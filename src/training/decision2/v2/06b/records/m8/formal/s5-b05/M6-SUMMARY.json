@@ -1,0 +1,353 @@
+{
+  "H": 0.45904022473242023,
+  "T": 0.5153125000000001,
+  "gate_human_transfer_vs_released": {
+    "ci95_H": [
+      -0.06449448188458451,
+      0.06050216930368588
+    ],
+    "ci95_v3": [
+      2.65113706265703,
+      9.29988829793304
+    ],
+    "delta_H": -0.02054502089056126,
+    "released": "released"
+  },
+  "gpu_time": {
+    "gpu_hours": 0.06864257196585337,
+    "image_ids": [
+      "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+    ],
+    "runs": {
+      "m8-s5-b05": 0.052914849784639145,
+      "m8-s5-b05-mlx": 0.015727722181214227
+    }
+  },
+  "label": "post-key same-panel",
+  "loaded_parameters": 597103104,
+  "mlx_diag": {
+    "english": 0.6872486772486772,
+    "invalid_or_missing": 0,
+    "items": 2275,
+    "non_english": 0.6347049863716531,
+    "overall": 0.6422112279255137,
+    "scope": "multilingual development diagnostic; not a release score"
+  },
+  "mlx_run_dir": "/data/dev2/runs/06b/m8/formal/m8-s5-b05-mlx",
+  "model_path": "/data/dev2/runs/06b/m1/arms/m8-s5-b05/full/best-export",
+  "model_revision": "85c1add12019a6855ffbbd34b9a05febe5acd5ae4160280ed1560582e0f83a3b",
+  "name": "m8-s5-b05",
+  "paired": {
+    "bosun06": {
+      "ci95_H": [
+        0.013699044651004893,
+        0.18943735465451686
+      ],
+      "ci95_T": [
+        0.05437500000000001,
+        0.1096875
+      ],
+      "ci95_v3": [
+        4.168853975485049,
+        14.095929192068672
+      ],
+      "delta_H": 0.11687911786543104,
+      "delta_T": 0.08156250000000004,
+      "delta_v3": 10.111992966729133,
+      "file_sha256": "aef969a5b867e3a5a4ce8ff0066e5336f078315dbf928f4fd21803da101e2506",
+      "replicates": 5000,
+      "right_v3": 38.524327392383704,
+      "run_dir": "/data/dev2/runs/eval/m1-adopt/bosun"
+    },
+    "causal-control": {
+      "ci95_H": [
+        -0.1123302881819857,
+        0.10659413123245128
+      ],
+      "ci95_T": [
+        0.17625000000000002,
+        0.23749999999999993
+      ],
+      "ci95_v3": [
+        5.028286395892707,
+        15.974811391852326
+      ],
+      "delta_H": -0.02105384923256537,
+      "delta_T": 0.20625000000000004,
+      "delta_v3": 10.116315850441843,
+      "file_sha256": "89620be62e49b18fc488df3c4d1591e81616496a878f6c178ba371d4434862a7",
+      "replicates": 5000,
+      "right_v3": 38.52000450867099,
+      "run_dir": "/data/dev2/runs/eval/m1-adopt/dev20-06b"
+    },
+    "gliner25": {
+      "ci95_H": [
+        -0.012659984461693176,
+        0.16115121983091787
+      ],
+      "ci95_T": [
+        0.07436718749999997,
+        0.1371874999999999
+      ],
+      "ci95_v3": [
+        4.2412412791299765,
+        13.721660858361394
+      ],
+      "delta_H": 0.01799127915212012,
+      "delta_T": 0.10531250000000009,
+      "delta_v3": 6.11220159247371,
+      "file_sha256": "bb1139f7f106d2b0106480c309b5f855c11b7416a903987cc166b037d6ba9ccb",
+      "replicates": 5000,
+      "right_v3": 42.52411876663913,
+      "run_dir": "/data/dev2/runs/eval/m1/p1-gliner25"
+    },
+    "kai1": {
+      "ci95_H": [
+        0.055842406142562605,
+        0.19297140773920443
+      ],
+      "ci95_T": [
+        0.12781250000000005,
+        0.1790624999999999
+      ],
+      "ci95_v3": [
+        10.00203051669837,
+        17.49987266238486
+      ],
+      "delta_H": 0.1021328441657337,
+      "delta_T": 0.15343750000000006,
+      "delta_v3": 12.698059641241464,
+      "file_sha256": "7b391cb2f5ab08b798e3ba6817dcf269ae0b9fb4843dabe4ac434b8177b77f98",
+      "replicates": 5000,
+      "right_v3": 35.93826071787137,
+      "run_dir": "/data/dev2/runs/eval/m1-adopt/kai1"
+    },
+    "kai1-8k": {
+      "ci95_H": [
+        0.05182266780433946,
+        0.19189957178303516
+      ],
+      "ci95_T": [
+        0.12781250000000005,
+        0.1790624999999999
+      ],
+      "ci95_v3": [
+        9.74459140386689,
+        17.42074152533427
+      ],
+      "delta_H": 0.10152817156819316,
+      "delta_T": 0.15343750000000006,
+      "delta_v3": 12.667629218232463,
+      "file_sha256": "0d5d06ef93d77f8d6796019d1fb4286626ccd571e9a116906b02c2d3d9109aef",
+      "replicates": 5000,
+      "right_v3": 35.968691140880374,
+      "run_dir": "/data/dev2/runs/06b/m2/formal/kai1-native-8k"
+    },
+    "lex": {
+      "ci95_H": [
+        0.04127046887111454,
+        0.30264118355617053
+      ],
+      "ci95_T": [
+        0.12530468749999996,
+        0.1825
+      ],
+      "ci95_v3": [
+        9.917134108314858,
+        24.07310536018796
+      ],
+      "delta_H": 0.19309346978780428,
+      "delta_T": 0.15343750000000006,
+      "delta_v3": 17.613831428405987,
+      "file_sha256": "86ffda0f0a3ad2c53a78fc033907925457dc9bd602b49c92b3e518f3e96151e0",
+      "replicates": 5000,
+      "right_v3": 31.02248893070685,
+      "run_dir": "/data/dev2/runs/eval/m1/r3-lex"
+    },
+    "m5-x": {
+      "ci95_H": [
+        -0.05818870501793786,
+        0.06928939214064515
+      ],
+      "ci95_T": [
+        0.05281250000000004,
+        0.109375
+      ],
+      "ci95_v3": [
+        0.8016013016146435,
+        7.775605489954399
+      ],
+      "delta_H": -0.01405012737154604,
+      "delta_T": 0.08031250000000006,
+      "delta_v3": 3.271763360810148,
+      "file_sha256": "36417e7b7b28f29df87f98eb09bbcf2956298ff0e472f36408dbe77855e33d43",
+      "replicates": 5000,
+      "right_v3": 45.36455699830269,
+      "run_dir": "/data/dev2/runs/06b/m5/formal/m5-x-soup"
+    },
+    "m5-z": {
+      "ci95_H": [
+        -0.058091882014632584,
+        0.032551114286810366
+      ],
+      "ci95_T": [
+        0.07343750000000004,
+        0.12843750000000004
+      ],
+      "ci95_v3": [
+        1.7523589224137555,
+        7.043194628919268
+      ],
+      "delta_H": -0.03930913782629142,
+      "delta_T": 0.10031250000000003,
+      "delta_v3": 3.159404735703923,
+      "file_sha256": "49af44809883536dedca2fd79a1e5be824bb963dd6cd157f21e8782ad3775a1c",
+      "replicates": 5000,
+      "right_v3": 45.476915623408914,
+      "run_dir": "/data/dev2/runs/06b/m5/formal/m5-z-soup"
+    },
+    "m6-mxcx": {
+      "ci95_H": [
+        0.0,
+        0.0
+      ],
+      "ci95_T": [
+        -0.008125000000000049,
+        0.015625
+      ],
+      "ci95_v3": [
+        -0.3962978608550468,
+        0.7465179505084696
+      ],
+      "delta_H": 0.0,
+      "delta_T": 0.003750000000000031,
+      "delta_v3": 0.17728972862263248,
+      "file_sha256": "28eeaf294bb2692443c8d16f21e8c2eb73f31c9ef6dc2c0c97ef275e0fbfdc6f",
+      "replicates": 5000,
+      "right_v3": 48.459030630490204,
+      "run_dir": "/data/dev2/runs/06b/m6/formal/m6-mxcx-soup"
+    },
+    "released": {
+      "ci95_H": [
+        -0.06449448188458451,
+        0.06050216930368588
+      ],
+      "ci95_T": [
+        0.09593749999999995,
+        0.14499999999999996
+      ],
+      "ci95_v3": [
+        2.65113706265703,
+        9.29988829793304
+      ],
+      "delta_H": -0.02054502089056126,
+      "delta_T": 0.12000000000000005,
+      "delta_v3": 5.0948410077707535,
+      "file_sha256": "059c939ed6d3b51394939914912d350f56c7d44feb10840ff661f0eb5a8c8893",
+      "replicates": 5000,
+      "right_v3": 43.54147935134208,
+      "run_dir": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup"
+    }
+  },
+  "public231": {
+    "correct": 152,
+    "easy": 47,
+    "hard": 44,
+    "items": 231,
+    "standard": 61
+  },
+  "run_dir": "/data/dev2/runs/06b/m8/formal/m8-s5-b05",
+  "runtime": {
+    "causal_conv1d": "1.7.0",
+    "device_name": "",
+    "devices": 1,
+    "fla": "0.5.2",
+    "hip": "7.2.53211",
+    "numpy": "2.3.5",
+    "python": "3.12.13",
+    "safetensors": "0.8.0",
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0",
+    "triton": "3.7.1"
+  },
+  "runtime_env": {
+    "HIP_FORCE_DEV_KERNARG": "1",
+    "TRITON_CACHE_AUTOTUNING": "1",
+    "TRITON_CACHE_DIR": "/data/dev2/runs/06b/m8/formal/m8-s5-b05.triton-cache"
+  },
+  "schema": "dev2-06b-m6-summary/1",
+  "seal_sha256": "0fe8b3f584b033e835d8a53f3062cf0d247481cc74498c8869c01e11131979b1",
+  "successor": {
+    "checks": {
+      "H_upper_bound_ge_0": true,
+      "no_type_collapsed": true,
+      "v3_lower_bound_gt_0": true
+    },
+    "released": "released",
+    "released_run_dir": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup",
+    "verdict": true
+  },
+  "triton_cache": {
+    "m8-s5-b05": {
+      "added": [],
+      "after_files": 303,
+      "after_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+      "autotune_entries_added": [],
+      "before_files": 303,
+      "before_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+      "cache": "/data/dev2/runs/06b/m8/formal/m8-s5-b05.triton-cache",
+      "changed": [],
+      "kind": "per-run",
+      "removed": [],
+      "schema": "dev2-06b-m6-triton-cache/1",
+      "snapshot": "/data/dev2/runs/06b/m6/triton-cache-frozen",
+      "snapshot_manifest": "/data/dev2/runs/06b/m6/triton-cache-frozen.MANIFEST.json",
+      "unchanged": true
+    },
+    "m8-s5-b05-mlx": {
+      "added": [],
+      "after_files": 303,
+      "after_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+      "autotune_entries_added": [],
+      "before_files": 303,
+      "before_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+      "cache": "/data/dev2/runs/06b/m8/formal/m8-s5-b05-mlx.triton-cache",
+      "changed": [],
+      "kind": "per-run",
+      "removed": [],
+      "schema": "dev2-06b-m6-triton-cache/1",
+      "snapshot": "/data/dev2/runs/06b/m6/triton-cache-frozen",
+      "snapshot_manifest": "/data/dev2/runs/06b/m6/triton-cache-frozen.MANIFEST.json",
+      "unchanged": true
+    }
+  },
+  "type_collapse": {
+    "accuracy": {
+      "choice": 0.48625,
+      "noul": 0.64625,
+      "score": 0.3425
+    },
+    "any_collapsed": false,
+    "verdicts": {
+      "choice": "OK",
+      "noul": "OK",
+      "score": "OK"
+    }
+  },
+  "typed_final": {
+    "choice": {
+      "correct": 389,
+      "n": 800
+    },
+    "noul": {
+      "correct": 517,
+      "n": 800
+    },
+    "score": {
+      "correct": 137,
+      "n": 400
+    }
+  },
+  "v3": 48.63632035911284
+}

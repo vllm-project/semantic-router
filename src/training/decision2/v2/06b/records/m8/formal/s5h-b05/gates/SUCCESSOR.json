@@ -1,0 +1,174 @@
+{
+  "D4_pass": true,
+  "gates_paired_equals_same_panel_compare": true,
+  "inputs": {
+    "d4": {
+      "path": "/data/dev2/runs/06b/m8/d4/s5h-b05/D4.json",
+      "sha256": "6251392666364dc0ece2abf9c3150519419fb33caaab6a446bc5e76416446bc2"
+    },
+    "exposure": {
+      "path": "/data/dev2/runs/06b/m8/overlap/exposure-m6-mxcx-soup.json",
+      "sha256": "4c2a55d2b73dff179103824fd02970eaa677eb74557e28a80ce45258e1bf5bf8"
+    },
+    "gliner25": {
+      "path": "/data/dev2/runs/06b/m8/formal/m8-s5h-b05.gates/paired-vs-gliner25.json",
+      "sha256": "e931a98037e67310e5ad9500ec1bb63960bf3fbebaf9d8ded153002302d9aeba"
+    },
+    "kai1": {
+      "path": "/data/dev2/runs/06b/m8/formal/m8-s5h-b05/PAIRED-vs-kai1.json",
+      "sha256": "c94a8f6c7d6f57691e9e080fe021b1989058423f6ba5bdcd38e9b0b4e867e75c"
+    },
+    "mlx": {
+      "path": "/data/dev2/runs/06b/m8/formal/m8-s5h-b05.gates/mlx-paired.json",
+      "sha256": "6b5a07f136d5adc3e02a3eb35db96d5762c59b520fcfedcc3111193a12ac27ce"
+    },
+    "public231": {
+      "path": "/data/dev2/runs/06b/m8/formal/m8-s5h-b05.gates/public231-vs-released.json",
+      "sha256": "c09f0d9e1104881e7ef06953809fb936370d188fbb819c6ab6e9dfe930727b13"
+    },
+    "released": {
+      "path": "/data/dev2/runs/06b/m8/formal/m8-s5h-b05.gates/paired-vs-released.json",
+      "sha256": "34a035339f6a97101ba15229bd246cc6b24a6f0415472904e2994a65ba449a03"
+    },
+    "report": {
+      "path": "/data/dev2/runs/06b/m8/formal/m8-s5h-b05/REPORT.json",
+      "sha256": "30acafd8b5d577b633fa7168457a5fd724693c4f47d550d276d3a51ce715f8bc"
+    },
+    "score": {
+      "path": "/data/dev2/runs/06b/m8/formal/m8-s5h-b05.gates/score-report.json",
+      "sha256": "74cb94edbf26138f99821b4d0f47db459a446ef33ac91eea736faac31a292cf4"
+    },
+    "types": {
+      "path": "/data/dev2/runs/06b/m8/formal/m8-s5h-b05.gates/types.json",
+      "sha256": "3131feb0b969e8c9a8628b132645f11e98dfe1ae2efa6b5ffead48d0babf6f02"
+    }
+  },
+  "label": "m8-s5h-b05",
+  "prereg": "v2/06b/records/m8-prereg-2026-09-29.md section 8",
+  "prereg_commit": "e6a5f4515b902f2760ff768d47bf50c9eafb3849",
+  "rules": {
+    "R1": {
+      "ci95_H": [
+        -0.06449448188458451,
+        0.06050216930368588
+      ],
+      "ci95_v3": [
+        2.5024727304107675,
+        9.122829899026312
+      ],
+      "delta_H": -0.02054502089056126,
+      "delta_v3": 4.917551279148121,
+      "models": {
+        "left": "m8-s5h-b05",
+        "right": "released"
+      },
+      "pass": true,
+      "rule": "post-key v3 paired delta vs released: 95% CI lower bound > 0"
+    },
+    "R2": {
+      "ci95_H": [
+        -0.06449448188458451,
+        0.06050216930368588
+      ],
+      "delta_H": -0.02054502089056126,
+      "pass": true,
+      "rule": "delta H vs released: 95% CI upper bound >= 0"
+    },
+    "R3": {
+      "pass": true,
+      "rule": "v2.eval.gates types: no type COLLAPSED",
+      "score_flags": [
+        "NO-GAIN"
+      ],
+      "score_no_gain_disclosed": true,
+      "verdicts": {
+        "choice": "OK",
+        "noul": "OK",
+        "score": "OK"
+      }
+    },
+    "R4": {
+      "card_macro_ci95": [
+        -0.005770975056689343,
+        0.014365079365079365
+      ],
+      "card_macro_delta": 0.004433106575963741,
+      "pass": true,
+      "rule": "Choice + Noul type-macro accuracy, candidate - released: paired item-bootstrap 95% upper bound >= 0 (items resampled within type)",
+      "type_macro_ci95_reported": [
+        0.015554610733182163,
+        0.03985222978080119
+      ],
+      "type_macro_delta_reported": 0.027486428915000416
+    },
+    "R5": {
+      "checks": {
+        "H_vs_gliner25_upper_bound_ge_0": true,
+        "no_type_collapsed": true,
+        "v3_ge_38.3": true,
+        "v3_vs_kai1_lower_bound_gt_0": true
+      },
+      "pass": true,
+      "rule": "paired v3 vs Kai1 lower bound > 0; v3 >= 38.3; delta H vs GLiNER2.5-Decide upper bound >= 0; no type collapsed",
+      "v3": 48.459030630490204,
+      "vs_gliner25": {
+        "ci95_H": [
+          -0.012659984461693176,
+          0.16115121983091787
+        ],
+        "ci95_v3": [
+          4.011100625600345,
+          13.566513999972571
+        ],
+        "delta_H": 0.01799127915212012,
+        "delta_v3": 5.934911863851077,
+        "models": {
+          "left": "m8-s5h-b05",
+          "right": "gliner25"
+        }
+      },
+      "vs_kai1": {
+        "ci95_H": [
+          0.055842406142562605,
+          0.19297140773920443
+        ],
+        "ci95_v3": [
+          9.830550241866588,
+          17.277066468431105
+        ],
+        "delta_H": 0.1021328441657337,
+        "delta_v3": 12.520769912618832,
+        "models": {
+          "left": "m8-s5h-b05",
+          "right": "kai1"
+        }
+      }
+    },
+    "R6": {
+      "checks": {
+        "methods_agree": true,
+        "no_group_found": true,
+        "payload_is_rescreen_excluded_groups": true,
+        "six_m6_mixtures": true
+      },
+      "files": 6,
+      "groups": 0,
+      "pass": true,
+      "rows": 356331,
+      "rule": "overlap_effects exposure of the six M6 mixtures against the rescreen's excluded groups finds none"
+    },
+    "R7": {
+      "delta_items": 10,
+      "left_correct": 152,
+      "mcnemar_exact_p": 0.08715855330228806,
+      "pass": true,
+      "right_correct": 142,
+      "rule": "v2.eval.gates public231 vs the current revision is not REGRESSION",
+      "verdict": "OK"
+    }
+  },
+  "run": "/data/dev2/runs/06b/m8/formal/m8-s5h-b05",
+  "schema": "dev2-06b-m8-successor/1",
+  "seal_sha256": "dd547f9e7963e4b9ecfb2aa076019dfa337d77370f63355f87ee0d90f0be0051",
+  "verdict": true
+}

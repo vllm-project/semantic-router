@@ -1,0 +1,148 @@
+{
+  "schema": "dev2-hub-rename/1",
+  "command": "redirects",
+  "started_utc": "2026-09-29T08:44:55Z",
+  "ended_utc": "2026-09-29T08:44:56Z",
+  "huggingface_hub": "1.33.0",
+  "pairs": [
+    {
+      "old": "llm-semantic-router/DEV2.0-8B",
+      "new": "llm-semantic-router/DEV2.0-9B",
+      "revision": "53bac735be58def53673d0d290b9baa3f2af1cf9",
+      "model_info_old": {
+        "id": "llm-semantic-router/DEV2.0-9B",
+        "sha": "53bac735be58def53673d0d290b9baa3f2af1cf9",
+        "private": true
+      },
+      "repo_exists_old": true,
+      "hf_hub_download_old": {
+        "ok": true,
+        "config_sha256": "ca00fed94d4027e9ce736a4ed5ae64873ea7209d5649294883cc2921df4dd0a5",
+        "same_as_new": true
+      },
+      "http": [
+        {
+          "method": "GET",
+          "url": "https://huggingface.co/api/models/llm-semantic-router/DEV2.0-8B",
+          "status": 307,
+          "location": "/api/models/llm-semantic-router/DEV2.0-9B"
+        },
+        {
+          "method": "GET",
+          "url": "https://huggingface.co/api/models/llm-semantic-router/DEV2.0-8B/revision/53bac735be58def53673d0d290b9baa3f2af1cf9",
+          "status": 307,
+          "location": "/api/models/llm-semantic-router/DEV2.0-9B/revision/53bac735be58def53673d0d290b9baa3f2af1cf9"
+        },
+        {
+          "method": "HEAD",
+          "url": "https://huggingface.co/llm-semantic-router/DEV2.0-8B/resolve/53bac735be58def53673d0d290b9baa3f2af1cf9/config.json",
+          "status": 307,
+          "location": "/llm-semantic-router/DEV2.0-9B/resolve/53bac735be58def53673d0d290b9baa3f2af1cf9/config.json"
+        },
+        {
+          "method": "GET",
+          "url": "https://huggingface.co/llm-semantic-router/DEV2.0-8B",
+          "status": 401,
+          "location": null
+        },
+        {
+          "method": "GET",
+          "url": "https://huggingface.co/api/models/llm-semantic-router/DEV2.0-9B",
+          "status": 200,
+          "location": null
+        }
+      ]
+    },
+    {
+      "old": "llm-semantic-router/DEV2.0-26B",
+      "new": "llm-semantic-router/DEV2.0-27B",
+      "revision": "6931828d7e41a5d31cc8e5acdc36f5eebae70fad",
+      "model_info_old": {
+        "id": "llm-semantic-router/DEV2.0-27B",
+        "sha": "6931828d7e41a5d31cc8e5acdc36f5eebae70fad",
+        "private": true
+      },
+      "repo_exists_old": true,
+      "hf_hub_download_old": {
+        "ok": true,
+        "config_sha256": "19e28bbca0e6ead112ff65c96af6b388c515cdad7878be0429b405df4f5788a9",
+        "same_as_new": true
+      },
+      "http": [
+        {
+          "method": "GET",
+          "url": "https://huggingface.co/api/models/llm-semantic-router/DEV2.0-26B",
+          "status": 307,
+          "location": "/api/models/llm-semantic-router/DEV2.0-27B"
+        },
+        {
+          "method": "GET",
+          "url": "https://huggingface.co/api/models/llm-semantic-router/DEV2.0-26B/revision/6931828d7e41a5d31cc8e5acdc36f5eebae70fad",
+          "status": 307,
+          "location": "/api/models/llm-semantic-router/DEV2.0-27B/revision/6931828d7e41a5d31cc8e5acdc36f5eebae70fad"
+        },
+        {
+          "method": "HEAD",
+          "url": "https://huggingface.co/llm-semantic-router/DEV2.0-26B/resolve/6931828d7e41a5d31cc8e5acdc36f5eebae70fad/config.json",
+          "status": 307,
+          "location": "/llm-semantic-router/DEV2.0-27B/resolve/6931828d7e41a5d31cc8e5acdc36f5eebae70fad/config.json"
+        },
+        {
+          "method": "GET",
+          "url": "https://huggingface.co/llm-semantic-router/DEV2.0-26B",
+          "status": 401,
+          "location": null
+        },
+        {
+          "method": "GET",
+          "url": "https://huggingface.co/api/models/llm-semantic-router/DEV2.0-27B",
+          "status": 200,
+          "location": null
+        }
+      ]
+    }
+  ],
+  "collection": {
+    "slug": "llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00",
+    "title": "🎲 Decision 2.0",
+    "private": true,
+    "items": [
+      [
+        1,
+        "model",
+        "llm-semantic-router/DEV2.0-0.6B",
+        "6abaadad8c15254728de5a8a"
+      ],
+      [
+        2,
+        "model",
+        "llm-semantic-router/DEV2.0-0.8B",
+        "6aba79f5dc43bcce5a7b5bb4"
+      ],
+      [
+        3,
+        "model",
+        "llm-semantic-router/DEV2.0-2B",
+        "6abad08addd854b57289eb3d"
+      ],
+      [
+        4,
+        "model",
+        "llm-semantic-router/DEV2.0-4B",
+        "6abb0f9ae72aa5d5f67bb938"
+      ],
+      [
+        5,
+        "model",
+        "llm-semantic-router/DEV2.0-9B",
+        "6abb6bbb61fba9d4e6a2ecdc"
+      ],
+      [
+        6,
+        "model",
+        "llm-semantic-router/DEV2.0-27B",
+        "6abb693d1dd495f6980919d5"
+      ]
+    ]
+  }
+}

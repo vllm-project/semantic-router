@@ -1,6 +1,6 @@
 # DEV2.0-8B (9B tier, candidate K-a13) release: state file
 
-Updated: 2026-09-29 15:50 UTC+8 (release-9b worker 1; DONE up to, not including, `--collect`)
+Updated: 2026-09-29 17:48 UTC+8 (rename worker; RENAMED to DEV2.0-9B, see the last section)
 Branch `xunzhuo/decision-2-training-release-9b` (worktree `/home/xunliu/code/vllm-sr-dev2-release-9b`, merge-only).
 Gist file `07f-decision-2-release-9b.md`. Full record: `../dev2-8b-release-2026-09-29.md`.
 
@@ -23,8 +23,20 @@ Gist file `07f-decision-2-release-9b.md`. Full record: `../dev2-8b-release-2026-
   `3277dec9d`): 15/15 steps, parity 0 changes pre and post upload, card HTTP 12/12, links 15/15, gate evaluate 6/6.
 - Receipts copied into this directory; verified draft written and installed.
 
-## Next (coordinator)
+## Released (16:00 UTC+8)
 
-1. Final decision `runs/release/decisions/DEV2.0-8B.decision.json` (status final, decided_by; same identity, report,
-   paired file); point the spec's `gate_receipt` at it (commit, push, mirror).
-2. JevArena-C1 line in `card.text.confirmation` (card-only revision), then `ops/release-upload.sh` with `--upload --collect`.
+- Final revision `53bac735be58…` (main), manifest `d5007cdb83cd…`; final decision `7666fd7c8676…`, gate.json `de1436a6…`.
+- Collection (private, titled "🎲 Decision 2.0" outside the pipeline): 0.6B, 0.8B, 2B, 4B, 8B, 26B in size order.
+- Next: C1 event 3 result -> card-only revision with `--upload --collect --already-collected` (the collection title guard
+  in `hub.py` needs a coordinator decision first).
+
+## Renamed DEV2.0-9B (16:44 UTC+8, rename worker; branch `xunzhuo/decision-2-training-release`)
+
+- The user directive of 16:05 says names follow the base model's size.
+- `llm-semantic-router/DEV2.0-8B` was moved to **`llm-semantic-router/DEV2.0-9B`**; the old ID redirects.
+- Card-only revision `ae6831960dd1…` (`main`), manifest `996b2819…`. Its final decision `bad97635…` supersedes
+  `7666fd7c…`.
+- Weights are byte-identical. Collection position 5 of 0.6B, 0.8B, 2B, 4B, 9B, 27B.
+- Record: `../dev2-rename-9b-27b-2026-09-29.md`. Spec: `../../specs/dev2-9b-release.json`.
+- Next: the C1 line after event 3 is scored, as a card-only revision of DEV2.0-9B from `dev2-9b-release.json`
+  (`--upload --collect --already-collected`, with a new final decision).

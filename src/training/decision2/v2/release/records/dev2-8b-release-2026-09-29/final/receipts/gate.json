@@ -1,0 +1,48 @@
+{
+  "decided_by": "coordinator (Decision 2.0 program), under the user's full-autonomy mandate of 2026-09-28",
+  "decision": "release",
+  "decision_sha256": "7666fd7c8676fac9052b7e10812c556dfac5e1bc040ddb86a6687639155f905a",
+  "items": {
+    "1_beats_own_1_0": {
+      "evidence": "paired v3 95% interval low +0.607 (sha ae559e9a1e13)",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "7 results below own 1.0 listed in the card tradeoffs table",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 40 files re-hashed; loaded 7940895744",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "d5007cdb83cd9e29c353efb5dff92a72035c53a4312468c660cb73af2a3accfa",
+  "model_name": "DEV2.0-8B",
+  "receipts_sha256": {
+    "card-post": "2789c452a875649bc1eb3a71f0e70117c18ca6112830f54c95e297770219d387",
+    "card-pre": "a46680b0413838ae887a9efd45b8a1ee4bb5f7c647e88fa64b3c5c424e0c075e",
+    "download": "fc49e4c3ade043f1d0c61d1e4d674af4b5b59b057c51efdb154dd473035c9389",
+    "post": "ffeb05e0f1b615ebd6e2c9812187bbbf63e0c08cb708483cb4b3de7cf93f080f",
+    "readback": "bd0bdc81c1a86c9861de3faf01abcaa62bab209c01bddd4ff3abdfe7ed451eda",
+    "repeat-post": "8d63bbfbc4c1efa779c80ad3727737ced4be135a7a4bde5c0b76b8d63c1e926d",
+    "repeat-pre": "60c2f042e383940639a276ff14f5c69c5db688120449e134201481a76e8b54c7",
+    "tree": "5ba3b3be881bfb593ee7c75ab93945b1eca68de29ac85ed84347f9e7c7fb76ac",
+    "upload": "e4385b8b362b8e8c54579e555e8da23ee218c2e3dc63141c9257efcc94497832"
+  },
+  "repo_id": "llm-semantic-router/DEV2.0-8B",
+  "revision": "53bac735be58def53673d0d290b9baa3f2af1cf9",
+  "schema": "dev2-release-gate/1",
+  "utc": "2026-09-29T08:00:12.383387+00:00"
+}

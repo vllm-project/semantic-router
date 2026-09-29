@@ -1,0 +1,45 @@
+llm-semantic-router private storage: 62.57 GB used of 100 GB, headroom 37.43 GB (38 private repos; threshold 1 GB: OK)
+     17.95 GB  model    llm-semantic-router/DEV2.0-8B
+     16.85 GB  model    llm-semantic-router/DEV2.0-4B
+      7.56 GB  model    llm-semantic-router/DEV2.0-2B
+      3.23 GB  dataset  llm-semantic-router/decision-2.0-training-data
+      3.13 GB  model    llm-semantic-router/Vela-2.0-Encoder-307M-Unified
+      3.03 GB  model    llm-semantic-router/DEV2.0-0.8B
+      2.40 GB  model    llm-semantic-router/DEV2.0-0.6B
+      2.32 GB  model    llm-semantic-router/Decision-1.0-Route-0.6B
+{"copy": "/data/dev2/runs/release/triton/dev2-26b-f1-copy-20260929T080231Z", "copy_sha256": "03b172f1a6adeef6c6a6c491d04389b355c9d8579480008023f408c8659b502b", "files": 2659}
++ status=0
++ /data/dev2/src/a752ca6969f7c12fb4c4049d6a17f54757dde47c-src_training_decision2/src/training/decision2/v2/release/release.sh --spec /data/dev2/src/a752ca6969f7c12fb4c4049d6a17f54757dde47c-src_training_decision2/src/training/decision2/v2/release/specs/dev2-26b-release.json --src a752ca6969f7c12fb4c4049d6a17f54757dde47c-src_training_decision2 --work /data/dev2/runs/release/dev2-26b-release-20260929T080231Z --image sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1 --gpu 6 --track release --shared-lease release --threads 4 --site /opt/decision-fla --require-kernels --base-path /data/dev2/hf-cache/models--Qwen--Qwen3.8-27B/snapshots/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0 --env HIP_FORCE_DEV_KERNARG=1 --env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=/data/dev2/runs/release/triton/dev2-26b-f1-copy-20260929T080231Z --mount-rw /data/dev2/runs/release/triton/dev2-26b-f1-copy-20260929T080231Z --env HF_HUB_CACHE=/data/dev2/hf-cache --mount /data/dev2/hf-cache/models--Qwen--Qwen3.8-27B --mount /data/dev2/hf-cache/blobs --mount /data/dev2/private/panels/goldfree --mount /data/dev2/runs/27b/M3-A-soup/formal/output --parity typed-final:/data/dev2/private/panels/goldfree/typed-final.prompts.jsonl:/data/dev2/runs/27b/M3-A-soup/formal/output/typed-final.predictions.jsonl:200 --parity css15:/data/dev2/private/panels/goldfree/css15.prompts.jsonl:/data/dev2/runs/27b/M3-A-soup/formal/output/css15.predictions.jsonl:300 --parity public231:/data/dev2/private/panels/goldfree/public231.prompts.jsonl:/data/dev2/runs/27b/M3-A-soup/formal/output/public231.predictions.jsonl:100 --upload --collect --already-collected
+08:02:32Z build llm-semantic-router/DEV2.0-26B from a752ca6969f7c12fb4c4049d6a17f54757dde47c-src_training_decision2
+08:03:01Z pre-upload examples (two processes)
+{"mode": "compare", "passed": true}
+08:07:02Z card example (pre-upload)
+08:08:59Z scored-panel parity (pre-upload)
+08:12:03Z ensure private llm-semantic-router/DEV2.0-26B
+{"command": "ensure", "passed": true, "repo": "llm-semantic-router/DEV2.0-26B"}
+08:12:04Z upload
+{"command": "upload", "passed": true, "repo": "llm-semantic-router/DEV2.0-26B", "revision": "6931828d7e41a5d31cc8e5acdc36f5eebae70fad"}
+08:12:06Z real hf download of 6931828d7e41a5d31cc8e5acdc36f5eebae70fad
+{"command": "download", "passed": true, "repo": "llm-semantic-router/DEV2.0-26B", "revision": "6931828d7e41a5d31cc8e5acdc36f5eebae70fad"}
+{"command": "tree", "passed": true}
+08:12:10Z post-download examples
+{"mode": "compare", "passed": true}
+08:19:13Z readback
+{"command": "readback", "passed": true, "repo": "llm-semantic-router/DEV2.0-26B", "revision": "6931828d7e41a5d31cc8e5acdc36f5eebae70fad"}
+08:19:14Z gate seal and collection add
+{"gate": "sealed", "revision": "6931828d7e41a5d31cc8e5acdc36f5eebae70fad"}
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/data/dev2/src/a752ca6969f7c12fb4c4049d6a17f54757dde47c-src_training_decision2/src/training/decision2/v2/release/hub.py", line 415, in <module>
+    main()
+  File "/data/dev2/src/a752ca6969f7c12fb4c4049d6a17f54757dde47c-src_training_decision2/src/training/decision2/v2/release/hub.py", line 399, in main
+    result = handler(args)
+             ^^^^^^^^^^^^^
+  File "/data/dev2/src/a752ca6969f7c12fb4c4049d6a17f54757dde47c-src_training_decision2/src/training/decision2/v2/release/hub.py", line 335, in collect
+    raise RuntimeError("Repository and collection must both be private")
+RuntimeError: Repository and collection must both be private
++ status=1
++ set +x
+{"copy": "/data/dev2/runs/release/triton/dev2-26b-f1-copy-20260929T080231Z", "post_sha256": "3eab52d11b97e8e7f6989d7dee33e697645ad38f33a524069b8100819b093100", "added": 33, "changed": 7, "removed": 0, "path_rewrites": 7, "frozen_check": false}
+release.sh failed (1); work=/data/dev2/runs/release/dev2-26b-release-20260929T080231Z

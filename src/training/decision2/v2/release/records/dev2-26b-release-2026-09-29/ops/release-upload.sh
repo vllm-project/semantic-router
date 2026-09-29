@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # DEV2.0-26B private upload + verification on node B GPU6, shared lease owner.release.
-# Usage (node B): bash <mirror>/v2/release/records/dev2-26b-release-2026-09-29/ops/release-upload.sh <SRC> [--collect] [--parity-n "T C P"]
+# Usage (node B): bash <mirror>/v2/release/records/dev2-26b-release-2026-09-29/ops/release-upload.sh <SRC> [--collect [--already-collected]] [--parity-n "T C P"]
 #   SRC = <commit>-src_training_decision2 under /data/dev2/src (the commit that holds the spec).
 #   --collect: coordinator finalization only (final decision named by the spec's gate_receipt).
 #   --parity-n: first N prompts of typed-final / css15 / public231 (default the full 1600 6547 231).
@@ -10,7 +10,8 @@ shift
 collect=() parity_n=(1600 6547 231)
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --collect) collect=(--collect); shift ;;
+    --collect) collect+=(--collect); shift ;;
+    --already-collected) collect+=(--already-collected); shift ;;
     --parity-n) read -r -a parity_n <<< "$2"; shift 2 ;;
     *) echo "unknown argument $1" >&2; exit 2 ;;
   esac

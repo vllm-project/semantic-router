@@ -437,6 +437,14 @@ def auto_limits(candidate: dict[str, Any], cap: int) -> list[str]:
     return limits
 
 
+def base_name_line(facts: dict[str, Any]) -> str:
+    base = facts["name_base_model"]
+    return (
+        f"- **Name:** Named after its base model ([{base.rsplit('/', 1)[-1]}]"
+        f"(https://huggingface.co/{base})); it loads {facts['parameters']['loaded']:,} parameters."
+    )
+
+
 def render_readme(ctx: dict[str, Any]) -> str:
     facts, text = ctx["facts"], ctx["text"]
     name, repo = facts["model_name"], facts["repo_id"]
@@ -627,6 +635,7 @@ def render_readme(ctx: dict[str, Any]) -> str:
         "",
         f"- **Architecture:** {text.get('architecture') or ARCHITECTURE[facts['profile']]}",
         f"- **Parameters:** {facts['parameters']['loaded']:,} loaded ({components}).",
+        *([base_name_line(facts)] if facts.get("name_basis") == "base" else []),
         f"- **Direct weight origin:** [{origin['repo_id']}](https://huggingface.co/{origin['repo_id']}) at "
         f"`{origin['revision']}`. {origin['summary']}",
         f"- **Input limit:** {facts['max_input_tokens']:,} tokens for the complete state, question and candidates.",

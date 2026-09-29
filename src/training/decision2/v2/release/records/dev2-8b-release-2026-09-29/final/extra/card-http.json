@@ -1,0 +1,118 @@
+{
+  "anonymous_status": {
+    "model_api": 401,
+    "model_page": 401,
+    "readme": 401
+  },
+  "manifest_sha256": "d5007cdb83cd9e29c353efb5dff92a72035c53a4312468c660cb73af2a3accfa",
+  "model_api": {
+    "base_model": "llm-semantic-router/Decision-1.0-Lux-9B",
+    "base_model_relation": "finetune",
+    "files": 41,
+    "license": "apache-2.0",
+    "private": true,
+    "sha": "53bac735be58def53673d0d290b9baa3f2af1cf9",
+    "status": 200
+  },
+  "passed": true,
+  "readme_sha256": "4f11e36c642a94caff4bc79ac70c88b5d6b6ec8a93eab73dae5f7d71b952f56a",
+  "rendered_page": {
+    "status": 401
+  },
+  "repo": "llm-semantic-router/DEV2.0-8B",
+  "revision": "53bac735be58def53673d0d290b9baa3f2af1cf9",
+  "schema": "dev2-hub-card-http/1",
+  "targets": [
+    {
+      "kind": "anchor",
+      "passed": true,
+      "target": "#download-and-decide"
+    },
+    {
+      "bytes": 4073,
+      "kind": "file",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "ATTRIBUTIONS.md"
+    },
+    {
+      "bytes": 11544,
+      "kind": "file",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "LICENSE"
+    },
+    {
+      "bytes": 229,
+      "kind": "file",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "NOTICE"
+    },
+    {
+      "bytes": 570778,
+      "kind": "image",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "assets/DEV2.0-8B-owl-banner.png"
+    },
+    {
+      "bytes": 18275,
+      "kind": "image",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "assets/jevarena-v3-model-task.svg"
+    },
+    {
+      "bytes": 3251,
+      "kind": "image",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "assets/jevarena-v3-rank.svg"
+    },
+    {
+      "bytes": 3277,
+      "kind": "image",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "assets/jevbench-public231-rank.svg"
+    },
+    {
+      "bytes": 3084,
+      "kind": "file",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "evaluation/EVALUATION.md"
+    },
+    {
+      "kind": "absolute",
+      "passed": true,
+      "status": 200,
+      "target": "https://huggingface.co/Qwen/Qwen3.5-9B",
+      "via": "page"
+    },
+    {
+      "kind": "absolute",
+      "passed": true,
+      "status": 200,
+      "target": "https://huggingface.co/collections/llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00",
+      "via": "api"
+    },
+    {
+      "kind": "absolute",
+      "passed": true,
+      "status": 200,
+      "target": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B",
+      "via": "page"
+    }
+  ],
+  "utc": "2026-09-29T08:02:34.842865+00:00"
+}
