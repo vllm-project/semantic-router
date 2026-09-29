@@ -1,0 +1,69 @@
+{
+ "files": {
+  "hs1/README.md": {
+   "bytes": 7399,
+   "sha256": "d76c926b93dcb7b5e4d1e52201fd68d81c41ba3065d7548da9d4ca6bf9a40c68"
+  },
+  "hs1/audits/confirmation-summary.json": {
+   "bytes": 5917,
+   "sha256": "e1f291af3d6263bb4f18f0ddc9b788278b7a9e36d726081e896c7e7ba999afda"
+  },
+  "hs1/audits/hs1.audit.json": {
+   "bytes": 36512,
+   "sha256": "4c2c4038136cee892ef66b32c564ef51bbe323a95da9cbfe3b658e51f59e9b85"
+  },
+  "hs1/audits/overlap-pihs1.public.json": {
+   "bytes": 4698,
+   "sha256": "e71109bb8ec5ba1420ea995743ea2bed39cff00940652e63636c5f2633d0a2a3"
+  },
+  "hs1/audits/overlap-piv4.public.json": {
+   "bytes": 50637,
+   "sha256": "d2318f78781091a0e22ab17e5893b70eadcade9246fce6360b7eff4f5bf4a57c"
+  },
+  "hs1/audits/overlap-piv4q.public.json": {
+   "bytes": 35032,
+   "sha256": "82994b219ac682cd79176cc2005ff7864639b204532bb208544b89b5b6bd7771"
+  },
+  "hs1/audits/struct.public.json": {
+   "bytes": 1327,
+   "sha256": "868a10c4fa318ae6e92829149b216ed57b325b83122c8366b0f070e91a191d0b"
+  },
+  "hs1/build.json": {
+   "bytes": 10887,
+   "sha256": "3e6b02852c0e252c672afc1fb86ed95be17c16f40458995a502f5632af9fc90c"
+  },
+  "hs1/dev.jsonl": {
+   "bytes": 10467519,
+   "sha256": "2e9ee9ab6768aa2b3d0d397670248e5a8f2e524d60887d06698a4e84516533bf"
+  },
+  "hs1/dev.manifest.json": {
+   "bytes": 3882,
+   "sha256": "7bbf3c7fc99c868afe1b7090dd647e3f4f553067c5264f1c2a13480970319c0d"
+  },
+  "hs1/dev.tokens.jsonl": {
+   "bytes": 202678,
+   "sha256": "ee54353bc959d15e9cb8a6892dd94923927265e01e005e68a2a4f06e4f628165"
+  },
+  "hs1/isolation.json": {
+   "bytes": 435,
+   "sha256": "67406e1c98102ca1c802885368a425e7ea93400a2ceab25fd2ab1db1ea2cac1f"
+  },
+  "hs1/license-registry-hs1.json": {
+   "bytes": 530,
+   "sha256": "aec247dbfb267b5f4cf3494be33a4e89b58aefb104249f7ee93c8c6045aafabb"
+  },
+  "hs1/train.jsonl": {
+   "bytes": 77529383,
+   "sha256": "c90ef3164d90d3fd6a1ab0397529faec172760b1756de7d4d8cbf2677a131a71"
+  },
+  "hs1/train.manifest.json": {
+   "bytes": 3861,
+   "sha256": "2a3bd335a02f297bae0129910c6d7819b5dbc03de01b6e3eb20b0b8ff0165a90"
+  },
+  "hs1/train.tokens.jsonl": {
+   "bytes": 1691757,
+   "sha256": "038cde6f04baed20f0568732438decf57c2e1e8f1e5108cdb590f3bec2b57c69"
+  }
+ },
+ "schema": "decision2-hf-v2-registry/v1"
+}
