@@ -14,6 +14,7 @@ case "$SEED" in
   *) echo "unknown seed $SEED (s1|s2)" >&2; exit 2 ;;
 esac
 CODE=/data/dev2/src/$SHA/src/training/decision2
+[ -d "$CODE" ] || CODE=/data/dev2/src/$SHA-src_training_decision2/src/training/decision2
 RUN=/data/dev2/runs/27b/m4b/$ARM-$SEED
 STAGES=${STAGES:-probe,onestep,reload,full}
 GPUS=${GPUS:-0,1,2}
