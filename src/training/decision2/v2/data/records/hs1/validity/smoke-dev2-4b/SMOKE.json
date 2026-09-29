@@ -1,0 +1,127 @@
+{
+  "adapter": {
+    "args": [
+      "--checkpoint",
+      "{model}",
+      "--source-path",
+      "{source}",
+      "--model-id",
+      "{model_id}",
+      "--model-revision",
+      "{revision}",
+      "--max-length",
+      "{max_length}",
+      "--input",
+      "{input}",
+      "--output",
+      "{output}"
+    ],
+    "batch_policy": "v2.dec.infer_dec (the scored decoder-track runtime) on a frozen qwen-full release package's model files: one prompt per call, all its questions batched; no truncation; temperature 1 because the package ships no calibration file",
+    "extra_mounts": [],
+    "image": "decision20-train-fast:host2",
+    "model_id": null,
+    "module": "v2.dec.infer_dec",
+    "name": "dev2-dec-package-t1",
+    "python": "python3",
+    "requires": [
+      "source",
+      "model_id",
+      "max_length"
+    ]
+  },
+  "adapter_module_sha256": "c90899dbcee0478f9ce97921bd64da80898fb4dbfc723618cd5ecff19cb2a43c",
+  "ended_utc": "2026-09-29T15:59:37.759083+00:00",
+  "extra": {
+    "max_length": "16384",
+    "model_id": "llm-semantic-router/DEV2.0-4B",
+    "source": "/data/dev2/hf-cache/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259"
+  },
+  "gpu_label": "gpu1",
+  "gpu_wall_seconds": 32.10260420083068,
+  "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54",
+  "label": "post-key same-panel",
+  "model_id": "llm-semantic-router/DEV2.0-4B",
+  "model_path": "/data/dev2/runs/release/dev2-4b-final-20260929T010237Z/download/DEV2.0-4B",
+  "model_revision": "452f133211de292a87bc29ab7e24a3bd0704e40d",
+  "panels": [
+    {
+      "argv": [
+        "python3",
+        "-m",
+        "v2.dec.infer_dec",
+        "--checkpoint",
+        "/data/dev2/runs/release/dev2-4b-final-20260929T010237Z/download/DEV2.0-4B",
+        "--source-path",
+        "/data/dev2/hf-cache/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259",
+        "--model-id",
+        "llm-semantic-router/DEV2.0-4B",
+        "--model-revision",
+        "452f133211de292a87bc29ab7e24a3bd0704e40d",
+        "--max-length",
+        "16384",
+        "--input",
+        "/data/dev2/private/panels/goldfree/hs1-dev.prompts.jsonl",
+        "--output",
+        "/data/dev2/runs/data/hs1-validity/smoke-dev2-4b/smoke/hs1-dev.predictions.jsonl",
+        "--max-items",
+        "20"
+      ],
+      "exit_code": 0,
+      "expected_rows": 2396,
+      "log_sha256": "0760234e979db4375ede919f6718ca8da469e174ac368a828cc460a1e39619b6",
+      "output_rows": 20,
+      "output_sha256": "3af3dfb9a9a9fa5ad0569af348db7992596447aef33e739344d2b99d586d918d",
+      "panel": "hs1-dev",
+      "utc_end": "2026-09-29T15:59:37.758685+00:00",
+      "utc_start": "2026-09-29T15:59:05.656087+00:00",
+      "wall_seconds": 32.10260420083068
+    }
+  ],
+  "runtime": {
+    "causal_conv1d": "1.7.0",
+    "device_name": "",
+    "devices": 1,
+    "fla": "0.5.2",
+    "hip": "7.2.53211",
+    "numpy": "2.3.5",
+    "python": "3.12.13",
+    "safetensors": "0.8.0",
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0",
+    "triton": "3.7.1"
+  },
+  "runtime_env": {
+    "HIP_FORCE_DEV_KERNARG": "1",
+    "TRITON_CACHE_AUTOTUNING": "1",
+    "TRITON_CACHE_DIR": "/data/dev2/runs/data/hs1-validity/smoke-dev2-4b-triton"
+  },
+  "schema": "dev2-same-panel-collect/1",
+  "source_mirror": {
+    "archive_sha256": "6b1fd2c98cbd611991fc40a2fe83d83101f98b0ede38813a00697c32ef63e0ba",
+    "commit": "21bdb5e90e2b0635d54807101e755a72762d2747",
+    "content_manifest_sha256": "27595bb1e6216bbb50942219af2a122a657bfe7ca6f769aa4ac5caba2c570fc9",
+    "created_utc": "2026-09-29T15:47:16Z",
+    "files": 3779,
+    "path": "src/training/decision2",
+    "schema": "dev2-mirror/1",
+    "tree": "d8f381215466521a100ca83a0432c5929902ae29"
+  },
+  "sources": {
+    "benchmark/generate.py": "c6569d4c86c3b9ea2ebdda564d8ba4d3428cc807d41d39984379821cfbb9422c",
+    "benchmark/score.py": "d02a3b2bbaa08ec45928fc354532b3c3b5aef80e0a5d8e9ed6348ad6d30e2bcc",
+    "jev_arena/compare_v3.py": "bdb966ede0018ebdcd486c77f813ba722bc8d5f78ffab0dbf673631249d2513e",
+    "jev_arena/jevbench_public.py": "aec840b6497beeae8b63e9270670c22506265c086a84e889bc82f694146518cf",
+    "transfer/build.py": "717e31b62d1f9d09b30f1ae2365b2e59cdf0cf40209dda5e9e08b921a1fc184d",
+    "transfer/score.py": "cfe199a1826bb89b27c9eb746f808d74f16b46ca6585ac7b0ff7e440d44eeaca",
+    "v2/eval/adapters.py": "6717d108a1336efef8aded3fed8ec697d42dede7c125d3241387868d448c8f32",
+    "v2/eval/panels.py": "54543ef276b3b8cca0215226e67b484aa093fad936ead56ec010465931803812",
+    "v2/eval/same_panel.py": "936f083dea972cbfc1886710f4f14e3f01f1b3eec6d667e9912bf399772da704"
+  },
+  "started_utc": "2026-09-29T15:58:59.455721+00:00",
+  "visible_devices": {
+    "CUDA_VISIBLE_DEVICES": null,
+    "HIP_VISIBLE_DEVICES": null,
+    "ROCR_VISIBLE_DEVICES": "1"
+  }
+}

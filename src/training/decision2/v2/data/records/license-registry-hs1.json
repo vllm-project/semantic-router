@@ -1,0 +1,9 @@
+{
+  "decision2_hardskills_hs1": {
+    "license": "project-generated (no third-party text)",
+    "attribution": "Decision 2.0 HS1 hard-skill generators (quoted-conclusion check, long policy packets, unmet-condition Noul)",
+    "evidence": "generator source under src/training/decision2/v2/data/hs1 at the build commit; project-authored templates only; no corpus text and no model-written text",
+    "redistribution": "unrestricted within the project; may be redistributed with the models under Apache-2.0",
+    "used_by": ["HS1"]
+  }
+}

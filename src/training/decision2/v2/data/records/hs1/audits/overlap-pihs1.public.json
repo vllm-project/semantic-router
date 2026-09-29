@@ -1,0 +1,225 @@
+{
+ "candidate_files": [
+  {
+   "rows": 19968,
+   "sha256": "c90ef3164d90d3fd6a1ab0397529faec172760b1756de7d4d8cbf2677a131a71"
+  },
+  {
+   "rows": 2396,
+   "sha256": "2e9ee9ab6768aa2b3d0d397670248e5a8f2e524d60887d06698a4e84516533bf"
+  }
+ ],
+ "candidates": {
+  "distinct_leaves_scanned": 33378,
+  "groups": 11182,
+  "rows": 22364,
+  "states_keyed": 22364
+ },
+ "flagged": {
+  "boilerplate": {
+   "E_leaf": {
+    "groups": 0,
+    "units": 0
+   },
+   "E_state": {
+    "groups": 0,
+    "units": 0
+   },
+   "L": {
+    "groups": 0,
+    "units": 0
+   },
+   "N_char": {
+    "groups": 0,
+    "units": 0
+   },
+   "N_word": {
+    "groups": 0,
+    "units": 0
+   },
+   "S": {
+    "groups": 0,
+    "units": 0
+   }
+  },
+  "by_method": {
+   "E": {
+    "groups": 0,
+    "rows": 0
+   },
+   "L": {
+    "groups": 0,
+    "rows": 0
+   },
+   "N": {
+    "groups": 0,
+    "rows": 0
+   },
+   "S": {
+    "groups": 0,
+    "rows": 0
+   }
+  },
+  "by_role": {
+   "ht_dev_goldfree": {
+    "E": {
+     "groups": 0,
+     "rows": 0
+    },
+    "L": {
+     "groups": 0,
+     "rows": 0
+    },
+    "N": {
+     "groups": 0,
+     "rows": 0
+    },
+    "S": {
+     "groups": 0,
+     "rows": 0
+    },
+    "any": {
+     "groups": 0,
+     "rows": 0
+    }
+   },
+   "score5_dev_goldfree": {
+    "E": {
+     "groups": 0,
+     "rows": 0
+    },
+    "L": {
+     "groups": 0,
+     "rows": 0
+    },
+    "N": {
+     "groups": 0,
+     "rows": 0
+    },
+    "S": {
+     "groups": 0,
+     "rows": 0
+    },
+    "any": {
+     "groups": 0,
+     "rows": 0
+    }
+   },
+   "score5t_dev_goldfree": {
+    "E": {
+     "groups": 0,
+     "rows": 0
+    },
+    "L": {
+     "groups": 0,
+     "rows": 0
+    },
+    "N": {
+     "groups": 0,
+     "rows": 0
+    },
+    "S": {
+     "groups": 0,
+     "rows": 0
+    },
+    "any": {
+     "groups": 0,
+     "rows": 0
+    }
+   }
+  },
+  "quarantine": {
+   "groups": 0,
+   "rows": 0
+  }
+ },
+ "methods": {
+  "E": "normalized leaf equality (compact length >= 20) and equality of normalized canonical-JSON states (canonical-JSON strings decoded first)",
+  "L": "S rule against 400/200 windows (last window end-aligned) of the compact text of protected leaves > 800 chars; candidate units are 200/100 windows of leaves over 200 compact chars, else the leaf",
+  "N": "word 13-grams over word_tokens and compact 30-grams kept iff int.from_bytes(blake2b(utf8, digest_size=8, person), 'big') % 4 == 0; only 8-byte hashes are stored",
+  "S": "audit_vitaminc_score rule against protected leaves <= 800 normalized chars: compact 6-gram sets, every 2nd sorted protected gram indexed, the 6 rarest candidate grams by (posting length, gram), postings <= 128, Jaccard >= 0.72 or containment >= 0.9",
+  "boilerplate": "a matched unit in >= 5 distinct candidate groups, or an N gram in >= 5 distinct protected rows; reported separately and never quarantining"
+ },
+ "params": {
+  "boilerplate_groups": 5,
+  "boilerplate_rows": 5,
+  "candidate_window": 200,
+  "candidate_window_stride": 100,
+  "char_ngram": 30,
+  "char_sample_mod": 4,
+  "containment": 0.9,
+  "gram": 6,
+  "index_every": 2,
+  "jaccard": 0.72,
+  "max_posting": 128,
+  "min_compact": 20,
+  "ngram_min_hits": 1,
+  "rare_grams": 6,
+  "short_max_chars": 800,
+  "window": 400,
+  "window_stride": 200,
+  "word_ngram": 13
+ },
+ "protected": {
+  "cjk_heavy_distinct_leaves": 31,
+  "distinct_leaves_by_length": {
+   "gt_800": 667,
+   "le_800": 5343
+  },
+  "index_keys": {
+   "L": 312914,
+   "N_char": 330833,
+   "N_word": 264345,
+   "S": 155796
+  },
+  "leaves_by_length": {
+   "below_min_compact": 24308,
+   "gt_800": 667,
+   "le_800": 15560
+  },
+  "leaves_by_role": {
+   "ht_dev_goldfree": {
+    "below_min_compact": 11708,
+    "gt_800": 423,
+    "le_800": 14004
+   },
+   "score5_dev_goldfree": {
+    "below_min_compact": 3000,
+    "gt_800": 244,
+    "le_800": 756
+   },
+   "score5t_dev_goldfree": {
+    "below_min_compact": 9600,
+    "gt_800": 0,
+    "le_800": 800
+   }
+  },
+  "long_leaf_windows_scanned": 4357,
+  "rows_by_role": {
+   "ht_dev_goldfree": 3240,
+   "score5_dev_goldfree": 500,
+   "score5t_dev_goldfree": 800
+  },
+  "states_indexed": 4540
+ },
+ "protected_files": [
+  {
+   "role": "ht_dev_goldfree",
+   "rows": 3240,
+   "sha256": "763f2973d0b22c3cb54a3d83015e7ca9bb89bb811d3541306d7e0153dab16990"
+  },
+  {
+   "role": "score5_dev_goldfree",
+   "rows": 500,
+   "sha256": "6189d111979b5df7f56ff4c44a7550135f8a35d9a4982679880bd8d9f3b6f2f8"
+  },
+  {
+   "role": "score5t_dev_goldfree",
+   "rows": 800,
+   "sha256": "34baa42307b61c4013215afdf4deef4d69f9d39c071d0fc16fb378ba047e9d66"
+  }
+ ],
+ "protected_inventory_sha256": "d29c964526835b2d0865000f5ea60614468e3a0bdc3e2d9a29712ecbd585d786",
+ "protected_leaves_over_800_chars_not_near_scanned": 0,
+ "schema": "decision2.v2.overlap.public.v1"
+}

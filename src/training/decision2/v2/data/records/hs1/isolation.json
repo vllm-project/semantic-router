@@ -1,0 +1,20 @@
+{
+ "failures": [],
+ "intersections": [],
+ "partitions": {
+  "aho/HS1": {
+   "groups": 1198,
+   "kind": "aho",
+   "rows": 2396,
+   "sha256": "2e9ee9ab6768aa2b3d0d397670248e5a8f2e524d60887d06698a4e84516533bf"
+  },
+  "train/HS1": {
+   "groups": 9984,
+   "kind": "train",
+   "rows": 19968,
+   "sha256": "c90ef3164d90d3fd6a1ab0397529faec172760b1756de7d4d8cbf2677a131a71"
+  }
+ },
+ "schema": "decision2.v2.isolation.v1",
+ "verdict": "PASS"
+}
