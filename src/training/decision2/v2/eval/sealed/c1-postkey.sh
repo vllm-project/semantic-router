@@ -107,7 +107,7 @@ mkdir -p "$PK"
 exec 9>>"$PK/.lock"
 flock -n 9 || { echo "another post-key C1 process holds $PK/.lock" >&2; exit 1; }
 
-DECRYPTED=0 GT="" LEASED=0 KEY="" LOG=""
+DECRYPTED=0 GT="" LEASED=0 KEY="" LOG="" PLAINTEXT=""
 log() {
   local t
   t=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -133,7 +133,7 @@ cleanup() {
     fi
   fi
   local what="nothing was decrypted" lease="no GPU lease taken"
-  if [ "$DECRYPTED" = 1 ]; then what="plaintext removed"; fi
+  if [ -n "$PLAINTEXT" ]; then what="$PLAINTEXT decrypted and removed"; fi
   if [ "$LEASED" = 1 ]; then lease="GPU$GPU entry $LEASE_NAME restored"; fi
   log "cleanup (exit $code): $what; $lease"
 }
@@ -155,6 +155,7 @@ read_key() {
 }
 gold_in() {
   GT=$(mktemp -d "$C1/.gold.XXXXXX")
+  PLAINTEXT="${PLAINTEXT:+$PLAINTEXT and }gold"
   decrypt v1/build-5/gold.jsonl >"$GT/gold.jsonl"
   [ "$(sha256sum <"$GT/gold.jsonl" | cut -c1-64)" = "$GOLD_SHA" ] || abort "gold hash mismatch"
   [ "$(sha256sum <"$RETIRED" | cut -c1-64)" = "$RETIRED_SHA" ] || abort "the v1.2 retired list differs from ${RETIRED_SHA:0:12}"
@@ -263,7 +264,7 @@ if [ "$PHASE" = preflight ]; then
 fi
 
 read_key
-DECRYPTED=1
+DECRYPTED=1 PLAINTEXT=prompts
 decrypt v1/build-5/prompts.jsonl >"$PANEL"
 chmod 644 "$PANEL"
 [ "$(sha256sum <"$PANEL" | cut -c1-64)" = "$PROMPTS_SHA" ] || abort "prompts hash mismatch"
