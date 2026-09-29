@@ -56,5 +56,49 @@ class VendorSourceTest(unittest.TestCase):
                 build.vendor_root({"vendor_source": str(tree)})
 
 
+def runtime_tree(scratch: Path, marker: bool = True) -> Path:
+    tree = mirror_tree(scratch, marker)
+    (tree / "v2/release/runtime").mkdir(parents=True)
+    for name in ("__init__.py", "api.py", "qwen.py"):
+        (tree / "v2/release/runtime" / name).write_text(f"# released {name}\n")
+    return tree
+
+
+class RuntimeSourceTest(unittest.TestCase):
+    def test_default_is_the_builder_tree(self):
+        self.assertEqual(build.runtime_root({}), (build.SOURCE_ROOT, None))
+
+    def test_mirror_tree_supplies_the_runtime_template_only(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            tree = runtime_tree(Path(scratch))
+            spec = {"profile": "qwen-full", "runtime_source": str(tree)}
+            self.assertEqual(build.runtime_root(spec)[1]["tree"], "b" * 40)
+            stage = Path(scratch) / "stage"
+            stage.mkdir()
+            records = build.vendor_runtime(spec, stage, IDENTITY)
+            for name in ("__init__.py", "api.py", "qwen.py"):
+                self.assertEqual(
+                    (stage / "decision2" / name).read_text(), f"# released {name}\n"
+                )
+                self.assertEqual(
+                    records[f"decision2/{name}"]["source_sha256"],
+                    layout.sha_file(tree / "v2/release/runtime" / name),
+                )
+            infer = "decision2/_vendor/dev2model/infer.py"
+            self.assertEqual(
+                records[infer]["source_sha256"],
+                layout.sha_file(build.SOURCE_ROOT / "training/model/infer.py"),
+            )
+
+    def test_a_tree_without_the_runtime_or_outside_a_mirror_is_refused(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            with self.assertRaises(ValueError):
+                build.runtime_root({"runtime_source": str(mirror_tree(Path(scratch)))})
+        with tempfile.TemporaryDirectory() as scratch:
+            tree = runtime_tree(Path(scratch), marker=False)
+            with self.assertRaises(ValueError):
+                build.runtime_root({"runtime_source": str(tree)})
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,48 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the C1 event-3 card pass assigned to release engineering in the cross-track note of 2026-09-29 23:40 UTC+8, under the user's full-autonomy mandate",
+  "decision": "release",
+  "decision_sha256": "4d31cdab845e02063717432578ac2271336727130a7245d12c2764ba4d5bd9e5",
+  "items": {
+    "1_beats_own_1_0": {
+      "evidence": "paired v3 95% interval low +0.992 (sha 27f1419f9604)",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "7 results below own 1.0 listed in the card tradeoffs table",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 36 files re-hashed; loaded 4208383488",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "8d3d618de3a6ed148b2355ca8404c6b2d1e6bd82d6a2d09e93734ac184c1b2fd",
+  "model_name": "DEV2.0-4B",
+  "receipts_sha256": {
+    "card-post": "d5bdf3ff262050b30eb1799de5bf00aa9deec1eaeb803be092b00a435f547faf",
+    "card-pre": "267581e97cce4f95cb58f454775615872be260fd3f757fd28fbe75535b00ee1a",
+    "download": "23c744c4f5d2ac692715c5e7b7c3d5f3d4bdef8c53e1ec48552369f4d402efc2",
+    "post": "47e01cd07161fd61c215b5e9f5558d8af709624bd1a9b7da13a4f301ff0c6f26",
+    "readback": "eb1ab5585b1e1b0a09128e17e3b25c275b0bae1295e89314278d02c095db3901",
+    "repeat-post": "90ced6b477db5ddda02825a1203427268577e39940ccf1c3d8b6f5375fa89f36",
+    "repeat-pre": "9e26abcbfb2a1cb9b2885271feb131fdae7817001b7afbc4575c7dabd3f41b15",
+    "tree": "f99a879619606b3305eeb7b905d806a4a2b25f3e81017dfca7ceacba6fe161e1",
+    "upload": "a19686da565793f1ad0f99872afb0419eb60ba4a686137c2d521c44f392630c3"
+  },
+  "repo_id": "llm-semantic-router/DEV2.0-4B",
+  "revision": "197b70ca90759aca48410a9f94bb534e8ae2919f",
+  "schema": "dev2-release-gate/1",
+  "utc": "2026-09-29T17:13:55.578782+00:00"
+}

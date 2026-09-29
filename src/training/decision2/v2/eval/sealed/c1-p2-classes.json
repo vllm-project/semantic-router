@@ -1,0 +1,95 @@
+{
+  "schema": "dev2-c1-hit-classes/1",
+  "rule": "P2 class-aware (coordinator 2026-09-29 21:35 UTC+8)",
+  "near_exact": {
+    "containment": 0.8,
+    "exact_tokens": 8
+  },
+  "a": [
+    {
+      "model": "DEV2.0-0.6B released (0.6B M4 T, m4-mix-t)",
+      "sha256": [
+        "98e4e85906a5076cce20b98c132fc1ba0d7fcf6949b41d15231bdfeecc5d549a"
+      ],
+      "paths": [
+        "^/data/dev2/runs/06b/m4/data/m4-mix-t\\."
+      ]
+    },
+    {
+      "model": "DEV2.0-0.6B successor m8-s5-b05 (m6-mxcx-soup weights, M6 mx and cx seeds 1-3)",
+      "sha256": [
+        "a277bd45a61662b8edbdc3472d0f74f605bc2a4d6e187605afc2bb3d4c998eae",
+        "5fafa72d6199025e36cda7eb315a1faa341d1f5164ac1d06ccafd69f4e7ed8c0",
+        "e484c99b1fe4ca5051a2f33ca032edda71f07ff601f6ace859f82c687e31f653",
+        "ad925c379fe4f1c658087d99e88dcd4ac3cfdab372e999b592eb2f6c4e6186fc",
+        "420fd988f06c0fe5deb4aed72fcc71f3d2a2af414ccea2597d652679ad664489",
+        "9131be73edce1e3ba79a9b91adcff7807035e12352545fbbfd3b5e0e44178aa5"
+      ],
+      "paths": [
+        "^/data/dev2/runs/06b/m6/data/m6-(mx|cx)-s[123]\\.train\\.jsonl$"
+      ]
+    },
+    {
+      "model": "DEV2.0-0.8B released (decoder M2 E8F, m2-full-a7-v1)",
+      "sha256": [
+        "d1dc33fcb7a49fa9df9519545b1b0debeac38f86cbd760b481eb37334c9bd6f6"
+      ],
+      "paths": [
+        "^/data/dev2/runs/dec/m2/data/m2-full-a7-v1/"
+      ]
+    },
+    {
+      "model": "DEV2.0-2B released, event-3 candidate (decoder M3 S2T, m3-v2m-ret)",
+      "sha256": [
+        "13804ac6d6c4b3f55f4db35d3bebad8575a9604eca84cfb9fad6a1afd5cff79b"
+      ],
+      "paths": [
+        "^/data/dev2/runs/dec/m3/data/m3-v2m-ret/"
+      ]
+    },
+    {
+      "model": "DEV2.0-4B released, event-3 candidate (decoder M4 N4XF, m4-xl-full-29m)",
+      "sha256": [
+        "c7d51219e9f0fdd107b914df5c7e9f81f2b53496bb43a94796857b8ea3fcfa60"
+      ],
+      "paths": [
+        "^/data/dev2/runs/dec/m4/data/m4-xl-full-29m/"
+      ]
+    },
+    {
+      "model": "DEV2.0-9B released, event-3 candidate (9B M4 K-a13, m4-k-xl-r2-60m)",
+      "sha256": [
+        "a66131b1165513128e5a51af78587c4ddefcc836773e724c4514a592e33fc0e0"
+      ],
+      "paths": [
+        "^/data/dev2/runs/9b/m4/data/m4-k-xl-r2-60m/"
+      ]
+    },
+    {
+      "model": "DEV2.0-27B released, event-3 candidate (27B M3-A = F1, mixtures-m3-1 = -2)",
+      "sha256": [
+        "de00df035439346e0da2bf77b594ce0c3f7d058b61040f149f0c75c61ce7f397"
+      ],
+      "paths": [
+        "^/data/dev2/private/27b/m3-data/mixtures-m3-[12]/"
+      ]
+    }
+  ],
+  "training_roots": "^(training-data:|hf-blobs|/data/dev2/runs/(?!eval)|/data/dev2/private/(data|27b|dec-arms|a7/runs|a7/base)|/data/dev2/tmp)",
+  "d": "(/panels|/evals|panel[^/]*\\.private|gold-free|/protected|formal-v3|css-transfer|core-inventory|decision-models-css|/private/data/pi-v)",
+  "c": "^(/data/dev2/private/(sources|a7/sources|ml-sources)/|/data/decision20-[^/]+/(external|private-race06-audit|experiments/[^/]+/(source|hf-cache)|private-small06))",
+  "disclose": [
+    {
+      "name": "pinned copies of the Decision 1.0 decoder training corpora (trained Sol, Nox, Eos and Lux 1.0)",
+      "pattern": "^/data/dev2/private/a7/sources/dec10"
+    },
+    {
+      "name": "raw upstream datasets of the Decision 1.0 encoder corpora (Kai, Lex)",
+      "pattern": "^/data/dev2/private/a7/sources/enc10"
+    },
+    {
+      "name": "raw-source sample dump",
+      "pattern": "^/data/dev2/private/tmp(/|$)"
+    }
+  ]
+}

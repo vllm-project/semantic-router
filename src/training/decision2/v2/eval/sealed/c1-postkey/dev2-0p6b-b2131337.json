@@ -1,0 +1,58 @@
+{
+  "schema": "dev2-c1-postkey-spec/1",
+  "name": "dev2-0p6b-b2131337",
+  "tier": "0.6B",
+  "role": "current",
+  "label": "DEV2.0-0.6B",
+  "repo": "llm-semantic-router/DEV2.0-0.6B",
+  "revision": "b21313375ad77ddf4a8e420fa5195e6e09582043",
+  "image": "host2",
+  "adapter_spec": "v2/06b/records/adapters/dev2-06b-causal-8k-sb.json",
+  "model_path": "/data/dev2/runs/release/dev2-0p6b-m8-release-20260929T134030Z/download/DEV2.0-0.6B",
+  "mounts": [],
+  "env": ["HIP_FORCE_DEV_KERNARG=1"],
+  "extra": {
+    "model_id": "llm-semantic-router/DEV2.0-0.6B"
+  },
+  "limit": "8,192 tokens (package limit), over-budget questions invalid, no truncation",
+  "cache": {
+    "frozen": "/data/dev2/runs/06b/m8/formal/m8-s5-b05.triton-cache",
+    "sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f"
+  },
+  "smoke_items": null,
+  "parity": {
+    "mode": "exact",
+    "stored": "/data/dev2/runs/06b/m8/formal/m8-s5-b05/output/typed-final.predictions.jsonl",
+    "tolerance": 0.0001
+  },
+  "identity": "bb806f31a14d4532a1b5e00984442128f47f46cbbc68e57e7623327c81cfb983",
+  "package": {
+    "dir": "/data/dev2/runs/release/dev2-0p6b-m8-release-20260929T134030Z/download/DEV2.0-0.6B",
+    "manifest_sha256": "816827dd836d21ab0b7555605fdc56dd5189ee4462a541a84de27de97f637796",
+    "identity": "bb806f31a14d4532a1b5e00984442128f47f46cbbc68e57e7623327c81cfb983"
+  },
+  "files": [
+    {
+      "path": "/data/dev2/runs/06b/m8/formal/m8-s5-b05/output/typed-final.predictions.jsonl",
+      "sha256": "99c5a0147b69a7292cbbae0ffd31d5d874235c29eed8b6de130a78ea010e1c60"
+    },
+    {
+      "path": "/data/dev2/runs/06b/m8/formal/m8-s5-b05/output/public231.predictions.jsonl",
+      "sha256": "0993d7239e8cccc3b471f5faf5cd08b50579276a12aa1730d32d6f7539953116"
+    },
+    {
+      "path": "/data/dev2/runs/06b/m8/formal/m8-s5-b05/COLLECT.json",
+      "sha256": "f54a15b1ca4073f3f056650a7414f7b28c0a2c5a7ef4a698b14c53b50eb94c5c"
+    }
+  ],
+  "stored_collect": "/data/dev2/runs/06b/m8/formal/m8-s5-b05/COLLECT.json",
+  "compare": [
+    {
+      "key": "prev-e61b2b44",
+      "name": "DEV2.0-0.6B e61b2b44 (previous revision, C1 event 2)",
+      "run": "/data/dev2/runs/eval/m4/c1-event2/cand",
+      "seal_sha256": "f9e1279c2bc4b0db9c44f885c3631e059ef4a8ee5b80773a62a4f7de6b582739"
+    }
+  ],
+  "notes": "The current revision (released 2026-09-29 22:05; BF16 storage of the scored m6-mxcx-soup weights plus the five-level Score offsets) on the release run's real hf download. Formal runtime of the scored run m8-s5-b05: training.model.infer with its adapter dev2-06b-causal-8k-sb (8,192 tokens, T = 1, score_bias.json from the package, bound to identity bb806f31), image f83b1d10, HIP_FORCE_DEV_KERNARG=1 and a fresh copy of that run's persisted autotune cache. training.model.infer takes no --max-items, so the smoke is the whole typed FINAL (1,600) and public 231 (231) panels, exact against the scored run (the release parity found 0 changes at tolerance 0). The comparison with the previous revision's event-2 predictions is item 8 applied after the fact, for information."
+}
