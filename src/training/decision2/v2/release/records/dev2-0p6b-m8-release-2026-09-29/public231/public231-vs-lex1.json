@@ -1,0 +1,153 @@
+{
+  "ci95": {
+    "high": 55.0,
+    "low": 24.0
+  },
+  "delta": 39,
+  "discordant": {
+    "left_only": 55,
+    "right_only": 16
+  },
+  "families": {
+    "adequacy": {
+      "items": 12,
+      "left": 7,
+      "right": 6
+    },
+    "adversarial": {
+      "items": 6,
+      "left": 4,
+      "right": 4
+    },
+    "ambiguous": {
+      "items": 7,
+      "left": 1,
+      "right": 2
+    },
+    "extraction": {
+      "items": 24,
+      "left": 22,
+      "right": 19
+    },
+    "fact": {
+      "items": 12,
+      "left": 12,
+      "right": 6
+    },
+    "intent": {
+      "items": 24,
+      "left": 22,
+      "right": 18
+    },
+    "judge_hard": {
+      "items": 17,
+      "left": 8,
+      "right": 7
+    },
+    "long_policy": {
+      "items": 19,
+      "left": 6,
+      "right": 0
+    },
+    "multi_hop": {
+      "items": 18,
+      "left": 6,
+      "right": 0
+    },
+    "ordinal": {
+      "items": 12,
+      "left": 11,
+      "right": 11
+    },
+    "policy": {
+      "items": 12,
+      "left": 10,
+      "right": 6
+    },
+    "probability": {
+      "items": 10,
+      "left": 3,
+      "right": 1
+    },
+    "routing": {
+      "items": 12,
+      "left": 12,
+      "right": 6
+    },
+    "routing_hard": {
+      "items": 5,
+      "left": 5,
+      "right": 2
+    },
+    "temporal_numeric": {
+      "items": 15,
+      "left": 3,
+      "right": 5
+    },
+    "tool_selection": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "tradeoff": {
+      "items": 6,
+      "left": 3,
+      "right": 3
+    },
+    "trap": {
+      "items": 8,
+      "left": 5,
+      "right": 5
+    }
+  },
+  "items": 231,
+  "label": "post-key same-panel",
+  "left_correct": 152,
+  "mcnemar_exact_p": 3.7532376885930504e-06,
+  "names": {
+    "left": "DEV2.0-0.6B",
+    "right": "lex1"
+  },
+  "right_correct": 113,
+  "rule": "REGRESSION if left − right < 0 items and the exact two-sided McNemar p < 0.05",
+  "runs": {
+    "left": "/data/dev2/runs/06b/m8/formal/m8-s5-b05",
+    "right": "/data/dev2/runs/eval/m1/r3-lex"
+  },
+  "schema": "dev2-gate-public231/1",
+  "tiers": {
+    "easy": {
+      "items": 48,
+      "left": 47,
+      "right": 42
+    },
+    "hard": {
+      "items": 111,
+      "left": 44,
+      "right": 29
+    },
+    "standard": {
+      "items": 72,
+      "left": 61,
+      "right": 42
+    }
+  },
+  "types": {
+    "choice": {
+      "items": 139,
+      "left": 93,
+      "right": 70
+    },
+    "noul": {
+      "items": 74,
+      "left": 47,
+      "right": 32
+    },
+    "score": {
+      "items": 18,
+      "left": 12,
+      "right": 11
+    }
+  },
+  "verdict": "OK"
+}
