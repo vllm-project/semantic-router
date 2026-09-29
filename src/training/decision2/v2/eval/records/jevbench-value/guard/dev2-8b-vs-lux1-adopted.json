@@ -1,0 +1,153 @@
+{
+  "ci95": {
+    "high": 1.0,
+    "low": -11.0
+  },
+  "delta": -5,
+  "discordant": {
+    "left_only": 2,
+    "right_only": 7
+  },
+  "families": {
+    "adequacy": {
+      "items": 12,
+      "left": 8,
+      "right": 8
+    },
+    "adversarial": {
+      "items": 6,
+      "left": 6,
+      "right": 6
+    },
+    "ambiguous": {
+      "items": 7,
+      "left": 4,
+      "right": 4
+    },
+    "extraction": {
+      "items": 24,
+      "left": 24,
+      "right": 24
+    },
+    "fact": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "intent": {
+      "items": 24,
+      "left": 22,
+      "right": 23
+    },
+    "judge_hard": {
+      "items": 17,
+      "left": 9,
+      "right": 9
+    },
+    "long_policy": {
+      "items": 19,
+      "left": 9,
+      "right": 8
+    },
+    "multi_hop": {
+      "items": 18,
+      "left": 10,
+      "right": 14
+    },
+    "ordinal": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "policy": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "probability": {
+      "items": 10,
+      "left": 7,
+      "right": 7
+    },
+    "routing": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "routing_hard": {
+      "items": 5,
+      "left": 5,
+      "right": 5
+    },
+    "temporal_numeric": {
+      "items": 15,
+      "left": 4,
+      "right": 4
+    },
+    "tool_selection": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "tradeoff": {
+      "items": 6,
+      "left": 2,
+      "right": 3
+    },
+    "trap": {
+      "items": 8,
+      "left": 8,
+      "right": 8
+    }
+  },
+  "items": 231,
+  "label": "post-key same-panel",
+  "left_correct": 178,
+  "mcnemar_exact_p": 0.1796875,
+  "names": {
+    "left": "DEV2.0-8B (K-a13)",
+    "right": "Lux 1.0 adopted"
+  },
+  "right_correct": 183,
+  "rule": "REGRESSION if left − right < 0 items and the exact two-sided McNemar p < 0.05",
+  "runs": {
+    "left": "/data/dev2/runs/9b/formal-m4/K-a13-16k",
+    "right": "/data/dev2/runs/eval/m1/d1-lux1-autotune-cache"
+  },
+  "schema": "dev2-gate-public231/1",
+  "tiers": {
+    "easy": {
+      "items": 48,
+      "left": 48,
+      "right": 48
+    },
+    "hard": {
+      "items": 111,
+      "left": 64,
+      "right": 68
+    },
+    "standard": {
+      "items": 72,
+      "left": 66,
+      "right": 67
+    }
+  },
+  "types": {
+    "choice": {
+      "items": 139,
+      "left": 109,
+      "right": 114
+    },
+    "noul": {
+      "items": 74,
+      "left": 55,
+      "right": 55
+    },
+    "score": {
+      "items": 18,
+      "left": 14,
+      "right": 14
+    }
+  },
+  "verdict": "OK"
+}

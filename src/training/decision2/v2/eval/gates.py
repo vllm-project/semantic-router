@@ -2,10 +2,18 @@
 
     python3 -m v2.eval.gates paired --left RUN --right RUN --left-name A --right-name B --output OUT
     python3 -m v2.eval.gates types --run RUN --label L --output OUT
+    python3 -m v2.eval.gates public231 --left RUN --right RUN --left-name A --right-name B --output OUT
 
 `paired` runs the joint v3 paired bootstrap (5,000 draws, seed 20260927) between two run
 directories after checking both seals. It reports the composite and per-axis (T typed,
 H human transfer) intervals and writes to OUT, never into either run directory.
+
+`public231` is the JevBench public-231 non-regression guard. It re-scores both sealed
+prediction files and reports left − right in items with the exact two-sided McNemar p on
+the discordant items, the within-tier paired bootstrap interval, and counts by tier, family
+and type. The verdict is REGRESSION when left − right < 0 and p < 0.05. The panel cannot
+separate sibling checkpoints, so the guard only catches large losses; it is never a
+selection criterion.
 
 `types` is the "no decision type collapsed" check on typed FINAL. For each of Choice, Noul
 and Score it reports accuracy with a Wilson 95% interval against chance, the predicted
@@ -35,6 +43,7 @@ from v2.eval.same_panel import (
 )
 
 TOP_SHARE = 0.9
+PUBLIC_ALPHA = 0.05
 
 
 def verified(run: Path, panel: str) -> Path:
@@ -193,22 +202,115 @@ def types(args: argparse.Namespace) -> int:
     return 0
 
 
+def mcnemar_exact(left_only: int, right_only: int) -> float:
+    n = left_only + right_only
+    if n == 0:
+        return 1.0
+    tail = sum(math.comb(n, i) for i in range(min(left_only, right_only) + 1))
+    return min(1.0, 2 * tail / 2**n)
+
+
+def public_guard(
+    left: dict[str, dict[str, Any]],
+    right: dict[str, dict[str, Any]],
+    targets: dict[str, dict[str, Any]],
+    replicates: int,
+    seed: int,
+) -> dict[str, Any]:
+    from v2.eval import overlap_effects
+
+    if set(left) != set(targets) or set(right) != set(targets):
+        raise ValueError("public 231 outcomes do not cover the panel items")
+    left_only = sum(left[i]["correct"] and not right[i]["correct"] for i in targets)
+    right_only = sum(right[i]["correct"] and not left[i]["correct"] for i in targets)
+    delta = left_only - right_only
+    p = mcnemar_exact(left_only, right_only)
+    breakdown: dict[str, Any] = {}
+    for name, key in (
+        ("tiers", "tier"),
+        ("families", "family"),
+        ("types", "task_type"),
+    ):
+        cells: dict[str, dict[str, int]] = defaultdict(
+            lambda: {"items": 0, "left": 0, "right": 0}
+        )
+        for item_id, target in targets.items():
+            cell = cells[target[key]]
+            cell["items"] += 1
+            cell["left"] += bool(left[item_id]["correct"])
+            cell["right"] += bool(right[item_id]["correct"])
+        breakdown[name] = dict(sorted(cells.items()))
+    strata = overlap_effects.public_strata(left, right, set())
+    return {
+        "items": len(targets),
+        "left_correct": sum(bool(left[i]["correct"]) for i in targets),
+        "right_correct": sum(bool(right[i]["correct"]) for i in targets),
+        "delta": delta,
+        "discordant": {"left_only": left_only, "right_only": right_only},
+        "mcnemar_exact_p": p,
+        "ci95": overlap_effects.strata_bootstrap(strata, replicates, seed),
+        **breakdown,
+        "verdict": "REGRESSION" if delta < 0 and p < PUBLIC_ALPHA else "OK",
+    }
+
+
+def public231(args: argparse.Namespace) -> int:
+    from v2.eval import overlap_effects
+
+    panels.verify(args.panel_root, ["public231"])
+    panel_dir = args.panel_root / panels.FORMAL["public231"]["panel_dir"]
+    targets = {
+        row["id"]: row
+        for row in read_jsonl(panels.path(args.panel_root, "public231", "gold"))
+    }
+    result = {
+        "schema": "dev2-gate-public231/1",
+        "label": "post-key same-panel",
+        "rule": (
+            f"REGRESSION if left − right < 0 items and the exact two-sided McNemar "
+            f"p < {PUBLIC_ALPHA}"
+        ),
+        "runs": {"left": str(args.left), "right": str(args.right)},
+        "names": {"left": args.left_name, "right": args.right_name},
+        **public_guard(
+            overlap_effects.public_outcomes(args.left, panel_dir),
+            overlap_effects.public_outcomes(args.right, panel_dir),
+            targets,
+            PAIRED_REPLICATES,
+            PAIRED_SEED,
+        ),
+    }
+    write_json(args.output, result)
+    print(
+        json.dumps(
+            {
+                key: result[key]
+                for key in ("delta", "discordant", "mcnemar_exact_p", "ci95", "verdict")
+            }
+        )
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--panel-root", type=Path, default=panels.DEFAULT_ROOT)
     commands = parser.add_subparsers(dest="command", required=True)
-    one = commands.add_parser("paired")
-    one.add_argument("--left", type=Path, required=True)
-    one.add_argument("--right", type=Path, required=True)
-    one.add_argument("--left-name", required=True)
-    one.add_argument("--right-name", required=True)
-    one.add_argument("--output", type=Path, required=True)
+    for name in ("paired", "public231"):
+        pair = commands.add_parser(name)
+        pair.add_argument("--left", type=Path, required=True)
+        pair.add_argument("--right", type=Path, required=True)
+        pair.add_argument("--left-name", required=True)
+        pair.add_argument("--right-name", required=True)
+        pair.add_argument("--output", type=Path, required=True)
     two = commands.add_parser("types")
     two.add_argument("--run", type=Path, required=True)
     two.add_argument("--label", required=True)
     two.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
-    return paired(args) if args.command == "paired" else types(args)
+    return {"paired": paired, "types": types, "public231": public231}[args.command](
+        args
+    )
 
 
 if __name__ == "__main__":

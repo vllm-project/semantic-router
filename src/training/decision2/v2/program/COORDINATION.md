@@ -94,6 +94,7 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 | eval: 9B gates | `/home/xunliu/code/vllm-sr-dev2-eval-9bgates` | `xunzhuo/decision-2-training-eval-9bgates` |
 | eval: JevBench analysis | `/home/xunliu/code/vllm-sr-dev2-eval-jevbench` | `xunzhuo/decision-2-training-eval-jevbench` |
 | ~27B Milestone 4b | `/home/xunliu/code/vllm-sr-dev2-27b-m4b` | `xunzhuo/decision-2-training-27b-m4b` |
+| research & data: hard-skill families | `/home/xunliu/code/vllm-sr-dev2-data-hardskills` | `xunzhuo/decision-2-training-data-hardskills` |
 
 - New code and records go under `src/training/decision2/v2/<track>/` (tracks: `eval`, `data`, `06b`, `dec`, `9b`, `27b`;
   shared helpers in `src/training/decision2/v2/common/`). Reuse the existing verified modules instead of forking them.
@@ -197,6 +198,42 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-29 17:15 — **JevBench decision: KEEP as a guarded card metric and optimization signal** (eval record
+  `v2/eval/records/jevbench-value-2026-09-29.md`; integration `dea99f355`; 0 GPU-h).
+  - **Findings:**
+    - Our public-231 reproduction is exact: 86 stored runs rescored with upstream's rule changed 0 items.
+    - Per-model 95% interval ≈ ±11 items. The easy tier is at ceiling. The minimum detectable within-tier gap is 11–20
+      items.
+    - It is mainly a size meter (ρ .91 with size; within-tier ρ with v3 only .27), but carries information beyond v3,
+      tied to mlx-diag residuals.
+    - Noise: DEV2.0-9B vs Lux 1.0 −5 [−11, +1]; DEV2.0-4B vs Nox 1.0 −2 [−9, +5].
+    - Real gaps:
+      - DEV2.0-4B vs Decider 4B −21 [−32, −10];
+      - DEV2.0-27B vs Eikos-27B −14 [−22, −6].
+    - The real gaps come from two hard-tier skills neither JevArena nor our training covers:
+      - verifying a quoted person's plausible-but-wrong conclusion instead of adopting it;
+      - applying long policy documents with amendments and precedence;
+      - plus a smaller one: saying "yes" when a condition is not met.
+    - We inherited these gaps from Decision 1.0, and our fine-tunes deepened them slightly. A7 is not the cause.
+    - No contamination in our data. JPT-4B is a moderate open suspicion and off-card anyway.
+  - **Successor rule item 7 (replaces "pending"):** `python3 -m v2.eval.gates public231 --left <successor> --right
+    <current revision>` must not return REGRESSION (a loss with p < .05) (`5551fb38e`).
+    - Nobody selects on public 231, whether in development or among siblings.
+    - Formal runs keep reporting it by easy / standard / hard.
+  - **Cards** (the next card-only pass, together with the C1 lines, for all six models):
+    - Keep the easy / standard / hard column.
+    - The note under the public-231 rank chart becomes: "public-only rerun (about a third of the official Intelligence
+      inputs), not the official JevBench score; easy tier at ceiling; totals within about 10 items are not
+      distinguishable."
+    - Disclosures quote paired gaps with CIs and name the two skills where a peer is significantly ahead.
+    - Never show upstream board numbers.
+  - **Data (new worker):** build "quoted-conclusion verification" and "long policy packet" families, plus "condition not
+    met" Noul negatives, from independent material.
+    - Never use JevBench items, paraphrases or family names, nor typed-FINAL-family generators.
+    - Public-231 hard is then read only in formal runs, as the out-of-sample check.
+  - **Every track:** add long-prose rows to typed / A7 mixtures where the preregistration allows. Quarantine the 4B
+    near-match group (3 HotpotQA rows) in future mixtures.
 
 - 2026-09-29 16:40 — **Score5-typed-DEV v1 PASSES; 0.6B Milestone 8 launched** (eval record
   `v2/eval/records/score5t-dev-2026-09-29.md`; integration `ab2f1082a`; 0.083 GPU-h; usage pasted into "Eval runners").
