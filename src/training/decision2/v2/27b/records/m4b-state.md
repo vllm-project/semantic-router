@@ -1,6 +1,6 @@
 # ~27B M4b state (resume file)
 
-Updated: 2026-09-29 20:50 UTC+8 (resumed M4b worker; **A1-s1 done; A2-s1 full running**)
+Updated: 2026-09-30 03:35 UTC+8 (resumed M4b worker; **training done (5 arm-seeds, A3 admitted by the guard at 35.99); soups built; 8 readouts running in 3 lanes**)
 Branch: `xunzhuo/decision-2-training-27b-m4b` (worktree `/home/xunliu/code/vllm-sr-dev2-27b-m4b`; merge-only into
 `xunzhuo/decision-2-training`). Gist file: `06b-decision-2-27b-m4b.md`. GPUs: node B GPU0–2 only (lent by 9B;
 leases now `track=27b-m4b`, previous owners kept as `owner.prev-20260929T094419Z`). Budget 36 GPU-h.
@@ -24,7 +24,7 @@ Milestone 4 (other worker; node A GPU2–4 + node B GPU5–7; `m4-*` files/dirs)
 | 3b | F1M = F1 merged in FP32 (`/data/dev2/runs/27b/m4b/F1M/checkpoint`, sha `3ed76a7b…`); merge check 496 projections, max rel 5.5e-8 | done |
 | 4 | P0: parity PASS (gradient gate, amendment 2); probe 32K OOM → 16K + expandable segments PASS (174.8 GB, 1,721 tok/s); amendment 3 `909f8b748` (autocast, caps 7.5 / 8.3) | done |
 | 5 | Chain `chain_m4b.sh` @ `9c7168698` (pid 2081589, `logs/chain.log`, `CHAIN.jsonl`): A1-s1 → A2-s1 → A1-s2 → A2-s2 → A3-s1 (budget guard; A3 expected skipped); ≈ 2.2 h per arm-seed. A1-s1 one-step PASS (0.610), reload PASS (0.026, Δp 0.0) | running (A1-s1 full) |
-| 6 | Soups, F1M readout, α line, finalists | pending |
+| 6 | Soups A1-soup `5bcfa3d4…` / A2-soup (CPU, bitwise-verified); readouts lanes `lanes_m4b.sh` @ `ee1331687` (GPU0: A1-s1, A2-s1, A3-s1; GPU1: A1-s2, A2-s2, F1M; GPU2: A1-soup, A2-soup; `LANES.jsonl`); then α line + rules | running |
 | 7 | CAL698 + formal ×≤3 + gates + mlx-diag | pending |
 | 8 | Records, gist 06b, merge, report | pending |
 
@@ -46,7 +46,11 @@ local copy before launch); launch = `setsid nohup bash <script> … > /data/dev2
 | A1-s1 one-step / reload | 0.610 / 0.026 |
 | A1-s1 full (404 updates, 1.61 h wall; BEST = step 404, SELECT family-macro .914) | 4.828 |
 | A2-s1 one-step / reload | 0.205 / 0.026 |
-| **Total so far** | **6.66** |
+| A2-s1 full (BEST 404, SELECT .924) | 4.906 |
+| A1-s2 one-step / reload / full (BEST 404, SELECT .947) | 0.219 / 0.025 / 4.808 |
+| A2-s2 full (BEST 404, SELECT .906) + preflights | 4.817 + ≈0.25 |
+| A3-s1 full + preflights (BEST 404) | ≈5.17 |
+| **Total after training (chain receipts)** | **26.85** |
 
 ## Research notes (read-only passes, 16:10–16:40)
 
