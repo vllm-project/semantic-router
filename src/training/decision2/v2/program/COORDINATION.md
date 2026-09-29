@@ -192,6 +192,20 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 08:05 — **DEV2.0-4B APPROVED for private release** (eval record `m4-dev2-4b-gates-2026-09-29.md`; integration
+  `e1ea4f5c7`). Gates: human transfer vs Decider 4B +0.024 [−0.095, +0.073], vs Jet v6.2 +0.042 [−0.061, +0.093]; v3 vs
+  Decider 4B +1.27 [−5.71, +4.31], vs Jet +2.78 [−3.33, +5.94], vs adopted Nox1 +6.68 [+0.99, +9.64]; no type collapsed
+  (Choice .728, Noul .917, Score .463). No training-row exposure to the 84 flagged items (v3 stays 63.151 without them).
+  **Card disclosures (release worker):** margins over Decider 4B / Jet v6.2 not significant; the gain over Nox 1.0 is typed
+  reasoning (human-transfer gain not significant); typed Choice far below both peers (.728 vs .938 / .900); Score rarely
+  predicts level 0 and level-2 recall drops .30 → .19; public 231 significantly below Decider 4B (171 vs 192, −21 [−32,
+  −10]); mlx-diag Choice / Noul parts only — non-English Choice level (75.1% vs 75.9%), non-English Noul 72.7% vs 80.0%
+  (Korean 63% vs 69%, Japanese 67% vs 77%); CSS15 losses on wiki_corpus, mrf, media_ideology, talklife; long inputs; 4
+  invalid answers; the eval track's evaluation-familiarity sentence (no exposure); peer licence notes (Decider 4B licence
+  from card metadata only; Jet v6.2 Apache-2.0 with LICENSE); calibration decision; C1 placeholder. After release, delete
+  the `m4/N4XF-soup/` staging copy with `rewrite_history=False` (org private storage now has 25.4 GB free).
+  DEV2.0-2B needs no correction (the other 12 excluded rows touch only Decision Bench v4, which is in no reported panel).
+
 - 2026-09-29 07:55 — The 9B Milestone 4 worker's session ended (context exhausted) while its GPU chains kept running (node A
   GPU6: K-s2; GPU7: P-s1; queued seeds / arms follow). A fresh 9B worker took over (see gist 05); it also uses node B
   GPU0–2 (assigned to 9B at 07:35, idle until now). Lesson for every worker: keep context lean (delegate monitoring and
