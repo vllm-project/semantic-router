@@ -18,11 +18,17 @@ Base: `eead88a60` + merge of origin `xunzhuo/decision-2-training` (`f3aae7155`) 
 
 - nothing (node A GPU6-7 and node B GPU0-2 idle at 12:15).
 
+- Step 2 (12:35): independent re-run of `m4_rules.py` into node A `m4/rules/verify-w3/` is byte-identical to
+  `m4/rules/` (alpha `258835e7c7cc`, seed-K `51c559bce1fd`, seed-P `0e0d6d53af51`, seed-KN `0e9237c608a4`); key->run
+  mapping checked; alpha*_D = 1/2 reproduced; 8/8 unit tests. alpha*: K 1/3, U 1/3, D 1/2 (= DW), KN 1/2, P 1/2;
+  no proxy drop (best 76.06). Finalists (K, U, D, KN, P priority; D slot passes): **K-a13, U-a13, KN-a12**.
+- Lock: `records/lux9b-m4-formal-lock-2026-09-29.md` (sha256 prefixes: K-a13 `b9d973b3ef55`, U-a13 `8c1ab3719947`,
+  KN-a12 `e0dffa0ec943`; cache tree `af623300d71a`).
+
 ## Next
 
-1. (done) chains + readouts.
-2. Independently re-run `m4_rules.py` (seed x3 + alpha) as preregistered into `m4/rules/verify-w3/`, diff vs `m4/rules/`;
-   expected finalists K-a13, U-a13, KN-a12 (D slot passes: alpha*_D = 1/2 is DW, formally run in M3).
+3. Launch formal runs per the lock's Launch section (GPU6: K-a13 then KN-a12; GPU7: U-a13 after `formal-m4/triton-cache` exists);
+   then `v2.eval.gates types` per finalist; read `PAIRED-vs-Lux1-16K.json` (`ci95.low`, `axis_ci95.H.delta.high`).
 3. Formal post-key runs for finalists (node A, 16K vs Lux1 16K 65.808 adopted / 65.231 same-renderer), mlx-diag, public 231, unless the chains already did.
 4. Records + gist 05 entry; merge into `xunzhuo/decision-2-training`.
 
