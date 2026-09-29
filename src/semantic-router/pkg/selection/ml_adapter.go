@@ -18,6 +18,7 @@ package selection
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -31,7 +32,7 @@ import (
 type MLSelectorAdapter struct {
 	mlSelector    modelselection.Selector
 	method        SelectionMethod
-	embeddingFunc func(string) ([]float32, error)
+	embeddingFunc func(context.Context, string) ([]float32, error)
 }
 
 // NewMLSelectorAdapter creates a new adapter for an ML selector.
@@ -44,6 +45,16 @@ func NewMLSelectorAdapter(mlSelector modelselection.Selector, method SelectionMe
 
 // SetEmbeddingFunc sets the embedding function for computing query embeddings.
 func (a *MLSelectorAdapter) SetEmbeddingFunc(fn func(string) ([]float32, error)) {
+	if fn == nil {
+		a.embeddingFunc = nil
+		return
+	}
+	a.setContextEmbeddingFunc(func(_ context.Context, text string) ([]float32, error) {
+		return fn(text)
+	})
+}
+
+func (a *MLSelectorAdapter) setContextEmbeddingFunc(fn func(context.Context, string) ([]float32, error)) {
 	a.embeddingFunc = fn
 }
 
@@ -69,10 +80,19 @@ func (a *MLSelectorAdapter) Select(ctx context.Context, selCtx *SelectionContext
 		mlCtx.QueryEmbedding = float32ToFloat64(selCtx.QueryEmbedding)
 	} else if a.embeddingFunc != nil && selCtx.Query != "" {
 		// Compute embedding on demand if not provided
-		embedding, err := a.embeddingFunc(selCtx.Query)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		embedding, err := a.embeddingFunc(ctx, selCtx.Query)
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return nil, err
+			}
 			logging.Warnf("[MLAdapter] Failed to compute embedding: %v, using empty embedding", err)
 		} else {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			mlCtx.QueryEmbedding = float32ToFloat64(embedding)
 		}
 	}
