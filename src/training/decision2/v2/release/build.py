@@ -636,6 +636,10 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             banner=BRAND_DIR / banner,
             work=work / "card-work",
             output=stage,
+            paired_peers={
+                key: Path(path)
+                for key, path in (spec["card"].get("paired_peers") or {}).items()
+            },
         )
         pointer = layout.pointer(
             profile,
