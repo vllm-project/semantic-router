@@ -61,15 +61,22 @@ func main() {
 	for _, name := range names {
 		t := types[name]
 		if t.Kind() != reflect.Struct {
-			values := reflect.Zero(t).Interface().(interface {
+			schemaGetter, hasSchema := reflect.Zero(t).Interface().(interface {
 				JSONSchema() *jsonschema.Schema
-			}).JSONSchema().Enum
-			parts := []string{}
-			for _, v := range values {
-				b, _ := json.Marshal(v)
-				parts = append(parts, string(b))
+			})
+			if hasSchema {
+				sch := schemaGetter.JSONSchema()
+				if len(sch.Enum) > 0 {
+					parts := []string{}
+					for _, v := range sch.Enum {
+						b, _ := json.Marshal(v)
+						parts = append(parts, string(b))
+					}
+					fmt.Fprintf(&out, "export type %s = %s\n\n", name, strings.Join(parts, " | "))
+					continue
+				}
 			}
-			fmt.Fprintf(&out, "export type %s = %s\n\n", name, strings.Join(parts, " | "))
+			fmt.Fprintf(&out, "export type %s = string\n\n", name)
 			continue
 		}
 		if name == "Profile" {

@@ -51,9 +51,12 @@ type Catalog struct {
 	ComparisonResponse ComparisonResponse  `json:"comparison_response"`
 	ValidationRequest  ValidationRequest   `json:"validation_request"`
 	ValidationResponse ValidationResponse  `json:"validation_response"`
-	Error              APIError            `json:"error"`
-	EventPage          EventPage           `json:"event_page"`
-	WorkerSubmission   WorkerSubmission    `json:"worker_submission"`
+	Error              APIError             `json:"error"`
+	EventPage          EventPage            `json:"event_page"`
+	WorkerSubmission   WorkerSubmission     `json:"worker_submission"`
+	CapabilityCatalog  CapabilityCatalog    `json:"capability_catalog"`
+	PlanRequest        TrainingPlanRequest  `json:"plan_request"`
+	PlanResponse       TrainingPlanResponse `json:"plan_response"`
 }
 
 // Workers report execution outcomes, not management-only pending/retry states.
