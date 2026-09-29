@@ -26,7 +26,7 @@
     "cand06-e2", "kai1-8k", "kai1-e2",
     "cand27"
   ],
-  "card_eligible_27b": "PARENT-FILLS: card-eligible keys among autojev27, eikos27b, jebadiah27b (the plan takes the two strongest by post-key v3)",
+  "card_eligible_27b": ["autojev27", "eikos27b", "jebadiah27b"],
   "reference_pairs": [
     ["kai1-8k", "kai1-e2", "Kai 1.0 at 8,192 vs 1,024 tokens (limit effect, reference only)"]
   ],

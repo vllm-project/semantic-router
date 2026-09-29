@@ -35,9 +35,16 @@ class TableTest(unittest.TestCase):
     def tearDown(self) -> None:
         shutil.rmtree(self.tmp)
 
-    def test_default_plan_waits_for_the_27b_peers(self) -> None:
-        code, _ = run_plan(self.tmp, "--c27", "f1")
-        self.assertEqual(code, 2)
+    def test_default_plan_resolves_the_card_eligible_pair(self) -> None:
+        code, plan = run_plan(self.tmp, "--c27", "f1")
+        self.assertEqual(code, 0)
+        self.assertEqual(plan["selection"][-3:], ["cand27", "autojev27", "eikos27b"])
+        self.assertNotIn("jebadiah27b", plan["selection"])
+        table = json.loads(TABLE.read_text())
+        table["card_eligible_27b"] = "not yet decided"
+        path = self.tmp / "table.json"
+        path.write_text(json.dumps(table))
+        self.assertEqual(run_plan(self.tmp, "--c27", "f1", table=path)[0], 2)
 
     def test_default_plan(self) -> None:
         code, plan = run_plan(
@@ -574,6 +581,18 @@ class ScriptTest(unittest.TestCase):
             self.text.index("score seal"),
             self.text.index("decrypt v1/build-5/gold.jsonl"),
         )
+
+    def test_scan_verdict_interlock_precedes_the_key(self) -> None:
+        gate = self.text.index("python3 -m v2.eval.sealed.scanverdict check")
+        self.assertLess(gate, self.text.index("read -r KEY"))
+        self.assertLess(gate, self.text.index('mkdir "$E"'))
+        lines = self.text[:gate].splitlines()
+        self.assertEqual(lines[-3], 'if [ "$MODE" = event ]; then')
+        self.assertIn(
+            "e37e73f9c1519362bda350ec7d475ed6acf7e47ed1f83dc084b3a5a93247acfc",
+            self.text,
+        )
+        self.assertLess(self.text.index('log "verify-only: done"'), gate)
 
     def test_children_never_hold_the_key_descriptor(self) -> None:
         self.assertIn(

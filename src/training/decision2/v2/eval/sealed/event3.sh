@@ -10,7 +10,8 @@
 # --preflight-only: also every model's smoke on the GPU (the first 80 prompts of typed FINAL and of
 #   public 231, so every decision type) with its parity check against the stored formal run; stdin is
 #   closed, the key is never read, and neither the sealed directory nor the event directory is touched.
-# Event mode: the same verification and smokes (a failure leaves C1 untouched and the event unused),
+# Event mode: a PASS SCAN-VERDICT.json from event3-recheck-scan.sh (pinned manifest and protected
+# rows) is required first; then the same verification and smokes (a failure leaves C1 untouched and the event unused),
 # the stored event-2 seals are checked, the key is read, the event directory is created (event 3 is
 # used from here), prompts are decrypted, every model is collected once, all predictions are sealed,
 # prompts are removed, gold is decrypted to a private temp dir, reports and paired comparisons are
@@ -54,6 +55,9 @@ PROMPTS_SHA=0b29686f60c980f3fbc8a03b88537fc0bf90ee967afa67d4fe0c958b1bfde16a
 GOLD_SHA=c02777713c0e58b40cf602947433420744b2765465252ce22d692eb676ca4fe1
 BUNDLE_SHA=d924389a7ffc3d852d9204c3dfca1c12c32f82685a7e5c65277ba9980110534f
 E=/data/dev2/runs/eval/m4/c1-event3
+SCAN_VERDICT=/data/dev2/runs/eval/m4/c1-event3-recheck/SCAN-VERDICT.json
+RECHECK_MANIFEST_SHA=e37e73f9c1519362bda350ec7d475ed6acf7e47ed1f83dc084b3a5a93247acfc
+PROTECTED_SHA=36797f509bd96c3cb703df37cc48114c9bbdf0d2241802e56262139f4bef0a1a
 P="/data/dev2/runs/eval/m4/c1-event3-preflight/$MODE-$(date -u +%Y%m%dT%H%M%SZ)"
 PLAN="$P/PLAN.json"
 LEASE="/data/dev2/leases/gpu$GPU.lock/$LEASE_NAME"
@@ -143,6 +147,13 @@ log "verified images, mirror modules, paths, release manifests, tree digests and
 if [ "$MODE" = verify ]; then
   log "verify-only: done"
   exit 0
+fi
+if [ "$MODE" = event ]; then
+  # The custodian's confirmatory overlap scan (event3-recheck-scan.sh) must have passed.
+  helper_verdict=$(python3 -m v2.eval.sealed.scanverdict check --verdict "$SCAN_VERDICT" \
+    --manifest-sha "$RECHECK_MANIFEST_SHA" --protected-sha "$PROTECTED_SHA" 2>&1 3<&-) ||
+    abort "no PASS scan verdict for manifest ${RECHECK_MANIFEST_SHA:0:12} ($helper_verdict); key not read, event 3 not used"
+  log "$helper_verdict"
 fi
 
 if [ -f "$LEASE" ]; then cp -p "$LEASE" "$P/lease-before.owner"; fi
