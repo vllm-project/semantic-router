@@ -90,6 +90,8 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 | HF storage steward | `/home/xunliu/code/vllm-sr-dev2-storage` | `xunzhuo/decision-2-training-storage` |
 | release engineering (DEV2.0-4B) | `/home/xunliu/code/vllm-sr-dev2-release-4b` | `xunzhuo/decision-2-training-release-4b` |
 | release engineering (~27B) | `/home/xunliu/code/vllm-sr-dev2-release-27b` | `xunzhuo/decision-2-training-release-27b` |
+| release engineering (9B tier) | `/home/xunliu/code/vllm-sr-dev2-release-9b` | `xunzhuo/decision-2-training-release-9b` |
+| eval: 9B gates | `/home/xunliu/code/vllm-sr-dev2-eval-9bgates` | `xunzhuo/decision-2-training-eval-9bgates` |
 
 - New code and records go under `src/training/decision2/v2/<track>/` (tracks: `eval`, `data`, `06b`, `dec`, `9b`, `27b`;
   shared helpers in `src/training/decision2/v2/common/`). Reuse the existing verified modules instead of forking them.
@@ -184,6 +186,7 @@ exactly one gist file and updates it in place:
 | `07c-decision-2-release-2b.md` | release engineering for DEV2.0-2B |
 | `07d-decision-2-release-4b.md` | release engineering for DEV2.0-4B |
 | `07e-decision-2-release-27b.md` | release engineering for the ~27B tier |
+| `07f-decision-2-release-9b.md` | release engineering for the 9B tier |
 
 - Create: write the file locally with exactly that name, then `gh gist edit cd90fce0fa548616d8a4f1b2d2398dea -a <local-path>`.
   Update: `gh gist edit cd90fce0fa548616d8a4f1b2d2398dea -f <file-name> <local-path>`. Never modify or delete other files.
@@ -192,6 +195,21 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-29 13:45 — **SIXTH RELEASE CANDIDATE: 9B K-a13** (9B M4; gist 05 entry 13:30; record
+  `lux9b-m4-formal-result-2026-09-29.md`; integration `2e2be3903`).
+  - Finalists (preregistered `m4_rules.py`, priority K, U, KN): K-a13 67.737, +1.929 [+0.607, +4.144] vs adopted Lux1 16K
+    65.808 — PASS; U-a13 67.866, +2.058 [−0.215, +4.040] — FAIL; KN-a12 67.982, +2.174 [+0.358, +4.962] — PASS (but its Score
+    temperature sits at the calibrator minimum; Score Brier .373). Human transfer level for all (+.006 to +.010); no type
+    collapsed.
+  - **Coordinator decision: K-a13 goes forward** (preregistered priority, higher lower bound, better mlx-diag .822 vs .809,
+    sound Score calibration). K-a13 = the α = ⅓ point of the K line: ⅓ × K soup (Lux 1.0 full fine-tuned on a 60M-token XL r2
+    subsample with own-Lux KL on all rows, three seeds) + ⅔ × Lux 1.0. Artifacts on node A: `m4/K-a13-build/soup`,
+    `m4/K-a13-cal` (manifest `SHA256SUMS` `6913eb61836a`); scored run `/data/dev2/runs/9b/formal-m4/K-a13-16k`. Disclose:
+    public 231 178 vs 183 (same-renderer Lux1); mlx-diag .822 vs .832 (Korean −.07).
+  - Naming follows the actual loaded parameter count (~7.94B text backbone + head → e.g., DEV2.0-8B; release engineering
+    confirms). Storage: prefer a bf16 package if it gives EXACT answer parity on every scored prompt (the runtime computes in
+    BF16); otherwise ship the scored bytes.
 
 - 2026-09-29 12:10 — The 9B M4 continuation worker also ran out of context (second 9B worker). Nothing was lost: amendments
   2–4 (incl. the exact rule code `m4_rules.py`) are pushed, all training seeds (K-s1/s2/s3, P-s1/s2, KN-s1/s2) are done, and
