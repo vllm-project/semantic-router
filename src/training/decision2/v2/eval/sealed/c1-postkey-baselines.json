@@ -26,6 +26,19 @@
       "source": "post-key C1 v1.2 collection dev2-0p6b-b2131337-20260929T161232Z (spec c1-postkey/dev2-0p6b-b2131337.json; mirror 2b5e878db); not an independent validation",
       "backup": "private eval-artifacts c1-postkey/0.6B/dev2-0p6b-b2131337-20260929T161232Z (afcbb407)"
     },
+    "0.8B": {
+      "model": "DEV2.0-0.8B",
+      "repo": "llm-semantic-router/DEV2.0-0.8B",
+      "revision": "7d08d0e12082ee6810a4221063342cefe45b6ac3",
+      "identity": "60356482ceeb669c4a97eb14dcfae5144b1b181f6c8b7a628ea5d02c86a6dd8b",
+      "manifest_sha256": "2a19a65a0141a8d71939bbf82025e299266db404cadd8b2bc712d1a992e98e7e",
+      "run": "/data/dev2/runs/eval/m4/c1-event1/e8f",
+      "seal_sha256": "fe510c87b81cc5b583500ab72d56f434b98e14f3731463eb728f4ff1a28dc978",
+      "predictions_sha256": "bf23d30fc8157a80a8157dd30083f0a85edb80a6892e363274fcf03ae204030a",
+      "c1": 40.16661731265686,
+      "source": "C1 event 1 (v1.1) stored predictions of the same weights, rescored on v1.2 (report 8b494cd2, post-key label). The event collected them with CAL698 temperatures; the current revision serves T = 1, and undoing the temperatures changes 0 of 2,874 answers under the C1 scorer's rule (receipt c1-postkey/0.8B/e8f-t1-derivation/T1-DERIVATION.json), so these answers are the T = 1 answers; valid for every revision with these weights",
+      "backup": "private eval-artifacts m4/c1-event1/ (event run) and c1-postkey/0.8B/ (derivation and v1.2 report; 758acf53)"
+    },
     "2B": {
       "model": "DEV2.0-2B",
       "repo": "llm-semantic-router/DEV2.0-2B",
@@ -82,6 +95,6 @@
   "notes": [
     "A tier's entry is the C1 run of its current HF revision's weights. When a successor is released, its post-key run (SUMMARY.json baseline_entry) replaces the entry in the same commit as the release record.",
     "0.6B: the current revision b2131337 was collected post-key on 2026-09-29 (C1 36.92 on v1.2 vs 33.02 for the previous revision e61b2b44's event-2 predictions); a re-collection of these weights is refused.",
-    "0.8B: not registered. Its current revision 7d08d0e1 is a calibration-only (T = 1) revision of the weights scored in C1 event 1 (v1.1, 0b631a85); the release record states the answers are unchanged. Registering the event-1 run needs the coordinator's agreement."
+    "0.8B: registered 2026-09-30 by the coordinator's decision, from the event-1 predictions (0 answer changes at T = 1); no new collection."
   ]
 }

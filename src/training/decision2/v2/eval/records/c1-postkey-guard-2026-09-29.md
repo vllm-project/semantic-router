@@ -118,9 +118,9 @@ revisions included). Registry: `v2/eval/sealed/c1-postkey-baselines.json`.
 | 9B | DEV2.0-9B = package `DEV2.0-8B@53bac735`, BF16 `b1ed5a71` | 53.77 | `m4/c1-event3/cand9b` (event 3, stored) | `2457cb74…` | `m4/c1-event3/` (`1561a3a5`) |
 | 27B | DEV2.0-27B = `DEV2.0-26B@5683c6f0`, `b7fd44e3` | 57.33 | `m4/c1-event3/cand27` (event 3, stored) | `f41d44c5…` | `m4/c1-event3/` (`1561a3a5`) |
 
-- **0.8B is not registered.** Its current revision `7d08d0e1` is a calibration-only (T = 1) revision of the
-  weights scored in event 1 (v1.1, package `0b631a85`); the release record states the answers are unchanged.
-  Registering the event-1 run is a one-entry registry change, and needs the coordinator's agreement.
+- **0.8B** (added 2026-09-30, §8): DEV2.0-0.8B `7d08d0e1`, identity `60356482`, **C1 v1.2 40.17**. The run is
+  `m4/c1-event1/e8f` (event 1, stored predictions; seal `fe510c87…`). Backups: eval-artifacts `m4/c1-event1/` and
+  `c1-postkey/0.8B/` (`758acf53`).
 - **Successors.** The comparison target for a successor is always the registry entry of its tier. In the release
   commit, the successor's `baseline_entry` replaces that entry.
 
@@ -227,3 +227,24 @@ cat <C1 key file> | ssh -o BatchMode=yes "$NA" "bash $S/v2/eval/sealed/c1-postke
 - **Commits.** `a9fe47a62` (gate, runner, registry, spec, tests), `2b5e878db` (cleanup log wording), and the
   records commit that adds this file, the 0.6B registry entry and `c1-postkey-guard/`. `check_no_private.sh` is
   clean on each.
+
+## 8. Addendum 2026-09-30: DEV2.0-0.8B baseline (coordinator decision, 00:28 UTC+8)
+
+- **Source.** DEV2.0-0.8B's current weights (identity `60356482`) are the event-1 weights, served at T = 1 by
+  revision `7d08d0e1`. Event 1 collected them with the CAL698 temperatures (calibration `9f76867d…`: Choice 1.123,
+  Noul 1.071, Score 0.395).
+- **Derivation (node A, CPU, prompts not decrypted).** The temperatures were undone on the stored predictions with
+  the release's own `v2.release.dev_calibration.rescale` (softmax(log q · T), as `retemper_predictions --undo`),
+  taking each question's type from its answer. **0 of 2,874 answers change**, both under the release rule and under
+  the C1 scorer's rule (`benchmark.score.evaluate_answer`, including its validity checks: Score answers carry
+  probabilities, so the scorer takes their unique argmax).
+  - Receipt: [`c1-postkey-guard/T1-DERIVATION-dev2-0p8b-event1.json`](c1-postkey-guard/T1-DERIVATION-dev2-0p8b-event1.json).
+  - Rounding the expected score instead would show 372 changes, but that is not the scorer's rule.
+  - The stored run therefore serves as the baseline unchanged. The T = 1 file (`d4a104fe…`) is kept as evidence.
+- **v1.2 value.** `c1-postkey.sh rescore` (new mode, `1f7ea80f6`) scored the sealed event-1 run on v1.2 with the
+  post-key label. The gold was decrypted only for the call. Result: **C1 40.17** (Choice 41.00, Noul 59.40, Score
+  24.29; 2,840 items, 0 invalid), report `8b494cd2…`.
+- **Registry and backups.** The `tiers.0.8B` entry in `c1-postkey-baselines.json` points at `m4/c1-event1/e8f`.
+  Backup: eval-artifacts `c1-postkey/0.8B/` (`758acf53`; derivation, T = 1 file, v1.2 report, event seal;
+  readback OK).
+- **Cost.** No collection and 0 GPU-h, so the approval for up to 0.1 GPU-h was not needed.
