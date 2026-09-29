@@ -55,6 +55,16 @@
       },
       "sha256": "20d60396cd5f024f2bf5b9551ca70bead484848d2dfac7d97af4b89d8772d140"
     },
+    "8B": {
+      "accent": "#f8ca69",
+      "file": "DEV2.0-8B-owl-banner.png",
+      "owl": {
+        "sha256": "64e55deb635334185a01e1e9787de95503b8f49d11c44a2be5dd1b925d5e8ce1",
+        "source": "llm-semantic-router/Decision-1.0-Lux-9B@cdf4d3ef2dda21518e599fe99ebbe468486b197c:assets/decision-lux-9b-header.png"
+      },
+      "sha256": "7263ca30a2a572b15566dc2e2ee8f27fd765051487eb505e4e7b24d6a39a666a",
+      "tier": "9B"
+    },
     "9B": {
       "accent": "#f8ca69",
       "file": "DEV2.0-9B-owl-banner.png",
