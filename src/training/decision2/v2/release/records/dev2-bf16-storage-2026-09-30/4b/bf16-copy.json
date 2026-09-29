@@ -1,0 +1,93 @@
+{
+  "bf16_pattern": "layers\\.\\d+\\.(self_attn\\.[qkvo]_proj|linear_attn\\.(in_proj_(qkv|z|a|b)|out_proj)|mlp\\.(gate|up|down)_proj)\\.weight",
+  "files": {
+    "backbone/config.json": {
+      "bytes": 1977,
+      "sha256": "a5ed4156fda05f0f9149c66964d6165916754e7355488a8a07d9b0398acdbdb9",
+      "source_sha256": "a5ed4156fda05f0f9149c66964d6165916754e7355488a8a07d9b0398acdbdb9",
+      "verbatim": true
+    },
+    "backbone/model-00001-of-00005.safetensors": {
+      "bytes": 3267769408,
+      "sha256": "a2801f12dd8950d6679b408bd29236c147a509a4bf4d6bd3bc51a413e84afc36",
+      "source_sha256": "06faf67f333d1136e4cbc583220e98602354b454d3b0fb917bf433a8bf4dbb3f",
+      "verbatim": false
+    },
+    "backbone/model-00002-of-00005.safetensors": {
+      "bytes": 1995713848,
+      "sha256": "7caf44041d929cb639035d0b18d5322f90a7ea8a1d5ebe6d28c58926b3aa7206",
+      "source_sha256": "abac23bcaad1d5fb2aa73d9d051db970514a4f427b0cff22336b50c5e7aa7302",
+      "verbatim": false
+    },
+    "backbone/model-00003-of-00005.safetensors": {
+      "bytes": 1969497680,
+      "sha256": "729f623bcf46d2a87c089215d7161afa899d7267521a892347b072d51bbd5b48",
+      "source_sha256": "1f492a389f49f382b4bbf84686176b51f9621da50d143e436ed61f764a9fa988",
+      "verbatim": false
+    },
+    "backbone/model-00004-of-00005.safetensors": {
+      "bytes": 1963774600,
+      "sha256": "14a744b4c22f42d7649806919e2a408e07cc11f95c0b93cdac958c87f0c1b0a3",
+      "source_sha256": "18024da979fb12651442e3a168deb92b4b8e41d41ea8076151df62879ecfa823",
+      "verbatim": false
+    },
+    "backbone/model-00005-of-00005.safetensors": {
+      "bytes": 488113792,
+      "sha256": "47fadf7c49d9a0e8f73248cd1f1fe3a5bf9407f699ba4e3d6ee25d5d59944240",
+      "source_sha256": "0ad4368c4f04781d30c237c269a9911b9ffb037104a4ee469bb7f56d57e67d15",
+      "verbatim": false
+    },
+    "backbone/model.safetensors.index.json": {
+      "bytes": 33047,
+      "sha256": "c5967c4e75959371755995263d6b9a641485566a880b087c31e7193ad6b894a6",
+      "source_sha256": "1921033b850d1a219406de25ac8a8c13c45048572cd71b4a738246c1f690986c",
+      "verbatim": false
+    },
+    "chat_template.jinja": {
+      "bytes": 7756,
+      "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
+      "source_sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
+      "verbatim": true
+    },
+    "decision_config.json": {
+      "bytes": 2682,
+      "sha256": "6658fbd01bf92030078ad1bbe735a0de77045431055d06c32bc6de8cf7d275d9",
+      "source_sha256": "6658fbd01bf92030078ad1bbe735a0de77045431055d06c32bc6de8cf7d275d9",
+      "verbatim": true
+    },
+    "decision_head.safetensors": {
+      "bytes": 10529624,
+      "sha256": "bd324aa69788fa936293ff4959ea1caa8845a4e47589879b0748aed3c3df7c5a",
+      "source_sha256": "bd324aa69788fa936293ff4959ea1caa8845a4e47589879b0748aed3c3df7c5a",
+      "verbatim": true
+    },
+    "tokenizer.json": {
+      "bytes": 19989325,
+      "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+      "source_sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+      "verbatim": true
+    },
+    "tokenizer_config.json": {
+      "bytes": 1123,
+      "sha256": "bee8eba30f0eb4af73c0fe2cd06d0f89b657d7819941c438157ec42f7c80ea87",
+      "source_sha256": "bee8eba30f0eb4af73c0fe2cd06d0f89b657d7819941c438157ec42f7c80ea87",
+      "verbatim": true
+    }
+  },
+  "layout": "sharded",
+  "model_sha256": "8b0a8bc7f504faa69904329225a11f36cc7352abb9bd64f778d7b777f91c5b79",
+  "numel_by_storage_dtype": {
+    "BF16": 3569090560,
+    "F32": 636660736
+  },
+  "rule": "BF16 storage for Linear projection weights (rounded exactly as BF16 autocast does); FP32 bit-exact for all other tensors",
+  "safetensors": "0.8.0",
+  "schema": "dev2-release-bf16-copy/1",
+  "source_model_sha256": "11b5ca1c22f8cd38d67d718cbfa59a3fb4dc8f4e7bfd75b3e988f34e35fad0ad",
+  "tensor_bytes": 9684824064,
+  "tensors_by_storage_dtype": {
+    "BF16": 248,
+    "F32": 178
+  },
+  "torch": "2.12.0+git6bbd260"
+}

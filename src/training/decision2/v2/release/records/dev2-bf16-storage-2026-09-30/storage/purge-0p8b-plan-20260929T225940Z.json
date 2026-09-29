@@ -1,0 +1,34 @@
+{
+  "before": {
+    "commits": 7,
+    "heads": {
+      "branch:main": "bede7938a8c209c09f27400b79eed57948d6b75e"
+    },
+    "lfs_objects": 5,
+    "main_lfs_served": {
+      "assets/DEV2.0-0.8B-owl-banner.png": 206,
+      "backbone/model.safetensors": 206,
+      "decision_head.safetensors": 206,
+      "tokenizer.json": 206
+    },
+    "old_paths_served": {
+      "backbone/model.safetensors": 206
+    }
+  },
+  "mode": "plan",
+  "new_revision": "bede7938a8c209c09f27400b79eed57948d6b75e",
+  "node_copy": "/data/dev2/runs/dec/m2/formal-candidates/staging-16c0929a/m2/E8F-soup/checkpoint",
+  "old_revision": "d4812ac6bb07333ec60d66091f08e1557933aa30",
+  "repo": "llm-semantic-router/DEV2.0-0.8B",
+  "rewrite_history": false,
+  "schema": "dev2-release-purge-superseded/1",
+  "target_bytes": 3009606928,
+  "targets": {
+    "9db82b841878b2f259701e11fdccdfd4b54021b857934304de181e28379f5f1e": {
+      "bytes": 3009606928,
+      "node_copy_sha256": "9db82b841878b2f259701e11fdccdfd4b54021b857934304de181e28379f5f1e",
+      "path": "backbone/model.safetensors"
+    }
+  },
+  "utc": "2026-09-29T22:59:42.696478+00:00"
+}

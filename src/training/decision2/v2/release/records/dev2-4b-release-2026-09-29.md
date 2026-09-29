@@ -1,6 +1,19 @@
 # DEV2.0-4B: private release build, upload and verification (2026-09-29)
 
-## C1 card-only revision, 2026-09-30 ≈01:14 UTC+8 — revision `197b70ca` (current)
+## BF16 storage revision, 2026-09-30 ≈06:50 UTC+8 — revision `fadbba4f` (current)
+
+- **Revision `fadbba4ff671b4948fb7530fa6748f522b1ac9e4`** (`main`), manifest `d683a54182fb…`. Final decision
+  [`DEV2.0-4B.decision.json`](dev2-bf16-storage-2026-09-30/DEV2.0-4B.decision.json) `d6bcdea2…` supersedes
+  `4d31cdab…`; gate 6 of 6 items. Coordinator note 2026-09-30 06:10 (storage for the ~27B successor).
+- **Weights:** the FP32 backbone of `197b70ca` is stored as its `v2.release.bf16_copy` (Linear projection matrices
+  in BF16 exactly as BF16 autocast rounds them, every other tensor FP32 bit for bit); backbone bytes 16,823,084,504 → 9,684,902,375.
+  Decision head, tokenizer, configs, runtime, vendored sources and card text are unchanged.
+- **Parity:** 0 answer changes, 0 missing, before upload and on the real download: typed-final 1,600, CSS15 6,547 and public 231 with the formal run's cache, and mlx-diag 2,275 with the mlx run's cache (no-upload run); max drift 1.9e-14.
+- **Purge:** the superseded FP32 backbone objects were deleted with `rewrite_history=False`; older revisions' FP32
+  weights now rest on the node-A checkpoint and the per-file SHA-256.
+- Record: [`dev2-bf16-storage-2026-09-30.md`](dev2-bf16-storage-2026-09-30.md).
+
+## C1 card-only revision, 2026-09-30 ≈01:14 UTC+8 — revision `197b70ca` (superseded)
 
 - **Revision `197b70ca90759aca48410a9f94bb534e8ae2919f`** (`main`), manifest `8d3d618de3a6…`. Final decision
   [`DEV2.0-4B.decision.json`](dev2-c1-card-pass-2026-09-29/DEV2.0-4B.decision.json) `4d31cdab…` supersedes

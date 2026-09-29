@@ -1,0 +1,94 @@
+{
+  "after": {
+    "commits": 6,
+    "heads": {
+      "branch:main": "fadbba4ff671b4948fb7530fa6748f522b1ac9e4"
+    },
+    "lfs_objects": 8,
+    "main_lfs_served": {
+      "assets/DEV2.0-4B-owl-banner.png": 206,
+      "backbone/model-00001-of-00005.safetensors": 206,
+      "backbone/model-00002-of-00005.safetensors": 206,
+      "backbone/model-00003-of-00005.safetensors": 206,
+      "backbone/model-00004-of-00005.safetensors": 206,
+      "backbone/model-00005-of-00005.safetensors": 206,
+      "decision_head.safetensors": 206,
+      "tokenizer.json": 206
+    },
+    "old_paths_served": {
+      "backbone/model-00001-of-00005.safetensors": 403,
+      "backbone/model-00002-of-00005.safetensors": 403,
+      "backbone/model-00003-of-00005.safetensors": 403,
+      "backbone/model-00004-of-00005.safetensors": 403,
+      "backbone/model-00005-of-00005.safetensors": 403
+    }
+  },
+  "before": {
+    "commits": 6,
+    "heads": {
+      "branch:main": "fadbba4ff671b4948fb7530fa6748f522b1ac9e4"
+    },
+    "lfs_objects": 13,
+    "main_lfs_served": {
+      "assets/DEV2.0-4B-owl-banner.png": 206,
+      "backbone/model-00001-of-00005.safetensors": 206,
+      "backbone/model-00002-of-00005.safetensors": 206,
+      "backbone/model-00003-of-00005.safetensors": 206,
+      "backbone/model-00004-of-00005.safetensors": 206,
+      "backbone/model-00005-of-00005.safetensors": 206,
+      "decision_head.safetensors": 206,
+      "tokenizer.json": 206
+    },
+    "old_paths_served": {
+      "backbone/model-00001-of-00005.safetensors": 206,
+      "backbone/model-00002-of-00005.safetensors": 206,
+      "backbone/model-00003-of-00005.safetensors": 206,
+      "backbone/model-00004-of-00005.safetensors": 206,
+      "backbone/model-00005-of-00005.safetensors": 206
+    }
+  },
+  "checks": {
+    "commits_unchanged": true,
+    "exactly_targets_gone": true,
+    "main_still_served": true,
+    "old_weights_not_served": true,
+    "refs_unchanged": true
+  },
+  "mode": "apply",
+  "new_revision": "fadbba4ff671b4948fb7530fa6748f522b1ac9e4",
+  "node_copy": "/data/dev2/runs/dec/m4/formal-candidates/staging-e8656221/m4/N4XF-soup/checkpoint",
+  "old_revision": "197b70ca90759aca48410a9f94bb534e8ae2919f",
+  "passed": true,
+  "repo": "llm-semantic-router/DEV2.0-4B",
+  "rewrite_history": false,
+  "schema": "dev2-release-purge-superseded/1",
+  "target_bytes": 16823051456,
+  "targets": {
+    "06faf67f333d1136e4cbc583220e98602354b454d3b0fb917bf433a8bf4dbb3f": {
+      "bytes": 3992269864,
+      "node_copy_sha256": "06faf67f333d1136e4cbc583220e98602354b454d3b0fb917bf433a8bf4dbb3f",
+      "path": "backbone/model-00001-of-00005.safetensors"
+    },
+    "0ad4368c4f04781d30c237c269a9911b9ffb037104a4ee469bb7f56d57e67d15": {
+      "bytes": 976029360,
+      "node_copy_sha256": "0ad4368c4f04781d30c237c269a9911b9ffb037104a4ee469bb7f56d57e67d15",
+      "path": "backbone/model-00005-of-00005.safetensors"
+    },
+    "18024da979fb12651442e3a168deb92b4b8e41d41ea8076151df62879ecfa823": {
+      "bytes": 3926578128,
+      "node_copy_sha256": "18024da979fb12651442e3a168deb92b4b8e41d41ea8076151df62879ecfa823",
+      "path": "backbone/model-00004-of-00005.safetensors"
+    },
+    "1f492a389f49f382b4bbf84686176b51f9621da50d143e436ed61f764a9fa988": {
+      "bytes": 3937871784,
+      "node_copy_sha256": "1f492a389f49f382b4bbf84686176b51f9621da50d143e436ed61f764a9fa988",
+      "path": "backbone/model-00003-of-00005.safetensors"
+    },
+    "abac23bcaad1d5fb2aa73d9d051db970514a4f427b0cff22336b50c5e7aa7302": {
+      "bytes": 3990302320,
+      "node_copy_sha256": "abac23bcaad1d5fb2aa73d9d051db970514a4f427b0cff22336b50c5e7aa7302",
+      "path": "backbone/model-00002-of-00005.safetensors"
+    }
+  },
+  "utc": "2026-09-29T22:59:14.912751+00:00"
+}

@@ -158,6 +158,49 @@ class LoraSoupTest(unittest.TestCase):
             self.assertFalse((output / "calibration.json").exists())
             self.assertFalse(output.with_name(output.name + ".pending").exists())
 
+    def test_rank_32_members_give_a_rank_64_alpha_128_soup(self):
+        from training.model.infer import checkpoint_fingerprint
+        from v2.release.build import verify_qwen
+
+        members = [
+            make_member(self.root, f"r32-{i}", self.source, 200 + i, rank=32, alpha=64)
+            for i in range(2)
+        ]
+        output = self.root / "soup64"
+        manifest = lora_soup.build(members, self.source, output)
+        meta = json.loads((output / "decision_config.json").read_text())
+        config = json.loads((output / "adapter/adapter_config.json").read_text())
+        self.assertEqual((meta["lora"]["rank"], meta["lora"]["alpha"]), (64, 128))
+        self.assertEqual((config["r"], config["lora_alpha"]), (64, 128))
+        self.assertEqual(
+            (manifest["lora"]["member_rank"], manifest["lora"]["member_alpha"]),
+            (32, 64),
+        )
+        verify_adapter_config(output / "adapter", meta["lora"])
+        tensors = load_file(str(output / "adapter/adapter_model.safetensors"))
+        stem = "base_model.model.layers.0.mlp.gate_proj"
+        self.assertEqual(list(tensors[f"{stem}.lora_A.weight"].shape), [64, 12])
+        self.assertEqual(list(tensors[f"{stem}.lora_B.weight"].shape), [20, 64])
+        for module in TARGETS:
+            mean = (delta(members[0], module) + delta(members[1], module)) / 2
+            diff = (delta(output, module) - mean).abs().max().item()
+            self.assertLessEqual(diff, 1e-6 * mean.abs().max().item())
+        identity = checkpoint_fingerprint(output, self.source)
+        self.assertEqual(identity["model_sha256"], manifest["output"]["model_sha256"])
+        spec = {
+            "profile": "qwen-adapter",
+            "base": {
+                "path": str(self.source),
+                "repo_id": "Qwen/x",
+                "revision": "1" * 40,
+            },
+            "expected_identity": {"model_sha256": identity["model_sha256"]},
+            "max_input_tokens": 32768,
+        }
+        self.assertEqual(
+            verify_qwen(spec, output)["model_sha256"], identity["model_sha256"]
+        )
+
     def test_head_is_the_uniform_mean(self):
         members = self.members(3)
         output = self.root / "soup"

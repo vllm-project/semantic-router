@@ -1,0 +1,22 @@
+{
+  "bf16_receipt": "/data/dev2/runs/release/inputs/dev2-0p8b-bf16/bf16-copy.json",
+  "bytes_after": 2014377424,
+  "bytes_before": 3009606928,
+  "changed": [
+    "MODEL_MANIFEST.json",
+    "backbone/model.safetensors"
+  ],
+  "converted_files": [
+    "backbone/model.safetensors"
+  ],
+  "hub_managed_changed": [],
+  "new_revision": "bede7938a8c209c09f27400b79eed57948d6b75e",
+  "passed": true,
+  "problems": [],
+  "replaced_revision": "d4812ac6bb07333ec60d66091f08e1557933aa30",
+  "repo": "llm-semantic-router/DEV2.0-0.8B",
+  "schema": "dev2-release-bf16-revision-diff/1",
+  "unchanged_weight_files": [
+    "decision_head.safetensors"
+  ]
+}

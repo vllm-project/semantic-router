@@ -1,0 +1,33 @@
+{
+ "schema": "dev2-htdev2-c1-aggregates/1",
+ "label": "JevArena-C1 aggregates of the event models, post-key; informational agreement check only (HT-DEV v2 prereg section 5); never a selection criterion and never tuned to",
+ "sources": {
+  "0.6B": "C1 v1.1 event 2 (records/m4-dev2-06b-c1-event2-2026-09-29.md, results table)",
+  "0.8B": "C1 v1.1 event 1 (records/m4-dev2-08b-gates-and-c1-event1-2026-09-28.md)",
+  "2B/4B/9B": "C1 v1.2 event 3 (records/m4-c1-event3-prep-2026-09-29.md section 0000)"
+ },
+ "note": "The 0.6B post-key run of DEV2.0-0.6B b2131337 (C1 v1.2 36.92 vs 33.02 for the T soup) is left out: its weights stand in for 06b-m6-mxcx-soup on CSS items only (Score offsets change C1 Score) and the other 0.6B rows are v1.1. Sol and Lux rows are the event's 16K controls of the same weights.",
+ "c1": {
+  "06b-m4-t-a7-soup": 33.21,
+  "kai1": 17.77,
+  "lex": 20.82,
+  "bosun06": 35.03,
+  "gliner25": 22.82,
+  "dec-m2-E8F-soup": 40.24,
+  "eos1": 37.94,
+  "kev08b": 39.06,
+  "intern08b": 34.58,
+  "jpt08b": 39.01,
+  "dec-m3-S2T-soup": 45.70,
+  "sol1": 45.03,
+  "decider2b": 42.45,
+  "thisthat12": 42.81,
+  "dec-m4-N4XF-soup": 48.38,
+  "nox1": 49.70,
+  "decider4b": 49.65,
+  "jet62": 50.44,
+  "9b-m4-K-a13": 53.77,
+  "lux1": 51.97,
+  "nimble2": 52.77
+ }
+}

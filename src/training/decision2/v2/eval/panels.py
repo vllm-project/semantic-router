@@ -8,7 +8,8 @@ Score5-DEV, the 500-item 5-level Score check (v2/eval/score5.py), and
 Score5-typed-DEV, 800 fresh 5-level typed Score items from the typed FINAL
 generator's Score family in fit / check halves (v2/eval/score5t.py), and
 HS1-DEV, 2,396 held-out rows of the data track's HS1 hard-skill families
-(v2/data/hs1/; records/hs1-prereg-2026-09-29.md).
+(v2/data/hs1/; records/hs1-prereg-2026-09-29.md), and HT-DEV v2, 1,944 held-out
+items of nine CSS15 task sources in the formal CSS format (v2/eval/htdev2/).
 
 Layout under a panel root (default ``/data/dev2/private/panels``)::
 
@@ -110,6 +111,13 @@ DEVELOPMENT: dict[str, dict[str, Any]] = {
         "gold": "gold/hs1-dev.gold.jsonl",
         "gold_sha256": "808dfc01c825acdb7039f81e65ace5bae3ccdbe16e0036ec2258aebb6004d48f",
         "originals": 2396,
+    },
+    "ht-dev2": {
+        "prompts": "goldfree/ht-dev2.prompts.jsonl",
+        "prompts_sha256": "90cd409a1e091a623362c0e5b227d13b7301bf13fe266f7905e09233cf815f74",
+        "gold": "gold/ht-dev2.gold.jsonl",
+        "gold_sha256": "659c92b45d2a5b37e250ccb728cdbf5580ba361b3fc4b2f2ab505a13e0a556cc",
+        "originals": 1944,
     },
     "select": {
         "gold": "gold/select.jsonl",

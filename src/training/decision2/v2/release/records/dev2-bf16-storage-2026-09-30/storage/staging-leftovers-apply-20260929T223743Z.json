@@ -1,0 +1,257 @@
+{
+  "mode": "apply",
+  "passed": true,
+  "repos": {
+    "llm-semantic-router/dev2-27b-staging": {
+      "after": {
+        "commits": 2,
+        "heads": {
+          "branch:main": "14f75b3107e197bd9be43150069f52cf56837e75"
+        },
+        "lfs_objects": 0,
+        "used_storage": null
+      },
+      "before": {
+        "commits": 2,
+        "heads": {
+          "branch:main": "14f75b3107e197bd9be43150069f52cf56837e75"
+        },
+        "lfs_objects": 1,
+        "used_storage": 19989325
+      },
+      "checks": {
+        "commits_unchanged": true,
+        "no_lfs_left": true,
+        "refs_unchanged": true
+      },
+      "refused": [],
+      "target_bytes": 19989325,
+      "targets": {
+        "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523": {
+          "bytes": 19989325,
+          "node_copy": null,
+          "paths": [
+            "branch:main:m3/M3-A-soup/checkpoint/tokenizer.json"
+          ],
+          "served_by_released_main": [
+            "llm-semantic-router/DEV2.0-0.8B",
+            "llm-semantic-router/DEV2.0-2B",
+            "llm-semantic-router/DEV2.0-4B",
+            "llm-semantic-router/DEV2.0-9B",
+            "llm-semantic-router/DEV2.0-27B"
+          ]
+        }
+      }
+    },
+    "llm-semantic-router/dev2-9b-staging": {
+      "after": {
+        "commits": 2,
+        "heads": {
+          "branch:main": "8a98dc8261472999af7557da6117efd56bf742e4"
+        },
+        "lfs_objects": 0,
+        "used_storage": 19989325
+      },
+      "before": {
+        "commits": 2,
+        "heads": {
+          "branch:main": "8a98dc8261472999af7557da6117efd56bf742e4"
+        },
+        "lfs_objects": 1,
+        "used_storage": 19989325
+      },
+      "checks": {
+        "commits_unchanged": true,
+        "no_lfs_left": true,
+        "refs_unchanged": true
+      },
+      "refused": [],
+      "target_bytes": 19989325,
+      "targets": {
+        "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523": {
+          "bytes": 19989325,
+          "node_copy": null,
+          "paths": [
+            "branch:main:m3/DW/checkpoint/tokenizer.json"
+          ],
+          "served_by_released_main": [
+            "llm-semantic-router/DEV2.0-0.8B",
+            "llm-semantic-router/DEV2.0-2B",
+            "llm-semantic-router/DEV2.0-4B",
+            "llm-semantic-router/DEV2.0-9B",
+            "llm-semantic-router/DEV2.0-27B"
+          ]
+        }
+      }
+    },
+    "llm-semantic-router/dev2-dec-staging": {
+      "after": {
+        "commits": 12,
+        "heads": {
+          "branch:main": "e86562218928fbb77f8071b45646962f63049fad"
+        },
+        "lfs_objects": 0,
+        "used_storage": null
+      },
+      "before": {
+        "commits": 12,
+        "heads": {
+          "branch:main": "e86562218928fbb77f8071b45646962f63049fad"
+        },
+        "lfs_objects": 1,
+        "used_storage": 19989325
+      },
+      "checks": {
+        "commits_unchanged": true,
+        "no_lfs_left": true,
+        "refs_unchanged": true
+      },
+      "refused": [],
+      "target_bytes": 19989325,
+      "targets": {
+        "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523": {
+          "bytes": 19989325,
+          "node_copy": null,
+          "paths": [
+            "branch:main:m3/S2T-soup/checkpoint/tokenizer.json",
+            "branch:main:m4/N4LX-soup/checkpoint/tokenizer.json",
+            "branch:main:m4/N4XF-soup/checkpoint/tokenizer.json"
+          ],
+          "served_by_released_main": [
+            "llm-semantic-router/DEV2.0-0.8B",
+            "llm-semantic-router/DEV2.0-2B",
+            "llm-semantic-router/DEV2.0-4B",
+            "llm-semantic-router/DEV2.0-9B",
+            "llm-semantic-router/DEV2.0-27B"
+          ]
+        }
+      }
+    },
+    "llm-semantic-router/dev2-release-staging": {
+      "after": {
+        "commits": 2,
+        "heads": {
+          "branch:main": "545377c01920c94d1758f7cc1e67678937ad7690"
+        },
+        "lfs_objects": 0,
+        "used_storage": null
+      },
+      "before": {
+        "commits": 2,
+        "heads": {
+          "branch:main": "545377c01920c94d1758f7cc1e67678937ad7690"
+        },
+        "lfs_objects": 1,
+        "used_storage": 581036
+      },
+      "checks": {
+        "commits_unchanged": true,
+        "no_lfs_left": true,
+        "refs_unchanged": true
+      },
+      "refused": [],
+      "target_bytes": 581036,
+      "targets": {
+        "d731c3f12a896ef423361d9084cb4c947bad4138145ef5bb64e5f7885b7e7c46": {
+          "bytes": 581036,
+          "node_copy": null,
+          "paths": [
+            "branch:main:assets/DEV2.0-0.6B-owl-banner.png"
+          ],
+          "served_by_released_main": [
+            "llm-semantic-router/DEV2.0-0.6B"
+          ]
+        }
+      }
+    },
+    "llm-semantic-router/dev2-release-staging-06bm4": {
+      "before": {
+        "commits": 6,
+        "heads": {
+          "branch:main": "55394bd8aed99457db33effa685bd2d9dbe8bc3f"
+        },
+        "lfs_objects": 0,
+        "used_storage": null
+      },
+      "refused": [],
+      "target_bytes": 0,
+      "targets": {}
+    },
+    "llm-semantic-router/dev2-staging-06bm5-z": {
+      "after": {
+        "commits": 2,
+        "heads": {
+          "branch:main": "6b414780805d350cc88035e8fcd3998a285c3c9b"
+        },
+        "lfs_objects": 0,
+        "used_storage": null
+      },
+      "before": {
+        "commits": 2,
+        "heads": {
+          "branch:main": "6b414780805d350cc88035e8fcd3998a285c3c9b"
+        },
+        "lfs_objects": 1,
+        "used_storage": 11422654
+      },
+      "checks": {
+        "commits_unchanged": true,
+        "no_lfs_left": true,
+        "refs_unchanged": true
+      },
+      "refused": [],
+      "target_bytes": 11422654,
+      "targets": {
+        "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4": {
+          "bytes": 11422654,
+          "node_copy": "/data/dev2/runs/06b/m5/staging/m5-z-soup/tokenizer.json",
+          "paths": [
+            "branch:main:tokenizer.json"
+          ],
+          "served_by_released_main": []
+        }
+      }
+    },
+    "llm-semantic-router/dev2-staging-06bm6-mxcx": {
+      "after": {
+        "commits": 2,
+        "heads": {
+          "branch:main": "c11ad98216d9a655036ab40626ce20a73b451cfa"
+        },
+        "lfs_objects": 0,
+        "used_storage": null
+      },
+      "before": {
+        "commits": 2,
+        "heads": {
+          "branch:main": "c11ad98216d9a655036ab40626ce20a73b451cfa"
+        },
+        "lfs_objects": 1,
+        "used_storage": 11422650
+      },
+      "checks": {
+        "commits_unchanged": true,
+        "no_lfs_left": true,
+        "refs_unchanged": true
+      },
+      "refused": [],
+      "target_bytes": 11422650,
+      "targets": {
+        "be75606093db2094d7cd20f3c2f385c212750648bd6ea4fb2bf507a6a4c55506": {
+          "bytes": 11422650,
+          "node_copy": null,
+          "paths": [
+            "branch:main:tokenizer.json"
+          ],
+          "served_by_released_main": [
+            "llm-semantic-router/DEV2.0-0.6B"
+          ]
+        }
+      }
+    }
+  },
+  "rewrite_history": false,
+  "schema": "dev2-release-staging-leftovers/1",
+  "target_bytes": 83394315,
+  "utc": "2026-09-29T22:37:43.557759+00:00"
+}

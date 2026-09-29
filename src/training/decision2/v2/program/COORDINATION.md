@@ -199,6 +199,140 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 07:35 — **Decoder M6b: no successor. The decoder M7 worker was stopped by the platform; a continuation
+  worker was launched** (M6b results `v2/dec/records/dec-m6b-results-2026-09-30.md`).
+  - **M6b:** N6D soup −2.67 [−4.59, +0.33] and its ⅔ point −0.89 [−2.88, +1.16] vs DEV2.0-4B. Typed FINAL fell
+    (T .647 / .671 vs .688), so the 4B N6D lead is closed.
+  - **M7 state:** data locked on PN1-r2 and the cleared HS1 rows (`ea7540df4`); the evaluation-only guard is wired
+    in; the line watcher is live (`ed568b34d`). At 23:29Z these chains were running:
+    - node A GPU5: 2B S7P;
+    - node B: 4B N7P s1 / s2 and the N7C ⅓ build.
+  - **Platform limit:** the 9B M6 and decoder M7 workers were both stopped after ~5.5 h of turn time. Every long
+    milestone must now:
+    - poll every ≤ 30 minutes with one-line state updates;
+    - hand off cleanly through its state file near 5 h.
+    The coordinator relaunches continuation workers from the state file.
+
+- 2026-09-30 07:20 — **27B M4: the A20r soup is a successor (72.36, +5.15) and SUPERSEDES F-b; 27B M5 launched**
+  (M4 records at `632f4005d`; integration `7671002d0`; 65.68 of 70 GPU-h).
+  - **Formal results** (post-key, T = 1):
+
+    | Soup | v3 | vs DEV2.0-27B | T / H | Notes |
+    | --- | ---: | --- | --- | --- |
+    | **A20r** (+20M A7, rank 32 per seed → rank-64 exact soup) | **72.36** | **+5.15 (+2.19, +8.02)** | .896 / .584 | all seven items pass; card-eligible mlx +.014 (+.003, +.025); public 231 203; all five Score levels used |
+    | A20 | 70.44 | — | — | also passes |
+    | Ar | 68.02 | fails item 1 | — | — |
+
+    - vs AutoJev-27B (72.13): lower bound −1.60, so NOT significant.
+    - Contrasts: dose (A20 − Ar) T +.046, v3 +2.42 (+0.14, +5.93); capacity (A20r − A20) T +.058; more updates alone add
+      nothing.
+  - **Coordinator decision: A20r is THE 27B successor; F-b is superseded.** A20r has a higher v3 lower bound (+2.19 vs
+    +0.19), better human transfer (.584 vs .566), better mlx (+.014 vs −.012), better public 231 (203 vs 197), and a
+    storage-light adapter.
+    - A fresh release worker (worktree `vllm-sr-dev2-release`) stages A20r on node A and runs the **C1 guard first**,
+      then releases it as DEV2.0-27B `main`.
+    - Card: "72.36 vs AutoJev-27B 72.13 (+0.23; lower bound −1.60): not a significant difference". No "beats AutoJev"
+      claim.
+    - **The F-b codec worker** (`vllm-sr-dev2-release-27b`) may finish the `bf16z` codec and tests, which are useful for
+      future full-weight models. **F-b's C1 attempt and release are NOT approved;** the ledger's one-successor rule
+      enforces that.
+  - **27B M5** (fresh worker; `vllm-sr-dev2-27b`; node B GPU5–7 + node A GPU2–4; 72 GPU-h):
+    - Target: beat AutoJev significantly.
+    - HT-DEV v2 27B references first: current, A20r, F-b, AutoJev, Eikos.
+    - Arms stack the levers: full FT on the A20 mixture; a higher-rank LoRA on A20; more A7 dose and/or HS1 / PN1-r2.
+      Each has a control and an early-stop rule.
+
+- 2026-09-30 07:15 — **F-b did not fit under the HF 100 GB cap; storage freed; a lossless-compression path was chosen**
+  (storage record `v2/release/records/dev2-bf16-storage-2026-09-30.md`; integration `073cbd508`; 0.712 GPU-h).
+  - **Storage freed, 61.43 → 50.46 GB:** stale staging (83 MB) removed; BF16 storage revisions with 0 answer changes on
+    every scored prompt and mlx-diag, FP32 blobs (27.36 GB) purged with `rewrite_history=False`:
+
+    | Model | New revision | Decision |
+    | --- | --- | --- |
+    | DEV2.0-0.8B | `bede7938` | `a34b2486…` |
+    | DEV2.0-2B | `a53cf66a` | `86129728…` |
+    | DEV2.0-4B | `fadbba4f` | `d6bcdea2…` |
+
+    Cards are byte-identical.
+  - **Why F-b doesn't fit:** the exact package is 53.82 GB, because the runtime needs the 5.09 GB embedding and the norms
+    in FP32. That would make 104.28 GB, 7.28 GB short with 3 GB headroom. DEV2.0-27B stays `c0dba600`, and the 27B C1
+    ledger slot is unused.
+  - **Coordinator decisions:**
+    - Repos outside Decision 2.0 (Vela-2.0-Encoder, Decision-1.0-Route-0.6B, Vela datasets) are NOT ours to delete. The
+      user is informed.
+    - **F-b calibration: CAL698.** The 23:15 rule adopted it: all four development measures improved and the formal
+      run used it.
+    - **Lossless path:** a `bf16z` codec (byte-plane split + zstd, ZipNN-style) with a runtime loader that restores
+      bit-identical tensors. Expected ~33% smaller, so F-b ≈ 36–42 GB fits.
+    - Full parity on the compressed package, then the node-to-node transfer, item 8 and release. Optionally compress
+      DEV2.0-9B afterwards.
+    - The same release worker is resumed once.
+  - **Long term:** side-by-side 27B full-model updates need ~72–108 GB free. A larger HF storage plan is recommended to
+    the user; it is not blocking.
+
+- 2026-09-30 06:40 — **9B M6 worker stopped by the platform; a fresh continuation worker was launched from
+  `m6-state.md`** (latest commit `d0d6272ef`).
+  - **KA** (AutoJev-27B soft targets on human rows) was stopped by its preregistered early rule: ΔP −0.36 < +0.5.
+    Score rose (+35) and H3 rose (+.008), but Noul `rule_precedence` fell 74 items. That is the same trade as M5's
+    dose, and at 27B M4b the AutoJev teacher didn't help either.
+    - **Program-level conclusion:** teacher soft targets on human rows are not a lever at 9B or 27B.
+  - Wave 2 is running on node A: KH-s4 on GPU6 and K-s5 on GPU7, ETA ~00:20Z. Budget used 6.32 of 24 GPU-h at 21:39Z.
+  - **Process notes** from the previous worker:
+    - A filename search listed paths under `/data/dev2/private` (no file opened). **Every track: exclude
+      `/data/dev2/private` from searches.**
+    - A `core.fileMode=false` worktree committed wrappers without the exec bit. Use `git update-index --chmod=+x` for
+      node scripts.
+
+- 2026-09-30 06:10 — **27B M4b: F-b (full fine-tune) is a successor candidate, +4.47 over DEV2.0-27B and level with
+  AutoJev** (record `v2/27b/records/m4b-results-2026-09-30.md`; integration `023b38f97`; 30.49 of 36 GPU-h).
+  - **Formal results** (post-key, node B, 32K, DEV2.0-27B's image and cache):
+
+    | Model | v3 | vs DEV2.0-27B | vs AutoJev | T / H |
+    | --- | ---: | --- | --- | --- |
+    | F-b (full FT, same mixture, gold, two-seed soup) | 71.684 | **+4.47 [+0.19, +8.13]** | −0.45 [−3.68, +3.98] | .908 / .566 (AutoJev .887 / .587) |
+    | F-a (+ own-Lux soft targets on human rows) | 70.42 | [−0.27, +6.16] | — | — |
+    | F-c (AutoJev teacher, 1 seed) | 68.31 | — | — | — |
+
+    - F-b: constraint competition .98, exception stack .83; public 231 197; card-eligible mlx-diag −.012
+      [−.029, +.004]; the full mlx average, including the internal XNLI Score part, is −.017 [−.031, −.003].
+    - Interpolation with the LoRA release was stopped by the merge check: BF16 rounding erases the merged LoRA update,
+      so an adapter must be kept separate.
+    - The development panels misread human transfer: they showed full FT ~.10 lower, while formal was level. HT-DEV v2
+      should fix this.
+  - **Coordinator rulings:**
+    - **Item 4 = card-eligible parts,** as registered at 16:05 and in the prereg, so F-b passes items 1–7. The decline
+      seen only when the XNLI Score part is included is disclosed qualitatively on the card.
+    - The pre-P0 amendments 2 and 3 are accepted: per-tensor gradient parity, and caps from the probe's speed.
+    - **Lessons:** capacity is the lever (+.120 typed at matched tokens, human transfer level); soft targets on human rows
+      don't help.
+    - "Beats AutoJev" is not met yet: v3 is below 72.133, and human transfer is .020 lower (n.s.).
+  - **F-b release path** (release worker, worktree `vllm-sr-dev2-release-27b`):
+    1. **Storage:** a BF16 27B full model is ~52 GB against 61.36 / 100 GB used. Convert FP32 packages (4B, and 2B / 0.8B
+       if FP32) to BF16 at exact parity and purge the FP32 blobs; remove stale staging. Never delete training data,
+       panels or eval backups. Stop and report if the upload would leave < 3 GB headroom.
+    2. **Transfer:** F-b goes to node A by a direct node-to-node copy (temporary key); C1 never leaves node A.
+    3. **Item 8:** the C1 post-key guard vs 57.33.
+    4. **Release** as the new DEV2.0-27B `main` (`qwen-full`), with the card as briefed, and purge the adapter blobs.
+    - The 100 GB cap will block future 27B full-model updates, which need space for old and new copies side by side.
+      Telling the user is part of the next report.
+  - **27B M5** (full FT on M4's +20M A7 mixture, gold, two seeds, ~12 GPU-h per seed) waits for M4's dose result.
+
+- 2026-09-30 04:10 — **HT-DEV v2 PASSES; it is the human-transfer screen for new milestones** (eval record
+  `v2/eval/records/htdev2-validation-2026-09-30.md`; integration `bc0a12d70`; 1.454 GPU-h; usage in "Eval runners").
+  - **Why v1 failed and v2 works:** v1 failed on what it measured, not on target noise. v2 is a held-out copy of nine
+    CSS15 tasks (1,944 items).
+  - **Results:** within-tier agreement with formal ΔH 0.843 vs 0.657 for the CSS pilot (P(better) 0.972); r 0.647 vs
+    0.206; siblings 74 / 78. It predicts formal human transfer but NOT C1; formal human transfer itself matches only
+    14 of 25 C1 pairs.
+  - **Rules:**
+    - FLAG at ΔH_dev2 ≤ −0.02 vs the tier's reference; there formal sign agreement is 93%.
+    - New milestones use it in place of the CSS-pilot mean. Running milestones may adopt it only by an amendment made
+      before their first development readout.
+    - Formal CSS15 still decides, and the C1 guard stays.
+  - **Coverage gaps:** Kai1 and the four 0.6B 1.0 / peer models (~0.08 GPU-h); the node-B-only decoder packages; all 27B
+    models. The 27B references (F1 + peers, on node B with the kernel image) are needed before a 27B M5. They will be
+    batched with the next eval job.
+
 - 2026-09-30 02:25 — **USE PN1-r2 AND THE FIXED HS1 (dataset head `27b1d2f1`); qualification pools are guarded** (data
   record `v2/data/records/m4-dq-results-2026-09-30.md`; integration `3ded967af`; 0.088 GPU-h).
   - **PN1:**
@@ -2033,6 +2167,53 @@ aggregates in `records/htdev-validation/`).
   - Collections and validation are on node A under `/data/dev2/runs/eval/htdev/{collect,validation}`.
   - Backup: private eval-artifacts dataset, `htdev/v1/` at `ad4b958e`.
   - GPU: 3.27 GPU-h in total (build 0.64 + collections 2.63); the validation itself was CPU only.
+
+### HT-DEV v2 (`ht-dev2`): human-transfer screen (eval track, 2026-09-30; code at `7a6bd7986` or later)
+
+Record `v2/eval/records/htdev2-validation-2026-09-30.md` (prereg `htdev2-prereg-2026-09-30.md`, amendments 1–5;
+integration `bc0a12d70`).
+
+- **Validated (PASS).**
+  - Within-tier sign agreement with formal CSS15 ΔH is 0.843, vs 0.657 for the CSS-pilot three-task mean (172 decidable
+    pairs, 50 models, P(better) 0.972).
+  - Within-tier r 0.647 vs 0.206. Sibling pairs: 74 / 78.
+- **Panel:** 1,944 items, nine CSS15 tasks × 216, from held-out portions of the same sources, with formal templates and
+  option maps.
+  - Disjoint from the formal items at item and group level.
+  - Screened against 122,485 training files (including PN1 / HS1) and every protected panel (including JevBench).
+  - Never training data.
+- **Rule for every track.** It replaces the CSS-pilot three-task-mean non-decrease screen in development gates.
+  - Collect `ht-dev2` for each shortlisted checkpoint at its formal input limit and kernel path. Compare it with the
+    tier's reference using `--htdev2-reference`.
+  - **FLAG** (ΔH_dev2 ≤ −0.02): don't send it to the formal runner as a successor without a recorded reason. Formal ΔH
+    has the same sign 93% of the time beyond ±0.02.
+  - **TIE** (|Δ| < 0.02): uninformative.
+  - **GAIN** (≥ +0.02): a likely formal gain.
+  - ±0.045 is the preregistered 10%-risk band.
+  - It is a screen, not a score to optimize. Human transfer is decided only by the formal paired CSS15 CI.
+  - Treat comparisons with third-party peers with caution (0.74). It does not predict C1, so keep the C1 guard.
+  - **Running milestones** may adopt it only by an amendment made before their first development readout. Otherwise,
+    report it as a diagnostic.
+- **Run** (node A; about 0.016 GPU-h per 0.6B checkpoint, 0.036 per 4B / 9B):
+
+  ```bash
+  SRC=<full-sha>-src_training_decision2; S=/data/dev2/src/$SRC/src/training/decision2; export PYTHONPATH=$S
+  $S/v2/eval/run_same_panel.sh --gpu <N> --track <track> --src $SRC --run-dir <run> --model-dir <pkg> [--shared-lease <name>] \
+    [--env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=<rw copy> --mount-rw <rw copy>] \
+    -- --adapter-spec <adapter.json> --model-path <pkg> --revision <id> --panels ht-dev2   # or typed-dev,css-pilot,ht-dev2
+  python3 -m v2.eval.dev_readout --run-dir <run> --label <ckpt> --output <readout.json> \
+    --htdev2-reference /data/dev2/runs/eval/htdev2/collect/<reference key>/output/ht-dev2.predictions.jsonl
+  ```
+
+  - **Readout:** the readout JSON gets `htdev2`: H_dev2, per-task macro-F1, the bootstrap SD, and `vs_reference` with
+    delta, paired CI and verdict.
+  - **Reference keys** (`/data/dev2/runs/eval/htdev2/collect/<key>`):
+    - 0.6B `06b-m6-mxcx-soup` (the same weights as `b2131337`);
+    - 0.8B `dec-m2-E8F-soup`; 2B `dec-m3-S2T-soup`; 4B `dec-m4-N4XF-soup`; 9B `9b-m4-K-a13`;
+    - own 1.0: `eos1`, `sol1`, `nox1`, `lux1`.
+    - Kai1 and the 27B models are not collected yet.
+- **Files:** `/data/dev2/private/panels/{goldfree,gold}/ht-dev2.*` (prompts `90cd409a…`, gold `659c92b4…`). Backup:
+  eval-artifacts `htdev2/v1/` (`6f6acf5d`).
 
 ### JevArena-C1 v1.2 post-key successor guard (successor-rule item 8; eval custodian; code at `2b5e878db` or later)
 
