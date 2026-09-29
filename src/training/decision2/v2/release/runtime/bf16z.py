@@ -396,6 +396,33 @@ def verify_dir(root: Path, entries: dict[str, dict[str, Any]]) -> dict[str, Any]
     return {"files": results, "passed": all(r["ok"] for r in results.values())}
 
 
+def make_receipt(result: dict[str, Any], level: int, source: Path) -> dict[str, Any]:
+    """The compression receipt the release builder pins (``bf16z`` spec entry)."""
+    import zstandard
+
+    files = result["files"]
+    return {
+        "schema": RECEIPT_SCHEMA,
+        "format": FORMAT,
+        "level": level,
+        "zstandard": zstandard.__version__,
+        "source": str(source),
+        "seconds": result["seconds"],
+        "files": {
+            name: {
+                "sha256": e["sha256"],
+                "bytes": e["bytes"],
+                "restored": e["restored"],
+                "restored_sha256": e["source_sha256"],
+                "restored_bytes": e["source_bytes"],
+            }
+            for name, e in files.items()
+        },
+        "bytes": sum(e["bytes"] for e in files.values()),
+        "restored_bytes": sum(e["source_bytes"] for e in files.values()),
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -410,45 +437,29 @@ def main() -> None:
     v.add_argument("--dir", type=Path, required=True)
     v.add_argument("--receipt", type=Path)
     v.add_argument("--output", type=Path, required=True)
+    r = sub.add_parser("restore")
+    r.add_argument("--package", type=Path, required=True)
+    r.add_argument("--cache", type=Path)
     args = parser.parse_args()
-    import zstandard
-
     if args.command == "compress":
         if args.receipt.exists():
             raise FileExistsError(args.receipt)
         result = compress_checkpoint(args.source, args.output, level=args.level)
-        files = result["files"]
-        receipt = {
-            "schema": RECEIPT_SCHEMA,
-            "format": FORMAT,
-            "level": args.level,
-            "zstandard": zstandard.__version__,
-            "source": str(args.source),
-            "seconds": result["seconds"],
-            "files": {
-                name: {
-                    "sha256": e["sha256"],
-                    "bytes": e["bytes"],
-                    "restored": e["restored"],
-                    "restored_sha256": e["source_sha256"],
-                    "restored_bytes": e["source_bytes"],
-                }
-                for name, e in files.items()
-            },
-            "bytes": sum(e["bytes"] for e in files.values()),
-            "restored_bytes": sum(e["source_bytes"] for e in files.values()),
-        }
+        receipt = make_receipt(result, args.level, args.source)
         args.receipt.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
         print(
             json.dumps({k: receipt[k] for k in ("bytes", "restored_bytes", "seconds")})
         )
         return
+    if args.command == "restore":
+        manifest = json.loads((args.package / "MODEL_MANIFEST.json").read_text())
+        print(materialize(args.package, manifest, args.cache))
+        return
     if args.receipt:
         entries = json.loads(args.receipt.read_text())["files"]
     else:
-        entries = json.loads((args.dir / "MODEL_MANIFEST.json").read_text())["storage"][
-            "files"
-        ]
+        manifest = json.loads((args.dir / "MODEL_MANIFEST.json").read_text())
+        entries = manifest["storage"]["files"]
     report = verify_dir(args.dir, entries)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     print(json.dumps({"passed": report["passed"], "files": len(report["files"])}))
