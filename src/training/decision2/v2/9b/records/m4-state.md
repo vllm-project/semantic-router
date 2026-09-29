@@ -1,6 +1,6 @@
 # 9B M4 state (resume file)
 
-Updated: 2026-09-29 13:30 UTC+8 (worker 3)
+Updated: 2026-09-29 13:40 UTC+8 (worker 3; M4 complete)
 Branch: `xunzhuo/decision-2-training-9b` (merge-only into `xunzhuo/decision-2-training`)
 Base: `eead88a60` + merge of origin `xunzhuo/decision-2-training` (`f3aae7155`) = `1424df742`
 
@@ -36,9 +36,18 @@ Base: `eead88a60` + merge of origin `xunzhuo/decision-2-training` (`f3aae7155`) 
   Prereg is silent on several passers: K-a13 and KN-a12 both go to the coordinator (amendment 1: report at once;
   upload only a coordinator-approved release candidate, by release engineering, after `hf_headroom.sh`).
 
-## Next
+- Step 4b (13:40): gist 05 entry "2026-09-29 13:30" posted above 08:35 (gist revision `313b507b044a`).
+- Step 4c: this state commit merged into `xunzhuo/decision-2-training` (merge-only; see `git log` of that branch).
 
-4. Gist 05 entry (13:30, above 08:35; draft `/tmp/m4-gist-entry.md` on the worker host); merge into `xunzhuo/decision-2-training`.
+## Running
+
+- nothing. Node A GPU6-7 idle (leases still `track=9b-clm status=reserved`, as `chain-step.sh` leaves them);
+  node B GPU0-2 idle (leases `status=idle`).
+
+## Next (M4 complete)
+
+- Coordinator: choose between K-a13 (first in priority, higher lower bound) and KN-a12 (higher v3); the prereg is silent.
+  Only a coordinator-approved release candidate is uploaded, by release engineering, after `hf_headroom.sh` (amendment 1).
 
 ## GPU-hours
 
