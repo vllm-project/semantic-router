@@ -87,7 +87,6 @@ func TestQdrantListIntegrationCrossesOrderedScrollBatches(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-// StorageIntegration: qdrant
 // TestQdrantListIntegrationDistinctTimestampsCrossBatch verifies that startFrom
 // advances between scroll calls when records span two timestamp groups and the
 // newer group fills the first batch exactly.
@@ -98,6 +97,8 @@ func TestQdrantListIntegrationCrossesOrderedScrollBatches(t *testing.T) {
 //     Page returns the 100 newest records (all newer timestamps).
 //   - List(Limit:20, Offset:100): second page returns the remaining 5 newer and
 //     then 15 older records, proving startFrom moved from T+60s to T between calls.
+//
+// StorageIntegration: qdrant
 func TestQdrantListIntegrationDistinctTimestampsCrossBatch(t *testing.T) {
 	storagetest.Require(t, "qdrant")
 	ctx := context.Background()
