@@ -191,6 +191,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-29 09:00 — DEV2.0-4B package verified (gist `07d-decision-2-release-4b.md`; integration `31d21a4ec`): private
+  `llm-semantic-router/DEV2.0-4B@8052eb6c99c0b3b6a9980dcd77fb868c27da353a` (card-only on top of the full-parity upload
+  `c73123f3`; manifest `eab4e8ac…`; 4,208,383,488 loaded parameters; 16.85 GB; T = 1 — CAL698 worsened CSS-pilot ECE
+  .063 → .068 while improving the other three measures, and the rule has no tolerance band). Finalization + `--collect`
+  and the storage cleanup are running. Errata for the 0.8B / 0.6B / 2B records landed (`ce2eb1789`).
+  - Storage hit 93.85 / 100 GB with the 4B upload. The cleanup deletes the 4B staging copy and the staging copies of the HOLD
+    / not-a-successor 9B DW, 0.6B Z and 0.6B m6-mxcx (node copies are their durable store) to restore >= 40 GB.
+  - Tooling notes: the mirrored `hf_headroom.sh` lacks the execute bit — call it with `bash`. For formal runs, the scored run
+    and its mlx-diag run should share one frozen autotune cache so release parity can run in one pass (kernel tile choice
+    alone moves probabilities by up to 1.5e-3).
+
 - 2026-09-29 08:20 — From 0.6B Milestone 6 (gist 03; integration `4cb2afb8c`): no successor; the released DEV2.0-0.6B stands.
   - `m6-mxcx-soup` (mx ⊕ cx, 6 seeds, XL r2 recipes at ~30M tokens with own-Lux targets on every row): post-key v3 48.46,
     +4.92 [+2.50, +9.10] vs released, +5.93 [+3.93, +13.58] vs GLiNER2.5-Decide, human transfer −.021 [−.064, +.061], mlx-diag
