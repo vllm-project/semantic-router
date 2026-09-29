@@ -937,6 +937,46 @@ class PipelineTest(unittest.TestCase):
                 )
 
 
+class GpuCostTest(unittest.TestCase):
+    def test_cost_uses_repeated_widths_and_charges_new_ones(self):
+        from v2.data.m4 import pn1_gpu
+
+        runner = pn1_gpu.Runner(budget=100.0, size=4)
+        runner.log = [
+            {
+                "phase": "preflight",
+                "items": 4,
+                "width": 64,
+                "seconds": 20.0,
+                "new_shape": True,
+            },
+            {
+                "phase": "preflight",
+                "items": 4,
+                "width": 64,
+                "seconds": 5.0,
+                "new_shape": False,
+            },
+            {
+                "phase": "preflight",
+                "items": 1,
+                "width": 96,
+                "seconds": 25.0,
+                "new_shape": True,
+            },
+        ]
+        runner.shapes = {64, 96}
+        self.assertEqual(runner.batch_seconds(), 5.0)
+        known = [[{"ids": [1] * 60}]] * 3
+        self.assertAlmostEqual(runner.cost(known), pn1_gpu.SAFETY * 3 * 5.0)
+        fresh = known + [[{"ids": [1] * 120}]]
+        self.assertAlmostEqual(
+            runner.cost(fresh), pn1_gpu.SAFETY * 4 * 5.0 + pn1_gpu.SHAPE_ALLOWANCE
+        )
+        runner.log = runner.log[:1] + runner.log[2:]
+        self.assertEqual(runner.batch_seconds(), 25.0)
+
+
 class RegistryTest(unittest.TestCase):
     def test_registry_has_both_keys(self):
         from pathlib import Path

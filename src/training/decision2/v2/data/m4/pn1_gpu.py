@@ -37,6 +37,7 @@ PREFLIGHT_ITEMS = 256
 BUCKET = 32
 MAX_NEW_TOKENS = 192
 SAFETY = 1.15
+SHAPE_ALLOWANCE = 20.0
 THINK_OFF_SUFFIX = "<think>\n\n</think>\n\n"
 
 
@@ -201,8 +202,17 @@ def padded(batch: list[dict[str, Any]], size: int, pad_id: int) -> tuple[Any, An
     return ids, mask, width
 
 
+def width_of(batch: list[dict[str, Any]]) -> int:
+    return BUCKET * math.ceil(max(len(item["ids"]) for item in batch) / BUCKET)
+
+
 class Runner:
-    """Timed batches with a preflight rate and a hard budget stop."""
+    """Timed fixed-size batches, a projected cost and a hard budget stop.
+
+    Every batch is padded to the same row count, so the cost unit is a batch: the mean
+    time of batches at an already-seen padded width (else all batches but the first),
+    times SAFETY, plus SHAPE_ALLOWANCE seconds per padded width not seen yet.
+    """
 
     def __init__(self, budget: float, size: int) -> None:
         self.budget = budget
@@ -211,21 +221,20 @@ class Runner:
         self.shapes: set[int] = set()
         self.stopped = False
 
-    def steady_rate(self) -> float:
-        warm = self.log[1:] or self.log
-        return sum(b["items"] for b in warm) / max(
-            sum(b["seconds"] for b in warm), 1e-6
-        )
+    def batch_seconds(self) -> float:
+        warm = [b for b in self.log if not b["new_shape"]] or self.log[1:] or self.log
+        return sum(b["seconds"] for b in warm) / max(len(warm), 1)
+
+    def cost(self, groups: list[list[dict[str, Any]]]) -> float:
+        new = {width_of(batch) for batch in groups} - self.shapes
+        return SAFETY * len(groups) * self.batch_seconds() + SHAPE_ALLOWANCE * len(new)
 
     def run(self, groups: list[list[dict[str, Any]]], step, phase: str) -> list[Any]:
         import torch
 
         out = []
         for batch in groups:
-            if (
-                self.log
-                and elapsed() + SAFETY * self.size / self.steady_rate() > self.budget
-            ):
+            if self.log and elapsed() + self.cost([batch]) > self.budget:
                 self.stopped = True
                 break
             torch.cuda.synchronize()
@@ -330,9 +339,17 @@ def cmd_generate(args: argparse.Namespace) -> int:
     from v2.data.m4.pn1_text import twin_prompt
 
     languages = args.languages.split(",")
-    seeds = [s for s in read_jsonl(args.seeds) if s["language"] in languages]
+    excluded = {r["seed"] for path in args.exclude for r in read_jsonl(path)}
+    seeds = [
+        s
+        for s in read_jsonl(args.seeds)
+        if s["language"] in languages and s["seed"] not in excluded
+    ]
     receipt, model, tokenizer = prepare(args, "generate")
-    receipt["inputs_sha256"] = {"seeds.jsonl": file_sha256(args.seeds)}
+    receipt["inputs_sha256"] = {
+        "seeds.jsonl": file_sha256(args.seeds),
+        **{f"exclude/{p.parent.name}/{p.name}": file_sha256(p) for p in args.exclude},
+    }
     from transformers import GenerationConfig
 
     defaults = GenerationConfig.from_pretrained(args.model_dir, local_files_only=True)
@@ -406,45 +423,51 @@ def cmd_generate(args: argparse.Namespace) -> int:
             )
         return results, width
 
-    total = sum(len(group) for group in per_lang.values())
+    interleaved = [
+        group[i]
+        for i in range(max((len(g) for g in per_lang.values()), default=0))
+        for group in per_lang.values()
+        if i < len(group)
+    ][:PREFLIGHT_ITEMS]
     first = {
-        lang: math.ceil(PREFLIGHT_ITEMS * len(group) / max(total, 1))
-        for lang, group in per_lang.items()
+        lang: sum(s["language"] == lang for s in interleaved) for lang in languages
     }
-    preflight = [
-        items[s["seed"]]
-        for lang, group in per_lang.items()
-        for s in group[: first[lang]]
-    ]
+    preflight = [items[s["seed"]] for s in interleaved]
     runner = Runner(args.budget_seconds, args.batch_size)
     results = runner.run(batches(preflight, args.batch_size), step, "preflight")
-    rate = runner.steady_rate()
     spent = elapsed()
-    projected = spent + SAFETY * (total - len(preflight)) / rate
-    affordable = max(0, math.floor((args.budget_seconds - spent) * rate / SAFETY))
-    scale = (
-        1.0
-        if projected <= args.budget_seconds
-        else min(1.0, (len(preflight) + affordable) / max(total, 1))
-    )
-    keep = {
-        lang: max(first[lang], math.floor(len(group) * scale))
-        for lang, group in per_lang.items()
-    }
+
+    def plan(scale: float) -> tuple[dict[str, int], list[dict[str, Any]]]:
+        keep = {
+            lang: max(first[lang], math.floor(len(group) * scale))
+            for lang, group in per_lang.items()
+        }
+        rest = [
+            items[s["seed"]]
+            for lang, group in per_lang.items()
+            for s in group[first[lang] : keep[lang]]
+        ]
+        return keep, rest
+
+    scale = 1.0
+    keep, rest = plan(scale)
+    projected = spent + runner.cost(batches(rest, args.batch_size))
+    while (
+        scale > 0
+        and spent + runner.cost(batches(rest, args.batch_size)) > args.budget_seconds
+    ):
+        scale = round(scale - 0.005, 6)
+        keep, rest = plan(max(scale, 0.0))
     receipt["timing"]["preflight"] = {
         "items": len(preflight),
         "seconds": round(sum(b["seconds"] for b in runner.log), 1),
-        "steady_items_per_second": round(rate, 3),
-        "projected_total_seconds": round(projected, 1),
+        "steady_batch_seconds": round(runner.batch_seconds(), 3),
+        "projected_total_seconds_all_planned": round(projected, 1),
     }
-    rest = [
-        items[s["seed"]]
-        for lang, group in per_lang.items()
-        for s in group[first[lang] : keep[lang]]
-    ]
     results += runner.run(batches(rest, args.batch_size), step, "main")
     done = {r["seed"] for r in results}
     receipt["volumes"] = {
+        "excluded_already_generated": len(excluded),
         "planned": {lang: len(group) for lang, group in per_lang.items()},
         "kept_after_preflight": keep,
         "scale": round(scale, 6),
@@ -475,7 +498,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
             {
                 "generated": len(results),
                 "scale": scale,
-                "rate": rate,
+                "batch_seconds": runner.batch_seconds(),
                 "seconds": round(elapsed(), 1),
             }
         )
@@ -546,33 +569,35 @@ def cmd_judge(args: argparse.Namespace) -> int:
             rows[-1].append(item)
         else:
             rows.append([item])
-    preflight, count = [], 0
-    while rows and count < PREFLIGHT_ITEMS:
-        row = rows.pop(0)
-        preflight += row
-        count += len(row)
+    preflight = []
+    while rows and len(preflight) + len(rows[0]) <= PREFLIGHT_ITEMS:
+        preflight += rows.pop(0)
     runner = Runner(args.budget_seconds, args.batch_size)
     results = runner.run(batches(preflight, args.batch_size), step, "preflight")
-    rate = runner.steady_rate()
     spent = elapsed()
-    remaining = sum(len(r) for r in rows)
-    projected = spent + SAFETY * remaining / rate
-    affordable = (
-        remaining
-        if projected <= args.budget_seconds
-        else max(0, math.floor((args.budget_seconds - spent) * rate / SAFETY))
+
+    def fits(count: int) -> bool:
+        chosen = [item for row in rows[:count] for item in row]
+        return (
+            spent + runner.cost(batches(chosen, args.batch_size)) <= args.budget_seconds
+        )
+
+    projected = spent + runner.cost(
+        batches([item for row in rows for item in row], args.batch_size)
     )
-    rest, taken = [], 0
-    for row in rows:
-        if taken + len(row) > affordable:
-            break
-        rest += row
-        taken += len(row)
+    low, high = 0, len(rows)
+    while low < high:
+        middle = (low + high + 1) // 2
+        if fits(middle):
+            low = middle
+        else:
+            high = middle - 1
+    rest = [item for row in rows[:low] for item in row]
     receipt["timing"]["preflight"] = {
         "items": len(preflight),
         "seconds": round(sum(b["seconds"] for b in runner.log), 1),
-        "steady_items_per_second": round(rate, 3),
-        "projected_total_seconds": round(projected, 1),
+        "steady_batch_seconds": round(runner.batch_seconds(), 3),
+        "projected_total_seconds_all_items": round(projected, 1),
     }
     results += runner.run(batches(rest, args.batch_size), step, "main")
     receipt["volumes"] = {
@@ -600,7 +625,11 @@ def cmd_judge(args: argparse.Namespace) -> int:
     )
     print(
         json.dumps(
-            {"judged": len(results), "rate": rate, "seconds": round(elapsed(), 1)}
+            {
+                "judged": len(results),
+                "batch_seconds": runner.batch_seconds(),
+                "seconds": round(elapsed(), 1),
+            }
         )
     )
     return 0
@@ -626,6 +655,13 @@ def main(argv: list[str] | None = None) -> int:
         if name == "generate":
             sub.add_argument("--seeds", type=Path, required=True)
             sub.add_argument("--languages", required=True)
+            sub.add_argument(
+                "--exclude",
+                type=Path,
+                action="append",
+                default=[],
+                help="generations.jsonl of an earlier pass; its seeds are skipped",
+            )
         else:
             sub.add_argument("--items", type=Path, required=True)
     args = parser.parse_args(argv)
