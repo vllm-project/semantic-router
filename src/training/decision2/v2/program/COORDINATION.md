@@ -92,6 +92,8 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 | release engineering (~27B) | `/home/xunliu/code/vllm-sr-dev2-release-27b` | `xunzhuo/decision-2-training-release-27b` |
 | release engineering (9B tier) | `/home/xunliu/code/vllm-sr-dev2-release-9b` | `xunzhuo/decision-2-training-release-9b` |
 | eval: 9B gates | `/home/xunliu/code/vllm-sr-dev2-eval-9bgates` | `xunzhuo/decision-2-training-eval-9bgates` |
+| eval: JevBench analysis | `/home/xunliu/code/vllm-sr-dev2-eval-jevbench` | `xunzhuo/decision-2-training-eval-jevbench` |
+| ~27B Milestone 4b | `/home/xunliu/code/vllm-sr-dev2-27b-m4b` | `xunzhuo/decision-2-training-27b-m4b` |
 
 - New code and records go under `src/training/decision2/v2/<track>/` (tracks: `eval`, `data`, `06b`, `dec`, `9b`, `27b`;
   shared helpers in `src/training/decision2/v2/common/`). Reuse the existing verified modules instead of forking them.
@@ -152,14 +154,13 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 | GPUs | Owner (coordinator may reassign) |
 | --- | --- |
 | node A GPU0–1 | 0.6B track (owner; Milestone 7 finished 2026-09-29 14:00 UTC+8; idle until Milestone 8, which waits for Score5-typed-DEV). Short shared-lease jobs by eval (e.g., the Score5-typed-DEV validation collections) and release workers are allowed as recorded co-tenants with their own lease entries |
-| node A GPU2–4 | ~27B track (moved from the 9B track 2026-09-29 04:30 UTC+8; the 27B track may train on node A — same image + frozen autotune cache per the comparability rule; formal comparisons stay on node B). From 14:25: one GPU lent under a shared lease to eval for C1 event 3 staging, preflight and the event (~1.3 GPU-h) |
-| node A GPU5 | DEV2.0-0.8B release verification + C1 scoring event 1 (lent by the decoder track, 2026-09-28 21:00 UTC+8; small inference jobs may share it); back to the decoder afterwards |
-| node A GPU6–7 | 9B track (Milestone 4 finished 13:30 UTC+8); from 13:45 the 9B release worker uses one of them for package verification; the eval track may use short shared-lease jobs on any GPU for development-panel scoring |
-| node B GPU0–2 | 9B track (moved from the decoder 2026-09-29 07:35 UTC+8; 9B may train on node B — same image + frozen autotune cache; its formal comparisons stay on node A). Idle since M4; from 14:25 lent to eval for the 27B peers' mlx-diag (shared leases) |
-| node B GPU3–4 | 0.8B–4B decoder (moved from eval at 2026-09-28 16:30 UTC+8). Milestone 5 finished 14:20 UTC+8; from 14:40 lent to research & data for the paraphrase-style Noul arm (≤ 1.5 GPU-h) until decoder Milestone 6 |
-| node B GPU5–6 | ~27B (from 14:25: completing the M3 F2 soup / formal / contrast, plus F1 and F2 mlx-diag) |
-| node B GPU7 | ~27B Milestone 3 (H7 / H8 Lux wave finished and released 2026-09-29 04:14 UTC+8; assigned at 04:05); from 14:25 also available to the F2 completion |
-| node B GPU7 | research & data (owner) — SHARED from 2026-09-28 21:55 UTC+8 with the eval track's node-B comparator re-validation (~1.5 h, inference only; each writes its own lease owner entry, e.g. `owner.eval`) |
+| node A GPU2–4 | ~27B track (moved from the 9B track 2026-09-29 04:30 UTC+8; the 27B track may train on node A — same image + frozen autotune cache per the comparability rule; formal comparisons stay on node B). From 16:00: ~27B Milestone 4 (one attempt per GPU). The eval C1 staging worker may briefly hold one of these under a shared lease for preflight smokes; the event itself runs on node A GPU7 |
+| node A GPU5 | 0.8B–4B decoder: Milestone 6 from 16:05 UTC+8 |
+| node A GPU6–7 | 9B track: Milestone 5 from 16:05 UTC+8. GPU6 first finishes the DEV2.0-8B finalization. GPU7 is shared with C1 event 3 (eval shared lease, ~1.3 GPU-h). The eval track may use short shared-lease jobs on any GPU for development-panel scoring |
+| node B GPU0–2 | 9B-owned, lent from 16:05 UTC+8 to **~27B Milestone 4b**. The eval track's short 27B-peer mlx-diag leases (from 14:25) finish first |
+| node B GPU3–4 | 0.8B–4B decoder: Milestone 6 from 16:05 UTC+8. Research & data's paraphrase-Noul lend (≤ 1.5 GPU-h, from 14:40) finishes first |
+| node B GPU5–6 | ~27B (M3 F2 completion finished 15:50 UTC+8; from 16:00 ~27B Milestone 4) |
+| node B GPU7 | ~27B (from 16:00 ~27B Milestone 4) |
 
 Every training arm: freeze start repo + revision, data hash, token/step budget, controls, checkpoint-selection rule and
 stop rule BEFORE launch (commit a prereg); run preflights (load/parity, zero-step, one-step + reload). If a preflight
@@ -187,6 +188,7 @@ exactly one gist file and updates it in place:
 | `07d-decision-2-release-4b.md` | release engineering for DEV2.0-4B |
 | `07e-decision-2-release-27b.md` | release engineering for the ~27B tier |
 | `07f-decision-2-release-9b.md` | release engineering for the 9B tier |
+| `06b-decision-2-27b-m4b.md` | ~27B Milestone 4b (parallel levers: full fine-tuning, human-row teachers) |
 
 - Create: write the file locally with exactly that name, then `gh gist edit cd90fce0fa548616d8a4f1b2d2398dea -a <local-path>`.
   Update: `gh gist edit cd90fce0fa548616d8a4f1b2d2398dea -f <file-name> <local-path>`. Never modify or delete other files.
@@ -195,6 +197,137 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-29 16:20 — **C1 event 3 NOT run: the custodian content scan FAILED; C1 v1.2 decided** (prep record §00;
+  integration `295b5fb0e`; 0 GPU-h; nothing decrypted; 2 of 3 events used).
+  - Scan: 67,596 CLEAN, **4 OVERLAP**, 17 REVIEW, and 13 IDs newly non-CLEAN since event 2.
+    - OVERLAP: one `narrative_gold` passage, in four annotation files, matches the raw NQ source extract behind H7
+      (containment 0.52; the extract isn't trained on directly).
+    - The new REVIEW items come from the same NQ extract, an NQ audit cell, and 3 `hallutruthqa` items from the 0.6B
+      M6 `H5.train` pool, which fed only unreleased arms.
+    - None of the flagged files trained any event candidate. The rule fails regardless, and it was not reinterpreted.
+  - **Coordinator decision, made from content only and before any decryption: C1 v1.2** retires the OVERLAP items, the
+    newly non-CLEAN IDs, all REVIEW items, and any item sharing their source passages. That is < 1% of 2,874.
+    - The retired-ID list stays private; only its hash and count are published.
+    - Every event-3 pairing uses v1.2.
+    - The rescan's coverage is widened to raw source extracts behind every trained arm, every trained pool (including
+      unreleased arms), and all data landed through scan time, including round-1 data.
+    - At most two amendment iterations. A fresh eval worker registers the amendment, rescans, and on PASS runs event 3
+      exactly as staged.
+  - **Lesson for every track:** C1 independence arguments must include raw source extracts and every trained pool,
+    released or not. Round-1 tracks: land new data arms in the private dataset promptly, so the scan sees them.
+
+- 2026-09-29 16:15 — **DEV2.0-8B released; C1 event 3 triggered; collection renamed by the user.**
+  - **DEV2.0-8B** (to be renamed DEV2.0-9B): private `llm-semantic-router/DEV2.0-8B@53bac735be58def53673d0d290b9baa3f2af1cf9`
+    (`main`), manifest `d5007cdb…`, final decision `7666fd7c…` sealed to that revision. Only `MODEL_MANIFEST.json`
+    differs from `0dee8017`. C1 is the verbatim 2B / 4B placeholder line. Integration `28f05ace7`; 0.737 GPU-h in
+    total; storage 62.57 / 100 GB.
+  - **Collection:** someone outside the pipeline renamed it **"🎲 Decision 2.0"** and added DEV2.0-8B and DEV2.0-26B
+    (07:41–07:49Z). Treat this as the user's curation.
+    - Keep the user's title.
+    - The next release worker changes the pipeline to find the collection by its slug / ID instead of the exact title,
+      with a test.
+    - Current order: 0.6B, 0.8B, 2B, 4B, 8B, 26B.
+  - **C1 event 3 staged** (eval prep record §0; integration `f467d4243`; 0.41 GPU-h):
+    - Eikos-27B was pulled from the Hub. F1 uses the uploaded release revision `DEV2.0-26B@5683c6f0`; the weights
+      identity is the same as the release-check package, which the slow node-B link ruled out.
+    - Preflight: F1, AutoJev and Eikos reproduce their node-B answers exactly.
+    - **Trigger authorized** (the eval worker is resumed once): the 9B row is DEV2.0-8B at `53bac735` with BF16 identity
+      `b1ed5a71…`, and the ~27B row is `--c27 f1`.
+    - GPU: node A GPU7 if ≥ 130 GB is free, otherwise any idle node-A GPU.
+    - The eval worker acts as custodian; FAIL means the event stays unused.
+    - After this, C1 is exhausted.
+  - **27B peer mlx-diag** (record `m5-mlx-diag-27b-peers-2026-09-29.md`), type-macro accuracy: AutoJev 84.2, Jebadiah
+    83.2, Eikos 81.9; F1 .828 (27B track). Arabic is weakest for all of them; Score drops most outside English.
+  - **Next release worker:** starts after the DEV2.0-26B finalization and does:
+    - `move_repo` DEV2.0-8B → DEV2.0-9B and DEV2.0-26B → DEV2.0-27B;
+    - card-only revisions (name, banner label, examples, "named after the base model; loads N parameters");
+    - collection check, keeping the order;
+    - collection lookup by slug;
+    - `name_basis` = base;
+    - then the C1 lines for 2B / 4B / 9B / 27B, and the 0.6B Kai1-8K pairing, once event 3 is scored.
+
+- 2026-09-29 16:05 — **USER DIRECTIVES (optimization round 1).** These supersede earlier rules where they conflict.
+  1. **Naming follows the base model's size, not the loaded parameter count.**
+     - DEV2.0-8B → **DEV2.0-9B** (base Qwen3.5-9B). DEV2.0-26B → **DEV2.0-27B** (base Qwen3.8-27B).
+     - The other names are unchanged: 0.6B, 0.8B, 2B, 4B.
+     - Cards still state the actual loaded parameter count.
+     - After the two running finalizations, a release worker renames the HF repos with `move_repo`, adds card-only
+       revisions (name, banner label, examples), updates the collection order, and adds a `name_basis` = base option.
+  2. **27B target: beat AutoJev-27B (72.133).** Being in the first tier is not enough.
+     - A "beats AutoJev" claim needs post-key v3 above 72.133 with paired CI lower bound > 0 vs AutoJev-27B, and human
+       transfer not below.
+     - Intermediate successors are released as they come.
+  3. **Progressive updates.** Whenever a model improves comprehensively, update the HF repo promptly with new weights
+     and scores, without waiting for the final target. The repo must always hold the best model.
+     - **Successor rule, for every tier, vs the current HF revision's scored run:**
+       1. post-key v3 paired 95% CI lower bound > 0;
+       2. human transfer not significantly below;
+       3. no type collapsed;
+       4. mlx-diag overall (card-eligible parts) not significantly below;
+       5. the tier gates still hold;
+       6. no overlap exposure;
+       7. JevBench per the pending eval decision (item 4 below). Until then, report it without gating.
+     - **Fast path:** the track hands the coordinator a verified successor. A release worker publishes it as a new
+       revision of the same repo with updated card scores. After the new revision verifies, the superseded revision's
+       weight LFS blobs are purged with `rewrite_history=False`; node copies stay the durable store.
+     - Prefer BF16 packages when `v2.release.bf16_copy` gives exact parity.
+     - C1 event 3 still runs on the current releases, which are frozen and staged. Successor cards state which
+       revision C1 measured; no new sealed claim is made without a new sealed set.
+  4. **JevBench:** the user asks whether it has value, and why some models (4B, 8B) do well on JevArena but not on
+     JevBench. If it has no value, drop it from cards and the pipeline; if it has value, optimize against it too.
+     - Assigned to an eval analysis covering reliability, validity against v3 / C1 / human transfer, a per-item gap
+       analysis, contamination risk, and a recommendation.
+     - Until the decision lands, every track keeps collecting public 231 in formal runs, and no track selects on it.
+  - **Round 1 assignments.** Each track re-reads the newest cross-track notes before finalist selection.
+    - **27B:**
+      - M4 (A7 dose + LoRA rank, running) on node A GPU2–4 + node B GPU5–7.
+      - NEW **M4b** on node B GPU0–2, lent by 9B, 36 GPU-h cap: complementary levers. These are full-parameter
+        fine-tuning at matched data, and teacher soft targets on human rows (own cross-tier models, or AutoJev-27B with
+        a provenance caveat and a matched control).
+    - **9B:** NEW **M5** on node A GPU6–7, 24 GPU-h cap. GPU7 is shared with C1 event 3 for ~1.3 GPU-h.
+    - **Decoder (0.8B / 2B / 4B):** NEW **M6** on node A GPU5 + node B GPU3–4, 36 GPU-h cap, after data's ≤ 1.5 GPU-h
+      lend. Goal: make the SOTA-at-size claims significant.
+    - **0.6B:** M8 after Score5-typed-DEV validates, on node A GPU0–1.
+    - **Eval:** JevBench analysis (new), then the C1 event 3 trigger.
+
+- 2026-09-29 16:00 — **F2 fails; F1 = DEV2.0-26B is final; ~27B Milestone 4 approved; C1 event 3 batch final.**
+  - **F2** (27B records at integration `86011f435`; 1.26 GPU-h; nothing to HF):
+    - Post-key v3 64.47, below the 64.92 bar. F2 − F1 −2.74 (−5.86, +0.38). Human transfer is not below any peer and
+      nothing collapsed.
+    - Attribution for the card: the A7 typed curricula raised typed accuracy by +.099 (+.081, +.118). Constraint
+      competition went .38 → .57 and exception stack .59 → .79.
+    - mlx-diag (internal, since the XNLI part is NC): F1 .828, F2 .826; weakest in Arabic and Korean.
+    - **Chain root cause:** each script was uploaded and launched in one ssh command ending in `&`. The backgrounded
+      upload read empty input and wrote 0-byte scripts. The liveness check `pgrep -f <script>` matched the ssh shell's
+      own command line, so it always passed.
+    - **Rule for every track:** upload, verify size and SHA-256, then launch in a separate step. Check liveness by
+      container or PID, never by a `pgrep -f` pattern that can match your own shell.
+  - **DEV2.0-26B finalization:** the ~27B release worker is resumed once. It adds F1's card-eligible mlx-diag lines
+    (as on the 8B card) and the A7-effect sentence, sets C1 to the 2B / 4B "pending" wording, seals the final decision,
+    runs `--collect` after 8B (order 0.6B, 0.8B, 2B, 4B, 8B, 26B) and clears `dev2-27b-staging` with
+    `rewrite_history=False`.
+  - **~27B Milestone 4 approved** (proposal `v2/27b/records/m4-proposal-2026-09-29.md`; fresh worker; state file
+    `v2/27b/records/m4-state.md`):
+    - Arms, two seeds each on the M3 recipe:
+      - M4-A20: +20M A7 tokens, ~25M in total;
+      - M4-A20r: the same mixture at rank 32;
+      - M4-Ar: the control, M3-A's mixture repeated to ~25M tokens.
+    - Budget: 70 GPU-h cap, 13 GPU-h per attempt.
+    - GPUs: node B GPU5–7 + node A GPU2–4. Formal runs on node B with F1's image and cache.
+    - Selection: all three soups go formal. Successor rule: paired v3 lower bound vs F1 > 0, human transfer not
+      significantly below F1, every no-1.0 gate, no collapse, no overlap exposure.
+    - C1 events are exhausted after event 3, so an M4 successor would carry no sealed-set line.
+  - **C1 event 3, final batch:**
+    - DEV2.0-2B vs Sol 1.0 16K, Decider 2B and This-That 1.2.
+    - DEV2.0-4B vs Nox 1.0 (adopted config), Decider 4B and Jet v6.2.
+    - **DEV2.0-26B** (F1; manifest `98d6b01c…`; `qwen-adapter` on `Qwen/Qwen3.8-27B@1d4bf0f2…`) vs AutoJev-27B and
+      Eikos-27B.
+    - **DEV2.0-8B** (manifest `80770483…`, BF16, 16K) vs Lux 1.0 16K and Nimble v2.
+    - Kai 1.0 8K, paired with the stored event-2 DEV2.0-0.6B predictions.
+    - Trigger on node A **GPU7** (shared lease; not GPU2–4, which now belong to 27B M4) when the staging worker
+      returns. That worker may briefly hold one of node A GPU2–4 for staging smokes; M4 waits for that lease to be
+      released.
 
 - 2026-09-29 15:50 — **DEV2.0-8B package verified; release approved; finalization running** (gist `07f`; record
   `v2/release/records/dev2-8b-release-2026-09-29.md`; integration `b9ef18de1`; 0.63 GPU-h on node A GPU6).

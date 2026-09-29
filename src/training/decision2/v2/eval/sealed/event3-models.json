@@ -24,6 +24,7 @@
     "cand2b", "sol1-16k", "decider2b", "thisthat12",
     "cand4b", "nox1", "decider4b", "jet62",
     "cand06-e2", "kai1-8k", "kai1-e2",
+    "cand9b", "lux1", "nimble2",
     "cand27"
   ],
   "card_eligible_27b": ["autojev27", "eikos27b", "jebadiah27b"],
@@ -32,16 +33,16 @@
   ],
   "candidates_27b": {
     "f1": {
-      "tier": "27B", "role": "candidate", "label": "DEV2.0-27B (F1, M3-A soup)", "v3": 67.21,
-      "repo": "llm-semantic-router/DEV2.0-27B",
-      "revision": "manifest-sha256:15a4c402527c301951b292df08e7dd804c2ea98bf4e1c8c7a34d38a30ed6f8fa",
+      "tier": "27B", "role": "candidate", "label": "DEV2.0-26B (F1, M3-A soup)", "v3": 67.209,
+      "repo": "llm-semantic-router/DEV2.0-26B",
+      "revision": "5683c6f04fb6ac88484cee82220f1a1a2fa43392",
       "image": "kernel", "adapter_spec": "v2/27b/adapters/typed-lora-kernel.json",
-      "model_path": "${X}/f1/package/DEV2.0-27B",
+      "model_path": "${X}/f1/release/DEV2.0-26B@5683c6f0",
       "mounts": ["${M}/Qwen3.8-27B", "${X}/f1"],
       "env": ["HIP_FORCE_DEV_KERNARG=1"],
       "extra": {
         "source": "${M}/Qwen3.8-27B", "calibration": "${X}/f1/calibration.json",
-        "max_length": "32768", "model_id": "llm-semantic-router/DEV2.0-27B"
+        "max_length": "32768", "model_id": "llm-semantic-router/DEV2.0-26B"
       },
       "limit": "32,768 tokens, over-budget questions invalid",
       "cache": {"frozen": "${X}/f1/formal-triton-cache", "sha256": "03b172f1a6adeef6c6a6c491d04389b355c9d8579480008023f408c8659b502b"},
@@ -49,8 +50,8 @@
       "parity": {"mode": "exact", "stored": "${X}/f1/formal-typed-final.predictions.jsonl", "tolerance": 0.0001},
       "identity": "b7fd44e3ad73d24faa85c2ba06ba61d4494aa4be2a2025c580ba02bedae6e781",
       "package": {
-        "dir": "${X}/f1/package/DEV2.0-27B",
-        "manifest_sha256": "15a4c402527c301951b292df08e7dd804c2ea98bf4e1c8c7a34d38a30ed6f8fa",
+        "dir": "${X}/f1/release/DEV2.0-26B@5683c6f0",
+        "manifest_sha256": "ab07948eeff64d72b3dc179e72f6083a984b3fe8c481da3f9175480091a07cf5",
         "identity": "b7fd44e3ad73d24faa85c2ba06ba61d4494aa4be2a2025c580ba02bedae6e781",
         "base": "${M}/Qwen3.8-27B"
       },
@@ -62,18 +63,18 @@
       ],
       "stored_collect": "${X}/f1/formal-COLLECT.json",
       "stage_node_a": [
-        {"kind": "copy", "from": "${B27}/m3-release-check/release-20260929T031710Z/package/DEV2.0-27B", "to": "${X}/f1/package/DEV2.0-27B"},
+        {"kind": "hf", "repo": "llm-semantic-router/DEV2.0-26B", "revision": "5683c6f04fb6ac88484cee82220f1a1a2fa43392", "to": "${X}/f1/release/DEV2.0-26B@5683c6f0"},
         {"kind": "copy", "from": "${B27}/M3-A-soup/package/calibration.json", "to": "${X}/f1/calibration.json"},
         {"kind": "copy", "from": "${B27}/M3-A-soup/formal/triton-cache", "to": "${X}/f1/formal-triton-cache"},
         {"kind": "copy", "from": "${B27}/M3-A-soup/formal/output/typed-final.predictions.jsonl", "to": "${X}/f1/formal-typed-final.predictions.jsonl"},
         {"kind": "copy", "from": "${B27}/M3-A-soup/formal/output/public231.predictions.jsonl", "to": "${X}/f1/formal-public231.predictions.jsonl"},
         {"kind": "copy", "from": "${B27}/M3-A-soup/formal/COLLECT.json", "to": "${X}/f1/formal-COLLECT.json"}
       ],
-      "notes": "Frozen package = the no-publication release check 20260929T031710Z (FLA required, 0 answer changes on 10,378 prompts). A final release repo with identical weights is passed with --c27-package/--c27-manifest/--c27-repo/--c27-revision; identity must stay b7fd44e3. T = 1 file of the formal run (bound to b7fd44e3). Formal run: node B GPU5, 1,526.6 s for 8,378 prompts.",
+      "notes": "Frozen package = the uploaded private release revision DEV2.0-26B@5683c6f0 (manifest ab07948e, 30 files, 25,746,591,744 loaded parameters; 0 answer changes and max drift 0.0 on all 10,378 scored prompts before and after upload, v2/release/records/dev2-26b-release-2026-09-29.md), staged on node A by its hf step (30/30 files and 28 base files match; identity b7fd44e3 = the formal checkpoint). --model-id is metadata only: training.model.infer writes it to the output manifest, not to prediction rows or the identity. Fallback, NOT staged on node A (509 MB of weights over the ~25 KB/s node-B link, about 5 h): the release-check package 20260929T031710Z (node B m3-release-check/release-20260929T031710Z/package/DEV2.0-27B, manifest 15a4c402, same identity), passed with --c27-package DIR --c27-manifest 15a4c402527c301951b292df08e7dd804c2ea98bf4e1c8c7a34d38a30ed6f8fa --c27-repo llm-semantic-router/DEV2.0-27B --c27-revision manifest-sha256:15a4c402527c301951b292df08e7dd804c2ea98bf4e1c8c7a34d38a30ed6f8fa once copied to node A; identity must stay b7fd44e3. T = 1 file of the formal run (bound to b7fd44e3). Formal run: node B GPU5, 1,526.6 s for 8,378 prompts. node_b = the release readback download of 5683c6f0 (same manifest).",
       "node_b": {
-        "model_path": "${B27}/m3-release-check/release-20260929T031710Z/package/DEV2.0-27B",
-        "package.dir": "${B27}/m3-release-check/release-20260929T031710Z/package/DEV2.0-27B",
-        "mounts": ["${M}/Qwen3.8-27B", "${B27}/M3-A-soup/package", "${B27}/m3-release-check/release-20260929T031710Z/package"],
+        "model_path": "${REL}/dev2-26b-release-20260929T051011Z/download/DEV2.0-26B",
+        "package.dir": "${REL}/dev2-26b-release-20260929T051011Z/download/DEV2.0-26B",
+        "mounts": ["${M}/Qwen3.8-27B", "${B27}/M3-A-soup/package"],
         "extra.calibration": "${B27}/M3-A-soup/package/calibration.json",
         "cache.frozen": "${B27}/M3-A-soup/formal/triton-cache",
         "parity.stored": "${B27}/M3-A-soup/formal/output/typed-final.predictions.jsonl",
@@ -87,36 +88,54 @@
       }
     },
     "f2": {
-      "tier": "27B", "role": "candidate", "label": "DEV2.0-27B (F2, M3-S soup)", "v3": "PARENT-FILLS",
-      "repo": "llm-semantic-router/DEV2.0-27B", "revision": "PARENT-FILLS",
-      "image": "kernel", "adapter_spec": "v2/27b/adapters/typed-lora-kernel.json",
-      "model_path": "${X}/f2/package/DEV2.0-27B",
+      "tier": "27B",
+      "role": "candidate",
+      "label": "DEV2.0-26B (F2, M3-S soup)",
+      "v3": "PARENT-FILLS",
+      "repo": "llm-semantic-router/DEV2.0-26B",
+      "revision": "PARENT-FILLS",
+      "image": "kernel",
+      "adapter_spec": "v2/27b/adapters/typed-lora-kernel.json",
+      "model_path": "${X}/f2/release/DEV2.0-26B",
       "mounts": ["${M}/Qwen3.8-27B", "${X}/f2"],
       "env": ["HIP_FORCE_DEV_KERNARG=1"],
-      "extra": {
-        "source": "${M}/Qwen3.8-27B", "calibration": "${X}/f2/calibration.json",
-        "max_length": "32768", "model_id": "llm-semantic-router/DEV2.0-27B"
-      },
+      "extra": {"source": "${M}/Qwen3.8-27B", "calibration": "${X}/f2/calibration.json", "max_length": "32768", "model_id": "llm-semantic-router/DEV2.0-26B"},
       "limit": "32,768 tokens, over-budget questions invalid",
       "cache": {"frozen": "${X}/f2/formal-triton-cache", "sha256": "PARENT-FILLS"},
       "smoke_items": 80,
       "parity": {"mode": "exact", "stored": "${X}/f2/formal-typed-final.predictions.jsonl", "tolerance": 0.0001},
       "identity": "PARENT-FILLS",
-      "package": {"dir": "${X}/f2/package/DEV2.0-27B", "manifest_sha256": "PARENT-FILLS", "identity": "PARENT-FILLS", "base": "${M}/Qwen3.8-27B"},
-      "files": [{"path": "${X}/f2/calibration.json", "sha256": "PARENT-FILLS"}],
+      "package": {"dir": "${X}/f2/release/DEV2.0-26B", "manifest_sha256": "PARENT-FILLS", "identity": "PARENT-FILLS", "base": "${M}/Qwen3.8-27B"},
+      "files": [
+        {"path": "${X}/f2/calibration.json", "sha256": "PARENT-FILLS"},
+        {"path": "${X}/f2/formal-typed-final.predictions.jsonl", "sha256": "PARENT-FILLS"},
+        {"path": "${X}/f2/formal-public231.predictions.jsonl", "sha256": "PARENT-FILLS"},
+        {"path": "${X}/f2/formal-COLLECT.json", "sha256": "PARENT-FILLS"}
+      ],
       "stored_collect": "${X}/f2/formal-COLLECT.json",
       "stage_node_a": [
-        {"kind": "copy", "from": "PARENT-FILLS (F2 frozen package dir on node B)", "to": "${X}/f2/package/DEV2.0-27B"},
-        {"kind": "copy", "from": "PARENT-FILLS (F2 T = 1 calibration.json)", "to": "${X}/f2/calibration.json"},
-        {"kind": "copy", "from": "PARENT-FILLS (F2 formal triton-cache)", "to": "${X}/f2/formal-triton-cache"},
-        {"kind": "copy", "from": "PARENT-FILLS (F2 formal output/typed-final.predictions.jsonl)", "to": "${X}/f2/formal-typed-final.predictions.jsonl"},
-        {"kind": "copy", "from": "PARENT-FILLS (F2 formal output/public231.predictions.jsonl)", "to": "${X}/f2/formal-public231.predictions.jsonl"},
-        {"kind": "copy", "from": "PARENT-FILLS (F2 formal COLLECT.json)", "to": "${X}/f2/formal-COLLECT.json"}
+        {"kind": "hf", "repo": "llm-semantic-router/DEV2.0-26B", "revision": "PARENT-FILLS", "to": "${X}/f2/release/DEV2.0-26B"},
+        {"kind": "copy", "from": "${B27}/M3-S-soup/package/calibration.json", "to": "${X}/f2/calibration.json"},
+        {"kind": "copy", "from": "${B27}/M3-S-soup/formal/triton-cache", "to": "${X}/f2/formal-triton-cache"},
+        {"kind": "copy", "from": "${B27}/M3-S-soup/formal/output/typed-final.predictions.jsonl", "to": "${X}/f2/formal-typed-final.predictions.jsonl"},
+        {"kind": "copy", "from": "${B27}/M3-S-soup/formal/output/public231.predictions.jsonl", "to": "${X}/f2/formal-public231.predictions.jsonl"},
+        {"kind": "copy", "from": "${B27}/M3-S-soup/formal/COLLECT.json", "to": "${X}/f2/formal-COLLECT.json"}
       ],
-      "notes": "Matched control F2 (M3-S soup); formal run /data/dev2/runs/27b/M3-S-soup/formal or M3-S-final on node B, finishing about 14:40 UTC+8. Fill every PARENT-FILLS field from its frozen package, formal run and cache before choosing --c27 f2.",
+      "notes": "Matched control F2 (M3-S soup, node B /data/dev2/runs/27b/M3-S-soup). It replaces F1 only if F2 - F1 post-key v3 has a paired 95% CI lower bound > 0 and F2 passes every no-1.0 gate. Structure, runtime and destinations are F1's; the package comes from the Hub (hf step: a DEV2.0-26B revision, or a staging repo folder with --include), because the node-B link cannot carry a package. Drop-in: (1) on node B from a mirror: event3.py c27-receipt --formal-run <F2 formal dir> --package-dir <F2 release package> --calibration <its T = 1 calibration.json> --cache <formal triton-cache> --output R; (2) event3.py fill-c27 --table v2/eval/sealed/event3-models.json --key f2 --receipt R --revision <revision> [--repo ID --include 'SUBDIR/*'] [--adopt-paths when the node-B files are not at the M3-S-soup/{package,formal} paths below]; (3) commit, push, mirror, event3-stage-nodeA.sh --c27 f2, then event3.sh --verify-only --c27 f2.",
       "node_b": {
-        "model_path": "PARENT-FILLS", "package.dir": "PARENT-FILLS", "extra.calibration": "PARENT-FILLS",
-        "cache.frozen": "PARENT-FILLS", "parity.stored": "PARENT-FILLS", "stored_collect": "PARENT-FILLS"
+        "model_path": "PARENT-FILLS",
+        "package.dir": "PARENT-FILLS",
+        "mounts": ["${M}/Qwen3.8-27B", "${B27}/M3-S-soup/package"],
+        "extra.calibration": "${B27}/M3-S-soup/package/calibration.json",
+        "cache.frozen": "${B27}/M3-S-soup/formal/triton-cache",
+        "parity.stored": "${B27}/M3-S-soup/formal/output/typed-final.predictions.jsonl",
+        "files": [
+          {"path": "${B27}/M3-S-soup/package/calibration.json", "sha256": "PARENT-FILLS"},
+          {"path": "${B27}/M3-S-soup/formal/output/typed-final.predictions.jsonl", "sha256": "PARENT-FILLS"},
+          {"path": "${B27}/M3-S-soup/formal/output/public231.predictions.jsonl", "sha256": "PARENT-FILLS"},
+          {"path": "${B27}/M3-S-soup/formal/COLLECT.json", "sha256": "PARENT-FILLS"}
+        ],
+        "stored_collect": "${B27}/M3-S-soup/formal/COLLECT.json"
       }
     }
   },
@@ -379,29 +398,41 @@
       "notes": "Moot: 0.6B Milestone 7 ended with no successor (integration 47275d1f0). Comparators would be the stored event-2 rows (kai1-e2 with reference_only removed, lex-e2, bosun06-e2, gliner25-e2) plus kai1-8k."
     },
     "cand9b": {
-      "tier": "9B", "role": "candidate", "label": "DEV2.0-9B (K-a13)", "v3": 67.737,
-      "repo": "PARENT-FILLS (9B release repo)", "revision": "PARENT-FILLS (release revision)",
-      "image": "host2", "adapter_spec": "v2/dec/adapter-spec-infer-dec.json",
-      "model_path": "PARENT-FILLS (frozen release package dir)",
-      "mounts": ["${H}", "${M}/Decision-1.0-Lux-9B", "${RUNS}/9b/m4/K-a13-cal"],
+      "tier": "9B", "role": "candidate", "label": "DEV2.0-8B (9B tier, K-a13)", "v3": 67.737,
+      "repo": "llm-semantic-router/DEV2.0-8B", "revision": "PARENT-FILLS (--c9b-revision; default manifest-sha256:<--c9b-manifest>)",
+      "image": "host2", "adapter_spec": "v2/eval/sealed/adapters/dev2-dec-package-t1.json",
+      "model_path": "PARENT-FILLS (--c9b-package: the frozen DEV2.0-8B package dir on node A)",
+      "mounts": ["${H}", "${M}/Decision-1.0-Lux-9B"],
+      "env": ["HIP_FORCE_DEV_KERNARG=1"],
       "extra": {
-        "source": "${M}/Decision-1.0-Lux-9B", "calibration": "${RUNS}/9b/m4/K-a13-cal/calibration.json",
-        "model_id": "llm-semantic-router/DEV2.0-9B", "max_length": "16384"
+        "source": "${M}/Decision-1.0-Lux-9B", "model_id": "llm-semantic-router/DEV2.0-8B", "max_length": "16384"
       },
       "limit": "16,384 tokens, no truncation",
-      "cache": {"frozen": "${RUNS}/9b/formal-m3/triton-cache", "sha256": "af623300d71a8fdb9a6a5588d25e17356da3610d57710b08b5830a0c5d6efb6f"},
+      "cache": {"frozen": "${RUNS}/9b/formal-m4/triton-cache", "sha256": "5604ffdc5f1916068c0b8df0526efc455f7bbec708081533020b834aba52586d"},
       "smoke_items": 80,
-      "parity": {"mode": "exact", "stored": "${RUNS}/9b/formal-m4/K-a13-16k/output/typed-final.predictions.jsonl", "tolerance": 0.0001},
-      "identity": "b9d973b3ef555457da2dfa839c45cef3d4a98a47a43d1fd724e77fdec4aa125d",
-      "package": {"dir": "PARENT-FILLS (frozen release package dir)", "manifest_sha256": "PARENT-FILLS", "identity": "b9d973b3ef555457da2dfa839c45cef3d4a98a47a43d1fd724e77fdec4aa125d"},
+      "parity": {"mode": "exact", "stored": "${REL}/inputs/dev2-8b-t1/derived/typed-final.predictions.jsonl", "tolerance": 0.0001},
+      "identity": "PARENT-FILLS (read from the package's MODEL_MANIFEST.json)",
+      "identity_allowed": {
+        "b9d973b3ef555457da2dfa839c45cef3d4a98a47a43d1fd724e77fdec4aa125d": "scored FP32 K-a13 soup (m4/K-a13-build, SHA256SUMS 6913eb61)",
+        "b1ed5a71038b474902d2a6dfebeee0c6f7ce901097553b4621f6f0a23fb6da98": "its BF16-storage copy (v2.release.bf16_copy; receipt release/inputs/dev2-8b-bf16/bf16-copy.json ccdcf1c3, source_model_sha256 b9d973b3)"
+      },
+      "package": {"dir": "PARENT-FILLS (--c9b-package)", "manifest_sha256": "PARENT-FILLS (--c9b-manifest)", "identity": "PARENT-FILLS (read from the manifest)"},
       "trees": [{"dir": "${M}/Decision-1.0-Lux-9B", "sha256": "3a7cab7dbe865dae53f7fd2a72410d122f3363b3fb81802c74d68ead2a5143a9"}],
       "files": [
-        {"path": "${RUNS}/9b/m4/K-a13-cal/calibration.json", "sha256": "65297c6d72b8121174c4994da49e17dc8ff760a3d2101b7b418223c47f3ba7cc"},
-        {"path": "${RUNS}/9b/formal-m4/K-a13-16k/output/typed-final.predictions.jsonl", "sha256": "ad672049202066b924217e9600bd8dca53396947c3bf09ba870cca923f89d0e0"},
-        {"path": "${RUNS}/9b/formal-m4/K-a13-16k/output/public231.predictions.jsonl", "sha256": "82c5fe2cc63eb81253b73504f4b23b9cd35e9d86b33d93cf7f98c90a6ecac950"}
+        {"path": "${REL}/inputs/dev2-8b-t1/derived/typed-final.predictions.jsonl", "sha256": "22c9c689b7991701641114bcfa27ccd2c6b885b87f3794ccf207c7c0049e4ba3"},
+        {"path": "${REL}/inputs/dev2-8b-t1/derived/public231.predictions.jsonl", "sha256": "813b54417eb84f74c2a367f862ad303f51c4b60babf95ae8248da5b240da7621"}
       ],
+      "calibrated": {
+        "adapter_spec": "v2/dec/adapter-spec-infer-dec.json",
+        "parity_stored": "${RUNS}/9b/formal-m4/K-a13-16k/output/typed-final.predictions.jsonl",
+        "files": [
+          {"path": "${RUNS}/9b/m4/K-a13-cal/calibration.json", "sha256": "65297c6d72b8121174c4994da49e17dc8ff760a3d2101b7b418223c47f3ba7cc"},
+          {"path": "${RUNS}/9b/formal-m4/K-a13-16k/output/typed-final.predictions.jsonl", "sha256": "ad672049202066b924217e9600bd8dca53396947c3bf09ba870cca923f89d0e0"},
+          {"path": "${RUNS}/9b/formal-m4/K-a13-16k/output/public231.predictions.jsonl", "sha256": "82c5fe2cc63eb81253b73504f4b23b9cd35e9d86b33d93cf7f98c90a6ecac950"}
+        ]
+      },
       "stored_collect": "${RUNS}/9b/formal-m4/K-a13-16k/COLLECT.json",
-      "notes": "Sixth release candidate (13:45): K-a13 = 1/3 K soup + 2/3 Lux 1.0, FP32, CAL698 temperatures; scored run formal-m4/K-a13-16k (node A, 16K, frozen formal-m3 cache af623300); build m4/K-a13-build (SHA256SUMS 6913eb61, 23 files). Off by default: enable with --models ...,cand9b,lux1,nimble2 once the frozen release package exists and pass it with --c9b-package/--c9b-manifest/--c9b-repo/--c9b-revision (and --c9b-identity, --c9b-calibration FILE|none, --c9b-parity-stored, --c9b-tolerance if release engineering re-packages, e.g. bf16 or T = 1)."
+      "notes": "DEV2.0-8B = K-a13 (sixth release candidate, 13:45: 1/3 K soup + 2/3 Lux 1.0; 7,940,895,744 loaded parameters). It ships at T = 1 (CAL698 temperatures rejected under the 23:15 calibration rule), so it runs with the T = 1 package adapter (v2.dec.infer_dec, no calibration file) on the scored image and env (HIP_FORCE_DEV_KERNARG=1, as in formal-m4/K-a13-16k/COLLECT.json a8335037). Inputs: --c9b-package DIR (the frozen package on node A) and --c9b-manifest SHA (its MODEL_MANIFEST.json); --c9b-revision defaults to manifest-sha256:<manifest>, --c9b-repo to this repo. Identity: read from the manifest at plan time, accepted only if in identity_allowed or equal to --c9b-identity. Parity: exact against the T = 1 predictions derived from the sealed CAL698 run (retemper receipts: inputs ad672049 / 82c5fe2c, 0 answer changes; the files sealed in release/dev2-8b-t1-derived SEAL d00e453b); the BF16-storage package matched them with 0 answer changes and max drift 8.9e-16 (release parity 20260929T063342Z). Frozen cache: formal-m4/triton-cache 5604ffdc, the scored run's post-run tree (af623300 before its smoke, unchanged by the mlx run; 4,785 files), which the DEV2.0-8B release parity copies; --c9b-cache DIR --c9b-cache-sha SHA overrides it (e.g. formal-m3/triton-cache af623300). --c9b-calibration FILE switches back to a CAL698 package (FILE must be bound to the package identity, so FP32 only): adapter-spec-infer-dec, parity against the scored run's outputs ad672049 / 82c5fe2c. To allow another identity, add it to identity_allowed with its receipt."
     },
     "lux1": {
       "tier": "9B", "role": "own1", "label": "Decision 1.0 Lux (adopted, 16,384 tokens)", "v3": 65.808,
