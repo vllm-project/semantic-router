@@ -3,13 +3,14 @@
 Coordinator note 2026-09-30 06:10 (27B release path, step 1): "remove stale staging". Every weight object of these
 repositories was already deleted by earlier cleanups; what is left are shared small LFS files (tokenizers). A leftover
 is removed only if a released DEV2.0 repository's main serves the same SHA-256 (so the bytes stay on the Hub) or
-it is listed in --allow with a reason. Deletion passes rewrite_history=False; commits, refs and every non-LFS file
-stay. Released repositories, datasets and the collection are never touched.
+an --allow OID=PATH node copy re-hashes to it. Deletion passes rewrite_history=False; commits, refs and every
+non-LFS file stay. Released repositories, datasets and the collection are never touched.
 
-    <hf-cli python> staging_leftovers.py plan|apply RECEIPT.json
+    <hf-cli python> staging_leftovers.py plan|apply RECEIPT.json [--allow OID=PATH]...
 """
 
 import datetime as dt
+import hashlib
 import json
 import sys
 import time
@@ -65,9 +66,24 @@ def state(repo: str) -> dict:
     }
 
 
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1 << 24), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
 def main() -> None:
     mode, receipt = sys.argv[1], Path(sys.argv[2])
     assert mode in ("plan", "apply") and not receipt.exists()
+    rest = sys.argv[3:]
+    assert len(rest) % 2 == 0 and all(flag == "--allow" for flag in rest[::2])
+    allowed = {}
+    for value in rest[1::2]:
+        oid, path = value.split("=", 1)
+        assert sha256_file(Path(path)) == oid, f"{path} does not re-hash to {oid}"
+        allowed[oid] = path
     members = {item.item_id for item in api.get_collection(COLLECTION).items}
     served = {}
     for name in RELEASED:
@@ -82,12 +98,20 @@ def main() -> None:
         "rewrite_history": False,
         "repos": {},
     }
-    ok = True
+    plans = {}
     for name in STAGING:
         repo = f"{ORG}/{name}"
         assert repo not in members, f"{repo} is in the collection"
         before = state(repo)
         assert before["private"] is True, f"{repo} is not private"
+        plans[repo] = before
+    refused_any = any(
+        oid not in allowed and not served.get(oid)
+        for before in plans.values()
+        for oid in before["lfs"]
+    )
+    ok = not refused_any
+    for repo, before in plans.items():
         targets = {oid: f for oid, f in before["lfs"].items()}
         entry = {
             "before": {
@@ -101,16 +125,17 @@ def main() -> None:
                     "bytes": f.size,
                     "paths": before["paths"].get(oid, []),
                     "served_by_released_main": served.get(oid, []),
+                    "node_copy": allowed.get(oid),
                 }
                 for oid, f in targets.items()
             },
             "target_bytes": sum(f.size for f in targets.values()),
         }
-        unserved = [oid for oid in targets if not served.get(oid)]
+        unserved = [
+            oid for oid in targets if not served.get(oid) and oid not in allowed
+        ]
         entry["refused"] = unserved
-        if unserved:
-            ok = False
-        elif mode == "apply" and targets:
+        if mode == "apply" and targets and not refused_any:
             api.permanently_delete_lfs_files(
                 repo, list(targets.values()), rewrite_history=False
             )
