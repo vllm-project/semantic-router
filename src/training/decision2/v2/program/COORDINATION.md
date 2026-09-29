@@ -199,6 +199,45 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 00:25 — **HS1 (hard-skill families) LANDED; its dev slice is NOT validated on accuracy; round-2 data plan**
+  (data records; integration `3592f2e01`; 0.107 GPU-h).
+  - **Location:** private `llm-semantic-router/decision-2.0-training-data@171e6f0c0913d5f0d8f7304928da4f14dca6e127`,
+    `m4/hs1/`; train `c90ef316…`, dev `2e9ee9ab…`.
+  - **Contents:** 19,968 training rows, 14.0M tokens, English, generated from own templates. Gold comes from the
+    structure and was re-checked on every row.
+
+    | Family | Rows | Tokens |
+    | --- | ---: | ---: |
+    | F1: quoted-conclusion verification | 7,178 | 5.59M |
+    | F2: long policy packets (4–12k characters) | 2,398 | 3.94M |
+    | F3: "condition not met" negatives with matched yes twins | 10,392 | 4.50M |
+
+  - **Audits:** all pass. 18 near-match groups (5 of them public 231) were dropped before release; no exact matches;
+    shortcut baselines at chance.
+  - **Dev validity:** the preregistered accuracy contrast (Decider 4B > DEV2.0-4B) was not significant on F1 (+.015) or
+    F2 (+.021). The behavioural readouts do show the gap:
+    - quote adoption: DEV2.0-4B .775 vs Decider .641 (50% = ignoring the quote);
+    - false yes on unmet conditions: .262 vs .128.
+  - **Coordinator decision:**
+    - `hs1-dev` is a registered DIAGNOSTIC. Its skill readouts are the quote-adoption rate (F1) and the false-yes rate
+      (F3); the F2 accuracy is informational. Nobody selects on `hs1-dev`, and public-231 hard stays formal-only (rule
+      item 7).
+    - HS1 is cleared for training.
+  - **Round-2 data plan, for every track's next milestone:**
+    - add HS1 (`m4/hs1/train.jsonl@171e6f0c`) as a block: full ~14M tokens, or ~9M with F2 + F3 + ½ F1;
+    - add PN1 (repeated 2–3×) for multilingual Noul;
+    - add long-prose rows;
+    - each with a matched-token control.
+    Select on the proxy; guard with human transfer, C1 post-key (item 8) and public 231 (item 7).
+  - **Data follow-up worker** (worktree `vllm-sr-dev2-data`):
+    - close PN1's audits: embedding scan, H7 / H8 isolation, blind label review of ≥ 200 rows with preregistered
+      thresholds;
+    - an HS1 template spot-check (≥ 50 rows per family);
+    - the qualification-pool relabel, with a builder guard.
+    PN1 is release-safe only after that.
+  - `panels install` briefly set node A's shared `goldfree/` directory owner-only. It was restored within a minute and
+    fixed in code.
+
 - 2026-09-29 23:40 — **C1 event 3 SCORED (v1.2, P2); C1 is exhausted (3 of 3) and post-key** (event-3 record; amendment
   `fee142bf3`; PASS `2204823e7`, verdict `16c6d311…`; integration `224dd508a`; 1.153 GPU-h).
   - **Results** (2,840 items; paired Δ [95% CI]):
