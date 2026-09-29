@@ -109,8 +109,17 @@ def salt_maps(salt_root: Path) -> dict[str, Any]:
     return values
 
 
+HUMOR_PREFIX = " \n\nConstraint: "
+
+
 def template(maps: dict[str, Any], task: str) -> str:
-    return maps["prompts_templates"][TEMPLATE_KEY.get(task, task)]
+    text = maps["prompts_templates"][TEMPLATE_KEY.get(task, task)]
+    if task == "reddit_humor":
+        # the formal humor prompt predates this template's leading line and final newline
+        if not (text.startswith(HUMOR_PREFIX) and text.endswith("\n")):
+            raise ValueError("unexpected SALT humor template")
+        text = text[len(HUMOR_PREFIX) : -1]
+    return text
 
 
 def salt_label(value: Any) -> str:
