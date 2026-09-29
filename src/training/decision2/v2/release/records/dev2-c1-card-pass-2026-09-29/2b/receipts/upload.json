@@ -1,0 +1,12 @@
+{
+  "bytes": 7556621004,
+  "commit_url": "https://huggingface.co/llm-semantic-router/DEV2.0-2B/commit/a47bdf895d982896b0e65c2bdc61330fe1ad2d7c",
+  "files": 33,
+  "manifest_sha256": "1ba359509a76cb638a41d296e4037913f2864ac454bdd552e41ac8cd819bd25a",
+  "private": true,
+  "repo": "llm-semantic-router/DEV2.0-2B",
+  "revision": "a47bdf895d982896b0e65c2bdc61330fe1ad2d7c",
+  "schema": "dev2-hub-upload/1",
+  "seconds": 4.022316213930026,
+  "utc": "2026-09-29T17:05:32.481780+00:00"
+}

@@ -35,8 +35,20 @@ TOKEN_BUDGET = 24_000
 
 
 def teacher_temperatures(model_path: Path) -> dict[str, float]:
-    report = json.loads((model_path / "temperature.json").read_text(encoding="utf-8"))
-    temperatures = report.get("temperatures")
+    """Per-type temperatures from ``temperature.json``; packages without one (Eos 1.0)
+    publish a single calibrated temperature as ``config.json`` ``calibration.temperature``,
+    which then applies to every type."""
+    path = model_path / "temperature.json"
+    if path.is_file():
+        temperatures = json.loads(path.read_text(encoding="utf-8")).get("temperatures")
+    else:
+        config = json.loads((model_path / "config.json").read_text(encoding="utf-8"))
+        single = (config.get("calibration") or {}).get("temperature")
+        temperatures = (
+            None
+            if single is None
+            else dict.fromkeys(("choice", "noul", "score"), single)
+        )
     if not isinstance(temperatures, dict) or set(temperatures) != {
         "choice",
         "noul",
