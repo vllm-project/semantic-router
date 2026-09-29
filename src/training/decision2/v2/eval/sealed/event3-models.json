@@ -1,0 +1,491 @@
+{
+  "schema": "dev2-c1-event3-models/1",
+  "event": 3,
+  "events_total": 3,
+  "roots": {
+    "D20": "/data/decision20-20260926",
+    "M": "/data/decision20-20260926/models",
+    "H": "/data/dev2/hf-cache",
+    "DM": "/data/dev2/models",
+    "RUNS": "/data/dev2/runs",
+    "EV": "/data/dev2/runs/eval",
+    "DEC": "/data/dev2/runs/dec/formal",
+    "REL": "/data/dev2/runs/release",
+    "E2": "/data/dev2/runs/eval/m4/c1-event2",
+    "X": "/data/dev2/runs/eval/m4/c1-event3-assets",
+    "B27": "/data/dev2/runs/27b",
+    "KL": "/data/dev2/tools/envs/kai-lex"
+  },
+  "images": {
+    "host2": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54",
+    "kernel": "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1"
+  },
+  "default_models": [
+    "cand2b", "sol1-16k", "decider2b", "thisthat12",
+    "cand4b", "nox1", "decider4b", "jet62",
+    "cand06-e2", "kai1-8k", "kai1-e2",
+    "cand27"
+  ],
+  "card_eligible_27b": "PARENT-FILLS: card-eligible keys among autojev27, eikos27b, jebadiah27b (the plan takes the two strongest by post-key v3)",
+  "reference_pairs": [
+    ["kai1-8k", "kai1-e2", "Kai 1.0 at 8,192 vs 1,024 tokens (limit effect, reference only)"]
+  ],
+  "candidates_27b": {
+    "f1": {
+      "tier": "27B", "role": "candidate", "label": "DEV2.0-27B (F1, M3-A soup)", "v3": 67.21,
+      "repo": "llm-semantic-router/DEV2.0-27B",
+      "revision": "manifest-sha256:15a4c402527c301951b292df08e7dd804c2ea98bf4e1c8c7a34d38a30ed6f8fa",
+      "image": "kernel", "adapter_spec": "v2/27b/adapters/typed-lora-kernel.json",
+      "model_path": "${X}/f1/package/DEV2.0-27B",
+      "mounts": ["${M}/Qwen3.8-27B", "${X}/f1"],
+      "env": ["HIP_FORCE_DEV_KERNARG=1"],
+      "extra": {
+        "source": "${M}/Qwen3.8-27B", "calibration": "${X}/f1/calibration.json",
+        "max_length": "32768", "model_id": "llm-semantic-router/DEV2.0-27B"
+      },
+      "limit": "32,768 tokens, over-budget questions invalid",
+      "cache": {"frozen": "${X}/f1/formal-triton-cache", "sha256": "03b172f1a6adeef6c6a6c491d04389b355c9d8579480008023f408c8659b502b"},
+      "smoke_items": 20,
+      "parity": {"mode": "exact", "stored": "${X}/f1/formal-typed-final.predictions.jsonl", "tolerance": 0.0001},
+      "identity": "b7fd44e3ad73d24faa85c2ba06ba61d4494aa4be2a2025c580ba02bedae6e781",
+      "package": {
+        "dir": "${X}/f1/package/DEV2.0-27B",
+        "manifest_sha256": "15a4c402527c301951b292df08e7dd804c2ea98bf4e1c8c7a34d38a30ed6f8fa",
+        "identity": "b7fd44e3ad73d24faa85c2ba06ba61d4494aa4be2a2025c580ba02bedae6e781",
+        "base": "${M}/Qwen3.8-27B"
+      },
+      "files": [
+        {"path": "${X}/f1/calibration.json", "sha256": "48e8210d2fd3591d29e94c459a88e7ad89e7831dc1721bc4971f6fe6eacf96df"},
+        {"path": "${X}/f1/formal-typed-final.predictions.jsonl", "sha256": "ee01eb616de3f6654797c0de5c3edb0986c59ee86d5b57e6fa6a4fa9ff54d526"},
+        {"path": "${X}/f1/formal-COLLECT.json", "sha256": "d7f760358a1b6777b2be99b59e4fc3a051bb5dc015ab806021fe67e6e2d6ad98"}
+      ],
+      "stored_collect": "${X}/f1/formal-COLLECT.json",
+      "stage_node_a": [
+        {"kind": "copy", "from": "${B27}/m3-release-check/release-20260929T031710Z/package/DEV2.0-27B", "to": "${X}/f1/package/DEV2.0-27B"},
+        {"kind": "copy", "from": "${B27}/M3-A-soup/package/calibration.json", "to": "${X}/f1/calibration.json"},
+        {"kind": "copy", "from": "${B27}/M3-A-soup/formal/triton-cache", "to": "${X}/f1/formal-triton-cache"},
+        {"kind": "copy", "from": "${B27}/M3-A-soup/formal/output/typed-final.predictions.jsonl", "to": "${X}/f1/formal-typed-final.predictions.jsonl"},
+        {"kind": "copy", "from": "${B27}/M3-A-soup/formal/COLLECT.json", "to": "${X}/f1/formal-COLLECT.json"}
+      ],
+      "notes": "Frozen package = the no-publication release check 20260929T031710Z (FLA required, 0 answer changes on 10,378 prompts). A final release repo with identical weights is passed with --c27-package/--c27-manifest/--c27-repo/--c27-revision; identity must stay b7fd44e3. T = 1 file of the formal run (bound to b7fd44e3). Formal run: node B GPU5, 1,526.6 s for 8,378 prompts.",
+      "node_b": {
+        "model_path": "${B27}/m3-release-check/release-20260929T031710Z/package/DEV2.0-27B",
+        "package.dir": "${B27}/m3-release-check/release-20260929T031710Z/package/DEV2.0-27B",
+        "mounts": ["${M}/Qwen3.8-27B", "${B27}/M3-A-soup/package", "${B27}/m3-release-check/release-20260929T031710Z/package"],
+        "extra.calibration": "${B27}/M3-A-soup/package/calibration.json",
+        "cache.frozen": "${B27}/M3-A-soup/formal/triton-cache",
+        "parity.stored": "${B27}/M3-A-soup/formal/output/typed-final.predictions.jsonl",
+        "files": [
+          {"path": "${B27}/M3-A-soup/package/calibration.json", "sha256": "48e8210d2fd3591d29e94c459a88e7ad89e7831dc1721bc4971f6fe6eacf96df"},
+          {"path": "${B27}/M3-A-soup/formal/output/typed-final.predictions.jsonl", "sha256": "ee01eb616de3f6654797c0de5c3edb0986c59ee86d5b57e6fa6a4fa9ff54d526"},
+          {"path": "${B27}/M3-A-soup/formal/COLLECT.json", "sha256": "d7f760358a1b6777b2be99b59e4fc3a051bb5dc015ab806021fe67e6e2d6ad98"}
+        ],
+        "stored_collect": "${B27}/M3-A-soup/formal/COLLECT.json"
+      }
+    },
+    "f2": {
+      "tier": "27B", "role": "candidate", "label": "DEV2.0-27B (F2, M3-S soup)", "v3": "PARENT-FILLS",
+      "repo": "llm-semantic-router/DEV2.0-27B", "revision": "PARENT-FILLS",
+      "image": "kernel", "adapter_spec": "v2/27b/adapters/typed-lora-kernel.json",
+      "model_path": "${X}/f2/package/DEV2.0-27B",
+      "mounts": ["${M}/Qwen3.8-27B", "${X}/f2"],
+      "env": ["HIP_FORCE_DEV_KERNARG=1"],
+      "extra": {
+        "source": "${M}/Qwen3.8-27B", "calibration": "${X}/f2/calibration.json",
+        "max_length": "32768", "model_id": "llm-semantic-router/DEV2.0-27B"
+      },
+      "limit": "32,768 tokens, over-budget questions invalid",
+      "cache": {"frozen": "${X}/f2/formal-triton-cache", "sha256": "PARENT-FILLS"},
+      "smoke_items": 20,
+      "parity": {"mode": "exact", "stored": "${X}/f2/formal-typed-final.predictions.jsonl", "tolerance": 0.0001},
+      "identity": "PARENT-FILLS",
+      "package": {"dir": "${X}/f2/package/DEV2.0-27B", "manifest_sha256": "PARENT-FILLS", "identity": "PARENT-FILLS", "base": "${M}/Qwen3.8-27B"},
+      "files": [{"path": "${X}/f2/calibration.json", "sha256": "PARENT-FILLS"}],
+      "stored_collect": "${X}/f2/formal-COLLECT.json",
+      "stage_node_a": [
+        {"kind": "copy", "from": "PARENT-FILLS (F2 frozen package dir on node B)", "to": "${X}/f2/package/DEV2.0-27B"},
+        {"kind": "copy", "from": "PARENT-FILLS (F2 T = 1 calibration.json)", "to": "${X}/f2/calibration.json"},
+        {"kind": "copy", "from": "PARENT-FILLS (F2 formal triton-cache)", "to": "${X}/f2/formal-triton-cache"},
+        {"kind": "copy", "from": "PARENT-FILLS (F2 formal output/typed-final.predictions.jsonl)", "to": "${X}/f2/formal-typed-final.predictions.jsonl"},
+        {"kind": "copy", "from": "PARENT-FILLS (F2 formal COLLECT.json)", "to": "${X}/f2/formal-COLLECT.json"}
+      ],
+      "notes": "Matched control F2 (M3-S soup); formal run /data/dev2/runs/27b/M3-S-soup/formal or M3-S-final on node B, finishing about 14:40 UTC+8. Fill every PARENT-FILLS field from its frozen package, formal run and cache before choosing --c27 f2.",
+      "node_b": {
+        "model_path": "PARENT-FILLS", "package.dir": "PARENT-FILLS", "extra.calibration": "PARENT-FILLS",
+        "cache.frozen": "PARENT-FILLS", "parity.stored": "PARENT-FILLS", "stored_collect": "PARENT-FILLS"
+      }
+    }
+  },
+  "models": {
+    "cand2b": {
+      "tier": "2B", "role": "candidate", "label": "DEV2.0-2B", "v3": 53.437,
+      "repo": "llm-semantic-router/DEV2.0-2B", "revision": "5ad3e9a3cc4865ce0360f4ecce2b345020bfdb38",
+      "image": "host2", "adapter_spec": "v2/eval/sealed/adapters/dev2-dec-package-t1.json",
+      "model_path": "${REL}/dev2-2b-final-20260928T203550Z/download/DEV2.0-2B",
+      "mounts": ["${H}"],
+      "extra": {
+        "source": "${H}/models--llm-semantic-router--Decision-1.0-Sol-2B/snapshots/ce0c018a28de16d6639b1cd203b761bf643b89e6",
+        "model_id": "llm-semantic-router/DEV2.0-2B", "max_length": "16384"
+      },
+      "limit": "16,384 tokens (package limit), no truncation",
+      "cache": {"frozen": "${DEC}/m3/m3-S2T-soup-nodeA-triton", "sha256": "abdfd6872ccee3efc2b8e67358e9726e83eec882b1b0de3059d2ad408b2e26f0"},
+      "smoke_items": 20,
+      "parity": {"mode": "exact", "stored": "${REL}/dev2-2b-t1-derived/output/typed-final.predictions.jsonl", "tolerance": 0.0001},
+      "identity": "073bd1f2fe62e39fe993f57006bab17ece50a7e6fc7c5ee72107fefddeb81da4",
+      "package": {
+        "dir": "${REL}/dev2-2b-final-20260928T203550Z/download/DEV2.0-2B",
+        "manifest_sha256": "6c4e1885ec68f1047b7bb9e9604373cc44129178dc900791f5617612016c6e51",
+        "identity": "073bd1f2fe62e39fe993f57006bab17ece50a7e6fc7c5ee72107fefddeb81da4"
+      },
+      "trees": [{"dir": "${H}/models--llm-semantic-router--Decision-1.0-Sol-2B/snapshots/ce0c018a28de16d6639b1cd203b761bf643b89e6", "sha256": "2a1f0aa470c41ddb02078f24ed201f4bf81c1e93b9915ca153340a5bd63bb124"}],
+      "stored_collect": "${DEC}/m3/m3-S2T-soup-nodeA/COLLECT.json",
+      "notes": "Release readback download of the released revision (final record); parity against the T = 1 predictions of the scored run."
+    },
+    "sol1-16k": {
+      "tier": "2B", "role": "own1", "label": "Decision 1.0 Sol (16,384-token same-renderer control)", "v3": 45.781,
+      "repo": "llm-semantic-router/Decision-1.0-Sol-2B", "revision": "ce0c018a28de16d6639b1cd203b761bf643b89e6",
+      "image": "host2", "adapter_spec": "v2/dec/adapter-spec-infer-1p0.json",
+      "model_path": "${H}/models--llm-semantic-router--Decision-1.0-Sol-2B/snapshots/ce0c018a28de16d6639b1cd203b761bf643b89e6",
+      "mounts": ["${H}"],
+      "extra": {"model_id": "llm-semantic-router/Decision-1.0-Sol-2B", "max_length": "16384"},
+      "limit": "16,384 tokens, no truncation",
+      "cache": {"frozen": "${DEC}/m3/sol1-16k-triton", "sha256": "5f1777ad833afac0fe73b019eac55dacc4d04c877651fa53161128c76091868b"},
+      "smoke_items": 20,
+      "parity": {"mode": "exact", "stored": "${DEC}/m3/sol1-16k/output/typed-final.predictions.jsonl", "tolerance": 0.0001},
+      "trees": [{"dir": "${H}/models--llm-semantic-router--Decision-1.0-Sol-2B/snapshots/ce0c018a28de16d6639b1cd203b761bf643b89e6", "sha256": "2a1f0aa470c41ddb02078f24ed201f4bf81c1e93b9915ca153340a5bd63bb124"}],
+      "stored_collect": "${DEC}/m3/sol1-16k/COLLECT.json",
+      "notes": "Proposed 2B own-1.0 configuration: the stricter post-key v3 comparator and the 2B card's paired comparator."
+    },
+    "sol1": {
+      "tier": "2B", "role": "own1", "label": "Decision 1.0 Sol (adopted, published runtime)", "v3": 45.58,
+      "repo": "llm-semantic-router/Decision-1.0-Sol-2B", "revision": "0665a41108e8f0b33a9515c98311c45947b99399",
+      "image": "host2", "adapter": "decision1-sol",
+      "model_path": "${M}/Decision-1.0-Sol-2B",
+      "extra": {"model_id": "llm-semantic-router/Decision-1.0-Sol-2B"},
+      "limit": "16,384 tokens (published runtime), over-budget invalid",
+      "cache": null, "smoke_items": 20,
+      "parity": {"mode": "near", "stored": "${EV}/m1-adopt/sol1/output/typed-final.predictions.jsonl", "max_changed_fraction": 0.1},
+      "trees": [{"dir": "${M}/Decision-1.0-Sol-2B", "sha256": "7b1e20711f36d0b5446bb6ee30468aa066402db249dfc4fc5a7f6d6687a2e9a3"}],
+      "stored_collect": "${EV}/m2/mlx/x-sol1/COLLECT.json",
+      "notes": "Alternative to sol1-16k (select one). Adopted predictions are a prior-session import, so parity is near, not exact."
+    },
+    "decider2b": {
+      "tier": "2B", "role": "peer", "label": "Decider 2B", "v3": 49.499,
+      "repo": "Mapika/decider-2b", "revision": "533964dae8be954c5b5e19fa4948e48408094c1e",
+      "image": "host2", "adapter": "decider",
+      "model_path": "${D20}/experiments/sol2b-unmerged-package-r1/peer/decider-2b-533964d",
+      "extra": {},
+      "limit": "published decider runtime",
+      "cache": null, "smoke_items": 20,
+      "parity": {"mode": "near", "stored": "${EV}/m1-adopt/decider2b/output/typed-final.predictions.jsonl", "max_changed_fraction": 0.1},
+      "trees": [{"dir": "${D20}/experiments/sol2b-unmerged-package-r1/peer/decider-2b-533964d", "sha256": "6b8cb30c1a104a04648818594a04f0ae6d5aa902250e1c0a8dff4f697a86e8d8"}],
+      "stored_collect": "${EV}/m2/mlx/x-decider2b/COLLECT.json",
+      "licence": "apache-2.0 in card metadata only (no LICENSE file)"
+    },
+    "thisthat12": {
+      "tier": "2B", "role": "peer", "label": "This-That 1.2", "v3": 46.112,
+      "repo": "flock-io/this-that-model-1.2", "revision": "c4d1c30b8d512d278726de439b8cc81fccc70c8f",
+      "image": "host2", "adapter": "this-that-1.2",
+      "model_path": "${DM}/this-that-model-1.2@c4d1c30b",
+      "mounts": ["/data/dev2/tools/src/this-that-model"],
+      "extra": {"model_id": "flock-io/this-that-model-1.2", "source": "/data/dev2/tools/src/this-that-model"},
+      "limit": "1,536-token state limit, overflow invalid",
+      "cache": null, "smoke_items": 20,
+      "parity": {"mode": "near", "stored": "${EV}/m2/q4-thisthat12/output/typed-final.predictions.jsonl", "max_changed_fraction": 0.1},
+      "trees": [
+        {"dir": "${DM}/this-that-model-1.2@c4d1c30b", "sha256": "63b24b9cb512664f81fd4787fa63fadd3646db3590d90e1936f85561450c14f8"},
+        {"dir": "/data/dev2/tools/src/this-that-model", "sha256": "1bb890407a31f4f2653f426d61b7129f30032d784f5f2dfc888243d0a0768dc3"}
+      ],
+      "stored_collect": "${EV}/m2/q4-thisthat12/COLLECT.json",
+      "licence": "mit in card metadata only (no LICENSE file)"
+    },
+    "cand4b": {
+      "tier": "4B", "role": "candidate", "label": "DEV2.0-4B", "v3": 63.151,
+      "repo": "llm-semantic-router/DEV2.0-4B", "revision": "452f133211de292a87bc29ab7e24a3bd0704e40d",
+      "image": "host2", "adapter_spec": "v2/eval/sealed/adapters/dev2-dec-package-t1.json",
+      "model_path": "${REL}/dev2-4b-final-20260929T010237Z/download/DEV2.0-4B",
+      "mounts": ["${H}"],
+      "extra": {
+        "source": "${H}/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259",
+        "model_id": "llm-semantic-router/DEV2.0-4B", "max_length": "16384"
+      },
+      "limit": "16,384 tokens (package limit), no truncation",
+      "cache": {"frozen": "${DEC}/m4/m4-N4XF-soup-nodeA-triton", "sha256": "438618a6e3beb39407dabb96e689b5740d021a9c93b9df9769453c3d94deb119"},
+      "smoke_items": 20,
+      "parity": {"mode": "exact", "stored": "${REL}/dev2-4b-t1-derived/output/typed-final.predictions.jsonl", "tolerance": 0.0001},
+      "identity": "11b5ca1c22f8cd38d67d718cbfa59a3fb4dc8f4e7bfd75b3e988f34e35fad0ad",
+      "package": {
+        "dir": "${REL}/dev2-4b-final-20260929T010237Z/download/DEV2.0-4B",
+        "manifest_sha256": "8fa3be690678b545380042f161c4c9101503fcf52ef7f3f65e2a44037d881f8c",
+        "identity": "11b5ca1c22f8cd38d67d718cbfa59a3fb4dc8f4e7bfd75b3e988f34e35fad0ad"
+      },
+      "trees": [{"dir": "${H}/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259", "sha256": "b3e8aec1c3899fdd6918bb5c15a8fb6cb7be154d7ca47685276fd4bb43836420"}],
+      "stored_collect": "${DEC}/m4/m4-N4XF-soup-nodeA/COLLECT.json",
+      "notes": "Release readback download of the released revision (final record); parity against the T = 1 predictions of the scored run."
+    },
+    "nox1": {
+      "tier": "4B", "role": "own1", "label": "Decision 1.0 Nox (adopted, published runtime)", "v3": 56.47,
+      "repo": "llm-semantic-router/Decision-1.0-Nox-4B", "revision": "0bb833504965c0eabdb9630b7bbd385cb2fe5cd4",
+      "image": "host2", "adapter": "decision1-nox",
+      "model_path": "${M}/Decision-1.0-Nox-4B",
+      "extra": {"model_id": "llm-semantic-router/Decision-1.0-Nox-4B"},
+      "limit": "published runtime, over-budget invalid",
+      "cache": null, "smoke_items": 20,
+      "parity": {"mode": "near", "stored": "${EV}/m1-adopt/nox1/output/typed-final.predictions.jsonl", "max_changed_fraction": 0.1},
+      "trees": [{"dir": "${M}/Decision-1.0-Nox-4B", "sha256": "e8da8a6f031d85df4b47ae05963e894026da8f39ab937111c94dff4d82f4b72b"}],
+      "stored_collect": "${EV}/m2/mlx/x-nox1/COLLECT.json",
+      "notes": "Proposed 4B own-1.0 configuration: the stricter post-key v3 comparator and the 4B card's release-bar comparator. Adopted predictions are a prior-session import, so parity is near, not exact."
+    },
+    "nox1-16k": {
+      "tier": "4B", "role": "own1", "label": "Decision 1.0 Nox (16,384-token same-renderer control)", "v3": 55.689,
+      "repo": "llm-semantic-router/Decision-1.0-Nox-4B", "revision": "cde2a68dbaa557ea65dc458104d410a0802ee259",
+      "image": "host2", "adapter_spec": "v2/dec/adapter-spec-infer-1p0.json",
+      "model_path": "${H}/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259",
+      "mounts": ["${H}"],
+      "extra": {"model_id": "llm-semantic-router/Decision-1.0-Nox-4B", "max_length": "16384"},
+      "limit": "16,384 tokens, no truncation",
+      "cache": {"frozen": "${DEC}/m3/nox1-16k-triton", "sha256": "2c312b238a2b07197af520e95f7c5b557c8dafb6db887dd95bfe4d2da45d6436"},
+      "smoke_items": 20,
+      "parity": {"mode": "exact", "stored": "${DEC}/m3/nox1-16k/output/typed-final.predictions.jsonl", "tolerance": 0.0001},
+      "trees": [{"dir": "${H}/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259", "sha256": "b3e8aec1c3899fdd6918bb5c15a8fb6cb7be154d7ca47685276fd4bb43836420"}],
+      "stored_collect": "${DEC}/m3/nox1-16k/COLLECT.json",
+      "notes": "Alternative to nox1 (select one): exact-parity reproducible, same renderer and limit as the candidate."
+    },
+    "decider4b": {
+      "tier": "4B", "role": "peer", "label": "Decider 4B", "v3": 61.882,
+      "repo": "Mapika/decider-4b", "revision": "eb5fbdfc9448473ec25e399882912863afbdb70e",
+      "image": "host2", "adapter": "decider",
+      "model_path": "${M}/decider-4b",
+      "extra": {},
+      "limit": "published decider runtime",
+      "cache": null, "smoke_items": 20,
+      "parity": {"mode": "near", "stored": "${EV}/m1-adopt/decider4b/output/typed-final.predictions.jsonl", "max_changed_fraction": 0.1},
+      "trees": [{"dir": "${M}/decider-4b", "sha256": "a66ae864940d6c30c79afc4ee81059d7cc07bec11f9e36e6da8709dcf2bedea1"}],
+      "stored_collect": "${EV}/m2/mlx/x-decider4b/COLLECT.json",
+      "licence": "apache-2.0 in card metadata only (no LICENSE file)"
+    },
+    "jet62": {
+      "tier": "4B", "role": "peer", "label": "Jet v6.2", "v3": 60.375,
+      "repo": "michaljach/jet", "revision": "fbc3d2daa679e0d4bd9f99c9912b6496d5a41f0a",
+      "image": "host2", "adapter": "jet-v6.2",
+      "model_path": "${DM}/jet@fbc3d2da",
+      "extra": {"model_id": "michaljach/jet"},
+      "limit": "16,384 tokens, rejection invalid",
+      "cache": null, "smoke_items": 20,
+      "parity": {"mode": "near", "stored": "${EV}/m2/q5b-jet62/output/typed-final.predictions.jsonl", "max_changed_fraction": 0.1},
+      "trees": [{"dir": "${DM}/jet@fbc3d2da", "sha256": "8ff1971b6947300c221b13ca390404878842517614ad5033f3a88a21d6a7d340"}],
+      "stored_collect": "${EV}/m2/q5b-jet62/COLLECT.json",
+      "licence": "apache-2.0 (LICENSE file)"
+    },
+    "cand06-e2": {
+      "tier": "0.6B", "role": "candidate", "label": "DEV2.0-0.6B", "v3": 43.54,
+      "repo": "llm-semantic-router/DEV2.0-0.6B", "revision": "e61b2b4419383672cb6a92d63699f7974e5f81ac",
+      "stored": {
+        "event": 2,
+        "predictions": "${E2}/cand/output/sealed-c1.predictions.jsonl",
+        "seal": "${E2}/cand/SEAL-C1.json",
+        "seal_sha256": "f9e1279c2bc4b0db9c44f885c3631e059ef4a8ee5b80773a62a4f7de6b582739",
+        "report": "${E2}/cand/REPORT-C1.json"
+      },
+      "notes": "Not re-run: the event-2 predictions of the frozen package e61b2b44 (8,192 tokens)."
+    },
+    "kai1-8k": {
+      "tier": "0.6B", "role": "own1", "label": "Decision 1.0 Kai (8,192 tokens)", "v3": 35.969,
+      "repo": "llm-semantic-router/Decision-1.0-Kai-0.6B", "revision": "7185f514f54b8f93c55998b1e8f9c5cc67f0d029",
+      "image": "host2", "adapter_spec": "v2/06b/records/adapters/dev2-06b-kai-native-8k.json",
+      "model_path": "${M}/Decision-1.0-Kai-0.6B",
+      "mounts": ["${KL}"],
+      "extra": {"backend": "kai", "model_id": "dev2-06b/kai1-native-8k"},
+      "limit": "8,192-token native cap (complete input), overflow invalid",
+      "cache": null, "smoke_items": 20,
+      "parity": {"mode": "exact", "stored": "${RUNS}/06b/m2/formal/kai1-native-8k/output/typed-final.predictions.jsonl", "tolerance": 0.0001},
+      "trees": [
+        {"dir": "${M}/Decision-1.0-Kai-0.6B", "sha256": "731925de7347d706db61b96c29dae98125a71d5e341419b2d02f4d48942606f2"},
+        {"dir": "${KL}", "sha256": "d3ae64ba0266d492345f69bd6109ac6412e31eeec53d7fe00240bf5106194b9b"}
+      ],
+      "stored_collect": "${RUNS}/06b/m2/formal/kai1-native-8k/COLLECT.json",
+      "deviation": {
+        "id": "kai1-second-scoring",
+        "text": "Kai 1.0 was scored in event 2 at its published 1,024-token limit; this second configuration gives the 0.6B card a same-limit line, paired with the stored DEV2.0-0.6B event-2 predictions",
+        "approved": "coordinator 2026-09-29 02:05"
+      }
+    },
+    "kai1-e2": {
+      "tier": "0.6B", "role": "own1", "label": "Decision 1.0 Kai (1,024 tokens, event 2)", "v3": 35.938,
+      "repo": "llm-semantic-router/Decision-1.0-Kai-0.6B", "revision": "7185f514f54b8f93c55998b1e8f9c5cc67f0d029",
+      "stored": {
+        "event": 2,
+        "predictions": "${E2}/kai1/output/sealed-c1.predictions.jsonl",
+        "seal": "${E2}/kai1/SEAL-C1.json",
+        "seal_sha256": "aee20102c37184b3b972eced44517d971b188da1f07a8e02f2dba6e52e21bd66",
+        "report": "${E2}/kai1/REPORT-C1.json",
+        "reference_only": true
+      }
+    },
+    "lex-e2": {
+      "tier": "0.6B", "role": "own1", "label": "Decision 1.0 Lex (1,024 tokens, event 2)", "v3": 31.022,
+      "repo": "llm-semantic-router/Decision-1.0-Lex-0.6B", "revision": "ee8e74d912fca8328a353c11d174b44da3f91781",
+      "stored": {
+        "event": 2,
+        "predictions": "${E2}/lex/output/sealed-c1.predictions.jsonl",
+        "seal": "${E2}/lex/SEAL-C1.json",
+        "seal_sha256": "65841651648ac3f9f8d12928606dfa5ae02fd65e28d3527bbddbe35680a18110",
+        "report": "${E2}/lex/REPORT-C1.json"
+      },
+      "notes": "Only for a 0.6B successor slot."
+    },
+    "bosun06-e2": {
+      "tier": "0.6B", "role": "peer", "label": "Bosun v3.1 0.6B (event 2)", "v3": 38.524,
+      "repo": "Hanno-Labs/bosun-v3.1-0.6b", "revision": "1d8b6f9611f9b64b514ce8b57cd86398fbc31a3b",
+      "stored": {
+        "event": 2,
+        "predictions": "${E2}/bosun06/output/sealed-c1.predictions.jsonl",
+        "seal": "${E2}/bosun06/SEAL-C1.json",
+        "seal_sha256": "e8b7ee4aa73fafa81662367dcc93c48d0a1e32917864ead063f9e9f00b0cf177",
+        "report": "${E2}/bosun06/REPORT-C1.json"
+      },
+      "notes": "Only for a 0.6B successor slot."
+    },
+    "gliner25-e2": {
+      "tier": "0.6B", "role": "peer", "label": "GLiNER2.5-Decide (event 2)", "v3": 42.524,
+      "repo": "fastino/GLiNER2.5-Decide", "revision": "7ee5da4c2415e32259bcdc0b1a7367c32ce8d6f6",
+      "stored": {
+        "event": 2,
+        "predictions": "${E2}/gliner25/output/sealed-c1.predictions.jsonl",
+        "seal": "${E2}/gliner25/SEAL-C1.json",
+        "seal_sha256": "f2f8c79a02e06e5b376cd50626be1240f664f9b67c0f490990a101058d05c109",
+        "report": "${E2}/gliner25/REPORT-C1.json"
+      },
+      "notes": "Only for a 0.6B successor slot."
+    },
+    "cand06-next": {
+      "tier": "0.6B", "role": "candidate", "label": "PARENT-FILLS (0.6B successor)", "v3": "PARENT-FILLS",
+      "repo": "llm-semantic-router/DEV2.0-0.6B", "revision": "PARENT-FILLS",
+      "image": "host2", "adapter_spec": "PARENT-FILLS", "model_path": "PARENT-FILLS",
+      "extra": {"model_id": "llm-semantic-router/DEV2.0-0.6B"},
+      "limit": "PARENT-FILLS", "cache": null, "smoke_items": "PARENT-FILLS",
+      "parity": {"mode": "exact", "stored": "PARENT-FILLS", "tolerance": 0.0001},
+      "identity": "PARENT-FILLS",
+      "package": {"dir": "PARENT-FILLS", "manifest_sha256": "PARENT-FILLS", "identity": "PARENT-FILLS"},
+      "deviation": {
+        "id": "second-0.6B-candidate",
+        "text": "The rules allow one candidate per size; DEV2.0-0.6B was the 0.6B candidate in event 2",
+        "approved": null
+      },
+      "notes": "Comparators would be the stored event-2 rows (kai1-e2 with reference_only removed, lex-e2, bosun06-e2, gliner25-e2) plus kai1-8k."
+    },
+    "cand9b": {
+      "tier": "9B", "role": "candidate", "label": "PARENT-FILLS (9B successor)", "v3": "PARENT-FILLS",
+      "repo": "PARENT-FILLS", "revision": "PARENT-FILLS",
+      "image": "host2", "adapter_spec": "PARENT-FILLS", "model_path": "PARENT-FILLS",
+      "mounts": ["${H}"], "extra": {"model_id": "PARENT-FILLS", "max_length": "16384"},
+      "limit": "16,384 tokens (Lux-family package limit)",
+      "cache": {"frozen": "PARENT-FILLS", "sha256": "PARENT-FILLS"}, "smoke_items": 20,
+      "parity": {"mode": "exact", "stored": "PARENT-FILLS", "tolerance": 0.0001},
+      "identity": "PARENT-FILLS",
+      "package": {"dir": "PARENT-FILLS", "manifest_sha256": "PARENT-FILLS", "identity": "PARENT-FILLS"},
+      "notes": "Only if the coordinator approves a 9B release candidate before the event."
+    },
+    "lux1": {
+      "tier": "9B", "role": "own1", "label": "Decision 1.0 Lux (adopted, 16,384 tokens)", "v3": 65.808,
+      "repo": "llm-semantic-router/Decision-1.0-Lux-9B", "revision": "bd45a30aee8c84032791c245c70f86dee5389cc8",
+      "image": "host2", "adapter": "decision1-lux",
+      "model_path": "${M}/Decision-1.0-Lux-9B",
+      "env": ["TRITON_PRINT_AUTOTUNING=1"],
+      "extra": {"model_id": "llm-semantic-router/Decision-1.0-Lux-9B"},
+      "limit": "16,384 tokens (published runtime), over-budget invalid",
+      "cache": {"frozen": "${EV}/m1/lux1-triton-cache-d1", "sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f"},
+      "smoke_items": 20,
+      "parity": {"mode": "exact", "stored": "${EV}/m1/d1-lux1-autotune-cache/output/typed-final.predictions.jsonl", "tolerance": 0.0001},
+      "trees": [{"dir": "${M}/Decision-1.0-Lux-9B", "sha256": "3a7cab7dbe865dae53f7fd2a72410d122f3363b3fb81802c74d68ead2a5143a9"}],
+      "stored_collect": "${EV}/m1/d1-lux1-autotune-cache/COLLECT.json",
+      "notes": "Adopted 65.808 is the stricter 9B comparator (same-renderer 16K 65.231, 8K 65.231)."
+    },
+    "nimble2": {
+      "tier": "9B", "role": "peer", "label": "Nimble v2", "v3": 62.056,
+      "repo": "bespokelabs/Bespoke-Nimble-9B-v2", "revision": "4b8c04d1ac2cea3e41e5e3c4d2130bcead2c0abe",
+      "image": "host2", "adapter": "nimble-v2",
+      "model_path": "${DM}/nimble-v2@4b8c04d1",
+      "mounts": ["${H}"], "env": ["HF_HUB_CACHE=${H}", "HF_HUB_OFFLINE=1"],
+      "extra": {"model_id": "bespokelabs/Bespoke-Nimble-9B-v2"},
+      "limit": "8,192 tokens, rejected item invalid",
+      "cache": null, "smoke_items": 20,
+      "parity": {"mode": "near", "stored": "${EV}/m2/q6-nimble2/output/typed-final.predictions.jsonl", "max_changed_fraction": 0.1},
+      "trees": [{"dir": "${DM}/nimble-v2@4b8c04d1", "sha256": "75d31c1a1dbd14998a63a9c2a155a4c856d82c5d52df3eb0884b4480e260373d"}],
+      "stored_collect": "${EV}/m2/q6-nimble2/COLLECT.json",
+      "notes": "Its pinned Qwen3.5 base loads from the offline HF cache (not tree-pinned here)."
+    },
+    "autojev27": {
+      "tier": "27B", "role": "peer", "label": "AutoJev-27B", "v3": 72.133,
+      "repo": "denis-pplx/autojev-27b", "revision": "6f5b557e037f5edb25c7dc92dbc6553e5a19c015",
+      "image": "kernel", "adapter": "autojev27",
+      "model_path": "${D20}/references/autojev27-6f5b",
+      "mounts": ["${X}/autojev-source"], "env": ["HIP_FORCE_DEV_KERNARG=1"],
+      "extra": {"model_id": "denis-pplx/autojev-27b", "source": "${X}/autojev-source"},
+      "limit": "native runtime limits, invalid on rejection",
+      "cache": {"frozen": "${X}/nodeB-kernel/autojev27-triton", "sha256": "12dfb6088ddd34eb4dd95313e6e99d9e94c085176b57670fa257d71ccfdb36c9"},
+      "smoke_items": 20,
+      "parity": {"mode": "exact", "stored": "${EV}/m4/nodeB-kernel/autojev27/output/typed-final.predictions.jsonl", "tolerance": 0.0001},
+      "trees": [
+        {"dir": "${D20}/references/autojev27-6f5b", "sha256": "2c5f11e7ef139f531240f31a522c5fa1e73d921ee1c70a191c447ce7a3eeb5b2"},
+        {"dir": "${X}/autojev-source", "sha256": "f7cb68c36d3b10ecf98ea2df5cd9d97e4ecaeda81043f2abbb48068bd26a0ea5"}
+      ],
+      "stored_collect": "${EV}/m4/nodeB-kernel/autojev27/COLLECT.json",
+      "notes": "Node A copy is byte-identical to node B's /data/dev2/models/autojev-27b@6f5b557e (tree 2c5f11e7). Node-B kernel-image comparator run (72.133).",
+      "stage_node_a": [
+        {"kind": "copy", "from": "/data/dev2/tools/src/autojev-source", "to": "${X}/autojev-source"},
+        {"kind": "copy", "from": "${EV}/m4/nodeB-kernel/autojev27-triton", "to": "${X}/nodeB-kernel/autojev27-triton"}
+      ],
+      "node_b": {
+        "model_path": "${DM}/autojev-27b@6f5b557e",
+        "mounts": ["/data/dev2/tools/src/autojev-source"],
+        "extra.source": "/data/dev2/tools/src/autojev-source",
+        "cache.frozen": "${EV}/m4/nodeB-kernel/autojev27-triton",
+        "trees": [
+          {"dir": "${DM}/autojev-27b@6f5b557e", "sha256": "2c5f11e7ef139f531240f31a522c5fa1e73d921ee1c70a191c447ce7a3eeb5b2"},
+          {"dir": "/data/dev2/tools/src/autojev-source", "sha256": "f7cb68c36d3b10ecf98ea2df5cd9d97e4ecaeda81043f2abbb48068bd26a0ea5"}
+        ]
+      }
+    },
+    "eikos27b": {
+      "tier": "27B", "role": "peer", "label": "Eikos-27B (BF16)", "v3": 69.29,
+      "repo": "caiovicentino1/Eikos-27B", "revision": "103a5647c0131fd00abc165675fcee243d33a789",
+      "image": "kernel", "adapter": "eikos-27b",
+      "model_path": "${DM}/Eikos-27B@103a5647",
+      "env": ["HIP_FORCE_DEV_KERNARG=1"],
+      "extra": {"model_id": "caiovicentino1/Eikos-27B"},
+      "limit": "bundled runtime (one pass up to 160 options)",
+      "cache": {"frozen": "${X}/nodeB-kernel/eikos27b-triton", "sha256": "92fcc0d3ee145b40c767b15fbd40e6367b45d092cf4d35b0f636c241069c7d35"},
+      "smoke_items": 20,
+      "parity": {"mode": "exact", "stored": "${EV}/m4/nodeB-kernel/eikos27b/output/typed-final.predictions.jsonl", "tolerance": 0.0001},
+      "trees": [{"dir": "${DM}/Eikos-27B@103a5647", "sha256": "db7dd30177bbb59e2ffc93cc8524dafc9e2b2bb59b0724e6076ea3a6fcc8d887"}],
+      "stored_collect": "${EV}/m4/nodeB-kernel/eikos27b/COLLECT.json",
+      "notes": "BF16 sibling of its FP8 board entry. Not on node A: stage from the Hub at the pinned revision and match tree db7dd301 (node B copy).",
+      "stage_node_a": [
+        {"kind": "copy", "from": "${EV}/m4/nodeB-kernel/eikos27b-triton", "to": "${X}/nodeB-kernel/eikos27b-triton"},
+        {"kind": "hf", "repo": "caiovicentino1/Eikos-27B", "revision": "103a5647c0131fd00abc165675fcee243d33a789", "to": "${DM}/Eikos-27B@103a5647"}
+      ],
+      "node_b": {"cache.frozen": "${EV}/m4/nodeB-kernel/eikos27b-triton"}
+    },
+    "jebadiah27b": {
+      "tier": "27B", "role": "peer", "label": "Jebadiah-27B", "v3": 65.472,
+      "repo": "frontier-infra/jebadiah-27b", "revision": "c68db2b5570f3c2bdab511088885a88bd8b3a814",
+      "image": "kernel", "adapter": "jebadiah-27b",
+      "model_path": "${DM}/jebadiah-27b@c68db2b5",
+      "env": ["HIP_FORCE_DEV_KERNARG=1"],
+      "extra": {"model_id": "frontier-infra/jebadiah-27b"},
+      "limit": "2,048-token render budget; cut prompts invalid",
+      "cache": {"frozen": "${X}/nodeB-kernel/jebadiah27b-triton", "sha256": "27437a865e5418dba2c30284ebfe64ed28e9b0e070a023dffe3b2dfe6cf684b8"},
+      "smoke_items": 20,
+      "parity": {"mode": "exact", "stored": "${EV}/m4/nodeB-kernel/jebadiah27b/output/typed-final.predictions.jsonl", "tolerance": 0.0001},
+      "trees": [{"dir": "${DM}/jebadiah-27b@c68db2b5", "sha256": "081bd732444823539d4b863ec0022d08179d57b07e8fd54a5313a8a6a6414c53"}],
+      "stored_collect": "${EV}/m4/nodeB-kernel/jebadiah27b/COLLECT.json",
+      "notes": "Not on node A: stage from the Hub at the pinned revision and match tree 081bd732 (node B copy).",
+      "stage_node_a": [
+        {"kind": "copy", "from": "${EV}/m4/nodeB-kernel/jebadiah27b-triton", "to": "${X}/nodeB-kernel/jebadiah27b-triton"},
+        {"kind": "hf", "repo": "frontier-infra/jebadiah-27b", "revision": "c68db2b5570f3c2bdab511088885a88bd8b3a814", "to": "${DM}/jebadiah-27b@c68db2b5"}
+      ],
+      "node_b": {"cache.frozen": "${EV}/m4/nodeB-kernel/jebadiah27b-triton"}
+    }
+  }
+}
