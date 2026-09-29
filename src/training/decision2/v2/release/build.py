@@ -406,6 +406,28 @@ def base_text_parameters(base: Path, files: dict[str, str], source_kind: str) ->
     return total
 
 
+def _mirror_tree(value: str, key: str, inside: str) -> tuple[Path, dict[str, Any]]:
+    root = Path(value).resolve(strict=True)
+    mirror = next(
+        (
+            p / ".dev2-mirror.json"
+            for p in (root, *root.parents)
+            if (p / ".dev2-mirror.json").is_file()
+        ),
+        None,
+    )
+    if mirror is None or not (root / inside).is_dir():
+        raise ValueError(
+            f"{key} must be a decision2 tree with {inside} inside an exact node mirror"
+        )
+    record = json.loads(mirror.read_text(encoding="utf-8"))
+    return root, {
+        "commit": record.get("commit"),
+        "tree": record.get("tree"),
+        "content_manifest_sha256": record.get("content_manifest_sha256"),
+    }
+
+
 def vendor_root(spec: dict[str, Any]) -> tuple[Path, dict[str, Any] | None]:
     """Tree whose training/model (and v2/dec) sources are vendored.
 
@@ -416,25 +438,20 @@ def vendor_root(spec: dict[str, Any]) -> tuple[Path, dict[str, Any] | None]:
     value = spec.get("vendor_source")
     if not value:
         return SOURCE_ROOT, None
-    root = Path(value).resolve(strict=True)
-    mirror = next(
-        (
-            p / ".dev2-mirror.json"
-            for p in (root, *root.parents)
-            if (p / ".dev2-mirror.json").is_file()
-        ),
-        None,
-    )
-    if mirror is None or not (root / "training/model").is_dir():
-        raise ValueError(
-            "vendor_source must be a decision2 tree with training/model inside an exact node mirror"
-        )
-    record = json.loads(mirror.read_text(encoding="utf-8"))
-    return root, {
-        "commit": record.get("commit"),
-        "tree": record.get("tree"),
-        "content_manifest_sha256": record.get("content_manifest_sha256"),
-    }
+    return _mirror_tree(value, "vendor_source", "training/model")
+
+
+def runtime_root(spec: dict[str, Any]) -> tuple[Path, dict[str, Any] | None]:
+    """Tree whose v2/release/runtime supplies the package runtime (decision2/*.py).
+
+    Default: this builder's tree. ``runtime_source`` names the decision2 tree of an
+    exact node mirror (e.g. the one that built the revision a card-only revision
+    replaces) so the package runtime stays byte-identical to that revision's.
+    """
+    value = spec.get("runtime_source")
+    if not value:
+        return SOURCE_ROOT, None
+    return _mirror_tree(value, "runtime_source", "v2/release/runtime")
 
 
 def vendor_runtime(
@@ -442,12 +459,13 @@ def vendor_runtime(
 ) -> dict[str, Any]:
     """Copy the runtime template and the exact scored inference sources."""
     root, _ = vendor_root(spec)
+    runtime_tree, _ = runtime_root(spec)
     records: dict[str, Any] = {}
     target = stage / layout.RUNTIME_DIR
     target.mkdir()
     profile_module = "kai_native.py" if spec["profile"] == "kai-native" else "qwen.py"
     for name in ("__init__.py", "api.py", profile_module):
-        shutil.copyfile(RUNTIME_TEMPLATE / name, target / name)
+        shutil.copyfile(runtime_tree / "v2/release/runtime" / name, target / name)
         records[f"decision2/{name}"] = {
             "source": f"v2/release/runtime/{name}",
             "rewritten": False,
@@ -507,7 +525,7 @@ def vendor_runtime(
     for name, record in records.items():
         source = record.get("source")
         if source and "@" not in source and "source_sha256" not in record:
-            tree = SOURCE_ROOT if source.startswith("v2/release/") else root
+            tree = runtime_tree if source.startswith("v2/release/") else root
             record["source_sha256"] = layout.sha_file(tree / source)
     return records
 
@@ -900,6 +918,11 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
                 **(
                     {"vendor_source": vendor_root(spec)[1]}
                     if spec.get("vendor_source")
+                    else {}
+                ),
+                **(
+                    {"runtime_source": runtime_root(spec)[1]}
+                    if spec.get("runtime_source")
                     else {}
                 ),
             },
