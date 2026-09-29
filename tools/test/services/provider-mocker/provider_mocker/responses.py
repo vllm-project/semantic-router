@@ -32,7 +32,9 @@ async def responses(request: Request):
     assert body is not None
     await apply_fixture_delay()
     session_id = request.headers.get(SESSION_HEADER) or "__global__"
-    request.app.state.request_store.record(session_id, body, request.headers, raw_body)
+    request.app.state.request_store.record(
+        session_id, body, request.headers, raw_body, request.url.path
+    )
     if response_input_contains(body, "__mock_provider_error__"):
         return JSONResponse(
             status_code=429,
