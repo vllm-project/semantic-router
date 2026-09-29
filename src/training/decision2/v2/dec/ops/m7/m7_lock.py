@@ -6,11 +6,13 @@ m7-prep.sh (CPU, stdlib only). For each tier's three TRAIN files (m7/data/<tier>
 - matched tokens: |C - H| / H and |P - H| / H <= 0.5%, and P's filler is nested in C's (compose.json);
 - the exposure receipt (r2 payload 2194716a) lists 0 groups for the file;
 - the composed teacher covers every row except the gold-only pools, with the argmax agreement reported;
-- the C1 registry guard (the 9B rule: C1 name keys against every TRAIN source; family-name hits reported only).
+- the C1 registry guard (the 9B rule: C1 name keys against every TRAIN source; family-name hits reported only);
+- with --hs1-cleared: every HS1 row equals the row of the same id in the cleared HS1 revision's TRAIN file;
+- with --tag (a rebuild such as the PN1-r2 P arm): the arms not rebuilt are byte-identical to the untagged build.
 
-Writes <out> (lock-<tier>.json) and prints PASS / FAIL with the reasons. It never writes READY files.
+Writes <out> (lock-<tier><tag>.json) and prints PASS / FAIL with the reasons. It never writes READY files.
 
-usage: python3 m7_lock.py --tier 4b|2b --out /data/dev2/runs/dec/m7/lock-<tier>.json
+usage: python3 m7_lock.py --tier 4b|2b [--tag -r2 --arms P] [--hs1-cleared F --hs1-cleared-sha S] --out OUT
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from collections import Counter
 from pathlib import Path
 
 CODE = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(CODE))
 sys.path.insert(0, str(CODE / "v2" / "9b"))
 from lux9b.m3_data import c1_keys, denied_hits  # noqa: E402
 
@@ -50,24 +53,53 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--tier", choices=sorted(GOLD_POOLS), required=True)
     p.add_argument("--root", type=Path, default=M)
+    p.add_argument("--tag", default="")
+    p.add_argument("--arms", default="H C P")
+    p.add_argument("--hs1-cleared", type=Path)
+    p.add_argument("--hs1-cleared-sha")
     p.add_argument("--out", type=Path, required=True)
     a = p.parse_args(argv)
-    mix = a.root / "data" / a.tier / "mix"
+    mix = a.root / "data" / f"{a.tier}{a.tag}" / "mix"
     comp = json.loads((mix / "compose.json").read_text())
     report = comp["report"]
     quarantine = set(json.loads(QUARANTINE.read_text())["group_ids"])
     drops = comp["args"].get("hs1_drop_substring") or []
     keys = c1_keys(json.loads(C1_REGISTRY.read_text()))
     fails: list[str] = []
+    cleared = None
+    if a.hs1_cleared is not None:
+        if sha(a.hs1_cleared) != a.hs1_cleared_sha:
+            fails.append("cleared HS1 file differs from its pinned SHA-256")
+        cleared = {}
+        with a.hs1_cleared.open(encoding="utf-8") as stream:
+            for line in stream:
+                row = json.loads(line)
+                cleared[row["id"]] = row
     arms = {}
-    for arm in ("H", "C", "P"):
+    identical = {}
+    if a.tag:
+        base = json.loads(
+            (a.root / "data" / a.tier / "mix" / "compose.json").read_text()
+        )
+        for arm in ("H", "C", "P"):
+            if arm not in a.arms.split():
+                same = (
+                    base["files"][arm]["train_sha256"]
+                    == comp["files"][arm]["train_sha256"]
+                )
+                identical[arm] = same
+                if not same:
+                    fails.append(
+                        f"{arm}: the rebuild changed an arm that was not rebuilt"
+                    )
+    for arm in a.arms.split():
         name = f"m7-{a.tier}-{arm}"
         train = mix / name / "train.jsonl"
         got = sha(train)
         if got != comp["files"][arm]["train_sha256"]:
             fails.append(f"{name}: TRAIN hash differs from compose.json")
         ids, sources, families, qhits, defect = Counter(), Counter(), Counter(), 0, 0
-        tokens_rows = 0
+        tokens_rows, hs1_rows, hs1_differ = 0, 0, 0
         with train.open(encoding="utf-8") as stream:
             for line in stream:
                 row = json.loads(line)
@@ -85,13 +117,19 @@ def main(argv: list[str] | None = None) -> int:
             fails.append(f"{name}: {qhits} quarantined rows")
         if defect:
             fails.append(f"{name}: {defect} HS1 defect rows")
-        exp_path = a.root / "exposure" / name / f"exposure-{name}.json"
+        if hs1_differ:
+            fails.append(
+                f"{name}: {hs1_differ} HS1 rows are not rows of the cleared HS1 revision"
+            )
+        exp_path = a.root / "exposure" / f"{name}{a.tag}" / f"exposure-{name}.json"
         exposure = json.loads(exp_path.read_text()) if exp_path.is_file() else None
         if exposure is None:
             fails.append(f"{name}: no exposure receipt")
         elif exposure.get("groups") or exposure["files"][0]["sha256"] != got:
             fails.append(f"{name}: exposure receipt lists groups or another file")
-        tman_path = a.root / "teacher" / name / "teacher.jsonl.manifest.json"
+        tman_path = (
+            a.root / "teacher" / f"{name}{a.tag}" / "teacher.jsonl.manifest.json"
+        )
         tman = json.loads(tman_path.read_text()) if tman_path.is_file() else None
         if tman is None:
             fails.append(f"{name}: no composed teacher")
@@ -134,6 +172,10 @@ def main(argv: list[str] | None = None) -> int:
             ),
             "c1_registry_source_hits": c1,
             "c1_registry_family_name_hits": c1_family,
+            "hs1_rows": hs1_rows,
+            "hs1_rows_in_cleared_revision": (
+                None if cleared is None else hs1_rows - hs1_differ
+            ),
         }
     match = report["match"]
     if match["max_relative"] > MAX_MISMATCH:
@@ -143,7 +185,14 @@ def main(argv: list[str] | None = None) -> int:
     doc = {
         "schema": "dec-m7-lock/1",
         "tier": a.tier,
+        "tag": a.tag,
         "status": "FAIL" if fails else "PASS",
+        "unchanged_arms_identical": identical,
+        "hs1_cleared": (
+            None
+            if a.hs1_cleared is None
+            else {"file": str(a.hs1_cleared), "sha256": a.hs1_cleared_sha}
+        ),
         "fails": fails,
         "compose_sha256": sha(mix / "compose.json"),
         "inputs_sha256": comp["inputs_sha256"],

@@ -43,7 +43,11 @@ NOX=/hf/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa55
 SOLM=/hf/models--llm-semantic-router--Decision-1.0-Sol-2B/snapshots/ce0c018a28de16d6639b1cd203b761bf643b89e6
 COMMON=(--train-mode full --batching tokens --max-batch-tokens 32768 --max-batch-rows 64 --update-rows 64 --teacher-partial)
 declare -A START=([N7H]=$NOX [N7P]=$NOX [N7C]=$NOX [S7H]=$SOLM [S7P]=$SOLM [S7C]=$SOLM)
-declare -A MIX=([N7H]=4b-H [N7P]=4b-P [N7C]=4b-C [S7H]=2b-H [S7P]=2b-P [S7C]=2b-C)
+# TRAIN / teacher directories under m7/ (lock record); the P arms use the PN1-r2 rebuild (prereg PN1 revision rule).
+declare -A TRAINDIR=([N7H]=data/4b/mix/m7-4b-H [N7C]=data/4b/mix/m7-4b-C [N7P]=data/4b-r2/mix/m7-4b-P
+  [S7H]=data/2b/mix/m7-2b-H [S7C]=data/2b/mix/m7-2b-C [S7P]=data/2b-r2/mix/m7-2b-P)
+declare -A TEACHDIR=([N7H]=teacher/m7-4b-H [N7C]=teacher/m7-4b-C [N7P]=teacher/m7-4b-P-r2
+  [S7H]=teacher/m7-2b-H [S7C]=teacher/m7-2b-C [S7P]=teacher/m7-2b-P-r2)
 declare -A KL=([N7H]=1.0 [N7P]=1.0 [N7C]=1.0 [S7H]=0.5 [S7P]=0.5 [S7C]=0.5)
 SEEDS=(20260926 20260927 20260928)
 declare -A CAP=([N7H]=4.5 [N7P]=4.5 [N7C]=4.5 [S7H]=2.8 [S7P]=2.8 [S7C]=2.8)
@@ -108,8 +112,7 @@ arm() {  # <ARM>[:<seed index list>]
   local g=${1%%:*} which=1,2,3 i seed r t0 wd used est out note fin=()
   [[ $1 == *:* ]] && which=${1#*:}
   [ -f "$ST/$g.DONE" ] || [ -f "$ST/$g.FAILED" ] && { log "$g already has a marker; skipped"; return 0; }
-  local mix=${MIX[$g]} train teach
-  train=$M/data/${mix%%-*}/mix/m7-$mix/train.jsonl teach=$M/teacher/m7-$mix/teacher.jsonl
+  local train=$M/${TRAINDIR[$g]}/train.jsonl teach=$M/${TEACHDIR[$g]}/teacher.jsonl
   lease busy "$g waiting for its data lock (READY)" 60
   wait_ready "$(dirname "$train")/READY"
   wait_ready "$(dirname "$teach")/READY"

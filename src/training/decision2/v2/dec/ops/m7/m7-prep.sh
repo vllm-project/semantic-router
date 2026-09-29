@@ -10,11 +10,16 @@
 #   4. m7_lock.py per tier (lock-<tier>.json). READY files are written by hand only after the lock record is
 #      committed.
 # A finished step is skipped on a rerun; a failed step is not rerun. Each job leaves its launch receipt.
+# M7_TAG (e.g. -r2) builds into data/<tier><TAG>, teacher/m7-<tier>-<ARM><TAG>, exposure/... and lock-<tier><TAG>.json,
+# for the arms in M7_ARMS (default "H C P"); M7_PN1_REV / M7_PN1_SHA pick another PN1 revision (the prereg's PN1
+# revision rule), M7_HS1_CLEARED_REV / _SHA the cleared HS1 revision the lock compares the HS1 rows with.
 # usage: m7-prep.sh <mirror-dir> [4b|2b ...]
 set -uo pipefail
 SRC=$1
 shift
 TIERS=${*:-4b 2b}
+TAG=${M7_TAG:-}
+ARMS=${M7_ARMS:-H C P}
 M=/data/dev2/runs/dec/m7
 mkdir -p "$M/data" "$M/teacher" "$M/exposure" "$M/logs"
 CODE=/data/dev2/src/$SRC/src/training/decision2
@@ -43,6 +48,8 @@ SOL59=/runs/m6/teacher/sol-59m/teacher.jsonl
 S2T_T=/runs/m3/teacher/sol/sol-teacher.jsonl
 QUAR=/code/v2/dec/ops/m7/specs/m7-quarantine-groups.json
 DEFECT=" nights consecutive nights"
+HS1C_REV=${M7_HS1_CLEARED_REV:-27b1d2f130292268b43a618584bebab5d4e4a6b5}
+HS1C_SHA=${M7_HS1_CLEARED_SHA:-0dfaa6ebff1b614e5f1c432f2c7432c3fd217f7c344d402c7a7b37fe507de5e7}
 
 cpu() {  # <job> <out dir under m7> <python args...>: skipped when <out>.launch.json exists with exit 0
   local job=$1 out=$M/$2
@@ -71,6 +78,7 @@ fetch() {  # <revision> <path> <sha256>: one file of the private dataset at a pi
 [ "$(sha256sum "$PAYLOAD_DIR/excluded-groups.json" | cut -d' ' -f1)" = "$PAYLOAD_SHA" ] || { log "payload hash MISMATCH"; exit 1; }
 fetch "$HS1_REV" m4/hs1/train.jsonl "$HS1_SHA" || exit 1
 fetch "$PN1_REV" "$PN1_PATH" "$PN1_SHA" || exit 1
+fetch "$HS1C_REV" m4/hs1/train.jsonl "$HS1C_SHA" || exit 1
 
 for tier in $TIERS; do
   if [ "$tier" = 4b ]; then
@@ -79,31 +87,33 @@ for tier in $TIERS; do
     args=(--tier 2b --base "$B2" --base-sha "$B2_SHA" --pool-teacher "$SOL59" --filler replay --base-teacher "$S2T_T"
       --gold-pools '')
   fi
-  cpu "compose-$tier" "data/$tier" v2/dec/ops/m7/m7_compose.py "${args[@]}" --pool "$POOL" --pool-sha "$POOL_SHA" \
+  cpu "compose-$tier$TAG" "data/$tier$TAG" v2/dec/ops/m7/m7_compose.py "${args[@]}" --pool "$POOL" --pool-sha "$POOL_SHA" \
     --pool-ids "$XL_IDS" --hs1 "$H/$HS1_REV/m4/hs1/train.jsonl" --hs1-sha "$HS1_SHA" \
     --pn1 "$H/$PN1_REV/$PN1_PATH" --pn1-sha "$PN1_SHA" --quarantine "$QUAR" --hs1-drop-substring "$DEFECT" \
     --tokenizer "$TOK" --workers 40 --output /out/mix || exit 1
-  for arm in H C P; do
-    n=m7-$tier-$arm d=/runs/m7/data/$tier/mix/$n
+  for arm in $ARMS; do
+    n=m7-$tier-$arm d=/runs/m7/data/$tier$TAG/mix/$n
     if [ "$tier" = 4b ]; then
       src=(--source "$N4XF_T" --source "$d/teacher-new.jsonl")
       allow=(base-gold lp-gold fill-gold hs1 pn1)
     else
       src=(--source "$S2T_T")
-      [ -f "$M/data/$tier/mix/$n/teacher-new.jsonl" ] && src+=(--source "$d/teacher-new.jsonl")
-      [ -f "$M/data/$tier/mix/$n/teacher-replay.jsonl" ] && src+=(--source "$d/teacher-replay.jsonl")
+      [ -f "$M/data/$tier$TAG/mix/$n/teacher-new.jsonl" ] && src+=(--source "$d/teacher-new.jsonl")
+      [ -f "$M/data/$tier$TAG/mix/$n/teacher-replay.jsonl" ] && src+=(--source "$d/teacher-replay.jsonl")
       allow=(hs1 pn1)
     fi
     am=()
     for pool in "${allow[@]}"; do am+=(--allow-missing-pool "$d/train.ids.jsonl:$pool"); done
-    cpu "teacher-$n" "teacher/$n" -m v2.dec.compose_teacher compose --train "$d/train.jsonl" "${src[@]}" "${am[@]}" \
+    cpu "teacher-$n$TAG" "teacher/$n$TAG" -m v2.dec.compose_teacher compose --train "$d/train.jsonl" "${src[@]}" "${am[@]}" \
       --output /out/teacher.jsonl || exit 1
-    sha=$(sha256sum "$M/data/$tier/mix/$n/train.jsonl" | cut -d' ' -f1)
-    DEC_DATA=$PAYLOAD_DIR cpu "exposure-$n" "exposure/$n" -m v2.eval.overlap_effects exposure \
+    sha=$(sha256sum "$M/data/$tier$TAG/mix/$n/train.jsonl" | cut -d' ' -f1)
+    DEC_DATA=$PAYLOAD_DIR cpu "exposure-$n$TAG" "exposure/$n$TAG" -m v2.eval.overlap_effects exposure \
       --groups /data/excluded-groups.json --train "$d/train.jsonl" --expect-sha256 "$sha" \
       --label "decoder M7 $n" --output "/out/exposure-$n.json" || exit 1
   done
-  python3 -B "$CODE/v2/dec/ops/m7/m7_lock.py" --tier "$tier" --out "$M/lock-$tier.json" > "$M/lock-$tier.log" 2>&1
-  log "lock $tier: $(tail -1 "$M/lock-$tier.log")"
+  python3 -B "$CODE/v2/dec/ops/m7/m7_lock.py" --tier "$tier" --tag "$TAG" --arms "$ARMS" \
+    --hs1-cleared "$HOST_H/$HS1C_REV/m4/hs1/train.jsonl" --hs1-cleared-sha "$HS1C_SHA" \
+    --out "$M/lock-$tier$TAG.json" > "$M/lock-$tier$TAG.log" 2>&1
+  log "lock $tier$TAG: $(tail -1 "$M/lock-$tier$TAG.log")"
 done
-log "prep finished ($TIERS)"
+log "prep finished ($TIERS$TAG: $ARMS)"
