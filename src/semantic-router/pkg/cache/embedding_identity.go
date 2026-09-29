@@ -3,6 +3,7 @@ package cache
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
@@ -43,7 +44,7 @@ func LocalEmbeddingSettings(backend CacheBackend) (embedding.ConsumerSettings, b
 	default:
 		return embedding.ConsumerSettings{}, false
 	}
-	if model != "mmbert" && model != "multimodal" {
+	if model != "mmbert" && model != "multimodal" && model != "bert" {
 		return embedding.ConsumerSettings{}, false
 	}
 	return embedding.ConsumerSettings{ModelType: model, Layer: layer, Dimension: dimension, InputPolicy: semanticCacheInputPolicy}, true
@@ -54,7 +55,7 @@ func LocalEmbeddingSettings(backend CacheBackend) (embedding.ConsumerSettings, b
 // configuration and all prior namespaces remain untouched.
 func PrepareEmbeddingNamespace(cfg CacheConfig, resolve func(embedding.ConsumerSettings) (embedding.ContentIdentity, error)) (CacheConfig, string, error) {
 	model := normalizeEmbeddingModel(cfg.EmbeddingModel)
-	if !cfg.Enabled || (model != "mmbert" && model != "multimodal") {
+	if !cfg.Enabled || (model != "mmbert" && model != "multimodal" && model != "bert") {
 		return cfg, "", nil
 	}
 	if err := ValidateCacheConfig(cfg); err != nil {
@@ -90,6 +91,9 @@ func PrepareEmbeddingNamespace(cfg CacheConfig, resolve func(embedding.ConsumerS
 		return cfg, "", fmt.Errorf("unsupported local embedding cache backend %s", backend)
 	}
 	identity, err := resolve(settings)
+	if model == "bert" && errors.Is(err, embedding.ErrIdentityUnsupported) {
+		return cfg, "", nil
+	}
 	if err != nil {
 		return cfg, "", err
 	}

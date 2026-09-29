@@ -61,9 +61,10 @@ func NewRedisCache(ctx context.Context, cfg *RedisCacheConfig) (*RedisCache, err
 		ttlSec = defaultMemoryCacheTTL
 	}
 	opts := &redis.Options{
-		Addr:     cfg.Address,
-		Password: cfg.Password,
-		DB:       cfg.DB,
+		Addr:                  cfg.Address,
+		Password:              cfg.Password,
+		DB:                    cfg.DB,
+		ContextTimeoutEnabled: true,
 	}
 	client := redis.NewClient(opts)
 	if err := client.Ping(ctx).Err(); err != nil {
@@ -170,22 +171,28 @@ func (c *RedisCache) Set(ctx context.Context, opts RetrieveOptions, results []*R
 // It reads the user's index set rather than scanning the keyspace, so cost is
 // proportional to the number of cached queries for that user, not the total
 // number of keys in Redis.
-func (c *RedisCache) InvalidateByUser(ctx context.Context, userID string) {
+// An error means entries may still be readable, so a caller that just committed
+// a write is serving stale results until TTL - hence warn, not debug.
+func (c *RedisCache) InvalidateByUser(ctx context.Context, userID string) error {
 	if c == nil || c.client == nil || userID == "" {
-		return
+		return nil
 	}
 	idxKey := c.userIndexKey(userID)
 	keys, err := c.client.SMembers(ctx, idxKey).Result()
 	if err != nil {
-		logging.Debugf("Memory Redis cache index read error: %v", err)
-		return
+		// Leave the index intact: it is the only record of this user's value keys,
+		// so dropping it would strand them beyond any later invalidation.
+		logging.Warnf("Memory Redis cache index read failed for user %s, entries remain cached until TTL: %v", userID, err)
+		return err
 	}
 	// Delete the tracked value keys together with the index set itself. DEL on a
 	// key that already expired via TTL is a harmless no-op, so stale index members
 	// (entries whose value key already expired) never cause errors.
 	if err := c.client.Del(ctx, append(keys, idxKey)...).Err(); err != nil {
-		logging.Debugf("Memory Redis cache invalidate error: %v", err)
+		logging.Warnf("Memory Redis cache invalidate failed for user %s, %d entries remain cached until TTL: %v", userID, len(keys), err)
+		return err
 	}
+	return nil
 }
 
 // Close closes the Redis client.
