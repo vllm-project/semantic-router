@@ -34,6 +34,13 @@ Prereg: `records/lux9b-m5-prereg-2026-09-29.md` (arms KD / KG, lines KD / KG / U
 - 10:05Z: step ~373 of ~2,288 (8 checkpoints every 286 steps), ≈ 10.7 steps/min, peak 150.9 GiB → ≈ 3.7 h per seed;
   projected: s2 ends ≈ 17:00Z, lines ≈ 18:00Z, formal ≈ 18:45Z; milestone ≈ 18.3 GPU-h.
 
+- Worker stopped ~19:04 UTC+8 (Cursor usage limit), resumed 20:45 UTC+8. At 12:46Z both chains alive (PIDs 3218725 /
+  3219064), KD-s1 / KG-s1 at checkpoint 7 of 8, no failures; GPU7 eval lease idle. Integration `127ef1ef7` mirrored to node A
+  for successor item 7 (`v2.eval.gates public231`, 17:15 JevBench decision: must not return REGRESSION).
+- The dose's A7 Stage families come from the Decision 1.0 curriculum generators (stages 1-3, stage4-general-composition-v2),
+  none is a typed-FINAL generator family (constraint_competition, evidence_join, exception_stack, resource_ledger): 16:40
+  rule satisfied.
+
 ## Next
 
 1. After soups: `score.sh` + `m5_rules seed`; after lines: `m5_rules alpha` per line → lock per finalist → formal.
