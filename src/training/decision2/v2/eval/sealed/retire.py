@@ -13,14 +13,15 @@ hits jsonl, or a scan extract: a .json object whose `non_clean` list holds hit r
 refused if its `protected_sha256` is not that of --protected) gives it a verdict other
 than CLEAN; --baseline hits only split the flagged rows into recurring and new. The
 candidates files and the build hits must have the SHA-256 that the build manifest
-records. Flagged rows and candidates get the texts and shingles of
-`overlap.load_protected`. A candidate of any source is linked to a flagged row by text
-when the two shingle sets share at least 20% of either set, or when they share a
-shingle and a normalised text of at least 8 tokens on one side lies inside a text of
-the other. A candidate of the row's own source is linked by id when a top-level `id` or
-`*_id` field of the raw row (re-read from the snapshot and checked against the
-protected row) has a non-null value equal to the candidate's group id, its source item
-id, or the part of that before the first ':'. Every candidate in the source group of a
+records. Flagged rows and candidates get the shingles of `overlap.load_protected`. A
+candidate of any source is linked to a flagged row by text at the scanner's OVERLAP
+standard: they share a shingle and the shared shingles are at least half (0.5) of
+either side's set, so a short flagged sentence inside a long candidate still links,
+while generic wording common to otherwise unrelated texts does not. A candidate of the
+row's own source is linked by id when a top-level `id` or `*_id` field of the raw row
+(re-read from the snapshot and checked against the protected row) has a non-null value
+equal to the candidate's group id, its source item id, or the part of that before the
+first ':'. Every candidate in the source group of a
 linked candidate is retired, since the group's items share a source passage.
 
 RETIRED.json (private, mode 600) lists the retired candidate ids and the flagged
@@ -42,7 +43,7 @@ from collections import Counter, defaultdict
 from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any
 
 from v2.eval.sealed.build import excluded, read_jsonl, write_new
 from v2.eval.sealed.independence import MIN_CHARS, data_rows, strings
@@ -53,12 +54,6 @@ SCHEMA = "dev2-c1-retire/1"
 RETIRED_SCHEMA = "dev2-c1-retired/1"
 KINDS = ("text", "id", "both")
 PARAMS = Params()
-
-
-class Texts(NamedTuple):
-    texts: tuple[str, ...]
-    long: tuple[str, ...]
-    size: int
 
 
 def sha256(path: Path) -> str:
@@ -77,32 +72,25 @@ def tally(values: Iterable[Any]) -> dict[Any, int]:
     return dict(sorted(Counter(values).items()))
 
 
-def features(row: dict[str, Any]) -> tuple[Texts, set[int]]:
-    """Normalised texts (all, and those of >= 8 tokens) and shingles of a row, built
-    the way `overlap.load_protected` builds them."""
+def features(row: dict[str, Any]) -> set[int]:
+    """The shingles of a row, built the way `overlap.load_protected` builds them."""
     leaves = [
         *string_leaves(row.get("overlap_texts") or []),
         *string_leaves(row.get("state")),
     ]
     texts = dict.fromkeys(normalized(text) for text in leaves)
     texts.pop("", None)
-    long: list[str] = []
     own: set[int] = set()
     for norm in texts:
-        words = tokens(norm, PARAMS)
-        own |= shingles(words, PARAMS)
-        if len(words) >= PARAMS.shingle:
-            long.append(norm)
-    return Texts(tuple(texts), tuple(long), len(own)), own
+        own |= shingles(tokens(norm, PARAMS), PARAMS)
+    return own
 
 
-def text_linked(a: Texts, b: Texts, shared: int) -> bool:
-    """The text link of two sides that have `shared` >= 1 shingles in common."""
-    return (
-        shared / a.size >= PARAMS.review
-        or shared / b.size >= PARAMS.review
-        or any(needle in text for needle in a.long for text in b.texts)
-        or any(needle in text for needle in b.long for text in a.texts)
+def text_linked(shared: int, size: int, other: int) -> bool:
+    """`shared` shingles of two sets of `size` and `other` cover at least the OVERLAP
+    share of either set."""
+    return shared > 0 and (
+        shared / size >= PARAMS.overlap or shared / other >= PARAMS.overlap
     )
 
 
@@ -217,18 +205,19 @@ def raw_rows(
 
 def shingle_index(
     candidates: list[dict[str, Any]], wanted: set[int]
-) -> tuple[dict[int, list[int]], dict[int, Texts]]:
-    """Candidates by shingle for the `wanted` shingles, and the texts of those."""
+) -> tuple[dict[int, list[int]], dict[int, int]]:
+    """Candidates by shingle for the `wanted` shingles, and the shingle-set size of
+    those candidates."""
     postings: dict[int, list[int]] = defaultdict(list)
-    kept: dict[int, Texts] = {}
+    sizes: dict[int, int] = {}
     for number, candidate in enumerate(candidates):
-        texts, own = features(candidate)
+        own = features(candidate)
         common = own & wanted
         if common:
-            kept[number] = texts
+            sizes[number] = len(own)
             for key in common:
                 postings[key].append(number)
-    return postings, kept
+    return postings, sizes
 
 
 def id_index(candidates: list[dict[str, Any]]) -> dict[tuple[str, str], set[int]]:
@@ -248,14 +237,16 @@ def links(
 ) -> tuple[dict[int, set[str]], int]:
     """The link kinds of each linked candidate, and the flagged rows linking none."""
     flagged = {key: features(row) for key, row in rows.items()}
-    wanted: set[int] = set().union(*(own for _, own in flagged.values()))
-    postings, kept = shingle_index(candidates, wanted)
+    wanted: set[int] = set().union(*flagged.values())
+    postings, sizes = shingle_index(candidates, wanted)
     by_id = id_index(candidates)
     kinds: dict[int, set[str]] = defaultdict(set)
     unlinked = 0
-    for key, (texts, own) in sorted(flagged.items()):
+    for key, own in sorted(flagged.items()):
         shared = Counter(number for k in own for number in postings.get(k, ()))
-        text = {n for n, count in shared.items() if text_linked(texts, kept[n], count)}
+        text = {
+            n for n, count in shared.items() if text_linked(count, len(own), sizes[n])
+        }
         source = rows[key]["task"].partition("/")[0]
         ids = {n for v in id_values(raws[key]) for n in by_id.get((source, v), ())}
         for number in text:
@@ -382,6 +373,7 @@ def run(args: argparse.Namespace) -> tuple[bytes, dict[str, Any]]:
             "shingle": PARAMS.shingle,
             "min_tokens": PARAMS.min_tokens,
             "review": PARAMS.review,
+            "overlap": PARAMS.overlap,
             "cjk_split": PARAMS.cjk_split,
         },
         "inputs_sha256": {

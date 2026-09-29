@@ -23,14 +23,18 @@ def words(prefix: str, count: int) -> str:
 
 PASSAGE = words("aa", 40)
 QUOTE, WIDE, SHORT = words("qq", 30), words("ww", 200), words("s", 7)
+SENTENCE = words("se", 12)
+COVERING = f"{words('aa', 30)} {words('cc', 10)}"
 CONTAINED = f"{words('aa', 20)} {words('cc', 20)}"
 TRANSCRIPT = f"{words('ff', 200)} {QUOTE} {words('gq', 200)}"
+SPLICED = f"{words('fa', 200)} {SENTENCE} {words('fb', 200)}"
 ALPHA = [
     {"doc_id": "a-1", "text": PASSAGE},
     {"doc_id": "a-2", "note": "tiny"},
     {"doc_id": "a-3", "q": QUOTE, "w": WIDE, "short": SHORT},
     {"doc_id": "a-4", "text": words("zz", 30)},
     {"id": 12, "text": words("ii", 25)},
+    {"doc_id": "a-5", "text": SENTENCE},
 ]
 BETA = [
     ("K9", words("bb", 30), "yes"),
@@ -45,6 +49,7 @@ FLAGS = {
     "alpha/data/train.jsonl|0": "OVERLAP",
     "alpha/data/train.jsonl|2": "REVIEW",
     "alpha/data/train.jsonl|4": "REVIEW",
+    "alpha/data/train.jsonl|5": "REVIEW",
     "beta/cases.csv|0": "OVERLAP",
     "beta/cases.csv|2": "REVIEW",
     "gamma/items.json|1": "REVIEW",
@@ -55,9 +60,11 @@ BASELINE = {
     "beta/cases.csv|2": "REVIEW",
 }
 CANDIDATES: dict[str, tuple[str, dict[str, str]]] = {
-    "alpha/judge|c1": ("gc1", {"text": CONTAINED}),
+    "alpha/judge|c1": ("gc1", {"text": COVERING}),
     "alpha/rank|c1b": ("gc1", {"text": words("cb", 20)}),
+    "alpha/judge|c2": ("gc2", {"text": CONTAINED}),
     "alpha/judge|t2": ("gt2", {"transcript": TRANSCRIPT}),
+    "alpha/judge|t3": ("gt3", {"transcript": SPLICED}),
     "alpha/judge|a-1:x": ("a-1", {"text": PASSAGE}),
     "alpha/judge|12": ("g12", {"text": words("tw", 20)}),
     "alpha/judge|n1": ("gn1", {"text": words("nn", 30)}),
@@ -79,7 +86,7 @@ CANDIDATES: dict[str, tuple[str, dict[str, str]]] = {
     "gamma/rate|g-3": ("K9", {"text": words("gk", 20)}),
     "gamma/rate|g-4": ("gg4", {"text": words("gf", 20)}),
 }
-TEXT = {"alpha/judge|c1", "alpha/judge|t2", "gamma/rate|g-1"}
+TEXT = {"alpha/judge|c1", "alpha/judge|t3", "gamma/rate|g-1"}
 BOTH = {"alpha/judge|a-1:x"}
 ID = {
     "alpha/judge|12",
@@ -91,7 +98,7 @@ ID = {
 GROUP_ONLY = {"alpha/rank|c1b", "beta/verdict|gm-2", "gamma/rate|g-2"}
 RETIRED = TEXT | BOTH | ID | GROUP_ONLY
 BUILD = {
-    "alpha/judge|t2": ("OVERLAP", 0.9, 10),
+    "alpha/judge|t3": ("OVERLAP", 0.9, 10),
     "alpha/judge|a-1:x": ("CLEAN", 0.0, 0),
     "beta/function|K9:p2": ("REVIEW", 0.1, 10),
     "beta/function|M4:s1": ("REVIEW", 0.3, 10),
@@ -282,44 +289,62 @@ class RuleTest(unittest.TestCase):
     def shares(
         self, row_texts: list[str], state: dict[str, str]
     ) -> tuple[float, float, bool]:
-        row, row_own = retire.features({"overlap_texts": row_texts, "state": {}})
-        item, item_own = retire.features({"overlap_texts": [], "state": state})
-        shared = len(row_own & item_own)
-        linked = bool(shared) and retire.text_linked(row, item, shared)
-        return shared / row.size, shared / item.size, linked
+        row = retire.features({"overlap_texts": row_texts, "state": {}})
+        item = retire.features({"overlap_texts": [], "state": state})
+        shared = len(row & item)
+        linked = retire.text_linked(shared, len(row), len(item))
+        return shared / len(row), shared / len(item), linked
 
-    def test_containment_either_way_links(self) -> None:
-        row_share, item_share, linked = self.shares([PASSAGE], {"text": CONTAINED})
-        self.assertGreaterEqual(min(row_share, item_share), 0.2)
-        self.assertLess(max(row_share, item_share), 0.5)
+    def test_containment_under_half_either_way_does_not_link(self) -> None:
+        both = self.shares([PASSAGE], {"text": CONTAINED})
+        narrow = f"{words('qq', 12)} {words('zr', 12)}"
+        item = self.shares([QUOTE, WIDE, SHORT], {"text": narrow})
+        row = self.shares([PASSAGE], {"text": f"{words('aa', 20)} {words('xz', 200)}"})
+        for row_share, item_share, linked in (both, item, row):
+            self.assertGreaterEqual(max(row_share, item_share), 0.2)
+            self.assertLess(max(row_share, item_share), 0.5)
+            self.assertFalse(linked)
+        self.assertGreater(item[1], 0.2)
+        self.assertGreater(item[1], item[0])
+        self.assertGreater(row[0], row[1])
+
+    def test_containment_of_half_either_way_links(self) -> None:
+        row_share, item_share, linked = self.shares([PASSAGE], {"text": COVERING})
+        self.assertGreaterEqual(min(row_share, item_share), 0.5)
         self.assertTrue(linked)
-        wider = f"{words('aa', 31)} {words('xz', 200)}"
-        row_share, item_share, linked = self.shares([PASSAGE], {"text": wider})
-        self.assertGreaterEqual(row_share, 0.2)
-        self.assertLess(item_share, 0.2)
+        row_share, item_share, linked = self.shares([SENTENCE], {"transcript": SPLICED})
+        self.assertEqual(row_share, 1.0)
+        self.assertLess(item_share, 0.05)
+        self.assertTrue(linked)
+        edge = f"{words('ex', 12)} {words('ey', 200)}"
+        row_share, item_share, linked = self.shares([words("ex", 17)], {"t": edge})
+        self.assertEqual(row_share, 0.5)
+        self.assertLess(item_share, 0.5)
         self.assertTrue(linked)
         narrow = f"{words('qq', 20)} zq0"
         row_share, item_share, linked = self.shares(
             [QUOTE, WIDE, SHORT], {"text": narrow}
         )
-        self.assertLess(row_share, 0.2)
-        self.assertGreaterEqual(item_share, 0.2)
+        self.assertLess(row_share, 0.5)
+        self.assertGreaterEqual(item_share, 0.5)
         self.assertTrue(linked)
 
-    def test_long_text_inside_the_other_side_links(self) -> None:
+    def test_passage_inside_an_unrelated_transcript_does_not_link(self) -> None:
         row_share, item_share, linked = self.shares(
             [QUOTE, WIDE, SHORT], {"transcript": TRANSCRIPT}
-        )
-        self.assertLess(max(row_share, item_share), 0.2)
-        self.assertTrue(linked)
-
-    def test_shared_text_under_eight_tokens_does_not_link(self) -> None:
-        row_share, item_share, linked = self.shares(
-            [QUOTE, WIDE, SHORT], CANDIDATES["alpha/judge|n2"][1]
         )
         self.assertGreater(row_share, 0.0)
         self.assertLess(max(row_share, item_share), 0.2)
         self.assertFalse(linked)
+        row_share, item_share, linked = self.shares(
+            [QUOTE, WIDE, SHORT], CANDIDATES["alpha/judge|n2"][1]
+        )
+        self.assertGreater(row_share, 0.0)
+        self.assertFalse(linked)
+
+    def test_no_shared_shingle_never_links(self) -> None:
+        self.assertFalse(retire.text_linked(0, 1, 1))
+        self.assertTrue(retire.text_linked(1, 1, 1))
 
     def test_id_values(self) -> None:
         row = {
@@ -348,7 +373,13 @@ class RetireTest(unittest.TestCase):
     def test_text_links_cross_sources_and_skip_unrelated_items(self) -> None:
         retired = set(json.loads(self.world.run("v12")[0])["candidates"])
         self.assertLessEqual(TEXT | BOTH, retired)
-        for key in ("alpha/judge|n1", "alpha/judge|n2", "alpha/judge|z1"):
+        for key in (
+            "alpha/judge|c2",
+            "alpha/judge|t2",
+            "alpha/judge|n1",
+            "alpha/judge|n2",
+            "alpha/judge|z1",
+        ):
             self.assertNotIn(key, retired)
 
     def test_id_links_stay_within_the_source(self) -> None:
@@ -376,12 +407,12 @@ class RetireTest(unittest.TestCase):
         self.assertEqual(
             receipt["flagged"],
             {
-                "rows": 6,
-                "by_verdict": {"OVERLAP": 2, "REVIEW": 4},
-                "by_source": {"alpha": 3, "beta": 2, "gamma": 1},
+                "rows": 7,
+                "by_verdict": {"OVERLAP": 2, "REVIEW": 5},
+                "by_source": {"alpha": 4, "beta": 2, "gamma": 1},
                 "recurring": 2,
-                "new": 4,
-                "without_link": 1,
+                "new": 5,
+                "without_link": 2,
             },
         )
         self.assertEqual(
@@ -401,7 +432,7 @@ class RetireTest(unittest.TestCase):
                 "gamma/rate": 2,
             },
         )
-        self.assertEqual((retired["candidates"], retired["protected_rows"]), (12, 6))
+        self.assertEqual((retired["candidates"], retired["protected_rows"]), (12, 7))
         self.assertIsNone(retired["previous"])
         inputs = receipt["inputs_sha256"]
         self.assertEqual(len(inputs["baselines"]), 1)
@@ -412,7 +443,7 @@ class RetireTest(unittest.TestCase):
         )
         for key in [*CANDIDATES, *self.world.protected_ids]:
             self.assertNotIn(key, text)
-        for passage in (PASSAGE, QUOTE, WIDE, TRANSCRIPT):
+        for passage in (PASSAGE, QUOTE, WIDE, TRANSCRIPT, SENTENCE, SPLICED):
             self.assertNotIn(passage, text)
         for name in ("v12.RETIRED.json", "v12.receipt.json"):
             mode = (self.world.root / name).stat().st_mode
