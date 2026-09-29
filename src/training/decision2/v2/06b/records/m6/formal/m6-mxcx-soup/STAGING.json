@@ -1,0 +1,57 @@
+{
+  "built_utc": "2026-09-29T00:02:50.055942+00:00",
+  "candidate": "m6-mxcx-soup",
+  "export_manifest_sha256": "3ae009ad838487c0df839a55898a98f5665276136d2a8cab3c1260dd0b29dfa2",
+  "formal_run_dir": "/data/dev2/runs/06b/m6/formal/m6-mxcx-soup",
+  "formal_summary_sha256": "b4e223a339a254000c616c39a22a841af9c9dea327567ba3e2b426b3000a49c2",
+  "ingredients": [
+    {
+      "arm": "m6-mx-s1",
+      "best_select": 560,
+      "best_step": 2634,
+      "state_sha256": "506cd5e0dc7a5b385b6941890215639db7a703c4160465ed8d1b541c60e2001f"
+    },
+    {
+      "arm": "m6-mx-s2",
+      "best_select": 570,
+      "best_step": 4211,
+      "state_sha256": "fe41c7cae46bf81c3626c0a42c44156092712f2e361f50c4906172a4ba7e8369"
+    },
+    {
+      "arm": "m6-mx-s3",
+      "best_select": 566,
+      "best_step": 4200,
+      "state_sha256": "484885ef0ef9473283a07e129ad8f256a22054dd84c68203f9476906d72a0d74"
+    },
+    {
+      "arm": "m6-cx-s1",
+      "best_select": 561,
+      "best_step": 3217,
+      "state_sha256": "12c257ca22e5687ffb4ee2eb3ef116ec91c561415c8476a6c8d93ca735bde500"
+    },
+    {
+      "arm": "m6-cx-s2",
+      "best_select": 570,
+      "best_step": 3210,
+      "state_sha256": "2b0a9f58ab3815e07d745638b0d5a84487bf5b58e2dd135d2c369296caf23cba"
+    },
+    {
+      "arm": "m6-cx-s3",
+      "best_select": 570,
+      "best_step": 2819,
+      "state_sha256": "841dcbd6c3312045687b25fe4c445591cfc4e15409768c94413cc994a919ab1a"
+    }
+  ],
+  "not_successor_reason": "typed FINAL Score collapsed (94.75% one answer, level 4); post-key v3 +4.92 [+2.50, +9.10] vs released, human transfer not significantly worse",
+  "numbers_sha256": "e2ac5b00fc4f286b15898defe043fa9d2a3099238fc404ede79ea627e5cd234d",
+  "packaging_profile": "qwen-full",
+  "repo": "llm-semantic-router/dev2-staging-06bm6-mxcx",
+  "runtime": "training.model.infer, 8,192-token native cap",
+  "schema": "dev2-06b-m6-staging/1",
+  "source_commit": "58e8f692a9b2395ca96a545cdfeb102b80464b26",
+  "source_run": "/data/dev2/runs/06b/m1/arms/m6-mxcx-soup/full",
+  "state_sha256": "5c3d3ca18434fab1045a5840f4ef4508f9956fd3b2de00bd1bacf912b9729068",
+  "status": "private staging checkpoint, NOT a successor: typed FINAL Score collapsed (94.75% one answer, level 4); post-key v3 +4.92 [+2.50, +9.10] vs released, human transfer not significantly worse (not a release)",
+  "successor": false,
+  "weight_origin": "official Qwen/Qwen3-0.6B-Base fine-tuned by the Decision 2.0 0.6B track; uniform same-init weight soup"
+}

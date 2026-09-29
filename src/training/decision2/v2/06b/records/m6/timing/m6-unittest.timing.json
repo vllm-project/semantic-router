@@ -1,0 +1,1 @@
+{"run":"m6-unittest","gpu":1,"render":"/dev/dri/renderD137","commit":"0581149308b8081c2152aa9f90980971bcc99045-src_training_decision2","image":"decision20-train-fast:host2","start_utc":"2026-09-28T19:20:55Z","end_utc":"2026-09-28T19:21:05Z","wall_seconds":10,"gpu_hours":0.00278,"exit":0}

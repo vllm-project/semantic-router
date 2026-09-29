@@ -1,0 +1,334 @@
+{
+  "H": 0.4795852456229815,
+  "T": 0.3953125,
+  "answers_vs_reference": {
+    "answer_slots": 11053,
+    "answers_differ": 0,
+    "answers_equal": true,
+    "items_compared": 10653,
+    "max_abs_numeric_drift": 0.0,
+    "missing_items": 0,
+    "reference": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup"
+  },
+  "gate_human_transfer_vs_released": {
+    "ci95_H": [
+      0.0,
+      0.0
+    ],
+    "ci95_v3": [
+      0.0,
+      0.0
+    ],
+    "delta_H": 0.0,
+    "released": "released"
+  },
+  "gpu_time": {
+    "gpu_hours": 0.06967678639623853,
+    "image_ids": [
+      "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+    ],
+    "runs": {
+      "m6-control-released": 0.05397152284781138,
+      "m6-control-released-mlx": 0.01570526354842716
+    }
+  },
+  "label": "post-key same-panel",
+  "loaded_parameters": 597103104,
+  "mlx_diag": {
+    "english": 0.6528908128908129,
+    "invalid_or_missing": 0,
+    "items": 2275,
+    "non_english": 0.60836379669713,
+    "overall": 0.6147247990105134,
+    "scope": "multilingual development diagnostic; not a release score"
+  },
+  "mlx_run_dir": "/data/dev2/runs/06b/m6/formal/m6-control-released-mlx",
+  "model_path": "/data/dev2/runs/06b/m1/arms/m4-t-a7-soup/full/best-export",
+  "model_revision": "0f96aa3932ea501589f794eff9949b52fd1c64835b92f0392da860c22b0442bf",
+  "name": "m6-control-released",
+  "paired": {
+    "bosun06": {
+      "ci95_H": [
+        0.00959250694556055,
+        0.19165441602671526
+      ],
+      "ci95_T": [
+        -0.06749999999999995,
+        -0.00968749999999996
+      ],
+      "ci95_v3": [
+        -1.3458759190285305,
+        7.802665909814398
+      ],
+      "delta_H": 0.1374241387559923,
+      "delta_T": -0.03843750000000001,
+      "delta_v3": 5.0171519589583795,
+      "file_sha256": "600274e3356e476b8ea955c0ac7195c4ff129062a9ac13ea38d3d3c851b90780",
+      "replicates": 5000,
+      "right_v3": 38.524327392383704,
+      "run_dir": "/data/dev2/runs/eval/m1-adopt/bosun"
+    },
+    "causal-control": {
+      "ci95_H": [
+        -0.1114050732078477,
+        0.08740090937888746
+      ],
+      "ci95_T": [
+        0.06187500000000001,
+        0.1109453124999999
+      ],
+      "ci95_v3": [
+        -0.41562660960151293,
+        8.782009087851447
+      ],
+      "delta_H": -0.0005088283420041084,
+      "delta_T": 0.08625,
+      "delta_v3": 5.02147484267109,
+      "file_sha256": "003562c43d4f02ec05ca659b0fb7dfb5291f9cf0c7b877ed245347696cf34a17",
+      "replicates": 5000,
+      "right_v3": 38.52000450867099,
+      "run_dir": "/data/dev2/runs/eval/m1-adopt/dev20-06b"
+    },
+    "gliner25": {
+      "ci95_H": [
+        -0.013216625005101389,
+        0.16705900874591198
+      ],
+      "ci95_T": [
+        -0.04625000000000001,
+        0.016249999999999987
+      ],
+      "ci95_v3": [
+        -1.7685508857046046,
+        7.798198996419011
+      ],
+      "delta_H": 0.03853630004268138,
+      "delta_T": -0.014687499999999964,
+      "delta_v3": 1.0173605847029563,
+      "file_sha256": "c4e89b39735ae99f603d38c0be4805d76ac3475cab20d2715bb97527b342030c",
+      "replicates": 5000,
+      "right_v3": 42.52411876663913,
+      "run_dir": "/data/dev2/runs/eval/m1/p1-gliner25"
+    },
+    "kai1": {
+      "ci95_H": [
+        0.06826083036935146,
+        0.18242861509283195
+      ],
+      "ci95_T": [
+        0.007500000000000007,
+        0.05875781249999991
+      ],
+      "ci95_v3": [
+        4.704926956876495,
+        10.7573648897828
+      ],
+      "delta_H": 0.12267786505629497,
+      "delta_T": 0.03343750000000001,
+      "delta_v3": 7.603218633470711,
+      "file_sha256": "b461776b9073c645a32eb01d4c9e66c76cf373b88670c8628d53ace393c9ed7a",
+      "replicates": 5000,
+      "right_v3": 35.93826071787137,
+      "run_dir": "/data/dev2/runs/eval/m1-adopt/kai1"
+    },
+    "kai1-8k": {
+      "ci95_H": [
+        0.06173310224573456,
+        0.18069760615118263
+      ],
+      "ci95_T": [
+        0.007500000000000007,
+        0.05875781249999991
+      ],
+      "ci95_v3": [
+        4.430242805035709,
+        10.5890478722251
+      ],
+      "delta_H": 0.12207319245875442,
+      "delta_T": 0.03343750000000001,
+      "delta_v3": 7.5727882104617095,
+      "file_sha256": "2a55b3f28c94f35741377e0f916357ca67f0710af8a6bec81de23df6367187c0",
+      "replicates": 5000,
+      "right_v3": 35.968691140880374,
+      "run_dir": "/data/dev2/runs/06b/m2/formal/kai1-native-8k"
+    },
+    "lex": {
+      "ci95_H": [
+        0.033490997198197224,
+        0.30451455533887933
+      ],
+      "ci95_T": [
+        0.010937499999999989,
+        0.05625000000000002
+      ],
+      "ci95_v3": [
+        3.4706807405551925,
+        18.120352400377346
+      ],
+      "delta_H": 0.21363849067836554,
+      "delta_T": 0.03343750000000001,
+      "delta_v3": 12.518990420635234,
+      "file_sha256": "c3295cac695370e6bcf481ec0dbf621aac3328adecfd3dbf06202fbfddf1de02",
+      "replicates": 5000,
+      "right_v3": 31.02248893070685,
+      "run_dir": "/data/dev2/runs/eval/m1/r3-lex"
+    },
+    "m5-x": {
+      "ci95_H": [
+        -0.0477618540858725,
+        0.05121024536111301
+      ],
+      "ci95_T": [
+        -0.058750000000000024,
+        -0.020000000000000018
+      ],
+      "ci95_v3": [
+        -4.505020501297236,
+        0.6196481922906564
+      ],
+      "delta_H": 0.006494893519015221,
+      "delta_T": -0.03968749999999999,
+      "delta_v3": -1.8230776469606056,
+      "file_sha256": "55912a64c505a8fe45f5c298d5f2ba5a7f6da3a00064dbd9ab590e2e84724751",
+      "replicates": 5000,
+      "right_v3": 45.36455699830269,
+      "run_dir": "/data/dev2/runs/06b/m5/formal/m5-x-soup"
+    },
+    "m5-z": {
+      "ci95_H": [
+        -0.058486300647660666,
+        0.03597613526938366
+      ],
+      "ci95_T": [
+        -0.03500000000000003,
+        -0.004062499999999969
+      ],
+      "ci95_v3": [
+        -3.8914645104824057,
+        0.8197966026624931
+      ],
+      "delta_H": -0.018764116935730157,
+      "delta_T": -0.019687500000000024,
+      "delta_v3": -1.9354362720668306,
+      "file_sha256": "bdd621257099b4e3731ba606f0eb8fa31ac7bade4b0d97c6e5b8c7aab10a263b",
+      "replicates": 5000,
+      "right_v3": 45.476915623408914,
+      "run_dir": "/data/dev2/runs/06b/m5/formal/m5-z-soup"
+    },
+    "released": {
+      "ci95_H": [
+        0.0,
+        0.0
+      ],
+      "ci95_T": [
+        0.0,
+        0.0
+      ],
+      "ci95_v3": [
+        0.0,
+        0.0
+      ],
+      "delta_H": 0.0,
+      "delta_T": 0.0,
+      "delta_v3": 0.0,
+      "file_sha256": "88906eb8f1fc77ca5c2ef926c5c9533f758faa8db2f099cf6ed5e82a5e643fc2",
+      "replicates": 5000,
+      "right_v3": 43.54147935134208,
+      "run_dir": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup"
+    }
+  },
+  "public231": {
+    "correct": 142,
+    "easy": 48,
+    "hard": 40,
+    "items": 231,
+    "standard": 54
+  },
+  "run_dir": "/data/dev2/runs/06b/m6/formal/m6-control-released",
+  "runtime": {
+    "causal_conv1d": "1.7.0",
+    "device_name": "",
+    "devices": 1,
+    "fla": "0.5.2",
+    "hip": "7.2.53211",
+    "numpy": "2.3.5",
+    "python": "3.12.13",
+    "safetensors": "0.8.0",
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0",
+    "triton": "3.7.1"
+  },
+  "runtime_env": {
+    "HIP_FORCE_DEV_KERNARG": "1",
+    "TRITON_CACHE_AUTOTUNING": "1",
+    "TRITON_CACHE_DIR": "/data/dev2/runs/06b/m6/formal/m6-control-released.triton-cache"
+  },
+  "schema": "dev2-06b-m6-summary/1",
+  "seal_sha256": "618c99b848e964a45dcc6b9b5aef10031e464e6baf9feee8cf929240a8b9dc7e",
+  "successor": {
+    "skipped": "control run"
+  },
+  "triton_cache": {
+    "m6-control-released": {
+      "added": [],
+      "after_files": 303,
+      "after_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+      "autotune_entries_added": [],
+      "before_files": 303,
+      "before_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+      "cache": "/data/dev2/runs/06b/m6/formal/m6-control-released.triton-cache",
+      "changed": [],
+      "kind": "per-run",
+      "removed": [],
+      "schema": "dev2-06b-m6-triton-cache/1",
+      "snapshot": "/data/dev2/runs/06b/m6/triton-cache-frozen",
+      "snapshot_manifest": "/data/dev2/runs/06b/m6/triton-cache-frozen.MANIFEST.json",
+      "unchanged": true
+    },
+    "m6-control-released-mlx": {
+      "added": [],
+      "after_files": 303,
+      "after_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+      "autotune_entries_added": [],
+      "before_files": 303,
+      "before_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+      "cache": "/data/dev2/runs/06b/m6/formal/m6-control-released-mlx.triton-cache",
+      "changed": [],
+      "kind": "per-run",
+      "removed": [],
+      "schema": "dev2-06b-m6-triton-cache/1",
+      "snapshot": "/data/dev2/runs/06b/m6/triton-cache-frozen",
+      "snapshot_manifest": "/data/dev2/runs/06b/m6/triton-cache-frozen.MANIFEST.json",
+      "unchanged": true
+    }
+  },
+  "type_collapse": {
+    "accuracy": {
+      "choice": 0.31875,
+      "noul": 0.5525,
+      "score": 0.3325
+    },
+    "any_collapsed": false,
+    "verdicts": {
+      "choice": "OK",
+      "noul": "OK",
+      "score": "OK"
+    }
+  },
+  "typed_final": {
+    "choice": {
+      "correct": 255,
+      "n": 800
+    },
+    "noul": {
+      "correct": 442,
+      "n": 800
+    },
+    "score": {
+      "correct": 133,
+      "n": 400
+    }
+  },
+  "v3": 43.54147935134208
+}
