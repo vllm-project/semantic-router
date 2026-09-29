@@ -1,0 +1,4 @@
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/dev2/runs/release/dev2-26b-release-20260929T050618Z/package/DEV2.0-26B/decision2/qwen.py", line 33, in resolve_base
+    raise ValueError(f"Base file differs from the pinned revision: {name}")
+ValueError: Base file differs from the pinned revision: model-00001-of-00018.safetensors

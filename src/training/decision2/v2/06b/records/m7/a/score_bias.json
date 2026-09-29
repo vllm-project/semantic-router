@@ -1,0 +1,129 @@
+{
+  "fit": {
+    "inputs": {
+      "aho_manifest_sha256": "c20eb26b36ceb6bad83eeb192aaa482fc08b3aebd79319618713bfd336e6e19e",
+      "best_export_manifest_sha256": "3ae009ad838487c0df839a55898a98f5665276136d2a8cab3c1260dd0b29dfa2",
+      "cal698_ids_sha256": "7e8c01c8552f56ba30f4dd1a5c0ca7c2e74baf4412d2533eecbd23b77300f947",
+      "cal_gold_sha256": "3e34f6cb5a32c9f14d0fee0897ee3f2318e59d66fe1ff0a95e2ea5eb2497f60a",
+      "cal_parity_max_abs_drift": 0.0,
+      "cal_probs_sha256": "df223972b1a642a500ab2f8f38af33108edcecc41ff6ee504e1320d6618fa127",
+      "complete_sha256": "1e5603a5dd415d2a52efeab3dc2fa511101958ce404ed6ee380f7b488ff515ef",
+      "fit_aho_probs_sha256": "238ce555511fde5f18d0e4b1f65d374e2fb5a5a99dce365e7882948df7ec1292",
+      "fit_aho_sha256": "4bfe6731c5ef12782a626f4eacbd5844e0557deb468cd0e3662f08b754657a9e",
+      "probs_manifest_sha256": "4b14486785e453f0417cd034dd18e04a73d2df49ed03cf65bc75509710f5f289",
+      "state_sha256": "5c3d3ca18434fab1045a5840f4ef4508f9956fd3b2de00bd1bacf912b9729068"
+    },
+    "levels": {
+      "3": {
+        "gradient_norm": 4.1843132983371326e-12,
+        "newton_steps": 3,
+        "objective_end": 2.536542403898921,
+        "objective_start": 2.558527389300331,
+        "raw_offsets": [
+          0.0,
+          0.27670027832706445,
+          0.3071990335620182
+        ],
+        "rows": 1456,
+        "rows_by_level": {
+          "0": 484,
+          "1": 489,
+          "2": 483
+        },
+        "rows_by_source": {
+          "A6g": 21,
+          "A6h": 205,
+          "A7g": 66,
+          "G6": 177,
+          "H6": 987
+        },
+        "status": "fit"
+      },
+      "4": {
+        "gradient_norm": 6.051044155353324e-13,
+        "newton_steps": 3,
+        "objective_end": 4.728938248315497,
+        "objective_start": 4.736868265086406,
+        "raw_offsets": [
+          0.0,
+          0.15684927507770985,
+          0.16950168057471907,
+          0.10395794523909115
+        ],
+        "rows": 581,
+        "rows_by_level": {
+          "0": 149,
+          "1": 147,
+          "2": 146,
+          "3": 139
+        },
+        "rows_by_source": {
+          "A6g": 32,
+          "A6h": 72,
+          "A7g": 77,
+          "G6": 192,
+          "H6": 208
+        },
+        "status": "fit"
+      },
+      "5": {
+        "gradient_norm": 2.0456052280591088e-11,
+        "newton_steps": 3,
+        "objective_end": 7.211153610388386,
+        "objective_start": 7.228912232345709,
+        "raw_offsets": [
+          0.0,
+          0.20763907365346002,
+          0.2008070635263623,
+          0.16813420989173378,
+          0.2684244851156735
+        ],
+        "rows": 2026,
+        "rows_by_level": {
+          "0": 383,
+          "1": 464,
+          "2": 393,
+          "3": 400,
+          "4": 386
+        },
+        "rows_by_source": {
+          "A6g": 45,
+          "A6h": 15,
+          "A7g": 89,
+          "A7q": 1267,
+          "CAL698": 90,
+          "G6": 150,
+          "H6": 370
+        },
+        "status": "fit"
+      }
+    },
+    "min_fit_rows": 150,
+    "objective": "class-balanced NLL, b_0 = 0, logits = log max(p, 1e-12)",
+    "post": "shift to mean zero, round to 6 decimals",
+    "prereg": "v2/06b/records/m7-prereg-2026-09-29.md section 1.4",
+    "solver": "Newton, float64, gradient norm < 1e-09"
+  },
+  "format": "dev2-score-bias-v1",
+  "model_sha256": "01fae75098ce29314c5de2990321fcfd31457de7c02bb757bd8345662a823854",
+  "offsets": {
+    "3": [
+      -0.194633,
+      0.082067,
+      0.112566
+    ],
+    "4": [
+      -0.107577,
+      0.049272,
+      0.061924,
+      -0.003619
+    ],
+    "5": [
+      -0.169001,
+      0.038638,
+      0.031806,
+      -0.000867,
+      0.099424
+    ]
+  }
+}

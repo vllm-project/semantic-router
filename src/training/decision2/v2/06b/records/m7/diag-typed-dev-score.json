@@ -1,0 +1,989 @@
+{
+  "schema": "dev2-06b-m7-diag-typed-dev-score/1",
+  "scope": "CPU-only development diagnostic on typed-DEV Score questions; not a release or formal score; no typed-FINAL data read",
+  "panel": "typed-DEV",
+  "question_type": "score",
+  "items": 400,
+  "levels": [
+    0,
+    1,
+    2
+  ],
+  "families": [
+    "set_reconciliation"
+  ],
+  "family_note": "every typed-DEV Score question belongs to one family, so by_family equals overall; by_variant splits by generator variant",
+  "length_measure": "usage.input_tokens of the m6-mxcx-soup readout (identical across the four models: True)",
+  "tokens_identical_across_models": true,
+  "terciles": {
+    "rule": "cut points at the ceil(n/3)-th and ceil(2n/3)-th smallest item length; ties go to the lower bin",
+    "cut_tokens": [
+      166,
+      169
+    ],
+    "sizes": {
+      "T1_short": 148,
+      "T2_mid": 121,
+      "T3_long": 131
+    },
+    "token_ranges": {
+      "T1_short": [
+        159,
+        166
+      ],
+      "T2_mid": [
+        167,
+        169
+      ],
+      "T3_long": [
+        170,
+        179
+      ]
+    }
+  },
+  "tercile_note": "item length is confounded with the gold level on this panel (see gold_distribution per tercile); compare each tercile's accuracy with its own majority_accuracy",
+  "accuracy_rule": "predicted level = unique argmax of the level probabilities after the benchmark/score.py validity checks (score in range, probabilities complete and summing to 1 within 0.02, score within 0.06 of the probability-weighted mean); equal to the gold level counts correct, invalid or tied counts incorrect",
+  "top_share_rule": "top_share = share of the most-predicted level; highest_level_share = share predicting the highest level",
+  "sources_sha256": {
+    "typed_dev_gold": "c7a8b86bda0d0d6120e572b94dfc756bf10264108554af76307141ae02fbf5dc",
+    "m6-mxcx-soup": "b008c258773699687827ba7ba1843475314d0b883a828647686620bd6770dadc",
+    "m7-mxcx-soup": "4b0537c2b1a6ee8f2bd43dc7d70823d2f445576f63cc296c447c8dc83faf1e8e",
+    "m7-mx-soup": "a0a1b0a54b5c1589909831b00e53108e5fc8162fc10ac2c6313bb914ab2c0a3e",
+    "m7-cx-soup": "32327cc5d72e750d5e9c57291fc2c7ec04c9c2bb92a92fe27a3761091a94cc5c"
+  },
+  "models": {
+    "m6-mxcx-soup": {
+      "overall": {
+        "n": 400,
+        "accuracy": 0.525,
+        "accuracy_ci95_wilson": [
+          0.4761,
+          0.5735
+        ],
+        "correct": 210,
+        "majority_level": "2",
+        "majority_accuracy": 0.52,
+        "gold_distribution": {
+          "0": 85,
+          "1": 107,
+          "2": 208
+        },
+        "predicted_distribution": {
+          "0": 61,
+          "1": 8,
+          "2": 331
+        },
+        "top_value": "2",
+        "top_share": 0.8275,
+        "highest_level": "2",
+        "highest_level_share": 0.8275
+      },
+      "by_length_tercile": {
+        "T1_short": {
+          "n": 148,
+          "accuracy": 0.4054,
+          "accuracy_ci95_wilson": [
+            0.3297,
+            0.4859
+          ],
+          "correct": 60,
+          "majority_level": "1",
+          "majority_accuracy": 0.5946,
+          "gold_distribution": {
+            "0": 5,
+            "1": 88,
+            "2": 55
+          },
+          "predicted_distribution": {
+            "0": 35,
+            "1": 5,
+            "2": 108
+          },
+          "top_value": "2",
+          "top_share": 0.7297,
+          "highest_level": "2",
+          "highest_level_share": 0.7297
+        },
+        "T2_mid": {
+          "n": 121,
+          "accuracy": 0.6529,
+          "accuracy_ci95_wilson": [
+            0.5645,
+            0.7318
+          ],
+          "correct": 79,
+          "majority_level": "2",
+          "majority_accuracy": 0.7025,
+          "gold_distribution": {
+            "0": 20,
+            "1": 16,
+            "2": 85
+          },
+          "predicted_distribution": {
+            "0": 14,
+            "1": 3,
+            "2": 104
+          },
+          "top_value": "2",
+          "top_share": 0.8595,
+          "highest_level": "2",
+          "highest_level_share": 0.8595
+        },
+        "T3_long": {
+          "n": 131,
+          "accuracy": 0.542,
+          "accuracy_ci95_wilson": [
+            0.4567,
+            0.6249
+          ],
+          "correct": 71,
+          "majority_level": "2",
+          "majority_accuracy": 0.5191,
+          "gold_distribution": {
+            "0": 60,
+            "1": 3,
+            "2": 68
+          },
+          "predicted_distribution": {
+            "0": 12,
+            "2": 119
+          },
+          "top_value": "2",
+          "top_share": 0.9084,
+          "highest_level": "2",
+          "highest_level_share": 0.9084
+        }
+      },
+      "by_family": {
+        "set_reconciliation": {
+          "n": 400,
+          "accuracy": 0.525,
+          "accuracy_ci95_wilson": [
+            0.4761,
+            0.5735
+          ],
+          "correct": 210,
+          "majority_level": "2",
+          "majority_accuracy": 0.52,
+          "gold_distribution": {
+            "0": 85,
+            "1": 107,
+            "2": 208
+          },
+          "predicted_distribution": {
+            "0": 61,
+            "1": 8,
+            "2": 331
+          },
+          "top_value": "2",
+          "top_share": 0.8275,
+          "highest_level": "2",
+          "highest_level_share": 0.8275
+        }
+      },
+      "by_variant": {
+        "base": {
+          "n": 100,
+          "accuracy": 0.53,
+          "accuracy_ci95_wilson": [
+            0.4329,
+            0.6249
+          ],
+          "correct": 53,
+          "majority_level": "2",
+          "majority_accuracy": 0.54,
+          "gold_distribution": {
+            "0": 21,
+            "1": 25,
+            "2": 54
+          },
+          "predicted_distribution": {
+            "0": 16,
+            "1": 3,
+            "2": 81
+          },
+          "top_value": "2",
+          "top_share": 0.81,
+          "highest_level": "2",
+          "highest_level_share": 0.81
+        },
+        "counterfactual": {
+          "n": 100,
+          "accuracy": 0.5,
+          "accuracy_ci95_wilson": [
+            0.4038,
+            0.5962
+          ],
+          "correct": 50,
+          "majority_level": "2",
+          "majority_accuracy": 0.46,
+          "gold_distribution": {
+            "0": 22,
+            "1": 32,
+            "2": 46
+          },
+          "predicted_distribution": {
+            "0": 12,
+            "1": 5,
+            "2": 83
+          },
+          "top_value": "2",
+          "top_share": 0.83,
+          "highest_level": "2",
+          "highest_level_share": 0.83
+        },
+        "label": {
+          "n": 100,
+          "accuracy": 0.49,
+          "accuracy_ci95_wilson": [
+            0.3942,
+            0.5865
+          ],
+          "correct": 49,
+          "majority_level": "2",
+          "majority_accuracy": 0.54,
+          "gold_distribution": {
+            "0": 21,
+            "1": 25,
+            "2": 54
+          },
+          "predicted_distribution": {
+            "0": 21,
+            "2": 79
+          },
+          "top_value": "2",
+          "top_share": 0.79,
+          "highest_level": "2",
+          "highest_level_share": 0.79
+        },
+        "order": {
+          "n": 100,
+          "accuracy": 0.58,
+          "accuracy_ci95_wilson": [
+            0.4821,
+            0.672
+          ],
+          "correct": 58,
+          "majority_level": "2",
+          "majority_accuracy": 0.54,
+          "gold_distribution": {
+            "0": 21,
+            "1": 25,
+            "2": 54
+          },
+          "predicted_distribution": {
+            "0": 12,
+            "2": 88
+          },
+          "top_value": "2",
+          "top_share": 0.88,
+          "highest_level": "2",
+          "highest_level_share": 0.88
+        }
+      },
+      "invalid_or_missing": 0
+    },
+    "m7-mxcx-soup": {
+      "overall": {
+        "n": 400,
+        "accuracy": 0.5475,
+        "accuracy_ci95_wilson": [
+          0.4985,
+          0.5956
+        ],
+        "correct": 219,
+        "majority_level": "2",
+        "majority_accuracy": 0.52,
+        "gold_distribution": {
+          "0": 85,
+          "1": 107,
+          "2": 208
+        },
+        "predicted_distribution": {
+          "0": 142,
+          "1": 74,
+          "2": 184
+        },
+        "top_value": "2",
+        "top_share": 0.46,
+        "highest_level": "2",
+        "highest_level_share": 0.46
+      },
+      "by_length_tercile": {
+        "T1_short": {
+          "n": 148,
+          "accuracy": 0.5946,
+          "accuracy_ci95_wilson": [
+            0.5141,
+            0.6703
+          ],
+          "correct": 88,
+          "majority_level": "1",
+          "majority_accuracy": 0.5946,
+          "gold_distribution": {
+            "0": 5,
+            "1": 88,
+            "2": 55
+          },
+          "predicted_distribution": {
+            "0": 44,
+            "1": 38,
+            "2": 66
+          },
+          "top_value": "2",
+          "top_share": 0.4459,
+          "highest_level": "2",
+          "highest_level_share": 0.4459
+        },
+        "T2_mid": {
+          "n": 121,
+          "accuracy": 0.5455,
+          "accuracy_ci95_wilson": [
+            0.4567,
+            0.6314
+          ],
+          "correct": 66,
+          "majority_level": "2",
+          "majority_accuracy": 0.7025,
+          "gold_distribution": {
+            "0": 20,
+            "1": 16,
+            "2": 85
+          },
+          "predicted_distribution": {
+            "0": 43,
+            "1": 20,
+            "2": 58
+          },
+          "top_value": "2",
+          "top_share": 0.4793,
+          "highest_level": "2",
+          "highest_level_share": 0.4793
+        },
+        "T3_long": {
+          "n": 131,
+          "accuracy": 0.4962,
+          "accuracy_ci95_wilson": [
+            0.4119,
+            0.5807
+          ],
+          "correct": 65,
+          "majority_level": "2",
+          "majority_accuracy": 0.5191,
+          "gold_distribution": {
+            "0": 60,
+            "1": 3,
+            "2": 68
+          },
+          "predicted_distribution": {
+            "0": 55,
+            "1": 16,
+            "2": 60
+          },
+          "top_value": "2",
+          "top_share": 0.458,
+          "highest_level": "2",
+          "highest_level_share": 0.458
+        }
+      },
+      "by_family": {
+        "set_reconciliation": {
+          "n": 400,
+          "accuracy": 0.5475,
+          "accuracy_ci95_wilson": [
+            0.4985,
+            0.5956
+          ],
+          "correct": 219,
+          "majority_level": "2",
+          "majority_accuracy": 0.52,
+          "gold_distribution": {
+            "0": 85,
+            "1": 107,
+            "2": 208
+          },
+          "predicted_distribution": {
+            "0": 142,
+            "1": 74,
+            "2": 184
+          },
+          "top_value": "2",
+          "top_share": 0.46,
+          "highest_level": "2",
+          "highest_level_share": 0.46
+        }
+      },
+      "by_variant": {
+        "base": {
+          "n": 100,
+          "accuracy": 0.53,
+          "accuracy_ci95_wilson": [
+            0.4329,
+            0.6249
+          ],
+          "correct": 53,
+          "majority_level": "2",
+          "majority_accuracy": 0.54,
+          "gold_distribution": {
+            "0": 21,
+            "1": 25,
+            "2": 54
+          },
+          "predicted_distribution": {
+            "0": 36,
+            "1": 21,
+            "2": 43
+          },
+          "top_value": "2",
+          "top_share": 0.43,
+          "highest_level": "2",
+          "highest_level_share": 0.43
+        },
+        "counterfactual": {
+          "n": 100,
+          "accuracy": 0.59,
+          "accuracy_ci95_wilson": [
+            0.492,
+            0.6813
+          ],
+          "correct": 59,
+          "majority_level": "2",
+          "majority_accuracy": 0.46,
+          "gold_distribution": {
+            "0": 22,
+            "1": 32,
+            "2": 46
+          },
+          "predicted_distribution": {
+            "0": 31,
+            "1": 28,
+            "2": 41
+          },
+          "top_value": "2",
+          "top_share": 0.41,
+          "highest_level": "2",
+          "highest_level_share": 0.41
+        },
+        "label": {
+          "n": 100,
+          "accuracy": 0.49,
+          "accuracy_ci95_wilson": [
+            0.3942,
+            0.5865
+          ],
+          "correct": 49,
+          "majority_level": "2",
+          "majority_accuracy": 0.54,
+          "gold_distribution": {
+            "0": 21,
+            "1": 25,
+            "2": 54
+          },
+          "predicted_distribution": {
+            "0": 39,
+            "1": 24,
+            "2": 37
+          },
+          "top_value": "0",
+          "top_share": 0.39,
+          "highest_level": "2",
+          "highest_level_share": 0.37
+        },
+        "order": {
+          "n": 100,
+          "accuracy": 0.58,
+          "accuracy_ci95_wilson": [
+            0.4821,
+            0.672
+          ],
+          "correct": 58,
+          "majority_level": "2",
+          "majority_accuracy": 0.54,
+          "gold_distribution": {
+            "0": 21,
+            "1": 25,
+            "2": 54
+          },
+          "predicted_distribution": {
+            "0": 36,
+            "1": 1,
+            "2": 63
+          },
+          "top_value": "2",
+          "top_share": 0.63,
+          "highest_level": "2",
+          "highest_level_share": 0.63
+        }
+      },
+      "invalid_or_missing": 0
+    },
+    "m7-mx-soup": {
+      "overall": {
+        "n": 400,
+        "accuracy": 0.5725,
+        "accuracy_ci95_wilson": [
+          0.5236,
+          0.6201
+        ],
+        "correct": 229,
+        "majority_level": "2",
+        "majority_accuracy": 0.52,
+        "gold_distribution": {
+          "0": 85,
+          "1": 107,
+          "2": 208
+        },
+        "predicted_distribution": {
+          "0": 180,
+          "1": 99,
+          "2": 121
+        },
+        "top_value": "0",
+        "top_share": 0.45,
+        "highest_level": "2",
+        "highest_level_share": 0.3025
+      },
+      "by_length_tercile": {
+        "T1_short": {
+          "n": 148,
+          "accuracy": 0.723,
+          "accuracy_ci95_wilson": [
+            0.6459,
+            0.7887
+          ],
+          "correct": 107,
+          "majority_level": "1",
+          "majority_accuracy": 0.5946,
+          "gold_distribution": {
+            "0": 5,
+            "1": 88,
+            "2": 55
+          },
+          "predicted_distribution": {
+            "0": 38,
+            "1": 58,
+            "2": 52
+          },
+          "top_value": "1",
+          "top_share": 0.3919,
+          "highest_level": "2",
+          "highest_level_share": 0.3514
+        },
+        "T2_mid": {
+          "n": 121,
+          "accuracy": 0.4793,
+          "accuracy_ci95_wilson": [
+            0.3923,
+            0.5676
+          ],
+          "correct": 58,
+          "majority_level": "2",
+          "majority_accuracy": 0.7025,
+          "gold_distribution": {
+            "0": 20,
+            "1": 16,
+            "2": 85
+          },
+          "predicted_distribution": {
+            "0": 57,
+            "1": 23,
+            "2": 41
+          },
+          "top_value": "0",
+          "top_share": 0.4711,
+          "highest_level": "2",
+          "highest_level_share": 0.3388
+        },
+        "T3_long": {
+          "n": 131,
+          "accuracy": 0.4885,
+          "accuracy_ci95_wilson": [
+            0.4045,
+            0.5732
+          ],
+          "correct": 64,
+          "majority_level": "2",
+          "majority_accuracy": 0.5191,
+          "gold_distribution": {
+            "0": 60,
+            "1": 3,
+            "2": 68
+          },
+          "predicted_distribution": {
+            "0": 85,
+            "1": 18,
+            "2": 28
+          },
+          "top_value": "0",
+          "top_share": 0.6489,
+          "highest_level": "2",
+          "highest_level_share": 0.2137
+        }
+      },
+      "by_family": {
+        "set_reconciliation": {
+          "n": 400,
+          "accuracy": 0.5725,
+          "accuracy_ci95_wilson": [
+            0.5236,
+            0.6201
+          ],
+          "correct": 229,
+          "majority_level": "2",
+          "majority_accuracy": 0.52,
+          "gold_distribution": {
+            "0": 85,
+            "1": 107,
+            "2": 208
+          },
+          "predicted_distribution": {
+            "0": 180,
+            "1": 99,
+            "2": 121
+          },
+          "top_value": "0",
+          "top_share": 0.45,
+          "highest_level": "2",
+          "highest_level_share": 0.3025
+        }
+      },
+      "by_variant": {
+        "base": {
+          "n": 100,
+          "accuracy": 0.53,
+          "accuracy_ci95_wilson": [
+            0.4329,
+            0.6249
+          ],
+          "correct": 53,
+          "majority_level": "2",
+          "majority_accuracy": 0.54,
+          "gold_distribution": {
+            "0": 21,
+            "1": 25,
+            "2": 54
+          },
+          "predicted_distribution": {
+            "0": 43,
+            "1": 28,
+            "2": 29
+          },
+          "top_value": "0",
+          "top_share": 0.43,
+          "highest_level": "2",
+          "highest_level_share": 0.29
+        },
+        "counterfactual": {
+          "n": 100,
+          "accuracy": 0.68,
+          "accuracy_ci95_wilson": [
+            0.5834,
+            0.7633
+          ],
+          "correct": 68,
+          "majority_level": "2",
+          "majority_accuracy": 0.46,
+          "gold_distribution": {
+            "0": 22,
+            "1": 32,
+            "2": 46
+          },
+          "predicted_distribution": {
+            "0": 37,
+            "1": 34,
+            "2": 29
+          },
+          "top_value": "0",
+          "top_share": 0.37,
+          "highest_level": "2",
+          "highest_level_share": 0.29
+        },
+        "label": {
+          "n": 100,
+          "accuracy": 0.58,
+          "accuracy_ci95_wilson": [
+            0.4821,
+            0.672
+          ],
+          "correct": 58,
+          "majority_level": "2",
+          "majority_accuracy": 0.54,
+          "gold_distribution": {
+            "0": 21,
+            "1": 25,
+            "2": 54
+          },
+          "predicted_distribution": {
+            "0": 49,
+            "1": 26,
+            "2": 25
+          },
+          "top_value": "0",
+          "top_share": 0.49,
+          "highest_level": "2",
+          "highest_level_share": 0.25
+        },
+        "order": {
+          "n": 100,
+          "accuracy": 0.5,
+          "accuracy_ci95_wilson": [
+            0.4038,
+            0.5962
+          ],
+          "correct": 50,
+          "majority_level": "2",
+          "majority_accuracy": 0.54,
+          "gold_distribution": {
+            "0": 21,
+            "1": 25,
+            "2": 54
+          },
+          "predicted_distribution": {
+            "0": 51,
+            "1": 11,
+            "2": 38
+          },
+          "top_value": "0",
+          "top_share": 0.51,
+          "highest_level": "2",
+          "highest_level_share": 0.38
+        }
+      },
+      "invalid_or_missing": 0
+    },
+    "m7-cx-soup": {
+      "overall": {
+        "n": 400,
+        "accuracy": 0.4875,
+        "accuracy_ci95_wilson": [
+          0.4389,
+          0.5364
+        ],
+        "correct": 195,
+        "majority_level": "2",
+        "majority_accuracy": 0.52,
+        "gold_distribution": {
+          "0": 85,
+          "1": 107,
+          "2": 208
+        },
+        "predicted_distribution": {
+          "0": 118,
+          "1": 49,
+          "2": 233
+        },
+        "top_value": "2",
+        "top_share": 0.5825,
+        "highest_level": "2",
+        "highest_level_share": 0.5825
+      },
+      "by_length_tercile": {
+        "T1_short": {
+          "n": 148,
+          "accuracy": 0.5,
+          "accuracy_ci95_wilson": [
+            0.4205,
+            0.5795
+          ],
+          "correct": 74,
+          "majority_level": "1",
+          "majority_accuracy": 0.5946,
+          "gold_distribution": {
+            "0": 5,
+            "1": 88,
+            "2": 55
+          },
+          "predicted_distribution": {
+            "0": 59,
+            "1": 22,
+            "2": 67
+          },
+          "top_value": "2",
+          "top_share": 0.4527,
+          "highest_level": "2",
+          "highest_level_share": 0.4527
+        },
+        "T2_mid": {
+          "n": 121,
+          "accuracy": 0.5455,
+          "accuracy_ci95_wilson": [
+            0.4567,
+            0.6314
+          ],
+          "correct": 66,
+          "majority_level": "2",
+          "majority_accuracy": 0.7025,
+          "gold_distribution": {
+            "0": 20,
+            "1": 16,
+            "2": 85
+          },
+          "predicted_distribution": {
+            "0": 33,
+            "1": 15,
+            "2": 73
+          },
+          "top_value": "2",
+          "top_share": 0.6033,
+          "highest_level": "2",
+          "highest_level_share": 0.6033
+        },
+        "T3_long": {
+          "n": 131,
+          "accuracy": 0.4198,
+          "accuracy_ci95_wilson": [
+            0.3388,
+            0.5055
+          ],
+          "correct": 55,
+          "majority_level": "2",
+          "majority_accuracy": 0.5191,
+          "gold_distribution": {
+            "0": 60,
+            "1": 3,
+            "2": 68
+          },
+          "predicted_distribution": {
+            "0": 26,
+            "1": 12,
+            "2": 93
+          },
+          "top_value": "2",
+          "top_share": 0.7099,
+          "highest_level": "2",
+          "highest_level_share": 0.7099
+        }
+      },
+      "by_family": {
+        "set_reconciliation": {
+          "n": 400,
+          "accuracy": 0.4875,
+          "accuracy_ci95_wilson": [
+            0.4389,
+            0.5364
+          ],
+          "correct": 195,
+          "majority_level": "2",
+          "majority_accuracy": 0.52,
+          "gold_distribution": {
+            "0": 85,
+            "1": 107,
+            "2": 208
+          },
+          "predicted_distribution": {
+            "0": 118,
+            "1": 49,
+            "2": 233
+          },
+          "top_value": "2",
+          "top_share": 0.5825,
+          "highest_level": "2",
+          "highest_level_share": 0.5825
+        }
+      },
+      "by_variant": {
+        "base": {
+          "n": 100,
+          "accuracy": 0.47,
+          "accuracy_ci95_wilson": [
+            0.3751,
+            0.5671
+          ],
+          "correct": 47,
+          "majority_level": "2",
+          "majority_accuracy": 0.54,
+          "gold_distribution": {
+            "0": 21,
+            "1": 25,
+            "2": 54
+          },
+          "predicted_distribution": {
+            "0": 27,
+            "1": 16,
+            "2": 57
+          },
+          "top_value": "2",
+          "top_share": 0.57,
+          "highest_level": "2",
+          "highest_level_share": 0.57
+        },
+        "counterfactual": {
+          "n": 100,
+          "accuracy": 0.48,
+          "accuracy_ci95_wilson": [
+            0.3846,
+            0.5768
+          ],
+          "correct": 48,
+          "majority_level": "2",
+          "majority_accuracy": 0.46,
+          "gold_distribution": {
+            "0": 22,
+            "1": 32,
+            "2": 46
+          },
+          "predicted_distribution": {
+            "0": 29,
+            "1": 18,
+            "2": 53
+          },
+          "top_value": "2",
+          "top_share": 0.53,
+          "highest_level": "2",
+          "highest_level_share": 0.53
+        },
+        "label": {
+          "n": 100,
+          "accuracy": 0.41,
+          "accuracy_ci95_wilson": [
+            0.3187,
+            0.508
+          ],
+          "correct": 41,
+          "majority_level": "2",
+          "majority_accuracy": 0.54,
+          "gold_distribution": {
+            "0": 21,
+            "1": 25,
+            "2": 54
+          },
+          "predicted_distribution": {
+            "0": 35,
+            "1": 15,
+            "2": 50
+          },
+          "top_value": "2",
+          "top_share": 0.5,
+          "highest_level": "2",
+          "highest_level_share": 0.5
+        },
+        "order": {
+          "n": 100,
+          "accuracy": 0.59,
+          "accuracy_ci95_wilson": [
+            0.492,
+            0.6813
+          ],
+          "correct": 59,
+          "majority_level": "2",
+          "majority_accuracy": 0.54,
+          "gold_distribution": {
+            "0": 21,
+            "1": 25,
+            "2": 54
+          },
+          "predicted_distribution": {
+            "0": 27,
+            "2": 73
+          },
+          "top_value": "2",
+          "top_share": 0.73,
+          "highest_level": "2",
+          "highest_level_share": 0.73
+        }
+      },
+      "invalid_or_missing": 0
+    }
+  },
+  "cross_check": "overall Score accuracy equals each readout's dev.score.json by_type.score accuracy_all (0.525, 0.5475, 0.5725, 0.4875)"
+}

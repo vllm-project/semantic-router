@@ -52,6 +52,9 @@ analysis: the flagged items its training rows could have touched, the tier resco
 without them (every model), a worst case in which the candidate misses every one of them
 it answered correctly, and the contamination check on those items alone.
 
+SPEC may omit `mlx_panel` (the mlx-diag gold) when no model has an `mlx_run`; mlx-diag is
+then not scored, and FLAGGED must still have been collected against the frozen mlx-diag gold.
+
 Outputs are aggregates only: no item ids, text, gold values or answers.
 """
 
@@ -125,11 +128,19 @@ def digest(value: Any) -> str:
 # ---------------------------------------------------------------- panels
 
 
-def load_panels(panel_root: Path, mlx_panel: Path) -> dict[str, Any]:
+def load_panels(panel_root: Path, mlx_panel: Path | None) -> dict[str, Any]:
+    """Frozen gold panels; without `mlx_panel`, mlx-diag gold and prompts are None."""
     panels.verify(panel_root, ["typed-final", "css15", "public231"])
-    mlx_gold = mlx_panel / "gold.jsonl"
-    if sha_file(mlx_gold) != panels.DEVELOPMENT["mlx-diag"]["gold_sha256"]:
-        raise ValueError("mlx-diag gold differs from the frozen panel")
+    mlx_sha256 = panels.DEVELOPMENT["mlx-diag"]["gold_sha256"]
+    mlx = mlx_prompts = None
+    if mlx_panel is not None:
+        mlx_gold = mlx_panel / "gold.jsonl"
+        if sha_file(mlx_gold) != mlx_sha256:
+            raise ValueError("mlx-diag gold differs from the frozen panel")
+        mlx = {row["id"]: row for row in read_jsonl(mlx_gold)}
+        mlx_prompts = {
+            row["id"]: row for row in read_jsonl(mlx_panel / "prompts.jsonl")
+        }
     css = read_css_jsonl(panels.path(panel_root, "css15", "gold"))
     return {
         "root": panel_root,
@@ -140,15 +151,13 @@ def load_panels(panel_root: Path, mlx_panel: Path) -> dict[str, Any]:
             for row in read_jsonl(panels.path(panel_root, "public231", "gold"))
         },
         "public231_dir": panel_root / panels.FORMAL["public231"]["panel_dir"],
-        "mlx-diag": {row["id"]: row for row in read_jsonl(mlx_gold)},
-        "mlx-prompts": {
-            row["id"]: row for row in read_jsonl(mlx_panel / "prompts.jsonl")
-        },
+        "mlx-diag": mlx,
+        "mlx-prompts": mlx_prompts,
         "sha256": {
             "typed-final": panels.FORMAL["typed-final"]["gold_sha256"],
             "css15": panels.FORMAL["css15"]["gold_sha256"],
             "public231": panels.FORMAL["public231"]["gold_sha256"],
-            "mlx-diag": sha_file(mlx_gold),
+            "mlx-diag": mlx_sha256,
         },
     }
 
@@ -729,6 +738,8 @@ def mlx_value(outcomes: dict[str, dict[str, Any]], exclude: set[str]) -> dict[st
 
 
 def load_model(name: str, cfg: dict[str, Any], gold: dict[str, Any]) -> dict[str, Any]:
+    if cfg.get("mlx_run") and gold["mlx-diag"] is None:
+        raise ValueError(f"{name}: an mlx_run needs the spec's mlx_panel")
     run = Path(cfg["run"])
     typed_path, css_path = verified(run, "typed-final"), verified(run, "css15")
     model: dict[str, Any] = {
@@ -1559,6 +1570,8 @@ def tier_exposure(
         panel: {i for i in exclude[panel] if groups & set(item_groups[i])}
         for panel in SCORED_PANELS
     }
+    if exposed["mlx-diag"] and gold["mlx-diag"] is None:
+        raise ValueError("exposed mlx-diag items need the spec's mlx_panel")
     strata: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for panel, ids in exposed.items():
         for item_id in ids:
@@ -1659,8 +1672,10 @@ def exposure_jobs(
 def run(args: argparse.Namespace) -> int:
     spec = json.loads(args.spec.read_text(encoding="utf-8"))
     flagged_doc = json.loads(args.flagged.read_text(encoding="utf-8"))
+    mlx_panel = spec.get("mlx_panel")
     gold = load_panels(
-        Path(spec.get("panel_root", str(panels.DEFAULT_ROOT))), Path(spec["mlx_panel"])
+        Path(spec.get("panel_root", str(panels.DEFAULT_ROOT))),
+        Path(mlx_panel) if mlx_panel else None,
     )
     if flagged_doc["gold_sha256"] != gold["sha256"]:
         raise ValueError("flagged ids were collected against different panels")
@@ -1668,7 +1683,7 @@ def run(args: argparse.Namespace) -> int:
         panel: set(flagged_doc["panels"].get(panel, [])) for panel in SCORED_PANELS
     }
     for panel, ids in exclude.items():
-        if ids - set(gold[panel]):
+        if gold[panel] is not None and ids - set(gold[panel]):
             raise ValueError(f"{panel}: flagged ids outside the panel")
     none = {panel: set() for panel in SCORED_PANELS}
     focus = spec["focus_task"]

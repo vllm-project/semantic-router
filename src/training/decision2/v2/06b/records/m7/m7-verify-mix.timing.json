@@ -1,0 +1,1 @@
+{"run":"m7-verify-mix","gpu":0,"render":"/dev/dri/renderD129","commit":"d9a0a83fa5488deed728a0df05ac4324bce73554-src_training_decision2","image":"decision20-train-fast:host2","start_utc":"2026-09-29T00:55:55Z","end_utc":"2026-09-29T00:57:11Z","wall_seconds":76,"gpu_hours":0.02111,"exit":0}

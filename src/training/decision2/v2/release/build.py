@@ -125,6 +125,10 @@ def load_spec(path: Path) -> dict[str, Any]:
     layout.check_repo(
         spec["repo_id"], spec["model_name"], staging=spec["kind"] == "staging"
     )
+    if spec.get("gate_profile") is not None:
+        from v2.release.gate import gate_profile
+
+        gate_profile(spec)
     if spec["kind"] == "release":
         from v2.release.gate import check
 
@@ -565,9 +569,11 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
         raise ValueError(
             "Backbone header count differs from the checkpoint's text parameter count"
         )
-    if layout.name_for(loaded) != spec["model_name"]:
+    name_basis = spec.get("name_basis", "tier")
+    if layout.release_name(loaded, name_basis) != spec["model_name"]:
         raise ValueError(
-            f"{loaded:,} loaded parameters name the model {layout.name_for(loaded)}, not {spec['model_name']}"
+            f"{loaded:,} loaded parameters name the model "
+            f"{layout.release_name(loaded, name_basis)} ({name_basis}), not {spec['model_name']}"
         )
     decision = licence_policy.package_licence(spec["licence"]["components"])
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -614,6 +620,11 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
                 else "raw native probabilities (no post-hoc temperature)."
             ),
             "requirements_text": spec["card"]["requirements_text"],
+            **(
+                {"comparison": spec["gate_profile"]["name"]}
+                if spec.get("gate_profile")
+                else {}
+            ),
         }
         roster = Path(spec["card"]["roster"])
         card = card_module.build_card(
@@ -655,6 +666,7 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             "repo_id": spec["repo_id"],
             "model_name": spec["model_name"],
             "tier": layout.tier_for(loaded),
+            **({"name_basis": name_basis} if name_basis != "tier" else {}),
             "profile": profile,
             "files_sha256": inventory,
             "model_files": files,

@@ -1,0 +1,353 @@
+{
+  "H": 0.4113879941986401,
+  "T": 0.433125,
+  "gate_human_transfer_vs_released": {
+    "ci95_H": [
+      -0.11071375659977094,
+      0.028203233806266347
+    ],
+    "ci95_v3": [
+      -3.4731946582834383,
+      3.460997169714153
+    ],
+    "delta_H": -0.06819725142434141,
+    "released": "released"
+  },
+  "gpu_time": {
+    "gpu_hours": 0.07136672331227197,
+    "image_ids": [
+      "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54"
+    ],
+    "runs": {
+      "m7-mx-soup": 0.054032298458947074,
+      "m7-mx-soup-mlx": 0.01733442485332489
+    }
+  },
+  "label": "post-key same-panel",
+  "loaded_parameters": 597103104,
+  "mlx_diag": {
+    "english": 0.6965945165945165,
+    "invalid_or_missing": 0,
+    "items": 2275,
+    "non_english": 0.6339490139490139,
+    "overall": 0.6428983714698,
+    "scope": "multilingual development diagnostic; not a release score"
+  },
+  "mlx_run_dir": "/data/dev2/runs/06b/m7/formal/m7-mx-soup-mlx",
+  "model_path": "/data/dev2/runs/06b/m1/arms/m7-mx-soup/full/best-export",
+  "model_revision": "87dcd8fb2e24a86baf2a2d5382881e1f41e882d0fddd691c9befdb2c358fa08a",
+  "name": "m7-mx-soup",
+  "paired": {
+    "bosun06": {
+      "ci95_H": [
+        -0.0014271898970114104,
+        0.16831420523941254
+      ],
+      "ci95_T": [
+        -0.030312499999999964,
+        0.029687499999999978
+      ],
+      "ci95_v3": [
+        -0.3618265410243383,
+        8.552525384234022
+      ],
+      "delta_H": 0.06922688733165089,
+      "delta_T": -0.0006250000000000422,
+      "delta_v3": 3.687332725086918,
+      "file_sha256": "10e31c24e18b6e36d0e369d0ec78889e32c51a4ef549f0e7ac1fa0bc222dd672",
+      "replicates": 5000,
+      "right_v3": 38.524327392383704,
+      "run_dir": "/data/dev2/runs/eval/m1-adopt/bosun"
+    },
+    "causal-control": {
+      "ci95_H": [
+        -0.12601498681927928,
+        0.07047863232480081
+      ],
+      "ci95_T": [
+        0.09281249999999996,
+        0.15625
+      ],
+      "ci95_v3": [
+        0.5868409392278372,
+        10.212656756779284
+      ],
+      "delta_H": -0.06870607976634552,
+      "delta_T": 0.12406249999999996,
+      "delta_v3": 3.6916556087996284,
+      "file_sha256": "2020b76be83a00ea437c880c99b792a0a9bdacb685002281d6280267ffdb3b5d",
+      "replicates": 5000,
+      "right_v3": 38.52000450867099,
+      "run_dir": "/data/dev2/runs/eval/m1-adopt/dev20-06b"
+    },
+    "gliner25": {
+      "ci95_H": [
+        -0.06220962145994191,
+        0.12992335478779823
+      ],
+      "ci95_T": [
+        -0.012500000000000011,
+        0.05906250000000002
+      ],
+      "ci95_v3": [
+        -2.356675862760372,
+        7.9807389478339115
+      ],
+      "delta_H": -0.029660951381660028,
+      "delta_T": 0.023125000000000007,
+      "delta_v3": -0.3124586491685051,
+      "file_sha256": "51f27448ff1b6b3829504541d2d51da3b35c5c8996829c4ab7c705a1dd95ccab",
+      "replicates": 5000,
+      "right_v3": 42.52411876663913,
+      "run_dir": "/data/dev2/runs/eval/m1/p1-gliner25"
+    },
+    "kai1": {
+      "ci95_H": [
+        0.010738542572369858,
+        0.16536082229000154
+      ],
+      "ci95_T": [
+        0.04250000000000004,
+        0.09999999999999998
+      ],
+      "ci95_v3": [
+        3.7309213484503005,
+        12.128229116915202
+      ],
+      "delta_H": 0.054480613631953556,
+      "delta_T": 0.07124999999999998,
+      "delta_v3": 6.273399399599249,
+      "file_sha256": "9a6fc1e012ecbfe0a09ed7224e8eb48ddd348d20f7d49f24ba6d99aefe005914",
+      "replicates": 5000,
+      "right_v3": 35.93826071787137,
+      "run_dir": "/data/dev2/runs/eval/m1-adopt/kai1"
+    },
+    "kai1-8k": {
+      "ci95_H": [
+        0.01010520657105929,
+        0.15525438217109228
+      ],
+      "ci95_T": [
+        0.04250000000000004,
+        0.09999999999999998
+      ],
+      "ci95_v3": [
+        3.648499788833552,
+        11.383765525210064
+      ],
+      "delta_H": 0.05387594103441301,
+      "delta_T": 0.07124999999999998,
+      "delta_v3": 6.242968976590248,
+      "file_sha256": "3bea96f5ae681d564762b3ff3bf83f8619825acde5a5de5c65c1d05a6a2c2fc0",
+      "replicates": 5000,
+      "right_v3": 35.968691140880374,
+      "run_dir": "/data/dev2/runs/06b/m2/formal/kai1-native-8k"
+    },
+    "lex": {
+      "ci95_H": [
+        -0.020276605492244016,
+        0.2680666105914121
+      ],
+      "ci95_T": [
+        0.0415625,
+        0.10093750000000001
+      ],
+      "ci95_v3": [
+        2.742823133012706,
+        17.993022256277108
+      ],
+      "delta_H": 0.14544123925402413,
+      "delta_T": 0.07124999999999998,
+      "delta_v3": 11.189171186763772,
+      "file_sha256": "cf69f17e3087c9bd4b90c9f932b12b133248b3c60611faca27c4d96906428e71",
+      "replicates": 5000,
+      "right_v3": 31.02248893070685,
+      "run_dir": "/data/dev2/runs/eval/m1/r3-lex"
+    },
+    "m5-x": {
+      "ci95_H": [
+        -0.1022925050202371,
+        0.03936880119423652
+      ],
+      "ci95_T": [
+        -0.026249999999999996,
+        0.023749999999999993
+      ],
+      "ci95_v3": [
+        -5.356476613704437,
+        2.0831983098181466
+      ],
+      "delta_H": -0.06170235790532619,
+      "delta_T": -0.0018750000000000155,
+      "delta_v3": -3.152896880832067,
+      "file_sha256": "7350f8b83fb7cac8ee3e382a71de6232580247e9e0fe57f39871316972839c5e",
+      "replicates": 5000,
+      "right_v3": 45.36455699830269,
+      "run_dir": "/data/dev2/runs/06b/m5/formal/m5-x-soup"
+    },
+    "m5-z": {
+      "ci95_H": [
+        -0.11334435731448667,
+        0.03104605143308973
+      ],
+      "ci95_T": [
+        -0.006562500000000027,
+        0.04375000000000001
+      ],
+      "ci95_v3": [
+        -4.955470333987572,
+        2.627631387690083
+      ],
+      "delta_H": -0.08696136836007157,
+      "delta_T": 0.018124999999999947,
+      "delta_v3": -3.265255505938292,
+      "file_sha256": "b835b803e1d20ad1e684cfce8a92a939cd28ea2e99c53a9fdfe3701d6101501c",
+      "replicates": 5000,
+      "right_v3": 45.476915623408914,
+      "run_dir": "/data/dev2/runs/06b/m5/formal/m5-z-soup"
+    },
+    "m6-mxcx": {
+      "ci95_H": [
+        -0.11294224251573745,
+        0.030255459487303245
+      ],
+      "ci95_T": [
+        -0.09968750000000004,
+        -0.05750000000000005
+      ],
+      "ci95_v3": [
+        -9.633000273748138,
+        -1.9696922133989827
+      ],
+      "delta_H": -0.04765223053378015,
+      "delta_T": -0.07843750000000005,
+      "delta_v3": -6.2473705130195825,
+      "file_sha256": "52c02efc0727a840aac10c6893f18d748e65b40f23a641c0d7c9a0ef62f887bc",
+      "replicates": 5000,
+      "right_v3": 48.459030630490204,
+      "run_dir": "/data/dev2/runs/06b/m6/formal/m6-mxcx-soup"
+    },
+    "released": {
+      "ci95_H": [
+        -0.11071375659977094,
+        0.028203233806266347
+      ],
+      "ci95_T": [
+        0.012500000000000011,
+        0.06343750000000004
+      ],
+      "ci95_v3": [
+        -3.4731946582834383,
+        3.460997169714153
+      ],
+      "delta_H": -0.06819725142434141,
+      "delta_T": 0.03781249999999997,
+      "delta_v3": -1.3298192338714614,
+      "file_sha256": "a54dbf897d7392211cac6107a6d02fde51852344f80b44461b23d4d74b617c2f",
+      "replicates": 5000,
+      "right_v3": 43.54147935134208,
+      "run_dir": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup"
+    }
+  },
+  "public231": {
+    "correct": 153,
+    "easy": 47,
+    "hard": 45,
+    "items": 231,
+    "standard": 61
+  },
+  "run_dir": "/data/dev2/runs/06b/m7/formal/m7-mx-soup",
+  "runtime": {
+    "causal_conv1d": "1.7.0",
+    "device_name": "",
+    "devices": 1,
+    "fla": "0.5.2",
+    "hip": "7.2.53211",
+    "numpy": "2.3.5",
+    "python": "3.12.13",
+    "safetensors": "0.8.0",
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0",
+    "triton": "3.7.1"
+  },
+  "runtime_env": {
+    "HIP_FORCE_DEV_KERNARG": "1",
+    "TRITON_CACHE_AUTOTUNING": "1",
+    "TRITON_CACHE_DIR": "/data/dev2/runs/06b/m7/formal/m7-mx-soup.triton-cache"
+  },
+  "schema": "dev2-06b-m6-summary/1",
+  "seal_sha256": "de3570e4d899541ce98747e050ea920ac8ad2c2faacdaba4b2156da59eb2d78f",
+  "successor": {
+    "checks": {
+      "H_upper_bound_ge_0": true,
+      "no_type_collapsed": false,
+      "v3_lower_bound_gt_0": false
+    },
+    "released": "released",
+    "released_run_dir": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup",
+    "verdict": false
+  },
+  "triton_cache": {
+    "m7-mx-soup": {
+      "added": [],
+      "after_files": 303,
+      "after_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+      "autotune_entries_added": [],
+      "before_files": 303,
+      "before_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+      "cache": "/data/dev2/runs/06b/m7/formal/m7-mx-soup.triton-cache",
+      "changed": [],
+      "kind": "per-run",
+      "removed": [],
+      "schema": "dev2-06b-m6-triton-cache/1",
+      "snapshot": "/data/dev2/runs/06b/m6/triton-cache-frozen",
+      "snapshot_manifest": "/data/dev2/runs/06b/m6/triton-cache-frozen.MANIFEST.json",
+      "unchanged": true
+    },
+    "m7-mx-soup-mlx": {
+      "added": [],
+      "after_files": 303,
+      "after_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+      "autotune_entries_added": [],
+      "before_files": 303,
+      "before_tree_sha256": "e215f8bd5145181404bae7c502c084033d85c2e767ee4651942e870dcc72a94f",
+      "cache": "/data/dev2/runs/06b/m7/formal/m7-mx-soup-mlx.triton-cache",
+      "changed": [],
+      "kind": "per-run",
+      "removed": [],
+      "schema": "dev2-06b-m6-triton-cache/1",
+      "snapshot": "/data/dev2/runs/06b/m6/triton-cache-frozen",
+      "snapshot_manifest": "/data/dev2/runs/06b/m6/triton-cache-frozen.MANIFEST.json",
+      "unchanged": true
+    }
+  },
+  "type_collapse": {
+    "accuracy": {
+      "choice": 0.37,
+      "noul": 0.60875,
+      "score": 0.3225
+    },
+    "any_collapsed": true,
+    "verdicts": {
+      "choice": "OK",
+      "noul": "OK",
+      "score": "COLLAPSED: one answer (4) takes 98%"
+    }
+  },
+  "typed_final": {
+    "choice": {
+      "correct": 296,
+      "n": 800
+    },
+    "noul": {
+      "correct": 487,
+      "n": 800
+    },
+    "score": {
+      "correct": 129,
+      "n": 400
+    }
+  },
+  "v3": 42.21166011747062
+}

@@ -1,0 +1,134 @@
+"""Typed-DEV Score diagnostic (development panel only): level distribution and accuracy by input-length tercile and family."""
+import hashlib, json, math, sys
+from collections import Counter
+
+ARMS = ["m6-mxcx-soup", "m7-mxcx-soup", "m7-mx-soup", "m7-cx-soup"]
+GOLD = "/data/dev2/private/panels/gold/typed-dev.gold.jsonl"
+PRED = "/data/dev2/runs/06b/m1/arms/{}/readout/dev.predictions.jsonl"
+
+
+def sha(path):
+    return hashlib.sha256(open(path, "rb").read()).hexdigest()
+
+
+def wilson(k, n, z=1.959963984540054):
+    if n == 0:
+        return None
+    p = k / n
+    d = 1 + z * z / n
+    c = (p + z * z / (2 * n)) / d
+    h = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
+    return [round(c - h, 4), round(c + h, 4)]
+
+
+def level(answer, levels):
+    """Native Score point as in benchmark/score.py: unique argmax of the level probabilities."""
+    raw = answer.get("score")
+    probs = answer.get("probabilities") or {}
+    keys = [str(v) for v in range(len(levels))]
+    if not isinstance(raw, (int, float)) or not 0 <= raw <= len(levels) - 1:
+        return None
+    if set(probs) != set(keys) or abs(sum(probs.values()) - 1) > 0.02:
+        return None
+    if abs(raw - sum(int(k) * probs[k] for k in keys)) > 0.06:
+        return None
+    top = max(probs.values())
+    best = [k for k in keys if probs[k] == top]
+    return int(best[0]) if len(best) == 1 else None
+
+
+def summarize(items, levels):
+    n = len(items)
+    pred = Counter(str(p) for _, p, _ in items)
+    gold = Counter(str(g) for g, _, _ in items)
+    correct = sum(1 for g, p, _ in items if p is not None and p == g)
+    top_value, top_count = max(pred.items(), key=lambda kv: (kv[1], kv[0])) if pred else (None, 0)
+    maj_value, maj_count = max(gold.items(), key=lambda kv: (kv[1], kv[0])) if gold else (None, 0)
+    hi = str(max(levels))
+    return {
+        "n": n,
+        "accuracy": round(correct / n, 4) if n else None,
+        "accuracy_ci95_wilson": wilson(correct, n),
+        "correct": correct,
+        "majority_level": maj_value,
+        "majority_accuracy": round(maj_count / n, 4) if n else None,
+        "gold_distribution": dict(sorted(gold.items())),
+        "predicted_distribution": dict(sorted(pred.items())),
+        "top_value": top_value,
+        "top_share": round(top_count / n, 4) if n else None,
+        "highest_level": hi,
+        "highest_level_share": round(pred.get(hi, 0) / n, 4) if n else None,
+    }
+
+
+def main(out):
+    gold = {}
+    for line in open(GOLD):
+        g = json.loads(line)
+        if g["split"] == "dev" and g["questions"]["decision"]["type"] == "score":
+            gold[g["id"]] = g
+    assert len(gold) == 400, len(gold)
+    widths = {len(g["questions"]["decision"]["criteria"]) for g in gold.values()}
+    assert len(widths) == 1, widths
+    levels = list(range(widths.pop()))
+    preds, tokens = {}, {}
+    for arm in ARMS:
+        rows = {}
+        for line in open(PRED.format(arm)):
+            p = json.loads(line)
+            if p["id"] in gold:
+                rows[p["id"]] = p
+        assert set(rows) == set(gold), arm
+        preds[arm] = {i: level(rows[i]["answers"]["decision"], levels) for i in gold}
+        tokens[arm] = {i: rows[i]["usage"]["input_tokens"] for i in gold}
+    base = tokens[ARMS[0]]
+    tokens_identical = all(tokens[a] == base for a in ARMS)
+    lengths = sorted(base.values())
+    n = len(lengths)
+    t1, t2 = lengths[math.ceil(n / 3) - 1], lengths[math.ceil(2 * n / 3) - 1]
+
+    def tercile(i):
+        v = base[i]
+        return "T1_short" if v <= t1 else ("T2_mid" if v <= t2 else "T3_long")
+
+    bins = {b: [i for i in gold if tercile(i) == b] for b in ("T1_short", "T2_mid", "T3_long")}
+    ranges = {b: [min(base[i] for i in ids), max(base[i] for i in ids)] for b, ids in bins.items()}
+    families = sorted({g["family"] for g in gold.values()})
+    variants = sorted({g["provenance"]["variant"] for g in gold.values()})
+    models = {}
+    for arm in ARMS:
+        trip = {i: (gold[i]["gold"]["decision"]["value"], preds[arm][i], i) for i in gold}
+        models[arm] = {
+            "overall": summarize(list(trip.values()), levels),
+            "by_length_tercile": {b: summarize([trip[i] for i in ids], levels) for b, ids in bins.items()},
+            "by_family": {f: summarize([trip[i] for i in gold if gold[i]["family"] == f], levels) for f in families},
+            "by_variant": {v: summarize([trip[i] for i in gold if gold[i]["provenance"]["variant"] == v], levels) for v in variants},
+            "invalid_or_missing": sum(1 for i in gold if preds[arm][i] is None),
+        }
+    report = {
+        "schema": "dev2-06b-m7-diag-typed-dev-score/1",
+        "scope": "CPU-only development diagnostic on typed-DEV Score questions; not a release or formal score; no typed-FINAL data read",
+        "panel": "typed-DEV",
+        "question_type": "score",
+        "items": len(gold),
+        "levels": levels,
+        "families": families,
+        "family_note": "every typed-DEV Score question belongs to one family, so by_family equals overall; by_variant splits by generator variant",
+        "length_measure": "usage.input_tokens of the m6-mxcx-soup readout (identical across the four models: %s)" % tokens_identical,
+        "tokens_identical_across_models": tokens_identical,
+        "terciles": {
+            "rule": "cut points at the ceil(n/3)-th and ceil(2n/3)-th smallest item length; ties go to the lower bin",
+            "cut_tokens": [t1, t2],
+            "sizes": {b: len(ids) for b, ids in bins.items()},
+            "token_ranges": ranges,
+        },
+        "accuracy_rule": "predicted level = unique argmax of the level probabilities after the benchmark/score.py validity checks (score in range, probabilities complete and summing to 1 within 0.02, score within 0.06 of the probability-weighted mean); equal to the gold level counts correct, invalid or tied counts incorrect",
+        "top_share_rule": "top_share = share of the most-predicted level; highest_level_share = share predicting the highest level",
+        "sources_sha256": {"typed_dev_gold": sha(GOLD), **{arm: sha(PRED.format(arm)) for arm in ARMS}},
+        "models": models,
+    }
+    open(out, "w").write(json.dumps(report, indent=2, sort_keys=False) + "\n")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1])
