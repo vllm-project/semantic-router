@@ -1,0 +1,85 @@
+{
+ "schema": "decision2-27b-m4b-teacher-sources/1",
+ "expect_s_rows": 5744,
+ "train": {
+  "path": "/data/dev2/private/27b/m3-data/mixtures-m3-1/a7.train.jsonl",
+  "sha256": "de00df035439346e0da2bf77b594ce0c3f7d058b61040f149f0c75c61ce7f397"
+ },
+ "mixtures": {
+  "path": "/data/dev2/private/27b/m3-data/mixtures-m3-1/MIXTURES.json",
+  "sha256": "d88fac24e33e05f6c8d2660b33d5e2bb879f3e4bd716fad39e8d88adf1da45bd",
+  "name": "a7"
+ },
+ "teachers": {
+  "lux": {
+   "model": "Decision-1.0-Lux-9B (own-Lux)",
+   "files": [
+    {
+     "pool": "A0s-strict",
+     "path": "/data/dev2/private/27b/m2-data/hf-12912429/m3/pk1/A0s-strict/lux1.targets.jsonl",
+     "sha256": "9f24801b7901c3a09a1e7da76cddca0796864e4a12173bf45b39d2d964fdff98",
+     "repo": "llm-semantic-router/decision-2.0-training-data",
+     "revision": "129124298109b3db9c9e39273754fea78530cbfe",
+     "repo_path": "m3/pk1/A0s-strict/lux1.targets.jsonl"
+    },
+    {
+     "pool": "A6h",
+     "path": "/data/dev2/hf-cache/datasets--llm-semantic-router--decision-2.0-training-data/snapshots/7885baf6ea3805cc0e00405bde5061ad5b9d0aa9/m2/teachers/lux1/rp-v2/wave1.targets.jsonl",
+     "sha256": "47049a6b799be3a84aca07309f01e6d442df3eb94acc5c496f4085e4f9bc7709",
+     "repo": "llm-semantic-router/decision-2.0-training-data",
+     "revision": "7885baf6ea3805cc0e00405bde5061ad5b9d0aa9",
+     "repo_path": "m2/teachers/lux1/rp-v2/wave1.targets.jsonl"
+    },
+    {
+     "pool": "A6h",
+     "path": "/data/dev2/hf-cache/datasets--llm-semantic-router--decision-2.0-training-data/snapshots/6bd8eb4d4fe0bc2c47f517c1017f7422510b09f0/m2/teachers/lux1/rp-v2/wave2.targets.jsonl",
+     "sha256": "2c6ab38d7c11884e9ac20c318d1d4817290c08ab57a58d252a6ccec43411ea3d",
+     "repo": "llm-semantic-router/decision-2.0-training-data",
+     "revision": "6bd8eb4d4fe0bc2c47f517c1017f7422510b09f0",
+     "repo_path": "m2/teachers/lux1/rp-v2/wave2.targets.jsonl"
+    },
+    {
+     "pool": "A6h",
+     "path": "/data/dev2/hf-cache/datasets--llm-semantic-router--decision-2.0-training-data/snapshots/002e5b422bc74fc3a276be99daad1b7ad793520c/m2/teachers/lux1/rp-v2/wave3.targets.jsonl",
+     "sha256": "450bdd7b3ea1c139f9832d116bb039506380710131f7468c7779b6e4c05cfee3",
+     "repo": "llm-semantic-router/decision-2.0-training-data",
+     "revision": "002e5b422bc74fc3a276be99daad1b7ad793520c",
+     "repo_path": "m2/teachers/lux1/rp-v2/wave3.targets.jsonl"
+    }
+   ]
+  },
+  "aj": {
+   "model": "AutoJev-27B denis-pplx/autojev-27b@6f5b557e037f5edb25c7dc92dbc6553e5a19c015",
+   "provenance": {
+    "path": "/data/dev2/hf-cache/datasets--llm-semantic-router--decision-2.0-training-data/snapshots/3a99bf1c26ac7924ec1216cdf1f703e1a5f21ae6/m3/teachers/autojev27/PROVENANCE.md",
+    "sha256": "e27f8e1dc45059ad6cf16b6abeb33dc6e2f0e51be83debdea7926e6afcd6d62c"
+   },
+   "files": [
+    {
+     "pool": "A0s-strict",
+     "path": "/data/dev2/private/27b/m2-data/hf-12912429/m3/teachers/autojev27/pk1/A0s-strict-train.targets.jsonl",
+     "sha256": "b88b52e9e6848e490bc7d0cfd4982d07d967c6f025ade651d8794db9bfd38f16",
+     "repo": "llm-semantic-router/decision-2.0-training-data",
+     "revision": "129124298109b3db9c9e39273754fea78530cbfe",
+     "repo_path": "m3/teachers/autojev27/pk1/A0s-strict-train.targets.jsonl"
+    },
+    {
+     "pool": "A6h",
+     "path": "/data/dev2/hf-cache/datasets--llm-semantic-router--decision-2.0-training-data/snapshots/3a99bf1c26ac7924ec1216cdf1f703e1a5f21ae6/m3/teachers/autojev27/rp-v2/aj-m.targets.jsonl",
+     "sha256": "ba52dd86ff7fc7c422bb097c7036c344399de549597cec60c352fef02c21038a",
+     "repo": "llm-semantic-router/decision-2.0-training-data",
+     "revision": "3a99bf1c26ac7924ec1216cdf1f703e1a5f21ae6",
+     "repo_path": "m3/teachers/autojev27/rp-v2/aj-m.targets.jsonl"
+    },
+    {
+     "pool": "A6h",
+     "path": "/data/dev2/hf-cache/datasets--llm-semantic-router--decision-2.0-training-data/snapshots/780d27439c5a07650a37b9a0ce3369dae3359baf/m3/teachers/autojev27/rp-v2/aj-sl.targets.jsonl",
+     "sha256": "1254cb4703a10810acdef695a8218866fe7a664f5901074e8e8dffe68486aa75",
+     "repo": "llm-semantic-router/decision-2.0-training-data",
+     "revision": "780d27439c5a07650a37b9a0ce3369dae3359baf",
+     "repo_path": "m3/teachers/autojev27/rp-v2/aj-sl.targets.jsonl"
+    }
+   ]
+  }
+ }
+}
