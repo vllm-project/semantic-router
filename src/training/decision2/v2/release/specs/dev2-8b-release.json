@@ -11,7 +11,7 @@
   },
   "calibration": null,
   "max_input_tokens": 16384,
-  "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-8B.decision.json",
+  "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-8B.decision.build-draft.json",
   "origin": {
     "repo_id": "llm-semantic-router/Decision-1.0-Lux-9B",
     "revision": "bd45a30aee8c84032791c245c70f86dee5389cc8",
