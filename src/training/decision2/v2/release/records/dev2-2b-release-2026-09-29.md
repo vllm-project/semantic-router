@@ -1,5 +1,23 @@
 # DEV2.0-2B: private release (2026-09-29)
 
+## Erratum, 2026-09-29 ≈08:25 UTC+8: cited staging revisions no longer exist; "commit history is unchanged" is wrong
+
+Four storage cleanups on 2026-09-29 (decoder M3 at 02:15 and 02:32, release at 04:47, decoder M4 at 04:51 UTC+8)
+called `permanently_delete_lfs_files` with its huggingface_hub 1.33 default `rewrite_history=True`, which rewrote every
+commit of the staging repositories they touched. The staging revisions `545a6784`, `784a894f` and `16c0929a`
+(`dev2-dec-staging`), `62c61c10` (`dev2-release-staging-06bm4`) and `5afd8fc8` (`dev2-release-staging`) no longer
+exist. This record's checkpoint citation `dev2-dec-staging@545a6784…` (§1) is one of them.
+
+- **Wrong statement:** the "Storage cleanup" item below says the LFS objects "were deleted with
+  `permanently_delete_lfs_files`, so commit history is unchanged". That is wrong. The 04:47 cleanup
+  (`ops/free-released-duplicates.py.txt`) did not pass `rewrite_history=False`, so it rewrote the history of all three
+  staging repositories it touched. The objects and bytes it lists are correct. Do not reuse that script as is.
+- **Identity:** artifact identity rests on the per-file SHA-256 in each package's `MODEL_MANIFEST.json` plus the
+  verified node copies, not on those staging revision IDs.
+- **Released repository not rewritten:** `b2c5d7ea` and `5ad3e9a3` still resolve (Hub check, 2026-09-29 ≈08:20 UTC+8).
+
+Details: [storage steward record](hf-storage-steward-2026-09-29.md) §4.
+
 ## Released, 2026-09-29 ≈04:45 UTC+8 — revision `5ad3e9a3`, in the private "Decision 2.0" collection
 
 The coordinator finalized the release after the eval track's overlap-effect check (`v2/eval/records/m5-overlap-effects-2026-09-29.md`,
