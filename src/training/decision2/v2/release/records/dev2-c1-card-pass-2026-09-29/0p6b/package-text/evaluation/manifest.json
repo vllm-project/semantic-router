@@ -1,0 +1,153 @@
+{
+  "banner_sha256": "d731c3f12a896ef423361d9084cb4c947bad4138145ef5bb64e5f7885b7e7c46",
+  "excluded_comparators": 0,
+  "figures_sha256": {
+    "assets/jevarena-v3-model-task.svg": "c7d8799e190ebc38e9db219196d006356c0033e87576357717c5043c403a23d1",
+    "assets/jevarena-v3-rank.svg": "7f8e6dd8a7e5ee26bcf9794686e859cf93b9e70a952b55c7a788bc49161688d0",
+    "assets/jevbench-public231-rank.svg": "4bdeff5d53106f0cd984da33548e529e9be169605b367f09983cf0751e5ff9ce"
+  },
+  "models": [
+    {
+      "H": 0.45904022473242023,
+      "T": 0.5153125000000001,
+      "family": "decision2",
+      "label": "DEV2.0-0.6B",
+      "licence": "package",
+      "loaded_parameters": 597103104,
+      "mlx_diag_non_english": {
+        "choice": 0.7023809523809523,
+        "noul": 0.5283333333333333
+      },
+      "mlx_diag_sha256": "709e659f1fcb1638e3f187fc51d97ee28508a91b14ba7fea39837d84caa0eed5",
+      "public231_correct": 152,
+      "repo_id": null,
+      "report_loaded_parameters": 597103104,
+      "report_sha256": "b2083796ed0a03728edffb2aa8af5c9c60db38df3ad8182ea5c9e08d6bb6a2ed",
+      "revision": null,
+      "role": "candidate",
+      "seal_sha256": "0fe8b3f584b033e835d8a53f3062cf0d247481cc74498c8869c01e11131979b1",
+      "typed_brier": 0.3214324139134979,
+      "typed_ece_10": 0.15503275043931422,
+      "v3": 48.63632035911284
+    },
+    {
+      "H": 0.4410489455803001,
+      "T": 0.41,
+      "family": "peer",
+      "label": "GLiNER2.5-Decide",
+      "licence": "apache-2.0",
+      "loaded_parameters": 486444053,
+      "mlx_diag_non_english": {
+        "choice": 0.5767195767195767,
+        "noul": 0.525
+      },
+      "mlx_diag_sha256": "9d51a10c839f70e74986d21cb8de07d8d4256de5768c3bd0cdd6a5a0f60ac41e",
+      "public231_correct": 116,
+      "repo_id": "fastino/GLiNER2.5-Decide",
+      "report_loaded_parameters": 486444053,
+      "report_sha256": "7dc5be9242d07a59696e37b8caef1ed18a540ab96dfae547a3ffa2ae445f162d",
+      "revision": "7ee5da4c2415e32259bcdc0b1a7367c32ce8d6f6",
+      "role": "peer",
+      "seal_sha256": "7e31651ed061c6211eadb575d536a1f5269155955061799dd973c2527199386a",
+      "typed_brier": 0.3355712763817124,
+      "typed_ece_10": 0.1278019857343881,
+      "v3": 42.52411876663913
+    },
+    {
+      "H": 0.3421611068669892,
+      "T": 0.43375,
+      "family": "peer",
+      "label": "Bosun v3.1 0.6B",
+      "licence": "apache-2.0",
+      "loaded_parameters": 606131200,
+      "mlx_diag_non_english": {
+        "choice": 0.6322751322751323,
+        "noul": 0.6116666666666667
+      },
+      "mlx_diag_sha256": "d86cf9e58dd6fd27532e4c2a3c7e0365d9ec8ef9a001edda6c065b3ea6c0681d",
+      "public231_correct": 133,
+      "repo_id": "Hanno-Labs/bosun-v3.1-0.6b",
+      "report_loaded_parameters": 606131200,
+      "report_sha256": "80c539bfb19116105d15b4e29978f517fb67716bd688f66c7929b6265ed3aade",
+      "revision": "1d8b6f9611f9b64b514ce8b57cd86398fbc31a3b",
+      "role": "peer",
+      "seal_sha256": "09e48e9276923770de464673a18f0b008d8d2a64afbc35115cbeb503a3c3f3be",
+      "typed_brier": 0.30167053942831223,
+      "typed_ece_10": 0.0903340808238888,
+      "v3": 38.524327392383704
+    },
+    {
+      "H": 0.3569073805666865,
+      "T": 0.361875,
+      "family": "decision1",
+      "label": "Decision 1.0 Kai",
+      "licence": "apache-2.0",
+      "loaded_parameters": 571909635,
+      "mlx_diag_non_english": {
+        "choice": 0.49074074074074076,
+        "noul": 0.4766666666666667
+      },
+      "mlx_diag_sha256": "aed99737bc06813bd3c4e2a9854c1423fa3128e91d62a54970bcf697748dd84a",
+      "public231_correct": 114,
+      "repo_id": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+      "report_loaded_parameters": 571909635,
+      "report_sha256": "1b0140e360d35613d973cf36182978b54a1679e355ba62bc3cc2785714f06716",
+      "revision": "7185f514f54b8f93c55998b1e8f9c5cc67f0d029",
+      "role": "own-1.0",
+      "seal_sha256": "f16dd39cf22f2a442cd830fe484cf4ce5d39a2fb9a5b452435396388563ad268",
+      "typed_brier": 0.38966052748297914,
+      "typed_ece_10": 0.2093682855648303,
+      "v3": 35.93826071787137
+    },
+    {
+      "H": 0.26594675494461595,
+      "T": 0.361875,
+      "family": "decision1",
+      "label": "Decision 1.0 Lex",
+      "licence": "apache-2.0",
+      "loaded_parameters": 571909635,
+      "mlx_diag_non_english": {
+        "choice": 0.26455026455026454,
+        "noul": 0.51
+      },
+      "mlx_diag_sha256": "486b13754992160e3fd5d1c168585a812cdadb521222d3d000f3a1ad93e356ae",
+      "public231_correct": 113,
+      "repo_id": "llm-semantic-router/Decision-1.0-Lex-0.6B",
+      "report_loaded_parameters": 571909635,
+      "report_sha256": "45f7d5c9c8e35b70e069ffe2400c96b3401dd145994b17779e7897e8c3a4b3a9",
+      "revision": "ee8e74d912fca8328a353c11d174b44da3f91781",
+      "role": "peer",
+      "seal_sha256": "3df56d4e402af3aca8635bbac8349a13e4874b291ad4a2c525c493df64823dd2",
+      "typed_brier": 0.33573852316057007,
+      "typed_ece_10": 0.15565722242665123,
+      "v3": 31.02248893070685
+    }
+  ],
+  "paired_vs_own_1_0": {
+    "ci95": [
+      10.00203051669837,
+      17.49987266238486
+    ],
+    "delta": 12.698059641241464,
+    "replicates": 5000,
+    "sha256": "7b391cb2f5ab08b798e3ba6817dcf269ae0b9fb4843dabe4ac434b8177b77f98"
+  },
+  "panel_sha256": {
+    "gold/css15.gold.jsonl": "1cda9623032138bb7b124be0c1b0a4239c06bed7be3169264e6eb31805c19ba4",
+    "gold/public231/manifest.json": "e0e7c67701cf05f996d3b4eac09abf1bb3e6bb363cfe007089acd3644a38ed35",
+    "gold/public231/prompts.jsonl": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd",
+    "gold/public231/targets.jsonl": "abc17b971d13807a15b3cdb43062f4cd876aad9d7314e72365724904e88b937f",
+    "gold/typed-final.gold.jsonl": "707dd28dfbab10d124d437434023729f319501542e999e536fce9b7ff7f2361e",
+    "goldfree/css15.prompts.jsonl": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6",
+    "goldfree/public231.prompts.jsonl": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd",
+    "goldfree/typed-final.prompts.jsonl": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd"
+  },
+  "schema": "dev2-card-evaluation/1",
+  "scope": "post-key same-panel",
+  "scorer_sha256": {
+    "benchmark/score.py": "d02a3b2bbaa08ec45928fc354532b3c3b5aef80e0a5d8e9ed6348ad6d30e2bcc",
+    "jev_arena/compare_v3.py": "bdb966ede0018ebdcd486c77f813ba722bc8d5f78ffab0dbf673631249d2513e",
+    "jev_arena/jevbench_public.py": "aec840b6497beeae8b63e9270670c22506265c086a84e889bc82f694146518cf",
+    "transfer/score.py": "cfe199a1826bb89b27c9eb746f808d74f16b46ca6585ac7b0ff7e440d44eeaca"
+  }
+}

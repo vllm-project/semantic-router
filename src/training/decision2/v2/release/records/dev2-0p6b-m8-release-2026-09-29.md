@@ -4,6 +4,18 @@ Coordinator approval 2026-09-29 18:25 UTC+8 (first progressive-update successor;
 `v2/06b/records/m8-handoff-2026-09-29.md`). The work was interrupted by the Cursor usage limit at ~19:04 and
 resumed at 20:45 (nothing had been uploaded or committed before the stop).
 
+## C1 card-only revision, 2026-09-30 ≈01:00 UTC+8 — revision `188eb4c8` (current)
+
+- **Revision `188eb4c822e8643034f8ca87d865a16a86f69952`** (`main`), manifest `42c31b047a11…`. Final decision
+  [`DEV2.0-0.6B.decision.json`](dev2-c1-card-pass-2026-09-29/DEV2.0-0.6B.decision.json) `453b4b7b…` supersedes
+  `3fbe847b…` below and keeps the successor profile (R1–R7 against `99c4e799`, 12 of 12 items); gate.json `bacf1e1f…`.
+- **Card:** the C1 line now gives the previous revision's v1.2 same-limit result. Event 2 sealed the predictions of
+  `e61b2b44`, whose model files are identical to `99c4e799`; on v1.2 they score 33.02 vs Decision 1.0 Kai at 8,192
+  tokens 22.14 (+10.89 [+8.88, +12.64]). The line also says the current weights (`b2131337`) were not part of any
+  sealed event. The public-231 note was already the new one.
+- **Weights:** byte-identical to `b2131337`; only `README.md` and `MODEL_MANIFEST.json` changed.
+- Record: [`dev2-c1-card-pass-2026-09-29.md`](dev2-c1-card-pass-2026-09-29.md).
+
 ## Result
 
 - **Private `llm-semantic-router/DEV2.0-0.6B@b21313375ad77ddf4a8e420fa5195e6e09582043`** (`main`),

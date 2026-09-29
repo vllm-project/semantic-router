@@ -1,5 +1,24 @@
 # DEV2.0-4B: private release build, upload and verification (2026-09-29)
 
+## C1 card-only revision, 2026-09-30 ≈01:14 UTC+8 — revision `197b70ca` (current)
+
+- **Revision `197b70ca90759aca48410a9f94bb534e8ae2919f`** (`main`), manifest `8d3d618de3a6…`. Final decision
+  [`DEV2.0-4B.decision.json`](dev2-c1-card-pass-2026-09-29/DEV2.0-4B.decision.json) `4d31cdab…` supersedes
+  `bfd45785…` below; gate.json `5e62220a…`, 6 of 6 items.
+- **Card:**
+  - The C1 placeholder becomes the event-3 line (v1.2): 48.38 vs Decision 1.0 Nox 49.70 (−1.32 [−3.00, +0.35]),
+    Decider 4B 49.65 (−1.27 [−3.05, +0.49]) and Jet v6.2 50.44 (−2.06 [−3.86, −0.18]).
+  - A new disclosure says plainly that the post-key v3 lead over Nox 1.0 does not carry over to C1 and that Jet v6.2
+    is significantly ahead. It lists the C1 tasks and languages below Nox 1.0 (C1 Noul −3.21 [−6.28, −0.09]) and
+    below Jet v6.2 (Score −6.03 [−9.70, −2.05]).
+  - The JevBench gap to Decider 4B (−21 [−32, −10]) now names the two hard-tier skills: long policy documents (3 vs
+    10 of 19) and checking a quoted person's conclusion (18 vs 30 of 46). The Nox 1.0 comparison gains its interval
+    (−2 [−9, +5]).
+  - The public-231 note is the new one.
+- **Weights:** byte-identical to `452f1332`; only `README.md` and `MODEL_MANIFEST.json` changed. The package runtime
+  and vendored sources are pinned to mirror `f8f52c695`, which built `452f1332`.
+- Record: [`dev2-c1-card-pass-2026-09-29.md`](dev2-c1-card-pass-2026-09-29.md).
+
 ## Released, 2026-09-29 ≈09:09 UTC+8 — revision `452f1332`, in the private "Decision 2.0" collection
 
 The coordinator decided the release at 08:59 UTC+8 under the full-autonomy mandate: T = 1 kept (the 23:15 rule has

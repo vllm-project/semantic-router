@@ -11,7 +11,18 @@ Artifact identity rests on the per-file SHA-256 in each package's `MODEL_MANIFES
 not on those staging revision IDs. The released repository was not rewritten: `0b631a85`, `2667d883`, `7d08d0e1` and
 `f458c34c` still resolve (Hub check, 2026-09-29 ≈08:20 UTC+8). Details: [storage steward record](hf-storage-steward-2026-09-29.md) §4.
 
-## Card-only revision (overlap and A7 v3 quarantine disclosures), 2026-09-29 ≈04:45 UTC+8 — current revision `f458c34c`
+## C1 card-pass revision, 2026-09-30 ≈01:03 UTC+8 — revision `d4812ac6` (current)
+
+- **Revision `d4812ac6bb07333ec60d66091f08e1557933aa30`** (`main`), manifest `b568a92a5a21…`. Final decision
+  [`DEV2.0-0.8B.decision.json`](dev2-c1-card-pass-2026-09-29/DEV2.0-0.8B.decision.json) `a97e063f…` supersedes
+  `dd397e04…` below; gate.json `f8e25445…`, 6 of 6 items.
+- **Card:** only the public-231 note under the rank chart changes, to the eval decision of 2026-09-29 17:15 UTC+8. The
+  event-1 C1 line stands; DEV2.0-0.8B was not in event 3.
+- **Weights:** byte-identical to `f458c34c`; only `README.md` and `MODEL_MANIFEST.json` changed. The package runtime
+  and vendored sources are pinned to mirror `33de83cea`, which built `f458c34c`.
+- Record: [`dev2-c1-card-pass-2026-09-29.md`](dev2-c1-card-pass-2026-09-29.md).
+
+## Card-only revision (overlap and A7 v3 quarantine disclosures), 2026-09-29 ≈04:45 UTC+8 — revision `f458c34c` (superseded)
 
 The coordinator ordered this card-only revision after the eval track's overlap-effect check
 (`v2/eval/records/m5-overlap-effects-2026-09-29.md`, integration `cae64f4e8`). It was run by the DEV2.0-2B release

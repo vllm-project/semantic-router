@@ -1,0 +1,33 @@
+{
+  "passed": true,
+  "decision": {
+    "sha256": "a97e063f76cf7a1fc0c12cb47193c43bf4184ab08c396193f3d3e7fd36180720",
+    "status": "final"
+  },
+  "items": {
+    "1_beats_own_1_0": {
+      "passed": true,
+      "evidence": "paired v3 95% interval low +3.646 (sha fa62c29a1920)"
+    },
+    "2_regressions_disclosed": {
+      "passed": true,
+      "evidence": "11 results below own 1.0 listed in the card tradeoffs table"
+    },
+    "3_download_hash_parameters": {
+      "passed": true,
+      "evidence": "tree 30 files re-hashed; loaded 753446208"
+    },
+    "4_native_examples": {
+      "passed": true,
+      "evidence": "examples and the card's Python block reproduced from the download"
+    },
+    "5_output_consistency": {
+      "passed": true,
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run"
+    },
+    "6_card_design": {
+      "passed": true,
+      "evidence": "Hub card apache-2.0 / problems []"
+    }
+  }
+}
