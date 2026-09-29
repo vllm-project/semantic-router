@@ -73,6 +73,8 @@ const defaultSettings = {
   routerEvalEndpoint: '',
   srBenchAvailable: true,
   srBenchUnavailableReason: '',
+  mlPipelineAvailable: true,
+  mlPipelineUnavailableReason: '',
 }
 
 export const dashboardSettingsResponse = (
