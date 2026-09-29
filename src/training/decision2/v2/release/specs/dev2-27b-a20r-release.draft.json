@@ -1,0 +1,203 @@
+{
+  "schema": "dev2-release-spec/1",
+  "_release": {
+    "candidate": "27B Milestone 4 successor M4-A20r soup (coordinator 2026-09-30 07:20 UTC+8: A20r is THE 27B successor; F-b is superseded). 27B record v2/27b/records/m4-results-2026-09-29.md (commit 632f4005d).",
+    "name": "DEV2.0-27B: named after its base model Qwen/Qwen3.8-27B (name_basis base); it loads 26,096,775,168 parameters (text backbone 25,624,600,064 + rank-64 LoRA 466,911,232 + head 5,263,872; no vision tower, MTP or LM head).",
+    "gate": "successor profile at a size without Decision 1.0 (tier.no_1_0): R1-R7 of the 16:05 / 17:15 successor rule against the current revision c0dba600 (scored run M3-A-soup/formal), R5 = the no-1.0 tier gates vs AutoJev-27B, and R8 = the JevArena-C1 v1.2 post-key guard (item 8).",
+    "inputs": "node A copies of the 27B track's node-B files at the same paths (hash-equal lists); the checkpoint came through llm-semantic-router/dev2-27b-staging@90a70b4a and was re-hashed on node A.",
+    "runtime": "vendor_source = the scored run's source mirror ff660322a (training/model byte-identical to the formal run's); runtime_source pinned to mirror c68de36a5 for both the frozen package that C1 scores and the release, so the two builds differ only in card files.",
+    "c1": "draft: C1 line pending"
+  },
+  "kind": "release",
+  "repo_id": "llm-semantic-router/DEV2.0-27B",
+  "model_name": "DEV2.0-27B",
+  "name_basis": "base",
+  "name_base_model": "Qwen/Qwen3.8-27B",
+  "profile": "qwen-adapter",
+  "checkpoint": "/data/dev2/runs/27b/M4-A20r-soup/soup/checkpoint",
+  "expected_identity": {
+    "model_sha256": "2e07451107a2ca9735064cc01f7e43e8522b4bae48f2d77bdf29f7ea2fe6362c"
+  },
+  "base": {
+    "repo_id": "Qwen/Qwen3.8-27B",
+    "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "path": "/data/dev2/hf-cache/models--Qwen--Qwen3.8-27B/snapshots/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "licence": "apache-2.0",
+    "redistribution": "not redistributed: the package pins the base by repository revision and per-file SHA-256, and it is fetched or supplied at load time"
+  },
+  "calibration": null,
+  "max_input_tokens": 32768,
+  "vendor_source": "/data/dev2/src/ff660322a76b04c4774fdb6aaa31e5af2a45743e-src_training_decision2/src/training/decision2",
+  "runtime_source": "/data/dev2/src/c68de36a5245c4e14eccc7b3d43279b75affbc51-src_training_decision2/src/training/decision2",
+  "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-27B.decision.a20r.draft.json",
+  "gate_profile": {
+    "name": "successor",
+    "run": "/data/dev2/runs/27b/M4-A20r-soup/formal",
+    "current": {
+      "revision": "c0dba600087f582a1033830a2276d22e96e6324c",
+      "gate": "/data/dev2/src/c68de36a5245c4e14eccc7b3d43279b75affbc51-src_training_decision2/src/training/decision2/v2/release/records/dev2-c1-card-pass-2026-09-29/27b/receipts/gate.json",
+      "decision": "/data/dev2/src/c68de36a5245c4e14eccc7b3d43279b75affbc51-src_training_decision2/src/training/decision2/v2/release/records/dev2-c1-card-pass-2026-09-29/DEV2.0-27B.decision.json",
+      "run": "/data/dev2/runs/27b/M3-A-soup/formal",
+      "mlx_predictions": "/data/dev2/runs/27b/m3-f2/mlx-diag/M3-A-soup/output/mlx-diag.predictions.jsonl"
+    },
+    "paired": "/data/dev2/runs/27b/m4-gates/M4-A20r-soup/paired-vs-F1.json",
+    "types": "/data/dev2/runs/27b/m4-gates/M4-A20r-soup/types.json",
+    "mlx_paired": "/data/dev2/runs/27b/m4-mlx/mlx-paired-M4-A20r-soup-vs-DEV2.0-27B.json",
+    "exposure": "/data/dev2/runs/27b/m4-overlap/exposure-m4-a20.json",
+    "public231": "/data/dev2/runs/27b/m4-gates/public231-M4-A20r-vs-DEV2.0-27B.json",
+    "tier": {
+      "reference": "autojev27",
+      "v3_share": 0.9,
+      "paired": "/data/dev2/runs/27b/m4-gates/M4-A20r-soup/paired-vs-autojev27.json",
+      "no_1_0": true
+    }
+  },
+  "frozen_autotune_cache": {
+    "path": "/data/dev2/runs/27b/M4-A20r-soup/formal/triton-cache",
+    "tree_sha256": "f474e2e9dbdf3a2900465bce74256326ba2756250861b45359742685982cb5f7",
+    "post_record": "/data/dev2/runs/27b/M4-A20r-soup/formal/triton-cache.post.json",
+    "origin": "the formal run's persisted cache: a fresh copy of F1's scored post-run cache (tree 03b172f1...) that added no autotune entry (group-file path rewrites only, frozen check passed); release runs copy it with python3 -m v2.27b.triton_cache copy --expect <tree_sha256>"
+  },
+  "origin": {
+    "repo_id": "Qwen/Qwen3.8-27B",
+    "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "relation": "adapter",
+    "summary": "A PEFT LoRA adapter (rank 64, alpha 128, on all 496 text projections of the attention, gated-delta and MLP blocks) and a native candidate head trained on the frozen Qwen3.8-27B text backbone at `1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0` (Apache-2.0), which is not redistributed. The adapter is the exact uniform soup of two seeds of one rank-32 recipe (their LoRA factors stacked along the rank with the up-projections halved, so the mean of the two seeds' weight updates is reproduced exactly), with the two heads averaged."
+  },
+  "runtime_requirements": {
+    "python": "3.12.13",
+    "torch": "2.12.0+git6bbd260 (ROCm 7.2 build; one ROCm GPU tested)",
+    "transformers": "5.17.0",
+    "peft": "0.21.0",
+    "flash-linear-attention": "0.5.2 (GPU gated-delta kernels)",
+    "causal-conv1d": "1.7.0 (GPU convolution kernels)",
+    "triton": "3.7.1 (persisted autotune cache)",
+    "tokenizers": "0.23.2",
+    "safetensors": "0.8.0",
+    "huggingface_hub": "1.31.0 (pinned base download)"
+  },
+  "runtime_equivalence": "decision2/qwen.py loads the unmerged PEFT adapter on the pinned Qwen3.8-27B base (every base file checked against its SHA-256) with the vendored training/model sources whose SHA-256 equal the scored adapter sources (checked at build time), and applies the per-item batching, BF16-backbone / FP32-head execution, raw probabilities (temperature 1; no calibration file) and answer normalization of training.model.infer as run by v2.27b.typed_collect_kernel. Checked on one GPU of node A (same image and base bytes as the scoring node B) against the scored T = 1 predictions of every formal prompt (typed-final 1,600, css15 6,547, public231 231) by release.sh --parity, with the image's FLA and causal-conv1d kernels required and a fresh copy of the formal run's persisted Triton autotune cache.",
+  "scored": {
+    "label": "post-key same-panel run M4-A20r-soup/formal at T = 1 (node B, kernel path, frozen autotune cache, 32,768-token limit)",
+    "report_sha256": "e9a7c4700bd97bb78efa1c28117aa2a8a7a92fc2b3a29ead6d4f7e9c7f49b600",
+    "seal_sha256": "9d60e61171da3ea477ab59e1f5303f0bcbc560a5964e8a7ebe13e61855911611",
+    "predictions_sha256": {
+      "typed-final": "ea573b2d50be50efd3048ee427309232b1f9b998b98d9997644bd82a51442d0e",
+      "css15": "a5ed828a9b6a839b765643362a08a95386312bf4fdaf4c33e2f6d97a28337fbb",
+      "public231": "6746b61a58603418d43ce22109d08b79d9cf3bab63aa14acca6cd42c5dcf131d",
+      "mlx-diag": "1ab3487d9b7b9368450b003697692891ed6947cad18c2876b9626c96fb0d87e4"
+    },
+    "paired_sha256": "09ff4b0f872b60fe665124440b111afe03575d44a458c8743446a0ca7d0200c6",
+    "native_manifest": "/data/dev2/runs/27b/M4-A20r-soup/formal/output/typed-final.predictions.jsonl.manifest.json"
+  },
+  "licence": {
+    "components": [
+      {
+        "component": "DEV2.0-27B LoRA adapter, decision head, package runtime, card and artwork",
+        "licence": "apache-2.0",
+        "source": "llm-semantic-router/DEV2.0-27B"
+      },
+      {
+        "component": "Qwen3.8-27B text backbone and tokenizer (pinned external base, not redistributed)",
+        "licence": "apache-2.0",
+        "source": "Qwen/Qwen3.8-27B@1d4bf0f2"
+      }
+    ],
+    "files": [
+      {
+        "source": "/data/dev2/hf-cache/models--Qwen--Qwen3.8-27B/snapshots/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0/LICENSE",
+        "path": "LICENSE",
+        "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a"
+      },
+      {
+        "source": "/data/dev2/hf-cache/models--Qwen--Qwen3.8-27B/snapshots/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0/LICENSE",
+        "path": "LICENSES/Qwen3.8-27B-LICENSE.txt",
+        "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a"
+      }
+    ],
+    "attributions": [
+      "[Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B) at `1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0`: frozen text backbone and tokenizer of this adapter, not redistributed (Apache-2.0, `LICENSES/Qwen3.8-27B-LICENSE.txt`).",
+      "Training data of this adapter (not redistributed here; each keeps its own licence). Decision 2.0 base mixture (strict): GoEmotions (Demszky et al., ACL 2020; CC BY 4.0), SNLI (Bowman et al., EMNLP 2015; CC BY-SA 4.0), and the intent labels of CLINC150 (Larson et al., EMNLP-IJCNLP 2019; CC BY 3.0) and BANKING77 (Casanueva et al., 2020; CC BY 4.0) in replayed Decision 1.0 Stage 3 tasks, plus project-generated decision tasks. A6 Score arms: KLUE STS (Park et al., 2021; CC BY-SA 4.0), JGLUE JSTS (Kurihara et al., LREC 2022; CC BY-SA 4.0), IBM ArgQ-30k (Gretz et al., AAAI 2020; CC BY-SA 3.0), SAF (Filighera et al., ACL 2022; CC BY 4.0), plus project-generated multi-level Score tasks. A7 typed curricula (the project's own Decision 1.0 decoder-family training corpora; a 20.0M-token slice): the CLINC150 and BANKING77 intent labels, plus program-generated Decision 1.0 Stage 1-4 decision tasks labeled by program oracles.",
+      "Evaluation data shown on the card: JevArena v3 and JevBench public 231 (panels described in `evaluation/EVALUATION.md`).",
+      "Owl banner: a new owl with a ringed planet for this size, generated in the Decision 1.0 mosaic style, in the DEV2.0 name layout; wordmark set in Poppins (SIL Open Font License) and DejaVu Sans Bold."
+    ]
+  },
+  "card": {
+    "banner": "DEV2.0-27B-owl-banner.png",
+    "roster": "v2/eval/records/decision-index-peer-roster-2026-09-28.json",
+    "paired": "/data/dev2/runs/27b/m4-gates/M4-A20r-soup/paired-vs-autojev27.json",
+    "paired_peers": {
+      "eikos27": "/data/dev2/runs/27b/m4-gates/M4-A20r-soup/paired-vs-eikos27b.json",
+      "jebadiah27": "/data/dev2/runs/27b/m4-gates/M4-A20r-soup/paired-vs-jebadiah27b.json"
+    },
+    "calibration_text": "raw model probabilities (temperature 1). Per-type temperatures fitted on the clean 698-item calibration partition (Choice 0.639, Noul 0.545, Score 0.05) were evaluated and not adopted because they worsened calibration on out-of-distribution development data.",
+    "requirements_text": "Tested on one AMD MI325X GPU (ROCm 7.2) with Python 3.12, PyTorch 2.12, Transformers 5.17 and PEFT 0.21 (BF16 backbone, FP32 head). The evaluation peaked at 110 GB of allocated GPU memory (121 GB reserved) on its longest input, 18,261 tokens; no evaluated input reached the 32,768-token limit. The runtime downloads the pinned Qwen3.8-27B base files (or takes `base_path`) and checks every file's SHA-256 before loading. GPU answers match the evaluated predictions with the flash-linear-attention 0.5.2 and causal-conv1d 1.7.0 kernels and a persisted Triton autotune cache; without those kernels Transformers uses its reference implementation of the same operations, which is slower and differs slightly in the last digits.",
+    "text": {
+      "tagline": "A decision model for routing choices, yes/no checks and rubric scores over one state: native System One Choice, Noul and Score answers with probabilities, no chat API.",
+      "architecture": "A rank-64 LoRA adapter on the frozen 64-layer Qwen3.8-27B text backbone (48 gated-delta and 16 attention layers) reads the state, the question and every supplied candidate once; a shared candidate head scores the candidates against a global query and returns probabilities without generating text.",
+      "runtime_note": "The download includes a small local runtime (`decision2/`) for one CUDA or ROCm GPU; it fetches the pinned base and does not start a hosted endpoint.",
+      "confirmation": "**Independent sealed confirmation** — JevArena-C1 v1.2 (2,840 human-labeled items from 8 sources published after the relevant cutoffs, never used for training or development; scored once) measured the previous revision (release package `5683c6f0`, weights identity `b7fd44e3`): 57.33 vs AutoJev-27B 58.17 (−0.84, 95% CI [−2.50, +0.69]) and Eikos-27B 59.37 (−2.04, 95% CI [−3.66, −0.44]); it has not been repeated for this revision. No Decision 1.0 model exists at this size.\n\n**JevArena-C1 v1.2, post-key (not an independent validation):** pending for this revision (successor rule item 8).",
+      "comparator_note": "The three 27B peers were rerun on the same kernel image as this model. Eikos-27B is shown from its BF16 weights (`caiovicentino1/Eikos-27B`), the sibling of the FP8 build listed on the Decision Index; its card declares MIT for the authors' contributions on the Apache-2.0 base. AutoJev-27B declares Apache-2.0 weights and MIT code, Jebadiah-27B Apache-2.0. Invalid answers count as failures: none for this model; 13, 4 and 153 transfer answers for AutoJev-27B, Eikos-27B and Jebadiah-27B, and 36 public-231 answers for Jebadiah-27B.",
+      "training": [
+        "**Recipe:** a rank-32 LoRA (alpha 64, dropout 0.05) on all 496 text projections of the frozen Qwen3.8-27B base plus a new candidate head, one pass of cross-entropy plus 0.5 × Brier over 25.0M tokens of decision rows (inputs up to 4,096 tokens), learning rates LoRA 2e-5 / head 1e-4, seeds 20260926 and 20260928; each seed's checkpoint chosen on a held-out selection set (updates 3,561 and 2,230 of 3,561), then the exact uniform soup of the two adapters (one rank-64 adapter whose weight update is the mean of the two) and heads.",
+        "**Data (56,969 rows, 25.0M tokens):** the strict Decision 2.0 base (6,416 rows: program-generated decision tasks plus the human labels of GoEmotions, SNLI, CLINC150 and BANKING77; the Cosmos QA and SQuAD 2.0 answerability families removed), the A6 Score arms (4,651 rows: project-generated Score tasks with 2 to 10 levels in English and Chinese, and the graded human ratings of KLUE STS, JGLUE JSTS, IBM ArgQ-30k and SAF in Korean, Japanese, English and German), and a 20.0M-token slice of the A7 typed curricula (45,902 rows, 80% of the training tokens, an equal token quota for each of 39 families): program-generated Decision 1.0 Stage 1–4 decision tasks (36,105 rows) plus the BANKING77 (5,115 rows) and CLINC150 (4,682 rows) intent labels. By tokens the data is 60% English, 38% Chinese and about 2% Korean, Japanese and German together; 66% Choice, 19% Noul and 14% Score. The human sources are CC BY (3.0 or 4.0) or CC BY-SA (3.0 or 4.0).",
+        "**Where the A7 dose comes from:** the A7 typed curricula are the project's own Decision 1.0 decoder-family training corpora (the shared Choice and Score training data of the Sol, Nox, Eos, Lux and Kai 1.0 models), re-audited into separable parts. The program-generated tasks carry program-oracle labels that the 1.0 builders verified independently; BANKING77 (CC BY 4.0) and CLINC150 (CC BY 3.0) keep their publishers' labels. Whole groups that touched a protected evaluation inventory were set aside, and no formal evaluation panel, JevArena-C1 source or mlx-diag test split is in the training data. The previous revision trained on a 5.0M-token slice of the same curricula (14,755 rows); this one adds 31,147 rows.",
+        "**What the A7 dose did:** against a control trained on the same number of tokens that repeats the previous revision's data, the new A7 content raised typed-reasoning accuracy on unseen formal families by 4.6 points (95% CI +3.1 to +6.1) and the JevArena v3 composite by 2.4 points (95% CI +0.1 to +5.9); it cannot be separated from the Choice-heavier type mix (66% Choice tokens against 54%). At that dose, rank 32 per seed instead of rank 8 added 5.8 typed points (95% CI +4.0 to +7.6); its v3 gain (+1.9, 95% CI −0.9 to +5.0) is not significant on its own. More updates on the previous revision's data alone added nothing (v3 +0.8, 95% CI −1.9 to +2.0).",
+        "**Not used:** outputs of Jev or of any third-party decision model; every row trains on its gold label. Datasets keep their own licences ([attributions](ATTRIBUTIONS.md))."
+      ],
+      "limitations": [
+        "**Level with AutoJev-27B.** Post-key v3 72.36 vs AutoJev-27B 72.13 (+0.23; 95% CI lower bound −1.60): not a significant difference, so the higher point estimate is not a lead. Typed accuracy is level (T 0.896 vs 0.887) and so is human transfer (H 0.584 vs 0.587; −0.002, 95% CI [−0.030, +0.066], not significant). Typed Choice is lower (753 vs 800 of 800 answers correct) and constraint competition is 0.882 vs 1.000; exception stack is level (0.843) and resource ledger is higher (0.860 vs 0.705).",
+        "**Against the other 27B models** JevArena v3 is significantly higher than Eikos-27B (+3.07, 95% CI [+0.20, +7.75]) and Jebadiah-27B (+6.89, 95% CI [+4.33, +10.54]); human transfer is level with both (−0.003, 95% CI [−0.047, +0.071], and +0.006, 95% CI [−0.031, +0.065]).",
+        "**Against the previous revision** (`c0dba600`, the rank-16 M3-A soup): post-key v3 +5.15 (95% CI [+2.19, +8.02]), typed accuracy +0.109 (95% CI [+0.085, +0.133]), human transfer +0.011 (95% CI [−0.037, +0.056], level), public 231 +5 (95% CI [−1, +11], level) and card-eligible mlx-diag +1.4 points (95% CI +0.3 to +2.5). Transfer macro-F1 is lower on TempoWiC (0.713 vs 0.769) and Reddit humor (0.569 vs 0.631).",
+        "**JevBench public 231:** 203 correct (48 / 72 / 83): level with AutoJev-27B's 201 (+2, 95% CI [−6, +10]) and above Jebadiah-27B's 176 (+27, 95% CI [+16, +38]), but significantly below Eikos-27B's 212 (−9, 95% CI [−16, −2]; hard tier 83 vs 92), mostly in two hard-tier skills that neither JevArena nor this model's training covers: applying long policy documents with amendments and precedence (11 vs 15 of the 19 such items) and checking a quoted person's plausible but wrong conclusion against the evidence instead of adopting it (33 vs 38 of 46).",
+        "**Score levels.** On typed Score it uses all five levels (51 / 66 / 67 / 72 / 150 answers at levels 0–4 against 35 / 79 / 83 / 75 / 128 in the gold labels): the top level is still over-predicted, less than in the previous revision (182), and levels 1 and 2 are under-predicted.",
+        "**Transfer tasks.** Wiki politeness, TempoWiC and Reddit humor are lower than all three 27B models shown (macro-F1 0.490 against 0.529–0.591, 0.713 against 0.736–0.798 and 0.569 against 0.607–0.645), and MRF by less than 0.01; flute and media ideology trail AutoJev-27B and Eikos-27B, and persuasion trails AutoJev-27B and Jebadiah-27B.",
+        "**Long inputs** (over 4,000 characters): transfer accuracy 0.578, level with AutoJev-27B (0.576) and Eikos-27B (0.583); public 231 answers 26 of 37 (AutoJev-27B 28, Eikos-27B 29).",
+        "**Multilingual.** On the mlx-diag diagnostic (public test splits in seven languages, English instructions over target-language states), non-English Choice is level with English (81.0% vs 81.7%) and non-English Noul (paraphrase pairs) is 4.0 points lower (86.0% vs 90.0%). The weakest are Korean Noul (80%, 100 items) and Spanish Choice (77.8%, 126 items). The three 27B peers ran the same diagnostic (Choice and Noul parts; no paired test): non-English Choice is 80.6% for AutoJev-27B, 78.4% for Eikos-27B and 77.6% for Jebadiah-27B (81.0% here), and non-English Noul is 88.7%, 85.0% and 85.3% (86.0% here); Korean Noul is 85%, 84% and 80% (80% here). The diagnostic's Score part, not shown because its source data are non-commercial, is weakest outside English.",
+        "**Calibration.** The package returns raw probabilities (temperature 1); per-type temperatures fitted on the calibration partition were rejected because they worsened calibration on development data.",
+        "**Input limit.** 32,768 tokens for the complete state, question and candidates; longer inputs return an over-budget error instead of being truncated. Training inputs were at most 4,096 tokens.",
+        "**Seed soup.** Only the uniform soup of two seeds was evaluated on JevArena v3 and is released; a retrained seed of the same recipe can land below it.",
+        "**Base download and memory.** The base weights are not in this repository; loading needs the pinned Qwen3.8-27B revision (about 55 GB of files) and one GPU with at least 122 GB of memory (the evaluation's peak on an 18,261-token input: 110 GB allocated, 121 GB reserved; longer inputs were not measured). CPU inference was not verified.",
+        "**Evaluation familiarity.** A later screen of the program's training pools found topical-phrase overlap (no exact duplicates) between some training groups and 84 items of the reported evaluation panels. This model's training data contains none of those groups. Rescored without the 84 items, post-key v3 stays 72.36, the comparison bar (90% of AutoJev-27B) moves from 64.92 to 64.89, and none of this card's v3, human-transfer or public-231 comparisons change."
+      ],
+      "details": [
+        "**Weights:** the exact soup of two rank-32 LoRA adapters of the same recipe and start (seeds 20260926 and 20260928; selected updates 3,561 and 2,230), stored as one standard PEFT rank-64 adapter (alpha 128), plus the averaged decision head.",
+        "**Loading:** `Decision2.from_pretrained` downloads the 28 pinned files of Qwen/Qwen3.8-27B at `1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0` into the Hugging Face cache (or takes `base_path=` for a local copy of that revision) and checks each file's SHA-256 before loading the adapter on it."
+      ]
+    },
+    "reports": [
+      {
+        "key": "candidate",
+        "role": "candidate",
+        "report": "/data/dev2/runs/27b/M4-A20r-soup/formal/REPORT.json",
+        "label": "DEV2.0-27B",
+        "mlx": "/data/dev2/runs/27b/m4-mlx/M4-A20r-soup/mlx-diag.score.json"
+      },
+      {
+        "key": "autojev27",
+        "role": "reference",
+        "report": "/data/dev2/runs/27b/m2-peer-autojev27-nodeB-kernel/REPORT.json",
+        "repo_id": "denis-pplx/autojev-27b",
+        "label": "AutoJev-27B",
+        "mlx": "/data/dev2/runs/release/inputs/dev2-27b/peers-mlx/autojev27.mlx-diag.score.json"
+      },
+      {
+        "key": "eikos27",
+        "role": "peer",
+        "report": "/data/dev2/runs/27b/m3-peer-eikos27-nodeB-kernel/REPORT.json",
+        "repo_id": "caiovicentino1/Eikos-27B",
+        "board_entry": "caiovicentino1/Eikos-27B-FP8",
+        "label": "Eikos-27B",
+        "mlx": "/data/dev2/runs/release/inputs/dev2-27b/peers-mlx/eikos27b.mlx-diag.score.json"
+      },
+      {
+        "key": "jebadiah27",
+        "role": "peer",
+        "report": "/data/dev2/runs/27b/m3-peer-jebadiah-nodeB-kernel/REPORT.json",
+        "repo_id": "frontier-infra/jebadiah-27b",
+        "label": "Jebadiah-27B",
+        "mlx": "/data/dev2/runs/release/inputs/dev2-27b/peers-mlx/jebadiah27b.mlx-diag.score.json"
+      }
+    ]
+  }
+}
