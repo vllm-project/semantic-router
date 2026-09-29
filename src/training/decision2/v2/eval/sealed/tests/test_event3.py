@@ -77,6 +77,51 @@ class TableTest(unittest.TestCase):
         self.assertEqual(collected[-3:], ["cand27", "autojev27", "eikos27b"])
         self.assertNotIn("${", json.dumps(plan["models"]))
 
+    def test_9b_slot(self) -> None:
+        code, plan = run_plan(self.tmp, "--c27", "f1")
+        self.assertEqual(code, 0)
+        self.assertFalse({"cand9b", "lux1", "nimble2"} & set(plan["selection"]))
+        nine = ["--models", "cand9b,lux1,nimble2"]
+        self.assertEqual(run_plan(self.tmp, *nine)[0], 2)
+        package = [
+            "--c9b-package",
+            "/data/x/DEV2.0-9B",
+            "--c9b-manifest",
+            "c" * 64,
+            "--c9b-repo",
+            "llm-semantic-router/DEV2.0-9B",
+            "--c9b-revision",
+            "d" * 40,
+        ]
+        code, plan = run_plan(self.tmp, *nine, *package)
+        self.assertEqual(code, 0)
+        row = plan["models"]["cand9b"]
+        self.assertEqual(
+            (row["model_path"], row["package"]["dir"]), ("/data/x/DEV2.0-9B",) * 2
+        )
+        self.assertEqual(row["package"]["identity"], row["identity"])
+        self.assertEqual(row["parity"]["mode"], "exact")
+        pairs = {(p["left"], p["right"]) for p in plan["pairs"]}
+        self.assertEqual(pairs, {("cand9b", "lux1"), ("cand9b", "nimble2")})
+        code, plan = run_plan(
+            self.tmp,
+            *nine,
+            *package,
+            "--c9b-calibration",
+            "none",
+            "--c9b-identity",
+            "e" * 64,
+            "--c9b-parity-stored",
+            "/data/x/typed-final.predictions.jsonl",
+        )
+        self.assertEqual(code, 0)
+        row = plan["models"]["cand9b"]
+        self.assertTrue(row["adapter_spec"].endswith("dev2-dec-package-t1.json"))
+        self.assertNotIn("calibration", row["extra"])
+        self.assertEqual(row["package"]["identity"], "e" * 64)
+        self.assertFalse(any("predictions" in f["path"] for f in row["files"]))
+        self.assertEqual(run_plan(self.tmp, "--models", "lux1,nimble2")[0], 2)
+
     def test_card_eligible_rule_takes_the_two_strongest(self) -> None:
         table = json.loads(TABLE.read_text())
         table["card_eligible_27b"] = ["jebadiah27b", "eikos27b", "autojev27"]

@@ -1,7 +1,9 @@
 """JevArena-C1 v1.1 scoring event 3: model table, plan and gold-free checks for ``event3.sh``.
 
     python3 -m v2.eval.sealed.event3 plan --table T [--models K,...] [--c27 f1|f2] [--peers27 K,...] \
-        [--c27-package DIR --c27-manifest SHA --c27-repo ID --c27-revision REV] [--site node-a|node-b] \
+        [--c27-package DIR --c27-manifest SHA --c27-repo ID --c27-revision REV] \
+        [--c9b-package DIR --c9b-manifest SHA --c9b-repo ID --c9b-revision REV [--c9b-identity SHA] \
+         [--c9b-calibration FILE|none] [--c9b-parity-stored PATH] [--c9b-tolerance X]] [--site node-a|node-b] \
         [--allow-deviation ID]... --output PLAN.json
     python3 -m v2.eval.sealed.event3 show --plan PLAN.json
     python3 -m v2.eval.sealed.event3 argv --plan P --key K --phase smoke|collect --run-dir D --gpu N \
@@ -298,6 +300,43 @@ def build_pairs(
     return pairs
 
 
+def apply_c9b(row: dict[str, Any], args: argparse.Namespace) -> None:
+    """The 9B candidate's frozen release package, known only once release engineering is done."""
+    for flag, dotted in (
+        ("c9b_manifest", "package.manifest_sha256"),
+        ("c9b_repo", "repo"),
+        ("c9b_revision", "revision"),
+        ("c9b_parity_stored", "parity.stored"),
+    ):
+        value = getattr(args, flag, None)
+        if value:
+            set_dotted(row, dotted, value)
+    if getattr(args, "c9b_package", None):
+        row["model_path"] = row["model_dir"] = args.c9b_package
+        row["package"]["dir"] = args.c9b_package
+    if getattr(args, "c9b_identity", None):
+        row["identity"] = row["package"]["identity"] = args.c9b_identity
+    if getattr(args, "c9b_tolerance", None) is not None:
+        row["parity"]["tolerance"] = args.c9b_tolerance
+    calibration = getattr(args, "c9b_calibration", None)
+    if calibration == "none":
+        row["adapter_spec"] = "v2/eval/sealed/adapters/dev2-dec-package-t1.json"
+        row["extra"].pop("calibration", None)
+        row["files"] = [
+            f for f in row.get("files", []) if "calibration" not in f["path"]
+        ]
+    elif calibration:
+        row["extra"]["calibration"] = calibration
+        row["files"] = [
+            f for f in row.get("files", []) if "calibration" not in f["path"]
+        ]
+    if calibration or getattr(args, "c9b_parity_stored", None):
+        # Pinned hashes describe the scored run; a re-packaged release is checked by its manifest.
+        row["files"] = [
+            f for f in row.get("files", []) if "predictions" not in f["path"]
+        ]
+
+
 def plan(args: argparse.Namespace) -> int:
     table = load_table(args.table)
     roots = table["roots"]
@@ -339,6 +378,8 @@ def plan(args: argparse.Namespace) -> int:
                     set_dotted(row, dotted, value)
             if args.c27_package:
                 row["model_path"] = row["model_dir"] = args.c27_package
+        if key == "cand9b":
+            apply_c9b(row, args)
         row.pop("node_b", None)
         models[key] = expand(row, roots)
     errors = [
@@ -1035,6 +1076,17 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--peers27")
     for flag in ("--c27-package", "--c27-manifest", "--c27-repo", "--c27-revision"):
         a.add_argument(flag)
+    for flag in (
+        "--c9b-package",
+        "--c9b-manifest",
+        "--c9b-repo",
+        "--c9b-revision",
+        "--c9b-identity",
+        "--c9b-calibration",
+        "--c9b-parity-stored",
+    ):
+        a.add_argument(flag)
+    a.add_argument("--c9b-tolerance", type=float)
     a.add_argument("--site", choices=("node-a", "node-b"), default="node-a")
     a.add_argument("--allow-deviation", action="append", default=[])
     a.add_argument("--output", type=Path, required=True)
