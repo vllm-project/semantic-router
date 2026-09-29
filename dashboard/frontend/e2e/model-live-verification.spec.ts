@@ -220,20 +220,27 @@ test('keeps the Pricing column horizontally stable while the Live status changes
   await firstVerificationRequest
   await expect(page.getByRole('button', { name: /Checking… logical-model/ })).toBeDisabled()
 
-  // pending: the button label ("Checking…") is the widest of the three normal states.
+  // pending: the status label ("Checking…") is the widest of the three normal states; the
+  // check button itself is a fixed-size icon and does not vary by status.
   const pendingX = (await pricingCell.boundingBox())?.x
   expect(pendingX).toBe(idleX)
 
   releaseFirstVerification()
-  await expect(page.getByText('Live', { exact: true })).toBeVisible()
+  // The "Live" column heading is visible the whole time, so waiting on it (as opposed to
+  // this model's own verified state) can resolve before the verification response has
+  // updated the row — leaving verifiedX measuring the pending-state position. Wait for
+  // this model's "Check again" button instead: its accessible name only reads "Check
+  // again" once this row's verification has actually completed.
+  const checkAgainButton = page.getByRole('button', {
+    name: 'Check again logical-model with a real inference query',
+  })
+  await expect(checkAgainButton).toBeEnabled()
 
   // verified: label shrinks back to "Check again" — must not un-shift the column either.
   const verifiedX = (await pricingCell.boundingBox())?.x
   expect(verifiedX).toBe(idleX)
 
-  await page
-    .getByRole('button', { name: 'Check again logical-model with a real inference query' })
-    .click()
+  await checkAgainButton.click()
   await expect(page.getByText('Unavailable', { exact: true })).toBeVisible()
   await expect(page.getByText('Provider inference returned HTTP 503.')).toBeVisible()
 
