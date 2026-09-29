@@ -1,0 +1,36 @@
+{
+  "schema": "vllm-sr-intro-film-v1",
+  "captured_at_utc": "2026-09-29T14:25:19Z",
+  "video": {
+    "path": "/videos/vllm-sr-intro/vllm-sr-intro.mp4",
+    "sha256": "9cda9e53d2063f9da071ee1cd8f598b67ab6d28ffee5f3a3417cecdac920d4d8",
+    "bytes": 25359188,
+    "duration_seconds": 170.77,
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "master_sha256": "ca4938c6781a4d20912ce9e3a95805a94a3e48c63a3dd443c476bd2a5dfb582e",
+    "transcode": "H.264 High profile, Level 4.1, yuv420p, CRF 24, 3-second GOP, AAC-LC 160 kb/s stereo, fast-start MP4, from the 1080p30 master."
+  },
+  "poster": {
+    "path": "/videos/vllm-sr-intro/vllm-sr-intro-poster.webp",
+    "sha256": "60f9eac1fc64d4471c0fecdce199ff8eeb9b3b0b7e656532557f1984af6d319f",
+    "origin": "Frame 0 of the film, exported at 1920x1080 as WebP (quality 86)."
+  },
+  "audio": {
+    "track": "Blindfolded",
+    "artist": "Arulo",
+    "source_url": "https://assets.mixkit.co/music/194/194.mp3",
+    "license": "Mixkit Stock Music Free License",
+    "license_url": "https://mixkit.co/license/#musicFree",
+    "edit": "Starts on the last beat of bar 1; bars 10-14 removed with a 12 ms equal-power crossfade; normalized to -15 LUFS integrated with a -1 dBFS peak.",
+    "note": "The soundtrack is used under the Mixkit license and is not relicensed under this repository's Apache-2.0 license."
+  },
+  "imagery": {
+    "cover_background": "AI-generated for this film; no stock or third-party photography.",
+    "vllm_sr_logo": "Official vLLM Semantic Router logo, color and pure-white variants.",
+    "model_logos": "Model and provider marks from @lobehub/icons-static-svg (MIT) and Simple Icons (CC0 1.0), shown to identify the respective projects; trademarks remain with their owners.",
+    "contributor_avatars": "GitHub avatars of vllm-project/semantic-router contributors, rendered by contrib.rocks."
+  },
+  "figures": "Community numbers in the film are as of 2026-09-29: 220+ contributors, 1,985 merged pull requests, 5,972 GitHub stars, 1.31M downloads across models, PyPI and containers, and 836K vllm-sr.ai pageviews from Aug 30 to Sep 29, 2026."
+}
