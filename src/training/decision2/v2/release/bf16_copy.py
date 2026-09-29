@@ -1,0 +1,148 @@
+"""Write a BF16-storage copy of a full Qwen3.5-text Decision 2.0 checkpoint (answers meant to stay identical).
+
+The release runtime loads every parameter as FP32 and runs the backbone under
+BF16 autocast, so each Linear projection weight is rounded to BF16
+(round-to-nearest-even) before every matmul. Only those weights are stored as
+BF16, with the same cast; everything the runtime uses in FP32 (embedding table,
+RMS norms, gated-delta ``A_log`` / ``dt_bias``, depthwise conv filters, the
+decision head) is copied bit for bit. Whether answers really stay identical is
+decided by ``release.sh --parity`` on every scored prompt, not by this tool.
+Other files are copied verbatim; the shard index gets the new ``total_size``.
+
+    python3 -m v2.release.bf16_copy --source SOUP_DIR --output NEW_DIR --receipt receipt.json
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import shutil
+from pathlib import Path
+
+from v2.release.layout import sha_file, write_json
+
+BF16_WEIGHT = re.compile(
+    r"layers\.\d+\.(self_attn\.[qkvo]_proj|linear_attn\.(in_proj_(qkv|z|a|b)|out_proj)"
+    r"|mlp\.(gate|up|down)_proj)\.weight"
+)
+SHARDS = ("model-*.safetensors", "model.safetensors.index.json")
+
+
+def storage_dtype(name: str, shape: list[int], dtype: str) -> str:
+    if dtype != "F32":
+        raise ValueError(f"Source tensor is not FP32: {name} ({dtype})")
+    return "BF16" if len(shape) == 2 and BF16_WEIGHT.fullmatch(name) else "F32"
+
+
+def convert(source: Path, output: Path) -> dict:
+    import torch
+    from safetensors import safe_open
+    from safetensors.torch import save_file
+
+    if output.exists():
+        raise FileExistsError(output)
+    index_path = source / "backbone" / "model.safetensors.index.json"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    pending = output.with_name(output.name + ".pending")
+    shutil.copytree(source, pending, ignore=shutil.ignore_patterns(*SHARDS))
+    numel = {"BF16": 0, "F32": 0}
+    tensors_by_dtype = {"BF16": 0, "F32": 0}
+    total_size = 0
+    for shard in sorted(set(index["weight_map"].values())):
+        with safe_open(str(source / "backbone" / shard), framework="pt") as src:
+            metadata = src.metadata()
+            names = list(src.keys())
+            converted = {}
+            for name in names:
+                tensor = src.get_tensor(name)
+                dtype = "F32" if tensor.dtype == torch.float32 else str(tensor.dtype)
+                target = storage_dtype(name, list(tensor.shape), dtype)
+                if target == "BF16":
+                    tensor = tensor.to(torch.bfloat16)
+                converted[name] = tensor.contiguous()
+                numel[target] += tensor.numel()
+                tensors_by_dtype[target] += 1
+                total_size += tensor.numel() * tensor.element_size()
+        save_file(converted, str(pending / "backbone" / shard), metadata=metadata)
+        with safe_open(
+            str(source / "backbone" / shard), framework="pt"
+        ) as src, safe_open(str(pending / "backbone" / shard), framework="pt") as out:
+            if sorted(out.keys()) != sorted(names):
+                raise ValueError(f"Tensor names changed in {shard}")
+            for name in names:
+                original, stored = src.get_tensor(name), out.get_tensor(name)
+                expected = (
+                    original.to(torch.bfloat16)
+                    if stored.dtype == torch.bfloat16
+                    else original
+                )
+                if stored.dtype != expected.dtype or not torch.equal(stored, expected):
+                    raise ValueError(
+                        f"Stored tensor differs from its planned cast: {name}"
+                    )
+    index.setdefault("metadata", {})["total_size"] = total_size
+    (pending / "backbone" / "model.safetensors.index.json").write_text(
+        json.dumps(index, indent=2) + "\n", encoding="utf-8"
+    )
+    pending.rename(output)
+    files = sorted(
+        p.relative_to(output).as_posix() for p in output.rglob("*") if p.is_file()
+    )
+    source_files = sorted(
+        p.relative_to(source).as_posix() for p in source.rglob("*") if p.is_file()
+    )
+    if files != source_files:
+        raise ValueError("Output file set differs from the source")
+    return {
+        "numel_by_storage_dtype": numel,
+        "tensors_by_storage_dtype": tensors_by_dtype,
+        "tensor_bytes": total_size,
+        "files": {
+            name: {
+                "source_sha256": sha_file(source / name),
+                "sha256": sha_file(output / name),
+                "bytes": (output / name).stat().st_size,
+                "verbatim": not name.startswith("backbone/model"),
+            }
+            for name in files
+        },
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("--source", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--receipt", type=Path, required=True)
+    args = parser.parse_args()
+    import safetensors
+    import torch
+
+    from training.model.infer import checkpoint_fingerprint
+
+    result = convert(args.source, args.output)
+    for name, entry in result["files"].items():
+        if entry["verbatim"] and entry["sha256"] != entry["source_sha256"]:
+            raise ValueError(f"Verbatim file changed: {name}")
+    write_json(
+        args.receipt,
+        {
+            "schema": "dev2-release-bf16-copy/1",
+            "rule": "BF16 storage for Linear projection weights (rounded exactly as BF16 autocast does); FP32 bit-exact for all other tensors",
+            "bf16_pattern": BF16_WEIGHT.pattern,
+            "source_model_sha256": checkpoint_fingerprint(args.source, None)[
+                "model_sha256"
+            ],
+            "model_sha256": checkpoint_fingerprint(args.output, None)["model_sha256"],
+            "torch": torch.__version__,
+            "safetensors": safetensors.__version__,
+            **result,
+        },
+    )
+
+
+if __name__ == "__main__":
+    main()
