@@ -84,6 +84,12 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 			logging.Errorf("Process: recovered panic: %v\n%s", rec, debug.Stack())
 			retErr = status.Errorf(codes.Internal, "internal error: %v", rec)
 		}
+		// Error and panic returns skip the receive-error cleanup, so an
+		// in-flight admission taken before a dispatch error would otherwise
+		// inflate the model's in-flight count until the tracker's max age.
+		// Requests that ended through a normal path already zeroed the token,
+		// making this a no-op.
+		releaseInflightAdmission(ctx)
 		if retErr != nil && ctx != nil {
 			sendHeldHeaderReplyBeforeError(stream, ctx)
 		}
@@ -132,8 +138,7 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 		logging.Debugf("Streaming response aborted before completion, will not cache")
 	}
 	if ctx.InflightToken != 0 {
-		inflight.End(ctx.RequestModel, ctx.InflightToken)
-		ctx.InflightToken = 0
+		releaseInflightAdmission(ctx)
 	}
 
 	state, reason := replayLifecycleForReceiveError(err)
@@ -391,4 +396,18 @@ func processUnknownRequest(
 	}
 
 	return sendResponse(stream, response, "unknown")
+}
+
+// releaseInflightAdmission ends the request's in-flight admission, if one is
+// still open. The token and its model key travel together on the context, so
+// every cleanup path — normal response completion, receive errors, dispatch
+// errors, and panics — releases the exact bucket the request was admitted to
+// even when the routing model was rewritten in between. Double release is a
+// no-op because every caller clears the token afterwards.
+func releaseInflightAdmission(ctx *RequestContext) {
+	if ctx == nil || ctx.InflightToken == 0 {
+		return
+	}
+	inflight.End(ctx.InflightModel, ctx.InflightToken)
+	ctx.InflightToken = 0
 }
