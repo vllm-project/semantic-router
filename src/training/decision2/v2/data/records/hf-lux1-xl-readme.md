@@ -15,9 +15,17 @@ sorted by id, cut into five waves. The control-only rows (in no XL recipe's miss
 | `w5` | 12,215 |
 | `c-w1` | 60,000 |
 | `c-w2` | 40,957 |
+| `h-w1` | 25,664 |
 
 That is 252,215 recipe prompts and 100,957 control-only prompts. `w4` holds the last 32,554 XL-full rows and the first
 27,446 XL-short-only rows. Control-wave files are named `c-w<k>.*` and have the same format as `w<k>.*`.
+
+`h-w1` covers the H7 / H8 rows of the r2 recipes (`m3/mixtures/xl-r2/`, revision `10053613…`). These are the rows
+listed in `mx-xl-full-r2.lux1.missing.jsonl` ∪ `mx-xl-short-r2.lux1.missing.jsonl`: H7 4,292 and H8 21,372, all
+TRAIN rows of `m3/arms/H7|H8/` at `09f73967…`. The short-recipe list is a subset of the full one. The wave was
+preregistered in `m3b-lux-h-prereg-2026-09-29.md` and uses the same format. Its report also carries a repeat check
+(`provenance.repeat_check`: 256 prompts answered again in a fresh process) and the Triton cache states before the
+wave, after it and after the repeat run (`provenance.teacher_run.triton_cache.checks`).
 
 ## Files per wave
 
@@ -38,6 +46,9 @@ That is 252,215 recipe prompts and 100,957 control-only prompts. `w4` holds the 
   - `provenance`: guard receipt, launcher, image, collector summary, wall time and GPU-hours.
 - **`coverage.json`** (uploaded with `w1`, refreshed with `c-w1`): for each XL recipe and control, the rows with own-Lux targets before and after
   each wave, and the rows no wave covers.
+- **`coverage-r2.json`** (uploaded with `h-w1`): the same for the eight r2 recipes and controls.
+  - It starts from the r2 manifest's own-Lux counts, then adds `c-w2` (still pending in that manifest) and `h-w1`.
+  - It was uploaded only after both r2 release recipes showed no row left without a target.
 
 ## How the targets were made
 
@@ -70,5 +81,21 @@ That is 252,215 recipe prompts and 100,957 control-only prompts. `w4` holds the 
 | `cx-xl-v2v1-short` | 282,695 | 123,974 | 227,074 | 282,695 |
 
 - **Per wave:** `coverage.json` gives the counts after every wave, including the controls after `c-w1`.
-- **r2 rows:** H7 / H8 rows of the r2 recipes have no teacher targets and train on gold labels (M3b amendment 2).
-  Targets for rows that the amendment 3 rescreen flags stay published but are not referenced by any r2 recipe.
+- **Flagged rows:** targets for rows that the amendment 3 rescreen flags stay published but are not referenced by any
+  r2 recipe.
+
+**r2 recipes** (`m3/mixtures/xl-r2/`, revision `10053613…`; `coverage-r2.json`):
+
+| Recipe | Rows | In the r2 manifest | After `c-w2` | After `h-w1` |
+| --- | ---: | ---: | ---: | ---: |
+| `mx-xl-full-r2` | 365,970 | 340,306 | 340,306 | 365,970 |
+| `mx-xl-short-r2` | 373,577 | 355,632 | 355,632 | 373,577 |
+| `cx-xl-r2-nogap-full` | 340,306 | 340,306 | 340,306 | 340,306 |
+| `cx-xl-r2-nogap-short` | 355,632 | 355,632 | 355,632 | 355,632 |
+| `cx-xl-r2-a7v1-full` | 191,536 | 191,536 | 191,536 | 191,536 |
+| `cx-xl-r2-a7v1-short` | 167,067 | 167,067 | 167,067 | 167,067 |
+| `cx-xl-r2-v2v1-full` | 295,998 | 261,782 | 295,998 | 295,998 |
+| `cx-xl-r2-v2v1-short` | 282,419 | 257,563 | 282,419 | 282,419 |
+
+With `h-w1`, every row of every r2 recipe has an own-Lux target. Until `h-w1`, the H7 / H8 rows trained on gold labels
+(M3b amendment 2).

@@ -28,6 +28,10 @@ the interval is above 0 but the gain is below 5 points; otherwise CLEAN. Determi
 Receipts carry counts and accuracies only, never item text or gold values.
 
     python3 -m v2.eval.leak_audit audit --panel-root /data/dev2/private/panels --output audit.json
+    python3 -m v2.eval.leak_audit audit --panel ht-dev --files ht-dev=<prompts>:<gold> --output audit.json
+
+`--files NAME=PROMPTS:GOLD` audits a built panel before it is frozen and registered (its
+files' sha256s are recorded instead of the registry check).
     python3 -m v2.eval.leak_audit markdown --audit audit.json --output audit.md
 """
 
@@ -81,6 +85,8 @@ PANEL_ROLES = {
     "css15": "formal",
     "public231": "formal (public subset)",
     "mlx-diag": "development diagnostic",
+    "ht-dev": "development (human transfer)",
+    "score5-dev": "development (5-level Score check)",
 }
 
 
@@ -180,9 +186,30 @@ def public_gold(task_type: str, expected: Any) -> Any:
     return expected
 
 
-def load_panel(root: Path, panel: str) -> list[Question]:
+def load_panel(
+    root: Path, panel: str, files: tuple[Path, Path] | None = None
+) -> list[Question]:
     """Questions of one frozen panel (the gold files carry everything needed)."""
     from v2.eval import panels as registry
+
+    if panel in ("ht-dev", "score5-dev"):
+        prompts_path, gold_path = files or (
+            registry.path(root, panel, "prompts"),
+            registry.path(root, panel, "gold"),
+        )
+        states = {row["id"]: row["state"] for row in read_jsonl(prompts_path)}
+        return [
+            native_question(
+                panel,
+                row["id"],
+                row["task"],
+                row["group_id"],
+                row["questions"]["decision"],
+                row["gold"]["decision"]["value"],
+                states[row["id"]],
+            )
+            for row in read_jsonl(gold_path)
+        ]
 
     if panel in ("select", "cal"):
         rows = read_jsonl(registry.path(root, panel, "gold"))
@@ -731,7 +758,19 @@ def audit(args: argparse.Namespace) -> int:
     from v2.eval import panels as registry
 
     names = args.panel or list(PANEL_ROLES)
-    verified = registry.verify(args.panel_root, names)
+    files: dict[str, tuple[Path, Path]] = {}
+    for entry in args.files or []:
+        name, _, value = entry.partition("=")
+        prompts_file, _, gold_file = value.partition(":")
+        if name not in names or not gold_file:
+            raise SystemExit(
+                f"--files {entry!r}: expected NAME=PROMPTS:GOLD of a --panel"
+            )
+        files[name] = (Path(prompts_file), Path(gold_file))
+    verified = registry.verify(args.panel_root, [n for n in names if n not in files])
+    for name, pair in files.items():
+        for path in pair:
+            verified[str(path)] = registry.sha_file(path)
     result: dict[str, Any] = {
         "schema": SCHEMA,
         "rule": (
@@ -749,7 +788,9 @@ def audit(args: argparse.Namespace) -> int:
         "panels": {},
     }
     for name in names:
-        report = audit_panel(load_panel(args.panel_root, name), args.replicates, SEED)
+        report = audit_panel(
+            load_panel(args.panel_root, name, files.get(name)), args.replicates, SEED
+        )
         report["role"] = PANEL_ROLES[name]
         result["panels"][name] = report
         print(
@@ -862,6 +903,7 @@ def main(argv: list[str] | None = None) -> int:
         "--panel-root", type=Path, default=Path("/data/dev2/private/panels")
     )
     run.add_argument("--panel", action="append", choices=sorted(PANEL_ROLES))
+    run.add_argument("--files", action="append", metavar="NAME=PROMPTS:GOLD")
     run.add_argument("--replicates", type=int, default=REPLICATES)
     run.add_argument("--output", type=Path, required=True)
     render = commands.add_parser("markdown")

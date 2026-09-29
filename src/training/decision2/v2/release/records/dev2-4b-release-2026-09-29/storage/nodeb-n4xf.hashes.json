@@ -1,0 +1,38 @@
+{
+ "label": "node-b",
+ "root": "/data/dev2/runs/dec/m4/hf-staging/N4XF-soup",
+ "utc": "2026-09-29T01:07:07.000178+00:00",
+ "sha256": {
+  "m4/N4XF-soup/cal698-16k/calibration.json": "176a2f0e8f76c7b281c0784ec9e9d2ea17b84aef2e237e2673a062a5a62e421f",
+  "m4/N4XF-soup/cal698-8k-dev/calibration.json": "c822fafa3bfc0c95fb5ffe6507e83b4242f5eaa4c014a55b6ec77afb86d801cf",
+  "m4/N4XF-soup/checkpoint/backbone/config.json": "a5ed4156fda05f0f9149c66964d6165916754e7355488a8a07d9b0398acdbdb9",
+  "m4/N4XF-soup/checkpoint/backbone/model-00001-of-00005.safetensors": "06faf67f333d1136e4cbc583220e98602354b454d3b0fb917bf433a8bf4dbb3f",
+  "m4/N4XF-soup/checkpoint/backbone/model-00002-of-00005.safetensors": "abac23bcaad1d5fb2aa73d9d051db970514a4f427b0cff22336b50c5e7aa7302",
+  "m4/N4XF-soup/checkpoint/backbone/model-00003-of-00005.safetensors": "1f492a389f49f382b4bbf84686176b51f9621da50d143e436ed61f764a9fa988",
+  "m4/N4XF-soup/checkpoint/backbone/model-00004-of-00005.safetensors": "18024da979fb12651442e3a168deb92b4b8e41d41ea8076151df62879ecfa823",
+  "m4/N4XF-soup/checkpoint/backbone/model-00005-of-00005.safetensors": "0ad4368c4f04781d30c237c269a9911b9ffb037104a4ee469bb7f56d57e67d15",
+  "m4/N4XF-soup/checkpoint/backbone/model.safetensors.index.json": "1921033b850d1a219406de25ac8a8c13c45048572cd71b4a738246c1f690986c",
+  "m4/N4XF-soup/checkpoint/chat_template.jinja": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
+  "m4/N4XF-soup/checkpoint/decision_config.json": "6658fbd01bf92030078ad1bbe735a0de77045431055d06c32bc6de8cf7d275d9",
+  "m4/N4XF-soup/checkpoint/decision_head.safetensors": "bd324aa69788fa936293ff4959ea1caa8845a4e47589879b0748aed3c3df7c5a",
+  "m4/N4XF-soup/checkpoint/tokenizer.json": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+  "m4/N4XF-soup/checkpoint/tokenizer_config.json": "bee8eba30f0eb4af73c0fe2cd06d0f89b657d7819941c438157ec42f7c80ea87"
+ },
+ "size": {
+  "m4/N4XF-soup/cal698-16k/calibration.json": 3262,
+  "m4/N4XF-soup/cal698-8k-dev/calibration.json": 3261,
+  "m4/N4XF-soup/checkpoint/backbone/config.json": 1977,
+  "m4/N4XF-soup/checkpoint/backbone/model-00001-of-00005.safetensors": 3992269864,
+  "m4/N4XF-soup/checkpoint/backbone/model-00002-of-00005.safetensors": 3990302320,
+  "m4/N4XF-soup/checkpoint/backbone/model-00003-of-00005.safetensors": 3937871784,
+  "m4/N4XF-soup/checkpoint/backbone/model-00004-of-00005.safetensors": 3926578128,
+  "m4/N4XF-soup/checkpoint/backbone/model-00005-of-00005.safetensors": 976029360,
+  "m4/N4XF-soup/checkpoint/backbone/model.safetensors.index.json": 33048,
+  "m4/N4XF-soup/checkpoint/chat_template.jinja": 7756,
+  "m4/N4XF-soup/checkpoint/decision_config.json": 2682,
+  "m4/N4XF-soup/checkpoint/decision_head.safetensors": 10529624,
+  "m4/N4XF-soup/checkpoint/tokenizer.json": 19989325,
+  "m4/N4XF-soup/checkpoint/tokenizer_config.json": 1123
+ },
+ "utc_done": "2026-09-29T01:07:16.092294+00:00"
+}

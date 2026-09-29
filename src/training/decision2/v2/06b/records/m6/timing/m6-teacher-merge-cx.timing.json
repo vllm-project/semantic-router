@@ -1,0 +1,1 @@
+{"run":"m6-teacher-merge-cx","gpu":0,"render":"/dev/dri/renderD129","commit":"0581149308b8081c2152aa9f90980971bcc99045-src_training_decision2","image":"decision20-train-fast:host2","start_utc":"2026-09-28T19:24:16Z","end_utc":"2026-09-28T19:24:24Z","wall_seconds":8,"gpu_hours":0.00222,"exit":0}

@@ -1,0 +1,93 @@
+{
+  "label": "m6-mxcx-soup",
+  "rule": "COLLAPSED if one answer >= 90% of a type or the Wilson 95% lower bound <= chance",
+  "run": "/data/dev2/runs/06b/m6/formal/m6-mxcx-soup",
+  "schema": "dev2-gate-types/1",
+  "types": {
+    "choice": {
+      "accuracy": 0.48625,
+      "accuracy_ci95": [
+        0.45176338166786534,
+        0.5208680422345553
+      ],
+      "chance": 0.2666666666666696,
+      "gold_distribution": {
+        "approved": 94,
+        "insufficient_evidence": 218,
+        "offer_0": 214,
+        "offer_1": 186,
+        "rejected": 88
+      },
+      "gold_majority_share": 0.2725,
+      "predicted_distinct": 7,
+      "predicted_distribution": {
+        "approved": 206,
+        "insufficient_evidence": 9,
+        "none": 61,
+        "offer_0": 189,
+        "offer_1": 103,
+        "offer_3": 47,
+        "rejected": 185
+      },
+      "predicted_top_share": 0.2575,
+      "slots": 800,
+      "valid": 800,
+      "verdict": "OK"
+    },
+    "noul": {
+      "accuracy": 0.64625,
+      "accuracy_ci95": [
+        0.6124900317352866,
+        0.6786120958480581
+      ],
+      "chance": 0.5,
+      "gold_distribution": {
+        "False": 396,
+        "True": 404
+      },
+      "gold_majority_share": 0.505,
+      "predicted_distinct": 2,
+      "predicted_distribution": {
+        "False": 345,
+        "True": 455
+      },
+      "predicted_top_share": 0.56875,
+      "slots": 800,
+      "valid": 800,
+      "verdict": "OK"
+    },
+    "score": {
+      "accuracy": 0.3275,
+      "accuracy_ci95": [
+        0.2833392679681935,
+        0.3749425930386963
+      ],
+      "chance": 0.20000000000000148,
+      "gold_distribution": {
+        "0": 35,
+        "1": 79,
+        "2": 83,
+        "3": 75,
+        "4": 128
+      },
+      "gold_majority_share": 0.32,
+      "predicted_distinct": 3,
+      "predicted_distribution": {
+        "0": 10,
+        "2": 11,
+        "4": 379
+      },
+      "predicted_top_share": 0.9475,
+      "recall_by_level": {
+        "0": 0.2,
+        "1": 0.0,
+        "2": 0.012048192771084338,
+        "3": 0.0,
+        "4": 0.9609375
+      },
+      "slots": 400,
+      "valid": 400,
+      "verdict": "COLLAPSED: one answer (4) takes 95%"
+    }
+  }
+}

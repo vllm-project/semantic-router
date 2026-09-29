@@ -1,0 +1,167 @@
+{
+  "template": "M6",
+  "unit": "qwen3-0.6b-base-native-segmented",
+  "tokenizer": "/work/models/Qwen3-0.6B-Base",
+  "max_row_tokens": 8192,
+  "hf_dataset": "llm-semantic-router/decision-2.0-training-data",
+  "hf_revision": "100536133e192c54ec57c2599a5e4706f6d334ff",
+  "hf_folder": "m3/mixtures/xl-r2",
+  "name": "m6-mx-s2",
+  "family": "m6-mx",
+  "seed": 2,
+  "seeds": 3,
+  "budget_tokens": 30000000,
+  "budget_tolerance": 0.005,
+  "partition_salt": "m6-partition",
+  "recipe": {
+    "name": "cx-xl-r2-nogap-full",
+    "path": "/runs/m6/data/inputs/recipes/cx-xl-r2-nogap-full.ids.jsonl",
+    "sha256": "4a74a06ebb4ad933485d2417f99f633ed02d7596f31a098ece29aad65b9f3bca",
+    "rows": 340306
+  },
+  "shared_with": {
+    "name": "cx-xl-r2-a7v1-full",
+    "path": "/runs/m6/data/inputs/recipes/cx-xl-r2-a7v1-full.ids.jsonl",
+    "sha256": "dd14118106066ffb2f803d9aafda059d852c0943bf01932cea0c94cfcce144b2",
+    "rows": 191536
+  },
+  "base_pool": "A0s-strict",
+  "qks_pools": [
+    "A7q",
+    "A7k",
+    "A7s"
+  ],
+  "pools": {
+    "A0s-strict": {
+      "path": "/runs/m6/data/inputs/pools/A0s-strict.train.jsonl",
+      "sha256": "df5c76888e4397068ada2444815b50baa7eb6e36fe6c9a1c991ef069b01a7853",
+      "rows": 6547
+    },
+    "H1": {
+      "path": "/runs/m6/data/inputs/pools/H1.train.jsonl",
+      "sha256": "5d1c5133eff7dc9081876974f4ef4ac05f44cadba5bec49fc6e84e596f912b52",
+      "rows": 65432
+    },
+    "H3": {
+      "path": "/runs/m6/data/inputs/pools/H3.train.jsonl",
+      "sha256": "46a7b68e0ec78cddba3501b6bd2c243408d0c079826f8cb8b2b98637715292b1",
+      "rows": 36376
+    },
+    "H5": {
+      "path": "/runs/m6/data/inputs/pools/H5.train.jsonl",
+      "sha256": "0921f75b8c7cd865057b1adc9b45bcab1a377470a044732582b737e9b0c22f3a",
+      "rows": 94449
+    },
+    "H6": {
+      "path": "/runs/m6/data/inputs/pools/H6.train.jsonl",
+      "sha256": "c4ffe4d6790ca737f3ce9327778493fe72483c84c9c447245c5181eced053e7d",
+      "rows": 36110
+    },
+    "E11": {
+      "path": "/runs/m6/data/inputs/pools/E11.train.jsonl",
+      "sha256": "72eae02655246ab3261b828210269d906f0a18ee579b48770acc153fbca72f1f",
+      "rows": 24770
+    },
+    "G2": {
+      "path": "/runs/m6/data/inputs/pools/G2.train.jsonl",
+      "sha256": "c013d183760a348e205dded3f01b735424bd2d6791a3df48af0dd1107869eedd",
+      "rows": 27050
+    },
+    "G6": {
+      "path": "/runs/m6/data/inputs/pools/G6.train.jsonl",
+      "sha256": "884664923e7eb444c198f5f2ac7797a7a08438b47139e5a00a56cb38e898e236",
+      "rows": 25192
+    },
+    "G4h": {
+      "path": "/runs/m6/data/inputs/pools/G4h.train.jsonl",
+      "sha256": "be00a00d8cf6bbe2e5bbdd076b345c18b565a978c0343933e214598c377ba7e5",
+      "rows": 3799
+    },
+    "V1:A1": {
+      "path": "/runs/m6/data/inputs/pools/V1_A1.train.jsonl",
+      "sha256": "b50b43afcb306114f93e37880a021185e4381b97b4e55a84bd0b065d3f36c283",
+      "rows": 4434
+    },
+    "V1:A2": {
+      "path": "/runs/m6/data/inputs/pools/V1_A2.train.jsonl",
+      "sha256": "2cd61397a01b1bd16fcdfc19bddd7b05c9ddd94320044c23aa600da89b0d8f4c",
+      "rows": 5453
+    },
+    "V1:A3": {
+      "path": "/runs/m6/data/inputs/pools/V1_A3.train.jsonl",
+      "sha256": "96da839671e64ff3ccf13691522da8311092af4ec2f307474f3807d38a9c17bc",
+      "rows": 1586
+    },
+    "V1:A6g": {
+      "path": "/runs/m6/data/inputs/pools/V1_A6g.train.jsonl",
+      "sha256": "ac94b7f4f1e7d8b73ddbffebe15035aa3b47cca9c825f622d0ec8d04bd7fc02f",
+      "rows": 4905
+    },
+    "V1:A5": {
+      "path": "/runs/m6/data/inputs/pools/V1_A5.train.jsonl",
+      "sha256": "86868b2d10afb4e98b3798e000e7e80f2b471bdf97b8e565cd6077aaef61be54",
+      "rows": 2298
+    },
+    "V1:A6h": {
+      "path": "/runs/m6/data/inputs/pools/V1_A6h.train.jsonl",
+      "sha256": "23440f0c5561077780973259777fca4aa80400f5b30e9df6e1376f6d9aa31927",
+      "rows": 5622
+    },
+    "V1:A4v2h": {
+      "path": "/runs/m6/data/inputs/pools/V1_A4v2h.train.jsonl",
+      "sha256": "32e21294cca16ec34ae4074d17fdd90df61160556e83633005d9eb54b86984f8",
+      "rows": 1792
+    },
+    "A7h": {
+      "path": "/runs/m6/data/inputs/pools/A7h.train.jsonl",
+      "sha256": "86474b739d8297ebb98ca6ea818c7f6c3cef153a1d778108e6a6723336812718",
+      "rows": 6877
+    },
+    "A7m": {
+      "path": "/runs/m6/data/inputs/pools/A7m.train.jsonl",
+      "sha256": "dd9b1ef029f87e9f7c33165002b5dc74e26776ae28edabe503ef85fd7df9b692",
+      "rows": 10767
+    },
+    "A7i": {
+      "path": "/runs/m6/data/inputs/pools/A7i.train.jsonl",
+      "sha256": "0b8284b1e08229698e9516be7104fe2b6f7dad79ec25eddc3cd3c1ad48e72e12",
+      "rows": 18526
+    },
+    "A7g": {
+      "path": "/runs/m6/data/inputs/pools/A7g.train.jsonl",
+      "sha256": "cc87e0b7a441774aaacbd34b59425294bf8fd5f1b678f92c9a15fd008dcdfddd",
+      "rows": 57123
+    },
+    "A7p": {
+      "path": "/runs/m6/data/inputs/pools/A7p.train.jsonl",
+      "sha256": "cc9217e6128da1910784cb1839127a3edf7e5b90d5c795cd104d78f35f2f137e",
+      "rows": 10149
+    },
+    "A7o": {
+      "path": "/runs/m6/data/inputs/pools/A7o.train.jsonl",
+      "sha256": "dbba002225188fb4dca8f45d15a4801c41a8964d313ee49eba335e2af6355625",
+      "rows": 34569
+    },
+    "A7q": {
+      "path": "/runs/m6/data/inputs/pools/A7q.train.jsonl",
+      "sha256": "c65aac85a7399ebde36039d9de7b8945d8570909e61a3f4a69a7ad5001ac7bfd",
+      "rows": 23537
+    },
+    "A7k": {
+      "path": "/runs/m6/data/inputs/pools/A7k.train.jsonl",
+      "sha256": "8aab25e53e6f3c52e91f0bb45647ec448ba7b408491098285162abddb42577b9",
+      "rows": 2190
+    },
+    "A7s": {
+      "path": "/runs/m6/data/inputs/pools/A7s.train.jsonl",
+      "sha256": "f7eef149493d83e93cca1d5128132477412bbd99239832939fd77a80fb43e6ec",
+      "rows": 12860
+    },
+    "A7r": {
+      "path": "/runs/m6/data/inputs/pools/A7r.train.jsonl",
+      "sha256": "0fc421e4937146ae85d66b9c3a039fd2e5b1f344b9aad4bad77d9ea3983a534d",
+      "rows": 7061
+    }
+  },
+  "note": "family m6-mx: XL r2 cx-xl-r2-nogap-full (A0s-strict + data v2 + v1 arms + A7 pools under source caps + A7q/k/s/r; mx-xl-full-r2 minus the gold-only H7/H8 gap arms); seed 2 of 3: BASE (all A0s-strict) + QKS third 2 (A7q/A7k/A7s rows in both recipes, shared with the other family) + a disjoint proportional slice of the other pools (v2.06b.m6_partition)"
+}

@@ -2,7 +2,9 @@
 
 Formal panels (post-key same-panel): JevArena v3 typed FINAL + CSS15 and the
 JevBench public 231 subset. Development panels (never release scores): typed
-DEV, the three-task CSS pilot and the private-dataset SELECT/CAL partitions.
+DEV, the three-task CSS pilot, the private-dataset SELECT/CAL partitions,
+HT-DEV, the 13-task human-annotated transfer panel (v2/eval/htdev/), and
+Score5-DEV, the 500-item 5-level Score check (v2/eval/score5.py).
 
 Layout under a panel root (default ``/data/dev2/private/panels``)::
 
@@ -76,6 +78,20 @@ DEVELOPMENT: dict[str, dict[str, Any]] = {
         "gold": "gold/mlx-diag.gold.jsonl",
         "gold_sha256": "71515a41583e7c4792c7058d45e6b12980f033bc9de2847b15dd3fb7b940b484",
         "originals": 2275,
+    },
+    "ht-dev": {
+        "prompts": "goldfree/ht-dev.prompts.jsonl",
+        "prompts_sha256": "30b0bd3569da9dd183f142e606ba6dcb598de7e4d3d9c168f87f91852178fd65",
+        "gold": "gold/ht-dev.gold.jsonl",
+        "gold_sha256": "c1f138918f65edf1dc06143a876333f4380f03093c44a1218f20960d6cd49f1e",
+        "originals": 3240,
+    },
+    "score5-dev": {
+        "prompts": "goldfree/score5-dev.prompts.jsonl",
+        "prompts_sha256": "a01551c280473c9251ebbf8aed7bf9cfba3e12927def8959e4dd1283c072a86a",
+        "gold": "gold/score5-dev.gold.jsonl",
+        "gold_sha256": "0ba42dbb5c9ddf6a05a7abd71acb086bae4b9a9250e61f7f4869595a5f2d67ce",
+        "originals": 500,
     },
     "select": {
         "gold": "gold/select.jsonl",

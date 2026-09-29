@@ -1,0 +1,140 @@
+{
+ "schema": "dev2-release-free-duplicates/1",
+ "mode": "apply",
+ "utc": "2026-09-28T20:47:46.612602+00:00",
+ "targets": [
+  {
+   "repo": "llm-semantic-router/dev2-dec-staging",
+   "folder": "m2/E8F-soup/",
+   "released": "llm-semantic-router/DEV2.0-0.8B",
+   "delete": [
+    {
+     "file": "m2/E8F-soup/checkpoint/backbone/model.safetensors",
+     "sha256": "9db82b841878b2f259701e11fdccdfd4b54021b857934304de181e28379f5f1e",
+     "size": 3009606928,
+     "node_copy": "/data/dev2/runs/dec/m2/formal-candidates/staging-16c0929a/m2/E8F-soup/checkpoint/backbone/model.safetensors"
+    },
+    {
+     "file": "m2/E8F-soup/checkpoint/decision_head.safetensors",
+     "sha256": "cf2a2ebdd0b007eca460d90889f129f80a75b2371be54ca1889f4bf15613af6a",
+     "size": 4213584,
+     "node_copy": "/data/dev2/runs/dec/m2/formal-candidates/staging-16c0929a/m2/E8F-soup/checkpoint/decision_head.safetensors"
+    }
+   ],
+   "keep": [],
+   "delete_bytes": 3013820512
+  },
+  {
+   "repo": "llm-semantic-router/dev2-dec-staging",
+   "folder": "m3/S2T-soup/",
+   "released": "llm-semantic-router/DEV2.0-2B",
+   "delete": [
+    {
+     "file": "m3/S2T-soup/checkpoint/backbone/model-00001-of-00002.safetensors",
+     "sha256": "1f083a66d8cdcd02887452b2801efae6af41a6e9529bdc37c962b994721dca08",
+     "size": 3999855496,
+     "node_copy": "/data/dev2/runs/dec/m3/formal-candidates/staging-545a6784/m3/S2T-soup/checkpoint/backbone/model-00001-of-00002.safetensors"
+    },
+    {
+     "file": "m3/S2T-soup/checkpoint/backbone/model-00002-of-00002.safetensors",
+     "sha256": "3a3f291be8d6ac079f1f737ec89092ed3947abd2cd5fd342823c91ce1084af8b",
+     "size": 3527479552,
+     "node_copy": "/data/dev2/runs/dec/m3/formal-candidates/staging-545a6784/m3/S2T-soup/checkpoint/backbone/model-00002-of-00002.safetensors"
+    },
+    {
+     "file": "m3/S2T-soup/checkpoint/decision_head.safetensors",
+     "sha256": "33b6541bb6636677eb91a4d8e06acd4db81152b11097088840796f11d49c707a",
+     "size": 8424272,
+     "node_copy": "/data/dev2/runs/dec/m3/formal-candidates/staging-545a6784/m3/S2T-soup/checkpoint/decision_head.safetensors"
+    }
+   ],
+   "keep": [],
+   "delete_bytes": 7535759320
+  },
+  {
+   "repo": "llm-semantic-router/dev2-release-staging-06bm4",
+   "folder": "(whole repo)",
+   "released": "llm-semantic-router/DEV2.0-0.6B",
+   "delete": [
+    {
+     "file": "backbone/model.safetensors",
+     "sha256": "7e2d1f9d7010cb59fe0e38d3e0fb848222ba12657663dc96776a22221bd82b8e",
+     "size": 2384233112,
+     "node_copy": "/data/dev2/runs/release/inputs/dev2-0p6b/staging-06bm4-62c61c10/backbone/model.safetensors"
+    },
+    {
+     "file": "tokenizer.json",
+     "sha256": "be75606093db2094d7cd20f3c2f385c212750648bd6ea4fb2bf507a6a4c55506",
+     "size": 11422650,
+     "node_copy": "/data/dev2/runs/release/inputs/dev2-0p6b/staging-06bm4-62c61c10/tokenizer.json"
+    },
+    {
+     "file": "decision_head.safetensors",
+     "sha256": "70dc7451862bec4c88f2f8abcdaae66b7f1f118baa8582e3fa863c1794810046",
+     "size": 4213584,
+     "node_copy": "/data/dev2/runs/release/inputs/dev2-0p6b/staging-06bm4-62c61c10/decision_head.safetensors"
+    }
+   ],
+   "keep": [],
+   "delete_bytes": 2399869346
+  },
+  {
+   "repo": "llm-semantic-router/dev2-release-staging",
+   "folder": "(whole repo)",
+   "released": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+   "delete": [
+    {
+     "file": "native/encoder/model.safetensors",
+     "sha256": "4c95e05a3abf24ec93ce209e22915c1e3f2199b4c9d9c76e88f27dee6a2123c3",
+     "size": 1227771752,
+     "node_copy": "/data/dev2/runs/release/dryrun-kai1-staging-20260928T070010Z/download/dev2-release-staging/native/encoder/model.safetensors"
+    },
+    {
+     "file": "native/choice_encoder.safetensors",
+     "sha256": "bb520f1e36035862b3f9b564a24647e46704b8993d8d2f8659b3470252299792",
+     "size": 441337216,
+     "node_copy": "/data/dev2/runs/release/dryrun-kai1-staging-20260928T070010Z/download/dev2-release-staging/native/choice_encoder.safetensors"
+    },
+    {
+     "file": "native/score_encoder.safetensors",
+     "sha256": "400d1d9cd29452b50250a96ab121df31ca40c5cfbabe94ebe634ab96aec79678",
+     "size": 441337080,
+     "node_copy": "/data/dev2/runs/release/dryrun-kai1-staging-20260928T070010Z/download/dev2-release-staging/native/score_encoder.safetensors"
+    },
+    {
+     "file": "native/decision_heads.safetensors",
+     "sha256": "730fa21bac15e7ba7e239658ef521aa74948dd7d0a9dc417c4aef7d36c084267",
+     "size": 177241884,
+     "node_copy": "/data/dev2/runs/release/dryrun-kai1-staging-20260928T070010Z/download/dev2-release-staging/native/decision_heads.safetensors"
+    },
+    {
+     "file": "native/tokenizer/tokenizer.json",
+     "sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
+     "size": 34363188,
+     "node_copy": "/data/dev2/runs/release/dryrun-kai1-staging-20260928T070010Z/download/dev2-release-staging/native/tokenizer/tokenizer.json"
+    }
+   ],
+   "keep": [
+    {
+     "file": "assets/DEV2.0-0.6B-owl-banner.png",
+     "sha256": "d731c3f12a896ef423361d9084cb4c947bad4138145ef5bb64e5f7885b7e7c46",
+     "size": 581036,
+     "node_copy": "/data/dev2/runs/release/dryrun-kai1-staging-20260928T070010Z/download/dev2-release-staging/assets/DEV2.0-0.6B-owl-banner.png",
+     "kept_because": "not in the released repo"
+    }
+   ],
+   "delete_bytes": 2322051120
+  }
+ ],
+ "used_storage_before": {
+  "llm-semantic-router/dev2-dec-staging": 36705529760,
+  "llm-semantic-router/dev2-release-staging-06bm4": 2399869346,
+  "llm-semantic-router/dev2-release-staging": 2322632156
+ },
+ "remaining_lfs_bytes": {
+  "llm-semantic-router/dev2-dec-staging": 26155949928,
+  "llm-semantic-router/dev2-release-staging-06bm4": 0,
+  "llm-semantic-router/dev2-release-staging": 581036
+ },
+ "deleted_bytes": 15271500298
+}

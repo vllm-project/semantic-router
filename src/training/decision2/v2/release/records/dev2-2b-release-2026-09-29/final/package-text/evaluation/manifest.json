@@ -1,0 +1,153 @@
+{
+  "banner_sha256": "94008fafd629e5b8412e9c7b92d9dec07ff18a30e2cb973d4a2e43a8f927515a",
+  "excluded_comparators": 0,
+  "figures_sha256": {
+    "assets/jevarena-v3-model-task.svg": "5616473321481ad6afe45343adc863dfe4e97537b761833302c12bcdd75e102e",
+    "assets/jevarena-v3-rank.svg": "26a36aa0569d9176357be3438320145c07cedbcc280d65864828c435b77ea17b",
+    "assets/jevbench-public231-rank.svg": "7ed4bf852ef67c95c91ad8a85ba7faba53bdde0115f6a30d492dad2a7fb7ed4e"
+  },
+  "models": [
+    {
+      "H": 0.5254514218436512,
+      "T": 0.5434375,
+      "family": "decision2",
+      "label": "DEV2.0-2B",
+      "licence": "package",
+      "loaded_parameters": 1883930944,
+      "mlx_diag_non_english": {
+        "choice": 0.6653439153439153,
+        "noul": 0.6583333333333333
+      },
+      "mlx_diag_sha256": "63560f76d932d0e5e106efe60525b49706019a23cd704396e6dabcc1cf0a37a5",
+      "public231_correct": 171,
+      "repo_id": null,
+      "report_loaded_parameters": 1883930944,
+      "report_sha256": "08745acf9fc753bc1d3b0335dc3e341c697a657a9e6c7c26d85eebfebf4d160c",
+      "revision": null,
+      "role": "candidate",
+      "seal_sha256": "91a3df051724344b4c4d18bddb2215a81636af98de0d74f9eb9e7f286d88beab",
+      "typed_brier": 0.2705998285734389,
+      "typed_ece_10": 0.10339657499126552,
+      "v3": 53.436879311778604
+    },
+    {
+      "H": 0.42017973109762485,
+      "T": 0.583125,
+      "family": "peer",
+      "label": "Decider 2B",
+      "licence": "apache-2.0",
+      "loaded_parameters": 1881825088,
+      "mlx_diag_non_english": {
+        "choice": 0.753968253968254,
+        "noul": 0.66
+      },
+      "mlx_diag_sha256": "249450b57c6d6ff15b5073bea1915da2c9db9dab241b311539fd41a7ce14d21b",
+      "public231_correct": 175,
+      "repo_id": "Mapika/decider-2b",
+      "report_loaded_parameters": 1881825088,
+      "report_sha256": "dd91e5ba628dbb5a3d2fc4092e9fd62d336c0b88f732419c7dfadd83f634e8a2",
+      "revision": "533964dae8be954c5b5e19fa4948e48408094c1e",
+      "role": "peer",
+      "seal_sha256": "1131965e01aed5b397ca29b8bb20d662ea09eae997936baaf76870e147366c24",
+      "typed_brier": 0.2592733321913117,
+      "typed_ece_10": 0.06303489578140631,
+      "v3": 49.499222791504764
+    },
+    {
+      "H": 0.4050104442984842,
+      "T": 0.525,
+      "family": "peer",
+      "label": "This-That 1.2",
+      "licence": "mit",
+      "loaded_parameters": 1881825088,
+      "mlx_diag_non_english": {
+        "choice": 0.7619047619047619,
+        "noul": 0.665
+      },
+      "mlx_diag_sha256": "860e8dd232f4fa5771d77aff7e1db6e4aac0481e45cef61efa8b246307f643a8",
+      "public231_correct": 147,
+      "repo_id": "flock-io/this-that-model-1.2",
+      "report_loaded_parameters": 1881825088,
+      "report_sha256": "33daa04aa94d831b630401875dfec50c16cfc63e7214be32eb9008807dd29ea3",
+      "revision": "c4d1c30b8d512d278726de439b8cc81fccc70c8f",
+      "role": "peer",
+      "seal_sha256": "4ad0a32db1a74fa27b5c4586554702eadffe422d059f3fd70ca978fe5fe4a744",
+      "typed_brier": 0.34352184932185165,
+      "typed_ece_10": 0.2604558593715919,
+      "v3": 46.11187301083141
+    },
+    {
+      "H": 0.49278944823202014,
+      "T": 0.42531250000000004,
+      "family": "decision1",
+      "label": "Decision 1.0 Sol",
+      "licence": "apache-2.0",
+      "loaded_parameters": 1883930944,
+      "mlx_diag_non_english": {
+        "choice": 0.6706349206349207,
+        "noul": 0.6799999999999999
+      },
+      "mlx_diag_sha256": "35641629ef5600b81a2efbcff7284f6e8a3af1a6544e01008af664fd7d1f1cf0",
+      "public231_correct": 160,
+      "repo_id": "llm-semantic-router/Decision-1.0-Sol-2B",
+      "report_loaded_parameters": 1883930944,
+      "report_sha256": "09892d3e6ebaa8196a0f72184c05f303c5f8d1773dcb43c7b52c85dd5d39ffbb",
+      "revision": null,
+      "role": "own-1.0",
+      "seal_sha256": "f16e93b262f61effffbf7446c06fbb7de9a77f65b9c8c005c0120ed927fb520b",
+      "typed_brier": 0.3445250198063835,
+      "typed_ece_10": 0.2489012401486622,
+      "v3": 45.78094715066313
+    },
+    {
+      "H": 0.3799477831610097,
+      "T": 0.46687500000000004,
+      "family": "peer",
+      "label": "Bosun v3.1 1.7B",
+      "licence": "apache-2.0",
+      "loaded_parameters": 1737985024,
+      "mlx_diag_non_english": {
+        "choice": 0.6997354497354498,
+        "noul": 0.7016666666666667
+      },
+      "mlx_diag_sha256": "0b63232b46dc30f8c7265154fdb417985586aea2a2f2a8181022e21e336760e6",
+      "public231_correct": 151,
+      "repo_id": "Hanno-Labs/bosun-v3.1-1.7b",
+      "report_loaded_parameters": 1737985024,
+      "report_sha256": "7003d0ecead9db7710943cf350ade4a3096962ca816eb81dfc962f67abe9895c",
+      "revision": "1d8dc82a20e4a32ed60927a47272d6efff48eed2",
+      "role": "peer",
+      "seal_sha256": "0206edd184f45803e697795940d25c28b982ad70049ddae2a8bc0ab073710d7a",
+      "typed_brier": 0.3117068390822657,
+      "typed_ece_10": 0.12704599892453267,
+      "v3": 42.117469209734864
+    }
+  ],
+  "paired_vs_own_1_0": {
+    "ci95": [
+      3.2646522505551383,
+      10.805032166921862
+    ],
+    "delta": 7.655932161115473,
+    "replicates": 5000,
+    "sha256": "bca44e5f286312f2e96ac69b590347ddf37d81899dd762f5ce48475365c824ab"
+  },
+  "panel_sha256": {
+    "gold/css15.gold.jsonl": "1cda9623032138bb7b124be0c1b0a4239c06bed7be3169264e6eb31805c19ba4",
+    "gold/public231/manifest.json": "e0e7c67701cf05f996d3b4eac09abf1bb3e6bb363cfe007089acd3644a38ed35",
+    "gold/public231/prompts.jsonl": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd",
+    "gold/public231/targets.jsonl": "abc17b971d13807a15b3cdb43062f4cd876aad9d7314e72365724904e88b937f",
+    "gold/typed-final.gold.jsonl": "707dd28dfbab10d124d437434023729f319501542e999e536fce9b7ff7f2361e",
+    "goldfree/css15.prompts.jsonl": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6",
+    "goldfree/public231.prompts.jsonl": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd",
+    "goldfree/typed-final.prompts.jsonl": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd"
+  },
+  "schema": "dev2-card-evaluation/1",
+  "scope": "post-key same-panel",
+  "scorer_sha256": {
+    "benchmark/score.py": "d02a3b2bbaa08ec45928fc354532b3c3b5aef80e0a5d8e9ed6348ad6d30e2bcc",
+    "jev_arena/compare_v3.py": "bdb966ede0018ebdcd486c77f813ba722bc8d5f78ffab0dbf673631249d2513e",
+    "jev_arena/jevbench_public.py": "aec840b6497beeae8b63e9270670c22506265c086a84e889bc82f694146518cf",
+    "transfer/score.py": "cfe199a1826bb89b27c9eb746f808d74f16b46ca6585ac7b0ff7e440d44eeaca"
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "arm": "m6-mxcxa-soup",
+  "family": "qwen-causal",
+  "recipe": "/src/src/training/decision2/v2/06b/records/arms/m6-mx-s1.json",
+  "ingredients": [
+    {
+      "arm": "m6-mx-s1",
+      "run": "/runs/m1/arms/m6-mx-s1/full",
+      "state_sha256": "506cd5e0dc7a5b385b6941890215639db7a703c4160465ed8d1b541c60e2001f"
+    },
+    {
+      "arm": "m6-mx-s2",
+      "run": "/runs/m1/arms/m6-mx-s2/full",
+      "state_sha256": "fe41c7cae46bf81c3626c0a42c44156092712f2e361f50c4906172a4ba7e8369"
+    },
+    {
+      "arm": "m6-mx-s3",
+      "run": "/runs/m1/arms/m6-mx-s3/full",
+      "state_sha256": "484885ef0ef9473283a07e129ad8f256a22054dd84c68203f9476906d72a0d74"
+    },
+    {
+      "arm": "m6-cx-s1",
+      "run": "/runs/m1/arms/m6-cx-s1/full",
+      "state_sha256": "12c257ca22e5687ffb4ee2eb3ef116ec91c561415c8476a6c8d93ca735bde500"
+    },
+    {
+      "arm": "m6-cx-s2",
+      "run": "/runs/m1/arms/m6-cx-s2/full",
+      "state_sha256": "2b0a9f58ab3815e07d745638b0d5a84487bf5b58e2dd135d2c369296caf23cba"
+    },
+    {
+      "arm": "m6-cx-s3",
+      "run": "/runs/m1/arms/m6-cx-s3/full",
+      "state_sha256": "841dcbd6c3312045687b25fe4c445591cfc4e15409768c94413cc994a919ab1a"
+    },
+    {
+      "arm": "m5-a-s1",
+      "run": "/runs/m1/arms/m5-a-s1/full",
+      "state_sha256": "d4a1892a5000153ebf30b2d565f27b2dec0a4a151b849b43ca9d63b3e4e82b8f"
+    },
+    {
+      "arm": "m5-a-s2",
+      "run": "/runs/m1/arms/m5-a-s2/full",
+      "state_sha256": "b7b482563319923e1a51b7efef0c94cebb6f00d2e9581fbd473c52abd4ff4dfe"
+    },
+    {
+      "arm": "m5-a-s3",
+      "run": "/runs/m1/arms/m5-a-s3/full",
+      "state_sha256": "94bd26292d2c3ab2a2d5eb3938378391f5eb115855cf6c98d7a9512a04a90b9b"
+    }
+  ],
+  "allowed_differences": [
+    "arm",
+    "data.mixture",
+    "gpu_hour_cap",
+    "seed",
+    "start.collapse_stop",
+    "teacher"
+  ],
+  "export": true
+}

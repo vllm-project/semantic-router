@@ -1,0 +1,33 @@
+{
+ "llm-semantic-router/DEV2.0-2B": {
+  "main": "5ad3e9a3cc4865ce0360f4ecce2b345020bfdb38",
+  "private": true,
+  "vs": "b2c5d7eac4ef24648cbf9c23c26421f0960ca542",
+  "safetensors_identical": true,
+  "weights": 3,
+  "changed_files": [
+   "MODEL_MANIFEST.json",
+   "README.md"
+  ]
+ },
+ "llm-semantic-router/DEV2.0-0.8B": {
+  "main": "f458c34ccfb4a5d4d32babeda1570919adb1a3c8",
+  "private": true,
+  "vs": "7d08d0e12082ee6810a4221063342cefe45b6ac3",
+  "safetensors_identical": true,
+  "weights": 2,
+  "changed_files": [
+   "MODEL_MANIFEST.json",
+   "README.md"
+  ]
+ },
+ "collection": {
+  "slug": "llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00",
+  "private": true,
+  "items": [
+   "llm-semantic-router/DEV2.0-0.6B",
+   "llm-semantic-router/DEV2.0-0.8B",
+   "llm-semantic-router/DEV2.0-2B"
+  ]
+ }
+}

@@ -562,6 +562,31 @@ class RecipeMixtureTest(unittest.TestCase):
                     root, spec, {"p.jsonl": base + [renumbered], "r.jsonl": replay}
                 )
 
+    def test_excluded_groups_are_dropped_before_budgets(self) -> None:
+        from training.model.data import file_sha256
+
+        rows = [_train_row(f"a{i}", f"g{i % 3}", f"s{i}") for i in range(6)]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            listed = root / "excluded.json"
+            listed.write_text(json.dumps({"group_ids": ["g1"]}))
+            spec = {
+                "name": "t",
+                "seed": "t",
+                "exclude_group_ids": {
+                    "file": "mx:excluded.json",
+                    "sha256": file_sha256(listed),
+                },
+                "components": [{"name": "P", "files": ["d:p.jsonl"]}],
+            }
+            mixture, manifest = self._build(root, spec, {"p.jsonl": rows})
+            self.assertEqual({r["group_id"] for r in mixture}, {"g0", "g2"})
+            self.assertEqual(manifest["components"]["P"]["excluded_group"], 2)
+            self.assertIn("mx:excluded.json", manifest["inputs_sha256"])
+            spec["exclude_group_ids"]["sha256"] = "0" * 64
+            with self.assertRaises(ValueError):
+                self._build(root, spec, {"p.jsonl": rows})
+
     def test_original_hash_dedup_is_opt_in(self) -> None:
         from v2.dec.build_mixture import row_hashes
 
@@ -843,6 +868,129 @@ class PaddingEquivalenceTest(unittest.TestCase):
 
         groups = mixed_groups([0, 1, 2, 3, 4, 5], [5, 60, 10, 50, 20, 40], 2)
         self.assertEqual(groups, [[1, 0], [3, 2], [5, 4]])
+
+
+class ComposeTeacherTest(unittest.TestCase):
+    """First-wins teacher composition, allowed gold-only pools and the labeling slice."""
+
+    def _write(self, path: Path, records: list[dict]) -> Path:
+        path.write_text("".join(json.dumps(r) + "\n" for r in records))
+        return path
+
+    def _target(self, row: dict, p0: float) -> dict:
+        return {
+            "id": row["id"],
+            "input_sha256": row["input_sha256"],
+            "teacher_probs": {"result_0": p0, "result_1": 1.0 - p0},
+        }
+
+    def _args(self, **values):
+        base = {"allow_missing_pool": [], "check_sample": 0, "seed": "t"}
+        return SimpleNamespace(**{**base, **values})
+
+    def test_first_source_wins_and_overlaps_are_reported(self) -> None:
+        from v2.dec.compose_teacher import compose
+
+        rows = [_train_row(f"r{i}", f"g{i}", f"s{i}") for i in range(4)]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            train = self._write(root / "train.jsonl", rows)
+            first = self._write(
+                root / "a.jsonl",
+                [self._target(rows[0], 0.9), self._target(rows[1], 0.2)]
+                + [{"id": "elsewhere", "input_sha256": "x", "teacher_probs": {}}],
+            )
+            second = self._write(
+                root / "b.jsonl",
+                [self._target(r, 0.6) for r in rows[1:]],
+            )
+            out = root / "teacher.jsonl"
+            manifest = compose(
+                self._args(train=train, source=[first, second], output=out)
+            )
+            got = {
+                r["id"]: r["teacher_probs"]["result_0"]
+                for r in map(json.loads, out.read_text().splitlines())
+            }
+            self.assertEqual(got, {"r0": 0.9, "r1": 0.2, "r2": 0.6, "r3": 0.6})
+            self.assertEqual(manifest["covered"], 4)
+            self.assertEqual(manifest["overlap"]["0>1"]["records"], 1)
+            self.assertEqual(manifest["overlap"]["0>1"]["argmax_agreement"], 0.0)
+            self.assertEqual(manifest["sources"][0]["absent_from_train"], 1)
+
+    def test_missing_rows_need_an_allowed_pool(self) -> None:
+        from v2.dec.compose_teacher import compose
+
+        rows = [_train_row(f"r{i}", f"g{i}", f"s{i}") for i in range(3)]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            train = self._write(root / "train.jsonl", rows)
+            source = self._write(root / "a.jsonl", [self._target(rows[0], 0.7)])
+            ids = self._write(
+                root / "recipe.ids.jsonl",
+                [{"id": "r1", "pool": "H7"}, {"id": "r2", "pool": "H8"}],
+            )
+            with self.assertRaises(ValueError):
+                compose(
+                    self._args(
+                        train=train,
+                        source=[source],
+                        output=root / "x.jsonl",
+                        allow_missing_pool=[f"{ids}:H7"],
+                    )
+                )
+            manifest = compose(
+                self._args(
+                    train=train,
+                    source=[source],
+                    output=root / "y.jsonl",
+                    allow_missing_pool=[f"{ids}:H7", f"{ids}:H8"],
+                )
+            )
+            self.assertEqual(manifest["missing_by_pool"], {"H7": 1, "H8": 1})
+            self.assertEqual(len((root / "y.jsonl").read_text().splitlines()), 1)
+
+    def test_hash_mismatch_and_bad_distribution_fail(self) -> None:
+        from v2.dec.compose_teacher import compose
+
+        rows = [_train_row("r0", "g0", "s0")]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            train = self._write(root / "train.jsonl", rows)
+            wrong_hash = dict(self._target(rows[0], 0.5), input_sha256="other")
+            bad_sum = self._target(rows[0], 0.5)
+            bad_sum["teacher_probs"]["result_1"] = 0.6
+            for index, record in enumerate((wrong_hash, bad_sum)):
+                source = self._write(root / f"s{index}.jsonl", [record])
+                with self.assertRaises(ValueError):
+                    compose(
+                        self._args(
+                            train=train,
+                            source=[source],
+                            output=root / f"o{index}.jsonl",
+                        )
+                    )
+
+    def test_missing_writes_uncovered_rows_then_a_check_sample(self) -> None:
+        from training.model.data import load_partition
+        from v2.dec.compose_teacher import missing_rows
+
+        rows = [_train_row(f"r{i}", f"g{i}", f"s{i}") for i in range(5)]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            train = self._write(root / "train.jsonl", rows)
+            source = self._write(
+                root / "a.jsonl", [self._target(r, 0.5) for r in rows[:3]]
+            )
+            out = root / "label.jsonl"
+            manifest = missing_rows(
+                self._args(train=train, source=[source], output=out, check_sample=2)
+            )
+            written = [r["id"] for r in load_partition(out, "train")]
+            self.assertEqual(written[:2], ["r3", "r4"])
+            self.assertEqual(len(written), 4)
+            self.assertEqual(manifest["uncovered"], 2)
+            self.assertEqual(sorted(manifest["check_ids"]), sorted(written[2:]))
 
 
 if __name__ == "__main__":

@@ -2,7 +2,8 @@
 
 Per [prereg §3](m3b-prereg-2026-09-28.md) with [amendment 1](m3b-prereg-amendment-1-2026-09-28.md); the control-row
 waves follow [amendment 3 §4](m3b-prereg-amendment-3-2026-09-28.md). Amendment 2 adds no teacher targets: H7 / H8 rows
-of the r2 recipes train on gold labels.
+of the r2 recipes train on gold labels. That changed on 2026-09-29: wave `h-w1` gave these rows own-Lux targets
+([record](m3b-lux-h-targets-2026-09-29.md), revision `75e557f1…`).
 
 - **Teacher run:** own Lux1 `llm-semantic-router/Decision-1.0-Lux-9B@bd45a30a…` on node B GPU7, one wave per process.
   - Launcher: the Milestone 2 `teach.sh` (`49e50c6e…`), started by the queue `m3b-luxxl-queue.sh` (`e2ef3193…`). The

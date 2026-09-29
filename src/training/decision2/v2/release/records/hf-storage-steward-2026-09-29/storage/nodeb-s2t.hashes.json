@@ -1,0 +1,13 @@
+{
+ "label": "node-b",
+ "root": "/data/dev2/runs/dec/m3/hf-staging/S2T-soup",
+ "method": "sha256sum on node B",
+ "utc": "2026-09-28T21:12:24+00:00",
+ "utc_done": "2026-09-28T21:12:29+00:00",
+ "sha256": {
+  "m3/S2T-soup/checkpoint/backbone/model-00001-of-00002.safetensors": "1f083a66d8cdcd02887452b2801efae6af41a6e9529bdc37c962b994721dca08",
+  "m3/S2T-soup/checkpoint/backbone/model-00002-of-00002.safetensors": "3a3f291be8d6ac079f1f737ec89092ed3947abd2cd5fd342823c91ce1084af8b",
+  "m3/S2T-soup/checkpoint/decision_head.safetensors": "33b6541bb6636677eb91a4d8e06acd4db81152b11097088840796f11d49c707a",
+  "m3/S2T-soup/checkpoint/tokenizer.json": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
+ }
+}

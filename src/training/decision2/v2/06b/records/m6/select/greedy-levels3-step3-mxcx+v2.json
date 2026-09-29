@@ -1,0 +1,143 @@
+{
+  "S": {
+    "H3": 0.40524775233739313,
+    "H_pilot": 0.3637649735863574,
+    "P": 45.93296035311542,
+    "Q": 48.48130529963978,
+    "T_dev": 0.5800000000000001,
+    "cal_noul": {
+      "accuracy": 0.9344827586206896,
+      "correct": 271,
+      "n": 290
+    },
+    "collapse_stopped": false,
+    "contains_new_family": true,
+    "guards": {
+      "cal_noul_ge_085": true,
+      "choice_ge_255": true,
+      "score_ge_101": true,
+      "score_levels_ge_3": true,
+      "select_noul_ge_085": true
+    },
+    "guards_failed": [],
+    "guards_pass": true,
+    "in_distribution_source": "SOUP.json",
+    "ingredients": [
+      "m6-mx-s1",
+      "m6-mx-s2",
+      "m6-mx-s3",
+      "m6-cx-s1",
+      "m6-cx-s2",
+      "m6-cx-s3"
+    ],
+    "name": "m6-mxcx-soup",
+    "pilot_tasks": {
+      "discourse": 0.3637649735863574,
+      "implicit_hate": 0.32352046454407923,
+      "semeval_stance": 0.5284578188817427
+    },
+    "readout_dir": "/data/dev2/runs/06b/m1/arms/m6-mxcx-soup/readout",
+    "score_level_counts": {
+      "0": 61,
+      "1": 8,
+      "2": 331
+    },
+    "score_levels": 3,
+    "score_modal_share": 0.8275,
+    "select_noul": {
+      "accuracy": 0.9275862068965517,
+      "correct": 269,
+      "n": 290
+    },
+    "typed": {
+      "choice": 509,
+      "noul": 209,
+      "score": 210
+    },
+    "typed_n": {
+      "choice": 800,
+      "noul": 400,
+      "score": 400
+    }
+  },
+  "S_plus_g": {
+    "H3": 0.3961232540252171,
+    "H_pilot": 0.36714901275195394,
+    "P": 45.54549288402245,
+    "Q": 47.30852338894627,
+    "T_dev": 0.565,
+    "cal_noul": {
+      "accuracy": 0.9344827586206896,
+      "correct": 271,
+      "n": 290
+    },
+    "collapse_stopped": false,
+    "contains_new_family": true,
+    "guards": {
+      "cal_noul_ge_085": true,
+      "choice_ge_255": true,
+      "score_ge_101": true,
+      "score_levels_ge_3": true,
+      "select_noul_ge_085": true
+    },
+    "guards_failed": [],
+    "guards_pass": true,
+    "in_distribution_source": "SOUP.json",
+    "ingredients": [
+      "m6-mx-s1",
+      "m6-mx-s2",
+      "m6-mx-s3",
+      "m6-cx-s1",
+      "m6-cx-s2",
+      "m6-cx-s3",
+      "m4-v2-s1",
+      "m4-v2-s2",
+      "m4-v2-s3"
+    ],
+    "name": "m6-mxcxv-soup",
+    "pilot_tasks": {
+      "discourse": 0.3484329473982924,
+      "implicit_hate": 0.36714901275195394,
+      "semeval_stance": 0.4727878019254049
+    },
+    "readout_dir": "/data/dev2/runs/06b/m1/arms/m6-mxcxv-soup/readout",
+    "score_level_counts": {
+      "0": 132,
+      "1": 6,
+      "2": 262
+    },
+    "score_levels": 3,
+    "score_modal_share": 0.655,
+    "select_noul": {
+      "accuracy": 0.9172413793103448,
+      "correct": 266,
+      "n": 290
+    },
+    "typed": {
+      "choice": 490,
+      "noul": 209,
+      "score": 205
+    },
+    "typed_n": {
+      "choice": 800,
+      "noul": 400,
+      "score": 400
+    }
+  },
+  "accept": false,
+  "checks": {
+    "H3_within_0.010": true,
+    "Q_not_lower": false,
+    "choice_within_20": true,
+    "guards_hold": true,
+    "score_within_20": true
+  },
+  "delta": {
+    "H3": -0.009124498312176044,
+    "Q": -1.1727819106935087,
+    "choice": -19,
+    "score": -5
+  },
+  "label": "development readout (never a release score)",
+  "schema": "dev2-06b-m6-select-greedy/1"
+}

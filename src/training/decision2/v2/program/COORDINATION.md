@@ -86,6 +86,9 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 | A7 own-1.0 corpora | `/home/xunliu/code/vllm-sr-dev2-a7` | `xunzhuo/decision-2-training-a7` |
 | release engineering (DEV2.0-0.6B) | `/home/xunliu/code/vllm-sr-dev2-release-06b` | `xunzhuo/decision-2-training-release-06b` |
 | release engineering (DEV2.0-2B) | `/home/xunliu/code/vllm-sr-dev2-release-2b` | `xunzhuo/decision-2-training-release-2b` |
+| eval: human-transfer dev panel | `/home/xunliu/code/vllm-sr-dev2-eval-devpanel` | `xunzhuo/decision-2-training-eval-devpanel` |
+| HF storage steward | `/home/xunliu/code/vllm-sr-dev2-storage` | `xunzhuo/decision-2-training-storage` |
+| release engineering (DEV2.0-4B) | `/home/xunliu/code/vllm-sr-dev2-release-4b` | `xunzhuo/decision-2-training-release-4b` |
 
 - New code and records go under `src/training/decision2/v2/<track>/` (tracks: `eval`, `data`, `06b`, `dec`, `9b`, `27b`;
   shared helpers in `src/training/decision2/v2/common/`). Reuse the existing verified modules instead of forking them.
@@ -145,15 +148,14 @@ ask the coordinator for more in your report. When a GPU is reassigned the coordi
 
 | GPUs | Owner (coordinator may reassign) |
 | --- | --- |
-| node A GPU0 | 0.6B track (owner) — SHARED from 2026-09-28 22:30 UTC+8 with the DEV2.0-0.6B release worker for short CAL698-calibration / re-score jobs (≤ 30 min; own lease owner entry `owner.release`) |
-| node A GPU1 | 0.6B track (post-release optimization) |
-| node A GPU2–4 | 9B track (returned 2026-09-28 21:31 UTC+8 after AutoJev target production). **9B track: read the 21:00 cross-track note (A7 is mostly NEW data for Lux) and the 21:35 AutoJev note before planning work on these GPUs.** |
+| node A GPU0–1 | 0.6B track (owner; Milestone 7 from 2026-09-29 08:20 UTC+8). Short shared-lease jobs by eval (e.g., HT-DEV collections) and release workers are allowed as recorded co-tenants with their own lease entries |
+| node A GPU2–4 | ~27B Milestone 3 (moved from the 9B track 2026-09-29 04:30 UTC+8; the 27B track may train on node A — same image + frozen autotune cache per the comparability rule; formal comparisons stay on node B) |
 | node A GPU5 | DEV2.0-0.8B release verification + C1 scoring event 1 (lent by the decoder track, 2026-09-28 21:00 UTC+8; small inference jobs may share it); back to the decoder afterwards |
-| node A GPU6–7 | 9B track Milestone 3 (lent by eval at 2026-09-28 20:30 UTC+8; eval borrows one back for a formal run or a C1 scoring event) |
-| node B GPU0–2 | 0.8B–4B decoder (added 2026-09-28 10:40 UTC+8) |
+| node A GPU6–7 | 9B track Milestone 4 (2026-09-29 04:30 UTC+8); the eval track may use short shared-lease jobs on any GPU for development-panel scoring |
+| node B GPU0–2 | 9B track (moved from the decoder 2026-09-29 07:35 UTC+8; 9B may train on node B — same image + frozen autotune cache; its formal comparisons stay on node A) |
 | node B GPU3–4 | 0.8B–4B decoder (moved from eval at 2026-09-28 16:30 UTC+8) |
 | node B GPU5–6 | ~27B |
-| node B GPU7 (after the research & data H7 / H8 Lux wave, ~04:30 UTC+8) | ~27B Milestone 3 (assigned 2026-09-29 04:05 UTC+8); more GPUs from the 9B track when its Milestone 3 ends |
+| node B GPU7 | ~27B Milestone 3 (H7 / H8 Lux wave finished and released 2026-09-29 04:14 UTC+8; assigned at 04:05); more GPUs from the 9B track when its Milestone 3 ends |
 | node B GPU7 | research & data (owner) — SHARED from 2026-09-28 21:55 UTC+8 with the eval track's node-B comparator re-validation (~1.5 h, inference only; each writes its own lease owner entry, e.g. `owner.eval`) |
 
 Every training arm: freeze start repo + revision, data hash, token/step budget, controls, checkpoint-selection rule and
@@ -179,6 +181,7 @@ exactly one gist file and updates it in place:
 | `08-decision-2-own10-corpora.md` | A7 own-1.0 corpora |
 | `07b-decision-2-release-06b.md` | release engineering for DEV2.0-0.6B |
 | `07c-decision-2-release-2b.md` | release engineering for DEV2.0-2B |
+| `07d-decision-2-release-4b.md` | release engineering for DEV2.0-4B |
 
 - Create: write the file locally with exactly that name, then `gh gist edit cd90fce0fa548616d8a4f1b2d2398dea -a <local-path>`.
   Update: `gh gist edit cd90fce0fa548616d8a4f1b2d2398dea -f <file-name> <local-path>`. Never modify or delete other files.
@@ -187,6 +190,158 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-29 09:30 — **DEV2.0-4B RELEASED (private)**: `llm-semantic-router/DEV2.0-4B@452f133211de292a87bc29ab7e24a3bd0704e40d`
+  (final decision `bfd45785…`; weights identical to `8052eb6c` / `c73123f3`; T = 1; integration `e7e7fe1c3`). The private
+  "Decision 2.0" collection holds exactly DEV2.0-0.6B, 0.8B, 2B and 4B. Storage cleanup (all `rewrite_history=False`, node
+  copies re-hashed first) freed 53.37 GB: N4XF duplicate 16.83, 9B DW 31.76, 0.6B Z 2.39, 0.6B mxcx 2.39 → **40.48 GB used,
+  59.52 GB free**. HOLD candidates (9B DW, 0.6B Z / mxcx) now live only on the nodes with recorded hashes.
+
+- 2026-09-29 09:25 — HT-DEV v1 validated (eval records under `v2/eval/records/`; integration `af16d465f`; "Eval runners"):
+  it does NOT track formal human transfer better than the CSS pilot (within-tier sign agreement .539 vs pilot median .539
+  and pilot three-task mean .607; within-tier r .396 / .402 / .523; P(HT-DEV better) .51 vs a .90 bar). Rules:
+  - Proxy v2 and its tie band 8 stay. For human-transfer screening use the **CSS-pilot three-task mean** (best of the three);
+    human transfer is decided only by the formal paired CSS15 CI. HT-DEV is a registered diagnostic, never for selection.
+  - **Score5-DEV v1** (500 A7q held-out items, `score5` block in the dev readout) is NOT a gate: it missed the known
+    `m6-mxcx-soup` collapse (on human-rating rows that soup leans on level 0, while on typed FINAL it collapses to level 4).
+  - **0.6B track (Milestone 7, option a):** fit the per-level Score bias on CAL698 Score rows plus held-out slices of the
+    GENERATED Score arms (A7g, G6, A6g — programmatic, like typed FINAL Score), not on A7q human ratings; check level usage on
+    typed-DEV Score and those generated slices before the formal run. If you already fitted on A7q, re-fit before the formal run
+    and disclose.
+
+- 2026-09-29 09:00 — DEV2.0-4B package verified (gist `07d-decision-2-release-4b.md`; integration `31d21a4ec`): private
+  `llm-semantic-router/DEV2.0-4B@8052eb6c99c0b3b6a9980dcd77fb868c27da353a` (card-only on top of the full-parity upload
+  `c73123f3`; manifest `eab4e8ac…`; 4,208,383,488 loaded parameters; 16.85 GB; T = 1 — CAL698 worsened CSS-pilot ECE
+  .063 → .068 while improving the other three measures, and the rule has no tolerance band). Finalization + `--collect`
+  and the storage cleanup are running. Errata for the 0.8B / 0.6B / 2B records landed (`ce2eb1789`).
+  - Storage hit 93.85 / 100 GB with the 4B upload. The cleanup deletes the 4B staging copy and the staging copies of the HOLD
+    / not-a-successor 9B DW, 0.6B Z and 0.6B m6-mxcx (node copies are their durable store) to restore >= 40 GB.
+  - Tooling notes: the mirrored `hf_headroom.sh` lacks the execute bit — call it with `bash`. For formal runs, the scored run
+    and its mlx-diag run should share one frozen autotune cache so release parity can run in one pass (kernel tile choice
+    alone moves probabilities by up to 1.5e-3).
+
+- 2026-09-29 08:20 — From 0.6B Milestone 6 (gist 03; integration `4cb2afb8c`): no successor; the released DEV2.0-0.6B stands.
+  - `m6-mxcx-soup` (mx ⊕ cx, 6 seeds, XL r2 recipes at ~30M tokens with own-Lux targets on every row): post-key v3 48.46,
+    +4.92 [+2.50, +9.10] vs released, +5.93 [+3.93, +13.58] vs GLiNER2.5-Decide, human transfer −.021 [−.064, +.061], mlx-diag
+    +2.7 — but **typed FINAL Score collapsed** (379 / 400 answers = level 4; accuracy 131 ≈ always-4 128). `m6-mxcxa-soup`
+    (+ gold-label arm a): +3.29 [−1.12, +7.74], no collapse. Plausible cause: Lux distillation on the human Score rows.
+  - **Every track: watch Score level usage when distilling Lux on human-rated Score rows**; typed-DEV Score has 3 levels and
+    typed FINAL has 5, so development readouts can miss a 5-level collapse. **Eval track:** add a 5-level Score check to the
+    development readout (e.g., held-out slices of the 5-level Score arms) and publish it in "Eval runners".
+  - Coordinator: 0.6B Milestone 7 fixes the collapse — (a) a preregistered per-level Score bias correction fitted only on
+    CAL698 + in-family 5-level Score held-out slices, then one formal run; (b) a retrain with gold labels (no Lux targets)
+    on the human Score rows. Successor = paired CI lower bound > 0 vs released, human transfer not worse, no type collapsed.
+  - Storage reminder: HOLD / not-a-successor models are NOT uploaded to HF (04:55); `dev2-staging-06bm6-mxcx` is small and
+    stays, but no further HOLD uploads.
+
+- 2026-09-29 08:05 — **DEV2.0-4B APPROVED for private release** (eval record `m4-dev2-4b-gates-2026-09-29.md`; integration
+  `e1ea4f5c7`). Gates: human transfer vs Decider 4B +0.024 [−0.095, +0.073], vs Jet v6.2 +0.042 [−0.061, +0.093]; v3 vs
+  Decider 4B +1.27 [−5.71, +4.31], vs Jet +2.78 [−3.33, +5.94], vs adopted Nox1 +6.68 [+0.99, +9.64]; no type collapsed
+  (Choice .728, Noul .917, Score .463). No training-row exposure to the 84 flagged items (v3 stays 63.151 without them).
+  **Card disclosures (release worker):** margins over Decider 4B / Jet v6.2 not significant; the gain over Nox 1.0 is typed
+  reasoning (human-transfer gain not significant); typed Choice far below both peers (.728 vs .938 / .900); Score rarely
+  predicts level 0 and level-2 recall drops .30 → .19; public 231 significantly below Decider 4B (171 vs 192, −21 [−32,
+  −10]); mlx-diag Choice / Noul parts only — non-English Choice level (75.1% vs 75.9%), non-English Noul 72.7% vs 80.0%
+  (Korean 63% vs 69%, Japanese 67% vs 77%); CSS15 losses on wiki_corpus, mrf, media_ideology, talklife; long inputs; 4
+  invalid answers; the eval track's evaluation-familiarity sentence (no exposure); peer licence notes (Decider 4B licence
+  from card metadata only; Jet v6.2 Apache-2.0 with LICENSE); calibration decision; C1 placeholder. After release, delete
+  the `m4/N4XF-soup/` staging copy with `rewrite_history=False` (org private storage now has 25.4 GB free).
+  DEV2.0-2B needs no correction (the other 12 excluded rows touch only Decision Bench v4, which is in no reported panel).
+
+- 2026-09-29 07:55 — The 9B Milestone 4 worker's session ended (context exhausted) while its GPU chains kept running (node A
+  GPU6: K-s2; GPU7: P-s1; queued seeds / arms follow). A fresh 9B worker took over (see gist 05); it also uses node B
+  GPU0–2 (assigned to 9B at 07:35, idle until now). Lesson for every worker: keep context lean (delegate monitoring and
+  heavy reads to internal subagents) — two workers have now run out of context mid-milestone.
+- 2026-09-29 07:55 — **~27B track:** node A GPU2–4 have been yours since 04:30 and are idle; use them for your second
+  seeds (same image + frozen autotune cache; formal comparisons stay on node B).
+
+- 2026-09-29 07:35 — **FOURTH RELEASE CANDIDATE: DEV2.0-4B** (decoder M4; gist 04; integration `9b8137e56`).
+  - N4XF soup: own Nox 1.0, fine-tuned on a token-matched subsample of mx-xl-full-r2 with own-Lux targets (KL 1.0) on
+    every row except the gold-only H7 / H8 rows, three seeds + uniform soup. Post-key v3 63.151 vs the adopted Nox1 56.470:
+    +6.68 [+0.99, +9.64]; human transfer .580 vs .519 (11 of 15 CSS15 tasks up); typed FINAL Choice / Noul / Score 582 / 734 /
+    185 vs 552 / 653 / 178 (none collapsed); vs Decider 4B +1.27 [−5.71, +4.31], vs Jet v6.2 +2.78. Staged private
+    `dev2-dec-staging@e86562218928fbb77f8071b45646962f63049fad`, `m4/N4XF-soup/`; scored run
+    `/data/dev2/runs/dec/formal/m4/m4-N4XF-soup-nodeA` (+ `-mlx`). Disclose: mlx-diag .770 vs .795 (non-English Noul .727 vs
+    .800; Korean .63 vs .69; Japanese .72 vs .77); CSS15 wiki_corpus −.065, mrf −.045; public 231 171 vs 173.
+  - Release engineering and eval gate checks start now; C1 line after event 3. After release, delete its staging copy with
+    `rewrite_history=False`.
+  - Second finalist N4LX (cross-arm soup) 60.367 → HOLD; the 2B probe was below S2T.
+  - S2T's M3 mixture contains 57 rows that the r2 rescreen excluded for evaluation-panel hits (45 of them CSS15, matching
+    the 45 rows on the 2B card): the eval track confirms the other 12 touch no reported panel.
+  - **GPU reallocation:** node B GPU0–2 → 9B track. The decoder keeps node A GPU5 + node B GPU3–4 for Milestone 5 (a
+    successor study on the multilingual-Noul losses shared by the 0.8B / 2B / 4B models).
+
+- 2026-09-29 05:25 — Storage steward done (record `v2/release/records/hf-storage-steward-2026-09-29.md`; integration `e0ac90ef8`):
+  org private storage 57.76 GB, **42.24 GB free**. Before ANY upload run
+  `src/training/decision2/v2/common/hf_headroom.sh --node node-a --min-free-gb <upload GB>` (exits 1 if it won't fit).
+  - **HARD RULE: every LFS deletion must pass `rewrite_history=False`.** In `huggingface_hub` 1.33,
+    `permanently_delete_lfs_files` defaults to rewriting history. Three earlier cleanups did that to `dev2-dec-staging`,
+    `dev2-release-staging-06bm4` and `dev2-release-staging`, so the staging revisions `545a6784`, `784a894f`, `16c0929a`,
+    `62c61c10` and `5afd8fc8` cited in records NO LONGER EXIST. **Erratum:** artifact identity rests on the per-file SHA-256
+    in manifests and the verified node copies, not on those staging revision IDs; released repos (DEV2.0-0.6B / 0.8B / 2B)
+    were not rewritten. The 2B release record's "commit history is unchanged" is wrong. The next release worker adds errata
+    to the affected release records.
+  - **Decoder track (read this):** do NOT re-upload S2T — it is released as DEV2.0-2B and its staging copy was deleted on
+    purpose (04:47, and again 05:15). Do NOT upload HOLD candidates or M4 finalists to HF (04:55 policy): keep them on the
+    nodes with hashes; only a coordinator-approved release candidate is uploaded, directly to its release repo. Correct your
+    incident record's attribution (the S2T files were deleted by the release worker's 04:47 cleanup, not your 04:51 call).
+
+- 2026-09-29 04:55 — **DEV2.0-2B RELEASED (private)**: `llm-semantic-router/DEV2.0-2B@5ad3e9a3cc4865ce0360f4ecce2b345020bfdb38` (weights
+  identical to `b2c5d7ea`; final decision `de59a6c7…`, gate `8dbf4c87…`). **DEV2.0-0.8B card-only revision**
+  `f458c34ccfb4a5d4d32babeda1570919adb1a3c8` (overlap + A7 v3 quarantine disclosures; decision `dd397e04…` supersedes
+  `fedb18fa…`). The private "Decision 2.0" collection holds exactly DEV2.0-0.6B, DEV2.0-0.8B and DEV2.0-2B. Integration
+  `73398871f`.
+  - **STORAGE POLICY TIGHTENED (supersedes the staging parts of 02:45 / 04:10):** org private storage had reached 99.17 of
+    100 GB (the 9B staging repo alone is 31.8 GB) and is 83.90 GB after removing duplicate copies of released models.
+    From now on: (1) **no HF uploads of HOLD candidates** — the nodes' `/data` (with recorded hashes) is their durable
+    store; (2) only a candidate the coordinator has approved for release is uploaded, directly to its final repo; (3) a
+    storage steward clears existing HOLD staging LFS files that have verified node copies (seeds and superseded soups
+    first) until >= 40 GB is free; (4) every track runs the steward's headroom check before any upload. Datasets, eval
+    artifacts and released repos are never deleted.
+
+- 2026-09-29 04:35 — Overlap-effect check done (eval record `m5-overlap-effects-2026-09-29.md`; integration `cae64f4e8`): removing
+  the 84 flagged items in reported panels (82 human transfer, 73 of them `media_ideology`; 1 public 231; 1 mlx-diag; no typed
+  item) moves v3 by <= 0.05 for all 16 models; every release gate and threshold holds; no contamination signature (flagged-vs-
+  unflagged accuracy differences all include 0; the 0.6B never saw any; the 0.8B's rows touch 11 scored items, the 2B's 19).
+  Card wording: a one-line disclosure on DEV2.0-0.8B (card-only revision), one appended sentence on the 2B's
+  evaluation-familiarity item, nothing for 0.6B. DEV2.0-2B finalization, the 0.8B card-only revision and the staging
+  cleanup of released models' duplicate copies are running (release worker for 2B).
+
+- 2026-09-29 04:30 — From 9B Milestone 3 (gist 05; integration `850522e49`): 9B stays on Lux 1.0.
+  - Best: **DW** = ½ × (full-fine-tune three-seed soup on A7 + v1 + v2-M, 116M tokens) + ½ × Lux 1.0 (weight interpolation):
+    post-key v3 68.571 vs Lux1 65.808, +2.763 [−2.085, +6.202] — HOLD (lower bound < 0). Typed reasoning gain is
+    significant (T +.076 [+.054, +.098]; constraint competition .863, exception stack .882, resource ledger .662 vs Lux1
+    .777 / .760 / .568); human transfer flat and noisy (reddit humor −.167); public 231 179 vs 183 (hard −4); mlx-diag .813 vs
+    .828. Staged private `dev2-9b-staging@8a98dc82` (`m3/DW/`); scored run `/data/dev2/runs/9b/formal-m3/DW-16k`.
+    Coordinator: HOLD — a typed-only gain with flat human transfer and regressions is what the brief warns against.
+  - Findings: A7's Stage curricula are Lux's typed-reasoning lever; full fine-tuning is seed-unstable (transition-table
+    collapse in 3 of 5 runs) and soups + interpolation toward the 1.0 model repair it (interpolation beats both endpoints);
+    **human transfer is the binding axis for 9B and 4B** and the 3-task CSS pilot cannot see it; AutoJev targets transferred
+    poorly at 9B (arm B 64.600, −1.208); the shared renderer alone costs Lux 0.58 v3 (same-renderer Lux1 at 16K = 65.231),
+    so the stricter 9B comparator stays the adopted 65.808.
+  - A0s-strict EXISTS (research & data, gist 02 entry 22:00; also part of XL r1 / r2) — use it rather than in-materializer
+    exclusions.
+  - Coordinator actions: a broader human-transfer DEVELOPMENT panel is commissioned from the eval track (separate worktree);
+    9B Milestone 4 continues the DW line on node A GPU6–7; node A GPU2–4 move to ~27B Milestone 3.
+
+- 2026-09-29 04:25 — **Own-Lux targets now cover 100% of mx-xl-full-r2 (365,970) and mx-xl-short-r2 (373,577)** and all six
+  r2 controls: wave `h-w1` (25,664 H7 / H8 prompts) at private revision `75e557f170979bdbc428b6ea698a2047e2d2a5cd`, under
+  `m3/teachers/lux1/xl/` (`coverage-r2.json` `ecb6dc36…`); same Lux1 runtime, image and frozen cache as the earlier waves;
+  repeat check bitwise identical (integration `2d0e69965`). Runs that trained H7 / H8 rows on gold labels only should say
+  so. AutoJev targets for XL rows stay deferred. Node B GPU7 is now the ~27B track's.
+
+- 2026-09-29 04:10 — DEV2.0-2B package verified (gist `07c-decision-2-release-2b.md`; integration `e2918d988`): private
+  `llm-semantic-router/DEV2.0-2B@b2c5d7eac4ef24648cbf9c23c26421f0960ca542`, manifest `63c61883…`, 1,883,930,944 loaded
+  parameters, T = 1 (CAL698 worsened typed-DEV Brier / ECE and CSS-pilot Brier), parity 0 changes on 10,653 prompts,
+  re-hash 33/33, Apache-2.0 lineage (Sol 1.0 `ce0c018a` ← Qwen/Qwen3.5-2B@15852e8c); draft decision `31ae8a98…`. The
+  release worker found 45 training rows (18 groups) sharing long word sequences with human-transfer items (no typed, public
+  231 or mlx-diag matches); the card sentence is draft until the eval overlap-impact check (running) returns. Final decision
+  and `--collect` follow that check.
+  - **HF private storage is capped at 100 GB** (the org has no paid plan); usage 67.37 GB after the 2B upload. Storage
+    plan: after each release, delete the stored LFS files of that model's staging copies (0.8B E8F soup in
+    `dev2-dec-staging`, 0.6B `dev2-release-staging-06bm4`, the Kai1 dry-run `dev2-release-staging`, and 2B S2T once
+    released), keeping re-hashed node copies; 9B / 27B releases use `qwen-adapter` packages bound to their public Apache-2.0
+    bases (no base redistribution). Every track checks headroom before uploading; datasets and eval artifacts stay.
 
 - 2026-09-29 04:05 — From ~27B Milestone 2 (gist 06; integration `76267432d`): HOLD. Best = Score arm (A6g + A6h) seed 1,
   post-key v3 62.72 vs the >= 64.9 bar (AutoJev-27B re-measured 72.13; −9.42 [−10.65, −4.78]). Score data is the only
@@ -834,6 +989,8 @@ exactly one gist file and updates it in place:
 
 (The eval track appends frozen runner commands here when ready; other tracks use them for formal same-panel runs.)
 
+**Storage (every track, before any HF upload):** `src/training/decision2/v2/common/hf_headroom.sh --node node-a --min-free-gb <upload GB>` prints the org's private usage and headroom (100 GB cap) and exits 1 if the upload would not fit (`--json` for scripts; storage steward record `v2/release/records/hf-storage-steward-2026-09-29.md`, integration `e0ac90ef8`).
+
 ### Node bootstrap done (eval track, 2026-09-28 ~11:05 UTC+8)
 
 - Both nodes: `/data/dev2/{src,runs,leases,hf-cache,private,logs,tools}` (`private/` mode 700). HF token and Jev env file
@@ -1060,3 +1217,65 @@ Record `v2/eval/records/m5-proxy-v2-calibration-2026-09-29.md` (prereg `79482d86
 - **Re-run the calibration** when new formal candidates land:
   `python3 -m v2.eval.proxy_calibration extract --spec <spec.json> --output <features.json>` (node A, CPU), then
   `... analyze --features <features.json> --output <analysis.json>`.
+
+### Development proxy v3 (HT-DEV): NOT adopted, proxy v2 stays (eval track, 2026-09-29 ~09:25 UTC+8; code at `af16d465f` or later)
+
+Record `v2/eval/records/htdev-validation-2026-09-29.md` (prereg `htdev-prereg-2026-09-29.md` §5–§6 plus amendments 1–2;
+aggregates in `records/htdev-validation/`).
+
+- **HT-DEV v1 does not track formal human transfer better than the three-task CSS pilot, so no track switches.**
+  - Scope: the full preregistered set of 37 models (0.6B–9B own 1.0, peers and 2.0 candidates). Each has one same-job
+    `ht-dev,css-pilot,typed-dev` collection, compared against the stored post-key CSS15 H. No v3 item was re-read; no C1.
+  - Primary (within-tier sign agreement on pairs with |ΔH_formal| ≥ 0.02): HT-DEV 48/89 = 0.539, the same as the pilot
+    median (48/89). The pilot three-task mean gets 54/89 = 0.607. Paired model bootstrap P(HT-DEV better) = 0.51 against
+    a bar of 0.90.
+  - Within-tier Pearson r: 0.396 vs 0.402 (three-task mean 0.523). Cross-tier Spearman: 0.77 vs 0.81.
+  - Per tier, HT-DEV wins at 4B (16 vs 9 of 28 pairs) and 2B, and loses at 9B (2 vs 6 of 7), 0.8B and 0.6B. It
+    over-rates the JPT peers.
+  - Its 10%-risk gap against formal H is 0.12, wider than the whole within-tier formal-H range at 0.8B, 4B and 9B.
+- **P_HT = 100·√(T_dev·H_dev) orders v3 worse than P**, computed for the record only: 58/90 vs 67/90 within-tier
+  decision pairs, LOO RMSE 3.42 vs 3.23.
+- **Rules, unchanged and now confirmed:**
+  - Proxy v2 stands: P = 100·√(T_dev·H_pilot), v3 ≈ 22.4 + 0.58·P, tie band |ΔP| < 8. Drop only candidates ≥ 8 P
+    behind the best; send at most three finalists per tier to the formal runner.
+  - **Human transfer is decided only by the formal paired CSS15 CI.** No development panel (HT-DEV, the pilot median
+    or the three-task mean) orders within-tier candidates on formal H reliably. Release-gate formal-H pair CIs span
+    about 0.13–0.18, so within-tier gaps below about 0.05 sit inside the target's own noise.
+  - Never select on H_dev, H_pilot or a single task.
+- **HT-DEV stays registered** (`ht-dev`: 3,240 items, 13 tasks, dataset-isolated) as a diagnostic development panel
+  only, never a proxy, screen or selection criterion.
+  - Collections and validation are on node A under `/data/dev2/runs/eval/htdev/{collect,validation}`.
+  - Backup: private eval-artifacts dataset, `htdev/v1/` at `ad4b958e`.
+  - GPU: 3.27 GPU-h in total (build 0.64 + collections 2.63); the validation itself was CPU only.
+
+### 5-level Score development check (Score5-DEV v1; eval track, 2026-09-29 ~09:25 UTC+8; code at `af16d465f` or later)
+
+Record `v2/eval/records/score5-dev-2026-09-29.md` (prereg `score5-dev-prereg-2026-09-29.md`).
+
+- **It is built and in the dev readout, but it does NOT detect the m6 collapse. Do not use it as a collapse gate.**
+  - Panel: 500 items, 100 per level, from the A7q held-out slice (OASST1 reply ratings). The rows are familiar and in
+    family.
+  - Preregistered flags: COLLAPSE when the modal share is ≥ 0.60 or ≥ 2 levels are each used < 2%; WARN when the
+    modal share is ≥ 0.40 or one level is used < 2%.
+  - `m6-mxcx-soup`, which collapsed to level 4 on typed FINAL, is unflagged here: modal share 0.38 on level 0,
+    accuracy 0.34. So are mxcxa and cx.
+  - The released T soup gets WARN: it uses level 4 for 1% of answers, accuracy 0.236.
+  - The collapse is out-of-family behaviour; in-family rows don't show it. Cost: 0.03 GPU-h (node A GPU5).
+- **Fit pool, for 0.6B Milestone 7 and any track fitting on A7q held-out rows:**
+  - Fit only on the 1,913 `aho.jsonl` rows whose `id` is not in
+    `/data/dev2/runs/eval/score5-dev/build-v1/panel-rows.jsonl` (also in eval-artifacts `score5-dev/v1/`, `1b6924f6`).
+    The 500 panel rows are evaluation-only.
+  - On these in-family rows the mxcx soup over-uses level 0, not level 4. A per-level bias correction fitted on in-family
+    A7q slices may therefore not transfer to typed FINAL. The formal typed FINAL Score level usage (as in the 08:20 note)
+    and the gate's "no type collapsed" remain the check.
+- **In-family readout for a candidate** (code ≥ `1eb2d2928`). The readout JSON gains a `score5` block with the histogram,
+  modal share, rare levels, accuracy CI, macro-F1, QWK and flags:
+  1. `run_same_panel.sh ... -- ... --panels typed-dev,css-pilot,score5-dev`
+  2. `python3 -m v2.eval.htdev.score seal --prompts /data/dev2/private/panels/goldfree/score5-dev.prompts.jsonl --predictions <run>/output/score5-dev.predictions.jsonl --output <run>/SEAL-SCORE5.json`
+  3. `python3 -m v2.eval.dev_readout --run-dir <run> ...`
+- **Next eval worker: build an out-of-family 5-level Score development check.**
+  - Candidate sources: fresh 5-level items from the typed-panel generator family, disjoint from typed FINAL, if such a
+    generator exists; or out-of-family human-rated 5-level sources.
+  - Validate on mxcx vs mxcxa: two short 0.6B collections, < 0.05 GPU-h.
+  - HT-DEV's empathy task does not qualify as it stands. The T soup already puts 74% of its answers on one level there,
+    and every model is at chance accuracy.

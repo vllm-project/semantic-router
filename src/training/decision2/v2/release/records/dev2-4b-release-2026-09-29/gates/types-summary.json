@@ -1,0 +1,288 @@
+{
+  "note": "v2.eval.gates types on stored predictions (node A, CPU, mirror 4fd7e3388); full outputs with gold label counts stay on node A under /data/dev2/runs/release/dev2-4b/gates/ (sha256 below)",
+  "runs": {
+    "decider4b": {
+      "rule": "COLLAPSED if one answer >= 90% of a type or the Wilson 95% lower bound <= chance",
+      "run": "/data/dev2/runs/eval/m1-adopt/decider4b",
+      "sha256": "a3c9df1e8a82ee2749617950b481ab6b21f54bd30b974d4f6ae2c3305a2208cf",
+      "types": {
+        "choice": {
+          "accuracy": 0.9375,
+          "accuracy_ci95": [
+            0.9185451766460166,
+            0.9522731537315106
+          ],
+          "chance": 0.2666666666666696,
+          "predicted_distribution": {
+            "approved": 106,
+            "insufficient_evidence": 186,
+            "offer_0": 232,
+            "offer_1": 168,
+            "rejected": 108
+          },
+          "predicted_top_share": 0.29,
+          "slots": 800,
+          "valid": 800,
+          "verdict": "OK"
+        },
+        "noul": {
+          "accuracy": 0.77875,
+          "accuracy_ci95": [
+            0.7486915854968131,
+            0.8061440935722971
+          ],
+          "chance": 0.5,
+          "predicted_distribution": {
+            "False": 428,
+            "None": 1,
+            "True": 371
+          },
+          "predicted_top_share": 0.535,
+          "slots": 800,
+          "valid": 800,
+          "verdict": "OK"
+        },
+        "score": {
+          "accuracy": 0.285,
+          "accuracy_ci95": [
+            0.24297004043196901,
+            0.33112039502589363
+          ],
+          "chance": 0.20000000000000148,
+          "predicted_distribution": {
+            "0": 18,
+            "1": 76,
+            "2": 89,
+            "3": 186,
+            "4": 13,
+            "None": 18
+          },
+          "predicted_top_share": 0.465,
+          "recall_by_level": {
+            "0": 0.02857142857142857,
+            "1": 0.3924050632911392,
+            "2": 0.26506024096385544,
+            "3": 0.64,
+            "4": 0.09375
+          },
+          "slots": 400,
+          "valid": 400,
+          "verdict": "OK"
+        }
+      }
+    },
+    "dev2-4b-t1": {
+      "rule": "COLLAPSED if one answer >= 90% of a type or the Wilson 95% lower bound <= chance",
+      "run": "/data/dev2/runs/release/dev2-4b-t1-derived",
+      "sha256": "8341d2d022a8dbcedf30166779f34c554bc613f2bcd76a80a27e37a1c93accaa",
+      "types": {
+        "choice": {
+          "accuracy": 0.7275,
+          "accuracy_ci95": [
+            0.6956134303679722,
+            0.7572121014283419
+          ],
+          "chance": 0.2666666666666696,
+          "predicted_distribution": {
+            "approved": 94,
+            "insufficient_evidence": 218,
+            "none": 85,
+            "offer_0": 97,
+            "offer_1": 117,
+            "offer_2": 49,
+            "offer_3": 52,
+            "rejected": 88
+          },
+          "predicted_top_share": 0.2725,
+          "slots": 800,
+          "valid": 800,
+          "verdict": "OK"
+        },
+        "noul": {
+          "accuracy": 0.9175,
+          "accuracy_ci95": [
+            0.8963807997251917,
+            0.9346286926922199
+          ],
+          "chance": 0.5,
+          "predicted_distribution": {
+            "False": 384,
+            "True": 416
+          },
+          "predicted_top_share": 0.52,
+          "slots": 800,
+          "valid": 800,
+          "verdict": "OK"
+        },
+        "score": {
+          "accuracy": 0.4625,
+          "accuracy_ci95": [
+            0.4142263811170028,
+            0.5114870669279734
+          ],
+          "chance": 0.20000000000000148,
+          "predicted_distribution": {
+            "0": 4,
+            "1": 97,
+            "2": 51,
+            "3": 104,
+            "4": 144
+          },
+          "predicted_top_share": 0.36,
+          "recall_by_level": {
+            "0": 0.11428571428571428,
+            "1": 0.5443037974683544,
+            "2": 0.1927710843373494,
+            "3": 0.4,
+            "4": 0.71875
+          },
+          "slots": 400,
+          "valid": 400,
+          "verdict": "OK"
+        }
+      }
+    },
+    "jet62": {
+      "rule": "COLLAPSED if one answer >= 90% of a type or the Wilson 95% lower bound <= chance",
+      "run": "/data/dev2/runs/eval/m2/q5b-jet62",
+      "sha256": "972f7f9cc0c05187a567d4acfce0a8468178c1177359d8254b2c3b17050517b1",
+      "types": {
+        "choice": {
+          "accuracy": 0.9,
+          "accuracy_ci95": [
+            0.8772612606864002,
+            0.9189154985159104
+          ],
+          "chance": 0.2666666666666696,
+          "predicted_distribution": {
+            "approved": 94,
+            "insufficient_evidence": 218,
+            "none": 68,
+            "offer_0": 163,
+            "offer_1": 169,
+            "rejected": 88
+          },
+          "predicted_top_share": 0.2725,
+          "slots": 800,
+          "valid": 800,
+          "verdict": "OK"
+        },
+        "noul": {
+          "accuracy": 0.8,
+          "accuracy_ci95": [
+            0.7708768697721096,
+            0.8262556996296235
+          ],
+          "chance": 0.5,
+          "predicted_distribution": {
+            "False": 452,
+            "None": 3,
+            "True": 345
+          },
+          "predicted_top_share": 0.565,
+          "slots": 800,
+          "valid": 800,
+          "verdict": "OK"
+        },
+        "score": {
+          "accuracy": 0.3125,
+          "accuracy_ci95": [
+            0.26904080101876354,
+            0.35952643920611665
+          ],
+          "chance": 0.20000000000000148,
+          "predicted_distribution": {
+            "0": 9,
+            "1": 247,
+            "2": 110,
+            "3": 17,
+            "None": 17
+          },
+          "predicted_top_share": 0.6175,
+          "recall_by_level": {
+            "0": 0.22857142857142856,
+            "1": 0.9240506329113924,
+            "2": 0.4457831325301205,
+            "3": 0.09333333333333334,
+            "4": 0.0
+          },
+          "slots": 400,
+          "valid": 400,
+          "verdict": "OK"
+        }
+      }
+    },
+    "nox1-adopted": {
+      "rule": "COLLAPSED if one answer >= 90% of a type or the Wilson 95% lower bound <= chance",
+      "run": "/data/dev2/runs/eval/m1-adopt/nox1",
+      "sha256": "dc3007f29c24b04d8f6e32f410b24f277b338d9a74788d6df2fa8a8271c52760",
+      "types": {
+        "choice": {
+          "accuracy": 0.69,
+          "accuracy_ci95": [
+            0.6571066163445305,
+            0.721077344276567
+          ],
+          "chance": 0.2666666666666696,
+          "predicted_distribution": {
+            "approved": 94,
+            "insufficient_evidence": 218,
+            "none": 99,
+            "offer_0": 112,
+            "offer_1": 92,
+            "offer_2": 48,
+            "offer_3": 49,
+            "rejected": 88
+          },
+          "predicted_top_share": 0.2725,
+          "slots": 800,
+          "valid": 800,
+          "verdict": "OK"
+        },
+        "noul": {
+          "accuracy": 0.81625,
+          "accuracy_ci95": [
+            0.7879230569166696,
+            0.8415541933276572
+          ],
+          "chance": 0.5,
+          "predicted_distribution": {
+            "False": 341,
+            "True": 459
+          },
+          "predicted_top_share": 0.57375,
+          "slots": 800,
+          "valid": 800,
+          "verdict": "OK"
+        },
+        "score": {
+          "accuracy": 0.445,
+          "accuracy_ci95": [
+            0.3970499227484684,
+            0.4939964677174965
+          ],
+          "chance": 0.20000000000000148,
+          "predicted_distribution": {
+            "0": 5,
+            "1": 104,
+            "2": 75,
+            "3": 77,
+            "4": 139
+          },
+          "predicted_top_share": 0.3475,
+          "recall_by_level": {
+            "0": 0.14285714285714285,
+            "1": 0.5316455696202531,
+            "2": 0.30120481927710846,
+            "3": 0.3466666666666667,
+            "4": 0.625
+          },
+          "slots": 400,
+          "valid": 400,
+          "verdict": "OK"
+        }
+      }
+    }
+  },
+  "schema": "dev2-release-types-summary/1"
+}
