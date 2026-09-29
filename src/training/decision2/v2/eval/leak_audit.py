@@ -194,7 +194,7 @@ def load_panel(
     """Questions of one frozen panel (the gold files carry everything needed)."""
     from v2.eval import panels as registry
 
-    if panel in ("ht-dev", "score5-dev", "score5t-dev"):
+    if panel in ("ht-dev", "score5-dev", "score5t-dev", "hs1-dev"):
         prompts_path, gold_path = files or (
             registry.path(root, panel, "prompts"),
             registry.path(root, panel, "gold"),
