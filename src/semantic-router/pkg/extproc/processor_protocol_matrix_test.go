@@ -138,7 +138,7 @@ func TestExtProcAcceptsAnthropicToolUseCallerProvenance(t *testing.T) {
 	})
 }
 
-func TestExtProcAcceptsAnthropicToolUseToolsetName(t *testing.T) {
+func TestExtProcRejectsAnthropicToolUseToolsetName(t *testing.T) {
 	router := &OpenAIRouter{}
 	body := []byte(`{
 		"id":"msg_1","type":"message","role":"assistant","model":"m",
@@ -153,14 +153,8 @@ func TestExtProcAcceptsAnthropicToolUseToolsetName(t *testing.T) {
 				TraceContext: t.Context(),
 			}
 			response := router.handleNonStreamingResponseBody(body, ctx, 0)
-			if response.GetImmediateResponse() != nil || response.GetResponseBody() == nil {
-				t.Fatalf("successful Anthropic tool response was rejected: %+v", response)
-			}
-			if ctx.SemanticResponse == nil || len(ctx.SemanticResponse.Output) != 1 ||
-				len(ctx.SemanticResponse.Output[0].Content) != 1 ||
-				ctx.SemanticResponse.Output[0].Content[0].ToolCall == nil ||
-				ctx.SemanticResponse.Output[0].Content[0].ToolCall.ID != "call_1" {
-				t.Fatalf("tool response semantics changed: %+v", ctx.SemanticResponse)
+			if response.GetImmediateResponse() == nil {
+				t.Fatalf("toolset_name tool response reached the client although it cannot be replayed: %+v", response)
 			}
 		})
 	}

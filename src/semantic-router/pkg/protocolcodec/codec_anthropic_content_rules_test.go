@@ -1,7 +1,6 @@
 package protocolcodec
 
 import (
-	"bytes"
 	"encoding/json"
 	"slices"
 	"strings"
@@ -20,26 +19,56 @@ func anthropicRequestWithAssistantContent(content string) []byte {
 		`{"role":"assistant","content":[` + content + `]}]}`)
 }
 
-func TestAnthropicResponseToolUseAcceptsToolsetName(t *testing.T) {
+func TestAnthropicResponseToolUseRejectsToolsetName(t *testing.T) {
 	engine := NewBuiltinEngine()
 	body := anthropicResponseWithContent(
 		`{"type":"tool_use","id":"call_1","name":"lookup","input":{"city":"Paris"},"toolset_name":"web"}`,
 	)
-	response, _, _, err := engine.DecodeResponse(llmprotocol.AnthropicMessagesV1, body)
-	if err != nil {
-		t.Fatalf("tool_use toolset_name rejected on provider response: %v", err)
+	_, _, _, err := engine.DecodeResponse(llmprotocol.AnthropicMessagesV1, body)
+	assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_content_toolset_name")
+	if !strings.Contains(err.Error(), "response contract") {
+		t.Fatalf("provider response error names the wrong contract: %v", err)
 	}
-	if len(response.Output) != 1 || len(response.Output[0].Content) != 1 ||
-		response.Output[0].Content[0].ToolCall == nil ||
-		response.Output[0].Content[0].ToolCall.ID != "call_1" {
+	for _, target := range []llmprotocol.WireFormat{llmprotocol.AnthropicMessagesV1, llmprotocol.OpenAIChatV1} {
+		if _, err := engine.TranslateResponse(llmprotocol.AnthropicMessagesV1, target, body, nil); err == nil {
+			t.Fatalf("toolset_name response translated to %s although the next request cannot replay it", target)
+		}
+	}
+}
+
+// A tool call a response admits must replay as the next request's tool_use, answered by a tool_result.
+func TestAnthropicNativeToolLoopRoundTrip(t *testing.T) {
+	engine := NewBuiltinEngine()
+	call := `{"type":"tool_use","id":"call_1","name":"lookup","input":{"city":"Paris"},"caller":{"type":"direct"}}`
+	response, _, _, err := engine.DecodeResponse(llmprotocol.AnthropicMessagesV1, anthropicResponseWithContent(call))
+	if err != nil {
+		t.Fatalf("tool call response rejected: %v", err)
+	}
+	if response.Output[0].Content[0].ToolCall == nil || response.Output[0].Content[0].ToolCall.ID != "call_1" {
 		t.Fatalf("decoded tool call changed: %+v", response.Output)
 	}
-	roundTrip, err := engine.TranslateResponse(llmprotocol.AnthropicMessagesV1, llmprotocol.AnthropicMessagesV1, body, nil)
+	next := []byte(`{"model":"m","max_tokens":16,"messages":[{"role":"user","content":"weather?"},` +
+		`{"role":"assistant","content":[` + call + `]},` +
+		`{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_1","content":"sunny"}]}]}`)
+	request, _, _, err := engine.DecodeRequest(llmprotocol.AnthropicMessagesV1, next)
 	if err != nil {
-		t.Fatalf("same-format tool response translation failed: %v", err)
+		t.Fatalf("next request could not replay the response's tool call: %v", err)
 	}
-	if !bytes.Equal(roundTrip.Body, body) {
-		t.Fatalf("same-format response did not preserve toolset_name: %s", roundTrip.Body)
+	result := request.Messages[2].Content[0].ToolResult
+	if request.Messages[1].Content[0].ToolCall == nil || result == nil || result.CallID != "call_1" {
+		t.Fatalf("tool loop lost the call identity: %+v", request.Messages)
+	}
+}
+
+// Every field a response tool_use admits must also be accepted on a request tool_use, or the loop cannot close.
+func TestAnthropicResponseToolUseFieldsReplayInRequest(t *testing.T) {
+	for name, rule := range anthropicResponseContentFields["tool_use"] {
+		if rule != anthropicFieldAccepted {
+			continue
+		}
+		if anthropicRequestContentFields["tool_use"][name] != anthropicFieldAccepted {
+			t.Errorf("response tool_use accepts %q but a request tool_use does not", name)
+		}
 	}
 }
 

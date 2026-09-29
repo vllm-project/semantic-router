@@ -99,7 +99,8 @@ var (
 	anthropicResponseContentFields = map[string]map[string]anthropicFieldRule{
 		"text":     anthropicFieldRules([]string{"text", "type"}, "citations"),
 		"thinking": anthropicFieldRules([]string{"signature", "thinking", "type"}),
-		"tool_use": anthropicFieldRules([]string{"caller", "id", "input", "name", "toolset_name", "type"}),
+		// toolset_name stays unsupported until a native tool loop can replay it; see #4323.
+		"tool_use": anthropicFieldRules([]string{"caller", "id", "input", "name", "type"}, "toolset_name"),
 	}
 	anthropicKnownContentFields = []string{
 		"cache_control", "caller", "citations", "content", "context", "data", "file_id", "id", "input",
