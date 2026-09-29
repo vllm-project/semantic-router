@@ -127,3 +127,63 @@ func TestAnthropicMessagesKeepsKnownComponentWhenTotalsAreAbsent(t *testing.T) {
 		t.Fatalf("known component must survive the projection, got input_tokens=%d: %s", wire.Usage.InputTokens, body)
 	}
 }
+
+// When a neutral response contains only output components, the Messages
+// projection derives its required total from those components instead of
+// silently replacing the known count with zero.
+func TestAnthropicMessagesDerivesOutputTotalFromKnownComponents(t *testing.T) {
+	three := int64(3)
+	four := int64(4)
+	tests := []struct {
+		name      string
+		reasoning *int64
+		other     *int64
+		want      int64
+	}{
+		{name: "reasoning only", reasoning: &three, want: 3},
+		{name: "other only", other: &four, want: 4},
+		{name: "both components", reasoning: &three, other: &four, want: 7},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			response := llmprotocol.Response{
+				Generation: 1, ID: "response_1", Model: "public-model",
+				Output: []llmprotocol.OutputItem{{
+					ID: "item_1", Role: llmprotocol.RoleAssistant,
+					Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "done"}},
+				}},
+				Usage: llmprotocol.Usage{
+					State:           llmprotocol.UsageAvailable,
+					OutputReasoning: llmprotocol.TokenCount{Value: tt.reasoning, Provenance: llmprotocol.UsageAuthoritative},
+					OutputOther:     llmprotocol.TokenCount{Value: tt.other, Provenance: llmprotocol.UsageAuthoritative},
+				},
+			}
+			body, diagnostics, err := (AnthropicMessagesCodec{}).EncodeResponse(
+				response, llmprotocol.Envelope{}, llmprotocol.DefaultPolicy(),
+			)
+			if err != nil {
+				t.Fatalf("EncodeResponse failed: %v", err)
+			}
+			var wire struct {
+				Usage *struct {
+					OutputTokens int64 `json:"output_tokens"`
+				} `json:"usage"`
+			}
+			if err := json.Unmarshal(body, &wire); err != nil {
+				t.Fatalf("decode encoded Messages body: %v\n%s", err, body)
+			}
+			got := int64(-1)
+			if wire.Usage != nil {
+				got = wire.Usage.OutputTokens
+			}
+			if got != tt.want {
+				t.Fatalf("known output components must survive the projection, got output_tokens=%d: %s", got, body)
+			}
+			for _, diagnostic := range diagnostics {
+				if diagnostic.Field == "usage" {
+					t.Fatalf("known output components must not emit a usage diagnostic: %+v", diagnostics)
+				}
+			}
+		})
+	}
+}

@@ -224,8 +224,15 @@ func encodeAnthropicUsage(usage llmprotocol.Usage) *anthropicUsageWire {
 		inputTokens = max(0, tokenValue(usage.InputTotal)-tokenValue(usage.InputCacheRead)-tokenValue(usage.InputCacheWrite))
 	}
 	cacheWrite := tokenValue(usage.InputCacheWrite)
+	outputTokens := tokenValue(usage.OutputTotal)
+	if usage.OutputTotal.Value == nil {
+		// Messages output_tokens includes both the non-reasoning and reasoning
+		// portions. When a neutral response has components but no total, retain
+		// the information that can be projected instead of silently emitting 0.
+		outputTokens = tokenValue(usage.OutputReasoning) + tokenValue(usage.OutputOther)
+	}
 	*wire = anthropicUsageWire{
-		InputTokens: inputTokens, OutputTokens: tokenValue(usage.OutputTotal),
+		InputTokens: inputTokens, OutputTokens: outputTokens,
 		CacheCreationInputTokens: cacheWrite, CacheReadInputTokens: tokenValue(usage.InputCacheRead),
 		CacheCreation:       anthropicCacheCreationUsageWire{Ephemeral5mInputTokens: cacheWrite},
 		InferenceGeo:        "global",
