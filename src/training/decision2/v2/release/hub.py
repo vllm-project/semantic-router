@@ -327,11 +327,10 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     api = _api()
     info = api.model_info(args.repo, revision=args.revision)
     collection, _ = _collection_items(api, args.collection)
-    if (
-        info.private is not True
-        or collection.private is not True
-        or collection.title != COLLECTION_TITLE
-    ):
+    # The collection is identified by its pinned slug; its title is the user's to curate.
+    if args.collection != COLLECTION or getattr(collection, "slug", None) != COLLECTION:
+        raise RuntimeError("Releases enter only the pinned Decision 2.0 collection")
+    if info.private is not True or collection.private is not True:
         raise RuntimeError("Repository and collection must both be private")
     api.add_collection_item(
         args.collection, item_id=args.repo, item_type="model", exists_ok=True
@@ -345,6 +344,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         "gate_sha256": layout.sha_file(args.gate),
         "collection": {
             "slug": args.collection,
+            "title": collection.title,
             "private": collection.private,
             "items": items,
         },
