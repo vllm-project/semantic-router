@@ -285,6 +285,45 @@ class LeakAuditTest(unittest.TestCase):
             self.assertEqual(result["panels"]["ht-dev"]["questions"], 40)
             self.assertIn(str(tmp / "g.jsonl"), result["panel_sha256"])
 
+    def test_ht_dev2_reads_css_format_with_source_groups(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            prompts, gold = [], []
+            for i in range(30):
+                criteria = {"True": "the joke is funny", "False": "it is not"}
+                prompts.append(
+                    {
+                        "id": f"ht-dev2/humor/{i}",
+                        "state": f"joke {i}",
+                        "questions": {
+                            "label": {
+                                "type": "choice",
+                                "instructions": "q",
+                                "criteria": criteria,
+                            }
+                        },
+                    }
+                )
+                gold.append(
+                    {
+                        "id": f"ht-dev2/humor/{i}",
+                        "task": "reddit_humor",
+                        "gold": "True" if i % 2 else "False",
+                        "group_sha256": [f"g{i // 2}", "other"],
+                    }
+                )
+            for name, rows in (("p.jsonl", prompts), ("g.jsonl", gold)):
+                (tmp / name).write_text("".join(json.dumps(r) + "\n" for r in rows))
+            questions = leak_audit.load_panel(
+                tmp, "ht-dev2", (tmp / "p.jsonl", tmp / "g.jsonl")
+            )
+            self.assertEqual(len(questions), 30)
+            self.assertEqual({q.cluster for q in questions[:2]}, {"g0"})
+
     def test_markdown_renders(self):
         report = leak_audit.audit_panel(construction_order_panel(60, False), 50)
         report["role"] = "development"
