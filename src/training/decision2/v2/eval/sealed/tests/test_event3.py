@@ -370,6 +370,38 @@ class DigestTest(unittest.TestCase):
             self.assertEqual(count, 3)
 
 
+class VerifyTest(unittest.TestCase):
+    def test_unstaged_package_is_reported_not_raised(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            code, plan = run_plan(
+                tmp, "--c27", "f1", "--peers27", "autojev27", "--models", "cand27"
+            )
+            self.assertEqual(code, 0)
+            row = plan["models"]["cand27"]
+            row["package"]["dir"] = str(tmp / "missing")
+            out = event3.check_package(row["package"], 1)
+            self.assertFalse(out["ok"])
+            self.assertTrue(out["problems"][0].startswith("no MODEL_MANIFEST.json"))
+            plan["images"] = {}
+            path = tmp / "p.json"
+            path.write_text(json.dumps(plan))
+            code = event3.main(
+                [
+                    "verify",
+                    "--plan",
+                    str(path),
+                    "--src-root",
+                    str(ROOT),
+                    "--output",
+                    str(tmp / "v.json"),
+                ]
+            )
+            self.assertEqual(code, 1)
+            report = json.loads((tmp / "v.json").read_text())
+            self.assertFalse(report["models"]["cand27"]["ok"])
+
+
 class StoredTest(unittest.TestCase):
     def test_seal_checks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

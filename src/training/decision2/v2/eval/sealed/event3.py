@@ -541,7 +541,11 @@ def check_package(package: dict[str, Any], workers: int) -> dict[str, Any]:
     result: dict[str, Any] = {"dir": str(root)}
     manifest_path = root / "MODEL_MANIFEST.json"
     if not manifest_path.is_file():
-        return {**result, "ok": False, "problem": "no MODEL_MANIFEST.json"}
+        return {
+            **result,
+            "ok": False,
+            "problems": [f"no MODEL_MANIFEST.json in {root}"],
+        }
     result["manifest_sha256"] = sha_file(manifest_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     files = manifest.get("files_sha256") or {}
@@ -576,6 +580,76 @@ def check_package(package: dict[str, Any], workers: int) -> dict[str, Any]:
     return result
 
 
+def verify_row(row: dict[str, Any], src_root: Path, workers: int) -> dict[str, Any]:
+    out: dict[str, Any] = {"problems": []}
+    problems = out["problems"]
+    stored = row.get("stored")
+    if stored is not None:
+        # Existence only: stored C1 predictions and seals are hashed in the event phase.
+        for field in ("predictions", "seal"):
+            if not os.path.isfile(stored[field]):
+                problems.append(f"stored {field} missing")
+        return out
+    paths = [row["model_path"], row.get("model_dir") or row["model_path"]]
+    paths += row.get("mounts", [])
+    paths += [
+        v
+        for v in row.get("extra", {}).values()
+        if isinstance(v, str) and v.startswith("/")
+    ]
+    missing = sorted({x for x in paths if not os.path.exists(x)})
+    if missing:
+        problems.append(f"missing paths: {', '.join(missing)}")
+    module = adapter_module(src_root, row)
+    out["adapter_module"] = str(module.relative_to(src_root))
+    if module.is_file():
+        out["adapter_module_sha256"] = sha_file(module)
+    else:
+        problems.append("adapter module missing in the mirror")
+    stored_collect = row.get("stored_collect")
+    if stored_collect and os.path.isfile(stored_collect):
+        receipt = json.loads(Path(stored_collect).read_text(encoding="utf-8"))
+        out["adapter_module_same_as_stored_run"] = receipt.get(
+            "adapter_module_sha256"
+        ) == out.get("adapter_module_sha256")
+    parity = row["parity"]
+    if parity["mode"] != "none" and not os.path.isfile(parity["stored"]):
+        problems.append("stored typed-final predictions for parity missing")
+    if row.get("package"):
+        out["package"] = check_package(row["package"], workers)
+        problems += out["package"]["problems"]
+    for tree in row.get("trees", []):
+        if not os.path.isdir(tree["dir"]):
+            problems.append(f"tree missing: {tree['dir']}")
+            continue
+        digest, count = tree_digest(Path(tree["dir"]), workers)
+        out.setdefault("trees", []).append(
+            {"dir": tree["dir"], "sha256": digest, "files": count}
+        )
+        if digest != tree["sha256"]:
+            problems.append(f"tree digest differs: {tree['dir']}")
+    for pinned in row.get("files", []):
+        if not os.path.isfile(pinned["path"]):
+            problems.append(f"file missing: {pinned['path']}")
+        elif sha_file(Path(pinned["path"])) != pinned["sha256"]:
+            problems.append(f"file hash differs: {pinned['path']}")
+    cache = row.get("cache")
+    if cache:
+        if not os.path.isdir(cache["frozen"]):
+            problems.append(f"frozen autotune cache missing: {cache['frozen']}")
+        else:
+            sys.path.insert(0, str(src_root / "v2" / "27b"))
+            import triton_cache
+
+            digest = triton_cache.tree_digest(
+                triton_cache.file_hashes(Path(cache["frozen"]))
+            )
+            out["cache_sha256"] = digest
+            if digest != cache["sha256"]:
+                problems.append("frozen autotune cache digest differs")
+    return out
+
+
 def verify(args: argparse.Namespace) -> int:
     p = load_plan(args.plan)
     src_root = Path(args.src_root)
@@ -594,81 +668,10 @@ def verify(args: argparse.Namespace) -> int:
             report["images"][name] = {"id": image_id, "present": ok}
             failures += not ok
     for key in p["selection"]:
-        row = p["models"][key]
-        out: dict[str, Any] = {"problems": []}
-        stored = row.get("stored")
-        if stored is not None:
-            # Existence only: stored C1 predictions and seals are hashed in the event phase.
-            for field in ("predictions", "seal"):
-                if not os.path.isfile(stored[field]):
-                    out["problems"].append(f"stored {field} missing")
-        else:
-            paths = [
-                row["model_path"],
-                row.get("model_dir") or row["model_path"],
-                *row.get("mounts", []),
-            ]
-            paths += [
-                v
-                for v in row.get("extra", {}).values()
-                if isinstance(v, str) and v.startswith("/")
-            ]
-            missing = sorted({x for x in paths if not os.path.exists(x)})
-            if missing:
-                out["problems"].append(f"missing paths: {', '.join(missing)}")
-            try:
-                module = adapter_module(src_root, row)
-                out["adapter_module"] = str(module.relative_to(src_root))
-                if module.is_file():
-                    out["adapter_module_sha256"] = sha_file(module)
-                else:
-                    out["problems"].append("adapter module missing in the mirror")
-            except (ValueError, OSError) as exc:
-                out["problems"].append(f"adapter: {exc}")
-            stored_collect = row.get("stored_collect")
-            if stored_collect and os.path.isfile(stored_collect):
-                receipt = json.loads(Path(stored_collect).read_text(encoding="utf-8"))
-                out["adapter_module_same_as_stored_run"] = receipt.get(
-                    "adapter_module_sha256"
-                ) == out.get("adapter_module_sha256")
-            if row["parity"]["mode"] != "none" and not os.path.isfile(
-                row["parity"]["stored"]
-            ):
-                out["problems"].append(
-                    "stored typed-final predictions for parity missing"
-                )
-            if row.get("package"):
-                out["package"] = check_package(row["package"], args.hash_workers)
-                out["problems"] += out["package"]["problems"]
-            for tree in row.get("trees", []):
-                if not os.path.isdir(tree["dir"]):
-                    out["problems"].append(f"tree missing: {tree['dir']}")
-                    continue
-                digest, count = tree_digest(Path(tree["dir"]), args.hash_workers)
-                out.setdefault("trees", []).append(
-                    {"dir": tree["dir"], "sha256": digest, "files": count}
-                )
-                if digest != tree["sha256"]:
-                    out["problems"].append(f"tree digest differs: {tree['dir']}")
-            for pinned in row.get("files", []):
-                if not os.path.isfile(pinned["path"]):
-                    out["problems"].append(f"file missing: {pinned['path']}")
-                elif sha_file(Path(pinned["path"])) != pinned["sha256"]:
-                    out["problems"].append(f"file hash differs: {pinned['path']}")
-            cache = row.get("cache")
-            if cache:
-                if not os.path.isdir(cache["frozen"]):
-                    out["problems"].append("frozen autotune cache missing")
-                else:
-                    sys.path.insert(0, str(src_root / "v2" / "27b"))
-                    import triton_cache
-
-                    digest = triton_cache.tree_digest(
-                        triton_cache.file_hashes(Path(cache["frozen"]))
-                    )
-                    out["cache_sha256"] = digest
-                    if digest != cache["sha256"]:
-                        out["problems"].append("frozen autotune cache digest differs")
+        try:
+            out = verify_row(p["models"][key], src_root, args.hash_workers)
+        except (OSError, ValueError, KeyError) as exc:
+            out = {"problems": [f"verification error: {exc!r}"]}
         out["ok"] = not out["problems"]
         failures += not out["ok"]
         report["models"][key] = out

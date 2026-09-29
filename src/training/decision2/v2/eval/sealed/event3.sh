@@ -94,11 +94,10 @@ cleanup() {
       printf 'track=eval\nstatus=idle-released (C1 event 3 %s done)\nlast_job_end_utc=%s\n' "$MODE" "$(date -u +%FT%TZ)" >"$LEASE"
     fi
   fi
-  if [ "$DECRYPTED" = 1 ]; then
-    log "cleanup (exit $code): prompts and gold plaintext removed; GPU$GPU entry $LEASE_NAME restored"
-  else
-    log "cleanup (exit $code): nothing was decrypted; GPU$GPU entry $LEASE_NAME restored"
-  fi
+  local what="nothing was decrypted" lease="no GPU lease taken"
+  if [ "$DECRYPTED" = 1 ]; then what="prompts and gold plaintext removed"; fi
+  if [ "$LEASED" = 1 ]; then lease="GPU$GPU entry $LEASE_NAME restored"; fi
+  log "cleanup (exit $code): $what; $lease"
 }
 trap cleanup EXIT
 trap 'exit 129' HUP
