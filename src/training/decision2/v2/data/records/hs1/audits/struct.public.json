@@ -1,0 +1,22 @@
+{
+ "flagged_groups": 0,
+ "flagged_rows": 0,
+ "pass": true,
+ "protected_files": {
+  "cal.jsonl": "3e34f6cb5a32c9f14d0fee0897ee3f2318e59d66fe1ff0a95e2ea5eb2497f60a",
+  "css-pilot.prompts.jsonl": "598319a429de16c659b59ede0eac3c269939356b0599f4e08d1983e44def3dda",
+  "css15.prompts.jsonl": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6",
+  "ht-dev.prompts.jsonl": "30b0bd3569da9dd183f142e606ba6dcb598de7e4d3d9c168f87f91852178fd65",
+  "mlx-diag.prompts.jsonl": "25fde28f4b227a9cc8588da79a597ce816ba4a8f979139f99f69aeb595580a5f",
+  "public231.prompts.jsonl": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd",
+  "score5-dev.prompts.jsonl": "a01551c280473c9251ebbf8aed7bf9cfba3e12927def8959e4dd1283c072a86a",
+  "score5t-dev.prompts.jsonl": "8e35bfffc2c3b8e4252d3c39ec1c65054250a3ddf80159d219a16b41bca1d93c",
+  "select.jsonl": "32a4352d8ed93ce82430db80175339ad8e4d40c618f2866608fdb6ef5120f2a6",
+  "typed-dev.prompts.jsonl": "a17ec4b675bbc3da96dba8f31af8f25c9b02cc96ff048fb7de899bdd8b6cf79a",
+  "typed-final.prompts.jsonl": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd"
+ },
+ "protected_items": 19623,
+ "rule": "masked word 8-grams; flag forward or reverse containment >= 0.5 (reverse needs >= 10 protected grams)",
+ "scanned_rows": 22364,
+ "schema": "decision2.hs1.struct.v1"
+}

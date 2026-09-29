@@ -1,0 +1,25 @@
+{
+ "answer_changes_c1_scorer_rule": 0,
+ "answer_changes_release_rule": 0,
+ "calibration": "/data/dev2/runs/dec/m2/formal-candidates/staging-16c0929a/m2/E8F-soup/cal698-16k/calibration.json",
+ "calibration_sha256": "9f76867d5be618da315bd860aae689ed0cf2a2a20ea34d5bae485b011877e05c",
+ "input": "/data/dev2/runs/eval/m4/c1-event1/e8f/output/sealed-c1.predictions.jsonl",
+ "input_seal_sha256": "fe510c87b81cc5b583500ab72d56f434b98e14f3731463eb728f4ff1a28dc978",
+ "input_sha256": "bf23d30fc8157a80a8157dd30083f0a85edb80a6892e363274fcf03ae204030a",
+ "kinds_from": "the type field of each answer; prompts were not decrypted",
+ "mode": "undo: softmax(log q * T) per type, v2.release.dev_calibration.rescale (as retemper_predictions --undo)",
+ "model_sha256": [
+  "60356482ceeb669c4a97eb14dcfae5144b1b181f6c8b7a628ea5d02c86a6dd8b"
+ ],
+ "note": "Score answers carry probabilities, so the C1 scorer takes their unique argmax (as the release rule); rounding the expected score is not the scorer rule",
+ "output_sha256": "d4a104feec2f746315f60022f992c07c1ea561884da1bff3b1a6ccea64ad48c8",
+ "passed": true,
+ "rows": 2874,
+ "schema": "dev2-c1-postkey-t1-derivation/1",
+ "slots": 2874,
+ "temperature_by_type": {
+  "choice": 1.1226162977529484,
+  "noul": 1.0705289638177147,
+  "score": 0.3953193702868192
+ }
+}

@@ -1,0 +1,36 @@
+{
+ "files_sha256": {
+  "key": "6b71de1bdf0871a3c6a5eff455e1366f3df3ccb0cb3510421c60af3b6d5d7e39",
+  "packet_hs1_policy_packet": "7e80d21612e29e79696b446ef5d0b19f00042cf0bd1ca2b0fd2decf0349d0030",
+  "packet_hs1_quote_check": "d8f6a1522a3cec24b55104ccc8f1d75d463c9c272e13bc67e1f58f92b9faa4b0",
+  "packet_hs1_unmet_condition": "9d37e5060b84f41b50a3e24a0e56f71605690af79c269112e2529ced3b8297ad"
+ },
+ "n": 153,
+ "per_cell": 17,
+ "population": {
+  "hs1_policy_packet|choice": 1088,
+  "hs1_policy_packet|noul": 832,
+  "hs1_policy_packet|score": 478,
+  "hs1_quote_check|choice": 2946,
+  "hs1_quote_check|noul": 3332,
+  "hs1_quote_check|score": 900,
+  "hs1_unmet_condition|choice": 2072,
+  "hs1_unmet_condition|noul": 7280,
+  "hs1_unmet_condition|score": 1040
+ },
+ "rows": 19968,
+ "rows_sha256": "c90ef3164d90d3fd6a1ab0397529faec172760b1756de7d4d8cbf2677a131a71",
+ "salt": "dq-hs1-spot-v1",
+ "sampled": {
+  "hs1_policy_packet|choice": 17,
+  "hs1_policy_packet|noul": 17,
+  "hs1_policy_packet|score": 17,
+  "hs1_quote_check|choice": 17,
+  "hs1_quote_check|noul": 17,
+  "hs1_quote_check|score": 17,
+  "hs1_unmet_condition|choice": 17,
+  "hs1_unmet_condition|noul": 17,
+  "hs1_unmet_condition|score": 17
+ },
+ "schema": "dev2-dq-hs1-sample/1"
+}

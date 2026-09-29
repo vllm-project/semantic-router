@@ -1,0 +1,15 @@
+{
+  "schema": "dev2-gpu-time/1",
+  "gpu": 0,
+  "gpus": 1,
+  "image": "decision20-train-fast:host2",
+  "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54",
+  "source_commit": "1491092c30f731d35b4a5adc9c7ada93306feaef-src_training_decision2",
+  "start_utc": "2026-09-29T08:05:07Z",
+  "end_utc": "2026-09-29T08:05:43Z",
+  "wall_seconds": 35.44827628135681,
+  "gpu_hours": 0.009846743411488003,
+  "exit_code": 0,
+  "shared": true,
+  "vram_pct_at_start": "0"
+}

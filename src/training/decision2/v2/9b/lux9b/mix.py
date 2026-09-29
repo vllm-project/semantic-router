@@ -17,6 +17,8 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+from v2.common import eval_only
+
 MIX_VERSION = "decision2-9b-substitution-mix-v1"
 
 
@@ -93,6 +95,7 @@ def main() -> None:
     args = parser.parse_args()
     from training.model.data import file_sha256, load_partition
 
+    eval_only.guard(args)
     if file_sha256(args.a0) != args.a0_file_sha256:
         raise SystemExit("A0 file digest differs from the pinned partition")
     a0 = load_partition(args.a0, "train")
@@ -100,6 +103,7 @@ def main() -> None:
     if content_sha256(arm) != args.arm_content_sha256:
         raise SystemExit(f"{args.arm_name} content digest differs from the registry")
     rows, stats = substitute(a0, arm, args.fraction, args.seed)
+    eval_only.check_rows(rows)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("x", encoding="utf-8") as stream:
         for row in rows:

@@ -1,0 +1,246 @@
+{
+ "a1_gold": {
+  "oracle_equals_recheck": 22364,
+  "rows": 22364
+ },
+ "a4a_quarantine_list": {
+  "groups": 18,
+  "sha256": "f37e42f936f7603c3a57b91b6c22e6415e80f0a77c73942f3a69f43a69347f66"
+ },
+ "a4a_quarantined_groups_still_present": 0,
+ "a6_within_family_duplicate_rows_state_instructions": {
+  "hs1_policy_packet": 0,
+  "hs1_quote_check": 0,
+  "hs1_unmet_condition": 0
+ },
+ "groups": {
+  "dev": 1198,
+  "train": 9984
+ },
+ "inputs": {
+  "hs1.dev.jsonl": "2e9ee9ab6768aa2b3d0d397670248e5a8f2e524d60887d06698a4e84516533bf",
+  "hs1.train.jsonl": "c90ef3164d90d3fd6a1ab0397529faec172760b1756de7d4d8cbf2677a131a71"
+ },
+ "isolation": {
+  "failures": 0,
+  "intersections": 0,
+  "verdict": "PASS"
+ },
+ "overlap": {
+  "pihs1": {
+   "flagged": {
+    "groups": 0,
+    "rows": 0
+   },
+   "groups_by_class_family_split": {},
+   "groups_by_role": {},
+   "protected_inventory_sha256": "d29c964526835b2d0865000f5ea60614468e3a0bdc3e2d9a29712ecbd585d786",
+   "public_receipt_sha256": "e71109bb8ec5ba1420ea995743ea2bed39cff00940652e63636c5f2633d0a2a3",
+   "quarantining": {
+    "groups": 0,
+    "groups_by_method": {},
+    "rows": 0
+   },
+   "report_only": {
+    "groups": 0,
+    "groups_by_method": {},
+    "rows": 0
+   }
+  },
+  "piv4": {
+   "flagged": {
+    "groups": 52,
+    "rows": 104
+   },
+   "groups_by_class_family_split": {
+    "report_only:hs1_policy_packet/train": 1,
+    "report_only:hs1_quote_check/dev": 3,
+    "report_only:hs1_quote_check/train": 39,
+    "report_only:hs1_unmet_condition/dev": 1,
+    "report_only:hs1_unmet_condition/train": 8
+   },
+   "groups_by_role": {
+    "v1_train_a2": 27,
+    "v1_train_a3": 1,
+    "v1_train_a4v2h": 16,
+    "v1_train_a4v2r": 16,
+    "v2_aho_G2": 23
+   },
+   "protected_inventory_sha256": "24b060da2863a964da1ff2c40591943fff9d27e3ce19b28e2a9bd0918fdb47dc",
+   "public_receipt_sha256": "d2318f78781091a0e22ab17e5893b70eadcade9246fce6360b7eff4f5bf4a57c",
+   "quarantining": {
+    "groups": 0,
+    "groups_by_method": {},
+    "rows": 0
+   },
+   "report_only": {
+    "groups": 52,
+    "groups_by_method": {
+     "L": 37,
+     "N": 11,
+     "S": 13
+    },
+    "rows": 104
+   }
+  },
+  "piv4q": {
+   "flagged": {
+    "groups": 0,
+    "rows": 0
+   },
+   "groups_by_class_family_split": {},
+   "groups_by_role": {},
+   "protected_inventory_sha256": "48fd2537e63b1069a3569557bf9212983384c8c800c7e229084d339f4e0e954d",
+   "public_receipt_sha256": "82994b219ac682cd79176cc2005ff7864639b204532bb208544b89b5b6bd7771",
+   "quarantining": {
+    "groups": 0,
+    "groups_by_method": {},
+    "rows": 0
+   },
+   "report_only": {
+    "groups": 0,
+    "groups_by_method": {},
+    "rows": 0
+   }
+  }
+ },
+ "overlap_quarantining_union_groups": 0,
+ "overlap_rule": "quarantining = flagged against a role outside the PI-v4 report-only roles; every role of the quarantining-role and PI-hs1 scans quarantines",
+ "pi_v4_report_only_roles": [
+  "a7_train_A7g",
+  "a7_train_A7h",
+  "a7_train_A7i",
+  "a7_train_A7k",
+  "a7_train_A7m",
+  "a7_train_A7o",
+  "a7_train_A7p",
+  "a7_train_A7q",
+  "a7_train_A7r",
+  "a7_train_A7s",
+  "a7_train_A7x",
+  "rights_clean_train",
+  "v1_train_a1",
+  "v1_train_a2",
+  "v1_train_a3",
+  "v1_train_a4v2h",
+  "v1_train_a4v2r",
+  "v1_train_a5",
+  "v1_train_a6g",
+  "v1_train_a6h",
+  "v2_aho_E11",
+  "v2_aho_G2",
+  "v2_aho_G4h",
+  "v2_aho_G4r",
+  "v2_aho_G6",
+  "v2_aho_H1",
+  "v2_aho_H3",
+  "v2_aho_H5",
+  "v2_aho_H6"
+ ],
+ "rows": {
+  "dev": 2396,
+  "train": 19968
+ },
+ "schema": "decision2.hs1.confirmation-summary.v1",
+ "struct": {
+  "flagged_groups": 0,
+  "flagged_rows": 0,
+  "pass": true,
+  "protected_items": 19623,
+  "rule": "masked word 8-grams; flag forward or reverse containment >= 0.5 (reverse needs >= 10 protected grams)",
+  "scanned_rows": 22364
+ },
+ "struct_protected_files": 11,
+ "tokens": {
+  "dev": {
+   "all": {
+    "kai": 1743537,
+    "kai_gt_1024": 693,
+    "max_kai": 2747,
+    "max_native": 2774,
+    "native": 1946468,
+    "rows": 2396
+   },
+   "by_family": {
+    "hs1_policy_packet": {
+     "kai": 735169,
+     "kai_gt_1024": 475,
+     "max_kai": 2747,
+     "max_native": 2774,
+     "native": 776737,
+     "rows": 478
+    },
+    "hs1_quote_check": {
+     "kai": 665742,
+     "kai_gt_1024": 218,
+     "max_kai": 2378,
+     "max_native": 2523,
+     "native": 752716,
+     "rows": 958
+    },
+    "hs1_unmet_condition": {
+     "kai": 342626,
+     "kai_gt_1024": 0,
+     "max_kai": 735,
+     "max_native": 885,
+     "native": 417015,
+     "rows": 960
+    }
+   },
+   "content_sha256": "2e9ee9ab6768aa2b3d0d397670248e5a8f2e524d60887d06698a4e84516533bf",
+   "input_is_canonical": true,
+   "manifest_totals": {
+    "kai-0.6b@7185f514": 1743537,
+    "qwen3-0.6b-base@da87bfb6": 1892236,
+    "qwen3.5-0.8b-base@dc7cdfe2": 1946468
+   },
+   "tokens_file_sha256": "ee54353bc959d15e9cb8a6892dd94923927265e01e005e68a2a4f06e4f628165",
+   "totals_match_manifest": true
+  },
+  "train": {
+   "all": {
+    "kai": 12366373,
+    "kai_gt_1024": 3891,
+    "max_kai": 2836,
+    "max_native": 2875,
+    "native": 14029697,
+    "rows": 19968
+   },
+   "by_family": {
+    "hs1_policy_packet": {
+     "kai": 3737825,
+     "kai_gt_1024": 2393,
+     "max_kai": 2836,
+     "max_native": 2875,
+     "native": 3939776,
+     "rows": 2398
+    },
+    "hs1_quote_check": {
+     "kai": 4933726,
+     "kai_gt_1024": 1498,
+     "max_kai": 2485,
+     "max_native": 2623,
+     "native": 5594547,
+     "rows": 7178
+    },
+    "hs1_unmet_condition": {
+     "kai": 3694822,
+     "kai_gt_1024": 0,
+     "max_kai": 796,
+     "max_native": 924,
+     "native": 4495374,
+     "rows": 10392
+    }
+   },
+   "content_sha256": "c90ef3164d90d3fd6a1ab0397529faec172760b1756de7d4d8cbf2677a131a71",
+   "input_is_canonical": true,
+   "manifest_totals": {
+    "kai-0.6b@7185f514": 12366373,
+    "qwen3-0.6b-base@da87bfb6": 13624784,
+    "qwen3.5-0.8b-base@dc7cdfe2": 14029697
+   },
+   "tokens_file_sha256": "038cde6f04baed20f0568732438decf57c2e1e8f1e5108cdb590f3bec2b57c69",
+   "totals_match_manifest": true
+  }
+ }
+}

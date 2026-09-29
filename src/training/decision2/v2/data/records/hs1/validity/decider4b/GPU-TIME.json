@@ -1,0 +1,15 @@
+{
+  "schema": "dev2-gpu-time/1",
+  "gpu": 1,
+  "gpus": 1,
+  "image": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54",
+  "image_id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54",
+  "source_commit": "21bdb5e90e2b0635d54807101e755a72762d2747-src_training_decision2",
+  "start_utc": "2026-09-29T16:08:16Z",
+  "end_utc": "2026-09-29T16:11:05Z",
+  "wall_seconds": 169.2688500881195,
+  "gpu_hours": 0.047019125024477644,
+  "exit_code": 0,
+  "shared": true,
+  "vram_pct_at_start": "0"
+}

@@ -1,0 +1,39 @@
+{
+  "before": {
+    "commits": 7,
+    "heads": {
+      "branch:main": "b21313375ad77ddf4a8e420fa5195e6e09582043"
+    },
+    "lfs_objects": 6,
+    "main_lfs_served": {
+      "assets/DEV2.0-0.6B-owl-banner.png": 206,
+      "backbone/model.safetensors": 206,
+      "decision_head.safetensors": 206,
+      "tokenizer.json": 206
+    },
+    "old_paths_served": {
+      "backbone/model.safetensors": 206,
+      "decision_head.safetensors": 206
+    }
+  },
+  "mode": "plan",
+  "new_revision": "b21313375ad77ddf4a8e420fa5195e6e09582043",
+  "node_copy": "/data/dev2/runs/release/inputs/dev2-0p6b/staging-06bm4-62c61c10",
+  "old_revision": "99c4e799392afa73241915aeb16fefa5ef3518d7",
+  "repo": "llm-semantic-router/DEV2.0-0.6B",
+  "rewrite_history": false,
+  "schema": "dev2-release-purge-superseded/1",
+  "targets": {
+    "70dc7451862bec4c88f2f8abcdaae66b7f1f118baa8582e3fa863c1794810046": {
+      "bytes": 4213584,
+      "node_copy_sha256": "70dc7451862bec4c88f2f8abcdaae66b7f1f118baa8582e3fa863c1794810046",
+      "path": "decision_head.safetensors"
+    },
+    "7e2d1f9d7010cb59fe0e38d3e0fb848222ba12657663dc96776a22221bd82b8e": {
+      "bytes": 2384233112,
+      "node_copy_sha256": "7e2d1f9d7010cb59fe0e38d3e0fb848222ba12657663dc96776a22221bd82b8e",
+      "path": "backbone/model.safetensors"
+    }
+  },
+  "utc": "2026-09-29T13:54:09.355397+00:00"
+}

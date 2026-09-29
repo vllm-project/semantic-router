@@ -1,0 +1,2015 @@
+{
+ "a2_balance": {
+  "dev": {
+   "cells": {
+    "hs1_policy_packet": {
+     "choice_position_max_dev": {
+      "gold:4": [
+       116,
+       0.0086
+      ],
+      "gold:5": [
+       98,
+       0.0163
+      ]
+     },
+     "noul_true": 0.5,
+     "noul_true_by_kind": {
+      "grant_funding": [
+       14,
+       0.5
+      ],
+      "it_access": [
+       14,
+       0.5
+      ],
+      "leave_policy": [
+       14,
+       0.5
+      ],
+      "library_lending": [
+       14,
+       0.5
+      ],
+      "parking_permits": [
+       14,
+       0.5
+      ],
+      "returns_refund": [
+       14,
+       0.5
+      ],
+      "travel_expense": [
+       14,
+       0.5
+      ],
+      "tuition_refund": [
+       28,
+       0.5
+      ],
+      "venue_booking": [
+       28,
+       0.5
+      ],
+      "warranty_service": [
+       14,
+       0.5
+      ]
+     },
+     "score_levels": {
+      "4": {
+       "0": 18,
+       "1": 20,
+       "2": 26,
+       "3": 16
+      },
+      "5": {
+       "0": 3,
+       "1": 4,
+       "2": 4,
+       "3": 2,
+       "4": 3
+      }
+     }
+    },
+    "hs1_quote_check": {
+     "choice_position_max_dev": {
+      "gold:3": [
+       168,
+       0.0119
+      ],
+      "gold:4": [
+       146,
+       0.0171
+      ],
+      "gold:5": [
+       76,
+       0.0421
+      ],
+      "quoted:3": [
+       168,
+       0.0119
+      ],
+      "quoted:4": [
+       146,
+       0.024
+      ],
+      "quoted:5": [
+       76,
+       0.0368
+      ]
+     },
+     "noul_true": 0.4886,
+     "noul_true_by_kind": {
+      "applicant_screen": [
+       48,
+       0.4792
+      ],
+      "directory_route": [
+       58,
+       0.5
+      ],
+      "expense_total": [
+       48,
+       0.4792
+      ],
+      "order_sla": [
+       48,
+       0.4792
+      ],
+      "project_timeline": [
+       48,
+       0.4792
+      ],
+      "rubric_pick": [
+       46,
+       0.4783
+      ],
+      "subscription_bill": [
+       72,
+       0.5
+      ],
+      "transit_connection": [
+       72,
+       0.5
+      ]
+     },
+     "quote_correct_share": 0.5,
+     "score_levels": {
+      "4": {
+       "0": 32,
+       "1": 32,
+       "2": 32,
+       "3": 32
+      }
+     }
+    },
+    "hs1_unmet_condition": {
+     "choice_position_max_dev": {
+      "gold:4": [
+       120,
+       0.0083
+      ],
+      "gold:5": [
+       30,
+       0.0667
+      ],
+      "gold:6": [
+       28,
+       0.0952
+      ],
+      "gold:7": [
+       14,
+       0.1429
+      ]
+     },
+     "noul_true": 0.5,
+     "noul_true_by_kind": {
+      "claim_filing": [
+       112,
+       0.5
+      ],
+      "club_membership": [
+       56,
+       0.5
+      ],
+      "equipment_loan": [
+       56,
+       0.5
+      ],
+      "event_permit": [
+       56,
+       0.5
+      ],
+      "grant_application": [
+       56,
+       0.5
+      ],
+      "rental_application": [
+       56,
+       0.5
+      ],
+      "scholarship": [
+       56,
+       0.5
+      ],
+      "travel_grant": [
+       56,
+       0.5
+      ],
+      "vehicle_inspection": [
+       112,
+       0.5
+      ],
+      "volunteer_clearance": [
+       56,
+       0.5
+      ]
+     },
+     "score_levels": {
+      "4": {
+       "1": 19,
+       "2": 18,
+       "3": 11
+      }
+     }
+    }
+   },
+   "fails": [],
+   "pass": true
+  },
+  "train": {
+   "cells": {
+    "hs1_policy_packet": {
+     "choice_position_max_dev": {
+      "gold:4": [
+       538,
+       0.0046
+      ],
+      "gold:5": [
+       550,
+       0.0036
+      ]
+     },
+     "noul_true": 0.5,
+     "noul_true_by_kind": {
+      "grant_funding": [
+       104,
+       0.5
+      ],
+      "it_access": [
+       104,
+       0.5
+      ],
+      "leave_policy": [
+       104,
+       0.5
+      ],
+      "library_lending": [
+       104,
+       0.5
+      ],
+      "parking_permits": [
+       104,
+       0.5
+      ],
+      "returns_refund": [
+       104,
+       0.5
+      ],
+      "travel_expense": [
+       104,
+       0.5
+      ],
+      "warranty_service": [
+       104,
+       0.5
+      ]
+     },
+     "score_levels": {
+      "4": {
+       "0": 122,
+       "1": 137,
+       "2": 108,
+       "3": 111
+      }
+     }
+    },
+    "hs1_quote_check": {
+     "choice_position_max_dev": {
+      "gold:3": [
+       1194,
+       0.0
+      ],
+      "gold:4": [
+       1246,
+       0.0012
+      ],
+      "gold:5": [
+       506,
+       0.0063
+      ],
+      "quoted:3": [
+       1194,
+       0.0034
+      ],
+      "quoted:4": [
+       1246,
+       0.0116
+      ],
+      "quoted:5": [
+       506,
+       0.0273
+      ]
+     },
+     "noul_true": 0.4994,
+     "noul_true_by_kind": {
+      "applicant_screen": [
+       540,
+       0.5
+      ],
+      "directory_route": [
+       634,
+       0.4984
+      ],
+      "expense_total": [
+       540,
+       0.5
+      ],
+      "order_sla": [
+       540,
+       0.5
+      ],
+      "project_timeline": [
+       540,
+       0.5
+      ],
+      "rubric_pick": [
+       538,
+       0.4981
+      ]
+     },
+     "quote_correct_share": 0.5,
+     "score_levels": {
+      "4": {
+       "0": 230,
+       "1": 230,
+       "2": 220,
+       "3": 220
+      }
+     }
+    },
+    "hs1_unmet_condition": {
+     "choice_position_max_dev": {
+      "gold:4": [
+       1244,
+       0.0008
+      ],
+      "gold:5": [
+       462,
+       0.0035
+      ],
+      "gold:6": [
+       242,
+       0.0055
+      ],
+      "gold:7": [
+       124,
+       0.0058
+      ]
+     },
+     "noul_true": 0.5,
+     "noul_true_by_kind": {
+      "club_membership": [
+       910,
+       0.5
+      ],
+      "equipment_loan": [
+       910,
+       0.5
+      ],
+      "event_permit": [
+       910,
+       0.5
+      ],
+      "grant_application": [
+       910,
+       0.5
+      ],
+      "rental_application": [
+       910,
+       0.5
+      ],
+      "scholarship": [
+       910,
+       0.5
+      ],
+      "travel_grant": [
+       910,
+       0.5
+      ],
+      "volunteer_clearance": [
+       910,
+       0.5
+      ]
+     },
+     "score_levels": {
+      "4": {
+       "1": 177,
+       "2": 155,
+       "3": 188
+      }
+     }
+    }
+   },
+   "fails": [],
+   "pass": true
+  }
+ },
+ "a3c_heuristics": {
+  "dev": {
+   "accuracy": {
+    "f1:adopt_quote:choice": [
+     390,
+     0.5
+    ],
+    "f1:adopt_quote:noul_direct": [
+     242,
+     0.5
+    ],
+    "f1:adopt_quote:score": [
+     128,
+     0.5
+    ],
+    "f1:reject_quote:noul_verify": [
+     198,
+     0.5
+    ],
+    "f2:base_only:choice": [
+     214,
+     0.1822
+    ],
+    "f2:base_only:noul": [
+     168,
+     0.381
+    ],
+    "f2:base_only:score": [
+     96,
+     0.2083
+    ],
+    "f2:first_match:choice": [
+     214,
+     0.3178
+    ],
+    "f2:first_match:noul": [
+     168,
+     0.4048
+    ],
+    "f2:first_match:score": [
+     96,
+     0.3333
+    ],
+    "f2:latest_amendment:choice": [
+     214,
+     0.2103
+    ],
+    "f2:latest_amendment:noul": [
+     168,
+     0.3512
+    ],
+    "f2:latest_amendment:score": [
+     96,
+     0.2396
+    ],
+    "f3:no_if_near_threshold:noul": [
+     672,
+     0.5
+    ],
+    "f3:yes_unless_negation:noul": [
+     672,
+     0.5
+    ]
+   },
+   "fails": [],
+   "pass": true
+  },
+  "train": {
+   "accuracy": {
+    "f1:adopt_quote:choice": [
+     2946,
+     0.5
+    ],
+    "f1:adopt_quote:noul_direct": [
+     1852,
+     0.5
+    ],
+    "f1:adopt_quote:score": [
+     900,
+     0.5
+    ],
+    "f1:reject_quote:noul_verify": [
+     1480,
+     0.5
+    ],
+    "f2:base_only:choice": [
+     1088,
+     0.1857
+    ],
+    "f2:base_only:noul": [
+     832,
+     0.3798
+    ],
+    "f2:base_only:score": [
+     478,
+     0.2259
+    ],
+    "f2:first_match:choice": [
+     1088,
+     0.3263
+    ],
+    "f2:first_match:noul": [
+     832,
+     0.4062
+    ],
+    "f2:first_match:score": [
+     478,
+     0.3201
+    ],
+    "f2:latest_amendment:choice": [
+     1088,
+     0.2114
+    ],
+    "f2:latest_amendment:noul": [
+     832,
+     0.3738
+    ],
+    "f2:latest_amendment:score": [
+     478,
+     0.2218
+    ],
+    "f3:no_if_near_threshold:noul": [
+     7280,
+     0.5
+    ],
+    "f3:yes_unless_negation:noul": [
+     7280,
+     0.5
+    ]
+   },
+   "fails": [],
+   "pass": true
+  }
+ },
+ "a3d_length": {
+  "dev": {
+   "fails": [],
+   "families": {
+    "hs1_policy_packet": {
+     "accuracy": 0.5,
+     "majority": 0.5,
+     "n": 168
+    },
+    "hs1_quote_check": {
+     "accuracy": 0.5477,
+     "majority": 0.5114,
+     "n": 440
+    },
+    "hs1_unmet_condition": {
+     "accuracy": 0.5,
+     "majority": 0.5,
+     "n": 672
+    }
+   },
+   "pass": true
+  },
+  "train": {
+   "fails": [],
+   "families": {
+    "hs1_policy_packet": {
+     "accuracy": 0.494,
+     "majority": 0.5,
+     "n": 832
+    },
+    "hs1_quote_check": {
+     "accuracy": 0.5168,
+     "majority": 0.5006,
+     "n": 3332
+    },
+    "hs1_unmet_condition": {
+     "accuracy": 0.5,
+     "majority": 0.5,
+     "n": 7280
+    }
+   },
+   "pass": true
+  }
+ },
+ "a7_names": {
+  "hits": {},
+  "pass": true
+ },
+ "inputs": {
+  "hs1.dev.jsonl": "2e9ee9ab6768aa2b3d0d397670248e5a8f2e524d60887d06698a4e84516533bf",
+  "hs1.train.jsonl": "c90ef3164d90d3fd6a1ab0397529faec172760b1756de7d4d8cbf2677a131a71"
+ },
+ "schema": "decision2.hs1.audit.v1",
+ "shortcut": {
+  "a3a": {
+   "hs1_policy_packet/grant_funding": {
+    "gates": [
+     {
+      "accuracy": 0.25,
+      "n": 136,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.2926,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.2279,
+      "n": 136,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.2926,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.5192,
+      "n": 104,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 104,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.2,
+      "n": 60,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.2333,
+      "n": 60,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_policy_packet/it_access": {
+    "gates": [
+     {
+      "accuracy": 0.1912,
+      "n": 136,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.2772,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.2206,
+      "n": 136,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.2772,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.5192,
+      "n": 104,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 104,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.15,
+      "n": 60,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.4,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.15,
+      "n": 60,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.4,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_policy_packet/leave_policy": {
+    "gates": [
+     {
+      "accuracy": 0.1765,
+      "n": 136,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.2853,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.2353,
+      "n": 136,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.2853,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 104,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 104,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.25,
+      "n": 60,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.3167,
+      "n": 60,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_policy_packet/library_lending": {
+    "gates": [
+     {
+      "accuracy": 0.1985,
+      "n": 136,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.3074,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.2721,
+      "n": 136,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.3074,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.5481,
+      "n": 104,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 104,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.3,
+      "n": 60,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.1667,
+      "n": 60,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_policy_packet/parking_permits": {
+    "gates": [
+     {
+      "accuracy": 0.2206,
+      "n": 136,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.2757,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.1985,
+      "n": 136,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.2757,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.5385,
+      "n": 104,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 104,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.2833,
+      "n": 60,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3667,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.3167,
+      "n": 60,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3667,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_policy_packet/returns_refund": {
+    "gates": [
+     {
+      "accuracy": 0.1544,
+      "n": 136,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.2765,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.1912,
+      "n": 136,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.2765,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.4808,
+      "n": 104,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 104,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.2759,
+      "n": 58,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.1552,
+      "n": 58,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_policy_packet/travel_expense": {
+    "gates": [
+     {
+      "accuracy": 0.2574,
+      "n": 136,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.275,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.2353,
+      "n": 136,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.275,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.4423,
+      "n": 104,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 104,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.1833,
+      "n": 60,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.2167,
+      "n": 60,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_policy_packet/warranty_service": {
+    "gates": [
+     {
+      "accuracy": 0.2059,
+      "n": 136,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.2926,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.2059,
+      "n": 136,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.2926,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 104,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 104,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.2833,
+      "n": 60,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3667,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.3,
+      "n": 60,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3667,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_quote_check/applicant_screen": {
+    "gates": [
+     {
+      "accuracy": 0.3625,
+      "n": 480,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.3875,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.3417,
+      "n": 480,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.3875,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.5037,
+      "n": 540,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.4926,
+      "n": 540,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.2778,
+      "n": 180,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.3,
+      "n": 180,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_quote_check/directory_route": {
+    "gates": [
+     {
+      "accuracy": 0.3156,
+      "n": 564,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.3116,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.2872,
+      "n": 564,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.3116,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.5268,
+      "n": 634,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.489,
+      "n": 634,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_quote_check/expense_total": {
+    "gates": [
+     {
+      "accuracy": 0.3458,
+      "n": 480,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.3494,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.3417,
+      "n": 480,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.3494,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.5463,
+      "n": 540,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 540,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.2889,
+      "n": 180,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.2333,
+      "n": 180,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_quote_check/order_sla": {
+    "gates": [
+     {
+      "accuracy": 0.2785,
+      "n": 474,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.3138,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.3249,
+      "n": 474,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.3138,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.4963,
+      "n": 540,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.4889,
+      "n": 540,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.2778,
+      "n": 180,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.2,
+      "n": 180,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_quote_check/project_timeline": {
+    "gates": [
+     {
+      "accuracy": 0.2479,
+      "n": 468,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.3077,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.2265,
+      "n": 468,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.3077,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.4944,
+      "n": 540,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.4667,
+      "n": 540,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.2111,
+      "n": 180,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.1889,
+      "n": 180,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_quote_check/rubric_pick": {
+    "gates": [
+     {
+      "accuracy": 0.2667,
+      "n": 480,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.3,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.2708,
+      "n": 480,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.3,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.5019,
+      "n": 538,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.4535,
+      "n": 538,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.2778,
+      "n": 180,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.1889,
+      "n": 180,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_unmet_condition/club_membership": {
+    "gates": [
+     {
+      "accuracy": 0.3731,
+      "n": 260,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.4731,
+      "n": 260,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 910,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 910,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.3,
+      "n": 130,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 130,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.55,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_unmet_condition/equipment_loan": {
+    "gates": [
+     {
+      "accuracy": 0.3654,
+      "n": 260,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.4538,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.4346,
+      "n": 260,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.4538,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 910,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 910,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.2923,
+      "n": 130,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 130,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.55,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_unmet_condition/event_permit": {
+    "gates": [
+     {
+      "accuracy": 0.3692,
+      "n": 260,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.4538,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.4538,
+      "n": 260,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.4538,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 910,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 910,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.4,
+      "n": 130,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 130,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.55,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_unmet_condition/grant_application": {
+    "gates": [
+     {
+      "accuracy": 0.3692,
+      "n": 260,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.4385,
+      "n": 260,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 910,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 910,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.3385,
+      "n": 130,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.3692,
+      "n": 130,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.55,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_unmet_condition/rental_application": {
+    "gates": [
+     {
+      "accuracy": 0.3846,
+      "n": 260,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.4538,
+      "n": 260,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 910,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 910,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.4385,
+      "n": 130,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 130,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.55,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_unmet_condition/scholarship": {
+    "gates": [
+     {
+      "accuracy": 0.3962,
+      "n": 260,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.4923,
+      "n": 260,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 910,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 910,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.3,
+      "n": 130,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 130,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.55,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_unmet_condition/travel_grant": {
+    "gates": [
+     {
+      "accuracy": 0.3808,
+      "n": 260,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.4538,
+      "n": 260,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 910,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 910,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.4615,
+      "n": 130,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.3308,
+      "n": 130,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.55,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_unmet_condition/volunteer_clearance": {
+    "gates": [
+     {
+      "accuracy": 0.3532,
+      "n": 252,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.4984,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.4802,
+      "n": 252,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.4984,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 910,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 910,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.2462,
+      "n": 130,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.3538,
+      "n": 130,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.55,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   }
+  },
+  "a3a_pass": true,
+  "a3a_pooled": {
+   "hs1_policy_packet": {
+    "gates": [
+     {
+      "accuracy": 0.2206,
+      "n": 1088,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.2747,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.2132,
+      "n": 1088,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.2747,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.4964,
+      "n": 832,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 832,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.2448,
+      "n": 478,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3366,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.2427,
+      "n": 478,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3366,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_quote_check": {
+    "gates": [
+     {
+      "accuracy": 0.2851,
+      "n": 2946,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.3252,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.3028,
+      "n": 2946,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.3252,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.5084,
+      "n": 3332,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.4958,
+      "n": 3332,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.2378,
+      "n": 900,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.2444,
+      "n": 900,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   },
+   "hs1_unmet_condition": {
+    "gates": [
+     {
+      "accuracy": 0.3552,
+      "n": 2072,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.5196,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.4638,
+      "n": 2072,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.5196,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 7280,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 7280,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "option_only"
+     },
+     {
+      "accuracy": 0.3779,
+      "n": 1040,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5,
+      "n": 1040,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.55,
+      "view": "option_only"
+     }
+    ],
+    "pass": true
+   }
+  },
+  "a3b": {
+   "hs1_policy_packet": {
+    "gates": [
+     {
+      "accuracy": 0.227,
+      "n": 1088,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.2747,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.4856,
+      "n": 832,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.2259,
+      "n": 478,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.3366,
+      "view": "state_removed"
+     }
+    ],
+    "verdict": "PASS"
+   },
+   "hs1_quote_check": {
+    "gates": [
+     {
+      "accuracy": 0.299,
+      "n": 2946,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5111,
+      "n": 3332,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.3467,
+      "n": 900,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.55,
+      "view": "state_removed"
+     }
+    ],
+    "verdict": "PASS"
+   },
+   "hs1_quote_check.noul_verify": {
+    "gates": [
+     {
+      "accuracy": 0.5142,
+      "n": 1480,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     }
+    ],
+    "verdict": "PASS"
+   },
+   "hs1_unmet_condition": {
+    "gates": [
+     {
+      "accuracy": 0.3813,
+      "n": 2072,
+      "pass": true,
+      "task_type": "choice",
+      "threshold": 0.5196,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.5016,
+      "n": 7280,
+      "pass": true,
+      "task_type": "noul",
+      "threshold": 0.55,
+      "view": "state_removed"
+     },
+     {
+      "accuracy": 0.4538,
+      "n": 1040,
+      "pass": true,
+      "task_type": "score",
+      "threshold": 0.55,
+      "view": "state_removed"
+     }
+    ],
+    "verdict": "PASS"
+   }
+  },
+  "a3b_pass": true
+ }
+}

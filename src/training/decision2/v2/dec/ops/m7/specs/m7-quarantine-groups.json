@@ -1,0 +1,4 @@
+{
+  "note": "Training groups quarantined from every decoder M7 mixture: the 4B near-match group of the JevBench public-231 screen (3 HotpotQA rows, rule S; COORDINATION 2026-09-29 17:15, eval record jevbench-value-2026-09-29.md). Present in m4-xl-full-29m (c7d51219) and m6-xl-full-59m.",
+  "group_ids": ["m2:multihop:41be17b19b01045b01fd0dfc"]
+}

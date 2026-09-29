@@ -24,6 +24,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from v2.common import eval_only
 from v2.data.m2.common import read_jsonl, sha
 
 BUDGETS = {"S": 8_000_000, "M": 20_000_000, "L": 40_000_000}
@@ -120,6 +121,7 @@ def summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def write(out: Path, name: str, rows: list[dict[str, Any]]) -> str:
+    eval_only.check_rows(rows)
     data = "".join(
         json.dumps(
             {
@@ -145,6 +147,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out-dir", type=Path, required=True)
     args = parser.parse_args(argv)
     specs = json.loads(args.pools.read_text())
+    eval_only.guard(args, specs)
     pools = {name: load_pool(spec) for name, spec in specs.items()}
     args.out_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     manifest: dict[str, Any] = {

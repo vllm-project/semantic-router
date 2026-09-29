@@ -1,0 +1,182 @@
+{
+  "schema": "dev2-release-spec/1",
+  "_release": {
+    "card_c1": "Card-only revision after JevArena-C1 event 3 (item set v1.2, scored 2026-09-29; eval record v2/eval/records/m4-c1-event3-prep-2026-09-29.md section 0000), coordinator note 2026-09-29 23:40 UTC+8: the confirmation line now gives the v1.2 same-limit result of the previous revision's weights (event-2 predictions of e61b2b44 vs Decision 1.0 Kai at 8,192 tokens) and states that the current weights were not part of any sealed event. The card re-renders with the current public-231 note of card.py. Every model file stays byte-identical to the released revision b21313375ad77ddf4a8e420fa5195e6e09582043."
+  },
+  "kind": "release",
+  "repo_id": "llm-semantic-router/DEV2.0-0.6B",
+  "model_name": "DEV2.0-0.6B",
+  "profile": "qwen-full",
+  "checkpoint": "/data/dev2/runs/release/inputs/dev2-0p6b-m8-bf16/checkpoint",
+  "expected_identity": {
+    "model_sha256": "bb806f31a14d4532a1b5e00984442128f47f46cbbc68e57e7623327c81cfb983"
+  },
+  "calibration": null,
+  "max_input_tokens": 8192,
+  "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-0.6B.decision.card-c1.json",
+  "origin": {
+    "repo_id": "Qwen/Qwen3-0.6B-Base",
+    "revision": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+    "relation": "finetune",
+    "summary": "Every weight of the official Qwen3-0.6B-Base (Apache-2.0) was fine-tuned (nothing frozen, no adapter) together with a new candidate head trained from random initialization; the release is the uniform average of six such fine-tunes (two training recipes × three seeds), plus fixed per-level offsets on five-level Score logits. It contains no Decision 1.0 Kai or Lex weights: Decision 1.0 Kai is the comparison model, and our own Decision 1.0 Lux-9B supplied soft training targets only."
+  },
+  "runtime_requirements": {
+    "python": "3.12.13",
+    "torch": "2.12.0+git6bbd260 (ROCm 7.2 build; one ROCm GPU and CPU tested)",
+    "transformers": "5.17.0",
+    "tokenizers": "0.23.2",
+    "safetensors": "0.8.0"
+  },
+  "runtime_equivalence": "decision2/qwen.py loads this full checkpoint with the vendored training/model sources whose SHA-256 equal the scored adapter sources (checked at build time) and applies the per-state batching, BF16-backbone / FP32-head execution, raw probabilities (temperature 1; no calibration file), the fixed five-level Score logit offsets of score_bias.json and the answer normalization of training.model.infer (adapter dev2-06b-causal-8k-sb). The scored checkpoint (01fae750) stored every tensor in FP32; this package (v2.release.bf16_copy, receipt 2a991bfb) stores its 196 Linear projection matrices in BF16 exactly as BF16 autocast rounds them and every other tensor bit for bit in FP32, with the same offsets rebound to its hash. Checked on one GPU of the scoring node against the sealed predictions of every scored prompt (typed-final 1,600, css15 6,547, public231 231) and of the mlx-diag diagnostic (2,275) by release.sh --parity at tolerance 0: 0 answer changes, maximum probability drift 0.0.",
+  "scored": {
+    "label": "post-key same-panel run m8-s5-b05 (frozen runner, 8,192 tokens, raw probabilities with per-level Score offsets)",
+    "report_sha256": "b2083796ed0a03728edffb2aa8af5c9c60db38df3ad8182ea5c9e08d6bb6a2ed",
+    "seal_sha256": "0fe8b3f584b033e835d8a53f3062cf0d247481cc74498c8869c01e11131979b1",
+    "predictions_sha256": {
+      "typed-final": "99c5a0147b69a7292cbbae0ffd31d5d874235c29eed8b6de130a78ea010e1c60",
+      "css15": "6788c1da8b6755baad1ab7d8f95207aada7b44e6791b830f5b7dd958d4875d38",
+      "public231": "0993d7239e8cccc3b471f5faf5cd08b50579276a12aa1730d32d6f7539953116",
+      "mlx-diag": "b452f016921999af6f0bebe34465939937c4c5f20b904772549be345b8e60f11"
+    },
+    "paired_sha256": "7b391cb2f5ab08b798e3ba6817dcf269ae0b9fb4843dabe4ac434b8177b77f98",
+    "native_manifest": "/data/dev2/runs/06b/m8/formal/m8-s5-b05/output/typed-final.predictions.jsonl.manifest.json"
+  },
+  "licence": {
+    "components": [
+      {
+        "component": "DEV2.0-0.6B weights, Score offsets, decision head, package runtime, card and artwork",
+        "licence": "apache-2.0",
+        "source": "llm-semantic-router/DEV2.0-0.6B"
+      },
+      {
+        "component": "Qwen3-0.6B-Base weights and tokenizer (direct weight origin, fully fine-tuned)",
+        "licence": "apache-2.0",
+        "source": "Qwen/Qwen3-0.6B-Base@da87bfb6"
+      }
+    ],
+    "files": [
+      {
+        "source": "/data/dev2/hf-cache/models--llm-semantic-router--Decision-1.0-Eos-0.8B/snapshots/363c4a5e56afc115b1c78c837633956d0bbb63ab/LICENSE",
+        "path": "LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      },
+      {
+        "source": "/data/dev2/runs/release/inputs/dev2-0p6b/qwen3-0.6b-base-da87bfb6/LICENSE",
+        "path": "LICENSES/Qwen3-0.6B-Base-LICENSE.txt",
+        "sha256": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e"
+      }
+    ],
+    "attributions": [
+      "[Qwen3-0.6B-Base](https://huggingface.co/Qwen/Qwen3-0.6B-Base) at `da87bfb608c14b7cf20ba1ce41287e8de496c0cd`: direct weight origin; every weight was fine-tuned (Apache-2.0, `LICENSES/Qwen3-0.6B-Base-LICENSE.txt`). The tokenizer files are the Qwen3 tokenizer as saved by the training code.",
+      "[Decision 1.0 Lux-9B](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B) (Apache-2.0), our own model: its probabilities on all 232,754 training prompts were soft training targets. None of its weights are included.",
+      "Training data (not redistributed here; each keeps its own licence): OpenAssistant OASST1 (Köpf et al., NeurIPS 2023 Datasets and Benchmarks; Apache-2.0), SentiMix Hinglish (Patwa et al., SemEval 2020; CC BY 4.0), TyDi QA (Clark et al., TACL 2020; Apache-2.0, Wikipedia text CC BY-SA), CLINC150 (Larson et al., EMNLP-IJCNLP 2019; CC BY 3.0), WinoGrande (Sakaguchi et al., AAAI 2020; Apache-2.0), MultiNLI non-fiction genres (Williams, Nangia and Bowman, NAACL 2018; OANC terms), GSM8K (Cobbe et al., 2021; MIT), JGLUE JSTS, JSQuAD, JCommonsenseQA and JNLI (Kurihara et al., LREC 2022; CC BY-SA 4.0), KLUE STS, MRC and YNAT (Park et al., NeurIPS 2021 Datasets and Benchmarks; CC BY-SA 4.0), BANKING77 (Casanueva et al., 2020; CC BY 4.0), MLQE-PE (Fomicheva et al., LREC 2022; CC0 1.0, Wikipedia text CC BY-SA), 2WikiMultihopQA (Ho et al., COLING 2020; Apache-2.0, Wikipedia text CC BY-SA), HotpotQA (Yang et al., EMNLP 2018; CC BY-SA 4.0), CommonsenseQA (Talmor et al., NAACL 2019; MIT), SQuAD 2.0 (Rajpurkar, Jia and Liang, ACL 2018; CC BY-SA 4.0), MultiWOZ 2.2 (Zang et al., 2020; MIT), GoEmotions (Demszky et al., ACL 2020; CC BY 4.0), SciTail (Khot et al., AAAI 2018; Apache-2.0), MuSiQue (Trivedi et al., TACL 2022; CC BY 4.0, Wikipedia text CC BY-SA), QuAC (Choi et al., EMNLP 2018; CC BY-SA 4.0), DRCD (Shao et al., 2018; CC BY-SA 3.0), SQAC (Gutiérrez-Fandiño et al., 2022; CC BY-SA 4.0), CMRC 2018 (Cui et al., EMNLP 2019; CC BY-SA 4.0), ABCD (Chen et al., NAACL 2021; MIT), GermanQuAD (Möller et al., 2021; CC BY 4.0), IBM ArgQ-30k (Gretz et al., AAAI 2020; CC BY-SA 3.0), PIAF (Keraron et al., LREC 2020; MIT), DBpedia-14 (Zhang et al., NeurIPS 2015; CC BY-SA 3.0), MTOP (Li et al., EACL 2021; CC BY-SA 4.0), Taskmaster-2 (Byrne et al., Google 2020; CC BY 4.0), ROPES (Lin et al., MRQA 2019; CC BY 4.0), SNLI (Bowman et al., EMNLP 2015; CC BY-SA 4.0), Schema-Guided Dialogue (Rastogi et al., AAAI 2020; CC BY-SA 4.0), QuaRTz (Tafjord et al., EMNLP 2019; CC BY 4.0), AfriSenti Swahili (Muhammad et al., EMNLP 2023; CC BY 4.0), SAF (Filighera et al., ACL 2022; CC BY 4.0), OneStopEnglish (Vajjala and Lučić, BEA 2018; CC BY-SA 4.0), and project-generated decision tasks.",
+      "Evaluation data shown on the card: JevArena v3 and JevBench public 231 (panels described in `evaluation/EVALUATION.md`); mlx-diag Choice from the MASSIVE 1.1 test split (FitzGerald et al., 2022; CC BY 4.0) and Noul from the PAWS-X test split (Yang et al., EMNLP 2019).",
+      "Owl banner: Decision 1.0 Kai mosaic owl, unchanged pixels, in the DEV2.0 name layout; wordmark set in Poppins (SIL Open Font License) and DejaVu Sans Bold. The owl marks the 0.6B size tier; the model weights do not derive from Kai."
+    ]
+  },
+  "card": {
+    "banner": "DEV2.0-0.6B-owl-banner.png",
+    "roster": "v2/eval/records/decision-index-peer-roster-2026-09-28.json",
+    "paired": "/data/dev2/runs/06b/m8/formal/m8-s5-b05/PAIRED-vs-kai1.json",
+    "calibration_text": "Raw probabilities at T = 1. Five-level Score answers first add the fixed per-level logit offsets in `score_bias.json` (see Limitations). Per-type temperatures fitted on the clean 698-item calibration partition (Choice 0.584, Noul 0.554, Score 0.450) were evaluated and not adopted because they worsened calibration on out-of-distribution development data.",
+    "requirements_text": "Tested with Python 3.12, PyTorch 2.12 and Transformers 5.17 on one ROCm GPU (BF16 backbone, FP32 head), where answers match the evaluated predictions, and on CPU (FP32), where probabilities can differ from the GPU results by a few thousandths. Transformers 5.17 prints a Mistral tokenizer-regex warning when it finds the package's root `config.json`; it does not change tokenization and can be ignored.",
+    "text": {
+      "tagline": "A compact decision model for routing choices, yes/no checks and rubric scores over one state: native System One Choice, Noul and Score answers with probabilities, no chat API.",
+      "architecture": "The 28-layer Qwen3-0.6B text backbone (causal attention) reads the state, the question and every supplied candidate once; a shared candidate head scores the candidates against a global query and returns probabilities without generating text.",
+      "confirmation": "**Independent sealed confirmation, same input limit (previous revision)** — JevArena-C1 v1.2 (2,840 human-labeled items from 8 sources published after the relevant cutoffs, never used for training or development; scored once): the previous DEV2.0-0.6B weights score **33.02** vs Decision 1.0 Kai at 8,192 tokens 22.14 (+10.89, 95% CI [+8.88, +12.64]). These are the predictions sealed at event 2 from revision `e61b2b44` (model files identical to the previous revision `99c4e799`), rescored on v1.2; Kai 1.0 at its published 1,024-token limit scores 17.79 on v1.2. The current weights (released as revision `b2131337`) were not part of any sealed event.",
+      "comparator_note": "GLiNER2.5-Decide declares Apache-2.0 in its model card metadata, but its repository has no LICENSE file.",
+      "details": [
+        "**Weights:** The uniform average of six full fine-tunes of Qwen3-0.6B-Base (two training recipes × three seeds; 30M tokens per seed, one epoch), with a new candidate head. Decision 1.0 Lux-9B probabilities were soft training targets on every row; none of its weights are included.",
+        "**This revision** replaces `99c4e799` (a different three-seed average): post-key JevArena v3 48.64 against 43.54, a paired difference of +5.09 (95% interval [+2.65, +9.30]). Only five-level Score answers depend on the offsets; Choice, Noul and other Score scales come from the weights alone.",
+        "**Storage:** the backbone's Linear projection matrices are stored in BF16 exactly as BF16 autocast rounds them, every other tensor in FP32; on every evaluated prompt the answers and probabilities equal those of the evaluated FP32 weights."
+      ],
+      "training": [
+        "**Recipe:** each fine-tune is one epoch on its own 30M-token mixture (logical batch 16; backbone learning rate 1e-5 with 10% warm-up and cosine decay, head 2e-4) with cross-entropy plus 0.5 × Brier and a KL term (weight 1.0) toward soft targets from our own [Decision 1.0 Lux-9B](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B) on every row. No other teacher, and no outputs of Jev or of any third-party decision model.",
+        "**Data:** together the six mixtures hold 232,754 distinct decision rows: Choice 88,676, Noul 75,701 and Score 68,377; English 130,105, Chinese 46,699, Hinglish 12,269, Spanish 8,791, Japanese 6,537, Korean 5,884 and 26 other languages.",
+        "**Program-generated tasks (89,771 rows):** Decision 1.0 stage 1–4 generators and Decision 2.0 programmatic and verifiable generators, labeled by program oracles (no third-party text).",
+        "**Human-labeled and public data (142,983 rows)** from 37 public datasets that keep their own licences ([attributions](ATTRIBUTIONS.md)). The training mixtures contain no MASSIVE, PAWS-X or XNLI rows (the sources of mlx-diag), and every group the evaluation-overlap rescreen excluded was removed before training.",
+        "**Score offsets:** fitted afterwards on 400 fresh draws of the benchmark's own typed Score generator (see Limitations); no weight was changed."
+      ],
+      "limitations": [
+        "**Score offsets:** Five-level Score answers add fixed per-level offsets to the model's logits before the softmax (`score_bias.json`: +0.039, +0.203, +0.079, −0.152, −0.170 for levels 0–4). Choice, Noul and other Score scales are unchanged. The offsets were fitted on 400 fresh draws of the benchmark's own typed Score generator (`resource_ledger`, the family behind the typed panel's Score items). These draws are disjoint from the panel's items up to event ids and row order, but about three quarters share an answer structure with them. The offsets were chosen on a separate 400-item check half and on held-out human 5-level ratings. Without them the same weights give the top level on 94.75% of the typed Score items.",
+        "**Typed Score accuracy stays near always-majority:** On the typed Score family the model is right on 34.3% of items, against 32.0% for always answering the most common level (difference +2.3 points, 95% CI −1.5 to +6.3). The offsets fix level usage (62.0% of answers now on the top level), not Score skill on this family, and level 3 is never predicted there.",
+        "**Human 5-level ratings:** On 1,809 held-out human-rated 5-level items the offsets change accuracy by −1.1 points (34.1% → 33.0%; 95% CI −2.8 to +0.7).",
+        "**Against the previous revision:** The human-transfer axis is .459 against .480 (−.021, 95% CI −.064 to +.061). CSS15 losses are wiki politeness −3.4, Indian English dialect −3.4 and FLUTE −1.6 accuracy points. Public-231 easy is 47 against 48. Typed-panel calibration is weaker at T = 1 (ECE .155 against .118; Brier .321 against .309).",
+        "**Multilingual (mlx-diag, card-eligible parts):** Choice: 75.4% English, 70.2% other languages (weakest Arabic, 62.7%). Noul: 53.0% English, 52.8% other languages, near chance (weakest Spanish, 50.0%). The Choice + Noul macro is +0.4 points against the previous revision (95% CI −0.6 to +1.4).",
+        "**Public 231:** public-only rerun (about a third of the official Intelligence inputs), not the official JevBench score; easy tier at ceiling; totals within about 10 items are not distinguishable. It answers 152 (easy 47, standard 61, hard 44); paired differences: previous revision +10 items (95% interval [0, +20], p .087), Bosun v3.1 0.6B +19 ([+7, +31]), GLiNER2.5-Decide +36 ([+23, +49]), Decision 1.0 Kai +38 ([+23, +53]; +25 [+10, +41] against Kai at 8,192 tokens) and Decision 1.0 Lex +39 ([+24, +55]). No peer is significantly ahead on it.",
+        "**Same-limit comparison:** the table shows Decision 1.0 Kai at its published 1,024-token input limit. Run at this model's 8,192-token limit, Kai scores 35.97 on JevArena v3 and 127/231 on JevBench public, and the paired v3 difference is +12.67 (95% interval [+9.74, +17.42]).",
+        "**Overlap:** None of the evaluation-overlap rescreen's excluded training groups is in the training mixtures."
+      ]
+    },
+    "reports": [
+      {
+        "key": "candidate",
+        "role": "candidate",
+        "report": "/data/dev2/runs/06b/m8/formal/m8-s5-b05/REPORT.json",
+        "mlx": "/data/dev2/runs/06b/m8/formal/m8-s5-b05-mlx/mlx-diag.score.json",
+        "label": "DEV2.0-0.6B"
+      },
+      {
+        "key": "kai1",
+        "role": "own-1.0",
+        "report": "/data/dev2/runs/eval/m1-adopt/kai1/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/mlx/x-kai/mlx-diag.score.json",
+        "repo_id": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+        "label": "Decision 1.0 Kai"
+      },
+      {
+        "key": "gliner25",
+        "role": "peer",
+        "report": "/data/dev2/runs/eval/m1/p1-gliner25/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/mlx/x-gliner25/mlx-diag.score.json",
+        "repo_id": "fastino/GLiNER2.5-Decide",
+        "label": "GLiNER2.5-Decide"
+      },
+      {
+        "key": "bosun",
+        "role": "peer",
+        "report": "/data/dev2/runs/eval/m1-adopt/bosun/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/mlx/x-bosun06/mlx-diag.score.json",
+        "repo_id": "Hanno-Labs/bosun-v3.1-0.6b",
+        "label": "Bosun v3.1 0.6B"
+      },
+      {
+        "key": "lex1",
+        "role": "peer",
+        "report": "/data/dev2/runs/eval/m1/r3-lex/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/mlx/x-lex/mlx-diag.score.json",
+        "repo_id": "llm-semantic-router/Decision-1.0-Lex-0.6B",
+        "label": "Decision 1.0 Lex"
+      }
+    ]
+  },
+  "score_bias": {
+    "path": "/data/dev2/runs/release/inputs/dev2-0p6b-m8-bf16/score_bias.bf16.json",
+    "sha256": "7d3a060fe1823aa7fe759776df3db872408de580f227120fbe08b9eef53dcf6e"
+  },
+  "bf16_copy": {
+    "receipt": "/data/dev2/runs/release/inputs/dev2-0p6b-m8-bf16/bf16-copy.json",
+    "sha256": "2a991bfb4388d36f4767e8fa843aeb4b77f422aabb603f179fb609768b576c6b"
+  },
+  "gate_profile": {
+    "name": "successor",
+    "run": "/data/dev2/runs/06b/m8/formal/m8-s5-b05",
+    "current": {
+      "revision": "99c4e799392afa73241915aeb16fefa5ef3518d7",
+      "gate": "/data/dev2/src/95a683e506e723e7f7810402d3152a2192a7f864-src_training_decision2/src/training/decision2/v2/release/records/dev2-0p6b-release-2026-09-28/final/receipts/gate.json",
+      "decision": "/data/dev2/src/95a683e506e723e7f7810402d3152a2192a7f864-src_training_decision2/src/training/decision2/v2/release/records/dev2-0p6b-release-2026-09-28/DEV2.0-0.6B.decision.json",
+      "run": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup",
+      "mlx_predictions": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup-mlx/output/mlx-diag.predictions.jsonl"
+    },
+    "paired": "/data/dev2/runs/06b/m8/formal/m8-s5-b05.gates/paired-vs-released.json",
+    "types": "/data/dev2/runs/06b/m8/formal/m8-s5-b05.gates/types.json",
+    "mlx_paired": "/data/dev2/runs/06b/m8/formal/m8-s5-b05.gates/mlx-paired.json",
+    "exposure": "/data/dev2/runs/06b/m8/overlap/exposure-m6-mxcx-soup.json",
+    "public231": "/data/dev2/runs/release/dev2-0p6b-m8-public231-20260929T132851Z/public231-vs-previous.json",
+    "tier": {
+      "reference": "gliner25",
+      "v3_share": 0.9,
+      "paired": "/data/dev2/runs/06b/m8/formal/m8-s5-b05.gates/paired-vs-gliner25.json"
+    }
+  }
+}

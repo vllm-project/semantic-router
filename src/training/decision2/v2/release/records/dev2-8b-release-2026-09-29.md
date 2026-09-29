@@ -1,5 +1,36 @@
 # DEV2.0-8B (9B tier, candidate K-a13): private release build, upload and verification (2026-09-29)
 
+## DEV2.0-9B C1 card-only revision, 2026-09-30 ≈01:05 UTC+8 — revision `e51f9881` (current)
+
+- **Revision `e51f9881b92f646cb0bd62b2876d4878cc8d16ec`** of `llm-semantic-router/DEV2.0-9B` (`main`), manifest
+  `e01993466799…`. Final decision
+  [`DEV2.0-9B.decision.json`](dev2-c1-card-pass-2026-09-29/DEV2.0-9B.decision.json) `e833608c…` supersedes
+  `bad97635…` below; gate.json `09a04c70…`, 6 of 6 items.
+- **Card:** the C1 placeholder becomes the event-3 line (v1.2), measured on the frozen package `53bac735`: 53.77 vs
+  Decision 1.0 Lux 51.97 (+1.80 [+0.55, +3.07], significantly above) and Nimble v2 52.77 (+1.00 [−0.69, +2.75], level).
+  The public-231 note is the new one.
+- **Weights:** all 10 weight files byte-identical to `ae683196` (and `53bac735`); only `README.md` and
+  `MODEL_MANIFEST.json` changed. The package runtime is pinned to mirror `2926952c1`, which built `ae683196`.
+- Record: [`dev2-c1-card-pass-2026-09-29.md`](dev2-c1-card-pass-2026-09-29.md).
+
+## Renamed DEV2.0-9B, 2026-09-29 16:44 UTC+8 — card-only revision `ae683196` (superseded)
+
+- **Why:** the user directive of 2026-09-29 16:05 UTC+8: names follow the base model's size, and this model's base is
+  Qwen3.5-9B.
+- **Move:** the repository was moved to **`llm-semantic-router/DEV2.0-9B`** at 08:44:34Z. History, revisions and
+  privacy are unchanged, and the old ID redirects.
+- **Card-only revision `ae6831960dd1114296cb15a59248b79832c42959`** (`main`):
+  - manifest `996b28192928d9238657dce562721e10b850cae183926ff88396383192bef628`;
+  - final decision `bad976354662ea807cfc444c48f39f723624b14bd8446f74195308b19c1b0b4a`, which supersedes `7666fd7c…`
+    below;
+  - gate.json `9de02171…`.
+- **Weights:** every weight file is byte-identical to `53bac735`.
+- **Card:** it shows the 9B owl and says "Named after its base model (Qwen3.5-9B); it loads 7,940,895,744
+  parameters". The pending C1 line is unchanged.
+- **Collection:** position 5 of 0.6B, 0.8B, 2B, 4B, 9B, 27B.
+- Spec: `specs/dev2-9b-release.json`. Record: [`dev2-rename-9b-27b-2026-09-29.md`](dev2-rename-9b-27b-2026-09-29.md).
+- The sections below describe the release as DEV2.0-8B.
+
 ## Released, 2026-09-29 ≈16:00 UTC+8 — revision `53bac735`, in the private "Decision 2.0" collection
 
 The coordinator decided the release at 15:49 UTC+8 (full-autonomy mandate) on the verified draft `1db7683f…`.

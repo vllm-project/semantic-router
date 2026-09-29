@@ -1,0 +1,179 @@
+{
+ "out": "/data/dev2/private/eval/jevbench-value/contamination/signatures",
+ "models": [
+  {
+   "name": "DEV2.0-0.6B",
+   "dir": "/data/dev2/runs/06b/m4/formal/m4-t-a7-soup",
+   "expected": 142,
+   "group": "ours"
+  },
+  {
+   "name": "DEV2.0-0.8B",
+   "dir": "/data/dev2/runs/dec/formal/m2/m2-E8F-soup-nodeA",
+   "expected": 156,
+   "group": "ours"
+  },
+  {
+   "name": "DEV2.0-2B",
+   "dir": "/data/dev2/runs/dec/formal/m3/m3-S2T-soup-nodeA",
+   "expected": 171,
+   "group": "ours"
+  },
+  {
+   "name": "DEV2.0-4B",
+   "dir": "/data/dev2/runs/dec/formal/m4/m4-N4XF-soup-nodeA",
+   "expected": 171,
+   "group": "ours"
+  },
+  {
+   "name": "DEV2.0-8B",
+   "dir": "/data/dev2/runs/9b/formal-m4/K-a13-16k",
+   "expected": 178,
+   "group": "ours"
+  },
+  {
+   "name": "DEV2.0-27B",
+   "dir": "/data/dev2/private/eval/jevbench-value/contamination/nodeB-27b-f1",
+   "expected": 198,
+   "group": "ours"
+  },
+  {
+   "name": "Kai1",
+   "dir": "/data/dev2/runs/eval/m1-adopt/kai1",
+   "expected": 114,
+   "group": "d1"
+  },
+  {
+   "name": "Lex1",
+   "dir": "/data/dev2/runs/eval/m1/r3-lex",
+   "expected": 113,
+   "group": "d1"
+  },
+  {
+   "name": "Eos1",
+   "dir": "/data/dev2/runs/eval/m1/r4-eos1",
+   "expected": 142,
+   "group": "d1"
+  },
+  {
+   "name": "Sol1",
+   "dir": "/data/dev2/runs/eval/m1-adopt/sol1",
+   "expected": 161,
+   "group": "d1"
+  },
+  {
+   "name": "Nox1",
+   "dir": "/data/dev2/runs/eval/m1-adopt/nox1",
+   "expected": 173,
+   "group": "d1"
+  },
+  {
+   "name": "Lux1",
+   "dir": "/data/dev2/runs/eval/m1-adopt/lux1",
+   "expected": 183,
+   "group": "d1"
+  },
+  {
+   "name": "GLiNER2.5-Decide",
+   "dir": "/data/dev2/runs/eval/m1/p1-gliner25",
+   "expected": 116,
+   "group": "peer"
+  },
+  {
+   "name": "Bosun-0.6B",
+   "dir": "/data/dev2/runs/eval/m1-adopt/bosun",
+   "expected": 133,
+   "group": "peer"
+  },
+  {
+   "name": "JPT-0.8B",
+   "dir": "/data/dev2/runs/eval/m1/p2-jpt08b",
+   "expected": 171,
+   "group": "peer"
+  },
+  {
+   "name": "Intern",
+   "dir": "/data/dev2/runs/eval/m2/q2b-intern08b",
+   "expected": 164,
+   "group": "peer"
+  },
+  {
+   "name": "Kev",
+   "dir": "/data/dev2/runs/eval/m2/q1-kev08b",
+   "expected": 147,
+   "group": "peer"
+  },
+  {
+   "name": "Decider-2B",
+   "dir": "/data/dev2/runs/eval/m1-adopt/decider2b",
+   "expected": 175,
+   "group": "peer"
+  },
+  {
+   "name": "This-That",
+   "dir": "/data/dev2/runs/eval/m2/q4-thisthat12",
+   "expected": 147,
+   "group": "peer"
+  },
+  {
+   "name": "Bosun-1.7B",
+   "dir": "/data/dev2/runs/eval/m1/p3-bosun17b",
+   "expected": 151,
+   "group": "peer"
+  },
+  {
+   "name": "Decider-4B",
+   "dir": "/data/dev2/runs/eval/m1-adopt/decider4b",
+   "expected": 192,
+   "group": "peer"
+  },
+  {
+   "name": "JPT-4B",
+   "dir": "/data/dev2/runs/eval/m1/p4-jpt4b",
+   "expected": 203,
+   "group": "peer"
+  },
+  {
+   "name": "Jet-v6.2",
+   "dir": "/data/dev2/runs/eval/m2/q5b-jet62",
+   "expected": 174,
+   "group": "peer"
+  },
+  {
+   "name": "Hopper-G",
+   "dir": "/data/dev2/runs/eval/m2/q8-hopperg",
+   "expected": 194,
+   "group": "peer"
+  },
+  {
+   "name": "JPT-9B",
+   "dir": "/data/dev2/runs/eval/m1-adopt/jpt9b",
+   "expected": 197,
+   "group": "peer"
+  },
+  {
+   "name": "Nimble-v2",
+   "dir": "/data/dev2/runs/eval/m2/q6-nimble2",
+   "expected": 185,
+   "group": "peer"
+  },
+  {
+   "name": "AutoJev-27B",
+   "dir": "/data/dev2/runs/eval/m4/nodeB-kernel/autojev27",
+   "expected": 201,
+   "group": "peer"
+  },
+  {
+   "name": "Eikos-27B",
+   "dir": "/data/dev2/runs/eval/m4/nodeB-kernel/eikos27b",
+   "expected": 212,
+   "group": "peer"
+  },
+  {
+   "name": "Jebadiah-27B",
+   "dir": "/data/dev2/runs/eval/m4/nodeB-kernel/jebadiah27b",
+   "expected": 176,
+   "group": "peer"
+  }
+ ]
+}

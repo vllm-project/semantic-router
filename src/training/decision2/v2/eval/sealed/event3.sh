@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# JevArena-C1 v1.1 scoring event 3 (the last of three), node A.
+# JevArena-C1 scoring event 3 (the last of three) on item set v1.2 under policy P2, node A.
 # Usage (on node A, from an exact mirror; in event mode the key arrives once on stdin):
 #   event3.sh --gpu N --src MIRROR [--c27 f1|f2] --c9b-package DIR --c9b-manifest SHA
+#             [--scan-verdict-sha SHA (event mode)]
 #             [--lease-name owner.eval] [--shared] [--models K,K,...] [--peers27 K,K]
 #             [--c27-package DIR --c27-manifest SHA --c27-repo ID --c27-revision REV]
 #             [--c9b-repo ID] [--c9b-revision REV] [--c9b-identity SHA] [--c9b-calibration FILE|none]
@@ -17,21 +18,25 @@
 # --preflight-only: also every model's smoke on the GPU (the first 80 prompts of typed FINAL and of
 #   public 231, so every decision type) with its parity check against the stored formal run; stdin is
 #   closed, the key is never read, and neither the sealed directory nor the event directory is touched.
-# Event mode: a PASS SCAN-VERDICT.json from event3-recheck-scan.sh (pinned manifest and protected
-# rows) is required first; then the same verification and smokes (a failure leaves C1 untouched and the event unused),
-# the stored event-2 seals are checked, the key is read, the event directory is created (event 3 is
-# used from here), prompts are decrypted, every model is collected once, all predictions are sealed,
-# prompts are removed, gold is decrypted to a private temp dir, reports and paired comparisons are
-# written. Plaintext is removed on any exit. Each runner job writes only the named lease entry.
+# Event mode: the pinned retired list of the item set and the custodian's PASS class-aware judgment of the
+# rescan (scanverdict judge-classes; --scan-verdict-sha pins the file, and it must name this retired list
+# and these protected rows) are
+# required first; then the same verification and smokes (a failure leaves C1 untouched and the event
+# unused), the stored event-2 seals are checked, the key is read, the event directory is created
+# (event 3 is used from here), prompts are decrypted, every model is collected on all 2,874 prompts,
+# all predictions are sealed, prompts are removed, gold is decrypted to a private temp dir, and every
+# collected and stored model is scored and paired on the item set (the retired candidates' items
+# dropped). Plaintext is removed on any exit. Each runner job writes only the named lease entry.
 set -uo pipefail
 umask 077
 
-GPU="" SRC="" LEASE_NAME=owner.eval SHARED=0 MODE=event C27=f1
+GPU="" SRC="" LEASE_NAME=owner.eval SHARED=0 MODE=event C27=f1 SCAN_VERDICT_SHA=""
 PLAN_ARGS=()
 while [ $# -gt 0 ]; do
   case $1 in
   --gpu) GPU=$2; shift 2 ;;
   --src) SRC=$2; shift 2 ;;
+  --scan-verdict-sha) SCAN_VERDICT_SHA=$2; shift 2 ;;
   --lease-name) LEASE_NAME=$2; shift 2 ;;
   --shared) SHARED=1; shift ;;
   --c27) C27=$2; shift 2 ;;
@@ -64,8 +69,11 @@ PROMPTS_SHA=0b29686f60c980f3fbc8a03b88537fc0bf90ee967afa67d4fe0c958b1bfde16a
 GOLD_SHA=c02777713c0e58b40cf602947433420744b2765465252ce22d692eb676ca4fe1
 BUNDLE_SHA=d924389a7ffc3d852d9204c3dfca1c12c32f82685a7e5c65277ba9980110534f
 E=/data/dev2/runs/eval/m4/c1-event3
-SCAN_VERDICT=/data/dev2/runs/eval/m4/c1-event3-recheck/SCAN-VERDICT.json
-RECHECK_MANIFEST_SHA=e37e73f9c1519362bda350ec7d475ed6acf7e47ed1f83dc084b3a5a93247acfc
+ITEM_SET=v1.2
+RETIRED=$C1/v1_2/RETIRED-v1_2.json
+RETIRED_SHA=bbf095c70917f028d691fce570b114725e4f22fd6a1987456f6ae2c30f22990a
+SCAN_VERDICT=/data/dev2/runs/eval/m4/c1-rescan-v1_2/SCAN-VERDICT-P2.json
+VERDICT_SCHEMA=dev2-c1-class-verdict/1
 PROTECTED_SHA=36797f509bd96c3cb703df37cc48114c9bbdf0d2241802e56262139f4bef0a1a
 P="/data/dev2/runs/eval/m4/c1-event3-preflight/$MODE-$(date -u +%Y%m%dT%H%M%SZ)"
 PLAN="$P/PLAN.json"
@@ -154,7 +162,7 @@ job() {
   return "$rc"
 }
 
-log "start: C1 v1.1 event 3 ($MODE; GPU${GPU:-none} entry $LEASE_NAME; mirror $SRC; 27B candidate $C27; preflight dir $P)"
+log "start: C1 event 3 on item set $ITEM_SET ($MODE; GPU${GPU:-none} entry $LEASE_NAME; mirror $SRC; 27B candidate $C27; preflight dir $P)"
 helper plan --table "$S/v2/eval/sealed/event3-models.json" --c27 "$C27" "${PLAN_ARGS[@]}" --site node-a \
   --output "$PLAN" >>"$P/PREFLIGHT.log" 2>&1 || abort "the plan was refused (see $P/PREFLIGHT.log)"
 helper show --plan "$PLAN" >>"$P/PREFLIGHT.log" 2>&1
@@ -169,11 +177,15 @@ if [ "$MODE" = verify ]; then
   exit 0
 fi
 if [ "$MODE" = event ]; then
-  # The custodian's confirmatory overlap scan (event3-recheck-scan.sh) must have passed.
-  helper_verdict=$(python3 -m v2.eval.sealed.scanverdict check --verdict "$SCAN_VERDICT" \
-    --manifest-sha "$RECHECK_MANIFEST_SHA" --protected-sha "$PROTECTED_SHA" 2>&1 3<&-) ||
-    abort "no PASS scan verdict for manifest ${RECHECK_MANIFEST_SHA:0:12} ($helper_verdict); key not read, event 3 not used"
-  log "$helper_verdict"
+  [[ "$RETIRED_SHA" =~ ^[0-9a-f]{64}$ ]] || abort "item set $ITEM_SET is not registered (no pinned retired list); key not read, event 3 not used"
+  [ "$(sha256sum <"$RETIRED" | cut -c1-64)" = "$RETIRED_SHA" ] ||
+    abort "the $ITEM_SET retired list differs from ${RETIRED_SHA:0:12}; key not read, event 3 not used"
+  [[ "$SCAN_VERDICT_SHA" =~ ^[0-9a-f]{64}$ ]] || abort "--scan-verdict-sha is required in event mode; key not read, event 3 not used"
+  # The custodian's class-aware judgment of the rescan (policy P2) for this item set must have passed.
+  helper_verdict=$(python3 -m v2.eval.sealed.scanverdict check-v2 --verdict "$SCAN_VERDICT" --schema "$VERDICT_SCHEMA" \
+    --verdict-sha "$SCAN_VERDICT_SHA" --retired-sha "$RETIRED_SHA" --protected-sha "$PROTECTED_SHA" 2>&1 3<&-) ||
+    abort "no PASS $ITEM_SET scan verdict ${SCAN_VERDICT_SHA:0:12} ($helper_verdict); key not read, event 3 not used"
+  log "$helper_verdict; retired list ${RETIRED_SHA:0:12}"
 fi
 
 if [ -f "$LEASE" ]; then cp -p "$LEASE" "$P/lease-before.owner"; fi
@@ -240,16 +252,25 @@ GT=$(mktemp -d "$C1/.gold.XXXXXX")
 decrypt v1/build-5/gold.jsonl >"$GT/gold.jsonl"
 [ "$(sha256sum <"$GT/gold.jsonl" | cut -c1-64)" = "$GOLD_SHA" ] || abort "gold hash mismatch"
 log "gold decrypted to a private temp dir after all predictions were sealed"
+ITEMS=(--retired "$RETIRED" --retired-sha "$RETIRED_SHA")
 for k in "${COLLECT[@]}"; do
   [ -f "$E/$k/SEAL-C1.json" ] || continue
   python3 -m v2.eval.sealed.score score --gold "$GT/gold.jsonl" --predictions "$E/$k/output/sealed-c1.predictions.jsonl" \
-    --seal "$E/$k/SEAL-C1.json" --label "$(field "$k" label)" --output "$E/$k/REPORT-C1.json" >>"$E/EVENT.log" 2>&1 &&
-    log "scored $k"
+    --seal "$E/$k/SEAL-C1.json" --label "$(field "$k" label)" "${ITEMS[@]}" --output "$E/$k/REPORT-C1.json" >>"$E/EVENT.log" 2>&1 &&
+    log "scored $k on $ITEM_SET"
+done
+# Stored event-2 predictions (seals re-checked before the key) are re-scored on the same item set.
+mapfile -d '' -t STORED < <(helper keys --plan "$PLAN" --stored)
+for k in "${STORED[@]}"; do
+  mkdir -p "$E/$k"
+  python3 -m v2.eval.sealed.score score --gold "$GT/gold.jsonl" --predictions "$(field "$k" stored.predictions)" \
+    --seal "$(field "$k" stored.seal)" --label "$(field "$k" label)" "${ITEMS[@]}" --output "$E/$k/REPORT-C1.json" >>"$E/EVENT.log" 2>&1 &&
+    log "scored stored $k on $ITEM_SET"
 done
 mapfile -d '' -t PAIRS < <(helper pairs --plan "$PLAN" --event-dir "$E" 2>>"$E/EVENT.log")
 for ((i = 0; i < ${#PAIRS[@]}; i += 5)); do
   python3 -m v2.eval.sealed.score compare --gold "$GT/gold.jsonl" --left "${PAIRS[i]}" --right "${PAIRS[i + 1]}" \
-    --left-name "${PAIRS[i + 2]}" --right-name "${PAIRS[i + 3]}" --output "${PAIRS[i + 4]}" >"${PAIRS[i + 4]}.log" 2>&1 &
+    --left-name "${PAIRS[i + 2]}" --right-name "${PAIRS[i + 3]}" "${ITEMS[@]}" --output "${PAIRS[i + 4]}" >"${PAIRS[i + 4]}.log" 2>&1 &
 done
 wait
 for ((i = 0; i < ${#PAIRS[@]}; i += 5)); do
@@ -259,5 +280,5 @@ rm -rf "$GT"
 GT=""
 log "gold removed"
 helper summary --plan "$PLAN" --event-dir "$E" --preflight-dir "$P" --output "$E/EVENT3-SUMMARY.json" >>"$E/EVENT.log" 2>&1
-log "end: scoring complete (3 of 3 events used; JevArena-C1 v1.1 is now post-key)"
+log "end: scoring complete on item set $ITEM_SET (3 of 3 events used; JevArena-C1 is now post-key)"
 echo DONE >>"$E/EVENT.log"

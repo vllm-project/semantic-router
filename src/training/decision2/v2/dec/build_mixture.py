@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any
 
 from training.model.data import INPUT_FIELDS, digest, file_sha256, load_partition
+from v2.common import eval_only
 
 from .build_template_s import group_rows, select_groups
 
@@ -109,6 +110,7 @@ class Registry:
     def verified(self, relative: str, pinned: str | None = None) -> Path:
         path = self.root / relative
         actual = file_sha256(path)
+        eval_only.check_file(path, actual)
         if pinned is not None:
             if actual != pinned:
                 raise ValueError(f"{relative}: sha256 {actual} != pinned {pinned}")
@@ -300,7 +302,9 @@ def main() -> None:
         root, registry, prefix = rest.split(",")
         registries[name] = Registry(Path(root), registry, prefix)
     spec = json.loads(args.spec.read_text())
+    eval_only.guard(args, spec)
     mixture, manifest = build(spec, registries, args.tokenizer, args.workers)
+    eval_only.check_rows(mixture)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     pending = args.output.with_name(args.output.name + ".pending")
     with pending.open("x", encoding="utf-8") as stream:

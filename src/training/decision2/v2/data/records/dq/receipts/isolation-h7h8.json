@@ -1,0 +1,56 @@
+{
+ "failures": [],
+ "intersections": [],
+ "partitions": {
+  "existing/h7-aho": {
+   "groups": 189,
+   "kind": "existing",
+   "rows": 460,
+   "sha256": "0eaf41c0bfdbcd0c2a262a93804a16d8ba2698a8d621e17e83e554f50748a2b1"
+  },
+  "existing/h7-sho": {
+   "groups": 20,
+   "kind": "existing",
+   "rows": 41,
+   "sha256": "3906f68abd4a945443986d58640c25e36d71c7fcbc50d3621a66e3fde6785122"
+  },
+  "existing/h7-train": {
+   "groups": 1713,
+   "kind": "existing",
+   "rows": 4292,
+   "sha256": "7c4133b05664de492bb80b40df5eef0f028257f10327a492564bea5f62813a32"
+  },
+  "existing/h8-aho": {
+   "groups": 1928,
+   "kind": "existing",
+   "rows": 2427,
+   "sha256": "3c1ba01ab3bb9244201f741c428f0e75324a422d5744783016f002154cacd627"
+  },
+  "existing/h8-sho": {
+   "groups": 354,
+   "kind": "existing",
+   "rows": 439,
+   "sha256": "c1983981284671e8dd24dde43e4fba2ac2086457dc56a2a266f6c7e6768c2efa"
+  },
+  "existing/h8-train": {
+   "groups": 17062,
+   "kind": "existing",
+   "rows": 21378,
+   "sha256": "1f19e5ab84e6b80182e99cd8e2b7efc79ec17275048e6daf7987afc335e7d361"
+  },
+  "pn1/train": {
+   "groups": 4807,
+   "kind": "pn1",
+   "rows": 4888,
+   "sha256": "f6f6a5315a0aebc9d83b656ff90d378a0e1f2083f95bbcafdc18399969a64616"
+  },
+  "pn1dev/dev": {
+   "groups": 1965,
+   "kind": "pn1dev",
+   "rows": 1974,
+   "sha256": "c3b68ac113fc1f2afb5554530112f472a9c62f7997285bcaf89a6b655bb7f4cf"
+  }
+ },
+ "schema": "decision2.v2.isolation.v1",
+ "verdict": "PASS"
+}

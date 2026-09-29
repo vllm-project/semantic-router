@@ -1,0 +1,195 @@
+{
+ "arm_id": "HS1",
+ "canonical_form": "rows sorted by id; canonical(row) + '\\n' per row; UTF-8",
+ "canonical_path": "hs1.dev.jsonl",
+ "choice": {
+  "by_option_bucket": {
+   "3": 168,
+   "4": 382,
+   "5-8": 246
+  },
+  "gold_position_by_bucket": {
+   "3": {
+    "0": 58,
+    "1": 56,
+    "2": 54
+   },
+   "4": {
+    "0": 98,
+    "1": 99,
+    "2": 94,
+    "3": 91
+   },
+   "5-8": {
+    "0": 47,
+    "1": 55,
+    "2": 52,
+    "3": 49,
+    "4": 40,
+    "5": 3
+   }
+  }
+ },
+ "content_sha256": "2e9ee9ab6768aa2b3d0d397670248e5a8f2e524d60887d06698a4e84516533bf",
+ "counts": {
+  "family": {
+   "hs1_policy_packet": 478,
+   "hs1_quote_check": 958,
+   "hs1_unmet_condition": 960
+  },
+  "language": {
+   "en": 2396
+  },
+  "source": {
+   "decision2_hardskills_hs1": 2396
+  },
+  "task_type": {
+   "choice": 796,
+   "noul": 1280,
+   "score": 320
+  }
+ },
+ "groups": 1198,
+ "input": {
+  "is_canonical": true,
+  "path": "hs1.dev.jsonl",
+  "sha256": "2e9ee9ab6768aa2b3d0d397670248e5a8f2e524d60887d06698a4e84516533bf"
+ },
+ "license_registry_sha256": "05c88396f825d85f82c056c907ad62f9576d6b2700e5c6c14e779186ac64bcf9",
+ "licenses": {
+  "decision2_hardskills_hs1": {
+   "attribution": "Decision 2.0 HS1 hard-skill generators (quoted-conclusion check, long policy packets, unmet-condition Noul)",
+   "evidence": "generator source under src/training/decision2/v2/data/hs1 at the build commit; project-authored templates only; no corpus text and no model-written text",
+   "license": "project-generated (no third-party text)",
+   "redistribution": "unrestricted within the project; may be redistributed with the models under Apache-2.0"
+  }
+ },
+ "noul": {
+  "labels": {
+   "false": 645,
+   "true": 635
+  },
+  "true_fraction": 0.496094
+ },
+ "partition": "select",
+ "role": "aho",
+ "rows": 2396,
+ "rows_per_group": {
+  "2": 1198
+ },
+ "schema": "decision2.v2.freeze.v1",
+ "score": {
+  "by_levels": {
+   "4": 304,
+   "5": 16
+  },
+  "by_levels_grade": {
+   "4": {
+    "0": 98,
+    "1": 71,
+    "2": 76,
+    "3": 59
+   },
+   "5": {
+    "0": 3,
+    "1": 4,
+    "2": 4,
+    "3": 2,
+    "4": 3
+   }
+  }
+ },
+ "state_chars": {
+  "p0": 607,
+  "p10": 1035,
+  "p100": 11200,
+  "p25": 1165,
+  "p50": 1670,
+  "p75": 4729,
+  "p90": 6509,
+  "p99": 9577
+ },
+ "tokens": [
+  {
+   "by_language": {
+    "en": 1892236
+   },
+   "by_task_type": {
+    "choice": 735605,
+    "noul": 848990,
+    "score": 307641
+   },
+   "kind": "native_decoder",
+   "name": "qwen3-0.6b-base@da87bfb6",
+   "padded8_total": 1900968,
+   "path": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+   "quantiles": {
+    "p0": 233,
+    "p10": 330,
+    "p100": 2715,
+    "p25": 385,
+    "p50": 556,
+    "p75": 1231,
+    "p90": 1638,
+    "p99": 2346
+   },
+   "revision": null,
+   "tokenizer_json_sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539",
+   "total": 1892236
+  },
+  {
+   "by_language": {
+    "en": 1946468
+   },
+   "by_task_type": {
+    "choice": 757064,
+    "noul": 872983,
+    "score": 316421
+   },
+   "kind": "native_decoder",
+   "name": "qwen3.5-0.8b-base@dc7cdfe2",
+   "padded8_total": 1954944,
+   "path": "dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68",
+   "quantiles": {
+    "p0": 243,
+    "p10": 343,
+    "p100": 2774,
+    "p25": 401,
+    "p50": 571,
+    "p75": 1261,
+    "p90": 1676,
+    "p99": 2379
+   },
+   "revision": null,
+   "tokenizer_json_sha256": null,
+   "total": 1946468
+  },
+  {
+   "by_language": {
+    "en": 1743537
+   },
+   "by_task_type": {
+    "choice": 672878,
+    "noul": 785034,
+    "score": 285625
+   },
+   "kind": "raw",
+   "name": "kai-0.6b@7185f514",
+   "padded8_total": 1751736,
+   "path": "tokenizer",
+   "quantiles": {
+    "p0": 174,
+    "p10": 277,
+    "p100": 2747,
+    "p25": 319,
+    "p50": 487,
+    "p75": 1174,
+    "p90": 1582,
+    "p99": 2303
+   },
+   "revision": null,
+   "tokenizer_json_sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
+   "total": 1743537
+  }
+ ]
+}

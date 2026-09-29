@@ -1,0 +1,11 @@
+{
+ "files": 40,
+ "parent": "171e6f0c0913d5f0d8f7304928da4f14dca6e127",
+ "private_after": true,
+ "private_before": true,
+ "readback_sha256_equal": true,
+ "registry_key": "m4/registry.json",
+ "registry_sha256": "8ee400479c737d65b25928d8ae05b9194d2a4cc6165c805f65f7327aaa4ab928",
+ "repo": "llm-semantic-router/decision-2.0-training-data",
+ "revision": "c41d65d4a5c9d2cbfde7c098d7d943838b32fd12"
+}

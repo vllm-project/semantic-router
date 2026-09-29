@@ -18,9 +18,16 @@ v3 interval can decide (``v2/eval/records/m5-proxy-v2-calibration-2026-09-29.md`
 
 A run directory with ``output/score5-dev.predictions.jsonl`` also gets a ``score5`` block
 (5-level Score level usage, accuracy with CI, macro-F1, QWK and COLLAPSE / WARN /
-NO-SIGNAL flags; ``v2/eval/score5.py``). With ``output/ht-dev.predictions.jsonl`` it gets
+NO-SIGNAL flags; ``v2/eval/score5.py``). With ``output/score5t-dev.predictions.jsonl`` it
+gets a ``score5t`` block (Score5-typed-DEV: full / fit / check level usage, top share,
+accuracy against always-majority and the gate-equivalent COLLAPSE / WARN / NO-GAIN flags;
+``v2/eval/score5t.py``). With ``output/ht-dev.predictions.jsonl`` it gets
 ``htdev_empathy_levels``: gold-free level usage on HT-DEV's 5-level empathy task, context
-only (no flags).
+only (no flags). With ``output/ht-dev2.predictions.jsonl`` it gets an ``htdev2`` block
+(HT-DEV v2, the human-transfer screen: H_dev2 = mean task macro-F1 over nine held-out CSS15
+tasks); with ``--htdev2-reference <predictions>`` of a same-tier reference run it adds the
+paired delta, its 95% CI and the verdict FLAG (delta <= -0.02), TIE or GAIN (>= +0.02)
+(``v2/eval/records/htdev2-validation-2026-09-30.md``).
 """
 
 from __future__ import annotations
@@ -128,6 +135,23 @@ def score5_block(panel_root: Path, predictions_path: Path) -> dict[str, Any]:
     }
 
 
+def score5t_block(panel_root: Path, predictions_path: Path) -> dict[str, Any]:
+    from v2.eval import score5t
+
+    panels.verify(panel_root, [score5t.PANEL])
+    gold = read_jsonl(panels.path(panel_root, score5t.PANEL, "gold"))
+    predictions = {r["id"]: r for r in read_jsonl(predictions_path)}
+    return {
+        "panel": score5t.PANEL,
+        "scope": score5t.SCOPE,
+        "use": "flags predict the typed FINAL release-gate Score collapse; fit half "
+        "only for fitting post-hoc corrections, select on the check half; never "
+        "training data",
+        "predictions_sha256": sha_file(predictions_path),
+        **score5t.blocks(gold, predictions),
+    }
+
+
 def htdev_empathy_levels(panel_root: Path, predictions_path: Path) -> dict[str, Any]:
     """Level usage on HT-DEV's empathy task from prompts and predictions only."""
     from benchmark.score import evaluate_answer
@@ -153,6 +177,57 @@ def htdev_empathy_levels(panel_root: Path, predictions_path: Path) -> dict[str, 
         "n": len(points),
         **score5.level_usage(points),
     }
+
+
+HTDEV2_TIE = 0.02
+HTDEV2_BAND = 0.045
+
+
+def htdev2_block(
+    panel_root: Path, predictions_path: Path, reference_path: Path | None = None
+) -> dict[str, Any]:
+    from v2.eval.htdev2 import score as htdev2
+
+    panels.verify(panel_root, ["ht-dev2"])
+    gold = read_jsonl(panels.path(panel_root, "ht-dev2", "gold"))
+    predictions = {r["id"]: r for r in read_jsonl(predictions_path)}
+    report = htdev2.report(gold, predictions)
+    block: dict[str, Any] = {
+        "panel": "ht-dev2",
+        "scope": "HT-DEV v2, held-out parallel form of nine CSS15 tasks (development readout)",
+        "use": "human-transfer screen against a same-tier reference; the formal paired "
+        "CSS15 CI still decides; never training data",
+        "predictions_sha256": sha_file(predictions_path),
+        "H_dev2": report["H_dev2"],
+        "H_dev2_median": report["H_dev2_median"],
+        "sd": report["bootstrap"]["H_dev2"]["sd"],
+        "tasks": {t: v["macro_f1_all"] for t, v in report["tasks"].items()},
+        "invalid_or_missing": report["items"] - report["valid"],
+    }
+    if reference_path is not None:
+        reference = {r["id"]: r for r in read_jsonl(reference_path)}
+        base = htdev2.report(gold, reference, replicates=1)["H_dev2"]
+        delta = report["H_dev2"] - base
+        paired = htdev2.bootstrap(
+            htdev2.outcomes(gold, predictions),
+            htdev2.REPLICATES,
+            htdev2.SEED,
+            other=htdev2.outcomes(gold, reference),
+        )
+        block["vs_reference"] = {
+            "reference_sha256": sha_file(reference_path),
+            "reference_H_dev2": base,
+            "delta": delta,
+            "ci95": paired["H_dev2"]["ci95"],
+            "verdict": (
+                "FLAG"
+                if delta <= -HTDEV2_TIE
+                else "GAIN" if delta >= HTDEV2_TIE else "TIE"
+            ),
+            "tie_band": HTDEV2_TIE,
+            "band_10pct_risk": HTDEV2_BAND,
+        }
+    return block
 
 
 def readout(args: argparse.Namespace) -> dict[str, Any]:
@@ -220,6 +295,18 @@ def readout(args: argparse.Namespace) -> dict[str, Any]:
     )
     if score5_path and score5_path.is_file():
         out["score5"] = score5_block(args.panel_root, score5_path)
+    score5t_path = getattr(args, "score5t", None) or (
+        output_dir / "score5t-dev.predictions.jsonl" if output_dir else None
+    )
+    if score5t_path and score5t_path.is_file():
+        out["score5t"] = score5t_block(args.panel_root, score5t_path)
+    htdev2_path = getattr(args, "htdev2", None) or (
+        output_dir / "ht-dev2.predictions.jsonl" if output_dir else None
+    )
+    if htdev2_path and htdev2_path.is_file():
+        out["htdev2"] = htdev2_block(
+            args.panel_root, htdev2_path, getattr(args, "htdev2_reference", None)
+        )
     htdev_path = output_dir / "ht-dev.predictions.jsonl" if output_dir else None
     if htdev_path and htdev_path.is_file():
         out["htdev_empathy_levels"] = htdev_empathy_levels(args.panel_root, htdev_path)
@@ -231,7 +318,7 @@ def readout(args: argparse.Namespace) -> dict[str, Any]:
     return out
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -244,11 +331,18 @@ def main() -> None:
     parser.add_argument("--typed-dev", type=Path)
     parser.add_argument("--css-pilot", type=Path)
     parser.add_argument("--score5", type=Path)
+    parser.add_argument("--score5t", type=Path)
+    parser.add_argument("--htdev2", type=Path)
+    parser.add_argument(
+        "--htdev2-reference",
+        type=Path,
+        help="ht-dev2 predictions of the same-tier reference run (paired screen)",
+    )
     parser.add_argument("--select", type=Path)
     parser.add_argument("--cal", type=Path)
     parser.add_argument("--label", required=True)
     parser.add_argument("--output", type=Path, required=True)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     result = readout(args)
     write_json(args.output, result)
     summary = {k: result.get(k) for k in ("development_proxy",)}
@@ -263,6 +357,16 @@ def main() -> None:
     if "score5" in result:
         for field in ("accuracy", "modal_share", "rare_levels", "flags"):
             summary[f"score5.{field}"] = result["score5"][field]
+    if "score5t" in result:
+        for field in ("top_share", "top_category", "flags"):
+            summary[f"score5t.{field}"] = result["score5t"]["full"][field]
+        for field in ("top_share", "flags"):
+            summary[f"score5t.check.{field}"] = result["score5t"]["check"][field]
+    if "htdev2" in result:
+        summary["htdev2.H_dev2"] = result["htdev2"]["H_dev2"]
+        if "vs_reference" in result["htdev2"]:
+            for field in ("delta", "ci95", "verdict"):
+                summary[f"htdev2.{field}"] = result["htdev2"]["vs_reference"][field]
     print(json.dumps(summary))
 
 

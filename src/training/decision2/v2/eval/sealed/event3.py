@@ -15,7 +15,7 @@
     python3 -m v2.eval.sealed.event3 pairs --plan P --event-dir E
     python3 -m v2.eval.sealed.event3 summary --plan P --event-dir E --preflight-dir D --output S.json
     python3 -m v2.eval.sealed.event3 stage --plan P
-    python3 -m v2.eval.sealed.event3 keys --plan P [--collected]
+    python3 -m v2.eval.sealed.event3 keys --plan P [--collected | --stored]
     python3 -m v2.eval.sealed.event3 field --plan P --key K --field cache.frozen
     python3 -m v2.eval.sealed.event3 digest DIR
     python3 -m v2.eval.sealed.event3 c27-receipt --package-dir DIR \
@@ -1034,11 +1034,9 @@ def summary_cmd(args: argparse.Namespace) -> int:
     models = {}
     for key in p["selection"]:
         row = p["models"][key]
-        report = (
-            Path(row["stored"]["report"])
-            if row.get("stored")
-            else args.event_dir / key / "REPORT-C1.json"
-        )
+        report = args.event_dir / key / "REPORT-C1.json"
+        if row.get("stored") and not report.is_file():
+            report = Path(row["stored"]["report"])
         if report.is_file():
             value = json.loads(report.read_text(encoding="utf-8"))
             models[key] = {
@@ -1049,6 +1047,8 @@ def summary_cmd(args: argparse.Namespace) -> int:
                 "c1": value["c1"],
                 "by_type": value["by_type"],
                 "valid": value["valid"],
+                "items": value["items"],
+                "item_set": value.get("item_set"),
                 "long_input": value["slices"]["long_input"]["accuracy"],
                 "non_english": value["slices"]["non_english"]["accuracy"],
                 "report_sha256": sha_file(report),
@@ -1063,6 +1063,7 @@ def summary_cmd(args: argparse.Namespace) -> int:
                 "delta": value["delta"],
                 "ci95": value["ci95"],
                 "by_type": value["by_type"],
+                "item_set": value.get("item_set"),
                 "sha256": sha_file(path),
             }
     smokes, runs = gpu_hours(args.preflight_dir), gpu_hours(args.event_dir)
@@ -1089,7 +1090,12 @@ def summary_cmd(args: argparse.Namespace) -> int:
 
 def keys_cmd(args: argparse.Namespace) -> int:
     p = load_plan(args.plan)
-    keys = collected(p) if args.collected else p["selection"]
+    if args.collected:
+        keys = collected(p)
+    elif args.stored:
+        keys = [k for k in p["selection"] if p["models"][k].get("stored") is not None]
+    else:
+        keys = p["selection"]
     sys.stdout.write("".join(k + "\0" for k in keys))
     return 0
 
@@ -1609,7 +1615,9 @@ def main(argv: list[str] | None = None) -> int:
     j.add_argument("--plan", type=Path, required=True)
     k = sub.add_parser("keys")
     k.add_argument("--plan", type=Path, required=True)
-    k.add_argument("--collected", action="store_true")
+    only = k.add_mutually_exclusive_group()
+    only.add_argument("--collected", action="store_true")
+    only.add_argument("--stored", action="store_true")
     m = sub.add_parser("field")
     m.add_argument("--plan", type=Path, required=True)
     m.add_argument("--key", required=True)

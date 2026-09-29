@@ -1,0 +1,28 @@
+{
+  "best_export_manifest_sha256": "8dd5f8892a0f1f61a4c44ecb70a6b332bdfa9c3ab7273765fcb4a09f4f15401f",
+  "candidate": "s5h-b05",
+  "files_verified": 7,
+  "kind": "m8-score-bias-package",
+  "model_sha256": "01fae75098ce29314c5de2990321fcfd31457de7c02bb757bd8345662a823854",
+  "model_sha256_unchanged": true,
+  "prereg": "v2/06b/records/m8-prereg-2026-09-29.md section 6",
+  "prereg_commit": "e6a5f4515b902f2760ff768d47bf50c9eafb3849",
+  "score_bias_offsets": {
+    "5": [
+      -0.071734,
+      0.165757,
+      0.053534,
+      -0.076269,
+      -0.071288
+    ]
+  },
+  "score_bias_path": "/data/dev2/runs/06b/m8/dev/s5h-b05/score_bias.json",
+  "score_bias_sha256": "f61a729af88ec4193464ee7dcabade70d42f681f39cdbaad95010e067cb43302",
+  "source": {
+    "best_export_manifest_sha256": "3ae009ad838487c0df839a55898a98f5665276136d2a8cab3c1260dd0b29dfa2",
+    "complete_sha256": "1e5603a5dd415d2a52efeab3dc2fa511101958ce404ed6ee380f7b488ff515ef",
+    "dir": "/data/dev2/runs/06b/m1/arms/m6-mxcx-soup/full",
+    "state_sha256": "5c3d3ca18434fab1045a5840f4ef4508f9956fd3b2de00bd1bacf912b9729068"
+  },
+  "status": "COMPLETE"
+}

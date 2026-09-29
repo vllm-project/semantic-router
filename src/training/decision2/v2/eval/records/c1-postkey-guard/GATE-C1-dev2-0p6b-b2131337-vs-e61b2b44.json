@@ -1,0 +1,97 @@
+{
+  "by_type": {
+    "choice": {
+      "ci95": [
+        2.6473370668764615,
+        7.746402260595917
+      ],
+      "delta": 5.164597867454049,
+      "p": 0.0
+    },
+    "noul": {
+      "ci95": [
+        4.110132917474437,
+        11.858168683023544
+      ],
+      "delta": 8.045492723101304,
+      "p": 0.0
+    },
+    "score": {
+      "ci95": [
+        -4.246885898977348,
+        1.1879618621197514
+      ],
+      "delta": -1.4539288134343984,
+      "p": 0.2976595319063813
+    }
+  },
+  "ci95": [
+    2.1557727831014275,
+    5.6026237143452935
+  ],
+  "delta": 3.890924856267482,
+  "gold_sha256": "c02777713c0e58b40cf602947433420744b2765465252ce22d692eb676ca4fe1",
+  "item_set": {
+    "dropped_by_task": {
+      "delichess/communicative_function": 6,
+      "delichess/epistemic_stance": 6,
+      "implicaturex/likelihood": 1,
+      "legal_case_law/argument_function": 20,
+      "narrative_gold/span_is_event": 1
+    },
+    "dropped_items": 34,
+    "gold_items": 2874,
+    "retired_candidates": 555,
+    "retired_sha256": "bbf095c70917f028d691fce570b114725e4f22fd6a1987456f6ae2c30f22990a",
+    "scored_items": 2840,
+    "tasks_emptied": [],
+    "version": "v1.2"
+  },
+  "label": "JevArena-C1 v1.2, post-key (not an independent validation)",
+  "left": {
+    "by_type": {
+      "choice": 38.45703699629464,
+      "noul": 55.69219722940232,
+      "score": 20.135493529514765
+    },
+    "c1": 36.91555891288061,
+    "items": 2840,
+    "valid": 2840
+  },
+  "names": {
+    "left": "DEV2.0-0.6B b21313375ad77ddf4a8e420fa5195e6e09582043",
+    "right": "DEV2.0-0.6B e61b2b44 (previous revision, C1 event 2)"
+  },
+  "p": 0.0,
+  "replicates": 5000,
+  "right": {
+    "by_type": {
+      "choice": 33.29243912884059,
+      "noul": 47.64670450630101,
+      "score": 21.589422342949163
+    },
+    "c1": 33.02463405661313,
+    "items": 2840,
+    "valid": 2840
+  },
+  "rule": "REGRESSION if left − right < 0 C1 points and the two-sided paired bootstrap p < 0.05 (the paired 95% interval lies below 0); otherwise PASS",
+  "runs": {
+    "left": {
+      "dir": "/data/dev2/runs/eval/c1-postkey/0.6B/dev2-0p6b-b2131337-20260929T161232Z/cand",
+      "predictions_sha256": "43403f39a3ad81ee835d9b33c151ab7a87aa8fb84b3be5aa96daa251d60bcd8c",
+      "seal_label": "JevArena-C1 v1.2, post-key (not an independent validation)",
+      "seal_sha256": "056026acbad7b51f095f8ad8b5dbbf5b46d067bb6f2048b658bdd73c71eaa3cc"
+    },
+    "right": {
+      "dir": "/data/dev2/runs/eval/m4/c1-event2/cand",
+      "predictions_sha256": "0bc4b3bff733da29c6f84b0e6c886c1fd152f059f41beaec9805137243c5f13a",
+      "seal_label": "independent confirmation (JevArena-C1)",
+      "seal_sha256": "f9e1279c2bc4b0db9c44f885c3631e059ef4a8ee5b80773a62a4f7de6b582739"
+    }
+  },
+  "schema": "dev2-gate-c1/1",
+  "seed": 20260927,
+  "unit": "source groups within each task",
+  "use": "successor-rule item 8 only: never training data, never a selection criterion (development or siblings)",
+  "verdict": "PASS"
+}
