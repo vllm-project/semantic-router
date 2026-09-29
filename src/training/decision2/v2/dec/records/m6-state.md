@@ -21,11 +21,11 @@ Markers are under `/data/dev2/runs/dec/m6/status/` on the arm's node:
 
 | Arm | Tier | Node / GPU | Train / teacher | Status | GPU-h |
 | --- | --- | --- | --- | --- | ---: |
-| N6D | 4B | B / 3 | `m6-xl-full-59m` `160812e2…` / `lux-all-59m` `a1bafad5…` | data locked; chain b3 | 0 |
+| N6D | 4B | B / 3 | `m6-xl-full-59m` `160812e2…` / `lux-all-59m` `a1bafad5…` | s1 preflight PASS 09:24Z, full run | 0.17 |
 | N6A | 4B | B / 4 | `m4-xl-full-29m` `c7d51219…` / `lux-all-29m` `dc937c42…` | data locked; chain b4 (after S6X) | 0 |
-| S6X | 2B | B / 4 | `m4-xl-full-29m` / own-Sol `sol-29m` (part 2) | own-Sol labels first in chain b4 | 0 |
-| S6D | 2B | B / 4 | `m6-xl-full-59m` / own-Sol `sol-59m` (part 2) | chain b4 (after N6A) | 0 |
-| E6K | 0.8B | A / 5 | `m6-e8f-r2clean` `f9f3c022…` / own-Eos (part 2) | own-Eos labels first in chain a5 | 0 |
+| S6X | 2B | B / 4 | `m4-xl-full-29m` / own-Sol `sol-29m` `b8dec627…` | labels locked (part 2a); s1 next | 0.17 (labels) |
+| S6D | 2B | B / 4 | `m6-xl-full-59m` / own-Sol `sol-59m` `53e4adc8…` | labels locked; chain b4 (after N6A) | 0.17 (labels) |
+| E6K | 0.8B | A / 5 | `m6-e8f-r2clean` `f9f3c022…` / own-Eos (part 2b) | own-Eos labels running in chain a5 | 0 |
 
 ## Lines / finalists / formal
 
@@ -39,7 +39,9 @@ cost counts against both S6X and S6D for their caps, and once in the total.
 | Item | GPU-h |
 | --- | ---: |
 | data builds, teacher composition, exposure (CPU) | 0 |
-| total | 0 |
+| own-Sol labels (node B GPU4) | 0.168 |
+| N6D s1 through preflight (node B GPU3, as of 09:29Z) | 0.172 |
+| total (as of 09:29Z) | 0.34 |
 
 ## Incidents / deviations
 

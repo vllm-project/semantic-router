@@ -87,3 +87,22 @@ to those.
 
 N6D / N6A / S6X / S6D use `/data/dev2/runs/dec/m3/data-sel700-cal698` (SELECT `32a4352d…`, CAL698 `19cc1a8c…`),
 the directory N4XF and S2T used.
+
+## Part 2a — own-Sol labels (locked 2026-09-29 ≈17:35 UTC+8)
+
+Labeled by chain b4 on node B GPU4 (`ops/m6/m6-label.sh sol`, mirror of `8f5699bdf`), following M3's procedure:
+`v2.dec.teacher_label` over every row of `m6-xl-full-59m`, then `merge_labels`, then `compose_teacher` for the
+29m subset (the mixtures are nested). `m6-lockcheck.py sol` gives **PASS**; `lock-sol.json` is
+`92fc66228ef0381a29d137ab0cf7fa79ade401e525e1b37f278f78418b62de1c`.
+
+| Item | `sol-59m` (S6D) | `sol-29m` (S6X) |
+| --- | --- | --- |
+| Teacher file sha256 | `53e4adc80d3833fb7a690259660cb5d598b4f4d4640bb9a2e5fda18a8a8e0115` | `b8dec62776ea4f80a63b4ba863a381aa8fd5c85f63c65e70d1715d7b8a9c6222` |
+| Coverage | 110,728 / 110,728 (0 bad, 0 extra) | 58,742 / 58,742 (0 bad, 0 extra) |
+| Gold agreement (Choice / Noul / Score) | .770 / .719 / .430 | .772 / .723 / .439 |
+
+- **Teacher:** `llm-semantic-router/Decision-1.0-Sol-2B` at `ce0c018a`, package temperature 1.3003552029656025 for
+  every type (`temperature.json` `f0cbe732…`), max length 8192.
+- **Labels:** `sol-labels/labels.jsonl` is one shard and is byte-identical to `sol-59m`. The identity and TRAIN
+  hash checks pass, and 529 s of labeling used 0.168 GPU-h.
+- **Subset check:** `sol-29m` differs from `sol-59m` on 0 of the 58,742 shared rows.
