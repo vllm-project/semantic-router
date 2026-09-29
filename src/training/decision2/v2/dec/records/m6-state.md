@@ -5,6 +5,38 @@ GPUs: node B GPU3–4 (after research & data's PN1 lend), node A GPU5.
 
 ## Now
 
+- 2026-09-30 ≈02:10 UTC+8 — **M6 done: no successor in any tier.** Results:
+  [`dec-m6-results-2026-09-29.md`](dec-m6-results-2026-09-29.md).
+  - 4B: no finalist.
+  - 2B `2b-S6X-b1_3`: −1.88 [−2.52, +1.15].
+  - 0.8B `08b-E6K-b1_3`: −0.39 [−1.61, +2.16].
+  - ≈17.8 GPU-h. No GPU job is running; the leases are to be released.
+- 2026-09-29 ≈22:30 UTC+8 (14:30Z) — Resumed after the usage-limit stop (≈19:04–20:45).
+  - Training done: N6D, N6A, S6X and E6K, three seeds each, all with full postruns. N6D s3 took 1.62 GPU-h.
+    S6D s1 is running on node B GPU4.
+  - **Soup marker bug.** `m6-soup.sh` looked for `status/<ARM>-s<i>.DONE`, while the chain writes
+    `status/m6-<ARM>-s<i>.DONE`. So every chain soup reported "fewer than two seeds" and wrote `<ARM>.FAILED`, even
+    though all seeds were complete.
+    - Fixed in `m6-soup.sh`; integration merged in for the item-7 gate. Mirrored `ddc5d2ffe` to both nodes with
+      `mirror_to_node.sh`.
+    - The soups are rebuilt from the fixed mirror. This is a CPU step on finished seeds, not a rerun. The chain's
+      FAILED markers are kept under `m6/attempts/soup-<ARM>-marker-bug/`.
+    - S6D's soup is built by hand the same way.
+  - No-training lines were read at 16K and none has a pick under the rule; H3 falls below the incumbent's in every
+    case:
+    - 4b `L-N5BN`: β ⅓ T .713 / H3 .560 vs I .704 / .5625.
+    - 4b `L-Nox`: γ ⅓ T .714 / H3 .552.
+    - 2b `L-Sol`: flat.
+    - 08b `L-Eos`: γ ⅓ T .636 / H3 .344 vs .613 / .387.
+  - Running: the N6A / N6D soups and lines (GPU3), the S6X line (GPU4 co-tenant), and the E6K soup and line
+    (node A GPU5).
+  - COORDINATION 17:15 (JevBench decision):
+    - Item 7 is `v2.eval.gates public231 --left <successor> --right <current>`, which must not return REGRESSION.
+    - The 4B near-match group (3 HotpotQA rows vs one public-231 hard item) is in `c7d51219`, so it is in N6A,
+      S6X and the nested 59m mixture (N6D, S6D) as well as in the released DEV2.0-4B. The mixtures were locked
+      before the note. Disclosed; affects public 231 only.
+  - 2B formal reference (node B) is exact: 0 differing answers vs the node-A S2T run and the T = 1 binding. Its
+    mlx-diag reference is collected (`m6-ref-S2T-soup-mlx`).
 - 2026-09-29 ≈18:00 UTC+8 — All three training chains are live.
   - The chains are b3 (N6D), b4 (Sol labels, then S6X → N6A → S6D) and a5 (Eos labels, then E6K). Their mirrors
     are `8f5699bdf` on node B and `6fe568271` on node A. Logs: `m6/logs/chain-<ch>.log`.
