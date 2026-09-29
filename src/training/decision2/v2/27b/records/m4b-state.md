@@ -1,12 +1,12 @@
 # ~27B M4b state (resume file)
 
-Updated: 2026-09-29 18:10 UTC+8 (M4b worker; **P0 rerun running: tiny parity, then the 27B probe**)
+Updated: 2026-09-29 18:40 UTC+8 (M4b worker; **P0 passed; training chain running from A1-s1**)
 Branch: `xunzhuo/decision-2-training-27b-m4b` (worktree `/home/xunliu/code/vllm-sr-dev2-27b-m4b`; merge-only into
 `xunzhuo/decision-2-training`). Gist file: `06b-decision-2-27b-m4b.md`. GPUs: node B GPU0–2 only (lent by 9B;
 leases now `track=27b-m4b`, previous owners kept as `owner.prev-20260929T094419Z`). Budget 36 GPU-h.
 Milestone 4 (other worker; node A GPU2–4 + node B GPU5–7; `m4-*` files/dirs) is not touched.
 
-## Plan (prereg `m4b-prereg-2026-09-29.md`, amendments 1–2)
+## Plan (prereg `m4b-prereg-2026-09-29.md`, amendments 1–3)
 
 - A1 FF-gold (full-parameter FSDP ×3 on F1's exact file `de00df03…`, s1/s2), A2 FF-Lux (+1.0·KL own-Lux on S, s1/s2),
   A3 FF-AJ (+1.0·KL AutoJev on S, s1 only, budget permitting). S = 5,744 human-gold rows (`419fa355…`).
@@ -19,11 +19,11 @@ Milestone 4 (other worker; node A GPU2–4 + node B GPU5–7; `m4-*` files/dirs)
 | # | Step | Status |
 | --- | --- | --- |
 | 1 | Prereg `74b3bc3a0` | done |
-| 2 | Code `d32bd7c88` (+ fixes `9c0876b0a`, `9732527cc`, `10f836f5c`, `2fe86bf3f`, `e46f553df`) | done |
+| 2 | Code `d32bd7c88` (+ fixes `9c0876b0a`, `9732527cc`, `10f836f5c`, `2fe86bf3f`, `e46f553df`, `b99a87a22`, `909f8b748`) | done |
 | 3 | Teacher files built twice, byte-identical; amendment 1 `e46f553df` | done |
-| 3b | F1M = F1 merged in FP32 (`/data/dev2/runs/27b/m4b/F1M/checkpoint`, sha `3ed76a7b…`); merge check | materialized; check running |
-| 4 | P0: parity (attempts 1–3 fixed / regated, amendment 2), 27B probe; amendment 3 (precision, caps) | running (pid 2048142, `logs/p0.log`) |
-| 5 | A1-s1, A2-s1, A1-s2, A2-s2, A3-s1 (+ readouts) | pending |
+| 3b | F1M = F1 merged in FP32 (`/data/dev2/runs/27b/m4b/F1M/checkpoint`, sha `3ed76a7b…`); merge check 496 projections, max rel 5.5e-8 | done |
+| 4 | P0: parity PASS (gradient gate, amendment 2); probe 32K OOM → 16K + expandable segments PASS (174.8 GB, 1,721 tok/s); amendment 3 `909f8b748` (autocast, caps 7.5 / 8.3) | done |
+| 5 | Chain `chain_m4b.sh` (pid 2076247, `logs/chain.log`, `CHAIN.jsonl`): A1-s1 → A2-s1 → A1-s2 → A2-s2 → A3-s1 (budget guard; A3 expected skipped); ≈ 2.2 h per arm-seed | running (A1-s1 from 10:37Z) |
 | 6 | Soups, F1M readout, α line, finalists | pending |
 | 7 | CAL698 + formal ×≤3 + gates + mlx-diag | pending |
 | 8 | Records, gist 06b, merge, report | pending |
@@ -41,7 +41,9 @@ local copy before launch); launch = `setsid nohup bash <script> … > /data/dev2
 | P0 parity attempt 1 (rendezvous hang, stopped) | 0.161 |
 | P0 parity attempt 2 (runtime check) | 0.007 |
 | P0 parity attempt 3 (Adam parameter gate) | 0.052 |
-| **Total so far** | **0.220** |
+| P0 parity attempt 4 (PASS) | 0.025 |
+| P0 probe 1 (32K, OOM) / probe 2 (16K, PASS) | 0.313 / 0.410 |
+| **Total so far** | **0.968** |
 
 ## Research notes (read-only passes, 16:10–16:40)
 
