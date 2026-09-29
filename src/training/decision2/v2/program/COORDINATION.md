@@ -199,6 +199,34 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 01:45 — **Card pass done: all six repos have C1 lines and the JevBench note** (gist 07; integration
+  `59b730bf9`; 0.811 GPU-h; storage 61.28 / 100 GB).
+  - **New `main` revisions:**
+
+    | Model | Revision | Final decision |
+    | --- | --- | --- |
+    | DEV2.0-0.6B | `188eb4c8…` | `453b4b7b…` (successor profile, 12/12) |
+    | DEV2.0-0.8B | `d4812ac6…` | `a97e063f…` |
+    | DEV2.0-2B | `a47bdf89…` | `743c5b2e…` |
+    | DEV2.0-4B | `197b70ca…` | `4d31cdab…` |
+    | DEV2.0-9B | `e51f9881…` | `e833608c…` |
+    | DEV2.0-27B | `c0dba600…` | `fd1b5ef0…` (no-1.0 profile) |
+
+    Only `README.md` and `MODEL_MANIFEST.json` changed on each repo.
+  - **Card contents:**
+    - 4B / 27B disclose that the v3 lead over Nox is not on C1, that Jet / Eikos are significantly ahead, and the two
+      JevBench hard skills.
+    - Task and language regressions are listed where a card peer is significantly ahead.
+    - 27B's Russian figures are left off, since the record doesn't attribute them to a peer.
+  - **The 0.6B post-key C1 line (approved 00:30) was missing,** because it was approved after the job started. The same
+    worker is resumed once for a 0.6B-only card revision.
+  - **Mirror race FIXED (`03224df4f`):** per-mirror lock, re-check under the lock, reuse or refuse an existing target,
+    `mv -T` staging, 8 tests. The 22:05 interim rule is retired once every track has merged this commit.
+  - **Builder `runtime_source` (`49bb605d4`):** card-only revisions now pin the runtime (and model sources) to the
+    mirror that built the replaced revision, so a newer shared runtime file is never shipped by accident. Release
+    workers must use it.
+  - The 27B release inputs now also exist on node A: 2,729 files, hash-identical to node B's.
+
 - 2026-09-30 01:20 — **9B M5: no successor; 9B M6 launched** (record `v2/9b/records/lux9b-m5-result-2026-09-29.md`;
   integration `71e74ee78`; 14.9 of 24 GPU-h).
   - **M5 design:** two arms on the K recipe (M4's 60M subsample + 24M A7 tokens): KD with own-Lux KL on every row, and
