@@ -9,6 +9,15 @@
 #                            /panels) and gold into /data/dev2/private/dec/m7 (mode 700) on both nodes, from node A's
 #                            installed panels (hs1-dev) and each node's PN1 copy, every file hash-checked
 #   m7-relay.sh soup <ARM>   node-A m7/soup/<ARM> -> node B (not planned; for a 2B formal fallback only)
+#   m7-relay.sh htdev2-panel HT-DEV v2 gold-free prompts (90cd409a...) from node A's installed panel into
+#                            /data/dev2/runs/dec/panels on both nodes; the gold stays on node A
+#   m7-relay.sh htdev2 <point> [<point> ...]
+#                            node-B m7/lines/4b/<point>/ht-dev2 (gold-free predictions) + weights.json +
+#                            files.sha256 -> node A (same paths), for m7-htdev2.sh 4b score
+#   m7-relay.sh exposure     node-B m7/exposure (the TRAIN files' exposure receipts) -> node A, for successor item 6
+#   m7-relay.sh pkg <point>  4B C1 candidate: node-B formal/m7/pkg/m7-<point> (+ its SHA-256 list, the staging
+#                            parameter stubs and the formal run's persisted autotune cache) -> node A, every package
+#                            file checked against the list
 set -euo pipefail
 nodes_file=${DEV2_NODES_FILE:-$HOME/.config/decision2/nodes.env}
 resolve() { local d=""; [ -f "$nodes_file" ] && d=$(awk -F= -v k="$1" '$1 == k { print substr($0, length(k) + 2); exit }' "$nodes_file"); echo "${d:-$1}"; }
@@ -67,8 +76,47 @@ case ${1:-} in
     echo "diagnostic panels in place on both nodes"
     ;;
   soup)
-    [ $# -eq 2 ] || { sed -n '2,13p' "$0"; exit 2; }
+    [ $# -eq 2 ] || { sed -n '2,20p' "$0"; exit 2; }
     relay_dir a "$R/m7/soup/$2/build" "$2-soup" "$R/m7/soup-from-a/$2"
     ;;
-  *) sed -n '2,13p' "$0"; exit 2 ;;
+  htdev2-panel)
+    HTP=90cd409a1e091a623362c0e5b227d13b7301bf13fe266f7905e09233cf815f74
+    for n in a b; do
+      have "$n" "$R/panels/ht-dev2.prompts.jsonl" "$HTP" \
+        || on_a "cat /data/dev2/private/panels/goldfree/ht-dev2.prompts.jsonl" | put "$n" "$R/panels/ht-dev2.prompts.jsonl" "$HTP" 444
+    done
+    echo "HT-DEV v2 prompts in place on both nodes ($HTP)"
+    ;;
+  htdev2)
+    [ $# -ge 2 ] || { sed -n '2,20p' "$0"; exit 2; }
+    shift
+    for p in "$@"; do
+      src=$R/m7/lines/4b/$p
+      on_b "test -f '$src/ht-dev2/ht-dev2.predictions.jsonl'" || { echo "$p: no ht-dev2 predictions on node B" >&2; exit 1; }
+      on_b "! find '$src/ht-dev2' -iname '*gold*' | grep -q ." || { echo "$p: gold-named file under ht-dev2" >&2; exit 1; }
+      on_a "mkdir -p '$src'"
+      relay_dir b "$src" ht-dev2 "$src"
+      for f in weights.json files.sha256; do
+        have a "$src/$f" "$(on_b "sha256sum '$src/$f' | cut -d' ' -f1")" \
+          || on_b "cat '$src/$f'" | put a "$src/$f" "$(on_b "sha256sum '$src/$f' | cut -d' ' -f1")" 644
+      done
+    done
+    ;;
+  exposure)
+    relay_dir b "$R/m7" exposure "$R/m7"
+    ;;
+  pkg)
+    [ $# -eq 2 ] || { sed -n '2,20p' "$0"; exit 2; }
+    F=$R/formal/m7 P=m7-$2
+    on_b "test -f '$F/pkg/$P.sha256' && test -f '$F/stage-params/$P/PARAMS.json' && test -d '$F/$P-cache'" \
+      || { echo "$P is not staged and collected on node B" >&2; exit 1; }
+    on_b "cd '$F/pkg/$P' && sha256sum -c --quiet '$F/pkg/$P.sha256'" || { echo "$P changed on node B since staging" >&2; exit 1; }
+    on_b "cat '$F/pkg/$P.sha256'" | put a "$F/pkg/$P.sha256" "$(on_b "sha256sum '$F/pkg/$P.sha256' | cut -d' ' -f1")" 644
+    relay_dir b "$F/pkg" "$P" "$F/pkg"
+    on_a "cd '$F/pkg/$P' && sha256sum -c --quiet '$F/pkg/$P.sha256'" || { echo "$P: node-A copy fails its list" >&2; exit 1; }
+    relay_dir b "$F/stage-params" "$P" "$F/stage-params"
+    relay_dir b "$F" "$P-cache" "$F/from-b"
+    echo "package $P on node A verified against its list; formal cache at $F/from-b/$P-cache"
+    ;;
+  *) sed -n '2,20p' "$0"; exit 2 ;;
 esac
