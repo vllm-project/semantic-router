@@ -17,7 +17,7 @@ SRC=/data/dev2/src/$SHA
 CACHE=/data/dev2/runs/dec/formal/m4/m4-N4XF-soup-triton
 N4XF=/data/dev2/runs/dec/m4/formal-candidates/staging-e8656221/m4/N4XF-soup
 NOX_SOURCE=/data/dev2/hf-cache/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259
-NOX_PACKAGE=/data/dev2/hf-cache/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/0bb833504965c0eabdb9630b7bbd385cb2fe5cd4
+NOX_PACKAGE=$NOX_SOURCE
 LEASE=/data/dev2/leases/gpu$GPU.lock
 
 lease() {
@@ -60,7 +60,7 @@ n4xf_args=(-m v2.dec.infer_dec --checkpoint "$N4XF/checkpoint" --source-path "$N
   --model-id decision2-dec-m4-N4XF-soup --model-revision m4-N4XF-soup-e86562218928fbb77f8071b45646962f63049fad
   --max-length 16384 --calibration "$N4XF/cal698-16k/calibration.json")
 nox_args=(-m v2.dec.infer_1p0 --package "$NOX_PACKAGE" --model-id llm-semantic-router/Decision-1.0-Nox-4B
-  --model-revision 0bb833504965c0eabdb9630b7bbd385cb2fe5cd4 --max-length 16384 --package-temperatures)
+  --model-revision cde2a68dbaa557ea65dc458104d410a0802ee259 --max-length 16384 --package-temperatures)
 
 case "${1:-}" in
   smoke)
