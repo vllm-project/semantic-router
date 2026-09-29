@@ -20,7 +20,7 @@ mkdir "$O/started" 2>/dev/null || { log "already started; not rebuilt"; exit 0; 
 members=() seeds=()
 : > "$O/members.txt"
 for s in 1 2 3; do
-  [ -f "$ST/$G-s$s.DONE" ] || continue
+  [ -f "$ST/m6-$G-s$s.DONE" ] || [ -f "$ST/$G-s$s.DONE" ] || continue
   b=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['checkpoint'])" "$A/full/m6-$G-s$s/BEST.json") || continue
   members+=(--member "/runs/m6/arms/full/m6-$G-s$s/$b")
   seeds+=("s$s")
