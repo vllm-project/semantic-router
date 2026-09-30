@@ -61,9 +61,7 @@ def validate_catalog_workflow(
 
     job = workflow.jobs.get("image")
     if not isinstance(job, dict):
-        errors.append(
-            f".github/workflows/{workflow_name}: missing 'image' build job"
-        )
+        errors.append(f".github/workflows/{workflow_name}: missing 'image' build job")
         return
     steps = job.get("steps")
     if not isinstance(steps, list):
@@ -77,10 +75,9 @@ def validate_catalog_workflow(
         for step in steps
         if isinstance(step, dict) and step.get("id") == "definition"
     ]
-    if (
-        len(definition_steps) != 1
-        or CATALOG_DEFINITION_COMMAND not in definition_steps[0].get("run", "")
-    ):
+    if len(definition_steps) != 1 or CATALOG_DEFINITION_COMMAND not in definition_steps[
+        0
+    ].get("run", ""):
         errors.append(
             f".github/workflows/{workflow_name}: must resolve images from "
             "the shared Docker image catalog"
