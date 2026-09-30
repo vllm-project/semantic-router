@@ -35,8 +35,8 @@ the comparative evidence exists and maintainers agree.
 ## Start here: shared pilot v0.1
 
 The [pilot workspace](pilot-v0.1/README.md) contains the six-case fixture,
-question configuration, pinned models, Jev and Kai's saved live records and
-collaborator handoff instructions. Vela integration and the paired report are pending.
+question configuration, pinned models, all three arms' saved records and
+collaborator handoff instructions. The paired report and joint review remain pending.
 This is a Draft research increment, not a completed evaluation or production adapter.
 Review the Go sources in this directory directly; no source archive is required.
 

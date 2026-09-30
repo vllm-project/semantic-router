@@ -38,7 +38,7 @@ the earlier unconfirmed continue-after-failure proposal.
 | --- | --- | --- |
 | yuki-uix — Jev | Publish this package; assemble paired report | Six live records supplied here |
 | subin9 — Kai | Review Kai rows in the paired report | [Records and reproduction notes supplied](kai/kai-run.md); imported from `43ea6097d` with authorship preserved |
-| lyy26299 — Vela | Supply missing reproduction configuration/mapping in supplementary PR #1 | Results reviewed remotely; [PR #1](https://github.com/yuki-uix/semantic-router/pull/1) not yet integrated |
+| lyy26299 — Vela | Review Vela rows in the paired report | [Records and reproduction notes supplied](vela/run.md); missing dependencies restored from the contributor's pinned source |
 | All three | Review own rows and explain mismatches | Pending |
 
 Native result schemas are welcome. Include case ID, native prediction, unchanged
