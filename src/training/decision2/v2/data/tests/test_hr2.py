@@ -1,6 +1,11 @@
 import collections
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
+from training.model.data import canonical
+from v2.data.dq.blind_review import read_jsonl
 from v2.data.hr2 import audit, build, review
 from v2.data.hr2 import families as fam
 
@@ -210,6 +215,30 @@ class ReviewTest(unittest.TestCase):
             sorted(i["rid"] for c in built["packets_r2"] for i in c),
             sorted(i["rid"] for i in packet),
         )
+
+    def test_sample_cli_keeps_line_separators_inside_strings(self):
+        rows = self.rows()
+        rows[0]["state"]["text"] = "a\u2028b"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "train.jsonl"
+            path.write_text(
+                "".join(canonical(r) + "\n" for r in rows), encoding="utf-8"
+            )
+            self.assertEqual(
+                review.main(["sample", "--train", str(path), "--out-dir", f"{tmp}/s"]),
+                0,
+            )
+            self.assertEqual(len(read_jsonl(Path(tmp) / "s" / "key.jsonl")), 48)
+            packets = "".join(
+                (Path(tmp) / "s" / f"packet.r1.{i}.jsonl").read_text(encoding="utf-8")
+                for i in (1, 2)
+            )
+            self.assertNotIn("\u2028", packets)
+            self.assertEqual(len(packets.split("\n")) - 1, 48)
+            self.assertIn(
+                "a\u2028b",
+                [json.loads(x)["state"]["text"] for x in packets.split("\n") if x],
+            )
 
     def test_errors_splits_and_score_tolerance(self):
         key = review.build(self.rows(), "0" * 64)["key"]

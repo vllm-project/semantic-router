@@ -38,6 +38,7 @@ from v2.data.dq.blind_review import (
     weighted_error,
     write_json,
     write_jsonl,
+    write_new,
 )
 
 PER_FAMILY = 24
@@ -54,6 +55,18 @@ THRESHOLDS = {
     "family_errors_fail": 5,
 }
 NOUL_ALIASES = {"yes": "true", "no": "false"}
+# Characters some readers treat as line ends; escaped so a packet item stays on one line.
+LINE_BREAKS = {"\x85": "\\u0085", "\u2028": "\\u2028", "\u2029": "\\u2029"}
+
+
+def write_packet(path: Path, packet: Sequence[Mapping[str, Any]]) -> str:
+    lines = []
+    for item in packet:
+        text = json.dumps(item, ensure_ascii=False, sort_keys=True)
+        for char, escape in LINE_BREAKS.items():
+            text = text.replace(char, escape)
+        lines.append(text + "\n")
+    return write_new(path, "".join(lines))
 
 
 def gold_key(row: Mapping[str, Any]) -> str:
@@ -385,13 +398,13 @@ def main(argv: list[str] | None = None) -> int:
     three.add_argument("--private", type=Path, required=True)
     args = parser.parse_args(argv)
     if args.command == "sample":
-        data = args.train.read_bytes()
-        rows = [json.loads(line) for line in data.decode("utf-8").splitlines() if line]
-        built = build(rows, sha(data.decode("utf-8")))
+        text = args.train.read_bytes().decode("utf-8")
+        rows = [json.loads(line) for line in text.split("\n") if line]
+        built = build(rows, sha(text))
         args.out_dir.mkdir(mode=0o700)
         for order in ("r1", "r2"):
             for index, packet in enumerate(built[f"packets_{order}"], 1):
-                write_jsonl(args.out_dir / f"packet.{order}.{index}.jsonl", packet)
+                write_packet(args.out_dir / f"packet.{order}.{index}.jsonl", packet)
         write_jsonl(args.out_dir / "key.jsonl", built["key"])
         write_json(args.out_dir / "sample.json", built["sample"])
         print(json.dumps({"n": built["sample"]["n"], **built["sample"]["sampled"]}))
@@ -407,7 +420,7 @@ def main(argv: list[str] | None = None) -> int:
         }
         packet = [by_rid[rid] for rid in split_rids(key, r1, r2)]
         assert_blind(packet, FIELDS, {row["id"] for row in key})
-        write_jsonl(args.out, packet)
+        write_packet(args.out, packet)
         print(json.dumps({"splits": len(wanted)}))
         return 0
     splits = split_rids(key, r1, r2)
