@@ -10,7 +10,7 @@ stdlib only. It never writes READY files.
             agreement with gold by part and type -> lock-<tier>.json, PASS / FAIL
 
 usage: python3 m8s_lock.py teachers --root R --labels SHARD... [--tiers 2b 08b]
-       python3 m8s_lock.py check --root R --tier 2b|08b --out OUT
+       python3 m8s_lock.py check --root R --tier 2b|08b [--part 1|2] --out OUT
 """
 
 from __future__ import annotations
@@ -96,7 +96,7 @@ def split_teachers(
 def teachers(a: argparse.Namespace) -> int:
     labels = label_map(a.labels)
     for tier in a.tiers:
-        data = a.root / "data" / tier
+        data = a.root / "data" / tier / "topup"
         train = read_jsonl(data / "train.jsonl")
         parts = {r["id"]: r["part"] for r in read_jsonl(data / "train.parts.jsonl")}
         for arm, rows in split_teachers(train, parts, labels).items():
@@ -118,7 +118,7 @@ def argmax(probs: dict[str, float], keys: list[str]) -> int:
 
 def check(a: argparse.Namespace) -> int:
     root, tier = a.root, a.tier
-    data = root / "data" / tier
+    data = root / "data" / tier / "topup"
     comp = json.loads((data / "compose.json").read_text())
     fails: list[str] = []
     train_path = data / "train.jsonl"
@@ -156,10 +156,12 @@ def check(a: argparse.Namespace) -> int:
     if c1:
         fails.append(f"C1 registry source hits {sorted(c1)}")
     teacher_report: dict[str, Any] = {}
-    expected = {
-        "D1": {r["id"] for r in train},
-        "D2": {r["id"] for r in train if parts[r["id"]] == "human"},
-    }
+    expected = {}
+    if a.part == 2:
+        expected = {
+            "D1": {r["id"] for r in train},
+            "D2": {r["id"] for r in train if parts[r["id"]] == "human"},
+        }
     control = CONTROL_TEACHER[tier]
     if control:
         expected["C"] = {r["id"] for r in train}
@@ -203,6 +205,7 @@ def check(a: argparse.Namespace) -> int:
     doc = {
         "schema": "dec-m8s-lock/1",
         "tier": tier,
+        "part": a.part,
         "status": "FAIL" if fails else "PASS",
         "fails": fails,
         "train": {"path": str(train_path), "sha256": digest, "rows": len(train)},
@@ -246,6 +249,13 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("check")
     c.add_argument("--root", type=Path, required=True)
     c.add_argument("--tier", choices=("2b", "08b"), required=True)
+    c.add_argument(
+        "--part",
+        type=int,
+        choices=(1, 2),
+        default=2,
+        help="1: TRAIN and the control teacher only",
+    )
     c.add_argument("--out", type=Path, required=True)
     a = p.parse_args(argv)
     return teachers(a) if a.cmd == "teachers" else check(a)
