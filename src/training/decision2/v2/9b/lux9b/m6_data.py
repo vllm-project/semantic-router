@@ -122,7 +122,10 @@ def prompt_cap(spec, roots, inputs) -> int:
 
 
 def split(spec, roots, out: Path) -> dict[str, Any]:
+    # Prompt lines keep native_prompt's key order (the production waves' format): the collector
+    # digests a prompt in its stored key order and the converter re-derives it from the row.
     from v2.data.build_a0_variants import native_prompt
+    from v2.data.m3.waves import prompt_line
 
     inputs: dict[str, str] = {}
     rows, _, ids = load_x60(spec, roots, inputs)
@@ -135,7 +138,7 @@ def split(spec, roots, out: Path) -> dict[str, Any]:
         if row["id"] in covered:
             check_teacher(row, covered[row["id"]])
     cap = prompt_cap(spec, roots, inputs)
-    wave, too_long, prompts = [], [], {}
+    wave, too_long = [], []
     for row in s_rows:
         if row["id"] in covered:
             continue
@@ -144,7 +147,6 @@ def split(spec, roots, out: Path) -> dict[str, Any]:
             too_long.append(row)
         else:
             wave.append(row)
-            prompts[row["id"]] = prompt
     long_ids = {r["id"] for r in too_long}
     s_final = sorted(r["id"] for r in s_rows if r["id"] not in long_ids)
     out.mkdir(parents=True)
@@ -175,9 +177,9 @@ def split(spec, roots, out: Path) -> dict[str, Any]:
         (out / name).write_text(lines, encoding="utf-8")
         manifest["files"][name] = file_sha256(out / name)
     manifest["files"]["wave.rows.jsonl"] = write_lines(out / "wave.rows.jsonl", wave)
-    manifest["files"]["wave.prompts.jsonl"] = write_lines(
-        out / "wave.prompts.jsonl", [prompts[r["id"]] for r in wave]
-    )
+    with (out / "wave.prompts.jsonl").open("x", encoding="utf-8") as stream:
+        stream.writelines(prompt_line(r) for r in wave)
+    manifest["files"]["wave.prompts.jsonl"] = file_sha256(out / "wave.prompts.jsonl")
     by_pool: dict[str, Counter] = defaultdict(Counter)
     native = {r["id"]: ids[r["id"]]["native"] for r in rows}
     s_set = set(s_final)

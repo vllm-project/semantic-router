@@ -6,6 +6,9 @@ predictions (``_vendor/dev2model``), byte for byte except where the manifest
 records an import-only rewrite. A base-bound adapter's source files are pinned
 by repository revision and SHA-256; a supplied or downloaded copy is verified
 before use. GPU inference uses a BF16 backbone with an FP32 head; CPU uses FP32.
+A package whose manifest names a weight ``storage`` codec (bf16z) is first restored
+to exact safetensors files in a cache directory; the restored checkpoint must
+reproduce the scored identity.
 """
 
 from __future__ import annotations
@@ -96,16 +99,21 @@ class QwenDecision:
         source = None
         if manifest["profile"] == "qwen-adapter":
             source = resolve_base(manifest["base"], base_path)
+        model_root = root
+        if manifest.get("storage"):
+            from .bf16z import materialize
+
+            model_root = materialize(root, manifest)
         metadata = json.loads(
-            (root / "decision_config.json").read_text(encoding="utf-8")
+            (model_root / "decision_config.json").read_text(encoding="utf-8")
         )
         residual = metadata.get("dec_residual") is not None
         if residual:
             from ._vendor.dev2model.dec_model import dec_fingerprint
 
-            identity = dec_fingerprint(root, source)
+            identity = dec_fingerprint(model_root, source)
         else:
-            identity = checkpoint_fingerprint(root, source)
+            identity = checkpoint_fingerprint(model_root, source)
         if identity["model_sha256"] != manifest["identity"]["model_sha256"]:
             raise ValueError("Model identity differs from the scored checkpoint")
         score_bias = load_score_bias_entry(root, manifest, identity["model_sha256"])
@@ -129,9 +137,11 @@ class QwenDecision:
         if residual:
             from ._vendor.dev2model.dec_model import load_dec_checkpoint
 
-            model, tokenizer = load_dec_checkpoint(root, source)
+            model, tokenizer = load_dec_checkpoint(model_root, source)
         else:
-            model, tokenizer = DecisionModel.from_checkpoint(root, source_path=source)
+            model, tokenizer = DecisionModel.from_checkpoint(
+                model_root, source_path=source
+            )
         model = model.float().to(target).eval()
         if tokenizer.pad_token_id is None and tokenizer.eos_token_id is None:
             raise ValueError("Tokenizer needs a pad or EOS token")

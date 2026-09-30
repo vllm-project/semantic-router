@@ -1,0 +1,81 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: cross-track note of 2026-09-30 07:20 UTC+8 (A20r is THE 27B successor; release it as DEV2.0-27B main after the C1 post-key guard, item 8), under the user's full-autonomy mandate",
+  "decision": "release",
+  "decision_sha256": "ef7c85c5a5315e469f5bdfc2d701fc43e74ee744104309a0999fb4f0b84921b7",
+  "gate_profile": "successor",
+  "items": {
+    "1_successor_R1_v3": {
+      "evidence": "v3 72.360 vs current 67.209: +5.15 [+2.19, +8.02]",
+      "passed": true
+    },
+    "1_successor_R2_human_transfer": {
+      "evidence": "human transfer delta 95% [-0.037, +0.056]",
+      "passed": true
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "evidence": "types choice OK, noul OK, score OK",
+      "passed": true
+    },
+    "1_successor_R4_mlx_diag": {
+      "evidence": "mlx-diag card-eligible macro +0.0139 [+0.0025, +0.0250]",
+      "passed": true
+    },
+    "1_successor_R5_tier_gates": {
+      "evidence": "no Decision 1.0 at this size; v3 72.360 vs 90% of AutoJev-27B 72.133; H vs AutoJev-27B [-0.030, +0.066]; v3 >= 64.919 ok, H vs AutoJev-27B upper >= 0 ok, no type collapsed ok",
+      "passed": true
+    },
+    "1_successor_R6_no_overlap_exposure": {
+      "evidence": "1 training files, 0 exposed groups",
+      "passed": true
+    },
+    "1_successor_R7_public231": {
+      "evidence": "public 231 203 vs 198 (+5; McNemar p 0.180)",
+      "passed": true
+    },
+    "1_successor_R8_c1_postkey": {
+      "evidence": "JevArena-C1 v1.2 post-key 57.56 vs DEV2.0-27B 5683c6f0 (current revision): +0.23 [-1.22, +1.70], p 0.723, PASS",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "10 results below AutoJev-27B (no Decision 1.0 at this size) listed in the card tradeoffs table",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 32 files re-hashed; loaded 26096775168",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "82c71c2e232be71e842784cf8f305b1de7d81ff67a58fe11b4464f88b2e62d37",
+  "model_name": "DEV2.0-27B",
+  "receipts_sha256": {
+    "card-post": "cb00cb05bb2c77f5d078bf5eb359485d688e68be0240c502a2da41e7cb0b272e",
+    "card-pre": "648075264882e5a31eac63e7f7bd4af74f6245f62d3b801b3077efa6bf57c404",
+    "download": "408abab098ba3aa538ec46c4fcce6a1ec5ad4fd4cb940b93e86260ffd038837c",
+    "post": "928f9470ff309d7ca91523192cbbb0e9060fc8f58fc30f4d8674839e59a4f155",
+    "readback": "429af9246a933b225c78f3780914e10c11e2e1198eb5c073217e22db962fd21f",
+    "repeat-post": "727fd63f9f8c50c24ec9517cdb68e8754fb5f506083813378846703af78a054e",
+    "repeat-pre": "4369d61be663056c2f695f76a9137a75461898cdaac0c177cd30ce6a9a9c04d6",
+    "tree": "3365d5fe7c2ad2e643ab7bc3cf39e4bc5eb06ff344130a00c715c4cad16a4da6",
+    "upload": "d98c722c45911d5c109a1c930bf0b97a1c1a4690a92085b84e5fb821b0eef1cd"
+  },
+  "repo_id": "llm-semantic-router/DEV2.0-27B",
+  "revision": "5323310327e52d4eadd119cd10accac9b106c97d",
+  "schema": "dev2-release-gate/1",
+  "supersedes": {
+    "gate_sha256": "e6965d75e1f7cac175522f19fbabedd333ad2e8136f8e69a0eb9fb7b200b4a3f",
+    "revision": "c0dba600087f582a1033830a2276d22e96e6324c"
+  },
+  "utc": "2026-09-30T01:27:20.703889+00:00"
+}

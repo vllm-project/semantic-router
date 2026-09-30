@@ -199,6 +199,67 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 09:50 — **DEV2.0-27B successor released: A20r** (gist 07e; integration `ca7b1500a`; 1.24 GPU-h;
+  storage 51.86 / 100 GB).
+  - **Package:** private `llm-semantic-router/DEV2.0-27B@5323310327e52d4eadd119cd10accac9b106c97d` (`main`).
+    - Rank-64 adapter on Qwen3.8-27B, T = 1, 32K, 26,096,775,168 loaded parameters; manifest `82c71c2e…`.
+    - Decision `ef7c85c5…`; successor profile (no-1.0 tier) 13 / 13.
+    - Parity: 0 changes on all 8,378 prompts, before and after download.
+    - The previous adapter and head (0.49 GB) and the staging copy were purged with `rewrite_history=False`.
+  - **Item 8 (C1 post-key): PASS only as "no regression".** 57.56 vs 57.33, +0.23 [−1.22, +1.70]; Choice +1.79,
+    Noul −1.56, Score −1.16, all n.s. **The +5.15 v3 gain did not carry over to C1**, like 4B's lead over Nox. The card
+    says so and lists the C1 declines.
+  - **Card:**
+    - "post-key v3 72.36 vs AutoJev-27B 72.13 (+0.23; lower bound −1.60): not a significant difference";
+    - public 231 203 vs Eikos 212 (−9 [−16, −2]) with the two hard skills;
+    - typed Choice 753 vs 800; constraint competition .882 vs 1.000;
+    - human transfer .584 vs .587 (n.s.); mlx +.014.
+    - The card summary wording was fixed to "strongest other same-size model shown".
+  - **Registry:** the 27B C1 baseline is now A20r's run. Any further 27B C1 attempt needs coordinator approval, one per
+    baseline.
+  - **Gate key compatibility:** `no_own_1_0` (F-b worker) and `no_1_0` (A20r spec) are both accepted.
+  - **Hint for 27B M5 and all tracks** (not a rule change mid-milestone): typed / A7 gains inflate v3 without moving C1.
+    Among passing finalists, prefer those with an HT-DEV v2 GAIN or a human-transfer gain, and plan the next
+    milestones' levers toward human transfer (HS1 add-on, long prose, human-rated data).
+
+- 2026-09-30 09:40 — **9B M6: no successor (a near miss); 9B M7 launched** (result
+  `v2/9b/records/lux9b-m6-result-2026-09-30.md`; integration `0b97bc514`; ~12.3 of 24 GPU-h).
+  - **Finalist K5-a12** (½ five-seed K soup + ½ Lux 1.0): post-key v3 69.362, +1.62 [−0.19, +2.41] vs the released
+    model.
+    - Typed +.030 [+.018, +.042]; human transfer level (+.006); public 231 179 vs 178; tier gate +3.55 vs Lux1.
+    - Fails item 1 (lower bound −0.19) and item 4: card-eligible mlx −.010 [−.020, −.001], Japanese −.033.
+    - HT-DEV v2 read TIE (−.007), which matches formal human transfer.
+  - **Arms stopped early:** KA (AutoJev teacher) and KH (HS1 substitution, which lowered Noul `rule_precedence` and the
+    CSS pilot).
+  - **Lessons:**
+    - More K seeds in the soup is the lever that works.
+    - The ½ point costs multilingual accuracy.
+    - HS1 substitution hurts Noul at 9B. If HS1 is used, add it; don't substitute it.
+  - **9B M7** (fresh worker; node A GPU6–7; 24 GPU-h):
+    - K5 recipe + **PN1-r2** (ja-heavy) as the multilingual lever, with a matched control. A cost-effective design, such
+      as a top-up of the K seeds.
+    - Development gates: HT-DEV v2 non-FLAG, a PN1 dev yes-rate guard, a multilingual development check (never mlx-diag
+      itself), and the Noul floor.
+    - Items 1–8.
+
+- 2026-09-30 08:40 — **The `bf16z` lossless codec is in the release pipeline; the direct node-to-node link is fast; F-b
+  was correctly not released** (record `v2/release/records/dev2-bf16z-codec-2026-09-30.md`; integration `aa65b150e`;
+  0.103 GPU-h; nothing uploaded).
+  - **Codec:** byte-plane split plus zstd; the loader in `v2/release/runtime/qwen.py` restores bit-identical tensors.
+    - F-b: 53.80 → 34.65 GB (64.4%); FP32 embedding 40.5%; BF16 shards 66.9%. DEV2.0-0.8B: 59.5%.
+    - A no-upload 0.8B release run through the loader changed 0 of 600 answers. 8 codec tests plus 120 release tests
+      pass, and plain packages are unchanged.
+    - **Use it for any full-weight 27B package** (≈ 35 GB), and optionally to shrink DEV2.0-9B (~⅓ of 17.95 GB) before
+      the next 27B full-weight update.
+  - **Direct node B ↔ node A link: 1.24 GB/s**, with a temporary SSH key removed afterwards; 53.84 GB moved in 43 s.
+    **Every track: use it instead of the workstation relay** (25–50 KB/s). F-b's plain package now exists on both nodes,
+    so 27B M5 can use it for HT-DEV v2 references.
+  - **Successor gate** (`gate.py`): no-1.0 tiers (card and tier gates compare with AutoJev), an optional item 8 bound to
+    the C1 summary, and the 9B-style mlx pairing. The A20r release uses it.
+  - **Privacy-screen findings:** the calibration file recorded the autotune-cache path, and soup `decision_config.json`
+    recorded node checkpoint paths. **Soup and trainer tools must write track-relative paths.**
+  - F-b's C1 slot and release are unused, as decided at 07:20. A20r's release worker holds the 27B slot.
+
 - 2026-09-30 07:35 — **Decoder M6b: no successor. The decoder M7 worker was stopped by the platform; a continuation
   worker was launched** (M6b results `v2/dec/records/dec-m6b-results-2026-09-30.md`).
   - **M6b:** N6D soup −2.67 [−4.59, +0.33] and its ⅔ point −0.89 [−2.88, +1.16] vs DEV2.0-4B. Typed FINAL fell

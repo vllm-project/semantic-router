@@ -1,0 +1,72 @@
+{
+  "files": {
+    "m4/M4-A20r-soup/checkpoint/adapter/README.md": {
+      "bytes": 123,
+      "sha256": "fa69c811f08b76a2f0c1ec631a85cdec713341984ed56e9021fe668cfbaece4b"
+    },
+    "m4/M4-A20r-soup/checkpoint/adapter/adapter_config.json": {
+      "bytes": 1353,
+      "sha256": "2e9be5f75921435917a356c1bd5fcbb7fe7ba722ad52da3f1553debbdb2ab206"
+    },
+    "m4/M4-A20r-soup/checkpoint/adapter/adapter_model.safetensors": {
+      "bytes": 1867776712,
+      "sha256": "2f70601df771f185b19591376842945de6997382881994ecc57a9a95fc6f17e4"
+    },
+    "m4/M4-A20r-soup/checkpoint/chat_template.jinja": {
+      "bytes": 8952,
+      "sha256": "c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041"
+    },
+    "m4/M4-A20r-soup/checkpoint/decision_config.json": {
+      "bytes": 59949,
+      "sha256": "051d9e22c7f1452fdacce0889767870fcd78beacc7902ec28543dbd6541adb39"
+    },
+    "m4/M4-A20r-soup/checkpoint/decision_head.safetensors": {
+      "bytes": 21056344,
+      "sha256": "054c1f6c638c4f9bf4060bc3d196e351fe1912039527461e3572bfa7261c2c67"
+    },
+    "m4/M4-A20r-soup/checkpoint/soup_manifest.json": {
+      "bytes": 62345,
+      "sha256": "248ef8665853b94d38f39275e53b914f3dd68c4ced8395c54f9c6f03b8ff36f7"
+    },
+    "m4/M4-A20r-soup/checkpoint/tokenizer.json": {
+      "bytes": 19989325,
+      "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
+    },
+    "m4/M4-A20r-soup/checkpoint/tokenizer_config.json": {
+      "bytes": 1123,
+      "sha256": "bee8eba30f0eb4af73c0fe2cd06d0f89b657d7819941c438157ec42f7c80ea87"
+    },
+    "m4/M4-A20r-soup/package/ADOPTION.json": {
+      "bytes": 1483,
+      "sha256": "021922de72abda1f3713b0907881007899247bdc88728b51fc3798f8b53eea5f"
+    },
+    "m4/M4-A20r-soup/package/PACKAGE.json": {
+      "bytes": 1352,
+      "sha256": "c4e4e65746d91127f4cb7b073946e99c109eac8575a811217d25388d0ff900a8"
+    },
+    "m4/M4-A20r-soup/package/calibration.json": {
+      "bytes": 2055,
+      "sha256": "518e19cd0f89a6e8f63e666a02c9ca4fc8743f873c765183d1e745f476cd3157"
+    },
+    "m4/M4-A20r-soup/package/dev-calibration.json": {
+      "bytes": 3366,
+      "sha256": "f54a68323cccd016a9820caf710700d2a3c037007aea424a00bfb34d6353263a"
+    }
+  },
+  "lfs": [
+    "checkpoint/adapter/adapter_model.safetensors",
+    "checkpoint/decision_head.safetensors",
+    "checkpoint/tokenizer.json"
+  ],
+  "lfs_objects_before": [],
+  "passed": true,
+  "prefix": "m4/M4-A20r-soup",
+  "private": true,
+  "remote_mismatch": [],
+  "repo": "llm-semantic-router/dev2-27b-staging",
+  "revision": "90a70b4ab83feaecb6796925a75754bd57fa9514",
+  "schema": "dev2-27b-a20r-staging-upload/1",
+  "staging_json_sha256": "d26c3dac9481501a25e5405e4702bee05d7118fa5665f007ad854572b5cd67d5",
+  "upload_seconds": 7.2,
+  "utc": "2026-09-29T23:31:21Z"
+}

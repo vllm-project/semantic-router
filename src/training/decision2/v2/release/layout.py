@@ -65,7 +65,13 @@ TOKENIZER_ROOT_FILES = (
     "tokenizer.model",
     "chat_template.jinja",
 )
-MODEL_SUFFIXES = {".json", ".safetensors", ".bin", ".model", ".txt"}
+MODEL_SUFFIXES = {".json", ".safetensors", ".bin", ".model", ".txt", ".bf16z"}
+BF16Z_SUFFIX = ".safetensors.bf16z"
+
+
+def is_weight(name: str) -> bool:
+    """A safetensors weight file, stored plain or as bf16z (v2/release/runtime/bf16z.py)."""
+    return name.endswith((".safetensors", BF16Z_SUFFIX))
 
 
 def sha_file(path: Path) -> str:
@@ -137,12 +143,17 @@ def inventory(root: Path, *, allow_hub_added: bool = False) -> dict[str, str]:
 
 
 def safetensors_count(path: Path) -> int:
-    """Element count from the header only; weights are never read."""
-    with Path(path).open("rb") as stream:
-        (size,) = struct.unpack("<Q", stream.read(8))
-        if not 2 <= size <= 256 << 20:
-            raise ValueError(f"Invalid safetensors header: {path}")
-        header = json.loads(stream.read(size))
+    """Element count from the header only; weights are never read (nor decompressed)."""
+    if str(path).endswith(BF16Z_SUFFIX):
+        from v2.release.runtime.bf16z import original_header
+
+        header = original_header(Path(path))
+    else:
+        with Path(path).open("rb") as stream:
+            (size,) = struct.unpack("<Q", stream.read(8))
+            if not 2 <= size <= 256 << 20:
+                raise ValueError(f"Invalid safetensors header: {path}")
+            header = json.loads(stream.read(size))
     if not isinstance(header, dict):
         raise ValueError(f"Invalid safetensors header: {path}")
     total = 0
@@ -335,7 +346,7 @@ def select_model_files(profile: str, checkpoint: Path) -> list[str]:
 
 def parameter_files(profile: str, files: list[str]) -> dict[str, list[str]]:
     """Package weight paths grouped by component for header-based counting."""
-    weights = [name for name in files if name.endswith(".safetensors")]
+    weights = [name for name in files if is_weight(name)]
     if profile == "kai-native":
         return {"native": weights}
     if profile == "encoder-marker":
@@ -365,7 +376,7 @@ def pointer(
 ) -> dict[str, Any]:
     """Root query file: a truthful map of the model files, read first at load."""
     present = set(files)
-    weights = sorted(n for n in files if n.endswith(".safetensors"))
+    weights = sorted(n for n in files if is_weight(n))
     result: dict[str, Any] = {
         **POINTER,
         "model_name": model_name,
@@ -379,6 +390,11 @@ def pointer(
         "max_input_tokens": max_input_tokens,
         "calibration": {"temperature_file": calibration} if calibration else None,
     }
+    if any(n.endswith(BF16Z_SUFFIX) for n in files):
+        result["weight_storage"] = {
+            "codec": "bf16z/1",
+            "restore": "decision2.bf16z.materialize (run by decision2.Decision2.from_pretrained)",
+        }
     if profile == "kai-native":
         result.update(
             model_config="native/decision_config.json",

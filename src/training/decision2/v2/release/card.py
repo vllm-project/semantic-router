@@ -498,7 +498,7 @@ def render_readme(ctx: dict[str, Any]) -> str:
             summary = (
                 f"On the same 8,147-item JevArena v3 panel, {name} scores **{v3:.2f}**. "
                 f"{NO_OWN_1_0_TEXT[:-1]}; {own_label}"
-                + (", the strongest same-size model shown," if strongest else "")
+                + (", the strongest other same-size model shown," if strongest else "")
                 + f" scores **{own_v3:.2f}**"
             )
         else:

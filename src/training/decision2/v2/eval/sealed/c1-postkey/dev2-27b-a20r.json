@@ -1,0 +1,62 @@
+{
+  "schema": "dev2-c1-postkey-spec/1",
+  "name": "dev2-27b-a20r",
+  "tier": "27B",
+  "role": "successor",
+  "label": "DEV2.0-27B",
+  "repo": "llm-semantic-router/DEV2.0-27B",
+  "revision": "manifest-sha256:0d7953cc5d85a6fde6bdf71913795d1d7849e32fbed7df10103c6da6669b254a",
+  "image": "kernel",
+  "adapter_spec": "v2/27b/adapters/typed-lora-kernel.json",
+  "model_path": "/data/dev2/runs/release/dev2-27b-a20r-20260930/c1pkg/package/DEV2.0-27B",
+  "mounts": [
+    "/data/decision20-20260926/models/Qwen3.8-27B",
+    "/data/dev2/runs/27b/M4-A20r-soup/package"
+  ],
+  "env": ["HIP_FORCE_DEV_KERNARG=1"],
+  "extra": {
+    "source": "/data/decision20-20260926/models/Qwen3.8-27B",
+    "calibration": "/data/dev2/runs/27b/M4-A20r-soup/package/calibration.json",
+    "max_length": "32768",
+    "model_id": "llm-semantic-router/DEV2.0-27B"
+  },
+  "limit": "32,768 tokens, over-budget questions invalid",
+  "cache": {
+    "frozen": "/data/dev2/runs/27b/M4-A20r-soup/formal/triton-cache",
+    "sha256": "f474e2e9dbdf3a2900465bce74256326ba2756250861b45359742685982cb5f7"
+  },
+  "smoke_items": 80,
+  "parity": {
+    "mode": "exact",
+    "stored": "/data/dev2/runs/27b/M4-A20r-soup/formal/output/typed-final.predictions.jsonl",
+    "tolerance": 0.0001
+  },
+  "identity": "2e07451107a2ca9735064cc01f7e43e8522b4bae48f2d77bdf29f7ea2fe6362c",
+  "package": {
+    "dir": "/data/dev2/runs/release/dev2-27b-a20r-20260930/c1pkg/package/DEV2.0-27B",
+    "manifest_sha256": "0d7953cc5d85a6fde6bdf71913795d1d7849e32fbed7df10103c6da6669b254a",
+    "identity": "2e07451107a2ca9735064cc01f7e43e8522b4bae48f2d77bdf29f7ea2fe6362c",
+    "base": "/data/decision20-20260926/models/Qwen3.8-27B"
+  },
+  "files": [
+    {
+      "path": "/data/dev2/runs/27b/M4-A20r-soup/package/calibration.json",
+      "sha256": "518e19cd0f89a6e8f63e666a02c9ca4fc8743f873c765183d1e745f476cd3157"
+    },
+    {
+      "path": "/data/dev2/runs/27b/M4-A20r-soup/formal/output/typed-final.predictions.jsonl",
+      "sha256": "ea573b2d50be50efd3048ee427309232b1f9b998b98d9997644bd82a51442d0e"
+    },
+    {
+      "path": "/data/dev2/runs/27b/M4-A20r-soup/formal/output/public231.predictions.jsonl",
+      "sha256": "6746b61a58603418d43ce22109d08b79d9cf3bab63aa14acca6cd42c5dcf131d"
+    },
+    {
+      "path": "/data/dev2/runs/27b/M4-A20r-soup/formal/COLLECT.json",
+      "sha256": "e4502a34a55df70da3557b3d88ee8b65b4bba4faca8159b55ae1a5564530a659"
+    }
+  ],
+  "stored_collect": "/data/dev2/runs/27b/M4-A20r-soup/formal/COLLECT.json",
+  "compare": [],
+  "notes": "Successor-rule item 8 for the 27B successor M4-A20r soup (coordinator 2026-09-30 07:20 UTC+8: A20r is THE 27B successor; F-b is superseded, and no later 27B C1 attempt for F-b is approved), gated against the registered 27B baseline (DEV2.0-27B = release package 5683c6f0, identity b7fd44e3, C1 v1.2 57.33, event-3 run cand27). Frozen package = the pre-release build of the release spec v2/release/specs/dev2-27b-a20r-release.draft.json on node A (manifest 0d7953cc, 32 files, 26,096,775,168 loaded parameters, identity recomputed from the node A base); its model files are the scored checkpoint's bytes, staged node B -> node A through llm-semantic-router/dev2-27b-staging@90a70b4a and re-hashed (tokenizer.json from an identical node A copy), and the released revision differs from it only in card files (runtime_source pinned). Formal runtime of the scored run M4-A20r-soup/formal (node B GPU5, 1,458.97 s for 8,378 prompts): v2.27b.typed_collect_kernel with adapter typed-lora-kernel, 32,768 tokens, the T = 1 calibration.json of its package, image dbe5f32b, HIP_FORCE_DEV_KERNARG=1 and a fresh copy of that run's persisted autotune cache (f474e2e9: F1's scored cache 03b172f1 plus group-file path rewrites, no autotune entry added). The formal run's cache, stored predictions and COLLECT receipt are node A copies of node B's files (hash-equal lists). --model-revision is metadata only (output manifest, not prediction rows or the identity); the revision field names the pre-release package by its manifest, and the registry entry takes the released revision."
+}
