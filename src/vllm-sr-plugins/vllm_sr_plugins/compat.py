@@ -14,10 +14,13 @@ def get_logger(name: str) -> logging.Logger:
 
 
 def check_vllm_version() -> str:
-    """Return the running vLLM version, warning when it is not the pinned build."""
-    import vllm
+    """Return the installed vLLM build, warning when it is not the pinned one."""
+    from importlib.metadata import PackageNotFoundError, version
 
-    running = getattr(vllm, "__version__", "unknown")
+    try:
+        running = version("vllm")  # vllm.__version__ omits the local build suffix
+    except PackageNotFoundError:
+        running = "unknown"
     if running != PINNED_VLLM:
         get_logger("compat").warning(
             "vllm-sr-plugins is tested against vLLM %s; running %s. Pooler, "

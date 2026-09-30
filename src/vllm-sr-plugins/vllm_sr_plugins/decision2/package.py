@@ -100,8 +100,14 @@ def load_package(path: str | Path) -> Decision2Package:
     if model_sha256 != manifest["identity"]["model_sha256"]:
         raise ValueError("Model identity differs from the scored checkpoint")
 
-    qwen = _module(runtime, "qwen")
-    score_bias = qwen.load_score_bias_entry(root, manifest, model_sha256)
+    # Runtimes built before per-level Score offsets existed have no loader for
+    # them; their manifests bind none, and none are applied.
+    score_bias = None
+    if manifest.get("score_bias") is not None:
+        qwen = _module(runtime, "qwen")
+        if not hasattr(qwen, "load_score_bias_entry"):
+            raise ValueError("The manifest binds Score offsets its runtime cannot load")
+        score_bias = qwen.load_score_bias_entry(root, manifest, model_sha256)
     calibration = manifest.get("calibration")
     if calibration:
         load_calibration = _module(
