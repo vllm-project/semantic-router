@@ -247,6 +247,29 @@ class TrainerHelperTest(unittest.TestCase):
             selection_key(tie, 116, "shared"), selection_key(worse_brier, 58, "shared")
         )
 
+    def test_decision2_continuation_keeps_the_root_source(self) -> None:
+        from v2.dec.train_dec import continuation_metadata
+
+        root = {"kind": "decision1", "revision": None, "source_fingerprint": {"f": 1}}
+        start = {"checkpoint_format": "full", "full_training_source": root}
+        source = {"source_name": "checkpoint-0001624", "files_sha256": {"a": "b"}}
+        meta = continuation_metadata(start, source)
+        self.assertEqual(meta["full_training_source"], root)
+        self.assertEqual(meta["checkpoint_format"], "full")
+        self.assertEqual(meta["continued_from"]["source_fingerprint"], source)
+        self.assertIsNone(meta["continued_from"]["start_continued_from"])
+        again = continuation_metadata({**start, **meta}, {"files_sha256": {}})
+        self.assertEqual(again["full_training_source"], root)
+        self.assertEqual(
+            again["continued_from"]["start_continued_from"], meta["continued_from"]
+        )
+        for bad in (
+            {"checkpoint_format": "lora", "full_training_source": root},
+            {"checkpoint_format": "full"},
+        ):
+            with self.assertRaises(ValueError):
+                continuation_metadata(bad, source)
+
     def test_teacher_file_must_match_train_rows(self) -> None:
         from v2.dec.train_dec import attach_teacher_probs, load_teacher
 

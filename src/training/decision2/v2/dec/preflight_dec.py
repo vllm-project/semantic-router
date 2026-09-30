@@ -233,6 +233,8 @@ def main() -> None:
         reference, tokenizer = DecisionModel.from_decision1(
             args.source_path, contract["head_dim"]
         )
+    elif contract["init_kind"] == "decision2":
+        reference, tokenizer = DecisionModel.from_checkpoint(args.source_path)
     else:
         from safetensors.torch import load_file
 
