@@ -73,6 +73,7 @@ Router 在编码后端请求之前检查所需语义。所选后端格式无法�
 | 严格 JSON Schema 输出 | Supported | Supported | Supported |
 | 缓冲和流式响应 | Supported | Supported | Supported |
 | 推理内容和 effort | Supported | Supported | Supported |
+| 推理摘要请求（`reasoning.summary`） | 不转发；在 `x-vsr-protocol-warnings` 中标记为 `dropped` | Supported | 不转发；在 `x-vsr-protocol-warnings` 中标记为 `dropped` |
 | 没有 schema 的 JSON object 模式 | Supported | Supported | Not supported |
 | 音频输入 | Supported | Not supported | Not supported |
 | 托管图像生成生命周期 | Not supported | Supported | Not supported |
@@ -85,6 +86,10 @@ Router 在编码后端请求之前检查所需语义。所选后端格式无法�
 | 原生响应或会话状态字段 | Not supported | Supported | Not supported |
 
 此表描述编解码器表示，而不是模型能力。例如，OpenAI 兼容服务器可以接受 Chat 请求形状，同时对特定模型拒绝图像或工具。在将它们加入路由池之前，先限定实际端点和模型 revision。
+
+Responses 客户端可以发送 `reasoning.summary`。Router 会将 `auto`、`concise` 或 `detailed` 转发给 Responses 后端；路由到 Chat Completions 或 Messages 后端时，请求继续执行，但摘要设置会被丢弃并在响应头中说明。
+
+Anthropic Messages 客户端经由 Responses 后端发送 `cache_control` 时，Router 会移除 Responses 无法表示的缓存边界，继续转发提示词和工具结果，并在 `x-vsr-protocol-warnings` 中针对 `cache_control` 标记 `dropped`。
 
 Responses 客户端仍可以与 Chat Completions 或 Messages 后端一起使用 `previous_response_id`。Router 检索并物化保留的历史，移除 Router 拥有的对象控制，然后按所选后端格式编码无状态请求。
 

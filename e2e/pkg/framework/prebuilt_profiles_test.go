@@ -108,7 +108,7 @@ func TestPrebuiltImagesConsumeRegisteredProfileFixturesWithoutBuild(t *testing.T
 }
 
 func TestPublishedModelProfilesPrepareRegisteredBackends(t *testing.T) {
-	for _, profile := range []string{"vela-omni", "vela-halu"} {
+	for _, profile := range []string{"vela-omni", "vela-halu", "vela-shield"} {
 		for _, available := range []bool{true, false} {
 			scenario := "available"
 			if !available {

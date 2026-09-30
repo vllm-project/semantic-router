@@ -13,7 +13,7 @@ the vLLM Semantic Router in a production environment.
 
 | Channel | Tag pattern | Updated on | Use case |
 |---------|-------------|------------|----------|
-| **Versioned** | `v0.3.0` / `0.3.0` | Tagged releases only | Production release identifier; verify and pin a digest where immutability is required |
+| **Versioned** | `v0.4.0` / `0.4.0` | Tagged releases only | Production release identifier; verify and pin a digest where immutability is required |
 | **Nightly** | `nightly-YYYYMMDD` | Date-stamped builds | Pre-release testing |
 | **Latest** | `latest` | Affected image changes on `main` + releases | Development only |
 
@@ -72,7 +72,7 @@ Always upgrade to a specific version. Never rely on `latest` in production.
 
 ```bash
 # Pull the chart metadata first (optional but useful to verify it exists)
-helm show chart oci://ghcr.io/vllm-project/charts/semantic-router --version 0.3.0
+helm show chart oci://ghcr.io/vllm-project/charts/semantic-router --version 0.4.0
 
 # Upgrade to a specific version
 # --reset-then-reuse-values (Helm ≥ 3.14) resets to the new chart's defaults
@@ -80,12 +80,15 @@ helm show chart oci://ghcr.io/vllm-project/charts/semantic-router --version 0.3.
 # manifests because renamed or incompatible values still require migration.
 helm upgrade semantic-router \
   oci://ghcr.io/vllm-project/charts/semantic-router \
-  --version 0.3.0 \
+  --version 0.4.0 \
   --namespace vllm-semantic-router-system \
   --reset-then-reuse-values \
   --wait \
   --timeout 10m
 ```
+
+From a source checkout, `make helm-upgrade-version CHART_VERSION=0.4.0`
+uses the same versioned chart with the configured cluster context.
 
 :::caution Review values before every chart upgrade
 `--reuse-values` skips new chart defaults and can break when a release adds
@@ -109,15 +112,18 @@ Find the latest version on the [GitHub Releases page](https://github.com/vllm-pr
 
 ```bash
 # Pull by version tag (substitute podman for docker if using podman)
-docker pull ghcr.io/vllm-project/semantic-router/extproc:v0.3.0
-docker pull ghcr.io/vllm-project/semantic-router/vllm-sr:v0.3.0
+docker pull ghcr.io/vllm-project/semantic-router/extproc:v0.4.0
+docker pull ghcr.io/vllm-project/semantic-router/vllm-sr:v0.4.0
 
 # Read the multi-architecture index digest, not a platform-specific manifest.
 DIGEST=$(docker buildx imagetools inspect \
-  ghcr.io/vllm-project/semantic-router/extproc:v0.3.0 \
+  ghcr.io/vllm-project/semantic-router/extproc:v0.4.0 \
   --format '{{.Manifest.Digest}}')
 echo "Use digest: ${DIGEST}"
 ```
+
+From a source checkout, `make docker-pull-release DOCKER_TAG=v0.4.0`
+pulls the full set of production release images.
 
 For Kubernetes manifests, pin to the digest, not the tag:
 
@@ -129,13 +135,14 @@ Published versioned images for a full release:
 
 | Image | Typical owner |
 |-------|---------------|
-| `ghcr.io/vllm-project/semantic-router/extproc:v0.3.0` | Router ExtProc runtime |
-| `ghcr.io/vllm-project/semantic-router/extproc-rocm:v0.3.0` | ROCm router ExtProc runtime |
-| `ghcr.io/vllm-project/semantic-router/vllm-sr:v0.3.0` | Local/runtime CLI image |
-| `ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:v0.3.0` | ROCm local/runtime CLI image |
-| `ghcr.io/vllm-project/semantic-router/dashboard:v0.3.0` | Dashboard backend/frontend image |
-| `ghcr.io/vllm-project/semantic-router/operator:v0.3.0` | Kubernetes operator image |
-| `ghcr.io/vllm-project/semantic-router/operator-bundle:v0.3.0` | Operator bundle image |
+| `ghcr.io/vllm-project/semantic-router/extproc:v0.4.0` | Router ExtProc runtime |
+| `ghcr.io/vllm-project/semantic-router/extproc-rocm:v0.4.0` | ROCm router ExtProc runtime |
+| `ghcr.io/vllm-project/semantic-router/vllm-sr:v0.4.0` | Local/runtime CLI image |
+| `ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:v0.4.0` | CUDA local/runtime CLI image |
+| `ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:v0.4.0` | ROCm local/runtime CLI image |
+| `ghcr.io/vllm-project/semantic-router/dashboard:v0.4.0` | Dashboard backend/frontend image |
+| `ghcr.io/vllm-project/semantic-router/operator:v0.4.0` | Kubernetes operator image |
+| `ghcr.io/vllm-project/semantic-router/operator-bundle:v0.4.0` | Operator bundle image |
 
 Image repositories do not necessarily publish identical release channels.
 Verify the exact tag or digest in GHCR before adding a platform-specific image
@@ -144,7 +151,7 @@ to a production manifest.
 ### 2c. Python CLI upgrade
 
 ```bash
-pip install --upgrade vllm-sr==0.3.0
+pip install --upgrade vllm-sr==0.4.0
 vllm-sr --version    # verify
 ```
 
@@ -270,7 +277,7 @@ Create a `values-production.yaml` that explicitly pins image tags:
 
 ```yaml
 image:
-  tag: "v0.3.0"   # readable release tag; use a digest when immutability is required
+  tag: "v0.4.0"   # readable release tag; use a digest when immutability is required
   pullPolicy: IfNotPresent
 ```
 
@@ -279,7 +286,7 @@ Then deploy with:
 ```bash
 helm upgrade semantic-router \
   oci://ghcr.io/vllm-project/charts/semantic-router \
-  --version 0.3.0 \
+  --version 0.4.0 \
   -f values-production.yaml \
   --namespace vllm-semantic-router-system
 ```
@@ -334,7 +341,7 @@ for pre-release validation, not as an unpinned production channel.
 oras repo tags ghcr.io/vllm-project/charts/semantic-router
 
 # Verify a specific version exists before installing
-helm show chart oci://ghcr.io/vllm-project/charts/semantic-router --version 0.3.0
+helm show chart oci://ghcr.io/vllm-project/charts/semantic-router --version 0.4.0
 ```
 
 ### Helm: release is in a broken state after failed upgrade

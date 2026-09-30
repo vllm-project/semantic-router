@@ -1,14 +1,14 @@
 ---
-title: Deploy with Envoy AI Gateway
-description: Use Semantic Router for model selection or Responses state while Envoy AI Gateway owns provider and gateway policy.
+title: Deploy with Agent Router
+description: Use Semantic Router for model selection or Responses state while Agent Router (formerly Envoy AI Gateway) owns provider and gateway policy.
 ---
 
-# Deploy with Envoy AI Gateway
+# Deploy with Agent Router
 
-Use this topology when Envoy AI Gateway already owns north-south traffic and
+Use this topology when Agent Router (formerly Envoy AI Gateway) already owns north-south traffic and
 provider integration. Semantic Router can either choose a model from the
 request's meaning or run only as an ExtProc service for OpenAI Responses state
-and protocol conversion. Envoy AI Gateway remains responsible for Gateway API
+and protocol conversion. Agent Router remains responsible for Gateway API
 resources, provider credentials, rate limits, and traffic policy.
 
 For large request bodies or streamed immediate responses from Semantic Router, also see [Streamed ExtProc and immediate responses](./streamed-extproc). That guide shows how to switch the ExtProc filter from `BUFFERED` to `STREAMED` request bodies and how streamed Chat Completions clients receive looper or `fast_response` immediate responses.
@@ -20,13 +20,13 @@ The deployment consists of:
 - **Semantic Router** evaluates the selected recipe and chooses the logical
   model or provider alias.
 - **Envoy Gateway** provides the Kubernetes Gateway API data plane.
-- **Envoy AI Gateway** translates provider APIs and applies gateway-owned
+- **Agent Router** translates provider APIs and applies gateway-owned
   authentication, rate limiting, and traffic policy.
 - **Model providers** serve the selected model. This guide uses a demo backend;
   it does not install production inference capacity.
 
 Provider support changes independently of Semantic Router. Use the
-[Envoy AI Gateway provider documentation](https://aigateway.envoyproxy.io/docs/capabilities/llm-integrations/supported-providers/)
+[Agent Router provider documentation](https://theagentrouter.ai/docs/capabilities/llm-integrations/supported-providers/)
 to choose an `AIServiceBackend` and credential policy, then bind the provider
 names to the aliases used by your Semantic Router configuration.
 
@@ -77,7 +77,7 @@ intended provider backend before request-body conversion runs.
 
 You need:
 
-- Kubernetes `1.32` or later for the pinned Envoy AI Gateway `v1.0.x` and
+- Kubernetes `1.32` or later for the pinned Agent Router `v1.0.x` and
   Envoy Gateway `v1.8.x` compatibility set; [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)
   is sufficient for the demo;
 - Gateway API `v1.5.x` CRDs. The default Envoy Gateway Helm installation below
@@ -125,7 +125,7 @@ before adapting it to a real provider pool.
 
 ## Step 3: Install Envoy Gateway
 
-Install the Envoy Gateway release supported by Envoy AI Gateway `v1.0.0`:
+Install the Envoy Gateway release supported by Agent Router `v1.0.0`:
 
 ```bash
 export AIGW_VERSION=v1.0.0
@@ -140,10 +140,10 @@ helm upgrade -i eg oci://docker.io/envoyproxy/gateway-helm \
 kubectl wait --timeout=2m -n envoy-gateway-system deployment/envoy-gateway --for=condition=Available
 ```
 
-## Step 4: Install Envoy AI Gateway
+## Step 4: Install Agent Router
 
 Install the AI Gateway CRDs before the controller. These versions follow the
-upstream [`v1.0.x` compatibility matrix](https://aigateway.envoyproxy.io/docs/compatibility/).
+upstream [`v1.0.x` compatibility matrix](https://theagentrouter.ai/docs/compatibility/).
 
 ```bash
 # Install Envoy AI Gateway CRDs

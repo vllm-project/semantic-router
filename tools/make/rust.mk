@@ -58,6 +58,7 @@ RUST_CI_LIB_TESTS ?= \
 	model_architectures::embedding::gemma3_model::chunked_attention_tests::test_chunked_attention_matches_dense \
 	model_architectures::embedding::qwen3_embedding::chunked_attention_tests::test_chunked_attention_matches_dense \
 	model_architectures::embedding::qwen3_embedding::chunked_attention_tests::test_chunked_attention_matches_dense_on_real_rows_with_left_padding \
+	model_architectures::embedding::qwen3_embedding_test::test_attention_keeps_fp32_cpu_and_causal_mask \
 	model_architectures::embedding::multimodal_embedding::tests::test_bert_self_attention_matches_dense \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_and_whisper_self_attention_match_dense \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_head_attention_matches_dense \
@@ -87,6 +88,9 @@ test-rust-ci:
 		}; \
 		cargo test --release --no-default-features --lib "$$test_filter" -- --test-threads=1 --nocapture || exit 1; \
 	done
+	@cd candle-binding && cargo test --no-default-features --locked \
+		--test qwen3_classification_api_test \
+		--test classification_output_demo
 
 # Test Rust unit tests (with release optimization for performance)
 # Note: Uses TEST_GPU_DEVICE env var (default: 2) to avoid GPU 0/1 which may be busy

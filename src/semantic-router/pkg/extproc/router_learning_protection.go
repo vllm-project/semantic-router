@@ -36,23 +36,27 @@ func (r *OpenAIRouter) applyProtectionPreflight(input routerLearningInput) route
 	if !ok {
 		return preflight
 	}
+	identity, identityOK := r.protectionIdentity(input.ctx, cfg)
+	if identityOK {
+		preflight.identity = identity
+		if input.ctx != nil {
+			input.ctx.VSRLearningSessionID = identity.memoryKey
+			input.ctx.VSRLearningConversationID = identity.conversationID
+		}
+	}
 	if mode == config.DecisionAdaptationModeBypass {
 		preflight.policy = newProtectionPolicy(input.ctx, cfg, mode, routerLearningActionBypass, "decision_bypass", scope)
 		return preflight
 	}
-	identity, identityOK := r.protectionIdentity(input.ctx, cfg)
 	if !identityOK {
 		preflight.policy = newProtectionPolicy(input.ctx, cfg, mode, routerLearningActionSuppressSampling, "missing_identity", scope)
 		return preflight
 	}
 	if input.ctx != nil {
-		input.ctx.VSRLearningSessionID = identity.memoryKey
-		input.ctx.VSRLearningConversationID = identity.conversationID
 		configureProgressEvidence(input.ctx, progressGateConfig(cfg.Tuning), time.Now())
 	}
 
 	preflight.enabled = true
-	preflight.identity = identity
 	if mode == config.DecisionAdaptationModeObserve {
 		preflight.samplingAllowed = true
 		preflight.policy = newProtectionPolicy(input.ctx, cfg, mode, routerLearningActionObserve, "observe_only", scope)
@@ -135,7 +139,18 @@ func (r *OpenAIRouter) applyProtectionSwitch(
 		selectionResult:  baseResult,
 		selectedModelRef: baseRef,
 	}
-	if !preflight.enabled || preflight.mode == config.DecisionAdaptationModeBypass {
+	if preflight.mode == config.DecisionAdaptationModeBypass {
+		// Bypass disables learning policy, not conversation ownership. Stage the
+		// selected hard-policy route under the same scoped key that a following
+		// tool-loop hard lock will read.
+		if preflight.identity.memoryKey != "" {
+			decision.selectionContext = r.protectionSelectionContext(baseCtx, input.ctx, preflight.identity)
+		}
+		decision.changesModel = learningChangesModel(input.baseResult, baseResult)
+		decision.policy = preflight.policy
+		return decision, nil
+	}
+	if !preflight.enabled {
 		decision.changesModel = learningChangesModel(input.baseResult, baseResult)
 		decision.policy = preflight.policy
 		return decision, nil

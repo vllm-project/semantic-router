@@ -55,14 +55,36 @@ func AuthRoutes(svc *Service) *http.ServeMux {
 	return mux
 }
 
-func RegisterAdminRoutes(mux *http.ServeMux, svc *Service) {
-	mux.HandleFunc("/api/admin/users", adminUsersCollectionHandler(svc))
-	mux.HandleFunc("/api/admin/users/", adminUserItemHandler(svc))
-	mux.HandleFunc("/api/admin/permissions", adminPermissionsHandler(svc))
-	mux.HandleFunc("/api/admin/audit-logs", adminAuditLogsHandler(svc))
-	mux.HandleFunc("/api/admin/users/password", adminUserPasswordHandler(svc))
-	mux.HandleFunc("/api/admin/invitations", adminInvitationsHandler(svc))
-	mux.HandleFunc("/api/admin/invitations/", adminInvitationItemHandler(svc))
+type RouteRegistrar interface {
+	HandleFunc(string, func(http.ResponseWriter, *http.Request))
+}
+
+func registerAdminPolicy(mux RouteRegistrar, contract RouteContract, handler http.HandlerFunc) {
+	if policies, ok := mux.(*PolicyMux); ok {
+		policies.HandlePolicyFunc(contract, handler)
+		return
+	}
+	mux.HandleFunc(contract.Pattern, handler)
+}
+
+func RegisterAdminRoutes(mux RouteRegistrar, svc *Service) {
+	registerAdminPolicy(mux, ProtectedRoute("/api/admin/users", PermUsersView, SensitivitySensitive, ResourceOwnerAuth, http.MethodGet), adminUsersCollectionHandler(svc))
+	registerAdminPolicy(mux, Route("/api/admin/users/",
+		ReadPolicy(http.MethodGet, PermUsersView, SensitivitySensitive, ResourceOwnerAuth),
+		DelegatedMutationPolicy(http.MethodPatch, PermUsersManage, "user.update", SensitivitySecret, ResourceOwnerAuth, 64<<10),
+		DelegatedMutationPolicy(http.MethodDelete, PermUsersManage, "user.delete", SensitivitySecret, ResourceOwnerAuth, 64<<10),
+	), adminUserItemHandler(svc))
+	registerAdminPolicy(mux, ProtectedRoute("/api/admin/permissions", PermUsersManage, SensitivitySensitive, ResourceOwnerAuth, http.MethodGet), adminPermissionsHandler(svc))
+	registerAdminPolicy(mux, ProtectedRoute("/api/admin/audit-logs", PermUsersManage, SensitivitySecret, ResourceOwnerAuth, http.MethodGet), adminAuditLogsHandler(svc))
+	registerAdminPolicy(mux, ProtectedDelegatedAuditRoute("/api/admin/users/password", PermUsersManage, "user.password", SensitivitySecret, ResourceOwnerAuth, 64<<10, http.MethodPost), adminUserPasswordHandler(svc))
+	registerAdminPolicy(mux, Route("/api/admin/invitations",
+		ReadPolicy(http.MethodGet, PermUsersManage, SensitivitySecret, ResourceOwnerAuth),
+		DelegatedMutationPolicy(http.MethodPost, PermUsersManage, "invitation.create", SensitivitySecret, ResourceOwnerAuth, 64<<10),
+	), adminInvitationsHandler(svc))
+	registerAdminPolicy(mux, Route("/api/admin/invitations/",
+		DelegatedMutationPolicy(http.MethodPost, PermUsersManage, "invitation.rotate", SensitivitySecret, ResourceOwnerAuth, 64<<10),
+		DelegatedMutationPolicy(http.MethodDelete, PermUsersManage, "invitation.revoke", SensitivitySecret, ResourceOwnerAuth, 64<<10),
+	), adminInvitationItemHandler(svc))
 }
 
 func writeAudit(r *http.Request, svc *Service, action, resource, actorID string) {

@@ -70,6 +70,10 @@ func buildReplayRouteDiagnostics(
 		AppliedUnknownPolicies:         ctx.VSRDecisionDiagnostics.AppliedUnknownPolicies,
 		DecisionRanking:                replayDecisionRanking(ctx.VSRDecisionDiagnostics.Ranking),
 	}
+	if ctx.preparedDispatchReceipt != nil {
+		receipt := *ctx.preparedDispatchReceipt
+		diagnostics.PreparedDispatch = &receipt
+	}
 	if ctx.VSRSelectedDecision != nil {
 		diagnostics.Annotations = ctx.VSRSelectedDecision.Annotations
 	}

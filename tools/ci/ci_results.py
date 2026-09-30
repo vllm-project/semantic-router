@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Validate framework evidence and write source-bound CI execution receipts."""
+
 from __future__ import annotations
 
 import argparse
@@ -10,13 +11,20 @@ import subprocess
 from pathlib import Path
 
 from ci_plan import digest
+from release_guard_waiver import waiver_evidence_errors
 
 STATUSES = frozenset({"passed", "failed", "skipped"})
 SHA256_LENGTH = 64
 
 
-def collection_errors(evidence: dict, activity: str) -> list[str]:
+def collection_errors(
+    evidence: dict, activity: str, *, waiver: dict | None = None
+) -> list[str]:
     errors = []
+    if waiver:
+        errors.extend(waiver_evidence_errors(evidence, waiver))
+    elif evidence.get("known_issue_waiver") or evidence.get("waived_failure"):
+        errors.append("unplanned known-issue waiver in evidence")
     field = "cases" if "cases" in evidence else "checks"
     if field == "checks" and activity in {"test", "performance"}:
         return [
@@ -46,7 +54,9 @@ def collection_errors(evidence: dict, activity: str) -> list[str]:
         ids.append(item["id"])
         if item.get("status") not in STATUSES:
             errors.append(f"{item['id']}: missing or invalid status")
-        elif item["status"] != "passed":
+        elif item["status"] != "passed" and not (
+            waiver and item["id"] == waiver["case"] and item["status"] == "failed"
+        ):
             errors.append(f"required {item['id']}: {item['status']}")
     if len(ids) != len(set(ids)):
         errors.append(f"{field} contains duplicate execution IDs")
@@ -119,7 +129,12 @@ def make_receipt(
     execution_platform: str,
     environ: dict | None = None,
 ) -> dict:
-    errors = collection_errors(evidence, verification["activity"])
+    waiver = (
+        verification.get("known_issue_waiver")
+        if evidence.get("known_issue_waiver")
+        else None
+    )
+    errors = collection_errors(evidence, verification["activity"], waiver=waiver)
     if source_sha != verification["source_sha"]:
         errors.append("executed source SHA differs from planned source")
     for key in ("runtime", "device", "platform"):
@@ -154,7 +169,7 @@ def make_receipt(
         "artifacts": artifacts,
         "evidence": evidence,
         "evidence_sha256": digest(evidence),
-        "result": "success",
+        "result": "qualified-with-waiver" if waiver else "success",
     }
 
 

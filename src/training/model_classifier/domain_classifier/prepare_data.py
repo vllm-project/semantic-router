@@ -112,6 +112,17 @@ def canonical_groups(rows):
     return retained, len(rows) - len(retained)
 
 
+def training_contract(labels, ids):
+    """The sequence_repair contract. The released Vela Domain uses CLS pooling, and the
+    trainer keeps the base model's mean pooling unless the contract names one."""
+    return {
+        "label2id": labels,
+        "id2label": ids,
+        "problem_type": "single_label_classification",
+        "classifier_pooling": "cls",
+    }
+
+
 def main():
     from pyarrow import parquet
     from sklearn.feature_extraction.text import TfidfVectorizer
@@ -125,11 +136,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     labels, ids = load_contract(args.contract)
-    contract = {
-        "label2id": labels,
-        "id2label": ids,
-        "problem_type": "single_label_classification",
-    }
+    contract = training_contract(labels, ids)
     mapping = {
         subject: label
         for label, subjects in SUBJECT_GROUPS.items()

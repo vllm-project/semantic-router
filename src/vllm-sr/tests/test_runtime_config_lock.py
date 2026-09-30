@@ -9,6 +9,7 @@ import pytest
 import yaml
 from cli.bootstrap import BootstrapResult
 from cli.commands import runtime as runtime_commands
+from cli.commands.runtime_paths import resolve_state_root_dir
 from cli.main import main
 from cli.runtime_config_lock import (
     LOCK_FILENAME,
@@ -162,6 +163,66 @@ def test_serve_fails_fast_when_runtime_config_is_already_mutating(
     assert result.exit_code != 0
     assert "operation is in progress" in result.output
     assert elapsed < 1.0
+
+
+@pytest.mark.parametrize("state_root_override", [False, True])
+def test_serve_lock_matches_deployment_for_parent_paths(
+    monkeypatch, tmp_path: Path, state_root_override: bool
+):
+    config_dir = tmp_path / "samples" / "config"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "version": "v0.3",
+                "listeners": [
+                    {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
+                ],
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    workdir = tmp_path / "src" / "vllm-sr"
+    workdir.mkdir(parents=True)
+    monkeypatch.chdir(workdir)
+    config_path = Path("../../samples/config/config.yaml")
+    if state_root_override:
+        (tmp_path / "samples" / "state").mkdir()
+        monkeypatch.setenv("VLLM_SR_STATE_ROOT_DIR", "../../samples/config/../state")
+    else:
+        monkeypatch.delenv("VLLM_SR_STATE_ROOT_DIR", raising=False)
+
+    reached_deployment = []
+
+    class CheckingBackend:
+        def deploy(self, **kwargs):
+            kwargs["runtime_config_lock"].assert_matches(
+                runtime_config_path=kwargs["runtime_config_file"],
+                state_root_dir=resolve_state_root_dir(
+                    kwargs["source_config_file"], kwargs["env_vars"]
+                ),
+                stack_name=resolve_runtime_stack().stack_name,
+            )
+            reached_deployment.append(True)
+
+    monkeypatch.setattr(
+        runtime_commands,
+        "ensure_bootstrap_workspace",
+        lambda _: BootstrapResult(
+            config_path=config_path,
+            output_dir=tmp_path / ".vllm-sr",
+            setup_mode=False,
+        ),
+    )
+    monkeypatch.setattr(
+        runtime_commands, "_build_backend", lambda *_a, **_kw: CheckingBackend()
+    )
+
+    result = CliRunner().invoke(main, ["serve", "--config", str(config_path)])
+
+    assert result.exit_code == 0, f"{result.output}\n{result.exception}"
+    assert reached_deployment == [True]
 
 
 def test_runtime_config_lock_rejects_symlinked_store_component(tmp_path: Path):

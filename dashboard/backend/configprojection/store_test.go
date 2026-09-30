@@ -3,6 +3,7 @@ package configprojection
 import (
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestRefreshFromCanonicalPersistsActiveProjection(t *testing.T) {
@@ -66,6 +67,44 @@ func TestOpenInitializesSchemaVersion(t *testing.T) {
 	}
 	if version != currentSchemaVersion {
 		t.Fatalf("expected schema version %d, got %d", currentSchemaVersion, version)
+	}
+}
+
+func TestFreshStoreReadsSeededActiveProjection(t *testing.T) {
+	t.Parallel()
+
+	store, err := Open(filepath.Join(t.TempDir(), "projection.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	active, err := store.GetActiveProjection()
+	if err != nil {
+		t.Fatalf("read fresh active projection: %v", err)
+	}
+	if active.Status != StatusFailed || active.LastError != "projection not initialized" {
+		t.Fatalf("unexpected seed status: %+v", active)
+	}
+	if active.UpdatedAt.IsZero() {
+		t.Fatal("fresh active projection has no timestamp")
+	}
+
+	const sqliteTimestamp = "2026-09-23 10:18:22"
+	_, err = store.db.Exec(
+		`UPDATE config_projection_active SET updated_at = ? WHERE id = 1`,
+		sqliteTimestamp,
+	)
+	if err != nil {
+		t.Fatalf("write SQLite timestamp: %v", err)
+	}
+	active, err = store.GetActiveProjection()
+	if err != nil {
+		t.Fatalf("read SQLite timestamp: %v", err)
+	}
+	want := time.Date(2026, 9, 23, 10, 18, 22, 0, time.UTC)
+	if !active.UpdatedAt.Equal(want) {
+		t.Fatalf("timestamp = %s, want %s", active.UpdatedAt, want)
 	}
 }
 
