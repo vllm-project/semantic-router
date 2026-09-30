@@ -11,8 +11,11 @@ files) and the run directory `b2-c54b8d444cac/` (candidates, scans, review keys,
 
 ## Log (newest first)
 
+- 2026-10-01 01:18 UTC+8 — merged into `xunzhuo/decision-2-training` (`24b024a8b`, fast-forward); gist 02 entry
+  added (read back identical). Local review copies removed (packets, answers and keys stay on node A under
+  `review/`). No HR2 container left. **Worker done.**
 - 2026-10-01 01:15 UTC+8 — uploaded (34 files, read-back SHA-256 equal, private before / after); results record
-  and receipts written. Remaining: gist 02, merge into integration.
+  and receipts written.
 - 2026-10-01 01:08 UTC+8 — **blind review FAILED** (13 / 216 = 6.02%, CP95 upper 10.07%; weighted 6.50%; P1 / P2
   fail, P3 pass; F1 had nothing to drop) → published flagged not release-safe, not tuned further; 13 gold-error
   rows dropped. Final v1 (TRAIN 27,725) → the leak guard found 28 upstream rows (26 IPv4, 2 token-like) →
@@ -35,7 +38,7 @@ files) and the run directory `b2-c54b8d444cac/` (candidates, scans, review keys,
 
 ## Next steps (for the coordinator)
 
-1. Gist 02 entry and the merge into `xunzhuo/decision-2-training` (this worker, now).
+1. ~~Gist 02 entry and the merge into `xunzhuo/decision-2-training`.~~ Done.
 2. Coordinator decision: use HR2 for experiments only (not release-safe), or commission a separately
    preregistered HR2-r2 (for example without VitaminC "refutes" rows and `hs3_help`, fresh blind review).
 3. Before any C1-scored model trained on HR2: the custodian C1 content recheck (HR2 is inside the rescan roots).
