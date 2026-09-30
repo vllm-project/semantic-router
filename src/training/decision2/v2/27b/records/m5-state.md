@@ -141,6 +141,7 @@ the L128 training runs from `e76e56d4c`).
 
 ## Poll log (newest first)
 
+- 16:50Z: L128-s1 2,652 / 3,561 (9.9 s/upd; ETA ≈ 19:18Z), s2 2,687 / 3,561 (ETA ≈ 19:13Z); s2 SELECT700 at 2676 .915 (new BEST, checkpoint written). All processes alive; no incident
 - 16:25Z: L128-s1 2,490 / 3,561 (9.9 s/upd; ETA ≈ 19:18Z), s2 2,533 / 3,561 (ETA ≈ 19:11Z). SELECT700 family macro at 1338 / 1784 / 2230: s1 .909 / .913 / .925, s2 .906 / .912 / .914 (each a new BEST). Chain L128, node A watchers and drivers alive. rrsync on node A allows --mkpath (the chain's SKIP / mlx push)
 - 16:25Z: L128-s1 2,490 / 3,561 (9.9 s/upd; ETA ≈ 19:18Z), s2 2,533 / 3,561 (ETA ≈ 19:11Z). SELECT700 family macro at 1338 / 1784 / 2230: s1 .909 / .913 / .925, s2 .906 / .912 / .914 (each a new BEST). Chain L128, node A watchers and drivers alive. rrsync on node A allows --mkpath (the chain's SKIP / mlx push)
 - 15:55Z: continuation worker 3 (Cursor restart stopped worker 2 ≈ 12:40Z). L128-s1 2,303 / 3,561 (9.7 s/upd; ETA ≈ 19:15Z), s2 2,345 / 3,561 (9.2 s/upd; ETA ≈ 19:00Z). Chain L128, node A relay and mlx watchers and both drivers alive. FF20H / SX gates confirmed (DEVGATES-20260930T092543Z: no FF finalist). Receipts 50.05 GPU-h; projection ≈ 70.7 with L128's formal. Integration merged at 8793d333b
