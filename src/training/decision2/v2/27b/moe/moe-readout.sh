@@ -8,10 +8,17 @@
 #   NAME      output /data/dev2/runs/27b-moe/readouts/NAME (one collection per name)
 #   CKPT      a LoRA checkpoint directory (decision_config.json + adapter/ + head)
 #   BASE_DIR  the checkpoint's pinned source (its fingerprint is verified by the loader)
+# SMOKE=1: the runner's 8-item smoke per panel into readouts/NAME-smoke, no scoring (a path check, never a readout).
 set -euo pipefail
 NODE=$1 GPU=$2 NAME=$3 CKPT=$4 BASE=$5 MIRROR=$6 REF=${7:-}
 S=/data/dev2/src/$MIRROR/src/training/decision2
+SMOKE=${SMOKE:-0}
 OUT=/data/dev2/runs/27b-moe/readouts/$NAME
+SMOKE_ARGS=()
+if [ "$SMOKE" = 1 ]; then
+  OUT=$OUT-smoke
+  SMOKE_ARGS=(--max-items 8)
+fi
 LIMIT=32768
 FROZEN=/data/dev2/runs/27b/m3-warm-32768/triton-cache
 CACHE_SHA=583241fbc3bc89e22be51a49722996eab742162356100400d64fb4208cb20daf
@@ -49,7 +56,7 @@ status=0
   --mount "$BASE" --image "$IMAGE" --env TRITON_CACHE_AUTOTUNING=1 --env "TRITON_CACHE_DIR=$OUT/triton-cache" \
   --env HIP_FORCE_DEV_KERNARG=1 --purpose "27b-moe $NAME T=1 development readout" -- \
   --adapter-spec "$S/v2/27b/moe/adapters/moe-lora.json" --model-path "$CKPT" --revision "$REVISION" \
-  --extra "source=$BASE" --extra "max_length=$LIMIT" --panels "$PANELS" || status=$?
+  --extra "source=$BASE" --extra "max_length=$LIMIT" --panels "$PANELS" "${SMOKE_ARGS[@]}" || status=$?
 python3 -m v2.27b.triton_cache finish --dest "$OUT/triton-cache" > /dev/null || true
 python3 - "$LEASE" "$OUT" <<'EOF'
 import importlib, json, pathlib, sys
@@ -59,6 +66,10 @@ lease.update({"track": "27b-moe", "status": "reserved-idle", "container": None, 
 owner.write_text(json.dumps(lease, sort_keys=True) + "\n", encoding="utf-8")
 EOF
 [ "$status" = 0 ] || exit "$status"
+if [ "$SMOKE" = 1 ]; then
+  echo "moe readout smoke $NAME complete: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  exit 0
+fi
 ref=()
 [ -z "$REF" ] || ref=(--htdev2-reference "$REF")
 python3 -m v2.eval.dev_readout --run-dir "$OUT" --label "$NAME" --output "$OUT/READOUT.json" "${ref[@]}"
