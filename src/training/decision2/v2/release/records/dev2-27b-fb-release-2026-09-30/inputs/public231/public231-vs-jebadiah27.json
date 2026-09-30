@@ -1,0 +1,153 @@
+{
+  "ci95": {
+    "high": 32.0,
+    "low": 9.0
+  },
+  "delta": 21,
+  "discordant": {
+    "left_only": 30,
+    "right_only": 9
+  },
+  "families": {
+    "adequacy": {
+      "items": 12,
+      "left": 11,
+      "right": 10
+    },
+    "adversarial": {
+      "items": 6,
+      "left": 6,
+      "right": 6
+    },
+    "ambiguous": {
+      "items": 7,
+      "left": 6,
+      "right": 6
+    },
+    "extraction": {
+      "items": 24,
+      "left": 24,
+      "right": 24
+    },
+    "fact": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "intent": {
+      "items": 24,
+      "left": 24,
+      "right": 24
+    },
+    "judge_hard": {
+      "items": 17,
+      "left": 12,
+      "right": 14
+    },
+    "long_policy": {
+      "items": 19,
+      "left": 9,
+      "right": 0
+    },
+    "multi_hop": {
+      "items": 18,
+      "left": 15,
+      "right": 1
+    },
+    "ordinal": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "policy": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "probability": {
+      "items": 10,
+      "left": 8,
+      "right": 9
+    },
+    "routing": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "routing_hard": {
+      "items": 5,
+      "left": 5,
+      "right": 5
+    },
+    "temporal_numeric": {
+      "items": 15,
+      "left": 4,
+      "right": 4
+    },
+    "tool_selection": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "tradeoff": {
+      "items": 6,
+      "left": 5,
+      "right": 5
+    },
+    "trap": {
+      "items": 8,
+      "left": 8,
+      "right": 8
+    }
+  },
+  "items": 231,
+  "label": "post-key same-panel",
+  "left_correct": 197,
+  "mcnemar_exact_p": 0.0010650196345523,
+  "names": {
+    "left": "DEV2.0-27B (F-b)",
+    "right": "Jebadiah-27B"
+  },
+  "right_correct": 176,
+  "rule": "REGRESSION if left − right < 0 items and the exact two-sided McNemar p < 0.05",
+  "runs": {
+    "left": "/data/dev2/runs/27b/m4b/F-b/formal",
+    "right": "/data/dev2/runs/27b/m3-peer-jebadiah-nodeB-kernel"
+  },
+  "schema": "dev2-gate-public231/1",
+  "tiers": {
+    "easy": {
+      "items": 48,
+      "left": 48,
+      "right": 48
+    },
+    "hard": {
+      "items": 111,
+      "left": 78,
+      "right": 58
+    },
+    "standard": {
+      "items": 72,
+      "left": 71,
+      "right": 70
+    }
+  },
+  "types": {
+    "choice": {
+      "items": 139,
+      "left": 121,
+      "right": 102
+    },
+    "noul": {
+      "items": 74,
+      "left": 62,
+      "right": 59
+    },
+    "score": {
+      "items": 18,
+      "left": 14,
+      "right": 15
+    }
+  },
+  "verdict": "OK"
+}

@@ -1,0 +1,33 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "draft",
+  "decision": "release",
+  "model_name": "DEV2.0-27B",
+  "repo_id": "llm-semantic-router/DEV2.0-27B",
+  "identity": {
+    "model_sha256": "48ab177b2794b991a48c94a99ff53aa0db70505104e86c4a43ed031a6ba67784"
+  },
+  "report_sha256": "6895fee43e7ae1bca09ce72ad68a08ca6da2424ba5bd5ad6f6dd1ea440842d18",
+  "paired_sha256": "6d56dd95ca1afe245515359df8d5d196ce4cd7753eb27144abcb33b978ff383b",
+  "gate_profile": "successor",
+  "current_revision": "c0dba600087f582a1033830a2276d22e96e6324c",
+  "evidence_sha256": {
+    "current_decision": "fd1b5ef0643532407b27a4f7f8d6748e8f8f9fa27b627f5b285b8ddb41d3e008",
+    "current_gate": "e6965d75e1f7cac175522f19fbabedd333ad2e8136f8e69a0eb9fb7b200b4a3f",
+    "exposure": "dbdc9393242820d8907a4c2aaf307a8d66fa667de7b6e69142d08907a1642e27",
+    "mlx_paired": "49901c1b15fa166161174bb8fb4031b3181a61aa96e9b84bdf7cfddb15863d68",
+    "paired": "6194dc230a3b4f57c00faec9c867efecf9022934b3a3039e264526388a9189d1",
+    "public231": "c8a64a231341d7b8c98b14fd1366400c25d2580501194f5766ae123d3c215040",
+    "tier_paired": "6d56dd95ca1afe245515359df8d5d196ce4cd7753eb27144abcb33b978ff383b",
+    "types": "3e1d3f100c88e97b7dffc8ae9cebc6527521126cdf23423244b02d4164989d3e"
+  },
+  "prepared_by": "Decision 2.0 release engineering, ~27B release worker (worktree vllm-sr-dev2-release-27b)",
+  "rationale": "F-b is the successor of DEV2.0-27B (coordinator 06:10): post-key v3 71.684, +4.47 [+0.19, +8.13] vs the current revision's scored run; human transfer −0.007 [−0.073, +0.050]; no type collapsed; card-eligible mlx-diag −0.012 [−0.029, +0.004]; v3 ≥ 90% of AutoJev-27B and H vs AutoJev-27B [−0.069, +0.046]; no overlap exposure; public 231 197 vs 198 (OK); item 8 (C1 post-key) pending. Released as qwen-full with the BF16 storage copy (exact parity) losslessly compressed as bf16z, and the CAL698 temperatures adopted under the 23:15 rule, refitted on the copy with identical logits.",
+  "calibration": "CAL698 adopted (23:15 rule: typed-DEV Brier .035 -> .024, ECE .091 -> .023; CSS-pilot Brier .624 -> .591, ECE .112 -> .081); temperatures Choice 0.522, Noul 0.605, Score 0.05, refitted on the BF16 copy (identity 48ab177b; logits identical to the scored fit)",
+  "supersedes": {
+    "final_sha256": "fd1b5ef0643532407b27a4f7f8d6748e8f8f9fa27b627f5b285b8ddb41d3e008",
+    "released_as": "llm-semantic-router/DEV2.0-27B@c0dba600087f582a1033830a2276d22e96e6324c",
+    "released_gate_sha256": "e6965d75e1f7cac175522f19fbabedd333ad2e8136f8e69a0eb9fb7b200b4a3f"
+  },
+  "revision_binding": "This decision names no revision; receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified."
+}
