@@ -65,3 +65,14 @@ the early stop at an arm's first full checkpoint. Node wrappers in `lux9b/m6/`
 follow M5's (`aj_job.sh` / `aj_wave.sh` run the qualified AutoJev collector on
 GPU6-7; `early.sh`, `hs1.sh`; `formal.sh` adds the public-231 gate, successor
 item 7).
+
+Milestone 7: `lux9b/m7_data.py` (CPU; `topup` / `mlxdev`) builds the two continuation TRAIN
+files on the K recipe (P = x60 replay + the PN1-r2 block, gold only on the block; C = x60 replay
+at P's native tokens, containing P's replay) and MLX-DEV-9B (the decoder's MLX-DEV panel minus
+every group that shares a group, id, input or segment with x60 or PN1-r2). `lux9b/m7_rules.py`
+(`pn1` / `early` / `alpha` / `finalists`) scores the PN1 dev slice (hop and clean gold-no
+yes-rates), applies the member-1 early stop and M6's alpha rule with the CSS-pilot H3 condition
+replaced by the HT-DEV v2, PN1 dev and MLX-DEV-9B screens. Node wrappers in `lux9b/m7/`
+follow M6's; `cont.sh` continues a K seed with `v2.dec.train_dec --init decision2`, `line.sh`
+builds a soup and its interpolations and reads them, `screens.sh` scores the screens;
+`dryrun_test.sh` exercises them locally.
