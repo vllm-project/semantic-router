@@ -14,7 +14,7 @@ import requests
 
 from cli.routing_preview import build_preview_request, case_request_fields
 
-from . import nano
+from . import nano, retry
 from .activity import CallActivity
 from .adapters import get_adapter
 from .contracts import digest, plan, planned_cells
@@ -64,6 +64,30 @@ class Context:
         return self._cancel.is_set() or time.monotonic() > self.deadline
 
     def call(self, messages, role="subject", target=None, extra_body=None):
+        if role == "subject" and not any(
+            call["role"] == "subject" for call in self.calls
+        ):
+            extra_body = {**case_request_fields(self.case), **(extra_body or {})}
+        attempt = 1
+        while True:
+            try:
+                return self._attempt(messages, role, target, extra_body, attempt)
+            except CallFailure as exc:
+                wait = retry.delay(self.limits, attempt, exc)
+                # Priced runs retry only when the failed attempt's cost is known.
+                if (
+                    wait is None
+                    or (
+                        self.manifest["cost_policy"] == "require_priced"
+                        and exc.partial.get("cost_usd") is None
+                    )
+                    or time.monotonic() + wait >= self.deadline
+                    or self._cancel.wait(wait)
+                ):
+                    raise
+                attempt += 1
+
+    def _attempt(self, messages, role, target, extra_body, attempt):
         if self.cancelled():
             raise CallFailure("Run cancelled or wall-time budget exhausted")
         if self.quality_failure:
@@ -80,10 +104,6 @@ class Context:
                 raise ValueError("Unknown auxiliary target reference")
         if role not in {"subject", "judge", "simulator"}:
             raise ValueError("Unknown call role")
-        if role == "subject" and not any(
-            call["role"] == "subject" for call in self.calls
-        ):
-            extra_body = {**case_request_fields(self.case), **(extra_body or {})}
         request_body = effective_request(
             selected, messages, self.manifest["sampling"], extra_body
         )
@@ -154,6 +174,7 @@ class Context:
             role,
             {
                 "model": selected["model"],
+                **({"attempt": attempt} if attempt > 1 else {}),
                 "activity": activity.snapshot(),
                 "request": {
                     "messages": messages,

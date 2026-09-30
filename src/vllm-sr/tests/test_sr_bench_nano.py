@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 from cli.commands.benchmark_nano import nano_group
-from cli.sr_bench import nano
+from cli.sr_bench import nano, retry
 from cli.sr_bench.contracts import digest, plan
 from cli.sr_bench.engine import Engine
 from cli.sr_bench.harness_worker import _last_fence_code
@@ -138,6 +138,23 @@ class Target(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers["content-length"])))
         server = self.server
         server.requests.append({"body": body, "headers": dict(self.headers)})
+        faults = server.faults.get(body["model"], [])
+        fault = faults.pop(0) if faults else None
+        if isinstance(fault, int):
+            self.send_response(fault)
+            self.send_header("Retry-After", "0")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if fault == "drop":
+            return
+        if fault == "truncate":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.end_headers()
+            chunk = {"model": body["model"], "choices": [{"delta": {"content": "A"}}]}
+            self.wfile.write(("data: " + json.dumps(chunk) + "\n\n").encode())
+            return
         prompt = body["messages"][-1]["content"]
         if "slow" in prompt:
             time.sleep(server.slow_s)
@@ -190,7 +207,7 @@ class Target(BaseHTTPRequestHandler):
 @pytest.fixture
 def target():
     server = ThreadingHTTPServer(("127.0.0.1", 0), Target)
-    server.requests, server.answers = [], {}
+    server.requests, server.answers, server.faults = [], {}, {}
     server.slow_s, server.completion_tokens = 0, 3
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -387,6 +404,97 @@ def test_explicit_max_tokens_non_streaming_and_round_cap_flag(tmp_path, target, 
     assert row["max_tokens_sent"] is True and row["max_tokens"] == 120000
     assert row["stream"] is False
     assert row["suspected_output_cap_cases"] == ["mmlu-pro/1"]
+
+
+class _Failure(Exception):
+    def __init__(self, transient, retry_after=None):
+        self.transient, self.retry_after = transient, retry_after
+
+
+def test_retry_delay_backs_off_with_jitter_and_honours_retry_after():
+    limits = {"max_call_attempts": 4, "retry_backoff_s": 2}
+    assert retry.delay(limits, 1, _Failure(True), jitter=lambda: 0) == 1
+    assert retry.delay(limits, 2, _Failure(True), jitter=lambda: 1) == 6
+    assert retry.delay(limits, 3, _Failure(True, 30), jitter=lambda: 0) == 30
+    assert retry.delay(limits, 1, _Failure(True, 10**6)) == retry.MAX_DELAY_S
+    assert retry.delay(limits, 4, _Failure(True)) is None
+    assert retry.delay(limits, 1, _Failure(False)) is None
+    assert retry.delay({}, 1, _Failure(True)) is None
+    assert retry.retry_after_s("7") == 7
+    assert retry.retry_after_s("Wed, 21 Oct 2015 07:28:00 GMT") == 0
+    assert retry.retry_after_s("soon") is None
+    assert [retry.transient_status(s) for s in (400, 404, 429, 500, 502)] == [
+        False,
+        False,
+        True,
+        True,
+        True,
+    ]
+    for bad in ({"max_call_attempts": 0}, {"max_call_attempts": 9}, {"retry_backoff_s": 0}):
+        with pytest.raises(ValueError):
+            retry.validate(bad)
+
+
+def _fast_retries(target, cases, **limits):
+    return _manifest(target, cases, limits={"retry_backoff_s": 0.01, **limits})
+
+
+def test_transient_target_and_grader_failures_are_retried_and_reported(
+    tmp_path, target, frozen
+):
+    target.faults = {"m": [502, "drop", "truncate"], "grader-model": [429]}
+    grader_prompt = nano.simpleqa_messages(frozen[3], "A")[0]["content"]
+    target.answers[grader_prompt] = "A"
+    document = _fast_retries(target, [frozen[0], frozen[3]], concurrency=1)
+    store = Store(tmp_path)
+    run = _wait(store, Engine(store).start(document)["id"])
+    assert run["status"] == "completed"
+    assert {r["status"] for r in store.results(run["id"])} == {"completed"}
+    subject = [r for r in target.requests if r["body"]["model"] == "m"]
+    assert len(subject) == 5
+    first = [r for r in subject if r["body"]["messages"][-1]["content"] == "Return A"]
+    assert len(first) == 4 and all(r["body"] == first[0]["body"] for r in first)
+    row = make_report(store, run["id"])["nano"]["targets"][0]
+    assert row["retries"] == {"total": 4, "subject": 3, "grader": 1}
+    assert row["retried_cells"] == {"mmlu-pro/1": 3, "simpleqa-verified/4": 1}
+
+
+def test_non_transient_and_exhausted_failures_fail_closed(tmp_path, target, frozen):
+    target.faults = {"m": [400]}
+    store = Store(tmp_path / "a")
+    run = _wait(store, Engine(store).start(_fast_retries(target, frozen[:1]))["id"])
+    assert run["status"] == "failed" and len(target.requests) == 1
+    target.requests.clear()
+    target.faults = {"m": [503, 503, 503, 503]}
+    store = Store(tmp_path / "b")
+    run = _wait(store, Engine(store).start(_fast_retries(target, frozen[:1]))["id"])
+    assert run["status"] == "failed" and len(target.requests) == 4
+
+
+def test_other_scopes_keep_single_attempt_unless_opted_in(target):
+    document = {
+        "version": "sr-bench-1.0",
+        "cost_policy": "capability_only",
+        "targets": [
+            {
+                "id": "t",
+                "kind": "single",
+                "model": "m",
+                "base_url": f"http://127.0.0.1:{target.server_port}/v1",
+            }
+        ],
+        "cases": [
+            {
+                "id": "q",
+                "benchmark": "mmlu-pro",
+                "messages": [{"role": "user", "content": "x"}],
+                "answer": "A",
+            }
+        ],
+    }
+    assert set(retry.LIMIT_KEYS).isdisjoint(plan(document)["limits"])
+    document["limits"] = {"max_call_attempts": 3}
+    assert plan(document)["limits"]["max_call_attempts"] == 3
 
 
 def test_header_env_rejects_reserved_names_and_raw_values(target, frozen):

@@ -12,8 +12,9 @@ from contextlib import suppress
 from http import HTTPStatus
 
 import requests
+import urllib3
 
-from . import native_output
+from . import native_output, retry
 from .activity import CHECKPOINT_SECONDS
 
 MAX_USAGE_RECEIPT_BYTES = 12288
@@ -22,9 +23,36 @@ MAX_RECEIPT_CALLS = 256
 
 # Shared internal transport/harness contract; preserving its exception identity.
 class CallFailure(RuntimeError):  # noqa: N818
-    def __init__(self, message, partial=None):
+    def __init__(self, message, partial=None, *, transient=False, retry_after=None):
         super().__init__(message)
         self.partial = partial or {}
+        self.transient = transient
+        self.retry_after = retry_after
+
+
+READ_CHUNK_BYTES = 65536
+
+
+def read_chunks(response, size=READ_CHUNK_BYTES):
+    """Yield bytes as they arrive, without waiting to fill ``size``.
+
+    urllib3 errors are mapped as in ``requests.Response.iter_content``.
+    """
+    read1 = getattr(response.raw, "read1", None)
+    if read1 is None:
+        yield from response.iter_content(chunk_size=1)
+        return
+    try:
+        while chunk := read1(size, decode_content=True):
+            yield chunk
+    except urllib3.exceptions.ProtocolError as exc:
+        raise requests.exceptions.ChunkedEncodingError(exc) from exc
+    except urllib3.exceptions.DecodeError as exc:
+        raise requests.exceptions.ContentDecodingError(exc) from exc
+    except urllib3.exceptions.ReadTimeoutError as exc:
+        raise requests.exceptions.ReadTimeout(exc) from exc
+    except urllib3.exceptions.SSLError as exc:
+        raise requests.exceptions.SSLError(exc) from exc
 
 
 def final_content(content):
@@ -305,7 +333,11 @@ def chat(
             ),
         )
         if response.status_code >= HTTPStatus.BAD_REQUEST:
-            raise CallFailure(f"Target HTTP {response.status_code}")
+            raise CallFailure(
+                f"Target HTTP {response.status_code}",
+                transient=retry.transient_status(response.status_code),
+                retry_after=retry.retry_after_s(response.headers.get("retry-after")),
+            )
         streaming = body["stream"]
         content_type = response.headers.get("content-type", "")
         if streaming and "text/event-stream" not in content_type:
@@ -398,7 +430,8 @@ def chat(
             if native_evidence is not None:
                 native_output.validate_usage(native_evidence, usage)
 
-        for chunk in response.iter_content(chunk_size=1):
+        line_cap = limits["max_output_chars"] * 2
+        for chunk in read_chunks(response):
             if guard_error:
                 raise CallFailure(guard_error[0])
             if cancelled():
@@ -420,20 +453,26 @@ def chat(
             buffer.extend(chunk)
             if not streaming:
                 continue
-            if len(buffer) > limits["max_output_chars"] * 2:
-                raise CallFailure("SSE line cap exceeded")
-            if chunk == b"\n":
-                line = bytes(buffer).decode("utf-8").rstrip("\r\n")
-                buffer.clear()
+            start = 0
+            while (end := buffer.find(b"\n", start)) >= 0:
+                if end - start >= line_cap:
+                    raise CallFailure("SSE line cap exceeded")
+                line = bytes(buffer[start:end]).decode("utf-8").rstrip("\r")
+                start = end + 1
                 if line:
                     event_lines.append(line)
-                else:
-                    consume(event_lines)
-                    event_lines = []
-                    if stream_file is not None:
-                        stream_file.flush()
-                    if done:
-                        break
+                    continue
+                consume(event_lines)
+                event_lines = []
+                if stream_file is not None:
+                    stream_file.flush()
+                if done or guard_error:
+                    break
+            del buffer[:start]
+            if done:
+                break
+            if len(buffer) > line_cap:
+                raise CallFailure("SSE line cap exceeded")
         if event_lines:
             consume(event_lines)
         if not streaming and not guard_error:
@@ -442,7 +481,10 @@ def chat(
         if guard_error:
             raise CallFailure(guard_error[0])
         if not done or finish not in {"stop", "tool_calls", "function_call", "length"}:
-            raise CallFailure(f"Incomplete final response (finish_reason={finish})")
+            raise CallFailure(
+                f"Incomplete final response (finish_reason={finish})",
+                transient=finish is None,
+            )
         result = partial()
         if output_policy == "native":
             if not provider_model_observed:
@@ -487,7 +529,18 @@ def chat(
         raise
     except (requests.RequestException, ValueError, UnicodeError) as exc:
         raise CallFailure(
-            guard_error[0] if guard_error else type(exc).__name__, partial()
+            guard_error[0] if guard_error else type(exc).__name__,
+            partial(),
+            transient=not guard_error
+            and isinstance(
+                exc,
+                (
+                    requests.ConnectionError,
+                    requests.exceptions.ChunkedEncodingError,
+                    json.JSONDecodeError,
+                ),
+            )
+            and not isinstance(exc, requests.ReadTimeout),
         ) from exc
     finally:
         stop.set()

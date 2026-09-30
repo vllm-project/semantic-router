@@ -317,7 +317,7 @@ def test_native_http_activity_phases_final_flush_and_cancellation(api, stream, c
     call = calls[0]
     raw = next((api.store.root / "runs" / identity).rglob("*.sse")).read_bytes()
     assert call["activity"]["received_bytes"] == len(raw)
-    assert len(raw) > active["activity"]["received_bytes"]
+    assert len(raw) >= active["activity"]["received_bytes"]
     assert len(stream.requests) == 2
     render_body, generation_body = [body for _, body in stream.requests]
     assert "max_tokens" not in render_body
@@ -335,6 +335,7 @@ def test_native_http_activity_phases_final_flush_and_cancellation(api, stream, c
         assert call["status"] == "completed"
         assert api.store.get(identity)["status"] == "completed"
         assert raw == stream.expected_stream
+        assert len(raw) > active["activity"]["received_bytes"]
         assert call["final"] == "A"
         assert call["usage"] == {
             "input_tokens": 7,

@@ -79,8 +79,16 @@ its split.
 - **Per-request wall-clock timeout.** Each model request has 1,800 s (30 min),
   with `total_timeout_s` and `idle_timeout_s` both 1,800. A case that exceeds it
   gets the result status `timeout`, counts as incorrect in the full denominator,
-  and the run continues. Reports show `timeouts` separately from `failed`. Other
-  transport or grader failures still stop the run, as in sr-bench 1.0.
+  and the run continues. Reports show `timeouts` separately from `failed`.
+  Timeouts are never retried.
+- **Retries for transient failures.** Target and grader calls that fail with
+  HTTP 429 or 5xx, a refused or reset connection, or a stream that ends before
+  its final chunk are retried, up to 4 attempts per call, with exponential
+  backoff from 5 s plus jitter. A `Retry-After` header is honoured, up to 300 s.
+  Every attempt is kept in the call journal. The report's `nano.targets[]` lists
+  `retries` (subject and grader) and `retried_cells`. Other failures, including
+  other 4xx responses and grader replies without an A/B/C letter, still stop the
+  run, as in sr-bench 1.0.
 - **Streaming.** Targets stream by default. For providers that truncate streamed
   responses, set `stream: false` on a single-model target. Nano never uses
   logprobs.

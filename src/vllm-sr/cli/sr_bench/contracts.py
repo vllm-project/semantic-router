@@ -14,7 +14,7 @@ import yaml
 
 from cli.routing_preview import case_request_fields
 
-from . import PROFILE_SPLITS, VERSION, nano
+from . import PROFILE_SPLITS, VERSION, nano, retry
 from .adapters import get_adapter, list_adapters
 from .canonical import (
     canonical,
@@ -546,9 +546,10 @@ def plan(manifest, *, policy=None):
                 )
     limits = {**DEFAULT_LIMITS, **m.get("limits", {})}
     configure_output_policy(m, targets + list(auxiliary.values()), limits)
-    unknown = set(limits) - set(DEFAULT_LIMITS)
+    unknown = set(limits) - set(DEFAULT_LIMITS) - set(retry.LIMIT_KEYS)
     if unknown:
         raise ValueError(f"unknown limits: {sorted(unknown)}")
+    retry.validate(limits)
     for k, v in limits.items():
         _finite_positive(v, k)
     for k in (

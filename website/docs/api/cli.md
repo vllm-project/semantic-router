@@ -446,6 +446,7 @@ Write and validate a nano run manifest for your targets and grader.
 | `--output PATH` | [required] |
 | `--name TEXT` | Default: sr-bench-nano. |
 | `--concurrency INTEGER RANGE` | [default: 4; 1&lt;=x&lt;=32] |
+| `--sample INTEGER RANGE` | Smoke test: run only the first N frozen tasks per benchmark (no nano score).  [x&gt;=1] |
 | `--grader-base-url TEXT` | Environment: SR_BENCH_NANO_GRADER_BASE_URL. |
 | `--grader-model TEXT` | Environment: SR_BENCH_NANO_GRADER_MODEL. |
 | `--grader-api-key-env TEXT` | Environment: SR_BENCH_NANO_GRADER_API_KEY_ENV. |

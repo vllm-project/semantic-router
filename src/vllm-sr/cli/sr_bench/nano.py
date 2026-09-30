@@ -44,6 +44,8 @@ LIMITS = {
     "max_run_seconds": 604800,
     "max_output_tokens": 1048576,
     "max_output_chars": 8388608,
+    "max_call_attempts": 4,
+    "retry_backoff_s": 5,
 }
 ROUND_CAPS = frozenset(2**k for k in range(8, 21)) | {1000, 2000, 4000, 8000, 16000}
 TIMEOUT_ERRORS = (
@@ -372,10 +374,24 @@ def report_section(manifest, results, calls):
                 or (c.get("usage") or {}).get("output_tokens") in ROUND_CAPS
             }
         )
+        retried = [
+            c
+            for c in calls
+            if c["target_id"] == target["id"] and c.get("attempt", 1) > 1
+        ]
+        retried_cells = {}
+        for c in retried:
+            retried_cells[c["case_id"]] = retried_cells.get(c["case_id"], 0) + 1
         targets.append(
             {
                 "id": target["id"],
                 "model": target["model"],
+                "retries": {
+                    "total": len(retried),
+                    "subject": sum(c["role"] == "subject" for c in retried),
+                    "grader": sum(c["role"] != "subject" for c in retried),
+                },
+                "retried_cells": dict(sorted(retried_cells.items())),
                 "stream": target.get("stream", True),
                 "max_tokens_sent": max_tokens is not None,
                 "max_tokens": max_tokens,
@@ -394,6 +410,11 @@ def report_section(manifest, results, calls):
         "generation_policy": "exactly one generation per task per target",
         "output_policy": "uncapped; max_tokens is sent only when a target sets it",
         "per_request_timeout_s": manifest["limits"]["total_timeout_s"],
+        "retry_policy": {
+            "max_call_attempts": manifest["limits"].get("max_call_attempts", 1),
+            "retry_backoff_s": manifest["limits"].get("retry_backoff_s"),
+            "retried_failures": "HTTP 429/5xx, connection errors, truncated streams",
+        },
         "graders": graders,
         "targets": targets,
     }

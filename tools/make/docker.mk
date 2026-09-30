@@ -556,6 +556,7 @@ vllm-sr-test: vllm-sr-install-cli
 		src/vllm-sr/tests/test_sr_bench_large_datasets.py \
 		src/vllm-sr/tests/test_sr_bench_large_plans.py \
 		src/vllm-sr/tests/test_sr_bench_nano.py \
+		src/vllm-sr/tests/test_sr_bench_stream_reader.py \
 		src/vllm-sr/tests/test_sr_bench_experiments.py \
 		src/vllm-sr/tests/test_sr_bench_experiment_deletion.py \
 		src/vllm-sr/tests/test_sr_bench_experiment_admin.py \
