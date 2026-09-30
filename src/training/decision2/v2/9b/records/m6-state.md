@@ -1,6 +1,6 @@
 # 9B M6 state (resume file)
 
-Updated: 2026-09-30 06:05 UTC+8 (M6 worker; **KA stopped by its early rule; KH-s4 on GPU6, K-s5 on GPU7**)
+Updated: 2026-09-30 08:40 UTC+8 (continuation worker; **KA and KH stopped by their early rules; K5 / K2 lines on GPU7**)
 Branch: `xunzhuo/decision-2-training-9b` (merge-only into `xunzhuo/decision-2-training`)
 Prereg: `records/lux9b-m6-prereg-2026-09-30.md` (`f41402e68`) + amendment 1 (`7380a3cbf`). Code / wrappers mirror
 `7380a3cbf` on node A (created, verified); runtime mirror `3277dec9d` (verified, reused).
@@ -40,13 +40,28 @@ Prereg: `records/lux9b-m6-prereg-2026-09-30.md` (`f41402e68`) + amendment 1 (`73
   ΔP −0.36 < +0.5. H3 was higher (+.008; discourse +.010, stance +.013). Typed Score +35, with more level-1 answers
   (76 vs 38; gold 107), but Noul `rule_precedence` fell 74 items to Lux's level. That is the same trade as M5's dose.
   No KA second seed or line.
-- Wave 2 running: KH-s4 (GPU6, from 21:39Z) and K-s5 (GPU7, from 21:38Z); ETA ~00:20Z. Budget used 6.32 GPU-h at 21:39Z.
+- Wave 2 done: KH-s4 21:39–00:18Z (preflights PASS; BEST 1,607), K-s5 21:38–00:11Z (BEST 1,621).
+- **Early rule KH: STOP** (`rules/early-KH-s4.json` `488d2b17…`; readout `early-KH-s4/readout.json` `eee0967a…`):
+
+  | ⅓ point (first seed) | T | H3 | H | P | C / N / S | rule_precedence |
+  | --- | ---: | ---: | ---: | ---: | --- | ---: |
+  | KH-s4 (HS1 F3 + ½ F1) | .9250 | .5432 | .5765 | 73.03 | 800 / 327 / 353 | 327 |
+  | K-s4 (control) | .9231 | .5654 | .5846 | 73.46 | 800 / 346 / 331 | 346 |
+
+  ΔP −0.43 < +0.5 and rule_precedence 327 < 346. Score +22, Noul −19, H3 −.022. No KH second seed or line.
+  Chain `m6-g6` ended ("chain m6-gpu6 done"); GPU6 idle from 00:26Z.
+- `m6-g7`: K5 soup 00:11–00:22Z; K5 line ⅓ / ½ / ⅔, then K2 soup and line (⅓, ½); then it ends (KH stopped).
+  GPU-h 11.62 at 00:24Z.
+- Continuation commit `e2daf2afc` (mirrored, tree `ddc33f99…`): `chains/m6-htdev2.sh` (HT-DEV v2 diagnostic, runtime
+  `bc0a12d70` = the 9B reference's collection code) and `chains/m6-post.sh` (m6-formal.sh, then m6-htdev2.sh).
 
 ## Next
 
-1. Early rules (`m6/rules/early-KA-s4.json`, later `early-KH-s4.json`), written by the chains.
-2. After the lines: `m6/rules.sh` (commit `e7546eb2f`, mirror when needed) → finalists → locks → formal (`formal.sh`
-   runner `3277dec9d`), hs1-dev diagnostics, `ship_cal.sh`, successor items 1–7, item 8 hand-off.
+1. When `m6-g7` ends: `m6/rules.sh e2daf2afc rules-lines` (K5 is the only line that can give a finalist; K2 report only).
+2. A K5 pick → lock record (commit + push) → `m6-post.sh e2daf2afc 6 NAME` via upload/launch (formal, hs1-dev,
+   `ship_cal`, T = 1 derivation, HT-DEV v2) → successor items 1–7 vs the released T = 1 run → item 8 hand-off only
+   for a passer. No pick → no formal runs; results record.
+3. HS1 disclosure (02:25) is moot unless a KH artifact is a finalist (KH stopped).
 
 ## Launch pattern (chain rule)
 
