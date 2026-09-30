@@ -302,9 +302,9 @@ TRAVEL = Domain(
         Condition(
             "nights",
             "min",
-            "the trip lasts at least {t} consecutive nights",
+            "the trip lasts at least {t} in a row",
             "Extended Trip",
-            "a business trip of at least {t} consecutive nights away from the traveller's home office",
+            "a business trip of at least {t} in a row away from the traveller's home office",
             "the trip is an Extended Trip",
             _t("The trip lasted {v}.", "{name} was away for {v}."),
             "Nights away",

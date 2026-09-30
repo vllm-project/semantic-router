@@ -89,6 +89,7 @@ PANEL_ROLES = {
     "score5-dev": "development (5-level Score check)",
     "score5t-dev": "development (5-level typed Score check)",
     "hs1-dev": "development (HS1 hard-skill families)",
+    "ht-dev2": "development (human transfer, held-out CSS15 sources)",
 }
 
 
@@ -232,12 +233,14 @@ def load_panel(
                     )
                 )
         return out
-    prompts = {
-        row["id"]: row for row in read_jsonl(registry.path(root, panel, "prompts"))
-    }
-    out = []
-    if panel in ("css15", "css-pilot"):
-        for row in read_jsonl(registry.path(root, panel, "gold")):
+    if panel in ("css15", "css-pilot", "ht-dev2"):
+        prompts_path, gold_path = files or (
+            registry.path(root, panel, "prompts"),
+            registry.path(root, panel, "gold"),
+        )
+        prompts = {row["id"]: row for row in read_jsonl(prompts_path)}
+        out = []
+        for row in read_jsonl(gold_path):
             prompt = prompts[row["id"]]
             (key, question), *rest = prompt["questions"].items()
             if rest:
@@ -247,13 +250,17 @@ def load_panel(
                     panel,
                     row["id"],
                     row["task"],
-                    row["id"],
+                    (row.get("group_sha256") or [row["id"]])[0],
                     question,
                     row["gold"],
                     prompt["state"],
                 )
             )
         return out
+    prompts = {
+        row["id"]: row for row in read_jsonl(registry.path(root, panel, "prompts"))
+    }
+    out = []
     if panel == "public231":
         for row in read_jsonl(registry.path(root, panel, "gold")):
             prompt = prompts[row["id"]]

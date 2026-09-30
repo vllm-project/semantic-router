@@ -18,7 +18,20 @@ exist. This record's checkpoint citation `dev2-dec-staging@545a6784…` (§1) is
 
 Details: [storage steward record](hf-storage-steward-2026-09-29.md) §4.
 
-## C1 card-only revision, 2026-09-30 ≈01:07 UTC+8 — revision `a47bdf89` (current)
+## BF16 storage revision, 2026-09-30 ≈06:50 UTC+8 — revision `a53cf66a` (current)
+
+- **Revision `a53cf66a0d9d492a84b6617b61e7ce35fcd03af0`** (`main`), manifest `637a8af08bb9…`. Final decision
+  [`DEV2.0-2B.decision.json`](dev2-bf16-storage-2026-09-30/DEV2.0-2B.decision.json) `86129728…` supersedes
+  `743c5b2e…`; gate 6 of 6 items. Coordinator note 2026-09-30 06:10 (storage for the ~27B successor).
+- **Weights:** the FP32 backbone of `a47bdf89` is stored as its `v2.release.bf16_copy` (Linear projection matrices
+  in BF16 exactly as BF16 autocast rounds them, every other tensor FP32 bit for bit); backbone bytes 7,527,359,857 → 4,781,925,313.
+  Decision head, tokenizer, configs, runtime, vendored sources and card text are unchanged.
+- **Parity:** 0 answer changes, 0 missing, before upload and on the real download: typed-final 1,600, CSS15 6,547, public 231 and mlx-diag 2,275; max drift 8.9e-16.
+- **Purge:** the superseded FP32 backbone objects were deleted with `rewrite_history=False`; older revisions' FP32
+  weights now rest on the node-A checkpoint and the per-file SHA-256.
+- Record: [`dev2-bf16-storage-2026-09-30.md`](dev2-bf16-storage-2026-09-30.md).
+
+## C1 card-only revision, 2026-09-30 ≈01:07 UTC+8 — revision `a47bdf89` (superseded)
 
 - **Revision `a47bdf895d982896b0e65c2bdc61330fe1ad2d7c`** (`main`), manifest `1ba359509a76…`. Final decision
   [`DEV2.0-2B.decision.json`](dev2-c1-card-pass-2026-09-29/DEV2.0-2B.decision.json) `743c5b2e…` supersedes

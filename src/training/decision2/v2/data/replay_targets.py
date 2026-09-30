@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from training.model.data import canonical, validate_row
+from v2.common import eval_only
 from v2.data.build_a0_variants import native_prompt
 
 
@@ -214,6 +215,7 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args()
+    eval_only.guard(args)
     train_rows = load_jsonl(args.train)
     teacher_rows = load_jsonl(args.teacher_output)
     replay, report = convert(
@@ -228,6 +230,7 @@ def main() -> None:
         report["repeat"] = repeat_max_abs_diff(
             teacher_rows, load_jsonl(args.repeat_output)
         )
+    eval_only.check_rows(replay)
     data = "".join(canonical(row) + "\n" for row in replay).encode("utf-8")
     fd = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "wb") as stream:

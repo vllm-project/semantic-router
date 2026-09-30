@@ -21,6 +21,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from v2.common import eval_only
 from v2.eval.same_panel import sha_file
 
 SUFFIX = "#r1"
@@ -123,8 +124,10 @@ def main() -> None:
         Path(s.split("=", 1)[1]) for s in args.teacher
     ]
     expected = dict(item.rsplit("=", 1) for item in args.expect)
+    eval_only.guard(args)
     hashes = {str(p): sha_file(p) for p in inputs}
     for path, digest in hashes.items():
+        eval_only.check_file(path, digest)
         if expected.get(path) != digest:
             raise SystemExit(f"{path}: {digest} is not the frozen {expected.get(path)}")
     tokenizer = AutoTokenizer.from_pretrained(args.source, local_files_only=True)
@@ -149,6 +152,7 @@ def main() -> None:
     args.output_dir.mkdir(mode=0o700, parents=True, exist_ok=False)
     files, teachers = {}, {}
     train_path = args.output_dir / "pk1-a0s-4k.train.jsonl"
+    eval_only.check_rows(train)
     files[train_path.name] = write(train_path, train)
     for spec in args.teacher:
         name, path = spec.split("=", 1)
@@ -156,6 +160,7 @@ def main() -> None:
         replay, report = attach(pool, targets)
         for row in replay:
             validate_row(row, "train", replay=True)
+        eval_only.check_rows(replay)
         out = args.output_dir / f"replay-{name}.jsonl"
         files[out.name] = write(out, replay)
         teachers[name] = {"targets_sha256": hashes[path], **report}

@@ -1,0 +1,53 @@
+{
+  "label": "post-key same-panel",
+  "panel_root": "/data/dev2/private/panels",
+  "focus_task": "media_ideology",
+  "m4b": {
+    "F-a": {
+      "label": "DEV2.0-27B (M4b F-a)",
+      "run": "/data/dev2/runs/27b/m4b/F-a/formal",
+      "note": "M4b finalist F-a (fixed priority slot 1: A2's artifact, or the next candidate in order when A2's was dropped or failed; RULES.json names it), full-parameter FSDP x3 on Qwen/Qwen3.8-27B, F1's TRAIN a7.train.jsonl de00df03... (25,822 rows), 32,768 tokens, FLA kernel path, formal run from a copy of F1's post-run cache 03b172f1"
+    },
+    "F-b": {
+      "label": "DEV2.0-27B (M4b F-b)",
+      "run": "/data/dev2/runs/27b/m4b/F-b/formal",
+      "note": "M4b finalist F-b (fixed priority slot 2: A1's artifact, or the next candidate in order; RULES.json names it), full-parameter FSDP x3 on Qwen/Qwen3.8-27B, F1's TRAIN a7.train.jsonl de00df03..., 32,768 tokens, FLA kernel path, formal run from a copy of F1's post-run cache 03b172f1"
+    },
+    "F-c": {
+      "label": "DEV2.0-27B (M4b F-c)",
+      "run": "/data/dev2/runs/27b/m4b/F-c/formal",
+      "note": "M4b finalist F-c (fixed priority slot 3: theta(alpha*) if the alpha rule picks, else A3-s1's BEST, or the next candidate in order; RULES.json names it), 32,768 tokens, FLA kernel path, formal run from a copy of F1's post-run cache 03b172f1"
+    }
+  },
+  "comparators": {
+    "DEV2.0-27B (F1)": {
+      "run": "/data/dev2/runs/27b/M3-A-soup/formal",
+      "note": "M3 finalist F1 (M3-A soup, SEAL 42ba2fa1), the incumbent of the successor rule; no own exposure (receipt 6ae7fab0)"
+    },
+    "AutoJev-27B": {
+      "run": "/data/dev2/runs/27b/m2-peer-autojev27-nodeB-kernel",
+      "note": "sealed node-B copy of the eval track's m4/nodeB-kernel/autojev27 collection (image dbe5f32b); best measured open-weight peer, sets the 27B bar"
+    },
+    "Eikos-27B": {
+      "run": "/data/dev2/runs/27b/m3-peer-eikos27-nodeB-kernel",
+      "note": "sealed node-B copy of the eval track's m4/nodeB-kernel/eikos27b collection; BF16 sibling of its FP8 board entry"
+    },
+    "Jebadiah-27B": {
+      "run": "/data/dev2/runs/27b/m3-peer-jebadiah-nodeB-kernel",
+      "note": "sealed node-B copy of the eval track's m4/nodeB-kernel/jebadiah27b collection"
+    }
+  },
+  "tier": {
+    "own_1_0": [],
+    "peers": ["AutoJev-27B", "Eikos-27B", "Jebadiah-27B"],
+    "internal_peers": ["DEV2.0-27B (F1)"],
+    "threshold_pool": ["AutoJev-27B", "Eikos-27B", "Jebadiah-27B"],
+    "note": "no Decision 1.0 model exists at this size; the gate bar is 0.9 x the best measured open-weight peer; F1 and the other sealed M4b finalists are the within-milestone comparisons"
+  },
+  "reproduce_names": {
+    "AutoJev-27B": "PAIRED-vs-AutoJev-27B.json",
+    "Eikos-27B": "PAIRED-vs-Eikos-27B.json",
+    "Jebadiah-27B": "PAIRED-vs-Jebadiah.json",
+    "DEV2.0-27B (F1)": "PAIRED-vs-M3-A-soup.json"
+  }
+}

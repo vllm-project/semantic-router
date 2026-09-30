@@ -1,0 +1,2315 @@
+{
+  "created_utc": "2026-09-29T19:50:48.128044+00:00",
+  "models": [
+    {
+      "formal": {
+        "H_formal": 0.4795852456229815,
+        "css15_task_mean": 0.42636322462263126,
+        "report_sha256": "72cf01def4ac987919cd4f13b144652da5fd37a9cdf2c92487bd9c76736bbaa9",
+        "v3": 43.54147935134208
+      },
+      "group": "2.0 candidate",
+      "htdev1": {
+        "H_dev_v1": 0.4520562977011515,
+        "H_dev_v1_mean": 0.41328080174330384
+      },
+      "htdev2": {
+        "H_dev2": 0.4642498784802066,
+        "H_dev2_median": 0.49546856021676167,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "94f0a34a1f30a49a91c68e0915d09b2f811ace399dc7048641b15771e7bcde85",
+        "sd": 0.010895526476196054,
+        "tasks": {
+          "conv_go_awry": 0.6108285629575569,
+          "emotion": 0.5602130047318377,
+          "ibc": 0.4436323534181704,
+          "media_ideology": 0.27912755109145637,
+          "mrf": 0.4293542074363992,
+          "reddit_humor": 0.49724137931034484,
+          "talklife": 0.2914130808950086,
+          "tempowic": 0.5709702062643239,
+          "wiki_corpus": 0.49546856021676167
+        }
+      },
+      "key": "06b-m4-t-a7-soup",
+      "lineage": "06b",
+      "pilot": {
+        "H_mean3": 0.38550010349733244,
+        "H_pilot": 0.3188362618567685,
+        "invalid": 0,
+        "predictions_sha256": "d2c83c8dd50a43b6792915e6164d2c3f4f5aa28f7858e4705e02d5dd184c77cd",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.2984678131410807,
+          "implicit_hate": 0.3188362618567685,
+          "semeval_stance": 0.5391962354941482
+        }
+      },
+      "tier": "0.6B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.39737285075697093,
+        "css15_task_mean": 0.3788513204532933,
+        "report_sha256": "60deeee9eb027f0ac246780c5d5064439c6cab22b366e5f057c937d1b7bed698",
+        "v3": 39.12962133183701
+      },
+      "group": "2.0 candidate",
+      "htdev1": {
+        "H_dev_v1": 0.4531673087002488,
+        "H_dev_v1_mean": 0.4337057402532235
+      },
+      "htdev2": {
+        "H_dev2": 0.4012338986834377,
+        "H_dev2_median": 0.3678954009718904,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "edb560dabaa803ddf5199ec79021f408c89caf4a5e86dc68b5bfa7d14e230934",
+        "sd": 0.009528621269342811,
+        "tasks": {
+          "conv_go_awry": 0.45600328947368424,
+          "emotion": 0.5406800094275216,
+          "ibc": 0.515511321266717,
+          "media_ideology": 0.21249817598132203,
+          "mrf": 0.34685272005992174,
+          "reddit_humor": 0.4995744680851064,
+          "talklife": 0.33875636955144234,
+          "tempowic": 0.3333333333333333,
+          "wiki_corpus": 0.3678954009718904
+        }
+      },
+      "key": "06b-m4-v2-soup",
+      "lineage": "06b",
+      "pilot": {
+        "H_mean3": 0.33464474221885093,
+        "H_pilot": 0.341786411793267,
+        "invalid": 0,
+        "predictions_sha256": "22ff37fc94a99a134adffd43b6aa6f46df979509c45657285bd14f32c7804382",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.341786411793267,
+          "implicit_hate": 0.35003690989523784,
+          "semeval_stance": 0.31211090496804783
+        }
+      },
+      "tier": "0.6B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.47309035210396627,
+        "css15_task_mean": 0.42347510076605094,
+        "report_sha256": "94600e492117b5cbcfee69d58b7bbfdeb4196d92c534687017039ae7bc4c75d1",
+        "v3": 45.36455699830269
+      },
+      "group": "2.0 candidate",
+      "htdev1": {
+        "H_dev_v1": 0.47100275773044653,
+        "H_dev_v1_mean": 0.43896296276241753
+      },
+      "htdev2": {
+        "H_dev2": 0.44491826013166413,
+        "H_dev2_median": 0.4380236305048335,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "8f859f8da3c0457374b4a831a26496d763d91a566e2cd4b7cbbae1e3422536da",
+        "sd": 0.010564128712151857,
+        "tasks": {
+          "conv_go_awry": 0.5647481181239142,
+          "emotion": 0.5394868330950805,
+          "ibc": 0.49977888301915485,
+          "media_ideology": 0.30036763760841945,
+          "mrf": 0.39154929577464787,
+          "reddit_humor": 0.5564289972839888,
+          "talklife": 0.29939792008757526,
+          "tempowic": 0.4380236305048335,
+          "wiki_corpus": 0.41448302568736284
+        }
+      },
+      "key": "06b-m5-x-soup",
+      "lineage": "06b",
+      "pilot": {
+        "H_mean3": 0.38602604195703244,
+        "H_pilot": 0.3331616214123267,
+        "invalid": 0,
+        "predictions_sha256": "e6e11bd4268f111a8afba1df1a0743f8172a3a96c0ee20f48f065768e933e405",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.3331616214123267,
+          "implicit_hate": 0.3311727173816502,
+          "semeval_stance": 0.4937437870771204
+        }
+      },
+      "tier": "0.6B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.49834936255871165,
+        "css15_task_mean": 0.4319539046145739,
+        "report_sha256": "d909cec7cd90aae28fc277929ee2eef963dd3383c3f2905c86e74fe9ac05941d",
+        "v3": 45.476915623408914
+      },
+      "group": "2.0 candidate",
+      "htdev1": {
+        "H_dev_v1": 0.42512227729229163,
+        "H_dev_v1_mean": 0.4300609113265201
+      },
+      "htdev2": {
+        "H_dev2": 0.46737636799153903,
+        "H_dev2_median": 0.4987258827812159,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "a0094a561f661ab4d33699521ac09a29c83010463436c3d84b2d8d68772d0161",
+        "sd": 0.011220857277257199,
+        "tasks": {
+          "conv_go_awry": 0.5930541368743616,
+          "emotion": 0.545462527038614,
+          "ibc": 0.5057738632941885,
+          "media_ideology": 0.29008530500563334,
+          "mrf": 0.48729670329670327,
+          "reddit_humor": 0.5272651876425462,
+          "talklife": 0.3124060484928074,
+          "tempowic": 0.4987258827812159,
+          "wiki_corpus": 0.44631765749778174
+        }
+      },
+      "key": "06b-m5-z-soup",
+      "lineage": "06b",
+      "pilot": {
+        "H_mean3": 0.40187597202622066,
+        "H_pilot": 0.3356598618504267,
+        "invalid": 0,
+        "predictions_sha256": "9ff03672410ce6294c89c76b4338960554ce21e3253d6b0a0d6d3aeae9ff665c",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.33548278679127963,
+          "implicit_hate": 0.3356598618504267,
+          "semeval_stance": 0.5344852674369558
+        }
+      },
+      "tier": "0.6B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.461203009680688,
+        "css15_task_mean": 0.41757115674261186,
+        "report_sha256": "078d780c524602c7e51d57fe7ae40d99a35f5591a2abf91f78096a768aed3ca7",
+        "v3": 42.54670155249053
+      },
+      "group": "own 1.0",
+      "htdev1": {
+        "H_dev_v1": 0.4459540190013683,
+        "H_dev_v1_mean": 0.41273809652991117
+      },
+      "htdev2": {
+        "H_dev2": 0.433089967980683,
+        "H_dev2_median": 0.437037037037037,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "8f32a244ad92417a55b7b8eb35eb9f2ea7d24d782a7847301911b4533c268f14",
+        "sd": 0.010097997897602193,
+        "tasks": {
+          "conv_go_awry": 0.6214216163583253,
+          "emotion": 0.48207849287789706,
+          "ibc": 0.2931594891108564,
+          "media_ideology": 0.34565434565434566,
+          "mrf": 0.6422225568438489,
+          "reddit_humor": 0.34138904573687184,
+          "talklife": 0.22222222222222224,
+          "tempowic": 0.5126249059847426,
+          "wiki_corpus": 0.437037037037037
+        }
+      },
+      "key": "eos1",
+      "lineage": "eos",
+      "pilot": {
+        "H_mean3": 0.2411410669279467,
+        "H_pilot": 0.18842602072415737,
+        "invalid": 0,
+        "predictions_sha256": "157794cd55ca560406b598576e2d36f7376f3e57ab9e5e58548d5d7b7bc6fb5e",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.18842602072415737,
+          "implicit_hate": 0.1546664308649785,
+          "semeval_stance": 0.3803307491947043
+        }
+      },
+      "tier": "0.8B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.3824110671936759,
+        "css15_task_mean": 0.3750723329854757,
+        "report_sha256": "ddcdba6db2da3cfd93fafeb51bc1634694f5a6ed94aaf4ed1d9973dbe4d3f159",
+        "v3": 43.53532877765661
+      },
+      "group": "peer",
+      "htdev1": {
+        "H_dev_v1": 0.4958218387856852,
+        "H_dev_v1_mean": 0.47462716735854904
+      },
+      "htdev2": {
+        "H_dev2": 0.40800549459609603,
+        "H_dev2_median": 0.36347562515786813,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "1ce03798b918c53d7fca76d6c9559879e488918bcb21e5795b26760805f7edde",
+        "sd": 0.010201827524913333,
+        "tasks": {
+          "conv_go_awry": 0.36347562515786813,
+          "emotion": 0.42612502631840865,
+          "ibc": 0.3182138973657441,
+          "media_ideology": 0.3363052694573972,
+          "mrf": 0.6363305424099017,
+          "reddit_humor": 0.34469890192498726,
+          "talklife": 0.2212091503267974,
+          "tempowic": 0.4900873232334808,
+          "wiki_corpus": 0.5356037151702786
+        }
+      },
+      "key": "intern08b",
+      "lineage": "intern",
+      "pilot": {
+        "H_mean3": 0.24273524868249255,
+        "H_pilot": 0.2559933378014427,
+        "invalid": 0,
+        "predictions_sha256": "ac77585401331ccb617019c0e2c06a96f2aca3d210af0400f67e314a2a5bb059",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.30554574157936837,
+          "implicit_hate": 0.2559933378014427,
+          "semeval_stance": 0.16666666666666666
+        }
+      },
+      "tier": "0.8B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.38960651228881893,
+        "css15_task_mean": 0.3885526359492669,
+        "report_sha256": "66fcffaf1353974e6b92fba56be7e9e9a4dfc030fcc39a21703fd131bf5da754",
+        "v3": 43.216619699885435
+      },
+      "group": "peer",
+      "htdev1": {
+        "H_dev_v1": 0.48333333333333334,
+        "H_dev_v1_mean": 0.49795339930812926
+      },
+      "htdev2": {
+        "H_dev2": 0.43572514369459225,
+        "H_dev2_median": 0.4344365312107248,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "584a03980fdd3bfdbaa14572b8e6da5708a517b4b5781d2bee6d3f3af9dbd94a",
+        "sd": 0.01094962561697631,
+        "tasks": {
+          "conv_go_awry": 0.4344365312107248,
+          "emotion": 0.4639989419908284,
+          "ibc": 0.37966827180310325,
+          "media_ideology": 0.33270792494461626,
+          "mrf": 0.5908738699956952,
+          "reddit_humor": 0.49125826614729595,
+          "talklife": 0.36319106126992884,
+          "tempowic": 0.4791666666666667,
+          "wiki_corpus": 0.3862247592224709
+        }
+      },
+      "key": "kev08b",
+      "lineage": "kev",
+      "pilot": {
+        "H_mean3": 0.26009216533183505,
+        "H_pilot": 0.23841869315868616,
+        "invalid": 0,
+        "predictions_sha256": "bfaced45ee05faf5c54e20fcbb5b08bc185bef85191605c0a929910b2a9f6f79",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.23308127391987762,
+          "implicit_hate": 0.23841869315868616,
+          "semeval_stance": 0.3087765289169414
+        }
+      },
+      "tier": "0.8B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.3739429617310349,
+        "css15_task_mean": 0.3964354562806774,
+        "report_sha256": "f895774d711b81344e74644c1f5bd536b88fc176409a3d267f10dcd911d50385",
+        "v3": 40.08473729099444
+      },
+      "group": "peer",
+      "htdev1": {
+        "H_dev_v1": 0.469489648441166,
+        "H_dev_v1_mean": 0.4569135706422649
+      },
+      "htdev2": {
+        "H_dev2": 0.4189187984725933,
+        "H_dev2_median": 0.3611607142857143,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "d1da7e27f845f2c484e2bf21fa98aa2c7d2aaedf1124cc34f1b98e5e0940063f",
+        "sd": 0.00991508366748872,
+        "tasks": {
+          "conv_go_awry": 0.35358554488989274,
+          "emotion": 0.5015789710885811,
+          "ibc": 0.3556196319660212,
+          "media_ideology": 0.3285165178970489,
+          "mrf": 0.6894887034136503,
+          "reddit_humor": 0.48270907175016764,
+          "talklife": 0.29856392603380555,
+          "tempowic": 0.3611607142857143,
+          "wiki_corpus": 0.3990461049284579
+        }
+      },
+      "key": "jpt08b",
+      "lineage": "jpt",
+      "pilot": {
+        "H_mean3": 0.37820583986238776,
+        "H_pilot": 0.3299918597342485,
+        "invalid": 0,
+        "predictions_sha256": "95dc18140c5e52e9d8c0ef8af8798734c7dcff0a94c27b1eaf7728299419ffb7",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.3299918597342485,
+          "implicit_hate": 0.25469018652121495,
+          "semeval_stance": 0.5499354733316998
+        }
+      },
+      "tier": "0.8B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.4400895856662934,
+        "css15_task_mean": 0.40796939494857054,
+        "report_sha256": "e3e08cd17fe38becdfa655c61d329de7d39c75ffb7db70861af4f88d87fe2682",
+        "v3": 50.2358310153734
+      },
+      "group": "2.0 candidate",
+      "htdev1": {
+        "H_dev_v1": 0.45455155746509124,
+        "H_dev_v1_mean": 0.4560723531693861
+      },
+      "htdev2": {
+        "H_dev2": 0.4205210226104743,
+        "H_dev2_median": 0.4529127331337785,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "e22130b05f353a37459fad78dfc3f8fd24b001a6fbfe80ad99ea39d833f6d5f5",
+        "sd": 0.010576784067877928,
+        "tasks": {
+          "conv_go_awry": 0.4948575452007946,
+          "emotion": 0.5461566484517304,
+          "ibc": 0.39822831913212464,
+          "media_ideology": 0.26912123422806844,
+          "mrf": 0.4529127331337785,
+          "reddit_humor": 0.5201759872322989,
+          "talklife": 0.22551635980354778,
+          "tempowic": 0.4532818532818533,
+          "wiki_corpus": 0.42443852303007235
+        }
+      },
+      "key": "dec-m2-E8F-soup",
+      "lineage": "dec08b",
+      "pilot": {
+        "H_mean3": 0.3871998085640525,
+        "H_pilot": 0.27053770560217216,
+        "invalid": 0,
+        "predictions_sha256": "99c914652ea1521427d997e2bc40c42f0ba0e68dc7bf050c39a8b56b6b494f4e",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.2684798898760788,
+          "implicit_hate": 0.27053770560217216,
+          "semeval_stance": 0.6225818302139066
+        }
+      },
+      "tier": "0.8B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.433737714987715,
+        "css15_task_mean": 0.4035276933713075,
+        "report_sha256": "83ec5a75a032cfd6443b5f8694a0cc5aeb311efff9757c17e999ab06becde70c",
+        "v3": 49.77676864630048
+      },
+      "group": "2.0 candidate",
+      "htdev1": {
+        "H_dev_v1": 0.5015999061835118,
+        "H_dev_v1_mean": 0.4598300852500976
+      },
+      "htdev2": {
+        "H_dev2": 0.41479543911979866,
+        "H_dev2_median": 0.4639650011512779,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "b41117e397387d6eef70b2d9b8eef51ebc3fc44814488ca0a276d982f58dc96a",
+        "sd": 0.010516065991358181,
+        "tasks": {
+          "conv_go_awry": 0.4639650011512779,
+          "emotion": 0.521386058967129,
+          "ibc": 0.4057165802519617,
+          "media_ideology": 0.2835916646618781,
+          "mrf": 0.4115384615384616,
+          "reddit_humor": 0.4859452177817692,
+          "talklife": 0.21213416261381002,
+          "tempowic": 0.472041166380789,
+          "wiki_corpus": 0.4768406387311114
+        }
+      },
+      "key": "dec-m2-E8F-s1",
+      "lineage": "dec08b",
+      "pilot": {
+        "H_mean3": 0.3543893116079498,
+        "H_pilot": 0.2532589976536611,
+        "invalid": 0,
+        "predictions_sha256": "462d93e5ee18d295bce8fe43007faac952feee4f88bede80712ed2fbd4b07c76",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.22690060396237127,
+          "implicit_hate": 0.2532589976536611,
+          "semeval_stance": 0.5830083332078171
+        }
+      },
+      "tier": "0.8B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.450338042104106,
+        "css15_task_mean": 0.40749060816674987,
+        "report_sha256": "a9f69618a137785520eed1a18f22408921b4056851d1c665df4f8ddb82841240",
+        "v3": 43.08407034273644
+      },
+      "group": "2.0 candidate",
+      "htdev1": {
+        "H_dev_v1": 0.42630838700125845,
+        "H_dev_v1_mean": 0.4289763593452384
+      },
+      "htdev2": {
+        "H_dev2": 0.4274271383742826,
+        "H_dev2_median": 0.42356902356902354,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "40f02d151fad10a43627cc86fe8e7e23d65845e16ffd58c00ac8d86902156767",
+        "sd": 0.010331840019881357,
+        "tasks": {
+          "conv_go_awry": 0.5808925436570267,
+          "emotion": 0.5718760879721456,
+          "ibc": 0.36413817663817666,
+          "media_ideology": 0.19777241728461242,
+          "mrf": 0.6002351557907113,
+          "reddit_humor": 0.42356902356902354,
+          "talklife": 0.25376558193113097,
+          "tempowic": 0.43343653250773995,
+          "wiki_corpus": 0.42115872601797616
+        }
+      },
+      "key": "dec-m2-B8F-s1",
+      "lineage": "dec08b",
+      "pilot": {
+        "H_mean3": 0.361340253210898,
+        "H_pilot": 0.2591884966311115,
+        "invalid": 0,
+        "predictions_sha256": "aeeaff41ffc0df0863d1db94a5b054fe4714c83fbf0b7bc305883ca92226f41e",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.2591884966311115,
+          "implicit_hate": 0.24398107019386797,
+          "semeval_stance": 0.5808511928077146
+        }
+      },
+      "tier": "0.8B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.4184762605815237,
+        "css15_task_mean": 0.4168116603781539,
+        "report_sha256": "baee6597c2a624854d9fe6f7c36fe9f3973acd173b8bf7fcb692981d40418ee8",
+        "v3": 48.58464425456522
+      },
+      "group": "2.0 candidate",
+      "htdev1": {
+        "H_dev_v1": 0.4859891247098604,
+        "H_dev_v1_mean": 0.4636861633359406
+      },
+      "htdev2": {
+        "H_dev2": 0.4205168160013212,
+        "H_dev2_median": 0.45098039215686275,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "f35ac47074020239e88be5c32e65db6c19fee8dfe0e3f75de68ac58014dbdc8b",
+        "sd": 0.01046364200168948,
+        "tasks": {
+          "conv_go_awry": 0.45098039215686275,
+          "emotion": 0.5327692871598136,
+          "ibc": 0.41120055654939375,
+          "media_ideology": 0.31309519236924654,
+          "mrf": 0.47416534181240066,
+          "reddit_humor": 0.5125,
+          "talklife": 0.22048036235770904,
+          "tempowic": 0.5049656226126814,
+          "wiki_corpus": 0.36449458899378306
+        }
+      },
+      "key": "dec-m3-E8V-soup",
+      "lineage": "dec08b",
+      "pilot": {
+        "H_mean3": 0.36510555691830615,
+        "H_pilot": 0.28325332351770444,
+        "invalid": 0,
+        "predictions_sha256": "3523eec0c402fea4a70373ea778a159793b64adfae2716c26b96a0911971ff33",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.28325332351770444,
+          "implicit_hate": 0.25230057701747555,
+          "semeval_stance": 0.5597627702197385
+        }
+      },
+      "tier": "0.8B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.49246212263618927,
+        "css15_task_mean": 0.4461526170554431,
+        "report_sha256": "c56a21b9f75b45e15fcb5315c191cc97873ba2841e585efce41b115dfee5e0d0",
+        "v3": 45.580418820710975
+      },
+      "group": "own 1.0",
+      "htdev1": {
+        "H_dev_v1": 0.570895136939913,
+        "H_dev_v1_mean": 0.5248409914930288
+      },
+      "htdev2": {
+        "H_dev2": 0.4662241069114815,
+        "H_dev2_median": 0.4782608695652174,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "be7b0cc4c15e184fee8fc842944848b448ca847cf4f0b7b62d36761f768cec4d",
+        "sd": 0.01102366500181861,
+        "tasks": {
+          "conv_go_awry": 0.460825267447784,
+          "emotion": 0.49630496715591643,
+          "ibc": 0.46640082705656477,
+          "media_ideology": 0.3070766556410855,
+          "mrf": 0.6571428571428571,
+          "reddit_humor": 0.4782608695652174,
+          "talklife": 0.19396798170383078,
+          "tempowic": 0.6257472060989344,
+          "wiki_corpus": 0.5102903303911426
+        }
+      },
+      "key": "sol1",
+      "lineage": "sol",
+      "pilot": {
+        "H_mean3": 0.3676752410450202,
+        "H_pilot": 0.3151728272203718,
+        "invalid": 0,
+        "predictions_sha256": "dd2b0b3b2195b87b5614452e1c291e42ba8afdc7484c5cd1f91d91de7bf7ec39",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.30673785364035777,
+          "implicit_hate": 0.3151728272203718,
+          "semeval_stance": 0.481115042274331
+        }
+      },
+      "tier": "2B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.42017973109762485,
+        "css15_task_mean": 0.4446145287002014,
+        "report_sha256": "dd91e5ba628dbb5a3d2fc4092e9fd62d336c0b88f732419c7dfadd83f634e8a2",
+        "v3": 49.499222791504764
+      },
+      "group": "peer",
+      "htdev1": {
+        "H_dev_v1": 0.544537705771358,
+        "H_dev_v1_mean": 0.5259582494424019
+      },
+      "htdev2": {
+        "H_dev2": 0.486340274544684,
+        "H_dev2_median": 0.43540298994751836,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "0abeeab8b3d2e5cc108620c3605c8a8c18a09fbfa034e245f679eee35417b892",
+        "sd": 0.010312102121367123,
+        "tasks": {
+          "conv_go_awry": 0.35358554488989274,
+          "emotion": 0.7430805258205881,
+          "ibc": 0.43540298994751836,
+          "media_ideology": 0.2999818594104309,
+          "mrf": 0.7077922077922079,
+          "reddit_humor": 0.5173128758034419,
+          "talklife": 0.29873438581699907,
+          "tempowic": 0.6068836823553805,
+          "wiki_corpus": 0.4142883990656966
+        }
+      },
+      "key": "decider2b",
+      "lineage": "decider",
+      "pilot": {
+        "H_mean3": 0.4587443258700745,
+        "H_pilot": 0.446222954480327,
+        "invalid": 0,
+        "predictions_sha256": "b4c80180b8266aa6e81b1fa33cec9a26c9e3f4b92d0c1fdd431f8476f8fe793e",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.446222954480327,
+          "implicit_hate": 0.3849895978584467,
+          "semeval_stance": 0.5450204252714499
+        }
+      },
+      "tier": "2B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.4050104442984842,
+        "css15_task_mean": 0.4216710668011021,
+        "report_sha256": "33daa04aa94d831b630401875dfec50c16cfc63e7214be32eb9008807dd29ea3",
+        "v3": 46.11187301083141
+      },
+      "group": "peer",
+      "htdev1": {
+        "H_dev_v1": 0.5048701298701299,
+        "H_dev_v1_mean": 0.5206134381788411
+      },
+      "htdev2": {
+        "H_dev2": 0.4700631854259229,
+        "H_dev2_median": 0.5205387205387205,
+        "invalid": 53,
+        "items": 1944,
+        "report_sha256": "0765377e5dc7363541c17a586a4d7744e81bfdb4eede95e5d64d4bc404e6a3b1",
+        "sd": 0.010069037549848479,
+        "tasks": {
+          "conv_go_awry": 0.3404243119266055,
+          "emotion": 0.7967036486664179,
+          "ibc": 0.2969570067287032,
+          "media_ideology": 0.26068070818070815,
+          "mrf": 0.6258015164128063,
+          "reddit_humor": 0.5632527472527473,
+          "talklife": 0.28701766393466,
+          "tempowic": 0.5205387205387205,
+          "wiki_corpus": 0.539192345191937
+        }
+      },
+      "key": "thisthat12",
+      "lineage": "thisthat",
+      "pilot": {
+        "H_mean3": 0.39143590332113676,
+        "H_pilot": 0.4007796368181548,
+        "invalid": 14,
+        "predictions_sha256": "a03e04561900c2d3e9fe2a621f7dd529bdc8676f2d8ad6feb0ebaf34664ab1e4",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.4007796368181548,
+          "implicit_hate": 0.31573172666981625,
+          "semeval_stance": 0.4577963464754392
+        }
+      },
+      "tier": "2B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.3799477831610097,
+        "css15_task_mean": 0.39042003440196404,
+        "report_sha256": "7003d0ecead9db7710943cf350ade4a3096962ca816eb81dfc962f67abe9895c",
+        "v3": 42.117469209734864
+      },
+      "group": "peer",
+      "htdev1": {
+        "H_dev_v1": 0.46823596142938173,
+        "H_dev_v1_mean": 0.4551050048344909
+      },
+      "htdev2": {
+        "H_dev2": 0.4076474237365812,
+        "H_dev2_median": 0.3728937728937729,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "464e12a00682707d7f7c15da05607aafca81e2b14cc50604257b269b27009c08",
+        "sd": 0.010331915042476056,
+        "tasks": {
+          "conv_go_awry": 0.37082142758065856,
+          "emotion": 0.3757990267395118,
+          "ibc": 0.5042714008290351,
+          "media_ideology": 0.2522328579300094,
+          "mrf": 0.663784157730889,
+          "reddit_humor": 0.3728937728937729,
+          "talklife": 0.3035184695795161,
+          "tempowic": 0.4620300751879699,
+          "wiki_corpus": 0.36347562515786813
+        }
+      },
+      "key": "bosun17b",
+      "lineage": "bosun",
+      "pilot": {
+        "H_mean3": 0.3604928941402384,
+        "H_pilot": 0.2854805232347386,
+        "invalid": 0,
+        "predictions_sha256": "eaa865959be5dc5964b36e843ffbf950d1e578716a05a815490d8ec7cba7f0f2",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.2088235160530791,
+          "implicit_hate": 0.2854805232347386,
+          "semeval_stance": 0.5871746431328976
+        }
+      },
+      "tier": "2B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.5254514218436512,
+        "css15_task_mean": 0.456476795731409,
+        "report_sha256": "c04ca52a8107390913843bc4287bf2d30b5948e50e98c97d15910082298e4f4d",
+        "v3": 53.436879311778604
+      },
+      "group": "2.0 candidate",
+      "htdev1": {
+        "H_dev_v1": 0.5384667024704619,
+        "H_dev_v1_mean": 0.520200886281212
+      },
+      "htdev2": {
+        "H_dev2": 0.45945255276059666,
+        "H_dev2_median": 0.4402294007387357,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "34cb5295f540ce6b1ab9f5b5004d38de677273581b6347eadb28ed6222f9c007",
+        "sd": 0.010701605068505062,
+        "tasks": {
+          "conv_go_awry": 0.4087853099837899,
+          "emotion": 0.5700348879382529,
+          "ibc": 0.4402294007387357,
+          "media_ideology": 0.3129809576691926,
+          "mrf": 0.5555555555555556,
+          "reddit_humor": 0.584031158714703,
+          "talklife": 0.2620253075915772,
+          "tempowic": 0.6023842917251052,
+          "wiki_corpus": 0.3990461049284579
+        }
+      },
+      "key": "dec-m3-S2T-soup",
+      "lineage": "dec2b",
+      "pilot": {
+        "H_mean3": 0.4278314807805483,
+        "H_pilot": 0.3643186113409103,
+        "invalid": 0,
+        "predictions_sha256": "1bbe65a339f2c663384bae3da6e529f1fac3496905faa7715a2f79dc0bb715ab",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.3643186113409103,
+          "implicit_hate": 0.2923981784996094,
+          "semeval_stance": 0.6267776525011252
+        }
+      },
+      "tier": "2B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.5190457868410927,
+        "css15_task_mean": 0.4819805954397721,
+        "report_sha256": "ff6378c2b84242a316b0c6dd50695f4b1ca4f37d525da568c08f1be642dda3c3",
+        "v3": 56.47023599122784
+      },
+      "group": "own 1.0",
+      "htdev1": {
+        "H_dev_v1": 0.6001714728528795,
+        "H_dev_v1_mean": 0.5621472835440275
+      },
+      "htdev2": {
+        "H_dev2": 0.5030090769162395,
+        "H_dev2_median": 0.48283239938869077,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "34751987313b7a5fc312a8bde932848b2e8f4db38694611a1cfdaa7f25a44ca1",
+        "sd": 0.010883143269302014,
+        "tasks": {
+          "conv_go_awry": 0.48283239938869077,
+          "emotion": 0.4498363554724767,
+          "ibc": 0.5544381465991636,
+          "media_ideology": 0.37558963592483147,
+          "mrf": 0.7770897832817337,
+          "reddit_humor": 0.46545454545454545,
+          "talklife": 0.22706158575723795,
+          "tempowic": 0.710955710955711,
+          "wiki_corpus": 0.4838235294117647
+        }
+      },
+      "key": "nox1",
+      "lineage": "nox",
+      "pilot": {
+        "H_mean3": 0.45899712740540594,
+        "H_pilot": 0.41354003816542445,
+        "invalid": 0,
+        "predictions_sha256": "5e0bf09e8d41da1ce5e240c5c22330582920f697731918c305ce69d8d086aee1",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.41354003816542445,
+          "implicit_hate": 0.37468871778816715,
+          "semeval_stance": 0.5887626262626262
+        }
+      },
+      "tier": "4B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.5554796858996245,
+        "css15_task_mean": 0.520044094597821,
+        "report_sha256": "526dbd039d7faef123048e905f137dd7a5e30629dbdf3a5dd2a139bd28bb591c",
+        "v3": 61.88164578185147
+      },
+      "group": "peer",
+      "htdev1": {
+        "H_dev_v1": 0.5547182524202986,
+        "H_dev_v1_mean": 0.5796228396222155
+      },
+      "htdev2": {
+        "H_dev2": 0.554482949712278,
+        "H_dev2_median": 0.5335996687322564,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "224231de99cfbbec7fcc50c4da214b99bec2810eff6728e54deca0cf72d762fe",
+        "sd": 0.010321804048287716,
+        "tasks": {
+          "conv_go_awry": 0.3803376365441906,
+          "emotion": 0.7602816392121791,
+          "ibc": 0.5111790871623736,
+          "media_ideology": 0.5335996687322564,
+          "mrf": 0.7515703795452535,
+          "reddit_humor": 0.6444598457939876,
+          "talklife": 0.20038238856692225,
+          "tempowic": 0.7335929892891919,
+          "wiki_corpus": 0.4749429125641466
+        }
+      },
+      "key": "decider4b",
+      "lineage": "decider",
+      "pilot": {
+        "H_mean3": 0.5040116119168693,
+        "H_pilot": 0.5240701832487998,
+        "invalid": 0,
+        "predictions_sha256": "f7eba94c5da9e579ac109b3171f1d4888d968f65d0d57acddd0d424b675ee955",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.5240701832487998,
+          "implicit_hate": 0.35109266086263213,
+          "semeval_stance": 0.6368719916391756
+        }
+      },
+      "tier": "4B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.5375237765580445,
+        "css15_task_mean": 0.5107968534818785,
+        "report_sha256": "3b9188c86e0399d5b33cf5959b377c9f3ddf9899123ee934ed3d4cb51f82e4a8",
+        "v3": 60.37452368163445
+      },
+      "group": "peer",
+      "htdev1": {
+        "H_dev_v1": 0.5968997530022997,
+        "H_dev_v1_mean": 0.6179498423576126
+      },
+      "htdev2": {
+        "H_dev2": 0.5093149976995877,
+        "H_dev2_median": 0.47416534181240066,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "866551eac086f71557329a5fbc5e9cd431b0e9160f1f588cb91bdfa73213d049",
+        "sd": 0.01077116626895207,
+        "tasks": {
+          "conv_go_awry": 0.3732142857142857,
+          "emotion": 0.4430556123651089,
+          "ibc": 0.6131290157929502,
+          "media_ideology": 0.45469112376133247,
+          "mrf": 0.7358456381918652,
+          "reddit_humor": 0.5908712926175737,
+          "talklife": 0.2756068550872841,
+          "tempowic": 0.6232558139534883,
+          "wiki_corpus": 0.47416534181240066
+        }
+      },
+      "key": "jet62",
+      "lineage": "jet",
+      "pilot": {
+        "H_mean3": 0.49944100561504845,
+        "H_pilot": 0.48354667108740806,
+        "invalid": 0,
+        "predictions_sha256": "854bd63540271fb60080e9bb881939e3739ccc1daca511db13dc1f48edb5be8e",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.48354667108740806,
+          "implicit_hate": 0.37619270717409864,
+          "semeval_stance": 0.6385836385836385
+        }
+      },
+      "tier": "4B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.5297319015267733,
+        "css15_task_mean": 0.5017425481012966,
+        "report_sha256": "147dc02b20286430930f5f6829d741f7d9a05d6394cc076cd4a44987f16ead63",
+        "v3": 58.396482052248686
+      },
+      "group": "peer",
+      "htdev1": {
+        "H_dev_v1": 0.5586441926867458,
+        "H_dev_v1_mean": 0.6116782652814307
+      },
+      "htdev2": {
+        "H_dev2": 0.5000270592816474,
+        "H_dev2_median": 0.45140443080946513,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "04b324f3227c616a579354990c3cb82a1c4f69b2971978845eadf7bbadb76d28",
+        "sd": 0.01080088097072096,
+        "tasks": {
+          "conv_go_awry": 0.4197802197802198,
+          "emotion": 0.43839651920147277,
+          "ibc": 0.6092316271505472,
+          "media_ideology": 0.43471216911860777,
+          "mrf": 0.7277165318237033,
+          "reddit_humor": 0.5272173582032738,
+          "talklife": 0.22861219195849544,
+          "tempowic": 0.663172485489041,
+          "wiki_corpus": 0.45140443080946513
+        }
+      },
+      "key": "hopperg",
+      "lineage": "hopper",
+      "pilot": {
+        "H_mean3": 0.5328656803976842,
+        "H_pilot": 0.530020210954594,
+        "invalid": 0,
+        "predictions_sha256": "1ab22659f819651efa33868a96fa7926d5010f84fbfd9d54faad5444665e5f87",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.530020210954594,
+          "implicit_hate": 0.41561998809729855,
+          "semeval_stance": 0.65295684214116
+        }
+      },
+      "tier": "4B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.47584645201459974,
+        "css15_task_mean": 0.4595779024283442,
+        "report_sha256": "2642996da6a19a2b0d05541bbcefb26f18afd1307465e96e07859d5a62bb3a62",
+        "v3": 54.5620231059694
+      },
+      "group": "peer",
+      "htdev1": {
+        "H_dev_v1": 0.5653004451038576,
+        "H_dev_v1_mean": 0.5972580994731884
+      },
+      "htdev2": {
+        "H_dev2": 0.5022908068546205,
+        "H_dev2_median": 0.49005872434443865,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "7e0f54a91ccaad6705f0bee2a2480554da1b09b9eb0920882cd56814974f6fa3",
+        "sd": 0.01116422634875814,
+        "tasks": {
+          "conv_go_awry": 0.4230769230769231,
+          "emotion": 0.4443335307572844,
+          "ibc": 0.49005872434443865,
+          "media_ideology": 0.45943101851660173,
+          "mrf": 0.786579603058682,
+          "reddit_humor": 0.5851851851851851,
+          "talklife": 0.28761725262776366,
+          "tempowic": 0.5243350241247062,
+          "wiki_corpus": 0.52
+        }
+      },
+      "key": "jpt4b",
+      "lineage": "jpt",
+      "pilot": {
+        "H_mean3": 0.5421619992362836,
+        "H_pilot": 0.5354683827992155,
+        "invalid": 0,
+        "predictions_sha256": "d1797ed16da29c03c1b685d35dd65eb88f6c469766a52493461c574803cbdf44",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.5354683827992155,
+          "implicit_hate": 0.41272722800855793,
+          "semeval_stance": 0.6782903869010775
+        }
+      },
+      "tier": "4B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.5632433535970514,
+        "css15_task_mean": 0.49072223543209853,
+        "report_sha256": "bdb83c27862ead66c39ab7cbd146e8b88329b35e86ab8d95dda0982be225e233",
+        "v3": 59.53917077606508
+      },
+      "group": "2.0 candidate",
+      "htdev1": {
+        "H_dev_v1": 0.611490078683483,
+        "H_dev_v1_mean": 0.5784194293292816
+      },
+      "htdev2": {
+        "H_dev2": 0.49969609943063137,
+        "H_dev2_median": 0.4487331281079801,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "f5b61a02c9b344072ce6a78346bba0b6d7168bdaf8ed467e2b0be7beac16cddf",
+        "sd": 0.010497353435093938,
+        "tasks": {
+          "conv_go_awry": 0.4487331281079801,
+          "emotion": 0.5579617534563336,
+          "ibc": 0.5863940863940864,
+          "media_ideology": 0.36208172159330976,
+          "mrf": 0.766092003811834,
+          "reddit_humor": 0.36359668267132256,
+          "talklife": 0.26460291720711837,
+          "tempowic": 0.7080266912695518,
+          "wiki_corpus": 0.43977591036414565
+        }
+      },
+      "key": "dec-m3-N4LKr-soup",
+      "lineage": "dec4b",
+      "pilot": {
+        "H_mean3": 0.5402110672445537,
+        "H_pilot": 0.5304720357578443,
+        "invalid": 0,
+        "predictions_sha256": "03291d20be60fafc3b10024481484bf3379bf67a1e57f44e82b14d36799bdee1",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.5304720357578443,
+          "implicit_hate": 0.37679672239554574,
+          "semeval_stance": 0.713364443580271
+        }
+      },
+      "tier": "4B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.5368782403256973,
+        "css15_task_mean": 0.4864355392474929,
+        "report_sha256": "60b8c95468d8bdf4b2bb552bf7cb7d96a0500667d4ff6ff3530d334bdc93f955",
+        "v3": 58.90310372217087
+      },
+      "group": "2.0 candidate",
+      "htdev1": {
+        "H_dev_v1": 0.6141215106732348,
+        "H_dev_v1_mean": 0.5836543052556362
+      },
+      "htdev2": {
+        "H_dev2": 0.4939474808433533,
+        "H_dev2_median": 0.4317451037708272,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "a0519ab0cc9240b8d8152318265c7449e1069f64e3723ee3bc38041f7101aa4a",
+        "sd": 0.010689117706327569,
+        "tasks": {
+          "conv_go_awry": 0.4317451037708272,
+          "emotion": 0.5567230137533077,
+          "ibc": 0.545397061047191,
+          "media_ideology": 0.3797625585646251,
+          "mrf": 0.7482517482517483,
+          "reddit_humor": 0.4060285563194077,
+          "talklife": 0.2540657118283903,
+          "tempowic": 0.6927453769559033,
+          "wiki_corpus": 0.43080819709877965
+        }
+      },
+      "key": "dec-m3-N4L-soup",
+      "lineage": "dec4b",
+      "pilot": {
+        "H_mean3": 0.5387644035930089,
+        "H_pilot": 0.532660384078919,
+        "invalid": 0,
+        "predictions_sha256": "86926365e887859ef6f434e0056ddb32215e5e370342628aa63e3cfe8a73f059",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.532660384078919,
+          "implicit_hate": 0.38690497064346907,
+          "semeval_stance": 0.6967278560566388
+        }
+      },
+      "tier": "4B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.4950322006806077,
+        "css15_task_mean": 0.4685024519805795,
+        "report_sha256": "1543d4d903d7b8f328435061dfc70407aab7f528b56e4df99630e248de974211",
+        "v3": 56.506262435148905
+      },
+      "group": "2.0 candidate",
+      "htdev1": {
+        "H_dev_v1": 0.5841250717154332,
+        "H_dev_v1_mean": 0.5706525894548469
+      },
+      "htdev2": {
+        "H_dev2": 0.48820752391544237,
+        "H_dev2_median": 0.4346153846153846,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "920d1466d46254453ea5578340f7b64e0d43af0a4b4258a9f7cb48c03cf4aef8",
+        "sd": 0.010837830889095925,
+        "tasks": {
+          "conv_go_awry": 0.4346153846153846,
+          "emotion": 0.5702561100102084,
+          "ibc": 0.5605380912283381,
+          "media_ideology": 0.38185001103063276,
+          "mrf": 0.7522882181110029,
+          "reddit_humor": 0.38582551619675265,
+          "talklife": 0.2646881178100531,
+          "tempowic": 0.6206810044016694,
+          "wiki_corpus": 0.42312526183493926
+        }
+      },
+      "key": "dec-m3-N4T-soup",
+      "lineage": "dec4b",
+      "pilot": {
+        "H_mean3": 0.5164297883312468,
+        "H_pilot": 0.4975695517422088,
+        "invalid": 0,
+        "predictions_sha256": "12a31b5272ecf3da91c64b7ab728db0bec7d4fcfd3bbe0ed6ef6fff8c7c9db5c",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.4975695517422088,
+          "implicit_hate": 0.3474207510711442,
+          "semeval_stance": 0.7042990621803873
+        }
+      },
+      "tier": "4B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.4840261240176612,
+        "css15_task_mean": 0.47649405763043096,
+        "report_sha256": "a628b2b07cdcf1ff979d846c5f4861e3429937e83238c23c9f2be95080e60ecc",
+        "v3": 54.21204775480941
+      },
+      "group": "2.0 candidate",
+      "htdev1": {
+        "H_dev_v1": 0.6108240593534711,
+        "H_dev_v1_mean": 0.571819740518536
+      },
+      "htdev2": {
+        "H_dev2": 0.48419707348839913,
+        "H_dev2_median": 0.44574780058651026,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "39c37c1038ff3528d622fb3ff43679a784ff40f2eed93ef64cbf20673e6d038c",
+        "sd": 0.010423440151698602,
+        "tasks": {
+          "conv_go_awry": 0.44574780058651026,
+          "emotion": 0.5447620463169988,
+          "ibc": 0.5382884165603548,
+          "media_ideology": 0.3581920903954802,
+          "mrf": 0.746324488908221,
+          "reddit_humor": 0.36359668267132256,
+          "talklife": 0.24443875477762292,
+          "tempowic": 0.6961758241758242,
+          "wiki_corpus": 0.42024755700325733
+        }
+      },
+      "key": "dec-m3-N4J-soup",
+      "lineage": "dec4b",
+      "pilot": {
+        "H_mean3": 0.5367210979327787,
+        "H_pilot": 0.5394325076407269,
+        "invalid": 0,
+        "predictions_sha256": "41974460a7f506a7e4afb014757ca6e6e843d062f01399187128fa08ac4aba72",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.5394325076407269,
+          "implicit_hate": 0.36410835162116173,
+          "semeval_stance": 0.7066224345364472
+        }
+      },
+      "tier": "4B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.5365041246456961,
+        "css15_task_mean": 0.5082416228581232,
+        "report_sha256": "56edb028646f19c550125ce5be85b810ae6e0184f3b27ae68e5781b8c5e768f0",
+        "v3": 55.992820775509124
+      },
+      "group": "2.0 candidate",
+      "htdev1": {
+        "H_dev_v1": 0.6198479391756703,
+        "H_dev_v1_mean": 0.5662647369883419
+      },
+      "htdev2": {
+        "H_dev2": 0.5133488279934231,
+        "H_dev2_median": 0.5342185903983657,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "6fb6a2e5216c260a7727549b8a83f6b55f62861a817048550dc7551d83f22b30",
+        "sd": 0.011013748217786834,
+        "tasks": {
+          "conv_go_awry": 0.5244618395303327,
+          "emotion": 0.5485973655547458,
+          "ibc": 0.5642976549755714,
+          "media_ideology": 0.34384620555219464,
+          "mrf": 0.7807106598984772,
+          "reddit_humor": 0.4527027027027027,
+          "talklife": 0.23578347578347578,
+          "tempowic": 0.6355209575449412,
+          "wiki_corpus": 0.5342185903983657
+        }
+      },
+      "key": "dec-e1-X2",
+      "lineage": "dec4b",
+      "pilot": {
+        "H_mean3": 0.5105805978261203,
+        "H_pilot": 0.4663652801210526,
+        "invalid": 0,
+        "predictions_sha256": "3f09068d8a7e84bf3207c972fc023583df91c0f2a6fa26fad9e1174f3c00f51b",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.4663652801210526,
+          "implicit_hate": 0.40753380401335504,
+          "semeval_stance": 0.6578427093439532
+        }
+      },
+      "tier": "4B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.5578998177971736,
+        "css15_task_mean": 0.5290380314867156,
+        "report_sha256": "b4ebe0d24a3756136aa5fe79a1daf614b7509371f76d130c299d536f41add62c",
+        "v3": 65.80803397496813
+      },
+      "group": "own 1.0",
+      "htdev1": {
+        "H_dev_v1": 0.6547363516863841,
+        "H_dev_v1_mean": 0.6317128754554863
+      },
+      "htdev2": {
+        "H_dev2": 0.560324943076639,
+        "H_dev2_median": 0.5770267468380677,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "6fb685180fa61b71f53db930d65a596df6ee6b2dc0dfb99a8a217f1a47ec9e22",
+        "sd": 0.010952764709524276,
+        "tasks": {
+          "conv_go_awry": 0.5770267468380677,
+          "emotion": 0.48666973958666127,
+          "ibc": 0.5872206225147402,
+          "media_ideology": 0.5260760576534258,
+          "mrf": 0.7961682796760814,
+          "reddit_humor": 0.5891356277094577,
+          "talklife": 0.26972123889175115,
+          "tempowic": 0.6343223736968725,
+          "wiki_corpus": 0.5765838011226945
+        }
+      },
+      "key": "lux1",
+      "lineage": "lux",
+      "pilot": {
+        "H_mean3": 0.5277211633938793,
+        "H_pilot": 0.5718376589384838,
+        "invalid": 0,
+        "predictions_sha256": "f512cea166672a1613566bf25aab924e7b4a94554c7583ffe6c99cd25d07d57a",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.5718376589384838,
+          "implicit_hate": 0.4216410823708077,
+          "semeval_stance": 0.5896847488723466
+        }
+      },
+      "tier": "9B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.49686940966010734,
+        "css15_task_mean": 0.5080240506452819,
+        "report_sha256": "b3c262aaa9dfe4feefe0f7adb7dc0ec6872f2a4aacd7de04f3e2201f79084f69",
+        "v3": 60.99434158042904
+      },
+      "group": "peer",
+      "htdev1": {
+        "H_dev_v1": 0.6668298653610771,
+        "H_dev_v1_mean": 0.6333845827705686
+      },
+      "htdev2": {
+        "H_dev2": 0.5294911229233745,
+        "H_dev2_median": 0.5352887852887853,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "ff512a80caf4ce4635858a3f76007a8dba17a5388a4f8bfeee8c1348a888a84e",
+        "sd": 0.0110431233627084,
+        "tasks": {
+          "conv_go_awry": 0.4432250006643459,
+          "emotion": 0.5333449429891546,
+          "ibc": 0.5497992963392077,
+          "media_ideology": 0.5352887852887853,
+          "mrf": 0.789277429704945,
+          "reddit_humor": 0.5694352159468439,
+          "talklife": 0.2862483553377796,
+          "tempowic": 0.5698924731182795,
+          "wiki_corpus": 0.4889086069210293
+        }
+      },
+      "key": "jpt9b",
+      "lineage": "jpt",
+      "pilot": {
+        "H_mean3": 0.5545828456304166,
+        "H_pilot": 0.5298132342883576,
+        "invalid": 0,
+        "predictions_sha256": "86d8c91251b90e4566cbc64ac99a28186cafa371f5162ee783b8e298302a4b7b",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.5298132342883576,
+          "implicit_hate": 0.41981473312197737,
+          "semeval_stance": 0.714120569480915
+        }
+      },
+      "tier": "9B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.5357812528444776,
+        "css15_task_mean": 0.4982551881277391,
+        "report_sha256": "42636dfa1482ba5d76e9f5ada1186c699b6ab058a762106334911c60d8469cea",
+        "v3": 62.05584384100891
+      },
+      "group": "peer",
+      "htdev1": {
+        "H_dev_v1": 0.6440570299265951,
+        "H_dev_v1_mean": 0.6254350179588205
+      },
+      "htdev2": {
+        "H_dev2": 0.5318086985241827,
+        "H_dev2_median": 0.5698882952889752,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "ffd432d0b79ea1e10eb88a1466ad89b6216b6849aa51a29a3df5c41d50639a0c",
+        "sd": 0.011020712707234375,
+        "tasks": {
+          "conv_go_awry": 0.5698882952889752,
+          "emotion": 0.46514726191937816,
+          "ibc": 0.6077757583101094,
+          "media_ideology": 0.4300501837343943,
+          "mrf": 0.7436483516483516,
+          "reddit_humor": 0.5836490528414755,
+          "talklife": 0.2746706313059927,
+          "tempowic": 0.6298701298701299,
+          "wiki_corpus": 0.48157862179883704
+        }
+      },
+      "key": "nimble2",
+      "lineage": "nimble",
+      "pilot": {
+        "H_mean3": 0.5324623703769137,
+        "H_pilot": 0.5273468683918677,
+        "invalid": 0,
+        "predictions_sha256": "cf2dc92865fee67bc7eafc325322dbec48ab3630a6745db9c3fd16796dc4e749",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.5273468683918677,
+          "implicit_hate": 0.44889110114657277,
+          "semeval_stance": 0.6211491415923004
+        }
+      },
+      "tier": "9B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.5688937623404035,
+        "css15_task_mean": 0.5370823662647558,
+        "report_sha256": "0aa2e3773d5b93d633502bac8c732777dacfef03cb64e2866c42d95c144e9c95",
+        "v3": 65.36081851212519
+      },
+      "group": "2.0 candidate",
+      "htdev1": {
+        "H_dev_v1": 0.6523764051532057,
+        "H_dev_v1_mean": 0.6203673275917709
+      },
+      "htdev2": {
+        "H_dev2": 0.5579599875372148,
+        "H_dev2_median": 0.571063829787234,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "986dbdc600e4fb3bc16e5e3fe0c20cac80407921518db4ec2d30bd02169a1796",
+        "sd": 0.010872765154976512,
+        "tasks": {
+          "conv_go_awry": 0.571063829787234,
+          "emotion": 0.5654238452834012,
+          "ibc": 0.587640640252342,
+          "media_ideology": 0.4903189882013412,
+          "mrf": 0.7584973166368516,
+          "reddit_humor": 0.5958706610023992,
+          "talklife": 0.2744222567398845,
+          "tempowic": 0.6168359941944848,
+          "wiki_corpus": 0.5615663557369945
+        }
+      },
+      "key": "9b-l2-8k",
+      "lineage": "9b",
+      "pilot": {
+        "H_mean3": 0.5482163845657282,
+        "H_pilot": 0.5898363110269264,
+        "invalid": 0,
+        "predictions_sha256": "31e39446a4b45e6e0f7f85d1e005fabe6349d14cc3d3f3a8b88d2b0497496ce2",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.5898363110269264,
+          "implicit_hate": 0.4126260585209272,
+          "semeval_stance": 0.642186784149331
+        }
+      },
+      "tier": "9B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.5500012798533966,
+        "css15_task_mean": 0.5288249133863012,
+        "report_sha256": "8d076317fe15e80dfad1ed574b0ac2a1c8c5a930cd9ba94be37505c93442f67f",
+        "v3": 64.59980426353974
+      },
+      "group": "2.0 candidate",
+      "htdev1": {
+        "H_dev_v1": 0.6399464579203308,
+        "H_dev_v1_mean": 0.6180743289448004
+      },
+      "htdev2": {
+        "H_dev2": 0.5431560338288134,
+        "H_dev2_median": 0.5477303273469771,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "b400c57f1f09e57fa926c4bd3b24a2abc3391e85642c9d0e2719597ec621e4e8",
+        "sd": 0.010819747742912639,
+        "tasks": {
+          "conv_go_awry": 0.5551298017051441,
+          "emotion": 0.5477303273469771,
+          "ibc": 0.5854303567371052,
+          "media_ideology": 0.4629032258064516,
+          "mrf": 0.7163591125855276,
+          "reddit_humor": 0.5308270676691729,
+          "talklife": 0.25588844921801396,
+          "tempowic": 0.7237192967242613,
+          "wiki_corpus": 0.5104166666666667
+        }
+      },
+      "key": "9b-m3-B-s1",
+      "lineage": "9b",
+      "pilot": {
+        "H_mean3": 0.5618733564406301,
+        "H_pilot": 0.5742798460997149,
+        "invalid": 0,
+        "predictions_sha256": "07af4ab9df3a535d5094ed103c248955d92a044f16b275e87410c0e657df0b2c",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.5742798460997149,
+          "implicit_hate": 0.4057025871123846,
+          "semeval_stance": 0.7056376361097908
+        }
+      },
+      "tier": "9B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.5519582849801882,
+        "css15_task_mean": 0.5210501493786327,
+        "report_sha256": "3de8e0139ffb7d790adbee8643c9b74f7aa55a17071acedff57bdd39747b3511",
+        "v3": 68.57109186949685
+      },
+      "group": "2.0 candidate",
+      "htdev1": {
+        "H_dev_v1": 0.646982765953827,
+        "H_dev_v1_mean": 0.6182513713408203
+      },
+      "htdev2": {
+        "H_dev2": 0.5233612714396166,
+        "H_dev2_median": 0.5481407737699587,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "a14265a1f4147e825658b505cffafe15c6e8e905fd75df421f7e1d94bab2ec0b",
+        "sd": 0.010557521534773708,
+        "tasks": {
+          "conv_go_awry": 0.5489072365225838,
+          "emotion": 0.5481407737699587,
+          "ibc": 0.5498970997415146,
+          "media_ideology": 0.43064018536908305,
+          "mrf": 0.7541455576137657,
+          "reddit_humor": 0.402690149542245,
+          "talklife": 0.27154976383427254,
+          "tempowic": 0.7078260869565217,
+          "wiki_corpus": 0.49645458960660516
+        }
+      },
+      "key": "9b-m3-DW",
+      "lineage": "9b",
+      "pilot": {
+        "H_mean3": 0.5817170493692889,
+        "H_pilot": 0.6037653684101335,
+        "invalid": 0,
+        "predictions_sha256": "324209df9b025a207185e2f477cec3d99d853b9174c94ed50dbd4c24b39e4ccd",
+        "source": "htdev-v1 same-job collection",
+        "tasks": {
+          "discourse": 0.6037653684101335,
+          "implicit_hate": 0.4258538142580802,
+          "semeval_stance": 0.715531965439653
+        }
+      },
+      "tier": "9B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.45904022473242023,
+        "css15_task_mean": 0.4310797083244956,
+        "report_sha256": "26366dcd66c11191d624239bae96e62c6c9b535d419c251f223f8cd9a10c4512",
+        "v3": 48.459030630490204
+      },
+      "group": "2.0 candidate",
+      "htdev1": null,
+      "htdev2": {
+        "H_dev2": 0.46172981964459736,
+        "H_dev2_median": 0.5106987638633208,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "b73571af9c4d80d2677d3595efe0345b8ac4622b52cfc8e426a3cf47a68ea59b",
+        "sd": 0.010778980589408448,
+        "tasks": {
+          "conv_go_awry": 0.5806012453411298,
+          "emotion": 0.542228921589494,
+          "ibc": 0.5106987638633208,
+          "media_ideology": 0.3140622245343275,
+          "mrf": 0.5754185117183281,
+          "reddit_humor": 0.3831835007932311,
+          "talklife": 0.3183904825819305,
+          "tempowic": 0.5333333333333333,
+          "wiki_corpus": 0.3976513930462814
+        }
+      },
+      "key": "06b-m6-mxcx-soup",
+      "lineage": "06b",
+      "pilot": {
+        "H_mean3": 0.40524775233739313,
+        "H_pilot": 0.3637649735863574,
+        "invalid": 0,
+        "predictions_sha256": "c458b4fa17e5a89accc3e9d1e3d18ca229fbfb8da0e82a26d8f0572083b57561",
+        "source": "track readout (node A)",
+        "tasks": {
+          "discourse": 0.3637649735863574,
+          "implicit_hate": 0.32352046454407923,
+          "semeval_stance": 0.5284578188817427
+        }
+      },
+      "tier": "0.6B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.4557958925660293,
+        "css15_task_mean": 0.42457273148033986,
+        "report_sha256": "16e36cf9edef2e9e419bdb428a59cb50f3b6a040f9143ea24dafaad9279cf48a",
+        "v3": 46.83500542301683
+      },
+      "group": "2.0 candidate",
+      "htdev1": null,
+      "htdev2": {
+        "H_dev2": 0.4637605454953087,
+        "H_dev2_median": 0.4894150537484602,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "598007a15292d6efc0d9b9f520a15959844063beb7d83fe60e4cdbb3435ec3f2",
+        "sd": 0.010580833433540061,
+        "tasks": {
+          "conv_go_awry": 0.6054530874097834,
+          "emotion": 0.554197121798565,
+          "ibc": 0.4894150537484602,
+          "media_ideology": 0.304449768128373,
+          "mrf": 0.583011583011583,
+          "reddit_humor": 0.3611607142857143,
+          "talklife": 0.3129345959730146,
+          "tempowic": 0.5493607954545454,
+          "wiki_corpus": 0.4138621896477391
+        }
+      },
+      "key": "06b-m6-mxcxa-soup",
+      "lineage": "06b",
+      "pilot": {
+        "H_mean3": 0.41025762001807947,
+        "H_pilot": 0.34832572128101347,
+        "invalid": 0,
+        "predictions_sha256": "643ef6f62c6622b9832d27332530789749a2e93dcf857d6e55117204500fda50",
+        "source": "track readout (node A)",
+        "tasks": {
+          "discourse": 0.34832572128101347,
+          "implicit_hate": 0.33204309836918444,
+          "semeval_stance": 0.5504040404040405
+        }
+      },
+      "tier": "0.6B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.4113879941986401,
+        "css15_task_mean": 0.41106597273658674,
+        "report_sha256": "478c5ae3d9cbb1ab32ffdf3d01602a4319dbfcfe1ae27e6a0dea3cc6852c6611",
+        "v3": 42.21166011747062
+      },
+      "group": "2.0 candidate",
+      "htdev1": null,
+      "htdev2": {
+        "H_dev2": 0.4206772562433335,
+        "H_dev2_median": 0.4061624649859944,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "dea4c313624f44a58d77cf931a9527094be4e8591fa1dcb2ec7634afe784c985",
+        "sd": 0.01038217034997232,
+        "tasks": {
+          "conv_go_awry": 0.4807172192727637,
+          "emotion": 0.5642324462741782,
+          "ibc": 0.49429317633162473,
+          "media_ideology": 0.3063453169413939,
+          "mrf": 0.43882221947296796,
+          "reddit_humor": 0.4061624649859944,
+          "talklife": 0.3293685112566985,
+          "tempowic": 0.3684210526315789,
+          "wiki_corpus": 0.3977328990228013
+        }
+      },
+      "key": "06b-m7-mx-soup",
+      "lineage": "06b",
+      "pilot": {
+        "H_mean3": 0.4001236766579623,
+        "H_pilot": 0.33076272954544444,
+        "invalid": 0,
+        "predictions_sha256": "94396a5d32881d3cede98ef4a636f3cf992537d25ac49ca45b6f895e93ef8403",
+        "source": "track readout (node A)",
+        "tasks": {
+          "discourse": 0.3208033378303764,
+          "implicit_hate": 0.33076272954544444,
+          "semeval_stance": 0.548804962598066
+        }
+      },
+      "tier": "0.6B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.4245474406991261,
+        "css15_task_mean": 0.4115969714949613,
+        "report_sha256": "00df74a93f9bc78f6d8d72e720f4ac204cf814b952ed786b5211d74f12b3cce1",
+        "v3": 44.65474510658087
+      },
+      "group": "2.0 candidate",
+      "htdev1": null,
+      "htdev2": {
+        "H_dev2": 0.4283646355003034,
+        "H_dev2_median": 0.4284824902723735,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "9b46b99f01d31217a66edbde0be7ce7caa5c2023737b9d526934824b56d1db19",
+        "sd": 0.01057240662953693,
+        "tasks": {
+          "conv_go_awry": 0.5736842105263158,
+          "emotion": 0.5625984666932943,
+          "ibc": 0.4782291331106116,
+          "media_ideology": 0.24204142819709099,
+          "mrf": 0.4284824902723735,
+          "reddit_humor": 0.37082142758065856,
+          "talklife": 0.34560500491703805,
+          "tempowic": 0.45048923679060665,
+          "wiki_corpus": 0.40333032141474123
+        }
+      },
+      "key": "06b-m7-mxcx-soup",
+      "lineage": "06b",
+      "pilot": {
+        "H_mean3": 0.41365662242438145,
+        "H_pilot": 0.3377162706603527,
+        "invalid": 0,
+        "predictions_sha256": "9b681b455b25c0453dfa4047213df2ad4c38ea1d4e6df5922b72b95646696eb9",
+        "source": "track readout (node A)",
+        "tasks": {
+          "discourse": 0.3377162706603527,
+          "implicit_hate": 0.3307642616221959,
+          "semeval_stance": 0.5724893349905958
+        }
+      },
+      "tier": "0.6B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.4548396188974283,
+        "css15_task_mean": 0.40626635783762965,
+        "report_sha256": "ffffacb3876c3f6a3eaada57a2cb1e44e0ed145b25f2ca966609c9ab022e5a6c",
+        "v3": 47.35955944355842
+      },
+      "group": "2.0 candidate",
+      "htdev1": null,
+      "htdev2": {
+        "H_dev2": 0.422672870806665,
+        "H_dev2_median": 0.4449013157894737,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "44af37273895bf0fa97439ddc4bf9e91cb0e85fc9a92d8d86ce0210d49f9235f",
+        "sd": 0.010468917325368412,
+        "tasks": {
+          "conv_go_awry": 0.5520833333333333,
+          "emotion": 0.5369506756098896,
+          "ibc": 0.40301034943892083,
+          "media_ideology": 0.26009088479016307,
+          "mrf": 0.4449013157894737,
+          "reddit_humor": 0.5061728395061729,
+          "talklife": 0.1936900335534346,
+          "tempowic": 0.4778021978021978,
+          "wiki_corpus": 0.4293542074363992
+        }
+      },
+      "key": "dec-m2-E8F-s2",
+      "lineage": "dec08b",
+      "pilot": {
+        "H_mean3": 0.3081108311588015,
+        "H_pilot": 0.27683487490805136,
+        "invalid": 0,
+        "predictions_sha256": "d964d0d344a4e29871e80dae71ec97bbc9fa404681539dd2b9547b9a5c102b46",
+        "source": "track readout (node A)",
+        "tasks": {
+          "discourse": 0.27683487490805136,
+          "implicit_hate": 0.20710209338241967,
+          "semeval_stance": 0.44039552518593345
+        }
+      },
+      "tier": "0.8B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.36347995455283233,
+        "css15_task_mean": 0.374468398281205,
+        "report_sha256": "45bd78ca72007f5c2045b5a3f1895f667650339d6a662543cb356de6018e06f0",
+        "v3": 41.08418234496964
+      },
+      "group": "2.0 candidate",
+      "htdev1": null,
+      "htdev2": {
+        "H_dev2": 0.3860478411568727,
+        "H_dev2_median": 0.36449458899378306,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "e80322b86b637c666e516099397c0da80607ea1457c9ec8da5d28ffff4b73820",
+        "sd": 0.009940233830970277,
+        "tasks": {
+          "conv_go_awry": 0.3897133452201344,
+          "emotion": 0.5262908962793604,
+          "ibc": 0.32194988077563325,
+          "media_ideology": 0.3169627315163562,
+          "mrf": 0.4721126624240811,
+          "reddit_humor": 0.5032467532467533,
+          "talklife": 0.23734727196123867,
+          "tempowic": 0.3423124399945138,
+          "wiki_corpus": 0.36449458899378306
+        }
+      },
+      "key": "dec-m2-E8F-s3",
+      "lineage": "dec08b",
+      "pilot": {
+        "H_mean3": 0.3318871211549461,
+        "H_pilot": 0.2838953208583336,
+        "invalid": 0,
+        "predictions_sha256": "2cf643d64c0e9d6c1ae1c7237e73808836f66ee2d494368e2f3f5b25bb160dcb",
+        "source": "track readout (node A)",
+        "tasks": {
+          "discourse": 0.2838953208583336,
+          "implicit_hate": 0.24750591514871068,
+          "semeval_stance": 0.46426012745779416
+        }
+      },
+      "tier": "0.8B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.38455201613096346,
+        "css15_task_mean": 0.39101625157091424,
+        "report_sha256": "15359ff5b008f5a5c9dd6efff8d7d2b66c391814c4441e981d50c10c26e45cba",
+        "v3": 43.99976200173496
+      },
+      "group": "2.0 candidate",
+      "htdev1": null,
+      "htdev2": {
+        "H_dev2": 0.3945441926077667,
+        "H_dev2_median": 0.3513513513513513,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "a29651d18f77288a460ecced426f1b6da2e87a65b524e907b37035d4baab4508",
+        "sd": 0.00955398397208531,
+        "tasks": {
+          "conv_go_awry": 0.3513513513513513,
+          "emotion": 0.49012456489846706,
+          "ibc": 0.3374076903488668,
+          "media_ideology": 0.3369452159427816,
+          "mrf": 0.564516129032258,
+          "reddit_humor": 0.34469890192498726,
+          "talklife": 0.30407347648613414,
+          "tempowic": 0.4578194914329368,
+          "wiki_corpus": 0.3639609120521172
+        }
+      },
+      "key": "dec-m2-B8F-s2",
+      "lineage": "dec08b",
+      "pilot": {
+        "H_mean3": 0.34854389901528965,
+        "H_pilot": 0.24372761713092933,
+        "invalid": 0,
+        "predictions_sha256": "5e379b064148fdc8168668b6068d8f0fe47a3cb8ec23871958a85bba095cb5dc",
+        "source": "track readout (node A)",
+        "tasks": {
+          "discourse": 0.24372761713092933,
+          "implicit_hate": 0.23355671433660008,
+          "semeval_stance": 0.5683473655783396
+        }
+      },
+      "tier": "0.8B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.43760831470762873,
+        "css15_task_mean": 0.41443631721394186,
+        "report_sha256": "ea17ed4728cc61e4f7bfbfe2713f978cc19dca8db8ae9c98ffa63968eb7b3abd",
+        "v3": 49.84771521292881
+      },
+      "group": "2.0 candidate",
+      "htdev1": null,
+      "htdev2": {
+        "H_dev2": 0.42221066936843143,
+        "H_dev2_median": 0.4782608695652174,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "9f56797c03a70fcd2e29cc31456ed0be5be9a518976a75be88caf554d8756003",
+        "sd": 0.010568574599771315,
+        "tasks": {
+          "conv_go_awry": 0.4872727272727273,
+          "emotion": 0.5374710190283961,
+          "ibc": 0.39723659295326974,
+          "media_ideology": 0.24023541515371583,
+          "mrf": 0.4782608695652174,
+          "reddit_humor": 0.5043640496665309,
+          "talklife": 0.23135075958668885,
+          "tempowic": 0.4887798036465638,
+          "wiki_corpus": 0.434924787442773
+        }
+      },
+      "key": "dec-m6-08b-E6K-b1_3",
+      "lineage": "dec08b",
+      "pilot": {
+        "H_mean3": 0.39493850390126806,
+        "H_pilot": 0.27877679694207114,
+        "invalid": 0,
+        "predictions_sha256": "e61c6eb8364d2c2ef2a1ceb512cafee819c43f3854d67dfbb39a07916d02ebe0",
+        "source": "track readout (node A)",
+        "tasks": {
+          "discourse": 0.27877679694207114,
+          "implicit_hate": 0.2695249141721,
+          "semeval_stance": 0.6365138005896331
+        }
+      },
+      "tier": "0.8B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.5124270871739603,
+        "css15_task_mean": 0.47837089929679966,
+        "report_sha256": "08c19ed5be3fe745acad68280d3b958e111da5ba028e1540b60a82cea8ebc55f",
+        "v3": 55.36203134964658
+      },
+      "group": "2.0 candidate",
+      "htdev1": null,
+      "htdev2": {
+        "H_dev2": 0.49987672061477123,
+        "H_dev2_median": 0.49188307907301737,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "30443cbd97cd637ddf21508866ef1a40f54de379fd326540f9b3ceb6b2b7626d",
+        "sd": 0.010900803290828312,
+        "tasks": {
+          "conv_go_awry": 0.44574780058651026,
+          "emotion": 0.5474894748610519,
+          "ibc": 0.5714100064977258,
+          "media_ideology": 0.34215816253167697,
+          "mrf": 0.7356412273800157,
+          "reddit_humor": 0.4248180365702113,
+          "talklife": 0.24354016638716255,
+          "tempowic": 0.6962025316455696,
+          "wiki_corpus": 0.49188307907301737
+        }
+      },
+      "key": "dec-m2-X4K-s1",
+      "lineage": "dec4b",
+      "pilot": {
+        "H_mean3": 0.4951474499954955,
+        "H_pilot": 0.4352688626460417,
+        "invalid": 0,
+        "predictions_sha256": "36193b98c00ead49807bc2eea0e349cefbb068812a232070d612db8272676fb2",
+        "source": "track readout (node A)",
+        "tasks": {
+          "discourse": 0.4352688626460417,
+          "implicit_hate": 0.37613817653690385,
+          "semeval_stance": 0.6740353108035408
+        }
+      },
+      "tier": "4B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.5027474612208459,
+        "css15_task_mean": 0.4722567759003581,
+        "report_sha256": "16d988ce38a5a1524f801e29b17bc010ea776aff492f9cba3f2b2ba69961977c",
+        "v3": 54.11565357280116
+      },
+      "group": "2.0 candidate",
+      "htdev1": null,
+      "htdev2": {
+        "H_dev2": 0.4945549067347365,
+        "H_dev2_median": 0.48936170212765956,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "cb2f313568c2249f4be318b01c05e513101f20ff42c19986a3abc9a343ad42d0",
+        "sd": 0.010800153666644975,
+        "tasks": {
+          "conv_go_awry": 0.4373668008524746,
+          "emotion": 0.536266885017875,
+          "ibc": 0.5804960677555959,
+          "media_ideology": 0.3458791038292062,
+          "mrf": 0.7298044637566661,
+          "reddit_humor": 0.40050272308336826,
+          "talklife": 0.2356934601715295,
+          "tempowic": 0.6956229540182539,
+          "wiki_corpus": 0.48936170212765956
+        }
+      },
+      "key": "dec-m2-X4K-s2",
+      "lineage": "dec4b",
+      "pilot": {
+        "H_mean3": 0.4962238497474321,
+        "H_pilot": 0.4240183747235597,
+        "invalid": 0,
+        "predictions_sha256": "1f3a100e3e0f918a09f167841b3f30b39554ce4a566eb0484471ce91c8f4b372",
+        "source": "track readout (node A)",
+        "tasks": {
+          "discourse": 0.4240183747235597,
+          "implicit_hate": 0.3822577921233544,
+          "semeval_stance": 0.6823953823953823
+        }
+      },
+      "tier": "4B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.4893779819015105,
+        "css15_task_mean": 0.4759116828351853,
+        "report_sha256": "dc3dc17643816ef4f4e43f58ea45261125bf4f8665f1555ea5a2be7624b05ec8",
+        "v3": 54.41265285302802
+      },
+      "group": "2.0 candidate",
+      "htdev1": null,
+      "htdev2": {
+        "H_dev2": 0.4926489641494002,
+        "H_dev2_median": 0.47088952121736977,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "7ba5c765df61633e66ebe9151a7a2928cdfb6ec3decc1d6986683da8bbd5518d",
+        "sd": 0.01068364504975806,
+        "tasks": {
+          "conv_go_awry": 0.4373668008524746,
+          "emotion": 0.5486685700836644,
+          "ibc": 0.5856359229493557,
+          "media_ideology": 0.3296136944240856,
+          "mrf": 0.746324488908221,
+          "reddit_humor": 0.4032678190859579,
+          "talklife": 0.24013179383328978,
+          "tempowic": 0.6719420659901829,
+          "wiki_corpus": 0.47088952121736977
+        }
+      },
+      "key": "dec-m2-X4R-s1",
+      "lineage": "dec4b",
+      "pilot": {
+        "H_mean3": 0.49408805502922387,
+        "H_pilot": 0.4319331385410871,
+        "invalid": 0,
+        "predictions_sha256": "3bb21e1f9d836cc5708d767a473b930ac987a73d8bc2ab85090be3872a2c3380",
+        "source": "track readout (node A)",
+        "tasks": {
+          "discourse": 0.4319331385410871,
+          "implicit_hate": 0.3693116349292157,
+          "semeval_stance": 0.6810193916173688
+        }
+      },
+      "tier": "4B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.4797094055670291,
+        "css15_task_mean": 0.4679414557958264,
+        "report_sha256": "f57c8befdbe78a8aaf2180c83d5a1d53e7f18342bdec160905dc04eb5d7e123c",
+        "v3": 53.70523997685665
+      },
+      "group": "2.0 candidate",
+      "htdev1": null,
+      "htdev2": {
+        "H_dev2": 0.4815465139603153,
+        "H_dev2_median": 0.45401954397394134,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "80327d672869ab16e1e93550dcc4dd1aa6a9f8777d1bdb8cae146e81a3400f49",
+        "sd": 0.010215595540511638,
+        "tasks": {
+          "conv_go_awry": 0.45401954397394134,
+          "emotion": 0.5217901875271539,
+          "ibc": 0.5771135531135532,
+          "media_ideology": 0.30715806118104966,
+          "mrf": 0.7567356839643073,
+          "reddit_humor": 0.3660128926073241,
+          "talklife": 0.21901803594126906,
+          "tempowic": 0.6884343036978757,
+          "wiki_corpus": 0.44363636363636366
+        }
+      },
+      "key": "dec-m2-X4R-s2",
+      "lineage": "dec4b",
+      "pilot": {
+        "H_mean3": 0.49428860613685216,
+        "H_pilot": 0.44369714996630055,
+        "invalid": 0,
+        "predictions_sha256": "cd376fcb7ef359a8dd5f6a8f74cf6b754a917274ab833c9e701d33285e5b1049",
+        "source": "track readout (node A)",
+        "tasks": {
+          "discourse": 0.44369714996630055,
+          "implicit_hate": 0.3537311357544123,
+          "semeval_stance": 0.6854375326898438
+        }
+      },
+      "tier": "4B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.5638987244727365,
+        "css15_task_mean": 0.5017124297133734,
+        "report_sha256": "9c94f94c88416e85d9cd9b98f7f32f9e7d2380b7e3e29369efa3483f01e20a02",
+        "v3": 60.36717242761217
+      },
+      "group": "2.0 candidate",
+      "htdev1": null,
+      "htdev2": {
+        "H_dev2": 0.5236626500640474,
+        "H_dev2_median": 0.5461043016371823,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "32e00c759437e4d71a40b338b387ca81040d349b7742505877381c516a005158",
+        "sd": 0.011125611952988425,
+        "tasks": {
+          "conv_go_awry": 0.4795972711825721,
+          "emotion": 0.5461043016371823,
+          "ibc": 0.5694252520599826,
+          "media_ideology": 0.40424242424242424,
+          "mrf": 0.741328630217519,
+          "reddit_humor": 0.5533518621456365,
+          "talklife": 0.268745700527402,
+          "tempowic": 0.6956229540182539,
+          "wiki_corpus": 0.45454545454545453
+        }
+      },
+      "key": "dec-m4-N4LX-soup",
+      "lineage": "dec4b",
+      "pilot": {
+        "H_mean3": 0.5505659765690837,
+        "H_pilot": 0.5382208412164908,
+        "invalid": 0,
+        "predictions_sha256": "2c221217de7681e8d57c478613ce8e34cc70c3f079a57009ad38ee3aef24ec1e",
+        "source": "same-job collection",
+        "tasks": {
+          "discourse": 0.5382208412164908,
+          "implicit_hate": 0.38640974768542247,
+          "semeval_stance": 0.727067340805338
+        }
+      },
+      "tier": "4B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.5795593764607849,
+        "css15_task_mean": 0.5122892711899395,
+        "report_sha256": "87ec711c57f3df874f785f69b855184039351644ff35e1c1707d13381e2e66fd",
+        "v3": 63.151349623509844
+      },
+      "group": "2.0 candidate",
+      "htdev1": null,
+      "htdev2": {
+        "H_dev2": 0.5393525487170227,
+        "H_dev2_median": 0.5351320947772237,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "8c67485b6f68a91f394bfbca0ae230d5787ea051d9349b54aca52d21cae083b2",
+        "sd": 0.011129703881926583,
+        "tasks": {
+          "conv_go_awry": 0.5314762009212546,
+          "emotion": 0.5351320947772237,
+          "ibc": 0.5959649958454756,
+          "media_ideology": 0.43941318814277075,
+          "mrf": 0.7356412273800157,
+          "reddit_humor": 0.5920329670329669,
+          "talklife": 0.25755821000448464,
+          "tempowic": 0.7124085998035579,
+          "wiki_corpus": 0.45454545454545453
+        }
+      },
+      "key": "dec-m4-N4XF-soup",
+      "lineage": "dec4b",
+      "pilot": {
+        "H_mean3": 0.5624878567559061,
+        "H_pilot": 0.5364386345686938,
+        "invalid": 0,
+        "predictions_sha256": "373dee8888bdeb613ea3af6a8d89617b8cf248b2624882948e02ba38cc1797e0",
+        "source": "same-job collection",
+        "tasks": {
+          "discourse": 0.5364386345686938,
+          "implicit_hate": 0.41234306258215503,
+          "semeval_stance": 0.7386818731168692
+        }
+      },
+      "tier": "4B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.5660248237607367,
+        "css15_task_mean": 0.5444200726722588,
+        "report_sha256": "b0b805ccc3efd7f0e35652607658b3db5c95cf5077bb72ca66c6bd5c88e97feb",
+        "v3": 67.73727723794684
+      },
+      "group": "2.0 candidate",
+      "htdev1": null,
+      "htdev2": {
+        "H_dev2": 0.5636054334301362,
+        "H_dev2_median": 0.5761935905820798,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "621b207f8aeafd0ea52fa957a93aa5b95b92cf8ec7143d1a78f5d23680c65849",
+        "sd": 0.01063727052322811,
+        "tasks": {
+          "conv_go_awry": 0.5761935905820798,
+          "emotion": 0.5211371654480023,
+          "ibc": 0.6239148596128001,
+          "media_ideology": 0.4864290520028225,
+          "mrf": 0.7670313222249125,
+          "reddit_humor": 0.6023842917251052,
+          "talklife": 0.2625911150157546,
+          "tempowic": 0.7055501460564753,
+          "wiki_corpus": 0.5272173582032738
+        }
+      },
+      "key": "9b-m4-K-a13",
+      "lineage": "9b",
+      "pilot": {
+        "H_mean3": 0.5621901602795477,
+        "H_pilot": 0.5795371486683455,
+        "invalid": 0,
+        "predictions_sha256": "d394370eace8a059fa850fae5ad120f37a1803274f5d21652f60a86f987b2d3c",
+        "source": "track readout (node A)",
+        "tasks": {
+          "discourse": 0.5795371486683455,
+          "implicit_hate": 0.4394377616552311,
+          "semeval_stance": 0.6675955705150668
+        }
+      },
+      "tier": "9B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.5635997888956028,
+        "css15_task_mean": 0.541255517379503,
+        "report_sha256": "80c4cd2f33918b297d48fa12937c5b49e989b4c5a4d459501e713472496299eb",
+        "v3": 67.98174952841346
+      },
+      "group": "2.0 candidate",
+      "htdev1": null,
+      "htdev2": {
+        "H_dev2": 0.560234045500281,
+        "H_dev2_median": 0.5543434439253445,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "f94ed666f81965f7803d215645cdfbc7bdd27acef16a0435c88ce39f9a205133",
+        "sd": 0.010799115050890314,
+        "tasks": {
+          "conv_go_awry": 0.5543434439253445,
+          "emotion": 0.5411561079303014,
+          "ibc": 0.6016288373935432,
+          "media_ideology": 0.48003848003848004,
+          "mrf": 0.7582460991507012,
+          "reddit_humor": 0.6291208791208791,
+          "talklife": 0.2865471422213745,
+          "tempowic": 0.6987576973416011,
+          "wiki_corpus": 0.49226772238030436
+        }
+      },
+      "key": "9b-m4-KN-a12",
+      "lineage": "9b",
+      "pilot": {
+        "H_mean3": 0.5628161933437822,
+        "H_pilot": 0.565813289115311,
+        "invalid": 0,
+        "predictions_sha256": "53c5a01af16e1e05df4c3cb6cdc3490bfc47e2a684e2c32c3362d167ee04f1cb",
+        "source": "track readout (node A)",
+        "tasks": {
+          "discourse": 0.565813289115311,
+          "implicit_hate": 0.4063048011713529,
+          "semeval_stance": 0.7163304897446825
+        }
+      },
+      "tier": "9B"
+    },
+    {
+      "formal": {
+        "H_formal": 0.5681834042850165,
+        "css15_task_mean": 0.5400982787275023,
+        "report_sha256": "6808893198c78be0f37942f5165a65115aff7f37c7717667c89aaa0fbbe65193",
+        "v3": 67.86631506856266
+      },
+      "group": "2.0 candidate",
+      "htdev1": null,
+      "htdev2": {
+        "H_dev2": 0.5487290130948304,
+        "H_dev2_median": 0.5421916851053918,
+        "invalid": 0,
+        "items": 1944,
+        "report_sha256": "ed43e74e20d28174f17466b268272d0c085f9b6fd3f281b3cebc5ba64ee99085",
+        "sd": 0.010659183791833863,
+        "tasks": {
+          "conv_go_awry": 0.5672974947561924,
+          "emotion": 0.5241699622155426,
+          "ibc": 0.5941753728108202,
+          "media_ideology": 0.4767640674994825,
+          "mrf": 0.7714285714285714,
+          "reddit_humor": 0.5421916851053918,
+          "talklife": 0.25647974428462234,
+          "tempowic": 0.6923076923076923,
+          "wiki_corpus": 0.5137465274451576
+        }
+      },
+      "key": "9b-m4-U-a13",
+      "lineage": "9b",
+      "pilot": {
+        "H_mean3": 0.5699483289043926,
+        "H_pilot": 0.5913677775064831,
+        "invalid": 0,
+        "predictions_sha256": "11c05de51e30e1d213766281e1e609b41ea130d2dc310ae2f9601a979fa1dd25",
+        "source": "track readout (node A)",
+        "tasks": {
+          "discourse": 0.5913677775064831,
+          "implicit_hate": 0.4371928176218812,
+          "semeval_stance": 0.6812843915848136
+        }
+      },
+      "tier": "9B"
+    }
+  ],
+  "panels": {
+    "gold/css-pilot.gold.jsonl": "9a7274760dc4ced5ce5219b300974a1cf54c7d5e7e0c7de05d78bb33f2959391",
+    "gold/css15.gold.jsonl": "1cda9623032138bb7b124be0c1b0a4239c06bed7be3169264e6eb31805c19ba4",
+    "gold/ht-dev2.gold.jsonl": "659c92b45d2a5b37e250ccb728cdbf5580ba361b3fc4b2f2ab505a13e0a556cc",
+    "goldfree/css-pilot.prompts.jsonl": "598319a429de16c659b59ede0eac3c269939356b0599f4e08d1983e44def3dda",
+    "goldfree/css15.prompts.jsonl": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6",
+    "goldfree/ht-dev2.prompts.jsonl": "90cd409a1e091a623362c0e5b227d13b7301bf13fe266f7905e09233cf815f74"
+  },
+  "schema": "dev2-htdev2-validation-features/1",
+  "scope": "per-model aggregates only (HT-DEV v2 and CSS-pilot readouts, stored formal REPORT.json fields)",
+  "spec_sha256": "b90f63b15cbbc3461132f14c37fde984984e1f4a533a933c60511aa3a1d08a27"
+}

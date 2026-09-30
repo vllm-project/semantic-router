@@ -39,6 +39,8 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Callable
 
+from v2.common import eval_only
+
 RESAMPLE_SUFFIX = "#r1"
 SCHEMA = "decision2-27b-mixtures/2"
 GRAMMAR = (
@@ -526,9 +528,11 @@ def main() -> None:
         inputs += samples[name][0]
     if set(samples) & {spec.split("=", 1)[0] for spec in args.aho}:
         raise SystemExit("an --aho-sample name repeats an --aho name")
+    eval_only.guard(args)
     hashes = {}
     for path in inputs:
         hashes[path] = sha_file(Path(path))
+        eval_only.check_file(path, hashes[path])
         if path in expected and expected[path] != hashes[path]:
             raise SystemExit(
                 f"{path}: {hashes[path]} differs from the frozen {expected[path]}"
@@ -576,6 +580,7 @@ def main() -> None:
     for name, rows in outputs.items():
         for row in rows:
             validate_row(row, "train")
+        eval_only.check_rows(rows)
         check_partition_isolation({"train": rows, "select": select, "cal": cal})
         for aho_name, kept in aho_rows.items():
             check_partition_isolation({"train": rows, f"aho-{aho_name}": kept})
