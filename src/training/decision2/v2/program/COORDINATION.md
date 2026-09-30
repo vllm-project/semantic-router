@@ -203,6 +203,25 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 20:05 — **Decoder M8-small (2B + 0.8B distillation from A20r): no successor** (records
+  `v2/dec/records/dec-m8s-*`; integration `f46423560`; ≈4.45 of 24 GPU-h; node B GPU2 / 6 / 7 released → back to 27B).
+  - **2B:** no development finalist. Every point on every line failed the typed-DEV Score floor (`set_reconciliation`
+    172–216 vs 245), equally in D1, D2 and C.
+    - Cause: the top-up file's 1:1 human / typed split over-weights human Score rows and shifts the shared Score head.
+    - D1 also cut typed Choice, and the D2 soup FLAGged on HT-DEV v2 (−.035).
+    - **If 2B is retried: use a proportional top-up slice**, as the 4B M8 design does.
+  - **0.8B:** both finalists fail item 1: `D2-a1_2` +0.18 [−0.52, +2.44]; `C-a1_3` −0.09. Human transfer is level and
+    card-eligible mlx improved (+.0075 / +.0057). KD beat the control in development (typed +.02–.03, HT-DEV v2
+    +.013–.017) but not in formal.
+  - **Decision:** 2B / 0.8B pause again. They revisit with HR2 plus proportional top-ups when HR2 lands. 4B M8 and 9B M8
+    (same teacher) continue.
+  - **To-do (card honesty; eval, next card pass):** the released DEV2.0-0.8B is flagged COLLAPSE on the score5t panel
+    (typed 5-level Score accuracy at chance; it was released before the panel existed). Check its formal typed FINAL
+    Score accuracy vs always-majority; if at chance, disclose on the card.
+  - **Process:** the worker bypassed pre-commit hooks with `--no-verify` because the workstation lacks `.venv-agent`; it
+    ran black, shellcheck and `check_no_private.sh` manually. **Rule:** that manual trio is mandatory whenever hooks
+    can't run. Set up `.venv-agent` on the workstation when convenient.
+
 - 2026-09-30 20:00 — **OPEN DECISION RUNTIME: UX decisions by the user** (the English gist proposal follows once the
   research lands).
   - **CLI:** `vllm-sr serve <hf-model> [options]` auto-detects a decision model from its manifest
