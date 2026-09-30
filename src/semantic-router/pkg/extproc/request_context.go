@@ -107,6 +107,9 @@ type RequestContext struct {
 	FullDuplexRequestBody bool // true when the data plane negotiated FULL_DUPLEX_STREAMED
 	SkipProcessing        bool // true only when the configured opt-out header is valid
 
+	// Request header reply held until a full-duplex body is routed.
+	fullDuplexHold *fullDuplexHeaderHold
+
 	StreamingComplete      bool // True after neutral stream finalization runs once.
 	StreamingAborted       bool // True if the neutral stream ended abnormally.
 	ProtocolResponseStream *protocolcodec.StreamEngine
@@ -133,6 +136,12 @@ type RequestContext struct {
 	// the request was never admitted (rejected pre-selection, cache hit, etc.)
 	// and inflight.End on it is a no-op.
 	InflightToken uint64
+
+	// InflightModel is the model key whose bucket InflightToken was taken
+	// from. It travels with the token so every End site releases the exact
+	// bucket Begin admitted, even if the routing model is later rewritten
+	// (fallback candidates) or the request errors out before dispatch.
+	InflightModel string
 
 	// Session-aware transition metadata
 	SessionID           string  // Derived from ConversationID (Response API) or message hash (Chat Completions)

@@ -1,0 +1,36 @@
+{
+  "schema": "vllm-sr-intro-film-v1",
+  "captured_at_utc": "2026-09-30T07:58:42Z",
+  "video": {
+    "path": "/videos/vllm-sr-intro/vllm-sr-intro.mp4",
+    "sha256": "62ed5749431972ea8c69c577ea34300d6d5ce61358afa4d79f24adfbb809be15",
+    "bytes": 26709960,
+    "duration_seconds": 175.133,
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "master_sha256": "a10de907aba487fec9490da6296b98417c1beefb30f03ed3513dee92c9443c4f",
+    "transcode": "H.264 High profile, Level 4.1, yuv420p, CRF 24, 3-second GOP, AAC-LC 160 kb/s stereo, fast-start MP4, from the 1080p30 master."
+  },
+  "poster": {
+    "path": "/videos/vllm-sr-intro/vllm-sr-intro-poster.webp",
+    "sha256": "4b5c19fc4d82bcb93585be6b26a0680fde59d2d5487660ab12a406987b69de49",
+    "origin": "Frame 0 of the film, exported at 1920x1080 as WebP (quality 86)."
+  },
+  "audio": {
+    "track": "Blindfolded",
+    "artist": "Arulo",
+    "source_url": "https://assets.mixkit.co/music/194/194.mp3",
+    "license": "Mixkit Stock Music Free License",
+    "license_url": "https://mixkit.co/license/#musicFree",
+    "edit": "Starts at track bar 1.75; bars 10-14 removed with a 12 ms equal-power crossfade; track bars 68-69 repeated once with a 12 ms equal-power crossfade; normalized to -14 LUFS integrated with a -1 dBFS peak.",
+    "note": "The soundtrack is used under the Mixkit license and is not relicensed under this repository's Apache-2.0 license."
+  },
+  "imagery": {
+    "cover_background": "AI-generated for this film; no stock or third-party photography.",
+    "vllm_sr_logo": "Official vLLM Semantic Router logo, color and pure-white variants.",
+    "model_logos": "Model and provider marks from @lobehub/icons-static-svg (MIT) and Simple Icons (CC0 1.0), shown to identify the respective projects; trademarks remain with their owners.",
+    "contributor_avatars": "GitHub avatars of vllm-project/semantic-router contributors, rendered by contrib.rocks."
+  },
+  "figures": "Community numbers in the film are as of 2026-09-29: 220+ contributors, 1,985 merged pull requests, 5,972 GitHub stars, 1.31M downloads across models, PyPI and containers, and 836K vllm-sr.ai pageviews from Aug 30 to Sep 29, 2026."
+}
