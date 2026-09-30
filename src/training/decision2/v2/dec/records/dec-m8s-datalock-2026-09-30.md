@@ -43,6 +43,29 @@ arm has no teacher (E8F's objective).
 
 **READY after this commit:** `data/2b/topup`, `data/08b/topup`, `teacher/2b-C`.
 
-## Part 2 — A20r teacher files (pending)
+## Part 2 — A20r teacher files (locked 2026-09-30 ≈10:17Z / 18:17 UTC+8)
 
-After the parity gate and the three label shards: `m8s_lock.py teachers`, then `check --part 2` per tier.
+**Parity gate** (`m8s-label.sh parity`, node B GPU6, 09:39–09:41Z): the tool re-collected CAL698 (`19cc1a8c…`) and
+reproduced A20r's stored kernel-path CAL logits **bit for bit: 698 / 698 rows, 0 argmax changes, max |Δ logit| 0.0**
+(teacher identity `2e07451107a2…`, package calibration T = 1 `518e19cd…`, fresh copy of `f1-scored-cache` `03b172f1…`).
+
+**Labels** (amendment 1: two shards, node B GPU6 / GPU7, 09:42–10:11Z, 1,709 s / 1,703 s): the union of both tiers'
+top-up rows deduplicated by (id, input hash), **22,740 rows** (421 rows shared by the two recipes), sorted, position
+mod 2. Shard 0 `e864bac6627cbe50f7e43d2a94a88a37d8c4514cc320f3f9724ca2a2320e7d9a` (11,370 rows), shard 1
+`84498c3c3dcb05e46a7f076ebe6d01b0bbc6e033b5505a25196e73d53f75b71d` (11,370 rows). A20r argmax = gold on the union:
+Choice 10,035 / 11,255 (.892), Noul 6,422 / 7,538 (.852), Score 3,038 / 3,947 (.770).
+
+**Teacher files** (`m8s_lock.py teachers`, mirror `84dc45192`; `check --part 2`: **PASS** both tiers,
+`lock-2b-part2.json` `0b668e29…`, `lock-08b-part2.json` `238a3c66…`):
+
+| File | Rows | SHA-256 | A20r argmax = gold, human C / N / S; typed C / N / S |
+| --- | ---: | --- | --- |
+| `teacher/2b-D1` | 12,247 | `c9c7e4549da0a2d82808cad714fd771806304d498e87e07b2b6d602c8a6eace3` | .902 / .845 / .656; .775 / .841 / .938 |
+| `teacher/2b-D2` (human rows) | 8,762 | `6fec1f4d593e56606d0bf17b626a0c5d33a1683623a6f654e80ed1a442b1f8c9` | .902 / .845 / .656 |
+| `teacher/08b-D1` | 10,914 | `143634226424266ad38dacf1e7da7f4cf4c25cfdd6f26e1c0e31db97c7569bf0` | .922 / .894 / .738; .866 / .872 / .976 |
+| `teacher/08b-D2` (human rows) | 7,978 | `5c9292c7ee25305ae19552de42947e11f7ab0a321da91d41543286a083330f61` | .922 / .894 / .738 |
+
+For comparison, the 2B control's own-Sol targets agree .750 / .724 / .446 (human) and .694 / .731 / .581 (typed).
+The 4B worker's A20r files were not read (they were not published when these labels ran); nothing was reused.
+
+**READY after this commit:** `teacher/{2b,08b}-{D1,D2}`.
