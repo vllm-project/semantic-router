@@ -1019,7 +1019,7 @@ def session_labeltoken(args: argparse.Namespace) -> dict[str, Any]:
     lines = [
         f"Line {i}: order #{1000 + i} shipped on day {i % 28 + 1}; "
         f"status {'delayed' if i % 7 == 0 else 'on time'}."
-        for i in range(400)
+        for i in range(120)
     ]
     shared_state = "Shipping log:\n" + "\n".join(lines)
     shared = [
@@ -1130,6 +1130,9 @@ def session_labeltoken(args: argparse.Namespace) -> dict[str, Any]:
             "first_ms": shared_runs[0][0] * 1000,
             "rest": latency_summary([s for s, _, _ in shared_runs[1:]]),
             "failed": sum(status != 200 for _, status, _ in shared_runs),
+            "first_failure": next(
+                (str(v)[:300] for _, status, v in shared_runs if status != 200), None
+            ),
         }
     finally:
         server.stop()
