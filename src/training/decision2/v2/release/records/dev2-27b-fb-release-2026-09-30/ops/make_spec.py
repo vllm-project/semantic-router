@@ -232,8 +232,8 @@ def build(stage: str) -> dict[Path, str]:
                 "verify_sha256": sha(r["bf16z-verify.json"]),
             },
             "calibration": {
-                "path": f"{IN}/cal698-bf16/calibration.json",
-                "sha256": sha(r["calibration.json"]),
+                "path": f"{IN}/cal698-bf16/calibration.public.json",
+                "sha256": sha(r["calibration.public.json"]),
             },
             "vendor_source": SCORED_MIRROR,
             "runtime_source": MIRROR,
