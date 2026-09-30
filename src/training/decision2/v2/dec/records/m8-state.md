@@ -7,10 +7,21 @@ A20r, matched controls, starts now, HR2 only by amendment). Budget 24 GPU-h. GPU
 
 ## Now
 
-- 2026-09-30 ≈17:55 UTC+8 — Preregistration and tooling committed (worktree re-created from the pushed branch at
-  `e066e0505`, fast-forwarded to integration `d4903065d`). Next: mirror to both nodes; Score5-typed-DEV prompts to
-  node B; `m8-prep.sh` on node B (CPU); data lock part 1 (slice + C teacher) → C chains; label prompts to node A →
-  three label shards; lock part 2 (A20r teachers) → D chains.
+- 2026-09-30 ≈18:05 UTC+8 (10:05Z) — **Running.** Prereg `a629a6ce2`; data lock part 1 `862c99b1e`; formal wrapper +
+  compressed relays `a1f4dbc55`. Mirror on both nodes: `a629a6ce29fe2b9a27aeac8f8b611667f654d8d9-src_training_decision2`
+  (tests pass in the image: 17). Nothing uploaded.
+  - Slice: 12,794 rows / 6.32M tokens (`bd529767…`); human-rated 3,467 rows / 0.92M tokens; C teacher `7ddaff84…`;
+    exposure 0 groups; node B `m8/data/READY` written.
+  - node B chains (PIDs in `m8/chains/chain-b{3,4}.pid`): C-m1 preflight PASS 09:47Z, done 09:57Z (167 updates);
+    C-m2 done 09:58Z; C-m3 training (~10:09Z); b3 waits for `m8/teacher-a20r/READY`.
+  - node A label shards 0 / 1 / 2 on GPU0 / GPU1 / GPU5 since 09:57Z (PIDs `m8/label/logs/shard-<k>.pid`, containers
+    `dec-m8-label-<k>`), ≈15–20 min each.
+  - node B GPU3: `m8-lines.sh refs` (4b-I Score5-typed-DEV; other panels reused from M7).
+  - Next: relay shard predictions + smoke receipts to node B (`m8/label/run-<k>/`), `m8_teacher.py convert` on node B
+    → `m8/teacher-a20r/{D1,D2}`, lock part 2 commit, then `m8/teacher-a20r/READY` (format: `<sha>  D1/teacher.jsonl`,
+    `<sha>  D2/teacher.jsonl`). The C soup builds when C-m3 finishes; then `M8_GPU=3 m8-lines.sh line C`.
+  - The dec-small (2B / 0.8B) worker may read the A20r targets on node B by row id + input hash:
+    `/data/dev2/runs/dec/m8/teacher-a20r/D1/teacher.jsonl` (every slice row).
 
 ## Plan
 

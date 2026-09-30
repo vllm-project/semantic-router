@@ -43,6 +43,37 @@ under `/data/dev2/runs/dec/m8/`: `data.launch.json`, `exposure.launch.json`, `da
 - The slice is a subset of the released model's own TRAIN, so a successor adds no new training text; the quarantined
   HotpotQA group (in the released model's TRAIN) is not in the slice.
 
-## Part 2 — A20r teachers (D1, D2)
+## Part 2 — A20r teachers (D1, D2) (locked 2026-09-30 10:30 UTC)
 
-Appended when the three label shards and their parity smokes have finished.
+- **Labels:** `ops/m8/m8-label.sh` from the mirror of `a629a6ce2`, node A GPU0 / GPU1 (shared leases
+  `owner.dec-m8-label`) and GPU5, 09:57:52–10:12:53Z (896 + 897 + 901 GPU-s = **0.75 GPU-h**). Each shard =
+  the first 80 typed-final gold-free prompts + its slice prompts, through A20r's unchanged scored collector
+  (`v2.27b.typed_collect_kernel`, image `dbe5f32b`, 32,768 tokens, the package's T = 1 `calibration.json` `518e19cd…`,
+  a fresh copy of the frozen cache `f474e2e9…`, `HIP_FORCE_DEV_KERNARG=1`) on the frozen C1 package (manifest
+  `0d7953cc…`, identity `2e07451107a2…` = DEV2.0-27B@`5323310` weights).
+- **Parity smoke: PASS on all three shards** — 80 / 80 typed-final answers identical to A20r's stored formal run
+  (`ea573b2d…`), max probability drift **0.0** (receipts `c1d558c9…`, `2cfe4b48…`, `f3e8458c…`).
+- **Predictions** (gold-free): shard 0 `8c387f07…`, shard 1 `f2f87c82…`, shard 2 `f1fb32f9…` (4,265 / 4,265 / 4,264
+  slice rows after the 80 smoke rows). Provenance `label/provenance.json` `5f72b740…`.
+- **Conversion** (`m8_teacher.py convert`, host CPU, node B; manifest `teacher-a20r/manifest.json` `3f2dea64…`):
+  **coverage 12,794 / 12,794 slice rows, 0 failures.**
+
+| Teacher file | Rows | SHA-256 |
+| --- | ---: | --- |
+| **D1** `teacher-a20r/D1/teacher.jsonl` (every slice row) | 12,794 | `0ead0d1b9e6bca040d8d3aad72ca4af8d9e4211851fb78c72c29ade14a70ffdf` |
+| **D2** `teacher-a20r/D2/teacher.jsonl` (human-rated rows only) | 3,467 | `015de0685fb666ff9cbc85d0c3094f519b0d764a93befa8e1f94efd8955a735d` |
+
+**Teacher quality on the slice** (argmax vs gold; mean max probability in brackets):
+
+| Rows | A20r C / N / S | own-Lux C / N / S (C teacher) |
+| --- | --- | --- |
+| All slice rows (Lux: its 12,018 covered rows) | .893 / .850 / .632 (.861 / .864 / .691) | .834 / .798 / .511 (.863 / .852 / .650) |
+| Same rows (the 12,018 Lux-covered rows) | .890 / .859 / .633 | .834 / .798 / .511 |
+| Human-rated rows | .882 / .881 / .498 | .807 / .809 / .448 |
+| Typed rows | .896 / .845 / .858 | .840 / .796 / .609 |
+
+- A20r and own-Lux pick the same option on .850 / .863 / .684 of the rows both cover, so about one row in seven
+  (Choice, Noul) and one in three (Score) gets a different target. A20r's typed-Score advantage (.858 vs .609) is the
+  largest single difference; on human-rated Score rows both are near .45–.50 (5-level ratings).
+- The same A20r target files serve the 2B / 0.8B decoder worker by row id and input hash where rows overlap
+  (COORDINATION 17:05).
