@@ -556,7 +556,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	}
 
 	if ctx.InflightToken != 0 {
-		inflight.End(primaryModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 	}
 
