@@ -139,6 +139,7 @@ the L128 training runs from `e76e56d4c`).
 
 ## Poll log (newest first)
 
+- 11:48Z: L128-s1 858 / 3,561, s2 848 / 3,561 (9.5–9.8 s/upd; ETA ≈ 19:00Z). Chain L128 and node A watchers alive; no incident
 - 11:17Z: L128-s1 669 / 3,561, s2 656 / 3,561 (9.8–9.9 s/upd; ETA ≈ 19:05Z). Leases node B GPU5 / node A GPU2 running the L128 full containers; chain L128 and node A watchers alive
 - 10:51Z: L128-s1 512 / 3,561, s2 497 / 3,561 (10.0 s/upd; projected ≈ 10.0 h per attempt). First SELECT700 at update 446: s1 .824, s2 .869 family macro (M4-A20r seeds at 446: .840 / .820). All processes alive
 - 10:26Z: L128-s1 369 / 3,561, s2 355 / 3,561 (9.9 s/upd; projected 9.8–9.9 h per attempt, ETA ≈ 19:10Z). Chain L128, node A relay and mlx watchers, and both drivers alive; no incident
