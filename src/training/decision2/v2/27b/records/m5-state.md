@@ -1,6 +1,6 @@
 # ~27B M5 state (resume file)
 
-Updated: 2026-09-30 10:00 UTC+8 (01:57Z; M5 worker). **Continuation workers: read "Next steps" first.**
+Updated: 2026-09-30 12:00 UTC+8 (04:00Z; M5 worker; FF20 done, M5-FF20 chain running). **Continuation workers: read "Next steps" first.**
 Branch: `xunzhuo/decision-2-training-27b` (worktree `/home/xunliu/code/vllm-sr-dev2-27b`; merge-only into
 `xunzhuo/decision-2-training`). Gist file: `06-decision-2-27b.md`. Assignment: COORDINATION 2026-09-30 07:20.
 Prereg: `m5-prereg-2026-09-30.md` (+ amendment 1). Latest node mirror (both nodes): **`e76e56d4c`**.
@@ -22,8 +22,8 @@ Prereg: `m5-prereg-2026-09-30.md` (+ amendment 1). Latest node mirror (both node
 
 | What | Where | Log / PID | ETA |
 | --- | --- | --- | --- |
-| Lane B: FF20-s1 full → FF20H-s1 | node B GPU5–7, `d2-27b-m5-FF20-s1-full` | `/data/dev2/runs/27b/m5/logs/lane-b.log` | FF20-s1 ≈ 03:40Z, FF20H-s1 ≈ 08:10Z |
-| Lane A: FF20-s2 full → FF20H-s2 | node A GPU2–4, `d2-27b-m5-FF20-s2-full` | node A `/data/dev2/runs/27b/m5/logs/lane-a.log` | ≈ 03:55Z, ≈ 08:25Z |
+| Lane B: FF20H-s1 full (from 03:48:11Z, cap 17.5 GPU-h = 5.83 h wall) | node B GPU5–7, `d2-27b-m5-FF20H-s1-full` | `/data/dev2/runs/27b/m5/logs/lane-b.log` | ≈ 08:10Z |
+| Lane A: FF20H-s2 (preflights from 03:51Z, then full) | node A GPU2–4, `d2-27b-m5-FF20H-s2-*` | node A `/data/dev2/runs/27b/m5/logs/lane-a.log` | ≈ 08:30Z |
 | Chain FF20: pull FF20-s2 → soup M5-FF20 → readout (GPU0) → devgates | node B | `logs/chain-FF20.log`, PID 2425535 | ≈ 04:50Z |
 | Chain FF20H: pull FF20H-s2 → soups M5-FF20H + M5-SX → readouts (GPU0, GPU1) → devgates (all three) | node B | `logs/chain-FF20H.log`, PID 2432764 | ≈ 09:30Z |
 
@@ -56,6 +56,7 @@ Prereg: `m5-prereg-2026-09-30.md` (+ amendment 1). Latest node mirror (both node
   0.225 + 0.026; FF20X-s1 probe 0.278 (update-1 loss and gradient norm equal on both nodes; parameters differ bytewise
   in 25 / 27 backbone shards — float order, report only).
 - **G1 (00:52Z):** continue as planned (FF20 ≈ 3.5 h per attempt, FF20H ≈ 4.3 h).
+- **FF20 trained (both seeds exit 0, BEST = final update 891):** FF20-s1 full 10.255 GPU-h, SELECT700 family macro .9033; FF20-s2 (node A) full 10.468 GPU-h, .8693. FF20H-s1 preflights passed (reload 0.025). The FF20 chain started pulling FF20-s2 at 03:52Z.
 
 ## Next steps (in order)
 
@@ -84,6 +85,7 @@ Prereg: `m5-prereg-2026-09-30.md` (+ amendment 1). Latest node mirror (both node
 
 ## Poll log (newest first)
 
+- 04:00Z: FF20 both seeds complete (BEST 891; SELECT .903 / .869; 10.25 / 10.47 GPU-h); FF20H-s1 full running, FF20H-s2 preflights; chain-FF20 pulling FF20-s2.
 - 03:19Z: FF20-s1 831/891, FF20-s2 795/891; both ≈ 3.45 h per attempt (cap 4.5); chains waiting.
 - 02:53Z: FF20-s1 701/891, FF20-s2 672/891 (≈ 13 s/upd); chains waiting; no incident.
 - 02:27Z: FF20-s1 593/891 (12.4 s/upd), FF20-s2 553/891 (12.3 s/upd); both chains waiting; no incident.
