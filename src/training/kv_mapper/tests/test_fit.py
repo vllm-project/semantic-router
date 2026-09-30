@@ -100,9 +100,9 @@ class RidgeFitTests(unittest.TestCase):
         tensors = {**tensors_k, **tensors_v}
         compat = CompatibilitySpec(
             source_model="Qwen/Qwen3-14B",
-            source_revision="abc123",
+            source_revision="a" * 40,
             target_model="Qwen/Qwen3-32B",
-            target_revision="def456",
+            target_revision="b" * 40,
             variant="full_head",
             precision="fp16",
             source_tp=1,
