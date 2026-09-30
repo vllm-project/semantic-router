@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from datasets import load_dataset
+from huggingface_hub import HfApi
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
 # Direct execution resolves repository imports after adding the repository root.
@@ -28,6 +29,17 @@ from src.training.kv_mapper.collect import (
     write_run_metadata,
 )
 from src.training.kv_mapper.hooks import capture_kv
+from src.training.kv_mapper.mapper_id import (
+    require_weight_commit,
+    resolve_weight_commit,
+)
+
+
+def _pinned_revision(model_id: str, revision: str, model_info) -> str:
+    try:
+        return require_weight_commit(revision)
+    except ValueError:
+        return resolve_weight_commit(model_id, revision, model_info)
 
 
 def _load_lm(model_id: str, revision: str, device: str, dtype: torch.dtype):
@@ -121,6 +133,13 @@ def main() -> None:
 
     if args.fitting_token_step <= 0:
         parser.error("--fitting-token-step must be positive")
+    model_info = HfApi().model_info
+    args.source_revision = _pinned_revision(
+        args.source_model, args.source_revision, model_info
+    )
+    args.target_revision = _pinned_revision(
+        args.target_model, args.target_revision, model_info
+    )
     dtype = {
         "float16": torch.float16,
         "fp16": torch.float16,
