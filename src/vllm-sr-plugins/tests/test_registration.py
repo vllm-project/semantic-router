@@ -102,6 +102,28 @@ class DecisionsRouteTest(unittest.TestCase):
             404,
         )
 
+    def test_other_architectures_keep_their_server(self) -> None:
+        import asyncio
+        from types import SimpleNamespace
+
+        from vllm_sr_plugins.decision2.endpoint import STATE_KEY, DecisionsEndpoint
+
+        state = SimpleNamespace()
+        config = SimpleNamespace(
+            architecture="ModernBertForSequenceClassification", model="/m"
+        )
+        asyncio.run(
+            DecisionsEndpoint().init_state(
+                SimpleNamespace(model_config=config), state, SimpleNamespace(model="/m")
+            )
+        )
+        noul = {"q": {"type": "noul", "instructions": "Is it urgent?"}}
+        response = self.client(getattr(state, STATE_KEY)).post(
+            "/v1/decisions", json={"state": "s", "questions": noul}
+        )
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("ModernBertForSequenceClassification", response.json()["error"])
+
     def test_uninitialized(self) -> None:
         response = self.client().post(
             "/v1/decisions", json={"state": "s", "questions": {}}

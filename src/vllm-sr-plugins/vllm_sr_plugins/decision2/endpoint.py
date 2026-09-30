@@ -64,10 +64,12 @@ class DecisionsEndpoint:
         from fastapi.responses import JSONResponse
 
         async def decisions(raw: Request):
-            service: SystemOneService | None = getattr(raw.app.state, STATE_KEY, None)
-            if service is None:
+            service: SystemOneService | str | None = getattr(
+                raw.app.state, STATE_KEY, None
+            )
+            if not isinstance(service, SystemOneService):
                 return JSONResponse(
-                    {"error": "the decisions endpoint is not initialized"},
+                    {"error": service or "the decisions endpoint is not initialized"},
                     status_code=503,
                 )
             try:
@@ -107,12 +109,16 @@ class DecisionsEndpoint:
     async def init_state(self, engine_client: Any, state: Any, args: Namespace) -> None:
         if engine_client is None:
             return
-        check_vllm_version()
         architecture = getattr(engine_client.model_config, "architecture", None)
         if architecture != ARCHITECTURE_NAME:
-            raise RuntimeError(
+            # Installed next to other models: leave their servers running.
+            reason = (
                 f"{ROUTES[0]} needs a {ARCHITECTURE_NAME} engine, not {architecture}"
             )
+            setattr(state, STATE_KEY, reason)
+            logger.warning("%s; the route answers 503", reason)
+            return
+        check_vllm_version()
         path = os.environ.get(PACKAGE_ENV) or getattr(args, "model", None)
         if not path:
             raise RuntimeError(f"set --model or {PACKAGE_ENV} to the served package")
