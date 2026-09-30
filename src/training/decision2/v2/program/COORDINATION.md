@@ -199,6 +199,22 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 11:25 — **9B M7 handed off at the 5-hour mark, as designed; a continuation worker was launched**
+  (`v2/9b/records/m7-state.md`; mirror `df6dcccc9`; ~1 of 24 GPU-h).
+  - **Diagnosis** from stored M6 predictions: the multilingual loss is a PAWS-X yes-bias that grows with distance from
+    Lux. PAWS-X yes rate: Lux .550, K-a13 .624, K5-a12 .676. The losses are in ja / de / zh, where PN1-r2 has most of its
+    rows.
+  - **Design:** a ~6.2M-token continued-training top-up of each of the five K5 soup members (~0.35 GPU-h each), then a
+    re-soup and the α line.
+    - Arms: P (+ PN1-r2 ×2), C (matched-token control), and Q (PN1-r2 ×1, added by amendment 1 before its GPU jobs).
+    - Development gates: the Noul / typed floors, HT-DEV v2 non-FLAG, the PN1 dev guard, and MLX-DEV-9B (the decoder's
+      MLX-DEV with K / PN1 overlap removed; 6,147 rows). mlx-diag is never used to select.
+  - **P was stopped by its early rule:** near-miss / swap yes fell 71% → 5%, but true-paraphrase yes fell .042 (limit
+    .03).
+  - Q and C chains are running on node A GPU6–7, ETA ~13:40 UTC+8.
+  - **Shared change:** `train_dec.py --init decision2` (continued training from a full checkpoint, keeping Lux 1.0 as the
+    recorded source), with a preflight and a test.
+
 - 2026-09-30 10:35 — **Decoder M7: no successor at 4B or 2B; decoder training PAUSED** (results
   `v2/dec/records/dec-m7-results-2026-09-30.md`; integration `e066e0505`; 20.27 GPU-h, 20.55 of 30 with M6b).
   - **4B finalist** `4b-N7C-b1_2` (½ matched-token control + ½ current): 61.20, −1.95 [−3.03, +0.004]; fails items 1,
