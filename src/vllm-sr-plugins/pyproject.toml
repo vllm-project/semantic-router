@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vllm-sr-plugins"
+version = "0.0.1"
+description = "vLLM plugins that serve vLLM Semantic Router models without modifying vLLM"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+# vLLM, PyTorch and Transformers come from the serving image; see README.md
+# for the one tested build.
+dependencies = []
+
+[project.entry-points."vllm.general_plugins"]
+vllm_sr_decision2 = "vllm_sr_plugins:register"
+
+[project.entry-points."vllm.endpoint_plugins"]
+vllm_sr_decisions = "vllm_sr_plugins.decision2.endpoint:DecisionsEndpoint"
+
+[tool.setuptools.packages.find]
+include = ["vllm_sr_plugins*"]

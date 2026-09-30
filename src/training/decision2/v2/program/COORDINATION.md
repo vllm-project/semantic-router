@@ -205,6 +205,68 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 01:00 — **Vela-2.0-Unified check (7b239c1e): an open-vocabulary SCHEMA ENCODER, supported with small
+  additions** (not a fixed multi-head classifier).
+  - It fits `encoder_marker` + `span` on Tier 0 (ONNX Runtime / candle); we call this the `schema_encoder` profile.
+    Additions A1–A8 cover API set / span / presets / over / thresholds, overflow, multi-readout per pass, readout
+    features, the `embedded_heads` capability plus encoder-only graphs, planner rules, manifest fields, receipts, the
+    ORT CUDA EP and MIGraphX shape buckets.
+  - **Two decided lines revised:**
+    - (1) Over-length: reject by default; a manifest may declare windowing with aggregation; never silently cut;
+      windows reported.
+    - (2) The Rust renderer is REQUIRED before in-process encoders; the stop-gap is a supervised model server
+      (`vela2_serve.py`).
+  - It replaces ~7 Vela 1.0 request-time passes plus hallucination spans. Gaps: `NO_FEEDBACK`, Hazard presets,
+    relevance partial, no embeddings. Asks for the model owner are recorded.
+  - Decisions log updated (§9c, §2, §3). **Proposal v2 revision launched** (writer 28bfbd64, resumed once) to fold in
+    everything since v1. The plugin prototype continuation (6c2c1341) is still running.
+
+- 2026-10-01 00:55 — **USER DECISIONS:**
+  - **(1) Broaden to a general router-model runtime:** the four surfaces (`/v1/decisions`, `/v1/classify`,
+    `/v1/embeddings`, `/v1/rerank`) plus the `task_heads` and `multimodal_embedding` adapters.
+  - **(2) Retire the NLI model** (ModernBERT-base-nli) and its features: the hallucination explainer and the
+    response-cache polarity guard.
+  - **(3) Retire the OpenVINO provider;** Intel hardware goes through ONNX Runtime's OpenVINO EP.
+  - Recorded as [Decided] in gist file `10-open-decision-runtime-decisions.md` §9b.
+  - Proposal v2 waits only on the Vela-2.0-Unified check (7b239c1e).
+
+- 2026-10-01 00:50 — **Router-model coverage analysis (9c17b169): broaden the API and adapter layers into a general
+  router-model runtime.** Recorded in gist file `10-open-decision-runtime-decisions.md` §9b.
+  - All 40 registry models are fixed-task encoders, embedders or rerankers.
+  - **Recommended:**
+    - four surfaces (`/v1/decisions`, `/v1/classify` as first-class, `/v1/embeddings`, `/v1/rerank`) plus
+      `/v1/models`, `/health`, `/metrics`;
+    - new adapter families `task_heads` (sequence / scores / regression / token / pooled / relevance heads; text / pair /
+      grounded renderers; per-head overflow) and `multimodal_embedding`.
+  - **Corrections:**
+    - per-head overflow (reject / truncate / window) for fixed heads, while decision models keep "invalid";
+    - three token limits;
+    - representation identity in cache keys;
+    - heads separated from graph variants in the manifest.
+  - **Stage-3 dispositions:** replace most non-Vela models with Vela heads (label remaps via config migrate). The
+    embedding default → Vela Embedding, with a re-embedding migration. Keep Qwen3Guard / chat paths external. Retire
+    unused candle paths. Port the MLP selector.
+  - **Open, user to decide:** the NLI model disposition; OpenVINO (retire vs backend plugin).
+  - The proposal v2 must include all of this. Waiting only on the Vela-2.0-Unified check (7b239c1e).
+
+- 2026-10-01 00:45 — **Open Decision Runtime proposal v1 published** (writer 28bfbd64).
+  - Secret gist https://gist.github.com/Xunzhuo/be9324aed0fec68148248e27362efcde; repo copy
+    `src/training/decision2/v2/serving/open-decision-runtime-proposal.md` (commit `a4e0b54d5`; integration
+    `8b5db54d4`).
+  - ~5,980 words. Roadmap P0–P3: MVP 17–22 engineer-weeks, full coverage 39–54.
+  - 17 open decisions (OD-1 to OD-17), each with a recommendation.
+  - Prototype parity and latency are marked TBD.
+  - No leaderboard scores or names; the privacy check passed. Upstream note: vLLM #53555 (multi-LoRA heads) is merged
+    but not in the v0.30.0 tag.
+  - **v2 revision** (resume the writer once, after 7b239c1e and 9c17b169 report) folds in:
+    - Tier 1 as one tier with `generate` / `pooling` runner modes;
+    - the final runtime design (7 modules, placement table, plugin points, renderer path);
+    - llama.cpp positioning;
+    - the strangler execution plan (§10 of the decisions log);
+    - the Vela-2.0-Unified and router-model coverage results (fixed-task heads, sentence / token classification,
+      embeddings, rerank, and possibly broadening to a general router-model runtime with several API surfaces);
+    - plugin prototype results, if available.
+
 - 2026-10-01 00:35 — **USER: runtime execution plan (strangler-fig)**, recorded in gist file
   `10-open-decision-runtime-decisions.md` §10.
   - Stage 1: the new runtime starts with the new Decision models only; the legacy runtime keeps serving all existing
