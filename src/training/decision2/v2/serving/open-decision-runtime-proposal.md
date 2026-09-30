@@ -1,164 +1,215 @@
 # Open Decision Runtime for vLLM Semantic Router
 
-This proposal makes vLLM Semantic Router (vllm-sr) a runtime for decision models, with an engine mode, the Open Decision API and router integration. All three share a tiered runtime that embeds the model contract rather than the inference engine.
+This proposal makes vLLM Semantic Router (vllm-sr) a runtime for **every model the router runs**: open-question decision models, fixed-task classifiers, embedders and rerankers. One runtime serves four API surfaces, standalone and inside the router, and embeds the model contract rather than the inference engine.
 
 | | |
 |---|---|
-| Status | Draft for review, 2026-09-30 |
-| Scope | `vllm-sr` CLI, Go router, a new decision runtime (Go and Rust), the `vllm-sr-plugins` package |
-| Markers | **Decided**: by the user. **Recommended**: coordinator recommendation awaiting confirmation. **OD-n**: open decision, all listed in §16.2. **TBD**: awaiting prototype results. |
+| Status | Draft v2 for review, 2026-10-01 (v1: 2026-09-30) |
+| Scope | `vllm-sr` CLI, Go router, a new router-model runtime (Go facade, Rust core), the `vllm-sr-plugins` package, and the migration of the router's legacy model bindings |
+| Markers | **Decided**: by the user. **Recommended**: coordinator recommendation awaiting confirmation. **OD-n**: open decision, all listed in §17.2. **TBD**: awaiting prototype results. |
+
+## Changes from v1
+
+- **Scope:** a general router-model runtime **[Decided]**; the name stays.
+- **API:** four surfaces: `/v1/decisions` (+ `/v1/systemone`), `/v1/classify` (first-class), `/v1/embeddings`, `/v1/rerank`. `/v1/decisions` gains Set / Span, presets, `over`, thresholds, typed state parts, and spans / sets / thresholds / abstain / windows in responses (§4).
+- **Overflow:** decision models reject by default, windowing only where declared, never silently cut; per-head policies for fixed heads; three token limits (§4.5).
+- **Architecture:** the final design, with principles, seven modules, placement, plugin points and a worker protocol (§5). **Tier 1 is one vLLM sidecar tier with `generate` and `pooling` runner modes**; "Tier 1a / 1b" is gone. llama.cpp positioning added.
+- **Families:** `task_heads`, `multimodal_embedding`, and the `schema_encoder` profile for Vela 2.0 (§7).
+- **Renderer:** in-process encoders need the Rust renderer first (§5.10).
+- **Manifest:** one schema, with Vela 2.0 Unified and Decision 2.0 examples (§6).
+- **Execution plan:** three strangler-fig stages; NLI and OpenVINO retired **[Decided]** (§10).
+- **Prototype:** measured BF16 parity and latency (§8.2).
+- **Roadmap:** 59–78 engineer-weeks. **Open decisions:** re-numbered, 5 resolved, 7 added (§17).
 
 ## 1. Summary
 
-vllm-sr can reach a decision model today only as an HTTP classifier with labels fixed in a mapping file. The Decision 1.0 launch post promised native integration and an **Open Decision API**. This proposal defines the runtime behind them, the **Open Decision Runtime (ODR)**:
+Today vllm-sr reaches decision models only as HTTP classifiers with labels fixed in a mapping file. Every model it runs itself (all 40 entries in its default registry) is a fixed-task encoder, embedder or reranker, bound through four cgo bindings. This proposal defines the **Open Decision Runtime (ODR)**, one runtime for all of them:
 
-1. **One runtime, two entry points.** `vllm-sr serve <hf-model>` starts a standalone engine that serves `/v1/decisions`, as `vllm serve` does. The router runs the same code through a new `decision` signal type and selector.
-2. **Embed the contract, not the engine.** The router links `RouterModelRuntime`, one Go interface over one cgo boundary into a Rust core. The core owns the manifest, renderer, calibration and answer assembly, and the evaluation harness shares it. vLLM runs out of process, as a supervised sidecar on a Unix domain socket (UDS).
-3. **Tiers placed at run time** from a hardware probe, the manifest and parity receipts:
-   - encoders run in-process on ONNX Runtime (ORT), candle or llama.cpp;
-   - label-token deciders run on vLLM's stock generate runner;
-   - scoring-head models such as Decision 2.0 run on vLLM's pooling runner with our plugin;
-   - MoE and ≥27B models run on a shared tier.
-4. **Open to third-party models** through reviewed adapters. On a public decision-model leaderboard, 16 of the top 20 open entrants read label-token logits in one pass, which stock vLLM can serve given our renderer and calibration.
-5. **No vLLM fork:** one pinned plugin package, plus upstream contributions.
+1. **One runtime, two shells.** `vllm-sr serve <hf-model>` starts a standalone engine, as `vllm serve` does; the router runs the same code, router-managed by default.
+2. **Four surfaces** share one manifest schema, planner and backend set: open questions on `/v1/decisions`, fixed heads on `/v1/classify`, plus `/v1/embeddings` and `/v1/rerank`.
+3. **Embed the contract, not the engine.** The router links `RouterModelRuntime`, a Go interface over one cgo boundary into a Rust core that holds all decision logic. Backends only turn tokens into hidden states or logits, and vLLM runs as a supervised sidecar.
+4. **Placement follows isolation needs, gated by parity receipts.** Small encoders run in-process on ONNX Runtime (ORT) or candle; GPU decoders run in one vLLM sidecar tier; MoE and ≥27B models run remotely.
+5. **Strangler-fig migration.** Decision models first; then Vela 2.0 natively and Vela 1.0 by shadow dual-run; then every other legacy model and binding is retired.
+6. **No vLLM fork:** one pinned plugin package, plus upstream contributions.
 
-The MVP needs about 17–22 engineer-weeks (2–2.5 months with two engineers), and full coverage 39–54. **Decided:** phase-1 work waits for the plugin prototype's measured parity and latency, which §10 holds as placeholders.
+A prototype already serves Decision 2.0 0.8B on unmodified vLLM at 15 ms p50, changing about 0.6% of answers in BF16 (§8.2). The Stage 1 MVP needs about 23–29 engineer-weeks, and the whole plan 59–78 (§16).
 
 ## 2. Background
 
 ### 2.1 The System One format
 
-A request carries a **state** (text, a JSON object or an array) and a set of named, typed **questions**:
+A request carries a **state** and a set of named, typed **questions**. The state is text, a JSON object, an array, or (new in v2) typed parts such as user, context and answer.
 
 | Type | Input | Answer |
 |---|---|---|
-| Choice | Instructions and 2–255 named options | `choice`, `probabilities`, `confidence` |
+| Choice | Instructions and 2–255 named options | `choice`, `probabilities`, `confidence`; `abstain_probability` if the model has an abstain option |
 | Noul | Instructions, with optional `false` / `true` descriptions | `noul`, which is P(true) |
 | Score | Instructions and 2–10 ordered levels | `score` (the expected level), `probabilities`, `confidence`, `legend` |
+| Set (v2) | Instructions and 1–255 options, each judged independently | selected options, per-option probabilities, the threshold used |
+| Span (v2) | 1–255 entity labels | spans with code-point offsets, label and probability, the threshold used |
 
-A failed question returns its own error (`max_length_exceeded`, `invalid_question` or `invalid_model_output`), and over-length input is never truncated. The hosted System One API and each Decision 2.0 package's bundled runtime (`Decision2.system_one`) use this format.
+A failed question returns its own error (`max_length_exceeded`, `invalid_question` or `invalid_model_output`). Set and Span exist only where the manifest declares them, as Vela 2.0's own server already does.
 
-### 2.2 What exists today
+### 2.2 What the router runs today
 
-- `vllm-sr serve` starts only the router, Envoy and the dashboard; per its help text, it "does not download or launch the physical LLM engines".
-- External models are reachable only through `http_classify` and `http_chat`. Their contracts take labels from a static mapping, so a question cannot vary per request.
-- The in-process backend, candle or ORT, is chosen at build time.
-- The System One engine exists only as Python code in the training tree. A package is identified by its root `config.json` pointer, `{"decision_format": "vllm-sr-decision", "format_version": 2, "package_schema": "dev2-package/1"}`, beside a `MODEL_MANIFEST.json` of per-file SHA-256.
-- A [plugin prototype](https://github.com/vllm-project/semantic-router/tree/678ac2060ea5d0b2e6d63dea347aa9ce461fb34b/src/vllm-sr-plugins) already serves Decision 2.0 on unmodified vLLM (§8.2).
+| Consumer | Contract | Models today |
+|---|---|---|
+| Domain, fact-check, feedback, modality, guard, safety | `label_distribution.v1` | Vela 1.0 heads; ModernBERT / mmBERT / BERT classifiers; Qwen3Guard over chat |
+| Hazard, generic classifiers | `label_scores.v1` | Vela Hazard (12 labels, sealed operating point) |
+| Complexity | `score.v1` | Remote regression only |
+| PII | `token_spans.v1` | Vela PII (35 BIO labels), mmBERT and BERT PII |
+| Hallucination detector | `token_spans.v1` (grounded) | Vela Halu, LettuceDetect v1 / v2 |
+| Hallucination explainer, response-cache polarity guard | `text_pair_distribution.v1` | ModernBERT-base-nli |
+| Embedding signal, cache, memory, vector stores, RAG | `embedding.v1` | MiniLM-class default, Qwen3-Embedding, EmbeddingGemma, mmBERT / Vela Embedding, multi-modal-embed-small, Vela Omni |
+| RAG reranker | `relevance_scores.v1` | Vela Reranker (one head per layer exit) |
 
-**Goals:** one API and runtime, standalone or in the router; vLLM's kernels and hardware coverage without a fork; third-party models with measured parity; routing that stays available; auditable answers.
+- **Contracts and backends.** Each consumer accepts one fixed contract with no per-request options. Backends are candle, ORT, OpenVINO and HTTP; ORT accepts only `cpu`, `rocm:N` and `migraphx:N`, so local models reach NVIDIA only through candle.
+- **Overflow** is `reject | truncate | window` per deployment; guard, hazard and PII scan long input in windows.
+- **One forward per signal:** the AMD recipe loads ten separate 307M Vela artifacts.
+- **Decision models** exist only as Python in the training tree. A package is identified by its root `config.json` pointer, `{"decision_format": "vllm-sr-decision", "format_version": 2, "package_schema": "dev2-package/1"}`, next to a `MODEL_MANIFEST.json` of per-file SHA-256.
 
-**Non-goals for v1:** generative serving, decisions inside the served LLM's engine, diffusion deciders and training.
+**Goals:** one runtime and API for every router model; vLLM's kernels without a fork; third-party models with measured parity; routing that stays available; auditable answers; one legacy stack deleted. **Non-goals:** generative serving, decisions inside the served LLM's engine, diffusion deciders and training.
 
-## 3. Decisions already made
+## 3. Decisions
 
 | Area | Decision | Status |
 |---|---|---|
-| CLI | `vllm-sr serve <hf-model> [options]` detects a decision model from its manifest (root `config.json` with `decision_format: vllm-sr-decision`) and starts a System One engine, like `vllm serve`. With no model and `--config`, it starts the router as today. | **Decided** |
-| API | A native `POST /v1/decisions`, plus `GET /v1/models`, `/health` and `/metrics` | **Decided** |
-| API | A `POST /v1/systemone` alias, for ecosystem and client compatibility | **Recommended** (OD-1) |
-| API | An optional `POST /classify` shim for the router's `label_distribution.v1` contract, off by default | **Recommended** (OD-2) |
-| Router | The engine is router-managed by default (the same code as engine mode), with a remote engine as an option. A `decision` signal type (Choice / Noul / Score templates) and algorithms: model selection as a Choice, escalation as a Noul, complexity as a Score. One batched call per request, per-signal deadlines, fail-open. | **Decided** |
-| Scope | Open: third-party models are served through family adapters | **Decided** |
-| Sequencing | Phase-1 items wait for the prototype's measured parity and latency | **Decided** |
-| MoE tier | Explored after the current 27B training milestone reports | **Recommended** (coordinator default) |
+| CLI | `vllm-sr serve <hf-model>` detects a model from its manifest; `--config` alone starts the router | **Decided** |
+| Scope | General router-model runtime, open to third-party models through family adapters | **Decided** |
+| API | `/v1/decisions`, `/v1/classify` (alias `/classify`), `/v1/embeddings`, `/v1/rerank`, `/v1/models`, `/health`, `/metrics` | **Decided** |
+| API | `/v1/systemone` alias | **Recommended**, strongly (OD-1) |
+| API | Set / Span, presets, `over`, thresholds, typed state parts, new response fields | **Recommended** |
+| Overflow | Decision models reject by default; declared windowing; never silently cut | **Decided** |
+| Overflow | Per-head policies for fixed heads; three token limits | **Recommended** |
+| Router | Router-managed by default; `decision` signal and algorithms; one call per request; fail-open | **Decided** |
+| Runtime | The §5 design, with Tier 1 as one sidecar tier and two runner modes | **Decided** |
+| Renderer | Worker first for out-of-process models; Rust first for in-process encoders; Rust everywhere in the end | **Decided** |
+| Families | `task_heads`, `multimodal_embedding`, `schema_encoder` profile | **Recommended** |
+| Migration | Strangler-fig plan (§10) | **Decided** |
+| Retirement | The NLI model and its features; the OpenVINO provider | **Decided** |
+| Retirement | Other Stage 3 dispositions (§10.2) | **Recommended** (OD-19) |
+| Sequencing | Phase 1 waits for prototype parity and latency (first results in §8.2) | **Decided** |
+| MoE tier | Exploration started 2026-09-30, licence gate first | **Recommended** (OD-20) |
 
-## 4. User experience
+## 4. User experience and API
 
 ### 4.1 Engine mode
 
 ```bash
-vllm-sr serve <org>/<decision-model> --revision <40-hex>              # Hub package
-vllm-sr serve ./my-package --backend vllm --dtype bfloat16            # local package, forced backend
+vllm-sr serve <org>/<decision-model> --revision <40-hex>              # first-party package
+vllm-sr serve <org>/<vela-model> --backend ort --device cpu           # encoder, in-process backend
 vllm-sr serve <org>/<third-party-decider> --manifest <overlay.yaml>   # reviewed overlay
 vllm-sr serve --config config.yaml                                    # router mode, unchanged
 ```
 
 Detection is deterministic:
 
-1. Resolve a local directory, or a Hub repository at `--revision` (default `main`; the resolved commit is recorded).
-2. Read only the root `config.json`. `decision_format: vllm-sr-decision` marks a first-party package; `format_version` selects its schema.
-3. If there is no such pointer, use the registry overlay for `repo@revision`, or the one given with `--manifest`.
-4. If there is no overlay either, exit and point to `vllm serve`. The CLI never guesses a family or enables `trust_remote_code`.
-5. Download the files, verify their hashes, probe the hardware, place the model (§5.5) and serve.
+1. Resolve a local directory or a Hub repository at `--revision`, recording the commit.
+2. A root `config.json` with `decision_format: vllm-sr-decision` marks a first-party package.
+3. Otherwise use the registry overlay for `repo@revision` (as for Vela 2.0), or `--manifest`.
+4. With neither, exit and point to `vllm serve`; the CLI never guesses a family or enables `trust_remote_code`.
+5. Verify hashes, probe hardware, place the model (§5.4) and serve the declared surfaces.
 
-New options are `--revision`, `--manifest`, `--backend auto|ort|candle|llamacpp|vllm`, `--device`, `--dtype`, `--port` (default 8000) or `--uds`, `--api-key-file`, `--enable-classify-shim` and `--accept-licence`. **OD-3:** what should `serve <model> --config` mean?
+New options are `--revision`, `--manifest`, `--backend auto|ort|candle|llamacpp|vllm|worker`, `--device`, `--dtype`, `--port` or `--uds`, `--api-key-file` and `--accept-licence`.
 
-### 4.2 API v1
+### 4.2 Surfaces
 
-Request to `POST /v1/decisions`:
+| Surface | Serves | Router contracts |
+|---|---|---|
+| `POST /v1/decisions` (+ `/v1/systemone`) | Open Choice / Noul / Score, plus Set / Span where declared; inline or preset questions | `decision_answers.v1`; `label_decision.v1`; Score as `score.v1` |
+| `POST /v1/classify` (alias `/classify`) | Fixed heads: sequence, multi-label scores with operating points, regression, token spans (BIO); text / pair / grounded inputs; several heads per call; window scans | `label_distribution.v1`, `label_scores.v1`, `score.v1`, `token_spans.v1`, `text_pair_distribution.v1` |
+| `POST /v1/embeddings` | OpenAI-compatible, plus `dimensions`, `layer` (exit), and image / audio parts | `embedding.v1` |
+| `POST /v1/rerank` | A query and documents, returning raw logits; the exit is fixed per deployment | `relevance_scores.v1` |
+| `GET /v1/models`, `/health`, `/metrics` | Capability descriptor (surfaces, question types, heads, labels, limits, dimensions and exits, modalities, revision and hash, placement, receipts, licence); readiness; Prometheus metrics | None |
+
+`/v1/classify` keeps the HF-pipeline shape for a single task, so today's `http_classify` adapters work unchanged, and a `tasks` list runs heads sharing a backbone in one forward. Signal semantics (rules, thresholds, recipes) stay in Go, which is why it is not `/v1/signals`. Every response reports its representation identity: revision, manifest hash, head, dimension and exit.
+
+### 4.3 `/v1/decisions` v2
+
+Router signals bind to **presets**, not to free-text questions. A preset is a question the manifest defines and maps to a contract, and inline questions still work. This request to Vela 2.0 Unified runs in one forward pass:
 
 ```json
-{"model": "my-decision-model",
- "state": {"ticket": "The invoice total is wrong and I was charged twice."},
+{"model": "vela-2.0-unified",
+ "state": {"parts": [{"role": "user",
+   "text": "Hi, I'm Tom Baker. Paint me a watercolour of a lighthouse at sunset."}]},
  "questions": {
-   "team":   {"type": "choice", "instructions": "Which team should handle this?",
-              "criteria": {"billing": "Payments and invoices", "tech": "Product defects"}},
-   "urgent": {"type": "noul", "instructions": "Does the customer report a double charge?"},
-   "effort": {"type": "score", "instructions": "How long will resolving this take?",
-              "criteria": ["minutes", "hours", "days"]}},
- "options": {"deadline_ms": 50}}
+   "modality": {"preset": "modality"},
+   "attack":   {"preset": "attack"},
+   "pii":      {"preset": "pii"},
+   "topics":   {"type": "set", "over": "user", "threshold": 0.4,
+                "instructions": "Which topics does this request touch?",
+                "criteria": {"art": "Art or design", "travel": "Travel", "money": "Payments"}},
+   "urgency":  {"type": "score", "instructions": "How urgent is this request?",
+                "criteria": ["Routine", "Needs prompt attention", "Critical"]}},
+ "options": {"deadline_ms": 30}}
 ```
 
 Response (numbers illustrative):
 
 ```json
-{"model": "my-decision-model",
+{"model": "vela-2.0-unified",
+ "identity": {"revision": "a8fb3849", "manifest_sha256": "<64-hex>",
+              "backend": "ort-cpu", "precision": "fp32"},
  "answers": {
-   "team":   {"type": "choice", "choice": "billing",
-              "probabilities": {"billing": 0.96, "tech": 0.04}, "confidence": 0.76},
-   "urgent": {"type": "noul", "noul": 0.93},
-   "effort": {"type": "score", "score": 0.41, "probabilities": {"0": 0.63, "1": 0.33, "2": 0.04},
-              "confidence": 0.28, "legend": {"0": "minutes", "1": "hours", "2": "days"}}},
- "usage": {"input_tokens": 412, "output_tokens": 0}}
+   "modality": {"type": "choice", "choice": "DIFFUSION", "confidence": 0.81,
+                "probabilities": {"AR": 0.07, "DIFFUSION": 0.90, "BOTH": 0.03},
+                "abstain_probability": 0.02},
+   "attack":   {"type": "noul", "noul": 0.03},
+   "urgency":  {"type": "score", "score": 0.12, "probabilities": {"0": 0.89, "1": 0.10, "2": 0.01},
+                "confidence": 0.84, "legend": {"0": "Routine", "1": "Needs prompt attention", "2": "Critical"}}},
+ "sets":  {"topics": {"selected": ["art"], "probabilities": {"art": 0.93, "travel": 0.21, "money": 0.01}}},
+ "spans": {"pii": [{"label": "PERSON", "start": 8, "end": 17, "text": "Tom Baker", "probability": 0.97}]},
+ "thresholds": {"topics": 0.4, "pii": 0.62},
+ "input": {"tokens": 212, "sequences": 1, "windows": [], "shortened_parts": []},
+ "usage": {"input_tokens": 212, "output_tokens": 0}}
 ```
 
-| Endpoint | Purpose | Status |
-|---|---|---|
-| `POST /v1/decisions` | Native Open Decision API | **Decided** |
-| `POST /v1/systemone` | The hosted System One body, unchanged | **Recommended** (OD-1) |
-| `POST /classify` | One fixed question in `label_distribution.v1` or `score.v1` shape, with no Go changes | **Recommended**, off by default (OD-2) |
-| `GET /v1/models` | Identity, revision, manifest hash, limits, licence flags, placement | **Decided** |
-| `GET /health` | 200 when ready or degraded but serving, else 503 | **Decided** |
-| `GET /metrics` | Prometheus: requests, latency by tier, queues, restarts, escalations | **Decided** |
+- **State parts and `over`.** Roles come from the manifest's renderer; `over` names the part a question reads (default: all).
+- **Thresholds.** A request may override a Set or Span threshold; the response always reports the one applied, including length-dependent rules.
+- **Abstain.** `abstain_probability` appears only where the model has an abstain marker, flagged uncalibrated until the manifest says otherwise.
+- **`question_mode: fixed_tasks`** models accept presets only.
+- **Compatibility.** `/v1/decisions` is a strict superset of System One, adding `options.deadline_ms`, `options.return_meta` and the errors `deadline_exceeded`, `unavailable` and `too_many_options`. API v1 freezes at the end of P0 with a JSON Schema and a conformance suite; `vela2_serve.py` is one conformance target.
 
-`/v1/decisions` is a strict superset of System One. It adds three optional features:
+### 4.4 The other surfaces
 
-- `options.deadline_ms`, which aborts late work;
-- `options.return_meta`, which reports the placement, the cascade path and latencies;
-- the errors `deadline_exceeded`, `unavailable` and `too_many_options`.
+`/v1/classify` takes `input`, an optional `text_pair` or grounded `context` / `question`, and optional `tasks`, and reports `input.windows` with the reduction used. `/v1/embeddings` adds `dimensions`, `layer` and `image` / `audio` content parts, rejecting undeclared ones. `/v1/rerank` batches one query against N documents.
 
-Answers keep the caller's question ids and order. API v1 freezes at the end of P0, with a JSON Schema and a conformance suite. **OD-4:** should one call accept several states?
+### 4.5 Limits and overflow
 
-### 4.3 Router mode
+| Model kind | Default | Declared alternatives | Always |
+|---|---|---|---|
+| Decision models (`question_mode: open`) | `reject` → `max_length_exceeded` | `window` with a per-type aggregation (e.g. Choice mean, Score mean, Set max, Span mean) | Never silently cut. Windows are listed in `input.windows`, and shortened unasked parts in `input.shortened_parts`. |
+| Fixed-task heads (`task_heads`) | Per head, from the manifest | `reject \| truncate \| window`; a window needs a declared reduction (`max(label)`, `span_union`) | Truncation happens only where declared, and it is reported |
 
-In the default **managed** mode, `vllm-sr serve --config` starts and supervises the engine (§5.8). Until P2 delivers the in-process runtime, that engine is an engine-mode container on a shared UDS. In **remote** mode, the router uses the new `http_decision` adapter. The config below is illustrative, and its field names are **OD-5**:
+- **When windowing is allowed.** Only when every question in the sequence reads the same part; otherwise the planner splits questions by part, or rejects. This closes the one silent-cut case in Vela 2.0's own server.
+- **Three token limits:** the **architecture** limit (32,768 for Vela 2.0's YaRN backbone), the **trained** limit (8,192 for Vela 2.0; 512 for several heads on 32K bases) and the **deployment** limit, which may exceed the trained one only with a receipt.
+- **Question tokens count** against the window; if the questions alone do not fit, the request is rejected.
+
+### 4.6 Router mode
+
+In the default **managed** mode, `vllm-sr serve --config` starts and supervises the runtime. Until P2, that runtime is an engine-mode container on a shared Unix domain socket (UDS). In **remote** mode, the router calls a remote engine over HTTP(S). Field names below are illustrative (OD-4):
 
 ```yaml
 global:
   model_catalog:
     deployments:
-      decision-local: {provider: decision, artifact: <org>/<decision-model>,
-                       revision: <40-hex>, placement: auto}
+      decision-local: {provider: odr, artifact: <org>/<decision-model>, revision: <40-hex>, placement: auto}
+      vela-unified:   {provider: odr, artifact: <org>/<vela-2.0-unified>, revision: <40-hex>, placement: auto}
 routing:
+  model_bindings:
+    domain_classifier: {deployment: vela-unified, runtime: new,    contract: label_distribution.v1, preset: domain}
+    pii_classifier:    {deployment: vela-unified, runtime: new,    contract: token_spans.v1,        preset: pii}
+    prompt_guard:      {deployment: vela-guard,   runtime: legacy, contract: label_distribution.v1}
   signals:
     decisions:
       - {name: needs_reasoning, deployment: decision-local, type: noul, deadline_ms: 50,
          instructions: "Does answering this request need multi-step reasoning?"}
-      - {name: difficulty, deployment: decision-local, type: score, deadline_ms: 50,
-         instructions: "How hard is this request?", criteria: [easy, medium, hard]}
   decisions:
     - name: hard-reasoning
-      rules:
-        operator: AND
-        conditions:
-          - {type: decision, name: needs_reasoning, predicate: {gte: 0.7}}
-          - {type: decision, name: difficulty, predicate: {gte: 1.5}}
+      rules: {operator: AND, conditions: [{type: decision, name: needs_reasoning, predicate: {gte: 0.7}}]}
       modelRefs: [{model: large-reasoner}, {model: medium-reasoner}]
-      algorithm:
-        type: decision
-        decision: {deployment: decision-local, deadline_ms: 60,
-                   instructions: "Which model should answer this request?"}
+      algorithm: {type: decision, decision: {deployment: decision-local, deadline_ms: 60,
+                  instructions: "Which model should answer this request?"}}
 ```
 
 | Decision point | Question | Router surface |
@@ -166,409 +217,604 @@ routing:
 | Model selection | Choice over the decision's `modelRefs` | New `decision` selector; probabilities become selection scores |
 | Escalation | Noul, e.g. "Does the draft answer the request?" | Gate for the `confidence` looper |
 | Complexity | Score over easy / medium / hard | `decision` signal with numeric predicates |
+| Existing signals | Presets on Vela 2.0, or heads on Vela 1.0 | Existing contracts, `runtime: new` per binding |
 
-- **One batched call per request.** The planner (§5.4) splits the call by backbone.
-- **Per-question deadlines.** A default of 50 ms is recommended; remote classifiers default to 5 s today.
-- **Fail-open.** A late or failed answer leaves its signal unknown, so the rule's `on_error` / `on_unknown` policy applies (default `no_match`). A failed selector falls back to the first `modelRef`.
+One batched call per request carries every question and head. A late or failed answer leaves its signal unknown, so the rule's `on_error` / `on_unknown` policy applies, and a failed selector falls back to the first `modelRef`. **OD-5:** since `modelRefs` are known only after a decision wins, ask one Choice per candidate decision (exact) or one over their union (cheaper)?
 
-**OD-6:** `modelRefs` are known only after a decision wins. Should the planner send (a) one Choice per candidate decision, which is exact, or (b) one Choice over the union of candidates, renormalised to the winner's refs, which is cheaper?
+## 5. Runtime architecture
 
-## 5. Architecture
+### 5.1 Principles
 
-### 5.1 Embed the contract, not the engine
+1. **Decision logic is separate from compute.** Planning, rendering, readout, calibration, answer assembly and head compute live in the Rust core, in-process. Backends only turn tokens into hidden states or logits.
+2. **The in-process / out-of-process split follows isolation needs, not model names.** Stable, light, Python-free compute stays in-process. GPU-heavy, crash-prone, Python-dependent or custom-kernel compute runs in supervised workers.
+3. **Placement is gated by parity receipts.** A model may run on a backend only after answer parity has been recorded for that exact model × backend × dtype × hardware combination.
+4. **Engine mode and router mode share one runtime,** and so does the evaluation harness.
+
+### 5.2 Embed the contract, not the engine
 
 | Evidence | Consequence |
 |---|---|
-| vLLM's EngineCore runs in its own process by default (`VLLM_ENABLE_V1_MULTIPROCESSING=1`), and parallelism above 1 spawns workers. | Embedding still spawns processes |
-| After CUDA initialises, vLLM forces `spawn`, which re-executes `sys.executable`. | A Python interpreter must exist on disk |
-| Go-to-Python calls need `runtime.LockOSThread` and `PyGILState_Ensure`; Python 3.12+ aborts on misuse, and a maintained Go binding documents crashes in about one run in three without its fix. | A fragile request path |
-| An in-process CUDA fault or OOM kills the ExtProc server. | All routing fails |
-| NVIDIA Dynamo's 2026 proposals ([#10835](https://github.com/ai-dynamo/dynamo/issues/10835), [#10838](https://github.com/ai-dynamo/dynamo/issues/10838)) move from an in-process PyO3 shim to a sidecar driving stock `vllm serve` over a UDS, citing dependency entanglement, private-API fragility and GIL contention. TEI and Ollama also run engines out of process. | The established pattern |
-| A UDS round trip costs 4–11 µs and gRPC over a UDS 0.1–0.2 ms, against a 20–30 ms decoder call. | Little latency to save |
+| vLLM's EngineCore runs in its own process by default, and parallelism above 1 spawns workers | Embedding still spawns processes |
+| After CUDA initialises, vLLM forces `spawn`, which re-executes `sys.executable` | A Python interpreter must exist on disk |
+| Go-to-Python calls need `runtime.LockOSThread` and `PyGILState_Ensure`; a maintained Go binding documents crashes without its fix | A fragile request path |
+| An in-process CUDA fault or OOM kills the ExtProc server | All routing fails |
+| NVIDIA Dynamo is moving from an in-process shim to a sidecar ([#10835](https://github.com/ai-dynamo/dynamo/issues/10835), [#10838](https://github.com/ai-dynamo/dynamo/issues/10838)); TEI uses a UDS backend; Ollama uses runner subprocesses | The established pattern |
+| A UDS round trip costs about 0.01–0.2 ms, against a 15–30 ms decoder call | Little latency to save |
 
-Embedding saves about 0.1 ms at the cost of fault isolation, large router images, slow start-up and lock-step upgrades. The nearest supported path is vLLM's experimental Rust frontend, which drives a headless EngineCore but lacks pooling so far ([#54144](https://github.com/vllm-project/vllm/pull/54144)); we adopt it in P3.
+The nearest thing to embedding is vLLM's experimental **Rust frontend** driving a headless EngineCore; it lacks pooling so far ([#54144](https://github.com/vllm-project/vllm/pull/54144)), and we adopt it in P3. Rejected alternatives: candle or ORT for decoders (no Gated DeltaNet (GDN) support on our hardware); the served LLM's own vLLM instance (one runner type per instance; pooling-in-generate PRs [#40804](https://github.com/vllm-project/vllm/pull/40804) and [#30672](https://github.com/vllm-project/vllm/pull/30672) closed); SGLang (a second engine, no ModernBERT or DeBERTa; OD-6).
 
-Alternatives considered and rejected:
-
-- **candle:** no Qwen3.5 / Gated DeltaNet (GDN) support outside open PRs, and no ROCm.
-- **ORT for decoders:** the linear-attention ops have CPU and CUDA kernels only. ORT stays the encoder backend.
-- **A thin Python service only:** exact answers, but FP32 weights stay resident (about 103 GB, against 55 GB in BF16, at 27B). It remains the P0 stopgap.
-- **Inside the served LLM's vLLM instance:** one runner type per instance, closed pooling-in-generate PRs ([#40804](https://github.com/vllm-project/vllm/pull/40804), [#30672](https://github.com/vllm-project/vllm/pull/30672)), and weak early-layer signals.
-- **SGLang:** a second engine to maintain, no listed ModernBERT or DeBERTa support, and reported gRPC regressions (**OD-7**).
-
-### 5.2 Components
+### 5.3 Seven modules
 
 ```text
-            +------------- vllm-sr router (Go, Envoy ExtProc) --------------+
-request --> | signals --> decision engine (rules) --> selector              |
-            |   decision signals + selector questions: one bundle/request   |
-            | RouterModelRuntime (Go interface) === one cgo boundary ===+   |
-            +-----------------------------------------------------------|---+
-                                                                        v
- Rust core: manifest | renderer | calibration | answers | planner | placement | supervisor
-   |-- Tier 0   in-process: ORT (MIGraphX, CUDA, CPU, CoreML, OpenVINO), candle, llama.cpp
-   |-- Tier 1a  UDS sidecar: vLLM generate runner                  (label-token deciders)
-   |-- Tier 1b  UDS sidecar: vLLM pooling runner + vllm-sr-plugins (scoring heads)
-   '-- Tier 2   shared or remote: ODR engine or vLLM fleet         (MoE, >=27B, judges)
+            +---------------- vllm-sr router (Go, Envoy ExtProc) ----------------+
+request --> | signals --> decision engine (rules) --> selector                   |
+            |   all questions, heads, embeddings of a request: one bundle         |
+            | RouterModelRuntime (Go facade) ===== one cgo boundary =====+        |
+            +--------------------------------------------------------------|-----+
+                                                                           v
+ Rust core  [1 API: Decide/Classify/Embed/Rerank/Models/Health over HTTP + UDS]
+            [2 planner/scheduler] [3 readout adapters] [5 registry + artifacts]
+            [6 placement engine]  [7 supervisor + observability]
+   |-- 4 backends, in-process: ORT (CPU, MIGraphX, CUDA, OpenVINO EP), candle, llama.cpp (CPU), Rust heads
+   |-- 4 backends, out-of-process (supervised workers over UDS, worker protocol):
+   |       vLLM sidecar, runner mode `generate` or `pooling` + vllm-sr-plugins;
+   |       Python reference runtime; llama.cpp on GPU; model servers (stop-gap)
+   '-- 4 backends, remote: shared large-model services (MoE, >=27B, judges)
  Engine mode: the same core behind a thin HTTP server.  Evaluation: the same core via Python bindings.
 ```
 
-### 5.3 RouterModelRuntime and the Rust core
+1. **API layer:** `Decide`, `Classify`, `Embed`, `Rerank`, `Models`, `Health`, over HTTP and UDS; the Go facade crosses one cgo boundary.
+2. **Planner / scheduler:** grouping, batching, deadlines, admission, cascades, and state, prefix and result caches (§5.9).
+3. **Readout adapters (Rust trait):** `label_token`, `head`, `encoder_marker`, `span`, `generative` (escalation only), `diffusion` (future), `task_heads`, `multimodal_embedding`. Each bundles a renderer (template → tokens and a position map), readout, calibration, answer assembly and an overflow policy; one renderer may feed several readouts in one pass.
+4. **Backend interface (Rust trait):** `forward(tokens, positions | label-token ids) → hidden states | logits`, plus a capability descriptor (§5.8).
+5. **Registry and artifacts:** manifests, pinning, download cache, licence and access policy, graph variants (ONNX, GGUF, BF16, lossless `bf16z`) kept separate from heads, and parity receipts.
+6. **Placement engine:** hardware probe + requirements + receipts + policy (latency, cost, isolation) → backend and process class, with config overrides.
+7. **Supervisor and observability:** spawn, health, back-off restarts, readiness gated on golden answers, GPU memory budgets, degraded mode; metrics, traces and shadow parity sampling.
+
+The Go facade (names illustrative):
 
 ```go
-type RouterModelRuntime interface { // package decisionruntime; names illustrative
-    Load(ctx context.Context, spec ModelSpec) (ModelInfo, error) // resolve, verify, place
-    Decide(ctx context.Context, b Bundle) (Answers, error)      // one call per routed request
+type RouterModelRuntime interface { // one cgo boundary into the Rust core
+    Load(ctx context.Context, spec ModelSpec) (ModelInfo, error)       // resolve, verify, place
+    Decide(ctx context.Context, r DecideRequest) (DecideResponse, error) // /v1/decisions
+    Classify(ctx context.Context, r ClassifyRequest) (ClassifyResponse, error)
+    Embed(ctx context.Context, r EmbedRequest) (EmbedResponse, error)
+    Rerank(ctx context.Context, r RerankRequest) (RerankResponse, error)
     Models() []ModelInfo
     Health() HealthReport
     Close() error
 }
 ```
 
-Go makes one cgo call per routed request. The call carries the state, the questions, each question's deadline and the deployment ids, and it is cancelled with the Go context. The Rust core runs its own executor, and it handles:
+Each routed request makes one cgo call per surface, cancelled by the Go context. After Stage 3, the router reaches models only through this interface.
 
-- manifest checks;
-- rendering, from a template to token IDs and answer positions;
-- readouts, calibration and answer assembly;
-- planning, placement and all backend clients.
+### 5.4 Placement
 
-For decision workloads, the core gradually replaces the router's four cgo bindings. The evaluation harness uses the same core through Python bindings, so parity receipts measure the serving code. **OD-8:** which language should the renderer use? The prototype runs each package's vendored Python renderer inside a vLLM endpoint plugin, so it matches training byte for byte.
+| Where | What | Why |
+|---|---|---|
+| **In-process (Rust core)** | All decision logic and head compute | Pure CPU, no GPU state, lowest latency |
+| **In-process (ORT / candle)** | Encoders ≤0.5B: Vela 1.0 / 2.0, mmBERT classifiers, Kai / Lex, GLiNER2, embedders; on CPU or GPU execution providers | Stable C++ runtimes, already in-process today; a process hop costs more than it saves for small models |
+| **In-process (llama.cpp / ORT GenAI, CPU)** | Small decoders on CPU and edge (0.6B / 0.8B decision models) | No GPU memory contention; GGUF quantisation gives good CPU throughput |
+| **Out-of-process (supervised workers)** | GPU decoders ≥1B, GDN hybrids and multi-LoRA on vLLM; the Python reference runtime (byte-exact parity); llama.cpp on GPU; a model's own server as a stop-gap | Python and custom kernels, pre-allocated GPU memory, fault isolation: a GPU fault or OOM must not take down the router |
+| **Remote** | Resident MoE and ≥27B models, judges, diffusion deciders | Memory scales with total parameters, so these are better as a shared service on large-memory GPUs |
 
-### 5.4 Request planner
+Tier 0 is in-process, Tier 1 the local vLLM sidecar and Tier 2 remote. `/v1/models` reports the placement; a backend without a receipt needs explicit approval and shows as `unverified` (OD-7).
 
-The planner groups a request's questions by **backbone** and runs one concurrent plan per backbone; each question keeps its own deadline.
+### 5.5 Tier 1: one vLLM sidecar tier, two runner modes
 
-- **Tier 1a:** the state becomes a shared prefix and each question a suffix. The planner primes the prefix once and then fans out, so prefix caching reuses the state.
-- **Tier 1b:** vLLM disables prefix caching for hybrid pooling, so each question re-reads the state; packed models (§14) would need a single pass.
-- **Tier 0:** each encoder runs one batched forward pass.
-- **Shared backbones:** adapters on one backbone can share a plan once multi-LoRA heads ([#53555](https://github.com/vllm-project/vllm/pull/53555), merged on 2026-09-16 but absent from the v0.30.0 tag) are released.
+Tier 1 is a **single local vLLM sidecar tier**. Each model's manifest readout picks its runner mode:
 
-### 5.5 Placement at run time
-
-Placement replaces the build-time backend choice. Its inputs are:
-
-- a hardware probe (GPU, memory, loadable ORT providers, CPU features, the sidecar's vLLM build);
-- the manifest;
-- parity receipts;
-- operator policy (overrides, latency target, memory budget).
-
-The runtime keeps the backends that support the model, pass a receipt and fit the budget, and picks one by manifest preference and latency. The choice is reported in `/v1/models`. A backend without a receipt needs explicit approval, and the model is then shown as `unverified`. **OD-9:** what receipt threshold?
-
-### 5.6 Tiers
-
-| Tier | Runs | Backends | Models |
+| Runner mode | For | How it reads | Caching and escalation |
 |---|---|---|---|
-| **0** | In-process (Rust core) | ORT (MIGraphX, CUDA/TensorRT, CPU, CoreML, OpenVINO), candle, llama.cpp | Encoders ≤0.5B (Vela, Kai/Lex, marker heads), GLiNER2 via ONNX, Qwen3-0.6B-class on CPU, GGUF deciders |
-| **1a** | vLLM sidecar, generate runner | Stock vLLM: `allowed_token_ids`, logprobs (`--max-logprobs 256`), prefix caching (`--mamba-cache-mode align` for hybrids) | Label-token deciders, optional thinking escalation |
-| **1b** | vLLM sidecar, pooling runner | vLLM + `vllm-sr-plugins` | Scoring-head decoders (Decision 1.0 / 2.0 candidate head, K-slot heads) |
-| **2** | Shared or remote | Remote ODR engine, vLLM fleet, `http_chat` judges | Resident MoE and ≥27B models, JSON judges, diffusion (deferred) |
+| `generate` | Label-token deciders, the majority of third-party decision models | LM-head logits at answer positions, with `allowed_token_ids` and logprobs (`--max-logprobs 256`) | Prefix caching (`--mamba-cache-mode align` for hybrids); optional thinking escalation over the cached prefix |
+| `pooling` + `vllm-sr-plugins` | Head-based models: Decision 1.0 / 2.0 candidate heads, K-slot heads | The plugin pooler gathers hidden states at option endpoints; the head runs in FP32 | No prefix caching for hybrid pooling today, so the planner packs questions |
 
-A vLLM instance runs one runner type and one model, plus its LoRA adapters. That is why Tier 1 is split into 1a and 1b. Engines can share a GPU through `--gpu-memory-utilization`. MoE memory scales with total parameters, so one large Tier 2 GPU can serve many routers.
+A vLLM engine runs one runner type and one model (plus LoRA adapters), so each model uses exactly one mode; a deployment serving both kinds runs both kinds of engine, sharing a GPU through `--gpu-memory-utilization`. The modes could converge later: a stock-engine-friendly readout for our models puts everything in `generate` (pending an A/B test, OD-15), or a label-token head in the plugin puts everything in `pooling`, losing prefix caching and thinking.
 
-### 5.7 Cascades
+### 5.6 Why encoders stay out of vLLM
 
-A question escalates to the next tier under two conditions: its calibrated confidence is below the manifest or policy threshold, and its remaining deadline covers that tier's p95 latency. In Tier 1a, a bounded thinking step followed by a second label read over the cached prefix also counts as an escalation. Confidences are compared only after per-backend calibration, and the tier that answered is reported.
+vLLM supports encoders, so this is a latency and reach choice: 8K tokens of FP32 hidden states (about 25 MB) would cross a process boundary per call for a 307M model, Vela 2.0's readout is not a stock architecture, and DeBERTa-v3 / GLiNER2 are unsupported in vLLM, SGLang and llama.cpp.
 
-### 5.8 Sidecar supervision
+### 5.7 llama.cpp positioning
 
-- **Readiness:** vLLM's health check must pass, and a warm-up request must reproduce stored golden answers, which proves identity and numerics.
-- **Health:** checks and canaries run over the UDS. Timeouts degrade the sidecar; restarts back off from 1 s to 60 s, and a crash loop marks it failed.
-- **Memory:** vLLM pre-allocates KV memory, so every sidecar and every in-process CUDA context gets an explicit budget.
-- **Degraded mode:** questions fall back to a placement that has a receipt; if there is none, they return `unavailable` and fail open.
-- **Ownership:** on a bare host, the runtime restarts `vllm serve`. Under Docker or Kubernetes, the platform restarts it, so the router never needs the Docker socket. The router does not wait for sidecars to become ready, unless a deployment is `required`.
+llama.cpp links **in-process** through its C API, via a Rust binding. It is recommended in-process on **CPU and edge**, and in a **supervised subprocess on GPU** for fault isolation, as Ollama does even though it links llama.cpp directly.
 
-### 5.9 Latency budget
+- **Strengths:** the widest hardware reach (x86 / ARM CPUs, CUDA, HIP, Metal, Vulkan, SYCL, CANN); the best CPU engine (GGUF quantisation); BERT, XLM-R and ModernBERT with classifier heads; Qwen3-Next / Qwen3.5 hybrids with a fused GDN op on CPU, CUDA, Metal and SYCL.
+- **Weaknesses:** GDN on HIP is unoptimised (reported slow on RDNA 3.5, unmeasured on CDNA3); no DeBERTa; LoRA per request, not batched across adapters.
+- **Our candidate head:** `pooling none` hidden states at the option endpoints, with the head applied in Rust.
+- **Conditions:** benchmark GDN on CDNA3 (MI325X) before listing llama.cpp for AMD datacenter GPUs (OD-21). Every GGUF conversion or quantisation needs its own calibration and receipts.
+
+### 5.8 Plugin points and the worker protocol
+
+There are three versioned plugin points, each with compatibility CI:
+
+1. **Model manifests (data):** most new models need only a manifest and receipts.
+2. **Readout adapters (Rust trait):** only for a new readout or template family; reviewed code in our registry.
+3. **Backends (Rust trait and capability descriptor):** the descriptor declares `hidden_states`, `logits` or `embedded_heads` (heads baked into the graph), the index inputs, dtypes and shape constraints. **Prefer graphs that return hidden states, with heads in Rust:** for Vela 2.0, an encoder-only ONNX graph, keeping the published graph as the parity reference.
+
+Out-of-process backends implement a narrow **worker protocol**:
+
+```text
+Forward  {model, revision, mode: generate|pooling, want: hidden_states|logits|embedded_heads,
+          sequences: [{token_ids, positions | label_token_ids, lora?}], deadline_ms}
+Result   {per sequence: rows[positions x hidden] | logprobs[label ids] | head outputs,
+          backend_build, dtype, timings}
+Control  {health, warmup(golden_set), drain, memory_budget}
+```
+
+Any engine can be wrapped this way: vLLM (through our plugin), SGLang, a llama.cpp server, the Python reference runtime, or a model's own server.
+
+### 5.9 Planner rules
+
+| Rule | Detail |
+|---|---|
+| Grouping | By **(revision, state, phase)**; the phase separates request-time signals from response-time ones such as hallucination |
+| Canonical packing | Bidirectional encoders let packed questions shift each other's scores, so bundles are ordered canonically (preset id, then question digest) and always render the same tokens |
+| Cache key | The **question bundle**: representation identity, state digest, bundle digest, packing and window policy |
+| Span packing | At most one span question per sequence; each extra one adds a sequence |
+| Question-token budget | Schema tokens count against the window; questions that alone do not fit are rejected |
+| Window planning | Only when every question reads the same part; each window carries the full schema; results aggregate by the declared rule |
+| Receipts | A packed-versus-alone check: answer changes and maximum drift (OD-18) |
+| Representation identity | Revision, head, dimension and exit in every cache key and response; different exits or widths never mix |
+| Decoders | `generate`: shared state prefix, question suffixes. `pooling` on hybrids: packed layouts avoid state re-reads |
+| Fixed heads | One forward for all heads sharing a renderer; rerank batches a query with N documents; window scans reduce by `max` or `span_union` |
+
+For Vela 2.0, one sequence replaces about seven request-time Vela 1.0 passes (domain, guard, safety, fact-check, modality, feedback, PII).
+
+### 5.10 Renderer placement
+
+1. **Out-of-process models, phase 1:** the renderer runs in the worker (a Python endpoint plugin), byte-exact with training, as the prototype does.
+2. **In-process encoders need the Rust renderer first,** built on HF `tokenizers` with golden tests on token ids, marker positions, word units and code-point offsets. Vela 2.0's porting hazards: Python regex lookarounds (Rust's `regex` has none), control-character whitespace, offsets, marker stripping, the window loop and float formatting.
+3. **Stop-gap:** a supervised worker runs the model's own server (`vela2_serve.py`) for the Stage 2 shadow runs.
+4. **Target:** Rust renders every model, and workers become generic forward servers.
+
+### 5.11 Cascades and supervision
+
+- **Cascades:** a question escalates when its calibrated confidence is below threshold and its remaining deadline covers the next placement's p95; in `generate` mode, a bounded thinking step plus a second label read counts.
+- **Supervision:** readiness needs vLLM's health check and a warm-up reproducing golden answers; restarts back off from 1 s to 60 s; every worker and GPU context has a memory budget. Degraded questions fall back to another receipted placement, or return `unavailable` and fail open. Under Docker or Kubernetes the platform restarts workers, so the router never needs the Docker socket.
+
+### 5.12 Latency budget
 
 | Component | Figure | Basis |
 |---|---|---|
-| HTTP keep-alive plus vLLM's API-server-to-engine hop | About 1–4 ms | Estimate |
-| The sidecar's Python frontend | Not measured | **TBD: prototype results** |
-| 27B-class package | About 73 ms p50 (BF16, short prompts); 138–150 ms p50 per item on the package-native path | Internal measurement |
-| The shipped runtime's per-call FP32-to-BF16 weight recast | About 10 ms at 9B, 30 ms at 27B | Estimate; avoided by keeping Linear weights in BF16 |
+| UDS hop | 0.01–0.2 ms | Published measurements |
+| Decision 2.0 0.8B through vLLM + plugin, BF16, over HTTP | 15.2 ms p50, single request | Prototype (§8.2) |
+| The same model on the shipped Python runtime | 22.7 ms p50 (FP32 master weights); 21.4 ms with Linear weights resident in BF16 | Prototype (§8.2) |
+| 27B-class package | About 73 ms p50 (BF16, short prompts) | Internal measurement |
+| Per-call FP32-to-BF16 recast in the shipped runtime | About 10 ms at 9B, 30 ms at 27B | Estimate; BF16-resident weights avoid it |
 
-## 6. Decision Manifest v1
+## 6. Manifest
 
-Each model has one content-addressed manifest, which doubles as the evaluation harness's adapter spec.
+### 6.1 One schema for every model
+
+Decision models, `task_heads` models and schema encoders share one content-addressed manifest schema. The manifest is also the evaluation harness's adapter spec.
 
 | Section | Contents |
 |---|---|
-| Identity, licence | Name, repository, 40-hex revision, per-file SHA-256, SPDX licence, flags (non-commercial, research-only, gated, no-redistribution) |
-| Backbone | Family (e.g. Qwen3.5 GDN hybrid, Gemma 4, ModernBERT, DeBERTa-v3), total and active parameters, dtypes per backend, LoRA base pin, weight codec (plain or `bf16z`) |
-| Renderer | Template id and SHA-256; layout (shared-prefix branches, packed slots, encoder markers, GLiNER schema); label alphabet; thinking; tokenizer hash |
-| Readout | `label_token`, `head` (kind, weights, FP32), `slots`, `span`, or `canvas` (reserved) |
-| Answer positions | Last token, marker tokens, option endpoints, or slot k |
-| Calibration | Global, per-type or option-count temperature; Score offsets; softcapping. Each fit is bound to a model hash, backend and dtype. |
-| Score semantics | Ordinal distribution or isolated levels; key base; how `score` is computed |
-| Limits, overflow | Maximum tokens, options, levels and questions; overflow `refuse`, `shortlist` or `multi_pass`; over-length input always returns `max_length_exceeded` |
-| Escalation | Thinking gate and budget; cascade targets |
-| Parity receipts | Per backend, version, hardware class and dtype: panel id and hash, items, answer changes, maximum probability drift, calibration reference, harness version, date |
+| `model` | Repository, 40-hex revision, `access` (public / gated / private), per-component `licence` (weights, tokenizer, code), `remote_code` |
+| `family` / `profile` | Adapter family, or a profile such as `schema_encoder` (one renderer, several readouts) |
+| `question_mode`, `question_types`, `limits` | `open \| fixed_tasks`; the types served; option and label counts; `span_per_sequence` |
+| `backbone` | Architecture and geometry, total and active parameters, LoRA base pin |
+| `renderer` | Kind and template hash; layout; markers and their token ids; state parts; word units; tokenizer hash |
+| `input` | Three token limits; overflow policy; window size, overlap and aggregation |
+| `readouts` / `heads` | For decision models, readouts: kind, pooling, positions, abstain. For fixed tasks, heads: kind, labels, activation, operating point, contract, per-head overflow. |
+| `calibration` | Temperatures, thresholds and rules, with **provenance**: run, the dtype of the fitted scores, and the model hash it binds to |
+| `presets` | Named questions or heads and their router contract mapping |
+| `runner` | Per-backend hints, such as the vLLM mode and plugin class |
+| `artifacts` | Files with SHA-256. **Graph variants** (ORT graphs, GGUF, safetensors, MIGraphX caches, custom ops) are separate from **heads**. |
+| `receipts` | Per backend, build, device, dtype: panel, items, answer changes, maximum drift, packing and window policy, harness version, date |
 
-**First-party packages** extend the existing pointer: the root `config.json` gains a `decision_manifest` entry naming `DECISION_MANIFEST.json`, whose hash `MODEL_MANIFEST.json` records. For older packages, the runtime derives the manifest from `MODEL_MANIFEST.json`, `decision_config.json`, `calibration.json` and `score_bias.json`.
+First-party packages add a `decision_manifest` entry to the root `config.json`, naming a `DECISION_MANIFEST.json` whose hash `MODEL_MANIFEST.json` records; older packages get a derived manifest. Third-party models use reviewed overlays shipped with vllm-sr (OD-8), and weights are never redistributed.
 
-**Third-party models** use overlay manifests from a registry that ships with vllm-sr.
+### 6.2 Worked example: Vela 2.0 Unified
 
-- An overlay pins the author's repository, revision and hashes, names a reviewed adapter and renderer, and carries our harness's calibration and receipts.
-- Weights are downloaded unmodified and are never redistributed.
-- A local overlay passed with `--manifest` is marked `unreviewed`.
+This is the manifest from the Vela 2.0 check, renamed to the §6.1 fields. File digests and the revision are abbreviated here; the registry overlay carries the full values.
 
 ```yaml
-schema: decision-manifest/1
-identity: {name: <org>/<decider>, source: {repo: <org>/<decider>, revision: <40-hex>},
-           licence: {spdx: Apache-2.0, flags: []}}
-backbone: {architecture: Qwen3_5ForCausalLM, family: qwen3_5-hybrid, text_only: true}
-renderer: {template: <template-id>, sha256: <64-hex>, layout: branches, labels: letters}
-readout: {kind: label_token, position: last_token}
-calibration: {form: temperature_by_option_count, fits: [{backend: vllm-generate, dtype: bfloat16}]}
-score: {semantics: ordinal_distribution, key_base: 0}
-limits: {max_input_tokens: 32768, max_options: 255, overflow: refuse}
-escalation: {thinking: {confidence_below: 0.7, max_tokens: 512}}
-parity_receipts: []
+manifest_version: 1
+model:
+  repo: llm-semantic-router/Vela-2.0-Encoder-307M-Unified
+  revision: a8fb3849…                  # 40-hex in the overlay
+  access: private
+  licence: {weights: apache-2.0, tokenizer: gemma-terms-of-use}
+  remote_code: not_required            # ORT and candle paths
+profile: schema_encoder                # encoder_marker + span, one renderer, one forward
+question_mode: open
+question_types: [choice, noul, score, set, span]
+limits: {choice: [2, 255], score: [2, 10], set: [1, 255], span: [1, 255], span_per_sequence: 1}
+backbone:
+  arch: modernbert                     # Vela-1.0-Encoder-307M geometry
+  layers: 22
+  hidden: 768
+  vocab: 256008
+  attention: {local_window: 128, global_every: 3}
+  rope: {theta: 160000, yarn: {factor: 4.0, original_max: 8192, beta_fast: 32, beta_slow: 1, truncate: true}}
+renderer:
+  kind: vela2_schema
+  layout: "<bos> ([Q] q ([O] name: desc)* [ABS]?)* ([E] label: desc)* [SEP_SCHEMA] ([SEG_role] part)* <eos>"
+  markers: {"[Q]": 256000, "[O]": 256001, "[ABS]": 256002, "[SEP_SCHEMA]": 256003,
+            "[SEG_user]": 256004, "[SEG_answer]": 256005, "[E]": 256006, "[SEG_context]": 256007}
+  text_tokenizer: {file: tokenizer.json, drop_added_tokens: markers, special_tokens: false, offsets: char}
+  parts: [user, context, answer]
+  word_units: schema_lib_r4
+input:
+  limits: {architecture: 32768, trained: 8192, deployment: 8192}   # per sequence, schema included
+  overflow: window                     # only when all questions read one part; otherwise reject, never cut
+  window: {overlap: 512, aggregate: {choice: mean, score: mean, set: max, span: mean}}
+readouts:
+  - {kind: encoder_marker, types: [choice, noul, score, set], logit: cosine_plus_mlp,
+     pool: {question: "[Q]", option: "[O]", state: mean_over_parts},
+     abstain: {marker: "[ABS]", calibrated: false}}
+  - {kind: span, unit: first_subword_of_word, label_marker: "[E]", decoder: span_decode_r4_v2}
+calibration:
+  provenance: {file: calibration.json, run: R4b_s44, fitted_on: bf16_dev_scores}
+  temperature: {choice: 1.3786, score: 1.1278, set: 1.0152, span: 0.2927}
+  thresholds: {set: 0.3, "set:r_cats": 0.5, "span:halu": 0.55, "span:toxic": 0.1, span: 0.5}
+  rules:
+    pii: {kind: loglin_length, anchors: "calibration.json#pii_length_rule",
+          sparse_gate: {k: 3, floor: 0.1, probe: 0.5}}
+  confidence: {choice: top2_margin, score: one_minus_normalised_variance}
+presets:
+  modality:
+    type: choice
+    over: user
+    text: What kind of output does this request ask for?
+    options:
+      AR: a text answer only, including code, analysis or describing an existing image
+      DIFFUSION: a newly generated image only
+      BOTH: a newly generated image together with a separate written explanation
+    contract: label_distribution.v1    # label order = option order
+  pii: {type: span, over: user, source: "calibration.json#pii_schema", rule: pii, contract: token_spans.v1}
+  halu: {type: span, over: answer, source: "calibration.json#halu_schema", contract: grounded_text.v1,
+         context_template: "User request: {question}\n\n{context}"}
+  # domain, attack, p_harm, factcheck, feedback, relevance: same shape
+artifacts:
+  graphs:
+    - {file: onnx/model.onnx, sha256: 5096731c…, precision: fp32, opset: 18, heads: embedded,
+       inputs: [input_ids, attention_mask, q_index, opt_index, unit_index, ent_index],
+       outputs: [opt_logits, span_logits]}
+    - {file: onnx/model_fp16.onnx, sha256: aaea0639…, precision: fp16_encoder_fp32_heads, heads: embedded}
+  weights:
+    - {file: model.safetensors, sha256: bd37dd0d…, dtype: f32}   # candle: backbone + readout tensors
+  tokenizer: {file: tokenizer.json, sha256: e4b670c5…}
+receipts:                              # imported from the model's parity notes: 230 dev rows, 0 decision diffs
+  - {backend: ort, device: cpu, precision: fp32, max_prob_diff: {choice: 2.2e-6, span: 2.7e-5}}
+  - {backend: ort, device: cpu, precision: fp16_encoder, max_prob_diff: {choice: 0.006, span: 0.050}}
 ```
 
-**OD-10:** where should the manifest and the registry live?
+Placement is Tier 0: ORT on CPU with the published graph (receipted), or candle with heads in Rust. Still needed: FP16 long-document PII receipts (FP16 moves span scores by up to 0.38 while the PII threshold falls to 0.0003 at 8K); MIGraphX shape buckets for the four index inputs, or the encoder-only graph; the ORT CUDA provider (§9.2); and less long-input memory (full attention masks cost about 3.2 GB of FP32 scores per layer at 8K on CPU).
+
+### 6.3 Worked example: a Decision 2.0 package
+
+```yaml
+manifest_version: 1
+model:
+  repo: <org>/<decision-2.0-package>
+  revision: <40-hex>
+  access: public
+  licence: {weights: <spdx>, code: <spdx>}
+  remote_code: not_required            # the vendored runtime runs only inside the worker, hash-allowlisted
+family: head
+question_mode: open
+question_types: [choice, noul, score]
+limits: {choice: [2, 255], score: [2, 10]}
+backbone: {arch: qwen3_5_hybrid, text_only: true, parameters: 753446208}
+renderer:
+  kind: dev2_prompt                    # phase 1: vendored Python in the worker; later Rust with golden tests
+  template_sha256: <64-hex>
+  layout: "Context: {state} ... Decision: {question}{options}"
+input:
+  limits: {architecture: <n>, trained: <n>, deployment: <n>}
+  overflow: reject                     # max_length_exceeded; never truncated
+readouts:
+  - {kind: head, head: candidate_endpoint, positions: [option_endpoints, query], dtype: fp32}
+calibration:
+  provenance: {fitted_on: package_native_fp32_master_bf16_autocast, model_sha256: <64-hex>}
+  temperature: {by: question_type, file: calibration.json}
+  score_offsets: {file: score_bias.json}
+runner:
+  vllm: {mode: pooling, plugins: [vllm_sr_decision2, vllm_sr_decisions],
+         architecture: Decision2Qwen3_5ForScoring, pooling_task: token_classify}
+artifacts:
+  graphs:
+    - {variant: safetensors-bf16, files: "backbone/*.safetensors", sha256: MODEL_MANIFEST.json}
+  heads:
+    - {name: candidate_head, file: decision_head.safetensors, dtype: fp32}
+receipts:
+  - {backend: vllm-pooling, build: 0.29.1rc1.dev187-rocm, device: mi325x, dtype: bf16,
+     panels: 4, items: 11053, answer_changes: 63, max_drift: 0.124}
+  - {backend: python-reference, device: mi325x, dtype: bf16_resident_linear, items: 11053, answer_changes: 0}
+```
 
 ## 7. Adapter families
 
-Counts come from the 31-model survey in Appendix A.
+### 7.1 Families
 
-| Family | Readout | Engine path | Fork? | Count | First-party |
-|---|---|---|---|---|---|
-| Label-token decider | LM-head label-token logits at the answer position, one pass | Tier 1a stock vLLM (`allowed_token_ids` + logprobs); GGUF on llama.cpp | No | 21 | None yet (§14) |
-| Scoring-head decoder | Candidate-endpoint head or last-position K-slot head | Tier 1b pooling runner + `vllm-sr-plugins` | Plugin | 3 | Decision 1.0 decoders, Decision 2.0 |
-| Multi-slot packing | Several answer slots after one state | STEP token pooling ([#55307](https://github.com/vllm-project/vllm/pull/55307)) or endpoint plugin | Plugin | Layout variant | Future models |
-| Encoder + marker head | ModernBERT / mmBERT with option-marker head | Tier 0 ORT or candle; or vLLM ModernBERT + plugin head | No | 2 | Vela, Kai/Lex |
-| GLiNER2 / DeBERTa-v3 | Span / label extractor, labels at call time | Tier 0 ORT only (no DeBERTa in vLLM, SGLang or llama.cpp) | No | 3 | None |
-| Diffusion canvas | Denoise an answer canvas, then read labels | vLLM DiffusionGemma mode ([#57250](https://github.com/vllm-project/vllm/pull/57250)) plus out-of-tree fixes | **Deferred** | 2 | None |
+| Family | Readout | Typical models | Placement |
+|---|---|---|---|
+| `label_token` | LM-head label-token logits at answer positions (single or multi-slot) | Most third-party deciders; Qwen3Guard-style label scoring | Tier 1 `generate`; llama.cpp on CPU |
+| `head` | Candidate-endpoint or K-slot head on hidden states | Decision 1.0 decoders, Decision 2.0 | Tier 1 `pooling` + plugin |
+| `encoder_marker` | Option and question markers in an encoder; Choice / Noul / Score / Set; `[ABS]`; per-part pooling | Vela 2.0, Kai / Lex | Tier 0 |
+| `span` | Word-level span scores against label markers; span decoder; threshold rules | Vela 2.0, GLiNER2 | Tier 0 |
+| `task_heads` (new) | One backbone forward, N named fixed heads | Every Vela 1.0 artifact, LettuceDetect, every text embedder, the reranker | Tier 0; Tier 1 `pooling` for decoder embedders |
+| `multimodal_embedding` (new) | Per-modality towers plus fusion | Vela Omni | Tier 0 ORT |
+| `generative` | Constrained or free generation | Escalation only | Tier 1 `generate`, remote |
+| `diffusion` | Denoise an answer canvas, then read labels | Two surveyed deciders | **Deferred** (OD-22) |
 
-Without a fork, the families cover 29 of the 31 models: 21 on stock vLLM, 5 through the plugin (the two marker-head encoders also fit Tier 0), and 3 on ORT. The remaining work is renderers and calibration, not engine changes.
+- **`task_heads`:** head kinds `sequence`, `scores` (multi-label, sealed operating point), `regression`, `token` (BIO, offsets), `pooled` (mean or last-token, L2, Matryoshka dimensions, exits) and `relevance` (per exit); renderers `text`, `pair` and `grounded`; overflow per head. Rerank is a `pair` renderer plus a `relevance` head, not a family.
+- **`multimodal_embedding`:** image and audio processors belong to the sealed bundle and its receipts; vLLM cannot serve it.
+- **Guards on `label_token`:** Qwen3Guard-style scoring gets calibrated probabilities instead of today's regular expression over chat text.
+
+In the 31-model survey (Appendix A), the families cover 29 without a fork: 21 on stock vLLM, 5 through the plugin and 3 on ORT. Every router model kept after Stage 3 maps to `task_heads`, `multimodal_embedding` or `schema_encoder`.
+
+### 7.2 The `schema_encoder` profile
+
+Vela 2.0 Unified is not a fixed multi-head classifier but an **open-vocabulary schema encoder**: questions, options and labels are rendered as marker tokens, and one forward returns option scores and word-level span scores. The profile is **one renderer feeding two readouts** (`encoder_marker` and `span`), with no new family or tier:
+
+- **Adapter interface (A3):** several readouts per sequence, with packing limits (one span question per sequence).
+- **`encoder_marker` (A4):** per-part mean pooling, the `[ABS]` option (flagged uncalibrated), Set (a sigmoid per option) and per-type temperatures.
+- **`span` (A4):** word units (first sub-word of each word), a span decoder with code-point offsets, and threshold rules: constant, per question, length-dependent (PII), and a sparse-document gate.
+- **Backend (A5):** `embedded_heads` for the published graph, `hidden_states` for the preferred encoder-only graph.
+
+Vela 2.0 has **no embedding output**, so embeddings and the semantic cache stay on Vela Embedding.
+
+### 7.3 What each family means for each backend
+
+| Family | vLLM | ORT | candle | llama.cpp |
+|---|---|---|---|---|
+| `label_token` | Stock `generate`, no plugin | ORT GenAI for small dense decoders on CPU | Dense Qwen3 only; no GDN | Yes: GGUF logits at the answer position; best on CPU / edge |
+| `head` | `pooling` + plugin (the prototype) | Only models without GDN layers (e.g. a 0.6B export) | No GDN | `pooling none` hidden states plus a Rust head; GDN hybrids work; receipts per quantisation |
+| `schema_encoder` | Possible but not worth it (non-stock readout, 8K hidden states over a process boundary) | Yes: published graph now, encoder-only graph preferred; MIGraphX needs shape buckets | Yes: the backbone exists; readout tensors in Rust | ModernBERT hidden states, to verify; no GLiNER2 or DeBERTa |
+| `task_heads` | `classify`, `token_classify`, `embed` for BERT / ModernBERT (verify mmBERT 32K YaRN and ModernBERT token heads); several exits need the plugin; not preferred at ≤0.5B | Yes; today heads are baked into graphs, so each head is a graph variant until encoder-only graphs ship | Yes; already shares one backbone across heads | BERT-family heads and BERT / Gemma 3 embeddings; no DeBERTa |
+| `multimodal_embedding` | No | Yes (sealed four-graph bundle) | Only the model being retired | No |
 
 ## 8. vLLM integration without forks
 
 ### 8.1 The plugin registry
 
-`vllm-sr-plugins` (package `vllm_sr_plugins`) registers through vLLM's documented entry points.
+`vllm-sr-plugins` registers through vLLM's documented entry points, with no vLLM file modified:
 
 | Entry point | Provides |
 |---|---|
-| `vllm.general_plugins` | `ModelRegistry.register_model` for our model classes. The first is `Decision2Qwen3_5ForScoring`: the text-only Qwen3.5 backbone plus the FP32 candidate head, with no LM head. Classes for Qwen3, Decision 1.0 and K-slot heads follow. |
-| Poolers | The candidate pooler gathers the option-endpoint and query rows from every prefill chunk and returns one FP32 logit per candidate |
-| `vllm.endpoint_plugins` | A route that passes per-request positions in `PoolingParams.extra_kwargs`: `/v1/system_one` in the prototype, a thin positions-to-logits route in the target design |
+| `vllm.general_plugins` | `Decision2Qwen3_5ForScoring`: vLLM's own Qwen3.5 text backbone plus the FP32 candidate head, with no LM head. Classes for Qwen3, Decision 1.0 and K-slot heads follow. |
+| Poolers | The candidate pooler serves the built-in `token_classify` task, because Model Runner V2 rejects the `plugin` task. It gathers option-endpoint and query rows from every prefill chunk and returns one FP32 logit per candidate. |
+| `vllm.endpoint_plugins` | `/v1/decisions`, with an alias route. The alias is spelled `/v1/system_one` in the prototype and will be renamed to `/v1/systemone` to match Vela 2.0 and the ecosystem (OD-1). |
 
-To launch, run `vllm serve <package> --runner pooling --hf-overrides '{"architectures": [...]}'`, with `VLLM_PLUGINS` naming both plugins (endpoint plugins load only when listed). The endpoint plugin exists because HTTP `/pooling` forwards only `task`, `use_activation` and `dimensions`, and IO processors copy a single `PoolingParams` to every prompt. **OD-11:** serve the 27B adapter through vLLM LoRA, or merge it offline?
+The endpoint plugin exists because HTTP `/pooling` does not forward per-request `extra_kwargs`; in the target design it shrinks to a worker-protocol route. **OD-9:** serve the 27B adapter through vLLM LoRA, or merge it offline?
 
-### 8.2 What the prototype has shown
+### 8.2 Prototype results
 
-The prototype runs on a pinned vLLM `0.29.1rc1.dev187` (ROCm, MI325X / gfx942). Findings so far:
+The prototype ran on one MI325X with a pinned vLLM `0.29.1rc1.dev187` (ROCm) and served Decision 2.0 0.8B from its package directory. These results are preliminary: a continuation worker is finishing the FP32, Vela, label-token and co-location runs.
 
-- **No vLLM source changes are needed.**
-- **Model Runner V2 rejects the `plugin` pooling task**, so the pooler serves the built-in `token_classify` task.
-- **Chunked prefill works**, because the pooler accumulates rows across chunks.
-- **Vela 1.0 classifiers need no plugin**; they run on native ModernBERT classification (parity TBD).
-- **Limits of v0:** only `qwen-full` packages, with no 27B adapters, `bf16z` or Qwen3 yet; no hybrid prefix caching; and a request without positions returns `invalid_model_output`.
+**Parity, BF16 plugin vs stored scored predictions:**
 
-Parity and latency are **TBD: prototype results** (§10).
+| Panel | Items | Answer changes | Max probability drift |
+|---|---|---|---|
+| Public panel | 231 | 3 (also 3 at concurrency 32) | 0.022 |
+| Typed release panel | 2,000 | 20 | 0.061 |
+| Human-transfer panel | 6,547 | 33 | 0.031 |
+| Multilingual diagnostic | 2,275 | 7 | 0.124 |
 
-### 8.3 Version pinning and compatibility CI
+**Latency, same GPU:**
 
-- **Pinning:** each engine image pins one vLLM build and one plugin version, and the plugin warns on any other build.
-- **Release testing:** for every candidate vLLM release, CI runs unit tests (head, chunked-prefill gathering, registration, service contract) and a GPU parity panel for each model family. An image ships only if its receipts pass.
-- **Coverage and early warning:** the tests exercise every interface the plugin touches (`Pooler`, `PoolingMetadata`, `PoolingParams.extra_kwargs`, weight loading, endpoint plugins and `EngineClient`), and a nightly run against `main` flags breakage before it reaches a release.
-- **Hardware plugins:** they lag upstream by one to six releases, so each gets its own pin.
+| Path | p50 (ms) | Throughput (items/s) | Peak memory |
+|---|---|---|---|
+| vLLM + plugin, BF16, HTTP | 15.2 | 66 / 208 / 449 / 622 at concurrency 1 / 8 / 32 / 128 | TBD |
+| Shipped runtime, FP32 master weights | 22.7 | 44.1 | 2.91 GiB |
+| Shipped runtime, Linear weights resident in BF16 | 21.4 | 46.8 | 2.01 GiB |
+| vLLM + plugin, FP32 | TBD | TBD | TBD |
 
-### 8.4 Upstream contributions
+**Findings:**
 
-| Contribution | Benefit | Status |
+- No vLLM source changes; every request answered; the alias answered identically; chunked prefill works.
+- **BF16 changes about 0.6% of answers** (63 of 11,053), so `pooling`-mode BF16 needs its own calibration fit or an accepted tolerance (OD-11).
+- **FP32 does not start:** vLLM's chunked GDN kernel asserts on FP32. An opt-in custom-op override (`CustomOp.register_oot`) is being measured.
+- **BF16-resident weights are exact** in the shipped runtime: bit-identical on 400 items and 0 answer changes on all four panels, so the quick win is safe.
+- **Still TBD:** Vela 1.0 on native ModernBERT classification, a label-token demo in `generate` mode, co-location on one GPU, p95 / p99.
+
+### 8.3 Pinning, CI and upstream
+
+Each engine image pins one vLLM build and plugin version, and the plugin warns on any other build. For each candidate release, CI runs the unit tests (27 today) and a GPU parity panel per family; a nightly run against `main` catches breakage early. Upstream contributions:
+
+| Contribution | Benefit | Status (2026-10-01) |
 |---|---|---|
-| Per-request pooling params through `/pooling` | No Tier 1b endpoint plugin | Not started |
-| Prefix caching for hybrid pooling | No per-question state re-reads | Disabled; generation has `align` mode ([#30877](https://github.com/vllm-project/vllm/pull/30877)) |
-| A classify / pooling RPC in `vllm serve --grpc` | A typed UDS transport (only Generate and Embed today, [#36169](https://github.com/vllm-project/vllm/pull/36169)) | RFC open ([#47768](https://github.com/vllm-project/vllm/issues/47768)) |
-| Pooling in the Rust frontend client | The Rust core drives EngineCore (P3) | Open ([#54144](https://github.com/vllm-project/vllm/pull/54144), [#54648](https://github.com/vllm-project/vllm/pull/54648)) |
+| Per-request pooling params through `/pooling` | No endpoint plugin | Not started |
+| Prefix caching for hybrid pooling | No per-question state re-reads | Disabled; generation has `align` mode |
+| A classify / pooling RPC in `vllm serve --grpc` | A typed UDS transport | RFC open ([#47768](https://github.com/vllm-project/vllm/issues/47768)) |
+| Pooling in the Rust frontend client | The Rust core drives EngineCore | Open ([#54144](https://github.com/vllm-project/vllm/pull/54144), [#54648](https://github.com/vllm-project/vllm/pull/54648)) |
 | The `plugin` task on Model Runner V2 | Custom poolers keep their own task | Found by the prototype; not filed |
 
-Multi-LoRA with per-adapter heads (§5.4) needs no contribution; it only needs the next vLLM release.
+Multi-LoRA with per-adapter heads ([#53555](https://github.com/vllm-project/vllm/pull/53555)) is merged but absent from the v0.30.0 tag; it needs only the next release.
 
-## 9. Router integration details
+## 9. Router integration
 
 ### 9.1 CLI and packaging
 
 | Extension point | Change |
 |---|---|
-| `src/vllm-sr/cli/commands/runtime.py` (`_execute_serve`) | Optional positional `MODEL`; branch into engine mode before `_resolve_serve_config` |
-| `runtime_help.py`, `website/docs/api/cli.md` | Replace the "does not launch engines" text; regenerate with `tools/docs/generate_cli_reference.py` |
-| Download | `huggingface_hub` (already a dependency) at a pinned revision into `.vllm-sr/models`, reusing the `HF_ENDPOINT` / `HF_HOME` passthrough; tokens come from a file |
-| Engine images | `vllm-sr-engine` (CPU, CUDA, ROCm) for the server, core and Tier 0. Tier 1 images are built from `vllm/vllm-openai` / `vllm/vllm-openai-rocm` plus the plugin wheel. Both reuse the container runner and GPU passthrough (**OD-12**). |
+| `_execute_serve` in `src/vllm-sr/cli/commands/runtime.py` | Optional positional `MODEL`; branch into engine mode before config resolution |
+| `runtime_help.py`, CLI docs | Replace the "does not launch engines" text |
+| Download | `huggingface_hub` at a pinned revision into `.vllm-sr/models`; tokens from a file |
+| Images | A small runtime image (CPU, CUDA, ROCm) for the core and Tier 0; Tier 1 images from the vLLM images plus the plugin wheel (OD-10) |
 | Lifecycle | A `decision` service name for `status`, `logs` and `stop` |
 
-### 9.2 Contract, adapter, signal and selector
+### 9.2 Router-side work list
 
-- **Contract `decision_answers.v1`:** the `/v1/decisions` request and response, registered in `pkg/config/classifier_backend.go`.
-- **Adapter `http_decision`:** built on `pkg/modelruntime/connector`, reusing its timeouts, byte caps, bearer auth and metrics.
-  - Decisions are idempotent, so it allows one retry within the deadline.
-  - It raises `MaxIdleConnsPerHost` above the Go default of two that the connector inherits.
-  - It connects over a UDS to managed engines and over HTTP(S) to remote ones.
-  - Consumers `decision.<name>` are validated in `model_deployments.go`, and admission control applies per deployment.
-- **`decision` signal:** a type constant, a catalog entry with label-qualified references (`routing_surface_catalog.go`), a YAML collection (`canonical_config.go`) and a dispatcher.
-  - Each signal is a template: type, instructions, criteria, a state mapping and a deadline.
-  - A Choice matches by label, and a predicate can test the chosen option's probability.
-  - Noul and Score use the existing `gt` / `gte` / `lt` / `lte` predicates on P(true) and on the expected level.
-- **`decision` selector:** modelled on `prompt`, which asks a chat model for `{"selected_model", "rationale"}` JSON with a 5 s timeout. The new selector asks one Choice over the `modelRefs` instead, and its calibrated probabilities can be combined with cost and latency. The `confidence` looper can use a Noul as its gate.
-- **Observability:**
-  - `/api/v1/inventory/models` shows identity, placement and receipts.
-  - `routing/preview` traces show answers, tiers and latency.
-  - A new `x-vsr-decision-latency-ms` header is added.
-  - States are never logged.
+| Item | Why | Stage |
+|---|---|---|
+| **One Go provider for `runtime: new`**, implementing every typed task over `RouterModelRuntime` | The per-binding switch needs one provider for all contracts | 1 (decisions), 2 (rest) |
+| **`decision_answers.v1`**: answers, spans, sets, thresholds, abstain, windows, identity; a preset-to-contract table | Existing contracts cannot express per-request questions | 1 |
+| `http_decision` adapter, `decision` signal and selector | Remote engines (one retry within the deadline, `MaxIdleConnsPerHost` above Go's 2); §4.6 | 1 |
+| **`http_rerank` adapter** | The reranker is local-only | 2 |
+| **HTTP adapters for fact-check, feedback, modality** | No HTTP path today | 2 |
+| **ORT CUDA EP**: `cuda:N` in the Rust provider enum and Go validation | NVIDIA is reachable only through candle | 2 |
+| **MIGraphX migration** (§14), with shape buckets or encoder-only graphs | ORT dropped ROCm; Vela 2.0's index inputs clash with static shapes | 1–2 (critical) |
+| Receipts for `decision_answers.v1`; runtime shown per signal in dashboard and `status` | Principle 3; guardrail | 2 |
+| `vllm-sr config migrate` with label remaps | Stage 3 | 3 |
 
-### 9.3 Migration path from classifier signals
+`/api/v1/inventory/models` shows identity, placement and receipts; `routing/preview` traces show answers and latency; states are never logged.
 
-1. **Today, with no Go changes:** a fixed question behind the `/classify` shim feeds a `sequence_classifier` signal, or feeds `complexity` through `score.v1`.
-2. **Shadow:** `decision` signals marked `shadow: true` run and log their agreement with existing signals; no rule reads them.
-3. **Switch:** move rules to decision signals one domain at a time, keeping the classifier as the `on_error` fallback.
-4. **Consolidate:** move built-in model signals to decision templates where they do better. Tier 0 encoders such as Vela remain as fast paths.
+## 10. Execution plan: strangler-fig migration
 
-## 10. Evaluation and parity
+The new runtime is introduced **alongside** the legacy one, with no big-bang switch **[Decided]**.
 
-- **Shared harness.** The existing evaluation contract already fits: one JSONL row per prompt with answers and latency, with over-budget inputs counted as invalid rather than truncated. The harness runs each model on its author's native path and on ODR, and emits parity receipts.
-- **Receipts for every placement** (fields in §6). First-party releases already work this way; one recent release changed no answers on its full prompt set after a real download.
-- **Calibration per backend.** Temperatures and Score offsets are bound to the scored model's identity. The scored Decision 2.0 path keeps embeddings, norms, convolution filters, recurrent-state parameters and the residual stream in FP32 under BF16 autocast, while vLLM runs BF16 throughout. A new backend or dtype therefore needs its own fit, or a receipt showing that the old fit changes no answers.
-- **Golden tests:**
-  - identical token IDs, answer positions and prompt SHA-256 from the Python and Rust renderers (training already records these);
-  - stored answers for each backend;
-  - API conformance.
-- **Latency benchmarks:** p50, p95 and p99; throughput by concurrency; cold start; memory. Each is measured per tier, backend and hardware class.
+### 10.1 Stages
 
-**TBD: prototype results.** The prototype's session tool measures the items below; its record fills these tables.
-
-| Decision 2.0 0.8B through the plugin, compared with stored predictions | Items | Answer changes (BF16) | Max drift (BF16) | Answer changes (FP32) | Max drift (FP32) |
-|---|---|---|---|---|---|
-| Release panels (typed, human-transfer, public, multilingual subset) | TBD | TBD | TBD | TBD | TBD |
-
-| Latency, Decision 2.0 0.8B, same GPU | p50 (ms) | p95 (ms) | Throughput by concurrency |
+| Stage | New runtime serves | Legacy runtime | Exit gate |
 |---|---|---|---|
-| Shipped runtime (FP32 master weights, BF16 autocast) | TBD | TBD | TBD |
-| Shipped runtime, Linear weights resident in BF16 | TBD | TBD | TBD |
-| vLLM plus plugin, BF16 | TBD | TBD | TBD |
-| vLLM plus plugin, FP32 | TBD | TBD | TBD |
+| **1. New models first** | Decision 2.0 family and Decision 1.0 decoders: engine mode, `/v1/decisions`, the router's `decision` signal and selector through `decision_answers.v1` | Every existing signal, unchanged | Decision packages match release receipts; router E2E tests, including fail-open |
+| **2. Vela** | Vela 2.0 natively (A1–A8); Vela 1.0 migrated through `task_heads` manifests | Serves every binding still set to `runtime: legacy` | Per-signal parity gate before each flip |
+| **3. Retire legacy** | Only Decision models, Vela 1.0 and Vela 2.0 | Deleted; the router reaches models only through `RouterModelRuntime` | Config validation fails on removed types, with migration guidance |
 
-Also TBD: a Vela classifier on native ModernBERT classification compared with Transformers (argmax changes and maximum drift by length bucket), and Decision 2.0 co-located with Vela on one GPU. **OD-13:** what should the default Tier 1b dtype be?
+Stage 2 details:
 
-## 11. Hardware and backend matrix
+- **Vela 2.0** is a new model served through presets and the `schema_encoder` profile; until the Rust renderer passes, shadow runs use a supervised `vela2_serve.py` worker.
+- **Vela 1.0 is the only legacy family migrated.** Each artifact gets a single-head `task_heads` manifest, and each binding goes through **shadow dual-run** on live traffic (recording receipts), a **per-binding switch** (`runtime: new | legacy`), a **default flip** after parity, and **per-binding rollback**.
+- A signal moves to one Vela 2.0 forward only after its own parity gate; Feedback and Hazard wait on model-side presets (OD-16, OD-17).
+
+**Guardrails:** parity gates per signal, feature flags, dashboard and `status` visibility of the serving runtime, `vllm-sr config migrate`, and release notes for every removal.
+
+### 10.2 Stage 3 disposition of non-Vela models
+
+| Non-Vela model / path | Used by | Disposition | Status |
+|---|---|---|---|
+| BERT LoRA trio (`LoRABatch`), ModernBERT and mmBERT-32K classifiers, `halugate-sentinel`, `feedback-detector` | domain, fact-check, guard, feedback, modality, PII | **Replace** with Vela 1.0 heads, or one Vela 2.0 forward. Labels change (feedback 4 → 5; modality AR / DIFFUSION / BOTH → text / image / both), so `config migrate` remaps rules. | Recommended |
+| LettuceDetect v1 / v2 | hallucination detector | **Replace** with Vela Halu (same grounded input) | Recommended |
+| ModernBERT-base-nli | hallucination explainer, response-cache polarity guard | **Retire** the model and both features | **Decided** |
+| MiniLM-class default embedder, Qwen3-Embedding, EmbeddingGemma, mmBERT 2D-Matryoshka | embedding signal, semantic cache, memory, tools, vector stores, RAG | **Replace the default** with Vela Embedding; Qwen3 / Gemma stay available through external OpenAI `/embeddings`. Stored vectors must be re-embedded. | Recommended |
+| multi-modal-embed-small | multimodal cache and memory, image complexity | **Replace** with Vela Omni and re-embed (a different vector space) | Recommended |
+| Qwen3Guard via `http_chat` | prompt guard | **Keep external**; a `label_token` manifest later gives probabilities | Recommended |
+| candle Qwen3 multi-LoRA, candle Qwen3Guard, DeBERTa via candle `auto` | nothing wired | **Retire** | Recommended |
+| candle MLP selector | the `mlp` selection algorithm | **Port** to Rust head compute or Go before the candle binding is deleted | Recommended |
+| OpenVINO provider | embeddings, sequence labels | **Retire**; Intel uses ORT's OpenVINO execution provider | **Decided** |
+| Chat-LLM paths (prompt selector, preference, `llm` classifiers) | selection and signals | Keep on external chat endpoints; migrate each signal to Decision models after parity | Recommended |
+
+### 10.3 Stage 3 hazards
+
+- **Re-embedding:** a new embedding default invalidates stored vectors in the cache, memory, vector stores and RAG, so each store needs a drain, rebuild and verify migration.
+- **MLP selector:** port and receipt it before the candle binding is deleted.
+- **Label remaps:** `vllm-sr config migrate` rewrites rules on changed labels and refuses to guess ambiguous mappings.
+- **Removed features:** configs enabling the NLI explainer or polarity guard fail validation with guidance.
+- **One backbone:** the gain from Vela 2.0 needs many signals per forward; ORT graphs have heads baked in, while candle can share a backbone.
+
+## 11. Evaluation and parity
+
+- **Shared harness:** one JSONL row per prompt with answers and latency, over-budget inputs counted invalid; each model runs on its author's native path and on ODR.
+- **Receipts for every placement:** `compatibility-receipt/v1` extends from `label_distribution.v1` to every contract, including `decision_answers.v1` with bundle digest, packing and window policy. Vela 2.0's parity rows import as its first receipts.
+- **Calibration per backend:** fits bind to model identity and dtype; a new backend or dtype needs its own fit, or a receipt showing the old fit changes no answers.
+- **Golden tests:** identical token ids, positions, word units, offsets and prompt hashes from Python and Rust renderers; stored answers per backend; API conformance, including against `vela2_serve.py`.
+- **Shadow parity:** in Stage 2 the supervisor samples live traffic through both runtimes and the dashboard shows gate status.
+- **Benchmarks:** p50 / p95 / p99, throughput by concurrency, cold start and memory, per placement and hardware.
+
+## 12. Hardware and backend matrix
 
 | Backend | NVIDIA | AMD Instinct | Intel | Apple silicon | CPU |
 |---|---|---|---|---|---|
-| ORT (Tier 0) | CUDA, TensorRT | MIGraphX (ROCm provider removed in 1.23) | OpenVINO | CoreML | x86, ARM |
-| candle (Tier 0) | CUDA | None (unmerged PR) | None | Metal | MKL / Accelerate |
-| llama.cpp (Tier 0) | CUDA | HIP | SYCL | Metal | x86, ARM, RISC-V |
-| vLLM (Tier 1) | CUDA | ROCm | XPU | vllm-metal (pooling experimental) | x86, AArch64 |
-
-vLLM also reaches TPU, Ascend, Gaudi and Neuron through hardware plugins (§8.3).
+| ORT (Tier 0) | CUDA EP (to add, §9.2), TensorRT | MIGraphX (ROCm EP removed in 1.23) | OpenVINO EP | CoreML (not wired; use candle Metal) | x86, ARM |
+| candle (Tier 0) | CUDA | None | None | Metal | MKL / Accelerate |
+| llama.cpp | CUDA (subprocess) | HIP (subprocess; GDN unbenchmarked on CDNA3) | SYCL | Metal | x86, ARM (in-process) |
+| vLLM (Tier 1) | CUDA | ROCm | XPU | Experimental | x86, AArch64 |
 
 | Model class | NVIDIA | AMD Instinct | Apple silicon | CPU only |
 |---|---|---|---|---|
-| Encoders ≤0.5B, GLiNER2 | Tier 0: ORT or candle | Tier 0: ORT MIGraphX (GLiNER2 fidelity to verify) | Tier 0: candle or ORT CoreML | Tier 0: ORT |
-| Label-token deciders ≤12B | Tier 1a | Tier 1a | Tier 0: llama.cpp GGUF | Tier 0: llama.cpp, small only |
-| Scoring-head hybrids 0.8B–9B | Tier 1b | Tier 1b | Not in v1 (OD-14) | Impractical above ~1B |
-| MoE and ≥27B | Tier 2 | Tier 2 (27B ≈ 55 GB BF16; 35B MoE 52–70 GB) | None | None |
+| Vela 1.0 / 2.0, embedders, GLiNER2 | ORT CUDA or candle | ORT MIGraphX (shape buckets or encoder-only graph) | candle Metal | ORT |
+| Vela Omni | ORT CUDA | ORT MIGraphX (to verify) | ORT CPU | ORT |
+| Label-token deciders ≤12B | Tier 1 `generate` | Tier 1 `generate` | llama.cpp GGUF | llama.cpp, small only |
+| Head-based hybrids 0.8B–9B | Tier 1 `pooling` | Tier 1 `pooling` | Not in v2 (OD-12) | Impractical above ~1B |
+| MoE and ≥27B | Tier 2 | Tier 2 (27B ≈ 55 GB BF16) | None | None |
 
-## 12. Security and governance
+## 13. Security and governance
 
-- **No `trust_remote_code` by default.** Repositories supply weights, tokenizers and manifests; executable code comes only from reviewed adapters in vllm-sr and `vllm-sr-plugins`.
-- **P0 exception.** P0 runs a first-party package's bundled runtime only when its hashes are on an allowlist shipped with vllm-sr (**OD-15**). Bundled third-party code never runs.
-- **Reviewed adapters.** Each family or renderer lands with golden tests and a receipt, and each overlay records its reviewer.
-- **Licence flags** appear in `/v1/models`. Non-commercial and research-only models require `--accept-licence` (**OD-16**), and gated models need a token file.
-- **Pinned revisions and hashes.** Every file is verified before load, and a new upstream revision counts as a new identity.
-- **Exposure.** Images pin their versions and ship SBOMs. Managed engines listen only on a UDS or localhost; remote engines require TLS and a bearer key.
+- **No `trust_remote_code`:** executable code comes only from reviewed adapters in vllm-sr and `vllm-sr-plugins`. Bundled runtimes and stop-gap model servers run only in supervised workers, and only when hash-allowlisted (OD-13).
+- **Licence and access per component:** weights, tokenizer and code carry separate licences (Vela 2.0's tokenizer is under the Gemma terms). Flags (non-commercial, research-only, gated, private) appear in `/v1/models` and drive policy (OD-14); private repositories need a token file, never a command-line token.
+- **Pinning:** every file is verified before load; a new upstream revision is a new identity.
+- **Marker injection:** renderers insert markers by token id, so user text can never create one; golden tests check this.
+- **Exposure:** managed engines listen only on a UDS or localhost; remote engines require TLS and a bearer key.
 
-## 13. Existing issue: ORT's ROCm execution provider
+## 14. Existing issue: ORT's ROCm execution provider
 
-ONNX Runtime removed its ROCm execution provider in 1.23; ROCm 7.0 was its last supported release, and ORT points users to MIGraphX. vllm-sr's AMD path still depends on that provider:
+ONNX Runtime removed its ROCm execution provider in 1.23, yet vllm-sr's ROCm image pins `onnxruntime_rocm` 1.22.1 for ROCm 7.0, `migraphx-dynamic` also enables `rocm`, the CK flash-attention op pins the 1.22.1 header, and `rocm:N` still selects the ROCm provider. Tier 0 is the only AMD home for DeBERTa, GLiNER2 and Vela, so the migration (about 4–5 engineer-weeks) is critical path:
 
-- the ROCm image installs `onnxruntime_rocm` 1.22.1 for ROCm 7.0, and checks that both the MIGraphX and ROCm provider libraries resolve;
-- the `migraphx-dynamic` feature of `onnx-binding` also enables `rocm`;
-- the CK flash-attention op pins the ORT 1.22.1 C header;
-- `rocm:N` devices still select the ROCm provider, and only the implicit `migraphx:0` avoids it.
+1. Make MIGraphX the only AMD provider, with `rocm:N` a deprecated alias.
+2. Move to a supported ORT release on a current ROCm.
+3. Rebuild the CK op, or re-qualify MIGraphX attention fusion (disabled today with `MIGRAPHX_MLIR_USE_SPECIFIC_OPS=~attention` after non-finite mmBERT outputs).
+4. Add length buckets instead of one static shape, and padded fixed-size index tensors for Vela 2.0 (or its encoder-only graph).
+5. Record receipts and latency for every Tier 0 model on MIGraphX.
 
-AMD Tier 0 is therefore frozen on ORT 1.22.1 and ROCm 7.0. The migration belongs in P1 and takes about 3–4 engineer-weeks. It is critical path for GLiNER2 / DeBERTa, which can only run in Tier 0.
+## 15. Model-side co-design
 
-1. Make MIGraphX the only AMD provider: `rocm:N` becomes a deprecated alias of `migraphx:N`, and `migraphx-dynamic` stops enabling `rocm`.
-2. Move to a supported ORT release with MIGraphX, on a current ROCm.
-3. Rebuild the CK op against the new header, or replace it with MIGraphX attention fusion. That fusion is disabled today because it produced non-finite mmBERT outputs on ROCm 7.0, so it needs re-qualifying.
-4. Record receipts and latency for every Tier 0 model on MIGraphX.
+- **Vela 2.0 owner asks (OD-16):** a machine-readable `presets.json`, `NO_FEEDBACK`, `[ABS]` calibration, corrected licensing text (inherited from Kai), an encoder-only ONNX graph, FP16 long-document PII receipts, and the Hazard preset wording (OD-17).
+- **Packing for decoders:** several questions read at their own slots after one state removes hybrid-pooling re-reads; training must use the packed format with shuffled order.
+- **A stock-engine-friendly readout** (label-token or last-slot head) brings prefix caching, thinking and GGUF / MLX builds, after a panel A/B test (OD-15).
+- **An MoE tier** (35B-A3B / 26B-A4B class) for large-tier quality at about 4B active compute (OD-20).
+- **BF16 / FP8 serving** with only the head in FP32, each dtype calibrated.
+- **Shared-backbone Vela heads,** including an embedding head, so one forward serves a whole request.
 
-## 14. Model-side co-design
+## 16. Roadmap and effort
 
-These levers are for future Decision generations. New human-rated data is currently the main training lever, so each change should run as a preregistered, matched-control arm within a scheduled milestone.
+Planning figures in engineer-weeks (ew). They grew from v1's 39–54 ew with the four surfaces, new families, Vela 2.0, the Vela 1.0 migration and legacy deletion.
 
-- **Multi-question packing:** several questions follow one state, and each is read at its own slot in one pass (STEP pooling or an endpoint plugin). This removes the re-reads on hybrid pooling. Later questions see earlier ones, so training must use the packed format with shuffled order.
-- **A readout stock engines can run:** label-token rows or a last-position slot head. It brings stock vLLM, prefix caching, thinking and GGUF / MLX builds, but it needs a panel A/B test first (**OD-17**).
-- **An MoE tier:** Qwen3.5/3.6-35B-A3B- or Gemma-4-26B-A4B-class bases give large-tier quality at about 4B active compute, served in Tier 2. The timing follows the §3 default; the choice of base and LoRA on experts are open.
-- **Small Tier 0 encoders:** encoders lead the survey's frontier up to about 0.5B. Decision 2.0 0.6B has no GDN layers, so it exports to ONNX.
-- **BF16 / FP8 serving:** drop resident FP32 weights (about 103 GB, against 55 GB, at 27B) and keep only the head in FP32. FP8 on MI300-class GPUs needs conversion from OCP to fnuz, and each dtype gets its own calibration.
-- **Prefix sharing:**
-  - The Decision 2.0 renderer puts the state first (`Context:` … `Decision:`), but tokenizes state and question as one segment.
-  - Tokenizing the state separately would guarantee identical prefixes. It changes model inputs, so it must pass the training gates.
-  - Hybrid prefix caching reuses state only at block boundaries (`align` mode).
-  - A LoRA per question type breaks sharing; shared-backbone heads or activated LoRA (aLoRA) keep it.
-- **Packaging:** full-weight 27B packages use the lossless `bf16z` codec, which Tier 1b must load or the CLI must restore. Adapter packages pin their base by revision and hashes.
+| Phase | Stage | Scope | Exit criteria | Estimate |
+|---|---|---|---|---|
+| **P0** | 1 | Engine mode around the current Python runtime; CLI detection and download; images; API v1 schemas for all four surfaces, conformance suite and docs; BF16-resident Linear weights behind a receipt | API v1 frozen; a Decision 2.0 package matches its release receipt | 6–7 ew |
+| **P1** | 1 | Rust core v1 (manifest, calibration, answers, Python bindings); Tier 1 `pooling` (27B adapter, Qwen3, `bf16z`, compatibility CI) and `generate` (label-token adapter, 2–3 renderers); worker protocol; router `decision_answers.v1`, `http_decision`, `decision` signal and selector; MIGraphX migration in parallel | Receipts per backend; router E2E tests with fail-open; AMD Tier 0 on a supported ORT | 17–22 ew |
+| **P2** | 2 | In-process `RouterModelRuntime`, planner (§5.9), placement, supervisor; Rust renderer with golden tests; `schema_encoder` (A1–A8); `task_heads` and Vela 1.0 manifests; `/v1/classify`, `/v1/embeddings`, `/v1/rerank`; `multimodal_embedding`; the single Go provider; shadow dual-run and the `runtime` switch; ORT CUDA EP; `http_rerank` and HTTP adapters | Each Vela signal passes its parity gate and flips; killing a worker degrades answers, never routing | 22–29 ew |
+| **P3** | 3 + breadth | Stage 3 dispositions; `config migrate` with label remaps; re-embedding migration; MLP selector port; legacy binding deletion; Rust EngineCore client after upstream pooling lands; third-party breadth (4–6 renderers, GLiNER2); MoE placement | Legacy code deleted; 29 of 31 surveyed deciders served with receipts | 14–20 ew |
 
-## 15. Roadmap and effort
+- **Stage 1 MVP (P0 + P1):** 23–29 ew, or 3–3.5 months with two engineers.
+- **Stage 2 (P2):** 22–29 ew; the Rust renderer and Go provider are critical path, after MIGraphX on AMD.
+- **Everything:** 59–78 ew (13.5–18 engineer-months): 7–9 months with two engineers, 5–6 with three. P1 starts once prototype results are reviewed **[Decided]**.
 
-Estimates are planning figures in engineer-weeks (ew), not measurements.
+## 17. Risks and open decisions
 
-| Phase | Scope | Exit criteria | Estimate |
-|---|---|---|---|
-| **P0** | Engine mode wrapping the current runtime (all five endpoints, micro-batching); CLI detection and download; engine images; API v1 schema, conformance suite and docs; BF16-resident Linear weights behind a receipt | API v1 frozen; a Decision 2.0 package matches its release receipt with zero answer changes | 5–6 ew |
-| **P1** | Rust core v1 (manifest, calibration, answers, Python bindings); Tier 1a label-token adapter with 2–3 renderer ports; Tier 1b plugin (27B adapter, Qwen3 0.6B, `bf16z`, compatibility CI); Tier 0 MIGraphX migration; router `decision_answers.v1`, `http_decision`, `decision` signal and selector | Receipts per backend; router E2E tests pass, including fail-open; AMD Tier 0 on a supported ORT | 16–21 ew |
-| **P2** | Managed sidecar and supervisor (process, Docker, Kubernetes); in-process `RouterModelRuntime`; planner; run-time placement; cascades; multi-LoRA heads | Killing a sidecar degrades answers, never routing; one call per request | 8–12 ew |
-| **P3** | Rust engine-core client after upstream pooling lands; third-party breadth (4–6 renderers, GLiNER2, marker-head encoders); MoE placement; multi-slot packing | 29 of 31 surveyed models served with receipts | 10–15 ew |
-
-- **MVP:** P0, plus the P1 items that Decision 2.0 needs in router mode: the Rust core, Tier 1b for `qwen-full`, the label-token adapter and the router work. MIGraphX runs in parallel. About 17–22 ew, or 2–2.5 months with two engineers.
-- **Full coverage (P0–P3):** about 39–54 ew (9–12.5 engineer-months), or 5–6 months with two engineers.
-- P1 starts once the prototype results are reviewed (**Decided**).
-
-## 16. Risks and open questions
-
-### 16.1 Risks
+### 17.1 Risks
 
 | Risk | Mitigation |
 |---|---|
-| vLLM's BF16 numerics flip answers relative to the scored FP32-master path | Per-backend calibration and receipts; an FP32 option (OD-13) |
+| vLLM's BF16 numerics flip answers vs the scored path (about 0.6% in the prototype) | Per-backend calibration and receipts; the FP32 override (OD-11) |
 | Plugin interfaces change between vLLM releases | Pins, compatibility CI, upstream contributions |
-| Hybrid pooling is lightly exercised upstream, with no prefix caching | Packing, a stock-friendly readout, upstream work |
-| Large decoders miss routing deadlines and fail open too often | Latency-aware placement, cascades, smaller tiers |
-| Third-party revisions drift, or licences are misused | Pinned hashes, receipts re-run on change, licence flags (OD-16) |
+| The Rust renderer drifts from the training renderer | Golden tests on token ids, markers, word units and offsets; the model server as stop-gap |
+| Packing changes schema-encoder answers | Canonical packing, bundle cache keys, packed-vs-alone receipts (OD-18) |
+| Stage 3 breaks stored vectors or rules | Re-embedding migration, `config migrate`, validation errors with guidance |
+| Large decoders miss routing deadlines | Latency-aware placement, cascades, smaller tiers |
+| Private or restrictively licensed components are misused | Per-component licence and access flags, token files (OD-14) |
 
-### 16.2 Open decisions
+### 17.2 Open decisions
+
+Resolved since v1: v1 OD-2 (`/classify` is first-class), v1 OD-8 (renderer path, §5.10), the Tier 1 structure, the NLI and OpenVINO dispositions, and the overflow rule. v1 OD-3 to OD-7 and OD-9 to OD-17 carry over as OD-2 to OD-15.
 
 | ID | Question | Recommendation |
 |---|---|---|
-| OD-1 | Ship the `/v1/systemone` alias? | Yes, on by default |
-| OD-2 | Ship the `/classify` shim? | Yes, off by default |
-| OD-3 | What does `serve <model> --config` mean? | Reject it in v1 |
-| OD-4 | Several states per call? | Not in v1 |
-| OD-5 | Router config names | As in §4.3, pending config review |
-| OD-6 | Selector planning | One Choice per decision up to three candidates, a union Choice beyond |
-| OD-7 | SGLang as an alternative Tier 1 engine? | Not in v1 |
-| OD-8 | Renderer language | Vendored Python for first-party packages until Rust golden tests pass; Rust for new renderers |
-| OD-9 | Receipt threshold for placement | Zero answer changes for a first-party default backend; a published tolerance elsewhere |
-| OD-10 | Manifest file and registry location | A separate `DECISION_MANIFEST.json`; the registry in the vllm-sr repository |
-| OD-11 | 27B adapter: vLLM LoRA or an offline merge? | LoRA first; merge only with new receipts |
-| OD-12 | One engine image or several? | Split: a small Tier 0 image plus vLLM-based Tier 1 images |
-| OD-13 | Default Tier 1b dtype: BF16 recalibrated, or FP32 (exact, twice the memory)? | Decide from prototype parity |
-| OD-14 | Apple silicon and CPU for scoring-head hybrids; a Tier 0 export of the 0.6B | Hybrids out of v1; evaluate the export in P3 |
-| OD-15 | First-party bundled runtimes in P0? | Hash-allowlisted packages only |
-| OD-16 | Licence defaults | Refuse non-commercial and research-only models without `--accept-licence` |
-| OD-17 | A stock-engine-friendly readout for future models? | A preregistered panel A/B in the next training milestone |
+| OD-1 | Confirm the `/v1/systemone` alias | Yes, strongly recommended: Vela 2.0 already serves it. Rename the prototype's `/v1/system_one`. |
+| OD-2 | What does `serve <model> --config` mean? | Reject it in v1 |
+| OD-3 | Several states per call? | Not in v1 |
+| OD-4 | Router config field names (`provider: odr`, `preset`, `runtime`) | As in §4.6, pending config review |
+| OD-5 | Selector planning over `modelRefs` | One Choice per decision up to three candidates, a union Choice beyond |
+| OD-6 | SGLang as an alternative worker engine? | Not in v1; the worker protocol keeps it possible |
+| OD-7 | Receipt threshold for placement | Zero answer changes for a first-party default backend; a published tolerance elsewhere |
+| OD-8 | Manifest file and registry location | `DECISION_MANIFEST.json` in first-party packages; overlays (including Vela 2.0) in the vllm-sr repository |
+| OD-9 | 27B adapter: vLLM LoRA or an offline merge? | LoRA first; merge only with new receipts |
+| OD-10 | One engine image or several? | Split: a small runtime image plus vLLM-based Tier 1 images |
+| OD-11 | Default dtype for `pooling` mode: BF16 with its own calibration, or FP32 through the GDN override? | BF16 with a per-backend fit, if the FP32 run confirms the drift is numerical |
+| OD-12 | Apple and CPU for head-based hybrids; a Tier 0 export of the 0.6B | Hybrids out of v2; evaluate the export in P3 |
+| OD-13 | Which bundled runtimes and model servers may run as supervised workers? | Hash-allowlisted first-party packages and `vela2_serve.py`, Stage 2 only |
+| OD-14 | Licence and access defaults | Refuse non-commercial and research-only without `--accept-licence`; private repos need a token file; report tokenizer terms separately |
+| OD-15 | A stock-engine-friendly readout for future Decision models? | A preregistered panel A/B in the next training milestone |
+| OD-16 | Vela 2.0 model-owner asks: `presets.json`, `NO_FEEDBACK`, `[ABS]` calibration, licensing text, encoder-only graph, FP16 long-PII receipts | Request all six; Stage 2 needs `presets.json`, `NO_FEEDBACK` and the licensing fix before its flips |
+| OD-17 | Hazard presets: wait for published wording, or keep the Vela 1.0 Hazard head? | Keep the Vela 1.0 head until the presets are published and pass parity |
+| OD-18 | Packing effect: what packed-vs-alone tolerance, and is canonical packing the default for router signals? | Canonical packing by default; tolerance set like OD-7, measured in Stage 2 |
+| OD-19 | Confirm the Recommended Stage 3 dispositions (§10.2) | Confirm as listed |
+| OD-20 | MoE tier: replace the 27B tier, or add a family member? | Decide after the exploration reports |
+| OD-21 | llama.cpp for AMD datacenter GPUs | List it only after a GDN benchmark on MI325X |
+| OD-22 | Long-term DeBERTa / GLiNER2 path (ORT only), and diffusion deciders | Keep DeBERTa / GLiNER2 on ORT; keep diffusion deferred until its read works upstream without out-of-tree fixes |
 
-Diffusion deciders are deferred rather than open, until their structured read works upstream without out-of-tree fixes.
-
-### 16.3 Open technical questions
+### 17.3 Open technical questions
 
 1. Do vLLM's processed logprobs match our temperature pipeline, including Gemma's softcapping?
-2. Is hybrid `align` prefix caching stable on ROCm, and will upstream support prefix caching for hybrid pooling?
-3. What does the sidecar's Python frontend cost? (**TBD: prototype results**)
-4. Do concurrent requests with a shared prefix each recompute it?
-5. Are community GLiNER2 / DeBERTa ONNX exports faithful under MIGraphX?
-6. Does the router's candle Qwen3 multi-adapter forward skip LoRA deltas, as the research found?
+2. Is hybrid `align` prefix caching stable on ROCm?
+3. What do the sidecar frontend and HTTP hop cost at p95 / p99? (**TBD: prototype results**)
+4. Do ModernBERT token classification and 32K YaRN mmBERT work on the pinned vLLM?
+5. Are GLiNER2 / DeBERTa ONNX exports faithful under MIGraphX?
 
 ## Appendix A. Ecosystem survey summary
 
@@ -584,33 +830,19 @@ A 2026-09-28 snapshot of 31 distinct models: the top 20 open entrants on a publi
 | GLiNER2 span or label extractor | 0 | 3 | 3 |
 | Generative JSON | 0 | 0 | 0 |
 
-- **Backbones (top 20):** 15 Qwen3.5/3.6/3.8 GDN hybrids (2 of them MoE), 4 Gemma 4 (1 MoE) and 1 diffusion model; 12 of the 20 have ≥25B total parameters.
-- **API:** every public runtime uses a call shaped like System One. Most expose `/v1/systemone`, and at least one exposes `/v1/decisions`.
-- **Amortisation:** every runtime reuses the shared state, through prefix-cached branches or packed slots. One reports label-logit reads as 7–10× faster than generating constrained JSON.
-- **Engines and contracts:** vLLM `main` supports every decoder backbone studied, but DeBERTa is missing from vLLM, SGLang and llama.cpp. Several authors' runtimes are CUDA-only, option caps range from about 20 to 255, and at least one runtime silently truncates long states.
-- **Licences:** mostly Apache-2.0 or MIT; a few CC BY-NC 4.0, one research-only and one gated.
+Top-20 backbones: 15 Qwen3.5/3.6/3.8 GDN hybrids (2 MoE), 4 Gemma 4 (1 MoE), 1 diffusion; 12 have ≥25B total parameters. Every public runtime uses a System One-shaped call (most expose `/v1/systemone`) and reuses the shared state; at least one silently truncates long states.
 
 ## Appendix B. Glossary
 
-- **Label-token decider:** reads the LM-head logits of label tokens at an answer position.
-- **Scoring-head decoder:** a decoder with a trained head. Decision 1.0 / 2.0 score each option's endpoint against a query position.
-- **GDN hybrid:** Qwen3.5-family layers that mix Gated DeltaNet linear attention with periodic full attention.
+- **Label-token decider:** reads LM-head logits of label tokens at an answer position.
+- **Head-based decoder:** a decoder with a trained head scoring option endpoints (Decision 1.0 / 2.0).
+- **Schema encoder:** an encoder reading questions, options and labels rendered as input markers, answering all in one pass.
+- **Preset:** a manifest-defined question or head mapped to a router contract.
 - **Parity receipt:** evidence that a model on a given backend, dtype and hardware reproduces reference answers on a named panel.
 
 ## Appendix C. References
 
-- **vLLM docs:** [plugin system](https://github.com/vllm-project/vllm/blob/main/docs/design/plugin_system.md), [IO-processor plugins](https://github.com/vllm-project/vllm/blob/main/docs/design/io_processor_plugins.md), [endpoint plugins](https://github.com/vllm-project/vllm/blob/main/docs/design/endpoint_plugins.md), [pooling models](https://github.com/vllm-project/vllm/blob/main/docs/models/pooling_models/README.md), [multiprocessing](https://github.com/vllm-project/vllm/blob/main/docs/design/multiprocessing.md), [Rust frontend](https://github.com/vllm-project/vllm/blob/main/rust/README.md), [`vllm serve`](https://docs.vllm.ai/en/stable/cli/serve/), [environment variables](https://docs.vllm.ai/en/v0.26.0/configuration/env_vars/).
-- **vLLM PRs and issues:**
-  - pooling and prefix caching: [#20930](https://github.com/vllm-project/vllm/pull/20930), [#30877](https://github.com/vllm-project/vllm/pull/30877), [#50172](https://github.com/vllm-project/vllm/pull/50172), [#55307](https://github.com/vllm-project/vllm/pull/55307);
-  - pooling in the generate runner, closed: [#30672](https://github.com/vllm-project/vllm/pull/30672), [#40804](https://github.com/vllm-project/vllm/pull/40804);
-  - models: [#35520](https://github.com/vllm-project/vllm/pull/35520), [#42094](https://github.com/vllm-project/vllm/pull/42094), [#57250](https://github.com/vllm-project/vllm/pull/57250);
-  - gRPC and the Rust frontend: [#36169](https://github.com/vllm-project/vllm/pull/36169), [#47768](https://github.com/vllm-project/vllm/issues/47768), [#54144](https://github.com/vllm-project/vllm/pull/54144), [#54648](https://github.com/vllm-project/vllm/pull/54648);
-  - hidden states and LoRA: [#57185](https://github.com/vllm-project/vllm/pull/57185), [#49705](https://github.com/vllm-project/vllm/issues/49705), [#53555](https://github.com/vllm-project/vllm/pull/53555).
-- **Precedents and other engines:**
-  - Dynamo [#10835](https://github.com/ai-dynamo/dynamo/issues/10835) and [#10838](https://github.com/ai-dynamo/dynamo/issues/10838); [TEI](https://github.com/huggingface/text-embeddings-inference); the [Ollama runner](https://github.com/ollama/ollama/blob/da09488fbfc437c55a94bc5374b0850d935ea09f/llm/server.go);
-  - ORT: the [ROCm provider notice](https://onnxruntime.ai/docs/execution-providers/ROCm-ExecutionProvider.html), [execution providers](https://onnxruntime.ai/docs/execution-providers/), [#27907](https://github.com/microsoft/onnxruntime/pull/27907), and [onnxruntime-genai#2043](https://github.com/microsoft/onnxruntime-genai/pull/2043);
-  - candle [#3396](https://github.com/huggingface/candle/pull/3396) and [#3424](https://github.com/huggingface/candle/pull/3424); llama.cpp [#16095](https://github.com/ggml-org/llama.cpp/pull/16095) and [#19504](https://github.com/ggml-org/llama.cpp/pull/19504); [Python multiprocessing](https://docs.python.org/3/library/multiprocessing.html).
-- **Co-location research:**
-  - aLoRA: [2504.12397](https://arxiv.org/abs/2504.12397), [2512.17910](https://arxiv.org/abs/2512.17910);
-  - routing from activations: [2602.09924](https://arxiv.org/abs/2602.09924), [2603.20895](https://arxiv.org/abs/2603.20895), [2509.10625](https://arxiv.org/abs/2509.10625).
-- **vllm-sr:** the Decision 1.0 launch post (`website/blog/2026-09-22-introduce-decision.md`), `website/docs/installation/runtime/external.md`, and the [plugin prototype](https://github.com/vllm-project/semantic-router/tree/678ac2060ea5d0b2e6d63dea347aa9ce461fb34b/src/vllm-sr-plugins).
+- **vLLM docs:** [plugin system](https://github.com/vllm-project/vllm/blob/main/docs/design/plugin_system.md), [endpoint plugins](https://github.com/vllm-project/vllm/blob/main/docs/design/endpoint_plugins.md), [pooling models](https://github.com/vllm-project/vllm/blob/main/docs/models/pooling_models/README.md), [multiprocessing](https://github.com/vllm-project/vllm/blob/main/docs/design/multiprocessing.md), [Rust frontend](https://github.com/vllm-project/vllm/blob/main/rust/README.md).
+- **vLLM PRs and issues:** [#30877](https://github.com/vllm-project/vllm/pull/30877), [#50172](https://github.com/vllm-project/vllm/pull/50172), [#55307](https://github.com/vllm-project/vllm/pull/55307), [#30672](https://github.com/vllm-project/vllm/pull/30672), [#40804](https://github.com/vllm-project/vllm/pull/40804), [#57250](https://github.com/vllm-project/vllm/pull/57250), [#36169](https://github.com/vllm-project/vllm/pull/36169), [#47768](https://github.com/vllm-project/vllm/issues/47768), [#54144](https://github.com/vllm-project/vllm/pull/54144), [#54648](https://github.com/vllm-project/vllm/pull/54648), [#53555](https://github.com/vllm-project/vllm/pull/53555).
+- **Precedents and other engines:** Dynamo [#10835](https://github.com/ai-dynamo/dynamo/issues/10835) and [#10838](https://github.com/ai-dynamo/dynamo/issues/10838); [TEI](https://github.com/huggingface/text-embeddings-inference); the [Ollama runner](https://github.com/ollama/ollama/blob/da09488fbfc437c55a94bc5374b0850d935ea09f/llm/server.go); the ORT [ROCm provider notice](https://onnxruntime.ai/docs/execution-providers/ROCm-ExecutionProvider.html) and [execution providers](https://onnxruntime.ai/docs/execution-providers/); candle [#3396](https://github.com/huggingface/candle/pull/3396); llama.cpp [#16095](https://github.com/ggml-org/llama.cpp/pull/16095) and [#19504](https://github.com/ggml-org/llama.cpp/pull/19504).
+- **vllm-sr:** the Decision 1.0 launch post (`website/blog/2026-09-22-introduce-decision.md`), the Vela models tutorial (`website/docs/tutorials/global/vela-models.md`), and the plugin prototype on branch `xunzhuo/decision-2-vllm-plugin` (`src/vllm-sr-plugins/`).
