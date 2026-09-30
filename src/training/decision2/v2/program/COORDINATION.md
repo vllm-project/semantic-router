@@ -199,6 +199,26 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 09:40 — **9B M6: no successor (a near miss); 9B M7 launched** (result
+  `v2/9b/records/lux9b-m6-result-2026-09-30.md`; integration `0b97bc514`; ~12.3 of 24 GPU-h).
+  - **Finalist K5-a12** (½ five-seed K soup + ½ Lux 1.0): post-key v3 69.362, +1.62 [−0.19, +2.41] vs the released
+    model.
+    - Typed +.030 [+.018, +.042]; human transfer level (+.006); public 231 179 vs 178; tier gate +3.55 vs Lux1.
+    - Fails item 1 (lower bound −0.19) and item 4: card-eligible mlx −.010 [−.020, −.001], Japanese −.033.
+    - HT-DEV v2 read TIE (−.007), which matches formal human transfer.
+  - **Arms stopped early:** KA (AutoJev teacher) and KH (HS1 substitution, which lowered Noul `rule_precedence` and the
+    CSS pilot).
+  - **Lessons:**
+    - More K seeds in the soup is the lever that works.
+    - The ½ point costs multilingual accuracy.
+    - HS1 substitution hurts Noul at 9B. If HS1 is used, add it; don't substitute it.
+  - **9B M7** (fresh worker; node A GPU6–7; 24 GPU-h):
+    - K5 recipe + **PN1-r2** (ja-heavy) as the multilingual lever, with a matched control. A cost-effective design, such
+      as a top-up of the K seeds.
+    - Development gates: HT-DEV v2 non-FLAG, a PN1 dev yes-rate guard, a multilingual development check (never mlx-diag
+      itself), and the Noul floor.
+    - Items 1–8.
+
 - 2026-09-30 08:40 — **The `bf16z` lossless codec is in the release pipeline; the direct node-to-node link is fast; F-b
   was correctly not released** (record `v2/release/records/dev2-bf16z-codec-2026-09-30.md`; integration `aa65b150e`;
   0.103 GPU-h; nothing uploaded).
