@@ -205,6 +205,15 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 00:10 — **The Open Decision Runtime discussion is recorded in the program gist** as
+  `10-open-decision-runtime-decisions.md` (gist cd90fce0fa548616d8a4f1b2d2398dea).
+  - It holds every decision so far, marked [Decided] / [Recommended] / [Open]: UX, API, the final runtime architecture
+    (principles, 7 modules, placement table, Tier 1 as one tier with generate / pooling runner modes), llama.cpp
+    positioning, supported architectures, plugin points, vLLM without forks, known issues and model co-design.
+  - **When the proposal writer (28bfbd64) returns, resume it once** to fold this log into the proposal: rename Tier
+    1a / 1b to runner modes; make the final runtime design the core section; add llama.cpp positioning. Then link the
+    proposal gist from the log's §10.
+
 - 2026-10-01 00:05 — **Final model-runtime design, the core section for the proposal revision** (discussed with the
   user).
   - **Principles:**
