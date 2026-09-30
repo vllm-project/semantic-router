@@ -78,7 +78,7 @@ func TestSharedHeadersAllowResponseCache(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			decision := config.Decision{Name: "shared-header-cache", Plugins: []config.DecisionPlugin{{
 				Type:          config.DecisionPluginResponseCache,
-				Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true, "mode": "exact_then_semantic"}),
+				Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true, "mode": "exact_then_semantic", "scope": "global"}),
 			}}}
 			cache := &mockStreamingCache{exactHit: true, exactResponse: []byte(exactCacheHitBody)}
 			router := &OpenAIRouter{Cache: cache, Config: &config.RouterConfig{
@@ -126,8 +126,10 @@ func TestSharedHeadersAllowShadowDispatch(t *testing.T) {
 				if outcome := singleShadowOutcome(t, run); outcome.Verdict != shadowVerdictCompleted {
 					t.Fatalf("outcome = %+v", outcome)
 				}
-				if got := backend.headers[0].Get(name); source == "profile" && got != "provider-value" {
-					t.Fatalf("shadow header = %q", got)
+				// Primary provider headers do not belong to the shadow provider.
+				// Their presence must allow shadow dispatch without copying them.
+				if got := backend.headers[0].Get(name); source == "profile" && got != "" {
+					t.Fatalf("primary provider header leaked to shadow: %q", got)
 				}
 			})
 		}
