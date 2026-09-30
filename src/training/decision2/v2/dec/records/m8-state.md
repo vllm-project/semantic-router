@@ -7,6 +7,23 @@ A20r, matched controls, starts now, HR2 only by amendment). Budget 24 GPU-h. GPU
 
 ## Now
 
+- 2026-09-30 ≈19:40 UTC+8 (11:40Z) — **Finalists fixed; formal runs on node B.** All nine members DONE (chains
+  exited 11:02Z); soups C / D1 / D2 built; every line read and scored. Rules (`m8/select/4b-finalists.json`
+  `08273233…`, node A and node B):
+
+  | Line | α 1 | α ⅔ | α ⅓ | Pick |
+  | --- | --- | --- | --- | --- |
+  | L-D1 | T .701, HT −.027 **FLAG** | T .710, HT −.016 TIE | T .714, HT −.009 TIE | **slot 1 `4b-D1-a2_3`** |
+  | L-D2 | T .708, HT −.034 **FLAG** | T .717, HT −.021 **FLAG** | T .714, HT −.010 TIE | **slot 2 `4b-D2-a1_3`** |
+  | L-C | T .748, HT −.017 TIE | T .743, HT −.012 TIE | T .725, HT −.006 TIE | **slot 3 `4b-C-a1`** |
+
+  (4b-I typed DEV T .704; Score5-typed-DEV: no flag at any point; every point passes the typed / Noul floors.)
+  hs1-dev (report only): adopt C .793 / D1 .721 / D2 .693 (I .775); false yes .280 / .268 / .295 (I .262).
+  - Formal (`m8-formal.sh`, mirror `4d8b40d48…`): node B GPU3 slots 1, 3 and GPU4 slot 2 since 11:34Z; runs under
+    `/data/dev2/runs/dec/formal/m8/`, markers `formal/m8/status/`. Next per run: `M6_FORMAL_ROOT=/data/dev2/runs/dec/formal/m8
+    m6-relay.sh pull <run>` → node A `m6-score.sh 4b <run>` → `m6-relay.sh mark <run>` → node B `m6-formal.sh 4b mlx
+    <run>` → pull `<run>-mlx` → `m6-score.sh 4b mlx <run>`; `M6_EXPOSURE=` the slice receipt for `overlap`; then
+    `successor`.
 - 2026-09-30 ≈18:45 UTC+8 (10:45Z) — **D arms in members 2–3; C line scored.** Lock part 2 `4d8b40d48`
   (A20r targets: 12,794 / 12,794 rows, parity smoke PASS on all shards, drift 0.0; D1 `0ead0d1b…`, D2 `015de068…`);
   `m8/teacher-a20r/READY` written 10:23Z. Mirror `4d8b40d48…-src_training_decision2` on node B (formal wrapper).
