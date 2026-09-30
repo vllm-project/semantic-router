@@ -78,7 +78,9 @@ def make_features(rng: random.Random) -> dict:
         "prompt_tokens_bucket": feature(rng.choice(["<256", "256-1k", "1k-4k", "4k+"])),
         "has_tools": feature(has_tools),
         # Only meaningful when tools are used.
-        "tool_count": feature(rng.randint(1, 6)) if has_tools else feature(None, NOT_APPLICABLE),
+        "tool_count": (
+            feature(rng.randint(1, 6)) if has_tools else feature(None, NOT_APPLICABLE)
+        ),
         "context_fill_ratio": feature(round(rng.random(), 4)),
         # Optional recent-window fact: often missing (no trusted session contract).
         "recent_no_progress_turns": feature(rng.randint(0, 3)),
@@ -95,7 +97,9 @@ def hidden_risk(f: dict) -> float:
     z = -4.0
     z += 3.0 * f["complexity_score"]["value"]
     z += 2.0 * (1 - f["domain_confidence"]["value"])
-    z += {"math_reasoning": 0.9, "legal_qa": 0.7, "code_help": 0.5}.get(f["decision"]["value"], 0.0)
+    z += {"math_reasoning": 0.9, "legal_qa": 0.7, "code_help": 0.5}.get(
+        f["decision"]["value"], 0.0
+    )
     z += 0.4 if f["primary_model"]["value"] == "small-model-a" else 0.0
     z += {"1k-4k": 0.3, "4k+": 0.6}.get(f["prompt_tokens_bucket"]["value"], 0.0)
     if f["has_tools"]["value"]:
@@ -134,9 +138,18 @@ def make_row(rng: random.Random, seed: str, i: int) -> dict:
         "id": example_id,
         "input_digest": sha256_hex(f"{seed}/input/{i}"),
         "split": split_for(seed, example_id),
-        "primary": {"model": feats["primary_model"]["value"], "output_digest": sha256_hex(f"{seed}/p/{i}")},
-        "shadows": [{"model": SHADOW_MODEL, "output_digest": sha256_hex(f"{seed}/s/{i}")}],
-        "lineage": {"replay_id": f"replay-{i:06d}", "recipe": "synthetic", "decision": feats["decision"]["value"]},
+        "primary": {
+            "model": feats["primary_model"]["value"],
+            "output_digest": sha256_hex(f"{seed}/p/{i}"),
+        },
+        "shadows": [
+            {"model": SHADOW_MODEL, "output_digest": sha256_hex(f"{seed}/s/{i}")}
+        ],
+        "lineage": {
+            "replay_id": f"replay-{i:06d}",
+            "recipe": "synthetic",
+            "decision": feats["decision"]["value"],
+        },
         # --- not in the manifest yet ---
         "features": feats,
         "verdict": verdict,
@@ -150,7 +163,9 @@ def generate(rows: int, seed: str) -> list[dict]:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--rows", type=int, default=5000)
     ap.add_argument("--seed", default="fixture-seed-1")
     ap.add_argument("--out", type=Path, default=Path("synthetic.jsonl"))
@@ -163,8 +178,10 @@ def main() -> None:
 
     kept = [r for r in data if r["label"] is not None]
     print(f"wrote {len(data)} rows to {args.out}")
-    print(f"labelled {len(kept)}, excluded {len(data) - len(kept)}, "
-          f"positive rate {sum(r['label'] for r in kept) / max(1, len(kept)):.1%}")
+    print(
+        f"labelled {len(kept)}, excluded {len(data) - len(kept)}, "
+        f"positive rate {sum(r['label'] for r in kept) / max(1, len(kept)):.1%}"
+    )
     for name, _ in SPLITS:
         print(f"  {name}: {sum(r['split'] == name for r in data)}")
     print(f"file sha256: {sha256_hex(args.out.read_text())}")

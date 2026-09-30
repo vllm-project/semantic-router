@@ -34,7 +34,10 @@ class FixtureTest(unittest.TestCase):
 
     def test_split_proportions_follow_the_weights(self):
         rows = fixtures.generate(5000, "s1")
-        share = {n: sum(r["split"] == n for r in rows) / len(rows) for n, _ in fixtures.SPLITS}
+        share = {
+            n: sum(r["split"] == n for r in rows) / len(rows)
+            for n, _ in fixtures.SPLITS
+        }
         self.assertAlmostEqual(share["train"], 0.7, delta=0.03)
         self.assertAlmostEqual(share["calibration"], 0.1, delta=0.03)
         self.assertAlmostEqual(share["test"], 0.2, delta=0.03)
@@ -45,7 +48,9 @@ class FixtureTest(unittest.TestCase):
             for name, feat in row["features"].items():
                 self.assertIn(feat["status"], allowed, name)
                 if feat["status"] != fixtures.PRESENT:
-                    self.assertIsNone(feat["value"], f"{name} is missing but has a value")
+                    self.assertIsNone(
+                        feat["value"], f"{name} is missing but has a value"
+                    )
 
     def test_missing_data_actually_occurs(self):
         rows = fixtures.generate(500, "s1")
@@ -80,7 +85,9 @@ class TrainTest(unittest.TestCase):
 
     def write_data(self, directory, rows=3000, seed="s1"):
         path = Path(directory) / "data.jsonl"
-        path.write_text("".join(json.dumps(r) + "\n" for r in fixtures.generate(rows, seed)))
+        path.write_text(
+            "".join(json.dumps(r) + "\n" for r in fixtures.generate(rows, seed))
+        )
         return path
 
     def test_missing_value_is_encoded_with_a_flag_not_as_a_plain_zero(self):
@@ -89,6 +96,38 @@ class TrainTest(unittest.TestCase):
         encoded = dict(zip(self.train.feature_names(), self.train.encode(row)))
         self.assertEqual(encoded["context_fill_ratio"], 0.0)
         self.assertEqual(encoded["context_fill_ratio:missing"], 1.0)
+
+    def encoded(self, **overrides):
+        row = fixtures.generate(1, "s1")[0]["features"]
+        row.update(overrides)
+        return dict(zip(self.train.feature_names(), self.train.encode(row)))
+
+    def test_absent_boolean_is_not_encoded_as_confirmed_false(self):
+        absent = self.encoded(has_tools={"value": None, "status": fixtures.ABSENT})
+        false = self.encoded(has_tools={"value": False, "status": fixtures.PRESENT})
+        true = self.encoded(has_tools={"value": True, "status": fixtures.PRESENT})
+        self.assertNotEqual(absent, false)
+        self.assertEqual((absent["has_tools"], absent["has_tools:missing"]), (0.0, 1.0))
+        self.assertEqual((false["has_tools"], false["has_tools:missing"]), (0.0, 0.0))
+        self.assertEqual((true["has_tools"], true["has_tools:missing"]), (1.0, 0.0))
+
+    def test_absent_category_sets_its_missing_flag(self):
+        encoded = self.encoded(decision={"value": None, "status": fixtures.ABSENT})
+        self.assertEqual(encoded["decision:missing"], 1.0)
+        self.assertEqual(
+            sum(v for k, v in encoded.items() if k.startswith("decision=")), 0.0
+        )
+
+    def test_every_feature_has_a_missing_indicator(self):
+        names = set(self.train.feature_names())
+        for key in fixtures.generate(1, "s1")[0]["features"]:
+            self.assertIn(f"{key}:missing", names)
+
+    def test_unknown_status_or_category_is_rejected(self):
+        with self.assertRaises(ValueError):
+            self.encoded(has_tools={"value": None, "status": "unknown"})
+        with self.assertRaises(ValueError):
+            self.encoded(decision={"value": "new_topic", "status": fixtures.PRESENT})
 
     def test_training_is_deterministic(self):
         with tempfile.TemporaryDirectory() as d:
@@ -105,7 +144,9 @@ class TrainTest(unittest.TestCase):
 
     def test_classifier_beats_chance_and_is_calibrated(self):
         with tempfile.TemporaryDirectory() as d:
-            m = self.run_train(self.write_data(d, rows=5000), Path(d) / "a.json")["test_metrics"]
+            m = self.run_train(self.write_data(d, rows=5000), Path(d) / "a.json")[
+                "test_metrics"
+            ]
             self.assertGreater(m["classifier"]["auroc"], 0.65)
             self.assertLess(m["classifier"]["ece"], 0.08)
             # catches more failures than the simple low-confidence rule
