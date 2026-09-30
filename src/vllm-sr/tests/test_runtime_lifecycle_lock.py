@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from cli.runtime_lifecycle_lock import (
     RuntimeLifecycleLockError,
+    _resolve_lock_directory,
     acquire_runtime_lifecycle_lock,
 )
 
@@ -157,3 +158,62 @@ def test_runtime_lifecycle_lock_rejects_symlinked_directory(private_tmp_path: Pa
         acquire_runtime_lifecycle_lock(
             runtime="docker", stack_name="audit-a", lock_root=symlink_root
         )
+
+
+def test_resolve_lock_directory_falls_through_when_xdg_runtime_dir_is_unusable(
+    tmp_path: Path,
+):
+    # WSL images export XDG_RUNTIME_DIR=/run/user/<uid> without a systemd
+    # session, so the directory is named but never created. Resolution falls
+    # back to the state-home location instead of aborting the serve flow.
+    state_home = tmp_path / "state"
+    state_home.mkdir()
+    missing_runtime = tmp_path / "missing-runtime"
+
+    lock_directory = _resolve_lock_directory(
+        missing_runtime, str(missing_runtime), str(state_home)
+    )
+
+    assert lock_directory == state_home / "vllm-sr" / "locks"
+
+
+def test_resolve_lock_directory_falls_through_when_xdg_runtime_dir_is_relative(
+    tmp_path: Path,
+):
+    state_home = tmp_path / "state"
+    state_home.mkdir()
+
+    lock_directory = _resolve_lock_directory(
+        tmp_path / "missing-runtime", "relative/runtime", str(state_home)
+    )
+
+    assert lock_directory == state_home / "vllm-sr" / "locks"
+
+
+def test_resolve_lock_directory_prefers_usable_xdg_runtime_dir(tmp_path: Path):
+    runtime_home = tmp_path / "runtime"
+    runtime_home.mkdir(mode=0o700)
+
+    lock_directory = _resolve_lock_directory(
+        tmp_path / "missing-runtime", str(runtime_home), str(tmp_path / "state")
+    )
+
+    assert lock_directory == runtime_home / "vllm-sr" / "locks"
+
+
+def test_resolve_lock_directory_rejects_unusable_state_home(tmp_path: Path):
+    with pytest.raises(RuntimeLifecycleLockError, match="absolute path"):
+        _resolve_lock_directory(
+            tmp_path / "missing-runtime", "relative/runtime", "relative/state"
+        )
+
+
+def test_resolve_lock_directory_prefers_linux_runtime_dir(tmp_path: Path):
+    linux_runtime = tmp_path / "run-user-0"
+    linux_runtime.mkdir(mode=0o700)
+
+    lock_directory = _resolve_lock_directory(
+        linux_runtime, str(tmp_path / "runtime"), str(tmp_path / "state")
+    )
+
+    assert lock_directory == linux_runtime / "vllm-sr" / "locks"
