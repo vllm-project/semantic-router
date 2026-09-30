@@ -298,7 +298,9 @@ hf_upload() {
   export HF_HUB_CACHE=/data/dev2/hf-cache HF_HUB_DISABLE_TELEMETRY=1
   local repo=llm-semantic-router/decision-2.0-training-data tree=$R/hf/upload/m5/hr2
   local py=/data/dev2/tools/hf-cli/bin/python log=$R/logs/hf-upload.log
-  local msg="HR2 human-rated data (NOT release-safe: blind review 13/216): m5/hr2 (TRAIN 27,725, DEV 1,615; build ${SHA:0:12})"
+  local counts msg
+  counts=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); t=d["train"]["rows"]; v=d["dev"]["rows"]; print(f"TRAIN {t:,}, DEV {v:,}")' "$R/final/out/final.json")
+  msg="HR2 human-rated data (NOT release-safe: blind review 13/216): m5/hr2 ($counts; build ${SHA:0:12})"
   info() {
     hf datasets info "$repo" --expand private,sha | "$py" -c 'import json,sys; d=json.load(sys.stdin); print(d["private"], d["sha"])'
   }
