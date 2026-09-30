@@ -196,6 +196,8 @@ terminal that has the variables exported, and keep that terminal open:
 vllm-sr benchmark serve
 ```
 
+After reinstalling or upgrading from the branch, stop the running service
+(Ctrl-C in its terminal) and start it again so that it uses the new code.
 Each manifest file name and idempotency key can be used only once. To run
 again, use a new `--output` name and a new `--idempotency-key`.
 
