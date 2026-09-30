@@ -205,6 +205,19 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 00:35 — **USER: runtime execution plan (strangler-fig)**, recorded in gist file
+  `10-open-decision-runtime-decisions.md` §10.
+  - Stage 1: the new runtime starts with the new Decision models only; the legacy runtime keeps serving all existing
+    signals unchanged.
+  - Stage 2: Vela 2.0 is supported natively. Vela 1.0 is the ONLY legacy family migrated: manifests / adapters, shadow
+    dual-run with parity receipts, a per-binding `runtime: new | legacy` switch, a default flip after parity, rollback.
+  - Stage 3: every other legacy model type is deprecated and removed, and the legacy binding code is deleted. The
+    runtime is fully renewed.
+  - **Open:** which current features depend on non-Vela models (embeddings / semantic cache, RAG reranker, PII,
+    hallucination NLI, Qwen3Guard, merged-LoRA classifiers). Each needs a replace / external / retire decision before
+    Stage 3. Inputs are pending from the coverage analysis (9c17b169) and the Vela-2.0-Unified check (7b239c1e).
+  - The proposal revision (writer 28bfbd64, when it returns) must include this execution plan.
+
 - 2026-10-01 00:10 — **The Open Decision Runtime discussion is recorded in the program gist** as
   `10-open-decision-runtime-decisions.md` (gist cd90fce0fa548616d8a4f1b2d2398dea).
   - It holds every decision so far, marked [Decided] / [Recommended] / [Open]: UX, API, the final runtime architecture
