@@ -1,0 +1,47 @@
+{
+  "helpsteer3_train": {
+    "attribution": "Wang et al., HelpSteer3-Preference: Open Human-Annotated Preference Data across Diverse Tasks and Languages (2025, arXiv 2503.04378); nvidia/HelpSteer3@f6d145777bcbde96137596340fab89793acd1031 preference/ and feedback/ TRAIN; responses by commercially-permissive LLMs, human annotations by Scale AI and Translated contractors",
+    "evidence": "https://huggingface.co/datasets/nvidia/HelpSteer3/blob/f6d145777bcbde96137596340fab89793acd1031/README.md",
+    "license": "CC-BY-4.0",
+    "redistribution": "permitted with attribution"
+  },
+  "ethics_train": {
+    "attribution": "Hendrycks et al., Aligning AI With Shared Human Values (ICLR 2021); hendrycks/ethics@b8b47c589f8bee77175b8648e5497278b68da48a TRAIN files (commonsense short split, deontology, justice, utilitarianism)",
+    "evidence": "https://huggingface.co/datasets/hendrycks/ethics/blob/b8b47c589f8bee77175b8648e5497278b68da48a/README.md",
+    "license": "MIT",
+    "redistribution": "permitted with the MIT notice"
+  },
+  "prm800k_train": {
+    "attribution": "Lightman et al., Let's Verify Step by Step (2023); openai/prm800k@7ecc794703b2877f63226f2477a49b34f9b25163 phase 1 and phase 2 TRAIN; problems from MATH (Hendrycks et al. 2021, MIT)",
+    "evidence": "https://github.com/openai/prm800k/blob/7ecc794703b2877f63226f2477a49b34f9b25163/LICENSE",
+    "license": "MIT",
+    "redistribution": "permitted with the MIT notice"
+  },
+  "vitaminc_real_train": {
+    "attribution": "Schuster, Fisch and Barzilay, Get Your Vitamin C! Robust Fact Verification with Contrastive Evidence (NAACL 2021); tals/vitaminc@be6febb761b0b2807687e61e0b5282e459df2fa0 TRAIN, revision_type=real",
+    "evidence": "https://huggingface.co/datasets/tals/vitaminc/blob/be6febb761b0b2807687e61e0b5282e459df2fa0/LICENSE",
+    "license": "CC-BY-SA-3.0 (Wikipedia-derived)",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "kobest_boolq_train": {
+    "attribution": "Kim et al., KoBEST: Korean Balanced Evaluation of Significant Tasks (COLING 2022), KB-BoolQ; skt/kobest_v1@a5ea15e3ac77ed694b79f6204eb31889a2ba989f boolq/train",
+    "evidence": "https://huggingface.co/datasets/skt/kobest_v1/blob/a5ea15e3ac77ed694b79f6204eb31889a2ba989f/README.md",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "indonli_train": {
+    "attribution": "Mahendra, Aji, Louvan, Rahman and Vania, IndoNLI: A Natural Language Inference Dataset for Indonesian (EMNLP 2021); ir-nlp-csui/indonli@7b55d8217cc8417a8268b2ee6ba07bbfb75a4c8b data/indonli/train.jsonl; premises from Indonesian Wikipedia (CC BY-SA 3.0), UD Indonesian PUD / GSD (CC BY-SA 3.0 / 4.0) and IndoSum (Apache-2.0)",
+    "evidence": "https://huggingface.co/datasets/afaji/indonli (card licence cc-by-sa-4.0); https://github.com/ir-nlp-csui/indonli/blob/7b55d8217cc8417a8268b2ee6ba07bbfb75a4c8b/README.md",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "allegro_reviews_train": {
+    "attribution": "Rybak, Mroczkowski, Tracz and Gawlik, KLEJ: Comprehensive Benchmark for Polish Language Understanding (ACL 2020), Allegro Reviews; allegro/klej-allegro-reviews@b9ca796de36c796d6d5b853c3f13ef461440d630 train.csv",
+    "evidence": "https://github.com/allegro/klejbenchmark-allegroreviews/blob/master/README.md (License: CC BY-SA 4.0); https://klejbenchmark.com/tasks/",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "_screen_only": {
+    "helpsteer2": "nvidia/HelpSteer2@990b2711a36180dd19d9c94b8627844866f8982a (CC BY 4.0) is read only to drop HelpSteer3 samples whose first user turn matches a HelpSteer2 prompt (Decision 1.0 Kai/Lex lineage); no HelpSteer2 row enters HR2"
+  }
+}
