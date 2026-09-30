@@ -98,6 +98,7 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 | research & data: HR2 human-rated data | `/home/xunliu/code/vllm-sr-dev2-data-hr2` | `xunzhuo/decision-2-training-data-hr2` |
 | 9B Milestone 8 (parallel to M7) | `/home/xunliu/code/vllm-sr-dev2-9b-m8` | `xunzhuo/decision-2-training-9b-m8` |
 | decoder M8-small (2B + 0.8B) | `/home/xunliu/code/vllm-sr-dev2-dec-small` | `xunzhuo/decision-2-training-dec-small` |
+| serving: vLLM plugin-registry prototype | `/home/xunliu/code/vllm-sr-dev2-vllm-plugin` | `xunzhuo/decision-2-vllm-plugin` |
 
 - New code and records go under `src/training/decision2/v2/<track>/` (tracks: `eval`, `data`, `06b`, `dec`, `9b`, `27b`;
   shared helpers in `src/training/decision2/v2/common/`). Reuse the existing verified modules instead of forking them.
@@ -201,6 +202,33 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-30 19:50 — **Serving architecture recommendation (discussed with the user). Decision: wait for the plugin
+  prototype's measured results before starting phase-1 items.** Sources: research reports b9e89084 and 19da97ef.
+  - **Don't embed the vLLM engine in the vllm-sr process.**
+    - vLLM's EngineCore is a separate process by default; spawn needs a real Python executable.
+    - Go + GIL is fragile, and a CUDA fault or OOM would take down the router.
+    - Precedent: Dynamo #10835 (moving to a sidecar), TEI (UDS), Ollama (runner subprocesses).
+    - UDS transport costs ~0.01–0.2 ms against a 20–30 ms model call.
+    - The closest thing to embedding is vLLM's experimental Rust frontend (managed EngineCore; pooling in PR #54144).
+      Use it later, via our Rust FFI.
+  - **Target:** embed the contract, not the engine. `RouterModelRuntime` is one Go interface with one cgo boundary into
+    Rust.
+    - **Tier 0 in-process** (ORT, candle, optional llama.cpp) for small encoders.
+    - **Tier 1 supervised local vLLM sidecar over UDS**, with our plugin registry, for decoder and hybrid models
+      (Decision 1.0 / 2.0 decoders).
+    - **Tier 2 remote / shared.**
+    - Placement is decided per model and hardware at run time, not at build time.
+    - Request-level plan: one forward pass per backbone with N heads. Consolidation: multi-task encoder heads;
+      multi-LoRA with per-adapter heads (vLLM #53555). Cascades: escalate from Tier 0 to Tier 1 on low confidence.
+    - Training-serving co-design for a future Decision: shared-prefix or STEP-packed multi-question prompts.
+    - Co-location with the served LLM is not viable today (vLLM #40804 rejected; early-layer signals are weak). aLoRA
+      and mid-depth probes remain research.
+  - **Existing issue to fix:** vllm-sr's AMD path uses ORT's ROCm execution provider, which ORT removed in 1.23 (the
+    router pins 1.22.1). Migrate to MIGraphX.
+  - **Phase 1 candidates, pending the prototype:** the RFC for the contract and tiered runtime; the ORT ROCm → MIGraphX
+    migration; the router `http_decision` adapter + `decision_answers.v1` contract plus a `/v1/system_one` service; the
+    BF16-resident Linear quick win in the shipped runtime.
 
 - 2026-09-30 19:40 — **NEW SERVING TRACK (user-approved): vLLM plugin-registry prototype.**
   - **Direction:** serve router models (Vela 1.0 encoders, Decision 1.0, Decision 2.0) through **one maintained vLLM
