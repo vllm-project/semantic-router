@@ -99,6 +99,8 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 | 9B Milestone 8 (parallel to M7) | `/home/xunliu/code/vllm-sr-dev2-9b-m8` | `xunzhuo/decision-2-training-9b-m8` |
 | decoder M8-small (2B + 0.8B) | `/home/xunliu/code/vllm-sr-dev2-dec-small` | `xunzhuo/decision-2-training-dec-small` |
 | serving: vLLM plugin-registry prototype | `/home/xunliu/code/vllm-sr-dev2-vllm-plugin` | `xunzhuo/decision-2-vllm-plugin` |
+| serving: Open Decision Runtime proposal | `/home/xunliu/code/vllm-sr-dev2-odr-proposal` | `xunzhuo/decision-2-odr-proposal` |
+| 27B-tier MoE base exploration | `/home/xunliu/code/vllm-sr-dev2-27b-moe` | `xunzhuo/decision-2-training-27b-moe` |
 
 - New code and records go under `src/training/decision2/v2/<track>/` (tracks: `eval`, `data`, `06b`, `dec`, `9b`, `27b`;
   shared helpers in `src/training/decision2/v2/common/`). Reuse the existing verified modules instead of forking them.
@@ -202,6 +204,26 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-30 23:55 — **SILENT WORKER STOPS found (likely Cursor restarts); continuations relaunched.** No completion
+  notification arrives for these stops. GPU jobs keep running, but nobody processes their results.
+  - **~12:00 UTC+8 event:**
+    - the HR2 data worker (last commit `25ec87a8d` 11:56; 3 files uncommitted);
+    - the 9B M7 continuation (last commit `58cfcfea9` 11:44);
+    - the original 27B M5 worker.
+  - **~20:40 event:**
+    - the 27B M5 continuation (last commit `246f7c9a2` 20:39, "poll 12");
+    - the vLLM plugin prototype (last commit `678ac2060` 20:37).
+  - **Relaunched from state files:**
+    - HR2 continuation 11ba399b;
+    - 27B M5 continuation #2 d38f026c (L128 s1 / s2 training since ~17:48);
+    - plugin prototype continuation 6c2c1341.
+  - **9B M7 CLOSED, no successor:** P and Q were stopped by early rules. The 9B M8 worker read M7's C line under the same
+    rule and found no eligible point, so no formal run is needed.
+  - **Watchdog rules:**
+    - Every worker commits a state-file update at every poll (≤ 30 min). The coordinator treats > 60 min without a
+      state commit (while GPU jobs run) as a silent stop, and relaunches a continuation from the state file.
+    - Transcript mtimes are NOT a liveness signal, because tool calls are not logged there.
 
 - 2026-09-30 23:50 — **USER: the proposal goes to a new secret gist (writer running); START MoE base exploration NOW,
   in parallel, on idle GPUs.**
