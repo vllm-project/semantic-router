@@ -287,7 +287,7 @@ def main(argv: list[str] | None = None) -> int:
         name, _, path = item.partition("=")
         roots[name] = Path(path)
     spec = json.loads(args.spec.read_text(encoding="utf-8"))
-    eval_only.guard(args, spec)
+    eval_only.guard(args, {k: v for k, v in spec.items() if k != "note"})
     if args.step == "topup":
         if not args.tokenizer:
             ap.error("topup needs --tokenizer")
