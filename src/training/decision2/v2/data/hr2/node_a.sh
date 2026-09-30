@@ -11,6 +11,8 @@
 #   node_a.sh <commit> splits   R3 packet from review/answers/{r1,r2}.*.jsonl
 #   node_a.sh <commit> score    review report and gold-error ids (review/answers/r3.jsonl if any)
 #   node_a.sh <commit> final    finalize pass 2, freeze, isolation (G7), tokens and stats (G5, G8)
+#   node_a.sh <commit> leak     ids of final rows with a leak-guard finding (amendment 3); a new
+#                               `final` run (old final/ and freeze/ moved aside) drops them
 #   node_a.sh <commit> hf-assemble   m5/hr2 upload tree (registry.json inside) and the leak guard
 #   node_a.sh <commit> hf-upload     private upload with the HF CLI, pinned revision, read-back check
 set -euo pipefail
@@ -196,9 +198,14 @@ final() {
   local -a drops=()
   [ -e "$R/final-drop-families.txt" ] || { echo "run the score stage first" >&2; exit 1; }
   mapfile -t drops < "$R/final-drop-families.txt"
+  local -a leak=()
+  if [ -e "$R/leak/drop-ids.txt" ]; then
+    leak=(-v "$R/leak:$R/leak:ro" --drop-leak-ids "$R/leak/drop-ids.txt")
+  fi
   run final -v "$R/quarantine:$R/quarantine:ro" -v "$R/review:$R/review:ro" -v "$R/final:$R/final:rw" \
-    "$IMG" -m v2.data.hr2.build finalize --cand "$CAND" --out "$F" --drop-groups "$Q/drop-groups.txt" \
-    --drop-dev-groups "$Q/drop-dev-groups.txt" --drop-ids "$V/drop-ids.txt" --drop-families "${drops[@]}"
+    "${leak[@]:0:2}" "$IMG" -m v2.data.hr2.build finalize --cand "$CAND" --out "$F" \
+    --drop-groups "$Q/drop-groups.txt" --drop-dev-groups "$Q/drop-dev-groups.txt" \
+    --drop-ids "$V/drop-ids.txt" "${leak[@]:2}" --drop-families "${drops[@]}"
   local TOKM=(-v "$TOKJ:$TOKJ:ro" -v "$Q06:$Q06:ro" -v "$Q08:$Q08:ro" -v "$KAI:$KAI:ro")
   run freeze-train "${TOKM[@]}" -v "$R/final:$R/final:ro" -v "$Z:$Z:rw" "$IMG" -m v2.data.freeze freeze \
     --rows "$F/hr2.train.jsonl" --arm-id HR2 --role train --license-registry "$LIC" --tokenizers "$TOKJ" \
@@ -220,6 +227,29 @@ final() {
   run stats -v "$R/final:$R/final:ro" -v "$Z:$Z:rw" "$IMG" -m v2.data.hr2.audit stats \
     --train "$F/hr2.train.jsonl" --dev "$F/hr2.dev.jsonl" --tokens "$Z/hr2.train.tokens.jsonl" \
     --tokens "$Z/hr2.dev.tokens.jsonl" --out "$Z/stats.json"
+}
+
+# Ids of final rows with a leak-guard finding (amendment 3); the next `final` run drops them.
+leak() {
+  fresh leak
+  local F=$R/final/out rc=0
+  (cd "$F" && bash "$CODE/v2/common/check_no_private.sh" -- hr2.train.jsonl hr2.dev.jsonl) \
+    > "$R/leak/findings.txt" 2> "$R/leak/guard.err" || rc=$?
+  python3 - "$F" "$R/leak/findings.txt" > "$R/leak/drop-ids.txt" <<'EOF'
+import collections, json, pathlib, sys
+final, findings = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+wanted = collections.defaultdict(set)
+for line in findings.read_text().split("\n"):
+    if line.strip():
+        name, number, _ = line.split(":", 2)
+        wanted[name.removeprefix("./")].add(int(number))
+ids = set()
+for name, numbers in wanted.items():
+    lines = (final / name).read_text(encoding="utf-8").split("\n")
+    ids |= {json.loads(lines[n - 1])["id"] for n in numbers}
+print("\n".join(sorted(ids)))
+EOF
+  echo "leak-guard exit=$rc findings=$(grep -c . "$R/leak/findings.txt") rows=$(grep -c . "$R/leak/drop-ids.txt")"
 }
 
 hf_assemble() {
@@ -292,7 +322,7 @@ hf_upload() {
 }
 
 case "$STAGE" in
-  scans | pass1 | review | splits | score | final) "$STAGE" ;;
+  scans | pass1 | review | splits | score | final | leak) "$STAGE" ;;
   hf-assemble) hf_assemble ;;
   hf-upload) hf_upload ;;
   *)

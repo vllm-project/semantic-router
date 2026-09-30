@@ -389,6 +389,7 @@ def finalize(args: argparse.Namespace) -> int:
     drop_groups = read_list(args.drop_groups)
     drop_dev = read_list(args.drop_dev_groups)
     drop_ids = read_list(args.drop_ids)
+    drop_leak = read_list(args.drop_leak_ids)
     drop_families = set(args.drop_families)
     report: dict[str, Any] = collections.defaultdict(collections.Counter)
 
@@ -402,6 +403,8 @@ def finalize(args: argparse.Namespace) -> int:
             reason = "dev_near_train"
         elif row["id"] in drop_ids:
             reason = "review_error"
+        elif row["id"] in drop_leak:
+            reason = "leak_guard"
         if reason:
             report[f"{'dev' if dev_slice else 'train'}:{reason}"][row["family"]] += 1
         return reason is None
@@ -433,6 +436,10 @@ def finalize(args: argparse.Namespace) -> int:
                 "sha256": sha("\n".join(sorted(drop_dev))),
             },
             "ids": {"count": len(drop_ids), "sha256": sha("\n".join(sorted(drop_ids)))},
+            "leak_ids": {
+                "count": len(drop_leak),
+                "sha256": sha("\n".join(sorted(drop_leak))),
+            },
             "families": sorted(drop_families),
             "removed": {
                 key: dict(sorted(value.items()))
@@ -462,6 +469,7 @@ def main(argv: list[str] | None = None) -> int:
     two.add_argument("--drop-groups", action="append", default=[], type=Path)
     two.add_argument("--drop-dev-groups", action="append", default=[], type=Path)
     two.add_argument("--drop-ids", action="append", default=[], type=Path)
+    two.add_argument("--drop-leak-ids", action="append", default=[], type=Path)
     two.add_argument("--drop-families", nargs="*", default=[])
     args = parser.parse_args(argv)
     return build(args) if args.command == "build" else finalize(args)
