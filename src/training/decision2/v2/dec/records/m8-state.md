@@ -7,6 +7,17 @@ A20r, matched controls, starts now, HR2 only by amendment). Budget 24 GPU-h. GPU
 
 ## Now
 
+- 2026-09-30 ≈18:45 UTC+8 (10:45Z) — **D arms in members 2–3; C line scored.** Lock part 2 `4d8b40d48`
+  (A20r targets: 12,794 / 12,794 rows, parity smoke PASS on all shards, drift 0.0; D1 `0ead0d1b…`, D2 `015de068…`);
+  `m8/teacher-a20r/READY` written 10:23Z. Mirror `4d8b40d48…-src_training_decision2` on node B (formal wrapper).
+  - Early rules (`m8/early/*.json`): D1 continue (SELECT700 .9000 vs C-m1 .8975), D2 continue (.9033).
+  - Running: b3 D1-m2 → D2-m2; b4 D2-m3 → D1-m3 (≈11 min each); soups ≈11:05Z.
+  - L-C (vs 4b-I, typed DEV T .704): α 1 T .748 (C / N / S 562 / 277 / 358), HT-DEV v2 −.0165 [−.027, −.006] TIE;
+    α ⅔ .743, −.012 TIE; α ⅓ .725, −.006 TIE; Score5-typed-DEV no flags anywhere (4b-I top share .39). Every C point
+    passes the floors → C pick α 1 (rules not run yet). C soup hs1-dev: adopt .793 (I .775), false yes .280 (I .262).
+  - Next: `M8_GPU=3 m8-lines.sh line D1`, `M8_GPU=4 m8-lines.sh line D2` when `m8/status/D{1,2}.DONE` appear; hs1-dev
+    diag of each soup; `m8-relay.sh lines <points>`; node A `m8-score.sh points …` then `m8-score.sh rules`;
+    `m8-relay.sh select`; formal via `m8-formal.sh launch <mirror 4d8b40d48…> 4b 3|4 <slots>`.
 - 2026-09-30 ≈18:05 UTC+8 (10:05Z) — **Running.** Prereg `a629a6ce2`; data lock part 1 `862c99b1e`; formal wrapper +
   compressed relays `a1f4dbc55`. Mirror on both nodes: `a629a6ce29fe2b9a27aeac8f8b611667f654d8d9-src_training_decision2`
   (tests pass in the image: 17). Nothing uploaded.
