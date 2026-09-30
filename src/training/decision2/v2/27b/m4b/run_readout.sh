@@ -29,6 +29,8 @@ LIMIT=32768
 FROZEN=${FROZEN:-/data/dev2/runs/27b/m3-warm-32768/triton-cache}
 CACHE_SHA=${CACHE_SHA:-583241fbc3bc89e22be51a49722996eab742162356100400d64fb4208cb20daf}
 STAGES=${STAGES:-verify,cal,collect,aho,score,summary}
+# PANELS: the collect stage's development panels (Milestone 5 adds ht-dev2 on node B; default M4b's two).
+PANELS=${PANELS:-typed-dev,css-pilot}
 TRAIN_RUN=${TRAIN_RUN:-}
 DATA=/data/dev2/private/27b/m3-data/mixtures-m3-1
 AHO=${AHO-${TRAIN_RUN:+A6g=$DATA/aho-A6g.jsonl,A6h=$DATA/aho-A6h.jsonl,A7=$DATA/aho-A7.jsonl}}
@@ -99,7 +101,7 @@ if has collect; then
   status=0
   runner "$OUT" "$CKPT" "$OUT/triton-cache" "27b-m4b $NAME kernel-path development readout" -- \
     --revision "$REVISION" --extra "source=$BASE" --extra "calibration=$OUT/cal/calibration.json" \
-    --extra "max_length=$LIMIT" --panels typed-dev,css-pilot || status=$?
+    --extra "max_length=$LIMIT" --panels "$PANELS" || status=$?
   cache_finish "$OUT/triton-cache"
   [ "$status" = 0 ] || exit "$status"
 fi

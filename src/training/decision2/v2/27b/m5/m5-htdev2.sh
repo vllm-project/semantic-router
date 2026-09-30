@@ -11,7 +11,8 @@
 # own: calibration (the package's calibration.json, mounted by its directory); peer: adapter (eval adapter name).
 # Output: /data/dev2/runs/27b/m5/htdev2/<KEY>/ with the runner's output, triton-cache (a fresh verified copy of
 # the frozen cache) + triton-cache.post.json, and READOUT.json from v2.eval.dev_readout. STAGES (default
-# collect,readout) selects the steps; `readout` alone re-scores against a new REFERENCE_KEY.
+# collect,readout) selects the steps; `readout` alone re-scores against a new REFERENCE_KEY. PANELS (default ht-dev2)
+# adds development panels to the same collection (e.g. typed-dev,css-pilot,ht-dev2); ROOT overrides the output root.
 set -euo pipefail
 echo "m5 htdev2 $*: start $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
@@ -25,7 +26,8 @@ SRC=$MIRROR_SHA
 S=/data/dev2/src/$SRC/src/training/decision2
 SPEC=$(readlink -f "$SPEC")
 STAGES=${STAGES:-collect,readout}
-ROOT=/data/dev2/runs/27b/m5/htdev2
+ROOT=${ROOT:-/data/dev2/runs/27b/m5/htdev2}
+PANELS=${PANELS:-ht-dev2}
 OUT=$ROOT/$KEY
 cd "$S"
 export PYTHONPATH=$S PYTHONDONTWRITEBYTECODE=1 TMPDIR=/data/dev2/tmp
@@ -51,7 +53,7 @@ case "$KIND" in own | peer) ;; *) echo "kind must be own or peer, got '$KIND'" >
 if has collect; then
   [ ! -e "$OUT/GPU-TIME.json" ] || { echo "$OUT already collected" >&2; exit 1; }
   need "$MODEL" "$FROZEN" "${MOUNTS[@]}"
-  opts=() args=(--revision "$REVISION" --panels ht-dev2)
+  opts=() args=(--revision "$REVISION" --panels "$PANELS")
   for m in "${MOUNTS[@]}"; do opts+=(--mount "$m"); done
   for e in "${EXTRA[@]}"; do args+=(--extra "$e"); done
   if [ "$KIND" = own ]; then
