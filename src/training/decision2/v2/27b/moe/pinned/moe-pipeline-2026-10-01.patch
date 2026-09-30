@@ -1,0 +1,326 @@
+diff -ruN -x __pycache__ best368/training/model/calibrate.py moe/training/model/calibrate.py
+--- best368/training/model/calibrate.py	2026-10-01 08:00:00.000000000 +0800
++++ moe/training/model/calibrate.py	2026-10-01 08:00:00.000000000 +0800
+@@ -66,7 +66,7 @@
+     max_length: int, batch_size: int, device_name: str,
+ ) -> list[dict[str, Any]]:
+     import torch
+-    from .decision_model import DecisionModel, collate, encode
++    from .decision_model import DecisionModel, collate, encoder_for
+ 
+     if max_length < 1 or batch_size < 1:
+         raise ValueError("max_length and batch_size must be positive")
+@@ -78,6 +78,7 @@
+     pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id
+     if pad_id is None:
+         raise ValueError("Tokenizer needs a pad or EOS token")
++    encode = encoder_for(model.metadata)
+     encoded = [encode(row, tokenizer, max_length) for row in cal_rows]
+     records = []
+     with torch.inference_mode():
+diff -ruN -x __pycache__ best368/training/model/decision_model.py moe/training/model/decision_model.py
+--- best368/training/model/decision_model.py	2026-10-01 08:00:00.000000000 +0800
++++ moe/training/model/decision_model.py	2026-10-01 08:00:00.000000000 +0800
+@@ -23,6 +23,14 @@
+ 
+ PROMPT_VERSION = "decision2-segmented-options-global-query-v1"
+ ARCHITECTURE = "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp"
++BOS_PROMPT_VERSION = "decision2-bos-segmented-options-global-query-v1"
++MOE_ARCHITECTURES = {
++    "gemma4": "gemma4-moe-text-endpoints-global-query-shared-bilinear-mlp",
++    "qwen3_5_moe": "qwen3.5-moe-text-endpoints-global-query-shared-bilinear-mlp",
++}
++# Gemma is trained and served behind its BOS token; Qwen tokenizers add none.
++MOE_PROMPT_VERSIONS = {"gemma4": BOS_PROMPT_VERSION, "qwen3_5_moe": PROMPT_VERSION}
++EXPERTS_IMPLEMENTATIONS = ("eager", "grouped_mm")
+ 
+ 
+ def _payload(value: Any) -> str:
+@@ -71,6 +79,54 @@
+     }
+ 
+ 
++def encode_bos(row: dict[str, Any], tokenizer: Any, max_length: int) -> dict[str, Any]:
++    """The shared segmented prompt behind the tokenizer's BOS token."""
++    bos = getattr(tokenizer, "bos_token_id", None)
++    if bos is None or max_length < 2:
++        raise ValueError("The BOS prompt needs a tokenizer BOS token and max_length >= 2")
++    encoded = encode(row, tokenizer, max_length - 1)
++    ids = [bos, *encoded["ids"]]
++    return {
++        **encoded,
++        "ids": ids,
++        "candidate_positions": [position + 1 for position in encoded["candidate_positions"]],
++        "query_position": encoded["query_position"] + 1,
++        "token_ids_sha256": hashlib.sha256(canonical(ids).encode("utf-8")).hexdigest(),
++    }
++
++
++def encoder_for(metadata: dict[str, Any]) -> Any:
++    version = metadata.get("prompt_version")
++    if version == PROMPT_VERSION:
++        return encode
++    if version == BOS_PROMPT_VERSION:
++        return encode_bos
++    raise ValueError(f"Unknown Decision 2.0 prompt version: {version!r}")
++
++
++def moe_summary(backbone: nn.Module) -> dict[str, Any]:
++    """Total, routed and per-token active text parameters of an MoE text backbone."""
++    config = backbone.config
++    experts = int(getattr(config, "num_experts"))
++    top_k = int(getattr(config, "top_k_experts", None) or getattr(config, "num_experts_per_tok"))
++    total = sum(parameter.numel() for parameter in backbone.parameters())
++    routed = sum(
++        parameter.numel()
++        for name, module in backbone.named_modules()
++        if type(module).__name__.endswith("Experts")
++        for parameter in module.parameters(recurse=False)
++    )
++    if not 0 < top_k <= experts or not 0 < routed < total or routed % experts:
++        raise ValueError("Unexpected MoE expert layout")
++    return {
++        "num_experts": experts,
++        "experts_per_token": top_k,
++        "text_parameters": total,
++        "routed_expert_parameters": routed,
++        "active_text_parameters_per_token": total - routed + routed * top_k // experts,
++    }
++
++
+ def collate(items: list[dict[str, Any]], pad_id: int) -> dict[str, Any]:
+     if not items:
+         raise ValueError("Cannot collate an empty batch")
+@@ -140,11 +196,19 @@
+ 
+     @classmethod
+     def from_base(cls, path: str | Path, revision: str, head_dim: int = 256,
+-                  *, source_stage: str = "base") -> tuple["DecisionModel", Any]:
+-        from transformers import AutoTokenizer, Qwen3_5ForConditionalGeneration
++                  *, source_stage: str = "base",
++                  experts_implementation: str | None = None) -> tuple["DecisionModel", Any]:
++        from transformers import AutoConfig, AutoTokenizer, Qwen3_5ForConditionalGeneration
+ 
+         if source_stage not in ("base", "posttrained"):
+             raise ValueError("Qwen source stage must be base or posttrained")
++        model_type = AutoConfig.from_pretrained(path, local_files_only=True).model_type
++        if model_type in MOE_ARCHITECTURES:
++            return cls.from_moe_base(path, revision, head_dim, source_stage=source_stage,
++                                     model_type=model_type,
++                                     experts_implementation=experts_implementation)
++        if experts_implementation is not None:
++            raise ValueError("experts_implementation applies only to MoE bases")
+ 
+         tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=True)
+         full, info = Qwen3_5ForConditionalGeneration.from_pretrained(
+@@ -168,6 +232,46 @@
+         return cls(backbone, head, metadata), tokenizer
+ 
+     @classmethod
++    def from_moe_base(cls, path: str | Path, revision: str, head_dim: int, *, source_stage: str,
++                      model_type: str, experts_implementation: str | None) -> tuple["DecisionModel", Any]:
++        """Official Gemma 4 / Qwen3.5 MoE text decoder (vision tower unused) plus a fresh head."""
++        from transformers import AutoTokenizer
++
++        if experts_implementation not in EXPERTS_IMPLEMENTATIONS:
++            raise ValueError(f"MoE bases need experts_implementation in {EXPERTS_IMPLEMENTATIONS}")
++        if model_type == "gemma4":
++            from transformers import Gemma4ForConditionalGeneration as model_class
++        else:
++            from transformers import Qwen3_5MoeForConditionalGeneration as model_class
++        tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=True)
++        full, info = model_class.from_pretrained(
++            path, dtype=torch.float32, local_files_only=True, attn_implementation="sdpa",
++            experts_implementation=experts_implementation,
++            output_loading_info=True, low_cpu_mem_usage=True,
++        )
++        if any(info.get(name) for name in ("missing_keys", "mismatched_keys", "error_msgs")):
++            raise RuntimeError(f"Incomplete {model_type} base loading: {info}")
++        backbone = full.model.language_model
++        backbone.config.use_cache = False
++        if backbone.config._experts_implementation != experts_implementation:
++            raise RuntimeError("The MoE text decoder did not keep the pinned experts implementation")
++        head = CandidateHead(backbone.config.hidden_size, head_dim)
++        metadata = {
++            "architecture": MOE_ARCHITECTURES[model_type],
++            "prompt_version": MOE_PROMPT_VERSIONS[model_type],
++            "base_revision": revision, "source_stage": source_stage,
++            "initialization": f"{source_stage}-random-head",
++            "head_dim": head_dim, "max_options": MAX_OPTIONS,
++            "text_parameter_count": sum(p.numel() for p in backbone.parameters()),
++            "parameter_dtype": "float32", "autocast_dtype": "bfloat16",
++            "head_compute_dtype": "float32", "attention": "sdpa",
++            "backbone_model_type": model_type,
++            "experts_implementation": experts_implementation,
++            "moe": moe_summary(backbone),
++        }
++        return cls(backbone, head, metadata), tokenizer
++
++    @classmethod
+     def from_decision1(cls, path: str | Path, head_dim: int = 256) -> tuple["DecisionModel", Any]:
+         from safetensors.torch import load_file
+         from transformers import AutoTokenizer
+@@ -208,7 +312,14 @@
+ 
+         path = Path(path)
+         metadata = json.loads((path / "decision_config.json").read_text(encoding="utf-8"))
+-        if metadata.get("prompt_version") != PROMPT_VERSION or metadata.get("architecture") != ARCHITECTURE:
++        moe_type = next((kind for kind, name in MOE_ARCHITECTURES.items()
++                         if metadata.get("architecture") == name), None)
++        if moe_type is not None:
++            if metadata.get("prompt_version") != MOE_PROMPT_VERSIONS[moe_type]:
++                raise ValueError("MoE checkpoint prompt version differs from its architecture")
++            if metadata.get("checkpoint_format") != LORA_FORMAT:
++                raise ValueError("Only LoRA checkpoints are supported for MoE bases")
++        elif metadata.get("prompt_version") != PROMPT_VERSION or metadata.get("architecture") != ARCHITECTURE:
+             raise ValueError("Checkpoint is not a Decision 2.0 dynamic-option model")
+         if metadata.get("checkpoint_format") == LORA_FORMAT:
+             if source_path is None:
+@@ -224,7 +335,10 @@
+                 if not contract.get("base_revision"):
+                     raise ValueError("LoRA Qwen initialization has no immutable revision")
+                 source_model, _ = cls.from_base(source_path, contract["base_revision"],
+-                                                metadata["head_dim"], source_stage=source_kind)
++                                                metadata["head_dim"], source_stage=source_kind,
++                                                experts_implementation=metadata.get("experts_implementation"))
++                if source_model.metadata["architecture"] != metadata["architecture"]:
++                    raise ValueError("LoRA checkpoint architecture differs from its pinned source")
+             elif source_kind == "decision1":
+                 source_model, _ = cls.from_decision1(source_path, metadata["head_dim"])
+             elif source_kind == "decision2":
+diff -ruN -x __pycache__ best368/training/model/infer.py moe/training/model/infer.py
+--- best368/training/model/infer.py	2026-10-01 08:00:00.000000000 +0800
++++ moe/training/model/infer.py	2026-10-01 08:00:00.000000000 +0800
+@@ -306,7 +306,7 @@
+     adapter_sha = hashlib.sha256(canonical(adapter_sources).encode("utf-8")).hexdigest()
+ 
+     import torch
+-    from .decision_model import DecisionModel, collate, encode
++    from .decision_model import DecisionModel, collate, encoder_for
+ 
+     if not torch.cuda.is_available() or not torch.cuda.is_bf16_supported():
+         raise RuntimeError("A CUDA/ROCm BF16 GPU is required")
+@@ -329,7 +329,7 @@
+     predictions, counts = run_prompts(
+         rows, tokenizer=tokenizer, max_length=args.max_length,
+         temperature=calibration if calibration is not None else args.temperature,
+-        encode_fn=encode, predict_fn=predict,
++        encode_fn=encoder_for(model.metadata), predict_fn=predict,
+         model_sha256=model_identity["model_sha256"], adapter_sha256=adapter_sha,
+         calibration_sha256=file_sha256(args.calibration) if args.calibration is not None else None,
+     )
+diff -ruN -x __pycache__ best368/training/model/lora.py moe/training/model/lora.py
+--- best368/training/model/lora.py	2026-10-01 08:00:00.000000000 +0800
++++ moe/training/model/lora.py	2026-10-01 08:00:00.000000000 +0800
+@@ -15,11 +15,54 @@
+ MLP = ("mlp.gate_proj", "mlp.up_proj", "mlp.down_proj")
+ 
+ 
++GEMMA4_ATTENTION = ("self_attn.q_proj", "self_attn.k_proj", "self_attn.o_proj")
++GEMMA4_OPTIONAL = ("self_attn.v_proj",)
++QWEN_SHARED_EXPERT = ("mlp.shared_expert.gate_proj", "mlp.shared_expert.up_proj",
++                      "mlp.shared_expert.down_proj")
++
++
++def select_moe_target_modules(backbone: Any, is_linear: Callable[[Any], bool]) -> list[str]:
++    """Attention (or gated-delta) projections plus the dense / shared-expert MLP of every layer.
++
++    Routed experts, routers and the shared-expert gate stay frozen: no target may
++    live under ``experts`` or ``router`` / ``mlp.gate``.
++    """
++    config = getattr(backbone, "config", None)
++    model_type = getattr(config, "model_type", None)
++    modules = dict(backbone.named_modules())
++    layer_count = getattr(config, "num_hidden_layers", None)
++    if not isinstance(layer_count, int) or layer_count < 1:
++        raise ValueError("MoE text backbone needs num_hidden_layers")
++    targets: list[str] = []
++    for index in range(layer_count):
++        if model_type == "gemma4_text":
++            if getattr(config, "num_kv_shared_layers", 0):
++                raise ValueError("Gemma 4 KV-shared layers are not supported")
++            suffixes = [*GEMMA4_ATTENTION, *MLP]
++            suffixes += [s for s in GEMMA4_OPTIONAL if f"layers.{index}.{s}" in modules]
++        else:
++            kind = config.layer_types[index]
++            if kind not in ("full_attention", "linear_attention"):
++                raise ValueError(f"Unsupported Qwen3.5 MoE layer type: {kind}")
++            suffixes = [*(FULL_ATTENTION if kind == "full_attention" else LINEAR_ATTENTION),
++                        *QWEN_SHARED_EXPERT]
++        for suffix in sorted(suffixes):
++            name = f"layers.{index}.{suffix}"
++            if name not in modules or not is_linear(modules[name]):
++                raise ValueError(f"Missing MoE linear LoRA target: {name}")
++            targets.append(name)
++    if any(".experts" in name or ".router" in name or name.endswith("mlp.gate") for name in targets):
++        raise ValueError("MoE LoRA targets must exclude experts and routers")
++    return targets
++
++
+ def select_target_modules(backbone: Any, is_linear: Callable[[Any], bool] | None = None) -> list[str]:
+     """Return exact modules for every hybrid decoder layer, refusing partial coverage."""
+     if is_linear is None:
+         from torch import nn
+         is_linear = lambda module: isinstance(module, nn.Linear)
++    if getattr(getattr(backbone, "config", None), "model_type", None) in ("gemma4_text", "qwen3_5_moe_text"):
++        return select_moe_target_modules(backbone, is_linear)
+     modules = dict(backbone.named_modules())
+     layer_types = getattr(getattr(backbone, "config", None), "layer_types", None)
+     if not isinstance(layer_types, (list, tuple)) or not layer_types:
+diff -ruN -x __pycache__ best368/training/model/train.py moe/training/model/train.py
+--- best368/training/model/train.py	2026-10-01 08:00:00.000000000 +0800
++++ moe/training/model/train.py	2026-10-01 08:00:00.000000000 +0800
+@@ -24,7 +24,7 @@
+ import torch
+ 
+ from .data import check_partition_isolation, file_sha256, load_partition
+-from .decision_model import DecisionModel, PROMPT_VERSION, collate, encode
++from .decision_model import DecisionModel, collate, encoder_for
+ from .lora import adapter_parameters, attach_lora
+ from .loss import LOSS_VERSION, per_example_loss
+ from .plan import epoch_batches, planned_updates, replay_count, validate_resume_state
+@@ -195,6 +195,8 @@
+     parser.add_argument("--save-every", type=int, default=100)
+     parser.add_argument("--seed", type=int, default=20260926)
+     parser.add_argument("--gradient-checkpointing", action=argparse.BooleanOptionalAction, default=True)
++    parser.add_argument("--experts-implementation", choices=("eager", "grouped_mm"),
++                        help="Pinned MoE experts kernel (MoE bases only)")
+     return parser.parse_args()
+ 
+ 
+@@ -279,7 +281,8 @@
+         source = source_fingerprint(Path(args.model_path))
+         if args.init_kind in ("base", "posttrained"):
+             model, tokenizer = DecisionModel.from_base(args.model_path, args.base_revision,
+-                                                       args.head_dim, source_stage=args.init_kind)
++                                                       args.head_dim, source_stage=args.init_kind,
++                                                       experts_implementation=args.experts_implementation)
+         elif args.init_kind == "decision1":
+             model, tokenizer = DecisionModel.from_decision1(args.model_path, args.head_dim)
+         else:
+@@ -300,6 +303,7 @@
+     pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id
+     if pad_id is None:
+         raise ValueError("Tokenizer needs a pad or EOS token")
++    encode = encoder_for(model.metadata)
+     train_items = [encode(row, tokenizer, args.max_length) for row in train_rows]
+     replay_items = [encode(row, tokenizer, args.max_length) for row in replay_rows]
+     select_items = [encode(row, tokenizer, args.max_length) for row in select_rows]
+@@ -309,7 +313,7 @@
+     planned = planned_updates(len(train_items), len(replay_items), args.replay_fraction,
+                               args.microbatch, args.accumulation, args.epochs, args.max_steps)
+     contract = {
+-        "prompt_version": PROMPT_VERSION, "loss_version": LOSS_VERSION,
++        "prompt_version": model.metadata["prompt_version"], "loss_version": LOSS_VERSION,
+         "model_source": source, "data_sha256": data_sha,
+         "epochs": args.epochs, "max_steps": args.max_steps, "microbatch": args.microbatch,
+         "accumulation": args.accumulation, "eval_batch": args.eval_batch,
+@@ -324,6 +328,8 @@
+         "train_mode": args.train_mode, "planned_updates": planned,
+         "train_count": len(train_items), "replay_pool_count": len(replay_items),
+     }
++    if model.metadata.get("experts_implementation") is not None:
++        contract["experts_implementation"] = model.metadata["experts_implementation"]
+     if args.train_mode == "lora":
+         contract["lora"] = {"rank": args.lora_rank, "alpha": args.lora_alpha,
+                             "dropout": args.lora_dropout, "lr": args.lora_lr,

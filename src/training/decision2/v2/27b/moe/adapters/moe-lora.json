@@ -1,0 +1,17 @@
+{
+  "name": "decision2-27b-moe-lora",
+  "module": "v2.27b.moe.collect",
+  "args": [
+    "--checkpoint", "{model}",
+    "--source-path", "{source}",
+    "--model-id", "{model_id}",
+    "--model-revision", "{revision}",
+    "--max-length", "{max_length}",
+    "--input", "{input}",
+    "--output", "{output}"
+  ],
+  "model_id": "llm-semantic-router/DEV2.0-27B-MoE-candidate",
+  "image": "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1",
+  "batch_policy": "current training.model.infer: one prompt per call, all its questions batched; BF16 backbone, FP32 head; unmerged PEFT LoRA on the pinned official MoE base with its pinned experts implementation; Qwen3.5-MoE requires the image FLA / causal-conv1d kernels and a persisted TRITON_CACHE_DIR, Gemma 4 runs SDPA only; T = 1 (no calibration file); no truncation, over-budget questions invalid",
+  "requires": ["source", "max_length"]
+}

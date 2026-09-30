@@ -1,0 +1,40 @@
+{
+ "changed_files": [
+  "training/model/calibrate.py",
+  "training/model/decision_model.py",
+  "training/model/infer.py",
+  "training/model/lora.py",
+  "training/model/train.py"
+ ],
+ "derived_from": {
+  "manifest": "v2/27b/pinned/best368-pipeline-2026-09-26.manifest.json",
+  "tar_sha256": "552c35ba5dd93405616c39e57d520a23e5f30980a2622b13a8b9c36e7a0d5a97"
+ },
+ "files_sha256": {
+  "training/__init__.py": "71124a9395b10ca2c0e1664256995e3ca8258ad46d058a132eb7e2bd3db59c09",
+  "training/model/__init__.py": "1479a633302ee0e6e014174c819b3d39034c3d87d4bc45352ff29bc5cdf12a38",
+  "training/model/calibrate.py": "7aa114b733dfd96553cf1997cfba6cf7ff6b68596d4df13a44c420d2bfa4060b",
+  "training/model/calibration.py": "e6cf3ee4682e0b2c0c73a39209f42f5501db92f1abe1a7d0587235ae35cf9a02",
+  "training/model/data.py": "814f4503c20649dffa719bdafafdb68d1851d647867e51d59eeba6d640f18bc3",
+  "training/model/decision_model.py": "8ef39a02174d31b983885b9bee6945594c620a948e9058f0d6193669c9616f5b",
+  "training/model/infer.py": "5fc4dc9021ee211f69f757d1cd118e5991c04fdce864a0faea2a90073d179381",
+  "training/model/lora.py": "7d3150838b054e46553b85c2a9c3cbc76aae2208b5638638f326baa2e664c763",
+  "training/model/loss.py": "a12351dd5995678b12416ea016158e0493f2e6d7d976c94dc458b39cbbd816cb",
+  "training/model/plan.py": "664b6ffe21a9211a9b082afcc1e6b38c94ecbae3bfe7381834a6764dc18a925b",
+  "training/model/source.py": "ef6f94a4c741d902e3700fafc9ea16592e70d20793861da376df8d8d7a43609b",
+  "training/model/train.py": "8849c220c3d4d71cac9ca631c5ab86b35fe00b1503b2e792650a70d867cc8004"
+ },
+ "purpose": "BEST368 pipeline (v2/27b/pinned/best368-pipeline-2026-09-26.tar) plus official MoE backbones (Gemma 4 26B-A4B, Qwen3.5-35B-A3B): LoRA on attention and dense/shared-expert projections with experts and routers frozen, a pinned experts kernel, and the Gemma BOS prompt. Qwen3.5 dense paths are unchanged in behaviour; the patch is moe-pipeline-2026-10-01.patch.",
+ "schema_version": "decision2-27b-vendored-pipeline/1",
+ "tar_sha256": "69dc862225d64629859719fad54613bb23b841705bab706a5d611d075964604f",
+ "unchanged_files": [
+  "training/__init__.py",
+  "training/model/__init__.py",
+  "training/model/calibration.py",
+  "training/model/data.py",
+  "training/model/loss.py",
+  "training/model/plan.py",
+  "training/model/source.py"
+ ],
+ "usage": "extract into an empty directory and put it first on PYTHONPATH; run python -m training.model.{train,calibrate,infer}"
+}
