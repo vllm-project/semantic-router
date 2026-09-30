@@ -87,13 +87,14 @@ def state_segments(row: dict[str, Any]) -> set[bytes]:
     """Hashes of the row's normalized state lines (>= MIN_SEGMENT characters); instructions
     and option descriptions are templates shared by every row of a source, so they are not
     screened."""
-    from v2.dec.m5_block import MIN_SEGMENT, normalize
+    from v2.dec.m5_block import MIN_SEGMENT, _strings, normalize
 
     out = set()
-    for part in row["state"].split("\n"):
-        part = normalize(part)
-        if len(part) >= MIN_SEGMENT:
-            out.add(hashlib.sha256(part.encode("utf-8")).digest()[:16])
+    for text in _strings(row["state"]):
+        for part in text.split("\n"):
+            part = normalize(part)
+            if len(part) >= MIN_SEGMENT:
+                out.add(hashlib.sha256(part.encode("utf-8")).digest()[:16])
     return out
 
 

@@ -61,6 +61,13 @@ class StateSegmentsTest(unittest.TestCase):
         self.assertFalse(m7_data.state_segments(a) & m7_data.state_segments(b))
         self.assertEqual(m7_data.state_segments(a), m7_data.state_segments(c))
         self.assertEqual(len(m7_data.state_segments(a)), 1)
+        nested = {
+            "state": {
+                "passage": "Sentence one is long enough here.",
+                "q": ["another long enough line"],
+            }
+        }
+        self.assertEqual(len(m7_data.state_segments(nested)), 2)
 
 
 if __name__ == "__main__":
