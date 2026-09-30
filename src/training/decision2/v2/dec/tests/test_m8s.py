@@ -188,6 +188,28 @@ class RulesTest(unittest.TestCase):
         self.assertEqual((g["eligible"], g["htdev2"]), (True, "GAIN"))
         self.assertEqual(mr.gate(point(), ref, {"delta": -0.0199})["htdev2"], "TIE")
 
+    def test_amendment2_noul_and_score_floors(self):
+        ref = point()
+        ref["by_family"]["rule_precedence"] = {"correct": 264, "n": 400}
+        ok = point()
+        ok["by_family"]["rule_precedence"] = {"correct": 260, "n": 400}
+        self.assertEqual(mr.floors(ok, ref), [])
+        low = point()
+        low["by_family"]["rule_precedence"] = {"correct": 259, "n": 400}
+        self.assertTrue(any("Noul" in r for r in mr.floors(low, ref)))
+        self.assertTrue(any("Noul" in r for r in mr.floors(point(n=265), point(n=270))))
+
+        def s5(*flags):
+            return {"check": {"flags": list(flags)}}
+
+        self.assertEqual(mr.score_floor(s5("NO-GAIN"), s5()), [])
+        self.assertTrue(mr.score_floor(s5("COLLAPSE"), s5("COLLAPSE")))
+        self.assertTrue(mr.score_floor(s5("WARN"), s5()))
+        self.assertEqual(mr.score_floor(s5("WARN"), s5("WARN")), [])
+        g = mr.gate(point(), point(), {"delta": 0.0}, s5("COLLAPSE"), s5())
+        self.assertFalse(g["eligible"])
+        self.assertEqual(g["score5t_check_flags"], ["COLLAPSE"])
+
     def test_pick_prefers_gain_then_larger_alpha(self):
         rows = [
             {

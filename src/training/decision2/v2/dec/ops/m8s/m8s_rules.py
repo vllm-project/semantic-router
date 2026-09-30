@@ -9,11 +9,15 @@
              the larger alpha first within a class; a pick whose proxy P is >= 8 below the tier's best pick is
              dropped; slots D1, D2, C; at most three finalists. Development only; never a release score.
 
+             Amendment 2 adds the 4B M8 floors: Noul `rule_precedence` c >= c_I - 0.01 n, and Score5-typed-DEV check
+             half without COLLAPSE, and without WARN unless I's check half has WARN.
   htdev2     one point vs a reference on HT-DEV v2 (paired, 04:10 verdict) -> the JSON the finalists rule reads
+  score5t    node A (gold): the eval's Score5-typed-DEV block of one prediction file -> the JSON the finalists rule reads
 
 usage: python3 m8s_rules.py early --root M --tier 2b|08b --arm D1|D2 --gold G
        python3 m8s_rules.py finalists --tier 2b|08b --lines-root L --output <select>/<tier>-finalists.json
        python3 m8s_rules.py htdev2 --gold G --left P --left-name A --right P --right-name B --output OUT
+       python3 m8s_rules.py score5t --panel-root /data/dev2/private/panels --predictions P --output OUT
 """
 
 from __future__ import annotations
@@ -35,6 +39,8 @@ LINES = ("D1", "D2", "C")
 ORDER = ("1", "1/2", "1/3")
 TYPE_SLACK = Fraction(3, 100)
 FAMILY_SLACK = Fraction(1, 10)
+NOUL_FAMILY = "rule_precedence"
+NOUL_SLACK = Fraction(1, 100)
 HT_TIE = 0.02
 EARLY_SELECT_SLACK = 0.03
 PROXY_DROP = 8.0
@@ -76,13 +82,41 @@ def floors(point: dict[str, Any], ref: dict[str, Any]) -> list[str]:
             reasons.append(
                 f"family {f} {got['correct']}/{got['n']} below reference - 0.10"
             )
+    noul_ref = ref["by_family"].get(NOUL_FAMILY) or ref["by_type"]["noul"]
+    noul = point["by_family"].get(NOUL_FAMILY) or point["by_type"]["noul"]
+    noul_floor = noul_ref["correct"] - NOUL_SLACK * noul_ref["n"]
+    if noul["correct"] < noul_floor:
+        reasons.append(
+            f"Noul {NOUL_FAMILY} {noul['correct']} < floor {float(noul_floor):g}"
+        )
+    return reasons
+
+
+def score5t_flags(block: dict[str, Any]) -> set[str]:
+    flags = block["check"]["flags"]
+    return set(flags if isinstance(flags, list) else [flags] if flags else [])
+
+
+def score_floor(point_s5: dict[str, Any], ref_s5: dict[str, Any]) -> list[str]:
+    flags, ref_flags = score5t_flags(point_s5), score5t_flags(ref_s5)
+    reasons = []
+    if "COLLAPSE" in flags:
+        reasons.append("Score5-typed-DEV check half COLLAPSE")
+    if "WARN" in flags and "WARN" not in ref_flags:
+        reasons.append("Score5-typed-DEV check half WARN (reference has none)")
     return reasons
 
 
 def gate(
-    point: dict[str, Any], ref: dict[str, Any], ht: dict[str, Any]
+    point: dict[str, Any],
+    ref: dict[str, Any],
+    ht: dict[str, Any],
+    s5: dict[str, Any] | None = None,
+    s5_ref: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     reasons = floors(point, ref)
+    if s5 is not None:
+        reasons += score_floor(s5, s5_ref)
     verdict = htdev2_verdict(ht["delta"])
     if verdict == "FLAG":
         reasons.append(f"HT-DEV v2 FLAG ({ht['delta']:+.4f})")
@@ -91,6 +125,7 @@ def gate(
         "reasons": reasons,
         "htdev2": verdict,
         "htdev2_delta": ht["delta"],
+        "score5t_check_flags": sorted(score5t_flags(s5)) if s5 is not None else None,
     }
 
 
@@ -248,6 +283,29 @@ def htdev2_pair(a: argparse.Namespace) -> int:
     return 0
 
 
+def score5t_one(a: argparse.Namespace) -> int:
+    """The eval's Score5-typed-DEV block (full / fit / check, flags) of one prediction file (gold on node A)."""
+    from v2.eval.dev_readout import score5t_block
+
+    out = score5t_block(a.panel_root, a.predictions)
+    out["role"] = (
+        "M8-small Score floor (amendment 2): check half without COLLAPSE / new WARN"
+    )
+    a.output.parent.mkdir(parents=True, exist_ok=True)
+    with open(a.output, "x") as f:
+        json.dump(out, f, indent=1, sort_keys=True)
+        f.write("\n")
+    print(
+        json.dumps(
+            {
+                "check_flags": sorted(score5t_flags(out)),
+                "check_top_share": out["check"].get("top_share"),
+            }
+        )
+    )
+    return 0
+
+
 def parse_line(spec: str) -> tuple[str, dict[str, str]]:
     line, rest = spec.split(":", 1)
     return line, dict(item.split("=", 1) for item in rest.split(",") if item)
@@ -270,6 +328,7 @@ def finalists(a: argparse.Namespace) -> int:
         if name != f"L-{line}":
             raise SystemExit(f"{spec} names {name}")
         arms = json.loads(out.read_text())["arms"]
+        s5_ref = json.loads((a.lines_root / "diag" / f"{ref}.score5t.json").read_text())
         rows = []
         for step in ORDER:
             point = steps.get(step)
@@ -277,7 +336,10 @@ def finalists(a: argparse.Namespace) -> int:
                 continue
             ht_path = a.lines_root / "diag" / f"{point}.htdev2.json"
             ht = json.loads(ht_path.read_text())
-            g = gate(arms[point], arms[ref], ht)
+            s5_path = a.lines_root / "diag" / f"{point}.score5t.json"
+            g = gate(
+                arms[point], arms[ref], ht, json.loads(s5_path.read_text()), s5_ref
+            )
             rows.append(
                 {
                     "step": step,
@@ -292,6 +354,8 @@ def finalists(a: argparse.Namespace) -> int:
                     },
                     "htdev2_file": str(ht_path),
                     "htdev2_sha256": sha_file(ht_path),
+                    "score5t_file": str(s5_path),
+                    "score5t_sha256": sha_file(s5_path),
                     **g,
                 }
             )
@@ -355,8 +419,17 @@ def main(argv: list[str] | None = None) -> int:
     h.add_argument("--right", type=Path, required=True)
     h.add_argument("--right-name", required=True)
     h.add_argument("--output", type=Path, required=True)
+    s = sub.add_parser("score5t")
+    s.add_argument("--panel-root", type=Path, required=True)
+    s.add_argument("--predictions", type=Path, required=True)
+    s.add_argument("--output", type=Path, required=True)
     a = p.parse_args(argv)
-    return {"early": early, "finalists": finalists, "htdev2": htdev2_pair}[a.cmd](a)
+    return {
+        "early": early,
+        "finalists": finalists,
+        "htdev2": htdev2_pair,
+        "score5t": score5t_one,
+    }[a.cmd](a)
 
 
 if __name__ == "__main__":

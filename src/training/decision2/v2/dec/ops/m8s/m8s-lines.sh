@@ -3,7 +3,8 @@
 # development readouts", "Development gates", "Diagnostics"). Outputs under /data/dev2/runs/dec/m8s/lines/<tier>.
 #
 #   m8s-lines.sh <tier> refs          <tier>-I (the verified released start) read at 16K: typed DEV, CSS pilot,
-#                                     HT-DEV v2; then its HT-DEV v2 vs the eval track's reference collection of the
+#                                     HT-DEV v2, Score5-typed-DEV (amendment 2; scored on node A by
+#                                     m8s-relay.sh s5); then its HT-DEV v2 vs the eval track's reference collection of the
 #                                     same weights (diag/<tier>-I.htdev2-vs-eval.json, collection-path check)
 #   m8s-lines.sh <tier> line <ARM>    alpha 1/3, 1/2 (members [A, I, I], [A, I]; v2.dec.soup, CPU) and alpha 1 (the arm
 #                                     soup m8s/soup/<tier>-<ARM>), 16K readouts, readout/L-<ARM>.json
@@ -116,10 +117,13 @@ infer() {  # <point> <panel> <prompts file under /panels>
   gpu_seconds "$P/$panel.launch.json" "lines:$TIER" "readout $point $panel"
   [ $rc = 0 ] || die "$point $panel readout FAILED (see $P/$panel.stderr.log)"
 }
+S5_PROMPTS_SHA=8e35bfffc2c3b8e4252d3c39ec1c65054250a3ddf80159d219a16b41bca1d93c
 readout() {
   infer "$1" dev dev.prompts.jsonl
   infer "$1" css-pilot css-pilot.prompts.jsonl
   infer "$1" ht-dev2 ht-dev2.prompts.jsonl
+  [ "$(sha "$R/panels/score5t-dev.prompts.jsonl")" = "$S5_PROMPTS_SHA" ] || die "Score5-typed-DEV prompts differ"
+  infer "$1" score5t-dev score5t-dev.prompts.jsonl
 }
 htdev2() {  # <out> <left point file> <left name> <right file> <right name>
   [ -f "$1" ] && return 0
