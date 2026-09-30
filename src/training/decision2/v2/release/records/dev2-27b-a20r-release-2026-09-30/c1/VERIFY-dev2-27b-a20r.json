@@ -1,0 +1,34 @@
+{
+ "comparisons": {
+  "baseline": {
+   "problems": [],
+   "run": "/data/dev2/runs/eval/m4/c1-event3/cand27"
+  }
+ },
+ "image": {
+  "id": "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1",
+  "present": true
+ },
+ "model": {
+  "adapter_module": "v2/27b/typed_collect_kernel.py",
+  "adapter_module_same_as_stored_run": true,
+  "adapter_module_sha256": "72ea45679ad1e43414af258bcffa0912a8f2147548556112ea5bde9f85628e0a",
+  "cache_sha256": "f474e2e9dbdf3a2900465bce74256326ba2756250861b45359742685982cb5f7",
+  "package": {
+   "base": "/data/decision20-20260926/models/Qwen3.8-27B",
+   "base_files": 28,
+   "base_mismatched": [],
+   "dir": "/data/dev2/runs/release/dev2-27b-a20r-20260930/c1pkg/package/DEV2.0-27B",
+   "files": 31,
+   "identity": "2e07451107a2ca9735064cc01f7e43e8522b4bae48f2d77bdf29f7ea2fe6362c",
+   "manifest_sha256": "0d7953cc5d85a6fde6bdf71913795d1d7849e32fbed7df10103c6da6669b254a",
+   "mismatched": [],
+   "ok": true,
+   "problems": []
+  },
+  "problems": []
+ },
+ "passed": true,
+ "schema": "dev2-c1-postkey/1/verify",
+ "utc": "2026-09-30T00:06:47Z"
+}

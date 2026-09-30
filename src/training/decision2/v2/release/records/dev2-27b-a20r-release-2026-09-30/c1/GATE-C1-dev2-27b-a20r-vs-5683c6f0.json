@@ -1,0 +1,97 @@
+{
+  "by_type": {
+    "choice": {
+      "ci95": [
+        -0.17545918316799272,
+        3.7766094057556283
+      ],
+      "delta": 1.7865375578432463,
+      "p": 0.07321464292858572
+    },
+    "noul": {
+      "ci95": [
+        -3.647064330187984,
+        0.5348223047481282
+      ],
+      "delta": -1.5556891555711871,
+      "p": 0.1408281656331266
+    },
+    "score": {
+      "ci95": [
+        -4.730057157557481,
+        2.323774253679381
+      ],
+      "delta": -1.1607643905833527,
+      "p": 0.5593118623724745
+    }
+  },
+  "ci95": [
+    -1.2226829208257544,
+    1.6983470639625338
+  ],
+  "delta": 0.2282598482753997,
+  "gold_sha256": "c02777713c0e58b40cf602947433420744b2765465252ce22d692eb676ca4fe1",
+  "item_set": {
+    "dropped_by_task": {
+      "delichess/communicative_function": 6,
+      "delichess/epistemic_stance": 6,
+      "implicaturex/likelihood": 1,
+      "legal_case_law/argument_function": 20,
+      "narrative_gold/span_is_event": 1
+    },
+    "dropped_items": 34,
+    "gold_items": 2874,
+    "retired_candidates": 555,
+    "retired_sha256": "bbf095c70917f028d691fce570b114725e4f22fd6a1987456f6ae2c30f22990a",
+    "scored_items": 2840,
+    "tasks_emptied": [],
+    "version": "v1.2"
+  },
+  "label": "JevArena-C1 v1.2, post-key (not an independent validation)",
+  "left": {
+    "by_type": {
+      "choice": 63.489721967441845,
+      "noul": 72.26502585338041,
+      "score": 36.152365106146114
+    },
+    "c1": 57.55947083977275,
+    "items": 2840,
+    "valid": 2840
+  },
+  "names": {
+    "left": "DEV2.0-27B manifest-sha256:0d7953cc5d85a6fde6bdf71913795d1d7849e32fbed7df10103c6da6669b254a",
+    "right": "DEV2.0-27B 5683c6f0 (current revision)"
+  },
+  "p": 0.7229445889177836,
+  "replicates": 5000,
+  "right": {
+    "by_type": {
+      "choice": 61.7031844095986,
+      "noul": 73.8207150089516,
+      "score": 37.313129496729466
+    },
+    "c1": 57.33121099149735,
+    "items": 2840,
+    "valid": 2840
+  },
+  "rule": "REGRESSION if left − right < 0 C1 points and the two-sided paired bootstrap p < 0.05 (the paired 95% interval lies below 0); otherwise PASS",
+  "runs": {
+    "left": {
+      "dir": "/data/dev2/runs/eval/c1-postkey/27B/dev2-27b-a20r-20260930T000642Z/cand",
+      "predictions_sha256": "75ef884accc2428f308afcbf2a26ea43bd7f84bddf3f4c4f6d1c69e1a428be6e",
+      "seal_label": "JevArena-C1 v1.2, post-key (not an independent validation)",
+      "seal_sha256": "6b035fb7ac9a7d87d7a06ec26d3e544da5785451932902fe3d458e0abea42eec"
+    },
+    "right": {
+      "dir": "/data/dev2/runs/eval/m4/c1-event3/cand27",
+      "predictions_sha256": "0840d38e9aacd6c3bbdced805b917ff9070f03eea5badcc7d97c2abae71ec710",
+      "seal_label": "independent confirmation (JevArena-C1)",
+      "seal_sha256": "f41d44c5f325c9b2db1a2615c60be63e0d35f3803aa696a06c9e180053e32c2c"
+    }
+  },
+  "schema": "dev2-gate-c1/1",
+  "seed": 20260927,
+  "unit": "source groups within each task",
+  "use": "successor-rule item 8 only: never training data, never a selection criterion (development or siblings)",
+  "verdict": "PASS"
+}
