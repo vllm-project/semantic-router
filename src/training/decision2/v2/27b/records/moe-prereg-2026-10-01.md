@@ -115,7 +115,7 @@ Base repo and revision (direct weight origin), Apache-2.0 with the modification 
 parameters, LoRA rank 64 after the soup with experts frozen, the experts kernel, Gemma's BOS prompt and 4,736-token
 training limit (if Gemma), the A7 dose (≈ 20M tokens, Choice-heavy), T = 1 or CAL698, 32K limit, C1 status.
 
-## Amendment 1 (2026-10-01 00:55 UTC+8; after the P0 probes, before any training job)
+## Amendment 1 (committed 2026-10-01 00:35 UTC+8 as `204e2f53f`; after the P0 probes, before any training job)
 
 Receipts: node A `/data/dev2/runs/27b-moe/MOE-{Git,Qit}-probe/{probe/experts-probe.json,check/experts-check.json}`
 (0.052 + 0.017 GPU-h Gemma, 0.098 + 0.032 GPU-h Qwen-MoE).
@@ -154,7 +154,7 @@ Receipts: node A `/data/dev2/runs/27b-moe/MOE-{Git,Qit}-probe/{probe/experts-pro
   Worst case ≈ 54, Gemma winner ≈ 45. **A second surviving cell gets no seed 2** (attribution only); if G1 projects
   above 60, Q-pt stops first.
 
-## Amendment 2 (2026-10-01 01:25 UTC+8; after a setup failure of the first one-step, before any training update)
+## Amendment 2 (committed 2026-10-01 00:46 UTC+8 as `e5bbaba56`; after a setup failure of the first one-step, before any training update)
 
 - **Finding (affects how the 27B records describe their trainer; no result changes):** the 27B launcher runs every
   container with working directory `/code` and `python3 -m`, and `-m` puts the working directory ahead of
@@ -173,7 +173,7 @@ Receipts: node A `/data/dev2/runs/27b-moe/MOE-{Git,Qit}-probe/{probe/experts-pro
   preflight outcome: the one-step and reload are repeated **once** under `-r2` receipts with the fixed entry point; a
   second failure stops the cell. Admission receipts stand.
 
-## Amendment 3 (2026-10-01 01:20 UTC+8; before any screen readout of a cell)
+## Amendment 3 (committed 2026-10-01 00:55 UTC+8 as `2139aac8d`; before any screen readout of a cell)
 
 - **Screen automation** (so the preregistered branches run without a live worker; M5's missed B1 branch is the
   lesson): `moe-screen-nodeA.sh` relays node A cells' `checkpoint-0000892` (without `trainer_state.pt`, with a
@@ -185,3 +185,6 @@ Receipts: node A `/data/dev2/runs/27b-moe/MOE-{Git,Qit}-probe/{probe/experts-pro
   are read at T = 1 against the dense matched reference's own HT-DEV v2 predictions (`readouts/A20r-s1-c892`).
 - **Trainable capacity, disclosed:** with experts frozen the rank-32 adapters are 37.2M (Gemma) and ≈ 42.3M
   (Qwen-MoE) parameters per seed, against ≈ 233M for A20r's rank-32 adapter on the dense 27B.
+
+Correction (2026-10-01 01:05 UTC+8): the clock times first written in the three amendment headers were ahead of the
+real times; the headers now give the commit times. The order of events is unchanged.
