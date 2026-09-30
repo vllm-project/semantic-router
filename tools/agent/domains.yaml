@@ -107,6 +107,18 @@ domains:
     checks: [make docs-community-check, make docs-community-test]
     verifications: []
 
+  training-control-plane-contract:
+    owner: training
+    paths:
+      - src/semantic-router/pkg/trainingcontract/**
+      - src/training/control_plane/**
+      - tools/codegen/trainingcontract/**
+      - dashboard/frontend/src/generated/trainingContract.ts
+      - dashboard/frontend/src/utils/trainingContract.test.ts
+      - src/training/README.md
+    checks: [make training-contract-check]
+    verifications: []
+
   generated-api-contract:
     owner: router-core
     documentation_check: true
@@ -797,6 +809,8 @@ profiles:
     paths:
       - e2e/profiles/agentgateway/**
       - deploy/kubernetes/agentgateway/**
+      - e2e/testcases/full_duplex_routing.go
+      - src/semantic-router/pkg/extproc/processor_req_body_full_duplex*.go
   envoy-ai-gateway:
     display_name: Envoy AI Gateway
     owner: e2e
@@ -1013,6 +1027,8 @@ profiles:
       - src/semantic-router/pkg/llmprotocol/**
       - src/semantic-router/pkg/protocolcodec/**
       - src/semantic-router/pkg/extproc/processor_req_body_streamed*.go
+      - src/semantic-router/pkg/extproc/processor_req_body_full_duplex*.go
+      - e2e/testcases/full_duplex_routing.go
       - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
       - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
   provider-protocols:
