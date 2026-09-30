@@ -47,9 +47,8 @@ func appendAnthropicUsageMarks(
 	usage llmprotocol.Usage,
 ) {
 	if usageUnavailable(usage) {
-		appendDiagnostic(diagnostics, policy, source, llmprotocol.AnthropicMessagesV1,
-			"usage", llmprotocol.DiagnosticApproximated,
-			"Messages requires usage; emitted an explicit zero-valued usage object")
+		appendAccountingOmission(diagnostics, policy, source, llmprotocol.AnthropicMessagesV1,
+			"usage", "backend response omitted usage; emitted an explicit zero-valued usage object")
 		return
 	}
 	if anthropicOutputTotalIsLowerBound(usage) {

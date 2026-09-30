@@ -117,7 +117,7 @@
           },
           {
             "field": "usage",
-            "action": "approximated"
+            "action": "dropped"
           }
         ]
       }

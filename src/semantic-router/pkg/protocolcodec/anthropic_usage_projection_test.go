@@ -10,7 +10,7 @@ import (
 
 // OpenAI backends may omit usage on non-streaming responses. The Anthropic
 // Messages projection must emit an explicit zero-valued usage object with an
-// approximation diagnostic instead of failing the translation; the streaming
+// accounting-omission diagnostic instead of failing the translation; the streaming
 // path already projects the same zero-valued object for this case.
 func TestAnthropicMessagesProjectsUnavailableUsageAsZeroObject(t *testing.T) {
 	response := llmprotocol.Response{
@@ -42,14 +42,14 @@ func TestAnthropicMessagesProjectsUnavailableUsageAsZeroObject(t *testing.T) {
 	if wire.Usage.InputTokens != 0 || wire.Usage.OutputTokens != 0 {
 		t.Fatalf("unavailable usage must project to zero-valued tokens: %s", body)
 	}
-	approximated := false
+	omitted := false
 	for _, diagnostic := range diagnostics {
-		if diagnostic.Field == "usage" && diagnostic.Action == llmprotocol.DiagnosticApproximated {
-			approximated = true
+		if diagnostic.Field == "usage" && diagnostic.Action == llmprotocol.DiagnosticDropped {
+			omitted = true
 		}
 	}
-	if !approximated {
-		t.Fatalf("expected an approximation diagnostic for usage, got %+v", diagnostics)
+	if !omitted {
+		t.Fatalf("expected an accounting-omission diagnostic for usage, got %+v", diagnostics)
 	}
 }
 
@@ -319,7 +319,7 @@ func TestAnthropicStreamMarksPartialOutputProjection(t *testing.T) {
 }
 
 // The streaming terminal carries the unavailable usage as the zero object
-// with the same approximation mark as the buffered response.
+// with the same accounting-omission mark as the buffered response.
 func TestAnthropicStreamMarksUnavailableTerminalUsage(t *testing.T) {
 	response := llmprotocol.Response{
 		Generation: 1, ID: "response_1", Model: "public-model",
@@ -342,13 +342,13 @@ func TestAnthropicStreamMarksUnavailableTerminalUsage(t *testing.T) {
 	}
 	marked := false
 	for _, diagnostic := range diagnostics {
-		if diagnostic.Field == "usage" && diagnostic.Action == llmprotocol.DiagnosticApproximated &&
-			strings.Contains(diagnostic.Reason, "zero-valued") {
+		if diagnostic.Field == "usage" && diagnostic.Action == llmprotocol.DiagnosticDropped &&
+			strings.Contains(diagnostic.Reason, "omitted usage") {
 			marked = true
 		}
 	}
 	if !marked {
-		t.Fatalf("streaming terminal must mark the zero-valued usage object: %+v", diagnostics)
+		t.Fatalf("streaming terminal must mark the omitted usage object: %+v", diagnostics)
 	}
 }
 
