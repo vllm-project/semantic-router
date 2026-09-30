@@ -205,6 +205,15 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 00:55 — **USER DECISIONS:**
+  - **(1) Broaden to a general router-model runtime:** the four surfaces (`/v1/decisions`, `/v1/classify`,
+    `/v1/embeddings`, `/v1/rerank`) plus the `task_heads` and `multimodal_embedding` adapters.
+  - **(2) Retire the NLI model** (ModernBERT-base-nli) and its features: the hallucination explainer and the
+    response-cache polarity guard.
+  - **(3) Retire the OpenVINO provider;** Intel hardware goes through ONNX Runtime's OpenVINO EP.
+  - Recorded as [Decided] in gist file `10-open-decision-runtime-decisions.md` §9b.
+  - Proposal v2 waits only on the Vela-2.0-Unified check (7b239c1e).
+
 - 2026-10-01 00:50 — **Router-model coverage analysis (9c17b169): broaden the API and adapter layers into a general
   router-model runtime.** Recorded in gist file `10-open-decision-runtime-decisions.md` §9b.
   - All 40 registry models are fixed-task encoders, embedders or rerankers.
