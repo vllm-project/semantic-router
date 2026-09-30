@@ -1,20 +1,24 @@
 """Serving-track sessions, run inside the scored ROCm image on one GPU (node side).
 
     python3 -m v2.serving.session plugin  --out RUN --plugin-src DIR --package PKG --dtype bfloat16
-                                          [--panel NAME:PROMPTS:PREDICTIONS:COUNT]... [--bench PROMPTS:N]
+                                          [--panel NAME:PROMPTS:PREDICTIONS:COUNT[:CONCURRENCY]]...
+                                          [--bench PROMPTS:N]
     python3 -m v2.serving.session runtime --out RUN --package PKG --bench PROMPTS:N [--panel ...]...
     python3 -m v2.serving.session vela    --out RUN --plugin-src DIR --model SNAPSHOT --texts JSON...
     python3 -m v2.serving.session coloc   --out RUN --plugin-src DIR --package PKG --model SNAPSHOT
                                           --bench PROMPTS:N --texts JSON...
+    python3 -m v2.serving.session labeltoken --out RUN --plugin-src DIR --model SNAPSHOT
 
 ``plugin`` installs vllm-sr-plugins from its mirrored source as a wheel into
 RUN/site, serves the package with ``vllm serve`` on 127.0.0.1 inside the
-container, answers every panel prompt through ``/v1/system_one`` (one item per
+container, answers every panel prompt through ``/v1/decisions`` (one item per
 request, as the release parity does) and compares with the stored scored
 predictions, then measures latency and throughput. ``runtime`` measures the
 shipped package runtime in-process, then again with the backbone's Linear
-weights kept BF16-resident. Every result is a JSON file in RUN; per-prompt
-answers stay in RUN on the node.
+weights kept BF16-resident. ``labeltoken`` reads label-token distributions
+from a stock Qwen3.5 checkpoint on vLLM's generate runner (no plugin), checks
+them against Transformers and measures prefix caching on a shared state. Every
+result is a JSON file in RUN; per-prompt answers stay in RUN on the node.
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ import concurrent.futures
 import hashlib
 import http.client
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -36,9 +41,12 @@ from typing import Any
 
 from .measure import PanelTally, latency_summary, payload_sha256
 
-PLUGINS = "vllm_sr_decision2,vllm_sr_system_one"
+PLUGINS = "vllm_sr_decision2,vllm_sr_decisions"
+DECISIONS = "/v1/decisions"
+DECISIONS_ALIAS = "/v1/system_one"
 DECISION_PORT = 8100
 VELA_PORT = 8200
+LABEL_PORT = 8300
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -208,7 +216,10 @@ class Server:
             "graph",
             "compile",
             "Available KV cache memory",
-            "System One ready",
+            "Decisions endpoint ready",
+            "prefix caching",
+            "Prefix caching",
+            "mamba_cache_mode",
             "Decision 2.0 scoring model",
             "attention backend",
             "Using ",
@@ -336,18 +347,32 @@ def system_one_body(prompt: dict[str, Any]) -> dict[str, Any]:
     return {"state": prompt["state"], "questions": prompt["questions"]}
 
 
+def parse_panel(spec: str, concurrency: int) -> tuple[str, Path, Path, int, int]:
+    """NAME:PROMPTS:PREDICTIONS:COUNT[:CONCURRENCY]; the default concurrency applies if omitted."""
+    name, prompts_path, predictions_path, count, *rest = spec.split(":")
+    return (
+        name,
+        Path(prompts_path),
+        Path(predictions_path),
+        int(count),
+        int(rest[0]) if rest else concurrency,
+    )
+
+
 def run_panels(
     port: int, panels: list[str], out: Path, concurrency: int
 ) -> dict[str, Any]:
     results = {}
-    pool = Pool(port, concurrency)
-    try:
-        for spec in panels:
-            name, prompts_path, predictions_path, count = spec.split(":")
-            prompts = read_jsonl(Path(prompts_path))[: int(count)]
-            stored = {row["id"]: row for row in read_jsonl(Path(predictions_path))}
+    for spec in panels:
+        name, prompts_path, predictions_path, count, workers = parse_panel(
+            spec, concurrency
+        )
+        prompts = read_jsonl(prompts_path)[:count]
+        stored = {row["id"]: row for row in read_jsonl(predictions_path)}
+        pool = Pool(port, workers)
+        try:
             started = time.perf_counter()
-            outcomes = pool.map("/v1/system_one", [system_one_body(p) for p in prompts])
+            outcomes = pool.map(DECISIONS, [system_one_body(p) for p in prompts])
             seconds = time.perf_counter() - started
             tally = PanelTally(name)
             with (out / f"{name}.predictions.jsonl").open("w") as sink:
@@ -368,34 +393,35 @@ def run_panels(
                         )
                         + "\n"
                     )
-            results[name] = {
-                **tally.summary(),
-                "seconds": seconds,
-                "concurrency": concurrency,
-                "prompts_sha256": sha_file(Path(prompts_path)),
-                "predictions_sha256": sha_file(Path(predictions_path)),
-            }
-            print(
-                json.dumps(
-                    {
-                        "panel": name,
-                        **{
-                            k: results[name][k]
-                            for k in (
-                                "prompts",
-                                "slots",
-                                "category_changes",
-                                "missing",
-                                "max_abs_drift",
-                                "errors",
-                            )
-                        },
-                    }
-                ),
-                flush=True,
-            )
-    finally:
-        pool.close()
+        finally:
+            pool.close()
+        results[name] = {
+            **tally.summary(),
+            "seconds": seconds,
+            "concurrency": workers,
+            "prompts_sha256": sha_file(prompts_path),
+            "predictions_sha256": sha_file(predictions_path),
+        }
+        print(
+            json.dumps(
+                {
+                    "panel": name,
+                    **{
+                        k: results[name][k]
+                        for k in (
+                            "prompts",
+                            "slots",
+                            "category_changes",
+                            "missing",
+                            "max_abs_drift",
+                            "errors",
+                            "input_mismatch",
+                        )
+                    },
+                }
+            ),
+            flush=True,
+        )
     return results
 
 
@@ -482,19 +508,15 @@ def session_plugin(args: argparse.Namespace) -> dict[str, Any]:
     }
     try:
         server.wait_ready()
-        status, health = request(
-            DECISION_PORT,
-            "POST",
-            "/v1/system_one",
-            {
-                "state": "warmup",
-                "questions": {
-                    "q": {"type": "noul", "instructions": "Is this a warmup?"}
-                },
-            },
-        )
+        warmup = {
+            "state": "warmup",
+            "questions": {"q": {"type": "noul", "instructions": "Is this a warmup?"}},
+        }
+        status, first = request(DECISION_PORT, "POST", DECISIONS, warmup)
         if status != 200:
-            raise RuntimeError(f"warmup failed: {status} {health}")
+            raise RuntimeError(f"warmup failed: {status} {first}")
+        status, alias = request(DECISION_PORT, "POST", DECISIONS_ALIAS, warmup)
+        result["alias_matches"] = status == 200 and alias == first
         if args.panel:
             result["parity"] = run_panels(
                 DECISION_PORT, args.panel, out, args.concurrency
@@ -506,7 +528,7 @@ def session_plugin(args: argparse.Namespace) -> dict[str, Any]:
                 "items": len(prompts),
                 **bench_http(
                     DECISION_PORT,
-                    "/v1/system_one",
+                    DECISIONS,
                     [system_one_body(p) for p in prompts],
                     args.levels,
                     args.warmup,
@@ -558,16 +580,21 @@ def session_runtime(args: argparse.Namespace) -> dict[str, Any]:
     }
     for variant in ("fp32-master", "bf16-resident"):
         if variant == "bf16-resident":
-            converted = 0
+            # Only BF16-exact weights move: autocast rounds those to the same values.
+            converted = kept = 0
             for module in model.backend.model.backbone.modules():
                 if isinstance(module, torch.nn.Linear):
                     exact = module.weight.data.to(torch.bfloat16)
-                    if not torch.equal(exact.float(), module.weight.data):
-                        raise RuntimeError("a backbone Linear weight is not BF16-exact")
-                    module.weight.data = exact
-                    converted += 1
+                    if torch.equal(exact.float(), module.weight.data):
+                        module.weight.data = exact
+                        converted += 1
+                    else:
+                        kept += 1
             torch.cuda.empty_cache()
-            result["variants"][variant] = {"converted_linear": converted}
+            result["variants"][variant] = {
+                "converted_linear": converted,
+                "kept_fp32_linear": kept,
+            }
         else:
             result["variants"][variant] = {}
         run(prompts[: args.warmup])
@@ -593,10 +620,10 @@ def session_runtime(args: argparse.Namespace) -> dict[str, Any]:
         if args.panel and variant == "bf16-resident":
             entry["parity"] = {}
             for spec in args.panel:
-                name, prompts_path, predictions_path, count = spec.split(":")
-                stored = {row["id"]: row for row in read_jsonl(Path(predictions_path))}
+                name, prompts_path, predictions_path, count, _ = parse_panel(spec, 1)
+                stored = {row["id"]: row for row in read_jsonl(predictions_path)}
                 tally = PanelTally(name)
-                for prompt in read_jsonl(Path(prompts_path))[: int(count)]:
+                for prompt in read_jsonl(prompts_path)[:count]:
                     response = model.system_one(
                         state=prompt["state"], questions=prompt["questions"]
                     )
@@ -859,11 +886,11 @@ def session_coloc(args: argparse.Namespace) -> dict[str, Any]:
             }
 
         for workers in args.levels:
-            alone_d = drive(DECISION_PORT, "/v1/system_one", decision_bodies, workers)
+            alone_d = drive(DECISION_PORT, DECISIONS, decision_bodies, workers)
             alone_v = drive(VELA_PORT, "/classify", vela_bodies, workers)
             with concurrent.futures.ThreadPoolExecutor(2) as both:
                 joint_d = both.submit(
-                    drive, DECISION_PORT, "/v1/system_one", decision_bodies, workers
+                    drive, DECISION_PORT, DECISIONS, decision_bodies, workers
                 )
                 joint_v = both.submit(
                     drive, VELA_PORT, "/classify", vela_bodies * 4, workers
@@ -884,12 +911,284 @@ def session_coloc(args: argparse.Namespace) -> dict[str, Any]:
     return result
 
 
+# Public, synthetic items for the label-token demonstration: (state, question, labels).
+LABEL_STATES = (
+    "Ticket: The invoice total is wrong and I was charged twice for the same order.",
+    "Ticket: Since this morning the dashboard returns a 502 error and nobody on our "
+    "team can log in.",
+    "Ticket: I want to return the headphones I bought last week; the tags are still on.",
+    "Ticket: How do I change the email address attached to my account?",
+)
+LABEL_QUESTIONS = (
+    ("Does the customer report being charged more than once?", ("yes", "no")),
+    ("Is a service outage described?", ("yes", "no")),
+    ("Does the customer ask for money back?", ("yes", "no")),
+    (
+        "Which team should handle this ticket? A) billing B) engineering "
+        "C) returns D) account support",
+        ("A", "B", "C", "D"),
+    ),
+)
+
+
+def label_prompt(tokenizer: Any, state: str, question: str, labels: tuple[str, ...]):
+    """Chat-rendered prompt whose next token is the label; thinking disabled."""
+    messages = [
+        {
+            "role": "system",
+            "content": "Answer with exactly one label and nothing else.",
+        },
+        {
+            "role": "user",
+            "content": f"{state}\n\nQuestion: {question}\n"
+            f"Answer with one of: {', '.join(labels)}.",
+        },
+    ]
+    text = tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
+    )
+    return tokenizer(text, add_special_tokens=False)["input_ids"]
+
+
+def label_ids(tokenizer: Any, labels: tuple[str, ...]) -> list[int]:
+    ids = [tokenizer.encode(label, add_special_tokens=False) for label in labels]
+    if any(len(one) != 1 for one in ids):
+        raise ValueError(f"labels are not single tokens: {labels} -> {ids}")
+    return [one[0] for one in ids]
+
+
+def read_labels(value: Any, ids: list[int]) -> list[float]:
+    """Label probabilities from a completion with token-ID logprob keys."""
+    top = value["choices"][0]["logprobs"]["top_logprobs"][0]
+    return [
+        math.exp(top[f"token_id:{i}"]) if f"token_id:{i}" in top else 0.0 for i in ids
+    ]
+
+
+def prometheus_counter(port: int, name: str) -> float:
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
+    try:
+        connection.request("GET", "/metrics")
+        text = connection.getresponse().read().decode()
+    finally:
+        connection.close()
+    return sum(
+        float(line.rsplit(" ", 1)[1])
+        for line in text.splitlines()
+        if line.startswith(name + "{") or line.startswith(name + " ")
+    )
+
+
+def session_labeltoken(args: argparse.Namespace) -> dict[str, Any]:
+    """Tier 1a: stock vLLM generate runner, allowed_token_ids + processed logprobs, no plugin."""
+    from transformers import AutoTokenizer
+
+    out = args.out
+    tokenizer = AutoTokenizer.from_pretrained(args.model, local_files_only=True)
+    items = []
+    for s, state in enumerate(LABEL_STATES):
+        for q, (question, labels) in enumerate(LABEL_QUESTIONS):
+            items.append(
+                {
+                    "id": f"s{s}q{q}",
+                    "ids": label_prompt(tokenizer, state, question, labels),
+                    "labels": labels,
+                    "label_ids": label_ids(tokenizer, labels),
+                }
+            )
+    lines = [
+        f"Line {i}: order #{1000 + i} shipped on day {i % 28 + 1}; "
+        f"status {'delayed' if i % 7 == 0 else 'on time'}."
+        for i in range(400)
+    ]
+    shared_state = "Shipping log:\n" + "\n".join(lines)
+    shared = [
+        label_prompt(
+            tokenizer, shared_state, f"Is order #{1000 + k} delayed?", ("yes", "no")
+        )
+        for k in range(0, 64, 8)
+    ]
+    env = dict(os.environ)
+    env.pop("VLLM_PLUGINS", None)
+    env.update(
+        {
+            "VLLM_NO_USAGE_STATS": "1",
+            "DO_NOT_TRACK": "1",
+            "VLLM_CACHE_ROOT": str(out / "vllm-cache"),
+            "XDG_CACHE_HOME": str(out / "xdg-cache"),
+            "TRITON_CACHE_DIR": str(out / "triton-cache"),
+        }
+    )
+    result: dict[str, Any] = {
+        "session": "labeltoken",
+        "items": len(items),
+        "shared_state_tokens": len(shared[0]),
+        "shared_questions": len(shared),
+    }
+    base = [
+        str(args.model),
+        "--runner",
+        "generate",
+        "--language-model-only",
+        "--dtype",
+        "bfloat16",
+        "--max-model-len",
+        "8192",
+        "--gpu-memory-utilization",
+        str(args.gpu_memory_utilization),
+        "--logprobs-mode",
+        "processed_logprobs",
+        "--max-logprobs",
+        "8",
+        "--served-model-name",
+        "labeltoken",
+    ]
+    served: list[list[float]] = []
+    server = Server(
+        "labeltoken", [*base, "--enable-prefix-caching"], LABEL_PORT, out, env
+    )
+    result["prefix_caching_flag"] = True
+    try:
+        try:
+            server.wait_ready()
+        except RuntimeError:
+            result["prefix_caching_failure"] = server.log_facts()["log_lines"][-20:]
+            server.stop()
+            server = Server("labeltoken-nocache", base, LABEL_PORT, out, env)
+            result["prefix_caching_flag"] = False
+            server.wait_ready()
+
+        def body(item_ids: list[int], ids: list[int]) -> dict[str, Any]:
+            return {
+                "model": "labeltoken",
+                "prompt": item_ids,
+                "max_tokens": 1,
+                "temperature": 0.0,
+                "logprobs": len(ids),
+                "allowed_token_ids": ids,
+                "return_tokens_as_token_ids": True,
+            }
+
+        bodies = [body(item["ids"], item["label_ids"]) for item in items]
+        pool = Pool(LABEL_PORT, 16)
+        try:
+            pool.map("/v1/completions", bodies)
+            sequential = [pool.post("/v1/completions", b) for b in bodies]
+            started = time.perf_counter()
+            concurrent_runs = pool.map("/v1/completions", bodies * 4)
+            wall = time.perf_counter() - started
+        finally:
+            pool.close()
+        if any(status != 200 for _, status, _ in sequential):
+            raise RuntimeError(f"label-token request failed: {sequential[0]}")
+        mass, agree = [], 0
+        for item, (_, _, value) in zip(items, sequential):
+            probs = read_labels(value, item["label_ids"])
+            served.append(probs)
+            mass.append(sum(probs))
+            chosen = value["choices"][0]["logprobs"]["tokens"][0]
+            agree += chosen == f"token_id:{item['label_ids'][probs.index(max(probs))]}"
+        result["served"] = {
+            "label_mass_min": min(mass),
+            "label_mass_max": max(mass),
+            "argmax_is_generated_token": f"{agree}/{len(items)}",
+            "single": latency_summary([s for s, _, _ in sequential]),
+            "concurrency16": {
+                "requests": len(bodies) * 4,
+                "requests_per_s": len(bodies) * 4 / wall,
+                "latency": latency_summary([s for s, _, _ in concurrent_runs]),
+            },
+        }
+        yes_no = label_ids(tokenizer, ("yes", "no"))
+        hits0 = prometheus_counter(LABEL_PORT, "vllm:prefix_cache_hits_total")
+        queries0 = prometheus_counter(LABEL_PORT, "vllm:prefix_cache_queries_total")
+        one = Pool(LABEL_PORT, 1)
+        try:
+            shared_runs = [
+                one.post("/v1/completions", body(ids, yes_no)) for ids in shared
+            ]
+        finally:
+            one.close()
+        hits = prometheus_counter(LABEL_PORT, "vllm:prefix_cache_hits_total") - hits0
+        queries = (
+            prometheus_counter(LABEL_PORT, "vllm:prefix_cache_queries_total") - queries0
+        )
+        result["shared_state"] = {
+            "prefix_cache_hit_tokens": hits,
+            "prefix_cache_query_tokens": queries,
+            "hit_rate": hits / queries if queries else None,
+            "first_ms": shared_runs[0][0] * 1000,
+            "rest": latency_summary([s for s, _, _ in shared_runs[1:]]),
+            "failed": sum(status != 200 for _, status, _ in shared_runs),
+        }
+    finally:
+        server.stop()
+        result["server"] = server.log_facts()
+    result["reference"] = label_reference(args.model, items, served)
+    with (out / "labeltoken.served.jsonl").open("w") as sink:
+        for item, probs in zip(items, served):
+            sink.write(
+                json.dumps({"id": item["id"], "labels": item["labels"], "probs": probs})
+                + "\n"
+            )
+    return result
+
+
+def label_reference(
+    model_path: Path, items: list[dict[str, Any]], served: list[list[float]]
+) -> dict[str, Any]:
+    """Transformers FP32 label-token distributions at the answer position, vs the served ones."""
+    import torch
+    import transformers
+
+    model, errors = None, []
+    for loader in ("AutoModelForImageTextToText", "AutoModelForCausalLM"):
+        try:
+            model, info = getattr(transformers, loader).from_pretrained(
+                model_path,
+                dtype=torch.float32,
+                local_files_only=True,
+                output_loading_info=True,
+            )
+        except (ValueError, KeyError, OSError, AttributeError) as exc:
+            errors.append(f"{loader}: {exc}"[:200])
+            continue
+        if info.get("missing_keys"):
+            errors.append(f"{loader}: {len(info['missing_keys'])} missing weights")
+            model = None
+            continue
+        break
+    if model is None:
+        return {"error": errors}
+    model = model.to("cuda:0").eval()
+    changes, drift = 0, 0.0
+    with torch.inference_mode():
+        for item, probs in zip(items, served):
+            logits = model(
+                input_ids=torch.tensor([item["ids"]], device="cuda:0")
+            ).logits
+            ref = torch.softmax(logits[0, -1, item["label_ids"]].float(), -1).tolist()
+            changes += ref.index(max(ref)) != probs.index(max(probs))
+            drift = max(drift, max(abs(a - b) for a, b in zip(ref, probs)))
+    name = type(model).__name__
+    del model
+    torch.cuda.empty_cache()
+    return {
+        "class": name,
+        "dtype": "float32",
+        "argmax_changes": changes,
+        "max_prob_drift": drift,
+        "items": len(items),
+        "load_errors": errors,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     sub = parser.add_subparsers(dest="session", required=True)
-    for name in ("plugin", "runtime", "vela", "coloc"):
+    for name in ("plugin", "runtime", "vela", "coloc", "labeltoken"):
         p = sub.add_parser(name)
         p.add_argument("--out", type=Path, required=True)
         p.add_argument("--warmup", type=int, default=16)
@@ -898,8 +1197,11 @@ def main() -> None:
             type=lambda s: [int(x) for x in s.split(",")],
             default=[1, 8, 32, 128],
         )
-        if name != "runtime":
+        if name not in ("runtime", "labeltoken"):
             p.add_argument("--plugin-src", type=Path, required=True)
+        if name == "labeltoken":
+            p.add_argument("--model", type=Path, required=True)
+            p.add_argument("--gpu-memory-utilization", type=float, default=0.15)
         if name in ("plugin", "runtime", "coloc"):
             p.add_argument("--package", type=Path, required=True)
             p.add_argument("--bench")
@@ -926,6 +1228,7 @@ def main() -> None:
         "runtime": session_runtime,
         "vela": session_vela,
         "coloc": session_coloc,
+        "labeltoken": session_labeltoken,
     }[args.session]
     result = handler(args)
     result.update(
