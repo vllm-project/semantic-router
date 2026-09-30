@@ -26,10 +26,15 @@ NODE_GPUS = {
 }
 
 
+# Amendment 1: a full MoE attempt needs up to about 20 GPU-hours at the probe's speed.
+MAX_CAP_HOURS = 21.0
+
+
 def configure() -> None:
     base.TRACK = TRACK
     base.NODE_GPUS = NODE_GPUS
     base.ALLOWED_GPUS = NODE_GPUS["b"]
+    base.MAX_CAP_HOURS = MAX_CAP_HOURS
 
 
 def main() -> None:

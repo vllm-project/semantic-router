@@ -114,3 +114,42 @@ pass successor items 1–7 against DEV2.0-27B = A20r (scored run node B `/data/d
 Base repo and revision (direct weight origin), Apache-2.0 with the modification notice, total loaded and active
 parameters, LoRA rank 64 after the soup with experts frozen, the experts kernel, Gemma's BOS prompt and 4,736-token
 training limit (if Gemma), the A7 dose (≈ 20M tokens, Choice-heavy), T = 1 or CAL698, 32K limit, C1 status.
+
+## Amendment 1 (2026-10-01 00:55 UTC+8; after the P0 probes, before any training job)
+
+Receipts: node A `/data/dev2/runs/27b-moe/MOE-{Git,Qit}-probe/{probe/experts-probe.json,check/experts-check.json}`
+(0.052 + 0.017 GPU-h Gemma, 0.098 + 0.032 GPU-h Qwen-MoE).
+
+- **Probe results** (rank-32 LoRA fwd + bwd per training row, first 12 `a20` rows):
+
+  | | Gemma-4-26B-A4B-it | Qwen3.5-35B-A3B |
+  | --- | --- | --- |
+  | Text / routed / active-per-token parameters (text decoder) | 25,233,141,760 / 22,837,985,280 / 3,822,530,560 | 34,152,051,328 / 32,212,254,720 / 2,946,429,568 (+ 508.6M LM head, unused) |
+  | LoRA targets / trainable (adapter + head) | 205 / 40,066,560 | 310 / 44,438,016 |
+  | eager s per row | 3.05 | 6.91 |
+  | `grouped_mm` s per row | 0.66 | 1.07 |
+  | Peak allocated | ≈ 103 GB | ≈ 139 GB |
+  | Random-head parity `grouped_mm` vs eager (64 rows) | 13 argmax changes, max Δp .048 | 22 changes, max Δp .073 |
+
+- **The preregistered pin rule was mis-specified and is replaced (disclosed deviation).** An untrained random head
+  gives near-tied logits, so any BF16 rounding difference flips argmaxes; the rule could not separate a wrong kernel
+  from rounding, and eager is infeasible (≈ 49 / 110 s per update, 48+ GPU-h per arm). Replacement, decided before any
+  training: `experts_check.py` compares last hidden states at the readout positions of 32 SELECT rows against an FP32,
+  autocast-off, eager reference. **Pin `grouped_mm` if its BF16 relative L2 error is ≤ 1.25 × eager's at the median
+  and at the max.**
+  - Gemma: eager .185 / .338, `grouped_mm` .193 / .359 → ratios 1.05 / 1.06 → **`grouped_mm`**.
+  - Qwen3.5-MoE: eager .234 / .349, `grouped_mm` .198 / .419 → ratios 0.85 / 1.20 → **`grouped_mm`**.
+  - Both kernels sit at the same distance from FP32, so the random-head flips were rounding, not a kernel fault. The
+    checkpoint metadata pins `grouped_mm` for training and inference.
+- **Caps (from the measured speed; the rows average ≈ 440–460 tokens vs the probe's ≈ 330):** Gemma ≈ 13–14 s per
+  update → 15.0 GPU-h per full attempt / 16.0 per arm-seed; Qwen3.5-MoE ≈ 17–21 s → 20.0 / 21.0. The launcher's
+  maximum becomes 21 h. G1 (≈ 300 updates) re-projects from logged speeds.
+- **Screen cells, for cost: three, not four.** G-it on node A GPU3, Q-it on node A GPU5, Q-pt on node B GPU6. **G-pt
+  is not trained:** Gemma's pretrained start read far worse as frozen features (M1: SELECT .515 vs .676 for -it), while
+  Qwen-MoE has no stage evidence, so both of its variants are screened. Node A GPU4 is held for the winner's seed 2
+  (from the screen decision); node B GPU7 serves readouts and formal runs. Screen rule 4 (one variant per family)
+  applies to Qwen.
+- **Budget projection (60 GPU-h):** P0 0.2; preflights ≈ 1.2; screen to update 892 ≈ 3.4 + 2 × 4.7 = 12.8; winner
+  continuation ≤ 14.1 (Qwen) / 10.1 (Gemma); seed 2 ≤ 18.8 / 13.5; readouts, soup readout, formal and mlx-diag ≈ 7.
+  Worst case ≈ 54, Gemma winner ≈ 45. **A second surviving cell gets no seed 2** (attribution only); if G1 projects
+  above 60, Q-pt stops first.

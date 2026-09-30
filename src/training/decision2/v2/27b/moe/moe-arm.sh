@@ -6,7 +6,7 @@
 #   MIRROR the mirror directory name under /data/dev2/src; STAGES from probe,check,admit,onestep,reload,full
 #   (default admit,onestep,reload,full). One driver per arm-seed (flock on RUN/.driver.lock).
 # Env: EXPERTS (grouped_mm | eager; required for training stages), FULL_CAP (GPU-h per full attempt,
-#   default 13.0), ARM_CAP (cumulative per arm-seed, default 14.0).
+#   default Gemma 15.0 / Qwen3.5-MoE 20.0), ARM_CAP (cumulative per arm-seed, default FULL_CAP + 1).
 # The contract is M4-A20r's: a20 (SHA-256 checked), rank 32 / alpha 64 / dropout 0.05 on every non-expert
 # projection, LoRA 2e-5 / head 1e-4, ce_brier 0.5, one pass, micro-batch 1 x 16, SELECT700 selection, a
 # fresh training autotune cache seeded from T0. The trainer is the MoE pipeline (BEST368 + MoE backbones).
@@ -24,8 +24,6 @@ IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1
 PIPE_TAR=v2/27b/moe/pinned/moe-pipeline-2026-10-01.tar
 PIPE_MANIFEST=v2/27b/moe/pinned/moe-pipeline-2026-10-01.manifest.json
 SAVE_EVERY=446
-FULL_CAP=${FULL_CAP:-13.0}
-ARM_CAP=${ARM_CAP:-14.0}
 EXPERTS=${EXPERTS:-}
 case "$NODE:$GPU" in a:3 | a:4 | a:5 | b:6 | b:7) ;; *) echo "node $NODE GPU$GPU is outside the MoE allocation" >&2; exit 2 ;; esac
 case "$BASE_NAME" in
@@ -35,6 +33,10 @@ case "$BASE_NAME" in
   Qwen3.5-35B-A3B-Base) REV=0f0813072d2358973511097385626f21fcb6d422 KIND=base FAMILY=qwen LIMIT=4096 ;;
   *) echo "unknown base $BASE_NAME" >&2; exit 2 ;;
 esac
+# Amendment 1 caps (from the P0 probe's speed): Gemma 15 / 16, Qwen3.5-MoE 20 / 21 GPU-h per full attempt / arm-seed.
+case "$FAMILY" in gemma) CAP_DEFAULT=15.0 ;; *) CAP_DEFAULT=20.0 ;; esac
+FULL_CAP=${FULL_CAP:-$CAP_DEFAULT}
+ARM_CAP=${ARM_CAP:-$(python3 -c "import sys; print(float(sys.argv[1]) + 1)" "$FULL_CAP")}
 case "$ARM:$SEED" in *-s1:20260926 | *-s2:20260928 | *-probe:20260926) ;; *) echo "$ARM does not take seed $SEED" >&2; exit 2 ;; esac
 MODEL_DIR=$MODELS/$BASE_NAME
 [ -d "$CODE/v2/27b/moe" ] && [ -d "$MODEL_DIR" ] && [ -d "$T0" ] || { echo "missing mirror, base or T0" >&2; exit 2; }
