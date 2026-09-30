@@ -1,6 +1,12 @@
 # ~27B M5 state (resume file)
 
-Updated: 2026-09-30 12:00 UTC+8 (04:00Z; M5 worker; FF20 done, M5-FF20 chain running). **Continuation workers: read "Next steps" first.**
+Updated: 2026-09-30 17:20 UTC+8 (09:20Z; M5 continuation worker, started 09:10Z; COORDINATION 17:15). **Continuation
+workers: read "Next steps" first.**
+
+**Deviation (prereg amendment 2):** M5-FF20 failed development gate 2 at 04:26:53Z (HT-DEV v2 .516 vs A20r .565, Δ −.049
+[−.070, −.029], FLAG; gate 4 failed too), so B1 triggered. No worker was alive, so FF20H was not stopped. FF20H trained
+to completion and M5-SX was built. Both go through their preregistered gates as usual, and the results must disclose the
+deviation. B1's L128 branch was launched late, at 09:16Z.
 Branch: `xunzhuo/decision-2-training-27b` (worktree `/home/xunliu/code/vllm-sr-dev2-27b`; merge-only into
 `xunzhuo/decision-2-training`). Gist file: `06-decision-2-27b.md`. Assignment: COORDINATION 2026-09-30 07:20.
 Prereg: `m5-prereg-2026-09-30.md` (+ amendment 1). Latest node mirror (both nodes): **`e76e56d4c`**.
@@ -22,12 +28,16 @@ Prereg: `m5-prereg-2026-09-30.md` (+ amendment 1). Latest node mirror (both node
 
 | What | Where | Log / PID | ETA |
 | --- | --- | --- | --- |
-| Lane B: FF20H-s1 full (from 03:48:11Z, cap 17.5 GPU-h = 5.83 h wall) | node B GPU5–7, `d2-27b-m5-FF20H-s1-full` | `/data/dev2/runs/27b/m5/logs/lane-b.log` | ≈ 08:10Z |
-| Lane A: FF20H-s2 (preflights from 03:51Z, then full) | node A GPU2–4, `d2-27b-m5-FF20H-s2-*` | node A `/data/dev2/runs/27b/m5/logs/lane-a.log` | ≈ 08:30Z |
-| Chain FF20: pull FF20-s2 → soup M5-FF20 → readout (GPU0) → devgates | node B | `logs/chain-FF20.log`, PID 2425535 | ≈ 04:50Z |
-| Chain FF20H: pull FF20H-s2 → soups M5-FF20H + M5-SX → readouts (GPU0, GPU1) → devgates (all three) | node B | `logs/chain-FF20H.log`, PID 2432764 | ≈ 09:30Z |
+| L128-s1 (admit → onestep → reload → full; cap 12.0 GPU-h) | node B GPU5, `d2-27b-M5-L128-s1-*` | `/data/dev2/runs/27b/M5-L128-s1/driver.log`, PID 2459358 | ≈ 19:40Z |
+| L128-s2 (same) | node A GPU2, `d2-27b-M5-L128-s2-*` | node A `/data/dev2/runs/27b/M5-L128-s2/driver.log`, PID 3882884 | ≈ 19:40Z |
+| Chain FF20H: readouts M5-FF20H (GPU0) + M5-SX (GPU1) → devgates (M5-FF20, M5-FF20H, M5-SX) | node B | `logs/chain-FF20H.log`, PID 2432764 | ≈ 09:35Z |
 
-- Leases: node B GPU5–7 and GPU0–1 (aux) and node A GPU2–4 are track `27b`.
+- Done lanes and chains: FF20H-s1 (node B, 13.32 GPU-h), FF20H-s2 (node A, 13.49), chain FF20 (devgates 04:26Z).
+- `BRANCH-B1` is on both nodes (`/data/dev2/runs/27b/m5/BRANCH-B1`). `STOP-FF20H` was not written because there was
+  nothing left to stop.
+- Leases: node B GPU0–1 (aux, running readouts) and GPU5 (L128-s1), node A GPU2 (L128-s2) are track `27b`. Node B
+  GPU6–7 plus GPU2 are lent to 2B / 0.8B M8-small, and node A GPU3–4 to 9B M8 (COORDINATION 17:05 / 17:15). Never
+  co-tenant them.
 - Status: `~/.cache/m5-work/status.sh` (updates, s/update, projection per running attempt).
 
 ## Infrastructure
@@ -60,20 +70,16 @@ Prereg: `m5-prereg-2026-09-30.md` (+ amendment 1). Latest node mirror (both node
 
 ## Next steps (in order)
 
-1. **When `chain-FF20.log` ends with devgates** (`/data/dev2/runs/27b/m5/readouts/DEVGATES-<UTC>.json`): apply
-   **B1** to M5-FF20's gates 1–3 (collapse, HT-DEV v2 not FLAG vs A20r, typed guard).
-   - **Pass (default):** launch M5-FF20's formal run on node B GPU0:
-     `bash /data/dev2/src/<mirror>-src_training_decision2/src/training/decision2/v2/27b/m5/m5-tail.sh formal <mirror> M5-FF20 /data/dev2/runs/27b/m5/M5-FF20/checkpoint 0`
-     (detached with setsid/nohup, log in `logs/`). FF20H continues.
-   - **Fail:** `echo "B1: <reason>" > /data/dev2/runs/27b/m5/STOP-FF20H`, same text to `BRANCH-B1`; `docker stop` the
-     running `d2-27b-m5-FF20H-s*-full` containers (the lanes then stop); launch L128:
-     `m5-l128.sh b 5 s1` (node B) and `m5-l128.sh a 2 s2` (node A) from mirror `e76e56d4c`. The L128 soup / readout /
-     formal use M4's LoRA tooling (`v2/27b/run_finalist.sh`, `m4/m4-tail.sh` pattern) — write an M5 wrapper then.
-2. After M5-FF20's formal: mlx-diag (`m5-tail.sh lease <mirror> 2`, `m5-tail.sh mlx <mirror> M5-FF20 2`, then
-   `m5-tail.sh mlx-push <mirror> M5-FF20`; on node A `m5-mlx-nodeA.sh <mirror> M5-FF20`; then `m5-tail.sh mlx-pull
-   <mirror> M5-FF20`), and gates on node B: `m5-gates.sh <mirror> gates M5-FF20`, `... overlap`, `... verdicts M5-FF20`.
-3. When `chain-FF20H.log` ends with devgates: formal (≤ 3 finalists total, every passer), mlx-diag and gates for
-   M5-FF20H and M5-SX as in step 2 (use `EXTRA_COMPARATOR` for the other finalists' formal runs).
+1. **B1 is done** (amendment 2): M5-FF20 is not a finalist, and L128 is training (see "Running now").
+2. **When `chain-FF20H.log` ends with devgates** (`readouts/DEVGATES-<UTC>.json` over M5-FF20, M5-FF20H and M5-SX):
+   each passer goes formal (≤ 3 finalists in total, L128 included) on node B GPU0 or GPU1:
+   `m5-tail.sh formal <mirror> NAME /data/dev2/runs/27b/m5/NAME/checkpoint GPU` (detached, log in `logs/`), with
+   `EXTRA_COMPARATOR` naming the other finalists' formal runs. Check the budget first (amendment 2). Then mlx-diag
+   (`m5-tail.sh mlx <mirror> NAME GPU`, then `mlx-push`; on node A `m5-mlx-nodeA.sh <mirror> NAME`; then `mlx-pull`)
+   and gates on node B (`m5-gates.sh <mirror> gates NAME`, `... overlap`, `... verdicts NAME...`).
+3. **L128** (both seeds ≈ 19:40Z): relay L128-s2's BEST from node A, pull it, build the soup `M5-L128` (exact rank-256
+   concatenation), read it out on GPU0 / GPU1 and run devgates. If it passes, formal, mlx-diag and gates as in step 2.
+   The tooling is being written now; its commands will appear here.
 4. Verdicts → results record `m5-results-2026-09-30.md`, gist 06, merge, report. A successor needs a release hand-off:
    stage its frozen package on node A over the link (full weights: 96 GB FP32; the release worker converts with
    `bf16_copy` + `bf16z`), write a C1 post-key successor spec (format: `v2/eval/sealed/c1-postkey/*.json`, role
@@ -85,6 +91,7 @@ Prereg: `m5-prereg-2026-09-30.md` (+ amendment 1). Latest node mirror (both node
 
 ## Poll log (newest first)
 
+- 09:20Z: continuation worker. B1 recorded late (amendment 2). Leases node B GPU5 / node A GPU2 retaken 09:13Z. `BRANCH-B1` written; L128-s1 / s2 launched 09:16Z (admit). M5-FF20H / M5-SX CAL fits done, readout collections running. Receipts 49.46 GPU-h.
 - 04:00Z: FF20 both seeds complete (BEST 891; SELECT .903 / .869; 10.25 / 10.47 GPU-h); FF20H-s1 full running, FF20H-s2 preflights; chain-FF20 pulling FF20-s2.
 - 03:19Z: FF20-s1 831/891, FF20-s2 795/891; both ≈ 3.45 h per attempt (cap 4.5); chains waiting.
 - 02:53Z: FF20-s1 701/891, FF20-s2 672/891 (≈ 13 s/upd); chains waiting; no incident.
