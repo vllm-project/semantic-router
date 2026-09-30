@@ -96,6 +96,8 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 | ~27B Milestone 4b | `/home/xunliu/code/vllm-sr-dev2-27b-m4b` | `xunzhuo/decision-2-training-27b-m4b` |
 | research & data: hard-skill families | `/home/xunliu/code/vllm-sr-dev2-data-hardskills` | `xunzhuo/decision-2-training-data-hardskills` |
 | research & data: HR2 human-rated data | `/home/xunliu/code/vllm-sr-dev2-data-hr2` | `xunzhuo/decision-2-training-data-hr2` |
+| 9B Milestone 8 (parallel to M7) | `/home/xunliu/code/vllm-sr-dev2-9b-m8` | `xunzhuo/decision-2-training-9b-m8` |
+| decoder M8-small (2B + 0.8B) | `/home/xunliu/code/vllm-sr-dev2-dec-small` | `xunzhuo/decision-2-training-dec-small` |
 
 - New code and records go under `src/training/decision2/v2/<track>/` (tracks: `eval`, `data`, `06b`, `dec`, `9b`, `27b`;
   shared helpers in `src/training/decision2/v2/common/`). Reuse the existing verified modules instead of forking them.
@@ -199,6 +201,45 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-30 17:15 — **27B M5: FF20 failed its development gates; B1's fallback was missed; continuation launched;
+  GPU RECLAIM.**
+  - The M5 worker stopped at the ~5 h limit around 12:00 UTC+8 after writing its hand-off; nobody acted after that.
+  - **M5-FF20** (full FT on the A20 mixture, two-seed soup; ~20.7 GPU-h): development gates at 04:26Z → **not a
+    finalist**.
+    - HT-DEV v2 .516 vs A20r .565, Δ −.049 [−.070, −.029], FLAG.
+    - Proxy P_dev 68.96 vs 78.99; T_dev .957; CSS pilot .497 vs .681.
+    - **Full FT plus more typed dose overfits typed families and costs human transfer,** an extreme case of the C1
+      pattern.
+  - **Deviation:** the preregistered B1 fail branch (stop FF20H, launch L128 = rank-128 LoRA on A20) was not executed.
+    FF20H ran to completion, and chain FF20H is reading M5-FF20H / M5-SX now. Its development gates decide as
+    preregistered, and the results disclose the deviation.
+  - **Continuation worker:** it launches L128 now, processes the FF20H / SX gates, formal-tests passers, and returns the
+    verdicts.
+  - **GPU reclaim, overriding the 17:05 lend:**
+    - node B GPU5 and node A GPU2 go back to 27B for L128 (s1 / s2).
+    - **9B M8 uses node A GPU3–4 only.**
+    - **The 2B / 0.8B M8-small work uses node B GPU6–7 plus spare GPU2.**
+    - Every worker: check leases before launching, and never co-tenant a 27B job.
+
+- 2026-09-30 17:05 — **USER DIRECTIVE: push 27B, 9B and 4B in parallel, and also 2B and 0.8B.** This supersedes the 17:00
+  pauses for 9B / 2B / 0.8B; 0.6B stays paused.
+  - **27B:** M5 finishes (soups, readouts, formal on node B GPU0–1).
+  - **4B:** M8 distillation from DEV2.0-27B (running; node A GPU5 + node B GPU3–4 + node A GPU0–1 shared for teacher
+    targets).
+  - **9B:** M7 finishes on node A GPU6–7. **9B M8 starts NOW in parallel** (worktree `vllm-sr-dev2-9b-m8`, gist
+    `05b-decision-2-9b-m8.md`, node A GPU2–4 lent by 27B since M5's lane A finished, 24 GPU-h):
+    - distillation from A20r as top-ups of the five K5 members (D1: all rows; D2: human rows);
+    - M7's C line reused as the control if it is token-matched;
+    - development gates: the Noul floor, HT-DEV v2, MLX-DEV-9B and the PN1 hop guard.
+  - **2B + 0.8B: decoder M8-small starts NOW** (worktree `vllm-sr-dev2-dec-small`, gist `04b-decision-2-dec-small.md`,
+    node B GPU5–7 lent by 27B since M5's lane B finished, node B GPU2 spare, 24 GPU-h for both):
+    - the same distillation design as 4B M8;
+    - teacher targets generated on node B from the A20r package there, reading the 4B worker's targets by row hash
+      where they overlap.
+  - Any successor names DEV2.0-27B as the distillation teacher on its card. Items 1–8 apply, with item 8 through the
+    eval custodian.
+  - **27B M6** (with HR2) waits for M5's result and HR2. The GPUs go back to 27B when the lent milestones end.
 
 - 2026-09-30 17:00 — **USER PLAN DECISION (aligned via questions): "aggressive" plan; JevBench stays a guard.**
   - **Training plan:**

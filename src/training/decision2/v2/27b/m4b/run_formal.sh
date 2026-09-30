@@ -6,7 +6,8 @@
 # Usage: run_formal.sh NAME CKPT GPU MIRROR_SHA
 #   NAME        finalist slot, output directory /data/dev2/runs/27b/m4b/NAME (F-a, F-b, F-c; RULES.json)
 #   CKPT        the finalist's full checkpoint; READOUT (default /data/dev2/runs/27b/m4b/readouts/NAME) is
-#               its development readout, whose READOUT-M4B.json must name CKPT
+#               its development readout, whose READOUT-M4B.json must name CKPT. CHECKPOINT_FORMAT=peft-lora/1
+#               takes a LoRA checkpoint instead (M5's L128 soup); LOADED_PARAMETERS is then required
 #   MIRROR_SHA  code commit; the mirror /data/dev2/src/<sha>[-src_training_decision2]
 # Stages (STAGES, default verify,cal698,adopt,package,smoke,collect,score):
 #   verify   mirror record, inputs, both frozen caches' tree hashes, sealed comparators, the GPU lease
@@ -39,7 +40,12 @@ FROZEN=${FROZEN:-$R/m3-warm-32768/triton-cache}
 CACHE_SHA=${CACHE_SHA:-583241fbc3bc89e22be51a49722996eab742162356100400d64fb4208cb20daf}
 FORMAL_FROZEN=${FORMAL_FROZEN:-$R/m3-f2/f1-scored-cache}
 FORMAL_CACHE_SHA=${FORMAL_CACHE_SHA:-03b172f1a6adeef6c6a6c491d04389b355c9d8579480008023f408c8659b502b}
-LOADED_PARAMETERS=${LOADED_PARAMETERS:-25629863936}
+CHECKPOINT_FORMAT=${CHECKPOINT_FORMAT:-full}
+case "$CHECKPOINT_FORMAT" in
+  full) LOADED_PARAMETERS=${LOADED_PARAMETERS:-25629863936} ;;
+  peft-lora/1) : "${LOADED_PARAMETERS:?a LoRA checkpoint needs LOADED_PARAMETERS}" ;;
+  *) echo "CHECKPOINT_FORMAT is full or peft-lora/1" >&2; exit 2 ;;
+esac
 STAGES=${STAGES:-verify,cal698,adopt,package,smoke,collect,score}
 LABEL=${LABEL:-DEV2.0-27B (M4b $NAME)}
 COMPARATORS=(
@@ -65,29 +71,7 @@ json() {  # FILE KEY -> value
   python3 -c "import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])" "$1" "$2"
 }
 params() {  # CHECKPOINT -> "LOADED_PARAMETERS<TAB>PARAMETER_SOURCE" from safetensors headers
-  python3 - "$1" <<'EOF'
-import json, pathlib, struct, sys
-ckpt = pathlib.Path(sys.argv[1])
-def count(path):
-    with path.open("rb") as stream:
-        (size,) = struct.unpack("<Q", stream.read(8))
-        header = json.loads(stream.read(size))
-    total = 0
-    for name, meta in header.items():
-        if name != "__metadata__":
-            n = 1
-            for dim in meta["shape"]:
-                n *= dim
-            total += n
-    return total
-config = json.loads((ckpt / "decision_config.json").read_text())
-if config.get("checkpoint_format", "full") != "full":
-    raise SystemExit(f"{ckpt} is not a full checkpoint")
-index = json.loads((ckpt / "backbone/model.safetensors.index.json").read_text())
-backbone = sum(count(ckpt / "backbone" / f) for f in sorted(set(index["weight_map"].values())))
-head = count(ckpt / "decision_head.safetensors")
-print(f"{backbone + head}\tfull FP32 checkpoint: text backbone {backbone:,} + head {head:,} (safetensors headers)")
-EOF
+  python3 -m v2.27b.m4b.ckpt_format params --checkpoint "$1" --format "$CHECKPOINT_FORMAT" --base "$BASE"
 }
 check_readout() {
   python3 - "$READOUT/READOUT-M4B.json" "$CKPT" <<'EOF'
@@ -216,10 +200,10 @@ if has package; then
       python3 -m v2.27b.kernel_readout t1-calibration --rejected "$OUT/cal698/calibration.json" \
         --adoption "$OUT/adopt/dev-calibration.json" --output "$OUT/package/calibration.json"
     fi
-    python3 - "$OUT" "$CKPT" "$LIMIT" "$FORMAL_FROZEN" "$FORMAL_CACHE_SHA" "$loaded" "$source" <<'EOF'
+    python3 - "$OUT" "$CKPT" "$LIMIT" "$FORMAL_FROZEN" "$FORMAL_CACHE_SHA" "$loaded" "$source" "$CHECKPOINT_FORMAT" <<'EOF'
 import hashlib, json, pathlib, sys
 from datetime import datetime, timezone
-out, ckpt, limit, frozen, cache_sha, loaded, source = sys.argv[1:]
+out, ckpt, limit, frozen, cache_sha, loaded, source, checkpoint_format = sys.argv[1:]
 out = pathlib.Path(out)
 sha = lambda p: hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()
 adoption = json.loads((out / "ADOPTION.json").read_text())
@@ -230,7 +214,7 @@ package = {
     "schema": "decision2-27b-m4b-package/1",
     "created_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     "checkpoint": ckpt,
-    "checkpoint_format": "full",
+    "checkpoint_format": checkpoint_format,
     "model_sha256": calibration["model_sha256"],
     "checkpoint_sha256": calibration["checkpoint_sha256"],
     "decision": adoption["decision"],

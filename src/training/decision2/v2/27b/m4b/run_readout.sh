@@ -4,7 +4,8 @@
 # every GPU stage on its own fresh verified copy of the frozen readout cache 583241fb (FROZEN, CACHE_SHA).
 # Usage: run_readout.sh NAME CKPT GPU MIRROR_SHA
 #   NAME        output directory /data/dev2/runs/27b/m4b/readouts/NAME (A1-s1, A2-soup, F1M, T-13, ...)
-#   CKPT        a full checkpoint (arm-seed BEST, full soup, F1M or theta(alpha))
+#   CKPT        a full checkpoint (arm-seed BEST, full soup, F1M or theta(alpha)); with CHECKPOINT_FORMAT=peft-lora/1
+#               a LoRA checkpoint (M5's L128 soup) instead
 #   MIRROR_SHA  code commit; the mirror /data/dev2/src/<sha>[-src_training_decision2]
 # Stages (STAGES, default verify,cal,collect,aho,score,summary):
 #   verify   mirror record, inputs, the frozen cache's tree hash and the GPU lease (no GPU, no writes)
@@ -29,12 +30,16 @@ LIMIT=32768
 FROZEN=${FROZEN:-/data/dev2/runs/27b/m3-warm-32768/triton-cache}
 CACHE_SHA=${CACHE_SHA:-583241fbc3bc89e22be51a49722996eab742162356100400d64fb4208cb20daf}
 STAGES=${STAGES:-verify,cal,collect,aho,score,summary}
+# PANELS: the collect stage's development panels (Milestone 5 adds ht-dev2 on node B; default M4b's two).
+PANELS=${PANELS:-typed-dev,css-pilot}
 TRAIN_RUN=${TRAIN_RUN:-}
 DATA=/data/dev2/private/27b/m3-data/mixtures-m3-1
 AHO=${AHO-${TRAIN_RUN:+A6g=$DATA/aho-A6g.jsonl,A6h=$DATA/aho-A6h.jsonl,A7=$DATA/aho-A7.jsonl}}
 SELECT_ROWS=/data/decision20-20260926/data/rights_clean_goemotions_v2/select.jsonl
 LABEL=${LABEL:-M4b $NAME}
+CHECKPOINT_FORMAT=${CHECKPOINT_FORMAT:-full}
 [[ "$CACHE_SHA" =~ ^[0-9a-f]{64}$ ]] || { echo "CACHE_SHA must be a full SHA-256" >&2; exit 2; }
+case "$CHECKPOINT_FORMAT" in full | peft-lora/1) ;; *) echo "CHECKPOINT_FORMAT is full or peft-lora/1" >&2; exit 2 ;; esac
 cd "$S"
 export PYTHONPATH=$S PYTHONDONTWRITEBYTECODE=1 TMPDIR=/data/dev2/tmp
 source "$S/v2/27b/kernel_common.sh"
@@ -57,20 +62,14 @@ if os.path.realpath(os.path.join(run, best)) != os.path.realpath(ckpt):
 print(f"TRAIN_RUN BEST {best}")
 EOF
 }
-check_full() {
-  python3 - "$CKPT" <<'EOF'
-import json, pathlib, sys
-ckpt = pathlib.Path(sys.argv[1])
-config = json.loads((ckpt / "decision_config.json").read_text())
-if config.get("checkpoint_format", "full") != "full" or not (ckpt / "backbone").is_dir():
-    raise SystemExit(f"{ckpt} is not a full DecisionModel checkpoint")
-EOF
+check_format() {
+  python3 -m v2.27b.m4b.ckpt_format check --checkpoint "$CKPT" --format "$CHECKPOINT_FORMAT"
 }
 
 if has verify; then
   verify_mirror "$MIRROR_SHA"
   need "$CKPT" "$BASE" "$CAL_FILE" "$SELECT_ROWS" "$FROZEN" "$PANEL_ROOT"
-  check_full
+  check_format
   [ -z "$TRAIN_RUN" ] || check_best
   verify_cache "$FROZEN" "$CACHE_SHA"
   [ "$DRY_RUN" = 1 ] || verify_lease
@@ -99,7 +98,7 @@ if has collect; then
   status=0
   runner "$OUT" "$CKPT" "$OUT/triton-cache" "27b-m4b $NAME kernel-path development readout" -- \
     --revision "$REVISION" --extra "source=$BASE" --extra "calibration=$OUT/cal/calibration.json" \
-    --extra "max_length=$LIMIT" --panels typed-dev,css-pilot || status=$?
+    --extra "max_length=$LIMIT" --panels "$PANELS" || status=$?
   cache_finish "$OUT/triton-cache"
   [ "$status" = 0 ] || exit "$status"
 fi

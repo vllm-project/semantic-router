@@ -15,7 +15,10 @@ case "$SEED" in
 esac
 CODE=/data/dev2/src/$SHA/src/training/decision2
 [ -d "$CODE" ] || CODE=/data/dev2/src/$SHA-src_training_decision2/src/training/decision2
-RUN=/data/dev2/runs/27b/m4b/$ARM-$SEED
+# Milestone 5 reuses this driver: FF_ROOT (run root), FF_LABEL (lease / tmp label) and FF_PREFIX (container names)
+# with DEV2_27B_LAUNCH_ALLOC=m5-b|m5-a (launch3 allocation); unset, they keep M4b's values.
+FF_ROOT=${FF_ROOT:-/data/dev2/runs/27b/m4b} FF_LABEL=${FF_LABEL:-m4b} FF_PREFIX=${FF_PREFIX:-d2-27b-m4b}
+RUN=$FF_ROOT/$ARM-$SEED
 STAGES=${STAGES:-probe,onestep,reload,full}
 GPUS=${GPUS:-0,1,2}
 TEACHER_FILE=${TEACHER_FILE:-}
@@ -43,7 +46,7 @@ REVISION=${REVISION:-1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0}
 SEED_CACHE=${SEED_CACHE:-/data/dev2/runs/27b/M3-A-s1/triton-cache}
 SEED_CACHE_SHA=${SEED_CACHE_SHA:-}
 CACHE=$RUN/triton-cache
-export TMPDIR=/data/dev2/tmp/m4b-$ARM-$SEED
+export TMPDIR=/data/dev2/tmp/$FF_LABEL-$ARM-$SEED
 
 [ -d "$CODE/v2/27b/m4b" ] || { echo "missing mirror $SHA" >&2; exit 2; }
 for path in "$TRAIN_FILE" "$SELECT_FILE" "$MODEL_DIR/config.json" ${TEACHER_FILE:+"$TEACHER_FILE"}; do
@@ -89,9 +92,9 @@ if [ ! -f "$CACHE.copy.json" ]; then
   python3 -m v2.27b.triton_cache copy --frozen "$SEED_CACHE" --dest "$CACHE" --expect "$expect"
 fi
 
-python3 -m v2.27b.m4b.launch3 lease --gpus "$GPUS" --purpose "m4b $ARM-$SEED" --status reserved-idle
+python3 -m v2.27b.m4b.launch3 lease --gpus "$GPUS" --purpose "$FF_LABEL $ARM-$SEED" --status reserved-idle
 release() {
-  python3 -m v2.27b.m4b.launch3 lease --gpus "$GPUS" --purpose "m4b $ARM-$SEED done" --status idle || true
+  python3 -m v2.27b.m4b.launch3 lease --gpus "$GPUS" --purpose "$FF_LABEL $ARM-$SEED done" --status idle || true
   python3 -m v2.27b.triton_cache finish --dest "$CACHE" || true
 }
 trap release EXIT
@@ -127,7 +130,7 @@ launch() {  # NAME GPU_H GPUS PURPOSE OUT_DIR -- argv...
   mkdir -p "$out" || return 1
   cache_digest "$name" before || return 1
   log "stage $name on GPU $gpus, cap $gpu_h GPU-h ($wall h wall)"
-  python3 -m v2.27b.m4b.launch3 --name "d2-27b-m4b-$ARM-$SEED-$name" --gpus "$gpus" --cap-hours "$wall" \
+  python3 -m v2.27b.m4b.launch3 --name "$FF_PREFIX-$ARM-$SEED-$name" --gpus "$gpus" --cap-hours "$wall" \
     --purpose "$ARM-$SEED $purpose" --receipt "$RUN/receipts/$name.json" "${COMMON[@]}" \
     "${TEACHER_MOUNT[@]}" --mount "$out:/out:rw" -- "$@" || status=$?
   cache_digest "$name" after
