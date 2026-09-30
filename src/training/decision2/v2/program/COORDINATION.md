@@ -205,6 +205,20 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 01:10 — **Open Decision Runtime proposal v2 published** (same secret gist, updated in place; repo commit
+  `62ac7d233`, integration `b5eb195c5`; ~7,980 words; 22 open decisions).
+  - It folds in: the general router-model runtime (four surfaces), `task_heads`, `multimodal_embedding`, the
+    `schema_encoder` profile, the final architecture with Tier 1 runner modes, llama.cpp positioning, the revised
+    overflow and renderer rules, the Vela 2.0 manifest, the three-stage strangler plan with the disposition table (NLI
+    and OpenVINO retired), the router-side work list and a new roadmap (59–78 engineer-weeks; Stage 1 MVP 23–29).
+  - **Preliminary prototype data:**
+    - vLLM plugin BF16 changed 63 / 11,053 answers (~0.6%) on DEV2.0-0.8B;
+    - p50 15.2 ms; 66 → 622 items/s from concurrency 1 to 128;
+    - FP32 fails at engine start (the vLLM GDN kernel rejects FP32);
+    - **the shipped runtime with BF16-resident Linear weights changed 0 answers** (quick win validated on 0.8B).
+  - Vela 2.0 digests and revision are abbreviated in the public repo copy (the Vela 2.0 repo is private); full values
+    belong in the registry overlay.
+
 - 2026-10-01 01:00 — **Vela-2.0-Unified check (7b239c1e): an open-vocabulary SCHEMA ENCODER, supported with small
   additions** (not a fixed multi-head classifier).
   - It fits `encoder_marker` + `span` on Tier 0 (ONNX Runtime / candle); we call this the `schema_encoder` profile.
