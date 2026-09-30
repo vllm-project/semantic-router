@@ -1,0 +1,11 @@
+{
+  "files": {
+    "backbone/model.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 2014377424,
+      "restored_sha256": "439a1f070932f85f2156c3004a393ac07f7e67cbea3210cfc7848399122a6c01",
+      "sha256": "56b78469db1cc2e1f49c2340b5baa595746718dbfa62b387935b51aeb83e311b"
+    }
+  },
+  "passed": true
+}

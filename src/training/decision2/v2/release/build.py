@@ -27,6 +27,7 @@ from typing import Any
 from v2.release import card as card_module
 from v2.release import layout
 from v2.release import licence as licence_policy
+from v2.release.gate import no_own_1_0
 
 SPEC_SCHEMA = "dev2-release-spec/1"
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
@@ -273,7 +274,9 @@ def verify_score_bias(spec: dict[str, Any], model_sha256: str) -> dict[str, Any]
 BF16_COPY_SCHEMA = "dev2-release-bf16-copy/1"
 
 
-def verify_bf16_copy(spec: dict[str, Any], checkpoint: Path) -> dict[str, Any] | None:
+def verify_bf16_copy(
+    spec: dict[str, Any], checkpoint: Path, files: dict[str, str] | None = None
+) -> dict[str, Any] | None:
     """A ``bf16_copy`` spec entry: the checkpoint is exactly that copy of the scored weights.
 
     Returns the scored (source) identity the copy was made from, so Score offsets
@@ -290,15 +293,15 @@ def verify_bf16_copy(spec: dict[str, Any], checkpoint: Path) -> dict[str, Any] |
         raise ValueError("Not a v2.release.bf16_copy receipt")
     if receipt.get("model_sha256") != spec["expected_identity"].get("model_sha256"):
         raise ValueError("BF16 copy receipt names another package identity")
-    files = {
-        p.relative_to(checkpoint).as_posix()
-        for p in checkpoint.rglob("*")
-        if p.is_file()
-    }
+    if files is None:
+        files = {
+            p.relative_to(checkpoint).as_posix(): layout.sha_file(p)
+            for p in checkpoint.rglob("*")
+            if p.is_file()
+        }
     recorded = receipt.get("files") or {}
-    if set(recorded) != files or any(
-        layout.sha_file(checkpoint / name) != value["sha256"]
-        for name, value in recorded.items()
+    if set(recorded) != set(files) or any(
+        files[name] != value["sha256"] for name, value in recorded.items()
     ):
         raise ValueError("Checkpoint is not the BF16 copy its receipt describes")
     if (
@@ -313,6 +316,116 @@ def verify_bf16_copy(spec: dict[str, Any], checkpoint: Path) -> dict[str, Any] |
     }
 
 
+BF16Z_SCHEMA = "dev2-release-bf16z/1"
+FINGERPRINT_SUFFIXES = {".json", ".safetensors", ".bin", ".model", ".txt"}
+
+
+def bf16z_files(
+    spec: dict[str, Any], checkpoint: Path
+) -> tuple[dict[str, str], dict[str, Any]] | None:
+    """A ``bf16z`` spec entry: restored-name -> SHA-256 of every checkpoint file, and the storage record.
+
+    Each .bf16z file must equal its compression receipt entry and name, in its own
+    index, the restored bytes the receipt records; a pinned ``verify`` receipt
+    (``bf16z verify``, which decompressed every file) must agree with both.
+    """
+    entry = spec.get("bf16z")
+    if not entry:
+        return None
+    from v2.release.runtime import bf16z as codec
+
+    path, verify = Path(entry["receipt"]), Path(entry["verify"])
+    if layout.sha_file(path) != entry["sha256"]:
+        raise ValueError("bf16z receipt differs from its pinned sha256")
+    if layout.sha_file(verify) != entry["verify_sha256"]:
+        raise ValueError("bf16z verify receipt differs from its pinned sha256")
+    receipt, report = _object(path), _object(verify)
+    if receipt.get("schema") != BF16Z_SCHEMA or receipt.get("format") != codec.FORMAT:
+        raise ValueError("Not a bf16z compression receipt")
+    recorded = receipt["files"]
+    if not report.get("passed") or set(report.get("files", {})) != set(recorded):
+        raise ValueError("bf16z verify receipt does not cover every compressed file")
+    for name, value in recorded.items():
+        checked = report["files"][name]
+        if (
+            checked["sha256"] != value["sha256"]
+            or checked["restored_sha256"] != value["restored_sha256"]
+        ):
+            raise ValueError(f"bf16z verify receipt disagrees on {name}")
+    restored: dict[str, str] = {}
+    compressed = set()
+    for file in sorted(checkpoint.rglob("*")):
+        if not file.is_file():
+            continue
+        name = file.relative_to(checkpoint).as_posix()
+        if not name.endswith(codec.SUFFIX):
+            restored[name] = layout.sha_file(file)
+            continue
+        value = recorded.get(name)
+        if value is None or layout.sha_file(file) != value["sha256"]:
+            raise ValueError(f"{name} differs from the bf16z receipt")
+        index, _, _ = codec.read_index(file)
+        if (
+            index["source"]["sha256"] != value["restored_sha256"]
+            or index["source"]["bytes"] != value["restored_bytes"]
+        ):
+            raise ValueError(f"{name} restores other bytes than its receipt records")
+        restored[codec.restored_name(name)] = value["restored_sha256"]
+        compressed.add(name)
+    if compressed != set(recorded):
+        raise ValueError("Checkpoint and bf16z receipt list different compressed files")
+    storage = {
+        "codec": codec.FORMAT,
+        "receipt_sha256": entry["sha256"],
+        "verify_sha256": entry["verify_sha256"],
+        "level": receipt["level"],
+        "zstandard": receipt["zstandard"],
+        "files": {
+            name: {
+                key: value[key]
+                for key in (
+                    "sha256",
+                    "bytes",
+                    "restored",
+                    "restored_sha256",
+                    "restored_bytes",
+                )
+            }
+            for name, value in sorted(recorded.items())
+        },
+    }
+    return restored, storage
+
+
+def identity_from_hashes(files: dict[str, str]) -> dict[str, Any]:
+    """checkpoint_fingerprint of a full checkpoint, from its files' SHA-256 (no weights read)."""
+    import hashlib
+
+    from training.model.data import canonical
+    from training.model.infer import MODEL_ROOT_FILES
+
+    hashes = {
+        name: digest
+        for name, digest in sorted(files.items())
+        if ("/" not in name and name in MODEL_ROOT_FILES)
+        or (
+            name.split("/", 1)[0] == "backbone"
+            and Path(name).suffix in FINGERPRINT_SUFFIXES
+        )
+    }
+    if (
+        "decision_config.json" not in hashes
+        or "decision_head.safetensors" not in hashes
+    ):
+        raise ValueError(
+            "Checkpoint needs decision_config.json and decision_head.safetensors"
+        )
+    return {
+        "model_sha256": hashlib.sha256(canonical(hashes).encode("utf-8")).hexdigest(),
+        "files_sha256": hashes,
+    }
+
+
 def verify_qwen(spec: dict[str, Any], checkpoint: Path) -> dict[str, Any]:
     from training.model.calibration import load_calibration
     from training.model.infer import checkpoint_fingerprint
@@ -323,7 +436,13 @@ def verify_qwen(spec: dict[str, Any], checkpoint: Path) -> dict[str, Any]:
     if (metadata.get("checkpoint_format") == LORA_FORMAT) != adapter:
         raise ValueError("Checkpoint format and package profile disagree")
     base_path = Path(spec["base"]["path"]) if adapter else None
-    identity = checkpoint_fingerprint(checkpoint, base_path)
+    stored = bf16z_files(spec, checkpoint)
+    if stored is not None and (adapter or metadata.get("dec_residual") is not None):
+        raise ValueError("bf16z storage is defined for full non-residual checkpoints")
+    if stored is not None:
+        identity = identity_from_hashes(stored[0])
+    else:
+        identity = checkpoint_fingerprint(checkpoint, base_path)
     if metadata.get("dec_residual") is not None:
         identity = _dec_fingerprint(identity, checkpoint)
     if identity["model_sha256"] != spec["expected_identity"].get("model_sha256"):
@@ -354,9 +473,11 @@ def verify_qwen(spec: dict[str, Any], checkpoint: Path) -> dict[str, Any]:
     }
     if score_bias is not None:
         result["score_bias"] = score_bias
-    bf16 = verify_bf16_copy(spec, checkpoint)
+    bf16 = verify_bf16_copy(spec, checkpoint, stored[0] if stored else None)
     if bf16 is not None:
         result["bf16_copy"] = bf16
+    if stored is not None:
+        result["storage"] = stored[1]
     if adapter:
         contract = metadata["lora"]
         base = spec["base"]
@@ -464,7 +585,10 @@ def vendor_runtime(
     target = stage / layout.RUNTIME_DIR
     target.mkdir()
     profile_module = "kai_native.py" if spec["profile"] == "kai-native" else "qwen.py"
-    for name in ("__init__.py", "api.py", profile_module):
+    runtime_files = ["__init__.py", "api.py", profile_module]
+    if spec.get("bf16z"):
+        runtime_files.append("bf16z.py")
+    for name in runtime_files:
         shutil.copyfile(runtime_tree / "v2/release/runtime" / name, target / name)
         records[f"decision2/{name}"] = {
             "source": f"v2/release/runtime/{name}",
@@ -673,6 +797,11 @@ def screen(stage: Path) -> dict[str, Any]:
         if path.suffix == ".safetensors":
             text = json.dumps(layout.safetensors_metadata(path))
             vocab = False
+        elif path.name.endswith(layout.BF16Z_SUFFIX):
+            from v2.release.runtime.bf16z import original_header, read_index
+
+            text = json.dumps([read_index(path)[0], original_header(path)])
+            vocab = False
         elif path.suffix == ".png":
             data = path.read_bytes()
             if not data.startswith(b"\x89PNG\r\n\x1a\n") or any(
@@ -842,8 +971,7 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
                 {
                     "comparison": (
                         "no-1.0"
-                        if (spec["gate_profile"].get("tier") or {}).get("no_1_0")
-                        is True
+                        if no_own_1_0(spec["gate_profile"].get("tier") or {})
                         else spec["gate_profile"]["name"]
                     )
                 }
@@ -917,6 +1045,7 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             "base": identity.get("base"),
             "calibration": calibration,
             **({"score_bias": score_bias} if score_bias else {}),
+            **({"storage": identity["storage"]} if identity.get("storage") else {}),
             "max_input_tokens": spec["max_input_tokens"],
             "runtime": {
                 "requirements": spec.get("runtime_requirements", {}),

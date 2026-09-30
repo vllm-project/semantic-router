@@ -18,6 +18,8 @@ from training.model.data import (
     file_sha256,
 )  # noqa: E402
 from v2.data.build_a0_variants import native_prompt  # noqa: E402
+from v2.data.m3.waves import prompt_line  # noqa: E402
+from v2.data.replay_targets import collector_digest  # noqa: E402
 from lux9b import m6_data  # noqa: E402
 
 RULE = {
@@ -222,8 +224,16 @@ class SplitTest(Fixture):
         self.assertEqual(
             [r["id"] for r in wave], ["a0s-replay-h", "a7q-wave", "h1-wave"]
         )
-        prompts = (self.tmp / "split/wave.prompts.jsonl").read_text().splitlines()
-        self.assertEqual(prompts[1], canonical(native_prompt(self.by_id["a7q-wave"])))
+        prompts = (
+            (self.tmp / "split/wave.prompts.jsonl")
+            .read_text()
+            .splitlines(keepends=True)
+        )
+        self.assertEqual(prompts[1], prompt_line(self.by_id["a7q-wave"]))
+        for line, r in zip(prompts, wave):
+            self.assertEqual(
+                collector_digest(json.loads(line)), collector_digest(native_prompt(r))
+            )
         self.assertEqual(m["excluded_over_cap_rows"], 1)
         self.assertEqual(
             m["s_rows_by_production_file"], {"aj-a0s-strict": 1, "aj-m": 1}

@@ -32,12 +32,6 @@ collapsed; R4 mlx-diag card-eligible macro upper bound >= 0; R5 the tier gates
 human transfer vs that peer upper bound >= 0, no collapse); R6 no overlap
 exposure; R7 ``v2.eval.gates public231`` vs the current run is not REGRESSION.
 Its decision names the profile, ``current_revision`` and ``evidence_sha256``.
-At a size without a Decision 1.0 model the profile's ``tier`` sets ``no_1_0:
-true``: R5 then drops the own-1.0 check, ``card.paired`` is the candidate minus
-the reference peer and the card keeps the no-1.0 layout. ``c1_postkey`` (the
-``SUMMARY.json`` of ``v2/eval/sealed/c1-postkey.sh collect`` on these weights)
-adds R8: the JevArena-C1 v1.2 post-key guard vs the tier's registered baseline
-must not be REGRESSION (coordinator 2026-09-29 23:40).
 
   evaluate  print the six gate items with evidence from a work directory
   profile   print item 1 (or the successor items) from a spec, before any upload
@@ -63,7 +57,6 @@ TYPES_SCHEMA = "dev2-gate-types/1"
 PAIRED_SCHEMA = "jevarena-v3-paired-aggregate/1"
 PUBLIC231_SCHEMA = "dev2-gate-public231/1"
 EXPOSURE_SCHEMA = "dev2-overlap-exposure/1"
-C1_SUMMARY_SCHEMA = "dev2-c1-postkey/1/summary"
 PUBLIC_ALPHA = 0.05
 NO_OWN_1_0 = "no-1.0"
 SUCCESSOR = "successor"
@@ -76,7 +69,9 @@ SUCCESSOR_ITEMS = (
     "1_successor_R6_no_overlap_exposure",
     "1_successor_R7_public231",
 )
-C1_ITEM = "1_successor_R8_c1_postkey"
+SUCCESSOR_C1 = "1_successor_R8_c1_postkey"
+MLX_PAIRED_9B = "dev2-9b-mlx-paired/1"
+C1_SUMMARY_SCHEMA = "dev2-c1-postkey/1/summary"
 DECISION_TYPES = ("choice", "noul", "score")
 VERIFY_STEPS = (
     "repeat-pre",
@@ -108,14 +103,11 @@ def successor_profile(spec: dict[str, Any], value: dict[str, Any]) -> dict[str, 
         or type(share) is not float
         or not 0 < share <= 1
         or not spec["card"].get("paired")
-        or tier.get("no_1_0", False) not in (True, False)
-        or ("c1_postkey" in value and not value["c1_postkey"])
     ):
         raise ValueError(
             "successor gate_profile needs run, current {revision (40 hex), gate, "
             "decision, run}, paired, types, mlx_paired, exposure, public231, tier "
-            "{reference (a card report key), v3_share in (0, 1], paired, optional "
-            "no_1_0 true|false}, card.paired and, if given, a c1_postkey summary path"
+            "{reference (a card report key), v3_share in (0, 1], paired} and card.paired"
         )
     return value
 
@@ -123,23 +115,24 @@ def successor_profile(spec: dict[str, Any], value: dict[str, Any]) -> dict[str, 
 SUCCESSOR_EVIDENCE = ("paired", "types", "mlx_paired", "exposure", "public231")
 
 
-def successor_no_1_0(profile: dict[str, Any] | None) -> bool:
-    """A successor profile at a size without a Decision 1.0 model."""
-    return bool(
-        profile
-        and profile.get("name") == SUCCESSOR
-        and (profile.get("tier") or {}).get("no_1_0") is True
-    )
+def no_own_1_0(tier: dict[str, Any]) -> bool:
+    """A tier without Decision 1.0; ``no_1_0`` is the key of the A20r release spec (2026-09-30)."""
+    return tier.get("no_own_1_0") is True or tier.get("no_1_0") is True
+
+
+def successor_names(profile: dict[str, Any]) -> tuple[str, ...]:
+    """R1-R7, plus R8 (the C1 post-key guard) when the profile names its summary."""
+    return SUCCESSOR_ITEMS + ((SUCCESSOR_C1,) if profile.get("c1_postkey") else ())
 
 
 def evidence_sha256(profile: dict[str, Any]) -> dict[str, str]:
     """The files a successor decision binds by SHA-256."""
     files = {name: profile[name] for name in SUCCESSOR_EVIDENCE}
+    if profile.get("c1_postkey"):
+        files["c1_postkey"] = profile["c1_postkey"]
     files["tier_paired"] = profile["tier"]["paired"]
     files["current_gate"] = profile["current"]["gate"]
     files["current_decision"] = profile["current"]["decision"]
-    if profile.get("c1_postkey"):
-        files["c1_postkey"] = profile["c1_postkey"]
     return {name: sha_file(Path(path)) for name, path in sorted(files.items())}
 
 
@@ -197,7 +190,6 @@ def successor_items(spec: dict[str, Any], profile: dict[str, Any]) -> dict[str, 
     predictions = scored.get("predictions_sha256") or {}
     current = profile["current"]
     run, current_run = Path(profile["run"]), Path(current["run"])
-    names = SUCCESSOR_ITEMS + ((C1_ITEM,) if profile.get("c1_postkey") else ())
     try:
         chain = []
         if sha_file(run / "REPORT.json") != scored.get("report_sha256"):
@@ -229,7 +221,7 @@ def successor_items(spec: dict[str, Any], profile: dict[str, Any]) -> dict[str, 
             "passed": False,
             "evidence": f"current-revision chain unreadable: {error!r}",
         }
-        return {name: dict(failed) for name in names}
+        return {name: dict(failed) for name in successor_names(profile)}
 
     def r1_r2(axis: str) -> Any:
         def check() -> Any:
@@ -276,20 +268,28 @@ def successor_items(spec: dict[str, Any], profile: dict[str, Any]) -> dict[str, 
 
     def r4() -> Any:
         mlx = _json(Path(profile["mlx_paired"]))
-        low, high = mlx["bootstrap"]["card_macro_ci95"]
-        runs, problems = mlx["runs"], []
-        if (
-            "mlx-diag" in predictions
-            and runs["candidate"]["predictions_sha256"] != predictions["mlx-diag"]
-        ):
+        problems = []
+        if mlx.get("schema") == MLX_PAIRED_9B:
+            low, high = mlx["overall"]["ci95"]["low"], mlx["overall"]["ci95"]["high"]
+            delta = mlx["overall"]["delta"]
+            candidate = mlx["left"]["predictions_sha256"]
+            released = mlx["right"]["predictions_sha256"]
+            if sorted(mlx.get("types") or []) != ["choice", "noul"]:
+                problems.append(
+                    "mlx-diag pairing is not the card-eligible Choice + Noul"
+                )
+        else:
+            low, high = mlx["bootstrap"]["card_macro_ci95"]
+            delta = mlx["delta"]["card_macro"]
+            candidate = mlx["runs"]["candidate"]["predictions_sha256"]
+            released = mlx["runs"]["released"]["predictions_sha256"]
+        if "mlx-diag" in predictions and candidate != predictions["mlx-diag"]:
             problems.append("mlx-diag candidate predictions are not the scored ones")
         if (
             current.get("mlx_predictions")
-            and sha_file(Path(current["mlx_predictions"]))
-            != runs["released"]["predictions_sha256"]
+            and sha_file(Path(current["mlx_predictions"])) != released
         ):
             problems.append("mlx-diag comparison is not against the current revision")
-        delta = mlx["delta"]["card_macro"]
         return (
             high >= 0,
             f"mlx-diag card-eligible macro {delta:+.4f} [{low:+.4f}, {high:+.4f}]",
@@ -298,7 +298,6 @@ def successor_items(spec: dict[str, Any], profile: dict[str, Any]) -> dict[str, 
 
     def r5() -> Any:
         tier = profile["tier"]
-        no_own = successor_no_1_0(profile)
         entry = next(
             e for e in spec["card"]["reports"] if e["key"] == tier["reference"]
         )
@@ -310,16 +309,23 @@ def successor_items(spec: dict[str, Any], profile: dict[str, Any]) -> dict[str, 
             peer, v3, reference_v3, run, Path(peer.get("runs", {}).get("right", ""))
         )
         if abs(own["point"]["left"]["score"] - v3) > 1e-9:
-            problems.append("own 1.0 comparison is not the candidate")
-        if no_own and abs(own["point"]["right"]["score"] - reference_v3) > 1e-9:
-            problems.append(f"card comparison is not the candidate minus {label}")
-        own_low = _low_high(own["ci95"])[0]
+            problems.append("card comparison is not the candidate")
         h = peer["axis_ci95"]["H"]["delta"]
         floor = tier["v3_share"] * reference_v3
         types_ok = all(
             v == "OK" for v in _verdicts(_json(Path(profile["types"]))).values()
         )
-        checks = {} if no_own else {"own 1.0 low > 0": own_low > 0}
+        checks = {}
+        if no_own_1_0(tier):
+            if not _same_path(tier["paired"], spec["card"]["paired"]):
+                problems.append(
+                    "without a Decision 1.0 model the card compares with the reference"
+                )
+            head = "no Decision 1.0 at this size"
+        else:
+            own_low = _low_high(own["ci95"])[0]
+            checks["own 1.0 low > 0"] = own_low > 0
+            head = f"own 1.0 low {own_low:+.2f}"
         checks.update(
             {
                 f"v3 >= {floor:.3f}": v3 >= floor,
@@ -328,9 +334,9 @@ def successor_items(spec: dict[str, Any], profile: dict[str, Any]) -> dict[str, 
             }
         )
         evidence = (
-            "no Decision 1.0 at this size" if no_own else f"own 1.0 low {own_low:+.2f}"
-        ) + f"; v3 {v3:.3f} vs {tier['v3_share']:.0%} of {label} " f"{reference_v3:.3f}; H vs {label} [{h['low']:+.3f}, {h['high']:+.3f}]; " + ", ".join(
-            f"{k} {'ok' if v else 'FAIL'}" for k, v in checks.items()
+            f"{head}; v3 {v3:.3f} vs {tier['v3_share']:.0%} of {label} "
+            f"{reference_v3:.3f}; H vs {label} [{h['low']:+.3f}, {h['high']:+.3f}]; "
+            + ", ".join(f"{k} {'ok' if v else 'FAIL'}" for k, v in checks.items())
         )
         return all(checks.values()), evidence, problems
 
@@ -375,28 +381,34 @@ def successor_items(spec: dict[str, Any], profile: dict[str, Any]) -> dict[str, 
 
     def r8() -> Any:
         summary = _json(Path(profile["c1_postkey"]))
-        rule = summary["item8"]
-        problems = []
-        if summary.get("schema") != C1_SUMMARY_SCHEMA or summary.get("role") != (
-            "successor"
+        rule, entry, problems = (
+            summary.get("item8") or {},
+            summary.get("baseline_entry") or {},
+            [],
+        )
+        if (
+            summary.get("schema") != C1_SUMMARY_SCHEMA
+            or summary.get("role") != "successor"
         ):
-            problems.append("not the C1 post-key summary of a successor run")
-        if (summary.get("model") or {}).get("identity") != (
-            spec.get("expected_identity") or {}
-        ).get("model_sha256"):
-            problems.append("the C1 run scored other weights")
-        if not any(c.get("kind") == "item8" for c in summary.get("comparisons", [])):
-            problems.append("no item-8 comparison against the tier's baseline")
-        low, high = rule["ci95"]
+            problems.append("not a successor C1 post-key summary")
+        if entry.get("identity") != spec["expected_identity"]["model_sha256"]:
+            problems.append("C1 scored other weights than this package")
+        verdict = rule.get("verdict")
+        low, high = _low_high(rule.get("ci95") or [float("nan")] * 2)
         return (
-            rule["verdict"] == "PASS",
-            f"JevArena-C1 v1.2 post-key {summary['c1']:.2f} vs {rule['name']}: "
-            f"{rule['delta']:+.2f} [{low:+.2f}, {high:+.2f}], p {rule['p']:.3f}, {rule['verdict']}",
+            verdict == "PASS",
+            f"JevArena-C1 v1.2 post-key {summary.get('c1', float('nan')):.2f} vs "
+            f"{rule.get('name')}: {rule.get('delta', float('nan')):+.2f} [{low:+.2f}, {high:+.2f}] {verdict}",
             problems,
         )
 
-    checks = (r1_r2("v3"), r1_r2("H"), r3, r4, r5, r6, r7, r8)
-    return {name: _item(check, chain) for name, check in zip(names, checks)}
+    checks = [r1_r2("v3"), r1_r2("H"), r3, r4, r5, r6, r7]
+    if profile.get("c1_postkey"):
+        checks.append(r8)
+    return {
+        name: _item(check, chain)
+        for name, check in zip(successor_names(profile), checks)
+    }
 
 
 def gate_profile(spec: dict[str, Any]) -> dict[str, Any] | None:
@@ -539,18 +551,18 @@ def first_items(spec: dict[str, Any]) -> tuple[dict[str, Any], str]:
     """Item 1 of the spec's profile, and whom the card tradeoffs compare with."""
     paired = _json(Path(spec["card"]["paired"]))
     profile = gate_profile(spec)
-    if successor_no_1_0(profile):
-        reference = next(
-            e.get("label") or e["key"]
-            for e in spec["card"]["reports"]
-            if e["key"] == profile["tier"]["reference"]
-        )
-        return (
-            successor_items(spec, profile),
-            f"{reference} (no Decision 1.0 at this size)",
-        )
     if profile and profile["name"] == SUCCESSOR:
-        return successor_items(spec, profile), "own 1.0"
+        below = "own 1.0"
+        if no_own_1_0(profile["tier"]):
+            below = (
+                next(
+                    e.get("label") or e["key"]
+                    for e in spec["card"]["reports"]
+                    if e["key"] == profile["tier"]["reference"]
+                )
+                + " (no Decision 1.0 at this size)"
+            )
+        return successor_items(spec, profile), below
     if profile:
         below = (
             next(
