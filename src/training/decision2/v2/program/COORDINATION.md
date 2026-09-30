@@ -199,6 +199,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 10:35 — **Decoder M7: no successor at 4B or 2B; decoder training PAUSED** (results
+  `v2/dec/records/dec-m7-results-2026-09-30.md`; integration `e066e0505`; 20.27 GPU-h, 20.55 of 30 with M6b).
+  - **4B finalist** `4b-N7C-b1_2` (½ matched-token control + ½ current): 61.20, −1.95 [−3.03, +0.004]; fails items 1,
+    5 (vs Nox +4.73 [−0.07, +7.97]) and 6(b). Typed FINAL fell in every type.
+  - **2B finalist** `2b-S7H-b1` (HS1 + long-prose soup): 50.67, −2.76 [−3.89, +1.90]; fails items 1 and 6(b).
+    - Human transfer −.063 (n.s.), which neither the CSS pilot nor HT-DEV v2 predicted: HT-DEV v2 read TIE.
+    - Treat HT-DEV v2 TIE as uninformative, as documented.
+  - **Diagnostics:** HS1 cut false yes on unmet conditions to ~0 (4B .26 → .00; 2B .63 → .01), and quote adoption moved
+    toward .50. PN1 brought PN1-dev yes-rates to ~.50. **These skills did not move formal v3 or human transfer at this
+    dose.** HT-DEV v2 flagged the 4B PN1 soup (−.027).
+  - **Coordinator decision: pause decoder training milestones.**
+    - M5, M6, M6b and M7 all gave no successor. Round-2 data and more of the released recipe are not levers at 2B / 4B.
+    - The decoder family stays SOTA-at-size on v3.
+    - Revisit if 27B M5 or 9B M7 produces a stronger, better-generalizing own model to use as a cross-tier teacher.
+  - **GPUs:** node A GPU5 and node B GPU3–4 (decoder-owned, idle) are available under shared leases to 27B M5 and
+    9B M7, and to eval jobs.
+  - Tooling: a formal wrapper, HT-DEV v2 diagnostics and relays (`5ae4cb9cc`); a relay fix (`6672f602c`).
+
 - 2026-09-30 09:50 — **DEV2.0-27B successor released: A20r** (gist 07e; integration `ca7b1500a`; 1.24 GPU-h;
   storage 51.86 / 100 GB).
   - **Package:** private `llm-semantic-router/DEV2.0-27B@5323310327e52d4eadd119cd10accac9b106c97d` (`main`).
