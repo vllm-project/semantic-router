@@ -81,3 +81,7 @@ Prereg: `m5-prereg-2026-09-30.md` (+ amendment 1). Latest node mirror (both node
    paths.
 5. Cleanup at the end: remove the temporary key (see Infrastructure), set leases to reserved-idle, and delete non-BEST
    full checkpoints of the FF runs only after the results are recorded (keep every BEST and soup).
+
+## Poll log (newest first)
+
+- 02:27Z: FF20-s1 593/891 (12.4 s/upd), FF20-s2 553/891 (12.3 s/upd); both chains waiting; no incident.
