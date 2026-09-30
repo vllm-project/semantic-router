@@ -37,6 +37,11 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr benchmark experiment list`](#vllm-sr-benchmark-experiment-list) | Read one page of experiments. |
 | [`vllm-sr benchmark experiment show`](#vllm-sr-benchmark-experiment-show) | Read the experiment and one page of its linked runs. |
 | [`vllm-sr benchmark export`](#vllm-sr-benchmark-export) | Export a dev response matrix for training; holdout export is rejected. |
+| [`vllm-sr benchmark nano`](#vllm-sr-benchmark-nano) | EXPERIMENTAL sr-bench-nano: frozen five-benchmark ids for your own models. |
+| [`vllm-sr benchmark nano freeze`](#vllm-sr-benchmark-nano-freeze) | Maintainer: regenerate the frozen id list (ids and hashes only, no text). |
+| [`vllm-sr benchmark nano manifest`](#vllm-sr-benchmark-nano-manifest) | Write and validate a nano run manifest for your targets and grader. |
+| [`vllm-sr benchmark nano prepare`](#vllm-sr-benchmark-nano-prepare) | Download pinned sources, verify every frozen hash, and store one dataset. |
+| [`vllm-sr benchmark nano show`](#vllm-sr-benchmark-nano-show) | Verify the installed frozen id list and print its sha256 and split sizes. |
 | [`vllm-sr benchmark plan`](#vllm-sr-benchmark-plan) | Validate and freeze all cases, targets, profiles, and limits without inference. |
 | [`vllm-sr benchmark preview`](#vllm-sr-benchmark-preview) | Inspect routing decisions without producing quality scores. |
 | [`vllm-sr benchmark reconcile-usage`](#vllm-sr-benchmark-reconcile-usage) | Append an offline accounting correction from saved streams; no inference. |
@@ -398,6 +403,82 @@ Export a dev response matrix for training; holdout export is rejected.
 | --- | --- |
 | `RUN_ID` | Required argument. Type: text. |
 | `--output PATH` | [required] |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark nano` {#vllm-sr-benchmark-nano}
+
+```text
+Usage: vllm-sr benchmark nano [OPTIONS] COMMAND [ARGS]...
+```
+
+EXPERIMENTAL sr-bench-nano: frozen five-benchmark ids for your own models.
+
+| Parameter | Description |
+| --- | --- |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark nano freeze` {#vllm-sr-benchmark-nano-freeze}
+
+```text
+Usage: vllm-sr benchmark nano freeze [OPTIONS]
+```
+
+Maintainer: regenerate the frozen id list (ids and hashes only, no text).
+
+| Parameter | Description |
+| --- | --- |
+| `--output PATH` | [required] |
+| `--source-dir DIRECTORY` | Offline pinned files as DIR/&lt;benchmark&gt;/&lt;file&gt;. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark nano manifest` {#vllm-sr-benchmark-nano-manifest}
+
+```text
+Usage: vllm-sr benchmark nano manifest [OPTIONS]
+```
+
+Write and validate a nano run manifest for your targets and grader.
+
+| Parameter | Description |
+| --- | --- |
+| `--dataset FILE` | Dataset manifest JSON printed by 'nano prepare'.  [required] |
+| `--targets FILE` | JSON/YAML list (or &#123;targets: [...]&#125;) of your own OpenAI-compatible targets.  [required] |
+| `--output PATH` | [required] |
+| `--name TEXT` | Default: sr-bench-nano. |
+| `--concurrency INTEGER RANGE` | [default: 4; 1&lt;=x&lt;=32] |
+| `--grader-base-url TEXT` | Environment: SR_BENCH_NANO_GRADER_BASE_URL. |
+| `--grader-model TEXT` | Environment: SR_BENCH_NANO_GRADER_MODEL. |
+| `--grader-api-key-env TEXT` | Environment: SR_BENCH_NANO_GRADER_API_KEY_ENV. |
+| `--grader-header TEXT` | HEADER=ENV_VAR; the header value is read from ENV_VAR at call time. May be repeated. Environment: SR_BENCH_NANO_GRADER_HEADERS. |
+| `--grader-param TEXT` | KEY=JSON request parameter, e.g. chat_template_kwargs=&#123;"thinking":false&#125;. May be repeated. Environment: SR_BENCH_NANO_GRADER_PARAMS. |
+| `--grader-no-stream` | Call the grader without streaming. Default: false. Environment: SR_BENCH_NANO_GRADER_NO_STREAM. |
+| `--lcb-sandbox-image TEXT` | Digest-pinned image from 'benchmark setup --build-sandbox' (read from its receipt by default). Environment: SR_BENCH_NANO_LCB_SANDBOX_IMAGE. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark nano prepare` {#vllm-sr-benchmark-nano-prepare}
+
+```text
+Usage: vllm-sr benchmark nano prepare [OPTIONS]
+```
+
+Download pinned sources, verify every frozen hash, and store one dataset.
+
+| Parameter | Description |
+| --- | --- |
+| `--split CHOICE` | nano-holdout is a frozen holdout; run it only when explicitly requested.  [default: nano] Choices: nano, nano-holdout. |
+| `--source-dir DIRECTORY` | Offline pinned files as DIR/&lt;benchmark&gt;/&lt;file&gt;; default downloads from the Hub. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark nano show` {#vllm-sr-benchmark-nano-show}
+
+```text
+Usage: vllm-sr benchmark nano show [OPTIONS]
+```
+
+Verify the installed frozen id list and print its sha256 and split sizes.
+
+| Parameter | Description |
+| --- | --- |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr benchmark plan` {#vllm-sr-benchmark-plan}

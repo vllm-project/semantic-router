@@ -513,6 +513,7 @@ const sidebars: SidebarsConfig = {
             'benchmarking/sr-bench/plan-and-run',
             'benchmarking/sr-bench/iterate',
             'benchmarking/sr-bench/results',
+            'benchmarking/sr-bench/nano',
           ],
         },
       ],
