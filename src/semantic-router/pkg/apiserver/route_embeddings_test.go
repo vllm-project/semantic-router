@@ -349,6 +349,52 @@ func TestEmbeddingEndpointsValidateShapeBeforeAvailability(t *testing.T) {
 	}
 }
 
+// TestEmbeddingEndpointsValidateShapeBeforeAvailabilityUnprepared tests the
+// unprepared-service case: a zero-value server (no runtime acquired) must still
+// reject malformed requests with 400, not 503 EMBEDDING_NOT_READY. This covers
+// the regression where the runtime-error path was checked before shape validation.
+func TestEmbeddingEndpointsValidateShapeBeforeAvailabilityUnprepared(t *testing.T) {
+	s := &ClassificationAPIServer{}
+
+	tests := []struct {
+		name    string
+		path    string
+		body    string
+		handler func(http.ResponseWriter, *http.Request)
+	}{
+		{"embeddings negative target_layer", "/api/v1/embeddings", `{"texts":["hi"],"target_layer":-1}`, s.handleEmbeddings},
+		{"embeddings malformed image", "/api/v1/embeddings", `{"images":["data:image/png;base64,!!!!"]}`, s.handleEmbeddings},
+		{"embeddings unsafe image url", "/api/v1/embeddings", `{"images":["https://example.com/cat.png"]}`, s.handleEmbeddings},
+		{"embeddings negative dimension", "/api/v1/embeddings", `{"texts":["hi"],"dimension":-1}`, s.handleEmbeddings},
+		{"embeddings target_layer too large", "/api/v1/embeddings", `{"texts":["hi"],"target_layer":2147483648}`, s.handleEmbeddings},
+		{"embeddings no inputs", "/api/v1/embeddings", `{}`, s.handleEmbeddings},
+		{"similarity negative target_layer", "/api/v1/similarity", `{"text1":"hello","text2":"world","target_layer":-1}`, s.handleSimilarity},
+		{"similarity negative dimension", "/api/v1/similarity", `{"text1":"hello","text2":"world","dimension":-1}`, s.handleSimilarity},
+		{"similarity target_layer too large", "/api/v1/similarity", `{"text1":"hello","text2":"world","target_layer":2147483648}`, s.handleSimilarity},
+		{"similarity missing text", "/api/v1/similarity", `{"text1":"hello"}`, s.handleSimilarity},
+		{"batch similarity negative target_layer", "/api/v1/similarity/batch", `{"query":"hello","candidates":["world"],"target_layer":-1}`, s.handleBatchSimilarity},
+		{"batch similarity target_layer too large", "/api/v1/similarity/batch", `{"query":"hello","candidates":["world"],"target_layer":2147483648}`, s.handleBatchSimilarity},
+		{"batch similarity empty candidates", "/api/v1/similarity/batch", `{"query":"hello","candidates":[]}`, s.handleBatchSimilarity},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+
+			rr := httptest.NewRecorder()
+			tc.handler(rr, req)
+
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400 for a malformed request, got %d: %s", rr.Code, rr.Body.String())
+			}
+			if strings.Contains(rr.Body.String(), "EMBEDDING_NOT_READY") {
+				t.Fatalf("an invalid request was reported as retryable readiness: %s", rr.Body.String())
+			}
+		})
+	}
+}
+
 // The same deployment still answers 503 for media it could serve if it had
 // prepared a model, so validation ordering must not turn availability into a
 // client error.

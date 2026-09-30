@@ -160,6 +160,12 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 		s.writeJSONRequestError(w, err)
 		return
 	}
+	// client errors on every deployment and must not be reported as a retryable 503.
+	if code, message, ok := validateEmbeddingRequestShape(request); !ok {
+		s.writeErrorResponse(w, http.StatusBadRequest, code, message)
+		return
+	}
+
 	cfg, prepared, release, prepareErr := s.acquireEmbeddingRuntimeForRecipe(request.Recipe)
 	defer release()
 	if prepareErr != nil {
@@ -364,6 +370,21 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 	if !ok {
 		return
 	}
+	// Validate request shape before checking runtime availability.
+	// Malformed requests (invalid target_layer, etc.) are client errors on
+	// every deployment and must not be reported as a retryable 503.
+	embReq := EmbeddingRequest{
+		Model:           req.Model,
+		Dimension:       req.Dimension,
+		TargetLayer:     req.TargetLayer,
+		QualityPriority: req.QualityPriority,
+		LatencyPriority: req.LatencyPriority,
+		Texts:           []string{req.Text1, req.Text2},
+	}
+	if code, message, ok := validateEmbeddingRequestShape(embReq); !ok {
+		s.writeErrorResponse(w, http.StatusBadRequest, code, message)
+		return
+	}
 
 	cfg, prepared, release, err := s.acquireEmbeddingRuntimeForRecipe(req.Recipe)
 	defer release()
@@ -372,19 +393,7 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		return
 	}
 	start := time.Now()
-	request := EmbeddingRequest{
-		Model:           req.Model,
-		Dimension:       req.Dimension,
-		TargetLayer:     req.TargetLayer,
-		QualityPriority: req.QualityPriority,
-		LatencyPriority: req.LatencyPriority,
-		Texts:           []string{req.Text1, req.Text2},
-	}
-
-	if code, message, ok := validateEmbeddingRequestShape(request); !ok {
-		s.writeErrorResponse(w, http.StatusBadRequest, code, message)
-		return
-	}
+	request := embReq
 
 	if checkErr := checkEmbeddingReadiness(prepared, request); checkErr != nil {
 		s.writeEmbeddingNotReady(w, "calculate similarity", checkErr)
@@ -433,13 +442,9 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 	if !ok {
 		return
 	}
-
-	cfg, prepared, release, err := s.acquireEmbeddingRuntimeForRecipe(req.Recipe)
-	defer release()
-	if err != nil {
-		s.writeEmbeddingRuntimeError(w, err)
-		return
-	}
+	// Validate request shape before checking runtime availability.
+	// Malformed requests (invalid target_layer, etc.) are client errors on
+	// every deployment and must not be reported as a retryable 503.
 	embReq := EmbeddingRequest{
 		Model:           req.Model,
 		Dimension:       req.Dimension,
@@ -450,6 +455,13 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 	}
 	if code, message, ok := validateEmbeddingRequestShape(embReq); !ok {
 		s.writeErrorResponse(w, http.StatusBadRequest, code, message)
+		return
+	}
+
+	cfg, prepared, release, err := s.acquireEmbeddingRuntimeForRecipe(req.Recipe)
+	defer release()
+	if err != nil {
+		s.writeEmbeddingRuntimeError(w, err)
 		return
 	}
 	if checkErr := checkEmbeddingReadiness(prepared, embReq); checkErr != nil {
