@@ -38,7 +38,7 @@ Vela's health/biology error shows that a contract-valid high probability is not 
 
 | Condition | Jev | Kai | Vela |
 | --- | --- | --- | --- |
-| Interface | Hosted HTTP | Local runtime HTTP | Local Transformers |
+| Interface | Hosted HTTP | Local runtime HTTP; entrypoint in a host Python 3.12.3 venv, not the `vllm-sr decision serve` container image | Local Transformers |
 | Candidate descriptions | Supplied | Supplied | Not accepted by fixed head |
 | Warmup | None | One separate non-pilot input | One call using first pilot input |
 | Timeout | 10 seconds | 60 seconds | No enforced timeout reported |
@@ -56,6 +56,8 @@ from pilot records. Shared metadata still says the protocol is not formally froz
 ## Reproduction status and corrections
 
 Kai's contribution was cherry-picked with authorship retained, and Vela supplementary PR #1 was merged. Their local records are [Kai](kai/kai-results.jsonl) and [Vela](vela/vela-results.jsonl), with reproduction instructions in [Kai run notes](kai/kai-run.md) and [Vela run notes](vela/run.md).
+
+In the [2026-09-30 contributor review](https://github.com/vllm-project/semantic-router/pull/4336#issuecomment-5905046979), subin confirmed the Kai predictions, score, timing range, maximum sum deviation, pins, execution row and integrated file identity. The requested environment caveat is now explicit in the table: the runtime entrypoint ran in a host Python 3.12.3 virtual environment, not a container, because the source build had no default image. This matches the existing Kai run notes; no records or measurements changed. This acknowledgement covers the Kai evidence, not approval of the entire research conclusion.
 
 Vela's missing baseline and mapping were supplied from the contributor's pinned commit `53526a3edfa7afaae6760670a68033692cc112cc`. Mapping bytes match the captured hash; baseline model/revision matches metadata. The original run did not record its YAML hash, so original YAML byte identity is unverified. The bundled mapping-only command passed without inference. This resolves the missing-file packaging gap, not independent full-run reproduction.
 
@@ -87,8 +89,9 @@ Proposed handoff, not new assignments:
 
 | Who | Bounded next action | Done when |
 | --- | --- | --- |
-| Yuki | Submit this synthesis and documentation corrections; update stale PR-body pending statuses | Report is reviewable and PR description reflects integration |
-| subin / lyy | Review their rows and caveats; lyy can clarify summary/enrichment procedure | Corrections or acknowledgement on the PR |
+| Yuki | Synthesis and documentation corrections submitted; PR description updated | Initial handoff complete |
+| subin | Kai evidence checked; requested host-venv caveat incorporated | Contributor acknowledgement linked above |
+| lyy | Review Vela rows/caveats and clarify summary/enrichment procedure | Corrections or acknowledgement on the PR |
 | Yuki with contributors | Triage the separate Jev contract-failure evidence, then propose adopt/defer/reject against issue criteria | Linked evidence and bounded recommendation |
 | Maintainer | Review recommendation and sufficient closure evidence | Explicit decision or specific remaining work |
 
