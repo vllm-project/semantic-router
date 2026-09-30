@@ -13,7 +13,7 @@ translation:
 
 - 大型 OpenAI 兼容请求体，不应在 ExtProc 看到它们之前由网关完整缓冲；
 - agentgateway `FullDuplexStreamed` ExtProc 处理；
-- Envoy AI Gateway 或原始 Envoy `STREAMED` 请求体处理；
+- Agent Router（原 Envoy AI Gateway）或原始 Envoy `STREAMED` 请求体处理；
 - 流式 Chat Completions 客户端（`"stream": true`），可能在上游后端响应之前被 Semantic Router 短路。
 
 ## 工作原理
@@ -48,9 +48,9 @@ global:
 
 上面的 10 MiB 和 30 秒值是与 `e2e/profiles/streaming/values.yaml` 中流式 e2e profile 匹配的示例护栏；它们不是运行时默认值，也不是经过实验校准的限制。省略任一值或将其设为 0 会禁用该护栏。参考 `config/config.yaml` 演示了更小的 1 MiB 和 15 秒策略。
 
-## Envoy AI Gateway / Envoy Gateway
+## Agent Router / Envoy Gateway
 
-对于使用 `EnvoyPatchPolicy` 的 Envoy AI Gateway 示例，将 Semantic Router ExtProc 过滤器从缓冲请求体改为流式请求体。
+对于使用 `EnvoyPatchPolicy` 的 Agent Router 示例，将 Semantic Router ExtProc 过滤器从缓冲请求体改为流式请求体。
 
 ```yaml
 apiVersion: gateway.envoyproxy.io/v1alpha1

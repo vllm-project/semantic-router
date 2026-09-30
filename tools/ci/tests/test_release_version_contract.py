@@ -17,7 +17,7 @@ import check_version_contract as release_contract  # noqa: E402
 
 
 class ReleaseVersionContractTests(unittest.TestCase):
-    def test_release_inventory_comes_from_the_shared_ci_plan(self) -> None:
+    def test_release_inventory_flows_to_build_and_publication(self) -> None:
         self.assertEqual(
             release_contract.parse_release_images(),
             (
@@ -68,14 +68,14 @@ class ReleaseVersionContractTests(unittest.TestCase):
         ):
             release_contract.parse_release_images()
 
-    def test_release_image_bridge_rejects_unqualified_publication(self) -> None:
+    def test_release_image_bridge_rejects_wrong_publication_inventory(self) -> None:
         original_read_text = release_contract.read_text
 
         def missing_ci_output(path: Path) -> str:
             content = original_read_text(path)
             if path == release_contract.RELEASE_WORKFLOW_PATH:
                 return content.replace(
-                    "images: ${{ needs.ci.outputs.publish_images }}", "images: '[]'"
+                    "images: ${{ needs.validate.outputs.images }}", "images: '[]'"
                 )
             return content
 

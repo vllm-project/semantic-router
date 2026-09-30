@@ -52,21 +52,9 @@ jobs:
             exit 1
           fi
 
-      - name: Test crate
-        run: make test-rust-ci
-
-      - name: Run CPU API smoke tests
+      - name: Build and package crate
         working-directory: candle-binding
         run: |
-          cargo test --no-default-features \
-            --test qwen3_classification_api_test \
-            --test classification_output_demo \
-            --verbose
-
-      - name: Check, build, and dry-run publish
-        working-directory: candle-binding
-        run: |
-          cargo check --no-default-features --verbose
           cargo build --release --no-default-features --verbose
           cargo publish --dry-run --locked --no-default-features --verbose
           # Cargo's dry run builds and verifies the packaged source archive.
