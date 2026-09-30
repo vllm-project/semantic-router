@@ -218,7 +218,8 @@ class ReviewTest(unittest.TestCase):
 
     def test_sample_cli_keeps_line_separators_inside_strings(self):
         rows = self.rows()
-        rows[0]["state"]["text"] = "a\u2028b"
+        for row in rows:
+            row["state"]["text"] += "\u2028end"
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "train.jsonl"
             path.write_text(
@@ -235,10 +236,8 @@ class ReviewTest(unittest.TestCase):
             )
             self.assertNotIn("\u2028", packets)
             self.assertEqual(len(packets.split("\n")) - 1, 48)
-            self.assertIn(
-                "a\u2028b",
-                [json.loads(x)["state"]["text"] for x in packets.split("\n") if x],
-            )
+            texts = [json.loads(x)["state"]["text"] for x in packets.split("\n") if x]
+            self.assertTrue(all(text.endswith("\u2028end") for text in texts))
 
     def test_errors_splits_and_score_tolerance(self):
         key = review.build(self.rows(), "0" * 64)["key"]
