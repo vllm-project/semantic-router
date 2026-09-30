@@ -24,11 +24,15 @@ The runner input adapter (`runner-input.jsonl`) adds only the current runner fie
 | pilot-001 | biology | biology | 0.9998 | yes |
 | pilot-002 | computer science | computer science | 1.0000 | yes |
 | pilot-003 | math | math | 0.9998 | yes |
-| pilot-004 | history | history | 0.9998 | yes |
-| pilot-005 | health | biology | 0.9998 | yes |
+| pilot-004 | history | history | 0.9678 | yes |
+| pilot-005 | health | biology | 0.8153 | yes |
 | pilot-006 | diagnostic-only | computer science | 0.9075 | no |
 
-All 6/6 records were contract-valid and there were no inference failures. Primary accuracy is 4/5 (80%). Model-inference latency was P50 15.952 ms and P95 17.582 ms on the local CPU. All records preserve the complete 14-label probability vector; each vector sums to one within 1e-5.
+All 6/6 records were contract-valid and there were no inference failures. Primary accuracy is 4/5 (80%). All records preserve the complete 14-label probability vector; each vector sums to one within 1e-5.
+
+Offline review on 2026-09-30 corrected the displayed top-1 probabilities for cases 004 and 005 from the unchanged raw records. The saved summary's P50 15.952 ms and P95 17.582 ms match the third and sixth sorted `latency_wall_ms` observations (consistent with nearest-rank percentiles); its generation method is not included in the submitted runner. The ordinary six-observation median of that field is 16.141 ms. Both timing fields bracket the forward pass, excluding tokenization and softmax; despite its name, `latency_wall_ms` is not end-to-end latency. These six observations are not a stable tail-latency estimate or a basis for cross-arm speed ranking. The original summary is preserved.
+
+The metadata phrase “one unrecorded warmup” is stale: `vela-warmup.jsonl` contains the separate warmup capture. The original metadata is preserved rather than silently rewritten.
 
 The full record file is `vela-results.jsonl`; `vela-raw.jsonl` is the un-enriched runner output and `vela-warmup.jsonl` is the separate warmup capture. Since this is a local Transformers run, HTTP status, server timeout, and raw HTTP response body are unavailable and are recorded as null/unavailable rather than inferred.
 
