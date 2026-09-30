@@ -162,7 +162,11 @@ class Target(BaseHTTPRequestHandler):
             {
                 "model": body["model"],
                 "choices": [
-                    {"index": 0, "delta": {"content": answer}, "finish_reason": "stop"}
+                    {
+                        "index": 0,
+                        "delta": {"content": answer, "tool_calls": None},
+                        "finish_reason": "stop",
+                    }
                 ],
             },
             {"model": body["model"], "choices": [], "usage": usage},

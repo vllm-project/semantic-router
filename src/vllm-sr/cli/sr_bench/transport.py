@@ -368,7 +368,7 @@ def chat(
                     ttft = time.monotonic() - started
                 content += piece
                 reasoning += thought
-                for call in delta.get("tool_calls", []):
+                for call in delta.get("tool_calls") or []:
                     idx = call.get("index", 0)
                     entry = tool_calls.setdefault(
                         idx,
