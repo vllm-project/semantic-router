@@ -203,6 +203,46 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 20:20 — **4B M8 (distillation from DEV2.0-27B): no successor. PROGRAM CONCLUSION: stop teacher and
+  recipe-top-up arms at every size; HR2 is the remaining lever** (records `v2/dec/records/dec-m8-*`; gist 04;
+  integration `e17c0021a`; 3.90 of 24 GPU-h).
+  - **4B formal results** (bar 63.151):
+    - D1 (⅔ D1 soup, A20r on every row): 58.91, −4.25 [−5.13, −0.33].
+    - D2 (⅓ D2 soup, human rows only): 60.91, −2.24 [−2.79, +0.71].
+    - C (control soup): 57.95, −5.20 [−6.18, −0.02].
+    - All three fail item 1. Human transfer .533 / .545 / .502 vs .580 (n.s.); public 231 171 each; typed FINAL fell,
+      mostly Noul.
+  - **Teacher quality was fine:** exact parity, and on the training rows A20r beats own-Lux vs gold (.890 / .859 / .633
+    vs .834 / .798 / .511). **Distillation still lowered HT-DEV v2 more than the control did:** D1 −.027 and D2 −.034
+    FLAG, C −.017.
+    - Root cause: A20r's human transfer (.584) ≈ the 4B's (.580). Its edge is typed and C1, which did not carry over.
+  - **Program-level findings:**
+    1. Cross-size distillation from DEV2.0-27B gave no successor at 0.8B, 2B, 4B or 9B.
+    2. Teacher soft targets on human rows hurt, at every size and with every teacher (AutoJev, own-Lux, A20r).
+    3. Continued top-ups of the released 4B recipe cost quality (M6b, M7, M8).
+  - **Decision:** stop teacher-based and recipe-top-up arms. **All sub-27B tiers pause until HR2 lands**; their next
+    milestones use HR2 as a block with matched controls, screened with HT-DEV v2. 27B M5 (L128) continues.
+  - The A20r targets stay on node B. The decoder worktree was re-created from the pushed branch, with the shared agent
+    venv linked so pre-commit hooks run.
+
+- 2026-09-30 20:15 — **9B M8 (distillation from DEV2.0-27B): no successor** (records `lux9b-m8-*`; gist 05b; integration
+  `306af7236`; 3.21 of 24 GPU-h; ran on node A GPU3–4 only, per amendment 1, after the 27B reclaim of GPU2).
+  - **Teacher:** A20r reproduced its stored scores exactly (80 prompts) and scored all 12,443 top-up rows (M7 arm-C
+    file, 6.2M tokens). M7's C line was the matched control.
+  - **D2** (teacher on human rows only): stopped by its early rule. Noul `rule_precedence` 245 vs 286, the same failure
+    as M6's AutoJev arm. **At 9B the teacher must stay on every row.**
+  - **D1** (teacher on every row): beat the control at each mix (typed +.003–.013, slightly lower paraphrase yes-bias).
+    No point passed the PN1 guard; ⅓ missed the clean gold-no yes-rate by +.005 (.267 vs .262). M7's C line also has
+    no eligible point.
+  - **Coordinator ruling:** the stricter PN1 guard (hop + clean gold-no) STANDS. It tracks the paraphrase yes-bias that
+    sank K5-a12's item 4, which MLX-DEV-9B misses. It is also moot here: the ⅓ point's typed +.010 is far below the
+    ~+2 v3 that item 1 needs.
+  - **Cross-tier finding:** distillation from 27B gives development-sized gains only (0.8B, 9B); the 4B result is
+    pending. **The binding 9B problem is the paraphrase yes-bias that grows with distance from Lux 1.0.** Next levers:
+    HR2, or a yes-bias-balanced Noul block on the D1 recipe. Revisit after M7 closes and HR2 lands.
+  - Incident: a same-second CPU race on a shared control file crashed one early-rule script. The deterministic rule
+    was completed on unchanged inputs; nothing was retrained.
+
 - 2026-09-30 20:05 — **Decoder M8-small (2B + 0.8B distillation from A20r): no successor** (records
   `v2/dec/records/dec-m8s-*`; integration `f46423560`; ≈4.45 of 24 GPU-h; node B GPU2 / 6 / 7 released → back to 27B).
   - **2B:** no development finalist. Every point on every line failed the typed-DEV Score floor (`set_reconciliation`
