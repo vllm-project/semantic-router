@@ -8,8 +8,8 @@
   - **C** (matched-token control): x60 replay only, budgeted to P's native tokens with the same
     seed, so P's replay is contained in C's (checked); own-Lux targets on every row.
 * ``mlxdev``: MLX-DEV-9B, the decoder's MLX-DEV panel minus every group that shares a group id,
-  row id, input hash or normalized segment (``v2.dec.m5_block.segments``) with x60 (the K
-  seeds' TRAIN, which contains both continuation files) or the PN1-r2 block, with its index.
+  row id, input hash or a normalized state line of >= 20 characters with x60 (the K seeds'
+  TRAIN, which contains both continuation files) or the PN1-r2 block, with its index.
 
     python3 -m lux9b.m7_data topup --spec SPEC --root NAME=PATH ... --tokenizer /model --output-dir OUT
     python3 -m lux9b.m7_data mlxdev --spec SPEC --root NAME=PATH ... --output-dir OUT
@@ -20,6 +20,7 @@ Every input is hash-verified; outputs go to a new directory with ``manifest.json
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -57,6 +58,43 @@ def pn1_block(rows: list[dict[str, Any]], repeat: int) -> list[dict[str, Any]]:
         for row in rows:
             block.append(row if k == 1 else dict(row, id=f"{row['id']}~r{k}"))
     return block
+
+
+def closest_budget(rows, native, pool_of, target: int, seed: str):
+    """The stratified replay whose realized native tokens are closest to ``target``.
+
+    The stratified selection overshoots a small budget (every stratum takes whole groups
+    until its share is reached), so the requested budget is bisected below the target.
+    """
+    lo, hi, best = target // 2, target, None
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        kept, stats = recipe_budget(rows, native, pool_of, mid, seed, 1.0)
+        diff = stats["native_tokens"] - target
+        if best is None or abs(diff) < abs(best[1]["native_tokens"] - target):
+            best = (kept, stats)
+        if diff > 0:
+            hi = mid - 1
+        elif diff < 0:
+            lo = mid + 1
+        else:
+            break
+    kept, stats = best
+    return kept, {**stats, "target_tokens": target}
+
+
+def state_segments(row: dict[str, Any]) -> set[bytes]:
+    """Hashes of the row's normalized state lines (>= MIN_SEGMENT characters); instructions
+    and option descriptions are templates shared by every row of a source, so they are not
+    screened."""
+    from v2.dec.m5_block import MIN_SEGMENT, normalize
+
+    out = set()
+    for part in row["state"].split("\n"):
+        part = normalize(part)
+        if len(part) >= MIN_SEGMENT:
+            out.add(hashlib.sha256(part.encode("utf-8")).digest()[:16])
+    return out
 
 
 def type_shares(rows, tokens: dict[str, int]) -> dict[str, float]:
@@ -114,11 +152,11 @@ def topup(spec, roots, tokenizer: Path, workers: int, out: Path) -> dict[str, An
         pool_of,
         spec["replay_tokens"],
         f"{seed}:replay",
-        spec["tolerance"],
+        spec["replay_tolerance"],
     )
     target_c = stats_p["native_tokens"] + block_tokens
-    replay_c, stats_c = recipe_budget(
-        rows, native, pool_of, target_c, f"{seed}:replay", spec["tolerance"]
+    replay_c, stats_c = closest_budget(
+        rows, native, pool_of, target_c, f"{seed}:replay"
     )
     groups_p = {r["group_id"] for r in replay_p}
     groups_c = {r["group_id"] for r in replay_c}
@@ -204,8 +242,7 @@ def topup(spec, roots, tokenizer: Path, workers: int, out: Path) -> dict[str, An
 
 
 def mlxdev(spec, roots, out: Path) -> dict[str, Any]:
-    from v2.dec.m5_block import segments
-
+    segments = state_segments
     inputs: dict[str, str] = {}
     rows, _, _ = load_x60(spec, roots, inputs)
     pn1 = load_partition(verified(spec["pn1"]["train"], roots, inputs), "train")

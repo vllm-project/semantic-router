@@ -47,5 +47,21 @@ class Pn1BlockTest(unittest.TestCase):
         self.assertEqual(shares, {"choice": 0.25, "noul": 0.75})
 
 
+class StateSegmentsTest(unittest.TestCase):
+    def test_only_state_lines_are_screened(self):
+        a = {
+            "state": "Sentence one is long enough here.\nshort",
+            "instructions": "Same template text for all rows.",
+        }
+        b = {
+            "state": "Another state line that is long.",
+            "instructions": "Same template text for all rows.",
+        }
+        c = {"state": "  SENTENCE one is   long enough here. ", "instructions": "x"}
+        self.assertFalse(m7_data.state_segments(a) & m7_data.state_segments(b))
+        self.assertEqual(m7_data.state_segments(a), m7_data.state_segments(c))
+        self.assertEqual(len(m7_data.state_segments(a)), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

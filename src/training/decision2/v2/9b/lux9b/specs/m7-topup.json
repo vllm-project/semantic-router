@@ -5,6 +5,7 @@
  "max_length": 8192,
  "tolerance": 0.01,
  "replay_tokens": 5000000,
+ "replay_tolerance": 0.08,
  "x60": {
   "train": {
    "file": "m4:data/m4-k-xl-r2-60m/build/train.jsonl",
