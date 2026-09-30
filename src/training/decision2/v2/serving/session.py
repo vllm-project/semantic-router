@@ -488,6 +488,8 @@ def parse_bench(spec: str) -> tuple[list[dict[str, Any]], str]:
 def session_plugin(args: argparse.Namespace) -> dict[str, Any]:
     out = args.out
     install = install_plugin(args.plugin_src, out)
+    env = serving_env(out / "site", out)
+    env.update(item.split("=", 1) for item in args.server_env)
     server = Server(
         "decision",
         decision_server_args(
@@ -499,12 +501,13 @@ def session_plugin(args: argparse.Namespace) -> dict[str, Any]:
         ),
         DECISION_PORT,
         out,
-        serving_env(out / "site", out),
+        env,
     )
     result: dict[str, Any] = {
         "session": "plugin",
         "install": install,
         "dtype": args.dtype,
+        "server_env": args.server_env,
     }
     try:
         server.wait_ready()
@@ -578,7 +581,7 @@ def session_runtime(args: argparse.Namespace) -> dict[str, Any]:
         "items": len(prompts),
         "variants": {},
     }
-    for variant in ("fp32-master", "bf16-resident"):
+    for variant in args.variants:
         if variant == "bf16-resident":
             # Only BF16-exact weights move: autocast rounds those to the same values.
             converted = kept = 0
@@ -595,8 +598,19 @@ def session_runtime(args: argparse.Namespace) -> dict[str, Any]:
                 "converted_linear": converted,
                 "kept_fp32_linear": kept,
             }
-        else:
+        elif variant == "bf16-full":
+            # Control: every backbone parameter BF16, so the residual stream and
+            # norms run in BF16 as in a bfloat16 vLLM engine; buffers (RoPE) stay.
+            count = 0
+            for parameter in model.backend.model.backbone.parameters():
+                parameter.data = parameter.data.to(torch.bfloat16)
+                count += 1
+            torch.cuda.empty_cache()
+            result["variants"][variant] = {"bf16_parameters": count}
+        elif variant == "fp32-master":
             result["variants"][variant] = {}
+        else:
+            raise ValueError(f"unknown runtime variant {variant}")
         run(prompts[: args.warmup])
         torch.cuda.reset_peak_memory_stats()
         latencies, answers = run(prompts)
@@ -617,7 +631,7 @@ def session_runtime(args: argparse.Namespace) -> dict[str, Any]:
             for prompt, answer in zip(prompts, answers):
                 sink.write(json.dumps({"id": prompt["id"], "answers": answer}) + "\n")
         entry["answers"] = answers
-        if args.panel and variant == "bf16-resident":
+        if args.panel and variant in args.panel_variants:
             entry["parity"] = {}
             for spec in args.panel:
                 name, prompts_path, predictions_path, count, _ = parse_panel(spec, 1)
@@ -631,9 +645,12 @@ def session_runtime(args: argparse.Namespace) -> dict[str, Any]:
                 entry["parity"][name] = tally.summary()
     from v2.release.examples import compare_answers
 
-    base, resident = (
-        result["variants"][v].pop("answers") for v in ("fp32-master", "bf16-resident")
-    )
+    answers_by_variant = {
+        name: entry.pop("answers") for name, entry in result["variants"].items()
+    }
+    if not {"fp32-master", "bf16-resident"} <= set(answers_by_variant):
+        return result
+    base, resident = (answers_by_variant[v] for v in ("fp32-master", "bf16-resident"))
     diff = {"slots": 0, "category_changes": 0, "missing": 0, "max_abs_drift": 0.0}
     identical = 0
     for left, right in zip(base, resident):
@@ -1206,6 +1223,17 @@ def main() -> None:
             p.add_argument("--package", type=Path, required=True)
             p.add_argument("--bench")
             p.add_argument("--panel", action="append", default=[])
+        if name == "runtime":
+            p.add_argument(
+                "--variants",
+                type=lambda s: s.split(","),
+                default=["fp32-master", "bf16-resident"],
+            )
+            p.add_argument(
+                "--panel-variants",
+                type=lambda s: s.split(","),
+                default=["bf16-resident"],
+            )
         if name in ("plugin", "coloc"):
             p.add_argument("--dtype", default="bfloat16")
             p.add_argument("--gpu-memory-utilization", type=float, default=0.2)
@@ -1213,6 +1241,7 @@ def main() -> None:
         if name == "plugin":
             p.add_argument("--max-num-batched-tokens", type=int, default=16384)
             p.add_argument("--concurrency", type=int, default=1)
+            p.add_argument("--server-env", action="append", default=[])
         if name in ("vela", "coloc"):
             p.add_argument("--model", type=Path, required=True)
             p.add_argument("--texts", type=Path, action="append", required=True)
