@@ -6,8 +6,8 @@ platforms, and register through vLLM's documented plugin entry points.
 
 Status: prototype (v0). It serves Decision 2.0 full Qwen3.5 packages. Vela 1.0
 classifiers need no plugin class: vLLM's native ModernBERT sequence
-classification serves them. Results, limitations and next steps are in
-[`src/training/decision2/v2/serving/records/`](../training/decision2/v2/serving/records/).
+classification serves them. Design, parity, latency, limitations and next steps are in
+[the prototype record](../training/decision2/v2/serving/records/vllm-plugin-prototype-2026-10-01.md).
 
 ## Contents
 
@@ -89,8 +89,10 @@ curl -s localhost:8000/classify -H 'Content-Type: application/json' \
 - One model per engine. Separate engines share a GPU through `--gpu-memory-utilization`.
 - Served package profile: `qwen-full` with the shared candidate head. Base-bound adapter packages
   (27B), bf16z-compressed packages, Qwen3 backbones and Kai-native encoders are not served yet.
-- Prefix caching is off for hybrid pooling models in vLLM, so a shared state is re-read by every
-  question.
+- vLLM enables prefix caching for the hybrid pooling engine, but `token_classify` requests skip
+  cache reads, so a shared state is re-read by every question.
+- `--dtype float32` needs `VLLM_SR_GDN_BF16_INPUTS=1` and `--attention-backend TRITON_ATTN` on
+  ROCm; it is for numerics studies (about half the bfloat16 throughput).
 - A request without positions (for example a raw `/pooling` call) gets a NaN logit, which System
   One reports as `invalid_model_output`.
 

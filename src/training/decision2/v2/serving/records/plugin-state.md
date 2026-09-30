@@ -6,6 +6,16 @@ Assignment: coordinator notes 2026-09-30 19:40 (serving track), 19:50 / 20:00 (r
 
 ## Now
 
+- 2026-10-01 ≈01:10 UTC+8 (17:10Z) — **All measurements done; record written; GPU1 released (0.79 GPU-h total).**
+  Record: [`vllm-plugin-prototype-2026-10-01.md`](vllm-plugin-prototype-2026-10-01.md).
+  - float32: parity with `VLLM_SR_GDN_BF16_INPUTS=1` + `--attention-backend TRITON_ATTN` (the default ROCm
+    prefix-prefill kernel needs 128 KiB LDS at float32 / head 256): 42 / 11,053 changes (bf16 63); 30.0 ms p50,
+    239 items/s at concurrency 128.
+  - Control: Transformers runtime with BF16 parameters changes 64 / 11,053 → the bf16 gap is BF16 residual precision.
+  - Changed answers are near-ties (stored margin ≤ .026). Vela: 0 argmax changes (≤ 32,714 tokens). Label-token demo:
+    0 argmax changes vs Transformers; 86% prefix-cache hits on a shared state. Co-location: ≤ 7% interference at 1–8
+    workers.
+  - Next: gist 09, merge into `xunzhuo/decision-2-training`; optional Tier 1b prefix-cache experiment.
 - 2026-10-01 ≈00:35 UTC+8 (16:35Z) — **Plugin serves; BF16 parity and runtime measured; second chain running.**
   - `p08-bf16-0930T1611` (mirror `9c0abb957`): every request answered, alias identical. Answer changes vs stored
     predictions: public231 3 / 231, typed FINAL 20 / 2,000, CSS15 33 / 6,547, mlx-diag 7 / 2,275 (max drift .022 /
@@ -55,16 +65,25 @@ Assignment: coordinator notes 2026-09-30 19:40 (serving track), 19:50 / 20:00 (r
 | vela-0930T1623 | `9c0abb957` | 0.0014 | tokenizer not found (blob store unmounted) |
 | label-0930T1624 | `9c0abb957` | 0.0231 | weights not found (blob store unmounted) |
 | coloc-0930T1626 | `9c0abb957` | 0.0436 | Vela engine load failed (same) |
-| **Total** | | **0.363** | |
+| p08-fp32gdn-0930T1629 | `ecb46f764` | 0.0358 | FP32 start fails in ROCm prefix-prefill attention (LDS) |
+| rt08-bf16full-0930T1632 | `ecb46f764` | 0.0747 | Transformers BF16-parameter control done |
+| vela-0930T1637 | `ecb46f764` | 0.0219 | endpoint plugin aborted the ModernBERT server (fixed `14fe9ac40`) |
+| label-0930T1638 | `ecb46f764` | 0.0414 | demo done; shared state over the context (superseded) |
+| p08-fp32-tri-0930T1641 | `ecb46f764` | 0.1117 | FP32 parity + bench done |
+| vela-0930T1648 | `564d5f8e8` | 0.0364 | Vela float32 + bfloat16 done |
+| label-0930T1651 | `564d5f8e8` | 0.0414 | label-token demo + prefix cache done |
+| coloc-0930T1654 | `564d5f8e8` | 0.0617 | co-location done |
+| **Total** | | **0.788** | |
 
 ## Plan
 
 | Step | Status |
 | --- | --- |
-| Plugin v0: model class, pooler, `/v1/decisions`, pinned build | code done; first served answers pending |
-| DEV2.0-0.8B parity, bfloat16 and float32 | pending |
-| Vela-1.0 Domain via native ModernBERT classify vs Transformers | pending |
-| Serving-shape notes (+ co-located measurement if cheap) | pending |
-| Latency / throughput: plugin vs shipped runtime (+ BF16-resident) | pending |
-| Tier 1a label-token demo (generate runner, ≤ 0.2 GPU-h) | pending |
-| Record, gist 09, merge into `xunzhuo/decision-2-training` | pending |
+| Plugin v0: model class, pooler, `/v1/decisions`, pinned build | done |
+| DEV2.0-0.8B parity, bfloat16 and float32 | done |
+| Vela-1.0 Domain via native ModernBERT classify vs Transformers | done |
+| Serving-shape notes (+ co-located measurement) | done |
+| Latency / throughput: plugin vs shipped runtime (+ BF16-resident) | done |
+| Tier 1a label-token demo (generate runner) | done (0.08 GPU-h) |
+| Record | done |
+| Gist 09, merge into `xunzhuo/decision-2-training` | pending |
