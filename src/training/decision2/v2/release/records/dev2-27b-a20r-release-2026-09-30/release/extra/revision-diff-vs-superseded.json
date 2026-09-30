@@ -1,0 +1,34 @@
+{
+  "schema": "dev2-revision-diff/1",
+  "repo": "llm-semantic-router/DEV2.0-27B",
+  "released": "c0dba600087f582a1033830a2276d22e96e6324c",
+  "new": "5323310327e52d4eadd119cd10accac9b106c97d",
+  "files": {
+    "released": 32,
+    "new": 33
+  },
+  "changed_card_files": [
+    "ATTRIBUTIONS.md",
+    "MODEL_MANIFEST.json",
+    "README.md",
+    "assets/jevarena-v3-model-task.svg",
+    "assets/jevarena-v3-rank.svg",
+    "assets/jevbench-public231-rank.svg",
+    "evaluation/EVALUATION.md",
+    "evaluation/manifest.json"
+  ],
+  "changed_hub_managed_files": [],
+  "changed_other_files": [
+    "adapter/adapter_config.json",
+    "adapter/adapter_model.safetensors",
+    "decision2/_vendor/dev2model/infer.py",
+    "decision2/_vendor/dev2model/score_bias.py",
+    "decision2/qwen.py",
+    "decision_config.json",
+    "decision_head.safetensors"
+  ],
+  "weight_files": 2,
+  "weight_bytes": 488098072,
+  "weights_byte_identical": false,
+  "ok": false
+}

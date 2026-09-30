@@ -1,0 +1,25 @@
+{
+ "c1_candidate": null,
+ "finalists": [
+  {
+   "item8": null,
+   "lb_vs_bar": -3.8891558871697245,
+   "lb_vs_best_peer": -4.187122283367729,
+   "name": "m7-2b-S7H-b1",
+   "point": "2b-S7H-b1",
+   "priority": 1,
+   "revision": "54dbcae00d8390483b93cc8a111bda0718ee88a5573a72aea12232668849e6dc",
+   "run": "/data/dev2/runs/dec/formal/m7/m7-2b-S7H-b1",
+   "status": "FAIL",
+   "status_1_7": "FAIL"
+  }
+ ],
+ "order": [],
+ "pending": [],
+ "rule": "among finalists passing items 1-7 whose item 8 has not failed: highest paired lower bound vs the best same-size peer, then vs the bar (incumbent T = 1), then priority; the first is the C1 candidate and the successor once item 8 passes",
+ "schema": "dec-m6-successor-choice/1",
+ "successor": null,
+ "successor_revision": null,
+ "successor_run": null,
+ "tier": "2b"
+}

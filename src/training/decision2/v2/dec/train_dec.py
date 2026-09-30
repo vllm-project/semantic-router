@@ -153,6 +153,32 @@ def selection_key(metrics: dict[str, Any], step: int, rule: str) -> tuple[float,
     raise ValueError("selection rule must be matrix-v1 or shared")
 
 
+def continuation_metadata(
+    start: dict[str, Any], source: dict[str, Any]
+) -> dict[str, Any]:
+    """Checkpoint metadata of a full continuation of a full Decision 2.0 checkpoint.
+
+    The start's root ``full_training_source`` is kept, so soups and interpolations
+    with the root's other descendants stay defined; the direct start is recorded
+    in ``continued_from``.
+    """
+    root = start.get("full_training_source")
+    if start.get("checkpoint_format") != "full" or not isinstance(root, dict):
+        raise ValueError(
+            "--init decision2 needs a full Decision 2.0 checkpoint with its training source"
+        )
+    return {
+        "checkpoint_format": "full",
+        "full_training_source": root,
+        "continued_from": {
+            "kind": "decision2",
+            "source_fingerprint": source,
+            "start_continued_from": start.get("continued_from"),
+        },
+        "initialization": "decision2-full-continuation",
+    }
+
+
 def attach_teacher_probs(item: dict[str, Any], probs: dict[str, float]) -> None:
     values = [float(probs[key]) for key in item["keys"]]
     total = math.fsum(values)
@@ -165,9 +191,12 @@ def parse_args() -> argparse.Namespace:
         "--model-path",
         type=Path,
         required=True,
-        help="Decision 1.0 package, or an official Qwen3.5 snapshot with --init base",
+        help="Decision 1.0 package, an official Qwen3.5 snapshot with --init base, "
+        "or a full Decision 2.0 checkpoint with --init decision2",
     )
-    parser.add_argument("--init", choices=("decision1", "base"), default="decision1")
+    parser.add_argument(
+        "--init", choices=("decision1", "base", "decision2"), default="decision1"
+    )
     parser.add_argument("--revision", help="Immutable revision for --init base")
     parser.add_argument("--train-mode", choices=("lora", "full"), default="lora")
     parser.add_argument("--backbone-lr", type=float, default=1e-5)
@@ -239,6 +268,10 @@ def parse_args() -> argparse.Namespace:
             parser.error(f"{name} must be positive")
     if (args.init == "base") != bool(args.revision):
         parser.error("--init base needs --revision (and only then)")
+    if args.init == "decision2" and (args.train_mode != "full" or args.residual):
+        parser.error(
+            "--init decision2 continues a full checkpoint with --train-mode full"
+        )
     if args.train_mode == "full" and args.residual:
         parser.error("residual readouts extend LoRA continuations only")
     if args.teacher_partial and not args.teacher:
@@ -283,6 +316,12 @@ def main() -> None:
     source = source_fingerprint(args.model_path)
     if args.init == "decision1":
         base, tokenizer = DecisionModel.from_decision1(args.model_path, args.head_dim)
+    elif args.init == "decision2":
+        base, tokenizer = DecisionModel.from_checkpoint(args.model_path)
+        if base.metadata.get("head_dim") != args.head_dim:
+            raise ValueError("--head-dim must match the Decision 2.0 start checkpoint")
+        continued = continuation_metadata(base.metadata, source)
+        base.metadata.pop("soup", None)
     else:
         base, tokenizer = DecisionModel.from_base(
             args.model_path, args.revision, args.head_dim
@@ -300,16 +339,19 @@ def main() -> None:
     else:
         model.backbone.requires_grad_(True)
         model.head.requires_grad_(True)
-        model.metadata.update(
-            {
-                "checkpoint_format": "full",
-                "full_training_source": {
-                    "kind": args.init,
-                    "revision": args.revision,
-                    "source_fingerprint": source,
-                },
-            }
-        )
+        if args.init == "decision2":
+            model.metadata.update(continued)
+        else:
+            model.metadata.update(
+                {
+                    "checkpoint_format": "full",
+                    "full_training_source": {
+                        "kind": args.init,
+                        "revision": args.revision,
+                        "source_fingerprint": source,
+                    },
+                }
+            )
     model = model.float().to(device)
     if args.gradient_checkpointing == "on":
         model.backbone.gradient_checkpointing_enable(

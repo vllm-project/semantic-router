@@ -319,6 +319,139 @@ class SuccessorGateTest(unittest.TestCase):
         self.assertTrue(items["1_beats_own_1_0"]["passed"])
         self.assertEqual(below, "own 1.0")
 
+    def no_1_0(self):
+        """The A20r spec's key for a tier without Decision 1.0 (alias of no_own_1_0)."""
+        reports = self.spec["card"]["reports"]
+        reports[1]["role"] = "peer"
+        reports[2]["role"] = "reference"
+        self.spec["card"]["paired"] = self.spec["gate_profile"]["tier"]["paired"]
+        self.spec["gate_profile"]["tier"]["no_1_0"] = True
+
+    def test_no_1_0_alias_is_the_no_own_1_0_profile(self):
+        self.no_1_0()
+        items, below = gate.first_items(self.spec)
+        self.assertEqual(
+            list(items), list(gate.successor_names(gate.gate_profile(self.spec)))
+        )
+        self.assertEqual(self.failing(), [], items)
+        self.assertIn(
+            "no Decision 1.0 at this size",
+            items["1_successor_R5_tier_gates"]["evidence"],
+        )
+        self.assertEqual(below, "GLiNER2.5-Decide (no Decision 1.0 at this size)")
+        self.edit(
+            self.spec["gate_profile"]["tier"]["paired"],
+            **{"axis_ci95.H.delta.high": -0.01},
+        )
+        self.assertEqual(self.failing(), ["1_successor_R5_tier_gates"])
+
+    def test_no_1_0_alias_card_comparison_must_be_the_reference(self):
+        self.no_1_0()
+        self.spec["card"]["paired"] = str(
+            write(
+                self.root / "p-other.json",
+                paired(48.64, 35.94, 1.0, 0.16, (self.run, self.root / "kai")),
+            )
+        )
+        self.assertEqual(self.failing(), ["1_successor_R5_tier_gates"])
+
+    def test_c1_postkey_is_bound_by_the_decision(self):
+        rule = {"verdict": "PASS", "delta": 1.2, "ci95": [-0.4, 2.8], "p": 0.15}
+        path = write(
+            self.root / "c1-summary.json",
+            {
+                "schema": gate.C1_SUMMARY_SCHEMA,
+                "role": "successor",
+                "c1": 38.1,
+                "baseline_entry": {"identity": "a" * 64},
+                "item8": {**rule, "name": "DEV2.0-0.6B 99999999 (current revision)"},
+            },
+        )
+        self.spec["gate_profile"]["c1_postkey"] = str(path)
+        evidence = gate.evidence_sha256(gate.gate_profile(self.spec))
+        self.assertEqual(evidence["c1_postkey"], layout.sha_file(path))
+        self.assertEqual(self.failing(), [])
+        gate.check(self.spec, self.decision_for(), final=True)
+        self.edit(str(path), c1=37.0)
+        with self.assertRaises(ValueError):
+            gate.check(self.spec, self.decision, final=True)
+
+
+class SuccessorNoOwnAndC1Test(SuccessorGateTest):
+    """A tier without a Decision 1.0 model, and item 8 (C1 post-key) when named."""
+
+    def setUp(self):
+        super().setUp()
+        profile = self.spec["gate_profile"]
+        profile["tier"]["no_own_1_0"] = True
+        self.spec["card"]["paired"] = profile["tier"]["paired"]
+        self.summary = write(
+            self.root / "c1" / "SUMMARY.json",
+            {
+                "schema": gate.C1_SUMMARY_SCHEMA,
+                "role": "successor",
+                "c1": 58.1,
+                "item8": {
+                    "verdict": "PASS",
+                    "delta": 0.8,
+                    "ci95": [-0.9, 2.4],
+                    "name": "base",
+                },
+                "baseline_entry": {"identity": "a" * 64},
+            },
+        )
+        profile["c1_postkey"] = str(self.summary)
+
+    def test_all_pass(self):
+        items = self.items()
+        self.assertEqual(list(items), [*gate.SUCCESSOR_ITEMS, gate.SUCCESSOR_C1])
+        self.assertEqual(self.failing(), [], items)
+        self.assertIn("no Decision 1.0", items["1_successor_R5_tier_gates"]["evidence"])
+        self.assertIn("c1_postkey", gate.evidence_sha256(gate.gate_profile(self.spec)))
+
+    def test_c1_regression_or_other_weights_fail(self):
+        self.edit(str(self.summary), **{"item8.verdict": "REGRESSION"})
+        self.assertEqual(self.failing(), [gate.SUCCESSOR_C1])
+        self.edit(
+            str(self.summary),
+            **{"item8.verdict": "PASS", "baseline_entry.identity": "b" * 64},
+        )
+        self.assertEqual(self.failing(), [gate.SUCCESSOR_C1])
+
+    def test_card_must_compare_with_the_reference(self):
+        own = write(
+            self.root / "p-other.json",
+            paired(48.64, 35.94, 10.0, 0.19, (self.run, self.root / "kai")),
+        )
+        self.spec["card"]["paired"] = str(own)
+        self.assertEqual(self.failing(), ["1_successor_R5_tier_gates"])
+
+    def test_mlx_pairing_in_the_9b_schema(self):
+        mlx_current = self.spec["gate_profile"]["current"]["mlx_predictions"]
+        write(
+            Path(self.files["mlx_paired"]),
+            {
+                "schema": gate.MLX_PAIRED_9B,
+                "types": ["choice", "noul"],
+                "overall": {"ci95": {"low": -0.029, "high": 0.004}, "delta": -0.012},
+                "left": {"predictions_sha256": "m" * 64},
+                "right": {"predictions_sha256": layout.sha_file(Path(mlx_current))},
+            },
+        )
+        self.assertEqual(self.failing(), [])
+        self.edit("mlx_paired", **{"overall.ci95": {"low": -0.03, "high": -0.001}})
+        self.assertEqual(self.failing(), ["1_successor_R4_mlx_diag"])
+
+    # The own-1.0 variants of these are covered by SuccessorGateTest.
+    def test_each_rule_fails_on_its_criterion(self):
+        pass
+
+    def test_current_revision_chain(self):
+        pass
+
+    def test_tier_gates(self):
+        pass
+
 
 if __name__ == "__main__":
     unittest.main()

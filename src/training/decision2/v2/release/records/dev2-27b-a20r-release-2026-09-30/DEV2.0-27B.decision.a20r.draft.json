@@ -1,0 +1,54 @@
+{
+ "schema": "dev2-release-decision/1",
+ "status": "draft",
+ "decision": "release",
+ "model_name": "DEV2.0-27B",
+ "repo_id": "llm-semantic-router/DEV2.0-27B",
+ "name_basis": "base",
+ "name_base_model": "Qwen/Qwen3.8-27B",
+ "identity": {
+  "model_sha256": "2e07451107a2ca9735064cc01f7e43e8522b4bae48f2d77bdf29f7ea2fe6362c"
+ },
+ "report_sha256": "e9a7c4700bd97bb78efa1c28117aa2a8a7a92fc2b3a29ead6d4f7e9c7f49b600",
+ "paired_sha256": "09ff4b0f872b60fe665124440b111afe03575d44a458c8743446a0ca7d0200c6",
+ "gate_profile": "successor",
+ "current_revision": "c0dba600087f582a1033830a2276d22e96e6324c",
+ "evidence_sha256": {
+  "current_decision": "fd1b5ef0643532407b27a4f7f8d6748e8f8f9fa27b627f5b285b8ddb41d3e008",
+  "current_gate": "e6965d75e1f7cac175522f19fbabedd333ad2e8136f8e69a0eb9fb7b200b4a3f",
+  "exposure": "084781a6a0b47fb1598b33432f4d43be8cee8af2af63b44417bc9f087e69ede4",
+  "mlx_paired": "f1351c070025d3d18c1eb49c59ea897796c03242881268e2e41438c3b45e1ea5",
+  "paired": "9e77de58c9a8caa96201514a4864d9f3838c7cb0e95a5e2ef954d8f266ec5f37",
+  "public231": "bf20dc42932f6e1aeeea05b29458b8bb57b12dde9622c8a35300528b0e9f9632",
+  "tier_paired": "09ff4b0f872b60fe665124440b111afe03575d44a458c8743446a0ca7d0200c6",
+  "types": "de356f39813028200989985b8184c91e912799d4cf22e8f763722ef16e2b2e3f"
+ },
+ "calibration": "none (temperature 1); the CAL698 per-type temperatures (Choice 0.639, Noul 0.545, Score 0.05) were rejected under the 23:15 rule (typed-DEV Brier .065 -> .073 and ECE .049 -> .069; CSS-pilot ECE .088 -> .128; only CSS-pilot Brier improved, .464 -> .452)",
+ "prepared_by": "Decision 2.0 release engineering, 27B successor worker (worktree vllm-sr-dev2-release)",
+ "action": "New main revision of the private repository llm-semantic-router/DEV2.0-27B: the 27B Milestone 4 successor M4-A20r soup (rank-64 qwen-adapter on Qwen/Qwen3.8-27B@1d4bf0f2, T = 1, 32,768 tokens, 26,096,775,168 loaded parameters) replaces the M3-A soup (c0dba600); then the superseded adapter blobs are purged with rewrite_history=False and the C1 baseline registry takes this revision's post-key run.",
+ "rationale": "Coordinator decision 2026-09-30 07:20 UTC+8: A20r is THE 27B successor (post-key v3 72.36, +5.15 [+2.19, +8.02] vs the current revision; all seven 16:05 successor items pass; F-b is superseded: higher v3 lower bound, better human transfer, mlx-diag and public 231, and a storage-light adapter). Not a significant difference from AutoJev-27B (+0.23; lower bound -1.60): no 'beats AutoJev' claim. Draft for the frozen package that item 8 scores; the final decision adds the C1 summary.",
+ "approved_package": {
+  "identity": "2e07451107a2ca9735064cc01f7e43e8522b4bae48f2d77bdf29f7ea2fe6362c",
+  "loaded_parameters": 26096775168,
+  "base": "Qwen/Qwen3.8-27B@1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0: 28 pinned files by SHA-256",
+  "profile": "qwen-adapter (rank 64, alpha 128)",
+  "temperature": 1,
+  "max_input_tokens": 32768,
+  "revision_binding": "receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified."
+ },
+ "licence_decision": "apache-2.0 (adapter, head, runtime and card ours; base Qwen3.8-27B Apache-2.0; training-data licences credited in ATTRIBUTIONS.md)",
+ "supersedes": {
+  "revision": "c0dba600087f582a1033830a2276d22e96e6324c",
+  "final_sha256": "fd1b5ef0643532407b27a4f7f8d6748e8f8f9fa27b627f5b285b8ddb41d3e008",
+  "gate_sha256": "e6965d75e1f7cac175522f19fbabedd333ad2e8136f8e69a0eb9fb7b200b4a3f",
+  "weights_identity": "b7fd44e3ad73d24faa85c2ba06ba61d4494aa4be2a2025c580ba02bedae6e781"
+ },
+ "disclosures": [
+  "post-key v3 72.36 vs AutoJev-27B 72.13 (+0.23; 95% CI lower bound -1.60): not a significant difference",
+  "public 231 203 vs Eikos-27B 212 (-9, 95% CI -16, -2; gates public231 REGRESSION vs that peer); the two hard-tier skills (long policy 11 vs 15 of 19; quoted conclusions 33 vs 38 of 46)",
+  "typed Choice 753 vs AutoJev-27B 800; constraint competition .882 vs 1.000",
+  "human transfer .584 vs AutoJev-27B .587 (-0.002, 95% CI -0.030, +0.066; not significant)",
+  "card-eligible mlx-diag +.014 (95% CI +.003, +.025) vs the previous revision; the XNLI Score part stays internal (-.015, 95% CI -.032, +.001, reported only)",
+  "transfer tasks below all three peers (wiki politeness, TempoWiC, Reddit humor, MRF) and lower than the previous revision on TempoWiC and Reddit humor"
+ ]
+}

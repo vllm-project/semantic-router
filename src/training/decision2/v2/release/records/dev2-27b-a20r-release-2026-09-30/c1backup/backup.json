@@ -1,0 +1,24 @@
+{
+  "files_sha256": {
+    "GATE-C1-vs-baseline.json": "b374086bb6c22c339aaa1936e2a81b6ce91e4960bcdaa90cf7a781a8c6b9e333",
+    "PLAN.json": "fdd8eafa8388ce9754f562a86d54f7129f9d3e50f62dd33c2e5116f074894c03",
+    "POSTKEY.log": "a61ff472b1f7e33e5b444ee5059acad36c4668e85cf63ccbba3a5722ce62366f",
+    "SHA256SUMS": "fb277a9eb96fa03645b4878d585804f71ac9918efbae75d95e1e29c6254e14ba",
+    "SUMMARY.json": "e95c040341b0d20aebdbb50660e4d4c58008bea018d813b86180f6ae42dc6ecf",
+    "VERIFY.json": "35380f3b4126bc7fb725f47fa455fa893ecdfcb41d6a6ddb9aac9320a62a96d8",
+    "cand/COLLECT.json": "909b8deebe4f78403ff301795b2481a5f63e3521cb63e17737f99bfb8b220dbb",
+    "cand/GPU-TIME.json": "072881ac9921f62a91273a5b6d690c9c840015a15cc0c677e82aae993ff7a0ce",
+    "cand/REPORT-C1.json": "b5f704d7f310f3126d0668b4895de57b63a86dec62cdf3ecfd5d42feb71abc3a",
+    "cand/SEAL-C1.json": "6b035fb7ac9a7d87d7a06ec26d3e544da5785451932902fe3d458e0abea42eec",
+    "cand/output/sealed-c1.predictions.jsonl": "75ef884accc2428f308afcbf2a26ea43bd7f84bddf3f4c4f6d1c69e1a428be6e",
+    "cand/output/sealed-c1.predictions.jsonl.manifest.json": "01be3f1b946bba68ace2cd966306c0aee3ebcfa8bd09bf316aa58e2c3609b30d",
+    "smoke/PARITY.json": "208473571459249fbafe7cef096458f11dd60e8dc372632eae5977b7be7b492e"
+  },
+  "prefix": "c1-postkey/27B/dev2-27b-a20r-20260930T000642Z",
+  "private": true,
+  "readback_equal": true,
+  "repo": "llm-semantic-router/decision-2.0-eval-artifacts",
+  "revision": "bd34a942f56052eb4f9ba9f6ffbd18e5e9d88a74",
+  "schema": "dev2-c1-postkey-backup/1",
+  "utc": "2026-09-30T00:36:20Z"
+}

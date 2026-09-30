@@ -1,0 +1,100 @@
+{
+  "candidate": "M4-A20r-soup",
+  "checkpoint": {
+    "base_source_files_sha256_digest": "12d6b09d041c792d601e29de77616b0d1c523377d2408b67f111a12a788f24d9",
+    "loaded_parameters": 26096775168,
+    "lora": {
+      "alpha": 128,
+      "dropout": 0.05,
+      "member_alpha": 64,
+      "member_rank": 32,
+      "members": 2,
+      "rank": 64
+    },
+    "model_sha256": "2e07451107a2ca9735064cc01f7e43e8522b4bae48f2d77bdf29f7ea2fe6362c",
+    "parameter_source": "pinned base text backbone 25,624,600,064 + LoRA rank 64 466,911,232 + head 5,263,872 (safetensors headers)",
+    "soup_manifest_files_match": true
+  },
+  "created_utc": "2026-09-29T23:31:13Z",
+  "files": {
+    "m4/M4-A20r-soup/checkpoint/adapter/README.md": {
+      "bytes": 123,
+      "sha256": "fa69c811f08b76a2f0c1ec631a85cdec713341984ed56e9021fe668cfbaece4b"
+    },
+    "m4/M4-A20r-soup/checkpoint/adapter/adapter_config.json": {
+      "bytes": 1353,
+      "sha256": "2e9be5f75921435917a356c1bd5fcbb7fe7ba722ad52da3f1553debbdb2ab206"
+    },
+    "m4/M4-A20r-soup/checkpoint/adapter/adapter_model.safetensors": {
+      "bytes": 1867776712,
+      "sha256": "2f70601df771f185b19591376842945de6997382881994ecc57a9a95fc6f17e4"
+    },
+    "m4/M4-A20r-soup/checkpoint/chat_template.jinja": {
+      "bytes": 8952,
+      "sha256": "c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041"
+    },
+    "m4/M4-A20r-soup/checkpoint/decision_config.json": {
+      "bytes": 59949,
+      "sha256": "051d9e22c7f1452fdacce0889767870fcd78beacc7902ec28543dbd6541adb39"
+    },
+    "m4/M4-A20r-soup/checkpoint/decision_head.safetensors": {
+      "bytes": 21056344,
+      "sha256": "054c1f6c638c4f9bf4060bc3d196e351fe1912039527461e3572bfa7261c2c67"
+    },
+    "m4/M4-A20r-soup/checkpoint/soup_manifest.json": {
+      "bytes": 62345,
+      "sha256": "248ef8665853b94d38f39275e53b914f3dd68c4ced8395c54f9c6f03b8ff36f7"
+    },
+    "m4/M4-A20r-soup/checkpoint/tokenizer.json": {
+      "bytes": 19989325,
+      "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
+    },
+    "m4/M4-A20r-soup/checkpoint/tokenizer_config.json": {
+      "bytes": 1123,
+      "sha256": "bee8eba30f0eb4af73c0fe2cd06d0f89b657d7819941c438157ec42f7c80ea87"
+    },
+    "m4/M4-A20r-soup/package/ADOPTION.json": {
+      "bytes": 1483,
+      "sha256": "021922de72abda1f3713b0907881007899247bdc88728b51fc3798f8b53eea5f"
+    },
+    "m4/M4-A20r-soup/package/PACKAGE.json": {
+      "bytes": 1352,
+      "sha256": "c4e4e65746d91127f4cb7b073946e99c109eac8575a811217d25388d0ff900a8"
+    },
+    "m4/M4-A20r-soup/package/calibration.json": {
+      "bytes": 2055,
+      "sha256": "518e19cd0f89a6e8f63e666a02c9ca4fc8743f873c765183d1e745f476cd3157"
+    },
+    "m4/M4-A20r-soup/package/dev-calibration.json": {
+      "bytes": 3366,
+      "sha256": "f54a68323cccd016a9820caf710700d2a3c037007aea424a00bfb34d6353263a"
+    }
+  },
+  "formal": {
+    "collect_sha256": "e4502a34a55df70da3557b3d88ee8b65b4bba4faca8159b55ae1a5564530a659",
+    "report_sha256": "e9a7c4700bd97bb78efa1c28117aa2a8a7a92fc2b3a29ead6d4f7e9c7f49b600",
+    "run_dir_node_b": "/data/dev2/runs/27b/M4-A20r-soup/formal",
+    "seal_sha256": "9d60e61171da3ea477ab59e1f5303f0bcbc560a5964e8a7ebe13e61855911611"
+  },
+  "hf_policy": "private; soup only (no individual seeds); base not uploaded; deleted with rewrite_history=False after the release",
+  "max_input_tokens": 32768,
+  "milestone": "27B Milestone 4 successor (coordinator 2026-09-30 07:20)",
+  "node_b_source_paths": {
+    "checkpoint/adapter/README.md": "/data/dev2/runs/27b/M4-A20r-soup/soup/checkpoint/adapter/README.md",
+    "checkpoint/adapter/adapter_config.json": "/data/dev2/runs/27b/M4-A20r-soup/soup/checkpoint/adapter/adapter_config.json",
+    "checkpoint/adapter/adapter_model.safetensors": "/data/dev2/runs/27b/M4-A20r-soup/soup/checkpoint/adapter/adapter_model.safetensors",
+    "checkpoint/chat_template.jinja": "/data/dev2/runs/27b/M4-A20r-soup/soup/checkpoint/chat_template.jinja",
+    "checkpoint/decision_config.json": "/data/dev2/runs/27b/M4-A20r-soup/soup/checkpoint/decision_config.json",
+    "checkpoint/decision_head.safetensors": "/data/dev2/runs/27b/M4-A20r-soup/soup/checkpoint/decision_head.safetensors",
+    "checkpoint/soup_manifest.json": "/data/dev2/runs/27b/M4-A20r-soup/soup/checkpoint/soup_manifest.json",
+    "checkpoint/tokenizer.json": "/data/dev2/runs/27b/M4-A20r-soup/soup/checkpoint/tokenizer.json",
+    "checkpoint/tokenizer_config.json": "/data/dev2/runs/27b/M4-A20r-soup/soup/checkpoint/tokenizer_config.json",
+    "package/ADOPTION.json": "/data/dev2/runs/27b/M4-A20r-soup/ADOPTION.json",
+    "package/PACKAGE.json": "/data/dev2/runs/27b/M4-A20r-soup/package/PACKAGE.json",
+    "package/calibration.json": "/data/dev2/runs/27b/M4-A20r-soup/package/calibration.json",
+    "package/dev-calibration.json": "/data/dev2/runs/27b/M4-A20r-soup/adopt/dev-calibration.json"
+  },
+  "package_decision": "T = 1",
+  "profile": "qwen-adapter",
+  "schema": "dev2-27b-staging/1"
+}

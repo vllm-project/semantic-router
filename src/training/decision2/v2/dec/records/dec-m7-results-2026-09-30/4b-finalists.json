@@ -1,0 +1,253 @@
+{
+ "best_proxy": 62.90628589809471,
+ "finalists": [
+  {
+   "G": -0.0012499999999999734,
+   "H": 0.5628018923367579,
+   "H3": 0.5662605783604941,
+   "T": 0.703125,
+   "by_type": {
+    "choice": 491,
+    "noul": 266,
+    "score": 368
+   },
+   "checkpoint": "/data/dev2/runs/dec/m7/lines/4b/4b-N7C-b1_2/build/4b-N7C-b1_2",
+   "css_pilot_predictions": "/data/dev2/runs/dec/m7/lines/4b/4b-N7C-b1_2/css-pilot/css-pilot.predictions.jsonl",
+   "effective_weights": {
+    "A": "1/2",
+    "I": "1/2"
+   },
+   "eligible": true,
+   "files_sha256_list": "/data/dev2/runs/dec/m7/lines/4b/4b-N7C-b1_2/files.sha256",
+   "files_sha256_list_sha256": "d568829ac619d8bbc6cae70ee1496fea07ec3f6df77cad1feb04e7b40b1eb932",
+   "line": "L-N7C",
+   "point": "4b-N7C-b1_2",
+   "proxy": 62.90628589809471,
+   "reasons": [],
+   "slot": 1,
+   "step": "1/2",
+   "typed_dev_predictions": "/data/dev2/runs/dec/m7/lines/4b/4b-N7C-b1_2/dev/dev.predictions.jsonl",
+   "weights_json": "/data/dev2/runs/dec/m7/lines/4b/4b-N7C-b1_2/weights.json",
+   "weights_json_sha256": "9b7ac8866e1e38e9b7948641658e265243bee6124bf4f1434788ee49c040f5fd"
+  }
+ ],
+ "lines": {
+  "L-N7C": [
+   {
+    "G": -0.05687500000000001,
+    "H": 0.5534801582050711,
+    "H3": 0.5633889210081819,
+    "T": 0.6475,
+    "by_type": {
+     "choice": 440,
+     "noul": 258,
+     "score": 338
+    },
+    "eligible": false,
+    "point": "4b-N7C-b1",
+    "proxy": 59.86471435142604,
+    "reasons": [
+     "type choice 440 < floor 477",
+     "type score 338 < floor 350",
+     "family transition_table 111/400 below reference - 0.10"
+    ],
+    "step": "1"
+   },
+   {
+    "G": -0.0012499999999999734,
+    "H": 0.5628018923367579,
+    "H3": 0.5662605783604941,
+    "T": 0.703125,
+    "by_type": {
+     "choice": 491,
+     "noul": 266,
+     "score": 368
+    },
+    "eligible": true,
+    "point": "4b-N7C-b1_2",
+    "proxy": 62.90628589809471,
+    "reasons": [],
+    "step": "1/2"
+   },
+   {
+    "G": 0.003750000000000031,
+    "H": 0.5508945843389148,
+    "H3": 0.5642595462552313,
+    "T": 0.708125,
+    "by_type": {
+     "choice": 499,
+     "noul": 266,
+     "score": 368
+    },
+    "eligible": true,
+    "point": "4b-N7C-b1_3",
+    "proxy": 62.45816420092686,
+    "reasons": [],
+    "step": "1/3"
+   }
+  ],
+  "L-N7H": [
+   {
+    "G": 0.04437500000000005,
+    "H": 0.5271578974846424,
+    "H3": 0.545813631790202,
+    "T": 0.74875,
+    "by_type": {
+     "choice": 583,
+     "noul": 260,
+     "score": 355
+    },
+    "eligible": false,
+    "point": "4b-N7H-b1",
+    "proxy": 62.82590832941661,
+    "reasons": [
+     "H_mean 0.5458 < reference 0.5625"
+    ],
+    "step": "1"
+   },
+   {
+    "G": 0.03687499999999999,
+    "H": 0.5343220366264854,
+    "H3": 0.5513496441095594,
+    "T": 0.74125,
+    "by_type": {
+     "choice": 541,
+     "noul": 271,
+     "score": 374
+    },
+    "eligible": false,
+    "point": "4b-N7H-b1_2",
+    "proxy": 62.93379137231303,
+    "reasons": [
+     "H_mean 0.5513 < reference 0.5625"
+    ],
+    "step": "1/2"
+   },
+   {
+    "G": 0.026874999999999982,
+    "H": 0.5452672587816578,
+    "H3": 0.5593397645695698,
+    "T": 0.73125,
+    "by_type": {
+     "choice": 520,
+     "noul": 270,
+     "score": 380
+    },
+    "eligible": false,
+    "point": "4b-N7H-b1_3",
+    "proxy": 63.14480841558451,
+    "reasons": [
+     "H_mean 0.5593 < reference 0.5625"
+    ],
+    "step": "1/3"
+   }
+  ],
+  "L-N7P": [
+   {
+    "G": 0.008750000000000036,
+    "H": 0.5192889863752631,
+    "H3": 0.5376158249460645,
+    "T": 0.713125,
+    "by_type": {
+     "choice": 540,
+     "noul": 241,
+     "score": 360
+    },
+    "eligible": false,
+    "point": "4b-N7P-b1",
+    "proxy": 60.8537557106264,
+    "reasons": [
+     "type noul 241 < floor 252",
+     "H_mean 0.5376 < reference 0.5625"
+    ],
+    "step": "1"
+   },
+   {
+    "G": 0.007500000000000062,
+    "H": 0.5421639517365553,
+    "H3": 0.5519526641018596,
+    "T": 0.711875,
+    "by_type": {
+     "choice": 506,
+     "noul": 255,
+     "score": 378
+    },
+    "eligible": false,
+    "point": "4b-N7P-b1_2",
+    "proxy": 62.12511272766113,
+    "reasons": [
+     "H_mean 0.5520 < reference 0.5625"
+    ],
+    "step": "1/2"
+   },
+   {
+    "G": 0.0068750000000000755,
+    "H": 0.5453704533356167,
+    "H3": 0.5574073205509128,
+    "T": 0.71125,
+    "by_type": {
+     "choice": 503,
+     "noul": 260,
+     "score": 375
+    },
+    "eligible": false,
+    "point": "4b-N7P-b1_3",
+    "proxy": 62.281195792546995,
+    "reasons": [
+     "H_mean 0.5574 < reference 0.5625"
+    ],
+    "step": "1/3"
+   }
+  ]
+ },
+ "not_finalists": [
+  {
+   "line": "L-N7H",
+   "reason": "no point passes the gates",
+   "reasons": [
+    "H_mean 0.5458 < reference 0.5625",
+    "H_mean 0.5513 < reference 0.5625",
+    "H_mean 0.5593 < reference 0.5625"
+   ]
+  },
+  {
+   "line": "L-N7P",
+   "reason": "no point passes the gates",
+   "reasons": [
+    "H_mean 0.5376 < reference 0.5625",
+    "H_mean 0.5520 < reference 0.5625",
+    "H_mean 0.5574 < reference 0.5625",
+    "type noul 241 < floor 252"
+   ]
+  }
+ ],
+ "picks": {
+  "L-N7C": "4b-N7C-b1_2",
+  "L-N7H": null,
+  "L-N7P": null
+ },
+ "proxy_dropped": {},
+ "readouts": {
+  "L-N7C": {
+   "file": "/data/dev2/runs/dec/m7/lines/4b/readout/L-N7C.json",
+   "line": "L-N7C:1/3=4b-N7C-b1_3,1/2=4b-N7C-b1_2,1=4b-N7C-b1",
+   "sha256": "bc4e47b264f11545e708da83924a41304504e7e3b5915394298811092638e141"
+  },
+  "L-N7H": {
+   "file": "/data/dev2/runs/dec/m7/lines/4b/readout/L-N7H.json",
+   "line": "L-N7H:1/3=4b-N7H-b1_3,1/2=4b-N7H-b1_2,1=4b-N7H-b1",
+   "sha256": "017e3573d03750233b877259b14706a5fd358f5f2d97e9b899ee7291f6e803fc"
+  },
+  "L-N7P": {
+   "file": "/data/dev2/runs/dec/m7/lines/4b/readout/L-N7P.json",
+   "line": "L-N7P:1/3=4b-N7P-b1_3,1/2=4b-N7P-b1_2,1=4b-N7P-b1",
+   "sha256": "d2163f47a9cbd7e697e76b60d45a3918b3ab3d39b7324501340995fb6d1c7c2d"
+  }
+ },
+ "reference": "4b-I",
+ "role": "development-only selection (prereg dec-m7-prereg-2026-09-30.md); not a release or post-key score",
+ "rules_module": "/data/dev2/src/ed568b34d57f0026d515e422adbf7d7bc5a9bbc2-src_training_decision2/src/training/decision2/v2/9b/lux9b/m4_rules.py",
+ "rules_module_sha256": "f24028112fce5d1e2a3acddd7a067a8ad69936781b30fccd994d1d9ba9b883eb",
+ "schema": "dec-m7-finalists/1",
+ "tier": "4b"
+}

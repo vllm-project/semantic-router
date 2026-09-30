@@ -58,11 +58,16 @@ def _inventory(root: Path) -> dict[str, str]:
 
 
 def _tensor_count(path: Path) -> int:
-    with path.open("rb") as stream:
-        (size,) = struct.unpack("<Q", stream.read(8))
-        if not 2 <= size <= 256 << 20:
-            raise ValueError(f"Invalid safetensors header: {path.name}")
-        header = json.loads(stream.read(size))
+    if path.name.endswith(".safetensors.bf16z"):
+        from .bf16z import original_header
+
+        header = original_header(path)
+    else:
+        with path.open("rb") as stream:
+            (size,) = struct.unpack("<Q", stream.read(8))
+            if not 2 <= size <= 256 << 20:
+                raise ValueError(f"Invalid safetensors header: {path.name}")
+            header = json.loads(stream.read(size))
     return sum(
         math.prod(meta["shape"])
         for name, meta in header.items()

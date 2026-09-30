@@ -149,7 +149,7 @@ yield_gpu7() {
 }
 
 # GPU-hours used by Milestone 6 so far: every GPU job directory (gpu.txt; wall-clock, running jobs
-# up to now) under m6/ and formal-m6/, plus the AutoJev wave's job manifests. Soups are CPU.
+# up to now) under m6/ and formal-m6/, plus every AutoJev wave attempt's job manifests. Soups are CPU.
 m6_gpu_hours() {
   python3 - "$M6" "$RUNS/formal-m6" <<'PY'
 import datetime as dt, glob, json, os, sys
@@ -163,7 +163,7 @@ for root in sys.argv[1:]:
         end_file = os.path.join(run, "end-utc.txt")
         end = dt.datetime.strptime(open(end_file).read().strip(), fmt) if os.path.exists(end_file) else now
         total += (end - start).total_seconds() / 3600
-for manifest in glob.glob(os.path.join(sys.argv[1], "aj-wave", "*", "*.manifest.json")):
+for manifest in glob.glob(os.path.join(sys.argv[1], "aj-wave*", "*", "*.manifest.json")):
     total += json.load(open(manifest))["gpu_hours"]
 print(f"{total:.3f}")
 PY

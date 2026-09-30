@@ -1,0 +1,33 @@
+{
+  "also_named_by_other_paths": {},
+  "commits_after": 3,
+  "commits_before": 3,
+  "deleted": [
+    "054c1f6c638c4f9bf4060bc3d196e351fe1912039527461e3572bfa7261c2c67",
+    "2f70601df771f185b19591376842945de6997382881994ecc57a9a95fc6f17e4"
+  ],
+  "gone": true,
+  "head_after": [
+    "90a70b4ab83feaecb6796925a75754bd57fa9514"
+  ],
+  "head_before": [
+    "90a70b4ab83feaecb6796925a75754bd57fa9514"
+  ],
+  "history_unchanged": true,
+  "kept": {
+    "checkpoint/tokenizer.json": "no LFS object with this SHA-256 (already deleted)"
+  },
+  "lfs_objects_before": 2,
+  "mode": "apply",
+  "node_copy": "/data/dev2/runs/release/dev2-27b-a20r-20260930/staging/download/m4/M4-A20r-soup",
+  "passed": true,
+  "prefix": "m4/M4-A20r-soup",
+  "repo": "llm-semantic-router/dev2-27b-staging",
+  "rewrite_history": false,
+  "schema": "dev2-27b-a20r-staging-purge/1",
+  "targets": {
+    "checkpoint/adapter/adapter_model.safetensors": "2f70601df771f185b19591376842945de6997382881994ecc57a9a95fc6f17e4",
+    "checkpoint/decision_head.safetensors": "054c1f6c638c4f9bf4060bc3d196e351fe1912039527461e3572bfa7261c2c67"
+  },
+  "utc": "2026-09-30T01:37:24Z"
+}

@@ -95,6 +95,9 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 | eval: JevBench analysis | `/home/xunliu/code/vllm-sr-dev2-eval-jevbench` | `xunzhuo/decision-2-training-eval-jevbench` |
 | ~27B Milestone 4b | `/home/xunliu/code/vllm-sr-dev2-27b-m4b` | `xunzhuo/decision-2-training-27b-m4b` |
 | research & data: hard-skill families | `/home/xunliu/code/vllm-sr-dev2-data-hardskills` | `xunzhuo/decision-2-training-data-hardskills` |
+| research & data: HR2 human-rated data | `/home/xunliu/code/vllm-sr-dev2-data-hr2` | `xunzhuo/decision-2-training-data-hr2` |
+| 9B Milestone 8 (parallel to M7) | `/home/xunliu/code/vllm-sr-dev2-9b-m8` | `xunzhuo/decision-2-training-9b-m8` |
+| decoder M8-small (2B + 0.8B) | `/home/xunliu/code/vllm-sr-dev2-dec-small` | `xunzhuo/decision-2-training-dec-small` |
 
 - New code and records go under `src/training/decision2/v2/<track>/` (tracks: `eval`, `data`, `06b`, `dec`, `9b`, `27b`;
   shared helpers in `src/training/decision2/v2/common/`). Reuse the existing verified modules instead of forking them.
@@ -198,6 +201,221 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-30 17:15 — **27B M5: FF20 failed its development gates; B1's fallback was missed; continuation launched;
+  GPU RECLAIM.**
+  - The M5 worker stopped at the ~5 h limit around 12:00 UTC+8 after writing its hand-off; nobody acted after that.
+  - **M5-FF20** (full FT on the A20 mixture, two-seed soup; ~20.7 GPU-h): development gates at 04:26Z → **not a
+    finalist**.
+    - HT-DEV v2 .516 vs A20r .565, Δ −.049 [−.070, −.029], FLAG.
+    - Proxy P_dev 68.96 vs 78.99; T_dev .957; CSS pilot .497 vs .681.
+    - **Full FT plus more typed dose overfits typed families and costs human transfer,** an extreme case of the C1
+      pattern.
+  - **Deviation:** the preregistered B1 fail branch (stop FF20H, launch L128 = rank-128 LoRA on A20) was not executed.
+    FF20H ran to completion, and chain FF20H is reading M5-FF20H / M5-SX now. Its development gates decide as
+    preregistered, and the results disclose the deviation.
+  - **Continuation worker:** it launches L128 now, processes the FF20H / SX gates, formal-tests passers, and returns the
+    verdicts.
+  - **GPU reclaim, overriding the 17:05 lend:**
+    - node B GPU5 and node A GPU2 go back to 27B for L128 (s1 / s2).
+    - **9B M8 uses node A GPU3–4 only.**
+    - **The 2B / 0.8B M8-small work uses node B GPU6–7 plus spare GPU2.**
+    - Every worker: check leases before launching, and never co-tenant a 27B job.
+
+- 2026-09-30 17:05 — **USER DIRECTIVE: push 27B, 9B and 4B in parallel, and also 2B and 0.8B.** This supersedes the 17:00
+  pauses for 9B / 2B / 0.8B; 0.6B stays paused.
+  - **27B:** M5 finishes (soups, readouts, formal on node B GPU0–1).
+  - **4B:** M8 distillation from DEV2.0-27B (running; node A GPU5 + node B GPU3–4 + node A GPU0–1 shared for teacher
+    targets).
+  - **9B:** M7 finishes on node A GPU6–7. **9B M8 starts NOW in parallel** (worktree `vllm-sr-dev2-9b-m8`, gist
+    `05b-decision-2-9b-m8.md`, node A GPU2–4 lent by 27B since M5's lane A finished, 24 GPU-h):
+    - distillation from A20r as top-ups of the five K5 members (D1: all rows; D2: human rows);
+    - M7's C line reused as the control if it is token-matched;
+    - development gates: the Noul floor, HT-DEV v2, MLX-DEV-9B and the PN1 hop guard.
+  - **2B + 0.8B: decoder M8-small starts NOW** (worktree `vllm-sr-dev2-dec-small`, gist `04b-decision-2-dec-small.md`,
+    node B GPU5–7 lent by 27B since M5's lane B finished, node B GPU2 spare, 24 GPU-h for both):
+    - the same distillation design as 4B M8;
+    - teacher targets generated on node B from the A20r package there, reading the 4B worker's targets by row hash
+      where they overlap.
+  - Any successor names DEV2.0-27B as the distillation teacher on its card. Items 1–8 apply, with item 8 through the
+    eval custodian.
+  - **27B M6** (with HR2) waits for M5's result and HR2. The GPUs go back to 27B when the lent milestones end.
+
+- 2026-09-30 17:00 — **USER PLAN DECISION (aligned via questions): "aggressive" plan; JevBench stays a guard.**
+  - **Training plan:**
+    - **27B:** continue M5 (running: full FT + A20 dose + HS1 variants; soups and development readouts, formal
+      tonight). If there is no significant win over AutoJev, at most one more milestone with HR2.
+    - **9B:** finish M7 (the P and Q PN1 arms were both stopped by early rules for hurting true-paraphrase "hop"; the
+      C control line goes to rules and formal), then **pause**. Revisit with HR2 only if the coordinator reopens it.
+    - **4B: decoder M8 starts NOW,** with cross-size distillation from DEV2.0-27B (A20r) and matched controls. It does
+      not wait for HR2; HR2 may be added only by an amendment before its first readout.
+    - **2B / 0.8B / 0.6B: paused.** They lead their sizes.
+    - **Data:** HR2 (human-rated data) continues and is the main lever for the next round.
+  - **JevBench:** unchanged, a non-regression guard (item 7). Cards state "statistically level" where the gap is within
+    noise.
+  - **The user asked why 4B / 9B don't beat our own 1.0 on JevBench.** Answer:
+    - The gaps are noise: 4B −2 [−9, +5]; 9B −5 [−11, +1], with only 9 differing items.
+    - 2.0 gained on v3 typed families and human transfer, while JevBench hard tests quoted-conclusion checking, long
+      policy documents and condition-not-met, which neither generation trained on. Typed fine-tuning slightly
+      deepens quote-copying and the yes-bias.
+    - HS1 taught the skills at 2B / 4B without score gains. 27B A20r reached 203.
+    - On C1, 9B > Lux significantly and 4B = Nox.
+
+- 2026-09-30 11:30 — **User re-sent the directives; all are in effect. New data lever: HR2, new human-rated training
+  data.**
+  - **In effect:**
+    - Naming follows the base model: DEV2.0-9B / DEV2.0-27B.
+    - 27B target: beat AutoJev. A20r (72.36, level) is live; M5 aims for significance.
+    - Progressive updates under the successor rule, items 1–8. 0.6B and 27B have been updated.
+    - JevBench kept as guard item 7, with its skill data built (HS1).
+    - Code and docs on `xunzhuo/decision-2-training`; models and data private on HF.
+  - **Diagnosis driving the next lever:** typed / A7 gains inflate v3 but don't carry over to fresh human-labeled data.
+    Evidence: 4B's v3 lead over Nox is flat on C1; 27B A20r is +5.15 v3 but +0.23 C1. Typed-skill data (A7, HS1) and
+    teacher soft targets didn't move human transfer.
+  - **HR2** (research & data; worktree `vllm-sr-dev2-data-hr2`; node B GPU3–4 ≤ 1 GPU-h if needed):
+    - New licence-clean, human-judged datasets (preferences → Choice, yes/no labels → Noul, ratings → Score).
+    - Not already used, and not protected: C1's 8 sources, CSS15 including HT-DEV v2's held-out portions, JevBench,
+      mlx-diag sources, esnli-R. No model-judged labels.
+    - 20–60k rows; blind review ≥ 200 rows; per-source dev slices.
+    - Tracks add it as a block with matched-token controls, screened with HT-DEV v2, in their next milestones.
+
+- 2026-09-30 11:25 — **9B M7 handed off at the 5-hour mark, as designed; a continuation worker was launched**
+  (`v2/9b/records/m7-state.md`; mirror `df6dcccc9`; ~1 of 24 GPU-h).
+  - **Diagnosis** from stored M6 predictions: the multilingual loss is a PAWS-X yes-bias that grows with distance from
+    Lux. PAWS-X yes rate: Lux .550, K-a13 .624, K5-a12 .676. The losses are in ja / de / zh, where PN1-r2 has most of its
+    rows.
+  - **Design:** a ~6.2M-token continued-training top-up of each of the five K5 soup members (~0.35 GPU-h each), then a
+    re-soup and the α line.
+    - Arms: P (+ PN1-r2 ×2), C (matched-token control), and Q (PN1-r2 ×1, added by amendment 1 before its GPU jobs).
+    - Development gates: the Noul / typed floors, HT-DEV v2 non-FLAG, the PN1 dev guard, and MLX-DEV-9B (the decoder's
+      MLX-DEV with K / PN1 overlap removed; 6,147 rows). mlx-diag is never used to select.
+  - **P was stopped by its early rule:** near-miss / swap yes fell 71% → 5%, but true-paraphrase yes fell .042 (limit
+    .03).
+  - Q and C chains are running on node A GPU6–7, ETA ~13:40 UTC+8.
+  - **Shared change:** `train_dec.py --init decision2` (continued training from a full checkpoint, keeping Lux 1.0 as the
+    recorded source), with a preflight and a test.
+
+- 2026-09-30 10:35 — **Decoder M7: no successor at 4B or 2B; decoder training PAUSED** (results
+  `v2/dec/records/dec-m7-results-2026-09-30.md`; integration `e066e0505`; 20.27 GPU-h, 20.55 of 30 with M6b).
+  - **4B finalist** `4b-N7C-b1_2` (½ matched-token control + ½ current): 61.20, −1.95 [−3.03, +0.004]; fails items 1,
+    5 (vs Nox +4.73 [−0.07, +7.97]) and 6(b). Typed FINAL fell in every type.
+  - **2B finalist** `2b-S7H-b1` (HS1 + long-prose soup): 50.67, −2.76 [−3.89, +1.90]; fails items 1 and 6(b).
+    - Human transfer −.063 (n.s.), which neither the CSS pilot nor HT-DEV v2 predicted: HT-DEV v2 read TIE.
+    - Treat HT-DEV v2 TIE as uninformative, as documented.
+  - **Diagnostics:** HS1 cut false yes on unmet conditions to ~0 (4B .26 → .00; 2B .63 → .01), and quote adoption moved
+    toward .50. PN1 brought PN1-dev yes-rates to ~.50. **These skills did not move formal v3 or human transfer at this
+    dose.** HT-DEV v2 flagged the 4B PN1 soup (−.027).
+  - **Coordinator decision: pause decoder training milestones.**
+    - M5, M6, M6b and M7 all gave no successor. Round-2 data and more of the released recipe are not levers at 2B / 4B.
+    - The decoder family stays SOTA-at-size on v3.
+    - Revisit if 27B M5 or 9B M7 produces a stronger, better-generalizing own model to use as a cross-tier teacher.
+  - **GPUs:** node A GPU5 and node B GPU3–4 (decoder-owned, idle) are available under shared leases to 27B M5 and
+    9B M7, and to eval jobs.
+  - Tooling: a formal wrapper, HT-DEV v2 diagnostics and relays (`5ae4cb9cc`); a relay fix (`6672f602c`).
+
+- 2026-09-30 09:50 — **DEV2.0-27B successor released: A20r** (gist 07e; integration `ca7b1500a`; 1.24 GPU-h;
+  storage 51.86 / 100 GB).
+  - **Package:** private `llm-semantic-router/DEV2.0-27B@5323310327e52d4eadd119cd10accac9b106c97d` (`main`).
+    - Rank-64 adapter on Qwen3.8-27B, T = 1, 32K, 26,096,775,168 loaded parameters; manifest `82c71c2e…`.
+    - Decision `ef7c85c5…`; successor profile (no-1.0 tier) 13 / 13.
+    - Parity: 0 changes on all 8,378 prompts, before and after download.
+    - The previous adapter and head (0.49 GB) and the staging copy were purged with `rewrite_history=False`.
+  - **Item 8 (C1 post-key): PASS only as "no regression".** 57.56 vs 57.33, +0.23 [−1.22, +1.70]; Choice +1.79,
+    Noul −1.56, Score −1.16, all n.s. **The +5.15 v3 gain did not carry over to C1**, like 4B's lead over Nox. The card
+    says so and lists the C1 declines.
+  - **Card:**
+    - "post-key v3 72.36 vs AutoJev-27B 72.13 (+0.23; lower bound −1.60): not a significant difference";
+    - public 231 203 vs Eikos 212 (−9 [−16, −2]) with the two hard skills;
+    - typed Choice 753 vs 800; constraint competition .882 vs 1.000;
+    - human transfer .584 vs .587 (n.s.); mlx +.014.
+    - The card summary wording was fixed to "strongest other same-size model shown".
+  - **Registry:** the 27B C1 baseline is now A20r's run. Any further 27B C1 attempt needs coordinator approval, one per
+    baseline.
+  - **Gate key compatibility:** `no_own_1_0` (F-b worker) and `no_1_0` (A20r spec) are both accepted.
+  - **Hint for 27B M5 and all tracks** (not a rule change mid-milestone): typed / A7 gains inflate v3 without moving C1.
+    Among passing finalists, prefer those with an HT-DEV v2 GAIN or a human-transfer gain, and plan the next
+    milestones' levers toward human transfer (HS1 add-on, long prose, human-rated data).
+
+- 2026-09-30 09:40 — **9B M6: no successor (a near miss); 9B M7 launched** (result
+  `v2/9b/records/lux9b-m6-result-2026-09-30.md`; integration `0b97bc514`; ~12.3 of 24 GPU-h).
+  - **Finalist K5-a12** (½ five-seed K soup + ½ Lux 1.0): post-key v3 69.362, +1.62 [−0.19, +2.41] vs the released
+    model.
+    - Typed +.030 [+.018, +.042]; human transfer level (+.006); public 231 179 vs 178; tier gate +3.55 vs Lux1.
+    - Fails item 1 (lower bound −0.19) and item 4: card-eligible mlx −.010 [−.020, −.001], Japanese −.033.
+    - HT-DEV v2 read TIE (−.007), which matches formal human transfer.
+  - **Arms stopped early:** KA (AutoJev teacher) and KH (HS1 substitution, which lowered Noul `rule_precedence` and the
+    CSS pilot).
+  - **Lessons:**
+    - More K seeds in the soup is the lever that works.
+    - The ½ point costs multilingual accuracy.
+    - HS1 substitution hurts Noul at 9B. If HS1 is used, add it; don't substitute it.
+  - **9B M7** (fresh worker; node A GPU6–7; 24 GPU-h):
+    - K5 recipe + **PN1-r2** (ja-heavy) as the multilingual lever, with a matched control. A cost-effective design, such
+      as a top-up of the K seeds.
+    - Development gates: HT-DEV v2 non-FLAG, a PN1 dev yes-rate guard, a multilingual development check (never mlx-diag
+      itself), and the Noul floor.
+    - Items 1–8.
+
+- 2026-09-30 08:40 — **The `bf16z` lossless codec is in the release pipeline; the direct node-to-node link is fast; F-b
+  was correctly not released** (record `v2/release/records/dev2-bf16z-codec-2026-09-30.md`; integration `aa65b150e`;
+  0.103 GPU-h; nothing uploaded).
+  - **Codec:** byte-plane split plus zstd; the loader in `v2/release/runtime/qwen.py` restores bit-identical tensors.
+    - F-b: 53.80 → 34.65 GB (64.4%); FP32 embedding 40.5%; BF16 shards 66.9%. DEV2.0-0.8B: 59.5%.
+    - A no-upload 0.8B release run through the loader changed 0 of 600 answers. 8 codec tests plus 120 release tests
+      pass, and plain packages are unchanged.
+    - **Use it for any full-weight 27B package** (≈ 35 GB), and optionally to shrink DEV2.0-9B (~⅓ of 17.95 GB) before
+      the next 27B full-weight update.
+  - **Direct node B ↔ node A link: 1.24 GB/s**, with a temporary SSH key removed afterwards; 53.84 GB moved in 43 s.
+    **Every track: use it instead of the workstation relay** (25–50 KB/s). F-b's plain package now exists on both nodes,
+    so 27B M5 can use it for HT-DEV v2 references.
+  - **Successor gate** (`gate.py`): no-1.0 tiers (card and tier gates compare with AutoJev), an optional item 8 bound to
+    the C1 summary, and the 9B-style mlx pairing. The A20r release uses it.
+  - **Privacy-screen findings:** the calibration file recorded the autotune-cache path, and soup `decision_config.json`
+    recorded node checkpoint paths. **Soup and trainer tools must write track-relative paths.**
+  - F-b's C1 slot and release are unused, as decided at 07:20. A20r's release worker holds the 27B slot.
+
+- 2026-09-30 07:35 — **Decoder M6b: no successor. The decoder M7 worker was stopped by the platform; a continuation
+  worker was launched** (M6b results `v2/dec/records/dec-m6b-results-2026-09-30.md`).
+  - **M6b:** N6D soup −2.67 [−4.59, +0.33] and its ⅔ point −0.89 [−2.88, +1.16] vs DEV2.0-4B. Typed FINAL fell
+    (T .647 / .671 vs .688), so the 4B N6D lead is closed.
+  - **M7 state:** data locked on PN1-r2 and the cleared HS1 rows (`ea7540df4`); the evaluation-only guard is wired
+    in; the line watcher is live (`ed568b34d`). At 23:29Z these chains were running:
+    - node A GPU5: 2B S7P;
+    - node B: 4B N7P s1 / s2 and the N7C ⅓ build.
+  - **Platform limit:** the 9B M6 and decoder M7 workers were both stopped after ~5.5 h of turn time. Every long
+    milestone must now:
+    - poll every ≤ 30 minutes with one-line state updates;
+    - hand off cleanly through its state file near 5 h.
+    The coordinator relaunches continuation workers from the state file.
+
+- 2026-09-30 07:20 — **27B M4: the A20r soup is a successor (72.36, +5.15) and SUPERSEDES F-b; 27B M5 launched**
+  (M4 records at `632f4005d`; integration `7671002d0`; 65.68 of 70 GPU-h).
+  - **Formal results** (post-key, T = 1):
+
+    | Soup | v3 | vs DEV2.0-27B | T / H | Notes |
+    | --- | ---: | --- | --- | --- |
+    | **A20r** (+20M A7, rank 32 per seed → rank-64 exact soup) | **72.36** | **+5.15 (+2.19, +8.02)** | .896 / .584 | all seven items pass; card-eligible mlx +.014 (+.003, +.025); public 231 203; all five Score levels used |
+    | A20 | 70.44 | — | — | also passes |
+    | Ar | 68.02 | fails item 1 | — | — |
+
+    - vs AutoJev-27B (72.13): lower bound −1.60, so NOT significant.
+    - Contrasts: dose (A20 − Ar) T +.046, v3 +2.42 (+0.14, +5.93); capacity (A20r − A20) T +.058; more updates alone add
+      nothing.
+  - **Coordinator decision: A20r is THE 27B successor; F-b is superseded.** A20r has a higher v3 lower bound (+2.19 vs
+    +0.19), better human transfer (.584 vs .566), better mlx (+.014 vs −.012), better public 231 (203 vs 197), and a
+    storage-light adapter.
+    - A fresh release worker (worktree `vllm-sr-dev2-release`) stages A20r on node A and runs the **C1 guard first**,
+      then releases it as DEV2.0-27B `main`.
+    - Card: "72.36 vs AutoJev-27B 72.13 (+0.23; lower bound −1.60): not a significant difference". No "beats AutoJev"
+      claim.
+    - **The F-b codec worker** (`vllm-sr-dev2-release-27b`) may finish the `bf16z` codec and tests, which are useful for
+      future full-weight models. **F-b's C1 attempt and release are NOT approved;** the ledger's one-successor rule
+      enforces that.
+  - **27B M5** (fresh worker; `vllm-sr-dev2-27b`; node B GPU5–7 + node A GPU2–4; 72 GPU-h):
+    - Target: beat AutoJev significantly.
+    - HT-DEV v2 27B references first: current, A20r, F-b, AutoJev, Eikos.
+    - Arms stack the levers: full FT on the A20 mixture; a higher-rank LoRA on A20; more A7 dose and/or HS1 / PN1-r2.
+      Each has a control and an early-stop rule.
 
 - 2026-09-30 07:15 — **F-b did not fit under the HF 100 GB cap; storage freed; a lossless-compression path was chosen**
   (storage record `v2/release/records/dev2-bf16-storage-2026-09-30.md`; integration `073cbd508`; 0.712 GPU-h).

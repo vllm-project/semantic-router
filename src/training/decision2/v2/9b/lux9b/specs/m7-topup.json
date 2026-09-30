@@ -1,0 +1,72 @@
+{
+ "name": "m7-topup",
+ "note": "K-seed continuation files on the K recipe (M4 x60): P = x60 replay (whole groups, stratified as the x60 recipe, replay_tokens native tokens) + PN1-r2 (dataset revision 27b1d2f1) repeated pn1_repeat times, gold only on the block; C = x60 replay budgeted to P's native tokens with the same seed (contains P's replay). Replay rows keep their own-Lux targets. mlxdev: the decoder's MLX-DEV panel minus every group sharing a group id, row id, input hash or normalized segment with x60 or PN1-r2.",
+ "seed": "20260930:m7",
+ "max_length": 8192,
+ "tolerance": 0.01,
+ "replay_tokens": 5000000,
+ "replay_tolerance": 0.08,
+ "x60": {
+  "train": {
+   "file": "m4:data/m4-k-xl-r2-60m/build/train.jsonl",
+   "sha256": "a66131b1165513128e5a51af78587c4ddefcc836773e724c4514a592e33fc0e0"
+  },
+  "teacher": {
+   "file": "m4:data/m4-k-xl-r2-60m/build/teacher.jsonl",
+   "sha256": "cdcd99c1550d35531df0982ae85116fe3ea5035bc9a09c1ef7b5b3063a32f2c9"
+  }
+ },
+ "ids": {
+  "file": "m3b:xl-r2-a4/upload/m3/mixtures/xl-r2/mx-xl-full-r2.ids.jsonl",
+  "sha256": "7843afb7b2bbb315902b6748d6559532f384283d8efd836b935daac5f55dbd4a"
+ },
+ "pn1": {
+  "train": {
+   "file": "hf:27b1d2f130292268b43a618584bebab5d4e4a6b5/m4/pn1/arms/pn1.train.jsonl",
+   "sha256": "c1cec06bd5f1caadb7631338796054aae120cbf8b17dcb0bbf4c694470c52cfb"
+  },
+  "repeat": 2
+ },
+ "mlxdev": {
+  "panel": {
+   "file": "m7:mlxdev-src/build/panel.jsonl",
+   "sha256": "100ae4e770973640e00b79115e50c7fcca7d4837c22e596690ed6023530652a7"
+  },
+  "index": {
+   "file": "m7:mlxdev-src/build/panel.jsonl.index.jsonl",
+   "sha256": "6ffa4b84bca0ba76c8b10517c4dcfb86cd68b06a8a4031af9eb0cdebc70dc7a8"
+  }
+ },
+ "isolation": [
+  {
+   "role": "select",
+   "file": "d10:data/rights_clean_goemotions_v2/select.jsonl",
+   "sha256": "32a4352d8ed93ce82430db80175339ad8e4d40c618f2866608fdb6ef5120f2a6"
+  },
+  {
+   "role": "cal",
+   "file": "hf:ed87a03ab80ca5b9560780bba51a83a77ff47d14/m2/cal/CAL698/cal.jsonl",
+   "sha256": "19cc1a8c4ebe6fd13031079f6b7d131046ce503f435f894e3ea672f91c2ed41f"
+  },
+  {
+   "role": "pn1-dev",
+   "split": "select",
+   "file": "hf:27b1d2f130292268b43a618584bebab5d4e4a6b5/m4/pn1/dev/pn1.dev.jsonl",
+   "sha256": "c3b68ac113fc1f2afb5554530112f472a9c62f7997285bcaf89a6b655bb7f4cf"
+  },
+  {
+   "role": "hs1-dev",
+   "split": "select",
+   "file": "hf:171e6f0c0913d5f0d8f7304928da4f14dca6e127/m4/hs1/dev.jsonl",
+   "sha256": "2e9ee9ab6768aa2b3d0d397670248e5a8f2e524d60887d06698a4e84516533bf"
+  }
+ ],
+ "denied_sources": {
+  "c1_registry": "repo:v2/eval/records/sealed-c1-source-registry-2026-09-28.json",
+  "extra": [
+   "massive",
+   "pawsx",
+   "xnli"
+  ]
+ }
+}

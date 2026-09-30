@@ -282,6 +282,26 @@ class NoOwnCardTest(unittest.TestCase):
         self.assertEqual(result["manifest"]["paired_vs_reference"]["delta"], -1.5)
         self.assertTrue(result["tradeoffs"])
 
+    def test_strongest_reference_is_the_strongest_other_model(self):
+        items = entries(
+            {
+                "key": "gliner",
+                "role": "reference",
+                "report": str(REPORTS / "gliner25.json"),
+                "repo_id": "fastino/GLiNER2.5-Decide",
+            }
+        )
+        items[2] = {
+            "key": "bosun",
+            "role": "peer",
+            "report": str(REPORTS / "bosun.json"),
+            "repo_id": "Hanno-Labs/bosun-v3.1-0.6b",
+            "label": "Bosun",
+        }
+        readme = self.build(items)["readme"]
+        self.assertIn("the strongest other same-size model shown", readme)
+        self.assertNotIn("the strongest same-size model shown", readme)
+
     def test_paired_intervals_of_the_other_peers_on_the_evaluation_page(self):
         v3 = {
             name: json.loads((REPORTS / f"{name}.json").read_text())["v3"]["score"]

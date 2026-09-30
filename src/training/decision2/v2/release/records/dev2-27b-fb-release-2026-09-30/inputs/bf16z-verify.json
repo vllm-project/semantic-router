@@ -1,0 +1,167 @@
+{
+  "files": {
+    "backbone/model-00001-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 5085593736,
+      "restored_sha256": "2c0c7d5af6c52015d6a941b126da526b46e13e8d6a7c60f89e8c31b35270cd1f",
+      "sha256": "328c40b0e72a12eb6c21de13cf9fe1a9245308a188dcca0193de495b870d35e2"
+    },
+    "backbone/model-00002-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1943394880,
+      "restored_sha256": "0031edfc949cb91a97216db1e4269911bd57f14ef16c4d31146512c81aa40fab",
+      "sha256": "7b5b2bfed6b76cd71b6df6cb239711f97a5a3ea38fdb147ba985e8fc26df8fa8"
+    },
+    "backbone/model-00003-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1930820848,
+      "restored_sha256": "6bea7d1d40c5f39a9a0ed8c60b05463f069a052eb873d2d3247bfc9188c01874",
+      "sha256": "683678ffaac879c4ead1350b1638c0520f29d8ff3f828fb09d794241db40acd9"
+    },
+    "backbone/model-00004-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1858197512,
+      "restored_sha256": "8fefe97bce2b37c11151696ab1e3c059c59da08342929a0b41267b0d27cc23f8",
+      "sha256": "5aa1489bc2111f124765c3ad044ca64860746008d06f20174711da92a146e64d"
+    },
+    "backbone/model-00005-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1952938424,
+      "restored_sha256": "05ea02488c2d05013aae15f8204e3d3f87817d45bc965942830c4bcdb10bdb1e",
+      "sha256": "30e1685a1745c8ed5feb0b83854bcce14d1b67d0e7e724d009eb6d1efea53f41"
+    },
+    "backbone/model-00006-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1858197544,
+      "restored_sha256": "6d1c2bea947a03668ebb8cc9550f815bbf9eff9791b9b83ca1373bfcee8c1e92",
+      "sha256": "5a48c4798a99dbcedde86ad4b2c302e069eca50188fa2b7b44deb72941381719"
+    },
+    "backbone/model-00007-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1889858656,
+      "restored_sha256": "9f1ede03817c726b9573a1591c52354547fdf282fa1a71a4f0865c4c5333f098",
+      "sha256": "2b77d097453e417421292525d959cc6988a1d9648c8793bc4a0e49a08231c176"
+    },
+    "backbone/model-00008-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1921277344,
+      "restored_sha256": "ae3af660df8cbabf9e96536a271791c1b526bd360a1d610a54e189ae5f0c05a0",
+      "sha256": "83d8abbe23250a1303311afe09e1020b490333d7316d243f702c878b34595140"
+    },
+    "backbone/model-00009-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1930820880,
+      "restored_sha256": "76a3b03f064c08673c82f0b7eede84c68084ab7954658f28d00f3e6d2d94c441",
+      "sha256": "b9af04f5ce9d9e1655d49707b1075c6209d90c6f615d59c41ce6b6dcf34f0a46"
+    },
+    "backbone/model-00010-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1880315120,
+      "restored_sha256": "1e07fa8d7e86f636efea4b23f0b52ed683a31904ad85f9604a098f21254075ea",
+      "sha256": "c3b990f349d620ad4ae10776c758e9cb6e3d6fe2d0098bf0c5ae667a3413faae"
+    },
+    "backbone/model-00011-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1930820880,
+      "restored_sha256": "be9671a6b324f1f1cf94b59051ee527361fc99a5fe1f8ab2282dfe0bd170c1cc",
+      "sha256": "4c1e0bebd269af84cf45533ab677a362217dfd1d8e09d1924874995ddf6848f1"
+    },
+    "backbone/model-00012-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1858197544,
+      "restored_sha256": "693ccd720028bff6a04ed5c88c33c05ca72b1a71ba5e183ac50778d6c6bcde40",
+      "sha256": "b53b47e7256bc85eb478dcf24cae43f01ef7ba8eb6a567a2b82e6b9071d111cd"
+    },
+    "backbone/model-00013-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1952938456,
+      "restored_sha256": "7c89c9a8025599723aac81e2ac945502973d71e6e67856a8c97931b12795bd51",
+      "sha256": "294eedd6a80b5105ad444d27208e5396ea9c374956e8dcd9efb798167614e4f0"
+    },
+    "backbone/model-00014-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1858197544,
+      "restored_sha256": "b25ac37f4c625c69f392574711f37d2d187950985a506eeab78f6df170e83cdf",
+      "sha256": "d4748d59223c45d71a4f27d639aae414f5f0a3209961a1caa786595ddce209e7"
+    },
+    "backbone/model-00015-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1889858656,
+      "restored_sha256": "5d4c03287e2a20dea998ff186ca26d40185397af214e704e02804997b8070617",
+      "sha256": "cbef83a48b1e75ff27714f22b7854db986752803fe7cd4bb8d00758aa96cc691"
+    },
+    "backbone/model-00016-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1921277344,
+      "restored_sha256": "e26c7a87c909a9c18a4463871f9a65d89b467579142fba589e908412113846ae",
+      "sha256": "0a5430b0e6bde58a290aadc334d16f4056559c47161eb397a71f4395d194a2d5"
+    },
+    "backbone/model-00017-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1930820880,
+      "restored_sha256": "3f81b09aa712ce047ac42a9e554633571dfee95528f64e89c6408ddf350f68cf",
+      "sha256": "d67729801eac7e6dd1abd25851f42ccfd9f29d01c0975aa9030eabc608355671"
+    },
+    "backbone/model-00018-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1880315120,
+      "restored_sha256": "3f0ebc190ae30808243af0ceabd44cad64d34fd41b4c11213db381b06743ff5d",
+      "sha256": "c935eb1504b7faabd92e06ed6f7392bd73553151d7fa41f85364f13d4651f7ef"
+    },
+    "backbone/model-00019-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1930820880,
+      "restored_sha256": "abec006883a7304c90ba5a778c235863a601f9ba708221fb1ccb389606e164e7",
+      "sha256": "1dec78cc2e19e4e8c599565d7c4c0f90d622fb58cada6b0bc25f4298cb2f6775"
+    },
+    "backbone/model-00020-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1858197544,
+      "restored_sha256": "b9473e8dac42789ed6c12a48dbabf3744f8c8f25b547e0fde1e0d4b8172f4be1",
+      "sha256": "b2ef4c66a9cdd9482128bd39f8ce12d702d3597bf942ac5881eb8477f48d3a26"
+    },
+    "backbone/model-00021-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1952938456,
+      "restored_sha256": "b6fb79fcec8178997ca01c8104f3e81ffb7db9f17cef368618f5055835636715",
+      "sha256": "16635aa792fd4af6538c4729000323a65a9f0ba8e67aad9dd91b1dd3fd55f6a7"
+    },
+    "backbone/model-00022-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1858197544,
+      "restored_sha256": "4d51ad8151b8128d7e3bfb83c620849fee4bccf26294c02c426f1c13c1afd1b7",
+      "sha256": "3329d8892ffb067f1ebe596a3bfbd70b7e5699c413cbcce7fa8ed2952bd886b6"
+    },
+    "backbone/model-00023-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1889858656,
+      "restored_sha256": "1203ed27e79c29ffb81804235807f4ba44bf64cfcc2be43be1c0b22df8c468b7",
+      "sha256": "972ce1d59b113c491d2f22e10cd0f6965e3af30fec4bb9c684e8ba952f6223fb"
+    },
+    "backbone/model-00024-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1921277344,
+      "restored_sha256": "8404d913272e713832cc3a62410b092c092d06fe4569b67d4d4538a1dfebf3c2",
+      "sha256": "42e1927a1099ad1993e52e8ddbde9b51a0a03c99d306929d6e65b7f03c2c8042"
+    },
+    "backbone/model-00025-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1930820880,
+      "restored_sha256": "af3cb7a28c811b37b959d17634cd384f60fcad9c517c21da6629fa347ae47a1a",
+      "sha256": "661146cdfb2f20730047c28426c49c1356e8d19815818b6a8f8423ead22d8261"
+    },
+    "backbone/model-00026-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1880315120,
+      "restored_sha256": "3b377312a2cf64362af6d83cd784e8872c7d40b9bb746f0017c3b2dee248570f",
+      "sha256": "8cfccac392a89f3d5ab8a9540363461f7014bf8ba8a8d1aa0f5a37f22ffdcd68"
+    },
+    "backbone/model-00027-of-00027.safetensors.bf16z": {
+      "ok": true,
+      "restored_bytes": 1101110928,
+      "restored_sha256": "8f1a0660e32c3876b3324ecc39aa920f5c65b1461713ac52af4f4f137e122fa3",
+      "sha256": "5f9739ad7fa3257d434973e39fa248b6e50e821449b533be5c93149196d48650"
+    }
+  },
+  "passed": true
+}

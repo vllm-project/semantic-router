@@ -1,0 +1,108 @@
+{
+  "by_type": {
+    "choice": {
+      "after": {
+        "accuracy_all": 0.8463949843260188,
+        "brier": 0.09467006242099721,
+        "ece_10": 0.0633292623545455,
+        "n": 319,
+        "nll": 0.35082215341113754
+      },
+      "before": {
+        "accuracy_all": 0.8463949843260188,
+        "brier": 0.11072313435739002,
+        "ece_10": 0.11705494139272861,
+        "n": 319,
+        "nll": 0.4289526325822184
+      }
+    },
+    "noul": {
+      "after": {
+        "accuracy_all": 0.9238754325259516,
+        "brier": 0.051535586021363634,
+        "ece_10": 0.017064145413947466,
+        "n": 289,
+        "nll": 0.16878368119200826
+      },
+      "before": {
+        "accuracy_all": 0.9238754325259516,
+        "brier": 0.05424802357658459,
+        "ece_10": 0.054814420227386536,
+        "n": 289,
+        "nll": 0.1961403318078867
+      }
+    },
+    "score": {
+      "after": {
+        "accuracy_all": 1.0,
+        "brier": 5.890104523974412e-14,
+        "ece_10": 3.211771515410078e-08,
+        "n": 90,
+        "nll": 3.211774440477673e-08
+      },
+      "before": {
+        "accuracy_all": 1.0,
+        "brier": 0.04710270353818201,
+        "ece_10": 0.24756014585215128,
+        "n": 90,
+        "nll": 0.2917537302073346
+      }
+    }
+  },
+  "cal_sha256": "19cc1a8c4ebe6fd13031079f6b7d131046ce503f435f894e3ea672f91c2ed41f",
+  "calibration_version": "decision2-per-type-temperature/1",
+  "checkpoint_sha256": "d3460f3d4ebd4d04b07d3e4ec310a1a58d1da550302b512e8726db8190ae2e71",
+  "code_sha256": {
+    "calibrate_frozen.py": "ad35b7263bbf70498a22886ea47f4baa6a7b1bed23f70b7329791c4d9ff1421f"
+  },
+  "fit_split": "cal",
+  "inference": {
+    "batch_size": 1,
+    "device": "cuda:0",
+    "execution": "BF16 backbone, FP32 head",
+    "kernel_runtime": {
+      "causal_conv1d": "1.7.0",
+      "fla_path": "/opt/decision-fla/fla",
+      "flash_linear_attention": "0.5.2",
+      "kernel_bindings": {
+        "causal_conv1d_fn": "causal_conv1d.causal_conv1d_interface.causal_conv1d_fn",
+        "causal_conv1d_update": "causal_conv1d.causal_conv1d_interface.causal_conv1d_update",
+        "torch_chunk_gated_delta_rule": "fla.ops.gated_delta_rule.chunk.chunk_gated_delta_rule",
+        "torch_recurrent_gated_delta_rule": "fla.ops.gated_delta_rule.fused_recurrent.fused_recurrent_gated_delta_rule"
+      },
+      "triton": "3.7.1+gitf0b55c07",
+      "triton_cache_autotuning": "1",
+      "triton_cache_dir": "persisted Triton autotune cache: a fresh copy of the formal run cache (node path withheld)"
+    },
+    "max_length": 32768,
+    "runtime": {
+      "hip": "7.2.53211",
+      "torch": "2.12.0+git6bbd260",
+      "transformers": "5.17.0"
+    }
+  },
+  "logits_sha256": "1683a4d4805a79dfb7542a909bdd6c57134c91a515e41d5caaa519892b6e7996",
+  "model_sha256": "d3460f3d4ebd4d04b07d3e4ec310a1a58d1da550302b512e8726db8190ae2e71",
+  "overall": {
+    "after": {
+      "accuracy_all": 0.8982808022922636,
+      "brier": 0.06460391729581308,
+      "ece_10": 0.031916423357038176,
+      "n": 698,
+      "nll": 0.23021597950320938
+    },
+    "before": {
+      "accuracy_all": 0.8982808022922636,
+      "brier": 0.0791369656046945,
+      "ece_10": 0.10375390554041831,
+      "n": 698,
+      "nll": 0.3148685980012419
+    }
+  },
+  "selection_policy": "frozen_checkpoint",
+  "temperature_by_type": {
+    "choice": 0.5218070986939166,
+    "noul": 0.6049559048967627,
+    "score": 0.05
+  }
+}
