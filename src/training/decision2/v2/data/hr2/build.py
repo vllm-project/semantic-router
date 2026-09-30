@@ -236,6 +236,38 @@ def counts(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     return out
 
 
+def dedup(
+    rows: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, int]]]:
+    """Keep one copy of identical rows; drop every copy of an id or input with conflicting labels."""
+    report: dict[str, collections.Counter] = {
+        "exact": collections.Counter(),
+        "conflicting": collections.Counter(),
+    }
+    by_id: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
+    by_input: dict[str, set[int]] = collections.defaultdict(set)
+    for row in rows:
+        by_id[row["id"]].append(row)
+        by_input[row["input_sha256"]].add(row["label"])
+    unique, seen = [], set()
+    for ident in sorted(by_id):
+        copies = by_id[ident]
+        first = copies[0]
+        if (
+            len({(r["input_sha256"], r["label"]) for r in copies}) > 1
+            or len(by_input[first["input_sha256"]]) > 1
+        ):
+            report["conflicting"][first["family"]] += len(copies)
+            continue
+        if first["input_sha256"] in seen:
+            report["exact"][first["family"]] += len(copies)
+            continue
+        report["exact"][first["family"]] += len(copies) - 1
+        seen.add(first["input_sha256"])
+        unique.append(first)
+    return unique, {key: dict(sorted(value.items())) for key, value in report.items()}
+
+
 def build(args: argparse.Namespace) -> int:
     eval_only.guard(args)
     raw = args.raw
@@ -246,19 +278,7 @@ def build(args: argparse.Namespace) -> int:
             raise ValueError(f"{rel}: sha256 {actual} != pinned {expected}")
         inputs[rel] = actual
     rows, report = convert(raw)
-    seen: set[str] = set()
-    unique = []
-    for row in sorted(rows, key=lambda r: r["id"]):
-        if row["input_sha256"] in seen:
-            report.setdefault("exact_duplicates", collections.Counter())[
-                row["family"]
-            ] += 1
-            continue
-        seen.add(row["input_sha256"])
-        unique.append(row)
-    ids = [row["id"] for row in unique]
-    if len(ids) != len(set(ids)):
-        raise ValueError("duplicate row id")
+    unique, report["duplicates"] = dedup(rows)
     report["group_merges"] = merge_groups(unique)
     train = [row for row in unique if not is_dev(row["group_id"])]
     dev = [as_dev(row) for row in unique if is_dev(row["group_id"])]

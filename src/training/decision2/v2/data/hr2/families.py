@@ -204,13 +204,24 @@ def hs3_language(record: Mapping[str, Any]) -> str:
 
 
 def hs3_key(record: Mapping[str, Any]) -> str:
-    return sha(
-        canonical(record["context"])
-        + "\x1f"
-        + record["response1"]
-        + "\x1f"
-        + record["response2"]
-    )[:24]
+    """Stable sample key, independent of which response is listed first."""
+    pair = sorted((record["response1"], record["response2"]))
+    return sha(canonical(record["context"]) + "\x1f" + "\x1f".join(pair))[:24]
+
+
+def resolve(rows: Rows, report: collections.Counter) -> Rows:
+    """One row per id; ids whose copies disagree on input or label are dropped entirely."""
+    copies: dict[str, Rows] = collections.defaultdict(list)
+    for row in rows:
+        copies[row["id"]].append(row)
+    kept = []
+    for members in copies.values():
+        if len({(r["input_sha256"], r["label"]) for r in members}) > 1:
+            report["drop_conflicting_duplicates"] += len(members)
+            continue
+        report["drop_exact_duplicates"] += len(members) - 1
+        kept.append(members[0])
+    return kept
 
 
 def hs3_screened(first: str, screen: tuple[set[str], set[str]]) -> bool:
@@ -223,7 +234,17 @@ def hs3_pref(
     screen: tuple[set[str], set[str]],
     report: collections.Counter,
 ) -> Rows:
+    records = list(records)
+    verdicts: dict[str, set[str | None]] = collections.defaultdict(set)
+    for record in records:
+        overall = int(record["overall_preference"])
+        scores = [int(p["score"]) for p in record.get("individual_preference") or []]
+        strict = abs(overall) >= 2 and len(scores) >= 2
+        strict = strict and all(s != 0 and (s > 0) == (overall > 0) for s in scores)
+        preferred = record["response1"] if overall < 0 else record["response2"]
+        verdicts[hs3_key(record)].add(preferred if strict else None)
     pools: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
+    done: set[str] = set()
     for record in records:
         report["read"] += 1
         overall = int(record["overall_preference"])
@@ -234,11 +255,18 @@ def hs3_pref(
         if len(scores) < 2 or any(s == 0 or (s > 0) != (overall > 0) for s in scores):
             report["drop_annotator_split"] += 1
             continue
+        key = hs3_key(record)
+        if len(verdicts[key]) != 1:
+            report["drop_conflicting_duplicates"] += 1
+            continue
+        if key in done:
+            report["drop_exact_duplicates"] += 1
+            continue
+        done.add(key)
         first = hs3_first_user(record["context"])
         if hs3_screened(first, screen):
             report["drop_helpsteer2_prompt"] += 1
             continue
-        key = hs3_key(record)
         gold, other = (
             (record["response1"], record["response2"])
             if overall < 0
@@ -327,21 +355,32 @@ def help_levels(feedbacks: Sequence[str]) -> list[int] | None:
     return levels
 
 
+def hs3_help_pick(record: Mapping[str, Any]) -> tuple[str, list[str]]:
+    """The reviewed response of a sample (chosen by text, not position) and its feedback."""
+    key = hs3_key(record)
+    side = min((1, 2), key=lambda i: order("hr2-help-v1", key + record[f"response{i}"]))
+    return record[f"response{side}"], list(record.get(f"feedback{side}") or [])
+
+
 def hs3_help(
     records: Iterable[Mapping[str, Any]],
     screen: tuple[set[str], set[str]],
     report: collections.Counter,
 ) -> Rows:
+    records = list(records)
+    verdicts: dict[str, set[int | None]] = collections.defaultdict(set)
+    for record in records:
+        response, feedback = hs3_help_pick(record)
+        levels = help_levels(feedback) if len(feedback) == 3 else None
+        agreed = levels is not None and max(levels) - min(levels) <= 1
+        key = sha(canonical(record["context"]) + "\x1f" + response)[:24]
+        verdicts[key].add(sorted(levels)[1] if agreed else None)
     pool: Rows = []
+    done: set[str] = set()
     for record in records:
         report["read"] += 1
-        first = hs3_first_user(record["context"])
-        if hs3_screened(first, screen):
-            report["drop_helpsteer2_prompt"] += 1
-            continue
-        key = hs3_key(record)
-        side = int(order("hr2-help-v1", key), 16) % 2 + 1
-        feedback = record.get(f"feedback{side}") or []
+        response, feedback = hs3_help_pick(record)
+        key = sha(canonical(record["context"]) + "\x1f" + response)[:24]
         levels = help_levels(feedback) if len(feedback) == 3 else None
         if levels is None:
             report["drop_unparsed_or_not_three"] += 1
@@ -349,10 +388,18 @@ def hs3_help(
         if max(levels) - min(levels) > 1:
             report["drop_disagreement"] += 1
             continue
-        state = {
-            "conversation": hs3_turns(record["context"]),
-            "response": record[f"response{side}"],
-        }
+        if len(verdicts[key]) != 1:
+            report["drop_conflicting_duplicates"] += 1
+            continue
+        if key in done:
+            report["drop_exact_duplicates"] += 1
+            continue
+        done.add(key)
+        first = hs3_first_user(record["context"])
+        if hs3_screened(first, screen):
+            report["drop_helpsteer2_prompt"] += 1
+            continue
+        state = {"conversation": hs3_turns(record["context"]), "response": response}
         if state_chars(state) > MAX_STATE_CHARS:
             report["drop_length"] += 1
             continue
@@ -365,14 +412,14 @@ def hs3_help(
                 task_type="score",
                 language=hs3_language(record),
                 group_key="hs3:" + normalize(first),
-                local_id=f"help:{key}:{side}",
+                local_id="help:" + key,
                 state=state,
                 instructions=HELP_INSTRUCTIONS,
                 options=score_options(HELP_OPTIONS),
                 label=label,
                 render_template="hr2_hs3_help_v1",
                 audit=meta(
-                    f"{key}:{side}",
+                    key,
                     str(label),
                     domain=record["domain"],
                     upstream_language=record["language"],
@@ -435,6 +482,7 @@ def eth_util(records: Sequence[Mapping[str, str]], report: collections.Counter) 
                 audit=meta(key, "util", gold_longer=longer(gold, other)),
             )
         )
+    rows = resolve(rows, report)
     report["eligible"] = len(rows)
     chosen = take_length_balanced(rows, UTIL_TARGET, "hr2-util-v1")
     report["selected"] = len(chosen)
@@ -529,6 +577,7 @@ def eth_noul(
                 template=template,
             )
         )
+    rows = resolve(rows, report)
     report["eligible"] = len(rows)
     chosen = balance_yes_no(rows, ETHICS_NOUL_TARGET, f"hr2-{family}-v1")
     report["selected"] = len(chosen)
@@ -548,14 +597,22 @@ def prm_bucket(index: int) -> str:
 Step = tuple[int, list[str], str]
 
 
-def prm_walk(record: Mapping[str, Any]) -> tuple[list[Step], Step | None]:
-    """Yes candidates (+1 steps before the first -1) and the first -1 step of the chosen trajectory."""
+def prm_walk(
+    record: Mapping[str, Any],
+) -> tuple[list[Step], Step | None, list[tuple[Step, int]]]:
+    """+1 steps before the first -1, the first -1 step, and every rating given at a walked position
+    (the chosen and the alternative completions)."""
     yes: list[Step] = []
+    rated: list[tuple[Step, int]] = []
     previous: list[str] = []
     for index, step in enumerate(record["label"]["steps"]):
+        completions = step.get("completions") or []
+        for option in completions:
+            option_text = (option.get("text") or "").strip()
+            if option.get("rating") is not None and option_text:
+                rated.append(((index, list(previous), option_text), option["rating"]))
         if step.get("human_completion") is not None:
             break
-        completions = step.get("completions") or []
         chosen = step.get("chosen_completion")
         if chosen is not None:
             completion = completions[chosen]
@@ -569,12 +626,13 @@ def prm_walk(record: Mapping[str, Any]) -> tuple[list[Step], Step | None]:
         rating, text = completion.get("rating"), (completion.get("text") or "").strip()
         if rating is None or not text:
             break
+        current = (index, list(previous), text)
         if rating == -1:
-            return yes, (index, list(previous), text)
+            return yes, current, rated
         if rating == 1:
-            yes.append((index, list(previous), text))
+            yes.append(current)
         previous.append(text)
-    return yes, None
+    return yes, None, rated
 
 
 def prm_state(
@@ -592,6 +650,7 @@ def prm_step(records: Iterable[Mapping[str, Any]], report: collections.Counter) 
     groups: dict[str, dict[str, Rows]] = collections.defaultdict(
         lambda: {"yes": [], "no": []}
     )
+    ratings: dict[str, set[int]] = collections.defaultdict(set)
     for record in records:
         report["read"] += 1
         if record.get("is_quality_control_question") or record.get(
@@ -603,7 +662,11 @@ def prm_step(records: Iterable[Mapping[str, Any]], report: collections.Counter) 
             report["drop_finish_reason"] += 1
             continue
         problem = record["question"]["problem"].strip()
-        yes, no = prm_walk(record)
+        yes, no, rated = prm_walk(record)
+        for (index, previous, text), rating in rated:
+            ratings[sha(canonical(prm_state(problem, previous, index, text)))[:24]].add(
+                rating
+            )
         group = "prm:" + normalize(problem)
         for kind, items in (("yes", yes), ("no", [no] if no else [])):
             for index, previous, text in items:
@@ -629,7 +692,15 @@ def prm_step(records: Iterable[Mapping[str, Any]], report: collections.Counter) 
                 )
     picked: Rows = []
     for group in sorted(groups, key=lambda g: order("hr2-prm-group-v1", g)):
-        members = groups[group]
+        members = {}
+        for kind in ("yes", "no"):
+            agreed = []
+            for row in groups[group][kind]:
+                if len(ratings[row["audit_metadata"]["hr2"]["hash_key"]]) > 1:
+                    report["drop_conflicting_ratings"] += 1
+                else:
+                    agreed.append(row)
+            members[kind] = resolve(agreed, report)
         no = sorted(members["no"], key=lambda r: order("hr2-prm-v1", r["id"]))[:1]
         yes = sorted(members["yes"], key=lambda r: order("hr2-prm-v1", r["id"]))
         if no:
@@ -746,6 +817,7 @@ def kob_boolq(
                 template="hr2_kobest_boolq_v1",
             )
         )
+    rows = resolve(rows, report)
     report["eligible"] = len(rows)
     chosen = balance_yes_no(rows, None, "hr2-kob-v1")
     report["selected"] = len(chosen)
@@ -753,20 +825,20 @@ def kob_boolq(
 
 
 def indonli(records: Iterable[Mapping[str, Any]], report: collections.Counter) -> Rows:
-    by_label: dict[str, Rows] = collections.defaultdict(list)
+    rows: Rows = []
     for record in records:
         report["read"] += 1
         premise, hypothesis = record["premise"].strip(), record["hypothesis"].strip()
         if not premise or not hypothesis or record["label"] not in ("e", "n", "c"):
             report["drop_empty_or_label"] += 1
             continue
-        by_label[record["label"]].append(
+        rows.append(
             noul_row(
                 source=INDO_SOURCE,
                 family="indonli",
                 language="id",
                 group_key=f"indo:{record['premise_id']}",
-                key=str(record["pair_id"]),
+                key=sha(premise + "\x1f" + hypothesis)[:24],
                 state={"premise": premise, "hypothesis": hypothesis},
                 instructions=INDO_INSTRUCTIONS,
                 yes=record["label"] == "e",
@@ -774,13 +846,13 @@ def indonli(records: Iterable[Mapping[str, Any]], report: collections.Counter) -
                 upstream_label=record["label"],
             )
         )
-    ranked = {
-        label: sorted(
-            rows,
-            key=lambda r: order("hr2-indo-v1", r["audit_metadata"]["hr2"]["hash_key"]),
-        )
-        for label, rows in by_label.items()
-    }
+    rows = resolve(rows, report)
+    report["eligible"] = len(rows)
+    ranked: dict[str, Rows] = collections.defaultdict(list)
+    for row in sorted(
+        rows, key=lambda r: order("hr2-indo-v1", r["audit_metadata"]["hr2"]["hash_key"])
+    ):
+        ranked[row["audit_metadata"]["hr2"]["upstream_label"]].append(row)
     quarter = min(
         INDO_TARGET // 4, len(ranked["c"]), len(ranked["n"]), len(ranked["e"]) // 2
     )
@@ -790,15 +862,15 @@ def indonli(records: Iterable[Mapping[str, Any]], report: collections.Counter) -
 
 
 def allegro(records: Sequence[Mapping[str, str]], report: collections.Counter) -> Rows:
-    levels: dict[int, Rows] = collections.defaultdict(list)
+    rows: Rows = []
     for record in records:
         report["read"] += 1
         text = (record.get("text") or "").strip()
         try:
             stars = float(record["rating"])
         except (TypeError, ValueError):
-            stars = float("nan")
-        if not text or stars != int(stars) or not 1 <= stars <= 5:
+            stars = 0.0
+        if not text or not stars.is_integer() or not 1 <= stars <= 5:
             report["drop_empty_or_rating"] += 1
             continue
         if state_chars({"r": text}) > MAX_STATE_CHARS:
@@ -806,7 +878,7 @@ def allegro(records: Sequence[Mapping[str, str]], report: collections.Counter) -
             continue
         level = int(stars) - 1
         key = sha(text)[:24]
-        levels[level].append(
+        rows.append(
             make_row(
                 arm=ARM,
                 source=ALLEGRO_SOURCE,
@@ -823,15 +895,16 @@ def allegro(records: Sequence[Mapping[str, str]], report: collections.Counter) -
                 audit=meta(key, str(level)),
             )
         )
-    rows = [
-        row
-        for level in sorted(levels)
-        for row in sorted(
-            levels[level],
-            key=lambda r: order(
-                "hr2-allegro-v1", r["audit_metadata"]["hr2"]["hash_key"]
-            ),
-        )[:ALLEGRO_PER_LEVEL]
+    rows = resolve(rows, report)
+    report["eligible"] = len(rows)
+    levels: dict[int, Rows] = collections.defaultdict(list)
+    for row in sorted(
+        rows,
+        key=lambda r: order("hr2-allegro-v1", r["audit_metadata"]["hr2"]["hash_key"]),
+    ):
+        levels[row["label"]].append(row)
+    chosen = [
+        row for level in sorted(levels) for row in levels[level][:ALLEGRO_PER_LEVEL]
     ]
-    report["selected"] = len(rows)
-    return rows
+    report["selected"] = len(chosen)
+    return chosen
