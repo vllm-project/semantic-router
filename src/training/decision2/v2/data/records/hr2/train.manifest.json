@@ -1,0 +1,271 @@
+{
+ "arm_id": "HR2",
+ "canonical_form": "rows sorted by id; canonical(row) + '\\n' per row; UTF-8",
+ "canonical_path": "hr2.train.jsonl",
+ "choice": {
+  "by_option_bucket": {
+   "2": 10207
+  },
+  "gold_position_by_bucket": {
+   "2": {
+    "0": 5134,
+    "1": 5073
+   }
+  }
+ },
+ "content_sha256": "0fd9b2dbe68f863dc8acd13b3466b7e9aaf32d2308bc740f012e5c9717502f3a",
+ "counts": {
+  "family": {
+   "allegro": 3125,
+   "eth_cs": 1084,
+   "eth_deon": 1094,
+   "eth_just": 1080,
+   "eth_util": 3108,
+   "hs3_help": 4019,
+   "hs3_pref": 7099,
+   "prm_step": 3562,
+   "vitc": 3526
+  },
+  "language": {
+   "de": 107,
+   "en": 22166,
+   "es": 158,
+   "fr": 177,
+   "id": 44,
+   "it": 138,
+   "ja": 192,
+   "ko": 318,
+   "nl": 56,
+   "pl": 3182,
+   "pt": 109,
+   "ru": 111,
+   "vi": 60,
+   "zh": 879
+  },
+  "source": {
+   "allegro_reviews_train": 3125,
+   "ethics_train": 6366,
+   "helpsteer3_train": 11118,
+   "prm800k_train": 3562,
+   "vitaminc_real_train": 3526
+  },
+  "task_type": {
+   "choice": 10207,
+   "noul": 10346,
+   "score": 7144
+  }
+ },
+ "groups": 22336,
+ "input": {
+  "is_canonical": true,
+  "path": "hr2.train.jsonl",
+  "sha256": "0fd9b2dbe68f863dc8acd13b3466b7e9aaf32d2308bc740f012e5c9717502f3a"
+ },
+ "license_registry_sha256": "328453c7d4b6a49c7540b114e89eb50e1f18a55ff92a9d1c1033698dc681adc4",
+ "licenses": {
+  "allegro_reviews_train": {
+   "attribution": "Rybak, Mroczkowski, Tracz and Gawlik, KLEJ: Comprehensive Benchmark for Polish Language Understanding (ACL 2020), Allegro Reviews; allegro/klej-allegro-reviews@b9ca796de36c796d6d5b853c3f13ef461440d630 train.csv",
+   "evidence": "https://github.com/allegro/klejbenchmark-allegroreviews/blob/master/README.md (License: CC BY-SA 4.0); https://klejbenchmark.com/tasks/",
+   "license": "CC-BY-SA-4.0",
+   "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  },
+  "ethics_train": {
+   "attribution": "Hendrycks et al., Aligning AI With Shared Human Values (ICLR 2021); hendrycks/ethics@b8b47c589f8bee77175b8648e5497278b68da48a TRAIN files (commonsense short split, deontology, justice, utilitarianism)",
+   "evidence": "https://huggingface.co/datasets/hendrycks/ethics/blob/b8b47c589f8bee77175b8648e5497278b68da48a/README.md",
+   "license": "MIT",
+   "redistribution": "permitted with the MIT notice"
+  },
+  "helpsteer3_train": {
+   "attribution": "Wang et al., HelpSteer3-Preference: Open Human-Annotated Preference Data across Diverse Tasks and Languages (2025, arXiv 2503.04378); nvidia/HelpSteer3@f6d145777bcbde96137596340fab89793acd1031 preference/ and feedback/ TRAIN; responses by commercially-permissive LLMs, human annotations by Scale AI and Translated contractors",
+   "evidence": "https://huggingface.co/datasets/nvidia/HelpSteer3/blob/f6d145777bcbde96137596340fab89793acd1031/README.md",
+   "license": "CC-BY-4.0",
+   "redistribution": "permitted with attribution"
+  },
+  "prm800k_train": {
+   "attribution": "Lightman et al., Let's Verify Step by Step (2023); openai/prm800k@7ecc794703b2877f63226f2477a49b34f9b25163 phase 1 and phase 2 TRAIN; problems from MATH (Hendrycks et al. 2021, MIT)",
+   "evidence": "https://github.com/openai/prm800k/blob/7ecc794703b2877f63226f2477a49b34f9b25163/LICENSE",
+   "license": "MIT",
+   "redistribution": "permitted with the MIT notice"
+  },
+  "vitaminc_real_train": {
+   "attribution": "Schuster, Fisch and Barzilay, Get Your Vitamin C! Robust Fact Verification with Contrastive Evidence (NAACL 2021); tals/vitaminc@be6febb761b0b2807687e61e0b5282e459df2fa0 TRAIN, revision_type=real",
+   "evidence": "https://huggingface.co/datasets/tals/vitaminc/blob/be6febb761b0b2807687e61e0b5282e459df2fa0/LICENSE",
+   "license": "CC-BY-SA-3.0 (Wikipedia-derived)",
+   "redistribution": "permitted with attribution; share-alike applies to derived rows"
+  }
+ },
+ "noul": {
+  "labels": {
+   "false": 5173,
+   "true": 5173
+  },
+  "true_fraction": 0.5
+ },
+ "partition": "train",
+ "role": "train",
+ "rows": 27697,
+ "rows_per_group": {
+  "1": 18114,
+  "10": 7,
+  "11": 1,
+  "12": 6,
+  "14": 5,
+  "15": 1,
+  "16": 1,
+  "18": 2,
+  "2": 3734,
+  "26": 1,
+  "3": 202,
+  "4": 202,
+  "5": 5,
+  "6": 40,
+  "8": 15
+ },
+ "schema": "decision2.v2.freeze.v1",
+ "score": {
+  "by_levels": {
+   "5": 7144
+  },
+  "by_levels_grade": {
+   "5": {
+    "0": 1433,
+    "1": 1436,
+    "2": 1414,
+    "3": 1425,
+    "4": 1436
+   }
+  }
+ },
+ "state_chars": {
+  "p0": 14,
+  "p10": 122,
+  "p100": 12537,
+  "p25": 207,
+  "p50": 558,
+  "p75": 2633,
+  "p90": 6048,
+  "p99": 11183
+ },
+ "tokens": [
+  {
+   "by_language": {
+    "de": 118485,
+    "en": 12965062,
+    "es": 175967,
+    "fr": 224131,
+    "id": 61909,
+    "it": 225029,
+    "ja": 261180,
+    "ko": 477581,
+    "nl": 83765,
+    "pl": 1078166,
+    "pt": 140135,
+    "ru": 123629,
+    "vi": 74186,
+    "zh": 943670
+   },
+   "by_task_type": {
+    "choice": 9693109,
+    "noul": 2128947,
+    "score": 5130839
+   },
+   "kind": "native_decoder",
+   "name": "qwen3-0.6b-base@da87bfb6",
+   "padded8_total": 17048856,
+   "path": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+   "quantiles": {
+    "p0": 81,
+    "p10": 103,
+    "p100": 5198,
+    "p25": 121,
+    "p50": 299,
+    "p75": 817,
+    "p90": 1660,
+    "p99": 3086
+   },
+   "revision": null,
+   "tokenizer_json_sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539",
+   "total": 16952895
+  },
+  {
+   "by_language": {
+    "de": 105901,
+    "en": 13157286,
+    "es": 160297,
+    "fr": 205918,
+    "id": 48222,
+    "it": 191888,
+    "ja": 220545,
+    "ko": 384413,
+    "nl": 75068,
+    "pl": 1036152,
+    "pt": 124307,
+    "ru": 106544,
+    "vi": 70211,
+    "zh": 868216
+   },
+   "by_task_type": {
+    "choice": 9494237,
+    "noul": 2220753,
+    "score": 5039978
+   },
+   "kind": "native_decoder",
+   "name": "qwen3.5-0.8b-base@dc7cdfe2",
+   "padded8_total": 16852888,
+   "path": "dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68",
+   "quantiles": {
+    "p0": 90,
+    "p10": 112,
+    "p100": 5054,
+    "p25": 130,
+    "p50": 297,
+    "p75": 807,
+    "p90": 1628,
+    "p99": 2983
+   },
+   "revision": null,
+   "tokenizer_json_sha256": null,
+   "total": 16754968
+  },
+  {
+   "by_language": {
+    "de": 97504,
+    "en": 12496626,
+    "es": 148063,
+    "fr": 197602,
+    "id": 47303,
+    "it": 187231,
+    "ja": 216462,
+    "ko": 460577,
+    "nl": 70713,
+    "pl": 699536,
+    "pt": 118928,
+    "ru": 102014,
+    "vi": 69899,
+    "zh": 921079
+   },
+   "by_task_type": {
+    "choice": 9688517,
+    "noul": 1584755,
+    "score": 4560265
+   },
+   "kind": "raw",
+   "name": "kai-0.6b@7185f514",
+   "padded8_total": 15930152,
+   "path": "tokenizer",
+   "quantiles": {
+    "p0": 29,
+    "p10": 53,
+    "p100": 6847,
+    "p25": 69,
+    "p50": 210,
+    "p75": 769,
+    "p90": 1685,
+    "p99": 3381
+   },
+   "revision": null,
+   "tokenizer_json_sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
+   "total": 15833537
+  }
+ ]
+}

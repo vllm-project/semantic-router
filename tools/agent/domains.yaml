@@ -595,6 +595,12 @@ domains:
     checks: [make test-training-contracts]
     verifications: [training]
 
+  vllm-sr-plugins:
+    owner: training
+    paths: [src/vllm-sr-plugins/**]
+    checks: []
+    verifications: []
+
   model-selection-parity:
     owner: training
     paths:

@@ -1,0 +1,262 @@
+{
+ "candidates": {
+  "dev": "b0498c1f1ac2ef346579237b2d53533829f0bc0e86a67b71d749eaef180fab7e",
+  "train": "45b560103e84591d94ccfa763bbcbb9698366c92ad52f8534db29cbd0007bf2b"
+ },
+ "dev": {
+  "family": {
+   "allegro": 250,
+   "eth_cs": 94,
+   "eth_deon": 100,
+   "eth_just": 106,
+   "eth_util": 354,
+   "hs3_help": 126,
+   "hs3_pref": 263,
+   "prm_step": 60,
+   "vitc": 262
+  },
+  "gold_longer_by_family": {
+   "eth_util": {
+    "False": 157,
+    "None": 55,
+    "True": 142
+   },
+   "hs3_pref": {
+    "False": 130,
+    "None": 2,
+    "True": 131
+   }
+  },
+  "groups": 1322,
+  "label_by_family": {
+   "allegro": {
+    "0": 50,
+    "1": 50,
+    "2": 50,
+    "3": 50,
+    "4": 50
+   },
+   "eth_cs": {
+    "0": 47,
+    "1": 47
+   },
+   "eth_deon": {
+    "0": 50,
+    "1": 50
+   },
+   "eth_just": {
+    "0": 53,
+    "1": 53
+   },
+   "eth_util": {
+    "0": 165,
+    "1": 189
+   },
+   "hs3_help": {
+    "0": 32,
+    "1": 21,
+    "2": 23,
+    "3": 25,
+    "4": 25
+   },
+   "hs3_pref": {
+    "0": 138,
+    "1": 125
+   },
+   "prm_step": {
+    "0": 30,
+    "1": 30
+   },
+   "vitc": {
+    "0": 131,
+    "1": 131
+   }
+  },
+  "language": {
+   "de": 9,
+   "en": 1165,
+   "es": 11,
+   "fr": 11,
+   "id": 7,
+   "it": 11,
+   "ja": 7,
+   "ko": 31,
+   "nl": 5,
+   "pl": 256,
+   "pt": 11,
+   "ru": 15,
+   "vi": 4,
+   "zh": 72
+  },
+  "rows": 1615,
+  "sha256": "697c31428ae821d7c0238a64ced8b997cc5671be47307f88a273d082bc5aaebe",
+  "task_type": {
+   "choice": 617,
+   "noul": 622,
+   "score": 376
+  }
+ },
+ "drops": {
+  "dev_groups": {
+   "count": 1180,
+   "sha256": "b6ed67d744f23801658a3a66493f3da98d89a84cc447dbbc158c63b73a0054bd"
+  },
+  "families": [
+   "indonli",
+   "kob_boolq"
+  ],
+  "groups": {
+   "count": 1202,
+   "sha256": "90756b6123321677847d600c3c3d5f67562e336d2d8ea2c6338342d7d5f648bd"
+  },
+  "ids": {
+   "count": 13,
+   "sha256": "2677d0862c9e7417ac60d340ddf35e28a6ce3db5290599630f293b8b64dd3575"
+  },
+  "leak_ids": {
+   "count": 28,
+   "sha256": "2f0ce3bb72c0e5038f9cc8c283c451415c9ab092f407472403516ebb61981723"
+  },
+  "removed": {
+   "dev:dev_near_train": {
+    "allegro": 10,
+    "eth_cs": 1,
+    "eth_just": 9,
+    "eth_util": 34,
+    "hs3_help": 325,
+    "hs3_pref": 613,
+    "prm_step": 299,
+    "vitc": 128
+   },
+   "dev:family": {
+    "indonli": 239,
+    "kob_boolq": 358
+   },
+   "dev:quarantine_group": {
+    "hs3_help": 47,
+    "hs3_pref": 91,
+    "prm_step": 2,
+    "vitc": 10
+   },
+   "train:family": {
+    "indonli": 2261,
+    "kob_boolq": 3304
+   },
+   "train:leak_guard": {
+    "hs3_help": 8,
+    "hs3_pref": 20
+   },
+   "train:quarantine_group": {
+    "eth_deon": 1,
+    "eth_util": 4,
+    "hs3_help": 472,
+    "hs3_pref": 912,
+    "prm_step": 20,
+    "vitc": 62
+   },
+   "train:review_error": {
+    "allegro": 1,
+    "eth_cs": 1,
+    "eth_just": 2,
+    "hs3_help": 3,
+    "hs3_pref": 1,
+    "prm_step": 1,
+    "vitc": 4
+   }
+  }
+ },
+ "schema": "decision2.hr2.final.v1",
+ "train": {
+  "family": {
+   "allegro": 3125,
+   "eth_cs": 1084,
+   "eth_deon": 1094,
+   "eth_just": 1080,
+   "eth_util": 3108,
+   "hs3_help": 4019,
+   "hs3_pref": 7099,
+   "prm_step": 3562,
+   "vitc": 3526
+  },
+  "gold_longer_by_family": {
+   "eth_util": {
+    "False": 1325,
+    "None": 430,
+    "True": 1353
+   },
+   "hs3_pref": {
+    "False": 3558,
+    "None": 11,
+    "True": 3530
+   }
+  },
+  "groups": 22336,
+  "label_by_family": {
+   "allegro": {
+    "0": 625,
+    "1": 625,
+    "2": 625,
+    "3": 625,
+    "4": 625
+   },
+   "eth_cs": {
+    "0": 542,
+    "1": 542
+   },
+   "eth_deon": {
+    "0": 547,
+    "1": 547
+   },
+   "eth_just": {
+    "0": 540,
+    "1": 540
+   },
+   "eth_util": {
+    "0": 1543,
+    "1": 1565
+   },
+   "hs3_help": {
+    "0": 808,
+    "1": 811,
+    "2": 789,
+    "3": 800,
+    "4": 811
+   },
+   "hs3_pref": {
+    "0": 3591,
+    "1": 3508
+   },
+   "prm_step": {
+    "0": 1781,
+    "1": 1781
+   },
+   "vitc": {
+    "0": 1763,
+    "1": 1763
+   }
+  },
+  "language": {
+   "de": 107,
+   "en": 22166,
+   "es": 158,
+   "fr": 177,
+   "id": 44,
+   "it": 138,
+   "ja": 192,
+   "ko": 318,
+   "nl": 56,
+   "pl": 3182,
+   "pt": 109,
+   "ru": 111,
+   "vi": 60,
+   "zh": 879
+  },
+  "rows": 27697,
+  "sha256": "0fd9b2dbe68f863dc8acd13b3466b7e9aaf32d2308bc740f012e5c9717502f3a",
+  "task_type": {
+   "choice": 10207,
+   "noul": 10346,
+   "score": 7144
+  }
+ }
+}

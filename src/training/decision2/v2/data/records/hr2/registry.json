@@ -1,0 +1,137 @@
+{
+ "files": {
+  "hr2/README.md": {
+   "bytes": 6849,
+   "sha256": "7b2982a5a29ac3fce5ab8887fee257952fc44d2de187738cf0c89f1f04b6dc9e"
+  },
+  "hr2/audits/c1-names.json": {
+   "bytes": 1732,
+   "sha256": "c1f399a157129257ef2a548564d8942aed6954cf2818fb271adba61a232beb88"
+  },
+  "hr2/audits/names-g1.json": {
+   "bytes": 3306,
+   "sha256": "90595f6f84577b068059eb6a5ae8e0e09ef17a44582a880818da100d477c6d7c"
+  },
+  "hr2/audits/overlap-dev-vs-train.public.json": {
+   "bytes": 2561,
+   "sha256": "0ab4fbe1084b27894d504bfa7eb0bea1e4f2abe825c4d640a2dcf4d924a0aa9a"
+  },
+  "hr2/audits/overlap-pihr2.public.json": {
+   "bytes": 6898,
+   "sha256": "02032f5192b4e21021ed34a5300f690c3df2db538445b0b2da4f9673792f8712"
+  },
+  "hr2/audits/overlap-piv4.public.json": {
+   "bytes": 50749,
+   "sha256": "909d273b3cb03b08c37c7825362d21d3dbc723365391ba93c914933a0b2296fd"
+  },
+  "hr2/audits/overlap-piv4q.public.json": {
+   "bytes": 35097,
+   "sha256": "9336bcc560c4606eb668abf682de66fb6cdf990d664f33953c595a4e5b0d7569"
+  },
+  "hr2/audits/quarantine.public.json": {
+   "bytes": 1974,
+   "sha256": "6aa1d0e4cb4faad1e5d0e2caf23a960b4116bacd5b06ab1433f1a029f6f8ca44"
+  },
+  "hr2/audits/review-sample.json": {
+   "bytes": 1197,
+   "sha256": "cbff0d25169bdf75a9355cc8478390d48bc0b35fdf61ae28423e89cd8adea00e"
+  },
+  "hr2/audits/review.public.json": {
+   "bytes": 6928,
+   "sha256": "fffa1f06d29a9833caf9476ed8b177c5fe939830e65d403dc4adc83bbc398327"
+  },
+  "hr2/audits/shortcut/allegro.json": {
+   "bytes": 6974,
+   "sha256": "608b3d3bfb84b715ec86a7f9a7a55eb3694468425baff9effe525231abeb27aa"
+  },
+  "hr2/audits/shortcut/eth_cs.json": {
+   "bytes": 6895,
+   "sha256": "a899de0c80af1e2f61ee958c4bd2eb55729563cc547b49ede45096cd57181180"
+  },
+  "hr2/audits/shortcut/eth_deon.json": {
+   "bytes": 6987,
+   "sha256": "4db65a63b9882416f2a217581e89ed5580714c3eabd1e41121543f00dcbc4292"
+  },
+  "hr2/audits/shortcut/eth_just.json": {
+   "bytes": 6955,
+   "sha256": "b0c3255597e79aeebe751fef7fbe5e491cfa71052ae46f5b487e9f0059da24cc"
+  },
+  "hr2/audits/shortcut/eth_util.json": {
+   "bytes": 8101,
+   "sha256": "e38a8cf4775b1c459f4f5f4980a0ee658621574b46b181917dfc00cf6704ca94"
+  },
+  "hr2/audits/shortcut/hs3_help.json": {
+   "bytes": 7023,
+   "sha256": "a858b3a593722d0213a07c8a11c0f5b67812203bbebe20a1f81dcc2bb409e070"
+  },
+  "hr2/audits/shortcut/hs3_pref.json": {
+   "bytes": 8127,
+   "sha256": "ed5fe10a6165963c973babacb374ef2a3e6d30a39ed6a7c90747bfb1c560d515"
+  },
+  "hr2/audits/shortcut/indonli.json": {
+   "bytes": 8360,
+   "sha256": "4efaf4527ca4f56adb8238161ddd551781a693239bd32df4710a081caa9188b8"
+  },
+  "hr2/audits/shortcut/kob_boolq.json": {
+   "bytes": 7095,
+   "sha256": "cad70c49d24f98c70e1eb81c5b3562fd72a1589bd45b3c803c697b371be86513"
+  },
+  "hr2/audits/shortcut/prm_step.json": {
+   "bytes": 6988,
+   "sha256": "50cd3f09d342a95f02a60c37980238b6f8a5fac5cfb07759a109cdf585206f05"
+  },
+  "hr2/audits/shortcut/vitc.json": {
+   "bytes": 8025,
+   "sha256": "901979941a699cfb39a311c2efb98a82f3eec38fd84619018005a32646fe5ccc"
+  },
+  "hr2/build.json": {
+   "bytes": 7042,
+   "sha256": "a4f3c560e748450c55d5017341f79ef04788070e9af4861fc146429ddfd756b1"
+  },
+  "hr2/dev.manifest.json": {
+   "bytes": 6614,
+   "sha256": "1119ddf308c32a055d4d4a191fbe12f9062854763530aea41f988fcc72250669"
+  },
+  "hr2/final.json": {
+   "bytes": 4250,
+   "sha256": "722f87bb040a5542885e9610a922ec94d8745bcb8f6259058f69cd404bc1ce0c"
+  },
+  "hr2/hr2.dev.jsonl": {
+   "bytes": 2897997,
+   "sha256": "697c31428ae821d7c0238a64ced8b997cc5671be47307f88a273d082bc5aaebe"
+  },
+  "hr2/hr2.dev.tokens.jsonl": {
+   "bytes": 112529,
+   "sha256": "e1e9675c20989a5d492ba5e983e256d9a4dc2df0b53fa84db8b8ff3281cfc39a"
+  },
+  "hr2/hr2.train.jsonl": {
+   "bytes": 78877861,
+   "sha256": "0fd9b2dbe68f863dc8acd13b3466b7e9aaf32d2308bc740f012e5c9717502f3a"
+  },
+  "hr2/hr2.train.tokens.jsonl": {
+   "bytes": 1948360,
+   "sha256": "4233551999db260a295ff8404d1e7ae9e04d81f9bc71aa363e38168ba6ecc029"
+  },
+  "hr2/isolation.json": {
+   "bytes": 744,
+   "sha256": "ef92b7018d9b81721387e2d5cd5e7e6cff7f6660a6f192b7a89fab0540786174"
+  },
+  "hr2/license-registry-hr2.json": {
+   "bytes": 3820,
+   "sha256": "7f5b53e7a17782e890a4639e301226d4c935aca86ab521c80d772ee82de8208d"
+  },
+  "hr2/stats.json": {
+   "bytes": 8427,
+   "sha256": "0c8a36fde9c73d1c13f24f25f5c745690329eea0459ec6cc937110366a97f63f"
+  },
+  "hr2/status.json": {
+   "bytes": 678,
+   "sha256": "c7fa278b3b58f9f05876dbbfc444d26a58e08864d52be8c2ba307e9c002909a2"
+  },
+  "hr2/train.manifest.json": {
+   "bytes": 6843,
+   "sha256": "78ef35a2e2bfe4e5d8a2f9794d3405221a4d70e458ddc5541c50c6a684eb976f"
+  }
+ },
+ "schema": "decision2-hf-v2-registry/v1"
+}
