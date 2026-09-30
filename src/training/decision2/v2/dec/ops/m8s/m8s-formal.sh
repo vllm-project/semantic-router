@@ -63,7 +63,7 @@ collect() {  # <run> <tier> <model> <pkg> <rev> <spec> <cache> <purpose> [collec
     --model-dir "$model" --mount "$H" --mount "$pkg" --env TRITON_CACHE_AUTOTUNING=1 --env "TRITON_CACHE_DIR=$cache" \
     --mount-rw "$cache" --shared-lease dec-m8s-formal --purpose "$purpose" --expected-end "$(date -u -d '+30 min' +%FT%TZ)" \
     -- --adapter-spec "$spec" --model-path "$model" --revision "$rev" --extra "source=${SOURCE[$t]}" \
-    --extra max_length=16384 "$@" > "$F/$run.collect.log" 2>&1
+    --extra max_length=16384 --extra "model_id=decision2-dec-${run%-mlx}" "$@" > "$F/$run.collect.log" 2>&1
   rc=$?
   tree_manifest "$cache" > "$F/$run.cache-after.sha256"
   [ -f "$F/$run/GPU-TIME.json" ] && python3 - "$F/$run/GPU-TIME.json" "$run" "$purpose" >> "$M/GPU-SECONDS.jsonl" <<'EOF'
