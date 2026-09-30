@@ -5,7 +5,7 @@
   "model_name": "DEV2.0-27B",
   "repo_id": "llm-semantic-router/DEV2.0-27B",
   "identity": {
-    "model_sha256": "48ab177b2794b991a48c94a99ff53aa0db70505104e86c4a43ed031a6ba67784"
+    "model_sha256": "d3460f3d4ebd4d04b07d3e4ec310a1a58d1da550302b512e8726db8190ae2e71"
   },
   "report_sha256": "6895fee43e7ae1bca09ce72ad68a08ca6da2424ba5bd5ad6f6dd1ea440842d18",
   "paired_sha256": "6d56dd95ca1afe245515359df8d5d196ce4cd7753eb27144abcb33b978ff383b",

@@ -3,7 +3,7 @@
   "_release": {
     "candidate": "27B M4b F-b (A1-soup: full-parameter fine-tune, gold, two-seed FP32 soup); coordinator 2026-09-30 06:10 (successor, items 1-7) and 07:15 (bf16z storage, CAL698 rebound).",
     "gate": "successor profile (R1-R7) against the current revision c0dba600; no Decision 1.0 at this size, so the tier gates and the card compare with AutoJev-27B.",
-    "storage": "checkpoint = the bf16z compression of the v2.release.bf16_copy of the scored FP32 soup (identity chain 5bcfa3d4 -> 48ab177b); the builder derives the identity from the restored files' SHA-256 (compression and verify receipts pinned).",
+    "storage": "checkpoint = the bf16z compression of the v2.release.bf16_copy of the scored FP32 soup, with decision_config.json's two soup-member paths trimmed to track-relative form (identity chain 5bcfa3d4 -> 48ab177b -> d3460f3d; receipts inputs/bf16-copy.json and inputs/redaction.json); the builder derives the identity from the restored files' SHA-256 (compression and verify receipts pinned).",
     "previous": {
       "candidate": "~27B Milestone 3 finalist F1 (M3-A soup), the fifth release candidate (coordinator 2026-09-29 11:55); spec derived from v2/27b/release/dev2-27b-m3a-soup.candidate.json.",
       "name": "DEV2.0-27B: named after its base model Qwen/Qwen3.8-27B (name_basis base); it loads 25,746,591,744 parameters (text backbone 25,624,600,064 + rank-16 LoRA 116,727,808 + head 5,263,872; no vision tower, MTP or LM head). Released first as DEV2.0-26B (name_basis loaded-parameters).",
@@ -23,13 +23,13 @@
   "name_basis": "base",
   "name_base_model": "Qwen/Qwen3.8-27B",
   "profile": "qwen-full",
-  "checkpoint": "/data/dev2/runs/release/inputs/dev2-27b-fb/bf16",
+  "checkpoint": "/data/dev2/runs/release/inputs/dev2-27b-fb/bf16-public",
   "expected_identity": {
-    "model_sha256": "48ab177b2794b991a48c94a99ff53aa0db70505104e86c4a43ed031a6ba67784"
+    "model_sha256": "d3460f3d4ebd4d04b07d3e4ec310a1a58d1da550302b512e8726db8190ae2e71"
   },
   "calibration": {
-    "path": "/data/dev2/runs/release/inputs/dev2-27b-fb/cal698-bf16/calibration.public.json",
-    "sha256": "991908cb48b36b0fb505de984b54fb288e474307a8adf75beeef868b0c7c61eb"
+    "path": "/data/dev2/runs/release/inputs/dev2-27b-fb/cal698-public/calibration.public.json",
+    "sha256": "8bfa33e8ff181816d20e3cf95627cb3562125d030aaf8cfe264a53a1f1866eeb"
   },
   "max_input_tokens": 32768,
   "vendor_source": "/data/dev2/src/ee13316871f8f3e56d8a49edc493b251d45db158-src_training_decision2/src/training/decision2",
@@ -75,7 +75,7 @@
     "numpy": "2.3.5",
     "zstandard": "0.25.0 (bf16z restore)"
   },
-  "runtime_equivalence": "decision2/qwen.py loads the full checkpoint with the training/model sources vendored from the scored run's own source mirror (ee1331687), whose SHA-256 equal the scored adapter sources (checked at build time), and applies the per-item batching, BF16-backbone / FP32-head execution, the CAL698 per-type temperatures of calibration.json and the answer normalization of training.model.infer as run by v2.27b.typed_collect_kernel. The scored checkpoint (5bcfa3d4) stored every tensor in FP32; this package (v2.release.bf16_copy, identity 48ab177b) stores its 496 Linear projection matrices in BF16 exactly as BF16 autocast rounds them and every other tensor bit for bit in FP32; the CAL698 fit repeated on it reproduced all 698 calibration logits exactly. Checked on one GPU of the scoring node against the scored predictions of every formal prompt (typed-final 1,600, css15 6,547, public231 231) and of the mlx-diag diagnostic (2,275) by release.sh --parity, each with a fresh copy of the persisted Triton autotune cache of the run that scored it.",
+  "runtime_equivalence": "decision2/qwen.py loads the full checkpoint with the training/model sources vendored from the scored run's own source mirror (ee1331687), whose SHA-256 equal the scored adapter sources (checked at build time), and applies the per-item batching, BF16-backbone / FP32-head execution, the CAL698 per-type temperatures of calibration.json and the answer normalization of training.model.infer as run by v2.27b.typed_collect_kernel. The scored checkpoint (5bcfa3d4) stored every tensor in FP32; this package (v2.release.bf16_copy, identity 48ab177b, then decision_config.json's soup-member provenance paths trimmed to track-relative form, identity d3460f3d) stores its 496 Linear projection matrices in BF16 exactly as BF16 autocast rounds them and every other tensor bit for bit in FP32; the CAL698 fit repeated on it reproduced all 698 calibration logits exactly. Checked on one GPU of the scoring node against the scored predictions of every formal prompt (typed-final 1,600, css15 6,547, public231 231) and of the mlx-diag diagnostic (2,275) by release.sh --parity, each with a fresh copy of the persisted Triton autotune cache of the run that scored it.",
   "scored": {
     "label": "post-key same-panel run m4b/F-b/formal with CAL698 temperatures (kernel path, frozen autotune cache, 32,768-token limit)",
     "report_sha256": "6895fee43e7ae1bca09ce72ad68a08ca6da2424ba5bd5ad6f6dd1ea440842d18",
@@ -196,9 +196,5 @@
         "mlx": "/data/dev2/runs/release/inputs/dev2-27b/peers-mlx/jebadiah27b.mlx-diag.score.json"
       }
     ]
-  },
-  "bf16_copy": {
-    "receipt": "/data/dev2/runs/release/inputs/dev2-27b-fb/bf16-copy.json",
-    "sha256": "6dd54f2d6e19b2f34d61410ac2af5ecabdfd07deab4ac339a8c52fdeae2a6901"
   }
 }

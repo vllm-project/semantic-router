@@ -51,7 +51,7 @@
   },
   "cal_sha256": "19cc1a8c4ebe6fd13031079f6b7d131046ce503f435f894e3ea672f91c2ed41f",
   "calibration_version": "decision2-per-type-temperature/1",
-  "checkpoint_sha256": "48ab177b2794b991a48c94a99ff53aa0db70505104e86c4a43ed031a6ba67784",
+  "checkpoint_sha256": "d3460f3d4ebd4d04b07d3e4ec310a1a58d1da550302b512e8726db8190ae2e71",
   "code_sha256": {
     "calibrate_frozen.py": "ad35b7263bbf70498a22886ea47f4baa6a7b1bed23f70b7329791c4d9ff1421f"
   },
@@ -82,7 +82,7 @@
     }
   },
   "logits_sha256": "1683a4d4805a79dfb7542a909bdd6c57134c91a515e41d5caaa519892b6e7996",
-  "model_sha256": "48ab177b2794b991a48c94a99ff53aa0db70505104e86c4a43ed031a6ba67784",
+  "model_sha256": "d3460f3d4ebd4d04b07d3e4ec310a1a58d1da550302b512e8726db8190ae2e71",
   "overall": {
     "after": {
       "accuracy_all": 0.8982808022922636,

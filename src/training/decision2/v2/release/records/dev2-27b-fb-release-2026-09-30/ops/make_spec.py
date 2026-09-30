@@ -30,7 +30,8 @@ MIRROR = "/data/dev2/src/fcd616036495dd34efda0a37bff3b5127b3d7f73-src_training_d
 SCORED_MIRROR = "/data/dev2/src/ee13316871f8f3e56d8a49edc493b251d45db158-src_training_decision2/src/training/decision2"
 DECISIONS = "/data/dev2/runs/release/decisions"
 CURRENT = "c0dba600087f582a1033830a2276d22e96e6324c"
-IDENTITY = "48ab177b2794b991a48c94a99ff53aa0db70505104e86c4a43ed031a6ba67784"
+BF16_IDENTITY = "48ab177b2794b991a48c94a99ff53aa0db70505104e86c4a43ed031a6ba67784"
+IDENTITY = "d3460f3d4ebd4d04b07d3e4ec310a1a58d1da550302b512e8726db8190ae2e71"
 SCORED_IDENTITY = "5bcfa3d4bd1f83c5f4f999f9b8b68a01bb2bef69020c85661a2a937d9ecb02f9"
 LOADED = "25,629,863,936"
 PREPARED_BY = "Decision 2.0 release engineering, ~27B release worker (worktree vllm-sr-dev2-release-27b)"
@@ -219,12 +220,8 @@ def build(stage: str) -> dict[Path, str]:
     spec.update(
         {
             "profile": "qwen-full",
-            "checkpoint": f"{IN}/bf16z",
+            "checkpoint": f"{IN}/bf16z-public",
             "expected_identity": {"model_sha256": IDENTITY},
-            "bf16_copy": {
-                "receipt": f"{IN}/bf16-copy.json",
-                "sha256": sha(r["bf16-copy.json"]),
-            },
             "bf16z": {
                 "receipt": f"{IN}/bf16z.json",
                 "sha256": sha(r["bf16z.json"]),
@@ -232,7 +229,7 @@ def build(stage: str) -> dict[Path, str]:
                 "verify_sha256": sha(r["bf16z-verify.json"]),
             },
             "calibration": {
-                "path": f"{IN}/cal698-bf16/calibration.public.json",
+                "path": f"{IN}/cal698-public/calibration.public.json",
                 "sha256": sha(r["calibration.public.json"]),
             },
             "vendor_source": SCORED_MIRROR,
@@ -264,8 +261,9 @@ def build(stage: str) -> dict[Path, str]:
         "per-item batching, BF16-backbone / FP32-head execution, the CAL698 per-type temperatures of calibration.json "
         "and the answer normalization of training.model.infer as run by v2.27b.typed_collect_kernel. The scored "
         f"checkpoint ({SCORED_IDENTITY[:8]}) stored every tensor in FP32; this package (v2.release.bf16_copy, identity "
-        f"{IDENTITY[:8]}) stores its 496 Linear projection matrices in BF16 exactly as BF16 autocast rounds them and "
-        "every other tensor bit for bit in FP32; the CAL698 fit repeated on it reproduced all 698 calibration logits "
+        f"{BF16_IDENTITY[:8]}, then decision_config.json's soup-member provenance paths trimmed to track-relative form, "
+        f"identity {IDENTITY[:8]}) stores its 496 Linear projection matrices in BF16 exactly as BF16 autocast rounds them "
+        "and every other tensor bit for bit in FP32; the CAL698 fit repeated on it reproduced all 698 calibration logits "
         "exactly. Checked on one GPU of the scoring node against the scored predictions of every formal prompt "
         "(typed-final 1,600, css15 6,547, public231 231) and of the mlx-diag diagnostic (2,275) by release.sh --parity, "
         "each with a fresh copy of the persisted Triton autotune cache of the run that scored it."
@@ -355,7 +353,7 @@ def build(stage: str) -> dict[Path, str]:
     spec["_release"] = {
         "candidate": "27B M4b F-b (A1-soup: full-parameter fine-tune, gold, two-seed FP32 soup); coordinator 2026-09-30 06:10 (successor, items 1-7) and 07:15 (bf16z storage, CAL698 rebound).",
         "gate": f"successor profile ({', '.join(names)}) against the current revision {CURRENT[:8]}; no Decision 1.0 at this size, so the tier gates and the card compare with AutoJev-27B.",
-        "storage": "checkpoint = the bf16z compression of the v2.release.bf16_copy of the scored FP32 soup (identity chain 5bcfa3d4 -> 48ab177b); the builder derives the identity from the restored files' SHA-256 (compression and verify receipts pinned).",
+        "storage": "checkpoint = the bf16z compression of the v2.release.bf16_copy of the scored FP32 soup, with decision_config.json's two soup-member paths trimmed to track-relative form (identity chain 5bcfa3d4 -> 48ab177b -> d3460f3d; receipts inputs/bf16-copy.json and inputs/redaction.json); the builder derives the identity from the restored files' SHA-256 (compression and verify receipts pinned).",
         "previous": old["_release"],
     }
     evidence = {
@@ -415,7 +413,7 @@ def build(stage: str) -> dict[Path, str]:
         out[SPECS / "dev2-27b-fb-draft.json"] = spec
         plain = copy.deepcopy(spec)
         plain.pop("bf16z")
-        plain["checkpoint"] = f"{IN}/bf16"
+        plain["checkpoint"] = f"{IN}/bf16-public"
         plain["runtime_equivalence"] = spec["runtime_equivalence"].replace(
             "decision2/qwen.py restores the bf16z weight files (every restored file's SHA-256 recorded in "
             "MODEL_MANIFEST.json storage, and the restored checkpoint's identity checked against the scored identity "
