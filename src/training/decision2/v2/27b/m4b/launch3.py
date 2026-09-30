@@ -56,7 +56,9 @@ if ALLOCATION not in ALLOCATIONS:
 TRACK, ALLOWED_GPUS, ALLOCATION_TEXT = ALLOCATIONS[ALLOCATION]
 LEASE_ROOT = base.LEASE_ROOT
 IDLE_STATUSES = {"idle", "released", "reserved-idle"}
-COTENANT_OK = {"released", "idle"}
+COTENANT_OK = {"released", "idle", "ended", "done"}
+COTENANT_RELEASED_PREFIXES = ("idle-released", "released")
+COTENANT_END_KEYS = ("released_utc", "last_job_end_utc", "end_utc")
 LEASE_STATUSES = ("running", "reserved-idle", "idle")
 MULTI_GPU_SHM = "64g"
 
@@ -114,6 +116,16 @@ def shared_jobs(value) -> set[str]:
     return {item for item in str(value or "").split(",") if item}
 
 
+def cotenant_released(entry: dict) -> bool:
+    """Other tracks write free-text statuses ("idle-released (...)", "ended", "done"); an entry
+    without a status counts as released only if it records an end time."""
+    status = entry.get("status")
+    if status is None:
+        return any(entry.get(key) for key in COTENANT_END_KEYS)
+    word = str(status).strip().lower().split(" ", 1)[0].split("(", 1)[0]
+    return word in COTENANT_OK or word.startswith(COTENANT_RELEASED_PREFIXES)
+
+
 def check_cotenants(gpu: int, root: Path = LEASE_ROOT) -> None:
     """Every co-tenant entry (``owner.<name>``) must be released or idle."""
     lease = root / f"gpu{gpu}.lock"
@@ -121,10 +133,10 @@ def check_cotenants(gpu: int, root: Path = LEASE_ROOT) -> None:
         name = path.name[len("owner.") :]
         if name.startswith("prev-") or name == "pending":
             continue
-        status = base.read_lease(path).get("status")
-        if status not in COTENANT_OK:
+        entry = base.read_lease(path)
+        if not cotenant_released(entry):
             raise ValueError(
-                f"GPU{gpu} co-tenant {path.name} has status {status!r}; wait for its release"
+                f"GPU{gpu} co-tenant {path.name} has status {entry.get('status')!r}; wait for its release"
             )
 
 

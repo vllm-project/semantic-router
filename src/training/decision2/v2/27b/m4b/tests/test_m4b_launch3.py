@@ -268,6 +268,29 @@ class LeaseTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             launch3.check_cotenants(1, self.root)
 
+    def test_cotenant_free_text_statuses(self):
+        (self.lock / "owner").write_text("track=27b-m4b\nstatus=reserved-idle\n")
+        released = [
+            "track=eval\nstatus=idle-released (C1 event 3 preflight done)\n",
+            "track=06b\nstatus=idle (formal runs finished; no job running)\n",
+            "track=06b\nstatus=ended\n",
+            "track=data\nstatus=done\n",
+            "track=eval\npurpose=x\nreleased_utc=2026-09-28T15:28:56Z\n",
+        ]
+        for text in released:
+            (self.lock / "owner.eval").write_text(text)
+            launch3.check_cotenants(1, self.root)
+        blocking = [
+            "track=eval\nstatus=running\n",
+            "track=9b\nstatus=reserved\n",
+            "track=dec\nstatus=busy\n",
+            "track=eval\npurpose=collection without an end time\n",
+        ]
+        for text in blocking:
+            (self.lock / "owner.eval").write_text(text)
+            with self.assertRaises(ValueError, msg=text):
+                launch3.check_cotenants(1, self.root)
+
 
 class ReceiptTest(unittest.TestCase):
     def test_gpu_hours_and_fields(self):
