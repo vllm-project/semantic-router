@@ -3,6 +3,10 @@ name: Python Package Publisher
 on:
   workflow_call:
     inputs:
+      build-only:
+        description: Build the distribution for a later gated publisher in this run.
+        type: boolean
+        default: false
       prebuilt-dist:
         description: Promote the exact distribution qualified by package-check.yml.
         type: boolean
@@ -113,6 +117,7 @@ jobs:
           echo "catalog_snapshot=$CATALOG_SNAPSHOT" >> "$GITHUB_OUTPUT"
 
       - name: Build and verify package
+        if: inputs.channel == 'dev'
         working-directory: src/vllm-sr
         env:
           CATALOG_SNAPSHOT: ${{ steps.contract.outputs.catalog_snapshot }}
@@ -170,7 +175,20 @@ jobs:
             }
           done
 
+      - name: Build stable package and manifest
+        if: inputs.channel != 'dev'
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          python -m pip install build twine PyYAML==6.0.3 jsonschema==4.26.0
+          TAG="${RELEASE_TAG:-v${RELEASE_VERSION}}"
+          python tools/ci/package_contract.py --build-only --mode release \
+            --tag "$TAG" --output .agent-harness/package
+          mv .agent-harness/package/dist src/vllm-sr/dist
+
       - name: Verify installed wheel capabilities
+        if: inputs.channel == 'dev'
         run: python tools/ci/check_cli_wheel.py src/vllm-sr/dist/*.whl
 
       - uses: actions/upload-artifact@v4
@@ -181,7 +199,7 @@ jobs:
 
   testpypi:
     name: Publish to TestPyPI
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && !inputs.build-only
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -196,12 +214,14 @@ jobs:
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
-        run: twine upload --repository testpypi dist/*
+        run: twine upload --repository testpypi dist/*.whl dist/*.tar.gz
 
   pypi:
     name: Publish to PyPI
     if: >-
-      !cancelled() && !failure()
+      always() && !cancelled() && !failure()
+      && !inputs.build-only
+      && (inputs.prebuilt-dist || needs.build.result == 'success')
       && github.repository == 'vllm-project/semantic-router'
       && github.event_name == 'push'
       && ((inputs.channel == 'dev' && github.ref == 'refs/heads/main')
@@ -219,11 +239,11 @@ jobs:
           path: dist
 
       - name: Install qualification dependencies
-        if: inputs.prebuilt-dist
+        if: inputs.prebuilt-dist || inputs.channel != 'dev'
         run: python -m pip install PyYAML==6.0.3
 
       - name: Verify qualified source and package content
-        if: inputs.prebuilt-dist
+        if: inputs.prebuilt-dist || inputs.channel != 'dev'
         env:
           MODE: ${{ inputs.channel == 'dev' && 'main' || 'release' }}
           TAG: ${{ inputs.tag }}

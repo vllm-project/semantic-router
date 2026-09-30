@@ -17,6 +17,8 @@ const (
 	agentGatewayProxyService = "agentgateway-proxy"
 	semanticRouterDeployment = "semantic-router"
 	semanticRouterValuesFile = "deploy/kubernetes/agentgateway/semantic-router-values/values.yaml"
+	e2eValuesFile            = "e2e/profiles/agentgateway/values.yaml"
+	fullDuplexFile           = "e2e/profiles/agentgateway/full-duplex.yaml"
 )
 
 // Profile implements the agentgateway test profile.
@@ -100,6 +102,9 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 		return p.failSetup(ctx, opts, state, fmt.Errorf("apply routing resources: %w", err))
 	}
 	state.routingResourcesApplied = true
+	if err := p.deployFullDuplexGateway(ctx, deployer, opts); err != nil {
+		return p.failSetup(ctx, opts, state, fmt.Errorf("deploy full-duplex gateway: %w", err))
+	}
 
 	p.log("Step 7/7: Attaching Semantic Router as ExtProc")
 	if err := p.applyManifest(ctx, opts.KubeConfig, "deploy/kubernetes/agentgateway/extproc-policy.yaml"); err != nil {
@@ -119,6 +124,7 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
 
 	_ = p.deleteManifest(ctx, opts.KubeConfig, "deploy/kubernetes/agentgateway/extproc-policy.yaml")
+	_ = p.deleteManifest(ctx, opts.KubeConfig, fullDuplexFile)
 	_ = p.deleteManifest(ctx, opts.KubeConfig, "deploy/kubernetes/agentgateway/routing-resources.yaml")
 	_ = p.deleteManifest(ctx, opts.KubeConfig, "deploy/kubernetes/agentgateway/gateway.yaml")
 	_ = p.deleteManifest(ctx, opts.KubeConfig, "deploy/kubernetes/agentgateway/demo-llm.yaml")
@@ -137,6 +143,7 @@ func (p *Profile) GetTestCases() []string {
 		[]string{
 			"agentgateway-traffic-routing",
 			"agentgateway-full-duplex-multiturn",
+			"agentgateway-full-duplex-routing",
 		},
 	)
 }

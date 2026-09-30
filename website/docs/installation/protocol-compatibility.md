@@ -96,7 +96,7 @@ instead of being silently dropped.
 | Text verbosity (`low`, `medium`, `high`) | Supported | Supported | Not forwarded; reported as `dropped` |
 | Strict JSON Schema output | Supported | Supported | Supported |
 | Buffered and streaming responses | Supported | Supported | Supported |
-| Reasoning content and effort | Supported | Supported | Supported |
+| Reasoning content and effort | Supported, except signed thinking blocks | Supported, except signed thinking blocks | Supported |
 | Reasoning summary requests (`reasoning.summary`) | Not forwarded; reported as `dropped` | Supported; reported as `dropped` if the provider uses `chat_template_kwargs` for reasoning controls | Not forwarded; reported as `dropped` |
 | JSON object mode without a schema | Supported | Supported | Not supported |
 | Audio input | Supported | Not supported | Not supported |
@@ -128,6 +128,15 @@ change history are rejected. Anthropic `cache_control` boundaries are omitted
 when the selected backend uses Responses, which cannot represent them. The
 prompt and tool result still dispatch, and `x-vsr-protocol-warnings` reports a
 `dropped` diagnostic for `cache_control`.
+
+Reasoning content translated out of an Anthropic backend fails when the backend
+attaches a reasoning signature, which its thinking responses carry by default.
+A Chat Completions or Responses client then receives a typed
+`unsupported_capability` failure on buffered requests; on streaming requests the
+failure arrives mid-stream, after the response headers and any earlier deltas,
+because the signature reaches the encoder only with the reasoning delta.
+Same-format traffic, including Messages clients reading an Anthropic backend, is
+unaffected.
 
 A Responses client can still use `previous_response_id` with a Chat
 Completions or Messages backend. The Router retrieves and materializes the
