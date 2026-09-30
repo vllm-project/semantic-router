@@ -264,7 +264,7 @@ def _sandbox(request, payload, name):
         "-e",
         "PYTHONPATH=/harness:/upstream:/upstream/src",
         "-v",
-        f"{cli_root}:/harness:ro",
+        f"{cli_root / 'cli'}:/harness/cli:ro",
         "-v",
         f"{root}:/upstream:ro",
         "-v",

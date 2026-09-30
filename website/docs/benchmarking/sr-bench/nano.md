@@ -174,11 +174,30 @@ vllm-sr benchmark nano manifest \
 # optional: --grader-header X-Tenant=GRADER_TENANT --grader-param 'chat_template_kwargs={"thinking":false}'
 #           --grader-no-stream --concurrency 4 --lcb-sandbox-image sha256:...
 
+# Optional first: a 2-task-per-benchmark smoke manifest.
+# vllm-sr benchmark nano manifest --dataset nano-dataset.json \
+#   --targets my-targets.yaml --sample 2 --output nano-smoke.json
+
 # 6. Run once and read the report.
 vllm-sr benchmark run --manifest nano-run.json --detach --idempotency-key nano-1
 vllm-sr benchmark show RUN_ID
 vllm-sr benchmark report RUN_ID --output nano-report.json
 ```
+
+The sr-bench service makes every model and grader call, so it reads the
+credential variables (`MY_MODEL_API_KEY`, `GRADER_API_KEY`, and the header
+variables) from its own environment. Export them before the first
+`benchmark run`, which starts the service automatically. If the service is
+already running without them, or if the store already has earlier runs (after
+that, the service no longer starts automatically), start it yourself in a
+terminal that has the variables exported, and keep that terminal open:
+
+```bash
+vllm-sr benchmark serve
+```
+
+Each manifest file name and idempotency key can be used only once. To run
+again, use a new `--output` name and a new `--idempotency-key`.
 
 The service also writes the report to `<store>/runs/RUN_ID/report.json`. The
 default store is `~/.local/share/vllm-sr/sr-bench` unless `--store`,

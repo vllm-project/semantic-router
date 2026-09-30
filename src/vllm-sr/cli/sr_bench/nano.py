@@ -379,7 +379,7 @@ def report_section(manifest, results, calls):
         "profile": manifest["profile"],
         "ids_version": IDS_VERSION,
         "ids_sha256": document["sha256"],
-        "full_split": planned == full,
+        "full_split": planned == full and "execution_cells" not in manifest,
         "weights": WEIGHTS,
         "generation_policy": "exactly one generation per task per target",
         "output_policy": "uncapped; max_tokens is sent only when a target sets it",
