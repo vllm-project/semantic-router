@@ -28,12 +28,13 @@ package `src/vllm-sr-plugins/`; sessions `src/training/decision2/v2/serving/`; s
 - **One runner type per vLLM instance.** Label-token deciders need the generate runner (Tier 1a); our scoring-head
   models need the pooling runner plus this plugin (Tier 1b). Demo: a stock Qwen3.5-0.8B label-token read with
   `allowed_token_ids` and processed logprobs matches Transformers (0 argmax changes on 16 reads, max drift .023).
-  On a shared 2,759-token state, 86% of prompt tokens hit the prefix cache and follow-up questions take 16 ms instead
-  of 40 ms; Tier 1b reads no cache yet (first next step).
+  On a shared 2,760-token state, 86% of prompt tokens hit the prefix cache whether 8 questions are sent one by one,
+  staggered or all at once (all at once: 8 answers in 51 ms; one by one: 162 ms). Tier 1b reads no cache yet (first
+  next step).
 - **Serving shape.** One model and one runner per engine. Two engines sharing one GPU (Decision + Vela) barely
   interfere at 1–8 concurrent requests each (throughput within 7%, p50 within 0.2 ms); at 32 each, Decision throughput
   drops 10% and Vela's 26%.
-- **GPU:** 0.79 of the 3 GPU-h cap, node A GPU1 (details at the end).
+- **GPU:** 0.83 of the 3 GPU-h cap, node A GPU1 (details at the end).
 
 ## Design
 
@@ -164,10 +165,20 @@ template (thinking off); each request is `max_tokens=1`, `temperature=0`, `allow
 - The argmax label is the generated token on 16 / 16 reads.
 - Against Transformers FP32 (`Qwen3_5ForConditionalGeneration`, label logits at the answer position, softmax over the
   labels): 0 argmax changes, max probability drift .023.
-- Latency: p50 14.9 ms single, 393 requests/s at concurrency 16 (p50 40 ms).
-- Prefix caching is on by default for the hybrid in `align` mode (attention block 544 tokens). On a shared 2,759-token
-  state with 8 yes / no questions, 19,040 of 22,072 prompt tokens (86%) came from the cache (5 blocks per follow-up):
-  the first question took 40.3 ms, the next seven p50 16.2 ms (2.5× faster).
+- Latency: p50 15.8 ms single, 373 requests/s at concurrency 16 (p50 42 ms).
+- Prefix caching is on by default for the hybrid in `align` mode (attention block 544 tokens). Eight yes / no questions
+  over one 2,760-token state, each order on a fresh state and an idle engine:
+
+| Send order | Prompt tokens from cache | 8 answers (wall) | First question | Follow-ups p50 |
+| --- | --- | --- | --- | --- |
+| one by one | 19,040 / 22,080 (86%) | 162 ms | 43.1 ms | 16.9 ms |
+| first alone, then 7 at once | 19,040 / 22,080 (86%) | 79 ms | 38.3 ms | 38.4 ms |
+| all 8 at once | 19,040 / 22,080 (86%) | 51 ms | 49.7 ms | 47.8 ms |
+
+  Every follow-up reuses 5 cached blocks (2,720 tokens), even when all eight are sent together: the first prefill
+  occupies the engine step and the others, arriving milliseconds later, are scheduled after it and read its state. So
+  a System One call can send all its questions at once. Arrivals that land in the same engine step under load were not
+  measured.
 
 ### Co-located engines on one GPU
 
@@ -213,8 +224,10 @@ Tier 1b's prefix caching: this vLLM build enables prefix caching for the hybrid 
 blocks), but `token_classify` requests default to `skip_reading_prefix_cache=True`, so the measured hit rate is 0% and
 every question re-reads its state. Decision 2.0 renders the state first (`Context: <state> … Task type … Question …
 Options … Decision:`), so all candidate and query rows follow the shared state and a request could read the cached state
-blocks. It needs `skip_reading_prefix_cache=False` plus a guard for a fully cached identical prompt, whose rows would be
-missing (today the pooler answers NaN → `invalid_model_output`). That is the first Tier 1b next step.
+blocks. It needs `skip_reading_prefix_cache=False` plus a guard for a prompt whose cached prefix reaches a candidate
+row (an identical or near-identical earlier prompt): today the pooler answers NaN there → `invalid_model_output`; a
+retry of that question with cache reads off would be exact. The endpoint's all-questions-at-once submission already
+suits the cache (see the Tier 1a send-order table). That is the first Tier 1b next step.
 
 ## Limitations of v0
 
@@ -276,13 +289,13 @@ bash <decision2 mirror>/src/training/decision2/v2/serving/run.sh --src <decision
 | `rt08-bf16full-0930T1632` | `ecb46f764` | Transformers BF16-parameter control |
 | `p08-fp32-tri-0930T1641` | `ecb46f764` | plugin float32 (GDN inputs BF16, `TRITON_ATTN`) |
 | `vela-0930T1648` | `564d5f8e8` | Vela Domain, float32 + bfloat16, vs Transformers |
-| `label-0930T1651` | `564d5f8e8` | Tier 1a label-token demo |
+| `label-0930T1707` | `aac72d927` | Tier 1a label-token demo, shared state in three send orders |
 | `coloc-0930T1654` | `564d5f8e8` | Decision + Vela engines on one GPU |
 | `flips-bf16-fp32.json` | `a97cf14c0` | changed-answer margins (`v2.serving.flips`) |
 
 ## GPU-hours (node A GPU1, shared lease `owner.serving`)
 
-**0.79 GPU-h of the 3 GPU-h cap**: 0.50 in the runs reported above, 0.19 in failed or superseded runs of this
+**0.83 GPU-h of the 3 GPU-h cap**: 0.50 in the runs reported above, 0.24 in failed or superseded runs of this
 continuation (float32 start failures × 2; Vela × 2 and co-location × 1: shared HF blob store not mounted, then the
-endpoint plugin inside the Vela engine; label-token × 2: blob store, then an over-long shared state), 0.09 in the first
-worker's three failed smokes. Wall-clock per run is in each run's `launcher.json`; the lease file is marked released.
+endpoint plugin inside the Vela engine; label-token × 3: blob store, an over-long shared state, and one superseded by
+the three-order run), 0.09 in the first worker's three failed smokes. Wall-clock per run is in each run's `launcher.json`; the lease file is marked released.

@@ -6,6 +6,14 @@ Assignment: coordinator notes 2026-09-30 19:40 (serving track), 19:50 / 20:00 (r
 
 ## Now
 
+- 2026-10-01 ≈01:45 UTC+8 (17:45Z) — **DONE. Record, gist 09 and integration merge complete; GPU1 released
+  (0.83 GPU-h total).**
+  - Integration: `xunzhuo/decision-2-training` fast-forwarded to `204917689` (record `8e4c5aee7`), then again with
+    this update.
+  - Extra check `label-0930T1707` (mirror `aac72d927`, 0.044 GPU-h): eight questions over one 2,760-token state reuse
+    86% of prompt tokens from the prefix cache in every send order on an idle engine; all at once is fastest (51 ms
+    vs 162 ms one by one), so no client-side staggering is needed. Record and gist updated.
+  - Nothing is running; no follow-up is required from this worker. Open next steps are listed in the record.
 - 2026-10-01 ≈01:10 UTC+8 (17:10Z) — **All measurements done; record written; GPU1 released (0.79 GPU-h total).**
   Record: [`vllm-plugin-prototype-2026-10-01.md`](vllm-plugin-prototype-2026-10-01.md).
   - float32: parity with `VLLM_SR_GDN_BF16_INPUTS=1` + `--attention-backend TRITON_ATTN` (the default ROCm
@@ -73,7 +81,8 @@ Assignment: coordinator notes 2026-09-30 19:40 (serving track), 19:50 / 20:00 (r
 | vela-0930T1648 | `564d5f8e8` | 0.0364 | Vela float32 + bfloat16 done |
 | label-0930T1651 | `564d5f8e8` | 0.0414 | label-token demo + prefix cache done |
 | coloc-0930T1654 | `564d5f8e8` | 0.0617 | co-location done |
-| **Total** | | **0.788** | |
+| label-0930T1707 | `aac72d927` | 0.0439 | label-token demo + three send orders (reported run) |
+| **Total** | | **0.832** | |
 
 ## Plan
 
@@ -86,4 +95,4 @@ Assignment: coordinator notes 2026-09-30 19:40 (serving track), 19:50 / 20:00 (r
 | Latency / throughput: plugin vs shipped runtime (+ BF16-resident) | done |
 | Tier 1a label-token demo (generate runner) | done (0.08 GPU-h) |
 | Record | done |
-| Gist 09, merge into `xunzhuo/decision-2-training` | pending |
+| Gist 09, merge into `xunzhuo/decision-2-training` | done |
