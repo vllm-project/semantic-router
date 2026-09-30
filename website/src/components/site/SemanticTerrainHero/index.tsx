@@ -14,7 +14,6 @@ import OpenAI from '@lobehub/icons/es/OpenAI/components/Mono'
 import Qwen from '@lobehub/icons/es/Qwen/components/Mono'
 import Zhipu from '@lobehub/icons/es/Zhipu/components/Mono'
 import { PillLink } from '@site/src/components/site/Chrome'
-import TerrainCanvas from './TerrainCanvas'
 import styles from './index.module.css'
 
 const heroModelLogos = [
@@ -95,10 +94,14 @@ export default function SemanticTerrainHero(): JSX.Element {
 
   return (
     <section className={styles.stage}>
-      <TerrainCanvas />
+      <div className={styles.heroBackdrop} aria-hidden="true">
+        <span className={styles.heroGlow} data-glow="a" />
+        <span className={styles.heroGlow} data-glow="b" />
+        <span className={styles.heroGlow} data-glow="c" />
+        <span className={styles.heroGrid} />
+      </div>
 
       <header className={styles.hero}>
-        <div className={styles.heroScrim} aria-hidden="true" />
         <div className="site-shell-container">
           <div className={styles.heroInner}>
             <div className={styles.intro}>
