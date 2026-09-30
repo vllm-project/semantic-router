@@ -1,6 +1,6 @@
 # 9B M6 state (resume file)
 
-Updated: 2026-09-30 08:40 UTC+8 (continuation worker; **KA and KH stopped by their early rules; K5 / K2 lines on GPU7**)
+Updated: 2026-09-30 09:15 UTC+8 (continuation worker; **finalist K5-a12 in its formal run on GPU6**)
 Branch: `xunzhuo/decision-2-training-9b` (merge-only into `xunzhuo/decision-2-training`)
 Prereg: `records/lux9b-m6-prereg-2026-09-30.md` (`f41402e68`) + amendment 1 (`7380a3cbf`). Code / wrappers mirror
 `7380a3cbf` on node A (created, verified); runtime mirror `3277dec9d` (verified, reused).
@@ -55,13 +55,18 @@ Prereg: `records/lux9b-m6-prereg-2026-09-30.md` (`f41402e68`) + amendment 1 (`73
 - Continuation commit `e2daf2afc` (mirrored, tree `ddc33f99…`): `chains/m6-htdev2.sh` (HT-DEV v2 diagnostic, runtime
   `bc0a12d70` = the 9B reference's collection code) and `chains/m6-post.sh` (m6-formal.sh, then m6-htdev2.sh).
 
+- `m6-g7` ended 00:58Z ("chain m6-gpu7 done"). **Rules** (`m6/rules.sh e2daf2afc readout-lines`, 01:05Z):
+  seed K5 = soup (69.84 ≥ 65.51); K5 α\* = ½ (G\* +.030; ⅓ +.010 < .0225); **finalist K5-a12** (`finalists.json`
+  `c500e7f4…`); K2 report-only pick ½. Lock record `lux9b-m6-formal-lock-2026-09-30.md` (`e352dae8f`).
+- **Running:** chain `m6-post-K5-a12` (PID 3795461, launched 01:08Z on GPU6; console `logs/m6-post-K5-a12.console`,
+  steps `logs/m6-formal-K5-a12.log`, `logs/m6-htdev2-K5-a12.log`). Smoke OK; `formal-m6/triton-cache` = `af623300…`.
+
 ## Next
 
-1. When `m6-g7` ends: `m6/rules.sh e2daf2afc rules-lines` (K5 is the only line that can give a finalist; K2 report only).
-2. A K5 pick → lock record (commit + push) → `m6-post.sh e2daf2afc 6 NAME` via upload/launch (formal, hs1-dev,
-   `ship_cal`, T = 1 derivation, HT-DEV v2) → successor items 1–7 vs the released T = 1 run → item 8 hand-off only
-   for a passer. No pick → no formal runs; results record.
-3. HS1 disclosure (02:25) is moot unless a KH artifact is a finalist (KH stopped).
+1. When `m6-post-K5-a12` ends: read `formal-m6/K5-a12.gates/successor.json` (+ `-16k-t1.gates` if `ship=T1`),
+   `m6/hs1/K5-a12.json`, `formal-m6/K5-a12-htdev2/readout.json`; decide items 1–7 vs the released T = 1 run.
+2. Item 8 hand-off (frozen package + C1 spec) only if K5-a12 passes items 1–7; else results record, no successor.
+3. HS1 disclosure (02:25) is moot: K5-a12 has no HS1 or PN1 rows (KH stopped).
 
 ## Launch pattern (chain rule)
 
