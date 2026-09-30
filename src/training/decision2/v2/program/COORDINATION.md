@@ -98,6 +98,7 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 | research & data: HR2 human-rated data | `/home/xunliu/code/vllm-sr-dev2-data-hr2` | `xunzhuo/decision-2-training-data-hr2` |
 | 9B Milestone 8 (parallel to M7) | `/home/xunliu/code/vllm-sr-dev2-9b-m8` | `xunzhuo/decision-2-training-9b-m8` |
 | decoder M8-small (2B + 0.8B) | `/home/xunliu/code/vllm-sr-dev2-dec-small` | `xunzhuo/decision-2-training-dec-small` |
+| serving: vLLM plugin-registry prototype | `/home/xunliu/code/vllm-sr-dev2-vllm-plugin` | `xunzhuo/decision-2-vllm-plugin` |
 
 - New code and records go under `src/training/decision2/v2/<track>/` (tracks: `eval`, `data`, `06b`, `dec`, `9b`, `27b`;
   shared helpers in `src/training/decision2/v2/common/`). Reuse the existing verified modules instead of forking them.
@@ -201,6 +202,94 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-30 20:05 — **Decoder M8-small (2B + 0.8B distillation from A20r): no successor** (records
+  `v2/dec/records/dec-m8s-*`; integration `f46423560`; ≈4.45 of 24 GPU-h; node B GPU2 / 6 / 7 released → back to 27B).
+  - **2B:** no development finalist. Every point on every line failed the typed-DEV Score floor (`set_reconciliation`
+    172–216 vs 245), equally in D1, D2 and C.
+    - Cause: the top-up file's 1:1 human / typed split over-weights human Score rows and shifts the shared Score head.
+    - D1 also cut typed Choice, and the D2 soup FLAGged on HT-DEV v2 (−.035).
+    - **If 2B is retried: use a proportional top-up slice**, as the 4B M8 design does.
+  - **0.8B:** both finalists fail item 1: `D2-a1_2` +0.18 [−0.52, +2.44]; `C-a1_3` −0.09. Human transfer is level and
+    card-eligible mlx improved (+.0075 / +.0057). KD beat the control in development (typed +.02–.03, HT-DEV v2
+    +.013–.017) but not in formal.
+  - **Decision:** 2B / 0.8B pause again. They revisit with HR2 plus proportional top-ups when HR2 lands. 4B M8 and 9B M8
+    (same teacher) continue.
+  - **To-do (card honesty; eval, next card pass):** the released DEV2.0-0.8B is flagged COLLAPSE on the score5t panel
+    (typed 5-level Score accuracy at chance; it was released before the panel existed). Check its formal typed FINAL
+    Score accuracy vs always-majority; if at chance, disclose on the card.
+  - **Process:** the worker bypassed pre-commit hooks with `--no-verify` because the workstation lacks `.venv-agent`; it
+    ran black, shellcheck and `check_no_private.sh` manually. **Rule:** that manual trio is mandatory whenever hooks
+    can't run. Set up `.venv-agent` on the workstation when convenient.
+
+- 2026-09-30 20:00 — **OPEN DECISION RUNTIME: UX decisions by the user** (the English gist proposal follows once the
+  research lands).
+  - **CLI:** `vllm-sr serve <hf-model> [options]` auto-detects a decision model from its manifest
+    (`config.json` `decision_format`) and starts a **System One engine**, like `vllm serve`. With no model and a
+    `--config`, it starts the router as today.
+  - **API:** the native endpoint is named **`/v1/decisions`**: state + questions (Choice / Noul / Score) → answers and
+    distributions. Plus `/v1/models`, `/health` and `/metrics`. A `/classify` compatibility shim for the router's
+    existing `label_distribution.v1` contract is proposed as optional; to be confirmed in the proposal.
+  - **Router mode:** the decision engine is **router-managed by default** (the router supervises a local engine
+    running the same code as engine mode), with a remote engine as an option. Decision models serve the router's
+    internal decision points: `decision` signals (Choice / Noul / Score templates) and algorithms (model selection as a
+    Choice over candidate models, escalation as Noul, complexity as Score), with one batched call per request and
+    per-signal deadlines and fail-open.
+  - **Scope: open.** Third-party decision models are served through family adapters, not just Vela / Decision 1.0 /
+    2.0.
+  - **Pending inputs:** vllm-sr CLI / config facts (0c5e9497), Decision Index top-20 / Pareto architecture survey
+    (c1c70441), vLLM plugin prototype results (2529a7d0).
+
+- 2026-09-30 19:50 — **Serving architecture recommendation (discussed with the user). Decision: wait for the plugin
+  prototype's measured results before starting phase-1 items.** Sources: research reports b9e89084 and 19da97ef.
+  - **Don't embed the vLLM engine in the vllm-sr process.**
+    - vLLM's EngineCore is a separate process by default; spawn needs a real Python executable.
+    - Go + GIL is fragile, and a CUDA fault or OOM would take down the router.
+    - Precedent: Dynamo #10835 (moving to a sidecar), TEI (UDS), Ollama (runner subprocesses).
+    - UDS transport costs ~0.01–0.2 ms against a 20–30 ms model call.
+    - The closest thing to embedding is vLLM's experimental Rust frontend (managed EngineCore; pooling in PR #54144).
+      Use it later, via our Rust FFI.
+  - **Target:** embed the contract, not the engine. `RouterModelRuntime` is one Go interface with one cgo boundary into
+    Rust.
+    - **Tier 0 in-process** (ORT, candle, optional llama.cpp) for small encoders.
+    - **Tier 1 supervised local vLLM sidecar over UDS**, with our plugin registry, for decoder and hybrid models
+      (Decision 1.0 / 2.0 decoders).
+    - **Tier 2 remote / shared.**
+    - Placement is decided per model and hardware at run time, not at build time.
+    - Request-level plan: one forward pass per backbone with N heads. Consolidation: multi-task encoder heads;
+      multi-LoRA with per-adapter heads (vLLM #53555). Cascades: escalate from Tier 0 to Tier 1 on low confidence.
+    - Training-serving co-design for a future Decision: shared-prefix or STEP-packed multi-question prompts.
+    - Co-location with the served LLM is not viable today (vLLM #40804 rejected; early-layer signals are weak). aLoRA
+      and mid-depth probes remain research.
+  - **Existing issue to fix:** vllm-sr's AMD path uses ORT's ROCm execution provider, which ORT removed in 1.23 (the
+    router pins 1.22.1). Migrate to MIGraphX.
+  - **Phase 1 candidates, pending the prototype:** the RFC for the contract and tiered runtime; the ORT ROCm → MIGraphX
+    migration; the router `http_decision` adapter + `decision_answers.v1` contract plus a `/v1/system_one` service; the
+    BF16-resident Linear quick win in the shipped runtime.
+
+- 2026-09-30 19:40 — **NEW SERVING TRACK (user-approved): vLLM plugin-registry prototype.**
+  - **Direction:** serve router models (Vela 1.0 encoders, Decision 1.0, Decision 2.0) through **one maintained vLLM
+    plugin package, without forking vLLM**, to reuse vLLM's optimizations and hardware platforms.
+  - **Evidence:** research report (b9e89084).
+    - Neither candle (no Qwen3.5 hybrid, no ROCm) nor ORT (new linear-attention ops have CPU / CUDA kernels only) can
+      run the GDN hybrid in-process on MI325X.
+    - vLLM natively supports the Qwen3.5 / Qwen3.8 hybrid backbones, with LoRA for pooling models and ROCm gfx942.
+    - A plugin needs a custom pooling model class, a candidate pooler, and an endpoint for per-question option
+      positions.
+    - vLLM 0.29.1rc1.dev187 is in our ROCm images.
+    - Risks: BF16-vs-autocast numerics need parity re-qualification; plugin APIs are unstable across versions, so pin
+      and run compatibility CI; no prefix caching for hybrid pooling.
+    - Quick win found: the shipped runtime re-casts FP32 Linear weights to BF16 on every call (est. ~10 ms at 9B, ~30 ms
+      at 27B). Keeping them BF16-resident likely changes no answers.
+  - **Prototype worker** (worktree `vllm-sr-dev2-vllm-plugin`, branch `xunzhuo/decision-2-vllm-plugin`, gist
+    `09-decision-2-serving.md`; node B GPU2 or node A GPU1 shared, ≤ 3 GPU-h; no HF uploads):
+    - plugin v0 (`Decision2Qwen3_5ForScoring` + candidate pooler + `/v1/system_one` endpoint);
+    - DEV2.0-0.8B parity vs stored scored predictions (bf16 / fp32);
+    - a Vela encoder via vLLM's native ModernBERT classify;
+    - serving-shape options;
+    - latency and throughput vs the shipped runtime.
+  - A second research report (embedded vLLM, multi-backend runtime, co-location ideas; 19da97ef) is pending. The
+    coordinator will then write the target serving architecture.
 
 - 2026-09-30 17:15 — **27B M5: FF20 failed its development gates; B1's fallback was missed; continuation launched;
   GPU RECLAIM.**

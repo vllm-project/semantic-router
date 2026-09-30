@@ -1,0 +1,325 @@
+{
+ "best_proxy": null,
+ "finalists": [],
+ "lines": {
+  "C": [
+   {
+    "G": -0.0006249999999999867,
+    "H": 0.34113355954060925,
+    "H3": 0.4160492132774081,
+    "T": 0.609375,
+    "by_type": {
+     "choice": 570,
+     "noul": 233,
+     "score": 172
+    },
+    "eligible": false,
+    "htdev2": "TIE",
+    "htdev2_delta": -0.017705680930605427,
+    "htdev2_file": "/data/dev2/runs/dec/m8s/lines/2b/diag/2b-C-a1.htdev2.json",
+    "htdev2_sha256": "8afb73958af1ca0127fb4163ed96e69fa1a5d0cec8452c5a3c6f33acc1bf9338",
+    "point": "2b-C-a1",
+    "proxy": 45.59366873207932,
+    "reasons": [
+     "type score 172 < floor 245",
+     "family set_reconciliation 172/400 below reference - 0.10"
+    ],
+    "score5t_check_flags": [],
+    "score5t_file": "/data/dev2/runs/dec/m8s/lines/2b/diag/2b-C-a1.score5t.json",
+    "score5t_sha256": "6a4d3be23cbbb33f03215d7ee9062834fc193211392d5e749a17ddc1098aced2",
+    "step": "1"
+   },
+   {
+    "G": -0.020000000000000018,
+    "H": 0.3575263939231739,
+    "H3": 0.4276053043342434,
+    "T": 0.59,
+    "by_type": {
+     "choice": 524,
+     "noul": 229,
+     "score": 191
+    },
+    "eligible": false,
+    "htdev2": "TIE",
+    "htdev2_delta": -0.003033995795911404,
+    "htdev2_file": "/data/dev2/runs/dec/m8s/lines/2b/diag/2b-C-a1_2.htdev2.json",
+    "htdev2_sha256": "41e8921cb0433342bd2771b0da5b9074a06c90cb8ec05007c60eccb645e85d96",
+    "point": "2b-C-a1_2",
+    "proxy": 45.92826715811,
+    "reasons": [
+     "type score 191 < floor 245",
+     "family set_reconciliation 191/400 below reference - 0.10"
+    ],
+    "score5t_check_flags": [],
+    "score5t_file": "/data/dev2/runs/dec/m8s/lines/2b/diag/2b-C-a1_2.score5t.json",
+    "score5t_sha256": "e247aacc5161added0ce288cfff5c2c9d8a2186ab0051359a378f4944dbbcba7",
+    "step": "1/2"
+   },
+   {
+    "G": -0.01375000000000004,
+    "H": 0.36051395411758436,
+    "H3": 0.4264311165783979,
+    "T": 0.59625,
+    "by_type": {
+     "choice": 511,
+     "noul": 227,
+     "score": 216
+    },
+    "eligible": false,
+    "htdev2": "TIE",
+    "htdev2_delta": -0.001355800001773877,
+    "htdev2_file": "/data/dev2/runs/dec/m8s/lines/2b/diag/2b-C-a1_3.htdev2.json",
+    "htdev2_sha256": "7a2fb4321579ace2a8d49f771ba42df80e11e9c1c1c06b8b9ea1a9244ec4ac34",
+    "point": "2b-C-a1_3",
+    "proxy": 46.363395598533295,
+    "reasons": [
+     "type score 216 < floor 245",
+     "family set_reconciliation 216/400 below reference - 0.10"
+    ],
+    "score5t_check_flags": [],
+    "score5t_file": "/data/dev2/runs/dec/m8s/lines/2b/diag/2b-C-a1_3.score5t.json",
+    "score5t_sha256": "a3d4962b4779694d56a59018da548f26e477d4ef3e99526c14bab0462916971e",
+    "step": "1/3"
+   }
+  ],
+  "D1": [
+   {
+    "G": -0.09312500000000001,
+    "H": 0.36022213056973235,
+    "H3": 0.4169701996820597,
+    "T": 0.516875,
+    "by_type": {
+     "choice": 432,
+     "noul": 223,
+     "score": 172
+    },
+    "eligible": false,
+    "htdev2": "TIE",
+    "htdev2_delta": -0.013837720622522587,
+    "htdev2_file": "/data/dev2/runs/dec/m8s/lines/2b/diag/2b-D1-a1.htdev2.json",
+    "htdev2_sha256": "30a5751cfb63707579b9544fff2d0b1c9444135fdcb6ac77d08924d820a496c9",
+    "point": "2b-D1-a1",
+    "proxy": 43.14971769759686,
+    "reasons": [
+     "type choice 432 < floor 465",
+     "type score 172 < floor 245",
+     "family set_reconciliation 172/400 below reference - 0.10",
+     "family transition_table 180/400 below reference - 0.10",
+     "Noul rule_precedence 223 < floor 226"
+    ],
+    "score5t_check_flags": [],
+    "score5t_file": "/data/dev2/runs/dec/m8s/lines/2b/diag/2b-D1-a1.score5t.json",
+    "score5t_sha256": "5cddd853c047622d2e43d00d52970eeb14b5d9f12e26f9bd6ecd723521b864f2",
+    "step": "1"
+   },
+   {
+    "G": -0.05125000000000002,
+    "H": 0.3674497914349534,
+    "H3": 0.4281483984545608,
+    "T": 0.55875,
+    "by_type": {
+     "choice": 474,
+     "noul": 229,
+     "score": 191
+    },
+    "eligible": false,
+    "htdev2": "TIE",
+    "htdev2_delta": -0.004296360230749918,
+    "htdev2_file": "/data/dev2/runs/dec/m8s/lines/2b/diag/2b-D1-a1_2.htdev2.json",
+    "htdev2_sha256": "cb7d96bd909108b65e2e5df937b03162df679c9d22c17ec6ed2ba2c8cfda38f7",
+    "point": "2b-D1-a1_2",
+    "proxy": 45.31143023170646,
+    "reasons": [
+     "type score 191 < floor 245",
+     "family set_reconciliation 191/400 below reference - 0.10"
+    ],
+    "score5t_check_flags": [],
+    "score5t_file": "/data/dev2/runs/dec/m8s/lines/2b/diag/2b-D1-a1_2.score5t.json",
+    "score5t_sha256": "ba373c51bcde8cb562ef8d80a8c65e4f78551866f0d8fd0b23b3b85de3be1332",
+    "step": "1/2"
+   },
+   {
+    "G": -0.02937499999999993,
+    "H": 0.3559279683587547,
+    "H3": 0.42343473969235756,
+    "T": 0.5806250000000001,
+    "by_type": {
+     "choice": 488,
+     "noul": 225,
+     "score": 216
+    },
+    "eligible": false,
+    "htdev2": "TIE",
+    "htdev2_delta": -0.0010145198286267143,
+    "htdev2_file": "/data/dev2/runs/dec/m8s/lines/2b/diag/2b-D1-a1_3.htdev2.json",
+    "htdev2_sha256": "7f7c1aa068e9d6a5be188a4af1494ec8d36ffa912f8e0005d4a3cd2bc94a16c0",
+    "point": "2b-D1-a1_3",
+    "proxy": 45.45994683546187,
+    "reasons": [
+     "type score 216 < floor 245",
+     "family set_reconciliation 216/400 below reference - 0.10",
+     "Noul rule_precedence 225 < floor 226"
+    ],
+    "score5t_check_flags": [],
+    "score5t_file": "/data/dev2/runs/dec/m8s/lines/2b/diag/2b-D1-a1_3.score5t.json",
+    "score5t_sha256": "5932bd22b78e4b59ae87e0be39778e4149e8d63b4219d279207e1c89be4b3460",
+    "step": "1/3"
+   }
+  ],
+  "D2": [
+   {
+    "G": -0.07187500000000002,
+    "H": 0.37463498237589,
+    "H3": 0.4156644070817492,
+    "T": 0.538125,
+    "by_type": {
+     "choice": 453,
+     "noul": 236,
+     "score": 172
+    },
+    "eligible": false,
+    "htdev2": "FLAG",
+    "htdev2_delta": -0.034763058741200614,
+    "htdev2_file": "/data/dev2/runs/dec/m8s/lines/2b/diag/2b-D2-a1.htdev2.json",
+    "htdev2_sha256": "4be10219154c27cb3d846c9a5c4d8318ba3ec5216fbc847cf56d6c6e88ca6cfd",
+    "point": "2b-D2-a1",
+    "proxy": 44.89993874060696,
+    "reasons": [
+     "type choice 453 < floor 465",
+     "type score 172 < floor 245",
+     "family set_reconciliation 172/400 below reference - 0.10",
+     "family transition_table 181/400 below reference - 0.10",
+     "HT-DEV v2 FLAG (-0.0348)"
+    ],
+    "score5t_check_flags": [],
+    "score5t_file": "/data/dev2/runs/dec/m8s/lines/2b/diag/2b-D2-a1.score5t.json",
+    "score5t_sha256": "1bc41c47a4ed30defc7c80ece6995d46b1c7fd849e8072d529d6d27651c4779d",
+    "step": "1"
+   },
+   {
+    "G": -0.04874999999999996,
+    "H": 0.3710192168057324,
+    "H3": 0.42637866007619235,
+    "T": 0.56125,
+    "by_type": {
+     "choice": 482,
+     "noul": 228,
+     "score": 188
+    },
+    "eligible": false,
+    "htdev2": "TIE",
+    "htdev2_delta": -0.010660387088883005,
+    "htdev2_file": "/data/dev2/runs/dec/m8s/lines/2b/diag/2b-D2-a1_2.htdev2.json",
+    "htdev2_sha256": "b0110337482b9cdc822eed37612e4905adda251de9ebed5a51ef1c408cb74bba",
+    "point": "2b-D2-a1_2",
+    "proxy": 45.63272240752433,
+    "reasons": [
+     "type score 188 < floor 245",
+     "family set_reconciliation 188/400 below reference - 0.10"
+    ],
+    "score5t_check_flags": [],
+    "score5t_file": "/data/dev2/runs/dec/m8s/lines/2b/diag/2b-D2-a1_2.score5t.json",
+    "score5t_sha256": "0bf88aa2cc464ba967c999d431955769aca9a3e9e8f4723d9ec40b403f175d2b",
+    "step": "1/2"
+   },
+   {
+    "G": -0.030000000000000027,
+    "H": 0.3558755298861662,
+    "H3": 0.4250746811113446,
+    "T": 0.58,
+    "by_type": {
+     "choice": 488,
+     "noul": 226,
+     "score": 214
+    },
+    "eligible": false,
+    "htdev2": "TIE",
+    "htdev2_delta": -0.002127408636299899,
+    "htdev2_file": "/data/dev2/runs/dec/m8s/lines/2b/diag/2b-D2-a1_3.htdev2.json",
+    "htdev2_sha256": "9efb5796dad163f06026f3038e32d5a207093447930bf4ce1f8f94317860531c",
+    "point": "2b-D2-a1_3",
+    "proxy": 45.432126005061264,
+    "reasons": [
+     "type score 214 < floor 245",
+     "family set_reconciliation 214/400 below reference - 0.10"
+    ],
+    "score5t_check_flags": [],
+    "score5t_file": "/data/dev2/runs/dec/m8s/lines/2b/diag/2b-D2-a1_3.score5t.json",
+    "score5t_sha256": "b627c224a1e73a4440006bfb01643d255fefa0feb50955a4438bb04590f8cf23",
+    "step": "1/3"
+   }
+  ]
+ },
+ "not_finalists": [
+  {
+   "line": "D1",
+   "reason": "no point passes the gates",
+   "reasons": [
+    "Noul rule_precedence 223 < floor 226",
+    "Noul rule_precedence 225 < floor 226",
+    "family set_reconciliation 172/400 below reference - 0.10",
+    "family set_reconciliation 191/400 below reference - 0.10",
+    "family set_reconciliation 216/400 below reference - 0.10",
+    "family transition_table 180/400 below reference - 0.10",
+    "type choice 432 < floor 465",
+    "type score 172 < floor 245",
+    "type score 191 < floor 245",
+    "type score 216 < floor 245"
+   ]
+  },
+  {
+   "line": "D2",
+   "reason": "no point passes the gates",
+   "reasons": [
+    "HT-DEV v2 FLAG (-0.0348)",
+    "family set_reconciliation 172/400 below reference - 0.10",
+    "family set_reconciliation 188/400 below reference - 0.10",
+    "family set_reconciliation 214/400 below reference - 0.10",
+    "family transition_table 181/400 below reference - 0.10",
+    "type choice 453 < floor 465",
+    "type score 172 < floor 245",
+    "type score 188 < floor 245",
+    "type score 214 < floor 245"
+   ]
+  },
+  {
+   "line": "C",
+   "reason": "no point passes the gates",
+   "reasons": [
+    "family set_reconciliation 172/400 below reference - 0.10",
+    "family set_reconciliation 191/400 below reference - 0.10",
+    "family set_reconciliation 216/400 below reference - 0.10",
+    "type score 172 < floor 245",
+    "type score 191 < floor 245",
+    "type score 216 < floor 245"
+   ]
+  }
+ ],
+ "picks": {
+  "C": null,
+  "D1": null,
+  "D2": null
+ },
+ "proxy_dropped": {},
+ "readouts": {
+  "C": {
+   "file": "/data/dev2/runs/dec/m8s/lines/2b/readout/L-C.json",
+   "line": "L-C:1=2b-C-a1,1/2=2b-C-a1_2,1/3=2b-C-a1_3",
+   "sha256": "d5477f4537136a1539a6d078eb1ecde78fa55a49f0538b575bb3aba274746585"
+  },
+  "D1": {
+   "file": "/data/dev2/runs/dec/m8s/lines/2b/readout/L-D1.json",
+   "line": "L-D1:1=2b-D1-a1,1/2=2b-D1-a1_2,1/3=2b-D1-a1_3",
+   "sha256": "0c9859de1c8d41427b0d429bae7839f308e473f96a14cd2795fe7f6c1399c8af"
+  },
+  "D2": {
+   "file": "/data/dev2/runs/dec/m8s/lines/2b/readout/L-D2.json",
+   "line": "L-D2:1=2b-D2-a1,1/2=2b-D2-a1_2,1/3=2b-D2-a1_3",
+   "sha256": "b1a0530f997af457bda7a36e63dda3b7a494ac00ceab2db9b73fede258835a3d"
+  }
+ },
+ "reference": "2b-I",
+ "role": "development-only selection (prereg dec-m8s-prereg-2026-09-30.md); not a release or post-key score",
+ "schema": "dec-m8s-rules/1:finalists",
+ "tier": "2b"
+}

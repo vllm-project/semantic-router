@@ -1,0 +1,37 @@
+{
+ "c1_candidate": null,
+ "finalists": [
+  {
+   "item8": null,
+   "lb_vs_bar": -0.5203028597679304,
+   "lb_vs_best_peer": 1.7845665587540198,
+   "name": "m8s-08b-D2-a1_2",
+   "point": "08b-D2-a1_2",
+   "priority": 1,
+   "revision": "d50fad619a46e5fcdae473a62980f8b6049cd2a251fc5ec81cea00db760093ed",
+   "run": "/data/dev2/runs/dec/formal/m8s/m8s-08b-D2-a1_2",
+   "status": "FAIL",
+   "status_1_7": "FAIL"
+  },
+  {
+   "item8": null,
+   "lb_vs_bar": -0.8866161197567901,
+   "lb_vs_best_peer": 0.8305531715970589,
+   "name": "m8s-08b-C-a1_3",
+   "point": "08b-C-a1_3",
+   "priority": 2,
+   "revision": "2a6a12275ce1dbf886d0a11262507cebe8d808561d5c7c29e04fc98a8ec449b0",
+   "run": "/data/dev2/runs/dec/formal/m8s/m8s-08b-C-a1_3",
+   "status": "FAIL",
+   "status_1_7": "FAIL"
+  }
+ ],
+ "order": [],
+ "pending": [],
+ "rule": "among finalists passing items 1-7 whose item 8 has not failed: highest paired lower bound vs the best same-size peer, then vs the bar (incumbent T = 1), then priority; the first is the C1 candidate and the successor once item 8 passes",
+ "schema": "dec-m6-successor-choice/1",
+ "successor": null,
+ "successor_revision": null,
+ "successor_run": null,
+ "tier": "08b"
+}
