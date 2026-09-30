@@ -3,6 +3,7 @@ package extproc
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -95,6 +96,21 @@ type parallelRAGResult struct {
 	latency float64
 }
 
+// measureParallelRAGLookup records the full duration of one child lookup. It
+// deliberately does not use a backend's RAGRetrievalLatency: some backends do
+// not set it, while others record only their HTTP portion. Parallel hybrid
+// metrics must use the same end-to-end scope for every backend.
+func measureParallelRAGLookup(ctx *RequestContext, retrieve func() (string, error)) parallelRAGResult {
+	start := time.Now()
+	retrieved, err := retrieve()
+	return parallelRAGResult{
+		context: retrieved,
+		err:     err,
+		score:   ctx.RAGSimilarityScore,
+		latency: time.Since(start).Seconds(),
+	}
+}
+
 // retrieveParallel starts both backends and returns as soon as the primary
 // produces context. It does not rank backends: they do not share a score.
 // A fallback is used only when the primary fails or returns empty context.
@@ -138,13 +154,9 @@ func (r *OpenAIRouter) retrieveParallel(traceCtx context.Context, ctx *RequestCo
 			CacheResults:        ragConfig.CacheResults,
 			CacheTTLSeconds:     ragConfig.CacheTTLSeconds,
 		}
-		retrieved, err := r.retrieveFromBackend(childCtx, &primaryCtx, primaryConfig)
-		primaryChan <- parallelRAGResult{
-			context: retrieved,
-			err:     err,
-			score:   primaryCtx.RAGSimilarityScore,
-			latency: primaryCtx.RAGRetrievalLatency,
-		}
+		primaryChan <- measureParallelRAGLookup(&primaryCtx, func() (string, error) {
+			return r.retrieveFromBackend(childCtx, &primaryCtx, primaryConfig)
+		})
 	}()
 
 	// Try fallback backend
@@ -176,13 +188,9 @@ func (r *OpenAIRouter) retrieveParallel(traceCtx context.Context, ctx *RequestCo
 				CacheResults:        ragConfig.CacheResults,
 				CacheTTLSeconds:     ragConfig.CacheTTLSeconds,
 			}
-			retrieved, err := r.retrieveFromBackend(childCtx, &fallbackCtx, fallbackConfig)
-			fallbackChan <- parallelRAGResult{
-				context: retrieved,
-				err:     err,
-				score:   fallbackCtx.RAGSimilarityScore,
-				latency: fallbackCtx.RAGRetrievalLatency,
-			}
+			fallbackChan <- measureParallelRAGLookup(&fallbackCtx, func() (string, error) {
+				return r.retrieveFromBackend(childCtx, &fallbackCtx, fallbackConfig)
+			})
 		}()
 	}
 

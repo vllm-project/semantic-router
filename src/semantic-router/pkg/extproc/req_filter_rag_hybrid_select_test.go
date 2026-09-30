@@ -1,7 +1,10 @@
 package extproc
 
 import (
+	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -20,6 +23,79 @@ func TestHybridRetrievalLatencyKeepsWinnerDuration(t *testing.T) {
 	}
 	if got := hybridRetrievalLatency("parallel", 1.5, 0); got != 1.5 {
 		t.Fatalf("unset parallel latency = %v", got)
+	}
+}
+
+func TestMeasureParallelRAGLookupUsesEndToEndDuration(t *testing.T) {
+	ctx := &RequestContext{
+		RAGSimilarityScore:  0.9,
+		RAGRetrievalLatency: 0.001, // A backend's partial HTTP timing.
+	}
+
+	result := measureParallelRAGLookup(ctx, func() (string, error) {
+		time.Sleep(20 * time.Millisecond)
+		return "fallback context", nil
+	})
+
+	if result.context != "fallback context" || result.score != 0.9 {
+		t.Fatalf("unexpected result: %#v", result)
+	}
+	if result.latency < 15*time.Millisecond.Seconds() {
+		t.Fatalf("latency = %v, want the complete child lookup duration", result.latency)
+	}
+}
+
+func TestRetrieveParallelRecordsSelectedChildEndToEndLatency(t *testing.T) {
+	const primaryDelay = 100 * time.Millisecond
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		switch req.URL.Path {
+		case "/primary":
+			time.Sleep(primaryDelay)
+			http.Error(w, "primary unavailable", http.StatusServiceUnavailable)
+		case "/v1/vector_stores/fallback/search":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"object":"list","data":[{"content":"fallback context","score":0.9}]}`))
+		default:
+			http.NotFound(w, req)
+		}
+	}))
+	defer server.Close()
+
+	ragConfig := &config.RAGPluginConfig{
+		Backend: "hybrid",
+		BackendConfig: config.MustStructuredPayload(&config.HybridRAGConfig{
+			Primary:  "external_api",
+			Fallback: "openai",
+			Strategy: "parallel",
+			PrimaryConfig: config.MustStructuredPayload(&config.ExternalAPIRAGConfig{
+				Endpoint:        server.URL + "/primary",
+				RequestFormat:   "custom",
+				RequestTemplate: `{"query":"{{.Query}}"}`,
+			}),
+			FallbackConfig: config.MustStructuredPayload(&config.OpenAIRAGConfig{
+				BaseURL:       server.URL,
+				APIKey:        "test-key",
+				VectorStoreID: "fallback",
+			}),
+		}),
+	}
+	ctx := &RequestContext{UserContent: "where is the fallback?"}
+
+	started := time.Now()
+	got, err := (&OpenAIRouter{}).retrieveFromHybrid(context.Background(), ctx, ragConfig)
+	wrapperElapsed := time.Since(started)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "fallback context" {
+		t.Fatalf("context = %q", got)
+	}
+	if ctx.RAGRetrievalLatency <= 0 {
+		t.Fatal("selected child latency was not recorded")
+	}
+	if ctx.RAGRetrievalLatency >= (wrapperElapsed / 2).Seconds() {
+		t.Fatalf("selected child latency = %v, wrapper latency = %v", ctx.RAGRetrievalLatency, wrapperElapsed)
 	}
 }
 
