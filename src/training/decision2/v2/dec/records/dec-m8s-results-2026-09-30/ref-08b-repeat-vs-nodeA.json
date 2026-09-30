@@ -1,0 +1,37 @@
+{
+  "compared_utc": "2026-09-30T10:09:09.158322+00:00",
+  "label": "post-key same-panel",
+  "panels": {
+    "css15": {
+      "answer_slots": 6547,
+      "category_changes": 20,
+      "left_sha256": "35795fe2a37e66b31e63ccbf19f1926a27afc8e4bd049729f8ce429e76fbe7f9",
+      "max_abs_numeric_drift": 0.014061296270476031,
+      "missing_left": 0,
+      "missing_right": 0,
+      "originals": 6547,
+      "right_sha256": "995a0079601e71771336ddb663c2e31dd5910ff600e12c9f56b186be9841623d"
+    },
+    "public231": {
+      "answer_slots": 231,
+      "category_changes": 1,
+      "left_sha256": "8e1852fedb3b0c20692d9fc13eea67a3b20cec9397f3c451a63fb875b78cbb60",
+      "max_abs_numeric_drift": 0.012545236066796639,
+      "missing_left": 0,
+      "missing_right": 0,
+      "originals": 231,
+      "right_sha256": "8b030a6c0e01282a1e86b2e1355394c6cb84a0e0ac347af586e746481be392e8"
+    },
+    "typed-final": {
+      "answer_slots": 2000,
+      "category_changes": 9,
+      "left_sha256": "8da5d8153257828597a7624dd0b9f753e11c223b16ef0b6d06d8bf182d75b52d",
+      "max_abs_numeric_drift": 0.027780700762365385,
+      "missing_left": 0,
+      "missing_right": 0,
+      "originals": 1600,
+      "right_sha256": "328c01294378c5a23bfc7fe560aa6d6715b70f65bf9e0104eabc3a7da0478426"
+    }
+  },
+  "schema": "dev2-same-panel-repeat/1"
+}

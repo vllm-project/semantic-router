@@ -7,6 +7,16 @@ A20r, matched controls, starts now, HR2 only by amendment). Budget 24 GPU-h. GPU
 
 ## Now
 
+- 2026-09-30 ≈20:20 UTC+8 (12:20Z) — **M8 DONE: no successor; DEV2.0-4B stands**
+  ([results](dec-m8-results-2026-09-30.md)). No GPU job is running; decoder leases idle; nothing uploaded; C1 not
+  opened; no item-8 or release hand-off.
+  - Formal vs DEV2.0-4B (63.151): D1 `4b-D1-a2_3` 58.91, −4.25 [−5.13, −0.33]; D2 `4b-D2-a1_3` 60.91, −2.24
+    [−2.79, +0.71]; C `4b-C-a1` 57.95, −5.20 [−6.18, −0.02]. All fail items 1 and 6(b) (D1, C also 5); items 2, 3, 4,
+    6(a), 7 pass. vs Decider 4B: −2.98 / −0.97 / −3.93; vs Jet v6.2: −1.47 / +0.54 / −2.42 (all spanning 0).
+  - Development: A20r targets lowered HT-DEV v2 more than the matched control (α 1: D1 −.027 FLAG, D2 −.034 FLAG,
+    C −.017 TIE); typed DEV stayed level under KD while the control inflated it.
+  - 3.90 of 24 GPU-h. Node artifacts stay: node B `m8/`, `formal/m8/`; node A `m8/label`, `m8/lines/4b/diag`,
+    `formal/m8/successor/`. A20r targets for the 2B / 0.8B worker: node B `m8/teacher-a20r/D1/teacher.jsonl`.
 - 2026-09-30 ≈19:40 UTC+8 (11:40Z) — **Finalists fixed; formal runs on node B.** All nine members DONE (chains
   exited 11:02Z); soups C / D1 / D2 built; every line read and scored. Rules (`m8/select/4b-finalists.json`
   `08273233…`, node A and node B):
@@ -55,12 +65,12 @@ A20r, matched controls, starts now, HR2 only by amendment). Budget 24 GPU-h. GPU
 
 | Step | Where | Status |
 | --- | --- | --- |
-| Data build (slice, S split, C teacher, prompts, exposure) | node B CPU | pending |
-| A20r labels, 3 shards (+ parity smoke) | node A GPU0 / GPU1 (shared) / GPU5 | pending |
-| Chains b3: C:1 D1:1 D1:2 D2:2; b4: C:2 C:3 D2:1 D2:3 D1:3 | node B GPU3 / GPU4 | pending |
-| Lines L-D1 / L-D2 / L-C (α 1, ⅔, ⅓) + refs + hs1-dev | node B (co-tenant readouts) | pending |
-| HT-DEV v2 / Score5-typed-DEV scoring, rules → finalists | node A CPU | pending |
-| Formal (≤ 3), successor items 1–7, item-8 hand-off | node B → node A | pending |
+| Data build (slice, S split, C teacher, prompts, exposure) | node B CPU | done 09:41Z |
+| A20r labels, 3 shards (+ parity smoke) | node A GPU0 / GPU1 (shared) / GPU5 | done 10:13Z (smoke PASS) |
+| Chains b3: C:1 D1:1 D1:2 D2:2; b4: C:2 C:3 D2:1 D2:3 D1:3 | node B GPU3 / GPU4 | done 11:02Z |
+| Lines L-D1 / L-D2 / L-C (α 1, ⅔, ⅓) + refs + hs1-dev | node B (co-tenant readouts) | done 11:33Z |
+| HT-DEV v2 / Score5-typed-DEV scoring, rules → finalists | node A CPU | done 11:34Z |
+| Formal (3), successor items 1–7, item-8 hand-off | node B → node A | done 12:10Z; no passer, no hand-off |
 
 ## Liveness and operations
 
@@ -72,4 +82,8 @@ A20r, matched controls, starts now, HR2 only by amendment). Budget 24 GPU-h. GPU
 
 | Item | GPU-h |
 | --- | ---: |
-| (none yet) | 0 |
+| A20r labels | 0.748 |
+| Members (C 0.605, D1 0.619, D2 0.625) | 1.849 |
+| Lines, references, hs1-dev | 0.822 |
+| Formal (CAL fits, smokes, collections, mlx-diag) | 0.481 |
+| **Total (cap 24)** | **3.900** |

@@ -1,0 +1,19 @@
+{
+ "arm": "D2",
+ "c": {
+  "checkpoint": "checkpoint-0000167",
+  "run": "/data/dev2/runs/dec/m8/arms/full/m8-C-m1",
+  "select_family_macro": 0.8975,
+  "step": 167
+ },
+ "decision": "continue",
+ "difference": 0.005833333333333357,
+ "rule": "X-m1 final SELECT700 family-macro accuracy >= C-m1's - 0.02",
+ "schema": "dec-m8-early/1",
+ "x": {
+  "checkpoint": "checkpoint-0000167",
+  "run": "/data/dev2/runs/dec/m8/arms/full/m8-D2-m1",
+  "select_family_macro": 0.9033333333333333,
+  "step": 167
+ }
+}
