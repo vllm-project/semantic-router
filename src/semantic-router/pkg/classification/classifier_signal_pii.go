@@ -53,7 +53,7 @@ func (c *Classifier) evaluatePIISignal(ctx context.Context, results *SignalResul
 	// Entity types are returned as "LABEL_{class_id}" and translated by PIIMapping.
 	piiCache := make(map[string][]cachedPIIResult, len(uniqueContents))
 	for _, content := range uniqueContents {
-		chunks := piiSignalChunks(content)
+		chunks := c.piiInputs(content)
 		cached := make([]cachedPIIResult, 0, len(chunks))
 		for _, chunk := range chunks {
 			tokenResult, err := c.classifyPIITokens(ctx, chunk)
@@ -85,19 +85,20 @@ func (c *Classifier) evaluatePIISignal(ctx context.Context, results *SignalResul
 	logging.Debugf("[Signal Computation] PII signal evaluation completed in %v", elapsed)
 }
 
-// piiRuleHasInferenceError reports whether any chunk the rule reads failed to
+// piiRuleInferenceErrorCode reports a bounded code when a chunk the rule reads failed to
 // classify. A declared truncation (ErrTokenSpansTruncated) is not a failure
 // here: the call succeeded and its spans are valid for the part the provider
 // saw, so on_error decides what the unseen remainder means.
-func piiRuleHasInferenceError(ruleContents []string, piiCache map[string][]cachedPIIResult) bool {
+func piiRuleInferenceErrorCode(ruleContents []string, piiCache map[string][]cachedPIIResult) string {
+	code := ""
 	for _, content := range ruleContents {
 		for _, cached := range piiCache[content] {
 			if cached.err != nil && !errors.Is(cached.err, ErrTokenSpansTruncated) {
-				return true
+				code = mergeSignalErrorCode(code, boundedSignalErrorCode(cached.err, piiEvaluationFailedCode))
 			}
 		}
 	}
-	return false
+	return code
 }
 
 func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUserMessages []string, piiCache map[string][]cachedPIIResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
@@ -106,11 +107,12 @@ func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUse
 		return
 	}
 
-	inferenceFailed := piiRuleHasInferenceError(ruleContents, piiCache)
+	errorCode := piiRuleInferenceErrorCode(ruleContents, piiCache)
+	inferenceFailed := errorCode != ""
 	if inferenceFailed {
 		// The failure is recorded visibly either way; on_error below decides
 		// whether the rule also fails closed for the content never scored.
-		recordSignalRuleErrors(results, mu, config.SignalTypePII, []string{rule.Name}, piiEvaluationFailedCode)
+		recordSignalRuleErrors(results, mu, config.SignalTypePII, []string{rule.Name}, errorCode)
 	}
 
 	entityTypes, failed := c.collectPIIEntityTypes(ruleContents, rule.Name, rule.Threshold, piiCache)

@@ -1,0 +1,9 @@
+# Import the CLI command tree and validate generated model catalog artifacts.
+# Import directly from source; no CLI installation or package staging is needed.
+click==8.5.0
+PyYAML==6.0.3
+requests==2.34.2
+Jinja2==3.1.6
+jsonschema==4.26.0
+pydantic==2.13.5
+typing-extensions==4.16.0

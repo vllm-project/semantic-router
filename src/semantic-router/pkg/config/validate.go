@@ -124,7 +124,7 @@ type fieldEntry struct {
 // collectKnownFields builds a map of yaml-tag → field info for a struct type,
 // handling inline fields by promoting their children to the current level.
 func collectKnownFields(t reflect.Type) map[string]fieldEntry {
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	known := make(map[string]fieldEntry)
@@ -163,7 +163,7 @@ func splitYAMLTag(tag string) (string, string) {
 }
 
 func derefType(t reflect.Type) reflect.Type {
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	return t

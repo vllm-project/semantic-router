@@ -71,11 +71,11 @@ func TestCompileModelBindingsRejectsInvalidPreparation(t *testing.T) {
 			d.Device = "migraphx:0"
 			cfg.ModelDeployments["shared-encoder"] = d
 		}, "incompatible"},
-		{"too long", func(cfg *RouterConfig) {
+		{"negative budget", func(cfg *RouterConfig) {
 			d := cfg.ModelDeployments["shared-encoder"]
-			d.Input.MaxTokens = 32768
+			d.Input.MaxTokens = -1
 			cfg.ModelDeployments["shared-encoder"] = d
-		}, "at most 512"},
+		}, "must not be negative"},
 		{"wrong contract", func(cfg *RouterConfig) {
 			b := cfg.Recipes[0].Profile.ModelBindings["domain_classifier"]
 			b.Contract = RemoteClassifierContractScore
@@ -100,6 +100,10 @@ func TestCompileModelBindingsRejectsInvalidPreparation(t *testing.T) {
 
 func TestNamedDeploymentAdmissionAndCanonicalRoundTrip(t *testing.T) {
 	cfg := testDeploymentConfig()
+	deployment := cfg.ModelDeployments["other-encoder"]
+	deployment.CompilationCacheDir = "/var/cache/semantic-router/migraphx"
+	deployment.Input.MaxTokens = 8192
+	cfg.ModelDeployments["other-encoder"] = deployment
 	if err := validateModelAdmissionContracts(cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -124,6 +128,58 @@ func TestNamedDeploymentAdmissionAndCanonicalRoundTrip(t *testing.T) {
 	scoped := cfg.ConfigForRecipe(&cfg.Recipes[0])
 	if scoped.ModelBindings["domain_classifier"].Deployment != "shared-encoder" {
 		t.Fatal("recipe view lost bindings")
+	}
+}
+
+func TestRemovedClassifierSessionBankOptionIsRejected(t *testing.T) {
+	_, err := ParseYAMLBytes([]byte(`
+version: v0.3
+global:
+  model_catalog:
+    deployments:
+      classifier:
+        artifact: models/classifier
+        provider: ort
+        device: migraphx:0
+        input:
+          max_tokens: 8192
+          overflow: reject
+        short_sequence_tokens: 512
+`))
+	if err == nil || !strings.Contains(err.Error(), `unknown field "short_sequence_tokens"`) {
+		t.Fatalf("removed session-bank option must be rejected, got %v", err)
+	}
+}
+
+func TestCompilationCacheRequiresExplicitMIGraphXPlacement(t *testing.T) {
+	for _, test := range []struct {
+		name, provider, device, directory string
+		valid                             bool
+	}{
+		{"default off", "ort", "cpu", "", true},
+		{"MIGraphX", "ort", "migraphx:2", "/var/cache/semantic-router/migraphx", true},
+		{"CPU", "ort", "cpu", "/cache", false},
+		{"ROCm", "ort", "rocm:0", "/cache", false},
+		{"Candle", "candle", "cpu", "/cache", false},
+		{"HTTP", "http", "", "/cache", false},
+		{"relative", "ort", "migraphx:0", "cache", false},
+		{"spaces", "ort", "migraphx:0", " /cache", false},
+		{"null", "ort", "migraphx:0", "/cache\x00", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := testDeploymentConfig()
+			d := cfg.ModelDeployments["other-encoder"]
+			d.Provider, d.Device, d.CompilationCacheDir = test.provider, test.device, test.directory
+			if err := d.ValidateCompilationCache(); (err == nil) != test.valid {
+				t.Fatalf("cache validation: %v", err)
+			}
+			if test.provider != "http" {
+				cfg.ModelDeployments["other-encoder"] = d
+				if _, err := CompileModelBindings(cfg); (err == nil) != test.valid {
+					t.Fatalf("compiled deployment: %v", err)
+				}
+			}
+		})
 	}
 }
 

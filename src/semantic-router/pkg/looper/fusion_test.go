@@ -954,43 +954,6 @@ func TestParseFusionAnalysisRepairsInvalidStringEscapes(t *testing.T) {
 	assert.Equal(t, []string{`same \(escaped\) text`}, analysis.Consensus)
 }
 
-func newFusionTestRequest() *Request {
-	params := openai.ChatCompletionNewParams{
-		Model: "vllm-sr/fusion",
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.UserMessage("compare the options"),
-		},
-	}
-	return &Request{
-		OriginalRequest: &params,
-		DecisionName:    "fusion-test",
-	}
-}
-
-func newFusionStubServer(
-	t *testing.T,
-	respond func(model string, prompt string) (content string, status int),
-) *httptest.Server {
-	t.Helper()
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "1", r.Header.Get("x-vsr-fusion-depth"))
-		var payload struct {
-			Model    string `json:"model"`
-			Messages []struct {
-				Role    string `json:"role"`
-				Content string `json:"content"`
-			} `json:"messages"`
-		}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-		prompt := ""
-		if len(payload.Messages) > 0 {
-			prompt = payload.Messages[len(payload.Messages)-1].Content
-		}
-		content, status := respond(payload.Model, prompt)
-		writeFusionTestCompletion(w, payload.Model, content, status)
-	}))
-}
-
 func writeFusionTestCompletion(w http.ResponseWriter, model string, content string, status int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

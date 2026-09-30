@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from artifact_inventory import ServedArtifact
+from constants import VELA_RELEASE_REVISIONS
 from provenance.crossref import verify_artifact_bytes
 from provenance.emit import ARTIFACT_INCLUDE_GLOBS, resolve_hf_revision
 from provenance.manifest import load_manifest
@@ -103,7 +104,7 @@ def resolve_measured_artifact(
         revision = identity["revision"]
         patterns = [entry["path"] for entry in referenced["files"]]
     else:
-        revision = resolve_hf_revision(repo)
+        revision = VELA_RELEASE_REVISIONS.get(repo) or resolve_hf_revision(repo)
     if repo != served.hf_repo:
         logger.warning(
             "measuring %s, which is NOT the artifact %s serves (%s)",

@@ -39,7 +39,7 @@ SIGNAL keyword frustration_feedback_markers {
 }
 
 SIGNAL fact_check needs_fact_check {
-  description: "Request needs factual verification or sources."
+  description: "Requests that depend on external factual knowledge; verification routing combines this signal with feedback and source requirements."
 }
 
 SIGNAL user_feedback wrong_answer {
@@ -156,7 +156,7 @@ ROUTE omni (description = "Understand image-bearing follow-ups with the dedicate
 
 ROUTE feedback_verified_recovery (description = "Premium recovery lane for explicit or persistent dissatisfaction on evidence-sensitive follow-ups.") {
   PRIORITY 240
-  WHEN (projection("feedback_verified_escalate") OR reask("persistently_dissatisfied") OR user_feedback("wrong_answer") OR keyword("frustration_feedback_markers")) AND (projection("feedback_needs_evidence") OR keyword("verification_markers") OR fact_check("needs_fact_check")) AND NOT (keyword("code_error_markers") OR domain("computer science"))
+  WHEN (projection("feedback_verified_escalate") OR reask("persistently_dissatisfied") OR user_feedback("wrong_answer") OR keyword("frustration_feedback_markers")) AND (projection("feedback_needs_evidence") OR keyword("verification_markers")) AND NOT (keyword("code_error_markers") OR domain("computer science"))
   MODEL "openai/gpt5.4" (reasoning = true, effort = "high")
   PLUGIN header_mutation {
     add: [{ name: "X-Feedback-Lane", value: "verified-recovery" }]
@@ -186,7 +186,7 @@ ROUTE feedback_code_recovery (description = "Repair lane for code follow-ups tha
 
 ROUTE feedback_persistent_recovery (description = "Premium general recovery lane for repeated same-question retries that have already failed on a cheaper recovery pass.") {
   PRIORITY 210
-  WHEN reask("persistently_dissatisfied") AND NOT (projection("feedback_needs_evidence") OR keyword("verification_markers") OR fact_check("needs_fact_check") OR keyword("code_error_markers") OR domain("computer science"))
+  WHEN reask("persistently_dissatisfied") AND NOT (projection("feedback_needs_evidence") OR keyword("verification_markers") OR keyword("code_error_markers") OR domain("computer science"))
   MODEL "openai/gpt5.4" (reasoning = true, effort = "high")
   PLUGIN header_mutation {
     add: [{ name: "X-Feedback-Lane", value: "persistent-recovery" }]
@@ -196,7 +196,7 @@ ROUTE feedback_persistent_recovery (description = "Premium general recovery lane
 
 ROUTE feedback_general_recovery (description = "General recovery lane for repeated dissatisfaction that is neither verification-heavy nor code-specific.") {
   PRIORITY 200
-  WHEN (projection("feedback_retry") OR projection("feedback_escalate") OR reask("likely_dissatisfied") OR keyword("frustration_feedback_markers")) AND NOT (reask("persistently_dissatisfied") OR projection("feedback_needs_evidence") OR keyword("verification_markers") OR fact_check("needs_fact_check") OR keyword("code_error_markers") OR domain("computer science"))
+  WHEN (projection("feedback_retry") OR projection("feedback_escalate") OR reask("likely_dissatisfied") OR keyword("frustration_feedback_markers")) AND NOT (reask("persistently_dissatisfied") OR projection("feedback_needs_evidence") OR keyword("verification_markers") OR keyword("code_error_markers") OR domain("computer science"))
   MODEL "google/gemini-3.1-pro" (reasoning = true, effort = "medium")
   PLUGIN header_mutation {
     add: [{ name: "X-Feedback-Lane", value: "general-recovery" }]

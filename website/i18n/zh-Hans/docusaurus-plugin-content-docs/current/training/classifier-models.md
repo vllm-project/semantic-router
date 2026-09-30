@@ -1,135 +1,100 @@
 ---
-title: mmBERT-32K 分类器模型
-sidebar_label: 分类器模型
+title: 训练 Vela 分类器
+sidebar_label: 分类器
 translation:
-  source_commit: "2de78e816d34699cf31245e2ad3b16d6b0a803df"
+  source_commit: "96399a94b9030d66f46c5d45f9a838defc091153"
   source_file: "docs/training/classifier-models.md"
   outdated: false
 ---
 
-# mmBERT-32K 分类器模型 {#mmbert-32k-classifier-models}
+# 训练 Vela 分类器 {#train-vela-classifiers}
 
-当前分类器家族将同一多语言、长上下文 ModernBERT 编码器适配到若干路由决策。共享基础使分词和编码器行为保持一致，而每个任务有自己的标签、数据准备、训练损失和输出头。
+Vela 分类器将请求转换为路由信号。当应用需要更好地覆盖某种语言、领域或请求模式时，可以进行适配。各任务均使用共享 Vela Encoder 基座。
 
-## 共享架构与训练模式 {#shared-architecture-and-training-pattern}
+使用已发布模型，请先参阅 [Vela runtime 配置](../tutorials/global/vela-models.md)。
 
-意图、越狱、反馈、模态和事实核查模型使用序列分类：
+## 选择任务和标签 {#choose-the-task-and-labels}
 
-```text
-request -> mmBERT-32K encoder -> pooled representation -> task classifier -> label
-```
+| 模型 | 输出 | 示例用途 |
+| --- | --- | --- |
+| Domain | 14 个主题领域 | 将法律问题路由给专用模型 |
+| Guard | `benign`、`jailbreak` | 检测覆盖指令的攻击 |
+| Feedback | 四类反馈及 `NO_FEEDBACK` | 处理用户不满意的回答 |
+| Modality | `AR`、`DIFFUSION`、`BOTH` | 选择文本、图像或组合输出 |
+| FactCheck | `FACT_CHECK_NEEDED`、`NO_FACT_CHECK_NEEDED` | 选择答案核查路径 |
+| PII | 17 类实体的 token 标签 | 定位需要脱敏的个人信息 |
 
-PII 模型使用 token 分类：
+内容风险检测见 [Safety 和 Hazard](./mmbert-safety-classifier)。Guard 负责提示词攻击，普通有害内容由 Safety 处理。
 
-```text
-request -> mmBERT-32K encoder -> one classifier output per token -> BIO entities
-```
+### Domain {#domain}
 
-训练脚本对 ModernBERT 注意力和 MLP 投影应用 LoRA 更新，同时训练任务头。一次运行可以保留 adapter，或将其合并进基础权重。因此 `-lora` 和 `-merged` 产物共享同一逻辑架构和标签契约。
+Domain 预测生物、商业、化学、计算机科学、经济、工程、健康、历史、法律、数学、其他、哲学、物理或心理学。加入不属于专业领域的请求，让模型学会使用 `other`。
 
-对于五个标准序列/token 工作流，仓库还提供便捷目标：
-
-```bash
-make train-mmbert32k-intent
-make train-mmbert32k-jailbreak
-make train-mmbert32k-feedback
-make train-mmbert32k-factcheck
-make train-mmbert32k-pii
-```
-
-覆盖目标默认值前，先用 `--help` 运行所选 Python 入口。数据集下载、输出检查点和缓存应放在 Git 之外。
-
-## 意图分类器 {#intent-classifier}
-
-意图模型预测 14 个学科领域之一：biology、business、chemistry、computer science、economics、engineering、health、history、law、math、other、philosophy、physics 或 psychology。
-
-它是在 MMLU-Pro 题目加上改进 `other` 回退的补充样本上训练的 14 路序列分类器。标准目标使用 LoRA rank 32 和 alpha 64、5 个 epoch、batch 16，以及学习率 `2e-5`。评测报告准确率和加权 F1；部署评测还应检查每类召回率以及与 `other` 的混淆。
-
-MMLU-Pro 只发布 `validation`（70 行）和 `test`（12032 行），因此训练池必须来自 `test`。训练器在采样任何内容前先保留分层的 20% `test`，将这些行排除在梯度路径之外，并将其行索引以及在其上测得的指标写入检查点旁的 `heldout_eval.json`。引用该数字：整个 `test` 划分上的准确率覆盖了模型训练过的行，因此不是留出证据。
-
-产物：
-[`merged`](https://huggingface.co/llm-semantic-router/mmbert32k-intent-classifier-merged)、
-[`LoRA`](https://huggingface.co/llm-semantic-router/mmbert32k-intent-classifier-lora)。
-
-## 越狱检测器 {#jailbreak-detector}
-
-越狱模型是 `benign` 对 `jailbreak` 的二分类序列分类器。训练结合 ToxicChat、Salad-Data 攻击样本，以及显式的短长攻击模式增强。流水线同时训练分类头和 LoRA adapter，并用留出分类指标选择检查点。
-
-已发布 Model Card 记录 LoRA rank 48 和 alpha 96。当前标准目标默认为 rank 32、alpha 64、5 个 epoch、batch 16 和学习率 `2e-5`；复现已发布配置时覆盖 rank 和 alpha。分别评测良性假阳性和漏检攻击，并包含多语言、混淆、长上下文和间接提示切片；仅靠聚合准确率不是安全阈值。
-
-产物：
-[`merged`](https://huggingface.co/llm-semantic-router/mmbert32k-jailbreak-detector-merged)、
-[`LoRA`](https://huggingface.co/llm-semantic-router/mmbert32k-jailbreak-detector-lora)。
-
-## 反馈检测器 {#feedback-detector}
-
-反馈模型根据用户的跟进消息预测四种状态：
+### Feedback {#feedback}
 
 | 标签 | 含义 |
 | --- | --- |
-| `SAT` | 回答让用户满意 |
-| `NEED_CLARIFICATION` | 用户需要澄清 |
-| `WRONG_ANSWER` | 回答看起来不正确 |
-| `WANT_DIFFERENT` | 用户想要不同的结果或方法 |
+| `SAT` | 用户对答案满意 |
+| `NEED_CLARIFICATION` | 用户需要进一步解释 |
+| `WRONG_ANSWER` | 用户指出答案错误 |
+| `WANT_DIFFERENT` | 用户希望更换格式或方法 |
+| `NO_FEEDBACK` | 消息没有表达反馈 |
 
-它使用加权交叉熵补偿类别不平衡。标准 LoRA 运行使用 rank 64 和 alpha 128、最多 10 个 epoch、batch 16、学习率 `2e-5`、按 macro F1 提前选择检查点，以及 512 token 训练上限。
+输入是当前用户的后续消息。普通新问题应标为 `NO_FEEDBACK`；与答案无关的正面陈述不表示满意。如果缺少对话上下文导致无法可靠判断，应单独处理这些含糊回复。
 
-产物：
-[`merged`](https://huggingface.co/llm-semantic-router/mmbert32k-feedback-detector-merged)、
-[`LoRA`](https://huggingface.co/llm-semantic-router/mmbert32k-feedback-detector-lora)。
+### FactCheck 和 Modality {#factcheck-and-modality}
 
-## 模态路由器 {#modality-router}
+FactCheck 判断答案是否需要核查，不判断陈述真伪。数据应同时覆盖事实性问题、创作和非事实请求。
 
-模态路由器预测下游响应应如何产生：
+Modality 根据文本判断输出意图。`AR` 表示文本，`DIFFUSION` 表示图像，`BOTH` 表示组合响应。它是文本分类器，不检查上传的图片。
 
-| 标签 | 路由 |
-| --- | --- |
-| `AR` | 自回归文本模型 |
-| `DIFFUSION` | 图像生成模型 |
-| `BOTH` | 文本解释加视觉输出 |
+## 准备数据 {#prepare-your-data}
 
-训练组装文本请求、图像生成提示词和混合模态样本。`BOTH` 类可以包含已评审的种子/模板样本，以及通过 OpenAI 兼容端点合成的可选样本。除非显式设置，训练器会根据数据集大小自动选择 LoRA rank，使用 focal loss 和类别权重，对严重少数类过采样，并按验证 F1 选择。已发布 Model Card 记录 rank 16、alpha 32、10 个 epoch、batch 32 和学习率 `2e-5`。当前脚本默认为 8 个 epoch，并为其默认的 6000 样本数据集选择 rank 16。
+共享序列训练器要求 JSONL 行包含 `id`、`text`、`label` 和 `group_id`。相关样本应保留在同一分区；需要细分评测时，同时保留 `source`、`language`、`length_bucket` 和 `position`。独立的 `contract.json` 定义标签顺序。
+
+[序列训练参考](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_classifier/sequence_repair)提供文件格式和来源准备流程。[应用配方](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_classifier/vela-applications.md)提供 Feedback 和 Guard 数据构建工具。按任务复核来源标签，特别是攻击引文、正常指令和中性后续消息。
+
+## 训练序列分类器 {#train-a-sequence-classifier}
+
+下载固定 revision 的 Vela Encoder 到 `/models/vela-base`，并将 `VELA_BASE_REVISION` 设置为该 revision。以下例子假设 FactCheck 契约、训练集和开发集已经准备好。
 
 ```bash
-python src/training/model_classifier/modality_routing_classifier/\
-modality_routing_bert_finetuning_lora.py --help
+python -m src.training.model_classifier.sequence_repair.train \
+  --method full --fresh-head \
+  --base /models/vela-base \
+  --base-id llm-semantic-router/Vela-1.0-Encoder-307M \
+  --base-revision "${VELA_BASE_REVISION:?Set the downloaded revision}" \
+  --contract /data/factcheck/contract.json \
+  --train /data/factcheck/train.jsonl --dev /data/factcheck/dev.jsonl \
+  --output /data/factcheck/run \
+  --steps 600 --batch-size 4 --accumulate 4 \
+  --max-length 32768 --microbatch-token-budget 32768 \
+  --learning-rate 0.00001 --head-learning-rate 0.0001 \
+  --eval-every 200 --evaluation-dtype float32 --selection source-macro-f1
 ```
 
-产物：
-[`merged`](https://huggingface.co/llm-semantic-router/mmbert32k-modality-router-merged)、
-[`LoRA`](https://huggingface.co/llm-semantic-router/mmbert32k-modality-router-lora)。
+`--fresh-head` 初始化分类 head，并与完整编码器一起训练。继续已有任务时，提供兼容的 Vela 任务 checkpoint 并省略该参数。根据数据选择步数和采样；示例参数仅作为起点。
 
-## 事实核查分类器 {#fact-check-classifier}
+输入预算包含特殊 tokens。超过预算的训练样本会被记录为拒绝，评测时拒绝溢出。增加预算时，应加入真实长样本。
 
-事实核查模型预测 `FACT_CHECK_NEEDED` 或 `NO_FACT_CHECK_NEEDED`。它是路由模型：决定请求是否应进入验证路径；它不判断主张是否为真。
+### 继续训练并保留已有能力 {#continue-a-model-while-preserving-existing-behavior}
 
-正例是来自 QASPER 和 Natural Questions 等信息寻求问题。负例包括创意写作、代码和其他非信息寻求请求。构建器平衡两类，并创建分层的训练、验证和测试划分。标准目标使用 LoRA rank 32 和 alpha 64、5 个 epoch、batch 16 和学习率 `2e-5`；脚本按验证 F1 选择。
+适配已发布的分类器时，从该任务的 checkpoint 开始，并省略 `--fresh-head`。可选的 `--trainable-last-layers` 只更新最后几层编码器和分类 head。将旧训练样本标记为 `retention_replay: true`，再使用 `--retention-targets`，可以在学习新标签时约束这些旧样本的预测变化。
 
-产物：
-[`merged`](https://huggingface.co/llm-semantic-router/mmbert32k-factcheck-classifier-merged)、
-[`LoRA`](https://huggingface.co/llm-semantic-router/mmbert32k-factcheck-classifier-lora)。
+按照[继续训练流程](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_classifier/sequence_repair#preserve-behavior-during-continued-training)生成目标并配置训练。替换已部署的 Guard 模型前，在独立开发集上同时检查攻击召回率和合法请求误报。
 
 ## PII 检测器 {#pii-detector}
 
-PII 模型是序列分类模式的例外。它使用 token 分类头和 BIO 编码：`B-TYPE` 标记实体的第一个 token，`I-TYPE` 继续它，`O` 标记非实体 token。已发布模型将 17 种实体类型暴露为 35 个标签（`O` 加上每种实体类型两个标签）。
+PII 训练使用实体片段，而不是为整个请求指定一个标签。BIO 编码中，`B-TYPE` 表示实体开始，`I-TYPE` 表示继续，`O` 表示其他 token。
 
-已发布 Model Card 记录 Presidio 训练、LoRA rank 32、5 个 epoch、batch 16 和学习率 `1e-4`。当前标准目标用 70/30 的 AI4Privacy/Presidio 混合、字符跨度对齐到 mmBERT 子词 token、rank 48、alpha 96 和 8 个 epoch 扩展该方法。选择并报告实体级 F1，而不是被 `O` token 主导的 token 准确率。
+使用 [PII 训练流程](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_classifier/pii_model_fine_tuning_lora)中的 `train_repair.py`，对齐字符片段与 tokenizer 输出并训练 token 分类器。评测实体级 precision、recall 和 F1。大多数 token 为 `O`，因此 token accuracy 可能掩盖漏检。
 
-产物：
-[`merged`](https://huggingface.co/llm-semantic-router/mmbert32k-pii-detector-merged)、
-[`LoRA`](https://huggingface.co/llm-semantic-router/mmbert32k-pii-detector-lora)。
+## 评测并部署 {#evaluate-and-deploy}
 
-## 校验产物契约 {#validate-the-artifact-contract}
+在同一组独立请求上对比原始和训练后的模型，检查各类别错误、语言、长短输入，以及应不触发信号的请求。使用开发集选择阈值。
 
-发布或配置分类器前，验证以下全部内容：
+通过[序列导出工具](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_classifier/sequence_repair#freeze-then-evaluate-the-independent-test)导出选中的模型，包含训练权重、tokenizer 和任务标签映射。PII 使用专用导出流程。
 
-- 分词器和基础模型修订与训练运行匹配；
-- `id2label` 和 `label2id` 保留文档中的顺序；
-- adapter 包含任务头，或合并模型包含完整模型权重；
-- 运行时使用相同的截断和规范化规则；
-- adapter 和合并 logits 在固定样本上一致；
-- 留出指标和失败切片与产物一起存储。
+最后配置[本地模型绑定](../installation/runtime/in-process.md)，通过[路由预览](../installation/runtime/lifecycle-diagnostics.md)发送代表性请求，同时检查实际信号、决策和置信度。
 
-训练入口和产物映射位于
-[`src/training/model_classifier`](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_classifier)。
-分层内容安全模型请继续阅读[训练安全分类器](./mmbert-safety-classifier)。
+[产物索引](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_artifacts.json)保留早期 mmBERT adapter 和 merged 模型的入口。

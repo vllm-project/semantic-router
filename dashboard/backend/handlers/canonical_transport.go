@@ -92,7 +92,7 @@ func rawJSONMessage(value any) (json.RawMessage, error) {
 }
 
 func readCanonicalConfigFile(configPath string) (*canonicalConfigTransport, error) {
-	data, err := os.ReadFile(configPath)
+	data, err := readPersistedDashboardConfig(configPath)
 	if err != nil {
 		return nil, err
 	}

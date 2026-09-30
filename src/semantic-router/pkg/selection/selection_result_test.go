@@ -90,6 +90,22 @@ func TestValidateSelectionResultAcceptsModelAndLoRAReferences(t *testing.T) {
 	}
 }
 
+func TestValidateSelectionResultChecksSelectedCandidate(t *testing.T) {
+	ctx := &SelectionContext{CandidateModels: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}}}
+	candidate := ctx.CandidateModels[1]
+	if err := ValidateSelectionResult(ctx, &SelectionResult{SelectedModel: "model-b", SelectedCandidate: &candidate}); err != nil {
+		t.Fatal(err)
+	}
+	for _, result := range []*SelectionResult{
+		{SelectedModel: "model-a", SelectedCandidate: &candidate},
+		{SelectedModel: "model-b", SelectedCandidate: &config.ModelRef{Model: "model-b", Weight: 2}},
+	} {
+		if err := ValidateSelectionResult(ctx, result); !errors.Is(err, ErrSelectedModelNotCandidate) {
+			t.Fatalf("result %+v: expected %v, got %v", result, ErrSelectedModelNotCandidate, err)
+		}
+	}
+}
+
 func TestGlobalSelectRejectsInvalidSelectorResult(t *testing.T) {
 	oldRegistry := GetGlobalRegistry()
 	defer func() {

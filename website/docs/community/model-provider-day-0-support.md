@@ -127,6 +127,12 @@ definitions. Provider-specific reasoning placement reuses one of the catalog's
 validated transport modes; endpoint hostnames are never used as provider
 identity.
 
+Use `path_overrides` for paths relative to the configured base path.
+Use `operation_overrides` when an operation needs a host-root path or must
+omit the provider's `api-version` query. An operation key may appear in only
+one map. Runtime callers use `Registry.ResolveOperation` to resolve the path
+and query policy together.
+
 ### Reasoning wire contract
 
 Operators use one protocol-neutral decision surface:

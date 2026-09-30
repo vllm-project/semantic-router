@@ -1,0 +1,263 @@
+.selectField {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.fieldLabel {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+.selectControl {
+  position: relative;
+  min-width: 0;
+}
+.selectField .selectTrigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 38px;
+  padding: 0.5rem 0.7rem;
+  background: var(--bg-primary, #111115);
+  border: 1px solid var(--border-color, #38383e);
+  border-radius: 7px;
+  color: var(--text-primary);
+  text-align: left;
+  font-size: 13px;
+}
+.selectTrigger > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.selectTrigger svg,
+.selectOption svg,
+.selectSearch svg,
+.compactButton svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+.placeholder {
+  color: var(--text-secondary);
+}
+.selectMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  width: 100%;
+  min-width: min(260px, 100%);
+  overflow: hidden;
+  border: 1px solid var(--border-color, #38383e);
+  border-radius: 9px;
+  background: var(--bg-secondary, #202025);
+  box-shadow: 0 12px 32px #0005;
+}
+.menuAbove {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+.selectSearch {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.6rem;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+.selectField .selectSearch input {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 0.2rem;
+  font-size: 12px;
+}
+.selectField .selectSearch input:focus-visible {
+  outline: 0;
+}
+.selectSearch:focus-within {
+  box-shadow: inset 0 -2px var(--color-primary, #ff565e);
+}
+.options {
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 0.3rem;
+  overscroll-behavior: contain;
+}
+.selectField .selectOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  border-radius: 5px;
+  padding: 0.6rem;
+  text-align: left;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+.selectOption > span {
+  min-width: 0;
+}
+.selectOption strong {
+  display: block;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.selectOption small {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.selectField .selectOption:hover,
+.selectField .selectOption:focus-visible,
+.selectField .selectOption[aria-selected='true'] {
+  background: var(--bg-tertiary, #2d2d35);
+}
+.selectField .selectOption:focus-visible {
+  outline-offset: -2px;
+}
+.noOptions {
+  padding: 0.6rem;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.compactActions,
+.selectionHeading {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+.selectionHeading {
+  margin: 1.2rem 0 0.6rem;
+}
+.selectionHeading h3,
+.selectionHeading h4 {
+  margin: 0;
+}
+.compactActions .compactButton,
+.selectionHeading .compactButton,
+.compactButton.compactButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: auto;
+  padding: 0.35rem 0.55rem;
+  font-size: 12px;
+  line-height: 1.4;
+  border-radius: 6px;
+}
+.comparisonToolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 380px) minmax(0, 300px);
+  align-items: end;
+  gap: 1rem;
+}
+.targetPicker {
+  width: min(320px, 100%);
+}
+.sourcePicker {
+  max-width: 560px;
+}
+.settingsBlock {
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  margin: 1rem 0;
+  padding: 1rem;
+}
+.settingsBlock summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.settingsBlock summary svg {
+  width: 15px;
+  height: 15px;
+}
+.settingsBlock summary::after {
+  content: '+';
+  margin-left: auto;
+}
+.settingsBlock[open] summary::after {
+  content: '−';
+}
+.settingsBlock summary::-webkit-details-marker {
+  display: none;
+}
+.fieldHelp {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 400;
+}
+.profileGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+.profileGrid dt {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.profileGrid dd {
+  margin: 0.15rem 0 0;
+  font-size: 13px;
+}
+.fixedBadge {
+  display: inline-block;
+  margin-left: 0.4rem;
+  color: var(--text-secondary);
+  font-size: 10px;
+  border: 1px solid var(--border-color);
+  padding: 0 0.25rem;
+  border-radius: 3px;
+}
+.costControl {
+  max-width: 480px;
+}
+.fixedSettings {
+  margin: 0.75rem 0;
+  font-size: 12px;
+}
+.fixedSettings dl {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+.fixedSettings dl > div {
+  display: grid;
+  grid-template-columns: minmax(100px, 160px) minmax(0, 1fr);
+  gap: 0.5rem;
+}
+.fixedSettings dt {
+  color: var(--text-secondary);
+}
+.fixedSettings dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.fixedSettings ul {
+  margin: 0;
+  padding-left: 1rem;
+}
+.fixedSettings dd dl {
+  margin: 0;
+}
+@media (max-width: 700px) {
+  .comparisonToolbar {
+    grid-template-columns: 1fr;
+  }
+  .targetPicker {
+    width: 100%;
+  }
+}

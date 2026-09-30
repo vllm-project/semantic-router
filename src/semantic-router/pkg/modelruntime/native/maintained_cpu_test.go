@@ -312,12 +312,10 @@ func maintainedNativeEvidence(t *testing.T, resource *binding.Resource) any {
 			}
 		case *ort.SequenceClassifier:
 			evidence, err = model.Info()
-		case *embeddingEngine:
-			if model.candle != nil {
-				evidence, err = model.candle.Info()
-			} else {
-				evidence, err = model.ort.Info()
-			}
+		case *candleEmbeddingEngine:
+			evidence, err = model.Info()
+		case *ortTextEmbeddingEngine:
+			evidence, err = model.Info()
 		default:
 			return fmt.Errorf("unexpected maintained resource type %T", value)
 		}

@@ -5,7 +5,7 @@ import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import ConfigPageModelEndpoints from './ConfigPageModelEndpoints'
 import ConfigPageModelInventoryPanel from './ConfigPageModelInventoryPanel'
 import styles from './ConfigPage.module.css'
-import { evaluationRecordColumns, evaluationRecordKey } from './configPageEvaluationRecordsSupport'
+import { evaluationModelColumns } from './configPageEvaluationRecordsSupport'
 import { reasoningFamilyColumns } from './configPageReasoningFamilySupport'
 import type { ConfigPageModelsSectionController } from './useConfigPageModelsSectionController'
 import type { ConfigPageModelsSectionProps } from './configPageModelsSectionTypes'
@@ -89,8 +89,8 @@ function ReasoningFamiliesBlock({ controller }: ModelsSectionViewProps) {
         className={styles.managerTable}
         readonly
         pagination={{
-          pageSize: 25,
-          pageSizeOptions: [25, 50, 100],
+          pageSize: 5,
+          pageSizeOptions: [5, 10, 25, 50],
           itemLabel: 'families',
           resetKey: reasoning.search,
         }}
@@ -100,24 +100,25 @@ function ReasoningFamiliesBlock({ controller }: ModelsSectionViewProps) {
 }
 
 function EvaluationRecordsBlock({ props, controller }: ModelsSectionViewProps) {
-  const records = controller.evaluations.records
+  const groups = controller.evaluations.groups
   return (
     <div className={styles.sectionTableBlock}>
       <TableHeader
-        title="Evaluation Records"
-        count={records.length}
+        title="Evaluation Evidence"
+        count={groups.length}
         onAdd={props.isReadonly ? undefined : controller.evaluations.manage}
         addButtonText="Manage records"
         variant="embedded"
       />
       <DataTable
-        columns={evaluationRecordColumns}
-        data={records}
-        keyExtractor={evaluationRecordKey}
-        emptyMessage="No operator evaluation records configured; built-in evidence remains available automatically."
+        columns={evaluationModelColumns}
+        data={groups}
+        keyExtractor={(group) => group.modelName}
+        onView={controller.evaluations.view}
+        emptyMessage="No provider models configured."
         className={styles.managerTable}
         readonly
-        pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], itemLabel: 'records' }}
+        pagination={{ pageSize: 5, pageSizeOptions: [5, 10, 25, 50], itemLabel: 'models' }}
       />
     </div>
   )

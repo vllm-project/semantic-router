@@ -933,14 +933,26 @@
 }
 
 .ctxMenuItem {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
   padding: 0.375rem 0.75rem;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
   transition: background var(--transition-fast);
   color: var(--color-text);
 }
 
-.ctxMenuItem:hover {
+.ctxMenuItem:hover,
+.ctxMenuItem:focus-visible {
   background: var(--color-bg-tertiary);
+}
+
+.ctxMenuItem:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
 }
 
 .ctxMenuDanger {

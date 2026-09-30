@@ -17,7 +17,7 @@ from cli.consts import (
     PLATFORM_NVIDIA,
 )
 from cli.container_data_network import router_data_network_commands
-from cli.container_gpu_isolation import router_runtime_env
+from cli.container_gpu_isolation import router_compiler_cache, router_runtime_env
 from cli.container_images import (
     _normalize_platform,
     get_runtime_images,
@@ -48,17 +48,17 @@ from cli.container_start_paths import (
     _runtime_mount_specs,
 )
 from cli.container_start_runner import run_container_specs
-from cli.evaluation_runtime_env import (
-    EVALUATION_DASHBOARD_CONFIG_ENV_NAMES,
-    EVALUATION_DEPLOYMENTS_DIR_ENV,
-    EVALUATION_ENABLED_ENV,
-    configure_dashboard_evaluation_deployments,
-    configure_dashboard_evaluation_env,
-    evaluation_dashboard_secret_env_names,
-)
 from cli.parser import parse_user_config
 from cli.runtime_stack import PORT_OFFSET_ENV, RuntimeStackLayout, resolve_runtime_stack
 from cli.runtime_topology import resolve_runtime_topology
+from cli.sr_bench_runtime import (
+    BENCH_CONFIG_ENV,
+    BENCH_IDENTITY_LABEL,
+    BenchRuntime,
+    bench_command_identity,
+    dashboard_bench_env,
+    prepare_bench_runtime,
+)
 from cli.storage_secrets import (
     STORAGE_SECRET_ENV_NAMES,
     load_storage_secrets,
@@ -94,10 +94,15 @@ def container_start_vllm_sr(
     runtime_config_file: str | None = None,
 ):
     """Start the runtime containers and return code, stdout, and stderr."""
-    runtime = get_container_runtime()
     env_vars = dict(env_vars or {})
     envoy_log_level = _resolve_envoy_log_level(env_vars)
     stack_layout = stack_layout or resolve_runtime_stack()
+    for listener in listeners:
+        stack_layout.host_port(
+            listener["port"],
+            name=f"listener {listener.get('name', 'unknown')} host port",
+        )
+    runtime = get_container_runtime()
     resolve_runtime_topology(topology)
 
     normalized_platform = _resolve_platform(env_vars)
@@ -119,6 +124,7 @@ def container_start_vllm_sr(
         recipe_store_dir=runtime_paths["container_recipe_store_dir"],
     )
     storage_secret_values = _resolve_storage_secret_env(config_dir, stack_layout)
+    bench_runtime = None if minimal else prepare_bench_runtime(config_dir, stack_layout)
     _render_split_envoy_config(
         runtime_paths["effective_config_path"],
         runtime_paths["envoy_config_path"],
@@ -143,11 +149,15 @@ def container_start_vllm_sr(
         stack_layout=stack_layout,
         storage_secret_names=tuple(storage_secret_values),
         envoy_log_level=envoy_log_level,
+        bench_runtime=bench_runtime,
     )
 
     log.info(f"Starting vLLM Semantic Router runtime with {runtime}...")
     return run_container_specs(
-        container_specs, storage_secret_values=storage_secret_values
+        container_specs,
+        storage_secret_values=storage_secret_values,
+        bench_secret_values=bench_runtime.secrets if bench_runtime else {},
+        bench_token_env=bench_runtime.token_env if bench_runtime else "SR_BENCH_TOKEN",
     )
 
 
@@ -179,12 +189,13 @@ def _build_common_runtime_env(
     recipe_store_dir: str | None = None,
 ):
     common_env = dict(env_vars or {})
-    # Evaluation configuration is a Dashboard-only control-plane input. Rebuild
-    # it from the trusted host environment after the service environments split;
-    # the deployment path is then replaced with a read-only container mount.
+    # Signing authority belongs to Dashboard, never to recipe/data-plane env.
+    common_env.pop("DASHBOARD_JWT_SECRET", None)
+    # Benchmark credentials belong only to the independent worker and its gateway.
     for name in (
-        EVALUATION_DEPLOYMENTS_DIR_ENV,
-        *EVALUATION_DASHBOARD_CONFIG_ENV_NAMES,
+        *BENCH_CONFIG_ENV,
+        "SR_BENCH_TOKEN",
+        os.getenv("SR_BENCH_TOKEN_ENV", "SR_BENCH_TOKEN"),
     ):
         common_env.pop(name, None)
     common_env["VLLM_SR_RUNTIME_CONFIG_PATH"] = runtime_container_config
@@ -229,6 +240,7 @@ def _resolve_container_specs(
     stack_layout: RuntimeStackLayout,
     storage_secret_names: tuple[str, ...] = (),
     envoy_log_level: str = DEFAULT_ENVOY_LOG_LEVEL,
+    bench_runtime: BenchRuntime | None = None,
 ):
     runtime_images = get_runtime_images(
         image=image,
@@ -254,6 +266,7 @@ def _resolve_container_specs(
         stack_layout=stack_layout,
         storage_secret_names=storage_secret_names,
         envoy_log_level=envoy_log_level,
+        bench_runtime=bench_runtime,
     )
 
 
@@ -273,13 +286,17 @@ def _runtime_container_specs(
     stack_layout: RuntimeStackLayout,
     storage_secret_names: tuple[str, ...] = (),
     envoy_log_level: str = DEFAULT_ENVOY_LOG_LEVEL,
+    bench_runtime: BenchRuntime | None = None,
 ):
     listener_port = _primary_listener_port(listeners)
     management_listener = _managed_management_listener(
         runtime_paths["effective_config_path"], stack_layout
     )
     listener_host_ports = {
-        listener["port"] + stack_layout.port_offset
+        stack_layout.host_port(
+            listener["port"],
+            name=f"listener {listener.get('name', 'unknown')} host port",
+        )
         for listener in listeners
         if listener.get("port")
     }
@@ -335,6 +352,18 @@ def _runtime_container_specs(
     if minimal:
         return specs
 
+    if bench_runtime is not None and bench_runtime.managed:
+        specs.append(
+            _build_bench_runtime_spec(
+                runtime=runtime,
+                image=image_by_service["dashboard"],
+                nofile_limit=nofile_limit,
+                network_name=runtime_network_name,
+                stack_layout=stack_layout,
+                bench=bench_runtime,
+            )
+        )
+
     dashboard_cmd = _build_dashboard_runtime_command(
         runtime=runtime,
         dashboard_image=image_by_service["dashboard"],
@@ -348,6 +377,7 @@ def _runtime_container_specs(
         stack_layout=stack_layout,
         inherited_sensitive_env=inherited_sensitive_env,
         management_listener=management_listener,
+        bench_runtime=bench_runtime,
     )
     specs.append(("dashboard", stack_layout.dashboard_container_name, (dashboard_cmd,)))
 
@@ -369,6 +399,13 @@ def _build_router_runtime_command(
     storage_secret_names: tuple[str, ...] = (),
 ):
     router_env = router_runtime_env(common_env, normalized_platform)
+    compiler_cache = router_compiler_cache(
+        runtime,
+        router_image,
+        runtime_paths["vllm_sr_dir"],
+        stack_layout.stack_name,
+        normalized_platform,
+    )
     # Names only. Each one is rendered as an inheriting `-e NAME` flag, and the
     # value reaches Docker through the Router child process environment. They
     # stay out of `common_env` on purpose: `_build_dashboard_runtime_env()`
@@ -385,13 +422,14 @@ def _build_router_runtime_command(
     )
     return _build_service_run_command(
         runtime=runtime,
-        image=router_image,
+        image=compiler_cache.image_id if compiler_cache else router_image,
         container_name=stack_layout.router_container_name,
         nofile_limit=nofile_limit,
         network_name=runtime_network_name,
         env_vars=router_env,
         mount_specs=[
             *_runtime_mount_specs(runtime_paths, include_models=True),
+            *([compiler_cache.mount] if compiler_cache else []),
             runtime_paths["log_spool_router_mount"],
         ],
         port_mappings=[
@@ -452,7 +490,10 @@ def _build_envoy_runtime_command(
         port_mappings=[
             (
                 _listener_host_address(listener),
-                listener["port"] + stack_layout.port_offset,
+                stack_layout.host_port(
+                    listener["port"],
+                    name=f"listener {listener.get('name', 'unknown')} host port",
+                ),
                 listener["port"],
             )
             for listener in listeners
@@ -474,6 +515,16 @@ def _listener_host_address(listener: dict) -> str:
     )
 
 
+def _dashboard_host_bind_address() -> str:
+    """Select the Docker host address for the Dashboard's published port."""
+    address = os.getenv("VLLM_SR_DASHBOARD_HOST_BIND", "127.0.0.1").strip()
+    if address not in {"0.0.0.0", "127.0.0.1", "::", "::1"}:
+        raise ValueError(
+            "VLLM_SR_DASHBOARD_HOST_BIND must be an explicit wildcard or loopback IP"
+        )
+    return address
+
+
 def _build_dashboard_runtime_command(
     *,
     runtime: str,
@@ -488,6 +539,7 @@ def _build_dashboard_runtime_command(
     stack_layout: RuntimeStackLayout,
     inherited_sensitive_env: set[str],
     management_listener: dict[str, int | str],
+    bench_runtime: BenchRuntime | None = None,
 ):
     dashboard_env = _build_dashboard_runtime_env(
         common_env=common_env,
@@ -495,10 +547,8 @@ def _build_dashboard_runtime_command(
         stack_layout=stack_layout,
         management_port=int(management_listener["port"]),
     )
-    configure_dashboard_evaluation_env(
-        dashboard_env,
-        source_config_path=runtime_paths.get("source_config_path"),
-    )
+    if bench_runtime is not None:
+        dashboard_env.update(dashboard_bench_env(bench_runtime))
     dashboard_mount_specs = _runtime_mount_specs(
         runtime_paths, include_dashboard_data=True
     )
@@ -509,13 +559,6 @@ def _build_dashboard_runtime_command(
         ]
     )
     dashboard_mount_specs.extend(_active_recipe_mount_specs(runtime_paths))
-    if dashboard_env.get(EVALUATION_ENABLED_ENV) != "false":
-        configure_dashboard_evaluation_deployments(
-            dashboard_env,
-            dashboard_mount_specs,
-            staging_root=runtime_paths["evaluation_deployment_staging_root"],
-            readable_gid=int(runtime_paths["log_spool_gid"]),
-        )
     if runtime_paths.get("active_recipe_root"):
         dashboard_env["VLLM_SR_ACTIVE_RECIPE_DIR"] = "/app/recipe"
     else:
@@ -527,15 +570,16 @@ def _build_dashboard_runtime_command(
     ]
     dashboard_env[LOG_SPOOL_ROOT_ENV] = LOG_SPOOL_READER_DIR
     dashboard_env[LOG_SPOOL_GID_ENV] = runtime_paths["log_spool_gid"]
-    configure_openclaw_support(
-        dashboard_mount_specs,
-        dashboard_env,
-        config_dir,
-        openclaw_network_name,
-        runtime,
-        stack_layout,
-        resolve_container_cli=resolve_container_cli_path,
-    )
+    if dashboard_env["OPENCLAW_ENABLED"] == "true":
+        configure_openclaw_support(
+            dashboard_mount_specs,
+            dashboard_env,
+            config_dir,
+            openclaw_network_name,
+            runtime,
+            stack_layout,
+            resolve_container_cli=resolve_container_cli_path,
+        )
     service_entrypoint, service_args = bounded_log_spool_entrypoint(
         "/app/entrypoint.sh",
         [
@@ -551,13 +595,68 @@ def _build_dashboard_runtime_command(
         network_name=runtime_network_name,
         env_vars=dashboard_env,
         mount_specs=dashboard_mount_specs,
-        port_mappings=[(stack_layout.dashboard_port, 8700)],
+        port_mappings=[
+            (_dashboard_host_bind_address(), stack_layout.dashboard_port, 8700)
+        ],
         entrypoint=service_entrypoint,
         command_args=service_args,
-        inherited_env_keys={"DASHBOARD_ADMIN_PASSWORD"}
+        inherited_env_keys={"DASHBOARD_ADMIN_PASSWORD", "DASHBOARD_JWT_SECRET"}
         | inherited_sensitive_env
-        | evaluation_dashboard_secret_env_names(dashboard_env),
+        | ({bench_runtime.token_env} if bench_runtime else set()),
     )
+
+
+def _build_bench_runtime_spec(
+    *, runtime, image, nofile_limit, network_name, stack_layout, bench
+):
+    assert bench.store is not None
+    worker_env = dict.fromkeys(bench.secrets, "")
+    # The service has one fixed token variable; the Dashboard may use a custom ref.
+    worker_env["SR_BENCH_TOKEN"] = ""
+    cmd = _build_service_run_command(
+        runtime=runtime,
+        image=image,
+        container_name=stack_layout.sr_bench_container_name,
+        nofile_limit=nofile_limit,
+        network_name=network_name,
+        env_vars=worker_env,
+        mount_specs=[f"{bench.store}:{bench.store}:z"],
+        port_mappings=[("127.0.0.1", stack_layout.sr_bench_port, 8090)],
+        entrypoint="/opt/vllm-sr-dashboard-venv/bin/python",
+        command_args=[
+            "-m",
+            "cli.sr_bench.service",
+            "--store",
+            str(bench.store),
+            "--host",
+            "0.0.0.0",
+            "--port",
+            "8090",
+        ],
+        inherited_env_keys=set(worker_env),
+    )
+    cmd[2:2] = ["--user", f"{os.getuid()}:{os.getgid()}"]
+    identity = bench_command_identity(cmd, bench.secrets)
+    cmd[2:2] = ["--label", f"{BENCH_IDENTITY_LABEL}={identity}"]
+    # Health verification performs only authenticated reads inside the container.
+    probe = (
+        "import os,time,requests; "
+        "h={'Authorization':'Bearer '+os.environ['SR_BENCH_TOKEN']}; "
+        "\nfor i in range(30):\n"
+        " try:\n  r=requests.get('http://127.0.0.1:8090/health',headers=h,timeout=1); "
+        "r.raise_for_status(); assert r.json()['status']=='ready'; break\n"
+        " except Exception:\n  time.sleep(.5)\n"
+        "else: raise SystemExit('sr-bench service readiness failed')"
+    )
+    health = [
+        runtime,
+        "exec",
+        stack_layout.sr_bench_container_name,
+        "/opt/vllm-sr-dashboard-venv/bin/python",
+        "-c",
+        probe,
+    ]
+    return ("sr-bench", stack_layout.sr_bench_container_name, (cmd, health))
 
 
 def _recipe_env_binding_names(common_env: dict[str, str]) -> set[str]:
@@ -589,6 +688,16 @@ def _build_dashboard_runtime_env(
     management_port: int = 8080,
 ):
     dashboard_env = dict(common_env)
+    dashboard_env.pop("DASHBOARD_JWT_SECRET", None)
+    for feature_flag in ("OPENCLAW_ENABLED", "ML_PIPELINE_ENABLED"):
+        if feature_flag in os.environ:
+            dashboard_env[feature_flag] = os.environ[feature_flag]
+        else:
+            dashboard_env.setdefault(feature_flag, "false")
+    if os.getenv("DASHBOARD_JWT_SECRET", "").strip():
+        # The container runtime inherits the host value by name. Do not copy
+        # signing material into command arguments or printable runtime state.
+        dashboard_env["DASHBOARD_JWT_SECRET"] = ""
     for name in (
         "DASHBOARD_ADMIN_EMAIL",
         "DASHBOARD_ADMIN_PASSWORD",
@@ -601,10 +710,19 @@ def _build_dashboard_runtime_env(
     bootstrap_policy_env = "DASHBOARD_ALLOW_OPEN_BOOTSTRAP"
     if bootstrap_policy_env in os.environ:
         dashboard_env[bootstrap_policy_env] = os.environ[bootstrap_policy_env]
-    elif bootstrap_policy_env not in dashboard_env:
-        bootstrap_email = dashboard_env.get("DASHBOARD_ADMIN_EMAIL", "").strip()
-        bootstrap_password = dashboard_env.get("DASHBOARD_ADMIN_PASSWORD", "").strip()
-        if not (bootstrap_email and bootstrap_password):
+    bootstrap_email = dashboard_env.get("DASHBOARD_ADMIN_EMAIL", "").strip()
+    bootstrap_password = dashboard_env.get("DASHBOARD_ADMIN_PASSWORD", "").strip()
+    if not (bootstrap_email and bootstrap_password):
+        if _dashboard_host_bind_address() in {"0.0.0.0", "::"}:
+            if dashboard_env.get(bootstrap_policy_env) != "true":
+                raise ValueError(
+                    "Publishing Dashboard on all interfaces requires "
+                    "DASHBOARD_ADMIN_EMAIL and DASHBOARD_ADMIN_PASSWORD, or "
+                    "an explicit DASHBOARD_ALLOW_OPEN_BOOTSTRAP=true opt-in"
+                )
+        elif bootstrap_policy_env not in dashboard_env:
+            # Keep dashboard-first setup usable on the local machine without
+            # opening first-admin registration on the network by default.
             dashboard_env[bootstrap_policy_env] = "true"
 
     dashboard_env["TARGET_ROUTER_API_URL"] = (

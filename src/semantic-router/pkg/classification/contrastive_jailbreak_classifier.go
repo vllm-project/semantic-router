@@ -256,14 +256,7 @@ func contrastiveCosineSimilarity(a, b []float32) float32 {
 }
 
 func (c *ContrastiveJailbreakClassifier) embedText(text string) ([]float32, error) {
-	if c.provider != nil {
-		return c.provider.Embed(context.Background(), text)
-	}
-	output, err := getEmbeddingWithModelType(text, c.modelType, 0)
-	if err != nil {
-		return nil, err
-	}
-	return output.Embedding, nil
+	return embedding.Embed(context.Background(), c.provider, text, embedding.Options{})
 }
 
 // preloadKBEmbeddings concurrently computes embeddings for jailbreak and benign

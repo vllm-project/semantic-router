@@ -184,15 +184,18 @@ def test_unsupported_task_provider_binding_fails_before_startup(
     assert error_fragment in errors[0].message
 
 
-def test_classification_budget_is_not_expanded_by_embedding_capacity():
+@pytest.mark.parametrize("limit", [0, 512, 32768])
+def test_classification_budget_is_checked_against_actual_loaded_checkpoint(limit):
     document = binding_document()
     document["global"]["model_catalog"]["deployments"]["shared"]["input"][
         "max_tokens"
-    ] = 513
-    errors = validate_model_runtime_references(UserConfig.model_validate(document))
-    assert len(errors) == 1
-    assert errors[0].field == "recipes.private.routing.model_bindings.pii_classifier"
-    assert "512 tokens" in errors[0].message
+    ] = limit
+    parsed = UserConfig.model_validate(document)
+    assert validate_model_runtime_references(parsed) == []
+    assert (
+        parsed.global_["model_catalog"]["deployments"]["shared"]["input"]["max_tokens"]
+        == limit
+    )
 
 
 @pytest.mark.parametrize(
@@ -218,3 +221,27 @@ def test_unregistered_custom_local_artifact_remains_valid():
         "artifact"
     ] = "/mounted/custom/checkpoint"
     assert validate_model_runtime_references(UserConfig.model_validate(document)) == []
+
+
+@pytest.mark.parametrize(
+    "consumer,contract",
+    [("embedding", "embedding.v1"), ("domain_classifier", "label_distribution.v1")],
+)
+def test_openvino_binding_uses_canonical_deployment(consumer, contract):
+    document = binding_document()
+    document["recipes"] = []
+    document["routing"]["model_bindings"] = {
+        consumer: {
+            "deployment": "shared",
+            "contract": contract,
+            "adapter": "bert",
+            "head": "openvino_model.xml",
+        }
+    }
+    deployment = document["global"]["model_catalog"]["deployments"]["shared"]
+    deployment.update(provider="openvino", device="CPU", precision="native")
+    assert validate_config_structure(document) == []
+    assert validate_model_runtime_references(UserConfig.model_validate(document)) == []
+    deployment["input"]["overflow"] = "window"
+    errors = validate_model_runtime_references(UserConfig.model_validate(document))
+    assert any("reject or truncate" in e.message for e in errors)

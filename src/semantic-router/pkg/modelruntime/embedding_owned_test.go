@@ -114,7 +114,7 @@ func TestOwnedRecipeEmbeddingDoesNotProvisionSharedCache(t *testing.T) {
 	if prepared.Ready() {
 		t.Fatal("standalone recipe provisioned shared cache model")
 	}
-	if _, err := PrepareOwnedEmbeddings(context.Background(), cfg, nil); err == nil {
+	if _, err := PrepareOwnedResponseCacheEmbeddings(context.Background(), cfg, nil); err == nil {
 		t.Fatal("service runtime ignored required cache artifact")
 	}
 }

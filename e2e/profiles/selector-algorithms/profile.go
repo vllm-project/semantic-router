@@ -12,7 +12,7 @@ import (
 const valuesFile = "e2e/profiles/selector-algorithms/values.yaml"
 
 var resourceManifests = []string{
-	"e2e/profiles/selector-algorithms/mock-vllm.yaml",
+	"deploy/kubernetes/response-api/provider-mocker.yaml",
 	"e2e/profiles/selector-algorithms/gateway-resources.yaml",
 }
 
@@ -28,7 +28,7 @@ func NewProfile() *Profile {
 			SemanticRouterValuesFile: valuesFile,
 			ResourceManifests:        resourceManifests,
 			WaitDeployments: []helpers.DeploymentRef{
-				{Namespace: "default", Name: "selector-mock-vllm"},
+				{Namespace: "default", Name: "provider-mocker"},
 			},
 		}),
 	}

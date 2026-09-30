@@ -85,20 +85,23 @@ func TestTokenUsageAdd_DoesNotMutateReceiver(t *testing.T) {
 }
 
 func TestTokenUsageMap(t *testing.T) {
-	u := TokenUsage{PromptTokens: 7, CompletionTokens: 3, TotalTokens: 10}
-	m := u.Map()
-
-	// Round-trip through JSON to confirm the OpenAI-compatible shape.
-	body, err := json.Marshal(m)
-	if err != nil {
-		t.Fatalf("marshal usage map: %v", err)
-	}
-	var decoded TokenUsage
-	if err := json.Unmarshal(body, &decoded); err != nil {
-		t.Fatalf("unmarshal usage map: %v", err)
-	}
-	if decoded != u {
-		t.Errorf("usage map round-trip = %+v, want %+v", decoded, u)
+	for _, u := range []TokenUsage{
+		{PromptTokens: 7, CompletionTokens: 3, TotalTokens: 10},
+		{PromptTokens: 7, CompletionTokens: 3, TotalTokens: 10, CacheWriteTokens: 2},
+		{PromptTokens: 7, CompletionTokens: 3, TotalTokens: 10, CachedInputTokens: 3, CacheWriteTokens: 2},
+	} {
+		// Round-trip through JSON to confirm every cache bucket survives.
+		body, err := json.Marshal(u.Map())
+		if err != nil {
+			t.Fatalf("marshal usage map: %v", err)
+		}
+		var decoded TokenUsage
+		if err := json.Unmarshal(body, &decoded); err != nil {
+			t.Fatalf("unmarshal usage map: %v", err)
+		}
+		if decoded != u {
+			t.Errorf("usage map round-trip = %+v, want %+v", decoded, u)
+		}
 	}
 }
 

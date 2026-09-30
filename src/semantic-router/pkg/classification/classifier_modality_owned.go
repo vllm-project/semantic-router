@@ -40,21 +40,31 @@ func (m *ownedModalityClassifier) Classify(ctx context.Context, text string) (Mo
 }
 
 func (b *classifierOptionBuilder) buildModalityClassifierOption() (option, error) {
-	md := b.cfg.ModalityDetector
-	if !md.Enabled || md.GetMethod() == config.ModalityDetectionKeyword {
+	models := consumerModelRuntime([]*classifierModelRuntime{b.models})
+	return buildOwnedModalityOption(b.cfg, models, models.runtime.Sequence)
+}
+
+func buildOwnedModalityOption(
+	cfg *config.RouterConfig,
+	models *classifierModelRuntime,
+	load func(context.Context, config.ResolvedModelBinding) (*binding.Resolved[string, tasks.LabelDistribution], error),
+) (option, error) {
+	md := cfg.ModalityDetector
+	// Routing and classification APIs evaluate generation intent only through
+	// modality rules. Structural image presence does not consume this model.
+	if len(cfg.ModalityRules) == 0 || !md.Enabled || md.GetMethod() == config.ModalityDetectionKeyword {
 		return nil, nil
 	}
-	models := consumerModelRuntime([]*classifierModelRuntime{b.models})
 	_, explicit := models.plan.Lookup(models.recipe, "modality_detector")
 	if !explicit && (md.Classifier == nil || md.Classifier.ModelPath == "") {
 		return nil, nil
 	}
-	path, useCPU := "", true
+	path, useCPU, limit := "", true, 0
 	if md.Classifier != nil {
-		path, useCPU = md.Classifier.ModelPath, md.Classifier.UseCPU
+		path, useCPU, limit = md.Classifier.ModelPath, md.Classifier.UseCPU, md.Classifier.MaxSequenceLength
 	}
-	spec := models.localSpec("modality_detector", path, "mmbert32k", config.RemoteClassifierContractLabelDistribution, useCPU)
-	handle, err := models.runtime.Sequence(context.Background(), spec)
+	spec := models.localSpec("modality_detector", path, "mmbert32k", config.RemoteClassifierContractLabelDistribution, useCPU, limit)
+	handle, err := load(context.Background(), spec)
 	if err != nil {
 		if md.GetMethod() == config.ModalityDetectionHybrid && !explicit {
 			logging.Warnf("Modality classifier preparation failed; using configured keyword fallback: %v", err)

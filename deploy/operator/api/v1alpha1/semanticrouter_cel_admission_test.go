@@ -11,6 +11,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apiserver/schema"
 	schemacel "k8s.io/apiextensions-apiserver/pkg/apiserver/schema/cel"
+	kubejson "k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/yaml"
 )
@@ -50,8 +51,14 @@ func loadCRDValidator(t *testing.T) (*schema.Structural, *schemacel.Validator) {
 func celErrors(t *testing.T, structural *schema.Structural, validator *schemacel.Validator, cr string) []string {
 	t.Helper()
 	var obj map[string]interface{}
-	if err := yaml.Unmarshal([]byte(cr), &obj); err != nil {
+	data, err := yaml.YAMLToJSON([]byte(cr))
+	if err != nil {
 		t.Fatalf("parse CR: %v", err)
+	}
+	// API-server unstructured decoding preserves integer values. Standard
+	// encoding/json would make them float64, which CEL correctly rejects.
+	if err := kubejson.Unmarshal(data, &obj); err != nil {
+		t.Fatalf("decode CR: %v", err)
 	}
 	errs, _ := validator.Validate(context.Background(), field.NewPath(""), structural, obj, nil, 10_000_000)
 	out := make([]string, 0, len(errs))

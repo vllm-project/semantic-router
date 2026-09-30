@@ -231,16 +231,64 @@ test.describe('Playground Chat Component', () => {
 
     await page.reload({ waitUntil: 'domcontentloaded' })
     const selector = page.getByTestId('playground-composer-model-select')
-    await expect(selector).toContainText('vllm-sr/mom-v1-blend')
+    await expect(selector).toContainText('vllm-sr/auto')
     await expect(selector).not.toContainText('MoM')
     await selector.click()
 
     await expect(page.getByText('Choose a model', { exact: true })).toBeVisible()
     await expect(page.getByText('speed-first', { exact: true })).toBeVisible()
     await expect(page.getByText('Latency-first routing profile', { exact: true })).toHaveCount(0)
-    await expect(page.getByRole('option')).toHaveCount(2)
+    await expect(page.getByRole('option')).toHaveCount(3)
     await page.getByRole('option', { name: /vllm-sr\/mom-v1-flash/ }).click()
     await expect(selector).toContainText('vllm-sr/mom-v1-flash')
+  })
+
+  test('sends ordinary chat through the advertised default when Fusion is available', async ({
+    page,
+  }) => {
+    await page.unroute('**/api/router/v1/models*')
+    await page.route('**/api/router/v1/models*', async (route) => {
+      await route.fulfill({
+        json: {
+          object: 'list',
+          data: [
+            { id: 'vllm-sr/fusion', routing: { resolution: 'virtual', selectable: true } },
+            {
+              id: 'auto',
+              routing: { resolution: 'virtual', selectable: true, default_route: true },
+            },
+            {
+              id: 'vllm-sr/auto',
+              routing: { resolution: 'virtual', selectable: true, default_route: true },
+            },
+          ],
+        },
+      })
+    })
+    const requests: Record<string, unknown>[] = []
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
+      const request = route.request().postDataJSON()
+      requests.push(request)
+      await route.fulfill({
+        status: request.model === 'vllm-sr/auto' ? 200 : 400,
+        contentType: 'application/json',
+        body: chatJsonBody('Hello!'),
+      })
+    })
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    const selector = page.getByTestId('playground-composer-model-select')
+    await expect(selector).toContainText('vllm-sr/auto')
+    await page.getByPlaceholder('Ask me anything...').fill('Hello!')
+    await page.getByRole('button', { name: 'Send message', exact: true }).click()
+    await expect(
+      page.locator('[data-message-role="assistant"] [data-message-content]'),
+    ).toContainText('Hello!')
+    expect(requests).toHaveLength(1)
+    expect(requests[0].model).toBe('vllm-sr/auto')
+    await selector.click()
+    await expect(page.getByRole('option')).toHaveCount(2)
+    await page.getByRole('option', { name: /vllm-sr\/fusion/ }).click()
+    await expect(selector).toContainText('vllm-sr/fusion')
   })
 
   test('consolidates composer tools into an accessible mobile add menu', async ({ page }) => {

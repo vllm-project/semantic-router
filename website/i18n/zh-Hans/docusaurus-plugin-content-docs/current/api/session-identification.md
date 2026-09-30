@@ -1,25 +1,28 @@
 ---
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "e86e1ac69ece8f9921cddbbfa12a4c2d8f50b66b"
   source_file: "docs/api/session-identification.md"
   outdated: false
 ---
 
 # 会话标识 {#session-identification}
 
-会话感知路由、记忆、回放和遥测需要为相关轮次提供稳定身份。Router 在可用时使用显式的客户端身份，否则派生回退身份。
+路由学习保护要求客户端为相关轮次提供稳定、显式的身份。回放和遥测可以使用派生的回退身份，但这些回退身份不会启用保护。
 
 ## 选择所需身份 {#choose-the-identity-you-need}
 
-对于 Chat Completions 和 Messages API 客户端，若应用已有稳定会话键，请发送 `x-session-id`：
+使用默认的 `scope: conversation` 保护时，请同时发送两个请求头：
 
 ```http
-x-session-id: tenant-42:conversation-7
+x-session-id: tenant-42:session-7
+x-conversation-id: conversation-3
 ```
 
-对于路由学习保护，`x-conversation-id` 可以标识该会话内更窄的对话。保护策略在 `scope: conversation` 时使用对话身份；`scope: session` 时使用更宽的会话身份。
+在整个 session 内保持 `x-session-id` 稳定，并在其中每个 conversation 内保持 `x-conversation-id` 稳定。conversation 保护需要两者；`scope: session` 只需要 session 请求头。若自定义了请求头名称，请使用配置中的名称。缺少必需身份时，请求仍会正常路由，但保护不会保持模型。
 
-Responses API 管理自己的对话链。请求中的 `conversation` 值优先；否则由 `previous_response_id` 链继承原始对话；两者都不存在时会生成新的 conversation id。
+Replay 在具有显式身份时使用相同配置的会话和对话请求头名称。记录对话 ID 不会改变保护范围，也不会在 session 范围下重置模型归属。
+
+Responses API 将显式对话成员关系与响应链路分开。请求中的 `conversation` 值标识成员关系；`previous_response_id` 读取保留历史并提供内部链路跟踪键，不会加入或创建对话。两者都不存在时，Router 生成内部跟踪身份。这些遥测身份不能替代路由学习保护所要求的配置身份请求头。
 
 ## Chat 与 Messages API 优先级 {#chat-and-messages-api-priority}
 

@@ -23,10 +23,20 @@ serve_config = importlib.import_module("cli.commands.runtime_serve_config")
 main = importlib.import_module("cli.main").main
 recipe_package = importlib.import_module("cli.recipe_package")
 runtime_config_lock = importlib.import_module("cli.runtime_config_lock")
+runtime_lifecycle = importlib.import_module("cli.runtime_lifecycle")
 
 _PYPROJECT_VERSION_PATTERN = re.compile(
     r'^version = "(?P<version>[^"]+)"$', re.MULTILINE
 )
+
+
+@pytest.fixture
+def no_running_containers(monkeypatch):
+    """Exercise config replacement without depending on a host Docker daemon."""
+    monkeypatch.setattr(runtime_lifecycle, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        runtime_lifecycle, "container_status_strict", lambda _name: "not found"
+    )
 
 
 def _project_version() -> str:
@@ -95,7 +105,7 @@ def test_serve_materializes_active_config_under_custom_host_state_root(
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {"decisions": [{"name": "default"}]},
+                "routing": {"decisions": [{"name": "default", "priority": 0}]},
             },
             sort_keys=False,
         ),
@@ -155,7 +165,7 @@ def test_serve_materializes_active_config_under_custom_host_state_root(
 
 
 def test_serve_replace_active_config_reaches_runtime_materializer(
-    monkeypatch, tmp_path: Path
+    monkeypatch, tmp_path: Path, no_running_containers
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
@@ -215,7 +225,7 @@ def test_k8s_serve_keeps_non_persistent_effective_config_flow(
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {"decisions": [{"name": "default"}]},
+                "routing": {"decisions": [{"name": "default", "priority": 0}]},
             },
             sort_keys=False,
         ),
@@ -502,7 +512,7 @@ def test_serve_passes_log_level_to_backend_env(monkeypatch, tmp_path: Path):
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {"decisions": [{"name": "default"}]},
+                "routing": {"decisions": [{"name": "default", "priority": 0}]},
             },
             sort_keys=False,
         )
@@ -552,7 +562,7 @@ def test_serve_keeps_observability_enabled_in_setup_mode(monkeypatch, tmp_path: 
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {"decisions": [{"name": "default"}]},
+                "routing": {"decisions": [{"name": "default", "priority": 0}]},
                 "setup": {"mode": True},
             },
             sort_keys=False,
@@ -593,7 +603,7 @@ def test_serve_keeps_observability_enabled_in_setup_mode(monkeypatch, tmp_path: 
 
 
 def test_serve_restart_uses_completed_runtime_instead_of_readonly_setup_source(
-    monkeypatch, tmp_path: Path
+    monkeypatch, tmp_path: Path, no_running_containers
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
@@ -616,7 +626,7 @@ def test_serve_restart_uses_completed_runtime_instead_of_readonly_setup_source(
         {
             "version": "v0.3",
             "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
-            "routing": {"decisions": [{"name": "default"}]},
+            "routing": {"decisions": [{"name": "default", "priority": 0}]},
         },
         sort_keys=False,
     )
@@ -652,7 +662,14 @@ def test_serve_restart_uses_completed_runtime_instead_of_readonly_setup_source(
     )
 
     assert result.exit_code == 0, result.output
-    assert active.read_text(encoding="utf-8") == completed
+    expected = yaml.safe_load(completed)
+    expected["global"] = {
+        "services": {"observability": {"tracing": {"exporter": {}, "enabled": False}}}
+    }
+    assert yaml.safe_load(active.read_text(encoding="utf-8")) == expected
+    assert yaml.safe_load(config_path.read_text(encoding="utf-8"))["setup"] == {
+        "mode": True
+    }
     assert "VLLM_SR_SETUP_MODE" not in captured["env_vars"]
     assert "DASHBOARD_SETUP_MODE" not in captured["env_vars"]
     assert captured["env_vars"]["DISABLE_DASHBOARD"] == "true"
@@ -669,7 +686,7 @@ def test_serve_recovers_pending_config_before_choosing_setup_mode(
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {"decisions": [{"name": "default"}]},
+                "routing": {"decisions": [{"name": "default", "priority": 0}]},
             },
             sort_keys=False,
         ),

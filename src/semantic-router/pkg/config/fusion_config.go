@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -34,26 +35,69 @@ const (
 	FusionGroundingPolicyFilter   = "filter"
 )
 
+// FusionQuorumFailurePolicy selects what Fusion does when the usable panel
+// response count is below the configured quorum (min_successful_responses).
+//
+// It is independent of OnError, which only decides whether panel collection
+// continues after a single child call fails. Quorum failure is a panel-level
+// quality decision, so the two stay separate.
+//
+// The policy is recipe-owned. It is intentionally absent from
+// FusionRequestConfig so request input cannot weaken the configured quality
+// boundary.
+type FusionQuorumFailurePolicy string
+
+const (
+	// FusionQuorumFailurePolicyFail returns a typed quorum failure instead of
+	// synthesizing from fewer responses than policy requires.
+	FusionQuorumFailurePolicyFail FusionQuorumFailurePolicy = "fail"
+	// FusionQuorumFailurePolicyFallback routes to QuorumFallbackTarget instead.
+	FusionQuorumFailurePolicyFallback FusionQuorumFailurePolicy = "fallback"
+)
+
+// FusionQuorumFailurePolicies lists every supported quorum-failure policy.
+var FusionQuorumFailurePolicies = []FusionQuorumFailurePolicy{
+	FusionQuorumFailurePolicyFail,
+	FusionQuorumFailurePolicyFallback,
+}
+
+// IsValid reports whether the policy is a supported value. An unset policy is
+// not valid on its own; callers treat empty as "use the conservative default".
+func (p FusionQuorumFailurePolicy) IsValid() bool {
+	return slices.Contains(FusionQuorumFailurePolicies, p)
+}
+
+// FusionQuorumFailurePolicyChoices renders the supported policies for errors.
+func FusionQuorumFailurePolicyChoices() string {
+	names := make([]string, len(FusionQuorumFailurePolicies))
+	for i, policy := range FusionQuorumFailurePolicies {
+		names[i] = string(policy)
+	}
+	return strings.Join(names, " or ")
+}
+
 // FusionAlgorithmConfig configures Fusion-style panel execution for
 // decision.algorithm.type=fusion. Model is the judge/calling model; analysis
 // models come from analysis_models when set, otherwise from decision.modelRefs.
 type FusionAlgorithmConfig struct {
-	Model                        string                 `yaml:"model,omitempty" json:"model,omitempty"`
-	AnalysisModels               []string               `yaml:"analysis_models,omitempty" json:"analysis_models,omitempty"`
-	AnalysisMode                 string                 `yaml:"analysis_mode,omitempty" json:"analysis_mode,omitempty"`
-	AnalysisOverrides            []FusionModelOverride  `yaml:"analysis_overrides,omitempty" json:"analysis_overrides,omitempty"`
-	MaxConcurrent                int                    `yaml:"max_concurrent,omitempty" json:"max_concurrent,omitempty"`
-	MaxCompletionTokens          int                    `yaml:"max_completion_tokens,omitempty" json:"max_completion_tokens,omitempty"`
-	RoundTimeoutSeconds          int                    `yaml:"round_timeout_seconds,omitempty" json:"round_timeout_seconds,omitempty"`
-	MinSuccessfulResponses       int                    `yaml:"min_successful_responses,omitempty" json:"min_successful_responses,omitempty"`
-	Temperature                  *float64               `yaml:"temperature,omitempty" json:"temperature,omitempty"`
-	IncludeAnalysis              *bool                  `yaml:"include_analysis,omitempty" json:"include_analysis,omitempty"`
-	OnError                      string                 `yaml:"on_error,omitempty" json:"on_error,omitempty"`
-	AnalysisTemplate             string                 `yaml:"analysis_template,omitempty" json:"analysis_template,omitempty"`
-	SynthesisTemplate            string                 `yaml:"synthesis_template,omitempty" json:"synthesis_template,omitempty"`
-	JudgePromptVersion           string                 `yaml:"judge_prompt_version,omitempty" json:"judge_prompt_version,omitempty"`
-	IncludeIntermediateResponses *bool                  `yaml:"include_intermediate_responses,omitempty" json:"include_intermediate_responses,omitempty"`
-	Grounding                    *FusionGroundingConfig `yaml:"grounding,omitempty" json:"grounding,omitempty"`
+	Model                        string                    `yaml:"model,omitempty" json:"model,omitempty"`
+	AnalysisModels               []string                  `yaml:"analysis_models,omitempty" json:"analysis_models,omitempty"`
+	AnalysisMode                 string                    `yaml:"analysis_mode,omitempty" json:"analysis_mode,omitempty"`
+	AnalysisOverrides            []FusionModelOverride     `yaml:"analysis_overrides,omitempty" json:"analysis_overrides,omitempty"`
+	MaxConcurrent                int                       `yaml:"max_concurrent,omitempty" json:"max_concurrent,omitempty"`
+	MaxCompletionTokens          int                       `yaml:"max_completion_tokens,omitempty" json:"max_completion_tokens,omitempty"`
+	RoundTimeoutSeconds          int                       `yaml:"round_timeout_seconds,omitempty" json:"round_timeout_seconds,omitempty"`
+	MinSuccessfulResponses       int                       `yaml:"min_successful_responses,omitempty" json:"min_successful_responses,omitempty"`
+	Temperature                  *float64                  `yaml:"temperature,omitempty" json:"temperature,omitempty"`
+	IncludeAnalysis              *bool                     `yaml:"include_analysis,omitempty" json:"include_analysis,omitempty"`
+	OnError                      string                    `yaml:"on_error,omitempty" json:"on_error,omitempty"`
+	QuorumFailurePolicy          FusionQuorumFailurePolicy `yaml:"quorum_failure_policy,omitempty" json:"quorum_failure_policy,omitempty"`
+	QuorumFallbackTarget         string                    `yaml:"quorum_fallback_target,omitempty" json:"quorum_fallback_target,omitempty"`
+	AnalysisTemplate             string                    `yaml:"analysis_template,omitempty" json:"analysis_template,omitempty"`
+	SynthesisTemplate            string                    `yaml:"synthesis_template,omitempty" json:"synthesis_template,omitempty"`
+	JudgePromptVersion           string                    `yaml:"judge_prompt_version,omitempty" json:"judge_prompt_version,omitempty"`
+	IncludeIntermediateResponses *bool                     `yaml:"include_intermediate_responses,omitempty" json:"include_intermediate_responses,omitempty"`
+	Grounding                    *FusionGroundingConfig    `yaml:"grounding,omitempty" json:"grounding,omitempty"`
 }
 
 // FusionGroundingConfig configures the optional grounding stage that scores each
@@ -177,6 +221,9 @@ func ValidateFusionAlgorithmConfig(cfg *FusionAlgorithmConfig) error {
 		return err
 	}
 	if err := validateFusionOnError(cfg.OnError); err != nil {
+		return err
+	}
+	if err := validateFusionQuorumFailure(cfg.QuorumFailurePolicy, cfg.QuorumFallbackTarget); err != nil {
 		return err
 	}
 	if cfg.MaxConcurrent < 0 {
@@ -319,6 +366,26 @@ func validateFusionModelOverrides(overrides []FusionModelOverride) error {
 		if override.MaxCompletionTokens < 0 {
 			return fmt.Errorf("analysis_overrides[%d].max_completion_tokens must be >= 1 when set", i)
 		}
+	}
+	return nil
+}
+
+// validateFusionQuorumFailure validates the panel-level quorum-failure policy
+// and its pairing with quorum_fallback_target. An unset policy is allowed and
+// resolves to the conservative default at execution time.
+func validateFusionQuorumFailure(policy FusionQuorumFailurePolicy, fallbackTarget string) error {
+	target := strings.TrimSpace(fallbackTarget)
+	if policy != "" && !policy.IsValid() {
+		return fmt.Errorf("quorum_failure_policy must be %s, got %q",
+			FusionQuorumFailurePolicyChoices(), policy)
+	}
+	if policy == FusionQuorumFailurePolicyFallback && target == "" {
+		return fmt.Errorf("quorum_failure_policy %q requires quorum_fallback_target",
+			FusionQuorumFailurePolicyFallback)
+	}
+	if policy != FusionQuorumFailurePolicyFallback && target != "" {
+		return fmt.Errorf("quorum_fallback_target requires quorum_failure_policy %q",
+			FusionQuorumFailurePolicyFallback)
 	}
 	return nil
 }

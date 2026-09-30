@@ -140,6 +140,28 @@ def test_an_artifact_with_no_evaluation_task_is_reported(tmp_path):
     assert "mom-halugate-detector" in findings[0]
 
 
+def test_generic_classifier_is_not_assumed_to_be_a_guard():
+    config = yaml.safe_load(yaml.safe_dump(MINIMAL_CONFIG))
+    safety_path = "models/Vela-1.0-Encoder-307M-Safety"
+    config["routing"] = {
+        "signals": {
+            "classifiers": [
+                {
+                    "name": "generic-safety",
+                    "model_path": safety_path,
+                    "labels": ["safe", "unsafe"],
+                }
+            ]
+        }
+    }
+    inventory = served_artifacts(config)
+    assert inventory["jailbreak"].model_path == (
+        MINIMAL_CONFIG["global"]["model_catalog"]["system"]["prompt_guard"]
+    )
+    assert all(site.model_path != safety_path for site in inventory["jailbreak"].sites)
+    assert any(safety_path in finding for finding in uncovered_artifacts(config))
+
+
 def test_the_maintained_config_still_parses():
     """The shipped configuration must stay readable by the inventory."""
     inventory = served_artifacts(load_config(artifact_inventory.DEFAULT_CONFIG))

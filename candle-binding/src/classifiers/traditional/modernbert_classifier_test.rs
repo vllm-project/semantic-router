@@ -39,7 +39,7 @@ fn test_modernbert_classifier_traditional_modernbert_classifier_new(
                 );
 
                 // Validate real model output
-                assert!(confidence >= 0.0 && confidence <= 1.0);
+                assert!((0.0..=1.0).contains(&confidence));
                 assert!(class_id < 100); // Reasonable class ID range
 
                 // Test high-quality classification
@@ -86,7 +86,7 @@ fn test_modernbert_classifier_modernbert_classifier_new(
                 );
 
                 // Validate real model classification
-                assert!(confidence >= 0.0 && confidence <= 1.0);
+                assert!((0.0..=1.0).contains(&confidence));
                 assert!(class_id < 100); // Reasonable class ID range
 
                 // Test classification quality

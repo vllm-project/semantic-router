@@ -22,6 +22,7 @@ const (
 // error rather than a silent fallback.
 const (
 	RemoteClassifierContractLabelDistribution = "label_distribution.v1"
+	RemoteClassifierContractLabelScores       = "label_scores.v1"
 	RemoteClassifierContractLabelDecision     = "label_decision.v1"
 	// RemoteClassifierContractScore carries a single continuous score for a
 	// regression-style model, such as a query-difficulty scorer. It has no
@@ -110,7 +111,7 @@ func (b *RemoteClassifierBackend) Validate() error {
 	}
 	if b.Contract != "" {
 		switch b.Contract {
-		case RemoteClassifierContractLabelDistribution, RemoteClassifierContractLabelDecision, RemoteClassifierContractScore, RemoteClassifierContractTokenSpans:
+		case RemoteClassifierContractLabelDistribution, RemoteClassifierContractLabelScores, RemoteClassifierContractLabelDecision, RemoteClassifierContractScore, RemoteClassifierContractTokenSpans:
 		default:
 			return fmt.Errorf("backend.contract: unsupported value %q", b.Contract)
 		}
@@ -149,7 +150,7 @@ func ResolveRemoteClassifierBackend(
 	if err != nil {
 		return nil, err
 	}
-	if err := validateExternalClassifierModel(external, backend.Model, expectedRole); err != nil {
+	if err := validateExternalClassifierModel(external, backend.Model, expectedRole, backend.Protocol); err != nil {
 		return nil, err
 	}
 	return external, nil
@@ -208,11 +209,13 @@ func findNamedExternalModel(cfg *RouterConfig, name string) (*ExternalModelConfi
 	return external, nil
 }
 
-func validateExternalClassifierModel(external *ExternalModelConfig, name, expectedRole string) error {
+func validateExternalClassifierModel(external *ExternalModelConfig, name, expectedRole, protocol string) error {
 	if expectedRole != "" && external.ModelRole != expectedRole {
 		return fmt.Errorf("backend.model %q must use model_role %q, got %q", name, expectedRole, external.ModelRole)
 	}
-	if strings.TrimSpace(external.ModelName) == "" {
+	// /classify addresses one fixed head; its request has inputs only. Chat
+	// requests additionally select a named model in the request body.
+	if protocol != RemoteClassifierProtocolHTTPClassify && strings.TrimSpace(external.ModelName) == "" {
 		return fmt.Errorf("external model %q requires llm_model_name", name)
 	}
 	if !validClassifierEndpoint(external.ModelEndpoint) {
@@ -272,26 +275,8 @@ func ValidatePIIModelBackend(cfg *RouterConfig) error {
 	if cfg == nil {
 		return fmt.Errorf("PII model configuration is nil")
 	}
-	model := &cfg.PIIModel
-	if err := model.ClassifierOnErrorConfig.ValidateOnError(); err != nil {
-		return fmt.Errorf("classifier.pii.%w", err)
+	if err := ValidatePIIWindow(cfg); err != nil {
+		return err
 	}
-	if model.Backend == nil {
-		return nil
-	}
-	if model.UseMmBERT32K {
-		return fmt.Errorf("classifier.pii: backend is mutually exclusive with use_mmbert_32k")
-	}
-	if model.Backend.Protocol != RemoteClassifierProtocolHTTPClassify {
-		return fmt.Errorf("classifier.pii.backend.protocol %q is not supported by the PII consumer", model.Backend.Protocol)
-	}
-	if _, err := ResolveRemoteClassifierBackend(
-		cfg,
-		model.Backend,
-		ModelRoleClassification,
-		RemoteClassifierContractTokenSpans,
-	); err != nil {
-		return fmt.Errorf("classifier.pii: %w", err)
-	}
-	return nil
+	return validatePIIModelBackendContracts(cfg)
 }

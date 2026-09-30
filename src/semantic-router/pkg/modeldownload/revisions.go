@@ -6,8 +6,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -75,45 +73,13 @@ func immutableRevision(revision string) bool {
 	return err == nil
 }
 
-// cachedRevisionMatches reads the HF client's existing commit/etag/timestamp
-// metadata. No router receipt or registration requirement is introduced.
+// cachedRevisionMatches verifies the HF client's commit/etag metadata against
+// actual artifact bytes. No router receipt or registration is required.
 func cachedRevisionMatches(spec ModelSpec) (bool, error) {
-	files, err := snapshotFiles(spec.LocalPath)
-	if err != nil {
-		return false, err
-	}
-	if len(files) == 0 || !immutableRevision(spec.Revision) {
+	if !immutableRevision(spec.Revision) {
 		return false, nil
 	}
-	for _, path := range files {
-		relative, err := filepath.Rel(spec.LocalPath, path)
-		if err != nil {
-			return false, err
-		}
-		data, err := os.ReadFile(filepath.Join(spec.LocalPath, ".cache", "huggingface", "download", relative+".metadata"))
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		if err != nil {
-			return false, err
-		}
-		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-		if len(lines) < 3 || !strings.EqualFold(strings.TrimSpace(lines[0]), spec.Revision) || strings.TrimSpace(lines[1]) == "" {
-			return false, nil
-		}
-		timestamp, err := strconv.ParseFloat(strings.TrimSpace(lines[2]), 64)
-		if err != nil {
-			return false, nil
-		}
-		info, err := os.Stat(path)
-		if err != nil {
-			return false, err
-		}
-		if float64(info.ModTime().UnixNano())/1e9 > timestamp {
-			return false, nil
-		}
-	}
-	return true, nil
+	return hasCurrentModelRevision(spec)
 }
 
 func snapshotFiles(root string) ([]string, error) {

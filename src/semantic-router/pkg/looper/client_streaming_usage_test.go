@@ -55,12 +55,12 @@ func TestParseStreamingUsage_AcceptsDataWithoutSpace(t *testing.T) {
 	}
 }
 
-func TestParseStreamingUsage_NoUsageChunkReturnsZero(t *testing.T) {
+func TestParseStreamingUsage_NoUsageChunkIsUnreported(t *testing.T) {
 	body := "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n" +
 		"data: [DONE]\n"
 
-	if got := parseStreamingUsage([]byte(body)); got != (TokenUsage{}) {
-		t.Errorf("parseStreamingUsage() = %+v, want zero", got)
+	if got := parseStreamingUsage([]byte(body)); got != (TokenUsage{Unreported: true}) {
+		t.Errorf("parseStreamingUsage() = %+v, want unreported", got)
 	}
 }
 

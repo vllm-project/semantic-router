@@ -71,30 +71,16 @@ func (c *CategoryInitializerImpl) Init(modelID string, useCPU bool, numClasses .
 
 // MmBERT32KCategoryInitializerImpl uses mmBERT-32K (YaRN RoPE, 32K context) for intent classification.
 type MmBERT32KCategoryInitializerImpl struct {
-	usedMmBERT32K bool
+	maxSequenceLength int
+	usedMmBERT32K     bool
 }
 
 func (c *MmBERT32KCategoryInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
-	backend := embeddingBackendOverride()
-	if backend == "openvino" {
-		nc := 0
-		if len(numClasses) > 0 {
-			nc = numClasses[0]
-		}
-		if ovErr := initOpenVINOClassifier(modelID, nc, useCPU); ovErr == nil {
-			c.usedMmBERT32K = true
-			logging.ComponentEvent("classifier", "category_classifier_initialized", map[string]interface{}{
-				"backend":   "openvino",
-				"model_ref": modelID,
-				"classes":   nc,
-			})
-			return nil
-		} else {
-			logging.Warnf("OpenVINO classifier init failed, falling back to candle: %v", ovErr)
-		}
+	if embeddingBackendOverride() == "openvino" {
+		return fmt.Errorf("OpenVINO requires an owned model binding")
 	}
 
-	err := candle_binding.InitMmBert32KIntentClassifier(modelID, useCPU)
+	err := candle_binding.InitMmBert32KIntentClassifierWithMaxSequenceLength(modelID, useCPU, c.maxSequenceLength)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mmBERT-32K intent classifier: %w", err)
 	}
@@ -236,15 +222,7 @@ func (c *MmBERT32KCategoryInferenceImpl) Classify(_ context.Context, text string
 
 	switch backend {
 	case "openvino":
-		ovResult, ovErr := classifyOpenVINO(text)
-		if ovErr != nil {
-			err = ovErr
-		} else {
-			result = tasks.ClassResult{
-				Class:      ovResult.Class,
-				Confidence: ovResult.Confidence,
-			}
-		}
+		return tasks.ClassResult{}, fmt.Errorf("OpenVINO requires an owned model binding")
 	default:
 		result, err = nativeClassResult(candle_binding.ClassifyMmBert32KIntent(text))
 	}

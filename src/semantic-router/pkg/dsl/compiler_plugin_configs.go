@@ -1,6 +1,8 @@
 package dsl
 
 import (
+	"fmt"
+
 	"gopkg.in/yaml.v2"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -43,6 +45,7 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 		cfg := &config.ContextCompressionPluginConfig{}
 		return compilePluginFields(c, fields, cfg)
 	},
+	"prompt_cache": compilePromptCachePluginConfig,
 	"hallucination": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileHallucinationPluginConfig(fields), true
 	},
@@ -77,6 +80,35 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 	"tools": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileToolsPlugin(fields), true
 	},
+}
+
+func compilePromptCachePluginConfig(
+	c *Compiler,
+	fields map[string]Value,
+) (interface{}, bool) {
+	cfg, err := decodePromptCachePluginFields(fields)
+	if err != nil {
+		c.addError(Position{}, "%v", err)
+		return nil, false
+	}
+	return cfg, true
+}
+
+func decodePromptCachePluginFields(
+	fields map[string]Value,
+) (*config.PromptCachePluginConfig, error) {
+	payload, err := config.NewStructuredPayload(fieldsToMap(fields))
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode plugin fields: %w", err)
+	}
+	cfg := &config.PromptCachePluginConfig{}
+	if err := payload.DecodeIntoStrict(cfg); err != nil {
+		return nil, fmt.Errorf("failed to decode plugin fields: %w", err)
+	}
+	if err := config.ValidatePromptCachePluginConfig(cfg); err != nil {
+		return nil, err
+	}
+	return cfg, nil
 }
 
 func (c *Compiler) compileHeaderMutationPluginConfig(fields map[string]Value) config.HeaderMutationPluginConfig {
@@ -272,6 +304,15 @@ func (c *Compiler) compileFastResponsePluginConfig(fields map[string]Value) conf
 
 func (c *Compiler) compileRequestParamsPluginConfig(fields map[string]Value) config.RequestParamsPluginConfig {
 	cfg := config.RequestParamsPluginConfig{}
+	if value, exists := fields["default_max_tokens"]; exists {
+		if integer, ok := value.(IntValue); ok && integer.V > 0 {
+			cfg.DefaultMaxTokens = config.FixedOutputTokenDefault(integer.V)
+		} else if text, ok := value.(StringValue); ok && text.V == "auto" {
+			cfg.DefaultMaxTokens = &config.OutputTokenDefault{Auto: true}
+		} else {
+			c.addError(Position{}, "request_params.default_max_tokens must be a positive integer or auto")
+		}
+	}
 	if v, ok := getStringArrayField(fields, "blocked_params"); ok {
 		cfg.BlockedParams = v
 	}

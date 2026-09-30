@@ -1,26 +1,8 @@
-"""
-MoM Collection Evaluation Script
-================================
+"""Evaluate current Router classifiers, or explicitly select legacy MoM models.
 
-A unified, evaluation script for the Mixture of Models (MoM) collection.
-Standardizes evaluation across Text Classification and Token Classification tasks.
-
-Features:
-- Full Registry: Supports all 10 MoM models (Merged and LoRA variants).
-- Real Data Alignment: Specialized logic for MMLU-Pro (Intent) and Presidio (PII).
-- Comprehensive Metrics: Accuracy, F1, Precision, Recall, Confusion Matrices, and Latency (p50/p99).
-- Robust Inference: Parallel execution support and OOM (Out of Memory) recovery.
-- Multilingual Support: Built-in language filtering for cross-lingual performance analysis.
-
-Usage:
-    # Evaluate a single model on CUDA
-    python src/training/model_eval/mom_collection_eval.py --model feedback --device cuda
-
-    # Evaluate multiple models in parallel
-    python src/training/model_eval/mom_collection_eval.py --model intent jailbreak pii --parallel
-
-    # Filter evaluation by language (e.g., Spanish)
-    python src/training/model_eval/mom_collection_eval.py --model feedback --language es
+The historical entrypoint name is retained for compatibility. Default model
+identities follow served native artifacts; datasets are historical diagnostics,
+not claims of independent Vela release qualification.
 """
 
 import argparse
@@ -38,7 +20,6 @@ import requests
 import seaborn as sns
 import torch
 from datasets import Dataset, load_dataset
-from peft import PeftModel
 from seqeval.metrics import accuracy_score as seqe_accuracy_score
 from seqeval.metrics import classification_report as seq_classification_report
 from seqeval.metrics import f1_score as seq_f1_score
@@ -49,17 +30,15 @@ from sklearn.metrics import (
     precision_recall_fscore_support,
 )
 from tqdm import tqdm
-from transformers import (
-    AutoTokenizer,
-    ModernBertConfig,
-    ModernBertForSequenceClassification,
-    ModernBertForTokenClassification,
-)
 
 try:
-    from .constants import BASE_MODEL_ID, LANGUAGE_CODES, MODEL_REGISTRY
+    from .constants import COLLECTIONS, LANGUAGE_CODES, MODEL_REGISTRY, model_registry
+    from .dataset_contracts import classification_label_id, require_default_dataset
+    from .model_loading import load_registered_model, tokenize_complete
 except ImportError:
-    from constants import BASE_MODEL_ID, LANGUAGE_CODES, MODEL_REGISTRY
+    from constants import COLLECTIONS, LANGUAGE_CODES, MODEL_REGISTRY, model_registry
+    from dataset_contracts import classification_label_id, require_default_dataset
+    from model_loading import load_registered_model, tokenize_complete
 import warnings
 
 # suppress prf warnings
@@ -84,8 +63,23 @@ def setup_logging(output_dir: Path):
 #                                                                     CORE Functions
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Unified MoM Collection Evaluation")
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Served classifier evaluation (with explicit legacy MoM mode)"
+    )
+    parser.add_argument("--collection", choices=list(COLLECTIONS), default="served")
+    parser.add_argument(
+        "--revision", help="Explicit revision for --model_id or legacy artifacts"
+    )
+    parser.add_argument(
+        "--dtype", choices=["float32", "bfloat16", "float16"], default="float32"
+    )
+    parser.add_argument(
+        "--max_length",
+        type=int,
+        default=32768,
+        help="Full-input token budget; over-budget rows fail, never truncate",
+    )
     parser.add_argument(
         "--model",
         type=str,
@@ -135,7 +129,17 @@ def parse_args():
         default=3,
         help="Max retries for network/loading operations.",
     )
-    return parser.parse_args()
+    args = parser.parse_args(argv)
+    if args.model_id and len(args.model) != 1:
+        parser.error("--model_id requires exactly one --model")
+    if args.max_length <= 0:
+        parser.error("--max_length must be positive")
+    registry = model_registry(args.collection)
+    if args.use_lora and any("lora_id" not in registry[name] for name in args.model):
+        parser.error(
+            "Vela entries support merged evaluation only; use --collection legacy-mom for legacy adapters"
+        )
+    return args
 
 
 def retry_operation(func, max_retries=3, delay=2):
@@ -185,7 +189,7 @@ def filter_dataset_by_lang(dataset: Dataset, lang: str, text_col: str) -> Datase
 
 def load_eval_data(model_name: str, args) -> Dataset:
     """Load eval dataset."""
-    config = MODEL_REGISTRY[model_name]
+    config = dict(model_registry(args.collection)[model_name])
     logger = logging.getLogger("MoMEval")
 
     try:
@@ -230,7 +234,12 @@ def load_eval_data(model_name: str, args) -> Dataset:
                 )
             if args.limit:
                 ds = ds.select(range(min(len(ds), args.limit)))
+            if config["type"] == "text_classification":
+                ds = ds.map(
+                    lambda row: {"label": classification_label_id(row["label"], config)}
+                )
             return ds
+        require_default_dataset(config)
         #  da  PII
         if model_name == "pii":
             logger.info("Fetching Presidio dataset...")
@@ -335,16 +344,11 @@ def load_eval_data(model_name: str, args) -> Dataset:
                 ds = ds.remove_columns(["label"])
             ds = ds.rename_column(config["label_col"], "label")
 
-        label2id = {label: i for i, label in enumerate(config["labels"])}
-
         def map_to_int(example):
-            label = example["label"]
-            if isinstance(label, str):
-                example["label"] = label2id.get(label, -1)
+            example["label"] = classification_label_id(example["label"], config)
             return example
 
         ds = ds.map(map_to_int)
-        ds = ds.filter(lambda x: x["label"] != -1)
 
         logger.info(f"Dataset columns after processing: {ds.column_names}")
 
@@ -356,67 +360,8 @@ def load_eval_data(model_name: str, args) -> Dataset:
 
 
 def load_model_and_tokenizer(model_name: str, args):
-    """Load model and tokenizer with robust handling using base config."""
-    config_reg = MODEL_REGISTRY[model_name]
-    logger = logging.getLogger("MoMEval")
-
-    try:
-        model_id = args.model_id or (
-            config_reg["lora_id"] if args.use_lora else config_reg["id"]
-        )
-        logger.info(f"Loading model: {model_id}")
-
-        # Load tokenizer
-        def load_tok():
-            return AutoTokenizer.from_pretrained(model_id)
-
-        try:
-            tokenizer = retry_operation(load_tok, max_retries=args.max_retries)
-        except Exception as e:
-            logger.warning(
-                f"Tokenizer load from {model_id} failed: {e}. Falling back to base model."
-            )
-            tokenizer = retry_operation(
-                lambda: AutoTokenizer.from_pretrained(BASE_MODEL_ID),
-                max_retries=args.max_retries,
-            )
-
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-
-        # Build config from base model
-        clean_labels = config_reg["labels"]
-        id2label = {i: str(label) for i, label in enumerate(clean_labels)}
-        label2id = {str(label): i for i, label in enumerate(clean_labels)}
-
-        hf_config = ModernBertConfig.from_pretrained(
-            BASE_MODEL_ID,
-            num_labels=len(clean_labels),
-            id2label=id2label,
-            label2id=label2id,
-        )
-
-        # Load model
-        if config_reg["type"] == "text_classification":
-            model_cls = ModernBertForSequenceClassification
-        else:
-            model_cls = ModernBertForTokenClassification
-
-        if args.use_lora:
-            base_model = model_cls.from_pretrained(BASE_MODEL_ID, config=hf_config)
-            model = PeftModel.from_pretrained(base_model, model_id, config=hf_config)
-        else:
-            model = model_cls.from_pretrained(
-                model_id, config=hf_config, ignore_mismatched_sizes=True
-            )
-
-        model.to(args.device).eval()
-        logger.info(f"Model loaded successfully on {args.device}")
-        return model, tokenizer
-
-    except Exception as e:
-        logger.error(f"Failed to load model {model_name}: {e}")
-        raise
+    """Load the exact registered artifact without replacing its configuration."""
+    return load_registered_model(model_registry(args.collection)[model_name], args)
 
 
 def batch_row_count(batch: dict) -> int:
@@ -432,13 +377,15 @@ def batch_row_count(batch: dict) -> int:
 
 def evaluate_single_model(model_name: str, args) -> tuple[str, dict]:
     """Evaluate a single model with comprehensive error handling."""
-    config = MODEL_REGISTRY[model_name]
+    config = model_registry(args.collection)[model_name]
     logger = logging.getLogger("MoMEval")
 
     try:
         #                           Load data and model
         dataset = load_eval_data(model_name, args)
         model, tokenizer = load_model_and_tokenizer(model_name, args)
+        if args.max_length > model.config.max_position_embeddings:
+            raise ValueError("--max_length exceeds this artifact's context capacity")
 
         all_preds, all_truths, lats = [], [], []
 
@@ -451,27 +398,27 @@ def evaluate_single_model(model_name: str, args) -> tuple[str, dict]:
 
             try:
                 if config["type"] == "text_classification":
-                    inputs = tokenizer(
+                    inputs = tokenize_complete(
+                        tokenizer,
                         batch["text"],
-                        padding=True,
-                        truncation=True,
-                        max_length=512,
+                        args.max_length,
+                        args.device,
                         return_tensors="pt",
-                    ).to(args.device)
+                    )
                     with torch.no_grad():
                         out = model(**inputs)
                         preds = torch.argmax(out.logits, dim=-1).cpu().tolist()
                     all_preds.extend(preds)
                     all_truths.extend(batch["label"])
                 else:
-                    inputs = tokenizer(
+                    inputs = tokenize_complete(
+                        tokenizer,
                         batch["tokens"],
+                        args.max_length,
+                        args.device,
                         is_split_into_words=True,
-                        padding=True,
-                        truncation=True,
-                        max_length=512,
                         return_tensors="pt",
-                    ).to(args.device)
+                    )
 
                     with torch.no_grad():
                         out = model(**inputs)
@@ -494,14 +441,13 @@ def evaluate_single_model(model_name: str, args) -> tuple[str, dict]:
                                 else:
                                     p_labels.append("O")
 
-                        # Defensive len alignment
-                        min_len = min(len(p_labels), len(true_labels))
                         if len(p_labels) != len(true_labels):
-                            logger.warning(
-                                f"Length mismatch sample {i+idx}: pred={len(p_labels)}, gt={len(true_labels)} → truncating"
+                            raise ValueError(
+                                f"Word-label alignment mismatch sample {i+idx}: "
+                                f"pred={len(p_labels)}, gold={len(true_labels)}"
                             )
-                        all_preds.append(p_labels[:min_len])
-                        all_truths.append(true_labels[:min_len])
+                        all_preds.append(p_labels)
+                        all_truths.append(true_labels)
 
                 batch_time = (time.time() - start) * 1000
                 rows = batch_row_count(batch)
@@ -509,14 +455,13 @@ def evaluate_single_model(model_name: str, args) -> tuple[str, dict]:
 
             except torch.cuda.OutOfMemoryError:
                 logger.error(
-                    f"OOM at batch {i}. Reduce --batch_size. Skipping remaining batches."
+                    f"OOM at batch {i}. Reduce --batch_size; this run is incomplete."
                 )
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
-                break
+                raise
             except Exception as e:
-                logger.warning(f"Error processing batch {i}: {e}. Skipping...")
-                continue
+                raise RuntimeError(f"Evaluation failed at batch {i}") from e
 
         # Validate we got predictions
         if not all_preds or not all_truths:
@@ -526,15 +471,38 @@ def evaluate_single_model(model_name: str, args) -> tuple[str, dict]:
 
         # Metrics Calculation
         stats = {
+            "artifact": model.evaluation_identity,
+            "collection": args.collection,
+            "max_length": args.max_length,
+            "inference_policy": "native-full-input-argmax",
+            "dataset_scope": (
+                "custom" if args.custom_dataset else "historical-source-diagnostic"
+            ),
             "latency": {
                 "avg_ms": float(np.mean(lats)),
                 "p50_ms": float(np.percentile(lats, 50)),
                 "p99_ms": float(np.percentile(lats, 99)),
-            }
+            },
         }
 
         if config["type"] == "text_classification":
-            unique_labels = sorted(set(all_truths) | set(all_preds))
+            unique_labels = list(range(len(config["labels"])))
+            stats["label_support"] = {
+                label: all_truths.count(index)
+                for index, label in enumerate(config["labels"])
+            }
+            stats["unsupported_labels"] = [
+                label for label, count in stats["label_support"].items() if count == 0
+            ]
+            stats["macro_f1"] = float(
+                precision_recall_fscore_support(
+                    all_truths,
+                    all_preds,
+                    labels=unique_labels,
+                    average="macro",
+                    zero_division=0,
+                )[2]
+            )
             stats["accuracy"] = float(accuracy_score(all_truths, all_preds))
             p, r, f1, _sup = precision_recall_fscore_support(
                 all_truths,
@@ -660,6 +628,7 @@ def main():
                     summary[name] = res
                 except Exception as e:
                     logger.error(f"Parallel task failed: {e}")
+                    summary[models[futures.index(f)]] = {"error": str(e)}
     else:
         for m in models:
             name, res = evaluate_single_model(m, args)
@@ -685,6 +654,12 @@ def main():
 
     print("=" * 80 + "\n")
     logger.info("Evaluation pipeline complete!")
+    missing = set(models) - set(summary)
+    for name in missing:
+        summary[name] = {"error": "Evaluation produced no result"}
+    Path(args.output_dir, "summary.json").write_text(json.dumps(summary, indent=2))
+    if missing or any("error" in result for result in summary.values()):
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

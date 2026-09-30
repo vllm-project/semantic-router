@@ -3,176 +3,89 @@ package classification
 import (
 	"context"
 	"math"
-	"os"
-	"path/filepath"
 	"strconv"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// realFeedbackThreshold is the threshold config/config.yaml configures for the
-// feedback detector.
-const realFeedbackThreshold = 0.7
-
-// realFeedbackModelPath resolves the on-disk mmBERT-32K feedback model, honoring
-// the VLLM_SR_FEEDBACK_MODEL override and otherwise looking for the repo-root
-// models/ download. It returns "" when the model is not present.
-func realFeedbackModelPath() string {
-	if p := os.Getenv("VLLM_SR_FEEDBACK_MODEL"); p != "" {
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
-		return ""
-	}
-	// go test runs with the package directory as the working directory.
-	def := filepath.Join("..", "..", "..", "..", "models", "mmbert32k-feedback-detector-merged")
-	if _, err := os.Stat(def); err == nil {
-		return def
-	}
-	return ""
-}
-
-// setupRealFeedbackDetector initializes the real mmBERT-32K feedback model behind
-// a detector configured the way config.yaml configures it. It skips the test when
-// the model is not present (e.g. minimal-model CI).
 func setupRealFeedbackDetector(t *testing.T) *FeedbackDetector {
 	t.Helper()
-
-	modelPath := realFeedbackModelPath()
-	if modelPath == "" {
-		t.Skip("mmBERT-32K feedback model not present; set VLLM_SR_FEEDBACK_MODEL or run `make download-models`")
-	}
-
-	detector, err := NewFeedbackDetector(&config.FeedbackDetectorConfig{
-		Enabled:      true,
-		ModelID:      modelPath,
-		Threshold:    realFeedbackThreshold,
-		UseCPU:       true,
-		UseMmBERT32K: true,
-	})
+	cfg := config.DefaultGlobalConfig().FeedbackDetector
+	cfg.ModelID = requireRealModel(t, "VLLM_SR_FEEDBACK_MODEL", cfg.ModelID)
+	detector, err := NewFeedbackDetector(&cfg)
 	if err != nil {
 		t.Fatalf("build feedback detector: %v", err)
-	}
-	if err := detector.Initialize(); err != nil {
-		t.Fatalf("initialize feedback detector from %q: %v", modelPath, err)
 	}
 	t.Cleanup(func() {
 		if err := detector.Close(); err != nil {
 			t.Errorf("close feedback detector: %v", err)
 		}
 	})
+	if err := detector.Initialize(); err != nil {
+		t.Fatalf("initialize feedback detector: %v", err)
+	}
+	assertRealModelCPU(t, detector.backend.handle.Capability())
+	if _, ok := detector.mapping.LabelToIdx[FeedbackLabelNoFeedback]; !ok {
+		t.Fatalf("published feedback mapping lacks the explicit %q class", FeedbackLabelNoFeedback)
+	}
 	return detector
 }
 
-// satisfiedIndexOf reports which index the loaded mapping gives the satisfied
-// class, so the test reads the probability the detector is expected to report.
-func satisfiedIndexOf(t *testing.T, d *FeedbackDetector) int {
-	t.Helper()
-	for idx, label := range d.mapping.IdxToLabel {
-		if label == FeedbackLabelSatisfied {
-			parsed, err := strconv.Atoi(idx)
-			if err != nil {
-				t.Fatalf("mapping index %q is not a number: %v", idx, err)
-			}
-			return parsed
-		}
-	}
-	t.Fatalf("the loaded mapping names no %q class", FeedbackLabelSatisfied)
-	return -1
-}
-
-// TestFeedbackConfidenceIsTheSatisfiedProbabilityRealModel exercises the whole
-// path against the real model - the mmBERT-32K FFI, the loaded mapping, and the
-// threshold rule - and guards the #3534 contract: a below-threshold prediction is
-// reported as satisfied, so the confidence beside it is the model's own
-// P(satisfied), not 1 - P(argmax).
-func TestFeedbackConfidenceIsTheSatisfiedProbabilityRealModel(t *testing.T) {
+// The published five-class model preserves its prediction when abstaining;
+// uncertainty must never be reported as evidence of satisfaction.
+func TestFeedbackPredictionAndAbstentionRealModel(t *testing.T) {
 	detector := setupRealFeedbackDetector(t)
-	satisfiedIdx := satisfiedIndexOf(t, detector)
-
 	texts := []string{
-		"looks good to me",
-		"this is what I wanted",
-		"that is not what I asked for",
-		"can you explain what you mean by that",
-		"give me a different answer",
+		"Thank you, that answers my question perfectly.",
+		"That answer is incorrect; please check your calculation.",
+		"Could you clarify what you mean by that?",
+		"Please give me a different answer.",
+		"What is the capital of France?",
 	}
-
 	for _, text := range texts {
 		t.Run(text, func(t *testing.T) {
 			result, err := detector.Classify(context.Background(), text)
 			if err != nil {
-				t.Fatalf("Classify(%q): %v", text, err)
+				t.Fatalf("classify feedback: %v", err)
 			}
-			probs, err := detector.backend.Classify(context.Background(), text)
+			raw, err := detector.backend.Classify(context.Background(), text)
 			if err != nil {
-				t.Fatalf("raw owned feedback distribution(%q): %v", text, err)
+				t.Fatalf("read owned feedback distribution: %v", err)
 			}
-			class, confidence := deriveArgmax(probs.Probabilities)
-			if len(probs.Probabilities) < 2 {
-				t.Fatalf("probabilities = %v, want the full per-class distribution", probs.Probabilities)
+			assertRealModelDistribution(t, raw.Probabilities, len(detector.mapping.IdxToLabel))
+			class, confidence := deriveArgmax(raw.Probabilities)
+			label := detector.mapping.IdxToLabel[strconv.Itoa(class)]
+			if result.FeedbackType != label || result.Class != class || math.Abs(float64(result.Confidence-confidence)) > 1e-5 {
+				t.Fatalf("prediction %+v differs from model class=%d label=%s confidence=%g", result, class, label, confidence)
 			}
-			if sum := sumFeedbackProbabilities(probs.Probabilities); math.Abs(float64(sum-1.0)) > 1e-3 {
-				t.Errorf("probabilities sum = %.4f, want ~1.0 (softmax distribution)", sum)
+			if !result.ConfidenceAvailable || result.PolicyDefault != "" || result.Abstained != (confidence < detector.config.Threshold) {
+				t.Fatalf("incorrect feedback abstention/confidence contract: %+v", result)
 			}
-			t.Logf("text=%q argmax=%d confidence=%.6f probabilities=%v reported=%s %.6f",
-				text, class, confidence, probs.Probabilities, result.FeedbackType, result.Confidence)
-
-			if confidence >= realFeedbackThreshold {
-				if result.Confidence != confidence {
-					t.Errorf("above the threshold the reported confidence is %v, want the model's %v",
-						result.Confidence, confidence)
-				}
-				return
-			}
-			if result.FeedbackType != FeedbackLabelSatisfied {
-				t.Errorf("below the threshold the label is %q, want %q", result.FeedbackType, FeedbackLabelSatisfied)
-			}
-			want := probs.Probabilities[satisfiedIdx]
-			if result.Confidence != want {
-				t.Errorf("reported confidence is %v, want P(satisfied) %v", result.Confidence, want)
-			}
-			if regressed := float32(1.0) - confidence; result.Confidence == regressed && want != regressed {
-				t.Errorf("reported confidence is 1 - P(argmax) (%v), the #3534 defect", regressed)
-			}
+			t.Logf("input=%q result=%+v probabilities=%v", text, result, raw.Probabilities)
 		})
 	}
 }
 
-// TestFeedbackConfidenceUnderAThresholdNoPredictionMeetsRealModel raises the
-// threshold above what any prediction reaches, so the uncertain branch runs
-// whatever the model happens to think of the text.
-func TestFeedbackConfidenceUnderAThresholdNoPredictionMeetsRealModel(t *testing.T) {
+func TestFeedbackForcedAbstentionPreservesPredictionRealModel(t *testing.T) {
 	detector := setupRealFeedbackDetector(t)
-	satisfiedIdx := satisfiedIndexOf(t, detector)
-	detector.config.Threshold = 0.999999
-
-	const text = "thanks, that answers it"
+	const text = "What is the capital of France?"
+	raw, err := detector.backend.Classify(context.Background(), text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertRealModelDistribution(t, raw.Probabilities, len(detector.mapping.IdxToLabel))
+	class, confidence := deriveArgmax(raw.Probabilities)
+	// A test-only threshold above the probability range guarantees this branch,
+	// including checkpoints whose fp32 softmax rounds the winning score to 1.
+	detector.config.Threshold = 1.01
 	result, err := detector.Classify(context.Background(), text)
 	if err != nil {
-		t.Fatalf("Classify(%q): %v", text, err)
+		t.Fatal(err)
 	}
-	probs, err := detector.backend.Classify(context.Background(), text)
-	if err != nil {
-		t.Fatalf("raw owned feedback distribution(%q): %v", text, err)
+	if !result.Abstained || !result.ConfidenceAvailable || result.Class != class ||
+		result.FeedbackType != detector.mapping.IdxToLabel[strconv.Itoa(class)] ||
+		math.Abs(float64(result.Confidence-confidence)) > 1e-5 {
+		t.Fatalf("abstention changed the real prediction: result=%+v probabilities=%v", result, raw.Probabilities)
 	}
-	class, confidence := deriveArgmax(probs.Probabilities)
-	t.Logf("text=%q argmax=%d confidence=%.6f probabilities=%v reported=%s %.6f",
-		text, class, confidence, probs.Probabilities, result.FeedbackType, result.Confidence)
-
-	if result.FeedbackType != FeedbackLabelSatisfied {
-		t.Fatalf("the label is %q, want %q", result.FeedbackType, FeedbackLabelSatisfied)
-	}
-	if want := probs.Probabilities[satisfiedIdx]; result.Confidence != want {
-		t.Fatalf("reported confidence is %v, want P(satisfied) %v", result.Confidence, want)
-	}
-}
-
-func sumFeedbackProbabilities(probs []float32) float32 {
-	var sum float32
-	for _, p := range probs {
-		sum += p
-	}
-	return sum
 }

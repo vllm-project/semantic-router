@@ -1,6 +1,6 @@
 import type { Endpoint } from '../components/EndpointsEditor'
 import bundledCatalog from '../modelCatalogDocument'
-import type { DecisionConditionType } from '../types/config'
+import type { DecisionConditionType, SafetySignal } from '../types/config'
 import type { BuiltInModelCatalog, CatalogBenchmark, CatalogIndex } from '../types/modelCatalog'
 
 export interface ListenerConfig {
@@ -347,6 +347,7 @@ export interface NormalizedModel {
   reasoning_efforts?: string[]
   provider_model_id?: string
   api_format?: string
+  api_format_override?: string
   external_model_ids?: Record<string, string>
   backend_refs?: BackendRefEntry[]
   endpoints: Endpoint[]
@@ -534,7 +535,6 @@ export interface ObservabilityConfig {
       enabled?: boolean
       time_windows?: string[]
       update_interval?: string
-      queue_depth_estimation?: boolean
       max_models?: number
     }
   }
@@ -898,6 +898,7 @@ export interface ConfigSignals {
   modality?: ModalitySignal[]
   role_bindings?: RoleBindingSignal[]
   jailbreak?: JailbreakSignal[]
+  safety?: SafetySignal[]
   hallucination?: HallucinationSignal[]
   pii?: PIISignal[]
   kb?: KBSignal[]
@@ -1071,7 +1072,10 @@ export interface KeywordSignal {
 export interface EmbeddingSignal {
   name: string
   threshold: number
-  candidates: string[]
+  candidates?: string[]
+  image_candidates?: string[]
+  negative_candidates?: string[]
+  negative_image_candidates?: string[]
   aggregation_method?: string
   query_modality?: 'text' | 'image' | 'audio'
 }
@@ -1095,6 +1099,7 @@ export interface ClassifierSignal {
   model_path?: string
   labels: string[]
   instructions?: string
+  disable_rationale?: boolean
   use_cpu?: boolean
 }
 

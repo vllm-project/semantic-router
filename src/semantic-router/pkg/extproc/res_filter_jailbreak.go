@@ -91,14 +91,7 @@ func (r *OpenAIRouter) detectAndEnforceResponseJailbreak(
 		return nil
 	}
 
-	rjCfg := ctx.VSRSelectedDecision.GetResponseJailbreakConfig()
-	threshold := rjCfg.Threshold
-	if threshold <= 0 && r.Config != nil {
-		threshold = r.Config.PromptGuard.Threshold
-	}
-	if threshold <= 0 {
-		threshold = 0.5
-	}
+	threshold := r.responseJailbreakThreshold(ctx.VSRSelectedDecision)
 
 	start := time.Now()
 	classifier := r.classifierForRequest(ctx)
@@ -295,4 +288,22 @@ func recordResponseSignal(ctx *RequestContext, confidences map[string]float64, e
 	for key, value := range errors {
 		ctx.VSRSignalErrors[key] = value
 	}
+}
+
+// responseJailbreakThreshold is shared by provider response processing and
+// management probes so the policy default cannot drift between the two.
+func (r *OpenAIRouter) responseJailbreakThreshold(decision *config.Decision) float32 {
+	threshold := float32(0)
+	if decision != nil {
+		if policy := decision.GetResponseJailbreakConfig(); policy != nil {
+			threshold = policy.Threshold
+		}
+	}
+	if threshold <= 0 && r.Config != nil {
+		threshold = r.Config.PromptGuard.Threshold
+	}
+	if threshold <= 0 {
+		threshold = 0.5
+	}
+	return threshold
 }

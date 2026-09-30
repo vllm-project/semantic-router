@@ -10,7 +10,7 @@ extern "C" {
 /**
  * CK Flash Attention forward pass.
  *
- * Computes:  O = softmax(mask(Q @ K^T / scale) + bias) @ V
+ * Computes:  O = softmax(mask((Q @ K^T) * scale) + bias) @ V
  *
  * Sliding-window masking is applied via window_size_left/right (set to -1 to
  * disable, i.e. full / global attention).  An optional additive bias (e.g. a

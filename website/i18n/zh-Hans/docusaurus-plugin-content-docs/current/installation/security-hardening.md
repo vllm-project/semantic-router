@@ -76,36 +76,13 @@ api_key: ${MODEL_API_KEY}
 
 现有的 chart 原生 Secret 引用（例如控制面板 JWT Secret）仍是外部对象，不会被复制到 CLI 管理的 Secret。对每个手动管理的 Secret 使用相同的命名空间和 release 所有权纪律。
 
-### 隔离 Evaluation broker 凭据
+### 隔离 sr-bench 凭据
 
-生产 Evaluation 使用服务器拥有的 HTTP broker。沙箱 Python worker 的环境中既不接收 origin，也不接收凭据值，并且只能请求运行清单允许的操作、冻结的 case 身份、有界超时和已校验载荷。Go broker 选择精确的 Router、Envoy 或 evidence-ledger origin，并附加其 bearer token。
+Dashboard 代理服务器配置的 sr-bench origin，并传递已认证的用户身份。`SR_BENCH_TOKEN_ENV` 指定服务 token 的环境变量名，默认 `SR_BENCH_TOKEN`。服务、模型和 Router 管理凭据应分开。浏览器不能修改已登记目标的地址、价格、凭据引用或执行环境选项。
 
-使用专用的 Router Evaluation token：
+托管核心 worker 通过继承环境变量接收已登记模型的凭据和服务 token，密钥值不进入命令参数。私有 store 与相邻 token 文件位于 Router/Dashboard 共享挂载之外；worker 不挂载 Docker socket 或 GPU。Dashboard 只接收服务 token，不接收模型密钥。
 
-```yaml
-global:
-  services:
-    management_api:
-      auth:
-        mode: bearer
-        tokens:
-          - env: ROUTER_EVAL_TOKEN
-            role: evaluation
-        roles:
-          evaluation:
-            - classify.invoke
-```
-
-然后引用其名称，永远不要引用其值：
-
-```bash
-export ROUTER_EVAL_TOKEN="<secret-manager value>"
-export EVALUATION_ROUTER_API_KEY_ENV=ROUTER_EVAL_TOKEN
-```
-
-Evaluation token 必须与 `VLLM_SR_DASHBOARD_RECIPE_TOKEN` 不同，后者是控制面板控制平面身份。Envoy、故障恢复、硬策略和生产实验 ledger 必须各自使用另一个环境引用。复用引用或 ledger origin 会被拒绝。`vllm-sr serve` 将引用的密钥名称渲染为继承的 `-e NAME` 容器参数，因此值不会进入进程参数、生成的清单、API 响应、报告和日志。已配置但主机值为空的引用会使启动失败；已认证的 Router 如果没有专用 Evaluation 引用，会保持路由 Evaluation 不可用，而不是回退到更广泛的控制面板凭据。
-
-完整的端点和超时表面见 [Evaluation Plane](../benchmarking/evaluation-plane#configure-production-evidence-services)。
+代码和 Agent 任务应使用单独准备的 worker 主机，通过 `SR_BENCH_URL` 连接已认证且容器可达的地址。独立服务默认监听回环，非回环监听必须设置服务 token。参阅 [sr-bench 1.0](../benchmarking/sr-bench) 的前置条件和限额说明。
 
 ## 保护本地栈的存储凭据
 

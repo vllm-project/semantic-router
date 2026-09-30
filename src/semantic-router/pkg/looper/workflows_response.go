@@ -73,19 +73,16 @@ func formatWorkflowJSONResponse(
 					"role":    "assistant",
 					"content": finalResp.Content,
 				},
-				"finish_reason": "stop",
+				"finish_reason": workflowFinalFinishReason(finalResp),
 			},
 		},
 		"usage": usage.Map(),
-	}
-	if cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 {
-		completion["flow"] = trace
 	}
 	body, err := json.Marshal(completion)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal workflow response: %w", err)
 	}
-	return &Response{
+	return withWorkflowExtension(&Response{
 		Body:                  body,
 		ContentType:           "application/json",
 		Model:                 finalResp.Model,
@@ -94,7 +91,15 @@ func formatWorkflowJSONResponse(
 		AlgorithmType:         "workflows",
 		IntermediateResponses: trace,
 		Usage:                 usage,
-	}, nil
+	}, cfg, trace)
+}
+
+func workflowFinalFinishReason(resp *ModelResponse) string {
+	if resp.Parsed != nil && len(resp.Parsed.Choices) > 0 && resp.Parsed.Choices[0].FinishReason != "" {
+		return resp.Parsed.Choices[0].FinishReason
+	}
+	// Locally assembled responses may not carry a backend completion.
+	return "stop"
 }
 
 func formatWorkflowToolCallJSONResponse(
@@ -112,14 +117,11 @@ func formatWorkflowToolCallJSONResponse(
 	completion["id"] = fmt.Sprintf("chatcmpl-flow-%d", time.Now().UnixNano())
 	completion["model"] = finalResp.Model
 	completion["usage"] = usage.Map()
-	if cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 {
-		completion["flow"] = trace
-	}
 	body, err := json.Marshal(completion)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal workflow tool-call response: %w", err)
 	}
-	return &Response{
+	return withWorkflowExtension(&Response{
 		Body:                  body,
 		ContentType:           "application/json",
 		Model:                 finalResp.Model,
@@ -128,7 +130,7 @@ func formatWorkflowToolCallJSONResponse(
 		AlgorithmType:         "workflows",
 		IntermediateResponses: trace,
 		Usage:                 usage,
-	}, nil
+	}, cfg, trace)
 }
 
 func formatWorkflowStreamingResponse(
@@ -146,17 +148,17 @@ func formatWorkflowStreamingResponse(
 		err  error
 	)
 	if finalResp.HasToolCalls {
-		body, err = buildWorkflowStreamingToolCallSSE(id, timestamp, finalResp.Model, finalResp.Raw, trace, cfg)
+		body, err = buildWorkflowStreamingToolCallSSE(id, timestamp, finalResp.Model, finalResp.Raw)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		body = buildWorkflowStreamingSSE(id, timestamp, finalResp.Model, finalResp.Content, trace, cfg)
+		body = buildWorkflowStreamingSSE(id, timestamp, finalResp)
 	}
 	resp := streamingLooperResponse(body, finalResp.Model, modelsUsed, iterations, "workflows")
 	resp.IntermediateResponses = trace
 	resp.Usage = usage
-	return resp, nil
+	return withWorkflowExtension(resp, cfg, trace)
 }
 
 func buildWorkflowStreamingToolCallSSE(
@@ -164,8 +166,6 @@ func buildWorkflowStreamingToolCallSSE(
 	created int64,
 	model string,
 	raw []byte,
-	trace *workflowTrace,
-	cfg workflowsExecutionConfig,
 ) ([]byte, error) {
 	toolCalls, err := fusionToolCallDeltasFromRaw(raw)
 	if err != nil {
@@ -178,11 +178,7 @@ func buildWorkflowStreamingToolCallSSE(
 		"delta":         map[string]interface{}{"role": "assistant"},
 		"finish_reason": nil,
 	}
-	var extra map[string]interface{}
-	if cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 {
-		extra = map[string]interface{}{"flow": trace}
-	}
-	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, roleChoice, extra))
+	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, roleChoice, nil))
 	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, map[string]interface{}{
 		"index":         0,
 		"delta":         map[string]interface{}{"tool_calls": toolCalls},
@@ -199,23 +195,17 @@ func buildWorkflowStreamingToolCallSSE(
 func buildWorkflowStreamingSSE(
 	id string,
 	created int64,
-	model string,
-	content string,
-	trace *workflowTrace,
-	cfg workflowsExecutionConfig,
+	finalResp *ModelResponse,
 ) []byte {
+	model := finalResp.Model
 	var body []byte
 	roleChoice := map[string]interface{}{
 		"index":         0,
 		"delta":         map[string]interface{}{"role": "assistant"},
 		"finish_reason": nil,
 	}
-	var extra map[string]interface{}
-	if cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 {
-		extra = map[string]interface{}{"flow": trace}
-	}
-	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, roleChoice, extra))
-	for _, chunk := range splitIntoChunks(content, 50) {
+	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, roleChoice, nil))
+	for _, chunk := range splitIntoChunks(finalResp.Content, 50) {
 		body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, map[string]interface{}{
 			"index":         0,
 			"delta":         map[string]interface{}{"content": chunk},
@@ -225,7 +215,7 @@ func buildWorkflowStreamingSSE(
 	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, map[string]interface{}{
 		"index":         0,
 		"delta":         map[string]interface{}{},
-		"finish_reason": "stop",
+		"finish_reason": workflowFinalFinishReason(finalResp),
 	}, nil))
 	return appendSSEDone(body)
 }

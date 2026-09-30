@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "701e3631aa14a840646b8feb78caef3b5d9a91e3"
+  source_commit: "91dd60a58fd0806b1b4d4404449e705f484d53de"
   source_file: "docs/tutorials/signal/learned/complexity.md"
   outdated: false
 ---
@@ -90,6 +90,25 @@ global:
           max_prototypes: 8
           top_m: 2
 ```
+
+复杂度规则也可在 `hard` 和 `easy` 旁声明 `prototype_scoring`。
+省略时继承上述族级配置。声明的对象会完整覆盖：未填写的字段，包括空对象 `{}`
+中的所有字段，使用内置默认值，不继承族级覆盖值。这样，规则的原始配置会随配方
+导出或初始化一同保留。
+
+如需保留两个候选库中的所有不同候选：
+
+```yaml
+prototype_scoring:
+  enabled: false
+  best_weight: 0.75
+  top_m: 2
+```
+
+此设置关闭聚类和原型数量上限，保留最高相似度与支持分数的聚合。
+文本和图像的 hard/easy 候选库及其评分使用同一份解析后的配置。
+启用压缩时，`max_prototypes: 0` 使用默认上限 8。这些设置影响本地原型评分，
+不影响远程打分器返回的分数；阈值和显式难度边界保持不变。
 
 ### 本地与远程打分 {#local-and-remote-scoring}
 

@@ -194,3 +194,25 @@ func TestNativeSpansValidateUnicodePartialAndScoreSemantics(t *testing.T) {
 		})
 	}
 }
+
+func TestOperatingPointRejectsArtifactReplacementInsideGeneration(t *testing.T) {
+	path := t.TempDir()
+	file := filepath.Join(path, "model.safetensors")
+	if err := os.WriteFile(file, []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runtime := New(nil)
+	ctx := context.Background()
+	if err := runtime.verifyPreparedArtifact(ctx, path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte("replacement"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.verifyPreparedArtifact(ctx, path); err == nil {
+		t.Fatal("new policy could reuse old cached owner identity")
+	}
+	if err := New(runtime.Pool).verifyPreparedArtifact(ctx, path); err != nil {
+		t.Fatal("new generation could not prepare replacement", err)
+	}
+}

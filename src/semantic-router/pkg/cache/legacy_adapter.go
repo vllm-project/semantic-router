@@ -107,7 +107,7 @@ func (a *LegacyBackendAdapter) LookupSemantic(
 	}
 	result, err := a.backend.LookupSimilarWithThreshold(
 		ctx,
-		lookup.Identity.Partition.Key(),
+		lookup.Identity.SemanticPartitionKey(),
 		lookup.Identity.SemanticQuery,
 		lookup.Threshold,
 	)
@@ -116,14 +116,15 @@ func (a *LegacyBackendAdapter) LookupSemantic(
 	}
 	age, ageKnown := resultAge(result)
 	return CacheResult{
-		ResponseBody: result.ResponseBody,
-		Found:        result.Found,
-		HitKind:      HitKindSemantic,
-		Source:       CacheSourceL2,
-		Similarity:   result.Similarity,
-		Age:          age,
-		AgeKnown:     ageKnown,
-		ExpiresAt:    result.ExpiresAt,
+		ResponseBody:  result.ResponseBody,
+		Found:         result.Found,
+		HitKind:       HitKindSemantic,
+		Source:        CacheSourceL2,
+		Similarity:    result.Similarity,
+		NegationGuard: result.NegationGuard,
+		Age:           age,
+		AgeKnown:      ageKnown,
+		ExpiresAt:     result.ExpiresAt,
 	}, nil
 }
 
@@ -141,7 +142,7 @@ func (a *LegacyBackendAdapter) StoreSemantic(ctx context.Context, write CacheWri
 	return a.backend.AddEntry(
 		ctx,
 		write.RequestID,
-		write.Identity.Partition.Key(),
+		write.Identity.SemanticPartitionKey(),
 		write.Identity.SemanticQuery,
 		write.RequestBody,
 		write.ResponseBody,

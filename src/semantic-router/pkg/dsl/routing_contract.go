@@ -70,7 +70,7 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 // DecompileRoutingToAST converts runtime config to a routing-only AST.
 func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 	d := &decompiler{cfg: cfg}
-	prog := &Program{Strategy: string(cfg.Strategy), ModelBindings: cloneModelBindings(cfg.ModelBindings)}
+	prog := &Program{Strategy: string(cfg.Strategy), ModelBindings: cloneModelBindings(cfg.ModelBindings), CandidateRequirements: cfg.CandidateRequirements.Clone(), DataPolicy: cfg.DataPolicy.Clone()}
 	d.appendSignalsToProgram(prog)
 	d.appendModelsToProgram(prog)
 	d.appendRoutesToProgram(prog)
@@ -78,11 +78,12 @@ func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 }
 
 func (d *decompiler) decompileRoutingStrategy() {
-	if d.cfg.Strategy == "" && len(d.cfg.ModelBindings) == 0 {
+	if d.cfg.Strategy == "" && len(d.cfg.ModelBindings) == 0 && d.cfg.CandidateRequirements == nil && d.cfg.DataPolicy == nil {
 		return
 	}
 	d.writeSection("ROUTING PROFILE")
 	d.write("ROUTING {\n")
+	d.decompileRoutingPolicies()
 	if d.cfg.Strategy != "" {
 		d.write("  strategy: %s\n", d.cfg.Strategy)
 	}
@@ -218,6 +219,9 @@ func (d *decompiler) appendOperationalSignals(prog *Program) {
 }
 
 func (d *decompiler) appendSafetySignals(prog *Program) {
+	for i := range d.cfg.SafetyRules {
+		prog.Signals = append(prog.Signals, d.safetyToSignal(&d.cfg.SafetyRules[i]))
+	}
 	for _, jb := range d.cfg.JailbreakRules {
 		prog.Signals = append(prog.Signals, d.jailbreakToSignal(&jb))
 	}
@@ -256,6 +260,9 @@ func (d *decompiler) writeRoutingModelFields(model config.RoutingModel) {
 	d.writeOptionalRoutingModelString("param_size", model.ParamSize)
 	if model.ContextWindowSize > 0 {
 		d.write("  context_window_size: %d\n", model.ContextWindowSize)
+	}
+	if model.MaxOutputTokens > 0 {
+		d.write("  max_output_tokens: %d\n", model.MaxOutputTokens)
 	}
 	d.writeOptionalRoutingModelString("description", model.Description)
 	d.writeOptionalRoutingModelArray("capabilities", model.Capabilities)
@@ -300,6 +307,9 @@ func routingModelToDecl(model config.RoutingModel) *ModelDecl {
 	}
 	if model.ContextWindowSize > 0 {
 		fields["context_window_size"] = IntValue{V: model.ContextWindowSize}
+	}
+	if model.MaxOutputTokens > 0 {
+		fields["max_output_tokens"] = IntValue{V: model.MaxOutputTokens}
 	}
 	if model.Description != "" {
 		fields["description"] = StringValue{V: model.Description}

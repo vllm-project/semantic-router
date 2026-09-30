@@ -11,6 +11,7 @@
 *.ico binary
 *.svg binary
 *.pdf binary
+*.safetensors.fixture binary
 
 # Catalog projections are deterministic compiler outputs. Review authored
 # facts under config/catalog instead of treating these as independent sources.

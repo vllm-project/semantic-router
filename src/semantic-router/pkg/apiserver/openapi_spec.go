@@ -4,7 +4,6 @@ package apiserver
 
 import (
 	"fmt"
-	"net/http"
 	"strings"
 )
 
@@ -34,7 +33,7 @@ func newOpenAPISpec() OpenAPISpec {
 		OpenAPI: "3.0.0",
 		Info: OpenAPIInfo{
 			Title:       "Semantic Router Apiserver",
-			Description: "HTTP router apiserver for classification utilities, config management, and service introspection",
+			Description: "Router management API for configuration, plugin operations, prepared-model diagnostics, storage, and observability",
 			Version:     "v1",
 		},
 		Servers: []OpenAPIServer{
@@ -46,7 +45,7 @@ func newOpenAPISpec() OpenAPISpec {
 		Paths: make(map[string]OpenAPIPath),
 		Components: OpenAPIComponents{
 			SecuritySchemes: map[string]OpenAPISecurityScheme{
-				"bearerAuth": {
+				"bearerAuth": { // #nosec G101 -- OpenAPI security scheme metadata, not a credential.
 					Type:         "http",
 					Scheme:       "bearer",
 					BearerFormat: "opaque management token",
@@ -59,54 +58,29 @@ func newOpenAPISpec() OpenAPISpec {
 
 func buildOpenAPIOperation(route apiRoute) *OpenAPIOperation {
 	operation := &OpenAPIOperation{
-		Summary:     route.Description,
-		Description: route.Description,
-		OperationID: openAPIOperationID(route.Method, route.Path),
-		Tags:        []string{route.Capability},
-		Deprecated:  route.Deprecated,
-		Parameters:  append(openAPIPathParameters(route.Path), route.Parameters...),
-		Security:    openAPIOperationSecurity(route),
-		Permission:  route.Permission,
-		Sensitivity: route.Sensitivity,
-		AuditAction: route.AuditAction,
-		Plane:       route.Plane,
-		Audiences:   append([]APIAudience(nil), route.Audiences...),
-		Stability:   route.Stability,
-		Visibility:  route.Visibility,
-		Responses: map[string]OpenAPIResponse{
-			"200": openAPIObjectResponse("Successful response"),
-			"400": openAPIErrorResponse("Bad request"),
-		},
+		Summary:          route.Description,
+		Description:      route.Description,
+		OperationID:      openAPIOperationID(route.Method, route.Path),
+		Tags:             []string{route.Capability},
+		Deprecated:       route.Deprecated,
+		Parameters:       append(openAPIPathParameters(route.Path), route.Parameters...),
+		Security:         openAPIOperationSecurity(route),
+		Permission:       route.Permission,
+		Sensitivity:      route.Sensitivity,
+		AuditAction:      route.AuditAction,
+		Plane:            route.Plane,
+		Audiences:        append([]APIAudience(nil), route.Audiences...),
+		Stability:        route.Stability,
+		PluginOperations: append([]PluginOperationContract(nil), route.PluginOperations...),
+		Visibility:       route.Visibility,
+		Responses:        routeOpenAPIResponses(route),
 	}
 
 	if route.RequestBody.Kind != requestBodyNone {
 		operation.Responses["413"] = openAPIErrorResponse("Request body too large")
 		operation.RequestBody = buildOpenAPIRequestBody(route.RequestBody)
 	}
-	addKnowledgeBaseActivationResponses(route, operation)
-
 	return operation
-}
-
-func addKnowledgeBaseActivationResponses(route apiRoute, operation *OpenAPIOperation) {
-	create := route.Path == apiStorageKnowledgeBasesPath && route.Method == http.MethodPost
-	change := route.Path == apiStorageKnowledgeBasesPath+"/{name}" &&
-		(route.Method == http.MethodPut || route.Method == http.MethodDelete)
-	if !create && !change {
-		return
-	}
-	if create {
-		delete(operation.Responses, "200")
-		operation.Responses["201"] = openAPIObjectResponse("Knowledge base created")
-	}
-	pending := openAPIObjectResponse("Saved candidate awaiting whole-generation publication; poll /api/v1/config/hash until active_runtime_hash matches generated_runtime_hash")
-	pending.Content["application/json"].Schema.Properties = map[string]OpenAPISchema{
-		"activation_status":      {Type: "string", Enum: []string{"pending"}},
-		"generated_runtime_hash": {Type: "string", Description: "Exact candidate runtime document hash, when available"},
-	}
-	pending.Content["application/json"].Schema.Required = []string{"activation_status"}
-	operation.Responses["202"] = pending
-	operation.Responses["409"] = openAPIErrorResponse("Conflict, including CONFIG_ACTIVATION_PENDING when a saved candidate has not activated; no second KB mutation is persisted")
 }
 
 func capabilityDescription(name string) string {
@@ -190,44 +164,12 @@ func requestBodyDescription(body apiRequestBody) string {
 	return fmt.Sprintf("%s request payload. Limit: %d bytes.", body.Kind, body.LimitBytes)
 }
 
-func openAPIObjectResponse(description string) OpenAPIResponse {
-	return OpenAPIResponse{
-		Description: description,
-		Content:     openAPIObjectMedia(),
-	}
-}
-
 func openAPIErrorResponse(description string) OpenAPIResponse {
-	return OpenAPIResponse{
-		Description: description,
-		Content: map[string]OpenAPIMedia{
-			"application/json": {
-				Schema: &OpenAPISchema{
-					Type: "object",
-					Properties: map[string]OpenAPISchema{
-						"error": {
-							Type: "object",
-							Properties: map[string]OpenAPISchema{
-								"code":      {Type: "string"},
-								"message":   {Type: "string"},
-								"timestamp": {Type: "string"},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-func openAPIObjectMedia() map[string]OpenAPIMedia {
-	return map[string]OpenAPIMedia{
-		"application/json": {
-			Schema: &OpenAPISchema{
-				Type: "object",
-			},
-		},
-	}
+	return OpenAPIResponse{Description: description, Headers: map[string]OpenAPIHeader{
+		managementRequestIDHeader: {Description: "Correlation identifier for this management request.", Schema: OpenAPISchema{Type: "string"}},
+	}, Content: map[string]OpenAPIMedia{
+		"application/json": {Schema: openAPIRequestSchemaFor[managementErrorResponse]()},
+	}}
 }
 
 func requestBodyMedia(body apiRequestBody) map[string]OpenAPIMedia {

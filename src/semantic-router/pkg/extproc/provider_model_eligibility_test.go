@@ -8,6 +8,40 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
+func TestPrepareProviderDispatchRejectsImageInputOnChatOnlyModel(t *testing.T) {
+	router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	params := router.Config.ModelConfig[primary]
+	params.Capabilities = []string{"chat"}
+	router.Config.ModelConfig[primary] = params
+	request := testNeutralRequest(primary, "Describe the attached test image.")
+	request.Messages[0].Content = append(request.Messages[0].Content, llmprotocol.Content{
+		Kind: llmprotocol.ContentImage, URL: "https://example.com/a.png",
+	})
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+
+	dispatch, err := router.prepareProviderDispatch(request, primary, "", false, ctx)
+	var protocolError *llmprotocol.ProtocolError
+	if !errors.As(err, &protocolError) || protocolError.Code != "unsupported_capability" || dispatch != nil {
+		t.Fatalf("dispatch=%+v error=%v, want capability rejection", dispatch, err)
+	}
+	if ctx.ImmediateProtocolError == nil || ctx.ImmediateProtocolError.Code != "unsupported_capability" {
+		t.Fatalf("ImmediateProtocolError = %+v", ctx.ImmediateProtocolError)
+	}
+}
+
+func TestPrepareProviderDispatchAllowsImageInputOnUnannotatedModel(t *testing.T) {
+	router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	request := testNeutralRequest(primary, "Describe the attached test image.")
+	request.Messages[0].Content = append(request.Messages[0].Content, llmprotocol.Content{
+		Kind: llmprotocol.ContentImage, URL: "https://example.com/a.png",
+	})
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+
+	if _, err := router.prepareProviderDispatch(request, primary, "", false, ctx); err != nil {
+		t.Fatalf("unannotated model must not reject image_input: %v", err)
+	}
+}
+
 func TestPrepareProviderDispatchChecksPrimaryModelTaskCapabilities(t *testing.T) {
 	for _, capabilities := range [][]string{
 		{"image_input"},
@@ -30,13 +64,19 @@ func TestPrepareProviderDispatchChecksPrimaryModelTaskCapabilities(t *testing.T)
 			request.ImageGeneration = &llmprotocol.ImageGenerationOptions{}
 			ctx := routingTestContext(llmprotocol.OpenAIResponsesV1, request)
 			ctx.VSRSelectedDecision = decision
-			dispatch, err := router.prepareProviderDispatch(request, primary, decision.Name, false, ctx)
+			var dispatch *providerDispatch
+			var err error
+			if fallback {
+				dispatch, err = selectCapabilityTestDispatch(router, request, decision, ctx)
+			} else {
+				dispatch, err = router.prepareProviderDispatch(request, primary, decision.Name, false, ctx)
+			}
 			if fallback {
 				if err != nil || dispatch.logicalModel != "generator" || ctx.RequestModel != "generator" {
 					t.Fatalf("capabilities=%v: dispatch=%+v error=%v", capabilities, dispatch, err)
 				}
 				if ctx.ImmediateProtocolError != nil {
-					t.Fatal("successful same-wire reroute retained the primary rejection")
+					t.Fatal("successful capability selection left a dispatch error")
 				}
 			} else {
 				var protocolError *llmprotocol.ProtocolError
@@ -48,7 +88,7 @@ func TestPrepareProviderDispatchChecksPrimaryModelTaskCapabilities(t *testing.T)
 	}
 }
 
-func TestPrepareProviderDispatchPreservesContextEligibilityOnReroute(t *testing.T) {
+func TestCapabilitySelectionPreservesContextEligibility(t *testing.T) {
 	for _, largeFallback := range []bool{false, true} {
 		router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
 		params := router.Config.ModelConfig[primary]
@@ -72,7 +112,7 @@ func TestPrepareProviderDispatchPreservesContextEligibilityOnReroute(t *testing.
 		if _, err := router.contextEligibleDecisionModelRefs(decision.ModelRefs, decision.Name, ctx.VSRContextTokenCount, ctx); err != nil {
 			t.Fatal(err)
 		}
-		dispatch, err := router.prepareProviderDispatch(request, primary, decision.Name, false, ctx)
+		dispatch, err := selectCapabilityTestDispatch(router, request, decision, ctx)
 		if largeFallback {
 			if err != nil || dispatch.logicalModel != "large-generator" {
 				t.Fatalf("dispatch=%+v error=%v, want eligible large generator", dispatch, err)

@@ -34,9 +34,9 @@ func testAnthropicChatCacheControl(
 	defer session.Close()
 	backendOpts := opts
 	backendOpts.ServiceConfig = pkgtestcases.ServiceConfig{
-		Namespace:   "anthropic-backend-system",
-		Name:        "anthropic-backend-qwen",
-		ServicePort: "8080",
+		Namespace:   "provider-protocols-system",
+		Name:        "provider-mocker",
+		ServicePort: "8000",
 	}
 	backendSession, err := fixtures.OpenServiceSession(ctx, client, backendOpts)
 	if err != nil {

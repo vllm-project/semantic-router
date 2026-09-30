@@ -1,6 +1,8 @@
 package modeldownload
 
 import (
+	"fmt"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -11,7 +13,7 @@ func TestExplicitORTEmbeddingRequiresSelectedLayerInCandleProcess(t *testing.T) 
 	cfg := newEmbeddingOnlyConfig()
 	cfg.EmbeddingConfig.TargetLayer = 16
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"embed": {Provider: "ort", Artifact: testEmbeddingModelPath}}
-	cfg.ModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "embed", Contract: "embedding.v1", Adapter: "mmbert"}}
+	cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "embed", Contract: "embedding.v1", Adapter: "mmbert"}}
 	specs, err := BuildModelSpecs(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -20,7 +22,7 @@ func TestExplicitORTEmbeddingRequiresSelectedLayerInCandleProcess(t *testing.T) 
 	if !ok {
 		t.Fatal("embedding artifact missing")
 	}
-	if !slices.Contains(spec.RequiredFiles, "onnx/layer-16/model.onnx") || !spec.CheckONNX || len(spec.ExcludePatterns) != 0 {
+	if !requiresGraphAlternative(spec, "onnx/layer-16/model.onnx") || !spec.CheckONNX || len(spec.ExcludePatterns) != 0 {
 		t.Fatalf("ORT required files=%#v", spec)
 	}
 	if slices.Contains(spec.RequiredFiles, "model.safetensors") {
@@ -56,7 +58,7 @@ func TestImplicitEmbeddingProvisioningFollowsBuildProvider(t *testing.T) {
 	}
 	provider, _ := config.DefaultModelExecution(true)
 	if provider == "ort" {
-		if !spec.CheckONNX || !slices.Contains(spec.RequiredFiles, "onnx/layer-6/model.onnx") || len(spec.ExcludePatterns) != 0 {
+		if !spec.CheckONNX || !requiresGraphAlternative(spec, "onnx/layer-6/model.onnx") || len(spec.ExcludePatterns) != 0 {
 			t.Fatalf("implicit ORT provisioning does not include its graph: %#v", spec)
 		}
 		if slices.Contains(spec.RequiredFiles, "model.safetensors") {
@@ -67,7 +69,7 @@ func TestImplicitEmbeddingProvisioningFollowsBuildProvider(t *testing.T) {
 	}
 
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"explicit": {Provider: "candle", Artifact: testEmbeddingModelPath}}
-	cfg.ModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "explicit", Contract: "embedding.v1", Adapter: "mmbert"}}
+	cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "explicit", Contract: "embedding.v1", Adapter: "mmbert"}}
 	specs, err = BuildModelSpecs(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -75,5 +77,44 @@ func TestImplicitEmbeddingProvisioningFollowsBuildProvider(t *testing.T) {
 	spec, ok = findSpecByPath(specs, testEmbeddingModelPath)
 	if !ok || spec.CheckONNX || !slices.Contains(spec.ExcludePatterns, "*.onnx") {
 		t.Fatalf("explicit Candle binding did not override build default: %#v", spec)
+	}
+}
+
+func requiresGraphAlternative(spec ModelSpec, file string) bool {
+	return slices.ContainsFunc(spec.RequiredFileGroups, func(group []string) bool {
+		return slices.Contains(group, file)
+	})
+}
+
+func TestORTEmbeddingRequiresEveryReachableLayerAcrossLayouts(t *testing.T) {
+	for _, layout := range []string{"onnx/layer-%d/model.onnx", "onnx/model_layer_%d.onnx", "model_layer_%d.onnx"} {
+		t.Run(layout, func(t *testing.T) {
+			cfg := newEmbeddingOnlyConfig()
+			cfg.EmbeddingConfig.TargetLayer = 11
+			cfg.SemanticCache.Enabled = true
+			cfg.SemanticCache.EmbeddingModel = "mmbert"
+			cfg.ModelDeployments = map[string]config.ModelDeployment{"embed": {Provider: "ort", Artifact: testEmbeddingModelPath}}
+			cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "embed", Contract: "embedding.v1", Adapter: "mmbert"}}
+			specs, err := BuildModelSpecs(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			spec, ok := findSpecByPath(specs, testEmbeddingModelPath)
+			if !ok {
+				t.Fatal("missing embedding snapshot")
+			}
+			spec.LocalPath = t.TempDir()
+			for _, name := range []string{"config.json", "tokenizer.json"} {
+				writeModelFile(t, spec.LocalPath, name, "{}")
+			}
+			writeModelFile(t, filepath.Join(spec.LocalPath, "onnx"), "model.onnx", string(protoBytes(7, nil)))
+			writeModelFile(t, filepath.Join(spec.LocalPath, "onnx"), "model_layer_3.onnx", string(protoBytes(7, nil)))
+			assertSnapshotComplete(t, spec, false)
+			for i, layer := range []int{11, 6} {
+				name := fmt.Sprintf(layout, layer)
+				writeModelFile(t, filepath.Join(spec.LocalPath, filepath.Dir(name)), filepath.Base(name), string(protoBytes(7, nil)))
+				assertSnapshotComplete(t, spec, i == 1)
+			}
+		})
 	}
 }

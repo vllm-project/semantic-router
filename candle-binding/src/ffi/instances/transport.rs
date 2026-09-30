@@ -60,6 +60,7 @@ macro_rules! loader {
 }
 loader!(candle_instance_load_backbone, "backbone");
 loader!(candle_instance_load_sequence, "sequence");
+loader!(candle_instance_load_label_scores, "label_scores");
 loader!(candle_instance_load_token, "token");
 loader!(candle_instance_load_nli, "nli");
 loader!(candle_instance_load_hallucination, "hallucination");
@@ -161,6 +162,17 @@ pub unsafe extern "C" fn candle_instance_embedding(
     layer: usize,
 ) -> *mut c_char {
     reply(|| get(handle)?.embedding(string(text)?, dimension, layer))
+}
+
+/// Describe the already-loaded embedding instance without running inference or
+/// reopening its artifacts. Free the response with candle_instance_free_string.
+#[no_mangle]
+pub extern "C" fn candle_instance_embedding_descriptor(
+    handle: u64,
+    layer: usize,
+    dimension: usize,
+) -> *mut c_char {
+    reply(|| get(handle)?.embedding_runtime_descriptor(layer, dimension))
 }
 
 /// Free a string returned by this module, including error responses.
@@ -267,4 +279,82 @@ pub unsafe extern "C" fn candle_instance_text_windows(
     max_tokens: usize,
 ) -> *mut c_char {
     reply(|| get(handle)?.text_windows(string(text)?, max_tokens))
+}
+
+/// Score independent labels using a prepared multi-label task.
+/// # Safety
+/// `text` must point to a live NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn candle_instance_score(handle: u64, text: *const c_char) -> *mut c_char {
+    reply(|| get(handle)?.score(string(text)?))
+}
+
+/// Return complete categorical distributions for exact token windows.
+/// # Safety
+/// `text` must point to a live NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn candle_instance_classify_windows(
+    handle: u64,
+    text: *const c_char,
+    size: usize,
+    overlap: usize,
+) -> *mut c_char {
+    reply(|| get(handle)?.classify_windows(string(text)?, size, overlap))
+}
+
+/// Return independent label scores for exact token windows.
+/// # Safety
+/// `text` must point to a live NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn candle_instance_score_windows(
+    handle: u64,
+    text: *const c_char,
+    size: usize,
+    overlap: usize,
+) -> *mut c_char {
+    reply(|| get(handle)?.score_windows(string(text)?, size, overlap))
+}
+
+/// Load a cross-encoder at one immutable trained exit.
+/// # Safety
+/// Arguments are live NUL-terminated JSON strings; free the response with the instance free function.
+#[no_mangle]
+pub unsafe extern "C" fn candle_instance_load_pair_scorer(
+    options: *const c_char,
+    selection: *const c_char,
+) -> *mut c_char {
+    reply(|| {
+        let operation = || {
+            insert(load_selected(
+                serde_json::from_str(string(options)?)?,
+                "pair_scores",
+                Some(serde_json::from_str(string(selection)?)?),
+            )?)
+        };
+        operation().map_err(|error| error_with_context(error, "load"))
+    })
+}
+
+/// Score complete query/document pairs in input order.
+/// # Safety
+/// `pairs` is a live NUL-terminated JSON array; free the response with the instance free function.
+#[no_mangle]
+pub unsafe extern "C" fn candle_instance_score_pairs(
+    handle: u64,
+    pairs: *const c_char,
+) -> *mut c_char {
+    reply(|| get(handle)?.score_pairs(serde_json::from_str(string(pairs)?)?))
+}
+
+/// Return globally decoded token spans after exact overlapping windows.
+/// # Safety
+/// `text` must point to a live NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn candle_instance_token_windows(
+    handle: u64,
+    text: *const c_char,
+    size: usize,
+    overlap: usize,
+) -> *mut c_char {
+    reply(|| get(handle)?.token_windows(string(text)?, size, overlap))
 }

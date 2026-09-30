@@ -2,7 +2,7 @@
 title: 部署支持
 description: 查看 Semantic Router 项目维护哪些部署路径、集成、示例和硬件配置。
 translation:
-  source_commit: "d8e75b89b7290df941743270c69a111f80dde50a"
+  source_commit: "7d671e90d6cb1d5540c795158b94ee89fe323e19"
   source_file: "docs/installation/support-matrix.md"
   outdated: false
 ---
@@ -47,12 +47,12 @@ translation:
 | 集成 | 分类 | 项目覆盖 |
 | --- | --- | --- |
 | [agentgateway](k8s/agentgateway) | Supported integration | **PR CI。** Router 提供 ExtProc 策略；agentgateway 拥有数据平面。将请求正文设置为 `FullDuplexStreamed`。 |
-| [Envoy AI Gateway](k8s/ai-gateway) | Supported integration | **PR CI。** Router 提供路由策略；网关拥有 provider 流量。单独验证你的 provider。 |
+| [Agent Router](k8s/ai-gateway) | Supported integration | **PR CI。** 原 Envoy AI Gateway。Router 提供路由策略；网关拥有 provider 流量。单独验证你的 provider。 |
 | [AIBrix](k8s/aibrix) | Supported integration | **PR CI。** Router 选择模型或池；AIBrix 拥有部署、自动扩缩和副本。使用 AIBrix 的硬件支持矩阵。 |
 | [NVIDIA Dynamo](k8s/dynamo) | Supported integration | **Manual。** Router 选择目标；Dynamo 拥有图、worker 和 frontend。使用指南版本；较旧的 fixture 仅用于测试。 |
 | [Istio Gateway](k8s/istio) | Supported integration | **PR CI。** Router 提供 ExtProc 策略；Istio 承载请求。附带的 GPU 工作负载仅为示例。 |
 | [llm-d](k8s/llm-d) | Supported integration | **PR CI + Contract。** Router 选择模型或池；llm-d 拥有发现和副本路由。不要添加竞争的直接 Service 路由。 |
-| [使用 Envoy AI Gateway 的流式](k8s/streamed-extproc) | Supported integration | **PR CI。** 网关流式传输；Router 使用配置的 ExtProc 正文模式。显式测试该模式。 |
+| [使用 Agent Router 的流式](k8s/streamed-extproc) | Supported integration | **PR CI。** 网关流式传输；Router 使用配置的 ExtProc 正文模式。显式测试该模式。 |
 | [Valkey 智能体记忆](valkey-memory) | Supported integration | **Contract + Manual。** Router 拥有记忆行为；Valkey 拥有持久化和 Search。你拥有安全、保留和备份。 |
 | [使用 Redis 的 Responses API 状态](../tutorials/global/api-and-observability#response-api) | Supported integration | **Manual。** Router 拥有 Responses 行为；Redis 存储状态。你拥有 Redis 安全、持久化和驱逐。 |
 | [响应缓存](../tutorials/plugin/response-cache) | Supported integration | **Contract + Manual。** Router 拥有缓存行为；你的后端拥有存储和可用性。将缓存数据视为敏感。 |
@@ -64,10 +64,9 @@ translation:
 | --- | --- | --- |
 | KServe 示例 | Experimental example | KServe 集成冒烟测试；不是经过限定的 KServe 或模型服务部署。 |
 | OpenShift 示例 | Experimental example | 将资源适配到 Route 和安全约束；不是加固的 OpenShift 配置。 |
-| Anthropic 兼容后端 fixture | Experimental example | 协议集成测试；不是生产模型服务。 |
 | 幻觉策略演示 | Experimental example | 事实核查策略行为；不是经过限定的护栏或模型。 |
 | 越狱错误处理演示 | Experimental example | 分类器失败路径；不是安全的生产策略。 |
-| LLM Katan 开发后端 | Experimental example | 轻量 OpenAI 兼容测试后端；不是生产推理。 |
+| Provider mocker 与可选 tiny-model smoke | Experimental example | 确定性协议测试数据；需要真实推理时，使用上游 llama.cpp server 和固定版本的 Qwen3-0.6B。 |
 | PII 远程后端演示 | Experimental example | 远程 token_spans.v1 PII 后端及其 on_error 策略；不是经过限定的 PII 模型或脱敏策略。 |
 | 可观测性演示 | Experimental example | Prometheus、Grafana、告警和控制面板接线；替换所有示例安全和保留设置。 |
 | 响应越狱演示 | Experimental example | 响应分类器窗口行为；不是生产护栏模型。 |

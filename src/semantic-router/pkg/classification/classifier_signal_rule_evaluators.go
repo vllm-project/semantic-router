@@ -2,6 +2,7 @@ package classification
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -66,15 +67,21 @@ func categoryProbabilityFallbackAllowed(inference CategoryInference) bool {
 }
 
 const (
+	embeddingEvaluationFailedCode    = "embedding_evaluation_failed"
+	reaskEvaluationFailedCode        = "reask_evaluation_failed"
 	domainEvaluationFailedCode       = "domain_evaluation_failed"
 	factCheckEvaluationFailedCode    = "fact_check_evaluation_failed"
 	userFeedbackEvaluationFailedCode = "user_feedback_evaluation_failed"
+	userFeedbackUncertainCode        = "user_feedback_uncertain"
 	piiEvaluationFailedCode          = "pii_evaluation_failed"
 )
 
 func recordSignalRuleErrors(results *SignalResults, mu *sync.Mutex, signalType string, names []string, code string) {
 	mu.Lock()
 	defer mu.Unlock()
+	if results.SignalErrors == nil {
+		results.SignalErrors = make(map[string]string)
+	}
 	for _, name := range names {
 		results.SignalErrors[signalConfidenceKey(signalType, name)] = code
 	}
@@ -223,6 +230,10 @@ func (c *Classifier) evaluateUserFeedbackSignal(ctx context.Context, results *Si
 	}
 
 	logging.Debugf("[Signal Computation] User feedback signal evaluation completed in %v", elapsed)
+	c.applyUserFeedbackSignalResult(results, mu, feedbackResult, err)
+}
+
+func (c *Classifier) applyUserFeedbackSignalResult(results *SignalResults, mu *sync.Mutex, feedbackResult *FeedbackResult, err error) {
 	if err != nil {
 		logging.Errorf("user feedback rule evaluation failed: %v", err)
 		names := make([]string, 0, len(c.Config.UserFeedbackRules))
@@ -230,10 +241,16 @@ func (c *Classifier) evaluateUserFeedbackSignal(ctx context.Context, results *Si
 			names = append(names, rule.Name)
 		}
 		recordSignalRuleErrors(results, mu, config.SignalTypeUserFeedback, names, userFeedbackEvaluationFailedCode)
-	} else if feedbackResult != nil {
+	} else if feedbackResult != nil && feedbackResult.Abstained {
+		names := make([]string, 0, len(c.Config.UserFeedbackRules))
+		for _, rule := range c.Config.UserFeedbackRules {
+			names = append(names, rule.Name)
+		}
+		recordSignalRuleErrors(results, mu, config.SignalTypeUserFeedback, names, userFeedbackUncertainCode)
+	} else if feedbackResult != nil && feedbackResult.FeedbackType != FeedbackLabelNoFeedback {
 		// Check if this signal is defined in user_feedback_rules
 		for _, rule := range c.Config.UserFeedbackRules {
-			if rule.Name == signalName {
+			if rule.Name == feedbackResult.FeedbackType {
 				// Record signal match
 				c.recordSignalMatch(config.SignalTypeUserFeedback, rule.Name)
 
@@ -247,6 +264,10 @@ func (c *Classifier) evaluateUserFeedbackSignal(ctx context.Context, results *Si
 }
 
 func (c *Classifier) evaluateReaskSignal(results *SignalResults, mu *sync.Mutex, currentUserText string, priorUserMessages []string) {
+	names := c.applicableReaskRuleNames(currentUserText, priorUserMessages)
+	if len(names) == 0 {
+		return
+	}
 	start := time.Now()
 	matchedRules, err := c.reaskClassifier.Classify(currentUserText, priorUserMessages)
 	elapsed := time.Since(start)
@@ -256,6 +277,7 @@ func (c *Classifier) evaluateReaskSignal(results *SignalResults, mu *sync.Mutex,
 	logging.Debugf("[Signal Computation] Reask signal evaluation completed in %v", elapsed)
 	if err != nil {
 		logging.Errorf("reask rule evaluation failed: %v", err)
+		recordSignalRuleErrors(results, mu, config.SignalTypeReask, names, reaskEvaluationFailedCode)
 		return
 	}
 	if len(matchedRules) == 0 {
@@ -276,6 +298,25 @@ func (c *Classifier) evaluateReaskSignal(results *SignalResults, mu *sync.Mutex,
 	}
 	results.Metrics.Reask.Confidence = bestConfidence
 	mu.Unlock()
+}
+
+func (c *Classifier) applicableReaskRuleNames(currentUserText string, priorUserMessages []string) []string {
+	if strings.TrimSpace(currentUserText) == "" {
+		return nil
+	}
+	priorTurns := 0
+	for _, text := range priorUserMessages {
+		if strings.TrimSpace(text) != "" {
+			priorTurns++
+		}
+	}
+	var names []string
+	for _, rule := range c.reaskClassifier.rules {
+		if priorTurns >= rule.WithDefaults().LookbackTurns {
+			names = append(names, rule.Name)
+		}
+	}
+	return names
 }
 
 func (c *Classifier) evaluateContextSignal(

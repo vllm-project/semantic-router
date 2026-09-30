@@ -148,7 +148,10 @@ func TestEnsureClassificationServiceWaitsForRuntimeRegistry(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	registry := routerruntime.NewRegistry(cfg)
 
-	svc := ensureClassificationService(cfg, registry, nil)
+	svc, err := ensureClassificationService(cfg, registry, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if svc == nil {
 		t.Fatal("ensureClassificationService() returned nil, want placeholder service")
 	}

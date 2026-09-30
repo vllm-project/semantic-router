@@ -26,6 +26,16 @@ type ClassResultWithProbs struct {
 type LabelDistribution struct {
 	Probabilities []float32
 	Input         *InputUsage
+	Window        *ScanWindow
+}
+
+// ScanWindow names the window a windowed scan kept and how many it read. A
+// scan reports one distribution for a document it read in several windows, so
+// without this the score cannot be attributed to the part of the document that
+// produced it. Nil means the result did not come from a windowed scan.
+type ScanWindow struct {
+	Start, End int // Half-open offsets in the content token IDs.
+	Count      int // Windows the scan read for this input.
 }
 
 // TokenEntity is a labeled span in the exact input text. Start and End are

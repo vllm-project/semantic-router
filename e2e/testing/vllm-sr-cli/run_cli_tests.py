@@ -17,6 +17,7 @@ Usage:
 """
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -205,37 +206,78 @@ def check_prerequisites(*, require_runtime_access: bool) -> bool:
     return all_ok
 
 
-def discover_tests(pattern: str | None = None) -> unittest.TestSuite:
-    """Discover and load CLI tests."""
-    # Get the directory containing this script
-    test_dir = Path(__file__).parent
-
-    # Create test loader
+def discover_tests(
+    pattern: str | None = None,
+    *,
+    integration: bool = False,
+    integration_only: bool = False,
+) -> unittest.TestSuite:
+    """Discover the selected boundary before importing its modules."""
     loader = unittest.TestLoader()
-
-    if pattern:
-        # Load tests matching pattern
-        suite = unittest.TestSuite()
-        for test_file in test_dir.glob("test_*.py"):
-            if pattern.lower() in test_file.name.lower():
-                module_name = test_file.stem
-                try:
-                    # Import and load tests from module
-                    module = __import__(module_name)
-                    suite.addTests(loader.loadTestsFromModule(module))
-                except Exception as e:
-                    print(f"Warning: Failed to load {test_file}: {e}")
-    else:
-        # Load all tests
-        suite = loader.discover(str(test_dir), pattern="test_*.py")
-
+    suite = unittest.TestSuite()
+    for test_file in sorted(Path(__file__).parent.glob("test_*.py")):
+        live = test_file.stem.startswith("test_integration")
+        if (integration_only and not live) or (
+            not (integration or integration_only) and live
+        ):
+            continue
+        if pattern and pattern.lower() not in test_file.name.lower():
+            continue
+        # Import errors become real failing tests instead of shrinking inventory.
+        suite.addTests(loader.loadTestsFromName(test_file.stem))
     return suite
+
+
+def flatten_tests(suite):
+    for test in suite:
+        if isinstance(test, unittest.TestSuite):
+            yield from flatten_tests(test)
+        else:
+            yield test
+
+
+class RecordedResult(unittest.TextTestResult):
+    """Retain actual terminal outcomes, including setup errors and skips."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.cases = []
+
+    def addSuccess(self, test):  # noqa: N802 - unittest callback
+        super().addSuccess(test)
+        self.cases.append({"id": test.id(), "status": "passed"})
+
+    def addFailure(self, test, err):  # noqa: N802 - unittest callback
+        super().addFailure(test, err)
+        self.cases.append({"id": test.id(), "status": "failed"})
+
+    def addError(self, test, err):  # noqa: N802 - unittest callback
+        super().addError(test, err)
+        self.cases.append({"id": test.id(), "status": "failed"})
+
+    def addSkip(self, test, reason):  # noqa: N802 - unittest callback
+        super().addSkip(test, reason)
+        self.cases.append({"id": test.id(), "status": "skipped", "reason": reason})
+
+    def addExpectedFailure(self, test, error):  # noqa: N802 - unittest callback
+        super().addExpectedFailure(test, error)
+        self.cases.append({"id": test.id(), "status": "skipped"})
+
+    def addUnexpectedSuccess(self, test):  # noqa: N802 - unittest callback
+        super().addUnexpectedSuccess(test)
+        self.cases.append({"id": test.id(), "status": "failed"})
+
+    def addSubTest(self, test, subtest, error):  # noqa: N802 - unittest callback
+        super().addSubTest(test, subtest, error)
+        if error and not any(case["id"] == test.id() for case in self.cases):
+            self.cases.append({"id": test.id(), "status": "failed"})
 
 
 def run_tests(
     pattern: str | None = None,
     verbose: bool = False,
     integration: bool = False,
+    integration_only: bool = False,
 ) -> bool:
     """
     Run CLI tests.
@@ -248,7 +290,7 @@ def run_tests(
     Returns:
         True if all tests passed, False otherwise
     """
-    configure_integration_mode(integration)
+    configure_integration_mode(integration or integration_only)
 
     # Change to test directory
     test_dir = Path(__file__).parent
@@ -257,7 +299,16 @@ def run_tests(
 
     try:
         # Discover tests
-        suite = discover_tests(pattern)
+        discovered = discover_tests(
+            pattern,
+            integration=integration,
+            integration_only=integration_only,
+        )
+        selected = list(flatten_tests(discovered))
+        suite = unittest.TestSuite(selected)
+        expected = [test.id() for test in selected]
+        if len(set(expected)) != len(expected):
+            raise ValueError("Duplicate CLI case IDs")
 
         test_count = suite.countTestCases()
         print(f"\n📋 Found {test_count} test(s) to run")
@@ -270,9 +321,35 @@ def run_tests(
         print(f"{SECTION_DIVIDER}\n")
 
         verbosity = 2 if verbose else 1
-        runner = unittest.TextTestRunner(verbosity=verbosity)
+        runner = unittest.TextTestRunner(
+            verbosity=verbosity, resultclass=RecordedResult
+        )
         result = runner.run(suite)
-        return print_test_summary(result)
+        success = print_test_summary(result)
+        required = integration_only or os.environ.get("CI_REQUIRE_CLI_TESTS") == "1"
+        if required and (result.skipped or result.expectedFailures):
+            print("Required CLI cases were skipped")
+            success = False
+        path = os.environ.get("CLI_TEST_REPORT_PATH")
+        if path:
+            report_path = Path(path)
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(
+                json.dumps(
+                    {
+                        "expected_cases": expected,
+                        "cases": result.cases,
+                        "success": success,
+                        "tests_run": result.testsRun,
+                        "runtime": "candle",
+                        "device": "cpu",
+                        "platform": "linux/amd64",
+                    },
+                    indent=2,
+                )
+                + "\n"
+            )
+        return success
 
     finally:
         os.chdir(original_dir)
@@ -325,11 +402,16 @@ Integration Tests:
         help="Skip pre-flight checks",
     )
 
+    parser.add_argument(
+        "--integration-only",
+        action="store_true",
+        help="Run only live integration cases; skips are failures",
+    )
     args = parser.parse_args()
 
     # Run pre-flight checks
     if not args.skip_checks and not check_prerequisites(
-        require_runtime_access=args.integration
+        require_runtime_access=args.integration or args.integration_only
     ):
         print("\n❌ Pre-flight checks failed. Fix issues above and retry.")
         return 1
@@ -339,6 +421,7 @@ Integration Tests:
         pattern=args.pattern,
         verbose=args.verbose,
         integration=args.integration,
+        integration_only=args.integration_only,
     )
 
     return 0 if success else 1

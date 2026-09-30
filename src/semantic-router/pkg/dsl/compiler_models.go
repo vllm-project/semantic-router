@@ -38,6 +38,9 @@ func applyRoutingModelNumericFields(
 	if v, ok := getIntField(fields, "context_window_size"); ok {
 		params.ContextWindowSize = v
 	}
+	if v, ok := getIntField(fields, "max_output_tokens"); ok {
+		params.MaxOutputTokens = v
+	}
 }
 
 func applyRoutingModelArrayFields(params *config.ModelParams, fields map[string]Value) {

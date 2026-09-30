@@ -14,20 +14,7 @@ func (s learningSelectionResult) Select(_ context.Context, selCtx *selection.Sel
 	if s.result == nil {
 		return nil, selection.ErrSelectionResultRequired
 	}
-	result := *s.result
-	result.AllScores = cloneSelectionScores(s.result.AllScores)
-	if result.AllScores == nil {
-		result.AllScores = make(map[string]float64, len(selCtx.CandidateModels))
-	}
-	for _, candidate := range selCtx.CandidateModels {
-		if _, ok := result.AllScores[candidate.Model]; !ok {
-			result.AllScores[candidate.Model] = 0
-		}
-	}
-	if _, ok := result.AllScores[result.SelectedModel]; !ok {
-		result.AllScores[result.SelectedModel] = result.Score
-	}
-	return &result, nil
+	return s.result.WithScores(s.result.ScoresFor(selCtx.CandidateModels)), nil
 }
 
 func (s learningSelectionResult) Method() selection.SelectionMethod {
@@ -40,5 +27,6 @@ func (s learningSelectionResult) Method() selection.SelectionMethod {
 func (s learningSelectionResult) UpdateFeedback(context.Context, *selection.Feedback) error {
 	return nil
 }
+
 func (s learningSelectionResult) Tier() selection.AlgorithmTier                { return selection.TierSupported }
 func (s learningSelectionResult) ExternalDependencies() []selection.Dependency { return nil }

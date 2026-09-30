@@ -28,10 +28,8 @@ func newClassifierOptionBuilder(cfg *config.RouterConfig, options []option) *cla
 }
 
 func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]option, error) {
-	if CurrentNativeBackendCapabilities().Name != "openvino" {
-		if err := b.prepareEmbeddingSet(); err != nil {
-			return nil, err
-		}
+	if err := b.prepareEmbeddingSet(); err != nil {
+		return nil, err
 	}
 	if b.cfg.RoutingScope == config.DefaultRecipeName && !b.cfg.IsRecipeReachableForRouting(config.DefaultRecipeName) {
 		return b.options, nil
@@ -49,6 +47,7 @@ func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]opt
 		b.buildEventClassifierOption,
 		b.buildGenericClassifiersOption,
 		b.buildModalityClassifierOption,
+		b.buildSafetyClassifiersOption,
 	}
 	parallelOptions, err := b.buildParallelOptions(steps)
 	b.options = append(b.options, parallelOptions...)

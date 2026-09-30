@@ -51,7 +51,7 @@ func newResponseCacheAPITestServer() *ClassificationAPIServer {
 
 func TestResponseCacheStatsAreRedacted(t *testing.T) {
 	server := newResponseCacheAPITestServer()
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/response-cache/stats", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/storage/response-cache/stats", nil)
 	recorder := httptest.NewRecorder()
 	server.handleResponseCacheStats(recorder, request)
 	if recorder.Code != http.StatusOK {
@@ -68,7 +68,7 @@ func TestResponseCacheInvalidateDefaultsToDryRun(t *testing.T) {
 	server := newResponseCacheAPITestServer()
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/api/v1/response-cache/invalidate",
+		"/api/v1/storage/response-cache/invalidate",
 		bytes.NewBufferString(`{"selector":{"epoch":"release-a"}}`),
 	)
 	recorder := httptest.NewRecorder()
@@ -88,7 +88,7 @@ func TestResponseCacheFlushRequiresExplicitConfirmation(t *testing.T) {
 	server := newResponseCacheAPITestServer()
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/api/v1/response-cache/flush",
+		"/api/v1/storage/response-cache/flush",
 		bytes.NewBufferString(`{"confirm":"yes"}`),
 	)
 	recorder := httptest.NewRecorder()
@@ -103,14 +103,14 @@ func TestResponseCacheRoutesCarryDedicatedPermissions(t *testing.T) {
 	for _, route := range apiResponseCacheRoutes() {
 		permissions[route.Path] = route.Permission
 	}
-	if permissions["/api/v1/response-cache/stats"] != PermCacheRead {
-		t.Fatalf("stats permission = %q", permissions["/api/v1/response-cache/stats"])
+	if permissions["/api/v1/storage/response-cache/stats"] != PermCacheRead {
+		t.Fatalf("stats permission = %q", permissions["/api/v1/storage/response-cache/stats"])
 	}
-	if permissions["/api/v1/response-cache/invalidate"] != PermCacheInvalidate {
-		t.Fatalf("invalidate permission = %q", permissions["/api/v1/response-cache/invalidate"])
+	if permissions["/api/v1/storage/response-cache/invalidate"] != PermCacheInvalidate {
+		t.Fatalf("invalidate permission = %q", permissions["/api/v1/storage/response-cache/invalidate"])
 	}
-	if permissions["/api/v1/response-cache/flush"] != PermCacheManage {
-		t.Fatalf("flush permission = %q", permissions["/api/v1/response-cache/flush"])
+	if permissions["/api/v1/storage/response-cache/flush"] != PermCacheManage {
+		t.Fatalf("flush permission = %q", permissions["/api/v1/storage/response-cache/flush"])
 	}
 }
 
@@ -119,7 +119,7 @@ func TestResponseCacheMutationAddsHashChainedAuditEntry(t *testing.T) {
 	mux := server.setupRoutes()
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/api/v1/response-cache/invalidate",
+		"/api/v1/storage/response-cache/invalidate",
 		bytes.NewBufferString(`{"selector":{"epoch":"release-a"},"dry_run":false}`),
 	)
 	request.Header.Set("Content-Type", "application/json")
@@ -128,7 +128,7 @@ func TestResponseCacheMutationAddsHashChainedAuditEntry(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
-	entries := server.responseCacheAuditEntries()
+	entries := server.managementAuditPage(0, 100, "").Entries
 	if len(entries) != 1 || entries[0].Hash == "" {
 		t.Fatalf("audit entries = %#v", entries)
 	}

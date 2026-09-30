@@ -939,6 +939,22 @@ const (
 	NLIError NLILabel = -1
 )
 
+// String preserves the label contract when the router selects ONNX bindings.
+func (l NLILabel) String() string {
+	switch l {
+	case NLIEntailment:
+		return "ENTAILMENT"
+	case NLINeutral:
+		return "NEUTRAL"
+	case NLIContradiction:
+		return "CONTRADICTION"
+	case NLIUnknown:
+		return "UNKNOWN"
+	default:
+		return "ERROR"
+	}
+}
+
 // ============================================================================
 // Hallucination Detection (stub - not implemented in onnx_binding)
 // ============================================================================
@@ -999,8 +1015,11 @@ func InitHallucinationModel(modelPath string, useCPU bool) error {
 // InitNLIModel initializes the NLI model
 // Note: Not yet implemented in onnx_binding
 func InitNLIModel(modelPath string, useCPU bool) error {
-	return fmt.Errorf("NLI model not yet implemented in onnx_binding")
+	return fmt.Errorf("%w: local NLI is not implemented", ErrBackendUnavailable)
 }
+
+// IsNLIModelInitialized remains false while this backend has no NLI model.
+func IsNLIModelInitialized() bool { return false }
 
 // DetectHallucinations detects hallucinations in text
 // Note: Not yet implemented in onnx_binding
@@ -1017,7 +1036,7 @@ func DetectHallucinationsWithNLI(context, question, answer string, threshold flo
 // ClassifyNLI performs NLI classification
 // Note: Not yet implemented in onnx_binding
 func ClassifyNLI(premise, hypothesis string) (*NLIResult, error) {
-	return nil, fmt.Errorf("NLI classification not yet implemented in onnx_binding")
+	return nil, fmt.Errorf("%w: local NLI is not implemented", ErrBackendUnavailable)
 }
 
 // ============================================================================
@@ -1065,14 +1084,22 @@ type ModalityResult struct {
 	Confidence float32
 }
 
-// InitMmBert32KModalityClassifier is not supported in ONNX binding (Candle-only).
+// InitMmBert32KModalityClassifier loads the three-class response modality head.
 func InitMmBert32KModalityClassifier(modelPath string, useCPU bool) error {
-	return errors.New("modality classifier is not supported in ONNX binding; use Candle binding or disable modality routing")
+	return initClassifier("modality", modelPath, !useCPU)
 }
 
-// ClassifyMmBert32KModality is not supported in ONNX binding (Candle-only).
+// ClassifyMmBert32KModality returns the canonical response modality label.
 func ClassifyMmBert32KModality(text string) (ModalityResult, error) {
-	return ModalityResult{}, errors.New("modality classification is not supported in ONNX binding; use Candle binding or disable modality routing")
+	result, err := classifyWithClassifier("modality", text)
+	if err != nil {
+		return ModalityResult{}, err
+	}
+	labels := []string{"AR", "DIFFUSION", "BOTH"}
+	if result.Class < 0 || result.Class >= len(labels) {
+		return ModalityResult{}, fmt.Errorf("unknown modality class %d", result.Class)
+	}
+	return ModalityResult{Modality: labels[result.Class], ClassID: result.Class, Confidence: result.Confidence}, nil
 }
 
 // ============================================================================

@@ -11,7 +11,7 @@ import (
 // ragQueryWindowLimit caps how many windows of one query are searched. Each
 // window costs an embedding and a store round trip, and a query long enough to
 // need more than this has already been sampled from end to end.
-const ragQueryWindowLimit = 8
+const ragQueryWindowLimit = embedding.DefaultQueryWindowLimit
 
 // ragQueryEmbeddings returns one embedding per window of the query.
 //
@@ -20,53 +20,14 @@ const ragQueryWindowLimit = 8
 // documents. Every window is embedded instead, and the caller searches with each
 // and keeps a document's best score, which is the aggregation that ranks best
 // over passages of a long input.
+//
+// A provider that exposes no token windows, such as a remote embedding service,
+// keeps its single embedding, because the model owns its own truncation there.
 func ragQueryEmbeddings(ctx context.Context, provider embedding.Provider, query string) ([][]float32, error) {
 	if provider == nil {
 		return nil, fmt.Errorf("RAG embedding provider was not prepared")
 	}
-	tokenizer, ok := provider.(embedding.WindowProvider)
-	if !ok {
-		return nil, fmt.Errorf("RAG embedding provider has no token windows")
-	}
-	windows, err := tokenizer.Windows(ctx, query, 0)
-	if err != nil {
-		return nil, err
-	}
-	if len(windows) <= 1 {
-		embedding, embedErr := provider.Embed(ctx, query)
-		if embedErr != nil {
-			return nil, embedErr
-		}
-		return [][]float32{embedding}, nil
-	}
-
-	sampled := sampleQueryWindows(windows, ragQueryWindowLimit)
-	embeddings := make([][]float32, 0, len(sampled))
-	for _, window := range sampled {
-		embedding, embedErr := provider.Embed(ctx, query[window.Start:window.End])
-		if embedErr != nil {
-			return nil, embedErr
-		}
-		embeddings = append(embeddings, embedding)
-	}
-	return embeddings, nil
-}
-
-// sampleQueryWindows keeps at most limit windows, evenly spaced and always
-// including the first and the last, because the question a long query asks sits
-// at either end of it about as often.
-func sampleQueryWindows(windows []embedding.Window, limit int) []embedding.Window {
-	if limit <= 0 || len(windows) <= limit {
-		return windows
-	}
-	if limit == 1 {
-		return windows[:1]
-	}
-	kept := make([]embedding.Window, limit)
-	for i := range kept {
-		kept[i] = windows[i*(len(windows)-1)/(limit-1)]
-	}
-	return kept
+	return embedding.QueryVectors(ctx, provider, query, ragQueryWindowLimit)
 }
 
 // ragHits collects the documents the windows of one query retrieved, keeping the

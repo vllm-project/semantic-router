@@ -717,4 +717,4 @@ website/
 - [Terminal-Bench 2.1](https://github.com/harbor-framework/terminal-bench-2-1)
 - [统一配置契约 v0.3](./unified-config-contract-v0-3)
 - [多协议适配器架构](./multi-protocol-adaptor)
-- [评估平面](../benchmarking/evaluation-plane)
+- [sr-bench 1.0](../benchmarking/sr-bench)

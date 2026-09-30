@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
+  source_commit: "aa7b7e7bc1de4d193342e869a952552a4c15552c"
   source_file: "docs/tutorials/learning/memory-and-replay.md"
   outdated: false
 ---
@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-路由学习在热路径上使用进程内在线状态。启用路由回放时可以记录事件；跨重启持久化需要耐用后端。请求路由不依赖同步的回放存储读取。
+路由学习在热路径上使用进程内在线状态。启用路由回放时可以记录事件；跨配置重载和重启保留记录需要持久化后端。请求路由不依赖同步的回放存储读取。
 
 ## 主要优势
 
@@ -38,7 +38,7 @@ translation:
 | 路由回放 | 否 | 可选的路由、响应、结果和学习诊断；持久性取决于后端。 |
 | 离线配方学习 | 否 | 评估、发现、候选配方、配方补丁和经验种子包。 |
 
-## 配置
+## 配置 {#configuration}
 
 使用现有服务配置启用路由回放：
 
@@ -50,7 +50,7 @@ global:
       store_backend: postgres
 ```
 
-此示例使用 Postgres 做持久化。默认 `memory` 后端仅存在于进程内，重启后丢失记录。
+此示例使用 Postgres 做持久化。默认 `memory` 后端会在配置重载或重启时丢失记录，即使重载没有重启路由器进程也一样。调优配方时，使用持久化存储可让会话轨迹继续在 API 和 Dashboard 中查看。
 
 启用回放时，学习诊断会写入回放记录：
 

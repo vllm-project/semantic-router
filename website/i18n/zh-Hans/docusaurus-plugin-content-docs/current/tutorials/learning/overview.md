@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
+  source_commit: "68519cf498b94c947cf4c7cd9a2800a41276dea6"
   source_file: "docs/tutorials/learning/overview.md"
   outdated: false
 ---
@@ -40,6 +40,22 @@ translation:
 - 希望用显式配置的回放和结果驱动离线配方实验。
 
 ## 配置
+
+配置省略相关设置时，默认值如下：
+
+| 设置 | 默认值 |
+| --- | --- |
+| `global.router.learning.enabled` | `false`；需要显式开启总开关。 |
+| `adaptation.enabled` 和 `protection.enabled` | `true`，但受总开关控制。 |
+| `adaptation.candidate_set` | `decision` |
+| `protection.scope` | `conversation` |
+| 防护身份请求头 | `x-session-id` 和 `x-conversation-id` |
+
+使用 `vllm-sr recipe builtin init` 初始化内置配方时，会开启 conversation protection，并关闭在线 adaptation；基础配置中已有的设置优先。显式的 `false`、自定义身份请求头和调优参数都会保留。这些默认值作用于整份配置，decision 级别的 `bypass` 仍然有效。
+
+客户端需要提供稳定的 session 和 conversation 标识，防护才能保持模型。缺少标识时，路由不会获得会话防护，并会记录诊断。详见[会话标识](../../api/session-identification)。
+
+参考配置 `config/config.yaml` 启用了两个组件。若还需要开启在线 adaptation，并在多个副本间共享防护状态，可以配置：
 
 ```yaml
 global:

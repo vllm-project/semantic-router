@@ -193,6 +193,30 @@ def _kb_source_spec(
     return kb_name, source, source_path
 
 
+def validate_kb_source_output_location(
+    config: dict[str, object], config_path: Path, output: Path
+) -> None:
+    """Keep an offline config derivative beside its relative KB sources.
+
+    KB source paths intentionally cannot be rebased through absolute paths or
+    dot segments. Moving a config requires an explicit asset-copy workflow.
+    """
+    for kb_config in _configured_knowledge_bases(config):
+        spec = _kb_source_spec(kb_config)
+        if spec is None:
+            continue
+        kb_name, _, source_path = spec
+        # Reuse runtime path validation with the authored config as its origin,
+        # never a temporary validation file or the proposed output directory.
+        _resolve_kb_source_root(config_path, source_path)
+        if output.parent.resolve() != config_path.parent.resolve():
+            raise ValueError(
+                f"Knowledge base '{kb_name}' uses config-relative source.path "
+                f"'{source_path}'; --output must be in the same directory as "
+                "--config. Relocate the config and its assets explicitly first."
+            )
+
+
 def _runtime_kb_relative_path(source_path: str, kb_name: str) -> str:
     _safe_relative_kb_source_path(source_path)
     cleaned = _clean_kb_source_path(source_path)

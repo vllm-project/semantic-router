@@ -96,7 +96,11 @@ func responseStageGuardConfig(t *testing.T, server *httptest.Server, onError str
 
 	cfg := &config.RouterConfig{}
 	cfg.PromptGuard.Enabled = true
-	cfg.PromptGuard.Protocol = config.PromptGuardProtocolHTTPClassify
+	cfg.PromptGuard.Backend = &config.RemoteClassifierBackend{
+		Protocol: config.RemoteClassifierProtocolHTTPClassify,
+		Contract: config.RemoteClassifierContractLabelDistribution,
+		Model:    "test-guardrail",
+	}
 	cfg.PromptGuard.JailbreakMappingPath = "response-stage-test-mapping"
 	cfg.PromptGuard.PositiveLabels = []string{"jailbreak"}
 	cfg.PromptGuard.Threshold = 0.9

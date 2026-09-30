@@ -9,11 +9,12 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from verification_catalog import catalog_errors, verification_records
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 REGISTRY_PATH = REPO_ROOT / "tools" / "agent" / "domains.yaml"
 PROFILE_SELECTIONS = frozenset({"pr", "manual"})
-REGISTRY_VERSION = 2
+REGISTRY_VERSION = 3
 
 
 @lru_cache(maxsize=1)
@@ -32,7 +33,7 @@ def _records(name: str, registry: dict[str, Any] | None = None) -> dict[str, Any
 
 
 def job_records(registry: dict[str, Any] | None = None) -> dict[str, dict[str, Any]]:
-    return _records("jobs", registry)
+    return verification_records(registry or load_domain_registry())
 
 
 def domain_records(
@@ -136,6 +137,7 @@ def registry_schema_errors(
     if data.get("version") != REGISTRY_VERSION:
         errors.append(f"domain registry version must be {REGISTRY_VERSION}")
 
+    errors.extend(catalog_errors(data))
     jobs = job_records(data)
     outputs: list[str] = []
     for name, job in jobs.items():
@@ -152,13 +154,15 @@ def registry_schema_errors(
         if not isinstance(domain, dict):
             errors.append(f"domain {name!r} must be a mapping")
             continue
-        for field in ("owner", "paths", "checks", "ci_jobs"):
+        for field in ("owner", "paths", "checks", "verifications"):
             if field not in domain:
                 errors.append(f"domain {name!r} is missing {field!r}")
         _validate_string_list(domain, "paths", f"domain {name!r}", errors)
         _validate_string_list(domain, "checks", f"domain {name!r}", errors)
         _validate_string_list(domain, "verify", f"domain {name!r}", errors)
-        _validate_job_names(domain.get("ci_jobs", []), jobs, f"domain {name!r}", errors)
+        _validate_job_names(
+            domain.get("verifications", []), jobs, f"domain {name!r}", errors
+        )
         escalation = domain.get("escalation", {})
         if escalation:
             if not isinstance(escalation, dict):
@@ -168,7 +172,7 @@ def registry_schema_errors(
                     escalation, "paths", f"domain {name!r} escalation", errors
                 )
                 _validate_job_names(
-                    escalation.get("jobs", []),
+                    escalation.get("verifications", []),
                     jobs,
                     f"domain {name!r} escalation",
                     errors,
@@ -180,6 +184,10 @@ def registry_schema_errors(
             continue
         _validate_string_list(image, "pr_paths", f"image {name!r}", errors)
         _validate_string_list(image, "publish_paths", f"image {name!r}", errors)
+        if "verification_paths" in image:
+            _validate_string_list(
+                image, "verification_paths", f"image {name!r}", errors
+            )
 
     for name, profile in profile_records(data).items():
         if not isinstance(profile, dict):

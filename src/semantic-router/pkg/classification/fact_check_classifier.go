@@ -49,7 +49,7 @@ func NewFactCheckClassifier(cfg *config.FactCheckModelConfig, models ...*classif
 	if cfg.UseMmBERT32K {
 		adapter = "mmbert32k"
 	}
-	spec := runtime.localSpec("fact_check_classifier", cfg.ModelID, adapter, config.RemoteClassifierContractLabelDistribution, cfg.UseCPU)
+	spec := runtime.localSpec("fact_check_classifier", cfg.ModelID, adapter, config.RemoteClassifierContractLabelDistribution, cfg.UseCPU, cfg.MaxSequenceLength)
 	classifier := &FactCheckClassifier{
 		backend: &ownedSequenceBackend{runtime: runtime.runtime, spec: spec},
 		config:  cfg,

@@ -2,8 +2,11 @@ package config
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestCanonicalBackendPoolAcceptsHomogeneousReplicas(t *testing.T) {
@@ -155,4 +158,33 @@ providers:
 ` + backendRefs + `
 routing: {}
 `
+}
+
+func TestCanonicalBackendNamesSurviveRepeatedExportImport(t *testing.T) {
+	for _, name := range []string{"primary", "replica-pool_primary", ""} {
+		t.Run(name, func(t *testing.T) {
+			cfg, err := ParseYAMLBytes([]byte(canonicalBackendPoolConfig(fmt.Sprintf(`
+        - name: %q
+          provider: vllm
+          endpoint: 127.0.0.1:8000
+`, name))))
+			if err != nil {
+				t.Fatal(err)
+			}
+			original := cfg.GetEndpointsForModel("replica-pool")
+			for i := 0; i < 3; i++ {
+				data, err := yaml.Marshal(CanonicalConfigFromRouterConfig(cfg))
+				if err != nil {
+					t.Fatal(err)
+				}
+				cfg, err = ParseYAMLBytes(data)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got := cfg.GetEndpointsForModel("replica-pool"); !reflect.DeepEqual(got, original) {
+					t.Fatalf("round trip %d endpoints = %+v, want %+v", i, got, original)
+				}
+			}
+		})
+	}
 }

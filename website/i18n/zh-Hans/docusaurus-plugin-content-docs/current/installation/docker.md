@@ -2,7 +2,7 @@
 title: Docker 部署
 description: 将 Semantic Router 作为本地或单主机容器栈运行，并连接你单独运维的模型后端。
 translation:
-  source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
+  source_commit: "b2f672651b66f00e3410d5b58b5d6d8cb883cfad"
   source_file: "docs/installation/docker.md"
   outdated: false
 ---
@@ -31,6 +31,14 @@ vllm-sr serve --config config.yaml
 | 管理 API | `http://localhost:8080` | 校验配置，并使用评估、回放或向量存储 API。 |
 
 端口可能随活动配置或栈端口偏移而变化。不确定哪些端点处于活动状态时，使用 `vllm-sr status`。
+
+容器启动后，CLI 默认最多等待 1800 秒，直到 Router 就绪；首次设置模式下则等待控制面板就绪。如果模型加载或 GPU 编译需要不同的时限，可将 `--startup-timeout SECONDS` 设为正整数：
+
+```bash
+vllm-sr serve --config config.yaml --startup-timeout 7200
+```
+
+根据模型和硬件的实际启动时间选择时限。此选项适用于本地 Docker 部署，不改变推理请求的时限。等待超时后，CLI 报错退出，容器继续运行，可使用 `vllm-sr status` 和 `vllm-sr logs router` 检查。需要停止时，运行 `vllm-sr stop`。
 
 ## 连接模型后端
 

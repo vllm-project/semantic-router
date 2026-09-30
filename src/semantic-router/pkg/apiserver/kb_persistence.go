@@ -13,6 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
 )
 
 func knowledgeBaseOverrideYAML(existingData []byte, kbs []config.KnowledgeBaseConfig) ([]byte, error) {
@@ -89,7 +90,9 @@ func persistConfigAndSync(
 	yamlBytes []byte,
 	newCfg *config.RouterConfig,
 ) error {
-	if err := writeConfigAtomically(paths.sourcePath, yamlBytes); err != nil {
+	release := s.runtimeRegistry.LockConfigPublication()
+	defer release()
+	if err := writeConfigAtomicallyIfUnchanged(paths.sourcePath, previousData, yamlBytes); err != nil {
 		return err
 	}
 	if paths.usesRuntimeOverride() {
@@ -103,7 +106,16 @@ func persistConfigAndSync(
 
 // KB writes use the same candidate document/hash as full config updates. Do
 // not wait while holding staged asset state; readers can poll /config/hash.
-func (s *ClassificationAPIServer) knowledgeBaseActivationStatus(runtimePath string, successStatus int) (knowledgeBaseActivation, int) {
+//
+// generatedDocument is the document persistConfigAndSync just wrote. On a
+// Kubernetes ConfigMap target, runtimePath is a read-only mount that write
+// never touches, so hashing it here would find the old, unrelated match and
+// falsely report "active" (review on #3814); report "persisted" instead,
+// hashing the document that was actually written.
+func (s *ClassificationAPIServer) knowledgeBaseActivationStatus(runtimePath string, generatedDocument []byte, successStatus int) (knowledgeBaseActivation, int) {
+	if _, ok := configwriter.ConfigMapTargetFromEnv(); ok {
+		return knowledgeBaseActivation{ActivationStatus: "persisted", GeneratedRuntimeHash: configDocumentETagHash(generatedDocument)}, http.StatusAccepted
+	}
 	if s.runtimeRegistry == nil {
 		return knowledgeBaseActivation{ActivationStatus: "unknown"}, successStatus
 	}
@@ -111,10 +123,16 @@ func (s *ClassificationAPIServer) knowledgeBaseActivationStatus(runtimePath stri
 	if err != nil {
 		return knowledgeBaseActivation{ActivationStatus: "pending"}, http.StatusAccepted
 	}
-	state := knowledgeBaseActivation{ActivationStatus: "pending", GeneratedRuntimeHash: hash}
-	if s.activeConfigDocumentHash() == hash {
-		state.ActivationStatus = "active"
+	state := knowledgeBaseActivation{
+		ActivationStatus:     s.configActivationStatus(hash, s.activeConfigDocumentHash()),
+		GeneratedRuntimeHash: hash,
+		Activation:           s.configActivation(hash),
+	}
+	switch state.ActivationStatus {
+	case "active":
 		return state, successStatus
+	case "failed":
+		return state, http.StatusServiceUnavailable
 	}
 	return state, http.StatusAccepted
 }

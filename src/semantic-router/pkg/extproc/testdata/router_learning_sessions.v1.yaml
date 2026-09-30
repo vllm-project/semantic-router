@@ -391,12 +391,13 @@ scenarios:
           protection-frontier: 0.9
         conversation: conversation-a
         expected:
-          model: protection-frontier
+          rejected: true
+          model: ''
           sampling_allowed: false
-          action: allow_switch
-          reason: previous_model_not_in_candidates
+          action: reject
+          reason: selection_rejected
           category: boundary
-          hard_locked: false
+          hard_locked: true
           preflight_reason: tool_or_protocol_state
         coverage:
           - candidate-boundary

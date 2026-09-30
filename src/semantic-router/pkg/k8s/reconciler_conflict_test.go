@@ -161,7 +161,7 @@ func buildConflictReconciler(t *testing.T, namespace string, objs ...client.Obje
 				},
 			},
 		},
-		onConfigUpdate: func(*config.RouterConfig) error { return nil },
+		onConfigUpdate: func(context.Context, *config.RouterConfig) error { return nil },
 	}
 }
 

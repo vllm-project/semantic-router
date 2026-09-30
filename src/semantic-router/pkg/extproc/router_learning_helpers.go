@@ -8,6 +8,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
 func selectionDecisionStateKey(selCtx *selection.SelectionContext) string {
@@ -31,7 +32,43 @@ func routingSessionStateKey(ctx *RequestContext) string {
 	if ctx.Routing.IsPassthrough() {
 		return ""
 	}
-	return config.RoutingNamespaceKey(ctx.Routing.RecipeName(), ctx.SessionID)
+	return sessiontelemetry.RoutingSessionKey(ctx.Routing.RecipeName(), ctx.SessionID)
+}
+
+func selectionSessionStateKey(selCtx *selection.SelectionContext) string {
+	if selCtx == nil {
+		return ""
+	}
+	if selCtx.SessionStateKey != "" {
+		return selCtx.SessionStateKey
+	}
+	return sessiontelemetry.RoutingSessionKey(selCtx.RecipeName, selCtx.SessionID)
+}
+
+func protectionSessionStateKey(ctx *RequestContext) string {
+	if ctx == nil || requestBypassesRouting(ctx) {
+		return ""
+	}
+	// VSRLearningSessionID is already the encoded, unscoped protection tuple.
+	return config.RoutingNamespaceKey(ctx.Routing.RecipeName(), ctx.VSRLearningSessionID)
+}
+
+// routingLearningStateKey returns the single key Router Learning stores under:
+// decision state (current model, last switch, switch history) and the progress
+// gate's evidence window. Keying evidence any wider would let one conversation
+// spend or suppress another's whenever both share a session id.
+func routingLearningStateKey(ctx *RequestContext) string {
+	if ctx == nil || ctx.Routing.IsPassthrough() {
+		return ""
+	}
+	sessionID := ctx.VSRLearningSessionID
+	if sessionID == "" || protectionMode(ctx) == config.DecisionAdaptationModeObserve {
+		sessionID = ctx.SessionID
+	}
+	if sessionID == "" {
+		return ""
+	}
+	return config.RoutingNamespaceKey(ctx.Routing.RecipeName(), sessionID)
 }
 
 func requestBypassesRouting(ctx *RequestContext) bool {
@@ -43,6 +80,19 @@ func currentLearningModel(selCtx *selection.SelectionContext) string {
 		return ""
 	}
 	return strings.TrimSpace(selCtx.AgenticSession.PreviousModel)
+}
+
+func currentLearningModelRef(selCtx *selection.SelectionContext) *config.ModelRef {
+	if selCtx == nil || selCtx.AgenticSession == nil {
+		return nil
+	}
+	current := currentLearningModel(selCtx)
+	if current == "" {
+		return nil
+	}
+	base := &selection.SelectionResult{SelectedModel: current}
+	base.SelectedCandidate = selCtx.AgenticSession.PreviousCandidate
+	return selection.CurrentSessionCandidate(selCtx, base, current)
 }
 
 func selectionContextContainsModel(selCtx *selection.SelectionContext, model string) bool {
@@ -71,12 +121,17 @@ func (r *OpenAIRouter) eligibleLearningModelRefs(refs []config.ModelRef, ctx *Re
 	if len(refs) == 0 {
 		return nil
 	}
+	request, err := r.selectionCapabilityRequest(ctx)
+	if err != nil {
+		return nil
+	}
 	eligible := make([]config.ModelRef, 0, len(refs))
 	for _, ref := range refs {
 		if strings.TrimSpace(ref.Model) == "" ||
 			!r.configuredBackendModel(ref.Model) ||
-			(ctx != nil && r.modelRefExceedsContextWindow(ref, ctx.VSRContextTokenCount)) ||
-			(ctx != nil && ctx.VSRPolicyEligibleModelRefs != nil && !modelRefInEligibility(ref, ctx.VSRPolicyEligibleModelRefs)) {
+			(ctx != nil && !decisionUsesAutomaticOutput(request, ctx.VSRSelectedDecision) && !selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) && r.modelRefExceedsContextWindow(ref, ctx.VSRContextTokenCount)) ||
+			(ctx != nil && ctx.VSRPolicyEligibleModelRefs != nil && !modelRefInEligibility(ref, ctx.VSRPolicyEligibleModelRefs)) ||
+			(ctx != nil && r.candidateCapabilityMismatch(ref, request, ctx.VSRSelectedDecision, r.candidateRequirements(ctx), ctx.AutomaticCandidateDemands) != nil) {
 			continue
 		}
 		eligible = append(eligible, ref)

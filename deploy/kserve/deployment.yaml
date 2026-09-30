@@ -25,7 +25,7 @@ spec:
         sidecar.istio.io/inject: "true"  # Enable Istio injection for service mesh integration with KServe
         proxy.istio.io/config: '{ "holdApplicationUntilProxyStarts": true }'  # Ensure proxy is ready
     spec:
-      serviceAccountName: semantic-router  # Create ServiceAccount if RBAC required
+      serviceAccountName: semantic-router  # see serviceaccount.yaml and rbac.yaml
       # OpenShift security context - let OpenShift assign UID/GID
       securityContext:
         runAsNonRoot: true
@@ -59,16 +59,16 @@ spec:
           from huggingface_hub import snapshot_download
 
           models = [
-              ("llm-semantic-router/mmbert32k-intent-classifier-merged", "mmbert32k-intent-classifier-merged"),
-              ("llm-semantic-router/mmbert32k-pii-detector-merged", "mmbert32k-pii-detector-merged"),
-              ("llm-semantic-router/mmbert32k-jailbreak-detector-merged", "mmbert32k-jailbreak-detector-merged"),
-              ("{{EMBEDDING_MODEL_REPO}}", "{{EMBEDDING_MODEL}}")
+              ("llm-semantic-router/Vela-1.0-Encoder-307M-Domain", "Vela-1.0-Encoder-307M-Domain", "f6354f54adcf38770f635ad903be2b00577f6c11"),
+              ("llm-semantic-router/Vela-1.0-Encoder-307M-PII", "Vela-1.0-Encoder-307M-PII", "6d3300c4bd7975f30a664503f6c725cf1fbbad48"),
+              ("llm-semantic-router/Vela-1.0-Encoder-307M-Guard", "Vela-1.0-Encoder-307M-Guard", "087f9e401012df839c83717b746967ac7aebfa3e"),
+              ("{{EMBEDDING_MODEL_REPO}}", "{{EMBEDDING_MODEL}}", "{{EMBEDDING_MODEL_REVISION}}")
           ]
 
           cache_dir = "/app/cache/hf"
           base_dir = "/app/models"
 
-          for repo_id, local_dir_name in models:
+          for repo_id, local_dir_name, revision in models:
               local_dir = os.path.join(base_dir, local_dir_name)
 
               # Check if model weights actually exist (not just the directory)
@@ -90,10 +90,13 @@ spec:
                   import shutil
                   shutil.rmtree(local_dir, ignore_errors=True)
 
-              if not has_model:
+              # A changed immutable release must not reuse stale file-presence checks.
+              if not has_model or revision != "main":
                   print(f"Downloading {repo_id}...")
                   snapshot_download(
                       repo_id=repo_id,
+                      revision=revision,
+                      ignore_patterns=["reproduction/*", "reproducibility/*", "lora/*"],
                       local_dir=local_dir,
                       cache_dir=cache_dir
                   )
@@ -167,6 +170,16 @@ spec:
         env:
         - name: LD_LIBRARY_PATH
           value: "/app/lib"
+        # Lets the config write API patch this ConfigMap through the
+        # Kubernetes API instead of the read-only mounted file (#3688).
+        - name: VLLM_SR_K8S_CONFIGMAP_NAME
+          value: "semantic-router-kserve-config"
+        - name: VLLM_SR_K8S_CONFIGMAP_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: VLLM_SR_CONFIG_BACKUP_DIR
+          value: "/app/models/.vllm-sr/config-backups"
         - name: HF_HOME
           value: "/app/cache/hf"
         - name: TRANSFORMERS_CACHE

@@ -36,7 +36,11 @@ const humanizeIdentifier = (value: string, dropRouteSuffix: boolean): string => 
   if (IDENTIFIER_LABELS[normalized]) return IDENTIFIER_LABELS[normalized]
   const [base, qualifier] = normalized.split(':', 2)
   const tokens = base.split(/[_-]+/).filter(Boolean)
-  if (dropRouteSuffix && tokens[tokens.length - 1]?.toLowerCase() === 'route') {
+  if (
+    dropRouteSuffix &&
+    tokens.length > 1 &&
+    tokens[tokens.length - 1]?.toLowerCase() === 'route'
+  ) {
     tokens.pop()
   }
   const label = tokens.map(humanizeToken).join(' ')

@@ -136,7 +136,6 @@ global:
       metrics:
         windowed_metrics:
           enabled: false
-          queue_depth_estimation: false
       profiling:
         enabled: false
     authz: {}
@@ -182,6 +181,11 @@ global:
       domain_classifier: models/mmbert32k-intent-classifier-merged
       pii_classifier: models/mmbert32k-pii-detector-merged
     modules:
+      safety:
+        safety:
+          use_cpu: false
+        hazard:
+          use_cpu: false
       prompt_compression:
         enabled: false
         max_tokens: 0

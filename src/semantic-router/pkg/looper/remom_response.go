@@ -107,16 +107,12 @@ func (l *ReMoMLooper) formatReMoMJSONResponse(
 		"usage": usage.Map(),
 	}
 
-	if cfg.IncludeIntermediateResponses {
-		completion["reasoning_mom_responses"] = allRoundResponses
-	}
-
 	responseBody, err := json.Marshal(completion)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal response: %w", err)
 	}
 
-	return &Response{
+	return withReMoMExtension(&Response{
 		Body:                  responseBody,
 		ContentType:           "application/json",
 		Model:                 finalResponse.Model,
@@ -125,7 +121,7 @@ func (l *ReMoMLooper) formatReMoMJSONResponse(
 		AlgorithmType:         "remom",
 		IntermediateResponses: allRoundResponses,
 		Usage:                 usage,
-	}, nil
+	}, cfg.IncludeIntermediateResponses, allRoundResponses)
 }
 
 // formatReMoMStreamingResponse creates an SSE streaming response.
@@ -142,10 +138,10 @@ func (l *ReMoMLooper) formatReMoMStreamingResponse(
 	}
 	timestamp := time.Now().Unix()
 	id := fmt.Sprintf("chatcmpl-remom-%d", timestamp)
-	sseBody := buildReMoMStreamingSSE(id, timestamp, finalResponse, allRoundResponses, cfg.IncludeIntermediateResponses)
+	sseBody := buildReMoMStreamingSSE(id, timestamp, finalResponse)
 
 	resp := streamingLooperResponse(sseBody, finalResponse.Model, modelsUsed, iterations, "remom")
 	resp.IntermediateResponses = allRoundResponses
 	resp.Usage = usage
-	return resp, nil
+	return withReMoMExtension(resp, cfg.IncludeIntermediateResponses, allRoundResponses)
 }

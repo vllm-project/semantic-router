@@ -37,6 +37,8 @@ func CompileAST(prog *Program) (*config.RouterConfig, []error) {
 	}
 	c.config.Strategy = config.RoutingStrategy(prog.Strategy)
 	c.config.ModelBindings = cloneModelBindings(prog.ModelBindings)
+	c.config.CandidateRequirements = prog.CandidateRequirements.Clone()
+	c.config.DataPolicy = prog.DataPolicy.Clone()
 	c.compile()
 	c.compileScopes()
 	if len(c.errors) > 0 {

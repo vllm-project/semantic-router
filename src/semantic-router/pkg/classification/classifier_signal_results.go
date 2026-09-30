@@ -8,11 +8,28 @@ import (
 
 // SignalMetrics contains performance and probability metrics for a single signal.
 type SignalMetrics struct {
-	Method              string  `json:"method,omitempty"`
-	PolicyDefault       string  `json:"policy_default,omitempty"`
-	ExecutionTimeMs     float64 `json:"execution_time_ms"` // Execution time in milliseconds
-	Confidence          float64 `json:"confidence"`        // Confidence score (0.0-1.0), 0 if not applicable
-	ConfidenceAvailable *bool   `json:"confidence_available,omitempty"`
+	Method              string                            `json:"method,omitempty"`
+	PolicyDefault       string                            `json:"policy_default,omitempty"`
+	ExecutionTimeMs     float64                           `json:"execution_time_ms"` // Execution time in milliseconds
+	Confidence          float64                           `json:"confidence"`        // Confidence score (0.0-1.0), 0 if not applicable
+	ConfidenceAvailable *bool                             `json:"confidence_available,omitempty"`
+	Rules               map[string]*ClassifierRuleMetrics `json:"rules,omitempty"`
+}
+
+// ClassifierRuleMetrics explains a prepared policy without exposing paths or
+// request text. Scores remain in SignalValues; latency covers the complete scan.
+type ClassifierRuleMetrics struct {
+	PolicySHA256    string             `json:"policy_sha256"`
+	Provider        string             `json:"provider"`
+	Device          string             `json:"device"`
+	Precision       string             `json:"precision"`
+	InputTokens     int                `json:"input_tokens"`
+	ProcessedTokens int                `json:"processed_tokens"`
+	Truncated       bool               `json:"truncated"`
+	Windows         [][2]int           `json:"content_token_windows"`
+	Thresholds      map[string]float64 `json:"thresholds"`
+	WindowBatchSize int                `json:"window_batch_size"`
+	ExecutionTimeMs float64            `json:"execution_time_ms"`
 }
 
 // DomainClassificationResult preserves one domain evaluation before routing
@@ -41,6 +58,7 @@ type SignalResults struct {
 	MatchedModalityRules      []string // Matched modality: "AR", "DIFFUSION", or "BOTH"
 	MatchedAuthzRules         []string // Matched authz role names for user-level RBAC routing
 	MatchedJailbreakRules     []string // Matched jailbreak rule names (confidence >= threshold)
+	MatchedSafetyRules        []string // Matched safety rule names (confidence >= threshold)
 	MatchedPIIRules           []string // Matched PII rule names (denied PII types detected)
 	MatchedKBRules            []string
 	KBClassifierResults       map[string]*KBClassifyResult
@@ -61,7 +79,7 @@ type SignalResults struct {
 	JailbreakDecision       *tasks.LabelDecision // Present for categorical verdicts without probabilities
 	JailbreakDetected       bool                 // Whether any jailbreak was detected (across all rules)
 	JailbreakType           string               // Type of the detected jailbreak (from highest-confidence detection)
-	JailbreakConfidence     float32              // Confidence of the detected jailbreak
+	JailbreakConfidence     float32              // Highest observed Guard score, available even without a match
 	JailbreakScoreAvailable bool
 
 	// PII detection metadata (populated when PII signal is evaluated)
@@ -94,6 +112,7 @@ type SignalMetricsCollection struct {
 	Modality      SignalMetrics `json:"modality"`
 	Authz         SignalMetrics `json:"authz"`
 	Jailbreak     SignalMetrics `json:"jailbreak"`
+	Safety        SignalMetrics `json:"safety"`
 	PII           SignalMetrics `json:"pii"`
 	KB            SignalMetrics `json:"kb"`
 	Conversation  SignalMetrics `json:"conversation"`

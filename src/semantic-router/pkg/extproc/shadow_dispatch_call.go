@@ -5,11 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
-	"strings"
 	"time"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -127,7 +124,7 @@ func (d *shadowDispatcher) connectorFor(job *shadowJob, target *shadowTarget) (*
 	if client, ok := d.clients[key]; ok {
 		return client, "", nil
 	}
-	authorize, err := shadowAuthorizer(job.routerConfig, target.profile, target.logicalModel)
+	authorize, err := configuredProviderAuthorizer(job.routerConfig, target.profile, target.logicalModel)
 	if err != nil {
 		return nil, shadowReasonCredentialUnresolved, err
 	}
@@ -158,7 +155,7 @@ func shadowConnectorOptions(cfg config.ShadowDispatchPluginConfig) connector.Opt
 // own request identifier. Client headers are never forwarded. Per-request
 // headers are filtered once more against the shadow backend's own auth
 // header, so a decision mutation can never stand in for the shadow's
-// credential; only shadowAuthorizer may set that header.
+// credential; only configuredProviderAuthorizer may set that header.
 func shadowCallHeaders(job *shadowJob, target *shadowTarget) map[string]string {
 	result := make(map[string]string, len(job.extraHeaders)+2)
 	shadowAuthHeader := shadowProfileAuthHeader(target.profile)
@@ -225,7 +222,7 @@ func resolveShadowTarget(cfg *config.RouterConfig, model string) (*shadowTarget,
 	if err != nil {
 		return nil, fmt.Errorf("shadow model %q: %w", model, err)
 	}
-	endpointPath, endpointQuery, err := splitShadowEndpoint(shadowEndpointPath(profile, format))
+	endpointPath, endpointQuery, err := splitProviderEndpoint(providerEndpointPath(profile, format))
 	if err != nil {
 		return nil, fmt.Errorf("shadow model %q: %w", model, err)
 	}
@@ -235,91 +232,9 @@ func resolveShadowTarget(cfg *config.RouterConfig, model string) (*shadowTarget,
 		upstreamModel: cfg.ResolveExternalModelID(model, backendName),
 		profile:       profile,
 		format:        format,
-		baseURL:       shadowEndpointScheme(cfg, backendName, profile) + "://" + address,
+		baseURL:       providerEndpointScheme(cfg, backendName, profile) + "://" + address,
 		path:          endpointPath,
 		query:         endpointQuery,
-	}, nil
-}
-
-// splitShadowEndpoint parses a resolved provider endpoint into the absolute
-// path and the query the connector sends separately. A provider profile may
-// append a query, as Azure OpenAI does with api-version, and an operator's
-// chat_path override is free text, so the value is validated here rather than
-// trusted: it must be a path-only reference with no scheme, host, or fragment,
-// and any query must parse.
-func splitShadowEndpoint(endpoint string) (string, string, error) {
-	parsed, err := url.Parse(endpoint)
-	if err != nil {
-		return "", "", fmt.Errorf("parse endpoint path %q: %w", endpoint, err)
-	}
-	if parsed.Scheme != "" || parsed.Host != "" || parsed.User != nil || parsed.Opaque != "" {
-		return "", "", fmt.Errorf("endpoint path %q must not name a scheme or host", endpoint)
-	}
-	if parsed.Fragment != "" || parsed.RawFragment != "" || strings.Contains(endpoint, "#") {
-		return "", "", fmt.Errorf("endpoint path %q must not carry a fragment", endpoint)
-	}
-	if !strings.HasPrefix(parsed.Path, "/") {
-		return "", "", fmt.Errorf("endpoint path %q must be absolute", endpoint)
-	}
-	if _, err := url.ParseQuery(parsed.RawQuery); err != nil {
-		return "", "", fmt.Errorf("endpoint path %q has an invalid query: %w", endpoint, err)
-	}
-	return parsed.Path, parsed.RawQuery, nil
-}
-
-func shadowEndpointScheme(cfg *config.RouterConfig, backendName string, profile *config.ProviderProfile) string {
-	if profile != nil && profile.BaseURL != "" {
-		if parsed, err := url.Parse(profile.BaseURL); err == nil && parsed.Scheme != "" {
-			return parsed.Scheme
-		}
-		return "http"
-	}
-	if endpoint, ok := cfg.GetEndpointByName(backendName); ok && endpoint != nil &&
-		strings.EqualFold(strings.TrimSpace(endpoint.Protocol), "https") {
-		return "https"
-	}
-	return "http"
-}
-
-// shadowEndpointPath mirrors setProviderRequestPath so the shadow reaches the
-// same provider path the primary dispatch would use for that wire format.
-func shadowEndpointPath(profile *config.ProviderProfile, format llmprotocol.WireFormat) string {
-	path := requestWirePath(format)
-	if profile == nil {
-		return path
-	}
-	if configured, err := profile.ResolveCreatePath(requestWireProtocol(format)); err == nil && configured != "" {
-		return configured
-	}
-	return path
-}
-
-// shadowAuthorizer consults only the static router configuration, read at
-// call time. Client credentials never travel with a shadow copy, and a backend
-// without a configured key is simply called without one; if it needs a key the
-// call fails visibly with upstream_status instead of a per-request auth error.
-func shadowAuthorizer(
-	cfg *config.RouterConfig,
-	profile *config.ProviderProfile,
-	model string,
-) (func(context.Context, *http.Request) error, error) {
-	provider, providerAuth, err := resolveProviderAuth(profile)
-	if err != nil {
-		return nil, err
-	}
-	if cfg == nil {
-		return nil, nil
-	}
-	return func(_ context.Context, request *http.Request) error {
-		accessKey := authz.NewStaticConfigProvider(cfg).GetKey(provider, model, nil)
-		if accessKey == "" {
-			return nil
-		}
-		if providerAuth.Prefix != "" {
-			accessKey = providerAuth.Prefix + " " + accessKey
-		}
-		request.Header.Set(providerAuth.Header, accessKey)
-		return nil
 	}, nil
 }
 

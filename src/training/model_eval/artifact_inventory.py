@@ -36,10 +36,7 @@ REF_TASKS = {
 }
 
 # Load sites that declare no model_ref are classified by their config location.
-LOCATION_TASKS = (
-    ("modality_detector", "modality"),
-    ("signals.classifiers", "jailbreak"),
-)
+LOCATION_TASKS = (("modality_detector", "modality"),)
 
 MAPPING_KEYS = (
     "jailbreak_mapping_path",

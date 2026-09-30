@@ -154,16 +154,18 @@ type DeactivateResult struct {
 }
 
 type ExpectedAssertions struct {
-	Decision         string              `json:"decision"`
-	Recipe           string              `json:"recipe,omitempty"`
-	Algorithm        string              `json:"algorithm,omitempty"`
-	Alias            string              `json:"alias,omitempty"`
-	Plugins          []string            `json:"plugins"`
-	ForbiddenPlugins []string            `json:"forbidden_plugins"`
-	PluginMatch      string              `json:"plugin_match"`
-	Signals          map[string][]string `json:"signals"`
-	ForbiddenSignals map[string][]string `json:"forbidden_signals"`
-	SignalMatch      string              `json:"signal_match"`
+	SignalValues     map[string]SignalValueBounds `json:"signal_values,omitempty"`
+	Decision         string                       `json:"decision"`
+	Recipe           string                       `json:"recipe,omitempty"`
+	Algorithm        string                       `json:"algorithm,omitempty"`
+	SelectionStatus  string                       `json:"selection_status,omitempty"`
+	Alias            string                       `json:"alias,omitempty"`
+	Plugins          []string                     `json:"plugins"`
+	ForbiddenPlugins []string                     `json:"forbidden_plugins"`
+	PluginMatch      string                       `json:"plugin_match"`
+	Signals          map[string][]string          `json:"signals"`
+	ForbiddenSignals map[string][]string          `json:"forbidden_signals"`
+	SignalMatch      string                       `json:"signal_match"`
 }
 
 type Padding struct {
@@ -176,7 +178,8 @@ type GeneratedText struct {
 	MessageIndex    int    `json:"message_index"`
 	ContentIndex    int    `json:"content_index"`
 	TargetTextBytes int    `json:"target_text_bytes"`
-	Character       string `json:"character"`
+	Character       string `json:"character,omitempty"`
+	Text            string `json:"text,omitempty"`
 }
 
 type ImageFixtureMetadata struct {
@@ -290,6 +293,7 @@ type RequestModelResolver interface {
 }
 
 type ActualOutcome struct {
+	SignalValues      map[string]any      `json:"signal_values,omitempty"`
 	Decision          string              `json:"decision"`
 	Model             string              `json:"model,omitempty"`
 	RequestedModel    string              `json:"requested_model,omitempty"`
@@ -305,15 +309,16 @@ type ActualOutcome struct {
 }
 
 type ValidationChecks struct {
-	Decision  bool `json:"decision"`
-	Model     bool `json:"model"`
-	Recipe    bool `json:"recipe"`
-	Algorithm bool `json:"algorithm"`
-	Selection bool `json:"selection"`
-	Plugins   bool `json:"plugins"`
-	Signals   bool `json:"signals"`
-	Alias     bool `json:"alias"`
-	Trace     bool `json:"trace"`
+	SignalValues bool `json:"signal_values"`
+	Decision     bool `json:"decision"`
+	Model        bool `json:"model"`
+	Recipe       bool `json:"recipe"`
+	Algorithm    bool `json:"algorithm"`
+	Selection    bool `json:"selection"`
+	Plugins      bool `json:"plugins"`
+	Signals      bool `json:"signals"`
+	Alias        bool `json:"alias"`
+	Trace        bool `json:"trace"`
 }
 
 type ValidationResult struct {

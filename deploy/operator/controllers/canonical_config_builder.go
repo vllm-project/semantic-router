@@ -8,6 +8,7 @@ import (
 )
 
 func (r *SemanticRouterReconciler) buildCanonicalConfig(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) (*routerconfig.CanonicalConfig, error) {
+	defaults := routerconfig.DefaultCanonicalGlobal()
 	canonical := &routerconfig.CanonicalConfig{
 		Version: "v0.3",
 		Listeners: []routerconfig.Listener{
@@ -36,15 +37,14 @@ func (r *SemanticRouterReconciler) buildCanonicalConfig(ctx context.Context, sr 
 			Models:   []routerconfig.CanonicalProviderModel{},
 		},
 		Global: &routerconfig.CanonicalGlobal{
-			Router:       routerconfig.DefaultCanonicalGlobal().Router,
+			Router:       defaults.Router,
 			Services:     routerconfig.CanonicalServiceGlobal{},
 			Stores:       routerconfig.CanonicalStoreGlobal{},
 			Integrations: routerconfig.CanonicalIntegrationGlobal{},
-			ModelCatalog: routerconfig.CanonicalModelCatalog{
-				Embeddings: routerconfig.CanonicalEmbeddingModels{},
-				System:     routerconfig.CanonicalSystemModels{},
-				Modules:    routerconfig.CanonicalModelModules{},
-			},
+			// Zero-valued module fields serialize as explicit false/zero
+			// overrides. Start with the router's defaults so omitted operator
+			// settings retain the matching model, adapter and operating point.
+			ModelCatalog: defaults.ModelCatalog,
 		},
 	}
 

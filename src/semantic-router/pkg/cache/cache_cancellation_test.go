@@ -37,7 +37,7 @@ var _ = Describe("Cache lookup cancellation and miss contract (#2473)", func() {
 
 	specCancelledContextShortCircuits(newSeededBackend, threshold)
 	specBelowThresholdMissReportsCandidateScore(newSeededBackend, threshold)
-	specCGOEmbedCancellation(newSeededBackend)
+	specNonInterruptibleEmbedCancellation(newSeededBackend)
 })
 
 // specCancelledContextShortCircuits pins the best-effort half of the contract:
@@ -91,7 +91,7 @@ func specBelowThresholdMissReportsCandidateScore(newSeededBackend func() CacheBa
 	})
 }
 
-// specCGOEmbedCancellation covers the other half: the embed cannot be
+// specNonInterruptibleEmbedCancellation covers the other half: the embed cannot be
 // interrupted mid-flight, so cancellation is re-checked after it returns and
 // before the entry is published. cancelAfterEmbedCtx trips exactly on that
 // second check.
@@ -100,8 +100,8 @@ func specBelowThresholdMissReportsCandidateScore(newSeededBackend func() CacheBa
 // a short-circuit inside the embed would surface it wrapped as "failed to
 // generate embedding: ...", so a future ctxErr call added before the embed fails
 // these specs instead of silently moving them to another branch.
-func specCGOEmbedCancellation(newSeededBackend func() CacheBackend) {
-	Context("with a context cancelled during the CGO embedding", func() {
+func specNonInterruptibleEmbedCancellation(newSeededBackend func() CacheBackend) {
+	Context("with a context cancelled during a non-interruptible embedding", func() {
 		It("AddEntry returns the context error and publishes no entry", func() {
 			backend := newSeededBackend()
 			defer func() { _ = backend.Close() }()
@@ -141,7 +141,7 @@ const errAfterPostEmbedGuard = 2
 
 // cancelAfterEmbedCtx reports no error until the errAfter-th Err() call, then
 // context.Canceled. It lets a test deterministically trip the post-embedding
-// cancellation guard (Err() call #2) without racing the CGO embed.
+// cancellation guard (Err() call #2) without racing an actual native embed.
 type cancelAfterEmbedCtx struct {
 	context.Context
 	errAfter int

@@ -147,6 +147,29 @@ function loadScript(src: string): Promise<void> {
   })
 }
 
+// ─── Response validation ────────────────────────────────────
+
+const WASM_BUILD_HINT =
+  'The DSL compiler WASM is not built. ' +
+  'Run `make dashboard-build-wasm`, or start the frontend with ' +
+  '`make dashboard-dev-frontend`, which builds it.'
+
+/**
+ * A missing `signal-compiler.wasm` is served by the Vite SPA fallback as
+ * `index.html` with HTTP 200, so an unguarded `compileStreaming` fails with
+ * an opaque MIME error instead of naming the missing build prerequisite.
+ * Static servers without a registered `.wasm` MIME type hit the same trap.
+ */
+export function validateWasmResponse(resp: Response): void {
+  if (!resp.ok) {
+    throw new Error(`${WASM_BUILD_HINT} (HTTP ${resp.status})`)
+  }
+  const contentType = resp.headers.get('content-type') || ''
+  if (!contentType.includes('application/wasm')) {
+    throw new Error(WASM_BUILD_HINT)
+  }
+}
+
 // ─── Core init ──────────────────────────────────────────────
 
 /**
@@ -195,6 +218,7 @@ async function init(): Promise<void> {
     if (!wasmInstance) {
       // Fresh load: fetch + compile + cache
       const resp = await fetch('/signal-compiler.wasm')
+      validateWasmResponse(resp)
       const etag = resp.headers.get('etag') || resp.headers.get('last-modified')
 
       if (typeof WebAssembly.compileStreaming === 'function') {
@@ -218,7 +242,13 @@ async function init(): Promise<void> {
     go.run(wasmInstance)
 
     // 5. Wait for the global functions to be registered.
-    await waitForGlobals(['signalCompile', 'signalValidate', 'signalParseAST', 'signalDecompile', 'signalFormat'])
+    await waitForGlobals([
+      'signalCompile',
+      'signalValidate',
+      'signalParseAST',
+      'signalDecompile',
+      'signalFormat',
+    ])
 
     isReady = true
   })()

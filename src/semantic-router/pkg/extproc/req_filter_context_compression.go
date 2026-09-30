@@ -53,6 +53,8 @@ func (r *OpenAIRouter) applySemanticContextCompression(
 	}
 	policy := contextCompressionPolicy(pluginConfig, ctx.ContextCompressionTargetTokens)
 	policy = compressionPolicyForRequest(policy, ctx)
+	// Live-user truncation belongs to the bounded overflow preparation stages.
+	policy.Targets.CurrentUser.Mode = contextcompression.TargetPreserve
 	if revision, err := cache.FingerprintValue(pluginConfig); err == nil {
 		ctx.ContextCompressionRevision = revision[:12]
 	}
@@ -69,13 +71,17 @@ func (r *OpenAIRouter) applySemanticContextCompression(
 	if callContext == nil {
 		callContext = context.Background()
 	}
+	counter := r.contextCompressionTokenCounter(ctx)
+	if pluginConfig.Targets != nil && pluginConfig.Targets.CurrentUser.Mode == config.ContextCompressionTargetTruncate {
+		counter = overflowTokenCounter{}
+	}
 	compressionRequest := contextcompression.Request{
 		Model:        model,
 		Scope:        r.contextCompressionScope(ctx),
 		Request:      requestIR,
 		Policy:       policy,
 		Capabilities: semanticContextCompressionCapabilities(r.Config, ctx, request),
-		TokenCounter: r.contextCompressionTokenCounter(ctx),
+		TokenCounter: counter,
 		Scorer:       r.contextCompressionScorer(callContext, pluginConfig, ctx),
 		Recovery:     r.contextCompressionRecoveryStore(pluginConfig),
 		Provenance:   provenance,
@@ -84,6 +90,9 @@ func (r *OpenAIRouter) applySemanticContextCompression(
 	if result.Failure != nil {
 		recordContextCompressionStatus(ctx, "compression_failed", time.Since(start).Seconds())
 		return semanticCompressionFailure(pluginConfig, result.Failure)
+	}
+	if ctx.ContextCompressionApplied && !result.Applied {
+		return nil // Preserve the earlier overflow receipt.
 	}
 	r.recordCompressionPlan(ctx, result)
 	if !result.Applied {
@@ -100,14 +109,20 @@ func (r *OpenAIRouter) applySemanticContextCompression(
 		}
 	}
 	ctx.ContextCompressionRecoveryKeys = append(ctx.ContextCompressionRecoveryKeys[:0], result.RecoveryKeys...)
-	recordContextCompressionApplied(ctx, contextCompressionStats{
+	stats := contextCompressionStats{
 		appliedMessages: result.MessagesCompressed,
 		appliedBlocks:   result.BlocksCompressed,
 		beforeTokens:    result.TokensBefore,
 		afterTokens:     result.TokensAfter,
 		omittedChunks:   result.OmittedChunks,
 		jsonBlocks:      result.JSONBlocks,
-	}, start)
+	}
+	if ctx.ContextCompressionApplied && result.Plan.TokenCounterSource == "utf8_byte_upper_bound" {
+		stats.beforeTokens = ctx.ContextCompressionBefore
+		stats.appliedMessages += ctx.ContextCompressionMessages
+		stats.omittedChunks += ctx.ContextCompressionOmitted
+	}
+	recordContextCompressionApplied(ctx, stats, start)
 	request.Generation++
 	return nil
 }
@@ -180,7 +195,14 @@ func (r *OpenAIRouter) recordCompressionPlan(
 	ctx *RequestContext,
 	result contextcompression.ServiceResult,
 ) {
-	ctx.ContextCompressionStrategy = "extractive"
+	if !ctx.ContextCompressionApplied || ctx.ContextCompressionStrategy != "truncate" {
+		ctx.ContextCompressionStrategy = "extractive"
+	}
+	for _, target := range result.Plan.Targets {
+		if target.Kind == contextcompression.TargetCurrentUser && target.TargetTokens < target.OriginalTokens {
+			ctx.ContextCompressionStrategy = "truncate"
+		}
+	}
 	if len(result.RecoveryKeys) > 0 {
 		ctx.ContextCompressionStrategy = "recoverable"
 	}
@@ -206,7 +228,9 @@ func (r *OpenAIRouter) recordCompressionPlan(
 		result.Plan.FallbackReason,
 	)
 	savedTokens := max(0, result.TokensBefore-result.TokensAfter)
-	r.recordContextCompressionCostSavings(ctx, savedTokens)
+	if result.Plan.TokenCounterSource != "utf8_byte_upper_bound" {
+		r.recordContextCompressionCostSavings(ctx, savedTokens)
+	}
 }
 
 func (r *OpenAIRouter) recordContextCompressionCostSavings(

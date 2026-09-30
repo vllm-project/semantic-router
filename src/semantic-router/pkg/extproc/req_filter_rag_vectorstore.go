@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
@@ -40,29 +41,43 @@ func (r *OpenAIRouter) retrieveFromVectorStore(traceCtx context.Context, ctx *Re
 	if embedder == nil {
 		return "", fmt.Errorf("embedder not initialized for vectorstore RAG")
 	}
-
-	queryEmbedding, err := embedder.Embed(traceCtx, params.query)
-	if err != nil {
-		return "", fmt.Errorf("failed to generate query embedding: %w", err)
-	}
-
 	manager := r.currentVectorStoreManager()
 	if manager == nil {
 		return "", fmt.Errorf("vector store manager not initialized")
 	}
-
-	results, err := manager.Backend().Search(
-		traceCtx,
-		params.storeID,
-		queryEmbedding,
-		params.topK,
-		params.threshold,
-		params.filter,
-	)
-	if err != nil {
-		return "", fmt.Errorf("vectorstore search failed: %w", err)
+	if err = manager.CheckEmbeddingCompatibility(params.storeID); err != nil {
+		return "", err
 	}
 
+	// Embed the query once per window of itself, so a question that sits past
+	// the first window is still read, and keep each chunk's best score across
+	// those searches.
+	queryEmbeddings, err := embedding.QueryVectors(traceCtx, embedder, params.query, ragQueryWindowLimit)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate query embedding: %w", err)
+	}
+
+	batches := make([][]vectorstore.SearchResult, 0, len(queryEmbeddings))
+	for _, queryEmbedding := range queryEmbeddings {
+		windowResults, searchErr := manager.Search(
+			traceCtx,
+			params.storeID,
+			queryEmbedding,
+			params.topK,
+			params.threshold,
+			params.filter,
+		)
+		if searchErr != nil {
+			return "", fmt.Errorf("vectorstore search failed: %w", searchErr)
+		}
+		batches = append(batches, windowResults)
+	}
+	results := vectorstore.MergeSearchResults(params.topK, batches...)
+
+	results, err = r.rerankVectorStoreResults(traceCtx, ctx, ragConfig, params.query, results)
+	if err != nil {
+		return "", err
+	}
 	retrievedContext, bestScore, found := formatVectorStoreRetrievalResults(results)
 	if !found {
 		logging.Debugf("RAG vectorstore: no results found for query in store %s", params.storeID)
@@ -147,9 +162,13 @@ func formatVectorStoreRetrievalResults(results []vectorstore.SearchResult) (stri
 	}
 
 	parts := make([]string, 0, len(results))
+	bestScore := results[0].Score
 	for _, result := range results {
 		parts = append(parts, result.Content)
+		if result.Score > bestScore {
+			bestScore = result.Score
+		}
 	}
 
-	return strings.Join(parts, "\n\n---\n\n"), float32(results[0].Score), true
+	return strings.Join(parts, "\n\n---\n\n"), float32(bestScore), true
 }

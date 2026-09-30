@@ -1,15 +1,13 @@
 #include "../../include/embeddings/embedding_generator.h"
 #include "../../include/core/model_manager.h"
 #include "../../include/utils/math_utils.h"
+#include "../../include/utils/preprocessing.h"
 #include <iostream>
 #include <algorithm>
 #include <cstdlib>
 
 namespace openvino_sr {
 namespace embeddings {
-
-// Constants for special tokens (ModernBERT)
-static const int MODERNBERT_PAD = 50283;
 
 static int getPositiveEnvOrDefault(const char* key, int def) {
     if (const char* v = std::getenv(key)) {
@@ -21,9 +19,12 @@ static int getPositiveEnvOrDefault(const char* key, int def) {
 
 bool EmbeddingGenerator::initialize(
     const std::string& model_path,
-    const std::string& device
+    const std::string& device,
+    int pad_token_id
 ) {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (pad_token_id < 0) return false;
+    pad_token_id_ = pad_token_id;
     
     try {
         auto& manager = core::ModelManager::getInstance();
@@ -77,7 +78,7 @@ bool EmbeddingGenerator::initialize(
         if (last_slash != std::string::npos) {
             model_dir = model_dir.substr(0, last_slash);
         }
-        tokenizer_.loadVocab(model_dir);
+        if (!tokenizer_.loadVocab(model_dir)) return false;
         
         std::cout << "OpenVINO embedding model initialized: " << model_path 
                   << " on " << device << std::endl;
@@ -92,7 +93,10 @@ bool EmbeddingGenerator::initialize(
 
 std::vector<float> EmbeddingGenerator::generateEmbedding(
     const std::string& text,
-    int max_length
+    int max_length,
+    bool reject_overflow,
+    int* original_tokens,
+    const std::vector<int>& end_tokens
 ) {
     if (!model_ || !model_->compiled_model) {
         std::cerr << "Embedding model not initialized" << std::endl;
@@ -101,7 +105,8 @@ std::vector<float> EmbeddingGenerator::generateEmbedding(
     
     try {
         // Tokenize text
-        auto token_ids = tokenizer_.tokenize(text, max_length);
+        auto token_ids = tokenizer_.tokenizeWithBudget(text, max_length, reject_overflow, original_tokens, end_tokens);
+
         if (token_ids.empty()) {
             std::cerr << "Tokenization failed or returned empty" << std::endl;
             return {};
@@ -139,18 +144,19 @@ std::vector<float> EmbeddingGenerator::generateEmbedding(
             auto attention_mask_tensor = ov::Tensor(ov::element::i64, input_shape);
             auto mask_data = attention_mask_tensor.data<int64_t>();
             for (size_t i = 0; i < seq_len; ++i) {
-                mask_data[i] = (token_ids[i] != MODERNBERT_PAD) ? 1 : 0;
+                mask_data[i] = (token_ids[i] != pad_token_id_) ? 1 : 0;
             }
             slot->request.set_input_tensor(1, attention_mask_tensor);
         }
         
         // Set token_type_ids (all zeros for single sentence)
-        if (inputs.size() > 2) {
+        if (inputs.size() > 2 && inputs[2].get_names().count("token_type_ids") != 0) {
             auto token_type_tensor = ov::Tensor(ov::element::i64, input_shape);
             auto type_data = token_type_tensor.data<int64_t>();
             std::fill(type_data, type_data + seq_len, 0);
             slot->request.set_input_tensor(2, token_type_tensor);
         }
+        utils::setPositionIds(slot->request, *model_->compiled_model, seq_len);
         
         // Run inference
         slot->request.start_async();
@@ -181,7 +187,7 @@ std::vector<float> EmbeddingGenerator::generateEmbedding(
             int valid_token_count = 0;
             
             for (size_t seq_idx = 0; seq_idx < sequence_length && seq_idx < seq_len; ++seq_idx) {
-                if (token_ids[seq_idx] != MODERNBERT_PAD) {
+                if (token_ids[seq_idx] != pad_token_id_) {
                     for (size_t h = 0; h < hidden_size; ++h) {
                         size_t idx = seq_idx * hidden_size + h;
                         embedding[h] += output_data[idx];
@@ -329,4 +335,3 @@ std::vector<core::SimilarityMatch> EmbeddingGenerator::findTopKSimilar(
 
 } // namespace embeddings
 } // namespace openvino_sr
-

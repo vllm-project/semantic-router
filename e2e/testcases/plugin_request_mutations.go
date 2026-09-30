@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -46,12 +47,12 @@ func testPluginRequestMutations(
 	defer backendSession.Close()
 
 	sessionID := fmt.Sprintf("plugin-request-mutations-%d", time.Now().UnixNano())
-	responseBody, err := sendProtocolMatrixRequestWithHeaders(
+	response, err := sendProtocolMatrixRaw(
 		ctx,
 		session,
 		"/v1/chat/completions",
 		map[string]any{
-			"model": "MoM",
+			"model": "e2e-plugins",
 			"messages": []any{map[string]any{
 				"role":    "user",
 				"content": "__PLUGIN_REQUEST_MUTATIONS__ preserve this user message",
@@ -63,6 +64,7 @@ func testPluginRequestMutations(
 		},
 		false,
 		map[string]string{
+			"x-vsr-debug":           "true",
 			"x-vsr-e2e-deleted":     "remove-me",
 			"x-vsr-e2e-updated":     "client-value",
 			"x-vsr-test-session-id": sessionID,
@@ -71,7 +73,22 @@ func testPluginRequestMutations(
 	if err != nil {
 		return err
 	}
-	if validationErr := validatePluginMutationResponse(responseBody); validationErr != nil {
+	details := map[string]interface{}{
+		"status_code":   response.StatusCode,
+		"response_path": response.Headers.Get("x-vsr-response-path"),
+		"recipe":        response.Headers.Get("x-vsr-selected-recipe"),
+		"decision":      response.Headers.Get("x-vsr-selected-decision"),
+	}
+	if opts.SetDetails != nil {
+		opts.SetDetails(details)
+	}
+	if response.StatusCode != http.StatusOK ||
+		response.Headers.Get("x-vsr-response-path") != "upstream" ||
+		response.Headers.Get("x-vsr-selected-recipe") != "e2e-plugins" ||
+		response.Headers.Get("x-vsr-selected-decision") != "plugin_request_mutations_decision" {
+		return fmt.Errorf("plugin probe did not dispatch through its mutation policy: status=%d headers=%v", response.StatusCode, response.Headers)
+	}
+	if validationErr := validatePluginMutationResponse(response.Body); validationErr != nil {
 		return validationErr
 	}
 
@@ -84,11 +101,10 @@ func testPluginRequestMutations(
 	}
 
 	if opts.SetDetails != nil {
-		opts.SetDetails(map[string]interface{}{
-			"plugins_verified":           []string{"header_mutation", "request_params", "system_prompt"},
-			"provider_boundary_verified": true,
-			"protocol_preserved":         true,
-		})
+		details["plugins_verified"] = []string{"header_mutation", "request_params", "system_prompt"}
+		details["provider_boundary_verified"] = true
+		details["protocol_preserved"] = true
+		opts.SetDetails(details)
 	}
 	return nil
 }
@@ -114,8 +130,8 @@ func validatePluginMutationResponse(body []byte) error {
 
 func validatePluginMutationProviderRequest(observed []byte) error {
 	var request struct {
-		Body    map[string]any    `json:"body"`
-		Headers map[string]string `json:"headers"`
+		Body         map[string]any      `json:"body"`
+		HeaderValues map[string][]string `json:"header_values"`
 	}
 	if err := json.Unmarshal(observed, &request); err != nil {
 		return fmt.Errorf("decode provider-bound request: %w", err)
@@ -138,15 +154,19 @@ func validatePluginMutationProviderRequest(observed []byte) error {
 			return fmt.Errorf("request_params did not remove %q from provider request: %s", field, truncateString(string(observed), 800))
 		}
 	}
-	if request.Headers["x-vsr-e2e-added"] != "added-by-router" {
-		return fmt.Errorf("header_mutation add was not observed: %#v", request.Headers)
+	for name, expected := range map[string]string{
+		"x-vsr-e2e-added":   "added-by-router",
+		"x-vsr-e2e-updated": "updated-by-router",
+	} {
+		values := request.HeaderValues[name]
+		if len(values) != 1 || values[0] != expected {
+			return fmt.Errorf("header_mutation expected exactly one %s=%q, observed %#v", name, expected, values)
+		}
 	}
-	if request.Headers["x-vsr-e2e-updated"] != "updated-by-router" {
-		return fmt.Errorf("header_mutation update was not observed: %#v", request.Headers)
+	if _, exists := request.HeaderValues["x-vsr-e2e-deleted"]; exists {
+		return fmt.Errorf("header_mutation delete was not observed: %#v", request.HeaderValues)
 	}
-	if _, exists := request.Headers["x-vsr-e2e-deleted"]; exists {
-		return fmt.Errorf("header_mutation delete was not observed: %#v", request.Headers)
-	}
+
 	return nil
 }
 

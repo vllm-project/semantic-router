@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func mustMessageContent(t *testing.T, value interface{}) json.RawMessage {
@@ -555,7 +556,11 @@ func TestIntentRequestResolveSignalInput_RejectsOversizedMetadata(t *testing.T) 
 }
 
 func TestClassificationServiceClassifyIntentForEval_AcceptsMessagesWithoutText(t *testing.T) {
-	service := &ClassificationService{classifier: nil}
+	cfg := &config.RouterConfig{}
+	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, classifier.Close()) })
+	service := NewClassificationService(classifier, cfg)
 	req := IntentRequest{
 		Messages: []IntentMessage{
 			{

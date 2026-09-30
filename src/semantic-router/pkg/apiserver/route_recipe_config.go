@@ -108,10 +108,10 @@ func (s *ClassificationAPIServer) handleValidateRecipe(w http.ResponseWriter, r 
 		return
 	}
 
-	s.writeJSONResponse(w, http.StatusOK, map[string]any{
-		"valid":  true,
-		"name":   name,
-		"action": map[bool]string{true: "create", false: "replace"}[created],
+	s.writeJSONResponse(w, http.StatusOK, recipeValidationResponse{
+		Valid:  true,
+		Name:   name,
+		Action: map[bool]string{true: "create", false: "replace"}[created],
 	})
 }
 

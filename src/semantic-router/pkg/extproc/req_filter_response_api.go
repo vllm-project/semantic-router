@@ -81,6 +81,10 @@ type ResponseObjectState struct {
 	Metadata     map[string]string
 	ShouldStore  bool
 
+	// AutoStore preserves the client's memory-write opt-out after provider
+	// materialization removes Router-owned controls from the neutral request.
+	AutoStore *bool
+
 	// PersistenceAttempted prevents multiple terminal response paths from
 	// retaining the same object twice.
 	PersistenceAttempted bool
@@ -107,6 +111,10 @@ func (f *ResponseAPIFilter) PrepareObjectState(
 		ShouldStore:         request.Store == nil || *request.Store,
 	}
 	state.Input, state.Instructions = snapshotResponseObjectRequest(sourceBody, request)
+	if request.AutoStore != nil {
+		autoStore := *request.AutoStore
+		state.AutoStore = &autoStore
+	}
 	if request.PreviousResponseID != "" {
 		if f == nil || !f.enabled {
 			return nil, llmprotocol.NewError(

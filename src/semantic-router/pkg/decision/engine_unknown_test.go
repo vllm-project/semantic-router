@@ -231,10 +231,35 @@ func TestFailRequestOverridesHigherPriorityMatch(t *testing.T) {
 	}
 }
 
-func TestDecisionUnresolvedErrorNamesFix(t *testing.T) {
-	err := &DecisionUnresolvedError{Decision: "guarded"}
-	if !strings.Contains(err.Error(), "rules.on_unknown") || !errors.Is(err, ErrDecisionUnresolved) {
-		t.Fatalf("error = %q", err.Error())
+func TestDecisionUnresolvedErrorDescribesUnknownEvidence(t *testing.T) {
+	for _, reason := range []string{"user_feedback_uncertain", "user_feedback_evaluation_failed"} {
+		t.Run(reason, func(t *testing.T) {
+			engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{
+				Name: "guarded",
+				Rules: config.RuleNode{
+					Type:      config.SignalTypeUserFeedback,
+					Name:      "wrong_answer",
+					OnUnknown: config.RuleOnUnknownFailRequest,
+				},
+			}}, config.RoutingStrategyPriority)
+			result, traces, _, err := engine.EvaluateDecisionsWithTraceAndDiagnostics(&SignalMatches{
+				SignalErrors: map[string]string{"user_feedback:wrong_answer": reason},
+			})
+			if result != nil || !errors.Is(err, ErrDecisionUnresolved) {
+				t.Fatalf("result = %#v, error = %v", result, err)
+			}
+			for _, text := range []string{`decision "guarded"`, "unknown or unavailable", "Inspect the signal details", "rules.on_unknown"} {
+				if !strings.Contains(err.Error(), text) {
+					t.Fatalf("error %q does not include %q", err.Error(), text)
+				}
+			}
+			if strings.Contains(err.Error(), "evaluator failed") || strings.Contains(err.Error(), "Fix the signal backend") {
+				t.Fatalf("unknown evidence was attributed to a backend failure: %v", err)
+			}
+			if len(traces) != 1 || traces[0].State != "unknown" || traces[0].OnUnknown != string(config.RuleOnUnknownFailRequest) || traces[0].RootTrace == nil || traces[0].RootTrace.SignalError != reason {
+				t.Fatalf("unknown state, policy or original reason changed: %#v", traces)
+			}
+		})
 	}
 }
 
@@ -300,5 +325,23 @@ func TestOnErrorResolvedBranchNeverOutranksRealMatch(t *testing.T) {
 				t.Fatalf("confidence = %v, rules = %v", result.Confidence, result.MatchedRules)
 			}
 		})
+	}
+}
+
+func TestOperatingPointLabelMatchesKeepUnknownAndLegacyErrorPolicy(t *testing.T) {
+	node := config.RuleNode{Type: config.SignalTypeClassifier, Name: "risk", Label: "unsafe"}
+	for _, policy := range []config.UnknownPolicy{config.RuleOnUnknownNoMatch, config.RuleOnUnknownMatch, config.RuleOnUnknownFailRequest} {
+		node.OnUnknown = policy
+		engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: "route", Rules: node}}, config.RoutingStrategyPriority)
+		result, diagnostics, err := engine.EvaluateDecisionsWithDiagnostics(&SignalMatches{SignalErrors: map[string]string{"classifier:risk": "failed"}})
+		if (err != nil) != (policy == config.RuleOnUnknownFailRequest) || (result != nil) != (policy == config.RuleOnUnknownMatch) || diagnostics.AppliedUnknownPolicies["route"] != string(policy) {
+			t.Fatalf("policy %s result=%+v diagnostics=%+v error=%v", policy, result, diagnostics, err)
+		}
+	}
+	node.OnUnknown = ""
+	node.OnError = "match"
+	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: "route", Rules: node}}, config.RoutingStrategyPriority)
+	if result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{SignalErrors: map[string]string{"classifier:risk": "failed"}}); err != nil || result == nil {
+		t.Fatalf("legacy on_error lost: %+v %v", result, err)
 	}
 }

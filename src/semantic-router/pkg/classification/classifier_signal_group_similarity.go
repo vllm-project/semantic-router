@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -163,22 +164,27 @@ func (c *Classifier) embeddingRuleCentroid(
 	return centroid, nil
 }
 
-func (c *EmbeddingClassifier) ensureCandidateEmbeddings() error {
+func (c *EmbeddingClassifier) ensureCandidateEmbeddings(ctx context.Context) error {
 	c.preloadMu.Lock()
 	defer c.preloadMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	if c.preloadComplete {
 		return nil
 	}
-	if len(c.candidateEmbeddings) > 0 {
+	if len(c.candidateEmbeddings)+len(c.imageCandidateEmbeddings) > 0 {
 		if len(c.rulePrototypeBanks) == 0 {
 			c.rebuildRulePrototypeBanks()
 		}
 		c.preloadComplete = true
 		return nil
 	}
-	if err := c.preloadCandidateEmbeddings(); err != nil {
+	if err := c.preloadCandidateEmbeddings(ctx); err != nil {
 		c.candidateEmbeddings = make(map[string][]float32)
+		c.imageCandidateEmbeddings = make(map[string][]float32)
+		c.negativeRulePrototypeBanks = make(map[string]*prototypeBank)
 		c.rulePrototypeBanks = make(map[string]*prototypeBank)
 		c.preloadComplete = false
 		return err
@@ -191,7 +197,7 @@ func (c *EmbeddingClassifier) ruleCentroid(rule config.EmbeddingRule) ([]float32
 	if centroid, ok := prototypeBankCentroid(c.rulePrototypeBanks[rule.Name]); ok {
 		return centroid, nil
 	}
-	if err := c.ensureCandidateEmbeddings(); err != nil {
+	if err := c.ensureCandidateEmbeddings(context.Background()); err != nil {
 		return nil, err
 	}
 	return c.candidateRuleCentroid(rule)

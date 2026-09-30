@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "485dba984a011cee07ec21e7d6a6d54f69509dae"
+  source_commit: "96eb530f67c9d6fbd59fd1a82e857b3a7eb330ba"
   source_file: "docs/tutorials/signal/learned/jailbreak.md"
   outdated: false
 ---
@@ -56,6 +56,42 @@ routing:
 ```
 
 多轮攻击使用 `include_history`；把模式列表当作所配置检测方法的调参数据。
+
+### 请求内容与历史 {#request-content-and-history}
+
+对于路由请求，Guard 对请求末尾连续的 user 和 tool 消息打分，遇到 assistant、system 或 developer 消息即停止向前收集。这确保协议将多个文本工具结果放在一条 user 消息中时，各结果都会被检查。设置 `include_history: true` 后，还会检查更早的 user 和 tool 文本。system、developer 指令与 assistant 回复不会独立作为攻击证据打分。这收窄了旧版本也扫描这些可信角色的历史行为。
+
+若当前这组消息没有可检查文本，Guard 不会用更早的用户轮次或拼接后的可信指令替代。启用 `include_history` 时仍会检查历史中的有效文本。没有有效文本表示没有分类证据，并不保证请求安全。
+
+这一投影保留完整文本片段，不使用通用路由文本压缩器。各片段独立打分，任一片段命中即可使命中规则；它不推断跨消息的权限关系，也不检查图像、原始工具参数或路由后检索到的内容。消息角色是协议边界，不是经过认证的身份。直接文本检测 API 和响应方向扫描保留原有输入契约；提供纯文本的调用方仍需负责界定文本范围。
+
+### 本地分类器的 Token 窗口 {#token-windows-for-a-local-classifier}
+
+隐式本地 `mmbert32k` 默认配置按 512 token 窗口扫描每个文本片段，窗口间重叠 255 个内容 token。文档预算来自已注册的默认 Guard 模型，目前为包含特殊 token 在内的 32,768 token。此行为仅适用于未指定配方模型绑定或 `window`，且 `max_sequence_length` 保持为零的配置。每次前向计算仍限于 512 token；较长片段需要多次前向计算。准备阶段会记录解析后的窗口和文档预算，并检查实际加载模型的容量。不兼容的自定义产物会使准备失败，超过文档预算的片段会产生输入限制错误。
+
+显式模型绑定、文档预算、窗口策略与远程后端保持各自的配置行为。例如，经过资格验证并设置 `input.overflow: reject` 的 8K 部署仍在其预算内处理整个片段。
+
+对于使用重叠 token 窗口评估的检查点，在 prompt-guard 模块中配置相同窗口策略：
+
+```yaml
+global:
+  model_catalog:
+    modules:
+      prompt_guard:
+        variant: mmbert32k
+        max_sequence_length: 32768
+        window:
+          size: 128
+          overlap: 63
+```
+
+`size` 包含分词器的特殊 token；`overlap` 只计算内容 token。若分词器使用两个特殊 token，上例每次扫描 126 个内容 token，步长为 63。运行时使用完整输入的 token ID 规划窗口，不对各窗口的文本解码后重新分词，并在每个窗口中重置位置。总输入必须符合 `max_sequence_length`；超限是推理错误，不会留下未检查的后缀。
+
+请求规则、检测 API 和响应扫描使用相同的窗口间最大正类风险。对于多个正类标签，运行时先在各窗口内累加其概率，再选择风险最高的窗口。标签和置信度保留该窗口的完整概率分布。对比式规则保持现有文本窗口策略。
+
+在隐式默认配置之外，省略 `window` 会保留完整输入推理或已配置的旧扫描方式。窗口大小和阈值需要针对检查点单独评估；扫描所有 token 并不证明模型理解了远距离上下文。被引用的攻击以及含义依赖另一窗口的指令需要单独评估。本地 Candle 和 ORT 模型绑定也可选择 token 窗口，但加载的适配器和计算图必须支持请求的执行形状。
+
+后端若声明输入被截断或未处理完整，该次扫描即为未解析。请求规则、文本检测 API 和响应扫描不能使用其概率宣称完整输入干净。另一个已完整打分片段上的检测仍然有效；错误继续遵循配置的 `on_error` 与响应规则策略。
 
 ### 方向 {#direction}
 

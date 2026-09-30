@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "d8e75b89b7290df941743270c69a111f80dde50a"
+  source_commit: "a65e60e035f593b80c0a9c1963c34a53abe90444"
   source_file: "docs/tutorials/signal/learned/pii.md"
   outdated: false
 ---
@@ -50,6 +50,40 @@ routing:
 ```
 
 `pii_types_allowed` 为空时，任意检测到的 PII 都可能使信号匹配。
+
+## 完整的本地扫描 {#complete-local-scans}
+
+隐式本地 Vela PII 默认逐项扫描最多 32,768 个 token（含特殊 token）的文本。
+每次前向计算最多处理 512 个 token，相邻窗口重叠 255 个内容 token。
+窗口由模型 tokenizer 确定；覆盖范围不依赖字符估算或窗口边界处的重新分词。
+
+Candle 和 ORT 保留原始 UTF-8 偏移，按周围上下文为每个 token 选择一次观测，
+最后统一解码 BIO 实体。重叠不会重复计算输入用量或实体置信度。
+这保证已准入 token 的完整覆盖，不保证检测准确率，也不等于单次 32K 前向的质量。
+
+显式模块预算、后端、窗口或配方绑定保留各自策略。例如，配置
+`input: {max_tokens: 8192, overflow: reject}` 的部署仍会拒绝超限输入。
+显式启用窗口的示例：
+
+```yaml
+global:
+  model_catalog:
+    modules:
+      classifier:
+        pii:
+          use_mmbert_32k: true
+          max_sequence_length: 32768  # 完整文本预算，含特殊 token。
+          window: {size: 512, overlap: 255}
+```
+
+使用命名绑定时，在部署中声明 `input.overflow: window` 和正整数
+`input.max_tokens`；此限制替代模块预算。窗口大小与重叠仍由同一个 `window` 块提供。
+不支持的适配器、缺少窗口参数或超过已加载模型容量的限制都会报错。
+窗口大小包含 tokenizer 的特殊 token，重叠只计算内容 token。
+
+文本超过文档限制或任一窗口失败时，会返回分类器错误，不会将部分扫描报告为成功。
+既有 `on_error` 和决策 `rules.on_unknown` 策略决定路由结果。
+远程后端及显式截断配置保留下文所述的部分结果语义。
 
 ## 远程后端 {#remote-backend-token_spansv1}
 

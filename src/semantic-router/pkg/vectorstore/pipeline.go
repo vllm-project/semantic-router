@@ -232,9 +232,9 @@ func (p *IngestionPipeline) AttachFile(vectorStoreID, fileID string, strategy *C
 	}
 
 	// Verify the vector store exists.
-	_, err = p.manager.GetStore(vectorStoreID)
+	err = p.manager.CheckEmbeddingCompatibility(vectorStoreID)
 	if err != nil {
-		return nil, fmt.Errorf("vector store not found: %w", err)
+		return nil, err
 	}
 
 	vsfID := GenerateVectorStoreFileID()
@@ -403,6 +403,10 @@ func (p *IngestionPipeline) processJob(ctx context.Context, job IngestionJob) {
 		p.failJob(ctx, job, "cancelled", "ingestion cancelled before start")
 		return
 	}
+	if err := p.manager.CheckEmbeddingCompatibility(job.VectorStoreID); err != nil {
+		p.failJob(ctx, job, "embedding_incompatible", err.Error())
+		return
+	}
 
 	// Step 1: Read file content.
 	content, err := p.fileStore.Read(job.FileID)
@@ -449,7 +453,7 @@ func (p *IngestionPipeline) processJob(ctx context.Context, job IngestionJob) {
 	}
 
 	// Step 6: Insert into backend.
-	if err := p.backend.InsertChunks(ctx, job.VectorStoreID, embeddedChunks); err != nil {
+	if err := p.manager.InsertChunks(ctx, job.VectorStoreID, embeddedChunks); err != nil {
 		code := "storage_error"
 		if ctx.Err() != nil {
 			code = "cancelled"

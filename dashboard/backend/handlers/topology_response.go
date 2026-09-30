@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -18,12 +20,33 @@ type topologySignalMapping struct {
 func convertRouterResponse(req TestQueryRequest, routerResp *RouterEvalResponse, configPath string) *TestQueryResult {
 	result := newTestQueryResult(req)
 	result.SignalErrorMatches = routerResp.SignalErrorMatches
+	result.EvalTrace = routerResp.EvalTrace
+	result.SignalErrors = routerResp.SignalErrors
+	result.AppliedUnknownPolicies = routerResp.AppliedUnknownPolicies
+	result.DecisionError = routerResp.DecisionError
+	result.SelectedModel = routerResp.SelectedModel
+	result.RecommendedModels = routerResp.RecommendedModels
+	result.SelectionStatus = routerResp.SelectionStatus
+	result.SelectionMethod = routerResp.SelectionMethod
+	result.SelectionReason = routerResp.SelectionReason
+	if routerResp.DecisionError != "" {
+		result.IsAccurate = false
+		result.HTTPStatus = http.StatusServiceUnavailable
+		result.Warning = routerResp.DecisionError
+	} else if len(routerResp.SignalErrors) > 0 {
+		result.Warning = "Some signals failed; review the routing diagnostics."
+	}
 
 	appendMatchedSignals(result, routerResp)
 	appendSignalGroupHighlights(result)
 	applyRouterDecision(result, routerResp)
-	applyRecommendedModels(result, routerResp.RecommendedModels)
-	appendEvaluatedRulesFromConfig(result, configPath, req.Model)
+	if routerResp.SelectedModel != "" {
+		applyRecommendedModels(result, []string{routerResp.SelectedModel})
+	} else if routerResp.SelectionStatus == "" {
+		// Older routers do not report selection metadata.
+		applyRecommendedModels(result, routerResp.RecommendedModels)
+	}
+	appendEvaluatedRulesFromTrace(result, configPath, req.Model)
 
 	return result
 }
@@ -170,20 +193,76 @@ func applyRecommendedModels(result *TestQueryResult, recommendedModels []string)
 	}
 }
 
-func appendEvaluatedRulesFromConfig(result *TestQueryResult, configPath, requestModel string) {
-	parsedConfig, err := routerconfig.Parse(configPath)
-	if err != nil || parsedConfig == nil {
+// Trace types decode display fields only; EvalTrace retains the complete router payload.
+type topologyDecisionTrace struct {
+	DecisionName string             `json:"decision_name"`
+	State        string             `json:"state"`
+	Matched      bool               `json:"matched"`
+	RootTrace    *topologyRuleTrace `json:"root_trace"`
+}
+
+type topologyRuleTrace struct {
+	NodeType   string               `json:"node_type"`
+	SignalType string               `json:"signal_type"`
+	SignalName string               `json:"signal_name"`
+	Label      string               `json:"label"`
+	Matched    bool                 `json:"matched"`
+	Children   []*topologyRuleTrace `json:"children"`
+}
+
+func appendEvaluatedRulesFromTrace(result *TestQueryResult, configPath, requestModel string) {
+	var traces []topologyDecisionTrace
+	if json.Unmarshal(result.EvalTrace, &traces) != nil {
 		return
 	}
-
-	parsedConfig = topologyConfigForRequestModel(parsedConfig, requestModel)
-	matchedSignalNames := buildMatchedSignalNameSet(result.MatchedSignals)
-	for _, decision := range parsedConfig.IntelligentRouting.Decisions {
-		if result.MatchedDecision != "" && decision.Name == result.MatchedDecision {
-			continue
+	priorities := make(map[string]int)
+	if parsedConfig, err := routerconfig.Parse(configPath); err == nil && parsedConfig != nil {
+		for _, decision := range topologyConfigForRequestModel(parsedConfig, requestModel).IntelligentRouting.Decisions {
+			priorities[decision.Name] = decision.Priority
 		}
-		result.EvaluatedRules = append(result.EvaluatedRules, buildEvaluatedRule(decision, matchedSignalNames))
 	}
+	for _, trace := range traces {
+		rule := EvaluatedRule{
+			DecisionName: trace.DecisionName,
+			State:        trace.State,
+			IsMatch:      trace.Matched,
+			Priority:     priorities[trace.DecisionName],
+			Conditions:   []string{},
+			Expression:   topologyTraceExpression(trace.RootTrace),
+		}
+		if trace.RootTrace != nil {
+			rule.RuleOperator = trace.RootTrace.NodeType
+			for _, child := range trace.RootTrace.Children {
+				rule.Conditions = append(rule.Conditions, topologyTraceExpression(child))
+				rule.TotalCount++
+				if child != nil && child.Matched {
+					rule.MatchedCount++
+				}
+			}
+		}
+		result.EvaluatedRules = append(result.EvaluatedRules, rule)
+	}
+}
+
+func topologyTraceExpression(node *topologyRuleTrace) string {
+	if node == nil {
+		return "Unavailable"
+	}
+	if node.NodeType == "leaf" {
+		key := fmt.Sprintf("%s:%s", node.SignalType, node.SignalName)
+		if node.Label != "" {
+			key += ":" + node.Label
+		}
+		return key
+	}
+	if node.NodeType == "fallback" {
+		return "Always matches"
+	}
+	children := make([]string, 0, len(node.Children))
+	for _, child := range node.Children {
+		children = append(children, topologyTraceExpression(child))
+	}
+	return fmt.Sprintf("%s(%s)", node.NodeType, strings.Join(children, ", "))
 }
 
 func topologyConfigForRequestModel(
@@ -202,49 +281,4 @@ func topologyConfigForRequestModel(
 		return parsedConfig
 	}
 	return scoped
-}
-
-func buildMatchedSignalNameSet(signals []MatchedSignal) map[string]bool {
-	matchedSignalNames := make(map[string]bool, len(signals)*2)
-	for _, signal := range signals {
-		key := fmt.Sprintf("%s:%s", signal.Type, signal.Name)
-		normalizedKey := fmt.Sprintf("%s:%s", signal.Type, normalizeSignalName(signal.Name))
-		matchedSignalNames[key] = true
-		matchedSignalNames[normalizedKey] = true
-	}
-	return matchedSignalNames
-}
-
-func buildEvaluatedRule(decision routerconfig.Decision, matchedSignalNames map[string]bool) EvaluatedRule {
-	rule := EvaluatedRule{
-		DecisionName: decision.Name,
-		RuleOperator: strings.ToUpper(decision.Rules.Operator),
-		Conditions:   []string{},
-		IsMatch:      false,
-		Priority:     decision.Priority,
-	}
-	if rule.RuleOperator == "" {
-		rule.RuleOperator = "AND"
-	}
-
-	for _, condition := range decision.Rules.Conditions {
-		conditionKey := fmt.Sprintf("%s:%s", condition.Type, condition.Name)
-		normalizedConditionKey := fmt.Sprintf("%s:%s", condition.Type, normalizeSignalName(condition.Name))
-		rule.Conditions = append(rule.Conditions, conditionKey)
-		rule.TotalCount++
-		if matchedSignalNames[conditionKey] || matchedSignalNames[normalizedConditionKey] {
-			rule.MatchedCount++
-		}
-	}
-
-	switch {
-	case rule.TotalCount == 0:
-		rule.IsMatch = true
-	case rule.RuleOperator == "OR":
-		rule.IsMatch = rule.MatchedCount > 0
-	default:
-		rule.IsMatch = rule.MatchedCount == rule.TotalCount
-	}
-
-	return rule
 }

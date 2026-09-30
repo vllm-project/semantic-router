@@ -3,31 +3,18 @@
 package apiserver
 
 import (
-	"fmt"
 	"path"
 	"strings"
 
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
-// getEmbeddingModelsInfo returns information about loaded embedding models.
-func (s *ClassificationAPIServer) getEmbeddingModelsInfo(runtimeState *startupstatus.State) []ModelInfo {
-	var models []ModelInfo
-
-	prepared, release, err := s.acquireEmbeddings()
-	if err != nil {
-		return models
-	}
+// getEmbeddingModelsInfo lists the current generation's prepared embedding
+// bindings, including service and named-recipe owners of shared resources.
+func (s *ClassificationAPIServer) getEmbeddingModelsInfo() []ModelInfo {
+	_, service, release := s.acquireClassificationRuntime()
 	defer release()
-	for _, model := range prepared.Models() {
-		models = append(models, ModelInfo{Name: fmt.Sprintf("%s_embedding_model", model.Name), Type: "embedding", Loaded: true, ModelPath: model.Artifact, Metadata: map[string]string{"model_type": model.Name, "provider": model.Backend, "max_sequence_length": fmt.Sprint(model.MaxTokens), "default_dimension": fmt.Sprint(model.Dimension), "pooling": model.Pooling, "normalization": model.Normalization, "modalities": strings.Join(model.Modalities, ",")}})
-	}
-
-	for i := range models {
-		models[i] = enrichModelInfo(models[i], runtimeState)
-	}
-
+	models, _ := preparedEmbeddingModelsInfo(service)
 	return models
 }
 

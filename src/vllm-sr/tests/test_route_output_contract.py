@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -18,6 +19,7 @@ CLI_ROOT = Path(__file__).resolve().parents[1]
 def _run_cli_subprocess(tmp_path: Path, *args: str) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment["PYTHONPATH"] = str(CLI_ROOT)
+    environment["NO_PROXY"] = "127.0.0.1,localhost"
     return subprocess.run(
         [sys.executable, "-m", "cli.main", *args],
         cwd=tmp_path,
@@ -85,7 +87,7 @@ def test_recipe_learning_json_is_pure_in_subprocess(tmp_path: Path) -> None:
     assert artifact["object"] == "router_learning.recipe_learning"
 
 
-def test_recipe_learning_network_error_is_clean_and_redacted(tmp_path: Path) -> None:
+def test_recipe_learning_rejects_inline_credentials(tmp_path: Path) -> None:
     result = _run_cli_subprocess(
         tmp_path,
         "optimize",
@@ -98,10 +100,33 @@ def test_recipe_learning_network_error_is_clean_and_redacted(tmp_path: Path) -> 
 
     assert result.returncode == 1
     assert result.stdout == ""
-    assert result.stderr.startswith("Error: Router replay endpoint is not reachable")
+    assert result.stderr.startswith(
+        "Error: Router management credentials must use --token-env"
+    )
     assert "Traceback" not in result.stderr
     assert "TOPSECRET" not in result.stderr
-    assert "***@127.0.0.1:1" in result.stderr
+    assert "127.0.0.1" not in result.stderr
+
+
+def test_recipe_learning_connection_refused_is_clean(tmp_path: Path) -> None:
+    # Select and close an ephemeral loopback socket. Keeping it bound without
+    # listening causes a timeout on macOS instead of a connection refusal.
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as unavailable:
+        unavailable.bind(("127.0.0.1", 0))
+        endpoint = f"http://127.0.0.1:{unavailable.getsockname()[1]}"
+    result = _run_cli_subprocess(
+        tmp_path,
+        "optimize",
+        "recipe-learning",
+        "--endpoint",
+        endpoint,
+        "--timeout",
+        "1",
+    )
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert result.stderr.startswith("Error: Router management API is not reachable")
+    assert "Traceback" not in result.stderr
 
 
 def test_route_preview_network_error_is_clean_and_redacted(tmp_path: Path) -> None:

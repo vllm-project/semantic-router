@@ -1,54 +1,45 @@
 ---
-title: 当前模型目录
+title: Vela 模型目录
 sidebar_label: 模型目录
 translation:
-  source_commit: "e8c4109fd4151ad0c7c0163c8ead375bef882ddf"
+  source_commit: "19c03bfd28b6c53df9b682bbfc3e5fc1d372c803"
   source_file: "docs/training/model-catalog.md"
   outdated: false
 ---
 
-# 当前模型目录 {#current-model-catalog}
+# Vela 模型目录 {#vela-model-catalog}
 
-本目录覆盖当前
-[MoM 多语言嵌入集合](https://huggingface.co/collections/llm-semantic-router/mom-multilingual-embed)
-中的全部 5 个产物，以及
-[分类器集合](https://huggingface.co/collections/llm-semantic-router/mom-multilingual-class)
-中的全部 14 个产物。
-一行代表一个逻辑架构，并列出其所有已发布形态。
+[Vela 1.0](https://huggingface.co/collections/llm-semantic-router/vela-10-router-models-6aa555ba70cc6997d6d67798)是面向智能路由的模型家族。全部 12 个模型共享 307M 参数的 Vela Encoder 基座，覆盖请求理解、安全、检索和重排序。
 
-## 嵌入与重排序产物 {#embedding-and-reranking-artifacts}
+## 选择模型 {#choose-a-model}
 
-| 逻辑模型 | 已发布产物 | 架构 | 训练方法 |
-| --- | --- | --- | --- |
-| mmBERT-32K 基础 | [`mmbert-32k-yarn`](https://huggingface.co/llm-semantic-router/mmbert-32k-yarn) | 带 32K YaRN 上下文的 ModernBERT 掩码语言编码器 | 持续多语言掩码语言建模 |
-| mmBERT-32K embedder | [`mmbert-embed-32k-2d-matryoshka`](https://huggingface.co/llm-semantic-router/mmbert-embed-32k-2d-matryoshka) | 可选层和维度的 Bi-encoder 嵌入 | 带 2D Matryoshka 监督的 multiple-negatives ranking |
-| mmBERT-32K reranker | [`mmbert-rerank-32k-2d-matryoshka`](https://huggingface.co/llm-semantic-router/mmbert-rerank-32k-2d-matryoshka) | 带 20 个层/维度打分头的 Cross-encoder | 在所有头上平均的二元相关性损失 |
-| 小型多模态 embedder | [`multi-modal-embed-small`](https://huggingface.co/llm-semantic-router/multi-modal-embed-small) | MiniLM、SigLIP 和 Whisper-tiny 塔加两层融合；384 维 | 分阶段图文和音文对比对齐，带 Matryoshka 损失 |
-| 大型多模态 embedder | [`multi-modal-embed-large`](https://huggingface.co/llm-semantic-router/multi-modal-embed-large) | mmBERT-32K、SigLIP2-SO400M 和 Whisper-medium 三编码器；768 维 | 带难负例的缓存混合负例排序 |
+| 模型 | 用途 |
+| --- | --- |
+| [Encoder](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M) | 在共享基座上训练新任务 |
+| [Domain](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Domain) | 将请求分为 14 个主题领域 |
+| [Guard](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Guard) | 检测提示词注入和越狱攻击 |
+| [Safety](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Safety) | 检测不安全内容 |
+| [Shield](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Shield) | 检测不安全请求；可替代 Safety |
+| [Hazard](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Hazard) | 识别 12 类内容风险 |
+| [PII](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-PII) | 定位 17 类个人信息 |
+| [FactCheck](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-FactCheck) | 判断回答是否需要事实核查 |
+| [Feedback](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Feedback) | 识别满意、澄清、纠错、修改或无反馈 |
+| [Modality](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Modality) | 选择文本、图像或组合输出 |
+| [Embedding](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Embedding) | 比较请求并检索相关文档 |
+| [Reranker](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Reranker) | 按相关性重新排列候选文档 |
 
-数据流、目标、配置和命令见 [mmBERT-32K 模型](./mmbert-32k-models) 和[多模态嵌入](./multimodal-embeddings)。
+Guard 检测改变指令执行的攻击；Safety 检测内容风险，Hazard 识别风险类别。应用同时需要提示词攻击防护和内容策略时，可以组合使用。Shield 是单独训练的模型，与 Safety 使用相同的 `safe`/`unsafe` 接口；Safety 仍是默认模型，改用 Shield 的方法见英文版 [Safety 信号指南](https://vllm-sr.ai/docs/tutorials/signal/learned/safety#select-vela-shield)。
 
-## 分类器产物 {#classifier-artifacts}
+Embedding 和 Reranker 提供四种编码器深度和五种维度，方便权衡质量、延迟和内存。选择方法见 [Embedding 和 Reranking](./mmbert-32k-models)。
 
-下面前六个分类器使用多语言 mmBERT-32K/ModernBERT 编码器。两个已发布的安全产物使用 `jhu-clsp/mmBERT-base`；当前安全工作流可以训练 32K 后继产物。序列分类器为请求预测一个标签；PII 模型为每个 token 预测一个 BIO 标签。
+## 部署或定制 {#deploy-or-customize}
 
-| 逻辑模型 | 标签或输出 | 已发布产物 | 训练方法 |
-| --- | --- | --- | --- |
-| 意图分类器 | 14 个学科领域 | [`merged`](https://huggingface.co/llm-semantic-router/mmbert32k-intent-classifier-merged)、[`LoRA`](https://huggingface.co/llm-semantic-router/mmbert32k-intent-classifier-lora) | 在 MMLU-Pro 加上回退意图样本上做 LoRA 序列分类 |
-| 越狱检测器 | `benign`、`jailbreak` | [`merged`](https://huggingface.co/llm-semantic-router/mmbert32k-jailbreak-detector-merged)、[`LoRA`](https://huggingface.co/llm-semantic-router/mmbert32k-jailbreak-detector-lora) | 在良性/有毒聊天、攻击数据和模式增强上做 LoRA 序列分类 |
-| 反馈检测器 | 四种反馈状态 | [`merged`](https://huggingface.co/llm-semantic-router/mmbert32k-feedback-detector-merged)、[`LoRA`](https://huggingface.co/llm-semantic-router/mmbert32k-feedback-detector-lora) | 类别加权的 LoRA 序列分类 |
-| 模态路由器 | `AR`、`DIFFUSION`、`BOTH` | [`merged`](https://huggingface.co/llm-semantic-router/mmbert32k-modality-router-merged)、[`LoRA`](https://huggingface.co/llm-semantic-router/mmbert32k-modality-router-lora) | 带 focal loss、类别平衡和可选合成混合模态提示词的 LoRA |
-| 事实核查分类器 | `FACT_CHECK_NEEDED`、`NO_FACT_CHECK_NEEDED` | [`merged`](https://huggingface.co/llm-semantic-router/mmbert32k-factcheck-classifier-merged)、[`LoRA`](https://huggingface.co/llm-semantic-router/mmbert32k-factcheck-classifier-lora) | 在信息寻求和非信息寻求提示词上做平衡 LoRA 序列分类 |
-| PII 检测器 | 17 种实体类型，由 35 个 BIO 标签表示 | [`merged`](https://huggingface.co/llm-semantic-router/mmbert32k-pii-detector-merged)、[`LoRA`](https://huggingface.co/llm-semantic-router/mmbert32k-pii-detector-lora) | 带字符偏移到 token 对齐的 LoRA token 分类 |
-| 安全 Level 1 | `safe`、`unsafe` | [`LoRA adapter`](https://huggingface.co/llm-semantic-router/mmbert-safety-binary-merged) | 确定性仅提示词的 LoRA 序列分类 |
-| 安全 Level 2 | 九种危害输出 | [`LoRA`](https://huggingface.co/llm-semantic-router/mmbert-safety-binary-hazard) | 带固定分类对照的确定性仅提示词 LoRA 序列分类 |
+运行已发布模型，请参阅[使用 Vela 模型](../tutorials/global/vela-models.md)，了解默认下载和 Router 配置。Model card 提供独立使用的 quickstart 和评测结果。
 
-前六个任务见[分类器模型](./classifier-models)，两级安全流水线见[安全分类器](./mmbert-safety-classifier)。
+使用自己的数据适配模型，请从[训练概览](./training-overview)开始。共享 Encoder 用于训练；路由信号使用对应的任务 checkpoint。
 
-## 选择发布形态 {#choose-a-release-shape}
+## 早期版本和多模态模型 {#earlier-releases-and-multimodal-models}
 
-当运行时期望独立 Transformers 模型时，使用合并产物。当运行时可以加载 PEFT adapter 且你想要更小的任务专用产物时，使用 LoRA 产物。两种形态都必须保留训练时使用的同一分词器、标签顺序、基础模型兼容性和预处理契约。
+早期 [mmBERT 分类器集合](https://huggingface.co/collections/llm-semantic-router/mom-multilingual-class)和 [mmBERT 嵌入集合](https://huggingface.co/collections/llm-semantic-router/mom-multilingual-embed)仍可用于现有集成和对比。[产物索引](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_artifacts.json)保留了它们的训练入口。
 
-Model Card 描述已发布权重。仓库中已核对的训练配置描述新运行。两者不同时，将发布视为已有产物，将树内配置视为再训练的事实来源；没有原始数据和运行回执时，不要假设新检查点会逐位相同。
-
-Level 1 安全产物是 PEFT adapter，即使其历史名称以 `-merged` 结尾。检查产物内容和元数据，而不是从后缀推断加载方法。
+Vela 1.0 包含文本模型。图像和音频嵌入模型使用独立的[多模态训练指南](./multimodal-embeddings)。

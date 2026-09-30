@@ -85,7 +85,7 @@ function isCatalogRole(value: unknown): value is BuiltInModelRole {
     Number.isInteger(value.minimum_candidates) &&
     Number(value.minimum_candidates) >= 1 &&
     isStringArray(value.traits) &&
-    isStringArray(value.recommended_pool)
+    isStringArray(value.recommended_pool, true)
   )
 }
 
@@ -94,7 +94,7 @@ function isVerification(value: unknown, virtual: boolean): boolean {
     !isRecord(value) ||
     !isNonEmptyString(value.authority) ||
     !['claimed', 'imported', 'reproduced'].includes(String(value.status)) ||
-    !isNonEmptyString(value.verified_at)
+    (value.verified_at !== undefined && !isNonEmptyString(value.verified_at))
   ) {
     return false
   }

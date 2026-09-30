@@ -32,6 +32,7 @@ from cli.commands.runtime_support import (
 )
 from cli.consts import (
     DEFAULT_IMAGE_PULL_POLICY,
+    HEALTH_CHECK_TIMEOUT,
     IMAGE_PULL_POLICY_ALWAYS,
     IMAGE_PULL_POLICY_IF_NOT_PRESENT,
     IMAGE_PULL_POLICY_NEVER,
@@ -41,6 +42,7 @@ from cli.consts import (
     VLLM_SR_CONTAINER_IMAGE_DEFAULT,
 )
 from cli.deployment_backend import DEFAULT_TARGET, VALID_TARGETS, resolve_target
+from cli.runtime_lifecycle import validate_startup_timeout
 from cli.terminal import echo, fields, heading, success
 from cli.utils import get_logger
 
@@ -137,6 +139,7 @@ def _deploy_serve_backend(
     image_pull_policy: str,
     minimal: bool,
     readonly: bool,
+    startup_timeout: int | None,
 ) -> None:
     """Deploy one prepared runtime."""
 
@@ -162,6 +165,7 @@ def _deploy_serve_backend(
         enable_observability=not minimal,
         minimal=minimal,
         readonly=readonly,
+        **({"startup_timeout": startup_timeout} if startup_timeout is not None else {}),
     )
 
 
@@ -185,9 +189,16 @@ def _execute_serve(
     chart_dir: str | None,
     runtime: str | None,
     recipe_env_names: tuple[str, ...] = (),
+    startup_timeout: int | None = None,
 ) -> None:
     """Bootstrap workspace, resolve config, and delegate to the deployment backend."""
     resolved_target = resolve_target(target)
+    if startup_timeout is not None:
+        validate_startup_timeout(startup_timeout)
+        if resolved_target != "docker":
+            raise ValueError(
+                "--startup-timeout is supported only for local Docker deployments"
+            )
     _validate_target_platform(resolved_target, platform)
     apply_container_runtime_override(runtime)
     config_path, source_setup_mode = _resolve_serve_config(config, resolved_target)
@@ -207,6 +218,8 @@ def _execute_serve(
                 platform=platform,
                 recipe_env_bindings=recipe_env_bindings,
                 replace_active_config=replace_active_config,
+                minimal=minimal,
+                readonly=readonly,
             )
         )
         validate_setup_mode_flags(setup_mode, minimal, readonly)
@@ -243,6 +256,7 @@ def _execute_serve(
             image_pull_policy=image_pull_policy,
             minimal=minimal,
             readonly=readonly,
+            startup_timeout=startup_timeout,
         )
     finally:
         if runtime_lock is not None:
@@ -296,6 +310,16 @@ def _execute_serve(
     ),
     default=DEFAULT_IMAGE_PULL_POLICY,
     help=f"Image pull policy: always, ifnotpresent, never (default: {DEFAULT_IMAGE_PULL_POLICY})",
+)
+@click.option(
+    "--startup-timeout",
+    type=click.IntRange(min=1),
+    default=None,
+    metavar="SECONDS",
+    help=(
+        "Local Docker startup readiness budget in seconds, including model loading "
+        f"and compilation (default: {HEALTH_CHECK_TIMEOUT})."
+    ),
 )
 @click.option(
     "--readonly",
@@ -395,6 +419,7 @@ def serve(
     chart_dir: str | None,
     runtime: str | None,
     recipe_env_names: tuple[str, ...],
+    startup_timeout: int | None,
 ) -> None:
     _execute_serve(
         config,
@@ -416,6 +441,7 @@ def serve(
         chart_dir,
         runtime,
         recipe_env_names,
+        startup_timeout,
     )
 
 

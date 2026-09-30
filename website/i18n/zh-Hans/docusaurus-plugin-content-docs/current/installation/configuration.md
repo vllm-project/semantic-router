@@ -260,6 +260,45 @@ api_key: ${MODEL_API_KEY}
 
 内置虚拟模型、CLI 服务、后端绑定、分叉、打包和迁移见[模型、入口点与服务](../tutorials/global/models-entrypoints-serving)。完整 schema 见[虚拟模型](../tutorials/global/entrypoints-and-recipes)。
 
+### 配方级候选约束和回放策略
+
+可在默认配方或具名配方的 `routing` 中独立声明以下可选策略：
+
+```yaml
+candidate_requirements:
+  capabilities: declared
+  context: known_limits
+data_policy:
+  replay: false
+```
+
+`capabilities: declared` 要求模型显式声明请求所需的任务能力，包括工具和图像输入，并且提供方协议兼容。
+`context: known_limits` 将估算的输入需求与有效输出预留相加，再检查模型声明的限制。
+请求必须提供输出上限，或者 decision 配置正整数 `request_params.default_max_tokens`。
+默认值仅在调用方未指定时生效，之后仍按现有 `max_tokens_limit` 限制。模型的最大输出容量不是请求默认值。
+缺少必要模型事实或有效输出上限的候选不可选。
+输入计数仍是估算，尤其是多模态内容，因此不保证精确的提供方 token 容量。省略某个字段会保留该维度原有的兼容行为。
+
+例如，decision 可通过现有插件提供输出上限：
+
+```yaml
+plugins:
+  - type: request_params
+    configuration:
+      default_max_tokens: 4096
+      max_tokens_limit: 8192
+```
+
+配方的 `replay: false` 禁止路由器回放捕获，decision 不能重新开启；在尚未得到 decision 时被拒绝的请求同样适用。
+省略或 true 不额外限制现有全局和 decision 配置。该字段不控制其他存储、日志或后端留存；运营者仍需选择满足隐私要求的部署。
+
+多因素选择的 `latency_metric: ttft` 比较首 token 延迟，`tpot` 比较每个输出 token 的耗时。
+省略时保留原有的 TPOT 优先、TTFT 后备行为。如果质量是准入下限，可配合明确的质量证据和字典序目标使用。
+
+使用 `vllm-sr config schema --section routing.candidate_requirements` 和
+`vllm-sr config schema --section routing.data_policy` 查看当前契约。DSL 的 `ROUTING` 块支持相同对象。
+Kubernetes CRD 导出保留默认 routing 的策略；具名配方和入口点应使用 canonical YAML，CRD 导出会明确拒绝而不会静默丢弃。
+
 ## 配置工作流
 
 canonical 文档可以通过多个界面编写或应用：

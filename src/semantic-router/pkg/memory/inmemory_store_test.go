@@ -2,32 +2,19 @@ package memory
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 )
-
-func init() {
-	// Initialize BERT model for embeddings (required for similarity calculation)
-	err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true)
-	if err != nil {
-		// Skip tests if model initialization fails (model might not be available)
-		fmt.Printf("Warning: Failed to initialize BERT model for tests: %v\n", err)
-		fmt.Printf("Tests will be skipped. Make sure models are downloaded.\n")
-	}
-}
 
 // =============================================================================
 // Test Helpers
 // =============================================================================
 
 // newTestInMemoryStore creates an InMemoryStore with bert config for testing
-// since that's the model initialized in init()
+// with explicit fixture vectors; model quality is exercised by live Vela integration.
 func newTestInMemoryStore() *InMemoryStore {
 	return NewInMemoryStoreWithConfig(EmbeddingConfig{
 		Provider: memoryTestEmbeddingProvider(),

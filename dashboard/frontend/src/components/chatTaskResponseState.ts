@@ -151,6 +151,7 @@ export class ChatTaskResponseState {
         existingToolCall.function.arguments = mergeToolCallArgumentChunk(
           existingToolCall.function.arguments,
           parsedToolCall.functionArguments,
+          parsedToolCall.argumentMode,
         )
       }
       if (parsedToolCall.id) {
