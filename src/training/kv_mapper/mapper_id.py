@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
+from typing import Any
 
 _PRECISION_ALIASES = {
     "fp16": "fp16",
@@ -22,14 +24,23 @@ def normalize_precision(precision: str) -> str:
         raise ValueError(f"unsupported mapper precision: {precision!r}") from exc
 
 
-def _revision_token(revision: str, max_len: int = 12) -> str:
-    """HF revision or commit id, safe for use in a config string."""
-    token = re.sub(r"[^a-zA-Z0-9._-]", "-", revision.strip())
-    if not token:
-        raise ValueError("revision must be non-empty")
-    if len(token) > max_len:
-        return token[-max_len:]
-    return token
+_COMMIT_SHA = re.compile(r"[0-9a-f]{40}\Z")
+
+
+def require_weight_commit(revision: str) -> str:
+    """Return a canonical immutable Hugging Face weight commit."""
+    commit = revision.strip().lower()
+    if not _COMMIT_SHA.fullmatch(commit):
+        raise ValueError("model weight revision must be a full 40-character commit SHA")
+    return commit
+
+
+def resolve_weight_commit(
+    model_id: str, revision: str, model_info: Callable[..., Any]
+) -> str:
+    """Resolve a branch or tag once, before loading or recording model weights."""
+    info = model_info(model_id, revision=revision)
+    return require_weight_commit(info.sha)
 
 
 def make_mapper_id(
@@ -51,8 +62,8 @@ def make_mapper_id(
     revisions are re-fitted with a new recipe; it is not a model revision.
     """
     prec = normalize_precision(precision)
-    src = _revision_token(source_revision)
-    tgt = _revision_token(target_revision)
+    src = require_weight_commit(source_revision)
+    tgt = require_weight_commit(target_revision)
     tp = f"tp{source_tp}" if source_tp == target_tp else f"tp{source_tp}to{target_tp}"
     return (
         f"{pair_slug}-{variant}-{prec}-{tp}-h{n_kv_heads}"

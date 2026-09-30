@@ -34,16 +34,16 @@ COMPAT_MISMATCHES = (
     ("target_tp", 2),
     ("head_order", "other"),
     ("variant", "per_head"),
-    ("source_revision", "mismatch"),
+    ("source_revision", "c" * 40),
 )
 
 
 def _compat(**overrides) -> CompatibilitySpec:
     base = {
         "source_model": "Qwen/Qwen3-14B",
-        "source_revision": "abc123",
+        "source_revision": "a" * 40,
         "target_model": "Qwen/Qwen3-32B",
-        "target_revision": "def456",
+        "target_revision": "b" * 40,
         "variant": "full_head",
         "precision": "fp16",
         "source_tp": 1,
@@ -96,6 +96,13 @@ def _synthetic_tensors(
 
 
 class ArtifactContractTests(unittest.TestCase):
+    def test_artifact_compatibility_requires_immutable_revisions(self) -> None:
+        for field in ("source_revision", "target_revision"):
+            with self.subTest(field=field), self.assertRaisesRegex(
+                ValueError, "commit SHA"
+            ):
+                _compat(**{field: "main"})
+
     def test_rejects_wrong_tensor_layout(self) -> None:
         manifest = _synthetic_manifest()
         tensors = _synthetic_tensors()
@@ -189,8 +196,8 @@ class ArtifactContractTests(unittest.TestCase):
                 pair_slug="pair",
                 variant="full_head",
                 precision="bfloat16",
-                source_revision="abc123",
-                target_revision="def456",
+                source_revision="a" * 40,
+                target_revision="b" * 40,
                 source_tp=1,
                 target_tp=1,
                 n_kv_heads=8,

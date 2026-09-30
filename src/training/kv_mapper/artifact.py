@@ -11,7 +11,7 @@ from typing import Any
 import numpy as np
 from safetensors.numpy import load_file, save_file
 
-from src.training.kv_mapper.mapper_id import normalize_precision
+from src.training.kv_mapper.mapper_id import normalize_precision, require_weight_commit
 
 WEIGHTS_FILE = "weights.safetensors"
 MANIFEST_FILE = "manifest.json"
@@ -38,6 +38,12 @@ class CompatibilitySpec:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "precision", normalize_precision(self.precision))
+        object.__setattr__(
+            self, "source_revision", require_weight_commit(self.source_revision)
+        )
+        object.__setattr__(
+            self, "target_revision", require_weight_commit(self.target_revision)
+        )
 
 
 @dataclass

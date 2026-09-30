@@ -20,9 +20,10 @@ qwen3-14b-32b-full_head-fp16-tp1-h8-s<src>-t<tgt>-b1/
 
 Tensor keys: `target.{layer}.k.W`, `target.{layer}.k.b`, and the same for `v`.
 
-`mapper_id` pins Hugging Face weight revisions, dtype, and KV head count, not a
-routing alias. `bundle_version` (`b1`, `b2`, …) is a re-fit of the same
-revisions.
+`mapper_id` includes the full immutable Hugging Face weight commits, dtype, and
+KV head count. Branch names and tags must be resolved before fitting and cannot
+be written into an artifact. `bundle_version` (`b1`, `b2`, …) is a re-fit of the
+same commits.
 
 ## Install
 
