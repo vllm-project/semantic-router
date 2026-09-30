@@ -1,7 +1,7 @@
 import collections
 import unittest
 
-from v2.data.hr2 import build
+from v2.data.hr2 import audit, build, review
 from v2.data.hr2 import families as fam
 
 SCREEN = (set(), set())
@@ -166,6 +166,104 @@ class CommonRulesTest(unittest.TestCase):
         capped = fam.cap_share(rows, 100, 0.30, "t")
         cells = collections.Counter(r["audit_metadata"]["hr2"]["cell"] for r in capped)
         self.assertLessEqual(max(cells.values()), 0.30 * len(capped))
+
+
+def review_row(i, family, task_type, label, levels=2):
+    keys = {"choice": ["a", "b"], "noul": ["false", "true"]}.get(
+        task_type, [str(k) for k in range(levels)]
+    )
+    return {
+        "id": f"hr2-{family}-{i}",
+        "group_id": f"hr2:{family}:{i}",
+        "family": family,
+        "source": f"{family}_train",
+        "language": "en",
+        "split": "train",
+        "task_type": task_type,
+        "label": label,
+        "instructions": "Q?",
+        "state": {"text": f"item {i}"},
+        "options": [{"key": k, "description": k} for k in keys],
+    }
+
+
+class ReviewTest(unittest.TestCase):
+    def rows(self):
+        rows = [review_row(i, "fam_noul", "noul", i % 2) for i in range(60)]
+        rows += [review_row(i, "fam_score", "score", i % 5, 5) for i in range(60)]
+        return rows
+
+    def test_sample_is_blind_stratified_and_one_per_group(self):
+        built = review.build(self.rows(), "0" * 64)
+        key = built["key"]
+        self.assertEqual(len(key), 48)
+        cells = collections.Counter((k["family"], k["gold"]) for k in key)
+        self.assertEqual(cells[("fam_noul", "true")], 12)
+        self.assertEqual(
+            sorted(v for (f, _), v in cells.items() if f == "fam_score"),
+            [4, 5, 5, 5, 5],
+        )
+        self.assertEqual(len({k["group_id"] for k in key}), 48)
+        packet = [item for chunk in built["packets_r1"] for item in chunk]
+        self.assertEqual(sorted(packet[0]), sorted(review.FIELDS))
+        self.assertEqual(
+            sorted(i["rid"] for c in built["packets_r2"] for i in c),
+            sorted(i["rid"] for i in packet),
+        )
+
+    def test_errors_splits_and_score_tolerance(self):
+        key = review.build(self.rows(), "0" * 64)["key"]
+        r1, r2 = {}, {}
+        for row in key:
+            gold = row["gold"]
+            if row["task_type"] == "score":
+                r1[row["rid"]] = {"answer": str((int(gold) + 1) % 5)}
+                r2[row["rid"]] = {"answer": gold}
+            else:
+                other = "false" if gold == "true" else "true"
+                r1[row["rid"]] = {"answer": "yes" if gold == "true" else "no"}
+                r2[row["rid"]] = {"answer": other}
+        splits = review.split_rids(key, r1, r2)
+        noul = [k for k in key if k["task_type"] == "noul"]
+        wrapped = [k for k in key if k["task_type"] == "score" and k["gold"] == "4"]
+        self.assertEqual(len(splits), len(noul) + len(wrapped))
+        r3 = {rid: {"answer": r2[rid]["answer"]} for rid in splits}
+        sample = {
+            "population": {"fam_noul": 60, "fam_score": 60},
+            "rows_sha256": "",
+            "rows": 120,
+            "salt": review.SALT,
+            "n": len(key),
+        }
+        report, private = review.score(sample, key, r1, r2, r3)
+        self.assertEqual(report["verdict"]["errors"], len(noul))
+        self.assertEqual(report["verdict"]["failing_families"], ["fam_noul"])
+        self.assertIsNotNone(report["fix_rule_f1"])
+        self.assertEqual(report["fix_rule_f1"]["errors"], 0)
+        self.assertEqual(len(private["errors"]), len(noul))
+
+
+class AuditTest(unittest.TestCase):
+    def test_names_pass_on_the_registries(self):
+        self.assertEqual(audit.names()["hits"], {})
+
+    def test_quarantine_lists(self):
+        rows = [
+            {"group_id": "g1", "family": "f", "split": "train"},
+            {"group_id": "g2", "family": "f", "split": "select"},
+            {"group_id": "g3", "family": "h", "split": "select"},
+        ]
+        hit = {"methods": ["N"], "roles": ["panel"]}
+        drop, dev_drop, public = audit.quarantine(
+            rows,
+            [{"groups": {"g1": hit}}],
+            {"groups": {"g2": dict(hit, roles=["train_role"])}},
+            {"panel"},
+            {"pairs": [{"a": "g3", "b": "g1"}, {"a": "g1", "b": "g2"}]},
+        )
+        self.assertEqual(drop, {"g1"})
+        self.assertEqual(dev_drop, {"g3"})
+        self.assertEqual(public["report_only_roles_hit"], {"train_role": 1})
 
 
 if __name__ == "__main__":
