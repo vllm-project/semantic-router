@@ -9,7 +9,11 @@
 #   default Gemma 15.0 / Qwen3.5-MoE 20.0), ARM_CAP (cumulative per arm-seed, default FULL_CAP + 1).
 # The contract is M4-A20r's: a20 (SHA-256 checked), rank 32 / alpha 64 / dropout 0.05 on every non-expert
 # projection, LoRA 2e-5 / head 1e-4, ce_brier 0.5, one pass, micro-batch 1 x 16, SELECT700 selection, a
-# fresh training autotune cache seeded from T0. The trainer is the MoE pipeline (BEST368 + MoE backbones).
+# fresh training autotune cache seeded from T0. The trainer is the mirror's byte-frozen training.model.train (the code
+# that trained A20r at M4's mirror), run from /code as the 27B launcher does, through v2.27b.moe.train_moe (the MoE
+# experts pin and the Gemma BOS encoder).
+# PREFLIGHT_TAG (e.g. -r2) suffixes the onestep / reload receipts and directories of a repeated preflight after an
+# infrastructure failure (amendment 2); earlier receipts stay counted.
 set -euo pipefail
 NODE=$1 ARM=$2 GPU=$3 BASE_NAME=$4 SEED=$5 MIRROR=$6 STAGES=${7:-admit,onestep,reload,full}
 CODE=/data/dev2/src/$MIRROR/src/training/decision2
@@ -21,8 +25,6 @@ MIX_SHA=4aa0dc964505682b2840fa5167a7ec14983e5a0cea427480bed1996f1befc0d4
 T0=/data/dev2/runs/27b/m4-train-cache-T0
 T0_SHA=1933eb36d746a3bf3b716967ce97f977620eab0f7a390f751e79bfd4f8b2e21f
 IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1
-PIPE_TAR=v2/27b/moe/pinned/moe-pipeline-2026-10-01.tar
-PIPE_MANIFEST=v2/27b/moe/pinned/moe-pipeline-2026-10-01.manifest.json
 SAVE_EVERY=446
 EXPERTS=${EXPERTS:-}
 case "$NODE:$GPU" in a:3 | a:4 | a:5 | b:6 | b:7) ;; *) echo "node $NODE GPU$GPU is outside the MoE allocation" >&2; exit 2 ;; esac
@@ -51,30 +53,17 @@ flock -n 9 || { echo "another driver holds $RUN" >&2; exit 75; }
 cd "$CODE"
 has() { case ",$STAGES," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
 
-if [ ! -d "$RUN/pipeline" ]; then
-  mkdir "$RUN/pipeline"
-  tar -x -C "$RUN/pipeline" -f "$PIPE_TAR"
-fi
-python3 - "$RUN/pipeline" "$PIPE_MANIFEST" <<'EOF'
-import hashlib, json, pathlib, sys
-root, manifest = pathlib.Path(sys.argv[1]), json.load(open(sys.argv[2]))
-actual = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(root.rglob("*.py"))}
-if actual != manifest["files_sha256"]:
-    raise SystemExit("MoE pipeline differs from its manifest")
-print("MoE pipeline verified", len(actual), "files")
-EOF
-
 if [ ! -e "$RUN/triton-cache" ]; then
   PYTHONPATH=$CODE python3 -m v2.27b.triton_cache copy --frozen "$T0" --expect "$T0_SHA" --dest "$RUN/triton-cache"
 fi
 COMMON_MOUNTS=(
-  --mount "$RUN/pipeline:/pipeline" --mount "$CODE:/code" --mount "$MODEL_DIR:/source"
+  --mount "$CODE:/code" --mount "$MODEL_DIR:/source"
   --mount "$MIX:/data/train.jsonl"
   --mount "$DATA/rights_clean_goemotions_v2/select.jsonl:/data/select.jsonl"
   --mount "$DATA/rights_clean_goemotions_v2/cal.jsonl:/data/cal.jsonl"
   --mount "$RUN/triton-cache:/triton-cache:rw"
 )
-ENVS=(--env PYTHONPATH=/pipeline:/code:/opt/decision-fla --env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=/triton-cache)
+ENVS=(--env PYTHONPATH=/code:/opt/decision-fla --env TRITON_CACHE_AUTOTUNING=1 --env TRITON_CACHE_DIR=/triton-cache)
 CONTRACT_ARGS=(
   --init-kind "$KIND" --base-revision "$REV" --train /data/train.jsonl --select /data/select.jsonl
   --cal /data/cal.jsonl --objective ce_brier --brier-weight 0.5 --train-mode lora
@@ -83,8 +72,8 @@ CONTRACT_ARGS=(
   --backbone-lr 1e-6 --head-lr 1e-4 --weight-decay 0.01 --warmup-ratio 0.05
   --seed "$SEED" --gradient-checkpointing --experts-implementation "${EXPERTS:-eager}"
 )
-TRAIN_ARGS=(python3 -m training.model.train --model-path /source "${CONTRACT_ARGS[@]}")
-RESUME_ARGS=(python3 -m training.model.train --source-path /source "${CONTRACT_ARGS[@]}")
+TRAIN_ARGS=(python3 -m v2.27b.moe.train_moe --model-path /source "${CONTRACT_ARGS[@]}")
+RESUME_ARGS=(python3 -m v2.27b.moe.train_moe --source-path /source "${CONTRACT_ARGS[@]}")
 launch() {  # name cap purpose out_dir -- argv...
   local name=$1 cap=$2 purpose=$3 out=$4
   shift 5
@@ -117,11 +106,13 @@ if has admit; then
     --partition cal=/datasrc/rights_clean_goemotions_v2/cal.jsonl --output /out/admission.json
   python3 -c "import json,sys; r=json.load(open('$RUN/admit/admission.json')); sys.exit(0 if r['all_admitted'] else 3)"
 fi
+TAG=${PREFLIGHT_TAG:-}
+[[ "$TAG" =~ ^(-r[2-9])?$ ]] || { echo "PREFLIGHT_TAG must be empty or -r2..-r9" >&2; exit 2; }
 if has onestep; then
-  launch onestep 0.6 "one-step preflight" "$RUN/onestep" -- "${TRAIN_ARGS[@]}" --max-steps 1 --save-every 1 --output /out/run
+  launch "onestep$TAG" 0.6 "one-step preflight" "$RUN/onestep$TAG" -- "${TRAIN_ARGS[@]}" --max-steps 1 --save-every 1 --output /out/run
 fi
 if has reload; then
-  launch reload 0.5 "reload parity" "$RUN/onestep" -- python3 -m v2.27b.moe.preflight_reload \
+  launch "reload$TAG" 0.5 "reload parity" "$RUN/onestep$TAG" -- python3 -m v2.27b.moe.preflight_reload \
     --run-dir /out/run --step 1 --source-path /source --select /data/select.jsonl \
     --rows 32 --max-length "$LIMIT" --output /out/reload-parity.json
 fi

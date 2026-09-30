@@ -153,3 +153,22 @@ Receipts: node A `/data/dev2/runs/27b-moe/MOE-{Git,Qit}-probe/{probe/experts-pro
   continuation ≤ 14.1 (Qwen) / 10.1 (Gemma); seed 2 ≤ 18.8 / 13.5; readouts, soup readout, formal and mlx-diag ≈ 7.
   Worst case ≈ 54, Gemma winner ≈ 45. **A second surviving cell gets no seed 2** (attribution only); if G1 projects
   above 60, Q-pt stops first.
+
+## Amendment 2 (2026-10-01 01:25 UTC+8; after a setup failure of the first one-step, before any training update)
+
+- **Finding (affects how the 27B records describe their trainer; no result changes):** the 27B launcher runs every
+  container with working directory `/code` and `python3 -m`, and `-m` puts the working directory ahead of
+  `PYTHONPATH`. So the vendored BEST368 tar mounted at `/pipeline` was never imported. A20r's own provenance
+  (`M4-A20r-s1/full/run/provenance.json`, `code_sha256`: `train.py` `0111bbfd…`, `data.py` `632bd605…`, `loss.py`
+  `c6fc39ed…`, `plan.py` `c39d706e…`, `source.py` `ef7b3017…`, `decision_model.py` `1ab1e49b…`, `lora.py` `7049e35e…`)
+  equals the repository files at M4's mirror `1b56e482b`, not the BEST368 files (`train.py` `f5a1a1a0…`). **The A20r
+  trainer is the repository trainer.** Today's integration head has the same `train/data/loss/plan/source` bytes, and
+  `decision_model.py` / `lora.py` differ only by this milestone's MoE commit (dense paths unchanged).
+- **Change:** the cells train with the mirror's `training.model.train`, byte-frozen at `0111bbfd…` (a repository test
+  pins it), through `v2.27b.moe.train_moe`, which passes the experts pin to `from_base`, sets Gemma's BOS encoder and
+  prompt version, and writes a receipt beside the run. The MoE pipeline tar of amendment 1 is withdrawn (never used).
+- **Setup failure, recorded:** the first one-step of MOE-Git-s1, MOE-Qit-s1 and MOE-Qpt-s1 exited 2 after ≈ 1.3 s
+  (0.00035–0.00037 GPU-h each): argparse rejected `--experts-implementation` because the frozen trainer has no such
+  option. No model code ran. As with Milestone 1's zero-step launch incident, this is an infrastructure failure, not a
+  preflight outcome: the one-step and reload are repeated **once** under `-r2` receipts with the fixed entry point; a
+  second failure stops the cell. Admission receipts stand.
