@@ -444,3 +444,66 @@ class SupersededMemoryTest(MemoryFeaturesTest):
             f"Both turns reached the prompt, so the move did not retire the job: "
             f"{prompt[:PREVIEW_LENGTH]}...",
         )
+
+    def test_03_a_quoted_task_example_does_not_correct_earlier_fact(self):
+        """Quoting a first-person change in a task prompt must not retire an earlier fact."""
+        self.print_test_header(
+            "Quoted Task Is Not A Correction",
+            "Store a residence fact, store a translation quoting a move, verify residence stays",
+        )
+
+        first = self.send_memory_request(
+            message="I live in Boston.", auto_store=True
+        )
+        self.assertIsNotNone(first, "Failed to store the residence fact")
+
+        second = self.send_memory_request(
+            message='Please translate this sentence: "I just moved to Denver, and I live there now."',
+            auto_store=True,
+        )
+        self.assertIsNotNone(second, "Failed to store the translation task")
+
+        self.wait_for_storage()
+        self.flush_and_wait(8)
+
+        prompt = self._prompt_containing(
+            "Where do I live?",
+            ["boston"],
+        )
+        self.print_test_result(
+            True,
+            f"The residence reached the prompt and was not hidden by the quoted example: "
+            f"{prompt[:PREVIEW_LENGTH]}...",
+        )
+
+    def test_04_explicit_reaffirmation_with_continue_or_remain_does_not_correct_earlier_fact(self):
+        """Explicit reaffirmations such as continue or remain must not retire an older fact."""
+        self.print_test_header(
+            "Continue Or Remain Reaffirmation Is Not A Correction",
+            "Store a workplace fact, store a move reaffirming nursing with continue, verify workplace stays",
+        )
+
+        first = self.send_memory_request(
+            message="I work as a nurse at the Children's Hospital.", auto_store=True
+        )
+        self.assertIsNotNone(first, "Failed to store the workplace fact")
+
+        second = self.send_memory_request(
+            message="I moved apartments, and I continue to work as a nurse now.",
+            auto_store=True,
+        )
+        self.assertIsNotNone(second, "Failed to store the reaffirming move")
+
+        self.wait_for_storage()
+        self.flush_and_wait(8)
+
+        prompt = self._prompt_containing(
+            "Where do I work as a nurse?",
+            ["children", "apartments"],
+        )
+        self.print_test_result(
+            True,
+            f"Both turns reached the prompt, so continuing the job did not retire the hospital fact: "
+            f"{prompt[:PREVIEW_LENGTH]}...",
+        )
+

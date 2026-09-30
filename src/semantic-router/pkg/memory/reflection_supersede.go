@@ -271,7 +271,8 @@ func parseRetrievedTurns(m *Memory, statementIDs map[string]int) []retrievedTurn
 		sentences := statementSentences(userStatement(segment))
 		otherFacts := 0
 		for _, sentence := range sentences {
-			clauses, joined := sentenceClauses(sentence.text)
+			unquotedText := withoutQuotedContent(sentence.text)
+			clauses, joined := sentenceClauses(unquotedText)
 			inCorrection := make([]bool, len(clauses))
 			if trusted && !sentence.question {
 				var pairs []wordPair
@@ -325,12 +326,19 @@ func correctionPairs(clauses [][]string) ([]wordPair, []bool) {
 	return pairs, inCorrection
 }
 
+var reaffirmingWords = wordSet("still continue continues continued remain remains remained stay stays stayed")
+
 // reaffirms reports that a clause keeps a fact as it was, as in "I moved
-// apartments, and I still work as a nurse now". Saying a fact still holds
-// reports no change, so the clause neither anchors a correction nor rides out
-// with the turn that reports one.
+// apartments, and I still work as a nurse now" or "and I continue to work as a
+// nurse now". Saying a fact still holds reports no change, so the clause neither
+// anchors a correction nor rides out with the turn that reports one.
 func reaffirms(clause []string) bool {
-	return slices.Contains(clause, "still")
+	for _, word := range clause {
+		if reaffirmingWords[word] {
+			return true
+		}
+	}
+	return false
 }
 
 // statesAnotherFact treats a comma clause as its own fact, as in "my dog is
@@ -407,7 +415,23 @@ type statementSentence struct {
 func statementSentences(statement string) []statementSentence {
 	var sentences []statementSentence
 	start := 0
+	inDouble := false
+	inSmart := false
+	inBacktick := false
 	for i, r := range statement {
+		switch r {
+		case '"':
+			inDouble = !inDouble
+		case '“':
+			inSmart = true
+		case '”':
+			inSmart = false
+		case '`':
+			inBacktick = !inBacktick
+		}
+		if inDouble || inSmart || inBacktick {
+			continue
+		}
 		if r != '.' && r != '!' && r != '?' && r != ';' && r != '\n' {
 			continue
 		}
@@ -420,6 +444,37 @@ func statementSentences(statement string) []statementSentence {
 		sentences = append(sentences, statementSentence{text: text})
 	}
 	return sentences
+}
+
+// withoutQuotedContent returns text with quoted substrings stripped, so quotes
+// enclosing examples, translations or tasks don't introduce false corrections.
+func withoutQuotedContent(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	inDouble := false
+	inSmart := false
+	inBacktick := false
+	for _, r := range s {
+		switch r {
+		case '"':
+			inDouble = !inDouble
+			continue
+		case '“':
+			inSmart = true
+			continue
+		case '”':
+			inSmart = false
+			continue
+		case '`':
+			inBacktick = !inBacktick
+			continue
+		}
+		if inDouble || inSmart || inBacktick {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 // sentenceClauses splits a sentence at commas and at "and" or "but", and

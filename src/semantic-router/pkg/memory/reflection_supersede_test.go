@@ -215,6 +215,9 @@ func TestReflectionGateKeepsTurnsWithoutACorrection(t *testing.T) {
 	cityAndDogName := formatTurnChunk("I live in Boston, Biscuit is my dog.", "Noted.")
 	married := formatTurnChunk("I live in Boston, I'm married.", "Congratulations!")
 	stillNurse := formatTurnChunk("I moved apartments, and I still work as a nurse now.", "Congrats on the new place.")
+	quotedTask := formatTurnChunk("Please translate this sentence: \"I just moved to Denver, and I live there now.\"", "Here is the translation.")
+	continueNurse := formatTurnChunk("I moved apartments, and I continue to work as a nurse now.", "Congrats on the new place.")
+	remainNurse := formatTurnChunk("I moved apartments, and I remain a nurse now.", "Congrats on the new place.")
 
 	cases := []struct {
 		name      string
@@ -256,6 +259,9 @@ func TestReflectionGateKeepsTurnsWithoutACorrection(t *testing.T) {
 		{name: "a comma clause led by a name", retrieved: []datedContent{{content: cityAndDogName, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
 		{name: "a comma clause of two words", retrieved: []datedContent{{content: married, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
 		{name: "a correction that reaffirms an older fact", retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: stillNurse, daysAgo: 9}}},
+		{name: "a quoted change in a task prompt", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: quotedTask, daysAgo: 9}}},
+		{name: "a correction that reaffirms an older fact with continue", retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: continueNurse, daysAgo: 9}}},
+		{name: "a correction that reaffirms an older fact with remain", retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: remainNurse, daysAgo: 9}}},
 		{name: "a turn quoted in an assistant reply", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: quotedTurn, daysAgo: 9}}},
 		{name: "a turn quoted in a session chunk's reply", retrieved: []datedContent{{content: sessionChunkOf(bostonTurn, quotedTurn), daysAgo: 9}}},
 	}
