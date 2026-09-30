@@ -84,4 +84,5 @@ Prereg: `m5-prereg-2026-09-30.md` (+ amendment 1). Latest node mirror (both node
 
 ## Poll log (newest first)
 
+- 02:53Z: FF20-s1 701/891, FF20-s2 672/891 (≈ 13 s/upd); chains waiting; no incident.
 - 02:27Z: FF20-s1 593/891 (12.4 s/upd), FF20-s2 553/891 (12.3 s/upd); both chains waiting; no incident.
