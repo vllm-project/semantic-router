@@ -210,6 +210,22 @@ class RulesTest(unittest.TestCase):
         self.assertFalse(g["eligible"])
         self.assertEqual(g["score5t_check_flags"], ["COLLAPSE"])
 
+    def test_amendment3_relative_score_floor(self):
+        def s5(flags, top, upper):
+            return {
+                "check": {
+                    "flags": flags,
+                    "top_share": top,
+                    "top_share_wilson95": [top - 0.04, upper],
+                }
+            }
+
+        ref = s5(["COLLAPSE", "NO-GAIN"], 0.31, 0.357)
+        self.assertEqual(mr.score_floor(s5(["COLLAPSE"], 0.33, 0.38), ref), [])
+        self.assertEqual(mr.score_floor(s5([], 0.40, 0.45), ref), [])
+        self.assertTrue(mr.score_floor(s5(["COLLAPSE"], 0.92, 0.95), ref))
+        self.assertTrue(mr.score_floor(s5(["WARN"], 0.88, 0.91), ref))
+
     def test_pick_prefers_gain_then_larger_alpha(self):
         rows = [
             {

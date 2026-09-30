@@ -41,6 +41,7 @@ TYPE_SLACK = Fraction(3, 100)
 FAMILY_SLACK = Fraction(1, 10)
 NOUL_FAMILY = "rule_precedence"
 NOUL_SLACK = Fraction(1, 100)
+TOP_SHARE = 0.90
 HT_TIE = 0.02
 EARLY_SELECT_SLACK = 0.03
 PROXY_DROP = 8.0
@@ -100,6 +101,20 @@ def score5t_flags(block: dict[str, Any]) -> set[str]:
 def score_floor(point_s5: dict[str, Any], ref_s5: dict[str, Any]) -> list[str]:
     flags, ref_flags = score5t_flags(point_s5), score5t_flags(ref_s5)
     reasons = []
+    if "COLLAPSE" in ref_flags:
+        # Amendment 3: the incumbent's check half is itself flagged, so only a new level concentration counts
+        # (the eval's top-share thresholds for COLLAPSE / WARN).
+        top, upper = (
+            point_s5["check"]["top_share"],
+            point_s5["check"]["top_share_wilson95"][1],
+        )
+        if top >= TOP_SHARE:
+            reasons.append(f"Score5-typed-DEV check top share {top:.3f} >= {TOP_SHARE}")
+        elif upper >= TOP_SHARE > ref_s5["check"]["top_share_wilson95"][1]:
+            reasons.append(
+                f"Score5-typed-DEV check top-share upper bound {upper:.3f} >= {TOP_SHARE}"
+            )
+        return reasons
     if "COLLAPSE" in flags:
         reasons.append("Score5-typed-DEV check half COLLAPSE")
     if "WARN" in flags and "WARN" not in ref_flags:
