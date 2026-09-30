@@ -148,7 +148,7 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 		}
 		return nil, r.createErrorResponse(400, "invalid inference request")
 	}
-	if err := validateDynamoRoutingHeaders(ctx, llmprotocol.DefaultPolicy().Limits); err != nil {
+	if err := validateDynamoRoutingHeaders(ctx); err != nil {
 		recordIngressProtocolError(ctx, err)
 		var protocolError *llmprotocol.ProtocolError
 		if errors.As(err, &protocolError) {

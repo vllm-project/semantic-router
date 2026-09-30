@@ -17,27 +17,15 @@ var dynamoRoutingHeaderNames = []string{
 	headers.DynamoWorkerInstanceID, headers.DynamoPrefillInstanceID,
 	headers.DynamoDPRank, headers.DynamoPrefillDPRank,
 	headers.DynamoRequestPriority, headers.DynamoRequestStrictPriority,
-	headers.DynamoTenantID, headers.DynamoWorkerInstanceIDLegacy,
-	headers.DynamoPrefillInstanceIDLegacy, headers.DynamoDPRankLegacy,
-	headers.DynamoDataParallelRankLegacy, headers.DynamoPrefillDPRankLegacy,
 }
 
-// validateDynamoRoutingHeaders validates the documented Dynamo routing header
-// types without folding their values into the request body. ExtProc forwards
-// the headers unchanged, so the Dynamo frontend remains responsible for its
-// documented header-over-body precedence. In particular, x-tenant-id remains
-// routing input and is never promoted to trusted authentication state here.
-func validateDynamoRoutingHeaders(ctx *RequestContext, limits llmprotocol.Limits) error {
-	if tenantID := strings.TrimSpace(headerValueCI(ctx, headers.DynamoTenantID)); tenantID != "" &&
-		limits.DynamoNVExtStringBytes > 0 && len(tenantID) > limits.DynamoNVExtStringBytes {
-		return llmprotocol.NewError(
-			llmprotocol.ErrorInvalidRequest, "dynamo_tenant_header_limit",
-			"Dynamo x-tenant-id exceeds the configured limit", nil,
-		)
-	}
+// validateDynamoRoutingHeaders validates only namespaced Dynamo routing headers.
+// Headers remain unchanged on the wire; the frontend owns header-over-body precedence.
+// Unnamespaced tenant and legacy headers are shared with other providers and are
+// not subject to Dynamo validation or backend restrictions.
+func validateDynamoRoutingHeaders(ctx *RequestContext) error {
 	for _, header := range []string{
 		headers.DynamoWorkerInstanceID, headers.DynamoPrefillInstanceID,
-		headers.DynamoWorkerInstanceIDLegacy, headers.DynamoPrefillInstanceIDLegacy,
 	} {
 		if err := validateDynamoUnsignedHeader(ctx, header, 64); err != nil {
 			return err
@@ -45,8 +33,6 @@ func validateDynamoRoutingHeaders(ctx *RequestContext, limits llmprotocol.Limits
 	}
 	for _, header := range []string{
 		headers.DynamoDPRank, headers.DynamoPrefillDPRank,
-		headers.DynamoDPRankLegacy, headers.DynamoDataParallelRankLegacy,
-		headers.DynamoPrefillDPRankLegacy,
 	} {
 		if err := validateDynamoUnsignedHeader(ctx, header, 32); err != nil {
 			return err
@@ -147,7 +133,7 @@ func snapshotEffectiveDynamoRoutingHeaders(
 		}
 	}
 	effective := &RequestContext{Headers: result}
-	if err := validateDynamoRoutingHeaders(effective, llmprotocol.DefaultPolicy().Limits); err != nil {
+	if err := validateDynamoRoutingHeaders(effective); err != nil {
 		return nil, err
 	}
 	return result, nil

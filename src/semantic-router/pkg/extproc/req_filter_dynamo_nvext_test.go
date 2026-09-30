@@ -25,37 +25,30 @@ func (cfg dynamoBackendConfig) GetEndpointsForModel(string) []config.VLLMEndpoin
 
 func TestValidateDynamoRoutingHeadersAcceptsDocumentedHeadersCaseInsensitively(t *testing.T) {
 	ctx := &RequestContext{Headers: map[string]string{
-		"X-Tenant-Id":                       "tenant-a",
+		"X-Dynamo-Prefill-Dp-Rank":          "2",
 		headers.DynamoWorkerInstanceID:      "18446744073709551615",
 		headers.DynamoPrefillInstanceID:     "1",
 		headers.DynamoDPRank:                "4294967295",
-		headers.DynamoPrefillDPRankLegacy:   "2",
 		headers.DynamoRequestPriority:       "-7",
 		headers.DynamoRequestStrictPriority: "3",
 	}}
-	if err := validateDynamoRoutingHeaders(ctx, llmprotocol.DefaultPolicy().Limits); err != nil {
+	if err := validateDynamoRoutingHeaders(ctx); err != nil {
 		t.Fatalf("validateDynamoRoutingHeaders() error = %v", err)
 	}
 }
 
-func TestValidateDynamoRoutingHeadersRejectsInvalidUnsignedValuesAndOversizedTenant(t *testing.T) {
+func TestValidateDynamoRoutingHeadersRejectsInvalidUnsignedValues(t *testing.T) {
 	for _, test := range []struct {
 		name    string
 		headers map[string]string
-		limits  llmprotocol.Limits
 		code    string
 	}{
-		{"negative", map[string]string{headers.DynamoDPRank: "-1"}, llmprotocol.DefaultPolicy().Limits, "invalid_dynamo_routing_header"},
-		{"overflow", map[string]string{headers.DynamoDPRank: "4294967296"}, llmprotocol.DefaultPolicy().Limits, "invalid_dynamo_routing_header"},
-		{"not decimal", map[string]string{headers.DynamoWorkerInstanceID: "0x10"}, llmprotocol.DefaultPolicy().Limits, "invalid_dynamo_routing_header"},
-		{"tenant", map[string]string{headers.DynamoTenantID: "12345"}, func() llmprotocol.Limits {
-			limits := llmprotocol.DefaultPolicy().Limits
-			limits.DynamoNVExtStringBytes = 4
-			return limits
-		}(), "dynamo_tenant_header_limit"},
+		{"negative", map[string]string{headers.DynamoDPRank: "-1"}, "invalid_dynamo_routing_header"},
+		{"overflow", map[string]string{headers.DynamoDPRank: "4294967296"}, "invalid_dynamo_routing_header"},
+		{"not decimal", map[string]string{headers.DynamoWorkerInstanceID: "0x10"}, "invalid_dynamo_routing_header"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			err := validateDynamoRoutingHeaders(&RequestContext{Headers: test.headers}, test.limits)
+			err := validateDynamoRoutingHeaders(&RequestContext{Headers: test.headers})
 			if err == nil || !strings.Contains(err.Error(), test.code) {
 				t.Fatalf("error = %v, want code %q", err, test.code)
 			}
