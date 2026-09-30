@@ -5,6 +5,15 @@ GPU3–4. Preregistrations: [M6b](dec-m6b-prereg-2026-09-30.md) (`833ec0967`), [
 
 ## Now
 
+- 2026-09-30 ≈09:35 UTC+8 (01:35Z) — **2B done: no successor.** `2b-finalists.json` (01:14Z): slot 1
+  `2b-S7H-b1` only (L-S7P: H3 .4244–.4251 < .4278 and Score 172–208 < 245; L-S7C likewise). Formal
+  (`formal/m7/m7-2b-S7H-b1`, node A GPU5, T = 1 — CAL698 rejected by the 23:15 rule, cache copy `abdfd687…`):
+  v3 50.673 (T .555 / H .463) vs DEV2.0-2B 53.437 (T .543 / H .525): **−2.76 [−3.89, +1.90], item 1 FAIL**; 6(b)
+  FAIL; items 2, 3, 4 (mlx +.0037 [−.0053, +.0128]), 5 (vs Sol 1.0 16K +4.89 [+2.64, +10.26]), 6(a), 7 (public 231
+  173 vs 171, hard 59 vs 57) pass; vs Decider 2B +1.17 [−4.19, +5.40]. Typed FINAL C / N / S 433 / 616 / 158 vs
+  445 / 567 / 175: here typed held (+.012) and human transfer fell (−.063, CSS15 mrf −.074, reddit_humor −.054).
+  No C1 candidate. `successor/2b-choice.json`: none.
+  - 4B: N7P s3 (last seed) ends ≈01:48Z; `4b-finalists.json` ≈02:15Z; formal wrappers armed on node B.
 - 2026-09-30 ≈08:00 UTC+8 (00:00Z) — **Continuation worker (the first M7 worker was stopped by the platform at
   ≈23:30Z; no job was lost). H and C arms done on both tiers with three seeds each (no cap block: 4B seeds cost
   1.35 GPU-h, as preregistered).** P arms training; lines, diagnostics and formal wrappers are armed.
