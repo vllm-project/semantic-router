@@ -6,9 +6,11 @@ Run from the repository root:
 
 import importlib.util
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from src.training.model_classifier.escalation_risk import fixtures
 
@@ -70,14 +72,12 @@ class FixtureTest(unittest.TestCase):
 class TrainTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        from src.training.model_classifier.escalation_risk import train
+        # Keep the optional sklearn dependency lazy so fixture tests run without it.
+        from src.training.model_classifier.escalation_risk import train  # noqa: PLC0415
 
         cls.train = train
 
     def run_train(self, data_path, out_path):
-        import sys
-        from unittest import mock
-
         argv = ["train.py", "--data", str(data_path), "--out", str(out_path)]
         with mock.patch.object(sys, "argv", argv), mock.patch("builtins.print"):
             self.train.main()
@@ -93,14 +93,18 @@ class TrainTest(unittest.TestCase):
     def test_missing_value_is_encoded_with_a_flag_not_as_a_plain_zero(self):
         row = fixtures.generate(1, "s1")[0]["features"]
         row["context_fill_ratio"] = {"value": None, "status": fixtures.ABSENT}
-        encoded = dict(zip(self.train.feature_names(), self.train.encode(row)))
+        encoded = dict(
+            zip(self.train.feature_names(), self.train.encode(row), strict=True)
+        )
         self.assertEqual(encoded["context_fill_ratio"], 0.0)
         self.assertEqual(encoded["context_fill_ratio:missing"], 1.0)
 
     def encoded(self, **overrides):
         row = fixtures.generate(1, "s1")[0]["features"]
         row.update(overrides)
-        return dict(zip(self.train.feature_names(), self.train.encode(row)))
+        return dict(
+            zip(self.train.feature_names(), self.train.encode(row), strict=True)
+        )
 
     def test_absent_boolean_is_not_encoded_as_confirmed_false(self):
         absent = self.encoded(has_tools={"value": None, "status": fixtures.ABSENT})

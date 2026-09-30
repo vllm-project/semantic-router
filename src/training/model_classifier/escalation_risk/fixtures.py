@@ -24,6 +24,11 @@ import random
 from pathlib import Path
 
 FIXTURE_VERSION = "escalation-risk-fixture-v1"
+TOOLS_PRESENT_PROBABILITY = 0.25
+CONTEXT_ABSENT_PROBABILITY = 0.10
+RECENT_PROGRESS_ABSENT_PROBABILITY = 0.60
+ABSTAIN_PROBABILITY = 0.05
+TIE_PROBABILITY = 0.05
 
 # Same weights idea as shadowdataset.Policy; names match our pipeline stages.
 SPLITS = [("train", 7), ("calibration", 1), ("test", 2)]
@@ -69,7 +74,7 @@ def feature(value, status=PRESENT):
 
 def make_features(rng: random.Random) -> dict:
     decision = rng.choice(DECISIONS)
-    has_tools = rng.random() < 0.25
+    has_tools = rng.random() < TOOLS_PRESENT_PROBABILITY
     feats = {
         "decision": feature(decision),
         "primary_model": feature(rng.choice(PRIMARY_MODELS)),
@@ -85,9 +90,9 @@ def make_features(rng: random.Random) -> dict:
         # Optional recent-window fact: often missing (no trusted session contract).
         "recent_no_progress_turns": feature(rng.randint(0, 3)),
     }
-    if rng.random() < 0.10:
+    if rng.random() < CONTEXT_ABSENT_PROBABILITY:
         feats["context_fill_ratio"] = feature(None, ABSENT)
-    if rng.random() < 0.60:
+    if rng.random() < RECENT_PROGRESS_ABSENT_PROBABILITY:
         feats["recent_no_progress_turns"] = feature(None, ABSENT)
     return feats
 
@@ -112,12 +117,14 @@ def hidden_risk(f: dict) -> float:
 
 
 def make_verdict(rng: random.Random, risk: float) -> str:
-    if rng.random() < 0.05:
+    if rng.random() < ABSTAIN_PROBABILITY:
         return "abstain"
-    if rng.random() < 0.05:
+    if rng.random() < TIE_PROBABILITY:
         return "tie"
     primary_failed = rng.random() < risk
-    shadow_failed = rng.random() < 0.25 * risk  # stronger model fails less
+    shadow_failed = (
+        rng.random() < TOOLS_PRESENT_PROBABILITY * risk
+    )  # stronger model fails less
     if primary_failed and shadow_failed:
         return "both_failed"
     if primary_failed:

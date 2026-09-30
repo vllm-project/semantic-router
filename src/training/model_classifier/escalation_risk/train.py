@@ -19,7 +19,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
+from itertools import pairwise
 from pathlib import Path
 
 import numpy as np
@@ -60,6 +60,7 @@ BOOLEAN = ["has_tools"]
 
 # Target: catch at least this share of real failures (recall) on calibration data.
 TARGET_RECALL = 0.80
+LOW_CONFIDENCE_THRESHOLD = 0.6
 
 
 # ---------- features ----------
@@ -118,9 +119,9 @@ def load(path: Path) -> dict[str, tuple[np.ndarray, np.ndarray, list[dict]]]:
     )
     out = {}
     for split, rows in by_split.items():
-        X = np.array([encode(r["features"]) for r in rows])
+        x = np.array([encode(r["features"]) for r in rows])
         y = np.array([r["label"] for r in rows])
-        out[split] = (X, y, rows)
+        out[split] = (x, y, rows)
     return out
 
 
@@ -148,7 +149,7 @@ def ece(p: np.ndarray, y: np.ndarray, bins: int = 10) -> float:
     """Expected calibration error: how far 'predicted %' is from 'actual %'."""
     edges = np.linspace(0, 1, bins + 1)
     total = 0.0
-    for lo, hi in zip(edges[:-1], edges[1:]):
+    for lo, hi in pairwise(edges):
         mask = (p >= lo) & (p < hi) if hi < 1 else (p >= lo) & (p <= hi)
         if mask.any():
             total += mask.mean() * abs(p[mask].mean() - y[mask].mean())
@@ -184,20 +185,20 @@ def main() -> None:
     args = ap.parse_args()
 
     data = load(args.data)
-    X_tr, y_tr, _ = data["train"]
-    X_cal, y_cal, _ = data["calibration"]
-    X_te, y_te, rows_te = data["test"]
+    x_tr, y_tr, _ = data["train"]
+    x_cal, y_cal, _ = data["calibration"]
+    x_te, y_te, rows_te = data["test"]
 
     # 1. train
-    model = LogisticRegression(max_iter=1000, random_state=SEED).fit(X_tr, y_tr)
+    model = LogisticRegression(max_iter=1000, random_state=SEED).fit(x_tr, y_tr)
 
     # 2. calibrate + pick threshold on the calibration split (never on test)
-    a, b = fit_platt(model.predict_proba(X_cal)[:, 1], y_cal)
-    p_cal = apply_platt(model.predict_proba(X_cal)[:, 1], a, b)
+    a, b = fit_platt(model.predict_proba(x_cal)[:, 1], y_cal)
+    p_cal = apply_platt(model.predict_proba(x_cal)[:, 1], a, b)
     threshold = pick_threshold(p_cal, y_cal, TARGET_RECALL)
 
     # 3. evaluate on held-out test split
-    p_te = apply_platt(model.predict_proba(X_te)[:, 1], a, b)
+    p_te = apply_platt(model.predict_proba(x_te)[:, 1], a, b)
     conf = np.array([r["features"]["domain_confidence"]["value"] for r in rows_te])
     results = {
         "classifier": {
@@ -208,7 +209,9 @@ def main() -> None:
         },
         "baseline_never_escalate": decision_metrics(np.zeros_like(y_te, bool), y_te),
         "baseline_always_escalate": decision_metrics(np.ones_like(y_te, bool), y_te),
-        "baseline_low_confidence": decision_metrics(conf < 0.6, y_te),
+        "baseline_low_confidence": decision_metrics(
+            conf < LOW_CONFIDENCE_THRESHOLD, y_te
+        ),
     }
 
     # 4. write a JSON artifact with a content digest as its identity
@@ -224,7 +227,7 @@ def main() -> None:
         "data_sha256": hashlib.sha256(
             args.data.read_text().encode()
         ).hexdigest(),  # text: same hash on Windows
-        "counts": {s: int(len(v[1])) for s, v in data.items()},
+        "counts": {s: len(v[1]) for s, v in data.items()},
         "test_metrics": results,
     }
     digest = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
