@@ -139,8 +139,9 @@ the L128 training runs from `e76e56d4c`).
 
 ## Poll log (newest first)
 
-- 10:08Z: interim results record `m5-results-2026-09-30.md` (FF arms final; development attribution: dose at full FT −.037 [−.053, −.021], round-2 and cross-soup TIE; files `readouts/attribution/` on node B). L128 training; chain L128 and node A watchers waiting.
-- 09:52Z: FF20H / SX gates: no FF finalist (every candidate HT-DEV v2 FLAG). L128-s1 141 / 3,561, s2 138 / 3,561 (≈ 10 s/upd). L128 tooling `b2af94a9e` + `c8b1d9128` mirrored; `lsoup` test exact. Node A watchers and chain L128 running. Receipts 50.05 GPU-h.
+- 10:03Z: L128-s1 202 / 3,561, s2 200 / 3,561 (9.8–9.9 s/upd; ETA ≈ 19:10–19:30Z). Validated on node B with `DRY_RUN=1` (no GPU, no lease change): `run_readout.sh` with `CHECKPOINT_FORMAT=peft-lora/1` on A20r's soup passes every stage and argcheck. The default `full` refuses it, and an unknown format is refused; scratch removed. Integration merged at `64b608bb0`. Disk: node B 64%, node A 41%.
+- 09:55Z: interim results record `m5-results-2026-09-30.md` (FF arms final; development attribution: dose at full FT −.037 [−.053, −.021], round-2 and cross-soup TIE; files `readouts/attribution/` on node B). L128 training; chain L128 and node A watchers waiting.
+- 09:50Z: FF20H / SX gates: no FF finalist (every candidate HT-DEV v2 FLAG). L128-s1 141 / 3,561, s2 138 / 3,561 (≈ 10 s/upd). L128 tooling `b2af94a9e` + `c8b1d9128` mirrored; `lsoup` test exact. Node A watchers and chain L128 running. Receipts 50.05 GPU-h.
 - 09:20Z: continuation worker. B1 recorded late (amendment 2). Leases node B GPU5 / node A GPU2 retaken 09:13Z. `BRANCH-B1` written; L128-s1 / s2 launched 09:16Z (admit). M5-FF20H / M5-SX CAL fits done, readout collections running. Receipts 49.46 GPU-h.
 - 04:00Z: FF20 both seeds complete (BEST 891; SELECT .903 / .869; 10.25 / 10.47 GPU-h); FF20H-s1 full running, FF20H-s2 preflights; chain-FF20 pulling FF20-s2.
 - 03:19Z: FF20-s1 831/891, FF20-s2 795/891; both ≈ 3.45 h per attempt (cap 4.5); chains waiting.
