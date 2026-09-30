@@ -263,12 +263,12 @@ def request(
             connection.close()
 
 
-def serving_env(site: Path, out: Path) -> dict[str, str]:
+def stock_env(out: Path) -> dict[str, str]:
+    """vLLM as the image ships it: no vllm-sr plugin on the path or in VLLM_PLUGINS."""
     env = dict(os.environ)
+    env.pop("VLLM_PLUGINS", None)
     env.update(
         {
-            "PYTHONPATH": str(site),
-            "VLLM_PLUGINS": PLUGINS,
             "VLLM_NO_USAGE_STATS": "1",
             "DO_NOT_TRACK": "1",
             "VLLM_CACHE_ROOT": str(out / "vllm-cache"),
@@ -279,6 +279,12 @@ def serving_env(site: Path, out: Path) -> dict[str, str]:
             "TOKENIZERS_PARALLELISM": "false",
         }
     )
+    return env
+
+
+def serving_env(site: Path, out: Path) -> dict[str, str]:
+    env = stock_env(out)
+    env.update({"PYTHONPATH": str(site), "VLLM_PLUGINS": PLUGINS})
     return env
 
 
@@ -792,7 +798,7 @@ def vela_server(
         ],
         VELA_PORT,
         out,
-        serving_env(out / "site", out),
+        stock_env(out),
     )
 
 
@@ -800,10 +806,7 @@ def session_vela(args: argparse.Namespace) -> dict[str, Any]:
     from transformers import AutoTokenizer
 
     out = args.out
-    result: dict[str, Any] = {
-        "session": "vela",
-        "install": install_plugin(args.plugin_src, out),
-    }
+    result: dict[str, Any] = {"session": "vela", "plugins": None}
     tokenizer = AutoTokenizer.from_pretrained(args.model, local_files_only=True)
     short = load_texts(args.texts)
     texts = short + long_texts(short, tokenizer, [2048, 8192, 16384, 32000])
@@ -1025,17 +1028,7 @@ def session_labeltoken(args: argparse.Namespace) -> dict[str, Any]:
         )
         for k in range(0, 64, 8)
     ]
-    env = dict(os.environ)
-    env.pop("VLLM_PLUGINS", None)
-    env.update(
-        {
-            "VLLM_NO_USAGE_STATS": "1",
-            "DO_NOT_TRACK": "1",
-            "VLLM_CACHE_ROOT": str(out / "vllm-cache"),
-            "XDG_CACHE_HOME": str(out / "xdg-cache"),
-            "TRITON_CACHE_DIR": str(out / "triton-cache"),
-        }
-    )
+    env = stock_env(out)
     result: dict[str, Any] = {
         "session": "labeltoken",
         "items": len(items),
@@ -1214,7 +1207,7 @@ def main() -> None:
             type=lambda s: [int(x) for x in s.split(",")],
             default=[1, 8, 32, 128],
         )
-        if name not in ("runtime", "labeltoken"):
+        if name in ("plugin", "coloc"):
             p.add_argument("--plugin-src", type=Path, required=True)
         if name == "labeltoken":
             p.add_argument("--model", type=Path, required=True)
