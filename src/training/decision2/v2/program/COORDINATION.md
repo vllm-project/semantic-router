@@ -202,6 +202,30 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 19:40 — **NEW SERVING TRACK (user-approved): vLLM plugin-registry prototype.**
+  - **Direction:** serve router models (Vela 1.0 encoders, Decision 1.0, Decision 2.0) through **one maintained vLLM
+    plugin package, without forking vLLM**, to reuse vLLM's optimizations and hardware platforms.
+  - **Evidence:** research report (b9e89084).
+    - Neither candle (no Qwen3.5 hybrid, no ROCm) nor ORT (new linear-attention ops have CPU / CUDA kernels only) can
+      run the GDN hybrid in-process on MI325X.
+    - vLLM natively supports the Qwen3.5 / Qwen3.8 hybrid backbones, with LoRA for pooling models and ROCm gfx942.
+    - A plugin needs a custom pooling model class, a candidate pooler, and an endpoint for per-question option
+      positions.
+    - vLLM 0.29.1rc1.dev187 is in our ROCm images.
+    - Risks: BF16-vs-autocast numerics need parity re-qualification; plugin APIs are unstable across versions, so pin
+      and run compatibility CI; no prefix caching for hybrid pooling.
+    - Quick win found: the shipped runtime re-casts FP32 Linear weights to BF16 on every call (est. ~10 ms at 9B, ~30 ms
+      at 27B). Keeping them BF16-resident likely changes no answers.
+  - **Prototype worker** (worktree `vllm-sr-dev2-vllm-plugin`, branch `xunzhuo/decision-2-vllm-plugin`, gist
+    `09-decision-2-serving.md`; node B GPU2 or node A GPU1 shared, ≤ 3 GPU-h; no HF uploads):
+    - plugin v0 (`Decision2Qwen3_5ForScoring` + candidate pooler + `/v1/system_one` endpoint);
+    - DEV2.0-0.8B parity vs stored scored predictions (bf16 / fp32);
+    - a Vela encoder via vLLM's native ModernBERT classify;
+    - serving-shape options;
+    - latency and throughput vs the shipped runtime.
+  - A second research report (embedded vLLM, multi-backend runtime, co-location ideas; 19da97ef) is pending. The
+    coordinator will then write the target serving architecture.
+
 - 2026-09-30 17:15 — **27B M5: FF20 failed its development gates; B1's fallback was missed; continuation launched;
   GPU RECLAIM.**
   - The M5 worker stopped at the ~5 h limit around 12:00 UTC+8 after writing its hand-off; nobody acted after that.
