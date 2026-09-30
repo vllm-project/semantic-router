@@ -99,6 +99,8 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 | 9B Milestone 8 (parallel to M7) | `/home/xunliu/code/vllm-sr-dev2-9b-m8` | `xunzhuo/decision-2-training-9b-m8` |
 | decoder M8-small (2B + 0.8B) | `/home/xunliu/code/vllm-sr-dev2-dec-small` | `xunzhuo/decision-2-training-dec-small` |
 | serving: vLLM plugin-registry prototype | `/home/xunliu/code/vllm-sr-dev2-vllm-plugin` | `xunzhuo/decision-2-vllm-plugin` |
+| serving: Open Decision Runtime proposal | `/home/xunliu/code/vllm-sr-dev2-odr-proposal` | `xunzhuo/decision-2-odr-proposal` |
+| 27B-tier MoE base exploration | `/home/xunliu/code/vllm-sr-dev2-27b-moe` | `xunzhuo/decision-2-training-27b-moe` |
 
 - New code and records go under `src/training/decision2/v2/<track>/` (tracks: `eval`, `data`, `06b`, `dec`, `9b`, `27b`;
   shared helpers in `src/training/decision2/v2/common/`). Reuse the existing verified modules instead of forking them.
@@ -202,6 +204,137 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-10-01 00:35 — **USER: runtime execution plan (strangler-fig)**, recorded in gist file
+  `10-open-decision-runtime-decisions.md` §10.
+  - Stage 1: the new runtime starts with the new Decision models only; the legacy runtime keeps serving all existing
+    signals unchanged.
+  - Stage 2: Vela 2.0 is supported natively. Vela 1.0 is the ONLY legacy family migrated: manifests / adapters, shadow
+    dual-run with parity receipts, a per-binding `runtime: new | legacy` switch, a default flip after parity, rollback.
+  - Stage 3: every other legacy model type is deprecated and removed, and the legacy binding code is deleted. The
+    runtime is fully renewed.
+  - **Open:** which current features depend on non-Vela models (embeddings / semantic cache, RAG reranker, PII,
+    hallucination NLI, Qwen3Guard, merged-LoRA classifiers). Each needs a replace / external / retire decision before
+    Stage 3. Inputs are pending from the coverage analysis (9c17b169) and the Vela-2.0-Unified check (7b239c1e).
+  - The proposal revision (writer 28bfbd64, when it returns) must include this execution plan.
+
+- 2026-10-01 00:10 — **The Open Decision Runtime discussion is recorded in the program gist** as
+  `10-open-decision-runtime-decisions.md` (gist cd90fce0fa548616d8a4f1b2d2398dea).
+  - It holds every decision so far, marked [Decided] / [Recommended] / [Open]: UX, API, the final runtime architecture
+    (principles, 7 modules, placement table, Tier 1 as one tier with generate / pooling runner modes), llama.cpp
+    positioning, supported architectures, plugin points, vLLM without forks, known issues and model co-design.
+  - **When the proposal writer (28bfbd64) returns, resume it once** to fold this log into the proposal: rename Tier
+    1a / 1b to runner modes; make the final runtime design the core section; add llama.cpp positioning. Then link the
+    proposal gist from the log's §10.
+
+- 2026-10-01 00:05 — **Final model-runtime design, the core section for the proposal revision** (discussed with the
+  user).
+  - **Principles:**
+    - (1) Decision logic (planner, renderer, readout, calibration, answer assembly, head compute) lives in the Rust core,
+      in-process. Backends only map tokens to hidden states / logits.
+    - (2) The in-process vs out-of-process split follows isolation needs, not model names.
+    - (3) Placement is gated by parity receipts.
+    - (4) Engine mode and router mode share one runtime.
+  - **Seven modules:**
+    1. API: `Decide`, `Models`, `Health`; HTTP + UDS.
+    2. Planner / scheduler: grouping, batching, deadlines, admission, confidence cascades, state cache.
+    3. Readout adapters (plugins): label_token / head / encoder_marker / span / generative (escalation) / diffusion
+       (future).
+    4. Backend trait with a capability descriptor:
+       - in-process: ORT, candle, llama.cpp on CPU, Rust head compute;
+       - out-of-process supervised workers over UDS: vLLM (generate / pooling + plugin), the Python reference runtime,
+         llama.cpp on GPU;
+       - remote.
+    5. Registry and artifacts: manifests, pinning, cache, licence policy, variants (ONNX / GGUF / BF16 / bf16z), and
+       parity receipts per model × backend × dtype × hardware.
+    6. Placement engine: hardware probe + requirements + receipts + policy.
+    7. Supervisor and observability: spawn, health, restart, readiness, GPU memory budget, degradation; metrics,
+       traces, shadow parity; the eval harness uses the same runtime.
+  - **In-process:**
+    - all decision logic;
+    - encoders ≤ 0.5B via ORT / candle (CPU or GPU EPs);
+    - small decoders on CPU / edge via llama.cpp or ORT GenAI.
+  - **Out-of-process:**
+    - GPU decoders ≥ 1B, hybrid GDN and multi-LoRA via vLLM;
+    - the Python reference runtime (byte-exact);
+    - llama.cpp when on GPU.
+  - **Remote:** MoE / ≥ 27B resident models, judges, diffusion.
+  - **Architectures:**
+    - encoders: BERT, RoBERTa / XLM-R, ModernBERT / mmBERT; DeBERTa and GLiNER2 on ORT / candle only;
+    - dense decoders: Qwen3 / 2.5, Llama, Gemma 3 / 4, Mistral;
+    - hybrids: Qwen3.5 / 3.6 / 3.8, Qwen3-Next, Mamba hybrids;
+    - MoE via vLLM.
+    - Readouts: label-token (single / multi-slot), heads, encoder markers, spans.
+    - LoRA and quantisation per backend.
+  - **Plugin points** (versioned, with compat CI):
+    - model manifests (data only in most cases);
+    - readout adapters (Rust trait);
+    - backends (Rust trait; out-of-process backends implement a narrow worker protocol: tokens + positions / label ids →
+      hidden states / logits).
+  - **Renderer placement:** start in the worker (the Python endpoint plugin, byte-exact to training). Target: the Rust
+    core, using HF tokenizers, with golden tests against the training renderer, so that workers become generic forward
+    servers.
+
+- 2026-09-30 23:59 — **Proposal revision items (from user discussion), to apply when the writer 28bfbd64 returns.**
+  1. **Rename "Tier 1a / 1b".** It is ONE Tier 1 (local vLLM sidecar) with **two runner modes chosen per model by the
+     manifest's readout field**:
+     - `generate` mode for label-token deciders (the third-party majority; prefix caching, thinking escalation);
+     - `pooling` mode plus the vllm-sr plugin for head-based models (Decision 1.0 / 2.0, slot heads).
+     One model uses one mode; a deployment may run both kinds of engines. They could unify later via a label-token
+     readout (everything in generate mode) or a label-token head in the plugin (everything in pooling mode, losing
+     prefix caching and thinking).
+  2. **llama.cpp positioning:** linkable in-process via its C API (Rust binding into our core). Recommended in-process
+     for CPU / edge; run it in a supervised subprocess when on GPU, for fault isolation, as Ollama does.
+     - Strengths: widest hardware reach; best CPU engine (GGUF quantisation); BERT / XLM-R / ModernBERT with heads;
+       Qwen3-Next / 3.5 GDN (fused op on CPU / CUDA / Metal / SYCL).
+     - Weaknesses: GDN on HIP is unoptimised (reported slow on RDNA 3.5; CDNA3 unmeasured, so benchmark before listing
+       it for AMD); no DeBERTa; LoRA not batched across adapters.
+     - Our CandidateHead: take `pooling none` hidden states at the option endpoints and apply the head in Rust.
+     - GGUF / quantisation needs per-backend calibration and parity receipts.
+
+- 2026-09-30 23:55 — **SILENT WORKER STOPS found (likely Cursor restarts); continuations relaunched.** No completion
+  notification arrives for these stops. GPU jobs keep running, but nobody processes their results.
+  - **~12:00 UTC+8 event:**
+    - the HR2 data worker (last commit `25ec87a8d` 11:56; 3 files uncommitted);
+    - the 9B M7 continuation (last commit `58cfcfea9` 11:44);
+    - the original 27B M5 worker.
+  - **~20:40 event:**
+    - the 27B M5 continuation (last commit `246f7c9a2` 20:39, "poll 12");
+    - the vLLM plugin prototype (last commit `678ac2060` 20:37).
+  - **Relaunched from state files:**
+    - HR2 continuation 11ba399b;
+    - 27B M5 continuation #2 d38f026c (L128 s1 / s2 training since ~17:48);
+    - plugin prototype continuation 6c2c1341.
+  - **9B M7 CLOSED, no successor:** P and Q were stopped by early rules. The 9B M8 worker read M7's C line under the same
+    rule and found no eligible point, so no formal run is needed.
+  - **Watchdog rules:**
+    - Every worker commits a state-file update at every poll (≤ 30 min). The coordinator treats > 60 min without a
+      state commit (while GPU jobs run) as a silent stop, and relaunches a continuation from the state file.
+    - Transcript mtimes are NOT a liveness signal, because tool calls are not logged there.
+
+- 2026-09-30 23:50 — **USER: the proposal goes to a new secret gist (writer running); START MoE base exploration NOW,
+  in parallel, on idle GPUs.**
+  - **27B-tier MoE milestone** (fresh worker; worktree `vllm-sr-dev2-27b-moe`, branch
+    `xunzhuo/decision-2-training-27b-moe`, gist `06c-decision-2-27b-moe.md`; **node A GPU3–5 + node B GPU6–7**;
+    60 GPU-h):
+    - A licence / feasibility gate first: Gemma-4-26B-A4B terms vs Apache-2.0; Qwen3.5-35B-A3B; Transformers / PEFT MoE
+      support on ROCm; memory; the `decision_model.py` backbone support.
+    - Then (A) a matched-budget base screen and (B) a main run on the winner, with a soup and a control.
+    - Formal runs for ≤ 3 finalists; the "beats AutoJev" check plus items 1–8 vs DEV2.0-27B.
+    - Official general-purpose weights ONLY. Third-party MoE deciders (Rune, Decider 35B-A3B) may be opponent references,
+      never teachers or weight sources.
+    - Naming follows the base. Replace the 27B tier vs add a new family member: the coordinator decides.
+  - **Adapter-family clarification given to the user:**
+    - vLLM supports multi-slot packing (STEP pooling / endpoint plugin) and encoders.
+    - Encoders are placed in-process for latency and hardware reach, not for lack of vLLM support.
+    - DeBERTa-v3 / GLiNER2 are unsupported by vLLM, SGLang and llama.cpp, so they go through ORT.
+    - Diffusion deciders need non-stock fixes, so they are deferred.
+  - **GPU table update:**
+    - node A GPU3–5 and node B GPU6–7: MoE exploration.
+    - node A GPU2 and node B GPU0 / 1 / 5: 27B M5 / L128.
+    - node A GPU6–7: 9B M7.
+    - node A GPU0–1 and node B GPU2: serving prototype / eval.
+    - node B GPU3–4: HR2 (short).
 
 - 2026-09-30 ~23:40 — **Decision Index architecture survey (INTERNAL; no Index scores anywhere public); proposal
   drafting started with the recommended defaults** (the user left the outline question unanswered for ~3.3 h).
