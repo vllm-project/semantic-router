@@ -172,3 +172,16 @@ Receipts: node A `/data/dev2/runs/27b-moe/MOE-{Git,Qit}-probe/{probe/experts-pro
   option. No model code ran. As with Milestone 1's zero-step launch incident, this is an infrastructure failure, not a
   preflight outcome: the one-step and reload are repeated **once** under `-r2` receipts with the fixed entry point; a
   second failure stops the cell. Admission receipts stand.
+
+## Amendment 3 (2026-10-01 01:20 UTC+8; before any screen readout of a cell)
+
+- **Screen automation** (so the preregistered branches run without a live worker; M5's missed B1 branch is the
+  lesson): `moe-screen-nodeA.sh` relays node A cells' `checkpoint-0000892` (without `trainer_state.pt`, with a
+  SHA-256 list) to node B over the temporary rsync-only link, `moe-screen-nodeB.sh` reads each cell out on node B GPU7
+  as it arrives and runs `screen_rules.py` (rules 1–4 as preregistered), and node A applies `SCREEN.json`: STOP file
+  plus `docker stop` for dropped cells on either node, and the seed-2 start on node A GPU4.
+- **Details fixed now:** a cell whose driver ends without checkpoint 892 is absent from the screen; the "best
+  surviving cell" that gets seed 2 is ordered like rule 4 (higher P_dev, within |ΔP| < 2 the higher H_dev2); cells
+  are read at T = 1 against the dense matched reference's own HT-DEV v2 predictions (`readouts/A20r-s1-c892`).
+- **Trainable capacity, disclosed:** with experts frozen the rank-32 adapters are 37.2M (Gemma) and ≈ 42.3M
+  (Qwen-MoE) parameters per seed, against ≈ 233M for A20r's rank-32 adapter on the dense 27B.
