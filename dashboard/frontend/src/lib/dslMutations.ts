@@ -11,6 +11,8 @@
 
 import type { BoolExprNode, DSLFieldObject, DSLFieldValue } from '@/types/dsl'
 
+import { keepRouteSettingsOutsideForm } from './dslRouteBlock'
+
 // ---------- Block finding ----------
 
 interface BlockSpan {
@@ -484,6 +486,7 @@ export interface RouteModelInput {
   model: string
   reasoning?: boolean
   effort?: string
+  mode?: string
   lora?: string
   paramSize?: string
   weight?: number
@@ -526,6 +529,7 @@ function serializeRouteBody(input: RouteInput): string {
   if (input.models.length > 0) {
     const modelParts = input.models.map((m) => {
       const attrs: string[] = []
+      if (m.mode) attrs.push(`mode = "${m.mode}"`)
       if (m.reasoning !== undefined) attrs.push(`reasoning = ${m.reasoning}`)
       if (m.effort) attrs.push(`effort = "${m.effort}"`)
       if (m.lora) attrs.push(`lora = "${m.lora}"`)
@@ -585,7 +589,8 @@ export function updateRoute(
   const descPart = input.description ? ` (description = "${input.description}")` : ''
   const body = serializeRouteBody(input)
   const newBlock = `ROUTE ${name}${descPart} {\n${body}\n}\n`
-  return src.slice(0, block.start) + newBlock + src.slice(block.end)
+  const savedBlock = keepRouteSettingsOutsideForm(block.body, newBlock)
+  return src.slice(0, block.start) + savedBlock + src.slice(block.end)
 }
 
 /**

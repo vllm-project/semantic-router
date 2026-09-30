@@ -113,6 +113,7 @@ export interface ASTModelRef {
   model: string
   reasoning?: boolean
   effort?: string
+  mode?: string
   lora?: string
   paramSize?: string
   weight?: number
