@@ -24,6 +24,7 @@ import {
   getAllDecisions,
 } from './dashboardPageStats'
 import { buildDecisionPreviewRows, buildSignalBreakdownRows } from './dashboardPageOverview'
+import { fetchDashboardJson, settleDashboardRequests } from './dashboardPageRequests'
 import { createVisibilityAwareRequest } from './visibilityAwareRequest'
 import styles from './DashboardPage.module.css'
 
@@ -39,19 +40,13 @@ const DashboardPage: React.FC = () => {
   const [selectedRuntimeModel, setSelectedRuntimeModel] = useState<RouterModelInfo | null>(null)
 
   const fetchStatus = useCallback(async () => {
-    const statusRes = await fetch('/api/status')
-    if (statusRes.ok) {
-      setStatus(await statusRes.json())
-    }
+    setStatus(await fetchDashboardJson<SystemStatus>('/api/status', 'System status'))
   }, [])
 
   const fetchConfig = useCallback(async () => {
-    const configResult = await fetch('/api/router/config/all')
-    if (configResult.ok) {
-      setConfig(await configResult.json())
-      setLastUpdated(new Date())
-      setError(null)
-    }
+    setConfig(await fetchDashboardJson<RouterConfig>('/api/router/config/all', 'Router config'))
+    setLastUpdated(new Date())
+    setError(null)
   }, [])
 
   const statusRequest = useMemo(() => createVisibilityAwareRequest(fetchStatus), [fetchStatus])
@@ -60,19 +55,18 @@ const DashboardPage: React.FC = () => {
   const fetchAll = useCallback(
     async (manual = false) => {
       if (manual) setRefreshing(true)
-      try {
-        await Promise.all([
-          configRequest.run({ allowHidden: true }),
-          statusRequest.run({ allowHidden: true }),
-        ])
+      const failure = await settleDashboardRequests([
+        configRequest.run({ allowHidden: true }),
+        statusRequest.run({ allowHidden: true }),
+      ])
+      if (failure) {
+        setError(failure)
+      } else {
         setLastUpdated(new Date())
         setError(null)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load dashboard data')
-      } finally {
-        setLoading(false)
-        setRefreshing(false)
       }
+      setLoading(false)
+      setRefreshing(false)
     },
     [configRequest, statusRequest],
   )
