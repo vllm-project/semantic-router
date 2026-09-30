@@ -1,0 +1,86 @@
+{
+  "name": "dec-m8-human-rated-rule-v1",
+  "note": "Decoder M8 D2 soft-target set S (prereg dec-m8-prereg-2026-09-30.md, Data): the 9B M6 frozen soft-target rule copied verbatim from v2/9b/lux9b/specs/m6-ka-x60-ajS.json (soft_target_rule). The only addition is pool_alias: the 4B recipe names the A0s component 'A0s' (ids from mx-v2-full-M), the 9B recipe 'A0s-strict' (the same 6,547 rows). A row is human-rated if its pool lists its source (or '*') under human_sources; replay rows (replay_source) count only if they carry their upstream human label. Every other row is a typed row (gold only in D2).",
+  "source_spec": "v2/9b/lux9b/specs/m6-ka-x60-ajS.json",
+  "pool_alias": {
+    "A0s": "A0s-strict"
+  },
+  "soft_target_rule": {
+    "pools": [
+      "A0s-strict",
+      "A7g",
+      "A7h",
+      "A7i",
+      "A7k",
+      "A7m",
+      "A7o",
+      "A7p",
+      "A7q",
+      "A7r",
+      "A7s",
+      "E11",
+      "G2",
+      "G4h",
+      "G6",
+      "H1",
+      "H3",
+      "H5",
+      "H6",
+      "H7",
+      "H8",
+      "V1:A1",
+      "V1:A2",
+      "V1:A3",
+      "V1:A4v2h",
+      "V1:A5",
+      "V1:A6g",
+      "V1:A6h"
+    ],
+    "human_sources": {
+      "A0s-strict": [
+        "google_goemotions_official_train",
+        "legacy:snli",
+        "legacy:stage3_replay"
+      ],
+      "A7k": [
+        "*"
+      ],
+      "A7q": [
+        "*"
+      ],
+      "A7s": [
+        "*"
+      ],
+      "H1": [
+        "dbpedia14_train",
+        "multiwoz22_train",
+        "scitail_train",
+        "taskmaster2_train"
+      ],
+      "H5": [
+        "mtop_train"
+      ],
+      "H6": [
+        "argq30k_train",
+        "jglue_jsts_v1.3_train",
+        "klue_sts_train",
+        "mlqepe_train",
+        "onestop_english"
+      ],
+      "H8": [
+        "sentimix_spanglish_train"
+      ],
+      "V1:A1": [
+        "*"
+      ],
+      "V1:A5": [
+        "jglue_jnli_v1.3_train",
+        "klue_ynat_train"
+      ],
+      "V1:A6h": [
+        "*"
+      ]
+    },
+    "replay_source": "legacy:stage3_replay"
+  }
+}

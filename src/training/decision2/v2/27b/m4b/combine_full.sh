@@ -15,7 +15,8 @@ S=/data/dev2/src/$MIRROR/src/training/decision2
 S=$(cd "$S" && pwd -P)
 [[ "$NAME" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "NAME must be one directory name" >&2; exit 2; }
 IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1
-OUT=/data/dev2/runs/27b/m4b/$NAME
+# COMBINE_ROOT / COMBINE_PREFIX: Milestone 5 output root and container prefix (default M4b's).
+OUT=${COMBINE_ROOT:-/data/dev2/runs/27b/m4b}/$NAME
 CPUS=${COMBINE_CPUS:-16}
 case "$MODE" in
   soup) [ $# -ge 2 ] || { echo "a soup needs two or more checkpoints" >&2; exit 2; }
@@ -37,7 +38,7 @@ export TMPDIR=/data/dev2/tmp
 cpu() {
   local name=$1
   shift
-  docker run --rm --name "d2-27b-m4b-$NAME-$name" --network none --cpus "$CPUS" -e "OMP_NUM_THREADS=$CPUS" \
+  docker run --rm --name "${COMBINE_PREFIX:-d2-27b-m4b}-$NAME-$name" --network none --cpus "$CPUS" -e "OMP_NUM_THREADS=$CPUS" \
     -e HIP_VISIBLE_DEVICES= -e ROCR_VISIBLE_DEVICES= -e "PYTHONPATH=$S" -e PYTHONDONTWRITEBYTECODE=1 \
     "${mounts[@]}" -w "$S" --entrypoint python3 "$IMAGE" -m v2.27b.m4b.interp_full "$@"
 }

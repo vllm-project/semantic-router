@@ -1,0 +1,200 @@
+{
+ "coverage": {
+  "d2_rows": 3467,
+  "failure_reasons": {},
+  "failures": 0,
+  "human_rows": 3467,
+  "labeled_rows": 12794,
+  "slice_rows": 12794
+ },
+ "files_sha256": {
+  "D1/teacher.jsonl": "0ead0d1b9e6bca040d8d3aad72ca4af8d9e4211851fb78c72c29ade14a70ffdf",
+  "D2/teacher.jsonl": "015de0685fb666ff9cbc85d0c3094f519b0d764a93befa8e1f94efd8955a735d"
+ },
+ "gold_agreement": {
+  "choice": {
+   "agree": 4083,
+   "n": 4571,
+   "rate": 0.8932399912491796
+  },
+  "human/choice": {
+   "agree": 710,
+   "n": 805,
+   "rate": 0.8819875776397516
+  },
+  "human/noul": {
+   "agree": 649,
+   "n": 737,
+   "rate": 0.8805970149253731
+  },
+  "human/score": {
+   "agree": 958,
+   "n": 1925,
+   "rate": 0.49766233766233764
+  },
+  "noul": {
+   "agree": 4380,
+   "n": 5154,
+   "rate": 0.8498253783469151
+  },
+  "score": {
+   "agree": 1939,
+   "n": 3069,
+   "rate": 0.631801889866406
+  },
+  "typed/choice": {
+   "agree": 3373,
+   "n": 3766,
+   "rate": 0.8956452469463622
+  },
+  "typed/noul": {
+   "agree": 3731,
+   "n": 4417,
+   "rate": 0.8446909667194928
+  },
+  "typed/score": {
+   "agree": 981,
+   "n": 1144,
+   "rate": 0.8575174825174825
+  }
+ },
+ "mean_max_probability": {
+  "choice": 0.8614630576857071,
+  "human/choice": 0.8174989481380577,
+  "human/noul": 0.8604885819756591,
+  "human/score": 0.6033496359002128,
+  "noul": 0.8641142158796508,
+  "score": 0.6911865009100523,
+  "typed/choice": 0.8708605903957046,
+  "typed/noul": 0.8647191722272256,
+  "typed/score": 0.8389889179939175
+ },
+ "own_lux_argmax_agreement": {
+  "choice": {
+   "agree": 3706,
+   "n": 4361,
+   "rate": 0.8498050905755561
+  },
+  "human/choice": {
+   "agree": 682,
+   "n": 805,
+   "rate": 0.8472049689440994
+  },
+  "human/noul": {
+   "agree": 654,
+   "n": 737,
+   "rate": 0.8873812754409769
+  },
+  "human/score": {
+   "agree": 1228,
+   "n": 1743,
+   "rate": 0.7045324153757889
+  },
+  "noul": {
+   "agree": 4133,
+   "n": 4788,
+   "rate": 0.8631996658312447
+  },
+  "score": {
+   "agree": 1961,
+   "n": 2869,
+   "rate": 0.6835134193098641
+  },
+  "typed/choice": {
+   "agree": 3024,
+   "n": 3556,
+   "rate": 0.8503937007874016
+  },
+  "typed/noul": {
+   "agree": 3479,
+   "n": 4051,
+   "rate": 0.8588002962231548
+  },
+  "typed/score": {
+   "agree": 733,
+   "n": 1126,
+   "rate": 0.6509769094138543
+  }
+ },
+ "prereg": "dec-m8-prereg-2026-09-30.md",
+ "provenance": {
+  "base": "Qwen/Qwen3.8-27B@1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0 (not redistributed)",
+  "identity": "2e07451107a2ca9735064cc01f7e43e8522b4bae48f2d77bdf29f7ea2fe6362c",
+  "loaded_parameters": 26096775168,
+  "package": "the frozen pre-release package of the A20r release spec (node A), used by A20r's C1 post-key run; it differs from the released revision only in README.md",
+  "package_manifest_sha256": "0d7953cc5d85a6fde6bdf71913795d1d7849e32fbed7df10103c6da6669b254a",
+  "parity_smoke": {
+   "items": 80,
+   "reference": "A20r's stored formal typed-final predictions (sha256 ea573b2d50be50efd3048ee427309232b1f9b998b98d9997644bd82a51442d0e)",
+   "tolerance": 0.0001
+  },
+  "prereg": "dec-m8-prereg-2026-09-30.md",
+  "release_manifest_sha256": "82c71c2e232be71e842784cf8f305b1de7d81ff67a58fe11b4464f88b2e62d37",
+  "repo": "llm-semantic-router/DEV2.0-27B",
+  "revision": "5323310327e52d4eadd119cd10accac9b106c97d",
+  "rights": "own model; its package is apache-2.0 on an upstream base whose terms the release checked; no third-party teacher caveat",
+  "runtime": {
+   "autotune_cache_frozen_sha256": "f474e2e9dbdf3a2900465bce74256326ba2756250861b45359742685982cb5f7",
+   "calibration_sha256": "518e19cd0f89a6e8f63e666a02c9ca4fc8743f873c765183d1e745f476cd3157",
+   "collector": "v2.27b.typed_collect_kernel (unchanged; runs training.model.infer, one prompt per call)",
+   "env": [
+    "HIP_FORCE_DEV_KERNARG=1",
+    "TRITON_CACHE_AUTOTUNING=1"
+   ],
+   "gpus": "node A GPU0, GPU1 (shared leases) and GPU5",
+   "image": "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1",
+   "max_length": 32768,
+   "mirror": "a629a6ce29fe2b9a27aeac8f8b611667f654d8d9",
+   "temperature": "1 for every type (the package's calibration.json)"
+  },
+  "schema": "dec-m8-a20r-provenance/1",
+  "teacher": "DEV2.0-27B (A20r soup: rank-64 LoRA on Qwen3.8-27B + decision head)"
+ },
+ "provenance_sha256": "5f72b740cbdea64d2c646bf273780c7b80f5f2dab0831dfe26c8f898b054149d",
+ "schema": "dec-m8-a20r-teacher/1",
+ "shards": [
+  {
+   "predictions_sha256": "8c387f07e23462c5e580af17fa6fa56ec00283ee13e184410e9c0f9353a450fa",
+   "smoke": {
+    "changed": [],
+    "items": 80,
+    "max_drift": 0.0,
+    "questions": 80,
+    "schema": "dec-m8-label-smoke/1",
+    "shard_predictions_sha256": "8c387f07e23462c5e580af17fa6fa56ec00283ee13e184410e9c0f9353a450fa",
+    "status": "PASS",
+    "stored_sha256": "ea573b2d50be50efd3048ee427309232b1f9b998b98d9997644bd82a51442d0e",
+    "tolerance": 0.0001
+   }
+  },
+  {
+   "predictions_sha256": "f2f87c8204529ec7ac5e7940ab84360369fd88cf7d06c3f1f066ffc19a835a81",
+   "smoke": {
+    "changed": [],
+    "items": 80,
+    "max_drift": 0.0,
+    "questions": 80,
+    "schema": "dec-m8-label-smoke/1",
+    "shard_predictions_sha256": "f2f87c8204529ec7ac5e7940ab84360369fd88cf7d06c3f1f066ffc19a835a81",
+    "status": "PASS",
+    "stored_sha256": "ea573b2d50be50efd3048ee427309232b1f9b998b98d9997644bd82a51442d0e",
+    "tolerance": 0.0001
+   }
+  },
+  {
+   "predictions_sha256": "f1fb32f992c08687dca98ec71659369e3bb585fa13608f137b2a377b9b49fcf0",
+   "smoke": {
+    "changed": [],
+    "items": 80,
+    "max_drift": 0.0,
+    "questions": 80,
+    "schema": "dec-m8-label-smoke/1",
+    "shard_predictions_sha256": "f1fb32f992c08687dca98ec71659369e3bb585fa13608f137b2a377b9b49fcf0",
+    "status": "PASS",
+    "stored_sha256": "ea573b2d50be50efd3048ee427309232b1f9b998b98d9997644bd82a51442d0e",
+    "tolerance": 0.0001
+   }
+  }
+ ],
+ "slice_train_sha256": "bd529767070e929d0c502ab5c7b48d8c0247da0abaff0546b7ae08c48c35fe83"
+}

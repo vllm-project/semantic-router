@@ -1,0 +1,17 @@
+{
+  "schema": "decision2-27b-m5-htdev2-specs/1",
+  "node": "node B",
+  "note": "M5 development reference on node B: M4-A20r soup read with typed DEV, CSS pilot and HT-DEV v2 in one collection (m5-htdev2.sh with PANELS=typed-dev,css-pilot,ht-dev2), 32,768 tokens, kernel path, a fresh copy of DEV2.0-27B's scored cache 03b172f1 (the path, limit and cache of every M5 candidate readout). Its HT-DEV v2 predictions are also a cross-node check against the node A reference collection.",
+  "models": {
+    "m4-a20r-soup": {
+      "kind": "own",
+      "label": "M4-A20r soup (successor reference; rank-64 LoRA soup, T = 1)",
+      "model_path": "/data/dev2/runs/27b/M4-A20r-soup/soup/checkpoint",
+      "calibration": "/data/dev2/runs/27b/M4-A20r-soup/package/calibration.json",
+      "revision": "checkpoint-sha256:2e07451107a2ca9735064cc01f7e43e8522b4bae48f2d77bdf29f7ea2fe6362c",
+      "cache": {"frozen": "/data/dev2/runs/27b/m3-f2/f1-scored-cache", "sha256": "03b172f1a6adeef6c6a6c491d04389b355c9d8579480008023f408c8659b502b"},
+      "mounts": ["/data/dev2/runs/27b/M4-A20r-soup/package"],
+      "extra": {"model_id": "llm-semantic-router/DEV2.0-27B"}
+    }
+  }
+}
