@@ -392,10 +392,16 @@
     "message": "面向异构 LLM 推理的系统级智能"
   },
   "homepage.hero.line1": {
-    "message": "构建你的"
+    "message": "让你的"
   },
   "homepage.hero.line2": {
     "message": "Mixture-of-Models"
+  },
+  "homepage.hero.line3": {
+    "message": "可编程。"
+  },
+  "homepage.hero.dek": {
+    "message": "为每个请求匹配合适的模型与算力。"
   },
   "homepage.hero.primaryCta": {
     "message": "体验 Playground"
@@ -404,10 +410,7 @@
     "message": "先把请求看明白，再把系统做大；以信号驱动，以不确定性为标尺，让决策足够清晰。"
   },
   "homepage.hero.secondaryCta": {
-    "message": "浏览文档"
-  },
-  "homepage.hero.modelBand.eyebrow": {
-    "message": "Mixture-of-Models"
+    "message": "阅读使用文档"
   },
   "homepage.hero.modelBand.aria": {
     "message": "Mixture-of-Models 模型生态"
@@ -1083,6 +1086,12 @@
   },
   "homepage.videos.play.aria": {
     "message": "显示视频：{title}"
+  },
+  "homepage.videos.playFeatured.aria": {
+    "message": "播放视频：{title}"
+  },
+  "homepage.videos.playFeatured": {
+    "message": "播放视频"
   },
   "homepage.videos.pagination.aria": {
     "message": "视频播放列表分页"
