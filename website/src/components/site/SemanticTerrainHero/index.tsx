@@ -1,7 +1,6 @@
 import React, { useRef, useState } from 'react'
 import Translate, { translate } from '@docusaurus/Translate'
 import useBaseUrl from '@docusaurus/useBaseUrl'
-import IconExternalLink from '@theme/Icon/ExternalLink'
 import Claude from '@lobehub/icons/es/Claude/components/Mono'
 import DeepSeek from '@lobehub/icons/es/DeepSeek/components/Mono'
 import Gemini from '@lobehub/icons/es/Gemini/components/Mono'
@@ -30,7 +29,7 @@ const heroModelLogos = [
   { label: 'Grok', Icon: Grok },
 ]
 
-const FILM_DURATION = '2:51'
+const FILM_DURATION = '2:55'
 
 /* The poster is the film's first frame, so starting playback never jumps.
  * preload="none" keeps the film off the network until a visitor asks for it. */
@@ -105,35 +104,37 @@ export default function SemanticTerrainHero(): JSX.Element {
         <div className="site-shell-container">
           <div className={styles.heroInner}>
             <div className={styles.intro}>
-              <h1 className={styles.title}>
-                <span className={styles.accent}>
-                  <Translate id="homepage.hero.line1">Build your</Translate>
-                </span>
-                {' '}
-                <span className={styles.nowrap}>
-                  <Translate id="homepage.hero.line2">Mixture-of-Models</Translate>
-                </span>
-              </h1>
+              <div className={styles.introCopy}>
+                <h1 className={styles.title}>
+                  <Translate id="homepage.hero.line1">Make your</Translate>
+                  {' '}
+                  <span className={`${styles.accent} ${styles.nowrap}`}>
+                    <Translate id="homepage.hero.line2">Mixture-of-Models</Translate>
+                  </span>
+                  {' '}
+                  <Translate id="homepage.hero.line3">programmable.</Translate>
+                </h1>
+                <p className={styles.dek}>
+                  <Translate id="homepage.hero.dek">
+                    The right model, on the right compute, for every request.
+                  </Translate>
+                </p>
+              </div>
               <div className={styles.actions}>
                 <PillLink
                   className={styles.primaryCta}
-                  href="https://app.vllm-sr.ai"
-                  rel="noreferrer"
-                  target="_blank"
+                  href="https://app.vllm-sr.ai/playground"
                 >
                   <Translate id="homepage.hero.primaryCta">
-                    Try the Playground
+                    Try Playground
                   </Translate>
-                  <IconExternalLink />
+                  <span aria-hidden="true">→</span>
                 </PillLink>
-                <PillLink
-                  className={styles.secondaryCta}
-                  to="/docs/intro"
-                  muted
-                >
+                <PillLink className={styles.secondaryCta} to="/docs/intro" muted>
                   <Translate id="homepage.hero.secondaryCta">
-                    Explore the Docs
+                    Read the Docs
                   </Translate>
+                  <span aria-hidden="true">→</span>
                 </PillLink>
               </div>
             </div>
@@ -149,11 +150,6 @@ export default function SemanticTerrainHero(): JSX.Element {
           message: 'Mixture-of-Models ecosystem',
         })}
       >
-        <span className={styles.modelBandLabel}>
-          <Translate id="homepage.hero.modelBand.eyebrow">
-            Mixture-of-Models
-          </Translate>
-        </span>
         <div className={styles.modelViewport} aria-hidden="true">
           <div className={styles.modelTrack}>
             {modelCopies.map(copyIndex => (
