@@ -13,7 +13,7 @@ import numpy as np
 import torch
 from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from transformers.cache_utils import DynamicCache, DynamicLayer
+from transformers.cache_utils import DynamicCache
 from transformers.models.qwen3.modeling_qwen3 import apply_rotary_pos_emb
 
 # Direct execution resolves repository imports after adding the repository root.
@@ -119,8 +119,8 @@ def _continuation_score(
     model, prefix_pairs, last_context_id: int, ending_ids: list[int]
 ) -> float:
     cache = DynamicCache()
-    cache.layers = [DynamicLayer.from_tensors(k, v) for k, v in prefix_pairs]
-    cache.num_hidden_layers = len(prefix_pairs)
+    for layer, (key, value) in enumerate(prefix_pairs):
+        cache.update(key, value, layer)
     ids = torch.tensor(
         [[last_context_id, *ending_ids[:-1]]], device=model.device, dtype=torch.long
     )
