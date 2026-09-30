@@ -13,6 +13,8 @@
 #   formal NAME CKPT GPU      run_formal.sh (CAL698 release fit, adoption, frozen package, smoke, typed FINAL + CSS15 +
 #                             public 231, seal, report, paired compares) -> /data/dev2/runs/27b/m5/NAME
 #   mlx NAME GPU              run_mlx.sh on NAME's frozen package -> /data/dev2/runs/27b/m5/mlx-diag/NAME
+#   mlx-push NAME             NAME's mlx-diag collection (no cache) -> node A relay mlx/NAME with a SHA-256 list
+#   mlx-pull NAME             node A's mlx-paired output (m5-mlx-nodeA.sh) -> gates/mlx/NAME-vs-A20r.json
 # Every inference job: 32,768 tokens, kernel path, a fresh verified copy of DEV2.0-27B's scored cache 03b172f1
 # (formal runs: no autotune entry may be added). Readouts, CAL698 fits and formal runs never run on a training GPU.
 set -euo pipefail
@@ -66,6 +68,20 @@ case "$STAGE" in
   mlx)
     NAME=${1:?NAME} GPU=${2:?GPU}; aux "$GPU"
     bash "$M4B/run_mlx.sh" "$NAME" "$R/$NAME/package/PACKAGE.json" "$GPU" "$SHA" ;;
+  mlx-push | mlx-pull)
+    NAME=${1:?NAME} KEY=/data/dev2/tmp/27b-m5-xfer
+    X="ssh -i $KEY/id_ed25519 -o IdentitiesOnly=yes -o UserKnownHostsFile=$KEY/known_hosts -o StrictHostKeyChecking=yes -o BatchMode=yes"
+    PEER=$(cat "$KEY/peer") D=$R/mlx-diag/$NAME
+    if [ "$STAGE" = mlx-push ]; then
+      [ -f "$D/COLLECT.json" ] || { echo "no finished mlx-diag collection $D" >&2; exit 2; }
+      (cd "$D" && find output -type f | sort | xargs sha256sum > SHA256SUMS)
+      rsync -a --mkpath -e "$X" --exclude triton-cache/ "$D/" "root@$PEER:mlx/$NAME/"
+    else
+      mkdir -p "$R/gates/mlx"
+      rsync -a -e "$X" "root@$PEER:mlx/$NAME-vs-A20r.json" "$R/gates/mlx/$NAME-vs-A20r.json"
+      python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps({'R4': d['R4']['pass'], 'card_macro_ci95': d['bootstrap']['card_macro_ci95'], 'delta': d['delta']}))" \
+        "$R/gates/mlx/$NAME-vs-A20r.json"
+    fi ;;
   *) echo "unknown stage $STAGE" >&2; exit 2 ;;
 esac
 echo "m5 tail $STAGE complete: $(date -u +%FT%TZ)"
