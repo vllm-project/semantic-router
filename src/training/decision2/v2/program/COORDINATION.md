@@ -95,6 +95,7 @@ light-only). See "Compute". Re-read this file whenever you plan new GPU work.
 | eval: JevBench analysis | `/home/xunliu/code/vllm-sr-dev2-eval-jevbench` | `xunzhuo/decision-2-training-eval-jevbench` |
 | ~27B Milestone 4b | `/home/xunliu/code/vllm-sr-dev2-27b-m4b` | `xunzhuo/decision-2-training-27b-m4b` |
 | research & data: hard-skill families | `/home/xunliu/code/vllm-sr-dev2-data-hardskills` | `xunzhuo/decision-2-training-data-hardskills` |
+| research & data: HR2 human-rated data | `/home/xunliu/code/vllm-sr-dev2-data-hr2` | `xunzhuo/decision-2-training-data-hr2` |
 
 - New code and records go under `src/training/decision2/v2/<track>/` (tracks: `eval`, `data`, `06b`, `dec`, `9b`, `27b`;
   shared helpers in `src/training/decision2/v2/common/`). Reuse the existing verified modules instead of forking them.
@@ -198,6 +199,24 @@ exactly one gist file and updates it in place:
 - No credentials, private IPs/hostnames, restricted source text, or raw panel items/answers in the gist.
 
 ## Cross-track notes (coordinator; newest first)
+
+- 2026-09-30 11:30 — **User re-sent the directives; all are in effect. New data lever: HR2, new human-rated training
+  data.**
+  - **In effect:**
+    - Naming follows the base model: DEV2.0-9B / DEV2.0-27B.
+    - 27B target: beat AutoJev. A20r (72.36, level) is live; M5 aims for significance.
+    - Progressive updates under the successor rule, items 1–8. 0.6B and 27B have been updated.
+    - JevBench kept as guard item 7, with its skill data built (HS1).
+    - Code and docs on `xunzhuo/decision-2-training`; models and data private on HF.
+  - **Diagnosis driving the next lever:** typed / A7 gains inflate v3 but don't carry over to fresh human-labeled data.
+    Evidence: 4B's v3 lead over Nox is flat on C1; 27B A20r is +5.15 v3 but +0.23 C1. Typed-skill data (A7, HS1) and
+    teacher soft targets didn't move human transfer.
+  - **HR2** (research & data; worktree `vllm-sr-dev2-data-hr2`; node B GPU3–4 ≤ 1 GPU-h if needed):
+    - New licence-clean, human-judged datasets (preferences → Choice, yes/no labels → Noul, ratings → Score).
+    - Not already used, and not protected: C1's 8 sources, CSS15 including HT-DEV v2's held-out portions, JevBench,
+      mlx-diag sources, esnli-R. No model-judged labels.
+    - 20–60k rows; blind review ≥ 200 rows; per-source dev slices.
+    - Tracks add it as a block with matched-token controls, screened with HT-DEV v2, in their next milestones.
 
 - 2026-09-30 11:25 — **9B M7 handed off at the 5-hour mark, as designed; a continuation worker was launched**
   (`v2/9b/records/m7-state.md`; mirror `df6dcccc9`; ~1 of 24 GPU-h).
