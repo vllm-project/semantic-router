@@ -1021,19 +1021,23 @@ def session_labeltoken(args: argparse.Namespace) -> dict[str, Any]:
         f"status {'delayed' if i % 7 == 0 else 'on time'}."
         for i in range(120)
     ]
-    shared_state = "Shipping log:\n" + "\n".join(lines)
-    shared = [
-        label_prompt(
-            tokenizer, shared_state, f"Is order #{1000 + k} delayed?", ("yes", "no")
-        )
-        for k in range(0, 64, 8)
-    ]
+
+    def shared_prompts(tag: str) -> list[list[int]]:
+        """Eight questions over one ~2.8k-token state; each tag gives a different state."""
+        state = f"Shipping log {tag}:\n" + "\n".join(lines)
+        return [
+            label_prompt(
+                tokenizer, state, f"Is order #{1000 + k} delayed?", ("yes", "no")
+            )
+            for k in range(0, 64, 8)
+        ]
+
     env = stock_env(out)
     result: dict[str, Any] = {
         "session": "labeltoken",
         "items": len(items),
-        "shared_state_tokens": len(shared[0]),
-        "shared_questions": len(shared),
+        "shared_state_tokens": len(shared_prompts("A")[0]),
+        "shared_questions": len(shared_prompts("A")),
     }
     base = [
         str(args.model),
@@ -1110,29 +1114,53 @@ def session_labeltoken(args: argparse.Namespace) -> dict[str, Any]:
             },
         }
         yes_no = label_ids(tokenizer, ("yes", "no"))
-        hits0 = prometheus_counter(LABEL_PORT, "vllm:prefix_cache_hits_total")
-        queries0 = prometheus_counter(LABEL_PORT, "vllm:prefix_cache_queries_total")
-        one = Pool(LABEL_PORT, 1)
-        try:
-            shared_runs = [
-                one.post("/v1/completions", body(ids, yes_no)) for ids in shared
-            ]
-        finally:
-            one.close()
-        hits = prometheus_counter(LABEL_PORT, "vllm:prefix_cache_hits_total") - hits0
-        queries = (
-            prometheus_counter(LABEL_PORT, "vllm:prefix_cache_queries_total") - queries0
-        )
+
+        def phase(prompts: list[list[int]], mode: str) -> dict[str, Any]:
+            """Eight questions on a cold state: one by one, all at once, or first alone then the rest."""
+            hits0 = prometheus_counter(LABEL_PORT, "vllm:prefix_cache_hits_total")
+            queries0 = prometheus_counter(LABEL_PORT, "vllm:prefix_cache_queries_total")
+            requests = [body(ids, yes_no) for ids in prompts]
+            fan = Pool(LABEL_PORT, len(requests))
+            started = time.perf_counter()
+            try:
+                if mode == "sequential":
+                    runs = [fan.post("/v1/completions", r) for r in requests]
+                elif mode == "concurrent":
+                    runs = fan.map("/v1/completions", requests)
+                else:
+                    runs = [fan.post("/v1/completions", requests[0])]
+                    runs += fan.map("/v1/completions", requests[1:])
+            finally:
+                fan.close()
+            wall = time.perf_counter() - started
+            time.sleep(1)
+            hits = (
+                prometheus_counter(LABEL_PORT, "vllm:prefix_cache_hits_total") - hits0
+            )
+            queries = (
+                prometheus_counter(LABEL_PORT, "vllm:prefix_cache_queries_total")
+                - queries0
+            )
+            return {
+                "prefix_cache_hit_tokens": hits,
+                "prefix_cache_query_tokens": queries,
+                "hit_rate": hits / queries if queries else None,
+                "wall_ms": wall * 1000,
+                "first_ms": runs[0][0] * 1000,
+                "rest": latency_summary([s for s, _, _ in runs[1:]]),
+                "failed": sum(status != 200 for _, status, _ in runs),
+                "first_failure": next(
+                    (str(v)[:300] for _, status, v in runs if status != 200), None
+                ),
+            }
+
         result["shared_state"] = {
-            "prefix_cache_hit_tokens": hits,
-            "prefix_cache_query_tokens": queries,
-            "hit_rate": hits / queries if queries else None,
-            "first_ms": shared_runs[0][0] * 1000,
-            "rest": latency_summary([s for s, _, _ in shared_runs[1:]]),
-            "failed": sum(status != 200 for _, status, _ in shared_runs),
-            "first_failure": next(
-                (str(v)[:300] for _, status, v in shared_runs if status != 200), None
-            ),
+            mode: phase(shared_prompts(tag), mode)
+            for tag, mode in (
+                ("A", "sequential"),
+                ("B", "concurrent"),
+                ("C", "staggered"),
+            )
         }
     finally:
         server.stop()
