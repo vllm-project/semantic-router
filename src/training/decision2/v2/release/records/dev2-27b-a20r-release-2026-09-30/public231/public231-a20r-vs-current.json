@@ -1,0 +1,153 @@
+{
+  "ci95": {
+    "high": 11.0,
+    "low": -1.0
+  },
+  "delta": 5,
+  "discordant": {
+    "left_only": 7,
+    "right_only": 2
+  },
+  "families": {
+    "adequacy": {
+      "items": 12,
+      "left": 12,
+      "right": 11
+    },
+    "adversarial": {
+      "items": 6,
+      "left": 6,
+      "right": 6
+    },
+    "ambiguous": {
+      "items": 7,
+      "left": 6,
+      "right": 5
+    },
+    "extraction": {
+      "items": 24,
+      "left": 24,
+      "right": 24
+    },
+    "fact": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "intent": {
+      "items": 24,
+      "left": 24,
+      "right": 24
+    },
+    "judge_hard": {
+      "items": 17,
+      "left": 14,
+      "right": 14
+    },
+    "long_policy": {
+      "items": 19,
+      "left": 11,
+      "right": 10
+    },
+    "multi_hop": {
+      "items": 18,
+      "left": 15,
+      "right": 16
+    },
+    "ordinal": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "policy": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "probability": {
+      "items": 10,
+      "left": 8,
+      "right": 7
+    },
+    "routing": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "routing_hard": {
+      "items": 5,
+      "left": 5,
+      "right": 5
+    },
+    "temporal_numeric": {
+      "items": 15,
+      "left": 4,
+      "right": 2
+    },
+    "tool_selection": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "tradeoff": {
+      "items": 6,
+      "left": 6,
+      "right": 6
+    },
+    "trap": {
+      "items": 8,
+      "left": 8,
+      "right": 8
+    }
+  },
+  "items": 231,
+  "label": "post-key same-panel",
+  "left_correct": 203,
+  "mcnemar_exact_p": 0.1796875,
+  "names": {
+    "left": "DEV2.0-27B (M4-A20r soup)",
+    "right": "DEV2.0-27B c0dba600 (F1)"
+  },
+  "right_correct": 198,
+  "rule": "REGRESSION if left − right < 0 items and the exact two-sided McNemar p < 0.05",
+  "runs": {
+    "left": "/data/dev2/runs/27b/M4-A20r-soup/formal",
+    "right": "/data/dev2/runs/27b/M3-A-soup/formal"
+  },
+  "schema": "dev2-gate-public231/1",
+  "tiers": {
+    "easy": {
+      "items": 48,
+      "left": 48,
+      "right": 48
+    },
+    "hard": {
+      "items": 111,
+      "left": 83,
+      "right": 79
+    },
+    "standard": {
+      "items": 72,
+      "left": 72,
+      "right": 71
+    }
+  },
+  "types": {
+    "choice": {
+      "items": 139,
+      "left": 123,
+      "right": 119
+    },
+    "noul": {
+      "items": 74,
+      "left": 66,
+      "right": 65
+    },
+    "score": {
+      "items": 18,
+      "left": 14,
+      "right": 14
+    }
+  },
+  "verdict": "OK"
+}

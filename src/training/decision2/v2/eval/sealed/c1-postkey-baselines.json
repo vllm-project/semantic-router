@@ -81,20 +81,21 @@
     "27B": {
       "model": "DEV2.0-27B",
       "repo": "llm-semantic-router/DEV2.0-27B",
-      "revision": "5683c6f04fb6ac88484cee82220f1a1a2fa43392",
-      "identity": "b7fd44e3ad73d24faa85c2ba06ba61d4494aa4be2a2025c580ba02bedae6e781",
-      "manifest_sha256": "ab07948eeff64d72b3dc179e72f6083a984b3fe8c481da3f9175480091a07cf5",
-      "run": "/data/dev2/runs/eval/m4/c1-event3/cand27",
-      "seal_sha256": "f41d44c5f325c9b2db1a2615c60be63e0d35f3803aa696a06c9e180053e32c2c",
-      "predictions_sha256": "0840d38e9aacd6c3bbdced805b917ff9070f03eea5badcc7d97c2abae71ec710",
-      "c1": 57.33121099149735,
-      "source": "C1 event 3 (independent confirmation, v1.2), stored predictions of the release package DEV2.0-26B@5683c6f0 (F1); valid for every revision with these weights (the DEV2.0-27B rename and card-only revisions included)",
-      "backup": "private eval-artifacts m4/c1-event3/cand27 (1561a3a5)"
+      "revision": "5323310327e52d4eadd119cd10accac9b106c97d",
+      "identity": "2e07451107a2ca9735064cc01f7e43e8522b4bae48f2d77bdf29f7ea2fe6362c",
+      "manifest_sha256": "0d7953cc5d85a6fde6bdf71913795d1d7849e32fbed7df10103c6da6669b254a",
+      "run": "/data/dev2/runs/eval/c1-postkey/27B/dev2-27b-a20r-20260930T000642Z/cand",
+      "seal_sha256": "6b035fb7ac9a7d87d7a06ec26d3e544da5785451932902fe3d458e0abea42eec",
+      "predictions_sha256": "75ef884accc2428f308afcbf2a26ea43bd7f84bddf3f4c4f6d1c69e1a428be6e",
+      "c1": 57.55947083977275,
+      "source": "post-key C1 v1.2 collection dev2-27b-a20r-20260930T000642Z (spec c1-postkey/dev2-27b-a20r.json; mirror 08f14d6cf) of the pre-release package (manifest 0d7953cc), whose model files are those of the released revision 5323310327e5 (only README.md differs); item 8 vs the previous entry 57.33: +0.23 [-1.22, +1.70], PASS; not an independent validation",
+      "backup": "private eval-artifacts c1-postkey/27B/dev2-27b-a20r-20260930T000642Z (bd34a942)"
     }
   },
   "notes": [
     "A tier's entry is the C1 run of its current HF revision's weights. When a successor is released, its post-key run (SUMMARY.json baseline_entry) replaces the entry in the same commit as the release record.",
     "0.6B: the current revision b2131337 was collected post-key on 2026-09-29 (C1 36.92 on v1.2 vs 33.02 for the previous revision e61b2b44's event-2 predictions); a re-collection of these weights is refused.",
-    "0.8B: registered 2026-09-30 by the coordinator's decision, from the event-1 predictions (0 answer changes at T = 1); no new collection."
+    "0.8B: registered 2026-09-30 by the coordinator's decision, from the event-1 predictions (0 answer changes at T = 1); no new collection.",
+    "27B: replaced 2026-09-30 by the successor DEV2.0-27B 5323310327e5 (27B M4-A20r soup, identity 2e07451107a2; coordinator 07:20). The previous entry was the event-3 run cand27 of 5683c6f0 (identity b7fd44e3, C1 57.33, seal f41d44c5); a second 27B successor against this entry needs --approval."
   ]
 }

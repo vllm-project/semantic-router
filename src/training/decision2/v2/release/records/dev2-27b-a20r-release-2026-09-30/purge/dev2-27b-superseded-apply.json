@@ -1,0 +1,65 @@
+{
+  "after": {
+    "commits": 7,
+    "heads": {
+      "branch:main": "5323310327e52d4eadd119cd10accac9b106c97d"
+    },
+    "lfs_objects": 5,
+    "main_lfs_served": {
+      "adapter/adapter_model.safetensors": 206,
+      "assets/DEV2.0-27B-owl-banner.png": 206,
+      "decision_head.safetensors": 206,
+      "tokenizer.json": 206
+    },
+    "old_paths_served": {
+      "adapter/adapter_model.safetensors": 403,
+      "decision_head.safetensors": 403
+    }
+  },
+  "before": {
+    "commits": 7,
+    "heads": {
+      "branch:main": "5323310327e52d4eadd119cd10accac9b106c97d"
+    },
+    "lfs_objects": 7,
+    "main_lfs_served": {
+      "adapter/adapter_model.safetensors": 206,
+      "assets/DEV2.0-27B-owl-banner.png": 206,
+      "decision_head.safetensors": 206,
+      "tokenizer.json": 206
+    },
+    "old_paths_served": {
+      "adapter/adapter_model.safetensors": 206,
+      "decision_head.safetensors": 206
+    }
+  },
+  "checks": {
+    "commits_unchanged": true,
+    "exactly_targets_gone": true,
+    "main_still_served": true,
+    "old_weights_not_served": true,
+    "refs_unchanged": true
+  },
+  "mode": "apply",
+  "new_revision": "5323310327e52d4eadd119cd10accac9b106c97d",
+  "node_copy": "/data/dev2/runs/eval/m4/c1-event3-assets/f1/release/DEV2.0-26B@5683c6f0",
+  "old_revision": "c0dba600087f582a1033830a2276d22e96e6324c",
+  "passed": true,
+  "repo": "llm-semantic-router/DEV2.0-27B",
+  "rewrite_history": false,
+  "schema": "dev2-release-purge-superseded/1",
+  "target_bytes": 488098072,
+  "targets": {
+    "52969216d5e4020d50e279884b51161f477447550eebe4b3277a0feb0af161b2": {
+      "bytes": 467041728,
+      "node_copy_sha256": "52969216d5e4020d50e279884b51161f477447550eebe4b3277a0feb0af161b2",
+      "path": "adapter/adapter_model.safetensors"
+    },
+    "7e9916eb235148a0b1685e962e04bb512dd690f271c6857db46258a179dd581f": {
+      "bytes": 21056344,
+      "node_copy_sha256": "7e9916eb235148a0b1685e962e04bb512dd690f271c6857db46258a179dd581f",
+      "path": "decision_head.safetensors"
+    }
+  },
+  "utc": "2026-09-30T01:36:28.360749+00:00"
+}
