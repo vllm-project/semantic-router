@@ -5,6 +5,10 @@
 #                             moves to owner.prev-<UTC>); refused while another track's job holds it
 #   pull ARM-SEED             m5-pull.sh: a node A relay (BEST checkpoint + SHA-256 list) over the private link
 #   soup NAME CKPT CKPT...    combine_full.sh soup -> /data/dev2/runs/27b/m5/NAME/checkpoint (+ verify.json)
+#   lsoup NAME CKPT CKPT...   LoRA members (branch B1's L128): v2.27b.lora_soup (exact rank concatenation, as M4's
+#                             run_finalist.sh soup) in a CPU-only container -> /data/dev2/runs/27b/m5/NAME/checkpoint
+#                             (soup_manifest.json); rank / alpha = the members' sums and the verification are checked;
+#                             a member with a relay list (RELAY_SUMS=CKPT=SHA256SUMS ...) must match it file by file
 #   reference GPU             A20r's typed DEV + CSS pilot + HT-DEV v2 readout (m5-htdev2.sh, htdev2-refs-nodeB.json)
 #                             -> /data/dev2/runs/27b/m5/readouts/A20r-ref
 #   readout NAME CKPT GPU     run_readout.sh (CAL698 kernel fit, then typed DEV + CSS pilot + HT-DEV v2 with it, score,
@@ -17,6 +21,8 @@
 #   mlx-pull NAME             node A's mlx-paired output (m5-mlx-nodeA.sh) -> gates/mlx/NAME-vs-A20r.json
 # Every inference job: 32,768 tokens, kernel path, a fresh verified copy of DEV2.0-27B's scored cache 03b172f1
 # (formal runs: no autotune entry may be added). Readouts, CAL698 fits and formal runs never run on a training GPU.
+# readout / formal / mlx take CHECKPOINT_FORMAT from the environment (default full; peft-lora/1 for M5-L128, whose
+# formal run also needs LOADED_PARAMETERS); m4b/run_readout.sh and run_formal.sh refuse any other format.
 set -euo pipefail
 echo "m5 tail $*: start $(date -u +%FT%TZ)"
 STAGE=${1:?STAGE} SHA=${2:?MIRROR_SHA}
@@ -41,6 +47,56 @@ case "$STAGE" in
   soup)
     NAME=${1:?NAME}; shift
     COMBINE_ROOT=$R COMBINE_PREFIX=d2-27b-m5 bash "$M4B/combine_full.sh" "$SHA" "$NAME" soup "$@" ;;
+  lsoup)
+    NAME=${1:?NAME}; shift
+    [ $# -ge 2 ] || { echo "lsoup NAME CKPT CKPT..." >&2; exit 2; }
+    [[ "$NAME" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "NAME must be one directory name" >&2; exit 2; }
+    OUT=$R/$NAME BASE=/data/decision20-20260926/models/Qwen3.8-27B
+    IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1
+    [ ! -e "$OUT/checkpoint" ] || { echo "$OUT/checkpoint exists: refusing to overwrite" >&2; exit 66; }
+    args=() mounts=()
+    for c in "$@"; do
+      (cd "$S" && python3 -m v2.27b.m4b.ckpt_format check --checkpoint "$c" --format peft-lora/1)
+      args+=(--member "$c")
+      mounts+=(--mount "type=bind,src=$c,dst=$c,readonly")
+    done
+    mkdir -p "$OUT/soup"
+    docker run --rm --name "d2-27b-m5-$NAME-soup" --network none --cpus 16 -e OMP_NUM_THREADS=16 \
+      -e HIP_VISIBLE_DEVICES= -e ROCR_VISIBLE_DEVICES= -e PYTHONPATH=/code -e PYTHONDONTWRITEBYTECODE=1 \
+      --mount "type=bind,src=$S,dst=/code,readonly" --mount "type=bind,src=$BASE,dst=$BASE,readonly" "${mounts[@]}" \
+      --mount "type=bind,src=$OUT,dst=$OUT" -w /code --entrypoint python3 "$IMAGE" \
+      -m v2.27b.lora_soup "${args[@]}" --source-path "$BASE" --output "$OUT/checkpoint" 2>&1 | tee "$OUT/soup/soup.log"
+    python3 - "$OUT/checkpoint/soup_manifest.json" "${RELAY_SUMS:-}" "$@" <<'EOF' | tee "$OUT/soup/check.json"
+import json, pathlib, sys
+manifest = json.load(open(sys.argv[1]))
+relays = dict(spec.split("=", 1) for spec in sys.argv[2].split())
+members = [pathlib.Path(p) for p in sys.argv[3:]]
+configs = [json.loads((m / "decision_config.json").read_text())["lora"] for m in members]
+lora, check = manifest["lora"], manifest["verification"]
+expect = (len(members), sum(c["rank"] for c in configs), sum(c["alpha"] for c in configs))
+problems = []
+if (lora["members"], lora["rank"], lora["alpha"]) != expect:
+    problems.append(f"soup lora {lora}, expected members / rank / alpha {expect}")
+if not check["verify_adapter_config"] or check["max_relative_diff"] > check["tolerance_relative"]:
+    problems.append(f"soup verification {check['max_relative_diff']} / {check['verify_adapter_config']}")
+if [pathlib.Path(m["path"]) for m in manifest["members"]] != members:
+    problems.append("soup_manifest.json lists other members")
+for member in manifest["members"]:
+    sums = relays.get(member["path"])
+    if not sums:
+        continue
+    listed = {line.split(None, 1)[1].strip().removeprefix("./"): line.split(None, 1)[0]
+              for line in open(sums) if line.strip()}
+    for name, digest in member["files_sha256"].items():
+        if listed.get(name) != digest:
+            problems.append(f"{member['path']}/{name} is not the relayed file")
+if problems:
+    raise SystemExit("; ".join(problems))
+print(json.dumps({"soup": sys.argv[1], "model_sha256": manifest["output"]["model_sha256"], "members": lora["members"],
+                  "rank": lora["rank"], "alpha": lora["alpha"], "max_relative_diff": check["max_relative_diff"],
+                  "relay_checked": sorted(relays)}))
+EOF
+    ;;
   reference)
     GPU=${1:?GPU}; aux "$GPU"
     ROOT=$R/readouts PANELS=typed-dev,css-pilot,ht-dev2 STAGES=collect \
