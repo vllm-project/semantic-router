@@ -9,8 +9,10 @@
 #                               (+ SHARDS.sha256 written from node B's hashes)
 #   m8-relay.sh teacher         node-A m8/teacher-a20r/{D1,D2}/teacher.jsonl + manifest.json -> node B (same paths)
 #   m8-relay.sh lines <point> [<point> ...]
-#                               node-B m8/lines/4b/<point>/{weights.json,files.sha256} + gold-free predictions of dev,
-#                               css-pilot, ht-dev2, score5t-dev -> node A (same paths); readout/*.json|.line too
+#                               node-B m8/lines/4b/<point>/{weights.json,files.sha256} + the gold-free HT-DEV v2 and
+#                               Score5-typed-DEV predictions -> node A (same paths); readout/*.json|.line too (typed
+#                               DEV and CSS pilot are scored on node B by m8-lines.sh)
+# Files travel gzip-compressed through the workstation (about 50 KB/s uncompressed).
 #   m8-relay.sh select          node-A m8/select/4b-finalists.json -> node B
 #   m8-relay.sh gpuh            node-A m8/gpuh-node-a.json -> node B (the milestone-total stop rule reads it)
 #   m8-relay.sh early           node-B m8/early/*.json and m8/status/* -> node A m8/relayed-status/ (for records)
@@ -31,7 +33,7 @@ copy_file() {  # <from a|b> <path> [<dest path>]: no overwrite unless identical,
     [ "$("on_$to" "sha256sum '$dst' | cut -d' ' -f1")" = "$h" ] || { echo "node $to: $dst exists with other content" >&2; exit 1; }
     return 0
   fi
-  "on_$from" "cat '$src'" | "on_$to" "set -o noclobber; mkdir -p '$(dirname "$dst")'; cat > '$dst'"
+  "on_$from" "gzip -1 -c '$src'" | "on_$to" "set -o noclobber; mkdir -p '$(dirname "$dst")'; gunzip -c > '$dst'"
   [ "$("on_$to" "sha256sum '$dst' | cut -d' ' -f1")" = "$h" ] || { echo "node $to: $dst hash differs after the copy" >&2; exit 1; }
   echo "node $from -> $to: $dst ($h)"
 }
@@ -60,7 +62,7 @@ case ${1:-} in
     for point in "$@"; do
       P=$M/lines/4b/$point
       for f in weights.json files.sha256; do copy_file b "$P/$f"; done
-      for panel in dev css-pilot ht-dev2 score5t-dev; do
+      for panel in ht-dev2 score5t-dev; do
         if on_b "test -f '$P/$panel/$panel.predictions.jsonl'"; then copy_file b "$P/$panel/$panel.predictions.jsonl"; fi
       done
     done
