@@ -59,6 +59,7 @@ type responsesRequestWire struct {
 	ServiceTier          json.RawMessage             `json:"service_tier,omitempty"`
 	StreamOptions        *responsesStreamOptionsWire `json:"stream_options,omitempty"`
 	TopLogprobs          json.RawMessage             `json:"top_logprobs,omitempty"`
+	NVExt                json.RawMessage             `json:"nvext,omitempty"`
 	ClientMetadata       map[string]string           `json:"client_metadata,omitempty"`
 }
 
@@ -272,7 +273,28 @@ func (OpenAIResponsesCodec) DecodeRequest(body []byte, policy llmprotocol.Policy
 	if err := decodeResponsesRequestOptions(wire, &request, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
-	return request, requestEnvelope(llmprotocol.OpenAIResponsesV1, body, request.Generation, policy), diagnostics, nil
+	envelope, err := decodeResponsesRequestEnvelope(body, request.Generation, wire.NVExt, policy)
+	if err != nil {
+		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
+	}
+	return request, envelope, diagnostics, nil
+}
+
+func decodeResponsesRequestEnvelope(
+	body []byte,
+	generation uint64,
+	rawNVExt json.RawMessage,
+	policy llmprotocol.Policy,
+) (llmprotocol.Envelope, error) {
+	dynamoNVExt, err := decodeDynamoRequestNVExt(rawNVExt, policy)
+	if err != nil {
+		return llmprotocol.Envelope{}, err
+	}
+	envelope := requestEnvelope(llmprotocol.OpenAIResponsesV1, body, generation, policy)
+	if dynamoNVExt != nil {
+		envelope.Dynamo = &llmprotocol.DynamoEnvelope{RequestNVExt: dynamoNVExt}
+	}
+	return envelope, nil
 }
 
 // decodeResponsesDroppedFields accepts include and client_metadata without

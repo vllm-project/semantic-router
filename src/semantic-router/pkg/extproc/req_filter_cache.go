@@ -53,6 +53,12 @@ func (r *OpenAIRouter) handleCaching(
 	// Skip entire cache path for decisions that will inject user-specific context.
 	// Both reads (would serve stale generic answers) and writes (would leak
 	// personalized data) are wrong when RAG or memory is enabled.
+	if hasDynamoRequestExtension(ctx, ctx.ProtocolEnvelope) {
+		ctx.CacheReadBypass = true
+		ctx.CacheWriteBypass = true
+		logging.Debugf("[Cache] Skipping response cache for request carrying Dynamo extensions")
+		return nil, false
+	}
 	if decisionWillPersonalize(ctx, r.Config) {
 		logging.Debugf("[Cache] Skipping cache for decision '%s': RAG or memory enabled", categoryName)
 		return nil, false

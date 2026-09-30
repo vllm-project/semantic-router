@@ -55,6 +55,7 @@ type responsesResponseWire struct {
 	TopP                 json.RawMessage   `json:"top_p"`
 	Truncation           json.RawMessage   `json:"truncation,omitempty"`
 	User                 json.RawMessage   `json:"user,omitempty"`
+	NVExt                json.RawMessage   `json:"nvext,omitempty"`
 }
 
 func newResponsesResponseWire(id, model, status string, createdAt int64, previousResponseID string) responsesResponseWire {
@@ -133,7 +134,15 @@ func (OpenAIResponsesCodec) DecodeResponse(body []byte, policy llmprotocol.Polic
 	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
-	return response, responseEnvelope(llmprotocol.OpenAIResponsesV1, canonicalBody, response.Generation, wire.Status, policy), diagnostics, nil
+	nvext, err := decodeDynamoResponseNVExt(wire.NVExt, policy)
+	if err != nil {
+		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
+	}
+	envelope := responseEnvelope(llmprotocol.OpenAIResponsesV1, canonicalBody, response.Generation, wire.Status, policy)
+	if nvext != nil {
+		envelope.Dynamo = &llmprotocol.DynamoEnvelope{ResponseNVExt: nvext}
+	}
+	return response, envelope, diagnostics, nil
 }
 
 func responsesResponseMetadataDiagnostics(wire responsesResponseWire, policy llmprotocol.Policy) llmprotocol.Diagnostics {
@@ -406,11 +415,14 @@ func decodeResponsesUsage(wire responsesUsageWire) (llmprotocol.Usage, error) {
 }
 
 func (OpenAIResponsesCodec) EncodeResponse(response llmprotocol.Response, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
+	if err := validateDynamoResponseEnvelope(envelope, llmprotocol.OpenAIResponsesV1, policy); err != nil {
+		return nil, nil, err
+	}
 	if envelope.CanReplay(llmprotocol.OpenAIResponsesV1, response.Generation, policy, true) {
 		return append([]byte(nil), envelope.Response...), nil, nil
 	}
 	if response.Error != nil {
-		body, err := encodeResponsesErrorResource(response, envelope)
+		body, err := encodeResponsesErrorResource(response, envelope, policy)
 		return body, nil, err
 	}
 	var diagnostics llmprotocol.Diagnostics
@@ -425,6 +437,12 @@ func (OpenAIResponsesCodec) EncodeResponse(response llmprotocol.Response, envelo
 	}
 	wire.OutputText = encodeResponsesOutputText(response.Output)
 	wire.Usage = encodeResponsesUsage(response.Usage)
+	if envelope.Dynamo != nil && envelope.Dynamo.ResponseNVExt != nil {
+		wire.NVExt, err = encodeDynamoResponseNVExt(envelope.Dynamo.ResponseNVExt, policy)
+		if err != nil {
+			return nil, diagnostics, err
+		}
+	}
 	if err := applyResponsesStopReason(&wire, response.StopReason, envelope.Format, policy, &diagnostics); err != nil {
 		return nil, diagnostics, err
 	}
@@ -432,7 +450,7 @@ func (OpenAIResponsesCodec) EncodeResponse(response llmprotocol.Response, envelo
 	return body, diagnostics, err
 }
 
-func encodeResponsesErrorResource(response llmprotocol.Response, envelope llmprotocol.Envelope) ([]byte, error) {
+func encodeResponsesErrorResource(response llmprotocol.Response, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, error) {
 	wire := newResponsesResponseWire(
 		response.ID,
 		response.Model,
@@ -443,6 +461,13 @@ func encodeResponsesErrorResource(response llmprotocol.Response, envelope llmpro
 	wire.Error = &responsesErrorWire{Code: responsesErrorCode(response.Error), Message: response.Error.Message}
 	if response.Usage.State == llmprotocol.UsageAvailable {
 		wire.Usage = encodeResponsesUsage(response.Usage)
+	}
+	if envelope.Dynamo != nil && envelope.Dynamo.ResponseNVExt != nil {
+		var err error
+		wire.NVExt, err = encodeDynamoResponseNVExt(envelope.Dynamo.ResponseNVExt, policy)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return marshalWire(wire)
 }

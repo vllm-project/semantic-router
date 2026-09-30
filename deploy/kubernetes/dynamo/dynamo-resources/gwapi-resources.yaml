@@ -126,6 +126,9 @@ spec:
               clusterName: semantic-router
             timeout: 60s
           message_timeout: 60s
+          response_attributes:
+          - 'xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_name"]'
+          - 'xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_type"]'
           processing_mode:
             request_body_mode: BUFFERED
             request_header_mode: SEND
@@ -154,9 +157,21 @@ spec:
         name: semantic-router
         type: STRICT_DNS
     type: type.googleapis.com/envoy.config.cluster.v3.Cluster
+  # Preserve Envoy Gateway's EDS-backed Kubernetes Service discovery while
+  # attaching the trusted backend identity to every discovered Dynamo endpoint.
+  - name: httproute/default/semantic-router-to-dynamo/rule/0
+    operation:
+      op: add
+      jsonPath: ..lb_endpoints[*]
+      path: metadata
+      value:
+        filter_metadata:
+          semantic-router:
+            backend_name: dynamo-frontend
+            backend_type: dynamo
+    type: type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment
   targetRef:
     group: gateway.networking.k8s.io
     kind: Gateway
     name: semantic-router
   type: JSONPatch
-

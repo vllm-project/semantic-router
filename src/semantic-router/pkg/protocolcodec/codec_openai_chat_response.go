@@ -47,6 +47,13 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 		canonicalBody = nil
 	}
 	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, canonicalBody, response.Generation, response.SourceStopReason, policy)
+	nvext, err := decodeDynamoResponseNVExt(wire.NVExt, policy)
+	if err != nil {
+		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
+	}
+	if nvext != nil {
+		envelope.Dynamo = &llmprotocol.DynamoEnvelope{ResponseNVExt: nvext}
+	}
 	envelope.ResponseReencodeRequired = needsReencode
 	return response, envelope, diagnostics, nil
 }
@@ -255,6 +262,9 @@ func decodeChatUsage(wire chatUsageWire) (llmprotocol.Usage, error) {
 }
 
 func (OpenAIChatCodec) EncodeResponse(response llmprotocol.Response, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
+	if err := validateDynamoResponseEnvelope(envelope, llmprotocol.OpenAIChatV1, policy); err != nil {
+		return nil, nil, err
+	}
 	if response.Error != nil {
 		var diagnostics llmprotocol.Diagnostics
 		if response.Usage.State == llmprotocol.UsageAvailable {
@@ -279,6 +289,12 @@ func (OpenAIChatCodec) EncodeResponse(response llmprotocol.Response, envelope ll
 	}
 	wire.Choices = choices
 	wire.Usage = encodeChatUsage(response.Usage)
+	if envelope.Dynamo != nil && envelope.Dynamo.ResponseNVExt != nil {
+		wire.NVExt, err = encodeDynamoResponseNVExt(envelope.Dynamo.ResponseNVExt, policy)
+		if err != nil {
+			return nil, diagnostics, err
+		}
+	}
 	body, err := marshalWire(wire)
 	return body, diagnostics, err
 }
