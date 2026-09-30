@@ -256,13 +256,29 @@ wait_file() {
   done
 }
 
-# lent_ok GPU: 0 if the ~27B owner entry of GPU (gpuN.lock/owner) is absent or idle and no other
-# 9B-M8 job holds our entry as running. The owner entry is never rewritten.
+# lent_ok GPU: 0 if the ~27B owner entry of GPU (gpuN.lock/owner; key=value or JSON) is absent,
+# ours, idle or released (a missing status counts as busy unless the entry records a finished job),
+# and no other 9B-M8 job holds our entry as running. The owner entry is never rewritten.
 lent_ok() {
   local lock=$LEASES/gpu$1.lock st
-  if [ -f "$lock/owner" ] && ! grep -qx "track=$TRACK" "$lock/owner"; then
-    st=$(sed -n 's/^status=//p' "$lock/owner" | head -n 1)
-    case "$st" in idle*|released*|"") ;; *) echo "gpu$1 owner entry says status=$st" >&2; return 1 ;; esac
+  if [ -f "$lock/owner" ]; then
+    st=$(python3 - "$lock/owner" "$TRACK" <<'PY'
+import json, re, sys
+text = open(sys.argv[1]).read()
+try:
+    d = json.loads(text)
+    d = {k: str(v) for k, v in d.items()} if isinstance(d, dict) else {}
+except ValueError:
+    d = dict(re.findall(r"^(\w+)=(.*)$", text, re.M))
+if d.get("track") == sys.argv[2]:
+    print("ours")
+elif "status" in d:
+    print(d["status"] or "<empty>")
+else:
+    print("ended" if "last_job_exit" in d else "<missing>")
+PY
+)
+    case "$st" in ours|ended|idle*|released*) ;; *) echo "gpu$1 owner entry says status=$st" >&2; return 1 ;; esac
   fi
   if grep -q "^status=running" "$lock/$LEASE_ENTRY" 2>/dev/null; then
     echo "gpu$1 $LEASE_ENTRY says running" >&2; return 1

@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # usage: run_gpu.sh GPU RUN_DIR PURPOSE EXPECTED_MIN -- docker-run-args... IMAGE CMD...
 # Milestone 8 copy of m7/run_gpu.sh for GPUs lent by the ~27B track (container
-# d2-9b-m8-NAME-gGPU): refuses a GPU outside M8's allocation (node A GPU2-4; D2_9B_GPUS adds GPU6-7
-# once M7 ends), a GPU whose ~27B owner entry is not idle, our lease entry marked running, a GPU
+# d2-9b-m8-NAME-gGPU): refuses a GPU outside M8's allocation (node A GPU3-4 after the coordinator's
+# 17:15 reclaim of GPU2; D2_9B_GPUS widens it only by an amendment), a GPU whose ~27B owner entry is
+# not idle, our lease entry marked running, a GPU
 # with allocated VRAM, a reused run directory or an existing container name. It writes only
 # gpuN.lock/owner.9b-m8 (never the owner's gpuN.lock/owner) while the job runs, and start / end /
 # exit files into RUN_DIR.
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 gpu=$1; run=$2; purpose=$3; expected=$4; shift 4; [ "$1" = "--" ] && shift
-allowed="${D2_9B_GPUS:-2 3 4}"
+allowed="${D2_9B_GPUS:-3 4}"
 [[ " $allowed " == *" $gpu "* ]] || { echo "GPU $gpu is not allocated to 9B M8" >&2; exit 64; }
 render=renderD-dry
 if [ "${DRY_RUN:-0}" != 1 ]; then
