@@ -6,7 +6,21 @@ Assignment: coordinator notes 2026-09-30 19:40 (serving track), 19:50 / 20:00 (r
 
 ## Now
 
-- 2026-10-01 ≈00:40 UTC+8 — **Continuation (6c2c1341) resumed after the ~20:40 silent stop.**
+- 2026-10-01 ≈00:35 UTC+8 (16:35Z) — **Plugin serves; BF16 parity and runtime measured; second chain running.**
+  - `p08-bf16-0930T1611` (mirror `9c0abb957`): every request answered, alias identical. Answer changes vs stored
+    predictions: public231 3 / 231, typed FINAL 20 / 2,000, CSS15 33 / 6,547, mlx-diag 7 / 2,275 (max drift .022 /
+    .061 / .031 / .124); public231 at concurrency 32 also 3. Bench (400 typed FINAL items, HTTP): single p50 15.2 ms;
+    66 / 208 / 449 / 622 items/s at concurrency 1 / 8 / 32 / 128.
+  - `p08-fp32-0930T1617`: `--dtype float32` fails at engine start (vLLM's chunked gated-delta kernel asserts on FP32).
+    Added an opt-in `VLLM_SR_GDN_BF16_INPUTS=1` custom-op override (`CustomOp.register_oot`; `ecb46f764`).
+  - `rt08-0930T1618` (frozen autotune cache): FP32 master p50 22.7 ms, 44.1 items/s, peak 2.91 GiB; BF16-resident
+    p50 21.4 ms, 46.8 items/s, peak 2.01 GiB, 186 / 186 Linear converted, bit-identical on all 400 items and 0 changes
+    on all four panels (drift ≤ 9e-16).
+  - Vela / label / coloc on `9c0abb957` failed at load: HF cache weights are symlinks into the shared
+    `/data/dev2/hf-cache/blobs` store, which was not mounted. Relaunched with it.
+  - Chain `chain-ecb46f764.sh` (node A GPU1): FP32 + GDN-BF16-inputs plugin parity/bench → Transformers BF16-parameter
+    control (`bf16-full`) → vela → labeltoken → coloc.
+- 2026-10-01 ≈00:05 UTC+8 — **Continuation (6c2c1341) resumed after the ~20:40 silent stop.**
   - Found: three failed plugin sessions on node A GPU1 (0.093 GPU-h). The last (`p08-bf16-0930T124140`, mirror
     `678ac2060`) loaded the model and failed at the first request: `from __future__ import annotations` turned the
     route's `Request` annotation into a string, so FastAPI treated it as a query parameter (HTTP 400). The
@@ -35,7 +49,13 @@ Assignment: coordinator notes 2026-09-30 19:40 (serving track), 19:50 / 20:00 (r
 | smoke-bf16-122544 | `1408d273a` | 0.0164 | engine failed (plugin task rejected by Model Runner V2) |
 | smoke-bf16-123241 | `711330eac` | 0.0392 | engine failed (runtime predates Score offsets) |
 | p08-bf16-0930T124140 | `678ac2060` | 0.0372 | first request HTTP 400 (FastAPI annotation) |
-| **Total** | | **0.093** | |
+| p08-bf16-0930T1611 | `9c0abb957` | 0.0986 | BF16 parity + bench done |
+| p08-fp32-0930T1617 | `9c0abb957` | 0.0264 | FP32 engine start fails (GDN kernel assert) |
+| rt08-0930T1618 | `9c0abb957` | 0.0767 | shipped runtime FP32 master + BF16-resident done |
+| vela-0930T1623 | `9c0abb957` | 0.0014 | tokenizer not found (blob store unmounted) |
+| label-0930T1624 | `9c0abb957` | 0.0231 | weights not found (blob store unmounted) |
+| coloc-0930T1626 | `9c0abb957` | 0.0436 | Vela engine load failed (same) |
+| **Total** | | **0.363** | |
 
 ## Plan
 
