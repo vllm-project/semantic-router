@@ -8,8 +8,10 @@
   - **C** (matched-token control): x60 replay only, budgeted to P's native tokens with the same
     seed, so P's replay is contained in C's (checked); own-Lux targets on every row.
 * ``mlxdev``: MLX-DEV-9B, the decoder's MLX-DEV panel minus every group that shares a group id,
-  row id, input hash or a normalized state line of >= 20 characters with x60 (the K seeds'
-  TRAIN, which contains both continuation files) or the PN1-r2 block, with its index.
+  row id or input hash with x60 (the K seeds' TRAIN, which contains both continuation files) or
+  the PN1-r2 block (the partition-isolation identity), with its index. Kept groups that share a
+  normalized state line of >= 20 characters with those rows (for example an OASST prompt with
+  another rated reply) are counted per cell and disclosed, not dropped.
 
     python3 -m lux9b.m7_data topup --spec SPEC --root NAME=PATH ... --tokenizer /model --output-dir OUT
     python3 -m lux9b.m7_data mlxdev --spec SPEC --root NAME=PATH ... --output-dir OUT
@@ -266,6 +268,7 @@ def mlxdev(spec, roots, out: Path) -> dict[str, Any]:
                 dropped[field].add(row["group_id"])
         if segments(row) & seen_segments:
             dropped["segment"].add(row["group_id"])
+    shared_line = dropped.pop("segment")
     drop = set().union(*dropped.values())
     kept_index = [e for e in index if e["group_id"] not in drop]
     kept = [by_id[e["id"]] for e in kept_index]
@@ -302,6 +305,12 @@ def mlxdev(spec, roots, out: Path) -> dict[str, Any]:
         "groups": len({e["group_id"] for e in kept_index}),
         "dropped_groups": {k: len(v) for k, v in dropped.items()},
         "dropped_groups_total": len(drop),
+        "kept_groups_sharing_a_state_line": {
+            cell: len(
+                {e["group_id"] for e in kept_index if e["cell"] == cell} & shared_line
+            )
+            for cell in sorted(cells)
+        },
         "screened_rows": {"x60": len(rows), "pn1_r2": len(pn1)},
         "cells": per_cell,
         "panel_sha256": panel_sha,
