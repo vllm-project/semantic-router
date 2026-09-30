@@ -4,6 +4,8 @@ import unittest
 
 from support import has
 
+from vllm_sr_plugins.decision2.gather import POOLING_TASK
+
 HAVE_VLLM = has("vllm") and has("torch")
 
 
@@ -48,7 +50,7 @@ class CandidatePoolerTest(unittest.TestCase):
 
         def params(candidates, query):
             return PoolingParams(
-                task="plugin",
+                task=POOLING_TASK,
                 extra_kwargs={
                     POSITIONS_KEY: {
                         "candidate_positions": candidates,
@@ -62,8 +64,8 @@ class CandidatePoolerTest(unittest.TestCase):
     def expected(self, hidden, candidates, query):
         return self.reference(hidden[candidates][None], hidden[query][None])[0]
 
-    def test_supports_only_the_plugin_task(self) -> None:
-        self.assertEqual(self.pooler.get_supported_tasks(), {"plugin"})
+    def test_supports_only_its_pooling_task(self) -> None:
+        self.assertEqual(self.pooler.get_supported_tasks(), {POOLING_TASK})
         self.assertEqual(list(self.pooler.parameters()), [])
 
     def test_chunked_and_whole_prompts_match_the_training_head(self) -> None:
@@ -109,7 +111,7 @@ class CandidatePoolerTest(unittest.TestCase):
             torch.randn(6, 48),
             Metadata(
                 Cursor(torch, [6], [6], [6]),
-                [PoolingParams(task="plugin")],
+                [PoolingParams(task=POOLING_TASK)],
                 [self.states()],
             ),
         )

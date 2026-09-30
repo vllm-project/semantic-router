@@ -21,7 +21,8 @@ classification serves them. Results, limitations and next steps are in
   `CandidateHead` (`decision2/head.py`, the same parameters and arithmetic as the training head).
   It applies vLLM's own Qwen3.5 text-model config hook, so the gated-delta state is FP32 as the
   checkpoint's `mamba_ssm_dtype` says, and positions are one-dimensional.
-- **`CandidatePooler`** (`decision2/pooler.py`) serves the `plugin` pooling task. Each request
+- **`CandidatePooler`** (`decision2/pooler.py`) serves the `token_classify` pooling task (the built-in task with
+  per-request output lengths, accepted by both vLLM model runners). Each request
   carries its option-endpoint and query positions in `PoolingParams.extra_kwargs["decision2"]`.
   The pooler copies those hidden rows out of every prefill step, so chunked prefill works, and
   returns one FP32 logit per candidate when the prompt is complete.

@@ -60,7 +60,7 @@ class RegistrationTest(unittest.TestCase):
         plugin = SystemOneEndpoint()
         app = FastAPI()
         plugin.attach_router(app)
-        self.assertEqual(plugin.required_tasks, ("plugin",))
+        self.assertEqual(plugin.required_tasks, ("token_classify",))
         self.assertIn("/v1/system_one", {route.path for route in app.routes})
 
 

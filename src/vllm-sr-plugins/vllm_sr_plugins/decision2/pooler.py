@@ -1,11 +1,14 @@
 """vLLM pooler that turns option-endpoint hidden states into candidate logits.
 
-It serves the ``plugin`` pooling task. Each finished request gets a 1-D FP32
-tensor with one raw logit per candidate, in the request's candidate order. The
-rows a request needs are copied out of every prefill step it takes part in, so
-chunked prefill is supported; the copies own their storage, which async
-scheduling requires. A request without valid positions (for example a raw
-``/pooling`` call) gets a single NaN instead of failing the engine step.
+It serves the ``token_classify`` pooling task: the built-in task whose outputs
+vary in length per request, which both vLLM model runners accept (Model Runner
+V2 rejects the ``plugin`` task). Each finished request gets a 1-D FP32 tensor
+with one raw logit per candidate, in the request's candidate order; activation,
+temperature and answer formatting happen in the endpoint. The rows a request
+needs are copied out of every prefill step it takes part in, so chunked prefill
+is supported; the copies own their storage, which async scheduling requires. A
+request without valid positions (for example a raw ``/pooling`` call) gets a
+single NaN instead of failing the engine step.
 """
 
 from __future__ import annotations
@@ -19,7 +22,7 @@ from vllm.tasks import PoolingTask
 from vllm.v1.outputs import PoolerOutput
 from vllm.v1.pool.metadata import PoolingMetadata
 
-from .gather import parse_positions, plan_step
+from .gather import POOLING_TASK, parse_positions, plan_step
 from .head import CandidateHead
 
 
@@ -31,7 +34,7 @@ class CandidatePooler(Pooler):
         object.__setattr__(self, "head", head)
 
     def get_supported_tasks(self) -> Set[PoolingTask]:
-        return {"plugin"}
+        return {POOLING_TASK}
 
     def forward(
         self, hidden_states: torch.Tensor, pooling_metadata: PoolingMetadata

@@ -17,7 +17,7 @@ from argparse import Namespace
 from typing import Any
 
 from ..compat import check_vllm_version, get_logger
-from .gather import POSITIONS_KEY
+from .gather import POOLING_TASK, POSITIONS_KEY
 from .package import describe, load_package
 from .service import SystemOneService
 
@@ -42,7 +42,7 @@ def engine_encoder(engine_client: Any):
     async def encode(
         ids: list[int], positions: dict[str, Any], request_id: str
     ) -> list[float]:
-        params = PoolingParams(task="plugin", extra_kwargs=positions)
+        params = PoolingParams(task=POOLING_TASK, extra_kwargs=positions)
         final = None
         async for output in engine_client.encode(tokens_input(ids), params, request_id):
             final = output
@@ -55,7 +55,7 @@ def engine_encoder(engine_client: Any):
 
 class SystemOneEndpoint:
     name = "vllm_sr_system_one"
-    required_tasks = ("plugin",)
+    required_tasks = (POOLING_TASK,)
 
     def attach_router(self, app: Any) -> None:
         from fastapi import APIRouter, Request

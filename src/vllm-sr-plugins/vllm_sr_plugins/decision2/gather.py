@@ -16,6 +16,9 @@ from typing import Any
 
 POSITIONS_KEY = "decision2"
 MAX_CANDIDATES = 255
+# Model Runner V2 (the default runner) serves only the built-in pooling tasks;
+# token_classify is the one whose outputs vary in length per request.
+POOLING_TASK = "token_classify"
 
 
 @dataclass(frozen=True)
