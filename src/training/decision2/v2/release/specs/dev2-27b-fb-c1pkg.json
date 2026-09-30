@@ -28,8 +28,8 @@
     "model_sha256": "48ab177b2794b991a48c94a99ff53aa0db70505104e86c4a43ed031a6ba67784"
   },
   "calibration": {
-    "path": "/data/dev2/runs/release/inputs/dev2-27b-fb/cal698-bf16/calibration.json",
-    "sha256": "a0ddd7a02f294e659a8c859b9825cc26d6f0687a38d47cdf6e609bdd57238ce2"
+    "path": "/data/dev2/runs/release/inputs/dev2-27b-fb/cal698-bf16/calibration.public.json",
+    "sha256": "991908cb48b36b0fb505de984b54fb288e474307a8adf75beeef868b0c7c61eb"
   },
   "max_input_tokens": 32768,
   "vendor_source": "/data/dev2/src/ee13316871f8f3e56d8a49edc493b251d45db158-src_training_decision2/src/training/decision2",

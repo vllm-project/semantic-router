@@ -103,7 +103,7 @@ def receipts() -> dict:
             "bf16-copy.json",
             "bf16z.json",
             "bf16z-verify.json",
-            "calibration.json",
+            "calibration.public.json",
         )
     }
 
