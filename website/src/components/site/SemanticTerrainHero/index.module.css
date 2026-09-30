@@ -11,6 +11,102 @@
   color: var(--site-text);
 }
 
+.heroBackdrop {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.heroGlow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(2px);
+  opacity: 0.9;
+  will-change: transform, opacity;
+  animation: hero-glow-drift 18s var(--site-ease-out) infinite alternate;
+}
+
+.heroGlow[data-glow='a'] {
+  top: -18%;
+  left: calc(50% - min(36vw, 23rem));
+  width: min(72vw, 46rem);
+  height: min(40vw, 22rem);
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--site-brand-blue) 14%, transparent) 0%,
+    color-mix(in srgb, var(--site-brand-blue) 5%, transparent) 42%,
+    transparent 72%
+  );
+  animation-duration: 22s;
+}
+
+.heroGlow[data-glow='b'] {
+  top: 28%;
+  left: -8%;
+  width: min(52vw, 30rem);
+  height: min(52vw, 30rem);
+  background: radial-gradient(
+    circle at center,
+    color-mix(in srgb, var(--site-brand-blue-deep) 18%, transparent) 0%,
+    transparent 68%
+  );
+  animation-duration: 26s;
+  animation-delay: -4s;
+}
+
+.heroGlow[data-glow='c'] {
+  right: -6%;
+  bottom: 8%;
+  width: min(48vw, 26rem);
+  height: min(48vw, 26rem);
+  background: radial-gradient(
+    circle at center,
+    color-mix(in srgb, var(--site-brand-blue-light) 16%, transparent) 0%,
+    transparent 70%
+  );
+  animation-duration: 20s;
+  animation-delay: -9s;
+}
+
+.heroGrid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.45;
+  background-image:
+    linear-gradient(
+      color-mix(in srgb, var(--site-border) 70%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--site-border) 70%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 4.5rem 4.5rem;
+  mask-image: radial-gradient(ellipse 70% 55% at 50% 32%, #000 18%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 55% at 50% 32%, #000 18%, transparent 78%);
+}
+
+@keyframes hero-glow-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.78;
+  }
+
+  to {
+    transform: translate3d(1.5%, -2%, 0) scale(1.06);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heroGlow {
+    animation: none;
+  }
+}
+
 .terrain {
   position: absolute;
   z-index: 0;
@@ -133,16 +229,6 @@
   pointer-events: none;
 }
 
-.heroScrim {
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  background:
-    radial-gradient(circle at 50% 52%, color-mix(in srgb, var(--site-bg) 95%, transparent) 0, color-mix(in srgb, var(--site-bg) 76%, transparent) 28%, transparent 61%),
-    linear-gradient(90deg, color-mix(in srgb, var(--site-bg) 40%, transparent), color-mix(in srgb, var(--site-bg) 18%, transparent) 50%, color-mix(in srgb, var(--site-bg) 40%, transparent));
-  pointer-events: none;
-}
-
 .heroInner {
   display: grid;
   width: min(100%, 84rem);
@@ -154,19 +240,10 @@
   position: relative;
   display: grid;
   gap: 1.1rem;
-  justify-items: start;
-  justify-self: start;
+  justify-items: center;
+  justify-self: center;
+  text-align: center;
   pointer-events: auto;
-}
-
-/* The terrain HUD and glyphs run behind the top-left corner; keep the copy on a quiet patch. */
-.intro::before {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  inset: -3rem -5rem -2.5rem -6rem;
-  background: radial-gradient(ellipse at 42% 50%, color-mix(in srgb, var(--site-bg) 94%, transparent) 0, color-mix(in srgb, var(--site-bg) 78%, transparent) 48%, transparent 74%);
-  pointer-events: none;
 }
 
 .stage .title {
@@ -176,6 +253,8 @@
   font-weight: 460;
   letter-spacing: -0.045em;
   line-height: 1.04;
+  text-align: center;
+  text-wrap: balance;
 }
 
 .stage .title .accent {
@@ -191,6 +270,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
+  justify-content: center;
 }
 
 .actions .primaryCta,
@@ -458,12 +538,6 @@
   .actions .secondaryCta {
     width: 100%;
     min-width: 0;
-  }
-
-  .heroScrim {
-    background:
-      linear-gradient(180deg, transparent, color-mix(in srgb, var(--site-bg) 64%, transparent) 28%, color-mix(in srgb, var(--site-bg) 96%, transparent) 68%),
-      radial-gradient(circle at 40% 60%, color-mix(in srgb, var(--site-bg) 84%, transparent), transparent 72%);
   }
 
   .film {
