@@ -205,6 +205,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 00:45 — **Open Decision Runtime proposal v1 published** (writer 28bfbd64).
+  - Secret gist https://gist.github.com/Xunzhuo/be9324aed0fec68148248e27362efcde; repo copy
+    `src/training/decision2/v2/serving/open-decision-runtime-proposal.md` (commit `a4e0b54d5`; integration
+    `8b5db54d4`).
+  - ~5,980 words. Roadmap P0–P3: MVP 17–22 engineer-weeks, full coverage 39–54.
+  - 17 open decisions (OD-1 to OD-17), each with a recommendation.
+  - Prototype parity and latency are marked TBD.
+  - No leaderboard scores or names; the privacy check passed. Upstream note: vLLM #53555 (multi-LoRA heads) is merged
+    but not in the v0.30.0 tag.
+  - **v2 revision** (resume the writer once, after 7b239c1e and 9c17b169 report) folds in:
+    - Tier 1 as one tier with `generate` / `pooling` runner modes;
+    - the final runtime design (7 modules, placement table, plugin points, renderer path);
+    - llama.cpp positioning;
+    - the strangler execution plan (§10 of the decisions log);
+    - the Vela-2.0-Unified and router-model coverage results (fixed-task heads, sentence / token classification,
+      embeddings, rerank, and possibly broadening to a general router-model runtime with several API surfaces);
+    - plugin prototype results, if available.
+
 - 2026-10-01 00:35 — **USER: runtime execution plan (strangler-fig)**, recorded in gist file
   `10-open-decision-runtime-decisions.md` §10.
   - Stage 1: the new runtime starts with the new Decision models only; the legacy runtime keeps serving all existing
