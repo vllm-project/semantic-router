@@ -203,6 +203,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 20:00 — **OPEN DECISION RUNTIME: UX decisions by the user** (the English gist proposal follows once the
+  research lands).
+  - **CLI:** `vllm-sr serve <hf-model> [options]` auto-detects a decision model from its manifest
+    (`config.json` `decision_format`) and starts a **System One engine**, like `vllm serve`. With no model and a
+    `--config`, it starts the router as today.
+  - **API:** the native endpoint is named **`/v1/decisions`**: state + questions (Choice / Noul / Score) → answers and
+    distributions. Plus `/v1/models`, `/health` and `/metrics`. A `/classify` compatibility shim for the router's
+    existing `label_distribution.v1` contract is proposed as optional; to be confirmed in the proposal.
+  - **Router mode:** the decision engine is **router-managed by default** (the router supervises a local engine
+    running the same code as engine mode), with a remote engine as an option. Decision models serve the router's
+    internal decision points: `decision` signals (Choice / Noul / Score templates) and algorithms (model selection as a
+    Choice over candidate models, escalation as Noul, complexity as Score), with one batched call per request and
+    per-signal deadlines and fail-open.
+  - **Scope: open.** Third-party decision models are served through family adapters, not just Vela / Decision 1.0 /
+    2.0.
+  - **Pending inputs:** vllm-sr CLI / config facts (0c5e9497), Decision Index top-20 / Pareto architecture survey
+    (c1c70441), vLLM plugin prototype results (2529a7d0).
+
 - 2026-09-30 19:50 — **Serving architecture recommendation (discussed with the user). Decision: wait for the plugin
   prototype's measured results before starting phase-1 items.** Sources: research reports b9e89084 and 19da97ef.
   - **Don't embed the vLLM engine in the vllm-sr process.**
