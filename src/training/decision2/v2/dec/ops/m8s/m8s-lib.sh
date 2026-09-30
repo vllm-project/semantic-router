@@ -10,7 +10,8 @@ LAUNCH=$S/v2/dec/launch.sh
 R=/data/dev2/runs/dec
 M=$R/m8s
 IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1
-declare -A RENDER=([2]=/dev/dri/renderD145 [5]=/dev/dri/renderD169 [6]=/dev/dri/renderD177 [7]=/dev/dri/renderD185)
+# Node B GPU6-7 plus the spare GPU2 (COORDINATION 17:15 reclaim: GPU5 is 27B's again, never co-tenant).
+declare -A RENDER=([2]=/dev/dri/renderD145 [6]=/dev/dri/renderD177 [7]=/dev/dri/renderD185)
 SELCAL=$R/m3/data-sel700-cal698
 TCACHE=$M/triton-cache/dbe5f32b2263
 declare -A START=([2b]=$M/start/dev2-2b-a53cf66a [08b]=$M/start/dev2-0p8b-bede7938)
@@ -35,7 +36,7 @@ vram_free_gb() {
   rocm-smi -d "$1" --showmeminfo vram | awk -F': ' '/Total Memory/ {t=$NF} /Total Used Memory/ {u=$NF} END {printf "%d\n", (t-u)/1e9}'
 }
 dec_env() {  # <gpu>: launch.sh environment for node B GPU <gpu>
-  [ -n "${RENDER[$1]:-}" ] || { echo "GPU$1 is not an M8-small GPU (node B 2, 5, 6, 7)" >&2; return 2; }
+  [ -n "${RENDER[$1]:-}" ] || { echo "GPU$1 is not an M8-small GPU (node B 2, 6, 7)" >&2; return 2; }
   export DEC_IMAGE=$IMAGE DEC_RENDER=${RENDER[$1]} DEC_GPU_LABEL="node B GPU$1" DEC_DATA=$SELCAL DEC_TRITON_CACHE=$TCACHE
 }
 lease() {  # <gpu> <status> <purpose>: this track's shared lease entry (never another track's owner file)

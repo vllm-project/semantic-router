@@ -8,7 +8,7 @@
 #   E:<tier>:<arm>           HT-DEV v2 collection of <tier>-<arm>-s1 (16K, T = 1) for the early rule
 #   R:<tier>:<arm>           the early rule for a D arm (m8s_rules.py early) once D-s1 and C-s1 are collected
 #   S:<tier>:<arm>           the arm soup (v2.dec.soup, CPU) once every seed is terminal (>= 2 finished)
-# usage: m8s-chains.sh launch|run <chain: g2 g5 g6 g7>
+# usage: m8s-chains.sh launch|run <chain: g2 g6 g7>   (amendment 1: node B GPU2, GPU6, GPU7)
 set -u
 . "$(dirname "$0")/m8s-lib.sh"
 MODE=$1 CH=$2
@@ -16,9 +16,8 @@ C=$M/chains ST=$M/status
 mkdir -p "$C"
 case $CH in
   g2) GPU=2 ITEMS="T:2b:C:1:pf E:2b:C T:08b:C:1:pf E:08b:C T:2b:C:2 T:2b:C:3 S:2b:C T:08b:C:2 T:08b:C:3 S:08b:C" ;;
-  g5) GPU=5 ITEMS="L:parity L:0:3 T:2b:D1:1:pf E:2b:D1 R:2b:D1 T:08b:D1:1:pf E:08b:D1 R:08b:D1 T:2b:D1:2 T:2b:D1:3 S:2b:D1 T:08b:D1:2 T:08b:D1:3 S:08b:D1" ;;
-  g6) GPU=6 ITEMS="W:parity L:1:3 T:2b:D2:1:pf E:2b:D2 R:2b:D2 T:08b:D2:1:pf E:08b:D2 R:08b:D2 T:2b:D2:2 T:2b:D2:3 S:2b:D2 T:08b:D2:2 T:08b:D2:3 S:08b:D2" ;;
-  g7) GPU=7 ITEMS="W:parity L:2:3" ;;
+  g6) GPU=6 ITEMS="L:parity L:0:2 T:2b:D1:1:pf E:2b:D1 R:2b:D1 T:08b:D1:1:pf E:08b:D1 R:08b:D1 T:2b:D1:2 T:2b:D1:3 S:2b:D1 T:08b:D1:2 T:08b:D1:3 S:08b:D1" ;;
+  g7) GPU=7 ITEMS="W:parity L:1:2 T:2b:D2:1:pf E:2b:D2 R:2b:D2 T:08b:D2:1:pf E:08b:D2 R:08b:D2 T:2b:D2:2 T:2b:D2:3 S:2b:D2 T:08b:D2:2 T:08b:D2:3 S:08b:D2" ;;
   *) echo "unknown chain $CH" >&2; exit 2 ;;
 esac
 if [ "$MODE" = launch ]; then
