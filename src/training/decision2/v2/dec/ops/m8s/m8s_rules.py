@@ -9,8 +9,11 @@
              the larger alpha first within a class; a pick whose proxy P is >= 8 below the tier's best pick is
              dropped; slots D1, D2, C; at most three finalists. Development only; never a release score.
 
+  htdev2     one point vs a reference on HT-DEV v2 (paired, 04:10 verdict) -> the JSON the finalists rule reads
+
 usage: python3 m8s_rules.py early --root M --tier 2b|08b --arm D1|D2 --gold G
        python3 m8s_rules.py finalists --tier 2b|08b --lines-root L --output <select>/<tier>-finalists.json
+       python3 m8s_rules.py htdev2 --gold G --left P --left-name A --right P --right-name B --output OUT
 """
 
 from __future__ import annotations
@@ -216,6 +219,35 @@ def early(a: argparse.Namespace) -> int:
     return 0
 
 
+def htdev2_pair(a: argparse.Namespace) -> int:
+    """One point against a reference on the 1,944 HT-DEV v2 items (the eval scorer through m7_htdev2.evaluate)."""
+    htdev2 = _module("m7_htdev2", CODE / "v2/dec/ops/m7/m7_htdev2.py")
+    from v2.eval.htdev2 import score as scorer
+
+    out = htdev2.evaluate(scorer, a.gold, a.left, a.left_name, a.right, a.right_name)
+    out["schema"] = SCHEMA + ":htdev2"
+    out["role"] = (
+        "M8-small development gate (prereg dec-m8s-prereg-2026-09-30.md: not FLAG, prefer GAIN); "
+        "development readout, never a release score"
+    )
+    a.output.parent.mkdir(parents=True, exist_ok=True)
+    with open(a.output, "x") as f:
+        json.dump(out, f, indent=1, sort_keys=True)
+        f.write("\n")
+    print(
+        json.dumps(
+            {
+                "left": a.left_name,
+                "right": a.right_name,
+                "delta": round(out["delta"], 4),
+                "ci95": [round(x, 4) for x in out["ci95"]],
+                "verdict": out["verdict"],
+            }
+        )
+    )
+    return 0
+
+
 def parse_line(spec: str) -> tuple[str, dict[str, str]]:
     line, rest = spec.split(":", 1)
     return line, dict(item.split("=", 1) for item in rest.split(",") if item)
@@ -316,8 +348,15 @@ def main(argv: list[str] | None = None) -> int:
         default=[],
         help="LINE=reason for a line without a readout",
     )
+    h = sub.add_parser("htdev2")
+    h.add_argument("--gold", type=Path, required=True)
+    h.add_argument("--left", type=Path, required=True)
+    h.add_argument("--left-name", required=True)
+    h.add_argument("--right", type=Path, required=True)
+    h.add_argument("--right-name", required=True)
+    h.add_argument("--output", type=Path, required=True)
     a = p.parse_args(argv)
-    return early(a) if a.cmd == "early" else finalists(a)
+    return {"early": early, "finalists": finalists, "htdev2": htdev2_pair}[a.cmd](a)
 
 
 if __name__ == "__main__":
