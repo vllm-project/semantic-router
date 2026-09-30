@@ -56,7 +56,7 @@ vllm-sr recipe apply recipe.yaml
 vllm-sr recipe delete my-recipe
 ```
 
-Before deleting, inspect the target with `get` or `list`. `recipe plan recipe.yaml` only previews an apply proposal; it does not preview what `delete` removes. `delete` fetches a fresh collection ETag and compare-and-swaps one recipe out of the configuration, so it protects only against a change that races with the delete command itself. Only an unreferenced recipe can be deleted: while any entrypoint or other configuration element still points at it, deletion is refused. The default recipe cannot be deleted either — it is the top-level routing profile, and the server refuses it the same way. Delete removes that recipe and nothing else — there is no cascade and no undo.
+Before deleting, inspect the target with `get` or `list`. `recipe plan recipe.yaml` only previews an apply proposal; it does not preview what `delete` removes. `delete` fetches a fresh collection ETag and compare-and-swaps one recipe out of the configuration, so it protects only against a change that races with the delete command itself. Only an unreferenced recipe can be deleted: while any entrypoint still points at it, deletion is refused (an entrypoint mapping is the only configuration element that can reference a recipe). The default recipe cannot be deleted either — it is the top-level routing profile, and the server refuses it the same way. Delete removes that recipe and nothing else — there is no cascade and no undo.
 
 ## Interaction with the Dashboard
 
