@@ -200,6 +200,26 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 17:00 — **USER PLAN DECISION (aligned via questions): "aggressive" plan; JevBench stays a guard.**
+  - **Training plan:**
+    - **27B:** continue M5 (running: full FT + A20 dose + HS1 variants; soups and development readouts, formal
+      tonight). If there is no significant win over AutoJev, at most one more milestone with HR2.
+    - **9B:** finish M7 (the P and Q PN1 arms were both stopped by early rules for hurting true-paraphrase "hop"; the
+      C control line goes to rules and formal), then **pause**. Revisit with HR2 only if the coordinator reopens it.
+    - **4B: decoder M8 starts NOW,** with cross-size distillation from DEV2.0-27B (A20r) and matched controls. It does
+      not wait for HR2; HR2 may be added only by an amendment before its first readout.
+    - **2B / 0.8B / 0.6B: paused.** They lead their sizes.
+    - **Data:** HR2 (human-rated data) continues and is the main lever for the next round.
+  - **JevBench:** unchanged, a non-regression guard (item 7). Cards state "statistically level" where the gap is within
+    noise.
+  - **The user asked why 4B / 9B don't beat our own 1.0 on JevBench.** Answer:
+    - The gaps are noise: 4B −2 [−9, +5]; 9B −5 [−11, +1], with only 9 differing items.
+    - 2.0 gained on v3 typed families and human transfer, while JevBench hard tests quoted-conclusion checking, long
+      policy documents and condition-not-met, which neither generation trained on. Typed fine-tuning slightly
+      deepens quote-copying and the yes-bias.
+    - HS1 taught the skills at 2B / 4B without score gains. 27B A20r reached 203.
+    - On C1, 9B > Lux significantly and 4B = Nox.
+
 - 2026-09-30 11:30 — **User re-sent the directives; all are in effect. New data lever: HR2, new human-rated training
   data.**
   - **In effect:**
