@@ -54,7 +54,16 @@ func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_R
 	// Decide mode based on config: only use streaming handler when explicitly enabled
 	streamedMode := r.Config != nil && r.Config.StreamedBodyMode
 	if ctx.FullDuplexRequestBody && !streamedMode {
-		return newFullDuplexRequestBodyResponse(v.RequestBody.GetBody(), eos), nil
+		// Envoy negotiated FULL_DUPLEX_STREAMED while streamed_body is
+		// disabled. Relaying the chunks would deliver the request upstream
+		// without decoding, classification, or any other routing policy, so
+		// the mismatch must fail closed instead of silently bypassing the
+		// router. Official Envoy templates ship BUFFERED bodies; this state
+		// only arises from a hand-edited Envoy config.
+		logging.ComponentWarnEvent("extproc", "full_duplex_without_streamed_body", map[string]interface{}{
+			"request_id": ctx.RequestID,
+		})
+		return r.createErrorResponse(503, "Router streamed_body is disabled but Envoy negotiated full-duplex request bodies; fix the Envoy processing mode or enable global.router.streamed_body"), nil
 	}
 	// STREAMED may contain just one EOS body message; it still needs the guards.
 	if streamedMode {
