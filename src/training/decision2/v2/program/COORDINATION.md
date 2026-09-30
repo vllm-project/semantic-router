@@ -205,6 +205,23 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 23:59 — **Proposal revision items (from user discussion), to apply when the writer 28bfbd64 returns.**
+  1. **Rename "Tier 1a / 1b".** It is ONE Tier 1 (local vLLM sidecar) with **two runner modes chosen per model by the
+     manifest's readout field**:
+     - `generate` mode for label-token deciders (the third-party majority; prefix caching, thinking escalation);
+     - `pooling` mode plus the vllm-sr plugin for head-based models (Decision 1.0 / 2.0, slot heads).
+     One model uses one mode; a deployment may run both kinds of engines. They could unify later via a label-token
+     readout (everything in generate mode) or a label-token head in the plugin (everything in pooling mode, losing
+     prefix caching and thinking).
+  2. **llama.cpp positioning:** linkable in-process via its C API (Rust binding into our core). Recommended in-process
+     for CPU / edge; run it in a supervised subprocess when on GPU, for fault isolation, as Ollama does.
+     - Strengths: widest hardware reach; best CPU engine (GGUF quantisation); BERT / XLM-R / ModernBERT with heads;
+       Qwen3-Next / 3.5 GDN (fused op on CPU / CUDA / Metal / SYCL).
+     - Weaknesses: GDN on HIP is unoptimised (reported slow on RDNA 3.5; CDNA3 unmeasured, so benchmark before listing
+       it for AMD); no DeBERTa; LoRA not batched across adapters.
+     - Our CandidateHead: take `pooling none` hidden states at the option endpoints and apply the head in Rust.
+     - GGUF / quantisation needs per-backend calibration and parity receipts.
+
 - 2026-09-30 23:55 — **SILENT WORKER STOPS found (likely Cursor restarts); continuations relaunched.** No completion
   notification arrives for these stops. GPU jobs keep running, but nobody processes their results.
   - **~12:00 UTC+8 event:**
