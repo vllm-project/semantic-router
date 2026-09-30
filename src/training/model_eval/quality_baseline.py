@@ -169,8 +169,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         )
 
     spec = TASK_SPECS[args.task]
-    measured = resolve_measured_artifact(args, served)
-    spec.validate_artifact(measured.repo)
+    measured = resolve_measured_artifact(args, served, spec.validate_artifact)
     dataset_revision = resolve_hf_revision(spec.dataset_repo, repo_type="dataset")
 
     mapping = (

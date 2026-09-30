@@ -316,8 +316,8 @@ class DatasetContractTest(unittest.TestCase):
                 "load_config": Mock(),
                 "served_artifacts": lambda config: {"jailbreak": Mock()},
                 "TASK_SPECS": specs,
-                "resolve_measured_artifact": lambda *args: SimpleNamespace(
-                    repo=MODEL_REGISTRY["jailbreak"]["id"]
+                "resolve_measured_artifact": lambda args, served, validate_repo: (
+                    validate_repo(MODEL_REGISTRY["jailbreak"]["id"])
                 ),
                 "resolve_hf_revision": dataset_revision,
             },
