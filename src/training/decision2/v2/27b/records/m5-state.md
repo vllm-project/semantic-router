@@ -63,6 +63,16 @@ Prereg: `m5-prereg-2026-09-30.md`.
 - A20r node B reference readout (typed DEV + CSS pilot + HT-DEV v2, 03b172f1 cache): `readouts/m4-a20r-soup`
   (symlink `A20r-ref`), running on node B GPU0 from 00:17:55Z.
 
+## G1 (00:52Z, both FF20 attempts ≥ 100 updates): continue as planned
+
+- FF20-s1 146/891 at 12.8 s/update, FF20-s2 112/891 at 13.6 s/update → full attempts ≈ 3.45 / 3.65 h wall
+  (≈ 10.3 / 10.9 GPU-h; caps 13.5). FF20H ≈ 4.3 h per seed (≈ 12.9 GPU-h). Projected milestone ≈ 53.5 of 72 GPU-h
+  (receipts 1.54 at 00:52Z). No drop.
+- A20r node B reference (0.249 GPU-h): P_dev 78.99, T_dev .91625, H_pilot .6811, H_dev2 .56547; its HT-DEV v2
+  answers equal node A's exactly (only `latency_ms` differs).
+- Chain `m5-chain.sh 372b2be5f FF20 0` (PID 2425535, log `logs/chain-FF20.log`) waits for both FF20 seeds, then pull →
+  soup M5-FF20 → readout on GPU0 → devgates.
+
 ## Next
 
-- G1 at ≥ 100 updates; FF20 seeds done ≈ 04:30Z → pull FF20-s2, soup M5-FF20, readout, devgates → B1.
+- FF20 seeds done ≈ 03:40Z → chain → devgates → B1 decision; if M5-FF20 passes, its formal run on node B GPU0.
