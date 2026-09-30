@@ -2716,6 +2716,7 @@ func TestFallbackLoRAReasoningEffortUsesCandidateRef(t *testing.T) {
 	candidateModel := "model-fallback-1"
 	modelConfig := cfg.ModelConfig[candidateModel]
 	modelConfig.ReasoningFamily = "openai-reasoning"
+	modelConfig.LoRAs = []config.LoRAAdapter{{Name: "adapter"}}
 	cfg.ModelConfig[candidateModel] = modelConfig
 	cfg.ReasoningFamilies = map[string]config.ReasoningFamilyConfig{
 		"openai-reasoning": {
