@@ -111,7 +111,7 @@ func TestLLMLabelClassifierRationaleHTTP(t *testing.T) {
 			if err := json.Unmarshal(body, &request); err != nil {
 				t.Fatal(err)
 			}
-			if request.Model != "test-model" || request.MaxTokens != defaultLLMLabelClassifierMaxTokens || request.ResponseFormat.Type != "json_object" {
+			if request.Model != "test-model" || request.MaxTokens != defaultLLMLabelClassifierMaxTokens || request.ResponseFormat.Type != "json_schema" {
 				t.Fatalf("unexpected generation options: %s", body)
 			}
 			if len(request.Messages) != 2 || request.Messages[0].Role != "system" || request.Messages[1].Role != "user" {
