@@ -7,6 +7,12 @@ Worktree `/home/xunliu/code/vllm-sr-dev2-data-hr2`, branch `xunzhuo/decision-2-t
 
 ## Log (newest first)
 
+- 2026-10-01 01:08 UTC+8 — **Blind review FAILED** (13 / 216 = 6.02%, CP95 upper 10.07%; weighted 6.50%; P1 / P2
+  fail, P3 pass; F1 nothing to drop) → HR2 published flagged **not release-safe**, not tuned further; 13 gold-error
+  rows dropped. Final v1 (TRAIN 27,725) → leak guard found 28 upstream rows (26 IPv4, 2 token-like) → amendment 3
+  (`571e80b38`) → final v2: **TRAIN 27,697 (`0fd9b2db…`), DEV 1,615 (`697c3142…`)**, isolation / balance PASS,
+  tree leak guard clean. Old outputs kept as `final-v1/`, `freeze-v1/`, `hf-v1/`. Next: card update, assemble, upload.
+
 - 2026-10-01 00:25 UTC+8 — scans + pass 1 done. Full PI-v4: 4,556 groups flagged, 998 on quarantining roles;
   report-only hits disclosed (largest: HS3 vs A7q TRAIN 3,549 groups, HS3 vs v2 AHO H3 376, VitaminC vs H3 141).
   Quarantine lists: 1,202 groups (TRAIN + DEV) and 1,180 DEV-near-TRAIN groups. Pass 1: TRAIN 33,293 / DEV 2,101.

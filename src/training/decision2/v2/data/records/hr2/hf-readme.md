@@ -7,15 +7,18 @@
 > errors are removed from TRAIN. Use it for experiments only; a model trained on it is not releasable unless a
 > later, separately reviewed round replaces it. See `status.json`.
 
+Before upload, 28 TRAIN rows whose upstream text matched the shared leak guard (26 with IPv4 addresses, 2 with
+GitHub-token-like strings; none is ours) were dropped by amendment 3.
+
 Human judgments from sources that no Decision 2.0 arm, panel or Decision 1.0 lineage has used, converted to the
 native interfaces: preferences → Choice, yes/no labels → Noul, ratings → Score. Preregistration
-`v2/data/records/hr2-prereg-2026-09-30.md` with amendments 1 and 2 (branch `xunzhuo/decision-2-training`).
+`v2/data/records/hr2-prereg-2026-09-30.md` with amendments 1–3 (branch `xunzhuo/decision-2-training`).
 
 ## Files
 
 | File | Rows | Groups | Native tokens (Qwen3.5-0.8B-Base) |
 | --- | ---: | ---: | ---: |
-| `hr2.train.jsonl` | 27,725 | 22,353 | 16,802,442 |
+| `hr2.train.jsonl` (Choice 10,207, Noul 10,346, Score 7,144) | 27,697 | 22,336 | 16,754,968 |
 | `hr2.dev.jsonl` (split `select`; diagnostic only, never selection) | 1,615 | 1,322 | 561,317 |
 
 Also: per-row tokens (`*.tokens.jsonl`), freeze manifests, `build.json` (candidate build), `final.json` (every drop
@@ -26,8 +29,8 @@ by reason), `stats.json` (per-family sizes, labels, balance), `isolation.json`, 
 
 | Family | Type | TRAIN | DEV | Source (pin) | Licence | Human judgment |
 | --- | --- | ---: | ---: | --- | --- | --- |
-| `hs3_pref` | Choice (2) | 7,119 | 263 | HelpSteer3 `nvidia/HelpSteer3@f6d14577` preference TRAIN | CC BY 4.0 | ≥ 2 annotators, strict agreement (overall preference ±2 or ±3, every individual score the same sign) |
-| `hs3_help` | Score (5) | 4,027 | 126 | HelpSteer3 feedback TRAIN | CC BY 4.0 | 3 helpfulness ratings, max − min ≤ 1, gold = median |
+| `hs3_pref` | Choice (2) | 7,099 | 263 | HelpSteer3 `nvidia/HelpSteer3@f6d14577` preference TRAIN | CC BY 4.0 | ≥ 2 annotators, strict agreement (overall preference ±2 or ±3, every individual score the same sign) |
+| `hs3_help` | Score (5) | 4,019 | 126 | HelpSteer3 feedback TRAIN | CC BY 4.0 | 3 helpfulness ratings, max − min ≤ 1, gold = median |
 | `eth_util` | Choice (2) | 3,108 | 354 | ETHICS `hendrycks/ethics@b8b47c58` utilitarianism TRAIN | MIT | MTurk rankings (more pleasant scenario) |
 | `eth_cs` | Noul | 1,084 | 94 | ETHICS commonsense TRAIN, short split | MIT | MTurk labels |
 | `eth_deon` | Noul | 1,094 | 100 | ETHICS deontology TRAIN | MIT | MTurk labels |
@@ -44,7 +47,7 @@ Reviews). **Share-alike:** rows of `vitc` (CC BY-SA 3.0) and `allegro` (CC BY-SA
 licence. HelpSteer2 (`990b2711`, CC BY 4.0) was read only to drop HelpSteer3 prompts shared with it; no HelpSteer2
 row is included.
 
-TRAIN languages: en 22,191, pl 3,183, zh 879, ko 320, ja 192, fr 177, es 158, it 138, ru 111, pt 109, de 107, vi 60,
+TRAIN languages: en 22,166, pl 3,182, zh 879, ko 318, ja 192, fr 177, es 158, it 138, ru 111, pt 109, de 107, vi 60,
 nl 56, id 44 (non-English rows other than Polish are HelpSteer3 multilingual). Instructions and option descriptions
 are English.
 
@@ -63,8 +66,9 @@ the answer, .559 vs a .534 bar) and IndoNLI (Indonesian; hypothesis-only .613 vs
   SELECT / CAL, CSS15 + pilot, public 231, mlx-diag, Decision Bench v4) and PI-hr2 (HT-DEV v1, HT-DEV v2, Score5-DEV,
   score5t-dev fit + check, hs1-dev, PN1 dev, CAL698). 1,202 candidate groups with a hit were dropped whole (TRAIN and
   DEV). DEV groups near any TRAIN group were dropped (1,180). Report-only hits on training roles are disclosed in
-  `audits/`: 3,083 final groups share an n-gram with earlier training rows, 3,055 of them by the N rule only (mostly
-  HelpSteer3 vs OASST1-derived A7q TRAIN rows).
+  `audits/`: 3,077 of 23,658 final groups share text with rows of report-only roles (earlier training arms and
+  their held-out slices), 3,050 of them by the N rule only (one shared word 13-gram or sampled 30-character gram);
+  2,618 of them are HelpSteer3 groups vs OASST1-derived A7q TRAIN rows.
 - C1: no C1 registry source or parent; the C1 source-term scan of the raw files and candidates found none. The C1
   custodian content recheck is required before any C1-scored model trained on HR2.
 - Shortcut gate (group-disjoint 5 folds, gated views ≤ majority + 0.05): 9 families pass; VitaminC claim-only is at
