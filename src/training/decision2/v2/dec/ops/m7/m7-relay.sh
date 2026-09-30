@@ -95,10 +95,16 @@ case ${1:-} in
       on_b "test -f '$src/ht-dev2/ht-dev2.predictions.jsonl'" || { echo "$p: no ht-dev2 predictions on node B" >&2; exit 1; }
       on_b "! find '$src/ht-dev2' -iname '*gold*' | grep -q ." || { echo "$p: gold-named file under ht-dev2" >&2; exit 1; }
       on_a "mkdir -p '$src'"
-      relay_dir b "$src" ht-dev2 "$src"
+      if on_a "test -e '$src/ht-dev2'"; then
+        [ "$(on_a "cd '$src/ht-dev2' && $manifest")" = "$(on_b "cd '$src/ht-dev2' && $manifest")" ] \
+          || { echo "$p: node-A ht-dev2 differs from node B" >&2; exit 1; }
+        echo "$p: ht-dev2 already on node A (same manifest)"
+      else
+        relay_dir b "$src" ht-dev2 "$src"
+      fi
       for f in weights.json files.sha256; do
-        have a "$src/$f" "$(on_b "sha256sum '$src/$f' | cut -d' ' -f1")" \
-          || on_b "cat '$src/$f'" | put a "$src/$f" "$(on_b "sha256sum '$src/$f' | cut -d' ' -f1")" 644
+        h=$(on_b "sha256sum '$src/$f' | cut -d' ' -f1")
+        have a "$src/$f" "$h" || on_b "cat '$src/$f'" | put a "$src/$f" "$h" 644
       done
     done
     ;;
@@ -111,7 +117,8 @@ case ${1:-} in
     on_b "test -f '$F/pkg/$P.sha256' && test -f '$F/stage-params/$P/PARAMS.json' && test -d '$F/$P-cache'" \
       || { echo "$P is not staged and collected on node B" >&2; exit 1; }
     on_b "cd '$F/pkg/$P' && sha256sum -c --quiet '$F/pkg/$P.sha256'" || { echo "$P changed on node B since staging" >&2; exit 1; }
-    on_b "cat '$F/pkg/$P.sha256'" | put a "$F/pkg/$P.sha256" "$(on_b "sha256sum '$F/pkg/$P.sha256' | cut -d' ' -f1")" 644
+    h=$(on_b "sha256sum '$F/pkg/$P.sha256' | cut -d' ' -f1")
+    on_b "cat '$F/pkg/$P.sha256'" | put a "$F/pkg/$P.sha256" "$h" 644
     relay_dir b "$F/pkg" "$P" "$F/pkg"
     on_a "cd '$F/pkg/$P' && sha256sum -c --quiet '$F/pkg/$P.sha256'" || { echo "$P: node-A copy fails its list" >&2; exit 1; }
     relay_dir b "$F/stage-params" "$P" "$F/stage-params"
