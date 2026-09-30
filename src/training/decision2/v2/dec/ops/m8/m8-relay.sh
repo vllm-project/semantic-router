@@ -59,16 +59,22 @@ case ${1:-} in
   lines)
     shift
     [ $# -gt 0 ] || { echo "name the points" >&2; exit 2; }
+    want=""
     for point in "$@"; do
       P=$M/lines/4b/$point
-      for f in weights.json files.sha256; do copy_file b "$P/$f"; done
-      for panel in ht-dev2 score5t-dev; do
-        if on_b "test -f '$P/$panel/$panel.predictions.jsonl'"; then copy_file b "$P/$panel/$panel.predictions.jsonl"; fi
-      done
+      want+=" $P/weights.json $P/files.sha256 $P/ht-dev2/ht-dev2.predictions.jsonl $P/score5t-dev/score5t-dev.predictions.jsonl"
     done
-    for f in $(on_b "cd '$M/lines/4b/readout' 2>/dev/null && ls L-*.json L-*.line 2>/dev/null | grep -v '\.[0-9]\{8\}T'" || true); do
-      copy_file b "$M/lines/4b/readout/$f"
-    done
+    list=$(on_b "ls -1 $want $M/lines/4b/readout/L-*.json $M/lines/4b/readout/L-*.line 2>/dev/null | grep -v '\.[0-9]\{8\}T[0-9]\{6\}Z\.json\$'" || true)
+    [ -n "$list" ] || { echo "nothing to relay" >&2; exit 1; }
+    sums=$(on_b "sha256sum $(echo "$list" | tr '\n' ' ')")
+    stage=$M/.relay-$(date -u +%Y%m%dT%H%M%SZ)
+    # One compressed tar stream; on node A a staged file replaces nothing: new paths are moved in, existing paths must
+    # already hold identical bytes.
+    on_b "tar -C / -czf - $(echo "$list" | sed 's#^/##' | tr '\n' ' ')" | on_a "mkdir -p '$stage' && tar -C '$stage' -xzf -"
+    on_a "cd '$stage' && find . -type f | while read -r f; do d=/\${f#./}; if [ -e \"\$d\" ]; then cmp -s \"\$f\" \"\$d\" || { echo \"\$d exists with other content\" >&2; exit 1; }; else mkdir -p \"\$(dirname \"\$d\")\" && mv \"\$f\" \"\$d\"; fi; done && rm -rf '$stage'" \
+      || { echo "relay stopped; staged copy left in node A $stage" >&2; exit 1; }
+    [ "$(on_a "sha256sum $(echo "$list" | tr '\n' ' ')")" = "$sums" ] || { echo "hash lists differ after the relay" >&2; exit 1; }
+    echo "$(echo "$list" | wc -l) files relayed; hash lists equal"
     ;;
   select) copy_file a "$M/select/4b-finalists.json" ;;
   gpuh)
