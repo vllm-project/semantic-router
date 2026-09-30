@@ -1,7 +1,8 @@
 # ~27B M5 state (resume file)
 
-Updated: 2026-09-30 17:20 UTC+8 (09:20Z; M5 continuation worker, started 09:10Z; COORDINATION 17:15). **Continuation
-workers: read "Next steps" first.**
+Updated: 2026-09-30 23:55 UTC+8 (15:55Z; M5 continuation worker 3, started 15:50Z; COORDINATION 17:15 / 23:50).
+**Continuation workers: read "Next steps" first.** Worker 2 was stopped at ≈ 12:40Z by a Cursor restart. Nobody polled
+from 12:39Z to 15:50Z, and every detached process survived.
 
 **Deviation (prereg amendment 2):** M5-FF20 failed development gate 2 at 04:26:53Z (HT-DEV v2 .516 vs A20r .565, Δ −.049
 [−.070, −.029], FLAG; gate 4 failed too), so B1 triggered. No worker was alive, so FF20H was not stopped. FF20H trained
@@ -20,8 +21,9 @@ the L128 training runs from `e76e56d4c`).
   27B C1 attempt needs coordinator approval (one per baseline).
 - **Coordinator hint (09:50, not a rule change):** among passing finalists prefer an HT-DEV v2 GAIN / human-transfer
   gain; typed gains inflate v3 without moving C1. Report it with the choice; the preregistered choice rule stands.
-- **Budget:** 72 GPU-h. Receipts at 09:50Z: **50.05** (node B 25.00, node A 25.06, including the L128 preflights).
-  Projection: ≈ 70.5 after L128's training, ≈ 70.8 after its readout, and ≈ 71.7 if it also goes formal (+ mlx-diag).
+- **Budget:** 72 GPU-h. Receipts at 15:52Z: **50.05** (node B 25.00, node A 25.06, including the L128 preflights).
+  Projection (15:52Z, from the logged s/update): ≈ 69.5 after L128's training (9.85 + 9.58), ≈ 69.8 after its
+  readout, and ≈ 70.7 if it also goes formal (+ mlx-diag).
   The chain checks receipts + 0.9 ≤ 72 before the formal run. Sum receipts with
   `ssh <node> python3 - < ~/.cache/m5-work/budget.py` on both nodes (workstation helper; now includes `M5-L128-s*`).
 - **Platform rule (COORDINATION 07:35):** poll ≤ 30 min with one-line state updates; hand off through this file near
@@ -31,11 +33,11 @@ the L128 training runs from `e76e56d4c`).
 
 | What | Where | Log / PID | ETA |
 | --- | --- | --- | --- |
-| L128-s1 full (preflights passed; 3,561 updates, ≈ 10.1 s/upd; cap 12.0 GPU-h) | node B GPU5, `d2-27b-M5-L128-s1-full` | `/data/dev2/runs/27b/M5-L128-s1/driver.log`, PID 2459358 | ≈ 19:30Z |
-| L128-s2 full (same, ≈ 10.4 s/upd) | node A GPU2, `d2-27b-M5-L128-s2-full` | node A `/data/dev2/runs/27b/M5-L128-s2/driver.log`, PID 3882884 | ≈ 19:50Z |
+| L128-s1 full (preflights passed; 3,561 updates, ≈ 9.7 s/upd; projected 9.85 GPU-h, cap 12.0) | node B GPU5, `d2-27b-M5-L128-s1-full` | `/data/dev2/runs/27b/M5-L128-s1/driver.log`, PID 2459358 | ≈ 19:15Z |
+| L128-s2 full (same, ≈ 9.2 s/upd; projected 9.58 GPU-h) | node A GPU2, `d2-27b-M5-L128-s2-full` | node A `/data/dev2/runs/27b/M5-L128-s2/driver.log`, PID 3882884 | ≈ 19:00Z |
 | Relay watcher: L128-s2 BEST → node A `xfer/27b-m5/relay/M5-L128-s2` (+ `BUDGET-nodeA.json`) | node A | node A `logs/relay-M5-L128-s2.log`, PID 3889492 | at s2's end |
 | mlx watcher: scores M5-L128's mlx-diag after `mlx/M5-L128.PUSHED` (ends on `.SKIP`) | node A | node A `logs/mlx-watch-M5-L128.log`, PID 3889493 | if a finalist |
-| **Chain L128** (`RESERVE=0.9`): pull → `lsoup` M5-L128 → readout (GPU0) → devgates → [formal → mlx-diag → push → pull → gates / overlap / verdicts] | node B | `logs/chain-L128.log`, PID 2495533 | ≈ 20:30Z (devgates); ≈ 22:00Z (verdicts) |
+| **Chain L128** (`RESERVE=0.9`): pull → `lsoup` M5-L128 → readout (GPU0) → devgates → [formal → mlx-diag → push → pull → gates / overlap / verdicts] | node B | `logs/chain-L128.log`, PID 2495533 | ≈ 19:50Z (devgates); ≈ 21:15Z (verdicts) |
 
 - Done lanes and chains: FF20H-s1 (node B, 13.32 GPU-h), FF20H-s2 (node A, 13.49), chain FF20 (devgates 04:26Z),
   chain FF20H (devgates 09:25:43Z, no finalist).
@@ -48,9 +50,9 @@ the L128 training runs from `e76e56d4c`).
 - `BRANCH-B1` is on both nodes (`/data/dev2/runs/27b/m5/BRANCH-B1`). `STOP-FF20H` was not written because there was
   nothing left to stop.
 - Leases: node B GPU0 (reserved-idle, held for chain L128), GPU1 (reserved-idle, spare) and GPU5 (L128-s1), node A
-  GPU2 (L128-s2) are track `27b`. Node B
-  GPU6–7 plus GPU2 are lent to 2B / 0.8B M8-small, and node A GPU3–4 to 9B M8 (COORDINATION 17:05 / 17:15). Never
-  co-tenant them.
+  GPU2 (L128-s2) are track `27b`. **Node A GPU3–5 and node B GPU6–7 belong to the 27B MoE worker** (track `27b-moe`,
+  worktree `vllm-sr-dev2-27b-moe`, COORDINATION 23:50). Never touch its GPUs, files or branch, and never co-tenant.
+  Node B GPU2 and node A GPU0–1 are serving / eval, node A GPU6–7 9B M7, node B GPU3–4 HR2.
 - Status: `~/.cache/m5-work/status.sh` (updates, s/update, projection per running attempt).
 
 ## Infrastructure
@@ -139,6 +141,7 @@ the L128 training runs from `e76e56d4c`).
 
 ## Poll log (newest first)
 
+- 15:55Z: continuation worker 3 (Cursor restart stopped worker 2 ≈ 12:40Z). L128-s1 2,303 / 3,561 (9.7 s/upd; ETA ≈ 19:15Z), s2 2,345 / 3,561 (9.2 s/upd; ETA ≈ 19:00Z). Chain L128, node A relay and mlx watchers and both drivers alive. FF20H / SX gates confirmed (DEVGATES-20260930T092543Z: no FF finalist). Receipts 50.05 GPU-h; projection ≈ 70.7 with L128's formal. Integration merged at 8793d333b
 - 12:39Z: L128-s1 1,154 / 3,561, s2 1,152 / 3,561 (≈ 10.0 s/upd; ETA ≈ 19:20Z). Chain L128 and node A watchers alive; no incident
 - 12:20Z: L128-s1 1,038 / 3,561, s2 1,036 / 3,561 (9.7–9.9 s/upd; ETA ≈ 19:00Z). SELECT700 at 892: s1 .894, s2 .903 (M4-A20r seeds .859 / .880). All processes alive
 - 11:48Z: L128-s1 858 / 3,561, s2 848 / 3,561 (9.5–9.8 s/upd; ETA ≈ 19:00Z). Chain L128 and node A watchers alive; no incident
