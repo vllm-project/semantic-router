@@ -650,7 +650,7 @@ export function serializeBoolExpr(expr: BoolExprNode | null): string {
   const type = expr.type
   switch (type) {
     case 'signal_ref':
-      return `${expr.signalType}(${quoteDSLString(expr.signalName)})`
+      return formatSignalRef(expr.signalType, expr.signalName, expr.fields)
     case 'and':
       return `${serializeBoolExpr(expr.left)} AND ${serializeBoolExpr(expr.right)}`
     case 'or':
@@ -663,6 +663,30 @@ export function serializeBoolExpr(expr: BoolExprNode | null): string {
     default:
       return ''
   }
+}
+
+// Signal fields follow the name: classifier("risk", label: "unsafe", predicate: { gte: 0.5 }).
+export function formatSignalRef(
+  signalType: string,
+  signalName: string,
+  fields: DSLFieldObject = {},
+): string {
+  return `${signalType}(${[quoteDSLString(signalName), ...inlineFieldEntries(fields)].join(', ')})`
+}
+
+function inlineFieldEntries(fields: DSLFieldObject): string[] {
+  return Object.entries(fields).flatMap(([key, value]) =>
+    value === undefined || value === null ? [] : [`${key}: ${serializeInlineValue(value)}`],
+  )
+}
+
+function serializeInlineValue(value: DSLFieldValue): string {
+  if (Array.isArray(value)) return `[${value.map(serializeInlineValue).join(', ')}]`
+  if (isDSLFieldObject(value)) {
+    const entries = inlineFieldEntries(value)
+    return entries.length > 0 ? `{ ${entries.join(', ')} }` : '{}'
+  }
+  return typeof value === 'string' ? quoteDSLString(value) : String(value)
 }
 
 function isDSLFieldObject(value: DSLFieldValue): value is DSLFieldObject {
