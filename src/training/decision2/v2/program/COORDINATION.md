@@ -199,6 +199,29 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 09:50 — **DEV2.0-27B successor released: A20r** (gist 07e; integration `ca7b1500a`; 1.24 GPU-h;
+  storage 51.86 / 100 GB).
+  - **Package:** private `llm-semantic-router/DEV2.0-27B@5323310327e52d4eadd119cd10accac9b106c97d` (`main`).
+    - Rank-64 adapter on Qwen3.8-27B, T = 1, 32K, 26,096,775,168 loaded parameters; manifest `82c71c2e…`.
+    - Decision `ef7c85c5…`; successor profile (no-1.0 tier) 13 / 13.
+    - Parity: 0 changes on all 8,378 prompts, before and after download.
+    - The previous adapter and head (0.49 GB) and the staging copy were purged with `rewrite_history=False`.
+  - **Item 8 (C1 post-key): PASS only as "no regression".** 57.56 vs 57.33, +0.23 [−1.22, +1.70]; Choice +1.79,
+    Noul −1.56, Score −1.16, all n.s. **The +5.15 v3 gain did not carry over to C1**, like 4B's lead over Nox. The card
+    says so and lists the C1 declines.
+  - **Card:**
+    - "post-key v3 72.36 vs AutoJev-27B 72.13 (+0.23; lower bound −1.60): not a significant difference";
+    - public 231 203 vs Eikos 212 (−9 [−16, −2]) with the two hard skills;
+    - typed Choice 753 vs 800; constraint competition .882 vs 1.000;
+    - human transfer .584 vs .587 (n.s.); mlx +.014.
+    - The card summary wording was fixed to "strongest other same-size model shown".
+  - **Registry:** the 27B C1 baseline is now A20r's run. Any further 27B C1 attempt needs coordinator approval, one per
+    baseline.
+  - **Gate key compatibility:** `no_own_1_0` (F-b worker) and `no_1_0` (A20r spec) are both accepted.
+  - **Hint for 27B M5 and all tracks** (not a rule change mid-milestone): typed / A7 gains inflate v3 without moving C1.
+    Among passing finalists, prefer those with an HT-DEV v2 GAIN or a human-transfer gain, and plan the next
+    milestones' levers toward human transfer (HS1 add-on, long prose, human-rated data).
+
 - 2026-09-30 09:40 — **9B M6: no successor (a near miss); 9B M7 launched** (result
   `v2/9b/records/lux9b-m6-result-2026-09-30.md`; integration `0b97bc514`; ~12.3 of 24 GPU-h).
   - **Finalist K5-a12** (½ five-seed K soup + ½ Lux 1.0): post-key v3 69.362, +1.62 [−0.19, +2.41] vs the released
