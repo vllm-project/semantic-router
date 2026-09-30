@@ -315,7 +315,7 @@ class TestGrafanaPasswordFileContainer(CLITestBase):
             self.assertTrue(self._wait_until_grafana_ready(host_port_2))
 
             # Synchronize the admin password in the persisted database
-            rc, stdout, stderr = container_support_services.rekey_grafana_admin(
+            rc, _stdout, stderr = container_support_services.rekey_grafana_admin(
                 self.GRAFANA_CONTAINER_NAME, runtime=self.container_runtime
             )
             self.assertEqual(

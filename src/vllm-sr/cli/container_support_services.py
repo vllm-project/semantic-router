@@ -21,7 +21,7 @@ from cli.container_observability import (
     _run_service_start,
 )
 from cli.container_runtime import get_container_runtime
-from cli.container_services import _replace_existing_container
+from cli.container_services import _replace_existing_container, container_stop_container
 from cli.grafana_credentials import (
     CONTAINER_GRAFANA_PASSWORD_PATH,
     GRAFANA_ADMIN_PASSWORD_FILE_ENV,
@@ -50,8 +50,8 @@ def rekey_grafana_admin(
     password in ``grafana.db``.
 
     This invokes ``grafana cli admin reset-admin-password`` inside the container,
-    reading the secret directly from the container's mounted secret file, so the
-    credential never enters host process arguments or logs.
+    reading the secret directly from stdin redirected from the container's mounted
+    secret file, so the credential never enters process arguments or logs.
     """
     container_runtime = runtime or get_container_runtime()
     command = [
@@ -61,8 +61,8 @@ def rekey_grafana_admin(
         "sh",
         "-c",
         (
-            f"grafana cli --homepath /usr/share/grafana admin reset-admin-password "
-            f'"$(cat {CONTAINER_GRAFANA_PASSWORD_PATH})"'
+            "grafana cli --homepath /usr/share/grafana admin reset-admin-password "
+            f"--password-from-stdin < {CONTAINER_GRAFANA_PASSWORD_PATH}"
         ),
     ]
     deadline = time.time() + timeout
@@ -283,8 +283,11 @@ def container_start_grafana(
         rekey_status = rekey_grafana_admin(container_name, runtime=runtime)
 
         if rekey_status[0] != 0:
-            log.warning(
+            error_message = (
                 f"Failed to synchronize Grafana admin password for {container_name}: "
                 f"{rekey_status[2].strip() or f'exit code {rekey_status[0]}'}"
             )
+            log.error(error_message)
+            container_stop_container(container_name)
+            return (rekey_status[0], rekey_status[1], error_message)
     return status

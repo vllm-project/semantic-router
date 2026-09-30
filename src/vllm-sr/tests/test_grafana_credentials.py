@@ -6,7 +6,6 @@ import stat
 import subprocess
 from pathlib import Path
 
-
 from cli import container_support_services, runtime_lifecycle
 from cli import grafana_credentials as gc
 from cli.main import main
@@ -273,7 +272,7 @@ def test_rekey_grafana_admin_executes_cli_without_secrets_in_argv(monkeypatch):
         )
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    rc, stdout, stderr = container_support_services.rekey_grafana_admin(
+    rc, _stdout, _stderr = container_support_services.rekey_grafana_admin(
         "my-grafana-container", "docker"
     )
 
@@ -287,7 +286,11 @@ def test_rekey_grafana_admin_executes_cli_without_secrets_in_argv(monkeypatch):
     shell_command = command[5]
     assert gc.CONTAINER_GRAFANA_PASSWORD_PATH in shell_command
     assert "admin reset-admin-password" in shell_command
-    assert "cat " in shell_command
+    assert "--password-from-stdin" in shell_command
+    assert f"< {gc.CONTAINER_GRAFANA_PASSWORD_PATH}" in shell_command
+    assert "$(" not in shell_command
+    assert "`" not in shell_command
+    assert "cat " not in shell_command
 
 
 def test_rekey_grafana_admin_retries_until_success(monkeypatch):
@@ -308,10 +311,38 @@ def test_rekey_grafana_admin_retries_until_success(monkeypatch):
     monkeypatch.setattr(
         container_support_services, "GRAFANA_REKEY_POLL_INTERVAL_SECONDS", 0.001
     )
-    rc, stdout, stderr = container_support_services.rekey_grafana_admin(
+    rc, stdout, _stderr = container_support_services.rekey_grafana_admin(
         "my-grafana-container", "docker", timeout=5
     )
 
     assert rc == 0
     assert attempts == 3
     assert stdout == "success"
+
+
+def test_container_start_grafana_fails_and_stops_container_when_rekey_fails(
+    monkeypatch, tmp_path: Path
+):
+    captured: dict[str, object] = {}
+    stopped_containers: list[str] = []
+    _monkeypatch_grafana_container(monkeypatch, captured)
+    monkeypatch.setattr(
+        container_support_services,
+        "container_stop_container",
+        lambda name: stopped_containers.append(name) or True,
+    )
+    monkeypatch.setattr(
+        container_support_services,
+        "rekey_grafana_admin",
+        lambda _name, **_k: (1, "", "database locked permanently"),
+    )
+    layout = resolve_runtime_stack()
+
+    status = container_support_services.container_start_grafana(
+        "test-network", config_dir=str(tmp_path), stack_layout=layout
+    )
+
+    assert status[0] == 1
+    assert "Failed to synchronize Grafana admin password" in status[2]
+    assert "database locked permanently" in status[2]
+    assert stopped_containers == [layout.grafana_container_name]
