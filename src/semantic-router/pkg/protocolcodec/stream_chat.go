@@ -164,9 +164,14 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 	if err := validateChatStreamChunk(chunk); err != nil {
 		return nil, diagnostics, err
 	}
-	// Some gateways emit an empty synthetic chunk while waiting for the first
-	// model token. It must not establish the response ID or model identity.
-	if isGatewayChatKeepalive(chunk) {
+	// Some gateways emit empty synthetic chunks while waiting for the first
+	// model token. Before a response identity is pinned, any such chunk is a
+	// heartbeat: it must not establish the response ID or model identity, or
+	// it would poison a stream that later switches to its real identity. Once
+	// an identity is pinned, only the exact keepalive sentinel stays exempt,
+	// so a post-start empty chunk carrying a different response ID still
+	// fails closed through identity observation.
+	if isGatewayChatKeepalive(chunk) && (decoder.providerID == "" || isExactGatewayKeepalive(chunk)) {
 		diagnostics = decoder.appendProviderChunkDiagnostics(chunk, diagnostics)
 		return nil, diagnostics, nil
 	}
@@ -249,14 +254,19 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 // gateways, and any chunk without choices, usage, or error — an empty chunk
 // holds nothing a client could consume, but aggregator gateways do emit them
 // (often with their own synthetic IDs) and the strict identity pinning would
-// otherwise reject the real chunks that follow.
+// otherwise reject the real chunks that follow. Callers scope the broad
+// empty-chunk shape to before a real response starts via isExactGatewayKeepalive.
 func isGatewayChatKeepalive(chunk chatChunkWire) bool {
 	if chunk.Usage != nil || chunk.Error != nil {
 		return false
 	}
-	if len(chunk.Choices) == 0 {
-		return true
-	}
+	return len(chunk.Choices) == 0 || isExactGatewayKeepalive(chunk)
+}
+
+// isExactGatewayKeepalive recognizes the exact "chatcmpl-keepalive" sentinel,
+// the only keepalive shape that stays exempt once a response identity is
+// pinned.
+func isExactGatewayKeepalive(chunk chatChunkWire) bool {
 	if len(chunk.Choices) != 1 || chunk.ID != "chatcmpl-keepalive" || chunk.Created != 0 || chunk.Model != "keepalive" {
 		return false
 	}
