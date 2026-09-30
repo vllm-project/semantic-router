@@ -44,6 +44,14 @@ def _code(text):
     return "\n\n".join(matches) if matches else ""
 
 
+def _last_fence_code(text):
+    lines = text.split("\n")
+    fences = [i for i, line in enumerate(lines) if "```" in line]
+    if len(fences) < 2:
+        return ""
+    return "\n".join(lines[fences[-2] + 1 : fences[-1]])
+
+
 def _tau_role(model):
     return {"sr-bench-subject": "subject", "sr-bench-simulator": "simulator"}.get(
         model, "judge"
@@ -306,7 +314,10 @@ def _sandbox(request, payload, name):
 
 def _lcb(request):
     response = call(request["case"]["messages"])
-    code = _code(response["final"])
+    if request["config"].get("code_extraction") == "lcb-last-fence":
+        code = _last_fence_code(response["final"])
+    else:
+        code = _code(response["final"])
     if not code:
         return {
             "answer": response["final"],

@@ -33,6 +33,8 @@ WINDOWS = {
 }
 # LiveCodeBench v5+v6 additions at sr-bench's pinned release_v6 revision.
 LCB_FILES = ("test5.jsonl", "test6.jsonl")
+# lcb_runner extract_code: the lines between the last two fence lines.
+LCB_CODE_EXTRACTION = "lcb-last-fence"
 # No output cap: max_output_tokens only bounds an explicit per-target max_tokens.
 # max_output_chars is a memory guard far above any realistic answer.
 LIMITS = {
@@ -299,6 +301,13 @@ def apply_policy(m):
     if m.get("seed", SEED) != SEED:
         raise ValueError(f"Nano profiles use the frozen seed {SEED}")
     verify_cases(m)
+    if any(c["benchmark"] == "livecodebench" for c in m["cases"]):
+        options = m.setdefault("benchmark_options", {}).setdefault("livecodebench", {})
+        if options.get("code_extraction", LCB_CODE_EXTRACTION) != LCB_CODE_EXTRACTION:
+            raise ValueError(
+                f"Nano LiveCodeBench uses code_extraction {LCB_CODE_EXTRACTION}"
+            )
+        options["code_extraction"] = LCB_CODE_EXTRACTION
     if any(c["benchmark"] == "simpleqa-verified" for c in m["cases"]):
         _simpleqa_grader(m)
     return m
@@ -319,6 +328,7 @@ def report_section(manifest, results, calls):
             "grader": "lcb_runner sandbox",
             "source_revision": options.get("livecodebench", {}).get("source_revision"),
             "sandbox_image": options.get("livecodebench", {}).get("sandbox_image"),
+            "code_extraction": LCB_CODE_EXTRACTION,
         },
     }
     if any(c["benchmark"] == "simpleqa-verified" for c in manifest["cases"]):

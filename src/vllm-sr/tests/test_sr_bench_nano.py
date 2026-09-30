@@ -14,6 +14,7 @@ from cli.commands.benchmark_nano import nano_group
 from cli.sr_bench import nano
 from cli.sr_bench.contracts import digest, plan
 from cli.sr_bench.engine import Engine
+from cli.sr_bench.harness_worker import _last_fence_code
 from cli.sr_bench.nano_prepare import freeze
 from cli.sr_bench.report import make_report
 from cli.sr_bench.store import TERMINAL, Store
@@ -121,6 +122,12 @@ def test_simpleqa_official_template_is_pinned_and_letters_fail_closed():
     assert nano.simpleqa_verdict("C") == "not_attempted"
     with pytest.raises(ValueError, match="no A/B/C"):
         nano.simpleqa_verdict("")
+
+
+def test_lcb_extraction_takes_only_the_last_fenced_block():
+    reply = "```\nx ⇔ y\n```\nthen\n```python\nprint(1)\nprint(2)\n```\n"
+    assert _last_fence_code(reply) == "print(1)\nprint(2)"
+    assert _last_fence_code("no code") == ""
 
 
 class Target(BaseHTTPRequestHandler):

@@ -96,7 +96,7 @@ its split.
 | --- | --- |
 | MMLU-Pro, GPQA | sr-bench deterministic multiple-choice grader (`sr-bench-mcq-final-v2`) |
 | HLE | `sr-bench-nano-hle-exact-v1`: HLE's official exact-answer system prompt is prepended to the question. The grader reads the last `Exact Answer:` line (falling back to the last `\boxed{}`); numeric answers must match within the reference's precision, and other answers must match as normalized strings. No LLM judge is used. |
-| LiveCodeBench | sr-bench's sandboxed `lcb_runner` execution at the pinned LiveCodeBench revision (no network, read-only, all capabilities dropped) |
+| LiveCodeBench | sr-bench's sandboxed `lcb_runner` execution at the pinned LiveCodeBench revision (no network, read-only, all capabilities dropped); the graded code is the last fenced block, as in `lcb_runner` |
 | SimpleQA Verified | one configurable LLM grader, described below |
 
 ### SimpleQA grader
