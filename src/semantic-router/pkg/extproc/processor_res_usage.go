@@ -96,7 +96,7 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 
 	recordModelUsageTokens(ctx.RequestModel, usage)
 	metrics.RecordModelCompletionLatency(ctx.RequestModel, completionLatency.Seconds())
-	inflight.End(ctx.RequestModel, ctx.InflightToken)
+	inflight.End(ctx.InflightModel, ctx.InflightToken)
 	ctx.InflightToken = 0
 
 	if usage.completionTokens > 0 {
