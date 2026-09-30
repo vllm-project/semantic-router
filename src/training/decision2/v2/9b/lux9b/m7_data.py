@@ -149,14 +149,23 @@ def topup(spec, roots, tokenizer: Path, workers: int, out: Path) -> dict[str, An
         lengths[r["id"]] = lengths[r["id"].split("~r")[0]]
     block_tokens = sum(lengths[r["id"]] for r in block)
     seed = spec["seed"]
-    replay_p, stats_p = recipe_budget(
-        rows,
-        native,
-        pool_of,
-        spec["replay_tokens"],
-        f"{seed}:replay",
-        spec["replay_tolerance"],
-    )
+    if "replay_match_tokens" in spec:
+        replay_p, stats_p = closest_budget(
+            rows,
+            native,
+            pool_of,
+            spec["replay_match_tokens"] - block_tokens,
+            f"{seed}:replay",
+        )
+    else:
+        replay_p, stats_p = recipe_budget(
+            rows,
+            native,
+            pool_of,
+            spec["replay_tokens"],
+            f"{seed}:replay",
+            spec["replay_tolerance"],
+        )
     target_c = stats_p["native_tokens"] + block_tokens
     replay_c, stats_c = closest_budget(
         rows, native, pool_of, target_c, f"{seed}:replay"
