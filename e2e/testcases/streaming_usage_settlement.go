@@ -27,12 +27,21 @@ func init() {
 
 // usageSettlementModel is pinned by name. In this profile the public model
 // name and the upstream model id are the same string (no external_model_ids
-// mapping, so config.ResolveExternalModelID returns the name unchanged), the
-// stream flag already matches, and a benign prompt triggers no mutating
-// plugin. That is the byte-replay-eligible request shape from issue #3331:
-// before the fix, the replayed client bytes reached the backend without the
-// forced stream_options.include_usage, the backend emitted no usage chunk,
-// and the router silently recorded no usage for the request.
+// mapping, so config.ResolveExternalModelID returns the name unchanged) and
+// the stream flag already matches. No mutating plugin can run either, and
+// not because the prompts are benign: base-model is a concrete Model, not
+// an entrypoint alias (e2e/profiles/ai-gateway/values.yaml maps only the
+// e2e-* names to recipes), so routing takes handleSpecifiedModelRouting,
+// which dispatches with an empty decision name and bypasses every
+// recipe-local signal, decision, and plugin
+// (src/semantic-router/pkg/extproc/processor_req_body.go). The biology
+// leaning of the prompts below therefore never reaches biology_decision or
+// its system_prompt plugin, and assertStreamingUsageDispatchBody would fail
+// on the message count if it did. That is the byte-replay-eligible request
+// shape from issue #3331: before the fix, the replayed client bytes reached
+// the backend without the forced stream_options.include_usage, the backend
+// emitted no usage chunk, and the router silently recorded no usage for the
+// request.
 const usageSettlementModel = "base-model"
 
 // usageSettlementMetricPrompt and usageSettlementMetricCompletion are the
