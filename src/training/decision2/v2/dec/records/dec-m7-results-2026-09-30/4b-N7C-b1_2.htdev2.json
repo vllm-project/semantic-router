@@ -1,0 +1,71 @@
+{
+ "H_dev2": {
+  "4b-I": 0.5393525487170227,
+  "4b-N7C-b1_2": 0.5403456926905235
+ },
+ "H_dev2_median": {
+  "4b-I": 0.5351320947772237,
+  "4b-N7C-b1_2": 0.5454914602393495
+ },
+ "band_10pct_risk": 0.045,
+ "ci95": [
+  -0.009283413409219454,
+  0.011459751640000682
+ ],
+ "delta": 0.0009931439735008096,
+ "files": {
+  "4b-I": "581845cc383208c9da097c52fe38877f9ea57a557ac055a5a94bb6fe9cce1a91",
+  "4b-N7C-b1_2": "874706a8efee9371fbb8ca09e022e82b70d8a3230e476835eb0aee9f133045af",
+  "gold": "659c92b45d2a5b37e250ccb728cdbf5580ba361b3fc4b2f2ab505a13e0a556cc"
+ },
+ "invalid_or_missing": {
+  "4b-I": 0,
+  "4b-N7C-b1_2": 0
+ },
+ "items": 1944,
+ "left": "4b-N7C-b1_2",
+ "p_le_0": 0.4235,
+ "right": "4b-I",
+ "role": "diagnostic (M7 prereg predates HT-DEV v2, not adopted before the first development readout; COORDINATION 2026-09-30 04:10); never selected on; development readout, never a release score",
+ "schema": "dec-m7-htdev2/1",
+ "tasks": {
+  "conv_go_awry": {
+   "4b-I": 0.5314762009212546,
+   "4b-N7C-b1_2": 0.5314762009212546
+  },
+  "emotion": {
+   "4b-I": 0.5351320947772237,
+   "4b-N7C-b1_2": 0.5454914602393495
+  },
+  "ibc": {
+   "4b-I": 0.5959649958454756,
+   "4b-N7C-b1_2": 0.5899959183877314
+  },
+  "media_ideology": {
+   "4b-I": 0.43941318814277075,
+   "4b-N7C-b1_2": 0.43822722951579574
+  },
+  "mrf": {
+   "4b-I": 0.7356412273800157,
+   "4b-N7C-b1_2": 0.7473793641167807
+  },
+  "reddit_humor": {
+   "4b-I": 0.5920329670329669,
+   "4b-N7C-b1_2": 0.5814226925338036
+  },
+  "talklife": {
+   "4b-I": 0.25755821000448464,
+   "4b-N7C-b1_2": 0.2487956487956488
+  },
+  "tempowic": {
+   "4b-I": 0.7124085998035579,
+   "4b-N7C-b1_2": 0.7335929892891919
+  },
+  "wiki_corpus": {
+   "4b-I": 0.45454545454545453,
+   "4b-N7C-b1_2": 0.4467297304151556
+  }
+ },
+ "tie_band": 0.02,
+ "verdict": "TIE"
+}

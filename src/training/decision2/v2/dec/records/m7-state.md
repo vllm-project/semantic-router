@@ -5,8 +5,17 @@ GPU3–4. Preregistrations: [M6b](dec-m6b-prereg-2026-09-30.md) (`833ec0967`), [
 
 ## Now
 
+- 2026-09-30 ≈10:40 UTC+8 (02:40Z) — **M7 DONE: no successor in either tier; DEV2.0-4B and DEV2.0-2B stand**
+  ([results](dec-m7-results-2026-09-30.md)). No GPU job is running; leases idle; nothing uploaded; C1 not opened.
+  - 4B finalist `4b-N7C-b1_2` (½ matched-token control soup): v3 61.20, −1.95 [−3.03, +0.004] vs DEV2.0-4B; items
+    1, 5, 6(b) fail; mlx +.0057 (significant), public 231 177 vs 171. N7H / N7P had no passing point (H3).
+  - 2B finalist `2b-S7H-b1`: −2.76 [−3.89, +1.90]; items 1, 6(b) fail.
+  - No finalist passed items 1–7, so no C1 candidate, no item-8 hand-off, no release hand-off. The bars are the
+    scored T = 1 runs, answer-identical to the current BF16 revisions `fadbba4f` / `a53cf66a`.
+  - HT-DEV v2 (diagnostic): every H / C soup and both finalists TIE; 4B P soup FLAG −.027.
+  - 20.265 GPU-h for M7; 20.549 of 30 with M6b.
 - 2026-09-30 ≈09:35 UTC+8 (01:35Z) — **2B done: no successor.** `2b-finalists.json` (01:14Z): slot 1
-  `2b-S7H-b1` only (L-S7P: H3 .4244–.4251 < .4278 and Score 172–208 < 245; L-S7C likewise). Formal
+  `2b-S7H-b1` only (L-S7P: Score 172–208 < 245 at every β, H3 also below at ½ and ⅓; L-S7C likewise). Formal
   (`formal/m7/m7-2b-S7H-b1`, node A GPU5, T = 1 — CAL698 rejected by the 23:15 rule, cache copy `abdfd687…`):
   v3 50.673 (T .555 / H .463) vs DEV2.0-2B 53.437 (T .543 / H .525): **−2.76 [−3.89, +1.90], item 1 FAIL**; 6(b)
   FAIL; items 2, 3, 4 (mlx +.0037 [−.0053, +.0128]), 5 (vs Sol 1.0 16K +4.89 [+2.64, +10.26]), 6(a), 7 (public 231
@@ -71,21 +80,29 @@ GPU3–4. Preregistrations: [M6b](dec-m6b-prereg-2026-09-30.md) (`833ec0967`), [
 
 ## Plan
 
-| Chain | GPU | Items |
-| --- | --- | --- |
-| b3 | node B GPU3 | N7H s1–s3 → N7P s1, s3 |
-| b4 | node B GPU4 | N7C s1–s3 → N7P s2 |
-| a5 | node A GPU5 | S7H s1–s3 → S7C s1–s3 → S7P s1–s3 |
+| Chain | GPU | Items | Status |
+| --- | --- | --- | --- |
+| b3 | node B GPU3 | N7H s1–s3 → N7P s1, s3 | done 01:47Z (all seeds complete; soups N7H, N7P) |
+| b4 | node B GPU4 | N7C s1–s3 → N7P s2 | done 00:31Z (soup N7C) |
+| a5 | node A GPU5 | S7H s1–s3 → S7C s1–s3 → S7P s1–s3 | done 01:03Z (soups S7H, S7C, S7P) |
+| watchers | B GPU4 / A GPU5 | lines, diagnostics, finalists | done 02:02Z / 01:14Z |
+| formal | B GPU3 / A GPU5 | `4b-N7C-b1_2` / `2b-S7H-b1` | done 02:21Z / 01:29Z |
 
 ## GPU-hours
 
 | Item | GPU-h |
 | --- | ---: |
 | M6b (smokes, CAL fits, two formal collections) | 0.284 |
-| M7 | 0 |
-| **Total (cap 30)** | **0.284** |
+| M7 arms (4B 12.171, 2B 5.782) | 17.953 |
+| M7 lines, references, diagnostics (HT-DEV v2 0.364 of it) | 2.040 |
+| M7 formal | 0.272 |
+| **Total (cap 30)** | **20.549** |
 
 ## Incidents
 
 1. M6b first launch stopped before any job: M6's stale `owner.dec-formal` / `owner.m6-formal-smoke` lease entries on
    node B GPU3–4. Only those decoder entries were removed (copies under `m6b/logs/stale-leases/`).
+2. The first M7 worker was stopped by the platform (≈23:30Z) mid-milestone; chains and watchers kept running and
+   a continuation worker picked up from this file. No job was lost or rerun.
+3. HT-DEV v2 relay (00:02Z; no GPU time): an `ssh` in a hash argument read the piped file, leaving an empty
+   `weights.json` on node A. Removed; relay fixed in `6672f602c`.

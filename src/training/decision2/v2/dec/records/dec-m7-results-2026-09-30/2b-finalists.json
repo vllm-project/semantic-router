@@ -1,0 +1,266 @@
+{
+ "best_proxy": 49.48282909264413,
+ "finalists": [
+  {
+   "G": 0.073125,
+   "H": 0.35843372369798043,
+   "H3": 0.44207196828919226,
+   "T": 0.683125,
+   "by_type": {
+    "choice": 594,
+    "noul": 229,
+    "score": 270
+   },
+   "checkpoint": "/data/dev2/runs/dec/m7/soup/S7H/build/S7H-soup",
+   "css_pilot_predictions": "/data/dev2/runs/dec/m7/lines/2b/2b-S7H-b1/css-pilot/css-pilot.predictions.jsonl",
+   "effective_weights": {
+    "A": "1"
+   },
+   "eligible": true,
+   "files_sha256_list": "/data/dev2/runs/dec/m7/lines/2b/2b-S7H-b1/files.sha256",
+   "files_sha256_list_sha256": "c5765a16afe2029a5d253f0cf095fe7bb3da301e46017a00df68dc85293ca56d",
+   "line": "L-S7H",
+   "point": "2b-S7H-b1",
+   "proxy": 49.48282909264413,
+   "reasons": [],
+   "slot": 1,
+   "step": "1",
+   "typed_dev_predictions": "/data/dev2/runs/dec/m7/lines/2b/2b-S7H-b1/dev/dev.predictions.jsonl",
+   "weights_json": "/data/dev2/runs/dec/m7/lines/2b/2b-S7H-b1/weights.json",
+   "weights_json_sha256": "e5b03537164926677ea78afbe89bfa56e6da4b0bd29fee95120650aecb3e977a"
+  }
+ ],
+ "lines": {
+  "L-S7C": [
+   {
+    "G": 0.004375000000000018,
+    "H": 0.3266535284555405,
+    "H3": 0.4162881751126312,
+    "T": 0.614375,
+    "by_type": {
+     "choice": 569,
+     "noul": 236,
+     "score": 178
+    },
+    "eligible": false,
+    "point": "2b-S7C-b1",
+    "proxy": 44.79818763575963,
+    "reasons": [
+     "type score 178 < floor 245",
+     "H_mean 0.4163 < reference 0.4278",
+     "family set_reconciliation 178/400 below reference - 0.10"
+    ],
+    "step": "1"
+   },
+   {
+    "G": 0.007499999999999951,
+    "H": 0.3390513303475339,
+    "H3": 0.41810246333561685,
+    "T": 0.6174999999999999,
+    "by_type": {
+     "choice": 546,
+     "noul": 231,
+     "score": 211
+    },
+    "eligible": false,
+    "point": "2b-S7C-b1_2",
+    "proxy": 45.75633251142427,
+    "reasons": [
+     "type score 211 < floor 245",
+     "H_mean 0.4181 < reference 0.4278",
+     "family set_reconciliation 211/400 below reference - 0.10"
+    ],
+    "step": "1/2"
+   },
+   {
+    "G": 0.010624999999999996,
+    "H": 0.3463487685889097,
+    "H3": 0.4199704946595015,
+    "T": 0.620625,
+    "by_type": {
+     "choice": 531,
+     "noul": 237,
+     "score": 225
+    },
+    "eligible": false,
+    "point": "2b-S7C-b1_3",
+    "proxy": 46.36299219264133,
+    "reasons": [
+     "type score 225 < floor 245",
+     "H_mean 0.4200 < reference 0.4278"
+    ],
+    "step": "1/3"
+   }
+  ],
+  "L-S7H": [
+   {
+    "G": 0.073125,
+    "H": 0.35843372369798043,
+    "H3": 0.44207196828919226,
+    "T": 0.683125,
+    "by_type": {
+     "choice": 594,
+     "noul": 229,
+     "score": 270
+    },
+    "eligible": true,
+    "point": "2b-S7H-b1",
+    "proxy": 49.48282909264413,
+    "reasons": [],
+    "step": "1"
+   },
+   {
+    "G": 0.05812499999999998,
+    "H": 0.36561236958940213,
+    "H3": 0.4388477839444377,
+    "T": 0.668125,
+    "by_type": {
+     "choice": 556,
+     "noul": 229,
+     "score": 284
+    },
+    "eligible": true,
+    "point": "2b-S7H-b1_2",
+    "proxy": 49.42416053226593,
+    "reasons": [],
+    "step": "1/2"
+   },
+   {
+    "G": 0.041874999999999996,
+    "H": 0.3637328997516276,
+    "H3": 0.4378041437847947,
+    "T": 0.651875,
+    "by_type": {
+     "choice": 535,
+     "noul": 231,
+     "score": 277
+    },
+    "eligible": true,
+    "point": "2b-S7H-b1_3",
+    "proxy": 48.69377619630585,
+    "reasons": [],
+    "step": "1/3"
+   }
+  ],
+  "L-S7P": [
+   {
+    "G": 0.011249999999999982,
+    "H": 0.3665653602500685,
+    "H3": 0.4319765051080163,
+    "T": 0.62125,
+    "by_type": {
+     "choice": 556,
+     "noul": 266,
+     "score": 172
+    },
+    "eligible": false,
+    "point": "2b-S7P-b1",
+    "proxy": 47.72093147198145,
+    "reasons": [
+     "type score 172 < floor 245",
+     "family set_reconciliation 172/400 below reference - 0.10"
+    ],
+    "step": "1"
+   },
+   {
+    "G": -0.0006249999999999867,
+    "H": 0.3519071218952153,
+    "H3": 0.42436200329397566,
+    "T": 0.609375,
+    "by_type": {
+     "choice": 540,
+     "noul": 248,
+     "score": 187
+    },
+    "eligible": false,
+    "point": "2b-S7P-b1_2",
+    "proxy": 46.30803411989077,
+    "reasons": [
+     "type score 187 < floor 245",
+     "H_mean 0.4244 < reference 0.4278",
+     "family set_reconciliation 187/400 below reference - 0.10"
+    ],
+    "step": "1/2"
+   },
+   {
+    "G": -0.0024999999999999467,
+    "H": 0.351921014913485,
+    "H3": 0.42507525815139885,
+    "T": 0.6075,
+    "by_type": {
+     "choice": 522,
+     "noul": 242,
+     "score": 208
+    },
+    "eligible": false,
+    "point": "2b-S7P-b1_3",
+    "proxy": 46.23764878969757,
+    "reasons": [
+     "type score 208 < floor 245",
+     "H_mean 0.4251 < reference 0.4278",
+     "family set_reconciliation 208/400 below reference - 0.10"
+    ],
+    "step": "1/3"
+   }
+  ]
+ },
+ "not_finalists": [
+  {
+   "line": "L-S7P",
+   "reason": "no point passes the gates",
+   "reasons": [
+    "H_mean 0.4244 < reference 0.4278",
+    "H_mean 0.4251 < reference 0.4278",
+    "family set_reconciliation 172/400 below reference - 0.10",
+    "family set_reconciliation 187/400 below reference - 0.10",
+    "family set_reconciliation 208/400 below reference - 0.10",
+    "type score 172 < floor 245",
+    "type score 187 < floor 245",
+    "type score 208 < floor 245"
+   ]
+  },
+  {
+   "line": "L-S7C",
+   "reason": "no point passes the gates",
+   "reasons": [
+    "H_mean 0.4163 < reference 0.4278",
+    "H_mean 0.4181 < reference 0.4278",
+    "H_mean 0.4200 < reference 0.4278",
+    "family set_reconciliation 178/400 below reference - 0.10",
+    "family set_reconciliation 211/400 below reference - 0.10",
+    "type score 178 < floor 245",
+    "type score 211 < floor 245",
+    "type score 225 < floor 245"
+   ]
+  }
+ ],
+ "picks": {
+  "L-S7C": null,
+  "L-S7H": "2b-S7H-b1",
+  "L-S7P": null
+ },
+ "proxy_dropped": {},
+ "readouts": {
+  "L-S7C": {
+   "file": "/data/dev2/runs/dec/m7/lines/2b/readout/L-S7C.json",
+   "line": "L-S7C:1/3=2b-S7C-b1_3,1/2=2b-S7C-b1_2,1=2b-S7C-b1",
+   "sha256": "650d9f5a8a42b7ac1119789a0c0a0297da08e20b7ff9e63ac7c79c80cbd92cfa"
+  },
+  "L-S7H": {
+   "file": "/data/dev2/runs/dec/m7/lines/2b/readout/L-S7H.json",
+   "line": "L-S7H:1/3=2b-S7H-b1_3,1/2=2b-S7H-b1_2,1=2b-S7H-b1",
+   "sha256": "0fde54c8ce725463031a809731c77fcfe3eca2f55d6f52f274d3112b6af9bc81"
+  },
+  "L-S7P": {
+   "file": "/data/dev2/runs/dec/m7/lines/2b/readout/L-S7P.json",
+   "line": "L-S7P:1/3=2b-S7P-b1_3,1/2=2b-S7P-b1_2,1=2b-S7P-b1",
+   "sha256": "5025b67a76404bb2ee3e02525e2bf752546dfd184b2e4f233d6c7fc218a0a1fa"
+  }
+ },
+ "reference": "2b-I",
+ "role": "development-only selection (prereg dec-m7-prereg-2026-09-30.md); not a release or post-key score",
+ "rules_module": "/data/dev2/src/ed568b34d57f0026d515e422adbf7d7bc5a9bbc2-src_training_decision2/src/training/decision2/v2/9b/lux9b/m4_rules.py",
+ "rules_module_sha256": "f24028112fce5d1e2a3acddd7a067a8ad69936781b30fccd994d1d9ba9b883eb",
+ "schema": "dec-m7-finalists/1",
+ "tier": "2b"
+}
