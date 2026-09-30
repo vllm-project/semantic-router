@@ -1,0 +1,19 @@
+{
+  "bytes": 1198216395,
+  "files": {
+    "backbone/model.safetensors.bf16z": {
+      "bytes": 1198216395,
+      "restored": "backbone/model.safetensors",
+      "restored_bytes": 2014377424,
+      "restored_sha256": "439a1f070932f85f2156c3004a393ac07f7e67cbea3210cfc7848399122a6c01",
+      "sha256": "56b78469db1cc2e1f49c2340b5baa595746718dbfa62b387935b51aeb83e311b"
+    }
+  },
+  "format": "bf16z/1",
+  "level": 19,
+  "restored_bytes": 2014377424,
+  "schema": "dev2-release-bf16z/1",
+  "seconds": 69.68319463729858,
+  "source": "/data/dev2/runs/release/inputs/dev2-0p8b-bf16/checkpoint",
+  "zstandard": "0.25.0"
+}
