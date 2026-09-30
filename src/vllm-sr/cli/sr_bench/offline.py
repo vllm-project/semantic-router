@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 
-from . import VERSION
+from . import PROFILE_SPLITS, VERSION
 from .accounting import BUCKETS, correction_metadata, effective_calls
 from .adapters import get_adapter
 from .contracts import plan_digest
@@ -85,7 +85,7 @@ def export_training(store, run_id):
         raise ValueError(
             "Training export requires a complete rectangular matrix; recovery subsets stay separate"
         )
-    if manifest["profile"] == "standard" or any(
+    if PROFILE_SPLITS.get(manifest["profile"]) != "dev" or any(
         c.get("metadata", {}).get("split") != "dev" for c in manifest["cases"]
     ):
         raise ValueError(

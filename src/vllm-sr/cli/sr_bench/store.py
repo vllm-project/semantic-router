@@ -251,7 +251,9 @@ class Store:
             )
             completed = counts.get("completed", 0)
             failed = sum(
-                v for k, v in counts.items() if k not in {"completed", "running"}
+                v
+                for k, v in counts.items()
+                if k not in {"completed", "running", "timeout"}
             )
             return {
                 "id": row[0],
@@ -265,6 +267,7 @@ class Store:
                     "total": len(planned_cells(m)),
                     "completed": completed,
                     "failed": failed,
+                    "timeout": counts.get("timeout", 0),
                     "running": counts.get("running", 0),
                 },
             }

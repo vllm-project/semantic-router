@@ -10,7 +10,7 @@ from fractions import Fraction
 from itertools import pairwise
 from statistics import mean
 
-from . import VERSION
+from . import VERSION, nano
 from .accounting import cache_neutral_cost, correction_metadata, effective_calls
 from .contracts import BENCHMARK_WEIGHTS, planned_cells
 from .failures import first_saved_failure
@@ -18,7 +18,7 @@ from .native_output import model_limits
 from .target_contracts import effective_auxiliary_targets, target_inventory
 
 BUCKETS = ("input_tokens", "cached_input_tokens", "cache_write_tokens", "output_tokens")
-COMPARABLE_STATUSES = frozenset({"completed", "failed"})
+COMPARABLE_STATUSES = frozenset({"completed", "failed", "timeout"})
 MIN_CONTINUITY_REQUESTS = 2
 
 
@@ -199,7 +199,10 @@ def metric(target_id, results, calls, total, *, planned_case_ids=None):
         "id": target_id,
         "total": total,
         "completed": len(completed),
-        "failed": sum(r["status"] not in {"completed", "running"} for r in results),
+        "failed": sum(
+            r["status"] not in {"completed", "running", "timeout"} for r in results
+        ),
+        "timeouts": sum(r["status"] == "timeout" for r in results),
         "pending": total - len(results),
         "scored": len(scored),
         "correct": correct,
@@ -343,6 +346,20 @@ def make_report(store, run_id):
             + f"; profile={manifest['profile']}"
             + ("; custom task subset" if custom_subset else "")
         )
+    nano_section = None
+    if nano.is_nano(manifest) and manifest["mode"] == "live":
+        nano_section = nano.report_section(manifest, results, calls)
+        terminal = {row["id"]: row["terminal"] for row in nano_section["targets"]}
+        for item in metrics:
+            item["nano_score"] = (
+                item["macro_accuracy"]
+                if nano_section["full_split"] and terminal[item["id"]] == item["total"]
+                else None
+            )
+            item["score_scope"] = (
+                f"EXPERIMENTAL sr-bench-nano; equal weights; profile={manifest['profile']}"
+                + ("" if nano_section["full_split"] else "; partial frozen split")
+            )
     if manifest["mode"] in {"preview", "replay"}:
         routing_rows = (
             results
@@ -442,6 +459,12 @@ def make_report(store, run_id):
     limitations.append(
         "Cost reservations use conservative serialized-input bounds and frozen inference-call limits; provider billing outside reported token buckets is excluded."
     )
+    if nano_section:
+        limitations.append(
+            "EXPERIMENTAL sr-bench-nano: small frozen samples with one generation per task; "
+            "timeouts count as incorrect. Omitting max_tokens does not guarantee uncapped "
+            "output because servers may apply their own default; see suspected_output_cap_cases."
+        )
     metadata = manifest.get("limitations", [])
     limitations.extend(metadata)
     accounting = correction_metadata(store, run_id)
@@ -512,6 +535,7 @@ def make_report(store, run_id):
             ),
         },
         "benchmarks": benchmarks,
+        **({"nano": nano_section} if nano_section else {}),
         "limitations": limitations,
         "provenance": {
             "accounting_correction": accounting,

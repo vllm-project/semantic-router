@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 
+from . import PROFILE_SPLITS
 from .canonical import digest
 from .dataset_io import MAX_ROWS
 from .history_snapshot import validate_snapshot
@@ -159,9 +160,7 @@ def validate_manifest(manifest):
         or not 1 <= manifest["case_count"] <= MAX_ROWS
     ):
         raise ValueError("Invalid prepared dataset count")
-    if manifest.get("split") != (
-        "holdout" if manifest.get("profile") == "standard" else "dev"
-    ):
+    if manifest.get("split") != PROFILE_SPLITS.get(manifest.get("profile")):
         raise ValueError("Prepared evaluation split differs from profile")
     if manifest.get("selection") != SELECTION or dataset_identity(
         manifest

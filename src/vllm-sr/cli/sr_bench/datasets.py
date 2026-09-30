@@ -11,6 +11,7 @@ from collections import Counter, OrderedDict
 from pathlib import Path
 from urllib.parse import urlparse
 
+from . import PROFILE_SPLITS
 from .contracts import canonical, catalog, digest
 from .dataset_io import (
     MAX_ROW_BYTES,
@@ -292,13 +293,7 @@ class DatasetReader:
             for k, v in manifest.get("sources", {}).items()
         ):
             raise ValueError("Prepared dataset source provenance has invalid types")
-        if manifest.get("profile") not in {
-            "smoke",
-            "quick",
-            "standard",
-        } or manifest.get("split") != (
-            "holdout" if manifest["profile"] == "standard" else "dev"
-        ):
+        if manifest.get("split") != PROFILE_SPLITS.get(manifest.get("profile")):
             raise ValueError("Dataset has an invalid profile or split")
         if manifest.get("id") != identity:
             raise ValueError(
@@ -556,9 +551,9 @@ class DatasetReader:
 
     def selection(self, profile):
         """Resolve default sources from frozen content, without arbitrary revision picks."""
-        if profile not in {"smoke", "quick", "standard"}:
+        if profile not in PROFILE_SPLITS:
             raise ValueError("Unknown evaluation profile")
-        split = "holdout" if profile == "standard" else "dev"
+        split = PROFILE_SPLITS[profile]
         groups, blocked, remaining = {}, {}, MAX_FINGERPRINT_SCAN_BYTES
         paths = sorted((self.root / "datasets").glob("*/manifest.json"))
         if len(paths) > MAX_DATASETS:

@@ -23,6 +23,7 @@ def test_catalog_and_clean_command_surface():
         "catalog",
         "setup",
         "dataset",
+        "nano",
         "plan",
         "run",
         "runs",

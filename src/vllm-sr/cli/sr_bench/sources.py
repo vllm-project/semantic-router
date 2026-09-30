@@ -11,6 +11,7 @@ import tempfile
 from collections import defaultdict
 from pathlib import Path
 
+from . import PROFILE_SPLITS
 from .contracts import VERSION, canonical, digest
 from .dataset_io import (
     MAX_ROW_BYTES,
@@ -457,7 +458,7 @@ def _write_dataset(
             "seed": seed,
             "selection": SELECTION if preparation else "stratified-hash-v1",
             **({"preparation": preparation} if preparation else {}),
-            "split": "holdout" if profile == "standard" else "dev",
+            "split": PROFILE_SPLITS[profile],
         }
         if preparation:
             validate_cases(manifest, identities)

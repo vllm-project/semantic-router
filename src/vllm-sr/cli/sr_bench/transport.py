@@ -188,14 +188,15 @@ def effective_request(target, messages, sampling, extra_body=None):
         "metadata",
     }:
         raise CallFailure("Adapter attempted to override frozen request parameters")
+    streaming = target.get("stream", True)
     return {
         **sampling,
         **target.get("request_params", {}),
         **extras,
         "model": target["model"],
         "messages": messages,
-        "stream": True,
-        "stream_options": {"include_usage": True},
+        "stream": streaming,
+        **({"stream_options": {"include_usage": True}} if streaming else {}),
     }
 
 
@@ -225,6 +226,11 @@ def chat(
         if not key:
             raise CallFailure("Target credential environment variable is not set")
         headers["Authorization"] = "Bearer " + key
+    for name, env in target.get("header_env", {}).items():
+        value = os.environ.get(env)
+        if not value:
+            raise CallFailure("Target header environment variable is not set")
+        headers[name] = value
     if target.get("config_hash"):
         headers["X-SR-Bench-Expected-Config-Hash"] = target["config_hash"]
     if target.get("max_inference_calls"):
@@ -300,8 +306,12 @@ def chat(
         )
         if response.status_code >= HTTPStatus.BAD_REQUEST:
             raise CallFailure(f"Target HTTP {response.status_code}")
-        if "text/event-stream" not in response.headers.get("content-type", ""):
+        streaming = body["stream"]
+        content_type = response.headers.get("content-type", "")
+        if streaming and "text/event-stream" not in content_type:
             raise CallFailure("Target did not return a streaming response")
+        if not streaming and "json" not in content_type:
+            raise CallFailure("Target did not return a JSON response")
         if output_policy == "native" and target["kind"] == "mom":
             native_evidence = native_output.from_headers(target, response.headers)
 
@@ -408,6 +418,8 @@ def chat(
                 activity.received(wire_bytes, observed_at)
                 next_checkpoint = observed_at + CHECKPOINT_SECONDS
             buffer.extend(chunk)
+            if not streaming:
+                continue
             if len(buffer) > limits["max_output_chars"] * 2:
                 raise CallFailure("SSE line cap exceeded")
             if chunk == b"\n":
@@ -424,6 +436,9 @@ def chat(
                         break
         if event_lines:
             consume(event_lines)
+        if not streaming and not guard_error:
+            consume(["data:" + bytes(buffer).decode("utf-8")])
+            done = True
         if guard_error:
             raise CallFailure(guard_error[0])
         if not done or finish not in {"stop", "tool_calls", "function_call", "length"}:

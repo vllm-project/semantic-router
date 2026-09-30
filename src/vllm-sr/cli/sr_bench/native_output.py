@@ -77,8 +77,10 @@ def model_limits(manifest):
 
 def configure(manifest, targets, limits):
     policy = manifest.setdefault("output_policy", "bounded")
-    if not isinstance(policy, str) or policy not in {"bounded", "native"}:
-        raise NativeOutputError("output_policy must be bounded or native")
+    if not isinstance(policy, str) or policy not in {"bounded", "native", "uncapped"}:
+        raise NativeOutputError("output_policy must be bounded, native or uncapped")
+    if policy == "uncapped" and manifest.get("profile") not in {"nano", "nano-holdout"}:
+        raise NativeOutputError("output_policy uncapped is reserved for nano profiles")
     for target in targets:
         validate_limits(target, required=policy == "native")
     model_limits(manifest)

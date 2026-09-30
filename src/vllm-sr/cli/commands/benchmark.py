@@ -13,6 +13,7 @@ import click
 from click.core import ParameterSource
 
 from cli.commands.benchmark_experiments import experiment
+from cli.commands.benchmark_nano import nano_group
 from cli.commands.benchmark_preparations import (
     preparation_path,
     prepare_remote_dataset,
@@ -746,3 +747,4 @@ def candidate_plan_command(
 
 
 benchmark.add_command(experiment)
+benchmark.add_command(nano_group)

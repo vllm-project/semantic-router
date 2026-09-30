@@ -58,6 +58,7 @@ sdist = "build_support.SDist"
 
 [tool.setuptools.package-data]
 "cli.templates" = ["*.yaml", "*.json", "*.ini"]
+"cli.sr_bench" = ["nano_ids_v1.json", "nano_simpleqa_grader.txt"]
 "cli.model_assets" = ["**/*.yaml", "**/*.md", "**/*.dsl"]
 
 

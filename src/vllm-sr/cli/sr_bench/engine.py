@@ -14,6 +14,7 @@ import requests
 
 from cli.routing_preview import build_preview_request, case_request_fields
 
+from . import nano
 from .activity import CallActivity
 from .adapters import get_adapter
 from .contracts import digest, plan, planned_cells
@@ -49,6 +50,7 @@ class Context:
         self.calls = []
         self.call_slots = 0
         self.quality_failure = None
+        self.timed_out = False
         self.artifact_dir = (
             self.store.root / "runs" / run_id / case["id"] / target["id"]
         )
@@ -216,6 +218,11 @@ class Context:
                 {**exc.partial, "error": str(exc)},
             )
             call_record.update(exc.partial)
+            if role == "subject" and nano.is_nano(self.manifest):
+                if nano.is_timeout(str(exc)) and not self._cancel.is_set():
+                    self.timed_out = True
+                elif str(exc) == "Repeated output guard triggered":
+                    self.quality_failure = "repetition_guard"
             with self.engine.lock:
                 self.engine.spent[self.run_id] = self.engine.spent.get(
                     self.run_id, 0
@@ -434,6 +441,14 @@ class Engine:
                 if isinstance(exc, (CallFailure, ValueError))
                 else type(exc).__name__
             )
+            if (
+                nano.is_nano(manifest)
+                and not cancel.is_set()
+                and time.monotonic() < deadline
+                and (ctx.timed_out or time.monotonic() > ctx.deadline)
+            ):
+                self._timed_out_case(ctx, message, started)
+                return
             self.store.result(
                 run_id,
                 case["id"],
@@ -461,6 +476,28 @@ class Engine:
                     self.store.event(run_id, "failure_observed", failure)
             # Fail closed: no new cases are dispatched after a transport/harness failure.
             cancel.set()
+
+    def _timed_out_case(self, ctx, message, started):
+        """Nano records a wall-clock timeout as its own incorrect status and continues."""
+        self.store.result(
+            ctx.run_id,
+            ctx.case["id"],
+            ctx.target["id"],
+            "timeout",
+            {
+                "benchmark": ctx.case["benchmark"],
+                "answer": None,
+                "correct": False,
+                "score": 0.0,
+                "error": message,
+                "timeout_s": ctx.limits["total_timeout_s"],
+                "call_count": len(ctx.calls),
+                "queue_wait_s": ctx.queue_wait_s,
+                "started_at": ctx.started_at,
+                "finished_at": now(),
+                "latency_s": time.monotonic() - started,
+            },
+        )
 
     def _completed_case(self, ctx, result, started):
         if ctx.quality_failure:
@@ -557,7 +594,10 @@ class Engine:
                 status = "failed"
             elif cancel.is_set():
                 status = "cancelled"
-            elif run["progress"]["completed"] == run["progress"]["total"]:
+            elif (
+                run["progress"]["completed"] + run["progress"]["timeout"]
+                == run["progress"]["total"]
+            ):
                 status = "completed"
             else:
                 status = "failed"

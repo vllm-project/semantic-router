@@ -6,6 +6,8 @@ import re
 import uuid
 from datetime import datetime, timezone
 
+from . import PROFILE_SPLITS
+
 EXPERIMENT_ID = re.compile(r"exp-[0-9a-f]{32}\Z")
 
 MAX_HYPOTHESIS_CHARS = 2000
@@ -72,7 +74,7 @@ def run_roles(manifest):
     if mode == "live":
         if "single" in kinds:
             roles.append("baseline")
-        if profile == "standard":
+        if PROFILE_SPLITS.get(profile) == "holdout":
             roles.append("validation")
         else:
             if "mom" in kinds:

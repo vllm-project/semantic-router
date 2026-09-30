@@ -13,6 +13,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from . import nano
 from .contracts import digest
 from .harness_worker import (
     _verify_tau_task,
@@ -39,12 +40,19 @@ JUDGE_VERSION = "sr-bench-reference-judge-v1"
 def preflight_case(case, manifest, cache=None):
     benchmark = case["benchmark"]
     config = manifest.get("benchmark_options", {}).get(benchmark, {})
-    if benchmark in {"hle", "simpleqa-verified"}:
+    if benchmark in {"hle", "simpleqa-verified"} and "answer" not in case:
+        raise ValueError(f"{benchmark} requires a reference answer")
+    if benchmark in {"hle", "simpleqa-verified"} and not nano.is_nano(manifest):
         resolve_auxiliary_target(config, "judge", manifest)
-        if "answer" not in case:
-            raise ValueError(f"{benchmark} requires a reference answer")
         if config.get("grader_version") != JUDGE_VERSION:
             raise ValueError(f"{benchmark} requires grader_version={JUDGE_VERSION}")
+    if benchmark == "simpleqa-verified" and nano.is_nano(manifest):
+        resolve_auxiliary_target(config, "judge", manifest)
+        if config.get("grader_version") != nano.SIMPLEQA_GRADER:
+            raise ValueError(
+                f"{benchmark} requires grader_version={nano.SIMPLEQA_GRADER}"
+            )
+        nano.simpleqa_template()
     if benchmark == "tau3":
         resolve_auxiliary_target(config, "simulator", manifest)
         resolve_auxiliary_target(config, "judge", manifest)
@@ -220,6 +228,27 @@ def _judged(case, context):
     }
 
 
+def _nano_simpleqa(case, context):
+    generated = context.call(case["messages"])
+    judge = resolve_auxiliary_target(context.config, "judge", context.manifest)
+    graded = context.call(
+        nano.simpleqa_messages(case, generated["final"]), role="judge", target=judge
+    )
+    verdict = nano.simpleqa_verdict(graded["final"])
+    return {
+        "answer": generated["final"],
+        "correct": verdict == "correct",
+        "score": float(verdict == "correct"),
+        "details": {
+            "verdict": verdict,
+            "judge": judge["id"],
+            "judge_model": judge["model"],
+            "grader_version": nano.SIMPLEQA_GRADER,
+            "template_sha256": nano.SIMPLEQA_TEMPLATE_SHA256,
+        },
+    }
+
+
 class _Bridge(ThreadingHTTPServer):
     daemon_threads = True
 
@@ -376,6 +405,10 @@ def _harness(case, context):
 
 def execute_case(case, context):
     preflight_case(case, context.manifest)
+    if nano.is_nano(context.manifest) and case["benchmark"] == "hle":
+        return nano.grade_hle(case, context.call(case["messages"])["final"])
+    if nano.is_nano(context.manifest) and case["benchmark"] == "simpleqa-verified":
+        return _nano_simpleqa(case, context)
     if case["benchmark"] in {"hle", "simpleqa-verified"}:
         return _judged(case, context)
     return _harness(case, context)

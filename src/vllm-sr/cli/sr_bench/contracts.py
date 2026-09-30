@@ -6,6 +6,7 @@ import copy
 import hashlib
 import json
 import math
+import re
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -13,7 +14,7 @@ import yaml
 
 from cli.routing_preview import case_request_fields
 
-from . import VERSION
+from . import PROFILE_SPLITS, VERSION, nano
 from .adapters import get_adapter, list_adapters
 from .canonical import (
     canonical,
@@ -191,6 +192,37 @@ GENERATION_FIELDS = {
 }
 
 
+MAX_HEADER_ENV = 16
+_HEADER_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,63}$")
+_ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,127}$")
+_RESERVED_HEADERS = {
+    "authorization",
+    "content-type",
+    "content-length",
+    "host",
+    "transfer-encoding",
+    "connection",
+}
+
+
+def validate_header_env(header_env):
+    """Extra request headers are credential references: name -> env variable."""
+    if not isinstance(header_env, dict) or len(header_env) > MAX_HEADER_ENV:
+        raise ValueError("header_env must map at most 16 header names to env names")
+    for name, env in header_env.items():
+        if (
+            not isinstance(name, str)
+            or not _HEADER_NAME.match(name)
+            or name.lower() in _RESERVED_HEADERS
+            or name.lower().startswith("x-sr-bench-")
+            or not isinstance(env, str)
+            or not _ENV_NAME.match(env)
+        ):
+            raise ValueError(
+                "header_env needs non-reserved header names and environment variable names"
+            )
+
+
 def validate_request_params(params, limits, label="request_params"):
     if not isinstance(params, dict) or set(params) - GENERATION_FIELDS:
         raise ValueError(f"{label} contains unsupported generation fields")
@@ -356,7 +388,7 @@ def plan(manifest, *, policy=None):
     m.setdefault("cost_policy", "require_priced")
     if m["cost_policy"] not in {"require_priced", "capability_only"}:
         raise ValueError("cost_policy must be require_priced or capability_only")
-    if m["profile"] not in {"smoke", "quick", "standard"}:
+    if m["profile"] not in PROFILE_SPLITS:
         raise ValueError("unknown profile")
     if m["mode"] == "preview":
         if not isinstance(m.get("preview_context", {}), dict):
@@ -383,6 +415,8 @@ def plan(manifest, *, policy=None):
     cases = m.get("cases")
     if not isinstance(cases, list) or not cases:
         raise ValueError("at least one case is required")
+    if nano.is_nano(m):
+        m = nano.apply_policy(m)
     ids = set()
     available = {adapter.id for adapter in list_adapters()}
     for c in cases:
@@ -396,10 +430,10 @@ def plan(manifest, *, policy=None):
         ids.add(c["id"])
         case_request_fields(c)
         if (
-            m["profile"] == "standard"
+            PROFILE_SPLITS[m["profile"]] == "holdout"
             and c.get("metadata", {}).get("split") != "holdout"
         ):
-            raise ValueError("Standard profile requires prepared holdout cases")
+            raise ValueError("Holdout profiles require prepared holdout cases")
         if c.get("benchmark") not in available:
             raise ValueError(f"unknown benchmark for case {c['id']}")
         adapter = get_adapter(c["benchmark"])
@@ -456,7 +490,15 @@ def plan(manifest, *, policy=None):
             )
         if any(k in t for k in ("api_key", "authorization", "headers")):
             raise ValueError(
-                "use api_key_env; raw credentials and arbitrary headers are forbidden"
+                "use api_key_env and header_env; raw credentials and header values are forbidden"
+            )
+        validate_header_env(t.get("header_env", {}))
+        if "stream" in t and (
+            not isinstance(t["stream"], bool)
+            or (not t["stream"] and t["kind"] != "single")
+        ):
+            raise ValueError(
+                "stream must be boolean; only single targets may disable it"
             )
         if m["mode"] == "preview" and t in targets:
             if t["kind"] != "mom":
@@ -575,10 +617,14 @@ def plan(manifest, *, policy=None):
     if "experiment" in m:
         validate_role(m, m["experiment"]["role"])
     m["case_sha256"] = digest(cases)
-    expected_weights = {
-        **BENCHMARK_WEIGHTS,
-        **{c["benchmark"]: get_adapter(c["benchmark"]).weight for c in cases},
-    }
+    expected_weights = (
+        dict(nano.WEIGHTS)
+        if nano.is_nano(m)
+        else {
+            **BENCHMARK_WEIGHTS,
+            **{c["benchmark"]: get_adapter(c["benchmark"]).weight for c in cases},
+        }
+    )
     weights = m.get("benchmark_weights", expected_weights)
     if weights != expected_weights:
         raise ValueError(
