@@ -85,16 +85,6 @@ func (p *FuncProvider) Backend() string {
 	return p.backend
 }
 
-func NewEmbeddingFunc(models config.EmbeddingModels, options ProviderOptions) (func(string) ([]float32, error), error) {
-	provider, err := NewProvider(models, options)
-	if err != nil {
-		return nil, err
-	}
-	return func(text string) ([]float32, error) {
-		return provider.Embed(context.Background(), text)
-	}, nil
-}
-
 func resolveBackend(models config.EmbeddingModels, override string) string {
 	if normalized := strings.ToLower(strings.TrimSpace(override)); normalized != "" {
 		return normalized

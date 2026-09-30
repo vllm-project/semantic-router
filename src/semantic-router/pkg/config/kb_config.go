@@ -83,10 +83,6 @@ func (s KnowledgeBaseSource) ResolveManifestPath(baseDir string) string {
 	return filepath.Join(root, manifestFile)
 }
 
-func (s KnowledgeBaseSource) ResolveManifestBaseName() string {
-	return filepath.Base(s.manifestFileName())
-}
-
 func (s KnowledgeBaseSource) candidateRoots(baseDir string) []string {
 	candidates := make([]string, 0, 4)
 	if baseDir != "" {

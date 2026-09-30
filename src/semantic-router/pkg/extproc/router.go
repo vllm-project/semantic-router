@@ -275,13 +275,6 @@ func (r *OpenAIRouter) PreloadKnowledgeBases() error {
 	return r.Classifier.PreloadKnowledgeBases()
 }
 
-func (r *OpenAIRouter) RegisterToolStrategy(name string, retriever tools.ToolRetriever) {
-	if r.ToolsRegistry == nil {
-		r.ToolsRegistry = tools.NewRegistry()
-	}
-	r.ToolsRegistry.Register(name, retriever)
-}
-
 func (r *OpenAIRouter) fallbackOrchestratorForContext(ctx *RequestContext) *fallback.Orchestrator {
 	if r == nil {
 		return nil

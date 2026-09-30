@@ -187,35 +187,6 @@ func (s *Store) FinalizeActivationCommit(transaction ActivationTransaction) erro
 	return s.finalizeTransactionLocked(current)
 }
 
-func (s *Store) CommitDeactivation(transaction ActivationTransaction) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	current, err := s.readTransaction()
-	if err != nil || current.ID != transaction.ID || current.State != "pending" || current.Operation != ActivationOperationDeactivate {
-		return wrapPackageError(ErrorActivationConflict, http.StatusConflict, "Recipe deactivation transaction changed unexpectedly.", err)
-	}
-	active, err := s.readActivePointer()
-	if err != nil || active.RecipeDigest != current.TargetRecipeDigest {
-		return wrapPackageError(ErrorActivationConflict, http.StatusConflict, "Active Recipe changed during deactivation.", err)
-	}
-	if removeErr := os.Remove(filepath.Join(s.root, "active.json")); removeErr != nil {
-		return removeErr
-	}
-	if syncErr := syncDirectory(s.root); syncErr != nil {
-		return syncErr
-	}
-	config, err := readBoundedFile(s.configPath, maxConfigBytes)
-	if err != nil {
-		return err
-	}
-	current.State = "committing"
-	current.CommitConfigDigest = digestBytes(config)
-	if err := writeJSONAtomically(s.transactionPath(), current, 0o600); err != nil {
-		return err
-	}
-	return s.finalizeTransactionLocked(current)
-}
-
 func (s *Store) PrepareDeactivationCommit(transaction ActivationTransaction) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
