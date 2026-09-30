@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -137,6 +138,12 @@ func quoteBareExternalAPICustomRequestPlaceholders(template string) string {
 			i += len(placeholder)
 			continue
 		}
+		if length := externalAPIEnvironmentReferenceAt(template, i); length > 0 {
+			encoded, _ := json.Marshal(template[i : i+length])
+			result.Write(encoded)
+			i += length
+			continue
+		}
 
 		result.WriteByte(template[i])
 		i++
@@ -180,13 +187,16 @@ func validateExternalAPICustomRequestTemplateValue(value interface{}) error {
 func validateExternalAPICustomRequestPlaceholderTokens(value string) error {
 	for i := 0; i < len(value); {
 		switch {
+		case strings.HasPrefix(value[i:], "$$"):
+			i += 2
 		case strings.HasPrefix(value[i:], "${"):
 			end := strings.IndexByte(value[i+2:], '}')
 			if end < 0 {
 				return fmt.Errorf("malformed custom request template placeholder at byte %d", i)
 			}
 			placeholder := value[i : i+2+end+1]
-			if externalAPICustomRequestPlaceholderAt(placeholder, 0) != placeholder {
+			if externalAPICustomRequestPlaceholderAt(placeholder, 0) != placeholder &&
+				externalAPIEnvironmentReferenceAt(placeholder, 0) != len(placeholder) {
 				return fmt.Errorf("unsupported custom request template placeholder %q", placeholder)
 			}
 			i += len(placeholder)
@@ -225,6 +235,9 @@ func substituteExternalAPICustomRequestPlaceholders(value interface{}, query str
 		if replacement, ok := exactExternalAPICustomRequestPlaceholder(typed, query, topK, threshold); ok {
 			return replacement
 		}
+		if externalAPIEnvironmentReferenceAt(typed, 0) == len(typed) && typed != "" {
+			return resolveExternalAPIEnvironmentReference(typed)
+		}
 		return interpolateExternalAPICustomRequestPlaceholders(typed, query, topK, threshold)
 	default:
 		return value
@@ -251,6 +264,19 @@ func interpolateExternalAPICustomRequestPlaceholders(value, query string, topK i
 	for i := 0; i < len(value); {
 		placeholder := externalAPICustomRequestPlaceholderAt(value, i)
 		if placeholder == "" {
+			// One pass over the template text: request values written below
+			// are never rescanned, so user content cannot name an environment
+			// variable and have it resolved.
+			if strings.HasPrefix(value[i:], "$$") {
+				result.WriteByte('$')
+				i += 2
+				continue
+			}
+			if length := externalAPIEnvironmentReferenceAt(value, i); length > 0 {
+				result.WriteString(resolveExternalAPIEnvironmentReference(value[i : i+length]))
+				i += length
+				continue
+			}
 			result.WriteByte(value[i])
 			i++
 			continue
@@ -268,4 +294,44 @@ func interpolateExternalAPICustomRequestPlaceholders(value, query string, topK i
 	}
 
 	return result.String()
+}
+
+// externalAPIEnvironmentReferenceAt returns the length of an environment
+// reference starting at offset, or 0. Accepted forms are ${NAME},
+// ${NAME:-default}, ${NAME-default} and $NAME, where NAME uses uppercase
+// environment syntax; lowercase braced tokens stay reserved for the runtime
+// placeholders above. References are resolved when a request is rendered and
+// always land inside a JSON string value, so an environment value can never
+// add keys or change the request's shape.
+func externalAPIEnvironmentReferenceAt(value string, offset int) int {
+	if offset >= len(value) || value[offset] != '$' || offset+1 >= len(value) {
+		return 0
+	}
+	rest := value[offset+1:]
+	if rest[0] == '{' {
+		closeOffset := strings.IndexByte(rest, '}')
+		if closeOffset < 0 || !isUppercaseRequestTemplateEnvReference(rest[1:closeOffset]) {
+			return 0
+		}
+		return closeOffset + 2
+	}
+	if !isUppercaseEnvironmentNameStart(rest[0]) {
+		return 0
+	}
+	end := 1
+	for end < len(rest) && isUppercaseEnvironmentNameByte(rest[end]) {
+		end++
+	}
+	if end < len(rest) && rest[end] >= 'a' && rest[end] <= 'z' {
+		// $TENANTid is not a reference to TENANT; leave it literal.
+		return 0
+	}
+	return end + 1
+}
+
+func resolveExternalAPIEnvironmentReference(reference string) string {
+	if strings.HasPrefix(reference, "${") {
+		return resolveBracedEnvReference(reference[2 : len(reference)-1])
+	}
+	return os.Getenv(reference[1:])
 }

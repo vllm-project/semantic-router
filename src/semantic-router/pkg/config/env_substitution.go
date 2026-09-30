@@ -13,9 +13,18 @@ import (
 //   - ${VAR-default} when VAR is unset
 //   - $$ for a literal $
 func expandEnvSubstitutionsInMap(raw map[string]interface{}) {
+	_, externalAPIRequest := raw["request_format"]
 	for key, value := range raw {
 		if key == "request_template" {
 			if template, ok := value.(string); ok {
+				if externalAPIRequest {
+					// The external API template compiler owns environment
+					// references: it resolves them into JSON string values at
+					// render time. Splicing raw values into the template text
+					// here would let a value containing a quote rewrite the
+					// request's JSON structure.
+					continue
+				}
 				raw[key] = expandRequestTemplateEnvString(template)
 				continue
 			}

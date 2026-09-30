@@ -236,9 +236,11 @@ func TestExternalAPIRAGFullContractIsEnforcedAcrossLoaderPaths(t *testing.T) {
 	}
 }
 
-func TestExternalAPIRAGRequestTemplateExpansionLoadsValidDirectAndHybridConfigs(t *testing.T) {
+func TestExternalAPIRAGEnvironmentReferencesLoadOnBothParsePathsAndRenderAsData(t *testing.T) {
 	t.Setenv("RAG_TENANT", "production")
-	const wantTemplate = `{"query":"${user_content}","top_k":${top_k},"threshold":${threshold},"tenant":"production"}`
+	// The template keeps its environment reference after loading; the value is
+	// resolved into the JSON string at render time.
+	const wantTemplate = `{"query":"${user_content}","top_k":${top_k},"threshold":${threshold},"tenant":"${RAG_TENANT}"}`
 
 	tests := []struct {
 		name          string
@@ -288,7 +290,13 @@ func TestExternalAPIRAGRequestTemplateExpansionLoadsValidDirectAndHybridConfigs(
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cfg, err := ParseYAMLBytes(buildExternalRAGDecisionRefConfig(test.configuration))
+			raw := buildExternalRAGDecisionRefConfig(test.configuration)
+			// Dashboard, config-update and CLI-decompile validation use the
+			// no-expansion parser; it must accept what the runtime accepts.
+			if _, err := ParseYAMLBytesWithoutEnvExpansion(raw); err != nil {
+				t.Fatalf("ParseYAMLBytesWithoutEnvExpansion() error = %v", err)
+			}
+			cfg, err := ParseYAMLBytes(raw)
 			if err != nil {
 				t.Fatalf("ParseYAMLBytes() error = %v", err)
 			}
@@ -301,7 +309,36 @@ func TestExternalAPIRAGRequestTemplateExpansionLoadsValidDirectAndHybridConfigs(
 			if externalConfig.RequestTemplate != wantTemplate {
 				t.Fatalf("request_template = %q, want %q", externalConfig.RequestTemplate, wantTemplate)
 			}
+			compiled, err := ParseExternalAPICustomRequestTemplate(externalConfig.RequestTemplate)
+			if err != nil {
+				t.Fatalf("ParseExternalAPICustomRequestTemplate() error = %v", err)
+			}
+			rendered, err := compiled.Render("q", 3, 0.5)
+			if err != nil {
+				t.Fatalf("Render() error = %v", err)
+			}
+			if !strings.Contains(string(rendered), `"tenant":"production"`) {
+				t.Fatalf("rendered request %s lacks the resolved tenant", rendered)
+			}
 		})
+	}
+}
+
+func TestExternalAPIRAGUnknownPlaceholdersAreRejectedOnBothParsePaths(t *testing.T) {
+	raw := buildExternalRAGDecisionRefConfig(`            enabled: true
+            backend: external_api
+            backend_config:
+              endpoint: http://rag.example/search
+              request_format: custom
+              request_template: '{"query":"${user_content}","tenant":"${rag_tenant}"}'
+`)
+	for name, parse := range map[string]func([]byte) (*RouterConfig, error){
+		"runtime":      ParseYAMLBytes,
+		"no-expansion": ParseYAMLBytesWithoutEnvExpansion,
+	} {
+		if _, err := parse(raw); err == nil || !strings.Contains(err.Error(), "unsupported custom request template placeholder") {
+			t.Fatalf("%s parser error = %v, want unsupported placeholder", name, err)
+		}
 	}
 }
 

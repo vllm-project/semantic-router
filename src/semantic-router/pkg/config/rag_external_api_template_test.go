@@ -262,3 +262,88 @@ func externalAPIRAGValidationConfig(format, template string, limit *int64) *RAGP
 		}),
 	}
 }
+
+func TestCustomRequestTemplateEnvironmentValuesStayJSONData(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{name: "plain", value: "production"},
+		{name: "quote", value: `a"b`},
+		{name: "backslash", value: `C:\tenant\`},
+		{name: "structural key injection", value: `v","admin":true,"x":"`},
+		{name: "braces and newline", value: "{\"k\":1}\n"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("RAG_TENANT", test.value)
+			for _, template := range []string{
+				`{"query":"${user_content}","tenant":"${RAG_TENANT}"}`,
+				`{"query":"${user_content}","tenant":"$RAG_TENANT"}`,
+				`{"query":"${user_content}","tenant":${RAG_TENANT}}`,
+			} {
+				compiled, err := ParseExternalAPICustomRequestTemplate(template)
+				if err != nil {
+					t.Fatalf("ParseExternalAPICustomRequestTemplate(%s) error = %v", template, err)
+				}
+				rendered, err := compiled.Render("q", 1, 0.5)
+				if err != nil {
+					t.Fatalf("Render() error = %v", err)
+				}
+				var got map[string]interface{}
+				if err := json.Unmarshal(rendered, &got); err != nil {
+					t.Fatalf("rendered request is not JSON: %v: %s", err, rendered)
+				}
+				if len(got) != 2 || got["tenant"] != test.value || got["query"] != "q" {
+					t.Fatalf("template %s rendered %s, want exactly query and tenant=%q", template, rendered, test.value)
+				}
+			}
+		})
+	}
+}
+
+func TestCustomRequestTemplateEnvironmentReferencesInsideStrings(t *testing.T) {
+	t.Setenv("RAG_TENANT", `x"y`)
+	t.Setenv("EMPTY_VALUE", "")
+
+	compiled, err := ParseExternalAPICustomRequestTemplate(
+		`{"label":"tenant=${RAG_TENANT};d=${MISSING_VALUE:-fb};e=${EMPTY_VALUE-kept};lit=$${RAG_TENANT};raw=$RAG_TENANTid"}`)
+	if err != nil {
+		t.Fatalf("ParseExternalAPICustomRequestTemplate() error = %v", err)
+	}
+	rendered, err := compiled.Render("q", 1, 0.5)
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+	var got map[string]string
+	if err := json.Unmarshal(rendered, &got); err != nil {
+		t.Fatalf("rendered request is not JSON: %v: %s", err, rendered)
+	}
+	want := `tenant=x"y;d=fb;e=;lit=${RAG_TENANT};raw=$RAG_TENANTid`
+	if got["label"] != want {
+		t.Fatalf("label = %q, want %q", got["label"], want)
+	}
+}
+
+func TestCustomRequestTemplateNeverResolvesEnvironmentNamedByUserContent(t *testing.T) {
+	t.Setenv("RAG_SECRET", "must-not-leak")
+	compiled, err := ParseExternalAPICustomRequestTemplate(`{"query":"prefix ${user_content}","raw":"${user_content}"}`)
+	if err != nil {
+		t.Fatalf("ParseExternalAPICustomRequestTemplate() error = %v", err)
+	}
+	rendered, err := compiled.Render("${RAG_SECRET} $RAG_SECRET", 1, 0.5)
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+	if strings.Contains(string(rendered), "must-not-leak") {
+		t.Fatalf("user content resolved an environment variable: %s", rendered)
+	}
+}
+
+func TestCustomRequestTemplateRejectsEnvironmentReferencesInKeys(t *testing.T) {
+	if _, err := ParseExternalAPICustomRequestTemplate(`{"${RAG_TENANT}":"v"}`); err == nil ||
+		!strings.Contains(err.Error(), "not allowed in object keys") {
+		t.Fatalf("error = %v, want object-key rejection", err)
+	}
+}
