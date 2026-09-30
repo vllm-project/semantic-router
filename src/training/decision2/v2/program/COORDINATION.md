@@ -205,6 +205,22 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 01:00 — **Vela-2.0-Unified check (7b239c1e): an open-vocabulary SCHEMA ENCODER, supported with small
+  additions** (not a fixed multi-head classifier).
+  - It fits `encoder_marker` + `span` on Tier 0 (ONNX Runtime / candle); we call this the `schema_encoder` profile.
+    Additions A1–A8 cover API set / span / presets / over / thresholds, overflow, multi-readout per pass, readout
+    features, the `embedded_heads` capability plus encoder-only graphs, planner rules, manifest fields, receipts, the
+    ORT CUDA EP and MIGraphX shape buckets.
+  - **Two decided lines revised:**
+    - (1) Over-length: reject by default; a manifest may declare windowing with aggregation; never silently cut;
+      windows reported.
+    - (2) The Rust renderer is REQUIRED before in-process encoders; the stop-gap is a supervised model server
+      (`vela2_serve.py`).
+  - It replaces ~7 Vela 1.0 request-time passes plus hallucination spans. Gaps: `NO_FEEDBACK`, Hazard presets,
+    relevance partial, no embeddings. Asks for the model owner are recorded.
+  - Decisions log updated (§9c, §2, §3). **Proposal v2 revision launched** (writer 28bfbd64, resumed once) to fold in
+    everything since v1. The plugin prototype continuation (6c2c1341) is still running.
+
 - 2026-10-01 00:55 — **USER DECISIONS:**
   - **(1) Broaden to a general router-model runtime:** the four surfaces (`/v1/decisions`, `/v1/classify`,
     `/v1/embeddings`, `/v1/rerank`) plus the `task_heads` and `multimodal_embedding` adapters.
