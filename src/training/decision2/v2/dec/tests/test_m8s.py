@@ -203,7 +203,7 @@ class RulesTest(unittest.TestCase):
             return {"check": {"flags": list(flags)}}
 
         self.assertEqual(mr.score_floor(s5("NO-GAIN"), s5()), [])
-        self.assertTrue(mr.score_floor(s5("COLLAPSE"), s5("COLLAPSE")))
+        self.assertTrue(mr.score_floor(s5("COLLAPSE"), s5()))
         self.assertTrue(mr.score_floor(s5("WARN"), s5()))
         self.assertEqual(mr.score_floor(s5("WARN"), s5("WARN")), [])
         g = mr.gate(point(), point(), {"delta": 0.0}, s5("COLLAPSE"), s5())
