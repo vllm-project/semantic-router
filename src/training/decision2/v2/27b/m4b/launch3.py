@@ -1,6 +1,8 @@
 """Multi-GPU container launcher for Milestone 4b (host side, stdlib only).
 
-Only node B GPU0-2 (lent to track ``27b-m4b``) are accepted. The CLI and the
+Only the allocation's GPUs are accepted: by default node B GPU0-2 (lent to track
+``27b-m4b``); ``DEV2_27B_LAUNCH_ALLOC=m5-b`` / ``m5-a`` selects Milestone 5's
+(track ``27b``: node B GPU0-2 and GPU5-7, node A GPU2-4). The CLI and the
 receipt follow ``v2/27b/launch.py`` except that ``--gpus`` (a comma list)
 replaces ``--gpu``: every render node's PCI address is checked, each GPU's lease
 is updated, one network-less container gets exactly those devices (visible
@@ -29,13 +31,29 @@ from pathlib import Path
 
 base = importlib.import_module("v2.27b.launch")
 
-TRACK = "27b-m4b"
 IMAGE_ID = base.IMAGE_ID
-ALLOWED_GPUS = {
+NODE_B_GPU0_2 = {
     0: ("0000:83:00.0", "renderD129"),
     1: ("0000:8b:00.0", "renderD137"),
     2: ("0000:93:00.0", "renderD145"),
 }
+# DEV2_27B_LAUNCH_ALLOC picks the allocation at import (default: M4b's). Both nodes share one PCI layout;
+# the lease file, which must belong to the allocation's track, guards against the wrong node.
+ALLOCATIONS = {
+    "m4b": ("27b-m4b", NODE_B_GPU0_2, "the M4b allocation (node B GPU0-2)"),
+    "m5-b": (
+        "27b",
+        {**NODE_B_GPU0_2, **base.NODE_GPUS["b"]},
+        "the M5 allocation on node B (GPU0-2, GPU5-7)",
+    ),
+    "m5-a": ("27b", dict(base.NODE_GPUS["a"]), "the M5 allocation on node A (GPU2-4)"),
+}
+ALLOCATION = os.environ.get("DEV2_27B_LAUNCH_ALLOC", "m4b")
+if ALLOCATION not in ALLOCATIONS:
+    raise ValueError(
+        f"DEV2_27B_LAUNCH_ALLOC must be one of {sorted(ALLOCATIONS)}, not {ALLOCATION!r}"
+    )
+TRACK, ALLOWED_GPUS, ALLOCATION_TEXT = ALLOCATIONS[ALLOCATION]
 LEASE_ROOT = base.LEASE_ROOT
 IDLE_STATUSES = {"idle", "released", "reserved-idle"}
 COTENANT_OK = {"released", "idle"}
@@ -54,15 +72,13 @@ def parse_gpus(text: str) -> list[int]:
         raise ValueError("--gpus needs distinct GPU indices")
     outside = [gpu for gpu in gpus if gpu not in ALLOWED_GPUS]
     if outside:
-        raise ValueError(
-            f"GPU{outside[0]} is outside the M4b allocation (node B GPU0-2)"
-        )
+        raise ValueError(f"GPU{outside[0]} is outside {ALLOCATION_TEXT}")
     return sorted(gpus)
 
 
 def render_node(gpu: int, sysfs: Path = Path("/sys/class/drm")) -> Path:
     if gpu not in ALLOWED_GPUS:
-        raise ValueError(f"GPU{gpu} is outside the M4b allocation (node B GPU0-2)")
+        raise ValueError(f"GPU{gpu} is outside {ALLOCATION_TEXT}")
     pci, node = ALLOWED_GPUS[gpu]
     actual = (sysfs / node / "device").resolve().name.lower()
     if actual != pci:
@@ -312,7 +328,9 @@ def main(argv: list[str] | None = None) -> None:
         return
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--name", required=True)
-    parser.add_argument("--gpus", required=True, help="Comma list, subset of 0,1,2")
+    parser.add_argument(
+        "--gpus", required=True, help=f"Comma list, subset of {sorted(ALLOWED_GPUS)}"
+    )
     parser.add_argument("--cap-hours", type=float, required=True)
     parser.add_argument("--purpose", required=True)
     parser.add_argument("--receipt", type=Path, required=True)

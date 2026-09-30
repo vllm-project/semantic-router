@@ -1,5 +1,7 @@
 import argparse
 import importlib
+import json
+import os
 import re
 import subprocess
 import sys
@@ -78,6 +80,37 @@ class GpuTest(unittest.TestCase):
                 launch3.render_node(1, drm)
             with self.assertRaises(ValueError):
                 launch3.render_node(3, drm)
+
+    def test_allocations_by_environment(self):
+        code = (
+            "import importlib, json; l = importlib.import_module('v2.27b.m4b.launch3'); "
+            "print(json.dumps([l.TRACK, sorted(l.ALLOWED_GPUS), l.ALLOWED_GPUS[2][0]]))"
+        )
+        root = Path(launch3.__file__).resolve().parents[3]
+        expected = {
+            None: ["27b-m4b", [0, 1, 2], "0000:93:00.0"],
+            "m4b": ["27b-m4b", [0, 1, 2], "0000:93:00.0"],
+            "m5-b": ["27b", [0, 1, 2, 5, 6, 7], "0000:93:00.0"],
+            "m5-a": ["27b", [2, 3, 4], "0000:93:00.0"],
+        }
+        for alloc, want in expected.items():
+            env = {k: v for k, v in os.environ.items() if k != "DEV2_27B_LAUNCH_ALLOC"}
+            env["PYTHONPATH"] = str(root)
+            if alloc:
+                env["DEV2_27B_LAUNCH_ALLOC"] = alloc
+            out = subprocess.run(
+                [sys.executable, "-c", code],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+            self.assertEqual(json.loads(out), want, alloc)
+        env["DEV2_27B_LAUNCH_ALLOC"] = "m6"
+        bad = subprocess.run(
+            [sys.executable, "-c", code], env=env, capture_output=True, text=True
+        )
+        self.assertNotEqual(bad.returncode, 0)
 
     def test_cli_matches_launch_except_gpus(self):
         single = parser_options(launch.main)

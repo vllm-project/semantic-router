@@ -7,9 +7,16 @@
 # The eval runner rewrites the owner file for its job; release_lease() restores launch3's fields.
 # Drivers resolve the mirror before sourcing (MIRROR_SHA -> /data/dev2/src/<sha>[-src_training_decision2]):
 #   SRC=$MIRROR_SHA; [ -d /data/dev2/src/$SRC ] || SRC=$MIRROR_SHA-src_training_decision2
-TRACK=27b-m4b
-M4B=/data/dev2/runs/27b/m4b
-case "$GPU" in 0 | 1 | 2) ;; *) echo "GPU$GPU is outside the M4b allocation (node B GPU0-2)" >&2; exit 2 ;; esac
+# Milestone 5 reuses these drivers with DEV2_27B_LAUNCH_ALLOC=m5-b|m5-a (launch3's allocation: track 27b and
+# its GPUs) and M4B_ROOT=/data/dev2/runs/27b/m5; unset, both keep M4b's values.
+TRACK=$(python3 -c "import importlib; print(importlib.import_module('v2.27b.m4b.launch3').TRACK)")
+M4B=${M4B_ROOT:-/data/dev2/runs/27b/m4b}
+python3 - "$GPU" <<'EOF' || exit 2
+import importlib, sys
+launch3 = importlib.import_module("v2.27b.m4b.launch3")
+if not sys.argv[1].isdigit() or int(sys.argv[1]) not in launch3.ALLOWED_GPUS:
+    raise SystemExit(f"GPU{sys.argv[1]} is outside {launch3.ALLOCATION_TEXT}")
+EOF
 LEASE_KEEP=
 
 take_lease() {  # PURPOSE: the owner file must be ours and idle, co-tenants released or idle
