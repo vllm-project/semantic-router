@@ -7,13 +7,27 @@ Worktree `/home/xunliu/code/vllm-sr-dev2-data-hr2`, branch `xunzhuo/decision-2-t
 
 ## Log (newest first)
 
+- 2026-10-01 00:25 UTC+8 — scans + pass 1 done. Full PI-v4: 4,556 groups flagged, 998 on quarantining roles;
+  report-only hits disclosed (largest: HS3 vs A7q TRAIN 3,549 groups, HS3 vs v2 AHO H3 376, VitaminC vs H3 141).
+  Quarantine lists: 1,202 groups (TRAIN + DEV) and 1,180 DEV-near-TRAIN groups. Pass 1: TRAIN 33,293 / DEV 2,101.
+  **G4:** `indonli` FAIL (hypothesis-only .613 > .535) and `kob_boolq` FAIL (question-only .559 > .534) →
+  dropped; 9 families pass. Amendment 2 (review of 9 families, 216 rows, ≤ 9 errors) committed before sampling.
+
 - 2026-09-30 23:55 UTC+8 — continuation worker started (the first worker stopped silently ~12:01). Node A:
   `b1-25ec87a8db1e/` is empty (the first build stopped at its duplicate-id check; no candidate file exists).
   Kept the 3 uncommitted files (amendment 1 and its builder changes); PRM800K agreement now also records the
   alternative completions' ratings at every walked step (amendment 1 item 2 wording); builder registered in the
   eval-only guard test (G6); unit tests added.
 
-- 2026-10-01 00:55 UTC+8 — amendment 1 + fixes committed (`60a0b033d`), integration merged (`c54b8d444`,
+- 2026-10-01 00:18 UTC+8 — tooling `3bf56c149` mirrored; `node_a.sh 3bf56c149… scans` running (run dir
+  `b2-c54b8d444cac/`, logs in `logs/steps.log`). Done: G1 names PASS (0 hits); C1 source-term names over
+  raw + candidates: 0 sources found (769,706 rows, 31 files); PI-hr2 inventory `f25c95bf…` (7 roles,
+  11,552 rows); PI-hr2 scan 345 groups / 469 rows (HS3 338: Score5-DEV 259, HT-DEV v2 57, HT-DEV v1 27;
+  N-gram hits, mostly 1–3 units); PI-v4 quarantining scan 1,128 groups / 1,520 rows (HS3: A7q AHO 689,
+  Decision Bench v4 175, CSS15 156, v1 AHO a3 81; PRM800K: DBv4 11, public 231 3; VitaminC: v1 AHO a3 20);
+  DEV-vs-TRAIN self-scan: 1,286 of 3,143 DEV groups near a TRAIN group (HS3 837, PRM 281, KoBEST 84).
+  Waiting: full PI-v4 scan (report-only roles).
+- 2026-10-01 00:15 UTC+8 — amendment 1 + fixes committed (`60a0b033d`), integration merged (`c54b8d444`,
   pushed, mirrored). **Candidate build done** on node A (`b2-c54b8d444cac/cand/`): TRAIN 34,874 rows /
   28,332 groups (`45b56010…`), DEV 3,879 / 3,143 (`b0498c1f…`); Choice 12,499, Noul 17,754, Score 8,500;
   0 group merges; build-level conflicting duplicates 2 (VitaminC). Audit tooling added (`hr2/audit.py`,
