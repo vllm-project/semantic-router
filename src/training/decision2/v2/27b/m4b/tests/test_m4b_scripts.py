@@ -33,7 +33,8 @@ class ScriptSyntaxTest(unittest.TestCase):
 
     def test_gpu_allocation(self):
         common = (M4B / "common3.sh").read_text(encoding="utf-8")
-        self.assertIn('case "$GPU" in 0 | 1 | 2) ;;', common)
+        self.assertIn("int(sys.argv[1]) not in launch3.ALLOWED_GPUS", common)
+        self.assertIn("M4B=${M4B_ROOT:-/data/dev2/runs/27b/m4b}", common)
         self.assertIn("v2.27b.m4b.launch3 --name", common)
         self.assertIn('--gpus "$GPU"', common)
         for name in ("run_readout.sh", "run_formal.sh", "run_mlx.sh"):

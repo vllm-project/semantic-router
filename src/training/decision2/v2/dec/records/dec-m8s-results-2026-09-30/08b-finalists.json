@@ -1,0 +1,354 @@
+{
+ "best_proxy": 42.074868346057976,
+ "finalists": [
+  {
+   "G": 0.013124999999999942,
+   "H": 0.28268176388632515,
+   "H3": 0.3894751202678205,
+   "T": 0.62625,
+   "by_type": {
+    "choice": 634,
+    "noul": 220,
+    "score": 148
+   },
+   "eligible": true,
+   "htdev2": "TIE",
+   "htdev2_delta": 0.005389882015960912,
+   "htdev2_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-D2-a1_2.htdev2.json",
+   "htdev2_sha256": "038f0fb6ceeafe91a05f6a2a5425fc6f951ffd0758a0e69453069c8a019e2f1f",
+   "line": "D2",
+   "point": "08b-D2-a1_2",
+   "proxy": 42.074868346057976,
+   "reasons": [],
+   "score5t_check_flags": [
+    "COLLAPSE",
+    "NO-GAIN"
+   ],
+   "score5t_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-D2-a1_2.score5t.json",
+   "score5t_sha256": "8ef4f57f9d4abf48f3bbe016cc94984b7d41557cc9e2defa646ec6b4e876eaad",
+   "slot": 1,
+   "step": "1/2"
+  },
+  {
+   "G": 0.007499999999999951,
+   "H": 0.26634427757909396,
+   "H3": 0.38503480914135213,
+   "T": 0.620625,
+   "by_type": {
+    "choice": 631,
+    "noul": 215,
+    "score": 147
+   },
+   "eligible": true,
+   "htdev2": "TIE",
+   "htdev2_delta": -0.002309634888484957,
+   "htdev2_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-C-a1_3.htdev2.json",
+   "htdev2_sha256": "de3f52ba0344875523d46ab899b96d8fb38b19b9f47dd8bbb928390ec26343e8",
+   "line": "C",
+   "point": "08b-C-a1_3",
+   "proxy": 40.65709252670746,
+   "reasons": [],
+   "score5t_check_flags": [
+    "COLLAPSE",
+    "NO-GAIN"
+   ],
+   "score5t_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-C-a1_3.score5t.json",
+   "score5t_sha256": "5fd178c477754e9adfdf0e8d1a7dd47a3ff75b7a1e87ae8cbd9bc6be587957ed",
+   "slot": 2,
+   "step": "1/3"
+  }
+ ],
+ "lines": {
+  "C": [
+   {
+    "G": 0.003750000000000031,
+    "H": 0.2652415074206288,
+    "H3": 0.368548219622543,
+    "T": 0.6168750000000001,
+    "by_type": {
+     "choice": 658,
+     "noul": 223,
+     "score": 106
+    },
+    "eligible": false,
+    "htdev2": "TIE",
+    "htdev2_delta": -0.00034125662239231636,
+    "htdev2_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-C-a1.htdev2.json",
+    "htdev2_sha256": "85fedc25c1b06d257c64d9efa31d4c517bd8530f4f650d7943c2c1b0ac9946cf",
+    "point": "08b-C-a1",
+    "proxy": 40.45007477002983,
+    "reasons": [
+     "type score 106 < floor 147",
+     "family set_reconciliation 106/400 below reference - 0.10"
+    ],
+    "score5t_check_flags": [
+     "COLLAPSE",
+     "NO-GAIN"
+    ],
+    "score5t_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-C-a1.score5t.json",
+    "score5t_sha256": "3aae722a15733ad535a6b965f8f6228403709fbf385bf0db53ca9c80e61019b9",
+    "step": "1"
+   },
+   {
+    "G": 0.007499999999999951,
+    "H": 0.2709186700089547,
+    "H3": 0.38338397818452635,
+    "T": 0.620625,
+    "by_type": {
+     "choice": 638,
+     "noul": 219,
+     "score": 136
+    },
+    "eligible": false,
+    "htdev2": "TIE",
+    "htdev2_delta": -0.0010765779872422554,
+    "htdev2_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-C-a1_2.htdev2.json",
+    "htdev2_sha256": "9ef263259105b1bd3318a5090f16d66cab708e414a676c2af64952f3b48c0b68",
+    "point": "08b-C-a1_2",
+    "proxy": 41.004743576116596,
+    "reasons": [
+     "type score 136 < floor 147"
+    ],
+    "score5t_check_flags": [
+     "COLLAPSE",
+     "NO-GAIN"
+    ],
+    "score5t_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-C-a1_2.score5t.json",
+    "score5t_sha256": "1bcc261d083d5a848c7db3d79f8be8ba3ab6472180360afc3f519ca138dadc4c",
+    "step": "1/2"
+   },
+   {
+    "G": 0.007499999999999951,
+    "H": 0.26634427757909396,
+    "H3": 0.38503480914135213,
+    "T": 0.620625,
+    "by_type": {
+     "choice": 631,
+     "noul": 215,
+     "score": 147
+    },
+    "eligible": true,
+    "htdev2": "TIE",
+    "htdev2_delta": -0.002309634888484957,
+    "htdev2_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-C-a1_3.htdev2.json",
+    "htdev2_sha256": "de3f52ba0344875523d46ab899b96d8fb38b19b9f47dd8bbb928390ec26343e8",
+    "point": "08b-C-a1_3",
+    "proxy": 40.65709252670746,
+    "reasons": [],
+    "score5t_check_flags": [
+     "COLLAPSE",
+     "NO-GAIN"
+    ],
+    "score5t_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-C-a1_3.score5t.json",
+    "score5t_sha256": "5fd178c477754e9adfdf0e8d1a7dd47a3ff75b7a1e87ae8cbd9bc6be587957ed",
+    "step": "1/3"
+   }
+  ],
+  "D1": [
+   {
+    "G": 0.02312499999999995,
+    "H": 0.2824440901109156,
+    "H3": 0.3791058396865961,
+    "T": 0.63625,
+    "by_type": {
+     "choice": 654,
+     "noul": 232,
+     "score": 132
+    },
+    "eligible": false,
+    "htdev2": "TIE",
+    "htdev2_delta": 0.01635096512950379,
+    "htdev2_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-D1-a1.htdev2.json",
+    "htdev2_sha256": "978490367d699084e15b01aef1ec9c855cc12f1237628c7b572259640724feef",
+    "point": "08b-D1-a1",
+    "proxy": 42.39163270423422,
+    "reasons": [
+     "type score 132 < floor 147"
+    ],
+    "score5t_check_flags": [
+     "COLLAPSE",
+     "NO-GAIN"
+    ],
+    "score5t_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-D1-a1.score5t.json",
+    "score5t_sha256": "91816e325ba41ce71ffd19755a774fa6494dcd47af1c82e571f2daf83c67ff61",
+    "step": "1"
+   },
+   {
+    "G": 0.011874999999999969,
+    "H": 0.27728540069445307,
+    "H3": 0.38630079315617655,
+    "T": 0.625,
+    "by_type": {
+     "choice": 632,
+     "noul": 224,
+     "score": 144
+    },
+    "eligible": false,
+    "htdev2": "TIE",
+    "htdev2_delta": 0.00788098719315844,
+    "htdev2_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-D1-a1_2.htdev2.json",
+    "htdev2_sha256": "8b0ddad7a75c52b0a66c03cde4c4a38998b37073cb6db1a29f27d0ad5d1cc833",
+    "point": "08b-D1-a1_2",
+    "proxy": 41.62972200652236,
+    "reasons": [
+     "type score 144 < floor 147"
+    ],
+    "score5t_check_flags": [
+     "COLLAPSE",
+     "NO-GAIN"
+    ],
+    "score5t_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-D1-a1_2.score5t.json",
+    "score5t_sha256": "88a709c3aa22e7344dbc05b02bdce0c2c8783c179695c5f2e942f51e633fb8ad",
+    "step": "1/2"
+   },
+   {
+    "G": 0.004374999999999907,
+    "H": 0.2688574150091784,
+    "H3": 0.3858011804309631,
+    "T": 0.6174999999999999,
+    "by_type": {
+     "choice": 628,
+     "noul": 215,
+     "score": 145
+    },
+    "eligible": false,
+    "htdev2": "TIE",
+    "htdev2_delta": 0.0035929704874739787,
+    "htdev2_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-D1-a1_3.htdev2.json",
+    "htdev2_sha256": "07445b9bd4caa5bd6553cada5fec9432e2103c660c2aa3633cf51796538bca17",
+    "point": "08b-D1-a1_3",
+    "proxy": 40.74548487478921,
+    "reasons": [
+     "type score 145 < floor 147"
+    ],
+    "score5t_check_flags": [
+     "COLLAPSE",
+     "NO-GAIN"
+    ],
+    "score5t_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-D1-a1_3.score5t.json",
+    "score5t_sha256": "3436d71ed96ef2f6565df66ced5616ea2abcc21a6ef822c5772905dba6c805cc",
+    "step": "1/3"
+   }
+  ],
+  "D2": [
+   {
+    "G": 0.028749999999999942,
+    "H": 0.2837218465901056,
+    "H3": 0.38423789979357187,
+    "T": 0.641875,
+    "by_type": {
+     "choice": 662,
+     "noul": 230,
+     "score": 135
+    },
+    "eligible": false,
+    "htdev2": "TIE",
+    "htdev2_delta": 0.012468322376165686,
+    "htdev2_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-D2-a1.htdev2.json",
+    "htdev2_sha256": "bbbeedaab4b9f70daab19f988793830cc77e2fb885922f272600ef3046e43384",
+    "point": "08b-D2-a1",
+    "proxy": 42.674812276098415,
+    "reasons": [
+     "type score 135 < floor 147"
+    ],
+    "score5t_check_flags": [
+     "COLLAPSE",
+     "NO-GAIN"
+    ],
+    "score5t_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-D2-a1.score5t.json",
+    "score5t_sha256": "8c43cf2399200c1d74f9f303e2079c93059e0d59109ef6072572b40d0a2ff5b8",
+    "step": "1"
+   },
+   {
+    "G": 0.013124999999999942,
+    "H": 0.28268176388632515,
+    "H3": 0.3894751202678205,
+    "T": 0.62625,
+    "by_type": {
+     "choice": 634,
+     "noul": 220,
+     "score": 148
+    },
+    "eligible": true,
+    "htdev2": "TIE",
+    "htdev2_delta": 0.005389882015960912,
+    "htdev2_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-D2-a1_2.htdev2.json",
+    "htdev2_sha256": "038f0fb6ceeafe91a05f6a2a5425fc6f951ffd0758a0e69453069c8a019e2f1f",
+    "point": "08b-D2-a1_2",
+    "proxy": 42.074868346057976,
+    "reasons": [],
+    "score5t_check_flags": [
+     "COLLAPSE",
+     "NO-GAIN"
+    ],
+    "score5t_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-D2-a1_2.score5t.json",
+    "score5t_sha256": "8ef4f57f9d4abf48f3bbe016cc94984b7d41557cc9e2defa646ec6b4e876eaad",
+    "step": "1/2"
+   },
+   {
+    "G": 0.011249999999999982,
+    "H": 0.27525355429927245,
+    "H3": 0.3887187454259564,
+    "T": 0.624375,
+    "by_type": {
+     "choice": 627,
+     "noul": 218,
+     "score": 154
+    },
+    "eligible": true,
+    "htdev2": "TIE",
+    "htdev2_delta": 0.0070298237851167955,
+    "htdev2_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-D2-a1_3.htdev2.json",
+    "htdev2_sha256": "b52dfb922318ccdc29038a8043964572684b28e646462ef852c5455f032f3f55",
+    "point": "08b-D2-a1_3",
+    "proxy": 41.45617420428569,
+    "reasons": [],
+    "score5t_check_flags": [
+     "COLLAPSE",
+     "NO-GAIN"
+    ],
+    "score5t_file": "/data/dev2/runs/dec/m8s/lines/08b/diag/08b-D2-a1_3.score5t.json",
+    "score5t_sha256": "cb110a72b9c7910d3246f8f628cba029a1a7d94ca44c2e82dcdf84c1feb56325",
+    "step": "1/3"
+   }
+  ]
+ },
+ "not_finalists": [
+  {
+   "line": "D1",
+   "reason": "no point passes the gates",
+   "reasons": [
+    "type score 132 < floor 147",
+    "type score 144 < floor 147",
+    "type score 145 < floor 147"
+   ]
+  }
+ ],
+ "picks": {
+  "C": "08b-C-a1_3",
+  "D1": null,
+  "D2": "08b-D2-a1_2"
+ },
+ "proxy_dropped": {},
+ "readouts": {
+  "C": {
+   "file": "/data/dev2/runs/dec/m8s/lines/08b/readout/L-C.json",
+   "line": "L-C:1=08b-C-a1,1/2=08b-C-a1_2,1/3=08b-C-a1_3",
+   "sha256": "385e70f1439499a85942cf66c36da175a2cb7380fea6c8ac6719f2274c6cc778"
+  },
+  "D1": {
+   "file": "/data/dev2/runs/dec/m8s/lines/08b/readout/L-D1.json",
+   "line": "L-D1:1=08b-D1-a1,1/2=08b-D1-a1_2,1/3=08b-D1-a1_3",
+   "sha256": "9233c0460e3f64fd131a0230384ea1aada991eeb01ea991193549d1f1414988e"
+  },
+  "D2": {
+   "file": "/data/dev2/runs/dec/m8s/lines/08b/readout/L-D2.json",
+   "line": "L-D2:1=08b-D2-a1,1/2=08b-D2-a1_2,1/3=08b-D2-a1_3",
+   "sha256": "1c1f73d254286960c3c0002964b2747a10eeb9fa0df0cce1bb4d6959fe414170"
+  }
+ },
+ "reference": "08b-I",
+ "role": "development-only selection (prereg dec-m8s-prereg-2026-09-30.md); not a release or post-key score",
+ "schema": "dec-m8s-rules/1:finalists",
+ "tier": "08b"
+}

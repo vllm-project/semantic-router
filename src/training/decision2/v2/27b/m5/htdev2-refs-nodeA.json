@@ -1,0 +1,57 @@
+{
+  "schema": "decision2-27b-m5-htdev2-specs/1",
+  "node": "node A",
+  "note": "27B HT-DEV v2 references (coordinator 07:20): DEV2.0-27B's current weights (F1), A20r, F-b, AutoJev-27B, Eikos-27B. Own models run the 27B kernel adapter at 32,768 tokens from a fresh copy of DEV2.0-27B's scored cache 03b172f1 (every M3 / M4 / M4b formal run started from it); peers use their node-B kernel-image frozen caches, as in C1 event 3. A20r and F-b were copied node B -> node A over the private link and hash-checked (m5-state.md).",
+  "models": {
+    "dev2-27b-f1": {
+      "kind": "own",
+      "label": "DEV2.0-27B current weights (F1, M3-A soup; release revision 5683c6f0 = 32e7e8b1 weights)",
+      "model_path": "/data/dev2/runs/eval/m4/c1-event3-assets/f1/release/DEV2.0-26B@5683c6f0",
+      "calibration": "/data/dev2/runs/eval/m4/c1-event3-assets/f1/calibration.json",
+      "revision": "5683c6f04fb6ac88484cee82220f1a1a2fa43392",
+      "cache": {"frozen": "/data/dev2/runs/eval/m4/c1-event3-assets/f1/formal-triton-cache", "sha256": "03b172f1a6adeef6c6a6c491d04389b355c9d8579480008023f408c8659b502b"},
+      "mounts": ["/data/dev2/runs/eval/m4/c1-event3-assets/f1"],
+      "extra": {"model_id": "llm-semantic-router/DEV2.0-27B"}
+    },
+    "m4-a20r-soup": {
+      "kind": "own",
+      "label": "M4-A20r soup (successor being released; rank-64 LoRA soup, T = 1)",
+      "model_path": "/data/dev2/xfer/27b-m5/stage/M4-A20r-soup/soup/checkpoint",
+      "calibration": "/data/dev2/xfer/27b-m5/stage/M4-A20r-soup/package/calibration.json",
+      "revision": "checkpoint-sha256:2e07451107a2ca9735064cc01f7e43e8522b4bae48f2d77bdf29f7ea2fe6362c",
+      "cache": {"frozen": "/data/dev2/runs/eval/m4/c1-event3-assets/f1/formal-triton-cache", "sha256": "03b172f1a6adeef6c6a6c491d04389b355c9d8579480008023f408c8659b502b"},
+      "mounts": ["/data/dev2/xfer/27b-m5/stage/M4-A20r-soup/package"],
+      "extra": {"model_id": "llm-semantic-router/DEV2.0-27B"}
+    },
+    "m4b-f-b": {
+      "kind": "own",
+      "label": "F-b (M4b A1-soup, full fine-tune, FP32, CAL698)",
+      "model_path": "/data/dev2/xfer/27b-m5/stage/m4b/A1-soup/checkpoint",
+      "calibration": "/data/dev2/xfer/27b-m5/stage/m4b/F-b/package/calibration.json",
+      "revision": "checkpoint-sha256:5bcfa3d4bd1f83c5f4f999f9b8b68a01bb2bef69020c85661a2a937d9ecb02f9",
+      "cache": {"frozen": "/data/dev2/runs/eval/m4/c1-event3-assets/f1/formal-triton-cache", "sha256": "03b172f1a6adeef6c6a6c491d04389b355c9d8579480008023f408c8659b502b"},
+      "mounts": ["/data/dev2/xfer/27b-m5/stage/m4b/F-b/package"],
+      "extra": {"model_id": "llm-semantic-router/DEV2.0-27B"}
+    },
+    "autojev27": {
+      "kind": "peer",
+      "label": "AutoJev-27B (denis-pplx/autojev-27b@6f5b557e)",
+      "adapter": "autojev27",
+      "model_path": "/data/decision20-20260926/references/autojev27-6f5b",
+      "revision": "6f5b557e037f5edb25c7dc92dbc6553e5a19c015",
+      "cache": {"frozen": "/data/dev2/runs/eval/m4/c1-event3-assets/nodeB-kernel/autojev27-triton", "sha256": "12dfb6088ddd34eb4dd95313e6e99d9e94c085176b57670fa257d71ccfdb36c9"},
+      "mounts": ["/data/dev2/runs/eval/m4/c1-event3-assets/autojev-source"],
+      "extra": {"model_id": "denis-pplx/autojev-27b", "source": "/data/dev2/runs/eval/m4/c1-event3-assets/autojev-source"}
+    },
+    "eikos27b": {
+      "kind": "peer",
+      "label": "Eikos-27B BF16 (caiovicentino1/Eikos-27B@103a5647)",
+      "adapter": "eikos-27b",
+      "model_path": "/data/dev2/models/Eikos-27B@103a5647",
+      "revision": "103a5647c0131fd00abc165675fcee243d33a789",
+      "cache": {"frozen": "/data/dev2/runs/eval/m4/c1-event3-assets/nodeB-kernel/eikos27b-triton", "sha256": "92fcc0d3ee145b40c767b15fbd40e6367b45d092cf4d35b0f636c241069c7d35"},
+      "mounts": [],
+      "extra": {"model_id": "caiovicentino1/Eikos-27B"}
+    }
+  }
+}
