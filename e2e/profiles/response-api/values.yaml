@@ -23,6 +23,14 @@ config:
             provider: vllm
             endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
+      # Exercise Ollama's OpenAI-compatible Chat boundary against the same
+      # provider fixture while retaining Ollama-specific request projection.
+      - name: mock/ollama-chat
+        backend_refs:
+          - name: ollama-fixture
+            provider: ollama
+            endpoint: provider-mocker.default.svc.cluster.local:8000
+            weight: 1
       - name: mock/vision
         backend_refs:
           - name: test-endpoint
@@ -57,8 +65,30 @@ config:
             provider: openai
             base_url: http://provider-mocker.default.svc.cluster.local:8000/v1
             api_key_env: VSR_E2E_OPENAI_API_KEY
+      # This catalog binding uses Responses with a chat_template_kwargs
+      # reasoning transport. Route a dedicated probe through a decision so
+      # provider adaptation runs before dispatch to the simulator.
+      - name: nemotron-summary-responses
+        catalog: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
+        api_format: responses
+        backend_refs:
+          - name: mock-compactifai
+            provider: compactifai
+            base_url: http://provider-mocker.default.svc.cluster.local:8000/v1
+            api_key_env: VSR_E2E_OPENAI_API_KEY
   routing:
     decisions:
+      - name: reasoning_summary_template_decision
+        description: Exercise Responses summary projection through a chat template provider transport.
+        priority: 110
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: reasoning_summary_template_probe
+        modelRefs:
+          - model: nemotron-summary-responses
+            use_reasoning: true
       - name: default_decision
         description: Default catch-all decision
         priority: 1
@@ -91,6 +121,11 @@ config:
           - model: openai/gpt-oss-20b
             use_reasoning: false
     signals:
+      keywords:
+        - name: reasoning_summary_template_probe
+          operator: OR
+          keywords:
+            - reasoning_summary_template_probe
       input_modality:
         - name: image_input
           description: Request contains at least one image content part.
@@ -104,6 +139,8 @@ config:
       - name: openai/gpt-oss-20b
         capabilities: [chat]
       - name: mock/native-responses
+      - name: mock/ollama-chat
+        capabilities: [chat]
       # Explicit task declarations distinguish these custom simulator models.
       - name: mock/vision
         capabilities:

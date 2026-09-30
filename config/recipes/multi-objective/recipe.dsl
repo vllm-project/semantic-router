@@ -399,7 +399,7 @@ RECIPE speed-first (description = "Prefer the lowest observed latency while pres
     }
     PLUGIN response_cache {
       enabled: true
-      similarity_threshold: 0.9
+      mode: "exact"
       ttl_seconds: 900
     }
   }
@@ -490,7 +490,7 @@ RECIPE cost-first (description = "Keep every request local and spend additional 
     }
     PLUGIN response_cache {
       enabled: true
-      similarity_threshold: 0.88
+      mode: "exact"
       ttl_seconds: 3600
     }
   }
