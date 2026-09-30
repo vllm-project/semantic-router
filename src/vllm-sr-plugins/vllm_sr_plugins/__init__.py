@@ -22,6 +22,14 @@ def register() -> None:
     for architecture, target in _MODELS.items():
         if architecture not in supported:
             ModelRegistry.register_model(architecture, target)
+    from .decision2 import fp32
+
+    if fp32.enabled():
+        fp32.register_gdn_bf16_inputs()
+        get_logger("register").warning(
+            "%s=1: float32 engines feed the chunked gated-delta kernel bfloat16 inputs",
+            fp32.ENV,
+        )
     # vLLM keys its Qwen3.5 text-model config fix-ups by architecture name: the
     # gated-delta state dtype follows the checkpoint's mamba_ssm_dtype (FP32),
     # and text-only checkpoints drop the multimodal M-RoPE sections.
