@@ -139,6 +139,7 @@ the L128 training runs from `e76e56d4c`).
 
 ## Poll log (newest first)
 
+- 12:39Z: L128-s1 1,154 / 3,561, s2 1,152 / 3,561 (≈ 10.0 s/upd; ETA ≈ 19:20Z). Chain L128 and node A watchers alive; no incident
 - 12:20Z: L128-s1 1,038 / 3,561, s2 1,036 / 3,561 (9.7–9.9 s/upd; ETA ≈ 19:00Z). SELECT700 at 892: s1 .894, s2 .903 (M4-A20r seeds .859 / .880). All processes alive
 - 11:48Z: L128-s1 858 / 3,561, s2 848 / 3,561 (9.5–9.8 s/upd; ETA ≈ 19:00Z). Chain L128 and node A watchers alive; no incident
 - 11:17Z: L128-s1 669 / 3,561, s2 656 / 3,561 (9.8–9.9 s/upd; ETA ≈ 19:05Z). Leases node B GPU5 / node A GPU2 running the L128 full containers; chain L128 and node A watchers alive
