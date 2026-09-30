@@ -267,27 +267,6 @@ export interface ConfigVersion {
 
 export type EditorMode = 'dsl' | 'visual'
 
-export interface EditorState {
-  /** Current DSL source text in the editor */
-  dslSource: string
-  /** Compiled YAML output */
-  yamlOutput: string
-  /** Compiled CRD output */
-  crdOutput: string
-  /** Current diagnostics from validation */
-  diagnostics: Diagnostic[]
-  /** Whether WASM runtime is loaded and ready */
-  wasmReady: boolean
-  /** Loading state for async operations */
-  loading: boolean
-  /** Current active editor mode */
-  mode: EditorMode
-  /** Whether there are unsaved changes */
-  dirty: boolean
-  /** Last successful compile timestamp */
-  lastCompileAt: number | null
-}
-
 // ---------- WASM Bridge Interface ----------
 
 export interface WasmBridge {
