@@ -1,0 +1,117 @@
+{
+ "name": "m8-kd",
+ "note": "9B M8: DEV2.0-27B (A20r) teacher targets on M7's K-mix top-up rows (arm C's TRAIN, byte for byte). prompts: one gold-free runtime prompt per row in 3 shards + the human-rated rows S (M6's frozen soft-target rule on each row's XL r2 pool). teacher: D1 = A20r distributions (scored runtime, T = 1) on every row; D2 = on S only (gold on every other row). The control is M7's C line (own-Lux targets on every row).",
+ "shards": 3,
+ "control": {
+  "train": {
+   "file": "m7:data/m7-topup/build/C/train.jsonl",
+   "sha256": "eb55dbb22e87353b7bf33a92186c4c7167c90a02d8c3a1519faff31e4de8ec5e"
+  },
+  "teacher": {
+   "file": "m7:data/m7-topup/build/C/teacher.jsonl",
+   "sha256": "babd72c570cd850dc7a338783ab20c7d01f2a1f3e91c32888323e43982bb88a7"
+  }
+ },
+ "ids": {
+  "file": "m3b:xl-r2-a4/upload/m3/mixtures/xl-r2/mx-xl-full-r2.ids.jsonl",
+  "sha256": "7843afb7b2bbb315902b6748d6559532f384283d8efd836b935daac5f55dbd4a"
+ },
+ "soft_target_rule": {
+  "pools": [
+   "A0s-strict",
+   "A7g",
+   "A7h",
+   "A7i",
+   "A7k",
+   "A7m",
+   "A7o",
+   "A7p",
+   "A7q",
+   "A7r",
+   "A7s",
+   "E11",
+   "G2",
+   "G4h",
+   "G6",
+   "H1",
+   "H3",
+   "H5",
+   "H6",
+   "H7",
+   "H8",
+   "V1:A1",
+   "V1:A2",
+   "V1:A3",
+   "V1:A4v2h",
+   "V1:A5",
+   "V1:A6g",
+   "V1:A6h"
+  ],
+  "human_sources": {
+   "A0s-strict": [
+    "google_goemotions_official_train",
+    "legacy:snli",
+    "legacy:stage3_replay"
+   ],
+   "A7k": [
+    "*"
+   ],
+   "A7q": [
+    "*"
+   ],
+   "A7s": [
+    "*"
+   ],
+   "H1": [
+    "dbpedia14_train",
+    "multiwoz22_train",
+    "scitail_train",
+    "taskmaster2_train"
+   ],
+   "H5": [
+    "mtop_train"
+   ],
+   "H6": [
+    "argq30k_train",
+    "jglue_jsts_v1.3_train",
+    "klue_sts_train",
+    "mlqepe_train",
+    "onestop_english"
+   ],
+   "H8": [
+    "sentimix_spanglish_train"
+   ],
+   "V1:A1": [
+    "*"
+   ],
+   "V1:A5": [
+    "jglue_jnli_v1.3_train",
+    "klue_ynat_train"
+   ],
+   "V1:A6h": [
+    "*"
+   ]
+  },
+  "replay_source": "legacy:stage3_replay"
+ },
+ "teacher": {
+  "repo": "llm-semantic-router/DEV2.0-27B",
+  "revision": "5323310327e52d4eadd119cd10accac9b106c97d",
+  "model_sha256": "2e07451107a2ca9735064cc01f7e43e8522b4bae48f2d77bdf29f7ea2fe6362c",
+  "checkpoint": "27b:M4-A20r-soup/soup/checkpoint",
+  "base": "Qwen/Qwen3.8-27B (node A /data/decision20-20260926/models/Qwen3.8-27B)",
+  "calibration": "27b:M4-A20r-soup/package/calibration.json",
+  "calibration_sha256": "518e19cd0f89a6e8f63e666a02c9ca4fc8743f873c765183d1e745f476cd3157",
+  "temperatures": {
+   "choice": 1.0,
+   "noul": 1.0,
+   "score": 1.0
+  },
+  "max_length": 32768,
+  "adapter_module": "v2.27b.typed_collect_kernel",
+  "runtime_mirror": "ff660322a76b04c4774fdb6aaa31e5af2a45743e",
+  "image": "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1",
+  "frozen_cache": "27b:M4-A20r-soup/formal/triton-cache",
+  "scored_run": "27b:M4-A20r-soup/formal (COLLECT.json e4502a34...)"
+ }
+}

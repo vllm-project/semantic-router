@@ -76,3 +76,14 @@ replaced by the HT-DEV v2, PN1 dev and MLX-DEV-9B screens. Node wrappers in `lux
 follow M6's; `cont.sh` continues a K seed with `v2.dec.train_dec --init decision2`, `line.sh`
 builds a soup and its interpolations and reads them, `screens.sh` scores the screens;
 `dryrun_test.sh` exercises them locally.
+
+Milestone 8 (cross-size distillation from DEV2.0-27B): `lux9b/m8_data.py` (CPU; `prompts` /
+`teacher`) turns M7's K-mix top-up TRAIN (arm C) into gold-free prompts for DEV2.0-27B's scored
+runtime (the row's prompt text is rebuilt exactly by the runtime's `question_to_row`) and the
+teacher predictions (T = 1) into the D1 (every row) and D2 (M6's human-rated rows only) teacher
+files, with each arm's TRAIN the control's byte for byte. `lux9b/m8_rules.py` (`early` / `recipe`)
+applies the member-1 early stop against M7's matched control member and checks that a continuation's
+trainer contract equals the control's except the teacher; the alpha rule and finalists are
+`lux9b.m7_rules`'s. Node wrappers in `lux9b/m8/` follow M7's on GPUs lent by the ~27B track (own
+lease entry `owner.9b-m8`); `teacher.sh` runs the 27B collector in its kernel image with a private
+copy of the scored run's frozen cache and a parity check; `dryrun_test.sh` exercises them locally.
