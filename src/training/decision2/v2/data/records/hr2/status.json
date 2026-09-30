@@ -1,0 +1,18 @@
+{
+ "schema": "decision2.hr2.status.v1",
+ "release_safe": false,
+ "reason": "preregistered blind label review failed P1 and P2 (13 / 216 gold errors, 6.02%, exact 95% upper 10.07%; population-weighted 6.50%); fix rule F1 had no family to drop; published flagged, not tuned further",
+ "review": {
+  "n": 216,
+  "errors": 13,
+  "error": 0.060185,
+  "error_cp95_upper": 0.10072,
+  "weighted_error": 0.065009,
+  "P1": false,
+  "P2": false,
+  "P3": true
+ },
+ "gold_errors_removed_from_train": 13,
+ "families_dropped_by_shortcut_gate": ["indonli", "kob_boolq"],
+ "prereg": "v2/data/records/hr2-prereg-2026-09-30.md (amendments 1 and 2)"
+}

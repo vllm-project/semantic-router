@@ -11,6 +11,8 @@
 #   node_a.sh <commit> splits   R3 packet from review/answers/{r1,r2}.*.jsonl
 #   node_a.sh <commit> score    review report and gold-error ids (review/answers/r3.jsonl if any)
 #   node_a.sh <commit> final    finalize pass 2, freeze, isolation (G7), tokens and stats (G5, G8)
+#   node_a.sh <commit> hf-assemble   m5/hr2 upload tree (registry.json inside) and the leak guard
+#   node_a.sh <commit> hf-upload     private upload with the HF CLI, pinned revision, read-back check
 set -euo pipefail
 umask 077
 SHA=$1
@@ -220,8 +222,79 @@ final() {
     --tokens "$Z/hr2.dev.tokens.jsonl" --out "$Z/stats.json"
 }
 
+hf_assemble() {
+  fresh hf
+  local spec=$R/hf/spec.json
+  python3 - "$R" "$CAND" "$CODE/v2/data/records" > "$spec" <<'EOF'
+import json, pathlib, sys
+run, cand, rec = map(pathlib.Path, sys.argv[1:])
+items = [
+    (rec / "hr2/hf-readme.md", "README.md"),
+    (rec / "hr2/status.json", "status.json"),
+    (rec / "license-registry-hr2.json", "license-registry-hr2.json"),
+    (run / "final/out/hr2.train.jsonl", "hr2.train.jsonl"),
+    (run / "final/out/hr2.dev.jsonl", "hr2.dev.jsonl"),
+    (run / "final/out/final.json", "final.json"),
+    (cand / "build.json", "build.json"),
+    (run / "freeze/hr2.train.tokens.jsonl", "hr2.train.tokens.jsonl"),
+    (run / "freeze/hr2.dev.tokens.jsonl", "hr2.dev.tokens.jsonl"),
+    (run / "freeze/hr2.train.manifest.json", "train.manifest.json"),
+    (run / "freeze/hr2.dev.manifest.json", "dev.manifest.json"),
+    (run / "freeze/stats.json", "stats.json"),
+    (run / "freeze/isolation.json", "isolation.json"),
+    (run / "overlap/piv4.public.json", "audits/overlap-piv4.public.json"),
+    (run / "overlap/piv4q.public.json", "audits/overlap-piv4q.public.json"),
+    (run / "overlap/pihr2.public.json", "audits/overlap-pihr2.public.json"),
+    (run / "overlap/self.public.json", "audits/overlap-dev-vs-train.public.json"),
+    (run / "quarantine/lists/quarantine.public.json", "audits/quarantine.public.json"),
+    (run / "names/g1.json", "audits/names-g1.json"),
+    (run / "names/c1-names.json", "audits/c1-names.json"),
+    (run / "review/answers/review.public.json", "audits/review.public.json"),
+    (run / "review/sample/sample.json", "audits/review-sample.json"),
+]
+items += [(p, f"audits/shortcut/{p.name}") for p in sorted((run / "shortcut").glob("*.json"))]
+print(json.dumps([{"src": str(src), "dst": "hr2/" + dst} for src, dst in items], indent=1))
+EOF
+  run hf-assemble -v "$R:$R:ro" -v "$R/hf:$R/hf:rw" "$IMG" -m v2.data.assemble_hf_upload \
+    --spec "$spec" --out-dir "$R/hf/upload/m5"
+  local rc=0
+  (cd "$R/hf/upload/m5/hr2" && bash "$CODE/v2/common/check_no_private.sh" -- .) \
+    > "$R/logs/hf-leak-guard.out" 2> "$R/logs/hf-leak-guard.err" || rc=$?
+  echo "leak-guard exit=$rc $(tail -1 "$R/logs/hf-leak-guard.err")"
+  find "$R/hf/upload/m5/hr2" -type f -printf '%s\t%P\n' | sort -k2
+}
+
+hf_upload() {
+  export HF_HUB_CACHE=/data/dev2/hf-cache HF_HUB_DISABLE_TELEMETRY=1
+  local repo=llm-semantic-router/decision-2.0-training-data tree=$R/hf/upload/m5/hr2
+  local py=/data/dev2/tools/hf-cli/bin/python log=$R/logs/hf-upload.log
+  local msg="HR2 human-rated data (NOT release-safe: blind review 13/216): m5/hr2 (TRAIN 27,725, DEV 1,615; build ${SHA:0:12})"
+  info() {
+    hf datasets info "$repo" --expand private,sha | "$py" -c 'import json,sys; d=json.load(sys.stdin); print(d["private"], d["sha"])'
+  }
+  [ -f "$tree/registry.json" ] || { echo "no assembled tree" >&2; exit 1; }
+  [ ! -e "$R/hf/readback" ] || { echo "$R/hf/readback exists" >&2; exit 1; }
+  local before parent after head rev
+  read -r before parent < <(info)
+  [ "$before" = "True" ] || { echo "dataset is not private; refusing to upload" >&2; exit 1; }
+  echo "$(date -u +%FT%TZ) parent=$parent private=$before" | tee -a "$log"
+  hf upload "$repo" "$tree" m5/hr2 --repo-type dataset --commit-message "$msg" >> "$log" 2>&1
+  read -r after head < <(info)
+  [ "$after" = "True" ] || { echo "dataset private flag changed" >&2; exit 1; }
+  rev=$("$py" "$CODE/v2/data/hr2/hf_readback.py" pin "$repo" "$parent" "$msg")
+  echo "$(date -u +%FT%TZ) head=$head revision=$rev private=$after" | tee -a "$log"
+  mkdir -m 700 "$R/hf/readback"
+  hf download "$repo" --repo-type dataset --revision "$rev" --include 'm5/hr2/*' \
+    --local-dir "$R/hf/readback" > /dev/null
+  cmp "$R/hf/readback/m5/hr2/registry.json" "$tree/registry.json"
+  "$py" "$CODE/v2/data/hr2/hf_readback.py" verify "$repo" "$rev" m5/hr2 "$tree" \
+    "$R/hf/readback/m5/hr2" | tee "$R/hf/readback.json"
+}
+
 case "$STAGE" in
   scans | pass1 | review | splits | score | final) "$STAGE" ;;
+  hf-assemble) hf_assemble ;;
+  hf-upload) hf_upload ;;
   *)
     echo "unknown stage $STAGE" >&2
     exit 2
