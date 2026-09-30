@@ -205,6 +205,25 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 00:50 — **Router-model coverage analysis (9c17b169): broaden the API and adapter layers into a general
+  router-model runtime.** Recorded in gist file `10-open-decision-runtime-decisions.md` §9b.
+  - All 40 registry models are fixed-task encoders, embedders or rerankers.
+  - **Recommended:**
+    - four surfaces (`/v1/decisions`, `/v1/classify` as first-class, `/v1/embeddings`, `/v1/rerank`) plus
+      `/v1/models`, `/health`, `/metrics`;
+    - new adapter families `task_heads` (sequence / scores / regression / token / pooled / relevance heads; text / pair /
+      grounded renderers; per-head overflow) and `multimodal_embedding`.
+  - **Corrections:**
+    - per-head overflow (reject / truncate / window) for fixed heads, while decision models keep "invalid";
+    - three token limits;
+    - representation identity in cache keys;
+    - heads separated from graph variants in the manifest.
+  - **Stage-3 dispositions:** replace most non-Vela models with Vela heads (label remaps via config migrate). The
+    embedding default → Vela Embedding, with a re-embedding migration. Keep Qwen3Guard / chat paths external. Retire
+    unused candle paths. Port the MLP selector.
+  - **Open, user to decide:** the NLI model disposition; OpenVINO (retire vs backend plugin).
+  - The proposal v2 must include all of this. Waiting only on the Vela-2.0-Unified check (7b239c1e).
+
 - 2026-10-01 00:45 — **Open Decision Runtime proposal v1 published** (writer 28bfbd64).
   - Secret gist https://gist.github.com/Xunzhuo/be9324aed0fec68148248e27362efcde; repo copy
     `src/training/decision2/v2/serving/open-decision-runtime-proposal.md` (commit `a4e0b54d5`; integration
