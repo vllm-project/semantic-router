@@ -45,8 +45,6 @@ const DashboardPage: React.FC = () => {
 
   const fetchConfig = useCallback(async () => {
     setConfig(await fetchDashboardJson<RouterConfig>('/api/router/config/all', 'Router config'))
-    setLastUpdated(new Date())
-    setError(null)
   }, [])
 
   const statusRequest = useMemo(() => createVisibilityAwareRequest(fetchStatus), [fetchStatus])
@@ -77,18 +75,9 @@ const DashboardPage: React.FC = () => {
         // Ignore transient status polling errors.
       })
     }
-    const pollConfig = () => {
-      void configRequest.run().catch((pollError) => {
-        setError(
-          pollError instanceof Error ? pollError.message : 'Failed to refresh dashboard config',
-        )
-      })
-    }
-    const onVisibilityChange = () => {
-      if (!document.hidden) {
-        pollStatus()
-        pollConfig()
-      }
+    // Full refreshes settle config and status together before touching "Updated".
+    const refreshWhenVisible = () => {
+      if (!document.hidden) void fetchAll()
     }
     const onConfigDeployed = () => {
       void fetchAll()
@@ -96,16 +85,16 @@ const DashboardPage: React.FC = () => {
 
     void fetchAll()
     const statusInterval = window.setInterval(pollStatus, 10000)
-    const configInterval = window.setInterval(pollConfig, 30000)
+    const refreshInterval = window.setInterval(refreshWhenVisible, 30000)
     window.addEventListener('config-deployed', onConfigDeployed)
-    document.addEventListener('visibilitychange', onVisibilityChange)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
     return () => {
       window.clearInterval(statusInterval)
-      window.clearInterval(configInterval)
+      window.clearInterval(refreshInterval)
       window.removeEventListener('config-deployed', onConfigDeployed)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
     }
-  }, [configRequest, fetchAll, statusRequest])
+  }, [fetchAll, statusRequest])
 
   const signalStats = useMemo(
     () => (config ? countSignals(config) : { total: 0, byType: {} }),
