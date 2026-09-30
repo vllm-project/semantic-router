@@ -346,11 +346,7 @@ class TestK8sBackend:
                 args=[], returncode=1
             ),
         )
-        monkeypatch.setattr(
-            backend,
-            "_run_display",
-            lambda cmd: diagnostic_calls.append(cmd),
-        )
+        monkeypatch.setattr(backend, "_run_display", diagnostic_calls.append)
 
         with pytest.raises(SystemExit) as raised:
             backend._wait_for_pods()
@@ -372,11 +368,7 @@ class TestK8sBackend:
                 args=[], returncode=0
             ),
         )
-        monkeypatch.setattr(
-            backend,
-            "_run_display",
-            lambda cmd: diagnostic_calls.append(cmd),
-        )
+        monkeypatch.setattr(backend, "_run_display", diagnostic_calls.append)
 
         backend._wait_for_pods()
         assert diagnostic_calls == []
