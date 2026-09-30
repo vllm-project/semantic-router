@@ -203,6 +203,34 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 ~23:40 — **Decision Index architecture survey (INTERNAL; no Index scores anywhere public); proposal
+  drafting started with the recommended defaults** (the user left the outline question unanswered for ~3.3 h).
+  - **Survey findings** (counts only):
+    - 16 of the top 20 open entrants (21 of 31 models studied) are decoders reading **LM-head label-token logits** at
+      an answer position in one pass. None generates JSON.
+    - Scoring-head decoders (ours, AutoJev, Jev-Omni) are a minority. Encoders (ModernBERT marker heads, GLiNER2 on
+      DeBERTa-v3) own the frontier up to ~0.5B. There are 2 diffusion deciders.
+    - The API has converged on a System One call: `/v1/systemone` in most runtimes, **`/v1/decisions` in the top
+      model's runtime**.
+    - Shared-state amortisation, by prefix-cached branches or packed answer slots, is universal.
+  - **Runtime design update:**
+    - Tier 1 splits into **1a**, a vLLM generate runner for label-token deciders (stock vLLM with `allowed_token_ids` +
+      logprobs, prefix caching, thinking escalation), and **1b**, a vLLM pooling runner plus our plugin for scoring
+      heads.
+    - A large-resident placement class for MoE and ≥27B models.
+    - GLiNER / DeBERTa in Tier 0 only, so the ORT → MIGraphX move is critical-path.
+    - Diffusion is deferred.
+  - **Model-side levers**, recorded for future Decision generations: an MoE tier (Gemma-4-26B-A4B / Qwen3.5-35B-A3B
+    class: 27B-class quality at ~4B active compute; the brief listed gemma-4-26B-A4B as a 27B candidate); multi-question
+    packing; an optional stock-engine-friendly readout (label-token / last-slot head, which needs an A/B test); small
+    Tier-0 encoders; BF16 / FP8 serving.
+  - **Defaults adopted (the user may override):**
+    - Write the full English proposal now, adding prototype data later.
+    - Publish it as a **new SECRET gist**, with a copy at `src/training/decision2/v2/serving/open-decision-runtime-proposal.md`
+      on the integration branch.
+    - **MoE-base exploration for the 27B tier after 27B M5 reports** (a preregistered milestone), not now.
+  - Writer worker 28bfbd64 is drafting (no Index scores, no secrets).
+
 - 2026-09-30 20:20 — **4B M8 (distillation from DEV2.0-27B): no successor. PROGRAM CONCLUSION: stop teacher and
   recipe-top-up arms at every size; HR2 is the remaining lever** (records `v2/dec/records/dec-m8-*`; gist 04;
   integration `e17c0021a`; 3.90 of 24 GPU-h).
