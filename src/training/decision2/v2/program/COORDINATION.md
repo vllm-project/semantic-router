@@ -205,6 +205,54 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 00:05 — **Final model-runtime design, the core section for the proposal revision** (discussed with the
+  user).
+  - **Principles:**
+    - (1) Decision logic (planner, renderer, readout, calibration, answer assembly, head compute) lives in the Rust core,
+      in-process. Backends only map tokens to hidden states / logits.
+    - (2) The in-process vs out-of-process split follows isolation needs, not model names.
+    - (3) Placement is gated by parity receipts.
+    - (4) Engine mode and router mode share one runtime.
+  - **Seven modules:**
+    1. API: `Decide`, `Models`, `Health`; HTTP + UDS.
+    2. Planner / scheduler: grouping, batching, deadlines, admission, confidence cascades, state cache.
+    3. Readout adapters (plugins): label_token / head / encoder_marker / span / generative (escalation) / diffusion
+       (future).
+    4. Backend trait with a capability descriptor:
+       - in-process: ORT, candle, llama.cpp on CPU, Rust head compute;
+       - out-of-process supervised workers over UDS: vLLM (generate / pooling + plugin), the Python reference runtime,
+         llama.cpp on GPU;
+       - remote.
+    5. Registry and artifacts: manifests, pinning, cache, licence policy, variants (ONNX / GGUF / BF16 / bf16z), and
+       parity receipts per model × backend × dtype × hardware.
+    6. Placement engine: hardware probe + requirements + receipts + policy.
+    7. Supervisor and observability: spawn, health, restart, readiness, GPU memory budget, degradation; metrics,
+       traces, shadow parity; the eval harness uses the same runtime.
+  - **In-process:**
+    - all decision logic;
+    - encoders ≤ 0.5B via ORT / candle (CPU or GPU EPs);
+    - small decoders on CPU / edge via llama.cpp or ORT GenAI.
+  - **Out-of-process:**
+    - GPU decoders ≥ 1B, hybrid GDN and multi-LoRA via vLLM;
+    - the Python reference runtime (byte-exact);
+    - llama.cpp when on GPU.
+  - **Remote:** MoE / ≥ 27B resident models, judges, diffusion.
+  - **Architectures:**
+    - encoders: BERT, RoBERTa / XLM-R, ModernBERT / mmBERT; DeBERTa and GLiNER2 on ORT / candle only;
+    - dense decoders: Qwen3 / 2.5, Llama, Gemma 3 / 4, Mistral;
+    - hybrids: Qwen3.5 / 3.6 / 3.8, Qwen3-Next, Mamba hybrids;
+    - MoE via vLLM.
+    - Readouts: label-token (single / multi-slot), heads, encoder markers, spans.
+    - LoRA and quantisation per backend.
+  - **Plugin points** (versioned, with compat CI):
+    - model manifests (data only in most cases);
+    - readout adapters (Rust trait);
+    - backends (Rust trait; out-of-process backends implement a narrow worker protocol: tokens + positions / label ids →
+      hidden states / logits).
+  - **Renderer placement:** start in the worker (the Python endpoint plugin, byte-exact to training). Target: the Rust
+    core, using HF tokenizers, with golden tests against the training renderer, so that workers become generic forward
+    servers.
+
 - 2026-09-30 23:59 — **Proposal revision items (from user discussion), to apply when the writer 28bfbd64 returns.**
   1. **Rename "Tier 1a / 1b".** It is ONE Tier 1 (local vLLM sidecar) with **two runner modes chosen per model by the
      manifest's readout field**:
