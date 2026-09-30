@@ -1,8 +1,8 @@
 # 9B M7 state (resume file)
 
-Updated: 2026-09-30 11:25 UTC+8 (03:25Z) — hand-off near the 5 h turn limit. **Two chains are running on node A;
-nothing needs relaunching.** Branch `xunzhuo/decision-2-training-9b` (merge-only into `xunzhuo/decision-2-training`;
-integration already holds `471efec85`).
+Updated: 2026-09-30 11:50 UTC+8 (03:50Z) — continuation worker (started 11:25 UTC+8). **Q stopped by its early
+rule; only chain `m7-gpu7` (C) is running; nothing needs relaunching.** Branch `xunzhuo/decision-2-training-9b`
+(merge-only into `xunzhuo/decision-2-training`; integration already holds `471efec85`).
 
 - Prereg `records/lux9b-m7-prereg-2026-09-30.md` (`3bbdd4349`, before any GPU job) + amendment 1
   `records/lux9b-m7-prereg-amendment-1-2026-09-30.md` (`317a8614e`, before any Q GPU job).
@@ -16,12 +16,12 @@ integration already holds `471efec85`).
 
 | Item | State |
 | --- | --- |
-| Preflights P / C / Q (member 1) | P PASS, C PASS (all gates); Q running at 03:21Z |
+| Preflights P / C / Q (member 1) | P PASS, C PASS, Q PASS (all gates) |
 | **P** (PN1-r2 ×2) | **STOPPED by its early rule** (`rules/early-P.json`): clean gold-no .047 vs C-m1 .714 (passes), SELECT .874 vs .859 (passes), **hop .949 vs .992 (−.042 < −.03)**. No further members, no line. Chain `m7-gpu6` ended |
-| **C** (K-mix control) | chain `m7-gpu7` (PID 3826223): C-m1 done, C-m2 training at 03:21Z, then C-m3..m5 (~17 min each), C5 line (~55 min), K5-a12 and Lux 1.0 screens. ETA ≈ 05:20Z |
-| **Q** (PN1-r2 ×1, amendment 1) | chain `m7-gpu6q` (PID 3842133): Q-m1 + preflights → Q-m1-e1 → early rule `rules/early-Q.json` (≈ 03:40Z) → if it continues Q-m2..m5 (~20 min each) → Q5 line. ETA ≈ 05:40Z |
+| **C** (K-mix control) | chain `m7-gpu7` (PID 3826223): C-m1, C-m2 done; C-m3 training from 03:34Z, then C-m4..m5 (~16 min each), C5 line (~55 min), K5-a12 and Lux 1.0 screens. ETA ≈ 05:35Z |
+| **Q** (PN1-r2 ×1, amendment 1) | **STOPPED by its early rule** (`rules/early-Q.json` `4df5d09b…`, 03:43Z): clean gold-no .052 vs C-m1 .714 (passes), SELECT .862 vs .859 (passes), **hop .945 vs .992 (−.047 < −.03)**; PAWS-X-6 yes .515, accuracy .966 (216 updates, 03:25–03:41Z). No further members, no line. Chain `m7-gpu6q` ended 03:43Z; GPU6 idle |
 | R = K-a13 re-read | done: typed DEV answers identical to M6 (1,600 / 1,600); HT-DEV v2 on the M7 path = eval reference (Δ 0.0000, H_dev2 .5636, TIE); PN1 dev hop .987, clean gold-no .262, PAWS-X-6 yes .626, acc .867; MLX-DEV-9B Noul-ML .846, Choice-ML .921, Score-ML .547 |
-| GPU-hours | 0.98 at 03:20Z (`m7_gpu_hours`); projection ≈ 10 of 24 |
+| GPU-hours | 1.74 at 03:44Z (`m7_gpu_hours`); projection ≈ 5 of 24 (C line + at most one formal run) |
 
 Data: P `e6a74ea9…`, C `eb55dbb2…`, Q `82496294…` (C rebuilt byte-identical by the Q build); exposure P / C / Q
 `groups: []`; MLX-DEV-9B panel `d07fe654…` (6,147 rows). Failed CPU builds before the prereg (no output, no GPU) are
@@ -36,8 +36,8 @@ Liveness / logs (never `pgrep -f`):
 
 1. When both chains print `chain ... done`: re-read the newest COORDINATION notes, then (CPU, node A)
    `cd /data/dev2/runs/9b/m7 && bash $L/rules.sh df6dcccc946799f9bc52d99bef099105dcf35986 rules-lines`
-   → `rules/rules-lines/{alpha-Q5,alpha-C5,finalists}.json` (P5 has no readouts and is skipped; priority P5, Q5, C5).
-   If Q stopped early, only C5 can yield a finalist.
+   → `rules/rules-lines/{alpha-C5,finalists}.json` (P5 and Q5 have no readouts and are skipped; priority P5, Q5, C5).
+   Q stopped early, so only C5 can yield a finalist.
 2. Per finalist NAME (e.g. `Q5-a12`): a lock record `records/lux9b-m7-formal-lock-NAME-2026-09-30.md` (checkpoint
    `m7/NAME-build/soup` model_sha256 from its `console.log`, calibration `m7/NAME-cal/calibration.json` SHA-256,
    rule-output hashes, `formal-m3/triton-cache` tree `af623300…`), committed and pushed **before** its formal run;
