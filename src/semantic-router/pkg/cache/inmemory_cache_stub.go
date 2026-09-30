@@ -2,7 +2,11 @@
 
 package cache
 
-import "context"
+import (
+	"context"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+)
 
 // InMemoryCache provides high-performance in-memory semantic caching
 type InMemoryCache struct {
@@ -11,6 +15,7 @@ type InMemoryCache struct {
 
 // InMemoryCacheOptions contains configuration for the in-memory cache
 type InMemoryCacheOptions struct {
+	EmbeddingProvider   embedding.Provider
 	Enabled             bool
 	SimilarityThreshold float32
 	MaxEntries          int

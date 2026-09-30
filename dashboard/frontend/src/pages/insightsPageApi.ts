@@ -20,15 +20,15 @@ export async function fetchInsightsJSON<T>(url: string, label: string): Promise<
 
 export function fetchInsightsRecord(recordId: string) {
   return fetchInsightsJSON<InsightsRecord>(
-    `/api/router/v1/router_replay/${recordId}`,
+    `/api/router/api/v1/observability/replays/${recordId}`,
     'insight record',
   )
 }
 
-export function fetchInsightsTrajectory(sessionId: string) {
-  const query = new URLSearchParams({ session_id: sessionId })
+export function fetchInsightsTrajectory(sessionId: string, recipe: string) {
+  const query = new URLSearchParams({ session_id: sessionId, recipe })
   return fetchInsightsJSON<InsightsTrajectory>(
-    `/api/router/v1/router_replay/trajectory?${query.toString()}`,
+    `/api/router/api/v1/observability/replays/trajectory?${query.toString()}`,
     'record trace',
   )
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -22,14 +23,9 @@ type VLLMJailbreakInference struct {
 	negativeIdx    int
 }
 
-// NewVLLMJailbreakInference creates a new vLLM-based jailbreak inference instance
-// Takes ExternalModelConfig directly. mapping must describe exactly two classes:
-// this backend only ever produces a binary safe/jailbreak verdict plus a single
-// confidence score (the underlying model is generative, not a calibrated
-// sequence classifier), so it cannot populate a meaningful distribution over
-// more than two classes. The positive class's index is resolved from mapping
-// rather than assumed to be a fixed position, so a mapping that orders classes
-// differently than {safe: 0, jailbreak: 1} is still scored correctly.
+// NewVLLMJailbreakInference prepares a categorical guard. Its binary mapping
+// maps unsafe to the configured positive label; safe and controversial retain
+// their original SourceLabel and use the negative policy label.
 func NewVLLMJailbreakInference(cfg *config.ExternalModelConfig, defaultThreshold float32, mapping *JailbreakMapping, positiveLabels []string) (*VLLMJailbreakInference, error) {
 	if cfg.ModelEndpoint.Address == "" {
 		return nil, fmt.Errorf("vLLM endpoint address is required for guardrail")
@@ -49,6 +45,9 @@ func NewVLLMJailbreakInference(cfg *config.ExternalModelConfig, defaultThreshold
 	}
 
 	client := newVLLMClientFromConfig(cfg)
+	if client.initErr != nil {
+		return nil, fmt.Errorf("guard connector preparation failed: %w", client.initErr)
+	}
 
 	// Use timeout from config, default to 30 seconds
 	timeout := cfg.GetTimeout()
@@ -78,19 +77,13 @@ func NewVLLMJailbreakInference(cfg *config.ExternalModelConfig, defaultThreshold
 	}, nil
 }
 
-// Classify implements the SequenceClassifierBackend interface. Since this
-// backend is generative (a chat model asked to judge safety), it cannot
-// produce a calibrated softmax distribution; it derives a 2-class
-// (safe/jailbreak) distribution from the model's own confidence estimate, so
-// callers always get a full distribution regardless of which backend is
-// configured, consistent with candle-backed jailbreak backends. The
-// distribution is written at whichever indices the configured jailbreak_mapping
-// actually assigns to the positive/negative labels (resolved once in the
-// constructor), not a hardcoded {0: safe, 1: jailbreak} layout - a mapping
-// that orders classes the other way around would otherwise silently invert
-// every verdict this backend reports. ctx bounds the vLLM call so the caller's
-// cancellation/deadline propagates instead of always running to v.timeout.
-func (v *VLLMJailbreakInference) Classify(ctx context.Context, text string) (SequenceClassificationResult, error) {
+// Classify explicitly reports that this generative backend has no probabilities.
+func (v *VLLMJailbreakInference) Classify(context.Context, string) (SequenceClassificationResult, error) {
+	return SequenceClassificationResult{}, tasks.ErrProbabilitiesUnavailable
+}
+
+// Decide preserves the model's actual safety verdict without invented scores.
+func (v *VLLMJailbreakInference) Decide(ctx context.Context, text string) (tasks.LabelDecision, error) {
 	ctx, cancel := context.WithTimeout(ctx, v.timeout)
 	defer cancel()
 
@@ -105,31 +98,31 @@ func (v *VLLMJailbreakInference) Classify(ctx context.Context, text string) (Seq
 		Temperature: 0.0, // Deterministic for safety checks
 	})
 	if err != nil {
-		return SequenceClassificationResult{}, fmt.Errorf("vLLM API call failed: %w", err)
+		return tasks.LabelDecision{}, fmt.Errorf("vLLM API call failed: %w", err)
 	}
 
 	if len(resp.Choices) == 0 {
-		return SequenceClassificationResult{}, fmt.Errorf("no choices in vLLM response")
+		return tasks.LabelDecision{}, fmt.Errorf("no choices in vLLM response")
 	}
 
 	// Parse model output - flexible to support multiple formats
 	output := resp.Choices[0].Message.Content
 	logging.Debugf("vLLM jailbreak detection response: %s", logging.ContentDescriptor(output))
-	isJailbreak, confidence, categories := v.parseSafetyOutput(output)
-	logging.Debugf("Parsed result: isJailbreak=%v, confidence=%.3f, categories=%v",
-		isJailbreak, confidence, categories)
-
-	// Write the distribution at whichever indices the configured
-	// jailbreak_mapping assigns to the positive/negative labels. The argmax
-	// class/confidence reported to callers is derived centrally from this
-	// distribution (deriveArgmax), not decided here from isJailbreak.
-	probabilities := make([]float32, 2)
-	probabilities[v.positiveIdx] = 1 - confidence
-	probabilities[v.negativeIdx] = confidence
-	if isJailbreak {
-		probabilities[v.positiveIdx] = confidence
-		probabilities[v.negativeIdx] = 1 - confidence
+	decision, err := v.parseSafetyOutput(output)
+	if err != nil {
+		return tasks.LabelDecision{}, err
 	}
-
-	return SequenceClassificationResult{Probabilities: probabilities}, nil
+	idx := v.negativeIdx
+	if decision.Label == "unsafe" {
+		idx = v.positiveIdx
+	}
+	label, ok := v.mapping.GetJailbreakTypeFromIndex(idx)
+	if !ok {
+		return tasks.LabelDecision{}, fmt.Errorf("unknown guard mapping index %d", idx)
+	}
+	decision.SourceLabel = decision.Label
+	decision.Label = label
+	return decision, nil
 }
+
+func (v *VLLMJailbreakInference) Close() error { return v.client.Close() }

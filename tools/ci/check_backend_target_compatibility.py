@@ -37,7 +37,7 @@ TARGET_FORMS = {
 # of that evidence fail together with the public compatibility claim.
 EVIDENCE = {
     Path("config/config.yaml"): (
-        "remote-secondary",
+        "remote-openai-reference",
         "base_url: https://api.example.com/v1",
         "api_key_env: VLLM_SR_PRIMARY_API_KEY",
     ),

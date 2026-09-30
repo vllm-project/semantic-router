@@ -104,10 +104,7 @@ Optional `annotate` and `filter` arms can be selected with `--arms`.
 Build the driver:
 
 ```bash
-cd src/semantic-router
-CGO_LDFLAGS="-L$PWD/../../candle-binding/target/release" \
-  go build -o ../../bin/fusioneval ./cmd/fusioneval
-cd ../..
+make build-fusioneval
 ```
 
 Prepare items and start the Ollama proxy:
@@ -198,4 +195,4 @@ and hardware alongside any shared result.
 | `items.py` | Export items for the cached-panel driver. |
 | `grade_only.py` | Grade cached-panel answer files. |
 | `compare_multiarm.py` | Compare cached-panel arms and write a verdict. |
-| `../../src/semantic-router/cmd/fusioneval` | Generate one panel and evaluate multiple arms in process. |
+| `../../bench/grounded_fusion/fusioneval` | Generate one panel and evaluate multiple arms in process. |

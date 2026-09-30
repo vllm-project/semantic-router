@@ -55,14 +55,14 @@ Key Features:
 import json
 import os
 import random
+import re
 import shutil
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import ClassVar
 
 import torch
-import torch.nn as nn
 from datasets import Dataset, load_dataset
 from peft import LoraConfig, PeftConfig, PeftModel, TaskType, get_peft_model
 from sklearn.metrics import (
@@ -71,6 +71,7 @@ from sklearn.metrics import (
     precision_recall_fscore_support,
 )
 from sklearn.model_selection import train_test_split
+from torch import nn
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
@@ -88,9 +89,34 @@ from common_lora_utils import (
     set_gpu_device,
     setup_logging,
 )
+from training_args_compat import create_training_arguments
 
 # Setup logging
 logger = setup_logging()
+
+# Dataset filters and training heuristics retain their historical thresholds.
+MIN_LONG_TEXT_CHARS = 15
+MAX_STANDARD_TEXT_CHARS = 500
+MIN_TEXT_CHARS = 10
+MAX_EXTENDED_TEXT_CHARS = 1000
+MIN_INTERLEAVED_TEXT_CHARS = 20
+MIN_PARTI_PROMPT_CHARS = 3
+MAX_FAL_TEXT_CHARS = 1500
+MAX_TEMPLATE_FRACTION = 0.5
+MIN_BALANCED_MODALITY_SHARE = 20
+MAX_BALANCED_MODALITY_SHARE = 50
+TINY_DATASET_LIMIT = 2000
+SMALL_DATASET_LIMIT = 6000
+MEDIUM_DATASET_LIMIT = 20000
+LARGE_DATASET_LIMIT = 50000
+HIGH_RANK_PARAMS_PER_SAMPLE = 800
+LOW_RANK_PARAMS_PER_SAMPLE = 20
+HIGH_CLASS_IMBALANCE_RATIO = 3.0
+MODERATE_CLASS_IMBALANCE_RATIO = 1.5
+AUGMENTATION_IMBALANCE_RATIO = 2.0
+HIGH_PARAMS_PER_SAMPLE = 500
+MODERATE_PARAMS_PER_SAMPLE = 200
+
 
 # ============================================================================
 # Label Definitions
@@ -104,7 +130,7 @@ LABEL_BOTH = "BOTH"  # Hybrid: text explanation + image generation
 MODALITY_LABELS = [LABEL_AR, LABEL_DIFFUSION, LABEL_BOTH]
 
 
-def create_tokenizer_for_model(model_path: str, base_model_name: str = None):
+def create_tokenizer_for_model(model_path: str, base_model_name: str | None = None):
     """
     Create tokenizer with model-specific configuration.
 
@@ -138,7 +164,7 @@ class VLLMSynthesizer:
     # Seed examples covering diverse domains for few-shot prompting.
     # Includes both EXPLICIT requests ("show me", "illustrate") and IMPLICIT ones
     # where the visual need is implied by the topic (e.g., "How do I tile a bathroom?").
-    SEED_BOTH_EXAMPLES = [
+    SEED_BOTH_EXAMPLES: ClassVar[list[str]] = [
         # ---- EXPLICIT: Education / Science ----
         "Explain how photosynthesis works and show me a diagram of the process",
         "Teach me about the water cycle with illustrations for each stage",
@@ -250,7 +276,9 @@ Here are some examples for reference:
 Now generate {count} NEW and DIVERSE prompts (do not repeat the examples above).
 Output ONLY the prompts, one per line, with no numbering or bullets."""
 
-    def __init__(self, endpoint: str, model: str = None, api_key: str = None):
+    def __init__(
+        self, endpoint: str, model: str | None = None, api_key: str | None = None
+    ):
         """
         Initialize the vLLM synthesizer.
 
@@ -269,7 +297,8 @@ Output ONLY the prompts, one per line, with no numbering or bullets."""
             return self.model
 
         try:
-            import requests
+            # Keep synthesis dependencies optional for dataset-only training.
+            import requests  # noqa: PLC0415
 
             resp = requests.get(
                 f"{self.endpoint}/models",
@@ -295,7 +324,7 @@ Output ONLY the prompts, one per line, with no numbering or bullets."""
         batch_size: int = 50,
         temperature: float = 0.9,
         max_retries: int = 3,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Synthesize 'BOTH' class prompts using the vLLM endpoint.
 
@@ -308,7 +337,8 @@ Output ONLY the prompts, one per line, with no numbering or bullets."""
         Returns:
             List of synthesized prompts
         """
-        import requests
+        # Keep synthesis dependencies optional for dataset-only training.
+        import requests  # noqa: PLC0415
 
         model_name = self._get_model_name()
         all_prompts = set()  # Use set for deduplication
@@ -367,18 +397,18 @@ Output ONLY the prompts, one per line, with no numbering or bullets."""
                         line.strip()
                         for line in content.strip().split("\n")
                         if line.strip()
-                        and len(line.strip()) > 15
-                        and len(line.strip()) < 500
+                        and len(line.strip()) > MIN_LONG_TEXT_CHARS
+                        and len(line.strip()) < MAX_STANDARD_TEXT_CHARS
                     ]
 
                     # Clean up: remove numbering, bullets, quotes
                     cleaned = []
                     for line in lines:
                         # Remove common prefixes: "1.", "- ", "* ", '"'
-                        line = line.lstrip("0123456789.-)*] ").strip()
-                        line = line.strip('"').strip("'").strip()
-                        if line and len(line) > 15:
-                            cleaned.append(line)
+                        cleaned_line = line.lstrip("0123456789.-)*] ").strip()
+                        cleaned_line = cleaned_line.strip('"').strip("'").strip()
+                        if cleaned_line and len(cleaned_line) > MIN_LONG_TEXT_CHARS:
+                            cleaned.append(cleaned_line)
 
                     all_prompts.update(cleaned)
                     logger.info(
@@ -422,9 +452,9 @@ class ModalityRoutingDataset:
 
     def __init__(
         self,
-        vllm_endpoint: str = None,
-        vllm_model: str = None,
-        vllm_api_key: str = None,
+        vllm_endpoint: str | None = None,
+        vllm_model: str | None = None,
+        vllm_api_key: str | None = None,
     ):
         """
         Initialize the dataset loader.
@@ -435,7 +465,7 @@ class ModalityRoutingDataset:
             vllm_api_key: Optional API key for vLLM
         """
         self.label2id = {label: idx for idx, label in enumerate(MODALITY_LABELS)}
-        self.id2label = {idx: label for idx, label in enumerate(MODALITY_LABELS)}
+        self.id2label = dict(enumerate(MODALITY_LABELS))
 
         self.vllm_synthesizer = None
         if vllm_endpoint:
@@ -450,8 +480,8 @@ class ModalityRoutingDataset:
     # ----------------------------------------------------------------
 
     def _load_diffusion_prompts(
-        self, max_samples: int, global_seen: set = None
-    ) -> List[str]:
+        self, max_samples: int, global_seen: set | None = None
+    ) -> list[str]:
         """
         Load image generation prompts from multiple text-to-image prompt datasets.
 
@@ -524,8 +554,8 @@ class ModalityRoutingDataset:
                     prompt_clean = prompt.strip() if prompt else ""
                     if (
                         prompt_clean
-                        and len(prompt_clean) > 10
-                        and len(prompt_clean) < 1000
+                        and len(prompt_clean) > MIN_TEXT_CHARS
+                        and len(prompt_clean) < MAX_EXTENDED_TEXT_CHARS
                         and prompt_clean not in seen
                     ):
                         prompts.append(prompt_clean)
@@ -543,7 +573,7 @@ class ModalityRoutingDataset:
         logger.info(f"Diffusion prompts total: {len(prompts)} unique prompts")
         return prompts
 
-    def _generate_fallback_diffusion_prompts(self, count: int) -> List[str]:
+    def _generate_fallback_diffusion_prompts(self, count: int) -> list[str]:
         """Generate fallback diffusion-style prompts from templates."""
         templates = [
             "A {style} painting of {subject} in {setting}",
@@ -631,7 +661,7 @@ class ModalityRoutingDataset:
     # AR class loaders
     # ----------------------------------------------------------------
 
-    def _load_oasst_prompts(self, max_samples: int) -> List[str]:
+    def _load_oasst_prompts(self, max_samples: int) -> list[str]:
         """
         Load text-only conversational prompts from OpenAssistant (OASST2).
 
@@ -659,8 +689,8 @@ class ModalityRoutingDataset:
                     role == "prompter"
                     and parent_id is None
                     and text
-                    and len(text) > 10
-                    and len(text) < 1000
+                    and len(text) > MIN_TEXT_CHARS
+                    and len(text) < MAX_EXTENDED_TEXT_CHARS
                     and text not in seen
                 ):
                     # Filter out prompts that look like image generation requests
@@ -688,7 +718,7 @@ class ModalityRoutingDataset:
             logger.warning(f"Failed to load OASST2: {e}")
         return prompts
 
-    def _load_alpaca_prompts(self, max_samples: int) -> List[str]:
+    def _load_alpaca_prompts(self, max_samples: int) -> list[str]:
         """
         Load text-only instructions from Stanford Alpaca.
 
@@ -713,7 +743,12 @@ class ModalityRoutingDataset:
                 if inp and inp.strip():
                     text = f"{instruction.strip()}\n{inp.strip()}"
 
-                if text and len(text) > 10 and len(text) < 500 and text not in seen:
+                if (
+                    text
+                    and len(text) > MIN_TEXT_CHARS
+                    and len(text) < MAX_STANDARD_TEXT_CHARS
+                    and text not in seen
+                ):
                     # Filter out image-related prompts
                     text_lower = text.lower()
                     image_keywords = [
@@ -734,7 +769,7 @@ class ModalityRoutingDataset:
             logger.warning(f"Failed to load Alpaca: {e}")
         return prompts
 
-    def _load_dolly_prompts(self, max_samples: int) -> List[str]:
+    def _load_dolly_prompts(self, max_samples: int) -> list[str]:
         """
         Load text-only instructions from Databricks Dolly.
 
@@ -773,8 +808,8 @@ class ModalityRoutingDataset:
                 if (
                     category in text_categories
                     and instruction
-                    and len(instruction) > 10
-                    and len(instruction) < 500
+                    and len(instruction) > MIN_TEXT_CHARS
+                    and len(instruction) < MAX_STANDARD_TEXT_CHARS
                     and instruction not in seen
                 ):
                     prompts.append(instruction.strip())
@@ -785,7 +820,7 @@ class ModalityRoutingDataset:
             logger.warning(f"Failed to load Dolly: {e}")
         return prompts
 
-    def _load_lmsys_prompts(self, max_samples: int) -> List[str]:
+    def _load_lmsys_prompts(self, max_samples: int) -> list[str]:
         """
         Load text-only prompts from LMSYS-Chat-1M.
 
@@ -814,7 +849,12 @@ class ModalityRoutingDataset:
                     continue
 
                 text = first_msg.get("content", "")
-                if text and len(text) > 10 and len(text) < 1000 and text not in seen:
+                if (
+                    text
+                    and len(text) > MIN_TEXT_CHARS
+                    and len(text) < MAX_EXTENDED_TEXT_CHARS
+                    and text not in seen
+                ):
                     # Filter out image generation requests
                     text_lower = text.lower()
                     image_keywords = [
@@ -836,7 +876,7 @@ class ModalityRoutingDataset:
             )
         return prompts
 
-    def _load_ultrachat_prompts(self, max_samples: int) -> List[str]:
+    def _load_ultrachat_prompts(self, max_samples: int) -> list[str]:
         """
         Load text-only prompts from UltraChat.
 
@@ -861,7 +901,12 @@ class ModalityRoutingDataset:
                 # First element is the user's opening message
                 text = data[0] if isinstance(data[0], str) else ""
                 text = text.strip()
-                if text and len(text) > 15 and len(text) < 500 and text not in seen:
+                if (
+                    text
+                    and len(text) > MIN_LONG_TEXT_CHARS
+                    and len(text) < MAX_STANDARD_TEXT_CHARS
+                    and text not in seen
+                ):
                     # Filter out image/visual requests
                     text_lower = text.lower()
                     visual_keywords = [
@@ -885,8 +930,8 @@ class ModalityRoutingDataset:
         return prompts
 
     def _load_wildchat_prompts(
-        self, max_samples: int, global_seen: set = None
-    ) -> Tuple[List[str], List[str], List[str]]:
+        self, max_samples: int, global_seen: set | None = None
+    ) -> tuple[list[str], list[str], list[str]]:
         """
         Mine WildChat (1M real ChatGPT conversations) for all three classes.
 
@@ -895,7 +940,6 @@ class ModalityRoutingDataset:
 
         Source: https://huggingface.co/datasets/allenai/WildChat
         """
-        import re
 
         logger.info("Mining WildChat for modality-labeled real user prompts...")
 
@@ -953,7 +997,11 @@ class ModalityRoutingDataset:
                         first_msg = msg.get("content", "")
                         break
 
-                if not first_msg or len(first_msg) < 15 or len(first_msg) > 500:
+                if (
+                    not first_msg
+                    or len(first_msg) < MIN_LONG_TEXT_CHARS
+                    or len(first_msg) > MAX_STANDARD_TEXT_CHARS
+                ):
                     continue
 
                 text = first_msg.strip()
@@ -1000,8 +1048,8 @@ class ModalityRoutingDataset:
         return ar_prompts, diffusion_prompts, both_prompts
 
     def _load_interleavedbench_prompts(
-        self, max_samples: int, global_seen: set = None
-    ) -> List[str]:
+        self, max_samples: int, global_seen: set | None = None
+    ) -> list[str]:
         """
         Load prompts from InterleavedBench that explicitly require both text+image output.
 
@@ -1027,7 +1075,8 @@ class ModalityRoutingDataset:
         }
 
         try:
-            from huggingface_hub import hf_hub_download
+            # This optional dataset must not prevent other loaders from running.
+            from huggingface_hub import hf_hub_download  # noqa: PLC0415
 
             path = hf_hub_download(
                 "mqliu/InterleavedBench",
@@ -1057,8 +1106,8 @@ class ModalityRoutingDataset:
 
                         if (
                             text
-                            and len(text) > 20
-                            and len(text) < 1000
+                            and len(text) > MIN_INTERLEAVED_TEXT_CHARS
+                            and len(text) < MAX_EXTENDED_TEXT_CHARS
                             and text not in seen
                         ):
                             prompts.append(text)
@@ -1072,8 +1121,8 @@ class ModalityRoutingDataset:
         return prompts
 
     def _load_parti_prompts(
-        self, max_samples: int, global_seen: set = None
-    ) -> List[str]:
+        self, max_samples: int, global_seen: set | None = None
+    ) -> list[str]:
         """
         Load Parti Prompts - Google's curated text-to-image evaluation prompts.
 
@@ -1092,7 +1141,12 @@ class ModalityRoutingDataset:
                 if len(prompts) >= max_samples:
                     break
                 text = item.get("Prompt", "").strip()
-                if text and len(text) > 3 and len(text) < 500 and text not in seen:
+                if (
+                    text
+                    and len(text) > MIN_PARTI_PROMPT_CHARS
+                    and len(text) < MAX_STANDARD_TEXT_CHARS
+                    and text not in seen
+                ):
                     prompts.append(text)
                     seen.add(text)
 
@@ -1102,7 +1156,9 @@ class ModalityRoutingDataset:
 
         return prompts
 
-    def _load_fal_prompts(self, max_samples: int, global_seen: set = None) -> List[str]:
+    def _load_fal_prompts(
+        self, max_samples: int, global_seen: set | None = None
+    ) -> list[str]:
         """
         Load fal/image-generation-prompts - structured T2I prompts with categories.
 
@@ -1121,7 +1177,12 @@ class ModalityRoutingDataset:
                 if len(prompts) >= max_samples:
                     break
                 text = item.get("prompt", "").strip()
-                if text and len(text) > 10 and len(text) < 1500 and text not in seen:
+                if (
+                    text
+                    and len(text) > MIN_TEXT_CHARS
+                    and len(text) < MAX_FAL_TEXT_CHARS
+                    and text not in seen
+                ):
                     prompts.append(text)
                     seen.add(text)
 
@@ -1131,7 +1192,7 @@ class ModalityRoutingDataset:
 
         return prompts
 
-    def _generate_fallback_ar_prompts(self, count: int) -> List[str]:
+    def _generate_fallback_ar_prompts(self, count: int) -> list[str]:
         """Generate fallback text-only prompts from templates."""
         templates = [
             "What is {topic}?",
@@ -1241,11 +1302,11 @@ class ModalityRoutingDataset:
     # BOTH class loaders
     # ----------------------------------------------------------------
 
-    def _get_both_seed_examples(self) -> List[str]:
+    def _get_both_seed_examples(self) -> list[str]:
         """Return seed examples for the BOTH class."""
         return list(VLLMSynthesizer.SEED_BOTH_EXAMPLES)
 
-    def _generate_fallback_both_prompts(self, count: int) -> List[str]:
+    def _generate_fallback_both_prompts(self, count: int) -> list[str]:
         """
         Generate fallback BOTH-class prompts from templates.
 
@@ -1550,7 +1611,7 @@ class ModalityRoutingDataset:
         self,
         max_samples: int = 6000,
         synthesize_both: int = 0,
-    ) -> Tuple[List[str], List[int]]:
+    ) -> tuple[list[str], list[int]]:
         """
         Load and combine datasets for 3-class modality routing classification.
 
@@ -1767,7 +1828,7 @@ class ModalityRoutingDataset:
 
         # ---- QUALITY VALIDATION ----
         template_ratio = 1.0 - (both_real_count / max(len(both_texts), 1))
-        if template_ratio > 0.5:
+        if template_ratio > MAX_TEMPLATE_FRACTION:
             logger.warning(
                 f"⚠ BOTH class is {template_ratio * 100:.0f}% template-generated "
                 f"({both_real_count} real / {len(both_texts)} total). "
@@ -1795,10 +1856,10 @@ class ModalityRoutingDataset:
             labels.append(self.label2id[LABEL_BOTH])
 
         # Shuffle
-        combined = list(zip(texts, labels))
+        combined = list(zip(texts, labels, strict=False))
         random.seed(42)
         random.shuffle(combined)
-        texts, labels = zip(*combined)
+        texts, labels = zip(*combined, strict=False)
         texts, labels = list(texts), list(labels)
 
         # ---- CLASS BALANCE VALIDATION ----
@@ -1815,12 +1876,12 @@ class ModalityRoutingDataset:
         # Check for severe imbalance (any class <20% or >50%)
         for label_name, count in class_counts.items():
             pct = count / len(texts) * 100
-            if pct < 20:
+            if pct < MIN_BALANCED_MODALITY_SHARE:
                 logger.warning(
                     f"⚠ Class '{label_name}' is severely underrepresented "
                     f"({pct:.1f}%). Consider increasing data for this class."
                 )
-            elif pct > 50:
+            elif pct > MAX_BALANCED_MODALITY_SHARE:
                 logger.warning(
                     f"⚠ Class '{label_name}' dominates the dataset "
                     f"({pct:.1f}%). Consider balancing."
@@ -1876,9 +1937,9 @@ class ModalityRoutingDataset:
 def create_modality_routing_dataset(
     max_samples: int = 6000,
     synthesize_both: int = 0,
-    vllm_endpoint: str = None,
-    vllm_model: str = None,
-    vllm_api_key: str = None,
+    vllm_endpoint: str | None = None,
+    vllm_model: str | None = None,
+    vllm_api_key: str | None = None,
 ):
     """
     Create the modality routing dataset.
@@ -1902,7 +1963,9 @@ def create_modality_routing_dataset(
 
     # Convert to the format expected by our training
     sample_data = []
-    for text, label in zip(train_texts + val_texts, train_labels + val_labels):
+    for text, label in zip(
+        train_texts + val_texts, train_labels + val_labels, strict=False
+    ):
         sample_data.append({"text": text, "label": label})
 
     logger.info(f"Created dataset with {len(sample_data)} samples")
@@ -1919,7 +1982,7 @@ def create_modality_routing_dataset(
 def recommend_lora_rank(
     num_train_samples: int,
     num_classes: int = 3,
-    user_rank: int = None,
+    user_rank: int | None = None,
 ) -> int:
     """
     Recommend LoRA rank based on training data volume to avoid under/overfitting.
@@ -1946,13 +2009,13 @@ def recommend_lora_rank(
         Recommended LoRA rank
     """
     # Auto-scale thresholds
-    if num_train_samples <= 2000:
+    if num_train_samples <= TINY_DATASET_LIMIT:
         auto_rank = 8
-    elif num_train_samples <= 6000:
+    elif num_train_samples <= SMALL_DATASET_LIMIT:
         auto_rank = 16
-    elif num_train_samples <= 20000:
+    elif num_train_samples <= MEDIUM_DATASET_LIMIT:
         auto_rank = 32
-    elif num_train_samples <= 50000:
+    elif num_train_samples <= LARGE_DATASET_LIMIT:
         auto_rank = 48
     else:
         auto_rank = 64
@@ -1962,7 +2025,7 @@ def recommend_lora_rank(
         approx_params = 135_168 * user_rank  # Rough estimate for mmBERT
         ratio = approx_params / max(num_train_samples, 1)
 
-        if ratio > 800:
+        if ratio > HIGH_RANK_PARAMS_PER_SAMPLE:
             logger.warning(
                 f"⚠ LoRA rank {user_rank} yields ~{approx_params / 1e6:.1f}M params "
                 f"for {num_train_samples} train samples (ratio {ratio:.0f}:1). "
@@ -1970,7 +2033,7 @@ def recommend_lora_rank(
                 f"Proceeding with rank={user_rank} — consider increasing weight_decay "
                 f"and using early stopping."
             )
-        elif ratio < 20:
+        elif ratio < LOW_RANK_PARAMS_PER_SAMPLE:
             logger.warning(
                 f"⚠ LoRA rank {user_rank} yields ~{approx_params / 1e6:.1f}M params "
                 f"for {num_train_samples} train samples (ratio {ratio:.0f}:1). "
@@ -2022,7 +2085,7 @@ class FocalLoss(nn.Module):
 
     def __init__(
         self,
-        alpha: Optional[torch.Tensor] = None,
+        alpha: torch.Tensor | None = None,
         gamma: float = 2.0,
         reduction: str = "mean",
     ):
@@ -2070,7 +2133,7 @@ class ModalityRoutingLoRATrainer(Trainer):
 
     def __init__(
         self,
-        class_weights: Optional[torch.Tensor] = None,
+        class_weights: torch.Tensor | None = None,
         focal_gamma: float = 2.0,
         *args,
         **kwargs,
@@ -2200,18 +2263,18 @@ def compute_modality_metrics(eval_pred):
 
 def main(
     model_name: str = "mmbert-32k",
-    lora_rank: int = None,
-    lora_alpha: int = None,
+    lora_rank: int | None = None,
+    lora_alpha: int | None = None,
     lora_dropout: float = 0.1,
     num_epochs: int = 8,
     batch_size: int = 32,
     learning_rate: float = 2e-5,
     max_samples: int = 6000,
-    output_dir: str = None,
-    gpu_id: int = None,
-    vllm_endpoint: str = None,
-    vllm_model: str = None,
-    vllm_api_key: str = None,
+    output_dir: str | None = None,
+    gpu_id: int | None = None,
+    vllm_endpoint: str | None = None,
+    vllm_model: str | None = None,
+    vllm_api_key: str | None = None,
     synthesize_both: int = 0,
     use_class_weights: bool = True,
 ):
@@ -2245,9 +2308,9 @@ def main(
 
     # Device configuration and memory management
     if gpu_id is not None:
-        device, _ = set_gpu_device(gpu_id=gpu_id, auto_select=False)
+        _device, _ = set_gpu_device(gpu_id=gpu_id, auto_select=False)
     else:
-        device, _ = set_gpu_device(gpu_id=None, auto_select=True)
+        _device, _ = set_gpu_device(gpu_id=None, auto_select=True)
 
     clear_gpu_memory()
     log_memory_usage("Pre-training")
@@ -2257,7 +2320,7 @@ def main(
     logger.info(f"Using model: {model_name} -> {model_path}")
 
     # Create dataset FIRST (we need the size to recommend LoRA rank)
-    sample_data, label_to_id, id_to_label = create_modality_routing_dataset(
+    sample_data, label_to_id, _id_to_label = create_modality_routing_dataset(
         max_samples=max_samples,
         synthesize_both=synthesize_both,
         vllm_endpoint=vllm_endpoint,
@@ -2281,10 +2344,7 @@ def main(
         user_rank=lora_rank,  # None = auto-select
     )
     # Keep alpha = 2 * rank (standard ratio) unless user explicitly set it
-    if lora_alpha is not None:
-        effective_alpha = lora_alpha
-    else:
-        effective_alpha = 2 * effective_rank
+    effective_alpha = lora_alpha if lora_alpha is not None else 2 * effective_rank
     logger.info(
         f"LoRA config: rank={effective_rank}, alpha={effective_alpha}, "
         f"dropout={lora_dropout}"
@@ -2326,7 +2386,7 @@ def main(
         min_count = min(label_counts.values())
         imbalance_ratio = max_count / max(min_count, 1)
 
-        logger.info(f"Class distribution in training data:")
+        logger.info("Class distribution in training data:")
         for i in range(n_classes):
             label_name = (
                 MODALITY_LABELS[i] if i < len(MODALITY_LABELS) else f"class_{i}"
@@ -2339,13 +2399,13 @@ def main(
         logger.info(f"Imbalance ratio: {imbalance_ratio:.1f}:1")
 
         # Adapt focal gamma based on imbalance severity
-        if imbalance_ratio > 3.0:
+        if imbalance_ratio > HIGH_CLASS_IMBALANCE_RATIO:
             focal_gamma = 3.0
             logger.warning(
                 f"⚠ Severe class imbalance ({imbalance_ratio:.1f}:1). "
                 f"Increasing focal gamma to {focal_gamma} for stronger hard-example focus."
             )
-        elif imbalance_ratio > 1.5:
+        elif imbalance_ratio > MODERATE_CLASS_IMBALANCE_RATIO:
             focal_gamma = 2.0
             logger.info(
                 f"Moderate imbalance ({imbalance_ratio:.1f}:1). Using focal gamma={focal_gamma}"
@@ -2365,12 +2425,12 @@ def main(
         min_class_count = min(label_counts_train.values())
         imbalance = max_class_count / max(min_class_count, 1)
 
-        if imbalance > 2.0:
+        if imbalance > AUGMENTATION_IMBALANCE_RATIO:
             logger.info(
                 f"Oversampling minority classes to reduce {imbalance:.1f}:1 imbalance..."
             )
             # Group by class
-            class_buckets: Dict[int, List] = {}
+            class_buckets: dict[int, list] = {}
             for item in train_data:
                 label = item["label"]
                 if label not in class_buckets:
@@ -2420,12 +2480,12 @@ def main(
     # Higher weight_decay when param-to-sample ratio is high (overfitting risk)
     approx_params = 135_168 * effective_rank
     ratio = approx_params / max(len(train_data), 1)
-    if ratio > 500:
+    if ratio > HIGH_PARAMS_PER_SAMPLE:
         weight_decay = 0.15  # Aggressive regularization
         logger.info(
             f"High param-to-sample ratio ({ratio:.0f}:1) → weight_decay={weight_decay}"
         )
-    elif ratio > 200:
+    elif ratio > MODERATE_PARAMS_PER_SAMPLE:
         weight_decay = 0.10
         logger.info(
             f"Moderate param-to-sample ratio ({ratio:.0f}:1) → weight_decay={weight_decay}"
@@ -2437,7 +2497,8 @@ def main(
         )
 
     # Training arguments - optimized for 3-class LoRA classification
-    training_args = TrainingArguments(
+    training_args = create_training_arguments(
+        TrainingArguments,
         output_dir=output_dir,
         num_train_epochs=num_epochs,
         per_device_train_batch_size=batch_size,
@@ -2541,7 +2602,7 @@ def merge_lora_adapter_to_full_model(
     logger.info(f"Loading base model: {base_model_path}")
 
     # Load label mapping to get correct number of labels
-    with open(os.path.join(lora_adapter_path, "label_mapping.json"), "r") as f:
+    with open(os.path.join(lora_adapter_path, "label_mapping.json")) as f:
         mapping_data = json.load(f)
 
     if "idx_to_label" in mapping_data:
@@ -2581,7 +2642,7 @@ def merge_lora_adapter_to_full_model(
     # Fix config.json to include correct id2label mapping
     config_path = os.path.join(output_path, "config.json")
     if os.path.exists(config_path):
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             config = json.load(f)
 
         if "idx_to_label" in mapping_data:
@@ -2617,7 +2678,7 @@ def demo_inference(
 
     try:
         # Load label mapping
-        with open(os.path.join(model_path, "label_mapping.json"), "r") as f:
+        with open(os.path.join(model_path, "label_mapping.json")) as f:
             mapping_data = json.load(f)
         id_to_label = mapping_data.get("idx_to_label", {})
         num_labels = len(id_to_label)

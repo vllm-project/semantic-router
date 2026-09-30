@@ -51,6 +51,14 @@ class ModelCatalogSnapshotTests(unittest.TestCase):
                 all(
                     model["verification"]["asset_sha256"] == digest
                     for model in catalog["models"]
+                    if model["kind"] == "virtual"
+                )
+            )
+            self.assertTrue(
+                all(
+                    "asset_sha256" not in model["verification"]
+                    for model in catalog["models"]
+                    if model["kind"] == "physical"
                 )
             )
             probes = (bundle / "probes.yaml").read_text(encoding="utf-8")

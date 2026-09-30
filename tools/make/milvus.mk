@@ -4,33 +4,42 @@
 
 ##@ Milvus
 
+# Existing defaults remain available for manual development. Integration jobs
+# supply their own stack name, data directory and offset host ports.
+MILVUS_CONTAINER_NAME ?= milvus-semantic-cache
+MILVUS_DATA_DIR ?= /tmp/milvus-data
+MILVUS_HOST_PORT ?= 19530
+MILVUS_HEALTH_PORT ?= 9091
+MILVUS_BIND_ADDRESS ?=
+MILVUS_PORT_PREFIX = $(if $(MILVUS_BIND_ADDRESS),$(MILVUS_BIND_ADDRESS):)
+
 # Milvus container management
 start-milvus: ## Start Milvus container for testing
 	@$(LOG_TARGET)
-	@mkdir -p /tmp/milvus-data
+	@mkdir -p "$(MILVUS_DATA_DIR)"
 	@$(CONTAINER_RUNTIME) run -d \
-		--name milvus-semantic-cache \
+		--name "$(MILVUS_CONTAINER_NAME)" \
 		--security-opt seccomp:unconfined \
 		-e ETCD_USE_EMBED=true \
 		-e ETCD_DATA_DIR=/var/lib/milvus/etcd \
 		-e ETCD_CONFIG_PATH=/milvus/configs/advanced/etcd.yaml \
 		-e COMMON_STORAGETYPE=local \
 		-e CLUSTER_ENABLED=false \
-		-p 19530:19530 \
-		-p 9091:9091 \
-		-v /tmp/milvus-data:/var/lib/milvus:z \
+		-p "$(MILVUS_PORT_PREFIX)$(MILVUS_HOST_PORT):19530" \
+		-p "$(MILVUS_PORT_PREFIX)$(MILVUS_HEALTH_PORT):9091" \
+		-v "$(MILVUS_DATA_DIR):/var/lib/milvus:z" \
 		milvusdb/milvus:v2.3.3 \
 		milvus run standalone
 	@echo "Waiting for Milvus to be ready (up to 120s)..."
 	@elapsed=0; \
 	while [ $$elapsed -lt 120 ]; do \
-		if curl -sf http://localhost:9091/healthz >/dev/null 2>&1; then \
+		if curl -sf http://localhost:$(MILVUS_HEALTH_PORT)/healthz >/dev/null 2>&1; then \
 			echo "Milvus healthy after $${elapsed}s"; \
 			break; \
 		fi; \
-		if ! $(CONTAINER_RUNTIME) ps --filter "name=milvus-semantic-cache" --format '{{.Names}}' | grep -q milvus-semantic-cache; then \
+		if ! $(CONTAINER_RUNTIME) ps --filter "name=^$(MILVUS_CONTAINER_NAME)$$" --format '{{.Names}}' | grep -Fxq "$(MILVUS_CONTAINER_NAME)"; then \
 			echo "ERROR: Milvus container exited unexpectedly"; \
-			$(CONTAINER_RUNTIME) logs milvus-semantic-cache 2>&1 | tail -20 || true; \
+			$(CONTAINER_RUNTIME) logs "$(MILVUS_CONTAINER_NAME)" 2>&1 | tail -20 || true; \
 			exit 1; \
 		fi; \
 		sleep 5; \
@@ -39,25 +48,25 @@ start-milvus: ## Start Milvus container for testing
 	done; \
 	if [ $$elapsed -ge 120 ]; then \
 		echo "ERROR: Milvus did not become healthy within 120s"; \
-		$(CONTAINER_RUNTIME) logs milvus-semantic-cache 2>&1 | tail -30 || true; \
+		$(CONTAINER_RUNTIME) logs "$(MILVUS_CONTAINER_NAME)" 2>&1 | tail -30 || true; \
 		exit 1; \
 	fi
-	@echo "Milvus available at localhost:19530"
+	@echo "Milvus available at localhost:$(MILVUS_HOST_PORT)"
 
 stop-milvus: ## Stop and remove Milvus container
 	@$(LOG_TARGET)
-	@$(CONTAINER_RUNTIME) stop milvus-semantic-cache || true
-	@$(CONTAINER_RUNTIME) rm milvus-semantic-cache || true
-	@rm -rf /tmp/milvus-data 2>/dev/null || sudo -n rm -rf /tmp/milvus-data || true
+	@$(CONTAINER_RUNTIME) stop "$(MILVUS_CONTAINER_NAME)" || true
+	@$(CONTAINER_RUNTIME) rm "$(MILVUS_CONTAINER_NAME)" || true
+	@rm -rf "$(MILVUS_DATA_DIR)" 2>/dev/null || sudo -n rm -rf "$(MILVUS_DATA_DIR)" || true
 	@echo "Milvus container stopped and removed"
 
 restart-milvus: stop-milvus start-milvus ## Restart Milvus container
 
 milvus-status: ## Show status of Milvus container
 	@$(LOG_TARGET)
-	@if $(CONTAINER_RUNTIME) ps --filter "name=milvus-semantic-cache" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -q milvus-semantic-cache; then \
+	@if $(CONTAINER_RUNTIME) ps --filter "name=^$(MILVUS_CONTAINER_NAME)$$" --format '{{.Names}}' | grep -Fxq "$(MILVUS_CONTAINER_NAME)"; then \
 		echo "Milvus container is running:"; \
-		$(CONTAINER_RUNTIME) ps --filter "name=milvus-semantic-cache" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"; \
+		$(CONTAINER_RUNTIME) ps --filter "name=^$(MILVUS_CONTAINER_NAME)$$" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"; \
 	else \
 		echo "Milvus container is not running"; \
 		echo "Run 'make start-milvus' to start it"; \
@@ -66,14 +75,14 @@ milvus-status: ## Show status of Milvus container
 clean-milvus: stop-milvus ## Clean up Milvus data
 	@$(LOG_TARGET)
 	@echo "Cleaning up Milvus data..."
-	@sudo rm -rf milvus-data || rm -rf milvus-data
+	@rm -rf "$(MILVUS_DATA_DIR)" 2>/dev/null || sudo -n rm -rf "$(MILVUS_DATA_DIR)"
 	@echo "Milvus data directory cleaned"
 
 # Test semantic cache with Milvus backend
 test-milvus-cache: start-milvus rust
 	@$(LOG_TARGET)
 	@echo "Testing semantic cache with Milvus backend..."
-	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release:$${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 	export SR_TEST_MODE=true && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -tags=milvus -v ./pkg/cache/
 	@echo "Consider running 'make stop-milvus' when done testing"
@@ -82,7 +91,7 @@ test-milvus-cache: start-milvus rust
 test-semantic-router-milvus: build-router start-milvus
 	@$(LOG_TARGET)
 	@echo "Testing semantic-router with Milvus cache backend..."
-	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release:$${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 	export SR_TEST_MODE=true && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -tags=milvus -v ./...
 	@echo "Consider running 'make stop-milvus' when done testing"
@@ -94,12 +103,12 @@ start-milvus-ui: ## Start Attu UI to browse Milvus data
 	@$(CONTAINER_RUNTIME) run -d \
 		--name milvus-ui \
 		--add-host=host.docker.internal:host-gateway \
-		-e MILVUS_URL=host.docker.internal:19530 \
+		-e MILVUS_URL=host.docker.internal:$(MILVUS_HOST_PORT) \
 		-p 18000:3000 \
 		zilliz/attu:v2.3.5
 	@echo "Waiting for Attu to be ready..."
 	@sleep 3
-	@echo "Open UI: http://localhost:18000 (Milvus at host.docker.internal:19530)"
+	@echo "Open UI: http://localhost:18000 (Milvus at host.docker.internal:$(MILVUS_HOST_PORT))"
 
 stop-milvus-ui:
 	@$(LOG_TARGET)
@@ -157,9 +166,9 @@ benchmark-hybrid-quick: rust ## Run quick Hybrid vs Milvus benchmark (smaller sc
 	@echo "═══════════════════════════════════════════════════════════"
 	@echo ""
 	@echo "Cleaning and restarting Milvus..."
-	@$(CONTAINER_RUNTIME) stop milvus-semantic-cache 2>/dev/null || true
-	@$(CONTAINER_RUNTIME) rm milvus-semantic-cache 2>/dev/null || true
-	@sudo rm -rf /tmp/milvus-data 2>/dev/null || true
+	@$(CONTAINER_RUNTIME) stop "$(MILVUS_CONTAINER_NAME)" 2>/dev/null || true
+	@$(CONTAINER_RUNTIME) rm "$(MILVUS_CONTAINER_NAME)" 2>/dev/null || true
+	@sudo rm -rf "$(MILVUS_DATA_DIR)" 2>/dev/null || true
 	@$(MAKE) start-milvus
 	@sleep 5
 	@echo ""
@@ -172,7 +181,7 @@ benchmark-hybrid-quick: rust ## Run quick Hybrid vs Milvus benchmark (smaller sc
 	@echo "  • Both caches: make benchmark-hybrid-quick (default)"
 	@echo ""
 	@mkdir -p benchmark_results/hybrid_vs_milvus
-	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release:$${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 		export USE_CPU=$${USE_CPU:-false} && \
 		export SKIP_MILVUS=$${SKIP_MILVUS:-false} && \
 		export SR_BENCHMARK_MODE=true && \
@@ -194,9 +203,9 @@ benchmark-hybrid-only: rust ## Run ONLY Hybrid cache benchmark (skip Milvus for 
 	@echo "═══════════════════════════════════════════════════════════"
 	@echo ""
 	@echo "Cleaning and restarting Milvus..."
-	@$(CONTAINER_RUNTIME) stop milvus-semantic-cache 2>/dev/null || true
-	@$(CONTAINER_RUNTIME) rm milvus-semantic-cache 2>/dev/null || true
-	@sudo rm -rf /tmp/milvus-data 2>/dev/null || true
+	@$(CONTAINER_RUNTIME) stop "$(MILVUS_CONTAINER_NAME)" 2>/dev/null || true
+	@$(CONTAINER_RUNTIME) rm "$(MILVUS_CONTAINER_NAME)" 2>/dev/null || true
+	@sudo rm -rf "$(MILVUS_DATA_DIR)" 2>/dev/null || true
 	@$(MAKE) start-milvus
 	@sleep 5
 	@echo ""
@@ -205,7 +214,7 @@ benchmark-hybrid-only: rust ## Run ONLY Hybrid cache benchmark (skip Milvus for 
 	@echo "  • Select GPUs: CUDA_VISIBLE_DEVICES=2,3 USE_CPU=false make benchmark-hybrid-only"
 	@echo ""
 	@mkdir -p benchmark_results/hybrid_vs_milvus
-	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release:$${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 		export USE_CPU=$${USE_CPU:-false} && \
 		export SKIP_MILVUS=true && \
 		export SR_BENCHMARK_MODE=true && \

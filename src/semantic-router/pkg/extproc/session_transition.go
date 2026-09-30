@@ -19,8 +19,14 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 		return
 	}
 
+	pinnedSessionID := strings.TrimSpace(headerValueCI(ctx, headers.XSessionID))
 	if state := ctx.ResponseObjectState; state != nil {
-		ctx.SessionID = state.SessionTrackingID
+		// The client session correlates routing and Replay across protocols;
+		// retained-object lineage remains the fallback when it is not supplied.
+		ctx.SessionID = pinnedSessionID
+		if ctx.SessionID == "" {
+			ctx.SessionID = state.SessionTrackingID
+		}
 		ctx.PreviousResponseID = state.PreviousResponseID
 		history := state.ConversationHistory
 		ctx.TurnIndex = len(history)
@@ -35,8 +41,8 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 		return
 	}
 
-	if sid := strings.TrimSpace(headerValueCI(ctx, headers.XSessionID)); sid != "" {
-		ctx.SessionID = sid
+	if pinnedSessionID != "" {
+		ctx.SessionID = pinnedSessionID
 	}
 
 	if ctx.SessionID == "" {

@@ -53,7 +53,12 @@ func TestCallModel_RecordsLatency(t *testing.T) {
 
 	c := NewClient(&config.LooperConfig{Endpoint: server.URL})
 
-	resp, err := c.CallModel(context.Background(), readLimitTestRequest(), "model-a", false, 1, nil, "")
+	resp, err := c.CallModelWithOptions(
+		context.Background(),
+		*readLimitTestRequest(),
+		ModelTarget{Name: "model-a"},
+		CallOptions{Iteration: 1},
+	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

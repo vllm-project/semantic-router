@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
+	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
 )
 
 // RouterClassifierProxyHandler forwards knowledge-base management traffic
@@ -22,7 +24,12 @@ func RouterClassifierProxyHandler(routerAPIURL string, readonlyMode bool, creden
 			http.Error(w, "Router API URL is not configured", http.StatusBadGateway)
 			return
 		}
-		if readonlyMode && r.Method != http.MethodGet {
+		policy, allowed := routercontract.LookupManagement(r.Method, r.URL.Path)
+		if !allowed {
+			http.Error(w, "Router management route is not exposed by the Dashboard", http.StatusForbidden)
+			return
+		}
+		if readonlyMode && policy.Mutation {
 			http.Error(w, "Dashboard is in read-only mode. Configuration editing is disabled.", http.StatusForbidden)
 			return
 		}
@@ -53,6 +60,9 @@ func RouterClassifierProxyHandler(routerAPIURL string, readonlyMode bool, creden
 			return
 		}
 
+		if policy.Mutation && auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		resp, err := http.DefaultClient.Do(proxyReq)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Router API request failed: %v", err), http.StatusBadGateway)

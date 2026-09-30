@@ -251,7 +251,7 @@ type hybridSearchOpts struct {
 
 func hybridCreateStore(ctx context.Context, client *http.Client, baseURL, name string) (string, error) {
 	body, _ := json.Marshal(map[string]interface{}{"name": name})
-	req, err := http.NewRequestWithContext(ctx, "POST", baseURL+"/v1/vector_stores", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", baseURL+"/api/v1/storage/vector-stores", bytes.NewReader(body))
 	if err != nil {
 		return "", err
 	}
@@ -296,7 +296,7 @@ func hybridUploadFile(ctx context.Context, client *http.Client, baseURL, filenam
 	}
 	w.Close()
 
-	req, err := http.NewRequestWithContext(ctx, "POST", baseURL+"/v1/files", &buf)
+	req, err := http.NewRequestWithContext(ctx, "POST", baseURL+"/api/v1/storage/files", &buf)
 	if err != nil {
 		return "", err
 	}
@@ -327,7 +327,7 @@ func hybridUploadFile(ctx context.Context, client *http.Client, baseURL, filenam
 
 func hybridAttachFile(ctx context.Context, client *http.Client, baseURL, storeID, fileID string) error {
 	body, _ := json.Marshal(map[string]interface{}{"file_id": fileID})
-	url := fmt.Sprintf("%s/v1/vector_stores/%s/files", baseURL, storeID)
+	url := fmt.Sprintf("%s/api/v1/storage/vector-stores/%s/files", baseURL, storeID)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -348,7 +348,7 @@ func hybridAttachFile(ctx context.Context, client *http.Client, baseURL, storeID
 }
 
 func hybridWaitForIngestion(ctx context.Context, client *http.Client, baseURL, storeID string) error {
-	url := fmt.Sprintf("%s/v1/vector_stores/%s/files", baseURL, storeID)
+	url := fmt.Sprintf("%s/api/v1/storage/vector-stores/%s/files", baseURL, storeID)
 	deadline := time.Now().Add(90 * time.Second)
 
 	for time.Now().Before(deadline) {
@@ -411,7 +411,7 @@ func hybridSearchVerify(ctx context.Context, client *http.Client, baseURL, store
 	}
 
 	body, _ := json.Marshal(reqBody)
-	url := fmt.Sprintf("%s/v1/vector_stores/%s/search", baseURL, storeID)
+	url := fmt.Sprintf("%s/api/v1/storage/vector-stores/%s/search", baseURL, storeID)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -498,7 +498,7 @@ func hybridSearchExpectEmpty(ctx context.Context, client *http.Client, baseURL, 
 	}
 
 	body, _ := json.Marshal(reqBody)
-	url := fmt.Sprintf("%s/v1/vector_stores/%s/search", baseURL, storeID)
+	url := fmt.Sprintf("%s/api/v1/storage/vector-stores/%s/search", baseURL, storeID)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -537,7 +537,7 @@ func hybridSearchExpectEmpty(ctx context.Context, client *http.Client, baseURL, 
 }
 
 func hybridDeleteStore(ctx context.Context, client *http.Client, baseURL, storeID string) {
-	url := fmt.Sprintf("%s/v1/vector_stores/%s", baseURL, storeID)
+	url := fmt.Sprintf("%s/api/v1/storage/vector-stores/%s", baseURL, storeID)
 	req, _ := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	resp, err := client.Do(req)
 	if err == nil {

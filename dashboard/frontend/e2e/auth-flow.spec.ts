@@ -860,7 +860,7 @@ test.describe('Dashboard auth flow', () => {
       },
     })
 
-    await page.route('**/api/router/v1/router_replay/*', async (route) => {
+    await page.route('**/api/router/api/v1/observability/replays/*', async (route) => {
       await route.fulfill({
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -900,7 +900,7 @@ test.describe('Dashboard auth flow', () => {
       },
     })
 
-    await page.route('**/api/router/v1/router_replay/*', async (route) => {
+    await page.route('**/api/router/api/v1/observability/replays/*', async (route) => {
       await route.fulfill({
         status: 200,
         headers: { 'Content-Type': 'application/json' },

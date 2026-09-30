@@ -97,10 +97,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Model directory: {}\n", model_base);
 
-    ort::init().commit();
+    ort::init().commit()?;
 
     // Configuration
-    let layers = vec![6, 11, 16, 22];
+    let layers = [6, 11, 16, 22];
     let seq_lengths = vec![32, 64, 128, 256, 512];
     let batch_sizes = vec![1, 4, 8];
     let warmup_runs = 3;

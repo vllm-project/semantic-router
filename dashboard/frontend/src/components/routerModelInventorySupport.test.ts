@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { RouterModelInfo } from '../utils/routerRuntime'
+import { getRouterModelAnchor, type RouterModelInfo } from '../utils/routerRuntime'
 import { clampInventoryPage, filterAndSortRouterModels } from './routerModelInventorySupport'
 
 const models: RouterModelInfo[] = [
@@ -21,6 +21,19 @@ const models: RouterModelInfo[] = [
 ]
 
 describe('router model inventory support', () => {
+  it('keeps matching model names distinct across searchable recipe scopes', () => {
+    const scoped = ['default', 'a-b', 'a_b', '安全'].map((recipe) => ({
+      name: 'pii_classifier',
+      type: 'pii_detection',
+      loaded: true,
+      recipe,
+    }))
+    expect(new Set(scoped.map(getRouterModelAnchor)).size).toBe(scoped.length)
+    expect(filterAndSortRouterModels(scoped, '安全', 'all', 'state')).toEqual([scoped[3]])
+    expect(getRouterModelAnchor({ name: 'pii_classifier' })).toBe('model-pii-classifier')
+    expect(getRouterModelAnchor(scoped[0])).toBe('model-pii-classifier')
+  })
+
   it('searches registry metadata and groups transient loading states', () => {
     expect(
       filterAndSortRouterModels(models, 'mmbert', 'all', 'state').map((model) => model.name),

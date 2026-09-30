@@ -1,6 +1,7 @@
 package protocolcodec
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -222,6 +223,31 @@ func TestImageGenerationStreamLifecycleAcceptsCompleteOrderedSequence(t *testing
 func TestDecodeResponsesImageGenerationStreamAccumulatesTerminalImage(t *testing.T) {
 	response := decodeImageGenerationStreamFixture(t)
 	assertCompletedGeneratedImageResponse(t, response)
+}
+
+// A client cancellation while image generation is mid-stream must not be
+// released as a successful completion: the Responses wire must not gain a
+// `response.completed` terminal. The same invariance corner_cases_test.go
+// asserts for the streaming text formats.
+func TestImageGenerationStreamCancellationSuppressesDeferredCompletion(t *testing.T) {
+	encoder := newStartedImageGenerationEncoder(t)
+	zero, one := int64(0), int64(1)
+	for _, image := range []*llmprotocol.GeneratedImage{
+		{Status: llmprotocol.ImageGenerationGenerating},
+		{Status: llmprotocol.ImageGenerationGenerating, PartialIndex: &zero, PartialImage: "YQ=="},
+		{Status: llmprotocol.ImageGenerationGenerating, PartialIndex: &one, PartialImage: "Yg=="},
+	} {
+		pushImageGenerationProgress(t, encoder, image)
+	}
+	frames, _, err := encoder.Finalize(context.Canceled)
+	if err != nil {
+		t.Fatalf("finalize after cancellation: %v", err)
+	}
+	wire := bytes.Join(frames, nil)
+	assertNoSuccessfulStreamTerminal(t, llmprotocol.OpenAIResponsesV1, wire)
+	if !bytes.Contains(wire, []byte("stream_canceled")) {
+		t.Fatalf("cancellation has no public cancel terminal: %s", wire)
+	}
 }
 
 func decodeImageGenerationStreamFixture(t *testing.T) llmprotocol.Response {

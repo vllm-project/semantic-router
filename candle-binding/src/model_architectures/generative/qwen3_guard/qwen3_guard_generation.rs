@@ -77,8 +77,19 @@ impl Qwen3GuardModel {
         Ok(())
     }
 
+    /// Prefill every suffix token but the last on top of the restored prefix.
+    /// `generate_cached_suffix_tokens` feeds the last suffix token as its first
+    /// decode step, so the KV cache must hold exactly the tokens before it.
+    /// Prefilling the whole suffix and then re-feeding its last token would leave
+    /// a duplicate key: the cache would run one entry ahead of the logical
+    /// position, and the causal range at `q_offset` would skip the token just
+    /// appended and attend the stale duplicate instead.
     fn process_cached_suffix(&mut self, tokens: &[u32], prefix_len: usize) -> UnifiedResult<()> {
-        let suffix_tensor = Tensor::new(tokens, &self.device)
+        let prefill = &tokens[..tokens.len().saturating_sub(1)];
+        if prefill.is_empty() {
+            return Ok(());
+        }
+        let suffix_tensor = Tensor::new(prefill, &self.device)
             .map_err(|e| UnifiedError::Processing {
                 operation: "create suffix tensor".to_string(),
                 source: e.to_string(),
@@ -107,9 +118,9 @@ impl Qwen3GuardModel {
         prefix_len: usize,
     ) -> UnifiedResult<String> {
         let mut generated_text = String::new();
-        let mut total_tokens = prefix_len + tokens.len();
 
         for _step in 0..self.config.max_tokens {
+            let total_tokens = prefix_len + tokens.len();
             let context_size = 1;
             let start_pos = total_tokens - context_size;
             let ctxt = &tokens[tokens.len().saturating_sub(context_size)..];
@@ -138,7 +149,6 @@ impl Qwen3GuardModel {
             }
 
             tokens.push(next_token);
-            total_tokens += 1;
             if let Ok(piece) = self.tokenizer.decode(&[next_token], true) {
                 generated_text.push_str(&piece);
             }
@@ -192,7 +202,7 @@ fn prefix_cache_error(source: &str) -> UnifiedError {
     }
 }
 
-fn cached_guard_suffix(text: &str, mode: &str) -> String {
+pub(super) fn cached_guard_suffix(text: &str, mode: &str) -> String {
     let user_label = if mode == "output" {
         "ASSISTANT"
     } else {

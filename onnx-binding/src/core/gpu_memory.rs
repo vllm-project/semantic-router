@@ -180,19 +180,16 @@ fn probe_hip() -> Option<GpuMemInfo> {
 
     unsafe {
         let mut lib = libc::dlopen(
-            b"libamdhip64.so\0".as_ptr() as *const libc::c_char,
+            c"libamdhip64.so".as_ptr(),
             libc::RTLD_NOW | libc::RTLD_NOLOAD,
         );
         if lib.is_null() {
-            lib = libc::dlopen(
-                b"libamdhip64.so\0".as_ptr() as *const libc::c_char,
-                libc::RTLD_NOW,
-            );
+            lib = libc::dlopen(c"libamdhip64.so".as_ptr(), libc::RTLD_NOW);
             if lib.is_null() {
                 return None;
             }
         }
-        let sym = libc::dlsym(lib, b"hipMemGetInfo\0".as_ptr() as *const libc::c_char);
+        let sym = libc::dlsym(lib, c"hipMemGetInfo".as_ptr());
         if sym.is_null() {
             return None;
         }

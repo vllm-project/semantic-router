@@ -74,8 +74,11 @@ func TestDefaultHeaderMap(t *testing.T) {
 	if m["minimax"] != headers.UserMiniMaxKey {
 		t.Errorf("DefaultHeaderMap[minimax] = %q, want %q", m["minimax"], headers.UserMiniMaxKey)
 	}
-	if len(m) != 7 {
-		t.Errorf("DefaultHeaderMap has %d entries, want 7", len(m))
+	if m["cloudflare-workers-ai"] != headers.UserCloudflareWorkersAIKey {
+		t.Errorf("DefaultHeaderMap[cloudflare-workers-ai] = %q, want %q", m["cloudflare-workers-ai"], headers.UserCloudflareWorkersAIKey)
+	}
+	if len(m) != 8 {
+		t.Errorf("DefaultHeaderMap has %d entries, want 8", len(m))
 	}
 }
 

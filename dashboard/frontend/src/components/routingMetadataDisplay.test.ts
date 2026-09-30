@@ -5,6 +5,8 @@ import { formatRoutingMetadataValue } from './routingMetadataDisplay'
 
 describe('formatRoutingMetadataValue', () => {
   it.each([
+    ['route', 'Route'],
+    ['unified_route', 'Route'],
     ['unified_balance_recovery', 'Balance Recovery'],
     ['unified_speed_first_route', 'Speed First'],
     ['unified_cost_reasoning', 'Cost Reasoning'],

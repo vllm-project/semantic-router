@@ -4,7 +4,7 @@ import React from 'react'
 import styles from './styles.module.css'
 
 export interface PageHeaderProps {
-  /** Section the page belongs to — Blog, Research, Community. */
+  /** Section the page belongs to — Blog, Research, Community, Catalog. */
   eyebrow?: ReactNode
   title: ReactNode
   description?: ReactNode
@@ -16,10 +16,9 @@ export interface PageHeaderProps {
 /**
  * The one page title on the site.
  *
- * Blog, Research and Community each grew their own masthead — 3.25rem/600,
- * 4.25rem/400 and 2em/400 respectively — so three pages one nav click apart
- * looked like three different sites. Section identity now lives in the
- * eyebrow, and the title itself is the same component everywhere.
+ * Blog, Research, Community and Model Hub share this masthead. Section
+ * identity lives in the eyebrow; the title itself is the same component
+ * everywhere.
  */
 export default function PageHeader({
   eyebrow,

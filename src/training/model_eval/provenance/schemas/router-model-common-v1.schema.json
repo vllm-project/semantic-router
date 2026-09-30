@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vllm-project.github.io/semantic-router/schemas/router-model-common-v1.schema.json",
+  "title": "Shared definitions for Router Model provenance manifests",
+  "$defs": {
+    "manifestId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "task": {
+      "type": "string",
+      "enum": [
+        "domain",
+        "complexity",
+        "jailbreak",
+        "pii",
+        "fact-check",
+        "feedback",
+        "modality"
+      ]
+    },
+    "revision": {
+      "description": "Immutable revision. Branch and tag names are rejected on purpose.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "repoId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "labelMapping": {
+      "description": "Label name to contiguous class index. Ordering is part of the contract.",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"type": "integer", "minimum": 0},
+      "propertyNames": {"type": "string", "minLength": 1}
+    },
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["python", "packages"],
+      "properties": {
+        "python": {"type": "string", "minLength": 1},
+        "packages": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "codeRevision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repo", "revision", "entrypoint"],
+      "properties": {
+        "repo": {"$ref": "router-model-common-v1.schema.json#/$defs/repoId"},
+        "revision": {"$ref": "router-model-common-v1.schema.json#/$defs/revision"},
+        "entrypoint": {"type": "string", "minLength": 1, "pattern": "^[^/][^\\\\]*$"},
+        "dirty": {"type": "boolean"}
+      }
+    },
+    "datasetRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "revision"],
+      "properties": {
+        "id": {"$ref": "router-model-common-v1.schema.json#/$defs/manifestId"},
+        "revision": {"$ref": "router-model-common-v1.schema.json#/$defs/revision"},
+        "splits": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        }
+      }
+    },
+    "artifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "revision", "digest"],
+      "properties": {
+        "id": {"$ref": "router-model-common-v1.schema.json#/$defs/manifestId"},
+        "revision": {"$ref": "router-model-common-v1.schema.json#/$defs/revision"},
+        "digest": {"$ref": "router-model-common-v1.schema.json#/$defs/digest"}
+      }
+    },
+    "runRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": {"$ref": "router-model-common-v1.schema.json#/$defs/manifestId"}
+      }
+    }
+  }
+}

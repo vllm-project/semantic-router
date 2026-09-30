@@ -1,0 +1,5839 @@
+{
+  "schema_version": 1,
+  "snapshot_date": "2026-09-17",
+  "score_scale": "100 \u00d7 native accuracy",
+  "eligibility": "All finite same-task named-primary observations with known positive total parameters, open and closed weights, no parameter ceiling; union all listed panels. Incomplete-panel peers remain eligible per task.",
+  "observation_policy": "Only exactly equal model/name/size/score duplicates are coalesced with every source retained. Differing registry scores remain separate observations, with scored revision unknown. F2/AST independent reruns remain separate pinned observations and do not replace reported coordinates. Current other Vela variant is included.",
+  "dominance": "A peer has no more total parameters and no lower score, with at least one strict inequality. Scores use original available floating values, not rounded display labels.",
+  "sources": {
+    "nano_English41": {
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/main/benchmarks/mteb-eng-v2.json",
+      "evidence_type": "Vela_release_report",
+      "native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+      "sha256": "f3daecad1cf431630598efb04f3667431e3420239240f28a51568a74cef0c64f"
+    },
+    "nano_audio19": {
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/main/benchmarks/maeb-audio-only.json",
+      "evidence_type": "Vela_release_report",
+      "native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+      "sha256": "4fc7f217745eb0aa998bf0f8e044bd1fa5de2f73f1a7dead7b829a62c48669ff"
+    },
+    "mini_English41": {
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/main/benchmarks/mteb-eng-v2.json",
+      "evidence_type": "Vela_release_report",
+      "native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731",
+      "sha256": "5048644990078e6b0c9bd7aa1d52a7ed60729608ebafdb22bc49b4dad0f7cac9"
+    },
+    "mini_audio19": {
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/main/benchmarks/maeb-audio-only.json",
+      "evidence_type": "Vela_release_report",
+      "native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731",
+      "sha256": "b9adc831e1de9caed37d38292dc95d65f4f933178fa7abbf7c1211f23617efbf"
+    },
+    "scores_MTEB_eng_v2": {
+      "url": "https://mteb-leaderboard-backend.hf.space/v1/benchmarks/MTEB%28eng%2C%20v2%29/scores",
+      "sha256": "e574f14dc778d72c08255450091191b103930c487fa172a2dfabe41a0b56569d",
+      "retrieved_at_utc": "2026-09-17T20:28:47.419876+00:00",
+      "bytes": 1071836,
+      "benchmark": "MTEB(eng, v2)"
+    },
+    "scores_MAEB_beta_audio-only": {
+      "url": "https://mteb-leaderboard-backend.hf.space/v1/benchmarks/MAEB%28beta%2C%20audio-only%29/scores",
+      "sha256": "6153942c26a31577cc1e3a2fbb6eb10b09dc2f1fe08749db598d261e653f6bca",
+      "retrieved_at_utc": "2026-09-17T20:28:48.670374+00:00",
+      "bytes": 194971,
+      "benchmark": "MAEB(beta, audio-only)"
+    },
+    "mini_component_equivalence": {
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/main/benchmarks/component-equivalence.json",
+      "sha256": "8bbbd3a362d84a6e8f030803259db69e932e5997b1c7af1a276a0d17862eb184",
+      "evidence_type": "exact_component_identity_report",
+      "native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731"
+    },
+    "nano_component_equivalence": {
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/main/benchmarks/component-equivalence.json",
+      "evidence_type": "Vela_release_report",
+      "native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+      "sha256": "ebd40f9a887791d1736132c37f510a69e18a03e247422853f54a42b417b0db9b"
+    }
+  },
+  "models": {
+    "nano": {
+      "repo_id": "llm-semantic-router/Vela-1.0-Omni-Nano",
+      "release_commit": null,
+      "parameters_exact": 163771288,
+      "current_native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+      "task_evidence": {
+        "English41": {
+          "source_id": "nano_English41",
+          "identity": {
+            "model": "local/Vela-Omni-Nano-GIST-Rotation",
+            "evaluated_revision": "29994142677559ca657c27b657eda0dddbf583bd4cf42a3a31095ab3f99d1646",
+            "native_artifact_sha256": "29994142677559ca657c27b657eda0dddbf583bd4cf42a3a31095ab3f99d1646",
+            "revision_semantics": "local native artifact fingerprint, not a Hugging Face commit",
+            "component_applicability": {
+              "component": "text",
+              "evaluated_model": "local/Vela-Omni-Nano-GIST-Rotation",
+              "evaluated_native_artifact_sha256": "29994142677559ca657c27b657eda0dddbf583bd4cf42a3a31095ab3f99d1646",
+              "applies_to_native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+              "prior_component_applicability": {
+                "model": "local/Vela-Omni-Nano-GIST-Rotation",
+                "evaluated_revision": "29994142677559ca657c27b657eda0dddbf583bd4cf42a3a31095ab3f99d1646",
+                "native_artifact_sha256": "29994142677559ca657c27b657eda0dddbf583bd4cf42a3a31095ab3f99d1646",
+                "component_applicability": {
+                  "component": "text",
+                  "applies_to_revision": "self",
+                  "applies_to_native_artifact_sha256": "96d76f97478e114b816df3ab1b3c6947e4c5ef0babfb40ab865d7e3c838d34c4",
+                  "evaluated_model": "local/Vela-Omni-Nano-GIST-Rotation",
+                  "evaluated_revision": "29994142677559ca657c27b657eda0dddbf583bd4cf42a3a31095ab3f99d1646",
+                  "evaluated_native_artifact_sha256": "29994142677559ca657c27b657eda0dddbf583bd4cf42a3a31095ab3f99d1646",
+                  "revision_kind": "local native artifact fingerprint, not a Hugging Face commit",
+                  "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/benchmarks/component-equivalence.json",
+                  "new_full_panel_inference": false,
+                  "basis": "199 exact text tensors and byte-identical inference/tokenizer/configuration under the same official evaluator protocol."
+                },
+                "revision_semantics": "local native artifact fingerprint, not a Hugging Face commit",
+                "inference_profile_applicability": {
+                  "revision": "self",
+                  "native_artifact_sha256": "50ce808197fb43a1b8913a66d4a47339ec66ecd10d52cbd9f9e752d02f8c43fa",
+                  "parameters": 135383808,
+                  "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/benchmarks/inference-equivalence.json",
+                  "new_benchmark_run": false
+                }
+              },
+              "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/main/benchmarks/component-equivalence.json",
+              "new_full_panel_inference": false,
+              "basis": "The frozen text tensors, tokenizer, configuration and encoding computation are unchanged. The original measured text identity is retained."
+            }
+          },
+          "self_reference_interpretation": "Nano native fingerprint 474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2"
+        },
+        "audio19": {
+          "source_id": "nano_audio19",
+          "identity": {
+            "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
+            "evaluated_native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+            "release_native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+            "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/main/benchmarks/maeb-audio-only.json",
+            "new_full_panel_inference": true
+          },
+          "self_reference_interpretation": "Nano native fingerprint 474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2"
+        }
+      },
+      "release_reference": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano",
+      "release_revision_semantics": "Exact native fingerprint below; Hub commit is not encoded in this file."
+    },
+    "mini": {
+      "repo_id": "llm-semantic-router/Vela-1.0-Omni-Mini",
+      "release_commit": null,
+      "parameters_exact": 1361475288,
+      "current_native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731",
+      "task_evidence": {
+        "English41": {
+          "source_id": "mini_English41",
+          "identity": {
+            "model": "local/Qwen3-Embedding-0.6B-MRL768-NoInstructions",
+            "evaluated_revision": "98e47eac3fa59b6c627e371230905400b3a405ddc69ab1ef02cb1c476db04294",
+            "revision_semantics": "Exact standalone evaluation identity; not a Hugging Face commit for this Omni release.",
+            "component_applicability": {
+              "component": "text",
+              "evaluated_model": {
+                "repo_id": "local/Qwen3-Embedding-0.6B-MRL768-NoInstructions",
+                "revision": "98e47eac3fa59b6c627e371230905400b3a405ddc69ab1ef02cb1c476db04294"
+              },
+              "applies_to_model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+              "applies_to_native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731",
+              "prior_component_applicability": {
+                "component": "text",
+                "evaluated_model": {
+                  "repo_id": "local/Qwen3-Embedding-0.6B-MRL768-NoInstructions",
+                  "revision": "98e47eac3fa59b6c627e371230905400b3a405ddc69ab1ef02cb1c476db04294"
+                },
+                "applies_to_model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+                "applies_to_native_artifact_sha256": "1e4eb3cc6a7ab658a4c43baa8d5244a3724125afc2b6dc007737373714ccf8f3",
+                "bridge_native_artifact_sha256": "530d9af9957e1b03560943a0e4ffc1e6745b2aebfc9d977a8e9bbff91c1b627a",
+                "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/f5ef7feb7c0a7877c27ca4fa03c2183edba66fce/benchmarks/component-equivalence.json",
+                "new_whole_Omni_panel_inference": false,
+                "basis": "Exact frozen text weights, tokenizer, active configuration and encoding computation under the same evaluator protocol.",
+                "prior_bridge_native_artifact_sha256": "cf5f45cf6e26cd225e0fc0c1ece629b13b8bd0dfe57dcedef739ca8f529f80ab"
+              },
+              "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/main/benchmarks/component-equivalence.json",
+              "new_whole_Omni_panel_inference": false,
+              "basis": "Frozen text tensors, tokenizer, configuration and encoding computation are unchanged; retain the original standalone measured identity."
+            }
+          },
+          "self_reference_interpretation": "Mini native fingerprint d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731"
+        },
+        "audio19": {
+          "source_id": "mini_audio19",
+          "identity": {
+            "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+            "evaluated_native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731",
+            "release_native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731",
+            "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/main/benchmarks/maeb-audio-only.json",
+            "new_full_panel_inference": true
+          },
+          "self_reference_interpretation": "Mini native fingerprint d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731"
+        }
+      },
+      "release_reference": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini",
+      "release_revision_semantics": "Exact native fingerprint below; Hub commit is not encoded in this file."
+    }
+  },
+  "tasks": {
+    "imdb": {
+      "task": "ImdbClassification",
+      "highlight_variant": "nano",
+      "metric": "accuracy",
+      "panel": "English41",
+      "dataset": "mteb/imdb",
+      "dataset_url": "https://huggingface.co/datasets/mteb/imdb",
+      "registry_metadata": [
+        {
+          "metric": "accuracy",
+          "source_dataset": "mteb/imdb",
+          "languages": [
+            "English"
+          ],
+          "source_id": "scores_MTEB_eng_v2"
+        }
+      ],
+      "points": [
+        {
+          "model": "minishlab/potion-base-2M",
+          "parameters_billion": 0.002,
+          "score": 70.35639999999998,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 241
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": true
+        },
+        {
+          "model": "minishlab/potion-base-4M",
+          "parameters_billion": 0.004,
+          "score": 70.78880000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 230
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": true
+        },
+        {
+          "model": "minishlab/potion-base-8M",
+          "parameters_billion": 0.008,
+          "score": 70.78,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 218
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "minishlab/M2V_base_output",
+          "parameters_billion": 0.008,
+          "score": 65.11479999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 243
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "cointegrated/rubert-tiny",
+          "parameters_billion": 0.012,
+          "score": 60.520799999999994,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 253
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Mihaiii/Squirtle",
+          "parameters_billion": 0.016,
+          "score": 74.9528,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 217
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": true
+        },
+        {
+          "model": "Mihaiii/Venusaur",
+          "parameters_billion": 0.016,
+          "score": 73.02000000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 220
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Mihaiii/Wartortle",
+          "parameters_billion": 0.017,
+          "score": 74.5976,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 198
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Mihaiii/Bulbasaur",
+          "parameters_billion": 0.017,
+          "score": 71.5272,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 166
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Mihaiii/gte-micro",
+          "parameters_billion": 0.017,
+          "score": 62.17159999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 199
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Mihaiii/gte-micro-v4",
+          "parameters_billion": 0.019,
+          "score": 71.9568,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 151
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "MongoDB/mdbr-leaf-mt",
+          "parameters_billion": 0.023,
+          "score": 88.5508,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 79
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": true
+        },
+        {
+          "model": "Mihaiii/Ivysaur",
+          "parameters_billion": 0.023,
+          "score": 80.7996,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 128
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "avsolatorio/GIST-all-MiniLM-L6-v2",
+          "parameters_billion": 0.023,
+          "score": 78.542,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 103
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Snowflake/snowflake-arctic-embed-xs",
+          "parameters_billion": 0.023,
+          "score": 62.80240000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 160
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "brahmairesearch/slx-v0.1",
+          "parameters_billion": 0.023,
+          "score": 61.763999999999996,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 146
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sentence-transformers/all-MiniLM-L6-v2",
+          "parameters_billion": 0.023,
+          "score": 61.763999999999996,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 143
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sentence-transformers/multi-qa-MiniLM-L6-cos-v1",
+          "parameters_billion": 0.023,
+          "score": 61.217999999999996,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 279
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "cointegrated/rubert-tiny2",
+          "parameters_billion": 0.029,
+          "score": 60.714400000000005,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 254
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sergeyzh/rubert-tiny-turbo",
+          "parameters_billion": 0.029,
+          "score": 58.35799999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 246
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "ibm-granite/granite-embedding-30m-english",
+          "parameters_billion": 0.03,
+          "score": 62.2348,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 140
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sentence-transformers/static-retrieval-mrl-en-v1",
+          "parameters_billion": 0.031,
+          "score": 60.9924,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 233
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "minishlab/potion-base-32M",
+          "parameters_billion": 0.032,
+          "score": 70.126,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 203
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "minishlab/potion-retrieval-32M",
+          "parameters_billion": 0.032,
+          "score": 67.89840000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 212
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "BAAI/bge-small-en",
+          "parameters_billion": 0.033,
+          "score": 91.5152,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 215
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": true
+        },
+        {
+          "model": "abhinand/MedEmbed-small-v0.1",
+          "parameters_billion": 0.033,
+          "score": 91.30639999999998,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 86
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "BAAI/bge-small-en-v1.5",
+          "parameters_billion": 0.033,
+          "score": 90.60600000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 83
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "avsolatorio/NoInstruct-small-Embedding-v0",
+          "parameters_billion": 0.033,
+          "score": 90.1472,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 69
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "avsolatorio/GIST-small-Embedding-v0",
+          "parameters_billion": 0.033,
+          "score": 89.4868,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 66
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "ManiacLabs/miniac-embed",
+          "parameters_billion": 0.033,
+          "score": 86.8604,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 95
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "thenlper/gte-small",
+          "parameters_billion": 0.033,
+          "score": 86.80239999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 90
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "intfloat/e5-small-v2",
+          "parameters_billion": 0.033,
+          "score": 86.00280000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 134
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "intfloat/e5-small",
+          "parameters_billion": 0.033,
+          "score": 75.5492,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 135
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "jinaai/jina-embeddings-v2-small-en",
+          "parameters_billion": 0.033,
+          "score": 73.64359999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 193
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Snowflake/snowflake-arctic-embed-s",
+          "parameters_billion": 0.033,
+          "score": 69.48679999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 130
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sentence-transformers/all-MiniLM-L12-v2",
+          "parameters_billion": 0.033,
+          "score": 59.7812,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 157
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "jinaai/jina-embedding-s-en-v1",
+          "parameters_billion": 0.035,
+          "score": 58.7064,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 207
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "ibm-granite/granite-embedding-small-english-r2",
+          "parameters_billion": 0.048,
+          "score": 60.370000000000005,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 125
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "prdev/mini-gte",
+          "parameters_billion": 0.066,
+          "score": 88.6972,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 72
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "codefuse-ai/F2LLM-v2-80M",
+          "parameters_billion": 0.08,
+          "score": 90.77159999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 91
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "malenia1/ternary-weight-embedding",
+          "parameters_billion": 0.099,
+          "score": 51.2528,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 268
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "minishlab/M2V_base_glove",
+          "parameters_billion": 0.102,
+          "score": 66.998,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 234
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "minishlab/M2V_base_glove_subword",
+          "parameters_billion": 0.103,
+          "score": 66.5616,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 238
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "hotchpotch/bekko-embedding-v1-a8m",
+          "parameters_billion": 0.106,
+          "score": 75.2632,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 132
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "cnmoro/static-nomic-384-pten-v2-st",
+          "parameters_billion": 0.106,
+          "score": 60.5784,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 245
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "ibm-granite/granite-embedding-107m-multilingual",
+          "parameters_billion": 0.107,
+          "score": 62.91,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 169
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "DeepPavlov/rubert-base-cased-sentence",
+          "parameters_billion": 0.107,
+          "score": 57.732000000000006,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 264
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "DeepPavlov/distilrubert-small-cased-conversational",
+          "parameters_billion": 0.107,
+          "score": 54.5488,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 258
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sentence-transformers/static-similarity-mrl-multilingual-v1",
+          "parameters_billion": 0.108,
+          "score": 63.049200000000006,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 232
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "BAAI/bge-base-en",
+          "parameters_billion": 0.109,
+          "score": 91.4,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 194
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "infgrad/stella-base-en-v2",
+          "parameters_billion": 0.109,
+          "score": 91.31280000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 65
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "BAAI/bge-base-en-v1.5",
+          "parameters_billion": 0.109,
+          "score": 90.80799999999998,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 71
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "avsolatorio/GIST-Embedding-v0",
+          "parameters_billion": 0.109,
+          "score": 89.6556,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 61
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "intfloat/e5-base-v2",
+          "parameters_billion": 0.109,
+          "score": 86.15,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 106
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "thenlper/gte-base",
+          "parameters_billion": 0.109,
+          "score": 85.95200000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 80
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Snowflake/snowflake-arctic-embed-m-v1.5",
+          "parameters_billion": 0.109,
+          "score": 84.35640000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 129
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "intfloat/e5-base",
+          "parameters_billion": 0.109,
+          "score": 75.958,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 118
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Snowflake/snowflake-arctic-embed-m",
+          "parameters_billion": 0.109,
+          "score": 74.08200000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 133
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sentence-transformers/all-mpnet-base-v2",
+          "parameters_billion": 0.109,
+          "score": 71.1736,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 120
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Omartificial-Intelligence-Space/Arabic-mpnet-base-all-nli-triplet",
+          "parameters_billion": 0.109,
+          "score": 56.6356,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 252
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sentence-transformers/gtr-t5-base",
+          "parameters_billion": 0.11,
+          "score": 65.9944,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 269
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "jinaai/jina-embedding-b-en-v1",
+          "parameters_billion": 0.11,
+          "score": 63.8708,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 161
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "dwzhu/e5-base-4k",
+          "parameters_billion": 0.112,
+          "score": 86.15,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 124
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sdadas/mmlw-e5-small",
+          "parameters_billion": 0.118,
+          "score": 79.2072,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 136
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "intfloat/multilingual-e5-small",
+          "parameters_billion": 0.118,
+          "score": 75.8176,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 153
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Lajavaness/bilingual-embedding-small",
+          "parameters_billion": 0.118,
+          "score": 73.702,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 139
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Omartificial-Intelligence-Space/Arabic-MiniLM-L12-v2-all-nli-triplet",
+          "parameters_billion": 0.118,
+          "score": 60.621199999999995,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 197
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+          "parameters_billion": 0.118,
+          "score": 60.46159999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 187
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "shibing624/text2vec-base-multilingual",
+          "parameters_billion": 0.118,
+          "score": 59.348,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 208
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "hotchpotch/bekko-embedding-v1-a25m",
+          "parameters_billion": 0.123,
+          "score": 79.8308,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 109
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sdadas/mmlw-roberta-base",
+          "parameters_billion": 0.124,
+          "score": 84.69839999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 101
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "deepvk/deberta-v1-base",
+          "parameters_billion": 0.124,
+          "score": 52.6164,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 267
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "ibm-granite/granite-embedding-125m-english",
+          "parameters_billion": 0.125,
+          "score": 64.4052,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 110
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "minishlab/potion-multilingual-128M",
+          "parameters_billion": 0.128,
+          "score": 64.386,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 244
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sergeyzh/LaBSE-ru-turbo",
+          "parameters_billion": 0.129,
+          "score": 71.5828,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 195
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "cointegrated/LaBSE-en-ru",
+          "parameters_billion": 0.129,
+          "score": 62.8684,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 235
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "silma-ai/silma-embeddding-matryoshka-v0.1",
+          "parameters_billion": 0.135,
+          "score": 58.49720000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 257
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Omartificial-Intelligence-Space/Arabert-all-nli-triplet-Matryoshka",
+          "parameters_billion": 0.135,
+          "score": 54.17960000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 260
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Alibaba-NLP/gte-base-en-v1.5",
+          "parameters_billion": 0.137,
+          "score": 87.4836,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 190
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "nomic-ai/nomic-embed-text-v1-unsupervised",
+          "parameters_billion": 0.137,
+          "score": 86.32240000000002,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 114
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "nomic-ai/nomic-embed-text-v1",
+          "parameters_billion": 0.137,
+          "score": 85.55959999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 89
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "nomic-ai/nomic-embed-text-v1.5",
+          "parameters_billion": 0.137,
+          "score": 85.312,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 115
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "nomic-ai/nomic-embed-text-v1-ablated",
+          "parameters_billion": 0.137,
+          "score": 83.7804,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 104
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Hum-Works/lodestone-base-4096-v1",
+          "parameters_billion": 0.137,
+          "score": 79.544,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 261
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "jinaai/jina-embeddings-v2-base-en",
+          "parameters_billion": 0.137,
+          "score": 79.4408,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 173
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Snowflake/snowflake-arctic-embed-m-long",
+          "parameters_billion": 0.137,
+          "score": 71.7904,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 131
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Alibaba-NLP/gte-modernbert-base",
+          "parameters_billion": 0.149,
+          "score": 87.14,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 185
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "nomic-ai/modernbert-embed-base",
+          "parameters_billion": 0.149,
+          "score": 86.6108,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 201
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "ibm-granite/granite-embedding-english-r2",
+          "parameters_billion": 0.149,
+          "score": 61.912800000000004,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 99
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Tarka-AIR/Tarka-Embedding-150M-V1",
+          "parameters_billion": 0.156,
+          "score": 90.5852,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 68
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "codefuse-ai/F2LLM-v2-160M",
+          "parameters_billion": 0.159,
+          "score": 91.7148,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 74
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": true
+        },
+        {
+          "model": "Omartificial-Intelligence-Space/Marbert-all-nli-triplet-Matryoshka",
+          "parameters_billion": 0.163,
+          "score": 61.51839999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 255
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "jinaai/jina-embeddings-v5-text-nano",
+          "parameters_billion": 0.212,
+          "score": 94.7448,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 19
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": true
+        },
+        {
+          "model": "sentence-transformers/sentence-t5-base",
+          "parameters_billion": 0.223,
+          "score": 77.3372,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 256
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "keeeeenw/MicroLlama-text-embedding",
+          "parameters_billion": 0.272,
+          "score": 63.6532,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 278
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Lajavaness/bilingual-embedding-base",
+          "parameters_billion": 0.278,
+          "score": 87.392,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 107
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sdadas/mmlw-e5-base",
+          "parameters_billion": 0.278,
+          "score": 85.624,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 98
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "intfloat/multilingual-e5-base",
+          "parameters_billion": 0.278,
+          "score": 84.2892,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 137
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "deepfile/embedder-100p",
+          "parameters_billion": 0.278,
+          "score": 67.2992,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 149
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Omartificial-Intelligence-Space/Arabic-all-nli-triplet-Matryoshka",
+          "parameters_billion": 0.278,
+          "score": 64.7472,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 162
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+          "parameters_billion": 0.278,
+          "score": 64.5752,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 150
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "ibm-granite/granite-embedding-278m-multilingual",
+          "parameters_billion": 0.278,
+          "score": 63.0232,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 148
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Gameselo/STS-multilingual-mpnet-base-v2",
+          "parameters_billion": 0.278,
+          "score": 58.2736,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 171
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "jxm/cde-small-v1",
+          "parameters_billion": 0.281,
+          "score": 93.58840000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 178
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Alibaba-NLP/gte-multilingual-base",
+          "parameters_billion": 0.305,
+          "score": 74.912,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 108
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Snowflake/snowflake-arctic-embed-m-v2.0",
+          "parameters_billion": 0.305,
+          "score": 69.27799999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 112
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "jxm/cde-small-v2",
+          "parameters_billion": 0.306,
+          "score": 94.9352,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 158
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": true
+        },
+        {
+          "model": "google/embeddinggemma-300m",
+          "parameters_billion": 0.308,
+          "score": 92.9168,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 33
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "codefuse-ai/F2LLM-v2-330M",
+          "parameters_billion": 0.334,
+          "score": 94.5996,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 49
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "BAAI/bge-large-en",
+          "parameters_billion": 0.335,
+          "score": 93.5064,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 189
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "BAAI/bge-large-en-v1.5",
+          "parameters_billion": 0.335,
+          "score": 92.84599999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 63
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "mixedbread-ai/mxbai-embed-large-v1",
+          "parameters_billion": 0.335,
+          "score": 92.8324,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 51
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "llmrails/ember-v1",
+          "parameters_billion": 0.335,
+          "score": 92.78880000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 163
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "WhereIsAI/UAE-Large-V1",
+          "parameters_billion": 0.335,
+          "score": 92.7796,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 53
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "w601sxs/b1ade-embed",
+          "parameters_billion": 0.335,
+          "score": 91.9088,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 78
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "intfloat/e5-large-v2",
+          "parameters_billion": 0.335,
+          "score": 91.686,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 100
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "avsolatorio/GIST-large-Embedding-v0",
+          "parameters_billion": 0.335,
+          "score": 91.23440000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 48
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "mixedbread-ai/mxbai-embed-2d-large-v1",
+          "parameters_billion": 0.335,
+          "score": 90.40480000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 167
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "thenlper/gte-large",
+          "parameters_billion": 0.335,
+          "score": 88.45600000000002,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 67
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "intfloat/e5-large",
+          "parameters_billion": 0.335,
+          "score": 82.1096,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 92
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Snowflake/snowflake-arctic-embed-l",
+          "parameters_billion": 0.335,
+          "score": 72.876,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 123
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "consciousAI/cai-lunaris-text-embeddings",
+          "parameters_billion": 0.335,
+          "score": 61.512,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 236
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sentence-transformers/sentence-t5-large",
+          "parameters_billion": 0.336,
+          "score": 87.006,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 240
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sentence-transformers/gtr-t5-large",
+          "parameters_billion": 0.336,
+          "score": 70.86240000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 262
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "aari1995/German_Semantic_STS_V2",
+          "parameters_billion": 0.336,
+          "score": 67.22399999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 221
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Tarka-AIR/Tarka-Embedding-350M-V1",
+          "parameters_billion": 0.354,
+          "score": 95.298,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 40
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": true
+        },
+        {
+          "model": "deepvk/USER-bge-m3",
+          "parameters_billion": 0.359,
+          "score": 90.8792,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 102
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "ai-forever/ru-en-RoSBERTa",
+          "parameters_billion": 0.404,
+          "score": 80.2612,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 192
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "deepvk/USER-base",
+          "parameters_billion": 0.427,
+          "score": 58.5576,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 239
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "ai-forever/sbert_large_mt_nlu_ru",
+          "parameters_billion": 0.427,
+          "score": 56.133599999999994,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 263
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "ai-forever/sbert_large_nlu_ru",
+          "parameters_billion": 0.427,
+          "score": 55.9652,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 265
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "NovaSearch/stella_en_400M_v5",
+          "parameters_billion": 0.435,
+          "score": 96.4904,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 35
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": true
+        },
+        {
+          "model": "sdadas/mmlw-roberta-large",
+          "parameters_billion": 0.435,
+          "score": 91.6484,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 88
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "VPLabs/SearchMap_Preview",
+          "parameters_billion": 0.435,
+          "score": 77.3852,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 73
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Omartificial-Intelligence-Space/Arabic-labse-Matryoshka",
+          "parameters_billion": 0.471,
+          "score": 65.0308,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 200
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sentence-transformers/LaBSE",
+          "parameters_billion": 0.471,
+          "score": 62.041999999999994,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 231
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "nomic-ai/nomic-embed-text-v2-moe",
+          "parameters_billion": 0.475,
+          "score": 84.80199999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 96
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "ai-sage/Giga-Embeddings-instruct-480M-0826",
+          "parameters_billion": 0.484,
+          "score": 96.1244,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 43
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "mixedbread-ai/deepset-mxbai-embed-de-large-v1",
+          "parameters_billion": 0.487,
+          "score": 89.8104,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 87
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "KaLM-Embedding/KaLM-embedding-multilingual-mini-instruct-v2.5",
+          "parameters_billion": 0.494,
+          "score": 95.914,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 21
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "HIT-TMG/KaLM-embedding-multilingual-mini-instruct-v2",
+          "parameters_billion": 0.494,
+          "score": 95.1632,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 156
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "HIT-TMG/KaLM-embedding-multilingual-mini-instruct-v1",
+          "parameters_billion": 0.494,
+          "score": 95.0268,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 94
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "HIT-TMG/KaLM-embedding-multilingual-mini-instruct-v1.5",
+          "parameters_billion": 0.494,
+          "score": 94.93119999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 182
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "HIT-TMG/KaLM-embedding-multilingual-mini-v1",
+          "parameters_billion": 0.494,
+          "score": 91.6012,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 81
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "izhx/udever-bloom-560m",
+          "parameters_billion": 0.559,
+          "score": 72.21000000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 227
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "intfloat/multilingual-e5-large-instruct",
+          "parameters_billion": 0.56,
+          "score": 94.6112,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 60
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sdadas/mmlw-e5-large",
+          "parameters_billion": 0.56,
+          "score": 92.0048,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 84
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Lajavaness/bilingual-embedding-large",
+          "parameters_billion": 0.56,
+          "score": 88.7704,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 70
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "intfloat/multilingual-e5-large",
+          "parameters_billion": 0.56,
+          "score": 88.6748,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 121
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "OrdalieTech/Solon-embeddings-large-0.1",
+          "parameters_billion": 0.56,
+          "score": 84.17519999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 117
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "omarelshehy/arabic-english-sts-matryoshka",
+          "parameters_billion": 0.56,
+          "score": 82.7496,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 202
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "manu/bge-m3-custom-fr",
+          "parameters_billion": 0.568,
+          "score": 87.0164,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 122
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Snowflake/snowflake-arctic-embed-l-v2.0",
+          "parameters_billion": 0.568,
+          "score": 72.8232,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 97
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "jinaai/jina-embeddings-v3",
+          "parameters_billion": 0.572,
+          "score": 91.90440000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 58
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "KiteFishAI/Nano-Em1-0.6B-v2.1",
+          "parameters_billion": 0.596,
+          "score": 96.4837,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 34
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "codefuse-ai/F2LLM-v2-0.6B",
+          "parameters_billion": 0.596,
+          "score": 95.814,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 36
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "codefuse-ai/F2LLM-0.6B",
+          "parameters_billion": 0.596,
+          "score": 95.6372,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 44
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "jinaai/jina-embeddings-v5-text-small",
+          "parameters_billion": 0.596,
+          "score": 95.55,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 14
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Qwen/Qwen3-Embedding-0.6B",
+          "parameters_billion": 0.596,
+          "score": 95.4392,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 26
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "IEITYuan/Yuan-embedding-2.0-en",
+          "parameters_billion": 0.596,
+          "score": 94.76480000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 31
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "KiteFishAI/Nano-Em1-0.6B-v2",
+          "parameters_billion": 0.596,
+          "score": 91.73519999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 82
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "infgrad/Jasper-Token-Compression-600M",
+          "parameters_billion": 0.607,
+          "score": 97.1104,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 1
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": true
+        },
+        {
+          "model": "jinaai/jina-embeddings-v5-omni-nano",
+          "parameters_billion": 0.986,
+          "score": 94.7448,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 18
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "izhx/udever-bloom-1b1",
+          "parameters_billion": 1.065,
+          "score": 74.446,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 176
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sentence-transformers/sentence-t5-xl",
+          "parameters_billion": 1.242,
+          "score": 87.5436,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 229
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sentence-transformers/gtr-t5-xl",
+          "parameters_billion": 1.242,
+          "score": 68.1516,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 250
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "manu/sentence_croissant_alpha_v0.4",
+          "parameters_billion": 1.28,
+          "score": 72.05,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 177
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "manu/sentence_croissant_alpha_v0.2",
+          "parameters_billion": 1.28,
+          "score": 71.148,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 191
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "manu/sentence_croissant_alpha_v0.3",
+          "parameters_billion": 1.28,
+          "score": 69.5372,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 186
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "DeepPavlov/rubert-base-cased",
+          "parameters_billion": 1.28,
+          "score": 54.602799999999995,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 266
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "McGill-NLP/LLM2Vec-Sheared-LLaMA-mntp-supervised",
+          "parameters_billion": 1.295,
+          "score": 75.332,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 181
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "McGill-NLP/LLM2Vec-Sheared-LLaMA-mntp-unsup-simcse",
+          "parameters_billion": 1.295,
+          "score": 71.9232,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 272
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "NovaSearch/stella_en_1.5B_v5",
+          "parameters_billion": 1.54,
+          "score": 96.6608,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 32
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Alibaba-NLP/gte-Qwen2-1.5B-instruct",
+          "parameters_billion": 1.543,
+          "score": 95.8336,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 42
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "NovaSearch/jasper_en_vision_language_v1",
+          "parameters_billion": 1.565,
+          "score": 96.9528,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 15
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "jinaai/jina-embeddings-v5-omni-small",
+          "parameters_billion": 1.626,
+          "score": 95.55,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 13
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "codefuse-ai/F2LLM-v2-1.7B",
+          "parameters_billion": 1.721,
+          "score": 96.6684,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 20
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "codefuse-ai/F2LLM-1.7B",
+          "parameters_billion": 1.721,
+          "score": 96.3316,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 25
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "encord-team/ebind-full",
+          "parameters_billion": 1.79,
+          "score": 57.3432,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 213
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Alibaba-NLP/gme-Qwen2-VL-2B-Instruct",
+          "parameters_billion": 2.209,
+          "score": 96.0428,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 196
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "BidirLM/BidirLM-Omni-2.5B-Embedding",
+          "parameters_billion": 2.445,
+          "score": 93.0924,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 39
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Jaume/gemma-2b-embeddings",
+          "parameters_billion": 2.506,
+          "score": 65.47319999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 242
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "izhx/udever-bloom-3b",
+          "parameters_billion": 3.003,
+          "score": 77.698,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 147
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "ai-sage/Giga-Embeddings-instruct-3B-0826",
+          "parameters_billion": 3.151,
+          "score": 96.932,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 11
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "ai-sage/Giga-Embeddings-instruct",
+          "parameters_billion": 3.227,
+          "score": 96.714,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 30
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Qwen/Qwen3-Embedding-4B",
+          "parameters_billion": 4.022,
+          "score": 97.16,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 6
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": true
+        },
+        {
+          "model": "codefuse-ai/F2LLM-v2-4B",
+          "parameters_billion": 4.022,
+          "score": 96.926,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 16
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "codefuse-ai/F2LLM-4B",
+          "parameters_billion": 4.022,
+          "score": 96.87519999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 17
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "ICT-TIME-and-Querit/BOOM_4B_v1",
+          "parameters_billion": 4.022,
+          "score": 96.1644,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 45
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "ICT-TIME-and-Querit/ICT-TIME-and-Querit-embedding-v1",
+          "parameters_billion": 4.022,
+          "score": 96.138,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 37
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "LCO-Embedding/LCO-Embedding-Omni-3B",
+          "parameters_billion": 4.703,
+          "score": 88.0888,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 93
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Haon-Chen/e5-omni-3B",
+          "parameters_billion": 4.703,
+          "score": 67.6796,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 144
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sentence-transformers/sentence-t5-xxl",
+          "parameters_billion": 4.866,
+          "score": 90.2268,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 226
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "sentence-transformers/gtr-t5-xxl",
+          "parameters_billion": 4.866,
+          "score": 70.8028,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 247
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "McGill-NLP/LLM2Vec-Llama-2-7b-chat-hf-mntp-supervised",
+          "parameters_billion": 6.647,
+          "score": 85.77920000000002,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 170
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "McGill-NLP/LLM2Vec-Llama-2-7b-chat-hf-mntp-unsup-simcse",
+          "parameters_billion": 6.647,
+          "score": 75.6784,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 249
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "voyageai/voyage-3-m-exp",
+          "parameters_billion": 6.918,
+          "score": 97.2864,
+          "open_weights": false,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 59
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": true
+        },
+        {
+          "model": "bigscience/sgpt-bloom-7b1-msmarco",
+          "parameters_billion": 7.068,
+          "score": 61.772000000000006,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 172
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Alibaba-NLP/gte-Qwen2-7B-instruct",
+          "parameters_billion": 7.069,
+          "score": 96.75399999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 28
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Kingsoft-LLM/QZhou-Embedding",
+          "parameters_billion": 7.071,
+          "score": 96.3604,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 2
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Alibaba-NLP/gte-Qwen1.5-7B-instruct",
+          "parameters_billion": 7.099,
+          "score": 95.58120000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 55
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "yibinlei/LENS-d4000",
+          "parameters_billion": 7.11,
+          "score": 97.116,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 119
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "yibinlei/LENS-d8000",
+          "parameters_billion": 7.11,
+          "score": 96.9972,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 116
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "BAAI/bge-en-icl",
+          "parameters_billion": 7.11,
+          "score": 96.9144,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 141
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "annamodels/LGAI-Embedding-Preview",
+          "parameters_billion": 7.11,
+          "score": 96.8108,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 5
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Salesforce/SFR-Embedding-2_R",
+          "parameters_billion": 7.111,
+          "score": 96.80320000000002,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 41
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "zeta-alpha-ai/Zeta-Alpha-E5-Mistral",
+          "parameters_billion": 7.111,
+          "score": 95.50119999999997,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 155
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Haon-Chen/speed-embedding-7b-instruct",
+          "parameters_billion": 7.111,
+          "score": 94.87799999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 76
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Salesforce/SFR-Embedding-Mistral",
+          "parameters_billion": 7.111,
+          "score": 94.79200000000002,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 23
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Linq-AI-Research/Linq-Embed-Mistral",
+          "parameters_billion": 7.111,
+          "score": 94.7764,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 22
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "intfloat/e5-mistral-7b-instruct",
+          "parameters_billion": 7.111,
+          "score": 94.7276,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 38
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "GeoGPT-Research-Project/GeoEmbedding",
+          "parameters_billion": 7.111,
+          "score": 92.0364,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 46
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "McGill-NLP/LLM2Vec-Mistral-7B-Instruct-v2-mntp-supervised",
+          "parameters_billion": 7.153,
+          "score": 87.422,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 64
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "McGill-NLP/LLM2Vec-Mistral-7B-Instruct-v2-mntp-unsup-simcse",
+          "parameters_billion": 7.153,
+          "score": 77.954,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 165
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "GritLM/GritLM-7B",
+          "parameters_billion": 7.24,
+          "score": 95.07160000000002,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 47
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp-supervised",
+          "parameters_billion": 7.547,
+          "score": 82.9448,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 145
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp-unsup-simcse",
+          "parameters_billion": 7.547,
+          "score": 75.1904,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 248
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Qwen/Qwen3-Embedding-8B",
+          "parameters_billion": 7.567,
+          "score": 97.368,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 4
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": true
+        },
+        {
+          "model": "jcorners/ingot-8b-r3",
+          "parameters_billion": 7.567,
+          "score": 97.3672,
+          "open_weights": false,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 0
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "codefuse-ai/F2LLM-v2-8B",
+          "parameters_billion": 7.568,
+          "score": 97.05,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 9
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Alibaba-NLP/gme-Qwen2-VL-7B-Instruct",
+          "parameters_billion": 7.746,
+          "score": 96.72559999999999,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 180
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "nvidia/NV-Embed-v2",
+          "parameters_billion": 7.85,
+          "score": 97.1376,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 24
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "nvidia/NV-Embed-v1",
+          "parameters_billion": 7.85,
+          "score": 97.05799999999998,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 50
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "LCO-Embedding/LCO-Embedding-Omni-7B",
+          "parameters_billion": 8.932,
+          "score": 91.096,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 77
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Haon-Chen/e5-omni-7B",
+          "parameters_billion": 8.932,
+          "score": 71.0912,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 152
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Tevatron/OmniEmbed-v0.1",
+          "parameters_billion": 8.932,
+          "score": 67.2112,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 154
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "BAAI/bge-multilingual-gemma2",
+          "parameters_billion": 9.24,
+          "score": 96.66480000000001,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 159
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "ai-sage/Giga-Embeddings-instruct-10B-A1.8B-0826",
+          "parameters_billion": 10.476,
+          "score": 96.9212,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 12
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "codefuse-ai/F2LLM-v2-14B",
+          "parameters_billion": 13.99,
+          "score": 97.2288,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 10
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "GritLM/GritLM-8x7B",
+          "parameters_billion": 57.92,
+          "score": 94.3208,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MTEB_eng_v2",
+              "row_index": 52
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
+          "kind": "nano",
+          "parameters_billion": 0.163771288,
+          "parameters_exact": 163771288,
+          "score": 91.94760000000001,
+          "evidence_type": "exact_text_component_applicability",
+          "identity_ref": "models.nano.task_evidence.English41",
+          "size_basis": "current_whole_model_exact_tensor_count",
+          "open_weights": true,
+          "on_displayed_frontier": true,
+          "native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+          "revision": null,
+          "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/main/benchmarks/mteb-eng-v2.json",
+          "evaluated_native_artifact_sha256": "29994142677559ca657c27b657eda0dddbf583bd4cf42a3a31095ab3f99d1646"
+        },
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+          "kind": "mini",
+          "parameters_billion": 1.361475288,
+          "parameters_exact": 1361475288,
+          "score": 82.522,
+          "evidence_type": "exact_text_component_applicability",
+          "identity_ref": "models.mini.task_evidence.English41",
+          "size_basis": "current_whole_model_exact_tensor_count",
+          "open_weights": true,
+          "on_displayed_frontier": false,
+          "native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731",
+          "revision": null,
+          "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/main/benchmarks/mteb-eng-v2.json",
+          "evaluated_native_artifact_sha256": null
+        }
+      ],
+      "frontier_models": [
+        "minishlab/potion-base-2M",
+        "minishlab/potion-base-4M",
+        "Mihaiii/Squirtle",
+        "MongoDB/mdbr-leaf-mt",
+        "BAAI/bge-small-en",
+        "codefuse-ai/F2LLM-v2-160M",
+        "llm-semantic-router/Vela-1.0-Omni-Nano",
+        "jinaai/jina-embeddings-v5-text-nano",
+        "jxm/cde-small-v2",
+        "Tarka-AIR/Tarka-Embedding-350M-V1",
+        "NovaSearch/stella_en_400M_v5",
+        "infgrad/Jasper-Token-Compression-600M",
+        "Qwen/Qwen3-Embedding-4B",
+        "voyageai/voyage-3-m-exp",
+        "Qwen/Qwen3-Embedding-8B"
+      ],
+      "reported_peer_observations": 230,
+      "unknown_size_observations_excluded": [
+        {
+          "model": "ByteDance-Seed/Seed1.5-Embedding",
+          "score": 96.98,
+          "parameters_billion": null,
+          "row_index": 3,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "Bytedance/Seed1.6-embedding",
+          "score": 97.1688,
+          "parameters_billion": null,
+          "row_index": 7,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "google/gemini-embedding-001",
+          "score": 94.98,
+          "parameters_billion": null,
+          "row_index": 8,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "google/text-embedding-005",
+          "score": 95.6336,
+          "parameters_billion": null,
+          "row_index": 27,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "google/text-embedding-004",
+          "score": 95.9336,
+          "parameters_billion": null,
+          "row_index": 29,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "google/text-multilingual-embedding-002",
+          "score": 94.6228,
+          "parameters_billion": null,
+          "row_index": 54,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "Cohere/Cohere-embed-english-v3.0",
+          "score": 93.56920000000001,
+          "parameters_billion": null,
+          "row_index": 56,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "Cohere/Cohere-embed-multilingual-v3.0",
+          "score": 93.9672,
+          "parameters_billion": null,
+          "row_index": 57,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "voyageai/voyage-large-2-instruct",
+          "score": 93.7828,
+          "parameters_billion": null,
+          "row_index": 62,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "Cohere/Cohere-embed-english-light-v3.0",
+          "score": 92.16680000000001,
+          "parameters_billion": null,
+          "row_index": 75,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "openai/text-embedding-3-large",
+          "score": 87.6704,
+          "parameters_billion": null,
+          "row_index": 85,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "TencentBAC/Conan-embedding-v2",
+          "score": 96.1628,
+          "parameters_billion": null,
+          "row_index": 105,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "openai/text-embedding-3-small",
+          "score": 83.65639999999999,
+          "parameters_billion": null,
+          "row_index": 111,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "Cohere/Cohere-embed-multilingual-light-v3.0",
+          "score": 85.6372,
+          "parameters_billion": null,
+          "row_index": 113,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "izhx/udever-bloom-7b1",
+          "score": 78.46119999999999,
+          "parameters_billion": null,
+          "row_index": 126,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "voyageai/voyage-3",
+          "score": 89.6756,
+          "parameters_billion": null,
+          "row_index": 127,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "voyageai/voyage-multilingual-2",
+          "score": 82.7972,
+          "parameters_billion": null,
+          "row_index": 138,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "voyageai/voyage-3-lite",
+          "score": 73.03920000000001,
+          "parameters_billion": null,
+          "row_index": 142,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "voyageai/voyage-code-3",
+          "score": 89.634,
+          "parameters_billion": null,
+          "row_index": 175,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "voyageai/voyage-law-2",
+          "score": 85.1104,
+          "parameters_billion": null,
+          "row_index": 184,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "amazon/Titan-text-embeddings-v2",
+          "score": 82.3912,
+          "parameters_billion": null,
+          "row_index": 204,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "voyageai/voyage-large-2",
+          "score": 87.0532,
+          "parameters_billion": null,
+          "row_index": 210,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "voyageai/voyage-code-2",
+          "score": 87.0532,
+          "parameters_billion": null,
+          "row_index": 211,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "voyageai/voyage-finance-2",
+          "score": 82.8276,
+          "parameters_billion": null,
+          "row_index": 225,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "openai/text-embedding-ada-002",
+          "score": 77.9824,
+          "parameters_billion": null,
+          "row_index": 228,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "mteb/baseline-random-encoder",
+          "score": 50.098,
+          "parameters_billion": 0.0,
+          "row_index": 270,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "facebook/SONAR",
+          "score": 55.7508,
+          "parameters_billion": null,
+          "row_index": 277,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        },
+        {
+          "model": "consciousAI/cai-stellaris-text-embeddings",
+          "score": 66.89840000000001,
+          "parameters_billion": null,
+          "row_index": 280,
+          "reason": "no finite strictly positive reported total parameters",
+          "source_id": "scores_MTEB_eng_v2"
+        }
+      ],
+      "unknown_size_observation_count": 28,
+      "highlight_gap_above_best_equal_or_smaller_peer_pp": 0.23280000000001166,
+      "highlight_dominators": []
+    },
+    "mridingham": {
+      "task": "MridinghamTonic",
+      "highlight_variant": "mini",
+      "metric": "accuracy",
+      "panel": "audio19",
+      "dataset": "mteb/mridingham-tonic",
+      "dataset_url": "https://huggingface.co/datasets/mteb/mridingham-tonic",
+      "registry_metadata": [
+        {
+          "metric": "accuracy",
+          "source_dataset": "mteb/mridingham-tonic",
+          "languages": [
+            "No linguistic content"
+          ],
+          "source_id": "scores_MAEB_beta_audio-only"
+        },
+        {
+          "metric": "accuracy",
+          "source_dataset": "mteb/mridingham-tonic",
+          "languages": [
+            "No linguistic content"
+          ],
+          "source_id": "scores_MAEB_beta"
+        }
+      ],
+      "points": [
+        {
+          "model": "google/yamnet",
+          "parameters_billion": 0.004,
+          "score": 35.1585,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 28
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 35
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": true
+        },
+        {
+          "model": "asapp/sew-d-tiny-100k-ft-ls100h",
+          "parameters_billion": 0.02,
+          "score": 23.6496,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 56
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 59
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "matthewagi/HeAR-s1.1",
+          "parameters_billion": 0.022,
+          "score": 45.0619,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 12
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 31
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": true
+        },
+        {
+          "model": "facebook/encodec_24khz",
+          "parameters_billion": 0.023,
+          "score": 24.0357,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 62
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 63
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "openai/whisper-tiny",
+          "parameters_billion": 0.039,
+          "score": 44.0302,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 18
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 30
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "google/vggish",
+          "parameters_billion": 0.072,
+          "score": 32.7654,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 25
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 33
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "openai/whisper-base",
+          "parameters_billion": 0.074,
+          "score": 44.675,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 9
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 27
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "speechbrain/cnn14-esc50",
+          "parameters_billion": 0.081,
+          "score": 26.057599999999997,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 32
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 40
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "MIT/ast-finetuned-audioset-10-10-0.4593",
+          "parameters_billion": 0.087,
+          "score": 54.1632,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 20
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 32
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": true
+        },
+        {
+          "model": "facebook/data2vec-audio-base-960h",
+          "parameters_billion": 0.093,
+          "score": 20.768800000000002,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 60
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 61
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "microsoft/unispeech-sat-base-100h-libri-ft",
+          "parameters_billion": 0.094,
+          "score": 25.3408,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 58
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 60
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "facebook/wav2vec2-base",
+          "parameters_billion": 0.095,
+          "score": 35.1446,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 43
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 45
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "facebook/hubert-base-ls960",
+          "parameters_billion": 0.095,
+          "score": 31.575300000000002,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 27
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 36
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "microsoft/wavlm-base",
+          "parameters_billion": 0.095,
+          "score": 29.683799999999998,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 36
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 46
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "microsoft/wavlm-base-sd",
+          "parameters_billion": 0.095,
+          "score": 29.683799999999998,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 38
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 47
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "microsoft/wavlm-base-sv",
+          "parameters_billion": 0.095,
+          "score": 29.683799999999998,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 39
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 48
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "microsoft/wavlm-base-plus",
+          "parameters_billion": 0.095,
+          "score": 26.472800000000003,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 45
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 50
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "microsoft/wavlm-base-plus-sd",
+          "parameters_billion": 0.095,
+          "score": 26.472800000000003,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 46
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 51
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "microsoft/wavlm-base-plus-sv",
+          "parameters_billion": 0.095,
+          "score": 26.472800000000003,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 47
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 52
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "facebook/wav2vec2-base-960h",
+          "parameters_billion": 0.095,
+          "score": 24.3233,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 63
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 64
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "asapp/sew-d-base-plus-400k-ft-ls100h",
+          "parameters_billion": 0.095,
+          "score": 19.4928,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 57
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 62
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "asapp/sew-d-mid-400k-ft-ls100h",
+          "parameters_billion": 0.139,
+          "score": 19.3777,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 64
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 65
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "laion/clap-htsat-unfused",
+          "parameters_billion": 0.153,
+          "score": 49.519400000000005,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 14
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 11
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "laion/clap-htsat-fused",
+          "parameters_billion": 0.154,
+          "score": 46.997499999999995,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 19
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 14
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "microsoft/msclap-2023",
+          "parameters_billion": 0.16,
+          "score": 52.085899999999995,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 17
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 13
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "lyrebird/wav2clip",
+          "parameters_billion": 0.163,
+          "score": 40.2753,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 24
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 17
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "laion/larger_clap_general",
+          "parameters_billion": 0.194,
+          "score": 49.4479,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 4
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 6
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "laion/larger_clap_music_and_speech",
+          "parameters_billion": 0.194,
+          "score": 48.9895,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 6
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 10
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "laion/larger_clap_music",
+          "parameters_billion": 0.194,
+          "score": 18.3887,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 52
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 26
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "microsoft/msclap-2022",
+          "parameters_billion": 0.196,
+          "score": 29.139,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 33
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 18
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "openai/whisper-small",
+          "parameters_billion": 0.244,
+          "score": 45.4917,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 11
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 28
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "microsoft/speecht5_multimodal",
+          "parameters_billion": 0.298,
+          "score": 30.7438,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 40
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 20
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "facebook/wav2vec2-xls-r-300m",
+          "parameters_billion": 0.3,
+          "score": 35.8315,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 53
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 57
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "vitouphy/wav2vec2-xls-r-300m-phoneme",
+          "parameters_billion": 0.3,
+          "score": 33.9687,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 37
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 42
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "facebook/data2vec-audio-large-960h",
+          "parameters_billion": 0.313,
+          "score": 21.213099999999997,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 55
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 58
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "facebook/wav2vec2-lv-60-espeak-cv-ft",
+          "parameters_billion": 0.317,
+          "score": 37.2942,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 29
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 37
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "microsoft/wavlm-large",
+          "parameters_billion": 0.317,
+          "score": 31.4178,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 26
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 34
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "facebook/wav2vec2-large",
+          "parameters_billion": 0.317,
+          "score": 26.6444,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 50
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 54
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "facebook/hubert-large-ls960-ft",
+          "parameters_billion": 0.317,
+          "score": 24.223300000000002,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 51
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 55
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "facebook/wav2vec2-large-xlsr-53",
+          "parameters_billion": 0.317,
+          "score": 19.1335,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 65
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 66
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "OpenMuQ/MuQ-MuLan-large",
+          "parameters_billion": 0.63,
+          "score": 38.2543,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 22
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 16
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "openai/whisper-medium",
+          "parameters_billion": 0.769,
+          "score": 49.505500000000005,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 1
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 22
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "jinaai/jina-embeddings-v5-omni-nano",
+          "parameters_billion": 0.986,
+          "score": 30.988500000000002,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 10
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 7
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "facebook/wav2vec2-xls-r-1b",
+          "parameters_billion": 1.0,
+          "score": 39.845000000000006,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 44
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 49
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "facebook/mms-1b-fl102",
+          "parameters_billion": 1.0,
+          "score": 30.886999999999997,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 41
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 43
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "facebook/mms-1b-l1107",
+          "parameters_billion": 1.0,
+          "score": 30.7008,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 31
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 39
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "facebook/mms-1b-all",
+          "parameters_billion": 1.0,
+          "score": 27.418599999999998,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 35
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 41
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "speechbrain/m-ctc-t-large",
+          "parameters_billion": 1.059,
+          "score": 24.265700000000002,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 49
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 53
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "openai/whisper-large-v3",
+          "parameters_billion": 1.55,
+          "score": 37.5376,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 13
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 29
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "jinaai/jina-embeddings-v5-omni-small",
+          "parameters_billion": 1.626,
+          "score": 32.278600000000004,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 5
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 3
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "encord-team/ebind-full",
+          "parameters_billion": 1.79,
+          "score": 30.1563,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 21
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 15
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "facebook/wav2vec2-xls-r-2b",
+          "parameters_billion": 2.0,
+          "score": 44.6177,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 30
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 38
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "facebook/seamless-m4t-v2-large",
+          "parameters_billion": 2.3,
+          "score": 35.3743,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 42
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 44
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "BidirLM/BidirLM-Omni-2.5B-Embedding",
+          "parameters_billion": 2.445,
+          "score": 45.349000000000004,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 8
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 4
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "EximiusLabs/fusion-embedding-2-2b-preview",
+          "parameters_billion": 2.8,
+          "score": 53.992,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 23
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 12
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "LCO-Embedding/LCO-Embedding-Omni-3B",
+          "parameters_billion": 4.703,
+          "score": 39.5444,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 16
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 8
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Haon-Chen/e5-omni-3B",
+          "parameters_billion": 4.703,
+          "score": 29.941699999999997,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 15
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 9
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Qwen/Qwen2.5-Omni-3B",
+          "parameters_billion": 5.537,
+          "score": 26.4449,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 61
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 24
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Qwen/Qwen2-Audio-7B",
+          "parameters_billion": 7.0,
+          "score": 61.172000000000004,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 0
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 5
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "LCO-Embedding/LCO-Embedding-Omni-7B",
+          "parameters_billion": 8.932,
+          "score": 42.0671,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 7
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 1
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Haon-Chen/e5-omni-7B",
+          "parameters_billion": 8.932,
+          "score": 30.8166,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 3
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 0
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Tevatron/OmniEmbed-v0.1",
+          "parameters_billion": 8.932,
+          "score": 28.3225,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 2
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 2
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Qwen/Qwen2.5-Omni-7B",
+          "parameters_billion": 10.732,
+          "score": 30.6729,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 59
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 23
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Qwen/Qwen3-Omni-30B-A3B-Thinking",
+          "parameters_billion": 31.719,
+          "score": 27.9917,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 54
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 25
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "Qwen/Qwen3-Omni-30B-A3B-Instruct",
+          "parameters_billion": 35.26,
+          "score": 32.4927,
+          "open_weights": true,
+          "evidence_type": "registry_reported",
+          "scored_checkpoint_revision": null,
+          "size_basis": "reported_rounded_total",
+          "sources": [
+            {
+              "source_id": "scores_MAEB_beta_audio-only",
+              "row_index": 48
+            },
+            {
+              "source_id": "scores_MAEB_beta",
+              "row_index": 21
+            }
+          ],
+          "kind": "peer",
+          "on_displayed_frontier": false
+        },
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
+          "kind": "nano",
+          "parameters_billion": 0.163771288,
+          "parameters_exact": 163771288,
+          "score": 58.41978617863634,
+          "evidence_type": "measured_release_evaluation",
+          "identity_ref": "models.nano.task_evidence.audio19",
+          "size_basis": "current_whole_model_exact_tensor_count",
+          "open_weights": true,
+          "on_displayed_frontier": true,
+          "native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+          "revision": null,
+          "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/main/benchmarks/maeb-audio-only.json",
+          "evaluated_native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+          "evaluated_revision": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+          "evaluated_model": "llm-semantic-router/Vela-1.0-Omni-Nano"
+        },
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+          "kind": "mini",
+          "parameters_billion": 1.361475288,
+          "parameters_exact": 1361475288,
+          "score": 68.13725852666605,
+          "evidence_type": "measured_release_evaluation",
+          "identity_ref": "models.mini.task_evidence.audio19",
+          "size_basis": "current_whole_model_exact_tensor_count",
+          "open_weights": true,
+          "on_displayed_frontier": true,
+          "native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731",
+          "revision": null,
+          "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/main/benchmarks/maeb-audio-only.json",
+          "evaluated_native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731"
+        }
+      ],
+      "frontier_models": [
+        "google/yamnet",
+        "matthewagi/HeAR-s1.1",
+        "MIT/ast-finetuned-audioset-10-10-0.4593",
+        "llm-semantic-router/Vela-1.0-Omni-Nano",
+        "llm-semantic-router/Vela-1.0-Omni-Mini"
+      ],
+      "reported_peer_observations": 65,
+      "unknown_size_observations_excluded": [],
+      "unknown_size_observation_count": 0,
+      "highlight_gap_above_best_equal_or_smaller_peer_pp": 9.717472348029702,
+      "highlight_dominators": []
+    }
+  },
+  "limitations": [
+    "Frontier is relative to observed known-size points, not an official SOTA/rank or a matched-protocol reproduction.",
+    "Registry totals are rounded; unknown-size observations cannot be placed and remain explicitly listed.",
+    "Registry checkpoints/task revisions/precision/instructions/seed/training exposures are not established by the API; measured peer revisions remain explicit.",
+    "Full English values retain their actual evaluated component/native identities and applicability proofs; no old score is relabeled as a fresh current-native run."
+  ]
+}

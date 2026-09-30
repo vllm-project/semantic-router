@@ -8,9 +8,9 @@ built-in-model-snapshot: ## Freeze config/recipes/built-in/latest into vMAJOR.MI
 		exit 1; \
 	}
 	@python3 tools/release/snapshot_model_catalog.py --version "$(RELEASE_VERSION)"
-	@python3 tools/release/sync_model_catalog.py
+	@$(MAKE) model-catalog-package-stage
 	@python3 tools/release/snapshot_model_catalog.py --check --version "$(RELEASE_VERSION)"
-	@python3 tools/release/sync_model_catalog.py --check
+	@$(MAKE) model-catalog-package-check
 
 release-check: ## Validate the local release version contract; set RELEASE_VERSION to check a tag version
 	@python3 tools/release/check_version_contract.py $(if $(RELEASE_VERSION),--version "$(RELEASE_VERSION)")

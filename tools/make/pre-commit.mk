@@ -4,20 +4,18 @@ PRECOMMIT_CONTAINER := ghcr.io/vllm-project/semantic-router/precommit:latest
 
 AGENT_PRE_COMMIT ?= $(AGENT_VENV)/bin/pre-commit
 
-precommit-install: ## Install the repo-local pre-commit hook into the agent harness venv
+precommit-install: ## Install the repo-local pre-commit hook into the shared harness venv
 precommit-install:
-	@$(MAKE) agent-venv-install
+	@$(MAKE) harness-venv-install
 	@echo "Installing repo-local git hooks (pre-commit)..."
 	@"$(AGENT_PRE_COMMIT)" install --hook-type pre-commit
 
-precommit-branch-gate: agent-venv-install ## Run the local branch prelint bundle on demand
-	@$(MAKE) agent-ci-lint AGENT_BASE_REF="$(AGENT_BASE_REF)"
-
-precommit-check: agent-venv-install ## Run pre-commit checks on all relevant files
+precommit-check: harness-venv-install ## Run pre-commit checks on all relevant files
 	@echo "Running pre-commit on all tracked files..."
 	@"$(AGENT_PRE_COMMIT)" run --all-files
 
 # Run the CI changed-file pre-commit pipeline in a Docker container.
+# Keep native build outputs inside the container's toolchain and libc environment.
 #
 # For interactive debugging:
 #   export PRECOMMIT_CONTAINER=ghcr.io/vllm-project/semantic-router/precommit:latest
@@ -54,9 +52,13 @@ precommit-local:
 	fi; \
 	echo "Using $$IMAGE_SOURCE: $$IMAGE_REF"; \
 	$$CONTAINER_CMD run --rm \
-	    -e AGENT_BASE_REF="$(AGENT_BASE_REF)" \
+	    -e BASE_REF="$(BASE_REF)" \
 	    -e SKIP_MODEL_DEPENDENT_TESTS=true \
 	    -v $(shell pwd):/app \
 	    -v /app/.venv-agent \
+	    -v /app/candle-binding/target \
+	    -v /app/onnx-binding/target \
+	    -v /app/ml-binding/target \
+	    -v /app/nlp-binding/target \
 	    -w /app \
-	    ${PRECOMMIT_CONTAINER} bash -c 'make precommit-branch-gate'
+	    ${PRECOMMIT_CONTAINER} bash -c 'make check BASE_REF="$$BASE_REF"'

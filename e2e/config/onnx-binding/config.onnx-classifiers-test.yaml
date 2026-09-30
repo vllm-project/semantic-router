@@ -2,16 +2,15 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
+    model: qwen2.5:3b
   models:
   - name: qwen2.5:3b
-    reasoning_family: qwen3
+    reasoning:
+      family: qwen3
     backend_refs:
     - name: ollama
       endpoint: 127.0.0.1:11434
+      provider: ollama
       weight: 1
 routing:
   decisions:
@@ -104,7 +103,7 @@ routing:
       description: Math questions
     - name: physics
       description: Physics questions
-    - name: "computer science"
+    - name: computer science
       description: Computer science questions
     fact_check:
     - name: needs_fact_check
@@ -122,33 +121,64 @@ routing:
       description: User wants a different answer
   modelCards:
   - name: qwen2.5:3b
+  model_bindings:
+    domain_classifier:
+      deployment: domain-onnx
+      contract: label_distribution.v1
+      adapter: modernbert
+      mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json
+    pii_classifier:
+      deployment: pii-onnx
+      contract: token_spans.v1
+      adapter: modernbert
+      mapping_path: models/Vela-1.0-Encoder-307M-PII/pii_mapping.json
+    prompt_guard:
+      deployment: guard-onnx
+      contract: label_distribution.v1
+      adapter: modernbert
+      mapping_path: models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json
+    fact_check_classifier:
+      deployment: factcheck-onnx
+      contract: label_distribution.v1
+      adapter: modernbert
+    feedback_detector:
+      deployment: feedback-onnx
+      contract: label_distribution.v1
+      adapter: modernbert
+    embedding:
+      deployment: embedding-onnx
+      contract: embedding.v1
+      adapter: mmbert
+      head: onnx/model.onnx
 global:
   model_catalog:
     embeddings:
       semantic:
         use_cpu: true
-        mmbert_model_path: onnx-binding/mmbert-32k-yarn-onnx
+        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
+        embedding_config:
+          model_type: mmbert
     modules:
       classifier:
         domain:
           enabled: true
           use_mmbert_32k: true
-          model_id: models/mmbert32k-intent-classifier-merged-onnx
-          category_mapping_path: models/mmbert32k-intent-classifier-merged-onnx/category_mapping.json
+          model_id: models/Vela-1.0-Encoder-307M-Domain
+          category_mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json
           use_cpu: true
           threshold: 0.5
           model_ref: domain_classifier
         pii:
           enabled: true
           use_mmbert_32k: true
-          model_id: models/mmbert32k-pii-detector-merged-onnx
-          pii_mapping_path: models/mmbert32k-pii-detector-merged-onnx/pii_mapping.json
+          model_id: models/Vela-1.0-Encoder-307M-PII
+          pii_mapping_path: models/Vela-1.0-Encoder-307M-PII/pii_mapping.json
           use_cpu: true
           threshold: 0.5
           model_ref: pii_classifier
       hallucination_mitigation:
         fact_check:
-          model_id: models/mmbert32k-factcheck-classifier-merged-onnx
+          model_id: models/Vela-1.0-Encoder-307M-FactCheck
           use_cpu: true
           use_mmbert_32k: true
           threshold: 0.5
@@ -165,19 +195,68 @@ global:
       prompt_guard:
         enabled: true
         variant: mmbert32k
-        model_id: models/mmbert32k-jailbreak-detector-merged-onnx
-        jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged-onnx/jailbreak_mapping.json
+        model_id: models/Vela-1.0-Encoder-307M-Guard
+        jailbreak_mapping_path: models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json
         use_cpu: true
         threshold: 0.5
         model_ref: prompt_guard
       feedback_detector:
         enabled: true
         use_mmbert_32k: true
-        model_id: models/mmbert32k-feedback-detector-merged-onnx
-        feedback_mapping_path: models/mmbert32k-feedback-detector-merged-onnx/label_mapping.json
+        model_id: models/Vela-1.0-Encoder-307M-Feedback
+        feedback_mapping_path: ''
         use_cpu: true
         threshold: 0.5
         model_ref: feedback_detector
+    deployments:
+      domain-onnx:
+        artifact: models/Vela-1.0-Encoder-307M-Domain
+        provider: ort
+        device: cpu
+        precision: fp32
+        input:
+          max_tokens: 32768
+          overflow: reject
+      pii-onnx:
+        artifact: models/Vela-1.0-Encoder-307M-PII
+        provider: ort
+        device: cpu
+        precision: fp32
+        input:
+          max_tokens: 32768
+          overflow: reject
+      guard-onnx:
+        artifact: models/Vela-1.0-Encoder-307M-Guard
+        provider: ort
+        device: cpu
+        precision: fp32
+        input:
+          max_tokens: 32768
+          overflow: reject
+      factcheck-onnx:
+        artifact: models/Vela-1.0-Encoder-307M-FactCheck
+        provider: ort
+        device: cpu
+        precision: fp32
+        input:
+          max_tokens: 32768
+          overflow: reject
+      feedback-onnx:
+        artifact: models/Vela-1.0-Encoder-307M-Feedback
+        provider: ort
+        device: cpu
+        precision: fp32
+        input:
+          max_tokens: 32768
+          overflow: reject
+      embedding-onnx:
+        artifact: models/Vela-1.0-Encoder-307M-Embedding
+        provider: ort
+        device: cpu
+        precision: fp32
+        input:
+          max_tokens: 32768
+          overflow: reject
   router: {}
   services:
     response_api:
@@ -202,6 +281,4 @@ global:
     tools:
       enabled: true
       tools_db_path: config/runtime/tools/tools_db.json
-      model_type: mmbert
-      target_dim: 0
       similarity_threshold: 0.7

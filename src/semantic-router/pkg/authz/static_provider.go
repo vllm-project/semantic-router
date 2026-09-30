@@ -5,9 +5,7 @@ import (
 )
 
 // StaticConfigProvider reads LLM API keys from the router's static YAML config.
-// Each model entry can have an access_key field; this provider returns that key
-// for the requested model regardless of the LLM provider enum (since the static
-// config is model-scoped, not provider-scoped).
+// Credentials are keyed by both model alias and provider catalog identity.
 //
 // This is the fallback provider — used when no auth backend injects
 // per-user keys, or for models that don't require per-user auth.
@@ -24,14 +22,12 @@ func (p *StaticConfigProvider) Name() string {
 	return "static-config"
 }
 
-// GetKey returns the access_key from the router config for the given model.
-// The provider parameter is ignored because static config keys are model-scoped:
-// each model entry has a single access_key regardless of whether it's OpenAI or Anthropic.
-func (p *StaticConfigProvider) GetKey(_ LLMProvider, model string, _ map[string]string) string {
+// GetKey returns the credential attached to the selected provider instance.
+func (p *StaticConfigProvider) GetKey(provider LLMProvider, model string, _ map[string]string) string {
 	if p.config == nil {
 		return ""
 	}
-	return p.config.GetModelAccessKey(model)
+	return p.config.GetModelAccessKeyForProvider(model, string(provider))
 }
 
 // HeadersToStrip returns nil — static config doesn't inject any headers.

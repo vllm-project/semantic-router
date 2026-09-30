@@ -58,3 +58,22 @@ class TestContextCompressionPluginConfig:
                     }
                 },
             )
+
+    def test_current_user_is_explicit_opt_in(self):
+        default = ContextCompressionPluginConfig(enabled=True, targets={})
+        assert default.targets.current_user.mode == "preserve"
+        configured = ContextCompressionPluginConfig(
+            enabled=True, targets={"current_user": {"mode": "truncate"}}
+        )
+        assert configured.targets.current_user.mode == "truncate"
+        restored = ContextCompressionPluginConfig.model_validate_json(
+            configured.model_dump_json()
+        )
+        assert restored.targets.current_user.mode == "truncate"
+
+    @pytest.mark.parametrize("mode", ["extractive", "recoverable", "drop"])
+    def test_current_user_rejects_unsupported_modes(self, mode):
+        with pytest.raises(PydanticValidationError):
+            ContextCompressionPluginConfig(
+                enabled=True, targets={"current_user": {"mode": mode}}
+            )

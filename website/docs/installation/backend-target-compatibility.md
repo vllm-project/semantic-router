@@ -72,6 +72,7 @@ providers:
         - name: primary
           endpoint: model-server.default.svc.cluster.local:8000
           protocol: http
+          provider: vllm
           weight: 100
 ```
 

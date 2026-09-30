@@ -734,6 +734,10 @@ fn generate_mmbert_embedding(
         .get_mmbert_tokenizer()
         .ok_or_else(|| "mmBERT tokenizer not available".to_string())?;
 
+    if tokens_exceed_window(tokenizer, text, model.config().max_position_embeddings)? {
+        return Err("input exceeds the embedding model context window".into());
+    }
+
     // Tokenize
     let encoding = tokenizer
         .encode(text, true)
@@ -785,7 +789,13 @@ fn generate_mmbert_embeddings_batch(
 
     // Batch encode
     let embeddings = model
-        .encode_batch_with_matryoshka(tokenizer, texts, 8192, target_layer, target_dim)
+        .encode_batch_with_matryoshka(
+            tokenizer,
+            texts,
+            model.config().max_position_embeddings,
+            target_layer,
+            target_dim,
+        )
         .map_err(|e| format!("mmBERT batch encoding failed: {:?}", e))?;
 
     // Convert to Vec<Vec<f32>>
@@ -1325,7 +1335,8 @@ pub extern "C" fn calculate_embedding_similarity(
             eprintln!("Error generating embedding for text1");
             // Clean up allocated memory before returning
             if !emb_result1.data.is_null() {
-                crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length);
+                // SAFETY: this live result owns the matching allocation and is released once.
+                unsafe { crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length) };
             }
             unsafe {
                 (*result) = EmbeddingSimilarityResult::default();
@@ -1345,11 +1356,13 @@ pub extern "C" fn calculate_embedding_similarity(
         if status2 != 0 || emb_result2.error {
             eprintln!("Error generating embedding for text2");
             if !emb_result1.data.is_null() {
-                crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length);
+                // SAFETY: this live result owns the matching allocation and is released once.
+                unsafe { crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length) };
             }
             // Also clean up emb_result2
             if !emb_result2.data.is_null() {
-                crate::ffi::memory::free_embedding(emb_result2.data, emb_result2.length);
+                // SAFETY: this live result owns the matching allocation and is released once.
+                unsafe { crate::ffi::memory::free_embedding(emb_result2.data, emb_result2.length) };
             }
             unsafe {
                 (*result) = EmbeddingSimilarityResult::default();
@@ -1368,8 +1381,10 @@ pub extern "C" fn calculate_embedding_similarity(
         let model_id = emb_result1.model_type;
 
         // Free the raw data
-        crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length);
-        crate::ffi::memory::free_embedding(emb_result2.data, emb_result2.length);
+        // SAFETY: this live result owns the matching allocation and is released once.
+        unsafe { crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length) };
+        // SAFETY: this live result owns the matching allocation and is released once.
+        unsafe { crate::ffi::memory::free_embedding(emb_result2.data, emb_result2.length) };
 
         (emb1, emb2, model_id)
     } else {
@@ -1754,6 +1769,30 @@ pub extern "C" fn free_batch_similarity_result(result: *mut BatchSimilarityResul
     }
 }
 
+/// One entry of the models-info table.
+///
+/// `limits` is `Some((max_position_embeddings, hidden_size))` from the loaded
+/// model's config and `None` when the model is not loaded, in which case both
+/// numbers are reported as 0 and the path as empty.
+pub(crate) fn embedding_model_info(
+    name: &str,
+    path: Option<&str>,
+    limits: Option<(usize, usize)>,
+) -> crate::ffi::types::EmbeddingModelInfo {
+    use std::ffi::CString;
+    let (max_sequence_length, default_dimension) = match limits {
+        Some((max_positions, hidden)) => (max_positions as i32, hidden as i32),
+        None => (0, 0),
+    };
+    crate::ffi::types::EmbeddingModelInfo {
+        model_name: CString::new(name).unwrap().into_raw(),
+        is_loaded: limits.is_some(),
+        max_sequence_length,
+        default_dimension,
+        model_path: CString::new(path.unwrap_or("")).unwrap().into_raw(),
+    }
+}
+
 /// Get information about loaded embedding models
 ///
 /// This function returns metadata about all available embedding models,
@@ -1770,7 +1809,6 @@ pub extern "C" fn get_embedding_models_info(
     result: *mut crate::ffi::types::EmbeddingModelsInfoResult,
 ) -> i32 {
     use crate::ffi::types::{EmbeddingModelInfo, EmbeddingModelsInfoResult};
-    use std::ffi::CString;
 
     if result.is_null() {
         eprintln!("Error: null pointer passed to get_embedding_models_info");
@@ -1789,52 +1827,20 @@ pub extern "C" fn get_embedding_models_info(
         }
     };
 
-    // Check which models are loaded
-    let qwen3_loaded = factory.get_qwen3_model().is_some();
-    let gemma_loaded = factory.get_gemma_model().is_some();
+    // The limits come from each loaded model's own config.json, not from
+    // constants: `max_position_embeddings` is what the RoPE cache and the
+    // position guard are sized for, and `hidden_size` is the default dimension.
+    let qwen3_limits = factory
+        .get_qwen3_model()
+        .map(|m| (m.config().max_position_embeddings, m.config().hidden_size));
+    let gemma_limits = factory
+        .get_gemma_model()
+        .map(|m| (m.config().max_position_embeddings, m.config().hidden_size));
 
-    // Get model paths from factory
-    let qwen3_path = factory.get_qwen3_model_path();
-    let gemma_path = factory.get_gemma_model_path();
-
-    // Create model info array
-    let mut models_vec = Vec::new();
-
-    // Qwen3 model info
-    {
-        let model_name = CString::new("qwen3").unwrap();
-        let model_path = if let Some(path) = qwen3_path {
-            CString::new(path).unwrap()
-        } else {
-            CString::new("").unwrap()
-        };
-
-        models_vec.push(EmbeddingModelInfo {
-            model_name: model_name.into_raw(),
-            is_loaded: qwen3_loaded,
-            max_sequence_length: if qwen3_loaded { 32768 } else { 0 },
-            default_dimension: if qwen3_loaded { 1024 } else { 0 },
-            model_path: model_path.into_raw(),
-        });
-    }
-
-    // Gemma model info
-    {
-        let model_name = CString::new("gemma").unwrap();
-        let model_path = if let Some(path) = gemma_path {
-            CString::new(path).unwrap()
-        } else {
-            CString::new("").unwrap()
-        };
-
-        models_vec.push(EmbeddingModelInfo {
-            model_name: model_name.into_raw(),
-            is_loaded: gemma_loaded,
-            max_sequence_length: if gemma_loaded { 8192 } else { 0 },
-            default_dimension: if gemma_loaded { 768 } else { 0 },
-            model_path: model_path.into_raw(),
-        });
-    }
+    let models_vec = vec![
+        embedding_model_info("qwen3", factory.get_qwen3_model_path(), qwen3_limits),
+        embedding_model_info("gemma", factory.get_gemma_model_path(), gemma_limits),
+    ];
 
     let num_models = models_vec.len() as i32;
     let models_ptr = Box::into_raw(models_vec.into_boxed_slice()) as *mut EmbeddingModelInfo;
@@ -2459,7 +2465,7 @@ pub extern "C" fn multimodal_encode_text(
 /// inference path used by this crate, neither matters: training data and
 /// reference inference both use opaque JPEG/PNG without orientation metadata
 /// applied.
-fn decode_resize_to_chw_f32(
+pub(crate) fn decode_resize_to_chw_f32(
     bytes: &[u8],
     target_w: u32,
     target_h: u32,
@@ -2857,6 +2863,88 @@ pub extern "C" fn shutdown_embedding_batched() {
     // The scheduler thread will automatically stop when the model is dropped
     // This is handled by the Drop implementation of Qwen3EmbeddingModelBatched
     println!("INFO: Shutting down batched embedding model");
+}
+
+const BERT_EMBEDDING_WINDOW: usize = 512;
+const QWEN3_EMBEDDING_WINDOW: usize = 32768;
+
+fn embedding_window(model_type: &str) -> Option<(&'static MmTokenizer, usize)> {
+    let factory = GLOBAL_MODEL_FACTORY.get();
+    match model_type {
+        "bert" => crate::ffi::init::BERT_SIMILARITY
+            .get()
+            .map(|bert| (bert.tokenizer(), BERT_EMBEDDING_WINDOW)),
+        "gemma" => factory.and_then(|f| {
+            Some((
+                f.get_gemma_tokenizer()?,
+                f.get_gemma_model()?.config().max_position_embeddings,
+            ))
+        }),
+        "mmbert" => factory.and_then(|f| {
+            Some((
+                f.get_mmbert_tokenizer()?,
+                f.get_mmbert_model()?.config().max_position_embeddings,
+            ))
+        }),
+        "qwen3" => factory.and_then(|f| Some((f.get_qwen3_tokenizer()?, QWEN3_EMBEDDING_WINDOW))),
+        "multimodal" => get_multimodal_refs()
+            .map(|(model, tokenizer)| (tokenizer, model.config().text_max_position_embeddings)),
+        _ => None,
+    }
+}
+
+fn tokens_exceed_window(
+    tokenizer: &MmTokenizer,
+    text: &str,
+    window: usize,
+) -> Result<bool, String> {
+    use tokenizers::{TruncationDirection, TruncationParams, TruncationStrategy};
+    let mut tokenizer = tokenizer.clone();
+    tokenizer
+        .with_truncation(Some(TruncationParams {
+            max_length: window + 1,
+            strategy: TruncationStrategy::LongestFirst,
+            stride: 0,
+            direction: TruncationDirection::Right,
+        }))
+        .map_err(|e| e.to_string())?;
+    let encoding = tokenizer.encode(text, true).map_err(|e| e.to_string())?;
+    Ok(encoding.get_ids().len() > window)
+}
+
+/// Report whether `text` tokenizes past the context window of the loaded
+/// embedding model named by `model_type`, so a truncated embedding would alias
+/// every text sharing its prefix.
+///
+/// # Returns
+/// 1 when the text exceeds the window, 0 when it fits, -1 when the model is not
+/// loaded or the input is invalid
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[no_mangle]
+pub extern "C" fn embedding_text_exceeds_window(
+    text: *const c_char,
+    model_type: *const c_char,
+) -> i32 {
+    if text.is_null() || model_type.is_null() {
+        return -1;
+    }
+    let (text, model_type) = unsafe {
+        match (
+            CStr::from_ptr(text).to_str(),
+            CStr::from_ptr(model_type).to_str(),
+        ) {
+            (Ok(t), Ok(m)) => (t, m),
+            _ => return -1,
+        }
+    };
+    let Some((tokenizer, window)) = embedding_window(model_type) else {
+        return -1;
+    };
+    match tokens_exceed_window(tokenizer, text, window) {
+        Ok(true) => 1,
+        Ok(false) => 0,
+        Err(_) => -1,
+    }
 }
 
 #[cfg(test)]

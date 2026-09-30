@@ -151,7 +151,7 @@ func materializeMessagesWithLimit(probe ProbeDetail, limit int) ([]map[string]an
 	if plan != nil {
 		generatedItem := map[string]any{
 			"type": "text",
-			"text": strings.Repeat(plan.character, plan.bytes),
+			"text": strings.Repeat(plan.pattern, plan.bytes/len(plan.pattern)) + plan.pattern[:plan.bytes%len(plan.pattern)],
 		}
 		materialized := make([]any, 0, len(plan.content)+1)
 		materialized = append(materialized, plan.content[:plan.contentIndex]...)
@@ -251,7 +251,7 @@ func validateMaterializedProbeImages(
 type generatedMessagePlan struct {
 	content      []any
 	contentIndex int
-	character    string
+	pattern      string
 	bytes        int
 }
 
@@ -271,12 +271,9 @@ func planGeneratedMessage(probe ProbeDetail, messages []map[string]any) (*genera
 	if generated.ContentIndex < 0 || generated.ContentIndex > len(content) {
 		return nil, fmt.Errorf("%w: %s.content_index is out of range", ErrInvalid, label)
 	}
-	character := generated.Character
-	if character == "" {
-		character = "x"
-	}
-	if len(character) != 1 || character[0] < 0x20 || character[0] > 0x7e {
-		return nil, fmt.Errorf("%w: %s.character must be one printable ASCII character", ErrInvalid, label)
+	pattern, err := generatedTextPattern(generated.Character, generated.Text)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s: %w", ErrInvalid, label, err)
 	}
 	if generated.TargetTextBytes < 1 || generated.TargetTextBytes > maxGeneratedTextBytes {
 		return nil, fmt.Errorf(
@@ -299,7 +296,7 @@ func planGeneratedMessage(probe ProbeDetail, messages []map[string]any) (*genera
 	return &generatedMessagePlan{
 		content:      content,
 		contentIndex: generated.ContentIndex,
-		character:    character,
+		pattern:      pattern,
 		bytes:        generatedBytes,
 	}, nil
 }
@@ -320,8 +317,9 @@ func validateMaterializedMessageSize(probe ProbeDetail, limit int) error {
 		materialized = append(materialized, map[string]any{"type": "text", "text": ""})
 		materialized = append(materialized, plan.content[plan.contentIndex:]...)
 		messages[probe.GeneratedText.MessageIndex]["content"] = materialized
-		encodedCharacter, _ := json.Marshal(plan.character)
-		generatedExtra = plan.bytes * (len(encodedCharacter) - 2)
+		encodedPattern, _ := json.Marshal(plan.pattern)
+		encodedRemainder, _ := json.Marshal(plan.pattern[:plan.bytes%len(plan.pattern)])
+		generatedExtra = (plan.bytes/len(plan.pattern))*(len(encodedPattern)-2) + len(encodedRemainder) - 2
 	}
 	encoded, err := json.Marshal(messages)
 	if err != nil {

@@ -11,3 +11,19 @@ export function normalizeStringList(value: unknown): string[] {
       return true
     })
 }
+
+export function updateStructuredObjectField<TItem extends object>(
+  item: TItem,
+  key: Extract<keyof TItem, string>,
+  nextValue: unknown,
+  preserveEmpty = false,
+): TItem {
+  const nextItem = { ...item } as TItem
+  const record = nextItem as Record<string, unknown>
+  if (nextValue === undefined || (nextValue === '' && !preserveEmpty)) {
+    delete record[key]
+  } else {
+    record[key] = nextValue
+  }
+  return nextItem
+}

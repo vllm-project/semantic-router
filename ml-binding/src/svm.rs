@@ -3,7 +3,8 @@
 //! Inference-only implementation. Training is done in Python (src/training/model_selection/ml_model_selection/).
 //! Models are loaded from JSON files trained by the Python scripts.
 //!
-//! Supports both Linear and RBF kernels for one-vs-all multiclass classification.
+//! Supports exact libsvm one-vs-one voting for Linear and RBF kernels.
+//! Unversioned native one-vs-rest artifacts retain their original semantics.
 //!
 //! - Linear kernel: f(x) = w·x - rho (fast, good for high-dim data)
 //! - RBF kernel: f(x) = Σ(αᵢ·exp(-γ||x-xᵢ||²)) - rho (flexible boundaries)
@@ -12,16 +13,11 @@ use ndarray::{Array1, Array2};
 use serde::{Deserialize, Serialize};
 
 /// Kernel type for SVM
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub enum KernelType {
     Linear,
+    #[default]
     Rbf,
-}
-
-impl Default for KernelType {
-    fn default() -> Self {
-        KernelType::Rbf // RBF is better for high-dimensional embeddings
-    }
 }
 
 /// Linear SVM classifier - stores weight vector for fast inference
@@ -97,6 +93,8 @@ impl Classifier {
 /// SVM Selector for LLM routing
 pub struct SVMSelector {
     classifiers: Vec<Classifier>,
+    svc: Option<SvcData>,
+    feature_dim: usize,
     model_names: Vec<String>,
     trained: bool,
     kernel_type: KernelType,
@@ -122,6 +120,14 @@ pub struct RbfClassifierData {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SVMModelData {
     pub algorithm: String,
+    #[serde(default)]
+    pub format_version: Option<u32>,
+    #[serde(default)]
+    pub feature_dim: usize,
+    #[serde(default)]
+    pub input_normalization: Option<String>,
+    #[serde(default)]
+    pub svc: Option<SvcData>,
     pub trained: bool,
     pub model_names: Vec<String>,
     pub kernel_type: KernelType,
@@ -132,6 +138,111 @@ pub struct SVMModelData {
     pub rbf_classifiers: Vec<RbfClassifierData>,
 }
 
+/// Public sklearn/libsvm parameter layout. For multiclass models, each pair
+/// (i, j) uses row j-1 for class i's support vectors and row i for class j's.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SvcData {
+    support_vectors: Vec<Vec<f64>>,
+    dual_coef: Vec<Vec<f64>>,
+    intercept: Vec<f64>,
+    n_support: Vec<usize>,
+}
+
+impl SvcData {
+    fn validate(&self, classes: usize, dim: usize) -> Result<(), String> {
+        let n = self.support_vectors.len();
+        if classes < 2
+            || dim == 0
+            || n == 0
+            || self
+                .support_vectors
+                .iter()
+                .any(|v| v.len() != dim || v.iter().any(|x| !x.is_finite()))
+            || self.dual_coef.len() != classes - 1
+            || self
+                .dual_coef
+                .iter()
+                .any(|v| v.len() != n || v.iter().any(|x| !x.is_finite()))
+            || self.intercept.len() != classes * (classes - 1) / 2
+            || self.intercept.iter().any(|x| !x.is_finite())
+            || self.n_support.len() != classes
+            || self
+                .n_support
+                .iter()
+                .try_fold(0usize, |sum, n| sum.checked_add(*n))
+                != Some(n)
+        {
+            return Err("Invalid SVM parameter shapes or values".into());
+        }
+        Ok(())
+    }
+
+    fn select(&self, query: &[f64], kernel: KernelType, gamma: f64) -> usize {
+        let kernels: Vec<f64> = self
+            .support_vectors
+            .iter()
+            .map(|vector| match kernel {
+                KernelType::Linear => vector.iter().zip(query).map(|(a, b)| a * b).sum(),
+                KernelType::Rbf => (-gamma
+                    * vector
+                        .iter()
+                        .zip(query)
+                        .map(|(a, b)| (a - b).powi(2))
+                        .sum::<f64>())
+                .exp(),
+            })
+            .collect();
+        let classes = self.n_support.len();
+        let mut starts = vec![0; classes + 1];
+        for i in 0..classes {
+            starts[i + 1] = starts[i] + self.n_support[i];
+        }
+        let mut votes = vec![0; classes];
+        let mut pair = 0;
+        for i in 0..classes {
+            for j in i + 1..classes {
+                let mut score = 0.0;
+                for (coefficient, value) in self.dual_coef[j - 1][starts[i]..starts[i + 1]]
+                    .iter()
+                    .zip(&kernels[starts[i]..starts[i + 1]])
+                {
+                    score += coefficient * value;
+                }
+                for (coefficient, value) in self.dual_coef[i][starts[j]..starts[j + 1]]
+                    .iter()
+                    .zip(&kernels[starts[j]..starts[j + 1]])
+                {
+                    score += coefficient * value;
+                }
+                score += self.intercept[pair];
+                // sklearn reverses the public dual coefficients/intercepts for
+                // binary SVCs; multiclass coefficients have libsvm's signs.
+                let winner = if classes == 2 {
+                    if score >= 0.0 {
+                        j
+                    } else {
+                        i
+                    }
+                } else if score > 0.0 {
+                    i
+                } else {
+                    j
+                };
+                votes[winner] += 1;
+                pair += 1;
+            }
+        }
+        // libsvm resolves equal vote counts by the first class in classes_.
+        let mut winner = 0;
+        for i in 1..classes {
+            if votes[i] > votes[winner] {
+                winner = i;
+            }
+        }
+        winner
+    }
+}
+
 impl SVMSelector {
     pub fn new() -> Self {
         Self::with_kernel(KernelType::Rbf, 1.0) // RBF with gamma=1.0 for high-dim normalized embeddings
@@ -140,6 +251,8 @@ impl SVMSelector {
     pub fn with_kernel(kernel_type: KernelType, gamma: f64) -> Self {
         Self {
             classifiers: Vec::new(),
+            svc: None,
+            feature_dim: 0,
             model_names: Vec::new(),
             trained: false,
             kernel_type,
@@ -151,6 +264,8 @@ impl SVMSelector {
     pub fn with_rbf(gamma: Option<f64>) -> Self {
         Self {
             classifiers: Vec::new(),
+            svc: None,
+            feature_dim: 0,
             model_names: Vec::new(),
             trained: false,
             kernel_type: KernelType::Rbf,
@@ -171,6 +286,17 @@ impl SVMSelector {
     pub fn select(&self, query: &[f64]) -> Result<String, String> {
         if !self.trained {
             return Err("Model not trained".to_string());
+        }
+
+        if query.len() != self.feature_dim || query.iter().any(|x| !x.is_finite()) {
+            return Err(format!(
+                "Expected {} finite SVM features, got {}",
+                self.feature_dim,
+                query.len()
+            ));
+        }
+        if let Some(svc) = &self.svc {
+            return Ok(self.model_names[svc.select(query, self.kernel_type, self.gamma)].clone());
         }
 
         if self.classifiers.is_empty() {
@@ -247,6 +373,10 @@ impl SVMSelector {
 
         let data = SVMModelData {
             algorithm: "svm".to_string(),
+            format_version: self.svc.as_ref().map(|_| 2),
+            feature_dim: self.feature_dim,
+            input_normalization: self.svc.as_ref().map(|_| "none".into()),
+            svc: self.svc.clone(),
             trained: self.trained,
             model_names: self.model_names.clone(),
             kernel_type: self.kernel_type,
@@ -255,19 +385,76 @@ impl SVMSelector {
             rbf_classifiers,
         };
 
-        serde_json::to_string_pretty(&data)
-            .map_err(|e| format!("JSON serialization failed: {}", e))
+        serde_json::to_string_pretty(&data).map_err(|e| format!("JSON serialization failed: {}", e))
     }
 
     /// Load model from JSON (no retraining needed!)
     pub fn from_json(json: &str) -> Result<Self, String> {
-        let data: SVMModelData =
+        let mut data: SVMModelData =
             serde_json::from_str(json).map_err(|e| format!("JSON parse failed: {}", e))?;
+        if data.algorithm != "svm" || !matches!(data.format_version, None | Some(1) | Some(2)) {
+            return Err("Unsupported SVM artifact format".into());
+        }
+        if data.model_names.is_empty()
+            || data
+                .model_names
+                .iter()
+                .collect::<std::collections::HashSet<_>>()
+                .len()
+                != data.model_names.len()
+        {
+            return Err("SVM model names must be nonempty and unique".into());
+        }
+        if !data.gamma.is_finite() || data.gamma <= 0.0 {
+            return Err("SVM gamma must be finite and positive".into());
+        }
+        // Old Python exports include exact parameters alongside the lossy OvR
+        // approximation. Prefer the exact parameters, without input normalization.
+        if data.svc.is_none() {
+            #[derive(Deserialize)]
+            struct LegacyMarker {
+                support_vectors: Option<serde::de::IgnoredAny>,
+            }
+            let marker: LegacyMarker = serde_json::from_str(json)
+                .map_err(|e| format!("Invalid legacy SVC parameters: {}", e))?;
+            if marker.support_vectors.is_some() {
+                data.svc = Some(
+                    serde_json::from_str(json)
+                        .map_err(|e| format!("Invalid legacy SVC parameters: {}", e))?,
+                );
+                data.linear_classifiers.clear();
+                data.rbf_classifiers.clear();
+            }
+        }
+        if let Some(svc) = &data.svc {
+            if data.input_normalization.as_deref().unwrap_or("none") != "none" {
+                return Err("Unsupported SVM input normalization".into());
+            }
+            svc.validate(data.model_names.len(), data.feature_dim)?;
+        } else if data.format_version == Some(2) {
+            return Err("SVM version 2 requires exact SVC parameters".into());
+        }
+        let mut feature_dim = data.feature_dim;
 
         let mut classifiers = Vec::new();
 
         // Load linear classifiers
-        for c in data.linear_classifiers {
+        for c in data
+            .linear_classifiers
+            .into_iter()
+            .filter(|_| data.svc.is_none())
+        {
+            if feature_dim == 0 {
+                feature_dim = c.weights.len();
+            }
+            if feature_dim == 0
+                || c.weights.len() != feature_dim
+                || c.weights.iter().any(|x| !x.is_finite())
+                || !c.rho.is_finite()
+                || !data.model_names.contains(&c.model_name)
+            {
+                return Err("Invalid linear SVM classifier".into());
+            }
             classifiers.push(Classifier::Linear(LinearClassifier {
                 model_name: c.model_name,
                 weights: Array1::from_vec(c.weights),
@@ -276,9 +463,31 @@ impl SVMSelector {
         }
 
         // Load RBF classifiers
-        for c in data.rbf_classifiers {
+        for c in data
+            .rbf_classifiers
+            .into_iter()
+            .filter(|_| data.svc.is_none())
+        {
             let n = c.support_vectors.len();
             let dim = if n > 0 { c.support_vectors[0].len() } else { 0 };
+            if feature_dim == 0 {
+                feature_dim = dim;
+            }
+            if n == 0
+                || dim == 0
+                || dim != feature_dim
+                || c.alpha.len() != n
+                || c.support_vectors
+                    .iter()
+                    .any(|v| v.len() != dim || v.iter().any(|x| !x.is_finite()))
+                || c.alpha.iter().any(|x| !x.is_finite())
+                || !c.rho.is_finite()
+                || !c.gamma.is_finite()
+                || c.gamma <= 0.0
+                || !data.model_names.contains(&c.model_name)
+            {
+                return Err("Invalid RBF SVM classifier".into());
+            }
             let flat: Vec<f64> = c.support_vectors.into_iter().flatten().collect();
             let support_vectors = if n > 0 && dim > 0 {
                 Array2::from_shape_vec((n, dim), flat).unwrap_or_else(|_| Array2::zeros((0, 0)))
@@ -297,6 +506,8 @@ impl SVMSelector {
 
         Ok(Self {
             classifiers,
+            svc: data.svc,
+            feature_dim,
             model_names: data.model_names,
             trained: data.trained,
             kernel_type: data.kernel_type,

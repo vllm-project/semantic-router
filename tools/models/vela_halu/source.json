@@ -1,0 +1,22 @@
+{
+  "repo_id": "llm-semantic-router/Vela-1.0-Encoder-307M-Halu",
+  "revision": "ca87531211e414ac21c641b2faa8b8e21619de8f",
+  "files": {
+    "config.json": {
+      "algorithm": "git-blob-sha1",
+      "digest": "c2bdf76deb66de5c391e8a29677bb14cbcf0461d"
+    },
+    "model.safetensors": {
+      "algorithm": "sha256",
+      "digest": "0f51bf4a6e1462e88733c36e1e59fa96c1188c8c470de7829b51c95298247be6"
+    },
+    "operating_point.json": {
+      "algorithm": "git-blob-sha1",
+      "digest": "cc0c33d8bc08480b83bed5631fd08208bb39048a"
+    },
+    "tokenizer.json": {
+      "algorithm": "sha256",
+      "digest": "0be5487f39c5ddc334beb659aa180e4d8a347293bc21a5d85df7ec1674cc4c8c"
+    }
+  }
+}

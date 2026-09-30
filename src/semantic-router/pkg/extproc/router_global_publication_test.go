@@ -54,7 +54,7 @@ func TestPublishRouterStateAdoptsCommittedRouterGlobals(t *testing.T) {
 	committed := selection.NewRegistry()
 	router := &OpenAIRouter{ModelSelector: committed}
 
-	publishRouterState(&config.RouterConfig{}, router, nil)
+	publishRouterState(&config.RouterConfig{}, router, nil, nil)
 
 	require.Same(t, committed, selection.GetGlobalRegistry(),
 		"publishRouterState did not adopt the committed router's selection registry")

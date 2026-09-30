@@ -4,6 +4,9 @@ This directory contains research and maintenance scripts for training the text
 classifiers used by semantic-router. Each task has its own dataset preparation,
 training, export, and verification path.
 
+The complete published artifact-to-entrypoint mapping lives in
+[`../model_artifacts.json`](../model_artifacts.json).
+
 ## Choose a Task
 
 | Directory | Output | Use |
@@ -15,6 +18,7 @@ training, export, and verification path.
 | `hallucination_detection_classifier/` | token classifier | mark unsupported answer spans |
 | `modality_routing_classifier/` | three-class classifier LoRA | choose text, image, or mixed response |
 | `user_feedback_classifier/` | four-class classifier | classify satisfaction signals in follow-up text |
+| `safety_classifier/` | binary and legacy nine-class LoRA/merged models | hierarchical content-safety classification |
 
 These scripts download models or datasets when needed. Review the task README
 before running a full job; dataset licenses, compute needs, and output formats
@@ -75,6 +79,6 @@ label mapping. Use the verifier supplied with the task where one exists, and
 test the resulting artifact through the router before publishing it as
 supported.
 
-Public usage and configuration belong in the
-[website documentation](../../../website/docs/overview/semantic-router-overview.md). This
-directory documents how to produce and inspect training artifacts.
+For architecture and model-selection guidance, start with the public
+[classifier model guide](../../../website/docs/training/classifier-models.md).
+This directory documents how to produce and inspect training artifacts.

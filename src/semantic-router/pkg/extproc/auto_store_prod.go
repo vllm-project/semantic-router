@@ -3,9 +3,9 @@
 package extproc
 
 func extractRequestAutoStore(ctx *RequestContext) (bool, bool) {
-	if ctx == nil || ctx.SemanticRequest == nil || ctx.SemanticRequest.AutoStore == nil {
+	if ctx == nil || ctx.RequestAutoStore == nil {
 		return false, false
 	}
 
-	return *ctx.SemanticRequest.AutoStore, true
+	return *ctx.RequestAutoStore, true
 }

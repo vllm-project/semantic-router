@@ -1,0 +1,22 @@
+id: groq
+display_name: Groq
+description: Low-latency hosted inference.
+category: model_api
+support_tier: compatible
+default_base_url: https://api.groq.com/openai/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:groq
+  monogram: G
+  monochrome: true
+conformance:
+  status: unverified

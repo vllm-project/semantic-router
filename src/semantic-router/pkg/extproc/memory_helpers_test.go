@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
@@ -60,7 +59,7 @@ func TestExtractMemoryInfoRejectsMissingAuthenticatedUser(t *testing.T) {
 	ctx := &RequestContext{SemanticRequest: &llmprotocol.Request{Generation: 1, Messages: []llmprotocol.Message{
 		neutralTextMessage(llmprotocol.RoleUser, "hello"),
 	}}}
-	if _, _, history, err := extractMemoryInfo(ctx); err == nil || len(history) != 1 {
+	if _, _, history, err := extractMemoryInfo(ctx); err == nil || len(history) != 0 {
 		t.Fatalf("history=%+v err=%v", history, err)
 	}
 }
@@ -76,20 +75,6 @@ func TestNeutralMemoryMessageAndCurrentUserExtraction(t *testing.T) {
 	}
 	if got := neutralMemoryMessage("not-a-role", "text"); got.Role != llmprotocol.RoleUser {
 		t.Fatalf("unknown role=%q", got.Role)
-	}
-}
-
-func TestExtractAutoStoreUsesDecisionPolicy(t *testing.T) {
-	autoStore := true
-	payload, err := config.NewStructuredPayload(config.MemoryPluginConfig{Enabled: true, AutoStore: &autoStore})
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx := &RequestContext{VSRSelectedDecision: &config.Decision{
-		Name: "memory", Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginMemory, Configuration: payload}},
-	}}
-	if !extractAutoStore(ctx) {
-		t.Fatal("decision auto-store policy was not used")
 	}
 }
 

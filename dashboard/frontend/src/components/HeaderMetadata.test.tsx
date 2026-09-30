@@ -14,6 +14,23 @@ const routingHeaders = {
 }
 
 describe('chat routing metadata', () => {
+  it('labels native dispatch limits separately from consumed token usage', () => {
+    const markup = renderToStaticMarkup(
+      createElement(HeaderDisplay, {
+        headers: {
+          ...routingHeaders,
+          'x-vsr-effective-input-tokens': '512',
+          'x-vsr-effective-max-output-tokens': '261632',
+        },
+      }),
+    )
+
+    expect(markup).toContain('Rendered input tokens')
+    expect(markup).toContain('Output token limit')
+    expect(markup).toContain('261632')
+    expect(markup).not.toContain('Consumed tokens')
+  })
+
   it('keeps the primary route compact and puts supporting metadata behind details', () => {
     const markup = renderToStaticMarkup(createElement(HeaderDisplay, { headers: routingHeaders }))
 

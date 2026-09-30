@@ -24,7 +24,7 @@ class TestConfigTemplate(unittest.TestCase):
         self.assertEqual(data["version"], "v0.3")
         self.assertEqual(len(data["listeners"]), 1)
         self.assertEqual(
-            data["providers"]["defaults"]["default_model"],
+            data["providers"]["defaults"]["model"],
             "replace-with-your-model",
         )
         self.assertEqual(len(data["providers"]["models"]), 1)

@@ -38,21 +38,34 @@ Usage:
         --model-path qwen3_mmlu_math_reasoner_r32
 """
 
+import contextlib
+import dataclasses
 import hashlib
 import json
-import logging
 import os
 import pickle
 import re
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import torch
+from datasets import Dataset, load_dataset
+from peft import (
+    LoraConfig,
+    PeftModel,
+    TaskType,
+)
+from sklearn.model_selection import train_test_split
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    TrainingArguments,
+)
+from trl import SFTTrainer
 
-# Import common LoRA utilities from parent directory
-_parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Shared training utilities live beside the classifier entrypoints.
+_parent_dir = str(Path(__file__).resolve().parents[2] / "model_classifier")
 if _parent_dir not in sys.path:
     sys.path.insert(0, _parent_dir)
 
@@ -70,31 +83,16 @@ _bench_parent_dir = os.path.join(
 if _bench_parent_dir not in sys.path:
     sys.path.insert(0, _bench_parent_dir)
 
-import dataclasses
-from typing import Dict, Sequence
 
-import torch
-from common_lora_utils import (
+from common_lora_utils import (  # noqa: E402 - standalone shared utilities need the path bootstrap
     clear_gpu_memory,
     log_memory_usage,
     set_gpu_device,
     setup_logging,
 )
-from datasets import Dataset, load_dataset
-from peft import (
-    LoraConfig,
-    PeftConfig,
-    PeftModel,
-    TaskType,
-    get_peft_model,
+from training_args_compat import (  # noqa: E402 - uses the standalone path bootstrap
+    create_training_arguments,
 )
-from sklearn.model_selection import train_test_split
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    TrainingArguments,
-)
-from trl import SFTTrainer
 
 # Import bench dataset implementations
 try:
@@ -128,7 +126,17 @@ try:
 except ImportError as e:
     print(f"Warning: Could not import some dataset implementations: {e}")
     print(f"Bench parent directory: {_bench_parent_dir}")
-    print(f"Make sure bench datasets are available")
+    print("Make sure bench datasets are available")
+
+LOGGED_EXAMPLES = 5
+LOGGED_QUESTION_CHARS = 200
+LOGGED_OPTIONS = 5
+LOGGED_REASONING_CHARS = 500
+SIGNIFICANT_IMPROVEMENT_PERCENTAGE_POINTS = 5
+MIN_MULTIPLE_CHOICE_OPTIONS = 2
+LOW_RETENTION_WARNING_PERCENT = 20
+HIGH_TRUNCATION_WARNING_PERCENT = 10
+GRADIENT_CHECKPOINTING_TOKEN_THRESHOLD = 2048
 
 # Setup logging
 logger = setup_logging()
@@ -149,7 +157,7 @@ TRAINING_DATASETS = {
         "max_length": 3584,  # Optimized for multi-GPU with batch_size=1 + BF16
         "max_new_tokens": 1536,  # Matching shorter CoT for consistency
         "batch_size": 1,  # Reduced from 2 to avoid OOM with 3-4B models and long sequences
-        "gradient_accumulation_steps": 16,  # Effective batch = 1 × 16 × 4 GPUs = 64 (same effective batch)
+        "gradient_accumulation_steps": 16,  # Effective batch = 1 x 16 x 4 GPUs = 64 (same effective batch)
         "filter_long_sequences": True,  # Filter out samples > max_length to avoid truncated CoT
         "max_cot_char_length": 12000,  # Pre-filter dataset to shorter CoT samples (~3000 tokens)
         "max_samples_multiplier": 20,  # Load 20x more to compensate for char length filtering
@@ -232,8 +240,8 @@ def get_dataset_cache_key(
 
 def save_cached_datasets(
     cache_key: str,
-    train_samples: List[Dict],
-    val_samples: List[Dict],
+    train_samples: list[dict],
+    val_samples: list[dict],
     train_dataset,
     val_dataset,
 ):
@@ -272,23 +280,23 @@ def load_cached_datasets(cache_key: str):
     try:
         logger.info(f"📦 Found cached dataset: {cache_file}")
         logger.info(f"   Size: {cache_file.stat().st_size / 1024 / 1024:.1f} MB")
-        logger.info(f"   Loading from cache...")
+        logger.info("   Loading from cache...")
 
         with open(cache_file, "rb") as f:
             cache_data = pickle.load(f)
 
-        logger.info(f"   Cache loaded successfully!")
+        logger.info("   Cache loaded successfully!")
         logger.info(f"   Train samples: {len(cache_data['train_samples'])}")
         logger.info(f"   Val samples: {len(cache_data['val_samples'])}")
 
         return cache_data
     except Exception as e:
         logger.warning(f"Failed to load cache: {e}")
-        logger.warning(f"Will regenerate dataset...")
+        logger.warning("Will regenerate dataset...")
         return None
 
 
-def get_qwen3_target_modules() -> List[str]:
+def get_qwen3_target_modules() -> list[str]:
     """Get LoRA target modules for Qwen3 architecture."""
     return [
         "q_proj",
@@ -301,7 +309,7 @@ def get_qwen3_target_modules() -> List[str]:
     ]
 
 
-def get_token_sizes_for_model_type(model_type: str) -> Tuple[int, int]:
+def get_token_sizes_for_model_type(model_type: str) -> tuple[int, int]:
     """
     Get appropriate token sizes for training and inference based on model type.
 
@@ -319,7 +327,7 @@ def get_token_sizes_for_model_type(model_type: str) -> Tuple[int, int]:
 
 def get_training_config_for_model_type(
     model_type: str, default_batch_size: int = 2
-) -> Dict:
+) -> dict:
     """
     Get training configuration (batch size, gradient accumulation) for model type.
 
@@ -371,7 +379,7 @@ def load_dataset_implementation(dataset_name: str):
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
 
-def convert_answer_to_text(correct_answer, options: List[str]) -> str:
+def convert_answer_to_text(correct_answer, options: list[str]) -> str:
     """
     Convert any answer format to the actual answer text.
     This ensures consistency across all datasets.
@@ -434,7 +442,7 @@ def convert_answer_to_text(correct_answer, options: List[str]) -> str:
     return str(correct_answer)
 
 
-def convert_bench_question_to_training_format(question_obj, dataset_name: str) -> Dict:
+def convert_bench_question_to_training_format(question_obj, dataset_name: str) -> dict:
     """
     Convert Question object from bench to training format.
     Uses actual answer TEXT instead of letters/indices for consistency.
@@ -448,7 +456,10 @@ def convert_bench_question_to_training_format(question_obj, dataset_name: str) -
         Returns None if the sample is invalid
     """
     # Check if this is a free-form question (no multiple choice options)
-    has_options = question_obj.options and len(question_obj.options) >= 2
+    has_options = (
+        question_obj.options
+        and len(question_obj.options) >= MIN_MULTIPLE_CHOICE_OPTIONS
+    )
 
     if has_options:
         # Multiple-choice format: Convert answer to actual text
@@ -488,7 +499,7 @@ def load_training_data_for_model_type(
     model_type: str,
     max_samples_per_dataset: int = 1000,
     seed: int = 42,
-) -> List[Dict]:
+) -> list[dict]:
     """
     Load training data from external datasets (not MMLU-Pro).
 
@@ -546,7 +557,7 @@ def load_training_data_for_model_type(
             if "max_cot_char_length" in config and dataset_name == "openmathrreasoning":
                 load_kwargs["max_cot_length"] = config["max_cot_char_length"]
 
-            questions, dataset_info = dataset_impl.load_dataset(**load_kwargs)
+            questions, _dataset_info = dataset_impl.load_dataset(**load_kwargs)
 
             # Convert to our format (filter out None samples)
             valid_samples = 0
@@ -573,7 +584,7 @@ def load_training_data_for_model_type(
     return all_samples
 
 
-def load_mmlu_train_for_law(max_samples: int = 1000) -> List[Dict]:
+def load_mmlu_train_for_law(max_samples: int = 1000) -> list[dict]:
     """Load MMLU train split for law category only."""
     try:
         # Load MMLU-Pro train/validation split (not test!)
@@ -608,8 +619,8 @@ def load_mmlu_train_for_law(max_samples: int = 1000) -> List[Dict]:
 
 
 def load_mmlu_pro_test_data(
-    target_categories: List[str], max_samples: int = None
-) -> List[Dict]:
+    target_categories: list[str], max_samples: int | None = None
+) -> list[dict]:
     """
     Load MMLU-Pro TEST data for evaluation (never used in training!).
 
@@ -620,7 +631,7 @@ def load_mmlu_pro_test_data(
     Returns:
         List of test samples
     """
-    logger.info(f"Loading MMLU-Pro TEST data for evaluation")
+    logger.info("Loading MMLU-Pro TEST data for evaluation")
     logger.info(f"  Target categories: {target_categories}")
 
     try:
@@ -663,7 +674,7 @@ def load_mmlu_pro_test_data(
         raise
 
 
-def format_options(options: List[str]) -> str:
+def format_options(options: list[str]) -> str:
     """Format options list as A) ..., B) ..., etc."""
     letters = "ABCDEFGHIJ"
     formatted = []
@@ -675,11 +686,11 @@ def format_options(options: List[str]) -> str:
 
 def format_instruction(
     question: str,
-    options: List[str],
-    answer: str = None,
-    cot_content: str = None,
+    options: list[str],
+    answer: str | None = None,
+    cot_content: str | None = None,
     use_cot: bool = True,
-) -> List[Dict[str, str]]:
+) -> list[dict[str, str]]:
     """
     Format a problem as chat messages for proper instruction fine-tuning.
 
@@ -700,7 +711,7 @@ def format_instruction(
         Format: [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]
     """
     # Determine if this is multiple-choice or free-form
-    is_multiple_choice = options and len(options) >= 2
+    is_multiple_choice = options and len(options) >= MIN_MULTIPLE_CHOICE_OPTIONS
 
     if is_multiple_choice:
         # Multiple-choice format
@@ -837,7 +848,7 @@ class DataCollatorForCompletionOnlyLM:
 
 
 def create_solver_dataset(
-    samples: List[Dict],
+    samples: list[dict],
     tokenizer,
     max_length=1024,
     use_cot=True,
@@ -870,30 +881,29 @@ def create_solver_dataset(
         )
 
         # Track token length for diagnostics (optional filtering)
-        if filter_long_sequences or True:  # Always check for stats
-            formatted_text = tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,
-                add_generation_prompt=False,
-                enable_thinking=False,
-            )
-            tokens = tokenizer(formatted_text, truncation=False)
-            token_length = len(tokens["input_ids"])
-            token_lengths.append(token_length)
+        formatted_text = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=False,
+            enable_thinking=False,
+        )
+        tokens = tokenizer(formatted_text, truncation=False)
+        token_length = len(tokens["input_ids"])
+        token_lengths.append(token_length)
 
-            # Filter out samples that are too long (if enabled)
-            if filter_long_sequences and token_length > max_length:
-                continue  # Skip this sample
+        # Filter out samples that are too long (if enabled)
+        if filter_long_sequences and token_length > max_length:
+            continue  # Skip this sample
 
         # Store in TRL format (messages field)
         dataset_samples.append({"messages": messages})
 
     # Log token length statistics
     if token_lengths:
-        import numpy as np
+        import numpy as np  # noqa: PLC0415 - imported only for this training phase
 
         token_array = np.array(token_lengths)
-        logger.info(f"\n📊 Token Length Statistics:")
+        logger.info("\n📊 Token Length Statistics:")
         logger.info(f"  Total samples analyzed: {len(token_array)}")
         logger.info(f"  Min: {token_array.min()} tokens")
         logger.info(f"  Max: {token_array.max()} tokens")
@@ -917,21 +927,21 @@ def create_solver_dataset(
 
             if num_kept == 0:
                 logger.error(f"  ❌ ERROR: No samples fit in max_length={max_length}!")
-                logger.error(f"  Consider increasing max_length or disabling filtering")
-            elif kept_pct < 20:
+                logger.error("  Consider increasing max_length or disabling filtering")
+            elif kept_pct < LOW_RETENTION_WARNING_PERCENT:
                 logger.warning(f"  ⚠️  WARNING: Only {kept_pct:.1f}% of samples kept!")
                 logger.warning(
-                    f"  Consider increasing max_length to keep more training data"
+                    "  Consider increasing max_length to keep more training data"
                 )
         else:
             logger.info(
                 f"  ⚠️  Samples that will be TRUNCATED: {num_exceeds}/{len(token_array)} ({exceed_pct:.1f}%)"
             )
-            if exceed_pct > 10:
+            if exceed_pct > HIGH_TRUNCATION_WARNING_PERCENT:
                 logger.warning(
                     f"  ⚠️  WARNING: {exceed_pct:.1f}% of samples will be truncated!"
                 )
-                logger.warning(f"  Consider enabling filter_long_sequences=True")
+                logger.warning("  Consider enabling filter_long_sequences=True")
         logger.info("")
 
     if len(dataset_samples) == 0:
@@ -944,7 +954,7 @@ def create_solver_dataset(
 
 
 def extract_answer_text(
-    generated_text: str, options: List[str], question_text: str = ""
+    generated_text: str, options: list[str], question_text: str = ""
 ) -> str:
     """
     Extract the answer TEXT from generated text and match it to one of the options.
@@ -960,7 +970,9 @@ def extract_answer_text(
     """
     # Clean up the generated text
     if "Let's think step by step:" in generated_text:
-        generated_text = generated_text.split("Let's think step by step:")[-1]
+        generated_text = generated_text.rsplit("Let's think step by step:", maxsplit=1)[
+            -1
+        ]
     elif question_text and question_text in generated_text:
         # Remove question if it was echoed
         generated_text = generated_text.split(question_text)[-1]
@@ -1040,13 +1052,13 @@ def extract_answer_text(
 def evaluate_model_on_mmlu_pro(
     model,
     tokenizer,
-    test_samples: List[Dict],
+    test_samples: list[dict],
     use_cot: bool = True,
-    max_samples: int = None,
+    max_samples: int | None = None,
     phase_name: str = "MMLU-Pro Evaluation",
     max_new_tokens: int = 256,
     batch_size: int = 8,
-) -> Dict:
+) -> dict:
     """
     Evaluate model on MMLU-Pro test samples with batched inference.
 
@@ -1081,7 +1093,7 @@ def evaluate_model_on_mmlu_pro(
     # Process in batches
     num_batches = (len(test_samples) + batch_size - 1) // batch_size
 
-    import time
+    import time  # noqa: PLC0415 - imported only for this training phase
 
     for batch_idx in range(num_batches):
         batch_start = batch_idx * batch_size
@@ -1150,7 +1162,9 @@ def evaluate_model_on_mmlu_pro(
             )
 
         # Process each result in the batch
-        for i, (output, input_len) in enumerate(zip(outputs, inputs["input_ids"])):
+        for i, (output, input_len) in enumerate(
+            zip(outputs, inputs["input_ids"], strict=False)
+        ):
             # Decode only the generated part (skip the input prompt)
             generated_ids = output[len(input_len) :]
             generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
@@ -1187,7 +1201,7 @@ def evaluate_model_on_mmlu_pro(
 
             # Log first 5 examples
             sample_idx = batch_start + i
-            if sample_idx < 5:
+            if sample_idx < LOGGED_EXAMPLES:
                 logger.info(
                     f"\n[{sample_idx+1}/{len(test_samples)}] Category: {category}"
                 )
@@ -1214,7 +1228,7 @@ def evaluate_model_on_mmlu_pro(
     logger.info(f"{phase_name} Results:")
     logger.info(f"{'=' * 80}")
     logger.info(f"Overall Accuracy: {correct}/{total} = {accuracy:.2%}")
-    logger.info(f"\nPer-Category Accuracy:")
+    logger.info("\nPer-Category Accuracy:")
     for cat in sorted(category_stats.keys()):
         cat_acc = category_stats[cat]["correct"] / category_stats[cat]["total"]
         logger.info(
@@ -1243,8 +1257,8 @@ def main(
     learning_rate: float = 2e-4,
     max_samples_per_dataset: int = 1000,
     num_workers: int = 0,
-    output_dir: str = None,
-    gpu_id: Optional[int] = None,
+    output_dir: str | None = None,
+    gpu_id: int | None = None,
     use_cot: bool = True,
 ):
     """Main training function with NO data leakage."""
@@ -1283,29 +1297,29 @@ def main(
     )
 
     # Enable gradient checkpointing for long sequences to save memory
-    use_gradient_checkpointing = max_length > 2048
+    use_gradient_checkpointing = max_length > GRADIENT_CHECKPOINTING_TOKEN_THRESHOLD
     if use_gradient_checkpointing:
-        logger.info(f"⚙️  Enabling gradient checkpointing (sequence length > 2048)")
-        logger.info(f"   This trades compute for memory to handle longer sequences")
+        logger.info("⚙️  Enabling gradient checkpointing (sequence length > 2048)")
+        logger.info("   This trades compute for memory to handle longer sequences")
 
     logger.info("=" * 80)
 
     # GPU selection - use all GPUs if gpu_id is None
     if gpu_id is None:
         # Use all available GPUs - Trainer automatically uses DistributedDataParallel (DDP)
-        import torch
+        import torch  # noqa: PLC0415 - imported only for this training phase
 
         num_gpus = torch.cuda.device_count()
         logger.info(
             f"🚀 Multi-GPU Training: Using ALL {num_gpus} GPUs with DDP + BF16!"
         )
         logger.info(f"   GPUs: {', '.join([f'cuda:{i}' for i in range(num_gpus)])}")
-        logger.info(f"   Mixed Precision: BF16 (saves ~30-40% memory)")
+        logger.info("   Mixed Precision: BF16 (saves ~30-40% memory)")
         logger.info(
             f"   Per-device batch: {actual_batch_size}, Gradient accum: {actual_grad_accum}"
         )
         logger.info(
-            f"   Effective batch = {actual_batch_size} × {actual_grad_accum} × {num_gpus} = {actual_batch_size * actual_grad_accum * num_gpus}"
+            f"   Effective batch = {actual_batch_size} x {actual_grad_accum} x {num_gpus} = {actual_batch_size * actual_grad_accum * num_gpus}"
         )
         device_str = "cuda"
         selected_gpu = "all"
@@ -1395,16 +1409,20 @@ def main(
         logger.info(f"{'=' * 80}")
         logger.info(f"Source: {sample.get('source_dataset', 'unknown')}")
         logger.info(f"Category: {sample.get('category', 'unknown')}")
-        logger.info(f"\nQuestion:")
+        logger.info("\nQuestion:")
         logger.info(
-            f"  {sample['question'][:200]}{'...' if len(sample['question']) > 200 else ''}"
+            f"  {sample['question'][:LOGGED_QUESTION_CHARS]}{'...' if len(sample['question']) > LOGGED_QUESTION_CHARS else ''}"
         )
 
-        logger.info(f"\nOptions:")
-        for i, opt in enumerate(sample["options"][:5], 1):  # Show first 5 options
+        logger.info("\nOptions:")
+        for i, opt in enumerate(
+            sample["options"][:LOGGED_OPTIONS], 1
+        ):  # Show first 5 options
             logger.info(f"  {chr(64+i)}) {opt}")
-        if len(sample["options"]) > 5:
-            logger.info(f"  ... ({len(sample['options']) - 5} more options)")
+        if len(sample["options"]) > LOGGED_OPTIONS:
+            logger.info(
+                f"  ... ({len(sample['options']) - LOGGED_OPTIONS} more options)"
+            )
 
         # Find the letter for the answer
         answer_letter = None
@@ -1414,7 +1432,7 @@ def main(
                 answer_letter = chr(65 + i)
                 break
 
-        logger.info(f"\nCorrect Answer (LETTER + TEXT format):")
+        logger.info("\nCorrect Answer (LETTER + TEXT format):")
         if answer_letter:
             logger.info(f"  {answer_letter}) {answer_text}")
         else:
@@ -1431,14 +1449,14 @@ def main(
             use_cot=use_cot,
         )
 
-        logger.info(f"\n" + "=" * 80)
-        logger.info(f"📄 CHAT FORMAT MESSAGES (will be converted to ChatML):")
-        logger.info(f"=" * 80)
-        logger.info(f"User Message:")
+        logger.info("\n" + "=" * 80)
+        logger.info("📄 CHAT FORMAT MESSAGES (will be converted to ChatML):")
+        logger.info("=" * 80)
+        logger.info("User Message:")
         logger.info(f"  {messages[0]['content'][:300]}...")
-        logger.info(f"\nAssistant Message (includes full CoT solution):")
+        logger.info("\nAssistant Message (includes full CoT solution):")
         assistant_msg = messages[1]["content"]
-        if len(assistant_msg) > 500:
+        if len(assistant_msg) > LOGGED_REASONING_CHARS:
             logger.info(f"  {assistant_msg[:250]}...")
             logger.info(
                 f"  ... [solution continues for {len(assistant_msg)} characters] ..."
@@ -1446,20 +1464,20 @@ def main(
             logger.info(f"  ...{assistant_msg[-250:]}")
         else:
             logger.info(f"  {assistant_msg}")
-        logger.info(f"\nNote: Tokenizer will apply ChatML template:")
-        logger.info(f"  <|im_start|>user\\n[user message]<|im_end|>")
-        logger.info(f"  <|im_start|>assistant\\n[full CoT solution + answer]<|im_end|>")
+        logger.info("\nNote: Tokenizer will apply ChatML template:")
+        logger.info("  <|im_start|>user\\n[user message]<|im_end|>")
+        logger.info("  <|im_start|>assistant\\n[full CoT solution + answer]<|im_end|>")
         logger.info("=" * 80)
         logger.info("")
 
     logger.info(f"{'=' * 80}")
     logger.info("Training data format verified!")
     logger.info(f"   All {len(train_samples)} training samples use ChatML format")
-    logger.info(f"   Format: <|im_start|>user...question...<|im_end|>")
-    logger.info(f"           <|im_start|>assistant...answer...<|im_end|>")
-    logger.info(f"   Assistant will generate: 'The answer is X) <text>'")
-    logger.info(f"   Example: 'The answer is A) crop farmers'")
-    logger.info(f"   Model trains ONLY on assistant response (not question)")
+    logger.info("   Format: <|im_start|>user...question...<|im_end|>")
+    logger.info("           <|im_start|>assistant...answer...<|im_end|>")
+    logger.info("   Assistant will generate: 'The answer is X) <text>'")
+    logger.info("   Example: 'The answer is A) crop farmers'")
+    logger.info("   Model trains ONLY on assistant response (not question)")
     logger.info(f"{'=' * 80}\n")
 
     # Load MMLU-Pro TEST data for evaluation
@@ -1553,7 +1571,8 @@ def main(
     # Note: SFTTrainer automatically uses DistributedDataParallel (DDP) for multi-GPU training
     # DDP is much more memory-efficient than DataParallel - no manual wrapping needed!
     # BF16 mixed precision saves ~30-40% memory, enabling larger batches on multi-GPU
-    training_args = TrainingArguments(
+    training_args = create_training_arguments(
+        TrainingArguments,
         output_dir=output_dir,
         num_train_epochs=num_epochs,
         per_device_train_batch_size=actual_batch_size,
@@ -1611,7 +1630,7 @@ def main(
     response_template = "<|im_start|>assistant\n"
 
     logger.info(
-        f"🎭 Using DataCollatorForCompletionOnlyLM with response template: {repr(response_template)}"
+        f"🎭 Using DataCollatorForCompletionOnlyLM with response template: {response_template!r}"
     )
     logger.info(
         "   This ensures model trains ONLY on assistant responses, not prompts!"
@@ -1667,7 +1686,7 @@ def main(
 
     # EVALUATIONS: Run both baseline and post-training together
     # Only run evaluation on main process (rank 0) to avoid OOM
-    import accelerate
+    import accelerate  # noqa: PLC0415 - imported only for this training phase
 
     is_main_process = accelerate.PartialState().is_main_process
 
@@ -1681,25 +1700,21 @@ def main(
 
         # Delete trainer and model to free GPU memory for evaluation
         logger.info("🧹 Cleaning up training resources to free GPU memory...")
-        try:
+        with contextlib.suppress(BaseException):
             del trainer
             logger.info("  Trainer deleted")
-        except:
-            pass
-        try:
+        with contextlib.suppress(BaseException):
             del model
             logger.info("  Model deleted")
-        except:
-            pass
 
         # Force garbage collection and GPU memory cleanup
-        import gc
+        import gc  # noqa: PLC0415 - imported only for this training phase
 
         gc.collect()
         clear_gpu_memory()
 
         # Give CUDA a moment to release memory
-        import time
+        import time  # noqa: PLC0415 - imported only for this training phase
 
         time.sleep(2)
         logger.info("GPU memory cleared for evaluation\n")
@@ -1757,7 +1772,7 @@ def main(
         torch_dtype=torch.bfloat16,  # Load in BF16 to save memory
         device_map=eval_device,  # Directly load to device
     )
-    from peft import PeftModel
+    from peft import PeftModel  # noqa: PLC0415 - imported only for this training phase
 
     eval_model = PeftModel.from_pretrained(eval_base_model, output_dir)
     eval_model.eval()
@@ -1784,7 +1799,7 @@ def main(
     improvement_pct = (improvement / baseline_acc * 100) if baseline_acc > 0 else 0
 
     logger.info(f"\n{'=' * 80}")
-    logger.info(f"OVERALL RESULTS:")
+    logger.info("OVERALL RESULTS:")
     logger.info(f"{'=' * 80}")
     logger.info(f"  Baseline (Untrained):     {baseline_acc:.2f}%")
     logger.info(f"  Post-training:            {post_acc:.2f}%")
@@ -1792,15 +1807,15 @@ def main(
     logger.info(f"  Relative Improvement:     {improvement_pct:+.1f}%")
     logger.info(f"\n  Training Data: {TRAINING_DATASETS[model_type]['datasets']}")
     logger.info(f"  Test Data: MMLU-Pro {target_mmlu_categories}")
-    logger.info(f"  Data Leakage: NONE (completely separate datasets)")
+    logger.info("  Data Leakage: NONE (completely separate datasets)")
 
-    if improvement > 5:
-        logger.info(f"\n  SIGNIFICANT IMPROVEMENT! Model generalizes well to MMLU-Pro!")
+    if improvement > SIGNIFICANT_IMPROVEMENT_PERCENTAGE_POINTS:
+        logger.info("\n  SIGNIFICANT IMPROVEMENT! Model generalizes well to MMLU-Pro!")
     elif improvement > 0:
-        logger.info(f"\n  ⚠️  Modest improvement. Model shows some transfer learning.")
+        logger.info("\n  ⚠️  Modest improvement. Model shows some transfer learning.")
     else:
         logger.info(
-            f"\n  ⚠️  No improvement. More training data or epochs may be needed."
+            "\n  ⚠️  No improvement. More training data or epochs may be needed."
         )
 
     logger.info(f"{'=' * 80}\n")
@@ -2024,7 +2039,7 @@ if __name__ == "__main__":
                     f"❌ No samples found for category '{args.filter_category}'"
                 )
                 logger.info("Available categories in dataset:")
-                categories = set(s["category"] for s in original_samples)
+                categories = {s["category"] for s in original_samples}
                 for cat in sorted(categories):
                     logger.info(f"  - {cat}")
                 sys.exit(1)

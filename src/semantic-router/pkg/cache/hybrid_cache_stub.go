@@ -6,6 +6,7 @@ import (
 	"context"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 // HybridCache combines in-memory HNSW index with external Milvus storage
@@ -15,6 +16,7 @@ type HybridCache struct {
 
 // HybridCacheOptions contains configuration for the hybrid cache
 type HybridCacheOptions struct {
+	EmbeddingProvider       embedding.Provider
 	Enabled                 bool
 	SimilarityThreshold     float32
 	TTLSeconds              int

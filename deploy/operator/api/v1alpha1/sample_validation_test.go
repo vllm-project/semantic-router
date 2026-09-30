@@ -27,7 +27,7 @@ import (
 
 func TestSampleCRValidation(t *testing.T) {
 	// Get the project root directory
-	projectRoot := filepath.Join("..", "..", "..")
+	projectRoot := filepath.Join("..", "..")
 	samplesDir := filepath.Join(projectRoot, "config", "samples")
 
 	tests := []struct {
@@ -63,7 +63,7 @@ func TestSampleCRValidation(t *testing.T) {
 			// Read the sample YAML file
 			data, err := os.ReadFile(samplePath)
 			if err != nil {
-				t.Skipf("Sample file not found: %s (this is expected during development)", samplePath)
+				t.Fatalf("Required sample file not readable: %s: %v", samplePath, err)
 				return
 			}
 
@@ -158,12 +158,12 @@ func TestSampleCRValidation(t *testing.T) {
 
 func TestSampleCRsParseable(t *testing.T) {
 	// Test that all sample CRs can be parsed without errors
-	projectRoot := filepath.Join("..", "..", "..")
+	projectRoot := filepath.Join("..", "..")
 	samplesDir := filepath.Join(projectRoot, "config", "samples")
 
 	entries, err := os.ReadDir(samplesDir)
 	if err != nil {
-		t.Skipf("Samples directory not found: %s", samplesDir)
+		t.Fatalf("Required samples directory not readable: %s: %v", samplesDir, err)
 		return
 	}
 

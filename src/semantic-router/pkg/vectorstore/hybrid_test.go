@@ -2,6 +2,7 @@ package vectorstore
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"testing"
 )
@@ -212,6 +213,34 @@ func TestFuseScores_Weighted(t *testing.T) {
 			t.Errorf("results not sorted: [%d]=%f > [%d]=%f",
 				i, results[i].FinalScore, i-1, results[i-1].FinalScore)
 		}
+	}
+}
+
+func TestFuseScores_WeightedMissingBM25StaysAtZero(t *testing.T) {
+	results := FuseScores(
+		map[string]float64{"vector-only": 0.9},
+		map[string]float64{"lexical-low": 1.0, "lexical-high": 3.0},
+		nil,
+		&HybridSearchConfig{
+			Mode:         "weighted",
+			VectorWeight: 0,
+			BM25Weight:   1,
+			NgramWeight:  0,
+		},
+	)
+
+	found := false
+	for _, result := range results {
+		if result.ChunkID != "vector-only" {
+			continue
+		}
+		found = true
+		if result.FinalScore != 0 {
+			t.Fatalf("missing BM25 score = %f, want 0", result.FinalScore)
+		}
+	}
+	if !found {
+		t.Fatal("vector-only result was not returned")
 	}
 }
 
@@ -572,6 +601,68 @@ func TestGenericHybridRerank_TopK(t *testing.T) {
 
 	if len(results) > 2 {
 		t.Errorf("topK=2 but got %d results", len(results))
+	}
+}
+
+func TestMemoryBackend_HybridSearch_NonPositiveTopKReturnsAllResults(t *testing.T) {
+	backend := NewMemoryBackend(MemoryBackendConfig{})
+	ctx := context.Background()
+	if err := backend.CreateCollection(ctx, "vs_unlimited", 3); err != nil {
+		t.Fatalf("CreateCollection: %v", err)
+	}
+
+	chunks := make([]EmbeddedChunk, 60)
+	for i := range chunks {
+		chunks[i] = EmbeddedChunk{
+			ID:        fmt.Sprintf("c%d", i),
+			FileID:    "f1",
+			Content:   "common candidate content",
+			Embedding: []float32{1, 0, 0},
+		}
+	}
+	if err := backend.InsertChunks(ctx, "vs_unlimited", chunks); err != nil {
+		t.Fatalf("InsertChunks: %v", err)
+	}
+
+	for _, topK := range []int{0, -1} {
+		results, err := backend.HybridSearch(ctx, "vs_unlimited", "common", []float32{1, 0, 0}, topK, 0, nil, nil)
+		if err != nil {
+			t.Fatalf("HybridSearch(topK=%d): %v", topK, err)
+		}
+		if len(results) != len(chunks) {
+			t.Errorf("HybridSearch(topK=%d) returned %d results, want %d", topK, len(results), len(chunks))
+		}
+	}
+}
+
+func TestGenericHybridRerank_NonPositiveTopKReturnsAllCandidates(t *testing.T) {
+	backend := NewMemoryBackend(MemoryBackendConfig{})
+	ctx := context.Background()
+	if err := backend.CreateCollection(ctx, "vs_unlimited", 3); err != nil {
+		t.Fatalf("CreateCollection: %v", err)
+	}
+
+	chunks := make([]EmbeddedChunk, 60)
+	for i := range chunks {
+		chunks[i] = EmbeddedChunk{
+			ID:        fmt.Sprintf("c%d", i),
+			FileID:    "f1",
+			Content:   "common candidate content",
+			Embedding: []float32{1, 0, 0},
+		}
+	}
+	if err := backend.InsertChunks(ctx, "vs_unlimited", chunks); err != nil {
+		t.Fatalf("InsertChunks: %v", err)
+	}
+
+	for _, topK := range []int{0, -1} {
+		results, err := GenericHybridRerank(ctx, backend, "vs_unlimited", "common", []float32{1, 0, 0}, topK, 0, nil, nil)
+		if err != nil {
+			t.Fatalf("GenericHybridRerank(topK=%d): %v", topK, err)
+		}
+		if len(results) != len(chunks) {
+			t.Errorf("GenericHybridRerank(topK=%d) returned %d results, want %d", topK, len(results), len(chunks))
+		}
 	}
 }
 

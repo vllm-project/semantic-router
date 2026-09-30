@@ -1,0 +1,82 @@
+id: baidu-qianfan
+display_name: Baidu Qianfan
+description: ERNIE and selected third-party models through Qianfan's OpenAI-compatible API.
+category: model_api
+support_tier: compatible
+default_base_url: https://api.baiduqianfan.ai/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:baidu
+  monogram: E
+  monochrome: false
+conformance:
+  status: unverified
+models:
+- catalog: baidu/ernie-5.0
+  relationship: first_party
+  id: ernie-5.0
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-06
+    source: https://intl.cloud.baidu.com/en/doc/qianfan/s/7m95lyy43-intl-en
+- catalog: deepseek/deepseek-v4-pro
+  relationship: managed_cloud
+  id: deepseek-v4-pro
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: thinking_object_effort
+  reasoning_efforts:
+  - high
+  - max
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://intl.cloud.baidu.com/en/doc/qianfan/s/7m95lyy43-intl-en
+- catalog: deepseek/deepseek-v4-flash
+  relationship: managed_cloud
+  id: deepseek-v4-flash
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: thinking_object_effort
+  reasoning_efforts:
+  - high
+  - max
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://intl.cloud.baidu.com/en/doc/qianfan/s/7m95lyy43-intl-en
+- catalog: deepseek/deepseek-v3.2
+  relationship: managed_cloud
+  id: deepseek-v3.2-intl
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: deepseek_thinking
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://api.baiduqianfan.ai/v1/models
+- catalog: zai/glm-5.1
+  relationship: managed_cloud
+  id: glm-5.1
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: thinking_object
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://intl.cloud.baidu.com/en/doc/qianfan/s/7m95lyy43-intl-en

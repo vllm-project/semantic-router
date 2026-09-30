@@ -33,9 +33,9 @@ func NewService() *Service {
 
 func (s *Service) Capabilities(recoveryAvailable bool) Capabilities {
 	return Capabilities{
-		Strategies:             []string{"extractive", "recoverable"},
+		Strategies:             []string{"extractive", "recoverable", "truncate"},
 		ScoringMethods:         []string{"bm25", "embedding", "hybrid"},
-		Targets:                []string{"tool_output", "history", "rag", "memory"},
+		Targets:                []string{"tool_output", "history", "rag", "memory", "current_user"},
 		Recovery:               recoveryAvailable,
 		JSONStructurePreserved: true,
 		MultimodalPreserved:    true,
@@ -43,7 +43,7 @@ func (s *Service) Capabilities(recoveryAvailable bool) Capabilities {
 	}
 }
 
-func (s *Service) Apply(ctx context.Context, request Request) ServiceResult {
+func (s *Service) apply(ctx context.Context, request Request) ServiceResult {
 	s.requests.Add(1)
 	if request.Request == nil {
 		s.failures.Add(1)
@@ -69,7 +69,7 @@ func (s *Service) Apply(ctx context.Context, request Request) ServiceResult {
 		s.failures.Add(1)
 		return s.failureResult(request, plan, err)
 	}
-	return s.finalizeResult(request, counter, result, appliedCandidates)
+	return s.commitCompression(ctx, request, counter, result, appliedCandidates)
 }
 
 func tokenCounterForRequest(request Request) TokenCounter {
@@ -118,9 +118,6 @@ func (s *Service) executePlan(
 			&recoveryBytes,
 		)
 		if applyErr != nil {
-			for _, applied := range appliedCandidates {
-				applied.block.SetText(applied.originalText)
-			}
 			return result, appliedCandidates, applyErr
 		}
 		if !applied {
@@ -128,6 +125,7 @@ func (s *Service) executePlan(
 		}
 		result.Applied = true
 		result.BlocksCompressed++
+		candidate.replacementText = blockResult.Content
 		appliedCandidates = append(appliedCandidates, candidate)
 		appliedMessages[candidate.plan.MessageIndex] = struct{}{}
 		result.OmittedChunks += blockResult.OmittedChunks
@@ -147,26 +145,14 @@ func (s *Service) finalizeResult(
 	request Request,
 	counter TokenCounter,
 	result ServiceResult,
-	appliedCandidates []plannedCandidate,
 ) ServiceResult {
-	result.TokensAfter, _ = counter.CountRequest(request.Model, request.Request)
+	if result.TokensAfter <= 0 {
+		result.TokensAfter, _ = counter.CountRequest(request.Model, request.Request)
+	}
 	if result.TokensAfter <= 0 {
 		result.TokensAfter = result.Plan.OriginalTokens
 	}
-	if result.Applied && result.TokensAfter >= result.TokensBefore {
-		for _, candidate := range appliedCandidates {
-			candidate.block.SetText(candidate.originalText)
-		}
-		result.Applied = false
-		result.BlocksCompressed = 0
-		result.MessagesCompressed = 0
-		result.OmittedChunks = 0
-		result.JSONBlocks = 0
-		result.RecoveryKeys = nil
-		result.TokensAfter = result.TokensBefore
-		result.Plan.SkipReason = SkipBudgetNotReduced
-		result.Plan.Quality = "rejected_non_reducing"
-	}
+
 	if !result.Applied {
 		s.skipped.Add(1)
 		result.Plan.SkipReason = SkipBudgetNotReduced
@@ -234,9 +220,9 @@ func (s *Service) RecordEstimatedCostSavings(amount float64) {
 }
 
 type plannedCandidate struct {
-	plan         TargetPlan
-	block        *TextBlockIR
-	originalText string
+	plan            TargetPlan
+	block           *TextBlockIR
+	replacementText string
 }
 
 func (s *Service) plan(
@@ -287,6 +273,9 @@ func (s *Service) plan(
 		plan.FallbackReason = "embedding_unavailable"
 	}
 	sort.SliceStable(candidates, func(left, right int) bool {
+		if (candidates[left].plan.Kind == TargetCurrentUser) != (candidates[right].plan.Kind == TargetCurrentUser) {
+			return candidates[right].plan.Kind == TargetCurrentUser
+		}
 		if candidates[left].plan.Score == candidates[right].plan.Score {
 			return candidates[left].plan.OriginalTokens > candidates[right].plan.OriginalTokens
 		}
@@ -323,8 +312,10 @@ func candidateForBlock(
 	block *TextBlockIR,
 ) (plannedCandidate, bool) {
 	kind := block.Source
-	if kind == TargetHistory &&
-		(message.Protected || message.Role == "tool" || message.Role == "function") {
+	if request.Policy.Targets.CurrentUser.Mode == TargetTruncate && request.Request.currentUserTextBlock(message, block) {
+		kind = TargetCurrentUser
+	}
+	if !request.Request.compressionBlockAllowed(message, block) {
 		return plannedCandidate{}, false
 	}
 	policy := policyForTarget(request.Policy.Targets, kind)
@@ -343,10 +334,12 @@ func candidateForBlock(
 	if targetTokens <= 0 {
 		targetTokens = max(1, minTokens/2)
 	}
+	if kind == TargetCurrentUser {
+		targetTokens = 1 // The shared request budget sets the actual head/tail allowance.
+	}
 	query := request.Request.QueryFor(block)
 	return plannedCandidate{
-		block:        block,
-		originalText: block.Text,
+		block: block,
 		plan: TargetPlan{
 			MessageIndex:   block.MessageIndex,
 			BlockIndex:     block.BlockIndex,
@@ -355,7 +348,7 @@ func candidateForBlock(
 			OriginalTokens: tokens,
 			TargetTokens:   targetTokens,
 			Query:          query,
-			Score:          lexicalScore(query, block.Text),
+			Score:          candidateScore(kind, query, block.Text),
 		},
 	}, true
 }
@@ -407,18 +400,14 @@ func (s *Service) applyCandidate(
 	candidate plannedCandidate,
 	recoveryBytes *int,
 ) (bool, Result, string, error) {
-	block := candidate.block
-	compressed := CompressToolOutput(
-		block.Text,
-		candidate.plan.Query,
-		candidate.plan.OriginalTokens,
-		candidate.plan.TargetTokens,
-	)
+	compressed := compressCandidateText(request.Model, counter, candidate)
+	if candidate.plan.Mode == TargetTruncate {
+		return compressed.Applied, compressed, "", nil
+	}
 	if candidate.plan.Mode == TargetExtractive {
 		if !compressed.Applied {
 			return false, compressed, "", nil
 		}
-		block.SetText(compressed.Content)
 		return true, compressed, "", nil
 	}
 	if candidate.plan.Mode != TargetRecoverable {
@@ -490,7 +479,6 @@ func applyRecoverableCandidate(
 			RetrieveToolName,
 		)
 	}
-	block.SetText(body)
 	compressed.Content = body
 	compressed.CompressedTokens, _ = counter.CountText(request.Model, body)
 	return true, compressed, key, nil
@@ -513,6 +501,8 @@ func (s *Service) failureResult(
 
 func policyForTarget(targets Targets, kind TargetKind) TargetPolicy {
 	switch kind {
+	case TargetCurrentUser:
+		return targets.CurrentUser
 	case TargetRAG:
 		return targets.RAG
 	case TargetMemory:
@@ -582,7 +572,10 @@ func allocateGlobalBudget(
 	needed := max(0, originalTokens-targetRequest)
 	for index := range candidates {
 		if needed <= 0 {
-			break
+			if candidates[index].plan.Kind == TargetCurrentUser {
+				candidates[index].plan.TargetTokens = candidates[index].plan.OriginalTokens
+			}
+			continue
 		}
 		potential := max(0, candidates[index].plan.OriginalTokens-candidates[index].plan.TargetTokens)
 		if potential > needed {

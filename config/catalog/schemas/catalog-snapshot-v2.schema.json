@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vllm.ai/schemas/model-catalog/catalog-snapshot-v2.schema.json",
+  "title": "vLLM Semantic Router generated model catalog snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "catalogs",
+    "protocols",
+    "providers",
+    "reasoning_families",
+    "models",
+    "benchmarks",
+    "evaluations",
+    "indices",
+    "index_results"
+  ],
+  "properties": {
+    "schema_version": {"const": "vllm-sr/model-catalog/v2"},
+    "catalogs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["catalog_version", "channel", "default_model", "enabled_models", "default_intelligence_index"],
+        "properties": {
+          "catalog_version": {"type": "string", "minLength": 1},
+          "channel": {"enum": ["latest", "release"]},
+          "default_model": {"type": "string", "minLength": 1},
+          "enabled_models": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "default_intelligence_index": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "protocols": {"type": "array"},
+    "providers": {"type": "array"},
+    "reasoning_families": {"type": "array"},
+    "models": {"type": "array"},
+    "benchmarks": {"type": "array"},
+    "evaluations": {"type": "array"},
+    "indices": {"type": "array"},
+    "index_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["model", "reasoning_effort", "index", "status", "score", "coverage", "components", "provenance"],
+        "oneOf": [
+          {
+            "properties": {
+              "status": {"const": "available"},
+              "score": {"type": "number"},
+              "coverage": {"type": "number", "exclusiveMinimum": 0, "maximum": 1}
+            }
+          },
+          {
+            "properties": {
+              "status": {"const": "partial"},
+              "score": {"type": "null"},
+              "coverage": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1}
+            }
+          },
+          {
+            "properties": {
+              "status": {"const": "missing"},
+              "score": {"type": "null"},
+              "coverage": {"const": 0}
+            }
+          }
+        ],
+        "properties": {
+          "model": {"type": "string", "minLength": 1},
+          "reasoning_effort": {"type": "string", "minLength": 1},
+          "index": {"type": "string", "minLength": 1},
+          "status": {"enum": ["available", "partial", "missing"]},
+          "score": {"type": ["number", "null"]},
+          "coverage": {"type": "number", "minimum": 0, "maximum": 1},
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["weight", "status", "value", "normalized"],
+              "properties": {
+                "benchmark": {"type": "string", "minLength": 1},
+                "metric": {"type": "string", "minLength": 1},
+                "benchmark_profile": {"type": "string", "minLength": 1},
+                "benchmark_profiles": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {"type": "string", "minLength": 1}
+                },
+                "evaluation": {"type": "string", "minLength": 1},
+                "index": {"type": "string", "minLength": 1},
+                "weight": {"type": "number"},
+                "status": {"enum": ["available", "missing", "failed", "not_applicable", "withheld"]},
+                "value": {"type": ["number", "null"]},
+                "normalized": {"type": ["number", "null"]}
+              },
+              "oneOf": [
+                {
+                  "allOf": [
+                    {
+                      "anyOf": [
+                        {"required": ["benchmark", "metric", "benchmark_profile"]},
+                        {"required": ["benchmark", "metric", "benchmark_profiles"]}
+                      ]
+                    },
+                    {"not": {"required": ["index"]}}
+                  ]
+                },
+                {
+                  "allOf": [
+                    {"required": ["index"]},
+                    {
+                      "not": {
+                        "anyOf": [
+                          {"required": ["benchmark"]},
+                          {"required": ["metric"]},
+                          {"required": ["benchmark_profile"]},
+                          {"required": ["benchmark_profiles"]}
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "domains": {"type": "object", "additionalProperties": {"type": "number"}},
+          "provenance": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}

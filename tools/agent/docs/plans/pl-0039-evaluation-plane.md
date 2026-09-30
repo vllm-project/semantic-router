@@ -202,7 +202,5 @@ represent data-dependent production gates as completed evidence.
 
 - [Evaluation Plane](../../../../website/docs/benchmarking/evaluation-plane.md)
 - [Architecture guardrails](../architecture-guardrails.md)
-- [Feature-complete checklist](../feature-complete-checklist.md)
 - [Testing strategy](../testing-strategy.md)
 - [Router Flow Evaluation Campaign](pl-0037-router-flow-eval-campaign.md)
-- [Dashboard Modeling Experience](pl-0038-dashboard-modeling-experience.md)

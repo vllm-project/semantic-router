@@ -19,7 +19,7 @@ PLATFORM_PREFIX = "linux/"
 class ImageDefinition:
     context: str
     dockerfile: str
-    platforms: str
+    platforms: tuple[str, ...]
 
 
 def platform_targets(platforms: str) -> tuple[str, ...]:
@@ -49,7 +49,7 @@ def load_image_catalog(path: Path = CATALOG_PATH) -> dict[str, ImageDefinition]:
                     f"{path}: line {line_number} must contain four non-empty fields"
                 )
             image, context, dockerfile, platforms = (field.strip() for field in row)
-            normalized_platforms = ",".join(platform_targets(platforms))
+            normalized_platforms = platform_targets(platforms)
             if image in catalog:
                 raise ValueError(f"{path}: duplicate image '{image}'")
             catalog[image] = ImageDefinition(context, dockerfile, normalized_platforms)
@@ -72,7 +72,7 @@ def main() -> int:
 
     print(f"context={definition.context}")
     print(f"dockerfile={definition.dockerfile}")
-    print(f"platforms={definition.platforms}")
+    print(f"platforms={','.join(definition.platforms)}")
     return 0
 
 

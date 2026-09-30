@@ -33,6 +33,7 @@ import (
 	"sync/atomic"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 )
 
 // SelectionMethod defines the type of model selection algorithm
@@ -181,6 +182,14 @@ type SelectionContext struct {
 	// that opt into session-aware candidate policy evaluation.
 	CandidateIterations []config.CandidateIterationConfig
 
+	// InputTokens is the request-context token estimate available before model
+	// selection. ExpectedOutputTokens is the caller's output budget when present.
+	// Cost-aware selectors use both to compare request-shaped estimated cost.
+	InputTokens          int
+	ExpectedOutputTokens int
+	// CandidateDemands contains provider-rendered budgets for automatic output.
+	CandidateDemands map[string]CandidateDemand
+
 	// CostWeight indicates how much to weight cost in selection (0.0-1.0)
 	// Higher values prefer cheaper models
 	CostWeight float64
@@ -196,6 +205,11 @@ type SelectionContext struct {
 	// SessionID identifies the conversation session for multi-turn context (optional)
 	// Used to track within-session model performance
 	SessionID string
+
+	// SessionStateKey is the canonical recipe-scoped router memory key. It is
+	// separate from SessionID so client identity text cannot be mistaken for an
+	// encoded session/conversation tuple. An empty key uses the raw SessionID.
+	SessionStateKey string
 
 	// AgenticSession carries request-time session facts used by
 	// session_aware selection. The flat SessionID remains the shared
@@ -235,6 +249,10 @@ type SelectionResult struct {
 	// SelectedModel is the name of the selected model
 	SelectedModel string
 
+	// SelectedCandidate preserves the exact winning ModelRef when a model appears
+	// more than once with different candidate-level settings.
+	SelectedCandidate *config.ModelRef
+
 	// LoRAName is the LoRA adapter name to use (if applicable)
 	LoRAName string
 
@@ -253,8 +271,22 @@ type SelectionResult struct {
 	// Reasoning provides human-readable explanation for the selection
 	Reasoning string
 
-	// AllScores maps each candidate model to its computed score
-	AllScores map[string]float64
+	// EligibleModels is the selector's explicit policy envelope. Nil means the
+	// selector only ranks candidates; a non-nil set contains every model still
+	// allowed after hard filters (or the explicitly configured fallback).
+	// Later learning and provider rerouting must not expand this set.
+	EligibleModels []config.ModelRef
+
+	// CandidateScores is the typed input for composition and policy. AllScores
+	// is its compatibility/diagnostic projection, never a candidate identity.
+	CandidateScores CandidateScores
+	ScoreDirection  ScoreDirection
+	AllScores       map[string]float64
+
+	// MultiFactor records the base objective stages and their eligible survivors.
+	// Later learning/session policy may choose among them; this is not a final
+	// dispatch trace. Weighted objectives omit it.
+	MultiFactor *selectiontrace.MultiFactorObjective
 
 	// Prompt-helper telemetry is populated only by MethodPrompt.
 	HelperModel            string

@@ -1,8 +1,9 @@
 // Package responsejailbreak provides the e2e test profile for the
-// response_jailbreak plugin. It deploys the router with prompt_guard pointed
-// at a window-limited http_classify stand-in, then verifies that jailbreak
-// content the model emits past that window is still caught in the buffered
-// response and reported through the decision's configured action.
+// response-direction jailbreak signal and the response_jailbreak plugin. It
+// deploys the router with prompt_guard pointed at a window-limited
+// http_classify stand-in, then verifies that jailbreak content the model emits
+// past that window is still caught in the buffered response and reported
+// through the selected decision's configured action.
 package responsejailbreak
 
 import (
@@ -21,15 +22,15 @@ const (
 )
 
 var resourceManifests = []string{
-	"deploy/kubernetes/hallucination/mock-vllm.yaml",
+	"deploy/kubernetes/hallucination/provider-mocker.yaml",
 	"deploy/kubernetes/response-jailbreak/gwapi-resources.yaml",
 }
 
-// waitDeployments are the mock backends the profile must wait on. mock-vllm
+// waitDeployments are the mock backends the profile must wait on. provider-mocker
 // is both the chat backend and, on /classify, the http_classify guardrail
 // this profile thresholds against.
 var waitDeployments = []helpers.DeploymentRef{
-	{Namespace: "default", Name: "mock-vllm"},
+	{Namespace: "default", Name: "provider-mocker"},
 }
 
 // Profile implements the response_jailbreak test profile.
@@ -57,7 +58,7 @@ func (p *Profile) Name() string {
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests response_jailbreak detection on LLM output past the classifier's sequence window"
+	return "Tests the response-direction jailbreak signal on LLM output past the classifier's sequence window and the response_jailbreak plugin that enforces on it"
 }
 
 // Setup deploys the shared gateway stack and this profile's resources.
@@ -75,6 +76,7 @@ func (p *Profile) GetTestCases() []string {
 	return []string{
 		"response-jailbreak-window-block",
 		"response-jailbreak-window-warning",
+		"response-jailbreak-streaming-passthrough",
 	}
 }
 

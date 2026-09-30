@@ -87,8 +87,6 @@ describe('recipe-aware config managers', () => {
         saveConfig: vi.fn(),
         openEditModal: vi.fn(),
         openViewModal: vi.fn(),
-        listInputToArray: vi.fn(),
-        removeSignalByName: vi.fn(),
       }),
     )
 

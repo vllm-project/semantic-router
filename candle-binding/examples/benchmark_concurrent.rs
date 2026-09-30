@@ -90,7 +90,7 @@ fn check_gpu_memory() -> Option<(f64, f64)> {
     }
 
     let output = Command::new("nvidia-smi")
-        .args(&[
+        .args([
             "--query-gpu=memory.total,memory.free",
             "--format=csv,noheader,nounits",
         ])

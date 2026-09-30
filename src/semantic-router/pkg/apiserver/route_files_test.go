@@ -5,11 +5,14 @@ package apiserver
 import (
 	"bytes"
 	"encoding/json"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
@@ -28,7 +31,7 @@ func TestHandleUploadFileStreamsToFileStore(t *testing.T) {
 	body, contentType := buildMultipartUpload(t, "file", "notes.txt", payload, map[string]string{
 		"purpose": "assistants",
 	})
-	req := httptest.NewRequest(http.MethodPost, "/v1/files", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/storage/files", body)
 	req.Header.Set("Content-Type", contentType)
 
 	rr := httptest.NewRecorder()
@@ -99,7 +102,7 @@ func newFileUploadServer(t *testing.T) (*ClassificationAPIServer, *vectorstore.F
 func uploadFile(t *testing.T, apiServer *ClassificationAPIServer, filename string, content []byte, purpose string) *httptest.ResponseRecorder {
 	t.Helper()
 	body, contentType := buildMultipartUpload(t, "file", filename, content, map[string]string{"purpose": purpose})
-	req := httptest.NewRequest(http.MethodPost, "/v1/files", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/storage/files", body)
 	req.Header.Set("Content-Type", contentType)
 	rr := httptest.NewRecorder()
 	apiServer.handleUploadFile(rr, req)
@@ -149,5 +152,98 @@ func TestHandleUploadFileRejectsDocumentsForVisionPurpose(t *testing.T) {
 	rr := uploadFile(t, apiServer, "notes.txt", []byte("not an image"), "vision")
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleUploadFileHonorsVectorStoreLimits(t *testing.T) {
+	apiServer, _ := newFileUploadServer(t)
+	apiServer.config = &config.RouterConfig{VectorStore: &config.VectorStoreConfig{
+		MaxFileSizeMB:    1,
+		SupportedFormats: []string{".pdf"},
+	}}
+
+	rr := uploadFile(t, apiServer, "notes.txt", []byte("text"), "assistants")
+	if rr.Code != http.StatusBadRequest || !bytes.Contains(rr.Body.Bytes(), []byte("allowed: .pdf")) {
+		t.Fatalf("expected .txt rejected with configured formats, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	rr = uploadFile(t, apiServer, "doc.pdf", []byte("%PDF-1.4"), "assistants")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected .pdf accepted, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	rr = uploadFile(t, apiServer, "big.pdf", bytes.Repeat([]byte("x"), 1024*1024+1), "assistants")
+	if rr.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413 above max_file_size_mb, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func vectorStoreUploadConfig(maxFileSizeMB int, formats ...string) *config.RouterConfig {
+	return &config.RouterConfig{VectorStore: &config.VectorStoreConfig{
+		MaxFileSizeMB:    maxFileSizeMB,
+		SupportedFormats: formats,
+	}}
+}
+
+func TestUploadMaxBytesFallsBackOnOverflow(t *testing.T) {
+	if got := uploadMaxBytes(math.MaxInt); got != maxUploadSize {
+		t.Fatalf("expected overflowing max_file_size_mb to fall back to %d, got %d", maxUploadSize, got)
+	}
+	if got := uploadMaxBytes(0); got != maxUploadSize {
+		t.Fatalf("expected unset max_file_size_mb to fall back to %d, got %d", maxUploadSize, got)
+	}
+	if got := uploadMaxBytes(3); got != 3*megabyte {
+		t.Fatalf("expected 3MB, got %d", got)
+	}
+}
+
+func TestHandleUploadFileUsesResolvedRuntimeConfig(t *testing.T) {
+	apiServer, _ := newFileUploadServer(t)
+	staleCfg := vectorStoreUploadConfig(1, ".pdf")
+	liveCfg := vectorStoreUploadConfig(1, ".txt")
+	apiServer.config = staleCfg
+	apiServer.runtimeConfig = newLiveRuntimeConfig(staleCfg, func() *config.RouterConfig { return liveCfg }, nil)
+
+	rr := uploadFile(t, apiServer, "notes.txt", []byte("text"), "assistants")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected live config formats to win, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleUploadFileKeepsActiveConfigUntilGenerationPublication(t *testing.T) {
+	apiServer, _ := newFileUploadServer(t)
+	apiServer.config = vectorStoreUploadConfig(1, ".pdf")
+
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				apiServer.publishConfigMutation(vectorStoreUploadConfig(1, ".txt"))
+			}
+		}
+	}()
+	for range 5 {
+		uploadFile(t, apiServer, "notes.txt", []byte("text"), "assistants")
+	}
+	close(done)
+	wg.Wait()
+	apiServer.publishConfigMutation(vectorStoreUploadConfig(1, ".txt"))
+
+	rr := uploadFile(t, apiServer, "notes.txt", []byte("text"), "assistants")
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("candidate formats applied before publication, got %d: %s", rr.Code, rr.Body.String())
+	}
+	active := vectorStoreUploadConfig(1, ".txt")
+	apiServer.runtimeRegistry.UpdateConfig(active)
+	apiServer.runtimeConfig = newLiveRuntimeConfig(apiServer.config, apiServer.runtimeRegistry.CurrentConfig, nil)
+	rr = uploadFile(t, apiServer, "notes.txt", []byte("text"), "assistants")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("published generation formats did not apply, got %d: %s", rr.Code, rr.Body.String())
 	}
 }

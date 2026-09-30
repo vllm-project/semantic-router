@@ -105,7 +105,7 @@ fn create_default_security() -> CSecurityResult {
 }
 
 /// Initialize unified classifier (stub - not implemented)
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn init_unified_classifier_c(
     _intent_model_path: *const c_char,
     _pii_model_path: *const c_char,
@@ -118,7 +118,7 @@ pub extern "C" fn init_unified_classifier_c(
 }
 
 /// Initialize LoRA unified classifier (stub - not implemented)
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn init_lora_unified_classifier(
     _intent_model_path: *const c_char,
     _pii_model_path: *const c_char,
@@ -131,7 +131,7 @@ pub extern "C" fn init_lora_unified_classifier(
 }
 
 /// Classify batch with unified classifier (stub)
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn classify_unified_batch(
     _texts: *const *const c_char,
     _num_texts: i32,
@@ -146,7 +146,7 @@ pub extern "C" fn classify_unified_batch(
 }
 
 /// Classify batch with LoRA (stub)
-#[no_mangle]
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
 pub extern "C" fn classify_batch_with_lora(
     _texts: *const *const c_char,
     _num_texts: i32,
@@ -161,8 +161,12 @@ pub extern "C" fn classify_batch_with_lora(
 }
 
 /// Free unified batch result
-#[no_mangle]
-pub extern "C" fn free_unified_batch_result(result: *mut CUnifiedBatchResult) {
+///
+/// # Safety
+/// `result` must be null or uniquely reference a result returned by this library.
+/// Nested allocations must remain unmodified and must not be freed separately.
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
+pub unsafe extern "C" fn free_unified_batch_result(result: *mut CUnifiedBatchResult) {
     if result.is_null() {
         return;
     }
@@ -180,7 +184,7 @@ pub extern "C" fn free_unified_batch_result(result: *mut CUnifiedBatchResult) {
             for res in results.iter_mut() {
                 free_unified_result_inner(res);
             }
-            let _ = Box::from_raw(std::slice::from_raw_parts_mut(
+            let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
                 r.results,
                 r.num_results as usize,
             ));
@@ -190,8 +194,12 @@ pub extern "C" fn free_unified_batch_result(result: *mut CUnifiedBatchResult) {
 }
 
 /// Free LoRA batch result
-#[no_mangle]
-pub extern "C" fn free_lora_batch_result(result: *mut CLoRABatchResult) {
+///
+/// # Safety
+/// `result` must be null or uniquely reference a result returned by this library.
+/// Nested allocations must remain unmodified and must not be freed separately.
+#[cfg_attr(feature = "legacy-ffi", no_mangle)]
+pub unsafe extern "C" fn free_lora_batch_result(result: *mut CLoRABatchResult) {
     if result.is_null() {
         return;
     }
@@ -209,7 +217,7 @@ pub extern "C" fn free_lora_batch_result(result: *mut CLoRABatchResult) {
             for res in results.iter_mut() {
                 free_unified_result_inner(res);
             }
-            let _ = Box::from_raw(std::slice::from_raw_parts_mut(
+            let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
                 r.results,
                 r.num_results as usize,
             ));
@@ -226,7 +234,7 @@ unsafe fn free_unified_result_inner(result: &mut CUnifiedResult) {
         result.intent.category = ptr::null_mut();
     }
     if !result.intent.probabilities.is_null() && result.intent.num_probabilities > 0 {
-        let _ = Box::from_raw(std::slice::from_raw_parts_mut(
+        let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
             result.intent.probabilities,
             result.intent.num_probabilities as usize,
         ));
@@ -353,13 +361,15 @@ mod tests {
     #[test]
     fn test_free_unified_batch_result_null_safe() {
         // Should not panic when called with null
-        free_unified_batch_result(ptr::null_mut());
+        // SAFETY: null is explicitly accepted and has no allocation to release.
+        unsafe { free_unified_batch_result(ptr::null_mut()) };
     }
 
     #[test]
     fn test_free_lora_batch_result_null_safe() {
         // Should not panic when called with null
-        free_lora_batch_result(ptr::null_mut());
+        // SAFETY: null is explicitly accepted and has no allocation to release.
+        unsafe { free_lora_batch_result(ptr::null_mut()) };
     }
 
     #[test]

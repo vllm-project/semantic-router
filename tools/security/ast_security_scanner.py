@@ -154,6 +154,8 @@ class ScanResult:
 
 SKIP_DIRS = {
     ".git",
+    ".agent-harness",
+    ".codex",
     "__pycache__",
     "node_modules",
     ".venv",
@@ -827,8 +829,7 @@ def _check_network_tool_exfil(fn_name: str, node, filepath: str, result: ScanRes
                 "AST_SUBPROCESS_EXFIL",
                 filepath,
                 node.start_point.row + 1,
-                f"{fn_name}() spawning {tool} with POST data — "
-                "potential exfiltration",
+                f"{fn_name}() spawning {tool} with POST data — potential exfiltration",
                 node.text.decode(errors="replace")[:150],
                 _ast_path(node),
             )
@@ -927,8 +928,7 @@ def _check_url(node, filepath: str, is_test: bool, result: ScanResult):
                 "URL_KNOWN_EXFIL_SERVICE",
                 filepath,
                 node.start_point.row + 1,
-                f"URL targets known exfiltration service "
-                f"({pat.pattern.split('.')[0]})",
+                f"URL targets known exfiltration service ({pat.pattern.split('.')[0]})",
                 text[:150],
                 _ast_path(node),
             )
@@ -953,7 +953,7 @@ def _check_url(node, filepath: str, is_test: bool, result: ScanResult):
                 "URL_SUSPICIOUS_TLD",
                 filepath,
                 node.start_point.row + 1,
-                f"URL not in allowlist, suspicious TLD ({tld}): " f"{url_short}",
+                f"URL not in allowlist, suspicious TLD ({tld}): {url_short}",
                 text[:150],
                 _ast_path(node),
             )
@@ -1841,7 +1841,7 @@ def score_function_anomaly(node, filepath: str, result: ScanResult):
                 "AST_HIGH_ENTROPY_FUNC",
                 filepath,
                 node.start_point.row + 1,
-                f"Function '{name}' has high source entropy " f"({ent:.2f} bits/byte)",
+                f"Function '{name}' has high source entropy ({ent:.2f} bits/byte)",
                 body[:150],
                 _ast_path(node),
             )

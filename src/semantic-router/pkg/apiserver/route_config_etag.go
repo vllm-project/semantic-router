@@ -5,6 +5,7 @@ package apiserver
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"strings"
 )
@@ -16,26 +17,21 @@ func configDocumentETag(data []byte) string {
 	return `"` + hex.EncodeToString(digest[:]) + `"`
 }
 
-// checkConfigPrecondition implements optimistic concurrency for config
-// mutations. Existing whole-document APIs remain backward compatible when
-// require is false; focused subresource APIs require If-Match because they
-// read-modify-write one shared canonical document.
+// checkConfigPrecondition implements optimistic concurrency for every config
+// mutation. All writers share one canonical document, so every mutation must
+// prove which document it intends to replace.
 func checkConfigPrecondition(
 	w http.ResponseWriter,
 	r *http.Request,
 	currentData []byte,
-	require bool,
 ) bool {
 	ifMatch := strings.TrimSpace(r.Header.Get("If-Match"))
 	if ifMatch == "" {
-		if !require {
-			return true
-		}
 		writeConfigPreconditionError(
 			w,
 			configPreconditionRequiredStatus,
 			"PRECONDITION_REQUIRED",
-			"If-Match is required; fetch the recipe collection ETag before mutating it",
+			"If-Match is required; plan or read the current config before mutating it",
 		)
 		return false
 	}
@@ -43,7 +39,7 @@ func checkConfigPrecondition(
 	currentETag := configDocumentETag(currentData)
 	for _, candidate := range strings.Split(ifMatch, ",") {
 		candidate = strings.TrimSpace(candidate)
-		if candidate == "*" || candidate == currentETag {
+		if candidate == currentETag {
 			return true
 		}
 	}
@@ -61,5 +57,5 @@ func checkConfigPrecondition(
 func writeConfigPreconditionError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_, _ = w.Write([]byte(`{"error":{"code":"` + code + `","message":"` + message + `"}}` + "\n"))
+	_ = json.NewEncoder(w).Encode(managementErrorResponse{Error: managementErrorDetail{Code: code, Message: message, RequestID: w.Header().Get(managementRequestIDHeader)}})
 }

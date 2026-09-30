@@ -17,12 +17,8 @@ global:
 
 providers:
   defaults:
-    default_model: local/private-qwen
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-    default_reasoning_effort: medium
+    model: local/private-qwen
+    reasoning_effort: medium
   # Example pricing intentionally exaggerates the local-vs-cloud spread so
   # Insights makes privacy-preserving savings obvious. These are not vendor
   # billing quotes.
@@ -34,10 +30,11 @@ providers:
         - name: local-omni
           endpoint: vllm-omni:8000
           protocol: http
-          type: vllm
+          provider: vllm
           weight: 1
     - name: local/private-qwen
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       provider_model_id: qwen/qwen3.5-rocm
       api_format: openai
       pricing:
@@ -48,7 +45,7 @@ providers:
         - name: local-vllm
           endpoint: vllm:8000
           protocol: http
-          type: vllm
+          provider: vllm
           weight: 1
     - name: cloud/frontier-reasoning
       provider_model_id: anthropic/claude-opus-4.6
@@ -59,10 +56,21 @@ providers:
         completion_per_1m: 7.20
       backend_refs:
         - name: vllm_primary
+          provider: vllm
           endpoint: vllm:8000
           protocol: http
           weight: 1
 
+evaluation:
+  records:
+    - model: local/private-qwen
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.74
+    - model: cloud/frontier-reasoning
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.92
 routing:
   modelCards:
     - name: local/omni
@@ -77,7 +85,6 @@ routing:
         - security_containment
         - code
         - internal_docs
-      quality_score: 0.74
       modality: text
       tags:
         - deployment:self_hosted
@@ -92,7 +99,6 @@ routing:
         - deep_synthesis
         - architecture_review
         - long_context
-      quality_score: 0.92
       modality: text
       tags:
         - deployment:cloud
@@ -347,6 +353,13 @@ routing:
         max_tokens: 256K
 
     structure:
+      - name: local_handling_required
+        description: An operative local-handling instruction or external-transfer prohibition independently restricts routing.
+        feature:
+          type: exists
+          source:
+            type: regex
+            pattern: (?i)\A(?:(?:[^"“”'‘’`]|(?:"[^"]*"|“[^”]*”|'[^']*'|‘[^’]*’|`[^`]*`)|[\p{L}\p{N}]['’][\p{L}\p{N}])*(?:[.!?;\n。！？；，,]\s*|\b(?:and|but|then)\s+|(?:并且|但是|但|然后)))?\s*(?:(?:please|and|but|then)\s+|(?:并且|但是|但|然后))*(?:(?:(?:process|handle|analy[sz]e|summari[sz]e|review|search|run|execute)\b[^.!?;\n。！？；"“”'‘’`]*(?:locally|on[- ]prem(?:ises?)?|on[- ]device|(?:on|within|using)\s+(?:the\s+)?local\s+(?:model|backend|system|machine|device|server))\b|(?:keep|leave)\b[^.!?;\n。！？；"“”'‘’`]*\b(?:local|on[- ]prem(?:ises?)?|on[- ]device)\b|use\s+(?:only\s+)?(?:the\s+)?local\s+(?:model|backend|system|machine|device|server)\b|(?:do\s+not|don't|never)\s+(?:send|upload|share|transmit|forward)\b[^.!?;\n。！？；"“”'‘’`]*\b(?:outside|externally|to\s+(?:(?:the|an?)\s+)?(?:cloud|external\s+(?:service|system|server)))\b|(?:process|handle|analy[sz]e|summari[sz]e|review|search|run|execute)\b[^.!?;\n。！？；"“”'‘’`]*\bwithout\s+(?:sending|uploading|sharing|transmitting|forwarding)\b[^.!?;\n。！？；"“”'‘’`]*\b(?:outside|externally|to\s+(?:(?:the|an?)\s+)?(?:cloud|external\s+(?:service|system|server)))\b|(?:(?:this|these|it)(?:\s+(?:request|content|data|task))?|the\s+(?:request|content|data))\s+(?:must|shall)\s+(?:stay|remain|be\s+processed)\b[^.!?;\n。！？；"“”'‘’`]*\b(?:local|locally|on[- ]prem(?:ises?)?|on[- ]device)\b|local[- ]only\s+(?:processing|handling)\b|local\s+(?:processing|handling)\s+only\b)|(?:请)?(?:(?:仅|只)(?:允许)?(?:在|用|使用)?本地|仅限本地|在本地(?:处理|分析|总结|检索|运行|执行)|(?:处理|分析|总结|检索|运行|执行)[^.!?;\n。！？；"“”'‘’`]*(?:仅在本地|只在本地|在本地处理)|(?:不要|不得|禁止|请勿)[^.!?;\n。！？；"“”'‘’`]*(?:发送|传送|上传|分享|转发)[^.!?;\n。！？；"“”'‘’`]*(?:外部|云端|云服务)|(?:不要|不得|禁止|请勿)(?:向|往|到)(?:外部|云端|云服务)[^.!?;\n。！？；"“”'‘’`]*(?:发送|传送|上传|分享|转发)|(?:保持|保留)[^.!?;\n。！？；"“”'‘’`]*(?:本地|内网)))
       - name: many_questions
         description: Prompts with several explicit questions, usually indicating multi-part reasoning.
         feature:
@@ -531,7 +544,7 @@ routing:
           - type: embedding
             name: frontier_reasoning_request
             weight: 0.48
-            value_source: confidence
+            value_source: raw
           - type: context
             name: medium_context
             weight: 0.04
@@ -618,6 +631,7 @@ routing:
       priority: 300
       tier: 1
       rules:
+        on_unknown: fail_request
         operator: AND
         conditions:
           - type: projection
@@ -666,6 +680,7 @@ routing:
       priority: 250
       tier: 2
       rules:
+        on_unknown: fail_request
         operator: AND
         conditions:
           - operator: OR
@@ -674,6 +689,8 @@ routing:
                 name: policy_privacy_local_only
               - type: projection
                 name: privacy_override_active
+              - type: structure
+                name: local_handling_required
           - operator: NOT
             conditions:
               - type: projection
@@ -681,7 +698,7 @@ routing:
       modelRefs:
         - model: local/private-qwen
           use_reasoning: true
-          reasoning_effort: medium
+          reasoning_mode: enabled
       plugins:
         - type: tools
           configuration:
@@ -699,6 +716,7 @@ routing:
       priority: 200
       tier: 3
       rules:
+        on_unknown: fail_request
         operator: AND
         conditions:
           - type: projection
@@ -711,6 +729,10 @@ routing:
             conditions:
               - type: projection
                 name: privacy_override_active
+          - operator: NOT
+            conditions:
+              - type: structure
+                name: local_handling_required
       modelRefs:
         - model: cloud/frontier-reasoning
           use_reasoning: true
@@ -739,15 +761,20 @@ routing:
             name: policy_privacy_cloud_allowed
           - type: projection
             name: policy_security_standard
+          - operator: NOT
+            conditions:
+              - type: structure
+                name: local_handling_required
       modelRefs:
         - model: local/private-qwen
           use_reasoning: true
-          reasoning_effort: medium
+          reasoning_mode: enabled
       plugins:
         - type: tools
           configuration:
             enabled: true
-            mode: passthrough
+            mode: filtered
+            allow_tools: [local_search, local_read]
         - type: router_replay
           configuration:
             enabled: true

@@ -164,8 +164,8 @@ func TestGMTRouter_HeterogeneousGraphStructure(t *testing.T) {
 	selector := NewGMTRouterSelector(nil)
 
 	modelConfig := map[string]config.ModelParams{
-		"gpt-4":    {QualityScore: 0.95},
-		"claude-3": {QualityScore: 0.90},
+		"gpt-4":    modelParamsWithTestQuality(0.95),
+		"claude-3": modelParamsWithTestQuality(0.90),
 	}
 	selector.InitializeFromConfig(modelConfig)
 
@@ -212,8 +212,8 @@ func TestGMTRouter_PersonalizationLearning(t *testing.T) {
 	selector := NewGMTRouterSelector(cfg)
 
 	modelConfig := map[string]config.ModelParams{
-		"fast-model": {QualityScore: 0.7},
-		"slow-model": {QualityScore: 0.9},
+		"fast-model": modelParamsWithTestQuality(0.7),
+		"slow-model": modelParamsWithTestQuality(0.9),
 	}
 	selector.InitializeFromConfig(modelConfig)
 
@@ -269,8 +269,8 @@ func TestGMTRouter_MessagePassingAttention(t *testing.T) {
 	selector := NewGMTRouterSelector(cfg)
 
 	modelConfig := map[string]config.ModelParams{
-		"model-a": {QualityScore: 0.9},
-		"model-b": {QualityScore: 0.9},
+		"model-a": modelParamsWithTestQuality(0.9),
+		"model-b": modelParamsWithTestQuality(0.9),
 	}
 	selector.InitializeFromConfig(modelConfig)
 
@@ -411,9 +411,9 @@ func TestAutoMix_CascadedExecution(t *testing.T) {
 	selector := NewAutoMixSelector(cfg)
 
 	modelConfig := map[string]config.ModelParams{
-		"small-7b":   {QualityScore: 0.7},
-		"medium-13b": {QualityScore: 0.85},
-		"large-70b":  {QualityScore: 0.95},
+		"small-7b":   modelParamsWithTestQuality(0.7),
+		"medium-13b": modelParamsWithTestQuality(0.85),
+		"large-70b":  modelParamsWithTestQuality(0.95),
 	}
 
 	selector.InitializeFromConfig(modelConfig)

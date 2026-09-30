@@ -1,0 +1,77 @@
+.section {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  min-width: 0;
+}
+
+.heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.section .heading h3 {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.heading h3 small {
+  font-weight: 400;
+}
+
+.heading small,
+.description,
+.identity span,
+.calls dt {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.calls {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.calls li {
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.calls dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0.75rem 0 0;
+}
+
+.calls dd {
+  margin: 0.25rem 0 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.error {
+  color: var(--color-error, #f87171);
+}
+
+@media (max-width: 700px) {
+  .calls dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

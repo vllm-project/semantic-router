@@ -16,6 +16,7 @@ import type {
   SignalConfig,
   SignalType,
 } from '../types'
+import { SIGNAL_TYPES } from '../constants'
 import { extractSignals } from './topologySignalParser'
 
 /**
@@ -27,7 +28,7 @@ export function parseConfigToTopology(config: ConfigData): ParsedTopology {
   const decisions = extractDecisions(config)
   const models = extractModels(config)
   const strategy = config.routing?.strategy || config.global?.router?.strategy || 'priority'
-  const defaultModel = config.providers?.defaults?.default_model
+  const defaultModel = config.providers?.defaults?.model
 
   return { globalPlugins, signals, decisions, models, strategy, defaultModel }
 }
@@ -118,9 +119,10 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
         return {
           model: ref.model,
           use_reasoning: ref.use_reasoning,
+          reasoning_mode: ref.reasoning_mode,
           reasoning_effort: ref.reasoning_effort,
           lora_name: ref.lora_name,
-          reasoning_family: modelConfig?.reasoning_family,
+          reasoning_family: modelConfig?.reasoning?.family,
         }
       })
 
@@ -199,6 +201,7 @@ function extractDecisionAlgorithm(
     svm: algorithm.svm,
     mlp: algorithm.mlp,
     multi_factor: algorithm.multi_factor,
+    prompt: algorithm.prompt,
   }
 }
 
@@ -251,7 +254,7 @@ function extractModels(config: ConfigData): ModelConfig[] {
   config.providers?.models?.forEach((model) => {
     models.push({
       name: model.name,
-      reasoning_family: model.reasoning_family,
+      reasoning_family: model.reasoning?.family,
     })
   })
 
@@ -308,27 +311,9 @@ function normalizeModelScores(
  * Group signals by type
  */
 export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, SignalConfig[]> {
-  const groups: Record<SignalType, SignalConfig[]> = {
-    keyword: [],
-    embedding: [],
-    domain: [],
-    fact_check: [],
-    user_feedback: [],
-    reask: [],
-    preference: [],
-    language: [],
-    context: [],
-    structure: [],
-    complexity: [],
-    modality: [],
-    authz: [],
-    jailbreak: [],
-    pii: [],
-    kb: [],
-    conversation: [],
-    event: [],
-    projection: [],
-  }
+  const groups = Object.fromEntries(
+    SIGNAL_TYPES.map((signalType) => [signalType, [] as SignalConfig[]]),
+  ) as Record<SignalType, SignalConfig[]>
 
   signals.forEach((signal) => {
     if (groups[signal.type]) {

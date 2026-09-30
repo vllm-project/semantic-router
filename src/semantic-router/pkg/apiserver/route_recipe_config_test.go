@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -49,7 +50,7 @@ func TestRecipeLifecycleRequiresFreshETagAndProtectsReferences(t *testing.T) {
 
 func initialRecipeCollectionETag(t *testing.T, server *ClassificationAPIServer) string {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, "/config/router/recipes", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/config/recipes", nil)
 	rr := httptest.NewRecorder()
 	server.handleListRecipes(rr, req)
 	requireRecipeResponseCode(t, rr, http.StatusOK, "list recipes")
@@ -124,7 +125,7 @@ func TestValidateRecipeDoesNotWriteConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal validate request: %v", err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/config/router/recipes/validate", bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/config/recipes/validate", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	server.handleValidateRecipe(rr, req)
@@ -134,6 +135,43 @@ func TestValidateRecipeDoesNotWriteConfig(t *testing.T) {
 	if got := configDocumentETag(mustReadFile(t, configPath)); got != originalETag {
 		t.Fatalf("validate-only request changed config: before=%s after=%s", originalETag, got)
 	}
+}
+
+func TestValidateRecipeRejectsUnknownFields(t *testing.T) {
+	configPath := writeDeployTestBaseConfig(t)
+	server := &ClassificationAPIServer{configPath: configPath}
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/config/recipes/validate",
+		bytes.NewBufferString(`{"name":"preview","routing":{"strategy":"priority","decisions":[]},"legacy":true}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	server.handleValidateRecipe(rr, req)
+
+	if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "unknown field") {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestRecipeValidateRouteIsReadOnly(t *testing.T) {
+	for _, route := range apiRecipeRoutes() {
+		if route.Path != apiRecipesPath+"/validate" || route.Method != http.MethodPost {
+			continue
+		}
+		if route.Permission != PermConfigRead {
+			t.Fatalf("permission = %q, want %q", route.Permission, PermConfigRead)
+		}
+		if route.Sensitivity != SensitivityConfig {
+			t.Fatalf("sensitivity = %q, want %q", route.Sensitivity, SensitivityConfig)
+		}
+		if route.AuditAction != "" {
+			t.Fatalf("audit action = %q, want no mutation audit", route.AuditAction)
+		}
+		return
+	}
+	t.Fatal("recipe validation route not found")
 }
 
 func executeRecipePut(
@@ -148,7 +186,7 @@ func executeRecipePut(
 	if err != nil {
 		t.Fatalf("marshal recipe request: %v", err)
 	}
-	req := httptest.NewRequest(http.MethodPut, "/config/router/recipes/"+name, bytes.NewReader(payload))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/config/recipes/"+name, bytes.NewReader(payload))
 	req.SetPathValue("name", name)
 	req.Header.Set("Content-Type", "application/json")
 	if etag != "" {
@@ -166,7 +204,7 @@ func executeRecipeDelete(
 	etag string,
 ) *httptest.ResponseRecorder {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodDelete, "/config/router/recipes/"+name, nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/config/recipes/"+name, nil)
 	req.SetPathValue("name", name)
 	req.Header.Set("If-Match", etag)
 	rr := httptest.NewRecorder()

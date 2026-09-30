@@ -7,6 +7,7 @@ import argparse
 import ast
 import fnmatch
 import io
+import os
 import posixpath
 import subprocess
 import tarfile
@@ -403,7 +404,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
         description="Check configured dependency graphs and package health"
     )
     parser.add_argument("files", nargs="*")
-    parser.add_argument("--base-ref", default=None)
+    parser.add_argument("--base-ref", default=os.getenv("BASE_REF"))
     return parser
 
 

@@ -10,11 +10,11 @@ Signed-off-by: Yossi Ovadia <yovadia@redhat.com>
 
 import argparse
 import glob
-import json
 import os
 import sys
 import time
 import unittest
+from http import HTTPStatus
 
 import requests
 
@@ -39,7 +39,7 @@ def check_services():
             if "url" in service:
                 # Standard GET request check
                 response = requests.get(service["url"], timeout=2)
-                if response.status_code == 200:
+                if response.status_code == HTTPStatus.OK:
                     print(f"✅ {service['name']} is running")
                 else:
                     print(
@@ -65,7 +65,7 @@ def check_envoy_running():
     try:
         # Simple request with minimal content
         payload = {
-            "model": "Qwen/Qwen2-0.5B-Instruct",
+            "model": os.getenv("SR_TEST_MODEL", "Model-A"),
             "messages": [{"role": "user", "content": "test"}],
         }
         response = requests.post(
@@ -76,7 +76,7 @@ def check_envoy_running():
         )
 
         # If we get any response (even an error from the backend), Envoy is running
-        return response.status_code < 500
+        return response.status_code < HTTPStatus.INTERNAL_SERVER_ERROR
     except requests.exceptions.ConnectionError:
         return False
 

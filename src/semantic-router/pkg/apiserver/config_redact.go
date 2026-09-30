@@ -14,7 +14,11 @@ const redactedConfigValue = "[REDACTED]"
 // sensitiveAssignmentPattern matches YAML/JSON-style secret assignments that
 // sometimes appear inside parse/validation error strings.
 var sensitiveAssignmentPattern = regexp.MustCompile(
-	`(?i)((?:["']?(?:api[_-]?key|access[_-]?key|password|auth[_-]?password|client[_-]?secret|private[_-]?key|secret)["']?)\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,}\]]+)`,
+	`(?i)((?:["']?(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?(?:key|token)|auth[_-]?(?:password|token)|refresh[_-]?token|client[_-]?secret|private[_-]?key|proxy[_-]?authorization|authorization|password|credential|secret|token)["']?)\s*[:=]\s*)(?:"[^"]*"|'[^']*'|(?:Bearer|Basic)\s+[^\s,}\]]+|[^\s,}\]]+)`,
+)
+
+var environmentReferencePattern = regexp.MustCompile(
+	`^\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)$`,
 )
 
 // scrubSecretsInErrorMessage removes plaintext credential assignments from
@@ -63,7 +67,11 @@ func redactSensitiveConfigValue(value interface{}) interface{} {
 		out := make(map[string]interface{}, len(typed))
 		for key, nested := range typed {
 			if isSensitiveConfigKey(key) {
-				out[key] = redactedConfigValue
+				if isPureEnvironmentReference(nested) {
+					out[key] = nested
+				} else {
+					out[key] = redactedConfigValue
+				}
 				continue
 			}
 			out[key] = redactSensitiveConfigValue(nested)
@@ -80,16 +88,22 @@ func redactSensitiveConfigValue(value interface{}) interface{} {
 	}
 }
 
+func isPureEnvironmentReference(value interface{}) bool {
+	text, ok := value.(string)
+	return ok && environmentReferencePattern.MatchString(strings.TrimSpace(text))
+}
+
 func isSensitiveConfigKey(key string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(key))
-	compact := strings.ReplaceAll(normalized, "_", "")
+	compact := strings.NewReplacer("_", "", "-", "", " ", "").Replace(normalized)
 	// Env var names (api_key_env) and presence flags stay visible.
 	if strings.HasSuffix(compact, "env") || strings.HasSuffix(compact, "envset") {
 		return false
 	}
 	switch compact {
-	case "apikey", "accesskey", "password", "authpassword",
-		"clientsecret", "privatekey", "secret":
+	case "apikey", "xapikey", "accesskey", "password", "authpassword",
+		"clientsecret", "privatekey", "authorization", "proxyauthorization",
+		"credential", "secret", "token":
 		return true
 	}
 	for _, suffix := range []string{
@@ -98,6 +112,9 @@ func isSensitiveConfigKey(key string) bool {
 		"password",
 		"clientsecret",
 		"privatekey",
+		"authorization",
+		"credential",
+		"token",
 	} {
 		if strings.HasSuffix(compact, suffix) {
 			return true

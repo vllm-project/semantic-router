@@ -1,0 +1,25 @@
+{
+  "schema_version": "semantic-router.compatibility-receipt/v1",
+  "subject": {
+    "schema_version": "semantic-router.compatibility-subject/v1",
+    "artifact_revision": "synthetic-model-revision-001",
+    "artifact_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "task_contract": "label_distribution.v1",
+    "connector": "sr.candle.embedded.v1",
+    "precision": "float32",
+    "provider": "cpu",
+    "device_profile": "linux/amd64/cpu",
+    "router_revision": "synthetic-router-revision-001",
+    "labels": ["SAFE", "JAILBREAK"]
+  },
+  "subject_digest": "sha256:3d4b1cabc20d54f51709a7127d7b6319f7fd6b1466d8e6fb92bbbb197ada08a2",
+  "predicate_type": "semantic-router.execution",
+  "predicate_version": "v1",
+  "qualification_suite_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "checks": [
+    {"name": "label_parity", "passed": true, "details": "synthetic golden vector; not conformance evidence"},
+    {"name": "input_bounds", "passed": true, "details": "synthetic golden vector; not conformance evidence"},
+    {"name": "deadline_behavior", "passed": true, "details": "synthetic golden vector; not conformance evidence"},
+    {"name": "unavailable_behavior", "passed": true, "details": "synthetic golden vector; not conformance evidence"}
+  ]
+}

@@ -105,19 +105,21 @@
   line-height: 1.1;
   font-weight: var(--site-font-weight-normal);
   letter-spacing: -0.04em;
-  text-wrap: pretty;
+  text-wrap: balance;
 }
 
 .pageTitleCenter {
   max-width: none;
 }
 
+/* Uncapped, matching .site-section-intro. */
 .pageDescription {
-  max-width: 44rem;
+  max-width: none;
   margin: 0;
   color: var(--site-muted-bright);
   font-size: 1.05rem;
   line-height: 1.7;
+  text-wrap: balance;
 }
 
 .pageDescriptionCenter {

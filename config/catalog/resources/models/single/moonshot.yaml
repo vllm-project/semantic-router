@@ -1,0 +1,178 @@
+- id: moonshot/kimi-k3
+  display_name: Kimi K3
+  description: Moonshot AI native multimodal MoE model for long-context agents.
+  kind: physical
+  publisher: Moonshot / Kimi
+  presentation:
+    logo: package:moonshot
+    monogram: K
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/moonshotai/Kimi-K3
+    license: Kimi-K3
+  family: kimi-k3
+  reasoning_family: kimi-k3
+  parameter_size: 2.8T (104B active)
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Moonshot AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/moonshotai/Kimi-K3
+  tags:
+  - open_weights
+  - frontier
+  - multimodal
+  - moe
+  released_at: '2026-07-16'
+- id: moonshot/kimi-k2.7-code
+  display_name: Kimi K2.7 Code
+  description: Open-weight multimodal Kimi model specialized for long-horizon coding and agentic workflows.
+  kind: physical
+  publisher: Moonshot / Kimi
+  presentation:
+    logo: package:moonshot
+    monogram: K
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/moonshotai/Kimi-K2.7-Code
+    license: Modified-MIT
+  family: kimi-k2
+  reasoning_family: kimi-k2-always-on
+  parameter_size: 1T (32B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Moonshot AI
+    status: claimed
+    verified_at: 2026-09-06
+    source: https://huggingface.co/moonshotai/Kimi-K2.7-Code
+  tags:
+  - open_weights
+  - coding
+  - reasoning
+  - multimodal
+  - agentic
+  - moe
+  released_at: '2026-06-12'
+- id: moonshot/kimi-k2.6
+  display_name: Kimi K2.6
+  description: Open-weight multimodal Kimi model for reasoning and agentic workflows.
+  kind: physical
+  publisher: Moonshot / Kimi
+  presentation:
+    logo: package:moonshot
+    monogram: K
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/moonshotai/Kimi-K2.6
+    license: Modified-MIT
+  family: kimi-k2
+  reasoning_family: kimi-k2
+  parameter_size: 1T
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Moonshot AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/moonshotai/Kimi-K2.6
+  tags:
+  - open_weights
+  - multimodal
+  - moe
+  - agentic
+  released_at: '2026-04-20'
+- id: moonshot/kimi-k2.5
+  display_name: Kimi K2.5
+  description: Open-weight native multimodal Kimi model for visual and software agents.
+  kind: physical
+  publisher: Moonshot / Kimi
+  presentation:
+    logo: package:moonshot
+    monogram: K
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/moonshotai/Kimi-K2.5
+    license: Modified-MIT
+  family: kimi-k2
+  reasoning_family: kimi-k2
+  parameter_size: 1T (32B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Moonshot AI
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/moonshotai/Kimi-K2.5
+  tags:
+  - open_weights
+  - multimodal
+  - moe
+  - agentic
+  released_at: '2026-01-27'

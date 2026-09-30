@@ -1,3 +1,5 @@
+//go:build !riscv64
+
 /*
 Copyright 2025 vLLM Semantic Router.
 

@@ -1,8 +1,9 @@
 //! ModernBERT model implementation
 //!
 //! ModernBERT is a modernized bidirectional encoder-only Transformer model
-//! supporting extended context windows up to 32K tokens via YaRN RoPE scaling.
+//! using the context capacity and RoPE theta declared by each checkpoint.
 
+use crate::model_architectures::modernbert_rope::{Parameters, RopeOptions, RotaryEmbedding};
 use candle_core::{DType, Device, IndexOp, Result, Tensor, D};
 use candle_nn::{
     embedding, layer_norm_no_bias, linear, linear_no_bias, ops::softmax, Embedding, LayerNorm,
@@ -15,7 +16,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::model_architectures::attention::chunked_sdpa::{
-    chunked_sdpa, prepare_padding_mask, ChunkedSdpaConfig, ATTN_QUERY_BLOCK,
+    chunked_sdpa, chunked_sdpa_cpu_softmax, prepare_padding_mask, ChunkedSdpaConfig,
+    ATTN_QUERY_BLOCK,
 };
 
 // Flash Attention support (optional, requires flash-attn feature)
@@ -30,15 +32,31 @@ pub struct Config {
     pub num_attention_heads: usize,
     pub intermediate_size: usize,
     pub max_position_embeddings: usize,
+    #[serde(alias = "norm_eps")]
     pub layer_norm_eps: f64,
     pub pad_token_id: u32,
     pub global_attn_every_n_layers: usize,
     pub global_rope_theta: f64,
     pub local_attention: usize,
     pub local_rope_theta: f64,
+    #[serde(default, flatten)]
+    pub rope_options: RopeOptions,
     #[serde(default)]
     #[serde(flatten)]
     pub classifier_config: Option<ClassifierConfig>,
+}
+
+impl Config {
+    pub(crate) fn resolve_rope(&self) -> candle_core::Result<[Parameters; 2]> {
+        self.rope_options.resolve(
+            [self.global_rope_theta, self.local_rope_theta],
+            self.max_position_embeddings,
+            self.hidden_size,
+            self.num_attention_heads,
+            self.num_hidden_layers,
+            self.global_attn_every_n_layers,
+        )
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Copy, Default)]
@@ -56,39 +74,6 @@ pub struct ClassifierConfig {
     pub classifier_pooling: ClassifierPooling,
 }
 
-#[derive(Debug, Clone)]
-struct RotaryEmbedding {
-    sin: Tensor,
-    cos: Tensor,
-}
-
-impl RotaryEmbedding {
-    fn new(dtype: DType, config: &Config, rope_theta: f64, dev: &Device) -> Result<Self> {
-        let dim = config.hidden_size / config.num_attention_heads;
-        let inv_freq: Vec<_> = (0..dim)
-            .step_by(2)
-            .map(|i| 1f32 / rope_theta.powf(i as f64 / dim as f64) as f32)
-            .collect();
-        let inv_freq_len = inv_freq.len();
-        let inv_freq = Tensor::from_vec(inv_freq, (1, inv_freq_len), dev)?.to_dtype(dtype)?;
-        let max_seq_len = config.max_position_embeddings;
-        let t = Tensor::arange(0u32, max_seq_len as u32, dev)?
-            .to_dtype(dtype)?
-            .reshape((max_seq_len, 1))?;
-        let freqs = t.matmul(&inv_freq)?;
-        Ok(Self {
-            sin: freqs.sin()?,
-            cos: freqs.cos()?,
-        })
-    }
-
-    fn apply_rotary_emb_qkv(&self, q: &Tensor, k: &Tensor) -> Result<(Tensor, Tensor)> {
-        let q_embed = candle_nn::rotary_emb::rope(&q.contiguous()?, &self.cos, &self.sin)?;
-        let k_embed = candle_nn::rotary_emb::rope(&k.contiguous()?, &self.cos, &self.sin)?;
-        Ok((q_embed, k_embed))
-    }
-}
-
 #[derive(Clone)]
 struct ModernBertAttention {
     qkv: Linear,
@@ -97,6 +82,23 @@ struct ModernBertAttention {
     attention_head_size: usize,
     rotary_emb: Arc<RotaryEmbedding>,
     use_flash_attn: bool,
+}
+
+fn can_use_flash_attention(
+    enabled: bool,
+    is_cuda: bool,
+    uses_local_attention: bool,
+    has_padding: bool,
+    qkv_dtypes: [DType; 3],
+) -> bool {
+    enabled
+        && is_cuda
+        && !uses_local_attention
+        && !has_padding
+        && matches!(
+            qkv_dtypes,
+            [DType::F16, DType::F16, DType::F16] | [DType::BF16, DType::BF16, DType::BF16]
+        )
 }
 
 impl ModernBertAttention {
@@ -157,6 +159,7 @@ impl ModernBertAttention {
         uses_local_attention: bool,
         window: usize,
         block_size: usize,
+        has_padding: bool,
     ) -> Result<Tensor> {
         let (b, seq_len, d) = hidden_states.dims3()?;
         let (q, k, v) = self.project_qkv(hidden_states)?;
@@ -176,16 +179,26 @@ impl ModernBertAttention {
             },
             causal: false,
             scale,
+            q_offset: 0,
         };
 
-        // Use Flash Attention if enabled, otherwise use the shared chunked kernel
-        let xs = if self.use_flash_attn {
+        // The fixed-length Flash API below has neither a padding mask nor a
+        // sliding window. It also accepts only native F16/BF16 tensors: enabling
+        // the optional kernel must never reduce a model's requested precision.
+        // All other cases use the memory-bounded exact kernel.
+        let xs = if hidden_states.device().is_cpu() && q.dtype() == DType::F32 {
+            chunked_sdpa_cpu_softmax(&q, &k, &v, Some(pad_mask), &cfg)?
+        } else if can_use_flash_attention(
+            self.use_flash_attn,
+            hidden_states.device().is_cuda(),
+            uses_local_attention,
+            has_padding,
+            [q.dtype(), k.dtype(), v.dtype()],
+        ) {
             #[cfg(feature = "flash-attn")]
             {
                 // Flash Attention path
                 // Flash Attention expects: [batch, seq_len, num_heads, head_dim]
-                // Flash Attention requires f16/bf16, but we have F32
-                // Convert to f16, run Flash Attention, then convert back to F32
                 // `flash_attn` computes softmax(Q @ K^T . softmax_scale) @ V, so it
                 // applies the scale itself and takes `q` unscaled. The upstream
                 // candle-transformers model pre-scales `q` for its dense path only;
@@ -194,24 +207,10 @@ impl ModernBertAttention {
                 let k_flash = k.transpose(1, 2)?;
                 let v_flash = v.transpose(1, 2)?;
 
-                // Convert to f16 for Flash Attention
-                let q_flash_f16 = q_flash.to_dtype(DType::F16)?;
-                let k_flash_f16 = k_flash.to_dtype(DType::F16)?;
-                let v_flash_f16 = v_flash.to_dtype(DType::F16)?;
-
                 let softmax_scale = 1.0 / (self.attention_head_size as f32).sqrt();
                 // ModernBERT is bidirectional (non-causal)
-                match flash_attn(
-                    &q_flash_f16,
-                    &k_flash_f16,
-                    &v_flash_f16,
-                    softmax_scale,
-                    false,
-                ) {
-                    Ok(attn_output_f16) => {
-                        // Convert back to F32 and transpose back to [batch, num_heads, seq_len, head_dim]
-                        attn_output_f16.to_dtype(DType::F32)?.transpose(1, 2)?
-                    }
+                match flash_attn(&q_flash, &k_flash, &v_flash, softmax_scale, false) {
+                    Ok(attn_output) => attn_output.transpose(1, 2)?,
                     Err(e) => {
                         // Flash Attention failed, fallback to standard attention
                         eprintln!(
@@ -281,6 +280,7 @@ impl ModernBertLayer {
         config: &Config,
         rotary_emb: Arc<RotaryEmbedding>,
         uses_local_attention: bool,
+        layer_index: usize,
     ) -> Result<Self> {
         let attn = ModernBertAttention::load(
             vb.pp("attn"),
@@ -289,12 +289,18 @@ impl ModernBertLayer {
             cfg!(feature = "flash-attn"),
         )?;
         let mlp = ModernBertMLP::load(vb.pp("mlp"), config)?;
-        let attn_norm = layer_norm_no_bias(
-            config.hidden_size,
-            config.layer_norm_eps,
-            vb.pp("attn_norm"),
-        )
-        .ok();
+        let attn_norm = if layer_index == 0 {
+            if vb.contains_tensor("attn_norm.weight") || vb.contains_tensor("attn_norm.bias") {
+                candle_core::bail!("the first ModernBERT layer has no attention normalization");
+            }
+            None
+        } else {
+            Some(layer_norm_no_bias(
+                config.hidden_size,
+                config.layer_norm_eps,
+                vb.pp("attn_norm"),
+            )?)
+        };
         let mlp_norm =
             layer_norm_no_bias(config.hidden_size, config.layer_norm_eps, vb.pp("mlp_norm"))?;
         Ok(Self {
@@ -312,6 +318,7 @@ impl ModernBertLayer {
         pad_mask: &Tensor,
         window: usize,
         block_size: usize,
+        has_padding: bool,
     ) -> Result<Tensor> {
         let residual = xs.clone();
         let mut xs = xs.clone();
@@ -319,9 +326,14 @@ impl ModernBertLayer {
             xs = xs.apply(norm)?;
         }
 
-        let xs = self
-            .attn
-            .forward(&xs, pad_mask, self.uses_local_attention, window, block_size)?;
+        let xs = self.attn.forward(
+            &xs,
+            pad_mask,
+            self.uses_local_attention,
+            window,
+            block_size,
+            has_padding,
+        )?;
         let xs = (xs + residual)?;
         let mlp_out = xs.apply(&self.mlp_norm)?.apply(&self.mlp)?;
         let xs = (xs + mlp_out)?;
@@ -387,26 +399,34 @@ pub struct ModernBert {
 
 impl ModernBert {
     pub fn load(vb: VarBuilder, config: &Config) -> Result<Self> {
+        Self::load_backbone(vb.pp("model"), config)
+    }
+
+    /// Load the root tensor namespace exported by HF ModernBertModel.
+    pub fn load_backbone(vb: VarBuilder, config: &Config) -> Result<Self> {
+        let rope = config.resolve_rope()?;
         let word_embeddings = embedding(
             config.vocab_size,
             config.hidden_size,
-            vb.pp("model.embeddings.tok_embeddings"),
+            vb.pp("embeddings.tok_embeddings"),
         )?;
         let norm = layer_norm_no_bias(
             config.hidden_size,
             config.layer_norm_eps,
-            vb.pp("model.embeddings.norm"),
+            vb.pp("embeddings.norm"),
         )?;
         let global_rotary_emb = Arc::new(RotaryEmbedding::new(
             vb.dtype(),
-            config,
-            config.global_rope_theta,
+            config.hidden_size / config.num_attention_heads,
+            config.max_position_embeddings,
+            &rope[0],
             vb.device(),
         )?);
         let local_rotary_emb = Arc::new(RotaryEmbedding::new(
             vb.dtype(),
-            config,
-            config.local_rope_theta,
+            config.hidden_size / config.num_attention_heads,
+            config.max_position_embeddings,
+            &rope[1],
             vb.device(),
         )?);
 
@@ -414,7 +434,7 @@ impl ModernBert {
         for layer_id in 0..config.num_hidden_layers {
             let layer_uses_local_attention = layer_id % config.global_attn_every_n_layers != 0;
             layers.push(ModernBertLayer::load(
-                vb.pp(format!("model.layers.{layer_id}")),
+                vb.pp(format!("layers.{layer_id}")),
                 config,
                 if layer_uses_local_attention {
                     local_rotary_emb.clone()
@@ -422,13 +442,14 @@ impl ModernBert {
                     global_rotary_emb.clone()
                 },
                 layer_uses_local_attention,
+                layer_id,
             )?);
         }
 
         let final_norm = layer_norm_no_bias(
             config.hidden_size,
             config.layer_norm_eps,
-            vb.pp("model.final_norm"),
+            vb.pp("final_norm"),
         )?;
 
         Ok(Self {
@@ -441,14 +462,33 @@ impl ModernBert {
     }
 
     pub fn forward(&self, xs: &Tensor, mask: &Tensor) -> Result<Tensor> {
+        self.forward_to_layer(xs, mask, self.layers.len())
+    }
+
+    /// Apply the final normalization at a selected encoder exit. Callers that
+    /// select an intermediate exit must require this representation in the artifact.
+    pub fn forward_to_layer(&self, xs: &Tensor, mask: &Tensor, layer: usize) -> Result<Tensor> {
+        if layer > self.layers.len() {
+            candle_core::bail!("encoder exit exceeds the loaded layers");
+        }
         // (b, 1, 1, seq) additive padding mask, broadcast over query positions. The
         // previous (b, 1, seq, seq) expansion and the (seq, seq) sliding-window band
         // were both O(seq^2); the window is now applied inside the kernel per block.
         let pad_mask = prepare_padding_mask(mask, DType::F32)?.to_device(xs.device())?;
+        // Inspect padding once per model call, not once per layer. The transfer
+        // is only needed when Flash Attention is available on this device.
+        let has_padding = if cfg!(feature = "flash-attn") && xs.device().is_cuda() {
+            mask.flatten_all()?
+                .to_dtype(DType::U32)?
+                .to_vec1::<u32>()?
+                .contains(&0)
+        } else {
+            false
+        };
         let window = self.local_attention_size / 2;
         let mut xs = xs.apply(&self.word_embeddings)?.apply(&self.norm)?;
-        for layer in self.layers.iter() {
-            xs = layer.forward(&xs, &pad_mask, window, ATTN_QUERY_BLOCK)?;
+        for layer in self.layers.iter().take(layer) {
+            xs = layer.forward(&xs, &pad_mask, window, ATTN_QUERY_BLOCK, has_padding)?;
         }
         let xs = xs.apply(&self.final_norm)?;
         Ok(xs)
@@ -576,8 +616,36 @@ mod tests {
             global_rope_theta: 160000.0,
             local_attention: 8, // window = 4 each side
             local_rope_theta: 160000.0,
+            rope_options: RopeOptions::default(),
             classifier_config: None,
         }
+    }
+
+    #[test]
+    fn low_precision_rope_preserves_adjacent_positions_at_32k() -> Result<()> {
+        let mut config = tiny_config();
+        config.max_position_embeddings = 32768;
+        for dtype in [DType::F32, DType::F16, DType::BF16] {
+            let cache = RotaryEmbedding::new(
+                dtype,
+                config.hidden_size / config.num_attention_heads,
+                config.max_position_embeddings,
+                &Parameters::unscaled(160000.0),
+                &Device::Cpu,
+            )?;
+            let sin = cache.sin.to_dtype(DType::F32)?.to_vec2::<f32>()?;
+            let cos = cache.cos.to_dtype(DType::F32)?.to_vec2::<f32>()?;
+            let tolerance = if dtype == DType::BF16 { 0.004 } else { 0.0005 };
+            // The first frequency is exactly 1 radian per position. These
+            // values independently expose any early rounding of positions.
+            for position in [257, 2049, 8193, 16385, 32766, 32767] {
+                assert!((sin[position][0] - (position as f32).sin()).abs() < tolerance);
+                assert!((cos[position][0] - (position as f32).cos()).abs() < tolerance);
+            }
+            assert_ne!(sin[32766][0], sin[32767][0]);
+            assert_ne!(cos[32766][0], cos[32767][0]);
+        }
+        Ok(())
     }
 
     /// Build an attention block with deterministic random weights.
@@ -586,7 +654,14 @@ mod tests {
         let wqkv = Tensor::randn(0f32, 0.2f32, (hidden * 3, hidden), device).unwrap();
         let wo = Tensor::randn(0f32, 0.2f32, (hidden, hidden), device).unwrap();
         let rotary = Arc::new(
-            RotaryEmbedding::new(DType::F32, config, config.global_rope_theta, device).unwrap(),
+            RotaryEmbedding::new(
+                DType::F32,
+                config.hidden_size / config.num_attention_heads,
+                config.max_position_embeddings,
+                &Parameters::unscaled(config.global_rope_theta),
+                device,
+            )
+            .unwrap(),
         );
         ModernBertAttention {
             qkv: Linear::new(wqkv, None),
@@ -703,6 +778,59 @@ mod tests {
     }
 
     #[test]
+    fn test_flash_attention_never_changes_requested_precision() {
+        for dtype in [DType::F16, DType::BF16, DType::F32, DType::F64] {
+            let supported = matches!(dtype, DType::F16 | DType::BF16);
+            assert_eq!(
+                can_use_flash_attention(true, true, false, false, [dtype; 3]),
+                supported
+            );
+            for (enabled, is_cuda, local, padding) in [
+                (false, true, false, false),
+                (true, false, false, false),
+                (true, true, true, false),
+                (true, true, false, true),
+            ] {
+                assert!(!can_use_flash_attention(
+                    enabled, is_cuda, local, padding, [dtype; 3]
+                ));
+            }
+        }
+        for dtypes in [
+            [DType::F16, DType::BF16, DType::F16],
+            [DType::BF16, DType::BF16, DType::F32],
+        ] {
+            assert!(!can_use_flash_attention(true, true, false, false, dtypes));
+        }
+    }
+
+    #[test]
+    fn test_flash_option_keeps_fp32_cpu_attention_unchanged() {
+        let device = Device::Cpu;
+        let config = tiny_config();
+        let mut attn = make_test_attention(&config, &device);
+        let hidden = Tensor::full(100_000f32, (2, 33, config.hidden_size), &device).unwrap();
+        let raw_mask = all_real_mask(2, 33, &device);
+        let pad_mask = prepare_padding_mask(&raw_mask, DType::F32).unwrap();
+        let reference = attn
+            .forward(&hidden, &pad_mask, false, 4, 16, false)
+            .unwrap();
+        attn.use_flash_attn = true;
+        let actual = attn
+            .forward(&hidden, &pad_mask, false, 4, 16, false)
+            .unwrap();
+        assert_eq!(actual.dtype(), DType::F32);
+        assert_eq!(max_abs_diff(&actual, &reference), 0.0);
+        assert!(actual
+            .flatten_all()
+            .unwrap()
+            .to_vec1::<f32>()
+            .unwrap()
+            .iter()
+            .all(|value| value.is_finite()));
+    }
+
+    #[test]
     fn test_chunked_attention_matches_dense() {
         let device = Device::Cpu;
         let config = tiny_config();
@@ -722,7 +850,7 @@ mod tests {
 
                 for &block in &[1usize, 3, 8, 16, ATTN_QUERY_BLOCK] {
                     let chunked = attn
-                        .forward(&hidden, &pad_mask, uses_local, window, block)
+                        .forward(&hidden, &pad_mask, uses_local, window, block, false)
                         .unwrap();
                     let diff = max_abs_diff(&chunked, &reference);
                     assert!(
@@ -760,7 +888,7 @@ mod tests {
                 dense_reference_attention(&attn, &hidden, &raw_mask, uses_local, window);
             for &block in &[3usize, 8, ATTN_QUERY_BLOCK] {
                 let chunked = attn
-                    .forward(&hidden, &pad_mask, uses_local, window, block)
+                    .forward(&hidden, &pad_mask, uses_local, window, block, true)
                     .unwrap();
                 let diff = max_abs_diff(&chunked, &reference);
                 assert!(
@@ -772,5 +900,120 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_cpu_attention_preserves_mixed_padding_across_query_blocks() {
+        let device = Device::Cpu;
+        let mut config = tiny_config();
+        config.hidden_size = 8;
+        config.num_attention_heads = 2;
+        let seq_len = ATTN_QUERY_BLOCK + 1;
+        config.max_position_embeddings = seq_len;
+        let attn = make_test_attention(&config, &device);
+        let hidden = Tensor::randn(0f32, 1f32, (2, seq_len, config.hidden_size), &device).unwrap();
+        let mut mask = vec![1f32; 2 * seq_len];
+        mask[2 * seq_len - 7..].fill(0.0);
+        let raw_mask = Tensor::from_vec(mask, (2, seq_len), &device).unwrap();
+        let pad_mask = prepare_padding_mask(&raw_mask, DType::F32).unwrap();
+        let window = config.local_attention / 2;
+        for uses_local in [false, true] {
+            let actual = attn
+                .forward(
+                    &hidden,
+                    &pad_mask,
+                    uses_local,
+                    window,
+                    ATTN_QUERY_BLOCK,
+                    true,
+                )
+                .unwrap();
+            let reference =
+                dense_reference_attention(&attn, &hidden, &raw_mask, uses_local, window);
+            assert!(max_abs_diff(&actual, &reference) < 1e-4);
+            for batch in 0..2 {
+                let input = hidden.narrow(0, batch, 1).unwrap().contiguous().unwrap();
+                let mask = raw_mask.narrow(0, batch, 1).unwrap().contiguous().unwrap();
+                let mask = prepare_padding_mask(&mask, DType::F32).unwrap();
+                let single = attn
+                    .forward(
+                        &input,
+                        &mask,
+                        uses_local,
+                        window,
+                        ATTN_QUERY_BLOCK,
+                        batch == 1,
+                    )
+                    .unwrap();
+                assert!(max_abs_diff(&actual.narrow(0, batch, 1).unwrap(), &single) < 1e-4);
+            }
+        }
+    }
+
+    #[test]
+    fn test_chunked_attention_crosses_default_context_and_query_blocks() {
+        let device = Device::Cpu;
+        let mut config = tiny_config();
+        config.hidden_size = 8;
+        config.num_attention_heads = 2;
+        config.max_position_embeddings = 32768;
+        let attn = make_test_attention(&config, &device);
+        let seq_len = 1025;
+        let mut mask = vec![1f32; seq_len];
+        mask[seq_len - 17..].fill(0.0);
+        let raw_mask = Tensor::from_vec(mask, (1, seq_len), &device).unwrap();
+        let pad_mask = prepare_padding_mask(&raw_mask, DType::F32).unwrap();
+        let hidden = Tensor::randn(0f32, 1f32, (1, seq_len, config.hidden_size), &device).unwrap();
+        let window = config.local_attention / 2;
+        for uses_local in [false, true] {
+            let reference =
+                dense_reference_attention(&attn, &hidden, &raw_mask, uses_local, window);
+            for block in [256, ATTN_QUERY_BLOCK] {
+                let actual = attn
+                    .forward(&hidden, &pad_mask, uses_local, window, block, true)
+                    .unwrap();
+                assert!(max_abs_diff(&actual, &reference) < 1e-4);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod default_rope_compatibility_tests {
+    use super::*;
+    use crate::model_architectures::modernbert_rope::tests::{
+        assert_default_forward_unchanged, fixture_dir, legacy_default_cache,
+    };
+
+    #[test]
+    fn traditional_default_encoder_is_bitwise_unchanged() -> Result<()> {
+        let raw = std::fs::read_to_string(fixture_dir().join("tf4/config.json")).unwrap();
+        let mut config: Config = serde_json::from_str(&raw).unwrap();
+        config.rope_options = RopeOptions::default();
+        let vb = unsafe {
+            VarBuilder::from_mmaped_safetensors(
+                &[fixture_dir().join("weights.safetensors.fixture")],
+                DType::F32,
+                &Device::Cpu,
+            )?
+        };
+        let model = ModernBert::load_backbone(vb, &config)?;
+        let mut previous = model.clone();
+        for layer in &mut previous.layers {
+            let theta = if layer.uses_local_attention {
+                config.local_rope_theta
+            } else {
+                config.global_rope_theta
+            };
+            layer.attn.rotary_emb = Arc::new(legacy_default_cache(
+                config.hidden_size / config.num_attention_heads,
+                config.max_position_embeddings,
+                theta,
+            )?);
+        }
+        assert_default_forward_unchanged(
+            |ids, mask| model.forward(ids, mask),
+            |ids, mask| previous.forward(ids, mask),
+        )
     }
 }

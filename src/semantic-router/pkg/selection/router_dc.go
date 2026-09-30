@@ -18,6 +18,8 @@ package selection
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"strings"
@@ -318,13 +320,14 @@ func (r *RouterDCSelector) Select(ctx context.Context, selCtx *SelectionContext)
 		bestModel.Model, bestScore, confidence)
 
 	return &SelectionResult{
-		SelectedModel: bestModel.Model,
-		LoRAName:      bestModel.LoRAName,
-		Score:         softmaxScores[bestModel.Model],
-		Confidence:    confidence,
-		Method:        MethodRouterDC,
-		Reasoning:     reasoning,
-		AllScores:     softmaxScores,
+		SelectedModel:     bestModel.Model,
+		SelectedCandidate: bestModel,
+		LoRAName:          bestModel.LoRAName,
+		Score:             softmaxScores[bestModel.Model],
+		Confidence:        confidence,
+		Method:            MethodRouterDC,
+		Reasoning:         reasoning,
+		AllScores:         softmaxScores,
 	}, nil
 }
 
@@ -439,13 +442,11 @@ func (r *RouterDCSelector) applySoftmax(scores map[string]float64) map[string]fl
 	return result
 }
 
-// hashQuery creates a simple hash for query tracking
+// hashQuery returns a hex-encoded SHA-256 digest of the full query so that
+// affinity is keyed per query rather than per shared prefix.
 func (r *RouterDCSelector) hashQuery(query string) string {
-	// Simple hash for query grouping (could use more sophisticated methods)
-	if len(query) < 32 {
-		return fmt.Sprintf("%x", query)
-	}
-	return fmt.Sprintf("%x", query[:32])
+	sum := sha256.Sum256([]byte(query))
+	return hex.EncodeToString(sum[:])
 }
 
 // defaultSelection returns the first configured candidate when embedding-based
@@ -464,13 +465,14 @@ func (r *RouterDCSelector) defaultSelection(selCtx *SelectionContext, reason str
 	logging.Warnf("[RouterDC] Default candidate selection: %s, using first candidate %s", reason, firstModel.Model)
 
 	return &SelectionResult{
-		SelectedModel: firstModel.Model,
-		LoRAName:      firstModel.LoRAName,
-		Score:         allScores[firstModel.Model],
-		Confidence:    0.5,
-		Method:        MethodRouterDC,
-		Reasoning:     fmt.Sprintf("Default candidate selection: %s", reason),
-		AllScores:     allScores,
+		SelectedModel:     firstModel.Model,
+		SelectedCandidate: firstModel,
+		LoRAName:          firstModel.LoRAName,
+		Score:             allScores[firstModel.Model],
+		Confidence:        0.5,
+		Method:            MethodRouterDC,
+		Reasoning:         fmt.Sprintf("Default candidate selection: %s", reason),
+		AllScores:         allScores,
 	}, nil
 }
 

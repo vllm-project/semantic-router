@@ -48,14 +48,14 @@ func assertManagedStateBlocksWriters(t *testing.T, stateName string) {
 
 func managedConfigWriterTestCases(server *ClassificationAPIServer) []configWriterTestCase {
 	return []configWriterTestCase{
-		{name: "router patch", request: httptest.NewRequest(http.MethodPatch, "/config/router", bytes.NewBufferString(`{}`)), handle: server.handleConfigPatch},
-		{name: "router put", request: httptest.NewRequest(http.MethodPut, "/config/router", bytes.NewBufferString(`{}`)), handle: server.handleConfigPut},
-		{name: "router rollback", request: httptest.NewRequest(http.MethodPost, "/config/router/rollback", bytes.NewBufferString(`{}`)), handle: server.handleConfigRollback},
-		{name: "recipe put", request: requestWithPathValue(http.MethodPut, "/config/router/recipes/named", "name", "named"), handle: server.handlePutRecipe},
-		{name: "recipe delete", request: requestWithPathValue(http.MethodDelete, "/config/router/recipes/named", "name", "named"), handle: server.handleDeleteRecipe},
-		{name: "kb create", request: httptest.NewRequest(http.MethodPost, "/config/kbs", bytes.NewBufferString(`{}`)), handle: server.handleCreateKnowledgeBase},
-		{name: "kb update", request: requestWithPathValue(http.MethodPut, "/config/kbs/named", "name", "named"), handle: server.handleUpdateKnowledgeBase},
-		{name: "kb delete", request: requestWithPathValue(http.MethodDelete, "/config/kbs/named", "name", "named"), handle: server.handleDeleteKnowledgeBase},
+		{name: "router patch", request: httptest.NewRequest(http.MethodPatch, "/api/v1/config", bytes.NewBufferString(`{}`)), handle: server.handleConfigPatch},
+		{name: "router put", request: httptest.NewRequest(http.MethodPut, "/api/v1/config", bytes.NewBufferString(`{}`)), handle: server.handleConfigPut},
+		{name: "router rollback", request: httptest.NewRequest(http.MethodPost, "/api/v1/config/rollback", bytes.NewBufferString(`{}`)), handle: server.handleConfigRollback},
+		{name: "recipe put", request: requestWithPathValue(http.MethodPut, "/api/v1/config/recipes/named", "name", "named"), handle: server.handlePutRecipe},
+		{name: "recipe delete", request: requestWithPathValue(http.MethodDelete, "/api/v1/config/recipes/named", "name", "named"), handle: server.handleDeleteRecipe},
+		{name: "kb create", request: httptest.NewRequest(http.MethodPost, "/api/v1/storage/knowledge-bases", bytes.NewBufferString(`{}`)), handle: server.handleCreateKnowledgeBase},
+		{name: "kb update", request: requestWithPathValue(http.MethodPut, "/api/v1/storage/knowledge-bases/named", "name", "named"), handle: server.handleUpdateKnowledgeBase},
+		{name: "kb delete", request: requestWithPathValue(http.MethodDelete, "/api/v1/storage/knowledge-bases/named", "name", "named"), handle: server.handleDeleteKnowledgeBase},
 	}
 }
 
@@ -97,7 +97,7 @@ func TestRecipeStoreConfigLockRejectsCrossProcessContention(t *testing.T) {
 	rr := httptest.NewRecorder()
 	server.handleConfigPut(
 		rr,
-		httptest.NewRequest(http.MethodPut, "/config/router", bytes.NewBufferString(`{}`)),
+		httptest.NewRequest(http.MethodPut, "/api/v1/config", bytes.NewBufferString(`{}`)),
 	)
 	if rr.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409: %s", rr.Code, rr.Body.String())
@@ -125,6 +125,84 @@ func TestRecipeStoreConfigLockLeavesUnmanagedSourceWritersEnabled(t *testing.T) 
 	}
 	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
 		t.Fatalf("shared lock mode = %v, want real regular file", info.Mode())
+	}
+}
+
+func TestRecipeStoreConfigLockPreservesSharedGroupAccess(t *testing.T) {
+	storeDir := t.TempDir()
+	t.Setenv(recipeStoreDirEnv, storeDir)
+	lockPath := filepath.Join(storeDir, recipeConfigLockName)
+	if err := os.WriteFile(lockPath, nil, 0o660); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(lockPath, 0o660); err != nil {
+		t.Fatal(err)
+	}
+	lock, active, err := acquireRecipeStoreConfigLock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = unix.Flock(int(lock.Fd()), unix.LOCK_UN)
+		_ = lock.Close()
+	}()
+	if active {
+		t.Fatal("unmanaged store unexpectedly active")
+	}
+	info, err := os.Stat(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o660 {
+		t.Fatalf("shared lock mode = %o, want 660", info.Mode().Perm())
+	}
+}
+
+func TestRecipeStoreConfigLockRejectsUnsafeFilesWithoutChangingPermissions(t *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		mode     os.FileMode
+		hardlink bool
+	}{
+		{name: "other users", mode: 0o606},
+		{name: "world writable", mode: 0o666},
+		{name: "hard link", mode: 0o660, hardlink: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			storeDir := t.TempDir()
+			t.Setenv(recipeStoreDirEnv, storeDir)
+			lockPath := filepath.Join(storeDir, recipeConfigLockName)
+			if err := os.WriteFile(lockPath, []byte("sentinel"), testCase.mode); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(lockPath, testCase.mode); err != nil {
+				t.Fatal(err)
+			}
+			if testCase.hardlink {
+				if err := os.Link(lockPath, filepath.Join(t.TempDir(), "outside.lock")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			lock, _, err := acquireRecipeStoreConfigLock()
+			if lock != nil {
+				_ = unix.Flock(int(lock.Fd()), unix.LOCK_UN)
+				_ = lock.Close()
+			}
+			if err == nil {
+				t.Fatal("unsafe shared lock unexpectedly accepted")
+			}
+			info, err := os.Stat(lockPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Mode().Perm() != testCase.mode {
+				t.Fatalf("rejected lock mode changed to %o, want %o", info.Mode().Perm(), testCase.mode)
+			}
+			content, err := os.ReadFile(lockPath)
+			if err != nil || string(content) != "sentinel" {
+				t.Fatalf("rejected lock content changed: %q, %v", content, err)
+			}
+		})
 	}
 }
 

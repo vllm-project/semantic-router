@@ -20,7 +20,6 @@ use candle_semantic_router::model_architectures::traditional::modernbert::{
 };
 use candle_transformers::models::modernbert::{Config, ModernBert};
 use hf_hub::{api::sync::Api, Repo, RepoType};
-use serde_json;
 use std::path::Path;
 use std::process::Command;
 use std::time::Instant;
@@ -56,10 +55,9 @@ impl TestResults {
         println!("\nBackward Compatibility Testing:");
         for (test_name, passed, accuracy) in &self.backward_compatibility {
             println!(
-                "   {} - {}: {} (accuracy: {:.4})",
+                "   {} - {}:  (accuracy: {:.4})",
                 test_name,
                 if *passed { "PASSED" } else { "FAILED" },
-                "",
                 accuracy
             );
         }
@@ -121,7 +119,7 @@ fn check_gpu_memory() -> Option<(f64, f64)> {
 
     // Try to get GPU memory info using nvidia-smi
     let output = Command::new("nvidia-smi")
-        .args(&[
+        .args([
             "--query-gpu=memory.total,memory.free",
             "--format=csv,noheader,nounits",
         ])

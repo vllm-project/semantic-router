@@ -9,22 +9,14 @@ from typing import Any, Protocol
 import yaml
 from classify_pr_changes import NIGHTLY_IMAGES, PRODUCTION_RELEASE_IMAGES
 from docker_image_catalog import CATALOG_PATH, load_image_catalog, platform_targets
-from test_domain_registry import (
-    domain_records,
-    load_test_domain_registry,
-)
+from domain_registry import image_records, job_records, load_domain_registry
+from execution_batches import ALL_DISPATCH_JOBS, dispatch_job
+from image_artifacts import DEFINITIONS, publication_tags
+from verification_catalog import catalog_errors
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 LOCAL_WORKFLOW_PREFIX = "./.github/workflows/"
-REQUIRED_COMPATIBILITY_CHECKS = {
-    "Run pre-commit hooks check file lint",
-    "test-and-build",
-    "Lint",
-    "Unit Tests",
-    "Verify Manifests",
-    "Validate OLM Bundle",
-}
 REQUIRED_APPROVAL_CONDITION = "#approved-reviews-by >= 2"
 RELEASE_IMAGES = set(PRODUCTION_RELEASE_IMAGES)
 
@@ -37,6 +29,13 @@ class WorkflowLike(Protocol):
     jobs: dict[str, Any]
 
 
+CATALOG_WORKFLOW = "build-artifacts.yml"
+CATALOG_DEFINITION_COMMAND = (
+    'python tools/ci/image_artifacts.py definition --image "$IMAGE" '
+    '--mode "$MODE" "${args[@]}"'
+)
+
+
 def validate_catalog_entries(catalog: dict[str, Any], errors: list[str]) -> None:
     for image, definition in catalog.items():
         context = (REPO_ROOT / definition.context).resolve()
@@ -46,7 +45,7 @@ def validate_catalog_entries(catalog: dict[str, Any], errors: list[str]) -> None
         if not dockerfile.is_file():
             errors.append(f"{CATALOG_PATH}: '{image}' Dockerfile does not exist")
         try:
-            platform_targets(definition.platforms)
+            platform_targets(",".join(definition.platforms))
         except ValueError:
             errors.append(f"{CATALOG_PATH}: '{image}' has invalid platforms")
 
@@ -60,20 +59,16 @@ def validate_catalog_workflow(
         errors.append(f".github/workflows/{workflow_name}: missing workflow")
         return
 
-    job_id = {
-        "docker-validate.yml": "validate",
-        "docker-publish.yml": "publish",
-    }[workflow_name]
-    job = workflow.jobs.get(job_id)
+    job = workflow.jobs.get("image")
     if not isinstance(job, dict):
         errors.append(
-            f".github/workflows/{workflow_name}: missing '{job_id}' image job"
+            f".github/workflows/{workflow_name}: missing 'image' build job"
         )
         return
     steps = job.get("steps")
     if not isinstance(steps, list):
         errors.append(
-            f".github/workflows/{workflow_name}: '{job_id}' steps must be a list"
+            f".github/workflows/{workflow_name}: 'image' steps must be a list"
         )
         return
 
@@ -82,10 +77,10 @@ def validate_catalog_workflow(
         for step in steps
         if isinstance(step, dict) and step.get("id") == "definition"
     ]
-    expected_command = (
-        'python3 tools/ci/docker_image_catalog.py "$IMAGE" >> "$GITHUB_OUTPUT"'
-    )
-    if len(definition_steps) != 1 or definition_steps[0].get("run") != expected_command:
+    if (
+        len(definition_steps) != 1
+        or CATALOG_DEFINITION_COMMAND not in definition_steps[0].get("run", "")
+    ):
         errors.append(
             f".github/workflows/{workflow_name}: must resolve images from "
             "the shared Docker image catalog"
@@ -130,7 +125,8 @@ def validate_catalog_workflow(
                     "come from the shared Docker image catalog"
                 )
 
-    if 'case "$IMAGE"' in workflow.path.read_text(encoding="utf-8"):
+    workflow_text = workflow.path.read_text(encoding="utf-8")
+    if 'case "$IMAGE"' in workflow_text or "docker/login-action" in workflow_text:
         errors.append(
             f".github/workflows/{workflow_name}: image mappings must not be "
             "duplicated in the workflow"
@@ -146,15 +142,33 @@ def validate_docker_image_catalog(
         errors.append(f"{CATALOG_PATH.relative_to(REPO_ROOT)}: {error}")
         return
 
-    expected_images = set(NIGHTLY_IMAGES)
+    expected_images = set(image_records())
     if set(catalog) != expected_images:
         errors.append(
             f"{CATALOG_PATH.relative_to(REPO_ROOT)}: image inventory must match "
-            "the nightly image inventory"
+            "the CI image inventory"
+        )
+    if {
+        image: (definition.context, definition.dockerfile, list(definition.platforms))
+        for image, definition in catalog.items()
+    } != DEFINITIONS:
+        errors.append(
+            "tools/ci/image_artifacts.py: DEFINITIONS must load from the shared "
+            "Docker image catalog"
         )
     validate_catalog_entries(catalog, errors)
-    for workflow_name in ("docker-validate.yml", "docker-publish.yml"):
-        validate_catalog_workflow(workflow_name, workflows.get(workflow_name), errors)
+    validate_catalog_workflow(CATALOG_WORKFLOW, workflows.get(CATALOG_WORKFLOW), errors)
+    publisher = workflows.get("docker-publish.yml")
+    publisher_text = publisher.path.read_text(encoding="utf-8") if publisher else ""
+    if (
+        "image_artifacts.py promote" not in publisher_text
+        or "docker/build-push-action" in publisher_text
+        or "docker_image_catalog.py" in publisher_text
+    ):
+        errors.append(
+            ".github/workflows/docker-publish.yml: must promote sealed artifacts "
+            "without rebuilding from the catalog"
+        )
 
 
 def local_target(job: dict[str, Any]) -> str | None:
@@ -173,149 +187,123 @@ def needs(job: dict[str, Any]) -> set[str]:
     return set()
 
 
-def validate_pr_images_contract(
-    dispatcher: WorkflowLike,
-    workflows: dict[str, WorkflowLike],
-    errors: list[str],
-) -> None:
-    images = dispatcher.jobs.get("images", {})
-    if not isinstance(images, dict) or local_target(images) != "docker-validate.yml":
-        errors.append(
-            ".github/workflows/pr.yml: images must call the read-only "
-            "docker-validate.yml workflow"
+def validate_gate_transport(gate: dict[str, Any], errors: list[str]) -> None:
+    steps = gate.get("steps", [])
+    reconciliations = [
+        step for step in steps if "check_ci_gate.py" in step.get("run", "")
+    ]
+    expected = {
+        name: {"result": "${{ needs." + name + ".result }}"}
+        for name in ALL_DISPATCH_JOBS
+    }
+    try:
+        actual = json.loads(
+            reconciliations[0].get("env", {}).get("EXECUTOR_RESULTS", "")
         )
-    validation = workflows.get("docker-validate.yml")
-    if validation is None:
+    except (ValueError, TypeError, IndexError):
+        actual = None
+    if len(reconciliations) != 1 or actual != expected:
         errors.append(
-            ".github/workflows/docker-validate.yml: missing PR image validator"
+            "ci.yml gate must pass only every prerequisite's result, without job outputs"
         )
-        return
-    permissions = validation.data.get("permissions")
-    if permissions != {"contents": "read"}:
-        errors.append(
-            ".github/workflows/docker-validate.yml: permissions must be "
-            "exactly contents: read"
-        )
-    validation_text = validation.path.read_text(encoding="utf-8")
-    if "docker/login-action" in validation_text or "push: true" in validation_text:
-        errors.append(
-            ".github/workflows/docker-validate.yml: PR image validation "
-            "must not authenticate or publish"
-        )
-
-
-def validate_pr_selection_contract(
-    dispatcher: WorkflowLike,
-    workflows: dict[str, WorkflowLike],
-    errors: list[str],
-) -> None:
-    validate_pr_images_contract(dispatcher, workflows, errors)
-    if "bindings" in dispatcher.jobs:
-        errors.append(
-            ".github/workflows/pr.yml: duplicate standalone bindings job remains"
-        )
-    performance = dispatcher.jobs.get("performance", {})
-    if isinstance(performance, dict) and "outputs.full" in str(
-        performance.get("if", "")
+    if not any(
+        step.get("uses", "").startswith("actions/download-artifact@")
+        and step.get("with", {}).get("name") == "ci-plan"
+        and step.get("with", {}).get("path") == ".agent-harness/ci"
+        for step in steps
+    ) or not any(
+        "--plan .agent-harness/ci/plan.json" in step.get("run", "")
+        for step in reconciliations
     ):
         errors.append(
-            ".github/workflows/pr.yml: ci/full must not enable performance tests"
+            "ci.yml gate must read the independently downloaded ci-plan artifact"
         )
-    validate_classifier_contract(workflows, errors)
 
 
 def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) -> None:
     dispatcher = workflows.get("pr.yml")
-    if dispatcher is None:
-        errors.append(".github/workflows/pr.yml: missing PR dispatcher")
+    if not dispatcher or "pull_request" not in dispatcher.events:
+        errors.append("missing pull-request dispatcher")
         return
-    if "pull_request" not in dispatcher.events:
-        errors.append(".github/workflows/pr.yml: missing pull_request trigger")
-
-    compatibility = dispatcher.jobs.get("compatibility", {})
-    matrix = (
-        compatibility.get("strategy", {}).get("matrix", {}).get("check", [])
-        if isinstance(compatibility, dict)
-        else []
-    )
-    if set(matrix) != REQUIRED_COMPATIBILITY_CHECKS:
-        errors.append(
-            ".github/workflows/pr.yml: compatibility matrix does not preserve "
-            "the required branch-protection and Mergify contexts"
-        )
-    registry_contexts = set(
-        load_test_domain_registry().get("compatibility_contexts", [])
-    )
-    if registry_contexts != REQUIRED_COMPATIBILITY_CHECKS:
-        errors.append(
-            "tools/agent/test-domain-registry.yaml compatibility contexts "
-            "do not match workflow policy"
-        )
     gate = dispatcher.jobs.get("pr-gate", {})
-    if not isinstance(gate, dict) or gate.get("name") != "PR Gate":
-        errors.append(".github/workflows/pr.yml: missing stable 'PR Gate' aggregate")
-
-    validate_pr_selection_contract(dispatcher, workflows, errors)
-    validate_registry_dispatch_contract(dispatcher, workflows, errors)
-
-    classifier_callers = []
-    for workflow in workflows.values():
-        if "pull_request" not in workflow.events:
-            continue
-        for job in workflow.jobs.values():
-            if isinstance(job, dict) and local_target(job) == "ci-changes.yml":
-                classifier_callers.append(workflow.path.name)
-    if classifier_callers != ["pr.yml"]:
+    if (
+        gate.get("name") != "PR Gate"
+        or gate.get("if") != "always()"
+        or needs(gate) != {"ci"}
+    ):
         errors.append(
-            "PR change classification must run only in pr.yml; callers: "
-            + ", ".join(sorted(classifier_callers))
+            "pr.yml must retain the always-running stable PR Gate behind shared CI"
         )
-
+    for filename, profile in (
+        ("pr.yml", "pr"),
+        ("main.yml", "main"),
+        ("nightly-build.yml", "nightly"),
+    ):
+        workflow = workflows.get(filename)
+        call = workflow.jobs.get("ci", {}) if workflow else {}
+        if (
+            local_target(call) != "ci.yml"
+            or call.get("with", {}).get("profile") != profile
+        ):
+            errors.append(
+                f"{filename}: must use the single CI planner/executor with profile {profile}"
+            )
+        for job in workflow.jobs.values() if workflow else ():
+            if local_target(job) in {
+                record["workflow"].split("/")[-1] for record in job_records().values()
+            }:
+                errors.append(
+                    f"{filename}: duplicated verification dispatch outside ci.yml"
+                )
+    shared = workflows.get("ci.yml")
+    if not shared:
+        errors.append("missing shared ci.yml")
+        return
+    expected = set(ALL_DISPATCH_JOBS)
+    gate = shared.jobs.get("gate", {})
+    if needs(gate) != expected or gate.get("if") != "always()":
+        errors.append(
+            "ci.yml gate must aggregate every executor and build prerequisite"
+        )
+    validate_gate_transport(gate, errors)
+    text = shared.path.read_text()
+    if (
+        "check_ci_gate.py" not in text
+        or "--plan" not in text
+        or "ci-result-*" not in text
+    ):
+        errors.append(
+            "ci.yml must reconcile execution artifacts against the pre-execution plan"
+        )
+    for record in job_records().values():
+        call = shared.jobs.get(dispatch_job(record), {})
+        if local_target(call) != Path(record["workflow"]).name:
+            errors.append(f"ci.yml: no executor for {record['workflow']}")
+    errors.extend(catalog_errors(load_domain_registry()))
+    planner = workflows.get("ci-changes.yml")
+    if not planner or "tools/ci/ci_plan.py" not in planner.path.read_text():
+        errors.append("ci-changes.yml must call the tested plan generator")
+    builder = workflows.get("build-artifacts.yml")
+    if not builder:
+        errors.append("missing shared read-only image producer")
+    elif any(
+        word in builder.path.read_text()
+        for word in ("docker/login-action", "push: true")
+    ):
+        errors.append("shared image producer must not authenticate or publish")
     community = workflows.get("community.yml")
-    pull_request = community.events.get("pull_request", {}) if community else {}
-    types = pull_request.get("types", []) if isinstance(pull_request, dict) else []
-    if "synchronize" in types:
-        errors.append(
-            ".github/workflows/community.yml: metadata checks must not run on synchronize"
-        )
-
-
-def validate_registry_dispatch_contract(
-    dispatcher: WorkflowLike,
-    workflows: dict[str, WorkflowLike],
-    errors: list[str],
-) -> None:
-    for domain_name, domain in domain_records().items():
-        if "pr" not in domain.get("cadence", []):
-            continue
-        job_id = domain["pr_job"]
-        workflow_name = Path(domain["workflow"]).name
-        job = dispatcher.jobs.get(job_id)
-        if not isinstance(job, dict):
-            errors.append(
-                f".github/workflows/pr.yml: missing registry domain job {job_id!r}"
-            )
-            continue
-        if local_target(job) != workflow_name:
-            errors.append(
-                f".github/workflows/pr.yml: registry domain {domain_name!r} "
-                f"must call {workflow_name!r}"
-            )
-        workflow = workflows.get(workflow_name)
-        if workflow is None or "workflow_call" not in workflow.events:
-            errors.append(
-                f"{domain['workflow']}: registry domain workflow must be reusable"
-            )
+    trigger = community.events.get("pull_request", {}) if community else {}
+    if "synchronize" in (trigger or {}).get("types", []):
+        errors.append("community metadata must not repeat on every synchronization")
 
 
 def validate_release_contract(
     workflows: dict[str, WorkflowLike], errors: list[str]
 ) -> None:
     release = workflows.get("release.yml")
-    if release is None:
-        errors.append(".github/workflows/release.yml: missing release orchestrator")
+    if not release:
+        errors.append("missing release orchestrator")
         return
-
     validate_release_publishers(release, errors)
     validate_release_images(release, errors)
     validate_stable_tag_owner(workflows, errors)
@@ -323,31 +311,56 @@ def validate_release_contract(
     validate_fixture_tag_policy(workflows, errors)
 
 
-def validate_classifier_contract(
-    workflows: dict[str, WorkflowLike], errors: list[str]
-) -> None:
-    classifier = workflows.get("ci-changes.yml")
-    if classifier is None:
-        errors.append(".github/workflows/ci-changes.yml: missing classifier")
-        return
-    text = classifier.path.read_text(encoding="utf-8")
-    if "tools/ci/classify_pr_changes.py" not in text:
-        errors.append(
-            ".github/workflows/ci-changes.yml: must use the tested classifier contract"
-        )
-    if "dorny/paths-filter" in text:
-        errors.append(
-            ".github/workflows/ci-changes.yml: hidden dorny product filters remain"
-        )
-
-
 def validate_release_publishers(release: WorkflowLike, errors: list[str]) -> None:
+    expected_jobs = {
+        "validate",
+        "images",
+        "helm-build",
+        "python-build",
+        "docker",
+        "helm",
+        "pypi",
+        "crate",
+        "release-notes",
+    }
+    if set(release.jobs) != expected_jobs:
+        errors.append(
+            ".github/workflows/release.yml: publish graph must contain only "
+            "version validation, artifact builds, and publishers"
+        )
+    builder = release.jobs.get("images", {})
+    if (
+        local_target(builder) != "build-artifacts.yml"
+        or needs(builder) != {"validate"}
+        or builder.get("with", {}).get("mode") != "release"
+        or builder.get("with", {}).get("multiarch") is not True
+    ):
+        errors.append(
+            ".github/workflows/release.yml: images must build from the "
+            "validated release source without CI tests"
+        )
     expected_publishers = {
         "docker": "docker-publish.yml",
         "helm": "helm-publish.yml",
         "pypi": "pypi-publish.yml",
         "crate": "publish-crate.yml",
     }
+    expected_prebuilds = {
+        "helm-build": ("helm-publish.yml", "prebuilt-chart"),
+        "python-build": ("pypi-publish.yml", "prebuilt-dist"),
+    }
+    for job_id, (target, prebuilt_input) in expected_prebuilds.items():
+        job = release.jobs.get(job_id, {})
+        if (
+            local_target(job) != target
+            or needs(job) != {"validate"}
+            or job.get("with", {}).get("build-only") is not True
+            or job.get("with", {}).get(prebuilt_input, False)
+        ):
+            errors.append(
+                f".github/workflows/release.yml: '{job_id}' must build "
+                "the validated release artifact without publishing"
+            )
     for job_id, target in expected_publishers.items():
         job = release.jobs.get(job_id)
         if not isinstance(job, dict):
@@ -358,28 +371,70 @@ def validate_release_publishers(release: WorkflowLike, errors: list[str]) -> Non
                 f".github/workflows/release.yml: '{job_id}' must call '{target}' "
                 "after validate"
             )
+        if "github.event_name == 'push'" not in job.get("if", ""):
+            errors.append(
+                f".github/workflows/release.yml: '{job_id}' may publish only "
+                "on a tag push"
+            )
+        if "images" not in needs(
+            job
+        ) or "needs.images.result == 'success'" not in job.get("if", ""):
+            errors.append(
+                f".github/workflows/release.yml: '{job_id}' must wait for "
+                "successful release image builds"
+            )
+        for prebuild in expected_prebuilds:
+            if prebuild not in needs(
+                job
+            ) or f"needs.{prebuild}.result == 'success'" not in job.get("if", ""):
+                errors.append(
+                    f".github/workflows/release.yml: '{job_id}' must wait for "
+                    f"successful {prebuild}"
+                )
+    pypi_job = release.jobs.get("pypi", {})
+    if pypi_job.get("with", {}).get("prebuilt-dist") is not True or pypi_job.get(
+        "with", {}
+    ).get("build-only", False):
+        errors.append(
+            ".github/workflows/release.yml: Python publisher must promote "
+            "the validated prebuilt distribution"
+        )
+    helm_job = release.jobs.get("helm", {})
+    if helm_job.get("with", {}).get("prebuilt-chart") is not True or helm_job.get(
+        "with", {}
+    ).get("build-only", False):
+        errors.append(
+            ".github/workflows/release.yml: Helm publisher must promote "
+            "the validated prebuilt chart"
+        )
+    notes = release.jobs.get("release-notes", {})
+    if needs(notes) != {"validate", *expected_publishers}:
+        errors.append(
+            ".github/workflows/release.yml: GitHub Release must wait for "
+            "all publishers"
+        )
 
 
 def validate_release_images(release: WorkflowLike, errors: list[str]) -> None:
     docker_job = release.jobs.get("docker", {})
-    raw_images = (
+    images = (
         docker_job.get("with", {}).get("images")
         if isinstance(docker_job, dict)
         else None
     )
-    try:
-        images = set(json.loads(raw_images))
-    except (TypeError, json.JSONDecodeError):
-        images = set()
-    if images != RELEASE_IMAGES:
+    builder = release.jobs.get("images", {})
+    built_images = (
+        builder.get("with", {}).get("images") if isinstance(builder, dict) else None
+    )
+    expected = "${{ needs.validate.outputs.images }}"
+    if images != expected or built_images != expected:
         errors.append(
-            ".github/workflows/release.yml: release image inventory differs "
-            "from production deliverables"
+            "release image builds and publishers must consume the validated "
+            "publication inventory"
         )
     release_text = release.path.read_text(encoding="utf-8")
     fixture_bullets = {
-        "- `anthropic-shim`",
-        "- `llm-katan`",
+        "- `provider-mocker`",
         "- `vllm-sr-sim`",
     }
     if any(bullet in release_text for bullet in fixture_bullets):
@@ -421,33 +476,22 @@ def validate_nightly_docker_owner(
             + ", ".join(sorted(nightly_docker_calls))
         )
     nightly = workflows.get("nightly-build.yml")
-    docker_job = nightly.jobs.get("docker", {}) if nightly else {}
-    raw_images = (
-        docker_job.get("with", {}).get("images")
-        if isinstance(docker_job, dict)
-        else None
-    )
-    try:
-        images = set(json.loads(raw_images))
-    except (TypeError, json.JSONDecodeError):
-        images = set()
-    if images != set(NIGHTLY_IMAGES):
-        errors.append(
-            ".github/workflows/nightly-build.yml: nightly image inventory must "
-            "include production, companion, and test images"
-        )
+    docker = nightly.jobs.get("docker", {}) if nightly else {}
+    if docker.get("with", {}).get("images") != "${{ needs.ci.outputs.publish_images }}":
+        errors.append("nightly images must consume the planner publication inventory")
 
 
 def validate_fixture_tag_policy(
     workflows: dict[str, WorkflowLike], errors: list[str]
 ) -> None:
-    publisher = workflows.get("docker-publish.yml")
-    text = publisher.path.read_text(encoding="utf-8") if publisher else ""
-    if "anthropic-shim|llm-katan" not in text or "${IMAGE}:nightly" not in text:
-        errors.append(
-            ".github/workflows/docker-publish.yml: nightly test fixtures need "
-            "the mutable nightly tag"
-        )
+    if "provider-mocker" in set(NIGHTLY_IMAGES) | RELEASE_IMAGES:
+        errors.append("provider-mocker cannot follow product publication schedules")
+    for mode in ("pr", "nightly", "release"):
+        try:
+            publication_tags("provider-mocker", mode, "", False, "20260101")
+        except ValueError:
+            continue
+        errors.append(f"provider-mocker cannot be published in {mode} mode")
 
 
 def validate_security_boundary(
@@ -483,7 +527,13 @@ def validate_removed_workflows(errors: list[str]) -> None:
         "docker-release.yml",
         "issue-manager.yml",
         "owner-notification.yml",
+        "anti-spam-filter.yml",
+        "performance-nightly.yml",
         "skill-review.yml",
+        "paper-build.yml",
+        "router-learning-eval.yml",
+        "recipe-distribution.yml",
+        "docker-validate.yml",
     }
     existing = sorted(name for name in removed if (WORKFLOW_DIR / name).exists())
     if existing:
@@ -496,19 +546,19 @@ def validate_mergify_contract(errors: list[str]) -> None:
     sections = ("queue_conditions", "merge_conditions")
     queue_rules = data.get("queue_rules", [])
     default_rule = queue_rules[0] if queue_rules else {}
-    required = REQUIRED_COMPATIBILITY_CHECKS - {"Run pre-commit hooks check file lint"}
-    required.add("PR Gate")
     for section in sections:
         serialized = json.dumps(default_rule.get(section, []))
-        missing = sorted(
-            context
-            for context in required
-            if f"check-success = {context}" not in serialized
+        if "check-success = PR Gate" not in serialized:
+            errors.append(f".mergify.yml: {section} must require PR Gate")
+        obsolete = (
+            "test-and-build",
+            "Lint",
+            "Unit Tests",
+            "Verify Manifests",
+            "Validate OLM Bundle",
         )
-        if missing:
-            errors.append(
-                f".mergify.yml: {section} is missing contexts: " + ", ".join(missing)
-            )
+        if any(f"check-success = {context}" in serialized for context in obsolete):
+            errors.append(f".mergify.yml: {section} retains compatibility contexts")
     pull_request_rules = data.get("pull_request_rules", [])
     queue_rules = [
         rule

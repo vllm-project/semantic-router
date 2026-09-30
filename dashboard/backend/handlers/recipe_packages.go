@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/recipe"
 )
 
@@ -196,6 +197,9 @@ func (h *RecipeHandler) ImportPackage(w http.ResponseWriter, r *http.Request) {
 		writePackageError(w, recipe.NewPackageError(recipe.ErrorInvalidRequest, http.StatusBadRequest, "Recipe import request is invalid.", err))
 		return
 	}
+	if auth.RejectRevokedMutation(w, r) {
+		return
+	}
 	result, created, err := h.packages.Import(r.Context(), request)
 	if err != nil {
 		writePackageError(w, err)
@@ -229,6 +233,9 @@ func (h *RecipeHandler) ActivatePackage(w http.ResponseWriter, r *http.Request) 
 		writePackageError(w, recipe.NewPackageError(recipe.ErrorInvalidRequest, http.StatusBadRequest, "Recipe activation request is invalid.", err))
 		return
 	}
+	if auth.RejectRevokedMutation(w, r) {
+		return
+	}
 	result, err := h.activator.Activate(r.Context(), request)
 	if err != nil {
 		writePackageError(w, err)
@@ -259,6 +266,9 @@ func (h *RecipeHandler) DeactivatePackage(w http.ResponseWriter, r *http.Request
 			writePackageError(w, recipe.NewPackageError(recipe.ErrorInvalidRequest, http.StatusBadRequest, "Recipe deactivation request is invalid.", err))
 			return
 		}
+	}
+	if auth.RejectRevokedMutation(w, r) {
+		return
 	}
 	result, err := h.activator.Deactivate(r.Context(), request)
 	if err != nil {

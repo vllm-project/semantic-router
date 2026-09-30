@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -93,13 +94,13 @@ func (r *Runner) initializeReport() {
 func (r *Runner) finalizeReport(state *runState) {
 	r.reporter.Finalize(state.exitCode)
 
-	if err := r.reporter.WriteJSON("test-report.json"); err != nil {
+	if err := r.reporter.WriteJSON(reportPath("test-report.json")); err != nil {
 		r.log("Warning: failed to write JSON report: %v", err)
 	} else {
 		r.log("Test report written to: test-report.json")
 	}
 
-	if err := r.reporter.WriteMarkdown("test-report.md"); err != nil {
+	if err := r.reporter.WriteMarkdown(reportPath("test-report.md")); err != nil {
 		r.log("Warning: failed to write Markdown report: %v", err)
 	} else {
 		r.log("Test report written to: test-report.md")
@@ -124,6 +125,9 @@ func (r *Runner) prepareRuntime(ctx context.Context, state *runState) error {
 
 	if err := r.setupProfile(ctx, state); err != nil {
 		return err
+	}
+	if err := r.restartLocalImageDeployments(ctx, state.kubeClient); err != nil {
+		return fmt.Errorf("failed to restart local image deployments: %w", err)
 	}
 
 	return nil
@@ -388,6 +392,9 @@ extraVolumeMounts:
   - name: workspace-models
     mountPath: /app/models
 `, cluster.WorkspaceModelsNodeMountPath)
+	if hfEndpoint := strings.TrimSpace(os.Getenv("HF_ENDPOINT")); hfEndpoint != "" {
+		content += "extraEnv:\n  - name: HF_ENDPOINT\n    value: " + strconv.Quote(hfEndpoint) + "\n"
+	}
 
 	if _, err := tmpFile.WriteString(content); err != nil {
 		_ = tmpFile.Close()

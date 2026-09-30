@@ -65,8 +65,8 @@ interface DSLActions {
   /** Parse DSL → AST + diagnostics + symbols (for Visual Builder). */
   parseAST(): void
 
-  /** Decompile YAML → DSL-owned models, routing, entrypoints, and recipes. */
-  decompile(yaml: string): string | null
+  /** Decompile YAML → DSL-owned scopes, throwing the compiler's error on failure. */
+  decompile(yaml: string): string
 
   /** Format the current DSL source. */
   format(): void

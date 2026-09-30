@@ -6,13 +6,12 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
 const (
-	valuesFile   = "e2e/profiles/looper/values.yaml"
-	fakeManifest = "e2e/profiles/looper/manifests/fake-backend.yaml"
+	valuesFile       = "e2e/profiles/looper/values.yaml"
+	providerManifest = "e2e/profiles/looper/manifests/provider-mocker.yaml"
 )
 
 var gatewayResources = []string{
@@ -30,10 +29,10 @@ func NewProfile() *Profile {
 	return &Profile{stack: gatewaystack.New(gatewaystack.Config{
 		Name:                     "looper",
 		SemanticRouterValuesFile: valuesFile,
-		PrerequisiteManifests:    []string{fakeManifest},
+		PrerequisiteManifests:    []string{providerManifest},
 		ResourceManifests:        gatewayResources,
 		WaitDeployments: []helpers.DeploymentRef{
-			{Namespace: "default", Name: "looper-fake-backend"},
+			{Namespace: "default", Name: "looper-provider-mocker"},
 			{Namespace: "default", Name: "vllm-llama3-8b-instruct"},
 		},
 	})}
@@ -58,7 +57,23 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 }
 
 // GetTestCases returns the focused Looper contract tests.
-func (p *Profile) GetTestCases() []string { return []string{"looper-ratings-happy-path"} }
+func (p *Profile) GetTestCases() []string {
+	return []string{
+		"looper-ratings-happy-path",
+		"looper-fusion-analysis-modes",
+		"looper-fusion-synthesis-trace",
+		"looper-fusion-usable-quorum",
+		"looper-confidence-telemetry",
+		"looper-fusion-quorum-fallback",
+		"looper-fusion-quorum-zero-usable",
+		"looper-fusion-quorum-fallback-failure",
+		"looper-fusion-quorum-budget-exhausted",
+		"looper-fusion-quorum-deadline-cancellation",
+		"looper-fusion-quorum-fallback-anthropic",
+		"looper-fusion-quorum-fallback-responses",
+		"looper-fusion-quorum-caller-cancellation",
+	}
+}
 
 // GetServiceConfig returns the shared gateway service configuration.
 func (p *Profile) GetServiceConfig() framework.ServiceConfig { return p.stack.ServiceConfig() }

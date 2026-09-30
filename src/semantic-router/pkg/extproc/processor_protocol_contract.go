@@ -8,6 +8,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -88,11 +89,39 @@ func (r *OpenAIRouter) protocolEngine() (*protocolcodec.Engine, error) {
 	if r == nil {
 		return nil, fmt.Errorf("protocol runtime is unavailable")
 	}
-	registry := r.ProtocolCodecs
+	return protocolEngineFor(r.ProtocolCodecs)
+}
+
+// protocolEngineFor serves callers that hold only the registry, such as
+// detached work that must not capture the router.
+func protocolEngineFor(registry *protocolcodec.Registry) (*protocolcodec.Engine, error) {
 	if registry == nil {
 		registry = protocolcodec.NewBuiltinRegistry()
 	}
 	return protocolcodec.NewEngine(registry, llmprotocol.DefaultPolicy())
+}
+
+// protocolEngineForVendor creates an engine with the specified response vendor policy.
+func (r *OpenAIRouter) protocolEngineForVendor(vendor llmprotocol.ResponseVendor) (*protocolcodec.Engine, error) {
+	if r == nil {
+		return nil, fmt.Errorf("protocol runtime is unavailable")
+	}
+	registry := r.ProtocolCodecs
+	if registry == nil {
+		registry = protocolcodec.NewBuiltinRegistry()
+	}
+	policy := llmprotocol.DefaultPolicy()
+	policy.ResponseVendor = vendor
+	return protocolcodec.NewEngine(registry, policy)
+}
+
+// protocolEngineForBackend permits extensions only for live provider responses.
+func (r *OpenAIRouter) protocolEngineForBackend(ctx *RequestContext) (*protocolcodec.Engine, error) {
+	var vendor llmprotocol.ResponseVendor
+	if ctx != nil {
+		vendor = ctx.ResponseVendor
+	}
+	return r.protocolEngineForVendor(vendor)
 }
 
 // prepareProtocolRequest decodes every public wire format exactly once. The
@@ -104,11 +133,12 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	if ctx.SourceFormat == "" {
 		ctx.SourceFormat = llmprotocol.OpenAIChatV1
 	}
+	body = withAzureDeploymentModel(body, ctx.Headers[":path"])
 	engine, err := r.protocolEngine()
 	if err != nil {
 		return nil, r.createErrorResponse(503, "protocol runtime unavailable")
 	}
-	request, envelope, diagnostics, err := engine.DecodeRequestForMutation(ctx.SourceFormat, body)
+	request, envelope, diagnostics, err := decodeRequestWithLooperEvidence(engine, body, ctx)
 	if err != nil {
 		recordIngressProtocolError(ctx, err)
 		var protocolError *llmprotocol.ProtocolError
@@ -122,6 +152,7 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	request.Trusted.CorrelationID = ctx.RequestID
 	ctx.IngressBodyBytes = len(body)
 	ctx.SemanticRequest = &request
+	ctx.RequestAutoStore = cloneBoolPtr(request.AutoStore)
 	ctx.ProtocolEnvelope = envelope
 	ctx.ProtocolDiagnostics = append(llmprotocol.Diagnostics(nil), diagnostics...)
 	ctx.ExpectStreamingResponse = ctx.ExpectStreamingResponse || request.Stream
@@ -182,6 +213,13 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 		format = llmprotocol.OpenAIChatV1
 	}
 	dispatchRequest := *ctx.SemanticRequest
+	if policyErr := r.applyPromptCachePolicy(&dispatchRequest, ctx, format); policyErr != nil {
+		return nil, policyErr
+	}
+	dispatchRequest, projectionDiagnostics, err := r.projectRequestForBackendWithDiagnostics(dispatchRequest, ctx.RequestModel, format)
+	if err != nil {
+		return nil, err
+	}
 	if format == llmprotocol.OpenAIChatV1 && dispatchRequest.Stream &&
 		!streamUsageAlreadyRequested(dispatchRequest.StreamOptions) {
 		// The Router always asks Chat backends for the final usage chunk so
@@ -198,8 +236,9 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
+	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, projectionDiagnostics...)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, encoded.Diagnostics...)
-	return encoded.Body, nil
+	return encodeLooperEvidence(encoded.Body, format, ctx)
 }
 
 func streamUsageAlreadyRequested(options llmprotocol.StreamOptions) bool {
@@ -220,24 +259,20 @@ func (r *OpenAIRouter) decodeClientResponse(
 	if ctx == nil {
 		return nil, fmt.Errorf("request context is unavailable")
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngineForBackend(ctx)
 	if err != nil {
 		return nil, err
 	}
 	source, target := responseWireFormats(ctx)
-	var mutation protocolcodec.ResponseMutation
-	if responseID := responseObjectPublicID(ctx); responseID != "" {
-		mutation = func(response *llmprotocol.Response) error {
-			response.ID = responseID
-			return nil
-		}
-	}
+	mutation := clientResponseMutation(ctx, source)
 	decoded, err := engine.TranslateResponse(source, target, body, mutation)
 	if err != nil {
 		return nil, err
 	}
 	ctx.SemanticResponse = &decoded.Response
 	ctx.ResponseEnvelope = decoded.Envelope
+	ctx.ResponseBodyNeedsRewrite = decoded.Envelope.ResponseReencodeRequired
+	ctx.ResponseVendorExtensions = protocolcodec.DiagnosticsDroppedVendorExtensions(decoded.Diagnostics)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, decoded.Diagnostics...)
 	return ctx.SemanticResponse, nil
 }
@@ -300,13 +335,31 @@ func (r *OpenAIRouter) encodeClientResponse(
 }
 
 func requestWirePath(format llmprotocol.WireFormat) string {
+	// The Images wire predates the protocol catalog and is not registered
+	// there; keep its canonical path stable instead of falling back to the
+	// chat-completions default.
+	if format == llmprotocol.OpenAIImagesV1 {
+		return "/v1/images/generations"
+	}
+	registry, err := modelcatalog.BuiltIn()
+	if err != nil {
+		return "/v1/chat/completions"
+	}
+	path, err := registry.ResolveProtocolOperationPath(requestWireProtocol(format), "create")
+	if err == nil {
+		return path
+	}
+	return "/v1/chat/completions"
+}
+
+func requestWireProtocol(format llmprotocol.WireFormat) string {
 	switch format {
 	case llmprotocol.OpenAIResponsesV1:
-		return "/v1/responses"
+		return "openai/responses@1"
 	case llmprotocol.AnthropicMessagesV1:
-		return "/v1/messages"
+		return "anthropic/messages@1"
 	default:
-		return "/v1/chat/completions"
+		return "openai/chat-completions@1"
 	}
 }
 

@@ -366,35 +366,6 @@ func validateProjectionInputValueSource(scoreName string, input ProjectionScoreI
 	}
 }
 
-func isProjectionInputTypeSupported(signalType string) bool {
-	switch signalType {
-	case SignalTypeKeyword,
-		SignalTypeEmbedding,
-		SignalTypeDomain,
-		SignalTypeFactCheck,
-		SignalTypeUserFeedback,
-		SignalTypeReask,
-		SignalTypePreference,
-		SignalTypeLanguage,
-		SignalTypeContext,
-		SignalTypeStructure,
-		SignalTypeComplexity,
-		SignalTypeModality,
-		SignalTypeAuthz,
-		SignalTypeJailbreak,
-		SignalTypePII,
-		SignalTypeKB,
-		SignalTypeConversation,
-		SignalTypeEvent,
-		SignalTypeInputModality,
-		ProjectionInputKBMetric,
-		SignalTypeProjection:
-		return true
-	default:
-		return false
-	}
-}
-
 func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{} {
 	declared := map[string]map[string]struct{}{
 		SignalTypeKeyword:       collectKeywordRuleNames(cfg.KeywordRules),
@@ -411,6 +382,7 @@ func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{}
 		SignalTypeModality:      collectModalityRuleNames(cfg.ModalityRules),
 		SignalTypeAuthz:         collectRoleBindingNames(cfg.GetRoleBindings()),
 		SignalTypeJailbreak:     collectJailbreakRuleNames(cfg.JailbreakRules),
+		SignalTypeSafety:        collectSafetyRuleNames(cfg.SafetyRules),
 		SignalTypePII:           collectPIIRuleNames(cfg.PIIRules),
 		SignalTypeKB:            collectKBRuleNames(cfg.KBRules),
 		SignalTypeConversation:  collectConversationRuleNames(cfg.ConversationRules),
