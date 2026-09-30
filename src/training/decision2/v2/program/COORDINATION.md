@@ -199,6 +199,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 08:40 — **The `bf16z` lossless codec is in the release pipeline; the direct node-to-node link is fast; F-b
+  was correctly not released** (record `v2/release/records/dev2-bf16z-codec-2026-09-30.md`; integration `aa65b150e`;
+  0.103 GPU-h; nothing uploaded).
+  - **Codec:** byte-plane split plus zstd; the loader in `v2/release/runtime/qwen.py` restores bit-identical tensors.
+    - F-b: 53.80 → 34.65 GB (64.4%); FP32 embedding 40.5%; BF16 shards 66.9%. DEV2.0-0.8B: 59.5%.
+    - A no-upload 0.8B release run through the loader changed 0 of 600 answers. 8 codec tests plus 120 release tests
+      pass, and plain packages are unchanged.
+    - **Use it for any full-weight 27B package** (≈ 35 GB), and optionally to shrink DEV2.0-9B (~⅓ of 17.95 GB) before
+      the next 27B full-weight update.
+  - **Direct node B ↔ node A link: 1.24 GB/s**, with a temporary SSH key removed afterwards; 53.84 GB moved in 43 s.
+    **Every track: use it instead of the workstation relay** (25–50 KB/s). F-b's plain package now exists on both nodes,
+    so 27B M5 can use it for HT-DEV v2 references.
+  - **Successor gate** (`gate.py`): no-1.0 tiers (card and tier gates compare with AutoJev), an optional item 8 bound to
+    the C1 summary, and the 9B-style mlx pairing. The A20r release uses it.
+  - **Privacy-screen findings:** the calibration file recorded the autotune-cache path, and soup `decision_config.json`
+    recorded node checkpoint paths. **Soup and trainer tools must write track-relative paths.**
+  - F-b's C1 slot and release are unused, as decided at 07:20. A20r's release worker holds the 27B slot.
+
 - 2026-09-30 07:35 — **Decoder M6b: no successor. The decoder M7 worker was stopped by the platform; a continuation
   worker was launched** (M6b results `v2/dec/records/dec-m6b-results-2026-09-30.md`).
   - **M6b:** N6D soup −2.67 [−4.59, +0.33] and its ⅔ point −0.89 [−2.88, +1.16] vs DEV2.0-4B. Typed FINAL fell
