@@ -14,7 +14,7 @@ classification serves them. Results, limitations and next steps are in
 | Entry point | Name | What it adds |
 | --- | --- | --- |
 | `vllm.general_plugins` | `vllm_sr_decision2` | Registers `Decision2Qwen3_5ForScoring`, a pooling model: vLLM's text-only Qwen3.5 backbone plus the Decision 2.0 candidate head in FP32, with no LM head. |
-| `vllm.endpoint_plugins` | `vllm_sr_system_one` | `POST /v1/system_one`, the Decision 2.0 System One contract of the package runtime. |
+| `vllm.endpoint_plugins` | `vllm_sr_decisions` | `POST /v1/decisions` (alias `/v1/system_one`): the Decision 2.0 System One contract of the package runtime. |
 
 - **`Decision2Qwen3_5ForScoring`** (`decision2/model.py`) loads a package directory directly:
   `backbone/*.safetensors` into vLLM's `Qwen3_5Model` and `decision_head.safetensors` into
@@ -26,7 +26,8 @@ classification serves them. Results, limitations and next steps are in
   carries its option-endpoint and query positions in `PoolingParams.extra_kwargs["decision2"]`.
   The pooler copies those hidden rows out of every prefill step, so chunked prefill works, and
   returns one FP32 logit per candidate when the prompt is complete.
-- **`/v1/system_one`** (`decision2/endpoint.py`, `decision2/service.py`) opens the served package
+- **`/v1/decisions`** (`decision2/endpoint.py`, `decision2/service.py`; `/v1/system_one` is an
+  alias) opens the served package
   like `Decision2.from_pretrained` does: every file is checked against `MODEL_MANIFEST.json` and the
   model identity against the scored identity. Prompt rendering, tokenization, calibration, Score
   offsets and answer formatting then use the **package's own vendored runtime**
@@ -45,7 +46,7 @@ tests and the parity panels to pass on it first.
 
 ```bash
 pip install --no-deps src/vllm-sr-plugins          # into the environment that has vLLM
-export VLLM_PLUGINS=vllm_sr_decision2,vllm_sr_system_one
+export VLLM_PLUGINS=vllm_sr_decision2,vllm_sr_decisions
 PKG=/path/to/DEV2.0-0.8B                          # a downloaded package directory
 vllm serve "$PKG" --runner pooling \
   --hf-config-path "$PKG/backbone" --tokenizer "$PKG" \
@@ -60,7 +61,7 @@ and the list also filters general plugins. `--max-model-len` is the package's
 Keeping `--max-num-batched-tokens` at least that large lets most prompts prefill in one step.
 
 ```bash
-curl -s localhost:8000/v1/system_one -H 'Content-Type: application/json' -d '{
+curl -s localhost:8000/v1/decisions -H 'Content-Type: application/json' -d '{
   "state": {"ticket": "The invoice total is wrong and I was charged twice."},
   "questions": {
     "route": {"type": "choice", "instructions": "Which team should handle this?",

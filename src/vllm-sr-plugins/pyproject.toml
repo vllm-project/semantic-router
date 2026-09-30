@@ -17,7 +17,7 @@ dependencies = []
 vllm_sr_decision2 = "vllm_sr_plugins:register"
 
 [project.entry-points."vllm.endpoint_plugins"]
-vllm_sr_system_one = "vllm_sr_plugins.decision2.endpoint:SystemOneEndpoint"
+vllm_sr_decisions = "vllm_sr_plugins.decision2.endpoint:DecisionsEndpoint"
 
 [tool.setuptools.packages.find]
 include = ["vllm_sr_plugins*"]

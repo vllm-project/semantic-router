@@ -1,15 +1,16 @@
-"""``POST /v1/system_one`` on the vLLM OpenAI-compatible server.
+"""``POST /v1/decisions`` on the vLLM OpenAI-compatible server.
 
 A ``vllm.endpoint_plugins`` entry point; vLLM loads it only when its name is in
 ``VLLM_PLUGINS``. At startup it opens the served package (``--model``, or
 ``VLLM_SR_DECISION2_PACKAGE``) with the package's own runtime and checks that
-the engine runs ``Decision2Qwen3_5ForScoring``. Each request body is
-``{"state": ..., "questions": {...}}`` and the response is the runtime's
-``{"model", "answers", "usage"}``; malformed requests get HTTP 400.
+the engine runs ``Decision2Qwen3_5ForScoring``. Each request body is a System
+One call, ``{"state": ..., "questions": {...}}``, and the response is the
+runtime's ``{"model", "answers", "usage"}``; malformed requests get HTTP 400.
+``/v1/system_one`` is an alias with the same contract.
 """
 
-from __future__ import annotations
-
+# No `from __future__ import annotations`: FastAPI must see the real Request
+# class on the route handler, which is imported lazily below.
 import asyncio
 import os
 import uuid
@@ -25,7 +26,8 @@ logger = get_logger("decision2.endpoint")
 
 ARCHITECTURE_NAME = "Decision2Qwen3_5ForScoring"
 PACKAGE_ENV = "VLLM_SR_DECISION2_PACKAGE"
-STATE_KEY = "vllm_sr_system_one"
+STATE_KEY = "vllm_sr_decisions"
+ROUTES = ("/v1/decisions", "/v1/system_one")
 REQUEST_KEYS = {"state", "questions", "model"}
 
 
@@ -53,22 +55,20 @@ def engine_encoder(engine_client: Any):
     return encode
 
 
-class SystemOneEndpoint:
-    name = "vllm_sr_system_one"
+class DecisionsEndpoint:
+    name = "vllm_sr_decisions"
     required_tasks = (POOLING_TASK,)
 
     def attach_router(self, app: Any) -> None:
         from fastapi import APIRouter, Request
         from fastapi.responses import JSONResponse
 
-        router = APIRouter()
-
-        @router.post("/v1/system_one")
-        async def system_one(raw: Request):
+        async def decisions(raw: Request):
             service: SystemOneService | None = getattr(raw.app.state, STATE_KEY, None)
             if service is None:
                 return JSONResponse(
-                    {"error": "System One is not initialized"}, status_code=503
+                    {"error": "the decisions endpoint is not initialized"},
+                    status_code=503,
                 )
             try:
                 body = await raw.json()
@@ -93,12 +93,15 @@ class SystemOneEndpoint:
                 result = await service.system_one(
                     state=body["state"],
                     questions=body["questions"],
-                    request_id=f"sysone-{uuid.uuid4().hex}",
+                    request_id=f"decisions-{uuid.uuid4().hex}",
                 )
             except ValueError as exc:
                 return JSONResponse({"error": str(exc)}, status_code=400)
             return JSONResponse(result)
 
+        router = APIRouter()
+        for path in ROUTES:
+            router.add_api_route(path, decisions, methods=["POST"])
         app.include_router(router)
 
     async def init_state(self, engine_client: Any, state: Any, args: Namespace) -> None:
@@ -108,7 +111,7 @@ class SystemOneEndpoint:
         architecture = getattr(engine_client.model_config, "architecture", None)
         if architecture != ARCHITECTURE_NAME:
             raise RuntimeError(
-                f"/v1/system_one needs a {ARCHITECTURE_NAME} engine, not {architecture}"
+                f"{ROUTES[0]} needs a {ARCHITECTURE_NAME} engine, not {architecture}"
             )
         path = os.environ.get(PACKAGE_ENV) or getattr(args, "model", None)
         if not path:
@@ -117,9 +120,14 @@ class SystemOneEndpoint:
         served = os.path.realpath(engine_client.model_config.model)
         if served != str(package.root):
             raise RuntimeError(
-                f"engine serves {served}, System One opened {package.root}"
+                f"engine serves {served}, the endpoint opened {package.root}"
             )
         setattr(
             state, STATE_KEY, SystemOneService(package, engine_encoder(engine_client))
         )
-        logger.info("System One ready (%s): %s", POSITIONS_KEY, describe(package))
+        logger.info(
+            "Decisions endpoint ready on %s (%s): %s",
+            ", ".join(ROUTES),
+            POSITIONS_KEY,
+            describe(package),
+        )
