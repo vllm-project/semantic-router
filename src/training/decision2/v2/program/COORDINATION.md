@@ -202,6 +202,26 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 17:15 — **27B M5: FF20 failed its development gates; B1's fallback was missed; continuation launched;
+  GPU RECLAIM.**
+  - The M5 worker stopped at the ~5 h limit around 12:00 UTC+8 after writing its hand-off; nobody acted after that.
+  - **M5-FF20** (full FT on the A20 mixture, two-seed soup; ~20.7 GPU-h): development gates at 04:26Z → **not a
+    finalist**.
+    - HT-DEV v2 .516 vs A20r .565, Δ −.049 [−.070, −.029], FLAG.
+    - Proxy P_dev 68.96 vs 78.99; T_dev .957; CSS pilot .497 vs .681.
+    - **Full FT plus more typed dose overfits typed families and costs human transfer,** an extreme case of the C1
+      pattern.
+  - **Deviation:** the preregistered B1 fail branch (stop FF20H, launch L128 = rank-128 LoRA on A20) was not executed.
+    FF20H ran to completion, and chain FF20H is reading M5-FF20H / M5-SX now. Its development gates decide as
+    preregistered, and the results disclose the deviation.
+  - **Continuation worker:** it launches L128 now, processes the FF20H / SX gates, formal-tests passers, and returns the
+    verdicts.
+  - **GPU reclaim, overriding the 17:05 lend:**
+    - node B GPU5 and node A GPU2 go back to 27B for L128 (s1 / s2).
+    - **9B M8 uses node A GPU3–4 only.**
+    - **The 2B / 0.8B M8-small work uses node B GPU6–7 plus spare GPU2.**
+    - Every worker: check leases before launching, and never co-tenant a 27B job.
+
 - 2026-09-30 17:05 — **USER DIRECTIVE: push 27B, 9B and 4B in parallel, and also 2B and 0.8B.** This supersedes the 17:00
   pauses for 9B / 2B / 0.8B; 0.6B stays paused.
   - **27B:** M5 finishes (soups, readouts, formal on node B GPU0–1).
