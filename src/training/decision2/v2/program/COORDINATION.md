@@ -203,6 +203,30 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-09-30 23:50 — **USER: the proposal goes to a new secret gist (writer running); START MoE base exploration NOW,
+  in parallel, on idle GPUs.**
+  - **27B-tier MoE milestone** (fresh worker; worktree `vllm-sr-dev2-27b-moe`, branch
+    `xunzhuo/decision-2-training-27b-moe`, gist `06c-decision-2-27b-moe.md`; **node A GPU3–5 + node B GPU6–7**;
+    60 GPU-h):
+    - A licence / feasibility gate first: Gemma-4-26B-A4B terms vs Apache-2.0; Qwen3.5-35B-A3B; Transformers / PEFT MoE
+      support on ROCm; memory; the `decision_model.py` backbone support.
+    - Then (A) a matched-budget base screen and (B) a main run on the winner, with a soup and a control.
+    - Formal runs for ≤ 3 finalists; the "beats AutoJev" check plus items 1–8 vs DEV2.0-27B.
+    - Official general-purpose weights ONLY. Third-party MoE deciders (Rune, Decider 35B-A3B) may be opponent references,
+      never teachers or weight sources.
+    - Naming follows the base. Replace the 27B tier vs add a new family member: the coordinator decides.
+  - **Adapter-family clarification given to the user:**
+    - vLLM supports multi-slot packing (STEP pooling / endpoint plugin) and encoders.
+    - Encoders are placed in-process for latency and hardware reach, not for lack of vLLM support.
+    - DeBERTa-v3 / GLiNER2 are unsupported by vLLM, SGLang and llama.cpp, so they go through ORT.
+    - Diffusion deciders need non-stock fixes, so they are deferred.
+  - **GPU table update:**
+    - node A GPU3–5 and node B GPU6–7: MoE exploration.
+    - node A GPU2 and node B GPU0 / 1 / 5: 27B M5 / L128.
+    - node A GPU6–7: 9B M7.
+    - node A GPU0–1 and node B GPU2: serving prototype / eval.
+    - node B GPU3–4: HR2 (short).
+
 - 2026-09-30 ~23:40 — **Decision Index architecture survey (INTERNAL; no Index scores anywhere public); proposal
   drafting started with the recommended defaults** (the user left the outline question unanswered for ~3.3 h).
   - **Survey findings** (counts only):
