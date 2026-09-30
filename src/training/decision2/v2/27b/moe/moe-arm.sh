@@ -3,8 +3,8 @@
 # Usage: moe-arm.sh NODE ARM GPU BASE SEED MIRROR [STAGES]
 #   NODE a|b; GPU node A 3-5 / node B 6-7; BASE gemma-4-26B-A4B-it | gemma-4-26B-A4B | Qwen3.5-35B-A3B |
 #   Qwen3.5-35B-A3B-Base (under /data/dev2/models/moe); SEED 20260926 (s1) | 20260928 (s2);
-#   MIRROR the mirror directory name under /data/dev2/src; STAGES from probe,admit,onestep,reload,full
-#   (default admit,onestep,reload,full).
+#   MIRROR the mirror directory name under /data/dev2/src; STAGES from probe,check,admit,onestep,reload,full
+#   (default admit,onestep,reload,full). One driver per arm-seed (flock on RUN/.driver.lock).
 # Env: EXPERTS (grouped_mm | eager; required for training stages), FULL_CAP (GPU-h per full attempt,
 #   default 13.0), ARM_CAP (cumulative per arm-seed, default 14.0).
 # The contract is M4-A20r's: a20 (SHA-256 checked), rank 32 / alpha 64 / dropout 0.05 on every non-expert
@@ -44,6 +44,8 @@ case ",$STAGES," in *,onestep,* | *,full,* | *,reload,*)
 esac
 export DEV2_NODE=$NODE TMPDIR=/data/dev2/tmp
 mkdir -p "$RUN/receipts"
+exec 9> "$RUN/.driver.lock"
+flock -n 9 || { echo "another driver holds $RUN" >&2; exit 75; }
 cd "$CODE"
 has() { case ",$STAGES," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
 
@@ -95,6 +97,11 @@ if has probe; then
   launch probe 0.5 "experts-kernel probe (eager vs grouped_mm)" "$RUN/probe" -- python3 -m v2.27b.moe.experts_probe \
     --model-path /source --revision "$REV" --source-stage "$KIND" --select /data/select.jsonl \
     --train /data/train.jsonl --max-length "$LIMIT" --output /out/experts-probe.json
+fi
+if has check; then
+  launch check 0.3 "experts-kernel check vs FP32 reference" "$RUN/check" -- python3 -m v2.27b.moe.experts_check \
+    --model-path /source --revision "$REV" --source-stage "$KIND" --select /data/select.jsonl \
+    --max-length "$LIMIT" --output /out/experts-check.json
 fi
 if has admit; then
   mkdir -p "$RUN/admit"
