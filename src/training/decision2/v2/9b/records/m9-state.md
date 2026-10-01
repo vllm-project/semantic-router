@@ -1,6 +1,13 @@
 # 9B M9 state (resume file)
 
 **Continuation worker cba71646 (from 14:37Z; rules → lock / GO → formal → items → C1 → release → private Index).**
+**16:06Z official stage-3 rules: finalist K-a13IB** (`select/9b-finalists-s3.json` `4b02f31f…`, readout
+`lines/readout/m9-s3.json` `d312f8e7…`). K-a13IB passes every gate (T .9344 vs .9250; HT-DEV v2 −.006 TIE; Y1 −.015
+[−.028, −.003]; Y3 .134 vs .152). K-a13IBX fails the Noul type floor (319 < 326), the `rule_precedence` floor (319 <
+334) and Y1 (+.032 [+.019, +.045]). COORDINATION re-read (newest 2026-10-02 00:10 UTC+8; no 9B formal-path change;
+the custodian C1 content recheck for IB1-r3 + IB2 runs centrally, 3c7679b0). `lock.sh` 16:10Z →
+`select/formal-lock-s3.json` `bc4b428c…`, `soup/K-a13IB/SHA256SUMS` `49c6d942…` (16 files); lock record
+`records/lux9b-m9-formal-lock-s3-2026-10-01.md`; then `status/formal-s3.GO` (formal K-a13IB on GPU6, ≈ 40 min).
 Poll 15:37Z: **K-a13IBX seeds DONE** (s2 15:26Z, s1 15:28Z, s3 15:32Z; BEST = checkpoints 1,999 / 1,489 / 1,745)
 and the node-C soup `soup/KIBX/build/KIBX-soup` built 15:34Z (`model_sha256` `cc25e396…`); node C GPU1–4 / 6–7 idle
 (9B leases, status idle). Node A `post-a-KIBX` pulls it, builds K-a13IBX and reads the panels on GPU7, then runs the
