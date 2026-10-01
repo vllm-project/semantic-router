@@ -14,6 +14,11 @@ from .family_registry import family_registration
 from .runtime_profile import RuntimeProfileError, validate_relative_artifact_path
 
 _RESERVED_PATHS = frozenset({"config.json", ".vllm-sr-artifact.json"})
+# Transformers `trust_remote_code` metadata. This runtime never fetches or
+# imports repository code, so these keys are inert and never select files.
+_HF_REMOTE_CODE_KEYS = frozenset(
+    {"model_type", "architectures", "auto_map", "custom_pipelines"}
+)
 
 
 class DecisionConfigError(ValueError):
@@ -68,8 +73,9 @@ def parse_decision_config(
         "tokenizer",
         "decision_weights",
     }
-    if set(root) not in (required, required | {"calibration"}):
+    if set(root) - _HF_REMOTE_CODE_KEYS not in (required, required | {"calibration"}):
         raise DecisionConfigError("Decision config fields are unsupported")
+    _validate_remote_code_metadata(root)
     if (
         root["decision_format"] != "vllm-sr-decision"
         or type(root["format_version"]) is not int
@@ -270,6 +276,29 @@ def validate_decision_weight_index(
         raise DecisionConfigError("Decision weight index differs from config shards")
     if "metadata" in root:
         _mapping(root["metadata"], "weight index metadata")
+
+
+def _validate_remote_code_metadata(root: Mapping[str, Any]) -> None:
+    invalid = DecisionConfigError("Decision config remote-code metadata is invalid")
+    if "model_type" in root and not isinstance(root["model_type"], str):
+        raise invalid
+    architectures = root.get("architectures", [])
+    if not isinstance(architectures, list) or any(
+        not isinstance(item, str) for item in architectures
+    ):
+        raise invalid
+    auto_map = root.get("auto_map", {})
+    if not isinstance(auto_map, dict) or any(
+        not isinstance(key, str) or not isinstance(value, (str, list))
+        for key, value in auto_map.items()
+    ):
+        raise invalid
+    pipelines = root.get("custom_pipelines", {})
+    if not isinstance(pipelines, dict) or any(
+        not isinstance(key, str) or not isinstance(value, dict)
+        for key, value in pipelines.items()
+    ):
+        raise invalid
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:

@@ -205,6 +205,59 @@ def test_root_config_rejects_wrong_identity_code_and_unsafe_paths() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "family,model_name",
+    [("qwen3.5", "Decision-1.0-Sol-2B"), ("vela", "Decision-1.0-Kai-0.6B")],
+)
+def test_root_config_ignores_transformers_remote_code_metadata(
+    family: str, model_name: str
+) -> None:
+    descriptor = _descriptor(family, model_name)
+    plain = parse_decision_config(
+        json.dumps(descriptor).encode(), model_name=model_name, family=family
+    )
+    descriptor.update(
+        {
+            "model_type": "decision1",
+            "architectures": ["Decision1Model"],
+            "auto_map": {
+                "AutoConfig": "configuration_decision1.Decision1Config",
+                "AutoModel": "modeling_decision1.Decision1Model",
+            },
+            "custom_pipelines": {
+                "decision": {
+                    "impl": "pipeline_decision1.Decision1Pipeline",
+                    "pt": ["AutoModel"],
+                    "type": "text",
+                }
+            },
+        }
+    )
+    config = parse_decision_config(
+        json.dumps(descriptor).encode(), model_name=model_name, family=family
+    )
+    assert config == plain
+    assert not any(path.endswith(".py") for path in config.files)
+
+    for field, value in (
+        ("auto_map", ["modeling_decision1.Decision1Model"]),
+        ("architectures", "Decision1Model"),
+        ("custom_pipelines", {"decision": "pipeline_decision1.Decision1Pipeline"}),
+        ("model_type", 1),
+    ):
+        broken = {**descriptor, field: value}
+        with pytest.raises(DecisionConfigError, match="remote-code metadata"):
+            parse_decision_config(
+                json.dumps(broken).encode(), model_name=model_name, family=family
+            )
+    with pytest.raises(DecisionConfigError, match="fields"):
+        parse_decision_config(
+            json.dumps({**descriptor, "execution_code": "runtime.py"}).encode(),
+            model_name=model_name,
+            family=family,
+        )
+
+
 def test_root_config_accepts_dynamic_complete_shards_and_checks_index() -> None:
     descriptor = _descriptor("qwen3.5", "Decision-1.0-Nox-4B")
     weights = [
