@@ -5,7 +5,12 @@
 #   launch.sh parity --src DIR --model NAME --gpu N --run DIR --rows FILE
 #   launch.sh run    --src DIR --model NAME --gpus "N ..." --run DIR --rows-dir DIR --cache DIR [--only "K ..."]
 #   launch.sh resume --src DIR --model NAME --gpus "N ..." --run DIR --rows-dir DIR --only "K ..."
+#   launch.sh ref    --src DIR --model NAME --gpu N --run DIR --rows FILE --cache DIR
+#   launch.sh extra  --src DIR --model NAME --gpu N --run DIR --rows FILE --cache DIR --tag K
 #
+# ref: the package's own entry point (v2.eval.ix1.native_ref) over FILE into <run>/ref.jsonl, e.g.
+#   the calibration partition. extra: the kit runner with the adapter over FILE into <run>/extra-K,
+#   for requests rerun alone. Both run in the foreground with a copy of the frozen cache.
 # --only starts just the listed shard indices (shard k still runs on the k-th listed GPU).
 # resume restarts ended shards in place: the kit runner skips their final rows and retries errors;
 # the previous start/end/exit markers are kept with a numeric suffix (GPU-hours sum every interval).
@@ -49,10 +54,11 @@ declare -A REVISION=(
 )
 
 mode="${1:-}"; shift || true
-src="" model="" gpu="" gpus="" run="" rows="" rows_dir="" cache="" only=""
+src="" model="" gpu="" gpus="" run="" rows="" rows_dir="" cache="" only="" tag=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --only) only="$2"; shift 2 ;;
+    --tag) tag="$2"; shift 2 ;;
     --src) src="$2"; shift 2 ;;
     --model) model="$2"; shift 2 ;;
     --gpu) gpu="$2"; shift 2 ;;
@@ -65,7 +71,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 usage() { sed -n '2,/^set -euo/p' "$0" | sed '$d' >&2; exit 2; }
-[[ "$mode" == parity || "$mode" == run || "$mode" == resume ]] || usage
+[[ "$mode" =~ ^(parity|run|resume|ref|extra)$ ]] || usage
 [[ -f "$src/.dev2-mirror.json" && -n "${REVISION[$model]:-}" && "$run" == /data/dev2/private/* ]] || usage
 [[ "$(docker image inspect --format '{{.Id}}' "$IMAGE")" == "$IMAGE_ID_PREFIX"* ]] \
   || { echo "image $IMAGE is not the frozen build" >&2; exit 1; }
@@ -175,7 +181,7 @@ kit_run() {  # rows out -> shell command
 
 umask 077
 mkdir -p "$run"
-record="$run/launcher-$mode${only:+-only-${only// /_}}.json"
+record="$run/launcher-$mode${only:+-only-${only// /_}}${tag:+-$tag}.json"
 python3 - "$record" "$mode" "$model" "$revision" "$manifest_sha" "$IMAGE" "$KIT_REVISION" "$src" "${gpu:-$gpus}" <<'EOF'
 import json, sys
 path, mode, model, revision, manifest, image, kit, src, gpus = sys.argv[1:]
@@ -204,6 +210,28 @@ if [[ "$mode" == parity ]]; then
   no_fallback "$kit/runner.log"
   PYTHONPATH="$S" python3 -m v2.eval.ix1.parity --kit "$kit/results.jsonl" --ref "$ref/ref.jsonl" --out "$run/parity.json"
   exit 0
+fi
+
+if [[ "$mode" == ref || "$mode" == extra ]]; then
+  [[ "$gpu" =~ ^[0-7]$ && -f "$rows" && -d "$cache" && -f "$cache.sha256" ]] || usage
+  [[ "$(digest_dir "$cache")" == "$(cat "$cache.sha256")" ]] || { echo "frozen cache $cache changed" >&2; exit 1; }
+  take_lease "$gpu" "IX1 $mode $model" 1
+  if [[ "$mode" == ref ]]; then
+    work="$run"
+    [[ ! -e "$work/ref.jsonl" ]] || { echo "$work/ref.jsonl exists" >&2; exit 1; }
+    script="python3 -m v2.eval.ix1.native_ref --package $pkg --rows $rows --out $work/ref.jsonl ${base_dir:+--base-path $base_dir} > $work/native_ref.log 2>&1"
+  else
+    [[ "$tag" =~ ^[A-Za-z0-9_-]+$ ]] || usage
+    work="$run/extra-$tag"
+    [[ ! -e "$work/results.jsonl" ]] || { echo "$work already has results" >&2; exit 1; }
+    script="$(kit_run "$rows" "$work") > $work/runner.log 2>&1"
+  fi
+  mkdir -p "$work/triton"
+  cp -a "$cache/." "$work/triton/"
+  container "ix1-$mode-$(tr 'A-Z.' 'a-z_' <<< "$model")-g$gpu" "$gpu" "$work" 0 \
+    "date +%s > $work/start_epoch; $script; echo \$? > $work/exit_code; date +%s > $work/end_epoch"
+  no_fallback "$work"/*.log
+  exit "$(cat "$work/exit_code")"
 fi
 
 [[ -n "$gpus" && -d "$rows_dir" && -f "$rows_dir/panel.json" ]] || usage
