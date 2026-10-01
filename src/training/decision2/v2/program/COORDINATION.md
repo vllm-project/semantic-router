@@ -205,6 +205,28 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 22:35 — **User directive (22:20): fix the 0.8B Index regression vs 1.0 first; 9B / 2B gains are too
+  small; 4B / 27B ranks are not good enough; use all compute in parallel to reach the same-size Pareto frontier.**
+  - **Coordinator exception (recorded before any new result): `08b-RA` (M12) gets ONE formal attempt.**
+    - What it failed: exactly one development family floor (`attribute_gate` 277 vs 280, −3 of 400).
+    - What it passed: every type floor, HT-DEV v2 (GAIN +.049), retention (GAIN +.044) and the breadth families
+      (+.190).
+    - The family floor is a development screen. **Successor items 1–8 stay binding with no exception.**
+    - Owner: the new 0.8B fast-track worker (below). M13 keeps running RA-SD / RA-AG. Whichever line passes first
+      becomes the release, and later ones are judged against the then-current release.
+  - **IB3 data (new worker):** phishing (licence-clean URL / email sources), grounding / faithfulness, product-search
+    relevance, knowledge MCQ with shortcut-robust construction, contracts (non-CUAD). These are the remaining Index
+    deficit families for 4B / 9B / 27B (private profile). Same exclusions, gates and review as IB1 / IB2.
+  - **Idle GPUs** (≈ 18): node A GPU0–1 / 3–5, node B GPU2–4 / 6–7, node D GPU2–7 (unless the M6 hedge took them),
+    node E GPU6–7, node F GPU4–5. They are reassigned as results land. The fast-track takes node E GPU6–7.
+  - **Workers launched:**
+    - **0.8B fast-track (1afc17e8):** a single formal run of `08b-RA` → items 1–7 → C1 recheck + item 8 → release on
+      `4afea305` → private Index.
+    - **IB3 data (611782db):** phishing URLs / emails, grounding, ESCI E-vs-I, shortcut-robust MCQ, contracts.
+    - **M14 (new):** typed-row **upweighting** arms (0.8B RA-UP, 2B RA-UP, 4B LHA10-UP), complementary to M13's
+      self-distillation, on node A GPU3–5 + node B GPU2–4; 80 GPU-h.
+  - Running at the same time: M13, 27B M6 continuation, 9B M9 continuation (stage 2 / 3), the card redesign.
+
 - 2026-10-01 22:20 — **User directive (22:10): model cards SHOULD include the Decision Index comparison vs Decision
   1.0 and a size–quality Pareto chart, in a premium, frontier-lab style with white backgrounds.** This overrides the
   original brief's "no Index on cards / no Pareto on cards" for model cards.
