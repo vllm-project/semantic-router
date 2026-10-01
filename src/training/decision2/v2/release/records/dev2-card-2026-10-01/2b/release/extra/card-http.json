@@ -1,0 +1,105 @@
+{
+  "anonymous_status": {
+    "model_api": 401,
+    "model_page": 401,
+    "readme": 401
+  },
+  "manifest_sha256": "c166620fd4396d802065989a8472356af6db5e9d877c9e77af490d865374da32",
+  "model_api": {
+    "base_model": "llm-semantic-router/Decision-1.0-Sol-2B",
+    "base_model_relation": "finetune",
+    "files": 35,
+    "license": "apache-2.0",
+    "private": true,
+    "sha": "9f6ca45d76776f3d461ae8afea4531a18a1ae624",
+    "status": 200
+  },
+  "passed": true,
+  "readme_sha256": "f63aa70b5da943d14b407fc48890b858a0a26b47bb6e75156ebe70c17674dc8a",
+  "rendered_page": {
+    "status": 401
+  },
+  "repo": "llm-semantic-router/DEV2.0-2B",
+  "revision": "9f6ca45d76776f3d461ae8afea4531a18a1ae624",
+  "schema": "dev2-hub-card-http/1",
+  "targets": [
+    {
+      "bytes": 2944,
+      "kind": "file",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "ATTRIBUTIONS.md"
+    },
+    {
+      "bytes": 11544,
+      "kind": "file",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "LICENSE"
+    },
+    {
+      "bytes": 11544,
+      "kind": "file",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "LICENSES/Qwen3.5-2B-LICENSE.txt"
+    },
+    {
+      "bytes": 231,
+      "kind": "file",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "NOTICE"
+    },
+    {
+      "bytes": 3113,
+      "kind": "image",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "assets/jevarena.svg"
+    },
+    {
+      "bytes": 2756,
+      "kind": "image",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "assets/jevbench-public-231.svg"
+    },
+    {
+      "bytes": 5715,
+      "kind": "file",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "evaluation/EVALUATION.md"
+    },
+    {
+      "kind": "absolute",
+      "passed": true,
+      "status": 200,
+      "target": "https://huggingface.co/Qwen/Qwen3.5-2B",
+      "via": "page"
+    },
+    {
+      "kind": "absolute",
+      "passed": true,
+      "status": 200,
+      "target": "https://huggingface.co/collections/llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00",
+      "via": "api"
+    },
+    {
+      "kind": "absolute",
+      "passed": true,
+      "status": 200,
+      "target": "https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B",
+      "via": "page"
+    }
+  ],
+  "utc": "2026-10-01T15:17:02.402917+00:00"
+}

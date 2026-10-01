@@ -1,0 +1,113 @@
+{
+  "anonymous_status": {
+    "model_api": 401,
+    "model_page": 401,
+    "readme": 401
+  },
+  "manifest_sha256": "5d4b04ad76904aad307dabfdfa5a734a5dffbafe39bec753b582858f5752d26e",
+  "model_api": {
+    "base_model": "Qwen/Qwen3.5-4B-Base",
+    "base_model_relation": "finetune",
+    "files": 40,
+    "license": "apache-2.0",
+    "private": true,
+    "sha": "dd60f0c24fe8de2001a307b1094ab2091bb1acc7",
+    "status": 200
+  },
+  "passed": true,
+  "readme_sha256": "96827b412452887fd29c6d15f9b3e9e14f8be4b4ff151fb77bfdb61e92f30866",
+  "rendered_page": {
+    "status": 401
+  },
+  "repo": "llm-semantic-router/DEV2.0-4B",
+  "revision": "dd60f0c24fe8de2001a307b1094ab2091bb1acc7",
+  "schema": "dev2-hub-card-http/1",
+  "targets": [
+    {
+      "bytes": 3887,
+      "kind": "file",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "ATTRIBUTIONS.md"
+    },
+    {
+      "bytes": 11544,
+      "kind": "file",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "LICENSE"
+    },
+    {
+      "bytes": 11343,
+      "kind": "file",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "LICENSES/Qwen3.5-4B-Base-LICENSE.txt"
+    },
+    {
+      "bytes": 11544,
+      "kind": "file",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "LICENSES/Qwen3.5-4B-LICENSE.txt"
+    },
+    {
+      "bytes": 231,
+      "kind": "file",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "NOTICE"
+    },
+    {
+      "bytes": 3000,
+      "kind": "image",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "assets/jevarena.svg"
+    },
+    {
+      "bytes": 2479,
+      "kind": "image",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "assets/jevbench-public-231.svg"
+    },
+    {
+      "bytes": 5372,
+      "kind": "file",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "evaluation/EVALUATION.md"
+    },
+    {
+      "kind": "absolute",
+      "passed": true,
+      "status": 200,
+      "target": "https://huggingface.co/Qwen/Qwen3.5-4B",
+      "via": "page"
+    },
+    {
+      "kind": "absolute",
+      "passed": true,
+      "status": 200,
+      "target": "https://huggingface.co/Qwen/Qwen3.5-4B-Base",
+      "via": "page"
+    },
+    {
+      "kind": "absolute",
+      "passed": true,
+      "status": 200,
+      "target": "https://huggingface.co/collections/llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00",
+      "via": "api"
+    }
+  ],
+  "utc": "2026-10-01T15:04:29.854345+00:00"
+}

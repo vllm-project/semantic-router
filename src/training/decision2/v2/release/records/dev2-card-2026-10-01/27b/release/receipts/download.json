@@ -1,0 +1,14 @@
+{
+  "bytes": 1909099921,
+  "command": "hf download <repo> --revision <sha> --local-dir <fresh dir> (fresh HF_HUB_CACHE)",
+  "files": 33,
+  "hub_added": [
+    ".gitattributes"
+  ],
+  "passed": true,
+  "repo": "llm-semantic-router/DEV2.0-27B",
+  "revision": "e7b4a372ba8bb949f30337c5bbd2d0ad2f321027",
+  "schema": "dev2-hub-download/1",
+  "seconds": 6.384844678002992,
+  "utc": "2026-10-01T15:41:40.748889+00:00"
+}
