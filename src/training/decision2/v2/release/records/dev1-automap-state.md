@@ -8,6 +8,19 @@ GPU: lease-polite sharing on nodes C–F only; never node C GPU0, node E GPU4–
 
 ## Now
 
+- 2026-10-01 14:30 UTC+8 (06:30Z; earlier entries' clock labels ran up to ~30 min ahead) — **All seven 1.0 repos
+  live; DEV2.0-Route PR being verified.**
+  - **Eos:** native Eos (`3c2d6326` code via `inference.run`) and the remote code on node D GPU1 with the same
+    pinned FLA l2norm configs: bit-identical on all 8,378 prompts (0 changes, drift 0.0). Native Eos itself vs the
+    stored set: 46 (pinned) / 56 (unpinned) changes; unpinned vs pinned native: 30 typed-final changes. So the
+    stored set is not reproducible; the gate is met against the native runtime. Eos #3 merged → `bbdc2221`;
+    readback and fresh-cache smoke (card block) pass.
+  - **DEV2.0-Route-0.6B:** the 2.0 worker published its remote code to DEV2.0-0.6B (`25669e2d`). Staged the same
+    three files, `config.json` fields, manifest `remote_code`, and the 2.0 `api.py` prompt fix applied as one change
+    (`stage_dev2route1.py`; work `pub-ef74a012/DEV2.0-Route-0.6B`). CPU checks running (`verify/`): native original
+    vs native staged vs AutoModel staged, 120 prompts. PR only after they pass; never merged by us.
+  - Kai CPU parity (`p2-3684c2d8/kai-cpu`) still running (~6 cores effective).
+
 - 2026-10-01 14:15 UTC+8 (06:15Z) — **Record, gist 07 and integration done; waiting for a GPU for Eos.**
   - Record [`dev1-automap-2026-10-01.md`](dev1-automap-2026-10-01.md); gist `07-decision-2-release.md` entry
     (≈14:05); `xunzhuo/decision-2-training` fast-forwarded to `ffea82d96` (privacy check clean over 105 items).
