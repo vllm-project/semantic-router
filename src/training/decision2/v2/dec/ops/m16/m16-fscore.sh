@@ -42,7 +42,7 @@ case $TIER in
       "jet62=$E/m2/q5b-jet62")
     OWN='["adopted-1.0"]' PEERS='["decider4b", "jet62"]' ;;
   2b)
-    BAR1=bar-t1 BAR1_RUN=$RL/dev2-2b-t1-derived BAR1_MLX=$RL/dev2-2b-t1-derived-mlx
+    BAR1=bar-t1 BAR1_RUN=$RL/dev2-2b-t1-derived BAR1_MLX=$D/m3/m3-S2T-soup-mlx
     BAR2=bar-b PARITY=m16-2b-C0 ALSO=
     OTHERS=("same-limit-16k=$D/m3/sol1-16k" "adopted-1.0=$E/m1-adopt/sol1" "decider2b=$E/m1-adopt/decider2b"
       "thisthat12=$E/m2/q4-thisthat12")
