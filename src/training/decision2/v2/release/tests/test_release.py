@@ -201,32 +201,31 @@ def facts(licence_spdx="apache-2.0"):
             "license_name": "decision-2.0-component-licences",
             "components": [],
         },
-        "banner": "DEV2.0-0.6B-owl-banner.png",
-        "calibration_text": "raw native probabilities.",
-        "requirements_text": "Tested with Transformers 4.57.6.",
+        "remote_code": {"tested": ["5.17.0"], "base": None},
     }
+
+
+TEXT = {
+    "model_type": "Decision model (structured classification)",
+    "training_summary": "Fine-tuned on typed decision data.",
+}
 
 
 class CardTest(unittest.TestCase):
     def test_card_from_same_panel_reports(self):
         with tempfile.TemporaryDirectory() as scratch:
-            out, banner = Path(scratch) / "pkg", Path(scratch) / "banner.png"
-            banner.write_bytes(b"\x89PNG\r\n\x1a\n")
+            out = Path(scratch) / "pkg"
             result = card.build_card(
                 entries=card_entries(),
                 roster=ROSTER,
                 paired=None,
                 facts=facts("other"),
-                text={
-                    "tagline": "A compact decision model.",
-                    "staging_notice": "Staging dry run.",
-                    "limitations": [],
-                },
-                banner=banner,
+                text={**TEXT, "staging_notice": "Staging dry run."},
                 work=Path(scratch) / "work",
                 output=out,
             )
             readme = (out / "README.md").read_text()
+            evaluation = (out / "evaluation/EVALUATION.md").read_text()
             files = {
                 p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()
             }
@@ -236,20 +235,38 @@ class CardTest(unittest.TestCase):
             self.assertIn(
                 "Typed Choice (correct): 235/800 versus 277/800", result["tradeoffs"]
             )
-            self.assertIn("| Typed Choice (correct) | 235/800 | 277/800 |", readme)
-            self.assertIn("do not measure multilingual ability", readme)
+            self.assertIn("| Typed Choice (correct) | 235/800 | 277/800 |", evaluation)
+            self.assertIn(
+                "**Below Decision 1.0 Kai in places:** typed decisions (Choice 235 vs 277 of 800",
+                readme,
+            )
+            self.assertIn("so other languages are less well measured", readme)
             self.assertIn("license: other", readme)
+            self.assertIn("library_name: transformers", readme)
             self.assertIn(
                 "license_link: https://huggingface.co/llm-semantic-router/dev2-release-staging/blob/main/LICENSING.md",
                 readme,
             )
             self.assertNotIn("Decision 2.0 collection", readme)
+            for word in ("post-key", "Brier", "mlx-diag", "owl", "Download and decide"):
+                self.assertNotIn(word, readme)
+            self.assertNotRegex(readme, r"JevArena v3|\bv3\b(?!\.)")
+            self.assertIn("post-key", evaluation)
             for chart in layout.CHART_FILES:
-                self.assertTrue((out / chart).is_file())
-                self.assertNotIn("Pareto", (out / chart).read_text())
+                svg = (out / chart).read_text()
+                self.assertRegex(
+                    svg, r'<rect x="0" y="0" width="760" height="\d+" fill="#FFFFFF"/>'
+                )
+                self.assertIn('fill="#2563EB"', svg)
+                self.assertNotIn("Pareto", svg)
+                self.assertNotIn("Gradient", svg)
+            self.assertEqual(readme.count("```python"), 1)
             code = readme.split("```python\n", 1)[1].split("```", 1)[0]
             compile(code, "card", "exec")
-            self.assertIn('Decision2.from_pretrained("dev2-release-staging")', code)
+            self.assertIn(
+                'AutoModel.from_pretrained("llm-semantic-router/dev2-release-staging", trust_remote_code=True)',
+                code,
+            )
 
     def test_card_score_table_mlx_calibration_and_disclosures(self):
         m2 = ROOT / "v2/eval/records/m2-reports"
@@ -284,12 +301,9 @@ class CardTest(unittest.TestCase):
             },
         ]
         text = {
-            "tagline": "A decision model.",
-            "runtime_note": "The runtime targets one GPU.",
-            "confirmation": "Independent confirmation: PLACEHOLDER for the coordinator.",
-            "training": ["Hard labels only; no teacher targets."],
-            "details": ["Seed soup of three runs."],
-            "limitations": [],
+            **TEXT,
+            "c1_result": "Independent confirmation: one sentence.",
+            "limitations": ["The runtime targets one GPU."],
         }
         values = {
             **facts(),
@@ -300,18 +314,15 @@ class CardTest(unittest.TestCase):
                 "loaded": 753_446_208,
                 "components_text": "backbone 752,393,024; decision head 1,053,184",
             },
-            "banner": "DEV2.0-0.8B-owl-banner.png",
         }
         with tempfile.TemporaryDirectory() as scratch:
-            out, banner = Path(scratch) / "pkg", Path(scratch) / "banner.png"
-            banner.write_bytes(b"\x89PNG\r\n\x1a\n")
+            out = Path(scratch) / "pkg"
             result = card.build_card(
                 entries=entries,
                 roster=ROSTER,
                 paired=None,
                 facts=values,
                 text=text,
-                banner=banner,
                 work=Path(scratch) / "work",
                 output=out,
             )
@@ -324,25 +335,41 @@ class CardTest(unittest.TestCase):
             files |= {"LICENSE", "NOTICE", "ATTRIBUTIONS.md"}
             self.assertEqual(card.check_rendered(readme, files), [])
             self.assertEqual({e["key"] for e in result["excluded"]}, {"jpt"})
-            self.assertIn("Post-key same-panel results.", readme)
-            self.assertIn(card.PUBLIC231_NOTE, readme)
-            self.assertNotIn("official sealed JevBench rank.\n", readme)
-            self.assertIn("| T | H |", readme)
-            self.assertIn("mlx-diag non-English Choice / Noul", readme)
-            self.assertIn("Typed Brier / ECE", readme)
-            self.assertIn(f"> {text['confirmation']}", readme)
+            self.assertIn(card.PUBLIC231_NOTE, evaluation)
+            self.assertIn(f"{text['c1_result']}\n", evaluation)
+            self.assertNotIn(text["c1_result"], readme)
+            self.assertIn("Typed Brier and ECE", evaluation)
             self.assertIn(
-                "### Training\n\n- Hard labels only; no teacher targets.", readme
+                "| **DEV2.0-0.8B** | **0.75B** | **43.22** | **39.0** | **147** |",
+                readme,
             )
-            self.assertIn("- Seed soup of three runs.", readme)
-            self.assertIn("The runtime targets one GPU. Tested with", readme)
-            self.assertNotIn("runs on CPU or one", readme)
             self.assertIn(
-                "| **DEV2.0-0.8B** | 0.75B | **43.22** | 0.479 | 0.390 |", readme
+                "| Intern-Decision 0.8B | 0.85B | 43.54 | 38.2 | 164 |", readme
             )
-            self.assertIn("147/231 (48 / 58 / 41)", readme)
+            self.assertIn("147 (48 / 58 / 41)", evaluation)
+            self.assertIn("- The runtime targets one GPU.\n", readme)
             self.assertIn(
-                "Human transfer H (median task macro-F1): 0.390 versus 0.461",
+                "typed decisions (Noul 407 vs 410 of 800; Score 82 vs 120 of 400)",
+                readme,
+            )
+            self.assertIn(
+                "Random Acts of Pizza 31.1 vs 51.5, Conversations Gone Awry 41.9 vs 57.1",
+                readme,
+            )
+            self.assertIn(
+                "non-English Choice and Noul on a multilingual diagnostic (61.5% vs 68.5%; 58.7% vs 59.2%)",
+                readme,
+            )
+            self.assertIn(
+                "**Against other same-size models:** trails Intern-Decision 0.8B on JevArena "
+                "(43.22 vs 43.54) and JevBench public 231 (147 vs 164).",
+                readme,
+            )
+            self.assertLessEqual(
+                readme.split("## Limitations", 1)[1].split("##", 1)[0].count("\n- "), 5
+            )
+            self.assertIn(
+                "Human-labelled transfer (median task macro-F1): 0.390 versus 0.461",
                 result["tradeoffs"],
             )
             self.assertIn(
@@ -354,7 +381,11 @@ class CardTest(unittest.TestCase):
                 result["tradeoffs"],
             )
             self.assertFalse(any("Score (accuracy)" in t for t in result["tradeoffs"]))
-            self.assertIn("| 61.5 / 58.7 |", readme)
+            self.assertIn("| 61.5 / 58.7 |", evaluation)
+            self.assertIn(
+                "| Transfer: Random Acts of Pizza (macro-F1) | 31.1% | 51.5% |",
+                evaluation,
+            )
             self.assertIn(
                 "753,446,208 parameters its packaged runtime loads", evaluation
             )
@@ -380,6 +411,57 @@ class CardTest(unittest.TestCase):
                     [entries[0], {**entries[1], "mlx": str(other)}], ROSTER
                 )
 
+    def test_training_attributions_group_cc_sources_and_the_qwen_base(self):
+        attributions = [
+            "[Qwen3.5-4B-Base](https://huggingface.co/Qwen/Qwen3.5-4B-Base) at `abc`: direct weight "
+            "origin (Apache-2.0); licence text in `LICENSES/Qwen3.5-4B-Base-LICENSE.txt`.",
+            "Training data (not redistributed here): CLINC150 (Larson et al., 2019; CC BY 3.0), the labels "
+            "of KLUE YNAT, MRC and STS (Park et al., 2021; CC BY-SA 4.0), KLUE STS (Park et al.; CC BY-SA 4.0) "
+            "and MuSiQue (Trivedi et al., 2022; CC BY 4.0, Wikipedia text CC BY-SA).",
+            "Evaluation data: JevArena and JevBench public 231.",
+        ]
+        self.assertEqual(
+            card.cc_sources(attributions),
+            {
+                "CC BY 3.0": ["CLINC150"],
+                "CC BY 4.0": ["MuSiQue"],
+                "CC BY-SA 4.0": ["KLUE MRC", "KLUE STS", "KLUE YNAT"],
+                "Wikipedia text under CC BY-SA": ["MuSiQue"],
+            },
+        )
+        files = {"LICENSES/Qwen3.5-4B-Base-LICENSE.txt"}
+        self.assertEqual(
+            card.base_notice(attributions, files),
+            [
+                "[Qwen3.5-4B-Base](https://huggingface.co/Qwen/Qwen3.5-4B-Base) (Apache-2.0; "
+                "[licence text](LICENSES/Qwen3.5-4B-Base-LICENSE.txt))"
+            ],
+        )
+        self.assertEqual(
+            card.base_notice(attributions, set()),
+            [
+                "[Qwen3.5-4B-Base](https://huggingface.co/Qwen/Qwen3.5-4B-Base) (Apache-2.0)"
+            ],
+        )
+
+    def test_card_needs_text_keys_and_remote_code(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            for facts_value, text in (
+                (facts(), {"model_type": "x"}),
+                (facts(), {**TEXT, "tagline": "old key"}),
+                ({**facts(), "remote_code": None}, TEXT),
+            ):
+                with self.assertRaises(ValueError):
+                    card.build_card(
+                        entries=card_entries(),
+                        roster=ROSTER,
+                        paired=None,
+                        facts=facts_value,
+                        text=text,
+                        work=Path(scratch) / "work",
+                        output=Path(scratch) / "pkg",
+                    )
+
     def test_card_needs_own_comparator(self):
         entries = [e for e in card_entries() if e["role"] != "own-1.0"]
         with self.assertRaises(ValueError):
@@ -388,17 +470,23 @@ class CardTest(unittest.TestCase):
     def test_http_check_anchors_follow_hub_headings(self):
         from v2.release.tests.hub_card_http_check import anchor
 
-        self.assertEqual(anchor("Download and decide"), "download-and-decide")
+        self.assertEqual(anchor("Model overview"), "model-overview")
         self.assertEqual(
-            anchor("Tradeoffs versus Decision 1.0 Eos"),
-            "tradeoffs-versus-decision-10-eos",
+            anchor("Results below Decision 1.0 Eos"),
+            "results-below-decision-10-eos",
         )
 
     def test_lint(self):
         self.assertTrue(card.lint("A Pareto frontier"))
         self.assertTrue(card.lint("ran on node A"))
         self.assertTrue(card.lint("path /data/dev2/runs"))
-        self.assertFalse(card.lint("Transformers 4.57.6 on one GPU"))
+        self.assertTrue(card.lint("JevArena v3 score"))
+        self.assertFalse(card.lint("Transformers 4.57.6 on one GPU, Python 3.12"))
+        self.assertFalse(card.lint("node Express"))
+        self.assertEqual(card.lint_readme("post-key results"), ["post-key wording"])
+        self.assertTrue(card.lint_readme("typed Brier / ECE"))
+        self.assertTrue(card.lint_readme("revision " + "a" * 40))
+        self.assertFalse(card.lint_readme("JevArena 43.22, Transformers 5.17"))
 
 
 class ExamplesTest(unittest.TestCase):
@@ -701,9 +789,6 @@ class BuildTest(unittest.TestCase):
             )
             licence_file = scratch / "LICENSE"
             licence_file.write_text("Apache License 2.0\n")
-            banner_dir = scratch / "brand"
-            banner_dir.mkdir()
-            (banner_dir / "DEV2.0-4B-owl-banner.png").write_bytes(b"\x89PNG\r\n\x1a\n")
             entries = card_entries()
             spec = {
                 "schema": build.SPEC_SCHEMA,
@@ -737,20 +822,16 @@ class BuildTest(unittest.TestCase):
                 "card": {
                     "reports": entries,
                     "roster": str(ROSTER),
-                    "text": {"tagline": "t", "staging_notice": "Staging."},
-                    "requirements_text": "Tested with Transformers 5.17.0.",
+                    "text": {
+                        "model_type": "Decision model",
+                        "training_summary": "Fine-tuned on decision data.",
+                        "staging_notice": "Staging.",
+                    },
                 },
             }
             spec_path = scratch / "spec.json"
             spec_path.write_text(json.dumps(spec))
-            original = build.BRAND_DIR
-            build.BRAND_DIR = banner_dir
-            try:
-                receipt = build.build(
-                    spec_path, scratch / "out" / "dev2-release-staging"
-                )
-            finally:
-                build.BRAND_DIR = original
+            receipt = build.build(spec_path, scratch / "out" / "dev2-release-staging")
             pkg = scratch / "out" / "dev2-release-staging"
             manifest = api.verify_bundle(pkg)
             self.assertEqual(manifest["parameters"]["loaded"], 4_000_256_000)
@@ -788,12 +869,8 @@ class BuildTest(unittest.TestCase):
 
             spec["scored"] = {"label": "scored run /data/dev2/runs/x"}  # manifest only
             spec_path.write_text(json.dumps(spec))
-            build.BRAND_DIR = banner_dir
-            try:
-                with self.assertRaises(ValueError):
-                    build.build(spec_path, scratch / "out2" / "dev2-release-staging")
-            finally:
-                build.BRAND_DIR = original
+            with self.assertRaises(ValueError):
+                build.build(spec_path, scratch / "out2" / "dev2-release-staging")
             self.assertFalse((scratch / "out2" / "dev2-release-staging").exists())
 
 

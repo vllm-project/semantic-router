@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 from v2.release import card
-from v2.release.tests.test_release import REPORTS, ROSTER, facts
+from v2.release.tests.test_release import REPORTS, ROSTER, TEXT, facts
 
 
 def entries(decider_repo: str | None = "Mapika/decider-2b") -> list[dict]:
@@ -40,15 +40,13 @@ def entries(decider_repo: str | None = "Mapika/decider-2b") -> list[dict]:
 class PeerModelIdTest(unittest.TestCase):
     def build(self, items: list[dict]) -> dict:
         with tempfile.TemporaryDirectory() as scratch:
-            out, banner = Path(scratch) / "pkg", Path(scratch) / "banner.png"
-            banner.write_bytes(b"\x89PNG\r\n\x1a\n")
+            out = Path(scratch) / "pkg"
             card.build_card(
                 entries=items,
                 roster=ROSTER,
                 paired=None,
                 facts=facts(),
-                text={"tagline": "A decision model.", "limitations": []},
-                banner=banner,
+                text=TEXT,
                 work=Path(scratch) / "work",
                 output=out,
             )

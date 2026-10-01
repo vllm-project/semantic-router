@@ -114,7 +114,7 @@ def check(repo: str, revision: str, package: Path, token: str | None) -> dict[st
         "status": status,
         "bytes": len(body),
         "title_present": manifest["model_name"] in page,
-        "banner_referenced": "owl-banner.png" in page,
+        "charts_referenced": all(Path(c).name in page for c in layout.CHART_FILES),
     }
     return {
         "links": results,

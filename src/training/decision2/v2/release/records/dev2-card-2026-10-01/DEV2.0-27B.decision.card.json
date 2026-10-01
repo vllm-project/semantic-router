@@ -1,0 +1,79 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "final",
+  "decision": "release",
+  "model_name": "DEV2.0-27B",
+  "repo_id": "llm-semantic-router/DEV2.0-27B",
+  "name_basis": "base",
+  "name_base_model": "Qwen/Qwen3.8-27B",
+  "identity": {
+    "model_sha256": "2e07451107a2ca9735064cc01f7e43e8522b4bae48f2d77bdf29f7ea2fe6362c"
+  },
+  "report_sha256": "e9a7c4700bd97bb78efa1c28117aa2a8a7a92fc2b3a29ead6d4f7e9c7f49b600",
+  "paired_sha256": "09ff4b0f872b60fe665124440b111afe03575d44a458c8743446a0ca7d0200c6",
+  "gate_profile": "successor",
+  "current_revision": "c0dba600087f582a1033830a2276d22e96e6324c",
+  "evidence_sha256": {
+    "c1_postkey": "e95c040341b0d20aebdbb50660e4d4c58008bea018d813b86180f6ae42dc6ecf",
+    "current_decision": "fd1b5ef0643532407b27a4f7f8d6748e8f8f9fa27b627f5b285b8ddb41d3e008",
+    "current_gate": "e6965d75e1f7cac175522f19fbabedd333ad2e8136f8e69a0eb9fb7b200b4a3f",
+    "exposure": "084781a6a0b47fb1598b33432f4d43be8cee8af2af63b44417bc9f087e69ede4",
+    "mlx_paired": "f1351c070025d3d18c1eb49c59ea897796c03242881268e2e41438c3b45e1ea5",
+    "paired": "9e77de58c9a8caa96201514a4864d9f3838c7cb0e95a5e2ef954d8f266ec5f37",
+    "public231": "bf20dc42932f6e1aeeea05b29458b8bb57b12dde9622c8a35300528b0e9f9632",
+    "tier_paired": "09ff4b0f872b60fe665124440b111afe03575d44a458c8743446a0ca7d0200c6",
+    "types": "de356f39813028200989985b8184c91e912799d4cf22e8f763722ef16e2b2e3f"
+  },
+  "calibration": "none (temperature 1); the CAL698 per-type temperatures (Choice 0.639, Noul 0.545, Score 0.05) were rejected under the 23:15 rule (typed-DEV Brier .065 -> .073 and ECE .049 -> .069; CSS-pilot ECE .088 -> .128; only CSS-pilot Brier improved, .464 -> .452)",
+  "action": "Card-only revision of the private repository llm-semantic-router/DEV2.0-27B: README.md, the two charts under assets/, evaluation/EVALUATION.md and manifest.json, NOTICE and ATTRIBUTIONS.md are regenerated as a standard model-release card with a Transformers-only quickstart (internal release facts stay in the records). Every model, runtime and remote-code file is byte-identical to the released revision 0928079151171e60f0d202648ce62ed777d2fe8c. The repository stays in the private collection '🎲 Decision 2.0', ordered 0.6B, 0.8B, 2B, 4B, 9B, 27B; everything stays private.",
+  "rationale": "The release judgement of the superseded final decision b24a2b54… stands unchanged: the same identity 2e074511, scored report, paired comparison, calibration and licence decision. Only card files and the manifest digests change; release.sh checks the native examples, the card's Transformers example before upload, after the real download and from the Hub in fresh environments under Transformers 5.17 and 5.18, the card structure and every card link, and blocks the upload or the collection step otherwise.",
+  "licence_decision": "apache-2.0 (adapter, head, runtime and card ours; base Qwen3.8-27B Apache-2.0; training-data licences credited in ATTRIBUTIONS.md)",
+  "supersedes": {
+    "final_sha256": "b24a2b5490f83598ebea9644ef6dc380d650cc943ce0d7bdf6abc631143c734b",
+    "released_as": "llm-semantic-router/DEV2.0-27B@0928079151171e60f0d202648ce62ed777d2fe8c",
+    "released_manifest_sha256": "e3929c3b6a6ea12f3e089c877615b5860e6686cae0ba5950742f347f99fd9356",
+    "released_gate_sha256": "840fa5e128f809d2f0bf00360a0ee3fa1e83ccd2228dcfc719b0429e665766f8",
+    "earlier": {
+      "final_sha256": "b39993142c79b0451ce1ffe3a3dab09fd00651195b76203d6e935a6a841597ec",
+      "released_as": "llm-semantic-router/DEV2.0-27B@3236518c92f70a404c02d1c47642850355d163ed",
+      "released_manifest_sha256": "298662b35ca298f0b19d4d689ab5ff8c887fdfe0fb426b84c7951ecac1a8f1fd",
+      "released_gate_sha256": "09844442ca3f3272fb6fcbfff34f91a48c0a3ee91a0c54112b992363a30bc297",
+      "earlier": {
+        "final_sha256": "cc65becb0a22a1b24cd3d5990ab89a21546946c2ec840659635a8050898c7f7e",
+        "released_as": "llm-semantic-router/DEV2.0-27B@4e89288d6146034743a14e3fbb98b5864e693c52",
+        "released_manifest_sha256": "c0d8c65ab83cc2b26d68caeb3fdc209f75d97bff9fdf53f99ad30b935826e999",
+        "released_gate_sha256": "f9afa99399813c090b0d9ac663cbd2b435a750205633fc0ed287f24d1f05d478",
+        "earlier": {
+          "final_sha256": "ef7c85c5a5315e469f5bdfc2d701fc43e74ee744104309a0999fb4f0b84921b7",
+          "released_as": "llm-semantic-router/DEV2.0-27B@5323310327e52d4eadd119cd10accac9b106c97d",
+          "released_manifest_sha256": "82c71c2e232be71e842784cf8f305b1de7d81ff67a58fe11b4464f88b2e62d37",
+          "released_gate_sha256": "d4a98b69db3104cbc270cf4de8e83ac35d8b0dc1f85d9d31691fc3aeaaf38ae0",
+          "card_revision": null,
+          "earlier": {
+            "revision": "c0dba600087f582a1033830a2276d22e96e6324c",
+            "final_sha256": "fd1b5ef0643532407b27a4f7f8d6748e8f8f9fa27b627f5b285b8ddb41d3e008",
+            "gate_sha256": "e6965d75e1f7cac175522f19fbabedd333ad2e8136f8e69a0eb9fb7b200b4a3f",
+            "weights_identity": "b7fd44e3ad73d24faa85c2ba06ba61d4494aa4be2a2025c580ba02bedae6e781"
+          }
+        }
+      }
+    }
+  },
+  "disclosures": [
+    "post-key v3 72.36 vs AutoJev-27B 72.13 (+0.23; 95% CI lower bound -1.60): not a significant difference",
+    "public 231 203 vs Eikos-27B 212 (-9, 95% CI -16, -2; gates public231 REGRESSION vs that peer); the two hard-tier skills (long policy 11 vs 15 of 19; quoted conclusions 33 vs 38 of 46)",
+    "typed Choice 753 vs AutoJev-27B 800; constraint competition .882 vs 1.000",
+    "human transfer .584 vs AutoJev-27B .587 (-0.002, 95% CI -0.030, +0.066; not significant)",
+    "card-eligible mlx-diag +.014 (95% CI +.003, +.025) vs the previous revision; the XNLI Score part stays internal (-.015, 95% CI -.032, +.001, reported only)",
+    "transfer tasks below all three peers (wiki politeness, TempoWiC, Reddit humor, MRF) and lower than the previous revision on TempoWiC and Reddit humor"
+  ],
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's card job of 2026-10-01 21:58 UTC+8 (make the DEV2.0 cards standard, formal model-release cards with a Transformers-only quickstart; keep internal records off the cards), card-only revisions of all six repositories",
+  "decided_utc": "2026-10-01T13:58:00Z",
+  "prepared_by": "Decision 2.0 release engineering, release worker 4c0a68cd (worktree vllm-sr-dev2-automap)",
+  "previous_rationale": "The release judgement of the superseded final decision b3999314… stands unchanged: the same identity 2e074511, scored report, paired comparison, calibration and licence decision. Only decision2/qwen.py, the manifest digests and the card change. Adopted only with 0 answer changes (0 missing, 0 input mismatches) against the scored predictions on every scored prompt (typed-final 1,600, css15 6,547, public231 231) and on mlx-diag (2,275) before and after the real download, AutoModel answers equal to the native runtime's on the same prompts, the synthetic long-input regression (one prompt at the cap minus 300 tokens, 32 questions, 48 on 0.8B and 2B, so that the batch exceeds the budget) valid and equal to each question asked alone, and the card's Transformers example run from the Hub in fresh environments under Transformers 5.17 and 5.18; release.sh blocks the upload or the collection step otherwise. On this package the regression counts a side flip within the tolerance of a question whose answer asked alone lies within 0.02 of its decision boundary as a tie (listed in the receipt): the first run without that rule flipped one generated Noul question (P(true) 0.4997 alone, 0.5029 in the split), batch-shape noise of the unchanged single-batch path's kind.",
+  "card_revision": {
+    "kind": "card-redesign",
+    "spec": "v2/release/specs/dev2-27b-card.json",
+    "spec_sha256": "d71b68aa98b11a9a35c8e44bac73062d4717491ed4d755639699caedfbba4bf9"
+  }
+}

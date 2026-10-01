@@ -1,0 +1,152 @@
+{
+  "checked": 15,
+  "failed": [],
+  "links": [
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": true,
+      "source": "README.md",
+      "status": 200,
+      "target": "https://huggingface.co/collections/llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00"
+    },
+    {
+      "image": false,
+      "kind": "file",
+      "ok": true,
+      "sha256": "9118a0141d2994fa285fe42f855ed25bc732317ab18e71ecc779ef82dc7f07c7",
+      "source": "README.md",
+      "status": 200,
+      "target": "evaluation/EVALUATION.md"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": false,
+      "source": "README.md",
+      "status": 200,
+      "target": "https://huggingface.co/Qwen/Qwen3.5-4B-Base"
+    },
+    {
+      "image": false,
+      "kind": "file",
+      "ok": true,
+      "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a",
+      "source": "README.md",
+      "status": 200,
+      "target": "LICENSE"
+    },
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "c7d86600a682396c5998f3210e8a4bae528a92502ea99433cfe6537ad63f495d",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/jevarena.svg"
+    },
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "dc2b874005612ef743849af02d0c7b4659d8eb43f3f8fdac7b2ccd05ea7e70d1",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/jevbench-public-231.svg"
+    },
+    {
+      "image": false,
+      "kind": "file",
+      "ok": true,
+      "sha256": "50cbab8a892c5f2993b8c7351a99182507472def3b1374558308605d99b86b32",
+      "source": "README.md",
+      "status": 200,
+      "target": "LICENSES/Qwen3.5-4B-Base-LICENSE.txt"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": false,
+      "source": "README.md",
+      "status": 200,
+      "target": "https://huggingface.co/Qwen/Qwen3.5-4B"
+    },
+    {
+      "image": false,
+      "kind": "file",
+      "ok": true,
+      "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a",
+      "source": "README.md",
+      "status": 200,
+      "target": "LICENSES/Qwen3.5-4B-LICENSE.txt"
+    },
+    {
+      "image": false,
+      "kind": "file",
+      "ok": true,
+      "sha256": "8910aae4eb32042f0e211e89bc9e1dbcfdddade5d94a5d4dee4ad11506a87b11",
+      "source": "README.md",
+      "status": 200,
+      "target": "ATTRIBUTIONS.md"
+    },
+    {
+      "image": false,
+      "kind": "file",
+      "ok": true,
+      "sha256": "985fbe9a50628f633edf26ea139185744a8a5066974ad813b6723dcf757c95f0",
+      "source": "README.md",
+      "status": 200,
+      "target": "NOTICE"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": false,
+      "source": "ATTRIBUTIONS.md",
+      "status": 200,
+      "target": "https://huggingface.co/Qwen/Qwen3.5-4B-Base"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": false,
+      "source": "ATTRIBUTIONS.md",
+      "status": 200,
+      "target": "https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": false,
+      "source": "ATTRIBUTIONS.md",
+      "status": 200,
+      "target": "https://huggingface.co/Qwen/Qwen3.5-4B"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": false,
+      "source": "ATTRIBUTIONS.md",
+      "status": 200,
+      "target": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B"
+    }
+  ],
+  "passed": true,
+  "rendered_page": {
+    "bytes": 0,
+    "charts_referenced": false,
+    "status": 401,
+    "title_present": false
+  },
+  "repo": "llm-semantic-router/DEV2.0-4B",
+  "revision": "dd60f0c24fe8de2001a307b1094ab2091bb1acc7",
+  "schema": "dev2-hub-links/1",
+  "utc": "2026-10-01T15:04:30.546608+00:00"
+}

@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from v2.release import build, card, hub, layout
-from v2.release.tests.test_release import REPORTS, ROSTER, facts
+from v2.release.tests.test_release import REPORTS, ROSTER, TEXT, facts
 
 NINE_B = 7_940_895_744
 TWENTY_SEVEN_B = 25_746_591_744
@@ -102,15 +102,13 @@ class BaseNameCardTest(unittest.TestCase):
             },
         ]
         with tempfile.TemporaryDirectory() as scratch:
-            out, banner = Path(scratch) / "pkg", Path(scratch) / "banner.png"
-            banner.write_bytes(b"\x89PNG\r\n\x1a\n")
+            out = Path(scratch) / "pkg"
             card.build_card(
                 entries=entries,
                 roster=ROSTER,
                 paired=None,
                 facts={**facts(), **extra},
-                text={"tagline": "A decision model.", "limitations": []},
-                banner=banner,
+                text=TEXT,
                 work=Path(scratch) / "work",
                 output=out,
             )
@@ -127,15 +125,14 @@ class BaseNameCardTest(unittest.TestCase):
         )
         self.assertEqual(problems, [])
         self.assertIn(
-            "- **Parameters:** 571,909,635 loaded (native encoder paths and heads 571,909,635).\n"
-            "- **Name:** Named after its base model ([Qwen3-0.6B](https://huggingface.co/Qwen/Qwen3-0.6B)); "
-            "it loads 571,909,635 parameters.\n",
+            "| **Parameters** | 0.57B (571,909,635); named after its base model, "
+            "[Qwen3-0.6B](https://huggingface.co/Qwen/Qwen3-0.6B) |",
             readme,
         )
 
     def test_other_bases_add_no_name_line(self):
         readme, _ = self.render({})
-        self.assertNotIn("Named after its base model", readme)
+        self.assertNotIn("named after its base model", readme)
 
 
 class RenamedRepositoryTest(unittest.TestCase):

@@ -33,7 +33,6 @@ from v2.release.gate import no_own_1_0
 SPEC_SCHEMA = "dev2-release-spec/1"
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
 RELEASE_DIR = Path(__file__).resolve().parent
-BRAND_DIR = RELEASE_DIR / "brand"
 RUNTIME_TEMPLATE = RELEASE_DIR / "runtime"
 KAI_RUNTIME = {
     "decision_runtime/__init__.py": "b0f9db94cfbcc73cab2f09e0269b8bd2eb87c0cc533b34ea5c9a8bfbb1ee48ca",
@@ -792,7 +791,7 @@ def write_licences(spec: dict[str, Any], stage: Path, decision: dict[str, Any]) 
     notice = [
         f"{spec['model_name']} (Decision 2.0)",
         "",
-        "Original Decision 2.0 package code, model card and banner artwork are released",
+        "Original Decision 2.0 package code and model card (text and charts) are released",
         "under the Apache License 2.0 in LICENSE. Third-party material keeps its own",
         "licence and notices, listed in ATTRIBUTIONS.md"
         + (" and LICENSING.md." if decision["spdx"] == "other" else "."),
@@ -811,7 +810,7 @@ def write_licences(spec: dict[str, Any], stage: Path, decision: dict[str, Any]) 
         ]
         notice.append(path.read_text(encoding="utf-8").rstrip("\n"))
     (stage / "NOTICE").write_text("\n".join(notice) + "\n", encoding="utf-8")
-    attributions = ["# Source and artwork credits", ""]
+    attributions = ["# Attributions", ""]
     attributions += [f"- {line}" for line in lic.get("attributions", [])]
     (stage / "ATTRIBUTIONS.md").write_text(
         "\n".join(attributions) + "\n", encoding="utf-8"
@@ -992,7 +991,6 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
         if score_bias:
             score_bias["scored_sha256"] = scored_runtime["score_bias_sha256"]
         write_licences(spec, stage, decision)
-        banner = spec["card"].get("banner") or f"{spec['model_name']}-owl-banner.png"
         facts = {
             "model_name": spec["model_name"],
             "repo_id": spec["repo_id"],
@@ -1004,7 +1002,8 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             "max_input_tokens": spec["max_input_tokens"],
             "origin": spec["origin"],
             "licence": decision,
-            "banner": banner,
+            "attributions": spec["licence"].get("attributions", []),
+            "runtime_requirements": spec.get("runtime_requirements", {}),
             **(
                 {"name_basis": name_basis, "name_base_model": base_model}
                 if base_model
@@ -1016,7 +1015,7 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
                 if calibration
                 else "raw native probabilities (no post-hoc temperature)."
             ),
-            "requirements_text": spec["card"]["requirements_text"],
+            "requirements_text": spec["card"].get("requirements_text"),
             "remote_code": {
                 "tested": (spec.get("remote_code") or {}).get("tested"),
                 "base": identity.get("base"),
@@ -1040,7 +1039,6 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             paired=Path(spec["card"]["paired"]) if spec["card"].get("paired") else None,
             facts=facts,
             text=spec["card"]["text"],
-            banner=BRAND_DIR / banner,
             work=work / "card-work",
             output=stage,
             paired_peers={

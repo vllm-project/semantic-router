@@ -135,7 +135,6 @@ def main() -> None:
     if page.status_code == 200:
         rendered.update(
             contains_title=title in page.text,
-            contains_banner=f"{title}-owl-banner.png" in page.text,
             contains_charts=all(Path(c).name in page.text for c in layout.CHART_FILES),
         )
     result = {

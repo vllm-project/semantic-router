@@ -6,7 +6,8 @@ this repository. Subcommands:
 
   run      fixed Choice/Noul/Score requests through ``Decision2`` -> outputs JSON
   compare  two ``run`` outputs (cross-process / pre- vs post-download)
-  card     execute the README's native Python block and compare with a ``run`` output
+  card     execute the README's native Python block (or, on a Transformers-only card, its
+           Transformers block on the package directory) and compare with a ``run`` output
   parity   package answers on gold-free panel prompts vs sealed scored predictions
   automap         AutoConfig / AutoTokenizer / AutoModel / pipeline("decision") with
                   trust_remote_code vs a native ``run`` output (bit-identical answers)
@@ -509,12 +510,25 @@ def run_card_code(
 
 
 def card(args: argparse.Namespace) -> dict[str, Any]:
-    """Execute the README's native Python example exactly as a user would, in a fresh process."""
+    """Execute the README's Python example exactly as a user would, in a fresh process."""
     readme = (args.package / "README.md").read_text(encoding="utf-8")
-    code = card_block(readme, transformers=False)
-    name = args.package.resolve().name
-    if f'"{name}"' not in code:
-        raise ValueError("The card example does not load this package directory")
+    native = any(
+        TRANSFORMERS_BLOCK not in b
+        for b in re.findall(r"```python\n(.*?)```", readme, flags=re.S)
+    )
+    code = card_block(readme, transformers=not native)
+    if native:
+        name = args.package.resolve().name
+        if f'"{name}"' not in code:
+            raise ValueError("The card example does not load this package directory")
+    else:
+        # A Transformers-only card: its one example, on this package directory (no network).
+        repo = json.loads(
+            (args.package / "MODEL_MANIFEST.json").read_text(encoding="utf-8")
+        )["repo_id"]
+        if f'"{repo}"' not in code:
+            raise ValueError("The Transformers example does not load this repository")
+        code = code.replace(f'"{repo}"', json.dumps(str(args.package.resolve())))
     reference = json.loads(args.reference.read_text(encoding="utf-8"))
     expected = next(o for o in reference["outputs"] if o["id"] == EXAMPLES[0]["id"])
     completed, flags, started = run_card_code(
@@ -530,6 +544,7 @@ def card(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "schema": SCHEMA,
         "mode": "card",
+        "example": "native" if native else "transformers",
         "code_sha256": hashlib.sha256(code.encode("utf-8")).hexdigest(),
         "readme_sha256": sha_file(args.package / "README.md"),
         "interpreter_flags": flags,

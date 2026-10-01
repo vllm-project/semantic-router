@@ -523,8 +523,11 @@ def qwen_full_spec(scratch: Path) -> tuple[dict, str]:
         "card": {
             "reports": card_entries(),
             "roster": str(ROSTER),
-            "text": {"tagline": "t", "staging_notice": "Staging."},
-            "requirements_text": "Tested with Transformers 5.17.0.",
+            "text": {
+                "model_type": "Decision model",
+                "training_summary": "Fine-tuned on decision data.",
+                "staging_notice": "Staging.",
+            },
         },
     }
     return spec, model_sha256
@@ -543,14 +546,9 @@ class BuildScoreBiasTest(unittest.TestCase):
         self.write_native(self.bias_sha)
         self.spec["score_bias"] = {"path": str(self.bias), "sha256": self.bias_sha}
         self.spec["scored"] = {"native_manifest": str(self.native)}
-        banners = self.dir / "brand"
-        banners.mkdir()
-        (banners / "DEV2.0-0.6B-owl-banner.png").write_bytes(b"\x89PNG\r\n\x1a\n")
-        self.original_brand, build.BRAND_DIR = build.BRAND_DIR, banners
         self.count = 0
 
     def tearDown(self):
-        build.BRAND_DIR = self.original_brand
         self.scratch.cleanup()
 
     def write_native(self, bias_sha, offsets=OFFSETS_35, *, entry=True):

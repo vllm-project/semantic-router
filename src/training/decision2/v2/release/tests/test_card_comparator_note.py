@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from v2.release import card
-from v2.release.tests.test_release import REPORTS, ROSTER, facts
+from v2.release.tests.test_release import REPORTS, ROSTER, TEXT, facts
 
 NOTE = "GLiNER2.5-Decide declares Apache-2.0 in its model card metadata; its repository has no LICENSE file."
 
@@ -36,15 +36,13 @@ class ComparatorNoteTest(unittest.TestCase):
             },
         ]
         with tempfile.TemporaryDirectory() as scratch:
-            out, banner = Path(scratch) / "pkg", Path(scratch) / "banner.png"
-            banner.write_bytes(b"\x89PNG\r\n\x1a\n")
+            out = Path(scratch) / "pkg"
             card.build_card(
                 entries=entries,
                 roster=ROSTER,
                 paired=None,
                 facts=facts(),
-                text={"tagline": "A decision model.", "limitations": [], **text},
-                banner=banner,
+                text={**TEXT, **text},
                 work=Path(scratch) / "work",
                 output=out,
             )
@@ -59,13 +57,15 @@ class ComparatorNoteTest(unittest.TestCase):
     def test_note_follows_the_rank_scope_on_card_and_evaluation_page(self):
         readme, evaluation, problems = self.render({"comparator_note": NOTE})
         self.assertEqual(problems, [])
-        self.assertIn(f"Ranks include only the models shown. {NOTE} [Methods", readme)
-        self.assertIn(f"are not shown on this card. {NOTE}", evaluation)
+        self.assertNotIn(NOTE, readme)
+        self.assertIn(f"licences are not shown. {NOTE}\n", evaluation)
 
     def test_without_a_note_the_text_is_unchanged(self):
         readme, evaluation, _ = self.render({})
-        self.assertIn("Ranks include only the models shown. [Methods", readme)
-        self.assertIn("are not shown on this card.\n", evaluation)
+        self.assertIn(
+            "comparator notes: [EVALUATION.md](evaluation/EVALUATION.md)", readme
+        )
+        self.assertIn("licences are not shown.\n", evaluation)
 
 
 if __name__ == "__main__":
