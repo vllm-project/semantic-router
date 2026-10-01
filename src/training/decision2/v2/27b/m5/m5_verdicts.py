@@ -61,7 +61,12 @@ def paired(path: Path, files: dict[str, str]) -> dict[str, Any]:
 
 
 def finalist(
-    name: str, run: Path, gates: Path, files: dict[str, str]
+    name: str,
+    run: Path,
+    gates: Path,
+    files: dict[str, str],
+    train_of: dict[str, list[str]] = TRAIN_OF,
+    exposure_prefix: str = "exposure-m5-",
 ) -> dict[str, Any]:
     d = gates / name
     report = read(run / "REPORT.json", files)
@@ -75,8 +80,8 @@ def finalist(
     mlx_path = gates / "mlx" / f"{name}-vs-A20r.json"
     mlx = read(mlx_path, files) if mlx_path.is_file() else None
     exposure = {}
-    for mix in TRAIN_OF.get(name, []):
-        record = read(gates / "overlap" / f"exposure-m5-{mix}.json", files)
+    for mix in train_of.get(name, []):
+        record = read(gates / "overlap" / f"{exposure_prefix}{mix}.json", files)
         exposure[mix] = {
             "groups": len(record["groups"]),
             "methods_agree": record["methods_agree"],
@@ -160,13 +165,30 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--finalist", action="append", required=True, help="NAME=FORMAL_RUN"
     )
+    parser.add_argument(
+        "--train-of",
+        action="append",
+        default=[],
+        help="NAME=MIX[,MIX] (M6 and later; replaces the M5 mapping)",
+    )
+    parser.add_argument("--exposure-prefix", default="exposure-m5-")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
+    train_of = TRAIN_OF
+    if args.train_of:
+        train_of = {}
+        for spec in args.train_of:
+            name, _, mixes = spec.partition("=")
+            if not name or not mixes:
+                raise SystemExit(f"bad --train-of {spec!r}; use NAME=MIX[,MIX]")
+            train_of[name] = mixes.split(",")
     files: dict[str, str] = {}
     out = {}
     for spec in args.finalist:
         name, _, run = spec.partition("=")
-        out[name] = finalist(name, Path(run), args.gates, files)
+        out[name] = finalist(
+            name, Path(run), args.gates, files, train_of, args.exposure_prefix
+        )
     beating = sorted(
         (
             n
