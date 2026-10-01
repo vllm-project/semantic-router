@@ -1,0 +1,521 @@
+{
+ "balance_failures": [],
+ "dev": {
+  "balance": {
+   "args": {
+    "labels": {
+     "0": 187,
+     "1": 187
+    },
+    "pass": true,
+    "rows": 374
+   },
+   "copa": {
+    "gold_a_share": 0.5185,
+    "gold_longer_share": 0.5,
+    "labels": {
+     "0": 56,
+     "1": 52
+    },
+    "pass": true,
+    "rows": 108
+   },
+   "csqa": {
+    "labels": {
+     "0": 88,
+     "1": 99,
+     "2": 117,
+     "3": 95,
+     "4": 114
+    },
+    "pass": true,
+    "rows": 513,
+    "shares_by_option_count": {
+     "5": [
+      0.1715,
+      0.193,
+      0.2281,
+      0.1852,
+      0.2222
+     ]
+    },
+    "small_strata_reported": []
+   },
+   "isarc": {
+    "gold_a_share": 0.5488,
+    "gold_longer_share": 0.4625,
+    "labels": {
+     "0": 45,
+     "1": 37
+    },
+    "pass": true,
+    "rows": 82
+   },
+   "poem": {
+    "gold_a_share": 0.5328,
+    "gold_longer_share": 0.5485,
+    "labels": {
+     "0": 219,
+     "1": 192
+    },
+    "pass": true,
+    "rows": 411
+   },
+   "sentfin": {
+    "labels": {
+     "0": 248,
+     "1": 248,
+     "2": 248
+    },
+    "pass": true,
+    "rows": 744,
+    "shares_by_option_count": {
+     "3": [
+      0.3333,
+      0.3333,
+      0.3333
+     ]
+    },
+    "small_strata_reported": []
+   },
+   "sms": {
+    "labels": {
+     "0": 31,
+     "1": 31
+    },
+    "mean_state_chars": {
+     "0": 68.4,
+     "1": 118.5
+    },
+    "pass": true,
+    "rows": 62
+   },
+   "snips_rel": {
+    "labels": {
+     "0": 8,
+     "1": 8
+    },
+    "mean_state_chars": {
+     "0": 697.6,
+     "1": 703.8
+    },
+    "pass": true,
+    "rows": 16
+   },
+   "snips_sel": {
+    "labels": {
+     "0": 65,
+     "1": 75,
+     "2": 90,
+     "3": 80
+    },
+    "pass": true,
+    "rows": 310,
+    "shares_by_option_count": {
+     "4": [
+      0.2097,
+      0.2419,
+      0.2903,
+      0.2581
+     ]
+    },
+    "small_strata_reported": []
+   },
+   "sumedit": {
+    "labels": {
+     "0": 22,
+     "1": 22
+    },
+    "mean_state_chars": {
+     "0": 5190.5,
+     "1": 5141.9
+    },
+    "pass": true,
+    "rows": 44
+   }
+  },
+  "sizes": {
+   "by_family": {
+    "args": {
+     "groups": 187,
+     "languages": {
+      "en": 374
+     },
+     "native_tokens": 89947,
+     "rows": 374
+    },
+    "copa": {
+     "groups": 53,
+     "languages": {
+      "en": 108
+     },
+     "native_tokens": 10688,
+     "rows": 108
+    },
+    "csqa": {
+     "groups": 166,
+     "languages": {
+      "en": 513
+     },
+     "native_tokens": 78816,
+     "rows": 513
+    },
+    "isarc": {
+     "groups": 82,
+     "languages": {
+      "ar": 43,
+      "en": 39
+     },
+     "native_tokens": 11353,
+     "rows": 82
+    },
+    "poem": {
+     "groups": 411,
+     "languages": {
+      "en": 411
+     },
+     "native_tokens": 78250,
+     "rows": 411
+    },
+    "sentfin": {
+     "groups": 624,
+     "languages": {
+      "en": 744
+     },
+     "native_tokens": 94763,
+     "rows": 744
+    },
+    "sms": {
+     "groups": 62,
+     "languages": {
+      "en": 62
+     },
+     "native_tokens": 7289,
+     "rows": 62
+    },
+    "snips_rel": {
+     "groups": 16,
+     "languages": {
+      "en": 16
+     },
+     "native_tokens": 5095,
+     "rows": 16
+    },
+    "snips_sel": {
+     "groups": 309,
+     "languages": {
+      "en": 310
+     },
+     "native_tokens": 63722,
+     "rows": 310
+    },
+    "sumedit": {
+     "groups": 2,
+     "languages": {
+      "en": 44
+     },
+     "native_tokens": 69788,
+     "rows": 44
+    }
+   },
+   "groups": 1912,
+   "language": {
+    "ar": 43,
+    "en": 2621
+   },
+   "native_tokens": 509711,
+   "rows": 2664,
+   "task_type": {
+    "choice": 2542,
+    "noul": 122
+   },
+   "tokens_missing": 0
+  }
+ },
+ "inputs": {
+  "dev": "b412ab9312e834d45a1aef910b8921ebd1a25b5b0ddc5d226e6230a8b2a031cd",
+  "tokens": [
+   "951c7d4002be19da50524a4e25aaaa79a5391d35bb6b774ca32f6d3419fe7574",
+   "a29eca26ab4e9046915c486a90a8287c22dc9cd5590a3f8c8d35a51661a5d8be"
+  ],
+  "train": "7f2d00031298fa6812222d74c62fa7580ab41b89942e39edea897363bfa1ae80"
+ },
+ "schema": "decision2.ib1.stats.v1",
+ "shared_groups": 0,
+ "train": {
+  "balance": {
+   "args": {
+    "labels": {
+     "0": 2596,
+     "1": 2596
+    },
+    "pass": true,
+    "rows": 5192
+   },
+   "copa": {
+    "gold_a_share": 0.4852,
+    "gold_longer_share": 0.5,
+    "labels": {
+     "0": 426,
+     "1": 452
+    },
+    "pass": true,
+    "rows": 878
+   },
+   "csqa": {
+    "labels": {
+     "0": 995,
+     "1": 1015,
+     "2": 1033,
+     "3": 945,
+     "4": 995
+    },
+    "pass": true,
+    "rows": 4983,
+    "shares_by_option_count": {
+     "5": [
+      0.1997,
+      0.2037,
+      0.2073,
+      0.1896,
+      0.1997
+     ]
+    },
+    "small_strata_reported": []
+   },
+   "isarc": {
+    "gold_a_share": 0.4908,
+    "gold_longer_share": 0.5029,
+    "labels": {
+     "0": 429,
+     "1": 445
+    },
+    "pass": true,
+    "rows": 874
+   },
+   "poem": {
+    "gold_a_share": 0.4947,
+    "gold_longer_share": 0.5043,
+    "labels": {
+     "0": 1773,
+     "1": 1811
+    },
+    "pass": true,
+    "rows": 3584
+   },
+   "sentfin": {
+    "labels": {
+     "0": 2386,
+     "1": 2386,
+     "2": 2386
+    },
+    "pass": true,
+    "rows": 7158,
+    "shares_by_option_count": {
+     "3": [
+      0.3333,
+      0.3333,
+      0.3333
+     ]
+    },
+    "small_strata_reported": []
+   },
+   "sms": {
+    "labels": {
+     "0": 576,
+     "1": 576
+    },
+    "mean_state_chars": {
+     "0": 72.7,
+     "1": 137.9
+    },
+    "pass": true,
+    "rows": 1152
+   },
+   "snips_rel": {
+    "labels": {
+     "0": 1350,
+     "1": 1350
+    },
+    "mean_state_chars": {
+     "0": 704.7,
+     "1": 703.6
+    },
+    "pass": true,
+    "rows": 2700
+   },
+   "snips_sel": {
+    "labels": {
+     "0": 663,
+     "1": 679,
+     "2": 657,
+     "3": 674
+    },
+    "pass": true,
+    "rows": 2673,
+    "shares_by_option_count": {
+     "4": [
+      0.248,
+      0.254,
+      0.2458,
+      0.2522
+     ]
+    },
+    "small_strata_reported": []
+   },
+   "sumedit": {
+    "labels": {
+     "0": 640,
+     "1": 640
+    },
+    "mean_state_chars": {
+     "0": 4716.5,
+     "1": 4763.2
+    },
+    "pass": true,
+    "rows": 1280
+   },
+   "w2c": {
+    "gold_a_share": 0.528,
+    "gold_longer_share": 0.5191,
+    "labels": {
+     "0": 255,
+     "1": 228
+    },
+    "pass": true,
+    "rows": 483
+   },
+   "wands": {
+    "labels": {
+     "0": 2119,
+     "1": 2119,
+     "2": 2119
+    },
+    "pass": true,
+    "rows": 6357,
+    "shares_by_option_count": {
+     "3": [
+      0.3333,
+      0.3333,
+      0.3333
+     ]
+    },
+    "small_strata_reported": []
+   }
+  },
+  "sizes": {
+   "by_family": {
+    "args": {
+     "groups": 2596,
+     "languages": {
+      "en": 5192
+     },
+     "native_tokens": 1370107,
+     "rows": 5192
+    },
+    "copa": {
+     "groups": 439,
+     "languages": {
+      "en": 878
+     },
+     "native_tokens": 87546,
+     "rows": 878
+    },
+    "csqa": {
+     "groups": 1670,
+     "languages": {
+      "en": 4983
+     },
+     "native_tokens": 766686,
+     "rows": 4983
+    },
+    "isarc": {
+     "groups": 874,
+     "languages": {
+      "ar": 410,
+      "en": 464
+     },
+     "native_tokens": 117922,
+     "rows": 874
+    },
+    "poem": {
+     "groups": 3584,
+     "languages": {
+      "en": 3584
+     },
+     "native_tokens": 687454,
+     "rows": 3584
+    },
+    "sentfin": {
+     "groups": 6066,
+     "languages": {
+      "en": 7158
+     },
+     "native_tokens": 911407,
+     "rows": 7158
+    },
+    "sms": {
+     "groups": 1152,
+     "languages": {
+      "en": 1152
+     },
+     "native_tokens": 142531,
+     "rows": 1152
+    },
+    "snips_rel": {
+     "groups": 2697,
+     "languages": {
+      "en": 2700
+     },
+     "native_tokens": 854828,
+     "rows": 2700
+    },
+    "snips_sel": {
+     "groups": 2671,
+     "languages": {
+      "en": 2673
+     },
+     "native_tokens": 549781,
+     "rows": 2673
+    },
+    "sumedit": {
+     "groups": 56,
+     "languages": {
+      "en": 1280
+     },
+     "native_tokens": 1712091,
+     "rows": 1280
+    },
+    "w2c": {
+     "groups": 473,
+     "languages": {
+      "en": 483
+     },
+     "native_tokens": 214085,
+     "rows": 483
+    },
+    "wands": {
+     "groups": 391,
+     "languages": {
+      "en": 6357
+     },
+     "native_tokens": 3053991,
+     "rows": 6357
+    }
+   },
+   "groups": 22669,
+   "language": {
+    "ar": 410,
+    "en": 36904
+   },
+   "native_tokens": 10468429,
+   "rows": 37314,
+   "task_type": {
+    "choice": 32182,
+    "noul": 5132
+   },
+   "tokens_missing": 0
+  }
+ },
+ "verdict": "PASS"
+}

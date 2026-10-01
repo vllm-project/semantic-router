@@ -1,0 +1,171 @@
+{
+ "dev_near_train": {
+  "by_family": {
+   "args": {
+    "dev_rows": 174,
+    "groups": 87,
+    "train_rows": 0
+   },
+   "copa": {
+    "dev_rows": 2,
+    "groups": 1,
+    "train_rows": 0
+   },
+   "csqa": {
+    "dev_rows": 10,
+    "groups": 3,
+    "train_rows": 0
+   },
+   "maud": {
+    "dev_rows": 181,
+    "groups": 5,
+    "train_rows": 0
+   },
+   "medmcqa": {
+    "dev_rows": 224,
+    "groups": 224,
+    "train_rows": 0
+   },
+   "poem": {
+    "dev_rows": 5,
+    "groups": 5,
+    "train_rows": 0
+   },
+   "procb": {
+    "dev_rows": 20,
+    "groups": 20,
+    "train_rows": 0
+   },
+   "sentfin": {
+    "dev_rows": 40,
+    "groups": 35,
+    "train_rows": 0
+   },
+   "sms": {
+    "dev_rows": 24,
+    "groups": 24,
+    "train_rows": 0
+   },
+   "snips_rel": {
+    "dev_rows": 271,
+    "groups": 270,
+    "train_rows": 0
+   },
+   "snips_sel": {
+    "dev_rows": 12,
+    "groups": 12,
+    "train_rows": 0
+   },
+   "sumedit": {
+    "dev_rows": 43,
+    "groups": 3,
+    "train_rows": 0
+   },
+   "w2c": {
+    "dev_rows": 327,
+    "groups": 317,
+    "train_rows": 0
+   },
+   "wands": {
+    "dev_rows": 718,
+    "groups": 45,
+    "train_rows": 0
+   },
+   "wanli": {
+    "dev_rows": 13,
+    "groups": 13,
+    "train_rows": 0
+   }
+  },
+  "groups": 1064
+ },
+ "drop_dev_groups_sha256": "1bc7aeacc477a054eb454bd364cf142bfc59f3b80198abe714b7575c845afc88",
+ "drop_groups_sha256": "c1c3c86fde9170fcd44cf373b2977a864514c5aaab536d9b19f40bb93239a65b",
+ "quarantine": {
+  "by_family": {
+   "args": {
+    "dev_rows": 28,
+    "groups": 129,
+    "train_rows": 230
+   },
+   "copa": {
+    "dev_rows": 0,
+    "groups": 4,
+    "train_rows": 8
+   },
+   "csqa": {
+    "dev_rows": 7,
+    "groups": 27,
+    "train_rows": 470
+   },
+   "maud": {
+    "dev_rows": 163,
+    "groups": 103,
+    "train_rows": 3997
+   },
+   "medmcqa": {
+    "dev_rows": 1,
+    "groups": 30,
+    "train_rows": 29
+   },
+   "procb": {
+    "dev_rows": 0,
+    "groups": 10,
+    "train_rows": 10
+   },
+   "sentfin": {
+    "dev_rows": 2,
+    "groups": 6,
+    "train_rows": 5
+   },
+   "snips_rel": {
+    "dev_rows": 0,
+    "groups": 2,
+    "train_rows": 2
+   },
+   "snips_sel": {
+    "dev_rows": 0,
+    "groups": 1,
+    "train_rows": 1
+   },
+   "sumedit": {
+    "dev_rows": 100,
+    "groups": 24,
+    "train_rows": 393
+   },
+   "w2c": {
+    "dev_rows": 8,
+    "groups": 47,
+    "train_rows": 40
+   },
+   "wands": {
+    "dev_rows": 24,
+    "groups": 11,
+    "train_rows": 200
+   },
+   "wanli": {
+    "dev_rows": 16,
+    "groups": 136,
+    "train_rows": 120
+   }
+  },
+  "groups": 530
+ },
+ "report_only_roles_hit": {
+  "a7_train_A7h": 37,
+  "a7_train_A7i": 5,
+  "a7_train_A7m": 63,
+  "a7_train_A7q": 264,
+  "a7_train_A7s": 8,
+  "rights_clean_train": 3,
+  "v1_train_a1": 9,
+  "v1_train_a3": 93,
+  "v1_train_a6h": 7,
+  "v2_aho_E11": 9,
+  "v2_aho_H1": 444,
+  "v2_aho_H3": 138,
+  "v2_aho_H5": 4,
+  "v2_aho_H6": 23
+ },
+ "schema": "decision2.hr2.quarantine.v1"
+}

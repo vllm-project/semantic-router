@@ -1,0 +1,32 @@
+{
+ "schema": "decision2.ib1.status.v1",
+ "release_safe": false,
+ "reason": "preregistered decisive blind label review failed P1 and P2 (13 / 216 gold errors, 6.02%, exact 95% upper 10.07%; population-weighted 8.33%); P3 passed; no fix rule; published flagged, not tuned further",
+ "screen": {
+  "n": 120,
+  "disagreements": 4,
+  "families_dropped": []
+ },
+ "review": {
+  "n": 216,
+  "errors": 13,
+  "error": 0.060185,
+  "error_cp95_upper": 0.10072,
+  "weighted_error": 0.083282,
+  "P1": false,
+  "P2": false,
+  "P3": true
+ },
+ "rows_removed_from_train": {
+  "review_gold_errors": 13,
+  "screen_disagreements": 4,
+  "leak_guard": 12
+ },
+ "families_dropped": {
+  "empty_under_rule": ["expqa"],
+  "shortcut_gate": ["maud", "medmcqa", "procb", "wanli"]
+ },
+ "in_distribution_families": ["w2c", "isarc"],
+ "index_rows": "every candidate group with an exact, normalized or 13-gram match to any Index suite row was dropped (G0); positive controls 2,000 / 2,000 exact and 2,000 / 2,000 perturbed",
+ "prereg": "v2/data/records/ib1-prereg-2026-10-01.md (amendment 1)"
+}
