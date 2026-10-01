@@ -267,6 +267,10 @@ def main() -> None:
     (rooted / "adapter_config.json").write_text(
         json.dumps({**config, "base_model_name_or_path": f"{STAGING}-base"})
     )
+    shutil.copyfile(
+        rooted / "adapter" / "adapter_model.safetensors",
+        rooted / "adapter_model.safetensors",
+    )
     hub_cache(rooted, cache, f"{STAGING}-rooted", commit)
     env = {
         **os.environ,
@@ -369,8 +373,8 @@ def hub_checks(work: Path, device: str) -> None:
         type(loaded).__name__ == "Decision2Model"
     )
     del loaded
-    # The same adapter repository with its adapter_config.json also at the root: Transformers' PEFT
-    # detection loads the base the adapter names instead of the Decision model.
+    # The same adapter repository with its adapter (config and weights) also at the root: Transformers'
+    # PEFT detection loads the base the adapter names, with the adapter, instead of the Decision model.
     try:
         redirected = type(
             AutoModel.from_pretrained(f"{STAGING}-rooted", trust_remote_code=True)
