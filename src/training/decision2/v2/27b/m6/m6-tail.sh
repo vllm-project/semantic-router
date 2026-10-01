@@ -54,7 +54,7 @@ case "$STAGE" in
     extra=()
     for family in "$@"; do extra+=(--in-distribution "$family"); done
     for n in "$NAME" "$REF"; do [ -f "$R/slices/$n/probs/slices.json" ] || { echo "no slices for $n" >&2; exit 2; }; done
-    slice=$( [ "$STAGE" = pn1 ] && echo pn1 || echo ib )
+    slice=$( [ "$STAGE" = pn1 ] && echo pn1 || echo "${IB_SLICE:-ib}" )
     (cd "$S" && python3 -m v2.27b.m6.m6_slices "$STAGE" --rows "$ROWS" \
       --candidate "$NAME=$R/slices/$NAME/probs/$slice.probs.jsonl" \
       --reference "$REF=$R/slices/$REF/probs/$slice.probs.jsonl" "${extra[@]}" \
@@ -100,7 +100,8 @@ case "$STAGE" in
     extra=()
     for family in ${IN_DIST:-}; do extra+=(--in-distribution "$family"); done
     (cd "$S" && python3 -m v2.27b.m6.m6_devgates --root "$R" --pn1-rows "$PN1_ROWS" --ib-rows "$IB_ROWS" \
-      "${extra[@]}" --pn1-validation "$R/slices/M5-L128/pn1-vs-A20r.json" --ref-ib "${REF_IB:-A20r-ib1}" "$@" \
+      "${extra[@]}" --pn1-validation "$R/slices/M5-L128/pn1-vs-A20r.json" --ref-ib "${REF_IB:-A20r-ib1}" \
+      --ib-slice "${IB_SLICE:-ib}" "$@" \
       --output "$R/readouts/DEVGATES-$(date -u +%Y%m%dT%H%M%SZ).json") ;;
   formal)
     NAME=${1:?NAME} CKPT=${2:?CKPT} GPU=${3:?GPU}; aux "$GPU"

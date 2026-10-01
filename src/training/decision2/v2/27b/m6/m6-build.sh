@@ -10,12 +10,20 @@
 #      must be exhausted (all its non-duplicate groups taken)
 #   3. the source-level C1 registry check of the rows new against a20 (m4_c1_sources.py; counts only)
 #   4. BUILD.json: rows, tokens, updates (16 rows each), SAVE_EVERY = ceil(updates / 8), the GPU-hour projection
-#      (0.40 GPU-h per million tokens plus 0.1 s per row) and the per-seed cap check (projection x 1.15 <= 16)
-# Usage: m6-build.sh REVISION TRAIN_SHA DEV_SHA   (from /data/dev2/src/<sha>-src_training_decision2/...)
+#      (0.40 GPU-h per million tokens plus 0.1 s per row) and the per-seed cap check (projection x 1.15 <= the cap:
+#      16 for stage 1, 18 for stage 2)
+# With the optional IB2 arguments (stage 2, preregistration "Stage 2: IB2") the same build also writes a20ib12 = a20's
+# terms + IB1 + IB2, each block whole after the dedup (IB2 must add <= 10M tokens), and the stage-2 IB DEV slice
+# ib12.dev.jsonl = IB1 DEV + IB2 DEV (m6_data concat).
+# Usage: m6-build.sh REVISION TRAIN_SHA DEV_SHA [IB2_REVISION IB2_TRAIN_SHA IB2_DEV_SHA]
+#   (from /data/dev2/src/<sha>-src_training_decision2/...)
 set -uo pipefail
 export TMPDIR=/data/dev2/tmp HF_HUB_CACHE=/data/dev2/hf-cache
 REV=${1:?REVISION} TRAIN_SHA=${2:?TRAIN_SHA} DEV_SHA=${3:?DEV_SHA}
-for v in "$REV" "$TRAIN_SHA" "$DEV_SHA"; do [[ "$v" =~ ^[0-9a-f]{40}([0-9a-f]{24})?$ ]] || { echo "bad hash $v" >&2; exit 2; }; done
+REV2=${4:-} TRAIN2_SHA=${5:-} DEV2_SHA=${6:-}
+for v in "$REV" "$TRAIN_SHA" "$DEV_SHA" ${REV2:+"$REV2" "$TRAIN2_SHA" "$DEV2_SHA"}; do
+  [[ "$v" =~ ^[0-9a-f]{40}([0-9a-f]{24})?$ ]] || { echo "bad hash $v" >&2; exit 2; }
+done
 M=$(cd "$(dirname "$0")/../../.." && pwd)
 R=/data/dev2/private/27b/m2-data D=/data/dev2/private/27b/m3-data O=/data/dev2/private/27b/m6-data
 SNAP=$HF_HUB_CACHE/datasets--llm-semantic-router--decision-2.0-training-data/snapshots/$REV/m6/ib1
@@ -36,12 +44,32 @@ python3 -c "import json,sys; s=json.load(open(sys.argv[1])); sys.exit(0 if s.get
 [ -e "$O/ibx.train.jsonl" ] || (cd "$M" && PYTHONPATH=$M python3 -m v2.27b.m6.m6_data drop-families --input "$IB1" \
   --drop w2c --drop isarc --output "$O/ibx.train.jsonl") | tee "$O/ibx.json" || { echo "IBX FAILED"; exit 1; }
 IBX_SHA=$(sha256sum < "$O/ibx.train.jsonl" | cut -c1-64)
+IB2DEV='' IB12DEV_SHA='' stage2=() mount2=()
+if [ -n "$REV2" ]; then
+  SNAP2=$HF_HUB_CACHE/datasets--llm-semantic-router--decision-2.0-training-data/snapshots/$REV2/m6/ib2
+  hf download llm-semantic-router/decision-2.0-training-data --repo-type dataset --revision "$REV2" \
+    --include "m6/ib2/ib2.train.jsonl" --include "m6/ib2/ib2.dev.jsonl" --include "m6/ib2/status.json" > /dev/null ||
+    { echo "IB2 download failed"; exit 1; }
+  IB2=$(readlink -f "$SNAP2/ib2.train.jsonl") IB2DEV=$(readlink -f "$SNAP2/ib2.dev.jsonl")
+  [ "$(sha256sum < "$IB2" | cut -c1-64)" = "$TRAIN2_SHA" ] || { echo "ib2.train.jsonl is not $TRAIN2_SHA"; exit 1; }
+  [ "$(sha256sum < "$IB2DEV" | cut -c1-64)" = "$DEV2_SHA" ] || { echo "ib2.dev.jsonl is not $DEV2_SHA"; exit 1; }
+  python3 -c "import json,sys; s=json.load(open(sys.argv[1])); sys.exit(0 if s.get('release_safe') is True else 1)" \
+    "$SNAP2/status.json" || { echo "status.json at $REV2 is not release_safe"; exit 1; }
+  [ -e "$O/ib12.dev.jsonl" ] || (cd "$M" && PYTHONPATH=$M python3 -m v2.27b.m6.m6_data concat --input "$IBDEV" \
+    --input "$IB2DEV" --output "$O/ib12.dev.jsonl") | tee "$O/ib12.json" || { echo "IB12 DEV FAILED"; exit 1; }
+  IB12DEV_SHA=$(sha256sum < "$O/ib12.dev.jsonl" | cut -c1-64)
+  mount2=(--mount "type=bind,src=$IB2,dst=/ib/ib2.train.jsonl,readonly")
+  spec12="a20ib12=base:full,A6:rho,A7:tokens=20000000:family-equal,IB1:tokens=1000000000:family-equal"
+  spec12+=",IB2:tokens=1000000000:family-equal"
+  stage2=(--arm IB2=/ib/ib2.train.jsonl --expect "/ib/ib2.train.jsonl=$TRAIN2_SHA" --mixture "$spec12")
+fi
 for k in 1 2; do docker run --rm --network none -e HIP_VISIBLE_DEVICES= -e ROCR_VISIBLE_DEVICES= -e PYTHONPATH=/pipeline:/code -e PYTHONDONTWRITEBYTECODE=1 \
  --mount "type=bind,src=$M,dst=/code,readonly" --mount "type=bind,src=$R/pipeline,dst=/pipeline,readonly" \
  --mount type=bind,src=/data/decision20-20260926/models/Qwen3.8-27B,dst=/source,readonly \
  --mount "type=bind,src=$R,dst=/m2,readonly" --mount "type=bind,src=$D/a7,dst=/a7,readonly" \
  --mount "type=bind,src=$D/hf-ed87a03a,dst=/cal,readonly" \
  --mount "type=bind,src=$IB1,dst=/ib/ib1.train.jsonl,readonly" --mount "type=bind,src=$O/ibx.train.jsonl,dst=/ib/ibx.train.jsonl,readonly" \
+ "${mount2[@]}" \
  --mount "type=bind,src=$O,dst=/outroot" \
  -w /code --entrypoint python3 "$IMAGE" \
  -m v2.27b.build_mixtures --source /source --limit 4096 \
@@ -71,7 +99,7 @@ for k in 1 2; do docker run --rm --network none -e HIP_VISIBLE_DEVICES= -e ROCR_
  --mixture a20=base:full,A6:rho,A7:tokens=20000000:family-equal \
  --mixture a20ib1=base:full,A6:rho,A7:tokens=20000000:family-equal,IB1:tokens=1000000000:family-equal \
  --mixture a20ib1x=base:full,A6:rho,A7:tokens=20000000:family-equal,IB1X:tokens=1000000000:family-equal \
- --seed decision2-27b-m3 --output-dir "/outroot/mixtures-m6-$k" || { echo "BUILD $k FAILED"; exit 1; }; done
+ "${stage2[@]}" --seed decision2-27b-m3 --output-dir "/outroot/mixtures-m6-$k" || { echo "BUILD $k FAILED"; exit 1; }; done
 diff -r "$O/mixtures-m6-1" "$O/mixtures-m6-2" || { echo "BUILDS DIFFER"; exit 1; }
 echo IDENTICAL
 (cd "$O/mixtures-m6-1" && sha256sum -- * > ../mixtures-m6-1.sha256 && cat ../mixtures-m6-1.sha256)
@@ -85,39 +113,48 @@ assert hashlib.sha256(a20).hexdigest() == a20_sha, "a20 is not M4's file"
 a20_lines = set(a20.splitlines(keepends=True))
 manifest = json.loads((root / "MIXTURES.json").read_text())
 out = {"a20_is_m4": True}
-for name, arm in (("a20ib1", "IB1"), ("a20ib1x", "IB1X")):
+plan = [("a20ib1", ["IB1"], 16.0), ("a20ib1x", ["IB1X"], 16.0)]
+if "a20ib12" in manifest["mixtures"]:
+    plan.append(("a20ib12", ["IB1", "IB2"], 18.0))
+for name, arms, cap in plan:
     lines = (root / f"{name}.train.jsonl").read_bytes().splitlines(keepends=True)
     assert a20_lines <= set(lines), f"{name} misses a20 rows"
-    part = manifest["mixtures"][name]["parts"][arm]
-    families = part["families"]
-    assert all(f["exhausted"] for f in families.values()), f"{name}: an {arm} family was not exhausted"
+    parts = {arm: manifest["mixtures"][name]["parts"][arm] for arm in arms}
+    for arm, part in parts.items():
+        assert all(f["exhausted"] for f in part["families"].values()), f"{name}: an {arm} family was not exhausted"
+    if "IB2" in parts:
+        assert parts["IB2"]["tokens"] <= 10_000_000, f"{name}: IB2 adds more than 10M tokens (prereg: family-equal 10M)"
     rows = manifest["mixtures"][name]["rows"]
     tokens = manifest["mixtures"][name]["tokens"]
     updates = math.ceil(rows / 16)
     projection = 0.40 * tokens / 1e6 + 0.1 * rows / 3600
     added = [json.loads(line) for line in lines if line not in a20_lines]
     out[name] = {"rows": rows, "tokens": tokens, "updates": updates, "save_every": math.ceil(updates / 8),
-                 "added_rows": len(added), "added_tokens": part["tokens"],
-                 "dropped_duplicate_groups": part["dropped_duplicate_groups"],
+                 "added_rows": len(added), "added_tokens": {a: p["tokens"] for a, p in parts.items()},
+                 "dropped_duplicate_groups": {a: p["dropped_duplicate_groups"] for a, p in parts.items()},
                  "added_by_family": dict(sorted(Counter(r["family"] for r in added).items())),
-                 "projection_gpu_h": round(projection, 2), "cap_gpu_h": 16.0,
-                 "cap_ok": projection * 1.15 <= 16.0}
-    assert out[name]["cap_ok"], f"{name}: projection {projection:.2f} x 1.15 passes the 16.0 cap"
+                 "projection_gpu_h": round(projection, 2), "cap_gpu_h": cap,
+                 "cap_ok": projection * 1.15 <= cap}
+    assert out[name]["cap_ok"], f"{name}: projection {projection:.2f} x 1.15 passes the {cap} cap"
 print(json.dumps(out, indent=1, sort_keys=True))
 EOF
 cat "$O/mixtures-m6-1.checks.json"
-for name in a20ib1 a20ib1x; do
+for name in a20ib1 a20ib1x ${REV2:+a20ib12}; do
   python3 "$M/v2/27b/m4/m4_c1_sources.py" --train "$O/mixtures-m6-1/$name.train.jsonl" \
     --m3a "$O/mixtures-m6-1/a20.train.jsonl" --output "$O/c1-sources-$name.json" || { echo "C1 SOURCES $name FAILED"; exit 1; }
 done
-python3 - "$O" "$REV" "$TRAIN_SHA" "$DEV_SHA" "$IBX_SHA" "$IBDEV" > "$O/BUILD.json" <<'EOF'
+python3 - "$O" "$REV" "$TRAIN_SHA" "$DEV_SHA" "$IBX_SHA" "$IBDEV" "$REV2" "$TRAIN2_SHA" "$DEV2_SHA" "$IB12DEV_SHA" \
+  > "$O/BUILD.json" <<'EOF'
 import json, sys
 from pathlib import Path
-o, rev, train, dev, ibx, ibdev = sys.argv[1:]
+o, rev, train, dev, ibx, ibdev, rev2, train2, dev2, ib12 = sys.argv[1:]
 o = Path(o)
-c1 = {n: json.loads((o / f"c1-sources-{n}.json").read_text()) for n in ("a20ib1", "a20ib1x")}
+names = ["a20ib1", "a20ib1x"] + (["a20ib12"] if rev2 else [])
+c1 = {n: json.loads((o / f"c1-sources-{n}.json").read_text()) for n in names}
+stage2 = {"ib2_revision": rev2, "ib2_train_sha256": train2, "ib2_dev_sha256": dev2,
+          "ib12_dev_path": str(o / "ib12.dev.jsonl"), "ib12_dev_sha256": ib12} if rev2 else {}
 print(json.dumps({"schema": "decision2-27b-m6-build/1", "ib1_revision": rev, "ib1_train_sha256": train,
-                  "ib1_dev_sha256": dev, "ib1_dev_path": ibdev, "ibx_train_sha256": ibx,
+                  "ib1_dev_sha256": dev, "ib1_dev_path": ibdev, "ibx_train_sha256": ibx, **stage2,
                   "files_sha256": dict(line.split()[::-1] for line in (o / "mixtures-m6-1.sha256").read_text().splitlines()),
                   "checks": json.loads((o / "mixtures-m6-1.checks.json").read_text()), "c1_sources": c1},
                  indent=1, sort_keys=True))

@@ -24,6 +24,7 @@ shift
 [ $# -ge 2 ] || { echo "at least two ARM-SEED=b:PID|a entries" >&2; exit 2; }
 : "${PN1_ROWS:?}" "${PN1_SHA:?}" "${IB_ROWS:?}" "${IB_SHA:?}"
 LOADED=${LOADED:-27497508864} CAP=${CAP:-140} RESERVE=${RESERVE:-1.0} REF_IB=${REF_IB:-A20r-ib1}
+IB_SLICE=${IB_SLICE:-ib}
 S=/data/dev2/src/$SHA-src_training_decision2/src/training/decision2
 TAIL=$S/v2/27b/m6/m6-tail.sh GATES=$S/v2/27b/m6/m6-gates.sh
 [ -f "$TAIL" ] && [ -f "$GATES" ] || { echo "missing mirror $SHA" >&2; exit 2; }
@@ -90,7 +91,7 @@ process() {  # ARM
   [ -f "$R/$arm/checkpoint/soup_manifest.json" ] || RELAY_SUMS=$sums bash "$TAIL" lsoup "$SHA" "$arm" "$c1" "$c2"
   [ -f "$R/readouts/$arm/READOUT-M4B.json" ] || bash "$TAIL" readout "$SHA" "$arm" "$R/$arm/checkpoint" "${!var}"
   [ -f "$R/slices/$arm/probs/slices.json" ] || bash "$TAIL" slices "$SHA" "$arm" "$R/$arm/checkpoint" "${!var}" \
-    "pn1=$PN1_ROWS=$PN1_SHA" "ib=$IB_ROWS=$IB_SHA"
+    "pn1=$PN1_ROWS=$PN1_SHA" "$IB_SLICE=$IB_ROWS=$IB_SHA"
   stamp > "$R/logs/$arm.CANDIDATE"
 }
 while :; do
@@ -120,7 +121,8 @@ if [ ${#names[@]} = 0 ]; then
   echo "m6 chain complete (no candidate): $(stamp)"
   exit 0
 fi
-PN1_ROWS=$PN1_ROWS IB_ROWS=$IB_ROWS IN_DIST=${IN_DIST:-} REF_IB=$REF_IB bash "$TAIL" devgates "$SHA" "${names[@]}"
+PN1_ROWS=$PN1_ROWS IB_ROWS=$IB_ROWS IN_DIST=${IN_DIST:-} REF_IB=$REF_IB IB_SLICE=$IB_SLICE \
+  bash "$TAIL" devgates "$SHA" "${names[@]}"
 DEVGATES=$(find "$R/readouts" -maxdepth 1 -name 'DEVGATES-*.json' | sort | tail -n 1)
 mapfile -t finalists < <(python3 -c "import json,sys; print('\n'.join(json.load(open(sys.argv[1]))['finalists']))" "$DEVGATES" | sed '/^$/d')
 echo "$(stamp) development gates $DEVGATES: finalists ${finalists[*]:-none}"

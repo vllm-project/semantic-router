@@ -238,6 +238,19 @@ class M6DataTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 m6_data.drop_families(src, ["nope"], Path(tmp) / "other.jsonl")
 
+    def test_concat_dev_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            a, b, out = Path(tmp) / "a", Path(tmp) / "b", Path(tmp) / "ab"
+            a.write_text(json.dumps({"id": "1"}) + "\n")
+            b.write_text(json.dumps({"id": "2"}))
+            report = m6_data.concat([a, b], out)
+            self.assertEqual(report["rows"], 2)
+            self.assertEqual(
+                out.read_text().splitlines(), ['{"id": "1"}', '{"id": "2"}']
+            )
+            with self.assertRaises(ValueError):
+                m6_data.concat([a, a], Path(tmp) / "aa")
+
     def test_soup_problems(self):
         with tempfile.TemporaryDirectory() as tmp:
             members = []
