@@ -53,6 +53,14 @@ def hub_cache(package: Path, cache: Path, repo_id: str, commit: str) -> Path:
     return snapshot
 
 
+def cpu_lapack(torch) -> bool:
+    try:
+        torch.linalg.solve_triangular(torch.eye(2), torch.ones(2, 1), upper=False)
+        return True
+    except RuntimeError:
+        return False
+
+
 def step(name: str, args: list[str], results: dict) -> dict:
     results[name] = isolated(args)
     return results[name]
@@ -182,6 +190,13 @@ def main() -> None:
     }
     for name, pkg in packages.items():
         out = work / f"out-{name}"
+        if name == "qwen3_5-full" and args.device == "cpu" and not cpu_lapack(torch):
+            results[name] = {
+                "skipped": "this PyTorch has no CPU LAPACK (solve_triangular), which the Qwen3.5 "
+                "reference gated-delta path needs on CPU",
+                "passed": True,
+            }
+            continue
         extra = ["--base-path", str(work / "full")] if "adapter" in name else []
         native_sites = (
             ["--site", str(hidden)]
@@ -237,7 +252,7 @@ def main() -> None:
             .get("cpu_reference_layers"),
             "passed": all(v["exit"] == 0 for v in legs.values()),
         }
-    if args.device == "cpu":
+    if args.device == "cpu" and "skipped" not in results["qwen3_5-full"]:
         results["qwen3_5-full"]["passed"] &= (
             results["qwen3_5-full"]["cpu_reference_layers"] or 0
         ) > 0

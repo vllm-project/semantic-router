@@ -119,6 +119,19 @@ def _supported(function: Any, options: dict[str, Any], what: str) -> dict[str, A
     return options
 
 
+def _offline(options: dict[str, Any]) -> dict[str, Any]:
+    """With HF_HUB_OFFLINE, read the cache only (huggingface_hub would still list a commit's files)."""
+    try:
+        from huggingface_hub import is_offline_mode
+
+        offline = is_offline_mode()
+    except ImportError:
+        from huggingface_hub import constants
+
+        offline = constants.HF_HUB_OFFLINE
+    return {**options, "local_files_only": True} if offline else options
+
+
 def _package_dir(name_or_path: Any, config: Any, hub: dict[str, Any]) -> Path:
     """The repository revision as a directory: a local download, or a snapshot in the Hugging Face cache."""
     local = Path(os.fspath(name_or_path)).expanduser()
@@ -132,11 +145,13 @@ def _package_dir(name_or_path: Any, config: Any, hub: dict[str, Any]) -> Path:
     commit = getattr(revision, "resolved", None)
     if commit is None and getattr(config, "name_or_path", None) == str(name_or_path):
         commit = getattr(config, "_commit_hash", None)
-    options = {
-        k: v
-        for k, v in hub.items()
-        if k != "revision" and v is not None and v is not False
-    }
+    options = _offline(
+        {
+            k: v
+            for k, v in hub.items()
+            if k != "revision" and v is not None and v is not False
+        }
+    )
     _supported(snapshot_download, options, "huggingface_hub.snapshot_download")
     return Path(
         snapshot_download(str(name_or_path), revision=commit or revision, **options)
@@ -147,11 +162,13 @@ def _pinned_base(base: dict[str, Any], hub: dict[str, Any]) -> str:
     """The adapter's pinned base files at the pinned revision, in the same cache (checked by the runtime)."""
     from huggingface_hub import snapshot_download
 
-    options = {
-        k: hub[k]
-        for k in ("cache_dir", "local_files_only", "token")
-        if hub.get(k) is not None
-    }
+    options = _offline(
+        {
+            k: hub[k]
+            for k in ("cache_dir", "local_files_only", "token")
+            if hub.get(k) is not None
+        }
+    )
     return snapshot_download(
         base["repo_id"],
         revision=base["revision"],
