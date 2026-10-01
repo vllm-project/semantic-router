@@ -17,7 +17,8 @@
 # A shard directory holding rows.override.jsonl.gz (its rows minus requests that abort the device,
 # listed in skipped.json) resumes over that file; skipped requests are rerun alone into extra-<k>/.
 # <src> is a mirror_to_node.sh --path src/training/decision2 directory; NAME a package of the table
-# below, downloaded at its pinned revision to /data/dev2/models/ix1/<NAME>-<rev8>.
+# below, downloaded at its pinned revision to /data/dev2/models/ix1/<NAME>-<rev8>, or a DIAGNOSTIC
+# name: a private restaged package (v2.eval.ix1.restage) answering as the listed repository.
 # parity: on one GPU, (1) the package's own entry point (v2.eval.ix1.native_ref) over the gold-free
 #   compatibility rows with a fresh Triton autotune cache, which is then frozen to <run>/cache-frozen;
 #   (2) the kit runner with the adapter over the same rows with a copy of it; (3) v2.eval.ix1.parity.
@@ -52,6 +53,9 @@ declare -A REVISION=(
   [DEV2.0-9B]=e51f9881b92f646cb0bd62b2876d4878cc8d16ec
   [DEV2.0-27B]=5323310327e52d4eadd119cd10accac9b106c97d
 )
+declare -A DIAGNOSTIC=(  # name -> "repository revision package-dir"
+  [M5-L128]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/fix2/M5-L128-95d61175-re876fbe"
+)
 
 mode="${1:-}"; shift || true
 src="" model="" gpu="" gpus="" run="" rows="" rows_dir="" cache="" only="" tag=""
@@ -72,13 +76,17 @@ while [[ $# -gt 0 ]]; do
 done
 usage() { sed -n '2,/^set -euo/p' "$0" | sed '$d' >&2; exit 2; }
 [[ "$mode" =~ ^(parity|run|resume|ref|extra)$ ]] || usage
-[[ -f "$src/.dev2-mirror.json" && -n "${REVISION[$model]:-}" && "$run" == /data/dev2/private/* ]] || usage
+[[ -f "$src/.dev2-mirror.json" && -n "${REVISION[$model]:-}${DIAGNOSTIC[$model]:-}" && "$run" == /data/dev2/private/* ]] \
+  || usage
 [[ "$(docker image inspect --format '{{.Id}}' "$IMAGE")" == "$IMAGE_ID_PREFIX"* ]] \
   || { echo "image $IMAGE is not the frozen build" >&2; exit 1; }
 [[ "$(git -C "$KIT" rev-parse HEAD)" == "$KIT_REVISION" ]] || { echo "kit is not at $KIT_REVISION" >&2; exit 1; }
 S="$src/src/training/decision2"
-revision="${REVISION[$model]}"
-pkg="$MODELS/$model-${revision:0:8}"
+if [[ -n "${DIAGNOSTIC[$model]:-}" ]]; then
+  read -r repo revision pkg <<< "${DIAGNOSTIC[$model]}"
+else
+  repo="$model" revision="${REVISION[$model]}" pkg="$MODELS/$model-${REVISION[$model]:0:8}"
+fi
 manifest_sha="$(sha256sum "$pkg/MODEL_MANIFEST.json" | cut -c1-64)"
 base_dir="$(python3 - "$pkg/MODEL_MANIFEST.json" "$HF_CACHE" <<'EOF'
 import json, sys
@@ -176,7 +184,7 @@ wait_for_room() {
 
 kit_run() {  # rows out -> shell command
   printf 'python3 -m decision_index run --engine %s --option model_id=llm-semantic-router/%s --option revision=%s --option package_manifest_sha256=%s --option device=cuda:0 --rows %q --out %q --compact' \
-    "$ENGINE" "$model" "$revision" "$manifest_sha" "$1" "$2"
+    "$ENGINE" "$repo" "$revision" "$manifest_sha" "$1" "$2"
 }
 
 umask 077

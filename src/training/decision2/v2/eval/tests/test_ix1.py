@@ -1,9 +1,11 @@
-"""CPU-only checks for the IX1 parity gate, shard assignment and result merge."""
+"""CPU-only checks for the IX1 parity gate, shard assignment, result merge and CAL fits."""
 
 from __future__ import annotations
 
 import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from v2.eval.ix1 import merge, panel, parity
 
@@ -94,6 +96,38 @@ class ShardAndMergeTests(unittest.TestCase):
     def test_percentile_interpolates(self) -> None:
         self.assertEqual(merge._percentile([1.0, 2.0, 3.0, 4.0, 5.0], 0.5), 3.0)
         self.assertAlmostEqual(merge._percentile([0.0, 10.0], 0.95), 9.5)
+
+
+class CalibrationTests(unittest.TestCase):
+    def test_noul_labels_follow_the_option_keys(self) -> None:
+        from v2.eval.ix1 import calib
+
+        orders = {"ft": ["false", "true"], "tf": ["true", "false"]}
+        with tempfile.TemporaryDirectory() as tmp:
+            fits = {}
+            for name, keys in orders.items():
+                labels, refs = {}, []
+                for i, (p, gold) in enumerate([(0.9, "true"), (0.2, "false")] * 20):
+                    run_id = f"{name}{i}"
+                    labels[run_id] = {
+                        "type": "noul",
+                        "label": keys.index(gold),
+                        "keys": keys,
+                    }
+                    answer = {"type": "noul", "noul": p}
+                    refs.append(
+                        {"run_id": run_id, "status": "ok", "answers": {"q": answer}}
+                    )
+                labels_path = Path(tmp, f"{name}-labels.json")
+                ref_path = Path(tmp, f"{name}-ref.jsonl")
+                labels_path.write_text(json.dumps(labels))
+                ref_path.write_text("".join(json.dumps(r) + "\n" for r in refs))
+                fits[name] = calib.fit(labels_path, ref_path)
+        self.assertAlmostEqual(
+            fits["ft"]["temperatures"]["noul"], fits["tf"]["temperatures"]["noul"]
+        )
+        self.assertLess(fits["tf"]["temperatures"]["noul"], 1.0)
+        self.assertEqual(fits["ft"]["noul_tb"], fits["tf"]["noul_tb"])
 
 
 if __name__ == "__main__":
