@@ -22,3 +22,11 @@
   `2b-RASD`; E GPU1 `08b-RAAG`, GPU3 `08b-RASD`.
 - Node A: M13 tier probe golds built (identical hashes to M12's); M12 readouts staged as `08b-RA-m12`, `2b-RA-m12`,
   `4b-LHA10-m12` for the report-only contrasts.
+
+## 2026-10-01 14:50Z — training
+
+- All pre-warm preflights passed (`warm-4b-f` 13:50Z, `warm-08b-e` 13:55Z); every 4B / 0.8B seed passed preflight.
+- `4b-LHA5-s1` DONE 14:48Z (886 steps); `2b-RASD-s1` (2B pre-warm on F) started on GPU2. `4b-LHA5-s2` and
+  `4b-LHA10SD-s1` / `s2` near their end (~860 / 1,138 steps). Node E's four 0.8B seeds run at ≈ 40 steps / min (four
+  0.8B jobs at once; M12 ran two): `08b-RASD` ≈ 2,370 / 4,831 steps, `08b-RAAG` 2,492 / 2,066 of 5,624; expected end
+  ≈ 16:05–16:25Z.
