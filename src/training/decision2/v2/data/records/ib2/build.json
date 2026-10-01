@@ -1,0 +1,203 @@
+{
+ "dev": {
+  "family": {
+   "argq": 629,
+   "fc_args2": 336,
+   "fc_ready": 357,
+   "fc_rel": 804,
+   "fc_sel2": 785,
+   "gsm2": 745,
+   "hover": 598,
+   "ytspam": 151
+  },
+  "groups": 2684,
+  "label_by_family": {
+   "argq": {
+    "0": 321,
+    "1": 308
+   },
+   "fc_args2": {
+    "0": 116,
+    "1": 105,
+    "2": 115
+   },
+   "fc_ready": {
+    "0": 171,
+    "1": 186
+   },
+   "fc_rel": {
+    "0": 407,
+    "1": 397
+   },
+   "fc_sel2": {
+    "0": 202,
+    "1": 160,
+    "2": 209,
+    "3": 214
+   },
+   "gsm2": {
+    "0": 378,
+    "1": 367
+   },
+   "hover": {
+    "0": 246,
+    "1": 352
+   },
+   "ytspam": {
+    "0": 87,
+    "1": 64
+   }
+  },
+  "language": {
+   "en": 4405
+  },
+  "rows": 4405,
+  "sha256": "a48b62373010a30045edd44ff1e3fdca6106abacb7a2bf41b409c35de9fd9993",
+  "task_type": {
+   "choice": 1750,
+   "noul": 2655
+  }
+ },
+ "inputs": {
+  "glaiveai_glaive-function-calling-v2/glaive-function-calling-v2.json": "e9b5d671812b5ca2fbd7b625a37d5c99a19576c37252cdc806defe256aea6dad",
+  "hover-nlp_hover/data/hover/hover_train_release_v1.1.json": "1f1cd57abd616fa00c70bdc575ce77c16fc6cf1a6cffd5ff87c208030a336bb6",
+  "hover_wiki_wo_links.db": "c37ee397916ec0bffacfe8902db454a5cda88a7a188409217b2e15231fe5ee2f",
+  "ibm-research_argument_quality_ranking_30k/train.csv": "55910fd3599ec54c088d4e9c55f745ff814d153f13c1a7c23a4d31f167cf16f7",
+  "openai_gsm8k/main/train-00000-of-00001.parquet": "ea82612ea9582142387730c793eb67d3b12849002bc0b7fa6f8efafa7351419d",
+  "uci_youtube_spam/youtube+spam+collection.zip": "bd6182891adb3cfc8334b82c062176dfbebc563bf0ba07e31c2645f916865a0a"
+ },
+ "prereg": "records/ib2-prereg-2026-10-01.md",
+ "report": {
+  "duplicates": {
+   "conflicting": {
+    "hover": 2
+   },
+   "exact": {
+    "fc_args2": 3,
+    "fc_ready": 55,
+    "fc_rel": 12,
+    "hover": 20,
+    "ytspam": 201
+   }
+  },
+  "families": {
+   "argq": {
+    "drop_exact_duplicates": 1,
+    "drop_stance_not_unanimous": 6117,
+    "eligible": 14856,
+    "read": 20974,
+    "selected": 5978
+   },
+   "fc_args2": {
+    "drop_exact_duplicates": 4747,
+    "drop_no_alternative_value": 901,
+    "drop_no_first_call": 40528,
+    "drop_not_grounded": 7074,
+    "eligible": 3459,
+    "selected": 3459
+   },
+   "fc_ready": {
+    "drop_ask_not_supplied_later": 1183,
+    "drop_call_not_grounded": 6654,
+    "drop_exact_duplicates": 5661,
+    "drop_neither": 27807,
+    "eligible": 8863,
+    "selected": 3732
+   },
+   "fc_rel": {
+    "drop_exact_duplicates": 12339,
+    "drop_neither_call_nor_refusal": 25555,
+    "drop_no_functions": 34949,
+    "eligible": 13129,
+    "read": 112960,
+    "selected": 8000
+   },
+   "fc_sel2": {
+    "drop_exact_duplicates": 5770,
+    "drop_no_first_call": 40528,
+    "eligible": 8443,
+    "selected": 8000
+   },
+   "gsm2": {
+    "drop_exact_duplicates": 0,
+    "eligible": 7473,
+    "read": 7473,
+    "selected": 7370
+   },
+   "hover": {
+    "drop_exact_duplicates": 0,
+    "drop_hops": 3035,
+    "eligible": 15136,
+    "read": 18171,
+    "selected": 6000
+   },
+   "ytspam": {
+    "drop_exact_duplicates": 3,
+    "eligible": 1953,
+    "read": 1956,
+    "selected": 1900
+   }
+  },
+  "group_merges": 0
+ },
+ "schema": "decision2.ib2.build.v1",
+ "train": {
+  "family": {
+   "argq": 5349,
+   "fc_args2": 3120,
+   "fc_ready": 3320,
+   "fc_rel": 7184,
+   "fc_sel2": 7215,
+   "gsm2": 6625,
+   "hover": 5380,
+   "ytspam": 1548
+  },
+  "groups": 24023,
+  "label_by_family": {
+   "argq": {
+    "0": 2668,
+    "1": 2681
+   },
+   "fc_args2": {
+    "0": 1021,
+    "1": 1084,
+    "2": 1015
+   },
+   "fc_ready": {
+    "0": 1651,
+    "1": 1669
+   },
+   "fc_rel": {
+    "0": 3589,
+    "1": 3595
+   },
+   "fc_sel2": {
+    "0": 1783,
+    "1": 1893,
+    "2": 1752,
+    "3": 1787
+   },
+   "gsm2": {
+    "0": 3307,
+    "1": 3318
+   },
+   "hover": {
+    "0": 2151,
+    "1": 3229
+   },
+   "ytspam": {
+    "0": 818,
+    "1": 730
+   }
+  },
+  "language": {
+   "en": 39741
+  },
+  "rows": 39741,
+  "sha256": "9b9bc534a40d8c70516482b9175e64569304ea5088b58186a60782eab28bec3c",
+  "task_type": {
+   "choice": 15684,
+   "noul": 24057
+  }
+ }
+}

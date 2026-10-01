@@ -93,6 +93,7 @@ TWIN_FAMILIES = ("args",)
 CONSTRUCTIONS: dict[str, tuple[str, str, Any]] = {
     "sentfin-neutral": ("sentfin", "label", fam.SENTFIN_LABELS.index("neutral")),
     "sumedit-shakespeare": ("sumedit", "domain", "shakespeare"),
+    "sumedit-sales_email": ("sumedit", "domain", "sales_email"),
     "wands-partial": ("wands", "label", fam.WANDS_LABELS.index("Partial")),
 }
 
@@ -196,7 +197,7 @@ def snips_files(root: Path) -> dict[str, Any]:
 # --------------------------------------------------------------------------- build
 
 
-def convert(raw: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def convert(raw: Path, round_: int = 1) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     reports: dict[str, collections.Counter] = {
         name: collections.Counter() for name in FAMILIES
     }
@@ -235,7 +236,9 @@ def convert(raw: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         reports["procb"],
     )
     rows += fam.sentfin(
-        fam.read_csv(raw / "pyRis_SEntFiN/SEntFiN.csv"), reports["sentfin"]
+        fam.read_csv(raw / "pyRis_SEntFiN/SEntFiN.csv"),
+        reports["sentfin"],
+        two_way=round_ >= 3,
     )
     tsv = {"delimiter": "\t", "quoting": csv.QUOTE_NONE}
     rows += fam.wands(
@@ -365,7 +368,7 @@ def build(args: argparse.Namespace) -> int:
         if actual != expected:
             raise ValueError(f"{rel}: sha256 {actual} != pinned {expected}")
         inputs[rel] = actual
-    rows, report = convert(raw)
+    rows, report = convert(raw, args.round)
     unique, report["duplicates"] = dedup(rows)
     report["group_merges"] = merge_groups(unique)
     train = [row for row in unique if not is_dev(row["group_id"])]
@@ -375,6 +378,7 @@ def build(args: argparse.Namespace) -> int:
     manifest = {
         "schema": "decision2.ib1.build.v1",
         "prereg": "records/ib1-prereg-2026-10-01.md",
+        "round": args.round,
         "inputs": inputs,
         "report": report,
         "train": {
@@ -578,6 +582,7 @@ def main(argv: list[str] | None = None) -> int:
     one = sub.add_parser("build")
     one.add_argument("--raw", required=True, type=Path)
     one.add_argument("--out", required=True, type=Path)
+    one.add_argument("--round", type=int, choices=(1, 2, 3), default=1)
     two = sub.add_parser("finalize")
     two.add_argument("--cand", required=True, type=Path)
     two.add_argument("--out", required=True, type=Path)

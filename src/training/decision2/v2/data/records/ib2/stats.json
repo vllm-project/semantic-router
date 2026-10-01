@@ -1,0 +1,216 @@
+{
+ "balance_failures": [],
+ "dev": {
+  "balance": {
+   "argq": {
+    "cells": 41,
+    "labels": {
+     "0": 204,
+     "1": 204
+    },
+    "pass": true,
+    "rows": 408
+   },
+   "gsm2": {
+    "labels": {
+     "0": 286,
+     "1": 286
+    },
+    "pass": true,
+    "rows": 572
+   },
+   "hover": {
+    "labels": {
+     "0": 80,
+     "1": 120
+    },
+    "pass": true,
+    "rows": 200,
+    "yes_share": 0.6
+   },
+   "ytspam": {
+    "labels": {
+     "0": 46,
+     "1": 46
+    },
+    "pass": true,
+    "rows": 92
+   }
+  },
+  "sizes": {
+   "by_family": {
+    "argq": {
+     "groups": 408,
+     "languages": {
+      "en": 408
+     },
+     "native_tokens": 47418,
+     "rows": 408
+    },
+    "gsm2": {
+     "groups": 572,
+     "languages": {
+      "en": 572
+     },
+     "native_tokens": 84861,
+     "rows": 572
+    },
+    "hover": {
+     "groups": 140,
+     "languages": {
+      "en": 200
+     },
+     "native_tokens": 72301,
+     "rows": 200
+    },
+    "ytspam": {
+     "groups": 92,
+     "languages": {
+      "en": 92
+     },
+     "native_tokens": 11600,
+     "rows": 92
+    }
+   },
+   "groups": 1212,
+   "language": {
+    "en": 1272
+   },
+   "native_tokens": 216180,
+   "rows": 1272,
+   "task_type": {
+    "choice": 408,
+    "noul": 864
+   },
+   "tokens_missing": 0
+  }
+ },
+ "inputs": {
+  "dev": "ab009fb12f9563c3ef4a846f5455dd5233f2a2c5fafe6ac8a9c74349532eb923",
+  "tokens": [
+   "5dbe551907d3e49c97a93608dd0de62de781fa89180a4ab042832f6c78c708d1",
+   "ec7d07a221a74bcb861c15bef8352800222ae49bcf5b5bef9fb0765875619abc"
+  ],
+  "train": "ee137efa8bbf86e5c62574f3b8fbd6204063e095a8da514f32600ba3d51d1cfa"
+ },
+ "schema": "decision2.ib2.stats.v1",
+ "shared_groups": 0,
+ "train": {
+  "balance": {
+   "argq": {
+    "cells": 49,
+    "labels": {
+     "0": 2576,
+     "1": 2576
+    },
+    "pass": true,
+    "rows": 5152
+   },
+   "fc_ready": {
+    "labels": {
+     "0": 1291,
+     "1": 1291
+    },
+    "pass": true,
+    "rows": 2582
+   },
+   "fc_rel": {
+    "labels": {
+     "0": 2866,
+     "1": 2866
+    },
+    "pass": true,
+    "rows": 5732
+   },
+   "gsm2": {
+    "labels": {
+     "0": 2791,
+     "1": 2791
+    },
+    "pass": true,
+    "rows": 5582
+   },
+   "hover": {
+    "labels": {
+     "0": 1608,
+     "1": 2412
+    },
+    "pass": true,
+    "rows": 4020,
+    "yes_share": 0.6
+   },
+   "ytspam": {
+    "labels": {
+     "0": 725,
+     "1": 725
+    },
+    "pass": true,
+    "rows": 1450
+   }
+  },
+  "sizes": {
+   "by_family": {
+    "argq": {
+     "groups": 5152,
+     "languages": {
+      "en": 5152
+     },
+     "native_tokens": 598221,
+     "rows": 5152
+    },
+    "fc_ready": {
+     "groups": 2164,
+     "languages": {
+      "en": 2582
+     },
+     "native_tokens": 640191,
+     "rows": 2582
+    },
+    "fc_rel": {
+     "groups": 4091,
+     "languages": {
+      "en": 5732
+     },
+     "native_tokens": 1652936,
+     "rows": 5732
+    },
+    "gsm2": {
+     "groups": 5582,
+     "languages": {
+      "en": 5582
+     },
+     "native_tokens": 833392,
+     "rows": 5582
+    },
+    "hover": {
+     "groups": 2626,
+     "languages": {
+      "en": 4020
+     },
+     "native_tokens": 1507205,
+     "rows": 4020
+    },
+    "ytspam": {
+     "groups": 1435,
+     "languages": {
+      "en": 1450
+     },
+     "native_tokens": 192788,
+     "rows": 1450
+    }
+   },
+   "groups": 20054,
+   "language": {
+    "en": 24518
+   },
+   "native_tokens": 5424733,
+   "rows": 24518,
+   "task_type": {
+    "choice": 5152,
+    "noul": 19366
+   },
+   "tokens_missing": 0
+  }
+ },
+ "verdict": "PASS"
+}

@@ -1,0 +1,35 @@
+{
+  "left_sha256": "5bfcc8aefb3c5a03465796ff9a321fe2000e1d49dbaf580f25f418804f831422",
+  "max_abs_drift": 0.0,
+  "mode": "compare-answers",
+  "panels": {
+    "css15": {
+      "category_changes": 0,
+      "identical_prompts": 6547,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "prompts": 6547,
+      "slots": 6547
+    },
+    "public231": {
+      "category_changes": 0,
+      "identical_prompts": 231,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "prompts": 231,
+      "slots": 231
+    },
+    "typed-final": {
+      "category_changes": 0,
+      "identical_prompts": 1600,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "prompts": 1600,
+      "slots": 2000
+    }
+  },
+  "passed": true,
+  "right_sha256": "5bfcc8aefb3c5a03465796ff9a321fe2000e1d49dbaf580f25f418804f831422",
+  "schema": "dev2-release-examples/1",
+  "tolerance": 0.0001
+}

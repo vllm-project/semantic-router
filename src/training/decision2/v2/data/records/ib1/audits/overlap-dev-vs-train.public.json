@@ -1,8 +1,8 @@
 {
  "boilerplate": {
   "E_leaf": {
-   "groups": 4588,
-   "units": 102
+   "groups": 4554,
+   "units": 101
   },
   "E_state": {
    "groups": 0,
@@ -13,7 +13,7 @@
    "units": 282
   },
   "N_char": {
-   "groups": 4588,
+   "groups": 4554,
    "units": 32480
   },
   "N_word": {
@@ -22,14 +22,14 @@
   },
   "S": {
    "groups": 616,
-   "units": 265
+   "units": 267
   }
  },
  "by_method": {
   "E": {
-   "a_groups": 597,
-   "b_groups": 2759,
-   "pairs": 5551
+   "a_groups": 591,
+   "b_groups": 2737,
+   "pairs": 5530
   },
   "L": {
    "a_groups": 324,
@@ -37,30 +37,30 @@
    "pairs": 2026
   },
   "N": {
-   "a_groups": 645,
-   "b_groups": 2847,
-   "pairs": 10848
+   "a_groups": 638,
+   "b_groups": 2835,
+   "pairs": 10832
   },
   "S": {
-   "a_groups": 406,
-   "b_groups": 943,
-   "pairs": 2188
+   "a_groups": 397,
+   "b_groups": 907,
+   "pairs": 2153
   }
  },
  "candidate_files": [
   {
-   "rows": 6655,
-   "sha256": "6816bf43834a88c43c8351cc6e3f98e732a53ae9d2d40ccb64dc90ff2c1eca92"
+   "rows": 6605,
+   "sha256": "8ce859f4fd6f652cfe9f0600aafdd5075e99d6005723c52665876f31f1f44f79"
   },
   {
-   "rows": 63359,
-   "sha256": "888dad522420dafe6759aa1957dd35a628be579e4873934d89e0ee9ed9ecbdb1"
+   "rows": 63001,
+   "sha256": "468cf7f202b8b1f4e7f42bea199df281774bd712f3fe8eb3c59f1251c30e27e2"
   }
  ],
- "candidate_groups_in_pairs": 1097,
+ "candidate_groups_in_pairs": 1086,
  "candidates": {
-  "groups": 4588,
-  "rows": 6655
+  "groups": 4554,
+  "rows": 6605
  },
  "methods": {
   "E": "normalized leaf equality (compact length >= 20) and equality of normalized canonical-JSON states (canonical-JSON strings decoded first)",
@@ -70,7 +70,7 @@
   "boilerplate": "a matched unit in >= 5 distinct candidate groups, or an N gram in >= 5 distinct protected rows; reported separately and never quarantining"
  },
  "mode": "across",
- "pairs": 16681,
+ "pairs": 16639,
  "params": {
   "boilerplate_groups": 5,
   "boilerplate_rows": 5,
@@ -94,9 +94,9 @@
  "reference": {
   "distinct_leaves_by_length": {
    "gt_800": 11745,
-   "le_800": 73475
+   "le_800": 73067
   },
-  "groups": 41237,
+  "groups": 40895,
   "long_leaf_windows_scanned": 63755
  },
  "schema": "decision2.v2.overlap.self.public.v1"

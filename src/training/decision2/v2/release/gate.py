@@ -84,6 +84,41 @@ VERIFY_STEPS = (
     "card-post",
     "readback",
 )
+# Packages that ship the Transformers remote code (MODEL_MANIFEST.json remote_code).
+AUTOMAP_STEPS = (
+    "automap-pre",
+    "automap-card-pre",
+    "automap-parity-pre",
+    "automap-vs-native-pre",
+    "automap-post",
+)
+
+
+def remote_code_item(
+    receipts: Path, steps: dict[str, Any], package: Path
+) -> dict[str, Any] | None:
+    """Gate item 7 for a package with remote code: AutoModel / pipeline / card answers equal the native ones
+    before and after the download, the card's Transformers example runs from the Hub, and (with scored
+    parity) AutoModel answers every scored prompt as the native run did."""
+    manifest_path = package / "MODEL_MANIFEST.json"
+    if not manifest_path.is_file() or not _json(manifest_path).get("remote_code"):
+        return None
+    hub = sorted(p.stem for p in receipts.glob("automap-hub*.json"))
+    required = ["automap-pre", "automap-card-pre", "automap-post", *hub]
+    if (receipts / "parity-pre.json").is_file():
+        required += ["automap-parity-pre", "automap-vs-native-pre"]
+    compared = steps.get("automap-vs-native-pre") or {}
+    return {
+        "passed": bool(hub) and all(steps.get(s, {}).get("passed") for s in required),
+        "evidence": (
+            f"Transformers trust_remote_code: {', '.join(required)}"
+            + (
+                f"; scored prompts vs the native runtime: max drift {compared['max_abs_drift']:.3g}"
+                if "max_abs_drift" in compared
+                else ""
+            )
+        ),
+    }
 
 
 def _json(path: Path) -> dict[str, Any]:
@@ -587,9 +622,10 @@ def first_items(spec: dict[str, Any]) -> tuple[dict[str, Any], str]:
 def evaluate(work: Path) -> dict[str, Any]:
     receipts = work / "receipts"
     spec = _json(receipts / "spec.json")
+    hub = tuple(sorted(p.stem for p in receipts.glob("automap-hub*.json")))
     steps = {
         name: _json(receipts / f"{name}.json")
-        for name in VERIFY_STEPS
+        for name in (*VERIFY_STEPS, *AUTOMAP_STEPS, *hub)
         if (receipts / f"{name}.json").is_file()
     }
     build = _json(receipts / "build.json")
@@ -637,6 +673,9 @@ def evaluate(work: Path) -> dict[str, Any]:
             "evidence": f"Hub card {readback.get('card_data', {}).get('license')} / problems {readback.get('card_problems')}",
         },
     }
+    remote = remote_code_item(receipts, steps, Path(build.get("package", work / "-")))
+    if remote is not None:
+        items["7_transformers_remote_code"] = remote
     decision_path = Path(spec["gate_receipt"]) if spec.get("gate_receipt") else None
     return {
         "items": items,

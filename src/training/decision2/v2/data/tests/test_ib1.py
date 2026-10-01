@@ -232,6 +232,42 @@ class RebalanceTest(unittest.TestCase):
         )
 
 
+class Round3Test(unittest.TestCase):
+    def test_sentfin_two_way(self):
+        records = [
+            {
+                "Title": f"Headline number {i} about the firm",
+                "Decisions": repr({f"Firm{i}": label}),
+            }
+            for i, label in enumerate(["negative", "neutral", "positive"] * 4)
+        ]
+        three = fam.sentfin(records, counter())
+        report = counter()
+        two = fam.sentfin(records, report, two_way=True)
+        self.assertEqual(report["drop_class_not_used"], 4)
+        self.assertEqual(len(two), 8)
+        self.assertEqual({r["label"] for r in two}, {0, 1})
+        self.assertEqual(
+            [o["key"] for o in two[0]["options"]], ["negative", "positive"]
+        )
+        by_id = {r["id"]: r for r in three}
+        for r in two:
+            self.assertEqual(r["group_id"], by_id[r["id"]]["group_id"])
+            self.assertEqual(
+                r["options"][r["label"]]["key"],
+                by_id[r["id"]]["options"][by_id[r["id"]]["label"]]["key"],
+            )
+            validate_row(r, "train")
+        email = {
+            "family": "sumedit",
+            "label": 0,
+            "audit_metadata": {"ib1": {"domain": "sales_email"}},
+        }
+        self.assertEqual(
+            build.construction(email, ["sumedit-sales_email"]), "sumedit-sales_email"
+        )
+
+
 class IndexGuardTest(unittest.TestCase):
     def test_rules_and_controls(self):
         long_text = "The quick brown fox jumps over the lazy dog while the farmer watches from the porch and smiles."
@@ -334,6 +370,15 @@ class ReviewTest(unittest.TestCase):
         short = self.rows(("a",), 300) + self.rows(("b",), 10)
         topped = review.review_sample(short, "x", [], set(), 2)
         self.assertEqual(topped["sample"]["n"], 216)
+        big = self.rows(per=500)
+        first = review.review_sample(big, "x", [], set())
+        second = review.review_sample(big, "x", first["key"], set(), 2)
+        third = review.review_sample(big, "x", first["key"] + second["key"], set(), 3)
+        self.assertTrue(all(k["rid"].startswith("u") for k in third["key"]))
+        self.assertFalse(
+            {k["group_id"] for k in first["key"] + second["key"]}
+            & {k["group_id"] for k in third["key"]}
+        )
         self.assertEqual(topped["sample"]["sampled"], {"a": 206, "b": 10})
 
     def test_screen_drop_rule_and_verdict(self):

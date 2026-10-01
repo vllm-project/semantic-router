@@ -1,0 +1,423 @@
+{
+ "candidate_files": [
+  {
+   "rows": 39741,
+   "sha256": "9b9bc534a40d8c70516482b9175e64569304ea5088b58186a60782eab28bec3c"
+  },
+  {
+   "rows": 4405,
+   "sha256": "a48b62373010a30045edd44ff1e3fdca6106abacb7a2bf41b409c35de9fd9993"
+  }
+ ],
+ "candidates": {
+  "distinct_leaves_scanned": 50235,
+  "groups": 26707,
+  "rows": 44146,
+  "states_keyed": 43936
+ },
+ "flagged": {
+  "boilerplate": {
+   "E_leaf": {
+    "groups": 5978,
+    "units": 3
+   },
+   "E_state": {
+    "groups": 0,
+    "units": 0
+   },
+   "L": {
+    "groups": 0,
+    "units": 0
+   },
+   "N_char": {
+    "groups": 12143,
+    "units": 10
+   },
+   "N_word": {
+    "groups": 0,
+    "units": 0
+   },
+   "S": {
+    "groups": 0,
+    "units": 0
+   }
+  },
+  "by_method": {
+   "E": {
+    "groups": 0,
+    "rows": 0
+   },
+   "L": {
+    "groups": 1,
+    "rows": 1
+   },
+   "N": {
+    "groups": 72,
+    "rows": 114
+   },
+   "S": {
+    "groups": 1,
+    "rows": 1
+   }
+  },
+  "by_role": {
+   "cal698": {
+    "E": {
+     "groups": 0,
+     "rows": 0
+    },
+    "L": {
+     "groups": 0,
+     "rows": 0
+    },
+    "N": {
+     "groups": 0,
+     "rows": 0
+    },
+    "S": {
+     "groups": 0,
+     "rows": 0
+    },
+    "any": {
+     "groups": 0,
+     "rows": 0
+    }
+   },
+   "hr2_dev": {
+    "E": {
+     "groups": 0,
+     "rows": 0
+    },
+    "L": {
+     "groups": 1,
+     "rows": 1
+    },
+    "N": {
+     "groups": 16,
+     "rows": 24
+    },
+    "S": {
+     "groups": 0,
+     "rows": 0
+    },
+    "any": {
+     "groups": 17,
+     "rows": 25
+    }
+   },
+   "hs1_dev_goldfree": {
+    "E": {
+     "groups": 0,
+     "rows": 0
+    },
+    "L": {
+     "groups": 0,
+     "rows": 0
+    },
+    "N": {
+     "groups": 0,
+     "rows": 0
+    },
+    "S": {
+     "groups": 0,
+     "rows": 0
+    },
+    "any": {
+     "groups": 0,
+     "rows": 0
+    }
+   },
+   "ht_dev2_goldfree": {
+    "E": {
+     "groups": 0,
+     "rows": 0
+    },
+    "L": {
+     "groups": 1,
+     "rows": 1
+    },
+    "N": {
+     "groups": 34,
+     "rows": 53
+    },
+    "S": {
+     "groups": 0,
+     "rows": 0
+    },
+    "any": {
+     "groups": 35,
+     "rows": 54
+    }
+   },
+   "ht_dev_goldfree": {
+    "E": {
+     "groups": 0,
+     "rows": 0
+    },
+    "L": {
+     "groups": 0,
+     "rows": 0
+    },
+    "N": {
+     "groups": 16,
+     "rows": 24
+    },
+    "S": {
+     "groups": 1,
+     "rows": 1
+    },
+    "any": {
+     "groups": 16,
+     "rows": 24
+    }
+   },
+   "ib1_dev": {
+    "E": {
+     "groups": 0,
+     "rows": 0
+    },
+    "L": {
+     "groups": 0,
+     "rows": 0
+    },
+    "N": {
+     "groups": 0,
+     "rows": 0
+    },
+    "S": {
+     "groups": 0,
+     "rows": 0
+    },
+    "any": {
+     "groups": 0,
+     "rows": 0
+    }
+   },
+   "pn1_dev_goldfree": {
+    "E": {
+     "groups": 0,
+     "rows": 0
+    },
+    "L": {
+     "groups": 0,
+     "rows": 0
+    },
+    "N": {
+     "groups": 0,
+     "rows": 0
+    },
+    "S": {
+     "groups": 0,
+     "rows": 0
+    },
+    "any": {
+     "groups": 0,
+     "rows": 0
+    }
+   },
+   "score5_dev_goldfree": {
+    "E": {
+     "groups": 0,
+     "rows": 0
+    },
+    "L": {
+     "groups": 1,
+     "rows": 1
+    },
+    "N": {
+     "groups": 9,
+     "rows": 16
+    },
+    "S": {
+     "groups": 0,
+     "rows": 0
+    },
+    "any": {
+     "groups": 10,
+     "rows": 17
+    }
+   },
+   "score5t_dev_goldfree": {
+    "E": {
+     "groups": 0,
+     "rows": 0
+    },
+    "L": {
+     "groups": 0,
+     "rows": 0
+    },
+    "N": {
+     "groups": 0,
+     "rows": 0
+    },
+    "S": {
+     "groups": 0,
+     "rows": 0
+    },
+    "any": {
+     "groups": 0,
+     "rows": 0
+    }
+   }
+  },
+  "quarantine": {
+   "groups": 73,
+   "rows": 115
+  }
+ },
+ "methods": {
+  "E": "normalized leaf equality (compact length >= 20) and equality of normalized canonical-JSON states (canonical-JSON strings decoded first)",
+  "L": "S rule against 400/200 windows (last window end-aligned) of the compact text of protected leaves > 800 chars; candidate units are 200/100 windows of leaves over 200 compact chars, else the leaf",
+  "N": "word 13-grams over word_tokens and compact 30-grams kept iff int.from_bytes(blake2b(utf8, digest_size=8, person), 'big') % 4 == 0; only 8-byte hashes are stored",
+  "S": "audit_vitaminc_score rule against protected leaves <= 800 normalized chars: compact 6-gram sets, every 2nd sorted protected gram indexed, the 6 rarest candidate grams by (posting length, gram), postings <= 128, Jaccard >= 0.72 or containment >= 0.9",
+  "boilerplate": "a matched unit in >= 5 distinct candidate groups, or an N gram in >= 5 distinct protected rows; reported separately and never quarantining"
+ },
+ "params": {
+  "boilerplate_groups": 5,
+  "boilerplate_rows": 5,
+  "candidate_window": 200,
+  "candidate_window_stride": 100,
+  "char_ngram": 30,
+  "char_sample_mod": 4,
+  "containment": 0.9,
+  "gram": 6,
+  "index_every": 2,
+  "jaccard": 0.72,
+  "max_posting": 128,
+  "min_compact": 20,
+  "ngram_min_hits": 1,
+  "rare_grams": 6,
+  "short_max_chars": 800,
+  "window": 400,
+  "window_stride": 200,
+  "word_ngram": 13
+ },
+ "protected": {
+  "cjk_heavy_distinct_leaves": 1143,
+  "distinct_leaves_by_length": {
+   "gt_800": 4004,
+   "le_800": 16232
+  },
+  "index_keys": {
+   "L": 894842,
+   "N_char": 1418824,
+   "N_word": 1230494,
+   "S": 398171
+  },
+  "leaves_by_length": {
+   "below_min_compact": 64908,
+   "gt_800": 4094,
+   "le_800": 40608
+  },
+  "leaves_by_role": {
+   "cal698": {
+    "below_min_compact": 4734,
+    "gt_800": 0,
+    "le_800": 1270
+   },
+   "hr2_dev": {
+    "below_min_compact": 8803,
+    "gt_800": 435,
+    "le_800": 4196
+   },
+   "hs1_dev_goldfree": {
+    "below_min_compact": 8090,
+    "gt_800": 2378,
+    "le_800": 3894
+   },
+   "ht_dev2_goldfree": {
+    "below_min_compact": 7,
+    "gt_800": 454,
+    "le_800": 1483
+   },
+   "ht_dev_goldfree": {
+    "below_min_compact": 11708,
+    "gt_800": 423,
+    "le_800": 14004
+   },
+   "ib1_dev": {
+    "below_min_compact": 12945,
+    "gt_800": 159,
+    "le_800": 10357
+   },
+   "pn1_dev_goldfree": {
+    "below_min_compact": 6021,
+    "gt_800": 1,
+    "le_800": 3848
+   },
+   "score5_dev_goldfree": {
+    "below_min_compact": 3000,
+    "gt_800": 244,
+    "le_800": 756
+   },
+   "score5t_dev_goldfree": {
+    "below_min_compact": 9600,
+    "gt_800": 0,
+    "le_800": 800
+   }
+  },
+  "long_leaf_windows_scanned": 40164,
+  "rows_by_role": {
+   "cal698": 698,
+   "hr2_dev": 1615,
+   "hs1_dev_goldfree": 2396,
+   "ht_dev2_goldfree": 1944,
+   "ht_dev_goldfree": 3240,
+   "ib1_dev": 2664,
+   "pn1_dev_goldfree": 1974,
+   "score5_dev_goldfree": 500,
+   "score5t_dev_goldfree": 800
+  },
+  "states_indexed": 15510
+ },
+ "protected_files": [
+  {
+   "role": "cal698",
+   "rows": 698,
+   "sha256": "76c7991f5c5af0ce6819d6b33f8ea81f50ee43dbac3aabf8c12f334acd115262"
+  },
+  {
+   "role": "hr2_dev",
+   "rows": 1615,
+   "sha256": "db2402bf20a5e8325983aaaaf3db8600e27a1da4490491bb444f10ac4087f294"
+  },
+  {
+   "role": "hs1_dev_goldfree",
+   "rows": 2396,
+   "sha256": "49f192a700242efe46265c4377a3cedb44dd635e5c5d23db1fc2d1e6fac3f072"
+  },
+  {
+   "role": "ht_dev2_goldfree",
+   "rows": 1944,
+   "sha256": "8bd3ec3f95073c39f6c62571a2daabf00b580b925ebb54f318f9f8404932b6a7"
+  },
+  {
+   "role": "ht_dev_goldfree",
+   "rows": 3240,
+   "sha256": "763f2973d0b22c3cb54a3d83015e7ca9bb89bb811d3541306d7e0153dab16990"
+  },
+  {
+   "role": "ib1_dev",
+   "rows": 2664,
+   "sha256": "59e7866211e10b3128c76ca75fa6e08aa4750bb05bb3d3e0a2c7fbe6bb3f36a0"
+  },
+  {
+   "role": "pn1_dev_goldfree",
+   "rows": 1974,
+   "sha256": "b2d254585afd2430098c7cdbd7d74d72e455af84f2cfd764d4772699b40650c7"
+  },
+  {
+   "role": "score5_dev_goldfree",
+   "rows": 500,
+   "sha256": "6189d111979b5df7f56ff4c44a7550135f8a35d9a4982679880bd8d9f3b6f2f8"
+  },
+  {
+   "role": "score5t_dev_goldfree",
+   "rows": 800,
+   "sha256": "34baa42307b61c4013215afdf4deef4d69f9d39c071d0fc16fb378ba047e9d66"
+  }
+ ],
+ "protected_inventory_sha256": "795d8ef4f9bc775730721aeb1245043c9813d85071d338c813a349ff1837b195",
+ "protected_leaves_over_800_chars_not_near_scanned": 0,
+ "schema": "decision2.v2.overlap.public.v1"
+}

@@ -205,6 +205,113 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 15:40 — **Decision 1.0 auto_map done (2a4d413a); vLLM-SR parser fixed on PR #4086.** Record
+  `v2/release/records/dev1-automap-2026-10-01.md`, gist 07; integration `f6b750119`.
+  - **Seven public 1.0 repos merged through our own HF PRs** on their current heads (after subin's merges); weights
+    byte-identical; `AutoModel.from_pretrained(repo, trust_remote_code=True)` + `system_one(...)` + `pipeline("decision",
+    ...)`; clean-environment smoke tests on Transformers 4.57.6 / 5.17.0 / 5.18.0.
+    - New `main` revisions:
+
+      | Repo | `main` |
+      | --- | --- |
+      | Kai | `69aef406` |
+      | Lex | `1f9750a7` |
+      | Route | `a5b21dff` |
+      | Eos | `bbdc2221` |
+      | Sol | `fc210c8f` |
+      | Nox | `f098bdec` |
+      | Lux | `a31b9e2c` |
+
+    - Parity: 0 answer changes on 8,378 scored prompts each.
+    - Eos's stored predictions are not reproducible even by its own native runtime: unpinned FLA autotune, 46–56
+      changes. The remote code is bit-identical to the native Eos runtime under pinned settings.
+    - Nox / Lux show ≤ 0.0105 drift on long prompts only (FLA autotune; bit-identical with `FLA_CACHE_MODE=strict`).
+  - **`DEV2.0-Route-0.6B` (collaborator's):** PR #1 is open for subin, not merged.
+  - **vLLM-SR Decision runtime.** `parse_decision_config` required an exact root key set, so it would reject the new
+    revisions (catalogs pin older revisions, so nothing broke).
+    - **Fixed by the coordinator on the user's open PR #4086 (`xunzhuo/decision-runtime`), fast-forward commit
+      `e2ed609c7`.** `model_type` / `architectures` / `auto_map` / `custom_pipelines` are accepted as shape-checked
+      inert metadata; the runtime still never fetches or imports repo code, and any other unknown key is still
+      rejected.
+    - Tests: the root-config file 12/12 (with `huggingface_hub<1`; one pre-existing test fails under hub 2.0 because
+      `EntryNotFoundError` has no kwargs), plus 615 other decision tests passed; black clean; hooks pass.
+    - The catalog stays pinned.
+  - **Divergences, documented.**
+    - 1.0 keeps request-level over-length admission, while 2.0 answers the questions that fit.
+    - 1.0 confidence is `decision_type_aware_v1`.
+    - The encoder tokenizer is under `native/tokenizer`.
+    - **The 1.0 spec `automap/API-decision1.md` folds into the 2.0 `API.md`** when the 2.0 auto_map worker (4c0a68cd)
+      lands.
+
+- 2026-10-01 14:50 — **MoE-1 screen done: Gemma-4-26B-A4B-it continues, the Qwen3.5-35B-A3B cells stopped; Stage B
+  runs unattended from ~16:25; follow-up worker 72f00c98.** Records: `27b/records/moe-*`, gist 06c; integration
+  `e60db4605`.
+  - **Screen at update 892** (development proxy / HT-DEV v2):
+
+    | Cell | Proxy | HT-DEV v2 | Outcome |
+    | --- | ---: | --- | --- |
+    | dense A20r-s1 reference | 78.22 | .5634 | reference |
+    | Gemma-it | 72.82 | .5670, tie | continues, seed 2 started |
+    | Qwen-it | 69.69 | .5528 | stopped by the > 8-point rule (weak middle Score levels, CSS pilot −.10) |
+    | Qwen-Base | 69.75 | .5739 | stopped by the same rule |
+
+  - **Seeds.** Gemma s1 finished (BEST at update 2,676, 10.24 GPU-h); s2 ends ≈ 08:25Z.
+  - **Amendment 4** automates Stage B: soup → readout / CAL → development gates → frozen package → formal → items 1–7 →
+    beats-AutoJev.
+  - **Bugs fixed before use:**
+    - the CAL698 fitter dropped Gemma's BOS token (shared-module fix with a test; dense models unchanged);
+    - the formal driver pointed at peer run paths that do not exist.
+  - **Size and speed.** The soup loads 25.31B parameters with 3.90B active. At batch 1 it is *slower* than A20r (≈ 120
+    vs 84 ms median).
+  - **Licence.** Gemma 4 is Apache-2.0, so a derived release needs the licence text and a modification notice. The
+    release builder lacks a Gemma MoE profile (today only Qwen adapters).
+  - **Follow-up (72f00c98):**
+    - record the chain stages; the verdicts;
+    - **a private Index run of the frozen MoE package regardless of the verdict** (the 27B-class frontier entrant is a
+      full FT of this same base);
+    - a hand-off if it passes items 1–7 or clears the private frontier bar. Tier naming is the coordinator's call:
+      a successor, or a new base-named tier such as 26B-A4B.
+    - Then remove the MoE link key.
+  - **Leases.** Node B GPU6 is freed (owner archived as `owner.released-moe-*`; free for any track, e.g. 27B M6). Node
+    A GPU3 / GPU5 stay with MoE for its Index run.
+
+- 2026-10-01 14:45 — **4B M10 (c473a3b2): successor candidate `m10-4b-LH` → release; the recipe goes to 2B / 0.8B /
+  9B.** Records: `dec-m10-results-2026-10-01.md`, `dec-m10-handoff-2026-10-01.md`, gist 04; integration
+  `fb6ab3a4c`; 13.24 of 120 GPU-h.
+  - **LH:** a rank-128 LoRA on **Qwen3.5-4B-Base** with the scoring head, on the released 4B mixture at matched
+    tokens.
+    - post-key v3 **67.34**, +4.19 [+0.10, +9.88] vs DEV2.0-4B; items 1–7 pass;
+    - vs Decider 4B +5.46 [+0.28, +8.11]; vs Jet v6.2 +6.97 [+0.98, +11.13];
+    - mlx-diag +.038 [+.026, +.050]; human transfer .557 vs .580 (n.s.; CSS15 losses ibc −.10, talklife −.05
+      disclosed);
+    - T = 1 with 0 changes.
+    - The second finalist, NT2 (released recipe from Nox with the label-token readout), is +2.10 [+0.49, +5.82].
+  - **H1 holds (knowledge retention).** The Nox lineage lost knowledge / maths vs its base. On the retention probes
+    (Index-row-free MMLU val / dev, ARC val, a GSM8K train hold-out), DEV2.0-4B scores .710 vs the base's .762 (GSM8K
+    .515 vs .637). Every from-base arm recovers it (LH .770; FB .787 but it failed the typed Score floor).
+  - **H2 is mixed.** From the base, label-token = head. On Nox it gives +2.10. The native `label_token` runtime path
+    exists and matches `infer_dec` exactly (servable by stock vLLM generate mode).
+  - **Shared modules changed (flagged):** `run_same_panel.sh --isolate` (required on nodes C–F), the release runtime
+    and builder's label-token path, and an E/F option in the M6 formal library.
+  - **Decision: no informational formal run of FB** (it failed a preregistered development gate; the formal panel is
+    kept for passers).
+  - **Launched:**
+    - **LH release (b5f60b33, resumed):**
+      - package parity;
+      - C1 item 8 (custodial; one attempt);
+      - final decision;
+      - **coordinated with the auto_map worker** (never concurrent pushes to DEV2.0-4B; carry its remote code and
+        IX1's runtime fix if merged);
+      - the card lineage becomes Qwen3.5-4B-Base → merged LoRA;
+      - then a private Index run.
+    - **M11 (c473a3b2, resumed):** the LH recipe at 2B and 0.8B from their own bases (optional label-token-on-1.0
+      arm); the 4B LH + IB1 stage when IB1-r3 is release-safe; node E GPU0–3 + node F GPU2–7; 110 GPU-h.
+    - **9B M9 (dfc44bae):**
+      - L9, a rank-128 LoRA from Qwen3.5-9B-Base, plus an optional LoRA-on-Lux control;
+      - retention probes and a yes-bias guard;
+      - stage 2 + IB1 / IB2;
+      - node A GPU6–7 + node C GPU1–7 (lease-checked); 120 GPU-h.
+
 - 2026-10-01 14:30 — **4B HR2 efficacy pilot (M9, 57551951): HR2 is NOT a human-transfer lever → HR2 work stops.**
   Records: `dec-m9-results-2026-10-01.md` (`db728251d`), gist 04; integration `d29181e4a`; 5.94 of 16 GPU-h.
   - **HT-DEV v2 (all TIE):** HR2 soup − control −.004 [−.018, +.010], whose upper bound rules out a gain-sized

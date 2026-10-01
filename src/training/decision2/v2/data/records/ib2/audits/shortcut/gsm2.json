@@ -1,0 +1,475 @@
+{
+ "folds": {
+  "groups": [
+   1136,
+   1094,
+   1137,
+   1095,
+   1120
+  ],
+  "rows": [
+   1136,
+   1094,
+   1137,
+   1095,
+   1120
+  ],
+  "rule": "int(sha256(group_id).hexdigest(), 16) % 5"
+ },
+ "gate": {
+  "margin": 0.05,
+  "min_rows": 30,
+  "rule": "PASS iff accuracy <= majority + margin; majority is the cross-validated position prior on the same rows",
+  "views": [
+   "state_removed",
+   "option_only",
+   "hypothesis_only"
+  ]
+ },
+ "gates": [
+  {
+   "accuracy": 0.499642,
+   "delta": 0.012719,
+   "families_over_margin": [],
+   "majority": 0.486922,
+   "n": 5582,
+   "pass": true,
+   "task_type": "noul",
+   "threshold": 0.536922,
+   "view": "state_removed",
+   "wilson95": [
+    0.48653,
+    0.512754
+   ]
+  },
+  {
+   "accuracy": 0.493909,
+   "delta": 0.006987,
+   "families_over_margin": [],
+   "majority": 0.486922,
+   "n": 5582,
+   "pass": true,
+   "task_type": "noul",
+   "threshold": 0.536922,
+   "view": "option_only",
+   "wilson95": [
+    0.480802,
+    0.507024
+   ]
+  },
+  {
+   "accuracy": 0.475815,
+   "delta": -0.011107,
+   "families_over_margin": [],
+   "majority": 0.486922,
+   "n": 5582,
+   "pass": true,
+   "task_type": "noul",
+   "threshold": 0.536922,
+   "view": "hypothesis_only",
+   "wilson95": [
+    0.462735,
+    0.488929
+   ]
+  }
+ ],
+ "groups": 5582,
+ "heuristics": {
+  "lexical_overlap": {
+   "n_rows": 0
+  },
+  "longest_option": {
+   "by_family": {
+    "gsm2": {
+     "accuracy": 0.5,
+     "correct": 2791,
+     "delta": 0.013078,
+     "exceeds_margin": false,
+     "majority": 0.486922,
+     "n": 5582,
+     "wilson95": [
+      0.486888,
+      0.513112
+     ]
+    }
+   },
+   "by_source": {
+    "gsm8k_train": {
+     "accuracy": 0.5,
+     "correct": 2791,
+     "delta": 0.013078,
+     "exceeds_margin": false,
+     "majority": 0.486922,
+     "n": 5582,
+     "wilson95": [
+      0.486888,
+      0.513112
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "gsm2": {
+      "accuracy": 0.5,
+      "correct": 2791,
+      "delta": 0.013078,
+      "exceeds_margin": false,
+      "majority": 0.486922,
+      "n": 5582,
+      "wilson95": [
+       0.486888,
+       0.513112
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.5,
+     "correct": 2791,
+     "delta": 0.013078,
+     "exceeds_margin": false,
+     "majority": 0.486922,
+     "n": 5582,
+     "wilson95": [
+      0.486888,
+      0.513112
+     ]
+    }
+   },
+   "n_rows": 5582
+  },
+  "position_prior": {
+   "by_family": {
+    "gsm2": {
+     "accuracy": 0.486922,
+     "correct": 2718,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.486922,
+     "n": 5582,
+     "wilson95": [
+      0.473824,
+      0.500039
+     ]
+    }
+   },
+   "by_source": {
+    "gsm8k_train": {
+     "accuracy": 0.486922,
+     "correct": 2718,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.486922,
+     "n": 5582,
+     "wilson95": [
+      0.473824,
+      0.500039
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "gsm2": {
+      "accuracy": 0.486922,
+      "correct": 2718,
+      "delta": 0.0,
+      "exceeds_margin": false,
+      "majority": 0.486922,
+      "n": 5582,
+      "wilson95": [
+       0.473824,
+       0.500039
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.486922,
+     "correct": 2718,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.486922,
+     "n": 5582,
+     "wilson95": [
+      0.473824,
+      0.500039
+     ]
+    }
+   },
+   "n_rows": 5582
+  }
+ },
+ "input": {
+  "rows": 5582,
+  "sha256": "11d6777aabf7b1c8e4cacd583a21fdd5d8a19542becc956786f099c2d5c3701e"
+ },
+ "learner": {
+  "bits": 20,
+  "epochs": 4,
+  "instruction_cross_cap": 64,
+  "l2": 1e-06,
+  "learning_rate": 0.1,
+  "seed": 0,
+  "state_cross_cap": 128,
+  "state_cross_unigrams": 64,
+  "state_gram_cap": 128,
+  "text_gram_cap": 1024
+ },
+ "majority": {
+  "noul": {
+   "accuracy": 0.486922,
+   "n": 5582
+  }
+ },
+ "rows": 5582,
+ "schema": "decision2.v2.shortcut.v1",
+ "verdict": "PASS",
+ "views": {
+  "full_input": {
+   "by_family": {
+    "gsm2": {
+     "accuracy": 0.497313,
+     "correct": 2776,
+     "delta": 0.010391,
+     "exceeds_margin": false,
+     "majority": 0.486922,
+     "n": 5582,
+     "wilson95": [
+      0.484203,
+      0.510427
+     ]
+    }
+   },
+   "by_source": {
+    "gsm8k_train": {
+     "accuracy": 0.497313,
+     "correct": 2776,
+     "delta": 0.010391,
+     "exceeds_margin": false,
+     "majority": 0.486922,
+     "n": 5582,
+     "wilson95": [
+      0.484203,
+      0.510427
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "gsm2": {
+      "accuracy": 0.497313,
+      "correct": 2776,
+      "delta": 0.010391,
+      "exceeds_margin": false,
+      "majority": 0.486922,
+      "n": 5582,
+      "wilson95": [
+       0.484203,
+       0.510427
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.497313,
+     "correct": 2776,
+     "delta": 0.010391,
+     "exceeds_margin": false,
+     "majority": 0.486922,
+     "n": 5582,
+     "wilson95": [
+      0.484203,
+      0.510427
+     ]
+    }
+   },
+   "n_rows": 5582
+  },
+  "hypothesis_only": {
+   "by_family": {
+    "gsm2": {
+     "accuracy": 0.475815,
+     "correct": 2656,
+     "delta": -0.011107,
+     "exceeds_margin": false,
+     "majority": 0.486922,
+     "n": 5582,
+     "wilson95": [
+      0.462735,
+      0.488929
+     ]
+    }
+   },
+   "by_source": {
+    "gsm8k_train": {
+     "accuracy": 0.475815,
+     "correct": 2656,
+     "delta": -0.011107,
+     "exceeds_margin": false,
+     "majority": 0.486922,
+     "n": 5582,
+     "wilson95": [
+      0.462735,
+      0.488929
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "gsm2": {
+      "accuracy": 0.475815,
+      "correct": 2656,
+      "delta": -0.011107,
+      "exceeds_margin": false,
+      "majority": 0.486922,
+      "n": 5582,
+      "wilson95": [
+       0.462735,
+       0.488929
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.475815,
+     "correct": 2656,
+     "delta": -0.011107,
+     "exceeds_margin": false,
+     "majority": 0.486922,
+     "n": 5582,
+     "wilson95": [
+      0.462735,
+      0.488929
+     ]
+    }
+   },
+   "n_rows": 5582
+  },
+  "option_only": {
+   "by_family": {
+    "gsm2": {
+     "accuracy": 0.493909,
+     "correct": 2757,
+     "delta": 0.006987,
+     "exceeds_margin": false,
+     "majority": 0.486922,
+     "n": 5582,
+     "wilson95": [
+      0.480802,
+      0.507024
+     ]
+    }
+   },
+   "by_source": {
+    "gsm8k_train": {
+     "accuracy": 0.493909,
+     "correct": 2757,
+     "delta": 0.006987,
+     "exceeds_margin": false,
+     "majority": 0.486922,
+     "n": 5582,
+     "wilson95": [
+      0.480802,
+      0.507024
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "gsm2": {
+      "accuracy": 0.493909,
+      "correct": 2757,
+      "delta": 0.006987,
+      "exceeds_margin": false,
+      "majority": 0.486922,
+      "n": 5582,
+      "wilson95": [
+       0.480802,
+       0.507024
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.493909,
+     "correct": 2757,
+     "delta": 0.006987,
+     "exceeds_margin": false,
+     "majority": 0.486922,
+     "n": 5582,
+     "wilson95": [
+      0.480802,
+      0.507024
+     ]
+    }
+   },
+   "n_rows": 5582
+  },
+  "state_removed": {
+   "by_family": {
+    "gsm2": {
+     "accuracy": 0.499642,
+     "correct": 2789,
+     "delta": 0.012719,
+     "exceeds_margin": false,
+     "majority": 0.486922,
+     "n": 5582,
+     "wilson95": [
+      0.48653,
+      0.512754
+     ]
+    }
+   },
+   "by_source": {
+    "gsm8k_train": {
+     "accuracy": 0.499642,
+     "correct": 2789,
+     "delta": 0.012719,
+     "exceeds_margin": false,
+     "majority": 0.486922,
+     "n": 5582,
+     "wilson95": [
+      0.48653,
+      0.512754
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "gsm2": {
+      "accuracy": 0.499642,
+      "correct": 2789,
+      "delta": 0.012719,
+      "exceeds_margin": false,
+      "majority": 0.486922,
+      "n": 5582,
+      "wilson95": [
+       0.48653,
+       0.512754
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.499642,
+     "correct": 2789,
+     "delta": 0.012719,
+     "exceeds_margin": false,
+     "majority": 0.486922,
+     "n": 5582,
+     "wilson95": [
+      0.48653,
+      0.512754
+     ]
+    }
+   },
+   "n_rows": 5582
+  }
+ }
+}

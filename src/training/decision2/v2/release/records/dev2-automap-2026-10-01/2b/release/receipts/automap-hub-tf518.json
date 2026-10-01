@@ -1,0 +1,39 @@
+{
+  "code_sha256": "3fe1b766fd36902b5fee007f21d5be50c22fa5a0b8e7159e551f91e5b2ddab4c",
+  "comparison": {
+    "category_changes": 0,
+    "max_abs_drift": 0.0,
+    "missing": 0,
+    "slots": 3
+  },
+  "downloaded_revisions": [
+    "ffe291b4401930040914339592cd9fc59b9a3f87"
+  ],
+  "exit_code": 0,
+  "hub": true,
+  "interpreter_flags": [
+    "-s",
+    "-B"
+  ],
+  "mode": "automap-card",
+  "passed": true,
+  "readme_sha256": "3d679fe27250706a8f872910527bc6bd96fd660ce51c34bb1bd6502996acc61d",
+  "runtime": {
+    "hip": "7.2.53211",
+    "numpy": "2.3.5",
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "safetensors": "0.8.0",
+    "threads": 160,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.18.0"
+  },
+  "schema": "dev2-release-examples/1",
+  "seconds": 32.325301306002075,
+  "sites": [
+    "/data/dev2/tools/tf518",
+    "/opt/decision-fla"
+  ],
+  "stderr_tail": ""
+}
