@@ -95,3 +95,14 @@ Prereg `b8c3caf22`; ops `cef1a1b66`; data lock `7c3aed8c8`; amendment 1 (node F 
 - 0.8B C0 parity: F vs E exact, E vs node B's `08b-I` exact (five panels, 0 decisions differ, drift 0.0).
 - Stage 1 closed: no tier has a finalist, so no stage-1 formal, successor items or release hand-offs; DEV2.0-2B and
   DEV2.0-0.8B stay. Stage 2: `4b-LHBx-s1` DONE 08:56Z, `4b-LHB-s1` DONE 09:06Z; seeds 2 training (E3 / F7).
+
+## 2026-10-01 10:50Z — stage 2 closed (no finalist); M11 complete
+
+- Stage-2 seeds 2 DONE 09:57Z (E3) / 10:08Z (F7); soups built 10:00 / 10:10Z; readouts 10:11 / 10:22Z. Node A: pull,
+  points, `ibdev`, contrast, readout `663d91aed2c113e8`, rules once (10:40Z).
+- **4B stage 2: no finalist.** `4b-LHB` vs `4b-LH-f`: HT-DEV v2 TIE, IB DEV +.092 [+.078, +.106]; fails Noul / Score
+  type floors and two family floors. `4b-LHBx` vs `4b-LH-e`: HT-DEV v2 TIE, IB DEV +.030 [+.019, +.042]; fails the
+  choice type floor and retention (−.034 [−.049, −.019]). `4b-LH-e` vs `4b-LH-f` exact (seven panels).
+- M11 has no finalist: no formal, no successor items, no hand-offs, no Index requests; C1 recheck not needed.
+  Results [`dec-m11-results-2026-10-01.md`](dec-m11-results-2026-10-01.md). GPU-h 18.17 (E 8.47, F 9.70); no M11 job
+  running; all M11 lease entries idle.
