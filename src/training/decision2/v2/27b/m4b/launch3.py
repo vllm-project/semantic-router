@@ -2,7 +2,8 @@
 
 Only the allocation's GPUs are accepted: by default node B GPU0-2 (lent to track
 ``27b-m4b``); ``DEV2_27B_LAUNCH_ALLOC=m5-b`` / ``m5-a`` selects Milestone 5's
-(track ``27b``: node B GPU0-2 and GPU5-7, node A GPU2-4). The CLI and the
+(track ``27b``: node B GPU0-2 and GPU5-7, node A GPU2-4) and ``m6-b`` / ``m6-a``
+Milestone 6's (track ``27b``: node B GPU0, GPU1, GPU5, node A GPU2). The CLI and the
 receipt follow ``v2/27b/launch.py`` except that ``--gpus`` (a comma list)
 replaces ``--gpu``: every render node's PCI address is checked, each GPU's lease
 is updated, one network-less container gets exactly those devices (visible
@@ -47,6 +48,12 @@ ALLOCATIONS = {
         "the M5 allocation on node B (GPU0-2, GPU5-7)",
     ),
     "m5-a": ("27b", dict(base.NODE_GPUS["a"]), "the M5 allocation on node A (GPU2-4)"),
+    "m6-b": (
+        "27b",
+        {gpu: base.M6_NODE_GPUS["b"][gpu] for gpu in (0, 1, 5)},
+        "the M6 allocation on node B (GPU0, GPU1, GPU5)",
+    ),
+    "m6-a": ("27b", dict(base.M6_NODE_GPUS["a"]), "the M6 allocation on node A (GPU2)"),
 }
 ALLOCATION = os.environ.get("DEV2_27B_LAUNCH_ALLOC", "m4b")
 if ALLOCATION not in ALLOCATIONS:

@@ -8,6 +8,7 @@ returns typed Choice / Noul / Score answers; there is no text generation.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import math
@@ -115,6 +116,33 @@ def verify_bundle(path: str | Path) -> dict[str, Any]:
     return manifest
 
 
+def _without_remote_code_prompt(load: Any) -> Any:
+    """Run ``load`` with Transformers' interactive remote-code prompt answered "no" at once.
+
+    The root ``config.json`` also names the package's 🤗 Transformers remote code (``auto_map``). The
+    vendored loader reads the tokenizer with ``AutoTokenizer``, which consults that file without
+    ``trust_remote_code`` and would ask on the terminal; refused at once, the tokenizer comes from
+    ``tokenizer_config.json`` exactly as for a package without remote code.
+    """
+
+    @functools.wraps(load)
+    def wrapped(*args: Any, **kwargs: Any) -> Any:
+        try:
+            from transformers import dynamic_module_utils
+        except ImportError:
+            return load(*args, **kwargs)
+        saved = getattr(dynamic_module_utils, "TIME_OUT_REMOTE_CODE", None)
+        if saved is None:
+            return load(*args, **kwargs)
+        dynamic_module_utils.TIME_OUT_REMOTE_CODE = 0
+        try:
+            return load(*args, **kwargs)
+        finally:
+            dynamic_module_utils.TIME_OUT_REMOTE_CODE = saved
+
+    return wrapped
+
+
 class Decision2:
     """Native Choice, Noul and Score decisions over one verified package."""
 
@@ -126,6 +154,7 @@ class Decision2:
         self.max_input_tokens = manifest["max_input_tokens"]
 
     @classmethod
+    @_without_remote_code_prompt
     def from_pretrained(
         cls,
         path: str | Path,

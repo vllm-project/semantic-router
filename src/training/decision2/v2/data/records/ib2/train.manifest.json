@@ -1,0 +1,193 @@
+{
+ "arm_id": "IB2",
+ "canonical_form": "rows sorted by id; canonical(row) + '\\n' per row; UTF-8",
+ "canonical_path": "ib2.train.jsonl",
+ "choice": {
+  "by_option_bucket": {
+   "2": 5152
+  },
+  "gold_position_by_bucket": {
+   "2": {
+    "0": 2576,
+    "1": 2576
+   }
+  }
+ },
+ "content_sha256": "ee137efa8bbf86e5c62574f3b8fbd6204063e095a8da514f32600ba3d51d1cfa",
+ "counts": {
+  "family": {
+   "argq": 5152,
+   "fc_ready": 2582,
+   "fc_rel": 5732,
+   "gsm2": 5582,
+   "hover": 4020,
+   "ytspam": 1450
+  },
+  "language": {
+   "en": 24518
+  },
+  "source": {
+   "glaive_fc_v2": 8314,
+   "gsm8k_train": 5582,
+   "hover_train": 4020,
+   "ibm_argq_30k": 5152,
+   "uci_youtube_spam": 1450
+  },
+  "task_type": {
+   "choice": 5152,
+   "noul": 19366
+  }
+ },
+ "groups": 20054,
+ "input": {
+  "is_canonical": true,
+  "path": "ib2.train.jsonl",
+  "sha256": "ee137efa8bbf86e5c62574f3b8fbd6204063e095a8da514f32600ba3d51d1cfa"
+ },
+ "license_registry_sha256": "145ece6620c4a98d1874e3843f719d3b732e54efe91f33604fe11ee207c1f3ae",
+ "licenses": {
+  "glaive_fc_v2": {
+   "attribution": "Glaive AI, glaive-function-calling-v2; glaiveai/glaive-function-calling-v2@e7f4b6456019f5d8bcb991ef0dd67d8ff23221ac glaive-function-calling-v2.json; synthetic function-calling conversations released by Glaive AI; function schemas, requests and first assistant turns used as described in the IB2 data card",
+   "evidence": "https://huggingface.co/datasets/glaiveai/glaive-function-calling-v2/blob/e7f4b6456019f5d8bcb991ef0dd67d8ff23221ac/README.md (license: apache-2.0)",
+   "license": "Apache-2.0",
+   "redistribution": "permitted with the Apache-2.0 notice"
+  },
+  "gsm8k_train": {
+   "attribution": "Cobbe, Kosaraju, Bavarian, Chen, Jun, Kaiser, Plappert, Tworek, Hilton, Nakano, Hesse and Schulman, Training Verifiers to Solve Math Word Problems (2021); openai/gsm8k@740312add88f781978c0658806c59bc2815b9866 main/train only; human-written problems and solutions; IN-DISTRIBUTION for the Index's GSM8K benchmark; already in earlier 2.0 mixtures",
+   "evidence": "https://huggingface.co/datasets/openai/gsm8k/blob/740312add88f781978c0658806c59bc2815b9866/README.md (license: mit)",
+   "license": "MIT",
+   "redistribution": "permitted with the MIT notice"
+  },
+  "hover_train": {
+   "attribution": "Jiang, Bordia, Zhong, Dognin, Singh and Bansal, HoVer: A Dataset for Many-Hop Fact Extraction and Claim Verification (Findings of EMNLP 2020); hover-nlp/hover@39b84697f196308f398a251a7aea9b82ae0f0562 data/hover/hover_train_release_v1.1.json (train only); evidence passages are HoVer-wiki introductions (wiki_wo_links.db, sha256 c37ee397916ec0bffacfe8902db454a5cda88a7a188409217b2e15231fe5ee2f) from Wikipedia, by Wikipedia contributors; IN-DISTRIBUTION for the Index's HoVer benchmark",
+   "evidence": "https://huggingface.co/datasets/hover-nlp/hover/blob/c0e43052759879b3461642ca6c0dd26658f47691/README.md (license: cc-by-sa-4.0); https://hover-nlp.github.io/ (CC BY-SA 4.0); repository code MIT",
+   "license": "CC-BY-SA-4.0",
+   "redistribution": "permitted with attribution under the same licence (ShareAlike); Wikipedia text CC BY-SA"
+  },
+  "ibm_argq_30k": {
+   "attribution": "Gretz, Friedman, Cohen-Karlik, Toledo, Lahav, Aharonov and Slonim, A Large-scale Dataset for Argument Quality Ranking: Construction and Analysis (AAAI 2020); IBM-ArgQ-Rank-30kArgs, ibm-research/argument_quality_ranking_30k@590726b3765b1b90c5e53a17e3b1f77d92d3aa8a train.csv; (c) Copyright IBM 2014, released under CC BY-SA 3.0; crowd-written arguments with stance labels from 10 annotators",
+   "evidence": "https://huggingface.co/datasets/ibm-research/argument_quality_ranking_30k/blob/590726b3765b1b90c5e53a17e3b1f77d92d3aa8a/README.md (Licensing Information: CC-BY-SA 3.0; metadata cc-by-3.0, the stricter ShareAlike terms are applied)",
+   "license": "CC-BY-SA-3.0",
+   "redistribution": "permitted with attribution under the same licence (ShareAlike)"
+  },
+  "uci_youtube_spam": {
+   "attribution": "Alberto, Lochter and Almeida, TubeSpam: Comment Spam Filtering on YouTube (ICMLA 2015); YouTube Spam Collection, UCI Machine Learning Repository dataset 380 (DOI 10.24432/C58885), youtube+spam+collection.zip",
+   "evidence": "https://archive.ics.uci.edu/dataset/380/youtube+spam+collection (Creative Commons Attribution 4.0 International)",
+   "license": "CC-BY-4.0",
+   "redistribution": "permitted with attribution"
+  }
+ },
+ "noul": {
+  "labels": {
+   "false": 9281,
+   "true": 10085
+  },
+  "true_fraction": 0.520758
+ },
+ "partition": "train",
+ "role": "train",
+ "rows": 24518,
+ "rows_per_group": {
+  "1": 16507,
+  "2": 2767,
+  "3": 661,
+  "4": 104,
+  "5": 12,
+  "6": 3
+ },
+ "schema": "decision2.v2.freeze.v1",
+ "score": {
+  "by_levels": {},
+  "by_levels_grade": {}
+ },
+ "state_chars": {
+  "p0": 16,
+  "p10": 138,
+  "p100": 3419,
+  "p25": 199,
+  "p50": 415,
+  "p75": 732,
+  "p90": 1169,
+  "p99": 1938
+ },
+ "tokens": [
+  {
+   "by_language": {
+    "en": 5213524
+   },
+   "by_task_type": {
+    "choice": 552316,
+    "noul": 4661208
+   },
+   "kind": "native_decoder",
+   "name": "qwen3-0.6b-base@da87bfb6",
+   "padded8_total": 5299376,
+   "path": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+   "quantiles": {
+    "p0": 91,
+    "p10": 104,
+    "p100": 840,
+    "p25": 118,
+    "p50": 185,
+    "p75": 272,
+    "p90": 378,
+    "p99": 559
+   },
+   "revision": null,
+   "tokenizer_json_sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539",
+   "total": 5213524
+  },
+  {
+   "by_language": {
+    "en": 5424733
+   },
+   "by_task_type": {
+    "choice": 598221,
+    "noul": 4826512
+   },
+   "kind": "native_decoder",
+   "name": "qwen3.5-0.8b-base@dc7cdfe2",
+   "padded8_total": 5510448,
+   "path": "dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68",
+   "quantiles": {
+    "p0": 100,
+    "p10": 113,
+    "p100": 849,
+    "p25": 127,
+    "p50": 194,
+    "p75": 280,
+    "p90": 385,
+    "p99": 566
+   },
+   "revision": null,
+   "tokenizer_json_sha256": null,
+   "total": 5424733
+  },
+  {
+   "by_language": {
+    "en": 4228072
+   },
+   "by_task_type": {
+    "choice": 286019,
+    "noul": 3942053
+   },
+   "kind": "raw",
+   "name": "kai-0.6b@7185f514",
+   "padded8_total": 4314216,
+   "path": "tokenizer",
+   "quantiles": {
+    "p0": 38,
+    "p10": 52,
+    "p100": 1093,
+    "p25": 67,
+    "p50": 139,
+    "p75": 245,
+    "p90": 349,
+    "p99": 545
+   },
+   "revision": null,
+   "tokenizer_json_sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
+   "total": 4228072
+  }
+ ]
+}

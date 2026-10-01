@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from v2.release import build, card, examples, layout, licence
+from v2.release import automap, build, card, examples, layout, licence
 from v2.release.runtime import api
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -770,6 +770,16 @@ class BuildTest(unittest.TestCase):
             self.assertEqual(
                 pointer["calibration"], {"temperature_file": "calibration.json"}
             )
+            self.assertEqual(pointer["auto_map"], automap.CONFIG_FIELDS["auto_map"])
+            for name in automap.FILES:
+                self.assertEqual(
+                    (pkg / name).read_bytes(), (automap.SOURCE / name).read_bytes()
+                )
+                self.assertEqual(
+                    manifest["files_sha256"][name],
+                    manifest["remote_code"]["files"][name]["sha256"],
+                )
+            self.assertIn(card.TRANSFORMERS_HEADING, (pkg / "README.md").read_text())
             (pkg / "README.md").write_text("tampered")
             with self.assertRaises(ValueError):
                 api.verify_bundle(pkg)

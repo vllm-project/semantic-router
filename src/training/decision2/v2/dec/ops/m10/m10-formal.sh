@@ -33,8 +33,23 @@ T=/data/dev2/runs/dec/triton-cache/dbe5f32b2263
 lease=/data/dev2/leases/gpu$GPU.lock/owner
 printf 'track=dec-m10\nstatus=busy\npurpose=decoder M10 formal %s (runner entries owner.dec-formal)\nstart_utc=%s\nexpected_end_utc=%s\n' \
   "$*" "$(date -u +%FT%TZ)" "$(date -u -d '+120 min' +%FT%TZ)" > "$lease"
+# Finished decoder runner entries (track=dec, a last_job_end_utc line, no dev2-dec container on the GPU) would make
+# the next CAL fit's lease entry refuse to start (M6b incident; amendment 3): move them aside, as M8's wrapper does.
+clear_stale() {
+  local d=/data/dev2/leases/gpu$GPU.lock e
+  mkdir -p "$F/logs/stale-leases"
+  for e in owner.dec-formal owner.m6-formal-smoke; do
+    [ -f "$d/$e" ] || continue
+    if grep -qx 'track=dec' "$d/$e" && grep -q '^last_job_end_utc=' "$d/$e" \
+      && ! docker ps --format '{{.Names}}' | grep -q "^dev2-dec-gpu$GPU-"; then
+      mv -n "$d/$e" "$F/logs/stale-leases/gpu$GPU-$e.$(date -u +%Y%m%dT%H%M%S.%NZ)"
+      log "moved the finished decoder lease entry gpu$GPU.lock/$e to logs/stale-leases"
+    fi
+  done
+}
 for point in "$@"; do
   run=m10-$point
+  clear_stale
   if [ ! -f "$F/status/$run.SMOKE" ]; then
     if bash "$S/v2/dec/ops/m6/m6-formal.sh" 4b smoke "$point" 8 > "$F/logs/$run-smoke.log" 2>&1; then
       echo "done" > "$F/status/$run.SMOKE"
@@ -46,6 +61,7 @@ for point in "$@"; do
     fi
   fi
   if [ ! -f "$F/status/$run.COLLECTED" ]; then
+    clear_stale
     if bash "$S/v2/dec/ops/m6/m6-formal.sh" 4b finalist "$point" > "$F/logs/$run-finalist.log" 2>&1; then
       echo "done" > "$F/status/$run.COLLECTED"
       log "$run collected"

@@ -1,0 +1,50 @@
+{
+  "glaive_fc_v2": {
+    "attribution": "Glaive AI, glaive-function-calling-v2; glaiveai/glaive-function-calling-v2@e7f4b6456019f5d8bcb991ef0dd67d8ff23221ac glaive-function-calling-v2.json; synthetic function-calling conversations released by Glaive AI; function schemas, requests and first assistant turns used as described in the IB2 data card",
+    "evidence": "https://huggingface.co/datasets/glaiveai/glaive-function-calling-v2/blob/e7f4b6456019f5d8bcb991ef0dd67d8ff23221ac/README.md (license: apache-2.0)",
+    "license": "Apache-2.0",
+    "redistribution": "permitted with the Apache-2.0 notice"
+  },
+  "uci_youtube_spam": {
+    "attribution": "Alberto, Lochter and Almeida, TubeSpam: Comment Spam Filtering on YouTube (ICMLA 2015); YouTube Spam Collection, UCI Machine Learning Repository dataset 380 (DOI 10.24432/C58885), youtube+spam+collection.zip",
+    "evidence": "https://archive.ics.uci.edu/dataset/380/youtube+spam+collection (Creative Commons Attribution 4.0 International)",
+    "license": "CC-BY-4.0",
+    "redistribution": "permitted with attribution"
+  },
+  "ibm_argq_30k": {
+    "attribution": "Gretz, Friedman, Cohen-Karlik, Toledo, Lahav, Aharonov and Slonim, A Large-scale Dataset for Argument Quality Ranking: Construction and Analysis (AAAI 2020); IBM-ArgQ-Rank-30kArgs, ibm-research/argument_quality_ranking_30k@590726b3765b1b90c5e53a17e3b1f77d92d3aa8a train.csv; (c) Copyright IBM 2014, released under CC BY-SA 3.0; crowd-written arguments with stance labels from 10 annotators",
+    "evidence": "https://huggingface.co/datasets/ibm-research/argument_quality_ranking_30k/blob/590726b3765b1b90c5e53a17e3b1f77d92d3aa8a/README.md (Licensing Information: CC-BY-SA 3.0; metadata cc-by-3.0, the stricter ShareAlike terms are applied)",
+    "license": "CC-BY-SA-3.0",
+    "redistribution": "permitted with attribution under the same licence (ShareAlike)"
+  },
+  "hover_train": {
+    "attribution": "Jiang, Bordia, Zhong, Dognin, Singh and Bansal, HoVer: A Dataset for Many-Hop Fact Extraction and Claim Verification (Findings of EMNLP 2020); hover-nlp/hover@39b84697f196308f398a251a7aea9b82ae0f0562 data/hover/hover_train_release_v1.1.json (train only); evidence passages are HoVer-wiki introductions (wiki_wo_links.db, sha256 c37ee397916ec0bffacfe8902db454a5cda88a7a188409217b2e15231fe5ee2f) from Wikipedia, by Wikipedia contributors; IN-DISTRIBUTION for the Index's HoVer benchmark",
+    "evidence": "https://huggingface.co/datasets/hover-nlp/hover/blob/c0e43052759879b3461642ca6c0dd26658f47691/README.md (license: cc-by-sa-4.0); https://hover-nlp.github.io/ (CC BY-SA 4.0); repository code MIT",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution under the same licence (ShareAlike); Wikipedia text CC BY-SA"
+  },
+  "qasc_train": {
+    "attribution": "Khot, Clark, Guerquin, Jansen and Sabharwal, QASC: A Dataset for Question Answering via Sentence Composition (AAAI 2020); allenai/qasc@a34ba204eb9a33b919c10cc08f4f1c8dae5ec070 train",
+    "evidence": "https://huggingface.co/datasets/allenai/qasc/blob/a34ba204eb9a33b919c10cc08f4f1c8dae5ec070/README.md (license: cc-by-4.0)",
+    "license": "CC-BY-4.0",
+    "redistribution": "permitted with attribution"
+  },
+  "arc_train": {
+    "attribution": "Clark, Cowhey, Etzioni, Khot, Sabharwal, Schoenick and Tafjord, Think you have Solved Question Answering? Try ARC, the AI2 Reasoning Challenge (2018); allenai/ai2_arc@210d026faf9955653af8916fad021475a3f00453 ARC-Easy and ARC-Challenge train only; IN-DISTRIBUTION for the suite's ARC rows",
+    "evidence": "https://huggingface.co/datasets/allenai/ai2_arc/blob/210d026faf9955653af8916fad021475a3f00453/README.md (license: cc-by-sa-4.0)",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution under the same licence (ShareAlike)"
+  },
+  "gsm8k_train": {
+    "attribution": "Cobbe, Kosaraju, Bavarian, Chen, Jun, Kaiser, Plappert, Tworek, Hilton, Nakano, Hesse and Schulman, Training Verifiers to Solve Math Word Problems (2021); openai/gsm8k@740312add88f781978c0658806c59bc2815b9866 main/train only; human-written problems and solutions; IN-DISTRIBUTION for the Index's GSM8K benchmark; already in earlier 2.0 mixtures",
+    "evidence": "https://huggingface.co/datasets/openai/gsm8k/blob/740312add88f781978c0658806c59bc2815b9866/README.md (license: mit)",
+    "license": "MIT",
+    "redistribution": "permitted with the MIT notice"
+  },
+  "contractnli_train": {
+    "attribution": "Koreeda and Manning, ContractNLI: A Dataset for Document-level Natural Language Inference for Contracts (Findings of EMNLP 2021); Hitachi America, Ltd.; stanfordnlp.github.io/contract-nli/resources/contract-nli.zip, train.json only; IN-DISTRIBUTION for the Index's ContractNLI benchmark",
+    "evidence": "https://stanfordnlp.github.io/contract-nli/ (Our dataset is released under CC BY 4.0); LICENSE and TERMS in the archive (Creative Commons Attribution 4.0 International Public License)",
+    "license": "CC-BY-4.0",
+    "redistribution": "permitted with attribution"
+  }
+}

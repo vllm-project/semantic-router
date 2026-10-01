@@ -67,14 +67,19 @@ tier_setup() {
       NODE=B IMAGE=$IMAGE_B SOURCE=$NOX TLABEL=4B INCUMBENT=N4XF-soup
       MASTER=$R/formal/m5/cache-frozen MASTER_SHA=f6d0f9207e436aa0090f51d1d4163e9f58edeb067ac28b894fb5e58612ea11d8
       MASTER_MLX=$R/formal/m5/cache-frozen-mlx MASTER_MLX_SHA=65d7d38f267bb168b18b71dd0c1b80b8b3e1aa0bbaca141d8d03b3fe7223c569
+      # M6_4B_NODE=A (decoder M9): the same image on node A with copies of the node-B frozen masters
+      # (M6_4B_MASTER_DIR holds cache-frozen{,-mlx} and their .sha256 manifests) and HIP_FORCE_DEV_KERNARG=1.
       # M6_4B_NODE=E|F (decoder M10): the same image and copies of node B's frozen masters on node E / F; every
       # container gets only its GPU's render node (nodes C-F rule); Nox from the node's plain model directory.
       case ${M6_4B_NODE:-B} in
+        A)
+          NODE=A ENVX=(--env HIP_FORCE_DEV_KERNARG=1)
+          MASTER=${M6_4B_MASTER_DIR:?set M6_4B_MASTER_DIR}/cache-frozen MASTER_MLX=$M6_4B_MASTER_DIR/cache-frozen-mlx ;;
         E | F)
           NODE=$M6_4B_NODE H=/data/dev2/models ISOLATE=(--isolate)
           SOURCE=$H/Decision-1.0-Nox-4B/cde2a68dbaa557ea65dc458104d410a0802ee259 ;;
         B) ;;
-        *) echo "M6_4B_NODE must be B, E or F" >&2; exit 2 ;;
+        *) echo "M6_4B_NODE must be A, B, E or F" >&2; exit 2 ;;
       esac ;;
     2b)
       TLABEL=2B SOURCE=$SOL INCUMBENT=S2T-soup
@@ -104,7 +109,7 @@ tier_setup() {
       [ -n "$bdf" ] && RENDER_OF[$g]=$(readlink -f "/dev/dri/by-path/pci-$bdf-render")
     done
   else
-    GPU=${M6_GPU:-5} RENDER_OF=([5]=/dev/dri/renderD169)
+    GPU=${M6_GPU:-5} RENDER_OF=([5]=/dev/dri/renderD169 [6]=/dev/dri/renderD177 [7]=/dev/dri/renderD185)
   fi
 }
 declare -A RENDER_OF

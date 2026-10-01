@@ -24,6 +24,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from v2.release import automap
 from v2.release import card as card_module
 from v2.release import layout
 from v2.release import licence as licence_policy
@@ -583,6 +584,34 @@ def runtime_root(spec: dict[str, Any]) -> tuple[Path, dict[str, Any] | None]:
     return _mirror_tree(value, "runtime_source", "v2/release/runtime")
 
 
+def automap_root(spec: dict[str, Any]) -> tuple[Path | None, dict[str, Any] | None]:
+    """Tree whose v2/release/automap supplies the root 🤗 Transformers remote code.
+
+    Default: this builder's tree. ``automap_source`` names the decision2 tree of an exact node
+    mirror, so a later card-only revision can keep the remote code of the revision it replaces.
+    """
+    value = spec.get("automap_source")
+    if not value:
+        return None, None
+    return _mirror_tree(value, "automap_source", "v2/release/automap")
+
+
+def remote_code(spec: dict[str, Any], stage: Path) -> dict[str, Any]:
+    """Copy the trust_remote_code modules to the package root; the manifest section that records them."""
+    tree, mirror = automap_root(spec)
+    records = automap.copy_into(stage, tree)
+    return {
+        "files": records,
+        **automap.CONFIG_FIELDS,
+        **({"automap_source": mirror} if mirror else {}),
+        **(
+            {"tested": spec["remote_code"]["tested"]}
+            if (spec.get("remote_code") or {}).get("tested")
+            else {}
+        ),
+    }
+
+
 def vendor_runtime(
     spec: dict[str, Any], stage: Path, identity: dict[str, Any]
 ) -> dict[str, Any]:
@@ -958,6 +987,7 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
         runtime = vendor_runtime(spec, stage, identity)
         for name, record in runtime.items():
             record["sha256"] = layout.sha_file(stage / name)
+        remote = remote_code(spec, stage)
         scored_runtime = check_scored_runtime(spec, runtime, identity.get("score_bias"))
         if score_bias:
             score_bias["scored_sha256"] = scored_runtime["score_bias_sha256"]
@@ -987,6 +1017,10 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
                 else "raw native probabilities (no post-hoc temperature)."
             ),
             "requirements_text": spec["card"]["requirements_text"],
+            "remote_code": {
+                "tested": (spec.get("remote_code") or {}).get("tested"),
+                "base": identity.get("base"),
+            },
             **(
                 {
                     "comparison": (
@@ -1021,6 +1055,7 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             calibration=calibration and calibration["file"],
             base=identity.get("base"),
             max_input_tokens=spec["max_input_tokens"],
+            remote_code=True,
         )
         (stage / layout.POINTER_NAME).write_text(
             json.dumps(pointer, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
@@ -1049,6 +1084,7 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             "files_sha256": inventory,
             "model_files": files,
             "runtime_files": runtime,
+            "remote_code": remote,
             "parameters": {
                 "loaded": loaded,
                 "packaged": packaged,

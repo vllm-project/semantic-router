@@ -36,7 +36,29 @@ NODE_GPUS = {
 }
 ALLOWED_GPUS = NODE_GPUS["b"]
 MAX_CAP_HOURS = 13.0
+# Milestone 6 (opt-in with DEV2_27B_ALLOC=m6): the 27B leases node B GPU0 / GPU1 / GPU5 and node A GPU2, and an 18 GPU-hour
+# ceiling per launch (an A20 + IB1 rank-128 arm-seed projects to 12.5-14 GPU-h).
+M6_NODE_GPUS = {
+    "b": {
+        0: ("0000:83:00.0", "renderD129"),
+        1: ("0000:8b:00.0", "renderD137"),
+        5: NODE_GPUS["b"][5],
+    },
+    "a": {2: NODE_GPUS["a"][2]},
+}
+M6_MAX_CAP_HOURS = 18.0
 LEASE_ROOT = Path("/data/dev2/leases")
+
+
+def m6_allocation() -> bool:
+    value = os.environ.get("DEV2_27B_ALLOC", "")
+    if value not in ("", "m6"):
+        raise ValueError(f"DEV2_27B_ALLOC must be unset or m6, not {value!r}")
+    return value == "m6"
+
+
+def max_cap_hours() -> float:
+    return M6_MAX_CAP_HOURS if m6_allocation() else MAX_CAP_HOURS
 
 
 def node_name() -> str:
@@ -47,7 +69,7 @@ def node_name() -> str:
 
 
 def allowed_gpus(node: str | None = None) -> dict[int, tuple[str, str]]:
-    return NODE_GPUS[node or node_name()]
+    return (M6_NODE_GPUS if m6_allocation() else NODE_GPUS)[node or node_name()]
 
 
 def utc() -> str:
@@ -67,9 +89,12 @@ def render_node(
 ) -> Path:
     gpus = allowed_gpus(node_id)
     if gpu not in gpus:
-        raise ValueError(
-            f"GPU{gpu} is outside the ~27B allocation (node B GPU5-7, node A GPU2-4)"
+        where = (
+            "node B GPU0/1/5, node A GPU2"
+            if m6_allocation()
+            else "node B GPU5-7, node A GPU2-4"
         )
+        raise ValueError(f"GPU{gpu} is outside the ~27B allocation ({where})")
     pci, node = gpus[gpu]
     actual = (sysfs / node / "device").resolve().name.lower()
     if actual != pci:
@@ -210,8 +235,8 @@ def main() -> None:
         args.command = args.command[1:]
     if not args.command:
         raise ValueError("Missing container command after --")
-    if not 0 < args.cap_hours <= MAX_CAP_HOURS:
-        raise ValueError(f"cap-hours must be in (0, {MAX_CAP_HOURS:g}]")
+    if not 0 < args.cap_hours <= max_cap_hours():
+        raise ValueError(f"cap-hours must be in (0, {max_cap_hours():g}]")
     if args.receipt.exists():
         raise FileExistsError("Receipt already exists; use a fresh run name")
     device = render_node(args.gpu)

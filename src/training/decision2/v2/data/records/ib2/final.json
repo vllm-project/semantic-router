@@ -1,0 +1,151 @@
+{
+ "candidates": {
+  "dev": "a48b62373010a30045edd44ff1e3fdca6106abacb7a2bf41b409c35de9fd9993",
+  "train": "9b9bc534a40d8c70516482b9175e64569304ea5088b58186a60782eab28bec3c"
+ },
+ "dev": {
+  "family": {
+   "argq": 408,
+   "gsm2": 572,
+   "hover": 200,
+   "ytspam": 92
+  },
+  "groups": 1212,
+  "label_by_family": {
+   "argq": {
+    "0": 204,
+    "1": 204
+   },
+   "gsm2": {
+    "0": 286,
+    "1": 286
+   },
+   "hover": {
+    "0": 80,
+    "1": 120
+   },
+   "ytspam": {
+    "0": 46,
+    "1": 46
+   }
+  },
+  "language": {
+   "en": 1272
+  },
+  "rows": 1272,
+  "sha256": "ab009fb12f9563c3ef4a846f5455dd5233f2a2c5fafe6ac8a9c74349532eb923",
+  "task_type": {
+   "choice": 408,
+   "noul": 864
+  }
+ },
+ "drops": {
+  "dev_groups": {
+   "count": 1137,
+   "sha256": "c362a10e6030bfcecb193d8c812b343fe5cc6f579145f14bc2039a10ffa759d7"
+  },
+  "families": [
+   "fc_args2",
+   "fc_sel2"
+  ],
+  "groups": {
+   "count": 3433,
+   "sha256": "798d783caeccae050ff0675d3635c1aa0f0135b0d1a436069403fe0a1e795b6c"
+  },
+  "ids": {
+   "count": 5,
+   "sha256": "acd11d49f12f0a6a149ae8341592f6fb29793499a07965609f61df3d5680014a"
+  },
+  "leak_ids": {
+   "count": 1,
+   "sha256": "d91c9c13cc3d8e6d23448a702d4e4787820c86e9635cb9b90f01249c9a28c3c0"
+  },
+  "removed": {
+   "dev:dev_near_train": {
+    "argq": 119,
+    "fc_ready": 285,
+    "fc_rel": 631,
+    "gsm2": 24,
+    "hover": 264,
+    "ytspam": 18
+   },
+   "dev:dropped_group": {
+    "argq": 8,
+    "fc_ready": 72,
+    "fc_rel": 172,
+    "gsm2": 126,
+    "hover": 130
+   },
+   "dev:family": {
+    "fc_args2": 336,
+    "fc_sel2": 785
+   },
+   "dev:leak_guard": {
+    "ytspam": 1
+   },
+   "train:dropped_group": {
+    "argq": 84,
+    "fc_ready": 696,
+    "fc_rel": 1347,
+    "gsm2": 995,
+    "hover": 1351,
+    "ytspam": 2
+   },
+   "train:family": {
+    "fc_args2": 3120,
+    "fc_sel2": 7215
+   },
+   "train:review_or_screen": {
+    "hover": 2,
+    "ytspam": 3
+   }
+  }
+ },
+ "schema": "decision2.ib2.final.v1",
+ "train": {
+  "family": {
+   "argq": 5152,
+   "fc_ready": 2582,
+   "fc_rel": 5732,
+   "gsm2": 5582,
+   "hover": 4020,
+   "ytspam": 1450
+  },
+  "groups": 20054,
+  "label_by_family": {
+   "argq": {
+    "0": 2576,
+    "1": 2576
+   },
+   "fc_ready": {
+    "0": 1291,
+    "1": 1291
+   },
+   "fc_rel": {
+    "0": 2866,
+    "1": 2866
+   },
+   "gsm2": {
+    "0": 2791,
+    "1": 2791
+   },
+   "hover": {
+    "0": 1608,
+    "1": 2412
+   },
+   "ytspam": {
+    "0": 725,
+    "1": 725
+   }
+  },
+  "language": {
+   "en": 24518
+  },
+  "rows": 24518,
+  "sha256": "ee137efa8bbf86e5c62574f3b8fbd6204063e095a8da514f32600ba3d51d1cfa",
+  "task_type": {
+   "choice": 5152,
+   "noul": 19366
+  }
+ }
+}

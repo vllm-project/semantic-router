@@ -1,0 +1,100 @@
+{
+ "candidate_inputs": {
+  "ib2.dev.cand.jsonl": "a48b62373010a30045edd44ff1e3fdca6106abacb7a2bf41b409c35de9fd9993",
+  "ib2.train.cand.jsonl": "9b9bc534a40d8c70516482b9175e64569304ea5088b58186a60782eab28bec3c"
+ },
+ "candidates": {
+  "argq": {
+   "select": 629,
+   "train": 5349
+  },
+  "fc_args2": {
+   "select": 336,
+   "train": 3120
+  },
+  "fc_ready": {
+   "select": 357,
+   "train": 3320
+  },
+  "fc_rel": {
+   "select": 804,
+   "train": 7184
+  },
+  "fc_sel2": {
+   "select": 785,
+   "train": 7215
+  },
+  "gsm2": {
+   "select": 745,
+   "train": 6625
+  },
+  "hover": {
+   "select": 598,
+   "train": 5380
+  },
+  "ytspam": {
+   "select": 151,
+   "train": 1548
+  }
+ },
+ "drop_groups_sha256": "dd4dbb332cc945ecba6d9c578f4e8b5fab03719ffbea4401bd0c34dfc8944221",
+ "flagged": {
+  "argq": {
+   "groups_dropped": 0
+  },
+  "fc_args2": {
+   "groups_dropped": 298,
+   "rows": 320,
+   "rows_G": 312,
+   "rows_N2": 8
+  },
+  "fc_ready": {
+   "groups_dropped": 434,
+   "rows": 487,
+   "rows_E": 8,
+   "rows_G": 475,
+   "rows_N1": 8,
+   "rows_N2": 10
+  },
+  "fc_rel": {
+   "groups_dropped": 856,
+   "rows": 891,
+   "rows_E": 2,
+   "rows_G": 882,
+   "rows_N2": 9
+  },
+  "fc_sel2": {
+   "groups_dropped": 14,
+   "rows": 21,
+   "rows_E": 1,
+   "rows_G": 9,
+   "rows_N2": 11
+  },
+  "gsm2": {
+   "groups_dropped": 1121,
+   "rows": 1121,
+   "rows_E": 740,
+   "rows_G": 1118,
+   "rows_N1": 987,
+   "rows_N2": 1115
+  },
+  "hover": {
+   "groups_dropped": 560,
+   "rows": 924,
+   "rows_G": 912,
+   "rows_N2": 783
+  },
+  "ytspam": {
+   "groups_dropped": 0
+  }
+ },
+ "groups_dropped": 2977,
+ "reference": "every Decision Index suite row (selected and added rows); statistics kept on the node",
+ "rules": {
+  "E": "raw leaf equality, leaves >= 20 characters",
+  "G": "shared word 13-gram",
+  "N1": "normalized whole-leaf equality, >= 6 tokens",
+  "N2": "normalized sentence or leaf equality, >= 8 tokens"
+ },
+ "schema": "decision2.ib1.index-guard.v1"
+}
