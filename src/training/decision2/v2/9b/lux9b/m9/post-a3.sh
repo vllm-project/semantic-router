@@ -2,8 +2,10 @@
 # 9B M9 stage-3 post-training chain on node A for one arm (amendment 3). Waits for node C's arm soup (soup/<ARM>/DONE),
 # pulls it over the temporary transfer key (content manifest checked on both sides) and builds the development point
 # the way K-a13 was built from the K soup: the uniform FP32 soup of [arm soup, Lux 1.0, Lux 1.0] (alpha 1/3 toward the
-# arm soup) with K-a13's own checkpoint-form Lux 1.0 (m3/pf-D-s1-zero/run/checkpoint-0000000), on CPU, recorded in
-# soup/<POINT>/DONE and <point>.built.json. Then it reads every development panel plus the IB1 / IB2 DEV diagnostics
+# arm soup), on CPU, recorded in soup/<POINT>/DONE and <point>.built.json. The Lux 1.0 member is the zero-step
+# checkpoint of m9-KIB-s1 pulled from node C (amendment 3 fallback: the soup refuses K-a13's own m3/pf-D-s1-zero
+# checkpoint because its source label is "model" where M9's is "lux"; both checkpoints' backbone shards and head are
+# byte-identical). Then it reads every development panel plus the IB1 / IB2 DEV diagnostics
 # on this GPU (lines.sh), scores the point against C0 (score.sh points C0 <POINT>), marks status/scored-<POINT> and
 # reads the IB DEV panels of the arm soup itself (alpha 1; report only). The chain that finds both points scored (or
 # failed) runs once (status/rules-s3.lock): C0's IB DEV, the typed readout readout/m9-s3.json (with L9IB / L9IBX when
@@ -23,7 +25,9 @@ case $ARM in
   *) echo "no stage-3 arm $ARM" >&2; exit 2 ;;
 esac
 POINTS="K-a13IB K-a13IBX" LOCK=rules-s3.lock
-LUXCK=/runs/m3/pf-D-s1-zero/run/checkpoint-0000000
+LUXHOST=$M/arms/pre/m9-KIB-s1-zero/checkpoint-0000000
+LUXCK=/runs/m9/arms/pre/m9-KIB-s1-zero/checkpoint-0000000
+K13LUX=/data/dev2/runs/9b/m3/pf-D-s1-zero/run/checkpoint-0000000
 PANELS="dev css-pilot ht-dev2 score5t-dev hs1-dev pn1-dev m9-probes mlxdev"
 export M9_READOUT=m9-s3 M9_RULES=9b-finalists-s3
 mkdir -p "$M/chains" "$M/logs" "$ST"
@@ -88,11 +92,30 @@ P=$M/soup/$POINT
 if [ ! -f "$P/DONE" ]; then
   [ -e "$P/build" ] && fail "a partial build of $POINT exists; not rebuilt"
   mkdir -p "$P"
+  mkdir -p "$(dirname "$LUXHOST")"
+  if [ ! -f "$LUXHOST.pulled.json" ] && ! mkdir "$LUXHOST.pull.lock" 2> /dev/null; then
+    for _ in $(seq 1 120); do [ -f "$LUXHOST.pulled.json" ] && break; sleep 30; done
+    [ -f "$LUXHOST.pulled.json" ] || fail "the other chain's pull of the Lux 1.0 zero-step checkpoint did not finish"
+  fi
+  if [ ! -f "$LUXHOST.pulled.json" ]; then
+    mb=$(on "cd '$LUXHOST' && $manifest")
+    mkdir -p "$LUXHOST"
+    rsync -a -e 'ssh -i /root/.ssh/d2_temp_cd -o BatchMode=yes' "$FROM:$LUXHOST/" "$LUXHOST/" \
+      || fail "pull of the Lux 1.0 zero-step checkpoint failed"
+    ma=$(cd "$LUXHOST" && eval "$manifest")
+    [ "$ma" = "$mb" ] || fail "Lux 1.0 zero-step manifest differs after the pull ($mb vs $ma)"
+    (cd "$LUXHOST" && sha256sum backbone/*.safetensors decision_head.safetensors) > "$LUXHOST.weights.sha256"
+    (cd "$K13LUX" && sha256sum -c --quiet "$LUXHOST.weights.sha256") \
+      || fail "Lux 1.0 zero-step weights differ from K-a13's base checkpoint"
+    printf '{"artifact": "%s", "content_manifest": "%s", "pulled_utc": "%s", "weights_equal_to": "%s"}\n' "$LUXHOST" \
+      "$ma" "$(date -u +%FT%TZ)" "$K13LUX" > "$LUXHOST.pulled.json"
+    log "pulled the Lux 1.0 zero-step checkpoint ($ma); weights byte-identical to K-a13's base"
+  fi
   M9_NODE=$NODE bash "$OPS/launch.sh" "soup-$POINT" "$SRC" "$P/build" --cpu -- -m v2.dec.soup \
     --member "/runs/${art#/data/dev2/runs/9b/}" --member "$LUXCK" --member "$LUXCK" --output "/out/$POINT" \
     || fail "the alpha 1/3 soup of $POINT failed (see $P/build.stderr.log)"
   pt=$P/build/$POINT
-  python3 - "$pt" "$POINT" "$art" "/data/dev2/runs/9b/${LUXCK#/runs/}" "$(cd "$pt" && eval "$manifest")" << 'EOF'
+  python3 - "$pt" "$POINT" "$art" "$LUXHOST" "$(cd "$pt" && eval "$manifest")" << 'EOF'
 import json, sys, time
 pt, point, art, lux, content = sys.argv[1:]
 json.dump({
@@ -101,6 +124,7 @@ json.dump({
                     "[K soup, Lux 1.0, Lux 1.0] (m4/K-a13-build)",
     "members": [art, lux, lux],
     "arm_artifact": json.load(open(art + ".pulled.json")),
+    "lux_member": json.load(open(lux + ".pulled.json")),
     "content_manifest": content,
     "built_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
 }, open(pt + ".built.json", "w"), indent=1)
