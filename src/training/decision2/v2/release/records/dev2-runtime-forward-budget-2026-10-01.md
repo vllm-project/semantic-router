@@ -1,7 +1,8 @@
 # DEV2.0 runtime: forward token budget for long multi-question requests — release hand-off (2026-10-01)
 
-Owner: eval track (IX1 follow-up A). Status: fix merged into `xunzhuo/decision-2-training`; **no Hub revision
-published**. The release track builds and publishes the runtime-only revisions below.
+Owner: eval track (IX1 follow-up A). Status: fix merged into `xunzhuo/decision-2-training`. **Published** by the
+release track: 4B `13d42143` (with the LH successor), 0.8B `4afea305`, 2B `2973ad4a`, 9B `5de3f9ed`, 27B
+`09280791`; see [`dev2-budget-2026-10-01.md`](dev2-budget-2026-10-01.md).
 
 ## What failed
 
