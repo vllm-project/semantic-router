@@ -1,7 +1,7 @@
 # ~27B M6 state (resume file)
 
-Updated: 2026-10-01 23:10 UTC+8 (15:10Z; continuation worker 2 a56025bb ran 10:44–15:15Z and handed off; worker 1
-11741ee2 ran 06:17–10:55Z).
+Updated: 2026-10-01 23:28 UTC+8 (15:28Z; **worker 3 = the coordinator's continuation #2, 0d2e488f, on duty from
+15:12Z**; worker 2 a56025bb ran 10:44–15:15Z and handed off; worker 1 11741ee2 ran 06:17–10:55Z).
 Prereg `m6-prereg-2026-10-01.md` (`90d38aba7`) with amendments 1 (`b74685ddb`), 2 (`35492ac25`) and **3 (`4e4211aee`,
 data lock `7fcbc824c`)**. Mirrors: M6-IB / M6-IB2 seeds, chains and watchers run from **`b74685ddb`**, M6-IBX's from
 **`d8edcf4e1`**, M6-IB2PN's from **`7fcbc824c`** (on node A / B / D); step 0 ran from `20af2e4a1`. Hand-off record for
@@ -152,6 +152,15 @@ node B GPU0, GPU1, GPU5 and node A GPU2: track 27b, running the four M6-IB / M6-
 
 ## Infrastructure
 
+- **Contrast guard on node B (worker 3, since 15:59Z): PID 2868454**, mirror `b980dd144`, log
+  `m6/logs/contrast-guard.log`. The four chains share `m6/gates/`, and each chain's `m6-gates.sh gates` ends with
+  `m4_contrast --output gates/contrast.json`, which refuses an existing file, so every chain after the first one
+  with a sealed finalist would have stopped there, before `overlap` and `verdicts` (found by reading the code; no
+  chain has reached it yet). The guard moves each complete `contrast.json` to `contrast-<finalists>-<UTC>.json`
+  within 5 s and exits when no chain PID (2769370, 2789875, 2769422, 2818836) is alive. **Fallback** if a chain still
+  stops at its contrast step (the chain log ends in a `FileExistsError` after `m6 gates gates <ARM>: start`): from
+  that chain's mirror, `m6-gates.sh <sha> overlap <ARM>` and then `verdicts <ARM>` on node B (CPU; the chain's
+  formal, mlx and per-arm gate files are complete by then). Nothing reads `contrast.json` downstream.
 - **M6 node link (node B → node A): UP since 07:07Z** (`m6/m6-link.sh setup`, then `check` passed). Key in node B
   `/data/dev2/tmp/27b-m6-xfer/` (mode 700; `peer`, `known_hosts` with node A's host key, verified against node A's own);
   node A `authorized_keys` line `dev2-27b-m6-xfer-temp` = `from=<node B source>`, `command="/usr/bin/rrsync
@@ -208,12 +217,54 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
    (see the hand-off above) and fill the development table (G1–G6 with CIs, G5 and G6 especially, plus the es / fr
    view) in `m6-results-2026-10-01.md`; commit. On `m6 chain complete`, run `m6_report verdicts` and fill the formal
    table; record the choice rule's outcome across chains (stage 1: M6-IB / M6-IBX; stage 2: M6-IB2 / M6-IB2PN).
-3. Finalists passing items 1–7: complete `m6-handoff-2026-10-01.md` §2 (package, spec) after the custodian's §1
-   PASS; §3 IX1 request (private values only); §4 release hand-off only after item 8 passes.
-4. After the last chain (M6-IB2PN ≈ 08:30Z Oct 2): attribution (`m6-gates.sh` with every sealed finalist), final
-   results, gist 06, milestone-end cleanup ("Hand-off" above), merge (signed) into integration.
+3. **Superseded by worker 3 (15:50Z; `m6-handoff-2026-10-01.md` is now the runbook):** item 8 is this track's own
+   step (§2: one attempt, `c1-postkey.sh` on node A GPU2, only for the choice-rule finalist and only with zero
+   exposure in the custodian's §1 record), and so is the private Index (§3: `m6-index.sh` on node D GPU4–7, eval
+   allowance ≤ 12 GPU-h = one 27B run; first finalist passing items 1–7). The release (§4) supersedes DEV2.0-27B's
+   current `main` through the release pipeline, only if items 1–8 pass: **`main` moved to `e7b4a372` at 15:41Z** (the
+   card-redesign worker's card-only revision on top of the fix revision `09280791`; spec `dev2-27b-card.json`).
+4. After the last chain (M6-IB2PN ≈ 08:30Z Oct 2): attribution (`m6-gates.sh <mirror> contrast` and `verdicts` with
+   every sealed finalist; never `gates` again for an arm already gated), final
+   results, gist 06, milestone-end cleanup ("Hand-off" above), merge (signed) into integration. **Order:** the
+   chosen finalist's `m6-stage-a.sh` (node A, item 8 / release) runs before `m6-link.sh remove`, which deletes node
+   B's link directory.
 
 ## Poll log (newest first)
+
+- 16:20Z: **C1 content recheck r1 PASS** (custodian, record `v2/eval/records/c1-recheck-r1-2026-10-01.md`,
+  `36f93b7cc`, verdict `0823a1a8…`): IB1-r3, IB2, PN1-r2 and `a20ib12` expose 0 scored C1 items; the registry lists
+  M6-IB, M6-IBX, M6-IB2 and M6-IB2PN with exposure 0, so C1 content blocks item 8 for no M6 arm. Integration merged
+  (signed). Runbook §1 / §2 updated. Poll 5 (16:10Z): all alive, guard alive; **DEV2.0-27B `main` moved to
+  `e7b4a372` at 15:41Z** (card-only revision from `f85ea4e17` on top of `09280791`); the runbook's base revision and
+  spec now name it.
+- 16:06Z (poll 4 at 16:03Z): all alive, plus the new contrast guard (node B PID 2868454; see "Infrastructure").
+  M6-IB 3,107 / 2,948 (13.5 / 14.0 h; ETA 21:27Z / 21:59Z); M6-IB2 2,999 / 2,996 (17.8 / 17.8 h); M6-IBX 2,695 /
+  2,659 (13.8 / 14.0 h); M6-IB2PN 1,621 / 1,595 (18.9 / 18.7 h). **GPU-h ≈ 56.9** (closed 1.314 + running full runs
+  ≈ 55.5). Fix `b980dd144` (guard, `m6-gates.sh contrast` stage for the final attribution) mirrored to node B and
+  node D.
+- 15:47Z (poll 3 at 15:43Z): all alive. M6-IB 2,990 / 2,830 (13.5 / 13.9 h); M6-IB2 2,878 / 2,870 (17.8 / 17.8 h);
+  M6-IBX 2,573 / 2,540 (13.9 / 14.1 h; **s2 at 2500 .9116, BEST = 2500**); M6-IB2PN 1,500 / 1,471 (18.8 / 18.8 h).
+  Node D disk 597 GB. Committed with this entry: `m6/m6-stage-a.sh` (stages the chosen finalist's frozen files on
+  node A for item 8 and the release; runbook §2 step 1), and `m6-index.sh stage` now addresses node D directly
+  (it no longer reads the link directory's `peer-d`, which `m6-link.sh remove` deletes). Runbook
+  `m6-handoff-2026-10-01.md` rewritten at `c8acde617` (item 8, the Index and the release are this track's steps).
+- 15:36Z (poll 2 at 15:32Z): all alive. M6-IB 2,917 / 2,760 (13.4 / 13.9 h); M6-IB2 2,807 / 2,800 (17.8 / 17.8 h);
+  M6-IBX 2,501 / 2,478 (13.9 / 14.1 h; **s1 at 2500 .8950, BEST = 2500**); M6-IB2PN 1,429 / 1,401 (18.9 / 18.7 h).
+  **Private Index tooling for finalists** committed with this entry: `m6/m6-index.sh` (workstation: `stage` node B
+  soup → node D + IX1 restage, `parity`, `run`, `status`, `score`, `release`) and `m6/m6-index-run.sh` (node D: the 8
+  panel-8 shards on GPU4–7, two per GPU), set up exactly as IX1's M5-L128 diagnostic (restaged into DEV2.0-27B
+  `4e89288d` with the forward-budget runtime `e876fbe`, T = 1, A20r's frozen autotune cache), plus the four M6
+  `DIAGNOSTIC` entries in `v2/eval/ix1/launch.sh` (a data-only change to the shared IX1 launcher; tests pass).
+- 15:28Z (worker 3, poll 1 at 15:16Z): all alive (8 containers; node B drivers and the four chains, node A driver,
+  relay and four mlx watchers, node D four drivers and four relays). M6-IB 2,818 / 2,661 (13.2 / 13.9 h; ETA 21:08Z /
+  21:53Z); M6-IB2 2,707 / 2,699 (17.7 / 17.8 h; ETA 01:38Z / 01:44Z); M6-IBX 2,411 / 2,382 (13.9 / 14.0 h; ETA 22:29Z /
+  22:36Z); M6-IB2PN 1,330 / 1,301 (18.9 / 18.8 h of cap 22; ETA 06:28Z / 06:27Z). Node D disk 572 GB. Integration
+  merged (fast-forward to `bc1720c14`). Inputs since worker 2: the 27B forward-budget fix revision **has landed**
+  (DEV2.0-27B `main` = `09280791`, COORDINATION 21:25), so §4 of the hand-off builds on it; the custodian's C1
+  content recheck (3c7679b0) is running for IB1-r3 + IB2 + PN1-r2 (no record yet); **the finalists' private Index
+  runs are now this track's job** on node D GPU4–7 with a separate eval allowance of ≤ 12 GPU-h (outside M6's 140;
+  IX1's harness; values private); successor items 1–8 have no exceptions (COORDINATION 23:15). Node D GPU5 holds the
+  0.8B fast-track's IX1 parity gate since 15:19Z (their lease); GPU4 / 6 / 7 idle.
 
 - 15:05Z (poll at 15:03Z; worker 2's last): all alive. M6-IB 2,737 / 2,582 (13.0 / 13.7 h; s2 at 2544 .9115, BEST =
   2544); M6-IB2 2,626 / 2,617 (17.6 / 17.6 h; at 2481 .8931 / .8944, BEST = 2481 both); M6-IBX 2,333 / 2,303 (13.7 /

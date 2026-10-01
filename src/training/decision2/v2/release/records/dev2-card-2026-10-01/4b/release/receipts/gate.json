@@ -1,0 +1,90 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's card job of 2026-10-01 21:58 UTC+8 (make the DEV2.0 cards standard, formal model-release cards with a Transformers-only quickstart; keep internal records off the cards), card-only revisions of all six repositories",
+  "decision": "release",
+  "decision_sha256": "6e5615d3b789691e7753ae59d4bea77393b8e67e6c6daa96e35015b7425c5c90",
+  "gate_profile": "successor",
+  "items": {
+    "1_successor_R1_v3": {
+      "evidence": "v3 67.345 vs current 63.151: +4.19 [+0.10, +9.88]",
+      "passed": true
+    },
+    "1_successor_R2_human_transfer": {
+      "evidence": "human transfer delta 95% [-0.082, +0.074]",
+      "passed": true
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "evidence": "types choice OK, noul OK, score OK",
+      "passed": true
+    },
+    "1_successor_R4_mlx_diag": {
+      "evidence": "mlx-diag card-eligible macro +0.0370 [+0.0250, +0.0490]",
+      "passed": true
+    },
+    "1_successor_R5_tier_gates": {
+      "evidence": "own 1.0 low +5.00; v3 67.345 vs 90% of Decider 4B 61.882; H vs Decider 4B [-0.078, +0.043]; own 1.0 low > 0 ok, v3 >= 55.693 ok, H vs Decider 4B upper >= 0 ok, no type collapsed ok",
+      "passed": true
+    },
+    "1_successor_R6_no_overlap_exposure": {
+      "evidence": "1 training files, 0 exposed groups",
+      "passed": true
+    },
+    "1_successor_R7_public231": {
+      "evidence": "public 231 172 vs 171 (+1; McNemar p 1.000)",
+      "passed": true
+    },
+    "1_successor_R8_c1_postkey": {
+      "evidence": "JevArena-C1 v1.2 post-key 52.71 vs DEV2.0-4B 452f1332 (current revision): +4.32 [+2.60, +6.00] PASS",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "8 results below own 1.0 summarised in the card limitations and listed in evaluation/EVALUATION.md",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 39 files re-hashed; loaded 4208383488",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "5d4b04ad76904aad307dabfdfa5a734a5dffbafe39bec753b582858f5752d26e",
+  "model_name": "DEV2.0-4B",
+  "receipts_sha256": {
+    "automap-card-pre": "39948a813aac11f9cee299c3b54518eeb457c13a83d471f6e5d4210721cc2a3c",
+    "automap-hub": "252ade94ed0e7972658afa52a287da17e40484f5721d7daef0f98f0f66e735a5",
+    "automap-hub-tf518": "c99f875718c2ab6804c6b06e96a976854949c37ac52787faaf3e267177731559",
+    "automap-post": "cfd46f2c2c7c83bf48f852bf839a8c56762ec2dfc94e86d912db6bac89a6375b",
+    "automap-pre": "4d57b4b2ed7adee0ca1487ebd2ebd7bcceb6afcff1853d8fb10c418f4da0d846",
+    "card-post": "9a67ce7fdb958ed0eadd1747a98f5fd7a6193d5ef6b131c828af4a8b0fb16a48",
+    "card-pre": "1f0890e93c34365d5f0c154c428e45d2169b36c2a477e822983089cce05e22e2",
+    "download": "58d8556909290a8ab80e27e0cb0d2bcd132bcc0342bab01fadf8fb906ad512bc",
+    "post": "4f69a91fc66404430ee245f0a00e9200de132f8dd7daff85efa358d69ae3e186",
+    "readback": "18d12b2fb237b3d3dcb3c1265299eed9df3d6ba148184608fbdc2a887d79f4b9",
+    "repeat-post": "cf5be9804407ea1ba3f0ff1b6ac291e2aa44ee783698506071b0d1231c2ab2b9",
+    "repeat-pre": "9cfe08ae21b2d2f0ae3f14fa8fd026be56d4954aa509aefc8a73ed4c48a2d89e",
+    "tree": "d418fa252037c708dfd3c7da82c0e26d53d1a3a112cd4ff63c2d97426b399513",
+    "upload": "60a18eb9681bae1e5d90bd5f30ce4c4109926d2899ab20535a295dea78951aa2"
+  },
+  "repo_id": "llm-semantic-router/DEV2.0-4B",
+  "revision": "dd60f0c24fe8de2001a307b1094ab2091bb1acc7",
+  "schema": "dev2-release-gate/1",
+  "supersedes": {
+    "gate_sha256": "1f1872e895ebdca8619379c99a0c4bea235979c44d6403217c25cc4c1d25dbed",
+    "revision": "3785b7b963d2f56de0e44f9ec638c814c5ee6499"
+  },
+  "utc": "2026-10-01T15:04:28.099363+00:00"
+}

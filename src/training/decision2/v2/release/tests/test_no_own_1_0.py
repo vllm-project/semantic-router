@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 from v2.release import card, gate, layout
-from v2.release.tests.test_release import REPORTS, ROSTER, facts
+from v2.release.tests.test_release import REPORTS, ROSTER, TEXT, facts
 
 OK_TYPES = {kind: {"verdict": "OK"} for kind in ("choice", "noul", "score")}
 
@@ -53,8 +53,8 @@ class NoOwnGateTest(unittest.TestCase):
         self.decision = self.work / "decision.json"
         self.spec = {
             "kind": "release",
-            "model_name": "DEV2.0-26B",
-            "repo_id": "llm-semantic-router/DEV2.0-26B",
+            "model_name": "Decision-2.0-Vega-26B",
+            "repo_id": "llm-semantic-router/Decision-2.0-Vega-26B",
             "expected_identity": {"model_sha256": "c" * 64},
             "scored": {"report_sha256": layout.sha_file(candidate)},
             "gate_receipt": str(self.decision),
@@ -81,8 +81,8 @@ class NoOwnGateTest(unittest.TestCase):
             "schema": gate.DECISION_SCHEMA,
             "status": "final",
             "decision": "release",
-            "model_name": "DEV2.0-26B",
-            "repo_id": "llm-semantic-router/DEV2.0-26B",
+            "model_name": "Decision-2.0-Vega-26B",
+            "repo_id": "llm-semantic-router/Decision-2.0-Vega-26B",
             "identity": {"model_sha256": "c" * 64},
             "report_sha256": self.spec["scored"]["report_sha256"],
             "paired_sha256": layout.sha_file(self.paired),
@@ -134,7 +134,8 @@ class NoOwnGateTest(unittest.TestCase):
         items = gate.evaluate(self.work)["items"]
         self.assertFalse(items["1_beats_own_1_0"]["passed"])
         self.assertIn(
-            "results below own 1.0 listed", items["2_regressions_disclosed"]["evidence"]
+            "results below own 1.0 summarised in the card limitations",
+            items["2_regressions_disclosed"]["evidence"],
         )
 
     def test_each_condition_fails_closed(self):
@@ -198,7 +199,7 @@ def entries(reference: dict | None = None) -> list[dict]:
             "key": "cand",
             "role": "candidate",
             "report": str(REPORTS / "lex.json"),
-            "label": "DEV2.0-0.6B",
+            "label": "Decision-2.0-Kai-0.6B",
         },
         reference
         or {
@@ -225,8 +226,7 @@ class NoOwnCardTest(unittest.TestCase):
         peers: dict[str, dict] | None = None,
     ) -> dict:
         with tempfile.TemporaryDirectory() as scratch:
-            out, banner = Path(scratch) / "pkg", Path(scratch) / "banner.png"
-            banner.write_bytes(b"\x89PNG\r\n\x1a\n")
+            out = Path(scratch) / "pkg"
             path = None
             if paired:
                 path = write(Path(scratch) / "paired.json", paired)
@@ -235,8 +235,7 @@ class NoOwnCardTest(unittest.TestCase):
                 roster=ROSTER,
                 paired=path,
                 facts={**facts(), "comparison": "no-1.0"},
-                text={"tagline": "A decision model.", "limitations": []},
-                banner=banner,
+                text=TEXT,
                 work=Path(scratch) / "work",
                 output=out,
                 paired_peers={
@@ -265,18 +264,18 @@ class NoOwnCardTest(unittest.TestCase):
         result = self.build(entries(), paired)
         readme = result["readme"]
         self.assertEqual(result["problems"], [])
-        self.assertIn("There is no Decision 1.0 model at this size; Bosun", readme)
-        self.assertIn("paired 95% interval [-3.00, +0.20]", readme)
-        self.assertIn("### Tradeoffs versus Bosun", readme)
         self.assertIn(
-            "There is no Decision 1.0 model at this size, so this compares with Bosun.",
+            "level with the reference same-size model, Bosun (38.52; difference -7.50, "
+            "paired 95% CI -3.00 to +0.20). There is no Decision 1.0 model at this size.",
             readme,
         )
-        self.assertIn("/231** for Bosun.", readme)
+        self.assertIn("- **Below Bosun in places:** typed decisions", readme)
         self.assertIn(
-            "There is no Decision 1.0 model at this size. The candidate-minus-Bosun v3",
+            "There is no Decision 1.0 model at this size. The Decision-2.0-Kai-0.6B minus Bosun "
+            "JevArena difference is -1.50 (paired 95% interval [-3.00, +0.20]).",
             result["evaluation"],
         )
+        self.assertIn("## Results below Bosun", result["evaluation"])
         self.assertIsNone(result["manifest"]["decision_1_0"])
         self.assertNotIn("paired_vs_own_1_0", result["manifest"])
         self.assertEqual(result["manifest"]["paired_vs_reference"]["delta"], -1.5)
@@ -299,8 +298,8 @@ class NoOwnCardTest(unittest.TestCase):
             "label": "Bosun",
         }
         readme = self.build(items)["readme"]
-        self.assertIn("the strongest other same-size model shown", readme)
-        self.assertNotIn("the strongest same-size model shown", readme)
+        self.assertIn("the strongest other same-size model, GLiNER2.5-Decide", readme)
+        self.assertNotIn("the reference same-size model", readme)
 
     def test_paired_intervals_of_the_other_peers_on_the_evaluation_page(self):
         v3 = {
@@ -319,7 +318,7 @@ class NoOwnCardTest(unittest.TestCase):
         self.assertIn(
             "Against the other models shown: GLiNER2.5-Decide", result["evaluation"]
         )
-        self.assertIn("[-2.000, +1.000].", result["evaluation"])
+        self.assertIn("[-2.00, +1.00].", result["evaluation"])
         self.assertIn("gliner", str(result["manifest"]["paired_vs_peers"]).lower())
         self.assertNotIn("paired_vs_peers", self.build(entries())["manifest"])
         gliner["point"]["right"]["score"] += 1.0
@@ -338,7 +337,8 @@ class NoOwnCardTest(unittest.TestCase):
         self.assertEqual(result["problems"], [])
         self.assertEqual(result["tradeoffs"], [])
         self.assertNotIn("JPT", result["readme"])
-        self.assertIn("### Tradeoffs\n", result["readme"])
+        self.assertIn("There is no Decision 1.0 model at this size.", result["readme"])
+        self.assertNotIn("Below", result["readme"])
         self.assertIsNone(result["manifest"]["paired_vs_reference"])
 
     def test_roles_follow_the_comparison(self):

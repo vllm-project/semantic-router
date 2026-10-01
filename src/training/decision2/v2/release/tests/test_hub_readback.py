@@ -13,7 +13,7 @@ from unittest import mock
 
 from v2.release import hub, layout
 
-REPO = "llm-semantic-router/DEV2.0-0.8B"
+REPO = "llm-semantic-router/Decision-2.0-Eos-0.8B"
 REVISION = "b" * 40
 RELEASE = Path(__file__).resolve().parents[1] / "release.sh"
 
@@ -50,14 +50,14 @@ class FakeApi:
 class HubReadbackTest(unittest.TestCase):
     def readback(self, kind: str, collected: bool, **flags) -> dict:
         with tempfile.TemporaryDirectory() as scratch:
-            package = Path(scratch) / "DEV2.0-0.8B"
+            package = Path(scratch) / "Decision-2.0-Eos-0.8B"
             package.mkdir()
             (package / "README.md").write_text(
                 "---\nlicense: apache-2.0\nbase_model: org/base\n---\n\n# card\n"
             )
             manifest = {
                 "kind": kind,
-                "model_name": "DEV2.0-0.8B",
+                "model_name": "Decision-2.0-Eos-0.8B",
                 "repo_id": REPO,
                 "files_sha256": {"README.md": layout.sha_file(package / "README.md")},
             }

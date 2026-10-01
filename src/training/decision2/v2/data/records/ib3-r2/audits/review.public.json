@@ -1,0 +1,192 @@
+{
+ "agreement_with_gold": {
+  "majority": {
+   "cp95": [
+    0.95995,
+    0.997127
+   ],
+   "k": 213,
+   "n": 216,
+   "rate": 0.986111,
+   "wilson95": [
+    0.959968,
+    0.995265
+   ]
+  },
+  "r1": {
+   "cp95": [
+    0.95995,
+    0.997127
+   ],
+   "k": 213,
+   "n": 216,
+   "rate": 0.986111,
+   "wilson95": [
+    0.959968,
+    0.995265
+   ]
+  },
+  "r2": {
+   "cp95": [
+    0.974477,
+    0.999883
+   ],
+   "k": 215,
+   "n": 216,
+   "rate": 0.99537,
+   "wilson95": [
+    0.974246,
+    0.999182
+   ]
+  },
+  "r3_on_splits": {
+   "cp95": [
+    0.0,
+    0.841886
+   ],
+   "k": 0,
+   "n": 2,
+   "rate": 0.0,
+   "wilson95": [
+    0.0,
+    0.65762
+   ]
+  }
+ },
+ "by_family": {
+  "mqa": {
+   "cp95": [
+    0.002873,
+    0.04005
+   ],
+   "k": 3,
+   "n": 216,
+   "rate": 0.013889,
+   "wilson95": [
+    0.004735,
+    0.040032
+   ]
+  }
+ },
+ "by_language": {
+  "en": {
+   "cp95": [
+    0.002873,
+    0.04005
+   ],
+   "k": 3,
+   "n": 216,
+   "rate": 0.013889,
+   "wilson95": [
+    0.004735,
+    0.040032
+   ]
+  }
+ },
+ "by_task_type": {
+  "noul": {
+   "cp95": [
+    0.002873,
+    0.04005
+   ],
+   "k": 3,
+   "n": 216,
+   "rate": 0.013889,
+   "wilson95": [
+    0.004735,
+    0.040032
+   ]
+  }
+ },
+ "confidence": {
+  "r1": {
+   "high": 203,
+   "low": 6,
+   "medium": 7
+  },
+  "r2": {
+   "high": 198,
+   "low": 7,
+   "medium": 11
+  }
+ },
+ "defect_flags": {
+  "any": 5,
+  "both": 2
+ },
+ "error_unweighted": {
+  "cp95": [
+   0.002873,
+   0.04005
+  ],
+  "k": 3,
+  "n": 216,
+  "rate": 0.013889,
+  "wilson95": [
+   0.004735,
+   0.040032
+  ]
+ },
+ "error_weighted": {
+  "bootstrap95": [
+   0.0,
+   0.032407
+  ],
+  "rate": 0.013889,
+  "reps": 10000,
+  "salt": "dq-boot-v1"
+ },
+ "inter_reviewer": {
+  "kappa": 0.981477,
+  "raw": {
+   "cp95": [
+    0.966954,
+    0.998877
+   ],
+   "k": 214,
+   "n": 216,
+   "rate": 0.990741,
+   "wilson95": [
+    0.966874,
+    0.997457
+   ]
+  },
+  "splits": 2
+ },
+ "sample": {
+  "families": [
+   "mqa"
+  ],
+  "families_excluded": [],
+  "n": 216,
+  "per_family": 216,
+  "rows": 8762,
+  "rows_sha256": "2dd4ac5477cfb070f693c4f9319ebbe0f2a2e5599b88a0e36cfe78ba358b2e8c",
+  "salt": "ib3-review-v1"
+ },
+ "schema": "decision2.ib3.review.v1",
+ "thresholds": {
+  "error_max": 0.05,
+  "error_upper_max": 0.08,
+  "family_lower_max": 0.05,
+  "weighted_error_max": 0.05
+ },
+ "verdict": {
+  "P1": true,
+  "P2": true,
+  "P3": true,
+  "error": 0.013889,
+  "error_cp95_upper": 0.04005,
+  "errors": 3,
+  "failing_families": [],
+  "family_errors": {
+   "mqa": 3
+  },
+  "family_n": {
+   "mqa": 216
+  },
+  "n": 216,
+  "verdict": "PASS",
+  "weighted_error": 0.013889
+ }
+}

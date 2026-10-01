@@ -1,0 +1,61 @@
+{
+ "candidate_inputs": {
+  "ib3.dev.cand.jsonl": "29c5a2a422a923914dbd2a6625fb40c7bd5f14073f74fb4615944fce001390a7",
+  "ib3.train.cand.jsonl": "89b47eb4a972e2fc124e27ff249b23a63a5c2f95bc7273efea2ee5f1d401f5c5"
+ },
+ "candidates": {
+  "esci": {
+   "select": 1160,
+   "train": 10840
+  },
+  "fdial2": {
+   "select": 610,
+   "train": 5390
+  },
+  "mqa": {
+   "select": 1018,
+   "train": 8982
+  },
+  "phiu": {
+   "select": 193,
+   "train": 1753
+  },
+  "wpd": {
+   "select": 453,
+   "train": 3987
+  }
+ },
+ "drop_groups_sha256": "1e23260b6c9c31a81889e1b6e4e8e96eca4bebdcffaf47adfc1061686e821198",
+ "flagged": {
+  "esci": {
+   "groups_dropped": 2,
+   "rows": 2,
+   "rows_host": 2,
+   "rows_with_url": 6
+  },
+  "fdial2": {
+   "groups_dropped": 0,
+   "rows_with_url": 0
+  },
+  "mqa": {
+   "groups_dropped": 0,
+   "rows_with_url": 0
+  },
+  "phiu": {
+   "groups_dropped": 3,
+   "rows": 3,
+   "rows_host": 3,
+   "rows_with_url": 1946
+  },
+  "wpd": {
+   "groups_dropped": 98,
+   "rows": 132,
+   "rows_host": 132,
+   "rows_with_url": 4440
+  }
+ },
+ "groups_dropped": 103,
+ "reference": "every Decision Index suite row (selected and added rows); statistics kept on the node",
+ "rule": "a group is dropped if any URL in its data leaves equals a suite URL or its host equals a suite host",
+ "schema": "decision2.ib3.index-url-guard.v1"
+}

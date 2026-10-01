@@ -25,8 +25,7 @@ config.json                ROOT query file: vllm-sr-decision pointer, format_ver
 MODEL_MANIFEST.json        SHA-256 of every other file, parameter counts by component,
                            scored identity, origin, base binding, runtime and licence
 LICENSE NOTICE ATTRIBUTIONS.md [LICENSING.md LICENSES/...]
-assets/DEV2.0-<size>-owl-banner.png
-assets/jevarena-v3-rank.svg  assets/jevarena-v3-model-task.svg  assets/jevbench-public231-rank.svg
+assets/jevarena.svg  assets/jevbench-public-231.svg
 evaluation/EVALUATION.md  evaluation/manifest.json
 decision2/                 local System One runtime: __init__.py, api.py, <profile>.py
 decision2/_vendor/         exact scored inference sources (hash-recorded in the manifest)
@@ -52,17 +51,21 @@ model.system_one(state=..., questions={...})  # {"model", "answers", "usage"}; n
 metadata and the Hub's `.gitattributes` are ignored), per-file SHA-256 and the
 header parameter counts; `from_pretrained` additionally asserts the loaded
 parameter count, the scored model identity and the calibration binding.
-The model name must match the loaded size tier (`DEV2.0-<tier>`, nearest tier
+Model names are `Decision-2.0-<codename>-<size>B`; the codename follows the size
+tier across generations (0.6B Kai, 0.8B Eos, 2B Sol, 4B Nox, 9B Lux, 27B Vega;
+`layout.CODENAMES`). The size must match the loaded size tier (nearest tier
 within the frozen 1.25 same-size ratio), or, with `"name_basis":
 "loaded-parameters"` in the spec, the rounded loaded count inside that tier
-(one decimal below 1B, whole billions from 1B; e.g. `DEV2.0-26B` for the ~27B
-tier's 25.75B text model), or, with `"name_basis": "base"`, the size label of
-the base model (`name_base_model`, or the pinned `base.repo_id` of an adapter;
-it must be in the declared weight lineage and in the loaded count's tier).
-Base-named cards add "Named after its base model (…); it loads N parameters"
-under Model details, with N the exact loaded count. DEV2.0-9B (Qwen3.5-9B base,
-7,940,895,744 loaded) and DEV2.0-27B (Qwen3.8-27B base, 25,746,591,744 loaded)
-use it. Training state never enters a package.
+(one decimal below 1B, whole billions from 1B; e.g. `Decision-2.0-Vega-26B` for
+the ~27B tier's 25.75B text model), or, with `"name_basis": "base"`, the size
+label of the base model (`name_base_model`, or the pinned `base.repo_id` of an
+adapter; it must be in the declared weight lineage and in the loaded count's
+tier). `Decision-2.0-Lux-9B` (Qwen3.5-9B base, 7,940,895,744 loaded) and
+`Decision-2.0-Vega-27B` (Qwen3.8-27B base, 25,746,591,744 loaded) use it. The
+repositories were released as `DEV2.0-<tier>` and renamed on 2026-10-02
+(`layout.FORMER_REPOS`; the old IDs redirect): the guard refuses the former IDs,
+and the successor gate accepts a current-revision gate receipt sealed under the
+former ID of the same repository. Training state never enters a package.
 
 ## Release spec and commands
 
@@ -113,7 +116,6 @@ Individual steps (all write one receipt; the orchestrator calls them in order):
 | card example | `python -I -B v2/release/examples.py card --package PKG --reference A.json --output C.json` |
 | scored parity | `python -I -B v2/release/examples.py parity --package PKG --panel NAME:PROMPTS:SEALED:N --output P.json` |
 | hub | `<hf-cli python> -m v2.release.hub <ensure, upload, download, readback or collect> ...` and `python3 -m v2.release.hub tree ...` |
-| banners | `python v2/release/banner.py --sources <1.0 headers> --fonts <dir> --output-dir brand/` (needs Pillow) |
 
 ### Release gate and collection
 
@@ -160,7 +162,7 @@ dir>` with a fresh cache. `readback` checks the private flag, the exact revision
 each remote file's LFS SHA-256 or git blob id against the package, the Hub-parsed
 card metadata, that every card link and image resolves, and collection
 membership (staging repositories must not be in the collection). `collect` only
-accepts a `DEV2.0-*` release package with a gate receipt naming the exact
+accepts a `Decision-2.0-*` release package with a gate receipt naming the exact
 revision and manifest. `ensure`, `upload`, `readback` and `collect` refuse a
 repository ID that the Hub resolves to a different repository (the old ID of a
 renamed repository redirects to the new one), so a superseded spec cannot write
@@ -168,31 +170,50 @@ to a retired name.
 
 ## Model card
 
-`card.py` follows the Decision 1.0 product card: owl banner, what the model is
-for, the three decision types, the same-panel score table, the v3 rank chart,
-the model × task chart and the public-231 rank chart (all from the eval track's
-`v2.eval.charts` on REPORT.json files only), an automatic **tradeoffs** table of
-every per-type, per-task and public-tier result below the tier's own Decision
-1.0 model, a runnable local System One example (executed by the verifier), and
-short model details and limits. No Pareto chart, no internal gate ledger.
-Comparators pass a fail-closed licence filter (`licence.py`): CC BY-NC,
-research-only, unknown and internal-only models are excluded. A peer measured
-from a sibling of its Decision Index board artifact (e.g. the BF16 weights of
-an FP8 entry) names `board_entry` and takes that roster entry's licence only
-if the entry names it as its base model; disclose it in `comparator_note`. Card metadata is
+`card.py` writes a standard model-release card, from same-panel REPORT.json
+files only. README.md, in order: YAML metadata (`license`, `base_model`,
+`base_model_relation`, `library_name: transformers`, tags); `# Decision-2.0-<codename>-<size>`,
+one paragraph and a link row (collection, evaluation details); **Highlights**
+(JevArena versus the Decision 1.0 counterpart with the paired interval, the
+standing among the same-size models shown, the three decision types, stock
+Transformers); **Model overview** (type, base, parameters, context, decision
+types, precision, licence); **Evaluation** (a JevArena bar chart, a JevBench
+public-231 bar chart, one table of this model, its counterpart and the
+same-size peers, one footnote line); **Quickstart** with only "Use with 🤗
+Transformers" (pip line, the `AutoModel` + `system_one` example the verifier
+executes, the `pipeline("decision")` line); **Limitations** (at most five: one
+line summarising every result below the counterpart, one for gaps to stronger
+peers, the spec's own lines, scope and trust); **Training data** (the spec's
+summary, the base-model licence and the CC BY / CC BY-SA sources parsed from the
+spec's attributions); **License**; **Citation**. `lint_readme` refuses internal
+vocabulary on the README (panel versions, post-key, Brier / ECE, mlx-diag,
+native-runtime usage, revision hashes) on top of the shared `lint`.
+
+`evaluation/EVALUATION.md` keeps the method (JevArena definition, post-key
+scope, the public-231 note, native runs and the bootstrap, the C1 sentence,
+the multilingual diagnostic, the licence filter and comparator notes), the full
+results table (typed, transfer, per type, public tiers, Brier / ECE, mlx-diag,
+invalid counts), per-task results and every result below the counterpart.
+Internal release facts (gate items, decision IDs, revision and weights hashes,
+runtime-update notes) stay in the release records.
+
+The charts (`card_charts.py`) are plain SVG on a white background: horizontal
+bars sorted by score, the released model in accent blue and every other model
+grey, value labels and light gridlines. No Pareto chart. Comparators pass a
+fail-closed licence filter (`licence.py`): CC BY-NC, research-only, unknown and
+internal-only models are excluded. A peer measured from a sibling of its
+Decision Index board artifact (e.g. the BF16 weights of an FP8 entry) names
+`board_entry` and takes that roster entry's licence only if the entry names it
+as its base model; disclose it in `comparator_note`. Card metadata is
 `apache-2.0` only when every upstream component of the weight lineage is
 Apache-compatible; otherwise `other` with `LICENSING.md`.
 
-## Banners
+Spec `card.text` keys: `model_type` and `training_summary` (required),
+`description`, `base_model`, `precision`, `limitations`, `comparator_note`,
+`c1_result`, `transformers_note`, `staging_notice`; unknown keys are refused.
 
-`brand/DEV2.0-{0.6B,0.8B,2B,4B,9B,27B}-owl-banner.png` use the Decision 1.0
-composition: the tier's 1.0 mosaic owl (pixels unchanged; Kai, Eos, Sol, Nox,
-Lux), a new owl with a ringed planet for 27B (`brand/sources`, generated in the
-same style), the `DEV2.0` wordmark, a `DECISION 2.0` pill and the size in the
-tier's 1.0 accent colour. `brand/BANNERS.json` records every source hash.
-`--label 27B=26B` draws a final name that follows the loaded count with the
-tier's owl and accent (`DEV2.0-26B-owl-banner.png`). Base-named releases
-(DEV2.0-9B, DEV2.0-27B) use their tier banners unchanged.
+`brand/` keeps the owl banners of earlier card revisions; current cards do not
+use them.
 
 ## Tests
 

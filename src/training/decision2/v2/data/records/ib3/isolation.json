@@ -1,0 +1,50 @@
+{
+ "failures": [],
+ "intersections": [],
+ "partitions": {
+  "aho/HR2": {
+   "groups": 1322,
+   "kind": "aho",
+   "rows": 1615,
+   "sha256": "697c31428ae821d7c0238a64ced8b997cc5671be47307f88a273d082bc5aaebe"
+  },
+  "aho/HS1": {
+   "groups": 1198,
+   "kind": "aho",
+   "rows": 2396,
+   "sha256": "2e9ee9ab6768aa2b3d0d397670248e5a8f2e524d60887d06698a4e84516533bf"
+  },
+  "aho/IB1": {
+   "groups": 1714,
+   "kind": "aho",
+   "rows": 2067,
+   "sha256": "3f56aa418e90e58f3fbaa50bf2f9f4f0405eeb9dd2f0c51ffca6f602711c693f"
+  },
+  "aho/IB2": {
+   "groups": 1212,
+   "kind": "aho",
+   "rows": 1272,
+   "sha256": "ab009fb12f9563c3ef4a846f5455dd5233f2a2c5fafe6ac8a9c74349532eb923"
+  },
+  "aho/IB3": {
+   "groups": 1109,
+   "kind": "aho",
+   "rows": 1762,
+   "sha256": "e79d90d0517ed1a360c50e2d49b38b00cd5801a8b8a81bd29b876db2f85f737e"
+  },
+  "aho/PN1": {
+   "groups": 1965,
+   "kind": "aho",
+   "rows": 1974,
+   "sha256": "c3b68ac113fc1f2afb5554530112f472a9c62f7997285bcaf89a6b655bb7f4cf"
+  },
+  "train/IB3": {
+   "groups": 14507,
+   "kind": "train",
+   "rows": 24148,
+   "sha256": "688b643ed6ada12adedb1c18c028be3a41fedca77c4c9cb661f2c9ded4b5504e"
+  }
+ },
+ "schema": "decision2.v2.isolation.v1",
+ "verdict": "PASS"
+}

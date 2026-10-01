@@ -1,0 +1,30 @@
+{
+ "candidate_inputs": {
+  "ib3.dev.cand.jsonl": "17a59382f7dcfd2503447209e53eee7c0a5200cb8588d77b099f528d4a0d1358",
+  "ib3.train.cand.jsonl": "0fcf49d102120a0d3635e7cf95979c57769ed2d2eaed9c8f0fc036b530f70b58"
+ },
+ "candidates": {
+  "mqa": {
+   "select": 1018,
+   "train": 8982
+  }
+ },
+ "drop_groups_sha256": "45194ce11d6b7c7f95997f59ec1c5436bba957120fd62588a38a35f75037e368",
+ "flagged": {
+  "mqa": {
+   "groups_dropped": 116,
+   "rows": 232,
+   "rows_G": 224,
+   "rows_N2": 176
+  }
+ },
+ "groups_dropped": 116,
+ "reference": "every Decision Index suite row (selected and added rows); statistics kept on the node",
+ "rules": {
+  "E": "raw leaf equality, leaves >= 20 characters",
+  "G": "shared word 13-gram",
+  "N1": "normalized whole-leaf equality, >= 6 tokens",
+  "N2": "normalized sentence or leaf equality, >= 8 tokens"
+ },
+ "schema": "decision2.ib1.index-guard.v1"
+}

@@ -40,7 +40,7 @@ def spec_for(
         "schema": build.SPEC_SCHEMA,
         "kind": "staging",
         "repo_id": "llm-semantic-router/dev2-release-staging",
-        "model_name": "DEV2.0-0.6B",
+        "model_name": "Decision-2.0-Kai-0.6B",
         "profile": profile,
         "checkpoint": str(checkpoint),
         "expected_identity": {"model_sha256": identity},
@@ -69,7 +69,7 @@ def spec_for(
                     "key": "cand",
                     "role": "candidate",
                     "report": str(REPORTS / "lex.json"),
-                    "label": "DEV2.0-0.6B (test)",
+                    "label": "Decision-2.0-Kai-0.6B (test)",
                 },
                 {
                     "key": "kai1",
@@ -228,7 +228,7 @@ def main() -> None:
         )
         return path
 
-    layout.name_for = lambda parameters: "DEV2.0-0.6B"
+    layout.name_for = lambda parameters: "Decision-2.0-Kai-0.6B"
     results = {"config_sha256": layout.sha_file(config_path)}
 
     full_id = checkpoint_fingerprint(work / "full")["model_sha256"]
