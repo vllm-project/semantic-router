@@ -2,25 +2,42 @@
 
 Worktree `/home/xunliu/code/vllm-sr-dev2-data-ib1`, branch `xunzhuo/decision-2-training-data-ib1` (from
 `origin/xunzhuo/decision-2-training` at `3ee34c625`). Prereg `records/ib1-prereg-2026-10-01.md` (`1f6823fae`) with
-amendment 1 (`a21ee5f8a`); licence registry `records/license-registry-ib1.json`; reviewer instructions
+amendments 1 (`a21ee5f8a`) and 2 (`1464c28df`, round 2); licence registry `records/license-registry-ib1.json`; reviewer instructions
 `records/dq/reviewer-ib1.md`; tooling `v2/data/ib1/` (runner `node_a.sh`). Results
-`records/ib1-results-2026-10-01.md`; receipts and data card `records/ib1/`. Private data on node A under
+`records/ib1-results-2026-10-01.md` (round 1) and `records/ib1-r2-results-2026-10-01.md` (round 2); receipts and data card `records/ib1/`. Private data on node A under
 `/data/dev2/private/data/ib1/` (mode 700): `raw/` (pinned publisher files; `download.log` holds every revision and
 commit) and the run directory **`b2/`** (candidates, scans, quarantine, shortcut receipts, screen and review keys and
-answers, final files, upload tree, logs; superseded outputs kept as `final-v1/`, `freeze-v1/`, `hf-v1/`). `b1/`
+answers, final files, upload tree, logs; superseded outputs kept as `final-v1/`, `freeze-v1/`, `hf-v1/`) and the round-2 run directory **`r2/`** (same layout plus `pass1-3/`,
+`rescan1-3/`, `rescanfinal*/`; superseded `final-v1/`, `freeze-v1/`, `leak-v1/`, `shortcut-pass2/` and the unreviewed
+214-item draw `review-v1-unreviewed/`). `b1/`
 stopped at the build on a reader bug and holds nothing. Local review packets and answers (private, mode 700):
-`/home/xunliu/.cache/dev2-ib1-review/`.
+`/home/xunliu/.cache/dev2-ib1-review/` (round 2 in `review-r2/`).
 
 Rules carried by this job: Index numbers never leave the private directories (not in commits, records, gist, cards);
 no Index row is trained on (G0); C1 registry datasets and the sealed directory are never read; HR2-r2's worktree is
 not touched.
 
-**Status: DONE, flagged NOT release-safe.** Private
-`llm-semantic-router/decision-2.0-training-data@1371c28777ae24e2632145dff3ea55050d47c014`, `m6/ib1/`: TRAIN 37,314
-rows (`7f2d0003…`), DEV 2,664 (`b412ab93…`), 10.47M native tokens. Decisive blind review 13 / 216 = 6.02% (P1 / P2
-fail, P3 pass).
+**Status: round 2 DONE, flagged NOT release-safe.** Private
+`llm-semantic-router/decision-2.0-training-data@82bf70a70fa0d0dda33240493b2df80f78ce84ae`, `m6/ib1/`: TRAIN 31,923
+rows (`f44d7f5f…`), DEV 2,366 (`eefab909…`), 7.88M native tokens. Fresh decisive blind review 12 / 225 = 5.33%
+[2.79, 9.13], weighted 5.97%, `wands` 4 / 19 (P1, P2 and P3 fail). Round 1 (`1371c287`, 13 / 216) is the previous
+revision.
 
 ## Log (newest first)
+
+- 2026-10-01 14:15 UTC+8 — round 2 uploaded (revision `82bf70a7`, 80 files, read-back equal, private; stale round-1
+  stage-S receipts removed in the same commit); receipts, card, status and results record written; gist 02 and merge.
+- 2026-10-01 14:00 UTC+8 — round-2 final: review drops (12 + 17 carried) → re-scan of the final files flagged 1 group
+  → `final` re-run (old outputs `final-v1/`, `freeze-v1/`, `leak-v1/`) → re-scan clean, leak guard 0, G5 / G7 PASS.
+- 2026-10-01 13:55 UTC+8 — **round-2 review FAILED**: 12 / 225 = 5.33% [2.79, 9.13], weighted 5.97%, `wands` 4 / 19
+  (P3). 5 of 12 errors are reviewers choosing the class kept as an option but no longer gold.
+- 2026-10-01 13:37 UTC+8 — round-2 sample 225 (19 per family, `sumedit` 16); five fresh foreground reviewers (R1 / R2
+  on two packets each, R3 on 4 splits).
+- 2026-10-01 13:33 UTC+8 — first draw 214 < 216 (`sumedit` group-limited) → set aside unreviewed; addendum
+  `602fc4e9c` (quota top-up) before any review.
+- 2026-10-01 13:30 UTC+8 — run `r2`: candidates byte-identical to `b2`; scans, pass 1 (constructions + carried ids),
+  re-scans 62 + 7 → 2 → 0 groups (pass 3 sampled); G4 drops `medmcqa`, `procb`, `wanli`; `maud` emptied by re-scan.
+- 2026-10-01 13:08 UTC+8 — amendment 2 pushed (`1464c28df`) before any round-2 row was built or sampled.
 
 - 2026-10-01 13:06 UTC+8 — merged into `xunzhuo/decision-2-training` (`6ef637ebd`; IB1, HR2, guard, overlap,
   shortcut and freeze tests pass) and gist 02 entry added. **Worker done.**
@@ -52,8 +69,8 @@ fail, P3 pass).
 
 ## Next steps (for the coordinator)
 
-1. Decide: IB1 for experiments only (not release-safe), or a separately preregistered IB1-r2 (for example without
-   `sentfin` neutral rows, SummEdits' Shakespeare domain and WANDS Partial rows; fresh decisive review).
+1. Round 2 is not release-safe; the 4B M10 IB1 arms should not start from it. Decide on a round 3 (separate prereg,
+   fresh review): two-option `sentfin` (negative / positive) and `wands` (Exact / Irrelevant), or drop `wands`.
 2. Before any C1-scored model trained on IB1: the custodian C1 content recheck (IB1 is inside the rescan roots).
-3. Uncovered target families for a later round: math verification / GSM8K-style numeric options, contracts,
-   knowledge MCQ, adversarial NLI, select-all-that-apply (all removed by a gate or deferred).
+3. Uncovered target families (IB2): contracts, knowledge MCQ, maths verification, NLI substitute,
+   select-all-that-apply.

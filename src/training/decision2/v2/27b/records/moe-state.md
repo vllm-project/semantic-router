@@ -1,18 +1,26 @@
 # 27B MoE milestone (MoE-1): state (resume file)
 
-Updated: 2026-10-01 11:15 UTC+8 (03:15Z). Worker: 27B MoE continuation #1 (started 02:21Z; hand-off due ≈ 07:15Z),
-branch `xunzhuo/decision-2-training-27b-moe`, worktree `/home/xunliu/code/vllm-sr-dev2-27b-moe`, gist
+Updated: 2026-10-01 14:40 UTC+8 (06:40Z). **Continuation #1 handed off here** (worked 02:21–06:45Z). Branch
+`xunzhuo/decision-2-training-27b-moe`, worktree `/home/xunliu/code/vllm-sr-dev2-27b-moe`, gist
 `06c-decision-2-27b-moe.md`. Assignment: COORDINATION 2026-09-30 23:50. **Continuation workers: read "Next steps"
 first.** Prereg `moe-prereg-2026-10-01.md` (amendments 1–4; amendment 4 = `eacb6b85c`, 03:06Z); gate
 `moe-gate-2026-10-01.md`; results (interim) `moe-results-2026-10-01.md`.
+
+**Hand-off in one paragraph.** The screen is done (Gemma-4-26B-A4B-it won; Qwen3.5-35B-A3B stopped by the proxy
+rule). Seed 1 finished; seed 2 ends ≈ 08:25Z (16:25 UTC+8). From then on the two Stage B chains (PIDs below) run the
+whole preregistered tail unattended: relay → soup → T = 1 readout → CAL698 + 23:15 adoption → development gates →
+(pass) frozen package → formal → gates → latency → mlx-diag (node A) → `R/gates/VERDICTS-*.json` on node B, ≈ 2–2.5 h
+after seed 2. Every stage was path-checked except the soup's GPU collections. The next worker watches the chain logs,
+records each result, runs the verdicts if the chain stops early, and writes the release hand-off if there is a winner.
 
 ## Target, budget, GPUs
 
 - Beat AutoJev-27B significantly (post-key v3 > 72.133, paired lower bound > 0, H not below); successor items 1–7 vs
   DEV2.0-27B = A20r (72.360, node B `/data/dev2/runs/27b/M4-A20r-soup/formal`); item 8 via the eval custodian.
-- 60 GPU-h cap. **Receipts at 03:15Z: 22.64 GPU-h finished** (12.301 before; MOE-Git-s1 full 10.240; path checks
-  0.069; A20r latency reference 0.030) **+ MOE-Git-s2 running ≈ 5.2 → ≈ 27.8.** Projection ≈ 33 at the end of
-  training (≈ 08:25Z), ≈ 36 after Stage B.
+- 60 GPU-h cap. **Receipts at 06:35Z: 22.64 GPU-h finished** (12.301 before; MOE-Git-s1 full 10.240; path checks
+  0.069; A20r latency reference 0.030) **+ MOE-Git-s2 running ≈ 8.5 → ≈ 31.1.** Projection ≈ 33 at the end of
+  training (≈ 08:25Z), ≈ 35 after Stage B (A20r's formal run was 0.41 GPU-h; readout ≈ 0.3, CAL698 ≈ 0.05,
+  mlx-diag ≈ 0.15, latency ≈ 0.03).
 - GPUs (leases `track=27b-moe`): node A GPU4 (MOE-Git-s2, ends ≈ 08:25Z); node B GPU7 (Stage B readouts / formal).
   **Idle for the rest of the milestone: node A GPU3, GPU5 and node B GPU6** (reserved-idle; the coordinator may
   reassign them). Never use node A GPU2 / node B GPU0, 1, 5 (27B M5), node A GPU6–7, node A GPU0–1 / node B GPU2,
@@ -29,7 +37,7 @@ first.** Prereg `moe-prereg-2026-10-01.md` (amendments 1–4; amendment 4 = `eac
 
 | What | Where | Log | Notes |
 | --- | --- | --- | --- |
-| MOE-Git-s2 full (seed 20260928) | node A GPU4, `d2-27b-moe-MOE-Git-s2-full` | node A `/data/dev2/runs/27b-moe/MOE-Git-s2/driver.log` | from `2139aac8d`; 10.3 s per update; ends ≈ 08:25Z |
+| MOE-Git-s2 full (seed 20260928) | node A GPU4, `d2-27b-moe-MOE-Git-s2-full` | node A `/data/dev2/runs/27b-moe/MOE-Git-s2/driver.log` | from `2139aac8d`; 10.2 s per update; update 2,919 at 06:34Z; BEST so far `checkpoint-0002676` (SELECT .8219); ends ≈ 08:25Z |
 | Stage B chain, node A (waits for both `COMPLETE.json`, relays BEST checkpoints + receipt total; later scores mlx-diag) | node A host, PID 4105125 | node A `/data/dev2/runs/27b-moe/stageb/nodeA.log` | mirror `eacb6b85c` |
 | Stage B chain, node B (soup → T = 1 readout → CAL698 → adoption → gates → package → formal → gates → latency → mlx → verdicts) | node B host, PID 2728109 | node B `/data/dev2/runs/27b-moe/stageb/nodeB.log` | mirror `eacb6b85c` |
 
@@ -50,8 +58,13 @@ family-macro .8281 / Brier .1188; last update 3,561: .8209). Seeds' `decision_co
   (checkpoint, cal698, ADOPTION.json, package/PACKAGE.json, latency/), readout `R/readouts/MOE-Git-soup`, gates
   `R/readouts/DEVGATES.json`, formal `R/formal/MOE-Git-soup{,-smoke,-mlx}`, `R/gates/` (paired, types, public231,
   overlap, mlx, VERDICTS-*.json); node A `R/mlx-diag/`. Relay / mlx hand-over in `/data/dev2/xfer/27b-moe/{relay,mlx}`.
-- If a chain stage fails: read the chain log, fix in the repo, commit, mirror, and rerun **that stage only** with
-  `moe-tail.sh` (stages refuse to overwrite their outputs); never rerun a training arm.
+- If a chain stage fails: read the chain log, fix in the repo, commit, mirror
+  (`v2/common/mirror_to_node.sh --path src/training/decision2 node-b <sha>`), and rerun **that stage only**, e.g.
+  `M=<sha>-src_training_decision2; bash /data/dev2/src/$M/src/training/decision2/v2/27b/moe/moe-tail.sh formal $M
+  MOE-Git-soup` (stages refuse to overwrite their outputs; continue the remaining stages by hand in the chain's
+  order, and write `/data/dev2/xfer/27b-moe/mlx/MOE-Git-soup.PUSHED` only through the `mlx` stage). Never rerun a
+  training arm.
+- `pathcheck/` (both nodes) holds the path-check outputs only: never cite them as results.
 - Latency references: A20r p50 / p95 83.6 / 88.8 ms (FLA kernels, BF16, 52.2 GB resident); path check on
   MOE-Git-s1 checkpoint 892 (rank 32) 119.7 / 126.6 ms (50.7 GB).
 - Known pre-existing test failure (not this track's): `v2.27b.tests.test_m1_tools.LaunchTest.test_rejects_foreign_gpu`
@@ -84,12 +97,34 @@ Running full attempts have no receipt until they end: add (now − start) for ea
    checkpoint + base pin + `grouped_mm` + BOS prompt) and a C1 post-key spec draft for the eval custodian (template
    `v2/eval/sealed/c1-postkey/dev2-27b-a20r.json`; adapter spec `v2/27b/moe/adapters/moe-lora-cal.json`; stage the
    package, the base and the formal run's stored predictions on node A). Naming (DEV2.0-26B-A4B) and placement
-   (replace the 27B tier or add a family member) are the coordinator's call.
+   (replace the 27B tier or add a family member) are the coordinator's call. **Release gap to flag:** the release
+   builder (`v2/release/build.py`) has only a `qwen-adapter` LoRA profile; a Gemma MoE package needs a new profile
+   and a native runtime that loads Gemma 4 MoE with `grouped_mm` and the BOS prompt (A20r's C1 spec used a release
+   pre-build, so item 8 waits for that build).
+   Matched latency for the report: A20r's formal per-prompt `latency_ms` (FP32-resident + BF16 autocast, the formal
+   path) p50 / p95 typed FINAL 118.8 / 145.1, CSS15 103.8 / 232.6, public 231 106.2 / 418.2 ms; compare the soup's
+   formal predictions the same way. A20r's whole formal run was 0.407 GPU-h.
 5. Results record final, gist 06c, merge into `xunzhuo/decision-2-training` (merge-only), remove the temporary link
    (above), release the leases, report.
 
 ## Poll log (newest first)
 
+- 06:40Z: hand-off. MOE-Git-s2 update 2,919 (BEST 2,676, SELECT .8219); ends ≈ 08:25Z. Both chains alive; relay / mlx
+  hand-over dirs hold only MOE-Git-s1-best (pre-relayed) and the screen's files. Receipts ≈ 31.1 GPU-h.
+- 06:07Z: MOE-Git-s2 update 2,759; BEST now 2,676 (SELECT 0.8219 / 0.1212); ends ≈ 08:25Z. Both chains alive.
+- 05:45Z: MOE-Git-s2 update 2,642 (BEST 1,784); ends ≈ 08:25Z. Both chains alive.
+- 05:08Z: MOE-Git-s2 update 2,421 (BEST 1,784; SELECT at 2,230 .8201); ends ≈ 08:25Z. Both chains alive.
+- 04:40Z: MOE-Git-s2 update 2,250 (BEST still 1,784; ends ≈ 08:25Z). Both chains alive.
+- 04:12Z: MOE-Git-s2 update 2,099 (BEST so far 1,784); ends ≈ 08:20Z. Both chains alive and waiting.
+- 03:48Z: more path checks under `pathcheck/` (tests only; scratch removed from the relay / mlx hand-over dirs):
+  `soup` on node B from two relayed checkpoints (205 projections, 4.3e-7, rank 64 / α 128, 1.5 min); `gates` and
+  `verdicts` on A20r's own sealed run (self Δ 0 [0, 0]; vs AutoJev-27B +0.23 [−1.60, +4.74]; types / public 231 OK;
+  overlap 0 groups; item 4 PENDING without a pairing, as designed); node A `mlx-score` + node B `mlx-pull` on a copy of
+  M4-A20-soup's gold-free mlx-diag collection (pull, score, pairing vs A20r, push back). Untested on the soup only:
+  the GPU collections (`readout` = the screen's proven driver; `formal` / `mlx` = `moe-formal.sh`, smoke first).
+- 03:42Z: MOE-Git-s2 update 1,919 (10.1 s per update; BEST so far 1,784, SELECT .8214); ends ≈ 08:25Z. Both chains
+  alive and waiting. MOE-Git-s1's BEST already relayed to node B by the relay stage (path check of the relay; the
+  chain relays both seeds again when s2 ends). Integration fast-forwarded to `63582e120`.
 - 03:15Z: MOE-Git-s1 finished (10.240 GPU-h; BEST 2,676). Amendment 4 `eacb6b85c`; Stage B chains launched on both
   nodes from it. Path checks passed (cal698, adoption, gates, package, latency; A20r latency reference). Receipts
   22.64 finished + s2 running.

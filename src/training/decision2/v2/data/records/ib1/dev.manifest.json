@@ -5,7 +5,7 @@
  "choice": {
   "by_option_bucket": {
    "2": 975,
-   "3": 744,
+   "3": 494,
    "4": 310,
    "5-8": 513
   },
@@ -15,9 +15,8 @@
     "1": 468
    },
    "3": {
-    "0": 248,
-    "1": 248,
-    "2": 248
+    "0": 247,
+    "2": 247
    },
    "4": {
     "0": 65,
@@ -34,7 +33,7 @@
    }
   }
  },
- "content_sha256": "b412ab9312e834d45a1aef910b8921ebd1a25b5b0ddc5d226e6230a8b2a031cd",
+ "content_sha256": "eefab90932fb07fb6afaee0853fc3a98d1d05cf14e5478f319e3d09b29bc925d",
  "counts": {
   "family": {
    "args": 374,
@@ -42,15 +41,14 @@
    "csqa": 513,
    "isarc": 82,
    "poem": 411,
-   "sentfin": 744,
+   "sentfin": 494,
    "sms": 62,
-   "snips_rel": 16,
-   "snips_sel": 310,
-   "sumedit": 44
+   "snips_rel": 12,
+   "snips_sel": 310
   },
   "language": {
    "ar": 43,
-   "en": 2621
+   "en": 2323
   },
   "source": {
    "args_me_portals": 374,
@@ -58,21 +56,20 @@
    "commonsenseqa_train": 513,
    "gutenberg_poetry_cc0": 411,
    "isarcasmeval_train": 82,
-   "sentfin_v1": 744,
+   "sentfin_v1": 494,
    "sms_spam_collection": 62,
-   "snips_2017_custom_intents": 326,
-   "summedits": 44
+   "snips_2017_custom_intents": 322
   },
   "task_type": {
-   "choice": 2542,
-   "noul": 122
+   "choice": 2292,
+   "noul": 74
   }
  },
- "groups": 1912,
+ "groups": 1708,
  "input": {
   "is_canonical": true,
   "path": "ib1.dev.jsonl",
-  "sha256": "b412ab9312e834d45a1aef910b8921ebd1a25b5b0ddc5d226e6230a8b2a031cd"
+  "sha256": "eefab90932fb07fb6afaee0853fc3a98d1d05cf14e5478f319e3d09b29bc925d"
  },
  "license_registry_sha256": "c06ce6ca15da5f0744ccdcac2ad71cbc69e0e7e9a8a5a886a8b51c2482740b5f",
  "licenses": {
@@ -123,35 +120,27 @@
    "evidence": "https://github.com/sonos/nlu-benchmark/blob/b86ac7f1577868c42158d0dec77db50956046696/LICENSE (CC0 1.0 Universal)",
    "license": "CC0-1.0",
    "redistribution": "permitted"
-  },
-  "summedits": {
-   "attribution": "Laban, Kryscinski, Agarwal, Fabbri, Xiong, Joty and Wu, SummEdits: Measuring LLM Ability at Factual Reasoning Through The Lens of Summarization (EMNLP 2023); Salesforce/summedits@ce0c479aaf59259abb6b67e42248b2f49004b7d5 summedits.json, domains billsum (US public-domain bills), sales_call and sales_email (synthetic), shakespeare (public domain) only; edited summaries generated with an LLM and verified by human annotators",
-   "evidence": "https://huggingface.co/datasets/Salesforce/summedits/blob/ce0c479aaf59259abb6b67e42248b2f49004b7d5/README.md (license: cc-by-4.0); https://github.com/salesforce/factualNLG (Apache-2.0)",
-   "license": "CC-BY-4.0",
-   "redistribution": "permitted with attribution"
   }
  },
  "noul": {
   "labels": {
-   "false": 61,
-   "true": 61
+   "false": 37,
+   "true": 37
   },
   "true_fraction": 0.5
  },
  "partition": "select",
  "role": "aho",
- "rows": 2664,
+ "rows": 2366,
  "rows_per_group": {
-  "1": 1463,
+  "1": 1306,
   "10": 1,
   "12": 3,
   "13": 1,
   "17": 1,
-  "2": 365,
-  "21": 1,
-  "23": 1,
-  "3": 31,
-  "4": 15,
+  "2": 326,
+  "3": 26,
+  "4": 14,
   "5": 8,
   "6": 6,
   "7": 9,
@@ -165,95 +154,95 @@
  },
  "state_chars": {
   "p0": 24,
-  "p10": 55,
-  "p100": 5599,
-  "p25": 75,
-  "p50": 99,
-  "p75": 302,
-  "p90": 668,
-  "p99": 5201
+  "p10": 53,
+  "p100": 2368,
+  "p25": 72,
+  "p50": 100,
+  "p75": 312,
+  "p90": 626,
+  "p99": 1500
  },
  "tokens": [
   {
    "by_language": {
     "ar": 5499,
-    "en": 476018
+    "en": 375557
    },
    "by_task_type": {
-    "choice": 399578,
-    "noul": 81939
+    "choice": 370571,
+    "noul": 10485
    },
    "kind": "native_decoder",
    "name": "qwen3-0.6b-base@da87bfb6",
-   "padded8_total": 490904,
+   "padded8_total": 389456,
    "path": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
    "quantiles": {
     "p0": 83,
     "p10": 110,
-    "p100": 1646,
-    "p25": 117,
-    "p50": 139,
-    "p75": 188,
-    "p90": 213,
-    "p99": 1559
+    "p100": 620,
+    "p25": 120,
+    "p50": 143,
+    "p75": 190,
+    "p90": 210,
+    "p99": 407
    },
    "revision": null,
    "tokenizer_json_sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539",
-   "total": 481517
+   "total": 381056
   },
   {
    "by_language": {
     "ar": 5663,
-    "en": 504048
+    "en": 401303
    },
    "by_task_type": {
-    "choice": 427539,
-    "noul": 82172
+    "choice": 395827,
+    "noul": 11139
    },
    "kind": "native_decoder",
    "name": "qwen3.5-0.8b-base@dc7cdfe2",
-   "padded8_total": 518880,
+   "padded8_total": 415064,
    "path": "dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68",
    "quantiles": {
     "p0": 92,
     "p10": 121,
-    "p100": 1646,
-    "p25": 128,
-    "p50": 154,
-    "p75": 199,
-    "p90": 222,
-    "p99": 1539
+    "p100": 624,
+    "p25": 130,
+    "p50": 157,
+    "p75": 200,
+    "p90": 219,
+    "p99": 411
    },
    "revision": null,
    "tokenizer_json_sha256": null,
-   "total": 509711
+   "total": 406966
   },
   {
    "by_language": {
     "ar": 3102,
-    "en": 301546
+    "en": 218973
    },
    "by_task_type": {
-    "choice": 227974,
-    "noul": 76674
+    "choice": 215263,
+    "noul": 6812
    },
    "kind": "raw",
    "name": "kai-0.6b@7185f514",
-   "padded8_total": 313952,
+   "padded8_total": 230416,
    "path": "tokenizer",
    "quantiles": {
     "p0": 29,
     "p10": 38,
-    "p100": 1630,
-    "p25": 46,
-    "p50": 56,
-    "p75": 125,
-    "p90": 160,
-    "p99": 1509
+    "p100": 568,
+    "p25": 45,
+    "p50": 61,
+    "p75": 126,
+    "p90": 156,
+    "p99": 344
    },
    "revision": null,
    "tokenizer_json_sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
-   "total": 304648
+   "total": 222075
   }
  ]
 }

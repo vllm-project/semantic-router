@@ -112,8 +112,11 @@ def share(part: int, whole: int) -> float | None:
     return round(part / whole, 4) if whole else None
 
 
-def balance(rows: Sequence[Mapping[str, Any]]) -> tuple[dict[str, Any], list[str]]:
+def balance(
+    rows: Sequence[Mapping[str, Any]], constructions: Sequence[str] = ()
+) -> tuple[dict[str, Any], list[str]]:
     out: dict[str, Any] = {}
+    excluded = build.excluded_labels(constructions)
     fails: list[str] = []
     by_family: dict[str, list[Mapping[str, Any]]] = collections.defaultdict(list)
     for row in rows:
@@ -172,15 +175,23 @@ def balance(rows: Sequence[Mapping[str, Any]]) -> tuple[dict[str, Any], list[str
             ok = True
             for size, c in strata.items():
                 total = sum(c.values())
-                small = total < 20 * size
+                allowed = [p for p in range(size) if p not in excluded[name]]
+                ok = ok and not any(c[p] for p in excluded[name])
+                small = total < 20 * len(allowed)
                 entry.setdefault("small_strata_reported", [])
                 if small:
                     entry["small_strata_reported"].append(size)
                     continue
                 ok = ok and all(
-                    abs(c[p] / total - 1 / size) <= CLASS_MARGIN + 1e-9
-                    for p in range(size)
+                    abs(c[p] / total - 1 / len(allowed)) <= CLASS_MARGIN + 1e-9
+                    for p in allowed
                 )
+        present = sorted(
+            {n for r in members if (n := build.construction(r, constructions))}
+        )
+        if present:
+            entry["dropped_constructions_present"] = present
+            ok = False
         entry["pass"] = ok
         if not ok:
             fails.append(name)
@@ -192,11 +203,14 @@ def stats(
     train: Sequence[Mapping[str, Any]],
     dev: Sequence[Mapping[str, Any]],
     tokens: Mapping[str, Mapping[str, int]],
+    constructions: Sequence[str] = (),
 ) -> dict[str, Any]:
     out: dict[str, Any] = {"schema": "decision2.ib1.stats.v1"}
+    if constructions:
+        out["dropped_constructions"] = sorted(constructions)
     fails = []
     for name, rows in (("train", train), ("dev", dev)):
-        balanced, failed = balance(rows)
+        balanced, failed = balance(rows, constructions)
         out[name] = {"sizes": sizes(rows, tokens), "balance": balanced}
         fails += [f"{name}:{family}" for family in failed]
     out["shared_groups"] = len(
@@ -217,6 +231,12 @@ def main(argv: list[str] | None = None) -> int:
     two.add_argument("--dev", type=Path, required=True)
     two.add_argument("--tokens", type=Path, action="append", default=[])
     two.add_argument("--out", type=Path, required=True)
+    two.add_argument(
+        "--drop-construction",
+        action="append",
+        default=[],
+        choices=sorted(build.CONSTRUCTIONS),
+    )
     args = parser.parse_args(argv)
     if args.command == "names":
         receipt = names()
@@ -231,7 +251,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
     tokens = {item["id"]: item for path in args.tokens for item in read_jsonl(path)}
-    receipt = stats(read_jsonl(args.train), read_jsonl(args.dev), tokens)
+    receipt = stats(
+        read_jsonl(args.train), read_jsonl(args.dev), tokens, args.drop_construction
+    )
     receipt["inputs"] = {
         "train": file_sha256(args.train),
         "dev": file_sha256(args.dev),

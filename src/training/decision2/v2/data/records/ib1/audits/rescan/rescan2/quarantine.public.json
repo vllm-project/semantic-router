@@ -1,0 +1,35 @@
+{
+ "dev_near_train": {
+  "by_family": {},
+  "groups": 0
+ },
+ "drop_dev_groups_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+ "drop_groups_sha256": "1af57be77a69bc0c56ec25b2b2d796284530e2ddeac9686c5a4c552ea2c9046e",
+ "quarantine": {
+  "by_family": {
+   "maud": {
+    "dev_rows": 0,
+    "groups": 2,
+    "train_rows": 43
+   }
+  },
+  "groups": 2
+ },
+ "report_only_roles_hit": {
+  "a7_train_A7h": 30,
+  "a7_train_A7i": 2,
+  "a7_train_A7m": 50,
+  "a7_train_A7q": 209,
+  "a7_train_A7s": 8,
+  "rights_clean_train": 3,
+  "v1_train_a1": 7,
+  "v1_train_a3": 67,
+  "v1_train_a6h": 6,
+  "v2_aho_E11": 8,
+  "v2_aho_H1": 433,
+  "v2_aho_H3": 101,
+  "v2_aho_H5": 3,
+  "v2_aho_H6": 16
+ },
+ "schema": "decision2.hr2.quarantine.v1"
+}

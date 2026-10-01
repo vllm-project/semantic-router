@@ -1,0 +1,18 @@
+{
+ "category_changes": {
+  "css15": 0,
+  "public231": 0,
+  "typed-final": 0
+ },
+ "checked_utc": "2026-10-01T03:30:45.965823+00:00",
+ "exact": true,
+ "max_abs_numeric_drift": {
+  "css15": 0.0007689685059306672,
+  "public231": 1.765254609153999e-14,
+  "typed-final": 1.2212453270876722e-15
+ },
+ "repeat_sha256": "1683fb394049d3fadfc1f3b08dda753f20a702cb81d33ea9a0e9084645fca30a",
+ "report_sha256": "b522cb95e6a88241c6133f458013fea64f30575d23b285ee8069910a3fdb78d9",
+ "rule": "0 category changes on typed FINAL, CSS15 and public 231 vs dev2-4b-t1-derived -> the stored run is the bar; otherwise the node-A incumbent run is the paired reference and both comparisons are reported",
+ "schema": "dec-m9-formal-parity/1"
+}

@@ -10,13 +10,12 @@
    "csqa": 513,
    "isarc": 82,
    "poem": 411,
-   "sentfin": 744,
+   "sentfin": 494,
    "sms": 62,
-   "snips_rel": 16,
-   "snips_sel": 310,
-   "sumedit": 44
+   "snips_rel": 12,
+   "snips_sel": 310
   },
-  "groups": 1912,
+  "groups": 1708,
   "label_by_family": {
    "args": {
     "0": 187,
@@ -42,104 +41,114 @@
     "1": 192
    },
    "sentfin": {
-    "0": 248,
-    "1": 248,
-    "2": 248
+    "0": 247,
+    "2": 247
    },
    "sms": {
     "0": 31,
     "1": 31
    },
    "snips_rel": {
-    "0": 8,
-    "1": 8
+    "0": 6,
+    "1": 6
    },
    "snips_sel": {
     "0": 65,
     "1": 75,
     "2": 90,
     "3": 80
-   },
-   "sumedit": {
-    "0": 22,
-    "1": 22
    }
   },
   "language": {
    "ar": 43,
-   "en": 2621
+   "en": 2323
   },
-  "rows": 2664,
-  "sha256": "b412ab9312e834d45a1aef910b8921ebd1a25b5b0ddc5d226e6230a8b2a031cd",
+  "rows": 2366,
+  "sha256": "eefab90932fb07fb6afaee0853fc3a98d1d05cf14e5478f319e3d09b29bc925d",
   "task_type": {
-   "choice": 2542,
-   "noul": 122
+   "choice": 2292,
+   "noul": 74
   }
  },
  "drops": {
+  "constructions": [
+   "sentfin-neutral",
+   "sumedit-shakespeare",
+   "wands-partial"
+  ],
   "dev_groups": {
-   "count": 1064,
-   "sha256": "500e979df155c68fcc5cfa1dceab355895b7e8d0fa5929fe2c275816c1ae388b"
+   "count": 1071,
+   "sha256": "06048b2a2e0518ffa2ab031256d80de00c3222adcd1c01abe6f2326bc15e9c5d"
   },
   "families": [
-   "maud",
    "medmcqa",
    "procb",
    "wanli"
   ],
   "groups": {
-   "count": 3727,
-   "sha256": "b265b7f51cfffb1080eeb277122e5abc9a92f7123c0f271d856bc8d84de6ad1a"
+   "count": 3792,
+   "sha256": "fadff88370f186849b9e13e747b9881c6cd87c5cfd2c08421ccba2cb1e70f69b"
   },
   "ids": {
-   "count": 17,
-   "sha256": "6fb3ca94e02b5498b01994af5060655bbb2b5da355ff3f7ecab2d73e53df4c94"
+   "count": 29,
+   "sha256": "5138d8334329ee992897454e13d2700c43b6eeecef2eaeaa9ad26f203b3012ff"
   },
   "leak_ids": {
    "count": 12,
    "sha256": "1838e39623b76533215955164265a7fb6195c7ee02e106b6204a385cd4a1bd7d"
   },
   "removed": {
+   "dev:construction": {
+    "sentfin": 273,
+    "sumedit": 56,
+    "wands": 253
+   },
    "dev:dev_near_train": {
     "args": 174,
     "copa": 2,
     "csqa": 10,
+    "maud": 132,
     "poem": 5,
-    "sentfin": 40,
+    "sentfin": 17,
     "sms": 24,
-    "snips_rel": 271,
+    "snips_rel": 275,
     "snips_sel": 12,
     "sumedit": 43,
     "w2c": 50,
-    "wands": 680
+    "wands": 435
    },
    "dev:dropped_group": {
     "args": 28,
     "csqa": 7,
+    "maud": 212,
     "sentfin": 2,
     "sumedit": 100,
     "w2c": 285,
-    "wands": 62
+    "wands": 54
    },
    "dev:family": {
-    "maud": 344,
     "medmcqa": 821,
     "procb": 36,
     "wanli": 923
    },
+   "train:construction": {
+    "sentfin": 2393,
+    "sumedit": 689,
+    "wands": 2413
+   },
    "train:dropped_group": {
-    "args": 230,
+    "args": 238,
     "copa": 10,
     "csqa": 486,
-    "sentfin": 6,
+    "maud": 5656,
+    "sentfin": 3,
     "snips_rel": 2,
     "snips_sel": 1,
-    "sumedit": 393,
-    "w2c": 2684,
-    "wands": 757
+    "sumedit": 421,
+    "w2c": 2690,
+    "wands": 677
    },
    "train:family": {
-    "maud": 5656,
     "medmcqa": 7179,
     "procb": 324,
     "wanli": 8077
@@ -149,37 +158,38 @@
    },
    "train:review_or_screen": {
     "args": 1,
-    "csqa": 1,
+    "csqa": 3,
     "isarc": 1,
-    "sentfin": 4,
+    "sentfin": 1,
     "snips_rel": 1,
-    "sumedit": 4,
-    "w2c": 2,
-    "wands": 3
+    "snips_sel": 1,
+    "sumedit": 3,
+    "w2c": 3,
+    "wands": 6
    }
   }
  },
  "schema": "decision2.ib1.final.v1",
  "train": {
   "family": {
-   "args": 5192,
+   "args": 5184,
    "copa": 878,
-   "csqa": 4983,
+   "csqa": 4981,
    "isarc": 874,
    "poem": 3584,
-   "sentfin": 7158,
+   "sentfin": 4778,
    "sms": 1152,
    "snips_rel": 2700,
-   "snips_sel": 2673,
-   "sumedit": 1280,
-   "w2c": 483,
-   "wands": 6357
+   "snips_sel": 2672,
+   "sumedit": 576,
+   "w2c": 476,
+   "wands": 4068
   },
-  "groups": 22669,
+  "groups": 20755,
   "label_by_family": {
    "args": {
-    "0": 2596,
-    "1": 2596
+    "0": 2592,
+    "1": 2592
    },
    "copa": {
     "0": 426,
@@ -187,7 +197,7 @@
    },
    "csqa": {
     "0": 995,
-    "1": 1015,
+    "1": 1013,
     "2": 1033,
     "3": 945,
     "4": 995
@@ -201,9 +211,8 @@
     "1": 1811
    },
    "sentfin": {
-    "0": 2386,
-    "1": 2386,
-    "2": 2386
+    "0": 2389,
+    "2": 2389
    },
    "sms": {
     "0": 576,
@@ -217,31 +226,30 @@
     "0": 663,
     "1": 679,
     "2": 657,
-    "3": 674
+    "3": 673
    },
    "sumedit": {
-    "0": 640,
-    "1": 640
+    "0": 288,
+    "1": 288
    },
    "w2c": {
-    "0": 255,
-    "1": 228
+    "0": 251,
+    "1": 225
    },
    "wands": {
-    "0": 2119,
-    "1": 2119,
-    "2": 2119
+    "0": 2034,
+    "2": 2034
    }
   },
   "language": {
    "ar": 410,
-   "en": 36904
+   "en": 31513
   },
-  "rows": 37314,
-  "sha256": "7f2d00031298fa6812222d74c62fa7580ab41b89942e39edea897363bfa1ae80",
+  "rows": 31923,
+  "sha256": "f44d7f5fe9ccaf63386fc213394282466f2c26c6a2da2945b32207adc8c62c5c",
   "task_type": {
-   "choice": 32182,
-   "noul": 5132
+   "choice": 27495,
+   "noul": 4428
   }
  }
 }
