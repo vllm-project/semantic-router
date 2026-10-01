@@ -405,6 +405,53 @@ def code_example(local: str) -> str:
     )
 
 
+TRANSFORMERS_HEADING = "## Use with 🤗 Transformers"
+
+
+def transformers_example(repo: str) -> str:
+    example = EXAMPLES[0]
+    state = json.dumps(example["state"], ensure_ascii=False)
+    questions = json.dumps(example["questions"], ensure_ascii=False, indent=4).replace(
+        "\n", "\n    "
+    )
+    return (
+        "import json\n\n"
+        "from transformers import AutoModel\n\n"
+        f'model = AutoModel.from_pretrained("{repo}", trust_remote_code=True)  # cuda:0 if a GPU is visible, else CPU\n'
+        "result = model.system_one(\n"
+        f"    state={state},\n"
+        f"    questions={questions},\n"
+        ")\n"
+        'print(json.dumps(result["answers"], indent=2))\n'
+    )
+
+
+def transformers_note(facts: dict[str, Any], text: dict[str, Any]) -> str:
+    repo = facts["repo_id"]
+    remote = facts.get("remote_code") or {}
+    note = (
+        "`trust_remote_code=True` runs this repository's `modeling_decision2.py`, which loads the same "
+        "`decision2/` runtime as the download above after checking every file, so the answers are the "
+        "native ones. "
+        f'`pipeline("decision", model="{repo}", trust_remote_code=True)` returns the same response for '
+        '`{"state": ..., "questions": {...}}`. Pass `device_map="cpu"` or `"cuda:1"` to choose the device; '
+        "the model runs on one device with the runtime's own numerics, so `dtype` stays unset."
+    )
+    base = remote.get("base")
+    if base:
+        note += (
+            f" It downloads the {len(base['files_sha256'])} pinned files of "
+            f"[{base['repo_id']}](https://huggingface.co/{base['repo_id']}) at `{base['revision']}` "
+            "into the Hugging Face cache and checks their SHA-256 before applying the adapter."
+        )
+    tested = remote.get("tested")
+    if tested:
+        note += " Tested with " + ", ".join(tested) + "."
+    if text.get("transformers_note"):
+        note += f" {text['transformers_note']}"
+    return note
+
+
 def auto_limits(candidate: dict[str, Any], cap: int) -> list[str]:
     limits = [
         "JevArena v3 answers were available during development, so these are post-key "
@@ -636,6 +683,20 @@ def render_readme(ctx: dict[str, Any]) -> str:
         )
         + f" {requirements}",
         "",
+        *(
+            [
+                TRANSFORMERS_HEADING,
+                "",
+                "```python",
+                transformers_example(repo).rstrip("\n"),
+                "```",
+                "",
+                transformers_note(facts, text),
+                "",
+            ]
+            if facts.get("remote_code") is not None
+            else []
+        ),
         "## Model details",
         "",
         f"- **Architecture:** {text.get('architecture') or ARCHITECTURE[facts['profile']]}",
@@ -937,6 +998,7 @@ def check_rendered(readme: str, files: set[str]) -> list[str]:
         "## Download and decide",
         "## Model details",
         "```python",
+        *((TRANSFORMERS_HEADING,) if "modeling_decision2.py" in files else ()),
     ):
         if required not in readme:
             problems.append(f"missing section: {required}")
