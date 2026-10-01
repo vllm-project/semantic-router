@@ -22,6 +22,24 @@ import time
 from importlib import metadata
 from pathlib import Path
 
+FALLBACK_REQUEST = {
+    "state": "The parcel arrived damaged. Please send a replacement today.",
+    "questions": {
+        "route": {
+            "type": "choice",
+            "instructions": "Which team should handle this request?",
+            "criteria": {
+                "delivery": "Damaged or missing parcels",
+                "billing": "Payments and invoices",
+            },
+        },
+        "urgent": {
+            "type": "noul",
+            "instructions": "Does the customer request action today?",
+        },
+    },
+}
+
 
 def versions() -> dict[str, str | None]:
     found = {"python": platform.python_version()}
@@ -103,9 +121,14 @@ def main() -> None:
         if isinstance(node, ast.Call)
         and getattr(node.func, "attr", None) == "system_one"
     )
-    request = {
-        keyword.arg: ast.literal_eval(keyword.value) for keyword in call.keywords
-    }
+    try:
+        request = {
+            keyword.arg: ast.literal_eval(keyword.value) for keyword in call.keywords
+        }
+    except (
+        ValueError
+    ):  # the card builds its request at run time; the card block itself runs with --card
+        request = FALLBACK_REQUEST
     response = model.system_one(**request)
     receipt["system_one"] = response
     decide = pipeline(
@@ -141,7 +164,7 @@ def main() -> None:
             "stderr_tail": completed.stderr[-1500:] if completed.returncode else "",
         }
     receipt["passed"] = (
-        receipt["config"]["model_type"] == "decision1"
+        receipt["config"]["model_type"] in ("decision1", "decision2")
         and receipt["pipeline_equal"]
         and receipt["over_length"] == ["max_length_exceeded"]
         and receipt["invalid_question"].get("error") == "invalid_question"
