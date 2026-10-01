@@ -139,10 +139,10 @@ no_fallback() {  # the kernels the package was scored with must have been used
   fi
 }
 
-loading_shards() {  # shards started but not yet past model loading
+loading_shards() {  # shards launched but not yet past model loading
   local count=0 w
   for w in "$run"/shard-*; do
-    [[ -f "$w/start_epoch" && ! -f "$w/end_epoch" ]] || continue
+    [[ -f "$w/launched" && ! -f "$w/end_epoch" ]] || continue
     grep -q '"event": *"\(ready\|progress\|complete\)"' "$w/status.json" 2>/dev/null || count=$((count + 1))
   done
   echo "$count"
@@ -213,6 +213,7 @@ for k in "${!gpu_list[@]}"; do
   cp -a "$cache/." "$work/triton/"
   shard="$rows_dir/shard-$k-of-$n.jsonl.gz"
   wait_for_room
+  touch "$work/launched"
   container "ix1-$(tr 'A-Z.' 'a-z_' <<< "$model")-s$k-g$g" "$g" "$work" 1 \
     "date +%s > $work/start_epoch; $(kit_run "$shard" "$work") > $work/runner.log 2>&1; echo \$? > $work/exit_code; date +%s > $work/end_epoch" > /dev/null
   echo "started shard $k on gpu$g"
