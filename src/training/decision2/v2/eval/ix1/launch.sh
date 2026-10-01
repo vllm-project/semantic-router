@@ -17,13 +17,17 @@
 # a private IPC namespace and a ${IX1_MEMORY:-256g} memory limit, mounts the source, kit, package,
 # base and rows read-only and only its run directory writable. Shards start one at a time: the next
 # waits until at most one shard is still loading and the host has >= ${IX1_MIN_FREE_GIB:-400} GiB
-# available (these are shared Kubernetes control-plane hosts).
+# available (these are shared Kubernetes control-plane hosts). The image's kernel path
+# (/opt/decision-fla) stays on PYTHONPATH; a container that cannot import the flash-linear-attention
+# and causal-conv1d kernels exits 97, and a parity log showing the reference-kernel fallback fails.
 # Leases: /data/dev2/leases/gpu<N>.lock/owner is written only when absent or already track=eval-ix1;
 # a GPU leased by anyone else (node C GPU0: a K8s pod) is refused, and so is a busy GPU.
 set -euo pipefail
 
 IMAGE="decision20-train-fast:host2"
 IMAGE_ID_PREFIX="sha256:f83b1d10"
+IMAGE_PYTHONPATH="/opt/decision-fla"
+FALLBACK="falling back to its reference PyTorch implementation"
 KIT="/data/dev2/private/eval/index021/kit-87d4650b"
 KIT_REVISION="87d4650b42b377c0291a89c1f1a879f9b31082bf"
 MODELS="/data/dev2/models/ix1"
@@ -112,7 +116,7 @@ container() {  # name gpu workdir detach(0|1) script
   for n in $nodes; do devs+=(--device "$n"); done
   local envs=(-e HIP_VISIBLE_DEVICES=0 -e CUDA_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1
               -e HF_HUB_CACHE="$HF_CACHE" -e TOKENIZERS_PARALLELISM=false -e PYTHONDONTWRITEBYTECODE=1
-              -e PYTHONPATH="$S:$KIT" -e HOME="$work/home" -e DECISION2_PACKAGE_DIR="$pkg"
+              -e PYTHONPATH="$S:$KIT:$IMAGE_PYTHONPATH" -e HOME="$work/home" -e DECISION2_PACKAGE_DIR="$pkg"
               -e TRITON_CACHE_DIR="$work/triton" -e TRITON_CACHE_AUTOTUNING=1 -e HIP_FORCE_DEV_KERNARG=1)
   [[ -n "$base_dir" ]] && envs+=(-e DECISION2_BASE_DIR="$base_dir")
   local vols=(-v "$src:$src:ro" -v "$KIT:$KIT:ro" -v "$pkg:$pkg:ro" -v "$HF_CACHE:$HF_CACHE:ro" -v "$work:$work")
@@ -123,7 +127,14 @@ container() {  # name gpu workdir detach(0|1) script
   [[ "$detach" == 1 ]] && flags=(-d --rm)
   docker run "${flags[@]}" --name "$name" --network none --shm-size 8g --memory "${IX1_MEMORY:-256g}" \
     --device /dev/kfd "${devs[@]}" --group-add video --security-opt seccomp=unconfined \
-    "${envs[@]}" "${vols[@]}" -w "$S" --entrypoint bash "$IMAGE" -c "$script"
+    "${envs[@]}" "${vols[@]}" -w "$S" --entrypoint bash "$IMAGE" \
+    -c "python3 -c 'import fla.ops.gated_delta_rule, causal_conv1d' || exit 97; $script"
+}
+
+no_fallback() {  # the kernels the package was scored with must have been used
+  if grep -l "$FALLBACK" "$@" 2>/dev/null; then
+    echo "a run used the reference kernel path" >&2; return 1
+  fi
 }
 
 loading_shards() {  # shards started but not yet past model loading
@@ -170,12 +181,14 @@ if [[ "$mode" == parity ]]; then
   mkdir -p "$ref" "$kit"
   container "$tag-ref" "$gpu" "$ref" 0 "date +%s > $ref/start_epoch; python3 -m v2.eval.ix1.native_ref --package $pkg --rows $rows --out $ref/ref.jsonl ${base_dir:+--base-path $base_dir} > $ref/native_ref.log 2>&1; echo \$? > $ref/exit_code; date +%s > $ref/end_epoch"
   [[ "$(cat "$ref/exit_code")" == 0 ]] || { echo "reference pass failed" >&2; exit 1; }
+  no_fallback "$ref/native_ref.log"
   cp -a "$ref/triton" "$run/cache-frozen"
   digest_dir "$run/cache-frozen" > "$run/cache-frozen.sha256"
   mkdir -p "$kit/triton"
   cp -a "$run/cache-frozen/." "$kit/triton/"
   container "$tag-kit" "$gpu" "$kit" 0 "date +%s > $kit/start_epoch; $(kit_run "$rows" "$kit") > $kit/runner.log 2>&1; echo \$? > $kit/exit_code; date +%s > $kit/end_epoch"
   [[ "$(cat "$kit/exit_code")" == 0 ]] || { echo "kit pass failed" >&2; exit 1; }
+  no_fallback "$kit/runner.log"
   PYTHONPATH="$S" python3 -m v2.eval.ix1.parity --kit "$kit/results.jsonl" --ref "$ref/ref.jsonl" --out "$run/parity.json"
   exit 0
 fi
