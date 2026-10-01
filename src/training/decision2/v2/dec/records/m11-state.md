@@ -73,7 +73,25 @@ Prereg `b8c3caf22`; ops `cef1a1b66`; data lock `7c3aed8c8`; amendment 1 (node F 
 - 2B base ceiling (`2b-BASE-e` vs `2b-C0-e`): retention macro .635, +.064 [+.046, +.082]; HT-DEV v2 −.057 FLAG;
   Score5-typed-DEV COLLAPSE.
 - 2B C0 parity: node F vs node E exact on five panels (0 decisions differ, drift 0.0); E vs node B's `2b-I` exact
-  (above), so no 2B formal and no 2B hand-off; DEV2.0-2B stays the 2B release.
+  (above).
+- No 2B formal and no 2B hand-off; DEV2.0-2B stays the 2B release.
 - 4B stage-2 tier probe gold built on node A (2,461 items = 3,089 − 628). `4b-LH-f` vs M10's stored `4b-LH`: exact.
 - Training at 08:30Z: 0.8B NT seeds ≈1,050–1,450 / ≈2,540 steps (E0–2); 0.8B LH ≈750–960 (F2/3/6); `4b-LHBx-s1`
   593 / ≈1,270 (E3); `4b-LHB-s1` 276 / ≈1,240 (F7; slowed by the co-tenant reference reads until 08:21Z).
+
+## 2026-10-01 09:55Z — 0.8B gates closed (no 0.8B finalist); stage 1 closed
+
+- 0.8B seeds DONE 08:47–09:14Z (≈2,035 steps each); soups `08b-NT` (E, 08:57Z) and `08b-LH` (F, 09:29Z); readouts
+  done 09:05 / 09:41Z. Node A: pull, points, contrast, readout `3ff5b7c47271d6ea`, rules once (09:49Z).
+- **0.8B: no finalist.** `08b-LH` (vs `08b-C0-f`): HT-DEV v2 +.030 [+.008, +.050] GAIN; fails the typed choice floor
+  (501 < 610 − 24) and the `attribute_gate` family floor (247 / 400 < 320 / 400 − .10); retention macro .445, +.004
+  [−.009, +.017]; `hs1-dev` false-yes .682 vs .720; Score5-typed-DEV NO-GAIN (C0 COLLAPSE, NO-GAIN). `08b-NT` (vs
+  `08b-C0-e`): HT-DEV v2 +.018 [−.001, +.035] TIE; fails the choice (571) and Score (146 < 159 − 12) type floors and
+  the Noul `rule_precedence` floor (207 < 212 − 4); retention .433, −.008 [−.020, +.003]; false-yes .563 vs .720.
+  Contrast `08b-LH` vs `08b-NT`: HT-DEV v2 +.012 [−.009, +.033]; typed T +.033 (choice −70, Noul +23, Score +100);
+  retention +.012 [−.001, +.025].
+- 0.8B base ceiling (`08b-BASE-e` vs `08b-C0-e`): retention .495, +.054 [+.034, +.075]; HT-DEV v2 −.095 FLAG;
+  Score5-typed-DEV COLLAPSE.
+- 0.8B C0 parity: F vs E exact, E vs node B's `08b-I` exact (five panels, 0 decisions differ, drift 0.0).
+- Stage 1 closed: no tier has a finalist, so no stage-1 formal, successor items or release hand-offs; DEV2.0-2B and
+  DEV2.0-0.8B stay. Stage 2: `4b-LHBx-s1` DONE 08:56Z, `4b-LHB-s1` DONE 09:06Z; seeds 2 training (E3 / F7).
