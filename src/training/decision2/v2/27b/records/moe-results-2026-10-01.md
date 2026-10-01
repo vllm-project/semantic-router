@@ -86,10 +86,33 @@ reference's own predictions (`readouts/A20r-s1-c892`, SHA-256 `a809af48…`).
 | Seed | Node / GPU | Preflights | Full attempt | BEST (SELECT700 family macro / Brier) | Last update |
 | --- | --- | --- | --- | --- | --- |
 | MOE-Git-s1 (20260926) | A / 3 | pass (r2) | 16:55:57Z → 03:10:21Z, **10.240 GPU-h**, exit 0 | `checkpoint-0002676` .8281 / .1188 | .8209 / .1211 |
-| MOE-Git-s2 (20260928) | A / 4 | pass (one-step 0.073, reload 0 / 32) | from 22:05:42Z, ≈ 10.3 s per update, ends ≈ 08:25Z | pending | pending |
+| MOE-Git-s2 (20260928) | A / 4 | pass (one-step 0.073, reload 0 / 32) | 22:05:42Z → 08:28:00Z, **10.373 GPU-h**, exit 0 | `checkpoint-0002676` .8219 / .1212 | .8101 |
 
+- Both seeds selected the same update (2,676 of 3,561). Neither seed had a nonfinite loss or a restart.
 - The soup, its readout, CAL698 fit, adoption, development gates, package, formal run, gates, latency and mlx-diag
-  run unattended from mirror `eacb6b85c` (amendment 4); results land here as they finish.
+  ran unattended from mirror `eacb6b85c` (amendment 4). Node A relayed both BEST checkpoints at 08:32:53Z.
+
+### Soup, development readout and gates (node B; development numbers, never release scores)
+
+- **Soup `MOE-Git-soup`** (08:37:45–08:39:20Z, CPU): exact uniform rank concatenation of the two BEST checkpoints,
+  rank 64 / α 128, head averaged; 205 projections, max relative error 4.5e-7; model `9165bed7…`.
+- **T = 1 readout** (08:39:20–08:54:36Z, GPU7, 32K):
+
+  | | P_dev | T_dev | H_pilot | Choice / Noul / Score (typed DEV) | H_dev2 (Δ vs A20r, 95% CI) |
+  | --- | ---: | ---: | ---: | --- | --- |
+  | A20r (M5 `A20r-ref`) | 78.99 | .916 | .681 | .995 / .675 / 1.000 | .5655 |
+  | **MOE-Git-soup** | **75.26** | **.927** | **.611** | .999 / .790 / .920 | **.5728** (+.007 [−.011, +.026], TIE) |
+  | MOE-Git-s1 at update 892 (screen) | 72.82 | .913 | .581 | .999 / .743 / .910 | .5670 |
+
+  CSS pilot by task (soup vs A20r): discourse .611 vs .681, implicit hate .453 vs .514, SemEval stance .687 vs .718.
+- **CAL698** (0.048 GPU-h): Choice .465, Noul .381, Score .481. **Not adopted** under the 23:15 rule: CSS-pilot
+  ECE worsened (.043 → .128) although typed-DEV Brier (.0609 → .0596) / ECE (.054 → .038) and CSS-pilot Brier
+  (.607 → .531) improved. The package binds **T = 1**.
+- **Development gates** (`DEVGATES.json`): collapse pass, HT-DEV v2 not FLAG vs A20r, proxy 3.73 below A20r (limit
+  8) → **finalist**. Reported only: M5's typed guard (T_dev ≥ A20r − .03 = .886) passes (.927).
+- **Frozen package** (08:57:35Z, before any formal collection): `PACKAGE.json` `ffb11e1c…`; decision T = 1; base
+  `google/gemma-4-26B-A4B-it@4d7ae498` (tree `b05e076d…`), `grouped_mm`, BOS prompt, 32,768 tokens, rank 64 /
+  α 128; **25,310,379,550 loaded / 3,899,768,350 active** parameters.
 - **Parameters (safetensors headers):** base text decoder 25,233,141,790 (vision tower not loaded); routed experts
   22,837,985,280, top-8 of 128 active. A rank-32 seed: 25,273,208,350 loaded / 3,862,597,150 active. The rank-64 soup
   adds 74,342,400 adapter + 2,895,360 head: **25,310,379,550 loaded / 3,899,768,350 active (≈ 15% of loaded)**, vs

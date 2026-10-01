@@ -112,6 +112,14 @@ Running full attempts have no receipt until they end: add (now − start) for ea
 
 ## Poll log (newest first)
 
+- 09:08Z: **T = 1 readout** P_dev 75.26 (T_dev .927, H_pilot .611), H_dev2 .5728 (+.007 vs A20r, TIE).
+  **CAL698** fit (.465 / .381 / .481) rejected (CSS-pilot ECE .043 → .128) → T = 1. **Development gates pass**
+  (collapse, HT-DEV v2, proxy 3.73 below; typed guard reported, passes). **Package frozen** 08:57:35Z
+  (`PACKAGE.json` `ffb11e1c…`, 25,310,379,550 loaded / 3,899,768,350 active). **Formal** started 08:57:35Z on
+  node B GPU7 (smoke passed 09:02Z; collection running). **Private Index** (values private): package offered
+  08:58:24Z, staged on node A 08:59:24Z; **86-request parity gate PASS** (86 / 86 ok, 419 questions, max |Δp| 0.0;
+  0.065 GPU-h); presplit 20 requests ≥ 196,608 padded tokens (5 / 9 / 6 per shard); shards 0 / 1 / 2 running on
+  node A GPU3 / 4 / 5 from 09:03:45Z (≈ 3–4.3 requests/s each; ≈ 2.5–3.3 h, then the 20 alone).
 - 08:42Z: **MOE-Git-s2 finished** 08:28:00Z (10.373 GPU-h, exit 0; BEST `checkpoint-0002676`, SELECT .8219; last
   update 3,561 .8101). Node A relayed both BEST checkpoints at 08:32:53Z. **Soup** (node B, 08:37:45–08:39:20Z):
   `MOE-Git-soup` model `9165bed7…`, 2 members, rank 64 / α 128, 205 projections, max relative error 4.5e-7.
