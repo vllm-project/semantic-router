@@ -11,8 +11,11 @@
 # Every job is a co-tenant (the runner's shared lease; >= 60 GB free VRAM): the GPU's owner entry stays M14's, the
 # wrapper writes gpuN.lock/owner.dec-m14-formal. GPUs: node B GPU3 / GPU4 only (the library's node-B render map).
 #
+# mlx-launch / mlx-run (amendment 1): m6-formal.sh <tier> mlx m14-<point> for each point whose v3 report node A has
+# sealed (<run>/V3-SEALED.json, m14-relay.sh formal-mark); a failed mlx-diag collection stops that point.
+#
 # usage: m14-formal.sh masters <mirror-dir>
-#        m14-formal.sh launch|run <mirror-dir> <gpu> <tier> <point> [<point> ...]
+#        m14-formal.sh launch|run|mlx-launch|mlx-run <mirror-dir> <gpu> <tier> <point> [<point> ...]
 set -u
 MODE=$1 SRC=$2
 M=/data/dev2/runs/dec/m14
@@ -43,14 +46,15 @@ shift 4
 case $GPU in 3 | 4) ;; *) echo "GPU $GPU is not an M14 formal GPU (node B GPU3 / GPU4)" >&2; exit 2 ;; esac
 case $TIER in 2b | 08b | 4b) ;; *) echo "tier must be 2b, 08b or 4b" >&2; exit 2 ;; esac
 TAG=$TIER-b$GPU
-if [ "$MODE" = launch ]; then
+case $MODE in mlx-launch | mlx-run) TAG=mlx-$TAG ;; esac
+if [ "$MODE" = launch ] || [ "$MODE" = mlx-launch ]; then
   mkdir "$F/logs/formal-$TAG.lock" 2> /dev/null || { echo "M14 formal $TAG already launched"; exit 0; }
-  setsid nohup bash "$0" run "$SRC" "$GPU" "$TIER" "$@" > "$F/logs/formal-$TAG.log" 2>&1 < /dev/null &
+  setsid nohup bash "$0" "${MODE%launch}run" "$SRC" "$GPU" "$TIER" "$@" > "$F/logs/formal-$TAG.log" 2>&1 < /dev/null &
   echo $! > "$F/logs/formal-$TAG.pid"
   echo "$(date -u +%FT%TZ) M14 formal $TAG launched for $* (pid $(cat "$F/logs/formal-$TAG.pid"))" | tee -a "$M/OPERATIONS.log"
   exit 0
 fi
-[ "$MODE" = run ] || { echo "unknown mode $MODE" >&2; exit 2; }
+[ "$MODE" = run ] || [ "$MODE" = mlx-run ] || { echo "unknown mode $MODE" >&2; exit 2; }
 log() { echo "$(date -u +%FT%TZ) formal-$TAG $*" | tee -a "$M/OPERATIONS.log"; }
 export M6_FORMAL_ROOT=$F M6_SELECT=$M/select/formal M6_PREFIX=m14 M6_GPU=$GPU
 if [ "$TIER" != 4b ]; then
@@ -74,6 +78,24 @@ clear_stale() {
     fi
   done
 }
+if [ "$MODE" = mlx-run ]; then
+  for point in "$@"; do
+    run=m14-$point
+    { [ -f "$F/status/$run.MLX" ] || [ -f "$F/status/$run.MLX-FAILED" ]; } && { log "$run mlx-diag already attempted"; continue; }
+    [ -f "$F/$run/V3-SEALED.json" ] || { log "$run v3 not sealed by node A; mlx-diag not started"; continue; }
+    clear_stale
+    if bash "$S/v2/dec/ops/m6/m6-formal.sh" "$TIER" mlx "$run" > "$F/logs/$run-mlx.log" 2>&1; then
+      echo "done" > "$F/status/$run.MLX"
+      log "$run mlx-diag collected"
+    else
+      echo "mlx-diag failed" > "$F/status/$run.MLX-FAILED"
+      log "$run mlx-diag FAILED (see $F/logs/$run-mlx.log); point stopped"
+    fi
+  done
+  rm -f "$entry"
+  log "mlx chain finished"
+  exit 0
+fi
 for point in "$@"; do
   run=m14-$point
   [ -f "$F/status/$run.FAILED" ] && { log "$run failed earlier; not rerun"; continue; }

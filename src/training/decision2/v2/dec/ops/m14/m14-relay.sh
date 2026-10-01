@@ -10,6 +10,10 @@
 #                                      parity files only; refuses gold-named files)
 #   m14-relay.sh dir <a|b> <path>      one directory from node A to node B (a) or node B to node A (b), same path,
 #                                      e.g. a finalist soup for the node-B formal path (weights allowed; no gold)
+#   m14-relay.sh formal-pull <run>     node-B formal/m14/<run> -> node A (gold-free outputs, receipts, seal, header
+#                                      stubs; refuses gold-named files and weights; amendment 1)
+#   m14-relay.sh formal-mark <run>     node-A REPORT.json / SEAL.json hashes -> node-B <run>/V3-SEALED.json (gates the
+#                                      node-B mlx-diag collection; the seals must agree; no score leaves node A)
 set -euo pipefail
 nodes_file=${DEV2_NODES_FILE:-$HOME/.config/decision2/nodes.env}
 resolve() { local d=""; [ -f "$nodes_file" ] && d=$(awk -F= -v k="$1" '$1 == k { print substr($0, length(k) + 2); exit }' "$nodes_file"); echo "${d:-$1}"; }
@@ -52,6 +56,25 @@ case ${1:-} in
     [ $# -eq 3 ] || usage
     case $2 in a) from=$A to=$B ;; b) from=$B to=$A ;; *) usage ;; esac
     hop "$from" "$to" "$(dirname "$3")" "$(basename "$3")" all
+    ;;
+  formal-pull)
+    [ $# -eq 2 ] || usage
+    FR=/data/dev2/runs/dec/formal/m14
+    on "$B" "test -f '$FR/$2/M6-RECEIPT.json'" || { echo "$2 has no M6 receipt on node B" >&2; exit 1; }
+    on "$B" "! find '$FR/$2' -name '*.safetensors' -size +1M | grep -q ." || { echo "$2 contains weights" >&2; exit 1; }
+    hop "$B" "$A" "$FR" "$2" all
+    ;;
+  formal-mark)
+    [ $# -eq 2 ] || usage
+    FR=/data/dev2/runs/dec/formal/m14
+    seal_a=$(on "$A" "sha256sum '$FR/$2/SEAL.json' | cut -d' ' -f1")
+    seal_b=$(on "$B" "sha256sum '$FR/$2/SEAL.json' | cut -d' ' -f1")
+    [ -n "$seal_a" ] && [ "$seal_a" = "$seal_b" ] || { echo "$2: node-A seal differs from node B's" >&2; exit 1; }
+    rep_a=$(on "$A" "sha256sum '$FR/$2/REPORT.json' | cut -d' ' -f1")
+    [ -n "$rep_a" ] || { echo "$2 has no report on node A" >&2; exit 1; }
+    python3 -c 'import json,sys,datetime as d; print(json.dumps({"run": sys.argv[1], "report_sha256": sys.argv[2], "seal_sha256": sys.argv[3], "marked_utc": d.datetime.now(d.timezone.utc).isoformat()}))' \
+      "$2" "$rep_a" "$seal_a" | on "$B" "set -o noclobber; cat > '$FR/$2/V3-SEALED.json'"
+    echo "marked $2 on node B (seal $seal_a)"
     ;;
   *) usage ;;
 esac
