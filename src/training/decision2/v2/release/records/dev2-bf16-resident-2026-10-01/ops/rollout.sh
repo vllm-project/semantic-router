@@ -5,9 +5,10 @@
 #                       released revision's download: only decision2/*.py outside _vendor and card files may change;
 #                       identity and parameter counts equal
 #   --bench --gpu N     old runtime (the verified download of the released revision) vs new runtime (the newest
-#                       preview build): 20 warm-up + 400 single requests on the typed-final prompts, one isolated
-#                       container process each (old first), each with a fresh copy of the frozen autotune cache,
-#                       the scored image and kernels; then the answers and latency comparison
+#                       preview build): the first 400 typed-final prompts as single requests, once untimed (first
+#                       use of each input shape) and then timed, one isolated container process each (old first),
+#                       each with a fresh copy of the frozen autotune cache, the scored image and kernels; then the
+#                       answers and latency comparison
 #   --mlx-only --gpu N  no-upload release.sh run with mlx-diag parity only, with the mlx run's own cache (4B)
 #   --release --gpu N   release.sh --upload --collect --already-collected with the final spec and decision and full
 #                       parity before and after the real download (typed-final 1,600, css15 6,547, public231 231 and
@@ -98,6 +99,8 @@ case "$tier" in
     base_repo=$HFC/models--Qwen--Qwen3.8-27B
     base_snapshot=$base_repo/snapshots/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0
     base_args=(--base-path "$base_snapshot" --env "HF_HUB_CACHE=$HFC" --mount "$base_repo")
+    # node B's cache links model blobs into the shared store
+    [[ ! -d "$HFC/blobs" ]] || base_args+=(--mount "$HFC/blobs")
     bench_base=(--base-path "$base_snapshot") ;;
   *) echo "tier must be one of 0.6B 0.8B 2B 4B 9B 27B" >&2; exit 2 ;;
 esac
@@ -187,13 +190,14 @@ if [[ "$mode" == --bench ]]; then
     fi
     if [[ ${#bench_base[@]} -gt 0 ]]; then
       volumes+=(-v "$base_repo:$base_repo:ro")
+      [[ ! -d "$HFC/blobs" ]] || volumes+=(-v "$HFC/blobs:$HFC/blobs:ro")
       envs+=(-e "HF_HUB_CACHE=$HFC")
     fi
     started=$(date +%s.%N)
     docker run --rm --network none --ipc host --device /dev/kfd --device /dev/dri --group-add video \
       --security-opt seccomp=unconfined -e ROCR_VISIBLE_DEVICES="$gpu" "${envs[@]}" "${volumes[@]}" \
       --entrypoint python3 "$image" -I -B "$S/v2/release/runtime_bench.py" run --package "$pkg" \
-      --prompts "$G/typed-final.prompts.jsonl" --count 400 --warmup 20 --threads 4 \
+      --prompts "$G/typed-final.prompts.jsonl" --count 400 --warmup 400 --threads 4 \
       --output "$W/receipts/bench-$side.json" "${kernel_args[@]}" "${bench_base[@]}" > "$W/logs/bench-$side.log" 2>&1
     echo "$side wall_seconds=$(python3 -c "print($(date +%s.%N) - $started)")" | tee -a "$W/logs/wall.txt"
     [[ -z "$frozen" ]] || finish_cache "$TC"
