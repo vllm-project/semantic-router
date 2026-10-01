@@ -50,7 +50,7 @@ class M6LaunchTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {"DEV2_27B_ALLOC": "m6"}, clear=True):
             self.assertEqual(sorted(launch.allowed_gpus("b")), [0, 1, 5])
             self.assertEqual(sorted(launch.allowed_gpus("a")), [2])
-            self.assertEqual(launch.max_cap_hours(), 18.0)
+            self.assertEqual(launch.max_cap_hours(), 20.0)
             with tempfile.TemporaryDirectory() as tmp:
                 drm = fake_sysfs(Path(tmp), "renderD129", "0000:83:00.0")
                 self.assertEqual(launch.render_node(0, drm).name, "renderD129")

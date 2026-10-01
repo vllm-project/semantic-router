@@ -36,8 +36,8 @@ NODE_GPUS = {
 }
 ALLOWED_GPUS = NODE_GPUS["b"]
 MAX_CAP_HOURS = 13.0
-# Milestone 6 (opt-in with DEV2_27B_ALLOC=m6): the 27B leases node B GPU0 / GPU1 / GPU5 and node A GPU2, and an 18 GPU-hour
-# ceiling per launch (an A20 + IB1 rank-128 arm-seed projects to 12.5-14 GPU-h).
+# Milestone 6 (opt-in with DEV2_27B_ALLOC=m6): the 27B leases node B GPU0 / GPU1 / GPU5 and node A GPU2, and a 20 GPU-hour
+# ceiling per launch (rank-128 arm-seeds on A20 + IB1 / + IB2 project to about 12.4 / 14.8 GPU-h).
 M6_NODE_GPUS = {
     "b": {
         0: ("0000:83:00.0", "renderD129"),
@@ -46,7 +46,7 @@ M6_NODE_GPUS = {
     },
     "a": {2: NODE_GPUS["a"][2]},
 }
-M6_MAX_CAP_HOURS = 18.0
+M6_MAX_CAP_HOURS = 20.0
 LEASE_ROOT = Path("/data/dev2/leases")
 
 

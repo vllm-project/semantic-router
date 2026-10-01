@@ -15,7 +15,7 @@ case "$NODE:$GPU" in b:0 | b:1 | b:5 | a:2) ;; *) echo "node $NODE GPU$GPU is ou
 case "$ARM" in M6-IB | M6-IBX | M6-IB2) ;; *) echo "unknown arm $ARM" >&2; exit 2 ;; esac
 case "$SEED" in s1) SEED_VALUE=20260926 ;; s2) SEED_VALUE=20260928 ;; *) echo "SEED is s1 or s2" >&2; exit 2 ;; esac
 [[ "$MIX" =~ ^[a-z0-9]+$ ]] && [[ "$MIX_SHA" =~ ^[0-9a-f]{64}$ ]] || { echo "bad mixture $MIX / $MIX_SHA" >&2; exit 2; }
-if ! [[ "$SAVE" =~ ^[0-9]+$ ]] || ! python3 -c "import sys; sys.exit(0 if 0 < float(sys.argv[1]) <= 18 else 1)" "$CAP"; then
+if ! [[ "$SAVE" =~ ^[0-9]+$ ]] || ! python3 -c "import sys; sys.exit(0 if 0 < float(sys.argv[1]) <= 20 else 1)" "$CAP"; then
   echo "bad SAVE_EVERY $SAVE or CAP $CAP" >&2
   exit 2
 fi

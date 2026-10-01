@@ -10,8 +10,8 @@
 #      must be exhausted (all its non-duplicate groups taken)
 #   3. the source-level C1 registry check of the rows new against a20 (m4_c1_sources.py; counts only)
 #   4. BUILD.json: rows, tokens, updates (16 rows each), SAVE_EVERY = ceil(updates / 8), the GPU-hour projection
-#      (0.40 GPU-h per million tokens plus 0.1 s per row) and the per-seed cap check (projection x 1.15 <= the cap:
-#      16 for stage 1, 18 for stage 2)
+#      (0.1 s per row plus 0.0012048 s per token: L128's 9.96 GPU-h on a20 with a per-row allowance) and the per-seed
+#      cap check (projection x 1.15 <= the cap: 16 for stage 1, 20 for stage 2)
 # With the optional IB2 arguments (stage 2, preregistration "Stage 2: IB2") the same build also writes a20ib12 = a20's
 # terms + IB1 + IB2, each block whole after the dedup (IB2 must add <= 10M tokens), and the stage-2 IB DEV slice
 # ib12.dev.jsonl = IB1 DEV + IB2 DEV (m6_data concat).
@@ -115,7 +115,7 @@ manifest = json.loads((root / "MIXTURES.json").read_text())
 out = {"a20_is_m4": True}
 plan = [("a20ib1", ["IB1"], 16.0), ("a20ib1x", ["IB1X"], 16.0)]
 if "a20ib12" in manifest["mixtures"]:
-    plan.append(("a20ib12", ["IB1", "IB2"], 18.0))
+    plan.append(("a20ib12", ["IB1", "IB2"], 20.0))
 for name, arms, cap in plan:
     lines = (root / f"{name}.train.jsonl").read_bytes().splitlines(keepends=True)
     assert a20_lines <= set(lines), f"{name} misses a20 rows"
@@ -127,7 +127,7 @@ for name, arms, cap in plan:
     rows = manifest["mixtures"][name]["rows"]
     tokens = manifest["mixtures"][name]["tokens"]
     updates = math.ceil(rows / 16)
-    projection = 0.40 * tokens / 1e6 + 0.1 * rows / 3600
+    projection = (0.1 * rows + 0.0012048 * tokens) / 3600
     added = [json.loads(line) for line in lines if line not in a20_lines]
     out[name] = {"rows": rows, "tokens": tokens, "updates": updates, "save_every": math.ceil(updates / 8),
                  "added_rows": len(added), "added_tokens": {a: p["tokens"] for a, p in parts.items()},
