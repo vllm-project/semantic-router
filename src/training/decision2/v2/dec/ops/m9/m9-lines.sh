@@ -8,9 +8,11 @@
 #                               panel, then its parity with the stored node-B readouts (report only)
 #   m9-lines.sh early <ARM>     HT-DEV v2 of <ARM>-s1's BEST (point 4b-<ARM>-s1), scored against 4b-I
 #   m9-lines.sh e1              the early rule once both seed-1 reads exist -> m9/early/E1.json (m9_rules.py early)
+#   m9-lines.sh control         amendment 1: verify the N7C soup copied to node A (m9/control/N7C-soup, list 9bcc0d10)
 #   m9-lines.sh line <ARM>      alpha 1 (the arm soup) and alpha 1/2 ([I, soup], v2.dec.soup, CPU); typed DEV, CSS pilot,
-#                               HT-DEV v2, Score5-typed-DEV, HR2 DEV; hs1-dev for alpha 1; scored on node A
-#   m9-lines.sh score           (re)score every read point not yet scored, the H9 - C9 pairs and the line readouts
+#                               HT-DEV v2, Score5-typed-DEV, HR2 DEV; hs1-dev for alpha 1; scored on node A. <ARM> is
+#                               H9, or the control N7C (amendment 1; C9 stopped by its seed-1 preflight)
+#   m9-lines.sh score           (re)score every read point not yet scored, the H9 - control pairs and the line readouts
 #   m9-lines.sh rules           m9_rules.py gates -> m9/select/4b-pick.json
 #   m9-lines.sh status
 #
@@ -46,6 +48,11 @@ I_LIST=df602ca9f2574bcf127322c9b232ac94b2470dd00cfbefd8320b3f5fca5351f4
 SOURCE=/hf/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259
 GPU=${M9_GPU:-}
 TIER=4b
+# Amendment 1 (dec-m9-amendment-1-2026-10-01.md): C9 stopped by its seed-1 preflight; the control line is M7's N7C.
+CONTROL=${M9_CONTROL:-N7C}
+N7C_DIR=$M/control N7C_SOUP=$M/control/N7C-soup
+N7C_LIST=9bcc0d10054b142dfc2497119cf5a8d282a1a0f435f621a075a637a70dd7e826
+N7C_HALF_LIST=d568829ac619d8bbc6cae70ee1496fea07ec3f6df77cad1feb04e7b40b1eb932
 declare -A RENDER=([6]=/dev/dri/renderD177 [7]=/dev/dri/renderD185)
 declare -A PROMPTS=([dev]=dev.prompts.jsonl [css-pilot]=css-pilot.prompts.jsonl [ht-dev2]=ht-dev2.prompts.jsonl
   [score5t-dev]=score5t-dev.prompts.jsonl [hs1-dev]=hs1-dev.prompts.jsonl [hr2-dev]=hr2-dev.prompts.jsonl)
@@ -257,12 +264,13 @@ hs1() {  # <point>: hs1-dev against 4b-I (report only)
     --output "$out" > "$L/diag/$1.hs1.log" 2>&1 || die "$1 hs1-dev score FAILED"
   log "$1 hs1-dev scored (report only)"
 }
-pair() {  # <tag a1|a1_2>: H9 - C9 on HT-DEV v2 at one alpha
-  local out=$L/diag/pair-H9-C9-$1.htdev2.json h=$L/$TIER-H9-$1/ht-dev2/ht-dev2.predictions.jsonl c=$L/$TIER-C9-$1/ht-dev2/ht-dev2.predictions.jsonl
+pair() {  # <tag a1|a1_2>: H9 - control on HT-DEV v2 at one alpha
+  local X=$CONTROL
+  local out=$L/diag/pair-H9-$X-$1.htdev2.json h=$L/$TIER-H9-$1/ht-dev2/ht-dev2.predictions.jsonl c=$L/$TIER-$X-$1/ht-dev2/ht-dev2.predictions.jsonl
   [ -f "$out" ] || [ ! -f "$h" ] || [ ! -f "$c" ] && return 0
   py "$OPS/m9/m9_rules.py" htdev2 --gold "$HT_GOLD" --left "$h" --left-name "$TIER-H9-$1" --right "$c" \
-    --right-name "$TIER-C9-$1" --output "$out" > "$L/diag/pair-H9-C9-$1.log" 2>&1 || die "pair $1 FAILED"
-  log "pair H9 - C9 $1: $(tail -1 "$L/diag/pair-H9-C9-$1.log")"
+    --right-name "$TIER-$X-$1" --output "$out" > "$L/diag/pair-H9-$X-$1.log" 2>&1 || die "pair $1 FAILED"
+  log "pair H9 - $X $1: $(tail -1 "$L/diag/pair-H9-$X-$1.log")"
 }
 arm_spec() { echo "$1=$L/$1/dev/dev.predictions.jsonl,$L/$1/css-pilot/css-pilot.predictions.jsonl"; }
 dev_readout() {  # <line>: typed DEV + CSS pilot readout of the line's points against 4b-I
@@ -292,7 +300,7 @@ score_all() {
   pair a1
   pair a1_2
   dev_readout L-H9
-  dev_readout L-C9
+  dev_readout "L-$CONTROL"
 }
 
 parity() {  # 4b-I on the M9 path vs the stored node-B readouts (report only)
@@ -374,12 +382,25 @@ do_e1() {
   log "E1: $(tail -1 "$M/early/E1.log")"
 }
 
+control_ready() {  # amendment 1: M7's N7C soup copied to node A, checked against its per-file list
+  [ -f "$N7C_DIR/VERIFIED" ] && return 0
+  [ -f "$N7C_SOUP/decision_config.json" ] || die "no N7C soup at $N7C_SOUP (copy it from node B over the direct link)"
+  [ "$(tree_manifest "$N7C_SOUP" | sha256sum | cut -d' ' -f1)" = "$N7C_LIST" ] || die "N7C soup differs from its list $N7C_LIST"
+  printf 'soup=%s\nsha256_list_sha256=%s\nverified_utc=%s\nsource=node B /data/dev2/runs/dec/m7/soup/N7C/build/N7C-soup\n' \
+    "$N7C_SOUP" "$N7C_LIST" "$(date -u +%FT%TZ)" > "$N7C_DIR/VERIFIED"
+  log "N7C soup verified on node A (list $N7C_LIST)"
+}
+
 do_line() {
   local X=$1 art
-  case $X in H9 | C9) ;; *) die "unknown arm $X" ;; esac
-  [ ! -f "$M/status/$X.FAILED" ] || die "L-$X: arm soup FAILED ($(cat "$M/status/$X.FAILED")); the line is empty"
-  [ -f "$M/status/$X.DONE" ] || die "L-$X: arm soup not done yet"
-  art=$M/soup/$X/build/$X-soup
+  case $X in
+    H9 | C9)
+      [ ! -f "$M/status/$X.FAILED" ] || die "L-$X: arm soup FAILED ($(cat "$M/status/$X.FAILED")); the line is empty"
+      [ -f "$M/status/$X.DONE" ] || die "L-$X: arm soup not done yet"
+      art=$M/soup/$X/build/$X-soup ;;
+    N7C) control_ready; art=$N7C_SOUP ;;
+    *) die "unknown arm $X" ;;
+  esac
   [ -f "$art/decision_config.json" ] || die "L-$X: artifact $art missing"
   ref_point
   mkdir "$L/L-$X.lock" 2> /dev/null || die "L-$X already running"
@@ -387,6 +408,9 @@ do_line() {
   log "L-$X start: artifact $art"
   alias_point "$TIER-$X-a1" "L-$X" alpha 1 A "$art"
   build "$TIER-$X-a1_2" "L-$X" 1/2 "I=$I" "A=$art" -- I A
+  if [ "$X" = N7C ]; then
+    log "4b-N7C-a1_2 file list $(sha "$L/$TIER-N7C-a1_2/files.sha256") (M7 finalist 4b-N7C-b1_2: $N7C_HALF_LIST)"
+  fi
   for p in "$TIER-$X-a1" "$TIER-$X-a1_2"; do readout "$p"; done
   infer "$TIER-$X-a1" hs1-dev
   score_all
@@ -411,9 +435,10 @@ case $CMD in
   e1) do_e1 ;;
   line) [ $# -eq 2 ] || { sed -n '2,24p' "$0"; exit 2; }; do_line "$2" ;;
   score) score_all ;;
+  control) control_ready ;;
   rules)
-    py "$OPS/m9/m9_rules.py" gates --lines-root "$L" --output "$M/select/4b-pick.json" > "$M/select/rules.log" 2>&1 \
-      || die "rules FAILED (see $M/select/rules.log)"
+    py "$OPS/m9/m9_rules.py" gates --lines-root "$L" --control "$CONTROL" --output "$M/select/4b-pick.json" \
+      > "$M/select/rules.log" 2>&1 || die "rules FAILED (see $M/select/rules.log)"
     log "pick: $(tail -1 "$M/select/rules.log")"
     ;;
   status)

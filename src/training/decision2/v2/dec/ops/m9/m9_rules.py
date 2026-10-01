@@ -7,7 +7,8 @@
              E1-typed: H9-s1's BEST SELECT700 family-macro accuracy < C9-s1's - 0.03, or
              E1-human: dH_dev2(H9-s1 - C9-s1) <= -0.03 and dH_dev2(H9-s1 - 4b-I) <= -0.02 (FLAG);
            if H9 stops, C9 stops too
-  gates    every point of L-H9 and L-C9 (alpha 1, 1/2) against 4b-I with the M8 gates (ops/m8/m8_rules.eligibility:
+  gates    every point of L-H9 and the control line (L-N7C after amendment 1; L-C9 as preregistered) (alpha 1,
+           1/2) against 4b-I with the M8 gates (ops/m8/m8_rules.eligibility:
            typed type / family floors, Noul rule_precedence floor, Score5-typed-DEV check-half floor, HT-DEV v2 not
            FLAG); the formal candidate is L-H9's pick (eligible points with a GAIN first, then the larger alpha); the
            control line is gated for the report only. Adds the matched contrasts (H9 - C9 at each alpha) when present.
@@ -33,7 +34,7 @@ from typing import Any
 OPS = Path(__file__).resolve().parents[1]
 CODE = Path(__file__).resolve().parents[4]
 SCHEMA = "dec-m9-pick/1"
-LINES = ("L-H9", "L-C9")
+CONTROLS = ("C9", "N7C")
 ORDER = ("1", "1/2")
 REF = "4b-I"
 CANDIDATE_LINE = "L-H9"
@@ -179,11 +180,11 @@ def parse_line(spec: str) -> tuple[str, dict[str, str]]:
     return line, dict(item.split("=", 1) for item in rest.split(",") if item)
 
 
-def gates(lines_root: Path) -> dict[str, Any]:
+def gates(lines_root: Path, control: str = "C9") -> dict[str, Any]:
     m8 = _load("m8_rules", OPS / "m8" / "m8_rules.py")
     m6f = _load("m6_finalists", OPS / "m6" / "m6_finalists.py")
     lines, readouts = {}, {}
-    for line in LINES:
+    for line in (CANDIDATE_LINE, f"L-{control}"):
         out = lines_root / "readout" / f"{line}.json"
         spec = lines_root / "readout" / f"{line}.line"
         if not (out.is_file() and spec.is_file()):
@@ -204,7 +205,7 @@ def gates(lines_root: Path) -> dict[str, Any]:
     chosen = pick(lines[CANDIDATE_LINE])
     contrasts = {}
     for step, tag in (("1", "a1"), ("1/2", "a1_2")):
-        doc = load_opt(lines_root / "diag" / f"pair-H9-C9-{tag}.htdev2.json")
+        doc = load_opt(lines_root / "diag" / f"pair-H9-{control}-{tag}.htdev2.json")
         if doc is not None:
             contrasts[step] = {
                 k: doc[k] for k in ("delta", "ci95", "p_le_0", "verdict", "H_dev2")
@@ -218,7 +219,14 @@ def gates(lines_root: Path) -> dict[str, Any]:
         "reference": REF,
         "readouts": readouts,
         "lines": lines,
-        "matched_contrasts_htdev2_h9_minus_c9": contrasts,
+        "control": control,
+        "control_note": (
+            "amendment 1: C9 stopped by its seed-1 preflight; the control is M7's N7C "
+            "(same base, recipe and seeds; 43.5M vs 46.2M tokens)"
+            if control == "N7C"
+            else "preregistered matched-token control"
+        ),
+        "matched_contrasts_htdev2_h9_minus_control": contrasts,
         "pick": (
             None
             if chosen is None
@@ -252,6 +260,7 @@ def main(argv: list[str] | None = None) -> int:
         e.add_argument(f"--{name}", type=Path, required=True)
     g = sub.add_parser("gates")
     g.add_argument("--lines-root", type=Path, required=True)
+    g.add_argument("--control", choices=CONTROLS, default="N7C")
     g.add_argument("--output", type=Path, required=True)
     a = p.parse_args(argv)
     if a.cmd == "htdev2":
@@ -329,7 +338,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if not a.output.name.endswith("-pick.json"):
         p.error("--output must end with -pick.json")
-    doc = gates(a.lines_root)
+    doc = gates(a.lines_root, a.control)
     if a.output.exists():
         a.output.rename(a.output.with_name(a.output.name + ".prev"))
     a.output.parent.mkdir(parents=True, exist_ok=True)
@@ -338,7 +347,7 @@ def main(argv: list[str] | None = None) -> int:
         json.dumps(
             {
                 "pick": None if doc["pick"] is None else doc["pick"]["point"],
-                "contrasts": doc["matched_contrasts_htdev2_h9_minus_c9"],
+                "contrasts": doc["matched_contrasts_htdev2_h9_minus_control"],
                 "no_pick_reasons": doc["no_pick_reasons"],
             }
         )
