@@ -205,6 +205,78 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 03:40 — **27B M6 continuation #2 handed off (0d2e488f); continuation #3 launched.**
+  - **No results yet.** First gates ≈ 22:30Z, first verdict ≈ 23:30Z, the M6-IB2PN hedge ends ≈ 06:20Z Oct 2.
+  - **#2's work:**
+    - C1 recheck exposure 0 for all four arms;
+    - a fix for a shared-gates-dir contrast collision (a node B guard plus a separate cross-arm stage);
+    - **amendment 4 = the Index path**, recorded before any result, with tooling for restage / run / paired bootstrap /
+      item 1';
+    - the restage control was bit-identical;
+    - Index-contamination audit: 0 test items in any arm's data.
+  - **Coordinator decisions:**
+    - **The Index eval allowance rises to ≤ 40 GPU-h.** Index runs only for Index-path candidates and the chosen
+      successor; node C GPU1–7 and node D GPU4–7.
+    - **Choice order confirmed:** classic passers first, then Index-path passers by the Index-gain lower bound.
+    - **Release target:** `Decision-2.0-Vega-27B`, after the card-worker fix round lands, on the then-current `main`
+      with the new card generator and the "audited" footnote.
+  - **Deviation:** a doubled tool call moved the Index-control directory. It was restored and scored from its own
+    files; no GPU job ran twice.
+
+- 2026-10-02 03:15 — **M15 closed (c473a3b2): no arm passes development; the MLX-DEV guard does NOT track formal
+  mlx-diag → MLX-DEV2 commissioned (c0ce08eb).** Results `b5dac4abb`, state `4b8b4279e`, gist 04; integration
+  `a3b6a444b`; 15.14 of 70 GPU-h.
+
+  | Arm | Development result |
+  | --- | --- |
+  | `4b-LHA10SDML` | retention only −.030 |
+  | `2b-RASDML` | Score floor, `set_reconciliation` (HT-DEV v2 GAIN) |
+  | `2b-RA10SDML` | Score floor |
+  | `08b-RASDML` | choice, `attribute_gate`, `rule_precedence`, MLX-DEV (HT-DEV v2 GAIN) |
+  | `08b-RA10SDML` | choice −29 items, `attribute_gate` −4 (HT-DEV v2 GAIN) |
+
+  - Matching the released multilingual token share did **not** remove the typed-head losses.
+  - **The guard fails validation.** MLX-DEV reads M13 `4b-LHA10SD` and M12 `08b-RA` as flat (+.009 / +.006); their
+    formal mlx-diag deltas were −.029 / −.014.
+  - **The `4b-LHA10SD` private Index diagnostic** (private `m13-lha10sd/`): the gain is almost entirely the
+    in-distribution HoVer family; transfer-only is ≈ flat. It is not an Index-path candidate (it fails item 4 anyway).
+  - **MLX-DEV2 (eval, c0ce08eb):**
+    - an mlx-diag-like development panel from row-disjoint dev / validation splits;
+    - it must flag the known negatives (LHA10SD, 08b-RA, L128) and not flag LH (+) or K-a13IB (n.s.) before
+      adoption;
+    - then it becomes the **mandatory development guard for every breadth arm**.
+    - Fallback: read formal mlx-diag for development finalists before the other formal panels.
+  - **Program-level read** (M11–M15): at 0.8B–4B, breadth data trades typed heads and multilingual decisions for
+    gains that are mostly in-distribution. **Interpolation (M16) is the remaining cheap lever.** New breadth arms wait
+    for MLX-DEV2.
+
+- 2026-10-02 03:10 — **Rename + product-card round 2 DONE (4c0a68cd).**
+  - **Current IDs / `main`** (old `DEV2.0-*` IDs redirect at the same revision; all private):
+
+    | Repo | `main` |
+    | --- | --- |
+    | `Decision-2.0-Kai-0.6B` | `35882d49` |
+    | `Decision-2.0-Eos-0.8B` | `5c878c67` |
+    | `Decision-2.0-Sol-2B` | `73bb148b` |
+    | `Decision-2.0-Nox-4B` | `eff06485` |
+    | `Decision-2.0-Lux-9B` | `586af779` |
+    | `Decision-2.0-Vega-27B` | `d97928d3` |
+
+    - Cards are ≈ 4.0–4.1k characters, with a banner plus four branded charts.
+    - The removed files are gone; the only other change is `model_name` in `config.json`.
+  - **Tooling** (merged): rename `29618cb18`, product card `12b09d710`, the publish script takes its own lease
+    `eb2d9f1df`, record `ddd638d6c`.
+  - **Collection:** someone edited it by hand at 17:01Z (largest-first order; `DEV2.0-Route-0.6B` removed). **It is
+    left as found.**
+  - **Fix round (same worker):**
+    - Pareto x-axis for 2.0 points switches to the **board's served-parameter convention** (the loaded counts shifted
+      our points left);
+    - unified Index footnote: "…Training data audited at row level against all Index test items." It says "audited",
+      not "no overlap", because 0.8B carries one public-split BANKING77 duplicate.
+    - Card-only revisions for Kai / Eos / Sol / Nox / Vega. **Lux-9B is skipped:** the K-a13IB successor release
+      regenerates it with the fixed generator.
+  - **The 9B release (542e6421) must use the footnote wording above** (it supersedes the 02:05 note's wording).
+
 - 2026-10-02 02:05 — **COORDINATOR DECISION: an "Index path" for frontier-targeted finalists.** The user was asked
   and cancelled the questionnaire; under the standing autonomy directive the recommended rule is adopted. The user
   may override.

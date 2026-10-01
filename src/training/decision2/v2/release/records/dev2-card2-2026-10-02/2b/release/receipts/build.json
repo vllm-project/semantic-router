@@ -1,0 +1,101 @@
+{
+  "builder_commit": "eb2d9f1df8f17fe4e7e62949675ed6a599ae9fe6",
+  "card": {
+    "assets_receipt_sha256": "318aec32352e099f041351b503df7d8dd697fd225085003c3a511a990b75e2b2",
+    "excluded": [],
+    "figures_sha256": {
+      "assets/banner.png": "ce6c9247d0ebb9a2906fde6cc4d743d1f91ca1294d2be678135539de8c1a96c4",
+      "assets/index-areas.png": "9cc657240233939a8267191e9b0c8949cf0bfe008995721c42d213459bc4b835",
+      "assets/index-pareto.png": "994a17446d3b4a5d3416038e247256a26afc4e3ba9a77941e6b2d21998ba74f3",
+      "assets/jevarena-types.png": "34b007d8c56bacca1898d05b804db5a10c72113fe117ce3fb1e6b497f1f55316",
+      "assets/jevarena.png": "2e26f0972f90bb274b28f4d929bdfcbe58f147c257f4787019bf92000d371f7d"
+    },
+    "index_sha256": "47e59a9550767b07d8aa82effb3cee4d5fbde75c4abed725e6ed2e6551826a01",
+    "paired": {
+      "ci95": [
+        3.2646522505551383,
+        10.805032166921862
+      ],
+      "delta": 7.655932161115473,
+      "replicates": 5000,
+      "sha256": "bca44e5f286312f2e96ac69b590347ddf37d81899dd762f5ce48475365c824ab"
+    },
+    "readme_sha256": "b215fb8248834529b18d63ac582804551e706f4b098aae4b5771dd1871d469e4",
+    "shown": [
+      {
+        "key": "candidate",
+        "licence": "package",
+        "report_sha256": "08745acf9fc753bc1d3b0335dc3e341c697a657a9e6c7c26d85eebfebf4d160c"
+      },
+      {
+        "key": "sol1",
+        "licence": "apache-2.0",
+        "report_sha256": "09892d3e6ebaa8196a0f72184c05f303c5f8d1773dcb43c7b52c85dd5d39ffbb"
+      },
+      {
+        "key": "decider2b",
+        "licence": "apache-2.0",
+        "report_sha256": "dd91e5ba628dbb5a3d2fc4092e9fd62d336c0b88f732419c7dfadd83f634e8a2"
+      },
+      {
+        "key": "thisthat12",
+        "licence": "mit",
+        "report_sha256": "33daa04aa94d831b630401875dfec50c16cfc63e7214be32eb9008807dd29ea3"
+      },
+      {
+        "key": "bosun17b",
+        "licence": "apache-2.0",
+        "report_sha256": "7003d0ecead9db7710943cf350ade4a3096962ca816eb81dfc962f67abe9895c"
+      }
+    ],
+    "tradeoffs": [
+      "mlx-diag non-English Choice (accuracy): 66.5% versus 67.1%",
+      "mlx-diag non-English Noul (accuracy): 65.8% versus 68.0%",
+      "Transfer: Misinfo Reaction Frames (macro-F1): 53.7% versus 63.1%",
+      "Transfer: Wikipedia power (macro-F1): 45.0% versus 49.5%",
+      "Transfer: FLUTE figurative language (macro-F1): 62.8% versus 66.1%",
+      "Transfer: Ideological Books Corpus (macro-F1): 40.1% versus 42.7%",
+      "Transfer: Wikipedia politeness (macro-F1): 55.0% versus 57.4%",
+      "Transfer: Persuasion (macro-F1): 57.2% versus 58.0%",
+      "Transfer: TalkLife empathy (macro-F1): 31.9% versus 32.0%",
+      "Transfer: Conversations Gone Awry (macro-F1): 44.1% versus 44.3%"
+    ]
+  },
+  "ended_utc": "2026-10-01T17:51:32.336401+00:00",
+  "files": 32,
+  "identity": {
+    "architecture": "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp",
+    "bf16_copy": {
+      "receipt_sha256": "a5229ef121b8f081087bc636a247c76be5fa6c8e70ecabf3156d01c0ff2becd1",
+      "source_model_sha256": "073bd1f2fe62e39fe993f57006bab17ece50a7e6fc7c5ee72107fefddeb81da4"
+    },
+    "dec_residual": false,
+    "head_variant": "shared",
+    "model_sha256": "32872f2968e38aa99901797aaab5e12e32e281bf67bb924037d443394411170d",
+    "readout": "head",
+    "temperature_by_type": null,
+    "text_parameter_count": 1881825088
+  },
+  "licence": "apache-2.0",
+  "manifest_sha256": "e1a36cf97bf8ca2af54755c9be984e0e9a95c8e6b058b3484b9be12dafc9fd00",
+  "package": "/data/dev2/runs/release/dev2-card2-2B-20261001T175111Z/package/Decision-2.0-Sol-2B",
+  "parameters": {
+    "external_base_text": null,
+    "loaded": 1883930944,
+    "packaged": {
+      "backbone": 1881825088,
+      "head": 2105856,
+      "residual": 0
+    }
+  },
+  "release_decision": {
+    "sha256": "964e7ed9b94ec3139f314d423aec760ed479b9a6351eab660e925471af1b64d6",
+    "status": "final"
+  },
+  "schema": "dev2-release-build/1",
+  "screen": {
+    "text_files_screened": 27
+  },
+  "spec_sha256": "b1cadf4f41a3ef9669070b91391d3d6956407a124e7b8b2e63d1660af7f63153",
+  "started_utc": "2026-10-01T17:51:22.631010+00:00"
+}

@@ -1,0 +1,90 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's job of 2026-10-02 00:05 UTC+8 (rename the six DEV2.0 repositories to Decision-2.0-<Codename>-<tier>; product cards with a banner, product highlights, a code-only quickstart and JevArena / Jev Decision Index charts; no training details, limitations, NOTICE, attributions or evaluation/ files), card-only revisions of all six repositories",
+  "decision": "release",
+  "decision_sha256": "367e7c5c8b0138251e80b0614bf61a158f821ecc3c9a163f80ec2844bcf0d51e",
+  "gate_profile": "successor",
+  "items": {
+    "1_successor_R1_v3": {
+      "evidence": "v3 67.345 vs current 63.151: +4.19 [+0.10, +9.88]",
+      "passed": true
+    },
+    "1_successor_R2_human_transfer": {
+      "evidence": "human transfer delta 95% [-0.082, +0.074]",
+      "passed": true
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "evidence": "types choice OK, noul OK, score OK",
+      "passed": true
+    },
+    "1_successor_R4_mlx_diag": {
+      "evidence": "mlx-diag card-eligible macro +0.0370 [+0.0250, +0.0490]",
+      "passed": true
+    },
+    "1_successor_R5_tier_gates": {
+      "evidence": "own 1.0 low +5.00; v3 67.345 vs 90% of Decider 4B 61.882; H vs Decider 4B [-0.078, +0.043]; own 1.0 low > 0 ok, v3 >= 55.693 ok, H vs Decider 4B upper >= 0 ok, no type collapsed ok",
+      "passed": true
+    },
+    "1_successor_R6_no_overlap_exposure": {
+      "evidence": "1 training files, 0 exposed groups",
+      "passed": true
+    },
+    "1_successor_R7_public231": {
+      "evidence": "public 231 172 vs 171 (+1; McNemar p 1.000)",
+      "passed": true
+    },
+    "1_successor_R8_c1_postkey": {
+      "evidence": "JevArena-C1 v1.2 post-key 52.71 vs DEV2.0-4B 452f1332 (current revision): +4.32 [+2.60, +6.00] PASS",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "8 results below own 1.0 listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 36 files re-hashed; loaded 4208383488",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "ea6121929394dce1d92482ec32a89b2417a864ee576330aa5a20db5829778eb5",
+  "model_name": "Decision-2.0-Nox-4B",
+  "receipts_sha256": {
+    "automap-card-pre": "6b71c5df3a9e8841e2b73194f08c9994cd1ce37ba1488db4145968d5f25b29c6",
+    "automap-hub": "d28955e20ce79cab0683bf573bd28dd30cdc98b097eb91486cb2048ba363789b",
+    "automap-hub-tf518": "4a5a921cf1defaa154dbb23bd7c18e8b7206815f8fe71c4ded0f103be4f94b0b",
+    "automap-post": "3fe406ae8c486c1465e70f98c927c521e0d03baeb0b11e98e2f5ac78e194221b",
+    "automap-pre": "44abd7fc697a1df4516fed009aa0450dd4531c162217ca7539455de56c125ef5",
+    "card-post": "19ce0bf0ef9c4e7b4c68430b1fe13c4a40f9da3d24612e675ae86e37a0bbf173",
+    "card-pre": "201b650ca5439370dd059a238be6b370849117ddb85432bc1fd374862429a7b1",
+    "download": "ef51ddf4ad5241176ec50977ce4d03c11ff60552dee4050de40c21748682cf36",
+    "post": "ae9120c37821e245a36b51008a380f25856a00d77b8ecef181b90371e8775153",
+    "readback": "47e9642b6414f10102f3a84515cb01665b11389b8fb8c5959d989e1f904a89be",
+    "repeat-post": "bc72555a8cd0b1098f12588c424d3a5e32dc5cd1adddbf713feb79dd90ffff2e",
+    "repeat-pre": "d621f0111f731ab30e036bfac1557fb08f706bb6f960fb3788333d6c905ea38b",
+    "tree": "c773405222167ded6fa58ae396ffaedadb0a69a36c0f68f151a8788adbaf29a2",
+    "upload": "3e4098beaf62869cb0d24ab92fa2a485115bf9b02f5579f6a907d4ed099eb682"
+  },
+  "repo_id": "llm-semantic-router/Decision-2.0-Nox-4B",
+  "revision": "eff064856fd99342b5bf46a2ee41b4b3ecdac5b8",
+  "schema": "dev2-release-gate/1",
+  "supersedes": {
+    "gate_sha256": "1f1872e895ebdca8619379c99a0c4bea235979c44d6403217c25cc4c1d25dbed",
+    "revision": "3785b7b963d2f56de0e44f9ec638c814c5ee6499"
+  },
+  "utc": "2026-10-01T18:04:52.797313+00:00"
+}

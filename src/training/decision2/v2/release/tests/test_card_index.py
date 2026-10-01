@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from v2.release import card_assets, card_index
+from v2.release import card_assets, card_index, layout
 from v2.release.tests import card_fixture
 
 
@@ -41,6 +41,11 @@ class CardIndexTest(unittest.TestCase):
         changes = (
             lambda d: d.update(schema="other"),
             lambda d: d.update(footnote=""),
+            lambda d: d.update(footnote=d["footnote"].split(" Training data")[0]),
+            lambda d: d.pop("snapshot"),
+            lambda d: d["family"][0].pop("parameters_basis"),
+            lambda d: d["family"][0].update(parameters_basis="loaded"),
+            lambda d: d["family"][0].pop("loaded_parameters"),
             lambda d: d["family"].pop(),
             lambda d: d["family"][0].update(name="DEV2.0-0.6B"),
             lambda d: d["family"][0].update(model_sha256="short"),
@@ -53,6 +58,97 @@ class CardIndexTest(unittest.TestCase):
             with tempfile.TemporaryDirectory() as scratch:
                 with self.assertRaises(ValueError):
                     card_index.load(self.write(Path(scratch), change))
+
+    def test_footnote_discloses_the_row_level_audit(self):
+        footnote = card_index.FOOTNOTE.format(edition="0.2.1", snapshot="2026-09-28")
+        self.assertEqual(
+            footnote,
+            "Decision 2.0: independent reproduction with the official 0.2.1 kit on the "
+            "released weights; others: public board snapshot, 2026-09-28. Training data "
+            "audited at row level against all Index test items.",
+        )
+
+
+def _model(name: str, base: str | None, served: int, skill: float = 0.1) -> dict:
+    return {
+        "name": name,
+        "meta": {"base_model": base, "served_params": served},
+        "scores": {"balanced_skill": skill},
+        "categories": [{"id": a, "skill": skill} for a, _ in card_index.AREAS],
+    }
+
+
+def _board(extra=()) -> dict:
+    models = [
+        _model(f"peer {tier}", card_index.BOARD_BASES[tier][0], 1000 + i)
+        for i, tier in enumerate(layout.TIERS)
+    ]
+    served = {tier: 1000 + i for i, tier in enumerate(layout.TIERS)}
+    models += [
+        (
+            _model(name, card_index.BOARD_BASES[tier][-1], served[tier])
+            if tier
+            else _model(name, "org/encoder", 300)
+        )
+        for name, tier in card_index.DECISION1_TIERS.items()
+    ]
+    return {"generated_utc": "2000-01-01T00:00:00Z", "models": models + list(extra)}
+
+
+class BoardConventionTest(unittest.TestCase):
+    def test_family_takes_the_board_count_of_its_base(self):
+        board = _board([_model("other", "org/unrelated", 5)])
+        self.assertEqual(card_index.board_parameters(board, "2B"), 1002)
+        with self.assertRaisesRegex(ValueError, "not one count"):
+            card_index.board_parameters(
+                _board([_model("odd", card_index.BOARD_BASES["2B"][1], 7)]), "2B"
+            )
+        with self.assertRaisesRegex(ValueError, "not one count"):
+            card_index.board_parameters({"models": []}, "2B")
+
+    def test_build_matches_runs_by_weights_and_loads(self):
+        manifests = {
+            tier: {
+                "identity": {"model_sha256": f"{i:064x}"},
+                "parameters": {"loaded": 900 + i},
+            }
+            for i, tier in enumerate(layout.TIERS)
+        }
+        runs = [
+            {
+                "model_sha256": f"{i:064x}",
+                "edition": "0.0-test",
+                "balanced_skill": 1.0 + i,
+                "areas": {a: 1.0 for a, _ in card_index.AREAS},
+                "index_sha256": "c" * 64,
+            }
+            for i in range(len(layout.TIERS))
+        ]
+        built = card_index.build(runs, _board(), "2000-01-01", manifests)
+        for i, point in enumerate(built["family"]):
+            self.assertEqual(
+                (point["parameters"], point["loaded_parameters"]), (1000 + i, 900 + i)
+            )
+        with tempfile.TemporaryDirectory() as scratch:
+            path = Path(scratch) / "index.json"
+            path.write_text(json.dumps(built))
+            card_index.load(path)
+        with self.assertRaisesRegex(ValueError, "2 kit runs"):
+            card_index.build(runs + runs[:1], _board(), "2000-01-01", manifests)
+        with self.assertRaisesRegex(ValueError, "unexpected own model"):
+            card_index.build(
+                runs, _board([_model("Decision 3.0", None, 1)]), "2000-01-01", manifests
+            )
+
+    def test_board_base_is_in_each_released_lineage(self):
+        specs = Path(card_index.__file__).parent / "specs"
+        for tier in layout.TIERS:
+            key = tier.lower().replace(".", "p")
+            spec = json.loads((specs / f"dev2-{key}-product.json").read_text())
+            lineage = {spec["origin"]["repo_id"]} | {
+                c["source"].split("@", 1)[0] for c in spec["licence"]["components"]
+            }
+            self.assertTrue(lineage & set(card_index.BOARD_BASES[tier]), tier)
 
 
 class CardAssetsTest(unittest.TestCase):
