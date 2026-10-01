@@ -205,7 +205,37 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
-- 2026-10-01 18:50 — **27B M6 launched (11741ee2 → continuation 8? below); six rank-128 seeds training unattended;
+- 2026-10-01 18:55 — **M11 complete (c473a3b2): no finalist anywhere; M12 launched (additive breadth).** Records:
+  `dec-m11-results-2026-10-01.md` (`078c1af02`), amendment 2, gist 04; integration `73238a2f9`; 18.17 of 110 GPU-h.
+  - **2B / 0.8B stage 1** (3 seeds + soup each, vs the 2.0 releases):
+
+    | Point | HT-DEV v2 | Retention | Fails |
+    | --- | --- | --- | --- |
+    | `2b-LH` | tie | +.014 | Noul + Score type floors, Score5 collapse |
+    | `2b-NT` | +.029 GAIN | −.017 | retention |
+    | `08b-LH` | +.030 GAIN | +.004 | choice floor 501 vs 586; `attribute_gate` |
+    | `08b-NT` | tie | — | choice, Score, Noul floors |
+
+    - **Conclusion:** from-base LoRA keeps human transfer and retention but loses typed decisions at 2B / 0.8B. Their
+      bases sit above the releases on retention (+.064 / +.054).
+  - **4B stage 2** (LH + IB1 + IB2 at a 25% share):
+
+    | Point | IB DEV, 12 families | IB DEV, 9 transfer families | Fails |
+    | --- | --- | --- | --- |
+    | `4b-LHB` | **+.092 [+.078, +.106]** | +.053 | Noul + Score floors |
+    | `4b-LHBx` (transfer-only ablation) | +.030 | +.051 (equal) | choice floor + retention |
+
+    - **Breadth gain is real and transfers** (it does not depend on the in-distribution families).
+    - **Failure mechanism:** the IB share displaced typed rows.
+  - **Incident (recorded, amendment 2):** the first 2B gate run lacked inputs because of a probe-scorer bug plus two
+    concurrent scorings. It was set aside; the scorer is fixed and locked, and the gates were rerun once.
+  - **M12 (c473a3b2, resumed):**
+    - **4B LHA:** LH full tokens **plus** IB additive (≈ +25%); **LHA10:** ≈ +10%.
+    - **2B / 0.8B:** the released recipe retrained in full **plus** IB additive (≈ +20–25%); not top-ups.
+    - Same gates; successors build on the forward-budget fix revisions; a C1 content recheck for IB models;
+      100 GPU-h.
+
+- 2026-10-01 18:50 — **27B M6 launched (11741ee2 → continuation a56025bb); six rank-128 seeds training unattended;
   G5 yes-bias gate validated and binding.** Records: `27b/records/m6-state.md`, gist 06; integration `c55cf924c`.
   - **Arms** (two seeds each, rank-128 LoRA on the A20 rows, no extra typed dose):
 
