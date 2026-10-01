@@ -52,7 +52,8 @@ M6_NODE_GPUS = {
         for gpu in range(8)
     },
 }
-M6_MAX_CAP_HOURS = 20.0
+# Amendment 3: 22 for the M6-IB2PN hedge seeds on node D; m6-arm.sh keeps the other arms at 20.
+M6_MAX_CAP_HOURS = 22.0
 LEASE_ROOT = Path("/data/dev2/leases")
 SINGLE_LINE_KEY = re.compile(r"(?:^|\s)[A-Za-z_][A-Za-z0-9_]*=")
 SINGLE_LINE_PAIR = re.compile(

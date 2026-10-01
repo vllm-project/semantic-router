@@ -6,6 +6,8 @@
 # every data file's SHA-256 equal to node B's, every mixture equal to BUILD.json. Writes node D's address (never printed)
 # to node B's link directory as peer-d for the chain's pull-d. The code mirror is mirror_to_node.sh's job (node-d).
 # Usage: m6-stage-d.sh MIRROR_SHA MIXTURE...   (e.g. a20ib1x; the mirror must already be on node D)
+# Environment: M6_BUILD (build record in m6-data, default BUILD.json; BUILD-pn.json stages amendment 3's a20ib12pn from
+#   its mixtures_dir, mixtures-m6pn-1).
 set -euo pipefail
 SHA=${1:?MIRROR_SHA}
 shift
@@ -19,7 +21,10 @@ SRC=/data/dev2/src/$SHA-src_training_decision2/src/training/decision2
 BASE=/data/decision20-20260926/models/Qwen3.8-27B BASE_TREE=c457c9941d0f28581289cd67a3ef2af10bb18cfb400a4b00db9ccffa64854ab6
 T0=/data/dev2/runs/27b/m4-train-cache-T0 T0_TREE=1933eb36d746a3bf3b716967ce97f977620eab0f7a390f751e79bfd4f8b2e21f
 FILES="data/rights_clean_goemotions_v2/select.jsonl data/rights_clean_goemotions_v2/cal.jsonl runs/dev.prompts.jsonl runs/css-transfer-v1/css-pilot.prompts.jsonl"
-MX=/data/dev2/private/27b/m6-data/mixtures-m6-1
+BUILD_FILE=${M6_BUILD:-BUILD.json}
+[[ "$BUILD_FILE" =~ ^BUILD(-[a-z0-9]+)?\.json$ ]] || { echo "bad M6_BUILD $BUILD_FILE" >&2; exit 2; }
+build=$(onb "cat /data/dev2/private/27b/m6-data/$BUILD_FILE")
+MX=/data/dev2/private/27b/m6-data/$(python3 -c "import json,sys; print(json.loads(sys.argv[1]).get('mixtures_dir', 'mixtures-m6-1'))" "$build")
 ond "test -f $SRC/v2/27b/triton_cache.py" || { echo "mirror $SHA is not on node D" >&2; exit 2; }
 for m in "$@"; do [[ "$m" =~ ^a20ib[0-9a-z]+$ ]] || { echo "bad mixture $m" >&2; exit 2; }; done
 onb "umask 077; test -d /data/dev2/tmp/27b-m6-xfer && printf '%s\n' '${D#*@}' > /data/dev2/tmp/27b-m6-xfer/peer-d"
@@ -42,7 +47,6 @@ for f in $FILES; do
   b=$(onb "sha256sum < /data/decision20-20260926/$f | cut -c1-64") d=$(ond "sha256sum < /data/decision20-20260926/$f | cut -c1-64")
   [ "$b" = "$d" ] || { echo "node D $f differs from node B" >&2; exit 3; }
 done
-build=$(onb "cat /data/dev2/private/27b/m6-data/BUILD.json")
 for m in "$@"; do
   want=$(python3 -c "import json,sys; print(json.loads(sys.argv[1])['files_sha256'][sys.argv[2] + '.train.jsonl'])" "$build" "$m")
   got=$(ond "sha256sum < $MX/$m.train.jsonl | cut -c1-64")
