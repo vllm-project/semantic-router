@@ -4,8 +4,9 @@
 #   --stage    release.sh without parity or upload on the final spec: build, native examples and card, AutoConfig /
 #              AutoTokenizer / AutoModel / pipeline vs native and the card's Transformers block (the package that
 #              --extra tests and --release must rebuild byte for byte)
-#   --extra    on the newest staged package: the synthetic long-input regression (32 questions, one prompt at the cap
-#              minus 300 tokens; each answer vs the question alone), runtime_bench old (the released auto_map
+#   --extra    on the newest staged package: the synthetic long-input regression (one prompt at the cap minus 300
+#              tokens; 32 questions, 48 on 0.8B / 2B so the batch passes the budget there too; each answer vs the
+#              question alone), runtime_bench old (the released auto_map
 #              package) vs new (400 typed-final requests after 400 warm-up, a fresh frozen-cache copy each side) and,
 #              for 27B, the two private recorded requests (counts only; request files stay in a private directory)
 #   --release  refuses unless main is the superseded revision, --extra passed and a fresh build equals the staged
@@ -37,15 +38,15 @@ HFC=/data/dev2/hf-cache
 TF518=/data/dev2/tools/tf518
 HFPY=/data/dev2/tools/hf-cli/bin/python
 REPRO=/data/dev2/private/eval/budget-repro
-image=decision20-train-fast:host2 cache_tool=digest PM="" base_args=() base_mount=() base_run=()
+image=decision20-train-fast:host2 cache_tool=digest PM="" long_q=32 base_args=() base_mount=() base_run=()
 case "$tier" in
   0.8B)
     key=0p8b P=/data/dev2/runs/release/inputs/dev2-0p8b-t1/derived IN=/data/dev2/runs/release/inputs/dev2-0p8b-bf16
-    frozen=/data/dev2/runs/dec/formal/m2/m2-E8F-soup-nodeA-triton cap=16384
+    frozen=/data/dev2/runs/dec/formal/m2/m2-E8F-soup-nodeA-triton cap=16384 long_q=48
     frozen_digest=5e37a14373b70584bcc2e0056ad7ef5ebaf3d01b0a1820d216717a23232f09e2 ;;
   2B)
     key=2b P=/data/dev2/runs/release/inputs/dev2-2b-t1/derived IN=/data/dev2/runs/release/inputs/dev2-2b-bf16
-    frozen=/data/dev2/runs/dec/formal/m3/m3-S2T-soup-nodeA-triton cap=16384
+    frozen=/data/dev2/runs/dec/formal/m3/m3-S2T-soup-nodeA-triton cap=16384 long_q=48
     frozen_digest=abdfd6872ccee3efc2b8e67358e9726e83eec882b1b0de3059d2ad408b2e26f0 ;;
   9B)
     key=9b P=/data/dev2/runs/release/inputs/dev2-8b-t1/derived IN=/data/dev2/runs/release/inputs/dev2-8b-bf16
@@ -132,7 +133,7 @@ case "$mode" in
     status=0
     TCL=/data/dev2/runs/release/triton/dev2-budget-$tier-long-$TS; copy_cache "$TCL"
     gpu_run "$TCL" "$W/logs/long-request.log" "${pk[@]}" -- -B -m v2.release.tests.gpu_long_request \
-      --package "$new" "${base_run[@]}" --tokens $((cap - 300)) --questions 32 \
+      --package "$new" "${base_run[@]}" --tokens $((cap - 300)) --questions "$long_q" \
       --out "$W/receipts/long-request.json" || status=1
     finish_cache "$TCL"
     for side in old new; do

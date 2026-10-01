@@ -139,7 +139,7 @@ def decision_for(t: dict, spec_sha: str) -> dict:
                 "with 0 answer changes (0 missing, 0 input mismatches) against the scored predictions on every "
                 "scored prompt (typed-final 1,600, css15 6,547, public231 231) and on mlx-diag (2,275) before and "
                 "after the real download, AutoModel answers equal to the native runtime's on the same prompts, the "
-                "synthetic long-input regression (32 questions, one prompt at the cap minus 300 tokens) valid and "
+                "synthetic long-input regression (one prompt at the cap minus 300 tokens, 32 questions, 48 on 0.8B and 2B, so that the batch exceeds the budget) valid and "
                 "equal to each question asked alone, and the card's Transformers example run from the Hub in fresh "
                 "environments under Transformers 5.17 and 5.18; release.sh blocks the upload or the collection step "
                 "otherwise."
