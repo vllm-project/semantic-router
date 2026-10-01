@@ -6,9 +6,13 @@
 # status/formal.GO (written once the newest COORDINATION notes are re-read and the finalists' lock record is pushed),
 # formal.sh for each finalist (first on GPU6, second on GPU7, in parallel). A failed step stops its branch.
 #
-# usage: M9_NODE=a formal-chain.sh launch|run <mirror-dir>
+# Stage 2 (amendment 2): M9_STAGE=2 reads select/9b-finalists-s2.json and waits for status/formal-s2.GO.
+#
+# usage: [M9_STAGE=2] M9_NODE=a formal-chain.sh launch|run <mirror-dir>
 set -u
 MODE=$1 SRC=$2
+STAGE=${M9_STAGE:-1}
+if [ "$STAGE" = 2 ]; then RULES=9b-finalists-s2 GO=formal-s2.GO TAG=-s2; else RULES=9b-finalists GO=formal.GO TAG=""; fi
 M=/data/dev2/runs/9b/m9
 ST=$M/status
 F=/data/dev2/runs/9b/formal-m9
@@ -19,20 +23,20 @@ BASE=/data/dev2/models/Qwen--Qwen3.5-9B-Base/68c46c4b3498877f3ef123c856ecfde50c3
 T1=/data/dev2/runs/release/dev2-8b-t1-derived
 mkdir -p "$M/chains" "$M/logs" "$ST" "$F"
 if [ "$MODE" = launch ]; then
-  mkdir "$M/chains/formal.lock" 2> /dev/null || { echo "formal chain already launched"; exit 0; }
-  M9_NODE=a setsid nohup bash "$0" run "$SRC" > "$M/logs/formal-chain.log" 2>&1 < /dev/null &
-  echo $! > "$M/chains/formal.pid"
-  echo "$(date -u +%FT%TZ) M9 formal chain launched from $SRC (pid $(cat "$M/chains/formal.pid"))" | tee -a "$M/OPERATIONS.log"
+  mkdir "$M/chains/formal$TAG.lock" 2> /dev/null || { echo "formal chain$TAG already launched"; exit 0; }
+  M9_STAGE=$STAGE M9_NODE=a setsid nohup bash "$0" run "$SRC" > "$M/logs/formal-chain$TAG.log" 2>&1 < /dev/null &
+  echo $! > "$M/chains/formal$TAG.pid"
+  echo "$(date -u +%FT%TZ) M9 formal chain$TAG launched from $SRC (pid $(cat "$M/chains/formal$TAG.pid"))" | tee -a "$M/OPERATIONS.log"
   exit 0
 fi
-log() { echo "$(date -u +%FT%TZ) formal-chain $*" | tee -a "$M/OPERATIONS.log"; }
+log() { echo "$(date -u +%FT%TZ) formal-chain$TAG $*" | tee -a "$M/OPERATIONS.log"; }
 n=0
-until [ -f "$M/select/9b-finalists.json" ]; do
+until [ -f "$M/select/$RULES.json" ]; do
   n=$((n + 1))
   [ $((n % 30)) = 0 ] && log "waiting for the development rules"
   sleep 60
 done
-mapfile -t FIN < <(python3 -c 'import json,sys; print("\n".join(json.load(open(sys.argv[1]))["finalists"]))' "$M/select/9b-finalists.json")
+mapfile -t FIN < <(python3 -c 'import json,sys; print("\n".join(json.load(open(sys.argv[1]))["finalists"]))' "$M/select/$RULES.json")
 [ ${#FIN[@]} -gt 0 ] && [ -n "${FIN[0]}" ] || { log "no finalist: no formal run"; exit 0; }
 log "finalists: ${FIN[*]}"
 if [ ! -f "$F/C0F.parity.json" ]; then
@@ -46,9 +50,9 @@ if [ ! -f "$F/C0F.parity.json" ]; then
   log "C0F parity vs the stored bar: $(tail -c 400 "$M/logs/formal-C0F-parity.log" | tr '\n' ' ')"
 fi
 n=0
-until [ -f "$ST/formal.GO" ]; do
+until [ -f "$ST/$GO" ]; do
   n=$((n + 1))
-  [ $((n % 30)) = 0 ] && log "waiting for status/formal.GO (COORDINATION re-read + lock record)"
+  [ $((n % 30)) = 0 ] && log "waiting for status/$GO (COORDINATION re-read + lock record)"
   sleep 60
 done
 gpus=(6 7)
@@ -56,7 +60,7 @@ pids=()
 for i in "${!FIN[@]}"; do
   a=${FIN[$i]}
   art=$(cat "$M/soup/$a/DONE" 2> /dev/null) || { log "$a has no artifact on node A"; continue; }
-  case $a in L9) src=$BASE ;; *) src=$LUX ;; esac
+  case $a in L9 | L9IB | L9IBX) src=$BASE ;; *) src=$LUX ;; esac
   bash "$OPS/formal.sh" "${gpus[$i]}" "$a" "$art" "$src" "9B M9 $a" > "$M/logs/formal-$a.log" 2>&1 &
   pids+=($!)
   log "formal $a started on GPU${gpus[$i]} (pid $!)"
