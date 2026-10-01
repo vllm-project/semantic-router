@@ -223,7 +223,7 @@ exactly one gist file and updates it in place:
     - **0.8B fast-track (1afc17e8):** a single formal run of `08b-RA` → items 1–7 → C1 recheck + item 8 → release on
       `4afea305` → private Index.
     - **IB3 data (611782db):** phishing URLs / emails, grounding, ESCI E-vs-I, shortcut-robust MCQ, contracts.
-    - **M14 (new):** typed-row **upweighting** arms (0.8B RA-UP, 2B RA-UP, 4B LHA10-UP), complementary to M13's
+    - **M14 (ad17bb4f):** typed-row **upweighting** arms (0.8B RA-UP, 2B RA-UP, 4B LHA10-UP), complementary to M13's
       self-distillation, on node A GPU3–5 + node B GPU2–4; 80 GPU-h.
   - Running at the same time: M13, 27B M6 continuation, 9B M9 continuation (stage 2 / 3), the card redesign.
 
