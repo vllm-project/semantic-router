@@ -97,6 +97,9 @@ def main() -> None:
     parser.add_argument("--questions", type=int, default=32)
     parser.add_argument("--tolerance", type=float, default=0.02)
     parser.add_argument("--device", default="cuda:0")
+    parser.add_argument(
+        "--budget", type=int, help="override the runtime's token budget"
+    )
     args = parser.parse_args()
     package = args.package.resolve(strict=True)
     sys.path.insert(0, str(package))
@@ -107,6 +110,8 @@ def main() -> None:
     )
     backend = model.backend
     torch = backend.torch
+    if args.budget:
+        backend.batch_tokens = args.budget
     shapes: list[list[int]] = []
     forward = backend.model.forward
 

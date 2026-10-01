@@ -10,6 +10,18 @@ shapes and GPU-hours.
 
 ## Now
 
+- 06:55Z — Fix `8e6bdfc33` mirrored (`7b57c77c4`, then `12b27df7a` with the launcher's diagnostic packages).
+  Verification so far (DEV2.0-27B `4e89288d` restaged with the fixed `qwen.py`; only that file differs):
+  - synthetic request (generated text, 32 questions, long prompt 14,224 / 22,676 tokens): **unfixed runtime fails**
+    (2 invalid answers, 9 of 32 differ from the question asked alone; the 22,676 one hits a GPU page fault);
+    **fixed runtime at 22,676 passes** (2 forwards, 32 / 32 equal to alone, max drift 0.009).
+  - real memory-fault request on the fixed runtime: valid, 32 / 32 equal to alone (max drift 0.0075).
+  - **open:** at the 14,224-token shapes the fixed runtime's first sub-batch (24 rows, 341,376 padded tokens) ends
+    in a host-side segfault in the HIP runtime (3 of 3 runs). With `AMD_SERIALIZE_KERNEL=3` or a synchronize after
+    every module both pass. Running: smaller budgets (300,000 / 200,000) and the unfixed runtime at 24 rows.
+  - C done: note in the private folders (local `private/ixC/`).
+  - B waiting on A: the M5-L128 package is restaged (fixed runtime, checkpoint `95d61175…`, 27,497,508,864 loaded
+    parameters); panel and frozen cache relaying to node C.
 - 06:05Z — **A root-caused.** FLA 0.5.2's gated-delta forward computes some element offsets in 32-bit integers; a
   forward whose q / k / v tensors (padded tokens × value heads × 128) exceed 2^31 − 1 elements gives wrong rows,
   non-finite logits or a GPU page fault. DEV2.0-27B (48 value heads) passes the limit at 349,525 padded tokens; the
