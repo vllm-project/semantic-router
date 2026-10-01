@@ -463,8 +463,31 @@ def glaive_conversations(
     return out
 
 
-def glaive_slot(u1: str) -> int:
-    return int(order("ib2-glaive-slot-v1", normalize(u1)), 16) % 4
+STOPWORDS = frozenset(
+    "the and for with from that this your into about given which what when where there their them they "
+    "have will would could should based using user users".split()
+)
+
+
+def content_words(text: str) -> set[str]:
+    return {
+        w
+        for w in WORD_RE.findall(normalize(text))
+        if len(w) >= 4 and w not in STOPWORDS
+    }
+
+
+def unrelated(
+    function: Mapping[str, Any], gold: Mapping[str, Any], request: str
+) -> bool:
+    """Amendment 1: no name token and no description word shared with the called function or the request."""
+    words = set(WORD_RE.findall(normalize(request)))
+    if function["name"] == gold["name"]:
+        return False
+    if name_tokens(function["name"]) & (name_tokens(gold["name"]) | words):
+        return False
+    described = content_words(function["description"])
+    return not described & (content_words(gold["description"]) | words)
 
 
 def fc_row(conv: Mapping[str, Any], family: str, **kwargs: Any) -> dict[str, Any]:
@@ -498,18 +521,28 @@ def glaive(
         n: max(c.items(), key=lambda kv: (kv[1], kv[0]))[0]
         for n, c in descriptions.items()
     }
+    lists = [(c["key"], c["functions"]) for c in convs if c["call1"] or c["refusal"]]
+    lists.sort(key=lambda item: (order("ib2-fcrel-lists-v1", item[0]), item[0]))
     out: dict[str, Rows] = {name: [] for name in FC_FAMILIES}
+    makers = {
+        "fc_rel": fc_rel,
+        "fc_sel": fc_sel,
+        "fc_args": fc_args,
+        "fc_ready": fc_ready,
+    }
     for conv in convs:
-        family = FC_FAMILIES[glaive_slot(conv["u1"])]
-        reports[family]["slot"] += 1
-        made = {
-            "fc_rel": fc_rel,
-            "fc_sel": fc_sel,
-            "fc_args": fc_args,
-            "fc_ready": fc_ready,
-        }[family](conv, reports[family], pool=pool, describe=describe, values=values)
-        if made is not None:
-            out[family].append(made)
+        for family, make in makers.items():
+            made = make(
+                conv,
+                reports[family],
+                pool=pool,
+                describe=describe,
+                values=values,
+                lists=lists,
+            )
+            for item in made if isinstance(made, list) else [made]:
+                if item is not None:
+                    out[family].append(item)
     for family in FC_FAMILIES:
         report = reports[family]
         rows = per_group(resolve(out[family], report), f"ib2-{family}-group-v1")
@@ -524,22 +557,41 @@ def glaive(
 
 
 def fc_rel(
-    conv: Mapping[str, Any], report: collections.Counter, **_: Any
-) -> dict | None:
-    if conv["call1"]:
-        yes = True
-    elif conv["refusal"]:
-        yes = False
-    else:
+    conv: Mapping[str, Any],
+    report: collections.Counter,
+    *,
+    lists: Sequence[tuple[str, list[dict[str, Any]]]],
+    **_: Any,
+) -> list[dict[str, Any]]:
+    """Own list: yes iff A1 calls, no iff A1 refuses; amendment 1 adds a constructed no row per call."""
+
+    def make(key: str, functions: list[dict[str, Any]], yes: bool, kind: str) -> dict:
+        return noul(
+            yes=yes,
+            key=key,
+            state={"functions": dumps(functions, 1), "request": conv["u1"]},
+            instructions=FC_REL_INSTRUCTIONS,
+            kind=kind,
+            **fc_row(conv, "fc_rel"),
+        )
+
+    if conv["refusal"]:
+        return [make(conv["key"], conv["functions"], False, "refusal")]
+    if not conv["call1"]:
         report["drop_neither_call_nor_refusal"] += 1
-        return None
-    return noul(
-        yes=yes,
-        key=conv["key"],
-        state={"functions": dumps(conv["functions"], 1), "request": conv["u1"]},
-        instructions=FC_REL_INSTRUCTIONS,
-        **fc_row(conv, "fc_rel"),
-    )
+        return []
+    rows = [make(conv["key"], conv["functions"], True, "call")]
+    gold = conv["by_name"][conv["call1"][0]]
+    start = int(order("ib2-fcrel-start-v1", conv["key"]), 16) % len(lists)
+    for step in range(min(len(lists), 200)):
+        other, functions = lists[(start + step) % len(lists)]
+        if other != conv["key"] and all(
+            unrelated(f, gold, conv["u1"]) for f in functions
+        ):
+            rows.append(make(conv["key"] + ":x", functions, False, "constructed"))
+            return rows
+    report["no_constructed_negative"] += 1
+    return rows
 
 
 def fc_sel(

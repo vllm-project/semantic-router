@@ -187,9 +187,31 @@ class GlaiveFamiliesTest(unittest.TestCase):
                     values[(name, param)].setdefault(fam.dumps(value), value)
         pool = sorted({f["name"] for c in convs for f in c["functions"]})
         describe = {f["name"]: f["description"] for c in convs for f in c["functions"]}
-        rel = [fam.fc_rel(c, reports["fc_rel"]) for c in convs]
-        self.assertEqual(sum(r is not None and r["label"] == 1 for r in rel), 52)
-        self.assertEqual(sum(r is not None and r["label"] == 0 for r in rel), 40)
+        lists = [(c["key"], c["functions"]) for c in convs]
+        rel = [r for c in convs for r in fam.fc_rel(c, reports["fc_rel"], lists=lists)]
+        kinds = collections.Counter(
+            (r["audit_metadata"]["ib2"]["kind"], r["label"]) for r in rel
+        )
+        self.assertEqual(kinds[("call", 1)], 52)
+        self.assertEqual(kinds[("refusal", 0)], 40)
+        self.assertGreater(kinds[("constructed", 0)], 0)
+        for item in rel:
+            if item["audit_metadata"]["ib2"]["kind"] == "constructed":
+                names = [f["name"] for f in json.loads(item["state"]["functions"])]
+                if item["state"]["request"].startswith("Convert"):
+                    self.assertTrue(all(n.startswith("track_") for n in names))
+                else:
+                    self.assertFalse(any(n.startswith("track_") for n in names))
+        self.assertFalse(
+            fam.unrelated(
+                {"name": "calculate_tip", "description": "Calculate the tip amount"},
+                {
+                    "name": "calculate_percentage",
+                    "description": "Calculate a percentage",
+                },
+                "What is 15% of 200?",
+            )
+        )
         ready = [r for c in convs if (r := fam.fc_ready(c, reports["fc_ready"]))]
         labels = collections.Counter(r["label"] for r in ready)
         self.assertEqual(labels, {1: 40, 0: 40})
@@ -222,7 +244,7 @@ class GlaiveFamiliesTest(unittest.TestCase):
                         o["description"].startswith("get_news") for o in item["options"]
                     )
                 )
-        for item in [r for r in rel if r] + ready + args_rows + sel:
+        for item in rel + ready + args_rows + sel:
             validate_row(item, "train")
 
 
