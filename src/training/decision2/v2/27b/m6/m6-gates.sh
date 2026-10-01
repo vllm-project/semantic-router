@@ -8,6 +8,9 @@
 #   overlap   v2.eval.overlap_effects exposure of each M6 TRAIN file listed in BUILD.json -> gates/overlap/exposure-m6-<mix>.json
 #   verdicts  m5_verdicts.py with the M6 TRAIN mapping (items 1-7 and beats-AutoJev; item 4 from node A's mlx-paired
 #             output relayed to gates/mlx/NAME-vs-A20r.json; item 8 PENDING, the eval custodian's) -> gates/VERDICTS-<UTC>.json
+#   contrast  the family contrasts of `gates` only, over every NAME given (the attribution after all chains; each
+#             chain's gates stage already wrote its per-arm files, which refuse to be rewritten)
+#             -> gates/contrast-all-<UTC>.json
 set -euo pipefail
 echo "m6 gates $*: start $(date -u +%FT%TZ)"
 SHA=${1:?MIRROR_SHA} STAGE=${2:?STAGE}
@@ -34,7 +37,24 @@ paired() {  # LEFT_NAME RIGHT_NAME OUTPUT
     --output "$3" > "${3%.json}.log"
 }
 mkdir -p "$G"
+contrast() {  # OUTPUT NAME...: m4_contrast over every run, the M6 pairs present and the NAMEs as finalists
+  local out=$1 name spec
+  shift
+  local -a args=() pairs=()
+  for name in "${!RUN[@]}"; do args+=(--run "$name=${RUN[$name]}"); done
+  for spec in "M6-IB:M4-A20r-soup" "M6-IBX:M4-A20r-soup" "M6-IB2:M4-A20r-soup" "M6-IB2PN:M4-A20r-soup" \
+    "M6-IB:M5-L128" "M6-IBX:M5-L128" "M6-IB2:M5-L128" "M6-IB2PN:M5-L128" "M6-IB:M6-IBX" "M6-IB2:M6-IB" \
+    "M6-IB2PN:M6-IB2" "M5-L128:M4-A20r-soup"; do
+    [[ -n "${RUN[${spec%%:*}]:-}" && -n "${RUN[${spec#*:}]:-}" ]] && pairs+=(--pair "$spec")
+  done
+  for name in "$@"; do args+=(--finalist "$name"); done
+  python3 -m v2.27b.m4_contrast "${args[@]}" "${pairs[@]}" --output "$out" > "${out%.json}.log"
+}
 case "$STAGE" in
+  contrast)
+    for p in "${!PEER[@]}"; do RUN[$p]=${PEER[$p]}; done
+    contrast "$G/contrast-all-$(date -u +%Y%m%dT%H%M%SZ).json" "$@"
+    ;;
   gates)
     for p in "${!PEER[@]}"; do RUN[$p]=${PEER[$p]}; done
     python3 -m v2.eval.panels verify --panel typed-final --panel css15 --panel public231 > "$G/panels-verify.json"
@@ -52,15 +72,7 @@ case "$STAGE" in
       python3 -m v2.eval.gates public231 --left "${RUN[$name]}" --right "$A20R" --left-name "$name" \
         --right-name M4-A20r-soup --output "$D/public231-vs-A20r.json" > "$D/public231-vs-A20r.log"
     done
-    args=() pairs=()
-    for name in "${!RUN[@]}"; do args+=(--run "$name=${RUN[$name]}"); done
-    for spec in "M6-IB:M4-A20r-soup" "M6-IBX:M4-A20r-soup" "M6-IB2:M4-A20r-soup" "M6-IB2PN:M4-A20r-soup" \
-      "M6-IB:M5-L128" "M6-IBX:M5-L128" "M6-IB2:M5-L128" "M6-IB2PN:M5-L128" "M6-IB:M6-IBX" "M6-IB2:M6-IB" \
-      "M6-IB2PN:M6-IB2" "M5-L128:M4-A20r-soup"; do
-      [[ -n "${RUN[${spec%%:*}]:-}" && -n "${RUN[${spec#*:}]:-}" ]] && pairs+=(--pair "$spec")
-    done
-    for name in "$@"; do args+=(--finalist "$name"); done
-    python3 -m v2.27b.m4_contrast "${args[@]}" "${pairs[@]}" --output "$G/contrast.json" > "$G/contrast.log"
+    contrast "$G/contrast.json" "$@"
     ;;
   overlap)
     V=$G/overlap

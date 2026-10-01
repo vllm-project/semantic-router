@@ -1,0 +1,75 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "final",
+  "decision": "release",
+  "model_name": "Decision-2.0-Nox-4B",
+  "repo_id": "llm-semantic-router/Decision-2.0-Nox-4B",
+  "identity": {
+    "model_sha256": "6a555335e077fd26952fd58df06a7dcca1f5ef317194f2e3e4d7664d5c071cd7"
+  },
+  "report_sha256": "375e1ab553009361d5e67d1751e9f6638eed17c3db87d12b36e5ea11f169aa88",
+  "paired_sha256": "9fec07bb780f1b7beb064af572050c3a1a105859e933e9a655f39c6ae8f12b8d",
+  "gate_profile": "successor",
+  "current_revision": "3785b7b963d2f56de0e44f9ec638c814c5ee6499",
+  "evidence_sha256": {
+    "c1_postkey": "05af1b0fcc12b4cd5840f10d21d8dc91b1a4ef5c5a425a993e6552e3bde96dd1",
+    "current_decision": "799be1b415b249d02b6698eeac0e840359e404895bb6376b7fe0bf9449af1070",
+    "current_gate": "1f1872e895ebdca8619379c99a0c4bea235979c44d6403217c25cc4c1d25dbed",
+    "exposure": "d42e69cafc4cf1d16958d19dd16fec6e1a7ced706ea62459fa9f065cb09c3891",
+    "mlx_paired": "f264b9a418a7e78ec4a4579c8faf4cc4b79d7589f58bf16a1ed74747c0cb3a99",
+    "paired": "e1fd9d1e8b94d6a4db9db90d598d9b02a0ad126398a724ea0bd6697479a766d6",
+    "public231": "47c9381f21c6705fef130e6e0a2f2d373131103e90bb9fed7f746164ef9c9ace",
+    "tier_paired": "b9df43c8cab4e0a6d974724a1b602ca1fbb149c2e855219e355b00d6327e0fff",
+    "types": "c586b71f0199fcc0bbc2fb318669a197a8828290a7dc1f90f3ffffb40923c678"
+  },
+  "calibration": "none (temperature 1; COORDINATION 2026-10-01 13:40 keep T = 1 everywhere): the CAL698 per-type temperatures 8d88e163 (Choice 0.621, Noul 0.479, Score 0.209), adopted by the decoder under the 23:15 rule, are not shipped; undoing them changes 0 answers on every scored panel and mlx-diag",
+  "action": "Card-only revision of the private repository llm-semantic-router/Decision-2.0-Nox-4B (renamed from llm-semantic-router/DEV2.0-4B; the old ID redirects): README.md and the banner and four charts under assets/ are regenerated as a product card; NOTICE, ATTRIBUTIONS.md, LICENSES/, evaluation/ and the round-1 SVG charts are deleted; config.json and MODEL_MANIFEST.json carry the new name. Every model, tokenizer, runtime and remote-code file is byte-identical to the released revision dd60f0c24fe8de2001a307b1094ab2091bb1acc7. The repository stays in the private collection '🎲 Decision 2.0', ordered Kai 0.6B, Eos 0.8B, Sol 2B, Nox 4B, Lux 9B, Vega 27B; everything stays private.",
+  "rationale": "The release judgement of the superseded final decision 6e5615d3… stands unchanged: the same identity 6a555335, scored report, paired comparison, calibration and licence decision. Only the card, the name fields and the manifest digests change; release.sh checks the native examples, the card's Transformers example before upload, after the real download and from the Hub in fresh environments under Transformers 5.17 and 5.18, the card structure and every card link, and blocks the upload or the collection step otherwise.",
+  "approved_package": {
+    "identity": "6a555335e077fd26952fd58df06a7dcca1f5ef317194f2e3e4d7664d5c071cd7",
+    "fp32_identity": "5fa2a6998ede6290e1c741c71b44d145b7564b622b0c8e4561ef8f7f69c4c489",
+    "loaded_parameters": 4208383488,
+    "profile": "qwen-full (BF16 storage of the Linear projections)",
+    "temperature": 1,
+    "max_input_tokens": 16384,
+    "revision_binding": "receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified."
+  },
+  "licence_decision": "apache-2.0: own LoRA (merged), head, runtime and card; base Qwen/Qwen3.5-4B-Base @1001bb4d Apache-2.0 (card metadata license apache-2.0, LICENSE = Apache License 2.0, Copyright 2026 Alibaba Cloud, sha256 50cbab8a); tokenizer files of Decision 1.0 Nox-4B @cde2a68d and the Qwen3.5-4B @851bf6e8 vocabulary / chat template Apache-2.0; teacher Decision 1.0 Lux-9B (own, Apache-2.0, no weights included); training-data licences (CC BY, CC BY-SA, MIT, Apache-2.0, CC0, OANC) credited in ATTRIBUTIONS.md; Decider 4B (Apache-2.0, card metadata only) and Jet v6.2 (Apache-2.0 LICENSE) shown; the XNLI-based mlx-diag Score part stays off the card.",
+  "supersedes": {
+    "final_sha256": "6e5615d3b789691e7753ae59d4bea77393b8e67e6c6daa96e35015b7425c5c90",
+    "released_as": "llm-semantic-router/DEV2.0-4B@dd60f0c24fe8de2001a307b1094ab2091bb1acc7",
+    "released_manifest_sha256": "5d4b04ad76904aad307dabfdfa5a734a5dffbafe39bec753b582858f5752d26e",
+    "released_gate_sha256": "7931033b683ea2208b9db1b3d28e2dfdf98123b9d208160e1664abdd6538aea3",
+    "earlier": {
+      "final_sha256": "4947fda6ed87ee5a0b0e56009a4e064faf201470a5bce021e9a55b494693f8fe",
+      "released_as": "llm-semantic-router/DEV2.0-4B@13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f",
+      "released_manifest_sha256": "598cad2dd166703c658d4387ef5acce86007bf63124c0294c761ba07a00098b4",
+      "released_gate_sha256": "be7b02b40fff405b4dbb15be3ad53a8f97c245bf0857a8efd326d248a980d81c",
+      "earlier": {
+        "revision": "3785b7b963d2f56de0e44f9ec638c814c5ee6499",
+        "final_sha256": "799be1b415b249d02b6698eeac0e840359e404895bb6376b7fe0bf9449af1070",
+        "gate_sha256": "1f1872e895ebdca8619379c99a0c4bea235979c44d6403217c25cc4c1d25dbed",
+        "manifest_sha256": "8dea9adc111e025ba53516fa99e96ffdb89f06279954c62de7c484c5b85dbba1",
+        "weights_identity": "8b0a8bc7f504faa69904329225a11f36cc7352abb9bd64f778d7b777f91c5b79"
+      }
+    }
+  },
+  "disclosures": [
+    "lineage: weights from Qwen3.5-4B-Base through a merged rank-128 LoRA, not from Decision 1.0 Nox; same training mixture (minus 3 quarantined HotpotQA rows) and own-Lux teacher",
+    "human transfer .557 vs .580 for the previous revision (-0.023 [-0.082, +0.074], not significant); 8 of 15 CSS15 tasks lower, ibc -0.100 and talklife -0.050 the largest",
+    "public 231 172 vs Decider 4B 192 (-20 [-30, -10]; McNemar p .0002); level with Jet v6.2 and the previous revision",
+    "typed Choice .877 below Decider 4B .938 and Jet v6.2 .900; Score level 0 rarely predicted (7 of 400)",
+    "typed ECE at T = 1 .111 above the peers' .056 / .077",
+    "mlx-diag non-English Noul 76.3% below Decision 1.0 Nox 80.0%; Korean Noul 67%"
+  ],
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's job of 2026-10-02 00:05 UTC+8 (rename the six DEV2.0 repositories to Decision-2.0-<Codename>-<tier>; product cards with a banner, product highlights, a code-only quickstart and JevArena / Jev Decision Index charts; no training details, limitations, NOTICE, attributions or evaluation/ files), card-only revisions of all six repositories",
+  "prepared_by_release_engineering": "Decision 2.0 release engineering, 4B successor worker (worktree vllm-sr-dev2-release)",
+  "prepared_by": "Decision 2.0 release engineering, release worker 4c0a68cd (worktree vllm-sr-dev2-automap)",
+  "decided_utc": "2026-10-01T16:05:00Z",
+  "previous_rationale": "The release judgement of the superseded final decision 4947fda6… stands unchanged: the same identity 6a555335, scored report, paired comparison, calibration and licence decision. Only card files and the manifest digests change; release.sh checks the native examples, the card's Transformers example before upload, after the real download and from the Hub in fresh environments under Transformers 5.17 and 5.18, the card structure and every card link, and blocks the upload or the collection step otherwise.",
+  "card_revision": {
+    "kind": "card-product-rename",
+    "spec": "v2/release/specs/dev2-4b-product.json",
+    "spec_sha256": "2ecae5983cbf7cf7ad5faf07860998a23a74dbf3bf777dd4bf9be2fd7f794a88"
+  }
+}

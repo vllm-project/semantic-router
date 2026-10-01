@@ -1,0 +1,17 @@
+{
+ "datasets": {
+  "ib3-r2": {
+   "families": {
+    "mqa": 8752
+   },
+   "groups": 4376,
+   "path": "/data/dev2/private/data/ib3/r2/final/out/ib3.train.jsonl",
+   "rows": 8752,
+   "sha256": "9d92d92a207109a585ceead7fa5e1bdb0b2c61859de8227a2a6058428f852dea"
+  }
+ },
+ "ok": true,
+ "schema": "dev2-c1-recheck-verify/1",
+ "spec": "r2-ib3r2",
+ "spec_sha256": "151cc291ca989ae19a3584764f97f502dd44ef38be8933bbcab5a3f967dc0230"
+}

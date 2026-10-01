@@ -54,9 +54,14 @@ declare -A REVISION=(
   [DEV2.0-27B]=5323310327e52d4eadd119cd10accac9b106c97d
 )
 declare -A DIAGNOSTIC=(  # name -> "repository revision package-dir"
+  [M6-IB]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/M6-IB-re876fbe"
+  [M6-IBX]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/M6-IBX-re876fbe"
+  [M6-IB2]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/M6-IB2-re876fbe"
+  [M6-IB2PN]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/M6-IB2PN-re876fbe"
   [M5-L128]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/fix2/M5-L128-95d61175-re876fbe"
   [DEV2.0-27B-budget]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/fix2/DEV2.0-27B-4e89288d-re876fbe"
   [DEV2.0-4B-LH]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/DEV2.0-4B-13d42143"
+  [DEV2.0-0.8B-08bRA]="DEV2.0-0.8B bede7938a8c209c09f27400b79eed57948d6b75e /data/dev2/models/ix1/dec-08bfast/DEV2.0-0.8B-08bRA-83926edf-rbede7938"
 )
 
 mode="${1:-}"; shift || true

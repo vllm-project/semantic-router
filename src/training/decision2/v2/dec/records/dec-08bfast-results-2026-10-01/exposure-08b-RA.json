@@ -1,0 +1,16 @@
+{
+  "files": [
+    {
+      "path": "-",
+      "rows": 309225,
+      "sha256": "12bd63d8b215877b6f471c12652e534e0f0be794c15bff74ad5ac50e98018bf3"
+    }
+  ],
+  "groups": [],
+  "groups_by_pool": {},
+  "label": "decoder 0.8B fast track: M12 08b-RA TRAIN (data lock d506595c2)",
+  "matched_rows": {},
+  "methods_agree": true,
+  "payload_sha256": "2194716a179b2e6c3ba529dee3952c5dd62c0f3281638b7236029d5d542f4914",
+  "schema": "dev2-overlap-exposure/1"
+}

@@ -1,0 +1,90 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's card job of 2026-10-01 21:58 UTC+8 (make the DEV2.0 cards standard, formal model-release cards with a Transformers-only quickstart; keep internal records off the cards), card-only revisions of all six repositories",
+  "decision": "release",
+  "decision_sha256": "48777310da83f7ad499cd9df8cd0ab4cf0e7db3ff06537b4249c44be7f2b3e41",
+  "gate_profile": "successor",
+  "items": {
+    "1_successor_R1_v3": {
+      "evidence": "v3 72.360 vs current 67.209: +5.15 [+2.19, +8.02]",
+      "passed": true
+    },
+    "1_successor_R2_human_transfer": {
+      "evidence": "human transfer delta 95% [-0.037, +0.056]",
+      "passed": true
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "evidence": "types choice OK, noul OK, score OK",
+      "passed": true
+    },
+    "1_successor_R4_mlx_diag": {
+      "evidence": "mlx-diag card-eligible macro +0.0139 [+0.0025, +0.0250]",
+      "passed": true
+    },
+    "1_successor_R5_tier_gates": {
+      "evidence": "no Decision 1.0 at this size; v3 72.360 vs 90% of AutoJev-27B 72.133; H vs AutoJev-27B [-0.030, +0.066]; v3 >= 64.919 ok, H vs AutoJev-27B upper >= 0 ok, no type collapsed ok",
+      "passed": true
+    },
+    "1_successor_R6_no_overlap_exposure": {
+      "evidence": "1 training files, 0 exposed groups",
+      "passed": true
+    },
+    "1_successor_R7_public231": {
+      "evidence": "public 231 203 vs 198 (+5; McNemar p 0.180)",
+      "passed": true
+    },
+    "1_successor_R8_c1_postkey": {
+      "evidence": "JevArena-C1 v1.2 post-key 57.56 vs DEV2.0-27B 5683c6f0 (current revision): +0.23 [-1.22, +1.70] PASS",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "10 results below AutoJev-27B (no Decision 1.0 at this size) summarised in the card limitations and listed in evaluation/EVALUATION.md",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 33 files re-hashed; loaded 26096775168",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "3f07329f3e00b3827ee691d9448538551f835a78b4f2e0d0d643a0baedfec98b",
+  "model_name": "DEV2.0-27B",
+  "receipts_sha256": {
+    "automap-card-pre": "7103c02816e506de6f74505352faca2179106c7e1cd8fb75fecd85110967a599",
+    "automap-hub": "c14475537389915a78326e09647da6935381b90465aac692b0bb7bf9a2d8186f",
+    "automap-hub-tf518": "bea3a0fe3ac4e79899f671096951b34589562a2020426d6325a01996cefed8fc",
+    "automap-post": "e421497760275ba2f61b8f0429a9d1c2dff2c3f3e3273098e3281703d41fbfe1",
+    "automap-pre": "0903409b246f325c724e78aa8b04ed32d824837b750abeade888397eb57f4b8a",
+    "card-post": "fad2a72154e7be5e3b9f73960006e71d23a6702c42deb6d0651dc2d5d9732cb9",
+    "card-pre": "ff97bf6ecac69b357f9f8aa11a32c85906983226e005bc04461e2abdfb498803",
+    "download": "03b7ac65bc677e1e8377bf7b0dc9d28b532f98d12507d452901902c36b3430a3",
+    "post": "2decf1e4af363d057317e72f7e53afb4cbabe38e5e0a7272f99f93ffa995abe0",
+    "readback": "0d9bde4d208b5ae9f2266ece324bbda582ddfa61df50dd76a0a59f6d26552c07",
+    "repeat-post": "0991d79a07b2f7d1fce83a0f0aa24ff6cfd31a71dc48ce4370217dd4bd87edca",
+    "repeat-pre": "8c415d58494b938ebccc59c74892ff8e257ed5511638c5024a82aa2342d7002e",
+    "tree": "8c3afa4928a1dc25ed84ac2a3499a79abd89229fbc6eb572d5c50f9bae0834cb",
+    "upload": "f97c426ac0ba0b3c03bba1959048cce8c4d2b700179a52c56467ae18a8d612be"
+  },
+  "repo_id": "llm-semantic-router/DEV2.0-27B",
+  "revision": "e7b4a372ba8bb949f30337c5bbd2d0ad2f321027",
+  "schema": "dev2-release-gate/1",
+  "supersedes": {
+    "gate_sha256": "e6965d75e1f7cac175522f19fbabedd333ad2e8136f8e69a0eb9fb7b200b4a3f",
+    "revision": "c0dba600087f582a1033830a2276d22e96e6324c"
+  },
+  "utc": "2026-10-01T15:55:59.679098+00:00"
+}

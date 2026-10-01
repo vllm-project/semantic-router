@@ -205,6 +205,244 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 01:05 — **`08b-RA` private Index diagnostic done (1afc17e8; private report `private/08b-fast/`).**
+  Findings, score-free here:
+  - **The 0.8B breadth gain on the Index comes mostly from ONE in-distribution family (HoVer;** the IB2 `hover` rows
+    are HoVer train and the Index uses HoVer test). Leakage was audited (0 matching claims, planted controls 200 / 200),
+    so this is in-distribution learning, not leakage. **Outside HoVer the breadth gain is small.**
+  - **The entity-level financial-sentiment family regressed sharply.** Likely cause: a label-semantics clash with
+    IB1's sentence-level `sentfin`.
+  - Tool-call, contract-NLI and commonsense families barely moved; they keep the largest frontier gaps at 0.8B.
+  - **Consequences:**
+    1. **The Index-path proposal must use a transfer-only Index delta** (exclude benchmarks whose train splits are in
+       the candidate's training data, e.g. HoVer / When2Call / iSarcasmEval / GSM8K), not the raw headline.
+    2. Future IB arms drop `sentfin` (or rebuild it entity-level) and keep the in-distribution families separable.
+    3. Tool-call data as built does not transfer to When2Call-like decisions at 0.8B. Revisit it before more tool-call
+       dose.
+
+- 2026-10-02 01:00 — **C1 recheck r2 PASSED for IB3-r2 (3c7679b0).**
+  - **Result.** 0 exposed scored items; all 8 sources 0 / 0; planted controls 200 / 200.
+  - **Records.** `v2/eval/records/c1-recheck-r2-2026-10-02.md`; the registry marks IB3-r2 PASS. Integration `3c5d30837`.
+  - **Coverage rule.** An arm adding IB3-r2 as a block counts it as exposure 0. A new mixture file needs its own
+    coverage entry or recheck. IB3 round 1 (`688b643e…`) is not covered.
+
+- 2026-10-02 00:50 — **IB3-r2 is RELEASE-SAFE (611782db): maths only.** Private `@1c8452da` `m6/ib3/` (round 1
+  remains readable at `@c2401ab4`); records merged at `a12b5b44c`; gist 02.
+  - **Contents.** `mqa` (MathQA per-option yes / no, formula-verified keys): TRAIN 8,752 rows (4,376 problems), DEV
+    426, ≈ 1.52M tokens.
+  - **Review:** 3/216 = 1.39% [0.29, 4.01].
+  - **Audits.** All pass; the proposed-answer-only shortcut is .543 vs the .550 threshold (the same as r1).
+  - **Grounding dropped on licence:** WiCE's evidence text comes from third-party sites with no licence. Phishing /
+    ESCI are excluded.
+  - **Use.** It is a small block: add it as one block against a matched-token control in future arms (4B / 9B / 27B
+    maths-like deficits).
+  - **C1 recheck r2** for IB3-r2 has been requested from the custodian (3c7679b0).
+  - **Still open:** phishing, claim-level grounding, contracts.
+
+- 2026-10-02 00:35 — **9B M9 stage 3 (542e6421): K-a13IB was the only finalist and FAILED item 1; no 9B successor.**
+  Records `5d28495fa`, lock `5d0c1c234`, gist 05; integration `9eb632e03`; ≈ 41.5 of 120 GPU-h.
+  - **Formal.** v3 68.02 vs 67.737, +0.29 [−1.57, +1.20], so item 1 fails. Items 2–7 **pass**, including **item 4
+    multilingual −.004 [−.011, +.003]** (the swap design preserved multilingual, unlike additive IB), human transfer
+    +.007, and vs Lux1 +2.22.
+  - **The development typed gain did not hold formally** (.807 vs .811; Noul 704 vs 715).
+  - **Rules.** K-a13IBX failed the Noul floors and the yes-bias guard (excluding the in-distribution families hurt at
+    this recipe).
+  - **Structural issue, for the user.** IB breadth targets Index families that JevArena v3 does not measure, so
+    breadth candidates tie on v3 (9B +0.29, 4B −0.16) and cannot pass item 1.
+    - Coordinator proposal, pending data and a user decision: an **Index-path alternative to item 1** for
+      frontier-targeted finalists, requiring v3 non-inferior plus a significant paired private-Index gain, with items
+      2–8 unchanged.
+    - Data being collected: private Index diagnostics of K-a13IB (9B) and `4b-LHA10SD` (4B; M15 part A).
+  - **Follow-ups (542e6421, resumed):** (A) the K-a13IB private Index with a paired bootstrap CI; (B) a ½-interpolation
+    point with gates → formal → items 1–7.
+
+- 2026-10-02 00:25 — **Card round 1 done (4c0a68cd); rename + product-card round 2 launched (same worker).**
+  - **Round 1 card-only revisions:**
+
+    | Model | `main` |
+    | --- | --- |
+    | 0.6B | `38ac8e90` |
+    | 0.8B | `db7a9259` |
+    | 2B | `9f6ca45d` |
+    | 4B | `dd60f0c2` |
+    | 9B | `a12ef72e` |
+    | 27B | `e7b4a372` |
+
+    Records `records/dev2-card-2026-10-01.md`; integration `716c7b39b`.
+  - **Round 2** (the user's 23:53 / 00:00 asks):
+    - a branded banner;
+    - no training data / limitations / NOTICE / attributions / `evaluation/` / training details; remove JevBench;
+    - JevArena (overall + by type) and Jev Decision Index (Pareto + by area vs 1.0; 27B vs Lux-9B) charts with the
+      vLLM-SR logo;
+    - code-only quickstart; product-value highlights per tier.
+  - **Rename sequence (to avoid breaking a publisher):**
+    1. merge the release-tooling ID map / guard first;
+    2. `move_repo` the six repos to `Decision-2.0-{Kai,Eos,Sol,Nox,Lux,Vega}-{size}`;
+    3. verify redirects and the collection;
+    4. publish the round-2 cards.
+  - **ALL TRACKS:** from now on, release hand-offs use the **new repo IDs**. Re-read this note before any GO or upload.
+
+- 2026-10-02 00:20 — **C1 content recheck r1 PASSED (custodian 3c7679b0).**
+  - **Scope.** IB1-r3, IB2, PN1-r2 and the 27B M6 mixture `a20ib12` expose **0** scored C1 v1.2 items (0 rows / 0
+    groups for all 8 sources). Planted controls caught 200 / 200; the item mapping is 2,840 scored + 34 retired.
+  - **Every IB / PN1-trained arm may proceed to item 8** (28 mapped arms: 27B M6, 9B M9 stages 2–3, decoder
+    M11–M14, plus older PN1 arms). **Cite the record** `v2/eval/records/c1-recheck-r1-2026-10-01.md` and the registry
+    `v2/eval/sealed/c1-recheck-registry.json`; integration `e27253617`.
+  - **Custody.** Prompts only were decrypted, in a private temp dir on node A, then removed; the key was read once via
+    stdin; `ACCESS.log` updated.
+  - **IB3:** the repeat runner is prepared in the record (≈ 1 min); run it once a track adopts a release-safe IB3 file.
+
+- 2026-10-02 00:15 — **M13 complete: no successor (c473a3b2). Key finding: additive IB costs multilingual decisions.
+  M15 launched.** Results `dec-m13-results-2026-10-01.md` (`e16c5926f`), gist 04; integration `d4b7fe240`; 14.21 of
+  80 GPU-h.
+  - **`4b-LHA10SD`** passed every development gate (typed heads protected by self-distillation: Score 372 vs M12's
+    329). It **failed formal**:
+    - item 1: v3 67.19 vs 67.34, −0.16 [−2.84, +3.64];
+    - item 4: mlx-diag −.029 [−.039, −.018].
+    - Items 2, 3, 5, 6(a) and 7 pass; 6(b) was not evaluated (a scorer bug, now fixed; items 1 and 4 already decide).
+  - **2B / 0.8B self-distillation arms** fail type floors: the loss moves between heads.
+    - `2b-RASD`: Score 237 < 245, choice 479.
+    - `08b-RASD`: choice 574 < 586.
+    - `08b-RAAG`: choice + `attribute_gate`.
+  - **Finding:** **English-heavy IB added on top of a recipe erodes multilingual decisions** (4B −.029; 0.8B fast-track
+    −.014), and no development gate caught it. By contrast, 9B K-a13IB *swapped* IB into its mixture and passed a
+    development MLX guard; its formal result is pending.
+  - **M15 (resumed):**
+    - **(A)** a private Index diagnostic of the frozen `4b-LHA10SD` (not releasable), to quantify the breadth vs
+      multilingual trade-off for the user;
+    - **(B)** IB additive with the **multilingual token share held at the released mixture's**, plus typed-row
+      self-distillation and a **mandatory development MLX guard**; arms 4B LHA10SD-ML, 0.8B RASD-ML, 2B RASD-ML;
+      70 GPU-h on E / F.
+  - **All tracks:** any IB-additive arm must carry a development multilingual guard.
+
+- 2026-10-02 00:10 — **IB3 published but NOT release-safe (611782db); IB3-r2 commissioned (maths core + optional
+  claim-level grounding).** Data: private `@c2401ab4` `m6/ib3/`; records merged at `29caad2de`.
+  - **Contents.** TRAIN 24,148 rows:
+
+    | Family | Source and licence | Rows |
+    | --- | --- | ---: |
+    | `wpd` (phishing links) | Mendeley web-page phishing, CC BY 4.0 | 3,700 |
+    | `phiu` (phishing pages) | PhiUSIIL, CC BY 4.0 | 1,720 |
+    | `esci` (Exact vs Irrelevant, in-distribution) | ESCI train, Apache-2.0 | 9,970 |
+    | `mqa` (MathQA per-option, formula-verified keys) | MathQA, Apache-2.0 | 8,758 |
+
+    - Every audit passes, including a new Index URL / host guard (103 groups dropped; controls 500/500).
+  - **Review:** 29/216 = 13.4% (upper 18.7%).
+    - Phishing families: 20 errors. The labels are blocklist-based and not checkable from the URL; the reviewers agreed
+      on 214 of 216 items.
+    - `esci`: 8 errors at the Exact boundary.
+    - `mqa`: 1/54.
+  - **Not covered:**
+    - grounding (FaithDial / HaluEval leak through the response alone; the passage-swap redesign failed the screen);
+    - contracts (MAUD too small after exclusions; LEDGAR licence conflicting);
+    - phishing email (no licensed legitimate corpus);
+    - excluded by licence: LLM-AggreFact (ND), TofuEval / RAGTruth (NC).
+  - **IB3-r2:** the maths `mqa` block plus optional claim-level grounding (e.g. WiCE; screen-gated); no phishing /
+    ESCI; a fresh review. IB3-r2 needs the custodian C1 recheck before C1-scored use.
+  - **Program lesson:** for the phishing / PhishNChips family, no licence-clean source yet has row-checkable labels.
+    Keep it an open gap rather than adding noisy labels.
+
+- 2026-10-02 00:05 — **User decisions (23:53–00:00): naming and a product-style card (round 2).**
+  - **Naming (confirmed):** `Decision-2.0-{codename}-{size}`. The codename follows the size slot across generations.
+    Repos move with `move_repo`, so old IDs redirect.
+
+    | Current repo | New repo |
+    | --- | --- |
+    | `DEV2.0-0.6B` | `Decision-2.0-Kai-0.6B` |
+    | `DEV2.0-0.8B` | `Decision-2.0-Eos-0.8B` |
+    | `DEV2.0-2B` | `Decision-2.0-Sol-2B` |
+    | `DEV2.0-4B` | `Decision-2.0-Nox-4B` |
+    | `DEV2.0-9B` | `Decision-2.0-Lux-9B` |
+    | `DEV2.0-27B` | **`Decision-2.0-Vega-27B`** (new flagship codename) |
+
+    - The collaborator's `DEV2.0-Route-0.6B` is not renamed by us (suggest `Decision-2.0-Route-0.6B` to subin / the
+      user).
+    - **After the rename, every release hand-off and the tooling (hub ID guard, registries, collection, `API.md`,
+      snippets) use the new IDs.** Historical records keep the old names.
+  - **Card policy (supersedes 22:05 / 22:20):**
+    - **NO training-data section, NO limitations section, NO NOTICE file, NO dataset credits, NO training details**
+      (LoRA / architecture internals / precision / runtime notes). Treat it as a distributed product.
+    - Keep only the Apache-2.0 `LICENSE` file and the `base_model` metadata (the minimum Apache-2.0 requires of a
+      derivative).
+    - **Remove JevBench.** Evaluation = **JevArena + Jev Decision Index** only.
+    - **A branded top banner** (vLLM-SR logo; brand blue `#30A0FC` / yellow `#FCB414`; Inter on white). **Every chart
+      carries the vLLM-SR logo bottom-right.**
+    - Richer evaluation charts:
+      - JevArena overall vs same-size peers and the 1.0 counterpart;
+      - JevArena by decision type (Choice / Yes-No / Score + human-labelled transfer);
+      - the Jev Decision Index Pareto (family; this size highlighted);
+      - the Jev Decision Index by area vs the 1.0 counterpart.
+    - The Index charts carry the reproduction label as a footnote.
+    - **Quickstart = code only** (no device / version prose).
+    - **Highlights must be product value** (best-in-size, generation gain, speed, many questions in one pass), not
+      plumbing.
+    - Drop `evaluation/EVALUATION.md`, or reduce it to nothing user-facing.
+    - The prototype assets are in the local private `card-preview/proto-v2/` (`make_v2_assets.py`).
+  - **Execution:** the card worker (4c0a68cd) finishes round 1 (all six round-1 cards are on HF at 15:00–15:41Z), then
+    is resumed for rename + round 2 in one pass.
+
+- 2026-10-01 23:40 — **M13 (c473a3b2): the 4B finalist `4b-LHA10SD` passes every development gate; formal is
+  collecting. 2B / 0.8B are scoring. Continuation resumed.**
+  - **`4b-LHA10SD`** (LH + 10% IB additive + **typed-row self-distillation** from LH), vs LH:
+    - typed T .867 vs .868 (choice / Noul / Score 708 / 307 / 372), all floors hold;
+    - HT-DEV v2 −.003 tie; retention −.022 [−.047, +.002];
+    - IB transfer +.046 [+.034, +.058]; false-yes .202 vs .199.
+  - **Self-distillation on typed rows fixes the typed-head regression** that additive breadth caused in M12, while
+    keeping the breadth gain. Use it as the default way to add breadth to a released recipe.
+  - **`4b-LHA5`** fails: Noul floor 266 < 278, `rule_precedence`, and retention −.033.
+  - **Formal false start:** relative readout paths stopped it at the input check; nothing ran. Amendment 1
+    (`6c1236f18`) switched to absolute paths, with the same checkpoints and hashes.
+  - **Next:** score the 4B formal (items 1–7 vs LH 67.34); 2B `2b-RASD` and 0.8B `08b-RASD` / `08b-RAAG` rules; formal
+    for passers; hand-offs citing the custodian's C1 recheck; a private Index.
+
+- 2026-10-01 23:20 — **27B M6: eight seeds training (G5 hedge M6-IB2PN added); continuation #2 (0d2e488f); eval
+  custodian C1 content recheck (3c7679b0) launched for all IB-trained tracks.**
+  - **Training ends (UTC):** M6-IB ≈ 21:05 / 21:45, M6-IBX ≈ 22:35, M6-IB2 ≈ 01:40 Oct 2, M6-IB2PN ≈ 06:20 Oct 2. Each
+    chain runs to verdicts unattended (≈ 1–2 h after).
+  - **M6-IB2PN** (amendment 3) = M6-IB2 + PN1-r2 TRAIN.
+    - PN1H has 4,361 rows after dropping 3 groups near Index rows. It is disjoint from PN1 dev (G5's slice).
+    - **Caveat:** PN1 dev shares constructions with PN1 train, so formal item 4 is the real test. A reported-only es / fr
+      yes-bias check was added (it detects L128's bias).
+    - Cap 22 GPU-h per seed for this arm only.
+  - **Budget:** ≈ 49 of 140 GPU-h used, ≈ 134 projected. **The finalists' private Index runs use a separate eval
+    allowance (≤ 12 GPU-h) on node D GPU4–7.**
+  - **Correction for the 27B track:** the 27B fix revision **`09280791` has landed**; the successor builds on it.
+  - **C1 content recheck (custodian, 3c7679b0).** It covers IB1-r3 + IB2 + PN1-r2 once for every track (27B M6, 9B
+    M9 stage 3, M13 / M14). The record goes under `v2/eval/records/`, and item 8 is allowed only for zero exposure under
+    the rule. IB3 gets a repeat check when it lands.
+  - **Deviations:** merge `d96250da6` is unsigned (before the reminder). One state commit came 64 min after the
+    previous one (worker alive).
+
+- 2026-10-01 23:15 — **0.8B fast-track (1afc17e8): `08b-RA` FAILED formal (items 1, 4, 6(b)); DEV2.0-0.8B stays
+  `4afea305`.** Records merged at `1ecff4497`; gist 04; 0.21 GPU-h.
+  - **Item 1:** v3 53.10 vs 50.236, +2.87 [−2.87, +4.58]; vs the node-E re-collection of the release (50.263),
+    +2.84 [−2.92, +4.49].
+  - **Item 4:** mlx-diag Choice + Noul −.0136 [−.0256, −.0024].
+  - **Item 6(b)** fails; items 2 (human transfer +.073 [−.031, +.098]), 3, 5 (vs Eos +10.56), 6(a) and 7 (public 231
+    166 vs 156) pass.
+  - **The development family miss (`attribute_gate`) appeared formally as a typed-choice loss** (483 vs 529 correct)
+    and a multilingual drop. **Lesson: the development family floors are predictive. No further near-miss
+    exceptions.**
+  - A private Index diagnostic of `08b-RA` (not releasable) is running, to size the breadth effect at 0.8B and guide
+    the M13 / M14 choice-head arms.
+
+- 2026-10-01 22:45 — **9B M9: stage 2 no finalist; stage 3 K-a13IB previews as passing every development gate; a
+  continuation follows the official rules → GO → formal → release.**
+  - **Stage 2.** L9IB / L9IBX learn the IB families but fail HT-DEV v2 (−.021 / −.022 FLAG) and the yes-bias guards.
+    IB on the from-base adapter *raises* the near-miss yes-bias (+.074 vs L9).
+  - **Stage 3** (amendment 3 `787abdc54`): K-a13's exact recipe with part of x60 swapped for IB1-r3 + IB2. The IB
+    share is 16.8%; the IBX ablation is 12.4%.
+    - The K-a13IB preview (not the rules output) passes all seven gates: typed .934 vs .925, HT-DEV v2 tie, PN1 yes-bias
+      −.015 (better), hs1 false-yes .134 vs .152, IB DEV +.040 / +.081, retention unchanged.
+    - **Item-1 risk:** the typed gain is small.
+    - The official rules land ≈ 16:15Z. A lock + GO is needed for formal.
+  - **Lesson:** at 9B the proven K-a13 recipe (with ⅓ interpolation back to Lux) absorbs breadth without the yes-bias.
+    The from-base adapter does not.
+  - **Continuation (launched):** rules → GO → formal → items 1–7 → C1 recheck + item 8 → release on `5de3f9ed` →
+    private Index.
+  - **Deviation:** merge `135e7c523` is unsigned (DCO). History is not rewritten; **all workers must sign merges
+    with `git merge --signoff`**, as well as using `git commit -s`.
+
 - 2026-10-01 22:35 — **User directive (22:20): fix the 0.8B Index regression vs 1.0 first; 9B / 2B gains are too
   small; 4B / 27B ranks are not good enough; use all compute in parallel to reach the same-size Pareto frontier.**
   - **Coordinator exception (recorded before any new result): `08b-RA` (M12) gets ONE formal attempt.**
@@ -223,7 +461,7 @@ exactly one gist file and updates it in place:
     - **0.8B fast-track (1afc17e8):** a single formal run of `08b-RA` → items 1–7 → C1 recheck + item 8 → release on
       `4afea305` → private Index.
     - **IB3 data (611782db):** phishing URLs / emails, grounding, ESCI E-vs-I, shortcut-robust MCQ, contracts.
-    - **M14 (new):** typed-row **upweighting** arms (0.8B RA-UP, 2B RA-UP, 4B LHA10-UP), complementary to M13's
+    - **M14 (ad17bb4f):** typed-row **upweighting** arms (0.8B RA-UP, 2B RA-UP, 4B LHA10-UP), complementary to M13's
       self-distillation, on node A GPU3–5 + node B GPU2–4; 80 GPU-h.
   - Running at the same time: M13, 27B M6 continuation, 9B M9 continuation (stage 2 / 3), the card redesign.
 

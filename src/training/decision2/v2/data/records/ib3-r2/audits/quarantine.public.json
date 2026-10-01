@@ -1,0 +1,29 @@
+{
+ "dev_near_train": {
+  "by_family": {
+   "mqa": {
+    "dev_rows": 588,
+    "groups": 294,
+    "train_rows": 0
+   }
+  },
+  "groups": 294
+ },
+ "drop_dev_groups_sha256": "023ad57d8f2be811e62e03c567672eb311c3356334d06b0dca86b3e1e41f8aed",
+ "drop_groups_sha256": "5b4c624982f50b3e54a83e02a3be5a00a4ca42f3275706a10c596d48b0ef6eef",
+ "quarantine": {
+  "by_family": {
+   "mqa": {
+    "dev_rows": 0,
+    "groups": 5,
+    "train_rows": 10
+   }
+  },
+  "groups": 5
+ },
+ "report_only_roles_hit": {
+  "a7_train_A7q": 3,
+  "v2_aho_H1": 2
+ },
+ "schema": "decision2.hr2.quarantine.v1"
+}

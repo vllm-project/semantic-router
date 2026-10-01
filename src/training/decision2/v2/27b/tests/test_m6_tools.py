@@ -440,6 +440,127 @@ class M6GatesTest(unittest.TestCase):
             self.gates.pn1_validated(dict(report, candidate="M6-IB"))
 
 
+class M6ReportTest(unittest.TestCase):
+    def test_devgates_and_heldout_tables(self):
+        report = importlib.import_module("v2.27b.m6.m6_report")
+        gates = {
+            "G1_collapse": {"flags": [], "pass": True},
+            "G2_htdev2_vs_A20r": {
+                "delta": 0.004,
+                "ci95": [-0.01, 0.02],
+                "verdict": "TIE",
+                "pass": True,
+            },
+            "G3_typed_floor_vs_L128": {
+                "T_dev": 0.88,
+                "T_dev_floor": 0.8575,
+                "choice_accuracy": 0.97,
+                "score_accuracy": 0.99,
+                "pass": True,
+            },
+            "G4_noul_floor_vs_L128": {
+                "noul_accuracy": 0.55,
+                "floor": 0.52,
+                "pass": True,
+            },
+            "G5_pn1_guard_vs_A20r": {
+                "delta": {"clean_no": 0.012, "hop": 0.0},
+                "delta_ci95": {"clean_no": [0.002, 0.022], "hop": [0.0, 0.0]},
+                "pass": False,
+            },
+            "G6_breadth_vs_A20r": {
+                "B_dev": 0.93,
+                "delta": 0.01,
+                "delta_ci95": [0.002, 0.018],
+                "pass": True,
+            },
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            dg = Path(tmp) / "DEVGATES.json"
+            dg.write_text(
+                json.dumps(
+                    {
+                        "candidates": {"M6-IB": {"gates": gates, "pass": False}},
+                        "finalists": [],
+                    }
+                )
+            )
+            lines = report.devgates_table([dg])
+            self.assertIn(
+                "+0.0120 [+0.0020, +0.0220] / +0.0000 [+0.0000, +0.0000] (**FAIL**)",
+                lines[2],
+            )
+            self.assertEqual(lines[-1], "Finalists: none.")
+            rows = [noul_row(f"es{i}", "pn-name", "es", 0) for i in range(4)]
+            rows += [noul_row(f"hop{i}", "pn-hop", "fr", 1) for i in range(2)]
+            for name, yes in (("A20r", 0.1), ("M6-IB", 0.9)):
+                d = Path(tmp) / "slices" / name / "probs"
+                d.mkdir(parents=True)
+                (d / "pn1.probs.jsonl").write_text(
+                    "".join(
+                        json.dumps(
+                            {
+                                "id": r["id"],
+                                "keys": ["false", "true"],
+                                "probabilities": p_true(0.9 if r["label"] else yes),
+                            }
+                        )
+                        + "\n"
+                        for r in rows
+                    )
+                )
+            pn1 = Path(tmp) / "pn1.jsonl"
+            pn1.write_text("".join(json.dumps(r) + "\n" for r in rows))
+            held = report.heldout_table(Path(tmp), pn1, ["M6-IB"])
+            self.assertTrue(held[2].startswith("| M6-IB | 1.0000 / 0.0000 | +1.0000"))
+            self.assertIn("(4)", held[2])
+
+    def test_verdicts_table(self):
+        report = importlib.import_module("v2.27b.m6.m6_report")
+        pair = {"delta": 2.1, "ci95": [0.3, 3.9], "H_ci95": [-0.02, 0.03]}
+        items = {
+            "1_v3_lower_bound_vs_A20r": {"pass": True},
+            "2_H_not_below_A20r": {"pass": True},
+            "3_no_type_collapsed": {"pass": True},
+            "4_mlx_card_eligible_not_below_A20r": {
+                "status": "PENDING (node A mlx-paired)",
+                "pass": None,
+            },
+            "5_tier_gates": {"pass": True},
+            "6_no_overlap_exposure": {"pass": True},
+            "7_public231_not_regression": {"delta": -1, "verdict": "OK", "pass": True},
+        }
+        record = {
+            "finalists": {
+                "M6-IB2": {
+                    "v3": 74.5,
+                    "T": 0.95,
+                    "H": 0.59,
+                    "paired": {"A20r": pair, "autojev27": pair},
+                    "successor_items": items,
+                    "successor_items_1_7": None,
+                    "beats_autojev27": {"pass": True},
+                }
+            },
+            "successor_items_1_7": [],
+            "beats_autojev_and_successor": [],
+            "choice": None,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "VERDICTS.json"
+            path.write_text(json.dumps(record))
+            lines = report.verdicts_table(path)
+        self.assertIn(
+            "| M6-IB2 | 74.50 (0.950 / 0.590) | +2.10 [+0.30, +3.90] (pass)", lines[2]
+        )
+        self.assertIn("n/a (pending)", lines[2])
+        self.assertIn("-1 OK (pass)", lines[2])
+        self.assertEqual(
+            lines[-1],
+            "Items 1–7: none; beats AutoJev-27B and items 1–7: none; choice: none.",
+        )
+
+
 class M5VerdictsOptionsTest(unittest.TestCase):
     def write(self, path, value):
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -534,6 +655,40 @@ class M6ScriptTest(unittest.TestCase):
         self.assertIn("mixtures-m6pn-1/a20ib12pn.train.jsonl is not", out.stderr)
         out = run("M6-IB3", "a20ib12", "20")
         self.assertIn("unknown arm", out.stderr)
+
+    def test_index_entries_match_ix1_launcher(self):
+        launcher = (ROOT.parent / "eval" / "ix1" / "launch.sh").read_text()
+        index = (M6 / "m6-index.sh").read_text()
+        self.assertIn("MD=/data/dev2/models/ix1/m6\n", index)
+        self.assertIn("PKG=$MD/$ARM-re876fbe", index)
+        for arm in ("M6-IB", "M6-IBX", "M6-IB2", "M6-IB2PN"):
+            entry = (
+                f'  [{arm}]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 '
+                f'/data/dev2/models/ix1/m6/{arm}-re876fbe"\n'
+            )
+            self.assertIn(entry, launcher)
+
+    def test_index_argument_checks(self):
+        for script in ("m6-index.sh", "m6-index-run.sh"):
+            for args, message in (
+                (["abc", "M6-IB", "stage"], "full commit SHA"),
+                (["0" * 40, "M6-IB3", "stage"], "bad ARM"),
+            ):
+                with self.subTest(script=script, args=args):
+                    out = subprocess.run(
+                        ["bash", str(M6 / script), *args],
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(out.returncode, 2)
+                    self.assertIn(message, out.stderr)
+        out = subprocess.run(
+            ["bash", str(M6 / "m6-stage-a.sh"), "M6-IB3"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("bad ARM", out.stderr)
 
     def test_bash_n(self):
         scripts = sorted(M6.glob("*.sh"))

@@ -1,0 +1,31 @@
+{
+ "against": {
+  "bar-t1": {
+   "category_changes": {
+    "css15": 20,
+    "public231": 1,
+    "typed-final": 9
+   },
+   "exact": false,
+   "repeat": "/data/dev2/runs/dec/formal/f08/f08-08b-C0/REPEAT-vs-bar-t1.json",
+   "repeat_sha256": "334ca67d56fa2c742e5396e9a5bb911ab676ede99020132855a5ce2d80149f85"
+  },
+  "m8s-ref-08b-I": {
+   "category_changes": {
+    "css15": 0,
+    "public231": 0,
+    "typed-final": 0
+   },
+   "exact": true,
+   "repeat": "/data/dev2/runs/dec/formal/f08/f08-08b-C0/REPEAT-vs-m8s-ref-08b-I.json",
+   "repeat_sha256": "c6e12063f8334496099d1f21745a7f5d8f464a62db5e710b0ff5729b0df011c9"
+  }
+ },
+ "checked_utc": "2026-10-01T14:54:56.953027+00:00",
+ "exact_vs_stored_bar": false,
+ "report_sha256": "e7cc550230b5326a1d805415fcc3980be6971ec430ad03eb3e1af73ac4d74388",
+ "rule": "0 differing answers on typed FINAL, CSS15 and public 231",
+ "run": "/data/dev2/runs/dec/formal/f08/f08-08b-C0",
+ "schema": "dec-f08-c0-exact/1",
+ "seal_sha256": "756b91081c46a88fd008434655abd9bd9fcd0630102abb54db89921dd3ccaa8b"
+}

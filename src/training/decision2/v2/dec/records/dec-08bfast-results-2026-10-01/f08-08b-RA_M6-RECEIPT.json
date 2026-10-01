@@ -1,0 +1,80 @@
+{
+ "cache": {
+  "after_manifest": "/data/dev2/runs/dec/formal/f08/f08-08b-RA.cache-after.sha256",
+  "after_manifest_sha256": "16185ab75b42787f7a56538ce1751c8d133793634a36a794919eb31c51a31bf0",
+  "changed_entries": 10,
+  "changed_entry_names": [
+   "./46OGB7NQBRGXUZDOQA2IYEV4HNXYLMRCNNSOC74XK4QVCEFCUKWQ/__grp__recompute_w_u_fwd_kernel.json",
+   "./5YG6TMGKOKS2YNO5AKJ34ASBB4TYM4574QLBIS5FNGKP7IYCSR4Q/__grp__l2norm_fwd_kernel.json",
+   "./AX6CQIY4LWGAK2DTES7F4Y6HN35SHY76YJWS4FVUJCU2QX7XKK7Q/__grp__chunk_gated_delta_rule_fwd_kkt_solve_kernel.json",
+   "./BKI7VUCHV6PB5AGET47TK2GTQXC33ROUPVCVM3QXWU6QMXHS3DZA/__grp__l2norm_fwd_kernel.json",
+   "./G7COXU6R5XFK4KI5AVBYZP7GSXVY3HXR5HAMFTGSSQ3G222ECRDQ/__grp__chunk_local_cumsum_scalar_kernel.json",
+   "./MDW4OADMV7DOJX5BAOOK7DI6QKGBYWX4LFXA3YXHDHYDRMC4KXDQ/__grp__l2norm_fwd_kernel.json",
+   "./MFW5QCSCLKYGSDCGAVM7C266FPJRSRTIAHO6U4FAN5GBRVHTVW5Q/__grp__l2norm_fwd_kernel.json",
+   "./SGX6IONNICZ66EYELPF4RX7MJRWJF54TKNAJOQ24MZ7YMRIN2RAA/__grp__chunk_fwd_kernel_o.json",
+   "./TNCBCTI5BCOFHOJNP6IFA7DCJDUEQQJF7ZSEQWFYAUO5S2OA7RIQ/__grp__chunk_gated_delta_rule_fwd_kernel_h_blockdim64.json",
+   "./Y5NQUI47PD33L3BMVVUXG2CY3A7BZKPHGKFRBQV7AWKSLB5JLDNA/__grp__chunk_local_cumsum_scalar_kernel.json"
+  ],
+  "dir": "/data/dev2/runs/dec/formal/f08/f08-08b-RA-cache",
+  "entries_after": 1051,
+  "entries_master": 1051,
+  "flag_new_cache_entries": true,
+  "master_manifest": "/data/dev2/runs/dec/formal/m11/masters/cache-frozen-08b.sha256",
+  "master_manifest_sha256": "822e9f2d185e52789b6467612eb82d0191489d7253bb473058ff05cad55279f2",
+  "new_entries": 0,
+  "new_entry_names": [],
+  "removed_entries": 0
+ },
+ "calibration_rule": {
+  "adopt": false,
+  "candidate_sha256": "9890f9e2fd970f972165fb3eb2cfe9f6556d9bd43ce57c6312528885c03e49af",
+  "candidate_temperatures": {
+   "choice": 1.2156126233987656,
+   "noul": 1.5247347148943509,
+   "score": 0.6447719899334348
+  },
+  "file": "/data/dev2/runs/dec/formal/f08/pkg/f08-08b-RA/m6/f08-08b-RA/calibration-decision.json",
+  "sha256": "c66c7c88e3d77ca00fffcc91b2e3d18fb2bae5fce7f005f1a84ca06795c99f80",
+  "worsened": [
+   "typed_dev_ece_10"
+  ]
+ },
+ "calibration_used": "none",
+ "collect_args": [
+  "--extra",
+  "model_id=decision2-dec-f08-08b-RA"
+ ],
+ "gpu": 6,
+ "gpu_hours": 0.06436744107140435,
+ "image_id": "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1",
+ "kind": "finalist",
+ "label": "decision2-dec-f08-08b-RA",
+ "m5_receipt_note": "M5-RECEIPT.json comes from ops/m5/m5-receipt.py, whose node field is fixed to B; node here is authoritative",
+ "m5_receipt_sha256": "da57ec17d488d2730f656e6a60d13b1a5da74f613de0816e3d038a99f82977c2",
+ "model": "/data/dev2/runs/dec/formal/f08/pkg/f08-08b-RA/m6/f08-08b-RA/checkpoint",
+ "name": "f08-08b-RA",
+ "node": "E",
+ "package_dir": "/data/dev2/runs/dec/formal/f08/pkg/f08-08b-RA",
+ "parameters": 753446208,
+ "point": "08b-RA",
+ "revision": "366794a6461babbb08fe6ff6e2c38f1aa6fd8de0f7366ea649b16ab2cc01b4c4",
+ "revision_matches_list": true,
+ "schema": "dec-m6-formal-receipt/1",
+ "seal_sha256": "50b65064999e6766b7cae1fff89ce5d4c53351da57090e0699c8be91c1e56375",
+ "selection": {
+  "G": null,
+  "H3": null,
+  "T": null,
+  "effective_weights": null,
+  "line": "08b-RA",
+  "proxy": null,
+  "slot": 1,
+  "step": null
+ },
+ "spec": "/data/dev2/src/a3ab9eda28e5c3c7926a9cbd4b6efa93b9f1668c-src_training_decision2/src/training/decision2/v2/dec/ops/m5/m5-adapter-infer-dec-t1.json",
+ "tier": "08b",
+ "tier_label": "0.8B",
+ "wall_seconds": 231.72278785705566,
+ "weights_json": "/data/dev2/runs/dec/formal/f08/pkg/f08-08b-RA/m6/f08-08b-RA/weights.json",
+ "weights_json_sha256": "8dae773b6d49910d38f5611570eb443564dcfccac4c234cee7a931163b69d1ab"
+}

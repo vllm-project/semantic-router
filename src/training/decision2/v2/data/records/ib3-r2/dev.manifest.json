@@ -1,0 +1,144 @@
+{
+ "arm_id": "IB3",
+ "canonical_form": "rows sorted by id; canonical(row) + '\\n' per row; UTF-8",
+ "canonical_path": "ib3.dev.jsonl",
+ "choice": {
+  "by_option_bucket": {},
+  "gold_position_by_bucket": {}
+ },
+ "content_sha256": "4c6f2ca06e131ed28058f6f53bea8f2015ccfbd2d9494a1b6ff6733a94be51af",
+ "counts": {
+  "family": {
+   "mqa": 426
+  },
+  "language": {
+   "en": 426
+  },
+  "source": {
+   "mathqa_train": 426
+  },
+  "task_type": {
+   "noul": 426
+  }
+ },
+ "groups": 213,
+ "input": {
+  "is_canonical": true,
+  "path": "ib3.dev.jsonl",
+  "sha256": "4c6f2ca06e131ed28058f6f53bea8f2015ccfbd2d9494a1b6ff6733a94be51af"
+ },
+ "license_registry_sha256": "6f417683931852b2386b663659e7b7a556a84c6ad53388ce80281a06930155a0",
+ "licenses": {
+  "mathqa_train": {
+   "attribution": "Amini, Gabriel, Lin, Koncel-Kedziorski, Choi and Hajishirzi, MathQA: Towards Interpretable Math Word Problem Solving with Operation-Based Formalisms (NAACL 2019); math-qa.github.io/math-QA/data/MathQA.zip (sha256 7344f30456a7aef3176d4866cc953b35b41bec44eda6b00cdbcfde2876b2f07a), train.json only; problems from AQuA-RAT (Ling, Yogatama, Dyer and Blunsom, ACL 2017; Apache-2.0)",
+   "evidence": "https://huggingface.co/datasets/allenai/math_qa/blob/c4f1cc784c04c4957b50c97858f23893b633eea6/README.md (license: apache-2.0); https://huggingface.co/datasets/deepmind/aqua_rat (license: apache-2.0)",
+   "license": "Apache-2.0",
+   "redistribution": "permitted with the Apache-2.0 notice"
+  }
+ },
+ "noul": {
+  "labels": {
+   "false": 213,
+   "true": 213
+  },
+  "true_fraction": 0.5
+ },
+ "partition": "select",
+ "role": "aho",
+ "rows": 426,
+ "rows_per_group": {
+  "2": 213
+ },
+ "schema": "decision2.v2.freeze.v1",
+ "score": {
+  "by_levels": {},
+  "by_levels_grade": {}
+ },
+ "state_chars": {
+  "p0": 110,
+  "p10": 143,
+  "p100": 739,
+  "p25": 185,
+  "p50": 238,
+  "p75": 314,
+  "p90": 379,
+  "p99": 533
+ },
+ "tokens": [
+  {
+   "by_language": {
+    "en": 69683
+   },
+   "by_task_type": {
+    "noul": 69683
+   },
+   "kind": "native_decoder",
+   "name": "qwen3-0.6b-base@da87bfb6",
+   "padded8_total": 71328,
+   "path": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+   "quantiles": {
+    "p0": 123,
+    "p10": 138,
+    "p100": 259,
+    "p25": 147,
+    "p50": 159,
+    "p75": 176,
+    "p90": 195,
+    "p99": 239
+   },
+   "revision": null,
+   "tokenizer_json_sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539",
+   "total": 69683
+  },
+  {
+   "by_language": {
+    "en": 73517
+   },
+   "by_task_type": {
+    "noul": 73517
+   },
+   "kind": "native_decoder",
+   "name": "qwen3.5-0.8b-base@dc7cdfe2",
+   "padded8_total": 75048,
+   "path": "dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68",
+   "quantiles": {
+    "p0": 132,
+    "p10": 147,
+    "p100": 268,
+    "p25": 156,
+    "p50": 168,
+    "p75": 185,
+    "p90": 204,
+    "p99": 248
+   },
+   "revision": null,
+   "tokenizer_json_sha256": null,
+   "total": 73517
+  },
+  {
+   "by_language": {
+    "en": 47401
+   },
+   "by_task_type": {
+    "noul": 47401
+   },
+   "kind": "raw",
+   "name": "kai-0.6b@7185f514",
+   "padded8_total": 48856,
+   "path": "tokenizer",
+   "quantiles": {
+    "p0": 71,
+    "p10": 85,
+    "p100": 207,
+    "p25": 95,
+    "p50": 106,
+    "p75": 123,
+    "p90": 143,
+    "p99": 187
+   },
+   "revision": null,
+   "tokenizer_json_sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
+   "total": 47401
+  }
+ ]
+}

@@ -1,0 +1,86 @@
+{
+ "balance_failures": [],
+ "dev": {
+  "balance": {
+   "mqa": {
+    "cells": 213,
+    "labels": {
+     "0": 213,
+     "1": 213
+    },
+    "pass": true,
+    "rows": 426,
+    "unbalanced_cells": 0
+   }
+  },
+  "sizes": {
+   "by_family": {
+    "mqa": {
+     "groups": 213,
+     "languages": {
+      "en": 426
+     },
+     "native_tokens": 73517,
+     "rows": 426
+    }
+   },
+   "groups": 213,
+   "language": {
+    "en": 426
+   },
+   "native_tokens": 73517,
+   "rows": 426,
+   "task_type": {
+    "noul": 426
+   },
+   "tokens_missing": 0
+  }
+ },
+ "inputs": {
+  "dev": "4c6f2ca06e131ed28058f6f53bea8f2015ccfbd2d9494a1b6ff6733a94be51af",
+  "tokens": [
+   "7124b4a49704742cc8dc53f9041be58ca01b0a9018722d0cd5cd0eb8e839d3d8",
+   "2eda158cb9d756d398cc4b8146629c0e1a204a01915210d6394fcf14d22b40c6"
+  ],
+  "train": "9d92d92a207109a585ceead7fa5e1bdb0b2c61859de8227a2a6058428f852dea"
+ },
+ "schema": "decision2.ib3.stats.v1",
+ "shared_groups": 0,
+ "train": {
+  "balance": {
+   "mqa": {
+    "cells": 4376,
+    "labels": {
+     "0": 4376,
+     "1": 4376
+    },
+    "pass": true,
+    "rows": 8752,
+    "unbalanced_cells": 0
+   }
+  },
+  "sizes": {
+   "by_family": {
+    "mqa": {
+     "groups": 4376,
+     "languages": {
+      "en": 8752
+     },
+     "native_tokens": 1519651,
+     "rows": 8752
+    }
+   },
+   "groups": 4376,
+   "language": {
+    "en": 8752
+   },
+   "native_tokens": 1519651,
+   "rows": 8752,
+   "task_type": {
+    "noul": 8752
+   },
+   "tokens_missing": 0
+  }
+ },
+ "verdict": "PASS"
+}

@@ -1,0 +1,16 @@
+{
+ "hypothesis_fields": {
+  "esci": "product",
+  "fdial": "response",
+  "fdial2": "response",
+  "haluqa": "answer",
+  "maud": "proposed_answer",
+  "mqa": "proposed_answer"
+ },
+ "input": "2dd4ac5477cfb070f693c4f9319ebbe0f2a2e5599b88a0e36cfe78ba358b2e8c",
+ "rows": {
+  "mqa": 8762
+ },
+ "schema": "decision2.ib3.g4rows.v1",
+ "url_shape_baseline": {}
+}

@@ -1,0 +1,27 @@
+{
+  "schema": "dec-m10-formal-finalists/1",
+  "finalists": [
+    {
+      "slot": 0,
+      "line": "08b-C0",
+      "point": "08b-C0",
+      "checkpoint": "/data/dev2/runs/dec/formal/f08/inputs/08b-C0",
+      "weights_json": "/data/dev2/runs/dec/formal/f08/select/08b-C0.weights.json",
+      "files_sha256_list": "/data/dev2/runs/dec/formal/f08/select/08b-C0.files.sha256",
+      "files_sha256_list_sha256": "26baab0177827efdf4f15f06f72d3281725c59d43da5cb322873c8af55b598bf",
+      "typed_dev_predictions": "/data/dev2/runs/dec/formal/f08/inputs/lines/08b-C0-e/dev/dev.predictions.jsonl",
+      "css_pilot_predictions": "/data/dev2/runs/dec/formal/f08/inputs/lines/08b-C0-e/css-pilot/css-pilot.predictions.jsonl"
+    },
+    {
+      "slot": 1,
+      "line": "08b-RA",
+      "point": "08b-RA",
+      "checkpoint": "/data/dev2/runs/dec/formal/f08/inputs/08b-RA-soup",
+      "weights_json": "/data/dev2/runs/dec/formal/f08/select/08b-RA.weights.json",
+      "files_sha256_list": "/data/dev2/runs/dec/formal/f08/select/08b-RA.files.sha256",
+      "files_sha256_list_sha256": "83926edfea269a3f1509c08c7f3d716b9002e8caf2992d293c3991dd3cbbc18b",
+      "typed_dev_predictions": "/data/dev2/runs/dec/formal/f08/inputs/lines/08b-RA/dev/dev.predictions.jsonl",
+      "css_pilot_predictions": "/data/dev2/runs/dec/formal/f08/inputs/lines/08b-RA/css-pilot/css-pilot.predictions.jsonl"
+    }
+  ]
+}

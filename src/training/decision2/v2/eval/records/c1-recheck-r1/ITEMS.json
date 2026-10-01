@@ -1,0 +1,101 @@
+{
+ "ambiguous": 0,
+ "build_manifest_sha256": "71297ecb5458a182c68e88f88b52eb37f8f45770d02e82aa93f39d04dcbedd86",
+ "by_task": {
+  "delichess/communicative_function": {
+   "groups": 100,
+   "items": 270,
+   "retired": 6,
+   "scored": 264
+  },
+  "delichess/epistemic_stance": {
+   "groups": 93,
+   "items": 240,
+   "retired": 6,
+   "scored": 234
+  },
+  "hallutruthqa/find_truth": {
+   "groups": 300,
+   "items": 300,
+   "scored": 300
+  },
+  "hallutruthqa/hallucination": {
+   "groups": 255,
+   "items": 255,
+   "scored": 255
+  },
+  "implicaturex/likelihood": {
+   "groups": 160,
+   "items": 160,
+   "retired": 1,
+   "scored": 159
+  },
+  "innoduel/preferred_idea": {
+   "groups": 85,
+   "items": 85,
+   "scored": 85
+  },
+  "legal_case_law/argument_function": {
+   "groups": 41,
+   "items": 210,
+   "retired": 20,
+   "scored": 190
+  },
+  "narrative_gold/event_causality": {
+   "groups": 129,
+   "items": 129,
+   "scored": 129
+  },
+  "narrative_gold/setting_concreteness": {
+   "groups": 150,
+   "items": 150,
+   "scored": 150
+  },
+  "narrative_gold/setting_temporal_grounding": {
+   "groups": 135,
+   "items": 135,
+   "scored": 135
+  },
+  "narrative_gold/span_is_event": {
+   "groups": 240,
+   "items": 240,
+   "retired": 1,
+   "scored": 239
+  },
+  "tutormoments/is_rapport": {
+   "groups": 134,
+   "items": 200,
+   "scored": 200
+  },
+  "tutormoments/moment_type": {
+   "groups": 132,
+   "items": 200,
+   "scored": 200
+  },
+  "wb_reviews/star_rating": {
+   "groups": 300,
+   "items": 300,
+   "scored": 300
+  }
+ },
+ "candidates_sha256": {
+  "delichess": "21dc8c563b607a87928052f9fad8929be60ab62779ab9d68d0184433e35f7a71",
+  "gapa": "35717ce1b2b57d949dfed3f308362f709d404a7f5471ee67e81146ada02c6767",
+  "hallutruthqa": "c6b73c33de13f31edfd832372ea0a6bbbefc368e76373dd2b78323ffebd28347",
+  "implicaturex": "0f63935e83249a9fae85a226d0114b4c4224819ff8d967fb2b5109cce586caf9",
+  "innoduel": "72084dcecb8885d7408bde6c8a8807e4b6129c5fa964de33e5ec0d059da28241",
+  "legal_case_law": "c7cc20fa4c19c7ed3ccba2f142a96dbb28e6b62833f36bb7662d5eef656b4115",
+  "narrative_gold": "19dbdb6c249b786736027f2c27ce647e98f4069bca75a6f18ac7ad46b5a1bb57",
+  "tutormoments": "c643dfb6586c4d09e9f412f7b8db990386e154d85cf7ddaf171acfde6c3f09f2",
+  "wb_reviews": "a503a245b5346c85546a449aa06c5e6b0335d1c880174a891b2d4792ec46b742"
+ },
+ "item_set": "v1.2",
+ "items": 2874,
+ "items_sha256": "d9e05aed6ee5c3917417e04a749398fac8b7acbc3fe03e3a9270c3705bcee427",
+ "prompts_sha256": "0b29686f60c980f3fbc8a03b88537fc0bf90ee967afa67d4fe0c958b1bfde16a",
+ "protected_shape_sha256": "30a332ab8cf6fce99b54c2b07c13bb58fe031f0c08d93c33243d3c5db91aed40",
+ "retired": 34,
+ "retired_sha256": "bbf095c70917f028d691fce570b114725e4f22fd6a1987456f6ae2c30f22990a",
+ "schema": "dev2-c1-recheck-items/1",
+ "scored": 2840
+}

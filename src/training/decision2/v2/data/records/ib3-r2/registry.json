@@ -1,0 +1,133 @@
+{
+ "files": {
+  "ib3/README.md": {
+   "bytes": 5365,
+   "sha256": "f846c2e99aa05679533c53c08ff1e4363086e5a72c93224faa3cfc18cb8b20e0"
+  },
+  "ib3/audits/c1-names.json": {
+   "bytes": 1730,
+   "sha256": "077b40f10e245e953fc4678e7d9173305457dca232f14693b95d1d1766e30963"
+  },
+  "ib3/audits/index-guard-controls.json": {
+   "bytes": 103,
+   "sha256": "027712683c3bd6b2351da8470d4f7fa1176148a66b53dcff3775881bf4d035be"
+  },
+  "ib3/audits/index-guard.public.json": {
+   "bytes": 873,
+   "sha256": "72e896e42b548b8c2963d9399a81fc529582d96b664269b6c9debc7b648a281a"
+  },
+  "ib3/audits/index-url-guard-controls.json": {
+   "bytes": 100,
+   "sha256": "b6abcc1daa71537dc79c7fd29aab15b1d06efa2a5d945f20110c671d3bb6f059"
+  },
+  "ib3/audits/index-url-guard.public.json": {
+   "bytes": 741,
+   "sha256": "0335a452a5e503f0c54227debcd3beaec8658a2e8f9c0906ef172f4cd715539f"
+  },
+  "ib3/audits/names-g1.json": {
+   "bytes": 4771,
+   "sha256": "ce224a59e1cb9bdf1d5e4ff5bf9a37aa96f22c13ef5d4cf80bd41eb6671f8b9d"
+  },
+  "ib3/audits/overlap-dev-vs-train.public.json": {
+   "bytes": 2531,
+   "sha256": "8e0133728abfc1d92dc6ad8e047b1304021dcfadd29bfd4e9c7149a214c665ee"
+  },
+  "ib3/audits/overlap-piib3.public.json": {
+   "bytes": 8950,
+   "sha256": "243284b1440220ffe96b284778233b2d9e663f16b80f8ff6f82c53f578d92def"
+  },
+  "ib3/audits/overlap-piv4.public.json": {
+   "bytes": 50607,
+   "sha256": "6b75dbc36cf32e17733bed0f4b703289a2ccd1135722bd240744249243f67a1d"
+  },
+  "ib3/audits/overlap-piv4q.public.json": {
+   "bytes": 35025,
+   "sha256": "9de122dc42e6461679172154455e90af6bdff1981b1c2c54eed8ffc5de82c2bb"
+  },
+  "ib3/audits/quarantine.public.json": {
+   "bytes": 572,
+   "sha256": "1d2b9becbaa139ef036435b2c93510d12849b2b50d1446a84191af25a32a6bdc"
+  },
+  "ib3/audits/rescan1-summary.txt": {
+   "bytes": 52,
+   "sha256": "def2e18ddc146ed624a168016e7035842551a03ab18d47c23499806ddd9f228c"
+  },
+  "ib3/audits/rescanfinal-summary.txt": {
+   "bytes": 56,
+   "sha256": "a7aa1e3a8089d5f8e7082cab76f0dcc6f39996f6a09aa870b8265a55c1fca0c7"
+  },
+  "ib3/audits/review-sample.json": {
+   "bytes": 530,
+   "sha256": "e1daaa2e8c02aabd37c75b2509eaa70c6c4b066454b5bbe3f137693cb5e85eca"
+  },
+  "ib3/audits/review.public.json": {
+   "bytes": 2554,
+   "sha256": "028c0d15ddd3a9089bf38d03053df6865c4bd07c7f7c4ed6c7aa3b0e18bc5854"
+  },
+  "ib3/audits/screen-sample.json": {
+   "bytes": 172,
+   "sha256": "9b7e0d6171aeca048891d4eda366e2865d9be8bbdab03bc919c1a88e1ef48e14"
+  },
+  "ib3/audits/screen.public.json": {
+   "bytes": 172,
+   "sha256": "9b7e0d6171aeca048891d4eda366e2865d9be8bbdab03bc919c1a88e1ef48e14"
+  },
+  "ib3/audits/shortcut-g4rows.json": {
+   "bytes": 349,
+   "sha256": "4629b6195d0dd388cfca9fb831ceee56e082e4831b38b8908a6311232b30e5b9"
+  },
+  "ib3/audits/shortcut/mqa.json": {
+   "bytes": 7971,
+   "sha256": "87223ef4a6d66950cd852a8f1313cd68f02264e78855e1ea062c8e8d0eae6ebd"
+  },
+  "ib3/build.json": {
+   "bytes": 2082,
+   "sha256": "19cba41913ce9c9b1c7d4495b7e4f993e6946e8ad4dd727a7490d711e06bbfae"
+  },
+  "ib3/dev.manifest.json": {
+   "bytes": 3372,
+   "sha256": "2b98243610267fd538254f9bc32ff9eb4995e60c13defe9abc56f5324e2a51f5"
+  },
+  "ib3/final.json": {
+   "bytes": 1603,
+   "sha256": "9c530284c9fb893f74830ecffdda21918d95ad2c8fb117ee0385a91757a77928"
+  },
+  "ib3/ib3.dev.jsonl": {
+   "bytes": 391418,
+   "sha256": "4c6f2ca06e131ed28058f6f53bea8f2015ccfbd2d9494a1b6ff6733a94be51af"
+  },
+  "ib3/ib3.dev.tokens.jsonl": {
+   "bytes": 27977,
+   "sha256": "2eda158cb9d756d398cc4b8146629c0e1a204a01915210d6394fcf14d22b40c6"
+  },
+  "ib3/ib3.train.jsonl": {
+   "bytes": 8067406,
+   "sha256": "9d92d92a207109a585ceead7fa5e1bdb0b2c61859de8227a2a6058428f852dea"
+  },
+  "ib3/ib3.train.tokens.jsonl": {
+   "bytes": 574995,
+   "sha256": "7124b4a49704742cc8dc53f9041be58ca01b0a9018722d0cd5cd0eb8e839d3d8"
+  },
+  "ib3/isolation.json": {
+   "bytes": 1202,
+   "sha256": "09c0aca0bcbb39eef956fd74dbde50999389c5f055125a59f322295b109b3735"
+  },
+  "ib3/license-registry-ib3.json": {
+   "bytes": 725,
+   "sha256": "1e7e296c8c94d7e19ab757b63ec36f610ea208f3fb2134f16d62ffb104aa1521"
+  },
+  "ib3/stats.json": {
+   "bytes": 1481,
+   "sha256": "3875d14ba592f30a70708f6cb2ba96bdf58300b3fd3510f59fac04b9f16a3062"
+  },
+  "ib3/status.json": {
+   "bytes": 2210,
+   "sha256": "da688108003e17f289eefc55415789e71ba7beab2636e081a09e651e4e04eef5"
+  },
+  "ib3/train.manifest.json": {
+   "bytes": 3407,
+   "sha256": "08e740707c6b9e62ea659c38303a714cc1d205fdb8982014967f7bca3babbf74"
+  }
+ },
+ "schema": "decision2-hf-v2-registry/v1"
+}

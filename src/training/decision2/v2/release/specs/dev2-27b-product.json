@@ -1,0 +1,213 @@
+{
+  "schema": "dev2-release-spec/1",
+  "_release": {
+    "card_product": "Card-only revision under the new name (user job 2026-10-02 00:05 UTC+8, release worker 4c0a68cd): the product card of v2.release.card (banner, title, one paragraph, at-a-glance table, highlights, code-only quickstart, JevArena and Jev Decision Index charts with one compact table, licence, citation). card.text is empty; card.index and card.assets pin the private Index input and the assets rendered by v2.release.card_assets; card.speed pins the 400-request bench receipt of this runtime. licence.files keeps the LICENSE only; the upstream NOTICE and the attributions are dropped (no NOTICE, ATTRIBUTIONS.md, LICENSES/ or evaluation/ in the package). Weights, tokenizer, the package runtime, the vendored sources and the Transformers remote code are byte-identical to the replaced revision; config.json and MODEL_MANIFEST.json carry the new model name.",
+    "renamed_from": "llm-semantic-router/DEV2.0-27B",
+    "replaces_spec": {
+      "spec": "v2/release/specs/dev2-27b-card.json",
+      "sha256": "d71b68aa98b11a9a35c8e44bac73062d4717491ed4d755639699caedfbba4bf9"
+    },
+    "previous": {
+      "card_redesign": "Card-only revision (user card job 2026-10-01 21:58 UTC+8, release worker 4c0a68cd): a standard model-release card from v2.release.card (highlights, model overview, one evaluation chart pair and table, a Transformers-only quickstart, at most five limitations, training data with the licence attributions, licence, citation); methods and every result below the counterpart in evaluation/EVALUATION.md; internal release facts in the records. card.text is the short card text; banner, calibration_text and requirements_text are dropped; the attributions lose the internal panel version and the banner credit. Weights, tokenizer, configs, the package runtime, the vendored sources and the Transformers remote code are byte-identical to the replaced revision (same runtime_source, vendor_source and automap_source).",
+      "replaces_spec": {
+        "spec": "v2/release/specs/dev2-27b-budget.json",
+        "sha256": "1f9fe105f9decd5835e1bb29df4e6fa2355e9ddab55a87e1991eeaebf8205ce7"
+      },
+      "previous": {
+        "forward_token_budget": "Runtime-only revision (user release round 2026-10-01 18:08 UTC+8; IX1 hand-off dev2-runtime-forward-budget-2026-10-01): the package runtime (runtime_source 99432d1a7) is the auto_map runtime plus the forward token budget of decision2/qwen.py (8e6bdfc33, e876fbefc). Weights, tokenizer, model configs, the vendored training/model sources and the Transformers remote code are byte-identical to the replaced revision. Adopted only with 0 answer changes on every scored prompt and on mlx-diag, AutoModel equal to native and the long-input regression passing.",
+        "replaces_spec": {
+          "spec": "v2/release/specs/dev2-27b-automap.json",
+          "sha256": "69c2cd223e87c3b19ab5e73884043ff2d40fbee1376f3a8bbe02404eef056bae"
+        },
+        "previous": {
+          "transformers_remote_code": "Runtime-only revision (user request 2026-10-01 10:53 UTC+8; coordinator note 11:20, worker 4c0a68cd): the package gains the Transformers remote code and config.json fields; the package runtime (runtime_source 8e8082440) is the BF16-resident runtime plus the remote-code prompt fix. Weights, tokenizer, model configs and the vendored training/model sources are byte-identical to the replaced revision. Adopted only with 0 answer changes against the native runtime on every scored prompt and on mlx-diag.",
+          "replaces_spec": {
+            "spec": "v2/release/specs/dev2-27b-bf16r.json",
+            "sha256": "912168c4b2af9436d68df654397365c5544575abf8c369f9a2df335854bb3f64"
+          },
+          "previous": {
+            "bf16_resident_runtime": "Runtime-only revision (coordinator note 2026-10-01 10:30 UTC+8, b5f60b33): the package runtime comes from the BF16-resident commit 5dc962b00 (runtime_source); weights, tokenizer, configs and the vendored training/model sources (vendor_source, the mirror the replaced revision vendors) are byte-identical to the replaced revision. Adopted only with 0 answer changes on every scored prompt and on mlx-diag. The card gains one runtime-update line and runtime_equivalence one runtime sentence.",
+            "replaces_spec": {
+              "spec": "v2/release/specs/dev2-27b-a20r-release.json",
+              "sha256": "578980a4a06a5dbe9a9fa31abde9d2bdb723903d5bfc8dd4b87b2b00aee151fb"
+            },
+            "previous": {
+              "candidate": "27B Milestone 4 successor M4-A20r soup (coordinator 2026-09-30 07:20 UTC+8: A20r is THE 27B successor; F-b is superseded). 27B record v2/27b/records/m4-results-2026-09-29.md (commit 632f4005d).",
+              "name": "DEV2.0-27B: named after its base model Qwen/Qwen3.8-27B (name_basis base); it loads 26,096,775,168 parameters (text backbone 25,624,600,064 + rank-64 LoRA 466,911,232 + head 5,263,872; no vision tower, MTP or LM head).",
+              "gate": "successor profile at a size without Decision 1.0 (tier.no_1_0): R1-R7 of the 16:05 / 17:15 successor rule against the current revision c0dba600 (scored run M3-A-soup/formal), R5 = the no-1.0 tier gates vs AutoJev-27B, and R8 = the JevArena-C1 v1.2 post-key guard (item 8).",
+              "inputs": "node A copies of the 27B track's node-B files at the same paths (hash-equal lists); the checkpoint came through llm-semantic-router/dev2-27b-staging@90a70b4a and was re-hashed on node A.",
+              "runtime": "vendor_source = the scored run's source mirror ff660322a (training/model byte-identical to the formal run's); runtime_source pinned to mirror c68de36a5 for both the frozen package that C1 scores and the release, so the two builds differ only in card files.",
+              "c1": "final: post-key C1 line from the collected SUMMARY.json"
+            }
+          }
+        }
+      }
+    }
+  },
+  "kind": "release",
+  "repo_id": "llm-semantic-router/Decision-2.0-Vega-27B",
+  "model_name": "Decision-2.0-Vega-27B",
+  "name_basis": "base",
+  "name_base_model": "Qwen/Qwen3.8-27B",
+  "profile": "qwen-adapter",
+  "checkpoint": "/data/dev2/runs/27b/M4-A20r-soup/soup/checkpoint",
+  "expected_identity": {
+    "model_sha256": "2e07451107a2ca9735064cc01f7e43e8522b4bae48f2d77bdf29f7ea2fe6362c"
+  },
+  "base": {
+    "repo_id": "Qwen/Qwen3.8-27B",
+    "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "path": "/data/dev2/hf-cache/models--Qwen--Qwen3.8-27B/snapshots/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "licence": "apache-2.0",
+    "redistribution": "not redistributed: the package pins the base by repository revision and per-file SHA-256, and it is fetched or supplied at load time"
+  },
+  "calibration": null,
+  "max_input_tokens": 32768,
+  "vendor_source": "/data/dev2/src/ff660322a76b04c4774fdb6aaa31e5af2a45743e-src_training_decision2/src/training/decision2",
+  "runtime_source": "/data/dev2/src/99432d1a7da5adbc70212df78ae7ebf7e50b41e4-src_training_decision2/src/training/decision2",
+  "gate_receipt": "/data/dev2/runs/release/decisions/Decision-2.0-Vega-27B.decision.card2.json",
+  "gate_profile": {
+    "name": "successor",
+    "run": "/data/dev2/runs/27b/M4-A20r-soup/formal",
+    "current": {
+      "revision": "c0dba600087f582a1033830a2276d22e96e6324c",
+      "gate": "/data/dev2/src/c68de36a5245c4e14eccc7b3d43279b75affbc51-src_training_decision2/src/training/decision2/v2/release/records/dev2-c1-card-pass-2026-09-29/27b/receipts/gate.json",
+      "decision": "/data/dev2/src/c68de36a5245c4e14eccc7b3d43279b75affbc51-src_training_decision2/src/training/decision2/v2/release/records/dev2-c1-card-pass-2026-09-29/DEV2.0-27B.decision.json",
+      "run": "/data/dev2/runs/27b/M3-A-soup/formal",
+      "mlx_predictions": "/data/dev2/runs/27b/m3-f2/mlx-diag/M3-A-soup/output/mlx-diag.predictions.jsonl"
+    },
+    "paired": "/data/dev2/runs/27b/m4-gates/M4-A20r-soup/paired-vs-F1.json",
+    "types": "/data/dev2/runs/27b/m4-gates/M4-A20r-soup/types.json",
+    "mlx_paired": "/data/dev2/runs/27b/m4-mlx/mlx-paired-M4-A20r-soup-vs-DEV2.0-27B.json",
+    "exposure": "/data/dev2/runs/27b/m4-overlap/exposure-m4-a20.json",
+    "public231": "/data/dev2/runs/27b/m4-gates/public231-M4-A20r-vs-DEV2.0-27B.json",
+    "tier": {
+      "reference": "autojev27",
+      "v3_share": 0.9,
+      "paired": "/data/dev2/runs/27b/m4-gates/M4-A20r-soup/paired-vs-autojev27.json",
+      "no_1_0": true
+    },
+    "c1_postkey": "/data/dev2/runs/eval/c1-postkey/27B/dev2-27b-a20r-20260930T000642Z/SUMMARY.json"
+  },
+  "frozen_autotune_cache": {
+    "path": "/data/dev2/runs/27b/M4-A20r-soup/formal/triton-cache",
+    "tree_sha256": "f474e2e9dbdf3a2900465bce74256326ba2756250861b45359742685982cb5f7",
+    "post_record": "/data/dev2/runs/27b/M4-A20r-soup/formal/triton-cache.post.json",
+    "origin": "the formal run's persisted cache: a fresh copy of F1's scored post-run cache (tree 03b172f1...) that added no autotune entry (group-file path rewrites only, frozen check passed); release runs copy it with python3 -m v2.27b.triton_cache copy --expect <tree_sha256>"
+  },
+  "origin": {
+    "repo_id": "Qwen/Qwen3.8-27B",
+    "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "relation": "adapter",
+    "summary": "A PEFT LoRA adapter (rank 64, alpha 128, on all 496 text projections of the attention, gated-delta and MLP blocks) and a native candidate head trained on the frozen Qwen3.8-27B text backbone at `1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0` (Apache-2.0), which is not redistributed. The adapter is the exact uniform soup of two seeds of one rank-32 recipe (their LoRA factors stacked along the rank with the up-projections halved, so the mean of the two seeds' weight updates is reproduced exactly), with the two heads averaged."
+  },
+  "runtime_requirements": {
+    "python": "3.12.13",
+    "torch": "2.12.0+git6bbd260 (ROCm 7.2 build; one ROCm GPU tested)",
+    "transformers": "5.17.0",
+    "peft": "0.21.0",
+    "flash-linear-attention": "0.5.2 (GPU gated-delta kernels)",
+    "causal-conv1d": "1.7.0 (GPU convolution kernels)",
+    "triton": "3.7.1 (persisted autotune cache)",
+    "tokenizers": "0.23.2",
+    "safetensors": "0.8.0",
+    "huggingface_hub": "1.31.0 (pinned base download)"
+  },
+  "runtime_equivalence": "decision2/qwen.py loads the unmerged PEFT adapter on the pinned Qwen3.8-27B base (every base file checked against its SHA-256) with the vendored training/model sources whose SHA-256 equal the scored adapter sources (checked at build time), and applies the per-item batching, BF16-backbone / FP32-head execution, raw probabilities (temperature 1; no calibration file) and answer normalization of training.model.infer as run by v2.27b.typed_collect_kernel. From this revision the runtime holds the backbone's BF16-exact Linear weights in BF16, the values BF16 autocast multiplies with, instead of FP32 copies cast before every matmul; the FP32 LoRA factors stay FP32 and unmerged; it was checked with 0 answer changes on every scored prompt and on mlx-diag (2,275). From this revision the package also ships 🤗 Transformers remote code (configuration_decision2.py, modeling_decision2.py, pipeline_decision2.py; config.json gains model_type, auto_map and custom_pipelines): AutoModel with trust_remote_code loads the package through this runtime, which now also refuses Transformers' remote-code prompt while loading the tokenizer; it was checked with 0 answer changes against the native runtime on every scored prompt and on mlx-diag (2,275). From this revision the runtime runs a request whose padded question batch would put more than 2**30 elements in a gated-delta q / k / v tensor (the FLA kernels' 32-bit offsets) as several GPU-sized batches, longest questions first; requests within that budget, every scored prompt among them, keep the single-batch path, and it was checked with 0 answer changes on every scored prompt and on mlx-diag (2,275). Checked on one GPU of another node of the same type (same image and base bytes as the scoring run) against the scored T = 1 predictions of every formal prompt (typed-final 1,600, css15 6,547, public231 231) by release.sh --parity, with the image's FLA and causal-conv1d kernels required and a fresh copy of the formal run's persisted Triton autotune cache.",
+  "scored": {
+    "label": "post-key same-panel run M4-A20r-soup/formal at T = 1 (kernel path, frozen autotune cache, 32,768-token limit)",
+    "report_sha256": "e9a7c4700bd97bb78efa1c28117aa2a8a7a92fc2b3a29ead6d4f7e9c7f49b600",
+    "seal_sha256": "9d60e61171da3ea477ab59e1f5303f0bcbc560a5964e8a7ebe13e61855911611",
+    "predictions_sha256": {
+      "typed-final": "ea573b2d50be50efd3048ee427309232b1f9b998b98d9997644bd82a51442d0e",
+      "css15": "a5ed828a9b6a839b765643362a08a95386312bf4fdaf4c33e2f6d97a28337fbb",
+      "public231": "6746b61a58603418d43ce22109d08b79d9cf3bab63aa14acca6cd42c5dcf131d",
+      "mlx-diag": "1ab3487d9b7b9368450b003697692891ed6947cad18c2876b9626c96fb0d87e4"
+    },
+    "paired_sha256": "09ff4b0f872b60fe665124440b111afe03575d44a458c8743446a0ca7d0200c6",
+    "native_manifest": "/data/dev2/runs/27b/M4-A20r-soup/formal/output/typed-final.predictions.jsonl.manifest.json"
+  },
+  "licence": {
+    "components": [
+      {
+        "component": "Decision-2.0-Vega-27B LoRA adapter, decision head, package runtime, card and artwork",
+        "licence": "apache-2.0",
+        "source": "llm-semantic-router/Decision-2.0-Vega-27B"
+      },
+      {
+        "component": "Qwen3.8-27B text backbone and tokenizer (pinned external base, not redistributed)",
+        "licence": "apache-2.0",
+        "source": "Qwen/Qwen3.8-27B@1d4bf0f2"
+      }
+    ],
+    "files": [
+      {
+        "source": "/data/dev2/hf-cache/models--Qwen--Qwen3.8-27B/snapshots/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0/LICENSE",
+        "path": "LICENSE",
+        "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a"
+      }
+    ]
+  },
+  "card": {
+    "roster": "v2/eval/records/decision-index-peer-roster-2026-09-28.json",
+    "paired": "/data/dev2/runs/27b/m4-gates/M4-A20r-soup/paired-vs-autojev27.json",
+    "paired_peers": {
+      "eikos27": "/data/dev2/runs/27b/m4-gates/M4-A20r-soup/paired-vs-eikos27b.json",
+      "jebadiah27": "/data/dev2/runs/27b/m4-gates/M4-A20r-soup/paired-vs-jebadiah27b.json"
+    },
+    "text": {},
+    "reports": [
+      {
+        "key": "candidate",
+        "role": "candidate",
+        "report": "/data/dev2/runs/27b/M4-A20r-soup/formal/REPORT.json",
+        "label": "Decision-2.0-Vega-27B",
+        "mlx": "/data/dev2/runs/27b/m4-mlx/M4-A20r-soup/mlx-diag.score.json"
+      },
+      {
+        "key": "autojev27",
+        "role": "reference",
+        "report": "/data/dev2/runs/27b/m2-peer-autojev27-nodeB-kernel/REPORT.json",
+        "repo_id": "denis-pplx/autojev-27b",
+        "label": "AutoJev-27B",
+        "mlx": "/data/dev2/runs/release/inputs/dev2-27b/peers-mlx/autojev27.mlx-diag.score.json"
+      },
+      {
+        "key": "eikos27",
+        "role": "peer",
+        "report": "/data/dev2/runs/27b/m3-peer-eikos27-nodeB-kernel/REPORT.json",
+        "repo_id": "caiovicentino1/Eikos-27B",
+        "board_entry": "caiovicentino1/Eikos-27B-FP8",
+        "label": "Eikos-27B",
+        "mlx": "/data/dev2/runs/release/inputs/dev2-27b/peers-mlx/eikos27b.mlx-diag.score.json"
+      },
+      {
+        "key": "jebadiah27",
+        "role": "peer",
+        "report": "/data/dev2/runs/27b/m3-peer-jebadiah-nodeB-kernel/REPORT.json",
+        "repo_id": "frontier-infra/jebadiah-27b",
+        "label": "Jebadiah-27B",
+        "mlx": "/data/dev2/runs/release/inputs/dev2-27b/peers-mlx/jebadiah27b.mlx-diag.score.json"
+      }
+    ],
+    "index": {
+      "path": "/data/dev2/private/release/card2/decision-index-card.json",
+      "sha256": "47e59a9550767b07d8aa82effb3cee4d5fbde75c4abed725e6ed2e6551826a01"
+    },
+    "assets": {
+      "dir": "/data/dev2/private/release/card2/27b",
+      "receipt_sha256": "7b27684bba7df039347ee3a9066ee0a4fb8e2ef0505381848ebd3665dfdf5b38"
+    },
+    "speed": {
+      "evidence": "v2/release/records/dev2-budget-2026-10-01/27b/extra/receipts/bench-new.json",
+      "sha256": "a65cf5a6ad81e10e8f475210b294225eb69883dbd21e509e702e9e1e95eba60b"
+    }
+  },
+  "automap_source": "/data/dev2/src/99432d1a7da5adbc70212df78ae7ebf7e50b41e4-src_training_decision2/src/training/decision2",
+  "remote_code": {
+    "tested": [
+      "5.17.0",
+      "5.18.0"
+    ]
+  }
+}
