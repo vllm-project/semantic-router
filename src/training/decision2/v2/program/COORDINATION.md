@@ -205,6 +205,33 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 03:15 — **M15 closed (c473a3b2): no arm passes development; the MLX-DEV guard does NOT track formal
+  mlx-diag → MLX-DEV2 commissioned (c0ce08eb).** Results `b5dac4abb`, state `4b8b4279e`, gist 04; integration
+  `a3b6a444b`; 15.14 of 70 GPU-h.
+
+  | Arm | Development result |
+  | --- | --- |
+  | `4b-LHA10SDML` | retention only −.030 |
+  | `2b-RASDML` | Score floor, `set_reconciliation` (HT-DEV v2 GAIN) |
+  | `2b-RA10SDML` | Score floor |
+  | `08b-RASDML` | choice, `attribute_gate`, `rule_precedence`, MLX-DEV (HT-DEV v2 GAIN) |
+  | `08b-RA10SDML` | choice −29 items, `attribute_gate` −4 (HT-DEV v2 GAIN) |
+
+  - Matching the released multilingual token share did **not** remove the typed-head losses.
+  - **The guard fails validation.** MLX-DEV reads M13 `4b-LHA10SD` and M12 `08b-RA` as flat (+.009 / +.006); their
+    formal mlx-diag deltas were −.029 / −.014.
+  - **The `4b-LHA10SD` private Index diagnostic** (private `m13-lha10sd/`): the gain is almost entirely the
+    in-distribution HoVer family; transfer-only is ≈ flat. It is not an Index-path candidate (it fails item 4 anyway).
+  - **MLX-DEV2 (eval, c0ce08eb):**
+    - an mlx-diag-like development panel from row-disjoint dev / validation splits;
+    - it must flag the known negatives (LHA10SD, 08b-RA, L128) and not flag LH (+) or K-a13IB (n.s.) before
+      adoption;
+    - then it becomes the **mandatory development guard for every breadth arm**.
+    - Fallback: read formal mlx-diag for development finalists before the other formal panels.
+  - **Program-level read** (M11–M15): at 0.8B–4B, breadth data trades typed heads and multilingual decisions for
+    gains that are mostly in-distribution. **Interpolation (M16) is the remaining cheap lever.** New breadth arms wait
+    for MLX-DEV2.
+
 - 2026-10-02 03:10 — **Rename + product-card round 2 DONE (4c0a68cd).**
   - **Current IDs / `main`** (old `DEV2.0-*` IDs redirect at the same revision; all private):
 
