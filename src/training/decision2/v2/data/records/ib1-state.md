@@ -22,6 +22,8 @@ fail, P3 pass).
 
 ## Log (newest first)
 
+- 2026-10-01 13:06 UTC+8 — merged into `xunzhuo/decision-2-training` (`6ef637ebd`; IB1, HR2, guard, overlap,
+  shortcut and freeze tests pass) and gist 02 entry added. **Worker done.**
 - 2026-10-01 13:00 UTC+8 — uploaded `m6/ib1/` (43 files, read-back SHA-256 equal, private before / after; revision
   `1371c287`); receipts, data card, results record written. Remaining: gist 02, merge into integration.
 - 2026-10-01 12:50 UTC+8 — final files (`dada31e38` assemble; upload copy of the G0 receipt without suite
@@ -50,9 +52,8 @@ fail, P3 pass).
 
 ## Next steps (for the coordinator)
 
-1. Gist 02 entry and the merge into `xunzhuo/decision-2-training` (this worker, now).
-2. Decide: IB1 for experiments only (not release-safe), or a separately preregistered IB1-r2 (for example without
+1. Decide: IB1 for experiments only (not release-safe), or a separately preregistered IB1-r2 (for example without
    `sentfin` neutral rows, SummEdits' Shakespeare domain and WANDS Partial rows; fresh decisive review).
-3. Before any C1-scored model trained on IB1: the custodian C1 content recheck (IB1 is inside the rescan roots).
-4. Uncovered target families for a later round: math verification / GSM8K-style numeric options, contracts,
+2. Before any C1-scored model trained on IB1: the custodian C1 content recheck (IB1 is inside the rescan roots).
+3. Uncovered target families for a later round: math verification / GSM8K-style numeric options, contracts,
    knowledge MCQ, adversarial NLI, select-all-that-apply (all removed by a gate or deferred).
