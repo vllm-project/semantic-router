@@ -1,5 +1,5 @@
 {
-  "builder_commit": "539d2769fe4d13ae888dcef4cda8695cb4bafc9e",
+  "builder_commit": "2cfa500fe91363300e7826e22c42908a015ab924",
   "card": {
     "excluded": [],
     "figures_sha256": {
@@ -52,7 +52,7 @@
       "Transfer: mrf (macro-F1): 77.2% versus 77.5%"
     ]
   },
-  "ended_utc": "2026-10-01T06:16:56.881999+00:00",
+  "ended_utc": "2026-10-01T08:28:18.970717+00:00",
   "files": 35,
   "identity": {
     "architecture": "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp",
@@ -101,8 +101,8 @@
     "text_parameter_count": 25624600064
   },
   "licence": "apache-2.0",
-  "manifest_sha256": "b9b1744d32a8ad4fb1a3e7a7ceffcd5ca5eccca068d826f7eec03d228277b252",
-  "package": "/data/dev2/runs/release/dev2-automap-27B-20261001T061627Z/package/DEV2.0-27B",
+  "manifest_sha256": "298662b35ca298f0b19d4d689ab5ff8c887fdfe0fb426b84c7951ecac1a8f1fd",
+  "package": "/data/dev2/runs/release/dev2-automap-27B-20261001T082750Z/package/DEV2.0-27B",
   "parameters": {
     "external_base_text": 25624600064,
     "loaded": 26096775168,
@@ -121,5 +121,5 @@
     "text_files_screened": 34
   },
   "spec_sha256": "69c2cd223e87c3b19ab5e73884043ff2d40fbee1376f3a8bbe02404eef056bae",
-  "started_utc": "2026-10-01T06:16:28.101375+00:00"
+  "started_utc": "2026-10-01T08:27:50.930648+00:00"
 }
