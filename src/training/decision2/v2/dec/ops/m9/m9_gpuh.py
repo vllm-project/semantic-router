@@ -1,9 +1,10 @@
 """GPU-hours of decoder M9 jobs on node A (wall-clock x 1 GPU per GPU job), from launch receipts.
 
-Every `*.launch.json` with a GPU under /data/dev2/runs/dec/m9 is one job (training, postruns, soups, early reads,
-lines, diagnostics); every runner `GPU-TIME.json` under m9/formal adds its wall seconds; running `dec-m9-*` GPU
-containers add their elapsed time. Co-tenant jobs are counted in full (conservative). Training jobs are attributed
-to arms by name (`m9-<ARM>-s<i>...`, postrun `m9-arms-full-m9-<ARM>-s<i>-...`).
+Every `*.launch.json` with a GPU under /data/dev2/runs/dec/m9/{arms,soup,lines} is one job (training, postruns,
+soups, early reads, lines, diagnostics; the copied node-B parity readouts under m9/parity are not M9 jobs); every
+runner `GPU-TIME.json` under m9/formal adds its wall seconds; running `dec-m9-*` GPU containers add their elapsed
+time. Co-tenant jobs are counted in full (conservative). Training jobs are attributed to arms by name
+(`m9-<ARM>-s<i>...`, postrun `m9-arms-full-m9-<ARM>-s<i>-...`).
 
 usage: python3 m9_gpuh.py total          -> prints the milestone's GPU-h
        python3 m9_gpuh.py arm <ARM>      -> prints the arm's training GPU-h
@@ -20,6 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 M = Path(os.environ.get("M9_ROOT", "/data/dev2/runs/dec/m9"))
+JOB_DIRS = ("arms", "soup", "lines", "formal")
 ARM = re.compile(r"m9-(?:arms-full-m9-)?(H9|C9)-s([123])")
 
 
@@ -31,7 +33,10 @@ def utc(text):
 
 def jobs():
     out = {}
-    for path in M.rglob("*.launch.json"):
+    receipts = [
+        p for d in JOB_DIRS if (M / d).is_dir() for p in (M / d).rglob("*.launch.json")
+    ]
+    for path in receipts:
         try:
             r = json.loads(path.read_text())
         except (OSError, ValueError):
