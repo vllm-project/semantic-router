@@ -76,6 +76,11 @@ Running full attempts have no receipt until they end: add (now − start) for ea
 
 ## Poll log (newest first)
 
+- 02:55Z: G-it s1 at update 3,433, s2 at 1,616 (healthy). Shared fix `9273b0bc0` (CAL698 fitter uses the checkpoint's
+  prompt version). Stage B drivers + chains `ead10fffa` (mirrored on both nodes): exact soup dry run on the two
+  seeds' checkpoint 892 passed (205 projections, max relative error 4.3e-7; scratch deleted); `moe-formal.sh` peer
+  paths fixed (they pointed at missing directories). Path check of cal698 / adopt / devgates / package / latency
+  running on node B GPU7 under `/data/dev2/runs/27b-moe/pathcheck/` (MOE-Git-s1 checkpoint 892).
 - 02:45Z: continuation #1 took over; screen reconstructed (Gemma won; Qwen cells stopped by rule 3); receipts 12.30
   finished + ≈ 14.0 running; both Gemma seeds healthy (no nonfinite loss).
 - 17:05Z: Gemma cell training (≈ 9.9 s per update); both Qwen one-steps passed, reloads running; dense reference
