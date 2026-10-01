@@ -206,6 +206,42 @@ class ExamplesTest(unittest.TestCase):
             )
 
 
+class GateItemTest(unittest.TestCase):
+    def test_remote_code_item_needs_every_automap_receipt(self):
+        from v2.release import gate
+
+        with tempfile.TemporaryDirectory() as scratch:
+            scratch = Path(scratch)
+            receipts, package = scratch / "receipts", scratch / "pkg"
+            receipts.mkdir()
+            package.mkdir()
+            (package / "MODEL_MANIFEST.json").write_text(
+                json.dumps({"files_sha256": {}})
+            )
+            self.assertIsNone(gate.remote_code_item(receipts, {}, package))
+            (package / "MODEL_MANIFEST.json").write_text(
+                json.dumps({"remote_code": {"files": {}}})
+            )
+            (receipts / "parity-pre.json").write_text("{}")
+            names = [
+                "automap-pre",
+                "automap-card-pre",
+                "automap-post",
+                "automap-parity-pre",
+                "automap-vs-native-pre",
+            ]
+            steps = {n: {"passed": True} for n in names}
+            steps["automap-vs-native-pre"]["max_abs_drift"] = 0.0
+            self.assertFalse(gate.remote_code_item(receipts, steps, package)["passed"])
+            (receipts / "automap-hub.json").write_text("{}")
+            steps["automap-hub"] = {"passed": True}
+            item = gate.remote_code_item(receipts, steps, package)
+            self.assertTrue(item["passed"])
+            self.assertIn("max drift 0", item["evidence"])
+            steps["automap-parity-pre"]["passed"] = False
+            self.assertFalse(gate.remote_code_item(receipts, steps, package)["passed"])
+
+
 class RuntimePromptTest(unittest.TestCase):
     def test_remote_code_prompt_refused_at_once_during_load_only(self):
         modules = types.ModuleType("dynamic_module_utils")
