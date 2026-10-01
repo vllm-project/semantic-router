@@ -2,6 +2,11 @@
 
 ## Follow-ups A / B (2026-10-02, continuation cba71646; COORDINATION 00:35)
 
+- 17:55Z — **A and B done; hand-off.** A: [receipt](lux9b-m9-ix-ka13ib-receipt-2026-10-01.md): parity PASS, FP32-restage
+  control PASS, 120,226 rows (120,224 ok, 2 unsupported, 0 errors), scorers PASS, paired bootstrap (2,000 replicates)
+  and family delta written, contamination audit 0 item duplicates; values private (`private/9b-ka13ib/REPORT.md`,
+  node C `ix1/runs/K-a13IB/`). ≈ 2.82 GPU-h on node C. Every lease released (node A GPU6 17:10Z, node C GPU1–7
+  17:52Z); no M9 or IX1 container of this track running. **M9 ≈ 44.7 of 120 GPU-h. No 9B successor; DEV2.0-9B stands.**
 - 17:20Z — **B done: K-a12IB fails Y1 (PN1 clean gold-no +.018 [+.002, +.032]); no finalist, no formal**
   ([stage-4 result](lux9b-m9-stage4-result-2026-10-01.md); typed T .950, other six gates pass). Node A GPU6 released.
   **A:** parity gate PASS (86 / 86 ok, identical choices, max |Δp| 0.0); 7 shards running on node C GPU1–7 since
