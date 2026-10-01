@@ -224,33 +224,57 @@ func (r *shadowDispatchRun) replay(ctx context.Context, sessionID string, outcom
 }
 
 func requireShadowOutcome(record *shadowReplayRecord, model, verdict, reason string) error {
-	if len(record.Outcomes) != 1 {
-		return fmt.Errorf("replay %s has %d shadow outcomes, want one", record.ID, len(record.Outcomes))
+	return requireShadowOutcomes(record, shadowOutcomeWant{model: model, verdict: verdict, reason: reason})
+}
+
+// shadowOutcomeWant names one expected per-arm outcome of a multi-arm replays
+// record (issue #3376).
+type shadowOutcomeWant struct {
+	model   string
+	verdict string
+	reason  string
+}
+
+// requireShadowOutcomes asserts the exact per-arm outcome set of a replays
+// record: one bounded outcome per admitted arm, each carrying its shadow
+// identity, and no captured text unless the decision asked for it.
+func requireShadowOutcomes(record *shadowReplayRecord, wants ...shadowOutcomeWant) error {
+	if len(record.Outcomes) != len(wants) {
+		return fmt.Errorf("replay %s has %d shadow outcomes, want %d", record.ID, len(record.Outcomes), len(wants))
 	}
-	outcome := record.Outcomes[0]
-	if outcome.Target != "model" || outcome.TargetRef != model || outcome.Verdict != verdict || outcome.Reason != reason {
-		return fmt.Errorf("replay %s shadow target=%s/%s verdict=%s reason=%s, want model/%s %s/%s",
-			record.ID, outcome.Target, outcome.TargetRef, outcome.Verdict, outcome.Reason, model, verdict, reason)
-	}
-	if outcome.Metadata["primary_model"] != shadowPrimaryModel ||
-		outcome.Metadata["shadow_model"] != model || outcome.Metadata["shadow_request_id"] == "" ||
-		outcome.Metadata["attempts"] != "1" {
-		return fmt.Errorf("replay %s unexpected shadow identity or attempts: %v", record.ID, outcome.Metadata)
-	}
-	if _, captured := outcome.Metadata["response_excerpt"]; captured {
-		return fmt.Errorf("replay %s captured shadow text with capture_response_body disabled", record.ID)
-	}
-	if verdict == "completed" {
-		expectedHash := fmt.Sprintf("%x", sha256.Sum256([]byte("Hello from "+model+".")))
-		if outcome.Metadata["status_code"] != "200" || outcome.Metadata["response_sha256"] != expectedHash {
-			return fmt.Errorf("replay %s did not record the expected shadow response: %v", record.ID, outcome.Metadata)
+	for _, want := range wants {
+		found := false
+		for _, outcome := range record.Outcomes {
+			if outcome.Target != "model" || outcome.TargetRef != want.model ||
+				outcome.Verdict != want.verdict || outcome.Reason != want.reason {
+				continue
+			}
+			found = true
+			if outcome.Metadata["primary_model"] != shadowPrimaryModel || outcome.Metadata["shadow_model"] != want.model ||
+				outcome.Metadata["shadow_request_id"] == "" || outcome.Metadata["attempts"] != "1" {
+				return fmt.Errorf("replay %s arm %s unexpected shadow identity or attempts: %v",
+					record.ID, want.model, outcome.Metadata)
+			}
+			if _, captured := outcome.Metadata["response_excerpt"]; captured {
+				return fmt.Errorf("replay %s arm %s captured shadow text with capture_response_body disabled", record.ID, want.model)
+			}
+			if want.verdict == "completed" {
+				expectedHash := fmt.Sprintf("%x", sha256.Sum256([]byte("Hello from "+want.model+".")))
+				if outcome.Metadata["status_code"] != "200" || outcome.Metadata["response_sha256"] != expectedHash {
+					return fmt.Errorf("replay %s arm %s did not record the expected shadow response: %v",
+						record.ID, want.model, outcome.Metadata)
+				}
+			} else {
+				if outcome.Metadata["error"] == "" {
+					return fmt.Errorf("replay %s failed arm %s has no error detail", record.ID, want.model)
+				}
+				if _, present := outcome.Metadata["response_sha256"]; present {
+					return fmt.Errorf("replay %s failed arm %s has response provenance", record.ID, want.model)
+				}
+			}
 		}
-	} else {
-		if outcome.Metadata["error"] == "" {
-			return fmt.Errorf("replay %s failed shadow has no error detail", record.ID)
-		}
-		if _, present := outcome.Metadata["response_sha256"]; present {
-			return fmt.Errorf("replay %s failed shadow has response provenance", record.ID)
+		if !found {
+			return fmt.Errorf("replay %s has no arm %s %s/%s shadow outcome", record.ID, want.model, want.verdict, want.reason)
 		}
 	}
 	return nil
