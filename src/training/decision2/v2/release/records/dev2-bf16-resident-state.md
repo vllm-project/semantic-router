@@ -8,6 +8,12 @@ leases `owner.release-bf16r`). Started 2026-10-01 02:23Z.
 
 ## Now
 
+- 04:28Z — **0.6B, 0.8B, 2B, 4B released** (0 answer changes pre and post on all four panels; weights byte-identical;
+  every post-check ok): 0.6B `def20a1c`, 0.8B `e13a40f8`, 2B `56950ec5`, 4B `4f560ae5` (4B mlx-diag in its own
+  no-upload run, 0 changes). Receipts copied under `<key>/release/` (4B also `4b/mlx-parity/`).
+  - Running: node A GPU0 9B release (`dev2-bf16r-9B-20261001T042603Z`, from 04:26Z); node B GPU2 27B release
+    (`dev2-bf16r-27B-20261001T042616Z`, from 04:26Z; log `bf16r-relB-20261001T042616Z.log`).
+  - Next: fetch 9B / 27B receipts (`ops/fetch_receipts.sh`), fill the record (`ops/tables.py`), gist 07, merge.
 - 03:45Z — **Releases running** from mirror `45e097444` (final specs + decisions, bench receipts under
   `dev2-bf16-resident-2026-10-01/<key>/bench/`).
   - Image tests (mirror `79bff5da9`): unit 5/5 OK; GPU fixture 3/3 packages pass (byte-identical answers).
