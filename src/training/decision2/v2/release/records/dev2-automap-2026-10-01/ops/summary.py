@@ -47,7 +47,7 @@ def cell(result) -> str:
 
 def main() -> None:
     print(
-        "| Model | AutoModel vs native, 5.17: changes of prompts (max drift) | 5.18 | New `main` | "
+        "| Model | AutoModel vs native, Transformers 5.17: answers changed (max drift) | 5.18 | New `main` | "
         "Final decision (gate items) | Hub smoke 5.17 / 5.18 |"
     )
     print("| --- | --- | --- | --- | --- | --- |")

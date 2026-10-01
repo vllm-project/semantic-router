@@ -79,8 +79,9 @@ numerics and answers are unchanged (parity below); the packages' runtime is the 
   selection; answer-file comparison; gate item 7; the runtime's prompt refusal is scoped to the load.
 - **Image integration** (`v2.release.tests.automap_integration`; tiny Qwen3 / Qwen3.5 hybrid `qwen-full` and Qwen3
   LoRA `qwen-adapter` packages built by the release builder):
-  - GPU (node E GPU6, FLA kernels): native vs AutoModel / pipeline **bit-identical** for all three; the card's
-    Transformers block passes.
+  - GPU (node E GPU6, FLA kernels; mirror `07e2c3ffe`): native vs AutoModel / pipeline **bit-identical** for all
+    three; the card's Transformers block passes; and the offline-cache checks below, plus `model.to("cpu")`
+    (reloads on CPU through the native path; same decisions).
   - CPU: Qwen3 full and adapter bit-identical; Qwen3.5 recorded as skipped (the image's PyTorch has no CPU LAPACK).
     From an offline Hugging Face cache layout: AutoModel by repository ID through the hard-link view (view removed
     afterwards), casts / dtype / `save_pretrained` refused, the `adapter/` layout loads `Decision2Model`, and **with
@@ -93,12 +94,55 @@ numerics and answers are unchanged (parity below); the packages' runtime is the 
 
 ## 5. Parity: AutoModel vs the native runtime
 
-PARITY
+Node E (GPU6 / GPU7, one render node per container), the scored images (`host2` `f83b1d10`; 27B `latest`
+`dbe5f32b`), FLA 0.5.2 + causal-conv1d 1.7.0 required, a fresh copy of each scored run's frozen Triton autotune
+cache, the rollout's prompts and sealed predictions relayed from node A (SHA-256 lists compared). `release.sh`
+without upload on the draft specs (`automap.sh --verify`; 4B mlx-diag in its own run with its own cache, `--mlx`):
+native `parity-pre` writes every prompt's answers, `automap-parity-pre` the same prompts through
+`AutoModel.from_pretrained(package, trust_remote_code=True)` in a fresh process, and `compare-answers` compares
+them answer by answer. Every answer of the 10,653 prompts (11,053 answers: typed-final 1,600, css15 6,547,
+public231 231, mlx-diag 2,275) is **identical — 0 changes, max drift 0.0, for all six models**, and the native
+answers still reproduce the scored predictions (0 changes; drift ≤ 2e-14; 0.6B and 27B 0.0).
+
+Transformers 5.18.0 (`automap.sh --tf518`: the wheel installed `--no-deps` as an overlay on the image, AutoModel
+parity on the verified package) against the same native 5.17 answers: 0.6B and 27B **10,653 / 10,653 prompts
+identical (drift 0.0)**; TF518_REST. The text paths of `modeling_qwen3` / `modeling_qwen3_5` are unchanged
+between 5.17.0 and 5.18.0 (only multimodal code differs).
+
+The release builds re-run all of this before the upload (section 6). The verify and release packages differ only
+in `MODEL_MANIFEST.json` `builder.source_commit`.
 
 ## 6. Publication
 
-PUBLICATION
+After the BF16-resident rollout's record reached integration (`587c0e490`, all six released): integration merged,
+`make_automap.py final` (each final decision carries the rollout's final decision forward; the spec equals the
+verified draft except `gate_receipt`), then per tier `automap.sh --tf518` and `automap.sh --release` on node E:
+`main` must equal the superseded revision, `hf_headroom.sh` (52.37 / 100 GB), `release.sh --upload --collect
+--already-collected` with full native parity before and after the real download, the AutoModel steps before and
+after, the card's Transformers block from the Hub in a fresh `HF_HOME` under Transformers 5.17.0 and 5.18.0
+(`automap-hub`, `automap-hub-tf518`: the only downloaded commit must be the uploaded one), readback, gate seal
+(item 7 included) and the collection readback; then card HTTP, links and `gate evaluate`. Nothing is deleted
+(no `permanently_delete_lfs_files`, so no history rewrite).
+
+- **DEV2.0-0.6B:** the first run uploaded `25669e2d` and stopped at the Hub smoke (the image sets
+  `HF_HUB_OFFLINE=1`, so the "fresh" container was offline; fixed in `539d2769f`); the completed run
+  (`--resume 25669e2d`) published **`08b00e07cb90472e4184e3b91f3188c0ead8935b`** (the packages differ only in
+  `MODEL_MANIFEST.json` `builder.source_commit`), gate 13 / 13, Hub smoke 5.17 and 5.18 bit-identical, post-checks
+  ok. Receipts under `0p6b/release/` (and `0p6b/release-interrupted/`).
+- RELEASE_REST
 
 ## 7. Limits
 
-LIMITS
+- **CPU.** Works with a standard PyTorch (0.8B / 0.6B spot checks above), slowly; CPU (FP32) answers differ from the
+  GPU-scored predictions (0.8B 4 / 200, 0.6B 3 / 200 typed-final decisions; drift ≤ 0.005). The images' ROCm PyTorch
+  has no CPU LAPACK, so Qwen3.5 models (0.8B–27B) cannot run on CPU inside them, natively or through AutoModel.
+- **Kernels.** GPU answers equal the scored ones with FLA 0.5.2, causal-conv1d 1.7.0 and the persisted autotune
+  cache; without the kernels Transformers' reference path is slower and differs in the last digits (as natively).
+- **27B.** The first load downloads the 28 pinned Qwen3.8-27B files (about 52 GB) into the Hugging Face cache;
+  peak GPU memory is the native one (about 52 GB BF16-resident at the release examples' sizes, about 110 GB
+  allocated on the longest evaluated input).
+- **One device.** No `device_map="auto"` sharding (it means the runtime default); no dtype casts; `to()` reloads.
+- **AutoTokenizer** without `trust_remote_code` prompts (standard for repositories with remote code);
+  `pipeline("decision")` takes one request per call (`batch_size` 1).
+- **Versions.** Tested with Transformers 5.17.0 and 5.18.0 (huggingface_hub 1.31, tokenizers 0.23, PyTorch 2.12,
+  Python 3.12); 5.18 needs huggingface_hub ≥ 1.31.
