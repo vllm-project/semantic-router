@@ -5,17 +5,17 @@
 # allocation (DEV2_27B_ALLOC=m6: node B GPU0 / GPU1 / GPU5, node A GPU2). The driver is detached (setsid, no inherited
 # stdin or stdout); its PID is printed. One attempt per arm-seed.
 # Usage: m6-arm.sh NODE GPU ARM SEED MIXTURE MIXTURE_SHA SAVE_EVERY CAP
-#   NODE a|b; ARM M6-IB | M6-IBX | M6-IB2; SEED s1 | s2; MIXTURE a20ib1 | a20ib1x | <stage-2 name>
+#   NODE a|b|d; ARM M6-IB | M6-IBX | M6-IB2; SEED s1 | s2; MIXTURE a20ib1 | a20ib1x | <stage-2 name>
 set -euo pipefail
 NODE=${1:?NODE} GPU=${2:?GPU} ARM=${3:?ARM} SEED=${4:?SEED} MIX=${5:?MIXTURE} MIX_SHA=${6:?MIXTURE_SHA}
 SAVE=${7:?SAVE_EVERY} CAP=${8:?CAP}
 S=$(cd "$(dirname "$0")/../../.." && pwd)
 SRC=$(basename "$(cd "$S/../../.." && pwd)")
-case "$NODE:$GPU" in b:0 | b:1 | b:5 | a:2) ;; *) echo "node $NODE GPU$GPU is outside M6's allocation" >&2; exit 2 ;; esac
+case "$NODE:$GPU" in b:0 | b:1 | b:5 | a:2 | d:[0-7]) ;; *) echo "node $NODE GPU$GPU is outside M6's allocation" >&2; exit 2 ;; esac
 case "$ARM" in M6-IB | M6-IBX | M6-IB2) ;; *) echo "unknown arm $ARM" >&2; exit 2 ;; esac
 case "$SEED" in s1) SEED_VALUE=20260926 ;; s2) SEED_VALUE=20260928 ;; *) echo "SEED is s1 or s2" >&2; exit 2 ;; esac
 [[ "$MIX" =~ ^[a-z0-9]+$ ]] && [[ "$MIX_SHA" =~ ^[0-9a-f]{64}$ ]] || { echo "bad mixture $MIX / $MIX_SHA" >&2; exit 2; }
-if ! [[ "$SAVE" =~ ^[0-9]+$ ]] || ! python3 -c "import sys; sys.exit(0 if 0 < float(sys.argv[1]) <= 18 else 1)" "$CAP"; then
+if ! [[ "$SAVE" =~ ^[0-9]+$ ]] || ! python3 -c "import sys; sys.exit(0 if 0 < float(sys.argv[1]) <= 20 else 1)" "$CAP"; then
   echo "bad SAVE_EVERY $SAVE or CAP $CAP" >&2
   exit 2
 fi

@@ -153,14 +153,16 @@ hub_smoke() {
   mkdir -p "$home/hf-home"
   local volumes=(-v "$src:$src:ro" -v "$work/package:$work/package:ro" -v "$work/receipts:$work/receipts"
                  -v "$home:$home" -v /root/.cache/huggingface/token:/run/decision2-hf/token:ro)
-  local sites=("${site_args[@]}") keep=() e m
+  local sites=("${site_args[@]}") keep=() i m
   for m in "${rw_mounts[@]}"; do volumes+=(-v "$m:$m"); done
   if [[ -n "$extra" ]]; then
     volumes+=(-v "$extra:$extra:ro")
     sites=(--site "$extra" "${site_args[@]}")
   fi
-  for e in "${envs[@]}"; do
-    [[ "$e" =~ ^(HF_HOME|HF_HUB_CACHE|HF_HUB_OFFLINE|TRANSFORMERS_OFFLINE)= ]] || keep+=("$e")
+  # envs holds (-e KEY=VALUE) pairs; drop a cache / offline setting together with its -e.
+  for ((i = 1; i < ${#envs[@]}; i += 2)); do
+    [[ "${envs[i]}" =~ ^(HF_HOME|HF_HUB_CACHE|HF_HUB_OFFLINE|TRANSFORMERS_OFFLINE)= ]] \
+      || keep+=(-e "${envs[i]}")
   done
   # The image sets HF_HUB_OFFLINE=1 / TRANSFORMERS_OFFLINE=1; a user's environment is online.
   docker run --rm --network host --ipc host "${gpu_flags[@]}" -e HF_HOME="$home/hf-home" \

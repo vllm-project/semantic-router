@@ -159,6 +159,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--ref-ib", default="A20r-ib1", help="slices NAME of A20r's IB DEV"
     )
+    parser.add_argument(
+        "--ib-slice", default="ib", help="IB DEV slice file name (ib; ib12 in stage 2)"
+    )
     parser.add_argument("names", nargs="+")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
@@ -183,12 +186,15 @@ def main(argv: list[str] | None = None) -> None:
         return label or name, m6_slices.read_probs(path, rows)
 
     ref_pn1 = probs(args.ref_pn1, "pn1", pn1_rows, "A20r")
-    ref_ib = probs(args.ref_ib, "ib", ib_rows, "A20r")
+    ref_ib = probs(args.ref_ib, args.ib_slice, ib_rows, "A20r")
     slices = {
         n: {
             "pn1": m6_slices.pn1_report(pn1_rows, probs(n, "pn1", pn1_rows), ref_pn1),
             "breadth": m6_slices.breadth_report(
-                ib_rows, probs(n, "ib", ib_rows), ref_ib, args.in_distribution
+                ib_rows,
+                probs(n, args.ib_slice, ib_rows),
+                ref_ib,
+                args.in_distribution,
             ),
         }
         for n in args.names
