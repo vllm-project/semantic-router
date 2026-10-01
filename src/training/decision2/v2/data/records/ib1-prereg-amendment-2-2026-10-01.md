@@ -72,6 +72,9 @@ Run `r2` rebuilds the candidates from the same pinned raw files with the same bu
   - the round-1 stage-S rows;
   - the round-1 stage-R rows.
 - **Sample size.** `per_family = max(18, ceil(216 / F))`, so at least 216 rows (18 per family with 12 families).
+  - **Addendum (committed before any round-2 item was reviewed).** The first draw gave 214 items: once the round-1
+    groups are excluded, `sumedit` has enough distinct groups for only 16. The draw was set aside unreviewed. If a
+    draw falls below 216, the per-family quota is raised by one and the draw is repeated until the total reaches 216.
 - **Fresh salts.** `ib1-r2-review-v1` (sample), `ib1-r2-packet-v1` (packets), `ib1-r2-review-r2-order-v1` and
   `ib1-r2-review-r3-order-v1`. Item ids use the prefix `t`.
 - **Thresholds unchanged.**

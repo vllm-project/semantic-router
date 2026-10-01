@@ -256,14 +256,22 @@ def review_sample(
     eligible = [r for r in rows if r["family"] not in drop]
     families = sorted({r["family"] for r in eligible})
     per_family = max(cfg["min_per_family"], math.ceil(cfg["min_total"] / len(families)))
-    picked = draw(
-        eligible,
-        per_family,
-        cfg["salt"],
-        skip_ids={k["id"] for k in screen_key},
-        skip_groups={k["group_id"] for k in screen_key},
-        present_classes=round_ > 1,
-    )
+    while True:
+        picked = draw(
+            eligible,
+            per_family,
+            cfg["salt"],
+            skip_ids={k["id"] for k in screen_key},
+            skip_groups={k["group_id"] for k in screen_key},
+            present_classes=round_ > 1,
+        )
+        if round_ == 1 or len(picked) >= cfg["min_total"]:
+            break
+        if per_family >= max(
+            collections.Counter(r["family"] for r in eligible).values()
+        ):
+            raise ValueError(f"cannot reach {cfg['min_total']} review rows")
+        per_family += 1
     items, key = packets(picked, cfg["packet_salt"], cfg["prefix"])
     size = math.ceil(len(items) / PACKETS)
     packets_r1 = [items[i : i + size] for i in range(0, len(items), size)]

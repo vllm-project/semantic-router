@@ -331,6 +331,10 @@ class ReviewTest(unittest.TestCase):
             {k["group_id"] for k in first["key"]}
             & {k["group_id"] for k in second["key"]}
         )
+        short = self.rows(("a",), 300) + self.rows(("b",), 10)
+        topped = review.review_sample(short, "x", [], set(), 2)
+        self.assertEqual(topped["sample"]["n"], 216)
+        self.assertEqual(topped["sample"]["sampled"], {"a": 206, "b": 10})
 
     def test_screen_drop_rule_and_verdict(self):
         rows = self.rows(("a",), 20)
