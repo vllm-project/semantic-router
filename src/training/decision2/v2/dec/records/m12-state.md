@@ -12,3 +12,12 @@
   GPU7 `4b-LHA10-s2`; node E GPU0 `08b-RA-s1` (pre-warm), GPU1 `08b-RA-s2`, GPU2 `2b-RA-s1` (pre-warm), GPU3
   `2b-RA-s2`. Post chains (wait on the GPU flock): F GPU3 `4b-LHA`, F GPU7 `4b-LHA10`, E GPU1 `08b-RA`, E GPU3 `2b-RA`.
 - Reference readouts copied from M11 (`4b-LH-f`, `2b-C0-e`, `08b-C0-e`); the C0 IB DEV panel is read by the post chains.
+
+## 2026-10-01 12:15Z — pre-warms passed; 2B closed (no finalist)
+
+- Pre-warm preflights passed on all three tiers (warm-4b-f, warm-2b-e, warm-08b-e); all 8 seeds started by 11:18Z.
+- `2b-RA`: seeds DONE 11:41Z / 11:45Z; soup + 8 panels 11:56Z. Rules (run once, 12:12Z): **not eligible** — Score
+  typed floor 227 < 257 − 0.03·400. Otherwise: T .641 vs C0 .610; HT-DEV v2 −.004 [−.021, .012] TIE; retention
+  −.010 [−.038, .017]; Score5t no flags; false-yes .524 vs .625; IB DEV +.174 [.150, .200], transfer +.151 [.123, .183].
+  The 2B Score head again loses typed items under breadth (milder than M11's collapse, still below the floor).
+- 4B (4 seeds) and 0.8B (2 seeds) training.
