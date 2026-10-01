@@ -81,6 +81,9 @@ Mirror for every Index job: `0403fb5796ca00a5a217f8e7656c77fe6e2205db-src_traini
 
 ## Poll log (newest first)
 
+- 09:52Z: Index shards 10,190 / 8,810 / 9,260 requests, all `ok` so far; 3 containers running. Integration
+  fast-forwarded to `6e8d8e9b9` (merge of this branch); gist 06c updated. Results record: typed FINAL loss by family
+  (`exception_stack` −.225 carries most of it).
 - 09:50Z: **Stage B done** (node B 09:40:35Z, node A 09:38:05Z). Formal v3 **68.75** (T .812, H .582); vs A20r
   −3.61 [−6.54, −1.18]; mlx-diag −.036 [−.052, −.020] (R4 fail); verdicts: items 1–7 **false**, beats AutoJev
   **false** (`VERDICTS-20261001T094035Z.json`). Latency (BF16, M1 roster) 114.6 / 120.5 ms vs A20r 83.6 / 88.8.

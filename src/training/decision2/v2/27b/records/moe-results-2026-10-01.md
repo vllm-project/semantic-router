@@ -162,6 +162,9 @@ reference's own predictions (`readouts/A20r-s1-c892`, SHA-256 `a809af48…`).
   **−.036 [−.052, −.020]** (R4 fail); per type Choice −.012, Noul −.060, Score −.016; type macro −.029 (reported).
 - Typed DEV had shown the opposite (T_dev .927 vs .916, Noul .790 vs .675): the soup's Noul is ≈ .78–.79 on both
   panels while A20r's moves from .675 (DEV) to .921 (FINAL), so typed DEV did not predict the formal typed gap.
+- **Where the typed loss sits** (typed FINAL by family, soup vs A20r; descriptive): `exception_stack` .618 vs .843
+  (**−.225**, 400 questions), `resource_ledger` .800 vs .860 (−.060), `constraint_competition` .855 vs .882 (−.027;
+  ECE .271 vs .038), `evidence_join` .975 vs 1.000 (−.025). One family carries most of the gap.
 
 ## Successor items 1–7 vs DEV2.0-27B (A20r) and "beats AutoJev" (`gates/VERDICTS-20261001T094035Z.json`, `9474a46e…`)
 
