@@ -23,6 +23,7 @@ type semanticResponseStreamState struct {
 	responseID string
 	model      string
 	stop       llmprotocol.StopReason
+	stopSeq    string
 	usage      llmprotocol.Usage
 	items      map[int]*semanticStreamItem
 	order      []int
@@ -284,6 +285,7 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 			}
 		case llmprotocol.EventResponseCompleted:
 			state.terminal = true
+			state.stopSeq = event.MatchedStopSequence
 		case llmprotocol.EventResponseFailed:
 			state.terminal = true
 			state.failed = event.Error
@@ -346,7 +348,8 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 	}
 	return &llmprotocol.Response{
 		Generation: 1, ID: state.responseID, CreatedAt: time.Now().UTC(),
-		Model: state.model, Output: output, StopReason: state.stop, Usage: state.usage,
+		Model: state.model, Output: output, StopReason: state.stop,
+		MatchedStopSequence: state.stopSeq, Usage: state.usage,
 	}, nil
 }
 
