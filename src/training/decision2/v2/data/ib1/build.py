@@ -397,18 +397,24 @@ def equal_labels(rows: list[dict[str, Any]], salt: str) -> list[dict[str, Any]]:
 
 
 def position_band(rows: list[dict[str, Any]], salt: str) -> list[dict[str, Any]]:
-    """Trim over-represented gold positions until every position share is within 1/k ± 0.05."""
-    k = len(rows[0]["options"])
-    by: dict[int, list[dict[str, Any]]] = collections.defaultdict(list)
-    for row in ranked(rows, salt):
-        by[row["label"]].append(row)
-    while True:
-        total = sum(len(v) for v in by.values())
-        top = max(range(k), key=lambda p: (len(by[p]), p))
-        if total and len(by[top]) / total > 1 / k + POSITION_MARGIN:
-            by[top].pop()
-            continue
-        return [row for p in range(k) for row in by[p]]
+    """Per option count k, trim over-represented gold positions until every share is within 1/k ± 0.05."""
+    strata: dict[int, list[dict[str, Any]]] = collections.defaultdict(list)
+    for row in rows:
+        strata[len(row["options"])].append(row)
+    out: list[dict[str, Any]] = []
+    for k, members in sorted(strata.items()):
+        by: dict[int, list[dict[str, Any]]] = collections.defaultdict(list)
+        for row in ranked(members, salt):
+            by[row["label"]].append(row)
+        while True:
+            total = sum(len(v) for v in by.values())
+            top = max(range(k), key=lambda p: (len(by[p]), p))
+            if total and len(by[top]) / total > 1 / k + POSITION_MARGIN:
+                by[top].pop()
+                continue
+            break
+        out += [row for p in range(k) for row in by[p]]
+    return out
 
 
 def twins(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:

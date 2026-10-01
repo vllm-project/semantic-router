@@ -186,6 +186,12 @@ class RebalanceTest(unittest.TestCase):
         banded = build.position_band(skewed, "s")
         share = sum(r["label"] for r in banded) / len(banded)
         self.assertLessEqual(share, 0.55 + 1e-9)
+        six = [{"key": f"o{i}", "description": str(i)} for i in range(6)]
+        mixed = skewed + [
+            {"id": f"x{i}", "label": i % 6, "options": six} for i in range(120)
+        ]
+        kept = build.position_band(mixed, "s")
+        self.assertEqual(sum(len(r["options"]) == 6 for r in kept), 120)
 
 
 class IndexGuardTest(unittest.TestCase):

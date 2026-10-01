@@ -160,9 +160,27 @@ def balance(rows: Sequence[Mapping[str, Any]]) -> tuple[dict[str, Any], list[str
                 gold_longer is None or low <= gold_longer <= high
             )
         else:
-            shares = [share(labels[p], len(members)) for p in range(k)]
-            entry["shares"] = shares
-            ok = all(abs(s - 1 / k) <= CLASS_MARGIN + 1e-9 for s in shares)
+            strata: dict[int, collections.Counter] = collections.defaultdict(
+                collections.Counter
+            )
+            for row in members:
+                strata[len(row["options"])][row["label"]] += 1
+            entry["shares_by_option_count"] = {
+                str(size): [share(c[p], sum(c.values())) for p in range(size)]
+                for size, c in sorted(strata.items())
+            }
+            ok = True
+            for size, c in strata.items():
+                total = sum(c.values())
+                small = total < 20 * size
+                entry.setdefault("small_strata_reported", [])
+                if small:
+                    entry["small_strata_reported"].append(size)
+                    continue
+                ok = ok and all(
+                    abs(c[p] / total - 1 / size) <= CLASS_MARGIN + 1e-9
+                    for p in range(size)
+                )
         entry["pass"] = ok
         if not ok:
             fails.append(name)
@@ -180,10 +198,7 @@ def stats(
     for name, rows in (("train", train), ("dev", dev)):
         balanced, failed = balance(rows)
         out[name] = {"sizes": sizes(rows, tokens), "balance": balanced}
-        if name == "train":
-            fails += [f"{name}:{family}" for family in failed]
-        else:
-            out[name]["balance_failures_reported"] = failed
+        fails += [f"{name}:{family}" for family in failed]
     out["shared_groups"] = len(
         {r["group_id"] for r in train} & {r["group_id"] for r in dev}
     )
