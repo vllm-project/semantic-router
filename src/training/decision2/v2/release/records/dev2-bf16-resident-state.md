@@ -8,6 +8,11 @@ leases `owner.release-bf16r`). Started 2026-10-01 02:23Z.
 
 ## Now
 
+- 05:35Z — **DONE: all six released** as runtime-only revisions, 0 answer changes pre and post on every scored prompt
+  and on mlx-diag, weights byte-identical, every post-check ok. 0.6B `def20a1c`, 0.8B `e13a40f8`, 2B `56950ec5`, 4B
+  `4f560ae5`, 9B `b4f65fa8`, 27B `4e89288d`. Record
+  [`dev2-bf16-resident-2026-10-01.md`](dev2-bf16-resident-2026-10-01.md); 2.684 GPU-h; storage 52.13 / 100 GB. All
+  `owner.release-bf16r` lease entries removed. Remaining: integration merge and gist 07 (this commit), nothing running.
 - 04:28Z — **0.6B, 0.8B, 2B, 4B released** (0 answer changes pre and post on all four panels; weights byte-identical;
   every post-check ok): 0.6B `def20a1c`, 0.8B `e13a40f8`, 2B `56950ec5`, 4B `4f560ae5` (4B mlx-diag in its own
   no-upload run, 0 changes). Receipts copied under `<key>/release/` (4B also `4b/mlx-parity/`).
@@ -39,11 +44,11 @@ leases `owner.release-bf16r`). Started 2026-10-01 02:23Z.
 
 | Step | Where | Status |
 | --- | --- | --- |
-| Runtime: BF16-exact backbone Linear weights BF16-resident on GPU (CPU unchanged), `bf16_resident=False` opt-out; tests | worktree | in progress |
-| Specs + decisions (runtime-only path: superseded judgement carried forward, same gate profile) | worktree | |
-| Bench old vs new (400 typed-final items, p50/p95, peak memory), same GPU, fresh frozen-cache copies | node A GPU0/1; 27B node B GPU2 | |
-| Release per tier, in order 0.6B, 0.8B, 2B, 4B, 9B, 27B: `release.sh --upload --collect --already-collected`, full parity pre/post | node A GPU0/1 (0.6B–9B); node B GPU2 (27B) | |
-| Record, gist 07, merge into `xunzhuo/decision-2-training` | worktree | |
+| Runtime: BF16-exact backbone Linear weights BF16-resident on GPU (CPU unchanged), `bf16_resident=False` opt-out; tests | worktree | done (`5dc962b00`; tests 5 / 5 unit, 3 / 3 GPU fixture) |
+| Specs + decisions (runtime-only path: superseded judgement carried forward, same gate profile) | worktree | done (`45e097444`) |
+| Bench old vs new (400 typed-final items, p50/p95, peak memory), same GPU, fresh frozen-cache copies | node A GPU1; 27B node B GPU2 | done (400 / 400 identical each) |
+| Release per tier, in order 0.6B, 0.8B, 2B, 4B, 9B, 27B: `release.sh --upload --collect --already-collected`, full parity pre/post | node A GPU0 (0.6B–9B); node B GPU2 (27B) | done, all six |
+| Record, gist 07, merge into `xunzhuo/decision-2-training` | worktree | done |
 
 ## Facts (verified)
 
