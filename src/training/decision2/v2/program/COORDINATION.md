@@ -205,6 +205,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 03:40 — **27B M6 continuation #2 handed off (0d2e488f); continuation #3 launched.**
+  - **No results yet.** First gates ≈ 22:30Z, first verdict ≈ 23:30Z, the M6-IB2PN hedge ends ≈ 06:20Z Oct 2.
+  - **#2's work:**
+    - C1 recheck exposure 0 for all four arms;
+    - a fix for a shared-gates-dir contrast collision (a node B guard plus a separate cross-arm stage);
+    - **amendment 4 = the Index path**, recorded before any result, with tooling for restage / run / paired bootstrap /
+      item 1';
+    - the restage control was bit-identical;
+    - Index-contamination audit: 0 test items in any arm's data.
+  - **Coordinator decisions:**
+    - **The Index eval allowance rises to ≤ 40 GPU-h.** Index runs only for Index-path candidates and the chosen
+      successor; node C GPU1–7 and node D GPU4–7.
+    - **Choice order confirmed:** classic passers first, then Index-path passers by the Index-gain lower bound.
+    - **Release target:** `Decision-2.0-Vega-27B`, after the card-worker fix round lands, on the then-current `main`
+      with the new card generator and the "audited" footnote.
+  - **Deviation:** a doubled tool call moved the Index-control directory. It was restored and scored from its own
+    files; no GPU job ran twice.
+
 - 2026-10-02 03:15 — **M15 closed (c473a3b2): no arm passes development; the MLX-DEV guard does NOT track formal
   mlx-diag → MLX-DEV2 commissioned (c0ce08eb).** Results `b5dac4abb`, state `4b8b4279e`, gist 04; integration
   `a3b6a444b`; 15.14 of 70 GPU-h.
