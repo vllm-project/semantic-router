@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import threading
 import time
@@ -53,6 +54,10 @@ M6_NODE_GPUS = {
 }
 M6_MAX_CAP_HOURS = 20.0
 LEASE_ROOT = Path("/data/dev2/leases")
+SINGLE_LINE_KEY = re.compile(r"(?:^|\s)[A-Za-z_][A-Za-z0-9_]*=")
+SINGLE_LINE_PAIR = re.compile(
+    r"(?:^|\s)([A-Za-z_][A-Za-z0-9_]*)=(.*?)(?=\s[A-Za-z_][A-Za-z0-9_]*=|$)"
+)
 
 
 def m6_allocation() -> bool:
@@ -114,8 +119,14 @@ def read_lease(owner: Path) -> dict:
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        lines = [line.split("=", 1) for line in text.splitlines() if "=" in line]
-        return {key.strip(): value.strip() for key, value in lines}
+        lines = [line for line in text.splitlines() if line.strip()]
+        if len(lines) == 1 and len(SINGLE_LINE_KEY.findall(lines[0])) > 1:
+            # IX1 writes one line: "track=eval-ix1 status=released (...) last_job_end_utc=..."
+            return {
+                key: value.strip() for key, value in SINGLE_LINE_PAIR.findall(lines[0])
+            }
+        pairs = [line.split("=", 1) for line in lines if "=" in line]
+        return {key.strip(): value.strip() for key, value in pairs}
 
 
 def write_lease(

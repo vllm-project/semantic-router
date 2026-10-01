@@ -77,6 +77,29 @@ class M6LaunchTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 launch.node_name()
 
+    def test_read_lease_single_line_owner(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            owner = Path(tmp) / "owner"
+            owner.write_text(
+                "track=eval-ix1 status=released (IX1 follow-up complete) "
+                "last_job_end_utc=2026-10-01T08:18:09Z\n"
+            )
+            self.assertEqual(
+                launch.read_lease(owner),
+                {
+                    "track": "eval-ix1",
+                    "status": "released (IX1 follow-up complete)",
+                    "last_job_end_utc": "2026-10-01T08:18:09Z",
+                },
+            )
+            owner.write_text("track=27b\npurpose=a b=c (kept whole)\nstatus=idle\n")
+            self.assertEqual(launch.read_lease(owner)["purpose"], "a b=c (kept whole)")
+            owner.write_text("purpose=27b M5 closed; reserved-idle for track 27b\n")
+            self.assertEqual(
+                launch.read_lease(owner),
+                {"purpose": "27b M5 closed; reserved-idle for track 27b"},
+            )
+
     def test_launch3_idle_status_free_text(self):
         launch3 = importlib.import_module("v2.27b.m4b.launch3")
         for ok in ("released", "released (IX1 complete)", "idle", "reserved-idle"):
