@@ -643,7 +643,7 @@ def evaluate(work: Path) -> dict[str, Any]:
         "2_regressions_disclosed": {
             "passed": readback.get("passed", False)
             and not readback.get("card_problems"),
-            "evidence": f"{len(build['card']['tradeoffs'])} results below {below} listed in the card tradeoffs table",
+            "evidence": f"{len(build['card']['tradeoffs'])} results below {below} summarised in the card limitations and listed in evaluation/EVALUATION.md",
         },
         "3_download_hash_parameters": {
             "passed": bool(downloaded)

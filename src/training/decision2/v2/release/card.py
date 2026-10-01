@@ -1,28 +1,29 @@
-"""Product model card in the Decision 1.0 design, from same-panel reports only.
+"""Model card of a Decision 2.0 release, from same-panel reports only.
 
-Layout: owl banner, what the model is for, the three decision types, measured
-same-panel results (score table, rank chart, model x task chart, public-231
-rank chart), tradeoffs versus the tier's own Decision 1.0 model, a runnable
-local System One example, then short model details and limits. No Pareto chart,
-no internal gate ledger. Every comparator passes the licence filter; charts come
-from the eval track's generator (``v2.eval.charts``) on relabeled copies of the
-exact reports (display names only).
+README layout (a standard model-release card): YAML metadata; title, one
+paragraph and a link row; highlights; a model overview table; evaluation (a
+JevArena bar chart, a small JevBench public-231 chart and one compact table of
+this model, its Decision 1.0 counterpart and the same-size peers, with one
+footnote line); a Transformers quickstart; short limitations; training data with
+the licence attributions; licence; citation. Methods, per-task results, paired
+intervals, calibration, comparator notes and every result below the counterpart
+go to ``evaluation/EVALUATION.md``. Internal release facts (gate items,
+decision and weights hashes, runtime notes) stay in the release records.
 
-At a size without a Decision 1.0 model (``facts["comparison"] == "no-1.0"``) the
-own-1.0 slot states that no Decision 1.0 model exists at this size, and the
-summary and tradeoffs compare with the release gate's reference peer (role
-``reference``) when that peer passes the licence filter.
+Every comparator passes the licence filter. At a size without a Decision 1.0
+model (``facts["comparison"] == "no-1.0"``) the counterpart slot is the release
+gate's reference peer (role ``reference``).
 """
 
 from __future__ import annotations
 
 import json
-import math
 import re
 import shutil
 from pathlib import Path
 from typing import Any
 
+from v2.release import card_charts
 from v2.release import licence as licence_policy
 from v2.release.examples import EXAMPLES
 from v2.release.layout import CHART_FILES, sha_file
@@ -35,7 +36,7 @@ FORBIDDEN = (
         "internal gate ledger",
     ),
     (re.compile(r"GPU-hours?", re.I), "internal compute accounting"),
-    (re.compile(r"\bnode [AB]\b|\b\d{1,3}(?:\.\d{1,3}){3}\b"), "machine identity"),
+    (re.compile(r"\bnode [A-F]\b|\b\d{1,3}(?:\.\d{1,3}){3}\b"), "machine identity"),
     (re.compile(r"/data/|/root/|/home/"), "private path"),
     (
         re.compile(r"hf_[A-Za-z0-9]{20,}|jv_live_|gho_[A-Za-z0-9]|apikey_"),
@@ -45,40 +46,61 @@ FORBIDDEN = (
         re.compile(r"\bSOTA\b|state[- ]of[- ]the[- ]art", re.I),
         "unsupported leaderboard claim",
     ),
+    (re.compile(r"JevArena[ -]v3|\bv3\b(?!\.)", re.I), "internal panel version"),
 )
-TYPED_N = {"choice": 800, "noul": 800, "score": 400}
+# The README carries none of the internal evaluation vocabulary (EVALUATION.md may).
+README_FORBIDDEN = (
+    (re.compile(r"post-key", re.I), "post-key wording"),
+    (re.compile(r"\bBrier\b|\bECE\b"), "calibration metrics"),
+    (re.compile(r"mlx-diag", re.I), "development diagnostic"),
+    (re.compile(r"Download and decide|from decision2 import"), "native runtime usage"),
+    (re.compile(r"\bowl\b", re.I), "banner artwork"),
+    (re.compile(r"\b[0-9a-f]{40}\b"), "revision hash"),
+)
+TEXT_KEYS = {
+    "description",
+    "model_type",
+    "base_model",
+    "precision",
+    "limitations",
+    "training_summary",
+    "comparator_note",
+    "c1_result",
+    "transformers_note",
+    "staging_notice",
+}
+CITATION_YEAR = 2026
+AUTHOR = "vLLM Semantic Router Team"
 NO_OWN_1_0 = "no-1.0"
 NO_OWN_1_0_TEXT = "There is no Decision 1.0 model at this size."
 PUBLIC231_NOTE = (
-    "JevBench public 231: public-only rerun (about a third of the official Intelligence "
-    "inputs), not the official JevBench score; easy tier at ceiling; totals within about "
-    "10 items are not distinguishable."
+    "JevBench public 231 is an independent rerun of the 231 public questions (about a third of the "
+    "official Intelligence inputs), not the official JevBench score; its easy tier is at ceiling, and "
+    "totals within about 10 items are not distinguishable."
 )
+# Public-231 totals closer than this are not distinguishable (PUBLIC231_NOTE).
+PUBLIC_MARGIN = 10
+# A same-size peer's human-labelled transfer lead below this (median macro-F1) is not listed.
+TRANSFER_MARGIN = 0.02
+MAX_LIMITATIONS = 5
 MLX_SCHEMA = "dev2-mlx-diag-score/1"
-# mlx-diag Score is built from XNLI (CC BY-NC 4.0, internal use only); cards show Choice and Noul.
+# mlx-diag Score is built from XNLI (CC BY-NC 4.0, internal use only); EVALUATION.md shows Choice and Noul.
 MLX_CARD_TYPES = ("choice", "noul")
-ARCHITECTURE = {
-    "kai-native": (
-        "Three 22-layer bidirectional encoder paths share multilingual embeddings. "
-        "Each decision type has its own interaction layers and candidate readout; "
-        "the candidates of a question are scored together in one pass."
-    ),
-    "qwen-full": (
-        "A causal text backbone reads the state, the question and every supplied "
-        "candidate once. A shared candidate head scores the candidates against a "
-        "global query and returns probabilities without generating text."
-    ),
-    "qwen-adapter": (
-        "A LoRA adapter over the pinned base text backbone reads the state, the "
-        "question and every supplied candidate once. A shared candidate head scores "
-        "the candidates against a global query and returns probabilities without "
-        "generating text."
-    ),
-}
+MLX_NAMES = {"choice": "Choice", "noul": "Noul"}
+DEFAULT_PRECISION = "BF16 backbone compute, FP32 decision head"
+TRANSFORMERS_HEADING = "### Use with 🤗 Transformers"
+CHART_RANK, CHART_PUBLIC = CHART_FILES
 
 
 def lint(text: str) -> list[str]:
     return sorted({reason for pattern, reason in FORBIDDEN if pattern.search(text)})
+
+
+def lint_readme(text: str) -> list[str]:
+    return sorted(
+        set(lint(text))
+        | {reason for pattern, reason in README_FORBIDDEN if pattern.search(text)}
+    )
 
 
 def _report(path: Path) -> dict[str, Any]:
@@ -163,51 +185,96 @@ def select_reports(
     return {"shown": shown, "excluded": excluded}
 
 
+def _label(entry: dict[str, Any]) -> str:
+    return entry.get("label") or entry["data"]["model"]["label"]
+
+
+def _score(entry: dict[str, Any]) -> float:
+    return entry["data"]["v3"]["score"]
+
+
+def _transfer(entry: dict[str, Any]) -> float:
+    return entry["data"]["v3"]["H"]
+
+
+def _public(entry: dict[str, Any]) -> int:
+    return entry["data"]["panels"]["public231"]["correct"]
+
+
 def render_charts(
     shown: list[dict[str, Any]], work: Path, assets: Path
 ) -> dict[str, str]:
-    """Eval-track chart generator on relabeled copies; its receipt stays private."""
-    from v2.eval.charts import render
+    """The JevArena and JevBench public-231 bar charts; their receipt stays private."""
+    from v2.eval.charts import DEFAULT_LICENCES, licence_class
 
-    relabeled = work / "relabeled-reports"
-    relabeled.mkdir(parents=True, exist_ok=False)
-    paths, model_ids = [], {}
+    model_ids = {}
     for entry in shown:
-        data = json.loads(json.dumps(entry["data"]))
-        data["model"]["label"] = entry.get("label") or data["model"]["label"]
+        model = dict(entry["data"]["model"])
         if entry["role"] == "candidate":
-            # The packaged model is always drawn in the Decision 2.0 colour.
-            data["model"]["family"] = "decision2"
-        elif entry.get("repo_id") and not data["model"].get("model_id"):
-            # Some adopted reports name no model id; the chart licence lookup needs one.
-            model_ids[data["model"]["label"]] = entry["repo_id"]
-        path = relabeled / f"{entry['key']}.json"
-        path.write_text(
-            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-        paths.append(path)
-    output = work / "charts"
-    receipt = render(paths, output, model_ids=model_ids or None)
-    shutil.move(str(output / "charts.json"), str(work / "charts-receipt.json"))
+            continue
+        if entry.get("repo_id") and not model.get("model_id"):
+            # Some adopted reports name no model id; the licence lookup needs one.
+            model_ids[model["label"]] = entry["repo_id"]
+            model["model_id"] = entry["repo_id"]
+        if licence_class({"model": model}) not in DEFAULT_LICENCES:
+            raise ValueError(f"{_label(entry)}: licence class not shown on cards")
+    rows = [{"label": _label(e), "highlight": e["role"] == "candidate"} for e in shown]
+    scores = [_score(e) for e in shown]
+    figures_svg = {
+        CHART_RANK: card_charts.bar_chart(
+            title="JevArena",
+            subtitle="Typed decisions and 15 human-labelled transfer tasks, same frozen panel for every model (higher is better)",
+            rows=[{**r, "value": v} for r, v in zip(rows, scores)],
+            maximum=card_charts.axis_maximum(scores, 10, 50),
+            step=10,
+            digits=2,
+        ),
+        CHART_PUBLIC: card_charts.bar_chart(
+            title="JevBench (public 231)",
+            subtitle="Correct answers out of 231 public questions (higher is better)",
+            rows=[{**r, "value": float(_public(e))} for r, e in zip(rows, shown)],
+            maximum=231,
+            step=50,
+            digits=0,
+        ),
+    }
     assets.mkdir(parents=True, exist_ok=True)
     figures = {}
-    for relative in CHART_FILES:
-        name = Path(relative).name
-        if not (output / name).is_file():
-            raise ValueError(f"Chart generator did not produce {name}")
-        shutil.copyfile(output / name, assets / name)
-        figures[relative] = sha_file(assets / name)
-        if lint((assets / name).read_text(encoding="utf-8")):
-            raise ValueError(f"{name} failed the card content lint")
-    if set(receipt["figures"]) != {Path(r).name for r in CHART_FILES}:
-        raise ValueError(
-            "Unexpected chart set; cards carry exactly rank, model x task and public-231 rank"
+    for relative, svg in figures_svg.items():
+        if lint(svg):
+            raise ValueError(f"{relative} failed the card content lint")
+        target = assets.parent / relative
+        target.write_text(svg, encoding="utf-8")
+        figures[relative] = sha_file(target)
+    work.mkdir(parents=True, exist_ok=True)
+    (work / "charts-receipt.json").write_text(
+        json.dumps(
+            {
+                "schema": "dev2-card-charts/2",
+                "reports": {e["key"]: e["sha256"] for e in shown},
+                "model_id_overrides": model_ids,
+                "values": {
+                    _label(e): {"jevarena": _score(e), "public231": _public(e)}
+                    for e in shown
+                },
+                "figures": figures,
+            },
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
         )
+        + "\n",
+        encoding="utf-8",
+    )
     return figures
 
 
 def _pct(value: float) -> str:
     return f"{100 * value:.1f}%"
+
+
+def _f1(value: float) -> str:
+    return f"{100 * value:.1f}"
 
 
 def _typed(report: dict[str, Any], kind: str) -> tuple[int, int]:
@@ -239,41 +306,27 @@ def _mlx_cell(entry: dict[str, Any]) -> str:
     )
 
 
-def score_table(
-    shown: list[dict[str, Any]], candidate_loaded: int | None = None
-) -> tuple[str, list[dict[str, Any]]]:
-    ordered = sorted(shown, key=lambda e: -e["data"]["v3"]["score"])
-    mlx = any(e.get("mlx") for e in shown)
-    lines = [
-        "| Rank | Model | Parameters | JevArena v3 ↑ | T | H | Choice | Noul | Score | "
-        "JevBench public 231 (easy / standard / hard) ↑ | "
-        + ("mlx-diag non-English Choice / Noul ↑ | " if mlx else "")
-        + "Typed Brier / ECE ↓ |",
-        "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | "
-        + ("---: | " if mlx else "")
-        + "---: |",
-    ]
-    for rank, entry in enumerate(ordered, 1):
-        report = entry["data"]
-        label = entry.get("label") or report["model"]["label"]
-        bold = entry["role"] == "candidate"
-        name = f"**{label}**" if bold else label
-        loaded = loaded_parameters(entry, candidate_loaded)
-        typed = " | ".join(
-            f"{c}/{n}"
-            for c, n in (_typed(report, k) for k in ("choice", "noul", "score"))
-        )
-        public = report["panels"]["public231"]
-        final = report["panels"]["typed-final"]
-        v3 = f"{report['v3']['score']:.2f}"
-        lines.append(
-            f"| {rank} | {name} | {loaded / 1e9:.2f}B | {'**' + v3 + '**' if bold else v3} | "
-            f"{report['v3']['T']:.3f} | {report['v3']['H']:.3f} | {typed} | "
-            f"{public['correct']}/{public['items']} ({_tiers(public)}) | "
-            + (f"{_mlx_cell(entry)} | " if mlx else "")
-            + f"{final['brier']:.3f} / {final['ece_10']:.3f} |"
-        )
-    return "\n".join(lines), ordered
+TASK_NAMES = {
+    "conv_go_awry": "Conversations Gone Awry",
+    "emotion": "Emotion",
+    "flute": "FLUTE figurative language",
+    "ibc": "Ideological Books Corpus",
+    "indian_english_dialect": "Indian English dialect",
+    "media_ideology": "Media ideology",
+    "mrf": "Misinfo Reaction Frames",
+    "persuasion": "Persuasion",
+    "raop": "Random Acts of Pizza",
+    "reddit_humor": "Reddit humour",
+    "talklife": "TalkLife empathy",
+    "tempowic": "TempoWiC",
+    "tropes": "Character tropes",
+    "wiki_corpus": "Wikipedia power",
+    "wiki_politeness": "Wikipedia politeness",
+}
+
+
+def _task(name: str) -> str:
+    return TASK_NAMES.get(name, name.replace("_", " "))
 
 
 def tradeoff_rows(
@@ -282,7 +335,7 @@ def tradeoff_rows(
     candidate_mlx: dict[str, Any] | None = None,
     own_mlx: dict[str, Any] | None = None,
 ) -> list[tuple[str, str, str]]:
-    """Every per-type, transfer, per-task, public-tier and shown mlx-diag regression versus own 1.0."""
+    """Every per-type, transfer, per-task, public and mlx-diag result below the counterpart."""
     rows = []
     for kind in ("choice", "noul", "score"):
         (c, n), (o, _) = _typed(candidate, kind), _typed(own, kind)
@@ -291,7 +344,7 @@ def tradeoff_rows(
     if candidate["v3"]["H"] < own["v3"]["H"]:
         rows.append(
             (
-                "Human transfer H (median task macro-F1)",
+                "Human-labelled transfer (median task macro-F1)",
                 f"{candidate['v3']['H']:.3f}",
                 f"{own['v3']['H']:.3f}",
             )
@@ -316,13 +369,21 @@ def tradeoff_rows(
         if tasks_c[task]["macro_f1"] < tasks_o[task]["macro_f1"]:
             rows.append(
                 (
-                    f"Transfer: {task.replace('_', ' ')} (macro-F1)",
+                    f"Transfer: {_task(task)} (macro-F1)",
                     _pct(tasks_c[task]["macro_f1"]),
                     _pct(tasks_o[task]["macro_f1"]),
                 )
             )
-    tiers_c = candidate["panels"]["public231"]["tiers"]
-    tiers_o = own["panels"]["public231"]["tiers"]
+    public_c, public_o = candidate["panels"]["public231"], own["panels"]["public231"]
+    if public_c["correct"] < public_o["correct"]:
+        rows.append(
+            (
+                "JevBench public 231 (correct)",
+                f"{public_c['correct']}/{public_c['items']}",
+                f"{public_o['correct']}/{public_o['items']}",
+            )
+        )
+    tiers_c, tiers_o = public_c["tiers"], public_o["tiers"]
     for tier in ("easy", "standard", "hard"):
         if tier in tiers_c and tiers_c[tier]["correct"] < tiers_o[tier]["correct"]:
             rows.append(
@@ -364,9 +425,7 @@ def _paired_peers(
     shown: list[dict[str, Any]], paths: dict[str, Path]
 ) -> dict[str, dict[str, Any]]:
     """Candidate-minus-peer intervals for shown peers; each file must pair exactly those two reports."""
-    candidate = next(e for e in shown if e["role"] == "candidate")["data"]["v3"][
-        "score"
-    ]
+    candidate = _score(next(e for e in shown if e["role"] == "candidate"))
     result = {}
     for entry in shown:
         path = paths.get(entry["key"])
@@ -375,7 +434,7 @@ def _paired_peers(
         point = _report(Path(path))["point"]
         if (
             abs(point["left"]["score"] - candidate) > 1e-9
-            or abs(point["right"]["score"] - entry["data"]["v3"]["score"]) > 1e-9
+            or abs(point["right"]["score"] - _score(entry)) > 1e-9
         ):
             raise ValueError(
                 f"{entry['key']}: paired file is not candidate minus this peer"
@@ -384,65 +443,62 @@ def _paired_peers(
     return result
 
 
-def code_example(local: str) -> str:
+def _example_arguments() -> tuple[str, str]:
     example = EXAMPLES[0]
     state = json.dumps(example["state"], ensure_ascii=False)
     questions = json.dumps(example["questions"], ensure_ascii=False, indent=4).replace(
         "\n", "\n    "
     )
-    return (
-        "import json\n"
-        "import os\n"
-        "import sys\n\n"
-        f'sys.path.insert(0, os.path.abspath("{local}"))\n'
-        "from decision2 import Decision2\n\n"
-        f'model = Decision2.from_pretrained("{local}")  # cuda:0 if a GPU is visible, else CPU\n'
-        "result = model.system_one(\n"
-        f"    state={state},\n"
-        f"    questions={questions},\n"
-        ")\n"
-        'print(json.dumps(result["answers"], indent=2))\n'
-    )
-
-
-TRANSFORMERS_HEADING = "## Use with 🤗 Transformers"
+    return state, questions
 
 
 def transformers_example(repo: str) -> str:
-    example = EXAMPLES[0]
-    state = json.dumps(example["state"], ensure_ascii=False)
-    questions = json.dumps(example["questions"], ensure_ascii=False, indent=4).replace(
-        "\n", "\n    "
-    )
+    state, questions = _example_arguments()
     return (
         "import json\n\n"
         "from transformers import AutoModel\n\n"
-        f'model = AutoModel.from_pretrained("{repo}", trust_remote_code=True)  # cuda:0 if a GPU is visible, else CPU\n'
+        f'model = AutoModel.from_pretrained("{repo}", trust_remote_code=True)\n'
         "result = model.system_one(\n"
         f"    state={state},\n"
         f"    questions={questions},\n"
         ")\n"
         'print(json.dumps(result["answers"], indent=2))\n'
     )
+
+
+def pip_line(facts: dict[str, Any]) -> str:
+    requirements = facts.get("runtime_requirements") or {}
+    packages = ['"transformers>=5.17"', "torch", "safetensors"]
+    if "peft" in requirements:
+        packages.append("peft")
+    return "pip install " + " ".join(packages)
 
 
 def transformers_note(facts: dict[str, Any], text: dict[str, Any]) -> str:
     repo = facts["repo_id"]
     remote = facts.get("remote_code") or {}
+    requirements = facts.get("runtime_requirements") or {}
     note = (
-        "`trust_remote_code=True` runs this repository's `modeling_decision2.py`, which loads the same "
-        "`decision2/` runtime as the download above after checking every file, so the answers are the "
-        "native ones. "
-        f'`pipeline("decision", model="{repo}", trust_remote_code=True)` returns the same response for '
-        '`{"state": ..., "questions": {...}}`. Pass `device_map="cpu"` or `"cuda:1"` to choose the device; '
-        "the model runs on one device with the runtime's own numerics, so `dtype` stays unset."
+        f'`pipeline("decision", model="{repo}", trust_remote_code=True)` accepts '
+        '`{"state": ..., "questions": {...}}` and returns the same answers.'
     )
+    if "flash-linear-attention" in requirements:
+        note += (
+            ' The model loads on `cuda:0`; pass `device_map="cuda:1"` to choose another GPU. Install '
+            "`flash-linear-attention` and `causal-conv1d` for the kernels the evaluation used; without them "
+            "Transformers runs slower reference code whose probabilities differ in the last digits. CPU "
+            "inference was not verified."
+        )
+    else:
+        note += (
+            " The model loads on `cuda:0` when a GPU is visible and on the CPU otherwise; pass "
+            '`device_map="cpu"` or `device_map="cuda:1"` to choose.'
+        )
     base = remote.get("base")
     if base:
         note += (
-            f" It downloads the {len(base['files_sha256'])} pinned files of "
-            f"[{base['repo_id']}](https://huggingface.co/{base['repo_id']}) at `{base['revision']}` "
-            "into the Hugging Face cache and checks their SHA-256 before applying the adapter."
+            f" On first load it downloads the pinned base [{base['repo_id']}]"
+            f"(https://huggingface.co/{base['repo_id']}) and checks every file's SHA-256."
         )
     tested = remote.get("tested")
     if tested:
@@ -452,60 +508,289 @@ def transformers_note(facts: dict[str, Any], text: dict[str, Any]) -> str:
     return note
 
 
-def auto_limits(candidate: dict[str, Any], cap: int) -> list[str]:
-    limits = [
-        "JevArena v3 answers were available during development, so these are post-key "
-        "same-panel comparisons, not an untouched blind test.",
+def _significance(paired: dict[str, Any] | None) -> str | None:
+    if not paired:
+        return None
+    low, high = paired["ci95"]
+    return "above" if low > 0 else "below" if high < 0 else "level"
+
+
+def highlights(ctx: dict[str, Any]) -> list[str]:
+    shown = ctx["shown"]
+    candidate, own = ctx["candidate"], ctx["own"]
+    score = _score(candidate)
+    no_own = ctx.get("comparison") == NO_OWN_1_0
+    lines = []
+    if own is None:
+        lines.append(f"**JevArena {score:.2f}.** {NO_OWN_1_0_TEXT}")
+    else:
+        other, delta = _label(own), score - _score(own)
+        strongest = _score(own) >= max(_score(e) for e in shown if e is not candidate)
+        role = (
+            "its Decision 1.0 counterpart"
+            if not no_own
+            else (
+                "the strongest other same-size model"
+                if strongest
+                else "the reference same-size model"
+            )
+        )
+        paired, state = ctx["paired"], _significance(ctx["paired"])
+        interval = (
+            f"paired 95% CI {paired['ci95'][0]:+.2f} to {paired['ci95'][1]:+.2f}"
+            if paired
+            else None
+        )
+        if state == "above":
+            text = f"{delta:+.2f} over {role}, {other} ({interval})"
+        elif state == "below":
+            text = f"{delta:+.2f} below {role}, {other} ({interval})"
+        elif state == "level":
+            text = f"level with {role}, {other} ({_score(own):.2f}; difference {delta:+.2f}, {interval})"
+        else:
+            text = f"versus {_score(own):.2f} for {role}, {other} ({delta:+.2f})"
+        lines.append(
+            f"**JevArena {score:.2f}**, {text}."
+            + (f" {NO_OWN_1_0_TEXT}" if no_own else "")
+        )
+    ordered = sorted(shown, key=lambda e: -_score(e))
+    rank = ordered.index(candidate) + 1
+    above = [
+        _label(e)
+        for e in ordered
+        if e is not candidate
+        and e is not own
+        and _significance(ctx["paired_peers"].get(e["key"])) == "above"
     ]
+    standing = (
+        f"Highest JevArena score of the {len(ordered)} same-size models compared"
+        if rank == 1
+        else f"Ranks {rank} of {len(ordered)} on JevArena among the same-size models compared"
+    )
+    if above:
+        standing += f"; significantly above {_join(above)} (paired 95% CIs)"
+    lines.append(standing + ".")
+    lines.append(
+        'Runs with stock 🤗 Transformers through `AutoModel` or `pipeline("decision")` with '
+        "`trust_remote_code=True`."
+    )
+    return lines
+
+
+def _join(items: list[str]) -> str:
+    if len(items) <= 2:
+        return " and ".join(items)
+    return ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def weaker_than_counterpart(ctx: dict[str, Any]) -> str | None:
+    own = ctx["own"]
+    if own is None:
+        return None
+    candidate = ctx["candidate"]
+    c, o = candidate["data"], own["data"]
+    parts = []
+    typed = []
+    for kind in ("choice", "noul", "score"):
+        (mine, n), (theirs, _) = _typed(c, kind), _typed(o, kind)
+        if mine < theirs:
+            typed.append(f"{kind.title()} {mine} vs {theirs} of {n}")
+    if typed:
+        parts.append(f"typed decisions ({'; '.join(typed)})")
+    if c["v3"]["H"] < o["v3"]["H"]:
+        parts.append(
+            f"human-labelled transfer overall ({_f1(c['v3']['H'])} vs {_f1(o['v3']['H'])})"
+        )
+    tasks_c, tasks_o = c["panels"]["css15"]["tasks"], o["panels"]["css15"]["tasks"]
+    lower = sorted(
+        (t for t in tasks_c if tasks_c[t]["macro_f1"] < tasks_o[t]["macro_f1"]),
+        key=lambda t: tasks_c[t]["macro_f1"] - tasks_o[t]["macro_f1"],
+    )
+    if lower:
+        largest = ", ".join(
+            f"{_task(t)} {_f1(tasks_c[t]['macro_f1'])} vs {_f1(tasks_o[t]['macro_f1'])}"
+            for t in lower[:2]
+        )
+        parts.append(
+            f"{len(lower)} of {len(tasks_c)} human-labelled transfer tasks (largest gaps, macro-F1: {largest})"
+        )
+    if _public(candidate) < _public(own):
+        parts.append(f"JevBench public 231 ({_public(candidate)} vs {_public(own)})")
+    cm, om = candidate.get("mlx"), own.get("mlx")
+    if cm and om:
+        below = [
+            (MLX_NAMES[kind], mine, theirs)
+            for kind in MLX_CARD_TYPES
+            for mine, theirs in [
+                (
+                    cm["by_type"][kind]["non_english_mean_accuracy"],
+                    om["by_type"][kind]["non_english_mean_accuracy"],
+                )
+            ]
+            if mine < theirs
+        ]
+        if below:
+            parts.append(
+                f"non-English {_join([k for k, _, _ in below])} on a multilingual diagnostic ("
+                + "; ".join(f"{_pct(m)} vs {_pct(t)}" for _, m, t in below)
+                + ")"
+            )
+    if not parts:
+        return None
+    return (
+        f"**Below {_label(own)} in places:** {_join(parts)}. "
+        "Every such result is listed in [EVALUATION.md](evaluation/EVALUATION.md)."
+    )
+
+
+def weaker_than_peers(ctx: dict[str, Any]) -> str | None:
+    candidate, own = ctx["candidate"], ctx["own"]
+    parts = []
+    for entry in sorted(ctx["shown"], key=lambda e: -_score(e)):
+        if entry is candidate or entry is own:
+            continue
+        gaps = []
+        if _score(entry) > _score(candidate):
+            gaps.append(f"JevArena ({_score(candidate):.2f} vs {_score(entry):.2f})")
+        if _transfer(entry) - _transfer(candidate) >= TRANSFER_MARGIN:
+            gaps.append(
+                f"human-labelled transfer ({_f1(_transfer(candidate))} vs {_f1(_transfer(entry))})"
+            )
+        if _public(entry) - _public(candidate) > PUBLIC_MARGIN:
+            gaps.append(
+                f"JevBench public 231 ({_public(candidate)} vs {_public(entry)})"
+            )
+        if gaps:
+            parts.append(f"{_label(entry)} on {_join(gaps)}")
+    if not parts:
+        return None
+    return f"**Against other same-size models:** trails {'; '.join(parts)}."
+
+
+def limitations(ctx: dict[str, Any]) -> list[str]:
+    facts, text = ctx["facts"], ctx["text"]
+    candidate = ctx["candidate"]["data"]
+    lines = [
+        line for line in (weaker_than_counterpart(ctx), weaker_than_peers(ctx)) if line
+    ]
+    lines += text.get("limitations", [])
     screen = candidate["slices"].get("language_screen") or {}
     total = sum(sum(counts.values()) for counts in screen.values())
     english = sum(counts.get("en", 0) for counts in screen.values())
+    scope = f"Complete inputs above {facts['max_input_tokens']:,} tokens are rejected, never truncated."
     if not total or english / total >= 0.95:
-        limits.append(
-            "The v3 and public panels are almost entirely English; they do not measure multilingual ability."
+        scope += " The evaluation panels are almost entirely English, so other languages are less well measured."
+    trust = (
+        "It decides only from the input it is given and does not retrieve missing facts; "
+        "probabilities are estimates, so review consequential decisions against the evidence."
+    )
+    if len(lines) + 2 <= MAX_LIMITATIONS:
+        lines += [scope, trust]
+    else:
+        lines.append(f"{scope} {trust}")
+    if len(lines) > MAX_LIMITATIONS:
+        raise ValueError(
+            f"The card allows at most {MAX_LIMITATIONS} limitations; shorten the spec's own lines"
         )
-    over = 0
-    for panel in ("typed-final", "css15", "public231"):
-        reasons = (candidate.get("invalid", {}).get(panel) or {}).get("reasons") or {}
-        over += sum(
-            v for k, v in reasons.items() if "overflow" in k or "max_length" in k
-        )
-    invalid = sum(
-        (candidate.get("invalid", {}).get(p) or {}).get("invalid_or_missing", 0)
-        for p in ("typed-final", "css15", "public231")
-    )
-    limits.append(
-        f"Complete inputs above {cap:,} tokens are rejected, never truncated"
-        + (
-            f"; {invalid:,} evaluation answers were invalid (including over-budget inputs) and counted as failures."
-            if invalid
-            else "."
-        )
-    )
-    limits.append(
-        "It decides from the supplied state only and does not retrieve missing facts. "
-        "Probabilities are estimates; review consequential decisions against the evidence."
-    )
-    return limits
+    return lines
 
 
-def base_name_line(facts: dict[str, Any]) -> str:
-    base = facts["name_base_model"]
-    return (
-        f"- **Name:** Named after its base model ([{base.rsplit('/', 1)[-1]}]"
-        f"(https://huggingface.co/{base})); it loads {facts['parameters']['loaded']:,} parameters."
-    )
+CC = re.compile(r"CC BY(?:-SA)?(?: [0-9.]+)?(?![-\w])")
 
 
-def render_readme(ctx: dict[str, Any]) -> str:
-    facts, text = ctx["facts"], ctx["text"]
-    name, repo = facts["model_name"], facts["repo_id"]
-    local = repo.rsplit("/", 1)[1]
-    no_own = ctx.get("comparison") == NO_OWN_1_0
-    candidate = ctx["candidate"]["data"]
-    own = ctx["own"]["data"] if ctx["own"] else None
-    own_label = (ctx["own"].get("label") or own["model"]["label"]) if own else None
-    lic = facts["licence"]
+def _source_name(segment: str) -> str:
+    """The dataset name before a citation parenthesis, e.g. ', and the labels of KLUE STS, MRC and YNAT '."""
+    name = re.sub(r"^[\s,;.]*(?:(?:and|plus)\s+)?", "", segment).strip()
+    for separator in (": ", ". "):
+        name = name.rsplit(separator, 1)[-1]
+    name = name.rsplit(" of ", 1)[-1]
+    return re.sub(r"^(?:the|and|plus)\s+", "", name).strip(" ,.")
+
+
+def _expand(name: str) -> list[str]:
+    """'KLUE YNAT, MRC and STS' -> KLUE YNAT, KLUE MRC, KLUE STS (one shared prefix word)."""
+    parts = [p.strip() for p in re.split(r",\s*|\s+and\s+", name) if p.strip()]
+    words = parts[0].split()
+    if len(parts) == 1 or len(words) < 2:
+        return parts
+    return [parts[0]] + [p if " " in p else f"{words[0]} {p}" for p in parts[1:]]
+
+
+def cc_sources(attributions: list[str]) -> dict[str, list[str]]:
+    """CC BY / CC BY-SA training sources named in the spec's attributions, grouped by licence."""
+    groups: dict[str, list[str]] = {}
+    for body in attributions:
+        if not body.startswith("Training data"):
+            continue
+        start = 0
+        for match in re.finditer(r"\(([^()]*)\)", body):
+            name = _source_name(body[start : match.start()])
+            start = match.end()
+            terms = match.group(1).split(";")[-1]
+            for fragment in terms.split(","):
+                fragment = fragment.strip()
+                found = CC.search(fragment)
+                if not found or not name or not name[0].isupper():
+                    continue
+                key = found.group(0)
+                if fragment.lower().startswith("wikipedia"):
+                    key = f"Wikipedia text under {key}"
+                for item in _expand(name):
+                    if item not in groups.setdefault(key, []):
+                        groups[key].append(item)
+    return {k: sorted(v, key=str.lower) for k, v in sorted(groups.items())}
+
+
+def base_notice(attributions: list[str], files: set[str] | None = None) -> list[str]:
+    """Qwen (or other upstream) base-model licence lines from the spec's attributions."""
+    lines = []
+    for entry in attributions:
+        found = re.match(r"\[([^\]]+)\]\((https://huggingface\.co/[^)]+)\)", entry)
+        if not found or "/Qwen/" not in found.group(2):
+            continue
+        licence_file = re.search(r"`(LICENSES/[^`]+)`", entry)
+        terms = re.search(r"\((Apache-2\.0|[^,;()]*Licen[cs]e[^,;()]*)", entry)
+        line = f"[{found.group(1)}]({found.group(2)})"
+        if terms:
+            line += f" ({terms.group(1)}"
+            if licence_file and (files is None or licence_file.group(1) in files):
+                line += f"; [licence text]({licence_file.group(1)})"
+            line += ")"
+        lines.append(line)
+    return lines
+
+
+def training_section(
+    facts: dict[str, Any], text: dict[str, Any], files: set[str]
+) -> list[str]:
+    attributions = facts.get("attributions") or []
+    lines = [text["training_summary"], ""]
+    base = base_notice(attributions, files)
+    if base:
+        lines += [
+            f"**Base model licence.** Built on {_join(base)}; the upstream licence terms and "
+            "copyright notices are kept with this repository.",
+            "",
+        ]
+    groups = cc_sources(attributions)
+    if groups:
+        lines += [
+            "**Attribution.** The training data include material under Creative Commons licences: "
+            + "; ".join(f"{k}: {', '.join(v)}" for k, v in groups.items())
+            + ". These datasets are not redistributed here; full credits, citations and licences are in "
+            "[ATTRIBUTIONS.md](ATTRIBUTIONS.md).",
+            "",
+        ]
+    else:
+        lines += [
+            "Full data credits and licences: [ATTRIBUTIONS.md](ATTRIBUTIONS.md).",
+            "",
+        ]
+    return lines
+
+
+def _front_matter(facts: dict[str, Any]) -> list[str]:
+    lic, repo = facts["licence"], facts["repo_id"]
     front = ["---", f"license: {lic['spdx']}"]
     if lic["spdx"] == "other":
         # The Hub's metadata validator accepts only an https URI here.
@@ -518,6 +803,7 @@ def render_readme(ctx: dict[str, Any]) -> str:
     if origin.get("relation") in ("finetune", "adapter", "merge"):
         front.append(f"base_model_relation: {origin['relation']}")
     front += [
+        "library_name: transformers",
         "tags:",
         "- decision-model",
         "- classification",
@@ -525,203 +811,141 @@ def render_readme(ctx: dict[str, Any]) -> str:
         "- safetensors",
         "---",
     ]
-    paired = ctx["paired"]
-    v3 = candidate["v3"]["score"]
-    public = candidate["panels"]["public231"]
-    if own is None:
-        summary = (
-            f"On the same 8,147-item JevArena v3 panel, {name} scores **{v3:.2f}**. "
-            f"{NO_OWN_1_0_TEXT} On the separate 231 public JevBench questions it answers "
-            f"**{public['correct']}/231** correctly."
-        )
-    else:
-        own_v3, own_public = own["v3"]["score"], own["panels"]["public231"]
-        if no_own:
-            strongest = own_v3 >= max(
-                e["data"]["v3"]["score"]
-                for e in ctx["shown"]
-                if e["role"] != "candidate"
-            )
-            summary = (
-                f"On the same 8,147-item JevArena v3 panel, {name} scores **{v3:.2f}**. "
-                f"{NO_OWN_1_0_TEXT[:-1]}; {own_label}"
-                + (", the strongest other same-size model shown," if strongest else "")
-                + f" scores **{own_v3:.2f}**"
-            )
-        else:
-            summary = (
-                f"On the same 8,147-item JevArena v3 panel, {name} scores **{v3:.2f}** versus "
-                f"**{own_v3:.2f}** for {own_label}"
-            )
-        if paired:
-            lo, hi = paired["ci95"]
-            summary += (
-                f" ({paired['delta']:+.2f}; paired 95% interval [{lo:+.2f}, {hi:+.2f}])"
-            )
-        summary += (
-            f". On the separate 231 public JevBench questions it answers **{public['correct']}/231** "
-            f"correctly versus **{own_public['correct']}/231**"
-            + (f" for {own_label}." if no_own else ".")
-        )
-    table, ordered = score_table(ctx["shown"], facts["parameters"]["loaded"])
-    rank = next(i for i, e in enumerate(ordered, 1) if e["role"] == "candidate")
-    summary += f" It ranks {rank} of {len(ordered)} models shown on JevArena v3."
-    regressions = (
-        tradeoff_rows(
-            candidate, own, ctx["candidate"].get("mlx"), ctx["own"].get("mlx")
-        )
-        if own
-        else []
+    return front
+
+
+def overview(facts: dict[str, Any], text: dict[str, Any]) -> list[str]:
+    origin = facts["origin"]
+    base = text.get("base_model") or (
+        f"[{origin['repo_id'].rsplit('/', 1)[-1]}](https://huggingface.co/{origin['repo_id']})"
     )
-    mlx_note = (
-        " mlx-diag is a multilingual development diagnostic (public test splits in seven "
-        "languages, English instructions over target-language states), not a release score; "
-        "its Score part is not shown."
-        if any(e.get("mlx") for e in ctx["shown"])
-        else ""
+    loaded = facts["parameters"]["loaded"]
+    parameters = f"{loaded / 1e9:.2f}B ({loaded:,})"
+    if facts.get("name_basis") == "base":
+        named = facts["name_base_model"]
+        parameters += f"; named after its base model, [{named.rsplit('/', 1)[-1]}](https://huggingface.co/{named})"
+    lic = facts["licence"]
+    licence_cell = (
+        "[Apache-2.0](LICENSE)"
+        if lic["spdx"] == "apache-2.0"
+        else f"[{lic['spdx']}](LICENSE)"
+        + (" ([components](LICENSING.md))" if lic["spdx"] == "other" else "")
     )
-    lead = (
-        f"{NO_OWN_1_0_TEXT[:-1]}, so this compares with {own_label}. " if no_own else ""
-    )
-    tradeoff_text = (
-        f"{NO_OWN_1_0_TEXT} No same-size comparator passed this card's licence filter."
-        if own is None
-        else (
-            "\n".join(
-                [
-                    f"{lead}Results below {own_label} on this panel:",
-                    "",
-                    f"| Result | {name} | {own_label} |",
-                    "| --- | ---: | ---: |",
-                    *(
-                        f"| {row} | {mine} | {theirs} |"
-                        for row, mine, theirs in regressions
-                    ),
-                ]
-            )
-            if regressions
-            else f"{lead}No Choice, Noul, Score, transfer-task or public-tier result is below {own_label}."
-        )
-    )
-    limits = [
-        *text.get("limitations", []),
-        *auto_limits(candidate, facts["max_input_tokens"]),
+    return [
+        "| | |",
+        "| --- | --- |",
+        f"| **Model type** | {text['model_type']} |",
+        f"| **Base model** | {base} |",
+        f"| **Parameters** | {parameters} |",
+        f"| **Context length** | {facts['max_input_tokens']:,} tokens (state, questions and options together) |",
+        "| **Decision types** | Choice (2–255 options), Noul (yes/no), Score (2–10 ordered levels) |",
+        f"| **Precision** | {text.get('precision') or DEFAULT_PRECISION} |",
+        f"| **License** | {licence_cell} |",
     ]
+
+
+def results_table(ctx: dict[str, Any]) -> list[str]:
+    candidate_loaded = ctx["facts"]["parameters"]["loaded"]
+    rows = [
+        "| Model | Parameters | JevArena ↑ | Human-labelled transfer ↑ | JevBench (public 231) ↑ |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    for entry in sorted(ctx["shown"], key=lambda e: -_score(e)):
+        cells = [
+            _label(entry),
+            f"{loaded_parameters(entry, candidate_loaded) / 1e9:.2f}B",
+            f"{_score(entry):.2f}",
+            _f1(_transfer(entry)),
+            f"{_public(entry)}",
+        ]
+        if entry["role"] == "candidate":
+            cells = [f"**{c}**" for c in cells]
+        rows.append("| " + " | ".join(cells) + " |")
+    return rows
+
+
+def citation(facts: dict[str, Any]) -> list[str]:
+    name, repo = facts["model_name"], facts["repo_id"]
+    key = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+    return [
+        "```bibtex",
+        f"@misc{{{key}_{CITATION_YEAR},",
+        f"  title        = {{{{{name}}}: A Decision 2.0 Model for Structured Decisions}},",
+        f"  author       = {{{{{AUTHOR}}}}},",
+        f"  year         = {{{CITATION_YEAR}}},",
+        f"  howpublished = {{\\url{{https://huggingface.co/{repo}}}}}",
+        "}",
+        "```",
+    ]
+
+
+def render_readme(ctx: dict[str, Any], files: set[str]) -> str:
+    facts, text = ctx["facts"], ctx["text"]
+    name, repo = facts["model_name"], facts["repo_id"]
     staging = text.get("staging_notice")
+    lic = facts["licence"]
     links = [] if staging else [f"[Decision 2.0 collection]({COLLECTION_URL})"]
-    links.append("[Download](#download-and-decide)")
-    components = facts["parameters"]["components_text"]
-    requirements = facts["requirements_text"]
-    lines = [
-        *front,
-        "",
-        f"![{name} owl banner](assets/{facts['banner']})",
-        "",
-        f"# {name}",
-        "",
-    ]
+    links.append("[Evaluation details](evaluation/EVALUATION.md)")
+    description = text.get("description") or (
+        f"{name} is a Decision 2.0 model. It answers structured decision questions about one input "
+        "(**Choice** among named options, **Noul** yes/no checks and **Score** ratings on ordered levels) and "
+        "returns a probability for every answer, all in one forward pass and without generating text. Options "
+        "and rubrics are supplied with each request."
+    )
+    lines = [*_front_matter(facts), "", f"# {name}", ""]
     if staging:
         lines += [f"> **{staging}**", ""]
+    lines += [description, "", " · ".join(links), "", "## Highlights", ""]
+    lines += [f"- {item}" for item in highlights(ctx)]
+    lines += ["", "## Model overview", "", *overview(facts, text), ""]
     lines += [
-        text["tagline"],
+        "## Evaluation",
         "",
-        " · ".join(links),
+        f"![JevArena scores of {name} and same-size models]({CHART_RANK})",
         "",
-        "| Type | Use it for | Output |",
-        "| --- | --- | --- |",
-        "| **Choice** | Route a request or choose among 2–255 supplied options. | Selected ID + distribution |",
-        "| **Noul** | Check a condition against the supplied evidence. | P(yes) |",
-        "| **Score** | Apply 2–10 ordered rubric levels. | Expected level + distribution |",
+        f"![JevBench public 231 scores of {name} and same-size models]({CHART_PUBLIC})",
         "",
-        "Ask one or many named questions about one state; options and rubrics are supplied at request "
-        "time. Answers are typed decisions with probabilities, not generated text.",
+        *results_table(ctx),
         "",
-        "## Measured decisions",
+        "<sub>Every model ran on the same frozen prompts with the same scorers; missing or invalid answers "
+        "count as errors. JevArena combines typed-decision accuracy with the median macro-F1 of 15 "
+        "human-labelled transfer tasks (shown ×100). Methods, per-task results and comparator notes: "
+        "[EVALUATION.md](evaluation/EVALUATION.md).</sub>",
         "",
-        "Post-key same-panel results.",
+        "## Quickstart",
         "",
-        summary,
-        "",
-        *([f"> {text['confirmation']}", ""] if text.get("confirmation") else []),
-        table,
-        "",
-        "![JevArena v3 same-panel ranking](assets/jevarena-v3-rank.svg)",
-        "",
-        "![JevArena v3 model by task](assets/jevarena-v3-model-task.svg)",
-        "",
-        "![JevBench public 231 ranking](assets/jevbench-public231-rank.svg)",
-        "",
-        "Every model ran natively on the same frozen prompts with the same scorers; missing, invalid and "
-        "over-budget answers count as failures. JevArena v3 answers were available during development, "
-        "so these are post-key same-panel comparisons, not a blind test. T is typed-decision accuracy "
-        "(four-family macro), H the median macro-F1 over 15 human-labeled transfer tasks, and "
-        "v3 = 100 × sqrt(T × H). "
-        + PUBLIC231_NOTE
-        + mlx_note
-        + " Ranks include only the models shown. "
-        + (f"{text['comparator_note']} " if text.get("comparator_note") else "")
-        + "[Methods and per-model results](evaluation/EVALUATION.md)",
-        "",
-        f"### Tradeoffs versus {own_label}" if own else "### Tradeoffs",
-        "",
-        tradeoff_text,
-        "",
-        "## Download and decide",
+    ]
+    lines += [
+        TRANSFORMERS_HEADING,
         "",
         "```bash",
-        f"hf download {repo} --local-dir {local}",
+        pip_line(facts),
         "```",
         "",
         "```python",
-        code_example(local).rstrip("\n"),
+        transformers_example(repo).rstrip("\n"),
         "```",
         "",
+        transformers_note(facts, text),
+        "",
+        "## Limitations",
+        "",
+    ]
+    lines += [f"- {item}" for item in limitations(ctx)]
+    lines += ["", "## Training data", "", *training_section(facts, text, files)]
+    lines += [
+        "## License",
+        "",
         (
-            text.get("runtime_note")
-            or "The download includes a small local runtime (`decision2/`); it runs on CPU or one "
-            "CUDA/ROCm GPU and does not start a hosted endpoint."
+            "Apache-2.0 ([LICENSE](LICENSE))."
+            if lic["spdx"] == "apache-2.0"
+            else f"`{lic['spdx']}` ([LICENSE](LICENSE); per-component terms in [LICENSING.md](LICENSING.md))."
         )
-        + f" {requirements}",
+        + " Third-party notices: [NOTICE](NOTICE) and [ATTRIBUTIONS.md](ATTRIBUTIONS.md).",
         "",
-        *(
-            [
-                TRANSFORMERS_HEADING,
-                "",
-                "```python",
-                transformers_example(repo).rstrip("\n"),
-                "```",
-                "",
-                transformers_note(facts, text),
-                "",
-            ]
-            if facts.get("remote_code") is not None
-            else []
-        ),
-        "## Model details",
+        "## Citation",
         "",
-        f"- **Architecture:** {text.get('architecture') or ARCHITECTURE[facts['profile']]}",
-        f"- **Parameters:** {facts['parameters']['loaded']:,} loaded ({components}).",
-        *([base_name_line(facts)] if facts.get("name_basis") == "base" else []),
-        f"- **Direct weight origin:** [{origin['repo_id']}](https://huggingface.co/{origin['repo_id']}) at "
-        f"`{origin['revision']}`. {origin['summary']}",
-        f"- **Input limit:** {facts['max_input_tokens']:,} tokens for the complete state, question and candidates.",
-        f"- **Calibration:** {facts['calibration_text']}",
-        "- **Files:** the root `config.json` maps the model files; `MODEL_MANIFEST.json` lists the SHA-256 "
-        "of every file and the runtime verifies them before loading.",
-        *[f"- {item}" for item in text.get("details", [])],
-        "",
-        *(
-            ["### Training", "", *[f"- {item}" for item in text["training"]], ""]
-            if text.get("training")
-            else []
-        ),
-        "### Limits",
-        "",
-        *[f"- {item}" for item in limits],
-        "",
-        "[License](LICENSE)"
-        + (" · [Component licences](LICENSING.md)" if lic["spdx"] == "other" else "")
-        + " · [Notice](NOTICE) · [Attributions](ATTRIBUTIONS.md) · [Evaluation](evaluation/EVALUATION.md)",
+        *citation(facts),
         "",
     ]
     return "\n".join(lines)
@@ -729,11 +953,13 @@ def render_readme(ctx: dict[str, Any]) -> str:
 
 def render_evaluation(ctx: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     shown, candidate = ctx["shown"], ctx["candidate"]["data"]
+    name = ctx["facts"]["model_name"]
     candidate_loaded = ctx["facts"]["parameters"]["loaded"]
     mlx = any(e.get("mlx") for e in shown)
+    ordered = sorted(shown, key=lambda e: -_score(e))
     rows = [
-        "| Model | Loaded parameters | v3 | T | H | Choice / Noul / Score | Public 231 (easy/standard/hard) | "
-        "Typed Brier / ECE | "
+        "| Model | Loaded parameters | JevArena | Typed decisions | Human-labelled transfer | Choice / Noul / Score | "
+        "JevBench public 231 (easy / standard / hard) | Typed Brier / ECE | "
         + ("mlx-diag non-English Choice / Noul | " if mlx else "")
         + "Invalid typed / transfer / public |",
         "| --- | ---: | ---: | ---: | ---: | --- | --- | --- | "
@@ -741,25 +967,24 @@ def render_evaluation(ctx: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         + "--- |",
     ]
     models = []
-    for entry in sorted(shown, key=lambda e: -e["data"]["v3"]["score"]):
+    for entry in ordered:
         report = entry["data"]
-        label = entry.get("label") or report["model"]["label"]
+        label = _label(entry)
         final = report["panels"]["typed-final"]
         loaded = loaded_parameters(entry, candidate_loaded)
-        invalid = "/".join(
+        invalid = " / ".join(
             str((report.get("invalid", {}).get(p) or {}).get("invalid_or_missing", "—"))
             for p in ("typed-final", "css15", "public231")
         )
         rows.append(
-            f"| {label} | {loaded:,} | {report['v3']['score']:.3f} | "
-            f"{report['v3']['T']:.4f} | {report['v3']['H']:.4f} | "
+            f"| {label} | {loaded:,} | {_score(entry):.2f} | "
+            f"{_f1(report['v3']['T'])} | {_f1(report['v3']['H'])} | "
             + " / ".join(
                 f"{c}/{n}"
                 for c, n in (_typed(report, k) for k in ("choice", "noul", "score"))
             )
-            + f" | {report['panels']['public231']['correct']} ("
-            + _tiers(report["panels"]["public231"]).replace(" ", "")
-            + f") | {final['brier']:.3f} / {final['ece_10']:.3f} | "
+            + f" | {_public(entry)} ({_tiers(report['panels']['public231'])}) | "
+            f"{final['brier']:.3f} / {final['ece_10']:.3f} | "
             + (f"{_mlx_cell(entry)} | " if mlx else "")
             + f"{invalid} |"
         )
@@ -773,10 +998,10 @@ def render_evaluation(ctx: dict[str, Any]) -> tuple[str, dict[str, Any]]:
                 "licence": entry["licence"],
                 "report_sha256": entry["sha256"],
                 "seal_sha256": report.get("seal_sha256"),
-                "v3": report["v3"]["score"],
-                "T": report["v3"]["T"],
-                "H": report["v3"]["H"],
-                "public231_correct": report["panels"]["public231"]["correct"],
+                "jevarena": _score(entry),
+                "typed": report["v3"]["T"],
+                "transfer": report["v3"]["H"],
+                "public231_correct": _public(entry),
                 "typed_brier": final["brier"],
                 "typed_ece_10": final["ece_10"],
                 "loaded_parameters": loaded,
@@ -792,88 +1017,143 @@ def render_evaluation(ctx: dict[str, Any]) -> tuple[str, dict[str, Any]]:
                 ),
             }
         )
+    tasks = list(candidate["panels"]["css15"]["tasks"])
+    per_task = [
+        "| Task | " + " | ".join(_label(e) for e in ordered) + " |",
+        "| --- | " + " | ".join("---:" for _ in ordered) + " |",
+    ]
+    for kind in ("choice", "noul", "score"):
+        per_task.append(
+            f"| Typed {kind.title()} (accuracy) | "
+            + " | ".join(
+                _f1(e["data"]["panels"]["typed-final"]["by_type"][kind]["accuracy"])
+                for e in ordered
+            )
+            + " |"
+        )
+    for task in tasks:
+        per_task.append(
+            f"| {_task(task)} (macro-F1) | "
+            + " | ".join(
+                _f1(e["data"]["panels"]["css15"]["tasks"][task]["macro_f1"])
+                for e in ordered
+            )
+            + " |"
+        )
     reported = candidate["parameters"]["loaded"]
     parameter_note = (
-        f"The candidate row shows the {candidate_loaded:,} parameters its packaged runtime loads and "
+        f"The {name} row shows the {candidate_loaded:,} parameters its packaged runtime loads and "
         f"asserts; its same-panel report counted {reported:,} from the backbone safetensors only."
         if reported != candidate_loaded
         else ""
     )
     mlx_text = (
-        "mlx-diag (development diagnostic, 2,275 prompts, seven languages, English instructions over "
-        "target-language states): Choice comes from the MASSIVE 1.1 test split (CC BY 4.0) and Noul from "
-        "the PAWS-X test split; the columns show mean non-English accuracy. Its Score part is built from "
-        "XNLI (CC BY-NC 4.0) and is not shown. Public test splits may appear in backbone pretraining "
-        "data, so this is not a sealed test."
+        "**mlx-diag** (a development diagnostic, not a release score: 2,275 prompts in seven languages, "
+        "English instructions over target-language states): Choice comes from the MASSIVE 1.1 test split "
+        "(CC BY 4.0) and Noul from the PAWS-X test split; the column shows mean non-English accuracy. Its "
+        "Score part is built from XNLI (CC BY-NC 4.0) and is not shown. Public test splits may appear in "
+        "backbone pretraining data, so this is not a sealed test."
         if mlx
         else ""
     )
     paired = ctx["paired"]
     no_own = ctx.get("comparison") == NO_OWN_1_0
+    own = ctx["own"]
     paired_text = (
         NO_OWN_1_0_TEXT
-        if ctx["own"] is None
+        if own is None
         else (f"{NO_OWN_1_0_TEXT} " if no_own else "")
         + (
-            f"The candidate-minus-{ctx['own'].get('label') or ctx['own']['data']['model']['label']} v3 "
-            f"difference is {paired['delta']:+.3f} with paired 95% interval "
-            f"[{paired['ci95'][0]:+.3f}, {paired['ci95'][1]:+.3f}]."
+            f"The {name} minus {_label(own)} JevArena difference is {paired['delta']:+.2f} "
+            f"(paired 95% interval [{paired['ci95'][0]:+.2f}, {paired['ci95'][1]:+.2f}])."
             if paired
             else "No paired interval was supplied."
         )
     )
     peer_pairs = [
-        (e.get("label") or e["data"]["model"]["label"], ctx["paired_peers"][e["key"]])
+        (_label(e), ctx["paired_peers"][e["key"]])
         for e in shown
-        if e["key"] in ctx["paired_peers"] and e is not ctx["own"]
+        if e["key"] in ctx["paired_peers"] and e is not own
     ]
     if peer_pairs:
         paired_text += (
             " Against the other models shown: "
             + "; ".join(
-                f"{label} {value['delta']:+.3f} [{value['ci95'][0]:+.3f}, {value['ci95'][1]:+.3f}]"
+                f"{label} {value['delta']:+.2f} [{value['ci95'][0]:+.2f}, {value['ci95'][1]:+.2f}]"
                 for label, value in peer_pairs
             )
             + "."
         )
-    text = "\n".join(
+    below = (
+        tradeoff_rows(
+            candidate, own["data"], ctx["candidate"].get("mlx"), own.get("mlx")
+        )
+        if own
+        else []
+    )
+    below_lines = (
         [
-            "# Evaluation",
+            f"## Results below {_label(own)}",
             "",
-            "**Scope: post-key same-panel.** JevArena v3 has 1,600 typed original items (2,000 answer "
-            "slots) and 15 human-labeled transfer tasks (6,547 items). Its scalar is `100 × sqrt(T × H)`, "
-            "where T is the four-family macro accuracy of typed decisions and H is the median task "
-            "macro-F1 of human transfer. Missing, invalid and over-budget answers are failures in every "
-            "denominator. The answers of this panel were available during development, so results are "
-            "same-panel comparisons rather than an untouched blind test.",
-            "",
-            "JevBench public 231 is reported separately as raw accuracy by easy / standard / hard tier. "
-            "It is an independent rerun of the public questions, not the upstream four-axis score or the "
-            "official sealed JevBench rank.",
-            "",
-            "Every model ran through its own native inference path on the same frozen prompts and was "
-            "scored by the same scorers; each row reports the parameters its native loader instantiates. "
-            + (parameter_note + " " if parameter_note else "")
-            + "Typed Brier and ECE (10 bins) measure calibration on the typed decisions. "
-            "The paired interval is a joint bootstrap over typed groups (within family) and transfer "
-            "tasks then items, 5,000 replicates. " + paired_text,
-            "",
-            *([mlx_text, ""] if mlx_text else []),
-            "Comparators under non-commercial, research-only or unknown licences are not shown on this card."
-            + (
-                f" {ctx['text']['comparator_note']}"
-                if ctx["text"].get("comparator_note")
-                else ""
+            *(
+                [
+                    f"| Result | {name} | {_label(own)} |",
+                    "| --- | ---: | ---: |",
+                    *(f"| {row} | {mine} | {theirs} |" for row, mine, theirs in below),
+                ]
+                if below
+                else [
+                    f"No typed, transfer, public or diagnostic result is below {_label(own)}."
+                ]
             ),
             "",
-            *rows,
-            "",
-            "Report, panel and figure digests: [manifest.json](manifest.json).",
-            "",
         ]
+        if own
+        else []
     )
+    text = ctx["text"]
+    lines = [
+        f"# {name}: evaluation",
+        "",
+        "## Method",
+        "",
+        "**JevArena** scores 1,600 typed decision items (Choice, Noul and Score; 2,000 answer slots) and 15 "
+        "human-labelled transfer tasks (6,547 items) as `100 × sqrt(typed × transfer)`: *typed* is the "
+        "macro accuracy over the four typed families and *transfer* the median macro-F1 over the 15 tasks. "
+        "Missing, invalid and over-budget answers count as errors in every denominator. The panel's answers "
+        "were available during development (post-key), so the results are same-panel comparisons, not an "
+        "untouched blind test.",
+        "",
+        PUBLIC231_NOTE,
+        "",
+        "Every model ran through its own native inference path on the same frozen prompts and was scored "
+        "by the same scorers; each row reports the parameters its native loader instantiates. "
+        + (parameter_note + " " if parameter_note else "")
+        + "Typed Brier and ECE (10 bins) measure calibration on the typed decisions. Paired intervals "
+        "come from a joint bootstrap over typed groups (within family) and transfer tasks then items, "
+        "5,000 replicates. " + paired_text,
+        "",
+        *([text["c1_result"], ""] if text.get("c1_result") else []),
+        *([mlx_text, ""] if mlx_text else []),
+        "Comparators under non-commercial, research-only or unknown licences are not shown."
+        + (f" {text['comparator_note']}" if text.get("comparator_note") else ""),
+        "",
+        "## Results",
+        "",
+        *rows,
+        "",
+        "Typed decisions and human-labelled transfer are shown ×100.",
+        "",
+        "## Per-task results",
+        "",
+        *per_task,
+        "",
+        *below_lines,
+        "Report, panel and figure digests: [manifest.json](manifest.json).",
+        "",
+    ]
     manifest = {
-        "schema": "dev2-card-evaluation/1",
+        "schema": "dev2-card-evaluation/2",
         "scope": "post-key same-panel",
         "panel_sha256": candidate["panel_sha256"],
         "scorer_sha256": {
@@ -889,7 +1169,7 @@ def render_evaluation(ctx: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         **(
             {
                 "decision_1_0": None,
-                "paired_vs_reference": paired if ctx["own"] else None,
+                "paired_vs_reference": paired if own else None,
             }
             if no_own
             else {"paired_vs_own_1_0": paired}
@@ -901,7 +1181,7 @@ def render_evaluation(ctx: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         ),
         "excluded_comparators": len(ctx["excluded"]),
     }
-    return text, manifest
+    return "\n".join(lines), manifest
 
 
 def build_card(
@@ -911,16 +1191,25 @@ def build_card(
     paired: Path | None,
     facts: dict[str, Any],
     text: dict[str, Any],
-    banner: Path,
     work: Path,
     output: Path,
     paired_peers: dict[str, Path] | None = None,
+    files: set[str] | None = None,
 ) -> dict[str, Any]:
     """Write README.md, assets/ and evaluation/ into ``output``; return digests.
 
     ``paired_peers`` (report key -> candidate-minus-peer paired file) adds those
-    intervals to the evaluation page for peers the licence filter shows.
+    intervals to the evaluation page for peers the licence filter shows. ``files``
+    lists the package files the README may link to (default: those under ``output``).
     """
+    unknown = set(text) - TEXT_KEYS
+    if unknown:
+        raise ValueError(f"Card text keys not used by this card: {sorted(unknown)}")
+    for key in ("model_type", "training_summary"):
+        if not text.get(key):
+            raise ValueError(f"The card needs text.{key}")
+    if facts.get("remote_code") is None:
+        raise ValueError("The card's quickstart needs the Transformers remote code")
     comparison = facts.get("comparison", "own-1.0")
     selection = select_reports(entries, roster, comparison)
     shown = selection["shown"]
@@ -941,14 +1230,21 @@ def build_card(
             "A card needs the candidate and at least one eligible comparator"
         )
     figures = render_charts(shown, work, output / "assets")
-    banner_target = output / "assets" / facts["banner"]
-    shutil.copyfile(banner, banner_target)
-    readme = render_readme(ctx)
+    present = (
+        files
+        if files is not None
+        else {
+            p.relative_to(output).as_posix() for p in output.rglob("*") if p.is_file()
+        }
+    )
+    readme = render_readme(ctx, present)
     evaluation, manifest = render_evaluation(ctx)
     manifest["figures_sha256"] = figures
-    manifest["banner_sha256"] = sha_file(banner_target)
-    for content, label in ((readme, "README"), (evaluation, "EVALUATION")):
-        problems = lint(content)
+    for content, label, check in (
+        (readme, "README", lint_readme),
+        (evaluation, "EVALUATION", lint),
+    ):
+        problems = check(content)
         if problems:
             raise ValueError(f"{label} failed the card content lint: {problems}")
     (output / "README.md").write_text(readme, encoding="utf-8")
@@ -982,9 +1278,21 @@ def build_card(
     }
 
 
+REQUIRED_SECTIONS = (
+    "## Highlights",
+    "## Model overview",
+    "## Evaluation",
+    "## Quickstart",
+    "## Limitations",
+    "## Training data",
+    "## License",
+    "## Citation",
+)
+
+
 def check_rendered(readme: str, files: set[str]) -> list[str]:
     """Structural card checks on a rendered README against the repository file list."""
-    problems = lint(readme)
+    problems = lint_readme(readme)
     if not readme.startswith("---\n") or "\n---\n" not in readme[4:]:
         problems.append("missing YAML front matter")
     for link in re.findall(r"!\[[^\]]*\]\(([^)]+)\)", readme):
@@ -993,18 +1301,16 @@ def check_rendered(readme: str, files: set[str]) -> list[str]:
     for link in re.findall(r"(?<!!)\[[^\]]*\]\(([^)#]+)\)", readme):
         if not link.startswith("http") and link not in files:
             problems.append(f"link does not resolve: {link}")
-    for required in (
-        "## Measured decisions",
-        "## Download and decide",
-        "## Model details",
-        "```python",
-        *((TRANSFORMERS_HEADING,) if "modeling_decision2.py" in files else ()),
-    ):
-        if required not in readme:
+    headings = re.findall(r"^#{1,3} .+$", readme, flags=re.M)
+    for required in (*REQUIRED_SECTIONS, TRANSFORMERS_HEADING):
+        if required not in headings:
             problems.append(f"missing section: {required}")
+    order = [h for h in headings if h in REQUIRED_SECTIONS]
+    if order != [h for h in REQUIRED_SECTIONS if h in order]:
+        problems.append("sections out of order")
+    if "```python" not in readme:
+        problems.append("missing Python example")
     for chart in CHART_FILES:
         if f"]({chart})" not in readme:
             problems.append(f"missing chart: {chart}")
-    if not math.isfinite(len(readme)):
-        problems.append("invalid README")
     return problems
