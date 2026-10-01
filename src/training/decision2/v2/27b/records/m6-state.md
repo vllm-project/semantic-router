@@ -1,9 +1,10 @@
 # ~27B M6 state (resume file)
 
-Updated: 2026-10-02 03:38 UTC+8 (19:38Z; **worker 3 = the coordinator's continuation #2, 0d2e488f, ran
-15:12–19:40Z and handed off: read "Hand-off (worker 3 → continuation)" and its "Next steps" first**; worker 2
-a56025bb ran 10:44–15:15Z; worker 1 11741ee2 ran 06:17–10:55Z). Prereg amendment 4 (`c1eafcc08`, the Index path)
-applies from now on.
+Updated: 2026-10-02 03:52 UTC+8 (19:52Z; **worker 4 = the coordinator's continuation #3, cba71646, from 19:37Z**;
+worker 3 0d2e488f ran 15:12–19:40Z; worker 2 a56025bb ran 10:44–15:15Z; worker 1 11741ee2 ran 06:17–10:55Z).
+Prereg amendment 4 (`c1eafcc08`, the Index path) and **amendment 5 (COORDINATION 03:40: Index runs only for
+Index-path candidates and the chosen successor, ≤ 40 GPU-h on node C GPU1–7 + node D GPU4–7; release target
+`Decision-2.0-Vega-27B` with the "audited" footnote)** apply from now on.
 Prereg `m6-prereg-2026-10-01.md` (`90d38aba7`) with amendments 1 (`b74685ddb`), 2 (`35492ac25`) and **3 (`4e4211aee`,
 data lock `7fcbc824c`)**. Mirrors: M6-IB / M6-IB2 seeds, chains and watchers run from **`b74685ddb`**, M6-IBX's from
 **`d8edcf4e1`**, M6-IB2PN's from **`7fcbc824c`** (on node A / B / D); step 0 ran from `20af2e4a1`. Hand-off record for
@@ -289,6 +290,17 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
    B's link directory.
 
 ## Poll log (newest first)
+
+- 19:52Z (poll 13 at 19:39Z; worker 4's first): all alive (8 containers; node B drivers, four chains and the
+  contrast guard 2868454; node A driver, relay and four mlx watchers; node D four drivers and four relays). M6-IB
+  4,426 / 4,282 (s1 BEST 3816 .9196, s2 BEST 3180 .9308); M6-IB2 4,360 / 4,362 (BEST 4135 both); M6-IBX 4,005 / 3,958
+  (BEST 3125 / 3750); M6-IB2PN 2,944 / 2,925 (BEST 2583 both). Index GPUs: node C GPU1–7 and node D GPU4–7 all hold
+  `track=eval-ix1` released owners and run nothing (node D GPU7's 4B panel ended 18:55Z; node C GPU0 is the K8s pod).
+  Integration merged (fast-forward to `68e337ed6`, COORDINATION 03:40). **Amendment 5 committed** (the coordinator's
+  answers: allowance ≤ 40 GPU-h; Index runs only for Index-path candidates, i.e. finalists failing item 1 with item
+  1'(a) and items 2–7 passed, and for the chosen successor's card; node C + node D GPUs, shards may be split; choice
+  order confirmed; release to `Decision-2.0-Vega-27B` after the card fix round, footnote "…Training data audited at
+  row level against all Index test items."). GPU-h ≈ 86.
 
 - 19:36Z (poll 12 at 19:32Z; worker 3's last): all alive, guard alive. M6-IB 4,388 / 4,243 (13.5 / 13.8 h; ETA
   21:29Z / 21:47Z); **M6-IB2 4,318 / 4,321 (17.7 / 17.6 h; at 4135 .9198 / .9244, BEST = 4135 both)**; M6-IBX
