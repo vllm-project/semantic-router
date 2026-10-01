@@ -137,6 +137,9 @@ is still fixing the long-input runtime bug and staging its M5-L128 Index diagnos
 
 ## Poll log (newest first)
 
+- 09:54Z: M6-IB 687 / 674 of 5,081 (13.2 / 13.5 h); first SELECT700 family macro at update 636: s1 .8396, s2 .8331
+  (checkpoints written, BEST = 636). M6-IB2 694 / 679 of 6,614 (17.1 / 17.5 h); M6-IBX 446 / 440 of 4,997 (13.5 / 13.7
+  h). Six containers alive.
 - 09:28Z: steps M6-IB 522 / 522 of 5,081 (9.49–9.51 s/upd, 13.4 h), M6-IB2 527 / 519 of 6,614 (9.36 / 9.51, 17.2 /
   17.5 h), M6-IBX 287 / 282 of 4,997 (9.72 / 9.87, 13.5 / 13.7 h); six containers, three chains alive; no checkpoint yet
   (first at 625–827).
