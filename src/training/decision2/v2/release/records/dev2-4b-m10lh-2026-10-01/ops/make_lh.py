@@ -14,7 +14,7 @@ Run from src/training/decision2:
       --c1-node-path PATH [--runtime-line TEXT] [--current current.json] [--runtime-source DIR]
 draft: the spec before item 8 (C1 line pending, no R8) and its draft decision, for the frozen package C1 scores.
 final: the C1 post-key line and R8 from the collected SUMMARY.json (a local copy of the node A file) and the final
-decision. --current names the current revision (default: the BF16-resident revision 4f560ae5); a JSON file with
+decision. --current names the current revision (default: the auto_map revision 3785b7b9); a JSON file with
 revision, gate, decision, decision_sha256, gate_sha256 and manifest_sha256 replaces it when another revision of
 the repository lands first.
 """
@@ -30,7 +30,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 RECORD = HERE.parent
 SPECS = Path("v2/release/specs")
-BASE_SPEC = SPECS / "dev2-4b-bf16r.json"
+BASE_SPEC = SPECS / "dev2-4b-automap.json"
 OUT_SPEC = SPECS / "dev2-4b-m10lh.json"
 DRAFT_SPEC = SPECS / "dev2-4b-m10lh.draft.json"
 DECISIONS = Path("/data/dev2/runs/release/decisions")
@@ -41,16 +41,16 @@ MLX = f"{REL}/dev2-4b-lh-t1-derived-mlx"
 FORMAL = "/data/dev2/runs/dec/formal/m10/m10-4b-LH"
 MIRROR = "/data/dev2/src/{}-src_training_decision2/src/training/decision2"
 VENDOR = MIRROR.format("88aacb9fbcf03618bf8b18e58e2f5e1fcdc1c83d")
-RUNTIME = MIRROR.format("5dc962b003cc15b12a3568fe3c8ac8c2931b03a0")
-RECORDS_MIRROR = MIRROR.format("df3f242f89ca69855aa2a2f6ecb89cb857af1e5d")
-BF16R = f"{RECORDS_MIRROR}/v2/release/records/dev2-bf16-resident-2026-10-01"
+RUNTIME_COMMIT = "08ec0834ebd6d1be808ab1a756e1412047c35f74"
+RUNTIME = MIRROR.format(RUNTIME_COMMIT)
+RECORDS_MIRROR = MIRROR.format(RUNTIME_COMMIT)
 CURRENT = {
-    "revision": "4f560ae5d26d378cd8db0a93a06c1603ea76b635",
-    "gate": f"{BF16R}/4b/release/receipts/gate.json",
-    "decision": f"{BF16R}/DEV2.0-4B.decision.bf16r.json",
-    "decision_sha256": "b33fb92af1610a9f0ef5e317c6462b5bd07415b5e86608af56dd0e5e585edae1",
-    "gate_sha256": "573936ec2b0bb023e48c9d00ed4c58f8017422a70763aa826809228c0801efea",
-    "manifest_sha256": "bbf9456946a0f3a9d742c38fffcca243618cf78989457f7390cede98013910e2",
+    "revision": "3785b7b963d2f56de0e44f9ec638c814c5ee6499",
+    "gate": f"{RECORDS_MIRROR}/v2/release/records/dev2-4b-m10lh-2026-10-01/current/automap-4b-gate.json",
+    "decision": f"{RECORDS_MIRROR}/v2/release/records/dev2-automap-2026-10-01/DEV2.0-4B.decision.automap.json",
+    "decision_sha256": "799be1b415b249d02b6698eeac0e840359e404895bb6376b7fe0bf9449af1070",
+    "gate_sha256": "1f1872e895ebdca8619379c99a0c4bea235979c44d6403217c25cc4c1d25dbed",
+    "manifest_sha256": "8dea9adc111e025ba53516fa99e96ffdb89f06279954c62de7c484c5b85dbba1",
 }
 CURRENT_RUN = f"{REL}/dev2-4b-t1-derived"
 IDENTITY = "6a555335e077fd26952fd58df06a7dcca1f5ef317194f2e3e4d7664d5c071cd7"
@@ -148,7 +148,7 @@ TRAINING = [
 ]
 
 LIMITATIONS = [
-    "**Against the previous revision** (`4f560ae5`, the full fine-tune of Decision 1.0 Nox): post-key JevArena v3 "
+    "**Against the previous revision** (`3785b7b9`, the full fine-tune of Decision 1.0 Nox): post-key JevArena v3 "
     "67.34 vs 63.15 (+4.19, 95% CI [+0.10, +9.88]). The gain is typed reasoning (T 0.814 vs 0.688, +0.126, 95% CI "
     "[+0.098, +0.153]; Choice 702 vs 582 of 800, Noul 743 vs 734 of 800, Score 258 vs 185 of 400). Human transfer is "
     "lower but not significantly (H 0.557 vs 0.580, \u22120.023, 95% CI [\u22120.082, +0.074]): 8 of the 15 transfer "
@@ -232,7 +232,9 @@ def spec(
         "storage": f"v2.release.bf16_copy of the decoder's frozen FP32 checkpoint (identity {FP32_IDENTITY[:8]} -> "
         f"{IDENTITY[:8]}; receipt {SHA['bf16_copy'][:8]}).",
         "runtime": "vendor_source = the formal run's source mirror 88aacb9fb (training/model byte-identical); "
-        f"runtime_source = {Path(runtime_source).parents[2].name[:9]} (BF16-resident runtime).",
+        f"runtime_source = automap_source = {Path(runtime_source).parents[2].name[:9]} (the BF16-resident runtime "
+        "with the auto_map remote-code prompt fix 0cbf1033e and the IX1 forward token budget for long multi-question "
+        "requests 8e6bdfc33 / e876fbefc; the Transformers remote code of the auto_map revision 3785b7b9).",
         "c1": (
             "final: post-key C1 line from the collected SUMMARY.json"
             if final
@@ -249,6 +251,7 @@ def spec(
     s["calibration"] = None
     s["vendor_source"] = VENDOR
     s["runtime_source"] = runtime_source
+    s["automap_source"] = runtime_source
     s["gate_receipt"] = str(
         DECISIONS
         / (
@@ -279,7 +282,12 @@ def spec(
         "caches as the scoring run) against the T = 1 predictions derived exactly from the sealed CAL698 "
         "predictions of every scored prompt (typed-final 1,600, css15 6,547, public231 231) and of the mlx-diag "
         "diagnostic (2,275) by release.sh --parity, each panel with a copy of the persisted Triton autotune cache "
-        "of the run that scored it."
+        "of the run that scored it. The package ships the \U0001f917 Transformers remote code of the auto_map revision "
+        "(configuration_decision2.py, modeling_decision2.py, pipeline_decision2.py; config.json model_type, auto_map "
+        "and custom_pipelines): AutoModel with trust_remote_code loads it through this runtime, checked with 0 answer "
+        "changes against the native runtime on every scored prompt by release.sh. The runtime also splits long "
+        "multi-question requests by a forward token budget (2**30 gated-delta elements), which leaves every scored "
+        "answer unchanged (parity above)."
     )
     s["scored"] = {
         "label": "post-key same-panel run m10-4b-LH at T = 1 (predictions derived from the sealed CAL698 run by "

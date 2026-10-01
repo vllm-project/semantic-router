@@ -10,10 +10,10 @@
  "report_sha256": "375e1ab553009361d5e67d1751e9f6638eed17c3db87d12b36e5ea11f169aa88",
  "paired_sha256": "9fec07bb780f1b7beb064af572050c3a1a105859e933e9a655f39c6ae8f12b8d",
  "gate_profile": "successor",
- "current_revision": "4f560ae5d26d378cd8db0a93a06c1603ea76b635",
+ "current_revision": "3785b7b963d2f56de0e44f9ec638c814c5ee6499",
  "evidence_sha256": {
-  "current_decision": "b33fb92af1610a9f0ef5e317c6462b5bd07415b5e86608af56dd0e5e585edae1",
-  "current_gate": "573936ec2b0bb023e48c9d00ed4c58f8017422a70763aa826809228c0801efea",
+  "current_decision": "799be1b415b249d02b6698eeac0e840359e404895bb6376b7fe0bf9449af1070",
+  "current_gate": "1f1872e895ebdca8619379c99a0c4bea235979c44d6403217c25cc4c1d25dbed",
   "exposure": "d42e69cafc4cf1d16958d19dd16fec6e1a7ced706ea62459fa9f065cb09c3891",
   "mlx_paired": "f264b9a418a7e78ec4a4579c8faf4cc4b79d7589f58bf16a1ed74747c0cb3a99",
   "paired": "e1fd9d1e8b94d6a4db9db90d598d9b02a0ad126398a724ea0bd6697479a766d6",
@@ -23,7 +23,7 @@
  },
  "calibration": "none (temperature 1; COORDINATION 2026-10-01 13:40 keep T = 1 everywhere): the CAL698 per-type temperatures 8d88e163 (Choice 0.621, Noul 0.479, Score 0.209), adopted by the decoder under the 23:15 rule, are not shipped; undoing them changes 0 answers on every scored panel and mlx-diag",
  "prepared_by": "Decision 2.0 release engineering, 4B successor worker (worktree vllm-sr-dev2-release)",
- "action": "New main revision of the private repository llm-semantic-router/DEV2.0-4B: the decoder M10 successor m10-4b-LH (rank-128 LoRA on Qwen/Qwen3.5-4B-Base@1001bb4d merged, candidate head, uniform soup of three seeds; qwen-full, BF16 storage, T = 1, 16,384 tokens, 4,208,383,488 loaded parameters) replaces the N4XF soup (4f560ae5); then the superseded weight blobs are purged with rewrite_history=False and the C1 baseline registry takes this revision's post-key run.",
+ "action": "New main revision of the private repository llm-semantic-router/DEV2.0-4B: the decoder M10 successor m10-4b-LH (rank-128 LoRA on Qwen/Qwen3.5-4B-Base@1001bb4d merged, candidate head, uniform soup of three seeds; qwen-full, BF16 storage, T = 1, 16,384 tokens, 4,208,383,488 loaded parameters) replaces the N4XF soup (3785b7b9); then the superseded weight blobs are purged with rewrite_history=False and the C1 baseline registry takes this revision's post-key run.",
  "rationale": "Successor rule items 1-7 pass against the current revision (decoder record dec-m10-results-2026-10-01; recomputed on the T = 1 run): post-key v3 67.34 vs 63.15, +4.19 [+0.10, +9.88]; human transfer -0.023 [-0.082, +0.074] (not below); types OK; card-eligible mlx-diag +0.037 [+0.025, +0.049]; tier gates (vs adopted Nox 1.0 +10.87 [+4.99, +14.67]; v3 67.34 >= 55.69 = 0.9 x Decider 4B; human transfer vs Decider 4B +0.001 [-0.078, +0.043]); 0 exposed training groups; public 231 172 vs 171 (McNemar p 1.0). Draft for the frozen package that item 8 scores; the final decision adds the C1 summary.",
  "approved_package": {
   "identity": "6a555335e077fd26952fd58df06a7dcca1f5ef317194f2e3e4d7664d5c071cd7",
@@ -36,10 +36,10 @@
  },
  "licence_decision": "apache-2.0: own LoRA (merged), head, runtime and card; base Qwen/Qwen3.5-4B-Base @1001bb4d Apache-2.0 (card metadata license apache-2.0, LICENSE = Apache License 2.0, Copyright 2026 Alibaba Cloud, sha256 50cbab8a); tokenizer files of Decision 1.0 Nox-4B @cde2a68d and the Qwen3.5-4B @851bf6e8 vocabulary / chat template Apache-2.0; teacher Decision 1.0 Lux-9B (own, Apache-2.0, no weights included); training-data licences (CC BY, CC BY-SA, MIT, Apache-2.0, CC0, OANC) credited in ATTRIBUTIONS.md; Decider 4B (Apache-2.0, card metadata only) and Jet v6.2 (Apache-2.0 LICENSE) shown; the XNLI-based mlx-diag Score part stays off the card.",
  "supersedes": {
-  "revision": "4f560ae5d26d378cd8db0a93a06c1603ea76b635",
-  "final_sha256": "b33fb92af1610a9f0ef5e317c6462b5bd07415b5e86608af56dd0e5e585edae1",
-  "gate_sha256": "573936ec2b0bb023e48c9d00ed4c58f8017422a70763aa826809228c0801efea",
-  "manifest_sha256": "bbf9456946a0f3a9d742c38fffcca243618cf78989457f7390cede98013910e2",
+  "revision": "3785b7b963d2f56de0e44f9ec638c814c5ee6499",
+  "final_sha256": "799be1b415b249d02b6698eeac0e840359e404895bb6376b7fe0bf9449af1070",
+  "gate_sha256": "1f1872e895ebdca8619379c99a0c4bea235979c44d6403217c25cc4c1d25dbed",
+  "manifest_sha256": "8dea9adc111e025ba53516fa99e96ffdb89f06279954c62de7c484c5b85dbba1",
   "weights_identity": "8b0a8bc7f504faa69904329225a11f36cc7352abb9bd64f778d7b777f91c5b79"
  },
  "disclosures": [

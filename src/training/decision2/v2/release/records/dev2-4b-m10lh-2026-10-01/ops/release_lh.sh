@@ -4,12 +4,15 @@
 # the persisted autotune cache of the run that scored each panel (checked against its manifest before the copy).
 #   --prerelease  release.sh without upload on the draft spec and decision: build, examples, card, parity of
 #                 typed-final 1,600 / css15 6,547 / public231 231 (formal run's cache); then verify_bundle in a CPU
-#                 container. Its package is the frozen package that C1 (item 8) scores.
+#                 container. The first one (7517d321, runtime 5dc962b00) is the frozen package C1 (item 8)
+#                 scored; later ones carry the auto_map remote code and the merged runtime (same weights).
 #   --mlx         the same without upload, parity of mlx-diag 2,275 only (the mlx-diag run's cache)
 #   --bench       runtime_bench of the current revision's verified download (old) and the newest --prerelease
 #                 package (new): the first 400 typed-final prompts as single requests, untimed then timed, one
 #                 isolated container each, each with its own scored cache
-#   --release     release.sh --upload --collect --already-collected with the final spec and decision (successor
+#   --release     only if the Hub main is the superseded revision (SUPERSEDED, default the auto_map revision
+#                 3785b7b9) and the Transformers 5.18 site matches TF518_DIGEST:
+#                 release.sh --upload --collect --already-collected --hub-site tf518=... with the final spec and decision (successor
 #                 R1-R8) and full parity of the formal panels before and after the real download (mlx-diag parity
 #                 comes from --mlx on the same weights and runtime); then the frozen C1 package vs the released
 #                 package (weights and identity equal), the revision diff, collection order, card HTTP, links, gate
@@ -50,7 +53,11 @@ OLD=/data/dev2/runs/release/dev2-bf16r-4B-20261001T041149Z/download/DEV2.0-4B
 OLD_MANIFEST=bbf9456946a0f3a9d742c38fffcca243618cf78989457f7390cede98013910e2
 OLD_CACHE=/data/dev2/runs/dec/formal/m4/m4-N4XF-soup-nodeA-triton
 OLD_CACHE_DIGEST=438618a6e3beb39407dabb96e689b5740d021a9c93b9df9769453c3d94deb119
-superseded=${SUPERSEDED:-4f560ae5d26d378cd8db0a93a06c1603ea76b635}
+superseded=${SUPERSEDED:-3785b7b963d2f56de0e44f9ec638c814c5ee6499}
+C1PKG=/data/dev2/runs/release/dev2-4b-lh-prerelease-20261001T071009Z/package/$name
+C1PKG_MANIFEST=7517d321a88f946020e53ae1369e5f2d2301adf564e7fc1b61f04bb7b53c2947
+TF518=/data/dev2/tools/tf518
+TF518_DIGEST=${TF518_DIGEST:-}
 export TMPDIR=/data/dev2/tmp PYTHONPATH=$S
 mkdir -p "$TMPDIR" /data/dev2/runs/release/triton "$D"
 digest() { (cd "$1" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-64); }
@@ -134,9 +141,15 @@ case "$mode" in
     parity_args=("${formal_parity[@]}") hub_args=() ;;
   --mlx) copy_cache "$MLX_CACHE" "$MLX_CACHE.sha256" "$MLX_MANIFEST" "$TC"; manifest_file=$MLX_CACHE.sha256
     parity_args=(--parity "mlx-diag:$G/mlx-diag.prompts.jsonl:$P/mlx-diag.predictions.jsonl:2275") hub_args=() ;;
-  --release) bash "$S/v2/common/hf_headroom.sh" --min-free-gb 10
+  --release)
+    # Publish only on top of the revision the final decision supersedes (never concurrently with another worker).
+    main=$("$HFPY" -c 'import sys; from huggingface_hub import HfApi; print(HfApi().model_info(sys.argv[1]).sha)' "$REPO")
+    [[ "$main" == "$superseded" ]] || { echo "$REPO main is $main, not the superseded revision $superseded" >&2; exit 1; }
+    [[ -n "$TF518_DIGEST" && "$(digest "$TF518")" == "$TF518_DIGEST" ]] \
+      || { echo "Transformers 5.18 site $TF518 does not match TF518_DIGEST" >&2; exit 1; }
+    bash "$S/v2/common/hf_headroom.sh" --min-free-gb 10
     copy_cache "$FORMAL_CACHE" "$FORMAL_CACHE.sha256" "$FORMAL_MANIFEST" "$TC"; manifest_file=$FORMAL_CACHE.sha256
-    parity_args=("${formal_parity[@]}") hub_args=(--upload --collect --already-collected) ;;
+    parity_args=("${formal_parity[@]}") hub_args=(--upload --collect --already-collected --hub-site "tf518=$TF518") ;;
 esac
 echo "mirror $SRC mode $mode gpu $gpu work $W"
 set -x
@@ -159,7 +172,7 @@ if [[ "$mode" != --release ]]; then
 fi
 REV=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['revision'])" "$W/receipts/upload.json")
 cd "$S"
-C1PKG=$(ls -d /data/dev2/runs/release/dev2-4b-lh-prerelease-*/package/$name | tail -1)
+[[ "$(sha256sum < "$C1PKG/MODEL_MANIFEST.json" | cut -c1-64)" == "$C1PKG_MANIFEST" ]] || status=1
 python3 - "$PKG/MODEL_MANIFEST.json" "$C1PKG/MODEL_MANIFEST.json" > "$W/extra/c1-package-diff.json" <<'PY' || status=1
 import json, sys
 new, old = (json.load(open(p)) for p in sys.argv[1:3])
