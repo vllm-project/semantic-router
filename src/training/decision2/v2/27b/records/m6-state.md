@@ -137,6 +137,9 @@ is still fixing the long-input runtime bug and staging its M5-L128 Index diagnos
 
 ## Poll log (newest first)
 
+- 09:28Z: steps M6-IB 522 / 522 of 5,081 (9.49–9.51 s/upd, 13.4 h), M6-IB2 527 / 519 of 6,614 (9.36 / 9.51, 17.2 /
+  17.5 h), M6-IBX 287 / 282 of 4,997 (9.72 / 9.87, 13.5 / 13.7 h); six containers, three chains alive; no checkpoint yet
+  (first at 625–827).
 - 09:02Z: all six seeds in full runs (M6-IBX preflights passed on node D: reload 0 changes, |Δp| ≤ 6e-8). Steps /
   s per update / projected GPU-h: M6-IB-s1 359 / 9.38 / 13.2, M6-IB-s2 359 / 9.37 / 13.2, M6-IB2-s1 356 / 9.36 / 17.2,
   M6-IB2-s2 353 / 9.48 / 17.4 (node A sped up), M6-IBX-s1 124 / 9.68 / 13.4, M6-IBX-s2 121 / 9.93 / 13.8 (node D).
