@@ -3,8 +3,9 @@
 #
 # Usage:
 #   launch.sh parity --src DIR --model NAME --gpu N --run DIR --rows FILE
-#   launch.sh run    --src DIR --model NAME --gpus "N ..." --run DIR --rows-dir DIR --cache DIR
+#   launch.sh run    --src DIR --model NAME --gpus "N ..." --run DIR --rows-dir DIR --cache DIR [--only "K ..."]
 #
+# --only starts just the listed shard indices (shard k still runs on the k-th listed GPU).
 # <src> is a mirror_to_node.sh --path src/training/decision2 directory; NAME a package of the table
 # below, downloaded at its pinned revision to /data/dev2/models/ix1/<NAME>-<rev8>.
 # parity: on one GPU, (1) the package's own entry point (v2.eval.ix1.native_ref) over the gold-free
@@ -43,9 +44,10 @@ declare -A REVISION=(
 )
 
 mode="${1:-}"; shift || true
-src="" model="" gpu="" gpus="" run="" rows="" rows_dir="" cache=""
+src="" model="" gpu="" gpus="" run="" rows="" rows_dir="" cache="" only=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --only) only="$2"; shift 2 ;;
     --src) src="$2"; shift 2 ;;
     --model) model="$2"; shift 2 ;;
     --gpu) gpu="$2"; shift 2 ;;
@@ -111,9 +113,9 @@ if use > 5 or used > 2 * 2**30:
 digest_dir() { (cd "$1" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum | sha256sum | cut -c1-64); }
 
 container() {  # name gpu workdir detach(0|1) script
-  local name="$1" g="$2" work="$3" detach="$4" script="$5" nodes devs=()
+  local name="$1" g="$2" work="$3" detach="$4" script="$5" nodes node devs=()
   nodes="$(render_nodes "$g")" || { echo "no render node for gpu$g" >&2; return 1; }
-  for n in $nodes; do devs+=(--device "$n"); done
+  for node in $nodes; do devs+=(--device "$node"); done
   local envs=(-e HIP_VISIBLE_DEVICES=0 -e CUDA_VISIBLE_DEVICES=0 -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1
               -e HF_HUB_CACHE="$HF_CACHE" -e TOKENIZERS_PARALLELISM=false -e PYTHONDONTWRITEBYTECODE=1
               -e PYTHONPATH="$S:$KIT:$IMAGE_PYTHONPATH" -e HOME="$work/home" -e DECISION2_PACKAGE_DIR="$pkg"
@@ -198,8 +200,12 @@ fi
 read -r -a gpu_list <<< "$gpus"
 n="${#gpu_list[@]}"
 [[ -f "$rows_dir/shard-0-of-$n.jsonl.gz" ]] || { echo "no $n-way shards in $rows_dir" >&2; exit 1; }
-for g in "${gpu_list[@]}"; do take_lease "$g" "IX1 full run $model" 4; done
+selected() { [[ -z "$only" || " $only " == *" $1 "* ]]; }
 for k in "${!gpu_list[@]}"; do
+  if selected "$k"; then take_lease "${gpu_list[$k]}" "IX1 full run $model" 4; fi
+done
+for k in "${!gpu_list[@]}"; do
+  selected "$k" || continue
   g="${gpu_list[$k]}"
   work="$run/shard-$k"
   [[ ! -e "$work/results.jsonl" ]] || { echo "$work already has results; resume by hand" >&2; exit 1; }
