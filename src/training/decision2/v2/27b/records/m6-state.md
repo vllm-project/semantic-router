@@ -1,7 +1,7 @@
 # ~27B M6 state (resume file)
 
-Updated: 2026-10-01 20:00 UTC+8 (12:00Z; continuation worker 2 a56025bb, started 10:44Z; worker 1 11741ee2 ran
-06:17–10:55Z).
+Updated: 2026-10-01 23:10 UTC+8 (15:10Z; continuation worker 2 a56025bb ran 10:44–15:15Z and handed off; worker 1
+11741ee2 ran 06:17–10:55Z).
 Prereg `m6-prereg-2026-10-01.md` (`90d38aba7`) with amendments 1 (`b74685ddb`), 2 (`35492ac25`) and **3 (`4e4211aee`,
 data lock `7fcbc824c`)**. Mirrors: M6-IB / M6-IB2 seeds, chains and watchers run from **`b74685ddb`**, M6-IBX's from
 **`d8edcf4e1`**, M6-IB2PN's from **`7fcbc824c`** (on node A / B / D); step 0 ran from `20af2e4a1`. Hand-off record for
@@ -11,13 +11,23 @@ Assignment: COORDINATION 2026-10-01 14:25 (27B M6, worker 11741ee2). Branch `xun
 (worktree `/home/xunliu/code/vllm-sr-dev2-27b`; merge-only into `xunzhuo/decision-2-training`). Gist file
 `06-decision-2-27b.md`. Budget 140 GPU-h. Index numbers are private: never in this file, commits or the gist.
 
-## Hand-off (worker 2 → continuation; refreshed at every poll)
+## Hand-off (worker 2 → continuation, 15:10Z)
 
+- **State at 15:03Z:** eight seeds, four chains, five node A watchers / relays and four node D relays alive. GPU-h
+  **≈ 48.7 of 140** (closed 1.314 + running ≈ 47.4); projection ≈ 134 with the hedge (M6 funds no Index run).
+  Development SELECT700 bests so far (family macro): M6-IB .9148 / .9115, M6-IB2 .8931 / .8944, M6-IBX .8865 /
+  .8873, M6-IB2PN .8173 / .8631 (first checkpoint only).
 - **Eight seeds train unattended; four chains carry them to verdicts** (one per arm; M6-IB2PN is amendment 3's G5
   hedge). Nothing needs a manual step until a chain ends, except polling (≤ 45 min, state commit each time; > 60 min
-  without a commit while GPU jobs run counts as a silent stop). Training ends (measured rates): **M6-IB ≈ 21:15Z /
-  21:50Z** (s1 / s2), **M6-IBX ≈ 22:40Z**, **M6-IB2 ≈ 01:40Z** (Oct 2), **M6-IB2PN ≈ 06:50Z** (Oct 2); each chain then
-  needs ≈ 1–2 h (soup, readout, slices, gates; formal + mlx-diag + items 1–7 only for passers).
+  without a commit while GPU jobs run counts as a silent stop; tool sleeps here overran by up to 65%, so sleep ≤ 20
+  min and check the clock). Training ends (measured rates): **M6-IB ≈ 21:05Z / 21:45Z** (s1 / s2), **M6-IBX ≈
+  22:35Z**, **M6-IB2 ≈ 01:40Z** (Oct 2), **M6-IB2PN ≈ 06:20Z** (Oct 2); each chain then needs ≈ 1–2 h (soup, readout,
+  slices, gates; formal + mlx-diag + items 1–7 only for passers).
+- **Program notes since 18:50 that touch M6:** merges must be signed (`git merge --signoff`; this worker's merge
+  `d96250da6` at 11:42Z predates the reminder and is unsigned, not rewritten); release cards now carry an Index section
+  built by the release track from private reports (user 22:10) — Index values still never go into commits, gists or
+  COORDINATION / STATUS; node D GPU4–7 stay idle and unleased by M6 (the coordinator may reassign them); IB3 data
+  (phishing, grounding, ESCI, MCQ, contracts) is being built for a later milestone.
 - **Poll (workstation):** per node `docker ps | grep d2-27b-M6`; driver / chain / relay / watcher PIDs ("Running now");
   per seed `full/run/train-metrics.jsonl` (step, `seconds`) and `select-step-*-metrics.json` (family macro). Watch
   M6-IB2PN's projection against its 22 GPU-h cap (expected ≈ 18.6–19.2).
@@ -136,8 +146,9 @@ for M6-IB and `ib12` (IB1 + IB2 DEV) for M6-IB2.
 
 ## Leases
 
-node B GPU0, GPU1, GPU5 and node A GPU2: track 27b, running the four seeds. Node D: IX1 follow-up (not ours yet; IX1
-is still fixing the long-input runtime bug and staging its M5-L128 Index diagnostic).
+node B GPU0, GPU1, GPU5 and node A GPU2: track 27b, running the four M6-IB / M6-IB2 seeds. **Node D GPU0–GPU3: track
+27b** (M6-IBX on GPU0 / 1 since 08:32Z, M6-IB2PN on GPU2 / 3 since 11:31Z; IX1's released owner files moved to
+`owner.prev-*`). Node D GPU4–7: not leased by M6 (IX1's released owners; GPU5 has no owner file).
 
 ## Infrastructure
 
@@ -166,6 +177,9 @@ is still fixing the long-input runtime bug and staging its M5-L128 Index diagnos
 
 ## Hand-off templates (use when a chain's verdicts exist)
 
+(Superseded in part by `m6-handoff-2026-10-01.md`: the C1 content recheck is already requested and covers every arm,
+including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, M6 funds none.)
+
 - **Read a chain's outcome:** node B `m6/logs/chain-<ARM>.log` (last line `m6 chain complete…`), the newest
   `m6/readouts/DEVGATES-*.json` naming the arm (gates G1–G6, `finalists`), `m6/gates/VERDICTS-*.json` (items 1–7,
   beats-AutoJev, `choice`). Fill `m6-results-2026-10-01.md` (development table with CIs, formal table, verdicts,
@@ -187,16 +201,23 @@ is still fixing the long-input runtime bug and staging its M5-L128 Index diagnos
 - **Milestone end:** `m6/m6-link.sh remove`; leases back to `reserved-idle`; node D leases released (owner files);
   staged node D inputs may stay for later 27B work (≈ 53 GB on node D's data disk).
 
-## Next steps
+## Next steps (worker 2's hand-off, 15:10Z)
 
-1. Confirm the four preflights (onestep finite, reload parity 0 argmax changes) and the first full-run updates; record
-   seconds per update and ETAs.
-2. M6-IBX is launched (see "Running now"); watch its preflights and first updates on node D.
-3. After the chains: results record, item-8 hand-off (custodian C1 content recheck first, IB1 + IB2 roots) and the
-   private Index request for frozen finalists.
+1. Poll (≤ 45 min, commit each time) until M6-IB's chain starts processing (≈ 21:45Z, both seeds done).
+2. Per chain: when `m6/logs/<ARM>.CANDIDATE` and a `DEVGATES-*.json` naming the arm exist, run `m6_report devgates`
+   (see the hand-off above) and fill the development table (G1–G6 with CIs, G5 and G6 especially, plus the es / fr
+   view) in `m6-results-2026-10-01.md`; commit. On `m6 chain complete`, run `m6_report verdicts` and fill the formal
+   table; record the choice rule's outcome across chains (stage 1: M6-IB / M6-IBX; stage 2: M6-IB2 / M6-IB2PN).
+3. Finalists passing items 1–7: complete `m6-handoff-2026-10-01.md` §2 (package, spec) after the custodian's §1
+   PASS; §3 IX1 request (private values only); §4 release hand-off only after item 8 passes.
+4. After the last chain (M6-IB2PN ≈ 08:30Z Oct 2): attribution (`m6-gates.sh` with every sealed finalist), final
+   results, gist 06, milestone-end cleanup ("Hand-off" above), merge (signed) into integration.
 
 ## Poll log (newest first)
 
+- 15:05Z (poll at 15:03Z; worker 2's last): all alive. M6-IB 2,737 / 2,582 (13.0 / 13.7 h; s2 at 2544 .9115, BEST =
+  2544); M6-IB2 2,626 / 2,617 (17.6 / 17.6 h; at 2481 .8931 / .8944, BEST = 2481 both); M6-IBX 2,333 / 2,303 (13.7 /
+  13.9 h); M6-IB2PN 1,250 / 1,220 (18.7 / 18.6 h). Node D disk 566 GB. GPU-h ≈ 48.7.
 - 14:35Z (poll at 14:34Z): all alive. M6-IB 2,546 / 2,412 (13.0 / 13.7 h; s1 at 2544 .9013, BEST stays 1908); M6-IB2
   2,454 / 2,445 (17.5 / 17.6 h); M6-IBX 2,159 / 2,129 (13.7 / 13.9 h); M6-IB2PN 1,074 / 1,043 (18.7 / 18.6 h).
   GPU-h ≈ 44.9.
