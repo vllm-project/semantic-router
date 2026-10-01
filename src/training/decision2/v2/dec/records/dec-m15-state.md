@@ -1,5 +1,10 @@
 # Decoder M15 — state (prereg `dec-m15-prereg-2026-10-01.md`)
 
+## 2026-10-01 17:40Z
+
+- `2b-RASDML` s1 / s2 DONE (17:21 / 17:25Z); `2b-RA10SDML` s1 / s2 training (F GPU2 / 3). 4B and 0.8B seeds training.
+- Part A: shards 0–2 done, shard 3 running.
+
 ## 2026-10-01 17:16Z
 
 - Every preflight PASS (pre-warms 16:49–16:53Z); all eight seeds training (2B near the end of its cosine schedule; 4B
