@@ -100,17 +100,22 @@ is still fixing the long-input runtime bug and staging its M5-L128 Index diagnos
 
 1. Confirm the four preflights (onestep finite, reload parity 0 argmax changes) and the first full-run updates; record
    seconds per update and ETAs.
-2. **M6-IBX on node D** once IX1 releases it (its M5-L128 Index run holds node D until ≈ 11:00Z; check the owner files
-   for `status=released`): mirror the latest commit to node D (`mirror_to_node.sh --path src/training/decision2 node-d
-   <sha>`), `m6/m6-stage-d.sh <sha> a20ib1x` (base, data, T0, mixture; all hash-checked), commit a short amendment (node D
-   placement), then `m6-launch.sh <sha> M6-IBX:a20ib1x:ib:d0,d1:<aux>` — the aux GPU must be a node B GPU of the M6
-   allocation that is free when the seeds end (GPU1 frees ≈ 21:35Z). Node D seeds relay with `RELAY_NODE=d` and node B
-   pulls with `pull-d`. If node D stays busy, the next free 27B pair is node B GPU5 + GPU1 after M6-IB (≈ 21:35Z).
+2. **M6-IBX on node D (amendment 2, `35492ac25`; node D already staged and verified at 08:22Z, mirror `35492ac25` on
+   node A / B / D):** once IX1 releases node D GPU0 and GPU1 (owner files `status=released…`; IX1's M5-L128 Index run
+   expects to end ≈ 11:00–11:06Z), run from the workstation
+   `bash src/training/decision2/v2/27b/m6/m6-launch.sh 35492ac259d5762430cdf06a0a4a3f52578177c3 M6-IBX:a20ib1x:ib:d0,d1:5`
+   (it re-checks the node D mixture hash, takes the two node D leases with `launch3 lease` `m6-d`, launches both seeds,
+   starts the node D relay watchers with `RELAY_NODE=d`, the node A mlx watcher and the node B chain with aux GPU5).
+   Run it **once**, with its output to a local log (`> /tmp/m6-launch-ibx.log 2>&1`), and verify on the nodes. If node D
+   stays busy, use node B GPU5 + GPU1 after M6-IB (≈ 21:35Z): `M6-IBX:a20ib1x:ib:b5,b1:5`.
 3. After the chains: results record, item-8 hand-off (custodian C1 content recheck first, IB1 + IB2 roots) and the
    private Index request for frozen finalists.
 
 ## Poll log (newest first)
 
+- 08:27Z: node D staged for M6-IBX (`m6-stage-d.sh`: base tree, T0 tree, data files, `a20ib1x` equal to node B; image
+  present; 1 min copy) and amendment 2 committed (`35492ac25`, mirrored to node A / B / D); node B's `on_d` probe of
+  node D's relay directory works. Integration merged at `8a7527079`; gist 06 launch entry added.
 - 08:20Z: steps 69–75 of 5,081 / 6,614; s/upd 9.20–9.71; projections M6-IB 13.0–13.2 h, M6-IB2 17.1 (node B) / 17.8
   (node A) of cap 20. Interim results record written. Node D support committed (`e11a19b57`: launcher map `d`, launch3
   `m6-d` and free-text released owners, `m6-stage-d.sh`, `pull-d`, `d` seeds in chain / launch; tests pass). Receipts
