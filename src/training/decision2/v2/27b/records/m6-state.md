@@ -1,8 +1,9 @@
 # ~27B M6 state (resume file)
 
 Updated: 2026-10-01 18:50 UTC+8 (10:50Z; M6 worker 1, started 06:17Z; hand-off below).
-Prereg `m6-prereg-2026-10-01.md` (`90d38aba7`). Tooling: latest mirror **`482cb0ddb`** on node A and node B
-(`20af2e4a1` ran step 0).
+Prereg `m6-prereg-2026-10-01.md` (`90d38aba7`) with amendments 1 (`b74685ddb`) and 2 (`35492ac25`). Mirrors: M6-IB /
+M6-IB2 seeds, chains and watchers run from **`b74685ddb`**, M6-IBX's from **`d8edcf4e1`** (on node A / B / D); step 0
+ran from `20af2e4a1`.
 Assignment: COORDINATION 2026-10-01 14:25 (27B M6, worker 11741ee2). Branch `xunzhuo/decision-2-training-27b`
 (worktree `/home/xunliu/code/vllm-sr-dev2-27b`; merge-only into `xunzhuo/decision-2-training`). Gist file
 `06-decision-2-27b.md`. Budget 140 GPU-h. Index numbers are private: never in this file, commits or the gist.
@@ -154,6 +155,11 @@ is still fixing the long-input runtime bug and staging its M5-L128 Index diagnos
 
 ## Poll log (newest first)
 
+- 10:41Z (worker 1's last poll): M6-IB 999 / 966 of 5,081 (13.1 / 13.5 h; SELECT700 at 636 .8396 / .8331), M6-IB2 985 /
+  978 of 6,614 (17.2 / 17.3 h; at 827 .8668 / .8856), M6-IBX 728 / 715 of 4,997 (13.5 / 13.7 h; at 625 .8113 / .8596).
+  Six containers, three chains, four node A watchers and two node D relays alive. **GPU-h:** closed receipts 1.136
+  (node B 0.864, node A 0.094, node D 0.178) plus running full runs ≈ 14.6 → ≈ 15.7 used; projection ≈ 94 before any
+  private Index run.
 - 10:22Z: M6-IB 868 / 846 (13.1 / 13.5 h); M6-IB2 861 / 850 (17.2 / 17.4 h), first SELECT700 at 827: s1 .8668, s2
   .8856; M6-IBX 616 / 605 (13.5 / 13.7 h). Six containers, three chains alive.
 - 09:54Z: M6-IB 687 / 674 of 5,081 (13.2 / 13.5 h); first SELECT700 family macro at update 636: s1 .8396, s2 .8331
