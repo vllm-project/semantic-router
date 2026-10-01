@@ -228,6 +228,12 @@ def load_dec_checkpoint(
 
     path = Path(path)
     metadata = json.loads((path / "decision_config.json").read_text(encoding="utf-8"))
+    if metadata.get("readout") == "label_token":
+        from .label_token import load_label_checkpoint
+
+        return load_label_checkpoint(
+            path, source_path, trainable_adapter=trainable_adapter
+        )
     residual = metadata.get("dec_residual")
     if residual is None:
         model, tokenizer = DecisionModel.from_checkpoint(
@@ -296,6 +302,11 @@ def load_dec_checkpoint(
 
 def dec_fingerprint(path: Path, source_path: Path | None) -> dict[str, Any]:
     """Shared inference identity plus any residual readout weights."""
+    if not (Path(path) / "decision_head.safetensors").is_file():
+        from .label_token import is_label_checkpoint, label_fingerprint
+
+        if is_label_checkpoint(path):
+            return label_fingerprint(path, source_path)
     identity = checkpoint_fingerprint(path, source_path)
     residual = path / RESIDUAL_FILE
     if not residual.is_file():
