@@ -8,7 +8,15 @@ counts, hashes and GPU-hours.
 
 ## Now
 
-- 2026-10-01 04:25Z — **4B and 9B done, merged, dual-scored.** Both: 120,226 rows = 120,224 `ok` + 2 `unsupported`
+- 2026-10-01 04:45Z — **2B done and dual-scored** (120,224 `ok` + 2 `unsupported`; scorer gate PASS; 0 benchmarks
+  > 1 skill point from the external report; 1.34 GPU-h). 0.8B nearly done (one late shard), 0.6B running (node C
+  chains restarted at mirror `9e0f703ac` after a lease race: the busy check now waits for the previous container to
+  drain). 27B: six shards finish ≈ 04:50Z; node D jobs (mirror `27226408b`): `waiter-d.sh` reruns shard 3's skipped
+  request on GPU0 (a different GPU), then the 27B CAL pass; resumes shard 2 to retry its error row; `tail-d.sh`
+  stops shards 3 and 5 once four GPUs are free and spreads their unanswered rows over GPUs 1, 4, 5, 6, 7 as `extra-r*`
+  reruns (every row still answered once; the merge refuses double answers). Node C `waiter-c.sh`: CAL passes for
+  9B / 4B / 2B / 0.8B / 0.6B on GPU1 after 0.6B shard 0.
+- 04:25Z — **4B and 9B done, merged, dual-scored.** Both: 120,226 rows = 120,224 `ok` + 2 `unsupported`
   (`max_length_exceeded`; the external report's count), 0 errors; port vs kit `87d4650b` gate PASS (per-benchmark
   ≤ 5e-5, headline ≤ 0.002); **0 of 38 benchmarks differ from the external report by more than 1 skill point**
   (values private). GPU-h: 4B 2.17, 9B 2.71. 2B running on node C (then 0.8B, 0.6B by per-GPU chain); 27B on node D.
@@ -72,8 +80,9 @@ counts, hashes and GPU-hours.
 | Aborted shard starts (load only) | 0.04 |
 | Full run 4B (7 GPUs) | 2.17 |
 | Full run 9B (7 GPUs) | 2.71 |
-| Full runs 27B, 2B, 0.8B, 0.6B | running |
-| **Total so far** | **≈ 5.29** |
+| Full run 2B (7 GPUs) | 1.34 |
+| Full runs 27B, 0.8B, 0.6B | running |
+| **Total so far** | **≈ 6.63** |
 
 ## Hand-off notes
 
