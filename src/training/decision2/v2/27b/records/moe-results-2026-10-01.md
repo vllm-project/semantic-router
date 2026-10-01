@@ -1,11 +1,15 @@
 # 27B MoE milestone (MoE-1): results — INTERIM (screen done; Stage B training)
 
-Preregistration `moe-prereg-2026-10-01.md` (signed `bc82b771e`; amendments 1–3). Gate `moe-gate-2026-10-01.md`.
+Preregistration `moe-prereg-2026-10-01.md` (signed `bc82b771e`; amendments 1–4). Gate `moe-gate-2026-10-01.md`.
 Development readouts are never release scores; post-key numbers are "post-key same-panel". Nothing was uploaded to
-Hugging Face. Sections marked **pending** are filled from the screen chain and Stage B.
+Hugging Face. Sections marked **pending** are filled from the Stage B chain.
 
 ## Summary so far
 
+- **Screen:** Gemma-4-26B-A4B-it won; both Qwen3.5-35B-A3B cells were stopped by the proxy rule (8.5 points below the
+  dense matched reference, mostly typed-DEV Score and the CSS pilot). Stage B = one Gemma soup (two seeds).
+- **Latency:** at batch 1 the Gemma MoE decision is slower than the dense 27B (≈ 120 vs 84 ms p50) although ≈ 15% of
+  its parameters are active per token.
 - **Gate:** Gemma-4-26B-A4B(-it) and Qwen3.5-35B-A3B(-Base) are Apache-2.0 (Gemma 4's licence link is the verbatim
   Apache License 2.0), ungated, pinned and hash-verified on both nodes; the pinned ROCm image supports both; LoRA fits
   one MI325X.
@@ -77,11 +81,45 @@ reference's own predictions (`readouts/A20r-s1-c892`, SHA-256 `a809af48…`).
 - At the screen the MoE cells were a quarter-trained adapter with experts frozen (37–42M trainable parameters vs ≈ 233M
   for the dense rank-32 adapter); the dense seed was already within 0.8 of the final A20r soup (78.99).
 
-## Stage B, formal runs, successor items 1–7, "beats AutoJev" — pending
+## Stage B (Gemma-4-26B-A4B-it; amendment 4)
+
+| Seed | Node / GPU | Preflights | Full attempt | BEST (SELECT700 family macro / Brier) | Last update |
+| --- | --- | --- | --- | --- | --- |
+| MOE-Git-s1 (20260926) | A / 3 | pass (r2) | 16:55:57Z → 03:10:21Z, **10.240 GPU-h**, exit 0 | `checkpoint-0002676` .8281 / .1188 | .8209 / .1211 |
+| MOE-Git-s2 (20260928) | A / 4 | pass (one-step 0.073, reload 0 / 32) | from 22:05:42Z, ≈ 10.3 s per update, ends ≈ 08:25Z | pending | pending |
+
+- The soup, its readout, CAL698 fit, adoption, development gates, package, formal run, gates, latency and mlx-diag
+  run unattended from mirror `eacb6b85c` (amendment 4); results land here as they finish.
+- **Parameters (safetensors headers):** base text decoder 25,233,141,790 (vision tower not loaded); routed experts
+  22,837,985,280, top-8 of 128 active. A rank-32 seed: 25,273,208,350 loaded / 3,862,597,150 active. The rank-64 soup
+  adds 74,342,400 adapter + 2,895,360 head: **25,310,379,550 loaded / 3,899,768,350 active (≈ 15% of loaded)**, vs
+  A20r's 26,096,775,168 (all active).
+- **Latency reference (BF16 decision forward, M1's 64-prompt SELECT roster, node B GPU7):** A20r p50 / p95
+  **83.6 / 88.8 ms** (FLA kernels, 52.2 GB resident); a rank-32 Gemma MoE adapter (path check on MOE-Git-s1 checkpoint
+  892) **119.7 / 126.6 ms** (50.7 GB). At batch 1 on ≈ 140-token prompts the MoE is ≈ 43% slower per decision than
+  the dense 27B on this stack, despite ≈ 15% of the active parameters (the soup's own number comes from the chain).
+
+## Formal runs, successor items 1–7, "beats AutoJev" — pending
+
+## Licence of a derived release (Gemma terms; from the gate)
+
+- `google/gemma-4-26B-A4B-it@4d7ae498` is **Apache-2.0**: the card says `license: apache-2.0` and its `license_link`
+  (ai.google.dev/gemma/docs/gemma_4_license) redirects to the verbatim Apache License 2.0. The repository is ungated
+  and ships no `NOTICE` file. Gemma 4 is **not** under the Gemma Terms of Use or the Gemma Prohibited Use Policy
+  that cover Gemma 1–3, so no use restrictions pass through and no terms acceptance is needed.
+- A derived release (LoRA adapter + head served on the unmodified base, or merged weights) may be Apache-2.0 and must:
+  include the licence text (§4(a)); state prominently that the files were modified — here, an adapter and head
+  trained on top of the named base (§4(b)); keep any upstream attribution notices (§4(c); none ship); and use
+  "Gemma" / "Google" only to describe the origin (§6), so a product name such as DEV2.0-26B-A4B carries no
+  trademark. The card names the exact base repository and revision as the direct weight origin.
+- Data terms are A20r's (same `a20` mixture, SELECT700, CAL698), unchanged by the base. Rune-26B-A4B and Decider
+  35B-A3B were never teachers or weight sources.
 
 ## Budget (GPU-h; cap 60)
 
-- **Receipts at 02:30Z: 12.301 finished** — probes 0.150, kernel checks 0.049, failed launches 0.001, preflights 0.513
+- **Receipts at 03:15Z: 22.64 finished** (+ MOE-Git-s1 full 10.240, path checks 0.069, A20r latency reference 0.030)
+  **plus MOE-Git-s2 running (≈ 5.2) → ≈ 27.8.**
+- Receipts at 02:30Z: 12.301 finished — probes 0.150, kernel checks 0.049, failed launches 0.001, preflights 0.513
   (G-it s1 0.094, s2 0.089; Q-it 0.161; Q-pt 0.168), Q-it full 4.993, Q-pt full 4.980, readouts 1.615 (dense reference
   0.248, Gemma / Qwen-pt path smokes 0.176, cell screens 0.260 + 0.469 + 0.462) — **plus the two running Gemma seeds
   (≈ 9.6 + 4.4) → ≈ 26.3.**
