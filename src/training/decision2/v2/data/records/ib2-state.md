@@ -23,6 +23,8 @@ rows (`ee137efa…`), DEV 1,272 (`ab009fb1…`), 5.42M native tokens, six famili
 
 ## Log (newest first)
 
+- 2026-10-01 15:32 UTC+8 — merged into `xunzhuo/decision-2-training` (`66b96c4bb`; IB2, IB1 and guard tests pass)
+  and gist 02 entry added. **Worker done.**
 - 2026-10-01 15:20 UTC+8 — uploaded `m6/ib2/` (38 files, read-back SHA-256 equal, private before / after; revision
   `c5dbdd0a`, parent `82bf70a7` = IB1-r2's upload); receipts, data card and results record written. Remaining: merge
   into integration, gist 02.
