@@ -1,7 +1,9 @@
 # ~27B M6 state (resume file)
 
-Updated: 2026-10-01 23:28 UTC+8 (15:28Z; **worker 3 = the coordinator's continuation #2, 0d2e488f, on duty from
-15:12Z**; worker 2 a56025bb ran 10:44–15:15Z and handed off; worker 1 11741ee2 ran 06:17–10:55Z).
+Updated: 2026-10-02 03:40 UTC+8 (19:40Z; **worker 3 = the coordinator's continuation #2, 0d2e488f, ran
+15:12–≈ 20:00Z and handed off: read "Hand-off (worker 3 → continuation)" and its "Next steps" first**; worker 2
+a56025bb ran 10:44–15:15Z; worker 1 11741ee2 ran 06:17–10:55Z). Prereg amendment 4 (`c1eafcc08`, the Index path)
+applies from now on.
 Prereg `m6-prereg-2026-10-01.md` (`90d38aba7`) with amendments 1 (`b74685ddb`), 2 (`35492ac25`) and **3 (`4e4211aee`,
 data lock `7fcbc824c`)**. Mirrors: M6-IB / M6-IB2 seeds, chains and watchers run from **`b74685ddb`**, M6-IBX's from
 **`d8edcf4e1`**, M6-IB2PN's from **`7fcbc824c`** (on node A / B / D); step 0 ran from `20af2e4a1`. Hand-off record for
@@ -10,6 +12,58 @@ later on node B).
 Assignment: COORDINATION 2026-10-01 14:25 (27B M6, worker 11741ee2). Branch `xunzhuo/decision-2-training-27b`
 (worktree `/home/xunliu/code/vllm-sr-dev2-27b`; merge-only into `xunzhuo/decision-2-training`). Gist file
 `06-decision-2-27b.md`. Budget 140 GPU-h. Index numbers are private: never in this file, commits or the gist.
+
+## Hand-off (worker 3 → continuation, ≈ 20:00Z) — read this first
+
+- **State:** eight seeds train unattended on schedule; four chains, four node D relays, the node A relay and four mlx
+  watchers alive; the **contrast guard** (node B PID 2868454) protects the shared `m6/gates/` (see "Infrastructure").
+  No candidate, gate or formal result exists yet. GPU-h ≈ 80 of 140 at 19:00Z (projection ≈ 134); eval allowance
+  used 0.056 (the restage control).
+- **Rules that changed this session** (all recorded before any M6 result):
+  - **C1 content recheck r1 PASS, exposure 0 for all four arms** (`v2/eval/records/c1-recheck-r1-2026-10-01.md`,
+    verdict `0823a1a8…`): C1 content blocks item 8 for no arm.
+  - **Amendment 4 (`c1eafcc08`): the Index path** (COORDINATION 2026-10-02 02:05). Item 1' = v3 not significantly
+    below A20r (paired upper bound > 0) **and** a significantly positive paired Index delta vs A20r (`paired_boot`
+    lower bound > 0); items 2–8 unchanged; **one Index run per frozen formal finalist, started as soon as its formal
+    run is sealed**; choice = classic passers first (prereg order), then Index-path passers by the Index delta's
+    lower bound; private transfer-only tracking.
+  - **Index allowance:** COORDINATION 23:20 gave ≤ 12 GPU-h (one 27B run, ≈ 9.5 GPU-h); amendment 4 asks the
+    coordinator for one run per finalist (up to ≈ 38). Until it answers, run in seal order, the first within 12.
+  - **DEV2.0-27B `main` = `e7b4a372`** (card-only revision on `09280791`, 15:41Z) and the **repositories are being
+    renamed** (COORDINATION 00:25): the release supersedes the then-current `main` under the new ID.
+- **Done once for the Index path:** restage control PASS (86 / 86, max |Δp| 0.0); contamination audit (0 item
+  duplicates in every arm's TRAIN). Node D GPU4–6 hold released owners in the format IX1's `launch.sh` accepts;
+  GPU7 runs the 4B track's panel until ≈ 22:18Z (its lease).
+- **Commits to use:** node B mirror `b980dd144` (m6_report, `m6-gates.sh` `contrast` stage) or later; **node D
+  mirror `c1eafcc08`** (M6 `DIAGNOSTIC` entries, `m6-index-run.sh` with a GPU list; older node D mirrors ignore
+  `M6_INDEX_GPUS`). Run `m6-index.sh` / `m6-stage-a.sh` / `m6_index_path` from the worktree at `HEAD`.
+- **Tool sleeps overran here** (a 20-min sleep ran ≈ 40 min once): sleep ≤ 10–15 min and commit within 45 min. **A
+  tool call once ran a command twice** (18:22Z incident): before re-running anything that moves files or starts a
+  GPU job, check whether the first copy is still running.
+
+## Next steps (worker 3's hand-off; supersede the older lists below)
+
+1. **Poll ≤ 45 min, commit each time.** M6-IB's seeds end ≈ 21:30Z / 21:47Z, M6-IBX's ≈ 22:22Z / 22:32Z, M6-IB2's ≈
+   01:40Z, M6-IB2PN's ≈ 06:25Z (Oct 2); each chain then needs ≈ 1–2 h.
+2. **Per chain, at its dev gates** (`m6/logs/<ARM>.CANDIDATE` and a `readouts/DEVGATES-*.json` naming the arm): on
+   node B, `cd /data/dev2/src/b980dd1448940dfed4658d15624fd7fd54964e44-src_training_decision2/src/training/decision2 &&
+   PYTHONPATH=. python3 -m v2.27b.m6.m6_report devgates <DEVGATES file> --root /data/dev2/runs/27b/m6 --pn1-rows
+   /data/dev2/hf-cache/datasets--llm-semantic-router--decision-2.0-training-data/snapshots/27b1d2f130292268b43a618584bebab5d4e4a6b5/m4/pn1/dev/pn1.dev.jsonl`
+   → the development table (G1–G6 with intervals; G5 yes-bias and G6 breadth; the es / fr view) in the results
+   record; commit.
+3. **Per finalist, once `m6/<ARM>/formal/SEAL.json` exists:** start its Index run (runbook §3; ≈ 3 h):
+   `SHA=c1eafcc087f488e9e935050d2cfe26d8865c4704; M6=src/training/decision2/v2/27b/m6; bash $M6/m6-index.sh $SHA
+   <ARM> stage`, then `parity`, then `M6_INDEX_GPUS="4 5 6" bash $M6/m6-index.sh $SHA <ARM> run` (`"4 5 6 7"` once
+   the 4B run has released GPU7), `status` until 8 shards end 0, `score`, `release`. One run at a time on GPU4–7.
+4. **Per chain, at `m6 chain complete`:** `m6_report verdicts <VERDICTS file>` → the formal table (items 1–7,
+   beats-AutoJev). If a chain log ends in a `FileExistsError` after its gates start, the guard missed: run that
+   chain's `overlap` and `verdicts` stages by hand ("Infrastructure").
+5. **After the last chain and every finalist's Index run:** on node B `m6-gates.sh <b980dd144 or later> verdicts
+   <every sealed finalist>` and `contrast <every sealed finalist>`; locally `python3 -m v2.27b.m6.m6_index_path`
+   (runbook §3) → item 1' and the choice. Then runbook §2 (stage on node A with `m6-stage-a.sh <ARM>`, draft spec
+   and pre-release build, C1 spec, `c1-postkey.sh` verify / preflight / one run), §4 (release under the new repo ID,
+   after re-reading COORDINATION 00:25), §5 (milestone end: `m6-link.sh remove` after the staging, leases, gist 06,
+   signed merge).
 
 ## Hand-off (worker 2 → continuation, 15:10Z)
 
@@ -210,7 +264,7 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 - **Milestone end:** `m6/m6-link.sh remove`; leases back to `reserved-idle`; node D leases released (owner files);
   staged node D inputs may stay for later 27B work (≈ 53 GB on node D's data disk).
 
-## Next steps (worker 2's hand-off, 15:10Z)
+## Next steps (worker 2's hand-off, 15:10Z; superseded by worker 3's list above)
 
 1. Poll (≤ 45 min, commit each time) until M6-IB's chain starts processing (≈ 21:45Z, both seeds done).
 2. Per chain: when `m6/logs/<ARM>.CANDIDATE` and a `DEVGATES-*.json` naming the arm exist, run `m6_report devgates`
