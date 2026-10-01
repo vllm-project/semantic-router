@@ -1,0 +1,102 @@
+{
+  "builder_commit": "eb2d9f1df8f17fe4e7e62949675ed6a599ae9fe6",
+  "card": {
+    "assets_receipt_sha256": "4662e7dd65c331ae3a26170275ea314d563599fbafa3929e0f8563484ada194a",
+    "excluded": [
+      {
+        "key": "jpt08b",
+        "reason": "non-commercial licence"
+      }
+    ],
+    "figures_sha256": {
+      "assets/banner.png": "97d1b46c638b4036223ba36bd3df3a58dafcdb48f01a7809ebcfe54c4faa4fe5",
+      "assets/index-areas.png": "00b7e3598d89369eb89d0ea71220fbfde97dbb955571dec1f57fc707022561d7",
+      "assets/index-pareto.png": "88034e766d9da157bba0f0354a7157dc0c0560e640633537b98b6e11d288425b",
+      "assets/jevarena-types.png": "c48d403fc73fbf551ff2f32372e4ee997dadab90b19d7e0db55c9485ae27f82e",
+      "assets/jevarena.png": "2da9b8e6039f5c90165d7a19b7027fb75bf05449aa8756a8ed8486e1a0e5d039"
+    },
+    "index_sha256": "47e59a9550767b07d8aa82effb3cee4d5fbde75c4abed725e6ed2e6551826a01",
+    "paired": {
+      "ci95": [
+        3.645529987266831,
+        13.315791818808199
+      ],
+      "delta": 7.6891294628828675,
+      "replicates": 5000,
+      "sha256": "fa62c29a1920dc8824b13ba5ccf1d8e9c4acaf68d8dad4e137cd1b6c84bc50bc"
+    },
+    "readme_sha256": "e2926e02cb7b338c36a8629db01067a6a0ef50eaabc02261dd2ee999cb773431",
+    "shown": [
+      {
+        "key": "candidate",
+        "licence": "package",
+        "report_sha256": "1f5cf33d85be3f4c8c8dea29654275e1e9939848a9d8d4d6d381c1152a8f0a11"
+      },
+      {
+        "key": "eos1",
+        "licence": "apache-2.0",
+        "report_sha256": "078d780c524602c7e51d57fe7ae40d99a35f5591a2abf91f78096a768aed3ca7"
+      },
+      {
+        "key": "intern",
+        "licence": "apache-2.0",
+        "report_sha256": "ddcdba6db2da3cfd93fafeb51bc1634694f5a6ed94aaf4ed1d9973dbe4d3f159"
+      },
+      {
+        "key": "kev",
+        "licence": "apache-2.0",
+        "report_sha256": "66fcffaf1353974e6b92fba56be7e9e9a4dfc030fcc39a21703fd131bf5da754"
+      }
+    ],
+    "tradeoffs": [
+      "Typed Score (correct): 107/400 versus 120/400",
+      "Human-labelled transfer (median task macro-F1): 0.440 versus 0.461",
+      "mlx-diag non-English Noul (accuracy): 54.2% versus 59.2%",
+      "Transfer: Misinfo Reaction Frames (macro-F1): 45.6% versus 62.5%",
+      "Transfer: Conversations Gone Awry (macro-F1): 43.0% versus 57.1%",
+      "Transfer: FLUTE figurative language (macro-F1): 38.7% versus 46.1%",
+      "Transfer: Media ideology (macro-F1): 30.2% versus 36.6%",
+      "Transfer: Wikipedia power (macro-F1): 44.0% versus 49.2%",
+      "Transfer: TempoWiC (macro-F1): 53.5% versus 58.2%",
+      "Transfer: Ideological Books Corpus (macro-F1): 32.2% versus 35.2%",
+      "Transfer: Persuasion (macro-F1): 49.7% versus 50.1%"
+    ]
+  },
+  "ended_utc": "2026-10-01T17:46:57.151378+00:00",
+  "files": 29,
+  "identity": {
+    "architecture": "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp",
+    "bf16_copy": {
+      "receipt_sha256": "995cdadb56ad0659356d539b22c4636b4fa29f8b7da71a89f371fd31408f9f70",
+      "source_model_sha256": "60356482ceeb669c4a97eb14dcfae5144b1b181f6c8b7a628ea5d02c86a6dd8b"
+    },
+    "dec_residual": false,
+    "head_variant": "shared",
+    "model_sha256": "3f02f0e5fc68a1fd985ce48bf3a3bb2d4ed16d1a1705c2258317b78a4d6514f4",
+    "readout": "head",
+    "temperature_by_type": null,
+    "text_parameter_count": 752393024
+  },
+  "licence": "apache-2.0",
+  "manifest_sha256": "44012ea3b11c1ce9aa3375b034b1f6ba62b7c08f804c0b81a385e1e4b858ad43",
+  "package": "/data/dev2/runs/release/dev2-card2-0.8B-20261001T174647Z/package/Decision-2.0-Eos-0.8B",
+  "parameters": {
+    "external_base_text": null,
+    "loaded": 753446208,
+    "packaged": {
+      "backbone": 752393024,
+      "head": 1053184,
+      "residual": 0
+    }
+  },
+  "release_decision": {
+    "sha256": "b3d8e182a06d871d16ea8e88fabbaf47787b52f1d0b0aeb1069a75d685156cfe",
+    "status": "final"
+  },
+  "schema": "dev2-release-build/1",
+  "screen": {
+    "text_files_screened": 24
+  },
+  "spec_sha256": "e6f7ab54b4293afde10f0d237358a9d8214e1e681d7b129cdce34d88dfed3c92",
+  "started_utc": "2026-10-01T17:46:52.972139+00:00"
+}

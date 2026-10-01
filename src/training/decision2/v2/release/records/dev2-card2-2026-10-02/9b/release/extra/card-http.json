@@ -1,0 +1,90 @@
+{
+  "anonymous_status": {
+    "model_api": 401,
+    "model_page": 401,
+    "readme": 401
+  },
+  "manifest_sha256": "cd710f2656e50cbc62c245c93c0b8700e28c91d533b321c743b4e7abb54f166c",
+  "model_api": {
+    "base_model": "llm-semantic-router/Decision-1.0-Lux-9B",
+    "base_model_relation": "finetune",
+    "files": 40,
+    "license": "apache-2.0",
+    "private": true,
+    "sha": "586af77916ee508320421bda6c22f7f0305a7279",
+    "status": 200
+  },
+  "passed": true,
+  "readme_sha256": "4a56b638c4ec828866f890b31c28fd95ddd7eb4bfe8195cb43586eb1cade7384",
+  "rendered_page": {
+    "status": 401
+  },
+  "repo": "llm-semantic-router/Decision-2.0-Lux-9B",
+  "revision": "586af77916ee508320421bda6c22f7f0305a7279",
+  "schema": "dev2-hub-card-http/1",
+  "targets": [
+    {
+      "bytes": 11544,
+      "kind": "file",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "LICENSE"
+    },
+    {
+      "bytes": 135269,
+      "kind": "image",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "assets/banner.png"
+    },
+    {
+      "bytes": 134290,
+      "kind": "image",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "assets/index-areas.png"
+    },
+    {
+      "bytes": 204976,
+      "kind": "image",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "assets/index-pareto.png"
+    },
+    {
+      "bytes": 104834,
+      "kind": "image",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "assets/jevarena-types.png"
+    },
+    {
+      "bytes": 59086,
+      "kind": "image",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "assets/jevarena.png"
+    },
+    {
+      "kind": "absolute",
+      "passed": true,
+      "status": 200,
+      "target": "https://github.com/vllm-project/semantic-router",
+      "via": "page"
+    },
+    {
+      "kind": "absolute",
+      "passed": true,
+      "status": 200,
+      "target": "https://huggingface.co/collections/llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00",
+      "via": "api"
+    }
+  ],
+  "utc": "2026-10-01T18:16:49.806371+00:00"
+}

@@ -1,0 +1,57 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's job of 2026-10-02 00:05 UTC+8 (rename the six DEV2.0 repositories to Decision-2.0-<Codename>-<tier>; product cards with a banner, product highlights, a code-only quickstart and JevArena / Jev Decision Index charts; no training details, limitations, NOTICE, attributions or evaluation/ files), card-only revisions of all six repositories",
+  "decision": "release",
+  "decision_sha256": "964e7ed9b94ec3139f314d423aec760ed479b9a6351eab660e925471af1b64d6",
+  "items": {
+    "1_beats_own_1_0": {
+      "evidence": "paired v3 95% interval low +3.265 (sha bca44e5f2863)",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "10 results below own 1.0 listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 32 files re-hashed; loaded 1883930944",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "e1a36cf97bf8ca2af54755c9be984e0e9a95c8e6b058b3484b9be12dafc9fd00",
+  "model_name": "Decision-2.0-Sol-2B",
+  "receipts_sha256": {
+    "automap-card-pre": "a22522acf071744f80689882504940f5de30c54de91bcba54f01cf946efd62bc",
+    "automap-hub": "fa160f9ec3a91e56365e7ab93559d49e8ebf117b624c0e95c70a68c7476940a4",
+    "automap-hub-tf518": "12ddcc1558ab172f52317fa53aa97806d2fed77bc5f92f7d95f5a3a6b72ccb09",
+    "automap-post": "f4ef2ef86d6f10221430fdf0f5587fce2311d915013a911d6ccba69c6b5bcf9d",
+    "automap-pre": "440e03179d0c58dfaa73492556d3f316571b7c8f5741b2855ccdde1b7d547f15",
+    "card-post": "9fb70c51fa944d9e6666a467c0d1fabe2ad06bd5af725270794efb00db7d7440",
+    "card-pre": "b8b88a2347b0955875412a46b23a9da9a9f6e12bf503f30e2a220db69567268c",
+    "download": "bdb907b07b94a3670067709a9898db746ce3c320ddf4c96137ea0bc75e1e2791",
+    "post": "c7d2d8bf0c0dbde0daee8ccfa29743b13e5e38dfdb332138208f82295905c7c4",
+    "readback": "c4313bf9be2c0ce825476288ffb042e805a8116b353912addf612871ab2e6755",
+    "repeat-post": "35a1217f29f10ab1cd922b361220e715dcc0bb3bb6a9f3a5305e0c921eb829b4",
+    "repeat-pre": "175402ec5b1b9894470e637bb5efca64708036a4a0c9a2b465fcb6e6fecd07ec",
+    "tree": "bfe7a46ca7eb07690974fe118d02c080cfadada13ef770bbd4fcf00ade8a33f2",
+    "upload": "3fef52c5e3751f63a1345936549d046c397e8b9947f31b66e4d1665a982a91da"
+  },
+  "repo_id": "llm-semantic-router/Decision-2.0-Sol-2B",
+  "revision": "73bb148b08891047c5ae96656548a9fbc387f2c8",
+  "schema": "dev2-release-gate/1",
+  "utc": "2026-10-01T17:56:08.474353+00:00"
+}
