@@ -8,6 +8,18 @@ GPU-h). Preregistration [`dec-m10-prereg-2026-10-01.md`](dec-m10-prereg-2026-10-
 
 ## Now
 
+- 2026-10-01 ≈12:50 UTC+8 (04:50Z) — **Training ≈ 60%; C0 references read; probes built; runtime path committed.**
+  - Node F: LH s1–s3 at 452–495 / 787, FB s1–s3 at 509–521 / 787 (ETA ≈ 05:20Z). SELECT700 family macro so far:
+    LH .83–.88, FB .87–.90 (N4XF's seeds from Nox were ≈ .88–.90).
+  - Node E: LT2 s1–s3 at 344–390 / 787 (ETA ≈ 05:45Z); SELECT700 so far .72–.81 (label-token readout).
+  - Retention probes final (`a324f1e2…`, gold `5c674e35…` on nodes A / E / F, private): MMLU 1,265, ARC-Challenge
+    254, ARC-Easy 570, GSM8K 1,000. Excluded before any readout: 823 candidates with a 13-gram in TRAIN (821 GSM8K
+    train, 2 MMLU) and 1,729 with one in the Index suite (checked on node C; only hit counts left node C).
+  - C0 (`4b-C0-e`) read on node E GPU3: typed DEV, CSS pilot, HT-DEV v2, Score5-typed-DEV, `hs1-dev`, PN1 dev; probes
+    reading; then the base ceiling (`4b-BASE-e` = LT2-s1's zero-step checkpoint, label-token readout).
+  - Tooling: readout / merge / soup / node-A scoring / rules `083604187`; release-runtime `label_token` path
+    (`de275f9fb`: `qwen.py` dispatch, builder vendoring + identity; tests). Mirrors on nodes A / E / F.
+
 - 2026-10-01 ≈12:10 UTC+8 (04:10Z) — **Nine seeds training.**
   - Node F (mirror `2dea44d6f…`): LH s1–s3 on GPU2–4, FB s1–s3 on GPU5–7; all six preflights PASS (cross-process
     drift ≤ 1e-7 on the seeded cache); 787 updates per seed at ≈ 6–8 s → ETA ≈ 05:30Z.
