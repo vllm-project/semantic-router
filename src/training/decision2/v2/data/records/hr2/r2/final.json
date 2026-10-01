@@ -1,0 +1,239 @@
+{
+ "candidates": {
+  "dev": "b0498c1f1ac2ef346579237b2d53533829f0bc0e86a67b71d749eaef180fab7e",
+  "train": "45b560103e84591d94ccfa763bbcbb9698366c92ad52f8534db29cbd0007bf2b"
+ },
+ "dev": {
+  "family": {
+   "eth_cs": 94,
+   "eth_deon": 100,
+   "eth_just": 106,
+   "eth_util": 354,
+   "hs3_pref": 256,
+   "prm_step": 44
+  },
+  "gold_longer_by_family": {
+   "eth_util": {
+    "False": 157,
+    "None": 55,
+    "True": 142
+   },
+   "hs3_pref": {
+    "False": 128,
+    "None": 2,
+    "True": 126
+   }
+  },
+  "groups": 891,
+  "label_by_family": {
+   "eth_cs": {
+    "0": 47,
+    "1": 47
+   },
+   "eth_deon": {
+    "0": 50,
+    "1": 50
+   },
+   "eth_just": {
+    "0": 53,
+    "1": 53
+   },
+   "eth_util": {
+    "0": 165,
+    "1": 189
+   },
+   "hs3_pref": {
+    "0": 136,
+    "1": 120
+   },
+   "prm_step": {
+    "0": 22,
+    "1": 22
+   }
+  },
+  "language": {
+   "de": 7,
+   "en": 809,
+   "es": 7,
+   "fr": 6,
+   "id": 4,
+   "it": 6,
+   "ja": 7,
+   "ko": 23,
+   "nl": 4,
+   "pl": 4,
+   "pt": 6,
+   "ru": 10,
+   "vi": 3,
+   "zh": 58
+  },
+  "rows": 954,
+  "sha256": "dff8f4ea5f10f3e96a42035bdc84947bb42f533e8ed31924091a1c7a0d4fd80b",
+  "task_type": {
+   "choice": 610,
+   "noul": 344
+  }
+ },
+ "drops": {
+  "construction_families": [
+   "hs3_help"
+  ],
+  "construction_ids": {
+   "count": 403,
+   "sha256": "109d40e65ef26aa322d4eced0935e6d68e3b5743bc93c7d398dd2c79e0fd51a6"
+  },
+  "dev_groups": {
+   "count": 1188,
+   "sha256": "571500bae43b1602c6e3662af8ae07ec4e4496f1f23c0d6be0edaadda71a27c6"
+  },
+  "families": [
+   "indonli",
+   "kob_boolq"
+  ],
+  "groups": {
+   "count": 1413,
+   "sha256": "8d5da07742b4d3c18173eefd899e41dbe0bcd15e62e7b46dd3db7a0281c89826"
+  },
+  "ids": {
+   "count": 26,
+   "sha256": "4aabe5d7d8819dced562b8ee23541b3eb711b363f7948fd7dc53ac7ea77e5b26"
+  },
+  "leak_ids": {
+   "count": 28,
+   "sha256": "2f0ce3bb72c0e5038f9cc8c283c451415c9ab092f407472403516ebb61981723"
+  },
+  "licence_families": [
+   "allegro",
+   "vitc"
+  ],
+  "removed": {
+   "dev:construction": {
+    "prm_step": 8
+   },
+   "dev:construction_family": {
+    "hs3_help": 498
+   },
+   "dev:dev_near_train": {
+    "eth_cs": 1,
+    "eth_just": 9,
+    "eth_util": 34,
+    "hs3_pref": 619,
+    "prm_step": 301
+   },
+   "dev:family": {
+    "indonli": 239,
+    "kob_boolq": 358
+   },
+   "dev:licence": {
+    "allegro": 316,
+    "vitc": 400
+   },
+   "dev:quarantine_group": {
+    "hs3_pref": 92,
+    "prm_step": 2
+   },
+   "train:construction": {
+    "prm_step": 362
+   },
+   "train:construction_family": {
+    "hs3_help": 4502
+   },
+   "train:family": {
+    "indonli": 2261,
+    "kob_boolq": 3304
+   },
+   "train:leak_guard": {
+    "hs3_pref": 20
+   },
+   "train:licence": {
+    "allegro": 3184,
+    "vitc": 3596
+   },
+   "train:quarantine_group": {
+    "eth_deon": 1,
+    "eth_util": 4,
+    "hs3_pref": 1128,
+    "prm_step": 28
+   },
+   "train:review_error": {
+    "eth_cs": 2,
+    "eth_just": 3,
+    "eth_util": 1,
+    "hs3_pref": 8,
+    "prm_step": 4
+   }
+  }
+ },
+ "schema": "decision2.hr2.final.v1",
+ "train": {
+  "family": {
+   "eth_cs": 1084,
+   "eth_deon": 1094,
+   "eth_just": 1078,
+   "eth_util": 3107,
+   "hs3_pref": 6876,
+   "prm_step": 2856
+  },
+  "gold_longer_by_family": {
+   "eth_util": {
+    "False": 1324,
+    "None": 430,
+    "True": 1353
+   },
+   "hs3_pref": {
+    "False": 3446,
+    "None": 11,
+    "True": 3419
+   }
+  },
+  "groups": 15029,
+  "label_by_family": {
+   "eth_cs": {
+    "0": 542,
+    "1": 542
+   },
+   "eth_deon": {
+    "0": 547,
+    "1": 547
+   },
+   "eth_just": {
+    "0": 539,
+    "1": 539
+   },
+   "eth_util": {
+    "0": 1543,
+    "1": 1564
+   },
+   "hs3_pref": {
+    "0": 3480,
+    "1": 3396
+   },
+   "prm_step": {
+    "0": 1428,
+    "1": 1428
+   }
+  },
+  "language": {
+   "de": 70,
+   "en": 14536,
+   "es": 99,
+   "fr": 106,
+   "id": 30,
+   "it": 92,
+   "ja": 129,
+   "ko": 218,
+   "nl": 36,
+   "pl": 35,
+   "pt": 72,
+   "ru": 73,
+   "vi": 40,
+   "zh": 559
+  },
+  "rows": 16095,
+  "sha256": "820cb5a7d049fdb5b1711cdccb6bb72562c17c75bde2de18ac6310cf9f4bd5d4",
+  "task_type": {
+   "choice": 9983,
+   "noul": 6112
+  }
+ }
+}

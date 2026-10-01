@@ -1,0 +1,396 @@
+{
+ "balance_failures": [],
+ "dev": {
+  "balance": {
+   "eth_cs": {
+    "labels": {
+     "0": 47,
+     "1": 47
+    },
+    "mean_state_chars": {
+     "0": 60.5,
+     "1": 65.1
+    },
+    "pass": true,
+    "rows": 94
+   },
+   "eth_deon": {
+    "labels": {
+     "0": 50,
+     "1": 50
+    },
+    "mean_state_chars": {
+     "0": 86.0,
+     "1": 91.9
+    },
+    "pass": true,
+    "rows": 100
+   },
+   "eth_just": {
+    "labels": {
+     "0": 53,
+     "1": 53
+    },
+    "mean_state_chars": {
+     "0": 99.9,
+     "1": 98.4
+    },
+    "pass": true,
+    "rows": 106
+   },
+   "eth_util": {
+    "gold_a_share": 0.4661,
+    "gold_longer_share": 0.4749,
+    "labels": {
+     "0": 165,
+     "1": 189
+    },
+    "pass": true,
+    "rows": 354
+   },
+   "hs3_pref": {
+    "gold_a_share": 0.5312,
+    "gold_longer_share": 0.4961,
+    "labels": {
+     "0": 136,
+     "1": 120
+    },
+    "pass": true,
+    "rows": 256
+   },
+   "prm_step": {
+    "bucket_labels": {
+     "0-0": [
+      7,
+      7
+     ],
+     "1-1": [
+      3,
+      3
+     ],
+     "2-2": [
+      2,
+      2
+     ],
+     "3-4": [
+      5,
+      5
+     ],
+     "5-7": [
+      4,
+      4
+     ],
+     "8+": [
+      1,
+      1
+     ]
+    },
+    "labels": {
+     "0": 22,
+     "1": 22
+    },
+    "mean_state_chars": {
+     "0": 518.4,
+     "1": 606.2
+    },
+    "mean_step_index": {
+     "0": 2.545,
+     "1": 2.591
+    },
+    "pass": true,
+    "rows": 44
+   }
+  },
+  "sizes": {
+   "by_family": {
+    "eth_cs": {
+     "groups": 92,
+     "languages": {
+      "en": 94
+     },
+     "native_tokens": 10202,
+     "rows": 94
+    },
+    "eth_deon": {
+     "groups": 88,
+     "languages": {
+      "en": 100
+     },
+     "native_tokens": 12481,
+     "rows": 100
+    },
+    "eth_just": {
+     "groups": 98,
+     "languages": {
+      "en": 106
+     },
+     "native_tokens": 10879,
+     "rows": 106
+    },
+    "eth_util": {
+     "groups": 326,
+     "languages": {
+      "en": 354
+     },
+     "native_tokens": 43116,
+     "rows": 354
+    },
+    "hs3_pref": {
+     "groups": 244,
+     "languages": {
+      "de": 7,
+      "en": 111,
+      "es": 7,
+      "fr": 6,
+      "id": 4,
+      "it": 6,
+      "ja": 7,
+      "ko": 23,
+      "nl": 4,
+      "pl": 4,
+      "pt": 6,
+      "ru": 10,
+      "vi": 3,
+      "zh": 58
+     },
+     "native_tokens": 249242,
+     "rows": 256
+    },
+    "prm_step": {
+     "groups": 43,
+     "languages": {
+      "en": 44
+     },
+     "native_tokens": 12793,
+     "rows": 44
+    }
+   },
+   "groups": 891,
+   "language": {
+    "de": 7,
+    "en": 809,
+    "es": 7,
+    "fr": 6,
+    "id": 4,
+    "it": 6,
+    "ja": 7,
+    "ko": 23,
+    "nl": 4,
+    "pl": 4,
+    "pt": 6,
+    "ru": 10,
+    "vi": 3,
+    "zh": 58
+   },
+   "native_tokens": 338713,
+   "rows": 954,
+   "task_type": {
+    "choice": 610,
+    "noul": 344
+   },
+   "tokens_missing": 0
+  }
+ },
+ "inputs": {
+  "dev": "dff8f4ea5f10f3e96a42035bdc84947bb42f533e8ed31924091a1c7a0d4fd80b",
+  "tokens": [
+   "05641ae3cedf664f2b2f0a7871e55219b7a957a7f7a2b1faa95e8e52d3e18b6f",
+   "f4e3a3859df8dc6ef613625b1a95e23f953459ef4c7f10a7b0463f0e940274f6"
+  ],
+  "train": "820cb5a7d049fdb5b1711cdccb6bb72562c17c75bde2de18ac6310cf9f4bd5d4"
+ },
+ "schema": "decision2.hr2.stats.v1",
+ "shared_groups": 0,
+ "train": {
+  "balance": {
+   "eth_cs": {
+    "labels": {
+     "0": 542,
+     "1": 542
+    },
+    "mean_state_chars": {
+     "0": 57.4,
+     "1": 59.8
+    },
+    "pass": true,
+    "rows": 1084
+   },
+   "eth_deon": {
+    "labels": {
+     "0": 547,
+     "1": 547
+    },
+    "mean_state_chars": {
+     "0": 88.6,
+     "1": 89.4
+    },
+    "pass": true,
+    "rows": 1094
+   },
+   "eth_just": {
+    "labels": {
+     "0": 539,
+     "1": 539
+    },
+    "mean_state_chars": {
+     "0": 98.5,
+     "1": 105.4
+    },
+    "pass": true,
+    "rows": 1078
+   },
+   "eth_util": {
+    "gold_a_share": 0.4966,
+    "gold_longer_share": 0.5054,
+    "labels": {
+     "0": 1543,
+     "1": 1564
+    },
+    "pass": true,
+    "rows": 3107
+   },
+   "hs3_pref": {
+    "gold_a_share": 0.5061,
+    "gold_longer_share": 0.498,
+    "labels": {
+     "0": 3480,
+     "1": 3396
+    },
+    "pass": true,
+    "rows": 6876
+   },
+   "prm_step": {
+    "bucket_labels": {
+     "0-0": [
+      140,
+      140
+     ],
+     "1-1": [
+      173,
+      173
+     ],
+     "2-2": [
+      204,
+      204
+     ],
+     "3-4": [
+      328,
+      328
+     ],
+     "5-7": [
+      304,
+      304
+     ],
+     "8+": [
+      279,
+      279
+     ]
+    },
+    "labels": {
+     "0": 1428,
+     "1": 1428
+    },
+    "mean_state_chars": {
+     "0": 796.7,
+     "1": 743.0
+    },
+    "mean_step_index": {
+     "0": 4.704,
+     "1": 4.534
+    },
+    "pass": true,
+    "rows": 2856
+   }
+  },
+  "sizes": {
+   "by_family": {
+    "eth_cs": {
+     "groups": 1038,
+     "languages": {
+      "en": 1084
+     },
+     "native_tokens": 116429,
+     "rows": 1084
+    },
+    "eth_deon": {
+     "groups": 981,
+     "languages": {
+      "en": 1094
+     },
+     "native_tokens": 136878,
+     "rows": 1094
+    },
+    "eth_just": {
+     "groups": 1011,
+     "languages": {
+      "en": 1078
+     },
+     "native_tokens": 111224,
+     "rows": 1078
+    },
+    "eth_util": {
+     "groups": 2808,
+     "languages": {
+      "en": 3107
+     },
+     "native_tokens": 379836,
+     "rows": 3107
+    },
+    "hs3_pref": {
+     "groups": 6562,
+     "languages": {
+      "de": 70,
+      "en": 5317,
+      "es": 99,
+      "fr": 106,
+      "id": 30,
+      "it": 92,
+      "ja": 129,
+      "ko": 218,
+      "nl": 36,
+      "pl": 35,
+      "pt": 72,
+      "ru": 73,
+      "vi": 40,
+      "zh": 559
+     },
+     "native_tokens": 8798184,
+     "rows": 6876
+    },
+    "prm_step": {
+     "groups": 2629,
+     "languages": {
+      "en": 2856
+     },
+     "native_tokens": 1063575,
+     "rows": 2856
+    }
+   },
+   "groups": 15029,
+   "language": {
+    "de": 70,
+    "en": 14536,
+    "es": 99,
+    "fr": 106,
+    "id": 30,
+    "it": 92,
+    "ja": 129,
+    "ko": 218,
+    "nl": 36,
+    "pl": 35,
+    "pt": 72,
+    "ru": 73,
+    "vi": 40,
+    "zh": 559
+   },
+   "native_tokens": 10606126,
+   "rows": 16095,
+   "task_type": {
+    "choice": 9983,
+    "noul": 6112
+   },
+   "tokens_missing": 0
+  }
+ },
+ "verdict": "PASS"
+}

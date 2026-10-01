@@ -1,0 +1,228 @@
+{
+ "arm_id": "HR2",
+ "canonical_form": "rows sorted by id; canonical(row) + '\\n' per row; UTF-8",
+ "canonical_path": "hr2.dev.jsonl",
+ "choice": {
+  "by_option_bucket": {
+   "2": 610
+  },
+  "gold_position_by_bucket": {
+   "2": {
+    "0": 301,
+    "1": 309
+   }
+  }
+ },
+ "content_sha256": "dff8f4ea5f10f3e96a42035bdc84947bb42f533e8ed31924091a1c7a0d4fd80b",
+ "counts": {
+  "family": {
+   "eth_cs": 94,
+   "eth_deon": 100,
+   "eth_just": 106,
+   "eth_util": 354,
+   "hs3_pref": 256,
+   "prm_step": 44
+  },
+  "language": {
+   "de": 7,
+   "en": 809,
+   "es": 7,
+   "fr": 6,
+   "id": 4,
+   "it": 6,
+   "ja": 7,
+   "ko": 23,
+   "nl": 4,
+   "pl": 4,
+   "pt": 6,
+   "ru": 10,
+   "vi": 3,
+   "zh": 58
+  },
+  "source": {
+   "ethics_train": 654,
+   "helpsteer3_train": 256,
+   "prm800k_train": 44
+  },
+  "task_type": {
+   "choice": 610,
+   "noul": 344
+  }
+ },
+ "groups": 891,
+ "input": {
+  "is_canonical": true,
+  "path": "hr2.dev.jsonl",
+  "sha256": "dff8f4ea5f10f3e96a42035bdc84947bb42f533e8ed31924091a1c7a0d4fd80b"
+ },
+ "license_registry_sha256": "c9bd6b0c7c926512aeba1969032c7534273df0c15421024589742bafb25a155b",
+ "licenses": {
+  "ethics_train": {
+   "attribution": "Hendrycks et al., Aligning AI With Shared Human Values (ICLR 2021); hendrycks/ethics@b8b47c589f8bee77175b8648e5497278b68da48a TRAIN files (commonsense short split, deontology, justice, utilitarianism)",
+   "evidence": "https://huggingface.co/datasets/hendrycks/ethics/blob/b8b47c589f8bee77175b8648e5497278b68da48a/README.md",
+   "license": "MIT",
+   "redistribution": "permitted with the MIT notice"
+  },
+  "helpsteer3_train": {
+   "attribution": "Wang et al., HelpSteer3-Preference: Open Human-Annotated Preference Data across Diverse Tasks and Languages (2025, arXiv 2503.04378); nvidia/HelpSteer3@f6d145777bcbde96137596340fab89793acd1031 preference/ and feedback/ TRAIN; responses by commercially-permissive LLMs, human annotations by Scale AI and Translated contractors",
+   "evidence": "https://huggingface.co/datasets/nvidia/HelpSteer3/blob/f6d145777bcbde96137596340fab89793acd1031/README.md",
+   "license": "CC-BY-4.0",
+   "redistribution": "permitted with attribution"
+  },
+  "prm800k_train": {
+   "attribution": "Lightman et al., Let's Verify Step by Step (2023); openai/prm800k@7ecc794703b2877f63226f2477a49b34f9b25163 phase 1 and phase 2 TRAIN; problems from MATH (Hendrycks et al. 2021, MIT)",
+   "evidence": "https://github.com/openai/prm800k/blob/7ecc794703b2877f63226f2477a49b34f9b25163/LICENSE",
+   "license": "MIT",
+   "redistribution": "permitted with the MIT notice"
+  }
+ },
+ "noul": {
+  "labels": {
+   "false": 172,
+   "true": 172
+  },
+  "true_fraction": 0.5
+ },
+ "partition": "select",
+ "role": "aho",
+ "rows": 954,
+ "rows_per_group": {
+  "1": 832,
+  "2": 55,
+  "3": 4
+ },
+ "schema": "decision2.v2.freeze.v1",
+ "score": {
+  "by_levels": {},
+  "by_levels_grade": {}
+ },
+ "state_chars": {
+  "p0": 37,
+  "p10": 90,
+  "p100": 12118,
+  "p25": 122,
+  "p50": 171,
+  "p75": 688,
+  "p90": 2909,
+  "p99": 8556
+ },
+ "tokens": [
+  {
+   "by_language": {
+    "de": 7740,
+    "en": 181110,
+    "es": 8474,
+    "fr": 8763,
+    "id": 5314,
+    "it": 8173,
+    "ja": 7982,
+    "ko": 29565,
+    "nl": 2713,
+    "pl": 6869,
+    "pt": 8610,
+    "ru": 16074,
+    "vi": 3974,
+    "zh": 57073
+   },
+   "by_task_type": {
+    "choice": 309172,
+    "noul": 43262
+   },
+   "kind": "native_decoder",
+   "name": "qwen3-0.6b-base@da87bfb6",
+   "padded8_total": 355760,
+   "path": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+   "quantiles": {
+    "p0": 82,
+    "p10": 96,
+    "p100": 6744,
+    "p25": 104,
+    "p50": 115,
+    "p75": 302,
+    "p90": 1081,
+    "p99": 2858
+   },
+   "revision": null,
+   "tokenizer_json_sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539",
+   "total": 352434
+  },
+  {
+   "by_language": {
+    "de": 6713,
+    "en": 188514,
+    "es": 7869,
+    "fr": 7872,
+    "id": 3928,
+    "it": 7403,
+    "ja": 6740,
+    "ko": 24137,
+    "nl": 2434,
+    "pl": 5906,
+    "pt": 7619,
+    "ru": 13379,
+    "vi": 3719,
+    "zh": 52480
+   },
+   "by_task_type": {
+    "choice": 292358,
+    "noul": 46355
+   },
+   "kind": "native_decoder",
+   "name": "qwen3.5-0.8b-base@dc7cdfe2",
+   "padded8_total": 342192,
+   "path": "dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68",
+   "quantiles": {
+    "p0": 91,
+    "p10": 105,
+    "p100": 5889,
+    "p25": 113,
+    "p50": 124,
+    "p75": 310,
+    "p90": 993,
+    "p99": 2513
+   },
+   "revision": null,
+   "tokenizer_json_sha256": null,
+   "total": 338713
+  },
+  {
+   "by_language": {
+    "de": 6226,
+    "en": 145274,
+    "es": 8013,
+    "fr": 7470,
+    "id": 3826,
+    "it": 7395,
+    "ja": 6403,
+    "ko": 28828,
+    "nl": 2163,
+    "pl": 5453,
+    "pt": 7386,
+    "ru": 12948,
+    "vi": 3846,
+    "zh": 57051
+   },
+   "by_task_type": {
+    "choice": 276647,
+    "noul": 25635
+   },
+   "kind": "raw",
+   "name": "kai-0.6b@7185f514",
+   "padded8_total": 305440,
+   "path": "tokenizer",
+   "quantiles": {
+    "p0": 30,
+    "p10": 45,
+    "p100": 6743,
+    "p25": 54,
+    "p50": 65,
+    "p75": 257,
+    "p90": 1010,
+    "p99": 2714
+   },
+   "revision": null,
+   "tokenizer_json_sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
+   "total": 302282
+  }
+ ]
+}

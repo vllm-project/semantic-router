@@ -1,0 +1,247 @@
+{
+ "candidates": {
+  "dev": "6816bf43834a88c43c8351cc6e3f98e732a53ae9d2d40ccb64dc90ff2c1eca92",
+  "train": "888dad522420dafe6759aa1957dd35a628be579e4873934d89e0ee9ed9ecbdb1"
+ },
+ "dev": {
+  "family": {
+   "args": 374,
+   "copa": 108,
+   "csqa": 513,
+   "isarc": 82,
+   "poem": 411,
+   "sentfin": 744,
+   "sms": 62,
+   "snips_rel": 16,
+   "snips_sel": 310,
+   "sumedit": 44
+  },
+  "groups": 1912,
+  "label_by_family": {
+   "args": {
+    "0": 187,
+    "1": 187
+   },
+   "copa": {
+    "0": 56,
+    "1": 52
+   },
+   "csqa": {
+    "0": 88,
+    "1": 99,
+    "2": 117,
+    "3": 95,
+    "4": 114
+   },
+   "isarc": {
+    "0": 45,
+    "1": 37
+   },
+   "poem": {
+    "0": 219,
+    "1": 192
+   },
+   "sentfin": {
+    "0": 248,
+    "1": 248,
+    "2": 248
+   },
+   "sms": {
+    "0": 31,
+    "1": 31
+   },
+   "snips_rel": {
+    "0": 8,
+    "1": 8
+   },
+   "snips_sel": {
+    "0": 65,
+    "1": 75,
+    "2": 90,
+    "3": 80
+   },
+   "sumedit": {
+    "0": 22,
+    "1": 22
+   }
+  },
+  "language": {
+   "ar": 43,
+   "en": 2621
+  },
+  "rows": 2664,
+  "sha256": "b412ab9312e834d45a1aef910b8921ebd1a25b5b0ddc5d226e6230a8b2a031cd",
+  "task_type": {
+   "choice": 2542,
+   "noul": 122
+  }
+ },
+ "drops": {
+  "dev_groups": {
+   "count": 1064,
+   "sha256": "500e979df155c68fcc5cfa1dceab355895b7e8d0fa5929fe2c275816c1ae388b"
+  },
+  "families": [
+   "maud",
+   "medmcqa",
+   "procb",
+   "wanli"
+  ],
+  "groups": {
+   "count": 3727,
+   "sha256": "b265b7f51cfffb1080eeb277122e5abc9a92f7123c0f271d856bc8d84de6ad1a"
+  },
+  "ids": {
+   "count": 17,
+   "sha256": "6fb3ca94e02b5498b01994af5060655bbb2b5da355ff3f7ecab2d73e53df4c94"
+  },
+  "leak_ids": {
+   "count": 12,
+   "sha256": "1838e39623b76533215955164265a7fb6195c7ee02e106b6204a385cd4a1bd7d"
+  },
+  "removed": {
+   "dev:dev_near_train": {
+    "args": 174,
+    "copa": 2,
+    "csqa": 10,
+    "poem": 5,
+    "sentfin": 40,
+    "sms": 24,
+    "snips_rel": 271,
+    "snips_sel": 12,
+    "sumedit": 43,
+    "w2c": 50,
+    "wands": 680
+   },
+   "dev:dropped_group": {
+    "args": 28,
+    "csqa": 7,
+    "sentfin": 2,
+    "sumedit": 100,
+    "w2c": 285,
+    "wands": 62
+   },
+   "dev:family": {
+    "maud": 344,
+    "medmcqa": 821,
+    "procb": 36,
+    "wanli": 923
+   },
+   "train:dropped_group": {
+    "args": 230,
+    "copa": 10,
+    "csqa": 486,
+    "sentfin": 6,
+    "snips_rel": 2,
+    "snips_sel": 1,
+    "sumedit": 393,
+    "w2c": 2684,
+    "wands": 757
+   },
+   "train:family": {
+    "maud": 5656,
+    "medmcqa": 7179,
+    "procb": 324,
+    "wanli": 8077
+   },
+   "train:leak_guard": {
+    "w2c": 12
+   },
+   "train:review_or_screen": {
+    "args": 1,
+    "csqa": 1,
+    "isarc": 1,
+    "sentfin": 4,
+    "snips_rel": 1,
+    "sumedit": 4,
+    "w2c": 2,
+    "wands": 3
+   }
+  }
+ },
+ "schema": "decision2.ib1.final.v1",
+ "train": {
+  "family": {
+   "args": 5192,
+   "copa": 878,
+   "csqa": 4983,
+   "isarc": 874,
+   "poem": 3584,
+   "sentfin": 7158,
+   "sms": 1152,
+   "snips_rel": 2700,
+   "snips_sel": 2673,
+   "sumedit": 1280,
+   "w2c": 483,
+   "wands": 6357
+  },
+  "groups": 22669,
+  "label_by_family": {
+   "args": {
+    "0": 2596,
+    "1": 2596
+   },
+   "copa": {
+    "0": 426,
+    "1": 452
+   },
+   "csqa": {
+    "0": 995,
+    "1": 1015,
+    "2": 1033,
+    "3": 945,
+    "4": 995
+   },
+   "isarc": {
+    "0": 429,
+    "1": 445
+   },
+   "poem": {
+    "0": 1773,
+    "1": 1811
+   },
+   "sentfin": {
+    "0": 2386,
+    "1": 2386,
+    "2": 2386
+   },
+   "sms": {
+    "0": 576,
+    "1": 576
+   },
+   "snips_rel": {
+    "0": 1350,
+    "1": 1350
+   },
+   "snips_sel": {
+    "0": 663,
+    "1": 679,
+    "2": 657,
+    "3": 674
+   },
+   "sumedit": {
+    "0": 640,
+    "1": 640
+   },
+   "w2c": {
+    "0": 255,
+    "1": 228
+   },
+   "wands": {
+    "0": 2119,
+    "1": 2119,
+    "2": 2119
+   }
+  },
+  "language": {
+   "ar": 410,
+   "en": 36904
+  },
+  "rows": 37314,
+  "sha256": "7f2d00031298fa6812222d74c62fa7580ab41b89942e39edea897363bfa1ae80",
+  "task_type": {
+   "choice": 32182,
+   "noul": 5132
+  }
+ }
+}

@@ -73,6 +73,19 @@ def with_score_bias(
     ]
 
 
+def encode_rows(
+    rows: list[dict[str, Any]],
+    tokenizer: Any,
+    max_length: int,
+    metadata: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """CAL rows rendered with the checkpoint's prompt version, as ``training.model.infer``."""
+    from training.model.decision_model import encoder_for
+
+    encode = encoder_for(metadata)
+    return [encode(row, tokenizer, max_length) for row in rows]
+
+
 def cal_logits(
     checkpoint: Path,
     rows: list[dict[str, Any]],
@@ -82,7 +95,7 @@ def cal_logits(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     import torch
 
-    from training.model.decision_model import DecisionModel, collate, encode
+    from training.model.decision_model import DecisionModel, collate
 
     device = torch.device("cuda:0")
     model, tokenizer = DecisionModel.from_checkpoint(
@@ -94,7 +107,7 @@ def cal_logits(
         if tokenizer.pad_token_id is not None
         else tokenizer.eos_token_id
     )
-    encoded = [encode(row, tokenizer, max_length) for row in rows]
+    encoded = encode_rows(rows, tokenizer, max_length, model.metadata)
     records = []
     with torch.inference_mode():
         for start in range(0, len(encoded), batch_size):

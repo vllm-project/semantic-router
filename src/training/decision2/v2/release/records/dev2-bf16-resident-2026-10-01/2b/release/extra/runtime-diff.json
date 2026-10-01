@@ -1,0 +1,24 @@
+{
+  "schema": "dev2-runtime-diff/1",
+  "repo": "llm-semantic-router/DEV2.0-2B",
+  "released": "a53cf66a0d9d492a84b6617b61e7ce35fcd03af0",
+  "new": "56950ec50d74e0a6d34a04070eb02c05a19f6775",
+  "files": {
+    "released": 34,
+    "new": 34
+  },
+  "changed_runtime_files": [
+    "decision2/api.py",
+    "decision2/qwen.py"
+  ],
+  "changed_card_files": [
+    "MODEL_MANIFEST.json",
+    "README.md"
+  ],
+  "changed_hub_managed_files": [],
+  "changed_other_files": [],
+  "weight_files": 3,
+  "weight_bytes": 4790324776,
+  "weights_byte_identical": true,
+  "ok": true
+}

@@ -1,0 +1,38 @@
+{
+ "schema": "decision2.hr2.status.v1",
+ "round": "hr2-r2",
+ "release_safe": false,
+ "reason": "HR2-r2 (amendment 4) fresh blind review failed P2 and P3: 13 / 288 gold errors (4.51%, exact 95% upper 7.60%; P1 passes), population-weighted 8.02% (P2 needs <= 5%), hs3_pref 7 / 48 (exact lower bound above 5%); amendment 4 has no fix rule, so HR2-r2 is published flagged and not tuned further",
+ "review": {
+  "n": 288,
+  "errors": 13,
+  "error": 0.045139,
+  "error_cp95": [0.02425, 0.075952],
+  "weighted_error": 0.080228,
+  "weighted_bootstrap95": [0.038297, 0.128227],
+  "P1": true,
+  "P2": false,
+  "P3": false,
+  "failing_families": ["hs3_pref"],
+  "family_errors": {"eth_cs": 1, "eth_deon": 0, "eth_just": 1, "eth_util": 1, "hs3_pref": 7, "prm_step": 3}
+ },
+ "review_round1": {
+  "n": 216,
+  "errors": 13,
+  "error": 0.060185,
+  "error_cp95_upper": 0.10072,
+  "weighted_error": 0.065009,
+  "P1": false,
+  "P2": false,
+  "P3": true
+ },
+ "gold_errors_removed_from_train": {"round1": 13, "round2": 13},
+ "leak_guard_rows_removed_from_train": 28,
+ "families_dropped_by_licence": ["allegro", "vitc"],
+ "families_dropped_by_construction": ["hs3_help"],
+ "families_dropped_by_shortcut_gate": ["indonli", "kob_boolq"],
+ "construction_rows_removed": {"prm_boundary_yes": {"train": 362, "dev": 8}},
+ "recheck_groups_removed": {"train_groups": 211, "dev_groups": 8},
+ "supersedes": "m5/hr2 at afc3bc1e1d6849058f6fafdfbc3dfe007d067400 (round 1, not release-safe)",
+ "prereg": "v2/data/records/hr2-prereg-2026-09-30.md (amendments 1-4)"
+}
