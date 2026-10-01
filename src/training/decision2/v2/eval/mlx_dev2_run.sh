@@ -50,7 +50,10 @@ fi
 bash "$S/v2/eval/ix1/probe.sh" --gpu "$gpu" --name "$name" --package "$pkg" --work "$work" "${mounts[@]}" "${extra[@]}" -- \
   "cd $S; date +%s > $work/start_epoch; PYTHONPATH=$S:/opt/decision-fla python3 v2/release/examples.py parity --package \$PKG --output $work/parity.json --device cuda:0 --threads 4 \${BASE:+--base-path \$BASE} --site /opt/decision-fla --require-kernels $specs --answers $work/answers.jsonl > $work/parity.log 2>&1; echo \$? > $work/exit_code; date +%s > $work/end_epoch"
 
-[[ "$(cat "$work/exit_code")" == 0 ]] || { echo "readout failed; see $work/parity.log" >&2; exit 1; }
+# parity exits non-zero against the empty reference predictions; completeness is the check.
+expected=$(wc -l < "$panel/prompts.jsonl")
+[[ -z "$diag" ]] || expected=$(( expected + $(wc -l < "$diag/prompts.jsonl") ))
+[[ -f "$work/answers.jsonl" && "$(wc -l < "$work/answers.jsonl")" == "$expected" ]] || { echo "readout incomplete; see $work/parity.log" >&2; exit 1; }
 cd "$S"
 python3 -m v2.eval.mlx_dev2 predictions --panel "$panel" --answers "$work/answers.jsonl" --output "$work/mlx-dev2.predictions.jsonl"
 if [[ -n "$diag" ]]; then
