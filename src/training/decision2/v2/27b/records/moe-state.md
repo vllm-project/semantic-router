@@ -112,6 +112,17 @@ Running full attempts have no receipt until they end: add (now − start) for ea
 
 ## Poll log (newest first)
 
+- 07:32Z: MOE-Git-s2 update 3,235; ends ≈ 08:27Z. Both chains alive. **Memory finding (path check, synthetic rows,
+  rank-32 package):** the FP32-resident native path fits 16 questions × 16K tokens (257K padded tokens, 27 s) but
+  not 20 × 16K or 32 × 16K on one MI325X, and the kit runner halts a shard on any device error. Request-size scan of
+  the panel under the package's encoder (inputs only): 149.0M tokens, 0 questions over 32,768, 20 requests ≥ 196,608
+  padded tokens (ToolRet / BRIGHT 32-question requests; the largest two 488K and 751K). Tooling `0403fb579`:
+  `index_scan.py`, `index_skip.py` (IX1's rule: such requests are pre-split out of their shard and rerun alone; a
+  device-aborting request is skipped and rerun alone; one that fails alone is a final error). **Detached
+  watchers:** node B `moe-index.sh auto-offer` (offers the package as soon as the chain freezes it;
+  `stageb/index-offer.log`), node A `auto-run` with `MOE_INDEX_MIN_PADDED=196608` (stage → scan + 86-request parity
+  on GPU3 → presplit → 3 shards on GPU3 / 4 / 5; `/data/dev2/private/eval/index021/ix1/logs/auto-run-MOE-Git-soup.log`).
+  Path checks so far 0.127 GPU-h.
 - 07:05Z (continuation #2): MOE-Git-s2 update 3,093 (BEST 2,676); ends ≈ 08:24Z. Both chains alive. Private Index
   tooling `a717a4315` (mirrored on both nodes): `v2/27b/moe/index_engine.py` (kit engine over the frozen package
   through the formal run's native path), `index_ref.py`, `moe-index.sh` (offer / stage / panel / parity / run /
