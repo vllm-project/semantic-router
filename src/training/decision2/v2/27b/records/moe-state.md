@@ -96,6 +96,12 @@ Running full attempts have no receipt until they end: add (now − start) for ea
 
 ## Poll log (newest first)
 
+- 03:48Z: more path checks under `pathcheck/` (tests only; scratch removed from the relay / mlx hand-over dirs):
+  `soup` on node B from two relayed checkpoints (205 projections, 4.3e-7, rank 64 / α 128, 1.5 min); `gates` and
+  `verdicts` on A20r's own sealed run (self Δ 0 [0, 0]; vs AutoJev-27B +0.23 [−1.60, +4.74]; types / public 231 OK;
+  overlap 0 groups; item 4 PENDING without a pairing, as designed); node A `mlx-score` + node B `mlx-pull` on a copy of
+  M4-A20-soup's gold-free mlx-diag collection (pull, score, pairing vs A20r, push back). Untested on the soup only:
+  the GPU collections (`readout` = the screen's proven driver; `formal` / `mlx` = `moe-formal.sh`, smoke first).
 - 03:42Z: MOE-Git-s2 update 1,919 (10.1 s per update; BEST so far 1,784, SELECT .8214); ends ≈ 08:25Z. Both chains
   alive and waiting. MOE-Git-s1's BEST already relayed to node B by the relay stage (path check of the relay; the
   chain relays both seeds again when s2 ends). Integration fast-forwarded to `63582e120`.
