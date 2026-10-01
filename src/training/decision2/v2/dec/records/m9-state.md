@@ -9,6 +9,9 @@ its "written ≈11:10" line is a typo for ≈10:35); data lock [`dec-m9-datalock
 
 ## Now
 
+- 2026-10-01 13:09 UTC+8 (05:09Z) — poll: H9-s3 step 457 / 1,128 (≈ 15 updates / min alone on GPU6), ETA full
+  run ≈ 05:52Z, soup ≈ 06:02Z; post chain waiting; no failures.
+
 - 2026-10-01 12:47 UTC+8 (04:47Z) — **g6b adopted H9-s1 and started H9-s3; g7 finished.**
   - H9-s1 DONE (BEST 846, SELECT700 .8971; full run 04:28Z, postrun 04:31Z), H9-s2 DONE (BEST 847, .8965; 04:36Z).
     C9-s2 / s3 STOPPED (failed C9 preflight), C9.FAILED (no soup). H9-s3 started 04:33Z (preflight PASS 04:38Z; arm
