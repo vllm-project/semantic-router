@@ -86,6 +86,8 @@ Mirror for every Index job: `0403fb5796ca00a5a217f8e7656c77fe6e2205db-src_traini
 
 ## Poll log (newest first)
 
+- 10:56Z: Index shards 33,340 / 30,270 / 31,390 of ≈ 40,000 (all `ok`), 4.6–5.0 requests/s; shards end ≈ 11:20–11:30Z,
+  the 20 alone-reruns ≈ 11:50Z.
 - 10:17Z: Index shards 18,410 / 17,140 / 17,580 (all `ok`), ≈ 4.1–4.3 requests/s on average; shards end ≈ 11:45Z,
   their alone-reruns ≈ 12:10Z. Scorer imports checked on node A (port, kit 87d4650b, merge, compare).
 - 09:52Z: Index shards 10,190 / 8,810 / 9,260 requests, all `ok` so far; 3 containers running. Integration
