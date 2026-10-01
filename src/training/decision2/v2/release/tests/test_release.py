@@ -358,7 +358,7 @@ class CardTest(unittest.TestCase):
             self.assertIn(f"<sub>{card_fixture.FOOTNOTE}</sub>", readme)
             for word in (
                 "Limitations",
-                "Training data",
+                "## Training data",
                 "NOTICE",
                 "ATTRIBUTIONS",
                 "JevBench",
