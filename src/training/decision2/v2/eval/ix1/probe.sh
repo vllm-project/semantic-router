@@ -5,11 +5,11 @@
 #
 # Same container shape as launch.sh (render node of GPU G only, --network none, offline hub,
 # the image's FLA / causal-conv1d kernels required, a fresh copy of the 27B frozen Triton cache
-# when --cache is given). The work directory must be under /data/dev2/private/. The lease file is
+# when --cache is given; ${IX1_IMAGE} picks another image). The work directory must be under /data/dev2/private/. The lease file is
 # written with track=eval-ix1 and removed on exit.
 set -euo pipefail
 
-IMAGE="decision20-train-fast:host2"
+IMAGE="${IX1_IMAGE:-decision20-train-fast:host2}"
 IMAGE_PYTHONPATH="/opt/decision-fla"
 HF_CACHE="/data/dev2/hf-cache"
 gpu="" pkg="" work="" name="ixA-probe" cache="" mounts=()
