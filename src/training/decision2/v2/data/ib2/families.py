@@ -33,7 +33,8 @@ FC_READY_INSTRUCTIONS = (
     "Does the user's request already contain every required argument for this function?"
 )
 FC_CAP = 8000
-FC_FAMILIES = ("fc_rel", "fc_sel", "fc_args", "fc_ready")
+# Amendment 2: `fc_sel` and `fc_args` (run c2) failed G4 and are replaced by frequency-matched redesigns.
+FC_FAMILIES = ("fc_rel", "fc_sel2", "fc_args2", "fc_ready")
 YTSPAM_INSTRUCTIONS = (
     "Is this YouTube comment spam, that is advertising, self-promotion, a scam, or a link or request to "
     "visit, subscribe or follow that is unrelated to the video?"
@@ -523,11 +524,25 @@ def glaive(
     }
     lists = [(c["key"], c["functions"]) for c in convs if c["call1"] or c["refusal"]]
     lists.sort(key=lambda item: (order("ib2-fcrel-lists-v1", item[0]), item[0]))
+    # Amendment 2: frequency-matched pools, one entry per call instance (not per distinct name or value).
+    called = sorted(
+        ((c["key"], c["call1"][0]) for c in convs if c["call1"]),
+        key=lambda item: (order("ib2-fcsel2-pool-v1", item[0]), item[0]),
+    )
+    instances: dict[tuple[str, str], list[tuple[str, Any]]] = collections.defaultdict(
+        list
+    )
+    for conv in convs:
+        for index, (name, args) in enumerate(conv["calls"]):
+            for param, value in args.items():
+                instances[(name, param)].append((f"{conv['key']}:{index}", value))
+    for entries in instances.values():
+        entries.sort(key=lambda item: (order("ib2-fcargs2-pool-v1", item[0]), item[0]))
     out: dict[str, Rows] = {name: [] for name in FC_FAMILIES}
     makers = {
         "fc_rel": fc_rel,
-        "fc_sel": fc_sel,
-        "fc_args": fc_args,
+        "fc_sel2": fc_sel2,
+        "fc_args2": fc_args2,
         "fc_ready": fc_ready,
     }
     for conv in convs:
@@ -539,6 +554,8 @@ def glaive(
                 describe=describe,
                 values=values,
                 lists=lists,
+                called=called,
+                instances=instances,
             )
             for item in made if isinstance(made, list) else [made]:
                 if item is not None:
@@ -546,6 +563,13 @@ def glaive(
     for family in FC_FAMILIES:
         report = reports[family]
         rows = per_group(resolve(out[family], report), f"ib2-{family}-group-v1")
+        if family == "fc_args2":
+            rows = per_cell_cap(
+                rows,
+                lambda r: r["audit_metadata"]["ib2"]["cell"],
+                PER_GROUP,
+                "ib2-fc_args2-gold-v1",
+            )
         report["eligible"] = len(rows)
         if family in ("fc_rel", "fc_ready"):
             rows = balance_labels(rows, FC_CAP, f"ib2-{family}-v1")
@@ -719,6 +743,109 @@ def fc_args(
         instructions=FC_ARGS_INSTRUCTIONS,
         cell=name,
         **fc_row(conv, "fc_args"),
+    )
+
+
+def fc_sel2(
+    conv: Mapping[str, Any],
+    report: collections.Counter,
+    *,
+    called: Sequence[tuple[str, str]],
+    describe: Mapping[str, str],
+    **_: Any,
+) -> dict | None:
+    """Amendment 2: ``fc_sel`` with distractors drawn per call instance and canonical descriptions for all options."""
+    if not conv["call1"]:
+        report["drop_no_first_call"] += 1
+        return None
+    gold = conv["call1"][0]
+    blocked = name_tokens(gold) | set(WORD_RE.findall(normalize(conv["u1"])))
+    start = int(order("ib2-fcsel2-start-v1", conv["key"]), 16) % len(called)
+    picked: list[str] = []
+    for step in range(len(called)):
+        name = called[(start + step) % len(called)][1]
+        if name in picked or name in conv["by_name"] or name_tokens(name) & blocked:
+            continue
+        if not name_tokens(name) or describe[name] in {describe[p] for p in picked}:
+            continue
+        picked.append(name)
+        if len(picked) == 3:
+            break
+    texts = [f"{n}: {describe[n]}" for n in [gold] + picked]
+    if len(picked) < 3 or len({normalize(t) for t in texts}) != 4:
+        report["drop_no_distractors"] += 1
+        return None
+    return rotated(
+        descriptions=texts,
+        gold=0,
+        key=conv["key"],
+        state={"request": conv["u1"]},
+        instructions=FC_SEL_INSTRUCTIONS,
+        cell=gold,
+        **fc_row(conv, "fc_sel2"),
+    )
+
+
+def fc_args2(
+    conv: Mapping[str, Any],
+    report: collections.Counter,
+    *,
+    instances: Mapping[tuple[str, str], Sequence[tuple[str, Any]]],
+    **_: Any,
+) -> dict | None:
+    """Amendment 2: ``fc_args`` with replacement values drawn per call instance (frequency-matched)."""
+    if not conv["call1"]:
+        report["drop_no_first_call"] += 1
+        return None
+    name, args = conv["call1"]
+    request = Request(conv["u1"])
+    if not args or not all(request.grounded(v) for v in args.values()):
+        report["drop_not_grounded"] += 1
+        return None
+    params = sorted(args, key=lambda p: order("ib2-fcargs2-param-v1", conv["key"] + p))
+
+    def alternative(param: str, skip: set[str]) -> Any:
+        entries = instances.get((name, param), [])
+        if not entries:
+            return None
+        start = int(order("ib2-fcargs2-start-v1", conv["key"] + param), 16)
+        gold = args[param]
+        for step in range(len(entries)):
+            value = entries[(start + step) % len(entries)][1]
+            text = dumps(value)
+            if (
+                type(value) is type(gold)
+                and text != dumps(gold)
+                and text not in skip
+                and not request.grounded(value)
+            ):
+                return value
+        return None
+
+    copies: list[dict[str, Any]] = []
+    for param in params:
+        value = alternative(param, set())
+        if value is not None:
+            copies.append({**args, param: value})
+        if len(copies) == 2:
+            break
+    if len(copies) == 1:
+        param = next(p for p in params if dumps(copies[0][p]) != dumps(args[p]))
+        value = alternative(param, {dumps(copies[0][param])})
+        if value is not None:
+            copies.append({**args, param: value})
+    texts = [dumps(args)] + [dumps(c) for c in copies]
+    if len(copies) < 2 or len(set(texts)) != 3:
+        report["drop_no_alternative_value"] += 1
+        return None
+    return rotated(
+        descriptions=texts,
+        gold=0,
+        key=conv["key"],
+        state={"function": dumps(conv["by_name"][name], 1), "request": conv["u1"]},
+        instructions=FC_ARGS_INSTRUCTIONS,
+        cell=f"{name}|{sha(json.dumps(args, sort_keys=True, ensure_ascii=False))[:16]}",
+        **fc_row(conv, "fc_args2"),
     )
 
 
@@ -1076,6 +1203,49 @@ def gsm(records: Sequence[Mapping[str, Any]], report: collections.Counter) -> Ro
     rows = resolve(rows, report)
     report["eligible"] = len(rows)
     chosen = balance_labels(rows, None, "ib2-gsm-v1")
+    report["selected"] = len(chosen)
+    return chosen
+
+
+def gsm2(records: Sequence[Mapping[str, Any]], report: collections.Counter) -> Rows:
+    """Amendment 2: a no row states another problem's final answer, so yes and no answers share one distribution."""
+    problems = []
+    for record in records:
+        report["read"] += 1
+        question = " ".join(str(record.get("question") or "").split())
+        answer = str(record.get("answer") or "")
+        gold = number_text(answer.rsplit("####", 1)[1]) if "####" in answer else None
+        if not question or gold is None:
+            report["drop_shape"] += 1
+            continue
+        problems.append((sha(question)[:24], question, gold))
+    pool = sorted(problems, key=lambda p: (order("ib2-gsm2-pool-v1", p[0]), p[0]))
+    rows: Rows = []
+    for key, question, gold in problems:
+        yes = int(order("ib2-gsm2-v1", key), 16) % 2 == 0
+        shown = gold
+        if not yes:
+            start = int(order("ib2-gsm2-start-v1", key), 16) % len(pool)
+            shown = next(
+                pool[(start + step) % len(pool)][2]
+                for step in range(len(pool))
+                if float(pool[(start + step) % len(pool)][2]) != float(gold)
+            )
+        rows.append(
+            noul(
+                yes=yes,
+                source="gsm8k_train",
+                family="gsm2",
+                group_key="gsm:" + normalize(question),
+                key=key,
+                state={"problem": question, "claim": f"The answer is {shown}."},
+                instructions=GSM_INSTRUCTIONS,
+                template="ib2_gsm2_v1",
+            )
+        )
+    rows = resolve(rows, report)
+    report["eligible"] = len(rows)
+    chosen = balance_labels(rows, None, "ib2-gsm2-v1")
     report["selected"] = len(chosen)
     return chosen
 

@@ -53,30 +53,25 @@ PINS = {
     "ibm-research_argument_quality_ranking_30k/train.csv": "55910fd3599ec54c088d4e9c55f745ff814d153f13c1a7c23a4d31f167cf16f7",
     "hover-nlp_hover/data/hover/hover_train_release_v1.1.json": "1f1cd57abd616fa00c70bdc575ce77c16fc6cf1a6cffd5ff87c208030a336bb6",
     "hover_wiki_wo_links.db": "c37ee397916ec0bffacfe8902db454a5cda88a7a188409217b2e15231fe5ee2f",
-    "allenai_qasc/data/train-00000-of-00001.parquet": "b9a297b5ab55f1605c7682ffbb7042c26d7ecb9ff1e1aa5a820d4e791c8302d1",
-    "allenai_ai2_arc/ARC-Easy/train-00000-of-00001.parquet": "b315db8a4be597dc7daa50a4e70d48dd7c990c32085629e6ccd8c926beaa80b5",
-    "allenai_ai2_arc/ARC-Challenge/train-00000-of-00001.parquet": "e488c1587ffdcfc8443f916c53488a95cd471c5790e0746c6bfe4cecf20962cb",
     "openai_gsm8k/main/train-00000-of-00001.parquet": "ea82612ea9582142387730c793eb67d3b12849002bc0b7fa6f8efafa7351419d",
-    "stanfordnlp_contract-nli/contract-nli.zip": "e03fc77bbf8b53e2976a250e81d8a294bc3d5e5fb014521e477dee9340d6287b",
 }
+# Amendment 2: G4 (run c2) dropped `fc_sel`, `fc_args`, `gsm`, `arc` and `qasc`, and `cnli` was empty after G0 / G2;
+# `fc_sel2`, `fc_args2` and `gsm2` are their one redesign each.
 FAMILIES = (
     "fc_rel",
-    "fc_sel",
-    "fc_args",
+    "fc_sel2",
+    "fc_args2",
     "fc_ready",
     "ytspam",
     "argq",
     "hover",
-    "qasc",
-    "arc",
-    "gsm",
-    "cnli",
+    "gsm2",
 )
-NOUL_FAMILIES = ("fc_rel", "fc_ready", "ytspam", "gsm")
+NOUL_FAMILIES = ("fc_rel", "fc_ready", "ytspam", "gsm2")
 RATIO_FAMILIES = {"hover": (fam.HOVER_YES, fam.HOVER_NO)}
-HYPOTHESIS_FAMILIES = ("cnli",)
+HYPOTHESIS_FAMILIES: tuple[str, ...] = ()
 TOPIC_FAMILIES = ("argq",)
-ROTATED_FAMILIES = ("fc_sel", "fc_args", "qasc", "arc")
+ROTATED_FAMILIES = ("fc_sel2", "fc_args2")
 YOUTUBE_FILES = (
     "Youtube01-Psy.csv",
     "Youtube02-KatyPerry.csv",
@@ -134,24 +129,9 @@ def convert(raw: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         fam.hover_lookup(str(raw / "hover_wiki_wo_links.db")),
         reports["hover"],
     )
-    rows += fam.qasc(
-        parquet(raw / "allenai_qasc/data/train-00000-of-00001.parquet"), reports["qasc"]
+    rows += fam.gsm2(
+        parquet(raw / "openai_gsm8k/main/train-00000-of-00001.parquet"), reports["gsm2"]
     )
-    arc_records = []
-    for subset in ("ARC-Easy", "ARC-Challenge"):
-        arc_records += [
-            (subset, record)
-            for record in parquet(
-                raw / f"allenai_ai2_arc/{subset}/train-00000-of-00001.parquet"
-            )
-        ]
-    rows += fam.arc(arc_records, reports["arc"])
-    rows += fam.gsm(
-        parquet(raw / "openai_gsm8k/main/train-00000-of-00001.parquet"), reports["gsm"]
-    )
-    with zipfile.ZipFile(raw / "stanfordnlp_contract-nli/contract-nli.zip") as archive:
-        contracts = json.loads(archive.read("contract-nli/train.json").decode("utf-8"))
-    rows += fam.cnli(contracts, reports["cnli"])
     return rows, {
         "families": {name: dict(sorted(r.items())) for name, r in reports.items()}
     }

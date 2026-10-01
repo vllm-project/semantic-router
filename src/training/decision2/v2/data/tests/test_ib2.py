@@ -178,7 +178,7 @@ def conversations():
 
 class GlaiveFamiliesTest(unittest.TestCase):
     def test_family_rows_are_valid_and_labelled_by_rule(self):
-        reports = {name: counter() for name in build.FAMILIES}
+        reports = collections.defaultdict(collections.Counter)
         convs = fam.glaive_conversations(conversations(), counter())
         values = collections.defaultdict(dict)
         for conv in convs:
@@ -400,7 +400,7 @@ class OtherFamiliesTest(unittest.TestCase):
 
 class BalanceTest(unittest.TestCase):
     def test_rebalance_then_audit_passes(self):
-        rows = fam.gsm(
+        rows = fam.gsm2(
             [
                 {
                     "question": f"Problem {i}?",
@@ -410,10 +410,51 @@ class BalanceTest(unittest.TestCase):
             ],
             counter(),
         )
+        golds = {f"Problem {i}?": f"The answer is {2 * i + 1}." for i in range(1, 80)}
+        shown = collections.Counter(r["state"]["claim"] for r in rows)
+        for item in rows:
+            self.assertEqual(
+                item["label"] == 1,
+                golds[item["state"]["problem"]] == item["state"]["claim"],
+            )
+        self.assertTrue(set(shown) <= set(golds.values()))
         rows = build.rebalance(rows[3:])
         result, fails = audit.balance(rows)
         self.assertFalse(fails)
-        self.assertTrue(result["gsm"]["pass"])
+        self.assertTrue(result["gsm2"]["pass"])
+
+    def test_redesigned_tool_families(self):
+        convs = fam.glaive_conversations(conversations(), counter())
+        called = [(c["key"], c["call1"][0]) for c in convs if c["call1"]]
+        instances = collections.defaultdict(list)
+        for conv in convs:
+            for index, (name, args) in enumerate(conv["calls"]):
+                for param, value in args.items():
+                    instances[(name, param)].append((f"{conv['key']}:{index}", value))
+        describe = {f["name"]: f["description"] for c in convs for f in c["functions"]}
+        sel = [
+            r
+            for c in convs
+            if (r := fam.fc_sel2(c, counter(), called=called, describe=describe))
+        ]
+        self.assertTrue(sel)
+        for item in sel:
+            texts = [o["description"] for o in item["options"]]
+            self.assertEqual(len(set(texts)), 4)
+        args_rows = [
+            r for c in convs if (r := fam.fc_args2(c, counter(), instances=instances))
+        ]
+        self.assertEqual(len(args_rows), 40)
+        for item in args_rows:
+            gold = json.loads(item["options"][item["label"]]["description"])
+            request = fam.Request(item["state"]["request"])
+            for k, option in enumerate(item["options"]):
+                if k != item["label"]:
+                    other = json.loads(option["description"])
+                    changed = [p for p in gold if other[p] != gold[p]]
+                    self.assertEqual(len(changed), 1)
+                    self.assertFalse(request.grounded(other[changed[0]]))
+            validate_row(item, "train")
 
 
 if __name__ == "__main__":
