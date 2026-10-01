@@ -91,6 +91,19 @@ def _device(device: Any, device_map: Any) -> torch.device:
     return torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
+def _offline(options: dict[str, Any]) -> dict[str, Any]:
+    """With HF_HUB_OFFLINE, read the cache only (huggingface_hub would still list a commit's files)."""
+    try:
+        from huggingface_hub import is_offline_mode
+
+        offline = is_offline_mode()
+    except ImportError:
+        from huggingface_hub import constants
+
+        offline = constants.HF_HUB_OFFLINE
+    return {**options, "local_files_only": True} if offline else options
+
+
 def _package_dir(
     name_or_path: Any, config: Decision1Config, hub: dict[str, Any]
 ) -> Path:
@@ -106,11 +119,13 @@ def _package_dir(
     commit = getattr(revision, "resolved", None)
     if commit is None and getattr(config, "name_or_path", None) == str(name_or_path):
         commit = getattr(config, "_commit_hash", None)
-    options = {
-        k: v
-        for k, v in hub.items()
-        if k != "revision" and v is not None and v is not False
-    }
+    options = _offline(
+        {
+            k: v
+            for k, v in hub.items()
+            if k != "revision" and v is not None and v is not False
+        }
+    )
     return Path(
         snapshot_download(
             str(name_or_path),
