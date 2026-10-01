@@ -2,16 +2,19 @@
 # IX1 scoring (node side, CPU): merge the shard results, score them with the port and with kit
 # 87d4650b, then compare (scorer gate, external report, frontier peer). Outputs stay private.
 #
-# Usage: score.sh --src DIR --model NAME --size SIZE --panel DIR [--allow-errors] [--suffix S --force FILE]
+# Usage: score.sh --src DIR --model NAME --size SIZE --panel DIR [--allow-errors]
+#                 [--suffix S (--force FILE | --results FILE)]
 #
 # --force FILE (a JSON list of run IDs) rescores with those rows counted as wrong (status
-# "unsupported"), the declared contamination forcing rule; outputs go to merged<S>/.
+# "unsupported"), the declared contamination forcing rule; --results FILE scores a derived results
+# file (e.g. calibrated predictions); outputs go to merged<S>/.
 set -euo pipefail
 BASE=/data/dev2/private/eval/index021
 R=$BASE/ix1
-src="" model="" size="" panel="" allow="" suffix="" force=""
+src="" model="" size="" panel="" allow="" suffix="" force="" derived=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --results) derived="$2"; shift 2 ;;
     --src) src="$2"; shift 2 ;;
     --model) model="$2"; shift 2 ;;
     --size) size="$2"; shift 2 ;;
@@ -29,7 +32,11 @@ run="$R/runs/$model"
 out="$run/merged$suffix"
 umask 077
 export CUDA_VISIBLE_DEVICES='' HIP_VISIBLE_DEVICES='' ROCR_VISIBLE_DEVICES='' PYTHONDONTWRITEBYTECODE=1
-if [[ -z "$force" ]]; then
+if [[ -n "$derived" ]]; then
+  [[ -n "$suffix" ]] || { echo "--results needs --suffix" >&2; exit 2; }
+  mkdir -p "$out"
+  cp "$derived" "$out/results.jsonl"
+elif [[ -z "$force" ]]; then
   PYTHONPATH="$S" python3 -m v2.eval.ix1.merge --panel "$panel/panel.json" --run "$run" --out "$out" $allow
 else
   mkdir -p "$out"
