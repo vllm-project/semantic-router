@@ -1,0 +1,59 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's request of 2026-10-01 10:53 UTC+8 that every DEV2.0 model support standard Hugging Face usage through auto_map / trust_remote_code, assigned to release engineering in the cross-track note of 2026-10-01 11:20 UTC+8 (worker 4c0a68cd), each revision only with 0 answer changes against the native runtime on every scored prompt and on mlx-diag",
+  "decision": "release",
+  "decision_sha256": "591a9ae2eaef6a1fab5c730bfd575354f1190814e0a00d0eb9d4c6fe19d0c5f1",
+  "items": {
+    "1_beats_own_1_0": {
+      "evidence": "paired v3 95% interval low +3.646 (sha fa62c29a1920)",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "11 results below own 1.0 listed in the card tradeoffs table",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 33 files re-hashed; loaded 753446208",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518, automap-parity-pre, automap-vs-native-pre; scored prompts vs the native runtime: max drift 0",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "d8656ec0b18d799c7d51ac3bfb0ba7b614f077c68ccdd96e38c3c630f1acf345",
+  "model_name": "DEV2.0-0.8B",
+  "receipts_sha256": {
+    "automap-card-pre": "e0459afa2aa572b698ac1ebe3fca7ab68ff79e03b06203937328105391dde79b",
+    "automap-hub": "38c4ef6f9bb0d7e7f7b5a1d16ea877588daedbcb7d879aa1d69b4b2bb0b25a09",
+    "automap-hub-tf518": "48b5354d97491f57c531abbdab679ea1c5547edd85e5f3d9920543a0cf53bf89",
+    "automap-parity-pre": "73d4b85fba3288c35bb349243c0aae286ab66e670c89bef7bf8be321f6cd43d0",
+    "automap-post": "f9ca1e82fff32ea3718fa352266c93da8883c7b52ba8ac12d4ad3f264339e314",
+    "automap-pre": "d5063e7a5278f9854e90abd24d13c56d0c3f5868a00ac2511c54ffc66d9467e4",
+    "automap-vs-native-pre": "817dc5019b752efacec522952f85b463a2578121abf43dbcafaef45a13e1ee3f",
+    "card-post": "c5fa6d199b36c624574c9505d5b6aa0bf34d73df13031811e1f4ccfe591a95e5",
+    "card-pre": "95bfe8c90cf271acb5a77fa1c1f5df3cd604f513cfa201f224ae5f139e3edeb7",
+    "download": "c30993042bb1cf005dfd2ff64570815e2c4ca6534aa4caaa566f5fcdbfb4ce59",
+    "post": "7c65768932cde605a7b6dbd7d5b45c3b2dde75cf691791df92b28373f6d06ccf",
+    "readback": "5d9f0fce226457f37df7fe32b6fa177ef253e2621980b27f7a133fee815c8c05",
+    "repeat-post": "c652b383ae82acb369841014f60c3c9463d8535ac8f060c0370c6345d6ee84e2",
+    "repeat-pre": "ab90bf3752e1cbe406839338cc0e46c99ae49c051c778e93f1885ad94fb2d36c",
+    "tree": "233f2c2ae3b589e3e0019b414501d7dec1fbabebaef16af63f119677d4acd6ae",
+    "upload": "ac4e896dfc057f39bc4f29771e8e37e091f4327d231cde716a2ee3f97cc7de45"
+  },
+  "repo_id": "llm-semantic-router/DEV2.0-0.8B",
+  "revision": "1188dd33cc2d69381d3c37c9259b4f4163a666a6",
+  "schema": "dev2-release-gate/1",
+  "utc": "2026-10-01T06:46:18.439632+00:00"
+}

@@ -1,0 +1,77 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "draft",
+  "decision": "release",
+  "model_name": "DEV2.0-0.6B",
+  "repo_id": "llm-semantic-router/DEV2.0-0.6B",
+  "identity": {
+    "model_sha256": "bb806f31a14d4532a1b5e00984442128f47f46cbbc68e57e7623327c81cfb983"
+  },
+  "report_sha256": "b2083796ed0a03728edffb2aa8af5c9c60db38df3ad8182ea5c9e08d6bb6a2ed",
+  "paired_sha256": "7b391cb2f5ab08b798e3ba6817dcf269ae0b9fb4843dabe4ac434b8177b77f98",
+  "gate_profile": "successor",
+  "current_revision": "99c4e799392afa73241915aeb16fefa5ef3518d7",
+  "evidence_sha256": {
+    "current_decision": "e22fe181f6c245a15a1c341d136141ef529768c0b8fecb92d65ee909722b15b0",
+    "current_gate": "787c31c9e5bf618c788d28acbe6b1009181d62b6e37fa16e6c231b2dd2ca2bc1",
+    "exposure": "4c2a55d2b73dff179103824fd02970eaa677eb74557e28a80ce45258e1bf5bf8",
+    "mlx_paired": "72660c429ecc375d92f33a123b69d6cff797ed267fc1f4feda31c47d5504b30f",
+    "paired": "61700400844a98f6a80f2a8f30faf7808cfd30023a2d4202d405588922740b56",
+    "public231": "dff304c9897026ebb3bd465deccf7ac63dc34d75b81f7c829908ee87c9110c8e",
+    "tier_paired": "aed5ad9a28b059c7bf001c898598771b366e4a2ef4535872045c9ec72b2a9412",
+    "types": "ce2ca8bc47ccd5e8147c7d5b25f905ab85a23126bb65f599b7f735a4e2a7440a"
+  },
+  "prepared_by": "Decision 2.0 release engineering, auto_map worker (worktree vllm-sr-dev2-automap)",
+  "rationale": "The release judgement of the superseded final decision 330f3aef… stands unchanged: the same identity bb806f31, scored report, paired comparison, calibration and licence decision. Only package code, config.json and the card change. Adopted only with 0 answer changes (0 missing, 0 input mismatches) against the native runtime on every scored prompt (typed-final 1,600, css15 6,547, public231 231) and on mlx-diag (2,275), compared prompt by prompt, with native parity against the scored predictions before and after the real download, and the card's Transformers example run from the Hub in a fresh environment; release.sh blocks the upload or the collection step otherwise.",
+  "decided_utc": "2026-10-01T03:20:00Z",
+  "action": "Runtime-only revision of the private repository llm-semantic-router/DEV2.0-0.6B: the package gains Transformers remote code (configuration_decision2.py, modeling_decision2.py, pipeline_decision2.py at the root; config.json model_type decision2, auto_map, custom_pipelines decision) so AutoConfig, AutoTokenizer, AutoModel and pipeline('decision') load it with trust_remote_code=True through its own runtime, and the card gains a 'Use with 🤗 Transformers' section. The package runtime is the BF16-resident runtime plus the remote-code prompt fix (runtime_source 8e8082440). Weights, tokenizer, model configs, the vendored training/model sources, calibration and any Score offsets are byte-identical to the released revision def20a1c62f2941bb727d079d7f895800e9d8808. The repository stays in the private collection '🎲 Decision 2.0', ordered 0.6B, 0.8B, 2B, 4B, 9B, 27B; everything stays private.",
+  "release_rationale": "Successor rule (coordinator 16:05 / 17:15) against the current revision 99c4e799 (m4-t-a7-soup, scored report 72cf01de reached through its sealed gate 787c31c9 and decision e22fe181): R1 post-key v3 48.64 vs 43.54, +5.09 [+2.65, +9.30]; R2 human transfer -0.021 [-0.064, +0.061], not significantly below; R3 no type collapsed (Choice, Noul, Score OK; typed Score top share .620, accuracy .3425 vs always-majority .320, disclosed as no gain); R4 mlx-diag Choice + Noul macro +0.0044 [-0.0058, +0.0144]; R5 tier gates: vs Decision 1.0 Kai +12.70 [+10.00, +17.50], v3 48.64 >= 90% of GLiNER2.5-Decide 42.52, human transfer vs GLiNER2.5-Decide +0.018 [-0.013, +0.161], no collapse; R6 no overlap exposure (six M6 mixtures, 356,331 rows, 0 groups); R7 v2.eval.gates public231 vs the current run 152 vs 142 (+10, McNemar p .087), not REGRESSION. Package: the BF16-storage copy (bf16_copy receipt 2a991bfb) of the scored m6-mxcx-soup weights (01fae750) with the same five-level Score offsets rebound to its hash (score_bias.bf16.json 7d3a060f, from the packaged public file 725c16f9, scored file 03f0c9c7); exact parity with 0 answer changes and 0.0 probability drift on all 10,653 scored and mlx-diag prompts. Calibration T = 1: CAL698 temperatures (Choice 0.584, Noul 0.554, Score 0.450) worsened all four development measures (23:15 rule). Card disclosures verbatim from the M8 hand-off; C1 measured the previous revision only. After this revision verifies, the superseded weight LFS blobs are purged with rewrite_history=False; node copies stay the durable store.",
+  "revision_binding": "This decision names no revision; receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified.",
+  "c1": "Previous-revision line: event 2 sealed the predictions of revision e61b2b44 (model files byte-identical to 99c4e799); rescored on C1 v1.2 at event 3 they score 33.02 vs Decision 1.0 Kai at 8,192 tokens 22.14 (+10.89 [+8.88, +12.64]; Kai at 1,024 tokens 17.79). The current weights (m6-mxcx-soup plus Score offsets, released as b2131337) were not part of any sealed event, and C1 is post-key after event 3, so no C1 line measures them. The runtime-only revision computes the same products, so this line stays valid for it.",
+  "supersedes": {
+    "final_sha256": "330f3aefa5361eb1faf0b153a2e71ba1ca6953cd68a18cafbb0fe8e4f9eb8639",
+    "released_as": "llm-semantic-router/DEV2.0-0.6B@def20a1c62f2941bb727d079d7f895800e9d8808",
+    "released_manifest_sha256": "d53a8a16cf4b5dcd051a7948ad362cef98732a703a59959b082d4c517b09a9d5",
+    "released_gate_sha256": "965084a9bb74504c57b949af617f4c2a1e17f25ab76e83980bbf26b812cef381",
+    "earlier": {
+      "final_sha256": "54a0f25f373be7002eed7c3caacc89744b0fb3cc0ef391468824a0bf8b5f1feb",
+      "released_as": "llm-semantic-router/DEV2.0-0.6B@476fe984a2316519f3e583b7f31b1670295b2477",
+      "released_manifest_sha256": "5a3317a2034bf7fe9cc75ac228d6434907730ef97e0be7446c639851ad721dde",
+      "released_gate_sha256": "9d67b2090d6d09bc4e30d28b37e9508455c148451c3496b94bc5904dff99dc5f",
+      "card_revision": {
+        "kind": "card-only",
+        "spec": "v2/release/specs/dev2-0p6b-card-c1pk.json",
+        "spec_sha256": "1063a9da0a1de357f5502ec39bb895f4c83a87c5ef0aafd5b53431d28b9cffe5",
+        "c1_record": "v2/eval/records/c1-postkey-guard-2026-09-29.md (section 5)"
+      },
+      "earlier": {
+        "final_sha256": "453b4b7be975001a32989833ef24adbf641f4c9c911e78b46c0b48bfd6118dca",
+        "released_as": "llm-semantic-router/DEV2.0-0.6B@188eb4c822e8643034f8ca87d865a16a86f69952",
+        "released_manifest_sha256": "42c31b047a11e9545cce9ba046388b00ebc08458546e9a886fcca2195888a343",
+        "released_gate_sha256": "bacf1e1f186b89ab7ae0336cb028eb89c621a3689b370ab4a0540d0331940c3a",
+        "earlier": {
+          "final_sha256": "3fbe847bca4cde30229797b2d5e7e270640bd69c64e3b6691201c15d9dc82410",
+          "released_as": "llm-semantic-router/DEV2.0-0.6B@b21313375ad77ddf4a8e420fa5195e6e09582043",
+          "released_manifest_sha256": "816827dd836d21ab0b7555605fdc56dd5189ee4462a541a84de27de97f637796",
+          "released_gate_sha256": "606f8794509a70e9e633384554c974fac2ae0662563b00c9496c757c7c3cef4a",
+          "earlier": null
+        }
+      }
+    }
+  },
+  "c1_postkey": "Item 8 after the fact: b2131337 36.92 vs e61b2b44 33.02 on C1 v1.2 (+3.89 [+2.16, +5.60], p < .001; Choice +5.16, Noul +8.05, Score -1.45 n.s.). Post-key, not an independent validation.",
+  "disclosures": [
+    "post-key C1 declines vs the previous revision: star_rating 21.3 vs 30.5, moment_type 53.2 vs 60.1, is_rapport 43.6 vs 49.0, likelihood 10.2 vs 13.1; Russian .263 vs .353, Finnish .426 vs .500"
+  ],
+  "previous_rationale": "The release judgement of the superseded final decision 54a0f25f… stands unchanged: the same identity bb806f31, scored report, paired comparison, calibration and licence decision, and the successor-profile evidence against the same current revision. Only the package runtime changes, and it computes the same BF16 products as before. Adopted only with exact parity (0 answer changes, 0 missing, 0 input mismatches) against the scored predictions on every scored prompt (typed-final 1,600, css15 6,547, public231 231) and on mlx-diag (2,275), with the scored image, kernels and frozen autotune cache: release.sh parity-pre blocks the upload otherwise, and parity-post repeats it on the real download.",
+  "runtime_revision": {
+    "kind": "transformers-remote-code",
+    "runtime_commit": "8e808244072cef8735b8f3fdcfb8487f36605c5c",
+    "spec": "v2/release/specs/dev2-0p6b-automap.draft.json",
+    "spec_sha256": "7e38debb84fa731ebf9123fbfcaaa36ee597e90fef3492fcef71889c971b97fd",
+    "tested_transformers": [
+      "5.17.0",
+      "5.18.0"
+    ]
+  }
+}

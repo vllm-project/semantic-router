@@ -27,14 +27,22 @@
 #                -> card-post -> parity-post -> readback (private, hashes, Hub card, collection)
 #   --collect:   gate seal (the spec's coordinator decision + every verification receipt, bound to the
 #                uploaded revision) -> collect (private Decision 2.0 collection) -> readback-collected
-# The container never mounts gold. --cpu exposes no GPU; --gpu takes a leased GPU like the eval runner.
+# A package that ships the Transformers remote code (v2/release/automap) also runs, before upload,
+#   automap-pre (AutoConfig / AutoTokenizer / AutoModel / pipeline with trust_remote_code vs pre-a,
+#   bit-identical), automap-card-pre (the card's Transformers block on the package) and, with --parity,
+#   automap-parity-pre plus automap-vs-native-pre (per-prompt answers of AutoModel vs parity-pre's native
+#   run); after the download automap-post, and automap-hub[-<label>] (the card's Transformers block exactly
+#   as written, from the Hub, in a fresh cache over the host network; --hub-site LABEL=DIR adds a run with
+#   that site first on the path, e.g. another Transformers version). Answers stay in <work>/answers.
+# The container never mounts gold. --cpu exposes no GPU; --gpu takes a leased GPU like the eval runner,
+# passing only that GPU's render node and /dev/kfd (ROCR_VISIBLE_DEVICES=0 inside).
 set -euo pipefail
 
 usage() { sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 spec="" sha="" work="" device="cpu" gpu="" track="" image="decision20-train-fast:host2" python_bin="python3"
 threads="4" base_path="" upload=0 gate="" parity_tolerance="1e-4" mounts=() parity=()
-rw_mounts=() envs=() site_args=() kernel_args=() shared="" readback_args=()
+rw_mounts=() envs=() site_args=() kernel_args=() shared="" readback_args=() hub_sites=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --spec) spec="$2"; shift 2 ;;
@@ -61,6 +69,9 @@ while [[ $# -gt 0 ]]; do
     --upload) upload=1; shift ;;
     --collect) gate=1; shift ;;
     --already-collected) readback_args=(--already-collected); shift ;;
+    --hub-site)
+      [[ "$2" =~ ^[a-z0-9.-]+=/.+$ ]] || { echo "--hub-site takes LABEL=/absolute/dir" >&2; exit 2; }
+      hub_sites+=("$2"); shift 2 ;;
     *) usage ;;
   esac
 done
@@ -75,7 +86,7 @@ S="$src/src/training/decision2"
 hf_python="/data/dev2/tools/hf-cli/bin/python"
 repo="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["repo_id"])' "$spec")"
 name="${repo#*/}"
-mkdir -p "$work/receipts" "$work/package" "$work/logs"
+mkdir -p "$work/receipts" "$work/package" "$work/logs" "$work/answers"
 cp "$spec" "$work/receipts/spec.json"
 spec="$work/receipts/spec.json"
 python3 - "$work/receipts/launcher.json" "$image" "$(docker image inspect --format '{{.Id}}' "$image")" \
@@ -101,18 +112,23 @@ if [[ "$device" != "cpu" ]]; then
   elif [[ -f "$lease/owner" ]] && ! grep -qx "track=$track" "$lease/owner"; then
     echo "gpu$gpu is leased by another track" >&2; exit 1
   fi
+  # Only this GPU's render node: on shared nodes the other GPUs may belong to someone else.
+  bdf="$(amd-smi list 2>/dev/null | awk -v g="GPU: $gpu" '$0 ~ "^"g"$" {getline; print tolower($2)}')"
+  render="$(readlink -f "/dev/dri/by-path/pci-${bdf}-render" 2>/dev/null || true)"
+  [[ -n "$bdf" && -c "$render" ]] || { echo "no render node for GPU $gpu" >&2; exit 1; }
   mkdir -p "$lease"
   printf 'track=%s\npurpose=%s\nstart_utc=%s\nexpected_end_utc=unknown\nrun_dir=%s\n' \
     "$track" "release verification $repo" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$work" > "$lease_file"
-  gpu_flags=(--device /dev/kfd --device /dev/dri --group-add video --security-opt seccomp=unconfined
-             -e ROCR_VISIBLE_DEVICES="$gpu")
+  gpu_flags=(--device /dev/kfd --device "$render" --group-add video --group-add render
+             --security-opt seccomp=unconfined -e ROCR_VISIBLE_DEVICES=0)
 else
   gpu_flags=(-e HIP_VISIBLE_DEVICES= -e CUDA_VISIBLE_DEVICES= -e ROCR_VISIBLE_DEVICES=)
 fi
 
 # One isolated container process per call: package read-only, no network, no gold, no bytecode.
 examples() {
-  local volumes=(-v "$src:$src:ro" -v "$work/package:$work/package:ro" -v "$work/receipts:$work/receipts")
+  local volumes=(-v "$src:$src:ro" -v "$work/package:$work/package:ro" -v "$work/receipts:$work/receipts"
+                 -v "$work/answers:$work/answers")
   [[ -d "$work/download" ]] && volumes+=(-v "$work/download:$work/download:ro")
   local m
   for m in "${mounts[@]}"; do volumes+=(-v "$m:$m:ro"); done
@@ -123,15 +139,51 @@ examples() {
 }
 device_args=(--threads "$threads" "${site_args[@]}" "${kernel_args[@]}")
 [[ "$device" == "cpu" ]] && device_args+=(--device cpu) || device_args+=(--device cuda:0)
+# The remote code fetches a base-bound adapter's pinned base itself (here from the mounted HF_HUB_CACHE).
+automap_args=("${device_args[@]}")
 [[ -n "$base_path" ]] && device_args+=(--base-path "$base_path")
 parity_args=()
 for p in "${parity[@]}"; do parity_args+=(--panel "$p"); done
+
+# The card's Transformers block exactly as written, from the Hub: fresh HF_HOME, host network, the node's
+# token file mounted read-only (never in argv or env); optional extra site (e.g. another Transformers).
+hub_smoke() {
+  local label="$1" extra="$2" suffix="${1:+-$1}"
+  local home="$work/hub$suffix"
+  mkdir -p "$home/hf-home"
+  local volumes=(-v "$src:$src:ro" -v "$work/package:$work/package:ro" -v "$work/receipts:$work/receipts"
+                 -v "$home:$home" -v /root/.cache/huggingface/token:/run/decision2-hf/token:ro)
+  local sites=("${site_args[@]}") keep=() i m
+  for m in "${rw_mounts[@]}"; do volumes+=(-v "$m:$m"); done
+  if [[ -n "$extra" ]]; then
+    volumes+=(-v "$extra:$extra:ro")
+    sites=(--site "$extra" "${site_args[@]}")
+  fi
+  # envs holds (-e KEY=VALUE) pairs; drop a cache / offline setting together with its -e.
+  for ((i = 1; i < ${#envs[@]}; i += 2)); do
+    [[ "${envs[i]}" =~ ^(HF_HOME|HF_HUB_CACHE|HF_HUB_OFFLINE|TRANSFORMERS_OFFLINE)= ]] \
+      || keep+=(-e "${envs[i]}")
+  done
+  # The image sets HF_HUB_OFFLINE=1 / TRANSFORMERS_OFFLINE=1; a user's environment is online.
+  docker run --rm --network host --ipc host "${gpu_flags[@]}" -e HF_HOME="$home/hf-home" \
+    -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 \
+    -e HF_TOKEN_PATH=/run/decision2-hf/token -e HF_HUB_DISABLE_TELEMETRY=1 -e TOKENIZERS_PARALLELISM=false \
+    "${keep[@]}" "${volumes[@]}" --entrypoint "$python_bin" "$image" -I -B "$S/v2/release/examples.py" \
+    automap-card --hub --package "$pkg" --reference "$work/receipts/pre-a.json" --expect-revision "$revision" \
+    --output "$work/receipts/automap-hub$suffix.json" "${sites[@]}" > "$work/logs/automap-hub$suffix.log" 2>&1 \
+    || { rm -rf "$home/hf-home"; return 1; }
+  rm -rf "$home/hf-home"
+}
 
 started="$(date +%s.%N)"
 log "build $repo from $sha"
 python3 -m v2.release.build --spec "$spec" --output "$work/package/$name" > "$work/logs/build.log"
 cp "$work/package/$name.build/BUILD.json" "$work/receipts/build.json"
 pkg="$work/package/$name"
+remote_code="$(python3 -c 'import json,sys; print(1 if json.load(open(sys.argv[1])).get("remote_code") else 0)' \
+  "$pkg/MODEL_MANIFEST.json")"
+answers_args=()
+[[ "$remote_code" == 1 ]] && answers_args=(--answers "$work/answers/native-pre.jsonl")
 
 log "pre-upload examples (two processes)"
 examples run --package "$pkg" --output "$work/receipts/pre-a.json" "${device_args[@]}" > "$work/logs/pre-a.log" 2>&1
@@ -144,7 +196,23 @@ examples card --package "$pkg" --reference "$work/receipts/pre-a.json" --output 
 if [[ ${#parity_args[@]} -gt 0 ]]; then
   log "scored-panel parity (pre-upload)"
   examples parity --package "$pkg" --output "$work/receipts/parity-pre.json" --tolerance "$parity_tolerance" \
-    "${device_args[@]}" "${parity_args[@]}" > "$work/logs/parity-pre.log" 2>&1
+    "${device_args[@]}" "${parity_args[@]}" "${answers_args[@]}" > "$work/logs/parity-pre.log" 2>&1
+fi
+if [[ "$remote_code" == 1 ]]; then
+  log "Transformers remote code (pre-upload)"
+  examples automap --package "$pkg" --reference "$work/receipts/pre-a.json" \
+    --output "$work/receipts/automap-pre.json" "${automap_args[@]}" > "$work/logs/automap-pre.log" 2>&1
+  examples automap-card --package "$pkg" --reference "$work/receipts/pre-a.json" \
+    --output "$work/receipts/automap-card-pre.json" "${site_args[@]}" > "$work/logs/automap-card-pre.log" 2>&1
+  if [[ ${#parity_args[@]} -gt 0 ]]; then
+    log "scored-panel parity through AutoModel (pre-upload)"
+    examples automap-parity --package "$pkg" --output "$work/receipts/automap-parity-pre.json" \
+      --tolerance "$parity_tolerance" --answers "$work/answers/automap-pre.jsonl" "${automap_args[@]}" \
+      "${parity_args[@]}" > "$work/logs/automap-parity-pre.log" 2>&1
+    python3 "$S/v2/release/examples.py" compare-answers "$work/answers/native-pre.jsonl" \
+      "$work/answers/automap-pre.jsonl" --tolerance "$parity_tolerance" \
+      --output "$work/receipts/automap-vs-native-pre.json"
+  fi
 fi
 
 if [[ "$upload" == 1 ]]; then
@@ -172,6 +240,13 @@ if [[ "$upload" == 1 ]]; then
   if [[ ${#parity_args[@]} -gt 0 ]]; then
     examples parity --package "$work/download/$name" --output "$work/receipts/parity-post.json" \
       --tolerance "$parity_tolerance" "${device_args[@]}" "${parity_args[@]}" > "$work/logs/parity-post.log" 2>&1
+  fi
+  if [[ "$remote_code" == 1 ]]; then
+    log "Transformers remote code on the download; card example from the Hub (fresh cache)"
+    examples automap --package "$work/download/$name" --reference "$work/receipts/pre-a.json" \
+      --output "$work/receipts/automap-post.json" "${automap_args[@]}" > "$work/logs/automap-post.log" 2>&1
+    hub_smoke "" ""
+    for hs in "${hub_sites[@]}"; do hub_smoke "${hs%%=*}" "${hs#*=}"; done
   fi
   log "readback"
   "$hf_python" -m v2.release.hub readback --repo "$repo" --revision "$revision" --package "$pkg" \

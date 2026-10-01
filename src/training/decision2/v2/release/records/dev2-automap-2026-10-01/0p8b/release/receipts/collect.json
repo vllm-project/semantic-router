@@ -1,0 +1,22 @@
+{
+  "collection": {
+    "items": [
+      "llm-semantic-router/DEV2.0-0.6B",
+      "llm-semantic-router/DEV2.0-0.8B",
+      "llm-semantic-router/DEV2.0-2B",
+      "llm-semantic-router/DEV2.0-4B",
+      "llm-semantic-router/DEV2.0-9B",
+      "llm-semantic-router/DEV2.0-27B",
+      "llm-semantic-router/DEV2.0-Route-0.6B"
+    ],
+    "private": true,
+    "slug": "llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00",
+    "title": "🎲 Decision 2.0"
+  },
+  "gate_sha256": "cb13c2f9fed9a24cfe5ae3a62697e07ba65977bf1c9e009ffd39806cb120a452",
+  "passed": true,
+  "repo": "llm-semantic-router/DEV2.0-0.8B",
+  "revision": "1188dd33cc2d69381d3c37c9259b4f4163a666a6",
+  "schema": "dev2-hub-collect/1",
+  "utc": "2026-10-01T06:46:18.749441+00:00"
+}

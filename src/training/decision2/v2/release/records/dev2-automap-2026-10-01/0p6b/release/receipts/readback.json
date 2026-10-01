@@ -1,0 +1,33 @@
+{
+  "card_data": {
+    "base_model": "Qwen/Qwen3-0.6B-Base",
+    "base_model_relation": "finetune",
+    "license": "apache-2.0",
+    "license_name": null,
+    "tags": [
+      "decision-model",
+      "classification",
+      "system-one",
+      "safetensors"
+    ]
+  },
+  "card_problems": [],
+  "collection": {
+    "contains_repo": true,
+    "expected_repo": true,
+    "items": 7,
+    "private": true,
+    "slug": "llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00",
+    "title": "🎲 Decision 2.0"
+  },
+  "extra_remote": [],
+  "hash_mismatch": [],
+  "missing_remote": [],
+  "passed": true,
+  "private": true,
+  "remote_files": 36,
+  "repo": "llm-semantic-router/DEV2.0-0.6B",
+  "revision": "08b00e07cb90472e4184e3b91f3188c0ead8935b",
+  "schema": "dev2-hub-readback/1",
+  "utc": "2026-10-01T06:24:54.768466+00:00"
+}

@@ -1,0 +1,57 @@
+{
+ "cells": {
+  "argq|oppose": 18,
+  "argq|support": 18,
+  "fc_ready|false": 18,
+  "fc_ready|true": 18,
+  "fc_rel|false": 18,
+  "fc_rel|true": 18,
+  "gsm2|false": 18,
+  "gsm2|true": 18,
+  "hover|false": 18,
+  "hover|true": 18,
+  "ytspam|false": 18,
+  "ytspam|true": 18
+ },
+ "excluded_key_rows": 60,
+ "families": [
+  "argq",
+  "fc_ready",
+  "fc_rel",
+  "gsm2",
+  "hover",
+  "ytspam"
+ ],
+ "families_excluded": [
+  "fc_args2",
+  "fc_sel2"
+ ],
+ "n": 216,
+ "per_family": 36,
+ "population": {
+  "argq": 5152,
+  "fc_ready": 2582,
+  "fc_rel": 5734,
+  "gsm2": 5582,
+  "hover": 4020,
+  "ytspam": 1456
+ },
+ "rows": 33068,
+ "rows_sha256": "70172b6c9c51d03c02b5fe35a4511c8545de41f00ebbdeec134a4ed9c66334bd",
+ "salt": "ib2-review-v1",
+ "sampled": {
+  "argq": 36,
+  "fc_ready": 36,
+  "fc_rel": 36,
+  "gsm2": 36,
+  "hover": 36,
+  "ytspam": 36
+ },
+ "schema": "decision2.ib2.review-sample.v1",
+ "thresholds": {
+  "error_max": 0.05,
+  "error_upper_max": 0.08,
+  "family_lower_max": 0.05,
+  "weighted_error_max": 0.05
+ }
+}

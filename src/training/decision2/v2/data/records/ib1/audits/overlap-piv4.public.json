@@ -1,19 +1,19 @@
 {
  "candidate_files": [
   {
-   "rows": 63359,
-   "sha256": "888dad522420dafe6759aa1957dd35a628be579e4873934d89e0ee9ed9ecbdb1"
+   "rows": 63001,
+   "sha256": "468cf7f202b8b1f4e7f42bea199df281774bd712f3fe8eb3c59f1251c30e27e2"
   },
   {
-   "rows": 6655,
-   "sha256": "6816bf43834a88c43c8351cc6e3f98e732a53ae9d2d40ccb64dc90ff2c1eca92"
+   "rows": 6605,
+   "sha256": "8ce859f4fd6f652cfe9f0600aafdd5075e99d6005723c52665876f31f1f44f79"
   }
  ],
  "candidates": {
-  "distinct_leaves_scanned": 94295,
-  "groups": 45825,
-  "rows": 70014,
-  "states_keyed": 69934
+  "distinct_leaves_scanned": 93850,
+  "groups": 45449,
+  "rows": 69606,
+  "states_keyed": 69526
  },
  "flagged": {
   "boilerplate": {
@@ -48,7 +48,7 @@
     "rows": 2601
    },
    "L": {
-    "groups": 162,
+    "groups": 160,
     "rows": 476
    },
    "N": {
@@ -163,12 +163,12 @@
      "rows": 12
     },
     "S": {
-     "groups": 5,
-     "rows": 6
+     "groups": 4,
+     "rows": 5
     },
     "any": {
-     "groups": 15,
-     "rows": 18
+     "groups": 14,
+     "rows": 17
     }
    },
    "a7_aho_A7o": {
@@ -221,8 +221,8 @@
      "rows": 0
     },
     "L": {
-     "groups": 7,
-     "rows": 7
+     "groups": 8,
+     "rows": 8
     },
     "N": {
      "groups": 29,
@@ -233,8 +233,8 @@
      "rows": 25
     },
     "any": {
-     "groups": 38,
-     "rows": 301
+     "groups": 39,
+     "rows": 302
     }
    },
    "a7_aho_A7r": {
@@ -331,8 +331,8 @@
      "rows": 0
     },
     "L": {
-     "groups": 7,
-     "rows": 7
+     "groups": 6,
+     "rows": 6
     },
     "N": {
      "groups": 18,
@@ -343,8 +343,8 @@
      "rows": 78
     },
     "any": {
-     "groups": 47,
-     "rows": 140
+     "groups": 46,
+     "rows": 139
     }
    },
    "a7_train_A7i": {
@@ -463,8 +463,8 @@
      "rows": 0
     },
     "L": {
-     "groups": 70,
-     "rows": 333
+     "groups": 69,
+     "rows": 332
     },
     "N": {
      "groups": 236,
@@ -475,8 +475,8 @@
      "rows": 11
     },
     "any": {
-     "groups": 307,
-     "rows": 1017
+     "groups": 306,
+     "rows": 1016
     }
    },
    "a7_train_A7r": {
@@ -859,8 +859,8 @@
      "rows": 0
     },
     "L": {
-     "groups": 35,
-     "rows": 227
+     "groups": 34,
+     "rows": 226
     },
     "N": {
      "groups": 108,
@@ -871,8 +871,8 @@
      "rows": 189
     },
     "any": {
-     "groups": 144,
-     "rows": 652
+     "groups": 143,
+     "rows": 651
     }
    },
    "css15_native": {
@@ -881,8 +881,8 @@
      "rows": 0
     },
     "L": {
-     "groups": 35,
-     "rows": 227
+     "groups": 34,
+     "rows": 226
     },
     "N": {
      "groups": 108,
@@ -893,8 +893,8 @@
      "rows": 189
     },
     "any": {
-     "groups": 144,
-     "rows": 652
+     "groups": 143,
+     "rows": 651
     }
    },
    "css_pilot": {
@@ -1432,7 +1432,7 @@
     },
     "L": {
      "groups": 14,
-     "rows": 38
+     "rows": 40
     },
     "N": {
      "groups": 12,
@@ -1444,7 +1444,7 @@
     },
     "any": {
      "groups": 26,
-     "rows": 58
+     "rows": 60
     }
    },
    "v1_aho_a4v2h": {
@@ -1608,7 +1608,7 @@
     },
     "L": {
      "groups": 38,
-     "rows": 86
+     "rows": 88
     },
     "N": {
      "groups": 75,
@@ -1620,7 +1620,7 @@
     },
     "any": {
      "groups": 115,
-     "rows": 365
+     "rows": 367
     }
    },
    "v1_train_a4v2h": {
@@ -1747,12 +1747,12 @@
      "rows": 13
     },
     "S": {
-     "groups": 4,
-     "rows": 18
+     "groups": 3,
+     "rows": 17
     },
     "any": {
-     "groups": 15,
-     "rows": 41
+     "groups": 14,
+     "rows": 40
     }
    },
    "v2_aho_G2": {
@@ -1871,8 +1871,8 @@
      "rows": 0
     },
     "L": {
-     "groups": 49,
-     "rows": 324
+     "groups": 48,
+     "rows": 325
     },
     "N": {
      "groups": 123,
@@ -1883,8 +1883,8 @@
      "rows": 66
     },
     "any": {
-     "groups": 177,
-     "rows": 783
+     "groups": 176,
+     "rows": 784
     }
    },
    "v2_aho_H5": {
@@ -1915,8 +1915,8 @@
      "rows": 0
     },
     "L": {
-     "groups": 12,
-     "rows": 29
+     "groups": 10,
+     "rows": 27
     },
     "N": {
      "groups": 16,
@@ -1927,8 +1927,8 @@
      "rows": 58
     },
     "any": {
-     "groups": 33,
-     "rows": 158
+     "groups": 31,
+     "rows": 156
     }
    },
    "zh_decision_bench_massive": {
@@ -1977,7 +1977,7 @@
    }
   },
   "quarantine": {
-   "groups": 1401,
+   "groups": 1399,
    "rows": 9053
   }
  },

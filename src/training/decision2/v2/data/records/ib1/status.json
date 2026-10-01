@@ -1,23 +1,27 @@
 {
  "schema": "decision2.ib1.status.v1",
- "round": 2,
- "release_safe": false,
- "reason": "round-2 decisive blind label review failed P1, P2 and P3 (12 / 225 gold errors, 5.33%, exact 95% upper 9.13%; population-weighted 5.97%; wands 4 / 19 errors, exact 95% lower above 5%); published flagged, not tuned further in this round",
+ "round": 3,
+ "release_safe": true,
+ "reason": "round-3 fresh decisive blind label review passed P1, P2 and P3 (3 / 216 gold errors, 1.39%, exact 95% upper 4.01%; population-weighted 2.14%; no failing family) and every audit passed",
  "review": {
-  "n": 225,
-  "errors": 12,
-  "error": 0.053333,
-  "error_cp95": [0.027858, 0.091309],
-  "weighted_error": 0.059728,
-  "weighted_bootstrap95": [0.026101, 0.097706],
-  "failing_families": ["wands"],
-  "P1": false,
-  "P2": false,
-  "P3": false,
-  "errors_answering_a_dropped_class": 5
+  "n": 216,
+  "errors": 3,
+  "error": 0.013889,
+  "error_cp95": [0.002873, 0.04005],
+  "weighted_error": 0.021357,
+  "weighted_bootstrap95": [0.0, 0.053561],
+  "failing_families": [],
+  "P1": true,
+  "P2": true,
+  "P3": true
  },
- "constructions_dropped": ["sentfin-neutral", "sumedit-shakespeare", "wands-partial"],
+ "round3_changes": {
+  "sentfin": "two-option item (negative / positive); neutral is neither an option nor gold",
+  "families_removed": ["wands", "csqa", "sumedit"],
+  "sumedit_reason": "domain rule kept billsum and sales_call, but every remaining group was already sampled in rounds 1-2, so the family could not be freshly reviewed"
+ },
  "rows_removed_from_train": {
+  "round3_review_gold_errors": 3,
   "round2_review_gold_errors": 12,
   "round1_review_and_screen": 17,
   "leak_guard": 12
@@ -25,10 +29,14 @@
  "families_dropped": {
   "empty_under_rule": ["expqa"],
   "shortcut_gate": ["medmcqa", "procb", "wanli"],
-  "empty_after_rescan": ["maud"]
+  "empty_after_rescan": ["maud"],
+  "amendment_3": ["wands", "csqa", "sumedit"]
  },
  "in_distribution_families": ["w2c", "isarc"],
  "index_rows": "every candidate group with an exact, normalized or 13-gram match to any Index suite row was dropped (G0); positive controls 2,000 / 2,000 exact and 2,000 / 2,000 perturbed",
- "prereg": "v2/data/records/ib1-prereg-2026-10-01.md (amendments 1 and 2)",
- "round1": "previous revision of m6/ib1 (decision-2.0-training-data@1371c28777ae24e2632145dff3ea55050d47c014), NOT release-safe"
+ "prereg": "v2/data/records/ib1-prereg-2026-10-01.md (amendments 1, 2 and 3)",
+ "previous_revisions": {
+  "round1": "decision-2.0-training-data@1371c28777ae24e2632145dff3ea55050d47c014 (NOT release-safe)",
+  "round2": "decision-2.0-training-data@82bf70a70fa0d0dda33240493b2df80f78ce84ae (NOT release-safe)"
+ }
 }

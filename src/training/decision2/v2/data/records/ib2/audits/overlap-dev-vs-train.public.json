@@ -1,0 +1,103 @@
+{
+ "boilerplate": {
+  "E_leaf": {
+   "groups": 2684,
+   "units": 151
+  },
+  "E_state": {
+   "groups": 0,
+   "units": 0
+  },
+  "L": {
+   "groups": 547,
+   "units": 309
+  },
+  "N_char": {
+   "groups": 2684,
+   "units": 13718
+  },
+  "N_word": {
+   "groups": 883,
+   "units": 7459
+  },
+  "S": {
+   "groups": 1251,
+   "units": 2048
+  }
+ },
+ "by_method": {
+  "E": {
+   "a_groups": 537,
+   "b_groups": 2889,
+   "pairs": 7391
+  },
+  "L": {
+   "a_groups": 234,
+   "b_groups": 188,
+   "pairs": 390
+  },
+  "N": {
+   "a_groups": 1093,
+   "b_groups": 4571,
+   "pairs": 7799
+  },
+  "S": {
+   "a_groups": 718,
+   "b_groups": 5268,
+   "pairs": 16973
+  }
+ },
+ "candidate_files": [
+  {
+   "rows": 4405,
+   "sha256": "a48b62373010a30045edd44ff1e3fdca6106abacb7a2bf41b409c35de9fd9993"
+  },
+  {
+   "rows": 39741,
+   "sha256": "9b9bc534a40d8c70516482b9175e64569304ea5088b58186a60782eab28bec3c"
+  }
+ ],
+ "candidate_groups_in_pairs": 1131,
+ "candidates": {
+  "groups": 2684,
+  "rows": 4405
+ },
+ "methods": {
+  "E": "normalized leaf equality (compact length >= 20) and equality of normalized canonical-JSON states (canonical-JSON strings decoded first)",
+  "L": "S rule against 400/200 windows (last window end-aligned) of the compact text of protected leaves > 800 chars; candidate units are 200/100 windows of leaves over 200 compact chars, else the leaf",
+  "N": "word 13-grams over word_tokens and compact 30-grams kept iff int.from_bytes(blake2b(utf8, digest_size=8, person), 'big') % 4 == 0; only 8-byte hashes are stored",
+  "S": "audit_vitaminc_score rule against protected leaves <= 800 normalized chars: compact 6-gram sets, every 2nd sorted protected gram indexed, the 6 rarest candidate grams by (posting length, gram), postings <= 128, Jaccard >= 0.72 or containment >= 0.9",
+  "boilerplate": "a matched unit in >= 5 distinct candidate groups, or an N gram in >= 5 distinct protected rows; reported separately and never quarantining"
+ },
+ "mode": "across",
+ "pairs": 29173,
+ "params": {
+  "boilerplate_groups": 5,
+  "boilerplate_rows": 5,
+  "candidate_window": 200,
+  "candidate_window_stride": 100,
+  "char_ngram": 30,
+  "char_sample_mod": 4,
+  "containment": 0.9,
+  "gram": 6,
+  "index_every": 2,
+  "jaccard": 0.72,
+  "max_posting": 128,
+  "min_compact": 20,
+  "ngram_min_hits": 1,
+  "rare_grams": 6,
+  "short_max_chars": 800,
+  "window": 400,
+  "window_stride": 200,
+  "word_ngram": 13
+ },
+ "reference": {
+  "distinct_leaves_by_length": {
+   "gt_800": 3151,
+   "le_800": 42358
+  },
+  "groups": 24023,
+  "long_leaf_windows_scanned": 12782
+ },
+ "schema": "decision2.v2.overlap.self.public.v1"
+}

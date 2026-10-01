@@ -18,7 +18,9 @@
 #   node_a.sh <commit> hf-upload    private upload with the HF CLI, pinned revision, read-back check
 #
 # Round 2 (IB1_ROUND=2, amendment 2): `pass1` also drops the three constructions and the round-1 ids carried from
-# IB1_PREV (no G4 there); then
+# IB1_PREV (no G4 there). Round 3 (IB1_ROUND=3, amendment 3): the build makes `sentfin` two-option, `wands` and
+# `csqa` leave, two SummEdits domains are dropped, and the ids and review keys of rounds 1 (b2) and 2 (r2) are
+# carried. Both rounds then use
 #   node_a.sh <commit> rescan <n>   re-scan pass <n> (G0, overlap, quarantine, C1 names) into rescan<n>/
 #   node_a.sh <commit> pass <n>     finalize pass <n> (n >= 2) with every rescan<1..n-1> list; G4 on it
 #   node_a.sh <commit> rescan final<k> re-scan of the final files after the review drops (k = "" or 2, 3, ...);
@@ -58,10 +60,20 @@ PREV=$H/${IB1_PREV:-b2}
 SAMPLE_PASS=${IB1_SAMPLE_PASS:-2}
 CONS=()
 CARRY=()
+FAMOUT=()
+PREVM=(-v "$PREV:$PREV:ro")
+RKEYS=(--screen-key "$PREV/screen/sample/key.jsonl" --screen-key "$PREV/review/sample/key.jsonl")
 if [ "$ROUND" = 2 ]; then
   CONS=(--drop-construction sentfin-neutral --drop-construction sumedit-shakespeare
     --drop-construction wands-partial)
   CARRY=(--drop-ids "$PREV/drop-ids.txt" --drop-leak-ids "$PREV/leak/drop-ids.txt")
+elif [ "$ROUND" = 3 ]; then
+  PREV2=$H/r2
+  CONS=(--drop-construction sumedit-shakespeare --drop-construction sumedit-sales_email)
+  CARRY=(--drop-ids "$PREV/drop-ids.txt" --drop-ids "$PREV2/drop-ids.txt" --drop-leak-ids "$PREV/leak/drop-ids.txt")
+  FAMOUT=(wands csqa sumedit)
+  PREVM+=(-v "$PREV2:$PREV2:ro")
+  RKEYS+=(--screen-key "$PREV2/review/sample/key.jsonl" --screen-key "$PREV2/review-v1-unreviewed/sample/key.jsonl")
 fi
 
 [ -d "$CODE" ] || { echo "no mirror $MIRROR" >&2; exit 1; }
@@ -93,7 +105,8 @@ run() {
 build() {
   [ ! -e "$CAND" ] || { echo "$CAND exists" >&2; exit 1; }
   mkdir -m 700 "$CAND"
-  run build -v "$RAW:$RAW:ro" -v "$CAND:$CAND:rw" "$IMG" -m v2.data.ib1.build build --raw "$RAW" --out "$CAND"
+  run build -v "$RAW:$RAW:ro" -v "$CAND:$CAND:rw" "$IMG" -m v2.data.ib1.build build --raw "$RAW" --out "$CAND" \
+    --round "$ROUND"
 }
 
 scans() {
@@ -151,11 +164,11 @@ pass1() {
     --quarantining-manifest "$PI4/manifest.quarantining.json" --self-scan "$O/self.private.json" \
     --out-dir "$Q/lists"
   fresh pass1
-  run pass1 -v "$CAND:$CAND:ro" -v "$Q:$Q:ro" -v "$R/g0:$R/g0:ro" -v "$PREV:$PREV:ro" -v "$R/pass1:$R/pass1:rw" \
+  run pass1 -v "$CAND:$CAND:ro" -v "$Q:$Q:ro" -v "$R/g0:$R/g0:ro" "${PREVM[@]}" -v "$R/pass1:$R/pass1:rw" \
     "$IMG" -m v2.data.ib1.build finalize --cand "$CAND" --out "$R/pass1/out" \
     --drop-groups "$Q/lists/drop-groups.txt" --drop-groups "$R/g0/scan/drop-groups.txt" \
-    --drop-dev-groups "$Q/lists/drop-dev-groups.txt" "${CONS[@]}" "${CARRY[@]}"
-  [ "$ROUND" = 2 ] || shortcut pass1
+    --drop-dev-groups "$Q/lists/drop-dev-groups.txt" "${CONS[@]}" "${CARRY[@]}" --drop-families "${FAMOUT[@]}"
+  [ "$ROUND" -ge 2 ] || shortcut pass1
 }
 
 # shortcut <pass>: per-family G4 audits of that pass's TRAIN file; failing families go to shortcut/shortcut-fail.txt.
@@ -231,9 +244,10 @@ rescan() {
 passn() {
   local n=$1
   fresh "pass$n"
-  local -a drops mounts=(-v "$CAND:$CAND:ro" -v "$R:$R:ro" -v "$PREV:$PREV:ro" -v "$R/pass$n:$R/pass$n:rw")
+  local -a drops mounts=(-v "$CAND:$CAND:ro" -v "$R:$R:ro" "${PREVM[@]}" -v "$R/pass$n:$R/pass$n:rw")
   mapfile -t drops < <(pass_drops $((n - 1)))
-  run "pass$n" "${mounts[@]}" "$IMG" -m v2.data.ib1.build finalize --cand "$CAND" --out "$R/pass$n/out" "${drops[@]}"
+  run "pass$n" "${mounts[@]}" "$IMG" -m v2.data.ib1.build finalize --cand "$CAND" --out "$R/pass$n/out" "${drops[@]}" \
+    --drop-families "${FAMOUT[@]}"
   [ "$n" != "$SAMPLE_PASS" ] || shortcut "pass$n"
 }
 
@@ -264,11 +278,10 @@ screen_score() {
 
 review() {
   fresh review
-  if [ "$ROUND" = 2 ]; then
+  if [ "$ROUND" -ge 2 ]; then
     local P=$R/pass$SAMPLE_PASS
-    run sample -v "$P:$P:ro" -v "$R/shortcut:$R/shortcut:ro" -v "$PREV:$PREV:ro" -v "$R/review:$R/review:rw" \
-      "$IMG" -m v2.data.ib1.review sample --round 2 --train "$P/out/ib1.train.jsonl" \
-      --screen-key "$PREV/screen/sample/key.jsonl" --screen-key "$PREV/review/sample/key.jsonl" \
+    run sample -v "$P:$P:ro" -v "$R/shortcut:$R/shortcut:ro" "${PREVM[@]}" -v "$R/review:$R/review:rw" \
+      "$IMG" -m v2.data.ib1.review sample --round "$ROUND" --train "$P/out/ib1.train.jsonl" "${RKEYS[@]}" \
       --drop-families "$R/shortcut/shortcut-fail.txt" --out-dir "$R/review/sample"
   else
     run sample -v "$R/pass1:$R/pass1:ro" -v "$R/screen:$R/screen:ro" -v "$R/review:$R/review:rw" "$IMG" \
@@ -300,6 +313,7 @@ score() {
     --private "$V/answers/review.private.json"
   local carried=$R/screen/drop-ids.txt
   [ "$ROUND" != 2 ] || carried=$PREV/drop-ids.txt
+  [ "$ROUND" != 3 ] || carried=$PREV2/drop-ids.txt
   python3 - "$V/answers" "$carried" > "$R/drop-ids.txt" <<'EOF'
 import json, pathlib, sys
 answers, screen = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
@@ -313,15 +327,16 @@ final() {
   fresh final freeze
   local Q=$R/quarantine/lists F=$R/final/out Z=$R/freeze
   local -a drops=() leak=() lists=() extra=()
-  if [ "$ROUND" = 2 ]; then
+  if [ "$ROUND" -ge 2 ]; then
     mapfile -t drops < "$R/shortcut/shortcut-fail.txt"
+    drops+=("${FAMOUT[@]}")
     mapfile -t lists < <(pass_drops $((SAMPLE_PASS - 1)))
     local X
     for X in "$R"/rescanfinal*; do
       [ ! -e "$X/lists" ] || lists+=(--drop-groups "$X/lists/drop-groups.txt" --drop-groups "$X/g0/drop-groups.txt"
         --drop-dev-groups "$X/lists/drop-dev-groups.txt")
     done
-    extra=(-v "$PREV:$PREV:ro")
+    extra=("${PREVM[@]}")
   else
     mapfile -t drops < "$R/screen/families-out.txt"
     lists=(--drop-groups "$Q/drop-groups.txt" --drop-groups "$R/g0/scan/drop-groups.txt"

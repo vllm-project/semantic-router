@@ -1,0 +1,59 @@
+{
+  "schema": "dev2-c1-postkey-spec/1",
+  "name": "dev2-4b-m10lh",
+  "tier": "4B",
+  "role": "successor",
+  "label": "DEV2.0-4B",
+  "repo": "llm-semantic-router/DEV2.0-4B",
+  "revision": "manifest-sha256:7517d321a88f946020e53ae1369e5f2d2301adf564e7fc1b61f04bb7b53c2947",
+  "image": "kernel",
+  "adapter_spec": "v2/eval/sealed/adapters/dev2-dec-package-t1.json",
+  "model_path": "/data/dev2/runs/release/dev2-4b-lh-prerelease-20261001T071009Z/package/DEV2.0-4B",
+  "mounts": ["/data/dev2/hf-cache"],
+  "env": ["HIP_FORCE_DEV_KERNARG=1"],
+  "extra": {
+    "source": "/data/dev2/hf-cache/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259",
+    "model_id": "llm-semantic-router/DEV2.0-4B",
+    "max_length": "16384"
+  },
+  "limit": "16,384 tokens (package limit), no truncation",
+  "cache": {
+    "frozen": "/data/dev2/runs/dec/formal/m10/m10-4b-LH-cache-frozen",
+    "sha256": "569e86f58a4718b794b0e25983cea48f94db9097836e16057890b5fd27ef024b"
+  },
+  "smoke_items": 80,
+  "parity": {
+    "mode": "exact",
+    "stored": "/data/dev2/runs/release/dev2-4b-lh-t1-derived/output/typed-final.predictions.jsonl",
+    "tolerance": 0.0001
+  },
+  "identity": "6a555335e077fd26952fd58df06a7dcca1f5ef317194f2e3e4d7664d5c071cd7",
+  "package": {
+    "dir": "/data/dev2/runs/release/dev2-4b-lh-prerelease-20261001T071009Z/package/DEV2.0-4B",
+    "manifest_sha256": "7517d321a88f946020e53ae1369e5f2d2301adf564e7fc1b61f04bb7b53c2947",
+    "identity": "6a555335e077fd26952fd58df06a7dcca1f5ef317194f2e3e4d7664d5c071cd7"
+  },
+  "trees": [
+    {
+      "dir": "/data/dev2/hf-cache/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259",
+      "sha256": "b3e8aec1c3899fdd6918bb5c15a8fb6cb7be154d7ca47685276fd4bb43836420"
+    }
+  ],
+  "files": [
+    {
+      "path": "/data/dev2/runs/release/dev2-4b-lh-t1-derived/output/typed-final.predictions.jsonl",
+      "sha256": "c148d77a60c822f9e0b2fc97754d664d588ff1116686a0ffb1b376bd71aadcda"
+    },
+    {
+      "path": "/data/dev2/runs/release/dev2-4b-lh-t1-derived/output/public231.predictions.jsonl",
+      "sha256": "aebe679df3847372153941f4ef5d907b1604f160849030e6f751d6cf9b79bd87"
+    },
+    {
+      "path": "/data/dev2/runs/dec/formal/m10/m10-4b-LH/COLLECT.json",
+      "sha256": "f6e50377a07e7635e8e88bd9027c394ce52d4c5519aa6d7cb6c911814cc26b51"
+    }
+  ],
+  "stored_collect": "/data/dev2/runs/dec/formal/m10/m10-4b-LH/COLLECT.json",
+  "compare": [],
+  "notes": "Successor-rule item 8 for the DEV2.0-4B successor m10-4b-LH (decoder M10; user release job 2026-10-01; hand-off v2/dec/records/dec-m10-handoff-2026-10-01.md section 2), gated against the registered 4B baseline (DEV2.0-4B weights 452f1332, identity 11b5ca1c, C1 v1.2 48.38, event-3 run cand4b). Frozen package = the pre-release build of v2/release/specs/dev2-4b-m10lh.draft.json on node A (no upload; manifest 7517d321, 37 files, 4,208,383,488 loaded parameters, identity 6a555335 = the v2.release.bf16_copy of the decoder's frozen FP32 soup 5fa2a699, receipt 7d8f21f5). Formal runtime of the scored run m10-4b-LH (node F GPU3): v2.dec.infer_dec, 16,384 tokens, image dbe5f32b, HIP_FORCE_DEV_KERNARG=1 and a fresh copy of that run's persisted autotune cache (569e86f5, staged on node A by the decoder). T = 1 (COORDINATION 2026-10-01 13:40): the package ships no calibration file, so the adapter is dev2-dec-package-t1 and the parity reference is the T = 1 derivation of the sealed CAL698 run (dev2-4b-lh-t1-derived; 0 answer changes, byte-equal to the decoder's own derivation). The source path (Decision 1.0 Nox) is unused by full checkpoints. Training data = the released 4B mixture minus 3 quarantined HotpotQA rows (c385406e); no new source, so no custodian content recheck beyond the standard check. --model-revision is metadata only; the revision field names the pre-release package by its manifest, and the registry entry takes the released revision."
+}

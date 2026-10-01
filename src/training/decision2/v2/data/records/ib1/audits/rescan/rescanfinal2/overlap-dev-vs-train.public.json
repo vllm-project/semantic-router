@@ -1,8 +1,8 @@
 {
  "boilerplate": {
   "E_leaf": {
-   "groups": 1708,
-   "units": 24
+   "groups": 1714,
+   "units": 22
   },
   "E_state": {
    "groups": 0,
@@ -13,8 +13,8 @@
    "units": 0
   },
   "N_char": {
-   "groups": 1708,
-   "units": 242
+   "groups": 1714,
+   "units": 241
   },
   "N_word": {
    "groups": 876,
@@ -22,7 +22,7 @@
   },
   "S": {
    "groups": 321,
-   "units": 201
+   "units": 199
   }
  },
  "by_method": {
@@ -49,18 +49,18 @@
  },
  "candidate_files": [
   {
-   "rows": 2366,
-   "sha256": "eefab90932fb07fb6afaee0853fc3a98d1d05cf14e5478f319e3d09b29bc925d"
+   "rows": 2067,
+   "sha256": "3f56aa418e90e58f3fbaa50bf2f9f4f0405eeb9dd2f0c51ffca6f602711c693f"
   },
   {
-   "rows": 31923,
-   "sha256": "f44d7f5fe9ccaf63386fc213394282466f2c26c6a2da2945b32207adc8c62c5c"
+   "rows": 24325,
+   "sha256": "1e1b08f3d37f9051ffe2e4b99fd7be673f315d05cc74a27a8d350eae2bb706c5"
   }
  ],
  "candidate_groups_in_pairs": 0,
  "candidates": {
-  "groups": 1708,
-  "rows": 2366
+  "groups": 1714,
+  "rows": 2067
  },
  "methods": {
   "E": "normalized leaf equality (compact length >= 20) and equality of normalized canonical-JSON states (canonical-JSON strings decoded first)",
@@ -93,11 +93,11 @@
  },
  "reference": {
   "distinct_leaves_by_length": {
-   "gt_800": 5842,
-   "le_800": 33712
+   "gt_800": 2168,
+   "le_800": 29276
   },
-  "groups": 20755,
-  "long_leaf_windows_scanned": 29023
+  "groups": 20206,
+  "long_leaf_windows_scanned": 10257
  },
  "schema": "decision2.v2.overlap.self.public.v1"
 }
