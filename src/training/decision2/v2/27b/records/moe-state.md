@@ -96,6 +96,7 @@ Running full attempts have no receipt until they end: add (now − start) for ea
 
 ## Poll log (newest first)
 
+- 06:07Z: MOE-Git-s2 update 2,759; BEST now 2,676 (SELECT 0.8219 / 0.1212); ends ≈ 08:25Z. Both chains alive.
 - 05:45Z: MOE-Git-s2 update 2,642 (BEST 1,784); ends ≈ 08:25Z. Both chains alive.
 - 05:08Z: MOE-Git-s2 update 2,421 (BEST 1,784; SELECT at 2,230 .8201); ends ≈ 08:25Z. Both chains alive.
 - 04:40Z: MOE-Git-s2 update 2,250 (BEST still 1,784; ends ≈ 08:25Z). Both chains alive.
