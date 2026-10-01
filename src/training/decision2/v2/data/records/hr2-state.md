@@ -18,6 +18,11 @@ hf-upload.
 
 ## Log (newest first)
 
+- 2026-10-01 12:00 UTC+8 — **round-2 blind review FAILED** (288 rows; R1 / R2 four fresh subagents, R3 fresh on 3
+  splits): 13 / 288 = 4.51% [2.43, 7.60] (P1 pass), population-weighted 8.02% [3.83, 12.82] (P2 fail), `hs3_pref`
+  7 / 48 (P3 fail); `prm_step` 3, `eth_cs` 1, `eth_just` 1, `eth_util` 1, `eth_deon` 0. κ .986. No fix rule
+  (amendment 4): HR2-r2 is published flagged `release_safe: false`; the 13 round-2 errors leave TRAIN. Next: final,
+  final-audits, card, upload.
 - 2026-10-01 11:26 UTC+8 — **r2 recheck converged** (runner `fd3cd9e40`): iterations dropped 163 + 7 DEV, 41 + 1
   DEV, 7 + 0 groups; iteration 4 recheck 0 / 0. Pass TRAIN 16,107 / DEV 954; G1 PASS, C1 terms 0, G4 no failure,
   leak guard 0. (A duplicated ssh invocation of the iteration loop was found and its loop shell stopped; the running
