@@ -355,6 +355,84 @@ class ProbeTest(unittest.TestCase):
             self.assertEqual(result["gsm8k"]["delta"], 0.0)
 
 
+class CompareAndRulesTest(unittest.TestCase):
+    def test_compare_counts_decisions_and_drift(self):
+        mc = load("m10_compare")
+        with tempfile.TemporaryDirectory() as tmp:
+            a, b = Path(tmp) / "a.jsonl", Path(tmp) / "b.jsonl"
+            a.write_text(
+                json.dumps({"id": "i", "answers": {"q": {"type": "noul", "noul": 0.6}}})
+                + "\n"
+            )
+            b.write_text(
+                json.dumps({"id": "i", "answers": {"q": {"type": "noul", "noul": 0.4}}})
+                + "\n"
+            )
+            result = mc.compare(a, b)
+            self.assertEqual(result["decisions_differ"], 1)
+            self.assertAlmostEqual(result["max_probability_drift"], 0.2)
+
+    def test_retention_gate_and_pick(self):
+        mr = load("m10_rules")
+
+        def arm(t, rp):
+            return {
+                "T": t,
+                "H_mean": 0.5,
+                "proxy": 60.0,
+                "by_type": {"choice": {"n": 100, "correct": 50}},
+                "by_family": {
+                    "rule_precedence": {"n": 400, "correct": rp},
+                    "f": {"n": 10, "correct": 5},
+                },
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "diag").mkdir()
+            readout = root / "readout.json"
+            arms = {"C0": arm(0.7, 300), "X": arm(0.7, 300), "Y": arm(0.7, 300)}
+            readout.write_text(json.dumps({"arms": arms}))
+            for name in ("C0", "X", "Y"):
+                (root / "diag" / f"{name}.score5t.json").write_text(
+                    json.dumps({"check": {"flags": []}})
+                )
+            for name, verdict, delta, ci in (
+                ("X", "TIE", 0.03, [0.01, 0.05]),
+                ("Y", "GAIN", -0.05, [-0.08, -0.02]),
+            ):
+                (root / "diag" / f"{name}.htdev2.json").write_text(
+                    json.dumps({"delta": 0.0, "ci95": [0, 0], "verdict": verdict})
+                )
+                (root / "diag" / f"{name}.probes.json").write_text(
+                    json.dumps(
+                        {
+                            "macro_mmlu_arc_gsm8k": 0.5,
+                            "macro_delta": delta,
+                            "macro_delta_ci95": ci,
+                        }
+                    )
+                )
+            out = root / "sel.json"
+            mr.main(
+                [
+                    "--lines-root",
+                    str(root),
+                    "--readout",
+                    str(readout),
+                    "--point",
+                    "X=C0",
+                    "--point",
+                    "Y=C0",
+                    "--output",
+                    str(out),
+                ]
+            )
+            result = json.loads(out.read_text())
+            self.assertEqual(result["finalists"], ["X"])
+            self.assertIn("retention", result["points"][1]["reasons"][0])
+
+
 class TrainerArgsTest(unittest.TestCase):
     def test_label_token_rejects_head_init_seed(self):
         cmd = [

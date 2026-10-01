@@ -354,8 +354,26 @@ def score(args: argparse.Namespace) -> None:
                 draws[int(0.975 * args.draws) - 1],
             ]
         out[name] = entry
-    macro = [out[p]["accuracy"] for p in ("mmlu", "arc", "gsm8k") if p in out]
-    out["macro_mmlu_arc_gsm8k"] = sum(macro) / len(macro) if macro else math.nan
+    parts = [p for p in ("mmlu", "arc", "gsm8k") if p in out]
+    out["macro_mmlu_arc_gsm8k"] = (
+        sum(out[p]["accuracy"] for p in parts) / len(parts) if parts else math.nan
+    )
+    if right is not None and parts:
+        # Each probe resampled within itself; the macro is the mean of the probe deltas.
+        diffs = {p: [left[i] - right[i] for i in groups[p]] for p in parts}
+        draws = sorted(
+            sum(
+                sum(d[rng.randrange(len(d))] for _ in range(len(d))) / len(d)
+                for d in diffs.values()
+            )
+            / len(parts)
+            for _ in range(args.draws)
+        )
+        out["macro_delta"] = sum(out[p]["delta"] for p in parts) / len(parts)
+        out["macro_delta_ci95"] = [
+            draws[int(0.025 * args.draws)],
+            draws[int(0.975 * args.draws) - 1],
+        ]
     Path(args.output).write_text(json.dumps(out, indent=2) + "\n")
     print(json.dumps(out))
 
