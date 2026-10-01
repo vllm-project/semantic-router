@@ -1,9 +1,10 @@
 # 9B M9 state (resume file)
 
 **Continuation worker cba71646 (from 14:37Z; rules → lock / GO → formal → items → C1 → release → private Index).**
-Poll 15:10Z: K-a13IBX at 1,743 / 1,762 / 1,682 of ≈ 1,990 (ETA ≈ 15:32Z); every chain PID alive (node C
-`chain-c{2,1,4}-s3`, `post-c-KIBX`; node A `post-a-KIBX`, `formal-s3`); no `select/9b-finalists-s3.json` yet (ETA
-≈ 16:15Z). Integration merged (`a9df14980`, signed off). New: `lux9b/m9/items.py` (`f1bb2a50f`; items 1–7 from
+Poll 15:37Z: **K-a13IBX seeds DONE** (s2 15:26Z, s1 15:28Z, s3 15:32Z; BEST = checkpoints 1,999 / 1,489 / 1,745)
+and the node-C soup `soup/KIBX/build/KIBX-soup` built 15:34Z (`model_sha256` `cc25e396…`); node C GPU1–4 / 6–7 idle
+(9B leases, status idle). Node A `post-a-KIBX` pulls it, builds K-a13IBX and reads the panels on GPU7, then runs the
+shared readout / contrasts / rules (ETA ≈ 16:10Z); `formal-s3` alive and waiting. Integration merged (`a9df14980`, signed off). New: `lux9b/m9/items.py` (`f1bb2a50f`; items 1–7 from
 `successor.json`, the exposure receipts and a line-level TRAIN ⊂ x60 ∪ IB1-r3 ∪ IB2 check), committed before any
 formal run. **Item 6 subset checks done (node C, mirror `f1bb2a50f`):** `exposure/kib-subset.json` (`1dfb1843…`):
 151,015 of 151,015 K-a13IB TRAIN rows (`2cd09292…`) occur in x60 (`a66131b1…`, the released K file) ∪ IB1-r3 TRAIN
