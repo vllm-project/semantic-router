@@ -5,6 +5,9 @@
 # Usage (on a node, from an exact mirror):
 #   run_parity1.sh <Repo-Name> <head-sha> <cpu|gpuN> <work-dir> [--threads N] [--fla-profile DIR]
 #                  [--python INTERPRETER] [--panel NAME:PROMPTS:PREDICTIONS[:N]]...
+#                  [--reference-out DIR --kai-code DIR]
+# With --reference-out, the native Kai runtime (reference_kai_native1.py) writes
+# reference predictions for the repository into DIR instead of running parity.
 # The GPU path takes /data/dev2/leases/gpuN.lock/owner only if it is free,
 # passes just that GPU's render node plus /dev/kfd (ROCR_VISIBLE_DEVICES=0)
 # and releases the lease on exit.
@@ -14,12 +17,16 @@ repo="$1"; head="$2"; target="$3"; work="$4"; shift 4
 threads=32
 profile=""
 python=python3
+reference=""
+kai_code=""
 panels=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --threads) threads="$2"; shift 2 ;;
     --fla-profile) profile="$2"; shift 2 ;;
     --python) python="$2"; shift 2 ;;
+    --reference-out) reference="$2"; shift 2 ;;
+    --kai-code) kai_code="$2"; shift 2 ;;
     --panel) panels+=("$2"); shift 2 ;;
     *) echo "unknown argument $1" >&2; exit 2 ;;
   esac
@@ -63,6 +70,17 @@ if [[ -n "$profile" ]]; then
   docker_args+=(-v "$profile:/fla-profile:ro" -e FLA_CACHE_MODE=strict -e FLA_CONFIG_DIR=/fla-profile)
 fi
 panel_args=()
+if [[ -n "$reference" ]]; then
+  for panel in "${panels[@]}"; do
+    IFS=: read -r name prompts _ <<< "$panel"
+    panel_args+=(--panel "$name:$prompts")
+  done
+  docker_args+=(-v "$kai_code:$kai_code:ro" -v "$(dirname "$reference"):$(dirname "$reference")")
+  docker run "${docker_args[@]}" "$image" "$python" -B "$here/reference_kai_native1.py" \
+    --kai-code "$kai_code" --weights "$work/staged" --model-name "$repo" --work "$work/reference" \
+    --device "$device" --output-dir "$reference" "${panel_args[@]}" 2>&1 | tail -n 40
+  exit
+fi
 for panel in "${panels[@]}"; do panel_args+=(--panel "$panel"); done
 docker run "${docker_args[@]}" "$image" "$python" -B "$here/parity1.py" \
   --model "$work/staged" --device "$device" --threads "$threads" \
