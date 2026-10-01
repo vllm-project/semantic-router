@@ -205,6 +205,19 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 23:15 — **0.8B fast-track (1afc17e8): `08b-RA` FAILED formal (items 1, 4, 6(b)); DEV2.0-0.8B stays
+  `4afea305`.** Records merged at `1ecff4497`; gist 04; 0.21 GPU-h.
+  - **Item 1:** v3 53.10 vs 50.236, +2.87 [−2.87, +4.58]; vs the node-E re-collection of the release (50.263),
+    +2.84 [−2.92, +4.49].
+  - **Item 4:** mlx-diag Choice + Noul −.0136 [−.0256, −.0024].
+  - **Item 6(b)** fails; items 2 (human transfer +.073 [−.031, +.098]), 3, 5 (vs Eos +10.56), 6(a) and 7 (public 231
+    166 vs 156) pass.
+  - **The development family miss (`attribute_gate`) appeared formally as a typed-choice loss** (483 vs 529 correct)
+    and a multilingual drop. **Lesson: the development family floors are predictive. No further near-miss
+    exceptions.**
+  - A private Index diagnostic of `08b-RA` (not releasable) is running, to size the breadth effect at 0.8B and guide
+    the M13 / M14 choice-head arms.
+
 - 2026-10-01 22:45 — **9B M9: stage 2 no finalist; stage 3 K-a13IB previews as passing every development gate; a
   continuation follows the official rules → GO → formal → release.**
   - **Stage 2.** L9IB / L9IBX learn the IB families but fail HT-DEV v2 (−.021 / −.022 FLAG) and the yes-bias guards.
