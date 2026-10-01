@@ -9,35 +9,42 @@
 # re-hashed against data/READY.json before each seed), N4XF's batching, seeds 20260926 / 27 / 28.
 # Stop rules: a failed preflight stops the arm (no rerun, no replacement seed); a seed stops at its arm cap; no NT
 # seed starts unless LT's three seeds passed their preflights and the node's M10 GPU-hours are below the NT gate.
+# Wave w2 (amendment 1): LT's seed-1 zero-step failed on 9 TRAIN rows longer than 8,192 tokens under the label-token
+# prompt, so node E GPU0-2 run "LT2:i NT2:i", the same arms with --max-length 8448 (the only change).
 # Markers: /data/dev2/runs/dec/m10/status/m10-<ARM>-s<i>.{DONE,FAILED,STOPPED}.
-# usage: M10_NODE=e|f m10-chains.sh launch <mirror-dir> <gpu>
-#        M10_NODE=e|f m10-chains.sh run <mirror-dir> <gpu>     (the chain body, started by launch under flock)
+# usage: M10_NODE=e|f m10-chains.sh launch <mirror-dir> <gpu> [w1|w2]
+#        M10_NODE=e|f m10-chains.sh run <mirror-dir> <gpu> [w1|w2]   (the chain body, started by launch under flock)
 set -u
-MODE=$1 SRC=$2 GPU=$3
+MODE=$1 SRC=$2 GPU=$3 WAVE=${4:-w1}
 NODE=${M10_NODE:?set M10_NODE=e or f}
 M=/data/dev2/runs/dec/m10
 C=$M/chains ST=$M/status
 OPS=/data/dev2/src/$SRC/src/training/decision2/v2/dec/ops/m10
 mkdir -p "$C" "$ST" "$M/logs"
-case $NODE:$GPU in
-  e:0) ITEMS="LT:1 NT:1" ;;
-  e:1) ITEMS="LT:2 NT:2" ;;
-  e:2) ITEMS="LT:3 NT:3" ;;
-  f:2) ITEMS="LH:1" ;;
-  f:3) ITEMS="LH:2" ;;
-  f:4) ITEMS="LH:3" ;;
-  f:5) ITEMS="FB:1" ;;
-  f:6) ITEMS="FB:2" ;;
-  f:7) ITEMS="FB:3" ;;
-  *) echo "no M10 chain for node $NODE GPU$GPU" >&2; exit 2 ;;
+case $WAVE:$NODE:$GPU in
+  w1:e:0) ITEMS="LT:1 NT:1" ;;
+  w1:e:1) ITEMS="LT:2 NT:2" ;;
+  w1:e:2) ITEMS="LT:3 NT:3" ;;
+  w1:f:2) ITEMS="LH:1" ;;
+  w1:f:3) ITEMS="LH:2" ;;
+  w1:f:4) ITEMS="LH:3" ;;
+  w1:f:5) ITEMS="FB:1" ;;
+  w1:f:6) ITEMS="FB:2" ;;
+  w1:f:7) ITEMS="FB:3" ;;
+  w2:e:0) ITEMS="LT2:1 NT2:1" ;;
+  w2:e:1) ITEMS="LT2:2 NT2:2" ;;
+  w2:e:2) ITEMS="LT2:3 NT2:3" ;;
+  *) echo "no M10 chain $WAVE for node $NODE GPU$GPU" >&2; exit 2 ;;
 esac
+TAG=$NODE$GPU
+[ "$WAVE" = w1 ] || TAG=$NODE$GPU-$WAVE
 
 if [ "$MODE" = launch ]; then
-  mkdir "$C/launch-$NODE$GPU.lock" 2> /dev/null || { echo "M10 chain $NODE$GPU already launched"; exit 0; }
-  M10_NODE=$NODE setsid nohup flock "$C/gpu$GPU.flock" bash "$0" run "$SRC" "$GPU" \
-    > "$M/logs/chain-$NODE$GPU.log" 2>&1 < /dev/null &
-  echo $! > "$C/chain-$NODE$GPU.pid"
-  echo "$(date -u +%FT%TZ) M10 chain $NODE$GPU launched from $SRC (pid $(cat "$C/chain-$NODE$GPU.pid"))" \
+  mkdir "$C/launch-$TAG.lock" 2> /dev/null || { echo "M10 chain $TAG already launched"; exit 0; }
+  M10_NODE=$NODE setsid nohup flock "$C/gpu$GPU.flock" bash "$0" run "$SRC" "$GPU" "$WAVE" \
+    > "$M/logs/chain-$TAG.log" 2>&1 < /dev/null &
+  echo $! > "$C/chain-$TAG.pid"
+  echo "$(date -u +%FT%TZ) M10 chain $TAG launched from $SRC (pid $(cat "$C/chain-$TAG.pid"))" \
     | tee -a "$M/OPERATIONS.log"
   exit 0
 fi
@@ -84,6 +91,8 @@ args_for() {  # <ARM>: start path, then the arm's trainer arguments
     LT) echo "$BASE --init base --revision $BASE_REV ${LORA[*]} --readout label_token" ;;
     FB) echo "$BASE --init base --revision $BASE_REV --train-mode full --backbone-lr 2.5e-6 --head-lr 1e-4 --head-init-seed $HEAD_INIT_SEED" ;;
     NT) echo "$NOX --init decision1 --train-mode full --backbone-lr 5e-6 --readout label_token" ;;
+    LT2) echo "$(args_for LT) --max-length 8448" ;;
+    NT2) echo "$(args_for NT) --max-length 8448" ;;
   esac
 }
 terminal() { [ -f "$ST/m10-$1-s$2.DONE" ] || [ -f "$ST/m10-$1-s$2.FAILED" ] || [ -f "$ST/m10-$1-s$2.STOPPED" ]; }
@@ -102,11 +111,12 @@ item() {  # <ARM> <seed index>
     log "$r not started: arm $g stopped by a failed preflight"
     return 0
   fi
-  if [ "$g" = NT ]; then
+  if [ "$g" = NT ] || [ "$g" = NT2 ]; then
+    local lt=LT${g#NT}
     for s in 1 2 3; do
-      if ! grep -qs "^[^ ]* m10-LT-s$s preflight PASS" "$M/arms/OPERATIONS.log"; then
-        echo "not started: LT-s$s did not pass its preflight (NT is the optional second wave)" > "$ST/$r.STOPPED"
-        log "$r not started: LT-s$s preflight not PASS"
+      if ! grep -qs "^[^ ]* m10-$lt-s$s preflight PASS" "$M/arms/OPERATIONS.log"; then
+        echo "not started: $lt-s$s did not pass its preflight (NT is the optional second wave)" > "$ST/$r.STOPPED"
+        log "$r not started: $lt-s$s preflight not PASS"
         return 0
       fi
     done
