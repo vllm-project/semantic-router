@@ -90,7 +90,7 @@ def collect_logits(
 ) -> list[dict[str, Any]]:
     import torch
 
-    from .decision_model import DecisionModel, collate, encode
+    from .decision_model import DecisionModel, collate, encoder_for
 
     if max_length < 1 or batch_size < 1:
         raise ValueError("max_length and batch_size must be positive")
@@ -110,6 +110,7 @@ def collect_logits(
     )
     if pad_id is None:
         raise ValueError("Tokenizer needs a pad or EOS token")
+    encode = encoder_for(model.metadata)
     encoded = [encode(row, tokenizer, max_length) for row in cal_rows]
     records = []
     with torch.inference_mode():

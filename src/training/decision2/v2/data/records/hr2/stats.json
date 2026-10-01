@@ -1,0 +1,543 @@
+{
+ "balance_failures": [],
+ "dev": {
+  "balance": {
+   "allegro": {
+    "labels": {
+     "0": 50,
+     "1": 50,
+     "2": 50,
+     "3": 50,
+     "4": 50
+    },
+    "pass": true,
+    "rows": 250,
+    "top_level_share": 0.2
+   },
+   "eth_cs": {
+    "labels": {
+     "0": 47,
+     "1": 47
+    },
+    "mean_state_chars": {
+     "0": 60.5,
+     "1": 65.1
+    },
+    "pass": true,
+    "rows": 94
+   },
+   "eth_deon": {
+    "labels": {
+     "0": 50,
+     "1": 50
+    },
+    "mean_state_chars": {
+     "0": 86.0,
+     "1": 91.9
+    },
+    "pass": true,
+    "rows": 100
+   },
+   "eth_just": {
+    "labels": {
+     "0": 53,
+     "1": 53
+    },
+    "mean_state_chars": {
+     "0": 99.9,
+     "1": 98.4
+    },
+    "pass": true,
+    "rows": 106
+   },
+   "eth_util": {
+    "gold_a_share": 0.4661,
+    "gold_longer_share": 0.4749,
+    "labels": {
+     "0": 165,
+     "1": 189
+    },
+    "pass": true,
+    "rows": 354
+   },
+   "hs3_help": {
+    "labels": {
+     "0": 32,
+     "1": 21,
+     "2": 23,
+     "3": 25,
+     "4": 25
+    },
+    "pass": true,
+    "rows": 126,
+    "top_level_share": 0.254
+   },
+   "hs3_pref": {
+    "gold_a_share": 0.5247,
+    "gold_longer_share": 0.5019,
+    "labels": {
+     "0": 138,
+     "1": 125
+    },
+    "pass": true,
+    "rows": 263
+   },
+   "prm_step": {
+    "bucket_labels": {
+     "0-0": [
+      9,
+      9
+     ],
+     "1-1": [
+      5,
+      5
+     ],
+     "2-2": [
+      2,
+      2
+     ],
+     "3-4": [
+      6,
+      6
+     ],
+     "5-7": [
+      6,
+      6
+     ],
+     "8+": [
+      2,
+      2
+     ]
+    },
+    "labels": {
+     "0": 30,
+     "1": 30
+    },
+    "mean_state_chars": {
+     "0": 552.1,
+     "1": 605.2
+    },
+    "mean_step_index": {
+     "0": 2.7,
+     "1": 2.967
+    },
+    "pass": true,
+    "rows": 60
+   },
+   "vitc": {
+    "labels": {
+     "0": 131,
+     "1": 131
+    },
+    "mean_state_chars": {
+     "0": 236.8,
+     "1": 235.1
+    },
+    "pass": true,
+    "rows": 262
+   }
+  },
+  "sizes": {
+   "by_family": {
+    "allegro": {
+     "groups": 250,
+     "languages": {
+      "pl": 250
+     },
+     "native_tokens": 77985,
+     "rows": 250
+    },
+    "eth_cs": {
+     "groups": 92,
+     "languages": {
+      "en": 94
+     },
+     "native_tokens": 10202,
+     "rows": 94
+    },
+    "eth_deon": {
+     "groups": 88,
+     "languages": {
+      "en": 100
+     },
+     "native_tokens": 12481,
+     "rows": 100
+    },
+    "eth_just": {
+     "groups": 98,
+     "languages": {
+      "en": 106
+     },
+     "native_tokens": 10879,
+     "rows": 106
+    },
+    "eth_util": {
+     "groups": 326,
+     "languages": {
+      "en": 354
+     },
+     "native_tokens": 43116,
+     "rows": 354
+    },
+    "hs3_help": {
+     "groups": 125,
+     "languages": {
+      "de": 2,
+      "en": 71,
+      "es": 4,
+      "fr": 5,
+      "id": 3,
+      "it": 5,
+      "ko": 8,
+      "nl": 1,
+      "pl": 2,
+      "pt": 5,
+      "ru": 5,
+      "vi": 1,
+      "zh": 14
+     },
+     "native_tokens": 95813,
+     "rows": 126
+    },
+    "hs3_pref": {
+     "groups": 251,
+     "languages": {
+      "de": 7,
+      "en": 118,
+      "es": 7,
+      "fr": 6,
+      "id": 4,
+      "it": 6,
+      "ja": 7,
+      "ko": 23,
+      "nl": 4,
+      "pl": 4,
+      "pt": 6,
+      "ru": 10,
+      "vi": 3,
+      "zh": 58
+     },
+     "native_tokens": 255458,
+     "rows": 263
+    },
+    "prm_step": {
+     "groups": 58,
+     "languages": {
+      "en": 60
+     },
+     "native_tokens": 17970,
+     "rows": 60
+    },
+    "vitc": {
+     "groups": 104,
+     "languages": {
+      "en": 262
+     },
+     "native_tokens": 37413,
+     "rows": 262
+    }
+   },
+   "groups": 1322,
+   "language": {
+    "de": 9,
+    "en": 1165,
+    "es": 11,
+    "fr": 11,
+    "id": 7,
+    "it": 11,
+    "ja": 7,
+    "ko": 31,
+    "nl": 5,
+    "pl": 256,
+    "pt": 11,
+    "ru": 15,
+    "vi": 4,
+    "zh": 72
+   },
+   "native_tokens": 561317,
+   "rows": 1615,
+   "task_type": {
+    "choice": 617,
+    "noul": 622,
+    "score": 376
+   },
+   "tokens_missing": 0
+  }
+ },
+ "inputs": {
+  "dev": "697c31428ae821d7c0238a64ced8b997cc5671be47307f88a273d082bc5aaebe",
+  "tokens": [
+   "4233551999db260a295ff8404d1e7ae9e04d81f9bc71aa363e38168ba6ecc029",
+   "e1e9675c20989a5d492ba5e983e256d9a4dc2df0b53fa84db8b8ff3281cfc39a"
+  ],
+  "train": "0fd9b2dbe68f863dc8acd13b3466b7e9aaf32d2308bc740f012e5c9717502f3a"
+ },
+ "schema": "decision2.hr2.stats.v1",
+ "shared_groups": 0,
+ "train": {
+  "balance": {
+   "allegro": {
+    "labels": {
+     "0": 625,
+     "1": 625,
+     "2": 625,
+     "3": 625,
+     "4": 625
+    },
+    "pass": true,
+    "rows": 3125,
+    "top_level_share": 0.2
+   },
+   "eth_cs": {
+    "labels": {
+     "0": 542,
+     "1": 542
+    },
+    "mean_state_chars": {
+     "0": 57.4,
+     "1": 59.8
+    },
+    "pass": true,
+    "rows": 1084
+   },
+   "eth_deon": {
+    "labels": {
+     "0": 547,
+     "1": 547
+    },
+    "mean_state_chars": {
+     "0": 88.6,
+     "1": 89.4
+    },
+    "pass": true,
+    "rows": 1094
+   },
+   "eth_just": {
+    "labels": {
+     "0": 540,
+     "1": 540
+    },
+    "mean_state_chars": {
+     "0": 98.4,
+     "1": 105.4
+    },
+    "pass": true,
+    "rows": 1080
+   },
+   "eth_util": {
+    "gold_a_share": 0.4965,
+    "gold_longer_share": 0.5052,
+    "labels": {
+     "0": 1543,
+     "1": 1565
+    },
+    "pass": true,
+    "rows": 3108
+   },
+   "hs3_help": {
+    "labels": {
+     "0": 808,
+     "1": 811,
+     "2": 789,
+     "3": 800,
+     "4": 811
+    },
+    "pass": true,
+    "rows": 4019,
+    "top_level_share": 0.2018
+   },
+   "hs3_pref": {
+    "gold_a_share": 0.5058,
+    "gold_longer_share": 0.498,
+    "labels": {
+     "0": 3591,
+     "1": 3508
+    },
+    "pass": true,
+    "rows": 7099
+   },
+   "prm_step": {
+    "bucket_labels": {
+     "0-0": [
+      149,
+      149
+     ],
+     "1-1": [
+      195,
+      195
+     ],
+     "2-2": [
+      238,
+      238
+     ],
+     "3-4": [
+      417,
+      417
+     ],
+     "5-7": [
+      404,
+      404
+     ],
+     "8+": [
+      378,
+      378
+     ]
+    },
+    "labels": {
+     "0": 1781,
+     "1": 1781
+    },
+    "mean_state_chars": {
+     "0": 826.4,
+     "1": 773.9
+    },
+    "mean_step_index": {
+     "0": 4.954,
+     "1": 4.715
+    },
+    "pass": true,
+    "rows": 3562
+   },
+   "vitc": {
+    "labels": {
+     "0": 1763,
+     "1": 1763
+    },
+    "mean_state_chars": {
+     "0": 222.7,
+     "1": 222.4
+    },
+    "pass": true,
+    "rows": 3526
+   }
+  },
+  "sizes": {
+   "by_family": {
+    "allegro": {
+     "groups": 3120,
+     "languages": {
+      "pl": 3125
+     },
+     "native_tokens": 955696,
+     "rows": 3125
+    },
+    "eth_cs": {
+     "groups": 1038,
+     "languages": {
+      "en": 1084
+     },
+     "native_tokens": 116425,
+     "rows": 1084
+    },
+    "eth_deon": {
+     "groups": 981,
+     "languages": {
+      "en": 1094
+     },
+     "native_tokens": 136878,
+     "rows": 1094
+    },
+    "eth_just": {
+     "groups": 1013,
+     "languages": {
+      "en": 1080
+     },
+     "native_tokens": 111417,
+     "rows": 1080
+    },
+    "eth_util": {
+     "groups": 2808,
+     "languages": {
+      "en": 3108
+     },
+     "native_tokens": 379957,
+     "rows": 3108
+    },
+    "hs3_help": {
+     "groups": 3895,
+     "languages": {
+      "de": 37,
+      "en": 3188,
+      "es": 59,
+      "fr": 70,
+      "id": 13,
+      "it": 45,
+      "ja": 61,
+      "ko": 97,
+      "nl": 18,
+      "pl": 22,
+      "pt": 37,
+      "ru": 37,
+      "vi": 18,
+      "zh": 317
+     },
+     "native_tokens": 4084282,
+     "rows": 4019
+    },
+    "hs3_pref": {
+     "groups": 6770,
+     "languages": {
+      "de": 70,
+      "en": 5524,
+      "es": 99,
+      "fr": 107,
+      "id": 31,
+      "it": 93,
+      "ja": 131,
+      "ko": 221,
+      "nl": 38,
+      "pl": 35,
+      "pt": 72,
+      "ru": 74,
+      "vi": 42,
+      "zh": 562
+     },
+     "native_tokens": 9114280,
+     "rows": 7099
+    },
+    "prm_step": {
+     "groups": 3230,
+     "languages": {
+      "en": 3562
+     },
+     "native_tokens": 1364087,
+     "rows": 3562
+    },
+    "vitc": {
+     "groups": 1348,
+     "languages": {
+      "en": 3526
+     },
+     "native_tokens": 491946,
+     "rows": 3526
+    }
+   },
+   "groups": 22336,
+   "language": {
+    "de": 107,
+    "en": 22166,
+    "es": 158,
+    "fr": 177,
+    "id": 44,
+    "it": 138,
+    "ja": 192,
+    "ko": 318,
+    "nl": 56,
+    "pl": 3182,
+    "pt": 109,
+    "ru": 111,
+    "vi": 60,
+    "zh": 879
+   },
+   "native_tokens": 16754968,
+   "rows": 27697,
+   "task_type": {
+    "choice": 10207,
+    "noul": 10346,
+    "score": 7144
+   },
+   "tokens_missing": 0
+  }
+ },
+ "verdict": "PASS"
+}

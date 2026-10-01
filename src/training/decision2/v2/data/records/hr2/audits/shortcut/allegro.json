@@ -1,0 +1,402 @@
+{
+ "folds": {
+  "groups": [
+   642,
+   610,
+   600,
+   635,
+   633
+  ],
+  "rows": [
+   642,
+   611,
+   601,
+   637,
+   634
+  ],
+  "rule": "int(sha256(group_id).hexdigest(), 16) % 5"
+ },
+ "gate": {
+  "margin": 0.05,
+  "min_rows": 30,
+  "rule": "PASS iff accuracy <= majority + margin; majority is the cross-validated position prior on the same rows",
+  "views": [
+   "state_removed",
+   "option_only",
+   "hypothesis_only"
+  ]
+ },
+ "gates": [
+  {
+   "accuracy": 0.19488,
+   "delta": 0.00992,
+   "families_over_margin": [],
+   "majority": 0.18496,
+   "n": 3125,
+   "pass": true,
+   "task_type": "score",
+   "threshold": 0.23496,
+   "view": "state_removed",
+   "wilson95": [
+    0.18137,
+    0.209139
+   ]
+  },
+  {
+   "accuracy": 0.19904,
+   "delta": 0.01408,
+   "families_over_margin": [],
+   "majority": 0.18496,
+   "n": 3125,
+   "pass": true,
+   "task_type": "score",
+   "threshold": 0.23496,
+   "view": "option_only",
+   "wilson95": [
+    0.185414,
+    0.213405
+   ]
+  }
+ ],
+ "groups": 3120,
+ "heuristics": {
+  "lexical_overlap": {
+   "n_rows": 0
+  },
+  "longest_option": {
+   "by_family": {
+    "allegro": {
+     "accuracy": 0.2,
+     "correct": 625,
+     "delta": 0.01504,
+     "exceeds_margin": false,
+     "majority": 0.18496,
+     "n": 3125,
+     "wilson95": [
+      0.186348,
+      0.214389
+     ]
+    }
+   },
+   "by_source": {
+    "allegro_reviews_train": {
+     "accuracy": 0.2,
+     "correct": 625,
+     "delta": 0.01504,
+     "exceeds_margin": false,
+     "majority": 0.18496,
+     "n": 3125,
+     "wilson95": [
+      0.186348,
+      0.214389
+     ]
+    }
+   },
+   "by_task_family": {
+    "score": {
+     "allegro": {
+      "accuracy": 0.2,
+      "correct": 625,
+      "delta": 0.01504,
+      "exceeds_margin": false,
+      "majority": 0.18496,
+      "n": 3125,
+      "wilson95": [
+       0.186348,
+       0.214389
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "score": {
+     "accuracy": 0.2,
+     "correct": 625,
+     "delta": 0.01504,
+     "exceeds_margin": false,
+     "majority": 0.18496,
+     "n": 3125,
+     "wilson95": [
+      0.186348,
+      0.214389
+     ]
+    }
+   },
+   "n_rows": 3125
+  },
+  "position_prior": {
+   "by_family": {
+    "allegro": {
+     "accuracy": 0.18496,
+     "correct": 578,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.18496,
+     "n": 3125,
+     "wilson95": [
+      0.171737,
+      0.198957
+     ]
+    }
+   },
+   "by_source": {
+    "allegro_reviews_train": {
+     "accuracy": 0.18496,
+     "correct": 578,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.18496,
+     "n": 3125,
+     "wilson95": [
+      0.171737,
+      0.198957
+     ]
+    }
+   },
+   "by_task_family": {
+    "score": {
+     "allegro": {
+      "accuracy": 0.18496,
+      "correct": 578,
+      "delta": 0.0,
+      "exceeds_margin": false,
+      "majority": 0.18496,
+      "n": 3125,
+      "wilson95": [
+       0.171737,
+       0.198957
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "score": {
+     "accuracy": 0.18496,
+     "correct": 578,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.18496,
+     "n": 3125,
+     "wilson95": [
+      0.171737,
+      0.198957
+     ]
+    }
+   },
+   "n_rows": 3125
+  }
+ },
+ "input": {
+  "rows": 3125,
+  "sha256": "f8a82dd4ec400047844c774850079b30755aa2ded323e8b0ff5688657cc106de"
+ },
+ "learner": {
+  "bits": 20,
+  "epochs": 4,
+  "instruction_cross_cap": 64,
+  "l2": 1e-06,
+  "learning_rate": 0.1,
+  "seed": 0,
+  "state_cross_cap": 128,
+  "state_cross_unigrams": 64,
+  "state_gram_cap": 128,
+  "text_gram_cap": 1024
+ },
+ "majority": {
+  "score": {
+   "accuracy": 0.18496,
+   "n": 3125
+  }
+ },
+ "rows": 3125,
+ "schema": "decision2.v2.shortcut.v1",
+ "verdict": "PASS",
+ "views": {
+  "full_input": {
+   "by_family": {
+    "allegro": {
+     "accuracy": 0.43072,
+     "correct": 1346,
+     "delta": 0.24576,
+     "exceeds_margin": true,
+     "majority": 0.18496,
+     "n": 3125,
+     "wilson95": [
+      0.413454,
+      0.448156
+     ]
+    }
+   },
+   "by_source": {
+    "allegro_reviews_train": {
+     "accuracy": 0.43072,
+     "correct": 1346,
+     "delta": 0.24576,
+     "exceeds_margin": true,
+     "majority": 0.18496,
+     "n": 3125,
+     "wilson95": [
+      0.413454,
+      0.448156
+     ]
+    }
+   },
+   "by_task_family": {
+    "score": {
+     "allegro": {
+      "accuracy": 0.43072,
+      "correct": 1346,
+      "delta": 0.24576,
+      "exceeds_margin": true,
+      "majority": 0.18496,
+      "n": 3125,
+      "wilson95": [
+       0.413454,
+       0.448156
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "score": {
+     "accuracy": 0.43072,
+     "correct": 1346,
+     "delta": 0.24576,
+     "exceeds_margin": true,
+     "majority": 0.18496,
+     "n": 3125,
+     "wilson95": [
+      0.413454,
+      0.448156
+     ]
+    }
+   },
+   "n_rows": 3125
+  },
+  "hypothesis_only": {
+   "n_rows": 0
+  },
+  "option_only": {
+   "by_family": {
+    "allegro": {
+     "accuracy": 0.19904,
+     "correct": 622,
+     "delta": 0.01408,
+     "exceeds_margin": false,
+     "majority": 0.18496,
+     "n": 3125,
+     "wilson95": [
+      0.185414,
+      0.213405
+     ]
+    }
+   },
+   "by_source": {
+    "allegro_reviews_train": {
+     "accuracy": 0.19904,
+     "correct": 622,
+     "delta": 0.01408,
+     "exceeds_margin": false,
+     "majority": 0.18496,
+     "n": 3125,
+     "wilson95": [
+      0.185414,
+      0.213405
+     ]
+    }
+   },
+   "by_task_family": {
+    "score": {
+     "allegro": {
+      "accuracy": 0.19904,
+      "correct": 622,
+      "delta": 0.01408,
+      "exceeds_margin": false,
+      "majority": 0.18496,
+      "n": 3125,
+      "wilson95": [
+       0.185414,
+       0.213405
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "score": {
+     "accuracy": 0.19904,
+     "correct": 622,
+     "delta": 0.01408,
+     "exceeds_margin": false,
+     "majority": 0.18496,
+     "n": 3125,
+     "wilson95": [
+      0.185414,
+      0.213405
+     ]
+    }
+   },
+   "n_rows": 3125
+  },
+  "state_removed": {
+   "by_family": {
+    "allegro": {
+     "accuracy": 0.19488,
+     "correct": 609,
+     "delta": 0.00992,
+     "exceeds_margin": false,
+     "majority": 0.18496,
+     "n": 3125,
+     "wilson95": [
+      0.18137,
+      0.209139
+     ]
+    }
+   },
+   "by_source": {
+    "allegro_reviews_train": {
+     "accuracy": 0.19488,
+     "correct": 609,
+     "delta": 0.00992,
+     "exceeds_margin": false,
+     "majority": 0.18496,
+     "n": 3125,
+     "wilson95": [
+      0.18137,
+      0.209139
+     ]
+    }
+   },
+   "by_task_family": {
+    "score": {
+     "allegro": {
+      "accuracy": 0.19488,
+      "correct": 609,
+      "delta": 0.00992,
+      "exceeds_margin": false,
+      "majority": 0.18496,
+      "n": 3125,
+      "wilson95": [
+       0.18137,
+       0.209139
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "score": {
+     "accuracy": 0.19488,
+     "correct": 609,
+     "delta": 0.00992,
+     "exceeds_margin": false,
+     "majority": 0.18496,
+     "n": 3125,
+     "wilson95": [
+      0.18137,
+      0.209139
+     ]
+    }
+   },
+   "n_rows": 3125
+  }
+ }
+}

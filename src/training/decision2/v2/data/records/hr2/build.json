@@ -1,0 +1,338 @@
+{
+ "dev": {
+  "family": {
+   "allegro": 316,
+   "eth_cs": 104,
+   "eth_deon": 103,
+   "eth_just": 117,
+   "eth_util": 388,
+   "hs3_help": 498,
+   "hs3_pref": 967,
+   "indonli": 239,
+   "kob_boolq": 358,
+   "prm_step": 389,
+   "vitc": 400
+  },
+  "gold_longer_by_family": {
+   "eth_util": {
+    "False": 176,
+    "None": 62,
+    "True": 150
+   },
+   "hs3_pref": {
+    "False": 473,
+    "None": 2,
+    "True": 492
+   }
+  },
+  "groups": 3143,
+  "label_by_family": {
+   "allegro": {
+    "0": 75,
+    "1": 65,
+    "2": 65,
+    "3": 51,
+    "4": 60
+   },
+   "eth_cs": {
+    "0": 47,
+    "1": 57
+   },
+   "eth_deon": {
+    "0": 53,
+    "1": 50
+   },
+   "eth_just": {
+    "0": 59,
+    "1": 58
+   },
+   "eth_util": {
+    "0": 177,
+    "1": 211
+   },
+   "hs3_help": {
+    "0": 102,
+    "1": 97,
+    "2": 104,
+    "3": 96,
+    "4": 99
+   },
+   "hs3_pref": {
+    "0": 491,
+    "1": 476
+   },
+   "indonli": {
+    "0": 117,
+    "1": 122
+   },
+   "kob_boolq": {
+    "0": 184,
+    "1": 174
+   },
+   "prm_step": {
+    "0": 194,
+    "1": 195
+   },
+   "vitc": {
+    "0": 200,
+    "1": 200
+   }
+  },
+  "language": {
+   "de": 16,
+   "en": 2676,
+   "es": 18,
+   "fr": 20,
+   "id": 247,
+   "it": 16,
+   "ja": 12,
+   "ko": 398,
+   "nl": 13,
+   "pl": 327,
+   "pt": 17,
+   "ru": 17,
+   "vi": 8,
+   "zh": 94
+  },
+  "rows": 3879,
+  "sha256": "b0498c1f1ac2ef346579237b2d53533829f0bc0e86a67b71d749eaef180fab7e",
+  "task_type": {
+   "choice": 1355,
+   "noul": 1710,
+   "score": 814
+  }
+ },
+ "inputs": {
+  "allegro_klej-allegro-reviews/train.csv": "bc722eafd61ccec427cc3f6af112fbbfbc999bb619f8f02a7ad5027fec1c707e",
+  "hendrycks_ethics/data/commonsense/train.csv": "286cb4098a66b71819493f964cf2afe62cdbb6c6b41983b9c0b8fc484650c752",
+  "hendrycks_ethics/data/deontology/train.csv": "d31e25825c43c16fb566cc9172dd59191756111cf74ef1b90633a716299861fe",
+  "hendrycks_ethics/data/justice/train.csv": "175c8255f5ee3d99ad381cd716473367274dc24b3832d5e3357f37f1779a7d3f",
+  "hendrycks_ethics/data/utilitarianism/train.csv": "a057f29e667b19531644f5c4c317606cacf47669d9bc6b4bd1844fd4d1780050",
+  "indonli/train.jsonl": "c18a2974a8683d283d0c8eb3d944354d3c5ce54ab6232613d932c0bd2a82abf8",
+  "nvidia_HelpSteer2/preference/preference.jsonl.gz": "a5cd48600fb7a330cf0ccc8f59051e24e8f236907c379f42eff1ba18da55204b",
+  "nvidia_HelpSteer2/train.jsonl.gz": "c0d7e91d738d42e8a08070db26c4c09a9c7631308e1f0fd380ff43d130c9f713",
+  "nvidia_HelpSteer2/validation.jsonl.gz": "610eeb5289494d613c4c0f70aade2df8df0b499f3a24e76d232f74e6909d010a",
+  "nvidia_HelpSteer3/feedback/train.jsonl.gz": "6f51cf5b7224436b0c5a4c80b280eddc566f7d2b589f5a4be0ba7a3637f0519c",
+  "nvidia_HelpSteer3/preference/train.jsonl.gz": "32b52e1d378f8dab1e4c9ae549da49a5d6fc0875aeafe3f9139e6053beb906bb",
+  "prm800k/phase1_train.jsonl": "e9da6a73f827ffb9a8c0dc644c541d34ed76b3d4d1e4896ff5f7b37ddf5ae34d",
+  "prm800k/phase2_train.jsonl": "1110237feeb51d1bc200cb37b8f965cfdc1036eac7d506094049366fe7dc1089",
+  "skt_kobest_v1/boolq/train.jsonl": "312b92a96fd5d1fc8059491fbc598a3895581723d2266b840577f4e320e6315b",
+  "tals_vitaminc/train.jsonl": "7461c6fd1a13459590317c5ccdc8651dd2daf7c1ad8ae4b10ccd88d164fccd5a"
+ },
+ "prereg": "records/hr2-prereg-2026-09-30.md",
+ "report": {
+  "duplicates": {
+   "conflicting": {
+    "vitc": 2
+   },
+   "exact": {
+    "allegro": 0,
+    "eth_cs": 0,
+    "eth_deon": 0,
+    "eth_just": 0,
+    "eth_util": 0,
+    "hs3_help": 0,
+    "hs3_pref": 0,
+    "indonli": 0,
+    "kob_boolq": 0,
+    "prm_step": 0,
+    "vitc": 2
+   }
+  },
+  "families": {
+   "allegro": {
+    "drop_conflicting_duplicates": 151,
+    "drop_empty_or_rating": 397,
+    "drop_exact_duplicates": 168,
+    "eligible": 8861,
+    "read": 9577,
+    "selected": 3500
+   },
+   "eth_cs": {
+    "drop_exact_duplicates": 0,
+    "drop_long_split": 7249,
+    "eligible": 6661,
+    "read": 13910,
+    "selected": 1200
+   },
+   "eth_deon": {
+    "drop_exact_duplicates": 2,
+    "eligible": 18162,
+    "read": 18164,
+    "selected": 1200
+   },
+   "eth_just": {
+    "drop_exact_duplicates": 9,
+    "eligible": 21782,
+    "read": 21791,
+    "selected": 1200
+   },
+   "eth_util": {
+    "drop_exact_duplicates": 120,
+    "eligible": 13617,
+    "read": 13737,
+    "selected": 3500
+   },
+   "hs3_help": {
+    "drop_conflicting_duplicates": 68,
+    "drop_disagreement": 5817,
+    "drop_exact_duplicates": 11564,
+    "drop_helpsteer2_prompt": 486,
+    "drop_length": 1422,
+    "drop_unparsed_or_not_three": 153,
+    "eligible": 19272,
+    "read": 38782,
+    "selected": 5000
+   },
+   "hs3_pref": {
+    "drop_annotator_split": 249,
+    "drop_conflicting_duplicates": 14,
+    "drop_exact_duplicates": 8336,
+    "drop_helpsteer2_prompt": 330,
+    "drop_length": 1651,
+    "drop_tie_or_slight": 14500,
+    "eligible": 13379,
+    "read": 38459,
+    "selected": 8999
+   },
+   "indonli": {
+    "drop_conflicting_duplicates": 4,
+    "drop_exact_duplicates": 1,
+    "eligible": 10325,
+    "read": 10330,
+    "selected": 2500
+   },
+   "kob_boolq": {
+    "drop_exact_duplicates": 0,
+    "eligible": 3665,
+    "read": 3665,
+    "selected": 3662
+   },
+   "prm_step": {
+    "drop_conflicting_ratings": 4805,
+    "drop_exact_duplicates": 16764,
+    "drop_finish_reason": 3189,
+    "drop_qc_or_screening": 20751,
+    "eligible": 20538,
+    "read": 98731,
+    "selected": 3996
+   },
+   "vitc": {
+    "drop_nei": 52981,
+    "drop_synthetic": 121700,
+    "read": 370653,
+    "selected": 4000,
+    "twin_cases": 35597
+   }
+  },
+  "group_merges": 0,
+  "helpsteer2_screen": {
+   "first_turns": 9356,
+   "prefixes": 9278
+  }
+ },
+ "schema": "decision2.hr2.build.v1",
+ "train": {
+  "family": {
+   "allegro": 3184,
+   "eth_cs": 1096,
+   "eth_deon": 1097,
+   "eth_just": 1083,
+   "eth_util": 3112,
+   "hs3_help": 4502,
+   "hs3_pref": 8032,
+   "indonli": 2261,
+   "kob_boolq": 3304,
+   "prm_step": 3607,
+   "vitc": 3596
+  },
+  "gold_longer_by_family": {
+   "eth_util": {
+    "False": 1328,
+    "None": 430,
+    "True": 1354
+   },
+   "hs3_pref": {
+    "False": 4020,
+    "None": 11,
+    "True": 4001
+   }
+  },
+  "groups": 28332,
+  "label_by_family": {
+   "allegro": {
+    "0": 625,
+    "1": 635,
+    "2": 635,
+    "3": 649,
+    "4": 640
+   },
+   "eth_cs": {
+    "0": 553,
+    "1": 543
+   },
+   "eth_deon": {
+    "0": 547,
+    "1": 550
+   },
+   "eth_just": {
+    "0": 541,
+    "1": 542
+   },
+   "eth_util": {
+    "0": 1545,
+    "1": 1567
+   },
+   "hs3_help": {
+    "0": 898,
+    "1": 903,
+    "2": 896,
+    "3": 904,
+    "4": 901
+   },
+   "hs3_pref": {
+    "0": 4024,
+    "1": 4008
+   },
+   "indonli": {
+    "0": 1133,
+    "1": 1128
+   },
+   "kob_boolq": {
+    "0": 1647,
+    "1": 1657
+   },
+   "prm_step": {
+    "0": 1804,
+    "1": 1803
+   },
+   "vitc": {
+    "0": 1798,
+    "1": 1798
+   }
+  },
+  "language": {
+   "de": 110,
+   "en": 23583,
+   "es": 209,
+   "fr": 178,
+   "id": 2307,
+   "it": 147,
+   "ja": 193,
+   "ko": 3646,
+   "nl": 57,
+   "pl": 3242,
+   "pt": 113,
+   "ru": 119,
+   "vi": 60,
+   "zh": 910
+  },
+  "rows": 34874,
+  "sha256": "45b560103e84591d94ccfa763bbcbb9698366c92ad52f8534db29cbd0007bf2b",
+  "task_type": {
+   "choice": 11144,
+   "noul": 16044,
+   "score": 7686
+  }
+ }
+}

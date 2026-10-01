@@ -23,6 +23,56 @@ LINEAR_ATTENTION = (
     "linear_attn.out_proj",
 )
 MLP = ("mlp.gate_proj", "mlp.up_proj", "mlp.down_proj")
+GEMMA4_ATTENTION = ("self_attn.q_proj", "self_attn.k_proj", "self_attn.o_proj")
+GEMMA4_OPTIONAL = ("self_attn.v_proj",)
+QWEN_SHARED_EXPERT = (
+    "mlp.shared_expert.gate_proj",
+    "mlp.shared_expert.up_proj",
+    "mlp.shared_expert.down_proj",
+)
+MOE_TEXT_TYPES = ("gemma4_text", "qwen3_5_moe_text")
+
+
+def select_moe_target_modules(
+    backbone: Any, is_linear: Callable[[Any], bool]
+) -> list[str]:
+    """Attention (or gated-delta) projections plus the dense / shared-expert MLP of every layer.
+
+    Routed experts, routers and the shared-expert gate stay frozen: no target may
+    live under ``experts`` or ``router`` / ``mlp.gate``.
+    """
+    config = getattr(backbone, "config", None)
+    model_type = getattr(config, "model_type", None)
+    modules = dict(backbone.named_modules())
+    layer_count = getattr(config, "num_hidden_layers", None)
+    if not isinstance(layer_count, int) or layer_count < 1:
+        raise ValueError("MoE text backbone needs num_hidden_layers")
+    targets: list[str] = []
+    for index in range(layer_count):
+        if model_type == "gemma4_text":
+            if getattr(config, "num_kv_shared_layers", 0):
+                raise ValueError("Gemma 4 KV-shared layers are not supported")
+            suffixes = [*GEMMA4_ATTENTION, *MLP]
+            suffixes += [s for s in GEMMA4_OPTIONAL if f"layers.{index}.{s}" in modules]
+        else:
+            kind = config.layer_types[index]
+            if kind not in ("full_attention", "linear_attention"):
+                raise ValueError(f"Unsupported Qwen3.5 MoE layer type: {kind}")
+            suffixes = [
+                *(FULL_ATTENTION if kind == "full_attention" else LINEAR_ATTENTION),
+                *QWEN_SHARED_EXPERT,
+            ]
+        for suffix in sorted(suffixes):
+            name = f"layers.{index}.{suffix}"
+            if name not in modules or not is_linear(modules[name]):
+                raise ValueError(f"Missing MoE linear LoRA target: {name}")
+            targets.append(name)
+    if any(
+        ".experts" in name or ".router" in name or name.endswith("mlp.gate")
+        for name in targets
+    ):
+        raise ValueError("MoE LoRA targets must exclude experts and routers")
+    return targets
 
 
 def select_target_modules(
@@ -33,6 +83,8 @@ def select_target_modules(
         from torch import nn
 
         is_linear = lambda module: isinstance(module, nn.Linear)
+    if getattr(getattr(backbone, "config", None), "model_type", None) in MOE_TEXT_TYPES:
+        return select_moe_target_modules(backbone, is_linear)
     modules = dict(backbone.named_modules())
     layer_types = getattr(getattr(backbone, "config", None), "layer_types", None)
     if not isinstance(layer_types, (list, tuple)) or not layer_types:
