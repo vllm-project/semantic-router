@@ -13,9 +13,8 @@ GPU: lease-polite sharing on nodes C–F only; never node C GPU0, node E GPU4–
     Route `a5b21dff`, Eos `bbdc2221`, Sol `fc210c8f`, Nox `f098bdec`, Lux `a31b9e2c`.
   - DEV2.0-Route-0.6B [PR #1](https://huggingface.co/llm-semantic-router/DEV2.0-Route-0.6B/discussions/1) (`8dd74c76`
     on head `72a2d317`): PR smoke in the clean venv (Transformers 5.18.0, CPU, `refs/pr/1`) passes; native answers
-    unchanged by the `api.py` fix (68 prompts, image CPU). Running: the same three passes in the clean venv
-    (`pub-ef74a012/DEV2.0-Route-0.6B/verify-fresh/result.log`: native original vs native staged vs AutoModel
-    staged). Never merge it; subin reviews.
+    unchanged by the `api.py` fix and AutoModel = native, identical on 68 prompts in the clean venv
+    (`pub-ef74a012/DEV2.0-Route-0.6B/verify-fresh/result.log`). Never merge it; subin reviews.
   - Stopped (not needed): Kai CPU parity (GPU parity is exact); the slow image-CPU AutoModel pass for Route.
   - Open follow-ups for the coordinator: (1) vLLM-SR Decision runtime `parse_decision_config` must ignore
     `model_type`, `architectures`, `auto_map`, `custom_pipelines` before a catalog moves to the new 1.0 revisions;
