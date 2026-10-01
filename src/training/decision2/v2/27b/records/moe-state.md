@@ -64,17 +64,21 @@ Mirror for every Index job: `0403fb5796ca00a5a217f8e7656c77fe6e2205db-src_traini
    --size 27B --panel /data/dev2/private/eval/index021/ix1/panel-3 --allow-errors` (`--allow-errors` because the two
    largest ToolRet requests, 488K and 751K padded tokens, are expected to exceed the GPU alone). Check the scorer
    gate (`merged/compare.json` → `scorers.pass`) and `merged/receipt.json` (row accounting).
-3. **Private only:** copy `merged/{compare.json,port.json,receipt.json,latency.json}` to
-   `/home/xunliu/code/decision2-program/private/moe1/` (mode 700) as `*-MOE-Git-soup.json`; run
-   `python3 private/moe1/compare_moe.py --moe … --a20r ../ix1/compare-27B.json --frontier
-   ../index021-frontier-gap-2026-10-01.json --out private/moe1/table-MOE-Git-soup.md`; write
-   `private/moe1/moe1-index-report-2026-10-01.md` (label "independent provisional 0.2.1 reproduction": headline
-   port / kit, vs DEV2.0-27B (IX1) and vs the 27B-class frontier peer and served size, areas, largest gains / losses,
-   row accounting, latency). Never put an Index value in commits, the gist, cards, COORDINATION or STATUS.
-4. **Hand-off status:** if the headline clears the 27B-class frontier bar in the IX1 report, mark
-   `moe-handoff-2026-10-01.md` **ISSUED** (no value in the file: "the private Index criterion was met"); otherwise
-   mark it **NOT ISSUED** (keep it as package notes). Add a public receipt (counts, hashes, GPU-h only; IX1's
-   `ix1-public-receipt/1` shape) under `v2/27b/records/moe-index/`.
+3. **Private only:** copy node A `ix1/runs/MOE-Git-soup/merged/{compare.json,port.json,receipt.json,latency.json}`
+   to `/home/xunliu/code/decision2-program/private/moe1/` (mode 700) as `compare-MOE-Git-soup.json`,
+   `port-MOE-Git-soup.json`, `receipt-MOE-Git-soup.json`, `latency-MOE-Git-soup.json`, then run
+   `python3 private/moe1/make_report.py` (tested on fake inputs): it writes `moe1-index-report-2026-10-01.md` with
+   the headline (port / kit), vs DEV2.0-27B (IX1) and vs the 27B-class frontier peer, the **Pareto standing at
+   25.31B** (the board snapshot `board-7cdcea3d.json` shows every entrant above Winnow-12B 50.02 is larger than
+   the MoE, so Rune 26B-A4B v3 does not dominate it), areas, the per-benchmark table (`compare_moe.py`), row
+   accounting and latency. Never put an Index value in commits, the gist, cards, COORDINATION or STATUS.
+4. **Hand-off status:** the brief's criterion is the 27B-class frontier bar of the IX1 report (Rune 26B-A4B v3's
+   headline). If cleared, mark `moe-handoff-2026-10-01.md` **ISSUED** (no value in the file: "the private Index
+   criterion was met"); otherwise **NOT ISSUED**, and give the coordinator the Pareto reading privately (it may
+   still matter for the frontier goal). Add a public receipt (counts, hashes, GPU-h only; IX1's
+   `ix1-public-receipt/1` shape) under `v2/27b/records/moe-index/`. The private eval-artifacts dataset is listed
+   as a private destination, but this track's standing rule is "nothing goes to HF": leave the upload to the
+   coordinator (artifacts are in node A's private dir and the local private folder).
 5. Free node A GPU3 / 4 / 5 (rename each `owner` to `owner.released-moe-<UTC>`, as for node B GPU7) once no
    `d2-27b-moe-*` container runs; results record + gist 06c (no Index values); merge into
    `xunzhuo/decision-2-training` (merge-only); report.
