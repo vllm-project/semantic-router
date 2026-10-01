@@ -80,3 +80,25 @@
   .494 vs .625. Contrast vs M12 `2b-RA`: HT-DEV v2 +.020 [+.006, +.034] GAIN, retention +.018 [−.007, +.044]; the
   Score count moved 227 → 237, short of the floor. No 2B finalist; no exception (COORDINATION 23:15).
 - 0.8B: `08b-RAAG-s2` at step 4,571 of ≈ 4,790; then soup and post on node E GPU1.
+
+## 2026-10-01 16:05Z — 4B formal item 1 fails; 0.8B rules: no finalist
+
+- [Amendment 2](dec-m13-amendment-2-2026-10-01.md) `0ea6b3e62` (before any formal scoring): two-bar formal scoring
+  (`m13-fscore.sh`, `m13_successor.py`; 4B bars = the released LH's stored formal run and node F's `m13-4b-LH`), an
+  mlx-diag step in `m13-formal.sh`. Tests 20 / 20.
+- 4B formal collected 15:39Z (both points); scored on node A 15:53Z. Parity: `m13-4b-LH` reproduces the stored LH run
+  exactly (0 answer changes on typed FINAL, CSS15, public 231; v3 67.345). **`m13-4b-LHA10SD` v3 67.187: vs LH −0.158
+  [−2.836, +3.636] (both bars) — item 1 FAILS** (lower bound ≤ 0). Report-only: vs DEV2.0-4B +4.035 [+1.571, +9.636],
+  vs adopted Nox 1.0 +10.72 [+6.53, +13.66]; types OK; public 231 174 vs 172. Item 6(a) exposure: 0 groups.
+  Items 2, 4–7 are being completed for the record (no change to the verdict).
+- mlx-diag: the 15:53Z launch used the amendment-2 mirror; the containers could not read the receipts' adapter spec
+  (collecting mirror `c2610143b` not mounted) and stopped before inference. [Amendment 3](dec-m13-amendment-3-2026-10-01.md)
+  `4f8bd3c34`; relaunched 15:55Z from the collecting mirror (node F GPU6 `4b-LH`, GPU7 `4b-LHA10SD`).
+- 0.8B post finished 15:49Z; scored 15:57Z; rules run once 15:59Z. **No 0.8B finalist.**
+  - `08b-RASD`: choice floor 574 < 586 (C / N / S 574 / 208 / 205 vs C0 610 / 212 / 159; `attribute_gate` 293 ≥ 280
+    holds); HT-DEV v2 +.040 [+.019, +.060] GAIN; retention +.026 [+.001, +.054]; transfer +.201 [+.165, +.237];
+    false-yes .783 vs .720.
+  - `08b-RAAG`: choice floor 498 < 586 and `attribute_gate` 228 < 280; HT-DEV v2 +.038 GAIN; retention +.009
+    [−.018, +.037]; transfer +.194.
+  - vs M12 `08b-RA` (C / N / S 600 / 216 / 202, `attribute_gate` 277): RASD HT −.009 tie, `attribute_gate` +16, choice
+    −26; RAAG retention −.035 [−.062, −.007]. Upweighting the proxy families lowered `attribute_gate` itself.
