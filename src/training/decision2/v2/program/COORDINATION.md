@@ -205,6 +205,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 04:15 — **MLX-DEV2 VALIDATED and adopted (c0ce08eb).** Record `v2/eval/records/mlx-dev2-2026-10-01.md`;
+  panel `mlx-dev2` in `v2/eval/panels.py`; runner `v2/eval/mlx_dev2_run.sh`; integration `12ac952b9`; 1.07 GPU-h.
+  - **Panel.** Built exactly like mlx-diag's card part (same languages, families, English instructions,
+    target-language states) from the publishers' **non-test** splits:
+    - Choice: MASSIVE 1.1 dev, CC BY 4.0, 345 × 7;
+    - Noul: PAWS-X validation, 400 × 7.
+    - 5,215 prompts; the isolation scan covers all program data on nodes A / B.
+    - No Score part (mlx-diag's Score is XNLI, NC).
+  - **Validation:** **5 / 5 verdicts correct.** It flags `4b-LHA10SD` (−.028), `08b-RA` (−.019) and M5-L128 (−.009),
+    and passes LH (+.015) and K-a13IB (−.002, n.s.). Spearman vs formal mlx-diag **1.00**; CI half-widths .004–.007.
+  - **RULE (mandatory for every breadth / IB arm before any formal panel is read):** MLX-DEV2 card-eligible
+    (Choice + Noul) paired delta vs the reference must have a 95% CI upper bound ≥ 0 (stratified paired bootstrap,
+    5,000 replicates, seed 20260927; `guard_pass` in `mlx_dev2 compare`).
+    - It replaces the old MLX-DEV guard, which is now report-only.
+    - Formal item 4 still applies at release.
+  - **M16 (ad17bb4f)** was launched with the old guard. Its finalists must also pass MLX-DEV2 before formal; the
+    coordinator enforces this at hand-off.
+
 - 2026-10-02 03:40 — **27B M6 continuation #2 handed off (0d2e488f); continuation #3 launched.**
   - **No results yet.** First gates ≈ 22:30Z, first verdict ≈ 23:30Z, the M6-IB2PN hedge ends ≈ 06:20Z Oct 2.
   - **#2's work:**
