@@ -21,3 +21,13 @@
   −.010 [−.038, .017]; Score5t no flags; false-yes .524 vs .625; IB DEV +.174 [.150, .200], transfer +.151 [.123, .183].
   The 2B Score head again loses typed items under breadth (milder than M11's collapse, still below the floor).
 - 4B (4 seeds) and 0.8B (2 seeds) training.
+
+## 2026-10-01 13:05Z — M12 complete (no finalist)
+
+- 0.8B `08b-RA` and 4B `4b-LHA` / `4b-LHA10` finished 12:35Z–12:55Z; rules run once at 12:58Z. **No finalist at any
+  tier**: `08b-RA` fails only the `attribute_gate` family floor (HT-DEV v2 GAIN +.049, retention +.044); `4b-LHA` fails
+  choice / Noul floors and retention; `4b-LHA10` fails the Score / `set_reconciliation` floors. The optional
+  transfer-only 4B arm is not trained (no passing 4B arm); no formal, hand-offs or Index requests.
+- Report-only LHA vs M11 `4b-LHB` contrast read 13:00Z (M11 readouts copied on node F as `4b-LHB-m11`).
+- GPU-h 10.01 of 100 (E 4.44, F 5.57); no M12 job running; all M12 leases idle. Results:
+  [`dec-m12-results-2026-10-01.md`](dec-m12-results-2026-10-01.md).
