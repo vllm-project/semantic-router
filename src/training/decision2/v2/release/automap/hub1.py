@@ -1,5 +1,6 @@
 """Hugging Face steps for the Decision 1.0 remote-code update (run on a node with the HF CLI venv).
 
+  listing --repo R --stage DIR --revision SHA   every file's LFS SHA-256 / blob ID at SHA
   check   --repo R --stage DIR             head unchanged since staging; no open PR touches the files
   pr      --repo R --stage DIR             open one PR with exactly the staged files, parent = staged head
   merge   --repo R --pr N --stage DIR      merge our PR if the head and open PRs still allow it
@@ -179,7 +180,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("step", choices=("check", "pr", "merge", "readback"))
+    parser.add_argument("step", choices=("listing", "check", "pr", "merge", "readback"))
     parser.add_argument("--repo", required=True)
     parser.add_argument("--stage", type=Path, required=True)
     parser.add_argument("--pr", type=int)
@@ -187,7 +188,9 @@ def main() -> None:
     parser.add_argument("--before", type=Path)
     args = parser.parse_args()
     api = HfApi()
-    if args.step == "check":
+    if args.step == "listing":
+        result = {args.repo: listing(api, args.repo, args.revision)}
+    elif args.step == "check":
         result = check(api, args.repo, args.stage)
     elif args.step == "pr":
         result = create_pr(api, args.repo, args.stage)
