@@ -509,6 +509,65 @@ class CommittedSpecTest(unittest.TestCase):
                     recheck.load_spec(path)
 
 
+class CommittedRegistryTest(unittest.TestCase):
+    def test_registry_matches_the_specs_and_the_verdict_receipts(self):
+        registry = json.loads((SEALED / "c1-recheck-registry.json").read_text())
+        self.assertEqual(registry["schema"], "dev2-c1-recheck-registry/1")
+        self.assertEqual(registry["item_set"]["version"], recheck.ITEM_SET)
+        self.assertEqual(registry["item_set"]["scored_items"], recheck.SCORED_ITEMS)
+        root = SEALED.parent.parent.parent
+        files = registry["files"]
+        for name, run in registry["rechecks"].items():
+            with self.subTest(recheck=name):
+                spec_path = root / run["spec"]
+                self.assertEqual(sha(spec_path), run["spec_sha256"])
+                spec = recheck.load_spec(spec_path)
+                self.assertEqual(spec["name"], name)
+                receipt = root / run["receipts"] / "VERDICT.json"
+                self.assertEqual(sha(receipt), run["verdict_sha256"])
+                verdict = json.loads(receipt.read_text())
+                self.assertEqual(verdict["verdict"], run["verdict"])
+                self.assertTrue(verdict["controls"]["pass"])
+                for entry in spec["datasets"]:
+                    cell = files[entry["sha256"]]
+                    result = verdict["datasets"][entry["key"]]
+                    self.assertEqual(
+                        (cell["key"], cell["rows"]), (entry["key"], entry["rows"])
+                    )
+                    self.assertEqual(cell["recheck"], name)
+                    self.assertEqual(cell["verdict"], result["verdict"])
+                    self.assertEqual(
+                        cell["exposed_scored_items"], result["exposed_scored_items"]
+                    )
+                    self.assertEqual(result["sha256"], entry["sha256"])
+                self.assertTrue((root / run["record"]).is_file())
+        keys = {cell["key"] for cell in files.values()}
+        for digest, cell in registry["covered"].items():
+            self.assertRegex(digest, recheck.SHA)
+            self.assertTrue(set(cell["covered_by"]) <= keys)
+            self.assertTrue(
+                all(
+                    files_cell["verdict"] == "PASS"
+                    for files_cell in files.values()
+                    if files_cell["key"] in cell["covered_by"]
+                )
+            )
+        valid = {
+            arm
+            for name, arms in registry["arms_exposure_0"].items()
+            if name != "note"
+            for arm in arms
+        }
+        for run in registry["rechecks"].values():
+            verdict = json.loads((root / run["receipts"] / "VERDICT.json").read_text())
+            exposed = {a["arm"] for a in verdict["arms"] if a["exposed_scored_items"]}
+            self.assertFalse(valid & exposed)
+
+    def test_the_postkey_registry_points_here(self):
+        notes = json.loads((SEALED / "c1-postkey-baselines.json").read_text())["notes"]
+        self.assertTrue(any("c1-recheck-registry.json" in note for note in notes))
+
+
 class ScriptTest(unittest.TestCase):
     def run_script(self, *argv: str) -> subprocess.CompletedProcess:
         return subprocess.run(
