@@ -8,7 +8,19 @@ GPU-h). Preregistration [`dec-m10-prereg-2026-10-01.md`](dec-m10-prereg-2026-10-
 
 ## Now
 
-- 2026-10-01 ≈12:50 UTC+8 (04:50Z) — **Training ≈ 60%; C0 references read; probes built; runtime path committed.**
+- 2026-10-01 ≈12:42 UTC+8 (04:42Z) — **Training ≈ 75–98%; post chains armed; formal path ready.**
+  - FB 747–769 / 787, LH 671–718, LT2 558–587 (correction: the 04:50Z header below was 04:20Z; ETAs ≈ 04:45Z
+    node F, ≈ 04:58Z node E).
+  - **C0 readout parity:** `4b-C0-e` on the M10 path equals node B's stored `4b-I` readouts on typed DEV, CSS pilot,
+    HT-DEV v2, Score5-typed-DEV and `hs1-dev`: 0 differing decisions, maximum drift 0.0. The base ceiling
+    (`4b-BASE-e`) is reading.
+  - Post chains (`m10-post.sh`, mirror `b55d8828…`): LH → node F GPU2, FB → GPU5, LT2 → node E GPU3 (merge LoRA
+    BESTs, soup, read all panels); `4b-C0-f` (cross-node parity) on node F GPU6 after FB-s2.
+  - Formal path for nodes E / F committed: `run_same_panel --isolate` (`51db2416c`, shared eval change), M6 formal
+    library `M6_4B_NODE=E|F` (`4427e618c`), `m10_formal_select.py`, `m10-formal.sh` (`9a6b5aa87`); node B's frozen
+    masters, the gold-free formal panels, CAL698 and the typed-DEV / CSS-pilot gold (the 23:15 rule) copied to E / F.
+
+- 2026-10-01 ≈12:20 UTC+8 (04:20Z) — **Training ≈ 60%; C0 references read; probes built; runtime path committed.**
   - Node F: LH s1–s3 at 452–495 / 787, FB s1–s3 at 509–521 / 787 (ETA ≈ 05:20Z). SELECT700 family macro so far:
     LH .83–.88, FB .87–.90 (N4XF's seeds from Nox were ≈ .88–.90).
   - Node E: LT2 s1–s3 at 344–390 / 787 (ETA ≈ 05:45Z); SELECT700 so far .72–.81 (label-token readout).
