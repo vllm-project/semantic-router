@@ -205,6 +205,43 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 14:45 — **4B M10 (c473a3b2): successor candidate `m10-4b-LH` → release; the recipe goes to 2B / 0.8B /
+  9B.** Records: `dec-m10-results-2026-10-01.md`, `dec-m10-handoff-2026-10-01.md`, gist 04; integration
+  `fb6ab3a4c`; 13.24 of 120 GPU-h.
+  - **LH:** a rank-128 LoRA on **Qwen3.5-4B-Base** with the scoring head, on the released 4B mixture at matched
+    tokens.
+    - post-key v3 **67.34**, +4.19 [+0.10, +9.88] vs DEV2.0-4B; items 1–7 pass;
+    - vs Decider 4B +5.46 [+0.28, +8.11]; vs Jet v6.2 +6.97 [+0.98, +11.13];
+    - mlx-diag +.038 [+.026, +.050]; human transfer .557 vs .580 (n.s.; CSS15 losses ibc −.10, talklife −.05
+      disclosed);
+    - T = 1 with 0 changes.
+    - The second finalist, NT2 (released recipe from Nox with the label-token readout), is +2.10 [+0.49, +5.82].
+  - **H1 holds (knowledge retention).** The Nox lineage lost knowledge / maths vs its base. On the retention probes
+    (Index-row-free MMLU val / dev, ARC val, a GSM8K train hold-out), DEV2.0-4B scores .710 vs the base's .762 (GSM8K
+    .515 vs .637). Every from-base arm recovers it (LH .770; FB .787 but it failed the typed Score floor).
+  - **H2 is mixed.** From the base, label-token = head. On Nox it gives +2.10. The native `label_token` runtime path
+    exists and matches `infer_dec` exactly (servable by stock vLLM generate mode).
+  - **Shared modules changed (flagged):** `run_same_panel.sh --isolate` (required on nodes C–F), the release runtime
+    and builder's label-token path, and an E/F option in the M6 formal library.
+  - **Decision: no informational formal run of FB** (it failed a preregistered development gate; the formal panel is
+    kept for passers).
+  - **Launched:**
+    - **LH release (b5f60b33, resumed):**
+      - package parity;
+      - C1 item 8 (custodial; one attempt);
+      - final decision;
+      - **coordinated with the auto_map worker** (never concurrent pushes to DEV2.0-4B; carry its remote code and
+        IX1's runtime fix if merged);
+      - the card lineage becomes Qwen3.5-4B-Base → merged LoRA;
+      - then a private Index run.
+    - **M11 (c473a3b2, resumed):** the LH recipe at 2B and 0.8B from their own bases (optional label-token-on-1.0
+      arm); the 4B LH + IB1 stage when IB1-r3 is release-safe; node E GPU0–3 + node F GPU2–7; 110 GPU-h.
+    - **9B M9 (dfc44bae):**
+      - L9, a rank-128 LoRA from Qwen3.5-9B-Base, plus an optional LoRA-on-Lux control;
+      - retention probes and a yes-bias guard;
+      - stage 2 + IB1 / IB2;
+      - node A GPU6–7 + node C GPU1–7 (lease-checked); 120 GPU-h.
+
 - 2026-10-01 14:30 — **4B HR2 efficacy pilot (M9, 57551951): HR2 is NOT a human-transfer lever → HR2 work stops.**
   Records: `dec-m9-results-2026-10-01.md` (`db728251d`), gist 04; integration `d29181e4a`; 5.94 of 16 GPU-h.
   - **HT-DEV v2 (all TIE):** HR2 soup − control −.004 [−.018, +.010], whose upper bound rules out a gain-sized
