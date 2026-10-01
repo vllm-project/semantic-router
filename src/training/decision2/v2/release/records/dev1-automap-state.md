@@ -8,6 +8,22 @@ GPU: lease-polite sharing on nodes C–F only; never node C GPU0, node E GPU4–
 
 ## Now
 
+- 2026-10-01 13:40 UTC+8 (05:40Z) — **Six repos merged and read back; Eos open (needs a GPU).**
+  - Merged own PRs (all checks passed, no other open PRs): Kai #1 → `69aef406`, Lex #1 → `1f9750a7`, Route #3 →
+    `a5b21dff`, Sol #2 → `fc210c8f`, Nox #2 → `f098bdec`, Lux #2 → `a31b9e2c`. Readback: every staged file by
+    SHA-256, every other file (weights included) by LFS SHA-256 / blob ID: all pass. Work root
+    `/data/dev2/runs/release/dev1-automap/pub-ef74a012`.
+  - Checks before merging: full-panel GPU parity (above), CPU equivalence of the parity-tested vs uploaded code
+    (`equiv-f6b8bfdf`: identical responses; only Eos-gated code and the Hub helper differ), PR-revision smoke in a
+    clean venv (Transformers 5.18.0, torch 2.14.1 CPU): AutoConfig / tokenizer / AutoModel / pipeline / errors OK.
+  - Fresh-cache smoke with the card's own block running (`smoke-main.log`, `smoke-main-lux.log`).
+  - Lux with the published FLA l2norm profile is bit-identical (drift 0.0 everywhere): the plain-path CSS15 drift of
+    Lux / Nox is FLA autotuning.
+  - **Eos:** eos3 (with its native convolution) 71 changes, i.e. worse than eos2 (47). Files and model code are
+    identical to Sol's; the native Eos runtime never pinned FLA's l2norm configs, so its scored predictions carry
+    that run's autotune picks. Planned: native Eos (`3c2d6326` code) and the remote code on the same GPU with the same
+    pinned configs; native Eos unpinned vs the stored set. Node E GPU6–7 are now the 2.0 worker's; no lease on C–F
+    is free (polling). Eos PR not opened.
 - 2026-10-01 12:55 UTC+8 (04:55Z) — **Parity: Kai, Lex, Route, Sol, Nox, Lux pass; Eos needs its native convolution
   (rerun queued).** Node E GPU7, work root `/data/dev2/runs/release/dev1-automap/p2-3684c2d8`.
   - 0 answer changes / 0 missing on all 8,378 scored prompts: Kai and Lex (max drift 2.4e-7 / 2.6e-7, Score
