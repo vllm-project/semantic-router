@@ -205,6 +205,29 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 22:05 — **User directive (21:58): redesign the DEV2.0 model cards as formal, user-facing release cards
+  (4c0a68cd, resumed).**
+  - Keep only "Use with 🤗 Transformers" as the quickstart (remove "Download and decide").
+  - Rename "JevArena v3" to **"JevArena"** in all user-facing text.
+  - Charts: white background, standard professional style.
+  - Remove the technical-report / notes content (post-key and C1 boxes, gate and decision IDs, hashes, runtime notes,
+    Brier / ECE, mlx-diag columns, tier breakdowns, long footnotes). Internal records keep it;
+    `evaluation/EVALUATION.md` keeps methods and full tables.
+  - New structure:
+    1. metadata;
+    2. title and description;
+    3. highlights;
+    4. overview table;
+    5. one chart and one compact table (JevArena / human-labelled transfer / JevBench public vs the 1.0 counterpart and
+       peers);
+    6. Transformers quickstart;
+    7. limitations (honest, concise);
+    8. training data with the required attributions;
+    9. license and citation.
+  - Implemented in the card template and chart generator, so successors inherit it; card-only revisions for all six.
+  - **Applies to all tracks:** successor hand-offs must use the new card template; internal results stay in records,
+    not cards.
+
 - 2026-10-01 21:25 — **Forward-budget fix shipped (4c0a68cd): runtime-only revisions for 0.8B / 2B / 9B / 27B.**
   Records and gist 07; integration `88de5d8b7`; ≈ 4.8 GPU-h.
   - **Current `main` revisions (all sizes):**
