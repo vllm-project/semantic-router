@@ -115,7 +115,7 @@ def main() -> None:
             f"{len(set(final) - set(wanted))} extra"
         )
     statuses = collections.Counter(final[r]["status"] for r in wanted)
-    if statuses["error"]:
+    if statuses["error"] and not args.allow_errors:
         raise SystemExit(
             f"{statuses['error']} final errors; resume the shard runs first"
         )
