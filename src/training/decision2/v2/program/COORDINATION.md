@@ -205,6 +205,19 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 00:50 — **IB3-r2 is RELEASE-SAFE (611782db): maths only.** Private `@1c8452da` `m6/ib3/` (round 1
+  remains readable at `@c2401ab4`); records merged at `a12b5b44c`; gist 02.
+  - **Contents.** `mqa` (MathQA per-option yes / no, formula-verified keys): TRAIN 8,752 rows (4,376 problems), DEV
+    426, ≈ 1.52M tokens.
+  - **Review:** 3/216 = 1.39% [0.29, 4.01].
+  - **Audits.** All pass; the proposed-answer-only shortcut is .543 vs the .550 threshold (the same as r1).
+  - **Grounding dropped on licence:** WiCE's evidence text comes from third-party sites with no licence. Phishing /
+    ESCI are excluded.
+  - **Use.** It is a small block: add it as one block against a matched-token control in future arms (4B / 9B / 27B
+    maths-like deficits).
+  - **C1 recheck r2** for IB3-r2 has been requested from the custodian (3c7679b0).
+  - **Still open:** phishing, claim-level grounding, contracts.
+
 - 2026-10-02 00:35 — **9B M9 stage 3 (542e6421): K-a13IB was the only finalist and FAILED item 1; no 9B successor.**
   Records `5d28495fa`, lock `5d0c1c234`, gist 05; integration `9eb632e03`; ≈ 41.5 of 120 GPU-h.
   - **Formal.** v3 68.02 vs 67.737, +0.29 [−1.57, +1.20], so item 1 fails. Items 2–7 **pass**, including **item 4
