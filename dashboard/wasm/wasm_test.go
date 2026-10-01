@@ -279,6 +279,104 @@ func TestDecompileNoArgs(t *testing.T) {
 	}
 }
 
+const envReferenceConfigPrefix = `version: v0.3
+providers:
+  models:
+    - name: qwen
+      backend_refs:
+        - name: primary
+          provider: vllm
+          endpoint: localhost:8000
+          protocol: http
+routing:
+  modelCards:
+    - name: qwen
+      modality: text
+  signals:
+    keywords:
+      - name: docs
+        operator: any
+        keywords: ["docs"]
+  decisions:
+    - name: docs_route
+      priority: 1
+      rules:
+        operator: AND
+        conditions:
+          - type: keyword
+            name: docs
+      modelRefs:
+        - model: qwen
+      plugins:
+`
+
+func decompileAndRecompile(t *testing.T, yamlSource string) (string, string) {
+	t.Helper()
+	var dr DecompileResult
+	if err := json.Unmarshal([]byte(decompile(js.Undefined(), []js.Value{js.ValueOf(yamlSource)}).(string)), &dr); err != nil {
+		t.Fatalf("failed to unmarshal decompile result: %v", err)
+	}
+	if dr.Error != "" {
+		t.Fatalf("unexpected decompile error: %s", dr.Error)
+	}
+	var cr CompileResult
+	if err := json.Unmarshal([]byte(compile(js.Undefined(), []js.Value{js.ValueOf(dr.DSL)}).(string)), &cr); err != nil {
+		t.Fatalf("failed to unmarshal compile result: %v", err)
+	}
+	if cr.Error != "" {
+		t.Fatalf("unexpected compile error: %s", cr.Error)
+	}
+	return dr.DSL, cr.YAML
+}
+
+func TestDecompileKeepsEnvironmentReferences(t *testing.T) {
+	t.Setenv("UPSTREAM_TOKEN", "token-from-environment")
+	yamlSource := envReferenceConfigPrefix + `        - type: system_prompt
+          configuration:
+            enabled: true
+            system_prompt: "Quote prices in $$USD."
+        - type: header_mutation
+          configuration:
+            add:
+              - name: Authorization
+                value: "Bearer ${UPSTREAM_TOKEN}"
+              - name: X-Tenant
+                value: "${TENANT_ID:-default-tenant}"
+`
+
+	dslText, yamlText := decompileAndRecompile(t, yamlSource)
+	for _, want := range []string{"$$USD", "Bearer ${UPSTREAM_TOKEN}", "${TENANT_ID:-default-tenant}"} {
+		if !strings.Contains(dslText, want) {
+			t.Errorf("decompiled DSL lost %q:\n%s", want, dslText)
+		}
+		if !strings.Contains(yamlText, want) {
+			t.Errorf("recompiled YAML lost %q:\n%s", want, yamlText)
+		}
+	}
+	if strings.Contains(dslText, "token-from-environment") {
+		t.Errorf("decompiled DSL contains an environment value:\n%s", dslText)
+	}
+}
+
+func TestDecompileAcceptsRequiredEnvironmentReference(t *testing.T) {
+	yamlSource := envReferenceConfigPrefix + `        - type: rag
+          configuration:
+            enabled: true
+            backend: openai
+            backend_config:
+              vector_store_id: vs_docs
+              api_key: ${OPENAI_API_KEY}
+`
+
+	dslText, yamlText := decompileAndRecompile(t, yamlSource)
+	if !strings.Contains(dslText, `api_key: "${OPENAI_API_KEY}"`) {
+		t.Errorf("decompiled DSL lost the API key reference:\n%s", dslText)
+	}
+	if !strings.Contains(yamlText, "api_key: ${OPENAI_API_KEY}") {
+		t.Errorf("recompiled YAML lost the API key reference:\n%s", yamlText)
+	}
+}
+
 func TestFormatValidDSL(t *testing.T) {
 	input := js.ValueOf(validDSL)
 

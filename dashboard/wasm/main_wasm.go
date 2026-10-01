@@ -206,7 +206,8 @@ func decompile(_ js.Value, args []js.Value) interface{} {
 	}
 	yamlSource := args[0].String()
 
-	cfg, err := config.ParseYAMLBytes([]byte(yamlSource))
+	// Deploy writes the decompiled values back, so ${VAR} and $$ must stay as written.
+	cfg, err := config.ParseYAMLBytesWithoutEnvExpansion([]byte(yamlSource))
 	if err != nil {
 		return marshalJSON(DecompileResult{Error: "YAML parse error: " + err.Error()})
 	}
