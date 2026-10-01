@@ -9,7 +9,8 @@
 #   5. node B: one m6-chain.sh per arm with its own IB DEV slice and aux GPU (detached; logs
 #      /data/dev2/runs/27b/m6/logs/chain-<ARM>.log); PIDs and first log lines confirmed.
 # Usage: m6-launch.sh MIRROR_SHA ARM:MIXTURE:SLICE:S1,S2:AUX ...
-#   S1 / S2 = b0 | b1 | b5 | a2 (node and GPU of each seed); SLICE = ib (IB1 DEV) | ib12 (IB1 + IB2 DEV); AUX = the node B
+#   S1 / S2 = b0 | b1 | b5 | a2 | d0..d7 (node and GPU of each seed; node D needs m6-stage-d.sh first, and its leases
+#   are taken with launch3 lease, allocation m6-d); SLICE = ib (IB1 DEV) | ib12 (IB1 + IB2 DEV); AUX = the node B
 #   GPU of that arm's readout, slices and formal run (one of its own node B training GPUs)
 #   e.g. m6-launch.sh <sha> M6-IB:a20ib1:ib:b5,b1:1 M6-IB2:a20ib12:ib12:b0,a2:0
 set -euo pipefail
@@ -19,12 +20,15 @@ shift
 [ $# -ge 1 ] || { echo "at least one ARM spec" >&2; exit 2; }
 NODES=${DEV2_NODES_FILE:-$HOME/.config/decision2/nodes.env}
 A=$(grep '^node-a=' "$NODES" | cut -d= -f2-) B=$(grep '^node-b=' "$NODES" | cut -d= -f2-)
+D=$(grep '^node-d=' "$NODES" | cut -d= -f2-)
 M=/data/dev2/src/$SHA-src_training_decision2/src/training/decision2/v2/27b/m6
 O=/data/dev2/private/27b/m6-data MX=$O/mixtures-m6-1 R=/data/dev2/runs/27b/m6
 PN1=/data/dev2/hf-cache/datasets--llm-semantic-router--decision-2.0-training-data/snapshots/27b1d2f130292268b43a618584bebab5d4e4a6b5/m4/pn1/dev/pn1.dev.jsonl
 PN1_SHA=c3b68ac113fc1f2afb5554530112f472a9c62f7997285bcaf89a6b655bb7f4cf
 onb() { ssh -o BatchMode=yes "$B" "$@"; }
 ona() { ssh -o BatchMode=yes "$A" "$@"; }
+ond() { ssh -o BatchMode=yes "$D" "$@"; }
+runner() { case "${1:0:1}" in a) echo ona ;; d) echo ond ;; *) echo onb ;; esac; }
 for n in onb ona; do $n "test -f $M/m6-chain.sh" || { echo "mirror $SHA missing ($n)" >&2; exit 2; }; done
 build=$(onb "cat $O/BUILD.json")
 val() { python3 -c "import json,sys; d=json.loads(sys.argv[1]); print(eval(sys.argv[2], {'d': d}))" "$build" "$1"; }
@@ -38,7 +42,7 @@ for spec in "$@"; do
     { echo "bad spec $spec" >&2; exit 2; }
   ARMS+=("$arm") ARM_MIX[$arm]=$mix ARM_SLICE[$arm]=$slice ARM_S1[$arm]=${seeds%,*} ARM_S2[$arm]=${seeds#*,} ARM_AUX[$arm]=$aux
   for loc in "${seeds%,*}" "${seeds#*,}"; do
-    case "$loc" in b0 | b1 | b5 | a2) ;; *) echo "bad seed location $loc" >&2; exit 2 ;; esac
+    case "$loc" in b0 | b1 | b5 | a2 | d[0-7]) ;; *) echo "bad seed location $loc" >&2; exit 2 ;; esac
   done
   case "$aux" in 0 | 1 | 5) ;; *) echo "bad aux GPU $aux" >&2; exit 2 ;; esac
 done
@@ -46,8 +50,15 @@ echo "$(date -u +%FT%TZ) launch from mirror $SHA: ${ARMS[*]}"
 # 1. node A mixtures
 for arm in "${ARMS[@]}"; do
   for loc in "${ARM_S1[$arm]}" "${ARM_S2[$arm]}"; do
-    [ "${loc:0:1}" = a ] || continue
     mix=${ARM_MIX[$arm]} want=$(val "d['files_sha256']['${ARM_MIX[$arm]}.train.jsonl']")
+    if [ "${loc:0:1}" = d ]; then
+      ond "test \"\$(sha256sum < $MX/$mix.train.jsonl | cut -c1-64)\" = $want" || { echo "node D $mix is not $want (run m6-stage-d.sh)" >&2; exit 3; }
+      ond "test -f $M/m6-arm.sh" || { echo "mirror $SHA missing on node D" >&2; exit 2; }
+      ond "cd ${M%/v2/27b/m6} && DEV2_27B_LAUNCH_ALLOC=m6-d PYTHONPATH=${M%/v2/27b/m6} python3 -m v2.27b.m4b.launch3 lease --gpus ${loc:1} --purpose '27b M6 $arm' --status reserved-idle"
+      echo "node D $mix hash equal; GPU${loc:1} lease taken"
+      continue
+    fi
+    [ "${loc:0:1}" = a ] || continue
     if ! ona "test -f $MX/$mix.train.jsonl"; then
       onb "set -e; K=/data/dev2/tmp/27b-m6-xfer; X=\"ssh -i \$K/id_ed25519 -o IdentitiesOnly=yes -o UserKnownHostsFile=\$K/known_hosts -o StrictHostKeyChecking=yes -o BatchMode=yes\"; rsync -a --mkpath -e \"\$X\" $MX/$mix.train.jsonl root@\$(cat \$K/peer):relay/mix/$mix.train.jsonl"
       ona "set -e; umask 077; mkdir -p $MX; chmod 700 $O; mv /data/dev2/xfer/27b-m6/relay/mix/$mix.train.jsonl $MX/; rmdir /data/dev2/xfer/27b-m6/relay/mix"
@@ -73,7 +84,7 @@ for arm in "${ARMS[@]}"; do
   save=$(val "d['checks']['$mix']['save_every']") cap=$(val "d['checks']['$mix']['cap_gpu_h']")
   for s in s1 s2; do
     loc=$([ $s = s1 ] && echo "${ARM_S1[$arm]}" || echo "${ARM_S2[$arm]}")
-    run=$([ "${loc:0:1}" = a ] && echo ona || echo onb)
+    run=$(runner "$loc")
     out=$($run "bash $M/m6-arm.sh ${loc:0:1} ${loc:1} $arm $s $mix $msha $save $cap")
     echo "$out"
     PID[$arm-$s]=$(pid "$out")
@@ -84,8 +95,8 @@ done
 for arm in "${ARMS[@]}"; do
   for s in s1 s2; do
     loc=$([ $s = s1 ] && echo "${ARM_S1[$arm]}" || echo "${ARM_S2[$arm]}")
-    [ "${loc:0:1}" = a ] || continue
-    ona "mkdir -p $R/logs; setsid nohup bash $M/m6-relay.sh $arm-$s ${PID[$arm-$s]} > $R/logs/relay-$arm-$s.log 2>&1 < /dev/null & echo relay $arm-$s \$!"
+    [ "${loc:0:1}" = b ] && continue
+    $(runner "$loc") "mkdir -p $R/logs; RELAY_NODE=${loc:0:1} setsid nohup bash $M/m6-relay.sh $arm-$s ${PID[$arm-$s]} > $R/logs/relay-$arm-$s.log 2>&1 < /dev/null & echo relay $arm-$s \$!"
   done
   ona "mkdir -p $R/logs; setsid nohup bash $M/m6-mlx-watch.sh $SHA $arm > $R/logs/mlx-watch-$arm.log 2>&1 < /dev/null & echo mlx-watch $arm \$!"
 done
@@ -95,7 +106,7 @@ for arm in "${ARMS[@]}"; do
   seeds=()
   for s in s1 s2; do
     loc=$([ $s = s1 ] && echo "${ARM_S1[$arm]}" || echo "${ARM_S2[$arm]}")
-    if [ "${loc:0:1}" = a ]; then seeds+=("$arm-$s=a"); else seeds+=("$arm-$s=b:${PID[$arm-$s]}"); fi
+    if [ "${loc:0:1}" = b ]; then seeds+=("$arm-$s=b:${PID[$arm-$s]}"); else seeds+=("$arm-$s=${loc:0:1}"); fi
   done
   aux=AUX_${arm//-/_}
   onb "setsid nohup env PN1_ROWS=$PN1 PN1_SHA=$PN1_SHA IB_ROWS=$rows IB_SHA=$sha IB_SLICE=$slice REF_IB=A20r-$slice \

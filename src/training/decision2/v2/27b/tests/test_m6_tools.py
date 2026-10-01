@@ -63,13 +63,38 @@ class M6LaunchTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 launch.allowed_gpus("b")
 
+    def test_m6_node_d_map(self):
+        with mock.patch.dict(
+            os.environ, {"DEV2_27B_ALLOC": "m6", "DEV2_NODE": "d"}, clear=True
+        ):
+            self.assertEqual(launch.node_name(), "d")
+            self.assertEqual(sorted(launch.allowed_gpus()), list(range(8)))
+            self.assertEqual(launch.allowed_gpus()[7], ("0000:bb:00.0", "renderD185"))
+            with tempfile.TemporaryDirectory() as tmp:
+                drm = fake_sysfs(Path(tmp), "renderD153", "0000:9b:00.0")
+                self.assertEqual(launch.render_node(3, drm).name, "renderD153")
+        with mock.patch.dict(os.environ, {"DEV2_NODE": "d"}, clear=True):
+            with self.assertRaises(ValueError):
+                launch.node_name()
+
+    def test_launch3_idle_status_free_text(self):
+        launch3 = importlib.import_module("v2.27b.m4b.launch3")
+        for ok in ("released", "released (IX1 complete)", "idle", "reserved-idle"):
+            self.assertTrue(launch3.idle_status(ok), ok)
+        for busy in ("running", "", None, "busy"):
+            self.assertFalse(launch3.idle_status(busy), busy)
+
     def test_launch3_m6_allocations(self):
         code = (
             "import importlib, json; l = importlib.import_module('v2.27b.m4b.launch3');"
             " print(json.dumps([l.TRACK, sorted(l.ALLOWED_GPUS)]))"
         )
         decision2 = ROOT.parents[1]
-        for alloc, gpus in (("m6-b", [0, 1, 5]), ("m6-a", [2])):
+        for alloc, gpus in (
+            ("m6-b", [0, 1, 5]),
+            ("m6-a", [2]),
+            ("m6-d", list(range(8))),
+        ):
             env = {
                 **os.environ,
                 "DEV2_27B_LAUNCH_ALLOC": alloc,

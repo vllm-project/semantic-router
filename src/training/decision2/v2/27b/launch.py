@@ -45,6 +45,11 @@ M6_NODE_GPUS = {
         5: NODE_GPUS["b"][5],
     },
     "a": {2: NODE_GPUS["a"][2]},
+    # node D (once IX1 releases it; per-GPU render node only, as on every node C-F); node B's PCI layout
+    "d": {
+        gpu: (f"0000:{0x83 + 8 * gpu:02x}:00.0", f"renderD{129 + 8 * gpu}")
+        for gpu in range(8)
+    },
 }
 M6_MAX_CAP_HOURS = 20.0
 LEASE_ROOT = Path("/data/dev2/leases")
@@ -63,8 +68,9 @@ def max_cap_hours() -> float:
 
 def node_name() -> str:
     node = os.environ.get("DEV2_NODE", "b")
-    if node not in NODE_GPUS:
-        raise ValueError(f"DEV2_NODE must be one of {sorted(NODE_GPUS)}, not {node!r}")
+    nodes = M6_NODE_GPUS if m6_allocation() else NODE_GPUS
+    if node not in nodes:
+        raise ValueError(f"DEV2_NODE must be one of {sorted(nodes)}, not {node!r}")
     return node
 
 
@@ -90,7 +96,7 @@ def render_node(
     gpus = allowed_gpus(node_id)
     if gpu not in gpus:
         where = (
-            "node B GPU0/1/5, node A GPU2"
+            "node B GPU0/1/5, node A GPU2, node D GPU0-7"
             if m6_allocation()
             else "node B GPU5-7, node A GPU2-4"
         )

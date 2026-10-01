@@ -8,6 +8,7 @@
 #   breadth NAME REF ROWS [FAMILY...]   m6_slices breadth (gate G6; FAMILY = in-distribution families)
 #                             -> slices/NAME/breadth-vs-REF.json
 #   pull ARM-SEED             a node A relay (BEST checkpoint + SHA-256 list) over the M6 node link -> m6/relay/ARM-SEED
+#   pull-d ARM-SEED           the same from node D's relay over the node B -> node D transfer key (/root/.ssh/d2_temp_cd)
 #   lsoup NAME CKPT CKPT...   v2.27b.lora_soup (exact rank concatenation) in a CPU-only container -> m6/NAME/checkpoint;
 #                             members with a relay list (RELAY_SUMS="CKPT=SHA256SUMS ...") must match it file by file
 #   readout NAME CKPT GPU     m4b/run_readout.sh (CAL698 kernel fit, typed DEV + CSS pilot + HT-DEV v2) -> m6/readouts/NAME
@@ -59,12 +60,18 @@ case "$STAGE" in
       --candidate "$NAME=$R/slices/$NAME/probs/$slice.probs.jsonl" \
       --reference "$REF=$R/slices/$REF/probs/$slice.probs.jsonl" "${extra[@]}" \
       --output "$R/slices/$NAME/$STAGE-vs-$REF.json") ;;
-  pull)
+  pull | pull-d)
     NAME=${1:?ARM-SEED}; link
     [[ "$NAME" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "ARM-SEED must be one directory name" >&2; exit 2; }
     DEST=$R/relay/$NAME
     mkdir -p "$DEST"
-    rsync -a -e "$X" "root@$PEER:relay/$NAME/" "$DEST/"
+    if [ "$STAGE" = pull ]; then
+      rsync -a -e "$X" "root@$PEER:relay/$NAME/" "$DEST/"
+    else
+      [ -f "$KEY/peer-d" ] || { echo "no node D address in $KEY/peer-d" >&2; exit 2; }
+      rsync -a -e "ssh -i /root/.ssh/d2_temp_cd -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes" \
+        "root@$(cat "$KEY/peer-d"):/data/dev2/xfer/27b-m6/relay/$NAME/" "$DEST/"
+    fi
     (cd "$DEST/checkpoint" && find . -type f | sort | xargs -P 16 -n 4 sha256sum | sort -k2) > "$DEST/SHA256SUMS.nodeB"
     diff "$DEST/SHA256SUMS" "$DEST/SHA256SUMS.nodeB"
     echo "m6 pull $NAME: $(wc -l < "$DEST/SHA256SUMS") files, SHA-256 lists equal" ;;

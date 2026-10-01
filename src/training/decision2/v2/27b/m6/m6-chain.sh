@@ -4,7 +4,8 @@
 #   - a node B seed (ARM-SEED=b:DRIVER_PID) is ready when run_lora_arm.sh wrote full/RUN_DIR with a complete, frozen
 #     BEST; it failed when its driver ended without that;
 #   - a node A seed (ARM-SEED=a) is ready when node A's m6-relay.sh left relay/ARM-SEED/SHA256SUMS on the M6 node link,
-#     and failed when it left RELAY-FAILED.txt.
+#     and failed when it left RELAY-FAILED.txt; a node D seed (ARM-SEED=d) likewise, read over the node B -> node D
+#     transfer key (/root/.ssh/d2_temp_cd; node D's address in the link directory's peer-d).
 # A ready arm is pulled (node A member, SHA-256 lists compared), souped (exact rank-256 concatenation), read out
 # (CAL698 kernel fit, typed DEV + CSS pilot + HT-DEV v2) and sliced (PN1 dev + IB DEV) on its aux GPU (AUX_<ARM> = one of
 # its own node B training GPUs, free once its seeds ended). An arm with a failed seed has no candidate (no rerun).
@@ -12,7 +13,7 @@
 # plus RESERVE stay within CAP, the formal run, the mlx-diag collection and its push to node A (m6-mlx-watch.sh scores
 # and pairs it there); non-finalists get mlx/NAME.SKIP. Then mlx-pull and the host-CPU gates (m6-gates.sh gates,
 # overlap, verdicts). A failed stage ends the chain with a record; nothing reruns.
-# Usage: m6-chain.sh MIRROR_SHA ARM-SEED=b:PID|a ...
+# Usage: m6-chain.sh MIRROR_SHA ARM-SEED=b:PID|a|d ...
 # Environment: PN1_ROWS PN1_SHA IB_ROWS IB_SHA (DEV rows and their SHA-256), IN_DIST ("w2c isarc"), AUX_M6_IB,
 #   AUX_M6_IBX (node B GPU0 / GPU1 / GPU5), LOADED (formal loaded parameters), CAP (140), RESERVE (formal + mlx, 1.0
 #   per finalist), REF_IB (A20r's IB DEV slices name, default A20r-ib1).
@@ -34,13 +35,17 @@ X="ssh -i $KEY/id_ed25519 -o IdentitiesOnly=yes -o UserKnownHostsFile=$KEY/known
 stamp() { date -u +%FT%TZ; }
 on_a() { rsync --list-only -e "$X" "root@$(cat "$KEY/peer"):$1" > /dev/null 2>&1; }
 to_a() { rsync -a --mkpath -e "$X" "$1" "root@$(cat "$KEY/peer"):$2"; }
+on_d() {
+  ssh -i /root/.ssh/d2_temp_cd -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes \
+    "root@$(cat "$KEY/peer-d")" test -f "/data/dev2/xfer/27b-m6/$1" > /dev/null 2>&1
+}
 declare -A WHERE=() PID=() STATE=()
 ARMS=()
 for spec in "$@"; do
   seed=${spec%%=*} where=${spec#*=}
   [[ "$seed" =~ ^(M6-[A-Z0-9]+)-s[12]$ ]] || { echo "bad ARM-SEED $seed" >&2; exit 2; }
   arm=${BASH_REMATCH[1]}
-  case "$where" in a) WHERE[$seed]=a ;; b:*) WHERE[$seed]=b PID[$seed]=${where#b:} ;; *) echo "bad $spec" >&2; exit 2 ;; esac
+  case "$where" in a | d) WHERE[$seed]=$where ;; b:*) WHERE[$seed]=b PID[$seed]=${where#b:} ;; *) echo "bad $spec" >&2; exit 2 ;; esac
   [[ " ${ARMS[*]} " == *" $arm "* ]] || ARMS+=("$arm")
 done
 for arm in "${ARMS[@]}"; do
@@ -70,6 +75,9 @@ seed_state() {  # ARM-SEED -> ready | failed | wait
       return
     fi
     echo wait
+  elif [ "${WHERE[$seed]}" = d ]; then
+    if on_d "relay/$seed/RELAY-FAILED.txt"; then echo failed; return; fi
+    on_d "relay/$seed/SHA256SUMS" && echo ready || echo wait
   else
     if on_a "relay/$seed/RELAY-FAILED.txt"; then echo failed; return; fi
     on_a "relay/$seed/SHA256SUMS" && echo ready || echo wait
@@ -79,14 +87,14 @@ member() {  # ARM-SEED -> checkpoint path on node B (pulls a node A member first
   if [ "${WHERE[$1]}" = b ]; then
     best_of "/data/dev2/runs/27b/$1"
   else
-    [ -f "$R/relay/$1/SHA256SUMS.nodeB" ] || bash "$TAIL" pull "$SHA" "$1" >&2
+    [ -f "$R/relay/$1/SHA256SUMS.nodeB" ] || bash "$TAIL" "$([ "${WHERE[$1]}" = d ] && echo pull-d || echo pull)" "$SHA" "$1" >&2
     echo "$R/relay/$1/checkpoint"
   fi
 }
 process() {  # ARM
   local arm=$1 var=AUX_${1//-/_} c1 c2 sums=""
   c1=$(member "$arm-s1") c2=$(member "$arm-s2")
-  for s in s1 s2; do [ "${WHERE[$arm-$s]}" = a ] && sums+="$R/relay/$arm-$s/checkpoint=$R/relay/$arm-$s/SHA256SUMS.nodeB "; done
+  for s in s1 s2; do [ "${WHERE[$arm-$s]}" != b ] && sums+="$R/relay/$arm-$s/checkpoint=$R/relay/$arm-$s/SHA256SUMS.nodeB "; done
   echo "$(stamp) $arm: soup of $c1 and $c2"
   [ -f "$R/$arm/checkpoint/soup_manifest.json" ] || RELAY_SUMS=$sums bash "$TAIL" lsoup "$SHA" "$arm" "$c1" "$c2"
   [ -f "$R/readouts/$arm/READOUT-M4B.json" ] || bash "$TAIL" readout "$SHA" "$arm" "$R/$arm/checkpoint" "${!var}"
@@ -148,8 +156,12 @@ for path in paths:
     if isinstance(record, dict) and (os.path.basename(path) == "GPU-TIME.json" or (
             os.path.basename(os.path.dirname(path)) == "receipts" and "gpu_hours" in record)):
         total += float(record.get("gpu_hours", 0))
-node_a = [json.load(open(p)) for p in glob.glob(os.path.join(sys.argv[1], "*", "BUDGET-nodeA.json"))]
-print(round(total + max((b["gpu_hours"] for b in node_a), default=0.0), 3))
+latest = {}
+for p in glob.glob(os.path.join(sys.argv[1], "*", "BUDGET-node*.json")):
+    budget = json.load(open(p))
+    node = budget.get("node", "a").lower()
+    latest[node] = max(latest.get(node, 0.0), float(budget["gpu_hours"]))
+print(round(total + sum(latest.values()), 3))
 EOF
 }
 formal_gpu=${AUX_M6_IB:-0}
