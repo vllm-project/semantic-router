@@ -231,6 +231,13 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 16:42Z (poll 6 at 16:36Z): all alive, guard alive. M6-IB 3,303 / 3,151 (13.7 / 14.1 h; s1 at 3180 .9111, BEST
+  stays 1908); M6-IB2 3,214 / 3,214 (17.7 / 17.5 h); M6-IBX 2,900 / 2,861 (13.9 / 14.0 h); **M6-IB2PN 1,821 / 1,795
+  (18.8 / 18.8 h; second SELECT700 at 1722: .8672 / .8686, BEST = 1722 both)**. Node D disk 664 GB. GPU-h ≈ 61.
+  New COORDINATION notes: **00:25 — the six repos are being renamed** (`Decision-2.0-{Kai,Eos,Sol,Nox,Lux,Vega}-
+  {size}`; round-2 cards follow, so `main` moves again; hand-offs use the new IDs); **00:35 — 9B K-a13IB failed
+  item 1** (breadth ties on v3), and an **Index-path alternative to item 1** is proposed, pending a user decision.
+  Runbook §3 / §4 updated for both.
 - 16:20Z: **C1 content recheck r1 PASS** (custodian, record `v2/eval/records/c1-recheck-r1-2026-10-01.md`,
   `36f93b7cc`, verdict `0823a1a8…`): IB1-r3, IB2, PN1-r2 and `a20ib12` expose 0 scored C1 items; the registry lists
   M6-IB, M6-IBX, M6-IB2 and M6-IB2PN with exposure 0, so C1 content blocks item 8 for no M6 arm. Integration merged
