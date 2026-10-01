@@ -1,0 +1,63 @@
+{
+  "schema": "dec-m15-data/1",
+  "name": "2b-RASDML",
+  "seed": 20261002,
+  "arm_train_sha256": "08140409a6afc439e35bc4e0aefc9b5812162c4a2972e5e1da5b137a99d0e592",
+  "teacher_sha256": "2b9858d89fb650db9bc3e7fa608755135b81d7b20ff7b1b6fa186c86bf2e49f2",
+  "ib_share": null,
+  "base": {
+    "rows": 56141,
+    "tokens": 29162107,
+    "ml_tokens": 13259366,
+    "ml_share": 0.4546779147336645
+  },
+  "ib": {
+    "rows": 35005,
+    "rows_in_arm": 35005,
+    "tokens": 7289339,
+    "ml_tokens": 38040,
+    "dose": 0.24995927077559932,
+    "by_level": {
+      "1": 35005
+    }
+  },
+  "upsample": {
+    "target_tokens": 6007938,
+    "tokens": 6006324,
+    "rows": 11256,
+    "groups": 6387,
+    "tokens_by_language": {
+      "zh": 3631032,
+      "ko": 470272,
+      "ja": 288077,
+      "de": 250797,
+      "es": 202606,
+      "zh-hant": 188551,
+      "te": 127651,
+      "fr": 110573,
+      "bn": 93765,
+      "th": 90992,
+      "ru": 90288,
+      "ar": 79847,
+      "fi": 77312,
+      "si": 64004,
+      "ne": 59351,
+      "id": 56717,
+      "et": 41210,
+      "sw": 40997,
+      "ro": 36978,
+      "hi": 5304
+    },
+    "teacher_copies": 11256
+  },
+  "train": {
+    "rows": 102402,
+    "tokens": 42457770,
+    "ml_share": 0.4546571805349174,
+    "sha256": "97157068dd811bc72030cac58f82c5f73d8d9e31ee9eaf536e082a31d05a5f78"
+  },
+  "teacher": {
+    "rows": 67397,
+    "sha256": "69d309b254748822ff54e0874b200eab691bdcfacfb508a34cb9f87eff0fed0b"
+  }
+}

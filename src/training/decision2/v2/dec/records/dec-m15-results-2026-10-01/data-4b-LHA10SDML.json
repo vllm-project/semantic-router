@@ -1,0 +1,73 @@
+{
+  "schema": "dec-m15-data/1",
+  "name": "4b-LHA10SDML",
+  "seed": 20261002,
+  "arm_train_sha256": "d41cdd1aa1e63b47394ed8fa61a87bf461cb4d2cea08cc7ff12f2e58b36dc9d5",
+  "teacher_sha256": "7639fab17c719bb3ed7a18bd16397130f109c8bd204d17c45f6743d6f0c17496",
+  "ib_share": null,
+  "base": {
+    "rows": 58739,
+    "tokens": 29404539,
+    "ml_tokens": 12180338,
+    "ml_share": 0.4142332583415098
+  },
+  "ib": {
+    "rows": 14108,
+    "rows_in_arm": 14108,
+    "tokens": 2939603,
+    "ml_tokens": 15351,
+    "dose": 0.09997106229075722,
+    "by_level": {
+      "1": 14108
+    }
+  },
+  "upsample": {
+    "target_tokens": 2052575,
+    "tokens": 2049189,
+    "rows": 4252,
+    "groups": 2802,
+    "tokens_by_language": {
+      "zh": 1073383,
+      "es": 126706,
+      "ja": 104548,
+      "ko": 94409,
+      "ru": 65073,
+      "de": 53384,
+      "hi-en": 50296,
+      "hi": 49582,
+      "fr": 48709,
+      "te": 47145,
+      "th": 44502,
+      "ar": 37015,
+      "zh-hant": 33432,
+      "fi": 31550,
+      "id": 31392,
+      "fa": 27567,
+      "bn": 24522,
+      "es-en": 21928,
+      "si": 19366,
+      "ne": 16806,
+      "sw": 14129,
+      "et": 11547,
+      "ro": 11411,
+      "ca": 3266,
+      "pt": 2748,
+      "uk": 1779,
+      "it": 1279,
+      "eu": 714,
+      "pl": 698,
+      "vi": 303
+    },
+    "teacher_copies": 4252
+  },
+  "train": {
+    "rows": 77099,
+    "tokens": 34393331,
+    "ml_share": 0.41417558537729304,
+    "sha256": "fef6b036f33de6756dab083fd21ab462ec2975cfa63120f2452d3c9145d33dd4"
+  },
+  "teacher": {
+    "rows": 62991,
+    "sha256": "b95c5e635921b3f947e5c14627f6b21cf5ca5af913fcc48735471c79aa0793dd"
+  }
+}

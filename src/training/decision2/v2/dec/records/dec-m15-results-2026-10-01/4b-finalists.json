@@ -1,0 +1,151 @@
+{
+  "schema": "dec-m15-finalists/1",
+  "tier": "4b",
+  "rule": "M13's gates (M8 eligibility, Score5t floor [m8s amendment 3 when the reference COLLAPSEs], HT-DEV v2 not FLAG, retention macro CI upper >= 0, yes-bias guard hs1-dev false-yes <= reference + 0.10, 0.8B HT-DEV v2 delta >= 0, transfer macro delta >= 0) + MLX-DEV guard (Noul-ML and Choice-ML 95% upper bounds >= 0); pick: HT-DEV v2 GAIN first, then the larger transfer macro delta; at most two",
+  "points": [
+    {
+      "point": "4b-LHA10SDML",
+      "reference": "4b-LH-f",
+      "T": 0.8775,
+      "T_ref": 0.868125,
+      "H3": 0.5569227642517927,
+      "proxy": 67.80927684868084,
+      "by_type": {
+        "choice": 742,
+        "noul": 292,
+        "score": 370
+      },
+      "rule_precedence": 292,
+      "htdev2": {
+        "delta": -0.008262913085432366,
+        "ci95": [
+          -0.021452341422703247,
+          0.005435116565355225
+        ],
+        "verdict": "TIE"
+      },
+      "score5t_check_flags": [],
+      "retention": {
+        "macro_mmlu_arc_gsm8k": 0.75560302992153,
+        "macro_delta": -0.030113576052901995,
+        "macro_delta_ci95": [
+          -0.05405094579574151,
+          -0.005822527332824815
+        ],
+        "mmlu": 0.6901185770750988,
+        "arc": 0.9538834951456311,
+        "gsm8k": 0.6228070175438597
+      },
+      "eligible": false,
+      "reasons": [
+        "retention: probe macro delta -0.0301 CI [-0.05405094579574151, -0.005822527332824815] below 0"
+      ],
+      "score_floor_rule": "m8 (no COLLAPSE; no WARN unless C0 has WARN)",
+      "false_yes": {
+        "point": 0.2113,
+        "reference": 0.1994
+      },
+      "ib_dev": {
+        "macro": 0.9420894821112719,
+        "delta": 0.08298884842043941,
+        "ci95": [
+          0.0693078673858134,
+          0.0969626973545824
+        ],
+        "transfer_macro": 0.9702064283249121,
+        "transfer_delta": 0.048091864602278545,
+        "transfer_ci95": [
+          0.03669894629031212,
+          0.06059394826656894
+        ]
+      },
+      "mlx_dev": {
+        "noul_ml": {
+          "a": 0.8506441644947462,
+          "b": 0.8664395297229264,
+          "diff": 0.015795365228180147,
+          "ci95": [
+            0.008928294107737211,
+            0.022755253555461152
+          ]
+        },
+        "choice_ml": {
+          "a": 0.9213746882793017,
+          "b": 0.9213528678304239,
+          "diff": -2.1820448877774012e-05,
+          "ci95": [
+            -0.014916678212895662,
+            0.014919510704889172
+          ]
+        },
+        "score_ml": {
+          "a": 0.5556479956068094,
+          "b": 0.5745006177924218,
+          "diff": 0.018852622185612344,
+          "ci95": [
+            0.002154195873208975,
+            0.034786986765370065
+          ]
+        },
+        "m_dev": {
+          "a": 0.7758889494602857,
+          "b": 0.7874310051152573,
+          "diff": 0.011542055654971572,
+          "ci95": [
+            0.0034837157457485723,
+            0.019368303233742168
+          ]
+        }
+      }
+    }
+  ],
+  "finalists": [],
+  "contrasts": [
+    {
+      "left": "4b-LHA10SDML",
+      "right": "4b-LHA10SD-m13",
+      "typed_T_delta": 0.010624999999999885,
+      "by_type_delta": {
+        "choice": 34,
+        "noul": -15,
+        "score": -2
+      },
+      "htdev2": {
+        "delta": -0.005185552058215581,
+        "ci95": [
+          -0.01746500903477155,
+          0.0079922539342554
+        ],
+        "verdict": "TIE"
+      },
+      "retention": {
+        "macro_delta": -0.008189277637856873,
+        "macro_delta_ci95": [
+          -0.03217493524029704,
+          0.014784248025566814
+        ],
+        "mmlu": {
+          "delta": -0.005533596837944664,
+          "delta_ci95": [
+            -0.020553359683794466,
+            0.009486166007905139
+          ]
+        },
+        "arc": {
+          "delta": 0.007281553398058253,
+          "delta_ci95": [
+            -0.0012135922330097086,
+            0.015776699029126214
+          ]
+        },
+        "gsm8k": {
+          "delta": -0.02631578947368421,
+          "delta_ci95": [
+            -0.09649122807017543,
+            0.03508771929824561
+          ]
+        }
+      }
+    }
+  ]
+}
