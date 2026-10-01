@@ -1,0 +1,20 @@
+{
+ "families_excluded": [
+  "fc_args2",
+  "fc_sel2"
+ ],
+ "n": 60,
+ "per_family": 10,
+ "rows": 33068,
+ "rows_sha256": "70172b6c9c51d03c02b5fe35a4511c8545de41f00ebbdeec134a4ed9c66334bd",
+ "salt": "ib2-screen-v1",
+ "sampled": {
+  "argq": 10,
+  "fc_ready": 10,
+  "fc_rel": 10,
+  "gsm2": 10,
+  "hover": 10,
+  "ytspam": 10
+ },
+ "schema": "decision2.ib2.screen-sample.v1"
+}

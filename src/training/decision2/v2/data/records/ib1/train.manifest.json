@@ -4,78 +4,59 @@
  "canonical_path": "ib1.train.jsonl",
  "choice": {
   "by_option_bucket": {
-   "2": 10996,
-   "3": 8846,
-   "4": 2672,
-   "5-8": 4981
+   "2": 17801,
+   "4": 2672
   },
   "gold_position_by_bucket": {
    "2": {
-    "0": 5471,
-    "1": 5525
-   },
-   "3": {
-    "0": 4423,
-    "2": 4423
+    "0": 8873,
+    "1": 8928
    },
    "4": {
     "0": 663,
     "1": 679,
     "2": 657,
     "3": 673
-   },
-   "5-8": {
-    "0": 995,
-    "1": 1013,
-    "2": 1033,
-    "3": 945,
-    "4": 995
    }
   }
  },
- "content_sha256": "f44d7f5fe9ccaf63386fc213394282466f2c26c6a2da2945b32207adc8c62c5c",
+ "content_sha256": "1e1b08f3d37f9051ffe2e4b99fd7be673f315d05cc74a27a8d350eae2bb706c5",
  "counts": {
   "family": {
-   "args": 5184,
+   "args": 5182,
    "copa": 878,
-   "csqa": 4981,
    "isarc": 874,
    "poem": 3584,
-   "sentfin": 4778,
+   "sentfin": 6808,
    "sms": 1152,
    "snips_rel": 2700,
    "snips_sel": 2672,
-   "sumedit": 576,
-   "w2c": 476,
-   "wands": 4068
+   "w2c": 475
   },
   "language": {
    "ar": 410,
-   "en": 31513
+   "en": 23915
   },
   "source": {
-   "args_me_portals": 5184,
+   "args_me_portals": 5182,
    "balanced_copa_train": 878,
-   "commonsenseqa_train": 4981,
    "gutenberg_poetry_cc0": 3584,
    "isarcasmeval_train": 874,
-   "sentfin_v1": 4778,
+   "sentfin_v1": 6808,
    "sms_spam_collection": 1152,
    "snips_2017_custom_intents": 5372,
-   "summedits": 576,
-   "wands": 4068,
-   "when2call_train_pref": 476
+   "when2call_train_pref": 475
   },
   "task_type": {
-   "choice": 27495,
-   "noul": 4428
+   "choice": 20473,
+   "noul": 3852
   }
  },
- "groups": 20755,
+ "groups": 20206,
  "input": {
   "is_canonical": true,
   "path": "ib1.train.jsonl",
-  "sha256": "f44d7f5fe9ccaf63386fc213394282466f2c26c6a2da2945b32207adc8c62c5c"
+  "sha256": "1e1b08f3d37f9051ffe2e4b99fd7be673f315d05cc74a27a8d350eae2bb706c5"
  },
  "license_registry_sha256": "c06ce6ca15da5f0744ccdcac2ad71cbc69e0e7e9a8a5a886a8b51c2482740b5f",
  "licenses": {
@@ -90,12 +71,6 @@
    "evidence": "https://huggingface.co/datasets/pkavumba/balanced-copa/blob/813bd03cd6e07d9bd8d7333896ad5d40abb95ea9/README.md (Licensing Information: CC BY 4.0)",
    "license": "CC-BY-4.0",
    "redistribution": "permitted with attribution"
-  },
-  "commonsenseqa_train": {
-   "attribution": "Talmor, Herzig, Lourie and Berant, CommonsenseQA: A Question Answering Challenge Targeting Commonsense Knowledge (NAACL 2019); tau/commonsense_qa@94630fe30dad47192a8546eb75f094926d47e155 train",
-   "evidence": "https://huggingface.co/datasets/tau/commonsense_qa/blob/94630fe30dad47192a8546eb75f094926d47e155/README.md (The dataset is licensed under the MIT License)",
-   "license": "MIT",
-   "redistribution": "permitted with the MIT notice"
   },
   "gutenberg_poetry_cc0": {
    "attribution": "Allison Parrish, Gutenberg Poetry Corpus (public-domain poems from Project Gutenberg); biglam/gutenberg-poetry-corpus@fcd42e249fed48dbd1d3b9b969528ef9298d3464; one-word perturbations constructed for IB1",
@@ -127,18 +102,6 @@
    "license": "CC0-1.0",
    "redistribution": "permitted"
   },
-  "summedits": {
-   "attribution": "Laban, Kryscinski, Agarwal, Fabbri, Xiong, Joty and Wu, SummEdits: Measuring LLM Ability at Factual Reasoning Through The Lens of Summarization (EMNLP 2023); Salesforce/summedits@ce0c479aaf59259abb6b67e42248b2f49004b7d5 summedits.json, domains billsum (US public-domain bills), sales_call and sales_email (synthetic), shakespeare (public domain) only; edited summaries generated with an LLM and verified by human annotators",
-   "evidence": "https://huggingface.co/datasets/Salesforce/summedits/blob/ce0c479aaf59259abb6b67e42248b2f49004b7d5/README.md (license: cc-by-4.0); https://github.com/salesforce/factualNLG (Apache-2.0)",
-   "license": "CC-BY-4.0",
-   "redistribution": "permitted with attribution"
-  },
-  "wands": {
-   "attribution": "Chen, Liu, Kallumadi and Mandal, WANDS: Dataset for Product Search Relevance Assessment (ECIR 2022), Wayfair; wayfair/WANDS@3b74dcf4ba29ab8ff3e6a50b5b09fc627cb882b5 dataset/label.csv, product.csv, query.csv",
-   "evidence": "https://github.com/wayfair/WANDS/blob/3b74dcf4ba29ab8ff3e6a50b5b09fc627cb882b5/LICENSE (MIT)",
-   "license": "MIT",
-   "redistribution": "permitted with the MIT notice"
-  },
   "when2call_train_pref": {
    "attribution": "Ross, Mahabaleshwarkar and Suhara, When2Call: When (not) to Call Tools (NAACL 2025); nvidia/When2Call@0582f7749df63a96fdc3070932e83e72396ace53 train/when2call_train_pref.jsonl only (the test files are an Index source and were never downloaded); generated with Mixtral-8x22B-Instruct (Apache-2.0); IN-DISTRIBUTION for the Index's When2Call benchmark",
    "evidence": "https://huggingface.co/datasets/nvidia/When2Call/blob/0582f7749df63a96fdc3070932e83e72396ace53/README.md (CC BY 4.0); https://github.com/NVIDIA/When2Call (generation model)",
@@ -148,45 +111,20 @@
  },
  "noul": {
   "labels": {
-   "false": 2214,
-   "true": 2214
+   "false": 1926,
+   "true": 1926
   },
   "true_fraction": 0.5
  },
  "partition": "train",
  "role": "train",
- "rows": 31923,
+ "rows": 24325,
  "rows_per_group": {
-  "1": 15776,
-  "10": 33,
-  "11": 35,
-  "12": 35,
-  "13": 26,
-  "14": 21,
-  "15": 29,
-  "16": 20,
-  "17": 19,
-  "18": 30,
-  "19": 17,
-  "2": 3900,
-  "20": 11,
-  "21": 12,
-  "22": 5,
-  "23": 5,
-  "24": 3,
-  "25": 4,
-  "26": 1,
-  "27": 2,
-  "3": 314,
-  "30": 1,
-  "31": 2,
-  "4": 144,
-  "47": 1,
-  "5": 96,
-  "6": 65,
-  "7": 59,
-  "8": 51,
-  "9": 38
+  "1": 16334,
+  "2": 3671,
+  "3": 160,
+  "4": 36,
+  "5": 5
  },
  "schema": "decision2.v2.freeze.v1",
  "score": {
@@ -195,95 +133,95 @@
  },
  "state_chars": {
   "p0": 18,
-  "p10": 59,
-  "p100": 12150,
-  "p25": 85,
-  "p50": 250,
-  "p75": 841,
-  "p90": 1443,
-  "p99": 2962
+  "p10": 60,
+  "p100": 4752,
+  "p25": 87,
+  "p50": 160,
+  "p75": 689,
+  "p90": 899,
+  "p99": 2083
  },
  "tokens": [
   {
    "by_language": {
     "ar": 50531,
-    "en": 7501815
+    "en": 4475361
    },
    "by_task_type": {
-    "choice": 6062355,
-    "noul": 1489991
+    "choice": 3562768,
+    "noul": 963124
    },
    "kind": "native_decoder",
    "name": "qwen3-0.6b-base@da87bfb6",
-   "padded8_total": 7662936,
+   "padded8_total": 4610520,
    "path": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
    "quantiles": {
     "p0": 82,
-    "p10": 112,
-    "p100": 2593,
-    "p25": 131,
-    "p50": 181,
-    "p75": 303,
-    "p90": 464,
-    "p99": 744
+    "p10": 94,
+    "p100": 1384,
+    "p25": 101,
+    "p50": 174,
+    "p75": 215,
+    "p90": 315,
+    "p99": 557
    },
    "revision": null,
    "tokenizer_json_sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539",
-   "total": 7552346
+   "total": 4525892
   },
   {
    "by_language": {
     "ar": 52348,
-    "en": 7828330
+    "en": 4696274
    },
    "by_task_type": {
-    "choice": 6351671,
-    "noul": 1529007
+    "choice": 3751263,
+    "noul": 997359
    },
    "kind": "native_decoder",
    "name": "qwen3.5-0.8b-base@dc7cdfe2",
-   "padded8_total": 7992544,
+   "padded8_total": 4833168,
    "path": "dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68",
    "quantiles": {
     "p0": 91,
-    "p10": 123,
-    "p100": 2602,
-    "p25": 143,
-    "p50": 190,
-    "p75": 312,
-    "p90": 473,
-    "p99": 748
+    "p10": 103,
+    "p100": 1391,
+    "p25": 109,
+    "p50": 183,
+    "p75": 224,
+    "p90": 324,
+    "p99": 565
    },
    "revision": null,
    "tokenizer_json_sha256": null,
-   "total": 7880678
+   "total": 4748622
   },
   {
    "by_language": {
     "ar": 27931,
-    "en": 5693360
+    "en": 3259909
    },
    "by_task_type": {
-    "choice": 4224251,
-    "noul": 1497040
+    "choice": 2467648,
+    "noul": 820192
    },
    "kind": "raw",
    "name": "kai-0.6b@7185f514",
-   "padded8_total": 5833864,
+   "padded8_total": 3374248,
    "path": "tokenizer",
    "quantiles": {
-    "p0": 28,
-    "p10": 40,
-    "p100": 5001,
-    "p25": 50,
-    "p50": 120,
-    "p75": 269,
-    "p90": 394,
-    "p99": 709
+    "p0": 29,
+    "p10": 42,
+    "p100": 1620,
+    "p25": 48,
+    "p50": 117,
+    "p75": 163,
+    "p90": 283,
+    "p99": 521
    },
    "revision": null,
    "tokenizer_json_sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
-   "total": 5721291
+   "total": 3287840
   }
  ]
 }

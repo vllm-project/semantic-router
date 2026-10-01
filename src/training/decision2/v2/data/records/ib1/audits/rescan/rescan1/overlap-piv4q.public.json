@@ -1,19 +1,19 @@
 {
  "candidate_files": [
   {
-   "rows": 48495,
-   "sha256": "4730291bdd107ac3f23242436f01b0eb983a7dba640b135934dcf88e68bfd6af"
+   "rows": 41076,
+   "sha256": "f379f2262fe3b01c4825184976e07dfd16bf1f65ebcc7889f1a765001868ac8c"
   },
   {
-   "rows": 3848,
-   "sha256": "9091f2009f9e695f1012bd1750022629b5979c91e24b0c67c47b88f50d8df6f7"
+   "rows": 3549,
+   "sha256": "cd0f53d05d09dec3e23d8f6b394068ad012ddef73bef228661abcc02391e227b"
   }
  ],
  "candidates": {
-  "distinct_leaves_scanned": 72228,
-  "groups": 39071,
-  "rows": 52343,
-  "states_keyed": 52266
+  "distinct_leaves_scanned": 63979,
+  "groups": 38534,
+  "rows": 44625,
+  "states_keyed": 44548
  },
  "flagged": {
   "boilerplate": {
@@ -52,8 +52,8 @@
     "rows": 3
    },
    "N": {
-    "groups": 49,
-    "rows": 1376
+    "groups": 40,
+    "rows": 1251
    },
    "S": {
     "groups": 6,
@@ -709,16 +709,16 @@
      "rows": 0
     },
     "N": {
-     "groups": 4,
-     "rows": 58
+     "groups": 0,
+     "rows": 0
     },
     "S": {
      "groups": 0,
      "rows": 0
     },
     "any": {
-     "groups": 4,
-     "rows": 58
+     "groups": 0,
+     "rows": 0
     }
    },
    "jevbench_public231_native": {
@@ -731,16 +731,16 @@
      "rows": 0
     },
     "N": {
-     "groups": 4,
-     "rows": 58
+     "groups": 0,
+     "rows": 0
     },
     "S": {
      "groups": 0,
      "rows": 0
     },
     "any": {
-     "groups": 4,
-     "rows": 58
+     "groups": 0,
+     "rows": 0
     }
    },
    "kai06b_css_cal_v1": {
@@ -1127,16 +1127,16 @@
      "rows": 0
     },
     "N": {
-     "groups": 6,
-     "rows": 78
+     "groups": 0,
+     "rows": 0
     },
     "S": {
      "groups": 0,
      "rows": 0
     },
     "any": {
-     "groups": 6,
-     "rows": 78
+     "groups": 0,
+     "rows": 0
     }
    },
    "v1_aho_a2": {
@@ -1339,8 +1339,8 @@
    }
   },
   "quarantine": {
-   "groups": 58,
-   "rows": 1386
+   "groups": 49,
+   "rows": 1261
   }
  },
  "methods": {

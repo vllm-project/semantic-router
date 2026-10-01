@@ -37,8 +37,8 @@
     "train_rows": 0
    },
    "sentfin": {
-    "dev_rows": 40,
-    "groups": 35,
+    "dev_rows": 24,
+    "groups": 24,
     "train_rows": 0
    },
    "sms": {
@@ -77,10 +77,10 @@
     "train_rows": 0
    }
   },
-  "groups": 1064
+  "groups": 1053
  },
- "drop_dev_groups_sha256": "1bc7aeacc477a054eb454bd364cf142bfc59f3b80198abe714b7575c845afc88",
- "drop_groups_sha256": "c1c3c86fde9170fcd44cf373b2977a864514c5aaab536d9b19f40bb93239a65b",
+ "drop_dev_groups_sha256": "0acaa4de5d18fe74e984bd45bbb54d83a88dd75fcb1ff883e5bff061b3862c48",
+ "drop_groups_sha256": "7126090c9b5eea2dc03537ced4abc96780ba55df6a5d9e20845adb3778480b45",
  "quarantine": {
   "by_family": {
    "args": {
@@ -115,8 +115,8 @@
    },
    "sentfin": {
     "dev_rows": 2,
-    "groups": 6,
-    "train_rows": 5
+    "groups": 7,
+    "train_rows": 8
    },
    "snips_rel": {
     "dev_rows": 0,
@@ -149,7 +149,7 @@
     "train_rows": 120
    }
   },
-  "groups": 530
+  "groups": 531
  },
  "report_only_roles_hit": {
   "a7_train_A7h": 37,
@@ -163,9 +163,9 @@
   "v1_train_a6h": 7,
   "v2_aho_E11": 9,
   "v2_aho_H1": 444,
-  "v2_aho_H3": 138,
+  "v2_aho_H3": 136,
   "v2_aho_H5": 4,
-  "v2_aho_H6": 23
+  "v2_aho_H6": 22
  },
  "schema": "decision2.hr2.quarantine.v1"
 }
