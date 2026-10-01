@@ -231,6 +231,13 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 18:12Z (poll 9 at 18:04Z): all alive, guard alive. M6-IB 3,853 / 3,689 (13.4 / 13.9 h; **s1 at 3816 .9196, BEST =
+  3816**); M6-IB2 3,770 / 3,762 (17.6 / 17.7 h); M6-IBX 3,430 / 3,387 (13.8 / 14.0 h); M6-IB2PN 2,363 / 2,343 (18.9 /
+  18.7 h). GPU-h ≈ 73. **COORDINATOR DECISION 2026-10-02 02:05 (18:05Z): the "Index path"** (item 1' = v3 not
+  significantly below the reference AND a significantly positive paired private-Index delta; items 2–8 unchanged; one
+  Index run per frozen finalist; "27B M6 finalists will be judged on both paths"). Amendment 4 records it for M6
+  before any M6 result. Integration merged (signed; `paired_boot.py` from the 9B track now on it). Node D GPU7 runs
+  the 4B track's `LHA10SD` Index shard (eval-ix1 lease); the 0.8B fast-track released GPU5 at 16:39Z.
 - 17:44Z (poll 8 at 17:42Z): all alive, guard alive. M6-IB 3,727 / 3,551 (13.2 / 13.9 h; ETA 21:08Z / 21:50Z);
   M6-IB2 3,628 / 3,621 (17.5 / 17.7 h); M6-IBX 3,293 / 3,251 (13.8 / 14.0 h; **s2 at 3125 .9159, BEST = 3125**);
   M6-IB2PN 2,225 / 2,203 (18.9 / 18.7 h). Node D disk 688 GB. GPU-h ≈ 70.
