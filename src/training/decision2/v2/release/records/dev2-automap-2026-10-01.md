@@ -9,7 +9,25 @@ per-prompt answers stay on the node. Times are UTC. Everything stays private.
 
 ## Result
 
-RESULT_TABLE
+**Every DEV2.0 package now loads with stock 🤗 Transformers** —
+`AutoModel.from_pretrained(repo, trust_remote_code=True)` (and `AutoConfig`, `AutoTokenizer`,
+`pipeline("decision", ...)`) — **through its own native runtime, with 0 answer changes against the native runtime
+on every scored prompt and on mlx-diag for all six models (max drift 0.0)**, under Transformers 5.17.0 and 5.18.0.
+Published as runtime-only revisions on top of the BF16-resident rollout (weights byte-identical; private; the
+collection unchanged). Status at the worker's handoff (07:20Z): 0.6B, 0.8B, 2B published; 4B, 9B and 27B releases
+running on node E (27B uploaded, its post-download checks running).
+
+| Model | AutoModel vs native, Transformers 5.17: answers changed (max drift) | 5.18 | New `main` | Final decision (gate items) | Hub smoke 5.17 / 5.18 |
+| --- | --- | --- | --- | --- | --- |
+| DEV2.0-0.6B | 0 of 11,053 (0) | 0 of 11,053 (0) | `08b00e07cb90472e4184e3b91f3188c0ead8935b` | `469b4d7d…` (13 / 13) | pass / pass |
+| DEV2.0-0.8B | 0 of 11,053 (0) | 0 of 11,053 (0) | `1188dd33cc2d69381d3c37c9259b4f4163a666a6` | `591a9ae2…` (7 / 7) | pass / pass |
+| DEV2.0-2B | 0 of 11,053 (0) | 0 of 11,053 (0) | `ffe291b4401930040914339592cd9fc59b9a3f87` | `6e15df74…` (7 / 7) | pass / pass |
+| DEV2.0-4B | 0 of 11,053 (0) | 0 of 8,778 (0) | — | — | — / — |
+| DEV2.0-9B | 0 of 11,053 (0) | — | — | — | — / — |
+| DEV2.0-27B | 0 of 11,053 (0) | 0 of 11,053 (0) | `2b7508e95a243d71e854a0743e14c1514f4c29dc` | — | — / — |
+
+The 5.18 column for 4B covers typed-final, css15 and public231 (its mlx-diag parity uses that run's own autotune
+cache and ran under 5.17 only). Gate items: the successor profile (0.6B, 27B) adds its R1–R7 items.
 
 ## 1. Design
 
@@ -105,8 +123,8 @@ public231 231, mlx-diag 2,275) is **identical — 0 changes, max drift 0.0, for 
 answers still reproduce the scored predictions (0 changes; drift ≤ 2e-14; 0.6B and 27B 0.0).
 
 Transformers 5.18.0 (`automap.sh --tf518`: the wheel installed `--no-deps` as an overlay on the image, AutoModel
-parity on the verified package) against the same native 5.17 answers: 0.6B and 27B **10,653 / 10,653 prompts
-identical (drift 0.0)**; TF518_REST. The text paths of `modeling_qwen3` / `modeling_qwen3_5` are unchanged
+parity on the verified package) against the same native 5.17 answers: **0.6B, 0.8B, 2B and 27B 10,653 / 10,653 prompts
+identical, 4B 8,378 / 8,378 (three panels), drift 0.0**; 9B runs in its release chain. The text paths of `modeling_qwen3` / `modeling_qwen3_5` are unchanged
 between 5.17.0 and 5.18.0 (only multimodal code differs).
 
 The release builds re-run all of this before the upload (section 6). The verify and release packages differ only
@@ -129,7 +147,11 @@ after, the card's Transformers block from the Hub in a fresh `HF_HOME` under Tra
   (`--resume 25669e2d`) published **`08b00e07cb90472e4184e3b91f3188c0ead8935b`** (the packages differ only in
   `MODEL_MANIFEST.json` `builder.source_commit`), gate 13 / 13, Hub smoke 5.17 and 5.18 bit-identical, post-checks
   ok. Receipts under `0p6b/release/` (and `0p6b/release-interrupted/`).
-- RELEASE_REST
+- **DEV2.0-0.8B** `1188dd33cc2d69381d3c37c9259b4f4163a666a6` and **DEV2.0-2B**
+  `ffe291b4401930040914339592cd9fc59b9a3f87`: gate 7 / 7, Hub smoke 5.17 and 5.18 bit-identical, post-checks ok.
+- **DEV2.0-4B, 9B, 27B:** running at the handoff (27B uploaded `2b7508e9…`; its parity-post, AutoModel-post and
+  the two fresh-cache Hub smokes, each downloading the 52 GB base, follow). See the state file for the steps
+  that complete this record.
 
 ## 7. Limits
 

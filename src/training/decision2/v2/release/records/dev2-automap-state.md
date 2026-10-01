@@ -8,6 +8,24 @@ pinned base (PEFT auto-detection tested). Worktree `/home/xunliu/code/vllm-sr-de
 
 ## Now
 
+- 07:20Z — **HANDOFF.** Published: **0.6B `08b00e07`** (13 / 13), **0.8B `1188dd33`** (7 / 7), **2B `ffe291b4`**
+  (7 / 7), each with AutoModel vs native 0 of 11,053 answers changed (drift 0), 5.18 parity 0 of 11,053, Hub smoke
+  5.17 + 5.18 pass, post-checks ok. Still running on node E (nothing else needed to start them):
+  - GPU6 chain (log `/data/dev2/logs/automap-gpu6-publish-20261001T061027Z.log`): 4B `--tf518` passed (0 of 8,778)
+    → 4B `--release` (from ~07:15Z) → 9B `--tf518` → 9B `--release` → GPU integration re-run. ETA ~08:30Z.
+  - GPU7 (log `/data/dev2/logs/automap-gpu7-publish-20261001T061027Z.log`): 27B `--release`, uploaded `2b7508e9`;
+    parity-post, automap-post and two fresh-cache Hub smokes (52 GB base each) follow. ETA ~08:15Z.
+  - **To finish** (worktree `vllm-sr-dev2-automap`):
+    1. Wait for `post_checks=ok` lines for 4B, 9B, 27B in those logs (or `CHAIN STOPPED` → read that work dir's
+       `logs/`; a failure after upload is resumable: `automap.sh <tier> --release --gpu N --resume <uploaded rev>`).
+    2. `bash src/training/decision2/v2/release/records/dev2-automap-2026-10-01/ops/fetch_receipts.sh <node-e addr>`;
+       in `src/training/decision2`: `python3 v2/release/records/dev2-automap-2026-10-01/ops/summary.py` → replace the
+       record's Result table; update its section 6 lines for 4B / 9B / 27B and the status sentence.
+    3. GPU-hours: node E GPU6 04:14–(chain end), GPU7 04:56–(27B end), minus idle gaps (≈ 7 GPU-h at 07:20Z).
+    4. Commit (`check_no_private.sh --strict`, `git commit -s`), push, `git merge origin/xunzhuo/decision-2-training`,
+       tests (`python3 -m unittest v2.release.tests.test_automap v2.release.tests.test_release`), push
+       `HEAD:xunzhuo/decision-2-training`; update gist 07's auto_map entry in place.
+    5. Remove the node E leases `gpu6.lock/owner` / `gpu7.lock/owner` when both chains end (track release-automap).
 - 06:40Z — **DEV2.0-0.6B published: `08b00e07cb90472e4184e3b91f3188c0ead8935b`** (decision `469b4d7d…`, gate 13 / 13
   incl. `7_transformers_remote_code`; full native parity pre/post 0 changes; AutoModel vs native 0 of 11,053, drift 0;
   Hub smoke from a fresh cache under 5.17.0 and 5.18.0 bit-identical; card HTTP / links / gate evaluate ok). The first
