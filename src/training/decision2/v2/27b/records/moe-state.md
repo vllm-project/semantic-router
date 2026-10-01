@@ -81,6 +81,8 @@ Mirror for every Index job: `0403fb5796ca00a5a217f8e7656c77fe6e2205db-src_traini
 
 ## Poll log (newest first)
 
+- 10:17Z: Index shards 18,410 / 17,140 / 17,580 (all `ok`), ≈ 4.1–4.3 requests/s on average; shards end ≈ 11:45Z,
+  their alone-reruns ≈ 12:10Z. Scorer imports checked on node A (port, kit 87d4650b, merge, compare).
 - 09:52Z: Index shards 10,190 / 8,810 / 9,260 requests, all `ok` so far; 3 containers running. Integration
   fast-forwarded to `6e8d8e9b9` (merge of this branch); gist 06c updated. Results record: typed FINAL loss by family
   (`exception_stack` −.225 carries most of it).
