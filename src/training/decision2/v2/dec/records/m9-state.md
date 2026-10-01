@@ -2,43 +2,55 @@
 
 Assignment: COORDINATION 2026-10-01 10:30 (4B HR2 efficacy pilot, NOT releasable: full seeds from Nox + N4XF + an HR2
 block vs a matched control, screened with HT-DEV v2). Budget 16 GPU-h. GPUs: node A GPU6–7 only (9B-owned, lent).
-Preregistration: [`dec-m9-prereg-2026-10-01.md`](dec-m9-prereg-2026-10-01.md) (`f22a5797c`); data lock
-[`dec-m9-datalock-2026-10-01.md`](dec-m9-datalock-2026-10-01.md) (`2f20c2223`, PASS). Gist 04 entry 11:15.
+Preregistration [`dec-m9-prereg-2026-10-01.md`](dec-m9-prereg-2026-10-01.md) (`f22a5797c`, committed 10:37 UTC+8;
+its "written ≈11:10" line is a typo for ≈10:35); data lock [`dec-m9-datalock-2026-10-01.md`](dec-m9-datalock-2026-10-01.md)
+(`2f20c2223`, PASS); [amendment 1](dec-m9-amendment-1-2026-10-01.md) (`e7f8e9858`, committed 11:10:50 UTC+8 =
+03:10:50Z, before any arm readout; its "written ≈11:35" line should read ≈11:10). Gist 04 entry.
 
 ## Now
 
-- 2026-10-01 ≈11:05 UTC+8 (03:05Z) — **Chains running.** Mirror `e9a357ed408cd569fa41b436c9e578354beaa99a-src_training_decision2`
-  on node A (139 tests pass in the image). Chains launched 02:58Z: `m9/chains/chain-g6.pid` (4081925),
-  `chain-g7.pid` (4081939); H9-s1 / C9-s1 passed zero-step, one-step running (containers `dec-m9-H9-s1-*`,
-  `dec-m9-C9-s1-*`). Expected seed ≈ 1.45 h; E1 ≈ 04:35Z; soups ≈ 07:35Z.
-  - `m9-lines.sh refs` on GPU6 (co-tenant, started 03:00Z, log `m9/logs/refs.log`): 4b-I HT-DEV v2 read; typed DEV
-    reading; then CSS pilot, Score5-typed-DEV, HR2 DEV, hs1-dev, scoring and node-B parity.
-  - Known: the chains' copy of `m9_gpuh.py` also counts the copied M7 parity receipts (+0.226 GPU-h, conservative for
-    the stop rules); fixed in the next mirror for reporting.
+- 2026-10-01 ≈11:25 UTC+8 (03:25Z) — **H9 training (3 seeds); control = M7's N7C (amendment 1); post chain armed.**
+  - **C9 stopped:** m9-C9-s1 preflight FAIL 03:04Z on `zero_trainer_cross_process` (698 / 700, drift 0.0187; every
+    other gate passed; cold shared autotune cache filled by both chains at once). No rerun (rules). E1 does not apply.
+  - **H9:** s1 (GPU6) and s2 (GPU7) passed preflight (03:04Z, 03:09Z) and are in their full runs (≈ 04:30Z); GPU6
+    then runs H9-s3 (≈ 06:00Z); the soup follows (`m9/status/H9.DONE`).
+  - **Readout path parity (refs, done 03:12Z):** `4b-I` on the M9 node-A path = the stored node-B readouts, 0 answer
+    differences and drift 0.0 on typed DEV, CSS pilot, HT-DEV v2, `hs1-dev`, Score5-typed-DEV; HT-DEV v2 = the eval
+    reference (Δ 0.0). `4b-I`: Score5-typed-DEV check no flag (top share .39); HR2 DEV family macro .688.
+  - **Control line L-N7C** (GPU7 co-tenant, since 03:14Z): N7C soup copied (list `9bcc0d10…` verified); α ½ rebuilt =
+    M7's finalist weights (only `decision_config.json` paths differ). Readouts running.
+  - **Formal parity run** (GPU6 co-tenant, since 03:14Z): `m9-ref-N4XF` (DEV2.0-4B weights, T = 1) on the node-A
+    formal path (dbe5f32b, copy of `cache-frozen` `f6d0f920…`); typed FINAL collected, CSS15 running; then PARITY.json
+    vs `dev2-4b-t1-derived` and its mlx-diag.
+  - **Post chain** (`m9-post.sh`, mirror `3adaa9cc1…`, pid 4131371, GPU7): waits for H9.DONE → `line H9` → `score` →
+    `rules` → (pick only) formal select / smoke / finalist / score / mlx / readout. Markers `m9/post/*.DONE|FAILED`,
+    log `m9/logs/post.log`.
 
 ## Plan
 
 | Step | Where | Status |
 | --- | --- | --- |
-| Prereg | workstation | done `f22a5797c` |
-| Tooling + tests, mirror | workstation → node A | done `e9a357ed4` |
-| Inputs + caches over the direct link | node B → node A | done (content manifests equal; formal caches `f6d0f920…` / `65d7d38f…`) |
-| Data build + lock | node A CPU | done 02:55Z, PASS |
-| Chains: GPU6 H9-s1 → C9-s2 → H9-s3; GPU7 C9-s1 → H9-s2 → C9-s3; E1 after s1 | node A GPU6–7 | running since 02:58Z |
-| References (`4b-I` on the M9 path + parity) | node A GPU6 (co-tenant) | running |
-| Lines (α 1, ½), diagnostics, scoring, rules | node A | after the soups |
-| Formal (H9 pick only; parity run first) | node A | tooling to be committed before use |
+| Prereg, tooling, data lock | | done |
+| Chains (H9 s1–s3; C9 stopped) | node A GPU6–7 | running; H9 soup ≈ 06:10Z |
+| References + readout parity | node A GPU6 | done (exact) |
+| Control line L-N7C (amendment 1) | node A GPU7 | running |
+| Formal-path parity run | node A GPU6 | running |
+| H9 line, scoring, rules, formal | node A GPU7 (post chain) | armed |
+| Results record, gist 04, merge | workstation | after the post chain |
 
-## Operations (node A, from the mirror `S=/data/dev2/src/<mirror>/src/training/decision2`)
+## Operations (node A, from the newest mirror `S=/data/dev2/src/<mirror>/src/training/decision2`)
 
-- Liveness: `cat /data/dev2/runs/dec/m9/chains/chain-g{6,7}.pid` + `ps -p`; `docker ps | grep dec-m9`. Never `pgrep -f`.
-- Logs: `m9/OPERATIONS.log`, `m9/logs/chain-g{6,7}.log`, `m9/arms/OPERATIONS.log`, `m9/lines/4b/OPERATIONS.log`.
-- Early rule: written by the chains to `m9/early/E1.json` (`m9-lines.sh early <ARM>` then `e1`).
-- After both soups (`m9/status/{H9,C9}.DONE`): `M9_GPU=6 m9-lines.sh line H9` and `M9_GPU=7 m9-lines.sh line C9`
-  (parallel), then `m9-lines.sh score` and `m9-lines.sh rules` → `m9/select/4b-pick.json`.
+- Liveness: `m9/chains/chain-g{6,7}.pid`, `m9/post/post.pid` + `ps -p`; `docker ps | grep -E 'dec-m9|dev2-dec-gpu'`.
+  Never `pgrep -f`.
+- Logs: `m9/OPERATIONS.log`, `m9/logs/{chain-g6,chain-g7,post,line-N7C,formal-parity}.log`, `m9/arms/OPERATIONS.log`,
+  `m9/lines/4b/OPERATIONS.log`, `m9/formal/OPERATIONS.log`.
+- If the post chain stops on a failed step: record it; do not rerun that step.
 
-## GPU-hours
+## GPU-hours (so far, approximate)
 
 | Item | GPU-h |
 | --- | ---: |
+| C9-s1 (zero-step, one-step, gate) | ≈ 0.10 |
+| H9 s1 / s2 (running) | — |
+| References (6 panels) | 0.21 |
 | **Total (cap 16)** | running |
