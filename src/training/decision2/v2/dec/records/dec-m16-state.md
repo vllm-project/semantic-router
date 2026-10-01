@@ -21,3 +21,15 @@ Branch `xunzhuo/decision-2-training-dec-m16`, worktree `vllm-sr-dev2-dec-m16`. P
 - Node B formal masters copied into `formal/m16/masters` (manifests equal). `m16-fscore.sh` 2B bar fix (bar-t1's
   mlx-diag run is node A's `formal/m3/m3-S2T-soup-mlx`, the DEV2.0-2B weights; the release dir holds only its score)
   committed here before any formal data exists.
+
+## 2026-10-01 18:36Z
+
+- Node A finished all nine 0.8B points (18:20Z); node A GPU3–5 leases released. 0.8B scored on node A and **rules run
+  once** (`m16/select/08b-finalists.json`, 18:31Z): 8 of 9 points pass every gate including the MLX-DEV guard
+  (`08b-RAUP-a75` fails the Choice type floor). **Finalists `08b-RASD-a75`, `08b-RA-a75`** (largest transfer deltas;
+  the second from another line by rule).
+- Formal (node B, mirror `5b246b110`): finalists and their readouts relayed from node A through node E (tree hashes
+  checked); select file `m16/select/formal/08b-finalists.json` (slot 0 `08b-C0` = the C0 package, manifest
+  `26baab01…`); launched 18:36Z: GPU3 parity `m16-08b-C0` then `m16-08b-RASD-a75`, GPU4 `m16-08b-RA-a75`
+  (co-tenants of the node-B readout chains).
+- Node B readouts: 2B `2b-RA` / `2b-RAUP` ×3 and `4b-LHA10UP` a25 / a50 done; the rest running.
