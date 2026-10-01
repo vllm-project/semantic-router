@@ -1,5 +1,18 @@
 # Decoder M15 — state (prereg `dec-m15-prereg-2026-10-01.md`)
 
+## 2026-10-01 18:17Z — 2B rules (run once): no finalist
+
+| Point (vs `2b-C0-f`: typed C / N / S 489 / 230 / 257) | Typed C / N / S | HT-DEV v2 | Retention Δ | Transfer Δ | MLX-DEV Noul-ML / Choice-ML Δ [95% CI] | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2b-RASDML` | 532 / 244 / **174** | +.041 [+.025, +.057] GAIN | +.010 [−.016, +.038] | +.152 | +.001 [−.007, +.008] / −.009 [−.024, +.007] (guard passes) | Score floor 174 < 245; `set_reconciliation` floor |
+| `2b-RA10SDML` | 472 / 234 / **235** | +.011 [−.004, +.026] TIE | +.009 [−.019, +.040] | +.147 | +.003 [−.004, +.011] / −.004 [−.016, +.009] (guard passes) | Score floor 235 < 245 |
+
+- Contrasts (report only): `2b-RASDML` vs M13 `2b-RASD`: HT +.024 [+.008, +.040] GAIN; typed Δ choice +53, Noul +11,
+  Score −63. `2b-RA10SDML` vs `2b-RASDML`: HT −.030 FLAG; Score +61, choice −60. Both pass the MLX-DEV guard; the Score
+  head decides (as in M12 / M13).
+- **Guard validation, 4B (report only):** M13's `4b-LHA10SD` vs `4b-LH-f` on MLX-DEV-M15: Noul-ML +.009, Choice-ML
+  −.006, M_dev +.010 — the development panel does **not** reproduce that model's formal mlx-diag loss (−.029).
+
 ## 2026-10-01 18:05Z
 
 - Node F training finished: `2b-RA10SDML` s1 / s2 DONE 17:50 / 17:54Z, `4b-LHA10SDML` s1 / s2 DONE 17:54 / 17:59Z. Both
