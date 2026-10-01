@@ -205,6 +205,32 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 00:25 — **Card round 1 done (4c0a68cd); rename + product-card round 2 launched (same worker).**
+  - **Round 1 card-only revisions:**
+
+    | Model | `main` |
+    | --- | --- |
+    | 0.6B | `38ac8e90` |
+    | 0.8B | `db7a9259` |
+    | 2B | `9f6ca45d` |
+    | 4B | `dd60f0c2` |
+    | 9B | `a12ef72e` |
+    | 27B | `e7b4a372` |
+
+    Records `records/dev2-card-2026-10-01.md`; integration `716c7b39b`.
+  - **Round 2** (the user's 23:53 / 00:00 asks):
+    - a branded banner;
+    - no training data / limitations / NOTICE / attributions / `evaluation/` / training details; remove JevBench;
+    - JevArena (overall + by type) and Jev Decision Index (Pareto + by area vs 1.0; 27B vs Lux-9B) charts with the
+      vLLM-SR logo;
+    - code-only quickstart; product-value highlights per tier.
+  - **Rename sequence (to avoid breaking a publisher):**
+    1. merge the release-tooling ID map / guard first;
+    2. `move_repo` the six repos to `Decision-2.0-{Kai,Eos,Sol,Nox,Lux,Vega}-{size}`;
+    3. verify redirects and the collection;
+    4. publish the round-2 cards.
+  - **ALL TRACKS:** from now on, release hand-offs use the **new repo IDs**. Re-read this note before any GO or upload.
+
 - 2026-10-02 00:20 — **C1 content recheck r1 PASSED (custodian 3c7679b0).**
   - **Scope.** IB1-r3, IB2, PN1-r2 and the 27B M6 mixture `a20ib12` expose **0** scored C1 v1.2 items (0 rows / 0
     groups for all 8 sources). Planted controls caught 200 / 200; the item mapping is 2,840 scored + 34 retired.
