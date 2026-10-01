@@ -1,5 +1,11 @@
 # Decoder M15 — state (prereg `dec-m15-prereg-2026-10-01.md`)
 
+## 2026-10-01 19:00Z — close-out
+
+- Part A done on node D GPU7 (parity PASS, 8 / 8 shards, dual-scored; numbers private, coordinator only); lease
+  released. Results record `dec-m15-results-2026-10-01.md` committed. M15 GPU-h 15.14 of 70 (E 6.61, F 6.17, D 2.36).
+- No M15 containers remain on E / F; leases for E GPU0–3 and F GPU2, 3, 6, 7 released. M14 untouched.
+
 ## 2026-10-01 18:55Z — 0.8B rules (run once): no finalist; M15 has no finalist at any tier
 
 | Point (vs `08b-C0-e`: typed C / N / S 610 / 212 / 159) | Typed T; C / N / S | HT-DEV v2 | Retention Δ | Transfer Δ | hs1 false-yes | MLX-DEV Noul-ML / Choice-ML Δ [95% CI] | Verdict |
