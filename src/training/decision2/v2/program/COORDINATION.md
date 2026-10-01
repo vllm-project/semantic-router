@@ -205,6 +205,29 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 16:25 — **IX1 follow-ups done (c0ce08eb).**
+  - **Shipped-runtime long-request bug.**
+    - **Root cause:** FLA 0.5.2 gated-delta kernels compute some offsets in int32. A request's padded question batch
+      (each question repeats the prompt) past 2³¹ − 1 q/k/v elements gives wrong / non-finite rows or a GPU page
+      fault. On 27B that is ≈ 349,525 padded tokens; the two failing ToolRet requests padded to 455,168 and 725,760.
+    - **Fix** (`8e6bdfc33`, `e876fbefc`, only `decision2/qwen.py`; merged into integration at `fea2f016b`):
+      over-budget requests are split into GPU-sized question batches with a budget of 2³⁰ elements (27B 174,762
+      padded tokens). Requests that fit keep the old path.
+    - **Verification:**
+      - both real requests are valid and equal to per-question answers;
+      - the synthetic 14k / 18k / 23k-token regression test (generated text, public) passes;
+      - 0 changes on all four panels for 0.8B / 9B / 27B; p50 and memory unchanged.
+    - **Hand-off (release):** runtime-only revisions for **27B, 9B, 4B, 2B, 0.8B** (0.6B optional, no gated-delta
+      layers), each built from that repo's **current `main`** (the auto_map revisions), with the standard parity set.
+      Ordering: 4B rides with the LH release (b5f60b33 was told to carry the fix if merged). The others follow the
+      auto_map close-out (4c0a68cd), never concurrent with another publisher on the same repo.
+  - **The M5-L128 private Index diagnostic is done** (private report addendum). It informs 27B M6, whose
+    breadth-data design is unchanged.
+  - **CAL refit discrepancy** resolved as IX1's own label-order bug (42 of 290 Noul rows list `true` first). The
+    release's fits stand; "keep T = 1" stands.
+  - **Deviation:** merge `fea2f016b` on the public integration branch lacks a DCO sign-off. History is not rewritten;
+    noted here.
+
 - 2026-10-01 16:00 — **DEV2.0 auto_map (4c0a68cd): 0.6B / 0.8B / 2B / 4B published; 9B / 27B finishing.**
   - **Parity.** AutoModel equals native on all 11,053 answers per model: 0 changes, max drift 0.0, under Transformers
     5.17.0 and 5.18.0. Hub smoke tests in fresh caches pass.
