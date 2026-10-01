@@ -82,7 +82,15 @@ if [[ -n "$reference" ]]; then
     --device "$device" --output-dir "$reference" "${panel_args[@]}" 2>&1 | tail -n 40
   exit
 fi
-for panel in "${panels[@]}"; do panel_args+=(--panel "$panel"); done
+declare -A mounted=()
+for panel in "${panels[@]}"; do
+  panel_args+=(--panel "$panel")
+  IFS=: read -r _ _ predictions _ <<< "$panel"
+  where="$(dirname "$predictions")"
+  if [[ "$where" != /data/dev2/private/* && -z "${mounted[$where]:-}" ]]; then
+    docker_args+=(-v "$where:$where:ro"); mounted[$where]=1
+  fi
+done
 docker run "${docker_args[@]}" "$image" "$python" -B "$here/parity1.py" \
   --model "$work/staged" --device "$device" --threads "$threads" \
   --output "$work/parity.json" --changes "$work/changes.jsonl" "${panel_args[@]}" 2>&1 | tail -n 40
