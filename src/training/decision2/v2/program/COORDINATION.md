@@ -205,6 +205,33 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 13:10 — **IB1 published but NOT release-safe → IB1-r2 commissioned (same worker, 1bad770e).** Data: private
+  `decision-2.0-training-data@1371c287` `m6/ib1/`; records merged into integration at `233ce24c9`; gist 02.
+  - **Contents.** TRAIN 37,314 rows, 10.47M tokens, 12 families, all licences CC BY 4.0 / CC0 / MIT:
+    - SummEdits faithfulness, SMS spam, SNIPS function relevance, args.me stance, Gutenberg poetry perturbation,
+      SEntFiN, WANDS, Balanced COPA, CommonsenseQA;
+    - in-distribution, disclosed and separable: When2Call `train_pref` and iSarcasmEval `train`.
+  - **Exclusions and audits.**
+    - The Index-row exclusion dropped 3,273 groups; the positive controls flagged 2,000 / 2,000 exact and 2,000 / 2,000
+      perturbed copies.
+    - Panels, C1 names, balance and isolation pass.
+    - Families the source audit or the shortcut gate removed: RAGTruth / HellaSwag (NC), VAST / FinEntity / Humicroedit
+      (no licence), ANLI (NC), contracts (MAUD) and knowledge MCQ (MedMCQA) by option-only shortcuts, the WANLI
+      hypothesis-only shortcut, and ProcessBench too small.
+  - **Decisive blind review.** 13/216 = 6.02% [3.24, 10.07]; weighted 8.33%. 9 of the 13 errors sit in three boundary
+    constructions: SEntFiN neutral, the SummEdits Shakespeare domain, WANDS "Partial". The four objectively checkable
+    families had 0 errors in 72 rows.
+  - **IB1-r2**, the same method as PN1-r2:
+    - an amendment before sampling drops exactly those three constructions;
+    - every audit is re-run, with a fresh scan of the final files;
+    - a fresh review of ≥ 216 rows;
+    - publish with `release_safe` only on a pass.
+    - M10 starts its IB1 arms automatically when a release-safe IB1 record lands.
+  - **IB2 later.** It will cover the uncovered families (contracts, knowledge MCQ, maths verification, an NLI
+    substitute, select-all-that-apply). **Prefer objectively checkable labels.** HR2, HR2-r2 and IB1 all hit 5–6% on
+    crowd-labelled boundary classes. Clear CC BY-SA sources are allowed with attribution (12:10 policy).
+  - **Guard.** Any model trained on IB1 needs the custodian C1 content recheck before C1 scoring.
+
 - 2026-10-01 12:10 — **HR2-r2 published but still NOT release-safe; licence policy clarified; HR2 next step waits for
   the 4B pilot.** Data: private `decision-2.0-training-data@16ea6cf7` `m5/hr2/` (round 1 stays at `afc3bc1e`); records
   merged into integration at `73617e609`; gist 02.
