@@ -88,7 +88,8 @@ EOF
     until ond "test -f $R/logs/m6-audit.exit"; do sleep 60; done
     ond "echo exit \$(cat $R/logs/m6-audit.exit); tail -n 3 $R/logs/m6-audit.log"
     (umask 077 && mkdir -p "${LOCAL%/*}/audit")
-    ond "cat $A6/audit.json" > "${LOCAL%/*}/audit/audit.json" ;;
+    ond "cat $A6/audit.json" > "${LOCAL%/*}/audit/audit.json"
+    chmod 600 "${LOCAL%/*}/audit/audit.json" ;;
   parity)
     ond "test -f $PKG/MODEL_MANIFEST.json" || { echo "run stage first" >&2; exit 3; }
     ond "test ! -e $R/logs/m6-parity-$ARM.exit" || { echo "parity of $ARM already ran" >&2; exit 3; }

@@ -235,12 +235,19 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 18:45Z (poll 10 at 18:41Z): all alive, guard alive. M6-IB 4,070 / 3,913 (13.7 / 13.9 h; s2 at 3816 .9221, BEST
+  stays 3180); M6-IB2 4,000 / 3,998 (17.8 / 17.6 h); M6-IBX 3,657 / 3,612 (13.8 / 14.0 h); **M6-IB2PN 2,583 / 2,573
+  (18.9 / 18.7 h; s1 at 2583 .9149)**. GPU-h ≈ 77.
 - 18:33Z: **Index-path preparation (amendment 4, `c1eafcc08`, on integration and mirrored to node D).**
   - **Restage control PASS** (once for M6): A20r's own package through the forward-budget runtime
     (`DEV2.0-27B-budget` = `4e89288d` + `e876fbe`), read by its entry point over the 86 compatibility requests on
     node D GPU4 with A20r's frozen cache, equals IX1's A20r kit answers: 86 / 86 `ok`, 419 questions, max |Δp| 0.0
     (`runs/DEV2.0-27B-budget-control/control.json`, private dir); 0.056 GPU-h (eval allowance), 18:22:52–18:26:22Z.
-  - **Contamination audit** of `a20ib12pn` + `a20ib1x` against the panel: running on node D (CPU) since 18:30Z.
+  - **Contamination audit PASS for the card line** (`v2.eval.ix1.contamination`, node D CPU, 18:30–18:32Z, exit 0;
+    planted control 200 / 200): `a20ib12pn` (110,173 lines, every arm's rows) and `a20ib1x` (79,945) have **0 item
+    duplicates** in the 120,226 panel rows. Familiar text only in BANKING77 (2 rows; 16 rows with an exact leaf, 21
+    partial), plus partial hits in API-Bank (25) and CLINC150 (1): A20's base rows, which A20r trained on too.
+    HoVer, When2Call, iSarcasmEval, GSM8K and BPoMP are clean. Private copy `private/m6/audit/audit.json`.
   - **Lease format fix:** IX1's `launch.sh` accepts only owner files with a line `track=eval-ix1`; node D GPU4 / GPU6
     held IX1's one-line released owners, which it refused. They were moved to `owner.prev-20261001T182238Z` (worker
     1's convention for GPU0–3) and replaced by released owners in the accepted format. GPU7 runs the 4B track's
