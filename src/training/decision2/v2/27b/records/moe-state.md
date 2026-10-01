@@ -1,5 +1,8 @@
 # 27B MoE milestone (MoE-1): state (resume file)
 
+**Continuation #2 (from 06:40Z):** follows the Stage B chains, writes the formal verdicts, runs the private Decision
+Index of the frozen package (IX1 harness; values private) and writes the hand-off if the package qualifies.
+
 Updated: 2026-10-01 14:40 UTC+8 (06:40Z). **Continuation #1 handed off here** (worked 02:21–06:45Z). Branch
 `xunzhuo/decision-2-training-27b-moe`, worktree `/home/xunliu/code/vllm-sr-dev2-27b-moe`, gist
 `06c-decision-2-27b-moe.md`. Assignment: COORDINATION 2026-09-30 23:50. **Continuation workers: read "Next steps"
@@ -109,6 +112,13 @@ Running full attempts have no receipt until they end: add (now − start) for ea
 
 ## Poll log (newest first)
 
+- 07:05Z (continuation #2): MOE-Git-s2 update 3,093 (BEST 2,676); ends ≈ 08:24Z. Both chains alive. Private Index
+  tooling `a717a4315` (mirrored on both nodes): `v2/27b/moe/index_engine.py` (kit engine over the frozen package
+  through the formal run's native path), `index_ref.py`, `moe-index.sh` (offer / stage / panel / parity / run /
+  resume / extra). Node A panel built (`panel-3`: 120,226 rows, run-ID digest = IX1's). Path check (tests only, never
+  results; synthetic non-Index rows): offer / stage of the PC-Git-s1-c892 package passed; parity path check on node A
+  GPU3 (formal collector vs kit runner + engine, 7 synthetic requests: 5 ok, 2 refused, max |Δp| 0.0, **pass**;
+  0.050 GPU-h) under `/data/dev2/private/eval/index021/moe-pathcheck/`; the path-check copies were removed.
 - 06:40Z: hand-off. MOE-Git-s2 update 2,919 (BEST 2,676, SELECT .8219); ends ≈ 08:25Z. Both chains alive; relay / mlx
   hand-over dirs hold only MOE-Git-s1-best (pre-relayed) and the screen's files. Receipts ≈ 31.1 GPU-h.
 - 06:07Z: MOE-Git-s2 update 2,759; BEST now 2,676 (SELECT 0.8219 / 0.1212); ends ≈ 08:25Z. Both chains alive.
