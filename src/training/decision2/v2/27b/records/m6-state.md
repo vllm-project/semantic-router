@@ -197,6 +197,10 @@ is still fixing the long-input runtime bug and staging its M5-L128 Index diagnos
 
 ## Poll log (newest first)
 
+- 12:30Z (poll at 12:27Z): all alive. M6-IB 1,707 / 1,621 (13.1 / 13.8 h); M6-IB2 1,657 / 1,654 (17.5 / 17.5 h; s1's
+  second SELECT700 at 1654 .8695, BEST = 1654); M6-IBX 1,376 / 1,357 (13.8 / 13.9 h; at 1250 .8692 / .8873, BEST =
+  1250); **M6-IB2PN 290 / 253 of 6,886 (projections 19.0 / 18.8 h, cap 22)**; M6-IB2PN-s2 preflights: onestep 0.071,
+  reload 0.017, 0 argmax changes, max |Δp| 6e-8. Node D disk 524 GB. **GPU-h ≈ 28** (closed 1.314 + running ≈ 26.6).
 - 11:55Z (poll at 11:49Z): all eight seeds in full runs (M6-IB2PN-s2 passed both preflights; full run since ≈ 11:44Z).
   M6-IB2PN 54 / 14 of 6,886 at 9.59 / 9.88 s per update (≈ 18.6–19.2 GPU-h at that rate; early wall-clock projections
   include the baseline SELECT700 pass). **Reporter `m6_report.py` (`4ee6b920e`, tests pass):** `devgates` and
