@@ -1,6 +1,6 @@
 # 9B M9 state (resume file)
 
-Updated: 2026-10-01 16:25 UTC+8 (08:25Z). Branch `xunzhuo/decision-2-training-9b-m9` (worktree `vllm-sr-dev2-9b-m9`).
+Updated: 2026-10-01 16:55 UTC+8 (08:55Z). Branch `xunzhuo/decision-2-training-9b-m9` (worktree `vllm-sr-dev2-9b-m9`).
 Prereg `records/lux9b-m9-prereg-2026-10-01.md` (`8570a5896`); amendment 1 (`0b84e0db4`, B0 read through the base's
 untied LM head); amendment 2 (`51c80ddc9`, stage 2 = L9 recipe + IB1-r3 + IB2 and the transfer-only ablation, started
 as node-C GPUs free). Every amendment preceded the GPU jobs it governs; no stage-1 arm had been read.
@@ -12,8 +12,8 @@ as node-C GPUs free). Every amendment preceded the GPU jobs it governs; no stage
 | node C GPU1–4 | stage 1 `chains.sh` c1 L9-s1, c2 L9-s2, c3 L9L-s1, c4 L9L-s2 (mirror `8570a5896`) | all four preflights PASS (07:06–07:11Z); ≈ 6,470 tokens / s per seed (≈ 37k tokens per update, 1,624 updates) → ETA ≈ 10:05–10:15Z |
 | node C GPU1 / GPU3 | `post-c.sh` L9 / L9L (`fb2cc87cc`): LoRA merges + soup after both seeds | waiting |
 | node A GPU6 / GPU7 | `post-a.sh` L9 / L9L (`fb2cc87cc`): pull soup → 8 panels → scoring vs C0 → typed readout + rules (`select/9b-finalists.json`) | waiting |
-| node A | `formal-chain.sh` (`ad272def4`): no finalist → stop; else parity run C0F (GPU6) vs the stored T = 1 bar, then **waits for `status/formal.GO`** (write it only after re-reading COORDINATION and pushing a finalist lock record) | waiting for the rules |
-| node C GPU5 / 2 / 4 / 1 | stage 2 `chains2.sh` (`1b0830c0c`): L9IB-s1 (GPU5, started 07:46Z), L9IB-s2 (GPU2), L9IBX-s1 (GPU4), L9IBX-s2 (GPU1, after the L9 merges) | s1 preflight runs passed zero- and one-step (07:51Z); the others wait on the GPU flocks; ≈ 3.5 h per seed at the stage-1 rate (seed cap 5.0) |
+| node A | `formal-chain.sh` (`ad272def4`): no finalist → stop; else (parity already done, see below) **waits for `status/formal.GO`** (write it only after re-reading COORDINATION and pushing a finalist lock record) | waiting for the rules |
+| node C GPU5 / 2 / 4 / 1 | stage 2 `chains2.sh` (`1b0830c0c`): L9IB-s1 (GPU5, started 07:46Z), L9IB-s2 (GPU2), L9IBX-s1 (GPU4), L9IBX-s2 (GPU1, after the L9 merges) | L9IB-s1 preflight PASS (07:53Z), full run; the others wait on the GPU flocks; ≈ 3.5 h per seed at the stage-1 rate (seed cap 5.0) |
 | node C GPU5 / GPU4 | `post-c.sh` L9IB / L9IBX | waiting |
 | node A GPU6 / GPU7 | `post-a.sh` with `M9_STAGE=2` (L9IB / L9IBX): + IB1 / IB2 DEV diagnostics, rules `select/9b-finalists-s2.json` | waiting |
 
@@ -42,6 +42,14 @@ Logs: node C / node A `/data/dev2/runs/9b/m9/{OPERATIONS.log,logs/,arms/OPERATIO
   **Unlike 4B, the released 9B lineage did not lose knowledge against its base on these probes** (C0 ≥ base).
 - Lux 1.0 vs C0 (report): HT-DEV v2 −.003 TIE; PN1 clean gold-no −.075 [−.095, −.057], hop −.025; hs1-dev
   false-yes .128 vs .152; MLX-DEV-9B Noul-ML −.045, Choice-ML −.074.
+
+## Formal-path parity (preregistered first step; run early because it needs no M9 result)
+
+`formal.sh 6 C0F` (runner mirror `ad272def4`, image `f83b1d10…`, one copy of the frozen `formal-m3` cache, tree
+`af623300…`): the CAL698 fit reproduces K-a13's temperatures exactly (Choice 1.4203, Noul 1.0368, Score 0.5626), and the
+collection has **0 answer differences** against the stored bar `release/dev2-8b-t1-derived` on typed FINAL, CSS15
+and public 231 (`formal-m9/C0F.parity.json`; probability drift ≤ .29 only from the temperatures). v3 67.737 (T .8106,
+H .5660), paired vs the bar 0.0 [0.0, 0.0], public 231 178, mlx-diag Δ 0.0. **The stored run is the paired bar.**
 
 ## Dry test of the gate code (scratch, not a rules output)
 
