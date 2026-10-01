@@ -23,10 +23,13 @@ LEASE=/data/dev2/leases/gpu$GPU.lock/owner
 CALIBRATION=${CALIBRATION:-}
 declare -A COMPARATORS=(
   [DEV2.0-27B]=/data/dev2/runs/27b/M4-A20r-soup/formal
-  [AutoJev-27B]=/data/dev2/runs/eval/m4/nodeB-kernel/autojev27
-  [Eikos-27B]=/data/dev2/runs/eval/m4/nodeB-kernel/eikos27b
-  [Jebadiah-27B]=/data/dev2/runs/eval/m4/nodeB-kernel/jebadiah27b
+  [AutoJev-27B]=/data/dev2/runs/27b/m2-peer-autojev27-nodeB-kernel
+  [Eikos-27B]=/data/dev2/runs/27b/m3-peer-eikos27-nodeB-kernel
+  [Jebadiah-27B]=/data/dev2/runs/27b/m3-peer-jebadiah-nodeB-kernel
 )
+for right in "${!COMPARATORS[@]}"; do
+  [ -f "${COMPARATORS[$right]}/SEAL.json" ] || { echo "comparator $right is not sealed: ${COMPARATORS[$right]}" >&2; exit 2; }
+done
 case "$NODE:$GPU" in a:3 | a:4 | a:5 | b:6 | b:7) ;; *) echo "node $NODE GPU$GPU is outside the MoE allocation" >&2; exit 2 ;; esac
 [[ "$NAME" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "NAME must be one directory name" >&2; exit 2; }
 [[ "$LOADED" =~ ^[0-9]+$ && "$ACTIVE" =~ ^[0-9]+$ ]] || { echo "parameter counts must be integers" >&2; exit 2; }

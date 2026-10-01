@@ -188,3 +188,51 @@ Receipts: node A `/data/dev2/runs/27b-moe/MOE-{Git,Qit}-probe/{probe/experts-pro
 
 Correction (2026-10-01 01:05 UTC+8): the clock times first written in the three amendment headers were ahead of the
 real times; the headers now give the commit times. The order of events is unchanged.
+
+## Amendment 4 (2026-10-01 ≈ 11:15 UTC+8; after the screen, before any Stage B job; commit time in the state file)
+
+Screen outcome (recorded in the results): Gemma-4-26B-A4B-it continues with its seed 2; both Qwen3.5-35B-A3B cells
+were stopped by rule 3. Stage B is therefore one soup, **MOE-Git-soup** = MOE-Git-s1 + MOE-Git-s2.
+
+- **Stage B automation** (as amendment 3 did for the screen; nothing is rerun automatically and a failed stage stops
+  the chain): `moe-stageb-nodeA.sh` waits for both seeds' `COMPLETE.json` and relays their BEST checkpoints (without
+  `trainer_state.pt`, with SHA-256 lists) and node A's receipt total to node B. `moe-stageb-nodeB.sh` then runs
+  `moe-tail.sh` soup → T = 1 soup readout → CAL698 fit → 23:15 adoption → development gates; a passing soup gets the
+  frozen package → formal (8-item smoke per panel, typed FINAL + CSS15 + public 231, seal, report, paired compares) →
+  gates → latency → mlx-diag collection. Node A scores mlx-diag (its gold lives there) and pairs it with A20r's node A
+  collection (`v2.06b.m8_scorebias mlx-paired`, R4 = Choice + Noul, item 4); node B pulls the pairing and writes the
+  verdicts (`moe_verdicts.py`, the M5 verdict code with `a20` as the training mixture and this prereg's tie-break). A
+  seed that ends without `COMPLETE.json` means no soup (recorded, never rerun).
+- **Development gates, as implemented** (`moe_devgates.py`), reference = A20r's readout (M5 `A20r-ref`):
+  1. collapse = screen rule 1 (`screen_rules.collapse`). Its chance test covers every typed-DEV type where the
+     reference is ≥ 10 points above chance, so Noul's .50 floor applies as well (the text above names Choice and
+     Score; the screen already ran with this code);
+  2. HT-DEV v2 paired with A20r's own predictions (H_dev2 .5655), FLAG at Δ ≤ −0.02;
+  3. P_dev not ≥ 8 below A20r's 78.99.
+  M5's typed guard (T_dev ≥ T_dev(A20r) − 0.03) is reported, not applied.
+- **CAL698 and the 23:15 rule:** `v2.release.calibrate_frozen` at 32,768 on the soup (node B GPU7, SDPA, the
+  checkpoint's experts pin), then `v2.release.dev_calibration` on the T = 1 readout's typed-DEV and CSS-pilot
+  predictions (re-tempered offline; answers unchanged); adopted only if aggregate ECE and Brier do not worsen,
+  otherwise T = 1 (`kernel_readout t1-calibration`). **Fix before use** (shared-module commit `9273b0bc0`, with a
+  test): the fitter rendered CAL rows with the plain prompt; it now uses the checkpoint's prompt version
+  (`encoder_for`), as inference does. Dense checkpoints are unchanged; Gemma gets the BOS token it was trained with.
+- **Frozen package** (`PACKAGE.json`, written before the formal smoke): soup checkpoint, model SHA-256, the adopted
+  calibration or its T = 1 binding, the 32,768-token limit, base repo / revision / tree hash, `grouped_mm`, the BOS
+  prompt version, rank 64 / α 128, soup manifest, adoption and gate receipts, and **loaded / active parameters**
+  (`moe_params.py`, safetensors headers: loaded = base text decoder + adapter + head; active = loaded − routed expert
+  tensors + top-8 / 128 of them; adapter and head count as active).
+- **Formal comparators (fix):** `moe-formal.sh` named peer run directories that do not exist on node B (its compare
+  stage would have failed). It now uses the sealed node B runs of every 27B record: A20r `M4-A20r-soup/formal`
+  (72.360), AutoJev-27B `m2-peer-autojev27-nodeB-kernel` (72.133), Eikos-27B `m3-peer-eikos27-nodeB-kernel` (69.290),
+  Jebadiah-27B `m3-peer-jebadiah-nodeB-kernel` (65.472); `gates paired` also reports F1 (`M3-A-soup/formal`, 67.209).
+- **Latency** (`latency.py`): M1's roster (65 SELECT rows by SHA-256 of `"27b-probe/" + id`, the first dropped),
+  one prompt per forward, BF16-resident backbone with unmerged LoRA, FP32 head, node B GPU7. A20r is measured the
+  same way once, on the FLA kernel path, as the dense reference (descriptive).
+- **Budget guard:** before each GPU stage, node A's relayed receipt total + node B's receipts + the stage's plan must
+  stay ≤ 60 GPU-h.
+- **Path checks (tests, never results; GPU time counted):** the exact soup on the two seeds' checkpoint 892 (CPU,
+  scratch, deleted; 205 projections, max relative error 4.3e-7); cal698 (0.044 GPU-h), adoption (CAL698 rejected:
+  CSS-pilot ECE worse), gates, package (25,273,208,350 loaded / 3,862,597,150 active at rank 32) and latency
+  (0.024 GPU-h) on MOE-Git-s1's checkpoint 892 and its screen readout under `/data/dev2/runs/27b-moe/pathcheck/`;
+  the A20r latency reference (0.030 GPU-h, `latency-ref/A20r`). The formal smoke is the calibrated adapter spec's
+  first run; it precedes any formal collection.

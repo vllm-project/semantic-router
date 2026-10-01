@@ -1,0 +1,111 @@
+{
+ "dev_near_train": {
+  "by_family": {
+   "allegro": {
+    "dev_rows": 10,
+    "groups": 10,
+    "train_rows": 0
+   },
+   "eth_cs": {
+    "dev_rows": 1,
+    "groups": 1,
+    "train_rows": 0
+   },
+   "eth_just": {
+    "dev_rows": 9,
+    "groups": 5,
+    "train_rows": 0
+   },
+   "eth_util": {
+    "dev_rows": 34,
+    "groups": 33,
+    "train_rows": 0
+   },
+   "hs3_help": {
+    "dev_rows": 499,
+    "groups": 311,
+    "train_rows": 0
+   },
+   "hs3_pref": {
+    "dev_rows": 779,
+    "groups": 580,
+    "train_rows": 0
+   },
+   "indonli": {
+    "dev_rows": 6,
+    "groups": 3,
+    "train_rows": 0
+   },
+   "kob_boolq": {
+    "dev_rows": 84,
+    "groups": 84,
+    "train_rows": 0
+   },
+   "prm_step": {
+    "dev_rows": 299,
+    "groups": 280,
+    "train_rows": 0
+   },
+   "vitc": {
+    "dev_rows": 128,
+    "groups": 31,
+    "train_rows": 0
+   }
+  },
+  "groups": 1180
+ },
+ "drop_dev_groups_sha256": "82288488c746b8898233dae84db33704c441c056ab639816fcf6089c519d49c3",
+ "drop_groups_sha256": "77d3370fead57e989ab25cfc797386009f68e4cec4a951a125416267aecd63a7",
+ "quarantine": {
+  "by_family": {
+   "eth_deon": {
+    "dev_rows": 0,
+    "groups": 1,
+    "train_rows": 1
+   },
+   "eth_util": {
+    "dev_rows": 0,
+    "groups": 3,
+    "train_rows": 4
+   },
+   "hs3_help": {
+    "dev_rows": 75,
+    "groups": 494,
+    "train_rows": 747
+   },
+   "hs3_pref": {
+    "dev_rows": 116,
+    "groups": 918,
+    "train_rows": 1164
+   },
+   "prm_step": {
+    "dev_rows": 2,
+    "groups": 20,
+    "train_rows": 20
+   },
+   "vitc": {
+    "dev_rows": 10,
+    "groups": 23,
+    "train_rows": 62
+   }
+  },
+  "groups": 1202
+ },
+ "report_only_roles_hit": {
+  "a7_train_A7h": 51,
+  "a7_train_A7i": 1,
+  "a7_train_A7m": 40,
+  "a7_train_A7q": 3022,
+  "a7_train_A7s": 5,
+  "rights_clean_train": 8,
+  "v1_train_a1": 22,
+  "v1_train_a3": 227,
+  "v1_train_a6h": 9,
+  "v2_aho_E11": 27,
+  "v2_aho_H1": 34,
+  "v2_aho_H3": 437,
+  "v2_aho_H5": 15,
+  "v2_aho_H6": 133
+ },
+ "schema": "decision2.hr2.quarantine.v1"
+}
