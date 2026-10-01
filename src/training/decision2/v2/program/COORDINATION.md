@@ -205,6 +205,26 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 01:20 — **M14 complete (ad17bb4f): no finalist; M16 interpolation sweep launched (same worker).**
+  Results `d2f247ae8`; integration `2bb9698b6`; 7.12 of 80 GPU-h.
+
+  | Arm | Fails | Notes |
+  | --- | --- | --- |
+  | `2b-RAUP` | Score floor only (236 < 245) | |
+  | `08b-RAUP` | choice 524 < 586, `attribute_gate`, false-yes over the limit | HT-DEV v2 GAIN +.028 |
+  | `4b-LHA10UP` | Score floor 345 < 359, retention −.042 | **first 4B IB arm with an HT-DEV v2 GAIN over LH (+.028)** |
+
+  - **Breadth held at every tier** (+.197 / +.156 / +.045).
+  - **Conclusion across M12–M14:** additive, self-distillation and upweighting all move typed-head losses between
+    heads; none removes them.
+  - **Shared code:** the trainer got `--example-weights` (`11ec9c5e4`), and the formal library got a node-B option
+    (`915fcb87a`).
+  - **M16:** interpolation `W(α) = (1 − α)·release + α·arm`, α ∈ {.25, .5, .75}, for the 0.8B / 2B / 4B breadth arms.
+    No training, readouts only.
+    - Gates are as before **plus a development MLX guard**.
+    - Formal for ≤ 2 per tier; item 8 cites the C1 recheck r1; hand-offs use the new repo IDs.
+    - node A GPU3–5 + node B GPU2–4; 30 GPU-h.
+
 - 2026-10-02 01:05 — **`08b-RA` private Index diagnostic done (1afc17e8; private report `private/08b-fast/`).**
   Findings, score-free here:
   - **The 0.8B breadth gain on the Index comes mostly from ONE in-distribution family (HoVer;** the IB2 `hover` rows
