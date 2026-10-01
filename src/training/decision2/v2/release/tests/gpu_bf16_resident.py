@@ -12,10 +12,11 @@ attention) as ``qwen-full``, and a LoRA continuation of the first as
 like the released BF16 packages, and FP32 LoRA factors. Each package answers
 the release examples in fresh isolated interpreters (``examples.py run``) on
 cuda:0 with the default runtime (BF16-resident) and with ``--fp32-master``
-(the previous runtime), and once on CPU. Passes if both GPU runs give
-byte-identical answers, the BF16-resident run holds every backbone Linear
-weight in BF16 except the LoRA factors, and the FP32-master and CPU runs hold
-every parameter in FP32. Writes RESULT.json; exits non-zero on any failure.
+(the previous runtime), and the Qwen3 packages once on CPU (the image's
+causal-conv1d kernel is GPU-only). Passes if both GPU runs give byte-identical
+answers, the BF16-resident run holds every backbone Linear weight in BF16
+except the LoRA factors, and the FP32-master and CPU runs hold every
+parameter in FP32. Writes RESULT.json; exits non-zero on any failure.
 """
 
 from __future__ import annotations
@@ -88,7 +89,9 @@ def qwen3_5_checkpoint(path: Path, tokenizer) -> None:
     model.save(path, tokenizer)
 
 
-def check(pkg: Path, out: Path, extra: list[str], lora_factors: int) -> dict:
+def check(
+    pkg: Path, out: Path, extra: list[str], lora_factors: int, cpu_leg: bool = True
+) -> dict:
     def receipt(name: str) -> dict:
         path = out / f"{name}.json"
         return json.loads(path.read_text()) if path.is_file() else {}
@@ -119,7 +122,9 @@ def check(pkg: Path, out: Path, extra: list[str], lora_factors: int) -> dict:
                 *extra,
             ]
         ),
-        "cpu": isolated(
+    }
+    if cpu_leg:
+        steps["cpu"] = isolated(
             [
                 "run",
                 "--package",
@@ -130,8 +135,7 @@ def check(pkg: Path, out: Path, extra: list[str], lora_factors: int) -> dict:
                 "cpu",
                 *extra,
             ]
-        ),
-    }
+        )
     steps["compare"] = isolated(
         [
             "compare",
@@ -170,9 +174,11 @@ def check(pkg: Path, out: Path, extra: list[str], lora_factors: int) -> dict:
         "resident_holds_bf16": (dtypes["gpu_resident"] or {}).get("bfloat16", 0) > 0,
         "fp32_master_all_fp32": weights["gpu_fp32_master"] is None
         and set(dtypes["gpu_fp32_master"] or {"?": 0}) == {"float32"},
-        "cpu_all_fp32": weights["cpu"] is None
-        and set(dtypes["cpu"] or {"?": 0}) == {"float32"},
     }
+    if cpu_leg:
+        checks["cpu_all_fp32"] = weights["cpu"] is None and set(
+            dtypes["cpu"] or {"?": 0}
+        ) == {"float32"}
     return {
         "steps": steps,
         "residency": weights,
@@ -273,7 +279,8 @@ def main() -> None:
     ):
         identity = checkpoint_fingerprint(checkpoint)["model_sha256"]
         pkg = package(name, "qwen-full", checkpoint, identity, None)
-        results[name] = check(pkg, work / f"out-{name}", [], 0)
+        # The image's causal-conv1d kernel is GPU-only (its Qwen3.5 cards say CPU is not verified).
+        results[name] = check(pkg, work / f"out-{name}", [], 0, name == "qwen3-full")
 
     model, tokenizer = DecisionModel.from_checkpoint(work / "full")
     attach_lora(

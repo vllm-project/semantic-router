@@ -227,15 +227,22 @@ class BackboneParityTest(unittest.TestCase):
     def test_qwen3_5_hybrid_keeps_gated_delta_tensors_fp32(self):
         from transformers.models.qwen3_5 import modeling_qwen3_5
 
-        # The image's causal-conv1d / FLA kernels are GPU-only; on CPU use the torch paths.
-        for name in (
-            "causal_conv1d_fn",
-            "causal_conv1d_update",
-            "torch_chunk_gated_delta_rule",
-            "torch_recurrent_gated_delta_rule",
-        ):
-            reference = inspect.unwrap(getattr(modeling_qwen3_5, name))
-            patch = mock.patch.object(modeling_qwen3_5, name, reference)
+        # The image's causal-conv1d / FLA kernels are GPU-only, and its PyTorch has no
+        # CPU LAPACK for the chunked reference's triangular solve: on CPU, use the torch
+        # references, with the recurrent form of the gated-delta rule in both places.
+        reference = {
+            name: inspect.unwrap(getattr(modeling_qwen3_5, name))
+            for name in (
+                "causal_conv1d_fn",
+                "causal_conv1d_update",
+                "torch_recurrent_gated_delta_rule",
+            )
+        }
+        reference["torch_chunk_gated_delta_rule"] = reference[
+            "torch_recurrent_gated_delta_rule"
+        ]
+        for name, function in reference.items():
+            patch = mock.patch.object(modeling_qwen3_5, name, function)
             patch.start()
             self.addCleanup(patch.stop)
         model = tiny_decision_model("qwen3_5")
