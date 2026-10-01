@@ -1,5 +1,11 @@
 # 9B M9 state (resume file)
 
+**Continuation worker cba71646 (from 14:37Z; rules → lock / GO → formal → items → C1 → release → private Index).**
+Poll 14:47Z: K-a13IBX at 1,445 / 1,472 / 1,384 of ≈ 1,990 (ETA ≈ 15:30Z); every chain PID alive (node C
+`chain-c{2,1,4}-s3`, `post-c-KIBX`; node A `post-a-KIBX`, `formal-s3`); no `select/9b-finalists-s3.json` yet. Integration
+merged (`a9df14980`, signed off). New: `lux9b/m9/items.py` (items 1–7 from `successor.json`, the exposure receipts and
+a line-level TRAIN ⊂ x60 ∪ IB1-r3 ∪ IB2 check), committed before any formal run.
+
 Updated: 2026-10-01 22:40 UTC+8 (14:35Z) by continuation worker b23ed249 (hand-off point). **Stage 2 closed 13:28Z: NO FINALIST**
 (record `lux9b-m9-stage2-result-2026-10-01.md`; rules `select/9b-finalists-s2.json` `df0ef550…`, readout
 `lines/readout/m9-s2.json` `cda87bcf…`; the s2 formal chain stopped by rule). L9IB fails the Choice / Score type
