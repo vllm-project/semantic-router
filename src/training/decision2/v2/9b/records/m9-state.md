@@ -9,7 +9,8 @@
   public 231 182 vs 178). Typed FINAL .8069 vs .8106 (the +.009 typed-DEV gain did not carry). `formal-m9/K-a13IB.gates/
   items.json` `3e00533b…`, `successor.json` `5e4a7258…`.
 - Therefore: no C1 item 8, no release, no private Index run of a release; the optional Noul T+b study (passers only)
-  not run. Every M9 chain has ended; node A GPU6–7 and node C GPU1–5 leases released (16:27Z; node C GPU6–7 were
+  not run. (The custodian's C1 content recheck r1, `v2/eval/records/c1-recheck-r1-2026-10-01.md`, maps K-a13IB /
+  K-a13IBX with exposure 0, so item 8 would have been allowed.) Integration fast-forwarded to `aa624ac1b`. Every M9 chain has ended; node A GPU6–7 and node C GPU1–5 leases released (16:27Z; node C GPU6–7 were
   released 14:05Z). **≈ 41.5 of 120 GPU-h used.**
 - **Proposed next lever (not launched):** K-a12IB = ½ point of the existing KIB soup (≈ 1 GPU-h, amendment first), then a
   five-seed KIB soup (≈ 6 GPU-h), then typed-row self-distillation + IB additive (≈ 9 GPU-h) if the typed gain stays

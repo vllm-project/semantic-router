@@ -20,8 +20,10 @@ formal prediction. Development readouts are never release scores; the formal com
 - **Why item 1 fails:** the typed-DEV gain (+.009, 15 of 1,600 items) did not reach typed FINAL (T .8069 vs .8106,
   −.004 [−.019, +.012]; Choice 732 vs 736, Noul 704 vs 715, Score 255 vs 246). Human transfer is up but not
   significantly (H .5735 vs .5660).
-- **No successor, so no C1 recheck use, no item 8, no release and no private Index run of a release.** The optional
-  CAL-only Noul T+b study applies only to a chosen passer of items 1–7, so it was not run.
+- **No successor, so no item 8, no release and no private Index run of a release.** The custodian's C1 content
+  recheck r1 ([`c1-recheck-r1-2026-10-01.md`](../../eval/records/c1-recheck-r1-2026-10-01.md), verdict `0823a1a8…`)
+  maps K-a13IB and K-a13IBX with exposure 0, so item 8 would have been allowed; it was not run because item 1 failed.
+  The optional CAL-only Noul T+b study applies only to a chosen passer of items 1–7, so it was not run.
 - **Breadth on the proven recipe is clean** (H4, H5 hold): IB is learned and survives the ⅓ interpolation (IB1 DEV
   +.040, IB2 DEV +.081 vs C0; ≈ 80% of the α 1 soup's gain) with no yes-bias or transfer cost. At ⅓ from Lux,
   though, the typed gain stays inside development noise.
