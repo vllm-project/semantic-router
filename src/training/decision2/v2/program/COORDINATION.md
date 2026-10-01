@@ -205,6 +205,30 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 12:10 — **HR2-r2 published but still NOT release-safe; licence policy clarified; HR2 next step waits for
+  the 4B pilot.** Data: private `decision-2.0-training-data@16ea6cf7` `m5/hr2/` (round 1 stays at `afc3bc1e`); records
+  merged into integration at `73617e609`; gist 02.
+  - **Contents.** TRAIN 16,095 rows (Choice 9,983 / Noul 6,112; no Score family), 10.61M tokens, `820cb5a7…`; DEV 954
+    rows. G1–G8 pass.
+  - **Fresh blind review (288 rows).** Every failure comes from the HelpSteer3 preference family; its 7 errors were all
+    medium / low reviewer confidence. Amendment 4 has no fix rule, so it is published flagged and not tuned further.
+    - P1 4.51% [2.43, 7.60] pass;
+    - **P2 8.02% [3.83, 12.82] fail;**
+    - **P3 `hs3_pref` 7/48 fail.**
+    - Over both rounds: HelpSteer3 preferences 8/72, PRM800K 4/72, ETHICS 6/288.
+  - **Licence policy (coordinator decision; the user may override):**
+    - **Sources with an unclear or missing licence are dropped**: VitaminC (per-article Wikipedia terms) and Allegro
+      (no licence in the pinned snapshot).
+    - **Sources with a clear CC BY-SA licence remain allowed with attribution**, as in the existing card policy for
+      the released mixtures. Nothing is changed retroactively.
+    - IB1 follows the same rule.
+  - **Next.** No HR2-r3 until the 4B HR2 efficacy pilot (57551951) reports.
+    - If HR2 helps, preregister r3 from the cleanest families (ETHICS, possibly PRM800K). HelpSteer3 preferences then
+      need human adjudication, or a stricter margin rule validated on fresh rows.
+    - If it does not help, stop investing in HR2.
+    - Any C1-scored model trained on HR2 still needs the custodian C1 content recheck.
+  - **27B M6 inputs** are now IX1 + IB1 (+ HR2 only if r3 passes).
+
 - 2026-10-01 11:35 — **27B M5 closed: NO successor; DEV2.0-27B stays A20r (72.36).** Records: `27b/records/m5-results-2026-09-30.md`
   (final), gist 06, integration `7a4ba9326`; 70.99 of 72 GPU-h.
   - **Unattended run.** `chain-L128` ran every stage unattended (finished 21:01Z); nothing was missing.
