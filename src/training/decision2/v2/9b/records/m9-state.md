@@ -1,6 +1,6 @@
 # 9B M9 state (resume file)
 
-Updated: 2026-10-01 17:00 UTC+8 (09:00Z). Branch `xunzhuo/decision-2-training-9b-m9` (worktree `vllm-sr-dev2-9b-m9`).
+Updated: 2026-10-01 17:55 UTC+8 (09:55Z). Branch `xunzhuo/decision-2-training-9b-m9` (worktree `vllm-sr-dev2-9b-m9`).
 Prereg `records/lux9b-m9-prereg-2026-10-01.md` (`8570a5896`); amendment 1 (`0b84e0db4`, B0 read through the base's
 untied LM head); amendment 2 (`51c80ddc9`, stage 2 = L9 recipe + IB1-r3 + IB2 and the transfer-only ablation, started
 as node-C GPUs free). Every amendment preceded the GPU jobs it governs; no stage-1 arm had been read.
@@ -9,11 +9,11 @@ as node-C GPUs free). Every amendment preceded the GPU jobs it governs; no stage
 
 | Where | Chain | State at 08:05Z |
 | --- | --- | --- |
-| node C GPU1–4 | stage 1 `chains.sh` c1 L9-s1, c2 L9-s2, c3 L9L-s1, c4 L9L-s2 (mirror `8570a5896`) | all four preflights PASS (07:06–07:11Z); ≈ 10.6 updates / min of 1,624; at 08:56Z updates 1,114–1,165 → ETA ≈ 09:40–09:50Z |
-| node C GPU1 / GPU3 | `post-c.sh` L9 / L9L (`fb2cc87cc`): LoRA merges + soup after both seeds | waiting |
-| node A GPU6 / GPU7 | `post-a.sh` L9 / L9L (`fb2cc87cc`): pull soup → 8 panels → scoring vs C0 → typed readout + rules (`select/9b-finalists.json`) | waiting |
+| node C GPU1–4 | stage 1 `chains.sh` c1 L9-s1, c2 L9-s2, c3 L9L-s1, c4 L9L-s2 (mirror `8570a5896`) | **all four DONE 09:40–09:47Z.** BEST (SELECT700 family macro): L9-s1 1,624 (.8766), L9-s2 1,621 (.8689), L9L-s1 1,624 (.8646), L9L-s2 1,216 (.8763) |
+| node C GPU1 / GPU3 | `post-c.sh` L9 / L9L (`fb2cc87cc`): LoRA merges + soup after both seeds | **done 09:49–09:50Z**: L9 soup `56237917…`, L9L soup `baf566e1…` (dec identities); merges agree with the adapters on 128 SELECT rows |
+| node A GPU6 / GPU7 | `post-a.sh` L9 / L9L (`fb2cc87cc`): pull soup → 8 panels → scoring vs C0 → typed readout + rules (`select/9b-finalists.json`) | soups pulled (content manifests equal), readouts running from 09:51Z |
 | node A | `formal-chain.sh` (`ad272def4`): no finalist → stop; else (parity already done, see below) **waits for `status/formal.GO`** (write it only after re-reading COORDINATION and pushing a finalist lock record) | waiting for the rules |
-| node C GPU5 / 2 / 4 / 1 | stage 2 `chains2.sh` (`1b0830c0c`): L9IB-s1 (GPU5, started 07:46Z), L9IB-s2 (GPU2), L9IBX-s1 (GPU4), L9IBX-s2 (GPU1, after the L9 merges) | L9IB-s1 preflight PASS (07:53Z), full run at update 803 of 2,343 (08:56Z; ≈ 13 / min → ETA ≈ 10:55Z, ≈ 3.1 GPU-h, cap 5.0); the others wait on the GPU flocks |
+| node C GPU5 / 2 / 4 / 1 | stage 2 `chains2.sh` (`1b0830c0c`): L9IB-s1 (GPU5, started 07:46Z), L9IB-s2 (GPU2), L9IBX-s1 (GPU4), L9IBX-s2 (GPU1, after the L9 merges) | L9IB-s1 full run (ETA ≈ 10:55Z); L9IB-s2 (GPU2), L9IBX-s1 (GPU4), L9IBX-s2 (GPU1) started 09:46–09:50Z after the stage-1 chains / L9 merges; ETA ≈ 13:00Z |
 | node C GPU5 / GPU4 | `post-c.sh` L9IB / L9IBX | waiting |
 | node A GPU6 / GPU7 | `post-a.sh` with `M9_STAGE=2` (L9IB / L9IBX): + IB1 / IB2 DEV diagnostics, rules `select/9b-finalists-s2.json` | waiting |
 
