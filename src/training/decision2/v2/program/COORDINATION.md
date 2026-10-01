@@ -205,6 +205,44 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 15:40 — **Decision 1.0 auto_map done (2a4d413a); vLLM-SR parser fixed on PR #4086.** Record
+  `v2/release/records/dev1-automap-2026-10-01.md`, gist 07; integration `f6b750119`.
+  - **Seven public 1.0 repos merged through our own HF PRs** on their current heads (after subin's merges); weights
+    byte-identical; `AutoModel.from_pretrained(repo, trust_remote_code=True)` + `system_one(...)` + `pipeline("decision",
+    ...)`; clean-environment smoke tests on Transformers 4.57.6 / 5.17.0 / 5.18.0.
+    - New `main` revisions:
+
+      | Repo | `main` |
+      | --- | --- |
+      | Kai | `69aef406` |
+      | Lex | `1f9750a7` |
+      | Route | `a5b21dff` |
+      | Eos | `bbdc2221` |
+      | Sol | `fc210c8f` |
+      | Nox | `f098bdec` |
+      | Lux | `a31b9e2c` |
+
+    - Parity: 0 answer changes on 8,378 scored prompts each.
+    - Eos's stored predictions are not reproducible even by its own native runtime: unpinned FLA autotune, 46–56
+      changes. The remote code is bit-identical to the native Eos runtime under pinned settings.
+    - Nox / Lux show ≤ 0.0105 drift on long prompts only (FLA autotune; bit-identical with `FLA_CACHE_MODE=strict`).
+  - **`DEV2.0-Route-0.6B` (collaborator's):** PR #1 is open for subin, not merged.
+  - **vLLM-SR Decision runtime.** `parse_decision_config` required an exact root key set, so it would reject the new
+    revisions (catalogs pin older revisions, so nothing broke).
+    - **Fixed by the coordinator on the user's open PR #4086 (`xunzhuo/decision-runtime`), fast-forward commit
+      `e2ed609c7`.** `model_type` / `architectures` / `auto_map` / `custom_pipelines` are accepted as shape-checked
+      inert metadata; the runtime still never fetches or imports repo code, and any other unknown key is still
+      rejected.
+    - Tests: the root-config file 12/12 (with `huggingface_hub<1`; one pre-existing test fails under hub 2.0 because
+      `EntryNotFoundError` has no kwargs), plus 615 other decision tests passed; black clean; hooks pass.
+    - The catalog stays pinned.
+  - **Divergences, documented.**
+    - 1.0 keeps request-level over-length admission, while 2.0 answers the questions that fit.
+    - 1.0 confidence is `decision_type_aware_v1`.
+    - The encoder tokenizer is under `native/tokenizer`.
+    - **The 1.0 spec `automap/API-decision1.md` folds into the 2.0 `API.md`** when the 2.0 auto_map worker (4c0a68cd)
+      lands.
+
 - 2026-10-01 14:50 — **MoE-1 screen done: Gemma-4-26B-A4B-it continues, the Qwen3.5-35B-A3B cells stopped; Stage B
   runs unattended from ~16:25; follow-up worker 72f00c98.** Records: `27b/records/moe-*`, gist 06c; integration
   `e60db4605`.
