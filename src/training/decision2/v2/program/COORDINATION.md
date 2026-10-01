@@ -205,6 +205,23 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 00:35 — **9B M9 stage 3 (542e6421): K-a13IB was the only finalist and FAILED item 1; no 9B successor.**
+  Records `5d28495fa`, lock `5d0c1c234`, gist 05; integration `9eb632e03`; ≈ 41.5 of 120 GPU-h.
+  - **Formal.** v3 68.02 vs 67.737, +0.29 [−1.57, +1.20], so item 1 fails. Items 2–7 **pass**, including **item 4
+    multilingual −.004 [−.011, +.003]** (the swap design preserved multilingual, unlike additive IB), human transfer
+    +.007, and vs Lux1 +2.22.
+  - **The development typed gain did not hold formally** (.807 vs .811; Noul 704 vs 715).
+  - **Rules.** K-a13IBX failed the Noul floors and the yes-bias guard (excluding the in-distribution families hurt at
+    this recipe).
+  - **Structural issue, for the user.** IB breadth targets Index families that JevArena v3 does not measure, so
+    breadth candidates tie on v3 (9B +0.29, 4B −0.16) and cannot pass item 1.
+    - Coordinator proposal, pending data and a user decision: an **Index-path alternative to item 1** for
+      frontier-targeted finalists, requiring v3 non-inferior plus a significant paired private-Index gain, with items
+      2–8 unchanged.
+    - Data being collected: private Index diagnostics of K-a13IB (9B) and `4b-LHA10SD` (4B; M15 part A).
+  - **Follow-ups (542e6421, resumed):** (A) the K-a13IB private Index with a paired bootstrap CI; (B) a ½-interpolation
+    point with gates → formal → items 1–7.
+
 - 2026-10-02 00:25 — **Card round 1 done (4c0a68cd); rename + product-card round 2 launched (same worker).**
   - **Round 1 card-only revisions:**
 
