@@ -156,6 +156,10 @@ is still fixing the long-input runtime bug and staging its M5-L128 Index diagnos
 
 ## Poll log (newest first)
 
+- 11:20Z: **amendment 3 committed (G5 hedge M6-IB2PN, before any hedge job).** Node A scans done: 0 hits on all 13
+  gold-free panels and PN1 dev; 4 near hits on Index suite rows in 3 PN1-r2 TRAIN groups (3 rows), dropped → PN1H
+  (4,361 rows). Next: tooling (`m6_data drop-groups`, `m6-build-pn.sh`, arm / launch / gates for M6-IB2PN, cap 22,
+  es / fr report), node B build, data-lock addendum, node D staging, launch on node D GPU2 then GPU3.
 - 11:03Z (worker 2, poll 1): M6-IB 1,147 / 1,105 of 5,081 (projection 13.2 / 13.7 h), M6-IB2 1,127 / 1,126 of 6,614
   (17.4 / 17.5 h), M6-IBX 863 / 851 of 4,997 (13.8 / 14.0 h). Six containers, three chains, four node A watchers and
   two node D relays alive; node D data disk 479 GB used. **GPU-h ≈ 17.8** (closed 1.136 + running ≈ 16.7).
