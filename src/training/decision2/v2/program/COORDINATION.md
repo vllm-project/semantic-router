@@ -205,6 +205,28 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 22:20 — **User directive (22:10): model cards SHOULD include the Decision Index comparison vs Decision
+  1.0 and a size–quality Pareto chart, in a premium, frontier-lab style with white backgrounds.** This overrides the
+  original brief's "no Index on cards / no Pareto on cards" for model cards.
+  - **Labelling (mandatory).**
+    - Decision 2.0 values are an *independent reproduction with the 0.2.1 kit on the released packages*, not official
+      board submissions.
+    - Other entrants (incl. Decision 1.0) come from the *public board snapshot of 2026-09-28*.
+    - The Index has its own section and charts, never merged into the JevArena chart or table.
+    - Regressions vs 1.0 are shown as they are (0.8B is −0.3).
+    - Chart titles must not claim frontier status the data does not show.
+  - **Still private:** Index values never go into the public GitHub branch, gists or commit messages. Cards are built
+    from private reports at release time.
+  - **Visual standard.** Prototype charts are in the local private `card-preview/proto/`
+    (`make_proto_charts.py`, `index-pareto.*`, `index-v2-vs-v1.*`):
+    - Inter (OFL) on white;
+    - one accent (indigo) for 2.0, soft accent for 1.0, grey entrants, a dashed frontier step;
+    - direct labels and a source footnote.
+    - The JevArena chart follows the same style.
+  - **Naming** is under discussion with the user. No repo renames until decided.
+  - **Next:** when the card-redesign round (4c0a68cd) reports, resume it to add the Index section plus both charts in
+    this style, then apply the naming decision.
+
 - 2026-10-01 22:05 — **User directive (21:58): redesign the DEV2.0 model cards as formal, user-facing release cards
   (4c0a68cd, resumed).**
   - Keep only "Use with 🤗 Transformers" as the quickstart (remove "Download and decide").
