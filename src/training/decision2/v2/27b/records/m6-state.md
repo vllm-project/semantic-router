@@ -235,6 +235,22 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 18:33Z: **Index-path preparation (amendment 4, `c1eafcc08`, on integration and mirrored to node D).**
+  - **Restage control PASS** (once for M6): A20r's own package through the forward-budget runtime
+    (`DEV2.0-27B-budget` = `4e89288d` + `e876fbe`), read by its entry point over the 86 compatibility requests on
+    node D GPU4 with A20r's frozen cache, equals IX1's A20r kit answers: 86 / 86 `ok`, 419 questions, max |Δp| 0.0
+    (`runs/DEV2.0-27B-budget-control/control.json`, private dir); 0.056 GPU-h (eval allowance), 18:22:52–18:26:22Z.
+  - **Contamination audit** of `a20ib12pn` + `a20ib1x` against the panel: running on node D (CPU) since 18:30Z.
+  - **Lease format fix:** IX1's `launch.sh` accepts only owner files with a line `track=eval-ix1`; node D GPU4 / GPU6
+    held IX1's one-line released owners, which it refused. They were moved to `owner.prev-20261001T182238Z` (worker
+    1's convention for GPU0–3) and replaced by released owners in the accepted format. GPU7 runs the 4B track's
+    `LHA10SD` panel (its lease ends ≈ 22:18Z).
+  - **Incident (no result affected):** a tool call ran one command twice. Its first copy moved the two owner files
+    and started the control; the second copy moved the live control's run directory into `void/` and started a
+    third attempt, which stopped at a container-name conflict before running anything. The running container kept
+    writing into the moved directory (bind mounts follow the directory), so after it ended (exit 0) its directory was
+    moved back, the conflict attempt went to `void/`, and the parity comparison was run by hand on the finished
+    run's files. Nothing ran twice on a GPU.
 - 18:12Z (poll 9 at 18:04Z): all alive, guard alive. M6-IB 3,853 / 3,689 (13.4 / 13.9 h; **s1 at 3816 .9196, BEST =
   3816**); M6-IB2 3,770 / 3,762 (17.6 / 17.7 h); M6-IBX 3,430 / 3,387 (13.8 / 14.0 h); M6-IB2PN 2,363 / 2,343 (18.9 /
   18.7 h). GPU-h ≈ 73. **COORDINATOR DECISION 2026-10-02 02:05 (18:05Z): the "Index path"** (item 1' = v3 not
