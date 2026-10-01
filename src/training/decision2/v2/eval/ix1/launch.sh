@@ -62,6 +62,8 @@ declare -A DIAGNOSTIC=(  # name -> "repository revision package-dir"
   [DEV2.0-27B-budget]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/fix2/DEV2.0-27B-4e89288d-re876fbe"
   [DEV2.0-4B-LH]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/DEV2.0-4B-13d42143"
   [DEV2.0-0.8B-08bRA]="DEV2.0-0.8B bede7938a8c209c09f27400b79eed57948d6b75e /data/dev2/models/ix1/dec-08bfast/DEV2.0-0.8B-08bRA-83926edf-rbede7938"
+  [K-a13IB]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/9b/K-a13IB-e51f9881"
+  [K-a13-fp32]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/9b/K-a13-fp32-e51f9881"
 )
 
 mode="${1:-}"; shift || true
