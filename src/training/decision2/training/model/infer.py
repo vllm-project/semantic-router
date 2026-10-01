@@ -588,7 +588,7 @@ def main() -> None:
 
     import torch
 
-    from .decision_model import DecisionModel, collate, encode
+    from .decision_model import DecisionModel, collate, encoder_for
 
     if not torch.cuda.is_available() or not torch.cuda.is_bf16_supported():
         raise RuntimeError("A CUDA/ROCm BF16 GPU is required")
@@ -629,7 +629,7 @@ def main() -> None:
         tokenizer=tokenizer,
         max_length=args.max_length,
         temperature=calibration if calibration is not None else args.temperature,
-        encode_fn=encode,
+        encode_fn=encoder_for(model.metadata),
         predict_fn=predict,
         model_sha256=model_identity["model_sha256"],
         adapter_sha256=adapter_sha,

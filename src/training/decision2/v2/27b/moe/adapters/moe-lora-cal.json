@@ -1,0 +1,18 @@
+{
+  "name": "decision2-27b-moe-lora-cal",
+  "module": "v2.27b.moe.collect",
+  "args": [
+    "--checkpoint", "{model}",
+    "--source-path", "{source}",
+    "--model-id", "{model_id}",
+    "--model-revision", "{revision}",
+    "--max-length", "{max_length}",
+    "--calibration", "{calibration}",
+    "--input", "{input}",
+    "--output", "{output}"
+  ],
+  "model_id": "llm-semantic-router/DEV2.0-27B-MoE-candidate",
+  "image": "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1",
+  "batch_policy": "as decision2-27b-moe-lora, with an adopted per-type CAL698 calibration (23:15 rule)",
+  "requires": ["source", "calibration", "max_length"]
+}

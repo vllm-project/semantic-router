@@ -39,6 +39,14 @@ HEAD_VARIANTS = (
     "candidate-interaction",
     "score-cardinality",
 )
+BOS_PROMPT_VERSION = "decision2-bos-segmented-options-global-query-v1"
+MOE_ARCHITECTURES = {
+    "gemma4": "gemma4-moe-text-endpoints-global-query-shared-bilinear-mlp",
+    "qwen3_5_moe": "qwen3.5-moe-text-endpoints-global-query-shared-bilinear-mlp",
+}
+# Gemma is trained and served behind its BOS token; Qwen tokenizers add none.
+MOE_PROMPT_VERSIONS = {"gemma4": BOS_PROMPT_VERSION, "qwen3_5_moe": PROMPT_VERSION}
+EXPERTS_IMPLEMENTATIONS = ("eager", "grouped_mm")
 
 
 def _payload(value: Any) -> str:
@@ -100,6 +108,58 @@ def encode(row: dict[str, Any], tokenizer: Any, max_length: int) -> dict[str, An
         ),
         "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
         "token_ids_sha256": hashlib.sha256(canonical(ids).encode("utf-8")).hexdigest(),
+    }
+
+
+def encode_bos(row: dict[str, Any], tokenizer: Any, max_length: int) -> dict[str, Any]:
+    """The shared segmented prompt behind the tokenizer's BOS token."""
+    bos = getattr(tokenizer, "bos_token_id", None)
+    if bos is None or max_length < 2:
+        raise ValueError(
+            "The BOS prompt needs a tokenizer BOS token and max_length >= 2"
+        )
+    encoded = encode(row, tokenizer, max_length - 1)
+    ids = [bos, *encoded["ids"]]
+    return {
+        **encoded,
+        "ids": ids,
+        "candidate_positions": [p + 1 for p in encoded["candidate_positions"]],
+        "query_position": encoded["query_position"] + 1,
+        "token_ids_sha256": hashlib.sha256(canonical(ids).encode("utf-8")).hexdigest(),
+    }
+
+
+def encoder_for(metadata: dict[str, Any]) -> Any:
+    version = metadata.get("prompt_version")
+    if version == PROMPT_VERSION:
+        return encode
+    if version == BOS_PROMPT_VERSION:
+        return encode_bos
+    raise ValueError(f"Unknown Decision 2.0 prompt version: {version!r}")
+
+
+def moe_summary(backbone: nn.Module) -> dict[str, Any]:
+    """Total, routed and per-token active text parameters of an MoE text backbone."""
+    config = backbone.config
+    experts = int(config.num_experts)
+    top_k = int(
+        getattr(config, "top_k_experts", None) or getattr(config, "num_experts_per_tok")
+    )
+    total = sum(parameter.numel() for parameter in backbone.parameters())
+    routed = sum(
+        parameter.numel()
+        for _, module in backbone.named_modules()
+        if type(module).__name__.endswith("Experts")
+        for parameter in module.parameters(recurse=False)
+    )
+    if not 0 < top_k <= experts or not 0 < routed < total or routed % experts:
+        raise ValueError("Unexpected MoE expert layout")
+    return {
+        "num_experts": experts,
+        "experts_per_token": top_k,
+        "text_parameters": total,
+        "routed_expert_parameters": routed,
+        "active_text_parameters_per_token": total - routed + routed * top_k // experts,
     }
 
 
@@ -208,6 +268,7 @@ class DecisionModel(nn.Module):
         *,
         source_stage: str = "base",
         head_variant: str = "shared",
+        experts_implementation: str | None = None,
     ) -> tuple[DecisionModel, Any]:
         from transformers import AutoConfig, AutoTokenizer
 
@@ -217,6 +278,19 @@ class DecisionModel(nn.Module):
             raise ValueError("Unsupported decision head variant")
 
         config = AutoConfig.from_pretrained(path, local_files_only=True)
+        if config.model_type in MOE_ARCHITECTURES:
+            if head_variant != "shared":
+                raise ValueError("MoE bases support only the shared decision head")
+            return cls.from_moe_base(
+                path,
+                revision,
+                head_dim,
+                source_stage=source_stage,
+                model_type=config.model_type,
+                experts_implementation=experts_implementation,
+            )
+        if experts_implementation is not None:
+            raise ValueError("experts_implementation applies only to MoE bases")
         if (
             head_variant in ("type-separated", "candidate-interaction")
             and config.model_type != "qwen3"
@@ -297,6 +371,68 @@ class DecisionModel(nn.Module):
         return cls(backbone, head, metadata), tokenizer
 
     @classmethod
+    def from_moe_base(
+        cls,
+        path: str | Path,
+        revision: str,
+        head_dim: int,
+        *,
+        source_stage: str,
+        model_type: str,
+        experts_implementation: str | None,
+    ) -> tuple[DecisionModel, Any]:
+        """Official Gemma 4 / Qwen3.5 MoE text decoder (vision tower unused) plus a fresh head."""
+        from transformers import AutoTokenizer
+
+        if experts_implementation not in EXPERTS_IMPLEMENTATIONS:
+            raise ValueError(
+                f"MoE bases need experts_implementation in {EXPERTS_IMPLEMENTATIONS}"
+            )
+        if model_type == "gemma4":
+            from transformers import Gemma4ForConditionalGeneration as model_class
+        else:
+            from transformers import Qwen3_5MoeForConditionalGeneration as model_class
+        tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=True)
+        full, info = model_class.from_pretrained(
+            path,
+            dtype=torch.float32,
+            local_files_only=True,
+            attn_implementation="sdpa",
+            experts_implementation=experts_implementation,
+            output_loading_info=True,
+            low_cpu_mem_usage=True,
+        )
+        if any(
+            info.get(name) for name in ("missing_keys", "mismatched_keys", "error_msgs")
+        ):
+            raise RuntimeError(f"Incomplete {model_type} base loading: {info}")
+        backbone = full.model.language_model
+        backbone.config.use_cache = False
+        if backbone.config._experts_implementation != experts_implementation:
+            raise RuntimeError(
+                "The MoE text decoder did not keep the pinned experts implementation"
+            )
+        head = CandidateHead(backbone.config.hidden_size, head_dim)
+        metadata = {
+            "architecture": MOE_ARCHITECTURES[model_type],
+            "prompt_version": MOE_PROMPT_VERSIONS[model_type],
+            "base_revision": revision,
+            "source_stage": source_stage,
+            "initialization": f"{source_stage}-random-head",
+            "head_dim": head_dim,
+            "max_options": MAX_OPTIONS,
+            "text_parameter_count": sum(p.numel() for p in backbone.parameters()),
+            "parameter_dtype": "float32",
+            "autocast_dtype": "bfloat16",
+            "head_compute_dtype": "float32",
+            "attention": "sdpa",
+            "backbone_model_type": model_type,
+            "experts_implementation": experts_implementation,
+            "moe": moe_summary(backbone),
+        }
+        return cls(backbone, head, metadata), tokenizer
+
+    @classmethod
     def from_decision1(
         cls, path: str | Path, head_dim: int = 256
     ) -> tuple[DecisionModel, Any]:
@@ -362,7 +498,20 @@ class DecisionModel(nn.Module):
         )
         architecture = metadata.get("architecture")
         variant = metadata.get("head_variant", "shared")
-        if metadata.get("prompt_version") != PROMPT_VERSION or architecture not in (
+        moe_type = next(
+            (kind for kind, name in MOE_ARCHITECTURES.items() if architecture == name),
+            None,
+        )
+        if moe_type is not None:
+            if metadata.get("prompt_version") != MOE_PROMPT_VERSIONS[moe_type]:
+                raise ValueError(
+                    "MoE checkpoint prompt version differs from its architecture"
+                )
+            if metadata.get("checkpoint_format") != LORA_FORMAT or variant != "shared":
+                raise ValueError(
+                    "Only shared-head LoRA checkpoints are supported for MoE bases"
+                )
+        elif metadata.get("prompt_version") != PROMPT_VERSION or architecture not in (
             ARCHITECTURE,
             QWEN3_ARCHITECTURE,
             QWEN3_TYPED_ARCHITECTURE,
@@ -409,6 +558,7 @@ class DecisionModel(nn.Module):
                     metadata["head_dim"],
                     source_stage=source_kind,
                     head_variant=variant,
+                    experts_implementation=metadata.get("experts_implementation"),
                 )
             elif source_kind == "decision1":
                 source_model, _ = cls.from_decision1(source_path, metadata["head_dim"])
