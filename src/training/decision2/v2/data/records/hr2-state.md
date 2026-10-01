@@ -6,10 +6,22 @@ Worktree `/home/xunliu/code/vllm-sr-dev2-data-hr2`, branch `xunzhuo/decision-2-t
 `records/hr2/`. Private data on node A under `/data/dev2/private/data/hr2/` (mode 700): `raw/` (pinned publisher
 files) and the run directory `b2-c54b8d444cac/` (candidates, scans, review keys, final files, upload tree, logs).
 
-**Status: DONE, flagged NOT release-safe.** Private `llm-semantic-router/decision-2.0-training-data@afc3bc1e1d6849058f6fafdfbc3dfe007d067400`,
+**Status: round 1 DONE, flagged NOT release-safe.** Private `llm-semantic-router/decision-2.0-training-data@afc3bc1e1d6849058f6fafdfbc3dfe007d067400`,
 `m5/hr2/`: TRAIN 27,697 rows (`0fd9b2db…`), DEV 1,615 (`697c3142…`). Blind review 13 / 216 = 6.02% (P1 / P2 fail).
 
+**HR2-r2: IN PROGRESS** (worker started 2026-10-01 10:24 UTC+8). Amendment 4
+(`records/hr2-prereg-amendment-4-2026-10-01.md`): drop VitaminC and Allegro (licence uncertain), drop `hs3_help`
+(C1) and PRM800K boundary yes rows (C2); fresh review 6 × 48 = 288 rows (P1 ≤ 13 errors, P3 ≥ 7 / 48 fails, no fix
+rule). Runner `v2/data/hr2/node_a_r2.sh`; run directory `/data/dev2/private/data/hr2/b2-c54b8d444cac-r2/` (reads the
+round-1 directory read-only). Stages: analyze ✔ → pass → audits → review → splits → score → final → hf-assemble →
+hf-upload.
+
 ## Log (newest first)
+
+- 2026-10-01 11:03 UTC+8 — **r2:** tooling `874e60e46` (tests 403 data + guard pass); error analysis on node A
+  (`analyze`, 4 s): the r2 drops remove 9 of 13 round-1 errors; kept reviewed rows 4 / 139 = 2.88%; expected TRAIN
+  ≈ 16,303 rows / 10.9M tokens, DEV ≈ 961. Licence evidence re-read (VitaminC LICENSE per-article terms; Allegro
+  snapshot without licence). Amendment 4 written; committed before `pass`.
 
 - 2026-10-01 01:18 UTC+8 — merged into `xunzhuo/decision-2-training` (`24b024a8b`, fast-forward); gist 02 entry
   added (read back identical). Local review copies removed (packets, answers and keys stay on node A under
