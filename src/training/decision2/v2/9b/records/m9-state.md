@@ -2,6 +2,10 @@
 
 ## Follow-ups A / B (2026-10-02, continuation cba71646; COORDINATION 00:35)
 
+- 17:20Z — **B done: K-a12IB fails Y1 (PN1 clean gold-no +.018 [+.002, +.032]); no finalist, no formal**
+  ([stage-4 result](lux9b-m9-stage4-result-2026-10-01.md); typed T .950, other six gates pass). Node A GPU6 released.
+  **A:** parity gate PASS (86 / 86 ok, identical choices, max |Δp| 0.0); 7 shards running on node C GPU1–7 since
+  ≈17:12Z (ETA ≈ 17:40Z); then the FP32 control on GPU1, scoring and the paired bootstrap.
 - 16:50Z — **B (amendment 4, `78b01441e`):** K-a12IB = [KIB soup, Lux 1.0] built on node A 16:46Z (`model_sha256`
   `68fed4cb…`); `post-a4.sh` reading the eight panels + IB DEV on node A GPU6 (ETA ≈ 17:50Z), then scoring, readout
   `m9-s4`, rules `select/9b-finalists-s4.json`. Formal only if it passes (`M9_STAGE=4`, after a lock record and
