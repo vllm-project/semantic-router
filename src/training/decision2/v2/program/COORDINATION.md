@@ -205,6 +205,45 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 00:05 — **User decisions (23:53–00:00): naming and a product-style card (round 2).**
+  - **Naming (confirmed):** `Decision-2.0-{codename}-{size}`. The codename follows the size slot across generations.
+    Repos move with `move_repo`, so old IDs redirect.
+
+    | Current repo | New repo |
+    | --- | --- |
+    | `DEV2.0-0.6B` | `Decision-2.0-Kai-0.6B` |
+    | `DEV2.0-0.8B` | `Decision-2.0-Eos-0.8B` |
+    | `DEV2.0-2B` | `Decision-2.0-Sol-2B` |
+    | `DEV2.0-4B` | `Decision-2.0-Nox-4B` |
+    | `DEV2.0-9B` | `Decision-2.0-Lux-9B` |
+    | `DEV2.0-27B` | **`Decision-2.0-Vega-27B`** (new flagship codename) |
+
+    - The collaborator's `DEV2.0-Route-0.6B` is not renamed by us (suggest `Decision-2.0-Route-0.6B` to subin / the
+      user).
+    - **After the rename, every release hand-off and the tooling (hub ID guard, registries, collection, `API.md`,
+      snippets) use the new IDs.** Historical records keep the old names.
+  - **Card policy (supersedes 22:05 / 22:20):**
+    - **NO training-data section, NO limitations section, NO NOTICE file, NO dataset credits, NO training details**
+      (LoRA / architecture internals / precision / runtime notes). Treat it as a distributed product.
+    - Keep only the Apache-2.0 `LICENSE` file and the `base_model` metadata (the minimum Apache-2.0 requires of a
+      derivative).
+    - **Remove JevBench.** Evaluation = **JevArena + Jev Decision Index** only.
+    - **A branded top banner** (vLLM-SR logo; brand blue `#30A0FC` / yellow `#FCB414`; Inter on white). **Every chart
+      carries the vLLM-SR logo bottom-right.**
+    - Richer evaluation charts:
+      - JevArena overall vs same-size peers and the 1.0 counterpart;
+      - JevArena by decision type (Choice / Yes-No / Score + human-labelled transfer);
+      - the Jev Decision Index Pareto (family; this size highlighted);
+      - the Jev Decision Index by area vs the 1.0 counterpart.
+    - The Index charts carry the reproduction label as a footnote.
+    - **Quickstart = code only** (no device / version prose).
+    - **Highlights must be product value** (best-in-size, generation gain, speed, many questions in one pass), not
+      plumbing.
+    - Drop `evaluation/EVALUATION.md`, or reduce it to nothing user-facing.
+    - The prototype assets are in the local private `card-preview/proto-v2/` (`make_v2_assets.py`).
+  - **Execution:** the card worker (4c0a68cd) finishes round 1 (all six round-1 cards are on HF at 15:00–15:41Z), then
+    is resumed for rename + round 2 in one pass.
+
 - 2026-10-01 23:40 — **M13 (c473a3b2): the 4B finalist `4b-LHA10SD` passes every development gate; formal is
   collecting. 2B / 0.8B are scoring. Continuation resumed.**
   - **`4b-LHA10SD`** (LH + 10% IB additive + **typed-row self-distillation** from LH), vs LH:
