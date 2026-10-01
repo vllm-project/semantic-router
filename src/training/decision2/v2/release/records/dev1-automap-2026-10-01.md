@@ -16,7 +16,7 @@ Decision 1.0 section of the shared `automap/API.md`). State log: [`dev1-automap-
 | Decision-1.0-Nox-4B | `eab48e99` | [#2](https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B/discussions/2) merged | `f098bdec` | 0 changes, 0.0105 (16 long CSS15 prompts) | pass | pass |
 | Decision-1.0-Lux-9B | `8db79130` | [#2](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/discussions/2) merged | `a31b9e2c` | 0 changes, 0.0103; 0.0 with the published FLA profile | pass | pass |
 | Decision-1.0-Eos-0.8B | `a66df1b5` | [#3](https://huggingface.co/llm-semantic-router/Decision-1.0-Eos-0.8B/discussions/3) merged | `bbdc2221` | 0 changes, 0.0 vs the native Eos runtime on the same GPU and kernels (the stored set is not reproducible, see below) | pass | pass |
-| DEV2.0-Route-0.6B (private) | `72a2d317` | PR only (see state log) | unchanged (never merged by us) | native vs AutoModel on CPU (state log) | — | — |
+| DEV2.0-Route-0.6B (private) | `72a2d317` | [#1](https://huggingface.co/llm-semantic-router/DEV2.0-Route-0.6B/discussions/1) open (PR only) | unchanged (never merged by us) | native answers unchanged by the `api.py` fix (68 prompts, CPU); AutoModel vs native: state log | — | — |
 
 Every PR was opened against the head current at staging (`parent_commit`), after checking that no open PR
 touched the same files; the heads included subin's merges of the same morning (neutral hardware wording on
@@ -109,6 +109,20 @@ only in Eos-gated code and the Hub download helper.
 - After merge: readback of every file at the new `main` (above); fresh-cache smoke (empty Hugging Face cache)
   that also runs each card's Python block verbatim: pass for all seven (Transformers 5.18.0, CPU).
 - Also checked locally: Transformers 4.57.6 (encoders) and 5.17.0.
+
+## DEV2.0-Route-0.6B (a collaborator's private 2.0 package; PR only)
+
+Prepared after the 2.0 auto_map release published its remote code on DEV2.0-0.6B (`25669e2d`), mirroring
+that revision (`stage_dev2route1.py`): the three files `configuration_decision2.py`, `modeling_decision2.py`,
+`pipeline_decision2.py` byte for byte (checked against DEV2.0-0.6B's `MODEL_MANIFEST.json` and the 2.0
+branch source), the 2.0 `config.json` fields (sorted rendering as in 2.0), `MODEL_MANIFEST.json` with the new
+hashes, a `remote_code` section naming its source package and an amended runtime equivalence note, a 2.0-style
+card section (example built from the repository's `QUESTIONS.json`), and one sentence corrected. The package's
+own runtime predates the 2.0 BF16-resident rollout and the 2.0 loading fix, so `decision2/api.py` gets only that
+fix (commit `0cbf1033e`: Transformers' remote-code prompt answered "no" while the vendored loader reads the
+tokenizer), applied as one change. Native answers through the package runtime before and after the change are
+identical on 68 prompts (public 231 and typed-final, CPU). PR #1 is open for the owner's review and is not
+merged by us.
 
 ## Divergences and follow-ups
 
