@@ -18,6 +18,10 @@
 #                             each with a copy of the frozen cache; a shard starts once the previous one is ready
 #   resume NAME SHARDS K GPU  restart ended shard K in place on GPU (the kit skips final rows and retries errors)
 #   extra  NAME GPU ROWS TAG  the kit runner over ROWS alone -> P/runs/NAME/extra-TAG (foreground)
+#   auto-offer NAME           node B host (start detached): wait for the Stage B chain's frozen package, then offer;
+#                             ends without an offer if the chain skips the package (X/mlx/NAME.SKIP) or after 8 h
+#   auto-run NAME SHARDS GPU...  node A host (start detached): wait for X/index/NAME.OFFERED, then stage, parity on
+#                             the first GPU over the compatibility sample and, only on a pass, run on the listed GPUs
 # R = MOE_ROOT (default /data/dev2/runs/27b-moe; a path check sets R/pathcheck), P = MOE_INDEX_ROOT (default
 # /data/dev2/private/eval/index021/ix1), X = /data/dev2/xfer/27b-moe (node B). Every GPU job goes through
 # v2.27b.moe.launch (the track's lease, render node, wall-clock cap and GPU-hour receipt): no network, the mirror, kit,
@@ -232,5 +236,39 @@ EOF
     mkdir -p "$W/triton" && cp -a "$CACHE/." "$W/triton/"
     job "$GPU" "d2-27b-moe-ix-$NAME-extra-$TAG-g$GPU" "27b-moe Index extra $NAME $TAG" "$W/receipt.json" "$W" "$PKG" \
       "$(dirname "$ROWS")" "$(kit_script "$ROWS" "$W" "$SHA")" ;;
+  auto-offer)
+    NAME=${1:?NAME}; name_ok "$NAME"
+    F=$R/$NAME/package/PACKAGE.json
+    for _ in $(seq 960); do
+      if python3 -c "import json,os,sys,time; d=json.load(open(sys.argv[1])); sys.exit(0 if 'active_parameters' in d and time.time() - os.path.getmtime(sys.argv[1]) > 30 else 1)" "$F" 2> /dev/null; then
+        echo "$(date -u +%FT%TZ) $NAME package frozen; offering"
+        exec bash "$0" offer "$MIR" "$NAME"
+      fi
+      [ ! -f "$X/mlx/$NAME.SKIP" ] || { echo "$(date -u +%FT%TZ) no package: $(cat "$X/mlx/$NAME.SKIP")"; exit 0; }
+      sleep 30
+    done
+    echo "$(date -u +%FT%TZ) no package after 8 h"; exit 1 ;;
+  auto-run)
+    NAME=${1:?NAME} SHARDS=${2:?SHARDS}
+    shift 2
+    name_ok "$NAME"
+    [ $# -eq "$SHARDS" ] || { echo "auto-run needs one GPU per shard" >&2; exit 2; }
+    PEER=$(cat "$KEY/peer") T=/data/dev2/tmp/27b-moe-index
+    mkdir -p "$T"
+    for _ in $(seq 960); do
+      if rs "root@$PEER:index/$NAME.OFFERED" "$T/" 2> /dev/null; then
+        echo "$(date -u +%FT%TZ) $NAME offered; staging"
+        bash "$0" stage "$MIR" "$NAME"
+        echo "$(date -u +%FT%TZ) parity gate on GPU$1"
+        bash "$0" parity "$MIR" "$NAME" "$1"
+        echo "$(date -u +%FT%TZ) parity passed; starting $SHARDS shards on GPUs $*"
+        exec bash "$0" run "$MIR" "$NAME" "$SHARDS" "$@"
+      fi
+      if rs "root@$PEER:mlx/$NAME.SKIP" "$T/" 2> /dev/null; then
+        echo "$(date -u +%FT%TZ) no package: $(cat "$T/$NAME.SKIP")"; exit 0
+      fi
+      sleep 60
+    done
+    echo "$(date -u +%FT%TZ) no offer after 16 h"; exit 1 ;;
   *) echo "unknown mode $MODE" >&2; exit 2 ;;
 esac
