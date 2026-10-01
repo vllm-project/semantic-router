@@ -6,8 +6,13 @@ this repository. Subcommands:
 
   run      fixed Choice/Noul/Score requests through ``Decision2`` -> outputs JSON
   compare  two ``run`` outputs (cross-process / pre- vs post-download)
-  card     execute the README's Python block and compare with a ``run`` output
+  card     execute the README's native Python block and compare with a ``run`` output
   parity   package answers on gold-free panel prompts vs sealed scored predictions
+  automap         AutoConfig / AutoTokenizer / AutoModel / pipeline("decision") with
+                  trust_remote_code vs a native ``run`` output (bit-identical answers)
+  automap-card    the README's Transformers block (package path, or ``--hub`` as written)
+  automap-parity  ``parity`` through AutoModel with trust_remote_code
+  compare-answers per-prompt answers of two ``--answers`` runs: changes and drift
 
 ``--site DIR`` puts an image directory of kernel packages on the path after the
 package (images that expose FLA only through ``PYTHONPATH``, which ``-I``
@@ -438,36 +443,58 @@ def compare(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def card(args: argparse.Namespace) -> dict[str, Any]:
-    """Execute the README's Python example exactly as a user would, in a fresh process."""
-    readme = (args.package / "README.md").read_text(encoding="utf-8")
-    blocks = re.findall(r"```python\n(.*?)```", readme, flags=re.S)
+NATIVE_BLOCK = "from decision2 import Decision2"
+TRANSFORMERS_BLOCK = "trust_remote_code=True"
+
+
+def card_block(readme: str, marker: str) -> str:
+    """The card's one Python example that contains ``marker`` (native or Transformers)."""
+    blocks = [
+        b for b in re.findall(r"```python\n(.*?)```", readme, flags=re.S) if marker in b
+    ]
     if len(blocks) != 1:
-        raise ValueError("The card must contain exactly one Python example")
-    code = blocks[0]
-    name = args.package.resolve().name
-    if f'"{name}"' not in code:
-        raise ValueError("The card example does not load this package directory")
-    reference = json.loads(args.reference.read_text(encoding="utf-8"))
-    expected = next(o for o in reference["outputs"] if o["id"] == EXAMPLES[0]["id"])
+        raise ValueError(
+            f"The card must contain exactly one Python example with {marker!r}"
+        )
+    return blocks[0]
+
+
+def run_card_code(
+    code: str, cwd: Path, sites: list[str], env: dict[str, str] | None = None
+) -> tuple[subprocess.CompletedProcess, list[str], float]:
+    """Run card code in a fresh interpreter; ``sites`` only, as if installed in the user's environment."""
     with tempfile.TemporaryDirectory() as scratch:
         script = Path(scratch) / "card_example.py"
         script.write_text(code, encoding="utf-8")
-        env = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
+        env = env or {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
         flags = ["-I", "-B"]
-        if args.site:
-            # Only the named kernel directories, as if installed in the user's environment.
-            env["PYTHONPATH"] = os.pathsep.join(args.site)
+        if sites:
+            env["PYTHONPATH"] = os.pathsep.join(sites)
             flags = ["-s", "-B"]
         started = time.perf_counter()
         completed = subprocess.run(
             [sys.executable, *flags, str(script)],
-            cwd=args.package.resolve().parent,
+            cwd=cwd,
             env=env,
             capture_output=True,
             text=True,
             timeout=3600,
         )
+    return completed, flags, started
+
+
+def card(args: argparse.Namespace) -> dict[str, Any]:
+    """Execute the README's native Python example exactly as a user would, in a fresh process."""
+    readme = (args.package / "README.md").read_text(encoding="utf-8")
+    code = card_block(readme, NATIVE_BLOCK)
+    name = args.package.resolve().name
+    if f'"{name}"' not in code:
+        raise ValueError("The card example does not load this package directory")
+    reference = json.loads(args.reference.read_text(encoding="utf-8"))
+    expected = next(o for o in reference["outputs"] if o["id"] == EXAMPLES[0]["id"])
+    completed, flags, started = run_card_code(
+        code, args.package.resolve().parent, args.site
+    )
     printed = None
     if completed.returncode == 0:
         try:
@@ -499,60 +526,88 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
         return [json.loads(line) for line in stream if line.strip()]
 
 
+def panel_parity(
+    system_one: Any, specs: list[str], answers: Path | None = None
+) -> dict[str, Any]:
+    """``system_one`` answers vs the sealed predictions of each NAME:PROMPTS:PREDICTIONS:COUNT panel.
+
+    ``answers`` (optional) receives one JSON line per prompt, ``{"panel", "id", "answers"}``, for a
+    direct comparison of two runtimes (``compare-answers``); it stays on the node like the predictions.
+    """
+    panels = {}
+    out = answers.open("x", encoding="utf-8") if answers else None
+    try:
+        for spec in specs:
+            name, prompts_path, predictions_path, count = spec.split(":")
+            prompts = read_jsonl(Path(prompts_path))[: int(count)]
+            sealed = {row["id"]: row for row in read_jsonl(Path(predictions_path))}
+            totals = {
+                "prompts": 0,
+                "slots": 0,
+                "category_changes": 0,
+                "missing": 0,
+                "max_abs_drift": 0.0,
+                "input_mismatch": 0,
+            }
+            started = time.perf_counter()
+            for prompt in prompts:
+                payload = {"state": prompt["state"], "questions": prompt["questions"]}
+                reference = sealed.get(prompt["id"]) or {}
+                if (
+                    reference.get("source_input_sha256")
+                    != hashlib.sha256(
+                        json.dumps(
+                            payload,
+                            ensure_ascii=False,
+                            separators=(",", ":"),
+                            allow_nan=False,
+                        ).encode("utf-8")
+                    ).hexdigest()
+                ):
+                    totals["input_mismatch"] += 1
+                response = system_one(
+                    state=prompt["state"], questions=prompt["questions"]
+                )
+                if out is not None:
+                    out.write(
+                        canonical(
+                            {
+                                "panel": name,
+                                "id": prompt["id"],
+                                "answers": response["answers"],
+                            }
+                        )
+                        + "\n"
+                    )
+                result = compare_answers(
+                    response["answers"], reference.get("answers") or {}
+                )
+                totals["prompts"] += 1
+                for key in ("slots", "category_changes", "missing"):
+                    totals[key] += result[key]
+                totals["max_abs_drift"] = max(
+                    totals["max_abs_drift"], result["max_abs_drift"]
+                )
+            panels[name] = {
+                **totals,
+                "prompts_sha256": sha_file(Path(prompts_path)),
+                "predictions_sha256": sha_file(Path(predictions_path)),
+                "ids_sha256": digest([p["id"] for p in prompts]),
+                "seconds": time.perf_counter() - started,
+            }
+    finally:
+        if out is not None:
+            out.close()
+    return panels
+
+
 def parity(args: argparse.Namespace) -> dict[str, Any]:
     """Answers of the package vs the sealed same-panel predictions on the first N prompts."""
     model, load_seconds = load_package(
         args.package, args.device, args.threads, args.base_path
     )
     kernels = kernel_runtime(args.require_kernels)
-    panels = {}
-    for spec in args.panel:
-        name, prompts_path, predictions_path, count = spec.split(":")
-        prompts = read_jsonl(Path(prompts_path))[: int(count)]
-        sealed = {row["id"]: row for row in read_jsonl(Path(predictions_path))}
-        totals = {
-            "prompts": 0,
-            "slots": 0,
-            "category_changes": 0,
-            "missing": 0,
-            "max_abs_drift": 0.0,
-            "input_mismatch": 0,
-        }
-        started = time.perf_counter()
-        for prompt in prompts:
-            payload = {"state": prompt["state"], "questions": prompt["questions"]}
-            reference = sealed.get(prompt["id"]) or {}
-            if (
-                reference.get("source_input_sha256")
-                != hashlib.sha256(
-                    json.dumps(
-                        payload,
-                        ensure_ascii=False,
-                        separators=(",", ":"),
-                        allow_nan=False,
-                    ).encode("utf-8")
-                ).hexdigest()
-            ):
-                totals["input_mismatch"] += 1
-            response = model.system_one(
-                state=prompt["state"], questions=prompt["questions"]
-            )
-            result = compare_answers(
-                response["answers"], reference.get("answers") or {}
-            )
-            totals["prompts"] += 1
-            for key in ("slots", "category_changes", "missing"):
-                totals[key] += result[key]
-            totals["max_abs_drift"] = max(
-                totals["max_abs_drift"], result["max_abs_drift"]
-            )
-        panels[name] = {
-            **totals,
-            "prompts_sha256": sha_file(Path(prompts_path)),
-            "predictions_sha256": sha_file(Path(predictions_path)),
-            "ids_sha256": digest([p["id"] for p in prompts]),
-            "seconds": time.perf_counter() - started,
-        }
+    panels = panel_parity(model.system_one, args.panel, args.answers)
     passed = all(
         p["category_changes"] == 0
         and p["missing"] == 0
@@ -569,6 +624,302 @@ def parity(args: argparse.Namespace) -> dict[str, Any]:
         "load_seconds": load_seconds,
         "tolerance": args.tolerance,
         "panels": panels,
+        "passed": passed,
+    }
+
+
+def automap_load(
+    package: str | Path, device: str | None, threads: int | None, base_path: str | None
+):
+    """The package through stock Transformers: AutoModel with trust_remote_code, nothing on sys.path."""
+    from transformers import AutoModel
+
+    options = {"device": device, "threads": threads, "base_path": base_path}
+    started = time.perf_counter()
+    model = AutoModel.from_pretrained(
+        str(package),
+        trust_remote_code=True,
+        **{k: v for k, v in options.items() if v is not None},
+    )
+    return model, time.perf_counter() - started
+
+
+def free(model: Any) -> None:
+    import gc
+
+    del model
+    gc.collect()
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except ImportError:
+        pass
+
+
+def automap(args: argparse.Namespace) -> dict[str, Any]:
+    """AutoConfig, AutoTokenizer, AutoModel and pipeline("decision") with trust_remote_code on the
+    package, each answer compared with the native ``run`` receipt (bit-identical required).
+    """
+    from transformers import AutoConfig, AutoTokenizer, pipeline
+    from transformers.utils import find_adapter_config_file, is_peft_available
+
+    package = str(args.package.resolve())
+    manifest = json.loads(
+        (args.package / "MODEL_MANIFEST.json").read_text(encoding="utf-8")
+    )
+    reference = json.loads(args.reference.read_text(encoding="utf-8"))
+    expected = {o["id"]: o["response"] for o in reference["outputs"]}
+    checks: dict[str, Any] = {}
+    config = AutoConfig.from_pretrained(package, trust_remote_code=True)
+    checks["config"] = {
+        "class": type(config).__name__,
+        "model_type": config.model_type,
+        "passed": type(config).__name__ == "Decision2Config"
+        and config.model_type == "decision2"
+        and getattr(config, "model_name", None) == manifest["model_name"],
+    }
+    tokenizer = AutoTokenizer.from_pretrained(package, trust_remote_code=True)
+    # An adapter_config.json at the root would make AutoModel load the adapter's base instead.
+    root_adapter = find_adapter_config_file(package)
+    checks["peft_detection"] = {
+        "peft_available": is_peft_available(),
+        "root_adapter_config": root_adapter,
+        "passed": root_adapter is None,
+    }
+    model, load_seconds = automap_load(
+        package, args.device, args.threads, args.base_path
+    )
+    kernels = kernel_runtime(args.require_kernels)
+    runtime_tokenizer = model.runtime.backend.tokenizer
+    texts = [
+        e["state"] if isinstance(e["state"], str) else canonical(e["state"])
+        for e in EXAMPLES
+    ]
+    same_ids = all(
+        tokenizer.encode(t, add_special_tokens=False)
+        == runtime_tokenizer.encode(t, add_special_tokens=False)
+        for t in texts
+    )
+    checks["tokenizer"] = {"class": type(tokenizer).__name__, "passed": same_ids}
+    checks["model"] = {
+        "class": type(model).__name__,
+        "module": type(model).__module__.split(".")[0],
+        "runtime_module": type(model.runtime).__module__.rsplit(".", 2)[-2],
+        "num_parameters": model.num_parameters(),
+        "cpu_reference_layers": model.cpu_reference_layers,
+        "passed": type(model).__name__ == "Decision2Model"
+        and type(model).__module__.startswith("transformers_modules.")
+        and model.num_parameters() == manifest["parameters"]["loaded"]
+        and model.model_name == manifest["model_name"],
+    }
+    examples = [*EXAMPLES, over_budget_example(model.max_input_tokens)]
+    outputs = []
+    for example in examples:
+        started = time.perf_counter()
+        response = model.system_one(
+            state=example["state"], questions=example["questions"]
+        )
+        outputs.append(
+            {
+                "id": example["id"],
+                "response": response,
+                "latency_ms": (time.perf_counter() - started) * 1000,
+            }
+        )
+    first = EXAMPLES[0]
+    checks["forward"] = {
+        "passed": model(state=first["state"], questions=first["questions"])
+        == outputs[0]["response"]
+    }
+    device = str(model.device)
+    free(model)
+    decide = pipeline(
+        "decision",
+        model=package,
+        trust_remote_code=True,
+        device_map=args.device,
+        model_kwargs={
+            k: v
+            for k, v in (("threads", args.threads), ("base_path", args.base_path))
+            if v is not None
+        },
+    )
+    requests = [
+        {"state": e["state"], "questions": e["questions"]} for e in EXAMPLES[:2]
+    ]
+    single = decide(requests[0])
+    batch = decide(requests)
+    keywords = decide(state=first["state"], questions=first["questions"])
+    checks["pipeline"] = {
+        "class": type(decide).__name__,
+        "passed": type(decide).__name__ == "Decision2Pipeline"
+        and single == keywords == expected[first["id"]]
+        and batch == [expected[e["id"]] for e in EXAMPLES[:2]],
+    }
+    free(decide)
+    comparison = {
+        o["id"]: compare_answers(o["response"]["answers"], expected[o["id"]]["answers"])
+        for o in outputs
+    }
+    answers = digest([{"id": o["id"], "response": o["response"]} for o in outputs])
+    identical = answers == reference["answers_sha256"]
+    checks["answers"] = {"bit_identical_to_native": identical, "passed": identical}
+    return {
+        "schema": SCHEMA,
+        "mode": "automap",
+        "package_manifest_sha256": sha_file(args.package / "MODEL_MANIFEST.json"),
+        "reference_sha256": sha_file(args.reference),
+        "device": device,
+        "load_seconds": load_seconds,
+        "runtime": {**runtime_versions(), "sites": args.site, "kernels": kernels},
+        "checks": checks,
+        "outputs": outputs,
+        "answers_sha256": answers,
+        "comparison": comparison,
+        "passed": all(c["passed"] for c in checks.values()),
+    }
+
+
+def automap_card(args: argparse.Namespace) -> dict[str, Any]:
+    """Execute the README's Transformers example in a fresh interpreter and compare with the native run.
+
+    Without ``--hub`` the repository ID is replaced by the package path (no network); with ``--hub`` the
+    code runs exactly as written against the Hub and ``--expect-revision`` must be the downloaded commit.
+    """
+    readme = (args.package / "README.md").read_text(encoding="utf-8")
+    code = card_block(readme, TRANSFORMERS_BLOCK)
+    repo = json.loads(
+        (args.package / "MODEL_MANIFEST.json").read_text(encoding="utf-8")
+    )["repo_id"]
+    if f'"{repo}"' not in code:
+        raise ValueError("The Transformers example does not load this repository")
+    if not args.hub:
+        code = code.replace(f'"{repo}"', json.dumps(str(args.package.resolve())))
+    reference = json.loads(args.reference.read_text(encoding="utf-8"))
+    expected = next(o for o in reference["outputs"] if o["id"] == EXAMPLES[0]["id"])
+    env = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
+    with tempfile.TemporaryDirectory() as scratch:
+        completed, flags, started = run_card_code(code, Path(scratch), args.site, env)
+    printed = None
+    if completed.returncode == 0:
+        try:
+            printed = json.loads(completed.stdout)
+        except json.JSONDecodeError:
+            printed = None
+    comparison = compare_answers(printed or {}, expected["response"]["answers"])
+    downloaded = None
+    if args.hub:
+        from huggingface_hub import scan_cache_dir
+
+        downloaded = sorted(
+            revision.commit_hash
+            for cached in scan_cache_dir().repos
+            if cached.repo_id == repo
+            for revision in cached.revisions
+        )
+    return {
+        "schema": SCHEMA,
+        "mode": "automap-card",
+        "hub": args.hub,
+        "code_sha256": hashlib.sha256(
+            card_block(readme, TRANSFORMERS_BLOCK).encode("utf-8")
+        ).hexdigest(),
+        "readme_sha256": sha_file(args.package / "README.md"),
+        "interpreter_flags": flags,
+        "sites": args.site,
+        "exit_code": completed.returncode,
+        "stderr_tail": completed.stderr[-2000:] if completed.returncode else "",
+        "seconds": time.perf_counter() - started,
+        "downloaded_revisions": downloaded,
+        "runtime": runtime_versions(),
+        "comparison": comparison,
+        "passed": completed.returncode == 0
+        and printed is not None
+        and comparison["category_changes"] == 0
+        and comparison["missing"] == 0
+        and comparison["max_abs_drift"] <= args.tolerance
+        and (not args.hub or downloaded == [args.expect_revision]),
+    }
+
+
+def automap_parity(args: argparse.Namespace) -> dict[str, Any]:
+    """``parity`` through AutoModel with trust_remote_code instead of the native import."""
+    model, load_seconds = automap_load(
+        args.package, args.device, args.threads, args.base_path
+    )
+    kernels = kernel_runtime(args.require_kernels)
+    panels = panel_parity(model.system_one, args.panel, args.answers)
+    passed = all(
+        p["category_changes"] == 0
+        and p["missing"] == 0
+        and p["input_mismatch"] == 0
+        and p["max_abs_drift"] <= args.tolerance
+        for p in panels.values()
+    )
+    return {
+        "schema": SCHEMA,
+        "mode": "automap-parity",
+        "package_manifest_sha256": sha_file(args.package / "MODEL_MANIFEST.json"),
+        "device": str(model.device),
+        "runtime": {
+            **runtime_versions(),
+            "sites": args.site,
+            "kernels": kernels,
+            "cpu_reference_layers": model.cpu_reference_layers,
+        },
+        "load_seconds": load_seconds,
+        "tolerance": args.tolerance,
+        "panels": panels,
+        "passed": passed,
+    }
+
+
+def compare_answer_files(args: argparse.Namespace) -> dict[str, Any]:
+    """Per-prompt answers of two runs (``--answers`` files) on the same panels: changes and drift."""
+    left, right = (
+        {(r["panel"], r["id"]): r["answers"] for r in read_jsonl(p)}
+        for p in (args.left, args.right)
+    )
+    panels: dict[str, dict[str, Any]] = {}
+    for key in sorted(set(left) | set(right)):
+        totals = panels.setdefault(
+            key[0],
+            {
+                "prompts": 0,
+                "identical_prompts": 0,
+                "slots": 0,
+                "category_changes": 0,
+                "missing": 0,
+                "max_abs_drift": 0.0,
+            },
+        )
+        totals["prompts"] += 1
+        if key not in left or key not in right:
+            totals["missing"] += 1
+            continue
+        totals["identical_prompts"] += canonical(left[key]) == canonical(right[key])
+        result = compare_answers(left[key], right[key])
+        for name in ("slots", "category_changes", "missing"):
+            totals[name] += result[name]
+        totals["max_abs_drift"] = max(totals["max_abs_drift"], result["max_abs_drift"])
+    passed = bool(panels) and all(
+        p["category_changes"] == 0
+        and p["missing"] == 0
+        and p["max_abs_drift"] <= args.tolerance
+        for p in panels.values()
+    )
+    return {
+        "schema": SCHEMA,
+        "mode": "compare-answers",
+        "left_sha256": sha_file(args.left),
+        "right_sha256": sha_file(args.right),
+        "tolerance": args.tolerance,
+        "panels": panels,
+        "max_abs_drift": max(
+            (p["max_abs_drift"] for p in panels.values()), default=0.0
+        ),
         "passed": passed,
     }
 
@@ -607,10 +958,50 @@ def main() -> None:
     cmp.add_argument("right", type=Path)
     cmp.add_argument("--output", type=Path, required=True)
     cmp.add_argument("--tolerance", type=float, default=0.0)
+    for name in ("automap", "automap-card", "automap-parity"):
+        p = sub.add_parser(name)
+        p.add_argument("--package", type=Path, required=True)
+        p.add_argument("--output", type=Path, required=True)
+        p.add_argument("--site", action="append", default=[])
+        if name != "automap-card":
+            p.add_argument("--device")
+            p.add_argument("--threads", type=int)
+            p.add_argument("--base-path")
+            p.add_argument("--require-kernels", action="store_true")
+        if name != "automap-parity":
+            p.add_argument("--reference", type=Path, required=True)
+    sub.choices["automap-card"].add_argument("--tolerance", type=float, default=0.0)
+    sub.choices["automap-card"].add_argument("--hub", action="store_true")
+    sub.choices["automap-card"].add_argument("--expect-revision")
+    sub.choices["automap-parity"].add_argument(
+        "--panel",
+        action="append",
+        required=True,
+        help="NAME:PROMPTS_JSONL:SEALED_PREDICTIONS_JSONL:COUNT",
+    )
+    sub.choices["automap-parity"].add_argument("--tolerance", type=float, default=1e-4)
+    for name in ("parity", "automap-parity"):
+        sub.choices[name].add_argument(
+            "--answers",
+            type=Path,
+            help="write each prompt's answers here (JSON lines, kept on the node)",
+        )
+    answers = sub.add_parser("compare-answers")
+    answers.add_argument("left", type=Path)
+    answers.add_argument("right", type=Path)
+    answers.add_argument("--output", type=Path, required=True)
+    answers.add_argument("--tolerance", type=float, default=1e-4)
     args = parser.parse_args()
-    handler = {"run": run, "compare": compare, "card": card, "parity": parity}[
-        args.command
-    ]
+    handler = {
+        "run": run,
+        "compare": compare,
+        "card": card,
+        "parity": parity,
+        "automap": automap,
+        "automap-card": automap_card,
+        "automap-parity": automap_parity,
+        "compare-answers": compare_answer_files,
+    }[args.command]
     for site in reversed(getattr(args, "site", [])):
         if not Path(site).is_absolute() or not Path(site).is_dir():
             raise ValueError(f"--site needs an existing absolute directory: {site}")
