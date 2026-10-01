@@ -1,7 +1,8 @@
 # ~27B M6 state (resume file)
 
-Updated: 2026-10-01 14:53 UTC+8 (06:53Z; M6 worker 1, started 06:17Z).
-Prereg `m6-prereg-2026-10-01.md` (`90d38aba7`). Tooling `20af2e4a1` (mirrored to node B).
+Updated: 2026-10-01 15:12 UTC+8 (07:12Z; M6 worker 1, started 06:17Z).
+Prereg `m6-prereg-2026-10-01.md` (`90d38aba7`). Tooling: latest mirror **`482cb0ddb`** on node A and node B
+(`20af2e4a1` ran step 0).
 Assignment: COORDINATION 2026-10-01 14:25 (27B M6, worker 11741ee2). Branch `xunzhuo/decision-2-training-27b`
 (worktree `/home/xunliu/code/vllm-sr-dev2-27b`; merge-only into `xunzhuo/decision-2-training`). Gist file
 `06-decision-2-27b.md`. Budget 140 GPU-h. Index numbers are private: never in this file, commits or the gist.
@@ -41,17 +42,48 @@ Nothing (no GPU job).
 
 ## Leases
 
-node B GPU0, GPU1, GPU5 and node A GPU2: track 27b, `reserved-idle`. Node D: IX1 follow-up (not ours yet).
+node B GPU0, GPU1, GPU5 and node A GPU2: track 27b, `reserved-idle`. Node D: IX1 follow-up (not ours yet; IX1 is
+still fixing the long-input runtime bug and staging its M5-L128 Index diagnostic on node C).
+
+## Infrastructure
+
+- **M6 node link (node B → node A): UP since 07:07Z** (`m6/m6-link.sh setup`, then `check` passed). Key in node B
+  `/data/dev2/tmp/27b-m6-xfer/` (mode 700; `peer`, `known_hosts` with node A's host key, verified against node A's own);
+  node A `authorized_keys` line `dev2-27b-m6-xfer-temp` = `from=<node B source>`, `command="/usr/bin/rrsync
+  /data/dev2/xfer/27b-m6"`, `restrict`; backup `authorized_keys.bak.27b-m6-20261001T070730Z`. **Remove at milestone end
+  with `m6/m6-link.sh remove`.** Never touch the MoE worker's link (`27b-moe-xfer`, node A → node B).
+- Drivers (`v2/27b/m6/`): `m6-build.sh` (node B), `m6-arm.sh` (either node), `m6-relay.sh` + `m6-mlx-watch.sh`
+  (node A), `m6-chain.sh` (node B), `m6-tail.sh` / `m6-gates.sh` (node B stages), `m6_devgates.py` (integration-tested on
+  node B with real files: reproduces M5's L128 readout values, fails L128 on G5).
+
+## Stage-1 launch runbook (when a release-safe IB1 record is on the integration branch)
+
+1. Read the IB1 record: dataset revision, `ib1.train.jsonl` / `ib1.dev.jsonl` SHA-256, `release_safe: true`. Commit the
+   data-lock amendment skeleton (revision and hashes) **before** any GPU job.
+2. Node B: `bash <mirror>/v2/27b/m6/m6-build.sh REV TRAIN_SHA DEV_SHA` (detached, log `m6/logs/build.log`; ≈ 30–40
+   min, two builds). Fill the data lock from `/data/dev2/private/27b/m6-data/BUILD.json` (mixture SHA-256, tokens,
+   updates, `SAVE_EVERY`, projection); commit + push + mirror.
+3. Push `a20ib1x.train.jsonl` to node A over the link (`rsync -e "$X" … root@peer:relay/mix/`), move it to
+   `/data/dev2/private/27b/m6-data/mixtures-m6-1/` on node A and check its SHA-256.
+4. Node B GPU0 / GPU1: IB DEV reference slices `A20r-ib1` (A20r soup) and `M5-L128-ib1` (`m6-tail.sh slices … ib=…`).
+5. Launch (`m6-arm.sh`): M6-IB-s1 node B GPU5, M6-IB-s2 node B GPU1, M6-IBX-s1 node B GPU0, M6-IBX-s2 node A GPU2
+   (`DEV2_NODE` set by the script). Record the four driver PIDs; confirm containers `d2-27b-M6-*` and first log lines.
+6. Node A: `m6-relay.sh M6-IBX-s2 <pid>`, `m6-mlx-watch.sh <sha> M6-IB`, `m6-mlx-watch.sh <sha> M6-IBX` (detached).
+7. Node B: `m6-chain.sh <sha> M6-IB-s1=b:<pid> M6-IB-s2=b:<pid> M6-IBX-s1=b:<pid> M6-IBX-s2=a` with `PN1_ROWS`,
+   `PN1_SHA`, `IB_ROWS`, `IB_SHA`, `IN_DIST="w2c isarc"`, `AUX_M6_IB=1`, `AUX_M6_IBX=0` (detached, log
+   `m6/logs/chain-stage1.log`). Confirm PID and first log line.
 
 ## Next steps
 
-1. Tooling: M6 gates / verdicts for formal finalists, the stage-1 chain, node A relay and mlx watchers, the node link;
-   tests; mirror to node A / B.
-2. When IB1-r3 is release-safe: data-lock amendment, build, IB1 DEV references (A20r, M5-L128), stage 1 launch
-   (4 seeds) with detached chains.
+1. Wait for IB1-r3; then the runbook above.
+2. Integration merge; gist 06 entry (no Index values).
 
 ## Poll log (newest first)
 
+- 07:12Z: chain tooling committed (`7d9e2ef59`, `482cb0ddb`: gates, build / arm / chain, node A relay and mlx watchers,
+  `m5_verdicts` M6 mapping; 27 tests pass, shellcheck clean); mirrored to node A / B; node link up and checked;
+  `m6_devgates.py` integration test on node B passed (scratch removed). IB1-r3: amendment 3 + build code committed,
+  review pending. IX1 follow-up still on node C / D.
 - 06:56Z: step 0 done: PN1 guard VALIDATED (L128 − A20r clean gold-no +.0188 [+.0095, +.0294]; hop level); 0.166
   GPU-h. Gates module `m6_devgates.py`, build / arm drivers written (not yet committed).
 - 06:53Z: prereg committed (`90d38aba7`); tooling `20af2e4a1` (slices, PN1 / breadth scoring, M6 allocations, tail
