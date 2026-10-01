@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -224,6 +226,67 @@ class StageTwoDataTest(unittest.TestCase):
         self.assertEqual({rows[i]["family"] for i in kept}, {"a", "b"})
         self.assertEqual(kept, sd.sample_groups(rows, 200, 7)[0])
         self.assertEqual(len(sd.sample_groups(rows, 999, 7)[0]), len(rows))
+
+
+class FormalLibTest(unittest.TestCase):
+    """ops/m6/m6-formal-lib.sh tier_setup: the M6_SMALL_NODE=E|F option (decoder M11) and the unchanged defaults."""
+
+    def setup(self, tier: str, **env: str) -> subprocess.CompletedProcess:
+        lib = HERE / "ops" / "m6" / "m6-formal-lib.sh"
+        script = (
+            f". {lib}; tier_setup; "
+            'echo "$NODE|$IMAGE|$MASTER|$MASTER_SHA|$MASTER_MLX|$SOURCE|${ISOLATE[*]}|$TLABEL|$INCUMBENT|${ENVX[*]}"'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            full = {
+                "PATH": os.environ["PATH"],
+                "S": str(HERE.parents[1]),
+                "TIER": tier,
+                "M6_FORMAL_ROOT": tmp,
+                **env,
+            }
+            return subprocess.run(
+                ["bash", "-c", script], env=full, capture_output=True, text=True
+            )
+
+    def fields(self, tier: str, **env: str) -> list[str]:
+        out = self.setup(tier, **env)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        return out.stdout.strip().split("|")
+
+    def test_small_node_f(self):
+        for tier, label, one in (
+            ("2b", "2B", "Decision-1.0-Sol-2B"),
+            ("08b", "0.8B", "Decision-1.0-Eos-0.8B"),
+        ):
+            node, image, master, pin, mlx, source, isolate, tlabel, _, envx = (
+                self.fields(tier, M6_SMALL_NODE="F", M6_SMALL_MASTER_DIR="/m")
+            )
+            self.assertEqual(
+                (node, pin, isolate, tlabel, envx),
+                ("F", "frozen", "--isolate", label, ""),
+            )
+            self.assertTrue(image.startswith("sha256:dbe5f32b"))
+            self.assertEqual(
+                (master, mlx),
+                (f"/m/cache-frozen-{tier}", f"/m/cache-frozen-{tier}-mlx"),
+            )
+            self.assertTrue(source.startswith(f"/data/dev2/models/{one}/"))
+
+    def test_defaults_unchanged(self):
+        node, image, master, pin, *_ = self.fields("08b")
+        self.assertEqual((node, pin), ("A", "live"))
+        self.assertTrue(master.endswith("formal/m2/m2-E8F-soup-nodeA-triton"))
+        node, _, master, pin, *_ = self.fields("2b")
+        self.assertEqual((node, pin), ("B", "frozen"))
+        self.assertTrue(master.endswith("/cache-frozen-2b"))
+        node, *_ = self.fields("2b", M6_2B_NODE="A")
+        self.assertEqual(node, "A")
+
+    def test_bad_small_node(self):
+        self.assertEqual(
+            self.setup("2b", M6_SMALL_NODE="B", M6_SMALL_MASTER_DIR="/m").returncode, 2
+        )
 
 
 if __name__ == "__main__":

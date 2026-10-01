@@ -5,8 +5,8 @@ lives outside the checkpoint), a ``weights.json`` (soup members, or the single c
 DEV / CSS pilot readouts for the 23:15 calibration rule. Slots follow the argument order (the M10 pick order; C0, the
 formal-path parity reference, is slot 0).
 
-usage: m10_formal_select.py --point NAME=CHECKPOINT,TYPED_DEV_PREDS,CSS_PILOT_PREDS [...] --output DIR
-       (writes DIR/4b-finalists.json, DIR/<NAME>.files.sha256, DIR/<NAME>.weights.json)
+usage: m10_formal_select.py [--tier 4b|2b|08b] --point NAME=CHECKPOINT,TYPED_DEV_PREDS,CSS_PILOT_PREDS [...] --output DIR
+       (writes DIR/<tier>-finalists.json, DIR/<NAME>.files.sha256, DIR/<NAME>.weights.json; tier default 4b)
 """
 
 from __future__ import annotations
@@ -37,9 +37,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--point", action="append", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--tier", choices=("4b", "2b", "08b"), default="4b")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
-    target = args.output / "4b-finalists.json"
+    target = args.output / f"{args.tier}-finalists.json"
     if target.exists():
         raise FileExistsError(target)
     entries = []
