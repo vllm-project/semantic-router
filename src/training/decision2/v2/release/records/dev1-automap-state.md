@@ -8,6 +8,17 @@ GPU: lease-polite sharing on nodes C–F only; never node C GPU0, node E GPU4–
 
 ## Now
 
+- 2026-10-01 14:15 UTC+8 (06:15Z) — **Record, gist 07 and integration done; waiting for a GPU for Eos.**
+  - Record [`dev1-automap-2026-10-01.md`](dev1-automap-2026-10-01.md); gist `07-decision-2-release.md` entry
+    (≈14:05); `xunzhuo/decision-2-training` fast-forwarded to `ffea82d96` (privacy check clean over 105 items).
+  - Fresh-cache smoke (clean venv, Transformers 5.18.0, CPU, empty cache, card block verbatim): all six pass.
+  - Eos facts (image): the GatedDeltaNet forward matches the native Eos pinned hash (so its native convolution was
+    installed in the scored run) and `causal_conv1d` is installed (the small-batch reference). Remaining suspect:
+    FLA l2norm autotuning, unpinned in Eos's native runtime. Watcher on node D
+    (`/data/dev2/runs/release/dev1-automap/eos-d/investigate.sh`, polls every 60 s, takes / releases its own
+    leases): native Eos pinned → remote code pinned (vs that) → native Eos unpinned. No lease on C–F free so far.
+  - DEV2.0-Route-0.6B: no DEV2.0 repo has the 2.0 remote code on the Hub yet (2.0 worker still verifying).
+  - Kai CPU parity (`p2-3684c2d8/kai-cpu`, 48 threads) still running.
 - 2026-10-01 13:40 UTC+8 (05:40Z) — **Six repos merged and read back; Eos open (needs a GPU).**
   - Merged own PRs (all checks passed, no other open PRs): Kai #1 → `69aef406`, Lex #1 → `1f9750a7`, Route #3 →
     `a5b21dff`, Sol #2 → `fc210c8f`, Nox #2 → `f098bdec`, Lux #2 → `a31b9e2c`. Readback: every staged file by
