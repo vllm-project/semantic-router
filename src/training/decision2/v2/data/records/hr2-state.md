@@ -18,6 +18,10 @@ hf-upload.
 
 ## Log (newest first)
 
+- 2026-10-01 11:26 UTC+8 — **r2 recheck converged** (runner `fd3cd9e40`): iterations dropped 163 + 7 DEV, 41 + 1
+  DEV, 7 + 0 groups; iteration 4 recheck 0 / 0. Pass TRAIN 16,107 / DEV 954; G1 PASS, C1 terms 0, G4 no failure,
+  leak guard 0. (A duplicated ssh invocation of the iteration loop was found and its loop shell stopped; the running
+  `audits` finished normally; long node stages now run detached with `nohup`.) Next: round-2 sample.
 - 2026-10-01 11:15 UTC+8 — **r2 pass + audits (iteration 1)** at `84a2fb714`: boundary list 364 TRAIN / 39 DEV
   candidate rows; pass TRAIN 16,329 / DEV 961. G1 PASS, C1 terms 0, G4 no family fails, leak guard 0. **The
   quarantine recheck found 163 groups (155 `hs3_pref`, 8 `prm_step`; all N-rule, mostly A7q AHO, Score5-DEV,
