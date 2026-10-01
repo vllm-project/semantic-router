@@ -63,6 +63,8 @@ the original run did not record its baseline YAML hash, so byte identity with th
 run's local YAML cannot be established. This supplies reproduction dependencies,
 not a new model run. Runner source and all captured result/metadata files are unchanged.
 
+Subsequent formatting update (2026-10-01): repository-pinned Black 25.1.0 reformatted `run-vela.py`, and Ruff cleanup reordered its standard-library imports. Apart from import order, its parsed AST is unchanged. Its current SHA-256 is `df490857e8a6f82e72973970b51969af3c735c1cce655312ab34c3dfa5a7c3ea`. The historical `runner_source_sha256` in `run-metadata.json` is preserved and refers to the original source at commit `efb0e7143fa52f715b3de31f84625c2031ceb6b2`, not the formatted file. `SHA256SUMS` covers current packaged files. Captured results, metadata and summary are unchanged; no model was rerun.
+
 With Python and PyYAML available, check configuration, mapping and inputs without
 Torch, downloaded model weights or inference:
 

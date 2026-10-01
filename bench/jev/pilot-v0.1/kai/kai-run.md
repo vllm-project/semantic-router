@@ -118,6 +118,8 @@ the warmup, the six cases and that one check.
 
 ## Artifact SHA-256
 
+The table below records the original run artifacts. On 2026-10-01, the two Python scripts were formatted with repository-pinned Black 25.1.0. Ruff cleanup in `run_kai.py` also names the existing 0.001 probability-sum tolerance and HTTP 200 constant, and uses list unpacking for two error lists. Saved-response and synthetic-failure checks agree with the original validator and request runner. The exact original sources remain available at commit `efb0e7143fa52f715b3de31f84625c2031ceb6b2`. Current source hashes are `ba9b3f4354c7e962ac03200410adf5c9eb639a83d60c14232ecc96585d2de00c` for `run_kai.py` and `e312e4a736db18d54ed83a4e8ae7f0da6924ca1c6a63510ae87389aef3096ee2` for `prepare_artifact.py`. Captured requests, results and warmup records were not changed or rerun.
+
 | File | SHA-256 |
 | --- | --- |
 | inputs.jsonl | 671c09f62dc9fc9b864efe54b0adfef0ec666f309f74b776dcec3d6d8cdd2ef6 |

@@ -11,12 +11,12 @@ use an already downloaded snapshot without changing that identity.
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
 import hashlib
 import json
 import math
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -193,11 +193,30 @@ def run(args: argparse.Namespace) -> None:
             for _ in range(args.warmup_runs):
                 warmup_logits = model(**warmup).logits
         if args.warmup_output is not None and args.warmup_runs:
-            warmup_probs = torch.softmax(warmup_logits[0].float(), dim=-1).cpu().tolist()
-            warmup_by_label = {label: warmup_probs[index] for label, index in sorted(mapping.items(), key=lambda item: item[1])}
-            warmup_record = {"record_type":"warmup","case_id":"warmup-001","text":cases[0]["text"],"warmup_runs":args.warmup_runs,"prediction":max(warmup_by_label,key=warmup_by_label.get),"probabilities":warmup_by_label,"contract_valid":True,"device":device,"model_repo":args.model_repo,"model_revision":resolved_revision,"mapping_sha256":hashlib.sha256(args.mapping.read_bytes()).hexdigest()}
+            warmup_probs = (
+                torch.softmax(warmup_logits[0].float(), dim=-1).cpu().tolist()
+            )
+            warmup_by_label = {
+                label: warmup_probs[index]
+                for label, index in sorted(mapping.items(), key=lambda item: item[1])
+            }
+            warmup_record = {
+                "record_type": "warmup",
+                "case_id": "warmup-001",
+                "text": cases[0]["text"],
+                "warmup_runs": args.warmup_runs,
+                "prediction": max(warmup_by_label, key=warmup_by_label.get),
+                "probabilities": warmup_by_label,
+                "contract_valid": True,
+                "device": device,
+                "model_repo": args.model_repo,
+                "model_revision": resolved_revision,
+                "mapping_sha256": hashlib.sha256(args.mapping.read_bytes()).hexdigest(),
+            }
             args.warmup_output.parent.mkdir(parents=True, exist_ok=True)
-            args.warmup_output.write_text(json.dumps(warmup_record, ensure_ascii=False, sort_keys=True)+"\n")
+            args.warmup_output.write_text(
+                json.dumps(warmup_record, ensure_ascii=False, sort_keys=True) + "\n"
+            )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     mapping_digest = hashlib.sha256(args.mapping.read_bytes()).hexdigest()
@@ -270,7 +289,20 @@ def run(args: argparse.Namespace) -> None:
     run_finished = datetime.now(timezone.utc).isoformat()
     if args.metadata_output is not None:
         args.metadata_output.parent.mkdir(parents=True, exist_ok=True)
-        args.metadata_output.write_text(json.dumps({"run_started":run_started,"run_finished":run_finished,"device":device,"warmup_runs":args.warmup_runs,"attempts_per_case":1,"automatic_retries":False}, indent=2)+"\n")
+        args.metadata_output.write_text(
+            json.dumps(
+                {
+                    "run_started": run_started,
+                    "run_finished": run_finished,
+                    "device": device,
+                    "warmup_runs": args.warmup_runs,
+                    "attempts_per_case": 1,
+                    "automatic_retries": False,
+                },
+                indent=2,
+            )
+            + "\n"
+        )
 
 
 if __name__ == "__main__":

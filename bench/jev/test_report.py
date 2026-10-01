@@ -16,21 +16,35 @@ class ReportTests(unittest.TestCase):
     def test_four_states(self):
         table = render(self.data, "mock")
         self.assertIn("MOCK 演示", table)
-        self.assertIn("| mock-001 | 可评分 | coding | coding | 通过 | 正确 | 1 |", table)
+        self.assertIn(
+            "| mock-001 | 可评分 | coding | coding | 通过 | 正确 | 1 |", table
+        )
         self.assertIn("| mock-002 | 诊断 | — | coding | 通过 | 不评分 | 1 |", table)
-        self.assertIn("| mock-003 | 失败 | coding | coding | 未通过 | 不评分 | 1 |", table)
-        self.assertIn("| mock-004 | 未执行 | writing | — | 未检查 | 不评分 | 0 |", table)
+        self.assertIn(
+            "| mock-003 | 失败 | coding | coding | 未通过 | 不评分 | 1 |", table
+        )
+        self.assertIn(
+            "| mock-004 | 未执行 | writing | — | 未检查 | 不评分 | 0 |", table
+        )
 
     def test_valid_but_wrong(self):
         self.records[0].update(expected="writing", correct=False)
-        self.assertIn("| 可评分 | writing | coding | 通过 | 错误 |", render(self.encode(), "mock"))
+        self.assertIn(
+            "| 可评分 | writing | coding | 通过 | 错误 |", render(self.encode(), "mock")
+        )
 
     def test_reject_inconsistent_records(self):
-        for index, change in [(0, {"schema": "unknown"}), (0, {"correct": False}),
-                              (1, {"correct": False}), (2, {"correct": True}),
-                              (3, {"contract_valid": False}), (3, {"attempts": 1}),
-                              (1, {"id": "mock-001"}), (1, {"revision": "different"}),
-                              (0, {"contract_valid": None})]:
+        for index, change in [
+            (0, {"schema": "unknown"}),
+            (0, {"correct": False}),
+            (1, {"correct": False}),
+            (2, {"correct": True}),
+            (3, {"contract_valid": False}),
+            (3, {"attempts": 1}),
+            (1, {"id": "mock-001"}),
+            (1, {"revision": "different"}),
+            (0, {"contract_valid": None}),
+        ]:
             with self.subTest(change=change):
                 records = [dict(r) for r in self.records]
                 records[index].update(change)
@@ -40,7 +54,9 @@ class ReportTests(unittest.TestCase):
 
     def test_transport_failure_without_prediction(self):
         self.records[2].update(raw_response="not JSON", error_kind="status")
-        self.assertIn("| 失败 | coding | — | 未通过 | 不评分 |", render(self.encode(), "mock"))
+        self.assertIn(
+            "| 失败 | coding | — | 未通过 | 不评分 |", render(self.encode(), "mock")
+        )
 
     def test_escape_table_content(self):
         self.records[3]["reason"] = "<tag>|line\nnext"

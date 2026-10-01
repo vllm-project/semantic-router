@@ -22,6 +22,8 @@ MODEL_REVISION = "9d6872cde6950c2c2b5786d182ec9a06ca1bdd66"
 RUNTIME_REVISION = "58cd660b51ba19aff01ad6f89e66f2d07f13908b"
 QUESTION_KEY = "intent"
 TIMEOUT_S = 60
+PROBABILITY_SUM_TOLERANCE = 0.001
+HTTP_OK = 200
 WARMUP_STATE = (
     "Describe how a bicycle gear system changes the effort needed to pedal uphill."
 )
@@ -33,8 +35,10 @@ TIMING_BOUNDARY = (
 
 
 def utc_now():
-    return datetime.now(timezone.utc).isoformat(timespec="microseconds").replace(
-        "+00:00", "Z"
+    return (
+        datetime.now(timezone.utc)
+        .isoformat(timespec="microseconds")
+        .replace("+00:00", "Z")
     )
 
 
@@ -57,13 +61,13 @@ def check_contract(parsed, labels):
         errors.append(f"model echoed as {parsed.get('model')!r}")
     answers = parsed.get("answers")
     if not isinstance(answers, dict) or set(answers) != {QUESTION_KEY}:
-        return errors + [f"answers keys are not exactly [{QUESTION_KEY!r}]"], None
+        return [*errors, f"answers keys are not exactly [{QUESTION_KEY!r}]"], None
     answer = answers[QUESTION_KEY]
     if answer.get("type") != "choice":
         errors.append(f"answer type is {answer.get('type')!r}")
     probabilities = answer.get("probabilities")
     if not isinstance(probabilities, dict):
-        return errors + ["probabilities missing or not an object"], answer
+        return [*errors, "probabilities missing or not an object"], answer
     if set(probabilities) != set(labels) or len(probabilities) != len(labels):
         missing = sorted(set(labels) - set(probabilities))
         extra = sorted(set(probabilities) - set(labels))
@@ -79,7 +83,7 @@ def check_contract(parsed, labels):
         if isinstance(v, (int, float)) and not isinstance(v, bool)
     ]
     total = math.fsum(numbers)
-    if not abs(total - 1.0) <= 0.001:
+    if not abs(total - 1.0) <= PROBABILITY_SUM_TOLERANCE:
         errors.append(f"sum {total!r} differs from 1 by more than 0.001")
     if answer.get("choice") not in labels:
         errors.append(f"choice {answer.get('choice')!r} is not a candidate label")
@@ -132,7 +136,7 @@ def run_one(base_url, state, question, labels):
         "timing_boundary": TIMING_BOUNDARY,
     }
     errors, answer = (["no parsed response"], None)
-    if parsed is not None and status == 200:
+    if parsed is not None and status == HTTP_OK:
         errors, answer = check_contract(parsed, labels)
     record.update(
         {
