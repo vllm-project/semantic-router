@@ -1,5 +1,12 @@
 # Decoder M15 — state (prereg `dec-m15-prereg-2026-10-01.md`)
 
+## 2026-10-01 18:05Z
+
+- Node F training finished: `2b-RA10SDML` s1 / s2 DONE 17:50 / 17:54Z, `4b-LHA10SDML` s1 / s2 DONE 17:54 / 17:59Z. Both
+  2B soups built (17:57Z) and being read; reference MLX-DEV-M15 reads `2b-C0-f` and `4b-LH-f` done (exit 0); the 4B post
+  chain is on the guard-validation read, then the merge / soup. 0.8B seeds training on E.
+- Part A: shards 0–4 done, shard 5 running.
+
 ## 2026-10-01 17:40Z
 
 - `2b-RASDML` s1 / s2 DONE (17:21 / 17:25Z); `2b-RA10SDML` s1 / s2 training (F GPU2 / 3). 4B and 0.8B seeds training.
