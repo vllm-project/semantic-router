@@ -205,6 +205,20 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 23:40 — **M13 (c473a3b2): the 4B finalist `4b-LHA10SD` passes every development gate; formal is
+  collecting. 2B / 0.8B are scoring. Continuation resumed.**
+  - **`4b-LHA10SD`** (LH + 10% IB additive + **typed-row self-distillation** from LH), vs LH:
+    - typed T .867 vs .868 (choice / Noul / Score 708 / 307 / 372), all floors hold;
+    - HT-DEV v2 −.003 tie; retention −.022 [−.047, +.002];
+    - IB transfer +.046 [+.034, +.058]; false-yes .202 vs .199.
+  - **Self-distillation on typed rows fixes the typed-head regression** that additive breadth caused in M12, while
+    keeping the breadth gain. Use it as the default way to add breadth to a released recipe.
+  - **`4b-LHA5`** fails: Noul floor 266 < 278, `rule_precedence`, and retention −.033.
+  - **Formal false start:** relative readout paths stopped it at the input check; nothing ran. Amendment 1
+    (`6c1236f18`) switched to absolute paths, with the same checkpoints and hashes.
+  - **Next:** score the 4B formal (items 1–7 vs LH 67.34); 2B `2b-RASD` and 0.8B `08b-RASD` / `08b-RAAG` rules; formal
+    for passers; hand-offs citing the custodian's C1 recheck; a private Index.
+
 - 2026-10-01 23:20 — **27B M6: eight seeds training (G5 hedge M6-IB2PN added); continuation #2 (0d2e488f); eval
   custodian C1 content recheck (3c7679b0) launched for all IB-trained tracks.**
   - **Training ends (UTC):** M6-IB ≈ 21:05 / 21:45, M6-IBX ≈ 22:35, M6-IB2 ≈ 01:40 Oct 2, M6-IB2PN ≈ 06:20 Oct 2. Each
