@@ -205,8 +205,37 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 11:35 — **27B M5 closed: NO successor; DEV2.0-27B stays A20r (72.36).** Records: `27b/records/m5-results-2026-09-30.md`
+  (final), gist 06, integration `7a4ba9326`; 70.99 of 72 GPU-h.
+  - **Unattended run.** `chain-L128` ran every stage unattended (finished 21:01Z); nothing was missing.
+  - **M5-L128 was the only finalist.** Rank-256 soup `95d61175…`, post-key v3 **74.73** (the best 27B so far), T .948,
+    H .589, public 231: 202 vs 203. Verdicts vs A20r:
+    - item 1 +2.37 [−0.56, +3.82] **fail**;
+    - item 4 mlx-diag Choice + Noul −.013 [−.024, −.002] (Noul −.026) **fail**;
+    - beats-AutoJev +2.59 [−0.29, +6.28] **fail**;
+    - items 2, 3, 5, 6 and 7 pass.
+  - **Why it fell short.** All of the gain is typed (+.052). Human transfer only looks level, because a different task
+    became the median: 10 of the 15 human tasks are lower.
+  - **New descriptive attribution (not preregistered).** On the same rows, the L128 adapter beats full FT on HT-DEV v2
+    by +.039 [+.021, +.057]. **Adapters keep the human transfer that full FT loses**, which is consistent with the
+    4B M10 hypothesis H1.
+  - **Cleanup.**
+    - The 27B link key was removed; the A/B → C–F transfer keys are verified intact.
+    - **The coordinator approved and deleted the 19 non-BEST FF20 / FF20H checkpoints (≈ 1.8 TB).** The one remaining
+      checkpoint per arm equals the recorded BEST.
+    - Leases node B GPU0 / 1 / 5 and node A GPU2 are reserved-idle for 27B.
+  - **Next 27B milestone (M6), preregistered after the inputs land; no filler runs meanwhile.** Inputs: IX1's 27B
+    Index result and private gap profile, IB1 breadth data, and HR2-r2 (release-safe).
+    - Design direction:
+      - the adapter recipe (L128-class) plus a human-transfer lever (HR2-r2) and breadth (IB1), not more typed dose;
+      - an mlx-diag Noul guard;
+      - the Noul T+b calibration study from IX1.
+    - **The MoE milestone continues.** Its base (Gemma-4-26B-A4B-it) equals that of the 25.8B Index frontier entrant.
+    - **Optional IX1 diagnostic:** an Index run of the frozen M5-L128 soup on the reserved-idle 27B GPUs, to see
+      whether typed gains appear on the Index. Not releasable either way.
+
 - 2026-10-01 11:25 — **User (11:10): add auto_map / trust_remote_code to all Decision 1.0 models too, for
-  uniformity. Worker 1.0-automap (b1? see below).**
+  uniformity. Worker 1.0-automap (2a4d413a).**
   - **Repos.** Decision 1.0 (all PUBLIC): Kai-0.6B, Lex-0.6B and Route-0.6B (encoders); Eos-0.8B, Sol-2B, Nox-4B
     and Lux-9B (decoders).
     - Today they are "model-only" (no `.py`, a custom `config.json`), served by the vLLM-SR decision runtime.
