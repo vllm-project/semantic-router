@@ -64,15 +64,15 @@ SHA = {
     "css15": "56cf468fab45b2e7aa5ef12d18c80c3d27dd59ec60e66a88e612582c9d4deae5",
     "public231": "aebe679df3847372153941f4ef5d907b1604f160849030e6f751d6cf9b79bd87",
     "mlx-diag": "94124564bcc3c377ff08438f9429fdab26be00e67174a77674e31c9b1a0d8992",
-    "paired_nox1": "dbbf363781506c5230ce4d211c95f751a798bebd4b12654a4e4024fd53ab9362",
+    "paired_nox1": "9fec07bb780f1b7beb064af572050c3a1a105859e933e9a655f39c6ae8f12b8d",
     "bf16_copy": "7d8f21f5adb70eb331f3a6b47396b569da546613927b16890486cda81c7247a1",
 }
 EVIDENCE = {
     "exposure": "d42e69cafc4cf1d16958d19dd16fec6e1a7ced706ea62459fa9f065cb09c3891",
     "mlx_paired": "f264b9a418a7e78ec4a4579c8faf4cc4b79d7589f58bf16a1ed74747c0cb3a99",
-    "paired": "d3cee756382699c40edc64f58c1ccd298cc0f7d7f77165caf159e0187ba6235e",
+    "paired": "e1fd9d1e8b94d6a4db9db90d598d9b02a0ad126398a724ea0bd6697479a766d6",
     "public231": "47c9381f21c6705fef130e6e0a2f2d373131103e90bb9fed7f746164ef9c9ace",
-    "tier_paired": "2a96116e9e9e9adfeb625c9a33898398594dc6c0193057ed92d3a1905143ecda",
+    "tier_paired": "b9df43c8cab4e0a6d974724a1b602ca1fbb149c2e855219e355b00d6327e0fff",
     "types": "c586b71f0199fcc0bbc2fb318669a197a8828290a7dc1f90f3ffffb40923c678",
 }
 PREPARED_BY = "Decision 2.0 release engineering, 4B successor worker (worktree vllm-sr-dev2-release)"
@@ -341,7 +341,7 @@ def spec(
         *att[3:],
     ]
     card = s["card"]
-    card["paired"] = f"{RUN}/PAIRED-vs-adopted-1.0.json"
+    card["paired"] = f"{IN}/gates/paired-vs-adopted-1.0.json"
     card["paired_peers"] = {
         "decider4b": f"{RUN}/PAIRED-vs-decider4b.json",
         "jet62": f"{RUN}/PAIRED-vs-jet62.json",
@@ -375,7 +375,7 @@ def spec(
             "run": CURRENT_RUN,
             "mlx_predictions": f"{IN}/current-mlx/output/mlx-diag.predictions.jsonl",
         },
-        "paired": f"{RUN}/PAIRED-vs-dev2-4b.json",
+        "paired": f"{IN}/gates/paired-vs-dev2-4b.json",
         "types": f"{IN}/gates/types.json",
         "mlx_paired": f"{IN}/gates/mlx-paired-vs-dev2-4b.json",
         "exposure": "/data/dev2/runs/dec/m10/exposure/exposure-m10-4b-base.json",
@@ -383,7 +383,7 @@ def spec(
         "tier": {
             "reference": "decider4b",
             "v3_share": 0.9,
-            "paired": f"{RUN}/PAIRED-vs-decider4b.json",
+            "paired": f"{IN}/gates/paired-vs-decider4b.json",
         },
     }
     if final:

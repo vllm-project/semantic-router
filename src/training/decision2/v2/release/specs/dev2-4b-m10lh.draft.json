@@ -61,7 +61,7 @@
       "public231": "aebe679df3847372153941f4ef5d907b1604f160849030e6f751d6cf9b79bd87",
       "mlx-diag": "94124564bcc3c377ff08438f9429fdab26be00e67174a77674e31c9b1a0d8992"
     },
-    "paired_sha256": "dbbf363781506c5230ce4d211c95f751a798bebd4b12654a4e4024fd53ab9362",
+    "paired_sha256": "9fec07bb780f1b7beb064af572050c3a1a105859e933e9a655f39c6ae8f12b8d",
     "native_manifest": "/data/dev2/runs/dec/formal/m10/m10-4b-LH/output/typed-final.predictions.jsonl.manifest.json"
   },
   "licence": {
@@ -117,7 +117,7 @@
   "card": {
     "banner": "DEV2.0-4B-owl-banner.png",
     "roster": "v2/eval/records/decision-index-peer-roster-2026-09-28.json",
-    "paired": "/data/dev2/runs/release/dev2-4b-lh-t1-derived/PAIRED-vs-adopted-1.0.json",
+    "paired": "/data/dev2/runs/release/inputs/dev2-4b-lh/gates/paired-vs-adopted-1.0.json",
     "calibration_text": "raw model probabilities (temperature 1). Per-type temperatures fitted on the clean 698-item calibration partition (Choice 0.621, Noul 0.479, Score 0.209) lowered every development calibration measure and change no answer, but are not shipped: every Decision 2.0 model keeps temperature 1.",
     "requirements_text": "Tested on one ROCm GPU with Python 3.12, PyTorch 2.12 and Transformers 5.17 (BF16 backbone, FP32 head). GPU answers match the evaluated predictions with the flash-linear-attention 0.5.2 and causal-conv1d 1.7.0 kernels and a persisted Triton autotune cache; without those kernels Transformers uses its reference implementation of the same operations, which is slower and differs slightly in the last digits.",
     "text": {
@@ -203,7 +203,7 @@
       "run": "/data/dev2/runs/release/dev2-4b-t1-derived",
       "mlx_predictions": "/data/dev2/runs/release/inputs/dev2-4b-lh/current-mlx/output/mlx-diag.predictions.jsonl"
     },
-    "paired": "/data/dev2/runs/release/dev2-4b-lh-t1-derived/PAIRED-vs-dev2-4b.json",
+    "paired": "/data/dev2/runs/release/inputs/dev2-4b-lh/gates/paired-vs-dev2-4b.json",
     "types": "/data/dev2/runs/release/inputs/dev2-4b-lh/gates/types.json",
     "mlx_paired": "/data/dev2/runs/release/inputs/dev2-4b-lh/gates/mlx-paired-vs-dev2-4b.json",
     "exposure": "/data/dev2/runs/dec/m10/exposure/exposure-m10-4b-base.json",
@@ -211,7 +211,7 @@
     "tier": {
       "reference": "decider4b",
       "v3_share": 0.9,
-      "paired": "/data/dev2/runs/release/dev2-4b-lh-t1-derived/PAIRED-vs-decider4b.json"
+      "paired": "/data/dev2/runs/release/inputs/dev2-4b-lh/gates/paired-vs-decider4b.json"
     }
   },
   "frozen_autotune_cache": {
