@@ -112,6 +112,11 @@ Running full attempts have no receipt until they end: add (now − start) for ea
 
 ## Poll log (newest first)
 
+- 08:42Z: **MOE-Git-s2 finished** 08:28:00Z (10.373 GPU-h, exit 0; BEST `checkpoint-0002676`, SELECT .8219; last
+  update 3,561 .8101). Node A relayed both BEST checkpoints at 08:32:53Z. **Soup** (node B, 08:37:45–08:39:20Z):
+  `MOE-Git-soup` model `9165bed7…`, 2 members, rank 64 / α 128, 205 projections, max relative error 4.5e-7.
+  Chain budget check: node A 26.151 + node B 6.862 = 33.01 GPU-h. T = 1 readout running on node B GPU7 from
+  08:39:20Z.
 - 07:45Z: MOE-Git-s2 update 3,296; SELECT at 3,122 .811 (BEST stays 2,676, .822); ends ≈ 08:27Z. Chains and
   watchers alive. **Formal smoke path check** (the chain's only GPU stage never run on an MoE checkpoint):
   `moe-formal.sh b 7 … smoke` from the chain's mirror `eacb6b85c` on PC-Git-s1-c892 with its T = 1 package
