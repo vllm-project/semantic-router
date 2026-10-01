@@ -1,0 +1,59 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's release round of 2026-10-01 18:08 UTC+8 (the queued IX1 hand-off records/dev2-runtime-forward-budget-2026-10-01.md) to publish runtime-only revisions carrying the long-request forward token budget for DEV2.0-0.8B, 2B, 9B and 27B, each only with 0 answer changes on every scored prompt and on mlx-diag, AutoModel equal to native, and the long-input regression passing",
+  "decision": "release",
+  "decision_sha256": "5a7a26e464ce6799bff1d5b6b95d8567a61a817e8d4a09a764dfe9f26f6c3d02",
+  "items": {
+    "1_beats_own_1_0": {
+      "evidence": "paired v3 95% interval low +3.265 (sha bca44e5f2863)",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "10 results below own 1.0 listed in the card tradeoffs table",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 36 files re-hashed; loaded 1883930944",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518, automap-parity-pre, automap-vs-native-pre; scored prompts vs the native runtime: max drift 0",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "d684013aa068f28c2e90db7be0fb6118ca19c2565eb97963b1bd5af67e18b7b2",
+  "model_name": "DEV2.0-2B",
+  "receipts_sha256": {
+    "automap-card-pre": "66d7eda7fde1f7762ef649426e629e4325c1a4b3a5b486d018e8571102967869",
+    "automap-hub": "d32bf6b128ef7c344cff695b319e13b491834acd27861241eeec2f1ac62e7344",
+    "automap-hub-tf518": "b086363d5c7d9d773372845b5dc4750e17e13a76ffe4fad6e76efe4753eaef34",
+    "automap-parity-pre": "b9f950ff40656ef826dcc776a6301bd8f3c47ff5219eccc09bf983b82ac74081",
+    "automap-post": "0ab0f9a48dbf7d5be59d55e40b0ef360eaea3fa458fff39c523b2c25a0e22978",
+    "automap-pre": "9d54a5cd9aebaed0151a890f97129ef80e44fb9b7795d46d5e5092fbb40e2605",
+    "automap-vs-native-pre": "1de15d229f22df94d2c03dd68b2a944ce535a565a63476ef913751346ffdce33",
+    "card-post": "60e6e083fe19636b7c76606bdf50766980bcd54ba4cb644be251d08704dbc052",
+    "card-pre": "b43be2999c6b412ea99c10b36ffa84b87ea5e7b9757f513b9d3a5ac139e71379",
+    "download": "a427d93e4ea591c4620819ae7c19c2000e3bcf72953b8e0b1271a5719a213e76",
+    "post": "7c9d283ca4645133464046c97117086fff2b86ac63f22a98026d35c7e4bf0ec9",
+    "readback": "4eacc19a298236dfe2a78c7d4fcc8209efb205814a1b5f37575789a13c17392b",
+    "repeat-post": "b0aabb1d5b3d4059f67a0383fd4c8121d3fafc5ac2e791423ed4df006776070d",
+    "repeat-pre": "3077013242bf2e428481a3fe03f3b7b280720abbb252f1ece896fbab9b59cee2",
+    "tree": "8bd52a4f979c8c2c9494ffc8ba5d5a3ebfea47365f8e6a2827454615cbcfac4d",
+    "upload": "52d420bb08d0b88d4c93101af351fc91748a76e434c63d0805abea2013d2fc7a"
+  },
+  "repo_id": "llm-semantic-router/DEV2.0-2B",
+  "revision": "2973ad4a13d0ab47d7599595f1c938c74ac3c660",
+  "schema": "dev2-release-gate/1",
+  "utc": "2026-10-01T11:12:58.857819+00:00"
+}

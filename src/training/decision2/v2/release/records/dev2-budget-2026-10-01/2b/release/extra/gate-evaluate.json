@@ -1,0 +1,37 @@
+{
+  "passed": true,
+  "decision": {
+    "sha256": "5a7a26e464ce6799bff1d5b6b95d8567a61a817e8d4a09a764dfe9f26f6c3d02",
+    "status": "final"
+  },
+  "items": {
+    "1_beats_own_1_0": {
+      "passed": true,
+      "evidence": "paired v3 95% interval low +3.265 (sha bca44e5f2863)"
+    },
+    "2_regressions_disclosed": {
+      "passed": true,
+      "evidence": "10 results below own 1.0 listed in the card tradeoffs table"
+    },
+    "3_download_hash_parameters": {
+      "passed": true,
+      "evidence": "tree 36 files re-hashed; loaded 1883930944"
+    },
+    "4_native_examples": {
+      "passed": true,
+      "evidence": "examples and the card's Python block reproduced from the download"
+    },
+    "5_output_consistency": {
+      "passed": true,
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run"
+    },
+    "6_card_design": {
+      "passed": true,
+      "evidence": "Hub card apache-2.0 / problems []"
+    },
+    "7_transformers_remote_code": {
+      "passed": true,
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518, automap-parity-pre, automap-vs-native-pre; scored prompts vs the native runtime: max drift 0"
+    }
+  }
+}

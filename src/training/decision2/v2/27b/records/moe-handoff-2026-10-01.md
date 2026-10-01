@@ -1,11 +1,10 @@
 # 27B MoE milestone (MoE-1): frozen package and release hand-off notes (2026-10-01)
 
-**Status: PENDING — issued only if the private Decision Index run of this package clears the 27B-class frontier
-bar** (the coordinator's private criterion; the run is scored on node A after ≈ 13:30Z, values stay private). The
-package did **not** pass successor items 1–7 against DEV2.0-27B (A20r) — items 1 and 4 fail
-(`moe-results-2026-10-01.md`) — so it is not a successor on the release panel. Naming and tier placement (a 27B
-successor or a new tier named from its base, e.g. 26B-A4B) are the coordinator's call. Nothing was built or
-published.
+**Status: NOT ISSUED (2026-10-01 11:45Z).** Neither hand-off condition holds: the package did **not** pass successor
+items 1–7 against DEV2.0-27B (A20r) — items 1 and 4 fail (`moe-results-2026-10-01.md`) — and its private Decision
+Index run (scored 11:38Z on node A; values in the private report only) does **not** clear the 27B-class frontier
+bar. These notes stay as the record of the frozen package and of what a Gemma MoE release would need, should a
+later Gemma-based candidate qualify. Nothing was built or published.
 
 ## Frozen package (`decision2-27b-moe-package/1`, frozen 2026-10-01T08:57:35Z, before any formal collection)
 

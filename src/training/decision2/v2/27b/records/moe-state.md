@@ -1,86 +1,69 @@
 # 27B MoE milestone (MoE-1): state (resume file)
 
-Updated: 2026-10-01 17:50 UTC+8 (09:50Z) by **continuation #2** (worked 06:40Z–). Branch
+Updated: 2026-10-01 19:45 UTC+8 (11:45Z) by **continuation #2** (worked 06:40–11:50Z). **MILESTONE CLOSED.** Branch
 `xunzhuo/decision-2-training-27b-moe`, worktree `/home/xunliu/code/vllm-sr-dev2-27b-moe`, gist
-`06c-decision-2-27b-moe.md`. Assignment: COORDINATION 2026-09-30 23:50 (+ the 2026-10-01 continuation brief: formal
-verdicts, private Index run, hand-off if qualified). Prereg `moe-prereg-2026-10-01.md` (amendments 1–4); results
-`moe-results-2026-10-01.md` (formal verdicts final); hand-off notes `moe-handoff-2026-10-01.md` (**PENDING**).
-**Continuation workers: read "Next steps" first.**
+`06c-decision-2-27b-moe.md`. Records: prereg `moe-prereg-2026-10-01.md` (amendments 1–4), results
+`moe-results-2026-10-01.md` (**FINAL**), package / release notes `moe-handoff-2026-10-01.md` (**NOT ISSUED**),
+public Index receipt `moe-index/receipt-MOE-Git-soup.json` (no values).
 
-**Status in one paragraph.** Stage B ran unattended and finished at 09:40Z. The Gemma soup passed the development
-gates but is **not a successor**: post-key v3 68.75 vs A20r 72.36 (−3.61 [−6.54, −1.18]; item 1 fail), mlx-diag
-Choice + Noul −.036 [−.052, −.020] (item 4 fail); items 2, 3, 5, 6, 7 pass; vs AutoJev-27B −3.39 [−5.60, +0.79]
-(no win). The **private Decision Index run** of the frozen package (IX1 harness, parity gate passed bit-identical)
-runs on node A GPU3 / 4 / 5 and ends ≈ 12:30Z, then 20 oversized requests run alone (≈ 12:50Z). What remains:
-score it (private), decide the hand-off status against the 27B-class frontier bar (private report
-`private/ix1/ix1-report-2026-10-01.md`), free the node A leases, final records, gist, merge.
+**Outcome in one paragraph.** Stage B ran unattended (08:28–09:40Z). The Gemma-4-26B-A4B-it soup passed the
+development gates and was frozen at T = 1 (25.31B loaded / 3.90B active), then scored post-key v3 68.75 against
+DEV2.0-27B = A20r's 72.36: −3.61 [−6.54, −1.18] (item 1 fail) with mlx-diag Choice + Noul −.036 [−.052, −.020]
+(item 4 fail); items 2, 3, 5, 6, 7 pass; vs AutoJev-27B −3.39 [−5.60, +0.79] (no win). Its private Decision Index
+run (IX1 harness; 86-request parity bit-identical; 120,224 ok + 2 out-of-memory errors; dual scoring passed)
+does not clear the 27B-class frontier bar (values in the private report only). No hand-off; DEV2.0-27B stays A20r.
 
-## Target, budget, GPUs
+## Final state of resources
 
-- Targets (prereg): beat AutoJev-27B significantly; successor items 1–7 vs DEV2.0-27B = A20r (72.360). Both missed.
-- 60 GPU-h cap. **Receipts at 09:45Z: 33.987 finished** (node A 26.151, node B 7.836) + private Index path checks
-  0.127 + parity 0.065 + **three Index shards running since ≈ 09:04Z** (≈ 3 × 4.5 h) → ≈ 47 at the end.
-- GPUs: **node A GPU3 / 4 / 5 hold the Index shards (leases `track=27b-moe`, status running, set by the launcher;
-  each returns to reserved-idle when its job ends)**. Node B GPU7 released 09:45Z (`owner.released-moe-20261001T0945Z`);
-  node B GPU6 was released by continuation #1. Never use node A GPU0–2 / GPU6–7 or other node B GPUs.
-- Platform rule: poll ≤ 30 min with a state commit; hand off through this file near 5 h.
+- **GPUs: all MoE leases released** — node A GPU3 (11:23Z), GPU5 (11:35Z), GPU4 (11:40Z); node B GPU7 (09:45Z);
+  node B GPU6 (continuation #1). Each `owner` was renamed `owner.released-moe-<UTC>`; no `d2-27b-moe-*` container
+  runs on either node.
+- **Temporary node A → node B link removed** (09:45Z): node B `authorized_keys` line `dev2-27b-moe-xfer-temp` deleted
+  (backup `authorized_keys.bak.27b-moe-cleanup-*`), node A `/data/dev2/tmp/27b-moe-xfer` deleted, probe refused.
+  `/root/.ssh/d2_temp_cd` (other tracks) untouched.
+- **Artifacts kept:** node B `/data/dev2/runs/27b-moe/` (soup checkpoint + frozen package, readouts, formal runs,
+  gates, verdicts); node A `/data/dev2/runs/27b-moe/` (seed runs, mlx-diag) and the staged package
+  `index-stage/MOE-Git-soup/`; private Index outputs node A `/data/dev2/private/eval/index021/ix1/` (`panel-3`,
+  `scan`, `parity/MOE-Git-soup`, `runs/MOE-Git-soup/{shard-*,extra-*,merged,moe1-index-report-2026-10-01.md}`) and
+  the local `decision2-program/private/moe1/`; path checks under `pathcheck/` and
+  `/data/dev2/private/eval/index021/moe-pathcheck/` (tests only). The X hand-over dir on node B
+  (`/data/dev2/xfer/27b-moe/`) is inert now that the link is gone.
+- **Budget: 41.31 of 60 GPU-h** (node A 26.151, node B 7.836, private Index 7.318).
+- Not done, by design: no upload of the private Index artifacts to the private eval-artifacts dataset (this
+  track's rule is "nothing goes to HF"; the coordinator may upload node A's private dir); no C1 (item 8 needs a
+  successor); nothing built or published.
 
-## Running now (detached)
+## Tools added by continuation #2 (`v2/27b/moe/`)
 
-| What | Where | Log / status | Notes |
-| --- | --- | --- | --- |
-| Index shard 0 / 1 / 2 (40,010 / 40,302 / 39,894 requests after the presplit) | node A GPU3 / GPU4 / GPU5, containers `d2-27b-moe-ix-MOE-Git-soup-s{0,1,2}-g{3,4,5}` (each driven by a `moe-index.sh _shard` host process) | `/data/dev2/private/eval/index021/ix1/runs/MOE-Git-soup/shard-K/{status.json,runner.log,launch.log}` | ≈ 3.3 requests/s each; after the shard ends, the same host process reruns its pre-split requests alone (`extra-sK-N`; 5 / 9 / 6) and records a final error for any that fails alone |
+`index_engine.py` (kit engine over a frozen MoE package through its formal path; reuses IX1's `check_response`),
+`index_ref.py` (parity reference from the formal collector), `index_scan.py` (request sizes under the package's
+encoder), `index_skip.py` (IX1's skip / rerun-alone / final-error rule, presplit), `moe-index.sh` (offer, stage,
+panel, parity, run, resume, extra, scan, presplit, auto-offer, auto-run); tests `tests/test_index_engine.py`.
+Known limitation for any later Gemma MoE run: the FP32-resident path holds ≈ 101 GB of weights and fits about
+257K padded tokens per request on one MI325X.
 
-Mirror for every Index job: `0403fb5796ca00a5a217f8e7656c77fe6e2205db-src_training_decision2` (node A).
+## Next steps
 
-## Infrastructure
-
-- **Temporary node A → node B link: removed 09:45Z** (key line `dev2-27b-moe-xfer-temp` deleted from node B
-  `authorized_keys`, backup `authorized_keys.bak.27b-moe-cleanup-*`; `/data/dev2/tmp/27b-moe-xfer` deleted on node A;
-  a probe rsync is refused). `/root/.ssh/d2_temp_cd` (other tracks) untouched. `moe-index.sh offer / stage / auto-*`
-  no longer work, and are not needed (the package is staged on node A).
-- **Private Index layout (node A, mode 700):** `/data/dev2/private/eval/index021/ix1/` — `panel-3/` (gold-free
-  shards + `compat-86.gold-free.jsonl.gz`, `panel.json`), `scan/` (request sizes), `parity/MOE-Git-soup/`
-  (`parity.json`, `cache-frozen`), `runs/MOE-Git-soup/` (`presplit.json`, `shard-K/`, later `extra-*`, `merged/`),
-  `logs/`. Path checks (tests only, never results): `/data/dev2/private/eval/index021/moe-pathcheck/`.
-- **Tools** (`v2/27b/moe/`): `index_engine.py` (kit engine: the formal run's native path), `index_ref.py` (parity
-  reference from the formal collector), `index_scan.py`, `index_skip.py` (IX1's rule), `moe-index.sh` (modes offer,
-  stage, panel, parity, run, resume, extra, scan, presplit, auto-offer, auto-run). Scoring: IX1's
-  `v2/eval/ix1/score.sh` (merge → port + kit 87d4650b → `compare.py`).
-- Stage B outputs (node B): soup `R/MOE-Git-soup/` (checkpoint, cal698, ADOPTION.json, package/, latency/), readout
-  `R/readouts/MOE-Git-soup`, `R/readouts/DEVGATES.json`, formal `R/formal/MOE-Git-soup{,-smoke,-mlx}`, `R/gates/`
-  (`VERDICTS-20261001T094035Z.json`); node A `R/mlx-diag/MOE-Git-soup`. `pathcheck/` (both nodes) = tests only.
-- Known pre-existing test failure (not this track's): `v2.27b.tests.test_m1_tools.LaunchTest.test_rejects_foreign_gpu`.
-
-## Next steps (in order)
-
-1. Poll every ≤ 30 min (node A): each `shard-K/status.json` (`completed`, `counts`); `docker ps | grep d2-27b-moe-ix`;
-   commit a state line. If a shard's host process exits with the shard incomplete (`exit_code` ≠ 0 and no further
-   attempt): read `runner.log`; `python3 -m v2.27b.moe.index_skip skip --shard-dir … --rows panel-3/shard-K-of-3.jsonl.gz`
-   handles a device-aborting request; then `bash /data/dev2/src/$M/src/training/decision2/v2/27b/moe/moe-index.sh
-   resume $M MOE-Git-soup 3 K GPU` (M = the mirror above). Never tune or select on Index rows.
-2. When all three shards **and** their `extra-sK-N` reruns have `end_epoch` (≈ 12:50Z): on node A
-   `bash /data/dev2/src/$M/src/training/decision2/v2/eval/ix1/score.sh --src /data/dev2/src/$M --model MOE-Git-soup
-   --size 27B --panel /data/dev2/private/eval/index021/ix1/panel-3 --allow-errors` (`--allow-errors` because the two
-   largest ToolRet requests, 488K and 751K padded tokens, are expected to exceed the GPU alone). Check the scorer
-   gate (`merged/compare.json` → `scorers.pass`) and `merged/receipt.json` (row accounting).
-3. **Private only:** copy `merged/{compare.json,port.json,receipt.json,latency.json}` to
-   `/home/xunliu/code/decision2-program/private/moe1/` (mode 700) as `*-MOE-Git-soup.json`; run
-   `python3 private/moe1/compare_moe.py --moe … --a20r ../ix1/compare-27B.json --frontier
-   ../index021-frontier-gap-2026-10-01.json --out private/moe1/table-MOE-Git-soup.md`; write
-   `private/moe1/moe1-index-report-2026-10-01.md` (label "independent provisional 0.2.1 reproduction": headline
-   port / kit, vs DEV2.0-27B (IX1) and vs the 27B-class frontier peer and served size, areas, largest gains / losses,
-   row accounting, latency). Never put an Index value in commits, the gist, cards, COORDINATION or STATUS.
-4. **Hand-off status:** if the headline clears the 27B-class frontier bar in the IX1 report, mark
-   `moe-handoff-2026-10-01.md` **ISSUED** (no value in the file: "the private Index criterion was met"); otherwise
-   mark it **NOT ISSUED** (keep it as package notes). Add a public receipt (counts, hashes, GPU-h only; IX1's
-   `ix1-public-receipt/1` shape) under `v2/27b/records/moe-index/`.
-5. Free node A GPU3 / 4 / 5 (rename each `owner` to `owner.released-moe-<UTC>`, as for node B GPU7) once no
-   `d2-27b-moe-*` container runs; results record + gist 06c (no Index values); merge into
-   `xunzhuo/decision-2-training` (merge-only); report.
+None for this track. Coordinator decisions: whether to upload the private Index artifacts; whether a later 27B
+milestone revisits the Gemma 4 MoE base with a different recipe (the typed FINAL loss sits mostly in one family,
+`exception_stack`, and human transfer is level with A20r).
 
 ## Poll log (newest first)
 
+- 11:45Z: **Index scored** (`score.sh --allow-errors`, 11:38Z): 120,226 rows, 120,224 ok + 2 errors (both
+  out of memory alone), dual scoring PASS; outcome private (does not clear the 27B-class bar) → hand-off NOT
+  ISSUED. Public receipt written. Node A GPU4 / GPU5 released. Milestone closed (41.31 GPU-h).
+- 11:29Z: **All three Index shards complete** (shard 0 11:12Z, 2 11:17Z, 1 11:20Z; every shard request `ok`; shard
+  0 2.14 GPU-h). Alone-reruns: s0 5 / 5 ok, s2 5 / 6 ok (1 running), s1 3 ok + **1 out of memory alone (final
+  error)** of 9 (5 to go, ≈ 11:38Z). Node A GPU3 released 11:23Z (`owner.released-moe-20261001T1123Z`).
+  Next: `score.sh … --allow-errors` once every `extra-*` has `end_epoch`.
+- 10:56Z: Index shards 33,340 / 30,270 / 31,390 of ≈ 40,000 (all `ok`), 4.6–5.0 requests/s; shards end ≈ 11:20–11:30Z,
+  the 20 alone-reruns ≈ 11:50Z.
+- 10:17Z: Index shards 18,410 / 17,140 / 17,580 (all `ok`), ≈ 4.1–4.3 requests/s on average; shards end ≈ 11:45Z,
+  their alone-reruns ≈ 12:10Z. Scorer imports checked on node A (port, kit 87d4650b, merge, compare).
+- 09:52Z: Index shards 10,190 / 8,810 / 9,260 requests, all `ok` so far; 3 containers running. Integration
+  fast-forwarded to `6e8d8e9b9` (merge of this branch); gist 06c updated. Results record: typed FINAL loss by family
+  (`exception_stack` −.225 carries most of it).
 - 09:50Z: **Stage B done** (node B 09:40:35Z, node A 09:38:05Z). Formal v3 **68.75** (T .812, H .582); vs A20r
   −3.61 [−6.54, −1.18]; mlx-diag −.036 [−.052, −.020] (R4 fail); verdicts: items 1–7 **false**, beats AutoJev
   **false** (`VERDICTS-20261001T094035Z.json`). Latency (BF16, M1 roster) 114.6 / 120.5 ms vs A20r 83.6 / 88.8.

@@ -1,6 +1,7 @@
 # ~27B M6 state (resume file)
 
-Updated: 2026-10-01 18:50 UTC+8 (10:50Z; M6 worker 1, started 06:17Z; hand-off below).
+Updated: 2026-10-01 19:05 UTC+8 (11:05Z; continuation worker 2 a56025bb, started 10:44Z; worker 1 11741ee2 ran
+06:17–10:55Z).
 Prereg `m6-prereg-2026-10-01.md` (`90d38aba7`) with amendments 1 (`b74685ddb`) and 2 (`35492ac25`). Mirrors: M6-IB /
 M6-IB2 seeds, chains and watchers run from **`b74685ddb`**, M6-IBX's from **`d8edcf4e1`** (on node A / B / D); step 0
 ran from `20af2e4a1`.
@@ -78,6 +79,17 @@ for M6-IB and `ib12` (IB1 + IB2 DEV) for M6-IB2.
 
 | M6-IBX-s1 | **node D GPU0** | 3894132 | `a20ib1x` (4,997 updates, save 625) | 16.0 | `d2-27b-M6-IBX-s1-*` |
 | M6-IBX-s2 | **node D GPU1** | 3894589 | `a20ib1x` | 16.0 | `d2-27b-M6-IBX-s2-*` |
+| **M6-IB2PN-s1** | **node D GPU2** | 609345 | `a20ib12pn` (6,886 updates, save 861) | **22.0** | `d2-27b-M6-IB2PN-s1-*` |
+| **M6-IB2PN-s2** | **node D GPU3** | 645978 | `a20ib12pn` | **22.0** | `d2-27b-M6-IB2PN-s2-*` |
+
+- **M6-IB2PN (amendment 3, G5 hedge)** launched from mirror **`7fcbc824c`** (tooling `c0056edca` + data lock):
+  `M6_BUILD=BUILD-pn.json STAGGER=1 m6-launch.sh 7fcbc824c… M6-IB2PN:a20ib12pn:ib12:d2,d3:1`. s1 started 11:32Z alone
+  (onestep 0.072, reload 0.017 GPU-h, 0 argmax changes on 32 rows, max |Δp| 7e-8; full run from ≈ 11:38Z); s2 started
+  11:38:28Z after s1's reload passed. Node D relays 646528 (s1) / 646813 (s2); node A mlx watcher 253360; node B chain
+  **2818836** (aux **GPU1**, slice `ib12`, log `m6/logs/chain-M6-IB2PN.log`). Leases node D GPU2 / GPU3 taken from IX1's
+  released owners (moved to `owner.prev-20261001T1131*`). ETA ≈ 06:40Z (s1) / 06:50Z (s2) on Oct 2, then ≈ 2 h chain.
+  Data: `/data/dev2/private/27b/m6-data/BUILD-pn.json`, `mixtures-m6pn-1/`, `pn1h.train.jsonl`; scan receipts under
+  node A / B `/data/dev2/private/27b/m6-pn/` (private).
 
 - M6-IBX launched 08:33Z from mirror `d8edcf4e1` (amendment 2; node D staged at 08:22Z): node D leases GPU0 / GPU1 taken
   from IX1's released owners (moved to `owner.prev-20261001T0832*`); node D relay watchers 3895113 (s1) / 3895407 (s2)
@@ -155,6 +167,24 @@ is still fixing the long-input runtime bug and staging its M5-L128 Index diagnos
 
 ## Poll log (newest first)
 
+- 11:45Z: **M6-IB2PN launched** (see "Running now"): s1 full run on node D GPU2, s2 in its onestep preflight on GPU3;
+  chain, relays and mlx watcher alive. Eight seeds in flight. GPU-h ≈ 22.0 (closed 1.136 + 0.089 hedge s1 preflights +
+  running ≈ 20.8).
+- 11:30Z: hedge tooling `c0056edca` (137 tests pass; shellcheck clean) mirrored to node A / B / D; node B build
+  11:20–11:26Z: two builds identical, amendment 1's four mixtures reproduced byte for byte, `a20ib12pn` 110,173 rows,
+  6,886 updates, `8f5425c5…`, projection 19.09 (cap 22), C1 source check clean. Data-lock addendum committed. Next:
+  node D staging, then launch (s1 on GPU2, s2 on GPU3 after s1's reload preflight).
+- 11:20Z: **amendment 3 committed (G5 hedge M6-IB2PN, before any hedge job).** Node A scans done: 0 hits on all 13
+  gold-free panels and PN1 dev; 4 near hits on Index suite rows in 3 PN1-r2 TRAIN groups (3 rows), dropped → PN1H
+  (4,361 rows). Next: tooling (`m6_data drop-groups`, `m6-build-pn.sh`, arm / launch / gates for M6-IB2PN, cap 22,
+  es / fr report), node B build, data-lock addendum, node D staging, launch on node D GPU2 then GPU3.
+- 11:03Z (worker 2, poll 1): M6-IB 1,147 / 1,105 of 5,081 (projection 13.2 / 13.7 h), M6-IB2 1,127 / 1,126 of 6,614
+  (17.4 / 17.5 h), M6-IBX 863 / 851 of 4,997 (13.8 / 14.0 h). Six containers, three chains, four node A watchers and
+  two node D relays alive; node D data disk 479 GB used. **GPU-h ≈ 17.8** (closed 1.136 + running ≈ 16.7).
+  G5 hedge (M6-IB2PN) assessment started: PN1-r2 TRAIN (`c1cec06b…`, 4,364 rows, cleared for released models in
+  `m4-dq-results-2026-09-30.md`) shares 0 ids, groups, input hashes, Tatoeba sentence ids or sentence texts with
+  PN1 dev; G0 Index-row scan 0 groups; short-text scan vs IB1 + IB2 DEV, SELECT700, CAL698 0 hits (node A panel /
+  Index scan running). Node D GPU2–7 released by IX1 and idle.
 - 10:41Z (worker 1's last poll): M6-IB 999 / 966 of 5,081 (13.1 / 13.5 h; SELECT700 at 636 .8396 / .8331), M6-IB2 985 /
   978 of 6,614 (17.2 / 17.3 h; at 827 .8668 / .8856), M6-IBX 728 / 715 of 4,997 (13.5 / 13.7 h; at 625 .8113 / .8596).
   Six containers, three chains, four node A watchers and two node D relays alive. **GPU-h:** closed receipts 1.136

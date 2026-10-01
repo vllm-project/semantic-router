@@ -1,0 +1,24 @@
+{
+  "package_model": "DEV2.0-27B",
+  "tokens_long_question": 32468,
+  "questions": 32,
+  "budget_tokens": 174762,
+  "forwards": [
+    [
+      5,
+      32512
+    ],
+    [
+      27,
+      496
+    ]
+  ],
+  "invalid_answers": [],
+  "mismatched_vs_alone": [
+    "q24"
+  ],
+  "max_drift_vs_alone": 0.018879394249702974,
+  "together_ms": 44554.4,
+  "within_budget": true,
+  "pass": false
+}

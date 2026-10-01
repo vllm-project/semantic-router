@@ -1,0 +1,15 @@
+{
+  "package_model": "DEV2.0-27B",
+  "question": "q24",
+  "split": null,
+  "alone": {
+    "noul": 0.4996767193529477,
+    "margin": 0.000646561294104564
+  },
+  "short_only_single_batch": {
+    "noul": 0.49046262566113147,
+    "margin": 0.019074748677737063
+  },
+  "split_vs_alone_same": null,
+  "short_only_vs_alone_same": true
+}

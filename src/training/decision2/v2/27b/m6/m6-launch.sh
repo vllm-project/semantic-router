@@ -13,6 +13,9 @@
 #   are taken with launch3 lease, allocation m6-d); SLICE = ib (IB1 DEV) | ib12 (IB1 + IB2 DEV); AUX = the node B
 #   GPU of that arm's readout, slices and formal run (one of its own node B training GPUs)
 #   e.g. m6-launch.sh <sha> M6-IB:a20ib1:ib:b5,b1:1 M6-IB2:a20ib12:ib12:b0,a2:0
+# Environment: M6_BUILD (build record in m6-data, default BUILD.json; BUILD-pn.json for amendment 3's a20ib12pn, whose
+#   mixtures_dir is mixtures-m6pn-1); STAGGER=1 starts each arm's s2 only after s1's reload preflight receipt exists
+#   (COORDINATION 14:30 cold-cache convention; amendment 3).
 set -euo pipefail
 SHA=${1:?MIRROR_SHA}
 shift
@@ -22,7 +25,8 @@ NODES=${DEV2_NODES_FILE:-$HOME/.config/decision2/nodes.env}
 A=$(grep '^node-a=' "$NODES" | cut -d= -f2-) B=$(grep '^node-b=' "$NODES" | cut -d= -f2-)
 D=$(grep '^node-d=' "$NODES" | cut -d= -f2-)
 M=/data/dev2/src/$SHA-src_training_decision2/src/training/decision2/v2/27b/m6
-O=/data/dev2/private/27b/m6-data MX=$O/mixtures-m6-1 R=/data/dev2/runs/27b/m6
+O=/data/dev2/private/27b/m6-data R=/data/dev2/runs/27b/m6 BUILD_FILE=${M6_BUILD:-BUILD.json}
+[[ "$BUILD_FILE" =~ ^BUILD(-[a-z0-9]+)?\.json$ ]] || { echo "bad M6_BUILD $BUILD_FILE" >&2; exit 2; }
 PN1=/data/dev2/hf-cache/datasets--llm-semantic-router--decision-2.0-training-data/snapshots/27b1d2f130292268b43a618584bebab5d4e4a6b5/m4/pn1/dev/pn1.dev.jsonl
 PN1_SHA=c3b68ac113fc1f2afb5554530112f472a9c62f7997285bcaf89a6b655bb7f4cf
 onb() { ssh -o BatchMode=yes "$B" "$@"; }
@@ -30,15 +34,16 @@ ona() { ssh -o BatchMode=yes "$A" "$@"; }
 ond() { ssh -o BatchMode=yes "$D" "$@"; }
 runner() { case "${1:0:1}" in a) echo ona ;; d) echo ond ;; *) echo onb ;; esac; }
 for n in onb ona; do $n "test -f $M/m6-chain.sh" || { echo "mirror $SHA missing ($n)" >&2; exit 2; }; done
-build=$(onb "cat $O/BUILD.json")
+build=$(onb "cat $O/$BUILD_FILE")
 val() { python3 -c "import json,sys; d=json.loads(sys.argv[1]); print(eval(sys.argv[2], {'d': d}))" "$build" "$1"; }
+MX=$O/$(val "d.get('mixtures_dir', 'mixtures-m6-1')")
 slice_rows() { case "$1" in ib) val "d['ib1_dev_path']" ;; ib12) val "d['ib12_dev_path']" ;; *) return 2 ;; esac; }
 slice_sha() { case "$1" in ib) val "d['ib1_dev_sha256']" ;; ib12) val "d['ib12_dev_sha256']" ;; *) return 2 ;; esac; }
 declare -A ARM_MIX ARM_SLICE ARM_S1 ARM_S2 ARM_AUX
 ARMS=()
 for spec in "$@"; do
   IFS=: read -r arm mix slice seeds aux <<< "$spec"
-  [[ "$arm" =~ ^M6-(IB|IBX|IB2)$ ]] && [[ "$mix" =~ ^a20ib(1|1x|12)$ ]] && [[ "$slice" =~ ^(ib|ib12)$ ]] ||
+  [[ "$arm" =~ ^M6-(IB|IBX|IB2|IB2PN)$ ]] && [[ "$mix" =~ ^a20ib(1|1x|12|12pn)$ ]] && [[ "$slice" =~ ^(ib|ib12)$ ]] ||
     { echo "bad spec $spec" >&2; exit 2; }
   ARMS+=("$arm") ARM_MIX[$arm]=$mix ARM_SLICE[$arm]=$slice ARM_S1[$arm]=${seeds%,*} ARM_S2[$arm]=${seeds#*,} ARM_AUX[$arm]=$aux
   for loc in "${seeds%,*}" "${seeds#*,}"; do
@@ -85,6 +90,17 @@ for arm in "${ARMS[@]}"; do
   for s in s1 s2; do
     loc=$([ $s = s1 ] && echo "${ARM_S1[$arm]}" || echo "${ARM_S2[$arm]}")
     run=$(runner "$loc")
+    if [ $s = s2 ] && [ "${STAGGER:-0}" = 1 ]; then
+      l1=${ARM_S1[$arm]} r1=$(runner "${ARM_S1[$arm]}")
+      echo "$(date -u +%FT%TZ) $arm-s2 waits for $arm-s1's reload preflight (node ${l1:0:1})"
+      until $r1 "test -f /data/dev2/runs/27b/$arm-s1/receipts/reload.json"; do
+        $r1 "kill -0 ${PID[$arm-s1]}" || { echo "$arm-s1 ended before its reload receipt: $arm-s2 not started" >&2; exit 3; }
+        sleep 30
+      done
+      $r1 "python3 -c \"import json,sys; sys.exit(json.load(open(sys.argv[1]))['exit_code'] != 0)\" /data/dev2/runs/27b/$arm-s1/receipts/reload.json" ||
+        { echo "$arm-s1's reload preflight failed: no candidate for $arm, $arm-s2 not started" >&2; exit 3; }
+      echo "$(date -u +%FT%TZ) $arm-s1 reload preflight passed"
+    fi
     out=$($run "bash $M/m6-arm.sh ${loc:0:1} ${loc:1} $arm $s $mix $msha $save $cap")
     echo "$out"
     PID[$arm-$s]=$(pid "$out")

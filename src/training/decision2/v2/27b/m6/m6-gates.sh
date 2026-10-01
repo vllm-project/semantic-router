@@ -2,7 +2,7 @@
 # ~27B M6 host-CPU gates of the sealed finalists (node B; no GPU): successor items 1-7 vs A20r's scored run, the
 # beats-AutoJev check and the attribution contrasts (preregistration "Formal, successor rule and Index",
 # "Attribution"). M5's m5-gates.sh with the M6 root, M5-L128 as a comparator and the M6 mixtures.
-# Usage: m6-gates.sh MIRROR_SHA STAGE NAME...      (NAME: M6-IB, M6-IBX, M6-IB2 with a sealed formal run)
+# Usage: m6-gates.sh MIRROR_SHA STAGE NAME...      (NAME: M6-IB, M6-IBX, M6-IB2, M6-IB2PN with a sealed formal run)
 #   gates     panels verify; per NAME v2.eval.gates paired vs A20r, AutoJev-27B, Eikos-27B, Jebadiah-27B, F1, M5-L128 and
 #             A20r - NAME; types; public231 vs A20r (item 7); family contrasts (m4_contrast.py) -> /data/dev2/runs/27b/m6/gates/
 #   overlap   v2.eval.overlap_effects exposure of each M6 TRAIN file listed in BUILD.json -> gates/overlap/exposure-m6-<mix>.json
@@ -23,7 +23,7 @@ BUILDS=${BUILDS:-/data/dev2/private/27b/m6-data}
 declare -A PEER=([AutoJev-27B]=$B/m2-peer-autojev27-nodeB-kernel [Eikos-27B]=$B/m3-peer-eikos27-nodeB-kernel
   [Jebadiah-27B]=$B/m3-peer-jebadiah-nodeB-kernel)
 declare -A RUN=([M4-A20r-soup]=$A20R [M5-L128]=$B/m5/M5-L128/formal ["DEV2.0-27B (F1)"]=$B/M3-A-soup/formal)
-declare -A MIX=([M6-IB]=a20ib1 [M6-IBX]=a20ib1x [M6-IB2]=${IB2_MIX:-a20ib12})
+declare -A MIX=([M6-IB]=a20ib1 [M6-IBX]=a20ib1x [M6-IB2]=${IB2_MIX:-a20ib12} [M6-IB2PN]=a20ib12pn)
 for name in "$@"; do
   [ -n "${MIX[$name]:-}" ] || { echo "unknown M6 finalist $name" >&2; exit 2; }
   [ -f "$R/$name/formal/SEAL.json" ] || { echo "$name has no sealed formal run" >&2; exit 2; }
@@ -54,8 +54,9 @@ case "$STAGE" in
     done
     args=() pairs=()
     for name in "${!RUN[@]}"; do args+=(--run "$name=${RUN[$name]}"); done
-    for spec in "M6-IB:M4-A20r-soup" "M6-IBX:M4-A20r-soup" "M6-IB2:M4-A20r-soup" "M6-IB:M5-L128" "M6-IBX:M5-L128" \
-      "M6-IB2:M5-L128" "M6-IB:M6-IBX" "M6-IB2:M6-IB" "M5-L128:M4-A20r-soup"; do
+    for spec in "M6-IB:M4-A20r-soup" "M6-IBX:M4-A20r-soup" "M6-IB2:M4-A20r-soup" "M6-IB2PN:M4-A20r-soup" \
+      "M6-IB:M5-L128" "M6-IBX:M5-L128" "M6-IB2:M5-L128" "M6-IB2PN:M5-L128" "M6-IB:M6-IBX" "M6-IB2:M6-IB" \
+      "M6-IB2PN:M6-IB2" "M5-L128:M4-A20r-soup"; do
       [[ -n "${RUN[${spec%%:*}]:-}" && -n "${RUN[${spec#*:}]:-}" ]] && pairs+=(--pair "$spec")
     done
     for name in "$@"; do args+=(--finalist "$name"); done
@@ -69,10 +70,18 @@ case "$STAGE" in
       mix=${MIX[$name]}
       file=$(find "$BUILDS" -path "*/mixtures-m6*-1/$mix.train.jsonl" | sort | head -n 1)
       [ -n "$file" ] || { echo "no frozen $mix.train.jsonl under $BUILDS" >&2; exit 2; }
-      sha=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['files_sha256'][sys.argv[2]])" \
-        "$(dirname "$(dirname "$file")")/BUILD.json" "$mix.train.jsonl" 2>/dev/null ||
-        python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['files_sha256'][sys.argv[2]])" \
-          "$(dirname "$file")/MIXTURES.json" "$mix.train.jsonl")
+      sha=$(python3 - "$(dirname "$(dirname "$file")")" "$(basename "$(dirname "$file")")" "$mix.train.jsonl" <<'EOF'
+import glob, json, os, sys
+root, mixdir, name = sys.argv[1:]
+for path in sorted(glob.glob(os.path.join(root, "BUILD*.json"))):
+    build = json.load(open(path))
+    if build.get("mixtures_dir", "mixtures-m6-1") == mixdir and name in build["files_sha256"]:
+        print(build["files_sha256"][name])
+        break
+else:
+    raise SystemExit(f"no build record lists {mixdir}/{name}")
+EOF
+)
       python3 -m v2.eval.overlap_effects exposure --groups "$FLAGGED" --train "$file" --expect-sha256 "$sha" \
         --label "DEV2.0-27B M6 $mix.train.jsonl" --output "$V/exposure-m6-$mix.json" > "$V/exposure-$mix.log"
     done
