@@ -19,6 +19,9 @@ round 1 stays at `afc3bc1e`): TRAIN 16,095 rows (`820cb5a7…`, 10.61M tokens), 
 
 ## Log (newest first)
 
+- 2026-10-01 12:08 UTC+8 — merged into `xunzhuo/decision-2-training` (`4970bfe93`, fast-forward; data tests 403 +
+  guard tests pass); gist 02 entry added (read back identical). Local review copies removed (packets, answers, keys
+  and error ids stay on node A under the r2 `review/`). No HR2 container or runner left. **Worker done.**
 - 2026-10-01 11:58 UTC+8 — **r2 published**: final TRAIN 16,095 / DEV 954 (G5 PASS, G7 PASS, leak 0; final-files
   recheck 0 / 0); `hf_headroom.sh` 47.98 GB free; upload `16ea6cf7` on `afc3bc1e` with `--delete '*'` under
   `m5/hr2/`: read-back 37 / 37 SHA-equal, remote folder = registry, other 750 files unchanged, private before and
@@ -73,7 +76,7 @@ round 1 stays at `afc3bc1e`): TRAIN 16,095 rows (`820cb5a7…`, 10.61M tokens), 
 
 ## Next steps (for the coordinator)
 
-1. Gist 02 entry and the merge into `xunzhuo/decision-2-training` for HR2-r2 (worker, in progress).
+1. ~~Gist 02 entry and the merge into `xunzhuo/decision-2-training` for HR2-r2.~~ Done (`4970bfe93`).
 2. Coordinator decision: HR2-r2 (`16ea6cf7`) for experiments only (not release-safe; it supersedes round 1 for
    experiments), or a separately preregistered round. Cleanest candidates: ETHICS (6 / 288 errors over both rounds)
    and PRM800K (4 / 72); HelpSteer3 preferences are the open problem (8 / 72; all round-2 errors at medium or low
