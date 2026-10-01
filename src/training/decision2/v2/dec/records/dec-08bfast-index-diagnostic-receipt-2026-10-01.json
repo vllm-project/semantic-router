@@ -1,0 +1,59 @@
+{
+  "schema": "dec-08bfast-index-diagnostic-receipt/1",
+  "label": "private Decision Index 0.2.1 diagnostic of the frozen M12 08b-RA soup (not releasable); values are private",
+  "model": {
+    "diagnostic_name": "DEV2.0-0.8B-08bRA",
+    "soup_tree_manifest_sha256": "83926edfea269a3f1509c08c7f3d716b9002e8caf2992d293c3991dd3cbbc18b",
+    "model_sha256": "f25beedd6b9b80fd8ce92857bfd6a14d77d73624e4fd410cc535357c0a1b41fb",
+    "restaged_onto": "llm-semantic-router/DEV2.0-0.8B@bede7938a8c209c09f27400b79eed57948d6b75e (runtime unchanged)",
+    "package_manifest_sha256": "b31c00396d492b1346621c89cb89db9bff204da568aadec2c8ef55b9b7dd8d17"
+  },
+  "source": {
+    "commit": "7b9fff09a711a1a224b01105c6af9be8c76775e4",
+    "tree": "87316354469c81008f3fa15d52992d17dc5b3663"
+  },
+  "parity_gate": {
+    "requests": 86,
+    "questions_compared": 419,
+    "statuses": {
+      "ok": 86
+    },
+    "pass": true,
+    "frozen_cache_digest": "731b28b0f266164518c6f1c64dd7214781e0e07f47ca7c7d3da6dafdf448b9b8"
+  },
+  "full_run": {
+    "panel_run_ids_sha256": "6455d7be7ce3e902a73f4d854884f817e20a0fa8ba74252a299261c4f1d6ad50",
+    "rows": 120226,
+    "shards": 8,
+    "statuses": {
+      "ok": 120224,
+      "unsupported": 2
+    },
+    "non_ok_reasons": {
+      "max_length_exceeded": 2
+    },
+    "results_sha256": "9c28a4303a1dc491d72ac650de32cebc4041cb0952f64da49139258117a117da"
+  },
+  "dual_scoring": {
+    "port_vs_kit": "87d4650b",
+    "pass": true
+  },
+  "contamination_audit": {
+    "train_sha256": "12bd63d8b215877b6f471c12652e534e0f0be794c15bff74ad5ac50e98018bf3",
+    "train_lines": 309225,
+    "planted_control": "200 / 200",
+    "duplicate_rows": 18,
+    "item_rows": 1,
+    "dev2_0p8b_train_same_run": {
+      "train_lines": 162777,
+      "duplicate_rows": 20,
+      "item_rows": 1
+    }
+  },
+  "gpu_hours": {
+    "parity": 0.026,
+    "voided_parity_start": 0.001,
+    "full_run": 1.234,
+    "total": 1.26
+  }
+}
