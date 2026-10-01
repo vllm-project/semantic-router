@@ -8,11 +8,11 @@ pinned base (PEFT auto-detection tested). Worktree `/home/xunliu/code/vllm-sr-de
 
 ## Now
 
-- 07:20Z — **HANDOFF.** Published: **0.6B `08b00e07`** (13 / 13), **0.8B `1188dd33`** (7 / 7), **2B `ffe291b4`**
-  (7 / 7), each with AutoModel vs native 0 of 11,053 answers changed (drift 0), 5.18 parity 0 of 11,053, Hub smoke
+- 07:40Z — **HANDOFF.** Published: **0.6B `08b00e07`** (13 / 13), **0.8B `1188dd33`** (7 / 7), **2B `ffe291b4`**
+  (7 / 7), **4B `3785b7b9`** (7 / 7; 07:36Z), each with AutoModel vs native 0 of 11,053 answers changed (drift 0), 5.18 parity 0 of 11,053, Hub smoke
   5.17 + 5.18 pass, post-checks ok. Still running on node E (nothing else needed to start them):
-  - GPU6 chain (log `/data/dev2/logs/automap-gpu6-publish-20261001T061027Z.log`): 4B `--tf518` passed (0 of 8,778)
-    → 4B `--release` (from ~07:15Z) → 9B `--tf518` → 9B `--release` → GPU integration re-run. ETA ~08:30Z.
+  - GPU6 chain (log `/data/dev2/logs/automap-gpu6-publish-20261001T061027Z.log`): 9B `--tf518` (from 07:36Z) →
+    9B `--release` → GPU integration re-run. ETA ~08:25Z.
   - GPU7 (log `/data/dev2/logs/automap-gpu7-publish-20261001T061027Z.log`): 27B `--release`, uploaded `2b7508e9`;
     parity-post, automap-post and two fresh-cache Hub smokes (52 GB base each) follow. ETA ~08:15Z.
   - **To finish** (worktree `vllm-sr-dev2-automap`):
