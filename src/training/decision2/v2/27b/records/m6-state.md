@@ -167,6 +167,13 @@ is still fixing the long-input runtime bug and staging its M5-L128 Index diagnos
 
 ## Poll log (newest first)
 
+- 11:50Z (poll 2 of worker 2, at 11:43Z): all eight seeds and every chain / relay / watcher alive. M6-IB 1,409 / 1,346
+  of 5,081 (13.2 / 13.8 h; second SELECT700 at 1272: .8740 / .8659, BEST = 1272), M6-IB2 1,387 / 1,382 of 6,614
+  (17.4 / 17.5 h), M6-IBX 1,113 / 1,095 of 4,997 (13.7 / 13.9 h), M6-IB2PN-s1 15 of 6,886 (9.56 s per update),
+  M6-IB2PN-s2 in its reload preflight. Node D data disk 501 GB. Integration merged at `d96250da6` (amendment 3 +
+  tooling); gist 06 entry added; **hand-off record `m6-handoff-2026-10-01.md` written: section 1 requests the
+  custodian's C1 content recheck now** (IB1 + IB2 + PN1 roots; `a20ib12pn` covers every arm's rows); interim results
+  updated.
 - 11:45Z: **M6-IB2PN launched** (see "Running now"): s1 full run on node D GPU2, s2 in its onestep preflight on GPU3;
   chain, relays and mlx watcher alive. Eight seeds in flight. GPU-h ≈ 22.0 (closed 1.136 + 0.089 hedge s1 preflights +
   running ≈ 20.8).
