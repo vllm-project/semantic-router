@@ -1,12 +1,13 @@
 # 9B M9 state (resume file)
 
-Updated: 2026-10-01 22:10 UTC+8 (14:08Z) by continuation worker b23ed249. **Stage 2 closed 13:28Z: NO FINALIST**
+Updated: 2026-10-01 22:40 UTC+8 (14:35Z) by continuation worker b23ed249 (hand-off point). **Stage 2 closed 13:28Z: NO FINALIST**
 (record `lux9b-m9-stage2-result-2026-10-01.md`; rules `select/9b-finalists-s2.json` `df0ef550…`, readout
 `lines/readout/m9-s2.json` `cda87bcf…`; the s2 formal chain stopped by rule). L9IB fails the Choice / Score type
 floors, HT-DEV v2 (FLAG −.021), Y1 (+.117) and Y3 (.229 vs .152); L9IBX fails HT-DEV v2 (FLAG −.022), Y1 (+.058) and
 Y3 (.271). **Stage 3:** K-a13IB seeds DONE 13:23–13:28Z, soup `soup/KIB/build/KIB-soup` built 13:30Z (node C);
 K-a13IB built and scored on node A (13:35 / 13:57Z; passes every gate in a scratch preview, see "Stage 3 interim");
-K-a13IBX seeds on GPU2 / 1 / 4 since 12:51–12:57Z (all preflights PASS), ≈ 760 / 1,990 at 13:56Z, ETA ≈ 15:40Z. **Stage 1 closed (no finalist); stage 2
+K-a13IBX seeds on GPU2 / 1 / 4 since 12:51–12:57Z (all preflights PASS), 1,273 / 1,282 / 1,215 of ≈ 1,990 at 14:35Z,
+ETA ≈ 15:30–15:35Z; every chain PID alive (node C `chain-c{2,1,4}-s3`, `post-c-KIBX`; node A `post-a-KIBX`, `formal-s3`). **Stage 1 closed (no finalist); stage 2
 training (unattended); stage 3 (amendment 3) launched 10:47Z.** Branch `xunzhuo/decision-2-training-9b-m9`
 (worktree `vllm-sr-dev2-9b-m9`). Prereg `records/lux9b-m9-prereg-2026-10-01.md` (`8570a5896`); amendment 1
 (`0b84e0db4`), amendment 2 (`51c80ddc9`, stage 2), **amendment 3 (`787abdc54`, stage 3 = K-a13 recipe + IB1-r3 + IB2 at
@@ -28,7 +29,7 @@ L9 fails the Noul floor, HT-DEV v2 (FLAG −.031) and Y1 (+.042); L9L fails Y1 o
 | node C GPU3 / 6 / 7 | **stage 3 `chains3.sh` (`787abdc54`)**: K-a13IB-s1 (pre-warm, alone first) / -s2 / -s3 | all DONE 13:23–13:28Z (BEST = last checkpoint: 2,083 / 2,081 / 2,084); GPU3 idle, GPU6–7 released 14:04Z |
 | node C GPU2 / 1 / 4 | stage 3 `chains3.sh`: K-a13IBX-s1 / -s2 / -s3 | full runs since 12:53 / 12:51 / 12:57Z (preflights PASS; GPU4 waited for the L9IBX merges), ETA ≈ 15:40Z |
 | node C (CPU) | stage 3 `post-c.sh` KIB / KIBX (`787abdc54`): three-seed FP32 soups | KIB built 13:30Z (`soup/KIB/build/KIB-soup`); KIBX waiting |
-| node A GPU6 / GPU7 | **stage 3 `post-a3.sh` KIB / KIBX (`624f94027`, pids 215950 / 215963)**: pull → K-a13IB / K-a13IBX = [arm soup, Lux, Lux] (α ⅓) → 10 panels → score vs C0 → `readout/m9-s3.json` → contrasts → `select/9b-finalists-s3.json` | KIB: K-a13IB scored 13:57Z, α 1 IB DEV read 14:00Z (chain ended, waiting in `finish` for K-a13IBX); KIBX: waiting for node C's soup |
+| node A GPU6 / GPU7 | **stage 3 `post-a3.sh` KIB / KIBX (`624f94027`, pids 215950 / 215963)**: pull → K-a13IB / K-a13IBX = [arm soup, Lux, Lux] (α ⅓) → 10 panels → score vs C0 → `readout/m9-s3.json` → contrasts → `select/9b-finalists-s3.json` | KIB: K-a13IB scored 13:57Z, α 1 IB DEV read 14:00Z, chain ended (its `finish` returns until K-a13IBX is scored); KIBX: waiting for node C's soup, then it runs the shared readout / contrasts / rules |
 | node A | stage 3 `formal-chain.sh` `M9_STAGE=3` (`787abdc54`, pid 214241) | waiting for the s3 rules, then **`status/formal-s3.GO`** |
 
 Liveness: node C `chains/chain-c{5,2,4,1}-s2.pid`, `chains/chain-c{3,6,7,2,1,4}-s3.pid`, `chains/post-c-{L9IB,L9IBX,KIB,KIBX}.pid`;
@@ -101,7 +102,13 @@ worker's log as `owner.before-9b-m9-20261001T104751Z`. Node C GPU3 (track) is id
 
 ## GPU-hours
 
-≈ 32.9 on node C at 13:33Z (running containers included; stage 2 L9IB 6.27 / L9IBX 6.05, stage 3 K-a13IB 7.74,
-K-a13IBX running) + node A readouts 1.65 + formal-path parity 0.20 → **≈ 34.8 of 120**. Stage 2 ≈ 13.0 (closed).
-Projection: stage 3 ≈ 17 (cap 30), formal ≈ 0.25 per finalist. (`m9/gpuh.py table --running` on node C; node A
+≈ 36.1 on node C at 14:35Z (running containers included; stage 1 L9 5.38 / L9L 5.42, stage 2 L9IB 6.27 / L9IBX 6.05,
+stage 3 K-a13IB 7.74 / K-a13IBX 5.05 so far, merges 0.17) + node A readouts ≈ 1.97 + formal-path parity 0.20 → **≈ 38.3
+of 120**. Stage 2 ≈ 13.0 (closed). Projection: stage 3 ≈ 16.5 (cap 30), formal ≈ 0.25 per finalist → M9 ≈ 40.
+
+## Deviations (this worker)
+
+- The integration merge `135e7c523` (11:00Z) lacks a DCO sign-off; it is on the integration branch, so history is not
+  rewritten. Later merges use `--signoff`.
+- Node C GPU6–7 lease archives were skipped at launch (single-line foreign owner files) and restored from the log. (`m9/gpuh.py table --running` on node C; node A
 `gpuh.py table` double-counts 0.08 of merge receipts copied in with the soup side files.)
