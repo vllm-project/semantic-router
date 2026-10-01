@@ -19,6 +19,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from training.model.data import INPUT_FIELDS, digest
 from v2.data.hr2.audit import file_sha256, read_jsonl, sizes, write_json
 from v2.data.ib1.audit import PROTECTED_DOCUMENTS
 from v2.data.ib2 import audit as ib2_audit
@@ -86,7 +87,9 @@ def audit_copy(row: Mapping[str, Any]) -> dict[str, Any]:
     state = {
         ("claim" if key == field else key): value for key, value in row["state"].items()
     }
-    return {**row, "state": state}
+    copy = {**row, "state": state}
+    copy["input_sha256"] = digest({name: copy[name] for name in INPUT_FIELDS})
+    return copy
 
 
 def shape_baseline(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:

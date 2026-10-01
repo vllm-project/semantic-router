@@ -10,7 +10,9 @@
 #   node_a.sh <commit> rescan <n>     re-scan pass <n> (G0, G0u, overlap, quarantine, C1 names) into rescan<n>/
 #   node_a.sh <commit> pass <n>       finalize pass <n> (n >= 2) with every list up to rescan<n-1>; G4 on it when
 #                                     n is IB3_SAMPLE_PASS
-#   node_a.sh <commit> screen         stage S sample and packets (G4-failing families left out)
+#   node_a.sh <commit> g4 <n>         G4 again on pass <n> (amendment 1: fixed audit copy; old receipts kept)
+#   node_a.sh <commit> amend-drop F.. families an amendment removes before the screen (amendment 1: maud)
+#   node_a.sh <commit> screen         stage S sample and packets (G4-failing and amendment-dropped families left out)
 #   node_a.sh <commit> screen-score   stage S verdict from screen/answers/s1.*.jsonl
 #   node_a.sh <commit> review         stage R sample and packets (screened rows / groups and dropped families out)
 #   node_a.sh <commit> splits         R3 packet from review/answers/{r1,r2}.*.jsonl
@@ -53,6 +55,7 @@ TRAIN=$CAND/ib3.train.cand.jsonl
 DEV=$CAND/ib3.dev.cand.jsonl
 WORKERS=${IB3_WORKERS:-48}
 SAMPLE_PASS=${IB3_SAMPLE_PASS:-2}
+AMEND=$R/amendment-drop-families.txt
 
 [ -d "$CODE" ] || { echo "no mirror $MIRROR" >&2; exit 1; }
 for d in "$H" "$R" "$T" "$R/logs"; do
@@ -241,9 +244,10 @@ passn() {
 screen() {
   fresh screen
   local Pd=$R/pass$SAMPLE_PASS
-  run screen-sample -v "$Pd:$Pd:ro" -v "$R/shortcut:$R/shortcut:ro" -v "$R/screen:$R/screen:rw" "$IMG" \
+  [ -f "$AMEND" ] || : > "$AMEND"
+  run screen-sample -v "$Pd:$Pd:ro" -v "$R/shortcut:$R/shortcut:ro" -v "$AMEND:$AMEND:ro" -v "$R/screen:$R/screen:rw" "$IMG" \
     -m v2.data.ib3.review screen-sample --train "$Pd/out/ib3.train.jsonl" \
-    --drop-families "$R/shortcut/shortcut-fail.txt" --out-dir "$R/screen/sample"
+    --drop-families "$R/shortcut/shortcut-fail.txt" --drop-families "$AMEND" --out-dir "$R/screen/sample"
   mkdir -m 700 "$R/screen/answers"
 }
 
@@ -261,7 +265,7 @@ screen_score() {
   run screen-score -v "$S:$S:rw" "$IMG" -m v2.data.ib3.review screen-score --key "$S/sample/key.jsonl" "${args[@]}" \
     --out "$S/screen.public.json" --private "$S/screen.private.json" \
     --drop-families-out "$S/drop-families.txt" --drop-ids-out "$S/drop-ids.txt"
-  cat "$R/shortcut/shortcut-fail.txt" "$S/drop-families.txt" | sort -u > "$S/families-out.txt"
+  cat "$R/shortcut/shortcut-fail.txt" "$AMEND" "$S/drop-families.txt" | sort -u > "$S/families-out.txt"
 }
 
 review() {
@@ -455,10 +459,26 @@ hf_upload() {
     "$R/hf/readback/m6/ib3" | tee "$R/hf/readback.json"
 }
 
+# g4 <n>: G4 again on pass <n>; the earlier receipts move to shortcut-v<k>/.
+g4() {
+  local k=1
+  while [ -e "$R/shortcut-v$k" ]; do k=$((k + 1)); done
+  [ ! -e "$R/shortcut" ] || mv "$R/shortcut" "$R/shortcut-v$k"
+  shortcut "pass$1"
+}
+
+amend_drop() {
+  [ ! -e "$AMEND" ] || { echo "$AMEND exists" >&2; exit 1; }
+  printf '%s\n' "$@" > "$AMEND"
+  echo "$(date -u +%FT%TZ) amendment drops: $*" >> "$R/logs/steps.log"
+}
+
 case "$STAGE" in
   build | scans | pass1 | screen | review | splits | score | final | leak) "$STAGE" ;;
   rescan) rescan "$3" ;;
   pass) passn "$3" ;;
+  g4) g4 "$3" ;;
+  amend-drop) shift 2; amend_drop "$@" ;;
   screen-score) screen_score ;;
   hf-assemble) hf_assemble ;;
   hf-upload) hf_upload ;;

@@ -3,6 +3,7 @@ from __future__ import annotations
 import collections
 import unittest
 
+from training.model.data import validate_row
 from v2.data.ib3 import audit, families as fam, index_guard
 
 
@@ -127,14 +128,21 @@ class UrlGuard(unittest.TestCase):
 
 class AuditCopy(unittest.TestCase):
     def test_hypothesis_field_renamed(self):
-        row = {
-            "family": "haluqa",
-            "state": {"passages": "p", "question": "q", "answer": "a"},
-        }
-        self.assertEqual(
-            audit.audit_copy(row)["state"],
-            {"passages": "p", "question": "q", "claim": "a"},
+        rows = fam.haluqa(
+            [
+                {
+                    "knowledge": "K.",
+                    "question": "Q?",
+                    "right_answer": "A",
+                    "hallucinated_answer": "B",
+                }
+            ],
+            collections.Counter(),
         )
+        for item in rows:
+            copy = audit.audit_copy(item)
+            self.assertEqual(list(copy["state"]), ["passages", "question", "claim"])
+            validate_row(copy, "train")
         url_row = {"family": "wpd", "state": {"url": "http://x.com"}}
         self.assertEqual(audit.audit_copy(url_row)["state"], {"url": "http://x.com"})
 
