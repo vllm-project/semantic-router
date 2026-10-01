@@ -104,13 +104,18 @@ take_lease() {  # gpu purpose hours
   if [[ -s "$lease/owner" ]] && ! grep -qx "track=eval-ix1" "$lease/owner"; then
     echo "gpu$1 is leased by another owner; refusing" >&2; return 1
   fi
-  rocm-smi --showuse --showmeminfo vram --json | python3 -c '
+  local tries=0
+  until rocm-smi --showuse --showmeminfo vram --json | python3 -c '
 import json, sys
 card = json.load(sys.stdin)["card" + sys.argv[1]]
 use, used = float(card["GPU use (%)"]), int(card["VRAM Total Used Memory (B)"])
 if use > 5 or used > 2 * 2**30:
     sys.exit(f"GPU{sys.argv[1]} is busy: use {use}%, VRAM used {used / 2**30:.1f} GiB")
-' "$1"
+' "$1"; do
+    tries=$((tries + 1))
+    (( tries < 12 )) || return 1
+    sleep 15
+  done
   printf 'track=eval-ix1\npurpose=%s\nstart_utc=%s\nexpected_end_utc=%s\nrun_dir=%s\n' "$2" \
     "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(date -u -d "+$3 hours" +%Y-%m-%dT%H:%M:%SZ)" "$run" > "$lease/owner"
 }

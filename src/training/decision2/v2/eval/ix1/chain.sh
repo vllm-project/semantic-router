@@ -2,15 +2,17 @@
 # IX1 per-GPU chain (node side): when shard k of the previous model has ended with exit code 0 on the
 # k-th GPU, start shard k of the next model there with launch.sh run --only k.
 #
-# Usage: chain.sh --src DIR --gpus "N ..." --rows-dir DIR --after MODEL --models "MODEL ..."
+# Usage: chain.sh --src DIR --gpus "N ..." --rows-dir DIR --after MODEL --models "MODEL ..." [--only "K ..."]
 #
 # Runs in the foreground (start it with nohup). Each GPU's chain stops at the first shard that does
-# not end with exit code 0; the other GPUs continue. Per-GPU logs: <ix1>/logs/chain-gpu<N>.log.
+# not end with exit code 0; the other GPUs continue. --only chains just the listed shard indices.
+# Per-GPU logs: <ix1>/logs/chain-gpu<N>.log (appended).
 set -euo pipefail
 R=/data/dev2/private/eval/index021/ix1
-src="" gpus="" rows_dir="" after="" models=""
+src="" gpus="" rows_dir="" after="" models="" only=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --only) only="$2"; shift 2 ;;
     --src) src="$2"; shift 2 ;;
     --gpus) gpus="$2"; shift 2 ;;
     --rows-dir) rows_dir="$2"; shift 2 ;;
@@ -41,6 +43,7 @@ chain() {  # shard index
 }
 
 for k in "${!gpu_list[@]}"; do
-  chain "$k" > "$R/logs/chain-gpu${gpu_list[$k]}.log" 2>&1 &
+  [[ -z "$only" || " $only " == *" $k "* ]] || continue
+  chain "$k" >> "$R/logs/chain-gpu${gpu_list[$k]}.log" 2>&1 &
 done
 wait
