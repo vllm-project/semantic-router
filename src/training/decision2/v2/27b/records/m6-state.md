@@ -215,6 +215,13 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 15:36Z (poll 2 at 15:32Z): all alive. M6-IB 2,917 / 2,760 (13.4 / 13.9 h); M6-IB2 2,807 / 2,800 (17.8 / 17.8 h);
+  M6-IBX 2,501 / 2,478 (13.9 / 14.1 h; **s1 at 2500 .8950, BEST = 2500**); M6-IB2PN 1,429 / 1,401 (18.9 / 18.7 h).
+  **Private Index tooling for finalists** committed with this entry: `m6/m6-index.sh` (workstation: `stage` node B
+  soup → node D + IX1 restage, `parity`, `run`, `status`, `score`, `release`) and `m6/m6-index-run.sh` (node D: the 8
+  panel-8 shards on GPU4–7, two per GPU), set up exactly as IX1's M5-L128 diagnostic (restaged into DEV2.0-27B
+  `4e89288d` with the forward-budget runtime `e876fbe`, T = 1, A20r's frozen autotune cache), plus the four M6
+  `DIAGNOSTIC` entries in `v2/eval/ix1/launch.sh` (a data-only change to the shared IX1 launcher; tests pass).
 - 15:28Z (worker 3, poll 1 at 15:16Z): all alive (8 containers; node B drivers and the four chains, node A driver,
   relay and four mlx watchers, node D four drivers and four relays). M6-IB 2,818 / 2,661 (13.2 / 13.9 h; ETA 21:08Z /
   21:53Z); M6-IB2 2,707 / 2,699 (17.7 / 17.8 h; ETA 01:38Z / 01:44Z); M6-IBX 2,411 / 2,382 (13.9 / 14.0 h; ETA 22:29Z /

@@ -656,6 +656,33 @@ class M6ScriptTest(unittest.TestCase):
         out = run("M6-IB3", "a20ib12", "20")
         self.assertIn("unknown arm", out.stderr)
 
+    def test_index_entries_match_ix1_launcher(self):
+        launcher = (ROOT.parent / "eval" / "ix1" / "launch.sh").read_text()
+        index = (M6 / "m6-index.sh").read_text()
+        self.assertIn("MD=/data/dev2/models/ix1/m6\n", index)
+        self.assertIn("PKG=$MD/$ARM-re876fbe", index)
+        for arm in ("M6-IB", "M6-IBX", "M6-IB2", "M6-IB2PN"):
+            entry = (
+                f'  [{arm}]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 '
+                f'/data/dev2/models/ix1/m6/{arm}-re876fbe"\n'
+            )
+            self.assertIn(entry, launcher)
+
+    def test_index_argument_checks(self):
+        for script in ("m6-index.sh", "m6-index-run.sh"):
+            for args, message in (
+                (["abc", "M6-IB", "stage"], "full commit SHA"),
+                (["0" * 40, "M6-IB3", "stage"], "bad ARM"),
+            ):
+                with self.subTest(script=script, args=args):
+                    out = subprocess.run(
+                        ["bash", str(M6 / script), *args],
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(out.returncode, 2)
+                    self.assertIn(message, out.stderr)
+
     def test_bash_n(self):
         scripts = sorted(M6.glob("*.sh"))
         self.assertTrue(scripts)
