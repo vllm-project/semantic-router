@@ -11,6 +11,8 @@
 # are supplied here. A failed stage stops the arm (it is recorded, not rerun).
 # DEC_DATA_DIR (optional) replaces the node's default SELECT/CAL directory
 # (mounted as /data; it must hold select.jsonl and cal.jsonl).
+# DEC_IMAGE_A (optional) replaces node A's default image (decoder M9 trains 4B
+# on node A GPU6-7 with the 4B lineage's image dbe5f32b).
 set -uo pipefail
 
 arm=$1 gpu=$2 src=$3 rel=$4 start=$5
@@ -19,8 +21,9 @@ shift 5
 declare -A RENDER
 case ${DEC_NODE:?set DEC_NODE=a or b} in
   a)
-    RENDER=([5]=/dev/dri/renderD169)
-    export DEC_IMAGE=sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54
+    # GPU6-7 are lent to the decoder track for M9 (COORDINATION 2026-10-01 10:30).
+    RENDER=([5]=/dev/dri/renderD169 [6]=/dev/dri/renderD177 [7]=/dev/dri/renderD185)
+    export DEC_IMAGE=${DEC_IMAGE_A:-sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54}
     export DEC_DATA=${DEC_DATA_DIR:-/data/decision20-20260926/data/hf-private-decision20-clean-v2}
     ;;
   b)

@@ -1,0 +1,125 @@
+{
+ "candidate_inputs": {
+  "ib1.dev.jsonl": "f994b35963df6850be0dcc63d19bb4a206f00717c2e50b4d3d2a44d56a38ead4",
+  "ib1.train.jsonl": "86e6ecdd310e98bcec526304d044ac3900e4d87c6ef75b8fa25c0f7975e0ef8c"
+ },
+ "candidates": {
+  "args": {
+   "select": 374,
+   "train": 5186
+  },
+  "copa": {
+   "select": 108,
+   "train": 878
+  },
+  "csqa": {
+   "select": 513,
+   "train": 4983
+  },
+  "isarc": {
+   "select": 82,
+   "train": 874
+  },
+  "medmcqa": {
+   "select": 590,
+   "train": 6880
+  },
+  "poem": {
+   "select": 411,
+   "train": 3584
+  },
+  "procb": {
+   "select": 10,
+   "train": 258
+  },
+  "sentfin": {
+   "select": 494,
+   "train": 4780
+  },
+  "sms": {
+   "select": 62,
+   "train": 1152
+  },
+  "snips_rel": {
+   "select": 12,
+   "train": 2700
+  },
+  "snips_sel": {
+   "select": 310,
+   "train": 2673
+  },
+  "sumedit": {
+   "select": 0,
+   "train": 578
+  },
+  "w2c": {
+   "select": 0,
+   "train": 477
+  },
+  "wands": {
+   "select": 0,
+   "train": 4072
+  },
+  "wanli": {
+   "select": 873,
+   "train": 7926
+  }
+ },
+ "drop_groups_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+ "flagged": {
+  "args": {
+   "groups_dropped": 0
+  },
+  "copa": {
+   "groups_dropped": 0
+  },
+  "csqa": {
+   "groups_dropped": 0
+  },
+  "isarc": {
+   "groups_dropped": 0
+  },
+  "medmcqa": {
+   "groups_dropped": 0
+  },
+  "poem": {
+   "groups_dropped": 0
+  },
+  "procb": {
+   "groups_dropped": 0
+  },
+  "sentfin": {
+   "groups_dropped": 0
+  },
+  "sms": {
+   "groups_dropped": 0
+  },
+  "snips_rel": {
+   "groups_dropped": 0
+  },
+  "snips_sel": {
+   "groups_dropped": 0
+  },
+  "sumedit": {
+   "groups_dropped": 0
+  },
+  "w2c": {
+   "groups_dropped": 0
+  },
+  "wands": {
+   "groups_dropped": 0
+  },
+  "wanli": {
+   "groups_dropped": 0
+  }
+ },
+ "groups_dropped": 0,
+ "reference": "every Decision Index suite row (selected and added rows); statistics kept on the node",
+ "rules": {
+  "E": "raw leaf equality, leaves >= 20 characters",
+  "G": "shared word 13-gram",
+  "N1": "normalized whole-leaf equality, >= 6 tokens",
+  "N2": "normalized sentence or leaf equality, >= 8 tokens"
+ },
+ "schema": "decision2.ib1.index-guard.v1"
+}

@@ -1,0 +1,1 @@
+rescan2 new drops: g0=0 groups=2 dev_groups=0

@@ -1,0 +1,187 @@
+{
+ "control": "N7C",
+ "control_note": "amendment 1: C9 stopped by its seed-1 preflight; the control is M7's N7C (same base, recipe and seeds; 43.5M vs 46.2M tokens)",
+ "lines": {
+  "L-H9": [
+   {
+    "G": 0.0006249999999999867,
+    "H": 0.5677790566816241,
+    "H3": 0.5553112755044075,
+    "T": 0.705,
+    "by_type": {
+     "choice": 536,
+     "noul": 241,
+     "score": 351
+    },
+    "eligible": false,
+    "hr2dev_delta_vs_I": 0.13996218579066155,
+    "hr2dev_family_macro": 0.8283744375368828,
+    "htdev2": {
+     "ci95": [
+      -0.02456073334920017,
+      0.0012129420312976258
+     ],
+     "delta": -0.011970331227017628,
+     "verdict": "TIE"
+    },
+    "point": "4b-H9-a1",
+    "proxy": 63.268019959577124,
+    "reasons": [
+     "type floor noul: 241 < 264 - 0.03*400",
+     "Noul floor: rule_precedence 241 < 264 - 0.01*400"
+    ],
+    "rule_precedence": 241,
+    "score5t_check_flags": [],
+    "score5t_check_top_share": 0.35,
+    "step": "1"
+   },
+   {
+    "G": -0.0068749999999999645,
+    "H": 0.5805400340647866,
+    "H3": 0.5700671100859627,
+    "T": 0.6975,
+    "by_type": {
+     "choice": 496,
+     "noul": 258,
+     "score": 362
+    },
+    "eligible": false,
+    "hr2dev_delta_vs_I": 0.10596533901889627,
+    "hr2dev_family_macro": 0.7943775907651175,
+    "htdev2": {
+     "ci95": [
+      -0.013338832144581758,
+      0.007705151673524924
+     ],
+     "delta": -0.0031336640231505175,
+     "verdict": "TIE"
+    },
+    "point": "4b-H9-a1_2",
+    "proxy": 63.63384899251252,
+    "reasons": [
+     "Noul floor: rule_precedence 258 < 264 - 0.01*400"
+    ],
+    "rule_precedence": 258,
+    "score5t_check_flags": [],
+    "score5t_check_top_share": 0.3975,
+    "step": "1/2"
+   }
+  ],
+  "L-N7C": [
+   {
+    "G": -0.05687500000000001,
+    "H": 0.5534801582050711,
+    "H3": 0.5633889210081819,
+    "T": 0.6475,
+    "by_type": {
+     "choice": 440,
+     "noul": 258,
+     "score": 338
+    },
+    "eligible": false,
+    "hr2dev_delta_vs_I": 0.004704070265054483,
+    "hr2dev_family_macro": 0.6931163220112757,
+    "htdev2": {
+     "ci95": [
+      -0.021745886687620786,
+      0.005656382059748277
+     ],
+     "delta": -0.00807223554361558,
+     "verdict": "TIE"
+    },
+    "point": "4b-N7C-a1",
+    "proxy": 59.86471435142604,
+    "reasons": [
+     "type floor choice: 440 < 501 - 0.03*800",
+     "type floor score: 338 < 362 - 0.03*400",
+     "family floor transition_table: 111/400 < 160/400 - 0.10",
+     "Noul floor: rule_precedence 258 < 264 - 0.01*400"
+    ],
+    "rule_precedence": 258,
+    "score5t_check_flags": [],
+    "score5t_check_top_share": 0.41,
+    "step": "1"
+   },
+   {
+    "G": -0.0012499999999999734,
+    "H": 0.5628018923367579,
+    "H3": 0.5662605783604941,
+    "T": 0.703125,
+    "by_type": {
+     "choice": 491,
+     "noul": 266,
+     "score": 368
+    },
+    "eligible": true,
+    "hr2dev_delta_vs_I": 0.0001485858872392054,
+    "hr2dev_family_macro": 0.6885608376334604,
+    "htdev2": {
+     "ci95": [
+      -0.009283413409219454,
+      0.011459751640000682
+     ],
+     "delta": 0.0009931439735008096,
+     "verdict": "TIE"
+    },
+    "point": "4b-N7C-a1_2",
+    "proxy": 62.90628589809471,
+    "reasons": [],
+    "rule_precedence": 266,
+    "score5t_check_flags": [],
+    "score5t_check_top_share": 0.415,
+    "step": "1/2"
+   }
+  ]
+ },
+ "matched_contrasts_htdev2_h9_minus_control": {
+  "1": {
+   "H_dev2": {
+    "4b-H9-a1": 0.527382217490005,
+    "4b-N7C-a1": 0.5312803131734071
+   },
+   "ci95": [
+    -0.018441423107634414,
+    0.00986195485430219
+   ],
+   "delta": -0.0038980956834020475,
+   "p_le_0": 0.692,
+   "verdict": "TIE"
+  },
+  "1/2": {
+   "H_dev2": {
+    "4b-H9-a1_2": 0.5362188846938721,
+    "4b-N7C-a1_2": 0.5403456926905235
+   },
+   "ci95": [
+    -0.014196139477808067,
+    0.006100245021391171
+   ],
+   "delta": -0.004126807996651327,
+   "p_le_0": 0.793,
+   "verdict": "TIE"
+  }
+ },
+ "no_pick_reasons": [
+  "Noul floor: rule_precedence 241 < 264 - 0.01*400",
+  "Noul floor: rule_precedence 258 < 264 - 0.01*400",
+  "type floor noul: 241 < 264 - 0.03*400"
+ ],
+ "pick": null,
+ "readouts": {
+  "L-H9": {
+   "file": "/data/dev2/runs/dec/m9/lines/4b/readout/L-H9.json",
+   "line": "L-H9:1=4b-H9-a1,1/2=4b-H9-a1_2",
+   "sha256": "039510326f89ab47eb4beb366b606fed9cfb0cf7e81c5f17c7a5ac70dcbae00a"
+  },
+  "L-N7C": {
+   "file": "/data/dev2/runs/dec/m9/lines/4b/readout/L-N7C.json",
+   "line": "L-N7C:1=4b-N7C-a1,1/2=4b-N7C-a1_2",
+   "sha256": "9293dda1049fb7c51e3f63f833ab27d7766ec1cdd08fbd36c4d8862364a17de9"
+  }
+ },
+ "reference": "4b-I",
+ "role": "development readout (decoder M9, HR2 efficacy pilot); never a release or post-key score; selects at most one formal run (pilot, not a release candidate)",
+ "rules_module_sha256": "fe2dbc65e5fdc33a771d9e07fee99b6a8a3b20527f484ee521992e7a08e6dc0b",
+ "schema": "dec-m9-pick/1",
+ "tier": "4b"
+}

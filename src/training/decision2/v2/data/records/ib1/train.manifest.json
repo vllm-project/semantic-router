@@ -4,79 +4,78 @@
  "canonical_path": "ib1.train.jsonl",
  "choice": {
   "by_option_bucket": {
-   "2": 11011,
-   "3": 13515,
-   "4": 2673,
-   "5-8": 4983
+   "2": 10996,
+   "3": 8846,
+   "4": 2672,
+   "5-8": 4981
   },
   "gold_position_by_bucket": {
    "2": {
-    "0": 5479,
-    "1": 5532
+    "0": 5471,
+    "1": 5525
    },
    "3": {
-    "0": 4505,
-    "1": 4505,
-    "2": 4505
+    "0": 4423,
+    "2": 4423
    },
    "4": {
     "0": 663,
     "1": 679,
     "2": 657,
-    "3": 674
+    "3": 673
    },
    "5-8": {
     "0": 995,
-    "1": 1015,
+    "1": 1013,
     "2": 1033,
     "3": 945,
     "4": 995
    }
   }
  },
- "content_sha256": "7f2d00031298fa6812222d74c62fa7580ab41b89942e39edea897363bfa1ae80",
+ "content_sha256": "f44d7f5fe9ccaf63386fc213394282466f2c26c6a2da2945b32207adc8c62c5c",
  "counts": {
   "family": {
-   "args": 5192,
+   "args": 5184,
    "copa": 878,
-   "csqa": 4983,
+   "csqa": 4981,
    "isarc": 874,
    "poem": 3584,
-   "sentfin": 7158,
+   "sentfin": 4778,
    "sms": 1152,
    "snips_rel": 2700,
-   "snips_sel": 2673,
-   "sumedit": 1280,
-   "w2c": 483,
-   "wands": 6357
+   "snips_sel": 2672,
+   "sumedit": 576,
+   "w2c": 476,
+   "wands": 4068
   },
   "language": {
    "ar": 410,
-   "en": 36904
+   "en": 31513
   },
   "source": {
-   "args_me_portals": 5192,
+   "args_me_portals": 5184,
    "balanced_copa_train": 878,
-   "commonsenseqa_train": 4983,
+   "commonsenseqa_train": 4981,
    "gutenberg_poetry_cc0": 3584,
    "isarcasmeval_train": 874,
-   "sentfin_v1": 7158,
+   "sentfin_v1": 4778,
    "sms_spam_collection": 1152,
-   "snips_2017_custom_intents": 5373,
-   "summedits": 1280,
-   "wands": 6357,
-   "when2call_train_pref": 483
+   "snips_2017_custom_intents": 5372,
+   "summedits": 576,
+   "wands": 4068,
+   "when2call_train_pref": 476
   },
   "task_type": {
-   "choice": 32182,
-   "noul": 5132
+   "choice": 27495,
+   "noul": 4428
   }
  },
- "groups": 22669,
+ "groups": 20755,
  "input": {
   "is_canonical": true,
   "path": "ib1.train.jsonl",
-  "sha256": "7f2d00031298fa6812222d74c62fa7580ab41b89942e39edea897363bfa1ae80"
+  "sha256": "f44d7f5fe9ccaf63386fc213394282466f2c26c6a2da2945b32207adc8c62c5c"
  },
  "license_registry_sha256": "c06ce6ca15da5f0744ccdcac2ad71cbc69e0e7e9a8a5a886a8b51c2482740b5f",
  "licenses": {
@@ -149,52 +148,45 @@
  },
  "noul": {
   "labels": {
-   "false": 2566,
-   "true": 2566
+   "false": 2214,
+   "true": 2214
   },
   "true_fraction": 0.5
  },
  "partition": "train",
  "role": "train",
- "rows": 37314,
+ "rows": 31923,
  "rows_per_group": {
-  "1": 17161,
-  "10": 22,
-  "11": 21,
-  "12": 30,
-  "13": 17,
-  "14": 19,
-  "15": 37,
-  "16": 28,
-  "17": 33,
-  "18": 27,
-  "19": 32,
-  "2": 4281,
-  "20": 22,
-  "21": 30,
-  "22": 12,
-  "23": 28,
-  "24": 23,
-  "25": 14,
-  "26": 12,
-  "27": 14,
-  "28": 4,
-  "29": 2,
-  "3": 364,
-  "30": 2,
-  "31": 3,
-  "32": 2,
-  "34": 1,
-  "35": 1,
-  "38": 1,
-  "4": 141,
-  "40": 1,
+  "1": 15776,
+  "10": 33,
+  "11": 35,
+  "12": 35,
+  "13": 26,
+  "14": 21,
+  "15": 29,
+  "16": 20,
+  "17": 19,
+  "18": 30,
+  "19": 17,
+  "2": 3900,
+  "20": 11,
+  "21": 12,
+  "22": 5,
+  "23": 5,
+  "24": 3,
+  "25": 4,
+  "26": 1,
+  "27": 2,
+  "3": 314,
+  "30": 1,
+  "31": 2,
+  "4": 144,
   "47": 1,
-  "5": 99,
-  "6": 59,
-  "7": 54,
-  "8": 38,
-  "9": 33
+  "5": 96,
+  "6": 65,
+  "7": 59,
+  "8": 51,
+  "9": 38
  },
  "schema": "decision2.v2.freeze.v1",
  "score": {
@@ -203,95 +195,95 @@
  },
  "state_chars": {
   "p0": 18,
-  "p10": 62,
+  "p10": 59,
   "p100": 12150,
-  "p25": 88,
-  "p50": 273,
-  "p75": 963,
-  "p90": 1551,
-  "p99": 5525
+  "p25": 85,
+  "p50": 250,
+  "p75": 841,
+  "p90": 1443,
+  "p99": 2962
  },
  "tokens": [
   {
    "by_language": {
     "ar": 50531,
-    "en": 10047936
+    "en": 7501815
    },
    "by_task_type": {
-    "choice": 7424357,
-    "noul": 2674110
+    "choice": 6062355,
+    "noul": 1489991
    },
    "kind": "native_decoder",
    "name": "qwen3-0.6b-base@da87bfb6",
-   "padded8_total": 10227880,
+   "padded8_total": 7662936,
    "path": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
    "quantiles": {
     "p0": 82,
     "p10": 112,
     "p100": 2593,
-    "p25": 125,
-    "p50": 183,
-    "p75": 323,
-    "p90": 496,
-    "p99": 1649
+    "p25": 131,
+    "p50": 181,
+    "p75": 303,
+    "p90": 464,
+    "p99": 744
    },
    "revision": null,
    "tokenizer_json_sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539",
-   "total": 10098467
+   "total": 7552346
   },
   {
    "by_language": {
     "ar": 52348,
-    "en": 10416081
+    "en": 7828330
    },
    "by_task_type": {
-    "choice": 7758979,
-    "noul": 2709450
+    "choice": 6351671,
+    "noul": 1529007
    },
    "kind": "native_decoder",
    "name": "qwen3.5-0.8b-base@dc7cdfe2",
-   "padded8_total": 10599616,
+   "padded8_total": 7992544,
    "path": "dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68",
    "quantiles": {
     "p0": 91,
     "p10": 123,
     "p100": 2602,
-    "p25": 135,
-    "p50": 193,
-    "p75": 332,
-    "p90": 504,
-    "p99": 1645
+    "p25": 143,
+    "p50": 190,
+    "p75": 312,
+    "p90": 473,
+    "p99": 748
    },
    "revision": null,
    "tokenizer_json_sha256": null,
-   "total": 10468429
+   "total": 7880678
   },
   {
    "by_language": {
     "ar": 27931,
-    "en": 7922698
+    "en": 5693360
    },
    "by_task_type": {
-    "choice": 5259845,
-    "noul": 2690784
+    "choice": 4224251,
+    "noul": 1497040
    },
    "kind": "raw",
    "name": "kai-0.6b@7185f514",
-   "padded8_total": 8081864,
+   "padded8_total": 5833864,
    "path": "tokenizer",
    "quantiles": {
     "p0": 28,
-    "p10": 41,
+    "p10": 40,
     "p100": 5001,
     "p25": 50,
-    "p50": 121,
-    "p75": 289,
-    "p90": 424,
-    "p99": 1661
+    "p50": 120,
+    "p75": 269,
+    "p90": 394,
+    "p99": 709
    },
    "revision": null,
    "tokenizer_json_sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
-   "total": 7950629
+   "total": 5721291
   }
  ]
 }

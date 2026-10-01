@@ -1,0 +1,122 @@
+== css-pilot.json
+{
+ "panel": "css-pilot",
+ "m9_path": "/data/dev2/runs/dec/m9/lines/4b/4b-I/css-pilot/css-pilot.predictions.jsonl",
+ "stored_node_b": "/data/dev2/runs/dec/m9/parity/m7/4b-I/css-pilot/css-pilot.predictions.jsonl",
+ "answers": 1430,
+ "answer_differences": 0,
+ "max_probability_drift": 0.0,
+ "ids_only_one_side": 0
+}
+== dev.json
+{
+ "panel": "dev",
+ "m9_path": "/data/dev2/runs/dec/m9/lines/4b/4b-I/dev/dev.predictions.jsonl",
+ "stored_node_b": "/data/dev2/runs/dec/m9/parity/m7/4b-I/dev/dev.predictions.jsonl",
+ "answers": 1600,
+ "answer_differences": 0,
+ "max_probability_drift": 0.0,
+ "ids_only_one_side": 0
+}
+== hs1-dev.json
+{
+ "panel": "hs1-dev",
+ "m9_path": "/data/dev2/runs/dec/m9/lines/4b/4b-I/hs1-dev/hs1-dev.predictions.jsonl",
+ "stored_node_b": "/data/dev2/runs/dec/m9/parity/m7/4b-I/hs1-dev/hs1-dev.predictions.jsonl",
+ "answers": 2396,
+ "answer_differences": 0,
+ "max_probability_drift": 0.0,
+ "ids_only_one_side": 0
+}
+== ht-dev2-vs-eval-reference.json
+{
+ "H_dev2": {
+  "4b-I-m9": 0.5393525487170227,
+  "eval-dec-m4-N4XF-soup": 0.5393525487170227
+ },
+ "H_dev2_median": {
+  "4b-I-m9": 0.5351320947772237,
+  "eval-dec-m4-N4XF-soup": 0.5351320947772237
+ },
+ "band_10pct_risk": 0.045,
+ "ci95": [
+  0.0,
+  0.0
+ ],
+ "delta": 0.0,
+ "files": {
+  "4b-I-m9": "f7fa8f63136a4ddac8edb8c3a755892eeec0000d6af15d7d7f82d7618aba07d7",
+  "eval-dec-m4-N4XF-soup": "15f975fa9543212e35e9cef6ccbfe237fb5097bc4c101a7ab1bf77a1af93dd01",
+  "gold": "659c92b45d2a5b37e250ccb728cdbf5580ba361b3fc4b2f2ab505a13e0a556cc"
+ },
+ "invalid_or_missing": {
+  "4b-I-m9": 0,
+  "eval-dec-m4-N4XF-soup": 0
+ },
+ "items": 1944,
+ "left": "4b-I-m9",
+ "p_le_0": 1.0,
+ "right": "eval-dec-m4-N4XF-soup",
+ "role": "development readout (decoder M9, HR2 efficacy pilot); never a release or post-key score; HT-DEV v2 screen (COORDINATION 2026-09-30 04:10)",
+ "schema": "dec-m9-htdev2/1",
+ "tasks": {
+  "conv_go_awry": {
+   "4b-I-m9": 0.5314762009212546,
+   "eval-dec-m4-N4XF-soup": 0.5314762009212546
+  },
+  "emotion": {
+   "4b-I-m9": 0.5351320947772237,
+   "eval-dec-m4-N4XF-soup": 0.5351320947772237
+  },
+  "ibc": {
+   "4b-I-m9": 0.5959649958454756,
+   "eval-dec-m4-N4XF-soup": 0.5959649958454756
+  },
+  "media_ideology": {
+   "4b-I-m9": 0.43941318814277075,
+   "eval-dec-m4-N4XF-soup": 0.43941318814277075
+  },
+  "mrf": {
+   "4b-I-m9": 0.7356412273800157,
+   "eval-dec-m4-N4XF-soup": 0.7356412273800157
+  },
+  "reddit_humor": {
+   "4b-I-m9": 0.5920329670329669,
+   "eval-dec-m4-N4XF-soup": 0.5920329670329669
+  },
+  "talklife": {
+   "4b-I-m9": 0.25755821000448464,
+   "eval-dec-m4-N4XF-soup": 0.25755821000448464
+  },
+  "tempowic": {
+   "4b-I-m9": 0.7124085998035579,
+   "eval-dec-m4-N4XF-soup": 0.7124085998035579
+  },
+  "wiki_corpus": {
+   "4b-I-m9": 0.45454545454545453,
+   "eval-dec-m4-N4XF-soup": 0.45454545454545453
+  }
+ },
+ "tie_band": 0.02,
+ "verdict": "TIE"
+}
+== ht-dev2.json
+{
+ "panel": "ht-dev2",
+ "m9_path": "/data/dev2/runs/dec/m9/lines/4b/4b-I/ht-dev2/ht-dev2.predictions.jsonl",
+ "stored_node_b": "/data/dev2/runs/dec/m9/parity/m7/4b-I/ht-dev2/ht-dev2.predictions.jsonl",
+ "answers": 1944,
+ "answer_differences": 0,
+ "max_probability_drift": 0.0,
+ "ids_only_one_side": 0
+}
+== score5t-dev.json
+{
+ "panel": "score5t-dev",
+ "m9_path": "/data/dev2/runs/dec/m9/lines/4b/4b-I/score5t-dev/score5t-dev.predictions.jsonl",
+ "stored_node_b": "/data/dev2/runs/dec/m9/parity/m8/score5t-dev/score5t-dev.predictions.jsonl",
+ "answers": 800,
+ "answer_differences": 0,
+ "max_probability_drift": 0.0,
+ "ids_only_one_side": 0
+}
