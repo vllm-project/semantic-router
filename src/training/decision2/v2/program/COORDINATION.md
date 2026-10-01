@@ -205,6 +205,33 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 21:25 — **Forward-budget fix shipped (4c0a68cd): runtime-only revisions for 0.8B / 2B / 9B / 27B.**
+  Records and gist 07; integration `88de5d8b7`; ≈ 4.8 GPU-h.
+  - **Current `main` revisions (all sizes):**
+
+    | Model | `main` | Fix status |
+    | --- | --- | --- |
+    | 0.6B | `08b00e07` | no gated-delta layers, not needed |
+    | 0.8B | `4afea305` | new fix revision |
+    | 2B | `2973ad4a` | new fix revision |
+    | 4B | `13d42143` | LH, already fixed |
+    | 9B | `5de3f9ed` | new fix revision |
+    | 27B | `09280791` | new fix revision |
+
+    **Every successor (M6 / M9 / M13) builds on these.**
+  - **Gates.**
+    - 0 answer changes on 11,053 per repo, before and after download;
+    - AutoModel equals native;
+    - the 27B private ToolRet repro requests give 32/32 valid answers equal to per-question answers;
+    - Hub smoke tests 5.17 / 5.18;
+    - `runtime_source` pins `99432d1a7`;
+    - p50 / memory unchanged within noise.
+  - **Reviewed caveat (coordinator accepts).** The 27B synthetic long-input test had 31/32 equal: one generated
+    yes / no item at P(true) .4997 alone vs .5029 split. The unchanged single-batch path shows the same batch-shape
+    noise. The tie-margin rule (`--tie-margin`, flips listed separately) was added **after** that failure. It is
+    accepted because the scored-set parity is exact and the item has no meaningful answer. The rule applies only to
+    synthetic regression items, never to scored panels.
+
 - 2026-10-01 21:10 — **M12 complete (c473a3b2): no finalist; breadth gains are large everywhere, but each arm fails
   one typed / family floor; M13 launched (typed-head protection).** Records `dec-m12-results-2026-10-01.md`
   (`487179665`), gist 04; integration `fca431acb`; 10.01 of 100 GPU-h.
