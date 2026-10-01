@@ -19,7 +19,7 @@ class ComparatorNoteTest(unittest.TestCase):
                 "key": "cand",
                 "role": "candidate",
                 "report": str(REPORTS / "bosun.json"),
-                "label": "DEV2.0-0.6B",
+                "label": "Decision-2.0-Kai-0.6B",
             },
             {
                 "key": "kai1",

@@ -27,9 +27,9 @@ class RemoteCodeFilesTest(unittest.TestCase):
     def test_pointer_gains_the_transformers_fields_only_with_remote_code(self):
         args = dict(calibration=None, base=None, max_input_tokens=16384)
         files = ["backbone/config.json", "backbone/model.safetensors"]
-        plain = layout.pointer("qwen-full", "DEV2.0-0.8B", files, **args)
+        plain = layout.pointer("qwen-full", "Decision-2.0-Eos-0.8B", files, **args)
         remote = layout.pointer(
-            "qwen-full", "DEV2.0-0.8B", files, remote_code=True, **args
+            "qwen-full", "Decision-2.0-Eos-0.8B", files, remote_code=True, **args
         )
         self.assertNotIn("auto_map", plain)
         self.assertEqual({k: remote[k] for k in plain}, plain)

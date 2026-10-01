@@ -51,17 +51,21 @@ model.system_one(state=..., questions={...})  # {"model", "answers", "usage"}; n
 metadata and the Hub's `.gitattributes` are ignored), per-file SHA-256 and the
 header parameter counts; `from_pretrained` additionally asserts the loaded
 parameter count, the scored model identity and the calibration binding.
-The model name must match the loaded size tier (`DEV2.0-<tier>`, nearest tier
+Model names are `Decision-2.0-<codename>-<size>B`; the codename follows the size
+tier across generations (0.6B Kai, 0.8B Eos, 2B Sol, 4B Nox, 9B Lux, 27B Vega;
+`layout.CODENAMES`). The size must match the loaded size tier (nearest tier
 within the frozen 1.25 same-size ratio), or, with `"name_basis":
 "loaded-parameters"` in the spec, the rounded loaded count inside that tier
-(one decimal below 1B, whole billions from 1B; e.g. `DEV2.0-26B` for the ~27B
-tier's 25.75B text model), or, with `"name_basis": "base"`, the size label of
-the base model (`name_base_model`, or the pinned `base.repo_id` of an adapter;
-it must be in the declared weight lineage and in the loaded count's tier).
-Base-named cards add "named after its base model, <base>" to the Parameters row
-of the model overview, next to the exact loaded count. DEV2.0-9B (Qwen3.5-9B base,
-7,940,895,744 loaded) and DEV2.0-27B (Qwen3.8-27B base, 25,746,591,744 loaded)
-use it. Training state never enters a package.
+(one decimal below 1B, whole billions from 1B; e.g. `Decision-2.0-Vega-26B` for
+the ~27B tier's 25.75B text model), or, with `"name_basis": "base"`, the size
+label of the base model (`name_base_model`, or the pinned `base.repo_id` of an
+adapter; it must be in the declared weight lineage and in the loaded count's
+tier). `Decision-2.0-Lux-9B` (Qwen3.5-9B base, 7,940,895,744 loaded) and
+`Decision-2.0-Vega-27B` (Qwen3.8-27B base, 25,746,591,744 loaded) use it. The
+repositories were released as `DEV2.0-<tier>` and renamed on 2026-10-02
+(`layout.FORMER_REPOS`; the old IDs redirect): the guard refuses the former IDs,
+and the successor gate accepts a current-revision gate receipt sealed under the
+former ID of the same repository. Training state never enters a package.
 
 ## Release spec and commands
 
@@ -158,7 +162,7 @@ dir>` with a fresh cache. `readback` checks the private flag, the exact revision
 each remote file's LFS SHA-256 or git blob id against the package, the Hub-parsed
 card metadata, that every card link and image resolves, and collection
 membership (staging repositories must not be in the collection). `collect` only
-accepts a `DEV2.0-*` release package with a gate receipt naming the exact
+accepts a `Decision-2.0-*` release package with a gate receipt naming the exact
 revision and manifest. `ensure`, `upload`, `readback` and `collect` refuse a
 repository ID that the Hub resolves to a different repository (the old ID of a
 renamed repository redirects to the new one), so a superseded spec cannot write
@@ -168,7 +172,7 @@ to a retired name.
 
 `card.py` writes a standard model-release card, from same-panel REPORT.json
 files only. README.md, in order: YAML metadata (`license`, `base_model`,
-`base_model_relation`, `library_name: transformers`, tags); `# DEV2.0-<size>`,
+`base_model_relation`, `library_name: transformers`, tags); `# Decision-2.0-<codename>-<size>`,
 one paragraph and a link row (collection, evaluation details); **Highlights**
 (JevArena versus the Decision 1.0 counterpart with the paired interval, the
 standing among the same-size models shown, the three decision types, stock

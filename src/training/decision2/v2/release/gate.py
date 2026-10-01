@@ -49,6 +49,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from v2.release import layout
 from v2.release.layout import sha_file, write_json
 
 DECISION_SCHEMA = "dev2-release-decision/1"
@@ -237,7 +238,7 @@ def successor_items(spec: dict[str, Any], profile: dict[str, Any]) -> dict[str, 
         prior = _json(Path(current["gate"]))
         if (
             prior.get("schema") != GATE_SCHEMA
-            or prior.get("repo_id") != spec["repo_id"]
+            or layout.current_repo(prior.get("repo_id") or "") != spec["repo_id"]
             or prior.get("revision") != current["revision"]
         ):
             chain.append(

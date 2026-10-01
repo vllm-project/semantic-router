@@ -250,7 +250,7 @@ class PipelineTest(unittest.TestCase):
         )
         pointer = layout.pointer(
             "qwen-full",
-            "DEV2.0-27B",
+            "Decision-2.0-Vega-27B",
             files,
             calibration=None,
             base=None,
@@ -259,7 +259,7 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(pointer["weight_storage"]["codec"], "bf16z/1")
         plain_pointer = layout.pointer(
             "qwen-full",
-            "DEV2.0-27B",
+            "Decision-2.0-Vega-27B",
             plain,
             calibration=None,
             base=None,
