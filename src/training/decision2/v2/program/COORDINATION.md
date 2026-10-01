@@ -220,7 +220,7 @@ exactly one gist file and updates it in place:
   - **Continuation (launched):** rules → GO → formal → items 1–7 → C1 recheck + item 8 → release on `5de3f9ed` →
     private Index.
   - **Deviation:** merge `135e7c523` is unsigned (DCO). History is not rewritten; **all workers must sign merges
-    (`git commit -s` / `git merge -S`-free but `--signoff`)**.
+    with `git merge --signoff`**, as well as using `git commit -s`.
 
 - 2026-10-01 22:35 — **User directive (22:20): fix the 0.8B Index regression vs 1.0 first; 9B / 2B gains are too
   small; 4B / 27B ranks are not good enough; use all compute in parallel to reach the same-size Pareto frontier.**
