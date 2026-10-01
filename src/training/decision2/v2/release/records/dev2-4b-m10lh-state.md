@@ -9,6 +9,12 @@ private only). GPUs: node A GPU0–1 (release / C1). Worktree `/home/xunliu/code
 
 ## Now
 
+- 08:50Z — **Released** `13d4214361d0` (manifest `598cad2d`, gate seal `be7b02b4`, 14 / 14 items; Hub smoke 5.17 +
+  5.18 pass). Purge of `3785b7b9`'s 6 weight blobs done (9.70 GB; DEV2.0-4B 9.72 GB; headroom 47.53 GB). C1 backup
+  eval-artifacts `18d45a76`; registry 4B = LH post-key run. Record `dev2-4b-m10lh-2026-10-01.md`. Next: merge, gist
+  07. Private Index: node C GPU6 / GPU7 (released by eval-ix1 08:18Z; their released markers archived as
+  `owner.prev-*`), parity gate PASS (86 / 86, max |Δp| 0.0); full run 7 shards via private `lh-run.sh` (GPU6 shards
+  0, 2, 4, 6; GPU7 1, 3, 5) from 08:40Z, ETA ≈ 10:00Z; then `score.sh --model DEV2.0-4B-LH --size 4B` (private only).
 - 08:25Z — auto_map 4B published `3785b7b9` (gate seal `1f1872e8`, copied to `dev2-4b-m10lh-2026-10-01/current/`);
   IX1 token-budget fix merged (integration `0ad342663`). LH rebuilt on top: BASE_SPEC `dev2-4b-automap.json`,
   runtime_source = automap_source = mirror `08ec0834e`; draft `.draft2` (the C1-frozen `.draft` 2998debf kept).
