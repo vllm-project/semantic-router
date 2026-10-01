@@ -31,6 +31,17 @@ class ExtractLetterTest(unittest.TestCase):
                     with self.subTest(text=text):
                         self.assertEqual(mcq_judge.extract_letter(text), letter)
 
+    def test_accepts_adjacent_chinese_explanations(self):
+        cases = (
+            ("答案\uff1aA因为前提成立", "A"),
+            ("Answer: A是正确的", "A"),
+            ("Answer: A\n答案\uff1aB因为前提成立", "B"),
+            ("答案\uff1aB因为前提成立\nAnswer: APPLE", "B"),
+        )
+        for text, expected in cases:
+            with self.subTest(text=text):
+                self.assertEqual(mcq_judge.extract_letter(text), expected)
+
     def test_uses_last_valid_explicit_answer(self):
         cases = (
             ("Answer: A\nAnswer: C", "C"),
@@ -55,7 +66,14 @@ class ExtractLetterTest(unittest.TestCase):
                 self.assertEqual(mcq_judge.extract_letter(text), expected)
 
     def test_returns_no_answer_without_a_valid_letter(self):
-        for text in (None, "", "No option selected.", "Answer: K", "Answer: a"):
+        for text in (
+            None,
+            "",
+            "No option selected.",
+            "Answer: K",
+            "Answer: a",
+            "Answer: \uff22",
+        ):
             with self.subTest(text=text):
                 self.assertIsNone(mcq_judge.extract_letter(text))
 
@@ -65,7 +83,7 @@ class JudgeCliTest(unittest.TestCase):
         cases = (
             ("word-prefix", "A", "Answer: APPLE"),
             ("fullwidth-colon", "B", "答案\uff1aB"),
-            ("last-valid", "B", "Answer: B\nAnswer: APPLE"),
+            ("last-valid", "B", "答案\uff1aB因为前提成立\nAnswer: APPLE"),
             ("standalone", "C", "Reasoning\n(C)"),
         )
         with tempfile.TemporaryDirectory() as directory:
