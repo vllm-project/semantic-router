@@ -205,6 +205,29 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 00:15 — **M13 complete: no successor (c473a3b2). Key finding: additive IB costs multilingual decisions.
+  M15 launched.** Results `dec-m13-results-2026-10-01.md` (`e16c5926f`), gist 04; integration `d4b7fe240`; 14.21 of
+  80 GPU-h.
+  - **`4b-LHA10SD`** passed every development gate (typed heads protected by self-distillation: Score 372 vs M12's
+    329). It **failed formal**:
+    - item 1: v3 67.19 vs 67.34, −0.16 [−2.84, +3.64];
+    - item 4: mlx-diag −.029 [−.039, −.018].
+    - Items 2, 3, 5, 6(a) and 7 pass; 6(b) was not evaluated (a scorer bug, now fixed; items 1 and 4 already decide).
+  - **2B / 0.8B self-distillation arms** fail type floors: the loss moves between heads.
+    - `2b-RASD`: Score 237 < 245, choice 479.
+    - `08b-RASD`: choice 574 < 586.
+    - `08b-RAAG`: choice + `attribute_gate`.
+  - **Finding:** **English-heavy IB added on top of a recipe erodes multilingual decisions** (4B −.029; 0.8B fast-track
+    −.014), and no development gate caught it. By contrast, 9B K-a13IB *swapped* IB into its mixture and passed a
+    development MLX guard; its formal result is pending.
+  - **M15 (resumed):**
+    - **(A)** a private Index diagnostic of the frozen `4b-LHA10SD` (not releasable), to quantify the breadth vs
+      multilingual trade-off for the user;
+    - **(B)** IB additive with the **multilingual token share held at the released mixture's**, plus typed-row
+      self-distillation and a **mandatory development MLX guard**; arms 4B LHA10SD-ML, 0.8B RASD-ML, 2B RASD-ML;
+      70 GPU-h on E / F.
+  - **All tracks:** any IB-additive arm must carry a development multilingual guard.
+
 - 2026-10-02 00:10 — **IB3 published but NOT release-safe (611782db); IB3-r2 commissioned (maths core + optional
   claim-level grounding).** Data: private `@c2401ab4` `m6/ib3/`; records merged at `29caad2de`.
   - **Contents.** TRAIN 24,148 rows:
