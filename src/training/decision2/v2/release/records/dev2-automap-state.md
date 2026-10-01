@@ -8,7 +8,21 @@ pinned base (PEFT auto-detection tested). Worktree `/home/xunliu/code/vllm-sr-de
 
 ## Now
 
-- 05:55Z — Code complete through the pipeline; draft specs/decisions for all six, finals for 0.6B / 0.8B (their
+- 05:20Z — **Verify runs (draft specs, no upload; native parity + AutoModel steps, prompt-by-prompt compare):**
+  0.6B, 0.8B, 2B **passed**: 0 answer changes vs native on typed-final 1,600 / css15 6,547 / public231 231 /
+  mlx-diag 2,275, max drift **0.0** (bit-identical); native vs sealed 0 changes (drift ≤ 9e-16; 0.6B 0.0).
+  Running: GPU6 4B → 4B mlx → 9B, then the 5.18 AutoModel parity chain (0.6B → 9B, queued); GPU7 27B verify
+  (from 04:56Z; the Decision 1.0 auto_map worker held GPU7 04:37–04:56Z, my watcher took it when its lease ended).
+  - CPU integration (mirror `9c3c860e0`): all pass — Qwen3 full + LoRA adapter bit-identical on CPU; offline
+    cache by repo ID through the hard-link view (removed after load); refusals; **PEFT pitfall shown: a root
+    adapter copy makes AutoModel load `Qwen3Model` (the named base + adapter); our `adapter/` layout loads
+    Decision2Model**. Qwen3.5 CPU skipped in the image (no LAPACK).
+  - CPU spot checks with a standard CPU PyTorch 2.12.0 overlay (`/data/dev2/tools/cpu-torch212`): 0.8B (Qwen3.5,
+    FLA on the AutoModel path → 18 layers rebound) and 0.6B: examples bit-identical, 200/200 typed-final prompts
+    identical (drift 0); CPU vs the GPU-scored predictions differ (0.8B 4/200, 0.6B 3/200 decisions; drift ≤ 0.005).
+  - Rollout: 0.6B `def20a1c`, 0.8B `e13a40f8`, 2B `56950ec5`, 4B `4f560ae5` released; 9B and 27B releases running
+    since 04:26Z; its record not final yet. Finals derived for 0.6B / 0.8B / 2B / 4B (`d265f81f2`).
+- 04:35Z — Code complete through the pipeline; draft specs/decisions for all six, finals for 0.6B / 0.8B (their
   rollout gates exist). Builder inputs relaying node A → node E (109 paths, 36 GB); all pinned mirrors created on
   node E (runtime/automap `8e808244`, vendor `2f21790b`, `33de83ce`, `f8f52c69`, `3277dec9`, `ff660322`, plus
   `95a683e5`, `c68de36a`). Next: preview builds (CPU) → native vs AutoModel full parity on GPU6/7 (5.17), then
@@ -17,7 +31,7 @@ pinned base (PEFT auto-detection tested). Worktree `/home/xunliu/code/vllm-sr-de
 ## Publish gate (do not upload before all hold)
 
 - BF16-resident rollout results record on origin (`records/dev2-bf16-resident-2026-10-01.md` final, all six) and its
-  final revision for the repo is `main` (0.6B `def20a1c`, 0.8B `e13a40f8` released at 05:55Z; 2B/4B/9B/27B pending).
+  final revision for the repo is `main` (0.6B `def20a1c`, 0.8B `e13a40f8` released 04:00Z, 2B `56950ec5` and 4B `4f560ae5` 04:28Z; 9B and 27B running).
 - Merge integration, `make_automap.py final`, rebuild via `release.sh --upload --collect --already-collected`
   (full parity + automap steps + Hub smoke under 5.17 and `--hub-site tf518=/data/dev2/tools/tf518`),
   `hf_headroom.sh` first, `rewrite_history=False`.

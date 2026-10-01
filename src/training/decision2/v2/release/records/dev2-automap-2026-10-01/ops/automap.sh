@@ -108,6 +108,12 @@ case "$mode" in
     hub_args=() ;;
   --release)
     suffix=""
+    # Publish only on top of the revision the final decision supersedes (the rollout's final revision).
+    expected=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["supersedes"]["released_as"].split("@")[1])' \
+      "$R/$name.decision.automap.json")
+    main=$("$HFPY" -c 'import sys; from huggingface_hub import HfApi; print(HfApi().model_info(sys.argv[1]).sha)' "$REPO")
+    [[ "$main" == "$expected" ]] || { echo "$REPO main is $main, not the superseded revision $expected" >&2; exit 1; }
+    echo "$REPO main $main = superseded revision"
     bash "$S/v2/common/hf_headroom.sh" --min-free-gb 3
     [[ -z "$frozen" ]] || copy_cache "$frozen" "$frozen_digest" "$TC"
     parity_args=(

@@ -1,0 +1,104 @@
+# 🤗 Transformers auto_map / trust_remote_code for the six DEV2.0 repositories (2026-10-01)
+
+User request 2026-10-01 10:53 UTC+8 (coordinator note 11:20, worker 4c0a68cd): every DEV2.0 model supports standard
+Hugging Face usage through `auto_map` / `trust_remote_code`, so stock `transformers` downloads and runs it. Release
+worker, worktree `vllm-sr-dev2-automap` (branch `xunzhuo/decision-2-automap`); state
+[`dev2-automap-state.md`](dev2-automap-state.md); API spec [`../automap/API.md`](../automap/API.md) (shared with the
+Decision 1.0 auto_map worker). Node receipts are copied under [`dev2-automap-2026-10-01/`](dev2-automap-2026-10-01/);
+per-prompt answers stay on the node. Times are UTC. Everything stays private.
+
+## Result
+
+RESULT_TABLE
+
+## 1. Design
+
+```python
+from transformers import AutoModel, pipeline
+
+model = AutoModel.from_pretrained("llm-semantic-router/DEV2.0-0.8B", trust_remote_code=True)
+model.system_one(state=..., questions={...})        # {"model", "answers", "usage"}, the native response
+pipeline("decision", model="llm-semantic-router/DEV2.0-0.8B", trust_remote_code=True)({"state": ..., "questions": {...}})
+```
+
+- **Files (repository root):** `configuration_decision2.py` (`Decision2Config`, `model_type` `decision2`; it only
+  exposes `config.json`), `modeling_decision2.py` (`Decision2Model`, a `PreTrainedModel`), `pipeline_decision2.py`
+  (`Decision2Pipeline`, task `decision`). `config.json` keeps every pointer field and gains `model_type`,
+  `architectures`, `auto_map` (`AutoConfig`, `AutoModel`) and `custom_pipelines` (`decision` → `AutoModel`).
+  `MODEL_MANIFEST.json` lists their SHA-256 (`files_sha256`, `remote_code`); `verify_bundle` covers them.
+- **The model is the package's own runtime.** `Decision2Model.from_pretrained` resolves the repository (the config's
+  commit on the Hub, or a local download), copies the package's `decision2/` runtime next to the remote code in
+  Transformers' dynamic-module cache — each file checked against the manifest; Transformers itself copies only flat
+  modules — imports it relative to `modeling_decision2`, and calls `Decision2.from_pretrained`. Everything the
+  native path checks is checked: every file against `MODEL_MANIFEST.json`, the loaded parameter count, the scored
+  model identity, and for the 27B adapter the 28 pinned base files at the pinned revision (fetched with the same
+  Hub options into the same cache). `system_one` / `forward` / the pipeline call the native `system_one`.
+- **Hugging Face cache links.** The runtime refuses links and the cache stores files as links, so a cached
+  revision is loaded from a temporary hard-link view next to its blobs (copies only where hard links fail),
+  removed after loading.
+- **Device and numerics.** `device` or `device_map` names one device (`"auto"` = the runtime default, cuda:0 if
+  visible); `dtype` only `None` / `"auto"` (FP32 on CPU; BF16 autocast with BF16-resident Linear weights and an
+  FP32 head on a GPU, as natively); `to(device)` / `cuda()` / `cpu()` reload the package on that device through the
+  native path; casts, `train()`, `save_pretrained()` and `push_to_hub()` are refused.
+- **Kernels.** On a GPU, Transformers uses flash-linear-attention / causal-conv1d when installed, otherwise its
+  PyTorch reference (as natively). Those kernels are GPU-only but bound at import, so on CPU the model gives each
+  Qwen3.5 gated-delta layer a forward that names the reference functions (per layer; nothing global changes).
+- **PEFT auto-detection.** An `adapter_config.json` at the repository root makes `AutoModel` (and `pipeline`) load
+  the base named in it and apply the adapter with Transformers' PEFT integration, never calling the remote code.
+  The 27B package keeps its adapter under `adapter/`, so `find_adapter_config_file(repo)` is `None` and `AutoModel`
+  reaches `Decision2Model`; the integration test shows the redirect with a root copy (section 4).
+
+## 2. Runtime change (`0cbf1033e`, shared module, separate commit)
+
+With `auto_map` in the root `config.json`, the vendored loader's `AutoTokenizer.from_pretrained(package)` (which in
+Transformers 5 always loads `AutoConfig` first, without `trust_remote_code`) asked on the terminal whether to run
+the remote code — up to 15 s, and the prompt text landed on stdout ahead of the native card example's JSON.
+`Decision2.from_pretrained` now runs with `TIME_OUT_REMOTE_CODE = 0` (restored afterwards), so the question is
+refused at once and the tokenizer comes from `tokenizer_config.json`, the same fallback as before. Weights,
+numerics and answers are unchanged (parity below); the packages' runtime is the BF16-resident runtime plus this.
+
+## 3. Pipeline (shared modules, called out)
+
+- `build.py` / `layout.py` / `card.py` (`83e04b0dc`): the remote code is copied into every build (`automap_source`
+  pins it like `runtime_source`); the card gains "Use with 🤗 Transformers" (`check_rendered` requires it when the
+  package ships the remote code).
+- `examples.py` (`08f183855`): `automap` (AutoConfig / AutoTokenizer / AutoModel / forward / pipeline vs a native
+  run, bit-identical), `automap-card` (the card's Transformers block, local or `--hub`), `automap-parity`,
+  `compare-answers`; `parity --answers` writes per-prompt answers.
+- `release.sh` / `gate.py` (`8e8082440`): the automap steps before and after upload, the Hub smoke (`automap-hub`,
+  fresh `HF_HOME`, host network, token file mounted read-only; `--hub-site` adds Transformers 5.18); gate item
+  `7_transformers_remote_code`. A leased GPU is now passed as its own render node plus `/dev/kfd` with
+  `ROCR_VISIBLE_DEVICES=0` (never all of `/dev/dri`), as shared nodes require.
+
+## 4. Tests
+
+- **stdlib** (`v2.release.tests.test_automap`, 13, in the image with torch; the release suite passes): config fields only with remote code;
+  copies byte-identical; `auto_map` names classes that exist; the remote code imports only flat relative modules
+  plus stdlib / torch / transformers / huggingface_hub; the card section (example compiles, names the repository,
+  the same request as the native example, base note, tested versions; `check_rendered` requires it); card block
+  selection; answer-file comparison; gate item 7; the runtime's prompt refusal is scoped to the load.
+- **Image integration** (`v2.release.tests.automap_integration`; tiny Qwen3 / Qwen3.5 hybrid `qwen-full` and Qwen3
+  LoRA `qwen-adapter` packages built by the release builder):
+  - GPU (node E GPU6, FLA kernels): native vs AutoModel / pipeline **bit-identical** for all three; the card's
+    Transformers block passes.
+  - CPU: Qwen3 full and adapter bit-identical; Qwen3.5 recorded as skipped (the image's PyTorch has no CPU LAPACK).
+    From an offline Hugging Face cache layout: AutoModel by repository ID through the hard-link view (view removed
+    afterwards), casts / dtype / `save_pretrained` refused, the `adapter/` layout loads `Decision2Model`, and **with
+    an `adapter_config.json` (and weights) at the root AutoModel loads `Qwen3Model`** — Transformers' PEFT
+    detection redirects to the named base and applies the adapter itself, bypassing the remote code.
+- **CPU spot checks with a standard PyTorch** (2.12.0+cpu overlay; Transformers 5.17): 0.8B (Qwen3.5; FLA on the
+  AutoModel path only, so all 18 gated-delta layers get reference forwards) and 0.6B (Qwen3): the examples
+  bit-identical to the native CPU run and **200 / 200 typed-final prompts identical (drift 0)**. Against the
+  GPU-scored predictions the CPU (FP32) answers differ: 0.8B 4 / 200 and 0.6B 3 / 200 decisions, drift ≤ 0.005.
+
+## 5. Parity: AutoModel vs the native runtime
+
+PARITY
+
+## 6. Publication
+
+PUBLICATION
+
+## 7. Limits
+
+LIMITS
