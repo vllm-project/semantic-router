@@ -2,93 +2,72 @@
 
 Assignment: COORDINATION 2026-10-01 10:55 (IX1, eval). Nodes C / D, 15 GPUs (node C GPU1–7, never GPU0; node D
 GPU0–7). Worktree `vllm-sr-dev2-eval-index`, branch `xunzhuo/decision-2-eval-index`. Records:
-[prereg](ix1-prereg-2026-10-01.md) (`662b9343f`, tie wording fixed in `a9845b9b9` before any GPU job). Index values
-are private (node `/data/dev2/private/eval/index021/ix1/`, local private folder); this file holds only steps,
-counts, hashes and GPU-hours.
+[prereg](ix1-prereg-2026-10-01.md) (`662b9343f`, tie wording fixed in `a9845b9b9` before any GPU job),
+**[results](ix1-results-2026-10-01.md)**, receipts [`ix1/`](ix1/). Index values are private (node
+`/data/dev2/private/eval/index021/ix1/`, the private eval-artifacts dataset `ix1/`, the local private folder); this
+file holds only steps, counts, hashes and GPU-hours.
 
 ## Now
 
-- 2026-10-01 04:45Z — **2B done and dual-scored** (120,224 `ok` + 2 `unsupported`; scorer gate PASS; 0 benchmarks
-  > 1 skill point from the external report; 1.34 GPU-h). 0.8B nearly done (one late shard), 0.6B running (node C
-  chains restarted at mirror `9e0f703ac` after a lease race: the busy check now waits for the previous container to
-  drain). 27B: six shards finish ≈ 04:50Z; node D jobs (mirror `27226408b`): `waiter-d.sh` reruns shard 3's skipped
-  request on GPU0 (a different GPU), then the 27B CAL pass; resumes shard 2 to retry its error row; `tail-d.sh`
-  stops shards 3 and 5 once four GPUs are free and spreads their unanswered rows over GPUs 1, 4, 5, 6, 7 as `extra-r*`
-  reruns (every row still answered once; the merge refuses double answers). Node C `waiter-c.sh`: CAL passes for
-  9B / 4B / 2B / 0.8B / 0.6B on GPU1 after 0.6B shard 0.
-- 04:25Z — **4B and 9B done, merged, dual-scored.** Both: 120,226 rows = 120,224 `ok` + 2 `unsupported`
-  (`max_length_exceeded`; the external report's count), 0 errors; port vs kit `87d4650b` gate PASS (per-benchmark
-  ≤ 5e-5, headline ≤ 0.002); **0 of 38 benchmarks differ from the external report by more than 1 skill point**
-  (values private). GPU-h: 4B 2.17, 9B 2.71. 2B running on node C (then 0.8B, 0.6B by per-GPU chain); 27B on node D.
-  - **27B device faults:** two requests (ToolRet, 32 questions, ≈ 18–19.5K tokens) aborted their processes with a
-    GPU memory access fault (no-retry page fault) at 03:42Z, while four other 27B processes were loading; one
-    resumed fine past its row (transient), the other faulted again on the same row on the same GPU (node D GPU3)
-    with nothing else loading. That shard resumes without that one request (`skipped.json`); the request will be
-    rerun alone on another GPU to tell a row defect from a GPU defect. One further 27B ToolRet request
-    (≈ 15K tokens) returned `invalid_model_output` (a non-finite or malformed head output); it stays an error unless
-    a resume answers it.
-  - **Contamination audit (CPU, node C) done:** each model's training files from its release / gate records,
-    hash-checked (0.6B six M6 files; 0.8B `d1dc33fc…`; 2B `13804ac6…`; 4B `c7d51219…`; 9B `a66131b1…`; 27B A20r
-    `a20.train.jsonl` `4aa0dc96…`; plus the Decision 1.0 decoder corpora behind the 0.8B–9B parents). Planted control
-    200 / 200. **Item duplicates (all question-specific text present in training): 0.6B 0, 0.8B 1, 2B 0, 4B 0, 9B 0,
-    27B 0; 1.0 corpora 1.** Familiar-text matches (a premise, evidence passage or board position seen in training,
-    without the hypothesis / claim) are reported separately (ANLI, HoVer, ChessBench).
-- 03:45Z — **Full runs live.** 27B: 8 shards on node D GPU0–7 (`runs/DEV2.0-27B`), ≈ 1.4 rows/s per GPU,
-  ETA ≈ 06:40Z. 4B: 7 shards on node C GPU1–7 (`runs/DEV2.0-4B`), ≈ 4–5 rows/s per GPU, ETA ≈ 04:35Z; then 9B, 2B,
-  0.8B, 0.6B on node C. Kit runner + adapter at mirror `a898de429`, frozen caches from the parity runs.
-  - Load profile, 27B: ≈ 98 GB host RAM per process for ≈ 30 s, then ≈ 6 GB; four concurrent loads left ≥ 770 GiB
-    available. Launch fixes on the way: the shard-count variable was clobbered (4B shards 1–6 exited at start with
-    no rows; relaunched with `--only`), and the stagger gate raced the container's start marker (27B shards 4–7
-    stopped during loading and restarted); both are fixed in the launcher (`--only`, host-side `launched` marker).
-    No row was run twice; the aborted shard directories are under `ix1/void/`.
-- 03:40Z — **Parity gates PASS, all six packages:** 86 / 86 `ok`, identical choices, **max |Δp| = 0.0**
-  (bit-identical; kit runner + adapter vs the package's own `system_one`, same GPU class and image, frozen Triton
-  cache). No compatibility row was unsupported.
-- 03:30Z — **Voided:** the first 27B parity attempt (launcher `a9845b9b9`) ran the transformers reference
-  `chunk_gated_delta_rule` because the launcher's `PYTHONPATH` replaced the image's `/opt/decision-fla`. Fixed in
-  `63f18bdd9` (kernel path kept; containers exit 97 without the kernels; parity fails on a fallback log line). The
-  voided run is kept under `ix1/void/`; it is not used.
-- 03:15Z — **Suite verify PASS on node C and node D:** kit `19ad28ec` `suite verify` (uncompressed rows
-  `b2b56d6f…`, added `7429f3c9…`, exclusions `331df32d…`, all match) and the port's `verify-suite` (150,317
-  scoreable, `upstream_021_row_ids_matched`, keep `ca4f8903…`). **Panel:** 38 Index benchmarks, **120,226 rows**
-  (267,668 Choice + 14,700 Noul questions), run-ID digest `6455d7be…`; gold-free shards 8-way (node D) and 7-way
-  (node C); compatibility sample `1356ceaf…` (86 rows, 44 benchmarks).
-- 03:07Z — Container isolation check: each container gets only its GPU's render node (node C GPU0 is never
-  visible); device count 1, expected PCI bus.
-- 02:58Z — Packages downloaded at the pinned revisions on both nodes (`/data/dev2/models/ix1/<name>-<rev8>`); the
-  pinned Qwen3.8-27B base copied node A → node D and → node C into `/data/dev2/hf-cache` (≈ 1 min each).
+- 2026-10-01 05:35Z — **IX1 DONE.** All six packages run, merged and dual-scored; parity, scorer and external
+  agreement gates pass; contamination audit and calibration study done; private report written
+  (`ix1-report-2026-10-01.md` in the private places). No GPU job running; every IX1 lease on node C / D is marked
+  released (node C GPU0's K8s lease untouched). Private artifacts uploaded to the private eval-artifacts dataset
+  (`ix1/`, two commits).
+- 05:05Z — 27B tail: shards 3 and 5 stopped once four GPUs were free; their 14,532 unanswered rows ran as five
+  `extra-r*` reruns on GPUs 1, 4, 5, 6, 7; merge verified one final record per row.
+- 04:45Z — 27B: shard 3's skipped request also faulted alone on GPU0 (so a request defect, not a GPU defect) and was
+  recorded as a final error; shard 2's `invalid_model_output` request failed again on resume. CAL passes for all six
+  packages done (node C GPU1, node D GPU2).
+- 04:25Z — 4B and 9B done and dual-scored; contamination audit done (item duplicates: 0.8B 1, others 0).
+- 03:45Z — Full runs live (27B node D; 4B, then 9B / 2B / 0.8B / 0.6B by per-GPU chains on node C). Launch fixes
+  on the way: shard-count variable clobbered (4B shards 1–6 exited at start, no rows, relaunched); stagger-gate
+  race (27B shards 4–7 stopped during loading, restarted); lease race between chained shards (busy check now
+  waits for the GPU to drain). No row ran twice; aborted directories are under `ix1/void/`.
+- 03:40Z — Parity gates PASS, all six packages (86 / 86 `ok`, max |Δp| = 0.0).
+- 03:30Z — Voided: the first 27B parity attempt ran transformers' reference `chunk_gated_delta_rule` (the launcher
+  had replaced the image's `/opt/decision-fla` on `PYTHONPATH`). Fixed: kernel path kept, containers exit 97
+  without the kernels, parity fails on a fallback log line.
+- 03:15Z — Suite verify PASS on node C and node D; panel 120,226 rows (run-ID digest `6455d7be…`).
+- 03:07Z — Container isolation: each container gets only its GPU's render node (node C GPU0 never visible).
+- 02:58Z — Packages downloaded at the pinned revisions on both nodes; the pinned Qwen3.8-27B base copied from
+  node A to node C / D.
 
-## Plan / checklist
+## Checklist
 
 - [x] Worktree, prereg
 - [x] Suite verify C / D
-- [x] Released-package engine adapter + tests (`publication/decision_index_release_engine.py`)
-- [x] 86-request parity gate: 27B, 4B, 9B, 2B, 0.8B, 0.6B
-- [ ] Full runs: 27B (D, running), 4B + 9B (C, done), then 2B (running), 0.8B, 0.6B
-- [ ] Dual scoring + external comparison (4B, 9B done)
-- [x] Contamination audit (CPU); override-adjusted values pending the last merges
-- [ ] Calibration study
-- [ ] Gap analysis + data-plan input (private)
+- [x] Released-package engine adapter + tests
+- [x] 86-request parity gate: all six packages
+- [x] Full runs: 27B, 4B, 9B, 2B, 0.8B, 0.6B
+- [x] Dual scoring + external comparison
+- [x] Contamination audit (CPU) + override-adjusted values (private)
+- [x] Calibration study (CAL fits; Index and own-panel rescoring)
+- [x] Gap analysis + data-plan input (private)
 
 ## GPU-hours
 
 | Item | GPU-h |
 | --- | ---: |
 | Device smoke and kernel diagnostics | 0.01 |
-| Voided 27B parity attempt | 0.06 |
+| Voided 27B parity attempt; aborted shard starts (load only) | 0.10 |
 | Parity gates (6 packages; reference + kit pass) | 0.30 |
-| Aborted shard starts (load only) | 0.04 |
-| Full run 4B (7 GPUs) | 2.17 |
-| Full run 9B (7 GPUs) | 2.71 |
-| Full run 2B (7 GPUs) | 1.34 |
-| Full runs 27B, 0.8B, 0.6B | running |
-| **Total so far** | **≈ 6.63** |
+| Full run 0.6B / 0.8B / 2B / 4B / 9B (7 GPUs each) | 0.89 / 1.21 / 1.34 / 2.17 / 2.71 |
+| Full run 27B (8 GPUs, incl. resumes, the tail reruns and the stopped intervals) | 9.82 |
+| CAL passes (6 packages) | ≈ 0.15 |
+| **Total** | **≈ 18.7** |
 
 ## Hand-off notes
 
-- Tools: `v2/eval/ix1/` (`launch.sh parity|run`, `panel`, `native_ref`, `parity`, `merge`). Packages
-  `/data/dev2/models/ix1/`, run root `/data/dev2/private/eval/index021/ix1/` (mode 700): `panel-7`, `panel-8`,
-  `parity/<model>`, `runs/<model>`, `logs/`.
-- Leases: `owner` files with `track=eval-ix1` on node C GPU1–7 and node D GPU0–7 while jobs run.
-- Launch detached with `nohup bash launch.sh … > log 2>&1 < /dev/null &` as a single command (a `cd … && nohup … &`
-  list keeps the SSH session open).
+- **Open items:** (1) refit the Noul temperature on CAL698 (file `19cc1a8c…`, logits `dacdbba3…`; not found on node
+  A in the obvious places) and compare with the CAL700 fit; (2) report the 27B batched-ToolRet runtime defect to
+  the 27B / runtime owners (run IDs in the private receipts); (3) confirm the licences flagged "verify" in the
+  private data-plan table and run `v2/data/overlap.py` on any chosen source against the Index rows and the
+  held-out inventories before use; (4) the temporary transfer keys on node A / B are the coordinator's to remove.
+- **Where things are (node C / D, `/data/dev2/private/eval/index021/ix1/`, mode 700):** `panel-7`, `panel-8`,
+  `parity/<model>`, `runs/<model>/{shard-*,extra-*,merged*}`, `calib/` (CAL requests, labels, per-model answers and
+  fits), `audit/` (training copies, outputs), `void/` (aborted attempts), `logs/`, `ix1-report-2026-10-01.md`.
+  Packages: `/data/dev2/models/ix1/`. Node A: `/data/dev2/private/eval/ix1-calib/` (own-panel calibration effects).
+- **Tools:** `v2/eval/ix1/` (see the results record). Launch detached with a single `nohup bash … > log 2>&1 <
+  /dev/null &` command; a `cd … && nohup … &` list keeps the SSH session open. Do not `pkill -f` a pattern that
+  also appears in the same SSH command line.
