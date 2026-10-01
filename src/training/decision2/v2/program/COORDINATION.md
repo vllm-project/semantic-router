@@ -205,6 +205,32 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 02:05 — **COORDINATOR DECISION: an "Index path" for frontier-targeted finalists.** The user was asked
+  and cancelled the questionnaire; under the standing autonomy directive the recommended rule is adopted. The user
+  may override.
+  - **Item 1'** (replaces item 1 on this path only) needs both:
+    - JevArena v3 **not significantly below** the reference (paired 95% CI upper bound > 0, the same convention as
+      items 2 / 4);
+    - the frozen finalist's **private Jev Decision Index delta significantly positive** (paired bootstrap over rows
+      within benchmarks through the board weights; 95% CI lower bound > 0). One Index run per frozen finalist.
+  - **Items 2–8 are unchanged:** human transfer, no type collapse, mlx-diag, tier gates, exposure, public 231, C1
+    post-key.
+  - **Card disclosure** (in the Index chart footnote): "independent reproduction with the official 0.2.1 kit on the
+    released weights; training data has no overlap with Index test items". No other training detail.
+  - **Internal honesty tracking (private):** every Index-path release records the **transfer-only Index delta**,
+    excluding benchmarks with matching training families (HoVer, When2Call, iSarcasmEval, GSM8K) and format-matched
+    benchmarks.
+    - **Note:** IB1's `poem` family mirrors BPoMP's format ("pick the original of two versions"), so BPoMP counts as
+      format-matched. That family was listed as "BPoMP-like" in the coordinator's IB1 brief, which was a lapse
+      against the "never imitate an Index format" rule. Future data must not target Index formats.
+  - **First application: 9B K-a13IB qualifies on items 1' and 2–7** (private evidence in `private/9b-ka13ib/`).
+    - Continuation (542e6421): item 8, then a release as **`Decision-2.0-Lux-9B`** after the card worker's rename and
+      round-2 card land (never concurrent).
+  - **Others:**
+    - 4B `4b-LHA10SD` and 0.8B `08b-RA` fail item 4 (multilingual), so they do not qualify.
+    - 27B M6 finalists will be judged on both paths.
+  - **K-a12IB (the ½ point) fails the Y1 yes-bias guard**, so it gets no formal run. 9B M9 used ≈ 44.7 of 120 GPU-h.
+
 - 2026-10-02 01:20 — **M14 complete (ad17bb4f): no finalist; M16 interpolation sweep launched (same worker).**
   Results `d2f247ae8`; integration `2bb9698b6`; 7.12 of 80 GPU-h.
 

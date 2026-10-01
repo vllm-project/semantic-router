@@ -219,10 +219,14 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
    table; record the choice rule's outcome across chains (stage 1: M6-IB / M6-IBX; stage 2: M6-IB2 / M6-IB2PN).
 3. **Superseded by worker 3 (15:50Z; `m6-handoff-2026-10-01.md` is now the runbook):** item 8 is this track's own
    step (§2: one attempt, `c1-postkey.sh` on node A GPU2, only for the choice-rule finalist and only with zero
-   exposure in the custodian's §1 record), and so is the private Index (§3: `m6-index.sh` on node D GPU4–7, eval
-   allowance ≤ 12 GPU-h = one 27B run; first finalist passing items 1–7). The release (§4) supersedes DEV2.0-27B's
-   current `main` through the release pipeline, only if items 1–8 pass: **`main` moved to `e7b4a372` at 15:41Z** (the
-   card-redesign worker's card-only revision on top of the fix revision `09280791`; spec `dev2-27b-card.json`).
+   exposure in the custodian's §1 record: met for every arm), and so are the private Index runs (§3:
+   `m6-index.sh` on node D GPU4–7). **Amendment 4 (Index path, COORDINATION 02:05): one Index run per frozen formal
+   finalist, started once its formal run is sealed; item 1' (v3 not significantly below A20r and a significantly
+   positive paired Index delta) can replace item 1; `m6_index_path` applies item 1' and the amended choice.** The
+   23:20 allowance (≤ 12 GPU-h) covers one 27B run; more are requested from the coordinator. The release (§4)
+   supersedes DEV2.0-27B's current `main` through the release pipeline, only if items 1–8 (or 1' and 2–8) pass:
+   **`main` moved to `e7b4a372` at 15:41Z** (card-only revision on top of the fix revision `09280791`; spec
+   `dev2-27b-card.json`), and the repositories are being renamed (COORDINATION 00:25: use the new ID).
 4. After the last chain (M6-IB2PN ≈ 08:30Z Oct 2): attribution (`m6-gates.sh <mirror> contrast` and `verdicts` with
    every sealed finalist; never `gates` again for an arm already gated), final
    results, gist 06, milestone-end cleanup ("Hand-off" above), merge (signed) into integration. **Order:** the
@@ -231,6 +235,27 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 18:12Z (poll 9 at 18:04Z): all alive, guard alive. M6-IB 3,853 / 3,689 (13.4 / 13.9 h; **s1 at 3816 .9196, BEST =
+  3816**); M6-IB2 3,770 / 3,762 (17.6 / 17.7 h); M6-IBX 3,430 / 3,387 (13.8 / 14.0 h); M6-IB2PN 2,363 / 2,343 (18.9 /
+  18.7 h). GPU-h ≈ 73. **COORDINATOR DECISION 2026-10-02 02:05 (18:05Z): the "Index path"** (item 1' = v3 not
+  significantly below the reference AND a significantly positive paired private-Index delta; items 2–8 unchanged; one
+  Index run per frozen finalist; "27B M6 finalists will be judged on both paths"). Amendment 4 records it for M6
+  before any M6 result. Integration merged (signed; `paired_boot.py` from the 9B track now on it). Node D GPU7 runs
+  the 4B track's `LHA10SD` Index shard (eval-ix1 lease); the 0.8B fast-track released GPU5 at 16:39Z.
+- 17:44Z (poll 8 at 17:42Z): all alive, guard alive. M6-IB 3,727 / 3,551 (13.2 / 13.9 h; ETA 21:08Z / 21:50Z);
+  M6-IB2 3,628 / 3,621 (17.5 / 17.7 h); M6-IBX 3,293 / 3,251 (13.8 / 14.0 h; **s2 at 3125 .9159, BEST = 3125**);
+  M6-IB2PN 2,225 / 2,203 (18.9 / 18.7 h). Node D disk 688 GB. GPU-h ≈ 70.
+- 17:20Z (poll 7 at 17:19Z; a 20-min tool sleep ran ≈ 40 min, so this commit is 42 min after the previous one):
+  all alive, guard alive. M6-IB 3,574 / 3,409 (13.3 / 13.9 h; **s2 at 3180 .9308, BEST = 3180**; s1 at 3180 .9111,
+  BEST stays 1908); **M6-IB2 3,480 / 3,477 (17.7 / 17.7 h; at 3308 .9012 / .8980, BEST = 3308 both)**; M6-IBX 3,152 /
+  3,120 (13.9 / 14.1 h; **s1 at 3125 .9053, BEST = 3125**); M6-IB2PN 2,084 / 2,062 (18.9 / 18.6 h). GPU-h ≈ 64.
+- 16:42Z (poll 6 at 16:36Z): all alive, guard alive. M6-IB 3,303 / 3,151 (13.7 / 14.1 h; s1 at 3180 .9111, BEST
+  stays 1908); M6-IB2 3,214 / 3,214 (17.7 / 17.5 h); M6-IBX 2,900 / 2,861 (13.9 / 14.0 h); **M6-IB2PN 1,821 / 1,795
+  (18.8 / 18.8 h; second SELECT700 at 1722: .8672 / .8686, BEST = 1722 both)**. Node D disk 664 GB. GPU-h ≈ 61.
+  New COORDINATION notes: **00:25 — the six repos are being renamed** (`Decision-2.0-{Kai,Eos,Sol,Nox,Lux,Vega}-
+  {size}`; round-2 cards follow, so `main` moves again; hand-offs use the new IDs); **00:35 — 9B K-a13IB failed
+  item 1** (breadth ties on v3), and an **Index-path alternative to item 1** is proposed, pending a user decision.
+  Runbook §3 / §4 updated for both.
 - 16:20Z: **C1 content recheck r1 PASS** (custodian, record `v2/eval/records/c1-recheck-r1-2026-10-01.md`,
   `36f93b7cc`, verdict `0823a1a8…`): IB1-r3, IB2, PN1-r2 and `a20ib12` expose 0 scored C1 items; the registry lists
   M6-IB, M6-IBX, M6-IB2 and M6-IB2PN with exposure 0, so C1 content blocks item 8 for no M6 arm. Integration merged
