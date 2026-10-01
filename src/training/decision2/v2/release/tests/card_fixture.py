@@ -15,7 +15,8 @@ from v2.release import card, card_index, layout
 
 ROOT = Path(__file__).resolve().parents[3]
 ROSTER = ROOT / "v2/eval/records/decision-index-peer-roster-2026-09-28.json"
-FOOTNOTE = "Synthetic test footnote."
+EDITION, SNAPSHOT = "0.0-test", "2000-01-01"
+FOOTNOTE = card_index.FOOTNOTE.format(edition=EDITION, snapshot=SNAPSHOT)
 # Synthetic balanced skills: family tier i -> 10.5 + 10 i; Decision 1.0 -> 2.25 below the same tier.
 FAMILY = {tier: 10.5 + 10 * i for i, tier in enumerate(layout.TIERS)}
 DECISION1 = {
@@ -35,13 +36,16 @@ def index_file(
     family = {**FAMILY, **(family or {})}
     data = {
         "schema": card_index.SCHEMA,
-        "edition": "0.0-test",
+        "edition": EDITION,
+        "snapshot": SNAPSHOT,
         "footnote": FOOTNOTE,
         "family": [
             {
                 "tier": tier,
                 "name": layout.tier_name(tier),
-                "parameters": int(layout.TIERS[tier]),
+                "parameters": int(layout.TIERS[tier] * 1.1),
+                "parameters_basis": card_index.PARAMETERS_BASIS,
+                "loaded_parameters": int(layout.TIERS[tier]),
                 "balanced_skill": family[tier],
                 "areas": _areas(family[tier]),
                 "model_sha256": (model_sha256 or {}).get(tier, "a" * 64),

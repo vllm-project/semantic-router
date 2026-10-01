@@ -1,0 +1,85 @@
+{
+  "builder_commit": "eb2d9f1df8f17fe4e7e62949675ed6a599ae9fe6",
+  "card": {
+    "assets_receipt_sha256": "e7cce5c188ae3d3175c52b2de22cddc1bbb876d27b4584a08b4870ca331185ac",
+    "excluded": [],
+    "figures_sha256": {
+      "assets/banner.png": "4486ed3a16ef697c29b20aad42bd2b7fc7163d51d8b84b37535d78243462b766",
+      "assets/index-areas.png": "86ec0c5a491d3668c65c1806bf32f7d2ca8561a0b4bf0da77b7c3be9e3bf54f7",
+      "assets/index-pareto.png": "8e69c7318a7181f0cab04fd60111e1df96358955ec9893f16e80d3a51eef9aa9",
+      "assets/jevarena-types.png": "102b7d0945830a648d376ad44a614657f21bc833bbeba7f5bf8adbc850aaea1d",
+      "assets/jevarena.png": "7d5dc0766c1a5e31aab6b68a2586cf6b16c640d6e583a8e45572db3ece350042"
+    },
+    "index_sha256": "47e59a9550767b07d8aa82effb3cee4d5fbde75c4abed725e6ed2e6551826a01",
+    "paired": {
+      "ci95": [
+        0.6068816517553796,
+        4.1435665002092525
+      ],
+      "delta": 1.9292432629787157,
+      "replicates": 5000,
+      "sha256": "ae559e9a1e13afca5ebb677e98706a027db415313f102e9059607d5114e99550"
+    },
+    "readme_sha256": "4a56b638c4ec828866f890b31c28fd95ddd7eb4bfe8195cb43586eb1cade7384",
+    "shown": [
+      {
+        "key": "candidate",
+        "licence": "package",
+        "report_sha256": "66106ef9123bf0bb9ac8aeb5024384cc98d5194dd231ff71cebc541b88cf3b17"
+      },
+      {
+        "key": "lux1",
+        "licence": "apache-2.0",
+        "report_sha256": "b4ebe0d24a3756136aa5fe79a1daf614b7509371f76d130c299d536f41add62c"
+      },
+      {
+        "key": "nimble2",
+        "licence": "apache-2.0",
+        "report_sha256": "42636dfa1482ba5d76e9f5ada1186c699b6ab058a762106334911c60d8469cea"
+      }
+    ],
+    "tradeoffs": [
+      "mlx-diag non-English Noul (accuracy): 80.8% versus 83.3%",
+      "Transfer: TalkLife empathy (macro-F1): 24.3% versus 26.6%",
+      "Transfer: Wikipedia power (macro-F1): 56.3% versus 58.4%",
+      "Transfer: Character tropes (macro-F1): 11.8% versus 12.8%",
+      "Transfer: Conversations Gone Awry (macro-F1): 55.1% versus 55.2%",
+      "JevBench public 231 (correct): 178/231 versus 183/231",
+      "JevBench public standard (correct): 66/72 versus 67/72",
+      "JevBench public hard (correct): 64/111 versus 68/111"
+    ]
+  },
+  "ended_utc": "2026-10-01T18:06:53.920611+00:00",
+  "files": 39,
+  "identity": {
+    "architecture": "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp",
+    "dec_residual": false,
+    "head_variant": "shared",
+    "model_sha256": "b1ed5a71038b474902d2a6dfebeee0c6f7ce901097553b4621f6f0a23fb6da98",
+    "readout": "head",
+    "temperature_by_type": null,
+    "text_parameter_count": 7936684544
+  },
+  "licence": "apache-2.0",
+  "manifest_sha256": "cd710f2656e50cbc62c245c93c0b8700e28c91d533b321c743b4e7abb54f166c",
+  "package": "/data/dev2/runs/release/dev2-card2-9B-20261001T180553Z/package/Decision-2.0-Lux-9B",
+  "parameters": {
+    "external_base_text": null,
+    "loaded": 7940895744,
+    "packaged": {
+      "backbone": 7936684544,
+      "head": 4211200,
+      "residual": 0
+    }
+  },
+  "release_decision": {
+    "sha256": "5e9f13ae73cd52d24155885e6666cd6aee2afa466b1e1906a634e1143e9a0a6e",
+    "status": "final"
+  },
+  "schema": "dev2-release-build/1",
+  "screen": {
+    "text_files_screened": 34
+  },
+  "spec_sha256": "900e14762405b2fd63cdaec9d51e5d723b26cf4df1749a3a1b7d04de76ea8be1",
+  "started_utc": "2026-10-01T18:06:24.445942+00:00"
+}

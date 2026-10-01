@@ -621,6 +621,151 @@ class M5VerdictsOptionsTest(unittest.TestCase):
             )
 
 
+class M6IndexPathTest(unittest.TestCase):
+    ITEMS = (
+        "1_v3_lower_bound_vs_A20r",
+        "2_H_not_below_A20r",
+        "3_no_type_collapsed",
+        "4_mlx_card_eligible_not_below_A20r",
+        "5_tier_gates",
+        "6_no_overlap_exposure",
+        "7_public231_not_regression",
+    )
+
+    def finalist(self, ci, fail=()):
+        items = {k: {"pass": k not in fail} for k in self.ITEMS}
+        items["1_v3_lower_bound_vs_A20r"]["pass"] = ci[0] > 0
+        return {
+            "paired": {"A20r": {"ci95": list(ci)}, "autojev27": {"ci95": [-1.0, 2.0]}},
+            "successor_items": items,
+            "successor_items_1_7": all(v["pass"] for v in items.values()),
+            "beats_autojev27": {"pass": False},
+        }
+
+    def verdicts(self, finalists):
+        passing = [n for n, f in finalists.items() if f["successor_items_1_7"]]
+        return {
+            "finalists": finalists,
+            "successor_items_1_7": passing,
+            "beats_autojev_and_successor": [],
+            "choice": passing[0] if passing else None,
+        }
+
+    @staticmethod
+    def boot(low):
+        return {
+            "headline": {
+                "delta": low + 0.2,
+                "ci95": [low, low + 0.4],
+                "se": 0.1,
+                "p_le_0": 0.01,
+            }
+        }
+
+    def test_item_1_prime_and_choice(self):
+        m = importlib.import_module("v2.27b.m6.m6_index_path")
+        finalists = {
+            "M6-IB": self.finalist((0.5, 4.0)),
+            "M6-IBX": self.finalist((-1.0, 3.0)),
+            "M6-IB2": self.finalist(
+                (-1.5, 2.5), fail=("4_mlx_card_eligible_not_below_A20r",)
+            ),
+            "M6-IB2PN": self.finalist((-2.0, -0.1)),
+        }
+        boots = {
+            "M6-IB": self.boot(-0.1),
+            "M6-IBX": self.boot(0.05),
+            "M6-IB2": self.boot(0.3),
+            "M6-IB2PN": self.boot(0.4),
+        }
+        public, private = m.decide(self.verdicts(finalists), boots, {})
+        f = public["finalists"]
+        self.assertTrue(f["M6-IB"]["classic_items_1_7"])
+        self.assertFalse(f["M6-IB"]["index_path"])
+        self.assertTrue(f["M6-IBX"]["index_path"])
+        self.assertFalse(f["M6-IB2"]["index_path"])  # item 4 fails
+        self.assertFalse(
+            f["M6-IB2PN"]["item_1_prime"]["a_v3_not_significantly_below_A20r"]
+        )
+        self.assertEqual(public["index_path"], ["M6-IBX"])
+        self.assertEqual(
+            (public["choice"], public["choice_path"]), ("M6-IB", "classic")
+        )
+        for field in ('"ci95"', '"se"', '"p_le_0"', '"delta"', "0.45"):
+            self.assertNotIn(field, json.dumps(public))
+        self.assertEqual(
+            private["finalists"]["M6-IBX"]["index_delta"]["ci95"], [0.05, 0.45]
+        )
+        del finalists["M6-IB"], boots["M6-IB"]
+        public, _ = m.decide(self.verdicts(finalists), boots, {})
+        self.assertEqual((public["choice"], public["choice_path"]), ("M6-IBX", "index"))
+        boots.pop("M6-IBX")
+        public, _ = m.decide(self.verdicts(finalists), boots, {})
+        self.assertIsNone(
+            public["finalists"]["M6-IBX"]["item_1_prime"][
+                "b_index_delta_significantly_positive"
+            ]
+        )
+        self.assertIsNone(public["choice"])
+
+    def test_transfer_only_excludes_in_distribution_and_format_matched(self):
+        m = importlib.import_module("v2.27b.m6.m6_index_path")
+        names = (
+            "When2Call",
+            "iSarcasmEval",
+            "HoVer",
+            "GSM8K",
+            "BPoMP",
+            "BANKING77",
+            "ANLI",
+        )
+        delta = {
+            "weighted_delta_sum": 1.0,
+            "benchmarks": {n: {"weighted_delta": 0.1} for n in names},
+        }
+        out = m.transfer_only("M6-IB2", delta)
+        self.assertEqual(
+            out["excluded"], ["When2Call", "iSarcasmEval", "HoVer", "GSM8K", "BPoMP"]
+        )
+        self.assertAlmostEqual(out["transfer_only_weighted_delta"], 0.5)
+        self.assertEqual(out["shared_with_A20r_weighted_delta"], {"BANKING77": 0.1})
+        self.assertEqual(m.transfer_only("M6-IBX", delta)["excluded"], ["BPoMP"])
+
+    def test_private_output_must_be_private(self):
+        m = importlib.import_module("v2.27b.m6.m6_index_path")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            verdicts = root / "VERDICTS.json"
+            verdicts.write_text(
+                json.dumps(self.verdicts({"M6-IB": self.finalist((0.5, 4.0))}))
+            )
+            with self.assertRaises(SystemExit):
+                m.main(
+                    [
+                        "--verdicts",
+                        str(verdicts),
+                        "--public",
+                        str(root / "p.json"),
+                        "--private",
+                        str(root / "x.json"),
+                    ]
+                )
+            (root / "private").mkdir()
+            m.main(
+                [
+                    "--verdicts",
+                    str(verdicts),
+                    "--public",
+                    str(root / "p.json"),
+                    "--private",
+                    str(root / "private" / "x.json"),
+                ]
+            )
+            self.assertEqual(
+                json.loads((root / "p.json").read_text())["choice"], "M6-IB"
+            )
+
+
 class M6ScriptTest(unittest.TestCase):
     def test_arm_caps(self):
         sha = "0" * 64
@@ -689,6 +834,93 @@ class M6ScriptTest(unittest.TestCase):
         )
         self.assertEqual(out.returncode, 2)
         self.assertIn("bad ARM", out.stderr)
+
+    def index_run(self, *args, dry=True):
+        env = dict(os.environ, M6_INDEX_DRY="1" if dry else "0")
+        return subprocess.run(
+            ["bash", str(M6 / "m6-index-run.sh"), "0" * 40, "M6-IB", *args],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+    def test_index_run_node_checks(self):
+        for args, message in (
+            (["e", "0", "4"], "NODE must be c or d"),
+            (["d", "0,8", "4"], "SHARDS"),
+            (["d", "0,0", "4"], "lists a shard twice"),
+            (["d", "0,1"], "no GPU listed"),
+            (["d", "0,1", "3"], "node d: GPU 3 is not allowed"),
+            (["c", "0,1", "0"], "node c: GPU 0 is not allowed"),
+            (["c", "0,1", "1", "1"], "listed twice"),
+        ):
+            with self.subTest(args=args):
+                out = self.index_run(*args)
+                self.assertEqual(out.returncode, 2)
+                self.assertIn(message, out.stderr)
+
+    def test_index_run_deals_shards_to_gpus(self):
+        out = self.index_run("c", "4,5,6,7", "1", "2")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(
+            out.stdout.splitlines(),
+            [
+                "shard 4: node c GPU1",
+                "shard 5: node c GPU2",
+                "shard 6: node c GPU1",
+                "shard 7: node c GPU2",
+                'launch.sh --gpus "9 9 9 9 1 2 1 2"',
+            ],
+        )
+        out = self.index_run("d", "0,1", "4", "5", "6", "7")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn('launch.sh --gpus "4 5 9 9 9 9 9 9"', out.stdout)
+        out = self.index_run("d", "0,1", "4", dry=False)
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("missing mirror", out.stderr)
+
+    def index_plan(self, gpus):
+        env = dict(os.environ, M6_INDEX_GPUS=gpus, DEV2_NODES_FILE="/nonexistent")
+        return subprocess.run(
+            ["bash", str(M6 / "m6-index.sh"), "0" * 40, "M6-IB", "plan"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+    def test_index_plan_splits_shards_across_nodes(self):
+        out = self.index_plan("d4 d5 d6 d7 c1 c2 c3 c4")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        lines = out.stdout.splitlines()
+        self.assertIn("node d: shards 0,1,2,3 on GPU 4 5 6 7", lines)
+        self.assertIn("node c: shards 4,5,6,7 on GPU 1 2 3 4", lines)
+        self.assertIn('  launch.sh --gpus "9 9 9 9 1 2 3 4"', lines)
+        out = self.index_plan("d4 c1 d5 c2")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        lines = out.stdout.splitlines()
+        self.assertIn("node d: shards 0,2,4,6 on GPU 4 5", lines)
+        self.assertIn("node c: shards 1,3,5,7 on GPU 1 2", lines)
+        self.assertIn('  launch.sh --gpus "4 9 5 9 4 9 5 9"', lines)
+        self.assertIn('  launch.sh --gpus "9 1 9 2 9 1 9 2"', lines)
+        self.assertIn("  shard 6: node d GPU5", lines)
+        self.assertIn("  shard 7: node c GPU2", lines)
+        out = self.index_plan("4 5 6 7")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(
+            out.stdout.splitlines()[0], "node d: shards 0,1,2,3,4,5,6,7 on GPU 4 5 6 7"
+        )
+        for gpus, message in (
+            ("c0", "not 'c0'"),
+            ("d3", "not 'd3'"),
+            ("d4 d4", "lists d4 twice"),
+            ("4 d4", "lists d4 twice"),
+            (" ", "1-8 entries"),
+            ("c1 c2 c3 c4 c5 c6 c7 d4 d5", "1-8 entries"),
+        ):
+            with self.subTest(gpus=gpus):
+                out = self.index_plan(gpus)
+                self.assertEqual(out.returncode, 2)
+                self.assertIn(message, out.stderr)
 
     def test_bash_n(self):
         scripts = sorted(M6.glob("*.sh"))

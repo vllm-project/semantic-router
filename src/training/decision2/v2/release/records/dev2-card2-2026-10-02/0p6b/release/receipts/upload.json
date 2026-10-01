@@ -1,0 +1,12 @@
+{
+  "bytes": 1519921183,
+  "commit_url": "https://huggingface.co/llm-semantic-router/Decision-2.0-Kai-0.6B/commit/35882d496478472e95c862e0bc6bb2eeae4c09da",
+  "files": 32,
+  "manifest_sha256": "1c9c2710033587f0c64a1d7fbf5580f527486cf3d482988d0b2b970b45e44f38",
+  "private": true,
+  "repo": "llm-semantic-router/Decision-2.0-Kai-0.6B",
+  "revision": "35882d496478472e95c862e0bc6bb2eeae4c09da",
+  "schema": "dev2-hub-upload/1",
+  "seconds": 2.4049856280034874,
+  "utc": "2026-10-01T17:15:25.857721+00:00"
+}

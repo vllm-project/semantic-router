@@ -1,0 +1,256 @@
+{
+  "schema": "dev2-card2-verify/1",
+  "repos": [
+    {
+      "repo": "llm-semantic-router/Decision-2.0-Kai-0.6B",
+      "revision": "35882d496478472e95c862e0bc6bb2eeae4c09da",
+      "main_is_revision": true,
+      "private": true,
+      "former_id": "llm-semantic-router/DEV2.0-0.6B",
+      "former_resolves_to": "llm-semantic-router/Decision-2.0-Kai-0.6B",
+      "former_redirects": true,
+      "superseded": "38ac8e90eff6dc3022d547b32147a1de70fb90b2",
+      "changed_vs_superseded": [
+        "ATTRIBUTIONS.md",
+        "LICENSES/Qwen3-0.6B-Base-LICENSE.txt",
+        "NOTICE",
+        "README.md",
+        "assets/banner.png",
+        "assets/index-areas.png",
+        "assets/index-pareto.png",
+        "assets/jevarena-types.png",
+        "assets/jevarena.png",
+        "assets/jevarena.svg",
+        "assets/jevbench-public-231.svg",
+        "config.json",
+        "evaluation/EVALUATION.md",
+        "evaluation/manifest.json"
+      ],
+      "non_card_changes": [],
+      "config_changed_keys": [
+        "model_name"
+      ],
+      "config_model_name": "Decision-2.0-Kai-0.6B",
+      "removed_files_absent": true,
+      "card_assets_present": true,
+      "readme_chars": [
+        6588,
+        4122
+      ],
+      "readme_title": true,
+      "passed": true
+    },
+    {
+      "repo": "llm-semantic-router/Decision-2.0-Eos-0.8B",
+      "revision": "5c878c67d6a0c665b1c71e54eee8710593889eca",
+      "main_is_revision": true,
+      "private": true,
+      "former_id": "llm-semantic-router/DEV2.0-0.8B",
+      "former_resolves_to": "llm-semantic-router/Decision-2.0-Eos-0.8B",
+      "former_redirects": true,
+      "superseded": "db7a9259d505cd7a4b5b044eb9a072cd4846955e",
+      "changed_vs_superseded": [
+        "ATTRIBUTIONS.md",
+        "LICENSES/Qwen3.5-0.8B-LICENSE.txt",
+        "NOTICE",
+        "README.md",
+        "assets/banner.png",
+        "assets/index-areas.png",
+        "assets/index-pareto.png",
+        "assets/jevarena-types.png",
+        "assets/jevarena.png",
+        "assets/jevarena.svg",
+        "assets/jevbench-public-231.svg",
+        "config.json",
+        "evaluation/EVALUATION.md",
+        "evaluation/manifest.json"
+      ],
+      "non_card_changes": [],
+      "config_changed_keys": [
+        "model_name"
+      ],
+      "config_model_name": "Decision-2.0-Eos-0.8B",
+      "removed_files_absent": true,
+      "card_assets_present": true,
+      "readme_chars": [
+        6957,
+        4065
+      ],
+      "readme_title": true,
+      "passed": true
+    },
+    {
+      "repo": "llm-semantic-router/Decision-2.0-Sol-2B",
+      "revision": "73bb148b08891047c5ae96656548a9fbc387f2c8",
+      "main_is_revision": true,
+      "private": true,
+      "former_id": "llm-semantic-router/DEV2.0-2B",
+      "former_resolves_to": "llm-semantic-router/Decision-2.0-Sol-2B",
+      "former_redirects": true,
+      "superseded": "9f6ca45d76776f3d461ae8afea4531a18a1ae624",
+      "changed_vs_superseded": [
+        "ATTRIBUTIONS.md",
+        "LICENSES/Qwen3.5-2B-LICENSE.txt",
+        "NOTICE",
+        "README.md",
+        "assets/banner.png",
+        "assets/index-areas.png",
+        "assets/index-pareto.png",
+        "assets/jevarena-types.png",
+        "assets/jevarena.png",
+        "assets/jevarena.svg",
+        "assets/jevbench-public-231.svg",
+        "config.json",
+        "evaluation/EVALUATION.md",
+        "evaluation/manifest.json"
+      ],
+      "non_card_changes": [],
+      "config_changed_keys": [
+        "model_name"
+      ],
+      "config_model_name": "Decision-2.0-Sol-2B",
+      "removed_files_absent": true,
+      "card_assets_present": true,
+      "readme_chars": [
+        6976,
+        4105
+      ],
+      "readme_title": true,
+      "passed": true
+    },
+    {
+      "repo": "llm-semantic-router/Decision-2.0-Nox-4B",
+      "revision": "eff064856fd99342b5bf46a2ee41b4b3ecdac5b8",
+      "main_is_revision": true,
+      "private": true,
+      "former_id": "llm-semantic-router/DEV2.0-4B",
+      "former_resolves_to": "llm-semantic-router/Decision-2.0-Nox-4B",
+      "former_redirects": true,
+      "superseded": "dd60f0c24fe8de2001a307b1094ab2091bb1acc7",
+      "changed_vs_superseded": [
+        "ATTRIBUTIONS.md",
+        "LICENSES/Qwen3.5-4B-Base-LICENSE.txt",
+        "LICENSES/Qwen3.5-4B-LICENSE.txt",
+        "NOTICE",
+        "README.md",
+        "assets/banner.png",
+        "assets/index-areas.png",
+        "assets/index-pareto.png",
+        "assets/jevarena-types.png",
+        "assets/jevarena.png",
+        "assets/jevarena.svg",
+        "assets/jevbench-public-231.svg",
+        "config.json",
+        "evaluation/EVALUATION.md",
+        "evaluation/manifest.json"
+      ],
+      "non_card_changes": [],
+      "config_changed_keys": [
+        "model_name"
+      ],
+      "config_model_name": "Decision-2.0-Nox-4B",
+      "removed_files_absent": true,
+      "card_assets_present": true,
+      "readme_chars": [
+        7399,
+        4044
+      ],
+      "readme_title": true,
+      "passed": true
+    },
+    {
+      "repo": "llm-semantic-router/Decision-2.0-Lux-9B",
+      "revision": "586af77916ee508320421bda6c22f7f0305a7279",
+      "main_is_revision": true,
+      "private": true,
+      "former_id": "llm-semantic-router/DEV2.0-9B",
+      "former_resolves_to": "llm-semantic-router/Decision-2.0-Lux-9B",
+      "former_redirects": true,
+      "superseded": "a12ef72ef467fe5f6ecd1027d6b75640e87b9b94",
+      "changed_vs_superseded": [
+        "ATTRIBUTIONS.md",
+        "LICENSES/Qwen3.5-9B-LICENSE.txt",
+        "NOTICE",
+        "README.md",
+        "assets/banner.png",
+        "assets/index-areas.png",
+        "assets/index-pareto.png",
+        "assets/jevarena-types.png",
+        "assets/jevarena.png",
+        "assets/jevarena.svg",
+        "assets/jevbench-public-231.svg",
+        "config.json",
+        "evaluation/EVALUATION.md",
+        "evaluation/manifest.json"
+      ],
+      "non_card_changes": [],
+      "config_changed_keys": [
+        "model_name"
+      ],
+      "config_model_name": "Decision-2.0-Lux-9B",
+      "removed_files_absent": true,
+      "card_assets_present": true,
+      "readme_chars": [
+        7283,
+        4030
+      ],
+      "readme_title": true,
+      "passed": true
+    },
+    {
+      "repo": "llm-semantic-router/Decision-2.0-Vega-27B",
+      "revision": "d97928d3f0b99eb93b0ccd57ec1517841de02a8f",
+      "main_is_revision": true,
+      "private": true,
+      "former_id": "llm-semantic-router/DEV2.0-27B",
+      "former_resolves_to": "llm-semantic-router/Decision-2.0-Vega-27B",
+      "former_redirects": true,
+      "superseded": "e7b4a372ba8bb949f30337c5bbd2d0ad2f321027",
+      "changed_vs_superseded": [
+        "ATTRIBUTIONS.md",
+        "LICENSES/Qwen3.8-27B-LICENSE.txt",
+        "NOTICE",
+        "README.md",
+        "assets/banner.png",
+        "assets/index-areas.png",
+        "assets/index-pareto.png",
+        "assets/jevarena-types.png",
+        "assets/jevarena.png",
+        "assets/jevarena.svg",
+        "assets/jevbench-public-231.svg",
+        "config.json",
+        "evaluation/EVALUATION.md",
+        "evaluation/manifest.json"
+      ],
+      "non_card_changes": [],
+      "config_changed_keys": [
+        "model_name"
+      ],
+      "config_model_name": "Decision-2.0-Vega-27B",
+      "removed_files_absent": true,
+      "card_assets_present": true,
+      "readme_chars": [
+        7262,
+        4114
+      ],
+      "readme_title": true,
+      "passed": true
+    }
+  ],
+  "collection": {
+    "slug": "llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00",
+    "private": true,
+    "last_updated": "2026-10-01 17:01:30.949000+00:00",
+    "items": [
+      "llm-semantic-router/Decision-2.0-Vega-27B",
+      "llm-semantic-router/Decision-2.0-Lux-9B",
+      "llm-semantic-router/Decision-2.0-Nox-4B",
+      "llm-semantic-router/Decision-2.0-Sol-2B",
+      "llm-semantic-router/Decision-2.0-Eos-0.8B",
+      "llm-semantic-router/Decision-2.0-Kai-0.6B"
+    ],
+    "all_six_present": true,
+    "ascending_size_order": false
+  },
+  "passed": true
+}
