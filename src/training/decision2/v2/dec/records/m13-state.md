@@ -70,3 +70,13 @@
 5. Close-out: `python3 $O/m13_gpuh.py table` on E and F (cap 80); results record `dec-m13-results-2026-10-01.md`,
    gist 04 entry, merge into integration (`check_no_private.sh --strict --log`). Hand-offs per prereg (package on the
    repo's current `main`; custodian C1 IB content recheck before the item-8 spec; private Index request).
+
+## 2026-10-01 15:45Z — continuation; 2B rules: no finalist
+
+- Continuation resumed from `f15cb7139`. 4B formal collection running (node F GPU6 `4b-LH`, GPU7 `4b-LHA10SD`).
+- 2B post finished 15:36Z; scored on node A 15:37Z; rules run once 15:38Z. **`2b-RASD` fails** the Score type floor
+  (237 < 257 − 12; choice / Noul / Score 479 / 233 / 237; typed T .593 vs .610). Everything else held: HT-DEV v2
+  +.017 [−.001, +.034] TIE, retention +.008 [−.018, +.035], IB DEV +.179, transfer +.155 [+.126, +.186], hs1 false-yes
+  .494 vs .625. Contrast vs M12 `2b-RA`: HT-DEV v2 +.020 [+.006, +.034] GAIN, retention +.018 [−.007, +.044]; the
+  Score count moved 227 → 237, short of the floor. No 2B finalist; no exception (COORDINATION 23:15).
+- 0.8B: `08b-RAAG-s2` at step 4,571 of ≈ 4,790; then soup and post on node E GPU1.
