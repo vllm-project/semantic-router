@@ -18,10 +18,16 @@
 #                             each with a copy of the frozen cache; a shard starts once the previous one is ready
 #   resume NAME SHARDS K GPU  restart ended shard K in place on GPU (the kit skips final rows and retries errors)
 #   extra  NAME GPU ROWS TAG  the kit runner over ROWS alone -> P/runs/NAME/extra-TAG (foreground)
+#   scan   NAME SHARDS        node A (CPU container): request sizes of P/panel-SHARDS under the package's own encoder
+#                             (v2.27b.moe.index_scan; inputs only, nothing answered) -> P/scan/NAME-panel-SHARDS.json
+#   presplit NAME SHARDS T    node A host: requests of >= T padded tokens are skipped in their shard and rerun alone
+#                             after it (v2.27b.moe.index_skip presplit), so a request over one GPU's memory cannot
+#                             halt a shard
 #   auto-offer NAME           node B host (start detached): wait for the Stage B chain's frozen package, then offer;
 #                             ends without an offer if the chain skips the package (X/mlx/NAME.SKIP) or after 8 h
-#   auto-run NAME SHARDS GPU...  node A host (start detached): wait for X/index/NAME.OFFERED, then stage, parity on
-#                             the first GPU over the compatibility sample and, only on a pass, run on the listed GPUs
+#   auto-run NAME SHARDS GPU...  node A host (start detached): wait for X/index/NAME.OFFERED, then stage, scan (CPU,
+#                             beside the parity gate), parity on the first GPU over the compatibility sample and, only
+#                             on a pass, presplit at MOE_INDEX_MIN_PADDED (if set) and run on the listed GPUs
 # R = MOE_ROOT (default /data/dev2/runs/27b-moe; a path check sets R/pathcheck), P = MOE_INDEX_ROOT (default
 # /data/dev2/private/eval/index021/ix1), X = /data/dev2/xfer/27b-moe (node B). Every GPU job goes through
 # v2.27b.moe.launch (the track's lease, render node, wall-clock cap and GPU-hour receipt): no network, the mirror, kit,
@@ -41,6 +47,7 @@ KEY=/data/dev2/tmp/27b-moe-xfer
 BASE=/data/dev2/models/moe/gemma-4-26B-A4B-it
 MODEL_ID=llm-semantic-router/DEV2.0-27B-MoE-candidate
 ENGINE=v2.27b.moe.index_engine:MoEPackageIndexEngine
+IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1
 PANEL_ROWS=120226
 PANEL_DIGEST=6455d7be7ce3e902a73f4d854884f817e20a0fa8ba74252a299261c4f1d6ad50
 COMPAT_PREFIX=1356ceaf
@@ -218,13 +225,36 @@ EOF
       done
     done ;;
   _shard)  # NAME SHARDS K GPU SUFFIX: one shard in the foreground (started detached by run / resume)
+    # A request that aborts the device is skipped (v2.27b.moe.index_skip: rows.override.jsonl.gz) and the shard
+    # resumes, at most 4 attempts; then every skipped request is rerun alone (extra-sK-n), and one that fails again
+    # is recorded as a final error. Any other failure stops the shard for a person.
     NAME=$1 SHARDS=$2 K=$3 GPU=$4 SUFFIX=${5:-}
     PKG=$(staged "$NAME")
     SHA=$(pkg_sha "$PKG")
     PANEL=$P/panel-$SHARDS W=$P/runs/$NAME/shard-$K
-    job "$GPU" "d2-27b-moe-ix-$NAME-s$K-g$GPU${SUFFIX:+-r${SUFFIX#.}}" \
-      "27b-moe Index 0.2.1 private run $NAME shard $K of $SHARDS" "$W/receipt$SUFFIX.json" "$W" "$PKG" "$PANEL" \
-      "$(kit_script "$PANEL/shard-$K-of-$SHARDS.jsonl.gz" "$W" "$SHA")" ;;
+    SOURCE=$PANEL/shard-$K-of-$SHARDS.jsonl.gz
+    for _ in 1 2 3 4; do
+      ROWS=$SOURCE
+      [ ! -f "$W/rows.override.jsonl.gz" ] || ROWS=$W/rows.override.jsonl.gz
+      status=0
+      job "$GPU" "d2-27b-moe-ix-$NAME-s$K-g$GPU${SUFFIX:+-r${SUFFIX#.}}" \
+        "27b-moe Index 0.2.1 private run $NAME shard $K of $SHARDS" "$W/receipt$SUFFIX.json" "$W" "$PKG" "$PANEL" \
+        "$(kit_script "$ROWS" "$W" "$SHA")" || status=$?
+      [ "$status" != 0 ] || break
+      python3 -m v2.27b.moe.index_skip skip --shard-dir "$W" --rows "$SOURCE" || exit "$status"
+      i=1
+      while [ -e "$W/end_epoch.$i" ]; do i=$((i + 1)); done
+      for f in start_epoch end_epoch exit_code status.json; do [ ! -e "$W/$f" ] || mv "$W/$f" "$W/$f.$i"; done
+      SUFFIX=.$i
+    done
+    [ "$status" = 0 ] || { echo "shard $K still failing after 4 attempts" >&2; exit "$status"; }
+    for f in "$W"/extra-rows/*.jsonl.gz; do
+      [ -e "$f" ] || continue
+      tag=s$K-$(basename "$f" .jsonl.gz)
+      [ ! -e "$P/runs/$NAME/extra-$tag/end_epoch" ] || continue
+      bash "$0" extra "$MIR" "$NAME" "$GPU" "$f" "$tag" \
+        || python3 -m v2.27b.moe.index_skip abort --extra-dir "$P/runs/$NAME/extra-$tag" --rows "$f"
+    done ;;
   extra)
     NAME=${1:?NAME} GPU=${2:?GPU} ROWS=${3:?ROWS} TAG=${4:?TAG}
     name_ok "$NAME"; gpu_ok "$GPU"; kit_ok
@@ -236,6 +266,27 @@ EOF
     mkdir -p "$W/triton" && cp -a "$CACHE/." "$W/triton/"
     job "$GPU" "d2-27b-moe-ix-$NAME-extra-$TAG-g$GPU" "27b-moe Index extra $NAME $TAG" "$W/receipt.json" "$W" "$PKG" \
       "$(dirname "$ROWS")" "$(kit_script "$ROWS" "$W" "$SHA")" ;;
+  scan)
+    NAME=${1:?NAME} SHARDS=${2:?SHARDS}
+    name_ok "$NAME"
+    PKG=$(staged "$NAME")
+    PANEL=$P/panel-$SHARDS OUT=$P/scan/$NAME-panel-$SHARDS.json
+    [ -f "$PANEL/panel.json" ] || { echo "no $SHARDS-way panel" >&2; exit 2; }
+    [ ! -e "$OUT" ] || { echo "$OUT exists" >&2; exit 66; }
+    mkdir -p "$P/scan"
+    docker run --rm --name "d2-27b-moe-ix-$NAME-scan" --network none --cpus 32 -e HIP_VISIBLE_DEVICES= \
+      -e ROCR_VISIBLE_DEVICES= -e PYTHONPATH=/code -e PYTHONDONTWRITEBYTECODE=1 -e HF_HUB_OFFLINE=1 \
+      -e TRANSFORMERS_OFFLINE=1 -e TOKENIZERS_PARALLELISM=false \
+      --mount "type=bind,src=$S,dst=/code,readonly" --mount "type=bind,src=$PKG,dst=$PKG,readonly" \
+      --mount "type=bind,src=$PANEL,dst=$PANEL,readonly" --mount "type=bind,src=$P/scan,dst=$P/scan" \
+      -w /code --entrypoint python3 "$IMAGE" -m v2.27b.moe.index_scan --checkpoint "$PKG/checkpoint" \
+      --panel "$PANEL/panel.json" --out "$OUT" --max-length "$(json "$PKG/PACKAGE.json" max_input_tokens)" --workers 32 ;;
+  presplit)
+    NAME=${1:?NAME} SHARDS=${2:?SHARDS} MIN=${3:?MIN_PADDED_TOKENS}
+    name_ok "$NAME"
+    [[ "$MIN" =~ ^[0-9]+$ ]] || { echo "MIN_PADDED_TOKENS must be an integer" >&2; exit 2; }
+    python3 -m v2.27b.moe.index_skip presplit --scan "$P/scan/$NAME-panel-$SHARDS.json" \
+      --panel "$P/panel-$SHARDS/panel.json" --run "$P/runs/$NAME" --min-padded-tokens "$MIN" ;;
   auto-offer)
     NAME=${1:?NAME}; name_ok "$NAME"
     F=$R/$NAME/package/PACKAGE.json
@@ -259,8 +310,15 @@ EOF
       if rs "root@$PEER:index/$NAME.OFFERED" "$T/" 2> /dev/null; then
         echo "$(date -u +%FT%TZ) $NAME offered; staging"
         bash "$0" stage "$MIR" "$NAME"
-        echo "$(date -u +%FT%TZ) parity gate on GPU$1"
+        mkdir -p "$P/logs"
+        bash "$0" scan "$MIR" "$NAME" "$SHARDS" > "$P/logs/scan-$NAME.log" 2>&1 &
+        scan=$!
+        echo "$(date -u +%FT%TZ) parity gate on GPU$1 (scan pid $scan)"
         bash "$0" parity "$MIR" "$NAME" "$1"
+        wait "$scan" || { echo "$(date -u +%FT%TZ) scan failed (logs/scan-$NAME.log)"; exit 1; }
+        if [ -n "${MOE_INDEX_MIN_PADDED:-}" ]; then
+          bash "$0" presplit "$MIR" "$NAME" "$SHARDS" "$MOE_INDEX_MIN_PADDED"
+        fi
         echo "$(date -u +%FT%TZ) parity passed; starting $SHARDS shards on GPUs $*"
         exec bash "$0" run "$MIR" "$NAME" "$SHARDS" "$@"
       fi

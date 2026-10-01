@@ -18,6 +18,7 @@ from unittest.mock import patch
 
 engine_module = importlib.import_module("v2.27b.moe.index_engine")
 index_ref = importlib.import_module("v2.27b.moe.index_ref")
+index_skip = importlib.import_module("v2.27b.moe.index_skip")
 ix1_parity = importlib.import_module("v2.eval.ix1.parity")
 
 MODEL_ID = "llm-semantic-router/DEV2.0-27B-MoE-candidate"
@@ -385,6 +386,81 @@ class ReferenceTests(unittest.TestCase):
         self.assertTrue(report["pass"], report)
         with self.assertRaisesRegex(ValueError, "different run IDs"):
             index_ref.convert(self.rows, predictions[:2])
+
+
+class SkipTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.rows = [
+            {
+                "_evaluation": {"run_id": f"r{i}", "catalog_id": 1},
+                "state": "s",
+                "questions": {},
+            }
+            for i in range(5)
+        ]
+        (self.root / "panel").mkdir()
+        self.source = self.root / "panel" / "shard-0-of-1.jsonl.gz"
+        index_skip.write_rows(self.source, self.rows)
+        self.panel = self.root / "panel" / "panel.json"
+        self.panel.write_text(
+            json.dumps({"run_ids_sha256": "x", "shards": [{"file": self.source.name}]})
+        )
+        self.shard = self.root / "run" / "shard-0"
+
+    def ids(self, path: Path) -> list[str]:
+        return [r["_evaluation"]["run_id"] for r in index_skip.read_rows(path)]
+
+    def test_presplit_then_device_failures_are_skipped_and_rerun_alone(self) -> None:
+        scan = {
+            "panel_run_ids_sha256": "x",
+            "requests": [
+                {"run_id": "r3", "padded_tokens": 500_000},
+                {"run_id": "r1", "padded_tokens": 10},
+            ],
+        }
+        index_skip.presplit(scan, self.panel, self.root / "run", 300_000)
+        self.assertEqual(json.loads((self.shard / "skipped.json").read_text()), ["r3"])
+        self.assertEqual(
+            self.ids(self.shard / "rows.override.jsonl.gz"), ["r0", "r1", "r2", "r4"]
+        )
+        with self.assertRaises(SystemExit):
+            index_skip.presplit(scan, self.panel, self.root / "run", 300_000)
+        results = self.shard / "results.jsonl"
+        results.write_text(
+            "".join(
+                json.dumps({"run_id": r, "status": "ok"}) + "\n" for r in ("r0", "r1")
+            )
+        )
+        self.assertEqual(index_skip.skip(self.shard, self.source)["skipped"], "r2")
+        with results.open("a") as stream:
+            stream.write(
+                json.dumps(
+                    {"run_id": "r4", "status": "error", "exception": "OutOfMemoryError"}
+                )
+                + "\n"
+            )
+        self.assertEqual(index_skip.skip(self.shard, self.source)["skipped"], "r4")
+        self.assertEqual(self.ids(self.shard / "rows.override.jsonl.gz"), ["r0", "r1"])
+        self.assertEqual(self.ids(self.shard / "extra-rows" / "3.jsonl.gz"), ["r4"])
+        with results.open("a") as stream:
+            stream.write(
+                json.dumps({"run_id": "r0", "status": "error", "error": "bad"}) + "\n"
+            )
+        with self.assertRaises(SystemExit) as caught:
+            index_skip.skip(self.shard, self.source)
+        self.assertEqual(caught.exception.code, 3)
+
+    def test_abort_records_one_final_error(self) -> None:
+        extra = self.root / "run" / "extra-s0-1"
+        rows = self.root / "one.jsonl.gz"
+        index_skip.write_rows(rows, self.rows[:1])
+        self.assertTrue(index_skip.abort(extra, rows, "aborted")["recorded"])
+        self.assertFalse(index_skip.abort(extra, rows, "aborted")["recorded"])
+        (record,) = index_skip.final_records(extra / "results.jsonl").values()
+        self.assertEqual((record["status"], record["catalog_id"]), ("error", 1))
 
 
 if __name__ == "__main__":
