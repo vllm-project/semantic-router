@@ -205,6 +205,95 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 00:15 — **M13 complete: no successor (c473a3b2). Key finding: additive IB costs multilingual decisions.
+  M15 launched.** Results `dec-m13-results-2026-10-01.md` (`e16c5926f`), gist 04; integration `d4b7fe240`; 14.21 of
+  80 GPU-h.
+  - **`4b-LHA10SD`** passed every development gate (typed heads protected by self-distillation: Score 372 vs M12's
+    329). It **failed formal**:
+    - item 1: v3 67.19 vs 67.34, −0.16 [−2.84, +3.64];
+    - item 4: mlx-diag −.029 [−.039, −.018].
+    - Items 2, 3, 5, 6(a) and 7 pass; 6(b) was not evaluated (a scorer bug, now fixed; items 1 and 4 already decide).
+  - **2B / 0.8B self-distillation arms** fail type floors: the loss moves between heads.
+    - `2b-RASD`: Score 237 < 245, choice 479.
+    - `08b-RASD`: choice 574 < 586.
+    - `08b-RAAG`: choice + `attribute_gate`.
+  - **Finding:** **English-heavy IB added on top of a recipe erodes multilingual decisions** (4B −.029; 0.8B fast-track
+    −.014), and no development gate caught it. By contrast, 9B K-a13IB *swapped* IB into its mixture and passed a
+    development MLX guard; its formal result is pending.
+  - **M15 (resumed):**
+    - **(A)** a private Index diagnostic of the frozen `4b-LHA10SD` (not releasable), to quantify the breadth vs
+      multilingual trade-off for the user;
+    - **(B)** IB additive with the **multilingual token share held at the released mixture's**, plus typed-row
+      self-distillation and a **mandatory development MLX guard**; arms 4B LHA10SD-ML, 0.8B RASD-ML, 2B RASD-ML;
+      70 GPU-h on E / F.
+  - **All tracks:** any IB-additive arm must carry a development multilingual guard.
+
+- 2026-10-02 00:10 — **IB3 published but NOT release-safe (611782db); IB3-r2 commissioned (maths core + optional
+  claim-level grounding).** Data: private `@c2401ab4` `m6/ib3/`; records merged at `29caad2de`.
+  - **Contents.** TRAIN 24,148 rows:
+
+    | Family | Source and licence | Rows |
+    | --- | --- | ---: |
+    | `wpd` (phishing links) | Mendeley web-page phishing, CC BY 4.0 | 3,700 |
+    | `phiu` (phishing pages) | PhiUSIIL, CC BY 4.0 | 1,720 |
+    | `esci` (Exact vs Irrelevant, in-distribution) | ESCI train, Apache-2.0 | 9,970 |
+    | `mqa` (MathQA per-option, formula-verified keys) | MathQA, Apache-2.0 | 8,758 |
+
+    - Every audit passes, including a new Index URL / host guard (103 groups dropped; controls 500/500).
+  - **Review:** 29/216 = 13.4% (upper 18.7%).
+    - Phishing families: 20 errors. The labels are blocklist-based and not checkable from the URL; the reviewers agreed
+      on 214 of 216 items.
+    - `esci`: 8 errors at the Exact boundary.
+    - `mqa`: 1/54.
+  - **Not covered:**
+    - grounding (FaithDial / HaluEval leak through the response alone; the passage-swap redesign failed the screen);
+    - contracts (MAUD too small after exclusions; LEDGAR licence conflicting);
+    - phishing email (no licensed legitimate corpus);
+    - excluded by licence: LLM-AggreFact (ND), TofuEval / RAGTruth (NC).
+  - **IB3-r2:** the maths `mqa` block plus optional claim-level grounding (e.g. WiCE; screen-gated); no phishing /
+    ESCI; a fresh review. IB3-r2 needs the custodian C1 recheck before C1-scored use.
+  - **Program lesson:** for the phishing / PhishNChips family, no licence-clean source yet has row-checkable labels.
+    Keep it an open gap rather than adding noisy labels.
+
+- 2026-10-02 00:05 — **User decisions (23:53–00:00): naming and a product-style card (round 2).**
+  - **Naming (confirmed):** `Decision-2.0-{codename}-{size}`. The codename follows the size slot across generations.
+    Repos move with `move_repo`, so old IDs redirect.
+
+    | Current repo | New repo |
+    | --- | --- |
+    | `DEV2.0-0.6B` | `Decision-2.0-Kai-0.6B` |
+    | `DEV2.0-0.8B` | `Decision-2.0-Eos-0.8B` |
+    | `DEV2.0-2B` | `Decision-2.0-Sol-2B` |
+    | `DEV2.0-4B` | `Decision-2.0-Nox-4B` |
+    | `DEV2.0-9B` | `Decision-2.0-Lux-9B` |
+    | `DEV2.0-27B` | **`Decision-2.0-Vega-27B`** (new flagship codename) |
+
+    - The collaborator's `DEV2.0-Route-0.6B` is not renamed by us (suggest `Decision-2.0-Route-0.6B` to subin / the
+      user).
+    - **After the rename, every release hand-off and the tooling (hub ID guard, registries, collection, `API.md`,
+      snippets) use the new IDs.** Historical records keep the old names.
+  - **Card policy (supersedes 22:05 / 22:20):**
+    - **NO training-data section, NO limitations section, NO NOTICE file, NO dataset credits, NO training details**
+      (LoRA / architecture internals / precision / runtime notes). Treat it as a distributed product.
+    - Keep only the Apache-2.0 `LICENSE` file and the `base_model` metadata (the minimum Apache-2.0 requires of a
+      derivative).
+    - **Remove JevBench.** Evaluation = **JevArena + Jev Decision Index** only.
+    - **A branded top banner** (vLLM-SR logo; brand blue `#30A0FC` / yellow `#FCB414`; Inter on white). **Every chart
+      carries the vLLM-SR logo bottom-right.**
+    - Richer evaluation charts:
+      - JevArena overall vs same-size peers and the 1.0 counterpart;
+      - JevArena by decision type (Choice / Yes-No / Score + human-labelled transfer);
+      - the Jev Decision Index Pareto (family; this size highlighted);
+      - the Jev Decision Index by area vs the 1.0 counterpart.
+    - The Index charts carry the reproduction label as a footnote.
+    - **Quickstart = code only** (no device / version prose).
+    - **Highlights must be product value** (best-in-size, generation gain, speed, many questions in one pass), not
+      plumbing.
+    - Drop `evaluation/EVALUATION.md`, or reduce it to nothing user-facing.
+    - The prototype assets are in the local private `card-preview/proto-v2/` (`make_v2_assets.py`).
+  - **Execution:** the card worker (4c0a68cd) finishes round 1 (all six round-1 cards are on HF at 15:00–15:41Z), then
+    is resumed for rename + round 2 in one pass.
+
 - 2026-10-01 23:40 — **M13 (c473a3b2): the 4B finalist `4b-LHA10SD` passes every development gate; formal is
   collecting. 2B / 0.8B are scoring. Continuation resumed.**
   - **`4b-LHA10SD`** (LH + 10% IB additive + **typed-row self-distillation** from LH), vs LH:

@@ -1,0 +1,402 @@
+{
+ "folds": {
+  "groups": [
+   353,
+   368,
+   349,
+   316,
+   344
+  ],
+  "rows": [
+   353,
+   368,
+   349,
+   316,
+   344
+  ],
+  "rule": "int(sha256(group_id).hexdigest(), 16) % 5"
+ },
+ "gate": {
+  "margin": 0.05,
+  "min_rows": 30,
+  "rule": "PASS iff accuracy <= majority + margin; majority is the cross-validated position prior on the same rows",
+  "views": [
+   "state_removed",
+   "option_only",
+   "hypothesis_only"
+  ]
+ },
+ "gates": [
+  {
+   "accuracy": 0.495954,
+   "delta": 0.020809,
+   "families_over_margin": [],
+   "majority": 0.475145,
+   "n": 1730,
+   "pass": true,
+   "task_type": "noul",
+   "threshold": 0.525145,
+   "view": "state_removed",
+   "wilson95": [
+    0.472429,
+    0.519497
+   ]
+  },
+  {
+   "accuracy": 0.491329,
+   "delta": 0.016185,
+   "families_over_margin": [],
+   "majority": 0.475145,
+   "n": 1730,
+   "pass": true,
+   "task_type": "noul",
+   "threshold": 0.525145,
+   "view": "option_only",
+   "wilson95": [
+    0.467817,
+    0.51488
+   ]
+  }
+ ],
+ "groups": 1730,
+ "heuristics": {
+  "lexical_overlap": {
+   "n_rows": 0
+  },
+  "longest_option": {
+   "by_family": {
+    "phiu": {
+     "accuracy": 0.5,
+     "correct": 865,
+     "delta": 0.024855,
+     "exceeds_margin": false,
+     "majority": 0.475145,
+     "n": 1730,
+     "wilson95": [
+      0.476465,
+      0.523535
+     ]
+    }
+   },
+   "by_source": {
+    "uci_phiusiil": {
+     "accuracy": 0.5,
+     "correct": 865,
+     "delta": 0.024855,
+     "exceeds_margin": false,
+     "majority": 0.475145,
+     "n": 1730,
+     "wilson95": [
+      0.476465,
+      0.523535
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "phiu": {
+      "accuracy": 0.5,
+      "correct": 865,
+      "delta": 0.024855,
+      "exceeds_margin": false,
+      "majority": 0.475145,
+      "n": 1730,
+      "wilson95": [
+       0.476465,
+       0.523535
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.5,
+     "correct": 865,
+     "delta": 0.024855,
+     "exceeds_margin": false,
+     "majority": 0.475145,
+     "n": 1730,
+     "wilson95": [
+      0.476465,
+      0.523535
+     ]
+    }
+   },
+   "n_rows": 1730
+  },
+  "position_prior": {
+   "by_family": {
+    "phiu": {
+     "accuracy": 0.475145,
+     "correct": 822,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.475145,
+     "n": 1730,
+     "wilson95": [
+      0.451694,
+      0.498706
+     ]
+    }
+   },
+   "by_source": {
+    "uci_phiusiil": {
+     "accuracy": 0.475145,
+     "correct": 822,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.475145,
+     "n": 1730,
+     "wilson95": [
+      0.451694,
+      0.498706
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "phiu": {
+      "accuracy": 0.475145,
+      "correct": 822,
+      "delta": 0.0,
+      "exceeds_margin": false,
+      "majority": 0.475145,
+      "n": 1730,
+      "wilson95": [
+       0.451694,
+       0.498706
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.475145,
+     "correct": 822,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.475145,
+     "n": 1730,
+     "wilson95": [
+      0.451694,
+      0.498706
+     ]
+    }
+   },
+   "n_rows": 1730
+  }
+ },
+ "input": {
+  "rows": 1730,
+  "sha256": "48e0574f32eb36825ebc4253cf644f4d6e16db8d20c5e74833aa021b4a8f89f9"
+ },
+ "learner": {
+  "bits": 20,
+  "epochs": 4,
+  "instruction_cross_cap": 64,
+  "l2": 1e-06,
+  "learning_rate": 0.1,
+  "seed": 0,
+  "state_cross_cap": 128,
+  "state_cross_unigrams": 64,
+  "state_gram_cap": 128,
+  "text_gram_cap": 1024
+ },
+ "majority": {
+  "noul": {
+   "accuracy": 0.475145,
+   "n": 1730
+  }
+ },
+ "rows": 1730,
+ "schema": "decision2.v2.shortcut.v1",
+ "verdict": "PASS",
+ "views": {
+  "full_input": {
+   "by_family": {
+    "phiu": {
+     "accuracy": 0.731214,
+     "correct": 1265,
+     "delta": 0.256069,
+     "exceeds_margin": true,
+     "majority": 0.475145,
+     "n": 1730,
+     "wilson95": [
+      0.709828,
+      0.751575
+     ]
+    }
+   },
+   "by_source": {
+    "uci_phiusiil": {
+     "accuracy": 0.731214,
+     "correct": 1265,
+     "delta": 0.256069,
+     "exceeds_margin": true,
+     "majority": 0.475145,
+     "n": 1730,
+     "wilson95": [
+      0.709828,
+      0.751575
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "phiu": {
+      "accuracy": 0.731214,
+      "correct": 1265,
+      "delta": 0.256069,
+      "exceeds_margin": true,
+      "majority": 0.475145,
+      "n": 1730,
+      "wilson95": [
+       0.709828,
+       0.751575
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.731214,
+     "correct": 1265,
+     "delta": 0.256069,
+     "exceeds_margin": true,
+     "majority": 0.475145,
+     "n": 1730,
+     "wilson95": [
+      0.709828,
+      0.751575
+     ]
+    }
+   },
+   "n_rows": 1730
+  },
+  "hypothesis_only": {
+   "n_rows": 0
+  },
+  "option_only": {
+   "by_family": {
+    "phiu": {
+     "accuracy": 0.491329,
+     "correct": 850,
+     "delta": 0.016185,
+     "exceeds_margin": false,
+     "majority": 0.475145,
+     "n": 1730,
+     "wilson95": [
+      0.467817,
+      0.51488
+     ]
+    }
+   },
+   "by_source": {
+    "uci_phiusiil": {
+     "accuracy": 0.491329,
+     "correct": 850,
+     "delta": 0.016185,
+     "exceeds_margin": false,
+     "majority": 0.475145,
+     "n": 1730,
+     "wilson95": [
+      0.467817,
+      0.51488
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "phiu": {
+      "accuracy": 0.491329,
+      "correct": 850,
+      "delta": 0.016185,
+      "exceeds_margin": false,
+      "majority": 0.475145,
+      "n": 1730,
+      "wilson95": [
+       0.467817,
+       0.51488
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.491329,
+     "correct": 850,
+     "delta": 0.016185,
+     "exceeds_margin": false,
+     "majority": 0.475145,
+     "n": 1730,
+     "wilson95": [
+      0.467817,
+      0.51488
+     ]
+    }
+   },
+   "n_rows": 1730
+  },
+  "state_removed": {
+   "by_family": {
+    "phiu": {
+     "accuracy": 0.495954,
+     "correct": 858,
+     "delta": 0.020809,
+     "exceeds_margin": false,
+     "majority": 0.475145,
+     "n": 1730,
+     "wilson95": [
+      0.472429,
+      0.519497
+     ]
+    }
+   },
+   "by_source": {
+    "uci_phiusiil": {
+     "accuracy": 0.495954,
+     "correct": 858,
+     "delta": 0.020809,
+     "exceeds_margin": false,
+     "majority": 0.475145,
+     "n": 1730,
+     "wilson95": [
+      0.472429,
+      0.519497
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "phiu": {
+      "accuracy": 0.495954,
+      "correct": 858,
+      "delta": 0.020809,
+      "exceeds_margin": false,
+      "majority": 0.475145,
+      "n": 1730,
+      "wilson95": [
+       0.472429,
+       0.519497
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.495954,
+     "correct": 858,
+     "delta": 0.020809,
+     "exceeds_margin": false,
+     "majority": 0.475145,
+     "n": 1730,
+     "wilson95": [
+      0.472429,
+      0.519497
+     ]
+    }
+   },
+   "n_rows": 1730
+  }
+ }
+}

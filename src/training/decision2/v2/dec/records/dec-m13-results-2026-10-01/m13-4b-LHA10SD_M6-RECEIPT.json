@@ -1,0 +1,84 @@
+{
+ "cache": {
+  "after_manifest": "/data/dev2/runs/dec/formal/m13/m13-4b-LHA10SD.cache-after.sha256",
+  "after_manifest_sha256": "d58dbddb12ab3e093bc353bb7357bbf2dfde7071c17b9a9fade6b59358d702fb",
+  "changed_entries": 13,
+  "changed_entry_names": [
+   "./63D7T26ITTXXEGOYKTA4BFY4BLV2UE56HJN7JGY5ZK6ZRNMRNDVA/__grp__chunk_gated_delta_rule_fwd_kernel_h_blockdim64.json",
+   "./BH2F2EGJV4N6EWMBE5ERKEJ6TQ2SLJYJ5JLJYD6O3ZBJHUR4POBQ/__grp__l2norm_fwd_kernel.json",
+   "./CCXBJUMNA35JYWNQRBGYSIOGO3FR7QBBQLNUMBCORS2IWOMX5P7Q/__grp__chunk_gated_delta_rule_fwd_kkt_solve_kernel.json",
+   "./DGJEK55XV42EXBXUPFAAW5DDRXQOEXTQWW3PQYGAPZIIPPLV4YWA/__grp__l2norm_fwd_kernel.json",
+   "./DWRDX4TEWZXID47FDBTTZOAXM3P37QMNNCSUEEW3IGCV6OXPDQ7A/__grp__l2norm_fwd_kernel.json",
+   "./JDVN6VRA3BZDLLEZ2ABQD7O6UBC62XJ52F5Q7NVQ3WFWMSUQMDBA/__grp__l2norm_fwd_kernel.json",
+   "./OEUKVSSQHJDP65GEZXCH4TCLXIQ77A7ZVAIQQEMAZXBCVZPCOLRQ/__grp__l2norm_fwd_kernel.json",
+   "./PGKLILTEQKY323CHSQT2PLZIQ2MAITSNQ4NHGY62B3VMWW42OCAA/__grp__chunk_local_cumsum_scalar_kernel.json",
+   "./S56D7RNVKRF465MIT5CVSY3IZJI76YLULGK4UX2IFR2BMHT63NPA/__grp__chunk_fwd_kernel_o.json",
+   "./SY44ZG6BFZ5JUH3CU4G7SL4ONWQSUVTGQS23I74CIHL3BCU22HYQ/__grp__recompute_w_u_fwd_kernel.json",
+   "./UFRPVB3EXCYNCLNKDZPU2KHD7SPU7E3DZSHWQGAEQP2ROBHQT4GA/__grp__l2norm_fwd_kernel.json",
+   "./XR47BECIIVU37GATJ2CIXAGOB7OK7YLPOJ777W3FB57ALHUATBXQ/__grp__l2norm_fwd_kernel.json",
+   "./ZNXOJ3FMHHEPTND5C4BAIGA6FKRWKQG3EDYAE4HFSMRNKIFM2ODQ/__grp__chunk_local_cumsum_scalar_kernel.json"
+  ],
+  "dir": "/data/dev2/runs/dec/formal/m13/m13-4b-LHA10SD-cache",
+  "entries_after": 1654,
+  "entries_master": 1654,
+  "flag_new_cache_entries": true,
+  "master_manifest": "/data/dev2/runs/dec/formal/m5/cache-frozen.sha256",
+  "master_manifest_sha256": "f6d0f9207e436aa0090f51d1d4163e9f58edeb067ac28b894fb5e58612ea11d8",
+  "new_entries": 0,
+  "new_entry_names": [],
+  "removed_entries": 0
+ },
+ "calibration_rule": {
+  "adopt": false,
+  "candidate_sha256": "d35b3be80e4dc4cbfd17baad65c1b530f51e1e65c50c193c9987a51ea35c22a4",
+  "candidate_temperatures": {
+   "choice": 0.7611359018310097,
+   "noul": 0.6432004602247169,
+   "score": 0.3353941354555302
+  },
+  "file": "/data/dev2/runs/dec/formal/m13/pkg/m13-4b-LHA10SD/m6/m13-4b-LHA10SD/calibration-decision.json",
+  "sha256": "a5cc151fbb7a15d75f65f4f5601ca9450be6340993021d12368ff1c04f9443e7",
+  "worsened": [
+   "css_pilot_ece_15",
+   "typed_dev_ece_10"
+  ]
+ },
+ "calibration_used": "none",
+ "collect_args": [
+  "--extra",
+  "model_id=decision2-dec-m13-4b-LHA10SD"
+ ],
+ "gpu": 7,
+ "gpu_hours": 0.09638801197210947,
+ "image_id": "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1",
+ "kind": "finalist",
+ "label": "decision2-dec-m13-4b-LHA10SD",
+ "m5_receipt_note": "M5-RECEIPT.json comes from ops/m5/m5-receipt.py, whose node field is fixed to B; node here is authoritative",
+ "m5_receipt_sha256": "d2b8072b66105911eeb64cbf1cd103b24f60f702290f83da95942d5873c42ad9",
+ "model": "/data/dev2/runs/dec/formal/m13/pkg/m13-4b-LHA10SD/m6/m13-4b-LHA10SD/checkpoint",
+ "name": "m13-4b-LHA10SD",
+ "node": "F",
+ "package_dir": "/data/dev2/runs/dec/formal/m13/pkg/m13-4b-LHA10SD",
+ "parameters": 4208383488,
+ "point": "4b-LHA10SD",
+ "revision": "2bd31db8c73d75298d8ef607126539c4fe24b1a9f4e0e83f2e7797b603186cf6",
+ "revision_matches_list": true,
+ "schema": "dec-m6-formal-receipt/1",
+ "seal_sha256": "7ac88cc9bcdd82433503460bb211216ee81c05aad9624a44415b6a5f6ffcf74f",
+ "selection": {
+  "G": null,
+  "H3": null,
+  "T": null,
+  "effective_weights": null,
+  "line": "4b-LHA10SD",
+  "proxy": null,
+  "slot": 1,
+  "step": null
+ },
+ "spec": "/data/dev2/src/c2610143be2ff302c080a5cdfe093e41d173f8da-src_training_decision2/src/training/decision2/v2/dec/ops/m5/m5-adapter-infer-dec-t1.json",
+ "tier": "4b",
+ "tier_label": "4B",
+ "wall_seconds": 346.9968430995941,
+ "weights_json": "/data/dev2/runs/dec/formal/m13/pkg/m13-4b-LHA10SD/m6/m13-4b-LHA10SD/weights.json",
+ "weights_json_sha256": "d210f8271c547a36eb15fc41e97d6ee032d4e6fa4dfcbd592eaa6e3377395609"
+}
