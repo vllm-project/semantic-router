@@ -1,0 +1,44 @@
+{
+  "external_agreement": "no external 27B values",
+  "gpu_hours_full_run": 9.8236,
+  "label": "independent provisional 0.2.1 reproduction (values private)",
+  "model": {
+    "base": {
+      "repo_id": "Qwen/Qwen3.8-27B",
+      "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
+    },
+    "calibration": null,
+    "model_id": "llm-semantic-router/DEV2.0-27B",
+    "model_sha256": "2e07451107a2ca9735064cc01f7e43e8522b4bae48f2d77bdf29f7ea2fe6362c",
+    "package_manifest_sha256": "82c71c2e232be71e842784cf8f305b1de7d81ff67a58fe11b4464f88b2e62d37",
+    "profile": "qwen-adapter",
+    "revision": "5323310327e52d4eadd119cd10accac9b106c97d"
+  },
+  "non_ok_reasons": {
+    "The package returned 'invalid_model_output'": 1,
+    "device memory access fault (process abort) on every attempt: node D GPU3 twice, GPU0 once": 1
+  },
+  "panel": {
+    "rows": 120226,
+    "run_ids_sha256": "6455d7be7ce3e902a73f4d854884f817e20a0fa8ba74252a299261c4f1d6ad50",
+    "shards_file": "panel-8"
+  },
+  "parity_gate": {
+    "max_abs_dp": 0.0,
+    "pass": true,
+    "questions_compared": 419,
+    "requests": 86,
+    "statuses": {
+      "ok": 86
+    },
+    "tolerance": 0.0001
+  },
+  "results_sha256": "dfe7ee90dc5d0a3f035d0e9a2d995fcf6ff24227d2aab7728a28de21475af154",
+  "schema": "ix1-public-receipt/1",
+  "scorer_gate": "port vs kit 87d4650b: pass (per-benchmark <= 1.5e-4, headline <= 0.01)",
+  "statuses": {
+    "error": 2,
+    "ok": 120224
+  },
+  "superseded_error_records": 1
+}

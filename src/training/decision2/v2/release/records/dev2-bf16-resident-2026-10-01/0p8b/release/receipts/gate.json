@@ -1,0 +1,48 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the BF16-resident runtime rollout (runtime-only revisions of the six released repositories, each only with 0 answer changes on every scored prompt and on mlx-diag), assigned to release engineering in the cross-track note of 2026-10-01 10:30 UTC+8 (b5f60b33) and adopted as the default under the user's full-autonomy mandate",
+  "decision": "release",
+  "decision_sha256": "d0b8347b1e32b66b7b2356d28e80fb1754bff96a9d0398d4be7e1c1751207106",
+  "items": {
+    "1_beats_own_1_0": {
+      "evidence": "paired v3 95% interval low +3.646 (sha fa62c29a1920)",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "11 results below own 1.0 listed in the card tradeoffs table",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 30 files re-hashed; loaded 753446208",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "3fb9e83e24c196adbf3a9fdb12e44ed0dc0dad0d4aea2bd87e649eb01834b3ed",
+  "model_name": "DEV2.0-0.8B",
+  "receipts_sha256": {
+    "card-post": "410067683e429c708066358376d08688de8b4c68cb918e0eb79e089f82494852",
+    "card-pre": "b71d13ba701be830af8df45b98f6fa038dc2aac99ed909b947553d046f31f6b2",
+    "download": "0992641ca2eb0ecf0c52342e954c3973c9a312b7c69c436793fbb6f16febe869",
+    "post": "e82131f98e8fee539e1e6183251ad74d846113ba4902f791241d713a963b955b",
+    "readback": "64e65eb8562265e40049c0612075999d08b740b9567ac2c9a803e983c91fc03e",
+    "repeat-post": "7536f8683ae752730f0dbc10a4eb5d5bebf03952bc04709283e715f8d133dccf",
+    "repeat-pre": "fd3266d4f29c9d63427508b2697d7b468a1920cf0a2455d85a7a94f086021343",
+    "tree": "4558981bdc652fa71fdb1ccae397b7f36f9b69f8b3061d944ce5ccc47492ef3f",
+    "upload": "dc7886cb1e5bec2be138b9bd0a78d0f3f10c54c1ab8ade562a5db12dd58e5961"
+  },
+  "repo_id": "llm-semantic-router/DEV2.0-0.8B",
+  "revision": "e13a40f848b3b27489fa4083d5e75950750f4856",
+  "schema": "dev2-release-gate/1",
+  "utc": "2026-10-01T03:59:29.483616+00:00"
+}

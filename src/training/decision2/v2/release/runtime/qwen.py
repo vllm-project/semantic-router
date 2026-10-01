@@ -5,10 +5,14 @@ normalization come from the vendored modules that produced the scored
 predictions (``_vendor/dev2model``), byte for byte except where the manifest
 records an import-only rewrite. A base-bound adapter's source files are pinned
 by repository revision and SHA-256; a supplied or downloaded copy is verified
-before use. GPU inference uses a BF16 backbone with an FP32 head; CPU uses FP32.
+before use. GPU inference runs the backbone under BF16 autocast with its
+BF16-exact Linear weights held in BF16 and every other tensor, the head
+included, in FP32; CPU uses FP32.
 A package whose manifest names a weight ``storage`` codec (bf16z) is first restored
 to exact safetensors files in a cache directory; the restored checkpoint must
-reproduce the scored identity.
+reproduce the scored identity. A checkpoint whose ``decision_config.json`` declares
+``readout: label_token`` is read through its tied LM head's label-token logits at
+the answer cue (vendored ``label_token.py``) instead of a candidate head.
 """
 
 from __future__ import annotations
@@ -59,6 +63,43 @@ def load_score_bias_entry(
     return offsets
 
 
+def keep_linear_bf16(module: Any, torch: Any) -> dict[str, int]:
+    """Hold the BF16-exact ``nn.Linear`` weights and biases of ``module`` in BF16.
+
+    BF16 autocast multiplies every Linear with its weight rounded to BF16, so a
+    weight that BF16 represents exactly gives the same products whether it is
+    kept in FP32 and cast on every call or kept in BF16. Everything else stays
+    FP32: embeddings, norms, gated-delta ``A_log`` / ``dt_bias``, conv filters,
+    Linear weights BF16 cannot hold exactly (e.g. FP32-trained LoRA factors,
+    which stay unmerged) and weights shared with any other kind of module.
+    Returns how many Linear modules hold a BF16 or an FP32 weight.
+    """
+    shared = {
+        id(parameter)
+        for layer in module.modules()
+        if not isinstance(layer, torch.nn.Linear)
+        for parameter in layer.parameters(recurse=False)
+    }
+    counts = {"linear_bf16": 0, "linear_fp32": 0}
+    for layer in module.modules():
+        if not isinstance(layer, torch.nn.Linear):
+            continue
+        for parameter in (layer.weight, layer.bias):
+            if (
+                parameter is None
+                or parameter.dtype != torch.float32
+                or id(parameter) in shared
+            ):
+                continue
+            rounded = parameter.data.to(torch.bfloat16)
+            if torch.equal(rounded.float(), parameter.data):
+                parameter.data = rounded
+        counts[
+            "linear_bf16" if layer.weight.dtype == torch.bfloat16 else "linear_fp32"
+        ] += 1
+    return counts
+
+
 class QwenDecision:
     def __init__(
         self,
@@ -69,6 +110,8 @@ class QwenDecision:
         cap: int,
         torch: Any,
         score_bias: dict[int, list[float]] | None = None,
+        residency: dict[str, int] | None = None,
+        encode_fn: Any = None,
     ):
         self.model = model
         self.tokenizer = tokenizer
@@ -77,6 +120,8 @@ class QwenDecision:
         self.cap = cap
         self.torch = torch
         self.score_bias = score_bias
+        self.residency = residency
+        self.encode_fn = encode_fn
 
     @classmethod
     def load(
@@ -87,6 +132,7 @@ class QwenDecision:
         device: str,
         base_path: str | Path | None,
         threads: int | None,
+        bf16_resident: bool = True,
     ) -> QwenDecision:
         import torch
 
@@ -108,7 +154,12 @@ class QwenDecision:
             (model_root / "decision_config.json").read_text(encoding="utf-8")
         )
         residual = metadata.get("dec_residual") is not None
-        if residual:
+        label = metadata.get("readout") == "label_token"
+        if label:
+            from ._vendor.dev2model.label_token import label_fingerprint
+
+            identity = label_fingerprint(model_root, source)
+        elif residual:
             from ._vendor.dev2model.dec_model import dec_fingerprint
 
             identity = dec_fingerprint(model_root, source)
@@ -134,7 +185,16 @@ class QwenDecision:
             not torch.cuda.is_available() or not torch.cuda.is_bf16_supported()
         ):
             raise RuntimeError("A CUDA/ROCm BF16 GPU is required for GPU inference")
-        if residual:
+        encode_fn = None
+        if label:
+            from ._vendor.dev2model.label_token import (
+                encode_label,
+                load_label_checkpoint,
+            )
+
+            model, tokenizer = load_label_checkpoint(model_root, source)
+            encode_fn = encode_label
+        elif residual:
             from ._vendor.dev2model.dec_model import load_dec_checkpoint
 
             model, tokenizer = load_dec_checkpoint(model_root, source)
@@ -142,7 +202,11 @@ class QwenDecision:
             model, tokenizer = DecisionModel.from_checkpoint(
                 model_root, source_path=source
             )
-        model = model.float().to(target).eval()
+        model = model.float()
+        residency = None
+        if target.type == "cuda" and bf16_resident:
+            residency = keep_linear_bf16(model.backbone, torch)
+        model = model.to(target).eval()
         if tokenizer.pad_token_id is None and tokenizer.eos_token_id is None:
             raise ValueError("Tokenizer needs a pad or EOS token")
         return cls(
@@ -153,6 +217,8 @@ class QwenDecision:
             manifest["max_input_tokens"],
             torch,
             score_bias,
+            residency,
+            encode_fn,
         )
 
     def parameter_count(self) -> int:
@@ -182,7 +248,7 @@ class QwenDecision:
         for qid, question in questions.items():
             try:
                 row = question_to_row(item, qid, question)
-                encoded = encode(row, self.tokenizer, self.cap)
+                encoded = (self.encode_fn or encode)(row, self.tokenizer, self.cap)
             except ValueError as exc:
                 reason = (
                     "max_length_exceeded"

@@ -42,6 +42,7 @@ def main() -> None:
     from training.model.decision_model import collate, encode
 
     from .dec_model import dec_fingerprint, load_dec_checkpoint
+    from .label_token import LabelTokenModel, encode_label
     from .runtime_check import require_runtime
 
     runtime = require_runtime()
@@ -77,7 +78,8 @@ def main() -> None:
         else tokenizer.eos_token_id
     )
     max_length = selected["contract"]["max_length"]
-    encoded = [encode(row, tokenizer, max_length) for row in cal_rows]
+    encode_fn = encode_label if isinstance(model, LabelTokenModel) else encode
+    encoded = [encode_fn(row, tokenizer, max_length) for row in cal_rows]
     records = []
     with torch.inference_mode():
         for start in range(0, len(encoded), args.batch_size):

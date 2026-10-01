@@ -1,0 +1,75 @@
+{
+  "bit_identical_items": 400,
+  "device_name": "",
+  "items": 400,
+  "items_per_s": {
+    "new": 40.45239867007222,
+    "old": 39.46962468645595
+  },
+  "latency_ms": {
+    "mean": {
+      "delta": -0.6155259622028098,
+      "new": 24.720412951428443,
+      "old": 25.335938913631253,
+      "ratio": 0.9757054212870855
+    },
+    "p50": {
+      "delta": -1.0487872641533613,
+      "new": 21.625655936077237,
+      "old": 22.6744432002306,
+      "ratio": 0.9537458426259087
+    },
+    "p95": {
+      "delta": -0.24765892885625362,
+      "new": 22.65620301477611,
+      "old": 22.903861943632364,
+      "ratio": 0.9891870231550576
+    }
+  },
+  "memory_gib": {
+    "after_load": {
+      "delta": -0.9044189453125,
+      "new": 1.9024028778076172,
+      "old": 2.806821823120117,
+      "ratio": 0.6777782836578025
+    },
+    "load_peak": {
+      "delta": -0.9044189453125,
+      "new": 1.9024028778076172,
+      "old": 2.806821823120117,
+      "ratio": 0.6777782836578025
+    },
+    "request_peak": {
+      "delta": -0.897575855255127,
+      "new": 2.0118274688720703,
+      "old": 2.9094033241271973,
+      "ratio": 0.6914914313145655
+    }
+  },
+  "mode": "compare",
+  "new": {
+    "manifest": "514d4ae35fd598e47fbe7c52c4b5220c574ca05532bf7c9f76680fd0bbf37331",
+    "sha256": "d69d615fc48e012a3c92e3c38eb2236732e8b8e05e1b8a1eadcc84031e57b1d0"
+  },
+  "old": {
+    "manifest": "a653dde2f40bd0f67300f64343bcc0537a486fcf116c2de0994984ad1399fcc2",
+    "sha256": "c8a65613205d5af7c1537ef85b0ead62d29401589ba3d0e456bbd9e95131bb60"
+  },
+  "passed": true,
+  "residency": {
+    "new": {
+      "linear_bf16": 186,
+      "linear_fp32": 0
+    },
+    "old": null
+  },
+  "same_device": true,
+  "same_prompts": true,
+  "schema": "dev2-runtime-bench/1",
+  "totals": {
+    "category_changes": 0,
+    "max_abs_drift": 0.0,
+    "missing": 0,
+    "slots": 400
+  }
+}

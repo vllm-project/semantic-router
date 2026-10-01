@@ -439,7 +439,14 @@ def verify_qwen(spec: dict[str, Any], checkpoint: Path) -> dict[str, Any]:
     stored = bf16z_files(spec, checkpoint)
     if stored is not None and (adapter or metadata.get("dec_residual") is not None):
         raise ValueError("bf16z storage is defined for full non-residual checkpoints")
-    if stored is not None:
+    label = metadata.get("readout") == "label_token"
+    if label and stored is not None:
+        raise ValueError("bf16z storage is not defined for label-token checkpoints")
+    if label:
+        from v2.dec.label_token import label_fingerprint
+
+        identity = label_fingerprint(checkpoint, base_path)
+    elif stored is not None:
         identity = identity_from_hashes(stored[0])
     else:
         identity = checkpoint_fingerprint(checkpoint, base_path)
@@ -468,6 +475,7 @@ def verify_qwen(spec: dict[str, Any], checkpoint: Path) -> dict[str, Any]:
         "architecture": metadata.get("architecture"),
         "head_variant": metadata.get("head_variant", "shared"),
         "dec_residual": metadata.get("dec_residual") is not None,
+        "readout": metadata.get("readout", "head"),
         "text_parameter_count": metadata.get("text_parameter_count"),
         "temperature_by_type": temperatures,
     }
@@ -644,6 +652,18 @@ def vendor_runtime(
         records["decision2/_vendor/dev2model/dec_model.py"] = {
             "source": "v2/dec/dec_model.py",
             "source_sha256": layout.sha_file(root / "v2/dec/dec_model.py"),
+            "rewritten": "absolute training.model imports -> package-relative",
+        }
+    if identity.get("readout") == "label_token":
+        original = (root / "v2/dec/label_token.py").read_text(encoding="utf-8")
+        pattern, replacement = IMPORT_REWRITE
+        rewritten = pattern.sub(replacement, original)
+        if "training.model" in rewritten:
+            raise ValueError("label_token.py keeps an absolute training.model import")
+        (package / "label_token.py").write_text(rewritten, encoding="utf-8")
+        records["decision2/_vendor/dev2model/label_token.py"] = {
+            "source": "v2/dec/label_token.py",
+            "source_sha256": layout.sha_file(root / "v2/dec/label_token.py"),
             "rewritten": "absolute training.model imports -> package-relative",
         }
     for name, record in records.items():

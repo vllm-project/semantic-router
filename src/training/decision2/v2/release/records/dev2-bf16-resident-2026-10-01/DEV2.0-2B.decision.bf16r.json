@@ -1,0 +1,161 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "final",
+  "decision": "release",
+  "model_name": "DEV2.0-2B",
+  "repo_id": "llm-semantic-router/DEV2.0-2B",
+  "identity": {
+    "model_sha256": "32872f2968e38aa99901797aaab5e12e32e281bf67bb924037d443394411170d"
+  },
+  "report_sha256": "08745acf9fc753bc1d3b0335dc3e341c697a657a9e6c7c26d85eebfebf4d160c",
+  "paired_sha256": "bca44e5f286312f2e96ac69b590347ddf37d81899dd762f5ce48475365c824ab",
+  "calibration": "none: raw model probabilities (temperature 1), no calibration.json; the CAL698 temperatures d73e9ce4 (Choice 0.742, Noul 0.816, Score 0.154) were evaluated on the development panels and rejected under the coordinator's 2026-09-28 23:15 UTC+8 rule (receipt 56de813b: typed-DEV Brier 0.267 -> 0.289, ECE-10 0.095 -> 0.135, CSS-pilot Brier-sum 0.748 -> 0.757; 0 answer changes)",
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the BF16-resident runtime rollout (runtime-only revisions of the six released repositories, each only with 0 answer changes on every scored prompt and on mlx-diag), assigned to release engineering in the cross-track note of 2026-10-01 10:30 UTC+8 (b5f60b33) and adopted as the default under the user's full-autonomy mandate",
+  "prepared_by": "Decision 2.0 release engineering, BF16-resident runtime worker (worktree vllm-sr-dev2-release)",
+  "decided_utc": "2026-10-01T02:30:00Z",
+  "action": "Runtime-only revision of the private repository llm-semantic-router/DEV2.0-2B: the package runtime decision2/*.py comes from the BF16-resident runtime commit 5dc962b00, which on a GPU holds the backbone's BF16-exact Linear weights in BF16 instead of FP32 copies cast before every matmul. Weights, tokenizer, configs, the vendored training/model sources, calibration and any Score offsets are byte-identical to the released revision a53cf66a0d9d492a84b6617b61e7ce35fcd03af0; the card gains one runtime-update line and MODEL_MANIFEST.json the new runtime hashes and one runtime sentence. The repository stays in the private collection '🎲 Decision 2.0', ordered 0.6B, 0.8B, 2B, 4B, 9B, 27B; everything stays private.",
+  "revision_binding": "This decision names no revision; receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified.",
+  "supersedes": {
+    "final_sha256": "861297288633463d79aa23ab59ada47dcbf0ad6872c37747382d1a41dc8818b2",
+    "released_as": "llm-semantic-router/DEV2.0-2B@a53cf66a0d9d492a84b6617b61e7ce35fcd03af0",
+    "released_manifest_sha256": "637a8af08bb95c2a91c17dc4899f7406b85f9541661cb447425228f23b45846a",
+    "released_gate_sha256": "bd594337967a6e8e624f4bcd24675e5c7ef3430cc895ee2533a6fa28e32e4196",
+    "card_revision": null,
+    "earlier": {
+      "final_sha256": "743c5b2e26f7a2c53c2c1e08e83b92f73ac617f08371341fb92c930b30e6d235",
+      "released_as": "llm-semantic-router/DEV2.0-2B@a47bdf895d982896b0e65c2bdc61330fe1ad2d7c",
+      "released_manifest_sha256": "1ba359509a76cb638a41d296e4037913f2864ac454bdd552e41ac8cd819bd25a",
+      "released_gate_sha256": "beca4c82f4faeff2ed7219c59a90472ef4f7562907ee357869f36a07dbeb9f75",
+      "card_revision": {
+        "kind": "card-only",
+        "spec": "v2/release/specs/dev2-2b-card-c1.json",
+        "spec_sha256": "d7f8bed3ffb45b45443c6c2a76427ec45cfff90be09dcaa169ebac76c9230fa6",
+        "c1_record": "v2/eval/records/m4-c1-event3-prep-2026-09-29.md (section 0000)"
+      },
+      "earlier": {
+        "final_sha256": "de59a6c71e35b7cbdf32be18d72436a6b76aebc3e1adee84e068645bdd7cc85c",
+        "released_as": "llm-semantic-router/DEV2.0-2B@5ad3e9a3cc4865ce0360f4ecce2b345020bfdb38",
+        "released_manifest_sha256": "6c4e1885ec68f1047b7bb9e9604373cc44129178dc900791f5617612016c6e51",
+        "released_gate_sha256": "8dbf4c87a95a69866c905e5597dec6b16f4e6b4bbf3c1c9ee305decc994f2c39",
+        "earlier": {
+          "draft_sha256": "31ae8a9890bc3daf4d0dbd3cb8844b4a0164449d709fde69a441791d9701b536",
+          "build_draft_sha256": "fde8c87ea45162a1cbecf85be579eb22c8d19c6d5a3635dd1b238f81adcdaa6c",
+          "verified_revision": "b2c5d7eac4ef24648cbf9c23c26421f0960ca542"
+        }
+      }
+    }
+  },
+  "rationale": "The release judgement of the superseded final decision 86129728… stands unchanged: the same identity 32872f29, scored report, paired comparison, calibration and licence decision. Only the package runtime changes, and it computes the same BF16 products as before. Adopted only with exact parity (0 answer changes, 0 missing, 0 input mismatches) against the scored predictions on every scored prompt (typed-final 1,600, css15 6,547, public231 231) and on mlx-diag (2,275), with the scored image, kernels and frozen autotune cache: release.sh parity-pre blocks the upload otherwise, and parity-post repeats it on the real download.",
+  "gate_evidence": {
+    "post_key_v3": {
+      "candidate": 53.437,
+      "sol1_16k_control": 45.781,
+      "delta": 7.66,
+      "ci95": [
+        3.26,
+        10.81
+      ],
+      "paired_sha256": "bca44e5f286312f2e96ac69b590347ddf37d81899dd762f5ce48475365c824ab"
+    },
+    "vs_sol1_adopted": {
+      "delta": 7.86,
+      "ci95": [
+        3.36,
+        10.8
+      ]
+    },
+    "vs_decider_2b": {
+      "delta": 3.94,
+      "ci95": [
+        -2.48,
+        5.67
+      ],
+      "H_delta": 0.105,
+      "H_ci95": [
+        -0.008,
+        0.132
+      ],
+      "T_delta": -0.04,
+      "T_ci95": [
+        -0.07,
+        -0.009
+      ]
+    },
+    "vs_this_that_1p2": {
+      "delta": 7.33,
+      "ci95": [
+        -2.0,
+        13.6
+      ],
+      "H_delta": 0.12,
+      "H_ci95": [
+        -0.05,
+        0.223
+      ]
+    },
+    "no_type_collapsed": {
+      "choice": 0.556,
+      "noul": 0.709,
+      "score": 0.438
+    },
+    "public231": {
+      "candidate": 171,
+      "sol1_16k_control": 160,
+      "decider_2b": 175
+    },
+    "overlap_effect": {
+      "record": "v2/eval/records/m5-overlap-effects-2026-09-29.md",
+      "integration": "cae64f4e8",
+      "touched_items": 19,
+      "v3_without_or_all_wrong": 53.44
+    }
+  },
+  "licence_decision": "apache-2.0: own weights, Decision 1.0 Sol-2B @ce0c018a and Qwen/Qwen3.5-2B @15852e8c text backbone and tokenizer are all Apache-2.0; training-data licences (CC BY, CC BY-SA, MIT, Apache-2.0, CC0, OANC) credited in ATTRIBUTIONS.md; Decider 2B (Apache-2.0) and This-That 1.2 (MIT) shown with a note that their licences come from card metadata only; the XNLI-based mlx-diag Score part stays off the card.",
+  "release_rationale": "Per-size release gate under the full-autonomy mandate. (1) Post-key same-panel JevArena v3 53.437 vs the stricter Decision 1.0 Sol same-renderer 16K control 45.781: +7.66 [+3.26, +10.81] (lower bound > 0); vs adopted Sol1 +7.86 [+3.36, +10.80]; 53.44 >= 44.5 (90% of Decider 2B 49.50). (2) Eval gates (record m4-dev2-2b-gates-2026-09-29, approval 02:50 UTC+8): human transfer not below Decider 2B (+0.105 [-0.008, +0.132]) or This-That 1.2 (+0.120 [-0.050, +0.223]); no type collapsed (Choice .556, Noul .709, Score .438 vs chance .267 / .50 / .20). (3) Calibration: T = 1 under the 23:15 rule. (4) Overlap effect (eval record m5-overlap-effects-2026-09-29, integration cae64f4e8): the S2T training rows flagged by the M3b XL r2 rescreen touch 19 scored items (18 media_ideology, 1 tropes); rescored without them or counting all as errors, v3 stays 53.44 and no comparison or gate changes; no contamination signature. (5) Package verified (real download, re-hash 33/33, loaded parameters 1,883,930,944, examples bit-identical in three processes, full-panel parity 0 changes). (6) Card in the 1.0 design with every disclosure; C1 line pending event 3 (placeholder). Licence apache-2.0.",
+  "c1": "Event 3 (v1.2) on the released weights (5ad3e9a3, identity 073bd1f2): 45.70 vs Decision 1.0 Sol 16K 45.03 (+0.68 [-0.91, +2.22], level), Decider 2B 42.45 (+3.26 [+1.32, +5.21]) and This-That 1.2 42.81 (+2.90 [+0.85, +4.99]), both significantly above. No significant loss against a card peer, so no C1 task or language list is added. The BF16 storage copy computes the same BF16 matmuls as the scored FP32 checkpoint, so the C1 baseline of these weights stays valid for this revision. The runtime-only revision computes the same products, so this line stays valid for it.",
+  "disclosures": [
+    "gain over Decision 1.0 Sol is typed reasoning; human transfer level (+0.033 [-0.044, +0.092])",
+    "transfer tasks below Sol 1.0 (mrf -0.094, wiki_corpus -0.045, flute -0.032, full tradeoffs table)",
+    "vs Decider 2B: margin not significant; typed accuracy significantly lower (-0.040); Choice weakest type vs peers; public hard tier 57 vs 63",
+    "typed Score almost never predicts level 0 (6 of 400, recall 0.03)",
+    "mlx-diag: non-English Noul -2.2 points, Korean Noul 0.59 vs 0.63",
+    "evaluation familiarity: 45 training rows share long word sequences with 19 human-transfer items; v3 unchanged without them",
+    "seed dependence; CPU not verified; C1 line pending"
+  ],
+  "storage_revision": {
+    "kind": "bf16-storage",
+    "spec": "v2/release/specs/dev2-2b-bf16.json",
+    "spec_sha256": "cef36904af02f08ba1bbfda2a1d5bde097d502630282027b3e1c2bd812b1199e",
+    "bf16_copy_receipt_sha256": "a5229ef121b8f081087bc636a247c76be5fa6c8e70ecabf3156d01c0ff2becd1",
+    "source_model_sha256": "073bd1f2fe62e39fe993f57006bab17ece50a7e6fc7c5ee72107fefddeb81da4",
+    "tensors_by_storage_dtype": {
+      "BF16": 186,
+      "F32": 134
+    },
+    "tensor_bytes": 4781866240
+  },
+  "previous_rationale": "The release judgement of the superseded final decision 743c5b2e… stands unchanged: the same scored report, paired comparison, calibration (T = 1) and licence decision. Only the checkpoint identity changes (073bd1f2 -> 32872f29), because the stored Linear weights are already rounded as the runtime rounds them before every matmul. Adopted only with exact parity (0 answer changes, 0 missing) against the T = 1 bindings on every scored prompt (typed-final 1,600, css15 6,547, public231 231) and on mlx-diag (2,275): release.sh parity-pre blocks the upload otherwise, and parity-post repeats it on the real download. The coordinator's note of 2026-09-30 06:10 UTC+8 frees private Hugging Face storage this way for the ~27B successor.",
+  "runtime_revision": {
+    "kind": "bf16-resident-runtime",
+    "runtime_commit": "5dc962b003cc15b12a3568fe3c8ac8c2931b03a0",
+    "spec": "v2/release/specs/dev2-2b-bf16r.json",
+    "spec_sha256": "c40549439787e026aab223dd5c983431a531603b9c1747209a18e69e075be6a6",
+    "bench": {
+      "compare": "v2/release/records/dev2-bf16-resident-2026-10-01/2b/bench/compare.json",
+      "items": 400,
+      "bit_identical_items": 400,
+      "p50_ms": [
+        24.128022836521268,
+        23.478264920413494
+      ],
+      "p95_ms": [
+        24.765969021245837,
+        23.708404041826725
+      ],
+      "request_peak_gib": [
+        7.13749885559082,
+        4.569395542144775
+      ]
+    }
+  }
+}
