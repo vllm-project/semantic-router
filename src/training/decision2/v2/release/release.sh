@@ -162,7 +162,9 @@ hub_smoke() {
   for e in "${envs[@]}"; do
     [[ "$e" =~ ^(HF_HOME|HF_HUB_CACHE|HF_HUB_OFFLINE|TRANSFORMERS_OFFLINE)= ]] || keep+=("$e")
   done
+  # The image sets HF_HUB_OFFLINE=1 / TRANSFORMERS_OFFLINE=1; a user's environment is online.
   docker run --rm --network host --ipc host "${gpu_flags[@]}" -e HF_HOME="$home/hf-home" \
+    -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 \
     -e HF_TOKEN_PATH=/run/decision2-hf/token -e HF_HUB_DISABLE_TELEMETRY=1 -e TOKENIZERS_PARALLELISM=false \
     "${keep[@]}" "${volumes[@]}" --entrypoint "$python_bin" "$image" -I -B "$S/v2/release/examples.py" \
     automap-card --hub --package "$pkg" --reference "$work/receipts/pre-a.json" --expect-revision "$revision" \

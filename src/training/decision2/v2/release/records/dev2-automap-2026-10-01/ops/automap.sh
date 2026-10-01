@@ -15,10 +15,12 @@
 set -euo pipefail
 tier="${1:-}" mode="${2:-}"
 shift 2 || true
-gpu=""
+gpu="" resume=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --gpu) gpu=$2; shift 2 ;;
+    # --release after a run that uploaded this package and then failed: main may be that revision.
+    --resume) resume=$2; shift 2 ;;
     *) echo "unknown argument $1" >&2; exit 2 ;;
   esac
 done
@@ -112,8 +114,12 @@ case "$mode" in
     expected=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["supersedes"]["released_as"].split("@")[1])' \
       "$R/$name.decision.automap.json")
     main=$("$HFPY" -c 'import sys; from huggingface_hub import HfApi; print(HfApi().model_info(sys.argv[1]).sha)' "$REPO")
-    [[ "$main" == "$expected" ]] || { echo "$REPO main is $main, not the superseded revision $expected" >&2; exit 1; }
-    echo "$REPO main $main = superseded revision"
+    if [[ -n "$resume" && "$main" == "$resume" ]]; then
+      echo "$REPO main $main = the revision an interrupted run of this package uploaded (resume)"
+    else
+      [[ "$main" == "$expected" ]] || { echo "$REPO main is $main, not the superseded revision $expected" >&2; exit 1; }
+      echo "$REPO main $main = superseded revision"
+    fi
     bash "$S/v2/common/hf_headroom.sh" --min-free-gb 3
     [[ -z "$frozen" ]] || copy_cache "$frozen" "$frozen_digest" "$TC"
     parity_args=(

@@ -843,10 +843,15 @@ def automap_card(args: argparse.Namespace) -> dict[str, Any]:
     downloaded = None
     if args.hub:
         from huggingface_hub import scan_cache_dir
+        from huggingface_hub.errors import CacheNotFound
 
+        try:
+            repos = scan_cache_dir().repos
+        except CacheNotFound:
+            repos = []
         downloaded = sorted(
             revision.commit_hash
-            for cached in scan_cache_dir().repos
+            for cached in repos
             if cached.repo_id == repo
             for revision in cached.revisions
         )
@@ -861,7 +866,9 @@ def automap_card(args: argparse.Namespace) -> dict[str, Any]:
         "interpreter_flags": flags,
         "sites": args.site,
         "exit_code": completed.returncode,
-        "stderr_tail": completed.stderr[-2000:] if completed.returncode else "",
+        "stderr_tail": (
+            completed.stderr[-2000:] if completed.returncode or printed is None else ""
+        ),
         "seconds": time.perf_counter() - started,
         "downloaded_revisions": downloaded,
         "runtime": runtime_versions(),
