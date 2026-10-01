@@ -1,11 +1,28 @@
 # ~27B M6 state (resume file)
 
-Updated: 2026-10-01 15:27 UTC+8 (07:27Z; M6 worker 1, started 06:17Z).
+Updated: 2026-10-01 18:50 UTC+8 (10:50Z; M6 worker 1, started 06:17Z; hand-off below).
 Prereg `m6-prereg-2026-10-01.md` (`90d38aba7`). Tooling: latest mirror **`482cb0ddb`** on node A and node B
 (`20af2e4a1` ran step 0).
 Assignment: COORDINATION 2026-10-01 14:25 (27B M6, worker 11741ee2). Branch `xunzhuo/decision-2-training-27b`
 (worktree `/home/xunliu/code/vllm-sr-dev2-27b`; merge-only into `xunzhuo/decision-2-training`). Gist file
 `06-decision-2-27b.md`. Budget 140 GPU-h. Index numbers are private: never in this file, commits or the gist.
+
+## Hand-off (worker 1 → continuation, ≈ 10:55Z)
+
+- **Six seeds train unattended; three chains carry them to verdicts.** Nothing needs a manual step until a chain ends,
+  except polling (≤ 30 min, state commit each time; > 60 min without a commit while GPU jobs run counts as a silent
+  stop). ETAs: M6-IB ≈ 21:15Z, M6-IBX ≈ 22:15Z, M6-IB2 ≈ 01:20Z (Oct 2); each chain then needs ≈ 1–2 h (soup, readout,
+  slices, gates; formal + mlx-diag only for passers).
+- **Poll command (workstation):** per node `docker ps | grep d2-27b-M6`, the driver PIDs and chain PIDs below, and
+  `full/run/train-metrics.jsonl` (`seconds` per update) / `select-step-*-metrics.json` (family macro) per seed.
+- **When a chain ends:** see "Hand-off templates" (results record, item 8 with the custodian C1 recheck first, private
+  Index of frozen finalists, release hand-off). A failed seed means no candidate for that arm (no rerun).
+- **Decisions and incidents this session (all recorded in the prereg amendments or below):** launch order (M6-IB +
+  M6-IB2 first; amendment 1); M6-IBX on node D (amendment 2); projection recalibrated on L128's receipts and stage-2
+  cap 20; `read_lease` parses IX1's one-line owner files (`d8edcf4e1`); a duplicated workstation launch stopped
+  harmlessly at a reference-slice refusal (07:49Z).
+- **Infrastructure to remove at milestone end:** the M6 node link (`m6/m6-link.sh remove`), node D leases (GPU0 / GPU1,
+  owner `track=27b`), and optionally node D's staged inputs (≈ 53 GB).
 
 ## Goal
 
