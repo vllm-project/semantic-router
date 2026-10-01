@@ -53,15 +53,25 @@ case $MODE in
     source=$(incontainer "$SOURCE") || exit 2
     for panel in $PANELS; do
       out=$L/$POINT/$panel
+      for _ in $(seq 1 360); do
+        [ "$(rocm-smi -d "$GPU" --showmemuse 2> /dev/null | awk -F': ' '/VRAM%/ {v = $NF} END {print v}')" = 0 ] && break
+        sleep 30
+      done
       if [ -f "$out.launch.json" ]; then
         grep -q '"exit_status": 0' "$out.launch.json" || log "$POINT $panel failed earlier; not rerun"
         continue
       fi
-      if [ "$panel" = mlxdev ]; then
+      case $panel in
+        mlxdev) rows=/runs/m7/data/mlxdev/build/panel.jsonl ;;
+        ib1dev) rows=/runs/m9/inputs/ib/ib1-31b200a3/m6/ib1/ib1.dev.jsonl ;;
+        ib2dev) rows=/runs/m9/inputs/ib/ib2-c5dbdd0a/m6/ib2/ib2.dev.jsonl ;;
+        *) rows="" ;;
+      esac
+      if [ -n "$rows" ]; then
         if M9_NODE=$NODE bash "$OPS/launch.sh" "lines-$POINT-$panel" "$SRC" "$out" --gpu "$GPU" -- \
           -m v2.dec.eval_rows --checkpoint "$ck" --source-path "$source" \
-          --rows /runs/m7/data/mlxdev/build/panel.jsonl --tag mlxdev --output /out --max-length 16384; then
-          log "$POINT $panel read: $(wc -l < "$out/mlxdev-predictions.jsonl") rows"
+          --rows "$rows" --tag "$panel" --output /out --max-length 16384; then
+          log "$POINT $panel read: $(wc -l < "$out/$panel-predictions.jsonl") rows"
         else
           log "$POINT $panel FAILED: $(tail -c 300 "$out.stderr.log" | tr '\n' ' ')"
         fi

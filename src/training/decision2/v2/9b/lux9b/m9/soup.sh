@@ -20,7 +20,7 @@ fail() { echo "$*" > "$OUT/FAILED"; log "FAILED: $*"; exit 1; }
 [ -f "$OUT/DONE" ] && { log "already built"; exit 0; }
 [ -f "$OUT/FAILED" ] && { log "failed earlier; not rebuilt"; exit 1; }
 case $ARM in
-  L9) source=$BASE ;;
+  L9 | L9IB | L9IBX) source=$BASE ;;
   L9L) source=/lux ;;
   *) fail "unknown arm $ARM" ;;
 esac

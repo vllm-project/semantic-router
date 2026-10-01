@@ -10,6 +10,7 @@
 #   score.sh contrast <A> <B>                HT-DEV v2, probes and PN1 of A vs B (report only)
 #   score.sh readout <REF> <point> [...]     typed DEV + CSS pilot (v2.dec.dev_readout) -> lines/readout/m9.json
 #   score.sh rules <X=REF> [...] [-- <A:B> ...]   m9_rules.py -> select/9b-finalists.json (runs once)
+# M9_READOUT / M9_RULES rename the readout and rules outputs (stage 2: m9-s2 / 9b-finalists-s2).
 set -u
 S=$(cd "$(dirname "$0")/../../../.." && pwd)
 MIRROR=${S%/src/training/decision2}
@@ -122,10 +123,10 @@ case ${1:-} in
       [ "$p" = "$ref" ] && continue
       args+=(--arm "$p=$(pred "$p" dev),$(pred "$p" css-pilot)" --compare "$ref:$p")
     done
-    out=$L/readout/m9.json
-    [ -f "$out" ] && mv "$out" "$L/readout/m9.$(date -u +%Y%m%dT%H%M%SZ).json"
+    out=$L/readout/${M9_READOUT:-m9}.json
+    [ -f "$out" ] && mv "$out" "$L/readout/${M9_READOUT:-m9}.$(date -u +%Y%m%dT%H%M%SZ).json"
     py -m v2.dec.dev_readout --typed-gold "$GOLD/typed-dev.gold.jsonl" --css-gold "$GOLD/css-pilot.gold.jsonl" \
-      "${args[@]}" --output "$out" > "$L/readout/m9.log" 2>&1 || die "dev_readout FAILED (see $L/readout/m9.log)"
+      "${args[@]}" --output "$out" > "$L/readout/${M9_READOUT:-m9}.log" 2>&1 || die "dev_readout FAILED (see $L/readout/${M9_READOUT:-m9}.log)"
     log "readout $(sha256sum "$out" | cut -c1-16) ($ref $*)"
     ;;
   rules)
@@ -137,9 +138,11 @@ case ${1:-} in
       shift
     done
     for c in "$@"; do cons+=(--contrast "$c"); done
-    py "$S/v2/9b/lux9b/m9_rules.py" --lines-root "$L" --readout "$L/readout/m9.json" "${pts[@]}" "${cons[@]}" \
-      --output "$M/select/9b-finalists.json" > "$M/select/rules.log" 2>&1 || die "rules FAILED (see $M/select/rules.log)"
-    log "finalists: $(tail -1 "$M/select/rules.log" | cut -c1-800)"
+    rules=${M9_RULES:-9b-finalists}
+    py "$S/v2/9b/lux9b/m9_rules.py" --lines-root "$L" --readout "$L/readout/${M9_READOUT:-m9}.json" "${pts[@]}" \
+      "${cons[@]}" --output "$M/select/$rules.json" > "$M/select/$rules.log" 2>&1 \
+      || die "rules FAILED (see $M/select/$rules.log)"
+    log "finalists ($rules): $(tail -1 "$M/select/$rules.log" | cut -c1-800)"
     ;;
   *) sed -n '2,13p' "$0"; exit 2 ;;
 esac

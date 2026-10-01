@@ -5,19 +5,29 @@
 # every arm scored (or failed) runs the typed readout, the L9 - L9L contrast and the rules once (status/rules.lock).
 # A failed step stops the chain (never rerun).
 #
-# usage: M9_NODE=a post-a.sh launch <mirror-dir> <ARM> <gpu> <user@node-c>
-#        M9_NODE=a post-a.sh run <mirror-dir> <ARM> <gpu> <user@node-c>
+# Stage 2 (amendment 2): M9_STAGE=2 sets the arms L9IB / L9IBX, the outputs readout/m9-s2.json and
+# select/9b-finalists-s2.json (lock status/rules-s2.lock), the contrasts against L9 and adds the IB1 / IB2 DEV
+# diagnostics (eval_rows) for the arm, C0 and L9.
+#
+# usage: [M9_STAGE=2] M9_NODE=a post-a.sh launch <mirror-dir> <ARM> <gpu> <user@node-c>
+#        [M9_STAGE=2] M9_NODE=a post-a.sh run <mirror-dir> <ARM> <gpu> <user@node-c>
 set -u
 MODE=$1 SRC=$2 ARM=$3 GPU=$4 FROM=$5
 NODE=${M9_NODE:?set M9_NODE=a}
 M=/data/dev2/runs/9b/m9
 ST=$M/status
 OPS=/data/dev2/src/$SRC/src/training/decision2/v2/9b/lux9b/m9
-ARMS="L9 L9L"
+STAGE=${M9_STAGE:-1}
+if [ "$STAGE" = 2 ]; then
+  ARMS="L9IB L9IBX" LOCK=rules-s2.lock EXTRA=(ib1dev ib2dev)
+  export M9_READOUT=m9-s2 M9_RULES=9b-finalists-s2
+else
+  ARMS="L9 L9L" LOCK=rules.lock EXTRA=()
+fi
 mkdir -p "$M/chains" "$M/logs" "$ST"
 if [ "$MODE" = launch ]; then
   mkdir "$M/chains/post-a-$ARM.lock" 2> /dev/null || { echo "post chain $ARM already launched"; exit 0; }
-  M9_NODE=$NODE setsid nohup bash "$0" run "$SRC" "$ARM" "$GPU" "$FROM" > "$M/logs/post-a-$ARM.log" 2>&1 < /dev/null &
+  M9_STAGE=$STAGE M9_NODE=$NODE setsid nohup bash "$0" run "$SRC" "$ARM" "$GPU" "$FROM" > "$M/logs/post-a-$ARM.log" 2>&1 < /dev/null &
   echo $! > "$M/chains/post-a-$ARM.pid"
   echo "$(date -u +%FT%TZ) M9 post chain $ARM launched on node A GPU$GPU from $SRC (pid $(cat "$M/chains/post-a-$ARM.pid"))" \
     | tee -a "$M/OPERATIONS.log"
@@ -29,8 +39,27 @@ manifest='find . -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum | sh
 finish() {  # every arm scored or failed -> typed readout, contrast, rules (once)
   local a pts=() scored=()
   for a in $ARMS; do [ -f "$ST/scored-$a" ] || [ -f "$ST/failed-$a" ] || return 0; done
-  mkdir "$ST/rules.lock" 2> /dev/null || return 0
+  mkdir "$ST/$LOCK" 2> /dev/null || return 0
   for a in $ARMS; do [ -f "$ST/scored-$a" ] && scored+=("$a") && pts+=("$a=C0"); done
+  if [ "$STAGE" = 2 ]; then
+    [ ${#scored[@]} -gt 0 ] || { log "no stage-2 arm was scored; no rules"; return 0; }
+    M9_NODE=$NODE bash "$OPS/lines.sh" read "$SRC" "$GPU" C0 /data/dev2/runs/9b/m4/K-a13-build/soup lux "${EXTRA[@]}" \
+      || log "C0 IB DEV diagnostics failed (report only)"
+    if [ -f "$M/soup/L9/DONE" ]; then
+      M9_NODE=$NODE bash "$OPS/lines.sh" read "$SRC" "$GPU" L9 "$(cat "$M/soup/L9/DONE")" \
+        /data/dev2/models/Qwen--Qwen3.5-9B-Base/68c46c4b3498877f3ef123c856ecfde50c39f404 "${EXTRA[@]}" \
+        || log "L9 IB DEV diagnostics failed (report only)"
+    fi
+    bash "$OPS/score.sh" readout C0 "${scored[@]}" L9 || { log "typed readout failed"; return 1; }
+    cons=()
+    for a in "${scored[@]}"; do
+      [ -f "$M/lines/L9/dev.launch.json" ] && bash "$OPS/score.sh" contrast "$a" L9 && cons+=("$a:L9")
+    done
+    [ ${#scored[@]} = 2 ] && bash "$OPS/score.sh" contrast L9IB L9IBX && cons+=(L9IB:L9IBX)
+    bash "$OPS/score.sh" rules "${pts[@]}" -- "${cons[@]}"
+    log "stage-2 rules ran: $(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["finalists"])' "$M/select/9b-finalists-s2.json" 2> /dev/null)"
+    return 0
+  fi
   if [ ! -f "$M/lines/B0/m9-probes/m9-probes.predictions.jsonl" ]; then
     mkdir -p "$M/lines/B0"
     rsync -a -e 'ssh -i /root/.ssh/d2_temp_cd -o BatchMode=yes' --include='*/' --include='*.predictions.jsonl' \
@@ -76,7 +105,8 @@ case $ARM in
   L9) source=/data/dev2/models/Qwen--Qwen3.5-9B-Base/68c46c4b3498877f3ef123c856ecfde50c39f404 ;;
   *) source=lux ;;
 esac
-M9_NODE=$NODE bash "$OPS/lines.sh" read "$SRC" "$GPU" "$ARM" "$art" "$source" || fail "readouts of $ARM failed"
+M9_NODE=$NODE bash "$OPS/lines.sh" read "$SRC" "$GPU" "$ARM" "$art" "$source" \
+  dev css-pilot ht-dev2 score5t-dev hs1-dev pn1-dev m9-probes mlxdev "${EXTRA[@]}" || fail "readouts of $ARM failed"
 for panel in dev css-pilot ht-dev2 score5t-dev hs1-dev pn1-dev m9-probes mlxdev; do
   grep -qs '"exit_status": 0' "$M/lines/$ARM/$panel.launch.json" || fail "$ARM $panel readout missing or failed"
 done
