@@ -49,14 +49,27 @@ for M6-IB and `ib12` (IB1 + IB2 DEV) for M6-IB2.
   The guard sees L128's yes-bias significantly, in the same direction as its formal mlx-diag failure (PAWS-X gold-no
   yes .200 → .294).
 
-## Running now
+## Running now (launched 07:56Z from mirror `b74685ddb`, amendment 1)
 
-Nothing (no GPU job).
+| Seed | Node / GPU | Driver PID | Mixture | Cap | Container prefix |
+| --- | --- | ---: | --- | ---: | --- |
+| M6-IB-s1 | node B GPU5 | 2768538 | `a20ib1` (5,081 updates, save 636) | 16.0 | `d2-27b-M6-IB-s1-*` |
+| M6-IB-s2 | node B GPU1 | 2768810 | `a20ib1` | 16.0 | `d2-27b-M6-IB-s2-*` |
+| M6-IB2-s1 | node B GPU0 | 2769039 | `a20ib12` (6,614 updates, save 827) | 20.0 | `d2-27b-M6-IB2-s1-*` |
+| M6-IB2-s2 | node A GPU2 | 147815 | `a20ib12` | 20.0 | `d2-27b-M6-IB2-s2-*` |
+
+- Drivers log to `/data/dev2/runs/27b/<seed>/driver.log` (stages admit → onestep → reload → full).
+- Node B chains: `m6-chain.sh` for M6-IB (PID 2769370, log `m6/logs/chain-M6-IB.log`, aux GPU1, slice `ib`) and
+  M6-IB2 (PID 2769422, log `m6/logs/chain-M6-IB2.log`, aux GPU0, slice `ib12`); first lines present.
+- Node A: relay watcher `m6-relay.sh M6-IB2-s2 147815` (PID 148145), mlx watchers for M6-IB (148094) and M6-IB2
+  (148270); logs in node A `/data/dev2/runs/27b/m6/logs/`.
+- Reference slices done (node B): A20r / M5-L128 × `ib` (0.085 / 0.092 GPU-h) and × `ib12`.
+- Liveness: by PID and container name (`docker ps | grep d2-27b-M6`), never `pgrep -f`.
 
 ## Leases
 
-node B GPU0, GPU1, GPU5 and node A GPU2: track 27b, `reserved-idle`. Node D: IX1 follow-up (not ours yet; IX1 is
-still fixing the long-input runtime bug and staging its M5-L128 Index diagnostic on node C).
+node B GPU0, GPU1, GPU5 and node A GPU2: track 27b, running the four seeds. Node D: IX1 follow-up (not ours yet; IX1
+is still fixing the long-input runtime bug and staging its M5-L128 Index diagnostic).
 
 ## Infrastructure
 
@@ -85,11 +98,21 @@ still fixing the long-input runtime bug and staging its M5-L128 Index diagnostic
 
 ## Next steps
 
-1. Wait for the IB1-r3 upload + integration merge; then the runbook above.
-2. Ask the coordinator for a GPU pair for M6-IBX if node D stays with IX1.
+1. Confirm the four preflights (onestep finite, reload parity 0 argmax changes) and the first full-run updates; record
+   seconds per update and ETAs.
+2. M6-IBX: needs a free GPU pair (node D after IX1, or a coordinator lend); then
+   `m6-launch.sh <mirror> M6-IBX:a20ib1x:ib:<s1>,<s2>:<aux>` (a node D placement needs a launcher map amendment).
+3. After the chains: results record, item-8 hand-off (custodian C1 content recheck first, IB1 + IB2 roots) and the
+   private Index request for frozen finalists.
 
 ## Poll log (newest first)
 
+- 08:00Z: **launched** (amendment 1 `b74685ddb`; build 07:31–07:36Z, two builds identical, all checks pass). Four seeds in
+  onestep preflight; chains and node A watchers alive with first log lines. Incident (harmless): the workstation
+  launch was started twice (a tool-call retry); the second copy stopped at the `ib12` reference-slice step on a
+  "fresh cache exists" refusal before launching anything (its error lines overwrote the start of the two `ib12`
+  slice logs; the first copy's slices completed and wrote their receipts). Exactly one set of seeds, watchers and
+  chains exists.
 - 07:27Z: IB2 release-safe and on integration; IB1-r3 review passed (status release-safe on its branch; upload and
   merge pending). Stage-2 build support (`758285710`: `a20ib12`, IB1 + IB2 DEV slice `ib12`, slice-name plumbing) and
   the launch orchestrator (`84b3ff8cc`, placement table, one chain per arm) committed. Plan change: M6-IB + M6-IB2 first,
