@@ -1,0 +1,42 @@
+{
+  "schema": "dev2-revision-diff/1",
+  "repo": "llm-semantic-router/DEV2.0-4B",
+  "released": "3785b7b963d2f56de0e44f9ec638c814c5ee6499",
+  "new": "13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f",
+  "files": {
+    "released": 40,
+    "new": 42
+  },
+  "changed_card_files": [
+    "ATTRIBUTIONS.md",
+    "LICENSES/Qwen3.5-4B-Base-LICENSE.txt",
+    "MODEL_MANIFEST.json",
+    "README.md",
+    "assets/jevarena-v3-model-task.svg",
+    "assets/jevarena-v3-rank.svg",
+    "assets/jevbench-public231-rank.svg",
+    "evaluation/EVALUATION.md",
+    "evaluation/manifest.json"
+  ],
+  "changed_hub_managed_files": [],
+  "changed_other_files": [
+    "backbone/model-00001-of-00005.safetensors",
+    "backbone/model-00002-of-00005.safetensors",
+    "backbone/model-00003-of-00005.safetensors",
+    "backbone/model-00004-of-00005.safetensors",
+    "backbone/model-00005-of-00005.safetensors",
+    "backbone/model.safetensors.index.json",
+    "decision2/_vendor/dev2model/decision_model.py",
+    "decision2/_vendor/dev2model/infer.py",
+    "decision2/_vendor/dev2model/lora.py",
+    "decision2/_vendor/dev2model/score_bias.py",
+    "decision2/qwen.py",
+    "decision_config.json",
+    "decision_head.safetensors",
+    "tokenizer_config.json"
+  ],
+  "weight_files": 6,
+  "weight_bytes": 9695398952,
+  "weights_byte_identical": false,
+  "ok": false
+}

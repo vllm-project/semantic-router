@@ -1,0 +1,101 @@
+{
+  "after": {
+    "commits": 9,
+    "heads": {
+      "branch:main": "13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f"
+    },
+    "lfs_objects": 8,
+    "main_lfs_served": {
+      "assets/DEV2.0-4B-owl-banner.png": 206,
+      "backbone/model-00001-of-00005.safetensors": 206,
+      "backbone/model-00002-of-00005.safetensors": 206,
+      "backbone/model-00003-of-00005.safetensors": 206,
+      "backbone/model-00004-of-00005.safetensors": 206,
+      "backbone/model-00005-of-00005.safetensors": 206,
+      "decision_head.safetensors": 206,
+      "tokenizer.json": 206
+    },
+    "old_paths_served": {
+      "backbone/model-00001-of-00005.safetensors": 403,
+      "backbone/model-00002-of-00005.safetensors": 403,
+      "backbone/model-00003-of-00005.safetensors": 403,
+      "backbone/model-00004-of-00005.safetensors": 403,
+      "backbone/model-00005-of-00005.safetensors": 403,
+      "decision_head.safetensors": 403
+    }
+  },
+  "before": {
+    "commits": 9,
+    "heads": {
+      "branch:main": "13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f"
+    },
+    "lfs_objects": 14,
+    "main_lfs_served": {
+      "assets/DEV2.0-4B-owl-banner.png": 206,
+      "backbone/model-00001-of-00005.safetensors": 206,
+      "backbone/model-00002-of-00005.safetensors": 206,
+      "backbone/model-00003-of-00005.safetensors": 206,
+      "backbone/model-00004-of-00005.safetensors": 206,
+      "backbone/model-00005-of-00005.safetensors": 206,
+      "decision_head.safetensors": 206,
+      "tokenizer.json": 206
+    },
+    "old_paths_served": {
+      "backbone/model-00001-of-00005.safetensors": 206,
+      "backbone/model-00002-of-00005.safetensors": 206,
+      "backbone/model-00003-of-00005.safetensors": 206,
+      "backbone/model-00004-of-00005.safetensors": 206,
+      "backbone/model-00005-of-00005.safetensors": 206,
+      "decision_head.safetensors": 206
+    }
+  },
+  "checks": {
+    "commits_unchanged": true,
+    "exactly_targets_gone": true,
+    "main_still_served": true,
+    "old_weights_not_served": true,
+    "refs_unchanged": true
+  },
+  "mode": "apply",
+  "new_revision": "13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f",
+  "node_copy": "/data/dev2/runs/release/dev2-bf16r-4B-20261001T041149Z/download/DEV2.0-4B",
+  "old_revision": "3785b7b963d2f56de0e44f9ec638c814c5ee6499",
+  "passed": true,
+  "repo": "llm-semantic-router/DEV2.0-4B",
+  "rewrite_history": false,
+  "schema": "dev2-release-purge-superseded/1",
+  "target_bytes": 9695398952,
+  "targets": {
+    "14a744b4c22f42d7649806919e2a408e07cc11f95c0b93cdac958c87f0c1b0a3": {
+      "bytes": 1963774600,
+      "node_copy_sha256": "14a744b4c22f42d7649806919e2a408e07cc11f95c0b93cdac958c87f0c1b0a3",
+      "path": "backbone/model-00004-of-00005.safetensors"
+    },
+    "47fadf7c49d9a0e8f73248cd1f1fe3a5bf9407f699ba4e3d6ee25d5d59944240": {
+      "bytes": 488113792,
+      "node_copy_sha256": "47fadf7c49d9a0e8f73248cd1f1fe3a5bf9407f699ba4e3d6ee25d5d59944240",
+      "path": "backbone/model-00005-of-00005.safetensors"
+    },
+    "729f623bcf46d2a87c089215d7161afa899d7267521a892347b072d51bbd5b48": {
+      "bytes": 1969497680,
+      "node_copy_sha256": "729f623bcf46d2a87c089215d7161afa899d7267521a892347b072d51bbd5b48",
+      "path": "backbone/model-00003-of-00005.safetensors"
+    },
+    "7caf44041d929cb639035d0b18d5322f90a7ea8a1d5ebe6d28c58926b3aa7206": {
+      "bytes": 1995713848,
+      "node_copy_sha256": "7caf44041d929cb639035d0b18d5322f90a7ea8a1d5ebe6d28c58926b3aa7206",
+      "path": "backbone/model-00002-of-00005.safetensors"
+    },
+    "a2801f12dd8950d6679b408bd29236c147a509a4bf4d6bd3bc51a413e84afc36": {
+      "bytes": 3267769408,
+      "node_copy_sha256": "a2801f12dd8950d6679b408bd29236c147a509a4bf4d6bd3bc51a413e84afc36",
+      "path": "backbone/model-00001-of-00005.safetensors"
+    },
+    "bd324aa69788fa936293ff4959ea1caa8845a4e47589879b0748aed3c3df7c5a": {
+      "bytes": 10529624,
+      "node_copy_sha256": "bd324aa69788fa936293ff4959ea1caa8845a4e47589879b0748aed3c3df7c5a",
+      "path": "decision_head.safetensors"
+    }
+  },
+  "utc": "2026-10-01T08:38:08.711783+00:00"
+}
