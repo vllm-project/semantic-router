@@ -1,0 +1,53 @@
+{
+  "answers_file": "bench-new.answers.jsonl",
+  "answers_sha256": "67ca6d8478b647dd2cbbe4667451122ab7a86499b3b912a3319c60eea04209e1",
+  "count": 400,
+  "device_name": "",
+  "fp32_master": false,
+  "ids_sha256": "eed99a82102f2679efc132c34ef7719cf6d81999e5019c829c87be010452c3c7",
+  "input_tokens_mean": 331.4925,
+  "items_per_s": 60.56496162120483,
+  "latency_ms": {
+    "max": 19.151501124724746,
+    "mean": 16.511196791543625,
+    "min": 15.17651998437941,
+    "p50": 16.609712969511747,
+    "p95": 16.858811024576426
+  },
+  "load_seconds": 5.869084268109873,
+  "memory_gib": {
+    "after_load": 1.4045591354370117,
+    "load_peak": 1.4045591354370117,
+    "request_peak": 1.4983553886413574
+  },
+  "mode": "run",
+  "model_name": "DEV2.0-0.6B",
+  "package_manifest_sha256": "5a8b004a02e1092197fe020bc19ae23367e33028ea12be7976e9b8aeb490e7a8",
+  "parameter_bytes": 1507608576,
+  "passed": true,
+  "profile": "qwen-full",
+  "prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd",
+  "runtime": {
+    "hip": "7.2.53211",
+    "kernels": null,
+    "numpy": "2.3.5",
+    "parameter_dtypes": {
+      "bfloat16": 440401920,
+      "float32": 156701184
+    },
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "residency": {
+      "linear_bf16": 196,
+      "linear_fp32": 0
+    },
+    "safetensors": "0.8.0",
+    "sites": [],
+    "threads": 4,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0"
+  },
+  "schema": "dev2-runtime-bench/1",
+  "warmup": 400
+}

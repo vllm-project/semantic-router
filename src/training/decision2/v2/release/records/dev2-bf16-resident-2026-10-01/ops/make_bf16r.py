@@ -126,19 +126,20 @@ def runtime_sentence(t: dict) -> str:
     )
 
 
-def card_line(bench: dict | None) -> str:
+def card_line(bench: dict | None, run: dict | None) -> str:
     if bench is None:
         return "**Runtime update:** BF16-resident weights; answers unchanged."
     lat, mem = bench["latency_ms"], bench["memory_gib"]["request_peak"]
     return (
         "**Runtime update:** BF16-resident weights; answers unchanged; latency p50 "
-        f"{lat['p50']['old']:.1f} → {lat['p50']['new']:.1f} ms (p95 {lat['p95']['old']:.1f} → "
-        f"{lat['p95']['new']:.1f} ms) and peak GPU memory {mem['old']:.1f} → {mem['new']:.1f} GiB per single "
-        "request on one AMD MI325X GPU."
+        f"{lat['p50']['old']:.1f} → {lat['p50']['new']:.1f} ms, p95 {lat['p95']['old']:.1f} → "
+        f"{lat['p95']['new']:.1f} ms; peak GPU memory {mem['old']:.1f} → {mem['new']:.1f} GiB "
+        f"({bench['items']} single requests, {run['input_tokens_mean']:.0f} input tokens on average, one AMD "
+        "MI325X GPU)."
     )
 
 
-def spec_for(t: dict, bench: dict | None, draft: bool) -> dict:
+def spec_for(t: dict, bench: dict | None, run: dict | None, draft: bool) -> dict:
     old = json.loads((SPECS / t["spec"]).read_text(encoding="utf-8"))
     spec = copy.deepcopy(old)
     if not spec.get("vendor_source"):
@@ -153,7 +154,7 @@ def spec_for(t: dict, bench: dict | None, draft: bool) -> dict:
     else:
         spec["runtime_equivalence"] = text + sentence
     details = spec["card"]["text"].setdefault("details", [])
-    details.append(card_line(bench))
+    details.append(card_line(bench, run))
     spec["_release"] = {
         "bf16_resident_runtime": (
             "Runtime-only revision (coordinator note 2026-10-01 10:30 UTC+8, b5f60b33): the package runtime comes "
@@ -266,20 +267,26 @@ def main() -> int:
     draft = mode == "draft"
     problems = []
     for t in TIERS:
-        bench = None
+        bench = run = None
         if not draft:
             path = OUT / t["key"] / "bench" / "compare.json"
             if not path.is_file():
                 print(f"{t['tier']}: no bench comparison yet, skipped")
                 continue
             bench = json.loads(path.read_text(encoding="utf-8"))
+            run = json.loads(
+                (path.parent / "bench-new.json").read_text(encoding="utf-8")
+            )
+            if sha(path.parent / "bench-new.json") != bench["new"]["sha256"]:
+                problems.append(f"{t['tier']}: bench-new.json is not the compared run")
+                continue
             if not bench["passed"] or bench["bit_identical_items"] != bench["items"]:
                 print(
                     f"{t['tier']}: bench answers differ, no final spec", file=sys.stderr
                 )
                 problems.append(t["tier"])
                 continue
-        spec = spec_for(t, bench, draft)
+        spec = spec_for(t, bench, run, draft)
         suffix = ".draft" if draft else ""
         spec_path = SPECS / f"dev2-{t['key']}-bf16r{suffix}.json"
         spec_text = json.dumps(spec, ensure_ascii=False, indent=2) + "\n"
