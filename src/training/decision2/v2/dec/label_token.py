@@ -34,7 +34,13 @@ import torch
 from torch import nn
 
 from training.model.data import MAX_OPTIONS, canonical, file_sha256
-from training.model.decision_model import _payload
+from training.model.decision_model import DecisionModel, _payload
+from training.model.lora import (
+    LORA_FORMAT,
+    select_target_modules,
+    verify_adapter_config,
+)
+from training.model.source import verify_source
 
 LABEL_PROMPT_VERSION = "decision2-label-token-v1"
 LABEL_ARCHITECTURE = "qwen3.5-text-label-token-tied-lm-head-v1"
@@ -249,8 +255,6 @@ class LabelTokenModel(nn.Module):
         return logits.masked_fill(~candidate_mask, -float("inf"))
 
     def save(self, path: str | Path, tokenizer: Any) -> None:
-        from training.model.lora import LORA_FORMAT, verify_adapter_config
-
         path = Path(path)
         path.mkdir(parents=True, exist_ok=False)
         if self.metadata.get("checkpoint_format") == LORA_FORMAT:
@@ -283,8 +287,6 @@ class LabelTokenModel(nn.Module):
 
     def merge_lora(self) -> None:
         """Materialize the adapter into a full backbone (same answers up to FP32 rounding)."""
-        from training.model.lora import LORA_FORMAT
-
         if self.metadata.get("checkpoint_format") != LORA_FORMAT:
             raise ValueError("Only a loaded LoRA label-token model can be merged")
         origin = {
@@ -319,8 +321,6 @@ def is_label_checkpoint(path: str | Path) -> bool:
 
 
 def _source_model(contract: dict[str, Any], source_path: Path) -> tuple[Any, Any]:
-    from training.model.decision_model import DecisionModel
-
     kind = contract.get("source_kind")
     if kind in ("base", "posttrained"):
         if not contract.get("base_revision"):
@@ -342,13 +342,6 @@ def load_label_checkpoint(
     trainable_adapter: bool = False,
 ) -> tuple[LabelTokenModel, Any]:
     from transformers import AutoTokenizer
-
-    from training.model.lora import (
-        LORA_FORMAT,
-        select_target_modules,
-        verify_adapter_config,
-    )
-    from training.model.source import verify_source
 
     path = Path(path)
     metadata = json.loads((path / "decision_config.json").read_text(encoding="utf-8"))
@@ -411,9 +404,6 @@ def label_fingerprint(
     path: str | Path, source_path: str | Path | None
 ) -> dict[str, Any]:
     """Inference identity: config, tokenizer, weights (and a LoRA source's files)."""
-    from training.model.lora import LORA_FORMAT, verify_adapter_config
-    from training.model.source import verify_source
-
     path = Path(path)
     metadata = json.loads((path / "decision_config.json").read_text(encoding="utf-8"))
     if metadata.get("readout") != LABEL_READOUT:
