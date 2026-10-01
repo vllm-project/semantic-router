@@ -68,14 +68,15 @@ Mirror for every Index job: `0403fb5796ca00a5a217f8e7656c77fe6e2205db-src_traini
    to `/home/xunliu/code/decision2-program/private/moe1/` (mode 700) as `compare-MOE-Git-soup.json`,
    `port-MOE-Git-soup.json`, `receipt-MOE-Git-soup.json`, `latency-MOE-Git-soup.json`, then run
    `python3 private/moe1/make_report.py` (tested on fake inputs): it writes `moe1-index-report-2026-10-01.md` with
-   the headline (port / kit), vs DEV2.0-27B (IX1) and vs the 27B-class frontier peer, the **Pareto standing at
-   25.31B** (the board snapshot `board-7cdcea3d.json` shows every entrant above Winnow-12B 50.02 is larger than
-   the MoE, so Rune 26B-A4B v3 does not dominate it), areas, the per-benchmark table (`compare_moe.py`), row
-   accounting and latency. Never put an Index value in commits, the gist, cards, COORDINATION or STATUS.
-4. **Hand-off status:** the brief's criterion is the 27B-class frontier bar of the IX1 report (Rune 26B-A4B v3's
-   headline). If cleared, mark `moe-handoff-2026-10-01.md` **ISSUED** (no value in the file: "the private Index
-   criterion was met"); otherwise **NOT ISSUED**, and give the coordinator the Pareto reading privately (it may
-   still matter for the frontier goal). Add a public receipt (counts, hashes, GPU-h only; IX1's
+   the headline (port / kit), vs DEV2.0-27B (IX1) and vs the 27B-class frontier peer, the **size–quality (Pareto)
+   standing at the package's loaded size** from the private board snapshot `board-7cdcea3d.json` (read the note
+   in the private README: the bar and the Pareto reading can differ because the package is smaller than the
+   peer), areas, the per-benchmark table (`compare_moe.py`), row accounting and latency. Never put an Index value,
+   a frontier comparison or a board entrant in commits, the gist, cards, COORDINATION or STATUS.
+4. **Hand-off status:** the brief's criterion is the 27B-class frontier bar of the private IX1 report. If cleared,
+   mark `moe-handoff-2026-10-01.md` **ISSUED** (no value in the file: "the private Index criterion was met");
+   otherwise **NOT ISSUED**, and give the coordinator the Pareto reading privately (it may still matter for the
+   frontier goal). Add a public receipt (counts, hashes, GPU-h only; IX1's
    `ix1-public-receipt/1` shape) under `v2/27b/records/moe-index/`. The private eval-artifacts dataset is listed
    as a private destination, but this track's standing rule is "nothing goes to HF": leave the upload to the
    coordinator (artifacts are in node A's private dir and the local private folder).
