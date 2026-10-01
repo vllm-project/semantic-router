@@ -1,0 +1,39 @@
+{
+ "schema": "decision2.ib2.status.v1",
+ "release_safe": true,
+ "reason": "preregistered decisive blind label review passed P1, P2 and P3 (5 / 216 gold errors, 2.31%, exact 95% upper 5.32%; population-weighted 1.41%; no family above the per-family bar), and every audit passed (G0 with positive controls, G1, G2 with clean re-scans, G3 names, G4, G5, G6, G7, G8, leak guard)",
+ "screen": {
+  "n": 60,
+  "disagreements": 0,
+  "families_dropped": []
+ },
+ "review": {
+  "n": 216,
+  "errors": 5,
+  "error": 0.023148,
+  "error_cp95_upper": 0.05319,
+  "weighted_error": 0.014053,
+  "P1": true,
+  "P2": true,
+  "P3": true
+ },
+ "rows_removed_from_train": {
+  "review_gold_errors": 5,
+  "screen_disagreements": 0,
+  "leak_guard": 0
+ },
+ "rows_removed_from_dev": {
+  "leak_guard": 1
+ },
+ "families_dropped": {
+  "shortcut_gate_run_c2": ["fc_sel", "fc_args", "gsm", "qasc", "arc"],
+  "empty_after_index_and_panel_exclusion": ["cnli"],
+  "shortcut_gate_redesign_run_c3": ["fc_sel2", "fc_args2"]
+ },
+ "in_distribution_families": ["hover", "gsm2"],
+ "share_alike_families": ["argq", "hover"],
+ "index_rows": "every candidate group with an exact, normalized or 13-gram match to any Index suite row was dropped (G0); positive controls 2,000 / 2,000 exact and 2,000 / 2,000 perturbed",
+ "c1": "the custodian C1 content recheck is required before any C1-scored model trained on IB2",
+ "limitations": "TRAIN (24,518 rows) is below the preregistered 40-120k target; the reviewers are one model family (AI adjudication, not human annotation)",
+ "prereg": "v2/data/records/ib2-prereg-2026-10-01.md (amendments 1 and 2)"
+}
