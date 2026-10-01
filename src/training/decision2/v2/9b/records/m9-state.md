@@ -1,6 +1,6 @@
 # 9B M9 state (resume file)
 
-Updated: 2026-10-01 18:15 UTC+8 (10:15Z). Branch `xunzhuo/decision-2-training-9b-m9` (worktree `vllm-sr-dev2-9b-m9`).
+Updated: 2026-10-01 18:35 UTC+8 (10:35Z). **Hand-off point: stage 1 is closed (no finalist; result record `lux9b-m9-stage1-result-2026-10-01.md`); stage 2 runs unattended.** Branch `xunzhuo/decision-2-training-9b-m9` (worktree `vllm-sr-dev2-9b-m9`).
 Prereg `records/lux9b-m9-prereg-2026-10-01.md` (`8570a5896`); amendment 1 (`0b84e0db4`, B0 read through the base's
 untied LM head); amendment 2 (`51c80ddc9`, stage 2 = L9 recipe + IB1-r3 + IB2 and the transfer-only ablation, started
 as node-C GPUs free). Every amendment preceded the GPU jobs it governs; no stage-1 arm had been read.
@@ -29,8 +29,9 @@ readouts, never release scores. Every contrast is against C0 (DEV2.0-9B) on the 
 | --- | --- | --- |
 | node C GPU1–4 | stage 1 `chains.sh` c1 L9-s1, c2 L9-s2, c3 L9L-s1, c4 L9L-s2 (mirror `8570a5896`) | **all four DONE 09:40–09:47Z.** BEST (SELECT700 family macro): L9-s1 1,624 (.8766), L9-s2 1,621 (.8689), L9L-s1 1,624 (.8646), L9L-s2 1,216 (.8763) |
 | node C GPU1 / GPU3 | `post-c.sh` L9 / L9L (`fb2cc87cc`): LoRA merges + soup after both seeds | **done 09:49–09:50Z**: L9 soup `56237917…`, L9L soup `baf566e1…` (dec identities); merges agree with the adapters on 128 SELECT rows |
-| node A GPU6 / GPU7 | `post-a.sh` L9 / L9L (`fb2cc87cc`): pull soup → 8 panels → scoring vs C0 → typed readout + rules (`select/9b-finalists.json`) | soups pulled (content manifests equal), readouts running from 09:51Z |
-| node A | `formal-chain.sh` (`ad272def4`): no finalist → stop; else (parity already done, see below) **waits for `status/formal.GO`** (write it only after re-reading COORDINATION and pushing a finalist lock record) | waiting for the rules |
+| node A GPU6 / GPU7 | `post-a.sh` L9 / L9L (`fb2cc87cc`) | done: scored 10:06–10:08Z, rules 10:09Z |
+| node A | `formal-chain.sh` (`ad272def4`), stage 1 | **stopped by rule: no finalist** (10:09Z) |
+| node A | `formal-chain.sh` with `M9_STAGE=2` (`54c420357`, pid 206896): reads `select/9b-finalists-s2.json`; no finalist → stop; else **waits for `status/formal-s2.GO`**, then `formal.sh` per finalist (GPU6 / GPU7) | waiting for the stage-2 rules |
 | node C GPU5 / 2 / 4 / 1 | stage 2 `chains2.sh` (`1b0830c0c`): L9IB-s1 (GPU5, started 07:46Z), L9IB-s2 (GPU2), L9IBX-s1 (GPU4), L9IBX-s2 (GPU1, after the L9 merges) | L9IB-s1 full run (ETA ≈ 10:55Z); L9IB-s2 (GPU2), L9IBX-s1 (GPU4), L9IBX-s2 (GPU1) started 09:46–09:50Z after the stage-1 chains / L9 merges; ETA ≈ 13:00Z |
 | node C GPU5 / GPU4 | `post-c.sh` L9IB / L9IBX | waiting |
 | node A GPU6 / GPU7 | `post-a.sh` with `M9_STAGE=2` (L9IB / L9IBX): + IB1 / IB2 DEV diagnostics, rules `select/9b-finalists-s2.json` | waiting |
@@ -80,11 +81,27 @@ the Noul floors, MLX-DEV-9B and retention, and passes the yes-bias guard, as exp
 ≈ 3.0 at 07:47Z (node C preflights + running seeds; node A readouts ≈ 0.4; B0 0.03). Projection: stage 1 ≈ 12,
 stage 2 ≈ 16, readouts / formal ≈ 4. Cap 120.
 
-## Next (if this worker has handed off)
+## Hand-off: finishing stage 2 (a continuation worker; everything below is already running or scripted)
 
-1. When `select/9b-finalists.json` exists (≈ 10:30Z): read it and `lines/readout/m9.json`; re-read COORDINATION;
-   for finalists, push a lock record (soup `SHA256SUMS` on node A, rules-output hashes), then
-   `date -u +%FT%TZ > /data/dev2/runs/9b/m9/status/formal.GO` on node A. The formal chain then runs each finalist
-   (`formal-m9/NAME-16k`, gates in `formal-m9/NAME.gates/`); apply items 1–7 from `successor.json` and the C0F parity.
-2. Stage 2 lands ≈ 13:00–13:30Z: rules in `select/9b-finalists-s2.json`; formal for ≤ 2 passers the same way.
-3. Results record, gist 05 entry, private Index request for frozen finalists (IX1 harness), C1 item-8 spec.
+1. **Wait** for node C's stage-2 seeds (`status/m9-L9IB-s{1,2}`, `m9-L9IBX-s{1,2}` `.DONE`; ETA ≈ 10:55Z for
+   L9IB-s1, ≈ 12:45–13:05Z for the others), the node-C soups (`soup/L9IB|L9IBX/DONE`) and node A's stage-2 post
+   chains (pull → 10 panels incl. `ib1dev` / `ib2dev` → `score.sh points C0` → `readout/m9-s2.json` → contrasts vs L9
+   → `select/9b-finalists-s2.json`). Liveness: node C `chains/chain-c{5,2,4,1}-s2.pid`, `chains/post-c-L9IB|L9IBX.pid`;
+   node A `chains/post-a-L9IB|L9IBX.pid`, `chains/formal-s2.pid`. A failed step writes `status/failed-<ARM>` and is
+   never rerun.
+2. **If the stage-2 rules name finalists:** re-read COORDINATION; on node A run
+   `bash /data/dev2/src/<mirror>/src/training/decision2/v2/9b/lux9b/m9/lock.sh select/9b-finalists-s2.json
+   lines/readout/m9-s2.json NAME…` (from `/data/dev2/runs/9b/m9`), commit its JSON as
+   `records/lux9b-m9-formal-lock-s2-2026-10-01.md`, push, then
+   `date -u +%FT%TZ > /data/dev2/runs/9b/m9/status/formal-s2.GO`. The chain runs `formal-m9/NAME-16k` (+ `-smoke`,
+   `-16k-mlx`) and writes `formal-m9/NAME.gates/successor.json`; the formal-path parity of DEV2.0-9B is already exact
+   (`formal-m9/C0F.parity.json`), so the stored T = 1 run is the bar. Items 1–7 read `successor.json` (item 4:
+   `MLX-PAIRED-vs-DEV2.0-9B-T1.json` `ci95.high` ≥ 0; item 5: `PAIRED-vs-Lux1-16K.json` + Nimble2; item 6: exposure
+   receipts `exposure/ib1-ib2-train.json` and x60's, both 0 groups; item 7: `PUBLIC231-vs-DEV2.0-9B-T1.json`).
+3. **For a passer of items 1–7:** the T = 1 derivation (`v2.release.retemper_predictions --undo`), a frozen package
+   for release engineering (card facts: Qwen3.5-9B-Base → merged LoRA; x60 + IB1-r3 + IB2; own-Lux teacher), a C1
+   item-8 spec (the 27B spec `v2/eval/sealed/c1-postkey/dev2-27b-a20r.json` is the template; image `host2`, the
+   formal-m9 cache; **the custodian's C1 content recheck first: the model is IB-trained**) and a private Index request
+   for IX1 (numbers only in `decision2-program/private/`).
+4. **If no stage-2 finalist:** M9 ends with no successor; write the final results record (stage 2 section) and the
+   gist 05 entry. The optional CAL-only Noul T+b study applies only to a finalist and was not run.
