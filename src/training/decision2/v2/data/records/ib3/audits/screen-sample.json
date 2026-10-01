@@ -1,0 +1,16 @@
+{
+ "families_excluded": [],
+ "n": 50,
+ "per_family": 10,
+ "rows": 29162,
+ "rows_sha256": "89ea11aa1b546a262f4cc06b901e31b28b5bd306d23c3b3c3e51b72b59df5632",
+ "salt": "ib3-screen-v1",
+ "sampled": {
+  "esci": 10,
+  "fdial2": 10,
+  "mqa": 10,
+  "phiu": 10,
+  "wpd": 10
+ },
+ "schema": "decision2.ib3.screen-sample.v1"
+}

@@ -205,6 +205,104 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 00:10 — **IB3 published but NOT release-safe (611782db); IB3-r2 commissioned (maths core + optional
+  claim-level grounding).** Data: private `@c2401ab4` `m6/ib3/`; records merged at `29caad2de`.
+  - **Contents.** TRAIN 24,148 rows:
+
+    | Family | Source and licence | Rows |
+    | --- | --- | ---: |
+    | `wpd` (phishing links) | Mendeley web-page phishing, CC BY 4.0 | 3,700 |
+    | `phiu` (phishing pages) | PhiUSIIL, CC BY 4.0 | 1,720 |
+    | `esci` (Exact vs Irrelevant, in-distribution) | ESCI train, Apache-2.0 | 9,970 |
+    | `mqa` (MathQA per-option, formula-verified keys) | MathQA, Apache-2.0 | 8,758 |
+
+    - Every audit passes, including a new Index URL / host guard (103 groups dropped; controls 500/500).
+  - **Review:** 29/216 = 13.4% (upper 18.7%).
+    - Phishing families: 20 errors. The labels are blocklist-based and not checkable from the URL; the reviewers agreed
+      on 214 of 216 items.
+    - `esci`: 8 errors at the Exact boundary.
+    - `mqa`: 1/54.
+  - **Not covered:**
+    - grounding (FaithDial / HaluEval leak through the response alone; the passage-swap redesign failed the screen);
+    - contracts (MAUD too small after exclusions; LEDGAR licence conflicting);
+    - phishing email (no licensed legitimate corpus);
+    - excluded by licence: LLM-AggreFact (ND), TofuEval / RAGTruth (NC).
+  - **IB3-r2:** the maths `mqa` block plus optional claim-level grounding (e.g. WiCE; screen-gated); no phishing /
+    ESCI; a fresh review. IB3-r2 needs the custodian C1 recheck before C1-scored use.
+  - **Program lesson:** for the phishing / PhishNChips family, no licence-clean source yet has row-checkable labels.
+    Keep it an open gap rather than adding noisy labels.
+
+- 2026-10-02 00:05 — **User decisions (23:53–00:00): naming and a product-style card (round 2).**
+  - **Naming (confirmed):** `Decision-2.0-{codename}-{size}`. The codename follows the size slot across generations.
+    Repos move with `move_repo`, so old IDs redirect.
+
+    | Current repo | New repo |
+    | --- | --- |
+    | `DEV2.0-0.6B` | `Decision-2.0-Kai-0.6B` |
+    | `DEV2.0-0.8B` | `Decision-2.0-Eos-0.8B` |
+    | `DEV2.0-2B` | `Decision-2.0-Sol-2B` |
+    | `DEV2.0-4B` | `Decision-2.0-Nox-4B` |
+    | `DEV2.0-9B` | `Decision-2.0-Lux-9B` |
+    | `DEV2.0-27B` | **`Decision-2.0-Vega-27B`** (new flagship codename) |
+
+    - The collaborator's `DEV2.0-Route-0.6B` is not renamed by us (suggest `Decision-2.0-Route-0.6B` to subin / the
+      user).
+    - **After the rename, every release hand-off and the tooling (hub ID guard, registries, collection, `API.md`,
+      snippets) use the new IDs.** Historical records keep the old names.
+  - **Card policy (supersedes 22:05 / 22:20):**
+    - **NO training-data section, NO limitations section, NO NOTICE file, NO dataset credits, NO training details**
+      (LoRA / architecture internals / precision / runtime notes). Treat it as a distributed product.
+    - Keep only the Apache-2.0 `LICENSE` file and the `base_model` metadata (the minimum Apache-2.0 requires of a
+      derivative).
+    - **Remove JevBench.** Evaluation = **JevArena + Jev Decision Index** only.
+    - **A branded top banner** (vLLM-SR logo; brand blue `#30A0FC` / yellow `#FCB414`; Inter on white). **Every chart
+      carries the vLLM-SR logo bottom-right.**
+    - Richer evaluation charts:
+      - JevArena overall vs same-size peers and the 1.0 counterpart;
+      - JevArena by decision type (Choice / Yes-No / Score + human-labelled transfer);
+      - the Jev Decision Index Pareto (family; this size highlighted);
+      - the Jev Decision Index by area vs the 1.0 counterpart.
+    - The Index charts carry the reproduction label as a footnote.
+    - **Quickstart = code only** (no device / version prose).
+    - **Highlights must be product value** (best-in-size, generation gain, speed, many questions in one pass), not
+      plumbing.
+    - Drop `evaluation/EVALUATION.md`, or reduce it to nothing user-facing.
+    - The prototype assets are in the local private `card-preview/proto-v2/` (`make_v2_assets.py`).
+  - **Execution:** the card worker (4c0a68cd) finishes round 1 (all six round-1 cards are on HF at 15:00–15:41Z), then
+    is resumed for rename + round 2 in one pass.
+
+- 2026-10-01 23:40 — **M13 (c473a3b2): the 4B finalist `4b-LHA10SD` passes every development gate; formal is
+  collecting. 2B / 0.8B are scoring. Continuation resumed.**
+  - **`4b-LHA10SD`** (LH + 10% IB additive + **typed-row self-distillation** from LH), vs LH:
+    - typed T .867 vs .868 (choice / Noul / Score 708 / 307 / 372), all floors hold;
+    - HT-DEV v2 −.003 tie; retention −.022 [−.047, +.002];
+    - IB transfer +.046 [+.034, +.058]; false-yes .202 vs .199.
+  - **Self-distillation on typed rows fixes the typed-head regression** that additive breadth caused in M12, while
+    keeping the breadth gain. Use it as the default way to add breadth to a released recipe.
+  - **`4b-LHA5`** fails: Noul floor 266 < 278, `rule_precedence`, and retention −.033.
+  - **Formal false start:** relative readout paths stopped it at the input check; nothing ran. Amendment 1
+    (`6c1236f18`) switched to absolute paths, with the same checkpoints and hashes.
+  - **Next:** score the 4B formal (items 1–7 vs LH 67.34); 2B `2b-RASD` and 0.8B `08b-RASD` / `08b-RAAG` rules; formal
+    for passers; hand-offs citing the custodian's C1 recheck; a private Index.
+
+- 2026-10-01 23:20 — **27B M6: eight seeds training (G5 hedge M6-IB2PN added); continuation #2 (0d2e488f); eval
+  custodian C1 content recheck (3c7679b0) launched for all IB-trained tracks.**
+  - **Training ends (UTC):** M6-IB ≈ 21:05 / 21:45, M6-IBX ≈ 22:35, M6-IB2 ≈ 01:40 Oct 2, M6-IB2PN ≈ 06:20 Oct 2. Each
+    chain runs to verdicts unattended (≈ 1–2 h after).
+  - **M6-IB2PN** (amendment 3) = M6-IB2 + PN1-r2 TRAIN.
+    - PN1H has 4,361 rows after dropping 3 groups near Index rows. It is disjoint from PN1 dev (G5's slice).
+    - **Caveat:** PN1 dev shares constructions with PN1 train, so formal item 4 is the real test. A reported-only es / fr
+      yes-bias check was added (it detects L128's bias).
+    - Cap 22 GPU-h per seed for this arm only.
+  - **Budget:** ≈ 49 of 140 GPU-h used, ≈ 134 projected. **The finalists' private Index runs use a separate eval
+    allowance (≤ 12 GPU-h) on node D GPU4–7.**
+  - **Correction for the 27B track:** the 27B fix revision **`09280791` has landed**; the successor builds on it.
+  - **C1 content recheck (custodian, 3c7679b0).** It covers IB1-r3 + IB2 + PN1-r2 once for every track (27B M6, 9B
+    M9 stage 3, M13 / M14). The record goes under `v2/eval/records/`, and item 8 is allowed only for zero exposure under
+    the rule. IB3 gets a repeat check when it lands.
+  - **Deviations:** merge `d96250da6` is unsigned (before the reminder). One state commit came 64 min after the
+    previous one (worker alive).
+
 - 2026-10-01 23:15 — **0.8B fast-track (1afc17e8): `08b-RA` FAILED formal (items 1, 4, 6(b)); DEV2.0-0.8B stays
   `4afea305`.** Records merged at `1ecff4497`; gist 04; 0.21 GPU-h.
   - **Item 1:** v3 53.10 vs 50.236, +2.87 [−2.87, +4.58]; vs the node-E re-collection of the release (50.263),

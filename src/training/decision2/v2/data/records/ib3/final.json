@@ -1,0 +1,143 @@
+{
+ "candidates": {
+  "dev": "29c5a2a422a923914dbd2a6625fb40c7bd5f14073f74fb4615944fce001390a7",
+  "train": "89b47eb4a972e2fc124e27ff249b23a63a5c2f95bc7273efea2ee5f1d401f5c5"
+ },
+ "dev": {
+  "family": {
+   "esci": 820,
+   "mqa": 426,
+   "phiu": 170,
+   "wpd": 346
+  },
+  "groups": 1109,
+  "label_by_family": {
+   "esci": {
+    "0": 410,
+    "1": 410
+   },
+   "mqa": {
+    "0": 213,
+    "1": 213
+   },
+   "phiu": {
+    "0": 85,
+    "1": 85
+   },
+   "wpd": {
+    "0": 173,
+    "1": 173
+   }
+  },
+  "language": {
+   "en": 1480,
+   "es": 108,
+   "ja": 174
+  },
+  "rows": 1762,
+  "sha256": "e79d90d0517ed1a360c50e2d49b38b00cd5801a8b8a81bd29b876db2f85f737e",
+  "task_type": {
+   "noul": 1762
+  }
+ },
+ "drops": {
+  "dev_groups": {
+   "count": 585,
+   "sha256": "c6f7058b52208330dc5094c90476f3ba9ff1ca26253e2e1728229a2cbdbdccd6"
+  },
+  "families": [
+   "fdial2"
+  ],
+  "groups": {
+   "count": 857,
+   "sha256": "5dc6d6734242c37b7812a7b0a9a716c1100d73b5bc1e17ef3713d6020c1bc291"
+  },
+  "ids": {
+   "count": 34,
+   "sha256": "1b1c97f4f6e168628539a9d2066c3324c9d3db1a0ef4cb4a6510f5895782dced"
+  },
+  "leak_ids": {
+   "count": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "removed": {
+   "dev:dev_near_train": {
+    "esci": 252,
+    "mqa": 570,
+    "phiu": 3,
+    "wpd": 13
+   },
+   "dev:dropped_group": {
+    "esci": 88,
+    "mqa": 22,
+    "wpd": 13
+   },
+   "dev:family": {
+    "fdial2": 610
+   },
+   "dev:rebalance": {
+    "phiu": 20,
+    "wpd": 81
+   },
+   "train:dropped_group": {
+    "esci": 854,
+    "mqa": 220,
+    "phiu": 3,
+    "wpd": 128
+   },
+   "train:family": {
+    "fdial2": 5390
+   },
+   "train:rebalance": {
+    "esci": 8,
+    "mqa": 2,
+    "phiu": 17,
+    "wpd": 151
+   },
+   "train:review_or_screen": {
+    "esci": 8,
+    "mqa": 2,
+    "phiu": 13,
+    "wpd": 8
+   }
+  }
+ },
+ "schema": "decision2.ib3.final.v1",
+ "train": {
+  "family": {
+   "esci": 9970,
+   "mqa": 8758,
+   "phiu": 1720,
+   "wpd": 3700
+  },
+  "groups": 14507,
+  "label_by_family": {
+   "esci": {
+    "0": 4985,
+    "1": 4985
+   },
+   "mqa": {
+    "0": 4379,
+    "1": 4379
+   },
+   "phiu": {
+    "0": 860,
+    "1": 860
+   },
+   "wpd": {
+    "0": 1850,
+    "1": 1850
+   }
+  },
+  "language": {
+   "en": 20760,
+   "es": 1490,
+   "ja": 1898
+  },
+  "rows": 24148,
+  "sha256": "688b643ed6ada12adedb1c18c028be3a41fedca77c4c9cb661f2c9ded4b5504e",
+  "task_type": {
+   "noul": 24148
+  }
+ }
+}

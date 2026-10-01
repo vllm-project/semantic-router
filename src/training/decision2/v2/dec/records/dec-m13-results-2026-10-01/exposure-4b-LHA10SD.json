@@ -1,0 +1,16 @@
+{
+  "files": [
+    {
+      "path": "-",
+      "rows": 72847,
+      "sha256": "d41cdd1aa1e63b47394ed8fa61a87bf461cb4d2cea08cc7ff12f2e58b36dc9d5"
+    }
+  ],
+  "groups": [],
+  "groups_by_pool": {},
+  "label": "decoder M13 4b-LHA10SD TRAIN (data lock debd36e1a)",
+  "matched_rows": {},
+  "methods_agree": true,
+  "payload_sha256": "2194716a179b2e6c3ba529dee3952c5dd62c0f3281638b7236029d5d542f4914",
+  "schema": "dev2-overlap-exposure/1"
+}

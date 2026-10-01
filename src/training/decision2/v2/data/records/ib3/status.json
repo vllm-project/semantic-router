@@ -1,0 +1,56 @@
+{
+ "c1": "the custodian C1 content recheck is required before any C1-scored model trained on IB3",
+ "families_dropped": {
+  "amendment_1_too_few_groups_after_index_and_panel_exclusion": [
+   "maud"
+  ],
+  "screen_three_or_more_of_ten": [
+   "fdial2"
+  ],
+  "shortcut_gate_run_d1": [
+   "fdial",
+   "haluqa"
+  ]
+ },
+ "in_distribution_families": [
+  "esci"
+ ],
+ "index_rows": "every candidate group with an exact, normalized or 13-gram match to any Index suite row was dropped (G0; positive controls 2,000 / 2,000 exact and 2,000 / 2,000 perturbed), and every group with a URL or host that occurs in any suite row (G0u; positive controls 500 / 500 exact and 500 / 500 perturbed)",
+ "limitations": "NOT release-safe: the decisive blind review failed; TRAIN (24,148 rows) is below the preregistered 30-80k target; phishing-link and phishing-page labels come from blocklists and are often not checkable from the URL and title alone; the reviewers are one model family (AI adjudication, not human annotation)",
+ "prereg": "v2/data/records/ib3-prereg-2026-10-01.md (amendments 1 and 2)",
+ "reason": "preregistered decisive blind label review failed P1, P2 and P3 (29 / 216 gold errors, 13.43%, exact 95% upper 18.71%; population-weighted 10.65%; esci, phiu and wpd above the per-family bar); every audit passed (G0 and G0u with positive controls, G1, G2 with clean re-scans, G3 names, G4, G5, G6, G7, G8, leak guard)",
+ "release_safe": false,
+ "review": {
+  "P1": false,
+  "P2": false,
+  "P3": false,
+  "error": 0.134259,
+  "error_cp95_upper": 0.187096,
+  "errors": 29,
+  "family_errors": {
+   "esci": 8,
+   "mqa": 1,
+   "phiu": 12,
+   "wpd": 8
+  },
+  "n": 216,
+  "weighted_error": 0.106485
+ },
+ "rows_removed_from_dev": {
+  "leak_guard": 0
+ },
+ "rows_removed_from_train": {
+  "leak_guard": 0,
+  "review_gold_errors": 29,
+  "screen_disagreements": 2
+ },
+ "schema": "decision2.ib3.status.v1",
+ "screen": {
+  "disagreements": 5,
+  "families_dropped": [
+   "fdial2"
+  ],
+  "n": 50
+ },
+ "share_alike_families": []
+}
