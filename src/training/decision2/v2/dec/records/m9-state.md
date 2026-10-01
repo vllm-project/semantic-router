@@ -9,6 +9,17 @@ its "written ≈11:10" line is a typo for ≈10:35); data lock [`dec-m9-datalock
 
 ## Now
 
+- 2026-10-01 12:47 UTC+8 (04:47Z) — **g6b adopted H9-s1 and started H9-s3; g7 finished.**
+  - H9-s1 DONE (BEST 846, SELECT700 .8971; full run 04:28Z, postrun 04:31Z), H9-s2 DONE (BEST 847, .8965; 04:36Z).
+    C9-s2 / s3 STOPPED (failed C9 preflight), C9.FAILED (no soup). H9-s3 started 04:33Z (preflight PASS 04:38Z; arm
+    used 3.03 GPU-h at start, so the original 4.8 cap would also have let it run), ETA ≈ 06:05Z, soup ≈ 06:12Z.
+  - Seed-level early read (report only): H9-s1 HT-DEV v2 vs `4b-I` −.0178 [−.0327, −.0023] TIE.
+  - Post chain (GPU7) waits for `status/H9.DONE`, then line H9 → score → rules → formal (pick only).
+  - **Finish (this worker or a continuation):** after `m9/post/FINISHED` (or `STOPPED`), on node A run
+    `python3 $S/v2/dec/ops/m9/m9_report.py` (mirror ≥ `29057a4de`) → `m9/results/summary.json`; fill
+    `dec-m9-results-2026-10-01.md` (draft in the branch), copy the small aggregates (pick, pairs, readouts, parity,
+    formal summaries, GPU-h) into `records/dec-m9-results-2026-10-01/`, update gist 04, merge into integration.
+
 - 2026-10-01 12:23 UTC+8 (04:23Z) — poll: H9-s1 step 1,042 / 1,128, H9-s2 986 / 1,128; g6b waiting on the GPU6
   lock (expected); post chain waiting. No failures since amendment 2.
 
