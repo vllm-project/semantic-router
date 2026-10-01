@@ -291,6 +291,20 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 20:10Z (poll 14 at 20:02Z): all alive, guard alive. M6-IB 4,554 / 4,427 (s1 at 4452 .9171, BEST stays 3816; ETA ≈
+  21:30Z / 21:50Z); M6-IB2 4,502 / 4,508 (ETA ≈ 01:35Z / 01:55Z, node A's seed at 10.1 s per update); M6-IBX 4,157 /
+  4,106 (ETA ≈ 22:20Z / 22:30Z); M6-IB2PN 3,094 / 3,080 (ETA ≈ 06:35Z / 06:30Z). Node D disk 737 GB. GPU-h ≈ 89.
+  **Index tooling for amendment 5 (`650465151`, mirrored to node C and node D):** `m6-index.sh` takes node-prefixed
+  GPUs (`M6_INDEX_GPUS="d4 d5 d6 d7 c1 c2 c3 c4"`: shard k on entry k mod n), `stage-c` (node B checkpoint → node C,
+  restage there, node C's package must equal node D's file for file), `collect` (node C shard results → node D's run,
+  SHA-256 lists equal; Triton caches stay), `plan` (dry run), two-node `status` / `release`; `m6-index-run.sh` runs
+  one node's shards (`NODE SHARDS GPU...`; placeholder GPU 9 for the other node's shards, as IX1's node C runs did).
+  147 27B tests pass, shellcheck clean. **The fix2 template is now on node C too** (relayed node D → node C through
+  node B's transfer key in 6 s; 33 files, SHA-256 list equal to node D's). Node C and node D hold identical IX1
+  inputs (image `f83b1d10`, kit `87d4650b`, base snapshot, A20r's frozen cache `ec364143…`, panel-8). The
+  workstation's path to node D is slow (≈ 3 s per connection, two timeouts); node B → node D, the chains' path, is
+  fast (6 / 6 at 0.2 s). `m6-index.sh` now retries connections (`ConnectionAttempts=4`).
+
 - 19:52Z (poll 13 at 19:39Z; worker 4's first): all alive (8 containers; node B drivers, four chains and the
   contrast guard 2868454; node A driver, relay and four mlx watchers; node D four drivers and four relays). M6-IB
   4,426 / 4,282 (s1 BEST 3816 .9196, s2 BEST 3180 .9308); M6-IB2 4,360 / 4,362 (BEST 4135 both); M6-IBX 4,005 / 3,958

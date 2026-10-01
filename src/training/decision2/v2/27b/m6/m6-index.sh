@@ -70,9 +70,10 @@ fi
 NODES=${DEV2_NODES_FILE:-$HOME/.config/decision2/nodes.env}
 B=$(grep '^node-b=' "$NODES" | cut -d= -f2-) C=$(grep '^node-c=' "$NODES" | cut -d= -f2-)
 D=$(grep '^node-d=' "$NODES" | cut -d= -f2-)
-onb() { ssh -o BatchMode=yes "$B" "$@"; }
-onc() { ssh -o BatchMode=yes "$C" "$@"; }
-ond() { ssh -o BatchMode=yes "$D" "$@"; }
+SSH=(ssh -o BatchMode=yes -o ConnectTimeout=30 -o ConnectionAttempts=4)
+onb() { "${SSH[@]}" "$B" "$@"; }
+onc() { "${SSH[@]}" "$C" "$@"; }
+ond() { "${SSH[@]}" "$D" "$@"; }
 XFER="ssh -i /root/.ssh/d2_temp_cd -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes"
 M=/data/dev2/src/$SHA-src_training_decision2
 S=$M/src/training/decision2
