@@ -278,6 +278,13 @@ EOF
 hf_assemble() {
   fresh hf
   local spec=$R/hf/spec.json
+  # The G0 receipt for upload keeps IB1-side counts only; suite statistics stay in the node copy.
+  python3 - "$R/g0/scan/index-guard.public.json" > "$R/hf/index-guard.public.json" <<'EOF'
+import json, sys
+receipt = json.load(open(sys.argv[1]))
+receipt["reference"] = "every Decision Index suite row (selected and added rows); statistics kept on the node"
+print(json.dumps(receipt, indent=1, sort_keys=True))
+EOF
   python3 - "$R" "$CAND" "$CODE/v2/data/records" > "$spec" <<'EOF'
 import json, pathlib, sys
 run, cand, rec = map(pathlib.Path, sys.argv[1:])
@@ -295,7 +302,7 @@ items = [
     (run / "freeze/ib1.dev.manifest.json", "dev.manifest.json"),
     (run / "freeze/stats.json", "stats.json"),
     (run / "freeze/isolation.json", "isolation.json"),
-    (run / "g0/scan/index-guard.public.json", "audits/index-guard.public.json"),
+    (run / "hf/index-guard.public.json", "audits/index-guard.public.json"),
     (run / "g0/controls.json", "audits/index-guard-controls.json"),
     (run / "overlap/piv4.public.json", "audits/overlap-piv4.public.json"),
     (run / "overlap/piv4q.public.json", "audits/overlap-piv4q.public.json"),
