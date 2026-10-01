@@ -11,7 +11,10 @@
 # GPUs: node E GPU0-3 and node F GPU2-3 / 6-7 only (node F GPU4-5: amendment 1; node E GPU4-7 and node F GPU0-1 are
 # never M13's).
 #
-# usage: M13_NODE=e|f m13-formal.sh launch|run <mirror-dir> <gpu> <tier> <point> [<point> ...]
+# mlx-launch / mlx-run (amendment 2): m6-formal.sh <tier> mlx m13-<point> for each point whose v3 report node A has
+# sealed (<run>/V3-SEALED.json, m13-fscore.sh formal-mark); a failed mlx-diag collection stops that point.
+#
+# usage: M13_NODE=e|f m13-formal.sh launch|run|mlx-launch|mlx-run <mirror-dir> <gpu> <tier> <point> [<point> ...]
 set -u
 MODE=$1 SRC=$2 GPU=$3 TIER=$4
 shift 4
@@ -28,9 +31,10 @@ F=/data/dev2/runs/dec/formal/m13
 S=/data/dev2/src/$SRC/src/training/decision2
 mkdir -p "$F/logs" "$F/status"
 TAG=$TIER-$NODE$GPU
-if [ "$MODE" = launch ]; then
+case $MODE in mlx-launch | mlx-run) TAG=mlx-$TAG ;; esac
+if [ "$MODE" = launch ] || [ "$MODE" = mlx-launch ]; then
   mkdir "$F/logs/formal-$TAG.lock" 2> /dev/null || { echo "M13 formal $TAG already launched"; exit 0; }
-  M13_NODE=$NODE setsid nohup bash "$0" run "$SRC" "$GPU" "$TIER" "$@" > "$F/logs/formal-$TAG.log" 2>&1 < /dev/null &
+  M13_NODE=$NODE setsid nohup bash "$0" "${MODE%launch}run" "$SRC" "$GPU" "$TIER" "$@" > "$F/logs/formal-$TAG.log" 2>&1 < /dev/null &
   echo $! > "$F/logs/formal-$TAG.pid"
   echo "$(date -u +%FT%TZ) M13 formal $TAG launched for $* (pid $(cat "$F/logs/formal-$TAG.pid"))" | tee -a "$M/OPERATIONS.log"
   exit 0
@@ -61,6 +65,24 @@ clear_stale() {
     fi
   done
 }
+if [ "$MODE" = mlx-run ]; then
+  for point in "$@"; do
+    run=m13-$point
+    [ -f "$F/status/$run.MLX" ] || [ -f "$F/status/$run.MLX-FAILED" ] && { log "$run mlx-diag already attempted"; continue; }
+    [ -f "$F/$run/V3-SEALED.json" ] || { log "$run v3 not sealed by node A; mlx-diag not started"; continue; }
+    clear_stale
+    if bash "$S/v2/dec/ops/m6/m6-formal.sh" "$TIER" mlx "$run" > "$F/logs/$run-mlx.log" 2>&1; then
+      echo "done" > "$F/status/$run.MLX"
+      log "$run mlx-diag collected"
+    else
+      echo "mlx-diag failed" > "$F/status/$run.MLX-FAILED"
+      log "$run mlx-diag FAILED (see $F/logs/$run-mlx.log); point stopped"
+    fi
+  done
+  rm -f "$entry"
+  log "mlx chain finished"
+  exit 0
+fi
 for point in "$@"; do
   run=m13-$point
   [ -f "$F/status/$run.FAILED" ] && { log "$run failed earlier; not rerun"; continue; }
