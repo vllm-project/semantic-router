@@ -1,0 +1,78 @@
+{
+ "dev": {
+  "family": {
+   "mqa": 1018
+  },
+  "groups": 509,
+  "label_by_family": {
+   "mqa": {
+    "0": 509,
+    "1": 509
+   }
+  },
+  "language": {
+   "en": 1018
+  },
+  "rows": 1018,
+  "sha256": "17a59382f7dcfd2503447209e53eee7c0a5200cb8588d77b099f528d4a0d1358",
+  "task_type": {
+   "noul": 1018
+  }
+ },
+ "families": [
+  "mqa"
+ ],
+ "inputs": {
+  "amazon_esci/shopping_queries_dataset_examples.parquet": "4a735b693b4a424a6fc67f5be6e4c811495c488bbf66d02a602d308b2744263a",
+  "amazon_esci/shopping_queries_dataset_products.parquet": "25124442d064d64b26f74082d6fa09438d679efc0c183cf28d19064a2b65a265",
+  "mathqa/train.json": "00e8919347d65dbba9289bf04ed998a6c48dbf451ca909eeb66a35f2419c2bf6",
+  "mcgill_faithdial/data/train.json": "51eff8212d804b1954b7eefa8987265750f0412b0b18b534ed2dbe636e524512",
+  "mendeley_wpd/dataset_B_05_2020.csv": "21093e2902e5441c86a6daf95e86e7c332046e477fdf109a579d7bd81e586d6c",
+  "rucaibox_halueval/data/qa_data.json": "89ed139ec5e3a3169a0b30e45569ac1283846f76f27f7bb5e908ee6deed57e88",
+  "theatticusproject_maud/MAUD_v1/MAUD_train.csv": "bac9f2d034ad487d5398ee2ac1c876679afea509ba8e7f1092112955c6180ff9",
+  "uci_phiusiil/phiusiil+phishing+url+dataset.zip": "0a639fd03aea6308c5b1c10c92aa23c2ce1505447a9137271865cd0badc9a59a"
+ },
+ "prereg": "records/ib3-r2-prereg-2026-10-02.md",
+ "report": {
+  "duplicates": {
+   "conflicting": {},
+   "exact": {}
+  },
+  "families": {
+   "mqa": {
+    "drop_exact_duplicates": 0,
+    "drop_formula_not_executable": 253,
+    "drop_key_not_verified": 8975,
+    "drop_no_distant_option": 158,
+    "drop_non_numeric_option": 4350,
+    "eligible": 10000,
+    "read": 29837,
+    "selected": 10000,
+    "selected_yes": 5000,
+    "verified": 16101
+   }
+  },
+  "group_merges": 0
+ },
+ "schema": "decision2.ib3.build.v1",
+ "train": {
+  "family": {
+   "mqa": 8982
+  },
+  "groups": 4491,
+  "label_by_family": {
+   "mqa": {
+    "0": 4491,
+    "1": 4491
+   }
+  },
+  "language": {
+   "en": 8982
+  },
+  "rows": 8982,
+  "sha256": "0fcf49d102120a0d3635e7cf95979c57769ed2d2eaed9c8f0fc036b530f70b58",
+  "task_type": {
+   "noul": 8982
+  }
+ }
+}

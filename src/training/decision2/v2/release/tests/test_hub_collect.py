@@ -12,7 +12,7 @@ from unittest import mock
 
 from v2.release import hub, layout
 
-REPO = "llm-semantic-router/DEV2.0-26B"
+REPO = "llm-semantic-router/Decision-2.0-Vega-26B"
 REVISION = "a" * 40
 
 
@@ -39,7 +39,7 @@ class FakeApi:
 class HubCollectTest(unittest.TestCase):
     def collect(self, api: FakeApi, collection: str = hub.COLLECTION) -> dict:
         with tempfile.TemporaryDirectory() as scratch:
-            package = Path(scratch) / "DEV2.0-26B"
+            package = Path(scratch) / "Decision-2.0-Vega-26B"
             package.mkdir()
             (package / layout.MANIFEST_NAME).write_text(json.dumps({"kind": "release"}))
             gate = Path(scratch) / "gate.json"

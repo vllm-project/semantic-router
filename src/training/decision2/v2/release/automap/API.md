@@ -1,6 +1,6 @@
 # Decision models in 🤗 Transformers (`trust_remote_code`)
 
-One API for every Decision model repository, Decision 2.0 (`DEV2.0-*`) and Decision 1.0
+One API for every Decision model repository, Decision 2.0 (`Decision-2.0-*`) and Decision 1.0
 (`Decision-1.0-*`): stock `transformers` downloads the repository and runs it through the repository's
 own code, which wraps the family's native runtime. There is no text generation and no chat API. The
 common surface comes first; [Divergences](#divergences-between-decision-10-and-20) lists every place
@@ -9,7 +9,7 @@ where the two families differ.
 ```python
 from transformers import AutoConfig, AutoModel, AutoTokenizer, pipeline
 
-repo = "llm-semantic-router/DEV2.0-0.8B"  # or e.g. "llm-semantic-router/Decision-1.0-Sol-2B"
+repo = "llm-semantic-router/Decision-2.0-Eos-0.8B"  # or e.g. "llm-semantic-router/Decision-1.0-Sol-2B"
 config = AutoConfig.from_pretrained(repo, trust_remote_code=True)
 tokenizer = AutoTokenizer.from_pretrained(repo, trust_remote_code=True)  # 1.0 encoders: see Tokenizer
 model = AutoModel.from_pretrained(repo, trust_remote_code=True)  # cuda:0 if a GPU is visible, else CPU
@@ -106,7 +106,7 @@ must be 1 (the runtime already batches the questions of one request).
 
 ## Divergences between Decision 1.0 and 2.0
 
-| Topic | Decision 2.0 (`DEV2.0-*`) | Decision 1.0 (`Decision-1.0-*`) |
+| Topic | Decision 2.0 (`Decision-2.0-*`) | Decision 1.0 (`Decision-1.0-*`) |
 | --- | --- | --- |
 | Over-length admission | Per question: a question over the package's limit is answered `max_length_exceeded`; the fitting questions of the same request are answered. | Per request, as the native 1.0 runtime: if any question exceeds the limit, every question of the request is answered `max_length_exceeded`. Limits: encoders 1,024 tokens, decoders 16,384. |
 | `confidence` (Choice, Score) | One minus the normalized entropy of `probabilities` (`1 − H(p) / ln K`, clipped to [0, 1]). | The vLLM-SR Decision runtime's `decision_type_aware_v1`: Choice the top-two margin; Score one minus the variance relative to a uniform distribution. |

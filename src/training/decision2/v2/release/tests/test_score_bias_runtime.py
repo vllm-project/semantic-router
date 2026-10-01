@@ -20,6 +20,7 @@ from training.model.infer import checkpoint_fingerprint, product_answer, run_pro
 from training.model.score_bias import SCORE_BIAS_FORMAT, validate_offsets
 from v2.release import build, layout
 from v2.release.runtime import api
+from v2.release.tests import card_fixture
 from v2.release.tests.test_release import ROSTER, card_entries, fake_safetensors
 
 REAL_MODULES = (
@@ -498,7 +499,7 @@ def qwen_full_spec(scratch: Path) -> tuple[dict, str]:
         "schema": build.SPEC_SCHEMA,
         "kind": "staging",
         "repo_id": "llm-semantic-router/dev2-release-staging",
-        "model_name": "DEV2.0-0.6B",
+        "model_name": "Decision-2.0-Kai-0.6B",
         "profile": "qwen-full",
         "checkpoint": str(ckpt),
         "expected_identity": {"model_sha256": model_sha256},
@@ -520,12 +521,13 @@ def qwen_full_spec(scratch: Path) -> tuple[dict, str]:
             ],
             "attributions": ["Qwen3-0.6B (Apache-2.0)."],
         },
-        "card": {
-            "reports": card_entries(),
-            "roster": str(ROSTER),
-            "text": {"tagline": "t", "staging_notice": "Staging."},
-            "requirements_text": "Tested with Transformers 5.17.0.",
-        },
+        "card": card_fixture.pinned_card(
+            scratch,
+            card_entries(),
+            "Decision-2.0-Kai-0.6B",
+            model_sha256,
+            {"staging_notice": "Staging."},
+        ),
     }
     return spec, model_sha256
 
@@ -543,14 +545,9 @@ class BuildScoreBiasTest(unittest.TestCase):
         self.write_native(self.bias_sha)
         self.spec["score_bias"] = {"path": str(self.bias), "sha256": self.bias_sha}
         self.spec["scored"] = {"native_manifest": str(self.native)}
-        banners = self.dir / "brand"
-        banners.mkdir()
-        (banners / "DEV2.0-0.6B-owl-banner.png").write_bytes(b"\x89PNG\r\n\x1a\n")
-        self.original_brand, build.BRAND_DIR = build.BRAND_DIR, banners
         self.count = 0
 
     def tearDown(self):
-        build.BRAND_DIR = self.original_brand
         self.scratch.cleanup()
 
     def write_native(self, bias_sha, offsets=OFFSETS_35, *, entry=True):

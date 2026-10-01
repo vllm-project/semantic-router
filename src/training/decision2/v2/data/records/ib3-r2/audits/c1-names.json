@@ -1,0 +1,111 @@
+{
+ "hits": {},
+ "roots": [
+  "raw",
+  "cand"
+ ],
+ "scanned": {
+  "row_files": 2,
+  "rows": 10000,
+  "text_files": 7
+ },
+ "schema": "dev2-c1-independence-names/1",
+ "sources_found": [],
+ "terms": {
+  "climatecause": [
+   "laallein/ClimateCause",
+   "ClimateCause"
+  ],
+  "comparia": [
+   "comparia-fr-arena"
+  ],
+  "constructcie": [
+   "constructcie"
+  ],
+  "delichess": [
+   "SpaceHunterInf",
+   "DeliChess"
+  ],
+  "esnlir": [
+   "Flaglab/esnlir",
+   "esnlir"
+  ],
+  "eusexams": [
+   "EusExams"
+  ],
+  "factbutcher": [
+   "factbutcher"
+  ],
+  "gapa": [
+   "alisa-yingjia-wan/gapa"
+  ],
+  "guardeus": [
+   "safety-GuardEUS",
+   "GuardEUS"
+  ],
+  "hallutruthqa": [
+   "Bekhouche/HalluTruthQA",
+   "HalluTruthQA",
+   "HalluScoring"
+  ],
+  "implicaturex": [
+   "McGill-NLP/ImplicatureX",
+   "ImplicatureX",
+   "implicatureBot"
+  ],
+  "innoduel": [
+   "NordosoftOy",
+   "innoduel"
+  ],
+  "judgmentbench": [
+   "JudgmentBench"
+  ],
+  "legal_case_law": [
+   "lbrenap1",
+   "mining-legal-arguments"
+  ],
+  "mcjudgebench": [
+   "jaelly/MCJudgeBench",
+   "MCJudgeBench"
+  ],
+  "narrative_gold": [
+   "CLS-Lab/narrative",
+   "narrative-gold-annotations",
+   "narrative-llm-annotations",
+   "narradolma"
+  ],
+  "nepfake": [
+   "NepFakeV2",
+   "Nandan007"
+  ],
+  "scopejudge": [
+   "dreadnode/scopejudge",
+   "scopejudge"
+  ],
+  "self_medication": [
+   "reddit-self-medication"
+  ],
+  "sentitaglish": [
+   "SentiTaglish"
+  ],
+  "stance_it": [
+   "giuseppe-aiello",
+   "stance-detection-it"
+  ],
+  "tiktok_stance": [
+   "tiktok-political-stance"
+  ],
+  "tutormoments": [
+   "allenai/tutormoments",
+   "tutormoments"
+  ],
+  "varm": [
+   "VARM-Bench"
+  ],
+  "wb_reviews": [
+   "Hplss/wb-review",
+   "wb-review-dataset",
+   "wildberries"
+  ]
+ }
+}

@@ -6,6 +6,7 @@ import ast
 import importlib.util
 import json
 import os
+import re
 import sys
 import tempfile
 import types
@@ -15,7 +16,7 @@ from unittest import mock
 
 from v2.release import automap, card, examples, layout
 from v2.release.runtime import api
-from v2.release.tests.test_release import ROSTER, card_entries, facts
+from v2.release.tests.test_release import build_test_card, card_entries, facts
 
 HAS_TORCH = (
     importlib.util.find_spec("torch") is not None
@@ -27,9 +28,9 @@ class RemoteCodeFilesTest(unittest.TestCase):
     def test_pointer_gains_the_transformers_fields_only_with_remote_code(self):
         args = dict(calibration=None, base=None, max_input_tokens=16384)
         files = ["backbone/config.json", "backbone/model.safetensors"]
-        plain = layout.pointer("qwen-full", "DEV2.0-0.8B", files, **args)
+        plain = layout.pointer("qwen-full", "Decision-2.0-Eos-0.8B", files, **args)
         remote = layout.pointer(
-            "qwen-full", "DEV2.0-0.8B", files, remote_code=True, **args
+            "qwen-full", "Decision-2.0-Eos-0.8B", files, remote_code=True, **args
         )
         self.assertNotIn("auto_map", plain)
         self.assertEqual({k: remote[k] for k in plain}, plain)
@@ -83,37 +84,26 @@ class RemoteCodeFilesTest(unittest.TestCase):
 
 
 class CardSectionTest(unittest.TestCase):
-    def build(self, remote_code):
+    def build(self, remote_code, requirements=None):
         scratch = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        out, banner = scratch / "pkg", scratch / "banner.png"
-        banner.write_bytes(b"\x89PNG\r\n\x1a\n")
-        details = {**facts(), "profile": "qwen-adapter"}
-        if remote_code is not None:
-            details["remote_code"] = remote_code
-        card.build_card(
-            entries=card_entries(),
-            roster=ROSTER,
-            paired=None,
-            facts=details,
-            text={"tagline": "t", "staging_notice": "Staging.", "limitations": []},
-            banner=banner,
-            work=scratch / "work",
-            output=out,
+        details = {**facts(), "profile": "qwen-adapter", "remote_code": remote_code}
+        if requirements:
+            details["runtime_requirements"] = requirements
+        result = build_test_card(
+            scratch, card_entries(), details, {"staging_notice": "Staging."}
         )
-        files = {p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()}
-        return (out / "README.md").read_text(), files | {
-            "LICENSE",
-            "NOTICE",
-            "ATTRIBUTIONS.md",
-        }
+        return result["readme"], result["files"] | {"LICENSE"}
 
-    def test_section_with_example_base_note_and_versions(self):
+    def test_quickstart_is_code_only(self):
         base = {
             "repo_id": "Qwen/Qwen3.8-27B",
             "revision": "1" * 40,
             "files_sha256": {f"f{i}": "0" * 64 for i in range(28)},
         }
-        readme, files = self.build({"tested": ["5.17.0", "5.18.0"], "base": base})
+        readme, files = self.build(
+            {"tested": ["5.17.0", "5.18.0"], "base": base},
+            {"peft": "0.21", "flash-linear-attention": "0.5.2"},
+        )
         self.assertIn(card.TRANSFORMERS_HEADING, readme)
         code = examples.card_block(readme, transformers=True)
         compile(code, "card", "exec")
@@ -123,24 +113,33 @@ class CardSectionTest(unittest.TestCase):
             code,
         )
         self.assertIn(json.dumps(examples.EXAMPLES[0]["state"]), code)
+        with self.assertRaises(ValueError):
+            examples.card_block(readme, transformers=False)
+        quickstart = readme.split("## Quickstart\n", 1)[1].split("\n## ", 1)[0]
+        prose = re.sub(r"```.*?```", "", quickstart, flags=re.S).strip()
+        self.assertEqual(prose, "")
         self.assertIn(
-            "Decision2.from_pretrained", examples.card_block(readme, transformers=False)
+            'pip install "transformers>=5.17" torch safetensors peft\n', quickstart
         )
-        self.assertIn("downloads the 28 pinned files of [Qwen/Qwen3.8-27B]", readme)
-        self.assertIn("Tested with Transformers 5.17.0 and 5.18.0.", readme)
-        self.assertIn('pipeline("decision"', readme)
-        files.add("modeling_decision2.py")
+        for word in (
+            "flash-linear-attention",
+            "device_map",
+            "Tested with",
+            "pinned base",
+        ):
+            self.assertNotIn(word, readme)
+        self.assertEqual(readme.count('pipeline("decision"'), 1)
         self.assertEqual(card.check_rendered(readme, files), [])
-        self.assertEqual(
+        self.assertIn(
+            f"missing section: {card.TRANSFORMERS_HEADING}",
             card.check_rendered(
                 readme.replace(card.TRANSFORMERS_HEADING, "## Other"), files
             ),
-            [f"missing section: {card.TRANSFORMERS_HEADING}"],
         )
 
-    def test_no_section_without_remote_code(self):
-        readme, files = self.build(None)
-        self.assertNotIn(card.TRANSFORMERS_HEADING, readme)
+    def test_plain_install_without_peft(self):
+        readme, files = self.build({"tested": ["5.17.0"], "base": None})
+        self.assertIn('pip install "transformers>=5.17" torch safetensors\n', readme)
         self.assertEqual(card.check_rendered(readme, files), [])
 
 

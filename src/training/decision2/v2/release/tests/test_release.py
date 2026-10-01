@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import struct
 import tempfile
 import unittest
@@ -11,6 +12,7 @@ from pathlib import Path
 
 from v2.release import automap, build, card, examples, layout, licence
 from v2.release.runtime import api
+from v2.release.tests import card_fixture
 
 ROOT = Path(__file__).resolve().parents[3]
 REPORTS = ROOT / "v2/eval/records/m1-reports"
@@ -31,30 +33,35 @@ def fake_safetensors(
 
 class LayoutTest(unittest.TestCase):
     def test_tiers_follow_loaded_parameters(self):
-        self.assertEqual(layout.name_for(571_909_635), "DEV2.0-0.6B")
-        self.assertEqual(layout.name_for(753_446_208), "DEV2.0-0.8B")
-        self.assertEqual(layout.name_for(7_940_895_744), "DEV2.0-9B")
-        self.assertEqual(layout.name_for(25_688_227_840), "DEV2.0-27B")
+        self.assertEqual(layout.name_for(571_909_635), "Decision-2.0-Kai-0.6B")
+        self.assertEqual(layout.name_for(753_446_208), "Decision-2.0-Eos-0.8B")
+        self.assertEqual(layout.name_for(7_940_895_744), "Decision-2.0-Lux-9B")
+        self.assertEqual(layout.name_for(25_688_227_840), "Decision-2.0-Vega-27B")
         self.assertIsNone(layout.tier_for(1_300_000_000))
         with self.assertRaises(ValueError):
             layout.name_for(1_300_000_000)
 
     def test_count_names_keep_the_released_names(self):
-        # Loaded counts of the released DEV2.0-0.6B, 0.8B, 2B and 4B packages.
+        # Loaded counts of the released Decision-2.0-Kai-0.6B, 0.8B, 2B and 4B packages.
         for loaded, name in (
-            (597_103_104, "DEV2.0-0.6B"),
-            (753_446_208, "DEV2.0-0.8B"),
-            (1_883_930_944, "DEV2.0-2B"),
-            (4_208_383_488, "DEV2.0-4B"),
+            (597_103_104, "Decision-2.0-Kai-0.6B"),
+            (753_446_208, "Decision-2.0-Eos-0.8B"),
+            (1_883_930_944, "Decision-2.0-Sol-2B"),
+            (4_208_383_488, "Decision-2.0-Nox-4B"),
         ):
             self.assertEqual(layout.release_name(loaded, "loaded-parameters"), name)
             self.assertEqual(layout.release_name(loaded), name)
         self.assertEqual(layout.tier_for(25_746_591_744), "27B")
-        self.assertEqual(layout.release_name(25_746_591_744), "DEV2.0-27B")
+        self.assertEqual(layout.release_name(25_746_591_744), "Decision-2.0-Vega-27B")
         self.assertEqual(
-            layout.release_name(25_746_591_744, "loaded-parameters"), "DEV2.0-26B"
+            layout.release_name(25_746_591_744, "loaded-parameters"),
+            "Decision-2.0-Vega-26B",
         )
-        layout.check_repo("llm-semantic-router/DEV2.0-26B", "DEV2.0-26B", staging=False)
+        layout.check_repo(
+            "llm-semantic-router/Decision-2.0-Vega-26B",
+            "Decision-2.0-Vega-26B",
+            staging=False,
+        )
         with self.assertRaises(ValueError):
             layout.count_name(1_300_000_000)
         with self.assertRaises(ValueError):
@@ -62,17 +69,61 @@ class LayoutTest(unittest.TestCase):
 
     def test_repository_rules(self):
         layout.check_repo(
-            "llm-semantic-router/dev2-release-staging", "DEV2.0-0.6B", staging=True
+            "llm-semantic-router/dev2-release-staging",
+            "Decision-2.0-Kai-0.6B",
+            staging=True,
         )
-        layout.check_repo("llm-semantic-router/DEV2.0-4B", "DEV2.0-4B", staging=False)
+        layout.check_repo(
+            "llm-semantic-router/Decision-2.0-Nox-4B",
+            "Decision-2.0-Nox-4B",
+            staging=False,
+        )
         for repo, name, staging in (
-            ("llm-semantic-router/DEV2.0-4B", "DEV2.0-4B", True),
-            ("llm-semantic-router/dev2-release-staging", "DEV2.0-4B", False),
-            ("someone/DEV2.0-4B", "DEV2.0-4B", False),
-            ("llm-semantic-router/DEV2.0-4B", "DEV2.0-9B", False),
+            ("llm-semantic-router/Decision-2.0-Nox-4B", "Decision-2.0-Nox-4B", True),
+            ("llm-semantic-router/dev2-release-staging", "Decision-2.0-Nox-4B", False),
+            ("someone/Decision-2.0-Nox-4B", "Decision-2.0-Nox-4B", False),
+            ("llm-semantic-router/Decision-2.0-Nox-4B", "Decision-2.0-Lux-9B", False),
+            ("llm-semantic-router/DEV2.0-4B", "DEV2.0-4B", False),
+            ("llm-semantic-router/Decision-2.0-Sol-4B", "Decision-2.0-Sol-4B", False),
+            (
+                "llm-semantic-router/Decision-2.0-Nox-1.3B",
+                "Decision-2.0-Nox-1.3B",
+                False,
+            ),
+            (
+                "llm-semantic-router/Decision-2.0-Route-0.6B",
+                "Decision-2.0-Route-0.6B",
+                False,
+            ),
         ):
             with self.assertRaises(ValueError):
                 layout.check_repo(repo, name, staging=staging)
+        with self.assertRaisesRegex(
+            ValueError, "renamed; use llm-semantic-router/Decision-2.0-Lux-9B"
+        ):
+            layout.check_repo(
+                "llm-semantic-router/DEV2.0-9B", "Decision-2.0-Lux-9B", staging=False
+            )
+
+    def test_former_repositories_map_to_the_renamed_ones(self):
+        self.assertEqual(
+            layout.FORMER_REPOS,
+            {
+                "llm-semantic-router/DEV2.0-0.6B": "llm-semantic-router/Decision-2.0-Kai-0.6B",
+                "llm-semantic-router/DEV2.0-0.8B": "llm-semantic-router/Decision-2.0-Eos-0.8B",
+                "llm-semantic-router/DEV2.0-2B": "llm-semantic-router/Decision-2.0-Sol-2B",
+                "llm-semantic-router/DEV2.0-4B": "llm-semantic-router/Decision-2.0-Nox-4B",
+                "llm-semantic-router/DEV2.0-9B": "llm-semantic-router/Decision-2.0-Lux-9B",
+                "llm-semantic-router/DEV2.0-27B": "llm-semantic-router/Decision-2.0-Vega-27B",
+            },
+        )
+        for new in layout.FORMER_REPOS.values():
+            layout.check_repo(new, new.rsplit("/", 1)[1], staging=False)
+            self.assertEqual(layout.current_repo(new), new)
+        self.assertEqual(
+            layout.current_repo("llm-semantic-router/DEV2.0-Route-0.6B"),
+            "llm-semantic-router/DEV2.0-Route-0.6B",
+        )
 
     def test_pointer_lists_only_present_files(self):
         files = [
@@ -85,7 +136,7 @@ class LayoutTest(unittest.TestCase):
         ]
         value = layout.pointer(
             "qwen-full",
-            "DEV2.0-4B",
+            "Decision-2.0-Nox-4B",
             files,
             calibration="calibration.json",
             base=None,
@@ -115,7 +166,7 @@ class LicenceTest(unittest.TestCase):
         self.assertFalse(self.check("HopitAI/hopper-g")["eligible"])
         self.assertFalse(self.check("unknown/model")["eligible"])
         self.assertFalse(
-            self.check(None, "decision2", "DEV2.0-0.6B (private)")["eligible"]
+            self.check(None, "decision2", "Decision-2.0-Kai-0.6B (private)")["eligible"]
         )
         self.assertTrue(self.check("Hanno-Labs/bosun-v3.1-0.6b")["eligible"])
         self.assertTrue(
@@ -149,7 +200,7 @@ def card_entries():
             "key": "cand",
             "role": "candidate",
             "report": str(REPORTS / "lex.json"),
-            "label": "DEV2.0-0.6B",
+            "label": "Decision-2.0-Kai-0.6B",
         },
         {
             "key": "kai1",
@@ -182,7 +233,7 @@ def card_entries():
 
 def facts(licence_spdx="apache-2.0"):
     return {
-        "model_name": "DEV2.0-0.6B",
+        "model_name": "Decision-2.0-Kai-0.6B",
         "repo_id": "llm-semantic-router/dev2-release-staging",
         "profile": "kai-native",
         "parameters": {
@@ -201,184 +252,205 @@ def facts(licence_spdx="apache-2.0"):
             "license_name": "decision-2.0-component-licences",
             "components": [],
         },
-        "banner": "DEV2.0-0.6B-owl-banner.png",
-        "calibration_text": "raw native probabilities.",
-        "requirements_text": "Tested with Transformers 4.57.6.",
+        "model_sha256": "b" * 64,
+        "speed": {"median_ms": 12.34, "requests": 400},
+        "remote_code": {"tested": ["5.17.0"], "base": None},
+    }
+
+
+TEXT: dict[str, str] = {}
+
+
+def build_test_card(
+    scratch: Path,
+    entries: list[dict],
+    values: dict,
+    text: dict | None = None,
+    paired: Path | None = None,
+    paired_peers: dict[str, Path] | None = None,
+    family: dict[str, float] | None = None,
+) -> dict:
+    """Build a card from synthetic Index values and placeholder assets; README, files and digests."""
+    entries = card_fixture.relabel(entries, values["model_name"])
+    index, assets = card_fixture.card_inputs(
+        scratch,
+        entries,
+        values["model_name"],
+        values["model_sha256"],
+        values.get("comparison", "own-1.0"),
+        family=family,
+    )
+    out = scratch / "pkg"
+    result = card.build_card(
+        entries=entries,
+        roster=ROSTER,
+        paired=paired,
+        facts=values,
+        text=TEXT if text is None else text,
+        work=scratch / "work",
+        output=out,
+        index=index,
+        assets=assets,
+        paired_peers=paired_peers,
+    )
+    files = {p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()}
+    readme = (out / "README.md").read_text()
+    return {
+        **result,
+        "readme": readme,
+        "files": files,
+        "out": out,
+        "index": index,
+        "assets": assets,
+        "problems": card.check_rendered(readme, files | {"LICENSE"}),
     }
 
 
 class CardTest(unittest.TestCase):
-    def test_card_from_same_panel_reports(self):
+    def test_product_card_from_same_panel_reports(self):
         with tempfile.TemporaryDirectory() as scratch:
-            out, banner = Path(scratch) / "pkg", Path(scratch) / "banner.png"
-            banner.write_bytes(b"\x89PNG\r\n\x1a\n")
-            result = card.build_card(
-                entries=card_entries(),
-                roster=ROSTER,
-                paired=None,
-                facts=facts("other"),
-                text={
-                    "tagline": "A compact decision model.",
-                    "staging_notice": "Staging dry run.",
-                    "limitations": [],
-                },
-                banner=banner,
-                work=Path(scratch) / "work",
-                output=out,
+            result = build_test_card(
+                Path(scratch),
+                card_entries(),
+                facts(),
+                {"staging_notice": "Staging dry run."},
             )
-            readme = (out / "README.md").read_text()
-            files = {
-                p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()
-            }
-            files |= {"LICENSE", "LICENSING.md", "NOTICE", "ATTRIBUTIONS.md"}
-            self.assertEqual(card.check_rendered(readme, files), [])
+            readme = result["readme"]
+            self.assertEqual(result["problems"], [])
             self.assertEqual({e["key"] for e in result["excluded"]}, {"old", "jpt"})
+            self.assertEqual(result["files"], {"README.md", *layout.CARD_ASSETS})
             self.assertIn(
                 "Typed Choice (correct): 235/800 versus 277/800", result["tradeoffs"]
             )
-            self.assertIn("| Typed Choice (correct) | 235/800 | 277/800 |", readme)
-            self.assertIn("do not measure multilingual ability", readme)
-            self.assertIn("license: other", readme)
+            body = readme.split("\n---\n", 1)[1]
+            self.assertTrue(
+                body.startswith(
+                    "\n![Decision-2.0-Kai-0.6B](assets/banner.png)\n\n# Decision-2.0-Kai-0.6B\n"
+                )
+            )
+            headings = re.findall(r"^#{2} .+$", readme, flags=re.M)
+            self.assertEqual(
+                headings,
+                [
+                    "## Highlights",
+                    "## Quickstart",
+                    "## Evaluation",
+                    "## License",
+                    "## Citation",
+                ],
+            )
+            self.assertIn("license: apache-2.0", readme)
             self.assertIn(
-                "license_link: https://huggingface.co/llm-semantic-router/dev2-release-staging/blob/main/LICENSING.md",
+                "base_model: llm-semantic-router/Decision-1.0-Kai-0.6B", readme
+            )
+            self.assertIn("| **Context length** | 8,192 tokens |", readme)
+            self.assertIn("| **Decision types** | Choice · Yes / No · Score |", readme)
+            self.assertIn("Apache-2.0 ([LICENSE](LICENSE)).", readme)
+            self.assertIn(
+                "**Speed:** a median of 12.3 ms per single-question request on a single GPU.",
                 readme,
             )
-            self.assertNotIn("Decision 2.0 collection", readme)
-            for chart in layout.CHART_FILES:
-                self.assertTrue((out / chart).is_file())
-                self.assertNotIn("Pareto", (out / chart).read_text())
+            self.assertIn("**Many questions, one pass:**", readme)
+            # Synthetic Index: Kai 0.6B 10.5, Decision 1.0 Kai 8.25.
+            self.assertIn("+2.2 on the Jev Decision Index", readme)
+            self.assertIn("| **10.5** |", readme)
+            self.assertIn("| 8.2 |", readme)
+            self.assertIn(f"<sub>{card_fixture.FOOTNOTE}</sub>", readme)
+            for word in (
+                "Limitations",
+                "Training data",
+                "NOTICE",
+                "ATTRIBUTIONS",
+                "JevBench",
+                "EVALUATION",
+                "LoRA",
+                "BF16",
+                "stock",
+                "Decision 2.0 collection",
+            ):
+                self.assertNotIn(word, readme)
+            self.assertNotIn("](https://huggingface.co/collections/", readme)
+            self.assertEqual(readme.count("```python"), 1)
             code = readme.split("```python\n", 1)[1].split("```", 1)[0]
             compile(code, "card", "exec")
-            self.assertIn('Decision2.from_pretrained("dev2-release-staging")', code)
+            self.assertIn(
+                'AutoModel.from_pretrained("llm-semantic-router/dev2-release-staging", trust_remote_code=True)',
+                code,
+            )
+            self.assertEqual(code.count('pipeline("decision"'), 1)
+            self.assertTrue(
+                next(
+                    l for l in code.splitlines() if 'pipeline("decision"' in l
+                ).startswith("# ")
+            )
+            for name in layout.CARD_ASSETS:
+                self.assertEqual(
+                    (result["out"] / name).read_bytes(),
+                    (result["assets"] / name).read_bytes(),
+                )
+            self.assertEqual(set(result["figures_sha256"]), set(layout.CARD_ASSETS))
+            self.assertEqual(result["index_sha256"], layout.sha_file(result["index"]))
+            receipt = (Path(scratch) / "work" / card.ASSETS_RECEIPT).read_text()
+            self.assertNotIn("10.5", receipt)
 
-    def test_card_score_table_mlx_calibration_and_disclosures(self):
-        m2 = ROOT / "v2/eval/records/m2-reports"
-        entries = [
-            {
-                "key": "cand",
-                "role": "candidate",
-                "report": str(m2 / "kev08b.json"),
-                "mlx": str(m2 / "mlx-kev08b.json"),
-                "label": "DEV2.0-0.8B",
-            },
-            {
-                "key": "eos1",
-                "role": "own-1.0",
-                "report": str(REPORTS / "eos1.json"),
-                "mlx": str(m2 / "mlx-eos1.json"),
-                "repo_id": "llm-semantic-router/Decision-1.0-Eos-0.8B",
-                "label": "Decision 1.0 Eos",
-            },
-            {
-                "key": "intern",
-                "role": "peer",
-                "report": str(m2 / "intern08b.json"),
-                "mlx": str(m2 / "mlx-intern08b.json"),
-                "repo_id": "internlm/Intern-Decision-0.8B",
-            },
-            {
-                "key": "jpt",
-                "role": "peer",
-                "report": str(REPORTS / "jpt08b.json"),
-                "repo_id": "kirp/jpt-0.8b",
-            },
-        ]
-        text = {
-            "tagline": "A decision model.",
-            "runtime_note": "The runtime targets one GPU.",
-            "confirmation": "Independent confirmation: PLACEHOLDER for the coordinator.",
-            "training": ["Hard labels only; no teacher targets."],
-            "details": ["Seed soup of three runs."],
-            "limitations": [],
-        }
-        values = {
-            **facts(),
-            "model_name": "DEV2.0-0.8B",
-            "repo_id": "llm-semantic-router/DEV2.0-0.8B",
-            "profile": "qwen-full",
-            "parameters": {
-                "loaded": 753_446_208,
-                "components_text": "backbone 752,393,024; decision head 1,053,184",
-            },
-            "banner": "DEV2.0-0.8B-owl-banner.png",
-        }
+    def test_index_gain_is_stated_only_when_positive(self):
         with tempfile.TemporaryDirectory() as scratch:
-            out, banner = Path(scratch) / "pkg", Path(scratch) / "banner.png"
-            banner.write_bytes(b"\x89PNG\r\n\x1a\n")
-            result = card.build_card(
-                entries=entries,
-                roster=ROSTER,
-                paired=None,
-                facts=values,
-                text=text,
-                banner=banner,
-                work=Path(scratch) / "work",
-                output=out,
+            result = build_test_card(
+                Path(scratch), card_entries(), facts(), family={"0.6B": 8.0}
             )
-            readme = (out / "README.md").read_text()
-            evaluation = (out / "evaluation/EVALUATION.md").read_text()
-            manifest = json.loads((out / "evaluation/manifest.json").read_text())
-            files = {
-                p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()
-            }
-            files |= {"LICENSE", "NOTICE", "ATTRIBUTIONS.md"}
-            self.assertEqual(card.check_rendered(readme, files), [])
-            self.assertEqual({e["key"] for e in result["excluded"]}, {"jpt"})
-            self.assertIn("Post-key same-panel results.", readme)
-            self.assertIn(card.PUBLIC231_NOTE, readme)
-            self.assertNotIn("official sealed JevBench rank.\n", readme)
-            self.assertIn("| T | H |", readme)
-            self.assertIn("mlx-diag non-English Choice / Noul", readme)
-            self.assertIn("Typed Brier / ECE", readme)
-            self.assertIn(f"> {text['confirmation']}", readme)
-            self.assertIn(
-                "### Training\n\n- Hard labels only; no teacher targets.", readme
+            self.assertEqual(result["problems"], [])
+            self.assertNotIn("on the Jev Decision Index", result["readme"])
+            self.assertIn(card.CHART_AREAS, result["readme"])
+            self.assertIn("| **8.0** |", result["readme"])
+
+    def test_released_card_links_the_collection_and_project(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            readme = build_test_card(Path(scratch), card_entries(), facts())["readme"]
+            self.assertIn(f"[Decision 2.0]({card.COLLECTION_URL})", readme)
+            self.assertIn(f"[vLLM Semantic Router]({card.PROJECT_URL})", readme)
+
+    def test_card_refuses_unknown_text_missing_remote_code_and_foreign_inputs(self):
+        for values, text in (
+            (facts(), {"model_type": "round-1 key"}),
+            ({**facts(), "remote_code": None}, {}),
+            ({**facts(), "model_name": "DEV2.0-0.6B"}, {}),
+        ):
+            with tempfile.TemporaryDirectory() as scratch, self.assertRaises(
+                (ValueError, TypeError)
+            ):
+                build_test_card(Path(scratch), card_entries(), values, text)
+        with tempfile.TemporaryDirectory() as scratch:
+            scratch = Path(scratch)
+            entries = card_fixture.relabel(card_entries(), facts()["model_name"])
+            index, assets = card_fixture.card_inputs(
+                scratch, entries, facts()["model_name"], facts()["model_sha256"]
             )
-            self.assertIn("- Seed soup of three runs.", readme)
-            self.assertIn("The runtime targets one GPU. Tested with", readme)
-            self.assertNotIn("runs on CPU or one", readme)
-            self.assertIn(
-                "| **DEV2.0-0.8B** | 0.75B | **43.22** | 0.479 | 0.390 |", readme
-            )
-            self.assertIn("147/231 (48 / 58 / 41)", readme)
-            self.assertIn(
-                "Human transfer H (median task macro-F1): 0.390 versus 0.461",
-                result["tradeoffs"],
-            )
-            self.assertIn(
-                "mlx-diag non-English Choice (accuracy): 61.5% versus 68.5%",
-                result["tradeoffs"],
-            )
-            self.assertIn(
-                "mlx-diag non-English Noul (accuracy): 58.7% versus 59.2%",
-                result["tradeoffs"],
-            )
-            self.assertFalse(any("Score (accuracy)" in t for t in result["tradeoffs"]))
-            self.assertIn("| 61.5 / 58.7 |", readme)
-            self.assertIn(
-                "753,446,208 parameters its packaged runtime loads", evaluation
-            )
-            self.assertIn("752,917,824 from the backbone safetensors only", evaluation)
-            self.assertIn("XNLI (CC BY-NC 4.0) and is not shown", evaluation)
-            model = next(m for m in manifest["models"] if m["role"] == "candidate")
-            self.assertEqual(model["loaded_parameters"], 753_446_208)
-            self.assertEqual(model["report_loaded_parameters"], 752_917_824)
-            self.assertEqual(
-                model["mlx_diag_sha256"], layout.sha_file(m2 / "mlx-kev08b.json")
-            )
-            other = Path(scratch) / "mlx-other.json"
-            other.write_text(
-                json.dumps(
-                    {
-                        **json.loads((m2 / "mlx-eos1.json").read_text()),
-                        "gold_sha256": "0" * 64,
-                    }
+
+            def attempt(values=None, **paths):
+                card.build_card(
+                    entries=entries,
+                    roster=ROSTER,
+                    paired=None,
+                    facts=values or facts(),
+                    text={},
+                    work=scratch / "work",
+                    output=scratch / "pkg",
+                    index=paths.get("index", index),
+                    assets=paths.get("assets", assets),
                 )
+
+            with self.assertRaisesRegex(ValueError, "other weights"):
+                attempt({**facts(), "model_sha256": "c" * 64})
+            other = card_fixture.index_file(
+                scratch / "other-index.json",
+                {"0.6B": facts()["model_sha256"]},
+                {"0.6B": 99.5},
             )
-            with self.assertRaises(ValueError):
-                card.select_reports(
-                    [entries[0], {**entries[1], "mlx": str(other)}], ROSTER
-                )
+            with self.assertRaisesRegex(ValueError, "another Index input"):
+                attempt(index=other)
+            (assets / layout.CHART_FILES[0]).write_bytes(b"\x89PNG\r\n\x1a\nchanged")
+            with self.assertRaisesRegex(ValueError, "differs from its receipt"):
+                attempt()
 
     def test_card_needs_own_comparator(self):
         entries = [e for e in card_entries() if e["role"] != "own-1.0"]
@@ -388,17 +460,35 @@ class CardTest(unittest.TestCase):
     def test_http_check_anchors_follow_hub_headings(self):
         from v2.release.tests.hub_card_http_check import anchor
 
-        self.assertEqual(anchor("Download and decide"), "download-and-decide")
+        self.assertEqual(anchor("Model overview"), "model-overview")
         self.assertEqual(
-            anchor("Tradeoffs versus Decision 1.0 Eos"),
-            "tradeoffs-versus-decision-10-eos",
+            anchor("Results below Decision 1.0 Eos"),
+            "results-below-decision-10-eos",
         )
 
     def test_lint(self):
-        self.assertTrue(card.lint("A Pareto frontier"))
+        self.assertFalse(card.lint("A Pareto frontier"))
         self.assertTrue(card.lint("ran on node A"))
         self.assertTrue(card.lint("path /data/dev2/runs"))
-        self.assertFalse(card.lint("Transformers 4.57.6 on one GPU"))
+        self.assertTrue(card.lint("JevArena v3 score"))
+        self.assertFalse(card.lint("Transformers 4.57.6 on one GPU, Python 3.12"))
+        self.assertFalse(card.lint("node Express"))
+        self.assertEqual(card.lint_readme("post-key results"), ["post-key wording"])
+        self.assertTrue(card.lint_readme("typed Brier / ECE"))
+        self.assertTrue(card.lint_readme("revision " + "a" * 40))
+        for removed in (
+            "JevBench public 231",
+            "rank-128 LoRA",
+            "BF16 backbone",
+            "## Limitations",
+            "## Training data",
+            "see ATTRIBUTIONS.md",
+            "[NOTICE](NOTICE)",
+            "evaluation/EVALUATION.md",
+            "Runs with stock 🤗 Transformers",
+        ):
+            self.assertTrue(card.lint_readme(removed), removed)
+        self.assertFalse(card.lint_readme("JevArena 43.22, Transformers 5.17"))
 
 
 class ExamplesTest(unittest.TestCase):
@@ -537,8 +627,8 @@ class GateTest(unittest.TestCase):
                 )
             )
             spec = {
-                "model_name": "DEV2.0-4B",
-                "repo_id": "llm-semantic-router/DEV2.0-4B",
+                "model_name": "Decision-2.0-Nox-4B",
+                "repo_id": "llm-semantic-router/Decision-2.0-Nox-4B",
                 "expected_identity": {"model_sha256": "a" * 64},
                 "scored": {"report_sha256": "b" * 64},
                 "card": {"paired": str(paired)},
@@ -546,8 +636,8 @@ class GateTest(unittest.TestCase):
             decision = {
                 "schema": gate.DECISION_SCHEMA,
                 "decision": "release",
-                "model_name": "DEV2.0-4B",
-                "repo_id": "llm-semantic-router/DEV2.0-4B",
+                "model_name": "Decision-2.0-Nox-4B",
+                "repo_id": "llm-semantic-router/Decision-2.0-Nox-4B",
                 "identity": {"model_sha256": "a" * 64},
                 "report_sha256": "b" * 64,
                 "paired_sha256": layout.sha_file(paired),
@@ -597,8 +687,8 @@ class GateTest(unittest.TestCase):
             decision.write_text(json.dumps({"status": "draft"}))
             spec = {
                 "kind": "release",
-                "model_name": "DEV2.0-4B",
-                "repo_id": "llm-semantic-router/DEV2.0-4B",
+                "model_name": "Decision-2.0-Nox-4B",
+                "repo_id": "llm-semantic-router/Decision-2.0-Nox-4B",
                 "expected_identity": {"model_sha256": "c" * 64},
                 "scored": {"report_sha256": "d" * 64},
                 "card": {"paired": str(paired)},
@@ -701,15 +791,12 @@ class BuildTest(unittest.TestCase):
             )
             licence_file = scratch / "LICENSE"
             licence_file.write_text("Apache License 2.0\n")
-            banner_dir = scratch / "brand"
-            banner_dir.mkdir()
-            (banner_dir / "DEV2.0-4B-owl-banner.png").write_bytes(b"\x89PNG\r\n\x1a\n")
             entries = card_entries()
             spec = {
                 "schema": build.SPEC_SCHEMA,
                 "kind": "staging",
                 "repo_id": "llm-semantic-router/dev2-release-staging",
-                "model_name": "DEV2.0-4B",
+                "model_name": "Decision-2.0-Nox-4B",
                 "profile": "qwen-full",
                 "checkpoint": str(ckpt),
                 "expected_identity": {"model_sha256": identity["model_sha256"]},
@@ -734,23 +821,17 @@ class BuildTest(unittest.TestCase):
                     ],
                     "attributions": ["Qwen3.5-4B-Base (Apache-2.0)."],
                 },
-                "card": {
-                    "reports": entries,
-                    "roster": str(ROSTER),
-                    "text": {"tagline": "t", "staging_notice": "Staging."},
-                    "requirements_text": "Tested with Transformers 5.17.0.",
-                },
+                "card": card_fixture.pinned_card(
+                    scratch,
+                    entries,
+                    "Decision-2.0-Nox-4B",
+                    identity["model_sha256"],
+                    {"staging_notice": "Staging."},
+                ),
             }
             spec_path = scratch / "spec.json"
             spec_path.write_text(json.dumps(spec))
-            original = build.BRAND_DIR
-            build.BRAND_DIR = banner_dir
-            try:
-                receipt = build.build(
-                    spec_path, scratch / "out" / "dev2-release-staging"
-                )
-            finally:
-                build.BRAND_DIR = original
+            receipt = build.build(spec_path, scratch / "out" / "dev2-release-staging")
             pkg = scratch / "out" / "dev2-release-staging"
             manifest = api.verify_bundle(pkg)
             self.assertEqual(manifest["parameters"]["loaded"], 4_000_256_000)
@@ -780,6 +861,12 @@ class BuildTest(unittest.TestCase):
                     manifest["remote_code"]["files"][name]["sha256"],
                 )
             self.assertIn(card.TRANSFORMERS_HEADING, (pkg / "README.md").read_text())
+            for name in ("NOTICE", "ATTRIBUTIONS.md", "evaluation/EVALUATION.md"):
+                self.assertFalse((pkg / name).exists(), name)
+            self.assertEqual(
+                manifest["card"]["figures_sha256"],
+                {n: manifest["files_sha256"][n] for n in layout.CARD_ASSETS},
+            )
             (pkg / "README.md").write_text("tampered")
             with self.assertRaises(ValueError):
                 api.verify_bundle(pkg)
@@ -788,12 +875,8 @@ class BuildTest(unittest.TestCase):
 
             spec["scored"] = {"label": "scored run /data/dev2/runs/x"}  # manifest only
             spec_path.write_text(json.dumps(spec))
-            build.BRAND_DIR = banner_dir
-            try:
-                with self.assertRaises(ValueError):
-                    build.build(spec_path, scratch / "out2" / "dev2-release-staging")
-            finally:
-                build.BRAND_DIR = original
+            with self.assertRaises(ValueError):
+                build.build(spec_path, scratch / "out2" / "dev2-release-staging")
             self.assertFalse((scratch / "out2" / "dev2-release-staging").exists())
 
 

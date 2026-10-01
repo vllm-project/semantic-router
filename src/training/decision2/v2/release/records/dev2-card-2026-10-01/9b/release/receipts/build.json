@@ -1,0 +1,80 @@
+{
+  "builder_commit": "f85ea4e1728203aaacc7c5ecc77a15f7de9ee75d",
+  "card": {
+    "excluded": [],
+    "figures_sha256": {
+      "assets/jevarena.svg": "e9fa4f0bea68dc67475f5794161d849a611cdcc6ac705c1cd082f780a8238804",
+      "assets/jevbench-public-231.svg": "bdd4c896fabc3e618056b9400bdb157c2a6ee1f8f3e6ae8428d9cc23b2675c5d"
+    },
+    "paired": {
+      "ci95": [
+        0.6068816517553796,
+        4.1435665002092525
+      ],
+      "delta": 1.9292432629787157,
+      "replicates": 5000,
+      "sha256": "ae559e9a1e13afca5ebb677e98706a027db415313f102e9059607d5114e99550"
+    },
+    "readme_sha256": "d5431167ad981d3c05c8c800effb24c4f7480112e94ce45c3d2fbb4b97e0ea4c",
+    "shown": [
+      {
+        "key": "candidate",
+        "licence": "package",
+        "report_sha256": "66106ef9123bf0bb9ac8aeb5024384cc98d5194dd231ff71cebc541b88cf3b17"
+      },
+      {
+        "key": "lux1",
+        "licence": "apache-2.0",
+        "report_sha256": "b4ebe0d24a3756136aa5fe79a1daf614b7509371f76d130c299d536f41add62c"
+      },
+      {
+        "key": "nimble2",
+        "licence": "apache-2.0",
+        "report_sha256": "42636dfa1482ba5d76e9f5ada1186c699b6ab058a762106334911c60d8469cea"
+      }
+    ],
+    "tradeoffs": [
+      "mlx-diag non-English Noul (accuracy): 80.8% versus 83.3%",
+      "Transfer: TalkLife empathy (macro-F1): 24.3% versus 26.6%",
+      "Transfer: Wikipedia power (macro-F1): 56.3% versus 58.4%",
+      "Transfer: Character tropes (macro-F1): 11.8% versus 12.8%",
+      "Transfer: Conversations Gone Awry (macro-F1): 55.1% versus 55.2%",
+      "JevBench public 231 (correct): 178/231 versus 183/231",
+      "JevBench public standard (correct): 66/72 versus 67/72",
+      "JevBench public hard (correct): 64/111 versus 68/111"
+    ]
+  },
+  "ended_utc": "2026-10-01T15:18:02.001753+00:00",
+  "files": 41,
+  "identity": {
+    "architecture": "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp",
+    "dec_residual": false,
+    "head_variant": "shared",
+    "model_sha256": "b1ed5a71038b474902d2a6dfebeee0c6f7ce901097553b4621f6f0a23fb6da98",
+    "readout": "head",
+    "temperature_by_type": null,
+    "text_parameter_count": 7936684544
+  },
+  "licence": "apache-2.0",
+  "manifest_sha256": "00284cc7b118da0308146e77ffaf83f63974f9cd1e0a008d9e6be14ca288a39c",
+  "package": "/data/dev2/runs/release/dev2-card-9B-20261001T151703Z/package/DEV2.0-9B",
+  "parameters": {
+    "external_base_text": null,
+    "loaded": 7940895744,
+    "packaged": {
+      "backbone": 7936684544,
+      "head": 4211200,
+      "residual": 0
+    }
+  },
+  "release_decision": {
+    "sha256": "b9ca88a9458f2f1cf9ed76306b95dd7ca5295602ff536fb2655134249684f528",
+    "status": "final"
+  },
+  "schema": "dev2-release-build/1",
+  "screen": {
+    "text_files_screened": 41
+  },
+  "spec_sha256": "b7339e99edc79045fb8c04b46e1a2a437e72b8d00ea3b27aedc7449b13007754",
+  "started_utc": "2026-10-01T15:17:33.965788+00:00"
+}

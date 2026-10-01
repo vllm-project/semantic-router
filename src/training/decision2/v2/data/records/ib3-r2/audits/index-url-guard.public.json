@@ -1,0 +1,23 @@
+{
+ "candidate_inputs": {
+  "ib3.dev.cand.jsonl": "17a59382f7dcfd2503447209e53eee7c0a5200cb8588d77b099f528d4a0d1358",
+  "ib3.train.cand.jsonl": "0fcf49d102120a0d3635e7cf95979c57769ed2d2eaed9c8f0fc036b530f70b58"
+ },
+ "candidates": {
+  "mqa": {
+   "select": 1018,
+   "train": 8982
+  }
+ },
+ "drop_groups_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+ "flagged": {
+  "mqa": {
+   "groups_dropped": 0,
+   "rows_with_url": 0
+  }
+ },
+ "groups_dropped": 0,
+ "reference": "every Decision Index suite row (selected and added rows); statistics kept on the node",
+ "rule": "a group is dropped if any URL in its data leaves equals a suite URL or its host equals a suite host",
+ "schema": "decision2.ib3.index-url-guard.v1"
+}

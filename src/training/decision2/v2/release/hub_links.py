@@ -1,8 +1,8 @@
 """Fetch every link and image of an uploaded card from the Hub (run on a node).
 
 ``hub readback`` checks that relative card links name packaged files. This
-follows them on the Hub instead: each relative link or image of README.md and
-ATTRIBUTIONS.md is downloaded from ``resolve/<revision>`` and re-hashed against
+follows them on the Hub instead: each relative link or image of README.md
+is downloaded from ``resolve/<revision>`` and re-hashed against
 MODEL_MANIFEST.json, each Hugging Face model or collection link is looked up
 through the Hub API (existence and private flag), in-page anchors must match
 a heading, and the rendered model page must load. The token stays in the
@@ -71,7 +71,7 @@ def check(repo: str, revision: str, package: Path, token: str | None) -> dict[st
         layout.MANIFEST_NAME: layout.sha_file(package / layout.MANIFEST_NAME),
     }
     results = []
-    for source in ("README.md", "ATTRIBUTIONS.md"):
+    for source in ("README.md",):
         text = (package / source).read_text(encoding="utf-8")
         heads = anchors(text)
         for image, target in links(text):
@@ -114,7 +114,7 @@ def check(repo: str, revision: str, package: Path, token: str | None) -> dict[st
         "status": status,
         "bytes": len(body),
         "title_present": manifest["model_name"] in page,
-        "banner_referenced": "owl-banner.png" in page,
+        "charts_referenced": all(Path(c).name in page for c in layout.CARD_ASSETS),
     }
     return {
         "links": results,

@@ -1,4 +1,4 @@
-"""A peer report without a model id takes the spec's repo_id for the chart licence lookup (stdlib)."""
+"""A peer report without a model id takes the spec's repo_id for the card licence lookup (stdlib)."""
 
 from __future__ import annotations
 
@@ -7,8 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from v2.release import card
-from v2.release.tests.test_release import REPORTS, ROSTER, facts
+from v2.release.tests.test_release import REPORTS, build_test_card, facts
 
 
 def entries(decider_repo: str | None = "Mapika/decider-2b") -> list[dict]:
@@ -24,7 +23,7 @@ def entries(decider_repo: str | None = "Mapika/decider-2b") -> list[dict]:
             "key": "cand",
             "role": "candidate",
             "report": str(REPORTS / "bosun17b.json"),
-            "label": "DEV2.0-2B",
+            "label": "Decision-2.0-Sol-2B",
         },
         {
             "key": "sol1",
@@ -38,41 +37,20 @@ def entries(decider_repo: str | None = "Mapika/decider-2b") -> list[dict]:
 
 
 class PeerModelIdTest(unittest.TestCase):
-    def build(self, items: list[dict]) -> dict:
+    def build(self, items: list[dict]) -> str:
         with tempfile.TemporaryDirectory() as scratch:
-            out, banner = Path(scratch) / "pkg", Path(scratch) / "banner.png"
-            banner.write_bytes(b"\x89PNG\r\n\x1a\n")
-            card.build_card(
-                entries=items,
-                roster=ROSTER,
-                paired=None,
-                facts=facts(),
-                text={"tagline": "A decision model.", "limitations": []},
-                banner=banner,
-                work=Path(scratch) / "work",
-                output=out,
-            )
-            charts = json.loads(
-                (Path(scratch) / "work/charts-receipt.json").read_text()
-            )
-            readme = (out / "README.md").read_text()
-            return {"charts": charts, "readme": readme}
+            values = {**facts(), "model_name": "Decision-2.0-Sol-2B"}
+            return build_test_card(Path(scratch), items, values)["readme"]
 
     def test_fixture_report_names_no_model_id(self):
         report = json.loads((REPORTS / "decider2b.json").read_text())
         self.assertIsNone(report["model"]["model_id"])
 
     def test_repo_id_fills_the_missing_model_id(self):
-        result = self.build(entries())
-        self.assertEqual(
-            result["charts"]["model_id_overrides"], {"Decider 2B": "Mapika/decider-2b"}
-        )
-        self.assertIn("Decider 2B", result["readme"])
+        self.assertIn("Decider 2B", self.build(entries()))
 
     def test_without_repo_id_the_peer_stays_off_the_card(self):
-        result = self.build(entries(decider_repo=None))
-        self.assertEqual(result["charts"]["model_id_overrides"], {})
-        self.assertNotIn("Decider 2B", result["readme"])
+        self.assertNotIn("Decider 2B", self.build(entries(decider_repo=None)))
 
 
 if __name__ == "__main__":

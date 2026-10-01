@@ -1,0 +1,57 @@
+{
+ "c1": "the custodian C1 content recheck is required before any C1-scored model trains on IB3-r2",
+ "families": [
+  "mqa"
+ ],
+ "families_not_included": {
+  "coordinator_decision": [
+   "wpd",
+   "phiu",
+   "esci"
+  ],
+  "dropped_in_ib3": [
+   "fdial",
+   "haluqa",
+   "fdial2",
+   "maud"
+  ],
+  "optional_grounding_licence_unclear": [
+   "wice"
+  ]
+ },
+ "in_distribution_families": [],
+ "index_rows": "every candidate group with an exact, normalized or 13-gram match to any Index suite row was dropped (G0; positive controls 2,000 / 2,000 exact and 2,000 / 2,000 perturbed); no IB3-r2 row holds a URL (G0u; controls 500 / 500 and 500 / 500)",
+ "limitations": "one family (maths multiple choice, per-option check) and 8,752 TRAIN rows, below IB3's 30-80k target; the reviewers judged 3 of 216 sampled keys wrong (each a key that the annotated formula verifies), so roughly 1-4% of rows may carry a wrong key; the reviewers are one model family (AI adjudication, not human annotation)",
+ "prereg": "v2/data/records/ib3-r2-prereg-2026-10-02.md (on IB3's prereg v2/data/records/ib3-prereg-2026-10-01.md with amendments 1 and 2)",
+ "reason": "preregistered decisive blind label review passed P1, P2 and P3 (3 / 216 gold errors, 1.39%, exact 95% upper 4.01%; population-weighted 1.39%); every audit passed (G0 and G0u with positive controls, G1, G2 with clean re-scans, G3 names, G4, G5, G6, G7, G8, leak guard)",
+ "release_safe": true,
+ "review": {
+  "P1": true,
+  "P2": true,
+  "P3": true,
+  "error": 0.013889,
+  "error_cp95_upper": 0.04005,
+  "errors": 3,
+  "excluded": "every row and group of IB3's stage S (50) and stage R (216) samples",
+  "family_errors": {
+   "mqa": 3
+  },
+  "n": 216,
+  "weighted_error": 0.013889
+ },
+ "round": "IB3-r2",
+ "rows_removed_from_dev": {
+  "leak_guard": 0
+ },
+ "rows_removed_from_train": {
+  "carried_ib3_findings": 2,
+  "leak_guard": 0,
+  "review_gold_errors": 3
+ },
+ "schema": "decision2.ib3.status.v1",
+ "screen": {
+  "stage_s": "not run (IB3-r2 prereg section 4: mqa passed IB3's stage S, 1 / 10)"
+ },
+ "share_alike_families": [],
+ "supersedes": "IB3 round 1 (m6/ib3 at revision c2401ab4, NOT release-safe); its phishing and product-search rows are not in this revision"
+}
