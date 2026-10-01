@@ -311,6 +311,69 @@ class TrainerHelperTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 load_teacher(path, rows)
 
+    def test_example_weights_cover_every_train_row(self) -> None:
+        from v2.dec.train_dec import example_weight_summary, load_example_weights
+
+        rows = [
+            {"id": "a", "task_type": "choice"},
+            {"id": "b", "task_type": "score"},
+            {"id": "ib", "task_type": "noul"},
+        ]
+        good = [
+            {"id": "ib", "weight": 1},
+            {"id": "b", "weight": 2.0},
+            {"id": "a", "weight": 1.5},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "weights.jsonl"
+            path.write_text("".join(json.dumps(r) + "\n" for r in good))
+            weights = load_example_weights(path, rows)
+            self.assertEqual(weights, [1.5, 2.0, 1.0])
+            summary = example_weight_summary(rows, weights)
+            self.assertEqual(summary["distinct"], [1.0, 1.5, 2.0])
+            self.assertAlmostEqual(summary["total"], 4.5)
+            self.assertEqual(summary["by_type"]["score"], {"rows": 1, "weight": 2.0})
+            for bad in (
+                good[:2],
+                good + [{"id": "a", "weight": 1.5}],
+                good[:2] + [{"id": "zz", "weight": 1.0}],
+                good[:2] + [{"id": "a", "weight": 0}],
+                good[:2] + [{"id": "a", "weight": float("inf")}],
+                good[:2] + [{"id": "a", "weight": "1.5"}],
+            ):
+                path.write_text("".join(json.dumps(r) + "\n" for r in bad))
+                with self.assertRaises(ValueError):
+                    load_example_weights(path, rows)
+
+    def test_example_weights_exclude_inverse_type_balance(self) -> None:
+        import sys
+        from unittest import mock
+
+        from v2.dec import train_dec
+
+        argv = [
+            "train_dec",
+            "--model-path",
+            "m",
+            "--train",
+            "t",
+            "--select",
+            "s",
+            "--cal",
+            "c",
+            "--output",
+            "o",
+            "--arm",
+            "x",
+            "--example-weights",
+            "w.jsonl",
+        ]
+        with mock.patch.object(sys, "argv", argv):
+            self.assertEqual(train_dec.parse_args().example_weights, Path("w.jsonl"))
+        with mock.patch.object(sys, "argv", argv + ["--type-balance", "inverse"]):
+            with self.assertRaises(SystemExit):
+                train_dec.parse_args()
+
 
 class RuntimeCheckTest(unittest.TestCase):
     @staticmethod

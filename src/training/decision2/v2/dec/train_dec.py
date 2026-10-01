@@ -6,6 +6,8 @@ intended difference:
 
 * ``--type-balance inverse``: per-example loss weights that give Choice, Noul
   and Score equal total TRAIN weight (window-normalized, as in the shared trainer).
+* ``--example-weights``: pinned per-row loss weights keyed by TRAIN id (every
+  row exactly once), window-normalized the same way.
 * ``--teacher``: KL(teacher || student) on every TRAIN row, from a pinned
   own-family teacher distribution file keyed by row ID and input hash.
 * ``--residual``: zero-gated residual readouts from ``dec_model``.
@@ -96,6 +98,53 @@ def type_weights(rows: list[dict[str, Any]], mode: str) -> dict[str, float]:
     if any(counts[kind] == 0 for kind in TASK_TYPES):
         raise ValueError("Inverse type balance needs every native type in TRAIN")
     return {kind: len(rows) / (len(TASK_TYPES) * counts[kind]) for kind in TASK_TYPES}
+
+
+def load_example_weights(path: Path, rows: list[dict[str, Any]]) -> list[float]:
+    """Per-row loss weights in TRAIN order from a JSONL file of ``{"id", "weight"}``.
+
+    The file must cover every TRAIN id exactly once with a positive finite weight.
+    """
+    index = {row["id"]: i for i, row in enumerate(rows)}
+    weights: list[float | None] = [None] * len(rows)
+    with path.open(encoding="utf-8") as stream:
+        for line_number, line in enumerate(stream, 1):
+            record = json.loads(line)
+            position = index.get(record.get("id"))
+            if position is None:
+                raise ValueError(f"{path}:{line_number}: unknown TRAIN id")
+            if weights[position] is not None:
+                raise ValueError(f"{path}:{line_number}: repeated id")
+            value = record.get("weight")
+            if (
+                type(value) not in (int, float)
+                or not math.isfinite(value)
+                or value <= 0
+            ):
+                raise ValueError(
+                    f"{path}:{line_number}: weight must be positive and finite"
+                )
+            weights[position] = float(value)
+    if any(weight is None for weight in weights):
+        raise ValueError("Example weights must cover every TRAIN row exactly once")
+    return weights
+
+
+def example_weight_summary(
+    rows: list[dict[str, Any]], weights: list[float]
+) -> dict[str, Any]:
+    """Distinct weights and per-type row / weight totals, for the run contract."""
+    by_type: dict[str, dict[str, float]] = defaultdict(
+        lambda: {"rows": 0, "weight": 0.0}
+    )
+    for row, weight in zip(rows, weights):
+        by_type[row["task_type"]]["rows"] += 1
+        by_type[row["task_type"]]["weight"] += weight
+    return {
+        "distinct": sorted(set(weights)),
+        "total": math.fsum(weights),
+        "by_type": {kind: dict(value) for kind, value in sorted(by_type.items())},
+    }
 
 
 def load_teacher(
@@ -234,6 +283,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--arm", required=True, help="Registered arm name")
     parser.add_argument("--type-balance", choices=("none", "inverse"), default="none")
+    parser.add_argument(
+        "--example-weights",
+        type=Path,
+        help="JSONL of {id, weight} covering every TRAIN row (window-normalized loss weights)",
+    )
     parser.add_argument("--teacher", type=Path)
     parser.add_argument("--teacher-kl-weight", type=float, default=0.0)
     parser.add_argument("--residual", action="append", default=[], choices=RESIDUALS)
@@ -293,6 +347,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("residual readouts extend LoRA continuations only")
     if args.teacher_partial and not args.teacher:
         parser.error("--teacher-partial needs --teacher")
+    if args.example_weights and args.type_balance != "none":
+        parser.error("--example-weights excludes --type-balance inverse")
     if args.batching == "tokens" and args.smoke_window_type:
         parser.error("--smoke-window-type needs --batching rows")
     if args.readout == "label_token" and (
@@ -319,6 +375,11 @@ def main() -> None:
         {"train": train_rows, "select": select_rows, "cal": cal_rows}
     )
     weights_by_type = type_weights(train_rows, args.type_balance)
+    row_weights = (
+        load_example_weights(args.example_weights, train_rows)
+        if args.example_weights
+        else None
+    )
     teacher = (
         load_teacher(args.teacher, train_rows, partial=args.teacher_partial)
         if args.teacher
@@ -331,6 +392,8 @@ def main() -> None:
     }
     if args.teacher:
         data_sha["teacher"] = file_sha256(args.teacher)
+    if args.example_weights:
+        data_sha["example_weights"] = file_sha256(args.example_weights)
 
     random.seed(args.seed)
     init_seed = args.seed if args.head_init_seed is None else args.head_init_seed
@@ -409,7 +472,11 @@ def main() -> None:
                 attach_teacher_probs(item, teacher[row["id"]])
     select_items = [encode_fn(row, tokenizer, args.max_length) for row in select_rows]
     train_lengths = [len(item["ids"]) for item in train_items]
-    example_weights = [weights_by_type[row["task_type"]] for row in train_rows]
+    example_weights = (
+        row_weights
+        if row_weights is not None
+        else [weights_by_type[row["task_type"]] for row in train_rows]
+    )
     token_windows = None
     if args.batching == "tokens":
         token_windows = [
@@ -471,6 +538,11 @@ def main() -> None:
         "data_sha256": data_sha,
         "type_balance": args.type_balance,
         "type_weights": weights_by_type,
+        "example_weights": (
+            example_weight_summary(train_rows, row_weights)
+            if row_weights is not None
+            else None
+        ),
         "teacher_kl_weight": args.teacher_kl_weight,
         "teacher_partial": args.teacher_partial,
         "teacher_rows": len(teacher) if teacher is not None else 0,

@@ -85,16 +85,24 @@ tier_setup() {
     2b | 08b)
       # M6_SMALL_NODE=E|F (decoder M11): 2B / 0.8B on node E / F with image dbe5f32b, the isolated runner, the 1.0
       # model from the node's plain model directory and copies of node B's frozen masters in M6_SMALL_MASTER_DIR
-      # (cache-frozen-<tier>{,-mlx} and their .sha256 manifests).
+      # (cache-frozen-<tier>{,-mlx} and their .sha256 manifests). M6_SMALL_NODE=B (decoder M14): the same on node B
+      # with the 1.0 snapshots of the HF cache and the runner without --isolate, as node B's stored bars were collected.
       if [ -n "${M6_SMALL_NODE:-}" ]; then
-        case $M6_SMALL_NODE in E | F) ;; *) echo "M6_SMALL_NODE must be E or F" >&2; exit 2 ;; esac
-        NODE=$M6_SMALL_NODE IMAGE=$IMAGE_B H=/data/dev2/models ISOLATE=(--isolate)
+        case $M6_SMALL_NODE in B | E | F) ;; *) echo "M6_SMALL_NODE must be B, E or F" >&2; exit 2 ;; esac
+        NODE=$M6_SMALL_NODE IMAGE=$IMAGE_B
+        if [ "$NODE" = B ]; then
+          ONE_2B=$SOL ONE_08B=$EOS
+        else
+          H=/data/dev2/models ISOLATE=(--isolate)
+          ONE_2B=$H/Decision-1.0-Sol-2B/ce0c018a28de16d6639b1cd203b761bf643b89e6
+          ONE_08B=$H/Decision-1.0-Eos-0.8B/363c4a5e56afc115b1c78c837633956d0bbb63ab
+        fi
         MASTER=${M6_SMALL_MASTER_DIR:?set M6_SMALL_MASTER_DIR}/cache-frozen-$TIER MASTER_SHA=frozen
         MASTER_MLX=$M6_SMALL_MASTER_DIR/cache-frozen-$TIER-mlx MASTER_MLX_SHA=frozen
         if [ "$TIER" = 2b ]; then
-          TLABEL=2B INCUMBENT=S2T-soup SOURCE=$H/Decision-1.0-Sol-2B/ce0c018a28de16d6639b1cd203b761bf643b89e6
+          TLABEL=2B INCUMBENT=S2T-soup SOURCE=$ONE_2B
         else
-          TLABEL=0.8B INCUMBENT=E8F-soup SOURCE=$H/Decision-1.0-Eos-0.8B/363c4a5e56afc115b1c78c837633956d0bbb63ab
+          TLABEL=0.8B INCUMBENT=E8F-soup SOURCE=$ONE_08B
         fi
       elif [ "$TIER" = 08b ]; then
         NODE=A IMAGE=$IMAGE_A SOURCE=$EOS TLABEL=0.8B INCUMBENT=E8F-soup ENVX=(--env HIP_FORCE_DEV_KERNARG=1)

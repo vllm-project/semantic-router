@@ -283,9 +283,27 @@ class FormalLibTest(unittest.TestCase):
         node, *_ = self.fields("2b", M6_2B_NODE="A")
         self.assertEqual(node, "A")
 
+    def test_small_node_b(self):
+        for tier, one in (
+            ("2b", "Decision-1.0-Sol-2B/snapshots/ce0c018a"),
+            ("08b", "Decision-1.0-Eos-0.8B/snapshots/363c4a5e"),
+        ):
+            node, image, master, pin, mlx, source, isolate, *_ = self.fields(
+                tier, M6_SMALL_NODE="B", M6_SMALL_MASTER_DIR="/m"
+            )
+            self.assertEqual((node, pin, isolate), ("B", "frozen", ""))
+            self.assertTrue(image.startswith("sha256:dbe5f32b"))
+            self.assertEqual(
+                (master, mlx),
+                (f"/m/cache-frozen-{tier}", f"/m/cache-frozen-{tier}-mlx"),
+            )
+            self.assertIn(
+                f"/data/dev2/hf-cache/models--llm-semantic-router--{one}", source
+            )
+
     def test_bad_small_node(self):
         self.assertEqual(
-            self.setup("2b", M6_SMALL_NODE="B", M6_SMALL_MASTER_DIR="/m").returncode, 2
+            self.setup("2b", M6_SMALL_NODE="C", M6_SMALL_MASTER_DIR="/m").returncode, 2
         )
 
 
