@@ -5,7 +5,8 @@
 ``<run root>/shard-<k>`` holds each kit runner's ``results.jsonl``, ``environment.json`` and the
 launcher's ``start_epoch`` / ``end_epoch``. The last record of a run ID is its final one (the kit
 appends retried errors on resume). The merge fails unless every panel run ID has exactly one final
-record and no final record is an error. Writes ``results.jsonl`` (final records, panel order),
+record and no final record is an error (``--allow-errors`` keeps errors that persisted through a
+resume; both scorers count them as failures). Writes ``results.jsonl`` (final records, panel order),
 ``latency.json`` (private: per-request wall-time percentiles) and ``receipt.json`` (public-safe:
 counts, digests and GPU-hours only).
 """
@@ -64,6 +65,11 @@ def main() -> None:
     parser.add_argument("--panel", type=Path, required=True)
     parser.add_argument("--run", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument(
+        "--allow-errors",
+        action="store_true",
+        help="keep final errors (after a resume) as failures instead of refusing",
+    )
     args = parser.parse_args()
     panel = json.loads(args.panel.read_text())
     order = panel_order(args.panel.parent, panel)
