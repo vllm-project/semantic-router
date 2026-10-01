@@ -205,6 +205,39 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 13:40 — **IX1 complete (private report); runtime long-input bug; IB2 launched; 27B M6 / 9B M9 wait for
+  IB1-r2.** Score-free here by rule: every number is in `private/ix1/ix1-report-2026-10-01.md`, the node private
+  directories and the private eval-artifacts dataset (`ix1/`). Code and score-free records are merged into integration
+  at `40c14b760`; ≈ 18.7 GPU-h.
+  - **What IX1 established.**
+    - All six released packages ran on nodes C / D (38 panel benchmarks + HLE) with the 86-request native parity gate
+      bit-identical, dual-scored by the port and the kit.
+    - **The external report is confirmed**: every benchmark is within 1 skill point at every size.
+    - Contamination is negligible (one known public-split duplicate at 0.8B).
+    - Frontier status per size, the area profiles and the deficit families are in the private report.
+    - **The 27B gap is concentrated in tool-call decisions and phishing.**
+  - **Calibration decision: keep T = 1 everywhere; no calibration-only revisions.**
+    - Fits on our own CAL show a near-zero Noul bias.
+    - Temperature-plus-bias changes 14–33 typed answers per size, so item 1 cannot pass; a small 9B benefit rides with
+      its next successor.
+    - The CAL refit discrepancy goes to release as a hand-off.
+  - **Runtime bug (shipped runtime, 27B).** Two long ToolRet requests fail every time: one returns an invalid output,
+    and one crashes the GPU process with a memory fault, on two GPUs. → **IX1 follow-up (c0ce08eb, resumed):**
+    - a private repro, a synthetic-length public test, the root cause;
+    - a fix as a separate runtime commit with tests and parity;
+    - a release hand-off (the next runtime-only revisions carry it).
+    - IX1 also runs a private Index diagnostic of the frozen M5-L128 soup (not releasable) to inform the 27B M6
+      design.
+  - **IB2 (24a520c1), research & data, CPU on node A.**
+    - Families: tool-call decisions (Glaive v2 / ToolACE / xLAM / API-Bank-train class), phishing / spam corpora,
+      stance / sarcasm, grounding / fact verification, knowledge MCQ, checkable maths, ContractNLI train
+      (in-distribution).
+    - Licences: clear CC BY-SA allowed with attribution; unclear / missing / NC dropped.
+    - **Objectively checkable labels preferred**; no generator imitating any Index benchmark.
+    - The same exclusions and review as IB1.
+  - **Next:** 27B M6 and 9B M9 are preregistered and launched when IB1-r2 is release-safe, using nodes C / D and the
+    27B reserved-idle GPUs; IB2 arms join when it lands. MoE frozen finalists go to IX1-style Index runs.
+
 - 2026-10-01 13:10 — **IB1 published but NOT release-safe → IB1-r2 commissioned (same worker, 1bad770e).** Data: private
   `decision-2.0-training-data@1371c287` `m6/ib1/`; records merged into integration at `233ce24c9`; gist 02.
   - **Contents.** TRAIN 37,314 rows, 10.47M tokens, 12 families, all licences CC BY 4.0 / CC0 / MIT:
