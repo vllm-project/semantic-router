@@ -205,6 +205,29 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 04:40 — **M16 final (ad17bb4f): no classic successor; three Index-path candidates already in evaluation;
+  4B excluded on mlx-diag; M17 launched (4B IB swap + MLX-DEV2).** Results `949ff508c`; integration `456c996fe`; 5.95
+  of 30 GPU-h.
+  - **Development.** Interpolation recovered the gates: 15 of 24 points pass. Transfer: 0.8B a75 +.19 to +.20, 2B
+    +.10 to +.15, 4B +.03 to +.045.
+  - **Formal verdicts:**
+
+    | Finalist | v3 | mlx-diag | Verdict |
+    | --- | --- | --- | --- |
+    | `08b-RA-a75` | +3.68 [−2.76, +4.82] | pass | classic items 1 / 6(b) fail |
+    | `08b-RASD-a75` | +1.45 [−4.27, +4.63] | pass | classic items 1 / 6(b) fail |
+    | `2b-RASD-a25` | +.05 [−.60, +1.67] | pass | classic items 1 / 6(b) fail |
+    | `2b-RA-a75` | −2.05 [−3.31, +3.14] | −.018 | fail |
+    | `4b-LHA10SD-a50` | +.02 [−1.81, +2.65] | −.015 | fail |
+    | `4b-LHA10SD-a75` | −.07 [−2.53, +2.38] | −.019 | fail |
+
+    - The two 0.8B bars both bind (the parity run differs from the stored run at 0.8B).
+    - **The Index-path evaluation of `08b-RA-a75`, `08b-RASD-a75` and `2b-RASD-a25` is already running (1afc17e8).**
+  - **The old MLX-DEV passed the 2B / 4B points whose formal mlx-diag then fell.** MLX-DEV2 is mandatory from now on.
+  - **M17 (c473a3b2, resumed):** 4B **swap** (constant tokens; ≈ 10% / 17% of the *English* rows replaced by IB; all
+    non-English rows kept) plus typed self-distillation, an optional ⅔ / ⅓ anchor interpolation, **MLX-DEV2 before
+    formal**, both paths; node E / F; 50 GPU-h.
+
 - 2026-10-02 04:30 — **Card fix round 3 published (4c0a68cd).**
   - **Current `main` revisions:**
 
