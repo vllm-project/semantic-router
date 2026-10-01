@@ -1,8 +1,9 @@
 """Forward token budget of the release runtime (``qwen.forward_token_budget`` / ``micro_batches``).
 
-A request's questions run as one padded batch unless that batch would pass the
-32-bit element offsets of the FLA gated-delta kernels; then they run as several
-batches within the budget, with the same answers. Needs torch; run in the
+A request's questions run as one padded batch unless that batch would put more
+than 2**30 elements in a gated-delta q / k / v tensor (half the FLA kernels'
+32-bit offsets); then they run as several batches within the budget, with the
+same answers. Needs torch; run in the
 pinned image. ``gpu_long_request`` checks a synthetic long request end to end
 on a real package.
 """
@@ -95,9 +96,9 @@ class BudgetTest(unittest.TestCase):
 
     def test_budget_follows_value_heads(self):
         budget = self.qwen.forward_token_budget
-        self.assertEqual(budget(qwen3_5(48)), 349_525)
-        self.assertEqual(budget(qwen3_5(32)), 524_287)
-        self.assertEqual(budget(qwen3_5(16, nested=True)), 1_048_575)
+        self.assertEqual(budget(qwen3_5(48)), 174_762)
+        self.assertEqual(budget(qwen3_5(32)), 262_143)
+        self.assertEqual(budget(qwen3_5(16, nested=True)), 524_287)
         self.assertIsNone(budget(SimpleNamespace(hidden_size=1024)))
 
     def test_batches_split_only_past_the_budget(self):

@@ -11,7 +11,8 @@ prompt is about ``--tokens`` tokens long and ``--questions - 1`` short ones, Cho
 and Noul alternating. With 32 questions of a 14,224-token prompt the padded batch
 holds 455,168 tokens; on a 48-value-head Qwen3.5 backbone (DEV2.0-27B) that is
 2.8e9 elements per gated-delta q / k / v tensor, past the kernels' 32-bit offsets,
-which before the forward token budget gave non-finite logits or a GPU memory fault.
+which before the forward token budget gave non-finite logits or a GPU memory fault
+(the budget, 174,762 padded tokens on that backbone, splits it into two forwards).
 Passes if every answer is valid, every forward stays within the runtime's budget,
 and each question's answer equals the same question asked alone (same choice or
 Noul side; probabilities within ``--tolerance``). Writes the result JSON (counts
@@ -117,6 +118,7 @@ def main() -> None:
 
     def recording(*a, **kw):
         shapes.append(list(kw["input_ids"].shape))
+        print(json.dumps({"forward": shapes[-1]}), file=sys.stderr, flush=True)
         return forward(*a, **kw)
 
     backend.model.forward = recording

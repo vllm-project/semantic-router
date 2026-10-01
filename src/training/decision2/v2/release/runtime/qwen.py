@@ -8,8 +8,9 @@ by repository revision and SHA-256; a supplied or downloaded copy is verified
 before use. GPU inference runs the backbone under BF16 autocast with its
 BF16-exact Linear weights held in BF16 and every other tensor, the head
 included, in FP32; CPU uses FP32. A request's questions run as one padded
-batch unless, on a GPU, that batch would pass the gated-delta kernels' 32-bit
-element offsets (``forward_token_budget``); then they run as several batches.
+batch unless, on a GPU, that batch would put more than 2**30 elements in a
+gated-delta q / k / v tensor (``forward_token_budget``); then they run as
+several batches.
 A package whose manifest names a weight ``storage`` codec (bf16z) is first restored
 to exact safetensors files in a cache directory; the restored checkpoint must
 reproduce the scored identity.
@@ -111,14 +112,16 @@ def forward_token_budget(config: Any) -> int | None:
     tensors in 32-bit integers (the L2-norm forward and the fused KKT-solve
     kernel among them). A forward whose tensors exceed 2**31 - 1 elements reads
     and writes the wrong memory for the later batch rows: wrong answers,
-    non-finite logits or a GPU memory fault.
+    non-finite logits or a GPU memory fault. On DEV2.0-27B, forwards with
+    tensors between about 2**30 and 2**31 elements also hung or crashed the
+    process, so the budget keeps these tensors within 2**30 elements.
     """
     config = getattr(config, "text_config", None) or config
     heads = getattr(config, "linear_num_value_heads", None)
     if not heads:
         return None
     width = heads * max(config.linear_key_head_dim, config.linear_value_head_dim)
-    return INT32_MAX // width
+    return (INT32_MAX // 2) // width
 
 
 def micro_batches(lengths: list[int], budget: int | None) -> list[list[int]]:
