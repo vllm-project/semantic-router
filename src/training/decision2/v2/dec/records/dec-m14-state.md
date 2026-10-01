@@ -64,3 +64,15 @@ Prereg [`dec-m14-prereg-2026-10-01.md`](dec-m14-prereg-2026-10-01.md). Branch `x
 - GPU-h of finished jobs: node A 0.41, node B 1.68. `m14_gpuh.py` now counts only receipts of jobs that ran on the
   node (`--node` / `$M14_NODE`): the staged `<point>-m12` readouts and relayed node-B readouts carry their original
   receipts and were being double-counted (the running chains' 30 GPU-h gate only became more conservative).
+
+## 2026-10-01 16:58Z — 0.8B closed (no finalist)
+
+- `08b-RAUP` seeds DONE 16:36Z / 16:43Z (4,115 / 4,109 updates, = M12's windows; BEST 3,086 / 4,109); soup 16:44Z;
+  eight panels 16:52Z (node A GPU5). Provenance confirms the weights (`99b77df5…`, distinct 1.0 / 1.5).
+- Rules (run once, 16:54Z, readout `ce79fdb6…`): **not eligible — Choice type floor 524 < 610 − 24; `attribute_gate`
+  family floor 268 / 400 < 320 / 400 − .10; yes-bias guard `hs1-dev` false-yes .827 > .720 + .10.** Otherwise: T .592
+  vs C0 .613 (C / N / S 524 / 219 / 204; C0 610 / 212 / 159); HT-DEV v2 **+.028 [+.007, +.049] GAIN**; retention .445,
+  +.011 [−.016, +.036]; Score5t COLLAPSE / NO-GAIN as C0 (M8s amendment 3 floor holds); IB DEV +.211, transfer +.197.
+- Contrast vs M12 `08b-RA` (exact path): typed T −.044 (**Choice −76**, Noul +3, Score +2); HT-DEV v2 −.021 [−.039,
+  −.002] FLAG; retention −.033 [−.060, −.005] (GSM8K −.096). Giving the released rows 1.5× the IB rows' weight did not
+  protect the Choice head at 0.8B; it lost more Choice items and raised the unmet-condition yes-bias.
