@@ -4,19 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"slices"
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
 )
-
-const finalizeTestRedisAddr = "localhost:6379"
 
 // TestExitIfFinalizeResponseIndexIsNoOpWhenDisabled covers the flag's default
 // behavior: with the flag unset, the router's normal startup path must fall
@@ -47,26 +45,25 @@ func TestRunResponseIndexFinalizationRejectsNonRedisBackend(t *testing.T) {
 // flag branch is taken. Legacy payloads that no index-aware write ever
 // covered become discoverable through the conversation index, the reported
 // stats match what was swept, and a second run is an idempotent no-op.
+//
+// Runs against an in-process miniredis rather than a live Redis. This
+// package sits outside the storage inventory, which only scans pkg/, so its
+// tests always run in the unit contract — where there is no Redis and a skip
+// is a failure. What this test owns is the command's wiring from router
+// config to store, sweep, and listing; the sweep's behavior against a real
+// Redis is covered by the storage-contract tests in pkg/responsestore.
 func TestRunResponseIndexFinalizationIndexesLegacyResponses(t *testing.T) {
-	keyPrefix := fmt.Sprintf("srtestcmd:%d:", time.Now().UnixNano())
+	const keyPrefix = "srtestcmd:"
+	server := miniredis.RunT(t)
 	cfg := &config.RouterConfig{}
 	cfg.ResponseAPI.StoreBackend = "redis"
 	cfg.ResponseAPI.TTLSeconds = 300
-	cfg.ResponseAPI.Redis.Address = finalizeTestRedisAddr
+	cfg.ResponseAPI.Redis.Address = server.Addr()
 	cfg.ResponseAPI.Redis.KeyPrefix = keyPrefix
 
-	raw := redis.NewClient(&redis.Options{Addr: finalizeTestRedisAddr})
+	raw := redis.NewClient(&redis.Options{Addr: server.Addr()})
+	t.Cleanup(func() { _ = raw.Close() })
 	ctx := context.Background()
-	if err := raw.Ping(ctx).Err(); err != nil {
-		t.Skipf("Redis not available: %v", err)
-	}
-	t.Cleanup(func() {
-		iter := raw.Scan(ctx, 0, keyPrefix+"*", 0).Iterator()
-		for iter.Next(ctx) {
-			raw.Del(ctx, iter.Val())
-		}
-		_ = raw.Close()
-	})
 
 	now := time.Now().Unix()
 	for _, response := range []*responseapi.StoredResponse{
