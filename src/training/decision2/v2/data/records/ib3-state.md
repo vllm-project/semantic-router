@@ -20,8 +20,16 @@ benchmark repositories are never sources; IB1 / IB2 files are not edited.
 rows (`688b643e…`), DEV 1,762 (`e79d90d0…`), 4.65M native tokens, four families (`wpd`, `phiu`, `esci`, `mqa`).
 Decisive blind review 29 / 216 = 13.43% (P1, P2, P3 fail); every audit passes.
 
+**IB3-r2 (commissioned 2026-10-02): IN PROGRESS.** Prereg `records/ib3-r2-prereg-2026-10-02.md` (`mqa` only; WiCE
+dropped by licence; fresh decisive review skipping IB3's sampled rows and groups); registry
+`records/license-registry-ib3-r2.json`. Node-A run directory `r2/`, runner env `IB3_RUN=r2 IB3_FAMILIES=mqa
+IB3_PRIOR_KEYS="<d2 screen key> <d2 review key>" IB3_PRIOR_DROPS=<d2 drop-ids.txt> IB3_RECORDS=ib3-r2
+IB3_LICENSE=license-registry-ib3-r2.json IB3_LABEL=IB3-r2`; stages build, scans, pass1, rescan 1, pass 2, skip-screen,
+review, splits, score, rescan final, final, leak, hf-assemble, hf-upload.
+
 ## Log (newest first)
 
+- 2026-10-02 00:30 UTC+8 — IB3-r2 prereg and runner options committed before any IB3-r2 row was built.
 - 2026-10-02 00:05 UTC+8 — merged into `xunzhuo/decision-2-training` (`e96eb833a`; IB1, IB2, IB3 and guard tests pass)
   and gist 02 entry added. **Worker done.**
 - 2026-10-02 00:00 UTC+8 — records, card and status written.

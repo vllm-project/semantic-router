@@ -1,0 +1,8 @@
+{
+  "mathqa_train": {
+    "attribution": "Amini, Gabriel, Lin, Koncel-Kedziorski, Choi and Hajishirzi, MathQA: Towards Interpretable Math Word Problem Solving with Operation-Based Formalisms (NAACL 2019); math-qa.github.io/math-QA/data/MathQA.zip (sha256 7344f30456a7aef3176d4866cc953b35b41bec44eda6b00cdbcfde2876b2f07a), train.json only; problems from AQuA-RAT (Ling, Yogatama, Dyer and Blunsom, ACL 2017; Apache-2.0)",
+    "evidence": "https://huggingface.co/datasets/allenai/math_qa/blob/c4f1cc784c04c4957b50c97858f23893b633eea6/README.md (license: apache-2.0); https://huggingface.co/datasets/deepmind/aqua_rat (license: apache-2.0)",
+    "license": "Apache-2.0",
+    "redistribution": "permitted with the Apache-2.0 notice"
+  }
+}

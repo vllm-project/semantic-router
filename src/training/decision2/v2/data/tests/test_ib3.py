@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import collections
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from training.model.data import validate_row
-from v2.data.ib3 import audit, families as fam, index_guard
+from v2.data.ib3 import audit, build, families as fam, index_guard
 
 
 def counts(rows):
@@ -88,6 +91,21 @@ class CellBalance(unittest.TestCase):
         report = collections.Counter()
         self.assertEqual(fam.mqa([wrong], report), [])
         self.assertEqual(report["drop_key_not_verified"], 1)
+
+    def test_convert_selected_families_reads_only_their_files(self):
+        record = {
+            "Problem": "a train running at the speed of 60 km / hr crosses a pole in 9 seconds . what is the length of the train ?",
+            "options": "a ) 120 metres , b ) 180 metres , c ) 324 metres , d ) 150 metres , e ) 140 metres",
+            "correct": "d",
+            "linear_formula": "multiply(n0,const_0_2778)|multiply(n1,#0)|",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            raw = Path(tmp)
+            (raw / "mathqa").mkdir()
+            (raw / "mathqa/train.json").write_text(json.dumps([record]))
+            rows, report = build.convert(raw, ("mqa",))
+        self.assertEqual({r["family"] for r in rows}, {"mqa"})
+        self.assertEqual(list(report["families"]), ["mqa"])
 
     def test_fdial2_passage_swap_twins(self):
         def turn(k, r, begin):

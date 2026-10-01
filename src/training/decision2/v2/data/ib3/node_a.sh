@@ -14,6 +14,7 @@
 #   node_a.sh <commit> amend-drop F.. families an amendment removes before the screen (amendment 1: maud)
 #   node_a.sh <commit> screen         stage S sample and packets (G4-failing and amendment-dropped families left out)
 #   node_a.sh <commit> screen-score   stage S verdict from screen/answers/s1.*.jsonl
+#   node_a.sh <commit> skip-screen    IB3-r2: no stage S (its only family passed IB3's); carries IB3's findings
 #   node_a.sh <commit> review         stage R sample and packets (screened rows / groups and dropped families out)
 #   node_a.sh <commit> splits         R3 packet from review/answers/{r1,r2}.*.jsonl
 #   node_a.sh <commit> score          stage R verdict (review/answers/r3.jsonl if any)
@@ -21,6 +22,10 @@
 #   node_a.sh <commit> leak           ids of final rows with a leak-guard finding; a new `final` drops them
 #   node_a.sh <commit> hf-assemble    m6/ib3 upload tree (registry.json inside) and the leak guard
 #   node_a.sh <commit> hf-upload      private upload with the HF CLI, pinned revision, read-back check
+#
+# IB3-r2 (records/ib3-r2-prereg-2026-10-02.md) sets IB3_FAMILIES (families built), IB3_PRIOR_KEYS (review keys whose
+# rows and groups the new review sample skips), IB3_PRIOR_DROPS (ids an earlier round found wrong), IB3_RECORDS,
+# IB3_LICENSE and IB3_LABEL.
 set -euo pipefail
 umask 077
 SHA=$1
@@ -50,7 +55,12 @@ TOKJ=/data/dev2/private/data/arms-v1/tokenizers.json
 Q06=/data/dev2/hf-cache/models--Qwen--Qwen3-0.6B-Base
 Q08=/data/dev2/hf-cache/models--Qwen--Qwen3.5-0.8B-Base
 KAI=/data/dev2/private/models/Decision-1.0-Kai-0.6B@7185f514f54b8f93c55998b1e8f9c5cc67f0d029/native/tokenizer
-LIC=$CODE/v2/data/records/license-registry-ib3.json
+LIC=$CODE/v2/data/records/${IB3_LICENSE:-license-registry-ib3.json}
+RECS=${IB3_RECORDS:-ib3}
+LABEL=${IB3_LABEL:-IB3}
+read -r -a FAMS <<< "${IB3_FAMILIES:-}"
+read -r -a PRIOR_KEYS <<< "${IB3_PRIOR_KEYS:-}"
+PRIOR_DROPS=${IB3_PRIOR_DROPS:-}
 TRAIN=$CAND/ib3.train.cand.jsonl
 DEV=$CAND/ib3.dev.cand.jsonl
 WORKERS=${IB3_WORKERS:-48}
@@ -86,7 +96,10 @@ run() {
 build() {
   [ ! -e "$CAND" ] || { echo "$CAND exists" >&2; exit 1; }
   mkdir -m 700 "$CAND"
-  run build -v "$RAW:$RAW:ro" -v "$CAND:$CAND:rw" "$IMG" -m v2.data.ib3.build build --raw "$RAW" --out "$CAND"
+  local -a sel=()
+  [ "${#FAMS[@]}" -eq 0 ] || sel=(--families "${FAMS[@]}" --prereg "records/ib3-r2-prereg-2026-10-02.md")
+  run build -v "$RAW:$RAW:ro" -v "$CAND:$CAND:rw" "$IMG" -m v2.data.ib3.build build --raw "$RAW" --out "$CAND" \
+    "${sel[@]}"
 }
 
 # overlap <dir> <train> <dev> <inventory dir>: the four overlap scans of one pair of files, in parallel.
@@ -268,12 +281,37 @@ screen_score() {
   cat "$R/shortcut/shortcut-fail.txt" "$AMEND" "$S/drop-families.txt" | sort -u > "$S/families-out.txt"
 }
 
+# IB3-r2: no stage S; an empty screen key, IB3's carried findings and the families G4 or an amendment removed.
+skip_screen() {
+  fresh screen
+  local S=$R/screen
+  [ -f "$AMEND" ] || : > "$AMEND"
+  mkdir -m 700 "$S/sample"
+  : > "$S/sample/key.jsonl"
+  if [ -n "$PRIOR_DROPS" ]; then cp "$PRIOR_DROPS" "$S/drop-ids.txt"; else : > "$S/drop-ids.txt"; fi
+  cat "$R/shortcut/shortcut-fail.txt" "$AMEND" | sort -u > "$S/families-out.txt"
+  python3 - "$S" "$PRIOR_DROPS" <<'EOF'
+import json, pathlib, sys
+out, prior = pathlib.Path(sys.argv[1]), sys.argv[2]
+ids = [x for x in pathlib.Path(prior).read_text().split() if x] if prior else []
+note = {"schema": "decision2.ib3.screen-skipped.v1", "stage_s": "not run (IB3-r2 prereg: its only family passed IB3's stage S)",
+        "carried_drop_ids": len(ids), "families_out": [x for x in (out / "families-out.txt").read_text().split() if x]}
+for name in ("screen.public.json", "sample/sample.json"):
+    (out / name).write_text(json.dumps(note, indent=1, sort_keys=True) + "\n")
+EOF
+}
+
 review() {
   fresh review
-  local Pd=$R/pass$SAMPLE_PASS
-  run sample -v "$Pd:$Pd:ro" -v "$R/screen:$R/screen:ro" -v "$R/review:$R/review:rw" "$IMG" \
+  local Pd=$R/pass$SAMPLE_PASS k
+  local -a mounts=() keys=()
+  for k in "${PRIOR_KEYS[@]}"; do
+    mounts+=(-v "$k:$k:ro")
+    keys+=(--screen-key "$k")
+  done
+  run sample -v "$Pd:$Pd:ro" -v "$R/screen:$R/screen:ro" -v "$R/review:$R/review:rw" "${mounts[@]}" "$IMG" \
     -m v2.data.ib3.review sample --train "$Pd/out/ib3.train.jsonl" \
-    --screen-key "$R/screen/sample/key.jsonl" --drop-families "$R/screen/families-out.txt" \
+    --screen-key "$R/screen/sample/key.jsonl" "${keys[@]}" --drop-families "$R/screen/families-out.txt" \
     --out-dir "$R/review/sample"
   mkdir -m 700 "$R/review/answers"
 }
@@ -381,13 +419,13 @@ receipt["reference"] = "every Decision Index suite row (selected and added rows)
 print(json.dumps(receipt, indent=1, sort_keys=True))
 EOF
   done
-  python3 - "$R" "$CAND" "$CODE/v2/data/records" > "$spec" <<'EOF'
+  python3 - "$R" "$CAND" "$CODE/v2/data/records" "$RECS" "$LIC" > "$spec" <<'EOF'
 import json, pathlib, sys
-run, cand, rec = map(pathlib.Path, sys.argv[1:])
+run, cand, rec, recs, lic = map(pathlib.Path, sys.argv[1:])
 items = [
-    (rec / "ib3/hf-readme.md", "README.md"),
-    (rec / "ib3/status.json", "status.json"),
-    (rec / "license-registry-ib3.json", "license-registry-ib3.json"),
+    (rec / recs / "hf-readme.md", "README.md"),
+    (rec / recs / "status.json", "status.json"),
+    (lic, "license-registry-ib3.json"),
     (run / "final/out/ib3.train.jsonl", "ib3.train.jsonl"),
     (run / "final/out/ib3.dev.jsonl", "ib3.dev.jsonl"),
     (run / "final/out/final.json", "final.json"),
@@ -436,7 +474,7 @@ hf_upload() {
   local counts safe msg
   counts=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); t=d["train"]["rows"]; v=d["dev"]["rows"]; print(f"TRAIN {t:,}, DEV {v:,}")' "$R/final/out/final.json")
   safe=$(python3 -c 'import json,sys; print("release-safe" if json.load(open(sys.argv[1]))["release_safe"] else "NOT release-safe")' "$tree/status.json")
-  msg="IB3 Index-family breadth block 3 ($safe): m6/ib3 ($counts; build ${SHA:0:12})"
+  msg="$LABEL Index-family breadth block 3 ($safe): m6/ib3 ($counts; build ${SHA:0:12})"
   info() {
     hf datasets info "$repo" --expand private,sha | "$py" -c 'import json,sys; d=json.load(sys.stdin); print(d["private"], d["sha"])'
   }
@@ -446,7 +484,8 @@ hf_upload() {
   read -r before parent < <(info)
   [ "$before" = "True" ] || { echo "dataset is not private; refusing to upload" >&2; exit 1; }
   echo "$(date -u +%FT%TZ) parent=$parent private=$before" | tee -a "$log"
-  hf upload "$repo" "$tree" m6/ib3 --repo-type dataset --commit-message "$msg" >> "$log" 2>&1
+  # m6/ib3 is replaced as a whole: files of an earlier round that are not in the tree are deleted.
+  hf upload "$repo" "$tree" m6/ib3 --repo-type dataset --delete '*' --commit-message "$msg" >> "$log" 2>&1
   read -r after head < <(info)
   [ "$after" = "True" ] || { echo "dataset private flag changed" >&2; exit 1; }
   rev=$("$py" "$CODE/v2/data/hr2/hf_readback.py" pin "$repo" "$parent" "$msg")
@@ -480,6 +519,7 @@ case "$STAGE" in
   g4) g4 "$3" ;;
   amend-drop) shift 2; amend_drop "$@" ;;
   screen-score) screen_score ;;
+  skip-screen) skip_screen ;;
   hf-assemble) hf_assemble ;;
   hf-upload) hf_upload ;;
   *)
