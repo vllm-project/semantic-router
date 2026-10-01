@@ -4,31 +4,37 @@ Assignment: coordinator note 2026-10-01 11:25 (user request 11:10: add HF `auto_
 to every Decision 1.0 model, uniform with Decision 2.0). Worker `1.0-automap` (2a4d413a).
 Branch `xunzhuo/decision-1-automap` (worktree `vllm-sr-dev2-automap1`, from `origin/xunzhuo/decision-2-training`
 `9ff8ae938`). Gist file `07-decision-2-release.md` (release engineering; update in place).
-GPU: lease-polite sharing on nodes C–F only (prefer node E GPU6–7 when the 2.0 auto_map worker is idle);
-never node C GPU0, node E GPU4–5, node F GPU0–1.
+GPU: lease-polite sharing on nodes C–F only; never node C GPU0, node E GPU4–5, node F GPU0–1.
 
 ## Now
 
-- 2026-10-01 11:30 UTC+8 — **Survey done; designing the remote code.**
-  - Hub heads (all public except DEV2.0-Route): Kai `9d6872cd`, Lex `6c5e3d48`, Route `c7a31eb0` (subin, new
-    weights 03:08Z), Eos `a66df1b5`, Sol `a1c9f252`, Nox `eab48e99`, Lux `8db79130` (subin's neutral-wording PRs
-    merged 03:08Z), DEV2.0-Route-0.6B `72a2d317` (private, 2.0 `qwen-full` package by subin).
-    No open PRs on any repo; Eos has one open non-PR discussion (fontlab), untouched.
-  - The 2.0 worker's branch `xunzhuo/decision-2-automap` is not pushed yet; drafting against the System One
-    schema, will reconcile before publishing.
-  - References: vLLM-SR decision runtime `58cd660b5` (branch `xunzhuo/decision-runtime`, `src/vllm-sr/decision_runtime`),
-    native 1.0 runtimes of the runtime-bearing revisions (Kai `7185f514`, Lex `ee8e74d9`, Eos `3c2d6326`,
-    Sol `0665a411`, Nox `0bb83350`, Lux `bd45a30a`), stored scored predictions on node A
-    (`runs/eval/m1/r{1..4}-*`, `runs/eval/m1-adopt/{kai1,sol1,nox1,lux1}`).
-  - **Compatibility finding:** the vLLM-SR runtime's `parse_decision_config` accepts only the eight descriptor keys
-    (+ `calibration`) in root `config.json`; adding `auto_map` there makes a *future* catalog bump to the new
-    revisions fail until the runtime tolerates standard HF keys. Deployed catalogs pin older revisions, so serving is
-    unaffected. To be reported to the coordinator.
+- 2026-10-01 12:25 UTC+8 (04:25Z) — **Remote code aligned with the 2.0 draft API; Kai and Lex pass parity; decoder runs
+  queued on node E GPU7.**
+  - Code (`v2/release/automap/decision1/`, commit `3684c2d8b`): `configuration_decision1.py`, `modeling_decision1.py`,
+    `pipeline_decision1.py` plus `decision1_system_one.py`, `decision1_vela.py` (vendored ModernBERT from Transformers
+    4.57.6, YaRN RoPE, three paths, type-sorted B8, published flags: no MHA fast path, no TF32, ROCm contiguous QKV),
+    `decision1_qwen.py` (Qwen3.5 backbone via Transformers, FP32 candidate head, segment-exact prompts, B8 padded to
+    32, temperature softmax; CPU rebinds gated-delta layers to the PyTorch references like 2.0).
+    `config.json` gains `model_type: decision1`, `architectures`, `auto_map`, `custom_pipelines.decision`.
+  - Aligned with the 2.0 worker's draft API (their worktree, uncommitted `automap/API.md`): file and class names per
+    family, `system_one` / `forward`, error answers (`invalid_question`, `max_length_exceeded`), device moves reload,
+    casts / `train()` / `save_pretrained()` refused, `threads`, no `choice` / `noul` / `score` helpers (2.0 has none).
+    1.0 keeps the native request-level admission: if any question is over the limit, every question gets
+    `max_length_exceeded` (2.0 Qwen answers per question) — divergence to report.
+  - **Parity (node E GPU7 / GPU6, Transformers 5.17 image, draft with the fast path on):** Kai and Lex 0 answer
+    changes, 0 missing on all 8,378 scored prompts (typed-final 1,600, CSS15 6,547, public 231); over-length rejections
+    agree on 404 + 44 prompts; token counts equal on every prompt; max drift 4.5e-7 (Kai), 6.6e-7 (Lex).
+  - Running (`/data/dev2/runs/release/dev1-automap/p2-3684c2d8`, mirror `3684c2d8b`): GPU7 chain Lex → Sol → Lux →
+    Kai → Eos → Nox with the final flags; Kai on CPU (48 threads). Node E GPU6 is now leased by the 2.0 worker; every
+    other GPU on nodes C–F is leased (IX1, M10).
+  - Compatibility finding (unchanged): the vLLM-SR runtime `58cd660b5` `parse_decision_config` accepts only the
+    Decision keys in root `config.json`, so a future catalog bump to the new revisions needs that parser to ignore the
+    four Transformers keys. Deployed catalogs pin older revisions.
+- 2026-10-01 11:30 UTC+8 — Survey done (heads, references, stored predictions); see git history.
 
 ## Next
 
-1. Read the native 1.0 code; write `v2/release/automap/` remote code (configuration / modeling / pipeline) and
-   `API.md`; unit tests on CPU.
-2. Parity: encoders on CPU (node E), decoders on a free leased GPU; 0 answer changes vs stored scored predictions.
-3. HF PRs (based on current heads), merge own 1.0 PRs when checks pass; DEV2.0-Route PR only, never merged.
-4. Fresh-environment Hub smoke test + hash readback; record, gist 07, merge into `xunzhuo/decision-2-training`.
+1. Finish decoder parity; Route reference = the native Kai runtime (`7185f514` code) with Route's weights, then parity.
+2. Transformers 4.57.6 check (`/data/dev2/tools/envs/tf4576` on node E) and a fresh-venv CPU smoke test.
+3. HF PRs (based on current heads), merge own 1.0 PRs when checks pass; DEV2.0-Route PR after the 2.0 code lands.
+4. Hub smoke + hash readback; record, gist 07, API.md 1.0 section, merge into `xunzhuo/decision-2-training`.
