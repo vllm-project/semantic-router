@@ -7,9 +7,9 @@
 # the SDPA path with YaRN rotary embeddings, reduced to inference.
 """Kai / Lex / Route: one ModernBERT encoder with Choice, Noul and Score paths.
 
-Inference follows the native Decision 1.0 runtime: FP32 weights and math, one
-marker per candidate, complete inputs only (no truncation), and rows sorted by
-question type into physical batches of eight.
+Inference follows the native Decision 1.0 runtime: FP32 weights and math (no TF32,
+no fused attention fast path), one marker per candidate, complete inputs only (no
+truncation), and rows sorted by question type into physical batches of eight.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from __future__ import annotations
 import copy
 import json
 import math
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -374,6 +375,25 @@ class VelaDecision(nn.Module):
         return output.masked_fill(~valid_candidates, torch.finfo(torch.float32).min)
 
 
+@contextmanager
+def native_flags():
+    """The published runtime's settings: no fused attention fast path and no TF32, restored afterwards."""
+    fastpath = torch.backends.mha.get_fastpath_enabled()
+    matmul, cudnn = (
+        torch.backends.cuda.matmul.allow_tf32,
+        torch.backends.cudnn.allow_tf32,
+    )
+    torch.backends.mha.set_fastpath_enabled(False)
+    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = False
+    try:
+        yield
+    finally:
+        torch.backends.mha.set_fastpath_enabled(fastpath)
+        torch.backends.cuda.matmul.allow_tf32 = matmul
+        torch.backends.cudnn.allow_tf32 = cudnn
+
+
 class VelaRuntime:
     """Loaded weights, tokenizer and the complete-input limit of one Decision 1.0 encoder."""
 
@@ -505,7 +525,7 @@ class VelaRuntime:
         )
         device = next(self.model.parameters()).device
         results: list[list[float] | None] = [None] * len(rows)
-        with torch.inference_mode():
+        with torch.inference_mode(), native_flags():
             for start in range(0, len(order), PHYSICAL_BATCH):
                 chunk = order[start : start + PHYSICAL_BATCH]
                 items = [encoded[index] for index in chunk]

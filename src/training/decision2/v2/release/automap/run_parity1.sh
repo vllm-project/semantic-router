@@ -4,7 +4,7 @@
 #
 # Usage (on a node, from an exact mirror):
 #   run_parity1.sh <Repo-Name> <head-sha> <cpu|gpuN> <work-dir> [--threads N] [--fla-profile DIR]
-#                  [--panel NAME:PROMPTS:PREDICTIONS[:N]]...
+#                  [--python INTERPRETER] [--panel NAME:PROMPTS:PREDICTIONS[:N]]...
 # The GPU path takes /data/dev2/leases/gpuN.lock/owner only if it is free,
 # passes just that GPU's render node plus /dev/kfd (ROCR_VISIBLE_DEVICES=0)
 # and releases the lease on exit.
@@ -13,11 +13,13 @@ set -euo pipefail
 repo="$1"; head="$2"; target="$3"; work="$4"; shift 4
 threads=32
 profile=""
+python=python3
 panels=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --threads) threads="$2"; shift 2 ;;
     --fla-profile) profile="$2"; shift 2 ;;
+    --python) python="$2"; shift 2 ;;
     --panel) panels+=("$2"); shift 2 ;;
     *) echo "unknown argument $1" >&2; exit 2 ;;
   esac
@@ -36,6 +38,7 @@ python3 "$here/stage1.py" --repo "llm-semantic-router/$repo" --head "$head" \
 
 docker_args=(--rm --network none --ipc host --security-opt seccomp=unconfined
   -v /data/dev2/hf-cache:/data/dev2/hf-cache:ro -v /data/dev2/private:/data/dev2/private:ro
+  -v /data/dev2/tools:/data/dev2/tools:ro
   -v "$decision2:$decision2:ro" -v "$work:$work"
   -e HF_HUB_OFFLINE=1 -e HF_MODULES_CACHE="$work/modules" -e PYTHONDONTWRITEBYTECODE=1)
 device=cpu
@@ -61,6 +64,6 @@ if [[ -n "$profile" ]]; then
 fi
 panel_args=()
 for panel in "${panels[@]}"; do panel_args+=(--panel "$panel"); done
-docker run "${docker_args[@]}" "$image" python3 -B "$here/parity1.py" \
+docker run "${docker_args[@]}" "$image" "$python" -B "$here/parity1.py" \
   --model "$work/staged" --device "$device" --threads "$threads" \
   --output "$work/parity.json" --changes "$work/changes.jsonl" "${panel_args[@]}" 2>&1 | tail -n 40
