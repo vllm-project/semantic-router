@@ -1,0 +1,50 @@
+{
+  "external_agreement": "no external values for this package",
+  "gpu_hours_full_run": 7.126,
+  "gpu_hours_parity_and_path_checks": 0.192,
+  "label": "independent provisional 0.2.1 reproduction (values private)",
+  "model": {
+    "adapter_sha256": "80331110341481b1363f2a11d7e30c15987ca9e44c3e71ecb80bb4cf08832995",
+    "base": {
+      "repo_id": "google/gemma-4-26B-A4B-it",
+      "revision": "4d7ae4984b7db7de8f8457170b3f1a419ee76d52"
+    },
+    "calibration": "T = 1",
+    "engine": "v2.27b.moe.index_engine:MoEPackageIndexEngine (the package formal path)",
+    "experts_implementation": "grouped_mm",
+    "model_id": "llm-semantic-router/DEV2.0-27B-MoE-candidate",
+    "model_sha256": "9165bed76da491d12b33df365e226c3d3a1a941d7caed060cf40d280d9abc115",
+    "package_sha256": "ffb11e1c5b525234f806853f6b1c12095602c664fc84663fea454f7011721ed6",
+    "prompt_version": "decision2-bos-segmented-options-global-query-v1"
+  },
+  "non_ok_reasons": {
+    "CUDA out of memory when run alone (32-question requests over one MI325X on the FP32-resident path)": 2
+  },
+  "panel": {
+    "rows": 120226,
+    "run_ids_sha256": "6455d7be7ce3e902a73f4d854884f817e20a0fa8ba74252a299261c4f1d6ad50",
+    "shards_file": "panel-3"
+  },
+  "parity_gate": {
+    "max_abs_dp": 0.0,
+    "pass": true,
+    "questions_compared": 419,
+    "requests": 86,
+    "statuses": {
+      "ok": 86
+    },
+    "tolerance": 0.0001
+  },
+  "presplit": {
+    "min_padded_tokens": 196608,
+    "requests_rerun_alone": 20
+  },
+  "results_sha256": "bbfc7a9813a1060a4a2a10b2ff47a147eabe12ae8b4af7b898bd8eba51412092",
+  "schema": "ix1-public-receipt/1",
+  "scorer_gate": "port vs kit 87d4650b: pass (per-benchmark <= 1.5e-4, headline <= 0.01)",
+  "statuses": {
+    "error": 2,
+    "ok": 120224
+  },
+  "superseded_error_records": 0
+}

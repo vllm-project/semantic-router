@@ -1,0 +1,92 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's release round of 2026-10-01 18:08 UTC+8 (the queued IX1 hand-off records/dev2-runtime-forward-budget-2026-10-01.md) to publish runtime-only revisions carrying the long-request forward token budget for DEV2.0-0.8B, 2B, 9B and 27B, each only with 0 answer changes on every scored prompt and on mlx-diag, AutoModel equal to native, and the long-input regression passing",
+  "decision": "release",
+  "decision_sha256": "b24a2b5490f83598ebea9644ef6dc380d650cc943ce0d7bdf6abc631143c734b",
+  "gate_profile": "successor",
+  "items": {
+    "1_successor_R1_v3": {
+      "evidence": "v3 72.360 vs current 67.209: +5.15 [+2.19, +8.02]",
+      "passed": true
+    },
+    "1_successor_R2_human_transfer": {
+      "evidence": "human transfer delta 95% [-0.037, +0.056]",
+      "passed": true
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "evidence": "types choice OK, noul OK, score OK",
+      "passed": true
+    },
+    "1_successor_R4_mlx_diag": {
+      "evidence": "mlx-diag card-eligible macro +0.0139 [+0.0025, +0.0250]",
+      "passed": true
+    },
+    "1_successor_R5_tier_gates": {
+      "evidence": "no Decision 1.0 at this size; v3 72.360 vs 90% of AutoJev-27B 72.133; H vs AutoJev-27B [-0.030, +0.066]; v3 >= 64.919 ok, H vs AutoJev-27B upper >= 0 ok, no type collapsed ok",
+      "passed": true
+    },
+    "1_successor_R6_no_overlap_exposure": {
+      "evidence": "1 training files, 0 exposed groups",
+      "passed": true
+    },
+    "1_successor_R7_public231": {
+      "evidence": "public 231 203 vs 198 (+5; McNemar p 0.180)",
+      "passed": true
+    },
+    "1_successor_R8_c1_postkey": {
+      "evidence": "JevArena-C1 v1.2 post-key 57.56 vs DEV2.0-27B 5683c6f0 (current revision): +0.23 [-1.22, +1.70] PASS",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "10 results below AutoJev-27B (no Decision 1.0 at this size) listed in the card tradeoffs table",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 35 files re-hashed; loaded 26096775168",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518, automap-parity-pre, automap-vs-native-pre; scored prompts vs the native runtime: max drift 0",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "e3929c3b6a6ea12f3e089c877615b5860e6686cae0ba5950742f347f99fd9356",
+  "model_name": "DEV2.0-27B",
+  "receipts_sha256": {
+    "automap-card-pre": "9575cb9621a568423494c4c29b5d5395c75de18c8446d725b0f37ea2a2e01166",
+    "automap-hub": "14f2b0f1e1119d5b560fe9b1e384584fbbf8ae3e30ebc31a0353afb2ee9b5dc7",
+    "automap-hub-tf518": "fc336c15e3d52bc10d4c5877949509ec6794f67532ed42c5afb78d88de582d15",
+    "automap-parity-pre": "3291461c5350cc9c4b921dd4a7c6c108fcb867da5fd6823214357fb79e44dc1a",
+    "automap-post": "fdc05678f80b9ffead4cd1c9c861697d6507498a4ecd3ce33f370737c419dd23",
+    "automap-pre": "6a17fe0bb12725e51484574454b3151e44595195b5ba887a781a95e45b913487",
+    "automap-vs-native-pre": "666610040c469eb167825975db740697e8e33fc37a71c39245a35df78a8d2d81",
+    "card-post": "d77769ccba713cb5338793c2aa0d9d49e45f08539b166516eec8ef2978ac6b69",
+    "card-pre": "82fb03c20ebf9d03b7f54786da76d1c5ce34aa2a9422dfb6d9aec478ff9178f1",
+    "download": "fbe3e5015a4c16e727e5ecd2536d68e628fe51fd51387df09e95344899f6552f",
+    "post": "831dfdc7bcdd30ece5a5bf6d5276b29fae06bab926fa4f76a4e132da6b6570de",
+    "readback": "1b62aae7eb4ef182d810a1863a5ad2a73171e1203171a79887d84666625303e0",
+    "repeat-post": "10c1c375179d7ae13d1ac200aaae086a59e492aa0bf720e2acbacd3c51c234ab",
+    "repeat-pre": "ee44c72ea79d1f0edfe426a45334c862277e79147f6eb8390583bcc5f1b94df3",
+    "tree": "18aade6ecaef112e2eb24e43ef449b939e160322d9d3afb3c8e7d542eced5be1",
+    "upload": "4df0ed67feba33ca4564a1da1096492851a68d5f06ef123f1a8ccd78a3b7a11d"
+  },
+  "repo_id": "llm-semantic-router/DEV2.0-27B",
+  "revision": "0928079151171e60f0d202648ce62ed777d2fe8c",
+  "schema": "dev2-release-gate/1",
+  "supersedes": {
+    "gate_sha256": "e6965d75e1f7cac175522f19fbabedd333ad2e8136f8e69a0eb9fb7b200b4a3f",
+    "revision": "c0dba600087f582a1033830a2276d22e96e6324c"
+  },
+  "utc": "2026-10-01T13:15:46.212294+00:00"
+}
