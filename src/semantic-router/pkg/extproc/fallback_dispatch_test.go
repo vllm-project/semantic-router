@@ -2749,6 +2749,7 @@ func TestFallbackPreservesInflightModelOwnershipDuringSettlement(t *testing.T) {
 	}
 
 	ctx := testFallbackRequestContext(primaryModel, []string{primaryModel, candidateModel})
+	ctx.InflightModel = primaryModel
 	ctx.InflightToken = primaryToken
 	ctx.UpstreamStatusCode = 503
 

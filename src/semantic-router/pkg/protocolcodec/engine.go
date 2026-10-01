@@ -194,6 +194,7 @@ func (engine *Engine) TranslateResponse(source, target llmprotocol.WireFormat, b
 		return ResponseResult{}, translateResponseErr
 	}
 	decodePolicy := engine.translationDecodePolicy(source, target, mutate != nil)
+	decodePolicy.ProviderStopSequences = engine.carriesMatchedStopSequence(target)
 	response, envelope, diagnostics, translateResponseErr := sourcePair.buffered.DecodeResponse(body, decodePolicy)
 	if translateResponseErr != nil {
 		return ResponseResult{Diagnostics: diagnostics}, translateResponseErr
@@ -301,6 +302,11 @@ func (engine *Engine) translationDecodePolicy(source, target llmprotocol.WireFor
 	return policy
 }
 
+func (engine *Engine) carriesMatchedStopSequence(target llmprotocol.WireFormat) bool {
+	pair, err := engine.codec(target)
+	return err == nil && pair.buffered.Capabilities().Supports(llmprotocol.CapabilityMatchedStopSequence)
+}
+
 func (engine *Engine) EncodeError(format llmprotocol.WireFormat, protocolError *llmprotocol.ProtocolError) ([]byte, error) {
 	if protocolError == nil {
 		protocolError = llmprotocol.NewError(llmprotocol.ErrorInternal, "internal", "request failed", nil)
@@ -355,6 +361,7 @@ func (engine *Engine) NewStreamWithMutation(
 	context.Source = source
 	context.Target = target
 	streamPolicy := engine.strictStreamPolicy()
+	streamPolicy.ProviderStopSequences = engine.carriesMatchedStopSequence(target)
 	return &StreamEngine{
 		decoder:            sourcePair.stream.NewDecoder(context, streamPolicy),
 		encoder:            targetPair.stream.NewEncoder(context, streamPolicy),

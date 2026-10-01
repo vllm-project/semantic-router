@@ -74,6 +74,8 @@ export interface ASTProjectionPartitionDecl {
 export interface ASTProjectionScoreInput {
   signalType: string
   signalName: string
+  kb?: string
+  metric?: string
   weight: number
   valueSource?: string
   match?: number
