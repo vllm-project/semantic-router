@@ -21,8 +21,10 @@ work="$root/$repo"
 hub() { "$hf_python" "$here/hub1.py" "$@" --repo "$id" --stage "$work/stage"; }
 fresh_run() {
   local home="$1" cache="$2"; shift 2
+  # The image sets HF_HUB_OFFLINE, TRANSFORMERS_OFFLINE and an FLA PYTHONPATH; a fresh venv has none.
   docker run --rm --network host -v /data/dev2:/data/dev2 -e HF_HOME="$home" -e HF_HUB_CACHE="$cache" \
-    -e HF_HUB_DISABLE_TELEMETRY=1 --entrypoint "$fresh" "$image" -B "$here/smoke1.py" "$@"
+    -e HF_HUB_OFFLINE=0 -e TRANSFORMERS_OFFLINE=0 -e PYTHONPATH= -e HF_HUB_DISABLE_TELEMETRY=1 \
+    --entrypoint "$fresh" "$image" -B "$here/smoke1.py" "$@"
 }
 case "$step" in
   stage)
