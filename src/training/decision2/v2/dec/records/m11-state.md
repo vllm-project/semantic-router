@@ -43,3 +43,17 @@ Prereg `b8c3caf22`; ops `cef1a1b66`; data lock `7c3aed8c8`; amendment 1 (node F 
      these manifests before the first copy. C0 first, path-checked against the bars (2B node-A
      `dev2-2b-t1-derived`; 0.8B node-B `m8s-ref-08b-I`); 0.8B scoring via the `m8s-score08b.sh` pairing.
   4. Stage 2 only when IB1-r3 is release-safe on origin (data lock first).
+
+## 2026-10-01 08:00Z — resumed (COORDINATION 15:28: IB1-r3 and IB2 release-safe; stage 2 now)
+
+- Stage-2 prereg `9c8798576` (4B LH + IB1 + IB2: `4b-LHB` all 15 IB families, `4b-LHBx` without `w2c` / `isarc` /
+  `hover` / `gsm2`; 25% IB tokens at LH's matched total; one shared base subsample; seeds 26 / 27; co-tenant on E GPU3 /
+  F GPU7); ops `698787dee` + `9c3c68292`; data lock `3773f99a0` (builds byte-identical on E and F; 628 GSM8K probe
+  items overlap stage-2 TRAIN and leave the 4B stage-2 probe gold).
+- IB DEV panel (3,339 rows, 12 families) built on node A in its decoder image; prompts on E / F (`7cf53e47…`).
+- LH soup copied F → E through node A (hash-equal). Stage-2 chains launched 07:52Z; `4b-LHB-s1` preflight PASS
+  (07:57Z), pre-warm marker `warm-4b-f`.
+- Formal: `M6_SMALL_NODE=E|F` + `M6_EF_GPUS` in the M6 library (flagged shared-module change, tests in `test_m11.py`),
+  `m10_formal_select.py --tier`, `ops/m11/m11-formal.sh` (`c7d50a0c2`).
+- Stage 1: all six 2B seeds DONE (≈07:40–07:45Z); soups `2b-LH` (merges 128 / 128, 128 / 128, 126 / 128 SELECT argmax)
+  and `2b-NT` built and reading; all six 0.8B preflights PASS, 0.8B seeds training.
