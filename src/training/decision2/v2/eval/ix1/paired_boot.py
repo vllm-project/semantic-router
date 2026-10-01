@@ -11,6 +11,10 @@ headline recomputed, so the area weighting is propagated rather than approximate
 sum Σ w_b² var_b (board weights from the private file) is reported as a cross-check. Before any replicate the
 identity resample (every case once, renamed) must reproduce both runs' headline exactly. The output holds
 Index values and stays private.
+
+``--exclude NAME ...`` drops those benchmarks' rows before scoring (both the observed headline and every
+replicate), so the headline is the port's balanced skill over the remaining benchmarks, e.g. a transfer-only
+delta without the benchmarks whose families or formats a model trained on.
 """
 
 from __future__ import annotations
@@ -117,6 +121,7 @@ def main() -> None:
     parser.add_argument("--seed", default="20261002")
     parser.add_argument("--workers", type=int, default=16)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--exclude", nargs="*", default=[])
     args = parser.parse_args()
 
     from decision_index.scoring.report import load_results
@@ -126,6 +131,11 @@ def main() -> None:
 
     started = time.time()
     rows, _ = selected_rows(verified_suite(args.suite_dir))
+    unknown = set(args.exclude) - set(NAMES.values())
+    if unknown:
+        raise SystemExit(f"unknown benchmarks {sorted(unknown)}")
+    dropped = {n for n, name in NAMES.items() if name in args.exclude}
+    rows = [r for r in rows if r["_evaluation"]["catalog_id"] not in dropped]
     results = (load_results(args.base), load_results(args.new))
     cases = _cases(rows)
     observed = tuple(_summary(score_rows(rows, r)) for r in results)
@@ -135,7 +145,7 @@ def main() -> None:
         if abs(got["balanced_skill"] - want["balanced_skill"]) > 1e-9:
             raise SystemExit("the identity resample does not reproduce the headline")
     weights = json.loads(args.external.read_text())["benchmark_index_weight"]
-    weight = {str(n): weights[name] for n, name in NAMES.items()}
+    weight = {str(n): weights[name] for n, name in NAMES.items() if n not in dropped}
 
     with multiprocessing.get_context("fork").Pool(args.workers) as pool:
         draws = sorted(pool.imap_unordered(_replicate, range(args.replicates), 4))
@@ -178,6 +188,7 @@ def main() -> None:
         "unit": "scoring case (group_id) within benchmark, paired, with replacement",
         "replicates": args.replicates,
         "seed": args.seed,
+        "excluded": sorted(args.exclude),
         "inputs_sha256": {
             key: hashlib.sha256(path.read_bytes()).hexdigest()
             for key, path in (("base", args.base), ("new", args.new))
