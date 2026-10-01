@@ -48,3 +48,16 @@ Branch `xunzhuo/decision-2-training-dec-m16`, worktree `vllm-sr-dev2-dec-m16`. P
   to node B's), scoring running. A duplicate relay invocation from the workstation stopped at the relay's
   "exists on the target" guard; it changed nothing.
 - Node B GPU2–4 now idle until the 2B mlx-diag and 4B formal collections.
+
+## 2026-10-01 20:09Z
+
+- 2B formal: parity `m16-2b-C0` is exact vs bar-t1 (0 / 0 / 0). `m16-2b-RA-a75` −2.05 [−3.31, +3.14] vs bar-t1 and
+  `m16-2b-RASD-a25` +.05 [−.60, +1.68]; both **fail items 1 and 6(b)**; `2b-RA-a75` also fails item 4 (mlx-diag
+  card-eligible −.0184 [−.0295, −.0075]). No 2B successor.
+- Scoring fix (`ab7be2f15`, committed before any 2B mlx-diag pair existed): m6-score's report-only mlx-diag pair for 2B
+  looked for an `m6-ref-S2T-soup-mlx` under M16's root, which does not exist; it now uses node A's `m3-S2T-soup-mlx`
+  (bar-t1's run). The first attempt stopped at that check before writing any pair file; it was rerun on the new mirror.
+- 4B: six points scored on node A; **rules run once** (19:40Z): the three `4b-LHA10UP` points and `4b-LHA10SD-a25`
+  fail retention (CI upper < 0). **Finalists `4b-LHA10SD-a75`, `4b-LHA10SD-a50`** (no other line eligible). Formal on
+  node B GPU3: parity `m16-4b-LH` exact vs the stored LH run (0 / 0 / 0); `m16-4b-LHA10SD-a75` −.07 [−2.53, +2.38] vs
+  bar-lh (item 1 fails). `-a50` collecting; 4B mlx-diag collecting on GPU4.
