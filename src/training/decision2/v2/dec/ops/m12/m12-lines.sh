@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
-# Decoder M11 development readouts (prereg dec-m11-prereg-2026-10-01.md, "Development readouts"), node E / F, from an
-# exact mirror. Every point is read the same way: v2.dec.infer_dec through m11-launch.sh, one container per panel,
+# Decoder M12 development readouts (prereg dec-m12-prereg-2026-10-01.md, "Development readouts"), node E / F, from an
+# exact mirror. Every point is read the same way: v2.dec.infer_dec through m12-launch.sh, one container per panel,
 # 16,384 tokens, T = 1, image dbe5f32b, the node's <tier>-read Triton cache (tier = the point's prefix: 2b, 08b or
 # 4b, stage 2).
-# Outputs: /data/dev2/runs/dec/m11/lines/<point>/<panel>/<panel>.predictions.jsonl (+ manifest and launch receipt). A
+# Outputs: /data/dev2/runs/dec/m12/lines/<point>/<panel>/<panel>.predictions.jsonl (+ manifest and launch receipt). A
 # panel already read is skipped; a failed read is recorded and not rerun. The caller holds the GPU's chain flock
-# (m11-post.sh, m11-refs.sh), so reads never share a GPU with training.
+# (m12-post.sh, m12-refs.sh), so reads never share a GPU with training.
 #
-#   M11_NODE=e|f m11-lines.sh read <mirror-dir> <gpu> <point> <checkpoint> <source> [panel ...]
+#   M12_NODE=e|f m12-lines.sh read <mirror-dir> <gpu> <point> <checkpoint> <source> [panel ...]
 #       <checkpoint> / <source> are host paths under /data/dev2/runs/dec or /data/dev2/models.
 #       Default panels: dev css-pilot ht-dev2 score5t-dev hs1-dev pn1-dev m10-probes.
-#   M11_NODE=e|f m11-lines.sh parity <mirror-dir> <point> <reference-dir> [panel ...]
+#   M12_NODE=e|f m12-lines.sh parity <mirror-dir> <point> <reference-dir> [panel ...]
 #       answer agreement and maximum probability drift of <point>'s readouts against stored predictions
 #       (<reference-dir>/<panel>/<panel>.predictions.jsonl) -> lines/<point>/parity-<name>.json
 set -u
 MODE=${1:-} SRC=${2:-}
-NODE=${M11_NODE:?set M11_NODE=e or f}
-M=/data/dev2/runs/dec/m11
+NODE=${M12_NODE:?set M12_NODE=e or f}
+M=/data/dev2/runs/dec/m12
 L=$M/lines
 CODE=/data/dev2/src/$SRC/src/training/decision2
-OPS=$CODE/v2/dec/ops/m11
+OPS=$CODE/v2/dec/ops/m12
 mkdir -p "$L"
 log() { echo "$(date -u +%FT%TZ) lines-$NODE $*" | tee -a "$L/OPERATIONS.log"; }
 incontainer() {
@@ -41,7 +41,7 @@ case $MODE in
       exit 1
     fi
     mkdir -p "$(dirname "$lease")"
-    printf 'track=dec-m11\nstatus=busy\npurpose=decoder M11 readouts (%s)\nstart_utc=%s\nexpected_end_utc=%s\n' \
+    printf 'track=dec-m12\nstatus=busy\npurpose=decoder M12 readouts (%s)\nstart_utc=%s\nexpected_end_utc=%s\n' \
       "$POINT" "$(date -u +%FT%TZ)" "$(date -u -d '+60 min' +%FT%TZ)" > "$lease"
     case ${POINT%%-*} in 2b | 08b | 4b) ;; *) log "$POINT: point names start with 2b-, 08b- or 4b-"; exit 2 ;; esac
     ck=$(incontainer "$CK") || exit 2
@@ -53,16 +53,16 @@ case $MODE in
         continue
       fi
       [ -f "/data/dev2/runs/dec/panels/$panel.prompts.jsonl" ] || { log "$POINT $panel: no prompts"; continue; }
-      if M11_NODE=$NODE M11_CACHE=${POINT%%-*}-read bash "$OPS/m11-launch.sh" "lines-$POINT-$panel" "$SRC" "$out" --gpu "$GPU" -- \
+      if M12_NODE=$NODE M12_CACHE=${POINT%%-*}-read bash "$OPS/m12-launch.sh" "lines-$POINT-$panel" "$SRC" "$out" --gpu "$GPU" -- \
         -m v2.dec.infer_dec --checkpoint "$ck" --source-path "$source" --input "/panels/$panel.prompts.jsonl" \
-        --output "/out/$panel.predictions.jsonl" --model-id "decision2-dec-m11-$POINT" --model-revision "$POINT" \
+        --output "/out/$panel.predictions.jsonl" --model-id "decision2-dec-m12-$POINT" --model-revision "$POINT" \
         --max-length 16384; then
         log "$POINT $panel read: $(wc -l < "$out/$panel.predictions.jsonl") items"
       else
         log "$POINT $panel FAILED: $(tail -c 300 "$out.stderr.log" | tr '\n' ' ')"
       fi
     done
-    printf 'track=dec-m11\nstatus=idle\npurpose=decoder M11 (readouts of %s finished)\nstart_utc=%s\nexpected_end_utc=%s\n' \
+    printf 'track=dec-m12\nstatus=idle\npurpose=decoder M12 (readouts of %s finished)\nstart_utc=%s\nexpected_end_utc=%s\n' \
       "$POINT" "$(date -u +%FT%TZ)" "$(date -u -d '+30 min' +%FT%TZ)" > "$lease"
     ;;
   parity)

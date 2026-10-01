@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # 9B M9: one preregistered seed on one M9 GPU: a zero-step run, a one-step run, the preflight_dec gate, and the full
 # run only on PASS (no full run for a --zero-only seed such as B0). A failed stage stops the seed; nothing is rerun.
-# With M9_PREWARM=1 the seed writes status/prewarm.DONE after its one-step run (the 14:30 pre-warm convention: the
-# other seeds wait for it). Outputs under /data/dev2/runs/9b/m9/arms/{pre,gates,full}/<run>.
+# With M9_PREWARM=1 the seed writes status/prewarm.DONE (status/$M9_PREWARM_MARK if set) after its one-step run (the
+# 14:30 pre-warm convention: the other seeds wait for it). Outputs under /data/dev2/runs/9b/m9/arms/{pre,gates,full}/<run>.
 #
 # usage: M9_NODE=c|a arm.sh <run> <gpu> <mirror-dir> <start-path-in-container> [--zero-only] -- <train_dec args>
 set -uo pipefail
@@ -29,7 +29,10 @@ fi
 bash "$L" "$run-one" "$src" "$R/pre/$run-one" --gpu "$gpu" -- -m v2.dec.train_dec "${common[@]}" \
   --max-steps 1 || { log "one-step FAILED"; exit 1; }
 log "one-step done"
-[[ ${M9_PREWARM:-0} == 1 ]] && { date -u +%FT%TZ > "$M/status/prewarm.DONE"; log "pre-warm marker written"; }
+[[ ${M9_PREWARM:-0} == 1 ]] && {
+  date -u +%FT%TZ > "$M/status/${M9_PREWARM_MARK:-prewarm.DONE}"
+  log "pre-warm marker written"
+}
 bash "$L" "$run-gate" "$src" "$R/gates/$run" --gpu "$gpu" -- -m v2.dec.preflight_dec --source-path "$start" \
   --select /data/select.jsonl --zero-run "/runs/m9/arms/pre/$run-zero" --one-run "/runs/m9/arms/pre/$run-one" \
   --output /out/preflight-receipt.json || { log "gate job FAILED"; exit 1; }

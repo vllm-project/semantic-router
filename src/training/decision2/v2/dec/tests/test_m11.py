@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -90,6 +92,17 @@ class RulesTest(unittest.TestCase):
                 (root / "diag" / f"{p}.hs1.json").write_text(
                     json.dumps(hs1(p, ref, spec["fy"], 0.20))
                 )
+                if "ib" in spec:
+                    block = {
+                        "family_macro": 0.6,
+                        "delta_family_macro": spec["ib"],
+                        "paired": {"ci95": [0, 0]},
+                    }
+                    (root / "diag" / f"{p}.ibdev.json").write_text(
+                        json.dumps(
+                            {"reference_name": ref, "ib_dev": block, "transfer": block}
+                        )
+                    )
             out = root / "sel.json"
             args = [
                 "--tier",
@@ -172,6 +185,108 @@ class RulesTest(unittest.TestCase):
         self.assertEqual(reasons["08b-A"], [])
         self.assertTrue(any("top share" in r for r in reasons["08b-B"]))
         self.assertTrue(any(r.startswith("0.8B rule") for r in reasons["08b-C"]))
+
+    def test_4b_breadth_gate_and_order(self):
+        clean = s5([], 0.4, 0.45)
+        base = {"s5": clean, "ht": 0.0, "verdict": "TIE", "ret": 0.0, "fy": 0.2}
+        result = self.run_rules(
+            "4b",
+            {
+                "4b-A": base | {"ib": 0.02},
+                "4b-B": base | {"ib": -0.01},
+                "4b-C": base | {"ib": 0.05},
+                "4b-D": base,
+            },
+            clean,
+        )
+        self.assertEqual(result["finalists"], ["4b-C", "4b-A"])
+        reasons = {r["point"]: r["reasons"] for r in result["points"]}
+        self.assertTrue(
+            any(r.startswith("breadth: IB DEV macro") for r in reasons["4b-B"])
+        )
+        self.assertTrue(
+            any(r.startswith("breadth: no IB DEV") for r in reasons["4b-D"])
+        )
+
+
+class StageTwoDataTest(unittest.TestCase):
+    def test_sample_groups_whole_groups_and_quota(self):
+        sd = load("m11_s2data")
+        rows = [
+            {"family": f, "group_id": f"{f}{g}", "tokens": 10}
+            for f in ("a", "b")
+            for g in range(10)
+            for _ in range(2)
+        ]
+        kept, info = sd.sample_groups(rows, 200, 7)
+        self.assertEqual(info["fraction"], 0.5)
+        self.assertEqual(sum(rows[i]["tokens"] for i in kept), 200)
+        groups = {rows[i]["group_id"] for i in kept}
+        self.assertEqual(len(kept), 2 * len(groups))
+        self.assertEqual({rows[i]["family"] for i in kept}, {"a", "b"})
+        self.assertEqual(kept, sd.sample_groups(rows, 200, 7)[0])
+        self.assertEqual(len(sd.sample_groups(rows, 999, 7)[0]), len(rows))
+
+
+class FormalLibTest(unittest.TestCase):
+    """ops/m6/m6-formal-lib.sh tier_setup: the M6_SMALL_NODE=E|F option (decoder M11) and the unchanged defaults."""
+
+    def setup(self, tier: str, **env: str) -> subprocess.CompletedProcess:
+        lib = HERE / "ops" / "m6" / "m6-formal-lib.sh"
+        script = (
+            f". {lib}; tier_setup; "
+            'echo "$NODE|$IMAGE|$MASTER|$MASTER_SHA|$MASTER_MLX|$SOURCE|${ISOLATE[*]}|$TLABEL|$INCUMBENT|${ENVX[*]}"'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            full = {
+                "PATH": os.environ["PATH"],
+                "S": str(HERE.parents[1]),
+                "TIER": tier,
+                "M6_FORMAL_ROOT": tmp,
+                **env,
+            }
+            return subprocess.run(
+                ["bash", "-c", script], env=full, capture_output=True, text=True
+            )
+
+    def fields(self, tier: str, **env: str) -> list[str]:
+        out = self.setup(tier, **env)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        return out.stdout.strip().split("|")
+
+    def test_small_node_f(self):
+        for tier, label, one in (
+            ("2b", "2B", "Decision-1.0-Sol-2B"),
+            ("08b", "0.8B", "Decision-1.0-Eos-0.8B"),
+        ):
+            node, image, master, pin, mlx, source, isolate, tlabel, _, envx = (
+                self.fields(tier, M6_SMALL_NODE="F", M6_SMALL_MASTER_DIR="/m")
+            )
+            self.assertEqual(
+                (node, pin, isolate, tlabel, envx),
+                ("F", "frozen", "--isolate", label, ""),
+            )
+            self.assertTrue(image.startswith("sha256:dbe5f32b"))
+            self.assertEqual(
+                (master, mlx),
+                (f"/m/cache-frozen-{tier}", f"/m/cache-frozen-{tier}-mlx"),
+            )
+            self.assertTrue(source.startswith(f"/data/dev2/models/{one}/"))
+
+    def test_defaults_unchanged(self):
+        node, image, master, pin, *_ = self.fields("08b")
+        self.assertEqual((node, pin), ("A", "live"))
+        self.assertTrue(master.endswith("formal/m2/m2-E8F-soup-nodeA-triton"))
+        node, _, master, pin, *_ = self.fields("2b")
+        self.assertEqual((node, pin), ("B", "frozen"))
+        self.assertTrue(master.endswith("/cache-frozen-2b"))
+        node, *_ = self.fields("2b", M6_2B_NODE="A")
+        self.assertEqual(node, "A")
+
+    def test_bad_small_node(self):
+        self.assertEqual(
+            self.setup("2b", M6_SMALL_NODE="B", M6_SMALL_MASTER_DIR="/m").returncode, 2
+        )
 
 
 if __name__ == "__main__":
