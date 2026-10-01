@@ -32,7 +32,7 @@ from pathlib import Path
 
 from v2.release import gate
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[5]
 RECORD = Path(__file__).resolve().parents[1]
 BASE_SPEC = ROOT / "v2/release/specs/dev2-9b-product.json"
 SPECS = ROOT / "v2/release/specs"
