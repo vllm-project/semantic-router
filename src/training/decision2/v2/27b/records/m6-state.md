@@ -1,7 +1,7 @@
 # ~27B M6 state (resume file)
 
-Updated: 2026-10-01 23:10 UTC+8 (15:10Z; continuation worker 2 a56025bb ran 10:44–15:15Z and handed off; worker 1
-11741ee2 ran 06:17–10:55Z).
+Updated: 2026-10-01 23:28 UTC+8 (15:28Z; **worker 3 = the coordinator's continuation #2, 0d2e488f, on duty from
+15:12Z**; worker 2 a56025bb ran 10:44–15:15Z and handed off; worker 1 11741ee2 ran 06:17–10:55Z).
 Prereg `m6-prereg-2026-10-01.md` (`90d38aba7`) with amendments 1 (`b74685ddb`), 2 (`35492ac25`) and **3 (`4e4211aee`,
 data lock `7fcbc824c`)**. Mirrors: M6-IB / M6-IB2 seeds, chains and watchers run from **`b74685ddb`**, M6-IBX's from
 **`d8edcf4e1`**, M6-IB2PN's from **`7fcbc824c`** (on node A / B / D); step 0 ran from `20af2e4a1`. Hand-off record for
@@ -214,6 +214,17 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
    results, gist 06, milestone-end cleanup ("Hand-off" above), merge (signed) into integration.
 
 ## Poll log (newest first)
+
+- 15:28Z (worker 3, poll 1 at 15:16Z): all alive (8 containers; node B drivers and the four chains, node A driver,
+  relay and four mlx watchers, node D four drivers and four relays). M6-IB 2,818 / 2,661 (13.2 / 13.9 h; ETA 21:08Z /
+  21:53Z); M6-IB2 2,707 / 2,699 (17.7 / 17.8 h; ETA 01:38Z / 01:44Z); M6-IBX 2,411 / 2,382 (13.9 / 14.0 h; ETA 22:29Z /
+  22:36Z); M6-IB2PN 1,330 / 1,301 (18.9 / 18.8 h of cap 22; ETA 06:28Z / 06:27Z). Node D disk 572 GB. Integration
+  merged (fast-forward to `bc1720c14`). Inputs since worker 2: the 27B forward-budget fix revision **has landed**
+  (DEV2.0-27B `main` = `09280791`, COORDINATION 21:25), so §4 of the hand-off builds on it; the custodian's C1
+  content recheck (3c7679b0) is running for IB1-r3 + IB2 + PN1-r2 (no record yet); **the finalists' private Index
+  runs are now this track's job** on node D GPU4–7 with a separate eval allowance of ≤ 12 GPU-h (outside M6's 140;
+  IX1's harness; values private); successor items 1–8 have no exceptions (COORDINATION 23:15). Node D GPU5 holds the
+  0.8B fast-track's IX1 parity gate since 15:19Z (their lease); GPU4 / 6 / 7 idle.
 
 - 15:05Z (poll at 15:03Z; worker 2's last): all alive. M6-IB 2,737 / 2,582 (13.0 / 13.7 h; s2 at 2544 .9115, BEST =
   2544); M6-IB2 2,626 / 2,617 (17.6 / 17.6 h; at 2481 .8931 / .8944, BEST = 2481 both); M6-IBX 2,333 / 2,303 (13.7 /
