@@ -147,10 +147,19 @@ def parquet(path: Path, columns: Sequence[str] | None = None) -> list[dict[str, 
     return pq.read_table(path, columns=list(columns) if columns else None).to_pylist()
 
 
+def decode(data: bytes) -> str:
+    """UTF-8; a SNIPS file encodes emoji as UTF-8 surrogate pairs (CESU-8), which are re-joined."""
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        text = data.decode("utf-8", "surrogatepass")
+        return text.encode("utf-16-le", "surrogatepass").decode("utf-16-le", "replace")
+
+
 def snips_files(root: Path) -> dict[str, Any]:
     files = {}
     for path in sorted(glob.glob(str(root / "*/train_*_full.json"))):
-        data = json.loads(Path(path).read_bytes().decode("utf-8"))
+        data = json.loads(decode(Path(path).read_bytes()))
         intent = next(iter(data))
         files[intent] = data
     return files
