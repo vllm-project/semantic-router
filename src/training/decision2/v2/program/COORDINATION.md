@@ -205,6 +205,68 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 23:40 — **M13 (c473a3b2): the 4B finalist `4b-LHA10SD` passes every development gate; formal is
+  collecting. 2B / 0.8B are scoring. Continuation resumed.**
+  - **`4b-LHA10SD`** (LH + 10% IB additive + **typed-row self-distillation** from LH), vs LH:
+    - typed T .867 vs .868 (choice / Noul / Score 708 / 307 / 372), all floors hold;
+    - HT-DEV v2 −.003 tie; retention −.022 [−.047, +.002];
+    - IB transfer +.046 [+.034, +.058]; false-yes .202 vs .199.
+  - **Self-distillation on typed rows fixes the typed-head regression** that additive breadth caused in M12, while
+    keeping the breadth gain. Use it as the default way to add breadth to a released recipe.
+  - **`4b-LHA5`** fails: Noul floor 266 < 278, `rule_precedence`, and retention −.033.
+  - **Formal false start:** relative readout paths stopped it at the input check; nothing ran. Amendment 1
+    (`6c1236f18`) switched to absolute paths, with the same checkpoints and hashes.
+  - **Next:** score the 4B formal (items 1–7 vs LH 67.34); 2B `2b-RASD` and 0.8B `08b-RASD` / `08b-RAAG` rules; formal
+    for passers; hand-offs citing the custodian's C1 recheck; a private Index.
+
+- 2026-10-01 23:20 — **27B M6: eight seeds training (G5 hedge M6-IB2PN added); continuation #2 (0d2e488f); eval
+  custodian C1 content recheck (3c7679b0) launched for all IB-trained tracks.**
+  - **Training ends (UTC):** M6-IB ≈ 21:05 / 21:45, M6-IBX ≈ 22:35, M6-IB2 ≈ 01:40 Oct 2, M6-IB2PN ≈ 06:20 Oct 2. Each
+    chain runs to verdicts unattended (≈ 1–2 h after).
+  - **M6-IB2PN** (amendment 3) = M6-IB2 + PN1-r2 TRAIN.
+    - PN1H has 4,361 rows after dropping 3 groups near Index rows. It is disjoint from PN1 dev (G5's slice).
+    - **Caveat:** PN1 dev shares constructions with PN1 train, so formal item 4 is the real test. A reported-only es / fr
+      yes-bias check was added (it detects L128's bias).
+    - Cap 22 GPU-h per seed for this arm only.
+  - **Budget:** ≈ 49 of 140 GPU-h used, ≈ 134 projected. **The finalists' private Index runs use a separate eval
+    allowance (≤ 12 GPU-h) on node D GPU4–7.**
+  - **Correction for the 27B track:** the 27B fix revision **`09280791` has landed**; the successor builds on it.
+  - **C1 content recheck (custodian, 3c7679b0).** It covers IB1-r3 + IB2 + PN1-r2 once for every track (27B M6, 9B
+    M9 stage 3, M13 / M14). The record goes under `v2/eval/records/`, and item 8 is allowed only for zero exposure under
+    the rule. IB3 gets a repeat check when it lands.
+  - **Deviations:** merge `d96250da6` is unsigned (before the reminder). One state commit came 64 min after the
+    previous one (worker alive).
+
+- 2026-10-01 23:15 — **0.8B fast-track (1afc17e8): `08b-RA` FAILED formal (items 1, 4, 6(b)); DEV2.0-0.8B stays
+  `4afea305`.** Records merged at `1ecff4497`; gist 04; 0.21 GPU-h.
+  - **Item 1:** v3 53.10 vs 50.236, +2.87 [−2.87, +4.58]; vs the node-E re-collection of the release (50.263),
+    +2.84 [−2.92, +4.49].
+  - **Item 4:** mlx-diag Choice + Noul −.0136 [−.0256, −.0024].
+  - **Item 6(b)** fails; items 2 (human transfer +.073 [−.031, +.098]), 3, 5 (vs Eos +10.56), 6(a) and 7 (public 231
+    166 vs 156) pass.
+  - **The development family miss (`attribute_gate`) appeared formally as a typed-choice loss** (483 vs 529 correct)
+    and a multilingual drop. **Lesson: the development family floors are predictive. No further near-miss
+    exceptions.**
+  - A private Index diagnostic of `08b-RA` (not releasable) is running, to size the breadth effect at 0.8B and guide
+    the M13 / M14 choice-head arms.
+
+- 2026-10-01 22:45 — **9B M9: stage 2 no finalist; stage 3 K-a13IB previews as passing every development gate; a
+  continuation follows the official rules → GO → formal → release.**
+  - **Stage 2.** L9IB / L9IBX learn the IB families but fail HT-DEV v2 (−.021 / −.022 FLAG) and the yes-bias guards.
+    IB on the from-base adapter *raises* the near-miss yes-bias (+.074 vs L9).
+  - **Stage 3** (amendment 3 `787abdc54`): K-a13's exact recipe with part of x60 swapped for IB1-r3 + IB2. The IB
+    share is 16.8%; the IBX ablation is 12.4%.
+    - The K-a13IB preview (not the rules output) passes all seven gates: typed .934 vs .925, HT-DEV v2 tie, PN1 yes-bias
+      −.015 (better), hs1 false-yes .134 vs .152, IB DEV +.040 / +.081, retention unchanged.
+    - **Item-1 risk:** the typed gain is small.
+    - The official rules land ≈ 16:15Z. A lock + GO is needed for formal.
+  - **Lesson:** at 9B the proven K-a13 recipe (with ⅓ interpolation back to Lux) absorbs breadth without the yes-bias.
+    The from-base adapter does not.
+  - **Continuation (launched):** rules → GO → formal → items 1–7 → C1 recheck + item 8 → release on `5de3f9ed` →
+    private Index.
+  - **Deviation:** merge `135e7c523` is unsigned (DCO). History is not rewritten; **all workers must sign merges
+    with `git merge --signoff`**, as well as using `git commit -s`.
+
 - 2026-10-01 22:35 — **User directive (22:20): fix the 0.8B Index regression vs 1.0 first; 9B / 2B gains are too
   small; 4B / 27B ranks are not good enough; use all compute in parallel to reach the same-size Pareto frontier.**
   - **Coordinator exception (recorded before any new result): `08b-RA` (M12) gets ONE formal attempt.**

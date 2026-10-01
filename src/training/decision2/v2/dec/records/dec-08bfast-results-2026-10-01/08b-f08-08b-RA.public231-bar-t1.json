@@ -1,0 +1,153 @@
+{
+  "ci95": {
+    "high": 21.0,
+    "low": -1.0
+  },
+  "delta": 10,
+  "discordant": {
+    "left_only": 21,
+    "right_only": 11
+  },
+  "families": {
+    "adequacy": {
+      "items": 12,
+      "left": 7,
+      "right": 9
+    },
+    "adversarial": {
+      "items": 6,
+      "left": 6,
+      "right": 5
+    },
+    "ambiguous": {
+      "items": 7,
+      "left": 3,
+      "right": 2
+    },
+    "extraction": {
+      "items": 24,
+      "left": 24,
+      "right": 24
+    },
+    "fact": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "intent": {
+      "items": 24,
+      "left": 23,
+      "right": 21
+    },
+    "judge_hard": {
+      "items": 17,
+      "left": 8,
+      "right": 5
+    },
+    "long_policy": {
+      "items": 19,
+      "left": 8,
+      "right": 6
+    },
+    "multi_hop": {
+      "items": 18,
+      "left": 7,
+      "right": 6
+    },
+    "ordinal": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "policy": {
+      "items": 12,
+      "left": 11,
+      "right": 10
+    },
+    "probability": {
+      "items": 10,
+      "left": 4,
+      "right": 4
+    },
+    "routing": {
+      "items": 12,
+      "left": 11,
+      "right": 11
+    },
+    "routing_hard": {
+      "items": 5,
+      "left": 5,
+      "right": 4
+    },
+    "temporal_numeric": {
+      "items": 15,
+      "left": 5,
+      "right": 4
+    },
+    "tool_selection": {
+      "items": 12,
+      "left": 12,
+      "right": 12
+    },
+    "tradeoff": {
+      "items": 6,
+      "left": 3,
+      "right": 5
+    },
+    "trap": {
+      "items": 8,
+      "left": 5,
+      "right": 4
+    }
+  },
+  "items": 231,
+  "label": "post-key same-panel",
+  "left_correct": 166,
+  "mcnemar_exact_p": 0.11018416518345475,
+  "names": {
+    "left": "f08-08b-RA",
+    "right": "bar-t1"
+  },
+  "right_correct": 156,
+  "rule": "REGRESSION if left − right < 0 items and the exact two-sided McNemar p < 0.05",
+  "runs": {
+    "left": "/data/dev2/runs/dec/formal/f08/f08-08b-RA",
+    "right": "/data/dev2/runs/release/dev2-0p8b-t1-derived"
+  },
+  "schema": "dev2-gate-public231/1",
+  "tiers": {
+    "easy": {
+      "items": 48,
+      "left": 48,
+      "right": 48
+    },
+    "hard": {
+      "items": 111,
+      "left": 54,
+      "right": 45
+    },
+    "standard": {
+      "items": 72,
+      "left": 64,
+      "right": 63
+    }
+  },
+  "types": {
+    "choice": {
+      "items": 139,
+      "left": 102,
+      "right": 97
+    },
+    "noul": {
+      "items": 74,
+      "left": 50,
+      "right": 46
+    },
+    "score": {
+      "items": 18,
+      "left": 14,
+      "right": 13
+    }
+  },
+  "verdict": "OK"
+}
