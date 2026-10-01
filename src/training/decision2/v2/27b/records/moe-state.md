@@ -112,6 +112,12 @@ Running full attempts have no receipt until they end: add (now − start) for ea
 
 ## Poll log (newest first)
 
+- 07:45Z: MOE-Git-s2 update 3,296; SELECT at 3,122 .811 (BEST stays 2,676, .822); ends ≈ 08:27Z. Chains and
+  watchers alive. **Formal smoke path check** (the chain's only GPU stage never run on an MoE checkpoint):
+  `moe-formal.sh b 7 … smoke` from the chain's mirror `eacb6b85c` on PC-Git-s1-c892 with its T = 1 package
+  calibration: typed FINAL / CSS15 / public 231 × 8 items, exit 0, 0.069 GPU-h; moved to
+  `pathcheck/formal/PC-Git-s1-c892-smoke` (tests only). Node B GPU6's lease was released by continuation #1
+  (`owner.released-moe-20261001T0645Z`); this track does not use it. Path checks 0.196 GPU-h in total.
 - 07:32Z: MOE-Git-s2 update 3,235; ends ≈ 08:27Z. Both chains alive. **Memory finding (path check, synthetic rows,
   rank-32 package):** the FP32-resident native path fits 16 questions × 16K tokens (257K padded tokens, 27 s) but
   not 20 × 16K or 32 × 16K on one MI325X, and the kit runner halts a shard on any device error. Request-size scan of
