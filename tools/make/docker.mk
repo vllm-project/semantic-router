@@ -12,12 +12,12 @@ PREBUILT_RUNTIME_IMAGES ?= 0
 #
 # Release channels:
 #   DOCKER_TAG=latest              (default) most recent build pushed to main
-#   DOCKER_TAG=v0.3.0              specific immutable release tag — recommended for production
+#   DOCKER_TAG=v0.4.0              specific immutable release tag — recommended for production
 #   DOCKER_TAG=nightly-20260115    nightly build from a specific date
 #
 # Examples:
-#   make docker-build-extproc DOCKER_TAG=v0.3.0
-#   make docker-pull-release  DOCKER_TAG=v0.3.0
+#   make docker-build-extproc DOCKER_TAG=v0.4.0
+#   make docker-pull-release  DOCKER_TAG=v0.4.0
 # ────────────────────────────────────────────────────────────────────────────
 DOCKER_REGISTRY ?= ghcr.io/vllm-project/semantic-router
 DOCKER_TAG ?= latest
@@ -137,7 +137,7 @@ docker-run-provider-mocker: docker-build-provider-mocker ## Run the shared provi
 		-e PROVIDER_MOCKER_MODEL="$(PROVIDER_MOCKER_MODEL)" "$(PROVIDER_MOCKER_IMAGE)"
 
 # Pull a specific release of all production images
-# Usage: make docker-pull-release DOCKER_TAG=v0.3.0
+# Usage: make docker-pull-release DOCKER_TAG=v0.4.0
 docker-pull-release: ## Pull all production images at a specific DOCKER_TAG (default: latest)
 docker-pull-release:
 	@$(LOG_TARGET)
@@ -222,7 +222,7 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 ##@ vLLM-SR (Semantic Router CLI)
 
 # vLLM-SR specific variables — image tags default to DOCKER_TAG so that a
-# single `DOCKER_TAG=v0.3.0` on the command line pins every image at once.
+# single `DOCKER_TAG=v0.4.0` on the command line pins every image at once.
 VLLM_SR_IMAGE ?= $(DOCKER_REGISTRY)/vllm-sr:$(DOCKER_TAG)
 VLLM_SR_IMAGE_ROCM ?= $(DOCKER_REGISTRY)/vllm-sr-rocm:$(DOCKER_TAG)
 VLLM_SR_IMAGE_CUDA ?= $(DOCKER_REGISTRY)/vllm-sr-cuda:$(DOCKER_TAG)
@@ -336,6 +336,7 @@ VELA_OMNI_VARIANTS ?= nano
 VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=$(VLLM_SR_TARGETARCH) --build-arg BUILDPLATFORM=$(VLLM_SR_BUILDPLATFORM) --build-arg IMAGE_REGISTRY=$(IMAGE_REGISTRY)
 # Minimum GPU architecture the NVIDIA image is compiled for; unset keeps the
 # Dockerfile default.
+CUDA_COMPUTE_CAP ?=
 ifneq ($(CUDA_COMPUTE_CAP),)
 VLLM_SR_BUILD_ARGS += --build-arg CUDA_COMPUTE_CAP=$(CUDA_COMPUTE_CAP)
 endif
@@ -437,7 +438,7 @@ vllm-sr-dev:
 	@echo "=========================================="
 	@echo ""
 	@echo "Next steps:"
-	@echo "  Start service: cd src/vllm-sr && vllm-sr serve --config config.yaml"
+	@echo "  Start service: VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) VLLM_SR_ROUTER_IMAGE=$(VLLM_SR_ROUTER_IMAGE) VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) vllm-sr serve --image-pull-policy never$(if $(VLLM_SR_PLATFORM_NORMALIZED), --platform $(VLLM_SR_PLATFORM_NORMALIZED))"
 	@echo "  Or use:        make vllm-sr-start"
 	@echo ""
 
@@ -537,58 +538,7 @@ vllm-sr-test: vllm-sr-install-cli
 	@$(LOG_TARGET)
 	@"$(AGENT_PYTHON)" -m pip install -e "src/vllm-sr[bench]"
 	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" run_cli_tests.py --verbose
-	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q \
-		src/vllm-sr/tests/test_container_images.py \
-		src/vllm-sr/tests/test_container_log_spool.py \
-		src/vllm-sr/tests/test_dashboard_dockerfile_surface.py \
-		src/vllm-sr/tests/test_embedding_api_config.py \
-		src/vllm-sr/tests/test_envoy_identity_and_local_bindings.py \
-		src/vllm-sr/tests/test_evaluation_cli.py \
-		src/vllm-sr/tests/test_sr_bench.py \
-		src/vllm-sr/tests/test_sr_bench_accounting.py \
-		src/vllm-sr/tests/test_sr_bench_activity.py \
-		src/vllm-sr/tests/test_sr_bench_client.py \
-		src/vllm-sr/tests/test_sr_bench_collection.py \
-		src/vllm-sr/tests/test_sr_bench_datasets.py \
-		src/vllm-sr/tests/test_sr_bench_dataset_validation.py \
-		src/vllm-sr/tests/test_sr_bench_dataset_fingerprints.py \
-		src/vllm-sr/tests/test_sr_bench_large_datasets.py \
-		src/vllm-sr/tests/test_sr_bench_large_plans.py \
-		src/vllm-sr/tests/test_sr_bench_experiments.py \
-		src/vllm-sr/tests/test_sr_bench_experiment_deletion.py \
-		src/vllm-sr/tests/test_sr_bench_experiment_admin.py \
-		src/vllm-sr/tests/test_routing_preview.py \
-		src/vllm-sr/tests/test_sr_bench_grading.py \
-		src/vllm-sr/tests/test_sr_bench_harness.py \
-		src/vllm-sr/tests/test_sr_bench_history_exclusions.py \
-		src/vllm-sr/tests/test_sr_bench_bridge.py \
-		src/vllm-sr/tests/test_sr_bench_native_output.py \
-		src/vllm-sr/tests/test_sr_bench_plan_hash.py \
-		src/vllm-sr/tests/test_sr_bench_preparation_cli.py \
-		src/vllm-sr/tests/test_sr_bench_preparation_collections.py \
-		src/vllm-sr/tests/test_sr_bench_preparation_sources.py \
-		src/vllm-sr/tests/test_sr_bench_preparations.py \
-		src/vllm-sr/tests/test_sr_bench_recovery.py \
-		src/vllm-sr/tests/test_sr_bench_replay.py \
-		src/vllm-sr/tests/test_sr_bench_reporting.py \
-		src/vllm-sr/tests/test_sr_bench_run_options.py \
-		src/vllm-sr/tests/test_sr_bench_setup.py \
-		src/vllm-sr/tests/test_sr_bench_snapshots.py \
-		src/vllm-sr/tests/test_sr_bench_sources.py \
-		src/vllm-sr/tests/test_sr_bench_runtime.py \
-		src/vllm-sr/tests/test_sr_bench_shutdown.py \
-		src/vllm-sr/tests/test_install_package_resolution.py \
-		src/vllm-sr/tests/test_install_runtime_behavior.py \
-		src/vllm-sr/tests/test_install_script_surface.py \
-		src/vllm-sr/tests/test_model_binding_contract.py \
-		src/vllm-sr/tests/test_recipe_builtin.py \
-		src/vllm-sr/tests/test_reasoning_controls.py \
-		src/vllm-sr/tests/test_route_command.py \
-		src/vllm-sr/tests/test_runtime_lifecycle.py \
-		src/vllm-sr/tests/test_runtime_observability.py \
-		src/vllm-sr/tests/test_setup_bootstrap.py \
-		src/vllm-sr/tests/test_split_runtime_backend_provisioning.py \
-		src/vllm-sr/tests/test_split_runtime_stack.py
+	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q src/vllm-sr/tests
 
 vllm-sr-test-integration: ## Run CLI integration tests (requires local runtime images)
 vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli docker-build-provider-mocker

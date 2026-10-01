@@ -133,29 +133,36 @@ vllm-sr serve --config config.yaml
 ```
 
 To run supported Router-side local embeddings and classifiers on CUDA, use
-`--platform nvidia`. The CLI selects and pulls the published
-`ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest` image by default:
+`--platform nvidia`. A stable CLI selects the matching published release image
+(for example, CLI `0.4.0` uses `vllm-sr-cuda:v0.4.0`). Development CLI builds
+use `:latest` unless an image is specified explicitly:
 
 ```bash
 vllm-sr config validate --config config.yaml
 vllm-sr serve --platform nvidia --config config.yaml
 ```
 
-For a source checkout, build the maintained CUDA image first. The
-`ifnotpresent` policy preserves that local build while still allowing the CLI
-to obtain missing companion images:
+For a source checkout, build the maintained CUDA image first and explicitly
+select its `latest` tag. An editable CLI installation with a stable package
+version otherwise selects the release tag. With the image override,
+`ifnotpresent` reuses the local build while allowing the CLI to obtain missing
+companion images:
 
 ```bash
 VLLM_SR_PLATFORM=nvidia make vllm-sr-build
-vllm-sr serve \
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest \
+  vllm-sr serve \
   --platform nvidia \
   --config config.yaml \
   --image-pull-policy ifnotpresent
 ```
 
-Pin a release tag or digest in production. If the Router shares a GPU with
-vLLM, measure memory and latency under representative concurrency; moving
-small, batch-one signal models to CUDA does not always improve end-to-end
+If you override the build tag or registry, set `VLLM_SR_IMAGE` to the actual
+built image and use `VLLM_SR_DASHBOARD_IMAGE` for a custom companion image.
+
+Pin a digest when deployments require an immutable image identity. If the
+Router shares a GPU with vLLM, measure memory and latency under representative
+concurrency; moving small, batch-one signal models to CUDA does not always improve end-to-end
 latency.
 
 ## Verify the routed path

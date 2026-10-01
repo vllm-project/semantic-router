@@ -48,6 +48,19 @@ vllm-sr serve --config config.yaml --image-pull-policy never
 Use `ifnotpresent` when local images should be reused but missing ones may still
 be pulled.
 
+For images built by `make vllm-sr-dev`, explicitly select the local tag because
+an editable CLI with a stable package version defaults to release images:
+
+```bash
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr:latest \
+  vllm-sr serve --config config.yaml --image-pull-policy never
+```
+
+For AMD or NVIDIA builds, select the corresponding `vllm-sr-rocm` or
+`vllm-sr-cuda` image and pass `--platform amd` or `--platform nvidia`. Use the
+actual tag and registry if you customized the build; see the
+[Development Guide](../community/development) for the full local workflow.
+
 When you build the project from source, configure the package manager and
 container runtime through your organization's approved proxy or mirror. Avoid
 checking regional endpoints, credentials, or local proxy addresses into the

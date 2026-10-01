@@ -67,10 +67,13 @@ func TestProtocolCodecE2EMatrixProfilesAreClosed(t *testing.T) {
 			"protocol-codec-chat-backend-streaming-matrix",
 			"protocol-codec-responses-backend-buffered-matrix",
 			"protocol-codec-responses-backend-streaming-matrix",
+			"protocol-codec-chat-backend-agent-client-replay",
+			"protocol-codec-responses-backend-agent-client-replay",
 		},
 		"provider-protocols": {
 			"protocol-codec-anthropic-backend-buffered-matrix",
 			"protocol-codec-anthropic-backend-streaming-matrix",
+			"protocol-codec-anthropic-backend-agent-client-replay",
 		},
 	}
 

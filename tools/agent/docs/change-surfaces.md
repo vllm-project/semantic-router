@@ -180,9 +180,11 @@ This document defines the project-level surfaces used by skills, reports, and va
 
 ## Local runtime and E2E
 
-- The CLI's local-image flow is the only local runtime path:
-  `make vllm-sr-dev`, then `vllm-sr serve --image-pull-policy never` with the
-  selected platform.
+- The CLI's local-image flow is the only local runtime path. Follow the
+  build-and-serve commands in [Environments](environments.md#local-runtime),
+  including the explicit image override for the selected platform. A stable
+  package version still defaults to release-tagged images in an editable
+  installation.
 - E2E profiles live under `e2e/profiles/**` and are run explicitly with
   `make verify PROFILE=<profile>` or selected by the coarse CI registry.
 - CI classification lives in `.github/workflows/ci-changes.yml` and

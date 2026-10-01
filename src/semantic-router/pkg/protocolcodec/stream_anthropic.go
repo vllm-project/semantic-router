@@ -40,13 +40,14 @@ func (AnthropicMessagesCodec) NewEncoder(context llmprotocol.StreamContext, poli
 }
 
 type anthropicEventWire struct {
-	Type         string                          `json:"type"`
-	Message      *anthropicResponseWire          `json:"message,omitempty"`
-	Index        *int                            `json:"index,omitempty"`
-	ContentBlock *anthropicContentWire           `json:"content_block,omitempty"`
-	Delta        *anthropicDeltaWire             `json:"delta,omitempty"`
-	Usage        *anthropicMessageDeltaUsageWire `json:"usage,omitempty"`
-	Error        *anthropicErrorWire             `json:"error,omitempty"`
+	Type              string                          `json:"type"`
+	Message           *anthropicResponseWire          `json:"message,omitempty"`
+	Index             *int                            `json:"index,omitempty"`
+	ContentBlock      *anthropicContentWire           `json:"content_block,omitempty"`
+	Delta             *anthropicDeltaWire             `json:"delta,omitempty"`
+	Usage             *anthropicMessageDeltaUsageWire `json:"usage,omitempty"`
+	Error             *anthropicErrorWire             `json:"error,omitempty"`
+	ContextManagement json.RawMessage                 `json:"context_management,omitempty"`
 }
 
 type anthropicMessageDeltaUsageWire struct {
@@ -56,19 +57,21 @@ type anthropicMessageDeltaUsageWire struct {
 	OutputTokens             int64                           `json:"output_tokens"`
 	OutputTokensDetails      anthropicOutputUsageDetailsWire `json:"output_tokens_details"`
 	ServerToolUse            anthropicServerToolUsageWire    `json:"server_tool_use"`
+	Iterations               []json.RawMessage               `json:"iterations,omitempty"`
 }
 
 type anthropicDeltaWire struct {
-	Type         string          `json:"type"`
-	Text         string          `json:"text,omitempty"`
-	Thinking     string          `json:"thinking,omitempty"`
-	PartialJSON  string          `json:"partial_json,omitempty"`
-	Signature    string          `json:"signature,omitempty"`
-	StopReason   *string         `json:"stop_reason,omitempty"`
-	StopSequence *string         `json:"stop_sequence,omitempty"`
-	Container    json.RawMessage `json:"container,omitempty"`
-	StopDetails  json.RawMessage `json:"stop_details,omitempty"`
-	Citation     json.RawMessage `json:"citation,omitempty"`
+	Type            string          `json:"type"`
+	Text            string          `json:"text,omitempty"`
+	Thinking        string          `json:"thinking,omitempty"`
+	PartialJSON     string          `json:"partial_json,omitempty"`
+	Signature       string          `json:"signature,omitempty"`
+	StopReason      *string         `json:"stop_reason,omitempty"`
+	StopSequence    *string         `json:"stop_sequence,omitempty"`
+	Container       json.RawMessage `json:"container,omitempty"`
+	StopDetails     json.RawMessage `json:"stop_details,omitempty"`
+	Citation        json.RawMessage `json:"citation,omitempty"`
+	EstimatedTokens *int64          `json:"estimated_tokens,omitempty"`
 }
 
 func (wire anthropicDeltaWire) MarshalJSON() ([]byte, error) {
@@ -175,7 +178,16 @@ func (decoder *anthropicStreamDecoder) decodeEvent(
 ) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	switch wire.Type {
 	case "message_start":
-		return decoder.emitAnthropicEvent(decodeAnthropicMessageStart(wire))
+		events, diagnostics, err := decoder.emitAnthropicEvent(decodeAnthropicMessageStart(wire))
+		if wire.Message != nil && len(wire.Message.Diagnostics) > 0 && !bytes.Equal(bytes.TrimSpace(wire.Message.Diagnostics), []byte("null")) {
+			appendProviderFieldOmission(&diagnostics, decoder.policy, llmprotocol.AnthropicMessagesV1,
+				"stream.message.diagnostics", "prompt-cache miss diagnostics have no neutral representation")
+		}
+		if wire.Message != nil && wire.Message.Usage != nil && len(wire.Message.Usage.Iterations) > 0 {
+			appendProviderFieldOmission(&diagnostics, decoder.policy, llmprotocol.AnthropicMessagesV1,
+				"stream.message.usage.iterations", "per-iteration usage has no neutral accounting bucket")
+		}
+		return events, diagnostics, err
 	case "content_block_start":
 		return decoder.emitDecodedAnthropicEvent(decodeAnthropicContentStart(wire))
 	case "content_block_delta":
@@ -235,8 +247,16 @@ func (decoder *anthropicStreamDecoder) decodeAnthropicMessageDelta(
 		return nil, nil, err
 	}
 	diagnostics := decoder.anthropicMessageDeltaDiagnostics(wire.Delta)
+	if len(wire.ContextManagement) > 0 && !bytes.Equal(bytes.TrimSpace(wire.ContextManagement), []byte("null")) {
+		appendProviderFieldOmission(&diagnostics, decoder.policy, llmprotocol.AnthropicMessagesV1,
+			"stream.context_management", "applied context edits have no protocol-neutral representation")
+	}
 	if wire.Usage == nil {
 		return nil, diagnostics, nil
+	}
+	if len(wire.Usage.Iterations) > 0 {
+		appendProviderFieldOmission(&diagnostics, decoder.policy, llmprotocol.AnthropicMessagesV1,
+			"stream.usage.iterations", "per-iteration usage has no neutral accounting bucket")
 	}
 	usage := decodeAnthropicMessageDeltaUsage(*wire.Usage)
 	events, eventDiagnostics, err := decoder.emitAnthropicEvent(llmprotocol.Event{Type: llmprotocol.EventUsageUpdated, Usage: &usage})
@@ -347,6 +367,9 @@ func decodeAnthropicContentDelta(wire anthropicEventWire) (llmprotocol.Event, er
 	case "text_delta":
 		event.Type, event.Delta, event.Content = llmprotocol.EventOutputTextDelta, wire.Delta.Text, &llmprotocol.Content{Kind: llmprotocol.ContentText, Text: wire.Delta.Text}
 	case "thinking_delta":
+		if wire.Delta.EstimatedTokens != nil && *wire.Delta.EstimatedTokens < 0 {
+			return llmprotocol.Event{}, invalidProviderResponse("invalid_estimated_tokens", "thinking token estimate must be non-negative")
+		}
 		event.Type, event.Delta, event.Content = llmprotocol.EventReasoningDelta, wire.Delta.Thinking, &llmprotocol.Content{
 			Kind: llmprotocol.ContentReasoning, Text: wire.Delta.Thinking,
 			Reasoning: llmprotocol.ReasoningScopeText,

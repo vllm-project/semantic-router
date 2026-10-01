@@ -217,6 +217,46 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
                 ["standalone", "built-in-latest"],
             )
 
+    def test_default_cpu_plan_fans_out_each_eligible_recipe_by_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            args = argparse.Namespace(
+                recipes_root=conformance.DEFAULT_RECIPE_ROOT,
+                output_dir=Path(directory),
+                shards=None,
+                github_output=None,
+            )
+            output = io.StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(conformance.command_plan_all(args), 0)
+            matrix = json.loads(output.getvalue())["include"]
+            inventories = conformance.cpu_sources(args)
+            expected = {
+                (item.source.name, recipe.name): (
+                    sources.repo_relative_path(
+                        item.source.recipes_root, conformance.REPO_ROOT
+                    ),
+                    item.source.report_subdir.as_posix(),
+                    recipe.variants,
+                )
+                for item in inventories
+                for recipe in item.recipes
+            }
+
+            self.assertEqual(len(matrix), len(expected))
+            self.assertEqual(
+                {(row["source"], row["recipes"]) for row in matrix},
+                set(expected),
+            )
+            for row in matrix:
+                key = (row["source"], row["recipes"])
+                self.assertEqual(row["shard"], f"{row['source']}-{row['recipes']}")
+                self.assertEqual(
+                    (row["recipes_root"], row["report_dir"], row["variants"]),
+                    expected[key],
+                )
+            self.assertIn(("built-in-latest", "mom-v1"), expected)
+            self.assertNotIn(("standalone", "vela-amd"), expected)
+
     def test_eval_rejects_zero_or_partial_probe_execution(self):
         for count in (0, 314, 315):
             with self.subTest(count=count), tempfile.TemporaryDirectory() as directory:

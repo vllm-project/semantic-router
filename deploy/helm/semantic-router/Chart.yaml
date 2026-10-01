@@ -7,7 +7,7 @@ version: 0.2.0
 # released image rather than the mutable main-channel tag. The publication
 # pipeline overrides it with the main, nightly, or release image tag attached
 # to the packaged chart.
-appVersion: "v0.3.0"
+appVersion: "v0.4.0"
 keywords:
   - semantic-router
   - llm

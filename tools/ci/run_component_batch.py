@@ -20,28 +20,30 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def validate_batch(batch: dict) -> None:
     catalog = load_catalog()
-    worker = catalog["component_workers"].get(batch.get("id"))
-    if not worker or any(batch.get(key) != value for key, value in worker.items()):
+    worker = catalog["component_workers"].get(batch.get("worker"))
+    if not worker or batch.get("go") != worker["go"]:
         raise ValueError("component batch has an unknown worker contract")
     records = batch.get("verifications", [])
-    if not records or len({row["id"] for row in records}) != len(records):
-        raise ValueError("component batch must contain distinct verification IDs")
-    for row in records:
-        declared = catalog["verifications"].get(row["id"], {})
-        if (
-            declared.get("executor") != "tools"
-            or declared.get("worker") != batch["id"]
-            or row.get("executor") != "tools"
-            or row.get("worker") != batch["id"]
-            or row.get("target") != declared.get("target")
-            or row.get("contract_sha256")
-            != digest(
-                {key: value for key, value in row.items() if key != "contract_sha256"}
-            )
-        ):
-            raise ValueError(
-                f"component contract differs from its planned worker: {row['id']}"
-            )
+    if len(records) != 1:
+        raise ValueError("component worker requires exactly one verification")
+    row = records[0]
+    declared = catalog["verifications"].get(row["id"], {})
+    if (
+        batch.get("id") != row["id"]
+        or batch.get("display_name") != row["display_name"]
+        or declared.get("executor") != "tools"
+        or declared.get("worker") != batch["worker"]
+        or row.get("executor") != "tools"
+        or row.get("worker") != batch["worker"]
+        or row.get("target") != declared.get("target")
+        or row.get("contract_sha256")
+        != digest(
+            {key: value for key, value in row.items() if key != "contract_sha256"}
+        )
+    ):
+        raise ValueError(
+            f"component contract differs from its planned worker: {row['id']}"
+        )
 
 
 def commands(target: str, output: Path) -> list[list[str]]:

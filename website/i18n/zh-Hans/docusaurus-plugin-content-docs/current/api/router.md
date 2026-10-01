@@ -21,9 +21,13 @@ Router 数据面通过 Envoy 监听器接收模型请求。在标准本地栈中
 | `DELETE` | `/v1/responses/{id}` | OpenAI Responses | 删除已存储的 response |
 | `GET` | `/v1/responses/{id}/input_items` | OpenAI Responses | 读取已存储的 input items |
 | `POST` | `/v1/messages` | Anthropic Messages | 当所选后端使用其他协议时，Router 会做转换 |
+| `POST` | `/openai/deployments/{deployment}/chat/completions` | Azure OpenAI Chat Completions | URL 中的 deployment 是 Router 模型名；接受 `api-version` |
+| `POST` | `/openai/responses` | Azure OpenAI Responses | 接受带日期的 `api-version`；模型名在请求体中，需要启用 Responses 服务 |
+| `POST` | `/openai/v1/responses` | Azure OpenAI Responses | 模型名在请求体中，需要启用 Responses 服务 |
+| `POST` | `/openai/v1/chat/completions` | Azure OpenAI Chat Completions | 模型名在请求体中 |
 | `GET` | `/v1/models` | OpenAI Models | 列出当前 Router 配置暴露的模型 |
 
-其他 `/v1/*` 路径默认拒绝。特别是 `/v1/files`、`/v1/vector_stores` 和路由回放路径在公网推理监听器上不可用。Router 自有的文件和向量存储操作使用管理监听器上的 `/api/v1/storage/files` 和 `/api/v1/storage/vector-stores`。
+其他 `/v1/*` 路径默认拒绝。特别是 `/v1/files`、`/v1/vector_stores` 和路由回放路径在公网推理监听器上不可用。Router 自有的文件和向量存储操作使用管理监听器上的 `/api/v1/storage/files` 和 `/api/v1/storage/vector-stores`。其他 `/openai/*` 操作，例如 embeddings 和读取已存储的 response，返回 `404`。
 
 客户端到后端的转换矩阵、后端 `api_format` 值以及字段级可移植边界，见[协议兼容性](../installation/protocol-compatibility)。
 
@@ -103,6 +107,12 @@ curl -sS http://localhost:8899/v1/messages \
 ```
 
 协议转换仅限于 Router 支持的字段。请求跨协议时，检查 `x-vsr-client-protocol`、`x-vsr-upstream-protocol` 以及任何 `x-vsr-protocol-warnings` 响应头。
+
+### Azure OpenAI 客户端 {#azure-openai-clients}
+
+deployment Chat 路径从 URL 读取模型名；Responses 和 v1 Chat 路径从请求体读取模型名。监听器配置 `api_keys` 时，Router 用客户端的 `api-key` 验证请求，并在转发给 provider 前移除该请求头。
+
+GitHub Copilot CLI 使用 Azure 模式时，设置 `COPILOT_PROVIDER_TYPE=azure`、指向监听器的 `COPILOT_PROVIDER_BASE_URL`，以及作为 Router 模型名的 `COPILOT_PROVIDER_WIRE_MODEL`。设置 `COPILOT_PROVIDER_WIRE_API=responses` 后，CLI 使用 `/openai/v1/responses`；设置 `COPILOT_PROVIDER_AZURE_API_VERSION` 后使用 `/openai/responses`。Router 接受 Responses 请求中的 `reasoning.summary`：对 Responses 后端会转发该设置；对 Chat Completions 或 Messages 后端仍会处理请求，但丢弃摘要设置并在 `x-vsr-protocol-warnings` 中说明。
 
 ## 路由回放 {#router-replay}
 
