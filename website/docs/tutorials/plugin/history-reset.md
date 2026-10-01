@@ -174,24 +174,19 @@ Responses API, and Anthropic Messages all keep their own semantics on the way
 out: instructions, tool call and result links, multimodal blocks, and request
 metadata survive the encode step unchanged.
 
-Responses requests need one extra step. Part of their conversation can live
-behind `previous_response_id`, and that stored history is normally materialized
-just before the provider call — after the context stage. When a reset policy is
-enabled, the router resolves the permitted stored history first, so the reset
-sees the conversation the provider would actually receive, and dispatch does
+Responses requests can carry part of their conversation behind
+`previous_response_id`. The router resolves that retained history while
+extracting request signals, before the original-history snapshot is captured,
+so the snapshot, the topic evidence bound to it, and the reset itself all
+describe the conversation the provider would actually receive, and dispatch does
 not prepend it a second time. Stored input, lineage, conversation membership,
 and public response IDs stay owned by the Responses API and are never altered
-by a reset. If that history cannot be resolved, the action is blocked with
+by a reset. If no original history can be resolved, the action is blocked with
 `history_unresolved` and the configured failure mode decides.
 
-One ordering constraint applies to the topic-continuity producer. Signals are
-evaluated before the stored history is resolved, so a producer that classifies
-at that point sees the pre-materialization request; its result will not carry
-this request's binding and the action rejects it as stale instead of acting on a
-partial conversation. Consuming the resolved snapshot is part of the trigger
-integration. Materialization is not moved ahead of signal extraction for all
-Responses traffic, because that would change the inputs every existing
-classifier sees.
+Because that resolution happens before signals are extracted, a
+topic-continuity producer classifies the same conversation the action
+transforms; no separate ordering step is needed for this plugin.
 
 Internal router hops — the algorithm loop and recovery follow-ups — continue a
 public turn that was already evaluated. They inherit that completion and never

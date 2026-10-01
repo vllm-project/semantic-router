@@ -22,8 +22,8 @@ func init() {
 
 // testHistoryResetNegative asserts the disabled-by-default contract of the
 // history_reset plugin end to end: the router accepts a decision carrying the
-// plugin, and the upstream request still contains every prior turn. The mock
-// backend echoes the conversation it actually received, so an HTTP 200 alone
+// plugin, and the upstream request still contains every prior turn. The provider mocker
+// echoes the conversation it actually received, so an HTTP 200 alone
 // cannot satisfy this test.
 func testHistoryResetNegative(
 	ctx context.Context,
@@ -93,7 +93,7 @@ func testHistoryResetNegative(
 
 // historyResetUpstreamEcho reads the mock backend's JSON echo of the request
 // it received from the assistant message of the chat completion.
-func historyResetUpstreamEcho(body []byte) (*mockVLLMEcho, error) {
+func historyResetUpstreamEcho(body []byte) (*providerMockerEcho, error) {
 	var completion struct {
 		Choices []struct {
 			Message struct {
@@ -108,15 +108,15 @@ func historyResetUpstreamEcho(body []byte) (*mockVLLMEcho, error) {
 		return nil, fmt.Errorf("chat completion carried no choices: %s", truncateString(string(body), 200))
 	}
 
-	echo := &mockVLLMEcho{}
+	echo := &providerMockerEcho{}
 	if err := json.Unmarshal([]byte(completion.Choices[0].Message.Content), echo); err != nil {
 		return nil, fmt.Errorf(
-			"assistant content is not a mock-vllm echo: %w (content=%q)",
+			"assistant content is not a provider-mocker echo: %w (content=%q)",
 			err,
 			truncateString(completion.Choices[0].Message.Content, 200),
 		)
 	}
-	if echo.Mock != "mock-vllm" {
+	if echo.Mock != "provider-mocker" {
 		return nil, fmt.Errorf("unexpected backend marker %q", echo.Mock)
 	}
 	return echo, nil

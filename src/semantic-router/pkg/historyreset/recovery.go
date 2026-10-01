@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -244,13 +245,20 @@ func encodedStructSize(value reflect.Value) (int, error) {
 		field := structType.Field(index)
 		// Embedding is checked before export, because the encoder promotes an
 		// embedded type's exported fields into this object even when the
-		// embedded field itself is unexported. Field renaming and omitempty
-		// likewise change which keys appear and under what names. The recovery
-		// types use none of them, so refusing is safer than modelling them.
-		if field.Anonymous || field.Tag.Get("json") != "" {
+		// embedded field itself is unexported. Modelling that is more subtle
+		// than this walk needs, so an embedded field is refused.
+		if field.Anonymous {
 			return 0, errUnsupportedRecoveryEncoding
 		}
 		if !field.IsExported() {
+			continue
+		}
+		name, ok := encodedFieldName(field)
+		if !ok {
+			return 0, errUnsupportedRecoveryEncoding
+		}
+		if name == "" {
+			// The tag omits this field from the encoding entirely.
 			continue
 		}
 		size, err := encodedValueSize(value.Field(index))
@@ -262,9 +270,32 @@ func encodedStructSize(value reflect.Value) (int, error) {
 		}
 		fields++
 		// "Name": plus the encoded value.
-		total += len(field.Name) + len(`"":`) + size
+		total += len(name) + len(`"":`) + size
 	}
 	return total, nil
+}
+
+// encodedFieldName reports the JSON key a struct field encodes under: the
+// field name when it carries no tag, the tag's name when it renames the key,
+// and an empty name when the tag is "-" and the encoder omits the field. A tag
+// carrying options such as omitempty changes whether the key appears at all,
+// which this walk does not model, so it reports false and the caller refuses.
+func encodedFieldName(field reflect.StructField) (string, bool) {
+	tag, tagged := field.Tag.Lookup("json")
+	if !tagged {
+		return field.Name, true
+	}
+	if tag == "-" {
+		return "", true
+	}
+	name, options, hasOptions := strings.Cut(tag, ",")
+	if hasOptions && options != "" {
+		return "", false
+	}
+	if name == "" {
+		return field.Name, true
+	}
+	return name, true
 }
 
 // encodedStringSize counts a JSON string exactly, including the quotes and the
