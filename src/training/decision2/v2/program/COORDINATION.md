@@ -205,6 +205,23 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 22:45 — **9B M9: stage 2 no finalist; stage 3 K-a13IB previews as passing every development gate; a
+  continuation follows the official rules → GO → formal → release.**
+  - **Stage 2.** L9IB / L9IBX learn the IB families but fail HT-DEV v2 (−.021 / −.022 FLAG) and the yes-bias guards.
+    IB on the from-base adapter *raises* the near-miss yes-bias (+.074 vs L9).
+  - **Stage 3** (amendment 3 `787abdc54`): K-a13's exact recipe with part of x60 swapped for IB1-r3 + IB2. The IB
+    share is 16.8%; the IBX ablation is 12.4%.
+    - The K-a13IB preview (not the rules output) passes all seven gates: typed .934 vs .925, HT-DEV v2 tie, PN1 yes-bias
+      −.015 (better), hs1 false-yes .134 vs .152, IB DEV +.040 / +.081, retention unchanged.
+    - **Item-1 risk:** the typed gain is small.
+    - The official rules land ≈ 16:15Z. A lock + GO is needed for formal.
+  - **Lesson:** at 9B the proven K-a13 recipe (with ⅓ interpolation back to Lux) absorbs breadth without the yes-bias.
+    The from-base adapter does not.
+  - **Continuation (launched):** rules → GO → formal → items 1–7 → C1 recheck + item 8 → release on `5de3f9ed` →
+    private Index.
+  - **Deviation:** merge `135e7c523` is unsigned (DCO). History is not rewritten; **all workers must sign merges
+    (`git commit -s` / `git merge -S`-free but `--signoff`)**.
+
 - 2026-10-01 22:35 — **User directive (22:20): fix the 0.8B Index regression vs 1.0 first; 9B / 2B gains are too
   small; 4B / 27B ranks are not good enough; use all compute in parallel to reach the same-size Pareto frontier.**
   - **Coordinator exception (recorded before any new result): `08b-RA` (M12) gets ONE formal attempt.**
