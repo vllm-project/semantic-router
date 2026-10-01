@@ -18,6 +18,8 @@ from ..runtime_profile import (
 from ..vela_inputs import EncodedVelaRow, encode_vela_rows
 from .base import FamilyArtifactFiles, FamilyLoadError
 
+MIN_LENGTH_BUCKET = 64
+
 if TYPE_CHECKING:
     from ..artifacts import VerifiedArtifact
     from ..physical_batching import DecisionRow
@@ -52,9 +54,12 @@ class VelaFamilyAdapter:
             optional=frozenset({"tokenizer/special_tokens_map.json"}),
         )
 
-    def batch_key(self, question_type: str) -> str:
-        # Vela has a separate head for each question type.
-        return f"{self.family}:{question_type}"
+    def batch_key(self, question_type: str, encoded: EncodedVelaRow) -> str:
+        # Vela has a separate head for each question type, and a physical batch pads
+        # every row to its longest one, so rows only share a batch within a
+        # power-of-two length bucket.
+        bucket = max(MIN_LENGTH_BUCKET, 1 << (encoded.input_tokens - 1).bit_length())
+        return f"{self.family}:{question_type}:{bucket}"
 
     def encode_rows(
         self, rows: tuple[DecisionRow, ...], tokenizer: Any, profile: RuntimeProfile
