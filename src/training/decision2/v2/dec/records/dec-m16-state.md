@@ -61,3 +61,11 @@ Branch `xunzhuo/decision-2-training-dec-m16`, worktree `vllm-sr-dev2-dec-m16`. P
   fail retention (CI upper < 0). **Finalists `4b-LHA10SD-a75`, `4b-LHA10SD-a50`** (no other line eligible). Formal on
   node B GPU3: parity `m16-4b-LH` exact vs the stored LH run (0 / 0 / 0); `m16-4b-LHA10SD-a75` −.07 [−2.53, +2.38] vs
   bar-lh (item 1 fails). `-a50` collecting; 4B mlx-diag collecting on GPU4.
+
+## 2026-10-01 20:35Z — M16 done
+
+- 4B formal: `m16-4b-LHA10SD-a50` +.02 [−1.81, +2.65] vs bar-lh; both 4B finalists fail items 1, 4 (mlx-diag
+  card-eligible −.015 / −.019, CIs below 0) and 6(b). **No M16 model passes items 1–7**; no item-8 spec, hand-off or
+  Index request. Results: [`dec-m16-results-2026-10-01.md`](dec-m16-results-2026-10-01.md).
+- Node B GPU2–4 leases released 20:27Z (finished formal lease entries moved to `formal/m16/logs/stale-leases`).
+  GPU-h 5.95 of 30.
