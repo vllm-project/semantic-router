@@ -1,0 +1,86 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's card job of 2026-10-01 21:58 UTC+8 (make the DEV2.0 cards standard, formal model-release cards with a Transformers-only quickstart; keep internal records off the cards), card-only revisions of all six repositories",
+  "decision": "release",
+  "decision_sha256": "a45dadcbf22237b78c37cc9939df3d6e917f121a619e1ae849b1b12d60edb6ef",
+  "gate_profile": "successor",
+  "items": {
+    "1_successor_R1_v3": {
+      "evidence": "v3 48.636 vs current 43.541: +5.09 [+2.65, +9.30]",
+      "passed": true
+    },
+    "1_successor_R2_human_transfer": {
+      "evidence": "human transfer delta 95% [-0.064, +0.061]",
+      "passed": true
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "evidence": "types choice OK, noul OK, score OK",
+      "passed": true
+    },
+    "1_successor_R4_mlx_diag": {
+      "evidence": "mlx-diag card-eligible macro +0.0044 [-0.0058, +0.0144]",
+      "passed": true
+    },
+    "1_successor_R5_tier_gates": {
+      "evidence": "own 1.0 low +10.00; v3 48.636 vs 90% of GLiNER2.5-Decide 42.524; H vs GLiNER2.5-Decide [-0.013, +0.161]; own 1.0 low > 0 ok, v3 >= 38.272 ok, H vs GLiNER2.5-Decide upper >= 0 ok, no type collapsed ok",
+      "passed": true
+    },
+    "1_successor_R6_no_overlap_exposure": {
+      "evidence": "6 training files, 0 exposed groups",
+      "passed": true
+    },
+    "1_successor_R7_public231": {
+      "evidence": "public 231 152 vs 142 (+10; McNemar p 0.087)",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "1 results below own 1.0 summarised in the card limitations and listed in evaluation/EVALUATION.md",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 34 files re-hashed; loaded 597103104",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "85df1637933abcf8dd4d377432c1f4b72fdf3972547d8bc24bc24593af79c8cf",
+  "model_name": "DEV2.0-0.6B",
+  "receipts_sha256": {
+    "automap-card-pre": "01107b73baa254b8327eea918cbb1096d36513a1f37a71a69a93787bdd966431",
+    "automap-hub": "ada8158c83d23b77ccc9fb5aa4635af7beeb0bfd559cfb5fe54434cc3b74fd89",
+    "automap-hub-tf518": "dedf03a9b08c15f431e184f60c9860eadf9f1a7c36c76287c4592d1e95b0bac2",
+    "automap-post": "8ee504a5d115ff7fc5d05c4f7cd58cfa33b5cd6e665d33e78d8e778e806304a9",
+    "automap-pre": "c1e9c3de3e8cc9a988fac908464b5f32d894bfc8edc5aab15e52bb2e233f98b5",
+    "card-post": "282506c4f086d1cfea9b7b2e7f484a4f2b92cb81845320e51eb728b66bd949bb",
+    "card-pre": "a741c4a33be9b0ac89bda11afe3758f6fd5a41e0914be0a9d461b30e5a26d1cf",
+    "download": "b15f07b64eb019ea1465e2ed6f783a84cc7dc27f94ed0d44d78ab7c759c6ee82",
+    "post": "cf3f6ba59a98654b865ff4e52f4ee9bebbac5d54c939eef55c821b742b38d3df",
+    "readback": "b362bb080764df0df04a831cbee3872301029c1f72e48d837f653ee6bff162ed",
+    "repeat-post": "6204427e60af8f3ef2f093a3a564f282c733dfaada7b33d87eadd6105309592b",
+    "repeat-pre": "8e2d9bf19f31b50a180e4b8211761b4b52b3138f9c6672ab4bf763b148e782bd",
+    "tree": "c151c4a531bfc96ad5d429f9a679d155e34649326019605ad46ba0c62d0f162e",
+    "upload": "cba79c36fb3c81c205c99c3935579cbbadf91dac0aebc42e75ec4610e537fbf5"
+  },
+  "repo_id": "llm-semantic-router/DEV2.0-0.6B",
+  "revision": "38ac8e90eff6dc3022d547b32147a1de70fb90b2",
+  "schema": "dev2-release-gate/1",
+  "supersedes": {
+    "gate_sha256": "787c31c9e5bf618c788d28acbe6b1009181d62b6e37fa16e6c231b2dd2ca2bc1",
+    "revision": "99c4e799392afa73241915aeb16fefa5ef3518d7"
+  },
+  "utc": "2026-10-01T15:08:25.449539+00:00"
+}

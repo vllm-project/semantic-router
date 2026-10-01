@@ -1,0 +1,57 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's card job of 2026-10-01 21:58 UTC+8 (make the DEV2.0 cards standard, formal model-release cards with a Transformers-only quickstart; keep internal records off the cards), card-only revisions of all six repositories",
+  "decision": "release",
+  "decision_sha256": "b9ca88a9458f2f1cf9ed76306b95dd7ca5295602ff536fb2655134249684f528",
+  "items": {
+    "1_beats_own_1_0": {
+      "evidence": "paired v3 95% interval low +0.607 (sha ae559e9a1e13)",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "8 results below own 1.0 summarised in the card limitations and listed in evaluation/EVALUATION.md",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 41 files re-hashed; loaded 7940895744",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "00284cc7b118da0308146e77ffaf83f63974f9cd1e0a008d9e6be14ca288a39c",
+  "model_name": "DEV2.0-9B",
+  "receipts_sha256": {
+    "automap-card-pre": "5ad761872ba2d32b7e97d5fbd85e07714dc2b143873c06c9b44ff1f45042e172",
+    "automap-hub": "8d089aa72614e7fc1247ee3f3cfa648709ba4dbf2abe95b6ade826af6f23611d",
+    "automap-hub-tf518": "630c18e25bd37c8219e12838bfd5378cb712bbfee0fc5e939e306db134647b64",
+    "automap-post": "b40ac497d416953aaee6943cf3fccc8ba69ddb741fdd9e8490d3aa4033296216",
+    "automap-pre": "41de28dd79ba65c012d44b0f47873e181de171ee2764ef3a2326a4c744497f06",
+    "card-post": "8dee95a1ad1c3cbae389f3ee3a2c4b253e2a1131144084db3ccf077b902033aa",
+    "card-pre": "16dc8563866182b3575a9009bc835d4262fc63dc7c8c4173bcbf1791bb1edfb9",
+    "download": "4402a80773cf4133a3bb4619a9c99788a359fbe5052d903e0af605c6fa9bdbb3",
+    "post": "ad8dd2cde48fd8021785ff960610fd89bae31564708ccdfa39e6452ed2473002",
+    "readback": "990a7c089719910654fced8ecd52eb94f90ed1e51e7b866fdb1e3001e863175f",
+    "repeat-post": "d5ebaa45cccf93f9739b64f1d4b073acb6eec4898e4fb110ca1a7a45b730c001",
+    "repeat-pre": "5dbfd1bbe780273407dd5d4cc2b77008ce85fdb3e07618e411c3f77224f0784c",
+    "tree": "3f05f3119faccc4bfbcff21398e122609a530a9076f3be5ea13e10a377ad9a16",
+    "upload": "60aa6851a2ecd33a85e2018799a60664e8beb361176fd7062358f6ccf81539a9"
+  },
+  "repo_id": "llm-semantic-router/DEV2.0-9B",
+  "revision": "a12ef72ef467fe5f6ecd1027d6b75640e87b9b94",
+  "schema": "dev2-release-gate/1",
+  "utc": "2026-10-01T15:27:28.197740+00:00"
+}

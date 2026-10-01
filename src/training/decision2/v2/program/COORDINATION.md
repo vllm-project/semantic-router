@@ -205,6 +205,82 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 00:35 — **9B M9 stage 3 (542e6421): K-a13IB was the only finalist and FAILED item 1; no 9B successor.**
+  Records `5d28495fa`, lock `5d0c1c234`, gist 05; integration `9eb632e03`; ≈ 41.5 of 120 GPU-h.
+  - **Formal.** v3 68.02 vs 67.737, +0.29 [−1.57, +1.20], so item 1 fails. Items 2–7 **pass**, including **item 4
+    multilingual −.004 [−.011, +.003]** (the swap design preserved multilingual, unlike additive IB), human transfer
+    +.007, and vs Lux1 +2.22.
+  - **The development typed gain did not hold formally** (.807 vs .811; Noul 704 vs 715).
+  - **Rules.** K-a13IBX failed the Noul floors and the yes-bias guard (excluding the in-distribution families hurt at
+    this recipe).
+  - **Structural issue, for the user.** IB breadth targets Index families that JevArena v3 does not measure, so
+    breadth candidates tie on v3 (9B +0.29, 4B −0.16) and cannot pass item 1.
+    - Coordinator proposal, pending data and a user decision: an **Index-path alternative to item 1** for
+      frontier-targeted finalists, requiring v3 non-inferior plus a significant paired private-Index gain, with items
+      2–8 unchanged.
+    - Data being collected: private Index diagnostics of K-a13IB (9B) and `4b-LHA10SD` (4B; M15 part A).
+  - **Follow-ups (542e6421, resumed):** (A) the K-a13IB private Index with a paired bootstrap CI; (B) a ½-interpolation
+    point with gates → formal → items 1–7.
+
+- 2026-10-02 00:25 — **Card round 1 done (4c0a68cd); rename + product-card round 2 launched (same worker).**
+  - **Round 1 card-only revisions:**
+
+    | Model | `main` |
+    | --- | --- |
+    | 0.6B | `38ac8e90` |
+    | 0.8B | `db7a9259` |
+    | 2B | `9f6ca45d` |
+    | 4B | `dd60f0c2` |
+    | 9B | `a12ef72e` |
+    | 27B | `e7b4a372` |
+
+    Records `records/dev2-card-2026-10-01.md`; integration `716c7b39b`.
+  - **Round 2** (the user's 23:53 / 00:00 asks):
+    - a branded banner;
+    - no training data / limitations / NOTICE / attributions / `evaluation/` / training details; remove JevBench;
+    - JevArena (overall + by type) and Jev Decision Index (Pareto + by area vs 1.0; 27B vs Lux-9B) charts with the
+      vLLM-SR logo;
+    - code-only quickstart; product-value highlights per tier.
+  - **Rename sequence (to avoid breaking a publisher):**
+    1. merge the release-tooling ID map / guard first;
+    2. `move_repo` the six repos to `Decision-2.0-{Kai,Eos,Sol,Nox,Lux,Vega}-{size}`;
+    3. verify redirects and the collection;
+    4. publish the round-2 cards.
+  - **ALL TRACKS:** from now on, release hand-offs use the **new repo IDs**. Re-read this note before any GO or upload.
+
+- 2026-10-02 00:20 — **C1 content recheck r1 PASSED (custodian 3c7679b0).**
+  - **Scope.** IB1-r3, IB2, PN1-r2 and the 27B M6 mixture `a20ib12` expose **0** scored C1 v1.2 items (0 rows / 0
+    groups for all 8 sources). Planted controls caught 200 / 200; the item mapping is 2,840 scored + 34 retired.
+  - **Every IB / PN1-trained arm may proceed to item 8** (28 mapped arms: 27B M6, 9B M9 stages 2–3, decoder
+    M11–M14, plus older PN1 arms). **Cite the record** `v2/eval/records/c1-recheck-r1-2026-10-01.md` and the registry
+    `v2/eval/sealed/c1-recheck-registry.json`; integration `e27253617`.
+  - **Custody.** Prompts only were decrypted, in a private temp dir on node A, then removed; the key was read once via
+    stdin; `ACCESS.log` updated.
+  - **IB3:** the repeat runner is prepared in the record (≈ 1 min); run it once a track adopts a release-safe IB3 file.
+
+- 2026-10-02 00:15 — **M13 complete: no successor (c473a3b2). Key finding: additive IB costs multilingual decisions.
+  M15 launched.** Results `dec-m13-results-2026-10-01.md` (`e16c5926f`), gist 04; integration `d4b7fe240`; 14.21 of
+  80 GPU-h.
+  - **`4b-LHA10SD`** passed every development gate (typed heads protected by self-distillation: Score 372 vs M12's
+    329). It **failed formal**:
+    - item 1: v3 67.19 vs 67.34, −0.16 [−2.84, +3.64];
+    - item 4: mlx-diag −.029 [−.039, −.018].
+    - Items 2, 3, 5, 6(a) and 7 pass; 6(b) was not evaluated (a scorer bug, now fixed; items 1 and 4 already decide).
+  - **2B / 0.8B self-distillation arms** fail type floors: the loss moves between heads.
+    - `2b-RASD`: Score 237 < 245, choice 479.
+    - `08b-RASD`: choice 574 < 586.
+    - `08b-RAAG`: choice + `attribute_gate`.
+  - **Finding:** **English-heavy IB added on top of a recipe erodes multilingual decisions** (4B −.029; 0.8B fast-track
+    −.014), and no development gate caught it. By contrast, 9B K-a13IB *swapped* IB into its mixture and passed a
+    development MLX guard; its formal result is pending.
+  - **M15 (resumed):**
+    - **(A)** a private Index diagnostic of the frozen `4b-LHA10SD` (not releasable), to quantify the breadth vs
+      multilingual trade-off for the user;
+    - **(B)** IB additive with the **multilingual token share held at the released mixture's**, plus typed-row
+      self-distillation and a **mandatory development MLX guard**; arms 4B LHA10SD-ML, 0.8B RASD-ML, 2B RASD-ML;
+      70 GPU-h on E / F.
+  - **All tracks:** any IB-additive arm must carry a development multilingual guard.
+
 - 2026-10-02 00:10 — **IB3 published but NOT release-safe (611782db); IB3-r2 commissioned (maths core + optional
   claim-level grounding).** Data: private `@c2401ab4` `m6/ib3/`; records merged at `29caad2de`.
   - **Contents.** TRAIN 24,148 rows:

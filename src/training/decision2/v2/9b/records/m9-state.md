@@ -1,5 +1,45 @@
 # 9B M9 state (resume file)
 
+## Now (2026-10-02 00:35 UTC+8, 16:35Z; continuation worker cba71646): **M9 CLOSED — no successor; DEV2.0-9B stands**
+
+- **Stage 3 result** [`lux9b-m9-stage3-result-2026-10-01.md`](lux9b-m9-stage3-result-2026-10-01.md): the official
+  rules named **K-a13IB** (passes all seven development gates); K-a13IBX fails the Noul floors and Y1.
+- **Formal K-a13IB (16:09–16:22Z, node A GPU6): v3 68.024 vs 67.737, +0.29 [−1.57, +1.20] → item 1 FAILS.** Items 2–7
+  pass (H +.007 [−.021, +.020]; types OK; mlx −.004 [−.011, +.003]; vs Lux1 16K +2.22 [+0.11, +3.95]; exposure 0;
+  public 231 182 vs 178). Typed FINAL .8069 vs .8106 (the +.009 typed-DEV gain did not carry). `formal-m9/K-a13IB.gates/
+  items.json` `3e00533b…`, `successor.json` `5e4a7258…`.
+- Therefore: no C1 item 8, no release, no private Index run of a release; the optional Noul T+b study (passers only)
+  not run. (The custodian's C1 content recheck r1, `v2/eval/records/c1-recheck-r1-2026-10-01.md`, maps K-a13IB /
+  K-a13IBX with exposure 0, so item 8 would have been allowed.) Integration fast-forwarded to `aa624ac1b`. Every M9 chain has ended; node A GPU6–7 and node C GPU1–5 leases released (16:27Z; node C GPU6–7 were
+  released 14:05Z). **≈ 41.5 of 120 GPU-h used.**
+- **Proposed next lever (not launched):** K-a12IB = ½ point of the existing KIB soup (≈ 1 GPU-h, amendment first), then a
+  five-seed KIB soup (≈ 6 GPU-h), then typed-row self-distillation + IB additive (≈ 9 GPU-h) if the typed gain stays
+  short; IB3 when release-safe. Details in the stage-3 record. Optional: a private Index diagnostic of K-a13IB (≈ 2
+  GPU-h) to size the 9B breadth effect.
+
+## Log (continuation cba71646)
+
+**16:06Z official stage-3 rules: finalist K-a13IB** (`select/9b-finalists-s3.json` `4b02f31f…`, readout
+`lines/readout/m9-s3.json` `d312f8e7…`). K-a13IB passes every gate (T .9344 vs .9250; HT-DEV v2 −.006 TIE; Y1 −.015
+[−.028, −.003]; Y3 .134 vs .152). K-a13IBX fails the Noul type floor (319 < 326), the `rule_precedence` floor (319 <
+334) and Y1 (+.032 [+.019, +.045]). COORDINATION re-read (newest 2026-10-02 00:10 UTC+8; no 9B formal-path change;
+the custodian C1 content recheck for IB1-r3 + IB2 runs centrally, 3c7679b0). `lock.sh` 16:10Z →
+`select/formal-lock-s3.json` `bc4b428c…`, `soup/K-a13IB/SHA256SUMS` `49c6d942…` (16 files); lock record
+`records/lux9b-m9-formal-lock-s3-2026-10-01.md` (`5d0c1c234`); `status/formal-s3.GO` 16:09:13Z; **formal K-a13IB
+running on node A GPU6 since 16:09:28Z** (chain pid 214241 → `formal.sh` pid 354110; CAL698 fit done, smoke
+collecting; ETA ≈ 16:50Z; log `logs/formal-K-a13IB.log`). Next: `items.py verdict` (copy `exposure/kib-subset.json`
+node C → node A first), items 1–7 into the stage-3 result record. GPU-hours ≈ 41.3 of 120 at 16:12Z (node C 38.81 by
+`gpuh.py`; node A readouts 2.29; C0F parity 0.20) + formal.
+Poll 15:37Z: **K-a13IBX seeds DONE** (s2 15:26Z, s1 15:28Z, s3 15:32Z; BEST = checkpoints 1,999 / 1,489 / 1,745)
+and the node-C soup `soup/KIBX/build/KIBX-soup` built 15:34Z (`model_sha256` `cc25e396…`); node C GPU1–4 / 6–7 idle
+(9B leases, status idle). Node A `post-a-KIBX` pulls it, builds K-a13IBX and reads the panels on GPU7, then runs the
+shared readout / contrasts / rules (ETA ≈ 16:10Z); `formal-s3` alive and waiting. Integration merged (`a9df14980`, signed off). New: `lux9b/m9/items.py` (`f1bb2a50f`; items 1–7 from
+`successor.json`, the exposure receipts and a line-level TRAIN ⊂ x60 ∪ IB1-r3 ∪ IB2 check), committed before any
+formal run. **Item 6 subset checks done (node C, mirror `f1bb2a50f`):** `exposure/kib-subset.json` (`1dfb1843…`):
+151,015 of 151,015 K-a13IB TRAIN rows (`2cd09292…`) occur in x60 (`a66131b1…`, the released K file) ∪ IB1-r3 TRAIN
+(`1e1b08f3…`, 24,325) ∪ IB2 TRAIN (`ee137efa…`, 24,518); `exposure/kibx-subset.json` (`af6ca288…`): 145,480 of 145,480
+(`548b61a5…`). IB exposure receipt `exposure/ib1-ib2-train.json` (node A, `9fd9d3db…`): 0 groups.
+
 Updated: 2026-10-01 22:40 UTC+8 (14:35Z) by continuation worker b23ed249 (hand-off point). **Stage 2 closed 13:28Z: NO FINALIST**
 (record `lux9b-m9-stage2-result-2026-10-01.md`; rules `select/9b-finalists-s2.json` `df0ef550…`, readout
 `lines/readout/m9-s2.json` `cda87bcf…`; the s2 formal chain stopped by rule). L9IB fails the Choice / Score type

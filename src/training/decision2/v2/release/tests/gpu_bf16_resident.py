@@ -239,7 +239,7 @@ def main() -> None:
     qwen3_5_checkpoint(work / "full35", tokenizer)
     licence = work / "LICENSE"
     licence.write_text("Apache License 2.0 (test)\n")
-    layout.name_for = lambda parameters: "DEV2.0-0.6B"
+    layout.name_for = lambda parameters: "Decision-2.0-Kai-0.6B"
 
     def package(name: str, profile: str, checkpoint: Path, identity: str, base_block):
         cal = work / f"cal-{name}.json"
