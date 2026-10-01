@@ -15,12 +15,15 @@ Rules carried by this job: Index numbers never leave the private directories (no
 no Index row is trained on (G0 + G0u); C1 registry datasets and the sealed directory are never read; Jev-derived
 benchmark repositories are never sources; IB1 / IB2 files are not edited.
 
-**Status: DONE, NOT RELEASE-SAFE.** Private
+**Round 1: DONE, NOT RELEASE-SAFE (superseded in `m6/ib3/` by IB3-r2 below; still readable at this revision).** Private
 `llm-semantic-router/decision-2.0-training-data@c2401ab4e7aee01cdf76c98d066eaca6e9102355`, `m6/ib3/`: TRAIN 24,148
 rows (`688b643e…`), DEV 1,762 (`e79d90d0…`), 4.65M native tokens, four families (`wpd`, `phiu`, `esci`, `mqa`).
 Decisive blind review 29 / 216 = 13.43% (P1, P2, P3 fail); every audit passes.
 
-**IB3-r2 (commissioned 2026-10-02): IN PROGRESS.** Prereg `records/ib3-r2-prereg-2026-10-02.md` (`mqa` only; WiCE
+**IB3-r2: DONE, RELEASE-SAFE.** Private `@1c8452da9f8024b1d79403cfcd95778fdab18cbb`, `m6/ib3/` (replaces round 1):
+TRAIN 8,752 (`9d92d92a…`), DEV 426 (`4c6f2ca0…`), `mqa` only, 1.52M native tokens; decisive review 3 / 216 = 1.39%
+[0.29, 4.01] PASS; every audit passes. Results `records/ib3-r2-results-2026-10-02.md`, receipts `records/ib3-r2/`.
+C1 custodian recheck required before C1-scored use. Local review packets `/home/xunliu/.cache/dev2-ib3r2-review/`. Prereg `records/ib3-r2-prereg-2026-10-02.md` (`mqa` only; WiCE
 dropped by licence; fresh decisive review skipping IB3's sampled rows and groups); registry
 `records/license-registry-ib3-r2.json`. Node-A run directory `r2/`, runner env `IB3_RUN=r2 IB3_FAMILIES=mqa
 IB3_PRIOR_KEYS="<d2 screen key> <d2 review key>" IB3_PRIOR_DROPS=<d2 drop-ids.txt> IB3_RECORDS=ib3-r2
@@ -29,7 +32,14 @@ review, splits, score, rescan final, final, leak, hf-assemble, hf-upload.
 
 ## Log (newest first)
 
-- 2026-10-02 00:30 UTC+8 — IB3-r2 prereg and runner options committed before any IB3-r2 row was built.
+- 2026-10-02 01:00 UTC+8 — IB3-r2 records written; gist 02 updated; merged into `xunzhuo/decision-2-training`.
+- 2026-10-02 00:44 UTC+8 — IB3-r2 uploaded: `m6/ib3/` revision `1c8452da` (33 files, read-back equal, private;
+  round-1 files deleted in the same commit); headroom 47.46 GB.
+- 2026-10-02 00:41 UTC+8 — IB3-r2 final: TRAIN 8,752 / DEV 426; final re-scan clean; leak guard 0; G5, G7 PASS.
+- 2026-10-02 00:38 UTC+8 — IB3-r2 stage R **PASS**: 3 / 216 (R1–R2 214 / 216, κ 0.98; R3 on 2 splits).
+- 2026-10-02 00:19 UTC+8 — IB3-r2 run `r2` (`dcae46ad8`): build 8,982 / 1,018 (identical to `d2`'s `mqa`); G0 116
+  (controls PASS), G0u 0 (controls PASS), G2 5 + 294 DEV; re-scan 1 clean; G4 PASS (.543).
+- 2026-10-02 00:09 UTC+8 — IB3-r2 prereg and runner options committed before any IB3-r2 row was built.
 - 2026-10-02 00:05 UTC+8 — merged into `xunzhuo/decision-2-training` (`e96eb833a`; IB1, IB2, IB3 and guard tests pass)
   and gist 02 entry added. **Worker done.**
 - 2026-10-02 00:00 UTC+8 — records, card and status written.
