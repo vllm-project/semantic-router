@@ -33,3 +33,18 @@ Branch `xunzhuo/decision-2-training-dec-m16`, worktree `vllm-sr-dev2-dec-m16`. P
   `26baab01…`); launched 18:36Z: GPU3 parity `m16-08b-C0` then `m16-08b-RASD-a75`, GPU4 `m16-08b-RA-a75`
   (co-tenants of the node-B readout chains).
 - Node B readouts: 2B `2b-RA` / `2b-RAUP` ×3 and `4b-LHA10UP` a25 / a50 done; the rest running.
+
+## 2026-10-01 19:40Z
+
+- 0.8B formal (node B, scored on node A): parity `m16-08b-C0` is exact vs node B's stored M8s reference of the same
+  weights (0 / 0 / 0 differing answers) and not exact vs bar-t1 (9 / 20 / 1), so both bars bind. `m16-08b-RASD-a75`
+  and `m16-08b-RA-a75` both pass items 2, 3, 4 (mlx-diag card-eligible upper bounds ≥ 0 vs both bars), 5, 6(a) and 7,
+  and **fail items 1 and 6(b)**. No 0.8B successor.
+- 2B: all nine points read on node B and scored on node A; **rules run once** (19:11Z): `2b-RAUP` a50 / a75 and
+  `2b-RASD` a50 / a75 fail the Score floor; the other five pass. **Finalists `2b-RA-a75`, `2b-RASD-a25`.** Formal
+  collected on node B (GPU3 parity `m16-2b-C0` then `m16-2b-RA-a75`, GPU4 `m16-2b-RASD-a25`; done 19:24Z), relayed
+  to node A (19:33Z); scoring running.
+- 4B: all six points read on node B (chains finished 19:08Z), relayed to node A (filtered tree content checked equal
+  to node B's), scoring running. A duplicate relay invocation from the workstation stopped at the relay's
+  "exists on the target" guard; it changed nothing.
+- Node B GPU2–4 now idle until the 2B mlx-diag and 4B formal collections.
