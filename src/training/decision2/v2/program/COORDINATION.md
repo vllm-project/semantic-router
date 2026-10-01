@@ -205,6 +205,97 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 18:25 — **9B M9 stage 1: no finalist — the 4B from-base LoRA recipe does NOT carry to 9B; stage 2 is
+  running; stage 3 (K-a13 + IB) added; continuation worker launched.** Records: prereg `8570a5896`, stage 1
+  `8ab82f069`, gist 05; integration `d75b54411`; 16.3 of 120 GPU-h.
+  - **L9** (rank-128 LoRA from Qwen3.5-9B-Base): typed .937, but it fails three gates: HT-DEV v2 −.031 [−.046, −.018]
+    FLAG, the Noul floor (330 < 334), and the yes-bias guard (+.042).
+  - **L9-Lux** (the same LoRA on Lux 1.0): HT-DEV v2 TIE −.006, but the yes-bias guard fails at +.086.
+  - **Retention.** DEV2.0-9B (.792) already matches or exceeds the base (.781), so there is no lost knowledge to
+    recover (unlike 4B). L9's gain is GSM8K only, likely in-distribution; MMLU falls.
+  - **Lesson:** the from-base recipe helps where the 1.0 lineage lost base capabilities (4B), not universally. 2B /
+    0.8B (M11) must be judged on their own retention probes.
+  - **Stage 2** (unattended until ≈ 12:45Z): L9IB (L9 + IB1-r3 + IB2) and L9IBX (the transfer-only ablation). The
+    formal step needs a manual GO.
+  - **Stage 3, added by the coordinator (amendment 3):** **K-a13IB**, the released 9B recipe plus IB1-r3 + IB2, with
+    the K-a13IBX ablation. The 9B deficits are coverage families, so this adds breadth on the proven recipe; the
+    yes-bias guard and Noul floor apply.
+  - **Continuation worker b23ed249.** A 9B successor must build on top of the 9B forward-budget fix revision.
+
+- 2026-10-01 18:10 — **All six DEV2.0 repos support stock Transformers (`trust_remote_code`); unified `API.md`; the
+  forward-budget fix round is queued (4c0a68cd).**
+  - **Current `main` revisions:**
+
+    | Model | `main` |
+    | --- | --- |
+    | 0.6B | `08b00e07` |
+    | 0.8B | `1188dd33` |
+    | 2B | `ffe291b4` |
+    | 4B | `13d42143` (LH; it already carries the fix) |
+    | 9B | `41cb6a08` |
+    | 27B | `3236518c` |
+
+    - AutoModel equals native on 11,053 answers each, under 5.17 / 5.18. Hub smoke tests pass.
+    - The 27B needed one resume after a release-script docker-flag bug in its smoke step (`2cfa500fe`); its two
+      revisions differ only in the builder commit.
+    - Records integration `99432d1a7`; ≈ 10.6 GPU-h on node E GPU6–7.
+  - **`API.md` (`ac94cda53`)** covers 1.0 and 2.0:
+    - the common surface first (AutoModel, `system_one`, `pipeline("decision")`, the schema);
+    - then the divergences: over-length admission (per request vs per question), confidence (`decision_type_aware_v1`
+      vs 1 − normalised entropy), the 1.0 encoder tokenizer subfolder, CPU vs GPU numerics, and the 27B base download.
+  - **Next (4c0a68cd, resumed):** runtime-only revisions with the forward-budget fix for 0.8B / 2B / 9B / 27B.
+    - Built from the current mains; they refuse to upload if `main` moved.
+    - Gates: 0 answer changes, AutoModel = native, the synthetic long-input test, and the 27B private ToolRet repro now
+      valid.
+    - A card runtime line; node E GPU6–7.
+    - **Successor releases on these repos (M6 / M9 / M11) must build on top of these fix revisions.**
+
+- 2026-10-01 18:00 — **DEV2.0-4B → `m10-4b-LH` released (b5f60b33): private `main` `13d42143`; successor items 1–8
+  pass.** Record and gist 07; integration `2ee92c13b`.
+  - **Parity.** 0 answer changes vs the sealed T = 1 predictions on typed-final / css15 / public231 / mlx-diag (max
+    drift 1.7e-14), before and after the real download. AutoModel equals native (drift 0).
+  - **C1 item 8 (custodial; the one attempt).** 52.71 vs the 4B baseline 48.38, +4.32 [+2.60, +6.00], PASS, labelled
+    post-key. The training data is the released mixture (0 new sources, 0 exposed groups), so no new-data C1 recheck
+    applied. **The C1 4B baseline registry now points to this run.**
+  - **Decision.**
+    - v3 +4.19 [+0.10, +9.88]; human transfer −.023 [−.082, +.074] (n.s.);
+    - types OK; mlx-diag card-eligible +.037; vs Nox1 +10.87;
+    - public 231 172 vs 171 (item 7 passes), but **vs Decider 4B 172 vs 192 (significantly below; disclosed on the
+      card)**.
+  - **Contents.** Built on the auto_map 4B revision `3785b7b9` (no concurrent publisher); it carries the remote code
+    **and IX1's long-input fix**. Hub `trust_remote_code` smoke tests under 5.17 / 5.18 pass.
+  - **Card.** The lineage is Qwen3.5-4B-Base → merged rank-128 LoRA → head (not Nox); all 15 human-transfer deltas are
+    listed; the Qwen3.5 Apache-2.0 LICENSE is shipped; no Index numbers.
+  - **Storage.** Superseded weights purged (9.70 GB); the org is at 52.47 / 100 GB.
+  - **Private Index:** done (private report). **The 4B frontier gap narrowed substantially** (numbers private).
+  - **Remaining runtime-only fix revisions:** 27B, 9B, 2B, 0.8B (4B is done). Queued for the auto_map worker after its
+    close-out.
+  - **Watch item.** Public 231 trails Decider 4B. It is a guard, but a future 4B arm should check whether IB2 / label
+    breadth helps there.
+
+- 2026-10-01 16:25 — **IX1 follow-ups done (c0ce08eb).**
+  - **Shipped-runtime long-request bug.**
+    - **Root cause:** FLA 0.5.2 gated-delta kernels compute some offsets in int32. A request's padded question batch
+      (each question repeats the prompt) past 2³¹ − 1 q/k/v elements gives wrong / non-finite rows or a GPU page
+      fault. On 27B that is ≈ 349,525 padded tokens; the two failing ToolRet requests padded to 455,168 and 725,760.
+    - **Fix** (`8e6bdfc33`, `e876fbefc`, only `decision2/qwen.py`; merged into integration at `fea2f016b`):
+      over-budget requests are split into GPU-sized question batches with a budget of 2³⁰ elements (27B 174,762
+      padded tokens). Requests that fit keep the old path.
+    - **Verification:**
+      - both real requests are valid and equal to per-question answers;
+      - the synthetic 14k / 18k / 23k-token regression test (generated text, public) passes;
+      - 0 changes on all four panels for 0.8B / 9B / 27B; p50 and memory unchanged.
+    - **Hand-off (release):** runtime-only revisions for **27B, 9B, 4B, 2B, 0.8B** (0.6B optional, no gated-delta
+      layers), each built from that repo's **current `main`** (the auto_map revisions), with the standard parity set.
+      Ordering: 4B rides with the LH release (b5f60b33 was told to carry the fix if merged). The others follow the
+      auto_map close-out (4c0a68cd), never concurrent with another publisher on the same repo.
+  - **The M5-L128 private Index diagnostic is done** (private report addendum). It informs 27B M6, whose
+    breadth-data design is unchanged.
+  - **CAL refit discrepancy** resolved as IX1's own label-order bug (42 of 290 Noul rows list `true` first). The
+    release's fits stand; "keep T = 1" stands.
+  - **Deviation:** merge `fea2f016b` on the public integration branch lacks a DCO sign-off. History is not rewritten;
+    noted here.
+
 - 2026-10-01 16:00 — **DEV2.0 auto_map (4c0a68cd): 0.6B / 0.8B / 2B / 4B published; 9B / 27B finishing.**
   - **Parity.** AutoModel equals native on all 11,053 answers per model: 0 changes, max drift 0.0, under Transformers
     5.17.0 and 5.18.0. Hub smoke tests in fresh caches pass.

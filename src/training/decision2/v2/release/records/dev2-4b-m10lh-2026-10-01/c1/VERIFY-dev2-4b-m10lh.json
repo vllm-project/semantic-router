@@ -1,0 +1,38 @@
+{
+ "comparisons": {
+  "baseline": {
+   "problems": [],
+   "run": "/data/dev2/runs/eval/m4/c1-event3/cand4b"
+  }
+ },
+ "image": {
+  "id": "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1",
+  "present": true
+ },
+ "model": {
+  "adapter_module": "v2/dec/infer_dec.py",
+  "adapter_module_same_as_stored_run": true,
+  "adapter_module_sha256": "4ce2e15a5c2a2cd3896802f6b77b879f3d6d743c2055aafd15de3f3909b2d9e3",
+  "cache_sha256": "569e86f58a4718b794b0e25983cea48f94db9097836e16057890b5fd27ef024b",
+  "package": {
+   "dir": "/data/dev2/runs/release/dev2-4b-lh-prerelease-20261001T071009Z/package/DEV2.0-4B",
+   "files": 37,
+   "identity": "6a555335e077fd26952fd58df06a7dcca1f5ef317194f2e3e4d7664d5c071cd7",
+   "manifest_sha256": "7517d321a88f946020e53ae1369e5f2d2301adf564e7fc1b61f04bb7b53c2947",
+   "mismatched": [],
+   "ok": true,
+   "problems": []
+  },
+  "problems": [],
+  "trees": [
+   {
+    "dir": "/data/dev2/hf-cache/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259",
+    "files": 32,
+    "sha256": "b3e8aec1c3899fdd6918bb5c15a8fb6cb7be154d7ca47685276fd4bb43836420"
+   }
+  ]
+ },
+ "passed": true,
+ "schema": "dev2-c1-postkey/1/verify",
+ "utc": "2026-10-01T07:19:49Z"
+}

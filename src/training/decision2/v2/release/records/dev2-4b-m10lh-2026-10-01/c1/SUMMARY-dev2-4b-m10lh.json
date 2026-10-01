@@ -1,0 +1,127 @@
+{
+ "approval": null,
+ "baseline_entry": {
+  "c1": 52.7055667591953,
+  "identity": "6a555335e077fd26952fd58df06a7dcca1f5ef317194f2e3e4d7664d5c071cd7",
+  "model": "DEV2.0-4B",
+  "predictions_sha256": "460268e57ec0b90fb15181e74d6d012cb9c52ec0d48a1f62a98a629d96eba58d",
+  "repo": "llm-semantic-router/DEV2.0-4B",
+  "revision": "manifest-sha256:7517d321a88f946020e53ae1369e5f2d2301adf564e7fc1b61f04bb7b53c2947",
+  "run": "/data/dev2/runs/eval/c1-postkey/4B/dev2-4b-m10lh-20261001T071945Z/cand",
+  "seal_sha256": "e2217e6c0ddd80ccad72ac661c699481a33cf1893691160ab620d0503ff3be53",
+  "source": "post-key C1 v1.2 collection dev2-4b-m10lh-20261001T071945Z"
+ },
+ "by_type": {
+  "choice": 57.5878721504623,
+  "noul": 67.30373824933572,
+  "score": 33.21290370687276
+ },
+ "c1": 52.7055667591953,
+ "comparisons": [
+  {
+   "by_type": {
+    "choice": {
+     "ci95": [
+      2.600767331657145,
+      6.953318431931036
+     ],
+     "delta": 4.7617426185178005,
+     "p": 0.0
+    },
+    "noul": {
+     "ci95": [
+      -2.129585803320555,
+      4.06853604734787
+     ],
+     "delta": 0.9173174725411144,
+     "p": 0.5945189037807561
+    },
+    "score": {
+     "ci95": [
+      2.1408819850026983,
+      9.886366285843373
+     ],
+     "delta": 6.111594030149629,
+     "p": 0.0008001600320064013
+    }
+   },
+   "ci95": [
+    2.5950786450761796,
+    6.0042834016905084
+   ],
+   "delta": 4.323609061989018,
+   "key": "baseline",
+   "kind": "item8",
+   "name": "DEV2.0-4B 452f1332 (current revision)",
+   "p": 0.0,
+   "right_c1": 48.38195769720628,
+   "run": "/data/dev2/runs/eval/m4/c1-event3/cand4b",
+   "sha256": "62f9e97ebb9896c098a27a9389d29d97fe73b43cb78b84778e1f3935df4eba72",
+   "verdict": "PASS"
+  }
+ ],
+ "gpu": {
+  "cand": {
+   "exit_code": 0,
+   "gpu": 0,
+   "gpu_hours": 0.03781135870350732,
+   "shared": true,
+   "wall_seconds": 136.12089133262634
+  },
+  "smoke": {
+   "exit_code": 0,
+   "gpu": 0,
+   "gpu_hours": 0.017080979413456387,
+   "shared": true,
+   "wall_seconds": 61.49152588844299
+  }
+ },
+ "gpu_hours": 0.0548923381169637,
+ "item8": {
+  "ci95": [
+   2.5950786450761796,
+   6.0042834016905084
+  ],
+  "delta": 4.323609061989018,
+  "name": "DEV2.0-4B 452f1332 (current revision)",
+  "p": 0.0,
+  "verdict": "PASS"
+ },
+ "item_set": {
+  "dropped_by_task": {
+   "delichess/communicative_function": 6,
+   "delichess/epistemic_stance": 6,
+   "implicaturex/likelihood": 1,
+   "legal_case_law/argument_function": 20,
+   "narrative_gold/span_is_event": 1
+  },
+  "dropped_items": 34,
+  "gold_items": 2874,
+  "retired_candidates": 555,
+  "retired_sha256": "bbf095c70917f028d691fce570b114725e4f22fd6a1987456f6ae2c30f22990a",
+  "scored_items": 2840,
+  "tasks_emptied": [],
+  "version": "v1.2"
+ },
+ "items": 2840,
+ "label": "JevArena-C1 v1.2, post-key (not an independent validation)",
+ "model": {
+  "adapter_spec": "v2/eval/sealed/adapters/dev2-dec-package-t1.json",
+  "identity": "6a555335e077fd26952fd58df06a7dcca1f5ef317194f2e3e4d7664d5c071cd7",
+  "label": "DEV2.0-4B",
+  "limit": "16,384 tokens (package limit), no truncation",
+  "manifest_sha256": "7517d321a88f946020e53ae1369e5f2d2301adf564e7fc1b61f04bb7b53c2947",
+  "repo": "llm-semantic-router/DEV2.0-4B",
+  "revision": "manifest-sha256:7517d321a88f946020e53ae1369e5f2d2301adf564e7fc1b61f04bb7b53c2947"
+ },
+ "name": "dev2-4b-m10lh",
+ "predictions_sha256": "460268e57ec0b90fb15181e74d6d012cb9c52ec0d48a1f62a98a629d96eba58d",
+ "report_sha256": "0b7e887003e787b3e39f2909ad9499c410d008b11ba793c3e26a1c320a7634c8",
+ "role": "successor",
+ "schema": "dev2-c1-postkey/1/summary",
+ "seal_sha256": "e2217e6c0ddd80ccad72ac661c699481a33cf1893691160ab620d0503ff3be53",
+ "tier": "4B",
+ "use": "successor-rule item 8 only: never training data, never a selection criterion (development or siblings)",
+ "utc": "2026-10-01T07:26:20Z",
+ "valid": 2840
+}

@@ -1,8 +1,8 @@
 {
   "device": "cuda:0",
-  "load_seconds": 118.72268097600318,
+  "load_seconds": 120.95241607999924,
   "mode": "automap-parity",
-  "package_manifest_sha256": "b9b1744d32a8ad4fb1a3e7a7ceffcd5ca5eccca068d826f7eec03d228277b252",
+  "package_manifest_sha256": "298662b35ca298f0b19d4d689ab5ff8c887fdfe0fb426b84c7951ecac1a8f1fd",
   "panels": {
     "css15": {
       "category_changes": 0,
@@ -13,7 +13,7 @@
       "predictions_sha256": "a5ed828a9b6a839b765643362a08a95386312bf4fdaf4c33e2f6d97a28337fbb",
       "prompts": 6547,
       "prompts_sha256": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6",
-      "seconds": 771.94300965,
+      "seconds": 777.1874569380016,
       "slots": 6547
     },
     "mlx-diag": {
@@ -25,7 +25,7 @@
       "predictions_sha256": "1ab3487d9b7b9368450b003697692891ed6947cad18c2876b9626c96fb0d87e4",
       "prompts": 2275,
       "prompts_sha256": "25fde28f4b227a9cc8588da79a597ce816ba4a8f979139f99f69aeb595580a5f",
-      "seconds": 220.60620057699998,
+      "seconds": 224.87304893000692,
       "slots": 2275
     },
     "public231": {
@@ -37,7 +37,7 @@
       "predictions_sha256": "6746b61a58603418d43ce22109d08b79d9cf3bab63aa14acca6cd42c5dcf131d",
       "prompts": 231,
       "prompts_sha256": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd",
-      "seconds": 32.31774536399462,
+      "seconds": 33.19632955499401,
       "slots": 231
     },
     "typed-final": {
@@ -49,7 +49,7 @@
       "predictions_sha256": "ea573b2d50be50efd3048ee427309232b1f9b998b98d9997644bd82a51442d0e",
       "prompts": 1600,
       "prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd",
-      "seconds": 161.5399649259998,
+      "seconds": 161.72749750499497,
       "slots": 2000
     }
   },
@@ -70,7 +70,7 @@
       "runtime_check_sha256": "4517d9e001d9e1e2b520086b5153fa69b642a191efb19b8c9a6a9ef126e1fc2d",
       "triton": "3.7.1+gitf0b55c07",
       "triton_cache_autotuning": "1",
-      "triton_cache_dir": "/data/dev2/runs/release/triton/dev2-automap-27B-20261001T061627Z"
+      "triton_cache_dir": "/data/dev2/runs/release/triton/dev2-automap-27B-20261001T082750Z"
     },
     "numpy": "2.3.5",
     "peft": "0.21.0",

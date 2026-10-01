@@ -55,15 +55,15 @@
     "4B": {
       "model": "DEV2.0-4B",
       "repo": "llm-semantic-router/DEV2.0-4B",
-      "revision": "452f133211de292a87bc29ab7e24a3bd0704e40d",
-      "identity": "11b5ca1c22f8cd38d67d718cbfa59a3fb4dc8f4e7bfd75b3e988f34e35fad0ad",
-      "manifest_sha256": "8fa3be690678b545380042f161c4c9101503fcf52ef7f3f65e2a44037d881f8c",
-      "run": "/data/dev2/runs/eval/m4/c1-event3/cand4b",
-      "seal_sha256": "b73e25f1ce5ea8ef53fe34b410d06644b4fb947ce6606761685921e631e7a137",
-      "predictions_sha256": "ebf6e9f2cbcadecae048a4416f629c0e3f2e9418fd8a7ddef78dde43182602fb",
-      "c1": 48.38195769720628,
-      "source": "C1 event 3 (independent confirmation, v1.2), stored predictions; valid for every revision with these weights, card-only revisions included",
-      "backup": "private eval-artifacts m4/c1-event3/cand4b (1561a3a5)"
+      "revision": "13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f",
+      "identity": "6a555335e077fd26952fd58df06a7dcca1f5ef317194f2e3e4d7664d5c071cd7",
+      "manifest_sha256": "7517d321a88f946020e53ae1369e5f2d2301adf564e7fc1b61f04bb7b53c2947",
+      "run": "/data/dev2/runs/eval/c1-postkey/4B/dev2-4b-m10lh-20261001T071945Z/cand",
+      "seal_sha256": "e2217e6c0ddd80ccad72ac661c699481a33cf1893691160ab620d0503ff3be53",
+      "predictions_sha256": "460268e57ec0b90fb15181e74d6d012cb9c52ec0d48a1f62a98a629d96eba58d",
+      "c1": 52.7055667591953,
+      "source": "post-key C1 v1.2 collection dev2-4b-m10lh-20261001T071945Z (spec c1-postkey/dev2-4b-m10lh.json; mirror 217a29bbb) of the pre-release package (manifest 7517d321), whose weights are those of the released revision 13d4214361d0 (identity 6a555335; the release differs only in README.md, config.json, the Transformers remote code and decision2/api.py, qwen.py, with 0 answer changes on every scored panel); item 8 vs the previous entry 48.38: +4.32 [+2.60, +6.00], PASS; not an independent validation",
+      "backup": "private eval-artifacts c1-postkey/4B/dev2-4b-m10lh-20261001T071945Z (18d45a76)"
     },
     "9B": {
       "model": "DEV2.0-9B",
@@ -96,6 +96,7 @@
     "A tier's entry is the C1 run of its current HF revision's weights. When a successor is released, its post-key run (SUMMARY.json baseline_entry) replaces the entry in the same commit as the release record.",
     "0.6B: the current revision b2131337 was collected post-key on 2026-09-29 (C1 36.92 on v1.2 vs 33.02 for the previous revision e61b2b44's event-2 predictions); a re-collection of these weights is refused.",
     "0.8B: registered 2026-09-30 by the coordinator's decision, from the event-1 predictions (0 answer changes at T = 1); no new collection.",
-    "27B: replaced 2026-09-30 by the successor DEV2.0-27B 5323310327e5 (27B M4-A20r soup, identity 2e07451107a2; coordinator 07:20). The previous entry was the event-3 run cand27 of 5683c6f0 (identity b7fd44e3, C1 57.33, seal f41d44c5); a second 27B successor against this entry needs --approval."
+    "27B: replaced 2026-09-30 by the successor DEV2.0-27B 5323310327e5 (27B M4-A20r soup, identity 2e07451107a2; coordinator 07:20). The previous entry was the event-3 run cand27 of 5683c6f0 (identity b7fd44e3, C1 57.33, seal f41d44c5); a second 27B successor against this entry needs --approval.",
+    "4B: replaced 2026-10-01 by the successor DEV2.0-4B 13d4214361d0 (decoder M10 m10-4b-LH, rank-128 LoRA on Qwen3.5-4B-Base merged, identity 6a555335; user release job 2026-10-01). The previous entry was the event-3 run cand4b of 452f1332 (identity 11b5ca1c, C1 48.38, seal b73e25f1); a second 4B successor against this entry needs --approval."
   ]
 }

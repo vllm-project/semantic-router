@@ -8,6 +8,12 @@ pinned base (PEFT auto-detection tested). Worktree `/home/xunliu/code/vllm-sr-de
 
 ## Now
 
+- 10:10Z — **DONE. All six published.** 9B **`41cb6a08`** (decision `61b86bd3…`, 7 / 7; 08:12Z) and 27B **`3236518c`**
+  (decision `b3999314…`, 14 / 14; 10:02Z), each with AutoModel vs native 0 of 11,053 under 5.17 and 5.18, Hub smoke
+  5.17 + 5.18 pass, post-checks ok. The 27B's first run uploaded `2b7508e9` and stopped at its Hub smoke (a filtered
+  `--env HF_HUB_CACHE` left a bare `-e`; fixed `2cfa500fe`, resumed). Unified `API.md` (1.0 + 2.0; `ac94cda53`);
+  `API-decision1.md` is a pointer. Receipts fetched, record final; node E GPU6 / GPU7 leases removed; about 10.6 GPU-h.
+  The 4B LH release (b5f60b33) carries the remote code through the builder; no requests from it in its records.
 - 07:40Z — **HANDOFF.** Published: **0.6B `08b00e07`** (13 / 13), **0.8B `1188dd33`** (7 / 7), **2B `ffe291b4`**
   (7 / 7), **4B `3785b7b9`** (7 / 7; 07:36Z), each with AutoModel vs native 0 of 11,053 answers changed (drift 0), 5.18 parity 0 of 11,053, Hub smoke
   5.17 + 5.18 pass, post-checks ok. Still running on node E (nothing else needed to start them):
