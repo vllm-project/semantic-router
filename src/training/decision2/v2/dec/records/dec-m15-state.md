@@ -1,5 +1,18 @@
 # Decoder M15 — state (prereg `dec-m15-prereg-2026-10-01.md`)
 
+## 2026-10-01 18:55Z — 0.8B rules (run once): no finalist; M15 has no finalist at any tier
+
+| Point (vs `08b-C0-e`: typed C / N / S 610 / 212 / 159) | Typed T; C / N / S | HT-DEV v2 | Retention Δ | Transfer Δ | hs1 false-yes | MLX-DEV Noul-ML / Choice-ML Δ [95% CI] | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `08b-RASDML` | .575 vs .613; 540 / 201 / 179 | +.047 [+.025, +.066] GAIN | +.033 [+.008, +.060] | +.192 | .774 vs .720 | **−.012 [−.021, −.003] / −.030 [−.057, −.003]** | choice 540 < 586; `attribute_gate` 271 < 280; `rule_precedence` 201 < 208; **MLX-DEV guard (both)** |
+| `08b-RA10SDML` | .634; 557 / 220 / 238 | +.030 [+.010, +.049] GAIN | −.016 [−.034, +.001] | +.193 | .726 | −.006 [−.016, +.003] / +.006 [−.019, +.029] (passes) | choice 557 < 586; `attribute_gate` 276 < 280 |
+
+- Contrasts (report only): `08b-RASDML` vs M13 `08b-RASD`: HT +.006 TIE; typed choice −34, Noul −7, Score −26.
+  `08b-RA10SDML` vs `08b-RASDML`: HT −.017 TIE; retention −.049 [−.074, −.024]; typed choice +17, Noul +19, Score +59.
+- **Guard validation, 0.8B (report only):** M12's `08b-RA` vs `08b-C0-e`: Noul-ML +.006, Choice-ML .000, M_dev .000 —
+  as at 4B, MLX-DEV does not reproduce that model's formal mlx-diag loss (−.014).
+- No formal, no hand-off. GPU-h (launch receipts): node E 6.61, node F 6.17; Part A pending (≈ 2.4).
+
 ## 2026-10-01 18:31Z — 4B rules (run once): no finalist
 
 | Point (vs `4b-LH-f`: typed C / N / S 728 / 290 / 371) | Typed T; C / N / S | HT-DEV v2 | Retention Δ | Transfer Δ | hs1 false-yes | MLX-DEV Noul-ML / Choice-ML Δ [95% CI] | Verdict |
