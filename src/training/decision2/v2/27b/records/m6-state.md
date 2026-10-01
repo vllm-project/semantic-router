@@ -219,10 +219,14 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
    table; record the choice rule's outcome across chains (stage 1: M6-IB / M6-IBX; stage 2: M6-IB2 / M6-IB2PN).
 3. **Superseded by worker 3 (15:50Z; `m6-handoff-2026-10-01.md` is now the runbook):** item 8 is this track's own
    step (§2: one attempt, `c1-postkey.sh` on node A GPU2, only for the choice-rule finalist and only with zero
-   exposure in the custodian's §1 record), and so is the private Index (§3: `m6-index.sh` on node D GPU4–7, eval
-   allowance ≤ 12 GPU-h = one 27B run; first finalist passing items 1–7). The release (§4) supersedes DEV2.0-27B's
-   current `main` through the release pipeline, only if items 1–8 pass: **`main` moved to `e7b4a372` at 15:41Z** (the
-   card-redesign worker's card-only revision on top of the fix revision `09280791`; spec `dev2-27b-card.json`).
+   exposure in the custodian's §1 record: met for every arm), and so are the private Index runs (§3:
+   `m6-index.sh` on node D GPU4–7). **Amendment 4 (Index path, COORDINATION 02:05): one Index run per frozen formal
+   finalist, started once its formal run is sealed; item 1' (v3 not significantly below A20r and a significantly
+   positive paired Index delta) can replace item 1; `m6_index_path` applies item 1' and the amended choice.** The
+   23:20 allowance (≤ 12 GPU-h) covers one 27B run; more are requested from the coordinator. The release (§4)
+   supersedes DEV2.0-27B's current `main` through the release pipeline, only if items 1–8 (or 1' and 2–8) pass:
+   **`main` moved to `e7b4a372` at 15:41Z** (card-only revision on top of the fix revision `09280791`; spec
+   `dev2-27b-card.json`), and the repositories are being renamed (COORDINATION 00:25: use the new ID).
 4. After the last chain (M6-IB2PN ≈ 08:30Z Oct 2): attribution (`m6-gates.sh <mirror> contrast` and `verdicts` with
    every sealed finalist; never `gates` again for an arm already gated), final
    results, gist 06, milestone-end cleanup ("Hand-off" above), merge (signed) into integration. **Order:** the
