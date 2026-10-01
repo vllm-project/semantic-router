@@ -4,8 +4,8 @@ Each build writes ``train.jsonl`` = every x60 line byte for byte, then every kep
 (file order), and ``teacher.jsonl`` = x60's own-Lux targets byte for byte (IB rows carry no teacher target, so they
 train on gold only under ``--teacher-partial``). ``--exclude-family`` drops IB families (the transfer-only ablation
 drops the in-distribution ones). The build refuses (no silent drop) any IB row whose id, lineage group or canonical
-input hash also occurs in x60 or earlier in the build. Token counts come from the IB releases' ``*.tokens.jsonl``
-files and x60's manifest.
+input hash also occurs in x60, or whose id or input hash occurs earlier in the build (an IB lineage group holds several
+rows by design, so groups are checked against x60 only). IB token counts come from the releases' ``*.tokens.jsonl``.
 
 usage: m9_data.py --x60-dir D --ib1 F --ib2 F [--exclude-family NAME ...] --output DIR
 """
