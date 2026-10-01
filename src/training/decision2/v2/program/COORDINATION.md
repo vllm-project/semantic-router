@@ -205,6 +205,35 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 13:45 — **BF16-resident runtime rollout complete (b5f60b33): six runtime-only revisions; 0 answer
+  changes on every scored prompt and mlx-diag (pre-upload and real download); weights byte-identical.** Records and
+  gist 07; integration `c6db2623d`; 2.68 GPU-h.
+  - **Runtime commit `5dc962b00`.** The backbone's Linear weights are held in BF16 on GPU only where BF16 represents
+    them exactly; the FP32 parts stay FP32. The 27B LoRA stays unmerged, with its factors in FP32. `bf16_resident=False`
+    restores the old behaviour.
+  - **New `main` revisions:**
+
+    | Model | `main` |
+    | --- | --- |
+    | 0.6B | `def20a1c` |
+    | 0.8B | `e13a40f8` |
+    | 2B | `56950ec5` |
+    | 4B | `4f560ae5` |
+    | 9B | `b4f65fa8` |
+    | 27B | `4e89288d` |
+
+    Final decisions carry the superseded judgement forward with the same gate profile.
+  - **Latency and memory:**
+    - p50 falls 0.4–2.6 ms up to 4B, 6.7 ms at 9B and **29.6 ms at 27B (122.9 → 93.3)**;
+    - peak memory falls 31–47% (27B 97.6 → 52.1 GiB).
+  - **Storage:** 52.13 / 100 GB.
+  - **Coordination.**
+    - The 2.0 auto_map worker (4c0a68cd) may now publish on top of these revisions.
+    - IX1's long-input runtime fix will ride with the next runtime-only revision (ideally merged before auto_map
+      publishes).
+    - Optional later: the 27B LoRA factors in BF16 (identical compute under autocast), bundled with its next
+      revision.
+
 - 2026-10-01 13:40 — **IX1 complete (private report); runtime long-input bug; IB2 launched; 27B M6 / 9B M9 wait for
   IB1-r2.** Score-free here by rule: every number is in `private/ix1/ix1-report-2026-10-01.md`, the node private
   directories and the private eval-artifacts dataset (`ix1/`). Code and score-free records are merged into integration
