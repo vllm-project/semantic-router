@@ -50,7 +50,7 @@ class M6LaunchTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {"DEV2_27B_ALLOC": "m6"}, clear=True):
             self.assertEqual(sorted(launch.allowed_gpus("b")), [0, 1, 5])
             self.assertEqual(sorted(launch.allowed_gpus("a")), [2])
-            self.assertEqual(launch.max_cap_hours(), 20.0)
+            self.assertEqual(launch.max_cap_hours(), 22.0)
             with tempfile.TemporaryDirectory() as tmp:
                 drm = fake_sysfs(Path(tmp), "renderD129", "0000:83:00.0")
                 self.assertEqual(launch.render_node(0, drm).name, "renderD129")
@@ -76,6 +76,29 @@ class M6LaunchTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {"DEV2_NODE": "d"}, clear=True):
             with self.assertRaises(ValueError):
                 launch.node_name()
+
+    def test_read_lease_single_line_owner(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            owner = Path(tmp) / "owner"
+            owner.write_text(
+                "track=eval-ix1 status=released (IX1 follow-up complete) "
+                "last_job_end_utc=2026-10-01T08:18:09Z\n"
+            )
+            self.assertEqual(
+                launch.read_lease(owner),
+                {
+                    "track": "eval-ix1",
+                    "status": "released (IX1 follow-up complete)",
+                    "last_job_end_utc": "2026-10-01T08:18:09Z",
+                },
+            )
+            owner.write_text("track=27b\npurpose=a b=c (kept whole)\nstatus=idle\n")
+            self.assertEqual(launch.read_lease(owner)["purpose"], "a b=c (kept whole)")
+            owner.write_text("purpose=27b M5 closed; reserved-idle for track 27b\n")
+            self.assertEqual(
+                launch.read_lease(owner),
+                {"purpose": "27b M5 closed; reserved-idle for track 27b"},
+            )
 
     def test_launch3_idle_status_free_text(self):
         launch3 = importlib.import_module("v2.27b.m4b.launch3")
@@ -176,6 +199,31 @@ class M6SlicesScoreTest(unittest.TestCase):
             m6_slices.pn1_report(rows, ("cand", noisy), ("ref", ref))["pass"]
         )
 
+    def test_pn1_heldout_es_fr_is_reported_only(self):
+        rows = self.pn1_rows()
+        for i in range(20):
+            rows.append(noul_row(f"eshop{i}", "pn-hop", "es", 1))
+            rows.append(noul_row(f"esname{i}", "pn-name", "es", 0))
+            rows.append(noul_row(f"frnear{i}", "pn-near", "fr", 0))
+        ref = {r["id"]: p_true(0.9 if r["label"] else 0.1) for r in rows}
+        report = m6_slices.pn1_report(rows, ("c", ref), ("r", ref))
+        held = report["heldout_es_fr"]
+        self.assertEqual(held["candidate"]["hop"]["n"], 20)
+        # es / fr pn-near is a noisy construction: only the es name rows count as clean gold-no
+        self.assertEqual(held["candidate"]["clean_no"]["n"], 20)
+        self.assertEqual(held["delta"], {"hop": 0, "clean_no": 0})
+        self.assertIsNotNone(held["delta_ci95"])
+        biased = dict(ref, **{f"esname{i}": p_true(0.9) for i in range(10)})
+        report = m6_slices.pn1_report(rows, ("c", biased), ("r", ref))
+        self.assertAlmostEqual(report["heldout_es_fr"]["delta"]["clean_no"], 0.5)
+        self.assertGreater(report["delta"]["clean_no"], 0)
+        self.assertFalse(report["pass"])
+        self.assertIsNone(
+            m6_slices.pn1_report(self.pn1_rows(), ("c", ref), ("r", ref))[
+                "heldout_es_fr"
+            ]
+        )
+
     def test_pn1_guard_hop_slack(self):
         rows = self.pn1_rows()
         ref = {r["id"]: p_true(0.9 if r["label"] else 0.1) for r in rows}
@@ -262,6 +310,44 @@ class M6DataTest(unittest.TestCase):
                 m6_data.drop_families(src, ["w2c"], out)
             with self.assertRaises(ValueError):
                 m6_data.drop_families(src, ["nope"], Path(tmp) / "other.jsonl")
+
+    def test_drop_groups(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src, out = Path(tmp) / "pn1.jsonl", Path(tmp) / "pn1h.jsonl"
+            lines = [
+                json.dumps(
+                    {
+                        "id": str(i),
+                        "group_id": g,
+                        "language": "ja",
+                        "family": "pn-hop",
+                        "label": 1,
+                    }
+                )
+                + "\n"
+                for i, g in enumerate(["g1", "g2", "g2", "g3"])
+            ]
+            src.write_text("".join(lines))
+            g0, scan = Path(tmp) / "g0.txt", Path(tmp) / "scan.txt"
+            g0.write_text("")
+            scan.write_text("g2\n")
+            report = m6_data.drop_groups(src, [g0, scan], out)
+            self.assertEqual(out.read_text(), lines[0] + lines[3])
+            self.assertEqual(
+                (
+                    report["groups_dropped"],
+                    report["rows_in"],
+                    report["rows_dropped"],
+                    report["rows_out"],
+                ),
+                (1, 4, 2, 2),
+            )
+            self.assertEqual(report["rows_dropped_by_cell"], {"ja/pn-hop/1": 2})
+            with self.assertRaises(FileExistsError):
+                m6_data.drop_groups(src, [scan], out)
+            scan.write_text("g9\n")
+            with self.assertRaises(ValueError):
+                m6_data.drop_groups(src, [scan], Path(tmp) / "other.jsonl")
 
     def test_concat_dev_files(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -415,6 +501,40 @@ class M5VerdictsOptionsTest(unittest.TestCase):
 
 
 class M6ScriptTest(unittest.TestCase):
+    def test_arm_caps(self):
+        sha = "0" * 64
+
+        def run(arm, mix, cap):
+            return subprocess.run(
+                [
+                    "bash",
+                    str(M6 / "m6-arm.sh"),
+                    "d",
+                    "2",
+                    arm,
+                    "s1",
+                    mix,
+                    sha,
+                    "861",
+                    cap,
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+        for arm, mix, cap in (
+            ("M6-IB2", "a20ib12", "20.5"),
+            ("M6-IB2PN", "a20ib12pn", "22.5"),
+        ):
+            out = run(arm, mix, cap)
+            self.assertEqual(out.returncode, 2)
+            self.assertIn("bad SAVE_EVERY", out.stderr)
+        out = run("M6-IB2PN", "a20ib12pn", "22")
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("mixtures-m6pn-1/a20ib12pn.train.jsonl is not", out.stderr)
+        out = run("M6-IB3", "a20ib12", "20")
+        self.assertIn("unknown arm", out.stderr)
+
     def test_bash_n(self):
         scripts = sorted(M6.glob("*.sh"))
         self.assertTrue(scripts)

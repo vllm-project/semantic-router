@@ -9,6 +9,11 @@ private only). GPUs: node A GPU0–1 (release / C1). Worktree `/home/xunliu/code
 
 ## Now
 
+- 10:00Z — **Done.** Merged (integration `f6e6d81b5`), gist 07 entry added. Private Index run of `13d42143`
+  (IX1 harness, mirror `fadde5824`, node C GPU6 / GPU7, one render node per container): 120,226 rows, 120,224 ok,
+  2 unsupported (`max_length_exceeded`), 0 errors; port vs kit scorer gate PASS; 2.10 GPU-h (+ parity 0.05).
+  Values only in the private folders (node C `index021/ix1/runs/DEV2.0-4B-LH`, eval-artifacts
+  `ix1/DEV2.0-4B-LH` `5d4e5aaa`, readback equal; local `private/ix1-lh/`). Node C GPU6 / GPU7 leases released.
 - 08:50Z — **Released** `13d4214361d0` (manifest `598cad2d`, gate seal `be7b02b4`, 14 / 14 items; Hub smoke 5.17 +
   5.18 pass). Purge of `3785b7b9`'s 6 weight blobs done (9.70 GB; DEV2.0-4B 9.72 GB; headroom 47.53 GB). C1 backup
   eval-artifacts `18d45a76`; registry 4B = LH post-key run. Record `dev2-4b-m10lh-2026-10-01.md`. Next: merge, gist

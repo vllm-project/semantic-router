@@ -74,12 +74,12 @@
     }
   },
   "device": "cuda:0",
-  "load_seconds": 113.03555906100519,
+  "load_seconds": 120.46729525500268,
   "mode": "automap",
   "outputs": [
     {
       "id": "support-routing",
-      "latency_ms": 5164.040596995619,
+      "latency_ms": 5062.230062001618,
       "response": {
         "answers": {
           "receipt": {
@@ -121,7 +121,7 @@
     },
     {
       "id": "structured-state",
-      "latency_ms": 94.3106490012724,
+      "latency_ms": 99.5397660008166,
       "response": {
         "answers": {
           "escalate": {
@@ -157,7 +157,7 @@
     },
     {
       "id": "policy-check",
-      "latency_ms": 87.97731500089867,
+      "latency_ms": 91.21960699849296,
       "response": {
         "answers": {
           "action": {
@@ -184,7 +184,7 @@
     },
     {
       "id": "multilingual",
-      "latency_ms": 91.53084900026442,
+      "latency_ms": 93.5516120007378,
       "response": {
         "answers": {
           "queue": {
@@ -207,7 +207,7 @@
     },
     {
       "id": "null-description",
-      "latency_ms": 87.33184900484048,
+      "latency_ms": 86.9702639975003,
       "response": {
         "answers": {
           "intent": {
@@ -230,7 +230,7 @@
     },
     {
       "id": "over-budget",
-      "latency_ms": 122.39450700144516,
+      "latency_ms": 127.90795699402224,
       "response": {
         "answers": {
           "tone": {
@@ -250,9 +250,9 @@
       }
     }
   ],
-  "package_manifest_sha256": "b9b1744d32a8ad4fb1a3e7a7ceffcd5ca5eccca068d826f7eec03d228277b252",
+  "package_manifest_sha256": "298662b35ca298f0b19d4d689ab5ff8c887fdfe0fb426b84c7951ecac1a8f1fd",
   "passed": true,
-  "reference_sha256": "2cbfb94f63a7d498bb1c9bad51f15c34b5e1f1889d9ff808815d3cd0bf3f6de3",
+  "reference_sha256": "35c049266c55203ea1f05ebde7f278e90fdb902a65c8f3612fbdc9cbb8009805",
   "runtime": {
     "hip": "7.2.53211",
     "kernels": {
@@ -268,7 +268,7 @@
       "runtime_check_sha256": "4517d9e001d9e1e2b520086b5153fa69b642a191efb19b8c9a6a9ef126e1fc2d",
       "triton": "3.7.1+gitf0b55c07",
       "triton_cache_autotuning": "1",
-      "triton_cache_dir": "/data/dev2/runs/release/triton/dev2-automap-27B-20261001T061627Z"
+      "triton_cache_dir": "/data/dev2/runs/release/triton/dev2-automap-27B-20261001T082750Z"
     },
     "numpy": "2.3.5",
     "peft": "0.21.0",

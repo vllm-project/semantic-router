@@ -27,7 +27,7 @@
     }
   },
   "device": "cuda:0",
-  "load_seconds": 124.173543126999,
+  "load_seconds": 120.34887238700321,
   "loaded_parameters": 26096775168,
   "mode": "run",
   "model_name": "DEV2.0-27B",
@@ -35,7 +35,7 @@
     {
       "id": "support-routing",
       "input_sha256": "d97b537c37ddf12ca4117ff655a31fa14afbfd968729bc2b512beadca6054f88",
-      "latency_ms": 5038.590049996856,
+      "latency_ms": 5417.97640400182,
       "response": {
         "answers": {
           "receipt": {
@@ -78,7 +78,7 @@
     {
       "id": "structured-state",
       "input_sha256": "b8557ad323a641d6ea898abb86818d9e13d91e0d327bb0dabc8fe696c840d829",
-      "latency_ms": 102.94789700128604,
+      "latency_ms": 99.54156399908243,
       "response": {
         "answers": {
           "escalate": {
@@ -115,7 +115,7 @@
     {
       "id": "policy-check",
       "input_sha256": "af52e9c0442937e0032aca068ae665a0abe8a64c60de0cbe69de386d569ce7c0",
-      "latency_ms": 95.4418719993555,
+      "latency_ms": 87.58187999774236,
       "response": {
         "answers": {
           "action": {
@@ -143,7 +143,7 @@
     {
       "id": "multilingual",
       "input_sha256": "28be6206986889181cc9bf19c4ad593721955ecdffc1c03da97e1be473bf496a",
-      "latency_ms": 100.9149180026725,
+      "latency_ms": 91.45392999926116,
       "response": {
         "answers": {
           "queue": {
@@ -167,7 +167,7 @@
     {
       "id": "null-description",
       "input_sha256": "78429233af527c450bc84b2757198df46d011c93dad94bed70d567637c953928",
-      "latency_ms": 92.58948100614361,
+      "latency_ms": 85.17478399880929,
       "response": {
         "answers": {
           "intent": {
@@ -191,7 +191,7 @@
     {
       "id": "over-budget",
       "input_sha256": "e71b67ec6c62c5db4858d7a24ef686f0cfa02d82f3c0237f504846e653baa3d0",
-      "latency_ms": 134.21626600029413,
+      "latency_ms": 129.23312700149836,
       "response": {
         "answers": {
           "tone": {
@@ -211,7 +211,7 @@
       }
     }
   ],
-  "package_manifest_sha256": "b9b1744d32a8ad4fb1a3e7a7ceffcd5ca5eccca068d826f7eec03d228277b252",
+  "package_manifest_sha256": "298662b35ca298f0b19d4d689ab5ff8c887fdfe0fb426b84c7951ecac1a8f1fd",
   "passed": true,
   "profile": "qwen-adapter",
   "runtime": {
@@ -230,7 +230,7 @@
       "runtime_check_sha256": "4517d9e001d9e1e2b520086b5153fa69b642a191efb19b8c9a6a9ef126e1fc2d",
       "triton": "3.7.1+gitf0b55c07",
       "triton_cache_autotuning": "1",
-      "triton_cache_dir": "/data/dev2/runs/release/triton/dev2-automap-27B-20261001T061627Z"
+      "triton_cache_dir": "/data/dev2/runs/release/triton/dev2-automap-27B-20261001T082750Z"
     },
     "numpy": "2.3.5",
     "parameter_dtypes": {

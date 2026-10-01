@@ -7,8 +7,8 @@
   ],
   "passed": true,
   "repo": "llm-semantic-router/DEV2.0-27B",
-  "revision": "2b7508e95a243d71e854a0743e14c1514f4c29dc",
+  "revision": "3236518c92f70a404c02d1c47642850355d163ed",
   "schema": "dev2-hub-download/1",
-  "seconds": 6.630470961004903,
-  "utc": "2026-10-01T07:16:45.095832+00:00"
+  "seconds": 8.352155761996983,
+  "utc": "2026-10-01T09:25:18.575908+00:00"
 }

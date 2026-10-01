@@ -205,6 +205,128 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 18:55 — **M11 complete (c473a3b2): no finalist anywhere; M12 launched (additive breadth).** Records:
+  `dec-m11-results-2026-10-01.md` (`078c1af02`), amendment 2, gist 04; integration `73238a2f9`; 18.17 of 110 GPU-h.
+  - **2B / 0.8B stage 1** (3 seeds + soup each, vs the 2.0 releases):
+
+    | Point | HT-DEV v2 | Retention | Fails |
+    | --- | --- | --- | --- |
+    | `2b-LH` | tie | +.014 | Noul + Score type floors, Score5 collapse |
+    | `2b-NT` | +.029 GAIN | −.017 | retention |
+    | `08b-LH` | +.030 GAIN | +.004 | choice floor 501 vs 586; `attribute_gate` |
+    | `08b-NT` | tie | — | choice, Score, Noul floors |
+
+    - **Conclusion:** from-base LoRA keeps human transfer and retention but loses typed decisions at 2B / 0.8B. Their
+      bases sit above the releases on retention (+.064 / +.054).
+  - **4B stage 2** (LH + IB1 + IB2 at a 25% share):
+
+    | Point | IB DEV, 12 families | IB DEV, 9 transfer families | Fails |
+    | --- | --- | --- | --- |
+    | `4b-LHB` | **+.092 [+.078, +.106]** | +.053 | Noul + Score floors |
+    | `4b-LHBx` (transfer-only ablation) | +.030 | +.051 (equal) | choice floor + retention |
+
+    - **Breadth gain is real and transfers** (it does not depend on the in-distribution families).
+    - **Failure mechanism:** the IB share displaced typed rows.
+  - **Incident (recorded, amendment 2):** the first 2B gate run lacked inputs because of a probe-scorer bug plus two
+    concurrent scorings. It was set aside; the scorer is fixed and locked, and the gates were rerun once.
+  - **M12 (c473a3b2, resumed):**
+    - **4B LHA:** LH full tokens **plus** IB additive (≈ +25%); **LHA10:** ≈ +10%.
+    - **2B / 0.8B:** the released recipe retrained in full **plus** IB additive (≈ +20–25%); not top-ups.
+    - Same gates; successors build on the forward-budget fix revisions; a C1 content recheck for IB models;
+      100 GPU-h.
+
+- 2026-10-01 18:50 — **27B M6 launched (11741ee2 → continuation a56025bb); six rank-128 seeds training unattended;
+  G5 yes-bias gate validated and binding.** Records: `27b/records/m6-state.md`, gist 06; integration `c55cf924c`.
+  - **Arms** (two seeds each, rank-128 LoRA on the A20 rows, no extra typed dose):
+
+    | Arm | Data | Where |
+    | --- | --- | --- |
+    | M6-IB | A20 + IB1-r3 | node B |
+    | M6-IB2 | A20 + IB1 + IB2 | node B + node A |
+    | M6-IBX | A20 + IB1 minus When2Call / iSarcasmEval | node D, from 08:20Z |
+
+    - The data lock is byte-identical across both builds; the C1 source check found 0 hits.
+    - Preflights pass.
+    - First results ≈ 21:15Z; the last training ends ≈ 01:20Z on Oct 2.
+  - **G5 (PN1-dev yes-rate on gold-"no" pairs)** flags M5-L128 at +.019 [+.009, +.029] (A20r .154 vs L128 .173). It
+    mirrors L128's mlx-diag item-4 failure, so it binds; it is the main rank-128 risk.
+  - **G6 breadth.** A20r is already .920 on the IB1 development families, so real gains are needed.
+  - **Budget:** ≈ 15.7 of 140 GPU-h used; ≈ 94 projected.
+  - **Continuation.**
+    - Follow the chains; formal / items 1–7 / beats-AutoJev for finalists.
+    - **The C1 content recheck for IB1 + IB2 before item 8**; a private Index; the hand-off, with the successor built on
+      the 27B fix revision.
+    - **Optional G5 hedge M6-IB2PN** (+ PN1 train, if release-safe and disjoint from PN1 dev) on free node D GPUs.
+    - At the end: remove the node B → A link and release node D.
+
+- 2026-10-01 18:25 — **9B M9 stage 1: no finalist — the 4B from-base LoRA recipe does NOT carry to 9B; stage 2 is
+  running; stage 3 (K-a13 + IB) added; continuation worker launched.** Records: prereg `8570a5896`, stage 1
+  `8ab82f069`, gist 05; integration `d75b54411`; 16.3 of 120 GPU-h.
+  - **L9** (rank-128 LoRA from Qwen3.5-9B-Base): typed .937, but it fails three gates: HT-DEV v2 −.031 [−.046, −.018]
+    FLAG, the Noul floor (330 < 334), and the yes-bias guard (+.042).
+  - **L9-Lux** (the same LoRA on Lux 1.0): HT-DEV v2 TIE −.006, but the yes-bias guard fails at +.086.
+  - **Retention.** DEV2.0-9B (.792) already matches or exceeds the base (.781), so there is no lost knowledge to
+    recover (unlike 4B). L9's gain is GSM8K only, likely in-distribution; MMLU falls.
+  - **Lesson:** the from-base recipe helps where the 1.0 lineage lost base capabilities (4B), not universally. 2B /
+    0.8B (M11) must be judged on their own retention probes.
+  - **Stage 2** (unattended until ≈ 12:45Z): L9IB (L9 + IB1-r3 + IB2) and L9IBX (the transfer-only ablation). The
+    formal step needs a manual GO.
+  - **Stage 3, added by the coordinator (amendment 3):** **K-a13IB**, the released 9B recipe plus IB1-r3 + IB2, with
+    the K-a13IBX ablation. The 9B deficits are coverage families, so this adds breadth on the proven recipe; the
+    yes-bias guard and Noul floor apply.
+  - **Continuation worker b23ed249.** A 9B successor must build on top of the 9B forward-budget fix revision.
+
+- 2026-10-01 18:10 — **All six DEV2.0 repos support stock Transformers (`trust_remote_code`); unified `API.md`; the
+  forward-budget fix round is queued (4c0a68cd).**
+  - **Current `main` revisions:**
+
+    | Model | `main` |
+    | --- | --- |
+    | 0.6B | `08b00e07` |
+    | 0.8B | `1188dd33` |
+    | 2B | `ffe291b4` |
+    | 4B | `13d42143` (LH; it already carries the fix) |
+    | 9B | `41cb6a08` |
+    | 27B | `3236518c` |
+
+    - AutoModel equals native on 11,053 answers each, under 5.17 / 5.18. Hub smoke tests pass.
+    - The 27B needed one resume after a release-script docker-flag bug in its smoke step (`2cfa500fe`); its two
+      revisions differ only in the builder commit.
+    - Records integration `99432d1a7`; ≈ 10.6 GPU-h on node E GPU6–7.
+  - **`API.md` (`ac94cda53`)** covers 1.0 and 2.0:
+    - the common surface first (AutoModel, `system_one`, `pipeline("decision")`, the schema);
+    - then the divergences: over-length admission (per request vs per question), confidence (`decision_type_aware_v1`
+      vs 1 − normalised entropy), the 1.0 encoder tokenizer subfolder, CPU vs GPU numerics, and the 27B base download.
+  - **Next (4c0a68cd, resumed):** runtime-only revisions with the forward-budget fix for 0.8B / 2B / 9B / 27B.
+    - Built from the current mains; they refuse to upload if `main` moved.
+    - Gates: 0 answer changes, AutoModel = native, the synthetic long-input test, and the 27B private ToolRet repro now
+      valid.
+    - A card runtime line; node E GPU6–7.
+    - **Successor releases on these repos (M6 / M9 / M11) must build on top of these fix revisions.**
+
+- 2026-10-01 18:00 — **DEV2.0-4B → `m10-4b-LH` released (b5f60b33): private `main` `13d42143`; successor items 1–8
+  pass.** Record and gist 07; integration `2ee92c13b`.
+  - **Parity.** 0 answer changes vs the sealed T = 1 predictions on typed-final / css15 / public231 / mlx-diag (max
+    drift 1.7e-14), before and after the real download. AutoModel equals native (drift 0).
+  - **C1 item 8 (custodial; the one attempt).** 52.71 vs the 4B baseline 48.38, +4.32 [+2.60, +6.00], PASS, labelled
+    post-key. The training data is the released mixture (0 new sources, 0 exposed groups), so no new-data C1 recheck
+    applied. **The C1 4B baseline registry now points to this run.**
+  - **Decision.**
+    - v3 +4.19 [+0.10, +9.88]; human transfer −.023 [−.082, +.074] (n.s.);
+    - types OK; mlx-diag card-eligible +.037; vs Nox1 +10.87;
+    - public 231 172 vs 171 (item 7 passes), but **vs Decider 4B 172 vs 192 (significantly below; disclosed on the
+      card)**.
+  - **Contents.** Built on the auto_map 4B revision `3785b7b9` (no concurrent publisher); it carries the remote code
+    **and IX1's long-input fix**. Hub `trust_remote_code` smoke tests under 5.17 / 5.18 pass.
+  - **Card.** The lineage is Qwen3.5-4B-Base → merged rank-128 LoRA → head (not Nox); all 15 human-transfer deltas are
+    listed; the Qwen3.5 Apache-2.0 LICENSE is shipped; no Index numbers.
+  - **Storage.** Superseded weights purged (9.70 GB); the org is at 52.47 / 100 GB.
+  - **Private Index:** done (private report). **The 4B frontier gap narrowed substantially** (numbers private).
+  - **Remaining runtime-only fix revisions:** 27B, 9B, 2B, 0.8B (4B is done). Queued for the auto_map worker after its
+    close-out.
+  - **Watch item.** Public 231 trails Decider 4B. It is a guard, but a future 4B arm should check whether IB2 / label
+    breadth helps there.
+
 - 2026-10-01 16:25 — **IX1 follow-ups done (c0ce08eb).**
   - **Shipped-runtime long-request bug.**
     - **Root cause:** FLA 0.5.2 gated-delta kernels compute some offsets in int32. A request's padded question batch

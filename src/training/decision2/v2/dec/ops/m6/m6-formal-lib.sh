@@ -8,7 +8,8 @@
 #
 # The caller sets S (decision2 dir of the exact mirror), SRC (mirror dir name) and TIER (4b|2b|08b), then calls
 # tier_setup. Node: 4b / 2b on node B, 08b on node A; M6_2B_NODE=A selects the 2B node-A fallback (prereg: used
-# only if the node-B S2T reference does not reproduce the node-A S2T answers exactly).
+# only if the node-B S2T reference does not reproduce the node-A S2T answers exactly); M6_4B_NODE=A|E|F and
+# M6_SMALL_NODE=E|F (2b / 08b) move a tier to another node.
 F=${M6_FORMAL_ROOT:-/data/dev2/runs/dec/formal/m6}
 R=/data/dev2/runs/dec
 M=$R/m6
@@ -81,21 +82,35 @@ tier_setup() {
         B) ;;
         *) echo "M6_4B_NODE must be A, B, E or F" >&2; exit 2 ;;
       esac ;;
-    2b)
-      TLABEL=2B SOURCE=$SOL INCUMBENT=S2T-soup
-      if [ "${M6_2B_NODE:-B}" = A ]; then
+    2b | 08b)
+      # M6_SMALL_NODE=E|F (decoder M11): 2B / 0.8B on node E / F with image dbe5f32b, the isolated runner, the 1.0
+      # model from the node's plain model directory and copies of node B's frozen masters in M6_SMALL_MASTER_DIR
+      # (cache-frozen-<tier>{,-mlx} and their .sha256 manifests).
+      if [ -n "${M6_SMALL_NODE:-}" ]; then
+        case $M6_SMALL_NODE in E | F) ;; *) echo "M6_SMALL_NODE must be E or F" >&2; exit 2 ;; esac
+        NODE=$M6_SMALL_NODE IMAGE=$IMAGE_B H=/data/dev2/models ISOLATE=(--isolate)
+        MASTER=${M6_SMALL_MASTER_DIR:?set M6_SMALL_MASTER_DIR}/cache-frozen-$TIER MASTER_SHA=frozen
+        MASTER_MLX=$M6_SMALL_MASTER_DIR/cache-frozen-$TIER-mlx MASTER_MLX_SHA=frozen
+        if [ "$TIER" = 2b ]; then
+          TLABEL=2B INCUMBENT=S2T-soup SOURCE=$H/Decision-1.0-Sol-2B/ce0c018a28de16d6639b1cd203b761bf643b89e6
+        else
+          TLABEL=0.8B INCUMBENT=E8F-soup SOURCE=$H/Decision-1.0-Eos-0.8B/363c4a5e56afc115b1c78c837633956d0bbb63ab
+        fi
+      elif [ "$TIER" = 08b ]; then
+        NODE=A IMAGE=$IMAGE_A SOURCE=$EOS TLABEL=0.8B INCUMBENT=E8F-soup ENVX=(--env HIP_FORCE_DEV_KERNARG=1)
+        MASTER=$R/formal/m2/m2-E8F-soup-nodeA-triton MASTER_SHA=live
+        MASTER_MLX=$R/formal/m2/m2-E8F-soup-nodeA-triton MASTER_MLX_SHA=live
+      elif [ "${M6_2B_NODE:-B}" = A ]; then
+        TLABEL=2B SOURCE=$SOL INCUMBENT=S2T-soup
         NODE=A IMAGE=$IMAGE_A ENVX=(--env HIP_FORCE_DEV_KERNARG=1)
         MASTER=$R/formal/m3/m3-S2T-soup-nodeA-triton MASTER_SHA=live
         MASTER_MLX=$R/formal/m3/m3-S2T-soup-triton MASTER_MLX_SHA=live
       else
+        TLABEL=2B SOURCE=$SOL INCUMBENT=S2T-soup
         NODE=B IMAGE=$IMAGE_B
         MASTER=$F/cache-frozen-2b MASTER_SHA=frozen
         MASTER_MLX=$F/cache-frozen-2b-mlx MASTER_MLX_SHA=frozen
       fi ;;
-    08b)
-      NODE=A IMAGE=$IMAGE_A SOURCE=$EOS TLABEL=0.8B INCUMBENT=E8F-soup ENVX=(--env HIP_FORCE_DEV_KERNARG=1)
-      MASTER=$R/formal/m2/m2-E8F-soup-nodeA-triton MASTER_SHA=live
-      MASTER_MLX=$R/formal/m2/m2-E8F-soup-nodeA-triton MASTER_MLX_SHA=live ;;
     *) echo "tier must be 4b, 2b or 08b" >&2; exit 2 ;;
   esac
   if [ "$NODE" = B ]; then
@@ -104,6 +119,8 @@ tier_setup() {
     local g bdf allowed
     GPU=${M6_GPU:-}
     [ "$NODE" = E ] && allowed="0 1 2 3" || allowed="2 3 4 5 6 7"
+    # M6_EF_GPUS narrows the node's decoder GPUs (decoder M11: node F GPU4-5 hold another workload).
+    [ -n "${M6_EF_GPUS:-}" ] && allowed=$M6_EF_GPUS
     for g in $allowed; do
       bdf=$(amd-smi list 2>/dev/null | awk -v n="GPU: $g" '$0 ~ "^"n"$" {getline; print tolower($2)}')
       [ -n "$bdf" ] && RENDER_OF[$g]=$(readlink -f "/dev/dri/by-path/pci-$bdf-render")
