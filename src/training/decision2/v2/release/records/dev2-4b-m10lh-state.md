@@ -9,6 +9,18 @@ private only). GPUs: node A GPU0–1 (release / C1). Worktree `/home/xunliu/code
 
 ## Now
 
+- 08:25Z — auto_map 4B published `3785b7b9` (gate seal `1f1872e8`, copied to `dev2-4b-m10lh-2026-10-01/current/`);
+  IX1 token-budget fix merged (integration `0ad342663`). LH rebuilt on top: BASE_SPEC `dev2-4b-automap.json`,
+  runtime_source = automap_source = mirror `08ec0834e`; draft `.draft2` (the C1-frozen `.draft` 2998debf kept).
+  New package manifest `2ee61ea0`, 40 files (only README / config.json / remote code / decision2 api.py, qwen.py
+  differ from the C1 package; weights identical): parity exact on all four panels, AutoModel vs native 0 changes
+  (drift 0.0). Bench (new vs 4f560ae5 download, same weights as 3785b7b9): p50 26.4 vs 29.2 ms, p95 26.9 vs 30.3,
+  peak 9.3 GiB both. Transformers 5.18 site installed on node A (`transformers` tree = node E's `5c3a59d6`; full
+  digest `93df9002`). Final spec / decision `4947fda6` committed (`32d9fc5e5`); **release running** node A GPU0
+  (`/data/dev2/logs/dev2-4b-lh-release-20261001T081057Z.log`, release.sh checks main == 3785b7b9 first). Next:
+  purge (ops/purge_superseded.py plan → apply, node copy = bf16r download), C1 backup (a20r backup_c1.py), registry
+  baseline_entry, record, gist 07, merge; Index: node C GPU1–5 leased 9B M9 until ~11:00Z, GPU6–7 eval-ix1 (idle,
+  leased) — poll; add an LH named entry to ix1/launch.sh (do not overwrite DEV2.0-4B outputs).
 - 07:30Z — pre-release package (draft spec, no upload) manifest `7517d321`, 37 files, identity `6a555335`,
   verify_bundle ok. Parity exact vs the T = 1 derivation: typed-final 1,600 / css15 6,547 / public231 231 / mlx-diag
   2,275, 0 answer changes, max drift 1.7e-14, predictions byte-equal (`c148d77a` / `56cf468f` / `aebe679d` /
