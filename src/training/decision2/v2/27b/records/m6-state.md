@@ -235,6 +235,9 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 19:01Z (poll 11 at 18:59Z): all alive, guard alive. M6-IB 4,183 / 4,030 (13.6 / 13.8 h; ETA 21:30Z / 21:47Z);
+  M6-IB2 4,115 / 4,115 (17.7 / 17.7 h); M6-IBX 3,763 / 3,724 (13.8 / 14.0 h; s1 at 3750 .8988, BEST stays 3125);
+  **M6-IB2PN 2,695 / 2,678 (18.9 / 18.7 h; at 2583 .9149 / .9073, BEST = 2583 both)**. GPU-h ≈ 80.
 - 18:45Z (poll 10 at 18:41Z): all alive, guard alive. M6-IB 4,070 / 3,913 (13.7 / 13.9 h; s2 at 3816 .9221, BEST
   stays 3180); M6-IB2 4,000 / 3,998 (17.8 / 17.6 h); M6-IBX 3,657 / 3,612 (13.8 / 14.0 h); **M6-IB2PN 2,583 / 2,573
   (18.9 / 18.7 h; s1 at 2583 .9149)**. GPU-h ≈ 77.
