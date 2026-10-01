@@ -1,5 +1,15 @@
 # Decoder M15 — state (prereg `dec-m15-prereg-2026-10-01.md`)
 
+## 2026-10-01 18:31Z — 4B rules (run once): no finalist
+
+| Point (vs `4b-LH-f`: typed C / N / S 728 / 290 / 371) | Typed T; C / N / S | HT-DEV v2 | Retention Δ | Transfer Δ | hs1 false-yes | MLX-DEV Noul-ML / Choice-ML Δ [95% CI] | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `4b-LHA10SDML` | .878 vs .868; 742 / 292 / 370 | −.008 [−.022, +.005] TIE | **−.030 [−.054, −.006]** | +.048 | .211 vs .199 | +.016 [+.009, +.023] / .000 [−.015, +.015] (guard passes) | retention CI upper < 0 |
+
+- Contrast vs M13 `4b-LHA10SD` (report only): HT −.005 TIE; retention −.008 [−.032, +.015]; typed choice +34, Noul −15,
+  Score −2. MLX-DEV: M13's point +.009 / −.006 vs LH, this point +.016 / .000.
+- 0.8B: `08b-RA10SDML` s1 / s2 DONE 18:07 / 18:15Z; `08b-RASDML` seeds finishing.
+
 ## 2026-10-01 18:17Z — 2B rules (run once): no finalist
 
 | Point (vs `2b-C0-f`: typed C / N / S 489 / 230 / 257) | Typed C / N / S | HT-DEV v2 | Retention Δ | Transfer Δ | MLX-DEV Noul-ML / Choice-ML Δ [95% CI] | Verdict |
