@@ -1,21 +1,20 @@
 {
  "candidates": {
-  "dev": "6816bf43834a88c43c8351cc6e3f98e732a53ae9d2d40ccb64dc90ff2c1eca92",
-  "train": "888dad522420dafe6759aa1957dd35a628be579e4873934d89e0ee9ed9ecbdb1"
+  "dev": "8ce859f4fd6f652cfe9f0600aafdd5075e99d6005723c52665876f31f1f44f79",
+  "train": "468cf7f202b8b1f4e7f42bea199df281774bd712f3fe8eb3c59f1251c30e27e2"
  },
  "dev": {
   "family": {
    "args": 374,
    "copa": 108,
-   "csqa": 513,
    "isarc": 82,
    "poem": 411,
-   "sentfin": 494,
+   "sentfin": 708,
    "sms": 62,
    "snips_rel": 12,
    "snips_sel": 310
   },
-  "groups": 1708,
+  "groups": 1714,
   "label_by_family": {
    "args": {
     "0": 187,
@@ -24,13 +23,6 @@
    "copa": {
     "0": 56,
     "1": 52
-   },
-   "csqa": {
-    "0": 88,
-    "1": 99,
-    "2": 117,
-    "3": 95,
-    "4": 114
    },
    "isarc": {
     "0": 45,
@@ -41,8 +33,8 @@
     "1": 192
    },
    "sentfin": {
-    "0": 247,
-    "2": 247
+    "0": 354,
+    "1": 354
    },
    "sms": {
     "0": 31,
@@ -61,146 +53,122 @@
   },
   "language": {
    "ar": 43,
-   "en": 2323
+   "en": 2024
   },
-  "rows": 2366,
-  "sha256": "eefab90932fb07fb6afaee0853fc3a98d1d05cf14e5478f319e3d09b29bc925d",
+  "rows": 2067,
+  "sha256": "3f56aa418e90e58f3fbaa50bf2f9f4f0405eeb9dd2f0c51ffca6f602711c693f",
   "task_type": {
-   "choice": 2292,
+   "choice": 1993,
    "noul": 74
   }
  },
  "drops": {
   "constructions": [
-   "sentfin-neutral",
-   "sumedit-shakespeare",
-   "wands-partial"
+   "sumedit-sales_email",
+   "sumedit-shakespeare"
   ],
   "dev_groups": {
-   "count": 1071,
-   "sha256": "06048b2a2e0518ffa2ab031256d80de00c3222adcd1c01abe6f2326bc15e9c5d"
+   "count": 1060,
+   "sha256": "07b7941d84bb37922db217a85434ee93c817cce5a2070461252ad772ec997774"
   },
   "families": [
+   "csqa",
    "medmcqa",
    "procb",
+   "sumedit",
+   "wands",
    "wanli"
   ],
   "groups": {
-   "count": 3792,
-   "sha256": "fadff88370f186849b9e13e747b9881c6cd87c5cfd2c08421ccba2cb1e70f69b"
+   "count": 3783,
+   "sha256": "765d2994c7421219f93fcd456f6f5353b89ac9730888e9792f58b0f9ff5e0ac3"
   },
   "ids": {
-   "count": 29,
-   "sha256": "5138d8334329ee992897454e13d2700c43b6eeecef2eaeaa9ad26f203b3012ff"
+   "count": 32,
+   "sha256": "dd9a67cc1aca76bc76f15eeac09201440ef76a43a63ca93dbe4506c3851837a4"
   },
   "leak_ids": {
    "count": 12,
    "sha256": "1838e39623b76533215955164265a7fb6195c7ee02e106b6204a385cd4a1bd7d"
   },
   "removed": {
-   "dev:construction": {
-    "sentfin": 273,
-    "sumedit": 56,
-    "wands": 253
-   },
    "dev:dev_near_train": {
     "args": 174,
     "copa": 2,
-    "csqa": 10,
     "maud": 132,
     "poem": 5,
-    "sentfin": 17,
+    "sentfin": 25,
     "sms": 24,
     "snips_rel": 275,
     "snips_sel": 12,
-    "sumedit": 43,
-    "w2c": 50,
-    "wands": 435
+    "w2c": 50
    },
    "dev:dropped_group": {
     "args": 28,
-    "csqa": 7,
     "maud": 212,
     "sentfin": 2,
-    "sumedit": 100,
-    "w2c": 285,
-    "wands": 54
+    "w2c": 285
    },
    "dev:family": {
+    "csqa": 530,
     "medmcqa": 821,
     "procb": 36,
+    "sumedit": 199,
+    "wands": 742,
     "wanli": 923
-   },
-   "train:construction": {
-    "sentfin": 2393,
-    "sumedit": 689,
-    "wands": 2413
    },
    "train:dropped_group": {
     "args": 238,
     "copa": 10,
-    "csqa": 486,
     "maud": 5656,
-    "sentfin": 3,
+    "sentfin": 8,
     "snips_rel": 2,
     "snips_sel": 1,
-    "sumedit": 421,
-    "w2c": 2690,
-    "wands": 677
+    "w2c": 2690
    },
    "train:family": {
+    "csqa": 5470,
     "medmcqa": 7179,
     "procb": 324,
+    "sumedit": 1706,
+    "wands": 7256,
     "wanli": 8077
    },
    "train:leak_guard": {
     "w2c": 12
    },
    "train:review_or_screen": {
-    "args": 1,
-    "csqa": 3,
+    "args": 2,
     "isarc": 1,
-    "sentfin": 1,
+    "sentfin": 2,
     "snips_rel": 1,
     "snips_sel": 1,
-    "sumedit": 3,
-    "w2c": 3,
-    "wands": 6
+    "w2c": 4
    }
   }
  },
  "schema": "decision2.ib1.final.v1",
  "train": {
   "family": {
-   "args": 5184,
+   "args": 5182,
    "copa": 878,
-   "csqa": 4981,
    "isarc": 874,
    "poem": 3584,
-   "sentfin": 4778,
+   "sentfin": 6808,
    "sms": 1152,
    "snips_rel": 2700,
    "snips_sel": 2672,
-   "sumedit": 576,
-   "w2c": 476,
-   "wands": 4068
+   "w2c": 475
   },
-  "groups": 20755,
+  "groups": 20206,
   "label_by_family": {
    "args": {
-    "0": 2592,
-    "1": 2592
+    "0": 2591,
+    "1": 2591
    },
    "copa": {
     "0": 426,
     "1": 452
-   },
-   "csqa": {
-    "0": 995,
-    "1": 1013,
-    "2": 1033,
-    "3": 945,
-    "4": 995
    },
    "isarc": {
     "0": 429,
@@ -211,8 +179,8 @@
     "1": 1811
    },
    "sentfin": {
-    "0": 2389,
-    "2": 2389
+    "0": 3404,
+    "1": 3404
    },
    "sms": {
     "0": 576,
@@ -228,28 +196,20 @@
     "2": 657,
     "3": 673
    },
-   "sumedit": {
-    "0": 288,
-    "1": 288
-   },
    "w2c": {
-    "0": 251,
+    "0": 250,
     "1": 225
-   },
-   "wands": {
-    "0": 2034,
-    "2": 2034
    }
   },
   "language": {
    "ar": 410,
-   "en": 31513
+   "en": 23915
   },
-  "rows": 31923,
-  "sha256": "f44d7f5fe9ccaf63386fc213394282466f2c26c6a2da2945b32207adc8c62c5c",
+  "rows": 24325,
+  "sha256": "1e1b08f3d37f9051ffe2e4b99fd7be673f315d05cc74a27a8d350eae2bb706c5",
   "task_type": {
-   "choice": 27495,
-   "noul": 4428
+   "choice": 20473,
+   "noul": 3852
   }
  }
 }

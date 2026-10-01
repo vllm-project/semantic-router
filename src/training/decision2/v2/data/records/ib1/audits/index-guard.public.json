@@ -1,7 +1,7 @@
 {
  "candidate_inputs": {
-  "ib1.dev.cand.jsonl": "6816bf43834a88c43c8351cc6e3f98e732a53ae9d2d40ccb64dc90ff2c1eca92",
-  "ib1.train.cand.jsonl": "888dad522420dafe6759aa1957dd35a628be579e4873934d89e0ee9ed9ecbdb1"
+  "ib1.dev.cand.jsonl": "8ce859f4fd6f652cfe9f0600aafdd5075e99d6005723c52665876f31f1f44f79",
+  "ib1.train.cand.jsonl": "468cf7f202b8b1f4e7f42bea199df281774bd712f3fe8eb3c59f1251c30e27e2"
  },
  "candidates": {
   "args": {
@@ -37,8 +37,8 @@
    "train": 324
   },
   "sentfin": {
-   "select": 805,
-   "train": 7193
+   "select": 755,
+   "train": 6835
   },
   "sms": {
    "select": 121,
@@ -69,7 +69,7 @@
    "train": 8077
   }
  },
- "drop_groups_sha256": "4b5e4c1a66f9abff09cb5c56f85fe9cea9a3767904f436cb0a4ed3919b90de98",
+ "drop_groups_sha256": "40f370afee83eb77c2ba528bc7424c1b09cde061240386d0d3abe57830ba3e55",
  "flagged": {
   "args": {
    "groups_dropped": 0
@@ -111,9 +111,7 @@
    "rows_N2": 27
   },
   "sentfin": {
-   "groups_dropped": 1,
-   "rows": 1,
-   "rows_E": 1
+   "groups_dropped": 0
   },
   "sms": {
    "groups_dropped": 0
@@ -152,7 +150,7 @@
    "rows_N2": 2
   }
  },
- "groups_dropped": 3273,
+ "groups_dropped": 3272,
  "reference": "every Decision Index suite row (selected and added rows); statistics kept on the node",
  "rules": {
   "E": "raw leaf equality, leaves >= 20 characters",

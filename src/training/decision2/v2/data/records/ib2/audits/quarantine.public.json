@@ -1,0 +1,107 @@
+{
+ "dev_near_train": {
+  "by_family": {
+   "argq": {
+    "dev_rows": 86,
+    "groups": 86,
+    "train_rows": 0
+   },
+   "fc_args2": {
+    "dev_rows": 1149,
+    "groups": 292,
+    "train_rows": 0
+   },
+   "fc_ready": {
+    "dev_rows": 938,
+    "groups": 309,
+    "train_rows": 0
+   },
+   "fc_rel": {
+    "dev_rows": 1907,
+    "groups": 558,
+    "train_rows": 0
+   },
+   "fc_sel2": {
+    "dev_rows": 2037,
+    "groups": 613,
+    "train_rows": 0
+   },
+   "gsm2": {
+    "dev_rows": 30,
+    "groups": 30,
+    "train_rows": 0
+   },
+   "hover": {
+    "dev_rows": 315,
+    "groups": 187,
+    "train_rows": 0
+   },
+   "ytspam": {
+    "dev_rows": 18,
+    "groups": 18,
+    "train_rows": 0
+   }
+  },
+  "groups": 1102
+ },
+ "drop_dev_groups_sha256": "eb9238fad8d26e6a98ee7e0305d0ea71aab267782d684c194fbd11b11882ee9f",
+ "drop_groups_sha256": "accc3db2e9b780674103e53c519e782022cccb68d51403d941aaa93a15a3afab",
+ "quarantine": {
+  "by_family": {
+   "argq": {
+    "dev_rows": 8,
+    "groups": 88,
+    "train_rows": 80
+   },
+   "fc_args2": {
+    "dev_rows": 5,
+    "groups": 12,
+    "train_rows": 44
+   },
+   "fc_ready": {
+    "dev_rows": 5,
+    "groups": 12,
+    "train_rows": 32
+   },
+   "fc_rel": {
+    "dev_rows": 3,
+    "groups": 17,
+    "train_rows": 55
+   },
+   "fc_sel2": {
+    "dev_rows": 8,
+    "groups": 19,
+    "train_rows": 58
+   },
+   "hover": {
+    "dev_rows": 54,
+    "groups": 379,
+    "train_rows": 575
+   },
+   "ytspam": {
+    "dev_rows": 0,
+    "groups": 2,
+    "train_rows": 2
+   }
+  },
+  "groups": 496
+ },
+ "report_only_roles_hit": {
+  "a7_train_A7h": 19,
+  "a7_train_A7i": 8,
+  "a7_train_A7m": 6,
+  "a7_train_A7q": 82,
+  "a7_train_A7x": 3,
+  "rights_clean_train": 7,
+  "v1_train_a1": 9,
+  "v1_train_a3": 676,
+  "v1_train_a6g": 1,
+  "v1_train_a6h": 698,
+  "v2_aho_E11": 48,
+  "v2_aho_H1": 835,
+  "v2_aho_H3": 1454,
+  "v2_aho_H5": 4,
+  "v2_aho_H6": 677
+ },
+ "schema": "decision2.hr2.quarantine.v1"
+}

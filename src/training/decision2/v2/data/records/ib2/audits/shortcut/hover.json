@@ -1,0 +1,475 @@
+{
+ "folds": {
+  "groups": [
+   519,
+   536,
+   538,
+   547,
+   487
+  ],
+  "rows": [
+   781,
+   819,
+   812,
+   859,
+   749
+  ],
+  "rule": "int(sha256(group_id).hexdigest(), 16) % 5"
+ },
+ "gate": {
+  "margin": 0.05,
+  "min_rows": 30,
+  "rule": "PASS iff accuracy <= majority + margin; majority is the cross-validated position prior on the same rows",
+  "views": [
+   "state_removed",
+   "option_only",
+   "hypothesis_only"
+  ]
+ },
+ "gates": [
+  {
+   "accuracy": 0.6,
+   "delta": 0.0,
+   "families_over_margin": [],
+   "majority": 0.6,
+   "n": 4020,
+   "pass": true,
+   "task_type": "noul",
+   "threshold": 0.65,
+   "view": "state_removed",
+   "wilson95": [
+    0.584767,
+    0.615042
+   ]
+  },
+  {
+   "accuracy": 0.6,
+   "delta": 0.0,
+   "families_over_margin": [],
+   "majority": 0.6,
+   "n": 4020,
+   "pass": true,
+   "task_type": "noul",
+   "threshold": 0.65,
+   "view": "option_only",
+   "wilson95": [
+    0.584767,
+    0.615042
+   ]
+  },
+  {
+   "accuracy": 0.595274,
+   "delta": -0.004726,
+   "families_over_margin": [],
+   "majority": 0.6,
+   "n": 4020,
+   "pass": true,
+   "task_type": "noul",
+   "threshold": 0.65,
+   "view": "hypothesis_only",
+   "wilson95": [
+    0.580017,
+    0.610349
+   ]
+  }
+ ],
+ "groups": 2627,
+ "heuristics": {
+  "lexical_overlap": {
+   "n_rows": 0
+  },
+  "longest_option": {
+   "by_family": {
+    "hover": {
+     "accuracy": 0.6,
+     "correct": 2412,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.6,
+     "n": 4020,
+     "wilson95": [
+      0.584767,
+      0.615042
+     ]
+    }
+   },
+   "by_source": {
+    "hover_train": {
+     "accuracy": 0.6,
+     "correct": 2412,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.6,
+     "n": 4020,
+     "wilson95": [
+      0.584767,
+      0.615042
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "hover": {
+      "accuracy": 0.6,
+      "correct": 2412,
+      "delta": 0.0,
+      "exceeds_margin": false,
+      "majority": 0.6,
+      "n": 4020,
+      "wilson95": [
+       0.584767,
+       0.615042
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.6,
+     "correct": 2412,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.6,
+     "n": 4020,
+     "wilson95": [
+      0.584767,
+      0.615042
+     ]
+    }
+   },
+   "n_rows": 4020
+  },
+  "position_prior": {
+   "by_family": {
+    "hover": {
+     "accuracy": 0.6,
+     "correct": 2412,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.6,
+     "n": 4020,
+     "wilson95": [
+      0.584767,
+      0.615042
+     ]
+    }
+   },
+   "by_source": {
+    "hover_train": {
+     "accuracy": 0.6,
+     "correct": 2412,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.6,
+     "n": 4020,
+     "wilson95": [
+      0.584767,
+      0.615042
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "hover": {
+      "accuracy": 0.6,
+      "correct": 2412,
+      "delta": 0.0,
+      "exceeds_margin": false,
+      "majority": 0.6,
+      "n": 4020,
+      "wilson95": [
+       0.584767,
+       0.615042
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.6,
+     "correct": 2412,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.6,
+     "n": 4020,
+     "wilson95": [
+      0.584767,
+      0.615042
+     ]
+    }
+   },
+   "n_rows": 4020
+  }
+ },
+ "input": {
+  "rows": 4020,
+  "sha256": "99ce7d2f9a7d931922f356e2842c84bd445f09ef4775131b76f2fd0ac90c1100"
+ },
+ "learner": {
+  "bits": 20,
+  "epochs": 4,
+  "instruction_cross_cap": 64,
+  "l2": 1e-06,
+  "learning_rate": 0.1,
+  "seed": 0,
+  "state_cross_cap": 128,
+  "state_cross_unigrams": 64,
+  "state_gram_cap": 128,
+  "text_gram_cap": 1024
+ },
+ "majority": {
+  "noul": {
+   "accuracy": 0.6,
+   "n": 4020
+  }
+ },
+ "rows": 4020,
+ "schema": "decision2.v2.shortcut.v1",
+ "verdict": "PASS",
+ "views": {
+  "full_input": {
+   "by_family": {
+    "hover": {
+     "accuracy": 0.566169,
+     "correct": 2276,
+     "delta": -0.033831,
+     "exceeds_margin": false,
+     "majority": 0.6,
+     "n": 4020,
+     "wilson95": [
+      0.550793,
+      0.581419
+     ]
+    }
+   },
+   "by_source": {
+    "hover_train": {
+     "accuracy": 0.566169,
+     "correct": 2276,
+     "delta": -0.033831,
+     "exceeds_margin": false,
+     "majority": 0.6,
+     "n": 4020,
+     "wilson95": [
+      0.550793,
+      0.581419
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "hover": {
+      "accuracy": 0.566169,
+      "correct": 2276,
+      "delta": -0.033831,
+      "exceeds_margin": false,
+      "majority": 0.6,
+      "n": 4020,
+      "wilson95": [
+       0.550793,
+       0.581419
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.566169,
+     "correct": 2276,
+     "delta": -0.033831,
+     "exceeds_margin": false,
+     "majority": 0.6,
+     "n": 4020,
+     "wilson95": [
+      0.550793,
+      0.581419
+     ]
+    }
+   },
+   "n_rows": 4020
+  },
+  "hypothesis_only": {
+   "by_family": {
+    "hover": {
+     "accuracy": 0.595274,
+     "correct": 2393,
+     "delta": -0.004726,
+     "exceeds_margin": false,
+     "majority": 0.6,
+     "n": 4020,
+     "wilson95": [
+      0.580017,
+      0.610349
+     ]
+    }
+   },
+   "by_source": {
+    "hover_train": {
+     "accuracy": 0.595274,
+     "correct": 2393,
+     "delta": -0.004726,
+     "exceeds_margin": false,
+     "majority": 0.6,
+     "n": 4020,
+     "wilson95": [
+      0.580017,
+      0.610349
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "hover": {
+      "accuracy": 0.595274,
+      "correct": 2393,
+      "delta": -0.004726,
+      "exceeds_margin": false,
+      "majority": 0.6,
+      "n": 4020,
+      "wilson95": [
+       0.580017,
+       0.610349
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.595274,
+     "correct": 2393,
+     "delta": -0.004726,
+     "exceeds_margin": false,
+     "majority": 0.6,
+     "n": 4020,
+     "wilson95": [
+      0.580017,
+      0.610349
+     ]
+    }
+   },
+   "n_rows": 4020
+  },
+  "option_only": {
+   "by_family": {
+    "hover": {
+     "accuracy": 0.6,
+     "correct": 2412,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.6,
+     "n": 4020,
+     "wilson95": [
+      0.584767,
+      0.615042
+     ]
+    }
+   },
+   "by_source": {
+    "hover_train": {
+     "accuracy": 0.6,
+     "correct": 2412,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.6,
+     "n": 4020,
+     "wilson95": [
+      0.584767,
+      0.615042
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "hover": {
+      "accuracy": 0.6,
+      "correct": 2412,
+      "delta": 0.0,
+      "exceeds_margin": false,
+      "majority": 0.6,
+      "n": 4020,
+      "wilson95": [
+       0.584767,
+       0.615042
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.6,
+     "correct": 2412,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.6,
+     "n": 4020,
+     "wilson95": [
+      0.584767,
+      0.615042
+     ]
+    }
+   },
+   "n_rows": 4020
+  },
+  "state_removed": {
+   "by_family": {
+    "hover": {
+     "accuracy": 0.6,
+     "correct": 2412,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.6,
+     "n": 4020,
+     "wilson95": [
+      0.584767,
+      0.615042
+     ]
+    }
+   },
+   "by_source": {
+    "hover_train": {
+     "accuracy": 0.6,
+     "correct": 2412,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.6,
+     "n": 4020,
+     "wilson95": [
+      0.584767,
+      0.615042
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "hover": {
+      "accuracy": 0.6,
+      "correct": 2412,
+      "delta": 0.0,
+      "exceeds_margin": false,
+      "majority": 0.6,
+      "n": 4020,
+      "wilson95": [
+       0.584767,
+       0.615042
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.6,
+     "correct": 2412,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.6,
+     "n": 4020,
+     "wilson95": [
+      0.584767,
+      0.615042
+     ]
+    }
+   },
+   "n_rows": 4020
+  }
+ }
+}

@@ -1,0 +1,390 @@
+{
+ "candidate_files": [
+  {
+   "rows": 39396,
+   "sha256": "995eae7369b4c83316c6b8e8a9781ab24aa186dbc4d51851ad6cbe8e23a4ca25"
+  },
+  {
+   "rows": 3540,
+   "sha256": "f3559892c86ebe164697496b9a7aff81b378baca2f7c7606dc542e4ca0dfe634"
+  }
+ ],
+ "candidates": {
+  "distinct_leaves_scanned": 62989,
+  "groups": 38454,
+  "rows": 42936,
+  "states_keyed": 42859
+ },
+ "flagged": {
+  "boilerplate": {
+   "E_leaf": {
+    "groups": 0,
+    "units": 0
+   },
+   "E_state": {
+    "groups": 0,
+    "units": 0
+   },
+   "L": {
+    "groups": 7,
+    "units": 3
+   },
+   "N_char": {
+    "groups": 19,
+    "units": 6
+   },
+   "N_word": {
+    "groups": 0,
+    "units": 0
+   },
+   "S": {
+    "groups": 0,
+    "units": 0
+   }
+  },
+  "by_method": {
+   "E": {
+    "groups": 0,
+    "rows": 0
+   },
+   "L": {
+    "groups": 0,
+    "rows": 0
+   },
+   "N": {
+    "groups": 0,
+    "rows": 0
+   },
+   "S": {
+    "groups": 0,
+    "rows": 0
+   }
+  },
+  "by_role": {
+   "cal698": {
+    "E": {
+     "groups": 0,
+     "rows": 0
+    },
+    "L": {
+     "groups": 0,
+     "rows": 0
+    },
+    "N": {
+     "groups": 0,
+     "rows": 0
+    },
+    "S": {
+     "groups": 0,
+     "rows": 0
+    },
+    "any": {
+     "groups": 0,
+     "rows": 0
+    }
+   },
+   "hr2_dev": {
+    "E": {
+     "groups": 0,
+     "rows": 0
+    },
+    "L": {
+     "groups": 0,
+     "rows": 0
+    },
+    "N": {
+     "groups": 0,
+     "rows": 0
+    },
+    "S": {
+     "groups": 0,
+     "rows": 0
+    },
+    "any": {
+     "groups": 0,
+     "rows": 0
+    }
+   },
+   "hs1_dev_goldfree": {
+    "E": {
+     "groups": 0,
+     "rows": 0
+    },
+    "L": {
+     "groups": 0,
+     "rows": 0
+    },
+    "N": {
+     "groups": 0,
+     "rows": 0
+    },
+    "S": {
+     "groups": 0,
+     "rows": 0
+    },
+    "any": {
+     "groups": 0,
+     "rows": 0
+    }
+   },
+   "ht_dev2_goldfree": {
+    "E": {
+     "groups": 0,
+     "rows": 0
+    },
+    "L": {
+     "groups": 0,
+     "rows": 0
+    },
+    "N": {
+     "groups": 0,
+     "rows": 0
+    },
+    "S": {
+     "groups": 0,
+     "rows": 0
+    },
+    "any": {
+     "groups": 0,
+     "rows": 0
+    }
+   },
+   "ht_dev_goldfree": {
+    "E": {
+     "groups": 0,
+     "rows": 0
+    },
+    "L": {
+     "groups": 0,
+     "rows": 0
+    },
+    "N": {
+     "groups": 0,
+     "rows": 0
+    },
+    "S": {
+     "groups": 0,
+     "rows": 0
+    },
+    "any": {
+     "groups": 0,
+     "rows": 0
+    }
+   },
+   "pn1_dev_goldfree": {
+    "E": {
+     "groups": 0,
+     "rows": 0
+    },
+    "L": {
+     "groups": 0,
+     "rows": 0
+    },
+    "N": {
+     "groups": 0,
+     "rows": 0
+    },
+    "S": {
+     "groups": 0,
+     "rows": 0
+    },
+    "any": {
+     "groups": 0,
+     "rows": 0
+    }
+   },
+   "score5_dev_goldfree": {
+    "E": {
+     "groups": 0,
+     "rows": 0
+    },
+    "L": {
+     "groups": 0,
+     "rows": 0
+    },
+    "N": {
+     "groups": 0,
+     "rows": 0
+    },
+    "S": {
+     "groups": 0,
+     "rows": 0
+    },
+    "any": {
+     "groups": 0,
+     "rows": 0
+    }
+   },
+   "score5t_dev_goldfree": {
+    "E": {
+     "groups": 0,
+     "rows": 0
+    },
+    "L": {
+     "groups": 0,
+     "rows": 0
+    },
+    "N": {
+     "groups": 0,
+     "rows": 0
+    },
+    "S": {
+     "groups": 0,
+     "rows": 0
+    },
+    "any": {
+     "groups": 0,
+     "rows": 0
+    }
+   }
+  },
+  "quarantine": {
+   "groups": 0,
+   "rows": 0
+  }
+ },
+ "methods": {
+  "E": "normalized leaf equality (compact length >= 20) and equality of normalized canonical-JSON states (canonical-JSON strings decoded first)",
+  "L": "S rule against 400/200 windows (last window end-aligned) of the compact text of protected leaves > 800 chars; candidate units are 200/100 windows of leaves over 200 compact chars, else the leaf",
+  "N": "word 13-grams over word_tokens and compact 30-grams kept iff int.from_bytes(blake2b(utf8, digest_size=8, person), 'big') % 4 == 0; only 8-byte hashes are stored",
+  "S": "audit_vitaminc_score rule against protected leaves <= 800 normalized chars: compact 6-gram sets, every 2nd sorted protected gram indexed, the 6 rarest candidate grams by (posting length, gram), postings <= 128, Jaccard >= 0.72 or containment >= 0.9",
+  "boilerplate": "a matched unit in >= 5 distinct candidate groups, or an N gram in >= 5 distinct protected rows; reported separately and never quarantining"
+ },
+ "params": {
+  "boilerplate_groups": 5,
+  "boilerplate_rows": 5,
+  "candidate_window": 200,
+  "candidate_window_stride": 100,
+  "char_ngram": 30,
+  "char_sample_mod": 4,
+  "containment": 0.9,
+  "gram": 6,
+  "index_every": 2,
+  "jaccard": 0.72,
+  "max_posting": 128,
+  "min_compact": 20,
+  "ngram_min_hits": 1,
+  "rare_grams": 6,
+  "short_max_chars": 800,
+  "window": 400,
+  "window_stride": 200,
+  "word_ngram": 13
+ },
+ "protected": {
+  "cjk_heavy_distinct_leaves": 1143,
+  "distinct_leaves_by_length": {
+   "gt_800": 3887,
+   "le_800": 13099
+  },
+  "index_keys": {
+   "L": 879854,
+   "N_char": 1347842,
+   "N_word": 1181707,
+   "S": 347720
+  },
+  "leaves_by_length": {
+   "below_min_compact": 51963,
+   "gt_800": 3935,
+   "le_800": 30251
+  },
+  "leaves_by_role": {
+   "cal698": {
+    "below_min_compact": 4734,
+    "gt_800": 0,
+    "le_800": 1270
+   },
+   "hr2_dev": {
+    "below_min_compact": 8803,
+    "gt_800": 435,
+    "le_800": 4196
+   },
+   "hs1_dev_goldfree": {
+    "below_min_compact": 8090,
+    "gt_800": 2378,
+    "le_800": 3894
+   },
+   "ht_dev2_goldfree": {
+    "below_min_compact": 7,
+    "gt_800": 454,
+    "le_800": 1483
+   },
+   "ht_dev_goldfree": {
+    "below_min_compact": 11708,
+    "gt_800": 423,
+    "le_800": 14004
+   },
+   "pn1_dev_goldfree": {
+    "below_min_compact": 6021,
+    "gt_800": 1,
+    "le_800": 3848
+   },
+   "score5_dev_goldfree": {
+    "below_min_compact": 3000,
+    "gt_800": 244,
+    "le_800": 756
+   },
+   "score5t_dev_goldfree": {
+    "below_min_compact": 9600,
+    "gt_800": 0,
+    "le_800": 800
+   }
+  },
+  "long_leaf_windows_scanned": 39637,
+  "rows_by_role": {
+   "cal698": 698,
+   "hr2_dev": 1615,
+   "hs1_dev_goldfree": 2396,
+   "ht_dev2_goldfree": 1944,
+   "ht_dev_goldfree": 3240,
+   "pn1_dev_goldfree": 1974,
+   "score5_dev_goldfree": 500,
+   "score5t_dev_goldfree": 800
+  },
+  "states_indexed": 12850
+ },
+ "protected_files": [
+  {
+   "role": "cal698",
+   "rows": 698,
+   "sha256": "76c7991f5c5af0ce6819d6b33f8ea81f50ee43dbac3aabf8c12f334acd115262"
+  },
+  {
+   "role": "hr2_dev",
+   "rows": 1615,
+   "sha256": "db2402bf20a5e8325983aaaaf3db8600e27a1da4490491bb444f10ac4087f294"
+  },
+  {
+   "role": "hs1_dev_goldfree",
+   "rows": 2396,
+   "sha256": "49f192a700242efe46265c4377a3cedb44dd635e5c5d23db1fc2d1e6fac3f072"
+  },
+  {
+   "role": "ht_dev2_goldfree",
+   "rows": 1944,
+   "sha256": "8bd3ec3f95073c39f6c62571a2daabf00b580b925ebb54f318f9f8404932b6a7"
+  },
+  {
+   "role": "ht_dev_goldfree",
+   "rows": 3240,
+   "sha256": "763f2973d0b22c3cb54a3d83015e7ca9bb89bb811d3541306d7e0153dab16990"
+  },
+  {
+   "role": "pn1_dev_goldfree",
+   "rows": 1974,
+   "sha256": "b2d254585afd2430098c7cdbd7d74d72e455af84f2cfd764d4772699b40650c7"
+  },
+  {
+   "role": "score5_dev_goldfree",
+   "rows": 500,
+   "sha256": "6189d111979b5df7f56ff4c44a7550135f8a35d9a4982679880bd8d9f3b6f2f8"
+  },
+  {
+   "role": "score5t_dev_goldfree",
+   "rows": 800,
+   "sha256": "34baa42307b61c4013215afdf4deef4d69f9d39c071d0fc16fb378ba047e9d66"
+  }
+ ],
+ "protected_inventory_sha256": "9aab05ffccd777ac7fe210f7e4a7d8fd8f1abf74ec0d777b596930fdf07f4a26",
+ "protected_leaves_over_800_chars_not_near_scanned": 0,
+ "schema": "decision2.v2.overlap.public.v1"
+}

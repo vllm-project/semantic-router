@@ -83,6 +83,15 @@ ROUNDS: dict[int, dict[str, Any]] = {
         "r3_salt": "ib1-r2-review-r3-order-v1",
         "prefix": "t",
     },
+    3: {
+        "min_per_family": 18,
+        "min_total": 216,
+        "salt": "ib1-r3-review-v1",
+        "packet_salt": "ib1-r3-packet-v1",
+        "r2_salt": "ib1-r3-review-r2-order-v1",
+        "r3_salt": "ib1-r3-review-r3-order-v1",
+        "prefix": "u",
+    },
 }
 PACKETS = 2
 FIELDS = ("rid", "task_type", "instructions", "state", "options")

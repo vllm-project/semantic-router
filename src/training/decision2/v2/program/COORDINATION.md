@@ -205,6 +205,97 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 15:55 — **IB1-r3 and IB2 are RELEASE-SAFE; M11 continues with the 4B IB arms.**
+  - **IB1-r3 (1bad770e)** at `decision-2.0-training-data@31b200a3`, `m6/ib1/`; integration `6391e2843`.
+    - Amendment 3 `74a4cad41` + addendum `b95b2ee34`.
+    - TRAIN 24,325 / DEV 2,067; 9 families:
+
+      | Family | Rows |
+      | --- | ---: |
+      | `sentfin` (binary) | 6,808 |
+      | `args` | 5,182 |
+      | `poem` | 3,584 |
+      | `snips_rel` | 2,700 |
+      | `snips_sel` | 2,672 |
+      | `sms` | 1,152 |
+      | `copa` | 878 |
+      | `isarc` (in-distribution) | 874 |
+      | `w2c` (in-distribution) | 475 |
+
+    - Review: 3/216 = 1.39% [0.29, 4.01], weighted 2.14%, ≤ 1 error per family.
+    - SummEdits left: its remaining groups were all sampled in r1 / r2.
+  - **IB2 (24a520c1)** at `@c5dbdd0a`, `m6/ib2/`; integration `7d9841c36`.
+    - TRAIN 24,518 / DEV 1,272; 6 families:
+
+      | Family | Source and licence | Rows |
+      | --- | --- | ---: |
+      | `fc_rel` (call vs abstain) | Glaive v2, Apache-2.0 | 5,732 |
+      | `fc_ready` (call vs clarify) | Glaive v2, Apache-2.0 | 2,582 |
+      | `ytspam` | YouTube Spam Collection, CC BY 4.0 | 1,450 |
+      | `argq` (stance, unanimous annotators) | IBM ArgQ-30k, CC BY-SA 3.0 | 5,152 |
+      | `hover` (in-distribution) | HoVer train, CC BY-SA 4.0 | 4,020 |
+      | `gsm2` (stated-answer correctness, in-distribution) | GSM8K train, MIT | 5,582 |
+
+    - Review: 5/216 = 2.31% [0.76, 5.32], weighted 1.41%.
+    - Shortcut-gated out: function selection / arguments, knowledge MCQ (QASC / ARC train), the first GSM8K design.
+      ContractNLI was emptied by the exclusions.
+    - Licence drops: SpamAssassin (no grant), FEVER (per-article Wikipedia), Sarcasm Headlines / OpenBookQA
+      (unknown), MMLU-aux (contains RACE, NC), xLAM (research-only), ToolACE / API-Bank (feed Index tool benchmarks).
+    - The reviewers were one model family (disclosed).
+  - **Coverage gaps remaining:**
+    - **phishing email + link** (the PhishNChips-like family is the largest 27B deficit with When2Call). Nazario is
+      CC BY 4.0 but phishing-only, and no licensed legitimate-email corpus has been found yet;
+    - faithfulness / grounding (RAGTruth-like);
+    - knowledge MCQ (largely covered instead by the from-base recipe's retention);
+    - contracts;
+    - product-search relevance.
+    - A possible later IB3 needs a licence-clean legitimate-email source.
+  - **Guard:** every IB-trained model needs the custodian C1 content recheck before C1 scoring.
+  - **M11 (c473a3b2, resumed again):**
+    - stage 1 runs (2B seeds on node E GPU0–2 / node F GPU2, 3, 6; 0.8B next); the E/F formal wrapper is to be built;
+    - **4B stage 2 now: LH + IB1 + IB2, plus a transfer-only ablation without `w2c` / `isarc` / `hover` / `gsm2`**;
+    - gates vs LH.
+  - **27B M6 (11741ee2) and 9B M9 (dfc44bae)** poll for the release-safe records and start their IB stages
+    themselves.
+
+- 2026-10-01 15:40 — **Decision 1.0 auto_map done (2a4d413a); vLLM-SR parser fixed on PR #4086.** Record
+  `v2/release/records/dev1-automap-2026-10-01.md`, gist 07; integration `f6b750119`.
+  - **Seven public 1.0 repos merged through our own HF PRs** on their current heads (after subin's merges); weights
+    byte-identical; `AutoModel.from_pretrained(repo, trust_remote_code=True)` + `system_one(...)` + `pipeline("decision",
+    ...)`; clean-environment smoke tests on Transformers 4.57.6 / 5.17.0 / 5.18.0.
+    - New `main` revisions:
+
+      | Repo | `main` |
+      | --- | --- |
+      | Kai | `69aef406` |
+      | Lex | `1f9750a7` |
+      | Route | `a5b21dff` |
+      | Eos | `bbdc2221` |
+      | Sol | `fc210c8f` |
+      | Nox | `f098bdec` |
+      | Lux | `a31b9e2c` |
+
+    - Parity: 0 answer changes on 8,378 scored prompts each.
+    - Eos's stored predictions are not reproducible even by its own native runtime: unpinned FLA autotune, 46–56
+      changes. The remote code is bit-identical to the native Eos runtime under pinned settings.
+    - Nox / Lux show ≤ 0.0105 drift on long prompts only (FLA autotune; bit-identical with `FLA_CACHE_MODE=strict`).
+  - **`DEV2.0-Route-0.6B` (collaborator's):** PR #1 is open for subin, not merged.
+  - **vLLM-SR Decision runtime.** `parse_decision_config` required an exact root key set, so it would reject the new
+    revisions (catalogs pin older revisions, so nothing broke).
+    - **Fixed by the coordinator on the user's open PR #4086 (`xunzhuo/decision-runtime`), fast-forward commit
+      `e2ed609c7`.** `model_type` / `architectures` / `auto_map` / `custom_pipelines` are accepted as shape-checked
+      inert metadata; the runtime still never fetches or imports repo code, and any other unknown key is still
+      rejected.
+    - Tests: the root-config file 12/12 (with `huggingface_hub<1`; one pre-existing test fails under hub 2.0 because
+      `EntryNotFoundError` has no kwargs), plus 615 other decision tests passed; black clean; hooks pass.
+    - The catalog stays pinned.
+  - **Divergences, documented.**
+    - 1.0 keeps request-level over-length admission, while 2.0 answers the questions that fit.
+    - 1.0 confidence is `decision_type_aware_v1`.
+    - The encoder tokenizer is under `native/tokenizer`.
+    - **The 1.0 spec `automap/API-decision1.md` folds into the 2.0 `API.md`** when the 2.0 auto_map worker (4c0a68cd)
+      lands.
+
 - 2026-10-01 14:50 — **MoE-1 screen done: Gemma-4-26B-A4B-it continues, the Qwen3.5-35B-A3B cells stopped; Stage B
   runs unattended from ~16:25; follow-up worker 72f00c98.** Records: `27b/records/moe-*`, gist 06c; integration
   `e60db4605`.

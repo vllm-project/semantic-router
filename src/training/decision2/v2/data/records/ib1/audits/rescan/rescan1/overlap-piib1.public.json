@@ -1,19 +1,19 @@
 {
  "candidate_files": [
   {
-   "rows": 48495,
-   "sha256": "4730291bdd107ac3f23242436f01b0eb983a7dba640b135934dcf88e68bfd6af"
+   "rows": 41076,
+   "sha256": "f379f2262fe3b01c4825184976e07dfd16bf1f65ebcc7889f1a765001868ac8c"
   },
   {
-   "rows": 3848,
-   "sha256": "9091f2009f9e695f1012bd1750022629b5979c91e24b0c67c47b88f50d8df6f7"
+   "rows": 3549,
+   "sha256": "cd0f53d05d09dec3e23d8f6b394068ad012ddef73bef228661abcc02391e227b"
   }
  ],
  "candidates": {
-  "distinct_leaves_scanned": 72228,
-  "groups": 39071,
-  "rows": 52343,
-  "states_keyed": 52266
+  "distinct_leaves_scanned": 63979,
+  "groups": 38534,
+  "rows": 44625,
+  "states_keyed": 44548
  },
  "flagged": {
   "boilerplate": {
@@ -30,8 +30,8 @@
     "units": 3
    },
    "N_char": {
-    "groups": 30,
-    "units": 12
+    "groups": 22,
+    "units": 8
    },
    "N_word": {
     "groups": 0,
@@ -384,7 +384,7 @@
    "sha256": "34baa42307b61c4013215afdf4deef4d69f9d39c071d0fc16fb378ba047e9d66"
   }
  ],
- "protected_inventory_sha256": "519c76eb6c31f0466e29c0f352abaaf9593af8fdabb075a39081aa5f7503d198",
+ "protected_inventory_sha256": "9aab05ffccd777ac7fe210f7e4a7d8fd8f1abf74ec0d777b596930fdf07f4a26",
  "protected_leaves_over_800_chars_not_near_scanned": 0,
  "schema": "decision2.v2.overlap.public.v1"
 }

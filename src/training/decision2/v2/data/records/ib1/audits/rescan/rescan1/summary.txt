@@ -1,1 +1,1 @@
-rescan1 new drops: g0=0 groups=62 dev_groups=7
+rescan1 new drops: g0=0 groups=53 dev_groups=7
