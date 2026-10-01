@@ -1,8 +1,8 @@
 {
  "candidate_files": [
   {
-   "rows": 39750,
-   "sha256": "10adc4685f24db63fb807c457060219787c609f4688823f152d465d45f3c68d6"
+   "rows": 39396,
+   "sha256": "995eae7369b4c83316c6b8e8a9781ab24aa186dbc4d51851ad6cbe8e23a4ca25"
   },
   {
    "rows": 3540,
@@ -10,10 +10,10 @@
   }
  ],
  "candidates": {
-  "distinct_leaves_scanned": 63361,
-  "groups": 38471,
-  "rows": 43290,
-  "states_keyed": 43213
+  "distinct_leaves_scanned": 62989,
+  "groups": 38454,
+  "rows": 42936,
+  "states_keyed": 42859
  },
  "flagged": {
   "boilerplate": {

@@ -1,12 +1,12 @@
 {
  "candidate_inputs": {
-  "ib1.dev.jsonl": "3f56aa418e90e58f3fbaa50bf2f9f4f0405eeb9dd2f0c51ffca6f602711c693f",
-  "ib1.train.jsonl": "b82bcf1755b4907348d7fdbcd7e65eed1e8feffe9bcb830f403c163151bd02bb"
+  "ib1.dev.jsonl": "f3559892c86ebe164697496b9a7aff81b378baca2f7c7606dc542e4ca0dfe634",
+  "ib1.train.jsonl": "995eae7369b4c83316c6b8e8a9781ab24aa186dbc4d51851ad6cbe8e23a4ca25"
  },
  "candidates": {
   "args": {
    "select": 374,
-   "train": 5184
+   "train": 5186
   },
   "copa": {
    "select": 108,
@@ -16,13 +16,21 @@
    "select": 82,
    "train": 874
   },
+  "medmcqa": {
+   "select": 590,
+   "train": 6880
+  },
   "poem": {
    "select": 411,
    "train": 3584
   },
+  "procb": {
+   "select": 10,
+   "train": 258
+  },
   "sentfin": {
    "select": 708,
-   "train": 6808
+   "train": 6810
   },
   "sms": {
    "select": 62,
@@ -38,7 +46,11 @@
   },
   "w2c": {
    "select": 0,
-   "train": 475
+   "train": 476
+  },
+  "wanli": {
+   "select": 873,
+   "train": 7926
   }
  },
  "drop_groups_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -52,7 +64,13 @@
   "isarc": {
    "groups_dropped": 0
   },
+  "medmcqa": {
+   "groups_dropped": 0
+  },
   "poem": {
+   "groups_dropped": 0
+  },
+  "procb": {
    "groups_dropped": 0
   },
   "sentfin": {
@@ -68,6 +86,9 @@
    "groups_dropped": 0
   },
   "w2c": {
+   "groups_dropped": 0
+  },
+  "wanli": {
    "groups_dropped": 0
   }
  },

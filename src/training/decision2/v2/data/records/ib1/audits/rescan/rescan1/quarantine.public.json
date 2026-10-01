@@ -25,7 +25,7 @@
   "groups": 7
  },
  "drop_dev_groups_sha256": "dcb84882852f43bcbdc21d49623aa8460b5095ea08a896954ed1eceb1b685036",
- "drop_groups_sha256": "c4720e4e9ccbc2fd97e21e95bcf65185dae2436631a47f826b53f9f08305167e",
+ "drop_groups_sha256": "cc0043cb248c3a6bb60bf3acedcde359a46c0acb500fbd5390b827a0bb750063",
  "quarantine": {
   "by_family": {
    "args": {
@@ -53,32 +53,27 @@
     "groups": 6,
     "train_rows": 6
    },
-   "wands": {
-    "dev_rows": 0,
-    "groups": 9,
-    "train_rows": 125
-   },
    "wanli": {
     "dev_rows": 0,
     "groups": 1,
     "train_rows": 1
    }
   },
-  "groups": 62
+  "groups": 53
  },
  "report_only_roles_hit": {
   "a7_train_A7h": 30,
   "a7_train_A7i": 2,
-  "a7_train_A7m": 50,
-  "a7_train_A7q": 209,
+  "a7_train_A7m": 46,
+  "a7_train_A7q": 193,
   "a7_train_A7s": 8,
   "rights_clean_train": 3,
-  "v1_train_a1": 7,
-  "v1_train_a3": 67,
+  "v1_train_a1": 5,
+  "v1_train_a3": 64,
   "v1_train_a6h": 6,
   "v2_aho_E11": 8,
-  "v2_aho_H1": 437,
-  "v2_aho_H3": 101,
+  "v2_aho_H1": 17,
+  "v2_aho_H3": 97,
   "v2_aho_H5": 3,
   "v2_aho_H6": 16
  },

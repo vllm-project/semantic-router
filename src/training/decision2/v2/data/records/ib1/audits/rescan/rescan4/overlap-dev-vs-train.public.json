@@ -1,66 +1,66 @@
 {
  "boilerplate": {
   "E_leaf": {
-   "groups": 4554,
-   "units": 101
+   "groups": 3186,
+   "units": 28
   },
   "E_state": {
    "groups": 0,
    "units": 0
   },
   "L": {
-   "groups": 92,
-   "units": 282
+   "groups": 0,
+   "units": 0
   },
   "N_char": {
-   "groups": 4554,
-   "units": 32480
+   "groups": 3186,
+   "units": 272
   },
   "N_word": {
-   "groups": 1518,
-   "units": 12214
+   "groups": 876,
+   "units": 125
   },
   "S": {
-   "groups": 616,
-   "units": 267
+   "groups": 321,
+   "units": 191
   }
  },
  "by_method": {
   "E": {
-   "a_groups": 591,
-   "b_groups": 2737,
-   "pairs": 5530
+   "a_groups": 0,
+   "b_groups": 0,
+   "pairs": 0
   },
   "L": {
-   "a_groups": 324,
-   "b_groups": 1134,
-   "pairs": 2026
+   "a_groups": 0,
+   "b_groups": 0,
+   "pairs": 0
   },
   "N": {
-   "a_groups": 638,
-   "b_groups": 2835,
-   "pairs": 10832
+   "a_groups": 0,
+   "b_groups": 0,
+   "pairs": 0
   },
   "S": {
-   "a_groups": 397,
-   "b_groups": 907,
-   "pairs": 2153
+   "a_groups": 0,
+   "b_groups": 0,
+   "pairs": 0
   }
  },
  "candidate_files": [
   {
-   "rows": 6605,
-   "sha256": "8ce859f4fd6f652cfe9f0600aafdd5075e99d6005723c52665876f31f1f44f79"
+   "rows": 3540,
+   "sha256": "f3559892c86ebe164697496b9a7aff81b378baca2f7c7606dc542e4ca0dfe634"
   },
   {
-   "rows": 63001,
-   "sha256": "468cf7f202b8b1f4e7f42bea199df281774bd712f3fe8eb3c59f1251c30e27e2"
+   "rows": 39396,
+   "sha256": "995eae7369b4c83316c6b8e8a9781ab24aa186dbc4d51851ad6cbe8e23a4ca25"
   }
  ],
- "candidate_groups_in_pairs": 1086,
+ "candidate_groups_in_pairs": 0,
  "candidates": {
-  "groups": 4554,
-  "rows": 6605
+  "groups": 3186,
+  "rows": 3540
  },
  "methods": {
   "E": "normalized leaf equality (compact length >= 20) and equality of normalized canonical-JSON states (canonical-JSON strings decoded first)",
@@ -70,7 +70,7 @@
   "boilerplate": "a matched unit in >= 5 distinct candidate groups, or an N gram in >= 5 distinct protected rows; reported separately and never quarantining"
  },
  "mode": "across",
- "pairs": 16639,
+ "pairs": 0,
  "params": {
   "boilerplate_groups": 5,
   "boilerplate_rows": 5,
@@ -93,11 +93,11 @@
  },
  "reference": {
   "distinct_leaves_by_length": {
-   "gt_800": 11745,
-   "le_800": 73067
+   "gt_800": 2393,
+   "le_800": 55395
   },
-  "groups": 40895,
-  "long_leaf_windows_scanned": 63755
+  "groups": 35268,
+  "long_leaf_windows_scanned": 11366
  },
  "schema": "decision2.v2.overlap.self.public.v1"
 }

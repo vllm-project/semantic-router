@@ -1,19 +1,19 @@
 {
  "candidate_files": [
   {
-   "rows": 41076,
-   "sha256": "f379f2262fe3b01c4825184976e07dfd16bf1f65ebcc7889f1a765001868ac8c"
+   "rows": 39396,
+   "sha256": "995eae7369b4c83316c6b8e8a9781ab24aa186dbc4d51851ad6cbe8e23a4ca25"
   },
   {
-   "rows": 3549,
-   "sha256": "cd0f53d05d09dec3e23d8f6b394068ad012ddef73bef228661abcc02391e227b"
+   "rows": 3540,
+   "sha256": "f3559892c86ebe164697496b9a7aff81b378baca2f7c7606dc542e4ca0dfe634"
   }
  ],
  "candidates": {
-  "distinct_leaves_scanned": 63979,
-  "groups": 38534,
-  "rows": 44625,
-  "states_keyed": 44548
+  "distinct_leaves_scanned": 62989,
+  "groups": 38454,
+  "rows": 42936,
+  "states_keyed": 42859
  },
  "flagged": {
   "boilerplate": {
@@ -30,8 +30,8 @@
     "units": 3
    },
    "N_char": {
-    "groups": 22,
-    "units": 8
+    "groups": 19,
+    "units": 6
    },
    "N_word": {
     "groups": 0,
@@ -48,16 +48,16 @@
     "rows": 0
    },
    "L": {
-    "groups": 4,
-    "rows": 4
+    "groups": 0,
+    "rows": 0
    },
    "N": {
-    "groups": 4,
-    "rows": 187
+    "groups": 0,
+    "rows": 0
    },
    "S": {
-    "groups": 4,
-    "rows": 4
+    "groups": 0,
+    "rows": 0
    }
   },
   "by_role": {
@@ -133,20 +133,20 @@
      "rows": 0
     },
     "L": {
-     "groups": 4,
-     "rows": 4
+     "groups": 0,
+     "rows": 0
     },
     "N": {
-     "groups": 4,
-     "rows": 187
+     "groups": 0,
+     "rows": 0
     },
     "S": {
      "groups": 0,
      "rows": 0
     },
     "any": {
-     "groups": 8,
-     "rows": 191
+     "groups": 0,
+     "rows": 0
     }
    },
    "ht_dev_goldfree": {
@@ -163,12 +163,12 @@
      "rows": 0
     },
     "S": {
-     "groups": 4,
-     "rows": 4
+     "groups": 0,
+     "rows": 0
     },
     "any": {
-     "groups": 4,
-     "rows": 4
+     "groups": 0,
+     "rows": 0
     }
    },
    "pn1_dev_goldfree": {
@@ -239,8 +239,8 @@
    }
   },
   "quarantine": {
-   "groups": 12,
-   "rows": 195
+   "groups": 0,
+   "rows": 0
   }
  },
  "methods": {

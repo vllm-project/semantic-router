@@ -9,7 +9,7 @@
    "medmcqa": 821,
    "poem": 416,
    "procb": 36,
-   "sentfin": 805,
+   "sentfin": 755,
    "sms": 121,
    "snips_rel": 287,
    "snips_sel": 322,
@@ -18,7 +18,7 @@
    "wands": 742,
    "wanli": 923
   },
-  "groups": 4588,
+  "groups": 4554,
   "label_by_family": {
    "args": {
     "0": 288,
@@ -62,9 +62,8 @@
     "1": 20
    },
    "sentfin": {
-    "0": 274,
-    "1": 273,
-    "2": 258
+    "0": 386,
+    "1": 369
    },
    "sms": {
     "0": 66,
@@ -101,12 +100,12 @@
   },
   "language": {
    "ar": 45,
-   "en": 6610
+   "en": 6560
   },
-  "rows": 6655,
-  "sha256": "6816bf43834a88c43c8351cc6e3f98e732a53ae9d2d40ccb64dc90ff2c1eca92",
+  "rows": 6605,
+  "sha256": "8ce859f4fd6f652cfe9f0600aafdd5075e99d6005723c52665876f31f1f44f79",
   "task_type": {
-   "choice": 6012,
+   "choice": 5962,
    "noul": 643
   }
  },
@@ -220,12 +219,12 @@
     "selected": 360
    },
    "sentfin": {
-    "drop_conflicting_duplicates": 14,
-    "drop_exact_duplicates": 73,
+    "drop_class_not_used": 5507,
+    "drop_exact_duplicates": 29,
     "drop_unparsed": 13,
-    "eligible": 14284,
+    "eligible": 8835,
     "read": 14371,
-    "selected": 7998
+    "selected": 7590
    },
    "sms": {
     "drop_exact_duplicates": 414,
@@ -276,6 +275,7 @@
   },
   "group_merges": 1
  },
+ "round": 3,
  "schema": "decision2.ib1.build.v1",
  "train": {
   "family": {
@@ -287,7 +287,7 @@
    "medmcqa": 7179,
    "poem": 3584,
    "procb": 324,
-   "sentfin": 7193,
+   "sentfin": 6835,
    "sms": 1163,
    "snips_rel": 2709,
    "snips_sel": 2674,
@@ -296,7 +296,7 @@
    "wands": 7256,
    "wanli": 8077
   },
-  "groups": 41237,
+  "groups": 40895,
   "label_by_family": {
    "args": {
     "0": 2712,
@@ -340,9 +340,8 @@
     "1": 160
    },
    "sentfin": {
-    "0": 2392,
-    "1": 2393,
-    "2": 2408
+    "0": 3409,
+    "1": 3426
    },
    "sms": {
     "0": 576,
@@ -379,12 +378,12 @@
   },
   "language": {
    "ar": 410,
-   "en": 62949
+   "en": 62591
   },
-  "rows": 63359,
-  "sha256": "888dad522420dafe6759aa1957dd35a628be579e4873934d89e0ee9ed9ecbdb1",
+  "rows": 63001,
+  "sha256": "468cf7f202b8b1f4e7f42bea199df281774bd712f3fe8eb3c59f1251c30e27e2",
   "task_type": {
-   "choice": 57457,
+   "choice": 57099,
    "noul": 5902
   }
  }

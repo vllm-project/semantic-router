@@ -1,7 +1,7 @@
 {
  "candidate_inputs": {
-  "ib1.dev.jsonl": "9091f2009f9e695f1012bd1750022629b5979c91e24b0c67c47b88f50d8df6f7",
-  "ib1.train.jsonl": "4730291bdd107ac3f23242436f01b0eb983a7dba640b135934dcf88e68bfd6af"
+  "ib1.dev.jsonl": "cd0f53d05d09dec3e23d8f6b394068ad012ddef73bef228661abcc02391e227b",
+  "ib1.train.jsonl": "f379f2262fe3b01c4825184976e07dfd16bf1f65ebcc7889f1a765001868ac8c"
  },
  "candidates": {
   "args": {
@@ -11,10 +11,6 @@
   "copa": {
    "select": 108,
    "train": 878
-  },
-  "csqa": {
-   "select": 513,
-   "train": 4983
   },
   "isarc": {
    "select": 82,
@@ -37,8 +33,8 @@
    "train": 258
   },
   "sentfin": {
-   "select": 496,
-   "train": 4780
+   "select": 710,
+   "train": 6810
   },
   "sms": {
    "select": 62,
@@ -50,19 +46,15 @@
   },
   "snips_sel": {
    "select": 310,
-   "train": 2673
+   "train": 2672
   },
   "sumedit": {
    "select": 0,
-   "train": 608
+   "train": 382
   },
   "w2c": {
    "select": 0,
-   "train": 483
-  },
-  "wands": {
-   "select": 0,
-   "train": 4238
+   "train": 482
   },
   "wanli": {
    "select": 873,
@@ -75,9 +67,6 @@
    "groups_dropped": 0
   },
   "copa": {
-   "groups_dropped": 0
-  },
-  "csqa": {
    "groups_dropped": 0
   },
   "isarc": {
@@ -111,9 +100,6 @@
    "groups_dropped": 0
   },
   "w2c": {
-   "groups_dropped": 0
-  },
-  "wands": {
    "groups_dropped": 0
   },
   "wanli": {
