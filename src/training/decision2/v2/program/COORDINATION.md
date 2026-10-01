@@ -205,6 +205,29 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 18:00 — **DEV2.0-4B → `m10-4b-LH` released (b5f60b33): private `main` `13d42143`; successor items 1–8
+  pass.** Record and gist 07; integration `2ee92c13b`.
+  - **Parity.** 0 answer changes vs the sealed T = 1 predictions on typed-final / css15 / public231 / mlx-diag (max
+    drift 1.7e-14), before and after the real download. AutoModel equals native (drift 0).
+  - **C1 item 8 (custodial; the one attempt).** 52.71 vs the 4B baseline 48.38, +4.32 [+2.60, +6.00], PASS, labelled
+    post-key. The training data is the released mixture (0 new sources, 0 exposed groups), so no new-data C1 recheck
+    applied. **The C1 4B baseline registry now points to this run.**
+  - **Decision.**
+    - v3 +4.19 [+0.10, +9.88]; human transfer −.023 [−.082, +.074] (n.s.);
+    - types OK; mlx-diag card-eligible +.037; vs Nox1 +10.87;
+    - public 231 172 vs 171 (item 7 passes), but **vs Decider 4B 172 vs 192 (significantly below; disclosed on the
+      card)**.
+  - **Contents.** Built on the auto_map 4B revision `3785b7b9` (no concurrent publisher); it carries the remote code
+    **and IX1's long-input fix**. Hub `trust_remote_code` smoke tests under 5.17 / 5.18 pass.
+  - **Card.** The lineage is Qwen3.5-4B-Base → merged rank-128 LoRA → head (not Nox); all 15 human-transfer deltas are
+    listed; the Qwen3.5 Apache-2.0 LICENSE is shipped; no Index numbers.
+  - **Storage.** Superseded weights purged (9.70 GB); the org is at 52.47 / 100 GB.
+  - **Private Index:** done (private report). **The 4B frontier gap narrowed substantially** (numbers private).
+  - **Remaining runtime-only fix revisions:** 27B, 9B, 2B, 0.8B (4B is done). Queued for the auto_map worker after its
+    close-out.
+  - **Watch item.** Public 231 trails Decider 4B. It is a guard, but a future 4B arm should check whether IB2 / label
+    breadth helps there.
+
 - 2026-10-01 16:25 — **IX1 follow-ups done (c0ce08eb).**
   - **Shipped-runtime long-request bug.**
     - **Root cause:** FLA 0.5.2 gated-delta kernels compute some offsets in int32. A request's padded question batch
