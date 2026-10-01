@@ -79,6 +79,17 @@ for M6-IB and `ib12` (IB1 + IB2 DEV) for M6-IB2.
 
 | M6-IBX-s1 | **node D GPU0** | 3894132 | `a20ib1x` (4,997 updates, save 625) | 16.0 | `d2-27b-M6-IBX-s1-*` |
 | M6-IBX-s2 | **node D GPU1** | 3894589 | `a20ib1x` | 16.0 | `d2-27b-M6-IBX-s2-*` |
+| **M6-IB2PN-s1** | **node D GPU2** | 609345 | `a20ib12pn` (6,886 updates, save 861) | **22.0** | `d2-27b-M6-IB2PN-s1-*` |
+| **M6-IB2PN-s2** | **node D GPU3** | 645978 | `a20ib12pn` | **22.0** | `d2-27b-M6-IB2PN-s2-*` |
+
+- **M6-IB2PN (amendment 3, G5 hedge)** launched from mirror **`7fcbc824c`** (tooling `c0056edca` + data lock):
+  `M6_BUILD=BUILD-pn.json STAGGER=1 m6-launch.sh 7fcbc824c… M6-IB2PN:a20ib12pn:ib12:d2,d3:1`. s1 started 11:32Z alone
+  (onestep 0.072, reload 0.017 GPU-h, 0 argmax changes on 32 rows, max |Δp| 7e-8; full run from ≈ 11:38Z); s2 started
+  11:38:28Z after s1's reload passed. Node D relays 646528 (s1) / 646813 (s2); node A mlx watcher 253360; node B chain
+  **2818836** (aux **GPU1**, slice `ib12`, log `m6/logs/chain-M6-IB2PN.log`). Leases node D GPU2 / GPU3 taken from IX1's
+  released owners (moved to `owner.prev-20261001T1131*`). ETA ≈ 06:40Z (s1) / 06:50Z (s2) on Oct 2, then ≈ 2 h chain.
+  Data: `/data/dev2/private/27b/m6-data/BUILD-pn.json`, `mixtures-m6pn-1/`, `pn1h.train.jsonl`; scan receipts under
+  node A / B `/data/dev2/private/27b/m6-pn/` (private).
 
 - M6-IBX launched 08:33Z from mirror `d8edcf4e1` (amendment 2; node D staged at 08:22Z): node D leases GPU0 / GPU1 taken
   from IX1's released owners (moved to `owner.prev-20261001T0832*`); node D relay watchers 3895113 (s1) / 3895407 (s2)
@@ -156,6 +167,9 @@ is still fixing the long-input runtime bug and staging its M5-L128 Index diagnos
 
 ## Poll log (newest first)
 
+- 11:45Z: **M6-IB2PN launched** (see "Running now"): s1 full run on node D GPU2, s2 in its onestep preflight on GPU3;
+  chain, relays and mlx watcher alive. Eight seeds in flight. GPU-h ≈ 22.0 (closed 1.136 + 0.089 hedge s1 preflights +
+  running ≈ 20.8).
 - 11:30Z: hedge tooling `c0056edca` (137 tests pass; shellcheck clean) mirrored to node A / B / D; node B build
   11:20–11:26Z: two builds identical, amendment 1's four mixtures reproduced byte for byte, `a20ib12pn` 110,173 rows,
   6,886 updates, `8f5425c5…`, projection 19.09 (cap 22), C1 source check clean. Data-lock addendum committed. Next:
