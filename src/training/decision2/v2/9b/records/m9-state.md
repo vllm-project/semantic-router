@@ -1,5 +1,14 @@
 # 9B M9 state (resume file)
 
+## Index path release (2026-10-02, continuation cba71646; coordinator decision 02:05 UTC+8)
+
+- 19:47Z — **K-a13IB passes items 1′ and 2–8** ([decision trail](lux9b-m9-index-path-decision-2026-10-02.md)).
+  Item 8: C1 v1.2 post-key 53.49 vs 53.77, −0.28 [−1.31, +0.65], PASS (one attempt, node A GPU6, 0.064 GPU-h).
+  Final spec and decision committed (`9e84f05f4`), re-pinned to the card round-3 Index input and assets (the user's
+  03:04 card fix leaves Lux 9B to this release). Release waits for the card worker's round-3 uploads on node E to
+  finish (never concurrent). Pre-checks done: Hub main `586af779`, private; purge node copy re-hashes to all 10
+  superseded weight objects; Transformers 5.18 site `93df9002…` (same as the 4B release).
+
 ## Follow-ups A / B (2026-10-02, continuation cba71646; COORDINATION 00:35)
 
 - 17:55Z — **A and B done; hand-off.** A: [receipt](lux9b-m9-ix-ka13ib-receipt-2026-10-01.md): parity PASS, FP32-restage
