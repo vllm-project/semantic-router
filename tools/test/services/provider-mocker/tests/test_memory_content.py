@@ -130,3 +130,95 @@ async def test_memory_extraction_and_rewriting_accept_text_parts(messages, expec
         )
         assert response.status_code == 200
         assert response.json()["choices"][0]["message"]["content"] == expected
+
+
+async def test_memory_assistant_fact_returns_a_fact_answer() -> None:
+    request = {
+        "model": "qwen3",
+        "messages": [
+            {
+                "role": "user",
+                "content": "I live in Boston.",
+            }
+        ],
+    }
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=create_app(Settings(scenario="memory"))),
+        base_url="http://fixture",
+    ) as client:
+        response = await client.post("/v1/chat/completions", json=request)
+        assert response.status_code == 200
+        assert (
+            response.json()["choices"][0]["message"]["content"]
+            == "Your dog Biscuit is a beagle."
+        )
+
+
+async def test_memory_assistant_fact_does_not_match_older_turn() -> None:
+    request = {
+        "model": "qwen3",
+        "messages": [
+            {
+                "role": "user",
+                "content": "I live in Boston.",
+            },
+            {"role": "user", "content": "What is Biscuit's breed?"},
+        ],
+    }
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=create_app(Settings(scenario="memory"))),
+        base_url="http://fixture",
+    ) as client:
+        response = await client.post("/v1/chat/completions", json=request)
+        assert response.status_code == 200
+        assert (
+            response.json()["choices"][0]["message"]["content"]
+            == "[user]: I live in Boston.\n"
+            "[user]: What is Biscuit's breed?"
+        )
+
+
+async def test_memory_quoted_translation_marker_returns_neutral_answer() -> None:
+    request = {
+        "model": "qwen3",
+        "messages": [
+            {
+                "role": "user",
+                "content": (
+                    "THRESHOLD_MARKER Please translate this sentence: "
+                    "\u2018I just moved to Denver, and I live there now actually\u2019."
+                ),
+            }
+        ],
+    }
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=create_app(Settings(scenario="memory"))),
+        base_url="http://fixture",
+    ) as client:
+        response = await client.post("/v1/chat/completions", json=request)
+        assert response.status_code == 200
+        assert (
+            response.json()["choices"][0]["message"]["content"]
+            == "Translation complete."
+        )
+
+
+async def test_memory_denver_correction_returns_neutral_answer() -> None:
+    request = {
+        "model": "qwen3",
+        "messages": [
+            {
+                "role": "user",
+                "content": "THRESHOLD_MARKER I just moved to Denver, and I live there now.",
+            }
+        ],
+    }
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=create_app(Settings(scenario="memory"))),
+        base_url="http://fixture",
+    ) as client:
+        response = await client.post("/v1/chat/completions", json=request)
+        assert response.status_code == 200
+        assert (
+            response.json()["choices"][0]["message"]["content"] == "Welcome to Denver!"
+        )

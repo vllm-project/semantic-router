@@ -118,7 +118,7 @@ func (m *MilvusStore) searchMemoryVectors(ctx context.Context, embedding []float
 			m.collectionName,
 			[]string{},
 			filterExpr,
-			[]string{"id", "content", "memory_type", "metadata"},
+			[]string{"id", "content", "memory_type", "metadata", "created_at"},
 			[]entity.Vector{entity.FloatVector(embedding)},
 			"embedding",
 			entity.COSINE,
@@ -205,11 +205,11 @@ func (m *MilvusStore) parseCandidates(sr client.SearchResult, defaultUserID stri
 }
 
 type searchFieldIndex struct {
-	id, content, memoryType, metadata int
+	id, content, memoryType, metadata, createdAt int
 }
 
 func indexSearchResultFields(fields []entity.Column) searchFieldIndex {
-	idx := searchFieldIndex{id: -1, content: -1, memoryType: -1, metadata: -1}
+	idx := searchFieldIndex{id: -1, content: -1, memoryType: -1, metadata: -1, createdAt: -1}
 	for i, field := range fields {
 		switch field.Name() {
 		case "id":
@@ -220,6 +220,8 @@ func indexSearchResultFields(fields []entity.Column) searchFieldIndex {
 			idx.memoryType = i
 		case "metadata":
 			idx.metadata = i
+		case "created_at":
+			idx.createdAt = i
 		}
 	}
 	return idx
@@ -234,7 +236,15 @@ func retrieveCandidateFromRow(fields []entity.Column, idx searchFieldIndex, row 
 	}
 
 	metadata := parseRetrieveMetadata(fields, idx.metadata, row)
-	mem := &Memory{ID: id, Content: content, Type: MemoryType(memType)}
+	var createdAt time.Time
+	if idx.createdAt >= 0 && idx.createdAt < len(fields) {
+		if col, ok := fields[idx.createdAt].(*entity.ColumnInt64); ok {
+			assignInt64ColumnAt(col, row, func(value int64) {
+				createdAt = timeFromMilvusTimestamp(value)
+			})
+		}
+	}
+	mem := &Memory{ID: id, Content: content, Type: MemoryType(memType), CreatedAt: createdAt}
 	populateMemoryFromRetrieveMetadata(mem, metadata, defaultUserID)
 	return &RetrieveResult{Memory: mem, Score: score}
 }

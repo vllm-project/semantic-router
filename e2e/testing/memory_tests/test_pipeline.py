@@ -364,7 +364,19 @@ class SupersededMemoryTest(MemoryFeaturesTest):
             )
             if not result:
                 continue
-            output = result.get("_output_text", "").lower()
+            response_text: str = result.get("_output_text", "").lower()
+            context_start: int = response_text.find(
+                "the following is relevant context from previous conversations with the user:"
+            )
+            context_end: int = response_text.find(
+                "use this context to personalize your response when relevant.",
+                context_start,
+            )
+            output = (
+                response_text[context_start:context_end]
+                if context_start >= 0 and context_end >= 0
+                else ""
+            )
             missing = [kw for kw in expected if kw not in output]
             if not missing:
                 return output
@@ -452,10 +464,10 @@ class SupersededMemoryTest(MemoryFeaturesTest):
             "Store a residence fact, store a translation quoting a move, verify residence stays",
         )
 
-        first = self.send_memory_request(
-            message="I live in Boston.", auto_store=True
-        )
+        first = self.send_memory_request(message="I live in Boston.", auto_store=True)
         self.assertIsNotNone(first, "Failed to store the residence fact")
+        self.wait_for_storage(seconds=3)
+        self.wait_for_storage(seconds=2)
 
         second = self.send_memory_request(
             message='Please translate this sentence: "I just moved to Denver, and I live there now."',
@@ -476,7 +488,9 @@ class SupersededMemoryTest(MemoryFeaturesTest):
             f"{prompt[:PREVIEW_LENGTH]}...",
         )
 
-    def test_04_explicit_reaffirmation_with_continue_or_remain_does_not_correct_earlier_fact(self):
+    def test_04_explicit_reaffirmation_with_continue_or_remain_does_not_correct_earlier_fact(
+        self,
+    ):
         """Explicit reaffirmations such as continue or remain must not retire an older fact."""
         self.print_test_header(
             "Continue Or Remain Reaffirmation Is Not A Correction",
@@ -507,3 +521,133 @@ class SupersededMemoryTest(MemoryFeaturesTest):
             f"{prompt[:PREVIEW_LENGTH]}...",
         )
 
+    def test_05_curly_single_quoted_translation_keeps_earlier_residence(self):
+        """A curly single-quoted change request must not retire a stored residence."""
+        self.print_test_header(
+            "Curly-Quoted Task Is Not A Correction",
+            "Store a residence, quote a Denver move using curly quotes, verify Boston stays",
+        )
+
+        first = self.send_memory_request(message="I live in Boston.", auto_store=True)
+        self.assertIsNotNone(first, "Failed to store the residence fact")
+        self.wait_for_storage(seconds=3)
+
+        exact_quoted_task = self.send_memory_request(
+            message=(
+                "THRESHOLD_MARKER Please translate this sentence: "
+                "\u2018I just moved to Denver, and I live there now.\u2019"
+            ),
+            auto_store=True,
+        )
+        self.assertIsNotNone(exact_quoted_task, "Failed to store the quoted task")
+        self.wait_for_storage(seconds=3)
+        exact_prompt = self._prompt_containing(
+            "What sentence did I ask you to translate: "
+            "\u2018I just moved to Denver, and I live there now.\u2019?",
+            ["boston"],
+        )
+        self.assertIn("q: i live in boston.", exact_prompt)
+
+        second = self.send_memory_request(
+            message=(
+                "THRESHOLD_MARKER Please translate this sentence: "
+                "\u2018I just moved to Denver, and I live there now actually\u2019."
+            ),
+            auto_store=True,
+        )
+        self.assertIsNotNone(second, "Failed to store the translation task")
+
+        self.wait_for_storage()
+        self.flush_and_wait(8)
+
+        self.assertTrue(self.milvus.is_available(), "Milvus is required for this test")
+        stored_records = self.milvus.client.query(
+            collection_name=self.milvus.collection,
+            filter=f'user_id == "{self.test_user}"',
+            output_fields=["content"],
+        )
+        stored_content = "\n".join(
+            record.get("content", "").lower() for record in stored_records
+        )
+        self.assertIn("please translate this sentence", stored_content)
+
+        prompt = self._prompt_containing(
+            "What sentence did I ask you to translate: "
+            "\u2018I just moved to Denver, and I live there now actually\u2019?",
+            ["boston", "denver"],
+        )
+        self.assertIn("q: i live in boston.", prompt)
+        self.assertIn("q: threshold_marker please translate this sentence", prompt)
+        self.print_test_result(
+            True,
+            f"The earlier residence reached the prompt despite the quoted move: "
+            f"{prompt[:PREVIEW_LENGTH]}...",
+        )
+
+    def test_06_corrected_question_keeps_independent_assistant_fact(self):
+        """A corrected residence must not remove a separate fact from its answer."""
+        self.print_test_header(
+            "Correction Keeps Assistant Fact",
+            "Store a residence with an assistant dog fact, correct the residence, verify both",
+        )
+
+        first = self.send_memory_request(
+            message="I live in Boston.",
+            auto_store=True,
+        )
+        self.assertIsNotNone(first, "Failed to store the residence and assistant fact")
+        self.assertEqual(first.get("_output_text"), "Your dog Biscuit is a beagle.")
+        self.wait_for_storage(seconds=3)
+
+        second = self.send_memory_request(
+            message="THRESHOLD_MARKER I just moved to Denver, and I live there now.",
+            auto_store=True,
+        )
+        self.assertIsNotNone(second, "Failed to store the residence correction")
+        self.assertEqual(second.get("_output_text"), "Welcome to Denver!")
+
+        self.wait_for_storage()
+        self.flush_and_wait(8)
+
+        self.assertTrue(self.milvus.is_available(), "Milvus is required for this test")
+        stored_records = self.milvus.client.query(
+            collection_name=self.milvus.collection,
+            filter=f'user_id == "{self.test_user}"',
+            output_fields=["content", "created_at"],
+        )
+        stored_content = "\n".join(
+            record.get("content", "").lower() for record in stored_records
+        )
+        self.assertIn("i just moved to denver, and i live there now", stored_content)
+        boston_created_at = next(
+            (
+                record["created_at"]
+                for record in stored_records
+                if "i live in boston." in record["content"].lower()
+            ),
+            None,
+        )
+        denver_created_at = next(
+            (
+                record["created_at"]
+                for record in stored_records
+                if "i just moved to denver, and i live there now"
+                in record["content"].lower()
+            ),
+            None,
+        )
+        self.assertIsNotNone(boston_created_at)
+        self.assertIsNotNone(denver_created_at)
+        self.assertGreater(denver_created_at, boston_created_at)
+
+        prompt = self._prompt_containing(
+            "I just moved to Denver, and I live there now. What breed is Biscuit?",
+            ["denver", "biscuit"],
+        )
+        self.assertNotIn("boston", prompt)
+        self.assertIn("beagle", prompt)
+        self.print_test_result(
+            True,
+            f"The correction replaced Boston while the assistant's dog fact stayed: "
+            f"{prompt[:PREVIEW_LENGTH]}...",
+        )

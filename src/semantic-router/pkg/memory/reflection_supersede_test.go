@@ -29,7 +29,12 @@ var (
 	jobNearPark   = formatTurnChunk("I changed jobs and now work as a paramedic near Central Park.", "Congratulations!")
 	leftParkTurn  = formatTurnChunk("I no longer work near Central Park.", "Noted.")
 	// The reply quotes a stored session, so its "Q:" line is not the user's.
-	quotedTurn = formatTurnChunk("What does a stored session look like?", "Like this:\n---\nQ: I moved to Denver, and I live there now")
+	quotedTurn                    = formatTurnChunk("What does a stored session look like?", "Like this:\n---\nQ: I moved to Denver, and I live there now")
+	bostonWithAssistantFact       = formatTurnChunk("I live in Boston.", "Your dog Biscuit is a beagle.")
+	bostonWithMixedAssistantFacts = formatTurnChunk(
+		"I live in Boston.",
+		"Your dog Biscuit is a beagle. You live in Boston.",
+	)
 	// Long enough that the correction is a near-duplicate for the default dedup threshold.
 	hospitalTurn   = formatTurnChunk("I work as a nurse at the children's hospital near the old park on Main Street in Boston, next to the big library.", "")
 	noHospitalTurn = formatTurnChunk("I no longer work as a nurse at the children's hospital near the old park on Main Street in Boston, next to the big library.", "")
@@ -129,6 +134,19 @@ func TestReflectionGateDropsCorrectedTurns(t *testing.T) {
 			want: []string{dogTurn, peanutsTurn, denverTurn},
 		},
 		{
+			name:      "a correction keeps an unrelated assistant fact",
+			retrieved: []datedContent{{content: bostonWithAssistantFact, daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
+			want:      []string{"A: Your dog Biscuit is a beagle.", denverTurn},
+		},
+		{
+			name: "a correction drops only the assistant sentence that repeats it",
+			retrieved: []datedContent{
+				{content: bostonWithMixedAssistantFacts, daysAgo: 30},
+				{content: denverTurn, daysAgo: 9},
+			},
+			want: []string{"A: Your dog Biscuit is a beagle.", denverTurn},
+		},
+		{
 			name:      "a session chunk keeps its other turns",
 			retrieved: []datedContent{{content: sessionChunkOf(dogTurn, bostonTurn, nurseTurn), daysAgo: 30}, {content: denverTurn, daysAgo: 9}},
 			want:      []string{sessionChunkOf(dogTurn, nurseTurn), denverTurn},
@@ -216,6 +234,9 @@ func TestReflectionGateKeepsTurnsWithoutACorrection(t *testing.T) {
 	married := formatTurnChunk("I live in Boston, I'm married.", "Congratulations!")
 	stillNurse := formatTurnChunk("I moved apartments, and I still work as a nurse now.", "Congrats on the new place.")
 	quotedTask := formatTurnChunk("Please translate this sentence: \"I just moved to Denver, and I live there now.\"", "Here is the translation.")
+	curlyQuotedTask := formatTurnChunk("Please translate this sentence: ‘I just moved to Denver, and I live there now’.", "Here is the translation.")
+	curlyQuotedTaskWithQuotedPeriod := formatTurnChunk("Please translate this sentence: ‘I just moved to Denver, and I live there now.’", "Here is the translation.")
+	curlyQuotedTaskWithAdverb := formatTurnChunk("Please translate this sentence: ‘I just moved to Denver, and I live there now actually’.", "Here is the translation.")
 	continueNurse := formatTurnChunk("I moved apartments, and I continue to work as a nurse now.", "Congrats on the new place.")
 	remainNurse := formatTurnChunk("I moved apartments, and I remain a nurse now.", "Congrats on the new place.")
 
@@ -260,6 +281,9 @@ func TestReflectionGateKeepsTurnsWithoutACorrection(t *testing.T) {
 		{name: "a comma clause of two words", retrieved: []datedContent{{content: married, daysAgo: 30}, {content: denverTurn, daysAgo: 9}}},
 		{name: "a correction that reaffirms an older fact", retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: stillNurse, daysAgo: 9}}},
 		{name: "a quoted change in a task prompt", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: quotedTask, daysAgo: 9}}},
+		{name: "a curly-single-quoted change in a task prompt", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: curlyQuotedTask, daysAgo: 9}}},
+		{name: "a curly-single-quoted change with punctuation inside the quote", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: curlyQuotedTaskWithQuotedPeriod, daysAgo: 9}}},
+		{name: "a curly-single-quoted change with a trailing adverb", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: curlyQuotedTaskWithAdverb, daysAgo: 9}}},
 		{name: "a correction that reaffirms an older fact with continue", retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: continueNurse, daysAgo: 9}}},
 		{name: "a correction that reaffirms an older fact with remain", retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: remainNurse, daysAgo: 9}}},
 		{name: "a turn quoted in an assistant reply", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: quotedTurn, daysAgo: 9}}},

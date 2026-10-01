@@ -163,15 +163,20 @@ func (s *supersession) hideCorrected(injected []*RetrieveResult) ([]*RetrieveRes
 		return refs[a].turn > refs[b].turn
 	})
 	hiddenTurns := make(map[turnRef]bool)
+	hidingCorrections := make(map[turnRef][]wordPair)
 	for _, ref := range refs {
 		if !s.turns[ref.memory][ref.turn].hideable {
 			continue
 		}
 		// Hiding a correction also drops what it said about the turns it
 		// corrects, so its own corrector must correct those turns directly.
-		hiddenTurns[ref] = slices.ContainsFunc(s.correctors[ref.memory][ref.turn], func(c turnRef) bool {
-			return inPrompt[c.memory] && !hiddenTurns[c] && s.correctsAll(c, dependents[ref])
-		})
+		for _, corrector := range s.correctors[ref.memory][ref.turn] {
+			if !inPrompt[corrector.memory] || hiddenTurns[corrector] || !s.correctsAll(corrector, dependents[ref]) {
+				continue
+			}
+			hiddenTurns[ref] = true
+			hidingCorrections[ref] = append(hidingCorrections[ref], s.turns[corrector.memory][corrector.turn].correction...)
+		}
 	}
 
 	hidden := false
@@ -179,16 +184,22 @@ func (s *supersession) hideCorrected(injected []*RetrieveResult) ([]*RetrieveRes
 	for _, m := range injected {
 		i := s.index[m]
 		live := make([]string, 0, len(s.turns[i]))
+		memoryChanged := false
 		for ti, turn := range s.turns[i] {
-			if hiddenTurns[turnRef{memory: i, turn: ti}] {
+			ref := turnRef{memory: i, turn: ti}
+			if hiddenTurns[ref] {
 				logging.Debugf("ReflectionGate: turn %d of memory id=%s superseded", ti, m.Memory.ID)
 				hidden = true
+				memoryChanged = true
+				if answer := independentAssistantAnswer(turn.text, hidingCorrections[ref]); answer != "" {
+					live = append(live, turnAnswerPrefix+answer)
+				}
 				continue
 			}
 			live = append(live, turn.text)
 		}
 		switch {
-		case len(live) == len(s.turns[i]):
+		case !memoryChanged:
 			kept = append(kept, m)
 		case len(live) > 0:
 			trimmed := *m.Memory
@@ -197,6 +208,56 @@ func (s *supersession) hideCorrected(injected []*RetrieveResult) ([]*RetrieveRes
 		}
 	}
 	return kept, hidden
+}
+
+func independentAssistantAnswer(turn string, corrections []wordPair) string {
+	_, answer, found := strings.Cut(turn, "\n"+turnAnswerPrefix)
+	if !found || strings.TrimSpace(answer) == "" {
+		return ""
+	}
+
+	originalWords := statementWords(userStatement(turn))
+	originalContentWords := make(map[string]bool, len(originalWords))
+	for _, word := range originalWords {
+		if isContentWord(word) {
+			originalContentWords[word] = true
+		}
+	}
+
+	var independent []string
+	for _, sentence := range statementSentences(answer) {
+		words := statementWords(sentence.text)
+		for i, word := range words {
+			switch word {
+			case "you":
+				words[i] = "i"
+			case "your":
+				words[i] = "my"
+			}
+		}
+		repeatsOriginal := slices.ContainsFunc(words, func(word string) bool {
+			return isContentWord(word) && originalContentWords[word]
+		})
+		if repeatsOriginal {
+			continue
+		}
+		answerPairs := anchorPairs(words)
+		if len(answerPairs) == 0 {
+			continue
+		}
+		corrected := slices.ContainsFunc(corrections, func(correction wordPair) bool {
+			return slices.Contains(answerPairs, correction)
+		})
+		if corrected {
+			continue
+		}
+		text := sentence.text
+		if sentence.ending != 0 {
+			text += string(sentence.ending)
+		}
+		independent = append(independent, text)
+	}
+	return strings.TrimSpace(strings.Join(independent, " "))
 }
 
 func (s *supersession) correctsAll(corrector turnRef, turns []turnRef) bool {
@@ -410,6 +471,7 @@ func userStatement(turn string) string {
 type statementSentence struct {
 	text     string
 	question bool
+	ending   rune
 }
 
 func statementSentences(statement string) []statementSentence {
@@ -417,6 +479,7 @@ func statementSentences(statement string) []statementSentence {
 	start := 0
 	inDouble := false
 	inSmart := false
+	inSmartSingle := false
 	inBacktick := false
 	for i, r := range statement {
 		switch r {
@@ -426,17 +489,21 @@ func statementSentences(statement string) []statementSentence {
 			inSmart = true
 		case '”':
 			inSmart = false
+		case '‘':
+			inSmartSingle = true
+		case '’':
+			inSmartSingle = false
 		case '`':
 			inBacktick = !inBacktick
 		}
-		if inDouble || inSmart || inBacktick {
+		if inDouble || inSmart || inSmartSingle || inBacktick {
 			continue
 		}
 		if r != '.' && r != '!' && r != '?' && r != ';' && r != '\n' {
 			continue
 		}
 		if text := statement[start:i]; strings.TrimSpace(text) != "" {
-			sentences = append(sentences, statementSentence{text: text, question: r == '?'})
+			sentences = append(sentences, statementSentence{text: text, question: r == '?', ending: r})
 		}
 		start = i + utf8.RuneLen(r)
 	}
@@ -453,6 +520,7 @@ func withoutQuotedContent(s string) string {
 	b.Grow(len(s))
 	inDouble := false
 	inSmart := false
+	inSmartSingle := false
 	inBacktick := false
 	for _, r := range s {
 		switch r {
@@ -465,11 +533,17 @@ func withoutQuotedContent(s string) string {
 		case '”':
 			inSmart = false
 			continue
+		case '‘':
+			inSmartSingle = true
+			continue
+		case '’':
+			inSmartSingle = false
+			continue
 		case '`':
 			inBacktick = !inBacktick
 			continue
 		}
-		if inDouble || inSmart || inBacktick {
+		if inDouble || inSmart || inSmartSingle || inBacktick {
 			continue
 		}
 		b.WriteRune(r)
