@@ -3,7 +3,8 @@
     python3 -m v2.eval.ix1.merge --panel <rows dir>/panel.json --run <run root> --out <run root>/merged
 
 ``<run root>/shard-<k>`` holds each kit runner's ``results.jsonl``, ``environment.json`` and the
-launcher's ``start_epoch`` / ``end_epoch``. The last record of a run ID is its final one (the kit
+launcher's ``start_epoch`` / ``end_epoch``; ``<run root>/extra-<k>`` holds requests rerun alone
+after they aborted the device in their shard. The last record of a run ID is its final one (the kit
 appends retried errors on resume). The merge fails unless every panel run ID has exactly one final
 record and no final record is an error (``--allow-errors`` keeps errors that persisted through a
 resume; both scorers count them as failures). Writes ``results.jsonl`` (final records, panel order),
@@ -96,6 +97,17 @@ def main() -> None:
             gpu_seconds += int(end_file.read_text()) - int(start_file.read_text())
         env = json.loads((shard / "environment.json").read_text())
         environments.add(json.dumps(env["model_source"], sort_keys=True))
+    for extra in sorted(args.run.glob("extra-*")):
+        lines = (extra / "results.jsonl").read_text(encoding="utf-8").splitlines()
+        records, retried = final_records(lines)
+        for run_id, record in records.items():
+            if run_id in final and final[run_id]["status"] != "error":
+                raise SystemExit(f"{extra.name} answers {run_id} a second time")
+            final[run_id] = record
+        superseded += retried
+        for start_file in extra.glob("start_epoch*"):
+            end_file = extra / start_file.name.replace("start", "end", 1)
+            gpu_seconds += int(end_file.read_text()) - int(start_file.read_text())
     wanted = [run_id for run_id, _ in order]
     if len(set(wanted)) != len(wanted) or set(final) != set(wanted):
         raise SystemExit(

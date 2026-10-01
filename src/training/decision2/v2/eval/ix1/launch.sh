@@ -9,6 +9,8 @@
 # --only starts just the listed shard indices (shard k still runs on the k-th listed GPU).
 # resume restarts ended shards in place: the kit runner skips their final rows and retries errors;
 # the previous start/end/exit markers are kept with a numeric suffix (GPU-hours sum every interval).
+# A shard directory holding rows.override.jsonl.gz (its rows minus requests that abort the device,
+# listed in skipped.json) resumes over that file; skipped requests are rerun alone into extra-<k>/.
 # <src> is a mirror_to_node.sh --path src/training/decision2 directory; NAME a package of the table
 # below, downloaded at its pinned revision to /data/dev2/models/ix1/<NAME>-<rev8>.
 # parity: on one GPU, (1) the package's own entry point (v2.eval.ix1.native_ref) over the gold-free
@@ -229,6 +231,10 @@ for k in "${!gpu_list[@]}"; do
     rm -f "$work/launched"
   fi
   shard="$rows_dir/shard-$k-of-$n.jsonl.gz"
+  if [[ "$mode" == resume && -f "$work/rows.override.jsonl.gz" ]]; then
+    [[ -f "$work/skipped.json" ]] || { echo "$work override without skipped.json" >&2; exit 1; }
+    shard="$work/rows.override.jsonl.gz"
+  fi
   wait_for_room
   touch "$work/launched"
   container "ix1-$(tr 'A-Z.' 'a-z_' <<< "$model")-s$k-g$g" "$g" "$work" 1 \
