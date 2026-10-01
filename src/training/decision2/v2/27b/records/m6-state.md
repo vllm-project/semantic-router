@@ -100,13 +100,21 @@ is still fixing the long-input runtime bug and staging its M5-L128 Index diagnos
 
 1. Confirm the four preflights (onestep finite, reload parity 0 argmax changes) and the first full-run updates; record
    seconds per update and ETAs.
-2. M6-IBX: needs a free GPU pair (node D after IX1, or a coordinator lend); then
-   `m6-launch.sh <mirror> M6-IBX:a20ib1x:ib:<s1>,<s2>:<aux>` (a node D placement needs a launcher map amendment).
+2. **M6-IBX on node D** once IX1 releases it (its M5-L128 Index run holds node D until ≈ 11:00Z; check the owner files
+   for `status=released`): mirror the latest commit to node D (`mirror_to_node.sh --path src/training/decision2 node-d
+   <sha>`), `m6/m6-stage-d.sh <sha> a20ib1x` (base, data, T0, mixture; all hash-checked), commit a short amendment (node D
+   placement), then `m6-launch.sh <sha> M6-IBX:a20ib1x:ib:d0,d1:<aux>` — the aux GPU must be a node B GPU of the M6
+   allocation that is free when the seeds end (GPU1 frees ≈ 21:35Z). Node D seeds relay with `RELAY_NODE=d` and node B
+   pulls with `pull-d`. If node D stays busy, the next free 27B pair is node B GPU5 + GPU1 after M6-IB (≈ 21:35Z).
 3. After the chains: results record, item-8 hand-off (custodian C1 content recheck first, IB1 + IB2 roots) and the
    private Index request for frozen finalists.
 
 ## Poll log (newest first)
 
+- 08:20Z: steps 69–75 of 5,081 / 6,614; s/upd 9.20–9.71; projections M6-IB 13.0–13.2 h, M6-IB2 17.1 (node B) / 17.8
+  (node A) of cap 20. Interim results record written. Node D support committed (`e11a19b57`: launcher map `d`, launch3
+  `m6-d` and free-text released owners, `m6-stage-d.sh`, `pull-d`, `d` seeds in chain / launch; tests pass). Receipts
+  0.958 GPU-h before the full runs.
 - 08:12Z: all four preflights passed (onestep exit 0, 0.072–0.077 GPU-h; reload 0 argmax changes on 32 rows, max |Δp|
   3e-8 / 6e-8; 0.018–0.020 GPU-h); full runs since ≈ 08:03Z. After ≈ 26 updates: M6-IB-s1 9.57 s/upd (projection
   13.5 h of cap 16), M6-IB-s2 9.50 (13.4 h), M6-IB2-s1 9.36 (17.2 h of cap 20), M6-IB2-s2 9.70 (17.8 h). The cost is
