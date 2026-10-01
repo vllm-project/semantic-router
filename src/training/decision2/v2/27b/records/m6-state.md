@@ -58,6 +58,14 @@ for M6-IB and `ib12` (IB1 + IB2 DEV) for M6-IB2.
 | M6-IB2-s1 | node B GPU0 | 2769039 | `a20ib12` (6,614 updates, save 827) | 20.0 | `d2-27b-M6-IB2-s1-*` |
 | M6-IB2-s2 | node A GPU2 | 147815 | `a20ib12` | 20.0 | `d2-27b-M6-IB2-s2-*` |
 
+| M6-IBX-s1 | **node D GPU0** | 3894132 | `a20ib1x` (4,997 updates, save 625) | 16.0 | `d2-27b-M6-IBX-s1-*` |
+| M6-IBX-s2 | **node D GPU1** | 3894589 | `a20ib1x` | 16.0 | `d2-27b-M6-IBX-s2-*` |
+
+- M6-IBX launched 08:33Z from mirror `d8edcf4e1` (amendment 2; node D staged at 08:22Z): node D leases GPU0 / GPU1 taken
+  from IX1's released owners (moved to `owner.prev-20261001T0832*`); node D relay watchers 3895113 (s1) / 3895407 (s2)
+  with `RELAY_NODE=d`; node A mlx watcher M6-IBX 174557; node B chain M6-IBX PID 2789875 (aux **GPU5**, slice `ib`,
+  log `m6/logs/chain-M6-IBX.log`). First launch attempt (mirror `35492ac25`) stopped before any GPU job: `launch3` could
+  not parse IX1's one-line owner file; fixed in `d8edcf4e1` (`read_lease` splits single-line `key=value` owner files).
 - Drivers log to `/data/dev2/runs/27b/<seed>/driver.log` (stages admit → onestep → reload → full).
 - Node B chains: `m6-chain.sh` for M6-IB (PID 2769370, log `m6/logs/chain-M6-IB.log`, aux GPU1, slice `ib`) and
   M6-IB2 (PID 2769422, log `m6/logs/chain-M6-IB2.log`, aux GPU0, slice `ib12`); first lines present.
@@ -123,19 +131,14 @@ is still fixing the long-input runtime bug and staging its M5-L128 Index diagnos
 
 1. Confirm the four preflights (onestep finite, reload parity 0 argmax changes) and the first full-run updates; record
    seconds per update and ETAs.
-2. **M6-IBX on node D (amendment 2, `35492ac25`; node D already staged and verified at 08:22Z, mirror `35492ac25` on
-   node A / B / D):** once IX1 releases node D GPU0 and GPU1 (owner files `status=released…`; IX1's M5-L128 Index run
-   expects to end ≈ 11:00–11:06Z), run from the workstation
-   `bash src/training/decision2/v2/27b/m6/m6-launch.sh 35492ac259d5762430cdf06a0a4a3f52578177c3 M6-IBX:a20ib1x:ib:d0,d1:5`
-   (it re-checks the node D mixture hash, takes the two node D leases with `launch3 lease` `m6-d`, launches both seeds,
-   starts the node D relay watchers with `RELAY_NODE=d`, the node A mlx watcher and the node B chain with aux GPU5).
-   Run it **once**, with its output to a local log (`> /tmp/m6-launch-ibx.log 2>&1`), and verify on the nodes. If node D
-   stays busy, use node B GPU5 + GPU1 after M6-IB (≈ 21:35Z): `M6-IBX:a20ib1x:ib:b5,b1:5`.
+2. M6-IBX is launched (see "Running now"); watch its preflights and first updates on node D.
 3. After the chains: results record, item-8 hand-off (custodian C1 content recheck first, IB1 + IB2 roots) and the
    private Index request for frozen finalists.
 
 ## Poll log (newest first)
 
+- 08:37Z: IX1 released node D at 08:20Z; **M6-IBX launched on node D GPU0 / GPU1** (onestep running; admission 79,945
+  rows, 0 over limit). All six seeds now train; three chains and five watchers alive.
 - 08:27Z: node D staged for M6-IBX (`m6-stage-d.sh`: base tree, T0 tree, data files, `a20ib1x` equal to node B; image
   present; 1 min copy) and amendment 2 committed (`35492ac25`, mirrored to node A / B / D); node B's `on_d` probe of
   node D's relay directory works. Integration merged at `8a7527079`; gist 06 launch entry added.
