@@ -4,8 +4,11 @@
 # Usage:
 #   launch.sh parity --src DIR --model NAME --gpu N --run DIR --rows FILE
 #   launch.sh run    --src DIR --model NAME --gpus "N ..." --run DIR --rows-dir DIR --cache DIR [--only "K ..."]
+#   launch.sh resume --src DIR --model NAME --gpus "N ..." --run DIR --rows-dir DIR --only "K ..."
 #
 # --only starts just the listed shard indices (shard k still runs on the k-th listed GPU).
+# resume restarts ended shards in place: the kit runner skips their final rows and retries errors;
+# the previous start/end/exit markers are kept with a numeric suffix (GPU-hours sum every interval).
 # <src> is a mirror_to_node.sh --path src/training/decision2 directory; NAME a package of the table
 # below, downloaded at its pinned revision to /data/dev2/models/ix1/<NAME>-<rev8>.
 # parity: on one GPU, (1) the package's own entry point (v2.eval.ix1.native_ref) over the gold-free
@@ -60,7 +63,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 usage() { sed -n '2,/^set -euo/p' "$0" | sed '$d' >&2; exit 2; }
-[[ "$mode" == parity || "$mode" == run ]] || usage
+[[ "$mode" == parity || "$mode" == run || "$mode" == resume ]] || usage
 [[ -f "$src/.dev2-mirror.json" && -n "${REVISION[$model]:-}" && "$run" == /data/dev2/private/* ]] || usage
 [[ "$(docker image inspect --format '{{.Id}}' "$IMAGE")" == "$IMAGE_ID_PREFIX"* ]] \
   || { echo "image $IMAGE is not the frozen build" >&2; exit 1; }
@@ -196,8 +199,13 @@ if [[ "$mode" == parity ]]; then
   exit 0
 fi
 
-[[ -n "$gpus" && -d "$rows_dir" && -f "$rows_dir/panel.json" && -d "$cache" && -f "$cache.sha256" ]] || usage
-[[ "$(digest_dir "$cache")" == "$(cat "$cache.sha256")" ]] || { echo "frozen cache $cache changed" >&2; exit 1; }
+[[ -n "$gpus" && -d "$rows_dir" && -f "$rows_dir/panel.json" ]] || usage
+if [[ "$mode" == run ]]; then
+  [[ -d "$cache" && -f "$cache.sha256" ]] || usage
+  [[ "$(digest_dir "$cache")" == "$(cat "$cache.sha256")" ]] || { echo "frozen cache $cache changed" >&2; exit 1; }
+else
+  [[ -n "$only" ]] || usage
+fi
 read -r -a gpu_list <<< "$gpus"
 n="${#gpu_list[@]}"
 [[ -f "$rows_dir/shard-0-of-$n.jsonl.gz" ]] || { echo "no $n-way shards in $rows_dir" >&2; exit 1; }
@@ -209,9 +217,17 @@ for k in "${!gpu_list[@]}"; do
   selected "$k" || continue
   g="${gpu_list[$k]}"
   work="$run/shard-$k"
-  [[ ! -e "$work/results.jsonl" ]] || { echo "$work already has results; resume by hand" >&2; exit 1; }
-  mkdir -p "$work/triton"
-  cp -a "$cache/." "$work/triton/"
+  if [[ "$mode" == run ]]; then
+    [[ ! -e "$work/results.jsonl" ]] || { echo "$work already has results; use resume" >&2; exit 1; }
+    mkdir -p "$work/triton"
+    cp -a "$cache/." "$work/triton/"
+  else
+    [[ -f "$work/results.jsonl" && -f "$work/end_epoch" ]] || { echo "$work has not ended" >&2; exit 1; }
+    i=1
+    while [[ -e "$work/end_epoch.$i" ]]; do i=$((i + 1)); done
+    for f in start_epoch end_epoch exit_code; do mv "$work/$f" "$work/$f.$i"; done
+    rm -f "$work/launched"
+  fi
   shard="$rows_dir/shard-$k-of-$n.jsonl.gz"
   wait_for_room
   touch "$work/launched"

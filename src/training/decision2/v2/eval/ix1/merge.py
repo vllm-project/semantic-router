@@ -91,9 +91,9 @@ def main() -> None:
             raise SystemExit(f"{shard.name} repeats run IDs of another shard")
         final.update(records)
         superseded += retried
-        start = int((shard / "start_epoch").read_text())
-        end = int((shard / "end_epoch").read_text())
-        gpu_seconds += end - start
+        for start_file in shard.glob("start_epoch*"):
+            end_file = shard / start_file.name.replace("start", "end", 1)
+            gpu_seconds += int(end_file.read_text()) - int(start_file.read_text())
         env = json.loads((shard / "environment.json").read_text())
         environments.add(json.dumps(env["model_source"], sort_keys=True))
     wanted = [run_id for run_id, _ in order]
