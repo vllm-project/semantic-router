@@ -165,7 +165,8 @@ kit_run() {  # rows out -> shell command
 
 umask 077
 mkdir -p "$run"
-python3 - "$run/launcher-$mode.json" "$mode" "$model" "$revision" "$manifest_sha" "$IMAGE" "$KIT_REVISION" "$src" "${gpu:-$gpus}" <<'EOF'
+record="$run/launcher-$mode${only:+-only-${only// /_}}.json"
+python3 - "$record" "$mode" "$model" "$revision" "$manifest_sha" "$IMAGE" "$KIT_REVISION" "$src" "${gpu:-$gpus}" <<'EOF'
 import json, sys
 path, mode, model, revision, manifest, image, kit, src, gpus = sys.argv[1:]
 mirror = json.load(open(src + "/.dev2-mirror.json"))
