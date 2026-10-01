@@ -10,6 +10,14 @@ shapes and GPU-hours.
 
 ## Now
 
+- 07:35Z — **A done.** 27B parity passes (0 changes on all four panels, drift 0). Benches old vs new, 400 / 400
+  bit-identical each: p50 ms 0.8B 25.6 → 23.2, 9B 28.7 → 28.6, 27B 98.9 → 98.8; request peak unchanged. Hand-off
+  record `v2/release/records/dev2-runtime-forward-budget-2026-10-01.md` (`5517093c1`). Merged into
+  `xunzhuo/decision-2-training` at `fea2f016b` (merge `0ad342663`; `qwen.py` conflict with the label-token
+  readout limited to the two new constructor arguments; runtime + IX1 tests pass on the merged tree).
+  - A20r's two failed long requests rerun on the fixed 27B package (`DEV2.0-27B-budget` diagnostic entry,
+    `b02395659`): 2 / 2 ok, private run `runs/DEV2.0-27B-budget/extra-toolret`.
+  - B: M5-L128 8 shards running (≈ 75 rows / min / shard; expected end ≈ 10:00–10:30Z).
 - 07:15Z — **Budget halved to 2^30 gated-delta elements** (`e876fbefc`; 27B 174,762 padded tokens, 9B 262,143,
   0.8B 524,287): forwards between about 2^30 and 2^31 elements also hung or crashed in the HIP runtime on 27B
   (cause not isolated; passed only with serialized kernels). Restaged 0.8B / 9B / 27B packages under `fix2/` (only
@@ -57,7 +65,7 @@ shapes and GPU-hours.
 | --- | --- | --- |
 | A repro: shapes, growing subsets, other sizes, isolated kernel | node C GPU1–4, node D GPU2–3 | done |
 | A fix in `v2/release/runtime/qwen.py` (separate commits `8e6bdfc33`, `e876fbefc`) + CPU tests + GPU synthetic test | worktree | done |
-| A verify: both requests, synthetic before / after, parity 0.8B / 9B / 27B, latency | node D | requests, synthetic, 0.8B / 9B parity done; 27B parity, benches running |
-| A merge + release hand-off record | worktree | |
+| A verify: both requests, synthetic before / after, parity 0.8B / 9B / 27B, latency | node D | done |
+| A merge + release hand-off record | worktree | done (`fea2f016b`, `dev2-runtime-forward-budget-2026-10-01.md`) |
 | B package (fixed runtime, M5 checkpoint), full panel, dual score, per-family vs A20r | node C / D | running |
 | C note | private folders | done |
