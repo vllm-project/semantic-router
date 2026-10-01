@@ -1,0 +1,49 @@
+{
+  "schema": "dec-m15-data/1",
+  "name": "08b-RASDML",
+  "seed": 20261002,
+  "arm_train_sha256": "12bd63d8b215877b6f471c12652e534e0f0be794c15bff74ad5ac50e98018bf3",
+  "teacher_sha256": "18827abcc49ffa73fb06ffbda68661848f373417d279f544d6c255fadbade4f6",
+  "ib_share": null,
+  "base": {
+    "rows": 162696,
+    "tokens": 138244874,
+    "ml_tokens": 59817917,
+    "ml_share": 0.4326953706797114
+  },
+  "ib": {
+    "rows": 146529,
+    "rows_in_arm": 146529,
+    "tokens": 30520065,
+    "ml_tokens": 157044,
+    "dose": 0.22076814942158363,
+    "by_level": {
+      "1": 48843,
+      "2": 48843,
+      "3": 48843
+    }
+  },
+  "upsample": {
+    "target_tokens": 23001481,
+    "tokens": 23001263,
+    "rows": 23553,
+    "groups": 22422,
+    "tokens_by_language": {
+      "zh": 22452171,
+      "ko": 262477,
+      "ja": 222407,
+      "de": 64208
+    },
+    "teacher_copies": 23553
+  },
+  "train": {
+    "rows": 332778,
+    "tokens": 191766202,
+    "ml_share": 0.43269472479827287,
+    "sha256": "4a69853e708348db1fd4121e4e7e5677dbfe72be4e41f4545d75e3110739bfae"
+  },
+  "teacher": {
+    "rows": 186249,
+    "sha256": "a639c3829ad990070756a89e94a103738e55bde9a0fd6f63117fa869fd2582ad"
+  }
+}
