@@ -92,7 +92,9 @@ def check(
     }
 
 
-def create_pr(api: HfApi, repo: str, stage: Path) -> dict[str, Any]:
+def create_pr(
+    api: HfApi, repo: str, stage: Path, description: str = DESCRIPTION
+) -> dict[str, Any]:
     status = check(api, repo, stage)
     if not status["clear"]:
         raise SystemExit(json.dumps({"refused": status}))
@@ -109,7 +111,7 @@ def create_pr(api: HfApi, repo: str, stage: Path) -> dict[str, Any]:
         repo,
         operations=operations,
         commit_message=TITLE,
-        commit_description=DESCRIPTION,
+        commit_description=description,
         create_pr=True,
         parent_commit=receipt["head"],
     )
@@ -186,6 +188,11 @@ def main() -> None:
     parser.add_argument("--pr", type=int)
     parser.add_argument("--revision")
     parser.add_argument("--before", type=Path)
+    parser.add_argument(
+        "--description-file",
+        type=Path,
+        help="PR description instead of the 1.0 default",
+    )
     args = parser.parse_args()
     api = HfApi()
     if args.step == "listing":
@@ -193,7 +200,12 @@ def main() -> None:
     elif args.step == "check":
         result = check(api, args.repo, args.stage)
     elif args.step == "pr":
-        result = create_pr(api, args.repo, args.stage)
+        description = (
+            args.description_file.read_text(encoding="utf-8")
+            if args.description_file
+            else DESCRIPTION
+        )
+        result = create_pr(api, args.repo, args.stage, description)
     elif args.step == "merge":
         result = merge(api, args.repo, args.pr, args.stage)
     else:
