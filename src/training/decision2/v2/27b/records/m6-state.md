@@ -18,7 +18,8 @@ Assignment: COORDINATION 2026-10-01 14:25 (27B M6, worker 11741ee2). Branch `xun
 - **State (poll 12, 19:32Z):** eight seeds train unattended on schedule; four chains, four node D relays, the node A
   relay and four mlx watchers alive; the **contrast guard** (node B PID 2868454) protects the shared `m6/gates/` (see
   "Infrastructure"). No candidate, gate or formal result exists yet. GPU-h ≈ 85 of 140 (projection ≈ 134); eval
-  allowance used 0.056 (the restage control). Last commit by worker 3 ≈ 19:40Z: the next poll is due by 20:25Z.
+  allowance used 0.056 (the restage control). Worker 3's last poll commit landed at 19:34Z (`a6d148235`): the next
+  poll commit is due by 20:19Z (45 min), and 20:34Z is the 60-min silent-stop line.
 - **Rules that changed this session** (all recorded before any M6 result):
   - **C1 content recheck r1 PASS, exposure 0 for all four arms** (`v2/eval/records/c1-recheck-r1-2026-10-01.md`,
     verdict `0823a1a8…`): C1 content blocks item 8 for no arm.
