@@ -1,7 +1,8 @@
 # 9B Milestone 9 stage-3 formal post-key run, finalist K-a13IB: lock
 
-Frozen 2026-10-02 ≈00:12 UTC+8 (16:12Z), before any formal prediction of a stage-3 artifact (`formal-m9/` holds only
-the C0F parity run). [Preregistration](lux9b-m9-prereg-2026-10-01.md) (`8570a5896`), amendments
+Frozen 2026-10-02 ≈00:08 UTC+8 (`lock.sh` 16:07:44Z; record pushed `5d0c1c234`, then `status/formal-s3.GO` 16:09:13Z;
+formal started 16:09:28Z), before any formal prediction of a stage-3 artifact (`formal-m9/` held only the C0F parity
+run). [Preregistration](lux9b-m9-prereg-2026-10-01.md) (`8570a5896`), amendments
 [1](lux9b-m9-prereg-amendment-1-2026-10-01.md) (`0b84e0db4`), [2](lux9b-m9-prereg-amendment-2-2026-10-01.md)
 (`51c80ddc9`) and [3](lux9b-m9-prereg-amendment-3-2026-10-01.md) (`787abdc54`, stage 3). **Post-key same-panel**
 comparison (the v3 labels were accessed earlier in the project); public 231 is a public-subset reproduction.

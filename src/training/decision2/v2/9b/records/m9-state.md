@@ -7,7 +7,11 @@
 334) and Y1 (+.032 [+.019, +.045]). COORDINATION re-read (newest 2026-10-02 00:10 UTC+8; no 9B formal-path change;
 the custodian C1 content recheck for IB1-r3 + IB2 runs centrally, 3c7679b0). `lock.sh` 16:10Z →
 `select/formal-lock-s3.json` `bc4b428c…`, `soup/K-a13IB/SHA256SUMS` `49c6d942…` (16 files); lock record
-`records/lux9b-m9-formal-lock-s3-2026-10-01.md`; then `status/formal-s3.GO` (formal K-a13IB on GPU6, ≈ 40 min).
+`records/lux9b-m9-formal-lock-s3-2026-10-01.md` (`5d0c1c234`); `status/formal-s3.GO` 16:09:13Z; **formal K-a13IB
+running on node A GPU6 since 16:09:28Z** (chain pid 214241 → `formal.sh` pid 354110; CAL698 fit done, smoke
+collecting; ETA ≈ 16:50Z; log `logs/formal-K-a13IB.log`). Next: `items.py verdict` (copy `exposure/kib-subset.json`
+node C → node A first), items 1–7 into the stage-3 result record. GPU-hours ≈ 41.3 of 120 at 16:12Z (node C 38.81 by
+`gpuh.py`; node A readouts 2.29; C0F parity 0.20) + formal.
 Poll 15:37Z: **K-a13IBX seeds DONE** (s2 15:26Z, s1 15:28Z, s3 15:32Z; BEST = checkpoints 1,999 / 1,489 / 1,745)
 and the node-C soup `soup/KIBX/build/KIBX-soup` built 15:34Z (`model_sha256` `cc25e396…`); node C GPU1–4 / 6–7 idle
 (9B leases, status idle). Node A `post-a-KIBX` pulls it, builds K-a13IBX and reads the panels on GPU7, then runs the
