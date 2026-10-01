@@ -86,6 +86,10 @@ Mirror for every Index job: `0403fb5796ca00a5a217f8e7656c77fe6e2205db-src_traini
 
 ## Poll log (newest first)
 
+- 11:29Z: **All three Index shards complete** (shard 0 11:12Z, 2 11:17Z, 1 11:20Z; every shard request `ok`; shard
+  0 2.14 GPU-h). Alone-reruns: s0 5 / 5 ok, s2 5 / 6 ok (1 running), s1 3 ok + **1 out of memory alone (final
+  error)** of 9 (5 to go, ≈ 11:38Z). Node A GPU3 released 11:23Z (`owner.released-moe-20261001T1123Z`).
+  Next: `score.sh … --allow-errors` once every `extra-*` has `end_epoch`.
 - 10:56Z: Index shards 33,340 / 30,270 / 31,390 of ≈ 40,000 (all `ok`), 4.6–5.0 requests/s; shards end ≈ 11:20–11:30Z,
   the 20 alone-reruns ≈ 11:50Z.
 - 10:17Z: Index shards 18,410 / 17,140 / 17,580 (all `ok`), ≈ 4.1–4.3 requests/s on average; shards end ≈ 11:45Z,
