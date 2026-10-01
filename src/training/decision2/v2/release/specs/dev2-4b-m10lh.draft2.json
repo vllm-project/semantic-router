@@ -2,21 +2,28 @@
   "schema": "dev2-release-spec/1",
   "_release": {
     "candidate": "decoder Milestone 10 successor m10-4b-LH (user release job 2026-10-01): rank-128 LoRA on Qwen3.5-4B-Base (merged) with the candidate head, uniform soup of three seeds; decoder records v2/dec/records/dec-m10-results-2026-10-01.md and dec-m10-handoff-2026-10-01.md.",
-    "gate": "successor profile: R1-R7 against the current revision 4f560ae5 (its scored run dev2-4b-t1-derived), R5 = the tier gates (own Decision 1.0 Nox adopted run, v3 >= 0.9 x Decider 4B, human transfer vs Decider 4B), and R8 = the JevArena-C1 v1.2 post-key guard (item 8).",
+    "gate": "successor profile: R1-R7 against the current revision 3785b7b9 (its scored run dev2-4b-t1-derived), R5 = the tier gates (own Decision 1.0 Nox adopted run, v3 >= 0.9 x Decider 4B, human transfer vs Decider 4B), and R8 = the JevArena-C1 v1.2 post-key guard (item 8).",
     "scored": "T = 1 (COORDINATION 2026-10-01 13:40): the sealed CAL698 formal run m10-4b-LH (node F GPU3, image dbe5f32b) returned to T = 1 offline with 0 answer changes, byte-equal to the decoder's own T = 1 derivation, then adopted, sealed and paired on node A (ops/prep_lh.sh derive).",
     "storage": "v2.release.bf16_copy of the decoder's frozen FP32 checkpoint (identity 5fa2a699 -> 6a555335; receipt 7d8f21f5).",
-    "runtime": "vendor_source = the formal run's source mirror 88aacb9fb (training/model byte-identical); runtime_source = 5dc962b00 (BF16-resident runtime).",
+    "runtime": "vendor_source = the formal run's source mirror 88aacb9fb (training/model byte-identical); runtime_source = automap_source = 08ec0834e (the BF16-resident runtime with the auto_map remote-code prompt fix 0cbf1033e and the IX1 forward token budget for long multi-question requests 8e6bdfc33 / e876fbefc; the Transformers remote code of the auto_map revision 3785b7b9).",
     "c1": "draft: C1 line pending",
     "previous": {
-      "bf16_resident_runtime": "Runtime-only revision (coordinator note 2026-10-01 10:30 UTC+8, b5f60b33): the package runtime comes from the BF16-resident commit 5dc962b00 (runtime_source); weights, tokenizer, configs and the vendored training/model sources (vendor_source, the mirror the replaced revision vendors) are byte-identical to the replaced revision. Adopted only with 0 answer changes on every scored prompt and on mlx-diag. The card gains one runtime-update line and runtime_equivalence one runtime sentence.",
+      "transformers_remote_code": "Runtime-only revision (user request 2026-10-01 10:53 UTC+8; coordinator note 11:20, worker 4c0a68cd): the package gains the Transformers remote code and config.json fields; the package runtime (runtime_source 8e8082440) is the BF16-resident runtime plus the remote-code prompt fix. Weights, tokenizer, model configs and the vendored training/model sources are byte-identical to the replaced revision. Adopted only with 0 answer changes against the native runtime on every scored prompt and on mlx-diag.",
       "replaces_spec": {
-        "spec": "v2/release/specs/dev2-4b-bf16.json",
-        "sha256": "7d472bd4dc85f07a69b3e3fbedcbe5784c9b74d756ba255024580518a41133bf"
+        "spec": "v2/release/specs/dev2-4b-bf16r.json",
+        "sha256": "bd90157637d18e53067b90e9cbb53e35ec7634ff2a27f297232064682de0567d"
       },
       "previous": {
-        "bf16_storage": "Storage-only revision (coordinator note 2026-09-30 06:10 UTC+8, 27B release path step 1): the FP32 backbone of the replaced revision is stored as its v2.release.bf16_copy (receipt 66fe6c02, identity 11b5ca1c -> 8b0a8bc7; 248 Linear projection matrices in BF16 as BF16 autocast rounds them, every other tensor FP32 bit for bit). Adopted only with 0 answer changes on every scored prompt and on mlx-diag. The card, scored run, runtime and vendored sources (pinned to the mirror that built the replaced revision) are unchanged; the runtime-equivalence text gains one storage sentence.",
+        "bf16_resident_runtime": "Runtime-only revision (coordinator note 2026-10-01 10:30 UTC+8, b5f60b33): the package runtime comes from the BF16-resident commit 5dc962b00 (runtime_source); weights, tokenizer, configs and the vendored training/model sources (vendor_source, the mirror the replaced revision vendors) are byte-identical to the replaced revision. Adopted only with 0 answer changes on every scored prompt and on mlx-diag. The card gains one runtime-update line and runtime_equivalence one runtime sentence.",
+        "replaces_spec": {
+          "spec": "v2/release/specs/dev2-4b-bf16.json",
+          "sha256": "7d472bd4dc85f07a69b3e3fbedcbe5784c9b74d756ba255024580518a41133bf"
+        },
         "previous": {
-          "card_c1": "Card-only revision after JevArena-C1 event 3 (item set v1.2, scored 2026-09-29; eval record v2/eval/records/m4-c1-event3-prep-2026-09-29.md section 0000), coordinator note 2026-09-29 23:40 UTC+8: the C1 line replaces the placeholder; a C1 disclosure (the v3 lead over Nox 1.0 does not carry over; Jet v6.2 significantly ahead; C1 tasks and languages below Nox 1.0 and Jet v6.2) and the two JevBench hard-tier skills behind the Decider 4B gap are added. The card re-renders with the current public-231 note of card.py. Every model file stays byte-identical to the released revision 452f133211de292a87bc29ab7e24a3bd0704e40d. The package runtime (decision2/*.py) and the vendored inference sources come from the mirror that built 452f1332 (f8f52c695), so only card files change."
+          "bf16_storage": "Storage-only revision (coordinator note 2026-09-30 06:10 UTC+8, 27B release path step 1): the FP32 backbone of the replaced revision is stored as its v2.release.bf16_copy (receipt 66fe6c02, identity 11b5ca1c -> 8b0a8bc7; 248 Linear projection matrices in BF16 as BF16 autocast rounds them, every other tensor FP32 bit for bit). Adopted only with 0 answer changes on every scored prompt and on mlx-diag. The card, scored run, runtime and vendored sources (pinned to the mirror that built the replaced revision) are unchanged; the runtime-equivalence text gains one storage sentence.",
+          "previous": {
+            "card_c1": "Card-only revision after JevArena-C1 event 3 (item set v1.2, scored 2026-09-29; eval record v2/eval/records/m4-c1-event3-prep-2026-09-29.md section 0000), coordinator note 2026-09-29 23:40 UTC+8: the C1 line replaces the placeholder; a C1 disclosure (the v3 lead over Nox 1.0 does not carry over; Jet v6.2 significantly ahead; C1 tasks and languages below Nox 1.0 and Jet v6.2) and the two JevBench hard-tier skills behind the Decider 4B gap are added. The card re-renders with the current public-231 note of card.py. Every model file stays byte-identical to the released revision 452f133211de292a87bc29ab7e24a3bd0704e40d. The package runtime (decision2/*.py) and the vendored inference sources come from the mirror that built 452f1332 (f8f52c695), so only card files change."
+          }
         }
       }
     }
@@ -31,7 +38,7 @@
   },
   "calibration": null,
   "max_input_tokens": 16384,
-  "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-4B.decision.m10lh.draft.json",
+  "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-4B.decision.m10lh.draft2.json",
   "origin": {
     "repo_id": "Qwen/Qwen3.5-4B-Base",
     "revision": "1001bb4d826a52d1f399e183466143f4da7b741b",
@@ -48,9 +55,9 @@
     "causal-conv1d": "1.7.0 (GPU convolution kernels)",
     "triton": "3.7.1 (persisted autotune cache)"
   },
-  "runtime_equivalence": "decision2/qwen.py loads this full checkpoint with the vendored training/model sources whose SHA-256 equal the scored adapter sources (checked at build time) and applies the per-item batching, BF16-backbone / FP32-head execution, raw probabilities (temperature 1; no calibration file) and answer normalization of v2.dec.infer_dec, which for this merged full checkpoint wraps the same DecisionModel without extra readouts. The scored checkpoint (5fa2a699) stored every tensor in FP32; this package (v2.release.bf16_copy, receipt 7d8f21f5) stores its 248 Linear projection matrices in BF16 exactly as BF16 autocast rounds them and every other tensor bit for bit in FP32, and the runtime holds the backbone's BF16-exact Linear weights in BF16, the values BF16 autocast multiplies with. Checked with 0 answer changes on one GPU of another node of the same type (same image, kernels and frozen autotune caches as the scoring run) against the T = 1 predictions derived exactly from the sealed CAL698 predictions of every scored prompt (typed-final 1,600, css15 6,547, public231 231) and of the mlx-diag diagnostic (2,275) by release.sh --parity, each panel with a copy of the persisted Triton autotune cache of the run that scored it.",
+  "runtime_equivalence": "decision2/qwen.py loads this full checkpoint with the vendored training/model sources whose SHA-256 equal the scored adapter sources (checked at build time) and applies the per-item batching, BF16-backbone / FP32-head execution, raw probabilities (temperature 1; no calibration file) and answer normalization of v2.dec.infer_dec, which for this merged full checkpoint wraps the same DecisionModel without extra readouts. The scored checkpoint (5fa2a699) stored every tensor in FP32; this package (v2.release.bf16_copy, receipt 7d8f21f5) stores its 248 Linear projection matrices in BF16 exactly as BF16 autocast rounds them and every other tensor bit for bit in FP32, and the runtime holds the backbone's BF16-exact Linear weights in BF16, the values BF16 autocast multiplies with. Checked with 0 answer changes on one GPU of another node of the same type (same image, kernels and frozen autotune caches as the scoring run) against the T = 1 predictions derived exactly from the sealed CAL698 predictions of every scored prompt (typed-final 1,600, css15 6,547, public231 231) and of the mlx-diag diagnostic (2,275) by release.sh --parity, each panel with a copy of the persisted Triton autotune cache of the run that scored it. The package ships the 🤗 Transformers remote code of the auto_map revision (configuration_decision2.py, modeling_decision2.py, pipeline_decision2.py; config.json model_type, auto_map and custom_pipelines): AutoModel with trust_remote_code loads it through this runtime, checked with 0 answer changes against the native runtime on every scored prompt by release.sh. The runtime also splits long multi-question requests by a forward token budget (2**30 gated-delta elements), which leaves every scored answer unchanged (parity above).",
   "vendor_source": "/data/dev2/src/88aacb9fbcf03618bf8b18e58e2f5e1fcdc1c83d-src_training_decision2/src/training/decision2",
-  "runtime_source": "/data/dev2/src/5dc962b003cc15b12a3568fe3c8ac8c2931b03a0-src_training_decision2/src/training/decision2",
+  "runtime_source": "/data/dev2/src/08ec0834ebd6d1be808ab1a756e1412047c35f74-src_training_decision2/src/training/decision2",
   "scored": {
     "label": "post-key same-panel run m10-4b-LH at T = 1 (predictions derived from the sealed CAL698 run by undoing its temperatures; adopted and sealed)",
     "report_sha256": "375e1ab553009361d5e67d1751e9f6638eed17c3db87d12b36e5ea11f169aa88",
@@ -135,7 +142,7 @@
         "**Not used:** outputs of Jev or of any third-party decision model; Decision 1.0 Nox's weights (earlier revisions of this repository were fine-tunes of it, so its Cosmos QA and SQuAD 2.0 answerability training no longer reaches this model through its weights); and the MASSIVE, PAWS-X and XNLI sources behind the multilingual diagnostic. Datasets keep their own licences ([attributions](ATTRIBUTIONS.md))."
       ],
       "limitations": [
-        "**Against the previous revision** (`4f560ae5`, the full fine-tune of Decision 1.0 Nox): post-key JevArena v3 67.34 vs 63.15 (+4.19, 95% CI [+0.10, +9.88]). The gain is typed reasoning (T 0.814 vs 0.688, +0.126, 95% CI [+0.098, +0.153]; Choice 702 vs 582 of 800, Noul 743 vs 734 of 800, Score 258 vs 185 of 400). Human transfer is lower but not significantly (H 0.557 vs 0.580, −0.023, 95% CI [−0.082, +0.074]): 8 of the 15 transfer tasks are lower (macro-F1: ibc −0.100, talklife −0.050, conv_go_awry −0.042, reddit_humor −0.040, persuasion −0.027, wiki_politeness −0.023, tropes −0.017, raop −0.014) and 7 higher (wiki_corpus +0.102, flute +0.048, media_ideology +0.040, mrf +0.026, indian_english_dialect +0.020, emotion +0.009, tempowic +0.004). JevBench public 231 is level (172 vs 171; +1, 95% CI [−7, +9]; hard tier 57 vs 56), and so are inputs over 4,000 characters (public 231: 15 vs 16 of 37; human-transfer panel: 43.6% vs 41.1%).",
+        "**Against the previous revision** (`3785b7b9`, the full fine-tune of Decision 1.0 Nox): post-key JevArena v3 67.34 vs 63.15 (+4.19, 95% CI [+0.10, +9.88]). The gain is typed reasoning (T 0.814 vs 0.688, +0.126, 95% CI [+0.098, +0.153]; Choice 702 vs 582 of 800, Noul 743 vs 734 of 800, Score 258 vs 185 of 400). Human transfer is lower but not significantly (H 0.557 vs 0.580, −0.023, 95% CI [−0.082, +0.074]): 8 of the 15 transfer tasks are lower (macro-F1: ibc −0.100, talklife −0.050, conv_go_awry −0.042, reddit_humor −0.040, persuasion −0.027, wiki_politeness −0.023, tropes −0.017, raop −0.014) and 7 higher (wiki_corpus +0.102, flute +0.048, media_ideology +0.040, mrf +0.026, indian_english_dialect +0.020, emotion +0.009, tempowic +0.004). JevBench public 231 is level (172 vs 171; +1, 95% CI [−7, +9]; hard tier 57 vs 56), and so are inputs over 4,000 characters (public 231: 15 vs 16 of 37; human-transfer panel: 43.6% vs 41.1%).",
         "**Against the 4B peers** post-key JevArena v3 is significantly higher than Decider 4B (+5.46, 95% CI [+0.28, +8.11]) and Jet v6.2 (+6.97, 95% CI [+0.98, +11.13]), from typed reasoning (T +0.125, 95% CI [+0.095, +0.153] and +0.136, 95% CI [+0.104, +0.167]); human transfer is level with both (+0.001, 95% CI [−0.078, +0.043], and +0.019, 95% CI [−0.074, +0.088]). Typed Choice is still below both peers (0.877 vs 0.938 and 0.900). JevBench public 231 is significantly below Decider 4B (172 vs 192; −20 items, 95% CI [−30, −10]; hard tier 57 vs 73) and level with Jet v6.2 (174; −2, 95% CI [−11, +7]). Long inputs are weaker than both peers (inputs over 4,000 characters: public 231 15 of 37 vs 25 and 19; human-transfer panel 43.6% vs 52.3% and 45.4%).",
         "**Against Decision 1.0 Nox** (adopted run): post-key v3 +10.87 (95% CI [+4.99, +14.67]); human transfer is higher but not significantly (+0.038, 95% CI [−0.055, +0.100]), with ibc (−0.096), talklife (−0.051), mrf (−0.020), wiki_politeness (−0.013) and conv_go_awry (−0.002) lower; public 231 is level (172 vs 173; −1, 95% CI [−10, +8]).",
         "**Score levels.** It rarely predicts the lowest typed Score level (7 of 400 predictions against 35 in the gold labels; recall 0.11 on level 0, as in the previous revision); levels 1–4 are recalled at 0.70, 0.55, 0.79 and 0.73.",
@@ -193,13 +200,20 @@
     "receipt": "/data/dev2/runs/release/inputs/dev2-4b-lh/bf16/bf16-copy.json",
     "sha256": "7d8f21f5adb70eb331f3a6b47396b569da546613927b16890486cda81c7247a1"
   },
+  "automap_source": "/data/dev2/src/08ec0834ebd6d1be808ab1a756e1412047c35f74-src_training_decision2/src/training/decision2",
+  "remote_code": {
+    "tested": [
+      "5.17.0",
+      "5.18.0"
+    ]
+  },
   "gate_profile": {
     "name": "successor",
     "run": "/data/dev2/runs/release/dev2-4b-lh-t1-derived",
     "current": {
-      "revision": "4f560ae5d26d378cd8db0a93a06c1603ea76b635",
-      "gate": "/data/dev2/src/df3f242f89ca69855aa2a2f6ecb89cb857af1e5d-src_training_decision2/src/training/decision2/v2/release/records/dev2-bf16-resident-2026-10-01/4b/release/receipts/gate.json",
-      "decision": "/data/dev2/src/df3f242f89ca69855aa2a2f6ecb89cb857af1e5d-src_training_decision2/src/training/decision2/v2/release/records/dev2-bf16-resident-2026-10-01/DEV2.0-4B.decision.bf16r.json",
+      "revision": "3785b7b963d2f56de0e44f9ec638c814c5ee6499",
+      "gate": "/data/dev2/src/08ec0834ebd6d1be808ab1a756e1412047c35f74-src_training_decision2/src/training/decision2/v2/release/records/dev2-4b-m10lh-2026-10-01/current/automap-4b-gate.json",
+      "decision": "/data/dev2/src/08ec0834ebd6d1be808ab1a756e1412047c35f74-src_training_decision2/src/training/decision2/v2/release/records/dev2-automap-2026-10-01/DEV2.0-4B.decision.automap.json",
       "run": "/data/dev2/runs/release/dev2-4b-t1-derived",
       "mlx_predictions": "/data/dev2/runs/release/inputs/dev2-4b-lh/current-mlx/output/mlx-diag.predictions.jsonl"
     },

@@ -124,8 +124,8 @@ if [[ "$mode" == --release ]]; then
   install_decision "$R/$name.decision.m10lh.json" "$D/$name.decision.m10lh.json"
   W=/data/dev2/runs/release/dev2-4b-lh-release-$TS
 else
-  SPEC=$S/v2/release/specs/dev2-4b-m10lh.draft.json
-  install_decision "$R/$name.decision.m10lh.draft.json" "$D/$name.decision.m10lh.draft.json"
+  SPEC=$S/v2/release/specs/dev2-4b-m10lh.draft2.json
+  install_decision "$R/$name.decision.m10lh.draft2.json" "$D/$name.decision.m10lh.draft2.json"
   W=/data/dev2/runs/release/dev2-4b-lh-${mode#--}-$TS
 fi
 (cd "$S" && python3 -m v2.release.gate profile --spec "$SPEC") > "/data/dev2/runs/release/dev2-4b-lh-profile-$TS.json" \

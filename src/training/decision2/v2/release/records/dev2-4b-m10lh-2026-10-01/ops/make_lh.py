@@ -12,7 +12,8 @@ Run from src/training/decision2:
   python3 v2/release/records/dev2-4b-m10lh-2026-10-01/ops/make_lh.py draft [--runtime-line TEXT]
   python3 v2/release/records/dev2-4b-m10lh-2026-10-01/ops/make_lh.py final --c1-summary SUMMARY.json \
       --c1-node-path PATH [--runtime-line TEXT] [--current current.json] [--runtime-source DIR]
-draft: the spec before item 8 (C1 line pending, no R8) and its draft decision, for the frozen package C1 scores.
+draft: the spec before item 8 (C1 line pending, no R8) and its draft decision (.draft2: on top of the auto_map
+revision; .draft, the frozen package C1 scored, is kept as generated at 5b2ddcfcc).
 final: the C1 post-key line and R8 from the collected SUMMARY.json (a local copy of the node A file) and the final
 decision. --current names the current revision (default: the auto_map revision 3785b7b9); a JSON file with
 revision, gate, decision, decision_sha256, gate_sha256 and manifest_sha256 replaces it when another revision of
@@ -32,7 +33,7 @@ RECORD = HERE.parent
 SPECS = Path("v2/release/specs")
 BASE_SPEC = SPECS / "dev2-4b-automap.json"
 OUT_SPEC = SPECS / "dev2-4b-m10lh.json"
-DRAFT_SPEC = SPECS / "dev2-4b-m10lh.draft.json"
+DRAFT_SPEC = SPECS / "dev2-4b-m10lh.draft2.json"
 DECISIONS = Path("/data/dev2/runs/release/decisions")
 REL = "/data/dev2/runs/release"
 IN = f"{REL}/inputs/dev2-4b-lh"
@@ -257,7 +258,7 @@ def spec(
         / (
             "DEV2.0-4B.decision.m10lh.json"
             if final
-            else "DEV2.0-4B.decision.m10lh.draft.json"
+            else "DEV2.0-4B.decision.m10lh.draft2.json"
         )
     )
     s["origin"] = {
@@ -506,7 +507,7 @@ def main() -> int:
         s = spec(None, None, line, current, runtime_source)
         DRAFT_SPEC.write_text(json.dumps(s, indent=2, ensure_ascii=False) + "\n")
         d = decision(s, None, None, current)
-        out = RECORD / "DEV2.0-4B.decision.m10lh.draft.json"
+        out = RECORD / "DEV2.0-4B.decision.m10lh.draft2.json"
     elif mode == "final":
         path = Path(arg["--c1-summary"])
         summary = json.loads(path.read_text())
