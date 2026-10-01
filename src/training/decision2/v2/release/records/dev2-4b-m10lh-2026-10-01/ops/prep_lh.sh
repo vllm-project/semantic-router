@@ -6,7 +6,7 @@
 # report, compare (the current revision's T = 1 run, adopted Nox 1.0, the 16K control, Decider 4B, Jet v6.2) and
 # mlx-diag score; 3. successor evidence on that run (types, public 231 and card-eligible mlx-diag vs the current
 # revision); 4. the v2.release.bf16_copy of the FP32 checkpoint (scored image, no network).
-# Usage (node A, from the exact mirror holding this file): bash <mirror>/.../ops/prep_lh.sh derive|bf16
+# Usage (node A, from the exact mirror holding this file): bash <mirror>/.../ops/prep_lh.sh derive|paired|bf16
 set -euo pipefail
 S=$(cd "$(dirname "$0")/../../../../.." && pwd)
 G=/data/dev2/private/panels/goldfree
@@ -86,6 +86,23 @@ PY
     --right-name "DEV2.0-4B (current, T = 1)" --output $GATES/mlx-paired-vs-dev2-4b.json
   sha256sum $I/* $D/*.json $DM/mlx-diag.score.json $DM/output/* $CURM/output/* $GATES/*
   ;;
+paired)
+  # the release gate's paired files name their runs (v2.eval.gates paired)
+  for cmp in "$CUR dev2-4b" "/data/dev2/runs/eval/m1-adopt/nox1 adopted-1.0" \
+             "/data/dev2/runs/eval/m1-adopt/decider4b decider4b"; do
+    # shellcheck disable=SC2086
+    set -- $cmp
+    python3 -B -m v2.eval.gates paired --left $D --right "$1" --left-name "DEV2.0-4B m10-4b-LH (T = 1)" \
+      --right-name "$2" --output "$GATES/paired-vs-$2.json"
+    python3 - "$GATES/paired-vs-$2.json" "$D/PAIRED-vs-$2.json" <<'PY'
+import json, sys
+a, b = (json.load(open(p)) for p in sys.argv[1:3])
+assert a["point"] == b["point"] and a["ci95"] == b["ci95"] and a["axis_ci95"] == b["axis_ci95"], "paired differs"
+print("paired equal to same_panel compare:", sys.argv[1])
+PY
+  done
+  sha256sum $GATES/paired-vs-*.json
+  ;;
 bf16)
   IMAGE=decision20-train-fast:host2
   test "$(docker image inspect -f '{{.Id}}' $IMAGE)" = sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54
@@ -99,5 +116,5 @@ bf16)
     -B -m v2.release.bf16_copy --source "$P/checkpoint" --output "$out/checkpoint" --receipt "$out/bf16-copy.json"
   echo "receipt $(sha256sum < "$out/bf16-copy.json" | cut -c1-64) bytes $(du -sb "$out/checkpoint" | cut -f1)"
   ;;
-*) echo "usage: prep_lh.sh derive|bf16" >&2; exit 2 ;;
+*) echo "usage: prep_lh.sh derive|paired|bf16" >&2; exit 2 ;;
 esac
