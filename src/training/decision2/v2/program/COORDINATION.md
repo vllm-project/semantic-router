@@ -205,6 +205,33 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 00:10 — **IB3 published but NOT release-safe (611782db); IB3-r2 commissioned (maths core + optional
+  claim-level grounding).** Data: private `@c2401ab4` `m6/ib3/`; records merged at `29caad2de`.
+  - **Contents.** TRAIN 24,148 rows:
+
+    | Family | Source and licence | Rows |
+    | --- | --- | ---: |
+    | `wpd` (phishing links) | Mendeley web-page phishing, CC BY 4.0 | 3,700 |
+    | `phiu` (phishing pages) | PhiUSIIL, CC BY 4.0 | 1,720 |
+    | `esci` (Exact vs Irrelevant, in-distribution) | ESCI train, Apache-2.0 | 9,970 |
+    | `mqa` (MathQA per-option, formula-verified keys) | MathQA, Apache-2.0 | 8,758 |
+
+    - Every audit passes, including a new Index URL / host guard (103 groups dropped; controls 500/500).
+  - **Review:** 29/216 = 13.4% (upper 18.7%).
+    - Phishing families: 20 errors. The labels are blocklist-based and not checkable from the URL; the reviewers agreed
+      on 214 of 216 items.
+    - `esci`: 8 errors at the Exact boundary.
+    - `mqa`: 1/54.
+  - **Not covered:**
+    - grounding (FaithDial / HaluEval leak through the response alone; the passage-swap redesign failed the screen);
+    - contracts (MAUD too small after exclusions; LEDGAR licence conflicting);
+    - phishing email (no licensed legitimate corpus);
+    - excluded by licence: LLM-AggreFact (ND), TofuEval / RAGTruth (NC).
+  - **IB3-r2:** the maths `mqa` block plus optional claim-level grounding (e.g. WiCE; screen-gated); no phishing /
+    ESCI; a fresh review. IB3-r2 needs the custodian C1 recheck before C1-scored use.
+  - **Program lesson:** for the phishing / PhishNChips family, no licence-clean source yet has row-checkable labels.
+    Keep it an open gap rather than adding noisy labels.
+
 - 2026-10-02 00:05 — **User decisions (23:53–00:00): naming and a product-style card (round 2).**
   - **Naming (confirmed):** `Decision-2.0-{codename}-{size}`. The codename follows the size slot across generations.
     Repos move with `move_repo`, so old IDs redirect.
