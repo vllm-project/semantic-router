@@ -137,6 +137,12 @@ is still fixing the long-input runtime bug and staging its M5-L128 Index diagnos
 
 ## Poll log (newest first)
 
+- 09:02Z: all six seeds in full runs (M6-IBX preflights passed on node D: reload 0 changes, |Δp| ≤ 6e-8). Steps /
+  s per update / projected GPU-h: M6-IB-s1 359 / 9.38 / 13.2, M6-IB-s2 359 / 9.37 / 13.2, M6-IB2-s1 356 / 9.36 / 17.2,
+  M6-IB2-s2 353 / 9.48 / 17.4 (node A sped up), M6-IBX-s1 124 / 9.68 / 13.4, M6-IBX-s2 121 / 9.93 / 13.8 (node D).
+  Every cap holds with ≥ 2.6 h margin. ETAs: M6-IB ≈ 21:15Z, M6-IBX ≈ 22:15Z, M6-IB2 ≈ 01:20Z (Oct 2); chains then
+  read out, gate and run formal + mlx-diag for passers (≈ 1–2 h each). Budget projection ≈ 94 GPU-h before any private
+  Index run (≤ 3 × ≈ 9.5). IX1's private M5-L128 diagnostic was read (private folder only); no gate changes.
 - 08:37Z: IX1 released node D at 08:20Z; **M6-IBX launched on node D GPU0 / GPU1** (onestep running; admission 79,945
   rows, 0 over limit). All six seeds now train; three chains and five watchers alive.
 - 08:27Z: node D staged for M6-IBX (`m6-stage-d.sh`: base tree, T0 tree, data files, `a20ib1x` equal to node B; image
