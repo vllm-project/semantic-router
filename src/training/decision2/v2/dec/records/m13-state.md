@@ -11,3 +11,14 @@
 - SD labeling started 13:23Z: node E 0.8B (DEV2.0-0.8B) on GPU0–3; node F 4B (LH soup) then 2B (DEV2.0-2B) on GPU2, 3,
   6, 7. Pre-warm shards passed (agreement with TRAIN gold — 0.8B choice / Noul / Score .845 / .821 / .895; 4B .950 /
   .923 / .846).
+
+## 2026-10-01 13:50Z — data lock, launch
+
+- SD targets done 13:27–13:29Z (full coverage). Data lock [`dec-m13-datalock-2026-10-01.md`](dec-m13-datalock-2026-10-01.md)
+  `debd36e1a` pushed; `READY-m13.json` written on E and F; a dry READY check passed for all five arms.
+- Launched 13:46Z from mirror `c2610143b`: node F GPU2 `4b-LHA5-s1` (pre-warm 4B) then `2b-RASD-s1` (pre-warm 2B),
+  GPU3 `4b-LHA5-s2` then `2b-RASD-s2`, GPU6 / GPU7 `4b-LHA10SD-s1` / `s2`; node E GPU0 `08b-RAAG-s1` (pre-warm 0.8B),
+  GPU1 `08b-RAAG-s2`, GPU2 / GPU3 `08b-RASD-s1` / `s2`. Post chains: F GPU6 `4b-LHA5`, GPU7 `4b-LHA10SD`, GPU3
+  `2b-RASD`; E GPU1 `08b-RAAG`, GPU3 `08b-RASD`.
+- Node A: M13 tier probe golds built (identical hashes to M12's); M12 readouts staged as `08b-RA-m12`, `2b-RA-m12`,
+  `4b-LHA10-m12` for the report-only contrasts.
