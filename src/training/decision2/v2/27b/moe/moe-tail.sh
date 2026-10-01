@@ -22,6 +22,7 @@
 #                       the pairing -> node B X/mlx/NAME-vs-A20r.json
 #   mlx-pull NAME       node B host: X/mlx/NAME-vs-A20r.json -> R/gates/mlx/NAME-vs-A20r.json
 #   latency NAME        node B GPU7: latency.py on the package checkpoint (M1's SELECT roster) -> R/NAME/latency.json
+#   latency-ref         node B GPU7: the same measurement of A20r (dense, FLA kernel path) -> R/latency-ref/A20r
 #   verdicts NAME...    node B host: moe_verdicts.py -> R/gates/VERDICTS-<UTC>.json
 # Development readouts are never release scores; formal numbers are post-key same-panel.
 # MOE_ROOT (default /data/dev2/runs/27b-moe) moves the cal698 / adopt / devgates / package / latency outputs for a path
@@ -368,6 +369,19 @@ EOF
       --mount "$SELECT_ROWS:/data/select.jsonl" --mount "$OUT:$OUT:rw" --env PYTHONPATH=/code -- \
       python3 -m v2.27b.moe.latency --checkpoint "$CKPT" --source-path "$BASE" --select /data/select.jsonl \
       --output "$OUT/latency.json" ;;
+  latency-ref)
+    OUT=$R/latency-ref/A20r DENSE=/data/decision20-20260926/models/Qwen3.8-27B
+    CKPT=/data/dev2/runs/27b/M4-A20r-soup/soup/checkpoint
+    [ ! -e "$OUT/latency.json" ] || { echo "$OUT/latency.json exists" >&2; exit 66; }
+    mkdir -p "$OUT"
+    python3 -m v2.27b.triton_cache copy --frozen /data/dev2/runs/27b/m3-warm-32768/triton-cache \
+      --expect 583241fbc3bc89e22be51a49722996eab742162356100400d64fb4208cb20daf --dest "$OUT/triton-cache"
+    launch latency-ref A20r 0.3 "A20r BF16 decision latency (M1 SELECT roster, kernel path)" \
+      --mount "$DENSE:$DENSE" --mount "$CKPT:$CKPT" --mount "$SELECT_ROWS:/data/select.jsonl" --mount "$OUT:$OUT:rw" \
+      --env PYTHONPATH=/code --env TRITON_CACHE_AUTOTUNING=1 --env "TRITON_CACHE_DIR=$OUT/triton-cache" \
+      --env HIP_FORCE_DEV_KERNARG=1 -- python3 -m v2.27b.moe.latency --checkpoint "$CKPT" --source-path "$DENSE" \
+      --select /data/select.jsonl --output "$OUT/latency.json"
+    python3 -m v2.27b.triton_cache finish --dest "$OUT/triton-cache" > /dev/null || true ;;
   verdicts)
     [ $# -ge 1 ] || { echo "verdicts NAME..." >&2; exit 2; }
     args=()

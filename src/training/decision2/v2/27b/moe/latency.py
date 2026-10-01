@@ -5,6 +5,8 @@ SHA-256 of ``"27b-probe/" + id``, one prompt per forward, CUDA-synchronized wall
 prompt dropped as warm-up, p50 / p95 over the other 64. Here the forward is the whole decision
 path of the checkpoint: backbone parameters BF16-resident (unmerged LoRA included, the pinned
 experts implementation), head in FP32 (it casts itself), the checkpoint's own prompt encoder.
+Gated-delta checkpoints (the dense Qwen3.5 reference, Qwen3.5-MoE) run on the image FLA kernel
+path (``typed_collect_kernel.kernel_runtime``: an existing ``TRITON_CACHE_DIR`` is required).
 
     python3 -m v2.27b.moe.latency --checkpoint CKPT --source-path BASE --select SELECT.jsonl \
         --output latency.json
@@ -14,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import json
 import statistics
 import time
@@ -22,6 +25,15 @@ from typing import Any
 
 ROSTER_ROWS = 65
 MAX_LENGTH = 32768
+DENSE_QWEN35 = "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp"
+
+
+def gated_delta(checkpoint: Path) -> bool:
+    metadata = json.loads(
+        (checkpoint / "decision_config.json").read_text(encoding="utf-8")
+    )
+    arch = str(metadata.get("architecture"))
+    return arch == DENSE_QWEN35 or arch.startswith("qwen3.5-moe")
 
 
 def roster(
@@ -56,6 +68,10 @@ def main() -> None:
     args = parser.parse_args()
     if args.output.exists():
         raise FileExistsError(args.output)
+    kernel_runtime = None
+    if gated_delta(args.checkpoint):
+        kernel = importlib.import_module("v2.27b.typed_collect_kernel")
+        kernel_runtime = kernel.kernel_runtime()
 
     import torch
     import transformers
@@ -116,6 +132,7 @@ def main() -> None:
         "resident_bytes_after_load": resident,
         "peak_bytes": torch.cuda.max_memory_allocated(device),
         "decision_latency": summary(latencies[1:], tokens[1:]),
+        "kernel_runtime": kernel_runtime,
         "runtime": {
             "torch": torch.__version__,
             "hip": torch.version.hip,
