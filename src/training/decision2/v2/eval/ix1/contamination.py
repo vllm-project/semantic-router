@@ -14,11 +14,16 @@ every string value of every training row, recursively.
   benchmark's template and is ignored for its rows.
 - Per row: ``coverage`` = share of its distinct 13-grams found in the training data, and
   ``state_exact`` = its longest state leaf matched exactly. Classes: ``duplicate`` (coverage >= 0.5
-  or state_exact), ``partial`` (any other exact or 13-gram hit), ``clean``.
+  or state_exact; familiar text, e.g. a premise or evidence passage), ``partial`` (any other exact
+  or 13-gram hit), ``clean``.
+- ``item``: the stricter overlap used for the override. The row's item units, i.e. every
+  non-template sentence of at least 8 tokens and every whole leaf of 4 to 30 tokens (claims,
+  hypotheses, utterances, positions), are all found in the training data.
 
 A planted control appends the states of 200 seeded panel rows to a synthetic training file; every
 planted row must be classed ``duplicate``. Outputs are private: ``audit.json`` (per training set and
-benchmark: class counts, rows with exact hits, maximum coverage) and ``duplicates.json`` (run IDs).
+benchmark: class counts, rows with exact hits, maximum coverage) and ``duplicates.json`` (run IDs of
+``duplicate`` rows) and ``items.json`` (run IDs of ``item`` rows).
 """
 
 from __future__ import annotations
@@ -40,6 +45,7 @@ TOKEN = re.compile(r"\w+")
 SENTENCE = re.compile(r"(?<=[.!?\u3002\uff01\uff1f])\s+|\n+")
 GRAM = 13
 LEAF_MIN = 4
+ITEM_LEAF_MAX = 30
 SENTENCE_MIN = 8
 TEMPLATE_ROWS = 50
 DUPLICATE_COVERAGE = 0.5
@@ -69,12 +75,24 @@ def grams_of(words: list[str]) -> set[int]:
     return {hash(tuple(words[i : i + GRAM])) for i in range(len(words) - GRAM + 1)}
 
 
-def units_of(text: str, words: list[str]) -> set[int]:
-    units = {hash(" ".join(words))} if len(words) >= LEAF_MIN else set()
+def sentence_units(text: str) -> set[int]:
+    units = set()
     for sentence in SENTENCE.split(text):
         part = tokens(sentence)
         if len(part) >= SENTENCE_MIN:
             units.add(hash(" ".join(part)))
+    return units
+
+
+def units_of(text: str, words: list[str]) -> set[int]:
+    units = {hash(" ".join(words))} if len(words) >= LEAF_MIN else set()
+    return units | sentence_units(text)
+
+
+def item_units_of(text: str, words: list[str]) -> set[int]:
+    units = sentence_units(text)
+    if LEAF_MIN <= len(words) <= ITEM_LEAF_MAX:
+        units.add(hash(" ".join(words)))
     return units
 
 
@@ -101,10 +119,12 @@ def index_rows(panel: Path) -> list[dict[str, Any]]:
                 state, other = row_texts(row)
                 grams: set[int] = set()
                 units: set[int] = set()
+                items: set[int] = set()
                 for text in state + other:
                     words = tokens(text)
                     grams |= grams_of(words)
                     units |= units_of(text, words)
+                    items |= item_units_of(text, words)
                 main = max(state, key=len, default="")
                 main_words = tokens(main)
                 rows.append(
@@ -113,6 +133,7 @@ def index_rows(panel: Path) -> list[dict[str, Any]]:
                         "benchmark": row["_evaluation"]["catalog_id"],
                         "grams": grams,
                         "units": units,
+                        "items": items,
                         "state_unit": (
                             hash(" ".join(main_words))
                             if len(main_words) >= LEAF_MIN
@@ -138,6 +159,7 @@ def drop_templates(rows: list[dict[str, Any]]) -> dict[str, int]:
         for row in members:
             row["grams"] -= template
             row["units"] -= template
+            row["items"] -= template
             if row["state_unit"] in template:
                 row["state_unit"] = None
         dropped[str(benchmark)] = len(template)
@@ -188,7 +210,8 @@ def classify(row: dict[str, Any], grams: set[int], units: set[int]) -> dict[str,
         kind = "partial"
     else:
         kind = "clean"
-    return {"class": kind, "coverage": coverage, "exact": exact}
+    item = bool(row["items"]) and row["items"] <= units
+    return {"class": kind, "coverage": coverage, "exact": exact, "item": item}
 
 
 def audit(rows, files: list[Path], workers: int) -> dict[str, Any]:
@@ -210,9 +233,10 @@ def audit(rows, files: list[Path], workers: int) -> dict[str, Any]:
             "exact_rows": 0,
             "max_coverage": 0.0,
             "undetectable": 0,
+            "item": 0,
         }
     )
-    duplicates = []
+    duplicates, items = [], []
     for row in rows:
         verdict = classify(row, grams, units)
         entry = per_benchmark[str(row["benchmark"])]
@@ -220,17 +244,22 @@ def audit(rows, files: list[Path], workers: int) -> dict[str, Any]:
         entry[verdict["class"]] += 1
         entry["undetectable"] += not row["grams"] and not row["units"]
         entry["exact_rows"] += verdict["exact"]
+        entry["item"] += verdict["item"]
         entry["max_coverage"] = max(
             entry["max_coverage"], round(verdict["coverage"], 4)
         )
         if verdict["class"] == "duplicate":
             duplicates.append(row["run_id"])
+        if verdict["item"]:
+            items.append(row["run_id"])
     return {
         "training_lines": lines,
         "files": [str(path) for path in files],
         "benchmarks": dict(sorted(per_benchmark.items(), key=lambda kv: int(kv[0]))),
         "duplicate_rows": len(duplicates),
+        "item_rows": len(items),
         "duplicates": sorted(duplicates),
+        "items": sorted(items),
     }
 
 
@@ -269,6 +298,7 @@ def main() -> None:
             stream.write(json.dumps({"text": row["state"]}, ensure_ascii=False) + "\n")
     control = audit(rows, [planted], args.workers)
     found = set(control["duplicates"])
+    planted_items = sum(row["run_id"] in set(control["items"]) for row in planted_rows)
     missed = [row["run_id"] for row in planted_rows if row["run_id"] not in found]
     report = {
         "schema": "ix1-contamination/1",
@@ -288,13 +318,15 @@ def main() -> None:
             "planted": PLANTED,
             "found": PLANTED - len(missed),
             "missed": missed,
+            "state_only_rows_classed_item": planted_items,
         },
         "training_sets": {},
     }
-    duplicates = {}
+    duplicates, items = {}, {}
     for name, files in sets.items():
         result = audit(rows, files, args.workers)
         duplicates[name] = result.pop("duplicates")
+        items[name] = result.pop("items")
         report["training_sets"][name] = result
         print(
             json.dumps(
@@ -302,10 +334,14 @@ def main() -> None:
                     "set": name,
                     "lines": result["training_lines"],
                     "duplicates": result["duplicate_rows"],
+                    "items": result["item_rows"],
                 }
             ),
             flush=True,
         )
+    (args.out / "items.json").write_text(
+        json.dumps(items, indent=2, sort_keys=True) + "\n"
+    )
     (args.out / "audit.json").write_text(
         json.dumps(report, indent=2, sort_keys=True) + "\n"
     )
