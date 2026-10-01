@@ -133,12 +133,18 @@ class Decision2:
         device: str | None = None,
         base_path: str | Path | None = None,
         threads: int | None = None,
+        bf16_resident: bool = True,
     ) -> Decision2:
         """Load a verified package. ``device`` defaults to cuda:0 if present, else cpu.
 
         ``base_path`` is only for base-bound adapter packages: a local copy of
         the pinned base; otherwise the listed base files are downloaded from
         the pinned Hub revision and verified byte for byte.
+
+        ``bf16_resident`` (Qwen profiles on a GPU): hold the backbone's
+        BF16-exact Linear weights in BF16, the values BF16 autocast multiplies
+        with, instead of FP32 copies cast on every call. Answers are identical;
+        False keeps the FP32 copies. CPU inference is FP32 either way.
         """
         manifest = verify_bundle(path)
         root = Path(path).resolve(strict=True)
@@ -155,7 +161,12 @@ class Decision2:
             from .qwen import QwenDecision
 
             backend = QwenDecision.load(
-                root, manifest, device=device, base_path=base_path, threads=threads
+                root,
+                manifest,
+                device=device,
+                base_path=base_path,
+                threads=threads,
+                bf16_resident=bf16_resident,
             )
         loaded = backend.parameter_count()
         if loaded != manifest["parameters"]["loaded"]:
