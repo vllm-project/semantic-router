@@ -8,6 +8,24 @@ GPU-h). Preregistration [`dec-m10-prereg-2026-10-01.md`](dec-m10-prereg-2026-10-
 
 ## Now
 
+- 2026-10-01 ≈14:35 UTC+8 (06:35Z) — **M10 development and formal work done; waiting on hand-offs and on IB1-r2.**
+  - Final results: [`dec-m10-results-2026-10-01.md`](dec-m10-results-2026-10-01.md). Two finalists pass items 1–7:
+    **`m10-4b-LH`** (C1 candidate; v3 67.34, +4.19 [+0.10, +9.88]) and `m10-4b-NT2` (v3 65.25, +2.10 [+0.49,
+    +5.82]). 13.24 of 120 GPU-h.
+  - Amendment 3 (`1a5bec9d9`): NT2's first formal step was refused by a finished runner's lease entry; NT2's
+    formal then ran once.
+  - All M10 GPUs are idle with leases `status=idle` (node E GPU0–3, node F GPU2–7); no M10 container runs.
+  - **Next (continuation or coordinator):**
+    1. Release engineering builds a release-format package of `m10-4b-LH` (node A
+       `formal/m10/pkg/m10-4b-LH`, local only).
+    2. The eval custodian runs C1 item 8 (spec draft in the hand-off record; node A holds the package, the formal
+       predictions and the frozen cache `formal/m10/m10-4b-LH-cache-frozen`).
+    3. IX1 runs the frozen candidate (private).
+    4. When IB1-r2 is release-safe, an amendment adds W+IB1 / W+C on the LH recipe (three seeds each; node F
+       GPU2–7, node E GPU0–3).
+    5. Optional, the coordinator decides: a formal test of LT2 (label-token from the base), and an informational
+       FB formal run.
+
 - 2026-10-01 ≈13:45 UTC+8 (05:45Z) — **`m10-4b-LH` passes successor items 1–7; hand-offs written; NT2 finishing.**
   - Wave-1 gates (`m10/select/4b-finalists-w1.json`, node A): finalist `4b-LH`; FB fails the typed Score floor
     (342 < 350); LT2 fails HT-DEV v2 (FLAG −.024).
@@ -89,5 +107,7 @@ GPU-h). Preregistration [`dec-m10-prereg-2026-10-01.md`](dec-m10-prereg-2026-10-
 
 | Item | GPU-h |
 | --- | ---: |
-| LT-s1 zero-step (failed) | 0.01 |
-| Running | — |
+| LH / FB / LT2 / NT2 training (incl. preflights); LT zero-step | 2.984 / 2.654 / 3.074 / 2.739; 0.008 |
+| Readouts, merges, runtime parity | 1.330 |
+| Formal (C0 parity, LH, NT2 incl. mlx-diag) | 0.450 |
+| **Total** | **13.24** |

@@ -51,8 +51,14 @@ A's transfer key. Results go only to `decision2-program/private/` and the node's
 every public artifact carry no Index numbers, and nothing in M10 was selected or tuned on Index rows. The retention
 probes excluded every item with a 13-gram in the suite (checked on node C).
 
+## Second finalist (not the C1 candidate)
+
+`m10-4b-NT2` (the N4XF recipe from Nox 1.0 with the label-token readout) also passes items 1–7. Its post-key v3 is
+65.25, +2.10 [+0.49, +5.82] vs DEV2.0-4B. Package on node F: `formal/m10/pkg/m10-4b-NT2`, revision `e607a58a…`,
+T = 1. The M6 choice rule ranks it second (lower bound vs Decider 4B −1.64 against LH's +0.28), so it is not sent
+to C1. It is the fallback if LH fails item 8, and then needs its own release-format package (label-token profile:
+the builder vendors `label_token.py`, `de275f9fb`).
+
 ## Remaining M10 work (this track)
 
-- NT2 (wave 2: the N4XF recipe on Nox with the label-token readout) is read and gated as soon as it finishes. It can
-  take the second finalist slot only under amendment 2's order.
 - IB1 arms on the LH recipe start when a release-safe IB1 record lands (IB1-r2).
