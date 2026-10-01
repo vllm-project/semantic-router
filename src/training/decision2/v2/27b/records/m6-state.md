@@ -231,6 +231,9 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 17:44Z (poll 8 at 17:42Z): all alive, guard alive. M6-IB 3,727 / 3,551 (13.2 / 13.9 h; ETA 21:08Z / 21:50Z);
+  M6-IB2 3,628 / 3,621 (17.5 / 17.7 h); M6-IBX 3,293 / 3,251 (13.8 / 14.0 h; **s2 at 3125 .9159, BEST = 3125**);
+  M6-IB2PN 2,225 / 2,203 (18.9 / 18.7 h). Node D disk 688 GB. GPU-h ≈ 70.
 - 17:20Z (poll 7 at 17:19Z; a 20-min tool sleep ran ≈ 40 min, so this commit is 42 min after the previous one):
   all alive, guard alive. M6-IB 3,574 / 3,409 (13.3 / 13.9 h; **s2 at 3180 .9308, BEST = 3180**; s1 at 3180 .9111,
   BEST stays 1908); **M6-IB2 3,480 / 3,477 (17.7 / 17.7 h; at 3308 .9012 / .8980, BEST = 3308 both)**; M6-IBX 3,152 /
