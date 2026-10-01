@@ -117,9 +117,10 @@ EOF
   fi
 }
 
-# master_ready: the finalist master cache of this tier / node exists (2B node B: reference exact on node A).
+# master_ready: the finalist master cache of this tier / node exists (2B node B: reference exact on node A; with
+# M6_SMALL_NODE the caller's own reference parity run takes that role).
 master_ready() {
-  if [ "$TIER" = 2b ] && [ "$NODE" = B ]; then
+  if [ "$TIER" = 2b ] && [ "$NODE" = B ] && [ -z "${M6_SMALL_NODE:-}" ]; then
     [ -f "$MASTER.sha256" ] || die "2B reference cache not frozen yet (m6-formal.sh 2b ref)"
     [ -f "$F/$REF2_RUN/REF-EXACT.json" ] || die "2B reference not checked on node A yet (m6-score.sh 2b ref; m6-relay.sh mark-ref)"
     [ "$(jget "$F/$REF2_RUN/REF-EXACT.json" exact)" = True ] \
