@@ -95,8 +95,12 @@ case "$STAGE" in
       STAGES=${STAGES:-verify,cal,collect,score,summary} LABEL="27b M6 $NAME" \
       bash "$M4B/run_readout.sh" "$NAME" "$CKPT" "$GPU" "$SHA" ;;
   devgates)
-    [ $# -ge 1 ] || { echo "devgates NAME..." >&2; exit 2; }
-    (cd "$S" && python3 -m v2.27b.m6.m6_devgates --root "$R" "$@" \
+    [ $# -ge 1 ] || { echo "devgates NAME... (env PN1_ROWS, IB_ROWS, IN_DIST)" >&2; exit 2; }
+    : "${PN1_ROWS:?devgates needs PN1_ROWS}" "${IB_ROWS:?devgates needs IB_ROWS}"
+    extra=()
+    for family in ${IN_DIST:-}; do extra+=(--in-distribution "$family"); done
+    (cd "$S" && python3 -m v2.27b.m6.m6_devgates --root "$R" --pn1-rows "$PN1_ROWS" --ib-rows "$IB_ROWS" \
+      "${extra[@]}" --pn1-validation "$R/slices/M5-L128/pn1-vs-A20r.json" --ref-ib "${REF_IB:-A20r-ib1}" "$@" \
       --output "$R/readouts/DEVGATES-$(date -u +%Y%m%dT%H%M%SZ).json") ;;
   formal)
     NAME=${1:?NAME} CKPT=${2:?CKPT} GPU=${3:?GPU}; aux "$GPU"

@@ -270,6 +270,112 @@ class M6DataTest(unittest.TestCase):
             self.assertTrue(m6_data.soup_problems(bad, {}, members))
 
 
+def typed_value(t_dev, choice, noul, score):
+    def cell(acc):
+        return {"accuracy": acc, "answer_categories": {"a": 1, "b": 1}}
+
+    return {
+        "T_dev": t_dev,
+        "typed_dev": {
+            "by_type": {
+                "choice": cell(choice),
+                "noul": cell(noul),
+                "score": cell(score),
+            }
+        },
+    }
+
+
+class M6GatesTest(unittest.TestCase):
+    def setUp(self):
+        self.gates = importlib.import_module("v2.27b.m6.m6_devgates")
+        self.l128 = typed_value(0.8875, 1.0, 0.55, 1.0)
+
+    def test_floors_against_l128(self):
+        ok = self.gates.floors(typed_value(0.8575, 0.97, 0.52, 0.97), self.l128)
+        self.assertTrue(ok["typed"]["pass"])
+        self.assertTrue(ok["noul"]["pass"])
+        low_t = self.gates.floors(typed_value(0.857, 1.0, 0.6, 1.0), self.l128)
+        self.assertFalse(low_t["typed"]["pass"])
+        low_score = self.gates.floors(typed_value(0.9, 1.0, 0.6, 0.96), self.l128)
+        self.assertFalse(low_score["typed"]["pass"])
+        low_noul = self.gates.floors(typed_value(0.9, 1.0, 0.519, 1.0), self.l128)
+        self.assertFalse(low_noul["noul"]["pass"])
+
+    def test_pn1_validation_rule(self):
+        report = {
+            "candidate": "M5-L128",
+            "reference": "A20r",
+            "delta": {"clean_no": 0.0188},
+        }
+        self.assertTrue(self.gates.pn1_validated(report))
+        self.assertFalse(
+            self.gates.pn1_validated(dict(report, delta={"clean_no": 0.0}))
+        )
+        with self.assertRaises(ValueError):
+            self.gates.pn1_validated(dict(report, candidate="M6-IB"))
+
+
+class M5VerdictsOptionsTest(unittest.TestCase):
+    def write(self, path, value):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(value))
+
+    def paired(self, low):
+        return {
+            "point": {"delta": {"score": 2.0, "T": 0.05, "H": 0.01}},
+            "ci95": {"low": low, "high": 4.0},
+            "axis_ci95": {
+                "H": {"delta": {"low": -0.02, "high": 0.03}},
+                "T": {"delta": {"low": 0.03, "high": 0.07}},
+            },
+            "models": {"left": "x", "right": "y"},
+        }
+
+    def test_train_of_and_exposure_prefix(self):
+        verdicts = importlib.import_module("v2.27b.m5.m5_verdicts")
+        with tempfile.TemporaryDirectory() as tmp:
+            gates, run = Path(tmp) / "gates", Path(tmp) / "run"
+            self.write(
+                run / "REPORT.json",
+                {
+                    "v3": {"score": 75.0, "T": 0.95, "H": 0.59},
+                    "panels": {"public231": {"correct": 203}},
+                },
+            )
+            for key in ("A20r", "autojev27", "eikos27b", "jebadiah27b", "F1"):
+                self.write(gates / "M6-IB" / f"paired-vs-{key}.json", self.paired(0.5))
+            self.write(
+                gates / "M6-IB" / "types.json",
+                {"types": {t: {"verdict": "OK"} for t in ("choice", "noul", "score")}},
+            )
+            self.write(
+                gates / "M6-IB" / "public231-vs-A20r.json",
+                {"delta": 0, "ci95": [-5, 5], "verdict": "OK"},
+            )
+            self.write(
+                gates / "mlx" / "M6-IB-vs-A20r.json",
+                {
+                    "bootstrap": {"card_macro_ci95": [-0.01, 0.01]},
+                    "delta": {"card_macro": 0.0, "type_macro": 0.0},
+                    "R4": {"pass": True},
+                },
+            )
+            self.write(
+                gates / "overlap" / "exposure-m6-a20ib1.json",
+                {"groups": [], "methods_agree": True},
+            )
+            out = verdicts.finalist(
+                "M6-IB", run, gates, {}, {"M6-IB": ["a20ib1"]}, "exposure-m6-"
+            )
+            self.assertTrue(out["successor_items"]["6_no_overlap_exposure"]["pass"])
+            self.assertTrue(out["successor_items_1_7"])
+            default = verdicts.finalist("M6-IB", run, gates, {})
+            self.assertFalse(
+                default["successor_items"]["6_no_overlap_exposure"]["pass"]
+            )
+
+
 class M6ScriptTest(unittest.TestCase):
     def test_bash_n(self):
         scripts = sorted(M6.glob("*.sh"))
