@@ -8,6 +8,25 @@ leases `owner.release-bf16r`). Started 2026-10-01 02:23Z.
 
 ## Now
 
+- 03:45Z — **Releases running** from mirror `45e097444` (final specs + decisions, bench receipts under
+  `dev2-bf16-resident-2026-10-01/<key>/bench/`).
+  - Image tests (mirror `79bff5da9`): unit 5/5 OK; GPU fixture 3/3 packages pass (byte-identical answers).
+  - Clean benches (one at a time per node; timed second pass): every tier 400/400 bit-identical answers, drift 0.
+    p50 ms 0.6B 19.2→16.6, 0.8B 22.7→21.6, 2B 24.1→23.5, 4B 28.5→28.1, 9B 33.8→27.2, 27B 122.9→93.3; peak GiB
+    2.32→1.50, 2.91→2.01, 7.14→4.57, 15.83→9.25, 29.79→16.83, 97.56→52.07. Overlapping first benches superseded.
+  - node A: `bf16r-relA-20261001T034035Z.log` (GPU0: 0.6B → 0.8B → 2B → 4B (after mlx-only) → 9B) and
+    `bf16r-mlx4b-20261001T034035Z.log` (GPU1: 4B mlx-diag-only parity, no upload).
+  - Next: start the 27B release on node B GPU2 when the 9B release starts (`rollout.sh 27B --release --gpu 2`).
+- 03:20Z — Runtime commit `5dc962b00` (shared module, separate commit); tests `fe666a1ac`, `9a8d72b91`; tooling
+  `91d36d213`, `79bff5da9` (mirrored on both nodes). Hub `main` of all six verified = the table below; storage 52.02 /
+  100 GB.
+  - Image tests (mirror `91d36d213`): GPU fixture byte-identical answers BF16-resident vs FP32-master for tiny Qwen3,
+    Qwen3.5 and LoRA packages; failures were CPU-only image limits (fixed in `9a8d72b91`, re-running).
+  - First benches (20 warm-up; superseded): 0.6B / 0.8B 400/400 bit-identical answers; p95 dominated by first-use
+    shape spikes → bench now times a second pass (`79bff5da9`). 27B bench failed: node B blob store unmounted (fixed).
+  - Running: node A GPU0 tests → 0.6B / 0.8B / 2B benches; GPU1 9B preview → 9B / 4B benches; node B GPU2 27B bench.
+  - Next: `make_bf16r.py final` from the copied bench compares → commit, mirror → releases in order on node A
+    (4B mlx-only on GPU1 first); 27B release on node B started when the 9B release starts (its upload comes ~35 min in).
 - 02:40Z — Context read; plan fixed (below). Implementing the runtime change.
 
 ## Plan

@@ -1,0 +1,77 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the BF16-resident runtime rollout (runtime-only revisions of the six released repositories, each only with 0 answer changes on every scored prompt and on mlx-diag), assigned to release engineering in the cross-track note of 2026-10-01 10:30 UTC+8 (b5f60b33) and adopted as the default under the user's full-autonomy mandate",
+  "decision": "release",
+  "decision_sha256": "330f3aefa5361eb1faf0b153a2e71ba1ca6953cd68a18cafbb0fe8e4f9eb8639",
+  "gate_profile": "successor",
+  "items": {
+    "1_successor_R1_v3": {
+      "evidence": "v3 48.636 vs current 43.541: +5.09 [+2.65, +9.30]",
+      "passed": true
+    },
+    "1_successor_R2_human_transfer": {
+      "evidence": "human transfer delta 95% [-0.064, +0.061]",
+      "passed": true
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "evidence": "types choice OK, noul OK, score OK",
+      "passed": true
+    },
+    "1_successor_R4_mlx_diag": {
+      "evidence": "mlx-diag card-eligible macro +0.0044 [-0.0058, +0.0144]",
+      "passed": true
+    },
+    "1_successor_R5_tier_gates": {
+      "evidence": "own 1.0 low +10.00; v3 48.636 vs 90% of GLiNER2.5-Decide 42.524; H vs GLiNER2.5-Decide [-0.013, +0.161]; own 1.0 low > 0 ok, v3 >= 38.272 ok, H vs GLiNER2.5-Decide upper >= 0 ok, no type collapsed ok",
+      "passed": true
+    },
+    "1_successor_R6_no_overlap_exposure": {
+      "evidence": "6 training files, 0 exposed groups",
+      "passed": true
+    },
+    "1_successor_R7_public231": {
+      "evidence": "public 231 152 vs 142 (+10; McNemar p 0.087)",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "1 results below own 1.0 listed in the card tradeoffs table",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 33 files re-hashed; loaded 597103104",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "d53a8a16cf4b5dcd051a7948ad362cef98732a703a59959b082d4c517b09a9d5",
+  "model_name": "DEV2.0-0.6B",
+  "receipts_sha256": {
+    "card-post": "14564a5fdfaf7ac40795bb72e034767fe9abd83a60ca9045d013d9d48a9be78f",
+    "card-pre": "c227a38ac0f4ed700bf7708dae20a5a61ca1fd3dd5c0c8c0aa3d675c76ac7038",
+    "download": "29597fbbf9256181e16c4091caff0d44a845a73e1c89f479b8f7bb29878237db",
+    "post": "acc7ba2777af71d2a2bfb49e324e10d83bad9bd6379169527254ebc8a865a4e0",
+    "readback": "5f59b765b60fb0bcdb3e4a225d2849d9563e893b77fb8855b268570951ddb30a",
+    "repeat-post": "49c2c0f07e0c6b12b97796405aa002fb9932998b49a9819c25f12fb5296362fb",
+    "repeat-pre": "33d582950e49ac150303de9acba34eb2edf27d3b6d3ada6c602b30901aab869e",
+    "tree": "fe24a9a949577ff062001156cd3ef487dfa75be26436f9933980e392b3f90f87",
+    "upload": "4eef58849ed80a769ed4177be77087b57ef9af5e65ee922de85f2b7205f6e4d0"
+  },
+  "repo_id": "llm-semantic-router/DEV2.0-0.6B",
+  "revision": "def20a1c62f2941bb727d079d7f895800e9d8808",
+  "schema": "dev2-release-gate/1",
+  "supersedes": {
+    "gate_sha256": "787c31c9e5bf618c788d28acbe6b1009181d62b6e37fa16e6c231b2dd2ca2bc1",
+    "revision": "99c4e799392afa73241915aeb16fefa5ef3518d7"
+  },
+  "utc": "2026-10-01T03:49:05.812403+00:00"
+}
