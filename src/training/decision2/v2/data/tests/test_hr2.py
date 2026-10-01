@@ -6,8 +6,9 @@ from pathlib import Path
 
 from training.model.data import canonical
 from v2.data.dq.blind_review import read_jsonl
-from v2.data.hr2 import audit, build, review
+from v2.data.hr2 import audit, build, r2, review
 from v2.data.hr2 import families as fam
+from v2.data.sources.common import sha
 
 SCREEN = (set(), set())
 
@@ -125,6 +126,35 @@ class PrmTest(unittest.TestCase):
         fam.prm_step(records, report)
         self.assertEqual(report["drop_conflicting_ratings"], 2)
         self.assertEqual(report["eligible"], 3)
+
+    def test_boundary_is_the_last_positive_step_before_the_first_error(self):
+        records = [
+            prm(
+                "p", step(("s1", 1)), step(("s2", 1)), step(("s3", 0)), step(("s4", -1))
+            ),
+            prm("q", step(("t1", 1)), step(("t2", 1))),
+            dict(
+                prm("r", step(("u1", 1)), step(("u2", -1))),
+                is_quality_control_question=True,
+            ),
+        ]
+        keys = r2.boundary_keys(records)
+        state = fam.prm_state("p", ["s1"], 1, "s2")
+        self.assertEqual(keys, {sha(canonical(state))[:24]})
+
+        def row(index, previous, text, label):
+            key = sha(canonical(fam.prm_state("p", previous, index, text)))[:24]
+            return {
+                "family": "prm_step",
+                "label": label,
+                "audit_metadata": {"hr2": {"hash_key": key}},
+            }
+
+        yes, no, _ = fam.prm_walk(records[0])
+        flags = [r2.is_boundary(row(*item, 1), keys) for item in yes]
+        self.assertEqual(flags, [False, True])
+        self.assertFalse(r2.is_boundary(row(1, ["s1"], "s2", 0), keys))
+        self.assertFalse(r2.is_boundary(row(*no, 0), keys))
 
 
 class CommonRulesTest(unittest.TestCase):
@@ -269,6 +299,118 @@ class ReviewTest(unittest.TestCase):
         self.assertIsNotNone(report["fix_rule_f1"])
         self.assertEqual(report["fix_rule_f1"]["errors"], 0)
         self.assertEqual(len(private["errors"]), len(noul))
+
+    def test_round2_is_disjoint_from_round1_and_uses_the_exact_family_rule(self):
+        rows = [review_row(i, "fam_noul", "noul", i % 2) for i in range(200)]
+        rows += [review_row(i, "fam_choice", "choice", i % 2) for i in range(200)]
+        first = review.build(rows, "0" * 64)["key"]
+        second = review.build(rows, "0" * 64, review.ROUND2, first)
+        key = second["key"]
+        self.assertEqual(len(key), 96)
+        self.assertTrue(all(k["rid"].startswith("q") for k in key))
+        self.assertFalse({k["id"] for k in key} & {k["id"] for k in first})
+        self.assertFalse({k["group_id"] for k in key} & {k["group_id"] for k in first})
+        cells = collections.Counter((k["family"], k["gold"]) for k in key)
+        self.assertEqual(set(cells.values()), {24})
+        self.assertEqual(second["sample"]["excluded"]["ids_in_rows"], 48)
+        self.assertEqual(
+            second["sample"]["population"], {"fam_choice": 200, "fam_noul": 200}
+        )
+        fails = [k for k in range(49) if review.ROUND2.family_fails(k, 48)]
+        self.assertEqual(fails[0], 7)
+        self.assertEqual(
+            [k for k in range(25) if review.ROUND2.family_fails(k, 24)][0], 5
+        )
+        self.assertEqual(
+            [k for k in range(25) if review.ROUND1.family_fails(k, 24)][0], 5
+        )
+        r1 = {k["rid"]: {"answer": k["gold"]} for k in key}
+        r2_answers = dict(r1)
+        wrong = [k for k in key if k["family"] == "fam_noul"][:7]
+        for k in wrong:
+            other = "false" if k["gold"] == "true" else "true"
+            r1[k["rid"]] = r2_answers[k["rid"]] = {"answer": other}
+        sample = dict(second["sample"], salt=review.ROUND2.salt)
+        report, _ = review.score(sample, key, r1, r2_answers, None, review.ROUND2)
+        self.assertEqual(report["verdict"]["failing_families"], ["fam_noul"])
+        self.assertEqual(report["fix_rule_f1"], "not applied in this round")
+        self.assertEqual(report["round"], "hr2-r2")
+
+    def test_round2_cli_requires_the_round1_key(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "train.jsonl"
+            path.write_text("".join(canonical(r) + "\n" for r in self.rows()))
+            with self.assertRaises(ValueError):
+                review.main(
+                    [
+                        "sample",
+                        "--round",
+                        "hr2-r2",
+                        "--train",
+                        str(path),
+                        "--out-dir",
+                        f"{tmp}/s",
+                    ]
+                )
+
+
+def noul_candidate(family, i, label, **extra):
+    return fam.noul_row(
+        source=f"{family}_train",
+        family=family,
+        language="en",
+        group_key=f"{family}:{i}",
+        key=f"k{i}",
+        state={"text": f"{family} item {i}"},
+        instructions="Q?",
+        yes=bool(label),
+        template="t",
+        **extra,
+    )
+
+
+class FinalizeTest(unittest.TestCase):
+    def test_licence_and_construction_drops_are_recorded_by_reason(self):
+        train = [noul_candidate("vitc", i, i % 2) for i in range(4)]
+        train += [noul_candidate("eth_cs", i, i % 2) for i in range(6)]
+        train += [
+            noul_candidate("prm_step", i, i % 2, bucket="0-0", step_index=0)
+            for i in range(6)
+        ]
+        dev = [build.as_dev(noul_candidate("eth_cs", i, i % 2)) for i in range(10, 12)]
+        boundary = next(
+            r for r in train if r["family"] == "prm_step" and r["label"] == 1
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            cand, out = Path(tmp) / "cand", Path(tmp) / "out"
+            cand.mkdir()
+            build.write_rows(cand / "hr2.train.cand.jsonl", train)
+            build.write_rows(cand / "hr2.dev.cand.jsonl", dev)
+            ids = Path(tmp) / "construction-ids.txt"
+            ids.write_text(boundary["id"] + "\n")
+            args = ["finalize", "--cand", str(cand), "--out", str(out)]
+            args += [
+                "--drop-licence-families",
+                "vitc",
+                "--drop-construction-ids",
+                str(ids),
+            ]
+            self.assertEqual(build.main(args), 0)
+            final = json.loads((out / "final.json").read_text())
+            removed = final["drops"]["removed"]
+            self.assertEqual(removed["train:licence"], {"vitc": 4})
+            self.assertEqual(removed["train:construction"], {"prm_step": 1})
+            self.assertEqual(final["drops"]["licence_families"], ["vitc"])
+            self.assertEqual(final["drops"]["construction_ids"]["count"], 1)
+            self.assertEqual(final["train"]["family"], {"eth_cs": 6, "prm_step": 4})
+            self.assertEqual(
+                final["train"]["label_by_family"]["prm_step"], {"0": 2, "1": 2}
+            )
+            with self.assertRaises(ValueError):
+                build.main(
+                    ["finalize", "--cand", str(cand), "--out", f"{tmp}/x"]
+                    + ["--drop-construction-families", "hs3_helpp"]
+                )
 
 
 class AuditTest(unittest.TestCase):

@@ -57,7 +57,15 @@ def main() -> None:
     shards = [shard_tensors(m) for m in args.member]
     if len({json.dumps({s: sorted(t) for s, t in x.items()}) for x in shards}) != 1:
         raise ValueError("members have different backbone tensor layouts")
-    heads = [load_file(str(m / "decision_head.safetensors")) for m in args.member]
+    # Label-token checkpoints read the tied LM head and carry no head file.
+    has_head = [(m / "decision_head.safetensors").is_file() for m in args.member]
+    if any(has_head) != all(has_head):
+        raise ValueError("members differ in having a decision head")
+    heads = [
+        load_file(str(m / "decision_head.safetensors"))
+        for m, present in zip(args.member, has_head)
+        if present
+    ]
     weight = 1.0 / len(args.member)
     pending = args.output.with_name(args.output.name + ".pending")
     shutil.copytree(
@@ -71,10 +79,14 @@ def main() -> None:
             for key in shards[0][name]
         }
         save_file(averaged, str(pending / "backbone" / name), metadata={"format": "pt"})
-    save_file(
-        {k: sum(h[k].float() * weight for h in heads).contiguous() for k in heads[0]},
-        str(pending / "decision_head.safetensors"),
-    )
+    if heads:
+        save_file(
+            {
+                k: sum(h[k].float() * weight for h in heads).contiguous()
+                for k in heads[0]
+            },
+            str(pending / "decision_head.safetensors"),
+        )
     identities = [dec_fingerprint(m, None)["model_sha256"] for m in args.member]
     meta = dict(metas[0])
     meta["soup"] = {
@@ -99,7 +111,11 @@ def main() -> None:
                 "output": str(args.output),
                 "members": identities,
                 "model_sha256": dec_fingerprint(args.output, None)["model_sha256"],
-                "head_sha256": file_sha256(args.output / "decision_head.safetensors"),
+                "head_sha256": (
+                    file_sha256(args.output / "decision_head.safetensors")
+                    if heads
+                    else None
+                ),
             }
         )
     )

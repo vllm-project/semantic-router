@@ -1,0 +1,408 @@
+{
+ "folds": {
+  "groups": [
+   51,
+   45,
+   57,
+   49,
+   53
+  ],
+  "rows": [
+   51,
+   45,
+   58,
+   50,
+   54
+  ],
+  "rule": "int(sha256(group_id).hexdigest(), 16) % 5"
+ },
+ "gate": {
+  "margin": 0.05,
+  "min_rows": 30,
+  "rule": "PASS iff accuracy <= majority + margin; majority is the cross-validated position prior on the same rows",
+  "views": [
+   "state_removed",
+   "option_only",
+   "hypothesis_only"
+  ]
+ },
+ "gates": [
+  {
+   "accuracy": 0.5,
+   "delta": 0.069767,
+   "families_over_margin": [
+    {
+     "delta": 0.069767,
+     "family": "procb",
+     "n": 258
+    }
+   ],
+   "majority": 0.430233,
+   "n": 258,
+   "pass": false,
+   "task_type": "noul",
+   "threshold": 0.480233,
+   "view": "state_removed",
+   "wilson95": [
+    0.439438,
+    0.560562
+   ]
+  },
+  {
+   "accuracy": 0.434109,
+   "delta": 0.003876,
+   "families_over_margin": [],
+   "majority": 0.430233,
+   "n": 258,
+   "pass": true,
+   "task_type": "noul",
+   "threshold": 0.480233,
+   "view": "option_only",
+   "wilson95": [
+    0.375034,
+    0.495117
+   ]
+  }
+ ],
+ "groups": 255,
+ "heuristics": {
+  "lexical_overlap": {
+   "n_rows": 0
+  },
+  "longest_option": {
+   "by_family": {
+    "procb": {
+     "accuracy": 0.5,
+     "correct": 129,
+     "delta": 0.069767,
+     "exceeds_margin": true,
+     "majority": 0.430233,
+     "n": 258,
+     "wilson95": [
+      0.439438,
+      0.560562
+     ]
+    }
+   },
+   "by_source": {
+    "processbench_math_apache": {
+     "accuracy": 0.5,
+     "correct": 129,
+     "delta": 0.069767,
+     "exceeds_margin": true,
+     "majority": 0.430233,
+     "n": 258,
+     "wilson95": [
+      0.439438,
+      0.560562
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "procb": {
+      "accuracy": 0.5,
+      "correct": 129,
+      "delta": 0.069767,
+      "exceeds_margin": true,
+      "majority": 0.430233,
+      "n": 258,
+      "wilson95": [
+       0.439438,
+       0.560562
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.5,
+     "correct": 129,
+     "delta": 0.069767,
+     "exceeds_margin": true,
+     "majority": 0.430233,
+     "n": 258,
+     "wilson95": [
+      0.439438,
+      0.560562
+     ]
+    }
+   },
+   "n_rows": 258
+  },
+  "position_prior": {
+   "by_family": {
+    "procb": {
+     "accuracy": 0.430233,
+     "correct": 111,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.430233,
+     "n": 258,
+     "wilson95": [
+      0.371278,
+      0.491234
+     ]
+    }
+   },
+   "by_source": {
+    "processbench_math_apache": {
+     "accuracy": 0.430233,
+     "correct": 111,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.430233,
+     "n": 258,
+     "wilson95": [
+      0.371278,
+      0.491234
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "procb": {
+      "accuracy": 0.430233,
+      "correct": 111,
+      "delta": 0.0,
+      "exceeds_margin": false,
+      "majority": 0.430233,
+      "n": 258,
+      "wilson95": [
+       0.371278,
+       0.491234
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.430233,
+     "correct": 111,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.430233,
+     "n": 258,
+     "wilson95": [
+      0.371278,
+      0.491234
+     ]
+    }
+   },
+   "n_rows": 258
+  }
+ },
+ "input": {
+  "rows": 258,
+  "sha256": "7b36da178cc63ea6d11fa0ddfbf404d0cdf0b54b292c6a51f2b5454020f4f739"
+ },
+ "learner": {
+  "bits": 20,
+  "epochs": 4,
+  "instruction_cross_cap": 64,
+  "l2": 1e-06,
+  "learning_rate": 0.1,
+  "seed": 0,
+  "state_cross_cap": 128,
+  "state_cross_unigrams": 64,
+  "state_gram_cap": 128,
+  "text_gram_cap": 1024
+ },
+ "majority": {
+  "noul": {
+   "accuracy": 0.430233,
+   "n": 258
+  }
+ },
+ "rows": 258,
+ "schema": "decision2.v2.shortcut.v1",
+ "verdict": "FAIL",
+ "views": {
+  "full_input": {
+   "by_family": {
+    "procb": {
+     "accuracy": 0.697674,
+     "correct": 180,
+     "delta": 0.267442,
+     "exceeds_margin": true,
+     "majority": 0.430233,
+     "n": 258,
+     "wilson95": [
+      0.639071,
+      0.750478
+     ]
+    }
+   },
+   "by_source": {
+    "processbench_math_apache": {
+     "accuracy": 0.697674,
+     "correct": 180,
+     "delta": 0.267442,
+     "exceeds_margin": true,
+     "majority": 0.430233,
+     "n": 258,
+     "wilson95": [
+      0.639071,
+      0.750478
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "procb": {
+      "accuracy": 0.697674,
+      "correct": 180,
+      "delta": 0.267442,
+      "exceeds_margin": true,
+      "majority": 0.430233,
+      "n": 258,
+      "wilson95": [
+       0.639071,
+       0.750478
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.697674,
+     "correct": 180,
+     "delta": 0.267442,
+     "exceeds_margin": true,
+     "majority": 0.430233,
+     "n": 258,
+     "wilson95": [
+      0.639071,
+      0.750478
+     ]
+    }
+   },
+   "n_rows": 258
+  },
+  "hypothesis_only": {
+   "n_rows": 0
+  },
+  "option_only": {
+   "by_family": {
+    "procb": {
+     "accuracy": 0.434109,
+     "correct": 112,
+     "delta": 0.003876,
+     "exceeds_margin": false,
+     "majority": 0.430233,
+     "n": 258,
+     "wilson95": [
+      0.375034,
+      0.495117
+     ]
+    }
+   },
+   "by_source": {
+    "processbench_math_apache": {
+     "accuracy": 0.434109,
+     "correct": 112,
+     "delta": 0.003876,
+     "exceeds_margin": false,
+     "majority": 0.430233,
+     "n": 258,
+     "wilson95": [
+      0.375034,
+      0.495117
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "procb": {
+      "accuracy": 0.434109,
+      "correct": 112,
+      "delta": 0.003876,
+      "exceeds_margin": false,
+      "majority": 0.430233,
+      "n": 258,
+      "wilson95": [
+       0.375034,
+       0.495117
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.434109,
+     "correct": 112,
+     "delta": 0.003876,
+     "exceeds_margin": false,
+     "majority": 0.430233,
+     "n": 258,
+     "wilson95": [
+      0.375034,
+      0.495117
+     ]
+    }
+   },
+   "n_rows": 258
+  },
+  "state_removed": {
+   "by_family": {
+    "procb": {
+     "accuracy": 0.5,
+     "correct": 129,
+     "delta": 0.069767,
+     "exceeds_margin": true,
+     "majority": 0.430233,
+     "n": 258,
+     "wilson95": [
+      0.439438,
+      0.560562
+     ]
+    }
+   },
+   "by_source": {
+    "processbench_math_apache": {
+     "accuracy": 0.5,
+     "correct": 129,
+     "delta": 0.069767,
+     "exceeds_margin": true,
+     "majority": 0.430233,
+     "n": 258,
+     "wilson95": [
+      0.439438,
+      0.560562
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "procb": {
+      "accuracy": 0.5,
+      "correct": 129,
+      "delta": 0.069767,
+      "exceeds_margin": true,
+      "majority": 0.430233,
+      "n": 258,
+      "wilson95": [
+       0.439438,
+       0.560562
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.5,
+     "correct": 129,
+     "delta": 0.069767,
+     "exceeds_margin": true,
+     "majority": 0.430233,
+     "n": 258,
+     "wilson95": [
+      0.439438,
+      0.560562
+     ]
+    }
+   },
+   "n_rows": 258
+  }
+ }
+}

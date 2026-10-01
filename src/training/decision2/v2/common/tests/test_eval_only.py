@@ -21,6 +21,7 @@ BUILDERS = {
     "data/m3/xl_prompts.py": ("guard",),
     "data/replay_targets.py": ("guard", "check_rows"),
     "data/hr2/build.py": ("guard", "check_rows"),
+    "data/ib1/build.py": ("guard", "check_rows"),
     "dec/build_mixture.py": ("guard", "check_file", "check_rows"),
     "dec/m5_block.py": ("guard", "check_rows"),
     "06b/mixture.py": ("guard", "check_rows"),

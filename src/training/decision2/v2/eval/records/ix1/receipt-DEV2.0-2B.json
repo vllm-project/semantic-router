@@ -1,0 +1,40 @@
+{
+  "external_agreement": "38 of 38 benchmarks within 1 skill point",
+  "gpu_hours_full_run": 1.3375,
+  "label": "independent provisional 0.2.1 reproduction (values private)",
+  "model": {
+    "base": null,
+    "calibration": null,
+    "model_id": "llm-semantic-router/DEV2.0-2B",
+    "model_sha256": "32872f2968e38aa99901797aaab5e12e32e281bf67bb924037d443394411170d",
+    "package_manifest_sha256": "637a8af08bb95c2a91c17dc4899f7406b85f9541661cb447425228f23b45846a",
+    "profile": "qwen-full",
+    "revision": "a53cf66a0d9d492a84b6617b61e7ce35fcd03af0"
+  },
+  "non_ok_reasons": {
+    "max_length_exceeded": 2
+  },
+  "panel": {
+    "rows": 120226,
+    "run_ids_sha256": "6455d7be7ce3e902a73f4d854884f817e20a0fa8ba74252a299261c4f1d6ad50",
+    "shards_file": "panel-7"
+  },
+  "parity_gate": {
+    "max_abs_dp": 0.0,
+    "pass": true,
+    "questions_compared": 419,
+    "requests": 86,
+    "statuses": {
+      "ok": 86
+    },
+    "tolerance": 0.0001
+  },
+  "results_sha256": "7d70a5367903a2018d070d7ece85857814760968143a2ca594c0bb6a19fd0361",
+  "schema": "ix1-public-receipt/1",
+  "scorer_gate": "port vs kit 87d4650b: pass (per-benchmark <= 1.5e-4, headline <= 0.01)",
+  "statuses": {
+    "ok": 120224,
+    "unsupported": 2
+  },
+  "superseded_error_records": 0
+}

@@ -1,0 +1,40 @@
+{
+ "boundary_states": 54771,
+ "candidates": {
+  "dev": "b0498c1f1ac2ef346579237b2d53533829f0bc0e86a67b71d749eaef180fab7e",
+  "train": "45b560103e84591d94ccfa763bbcbb9698366c92ad52f8534db29cbd0007bf2b"
+ },
+ "ids_sha256": "99e150a557492016846e1316b2c6701a13b35be393f6bf082b00a02078ffd402",
+ "raw": {
+  "prm800k/phase1_train.jsonl": "e9da6a73f827ffb9a8c0dc644c541d34ed76b3d4d1e4896ff5f7b37ddf5ae34d",
+  "prm800k/phase2_train.jsonl": "1110237feeb51d1bc200cb37b8f965cfdc1036eac7d506094049366fe7dc1089"
+ },
+ "rows": {
+  "dev": {
+   "boundary_rows": 39,
+   "by_bucket": {
+    "0-0": 3,
+    "1-1": 5,
+    "2-2": 1,
+    "3-4": 9,
+    "5-7": 10,
+    "8+": 11
+   },
+   "prm_yes_rows": 195
+  },
+  "train": {
+   "boundary_rows": 364,
+   "by_bucket": {
+    "0-0": 15,
+    "1-1": 22,
+    "2-2": 34,
+    "3-4": 95,
+    "5-7": 99,
+    "8+": 99
+   },
+   "prm_yes_rows": 1803
+  }
+ },
+ "rule": "prm_step yes rows that are the last +1 step before the first -1 on a walked path",
+ "schema": "decision2.hr2.r2-boundary.v1"
+}
