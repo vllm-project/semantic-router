@@ -8,6 +8,14 @@ pinned base (PEFT auto-detection tested). Worktree `/home/xunliu/code/vllm-sr-de
 
 ## Now
 
+- 06:40Z — **DEV2.0-0.6B published: `08b00e07cb90472e4184e3b91f3188c0ead8935b`** (decision `469b4d7d…`, gate 13 / 13
+  incl. `7_transformers_remote_code`; full native parity pre/post 0 changes; AutoModel vs native 0 of 11,053, drift 0;
+  Hub smoke from a fresh cache under 5.17.0 and 5.18.0 bit-identical; card HTTP / links / gate evaluate ok). The first
+  attempt uploaded `25669e2d` and stopped at the Hub smoke: the image sets `HF_HUB_OFFLINE=1` (fixed `539d2769f`,
+  re-run with `--resume`; the two packages differ only in `MODEL_MANIFEST.json` `builder.source_commit`).
+  - 5.18.0 AutoModel parity: 0.6B and 27B 10,653 / 10,653 prompts identical (drift 0); 0.8B passed in the chain.
+  - Running (mirror `539d2769f`): GPU6 0.8B release (06:29Z) → 2B → 4B → 9B (`--tf518` then `--release` each),
+    then the GPU integration re-run; GPU7 27B release (06:16Z; ETA ~08:20Z incl. two 52 GB base downloads).
 - 05:55Z — **Rollout DONE** (all six, record `587c0e490` in integration; mains 0.6B `def20a1c`, 0.8B `e13a40f8`,
   2B `56950ec5`, 4B `4f560ae5`, 9B `b4f65fa8`, 27B `4e89288d`). Integration merged (`eb359fdbc`); all six finals
   derived (`07e2c3ffe`, mirrored on node E); `automap.sh --release` refuses unless `main` = the superseded revision.
