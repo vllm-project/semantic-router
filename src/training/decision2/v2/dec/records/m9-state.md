@@ -9,6 +9,9 @@ its "written ≈11:10" line is a typo for ≈10:35); data lock [`dec-m9-datalock
 
 ## Now
 
+- 2026-10-01 12:23 UTC+8 (04:23Z) — poll: H9-s1 step 1,042 / 1,128, H9-s2 986 / 1,128; g6b waiting on the GPU6
+  lock (expected); post chain waiting. No failures since amendment 2.
+
 - 2026-10-01 ≈12:00 UTC+8 (03:58Z) — **Amendment 2 applied: H9 arm cap 5.8 GPU-h; GPU6 chain replaced by `g6b`.**
   - [Amendment 2](dec-m9-amendment-2-2026-10-01.md) (`29057a4de`, before any H9 readout; its "≈12:05 / 04:05Z" means
     ≈11:57 / 03:57Z): H9 seeds cost ≈ 1.75–1.8 GPU-h, so the 4.8 cap would have refused H9-s3; C9's unused budget
