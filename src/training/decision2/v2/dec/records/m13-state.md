@@ -41,3 +41,32 @@
 - Formal (node F, M6 library, `m13-formal.sh`): entries `m13/select/formal/4b-finalists.json` (slot 0 = the LH soup as
   the formal-path parity reference, slot 1 = `4b-LHA10SD`); launched 15:18Z, GPU6 `4b-LH`, GPU7 `4b-LHA10SD`.
 - 2B (`2b-RASD`, node F GPU2 / 3) and 0.8B (node E) still training.
+
+## 2026-10-01 15:40Z — 4B formal relaunched under amendment 1; hand-off
+
+- 4B formal: the 15:18Z smokes stopped at the formal library's input check (relative readout paths in the entries; no
+  container, no CAL fit). [Amendment 1](dec-m13-amendment-1-2026-10-01.md) `6c1236f18` committed first; entries
+  regenerated with absolute paths (same checkpoints, `files_sha256_list_sha256` unchanged), originals kept under
+  `formal/m13/logs/amendment-1/`; relaunched 15:31Z. **Both smokes passed**; collection running since 15:34Z (node F
+  GPU6 `4b-LH`, GPU7 `4b-LHA10SD`).
+- 2B: `2b-RASD-s1` / `s2` DONE 15:19Z / 15:24Z (1,251 / 1,249 steps); soup built; post (node F GPU3) on its last panel.
+- 0.8B: `08b-RASD-s1` / `s2` DONE (4,115 / 4,109 steps); soup built; post finished 15:29Z. `08b-RAAG-s1` / `s2` at
+  4,561 / 4,074 steps (≈ 4,790 total), then soup and post on node E GPU1 (≈ 16:30Z).
+
+### Hand-off: remaining steps (in order, from mirror `c2610143b`; `<E>` / `<F>` from `nodes.env`)
+
+1. Node A, 2B, once `post-2b-RASD post 2b-RASD finished`: `m13-score.sh pull <F> 2b-C0-f 2b-RASD`;
+   `points 2b-C0-f 2b-RASD 2b-RA-m12`; `ibdev 2b-C0-f 2b-C0-f 2b-RASD 2b-RA-m12`; `contrast 2b-RASD 2b-RA-m12`;
+   `readout 2b 2b-C0-f 2b-RASD`; `rules 2b 2b-RASD=2b-C0-f` (once).
+2. Node A, 0.8B, once `post-08b-RAAG post 08b-RAAG finished`: `pull <E> 08b-C0-e 08b-RASD 08b-RAAG`;
+   `points 08b-C0-e 08b-RASD 08b-RAAG 08b-RA-m12`; `ibdev 08b-C0-e 08b-C0-e 08b-RASD 08b-RAAG 08b-RA-m12`;
+   `contrast 08b-RASD 08b-RA-m12`; `contrast 08b-RAAG 08b-RA-m12`; `readout 08b 08b-C0-e 08b-RASD 08b-RAAG`;
+   `rules 08b 08b-RASD=08b-C0-e 08b-RAAG=08b-C0-e -- 08b-RASD:08b-RAAG` (once).
+3. Passers (≤ 2 per tier): `m10_formal_select.py --tier <tier>` with **absolute** readout paths (amendment 1), the
+   tier reference in slot 0; `M13_NODE=e|f m13-formal.sh launch <mirror> <gpu> <tier> <point>` (2B / 0.8B via
+   `M6_SMALL_NODE`).
+4. 4B formal: when both `formal/m13/status/m13-4b-*.COLLECTED` exist, score on node A (M6 library, as M12), then
+   mlx-diag; successor items 1–7 vs LH formal v3 67.34.
+5. Close-out: `python3 $O/m13_gpuh.py table` on E and F (cap 80); results record `dec-m13-results-2026-10-01.md`,
+   gist 04 entry, merge into integration (`check_no_private.sh --strict --log`). Hand-offs per prereg (package on the
+   repo's current `main`; custodian C1 IB content recheck before the item-8 spec; private Index request).
