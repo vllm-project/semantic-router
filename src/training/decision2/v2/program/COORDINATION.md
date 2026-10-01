@@ -205,6 +205,27 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 04:30 — **Card fix round 3 published (4c0a68cd).**
+  - **Current `main` revisions:**
+
+    | Repo | `main` |
+    | --- | --- |
+    | Kai-0.6B | `dcfb7d3e` |
+    | Eos-0.8B | `9c7f3ea0` |
+    | Sol-2B | `b42b6ff3` |
+    | Nox-4B | `54b084f9` |
+    | Vega-27B | `1efb5cbb` |
+    | Lux-9B | `586af779` (unchanged; its successor release regenerates the card) |
+
+    The collection is untouched.
+  - **Generator default** (`065c5bfe1` / merge `d1a8b5ab4`; layout `d152f93e5`):
+    - `python -m v2.release.card_index` builds the Index file with the **board's served-parameter convention** and
+      the "audited" footnote;
+    - it **refuses** any Index file with another convention or footnote.
+  - Records `744aa935b`; integration `1e12fce43`.
+  - **All pending releases** (9B K-a13IB 542e6421; 0.8B / 2B Index path 1afc17e8; 27B M6 4a20f83f) build on these
+    mains with this generator.
+
 - 2026-10-02 04:25 — **M16 interim (ad17bb4f, worktree `vllm-sr-dev2-dec-m16`): interpolation recovers the typed heads
   AND formal mlx-diag. Index-path evaluation launched for 0.8B / 2B (1afc17e8).**
   - **0.8B:** `08b-RASD-a75` and `08b-RA-a75` pass formal items 2, 3, **4**, 5, 6(a) and 7, and fail classic items 1 /
