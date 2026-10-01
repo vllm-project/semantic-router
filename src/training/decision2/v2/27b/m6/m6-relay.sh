@@ -2,7 +2,8 @@
 # ~27B M6 on node A (host side): wait for one arm-seed to finish (run_lora_arm.sh writes full/RUN_DIR after
 # COMPLETE.json), then hardlink its BEST checkpoint into /data/dev2/xfer/27b-m6/relay/NAME/ with its SHA-256 list,
 # BEST.json, COMPLETE.json and the arm-seed's receipts; BUDGET-nodeA.json sums node A's M6 GPU-hour receipts (the node B
-# chain's budget check). Node B pulls it with `m6-tail.sh pull NAME` over the M6 node link. If the driver exits
+# chain's budget check; BUDGET-noded.json on node D, RELAY_NODE=d). Node B pulls it with `m6-tail.sh pull NAME` over
+# the M6 node link (node A) or `m6-tail.sh pull-d NAME` over the node B -> node D transfer key. If the driver exits
 # without a finished run, RELAY-FAILED.txt records it and nothing is relayed (no rerun).
 # Usage: m6-relay.sh NAME DRIVER_PID     (NAME e.g. M6-IBX-s2; DRIVER_PID the pid m6-arm.sh printed). Detached.
 set -euo pipefail
@@ -10,7 +11,8 @@ echo "m6 relay $*: start $(date -u +%FT%TZ)"
 NAME=${1:?NAME} PID=${2:?DRIVER_PID}
 [[ "$NAME" =~ ^M6-[A-Z0-9]+-s[12]$ ]] || { echo "NAME is an M6 arm-seed (M6-IBX-s2, ...)" >&2; exit 2; }
 [[ "$PID" =~ ^[0-9]+$ ]] || { echo "DRIVER_PID must be a pid" >&2; exit 2; }
-RUN=/data/dev2/runs/27b/$NAME RELAY=/data/dev2/xfer/27b-m6/relay/$NAME
+RUN=/data/dev2/runs/27b/$NAME RELAY=/data/dev2/xfer/27b-m6/relay/$NAME NODE=${RELAY_NODE:-a}
+case "$NODE" in a | d) ;; *) echo "RELAY_NODE is a or d" >&2; exit 2 ;; esac
 [ -d "$RUN" ] || { echo "no arm-seed run $RUN" >&2; exit 2; }
 [ ! -e "$RELAY" ] || { echo "$RELAY exists: refusing to overwrite" >&2; exit 66; }
 mkdir -p "$(dirname "$RELAY")"
@@ -40,7 +42,7 @@ mkdir -p "$RELAY.part"
 cp -al "$run/$best" "$RELAY.part/checkpoint"
 cp -p "$run/BEST.json" "$run/COMPLETE.json" "$RELAY.part/"
 cp -rp "$RUN/receipts" "$RELAY.part/receipts"
-python3 - "$RELAY.part/BUDGET-nodeA.json" <<'EOF'
+python3 - "$RELAY.part/BUDGET-node$NODE.json" "$NODE" <<'EOF'
 import glob, json, os, sys
 from datetime import datetime, timezone
 seen, items = set(), []
@@ -63,9 +65,9 @@ for path in paths:
         items.append([path, float(record.get("gpu_hours", 0))])
 total = round(sum(h for _, h in items), 4)
 with open(sys.argv[1], "x") as out:
-    json.dump({"node": "a", "gpu_hours": total, "created_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    json.dump({"node": sys.argv[2], "gpu_hours": total, "created_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                "items": sorted(items)}, out, indent=1)
-print(f"node A M6 receipts {total} GPU-h ({len(items)} items)")
+print(f"node {sys.argv[2]} M6 receipts {total} GPU-h ({len(items)} items)")
 EOF
 (cd "$RELAY.part/checkpoint" && find . -type f | sort | xargs -P 16 -n 4 sha256sum | sort -k2) > "$RELAY.part/SHA256SUMS.tmp"
 mv "$RELAY.part/SHA256SUMS.tmp" "$RELAY.part/SHA256SUMS"

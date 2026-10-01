@@ -4,11 +4,14 @@
 ``family`` is listed (the in-distribution families ``w2c`` and ``isarc``), every other line copied byte for byte and in
 order; refuses unknown families and an output that exists; prints the counts and SHA-256 values for the data lock.
 
+``concat``: stage 2's IB DEV slice, the IB1 and IB2 DEV files joined in order (row ids unique across them).
+
 ``soup-check``: M5's ``lsoup`` check of a ``v2.27b.lora_soup`` output: members, rank and alpha are the members' sums,
 the verification passed within its tolerance, the manifest lists the members in order, and a member relayed from
 another node (``--relay-sums "CKPT=SHA256SUMS ..."``) matches its relay list file by file.
 
     python3 -m v2.27b.m6.m6_data drop-families --input IB.train.jsonl --drop w2c --drop isarc --output IBX.train.jsonl
+    python3 -m v2.27b.m6.m6_data concat --input IB1.dev.jsonl --input IB2.dev.jsonl --output IB12.dev.jsonl
     python3 -m v2.27b.m6.m6_data soup-check --manifest SOUP/soup_manifest.json [--relay-sums ...] CKPT CKPT...
 """
 
@@ -47,6 +50,33 @@ def drop_families(source: Path, drop: list[str], output: Path) -> dict:
         "rows_dropped": sum(counts[f] for f in drop),
         "rows_out": len(kept),
         "families_out": {f: n for f, n in sorted(counts.items()) if f not in drop},
+        "output": str(output),
+        "output_sha256": hashlib.sha256(out).hexdigest(),
+    }
+
+
+def concat(sources: list[Path], output: Path) -> dict:
+    """SELECT-format DEV files joined in order (stage 2's IB1 + IB2 DEV slice); row ids must stay unique."""
+    parts, ids = [], set()
+    for source in sources:
+        data = source.read_bytes()
+        for line in data.splitlines():
+            if not line.strip():
+                raise ValueError(f"{source}: blank line")
+            rid = json.loads(line)["id"]
+            if rid in ids:
+                raise ValueError(f"{source}: row id {rid} repeats")
+            ids.add(rid)
+        parts.append(data if data.endswith(b"\n") else data + b"\n")
+    out = b"".join(parts)
+    fd = os.open(output, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    with os.fdopen(fd, "wb") as stream:
+        stream.write(out)
+    return {
+        "inputs_sha256": {
+            str(s): hashlib.sha256(s.read_bytes()).hexdigest() for s in sources
+        },
+        "rows": len(ids),
         "output": str(output),
         "output_sha256": hashlib.sha256(out).hexdigest(),
     }
@@ -101,6 +131,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--input", type=Path, required=True)
     p.add_argument("--drop", action="append", required=True)
     p.add_argument("--output", type=Path, required=True)
+    p = sub.add_parser("concat")
+    p.add_argument("--input", type=Path, action="append", required=True)
+    p.add_argument("--output", type=Path, required=True)
     p = sub.add_parser("soup-check")
     p.add_argument("--manifest", type=Path, required=True)
     p.add_argument(
@@ -114,6 +147,9 @@ def main(argv: list[str] | None = None) -> None:
                 drop_families(args.input, args.drop, args.output), sort_keys=True
             )
         )
+        return
+    if args.mode == "concat":
+        print(json.dumps(concat(args.input, args.output), sort_keys=True))
         return
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
     relays = dict(spec.split("=", 1) for spec in args.relay_sums.split())

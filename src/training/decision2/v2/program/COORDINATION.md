@@ -205,6 +205,52 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 18:00 — **DEV2.0-4B → `m10-4b-LH` released (b5f60b33): private `main` `13d42143`; successor items 1–8
+  pass.** Record and gist 07; integration `2ee92c13b`.
+  - **Parity.** 0 answer changes vs the sealed T = 1 predictions on typed-final / css15 / public231 / mlx-diag (max
+    drift 1.7e-14), before and after the real download. AutoModel equals native (drift 0).
+  - **C1 item 8 (custodial; the one attempt).** 52.71 vs the 4B baseline 48.38, +4.32 [+2.60, +6.00], PASS, labelled
+    post-key. The training data is the released mixture (0 new sources, 0 exposed groups), so no new-data C1 recheck
+    applied. **The C1 4B baseline registry now points to this run.**
+  - **Decision.**
+    - v3 +4.19 [+0.10, +9.88]; human transfer −.023 [−.082, +.074] (n.s.);
+    - types OK; mlx-diag card-eligible +.037; vs Nox1 +10.87;
+    - public 231 172 vs 171 (item 7 passes), but **vs Decider 4B 172 vs 192 (significantly below; disclosed on the
+      card)**.
+  - **Contents.** Built on the auto_map 4B revision `3785b7b9` (no concurrent publisher); it carries the remote code
+    **and IX1's long-input fix**. Hub `trust_remote_code` smoke tests under 5.17 / 5.18 pass.
+  - **Card.** The lineage is Qwen3.5-4B-Base → merged rank-128 LoRA → head (not Nox); all 15 human-transfer deltas are
+    listed; the Qwen3.5 Apache-2.0 LICENSE is shipped; no Index numbers.
+  - **Storage.** Superseded weights purged (9.70 GB); the org is at 52.47 / 100 GB.
+  - **Private Index:** done (private report). **The 4B frontier gap narrowed substantially** (numbers private).
+  - **Remaining runtime-only fix revisions:** 27B, 9B, 2B, 0.8B (4B is done). Queued for the auto_map worker after its
+    close-out.
+  - **Watch item.** Public 231 trails Decider 4B. It is a guard, but a future 4B arm should check whether IB2 / label
+    breadth helps there.
+
+- 2026-10-01 16:25 — **IX1 follow-ups done (c0ce08eb).**
+  - **Shipped-runtime long-request bug.**
+    - **Root cause:** FLA 0.5.2 gated-delta kernels compute some offsets in int32. A request's padded question batch
+      (each question repeats the prompt) past 2³¹ − 1 q/k/v elements gives wrong / non-finite rows or a GPU page
+      fault. On 27B that is ≈ 349,525 padded tokens; the two failing ToolRet requests padded to 455,168 and 725,760.
+    - **Fix** (`8e6bdfc33`, `e876fbefc`, only `decision2/qwen.py`; merged into integration at `fea2f016b`):
+      over-budget requests are split into GPU-sized question batches with a budget of 2³⁰ elements (27B 174,762
+      padded tokens). Requests that fit keep the old path.
+    - **Verification:**
+      - both real requests are valid and equal to per-question answers;
+      - the synthetic 14k / 18k / 23k-token regression test (generated text, public) passes;
+      - 0 changes on all four panels for 0.8B / 9B / 27B; p50 and memory unchanged.
+    - **Hand-off (release):** runtime-only revisions for **27B, 9B, 4B, 2B, 0.8B** (0.6B optional, no gated-delta
+      layers), each built from that repo's **current `main`** (the auto_map revisions), with the standard parity set.
+      Ordering: 4B rides with the LH release (b5f60b33 was told to carry the fix if merged). The others follow the
+      auto_map close-out (4c0a68cd), never concurrent with another publisher on the same repo.
+  - **The M5-L128 private Index diagnostic is done** (private report addendum). It informs 27B M6, whose
+    breadth-data design is unchanged.
+  - **CAL refit discrepancy** resolved as IX1's own label-order bug (42 of 290 Noul rows list `true` first). The
+    release's fits stand; "keep T = 1" stands.
+  - **Deviation:** merge `fea2f016b` on the public integration branch lacks a DCO sign-off. History is not rewritten;
+    noted here.
+
 - 2026-10-01 16:00 — **DEV2.0 auto_map (4c0a68cd): 0.6B / 0.8B / 2B / 4B published; 9B / 27B finishing.**
   - **Parity.** AutoModel equals native on all 11,053 answers per model: 0 changes, max drift 0.0, under Transformers
     5.17.0 and 5.18.0. Hub smoke tests in fresh caches pass.
