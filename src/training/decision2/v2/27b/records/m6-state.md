@@ -1,6 +1,7 @@
 # ~27B M6 state (resume file)
 
-Updated: 2026-10-01 18:50 UTC+8 (10:50Z; M6 worker 1, started 06:17Z; hand-off below).
+Updated: 2026-10-01 19:05 UTC+8 (11:05Z; continuation worker 2 a56025bb, started 10:44Z; worker 1 11741ee2 ran
+06:17–10:55Z).
 Prereg `m6-prereg-2026-10-01.md` (`90d38aba7`) with amendments 1 (`b74685ddb`) and 2 (`35492ac25`). Mirrors: M6-IB /
 M6-IB2 seeds, chains and watchers run from **`b74685ddb`**, M6-IBX's from **`d8edcf4e1`** (on node A / B / D); step 0
 ran from `20af2e4a1`.
@@ -155,6 +156,13 @@ is still fixing the long-input runtime bug and staging its M5-L128 Index diagnos
 
 ## Poll log (newest first)
 
+- 11:03Z (worker 2, poll 1): M6-IB 1,147 / 1,105 of 5,081 (projection 13.2 / 13.7 h), M6-IB2 1,127 / 1,126 of 6,614
+  (17.4 / 17.5 h), M6-IBX 863 / 851 of 4,997 (13.8 / 14.0 h). Six containers, three chains, four node A watchers and
+  two node D relays alive; node D data disk 479 GB used. **GPU-h ≈ 17.8** (closed 1.136 + running ≈ 16.7).
+  G5 hedge (M6-IB2PN) assessment started: PN1-r2 TRAIN (`c1cec06b…`, 4,364 rows, cleared for released models in
+  `m4-dq-results-2026-09-30.md`) shares 0 ids, groups, input hashes, Tatoeba sentence ids or sentence texts with
+  PN1 dev; G0 Index-row scan 0 groups; short-text scan vs IB1 + IB2 DEV, SELECT700, CAL698 0 hits (node A panel /
+  Index scan running). Node D GPU2–7 released by IX1 and idle.
 - 10:41Z (worker 1's last poll): M6-IB 999 / 966 of 5,081 (13.1 / 13.5 h; SELECT700 at 636 .8396 / .8331), M6-IB2 985 /
   978 of 6,614 (17.2 / 17.3 h; at 827 .8668 / .8856), M6-IBX 728 / 715 of 4,997 (13.5 / 13.7 h; at 625 .8113 / .8596).
   Six containers, three chains, four node A watchers and two node D relays alive. **GPU-h:** closed receipts 1.136
