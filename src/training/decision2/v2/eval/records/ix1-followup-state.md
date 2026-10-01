@@ -10,6 +10,20 @@ shapes and GPU-hours.
 
 ## Now
 
+- 07:15Z — **Budget halved to 2^30 gated-delta elements** (`e876fbefc`; 27B 174,762 padded tokens, 9B 262,143,
+  0.8B 524,287): forwards between about 2^30 and 2^31 elements also hung or crashed in the HIP runtime on 27B
+  (cause not isolated; passed only with serialized kernels). Restaged 0.8B / 9B / 27B packages under `fix2/` (only
+  `decision2/qwen.py` differs from `e13a40f8` / `b4f65fa8` / `4e89288d`).
+  - synthetic request, 32 questions, long prompt 14,224 (twice) / 18,000 / 22,676 tokens: all pass (2 forwards
+    each, 0 invalid, 32 / 32 equal to the question asked alone, max drift ≤ 0.015).
+  - both real requests (twice each): valid, 32 / 32 equal to alone (max drift 0.0034 / 0.0022), peak 95.2 / 93.4 GiB.
+  - parity (typed-final 1,600, css15 6,547, public231 231, mlx-diag 2,275): 0.8B and 9B pass (0 changes, 0 missing,
+    0 input mismatches, max drift < 1e-15); 27B running (node D GPU2). Latency benches (runtime_bench, 400 typed-final
+    after 400 warm-up, old vs new on one GPU) queued: 0.8B → 9B on GPU5, 27B on GPU2 after its parity.
+  - B running: M5-L128 (`fix2/` package, manifest `c5a031ce…` on both nodes) 8 shards: node D GPU0, 1, 4, 6, 7, 3
+    (shards 0–3, 6, 7), node C GPU6, 7 (shards 4, 5). Node C GPU1–5 are now leased by the 9B M9 track.
+  - C note copied to node D `ixC/` (sha `6d322161…`).
+  - The 06:55Z entry below was written at about 06:40Z.
 - 06:55Z — Fix `8e6bdfc33` mirrored (`7b57c77c4`, then `12b27df7a` with the launcher's diagnostic packages).
   Verification so far (DEV2.0-27B `4e89288d` restaged with the fixed `qwen.py`; only that file differs):
   - synthetic request (generated text, 32 questions, long prompt 14,224 / 22,676 tokens): **unfixed runtime fails**
@@ -42,8 +56,8 @@ shapes and GPU-hours.
 | Step | Where | Status |
 | --- | --- | --- |
 | A repro: shapes, growing subsets, other sizes, isolated kernel | node C GPU1–4, node D GPU2–3 | done |
-| A fix in `v2/release/runtime/qwen.py` (separate commit) + CPU tests + GPU synthetic test | worktree | written |
-| A verify: both requests, synthetic before / after, parity 0.8B / 9B / 27B, latency | nodes C / D | |
+| A fix in `v2/release/runtime/qwen.py` (separate commits `8e6bdfc33`, `e876fbefc`) + CPU tests + GPU synthetic test | worktree | done |
+| A verify: both requests, synthetic before / after, parity 0.8B / 9B / 27B, latency | node D | requests, synthetic, 0.8B / 9B parity done; 27B parity, benches running |
 | A merge + release hand-off record | worktree | |
-| B package (fixed runtime, M5 checkpoint), full panel, dual score, per-family vs A20r | node C / D | |
-| C note | private folders | |
+| B package (fixed runtime, M5 checkpoint), full panel, dual score, per-family vs A20r | node C / D | running |
+| C note | private folders | done |
