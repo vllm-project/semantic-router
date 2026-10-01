@@ -8,7 +8,24 @@ counts, hashes and GPU-hours.
 
 ## Now
 
-- 2026-10-01 03:45Z — **Full runs live.** 27B: 8 shards on node D GPU0–7 (`runs/DEV2.0-27B`), ≈ 1.4 rows/s per GPU,
+- 2026-10-01 04:25Z — **4B and 9B done, merged, dual-scored.** Both: 120,226 rows = 120,224 `ok` + 2 `unsupported`
+  (`max_length_exceeded`; the external report's count), 0 errors; port vs kit `87d4650b` gate PASS (per-benchmark
+  ≤ 5e-5, headline ≤ 0.002); **0 of 38 benchmarks differ from the external report by more than 1 skill point**
+  (values private). GPU-h: 4B 2.17, 9B 2.71. 2B running on node C (then 0.8B, 0.6B by per-GPU chain); 27B on node D.
+  - **27B device faults:** two requests (ToolRet, 32 questions, ≈ 18–19.5K tokens) aborted their processes with a
+    GPU memory access fault (no-retry page fault) at 03:42Z, while four other 27B processes were loading; one
+    resumed fine past its row (transient), the other faulted again on the same row on the same GPU (node D GPU3)
+    with nothing else loading. That shard resumes without that one request (`skipped.json`); the request will be
+    rerun alone on another GPU to tell a row defect from a GPU defect. One further 27B ToolRet request
+    (≈ 15K tokens) returned `invalid_model_output` (a non-finite or malformed head output); it stays an error unless
+    a resume answers it.
+  - **Contamination audit (CPU, node C) done:** each model's training files from its release / gate records,
+    hash-checked (0.6B six M6 files; 0.8B `d1dc33fc…`; 2B `13804ac6…`; 4B `c7d51219…`; 9B `a66131b1…`; 27B A20r
+    `a20.train.jsonl` `4aa0dc96…`; plus the Decision 1.0 decoder corpora behind the 0.8B–9B parents). Planted control
+    200 / 200. **Item duplicates (all question-specific text present in training): 0.6B 0, 0.8B 1, 2B 0, 4B 0, 9B 0,
+    27B 0; 1.0 corpora 1.** Familiar-text matches (a premise, evidence passage or board position seen in training,
+    without the hypothesis / claim) are reported separately (ANLI, HoVer, ChessBench).
+- 03:45Z — **Full runs live.** 27B: 8 shards on node D GPU0–7 (`runs/DEV2.0-27B`), ≈ 1.4 rows/s per GPU,
   ETA ≈ 06:40Z. 4B: 7 shards on node C GPU1–7 (`runs/DEV2.0-4B`), ≈ 4–5 rows/s per GPU, ETA ≈ 04:35Z; then 9B, 2B,
   0.8B, 0.6B on node C. Kit runner + adapter at mirror `a898de429`, frozen caches from the parity runs.
   - Load profile, 27B: ≈ 98 GB host RAM per process for ≈ 30 s, then ≈ 6 GB; four concurrent loads left ≥ 770 GiB
@@ -39,9 +56,9 @@ counts, hashes and GPU-hours.
 - [x] Suite verify C / D
 - [x] Released-package engine adapter + tests (`publication/decision_index_release_engine.py`)
 - [x] 86-request parity gate: 27B, 4B, 9B, 2B, 0.8B, 0.6B
-- [ ] Full runs: 27B (D), 4B + 9B (C), then 2B, 0.8B, 0.6B
-- [ ] Dual scoring + external comparison
-- [ ] Contamination audit (CPU)
+- [ ] Full runs: 27B (D, running), 4B + 9B (C, done), then 2B (running), 0.8B, 0.6B
+- [ ] Dual scoring + external comparison (4B, 9B done)
+- [x] Contamination audit (CPU); override-adjusted values pending the last merges
 - [ ] Calibration study
 - [ ] Gap analysis + data-plan input (private)
 
@@ -53,8 +70,10 @@ counts, hashes and GPU-hours.
 | Voided 27B parity attempt | 0.06 |
 | Parity gates (6 packages; reference + kit pass) | 0.30 |
 | Aborted shard starts (load only) | 0.04 |
-| Full runs | running |
-| **Total so far** | **≈ 0.41** |
+| Full run 4B (7 GPUs) | 2.17 |
+| Full run 9B (7 GPUs) | 2.71 |
+| Full runs 27B, 2B, 0.8B, 0.6B | running |
+| **Total so far** | **≈ 5.29** |
 
 ## Hand-off notes
 
