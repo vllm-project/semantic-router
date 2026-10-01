@@ -8,6 +8,18 @@ GPU-h). Preregistration [`dec-m10-prereg-2026-10-01.md`](dec-m10-prereg-2026-10-
 
 ## Now
 
+- 2026-10-01 ≈13:45 UTC+8 (05:45Z) — **`m10-4b-LH` passes successor items 1–7; hand-offs written; NT2 finishing.**
+  - Wave-1 gates (`m10/select/4b-finalists-w1.json`, node A): finalist `4b-LH`; FB fails the typed Score floor
+    (342 < 350); LT2 fails HT-DEV v2 (FLAG −.024).
+  - Formal (node F GPU3): v3 67.34 vs 63.15, +4.19 [+0.10, +9.88]; vs Decider 4B +5.46 [+0.28, +8.11], vs Jet v6.2
+    +6.97 [+0.98, +11.13]; mlx-diag card-eligible +.0377 [+.0256, +.0498]; items 1–7 PASS
+    (`formal/m10/successor/4b-m10-4b-LH.md` on node A). Item 8 pending (needs a release-format package).
+  - Records: interim results `0064f6c62`; hand-offs [`dec-m10-handoff-2026-10-01.md`](dec-m10-handoff-2026-10-01.md)
+    (release package → C1 item 8 → IX1); integration `39096d7b5`; gist 04 updated.
+  - Label-token runtime parity re-run on the merged BF16-resident runtime: PASS (1,600 / 1,600, drift 0.0).
+  - NT2 at 623–665 / 787 (ETA ≈ 05:52Z); post chain `post-NT2` on node E GPU3 (soup on CPU, then readouts); then
+    node-A scoring and the wave-2 rules (`4b-finalists-w2.json`).
+
 - 2026-10-01 ≈13:05 UTC+8 (05:05Z) — **First-wave seeds done; FB and LH read and scored; LT2 reading; NT2 training.**
   - Per-seed BEST SELECT700: LH .895 / .890 / .905, FB .897 / .906 / .913 (N4XF's seeds from Nox ≈ .88–.90); LT2
     BESTs at the final updates; LoRA merges agree with the adapters on 128 / 128 SELECT rows (drift ≈ .011).
