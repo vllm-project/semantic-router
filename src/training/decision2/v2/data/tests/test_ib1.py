@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from training.model.data import canonical, validate_row
-from v2.data.ib1 import build, index_guard, review
+from v2.data.ib1 import audit, build, index_guard, review
 from v2.data.ib1 import families as fam
 
 
@@ -193,6 +193,44 @@ class RebalanceTest(unittest.TestCase):
         kept = build.position_band(mixed, "s")
         self.assertEqual(sum(len(r["options"]) == 6 for r in kept), 120)
 
+    def test_round2_constructions(self):
+        three = [{"key": f"o{i}", "description": str(i)} for i in range(3)]
+
+        def row(i, family="sentfin", label=None, domain=None):
+            return {
+                "id": f"{family}{i}",
+                "family": family,
+                "label": i % 3 if label is None else label,
+                "options": three,
+                "audit_metadata": {"ib1": {"domain": domain}},
+            }
+
+        neutral = build.CONSTRUCTIONS["sentfin-neutral"][2]
+        rows = [row(i) for i in range(30)]
+        self.assertEqual(
+            build.construction(rows[neutral], ["sentfin-neutral"]), "sentfin-neutral"
+        )
+        self.assertIsNone(build.construction(rows[neutral], ["wands-partial"]))
+        shakespeare = row(0, "sumedit", 0, "shakespeare")
+        self.assertEqual(
+            build.construction(shakespeare, sorted(build.CONSTRUCTIONS)),
+            "sumedit-shakespeare",
+        )
+        kept = [r for r in rows if r["label"] != neutral]
+        self.assertEqual(build.equal_labels(kept, "s"), [])
+        balanced = build.rebalance(kept, ["sentfin-neutral"])
+        self.assertEqual(len(balanced), 20)
+        self.assertNotIn(neutral, {r["label"] for r in balanced})
+        result, fails = audit.balance(balanced, ["sentfin-neutral"])
+        self.assertEqual(fails, [])
+        result, fails = audit.balance(
+            balanced + rows[neutral : neutral + 1], ["sentfin-neutral"]
+        )
+        self.assertEqual(fails, ["sentfin"])
+        self.assertEqual(
+            result["sentfin"]["dropped_constructions_present"], ["sentfin-neutral"]
+        )
+
 
 class IndexGuardTest(unittest.TestCase):
     def test_rules_and_controls(self):
@@ -281,6 +319,22 @@ class ReviewTest(unittest.TestCase):
             canonical(item) for packet in sample["packets_r1"] for item in packet
         )
         self.assertNotIn(rows[0]["source"] + '"', text)
+
+    def test_round2_sample_is_fresh(self):
+        rows = self.rows(per=300)
+        first = review.review_sample(rows, "x", [], set())
+        second = review.review_sample(rows, "x", first["key"], set(), 2)
+        self.assertEqual(second["sample"]["round"], 2)
+        self.assertEqual(second["sample"]["per_family"], 108)
+        self.assertTrue(all(k["rid"].startswith("t") for k in second["key"]))
+        self.assertFalse(
+            {k["group_id"] for k in first["key"]}
+            & {k["group_id"] for k in second["key"]}
+        )
+        short = self.rows(("a",), 300) + self.rows(("b",), 10)
+        topped = review.review_sample(short, "x", [], set(), 2)
+        self.assertEqual(topped["sample"]["n"], 216)
+        self.assertEqual(topped["sample"]["sampled"], {"a": 206, "b": 10})
 
     def test_screen_drop_rule_and_verdict(self):
         rows = self.rows(("a",), 20)

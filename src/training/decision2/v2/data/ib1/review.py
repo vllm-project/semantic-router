@@ -62,6 +62,28 @@ SALT = "ib1-review-v1"
 PACKET_SALT = "ib1-packet-v1"
 R2_SALT = "ib1-review-r2-order-v1"
 R3_SALT = "ib1-review-r3-order-v1"
+# Stage-R settings per round (amendment 2 §C): minimum per family, minimum total, sample / packet / R2-order /
+# R3-order salts, item-id prefix.
+ROUNDS: dict[int, dict[str, Any]] = {
+    1: {
+        "min_per_family": REVIEW_MIN_PER_FAMILY,
+        "min_total": REVIEW_MIN_TOTAL,
+        "salt": SALT,
+        "packet_salt": PACKET_SALT,
+        "r2_salt": R2_SALT,
+        "r3_salt": R3_SALT,
+        "prefix": "q",
+    },
+    2: {
+        "min_per_family": 18,
+        "min_total": 216,
+        "salt": "ib1-r2-review-v1",
+        "packet_salt": "ib1-r2-packet-v1",
+        "r2_salt": "ib1-r2-review-r2-order-v1",
+        "r3_salt": "ib1-r2-review-r3-order-v1",
+        "prefix": "t",
+    },
+}
 PACKETS = 2
 FIELDS = ("rid", "task_type", "instructions", "state", "options")
 THRESHOLDS = {
@@ -87,15 +109,24 @@ def draw(
     salt: str,
     skip_ids: set[str] = frozenset(),
     skip_groups: set[str] = frozenset(),
+    present_classes: bool = False,
 ) -> list[Mapping[str, Any]]:
-    """``per_family`` rows per family, one per group, gold cells capped at ceil(per_family / options)."""
+    """``per_family`` rows per family, one per group, gold cells capped at ceil(per_family / options).
+
+    With ``present_classes`` the cap divides by the number of gold labels present in the family instead, so a
+    family whose option set keeps a never-gold class still fills its quota.
+    """
+    labels: dict[str, set[int]] = collections.defaultdict(set)
+    for row in rows:
+        labels[row["family"]].add(row["label"])
     taken: collections.Counter = collections.Counter()
     cells: collections.Counter = collections.Counter()
     used: set[str] = set(skip_groups)
     picked = []
     for row in sorted(rows, key=lambda r: sha(f"{salt}:{r['id']}")):
         cell = (row["family"], row["label"])
-        cap = math.ceil(per_family / len(row["options"]))
+        width = len(labels[row["family"]]) if present_classes else len(row["options"])
+        cap = math.ceil(per_family / width)
         if (
             row["id"] in skip_ids
             or taken[row["family"]] >= per_family
@@ -219,22 +250,33 @@ def review_sample(
     rows_sha256: str,
     screen_key: Sequence[Mapping[str, Any]],
     drop: set[str],
+    round_: int = 1,
 ) -> dict[str, Any]:
+    cfg = ROUNDS[round_]
     eligible = [r for r in rows if r["family"] not in drop]
     families = sorted({r["family"] for r in eligible})
-    per_family = max(REVIEW_MIN_PER_FAMILY, math.ceil(REVIEW_MIN_TOTAL / len(families)))
-    picked = draw(
-        eligible,
-        per_family,
-        SALT,
-        skip_ids={k["id"] for k in screen_key},
-        skip_groups={k["group_id"] for k in screen_key},
-    )
-    items, key = packets(picked, PACKET_SALT, "q")
+    per_family = max(cfg["min_per_family"], math.ceil(cfg["min_total"] / len(families)))
+    while True:
+        picked = draw(
+            eligible,
+            per_family,
+            cfg["salt"],
+            skip_ids={k["id"] for k in screen_key},
+            skip_groups={k["group_id"] for k in screen_key},
+            present_classes=round_ > 1,
+        )
+        if round_ == 1 or len(picked) >= cfg["min_total"]:
+            break
+        if per_family >= max(
+            collections.Counter(r["family"] for r in eligible).values()
+        ):
+            raise ValueError(f"cannot reach {cfg['min_total']} review rows")
+        per_family += 1
+    items, key = packets(picked, cfg["packet_salt"], cfg["prefix"])
     size = math.ceil(len(items) / PACKETS)
     packets_r1 = [items[i : i + size] for i in range(0, len(items), size)]
     packets_r2 = [
-        sorted(chunk, key=lambda item: sha(f"{R2_SALT}:{item['rid']}"))
+        sorted(chunk, key=lambda item: sha(f"{cfg['r2_salt']}:{item['rid']}"))
         for chunk in packets_r1
     ]
     return {
@@ -245,7 +287,8 @@ def review_sample(
             "schema": "decision2.ib1.review-sample.v1",
             "rows_sha256": rows_sha256,
             "rows": len(rows),
-            "salt": SALT,
+            "round": round_,
+            "salt": cfg["salt"],
             "per_family": per_family,
             "n": len(key),
             "families": families,
@@ -261,7 +304,7 @@ def review_sample(
                     ).items()
                 )
             ),
-            "screened_rows_excluded": len(screen_key),
+            "excluded_key_rows": len(screen_key),
             "thresholds": THRESHOLDS,
         },
     }
@@ -369,12 +412,14 @@ def score(
             for k in (
                 "rows_sha256",
                 "rows",
+                "round",
                 "salt",
                 "n",
                 "per_family",
                 "families",
                 "families_excluded",
             )
+            if k in sample_info
         },
         "thresholds": THRESHOLDS,
         "verdict": first,
@@ -448,7 +493,8 @@ def main(argv: list[str] | None = None) -> int:
     s2.add_argument("--drop-ids-out", type=Path, required=True)
     r1 = sub.add_parser("sample")
     r1.add_argument("--train", type=Path, required=True)
-    r1.add_argument("--screen-key", type=Path, required=True)
+    r1.add_argument("--screen-key", type=Path, action="append", required=True)
+    r1.add_argument("--round", type=int, choices=sorted(ROUNDS), default=1)
     r1.add_argument("--drop-families", type=Path, action="append", default=[])
     r1.add_argument("--out-dir", type=Path, required=True)
     r2 = sub.add_parser("splits")
@@ -458,6 +504,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--r1", type=Path, action="append", required=True)
         p.add_argument("--r2", type=Path, action="append", required=True)
     r2.add_argument("--packets", type=Path, action="append", required=True)
+    r2.add_argument("--round", type=int, choices=sorted(ROUNDS), default=1)
     r2.add_argument("--out", type=Path, required=True)
     r3.add_argument("--sample", type=Path, required=True)
     r3.add_argument("--r3", type=Path, action="append", default=[])
@@ -491,8 +538,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "sample":
         rows, digest = train_rows(args.train)
+        excluded = [item for path in args.screen_key for item in read_jsonl(path)]
         built = review_sample(
-            rows, digest, read_jsonl(args.screen_key), read_drop(args.drop_families)
+            rows, digest, excluded, read_drop(args.drop_families), args.round
         )
         args.out_dir.mkdir(mode=0o700)
         for order in ("r1", "r2"):
@@ -517,7 +565,9 @@ def main(argv: list[str] | None = None) -> int:
         wanted = split_rids(key, ans1, ans2)
         packet = [
             by_rid[rid]
-            for rid in sorted(wanted, key=lambda rid: sha(f"{R3_SALT}:{rid}"))
+            for rid in sorted(
+                wanted, key=lambda rid: sha(f"{ROUNDS[args.round]['r3_salt']}:{rid}")
+            )
         ]
         assert_blind(packet, FIELDS, {row["id"] for row in key})
         write_packet(args.out, packet)

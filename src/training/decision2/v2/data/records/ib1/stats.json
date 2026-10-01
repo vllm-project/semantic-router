@@ -63,17 +63,16 @@
    },
    "sentfin": {
     "labels": {
-     "0": 248,
-     "1": 248,
-     "2": 248
+     "0": 247,
+     "2": 247
     },
     "pass": true,
-    "rows": 744,
+    "rows": 494,
     "shares_by_option_count": {
      "3": [
-      0.3333,
-      0.3333,
-      0.3333
+      0.5,
+      0.0,
+      0.5
      ]
     },
     "small_strata_reported": []
@@ -92,15 +91,15 @@
    },
    "snips_rel": {
     "labels": {
-     "0": 8,
-     "1": 8
+     "0": 6,
+     "1": 6
     },
     "mean_state_chars": {
-     "0": 697.6,
-     "1": 703.8
+     "0": 701.0,
+     "1": 710.5
     },
     "pass": true,
-    "rows": 16
+    "rows": 12
    },
    "snips_sel": {
     "labels": {
@@ -120,18 +119,6 @@
      ]
     },
     "small_strata_reported": []
-   },
-   "sumedit": {
-    "labels": {
-     "0": 22,
-     "1": 22
-    },
-    "mean_state_chars": {
-     "0": 5190.5,
-     "1": 5141.9
-    },
-    "pass": true,
-    "rows": 44
    }
   },
   "sizes": {
@@ -178,12 +165,12 @@
      "rows": 411
     },
     "sentfin": {
-     "groups": 624,
+     "groups": 426,
      "languages": {
-      "en": 744
+      "en": 494
      },
-     "native_tokens": 94763,
-     "rows": 744
+     "native_tokens": 63051,
+     "rows": 494
     },
     "sms": {
      "groups": 62,
@@ -194,12 +181,12 @@
      "rows": 62
     },
     "snips_rel": {
-     "groups": 16,
+     "groups": 12,
      "languages": {
-      "en": 16
+      "en": 12
      },
-     "native_tokens": 5095,
-     "rows": 16
+     "native_tokens": 3850,
+     "rows": 12
     },
     "snips_sel": {
      "groups": 309,
@@ -208,37 +195,34 @@
      },
      "native_tokens": 63722,
      "rows": 310
-    },
-    "sumedit": {
-     "groups": 2,
-     "languages": {
-      "en": 44
-     },
-     "native_tokens": 69788,
-     "rows": 44
     }
    },
-   "groups": 1912,
+   "groups": 1708,
    "language": {
     "ar": 43,
-    "en": 2621
+    "en": 2323
    },
-   "native_tokens": 509711,
-   "rows": 2664,
+   "native_tokens": 406966,
+   "rows": 2366,
    "task_type": {
-    "choice": 2542,
-    "noul": 122
+    "choice": 2292,
+    "noul": 74
    },
    "tokens_missing": 0
   }
  },
+ "dropped_constructions": [
+  "sentfin-neutral",
+  "sumedit-shakespeare",
+  "wands-partial"
+ ],
  "inputs": {
-  "dev": "b412ab9312e834d45a1aef910b8921ebd1a25b5b0ddc5d226e6230a8b2a031cd",
+  "dev": "eefab90932fb07fb6afaee0853fc3a98d1d05cf14e5478f319e3d09b29bc925d",
   "tokens": [
-   "951c7d4002be19da50524a4e25aaaa79a5391d35bb6b774ca32f6d3419fe7574",
-   "a29eca26ab4e9046915c486a90a8287c22dc9cd5590a3f8c8d35a51661a5d8be"
+   "26c8145e54631513cff8f479531dd0b5233b89d6a7074351ef97ddde1449cd0a",
+   "61c2dbd3e8fb9ac1ad4b330c7e69dd95564a6c7134b7487195c41b0565965f8d"
   ],
-  "train": "7f2d00031298fa6812222d74c62fa7580ab41b89942e39edea897363bfa1ae80"
+  "train": "f44d7f5fe9ccaf63386fc213394282466f2c26c6a2da2945b32207adc8c62c5c"
  },
  "schema": "decision2.ib1.stats.v1",
  "shared_groups": 0,
@@ -246,11 +230,11 @@
   "balance": {
    "args": {
     "labels": {
-     "0": 2596,
-     "1": 2596
+     "0": 2592,
+     "1": 2592
     },
     "pass": true,
-    "rows": 5192
+    "rows": 5184
    },
    "copa": {
     "gold_a_share": 0.4852,
@@ -265,20 +249,20 @@
    "csqa": {
     "labels": {
      "0": 995,
-     "1": 1015,
+     "1": 1013,
      "2": 1033,
      "3": 945,
      "4": 995
     },
     "pass": true,
-    "rows": 4983,
+    "rows": 4981,
     "shares_by_option_count": {
      "5": [
-      0.1997,
-      0.2037,
-      0.2073,
-      0.1896,
-      0.1997
+      0.1998,
+      0.2034,
+      0.2074,
+      0.1897,
+      0.1998
      ]
     },
     "small_strata_reported": []
@@ -305,17 +289,16 @@
    },
    "sentfin": {
     "labels": {
-     "0": 2386,
-     "1": 2386,
-     "2": 2386
+     "0": 2389,
+     "2": 2389
     },
     "pass": true,
-    "rows": 7158,
+    "rows": 4778,
     "shares_by_option_count": {
      "3": [
-      0.3333,
-      0.3333,
-      0.3333
+      0.5,
+      0.0,
+      0.5
      ]
     },
     "small_strata_reported": []
@@ -349,55 +332,54 @@
      "0": 663,
      "1": 679,
      "2": 657,
-     "3": 674
+     "3": 673
     },
     "pass": true,
-    "rows": 2673,
+    "rows": 2672,
     "shares_by_option_count": {
      "4": [
-      0.248,
-      0.254,
-      0.2458,
-      0.2522
+      0.2481,
+      0.2541,
+      0.2459,
+      0.2519
      ]
     },
     "small_strata_reported": []
    },
    "sumedit": {
     "labels": {
-     "0": 640,
-     "1": 640
+     "0": 288,
+     "1": 288
     },
     "mean_state_chars": {
-     "0": 4716.5,
-     "1": 4763.2
+     "0": 3805.2,
+     "1": 3889.9
     },
     "pass": true,
-    "rows": 1280
+    "rows": 576
    },
    "w2c": {
-    "gold_a_share": 0.528,
-    "gold_longer_share": 0.5191,
+    "gold_a_share": 0.5273,
+    "gold_longer_share": 0.5183,
     "labels": {
-     "0": 255,
-     "1": 228
+     "0": 251,
+     "1": 225
     },
     "pass": true,
-    "rows": 483
+    "rows": 476
    },
    "wands": {
     "labels": {
-     "0": 2119,
-     "1": 2119,
-     "2": 2119
+     "0": 2034,
+     "2": 2034
     },
     "pass": true,
-    "rows": 6357,
+    "rows": 4068,
     "shares_by_option_count": {
      "3": [
-      0.3333,
-      0.3333,
-      0.3333
+      0.5,
+      0.0,
+      0.5
      ]
     },
     "small_strata_reported": []
@@ -406,12 +388,12 @@
   "sizes": {
    "by_family": {
     "args": {
-     "groups": 2596,
+     "groups": 2592,
      "languages": {
-      "en": 5192
+      "en": 5184
      },
-     "native_tokens": 1370107,
-     "rows": 5192
+     "native_tokens": 1367569,
+     "rows": 5184
     },
     "copa": {
      "groups": 439,
@@ -422,12 +404,12 @@
      "rows": 878
     },
     "csqa": {
-     "groups": 1670,
+     "groups": 1669,
      "languages": {
-      "en": 4983
+      "en": 4981
      },
-     "native_tokens": 766686,
-     "rows": 4983
+     "native_tokens": 766375,
+     "rows": 4981
     },
     "isarc": {
      "groups": 874,
@@ -447,12 +429,12 @@
      "rows": 3584
     },
     "sentfin": {
-     "groups": 6066,
+     "groups": 4221,
      "languages": {
-      "en": 7158
+      "en": 4778
      },
-     "native_tokens": 911407,
-     "rows": 7158
+     "native_tokens": 609160,
+     "rows": 4778
     },
     "sms": {
      "groups": 1152,
@@ -471,48 +453,48 @@
      "rows": 2700
     },
     "snips_sel": {
-     "groups": 2671,
+     "groups": 2670,
      "languages": {
-      "en": 2673
+      "en": 2672
      },
-     "native_tokens": 549781,
-     "rows": 2673
+     "native_tokens": 549571,
+     "rows": 2672
     },
     "sumedit": {
-     "groups": 56,
+     "groups": 29,
      "languages": {
-      "en": 1280
+      "en": 576
      },
-     "native_tokens": 1712091,
-     "rows": 1280
+     "native_tokens": 531648,
+     "rows": 576
     },
     "w2c": {
-     "groups": 473,
+     "groups": 466,
      "languages": {
-      "en": 483
+      "en": 476
      },
-     "native_tokens": 214085,
-     "rows": 483
+     "native_tokens": 210142,
+     "rows": 476
     },
     "wands": {
-     "groups": 391,
+     "groups": 362,
      "languages": {
-      "en": 6357
+      "en": 4068
      },
-     "native_tokens": 3053991,
-     "rows": 6357
+     "native_tokens": 1955932,
+     "rows": 4068
     }
    },
-   "groups": 22669,
+   "groups": 20755,
    "language": {
     "ar": 410,
-    "en": 36904
+    "en": 31513
    },
-   "native_tokens": 10468429,
-   "rows": 37314,
+   "native_tokens": 7880678,
+   "rows": 31923,
    "task_type": {
-    "choice": 32182,
-    "noul": 5132
+    "choice": 27495,
+    "noul": 4428
    },
    "tokens_missing": 0
   }
