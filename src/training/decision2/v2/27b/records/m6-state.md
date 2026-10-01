@@ -231,6 +231,12 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 16:20Z: **C1 content recheck r1 PASS** (custodian, record `v2/eval/records/c1-recheck-r1-2026-10-01.md`,
+  `36f93b7cc`, verdict `0823a1a8…`): IB1-r3, IB2, PN1-r2 and `a20ib12` expose 0 scored C1 items; the registry lists
+  M6-IB, M6-IBX, M6-IB2 and M6-IB2PN with exposure 0, so C1 content blocks item 8 for no M6 arm. Integration merged
+  (signed). Runbook §1 / §2 updated. Poll 5 (16:10Z): all alive, guard alive; **DEV2.0-27B `main` moved to
+  `e7b4a372` at 15:41Z** (card-only revision from `f85ea4e17` on top of `09280791`); the runbook's base revision and
+  spec now name it.
 - 16:06Z (poll 4 at 16:03Z): all alive, plus the new contrast guard (node B PID 2868454; see "Infrastructure").
   M6-IB 3,107 / 2,948 (13.5 / 14.0 h; ETA 21:27Z / 21:59Z); M6-IB2 2,999 / 2,996 (17.8 / 17.8 h); M6-IBX 2,695 /
   2,659 (13.8 / 14.0 h); M6-IB2PN 1,621 / 1,595 (18.9 / 18.7 h). **GPU-h ≈ 56.9** (closed 1.314 + running full runs
