@@ -12,7 +12,8 @@ loads the package once and runs ``system_one`` on growing subsets of each reques
 question plus the first k - 1 others); every attempt is logged and fsynced before it starts, so
 a GPU memory fault still leaves the failing shape in the log. ``--trace`` synchronizes after every
 decoder sub-module and records the first module whose output is not finite (and, on a fault, the
-last module entered). The log holds answers and stays private.
+last module entered); ``--alone`` then asks every question on its own. The log holds answers and
+stays private.
 """
 
 from __future__ import annotations
@@ -224,6 +225,17 @@ def probe(args) -> None:
             if trace:
                 record["first_nonfinite"] = trace["first_nonfinite"]
             log(record)
+        if args.alone:
+            for qid, question in row["questions"].items():
+                answers, _ = backend.system_one(row["state"], {qid: question})
+                log(
+                    {
+                        "event": "alone",
+                        "request": request_id(row, index),
+                        "question": qid,
+                        "answer": answers[qid],
+                    }
+                )
     log({"event": "done"})
 
 
@@ -247,6 +259,7 @@ def main() -> None:
     p.add_argument("--counts")
     p.add_argument("--trace", action="store_true")
     p.add_argument("--answers", action="store_true")
+    p.add_argument("--alone", action="store_true")
     p.add_argument("--base-path", type=Path)
     p.add_argument("--device", default="cuda:0")
     args = parser.parse_args()
