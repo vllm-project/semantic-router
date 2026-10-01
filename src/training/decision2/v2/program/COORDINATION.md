@@ -205,6 +205,23 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 18:25 — **9B M9 stage 1: no finalist — the 4B from-base LoRA recipe does NOT carry to 9B; stage 2 is
+  running; stage 3 (K-a13 + IB) added; continuation worker launched.** Records: prereg `8570a5896`, stage 1
+  `8ab82f069`, gist 05; integration `d75b54411`; 16.3 of 120 GPU-h.
+  - **L9** (rank-128 LoRA from Qwen3.5-9B-Base): typed .937, but it fails three gates: HT-DEV v2 −.031 [−.046, −.018]
+    FLAG, the Noul floor (330 < 334), and the yes-bias guard (+.042).
+  - **L9-Lux** (the same LoRA on Lux 1.0): HT-DEV v2 TIE −.006, but the yes-bias guard fails at +.086.
+  - **Retention.** DEV2.0-9B (.792) already matches or exceeds the base (.781), so there is no lost knowledge to
+    recover (unlike 4B). L9's gain is GSM8K only, likely in-distribution; MMLU falls.
+  - **Lesson:** the from-base recipe helps where the 1.0 lineage lost base capabilities (4B), not universally. 2B /
+    0.8B (M11) must be judged on their own retention probes.
+  - **Stage 2** (unattended until ≈ 12:45Z): L9IB (L9 + IB1-r3 + IB2) and L9IBX (the transfer-only ablation). The
+    formal step needs a manual GO.
+  - **Stage 3, added by the coordinator (amendment 3):** **K-a13IB**, the released 9B recipe plus IB1-r3 + IB2, with
+    the K-a13IBX ablation. The 9B deficits are coverage families, so this adds breadth on the proven recipe; the
+    yes-bias guard and Noul floor apply.
+  - **Continuation worker b23ed249.** A 9B successor must build on top of the 9B forward-budget fix revision.
+
 - 2026-10-01 18:10 — **All six DEV2.0 repos support stock Transformers (`trust_remote_code`); unified `API.md`; the
   forward-budget fix round is queued (4c0a68cd).**
   - **Current `main` revisions:**
