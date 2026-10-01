@@ -205,6 +205,38 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 14:50 — **MoE-1 screen done: Gemma-4-26B-A4B-it continues, the Qwen3.5-35B-A3B cells stopped; Stage B
+  runs unattended from ~16:25; follow-up worker 72f00c98.** Records: `27b/records/moe-*`, gist 06c; integration
+  `e60db4605`.
+  - **Screen at update 892** (development proxy / HT-DEV v2):
+
+    | Cell | Proxy | HT-DEV v2 | Outcome |
+    | --- | ---: | --- | --- |
+    | dense A20r-s1 reference | 78.22 | .5634 | reference |
+    | Gemma-it | 72.82 | .5670, tie | continues, seed 2 started |
+    | Qwen-it | 69.69 | .5528 | stopped by the > 8-point rule (weak middle Score levels, CSS pilot −.10) |
+    | Qwen-Base | 69.75 | .5739 | stopped by the same rule |
+
+  - **Seeds.** Gemma s1 finished (BEST at update 2,676, 10.24 GPU-h); s2 ends ≈ 08:25Z.
+  - **Amendment 4** automates Stage B: soup → readout / CAL → development gates → frozen package → formal → items 1–7 →
+    beats-AutoJev.
+  - **Bugs fixed before use:**
+    - the CAL698 fitter dropped Gemma's BOS token (shared-module fix with a test; dense models unchanged);
+    - the formal driver pointed at peer run paths that do not exist.
+  - **Size and speed.** The soup loads 25.31B parameters with 3.90B active. At batch 1 it is *slower* than A20r (≈ 120
+    vs 84 ms median).
+  - **Licence.** Gemma 4 is Apache-2.0, so a derived release needs the licence text and a modification notice. The
+    release builder lacks a Gemma MoE profile (today only Qwen adapters).
+  - **Follow-up (72f00c98):**
+    - record the chain stages; the verdicts;
+    - **a private Index run of the frozen MoE package regardless of the verdict** (the 27B-class frontier entrant is a
+      full FT of this same base);
+    - a hand-off if it passes items 1–7 or clears the private frontier bar. Tier naming is the coordinator's call:
+      a successor, or a new base-named tier such as 26B-A4B.
+    - Then remove the MoE link key.
+  - **Leases.** Node B GPU6 is freed (owner archived as `owner.released-moe-*`; free for any track, e.g. 27B M6). Node
+    A GPU3 / GPU5 stay with MoE for its Index run.
+
 - 2026-10-01 14:45 — **4B M10 (c473a3b2): successor candidate `m10-4b-LH` → release; the recipe goes to 2B / 0.8B /
   9B.** Records: `dec-m10-results-2026-10-01.md`, `dec-m10-handoff-2026-10-01.md`, gist 04; integration
   `fb6ab3a4c`; 13.24 of 120 GPU-h.
