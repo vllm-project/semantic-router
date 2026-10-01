@@ -10,6 +10,14 @@ shapes and GPU-hours.
 
 ## Now
 
+- 08:20Z — **All three follow-ups done; hand-off.** Leases on node C GPU6–7 and node D GPU0–4, 6–7 set to
+  `status=released`; no IX1 container running.
+  - B: M5-L128 full panel complete: 120,226 / 120,226 ok, 0 errors, 9.00 GPU-h (launcher receipt); merged and
+    dual-scored (scorers pass, 0 flagged); per-family comparison with A20r written. Every value is in the private
+    folders only (local `private/ixB/`, node D `ixB/`).
+  - A GPU time (probes, verification, parity, benches): about 4 GPU-h, estimated from container wall times.
+  - Nothing went to HF. Open for others: the release track builds the runtime-only revisions listed in
+    `v2/release/records/dev2-runtime-forward-budget-2026-10-01.md`.
 - 07:50Z — C extra: the IX1 calibration study rerun with the fixed `calib.py` on all six sizes (old outputs kept as
   `*-v1-labelbug`; 12 rescorings, both scorers pass each). Results in the private C note only.
   - A20r baseline for B: its merged results with the two failed long requests replaced by the fixed-runtime
@@ -73,5 +81,5 @@ shapes and GPU-hours.
 | A fix in `v2/release/runtime/qwen.py` (separate commits `8e6bdfc33`, `e876fbefc`) + CPU tests + GPU synthetic test | worktree | done |
 | A verify: both requests, synthetic before / after, parity 0.8B / 9B / 27B, latency | node D | done |
 | A merge + release hand-off record | worktree | done (`fea2f016b`, `dev2-runtime-forward-budget-2026-10-01.md`) |
-| B package (fixed runtime, M5 checkpoint), full panel, dual score, per-family vs A20r | node C / D | running |
+| B package (fixed runtime, M5 checkpoint), full panel, dual score, per-family vs A20r | node C / D | done (private) |
 | C note | private folders | done |
