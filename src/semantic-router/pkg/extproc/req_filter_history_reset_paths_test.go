@@ -48,9 +48,12 @@ func enabledResetConfiguration() map[string]interface{} {
 	}
 }
 
-// Stored Responses history must be resolved before the context stage. If it
-// were left to dispatch, reset would remove nothing and the provider would
-// still receive the turns the policy was meant to drop.
+// The reset action transforms the conversation the provider will actually
+// receive, including turns retained behind previous_response_id. Signal
+// extraction resolves that history before the original-history snapshot is
+// captured, so the snapshot, the evidence bound to it, and the transformation
+// all describe the same conversation, and dispatch does not reintroduce what
+// the reset removed.
 func TestResponsesStoredHistoryIsResolvedBeforeReset(t *testing.T) {
 	router := &OpenAIRouter{}
 	request := &llmprotocol.Request{
@@ -59,20 +62,20 @@ func TestResponsesStoredHistoryIsResolvedBeforeReset(t *testing.T) {
 	}
 	ctx := storedResponsesContext(t, request)
 
-	bindHistoryResetPolicy(ctx)
-	router.resolveHistoryResetRequestHistory(ctx)
+	if _, err := router.extractRequestSignalSnapshot(ctx); err != nil {
+		t.Fatalf("signal extraction failed: %v", err)
+	}
 	if len(request.Messages) != 3 {
-		t.Fatalf("stored history was not materialized before reset, got %d messages", len(request.Messages))
+		t.Fatalf("stored history was not materialized before signals, got %d messages", len(request.Messages))
 	}
 	if !ctx.ResponseObjectState.ProviderContextApplied {
 		t.Fatal("materialization must be marked so dispatch does not repeat it")
 	}
-	// The snapshot is retaken so evidence and the reset view describe the
-	// history the provider would actually receive.
 	if len(ctx.OriginalContextHistory.Conversation().Messages) != 3 {
-		t.Fatal("the original-history snapshot still predates the stored turns")
+		t.Fatal("the original-history snapshot does not describe the resolved conversation")
 	}
 
+	bindHistoryResetPolicy(ctx)
 	ctx.HistoryResetTrigger = &historyreset.TriggerResult{
 		Class:      historyreset.TriggerChange,
 		Confidence: 0.95,
@@ -102,24 +105,6 @@ func TestResponsesStoredHistoryIsResolvedBeforeReset(t *testing.T) {
 	}
 	if len(ctx.ResponseObjectState.ConversationHistory) != 1 {
 		t.Fatal("reset mutated the stored conversation history")
-	}
-}
-
-// A decision without an enabled reset policy keeps the existing ordering: the
-// stored history is materialized at dispatch, exactly as before.
-func TestResponsesStoredHistoryStaysAtDispatchWithoutReset(t *testing.T) {
-	router := &OpenAIRouter{}
-	request := &llmprotocol.Request{
-		Model:    "model",
-		Messages: []llmprotocol.Message{neutralTextMessage(llmprotocol.RoleUser, "live question")},
-	}
-	ctx := storedResponsesContext(t, request)
-	ctx.VSRSelectedDecision = historyResetDecision(t, map[string]interface{}{"enabled": false})
-
-	bindHistoryResetPolicy(ctx)
-	router.resolveHistoryResetRequestHistory(ctx)
-	if len(request.Messages) != 1 || ctx.ResponseObjectState.ProviderContextApplied {
-		t.Fatal("an inactive policy must not change the materialization point")
 	}
 }
 
@@ -236,47 +221,6 @@ func capturedRequestDemand(ctx *RequestContext, stage string) (store.RequestDema
 		}
 	}
 	return store.RequestDemandSnapshot{}, false
-}
-
-// Evidence produced against the pre-materialization Responses view describes a
-// different conversation than the one reset would transform. The binding must
-// catch that rather than letting a partial-history classification authorize a
-// removal.
-func TestResponsesEvidenceFromThePreMaterializedViewIsRejected(t *testing.T) {
-	router := &OpenAIRouter{}
-	request := &llmprotocol.Request{
-		Model:    "model",
-		Messages: []llmprotocol.Message{neutralTextMessage(llmprotocol.RoleUser, "live question")},
-	}
-	ctx := storedResponsesContext(t, request)
-
-	// A producer evaluating at signal time binds to the request as it arrived.
-	bindHistoryResetPolicy(ctx)
-	captureOriginalContextHistory(ctx)
-	ingressBinding := historyResetEvidenceBinding(ctx)
-
-	router.resolveHistoryResetRequestHistory(ctx)
-	if historyResetEvidenceBinding(ctx) == ingressBinding {
-		t.Fatal("resolving stored history must change the binding")
-	}
-	ctx.HistoryResetTrigger = &historyreset.TriggerResult{
-		Class:      historyreset.TriggerChange,
-		Confidence: 0.95,
-		Signal:     "topic_boundary",
-		Version:    "v1",
-		Binding:    ingressBinding,
-	}
-
-	router.prepareContextHistorySteps(ctx, request)
-	if err := router.applyContextTransformationPlan(ctx, request); err != nil {
-		t.Fatalf("fail-open must preserve the request: %v", err)
-	}
-	if len(request.Messages) != 3 {
-		t.Fatalf("evidence about a partial history must not remove turns, got %d", len(request.Messages))
-	}
-	if ctx.HistoryResetDiagnostics.Reason != historyreset.ReasonEvidenceStale {
-		t.Fatalf("unexpected diagnostics %+v", ctx.HistoryResetDiagnostics)
-	}
 }
 
 // An enabled policy with no resolvable original history has nothing to bind

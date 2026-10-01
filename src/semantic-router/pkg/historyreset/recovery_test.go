@@ -651,8 +651,8 @@ func TestUnsupportedEncodingShapesAreRefused(t *testing.T) {
 	type withMap struct {
 		Values map[string]string
 	}
-	type withTag struct {
-		Value string `json:"renamed"`
+	type withOmitEmpty struct {
+		Value string `json:"value,omitempty"`
 	}
 	type embedded struct {
 		Value string
@@ -666,7 +666,7 @@ func TestUnsupportedEncodingShapesAreRefused(t *testing.T) {
 	}
 	cases := map[string]interface{}{
 		"map":       withMap{Values: map[string]string{"k": strings.Repeat("v", 4096)}},
-		"json_tag":  withTag{Value: "v"},
+		"omitempty": withOmitEmpty{Value: "v"},
 		"embedding": withEmbedding{embedded: embedded{Value: "v"}, Other: "o"},
 		"float":     withFloat{Value: 1.5},
 		"marshaler": struct{ Value json.RawMessage }{Value: json.RawMessage(`{"a":1}`)},
@@ -751,5 +751,33 @@ func TestUnsizableMessageStopsEnvelopeConstruction(t *testing.T) {
 	}
 	if sized != 1 {
 		t.Fatalf("construction continued past the refusal: sized %d messages", sized)
+	}
+}
+
+// The encoder's tag rules are modelled exactly rather than refused: a renamed
+// key is counted under its tag name, and a "-" tag is omitted entirely. The
+// real neutral types use both, so getting these wrong would either refuse a
+// valid removal or undercount its payload.
+func TestEncodedSizeModelsJSONTagRules(t *testing.T) {
+	type tagged struct {
+		Renamed string `json:"short"`
+		Skipped string `json:"-"`
+		Plain   string
+	}
+	subject := tagged{Renamed: "a", Skipped: strings.Repeat("x", 512), Plain: "b"}
+
+	encoded, err := json.Marshal(subject)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	size, err := encodedValueSize(reflect.ValueOf(subject))
+	if err != nil {
+		t.Fatalf("sizing failed: %v", err)
+	}
+	if size != len(encoded) {
+		t.Fatalf("size %d does not match the encoded length %d (%s)", size, len(encoded), encoded)
+	}
+	if strings.Contains(string(encoded), "Skipped") {
+		t.Fatal("fixture no longer exercises an omitted field")
 	}
 }

@@ -22,8 +22,8 @@ func init() {
 
 // testHistoryResetNegative asserts the disabled-by-default contract of the
 // history_reset plugin end to end: the router accepts a decision carrying the
-// plugin, and the upstream request still contains every prior turn. The mock
-// backend echoes the conversation it actually received, so an HTTP 200 alone
+// plugin, and the upstream request still contains every prior turn. The provider mocker
+// echoes the conversation it actually received, so an HTTP 200 alone
 // cannot satisfy this test.
 func testHistoryResetNegative(
 	ctx context.Context,
@@ -48,7 +48,7 @@ func testHistoryResetNegative(
 		{"role": "user", "content": "__HISTORY_RESET_PROBE__ now tell me about tax law instead"},
 	}
 
-	response, err := sendLocalChatConversation(ctx, localPort, "auto", conversation, 60*time.Second)
+	response, err := sendLocalChatConversation(ctx, localPort, "vllm-sr/auto", conversation, 60*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to send conversation: %w", err)
 	}

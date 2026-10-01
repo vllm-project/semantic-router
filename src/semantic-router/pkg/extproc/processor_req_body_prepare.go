@@ -27,6 +27,14 @@ func (r *OpenAIRouter) extractRequestSignalSnapshot(
 	if ctx == nil || ctx.SemanticRequest == nil {
 		return nil, status.Error(codes.InvalidArgument, "neutral inference request is unavailable")
 	}
+	// Resolve retained history before any signal, context estimate, or plugin
+	// consumes the neutral request. Provider dispatch is idempotent and must not
+	// later reintroduce history removed by the selected decision's tool policy.
+	if changed, err := r.materializeResponseObjectContext(ctx.SemanticRequest, ctx); err != nil {
+		return nil, err
+	} else if changed {
+		ctx.SemanticRequest.Generation++
+	}
 	captureOriginalContextHistory(ctx)
 	snapshot := extractSemanticRequestSignals(ctx.SemanticRequest)
 	captureOriginalRequestDemand(ctx, ctx.SemanticRequest, snapshot)
@@ -60,7 +68,13 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		history,
 		ctx,
 	)
+	if decisionErr == nil {
+		decisionErr = r.benchmarkCallLimitCheck(ctx)
+	}
 	if decisionErr != nil {
+		if errors.Is(decisionErr, errBenchmarkCallLimit) {
+			return requestDecisionState{}, r.createErrorResponse(412, errBenchmarkCallLimit.Error())
+		}
 		if errors.Is(decisionErr, context.Canceled) ||
 			errors.Is(decisionErr, context.DeadlineExceeded) {
 			return requestDecisionState{}, r.createErrorResponse(499, "request canceled")
@@ -81,13 +95,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		logging.Errorf("[Request Body] Decision evaluation failed: %v", decisionErr)
 		return requestDecisionState{}, r.createErrorResponse(403, decisionErr.Error())
 	}
-	metrics.RecordModelRequest(selectedModel)
-	ctx.InflightToken = inflight.Begin(selectedModel)
-	bindHistoryResetPolicy(ctx)
-	r.resolveHistoryResetRequestHistory(ctx)
 	if resp := r.handleFastResponse(ctx, decisionName); resp != nil {
-		inflight.End(selectedModel, ctx.InflightToken)
-		ctx.InflightToken = 0
 		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
 		r.updateRouterReplayStatus(ctx, 200, false)
 		r.attachRouterReplayResponse(
@@ -98,18 +106,22 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
 		return requestDecisionState{}, resp
 	}
+	metrics.RecordModelRequest(selectedModel)
+	ctx.InflightModel = selectedModel
+	ctx.InflightToken = inflight.Begin(selectedModel)
+	bindHistoryResetPolicy(ctx)
 	if resp := r.applyRateLimit(ctx, selectedModel); resp != nil {
-		inflight.End(selectedModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		return requestDecisionState{}, resp
 	}
 	if resp := r.applyCacheChecks(ctx, selectedModel, decisionName); resp != nil {
-		inflight.End(selectedModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		return requestDecisionState{}, resp
 	}
 	if ragErr := r.executeRAGPlugin(ctx, decisionName); ragErr != nil {
-		inflight.End(selectedModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		return requestDecisionState{}, r.createErrorResponse(503, fmt.Sprintf("RAG retrieval failed: %v", ragErr))
 	}
@@ -153,13 +165,12 @@ func (r *OpenAIRouter) respondContextTransformationRejected(
 ) *ext_proc.ProcessingResponse {
 	status, message := contextTransformationFailure(ctx)
 	terminalReason := "context_transformation_rejected"
-	if ctx != nil && ctx.HistoryResetDiagnostics != nil &&
-		ctx.HistoryResetDiagnostics.Outcome == historyreset.OutcomeFailed {
+	if ctx.HistoryResetDiagnostics != nil && ctx.HistoryResetDiagnostics.Outcome == historyreset.OutcomeFailed {
 		terminalReason = "history_reset_" + ctx.HistoryResetDiagnostics.Reason
 	}
-	resp := r.createErrorResponse(status, message)
-	if ctx.RouterReplayPluginConfig == nil && r.Config != nil {
-		ctx.RouterReplayPluginConfig = r.Config.EffectiveRouterReplayConfig(ctx.VSRSelectedDecision)
+	resp := r.encodeImmediateResponseForClient(r.createErrorResponse(status, message), ctx)
+	if r.Config != nil {
+		ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, ctx.VSRSelectedDecision)
 	}
 	r.startRouterReplay(ctx, originalModel, ctx.VSRSelectedModel, ctx.VSRSelectedDecisionName)
 	r.updateRouterReplayStatus(ctx, status, false)
@@ -198,12 +209,12 @@ func (r *OpenAIRouter) respondRoutingRejected(
 		ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, ctx.VSRSelectedDecision)
 	}
 	r.startRouterReplay(ctx, originalModel, "", "")
-	r.updateRouterReplayStatus(ctx, 503, false)
+	r.updateRouterReplayStatus(ctx, status, false)
 	if immediate := resp.GetImmediateResponse(); immediate != nil {
 		r.attachRouterReplayResponse(ctx, immediate.Body, false)
 	}
 	// Failed, not aborted: the router itself rejected the request with a
-	// terminal 503; aborted is reserved for streams that end early.
+	// terminal response; aborted is reserved for streams that end early.
 	r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, terminalReason)
 	addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
 	return resp
