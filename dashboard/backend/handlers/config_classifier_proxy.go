@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 
@@ -47,7 +48,8 @@ func RouterClassifierProxyHandler(routerAPIURL string, readonlyMode bool, creden
 
 		proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, bytes.NewReader(bodyBytes))
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to build router API request: %v", err), http.StatusInternalServerError)
+			log.Printf("Failed to build router API request: %s", redactURLsForLog(err.Error()))
+			http.Error(w, "Failed to build router API request", http.StatusInternalServerError)
 			return
 		}
 		copyProxyHeaders(proxyReq.Header, r.Header)
@@ -65,7 +67,9 @@ func RouterClassifierProxyHandler(routerAPIURL string, readonlyMode bool, creden
 		}
 		resp, err := http.DefaultClient.Do(proxyReq)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Router API request failed: %v", err), http.StatusBadGateway)
+			// Transport errors name the internal Router address, so only operators see them.
+			log.Printf("Router API request failed: %s", redactURLsForLog(err.Error()))
+			http.Error(w, "Router API unavailable", http.StatusBadGateway)
 			return
 		}
 		defer resp.Body.Close()
