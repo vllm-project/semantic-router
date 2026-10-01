@@ -5,14 +5,18 @@
 #
 #   node_a_r2.sh <commit> analyze   round-1 error analysis and filter counts (reads round-1 files only)
 #   node_a_r2.sh <commit> pass      PRM800K boundary list (C2), then finalize r2 from the HR2 candidates
+#                                   with every earlier recheck's drop lists (iter*/quarantine/lists)
 #   node_a_r2.sh <commit> audits    G1 names, C1 source terms, overlap re-scan of the r2 files (PI-v4
 #                                   full and quarantining, PI-hr2, DEV vs TRAIN) and the quarantine
 #                                   recheck, per-family shortcuts (G4), leak guard on the r2 files
+#   node_a_r2.sh <commit> next-iter moves a recheck that found groups to iter<k>/ so pass and audits
+#                                   run again without them (amendment 4 §E, until the recheck is empty)
 #   node_a_r2.sh <commit> review    round-2 sample and packets (round-1 rows and groups left out)
 #   node_a_r2.sh <commit> splits    R3 packet from review/answers/{r1,r2}.*.jsonl
 #   node_a_r2.sh <commit> score     review report and round-2 gold-error ids (no fix rule)
 #   node_a_r2.sh <commit> final     finalize with the round-2 gold errors, freeze, isolation (G7),
 #                                   tokens and stats (G5, G8), leak guard on the final files
+#   node_a_r2.sh <commit> final-audits  overlap re-scan and quarantine recheck of the final files
 #   node_a_r2.sh <commit> hf-assemble   m5/hr2 upload tree for r2 (registry.json inside), leak guard
 #   node_a_r2.sh <commit> hf-upload     private upload replacing m5/hr2, pinned revision, read-back check
 set -euo pipefail
@@ -52,6 +56,13 @@ DROPS=(--drop-groups "$R1/quarantine/lists/drop-groups.txt"
 [ -d "$CODE" ] || { echo "no mirror $MIRROR" >&2; exit 1; }
 for d in "$T" "$R" "$R/logs"; do
   [ -d "$d" ] || mkdir -m 700 "$d"
+done
+# Groups found by earlier rechecks (amendment 4 §E) are dropped like the round-1 quarantine.
+ITERS=()
+for d in "$R"/iter*/quarantine/lists; do
+  [ -d "$d" ] || continue
+  DROPS+=(--drop-groups "$d/drop-groups.txt" --drop-dev-groups "$d/drop-dev-groups.txt")
+  ITERS+=(-v "$d:$d:ro")
 done
 BASE=(--rm --network none --entrypoint python3 -w "$CODE" --cpu-shares 256
   -e PYTHONPATH=. -e TMPDIR="$T" -e CUDA_VISIBLE_DEVICES= -e HIP_VISIBLE_DEVICES=
@@ -112,18 +123,46 @@ analyze() {
 }
 
 pass() {
-  fresh lists pass
-  run boundary -v "$RAW:$RAW:ro" -v "$R/lists:$R/lists:rw" "$IMG" -m v2.data.hr2.r2 boundary \
-    --cand "$CAND" --raw "$RAW" --out-dir "$R/lists/prm"
-  run pass -v "$R/lists:$R/lists:ro" -v "$R/pass:$R/pass:rw" "$IMG" -m v2.data.hr2.build \
-    finalize --cand "$CAND" --out "$R/pass/out" "${DROPS[@]}"
+  if [ ! -e "$R/lists" ]; then
+    fresh lists
+    run boundary -v "$RAW:$RAW:ro" -v "$R/lists:$R/lists:rw" "$IMG" -m v2.data.hr2.r2 boundary \
+      --cand "$CAND" --raw "$RAW" --out-dir "$R/lists/prm"
+  fi
+  fresh pass
+  run pass -v "$R/lists:$R/lists:ro" -v "$R/pass:$R/pass:rw" "${ITERS[@]}" "$IMG" \
+    -m v2.data.hr2.build finalize --cand "$CAND" --out "$R/pass/out" "${DROPS[@]}"
   tail -1 "$R/logs/boundary.log"
   tail -1 "$R/logs/pass.log"
 }
 
-audits() {
-  fresh overlap names quarantine shortcut leak-pass
-  local O=$R/overlap F=$R/pass/out
+# A recheck that found groups moves to iter<k>/ with the pass and scans it judged; the boundary
+# list is reused (it depends only on the candidates and the raw files).
+next_iter() {
+  local k=1 d
+  while [ -e "$R/iter$k" ]; do k=$((k + 1)); done
+  python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); n=d["quarantine"]["groups"]+d["dev_near_train"]["groups"]; sys.exit(0 if n else "the recheck found no group; nothing to iterate")' \
+    "$R/quarantine/lists/quarantine.public.json"
+  mkdir -m 700 "$R/iter$k"
+  for d in pass overlap names quarantine shortcut leak-pass; do
+    mv "$R/$d" "$R/iter$k/$d"
+  done
+  echo "$(date -u +%FT%TZ) moved pass overlap names quarantine shortcut leak-pass to iter$k (recheck found groups)" >> "$R/logs/steps.log"
+  for d in pass pi-hr2 ov-piv4 ov-piv4q ov-pihr2 ov-self names c1-names families quarantine; do
+    [ ! -e "$R/logs/$d.log" ] || mv "$R/logs/$d.log" "$R/logs/iter$k-$d.log"
+  done
+  for d in "$R"/logs/sc-*.log; do
+    [ ! -e "$d" ] || mv "$d" "$R/logs/iter$k-$(basename "$d")"
+  done
+  echo "iter$k"
+}
+
+# scan <out dir> <rows dir> <name prefix>: overlap of the rows dir's TRAIN and DEV files against PI-v4
+# (full, quarantining) and PI-hr2, DEV against TRAIN, then the quarantine recheck
+# (<out dir>/overlap, <out dir>/quarantine/lists; both directories must not exist yet).
+scan() {
+  local out=$1 F=$2 pre=$3
+  local O=$out/overlap
+  mkdir -m 700 "$O" "$out/quarantine"
   cat > "$O/pi-hr2.spec.json" <<EOF
 [
  {"role": "ht_dev_goldfree", "origin": "$P/ht-dev.prompts.jsonl", "sha256": "30b0bd3569da9dd183f142e606ba6dcb598de7e4d3d9c168f87f91852178fd65", "project": true},
@@ -135,24 +174,49 @@ audits() {
  {"role": "cal698", "origin": "$CAL698", "sha256": "19cc1a8c4ebe6fd13031079f6b7d131046ce503f435f894e3ea672f91c2ed41f", "project": true}
 ]
 EOF
-  run pi-hr2 -v "$P:$P:ro" -v "$HFD:$HFD:ro" -v "$O:$O:rw" "$IMG" \
+  run "${pre}pi-hr2" -v "$P:$P:ro" -v "$HFD:$HFD:ro" -v "$O:$O:rw" "$IMG" \
     -m v2.data.build_protected_inventory --spec "$O/pi-hr2.spec.json" --out-dir "$O/pi-hr2"
-  local PASS=(-v "$R/pass:$R/pass:ro")
+  local ROWS=(-v "$F:$F:ro")
   local cand=(--candidates "$F/hr2.train.jsonl" --candidates "$F/hr2.dev.jsonl")
-  run ov-piv4 "${PASS[@]}" -v "$PI3:$PI3:ro" -v "$PI4:$PI4:ro" -v "$O:$O:rw" "$IMG" -m v2.data.overlap \
-    "${cand[@]}" --protected-inventory "$PI4/manifest.json" --private-receipt "$O/piv4.private.json" \
-    --public-receipt "$O/piv4.public.json" --workers "$WORKERS" &
-  run ov-piv4q "${PASS[@]}" -v "$PI3:$PI3:ro" -v "$PI4:$PI4:ro" -v "$O:$O:rw" "$IMG" -m v2.data.overlap \
-    "${cand[@]}" --protected-inventory "$PI4/manifest.quarantining.json" \
+  local -a jobs=()
+  run "${pre}ov-piv4" "${ROWS[@]}" -v "$PI3:$PI3:ro" -v "$PI4:$PI4:ro" -v "$O:$O:rw" "$IMG" \
+    -m v2.data.overlap "${cand[@]}" --protected-inventory "$PI4/manifest.json" \
+    --private-receipt "$O/piv4.private.json" --public-receipt "$O/piv4.public.json" \
+    --workers "$WORKERS" &
+  jobs+=($!)
+  run "${pre}ov-piv4q" "${ROWS[@]}" -v "$PI3:$PI3:ro" -v "$PI4:$PI4:ro" -v "$O:$O:rw" "$IMG" \
+    -m v2.data.overlap "${cand[@]}" --protected-inventory "$PI4/manifest.quarantining.json" \
     --private-receipt "$O/piv4q.private.json" --public-receipt "$O/piv4q.public.json" \
     --workers "$WORKERS" &
-  run ov-pihr2 "${PASS[@]}" -v "$O:$O:rw" "$IMG" -m v2.data.overlap "${cand[@]}" \
+  jobs+=($!)
+  run "${pre}ov-pihr2" "${ROWS[@]}" -v "$O:$O:rw" "$IMG" -m v2.data.overlap "${cand[@]}" \
     --protected-inventory "$O/pi-hr2/manifest.json" --private-receipt "$O/pihr2.private.json" \
     --public-receipt "$O/pihr2.public.json" --workers "$WORKERS" &
-  run ov-self "${PASS[@]}" -v "$O:$O:rw" "$IMG" -m v2.data.overlap --self-scan \
+  jobs+=($!)
+  run "${pre}ov-self" "${ROWS[@]}" -v "$O:$O:rw" "$IMG" -m v2.data.overlap --self-scan \
     --candidates "$F/hr2.dev.jsonl" --candidates "$F/hr2.train.jsonl" \
     --private-receipt "$O/self.private.json" --public-receipt "$O/self.public.json" \
     --workers "$WORKERS" &
+  jobs+=($!)
+  local job
+  for job in "${jobs[@]}"; do
+    wait "$job"
+  done
+  run "${pre}quarantine" "${ROWS[@]}" -v "$O:$O:ro" -v "$PI4:$PI4:ro" \
+    -v "$out/quarantine:$out/quarantine:rw" "$IMG" -m v2.data.hr2.audit quarantine \
+    --candidates "$F/hr2.train.jsonl" --candidates "$F/hr2.dev.jsonl" \
+    --quarantining "$O/piv4q.private.json" --quarantining "$O/pihr2.private.json" \
+    --full "$O/piv4.private.json" --quarantining-manifest "$PI4/manifest.quarantining.json" \
+    --self-scan "$O/self.private.json" --out-dir "$out/quarantine/lists"
+  echo "quarantine recheck: $(tail -1 "$R/logs/${pre}quarantine.log")"
+}
+
+audits() {
+  fresh names shortcut leak-pass
+  local F=$R/pass/out
+  local PASS=(-v "$R/pass:$R/pass:ro")
+  scan "$R" "$F" "" &
+  local scanning=$!
   run names -v "$R/names:$R/names:rw" "$IMG" -m v2.data.hr2.audit names --out "$R/names/g1.json"
   run c1-names "${PASS[@]}" -v "$RAW:$RAW:ro" -v "$R/names:$R/names:rw" "$IMG" \
     -m v2.eval.sealed.independence names --terms v2/eval/sealed/c1-source-terms.json \
@@ -164,15 +228,9 @@ EOF
   for f in "$S"/rows/*.jsonl; do
     name=$(basename "$f" .jsonl)
     run "sc-$name" -v "$S:$S:rw" "$IMG" -m v2.data.shortcut --rows "$f" \
-      --receipt "$S/$name.json" --workers 4 &
+      --receipt "$S/$name.json" --workers 4 || true
   done
-  wait
-  run quarantine "${PASS[@]}" -v "$O:$O:ro" -v "$PI4:$PI4:ro" -v "$R/quarantine:$R/quarantine:rw" \
-    "$IMG" -m v2.data.hr2.audit quarantine --candidates "$F/hr2.train.jsonl" \
-    --candidates "$F/hr2.dev.jsonl" --quarantining "$O/piv4q.private.json" \
-    --quarantining "$O/pihr2.private.json" --full "$O/piv4.private.json" \
-    --quarantining-manifest "$PI4/manifest.quarantining.json" --self-scan "$O/self.private.json" \
-    --out-dir "$R/quarantine/lists"
+  wait "$scanning"
   python3 - "$S" > "$S/shortcut-fail.txt" <<'EOF'
 import json, pathlib, sys
 for path in sorted(pathlib.Path(sys.argv[1]).glob("*.json")):
@@ -240,7 +298,7 @@ final() {
   local F=$R/final/out Z=$R/freeze
   [ -s "$R/review/answers/review.public.json" ] || { echo "run the score stage first" >&2; exit 1; }
   run final -v "$R/lists:$R/lists:ro" -v "$R/review:$R/review:ro" -v "$R/final:$R/final:rw" \
-    "$IMG" -m v2.data.hr2.build finalize --cand "$CAND" --out "$F" "${DROPS[@]}" \
+    "${ITERS[@]}" "$IMG" -m v2.data.hr2.build finalize --cand "$CAND" --out "$F" "${DROPS[@]}" \
     --drop-ids "$R/review/answers/drop-ids.txt"
   local TOKM=(-v "$TOKJ:$TOKJ:ro" -v "$Q06:$Q06:ro" -v "$Q08:$Q08:ro" -v "$KAI:$KAI:ro")
   run freeze-train "${TOKM[@]}" -v "$R/final:$R/final:ro" -v "$Z:$Z:rw" "$IMG" -m v2.data.freeze freeze \
@@ -269,6 +327,11 @@ final() {
   grep -h "exit=" "$R/logs/steps.log" | tail -9
 }
 
+final_audits() {
+  fresh final-check
+  scan "$R/final-check" "$R/final/out" fin-
+}
+
 hf_assemble() {
   fresh hf
   local spec=$R/hf/spec.json
@@ -293,10 +356,11 @@ items = [
     (run / "lists/prm/boundary.public.json", "audits/construction-prm-boundary.public.json"),
     (r1 / "quarantine/lists/quarantine.public.json", "audits/quarantine.public.json"),
     (run / "quarantine/lists/quarantine.public.json", "audits/quarantine-recheck.public.json"),
-    (run / "overlap/piv4.public.json", "audits/overlap-piv4.public.json"),
-    (run / "overlap/piv4q.public.json", "audits/overlap-piv4q.public.json"),
-    (run / "overlap/pihr2.public.json", "audits/overlap-pihr2.public.json"),
-    (run / "overlap/self.public.json", "audits/overlap-dev-vs-train.public.json"),
+    (run / "final-check/quarantine/lists/quarantine.public.json", "audits/quarantine-recheck-final.public.json"),
+    (run / "final-check/overlap/piv4.public.json", "audits/overlap-piv4.public.json"),
+    (run / "final-check/overlap/piv4q.public.json", "audits/overlap-piv4q.public.json"),
+    (run / "final-check/overlap/pihr2.public.json", "audits/overlap-pihr2.public.json"),
+    (run / "final-check/overlap/self.public.json", "audits/overlap-dev-vs-train.public.json"),
     (run / "names/g1.json", "audits/names-g1.json"),
     (run / "names/c1-names.json", "audits/c1-names.json"),
     (run / "review/answers/review.public.json", "audits/review.public.json"),
@@ -305,6 +369,10 @@ items = [
     (r1 / "review/sample/sample.json", "audits/review-r1-sample.json"),
 ]
 items += [(p, f"audits/shortcut/{p.name}") for p in sorted((run / "shortcut").glob("*.json"))]
+items += [
+    (p / "quarantine/lists/quarantine.public.json", f"audits/quarantine-recheck-{p.name}.public.json")
+    for p in sorted(run.glob("iter*"))
+]
 print(json.dumps([{"src": str(src), "dst": "hr2/" + dst} for src, dst in items], indent=1))
 EOF
   run hf-assemble -v "$R:$R:ro" -v "$R/hf:$R/hf:rw" "$IMG" -m v2.data.assemble_hf_upload \
@@ -349,6 +417,8 @@ hf_upload() {
 
 case "$STAGE" in
   analyze | pass | audits | review | splits | score | final) "$STAGE" ;;
+  next-iter) next_iter ;;
+  final-audits) final_audits ;;
   hf-assemble) hf_assemble ;;
   hf-upload) hf_upload ;;
   *)

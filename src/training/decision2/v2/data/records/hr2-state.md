@@ -18,6 +18,14 @@ hf-upload.
 
 ## Log (newest first)
 
+- 2026-10-01 11:15 UTC+8 — **r2 pass + audits (iteration 1)** at `84a2fb714`: boundary list 364 TRAIN / 39 DEV
+  candidate rows; pass TRAIN 16,329 / DEV 961. G1 PASS, C1 terms 0, G4 no family fails, leak guard 0. **The
+  quarantine recheck found 163 groups (155 `hs3_pref`, 8 `prm_step`; all N-rule, mostly A7q AHO, Score5-DEV,
+  DBv4) and 7 DEV groups near TRAIN.** Cause: `v2.data.overlap` exempts a matched unit as boilerplate when it occurs
+  in ≥ 5 distinct candidate groups, so units exempt in round 1's larger candidate set are no longer exempt once
+  VitaminC, Allegro and `hs3_help` leave. Amendment 4 §E applies (drop whole before sampling); because a drop can
+  lower other units below 5 groups, pass + audits repeat (`next-iter`) until the recheck finds none. Nothing else
+  changes; no row has been sampled.
 - 2026-10-01 11:03 UTC+8 — **r2:** tooling `874e60e46` (tests 403 data + guard pass); error analysis on node A
   (`analyze`, 4 s): the r2 drops remove 9 of 13 round-1 errors; kept reviewed rows 4 / 139 = 2.88%; expected TRAIN
   ≈ 16,303 rows / 10.9M tokens, DEV ≈ 961. Licence evidence re-read (VitaminC LICENSE per-article terms; Allegro
