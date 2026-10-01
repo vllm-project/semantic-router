@@ -468,19 +468,19 @@ def compare(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-NATIVE_BLOCK = "from decision2 import Decision2"
 TRANSFORMERS_BLOCK = "trust_remote_code=True"
 
 
-def card_block(readme: str, marker: str) -> str:
-    """The card's one Python example that contains ``marker`` (native or Transformers)."""
+def card_block(readme: str, transformers: bool) -> str:
+    """The card's one native Python example, or its one Transformers (trust_remote_code) example."""
     blocks = [
-        b for b in re.findall(r"```python\n(.*?)```", readme, flags=re.S) if marker in b
+        b
+        for b in re.findall(r"```python\n(.*?)```", readme, flags=re.S)
+        if (TRANSFORMERS_BLOCK in b) == transformers
     ]
     if len(blocks) != 1:
-        raise ValueError(
-            f"The card must contain exactly one Python example with {marker!r}"
-        )
+        kind = "Transformers" if transformers else "native"
+        raise ValueError(f"The card must contain exactly one {kind} Python example")
     return blocks[0]
 
 
@@ -511,7 +511,7 @@ def run_card_code(
 def card(args: argparse.Namespace) -> dict[str, Any]:
     """Execute the README's native Python example exactly as a user would, in a fresh process."""
     readme = (args.package / "README.md").read_text(encoding="utf-8")
-    code = card_block(readme, NATIVE_BLOCK)
+    code = card_block(readme, transformers=False)
     name = args.package.resolve().name
     if f'"{name}"' not in code:
         raise ValueError("The card example does not load this package directory")
@@ -820,7 +820,7 @@ def automap_card(args: argparse.Namespace) -> dict[str, Any]:
     code runs exactly as written against the Hub and ``--expect-revision`` must be the downloaded commit.
     """
     readme = (args.package / "README.md").read_text(encoding="utf-8")
-    code = card_block(readme, TRANSFORMERS_BLOCK)
+    code = card_block(readme, transformers=True)
     repo = json.loads(
         (args.package / "MODEL_MANIFEST.json").read_text(encoding="utf-8")
     )["repo_id"]
@@ -855,7 +855,7 @@ def automap_card(args: argparse.Namespace) -> dict[str, Any]:
         "mode": "automap-card",
         "hub": args.hub,
         "code_sha256": hashlib.sha256(
-            card_block(readme, TRANSFORMERS_BLOCK).encode("utf-8")
+            card_block(readme, transformers=True).encode("utf-8")
         ).hexdigest(),
         "readme_sha256": sha_file(args.package / "README.md"),
         "interpreter_flags": flags,
