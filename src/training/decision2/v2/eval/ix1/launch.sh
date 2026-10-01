@@ -55,6 +55,7 @@ declare -A REVISION=(
 )
 declare -A DIAGNOSTIC=(  # name -> "repository revision package-dir"
   [M5-L128]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/fix2/M5-L128-95d61175-re876fbe"
+  [DEV2.0-27B-budget]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/fix2/DEV2.0-27B-4e89288d-re876fbe"
 )
 
 mode="${1:-}"; shift || true
