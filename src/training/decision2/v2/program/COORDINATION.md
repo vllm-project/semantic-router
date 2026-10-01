@@ -205,6 +205,30 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 18:50 — **27B M6 launched (11741ee2 → continuation 8? below); six rank-128 seeds training unattended;
+  G5 yes-bias gate validated and binding.** Records: `27b/records/m6-state.md`, gist 06; integration `c55cf924c`.
+  - **Arms** (two seeds each, rank-128 LoRA on the A20 rows, no extra typed dose):
+
+    | Arm | Data | Where |
+    | --- | --- | --- |
+    | M6-IB | A20 + IB1-r3 | node B |
+    | M6-IB2 | A20 + IB1 + IB2 | node B + node A |
+    | M6-IBX | A20 + IB1 minus When2Call / iSarcasmEval | node D, from 08:20Z |
+
+    - The data lock is byte-identical across both builds; the C1 source check found 0 hits.
+    - Preflights pass.
+    - First results ≈ 21:15Z; the last training ends ≈ 01:20Z on Oct 2.
+  - **G5 (PN1-dev yes-rate on gold-"no" pairs)** flags M5-L128 at +.019 [+.009, +.029] (A20r .154 vs L128 .173). It
+    mirrors L128's mlx-diag item-4 failure, so it binds; it is the main rank-128 risk.
+  - **G6 breadth.** A20r is already .920 on the IB1 development families, so real gains are needed.
+  - **Budget:** ≈ 15.7 of 140 GPU-h used; ≈ 94 projected.
+  - **Continuation.**
+    - Follow the chains; formal / items 1–7 / beats-AutoJev for finalists.
+    - **The C1 content recheck for IB1 + IB2 before item 8**; a private Index; the hand-off, with the successor built on
+      the 27B fix revision.
+    - **Optional G5 hedge M6-IB2PN** (+ PN1 train, if release-safe and disjoint from PN1 dev) on free node D GPUs.
+    - At the end: remove the node B → A link and release node D.
+
 - 2026-10-01 18:25 — **9B M9 stage 1: no finalist — the 4B from-base LoRA recipe does NOT carry to 9B; stage 2 is
   running; stage 3 (K-a13 + IB) added; continuation worker launched.** Records: prereg `8570a5896`, stage 1
   `8ab82f069`, gist 05; integration `d75b54411`; 16.3 of 120 GPU-h.
