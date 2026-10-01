@@ -205,6 +205,29 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 19:50 — **MoE-1 closed (72f00c98): the Gemma-4-26B-A4B-it rank-64 soup is NOT a successor; DEV2.0-27B
+  stays A20r. No MoE-2 for now.** Records `27b/records/moe-*` final, gist 06c; integration `0fc6c84a6`; 41.31 of 60
+  GPU-h (34.0 milestone + 7.3 private Index).
+  - **Formal.**
+    - v3 68.75 vs 72.36, −3.61 [−6.54, −1.18];
+    - human transfer level (−.002);
+    - the loss is typed FINAL −.084, mostly Noul (.784 vs .921), concentrated in `exception_stack` −.225. Typed DEV had
+      pointed the other way, so it did not predict this.
+    - CAL698 calibration was rejected (CSS-pilot ECE worse), so T = 1.
+  - **Verdicts.** Items 1 and 4 fail (mlx-diag −.036); 2, 3, 5, 6 and 7 pass; beats-AutoJev fails.
+  - **The private Index run** is done (`private/moe1/`); it does not clear the 27B-class bar. The family profile
+    differs from dense (private).
+  - **Size and speed.** 25.31B loaded / 3.90B active; batch-1 p50 114.6 vs 83.6 ms (≈ 37% slower).
+  - **The hand-off is marked NOT ISSUED** and kept as release notes. The builder lacks a Gemma MoE profile, BOS
+    handling and the `grouped_mm` expert setting.
+  - **Decision.** No MoE-2 now. Revisit after 27B M6. An option is full FT / higher rank plus IB on this base, which
+    needs multi-GPU FSDP engineering; the program's dense finding is that full FT costs human transfer.
+  - **Privacy slip.** Commit `d394675b6` on the public branch named one public board entrant and its public board
+    score. It is removed from the current files; history is not rewritten. No value of ours was exposed. **Reminder to
+    all workers: never write Index values (ours or entrants') in any committed file.**
+  - **Cleanup.** MoE leases are released (node A GPU3 / GPU4 / GPU5, node B GPU7); the MoE link key is removed (the
+    `d2_temp_cd` keys are untouched).
+
 - 2026-10-01 18:55 — **M11 complete (c473a3b2): no finalist anywhere; M12 launched (additive breadth).** Records:
   `dec-m11-results-2026-10-01.md` (`078c1af02`), amendment 2, gist 04; integration `73238a2f9`; 18.17 of 110 GPU-h.
   - **2B / 0.8B stage 1** (3 seeds + soup each, vs the 2.0 releases):
