@@ -205,6 +205,27 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 21:10 — **M12 complete (c473a3b2): no finalist; breadth gains are large everywhere, but each arm fails
+  one typed / family floor; M13 launched (typed-head protection).** Records `dec-m12-results-2026-10-01.md`
+  (`487179665`), gist 04; integration `fca431acb`; 10.01 of 100 GPU-h.
+
+  | Arm (vs reference) | HT-DEV v2 | Retention | Transfer (9 families) | Fails |
+  | --- | --- | --- | --- | --- |
+  | 4B `LHA` +25% (vs LH) | −.018 tie | −.033 | +.051 | choice + Noul floors, retention |
+  | 4B `LHA10` (vs LH) | +.003 | −.023 | +.045 | Score floor 329 vs 359, `set_reconciliation` |
+  | 2B `RA` (vs DEV2.0-2B) | −.004 | −.010 | +.151 | Score floor 227 vs 245 |
+  | **0.8B `RA`** (vs DEV2.0-0.8B) | **+.049 GAIN** | **+.044** | **+.190** | **only `attribute_gate` 277 vs 280** |
+
+  - The 0.8B arm also gains typed Score (202 vs 159), with no Score5 collapse.
+  - **Mechanism:** adding breadth, even additively, moves losses between typed heads rather than removing them. Ten
+    percent IB gets ≈ 90% of the transfer gain of 25%.
+  - **M13 (resumed):**
+    - typed-row **self-distillation from the same-tier released model** (our own model, typed rows only; distinct from
+      the human-row teacher finding): 0.8B RA-SD, 2B RA-SD, 4B LHA10-SD;
+    - 0.8B RA-AG (`attribute_gate` upweighted);
+    - 4B LHA5 (+5%);
+    - same gates, no waivers; 80 GPU-h.
+
 - 2026-10-01 19:50 — **MoE-1 closed (72f00c98): the Gemma-4-26B-A4B-it rank-64 soup is NOT a successor; DEV2.0-27B
   stays A20r. No MoE-2 for now.** Records `27b/records/moe-*` final, gist 06c; integration `0fc6c84a6`; 41.31 of 60
   GPU-h (34.0 milestone + 7.3 private Index).
