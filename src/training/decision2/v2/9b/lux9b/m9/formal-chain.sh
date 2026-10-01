@@ -8,14 +8,16 @@
 #
 # Stage 2 (amendment 2): M9_STAGE=2 reads select/9b-finalists-s2.json and waits for status/formal-s2.GO.
 # Stage 3 (amendment 3): M9_STAGE=3 reads select/9b-finalists-s3.json and waits for status/formal-s3.GO.
+# Stage 4 (amendment 4): M9_STAGE=4 reads select/9b-finalists-s4.json and waits for status/formal-s4.GO.
 #
-# usage: [M9_STAGE=2|3] M9_NODE=a formal-chain.sh launch|run <mirror-dir>
+# usage: [M9_STAGE=2|3|4] M9_NODE=a formal-chain.sh launch|run <mirror-dir>
 set -u
 MODE=$1 SRC=$2
 STAGE=${M9_STAGE:-1}
 case $STAGE in
   2) RULES=9b-finalists-s2 GO=formal-s2.GO TAG=-s2 ;;
   3) RULES=9b-finalists-s3 GO=formal-s3.GO TAG=-s3 ;;
+  4) RULES=9b-finalists-s4 GO=formal-s4.GO TAG=-s4 ;;
   *) RULES=9b-finalists GO=formal.GO TAG="" ;;
 esac
 M=/data/dev2/runs/9b/m9
