@@ -1,7 +1,7 @@
 # ~27B M6 state (resume file)
 
-Updated: 2026-10-02 03:40 UTC+8 (19:40Z; **worker 3 = the coordinator's continuation #2, 0d2e488f, ran
-15:12–≈ 20:00Z and handed off: read "Hand-off (worker 3 → continuation)" and its "Next steps" first**; worker 2
+Updated: 2026-10-02 03:38 UTC+8 (19:38Z; **worker 3 = the coordinator's continuation #2, 0d2e488f, ran
+15:12–19:40Z and handed off: read "Hand-off (worker 3 → continuation)" and its "Next steps" first**; worker 2
 a56025bb ran 10:44–15:15Z; worker 1 11741ee2 ran 06:17–10:55Z). Prereg amendment 4 (`c1eafcc08`, the Index path)
 applies from now on.
 Prereg `m6-prereg-2026-10-01.md` (`90d38aba7`) with amendments 1 (`b74685ddb`), 2 (`35492ac25`) and **3 (`4e4211aee`,
@@ -13,12 +13,12 @@ Assignment: COORDINATION 2026-10-01 14:25 (27B M6, worker 11741ee2). Branch `xun
 (worktree `/home/xunliu/code/vllm-sr-dev2-27b`; merge-only into `xunzhuo/decision-2-training`). Gist file
 `06-decision-2-27b.md`. Budget 140 GPU-h. Index numbers are private: never in this file, commits or the gist.
 
-## Hand-off (worker 3 → continuation, ≈ 20:00Z) — read this first
+## Hand-off (worker 3 → continuation, 19:40Z) — read this first
 
-- **State:** eight seeds train unattended on schedule; four chains, four node D relays, the node A relay and four mlx
-  watchers alive; the **contrast guard** (node B PID 2868454) protects the shared `m6/gates/` (see "Infrastructure").
-  No candidate, gate or formal result exists yet. GPU-h ≈ 80 of 140 at 19:00Z (projection ≈ 134); eval allowance
-  used 0.056 (the restage control).
+- **State (poll 12, 19:32Z):** eight seeds train unattended on schedule; four chains, four node D relays, the node A
+  relay and four mlx watchers alive; the **contrast guard** (node B PID 2868454) protects the shared `m6/gates/` (see
+  "Infrastructure"). No candidate, gate or formal result exists yet. GPU-h ≈ 85 of 140 (projection ≈ 134); eval
+  allowance used 0.056 (the restage control). Last commit by worker 3 ≈ 19:40Z: the next poll is due by 20:25Z.
 - **Rules that changed this session** (all recorded before any M6 result):
   - **C1 content recheck r1 PASS, exposure 0 for all four arms** (`v2/eval/records/c1-recheck-r1-2026-10-01.md`,
     verdict `0823a1a8…`): C1 content blocks item 8 for no arm.
@@ -289,6 +289,12 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 19:36Z (poll 12 at 19:32Z; worker 3's last): all alive, guard alive. M6-IB 4,388 / 4,243 (13.5 / 13.8 h; ETA
+  21:29Z / 21:47Z); **M6-IB2 4,318 / 4,321 (17.7 / 17.6 h; at 4135 .9198 / .9244, BEST = 4135 both)**; M6-IBX
+  3,966 / 3,919 (13.9 / 14.0 h; **s2 at 3750 .9163, BEST = 3750**); M6-IB2PN 2,904 / 2,887 (18.8 / 18.7 h). No IX1
+  container on node D at 19:33Z. **GPU-h ≈ 85** (closed 1.314 + running ≈ 83.5). COORDINATION 03:15 (M15 closed;
+  MLX-DEV2 commissioned as the future guard for new breadth arms) changes nothing for M6's preregistered gates;
+  note that formal mlx-diag (item 4) is what sank the breadth arms at 0.8B–9B.
 - 19:01Z (poll 11 at 18:59Z): all alive, guard alive. M6-IB 4,183 / 4,030 (13.6 / 13.8 h; ETA 21:30Z / 21:47Z);
   M6-IB2 4,115 / 4,115 (17.7 / 17.7 h); M6-IBX 3,763 / 3,724 (13.8 / 14.0 h; s1 at 3750 .8988, BEST stays 3125);
   **M6-IB2PN 2,695 / 2,678 (18.9 / 18.7 h; at 2583 .9149 / .9073, BEST = 2583 both)**. GPU-h ≈ 80.
