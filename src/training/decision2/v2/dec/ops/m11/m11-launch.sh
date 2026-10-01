@@ -6,7 +6,7 @@
 #
 # GPU isolation (nodes C-F rule): the container gets /dev/kfd plus only its GPU's render node, resolved from the
 # GPU's PCI address as /root/d2-gpu-smoke.sh does, with ROCR_VISIBLE_DEVICES=0. Only M11's GPUs are accepted (node E
-# GPU0-3, node F GPU2-7), and the GPU's lease owner file must name "dec-m11". Mounts (read-only unless noted): the
+# GPU0-3, node F GPU2-3 / 6-7 after amendment 1), and the GPU's lease owner file must name "dec-m11". Mounts (read-only unless noted): the
 # exact mirror's src/training/decision2 as /code, /data/dev2/models as /models, /data/dev2/runs/dec as /runs, the
 # decoder panels as /panels, the SELECT/CAL directory as /data, <out-dir> as /out (rw) and the M11 Triton cache named
 # by M11_CACHE as /triton-cache (rw; prereg: per node and tier, training and readouts use separate caches, each a copy
@@ -26,7 +26,7 @@ fi
 node=${M11_NODE:?set M11_NODE=e or f}
 case $node in
   e) allowed=" 0 1 2 3 " ;;
-  f) allowed=" 2 3 4 5 6 7 " ;;
+  f) allowed=" 2 3 6 7 " ;;  # amendment 1: node F GPU4-5 hold another workload
   *) echo "unknown node $node" >&2; exit 2 ;;
 esac
 image=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1

@@ -3,7 +3,7 @@
 # when no training chain holds that GPU, and readouts on a GPU never overlap):
 #   refs (node E GPU3): per tier, C0 (DEV2.0-<t>'s weights, the M8s start copies) read as <t>-C0-e, then the untrained
 #        base through the label-token readout (a LoRA zero-step checkpoint, as M10's 4b-BASE) read as <t>-BASE-e;
-#   arm <ARM>: wait until the arm's three seeds have a terminal marker, read C0 on this node as <t>-C0-<node> if not
+#   arm <ARM> (node F GPU7 for <t>-LH, node E GPU3 for <t>-NT): wait until the arm's three seeds have a terminal marker, read C0 on this node as <t>-C0-<node> if not
 #        read yet (every point is gated against C0 read on its own node), build the arm soup (m11-soup.sh) and read it
 #        as <ARM>.
 # A failed step stops the chain (never rerun).

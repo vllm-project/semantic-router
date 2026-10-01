@@ -2,7 +2,8 @@
 # shellcheck disable=SC2034  # the per-tier values (NAME_<tier>) are read by name through tv()
 # Decoder M11 training chains (prereg dec-m11-prereg-2026-10-01.md, stage 1), one per M11 GPU. A chain holds its GPU's
 # flock for its whole run, keeps the GPU's lease owner file current and runs its items in order:
-#   node F: GPU2 "2b-LH:1"  GPU3 "2b-LH:2"  GPU4 "2b-LH:3"  GPU5 "08b-LH:1"  GPU6 "08b-LH:2"  GPU7 "08b-LH:3"
+#   node F: GPU2 "2b-LH:1 08b-LH:1"  GPU3 "2b-LH:2 08b-LH:2"  GPU6 "2b-LH:3 08b-LH:3"   (GPU7: node-F readouts)
+#   (amendment 1: node F GPU4-5 hold another workload's memory, so they are not used)
 #   node E: GPU0 "2b-NT:1 08b-NT:1"  GPU1 "2b-NT:2 08b-NT:2"  GPU2 "2b-NT:3 08b-NT:3"   (GPU3: references, readouts)
 # Arms: <t>-LH = LoRA r128 from Qwen3.5-<t>-Base + candidate head; <t>-NT = the tier's released recipe from its 1.0
 # model (Sol / Eos) with the label-token readout. Every arm: the tier's released r2-clean TRAIN (and, at 2B, own-Sol
@@ -24,12 +25,9 @@ C=$M/chains ST=$M/status
 OPS=/data/dev2/src/$SRC/src/training/decision2/v2/dec/ops/m11
 mkdir -p "$C" "$ST" "$M/logs"
 case $NODE:$GPU in
-  f:2) ITEMS="2b-LH:1" ;;
-  f:3) ITEMS="2b-LH:2" ;;
-  f:4) ITEMS="2b-LH:3" ;;
-  f:5) ITEMS="08b-LH:1" ;;
-  f:6) ITEMS="08b-LH:2" ;;
-  f:7) ITEMS="08b-LH:3" ;;
+  f:2) ITEMS="2b-LH:1 08b-LH:1" ;;
+  f:3) ITEMS="2b-LH:2 08b-LH:2" ;;
+  f:6) ITEMS="2b-LH:3 08b-LH:3" ;;
   e:0) ITEMS="2b-NT:1 08b-NT:1" ;;
   e:1) ITEMS="2b-NT:2 08b-NT:2" ;;
   e:2) ITEMS="2b-NT:3 08b-NT:3" ;;
