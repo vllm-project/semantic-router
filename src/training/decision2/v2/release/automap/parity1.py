@@ -113,7 +113,6 @@ def main() -> None:
         str(args.model), trust_remote_code=True, device=args.device
     )
     load_seconds = time.perf_counter() - started
-    too_long = sys.modules[type(model).__module__].DecisionInputTooLongError
     loaded = sum(parameter.numel() for parameter in model.parameters())
     panels, changes = {}, []
     for spec in args.panel:
@@ -146,12 +145,13 @@ def main() -> None:
                 for value in native.values()
             )
             totals["native_over_budget"] += native_over
-            try:
-                response = model.system_one(**payload)
-                answers, ours_over = response["answers"], False
-                tokens = response["usage"]["input_tokens"]
-            except too_long:
-                answers, ours_over, tokens = {}, True, None
+            response = model.system_one(**payload)
+            answers = response["answers"]
+            ours_over = all(
+                isinstance(value, dict) and value.get("error") == "max_length_exceeded"
+                for value in answers.values()
+            )
+            tokens = None if ours_over else response["usage"]["input_tokens"]
             if native_over or ours_over:
                 totals["prompts"] += 1
                 totals["slots"] += len(prompt["questions"])

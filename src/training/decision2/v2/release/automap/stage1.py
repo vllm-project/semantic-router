@@ -28,28 +28,27 @@ SCHEMA = "dev1-automap-stage/1"
 HERE = Path(__file__).resolve().parent
 CODE_DIR = HERE / "decision1"
 CODE_FILES = (
-    "configuration_decision.py",
-    "modeling_decision.py",
-    "pipeline_decision.py",
-    "decision_system_one.py",
-    "decision_vela.py",
-    "decision_qwen.py",
+    "configuration_decision1.py",
+    "modeling_decision1.py",
+    "pipeline_decision1.py",
+    "decision1_system_one.py",
+    "decision1_vela.py",
+    "decision1_qwen.py",
 )
 HF_KEYS = {
-    "architectures": ["DecisionModel"],
+    "model_type": "decision1",
+    "architectures": ["Decision1Model"],
     "auto_map": {
-        "AutoConfig": "configuration_decision.DecisionConfig",
-        "AutoModel": "modeling_decision.DecisionModel",
+        "AutoConfig": "configuration_decision1.Decision1Config",
+        "AutoModel": "modeling_decision1.Decision1Model",
     },
     "custom_pipelines": {
         "decision": {
-            "impl": "pipeline_decision.DecisionPipeline",
+            "impl": "pipeline_decision1.Decision1Pipeline",
             "pt": ["AutoModel"],
-            "tf": [],
             "type": "text",
         }
     },
-    "model_type": "decision",
 }
 HEADING = "## Use with 🤗 Transformers"
 
@@ -116,14 +115,15 @@ DECODER_EXAMPLE = {
 ENCODER_NOTES = (
     'The model loads on the first GPU when one is visible, otherwise on the CPU (pass `device="cpu"` '
     'or `device="cuda:0"` to choose); weights and arithmetic are FP32. A complete question, its '
-    "candidates and the state are limited to 1,024 tokens; a longer question raises an error instead "
-    "of being truncated."
+    "candidates and the state are limited to 1,024 tokens; if a question is longer, every question of "
+    "the request is answered with a `max_length_exceeded` error and nothing is truncated."
 )
 DECODER_NOTES = (
     'The model loads on the first GPU when one is visible, otherwise on the CPU (pass `device="cpu"` '
     'or `device="cuda:0"` to choose). On a GPU the backbone runs in BF16 with an FP32 decision head; '
     "on the CPU everything runs in FP32. A complete question, its candidates and the state are limited "
-    "to 16,384 tokens; a longer question raises an error instead of being truncated. "
+    "to 16,384 tokens; if a question is longer, every question of the request is answered with a "
+    "`max_length_exceeded` error and nothing is truncated. "
     "[flash-linear-attention](https://github.com/fla-org/flash-linear-attention) speeds up the "
     "linear-attention layers on a GPU."
 )
@@ -270,8 +270,8 @@ def section(repo_id: str, spec: dict[str, Any]) -> str:
         "```python\n"
         f"{python_example(repo_id, spec['example'])}"
         "```\n\n"
-        f'`pipeline("decision", model="{repo_id}", trust_remote_code=True)` accepts the same request body, '
-        "and `model.choice`, `model.noul` and `model.score` answer a single question. "
+        f'`pipeline("decision", model="{repo_id}", trust_remote_code=True)` accepts the same request body. '
+        "A malformed question is answered with an `invalid_question` error. "
         f"{notes}\n\n"
     )
 

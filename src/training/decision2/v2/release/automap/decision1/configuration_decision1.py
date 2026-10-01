@@ -1,12 +1,11 @@
 # Copyright 2026 The vLLM Semantic Router Authors.
 # SPDX-License-Identifier: Apache-2.0
-"""Configuration of a Decision 1.0 repository.
+"""Decision 1.0 configuration for 🤗 Transformers (``trust_remote_code=True``).
 
 The repository's root ``config.json`` is its Decision file map
-(``decision_format: vllm-sr-decision``): model name, runtime family, and the
-paths of the backbone, tokenizer, decision weights and calibration. The keys
-``model_type``, ``architectures``, ``auto_map`` and ``custom_pipelines`` let
-Transformers load it with ``trust_remote_code=True``.
+(``decision_format: vllm-sr-decision``): model name, runtime family and the
+paths of the backbone, tokenizer, decision weights and calibration, plus
+``model_type``, ``architectures``, ``auto_map`` and ``custom_pipelines``.
 """
 
 from __future__ import annotations
@@ -15,9 +14,9 @@ from pathlib import PurePosixPath
 from typing import Any
 
 try:
-    from transformers import PreTrainedConfig as _BaseConfig
-except ImportError:  # Transformers 4.x
-    from transformers import PretrainedConfig as _BaseConfig
+    from transformers import PreTrainedConfig
+except ImportError:  # Transformers 4
+    from transformers import PretrainedConfig as PreTrainedConfig
 
 FAMILIES = ("vela-encoder", "qwen3.5-decision")
 DESCRIPTOR_KEYS = (
@@ -33,17 +32,17 @@ DESCRIPTOR_KEYS = (
 )
 
 
-def _relative(path: Any, where: str) -> str:
+def _relative(path: Any) -> str:
     if not isinstance(path, str) or not path or "\\" in path:
-        raise ValueError(f"{where} must be a relative file path")
+        raise ValueError("config.json names a file with an invalid path")
     parts = PurePosixPath(path)
     if parts.is_absolute() or ".." in parts.parts or "." in parts.parts:
-        raise ValueError(f"{where} must stay inside the repository")
+        raise ValueError("config.json names a file outside the repository")
     return path
 
 
-class DecisionConfig(_BaseConfig):
-    model_type = "decision"
+class Decision1Config(PreTrainedConfig):
+    model_type = "decision1"
 
     def __init__(
         self,
@@ -71,7 +70,7 @@ class DecisionConfig(_BaseConfig):
         super().__init__(**kwargs)
 
     def descriptor(self) -> dict[str, Any]:
-        """The validated Decision file map."""
+        """The Decision file map of ``config.json``."""
         if self.decision_format != "vllm-sr-decision" or self.format_version != 1:
             raise ValueError("config.json is not a Decision 1.0 file map")
         if self.runtime_family not in FAMILIES:
@@ -100,4 +99,4 @@ class DecisionConfig(_BaseConfig):
         calibration = descriptor.get("calibration") or {}
         if calibration.get("temperature_file"):
             names.append(calibration["temperature_file"])
-        return sorted({_relative(name, "config.json path") for name in names})
+        return sorted({_relative(name) for name in names})

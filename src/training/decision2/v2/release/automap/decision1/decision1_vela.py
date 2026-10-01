@@ -24,7 +24,7 @@ import torch
 from torch import nn
 from torch.nn import functional
 
-from .decision_system_one import DecisionInputTooLongError, Row, content_text
+from .decision1_system_one import DecisionInputTooLongError, Row, content_text
 
 KINDS = ("choice", "noul", "score")
 PHYSICAL_BATCH = 8

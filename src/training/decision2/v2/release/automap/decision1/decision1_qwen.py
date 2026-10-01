@@ -12,8 +12,12 @@ multiple of 32 tokens. Complete inputs only: nothing is truncated.
 
 from __future__ import annotations
 
+import functools
+import inspect
 import json
 import math
+import sys
+import types
 from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
@@ -22,7 +26,7 @@ import torch
 from torch import nn
 from torch.nn import functional
 
-from .decision_system_one import (
+from .decision1_system_one import (
     DecisionInputTooLongError,
     Row,
     canonical_json,
@@ -35,6 +39,60 @@ NOUL_DEFAULT_FALSE = "The answer to the question is no."
 NOUL_DEFAULT_TRUE = "The answer to the question is yes."
 PROMPT_VERSION = "structured-segmented-candidate-endpoints-global-query-v2"
 SUFFIX = "\n\nSelect the single option best supported by the context and instructions.\nDecision:"
+QWEN3_5_MODELING = "transformers.models.qwen3_5.modeling_qwen3_5"
+# Gated-delta functions that Transformers binds at import to these packages' GPU-only kernels.
+GATED_DELTA = (
+    "causal_conv1d_fn",
+    "causal_conv1d_update",
+    "torch_chunk_gated_delta_rule",
+    "torch_recurrent_gated_delta_rule",
+)
+KERNEL_PACKAGES = ("fla", "causal_conv1d")
+
+
+def _accepting(function: Any) -> Any:
+    """``function`` called with only the keywords it takes, as Transformers' fallback wrapper calls it."""
+    parameters = inspect.signature(function).parameters
+    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in parameters.values()):
+        return function
+
+    @functools.wraps(function)
+    def call(*args: Any, **kwargs: Any) -> Any:
+        return function(*args, **{k: v for k, v in kwargs.items() if k in parameters})
+
+    return call
+
+
+def cpu_reference_layers(root: nn.Module) -> int:
+    """Bind the Qwen3.5 gated-delta layers under ``root`` to the PyTorch reference functions.
+
+    Transformers binds those functions at import to the flash-linear-attention /
+    causal-conv1d kernels when they are installed, and the kernels are GPU-only.
+    Each layer gets its own forward whose globals name the reference functions;
+    nothing global changes. Returns the number of layers rebound.
+    """
+    modeling = sys.modules.get(QWEN3_5_MODELING)
+    layer_class = getattr(modeling, "Qwen3_5GatedDeltaNet", None)
+    if layer_class is None or not any(name in sys.modules for name in KERNEL_PACKAGES):
+        return 0
+    references = {
+        name: _accepting(inspect.unwrap(getattr(modeling, name)))
+        for name in GATED_DELTA
+        if callable(getattr(modeling, name, None))
+    }
+    forward = inspect.unwrap(layer_class.forward)
+    reference_forward = types.FunctionType(
+        forward.__code__,
+        {**forward.__globals__, **references},
+        forward.__name__,
+        forward.__defaults__,
+        forward.__closure__,
+    )
+    reference_forward.__kwdefaults__ = forward.__kwdefaults__
+    layers = [m for m in root.modules() if isinstance(m, layer_class)]
+    for layer in layers:
+        layer.forward = types.MethodType(reference_forward, layer)
+    return len(layers)
 
 
 class CandidateHead(nn.Module):
@@ -170,6 +228,8 @@ class QwenRuntime:
         ):
             raise ValueError("Unexpected candidate-head geometry")
         model.to(device).eval()
+        if device.type == "cpu":
+            cpu_reference_layers(model)
         tokenizer = AutoTokenizer.from_pretrained(
             str((root / descriptor["tokenizer"]["json"]).parent),
             trust_remote_code=False,
@@ -230,13 +290,11 @@ class QwenRuntime:
     def _check_precision(self, device) -> None:
         backbone = {parameter.dtype for parameter in self.model.backbone.parameters()}
         wanted = torch.float32 if device.type == "cpu" else torch.bfloat16
-        if backbone != {wanted}:
-            # The weights are stored in BF16, so moving between BF16 and FP32 is exact.
-            self.model.backbone.to(wanted)
-        if {parameter.dtype for parameter in self.model.head.parameters()} != {
-            torch.float32
-        }:
-            raise ValueError("The candidate head must stay FP32; reload the model")
+        head = {parameter.dtype for parameter in self.model.head.parameters()}
+        if backbone != {wanted} or head != {torch.float32}:
+            raise RuntimeError(
+                "The model was cast or moved outside Decision1Model.to(); reload it"
+            )
 
     def predict(self, rows: list[Row]) -> tuple[list[list[float]], list[int]]:
         """Probabilities per row in request order, and input tokens per row."""
