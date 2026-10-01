@@ -1,13 +1,43 @@
 # ~27B M6 state (resume file)
 
-Updated: 2026-10-01 19:05 UTC+8 (11:05Z; continuation worker 2 a56025bb, started 10:44Z; worker 1 11741ee2 ran
+Updated: 2026-10-01 20:00 UTC+8 (12:00Z; continuation worker 2 a56025bb, started 10:44Z; worker 1 11741ee2 ran
 06:17–10:55Z).
-Prereg `m6-prereg-2026-10-01.md` (`90d38aba7`) with amendments 1 (`b74685ddb`) and 2 (`35492ac25`). Mirrors: M6-IB /
-M6-IB2 seeds, chains and watchers run from **`b74685ddb`**, M6-IBX's from **`d8edcf4e1`** (on node A / B / D); step 0
-ran from `20af2e4a1`.
+Prereg `m6-prereg-2026-10-01.md` (`90d38aba7`) with amendments 1 (`b74685ddb`), 2 (`35492ac25`) and **3 (`4e4211aee`,
+data lock `7fcbc824c`)**. Mirrors: M6-IB / M6-IB2 seeds, chains and watchers run from **`b74685ddb`**, M6-IBX's from
+**`d8edcf4e1`**, M6-IB2PN's from **`7fcbc824c`** (on node A / B / D); step 0 ran from `20af2e4a1`. Hand-off record for
+other tracks: `m6-handoff-2026-10-01.md`. Results tables: `python3 -m v2.27b.m6.m6_report` (from mirror `4ee6b920e` or
+later on node B).
 Assignment: COORDINATION 2026-10-01 14:25 (27B M6, worker 11741ee2). Branch `xunzhuo/decision-2-training-27b`
 (worktree `/home/xunliu/code/vllm-sr-dev2-27b`; merge-only into `xunzhuo/decision-2-training`). Gist file
 `06-decision-2-27b.md`. Budget 140 GPU-h. Index numbers are private: never in this file, commits or the gist.
+
+## Hand-off (worker 2 → continuation; refreshed at every poll)
+
+- **Eight seeds train unattended; four chains carry them to verdicts** (one per arm; M6-IB2PN is amendment 3's G5
+  hedge). Nothing needs a manual step until a chain ends, except polling (≤ 45 min, state commit each time; > 60 min
+  without a commit while GPU jobs run counts as a silent stop). Training ends (measured rates): **M6-IB ≈ 21:15Z /
+  21:50Z** (s1 / s2), **M6-IBX ≈ 22:40Z**, **M6-IB2 ≈ 01:40Z** (Oct 2), **M6-IB2PN ≈ 06:50Z** (Oct 2); each chain then
+  needs ≈ 1–2 h (soup, readout, slices, gates; formal + mlx-diag + items 1–7 only for passers).
+- **Poll (workstation):** per node `docker ps | grep d2-27b-M6`; driver / chain / relay / watcher PIDs ("Running now");
+  per seed `full/run/train-metrics.jsonl` (step, `seconds`) and `select-step-*-metrics.json` (family macro). Watch
+  M6-IB2PN's projection against its 22 GPU-h cap (expected ≈ 18.6–19.2).
+- **When a chain's gates land:** on node B, from mirror `4ee6b920e` or later:
+  `python3 -m v2.27b.m6.m6_report devgates /data/dev2/runs/27b/m6/readouts/DEVGATES-<UTC>.json --root
+  /data/dev2/runs/27b/m6 --pn1-rows <PN1 dev path>` (the `PN1=` path in `m6-launch.sh`) → G1–G6 with intervals and
+  the reported-only es / fr view for the results record; after verdicts, `m6_report verdicts
+  /data/dev2/runs/27b/m6/gates/VERDICTS-<UTC>.json`. Each chain writes its own DEVGATES / VERDICTS file (one arm
+  each); the "≤ 2 finalists per stage" rule cannot bind (stage 1: M6-IB, M6-IBX; stage 2: M6-IB2, M6-IB2PN).
+- **If a chain stops:** rerun only the failed stage with `m6-tail.sh <stage> <that chain's mirror> …` (or
+  `m6-gates.sh`), then the chain's remaining steps in `m6-chain.sh`'s order; never rerun a seed.
+- **Finalists:** formal, mlx-diag (scored on node A by the watcher), items 1–7 and beats-AutoJev run in the chain. Then
+  `m6-handoff-2026-10-01.md`: §1 the custodian's C1 content recheck (**requested 11:50Z; can run now**), §2 item 8 for
+  the chosen finalist (fill in the package path and spec), §3 the private Index request to IX1 (M6 funds none), §4 the
+  release hand-off on top of the 27B forward-budget fix revision of `main` `3236518c` (check that it has landed).
+- **Attribution after all chains:** `m6-gates.sh <mirror ≥ c0056edca> gates <all sealed finalists>` for the formal
+  contrasts (now including M6-IB2PN vs M6-IB2); development contrasts between arms from the readouts / slices.
+- **Milestone end** (after M6-IB2PN's chain, ≈ 09:00Z Oct 2; its mlx push / pull uses the link): `m6/m6-link.sh
+  remove`; node D leases GPU0–3 released (owner files back to idle / released for the next user); node B GPU0 / 1 / 5
+  and node A GPU2 back to `reserved-idle`; final results, gist 06, merge into integration.
 
 ## Hand-off (worker 1 → continuation, ≈ 10:55Z)
 
