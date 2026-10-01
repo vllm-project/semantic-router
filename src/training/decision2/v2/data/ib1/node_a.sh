@@ -382,13 +382,18 @@ EOF
 hf_assemble() {
   fresh hf
   local spec=$R/hf/spec.json
-  # The G0 receipt for upload keeps IB1-side counts only; suite statistics stay in the node copy.
-  python3 - "$R/g0/scan/index-guard.public.json" > "$R/hf/index-guard.public.json" <<'EOF'
+  # G0 receipts for upload keep IB1-side counts only; suite statistics stay in the node copies.
+  local g name
+  for g in "$R/g0/scan" "$R"/rescan*/g0; do
+    name=$(basename "$(dirname "$g")")
+    [ "$name" != g0 ] || name=index-guard
+    python3 - "$g/index-guard.public.json" > "$R/hf/$name.public.json" <<'EOF'
 import json, sys
 receipt = json.load(open(sys.argv[1]))
 receipt["reference"] = "every Decision Index suite row (selected and added rows); statistics kept on the node"
 print(json.dumps(receipt, indent=1, sort_keys=True))
 EOF
+  done
   python3 - "$R" "$CAND" "$CODE/v2/data/records" > "$spec" <<'EOF'
 import json, pathlib, sys
 run, cand, rec = map(pathlib.Path, sys.argv[1:])
@@ -415,11 +420,24 @@ items = [
     (run / "quarantine/lists/quarantine.public.json", "audits/quarantine.public.json"),
     (run / "names/g1.json", "audits/names-g1.json"),
     (run / "names/c1-names.json", "audits/c1-names.json"),
-    (run / "screen/screen.public.json", "audits/screen.public.json"),
-    (run / "screen/sample/sample.json", "audits/screen-sample.json"),
     (run / "review/answers/review.public.json", "audits/review.public.json"),
     (run / "review/sample/sample.json", "audits/review-sample.json"),
 ]
+if (run / "screen").exists():
+    items += [
+        (run / "screen/screen.public.json", "audits/screen.public.json"),
+        (run / "screen/sample/sample.json", "audits/screen-sample.json"),
+    ]
+for scan in sorted(run.glob("rescan*")):
+    out = f"audits/rescan/{scan.name}"
+    items += [(run / f"hf/{scan.name}.public.json", f"{out}/index-guard.public.json")]
+    items += [(scan / f"{n}.public.json", f"{out}/overlap-{n}.public.json") for n in ("piv4", "piv4q", "piib1")]
+    items += [
+        (scan / "self.public.json", f"{out}/overlap-dev-vs-train.public.json"),
+        (scan / "lists/quarantine.public.json", f"{out}/quarantine.public.json"),
+        (scan / "c1-names.json", f"{out}/c1-names.json"),
+        (scan / "summary.txt", f"{out}/summary.txt"),
+    ]
 items += [(p, f"audits/shortcut/{p.name}") for p in sorted((run / "shortcut").glob("*.json"))]
 print(json.dumps([{"src": str(src), "dst": "ib1/" + dst} for src, dst in items], indent=1))
 EOF
