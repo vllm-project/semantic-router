@@ -1,0 +1,391 @@
+{
+ "dev": {
+  "family": {
+   "args": 576,
+   "copa": 110,
+   "csqa": 530,
+   "isarc": 88,
+   "maud": 344,
+   "medmcqa": 821,
+   "poem": 416,
+   "procb": 36,
+   "sentfin": 805,
+   "sms": 121,
+   "snips_rel": 287,
+   "snips_sel": 322,
+   "sumedit": 199,
+   "w2c": 335,
+   "wands": 742,
+   "wanli": 923
+  },
+  "groups": 4588,
+  "label_by_family": {
+   "args": {
+    "0": 288,
+    "1": 288
+   },
+   "copa": {
+    "0": 57,
+    "1": 53
+   },
+   "csqa": {
+    "0": 90,
+    "1": 102,
+    "2": 118,
+    "3": 100,
+    "4": 120
+   },
+   "isarc": {
+    "0": 51,
+    "1": 37
+   },
+   "maud": {
+    "0": 147,
+    "1": 141,
+    "2": 28,
+    "3": 16,
+    "4": 11,
+    "5": 1
+   },
+   "medmcqa": {
+    "0": 203,
+    "1": 173,
+    "2": 232,
+    "3": 213
+   },
+   "poem": {
+    "0": 221,
+    "1": 195
+   },
+   "procb": {
+    "0": 16,
+    "1": 20
+   },
+   "sentfin": {
+    "0": 274,
+    "1": 273,
+    "2": 258
+   },
+   "sms": {
+    "0": 66,
+    "1": 55
+   },
+   "snips_rel": {
+    "0": 140,
+    "1": 147
+   },
+   "snips_sel": {
+    "0": 66,
+    "1": 80,
+    "2": 93,
+    "3": 83
+   },
+   "sumedit": {
+    "0": 82,
+    "1": 117
+   },
+   "w2c": {
+    "0": 163,
+    "1": 172
+   },
+   "wands": {
+    "0": 253,
+    "1": 253,
+    "2": 236
+   },
+   "wanli": {
+    "0": 312,
+    "1": 312,
+    "2": 299
+   }
+  },
+  "language": {
+   "ar": 45,
+   "en": 6610
+  },
+  "rows": 6655,
+  "sha256": "6816bf43834a88c43c8351cc6e3f98e732a53ae9d2d40ccb64dc90ff2c1eca92",
+  "task_type": {
+   "choice": 6012,
+   "noul": 643
+  }
+ },
+ "inputs": {
+  "Qwen_ProcessBench/math.json": "60cb0d7a69cbec98d43cf50855b9b7e7294599c3c9a24bdd031abd18c3b6b136",
+  "Salesforce_summedits/summedits.json": "21e34593330020d02b7d92f4651fdcc550f7d79a2f899392f106fd816c215a89",
+  "alisawuffles_WANLI/anonymized_annotations.jsonl": "32821a1cf24208399c1d3967b2c998b2f0227f054dfddd0b83bbde5cdf5e3588",
+  "alisawuffles_WANLI/train.jsonl": "85058cf017a911e89242dc29fa0a4ddaad3664cb923dc0a82145fdda14b694e5",
+  "biglam_gutenberg-poetry-corpus/data/train-00000-of-00001-fa9fb9e1f16eed7e.parquet": "c7117a3c7e613162679cc1fbca4b0ac4a1f105c7f6d00cebb9ec35d6788d64d2",
+  "cmalaviya_expertqa/r2_compiled_anon_fixed.jsonl": "da7edb5b774ed1081f50a665fc8cc1ad64690a4b6a67a587803f53f547be4bc6",
+  "iabufarha_iSarcasmEval/train/train.Ar.csv": "7a13a6ee8082c7a2f0bfd0d0e2b8bd06549ccb1feff7c013afdd509d473672f0",
+  "iabufarha_iSarcasmEval/train/train.En.csv": "fde737b69caffbcf81ebe79858ad16ac21881573c308343cd5219c4f7a800ae7",
+  "nvidia_When2Call/train/when2call_train_pref.jsonl": "d90637f108fabf1b097493c5818c3692e1d73140259d2f8e490536255e765bc4",
+  "openlifescienceai_medmcqa/data/train-00000-of-00001.parquet": "b119434ba551517a6ec0ba1f7e0b4c029165ed284a4704f262ce37c791c493c5",
+  "pkavumba_balanced-copa/train.csv": "650ec76d0b0b46511bcf68702f9e371cc3d9ad3074f947659d98155cc19d56ef",
+  "pyRis_SEntFiN/SEntFiN.csv": "570af7ba58f724f3fcc414dd5ba80da5b1a3b342134d76c6ebdf53a32c54a92f",
+  "sonos_nlu-benchmark/2017-06-custom-intent-engines/AddToPlaylist/train_AddToPlaylist_full.json": "fee1b4645352e70ed8a40f1f87c3b53fc3bf75f8ebc82252a22b82c107e75b01",
+  "sonos_nlu-benchmark/2017-06-custom-intent-engines/BookRestaurant/train_BookRestaurant_full.json": "7677e82cd6e9a8191f0a4502568c786278c984900b4796d3628e46f1abf73ef4",
+  "sonos_nlu-benchmark/2017-06-custom-intent-engines/GetWeather/train_GetWeather_full.json": "86f414b2ad8a993134d85d16e25e5d337beae47cef993c0af2a5f440405c60f6",
+  "sonos_nlu-benchmark/2017-06-custom-intent-engines/PlayMusic/train_PlayMusic_full.json": "901ddbe9781d1fdb8196e789c543f80df3d29ca6e237da64947905adcc0312e4",
+  "sonos_nlu-benchmark/2017-06-custom-intent-engines/RateBook/train_RateBook_full.json": "bb43e4b74134300d5766f6b420d0357a63402987a225f6dc92c806c9c040ce04",
+  "sonos_nlu-benchmark/2017-06-custom-intent-engines/SearchCreativeWork/train_SearchCreativeWork_full.json": "87b3432de48c71c205aa5238b41d9e3f2d70bdfcd0bea2427544fb9e4bd5e5bb",
+  "sonos_nlu-benchmark/2017-06-custom-intent-engines/SearchScreeningEvent/train_SearchScreeningEvent_full.json": "5447e9440c02e2fb08c3ae16b9f58a4d1332b4bc77fd34691402b02aa4399765",
+  "tau_commonsense_qa/data/train-00000-of-00001.parquet": "b0449767ed986bfc2ca52b1244a46ef12f732756727f3cb0a4ab69ac8b3d282b",
+  "theatticusproject_maud/MAUD_v1/MAUD_train.csv": "bac9f2d034ad487d5398ee2ac1c876679afea509ba8e7f1092112955c6180ff9",
+  "ucirvine_sms_spam/plain_text/train-00000-of-00001.parquet": "6e5518e4a49cb2de8af9c89a38b742825cdddbb55942701fc2237d4364288abd",
+  "wayfair_WANDS/dataset/label.csv": "c11fe81ad62f17f56f316b0ec9630ebe8fbe1393578cb0ca4f05c17253a180ef",
+  "wayfair_WANDS/dataset/product.csv": "d993926254572e6eba96c8fd87cc549a17fb91ad3748308036eee4cf92b10ac6",
+  "wayfair_WANDS/dataset/query.csv": "63b61660560fecc33ec490804c7e2b81402ee3e7c31a9cbb5e03736639f68e95",
+  "webis_args_me/args-me.jsonl": "dc49ce6a5547370034be99365e8041d91ce477dbb4e0012ae16c0a6ecdd28187"
+ },
+ "prereg": "records/ib1-prereg-2026-10-01.md",
+ "report": {
+  "duplicates": {
+   "conflicting": {},
+   "exact": {
+    "sumedit": 5
+   }
+  },
+  "families": {
+   "args": {
+    "drop_portal": 333473,
+    "drop_premise": 309,
+    "drop_shape": 4893,
+    "read": 382545,
+    "selected": 6000,
+    "twin_statements": 9304
+   },
+   "copa": {
+    "drop_conflicting_duplicates": 2,
+    "drop_exact_duplicates": 0,
+    "eligible": 998,
+    "read": 1000,
+    "selected": 998
+   },
+   "csqa": {
+    "drop_exact_duplicates": 0,
+    "drop_shape": 122,
+    "eligible": 9619,
+    "read": 9741,
+    "selected": 6000
+   },
+   "expqa": {
+    "drop_evidence_length": 1,
+    "drop_exact_duplicates": 0,
+    "drop_no_evidence": 2216,
+    "drop_support_Incomplete": 1766,
+    "drop_support_N/A": 745,
+    "drop_support_None": 44,
+    "drop_support_Partial": 660,
+    "eligible": 7166,
+    "read": 12598,
+    "selected": 0
+   },
+   "isarc": {
+    "drop_exact_duplicates": 0,
+    "drop_not_sarcastic": 4958,
+    "eligible": 1612,
+    "read": 6570,
+    "selected": 963
+   },
+   "maud": {
+    "drop_data_type": 12571,
+    "drop_exact_duplicates": 0,
+    "drop_option_count": 5265,
+    "drop_text_length": 1706,
+    "eligible": 6285,
+    "read": 25827,
+    "selected": 6000
+   },
+   "medmcqa": {
+    "drop_exact_duplicates": 0,
+    "drop_explanation_inconsistent": 70230,
+    "drop_multi": 62057,
+    "drop_shape": 519,
+    "eligible": 50016,
+    "read": 182822,
+    "selected": 8000
+   },
+   "poem": {
+    "drop_exact_duplicates": 0,
+    "rhyme_windows": 54962,
+    "selected": 4000,
+    "windows": 770818
+   },
+   "procb": {
+    "drop_exact_duplicates": 0,
+    "drop_generator_licence": 555,
+    "eligible": 445,
+    "read": 1000,
+    "selected": 360
+   },
+   "sentfin": {
+    "drop_conflicting_duplicates": 14,
+    "drop_exact_duplicates": 73,
+    "drop_unparsed": 13,
+    "eligible": 14284,
+    "read": 14371,
+    "selected": 7998
+   },
+   "sms": {
+    "drop_exact_duplicates": 414,
+    "eligible": 5160,
+    "read": 5574,
+    "selected": 1284
+   },
+   "snips_rel": {
+    "drop_exact_duplicates": 63,
+    "eligible": 6748,
+    "selected": 2996
+   },
+   "snips_sel": {
+    "drop_exact_duplicates": 106,
+    "eligible": 6867,
+    "read": 13784,
+    "selected": 2996
+   },
+   "sumedit": {
+    "drop_domain": 3548,
+    "drop_exact_duplicates": 0,
+    "drop_length": 270,
+    "eligible": 2530,
+    "read": 6348,
+    "selected": 1910
+   },
+   "w2c": {
+    "drop_conflicting_duplicates": 24,
+    "drop_exact_duplicates": 1,
+    "eligible": 8975,
+    "read": 9000,
+    "selected": 3516
+   },
+   "wands": {
+    "drop_conflicting_duplicates": 30,
+    "drop_exact_duplicates": 1559,
+    "eligible": 231859,
+    "read": 233448,
+    "selected": 7998
+   },
+   "wanli": {
+    "drop_exact_duplicates": 0,
+    "drop_not_unanimous": 53067,
+    "eligible": 49818,
+    "read": 102885,
+    "selected": 9000
+   }
+  },
+  "group_merges": 1
+ },
+ "schema": "decision2.ib1.build.v1",
+ "train": {
+  "family": {
+   "args": 5424,
+   "copa": 888,
+   "csqa": 5470,
+   "isarc": 875,
+   "maud": 5656,
+   "medmcqa": 7179,
+   "poem": 3584,
+   "procb": 324,
+   "sentfin": 7193,
+   "sms": 1163,
+   "snips_rel": 2709,
+   "snips_sel": 2674,
+   "sumedit": 1706,
+   "w2c": 3181,
+   "wands": 7256,
+   "wanli": 8077
+  },
+  "groups": 41237,
+  "label_by_family": {
+   "args": {
+    "0": 2712,
+    "1": 2712
+   },
+   "copa": {
+    "0": 431,
+    "1": 457
+   },
+   "csqa": {
+    "0": 1101,
+    "1": 1123,
+    "2": 1118,
+    "3": 1031,
+    "4": 1097
+   },
+   "isarc": {
+    "0": 429,
+    "1": 446
+   },
+   "maud": {
+    "0": 2357,
+    "1": 2382,
+    "2": 411,
+    "3": 311,
+    "4": 138,
+    "5": 57
+   },
+   "medmcqa": {
+    "0": 1839,
+    "1": 1876,
+    "2": 1721,
+    "3": 1743
+   },
+   "poem": {
+    "0": 1773,
+    "1": 1811
+   },
+   "procb": {
+    "0": 164,
+    "1": 160
+   },
+   "sentfin": {
+    "0": 2392,
+    "1": 2393,
+    "2": 2408
+   },
+   "sms": {
+    "0": 576,
+    "1": 587
+   },
+   "snips_rel": {
+    "0": 1358,
+    "1": 1351
+   },
+   "snips_sel": {
+    "0": 663,
+    "1": 679,
+    "2": 657,
+    "3": 675
+   },
+   "sumedit": {
+    "0": 870,
+    "1": 836
+   },
+   "w2c": {
+    "0": 1595,
+    "1": 1586
+   },
+   "wands": {
+    "0": 2413,
+    "1": 2413,
+    "2": 2430
+   },
+   "wanli": {
+    "0": 2688,
+    "1": 2688,
+    "2": 2701
+   }
+  },
+  "language": {
+   "ar": 410,
+   "en": 62949
+  },
+  "rows": 63359,
+  "sha256": "888dad522420dafe6759aa1957dd35a628be579e4873934d89e0ee9ed9ecbdb1",
+  "task_type": {
+   "choice": 57457,
+   "noul": 5902
+  }
+ }
+}
