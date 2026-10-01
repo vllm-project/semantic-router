@@ -11,8 +11,8 @@ in records only. Times are UTC. Everything stays private.
 
 - **All six repositories are republished as runtime-only revisions** with the BF16-resident runtime (`5dc962b00`),
   each with **0 answer changes on every scored prompt and on mlx-diag** (11,053 answers per model) before the upload
-  and again on the real download. All private; the collection "🎲 Decision 2.0" is unchanged (0.6B, 0.8B, 2B, 4B, 9B,
-  27B).
+  and again on the real download. All private; the collection "🎲 Decision 2.0" is unchanged: the six in order (0.6B, 0.8B, 2B, 4B, 9B, 27B), then
+  item 7, a collaborator's `DEV2.0-Route-0.6B`, already there before this rollout and not touched by it.
 
   | Model | New `main` | Final decision (gate items) | Replaces | Answer changes (max drift) | p50 latency; peak GPU memory, old → new |
   | --- | --- | --- | --- | --- | --- |
@@ -139,7 +139,7 @@ Release checks:
 
 - Every run: repeat-pre and repeat-post bit-identical, card example executed before and after the download, readback
   private with no card problems, card HTTP passed (anonymous access refused), collection "🎲 Decision 2.0" unchanged
-  (0.6B, 0.8B, 2B, 4B, 9B, 27B), `gate evaluate` all items passed; the gate sealed each final decision to its revision.
+  (0.6B, 0.8B, 2B, 4B, 9B, 27B, then the collaborator's `DEV2.0-Route-0.6B`), `gate evaluate` all items passed; the gate sealed each final decision to its revision.
 - Order: 0.6B → 0.8B → 2B → 4B → 9B on node A GPU0, one after another; the 27B on node B GPU2 started with the 9B run
   and uploaded after it (the 9B's scored image `f83b1d10` and inputs exist only on node A; node B holds the 27B
   inputs and the kernel image). For the 27B on node B, three small successor-gate evidence files were relayed from
