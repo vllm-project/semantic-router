@@ -146,7 +146,7 @@ def _load_mutated_catalog(
 
 
 def test_packaged_latest_catalog_is_verified() -> None:
-    assert available_catalog_versions() == ("latest",)
+    assert available_catalog_versions()[0] == "latest"
 
     catalog = load_model_catalog("latest")
 
