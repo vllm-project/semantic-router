@@ -84,7 +84,6 @@ def review_sample(
         SALT,
         skip_ids={k["id"] for k in screen_key},
         skip_groups={k["group_id"] for k in screen_key},
-        present_classes=True,
     )
     items, key = ib1.packets(picked, PACKET_SALT, PREFIX)
     size = math.ceil(len(items) / ib1.PACKETS)

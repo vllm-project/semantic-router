@@ -3,7 +3,7 @@ import json
 import unittest
 
 from training.model.data import validate_row
-from v2.data.ib2 import audit, build
+from v2.data.ib2 import audit, build, review
 from v2.data.ib2 import families as fam
 
 
@@ -455,6 +455,22 @@ class BalanceTest(unittest.TestCase):
                     self.assertEqual(len(changed), 1)
                     self.assertFalse(request.grounded(other[changed[0]]))
             validate_row(item, "train")
+
+
+class ReviewSampleTest(unittest.TestCase):
+    def test_review_sample_skips_screened_rows_and_stratifies(self):
+        rows = fam.gsm2(
+            [{"question": f"P{i}?", "answer": f"#### {i}"} for i in range(1, 400)],
+            counter(),
+        )
+        screened = [{"id": r["id"], "group_id": r["group_id"]} for r in rows[:5]]
+        built = review.review_sample(rows, "x", screened, set())
+        self.assertEqual(built["sample"]["n"], 216)
+        self.assertEqual(
+            built["sample"]["cells"], {"gsm2|false": 108, "gsm2|true": 108}
+        )
+        self.assertFalse({k["id"] for k in built["key"]} & {k["id"] for k in screened})
+        self.assertTrue(all(k["rid"].startswith("u") for k in built["key"]))
 
 
 if __name__ == "__main__":
