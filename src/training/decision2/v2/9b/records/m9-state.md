@@ -1,8 +1,8 @@
 # 9B M9 state (resume file)
 
-Updated: 2026-10-01 19:30 UTC+8 (11:26Z) by continuation worker b23ed249. **Poll 11:26Z:** L9IB-s2 1,172 / 2,344,
-L9IBX-s1 1,147 / 2,196, L9IBX-s2 1,089 / 2,187 (ETA ≈ 12:45–12:56Z); K-a13IB-s1 / s2 / s3 432 / 388 / 369 of 2,083
-(≈ 14 updates / min, ETA ≈ 13:25–13:32Z); every chain PID alive; node C 20.7 GPU-h incl. running. **Stage 1 closed (no finalist); stage 2
+Updated: 2026-10-01 19:55 UTC+8 (11:53Z) by continuation worker b23ed249. **Poll 11:53Z:** L9IB-s2 1,523 / 2,344,
+L9IBX-s1 1,483 / 2,196, L9IBX-s2 1,449 / 2,187 (ETA ≈ 12:48–12:57Z); K-a13IB-s1 / s2 / s3 840 / 794 / 773 of 2,083
+(≈ 14.8 updates / min, ETA ≈ 13:17–13:22Z); every chain PID alive; node C 23.5 GPU-h incl. running. **Stage 1 closed (no finalist); stage 2
 training (unattended); stage 3 (amendment 3) launched 10:47Z.** Branch `xunzhuo/decision-2-training-9b-m9`
 (worktree `vllm-sr-dev2-9b-m9`). Prereg `records/lux9b-m9-prereg-2026-10-01.md` (`8570a5896`); amendment 1
 (`0b84e0db4`), amendment 2 (`51c80ddc9`, stage 2), **amendment 3 (`787abdc54`, stage 3 = K-a13 recipe + IB1-r3 + IB2 at
