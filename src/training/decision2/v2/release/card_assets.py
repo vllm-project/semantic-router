@@ -450,7 +450,7 @@ class Renderer:
             ),
         ]
         ax.legend(handles=handles, loc="upper left", frameon=False, fontsize=9.5)
-        fig.text(0.08, 0.035, view["footnote"], fontsize=7.8, color=MUTED)
+        footnote(fig, 0.08, view["footnote"])
         self.add_logo(fig)
         self.save(fig, path)
 
@@ -525,9 +525,23 @@ class Renderer:
             fontsize=9.5,
             bbox_to_anchor=(0.93, 0.80),
         )
-        fig.text(0.06, 0.035, view["footnote"], fontsize=7.8, color=MUTED)
+        footnote(fig, 0.06, view["footnote"])
         self.add_logo(fig)
         self.save(fig, path)
+
+
+FOOTNOTE_LINE = 140
+
+
+def footnote(fig: Any, x: float, text: str) -> None:
+    """The Index footnote; one that would run into the logo breaks at the "; " nearest its middle."""
+    if len(text) > FOOTNOTE_LINE and "; " in text:
+        cuts = [i for i in range(len(text)) if text.startswith("; ", i)]
+        cut = min(cuts, key=lambda i: abs(i - len(text) / 2))
+        text = text[: cut + 1] + "\n" + text[cut + 2 :]
+        fig.text(x, 0.018, text, fontsize=7.8, color=MUTED, linespacing=1.4)
+        return
+    fig.text(x, 0.035, text, fontsize=7.8, color=MUTED)
 
 
 def chart_rows(shown: list[dict[str, Any]]) -> list[dict[str, Any]]:
