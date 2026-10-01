@@ -1,0 +1,12 @@
+{
+  "bytes": 2039402459,
+  "commit_url": "https://huggingface.co/llm-semantic-router/Decision-2.0-Eos-0.8B/commit/5c878c67d6a0c665b1c71e54eee8710593889eca",
+  "files": 29,
+  "manifest_sha256": "44012ea3b11c1ce9aa3375b034b1f6ba62b7c08f804c0b81a385e1e4b858ad43",
+  "private": true,
+  "repo": "llm-semantic-router/Decision-2.0-Eos-0.8B",
+  "revision": "5c878c67d6a0c665b1c71e54eee8710593889eca",
+  "schema": "dev2-hub-upload/1",
+  "seconds": 2.72008798099705,
+  "utc": "2026-10-01T17:48:30.739006+00:00"
+}

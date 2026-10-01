@@ -1,0 +1,48 @@
+{
+  "schema": "dec-m15-data/1",
+  "name": "08b-RA10SDML",
+  "seed": 20261002,
+  "arm_train_sha256": "12bd63d8b215877b6f471c12652e534e0f0be794c15bff74ad5ac50e98018bf3",
+  "teacher_sha256": "18827abcc49ffa73fb06ffbda68661848f373417d279f544d6c255fadbade4f6",
+  "ib_share": 0.1,
+  "base": {
+    "rows": 162696,
+    "tokens": 138244874,
+    "ml_tokens": 59817917,
+    "ml_share": 0.4326953706797114
+  },
+  "ib": {
+    "rows": 66378,
+    "rows_in_arm": 146529,
+    "tokens": 13823655,
+    "ml_tokens": 71905,
+    "dose": 0.09999397880025555,
+    "by_level": {
+      "1": 48843,
+      "2": 17535
+    }
+  },
+  "upsample": {
+    "target_tokens": 10416849,
+    "tokens": 10416622,
+    "rows": 10632,
+    "groups": 10134,
+    "tokens_by_language": {
+      "zh": 10168109,
+      "ko": 118815,
+      "ja": 100671,
+      "de": 29027
+    },
+    "teacher_copies": 10632
+  },
+  "train": {
+    "rows": 239706,
+    "tokens": 162485151,
+    "ml_share": 0.43269457896494185,
+    "sha256": "bc84da49ffe4940038161eb6fae536210901a7d08d855a0a99392520b3847fad"
+  },
+  "teacher": {
+    "rows": 173328,
+    "sha256": "f7f79ce196070c29d4e168cdd93e8353ddd5676dc78dc479c6315aaf067a4229"
+  }
+}

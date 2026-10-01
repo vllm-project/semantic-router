@@ -1,0 +1,35 @@
+{
+  "files": {
+    "assets/banner.png": "4486ed3a16ef697c29b20aad42bd2b7fc7163d51d8b84b37535d78243462b766",
+    "assets/index-areas.png": "86ec0c5a491d3668c65c1806bf32f7d2ca8561a0b4bf0da77b7c3be9e3bf54f7",
+    "assets/index-pareto.png": "8e69c7318a7181f0cab04fd60111e1df96358955ec9893f16e80d3a51eef9aa9",
+    "assets/jevarena-types.png": "102b7d0945830a648d376ad44a614657f21bc833bbeba7f5bf8adbc850aaea1d",
+    "assets/jevarena.png": "7d5dc0766c1a5e31aab6b68a2586cf6b16c640d6e583a8e45572db3ece350042"
+  },
+  "inputs": {
+    "fonts_sha256": {
+      "Inter-Bold": "288316099b1e0a47a4716d159098005eef7c0066921f34e3200393dbdb01947f",
+      "Inter-Medium": "97ad806f526e41546d46365bb3a393145f75b7b1568913db74549ad8b8dba872",
+      "Inter-Regular": "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82",
+      "Inter-SemiBold": "78a843fade9d4612a5567302fb595b56976eb5fcebf4fea5a5912d638bafcde3",
+      "InterDisplay-Bold": "b74c8e0dd744b3347faca4c96bc7b2e32f7d6f62300a79b1d1a99331e44a5bc4",
+      "InterDisplay-SemiBold": "0310d7a325896129730c6c8cf9a6e0f81ee258bedf77b1ff059b2a7b75f74e02"
+    },
+    "index_sha256": "47e59a9550767b07d8aa82effb3cee4d5fbde75c4abed725e6ed2e6551826a01",
+    "logo_sha256": "e6b8428eb67f9318450e4b938639055d20e5f3643aa3b6f676a7b96a7beda94a",
+    "reports": {
+      "candidate": "66106ef9123bf0bb9ac8aeb5024384cc98d5194dd231ff71cebc541b88cf3b17",
+      "lux1": "b4ebe0d24a3756136aa5fe79a1daf614b7509371f76d130c299d536f41add62c",
+      "nimble2": "42636dfa1482ba5d76e9f5ada1186c699b6ab058a762106334911c60d8469cea"
+    }
+  },
+  "model_name": "Decision-2.0-Lux-9B",
+  "model_sha256": "b1ed5a71038b474902d2a6dfebeee0c6f7ce901097553b4621f6f0a23fb6da98",
+  "schema": "dev2-card-assets/1",
+  "software": {
+    "matplotlib": "3.11.2",
+    "pillow": "12.3.0",
+    "python": "3.12.13"
+  },
+  "tier": "9B"
+}

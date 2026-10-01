@@ -99,6 +99,22 @@ class Renderer:
         ax.axis("off")
 
     @staticmethod
+    def footnote(fig, x: float, text: str) -> None:
+        """One line per sentence, kept left of the logo."""
+        lines = [
+            s if s.endswith(".") else s + "." for s in text.rstrip(".").split(". ")
+        ]
+        fig.text(
+            x,
+            0.018,
+            "\n".join(lines),
+            fontsize=7.8,
+            color=MUTED,
+            va="bottom",
+            linespacing=1.5,
+        )
+
+    @staticmethod
     def header(fig, title: str, subtitle: str, x: float = 0.06) -> None:
         fig.text(
             x,
@@ -316,7 +332,7 @@ class Renderer:
             ]
 
         fig, ax = plt.subplots(figsize=(11, 6.6), dpi=DPI)
-        fig.subplots_adjust(left=0.08, right=0.97, top=0.80, bottom=0.16)
+        fig.subplots_adjust(left=0.08, right=0.97, top=0.80, bottom=0.18)
         self.header(
             fig,
             "Jev Decision Index",
@@ -450,7 +466,7 @@ class Renderer:
             ),
         ]
         ax.legend(handles=handles, loc="upper left", frameon=False, fontsize=9.5)
-        fig.text(0.08, 0.035, view["footnote"], fontsize=7.8, color=MUTED)
+        self.footnote(fig, 0.08, view["footnote"])
         self.add_logo(fig)
         self.save(fig, path)
 
@@ -525,7 +541,7 @@ class Renderer:
             fontsize=9.5,
             bbox_to_anchor=(0.93, 0.80),
         )
-        fig.text(0.06, 0.035, view["footnote"], fontsize=7.8, color=MUTED)
+        self.footnote(fig, 0.06, view["footnote"])
         self.add_logo(fig)
         self.save(fig, path)
 

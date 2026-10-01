@@ -1,0 +1,118 @@
+{
+  "builder_commit": "eb2d9f1df8f17fe4e7e62949675ed6a599ae9fe6",
+  "card": {
+    "assets_receipt_sha256": "ad5b1609121e86378df5aec15c01475116fcd103b9f83f8794f923cf72ef2d49",
+    "excluded": [],
+    "figures_sha256": {
+      "assets/banner.png": "616ff6bfdc882566ac81bb72b46dd99f54033794da9bdc58bace68471efbcdea",
+      "assets/index-areas.png": "d2d6e0f265bde669be4355a5a9980740bc83118bf3cbbdfb2ac89a662ecc6d73",
+      "assets/index-pareto.png": "76ca2336a45c58beb88f10e61917cd67bf3af59b463018a90fa1151c3401c9d0",
+      "assets/jevarena-types.png": "33e46f237d4ec9ebea78578d856496409cf552337ef53c5d81d1a417e0f56220",
+      "assets/jevarena.png": "01814a5a0955c0dda6f951ce35181a210df6853746312ee47a189b8a8e544d22"
+    },
+    "index_sha256": "47e59a9550767b07d8aa82effb3cee4d5fbde75c4abed725e6ed2e6551826a01",
+    "paired": {
+      "ci95": [
+        10.00203051669837,
+        17.49987266238486
+      ],
+      "delta": 12.698059641241464,
+      "replicates": 5000,
+      "sha256": "7b391cb2f5ab08b798e3ba6817dcf269ae0b9fb4843dabe4ac434b8177b77f98"
+    },
+    "readme_sha256": "39225bee4669c1722678ba629ae5a8d26fc9a4be04ed8537eaa8d7d916f328a8",
+    "shown": [
+      {
+        "key": "candidate",
+        "licence": "package",
+        "report_sha256": "b2083796ed0a03728edffb2aa8af5c9c60db38df3ad8182ea5c9e08d6bb6a2ed"
+      },
+      {
+        "key": "kai1",
+        "licence": "apache-2.0",
+        "report_sha256": "1b0140e360d35613d973cf36182978b54a1679e355ba62bc3cc2785714f06716"
+      },
+      {
+        "key": "gliner25",
+        "licence": "apache-2.0",
+        "report_sha256": "7dc5be9242d07a59696e37b8caef1ed18a540ab96dfae547a3ffa2ae445f162d"
+      },
+      {
+        "key": "bosun",
+        "licence": "apache-2.0",
+        "report_sha256": "80c539bfb19116105d15b4e29978f517fb67716bd688f66c7929b6265ed3aade"
+      },
+      {
+        "key": "lex1",
+        "licence": "apache-2.0",
+        "report_sha256": "45f7d5c9c8e35b70e069ffe2400c96b3401dd145994b17779e7897e8c3a4b3a9"
+      }
+    ],
+    "tradeoffs": [
+      "Transfer: Misinfo Reaction Frames (macro-F1): 55.5% versus 56.6%"
+    ]
+  },
+  "ended_utc": "2026-10-01T17:14:09.521183+00:00",
+  "files": 32,
+  "identity": {
+    "architecture": "qwen3-text-endpoints-global-query-shared-bilinear-mlp",
+    "bf16_copy": {
+      "receipt_sha256": "2a991bfb4388d36f4767e8fa843aeb4b77f422aabb603f179fb609768b576c6b",
+      "source_model_sha256": "01fae75098ce29314c5de2990321fcfd31457de7c02bb757bd8345662a823854"
+    },
+    "dec_residual": false,
+    "head_variant": "shared",
+    "model_sha256": "bb806f31a14d4532a1b5e00984442128f47f46cbbc68e57e7623327c81cfb983",
+    "readout": "head",
+    "score_bias": {
+      "offsets": {
+        "5": [
+          0.039188,
+          0.203049,
+          0.079362,
+          -0.15162,
+          -0.169979
+        ]
+      },
+      "sha256": "7d3a060fe1823aa7fe759776df3db872408de580f227120fbe08b9eef53dcf6e"
+    },
+    "temperature_by_type": null,
+    "text_parameter_count": 596049920
+  },
+  "licence": "apache-2.0",
+  "manifest_sha256": "1c9c2710033587f0c64a1d7fbf5580f527486cf3d482988d0b2b970b45e44f38",
+  "package": "/data/dev2/runs/release/dev2-card2-0.6B-20261001T171401Z/package/Decision-2.0-Kai-0.6B",
+  "parameters": {
+    "external_base_text": null,
+    "loaded": 597103104,
+    "packaged": {
+      "backbone": 596049920,
+      "head": 1053184,
+      "residual": 0
+    }
+  },
+  "release_decision": {
+    "sha256": "fea1c446ecfa2c0b5e24c8a87177829aedcf5218037350cb670b2c6571a48a79",
+    "status": "final"
+  },
+  "schema": "dev2-release-build/1",
+  "score_bias": {
+    "file": "score_bias.json",
+    "offsets": {
+      "5": [
+        0.039188,
+        0.203049,
+        0.079362,
+        -0.15162,
+        -0.169979
+      ]
+    },
+    "scored_sha256": "03f0c9c777de95f8ea56112c05a3c29521687609aa67c9c7ca466c14bf8dadae",
+    "sha256": "7d3a060fe1823aa7fe759776df3db872408de580f227120fbe08b9eef53dcf6e"
+  },
+  "screen": {
+    "text_files_screened": 27
+  },
+  "spec_sha256": "c0af3bfdee9e56f39cc8a37ccb1939122e5919762391c5e4b7945d50e1a05f5e",
+  "started_utc": "2026-10-01T17:14:06.396482+00:00"
+}

@@ -1,0 +1,57 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's job of 2026-10-02 00:05 UTC+8 (rename the six DEV2.0 repositories to Decision-2.0-<Codename>-<tier>; product cards with a banner, product highlights, a code-only quickstart and JevArena / Jev Decision Index charts; no training details, limitations, NOTICE, attributions or evaluation/ files), card-only revisions of all six repositories",
+  "decision": "release",
+  "decision_sha256": "b3d8e182a06d871d16ea8e88fabbaf47787b52f1d0b0aeb1069a75d685156cfe",
+  "items": {
+    "1_beats_own_1_0": {
+      "evidence": "paired v3 95% interval low +3.646 (sha fa62c29a1920)",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "11 results below own 1.0 listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 29 files re-hashed; loaded 753446208",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "44012ea3b11c1ce9aa3375b034b1f6ba62b7c08f804c0b81a385e1e4b858ad43",
+  "model_name": "Decision-2.0-Eos-0.8B",
+  "receipts_sha256": {
+    "automap-card-pre": "4668fe81cfb536cf1ebfce20f0501595989c2f6040bdc4ea3176468ea3ad0667",
+    "automap-hub": "4cd20ae89e5bbd4e2aa447586a48c1d33e996ed27efeda13fccb589e414e0cde",
+    "automap-hub-tf518": "0d38945ca946c86129404682f6a481059959604f836e988c35d69db1d8762d25",
+    "automap-post": "3a348586e6a19d887292eae3137810f975f1b48d8d8305d87f0dd58f6190bdd6",
+    "automap-pre": "e1d14154c45616b633ba0271b2d7c6ca2995e6647125f546f40aa38fc681506c",
+    "card-post": "aeea4bf090215708aade30c5d544f8d5c518fd817de1622db11973eaf6665058",
+    "card-pre": "56043dd890ddb95e0b76cef79ee0ce6267aa8907d8cd85e69737bc0e91680f27",
+    "download": "92110c5912d9ba55a06eca26ceddaa80abbefeac363f44b80e5629f376d22008",
+    "post": "f3b36d2ae79ce330a60e47e66bf7ff3a81ce28e7056313b94f52400b2637c5d0",
+    "readback": "def9c8c55f753e82943f7db87bac06880e1534611dbbce8f301df4f8f3f9afc1",
+    "repeat-post": "2c7a95251f7d873202df5335a175337a6a67d3308b83f5a5861b15a05492b3c1",
+    "repeat-pre": "2ff9f55abcd5eee3eedd06764d35ecf97e05cf9cc901f701583f818c28c5f6b5",
+    "tree": "72c236bddb928fc3b611ee03497fc0d0102ba4f4636f25fa5716ea75eee62f67",
+    "upload": "2693eabec0dacf4b8e909eb1cc65bb646b77d25e70e47bf0ac8c82d908b3c141"
+  },
+  "repo_id": "llm-semantic-router/Decision-2.0-Eos-0.8B",
+  "revision": "5c878c67d6a0c665b1c71e54eee8710593889eca",
+  "schema": "dev2-release-gate/1",
+  "utc": "2026-10-01T17:50:27.384765+00:00"
+}

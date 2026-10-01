@@ -197,7 +197,13 @@ digests only. The spec pins the private Index input (`card.index`, schema
 `dev2-card-index/1`, see `card_index.py`), the rendered assets directory
 (`card.assets`) and the bench receipt (`card.speed`); the build re-checks that
 the receipt names exactly the card's reports, Index input and weights before it
-copies the PNGs. Index values therefore appear only on the published cards, never
+copies the PNGs. `python -m v2.release.card_index` builds the Index input from
+the kit runs (one per released weights) and the board snapshot. Every point on
+the size axis follows the board's served-parameter convention: a Decision 2.0
+point takes the board's count for its own base (`BOARD_BASES`), and the
+at-a-glance table keeps the loaded count. `load` refuses any other footnote than
+`FOOTNOTE` (the kit edition, the snapshot date and the row-level training-data
+audit). Index values therefore appear only on the published cards, never
 in commits or records; tests use synthetic values (`tests/card_fixture.py`).
 Internal release facts (gate items, every result below the counterpart, decision
 IDs, revision and weights hashes) stay in the build receipt and release records.
