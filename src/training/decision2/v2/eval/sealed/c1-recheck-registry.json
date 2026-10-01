@@ -97,6 +97,6 @@
     "decoder M14": ["08b-RAUP", "2b-RAUP", "4b-LHA10UP"]
   },
   "pending": {
-    "IB3": "the data track's m6/ib3 build (in progress): a recheck r2 with its TRAIN files (and any mixture that adds them) runs before item 8 of an IB3-trained arm"
+    "IB3": "not rechecked. The first round (decision-2.0-training-data@c2401ab4 m6/ib3/, TRAIN 688b643e..., 24,148 rows) is not release-safe; IB3-r2 is being built. A recheck r2 with the adopted IB3 TRAIN file (and any mixture that adds it) runs before item 8 of an IB3-trained arm (runner: record section 4)."
   }
 }
