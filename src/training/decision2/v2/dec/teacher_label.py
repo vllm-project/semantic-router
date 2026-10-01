@@ -63,6 +63,21 @@ def teacher_temperatures(model_path: Path) -> dict[str, float]:
     return {key: float(value) for key, value in temperatures.items()}
 
 
+def dec_temperatures(
+    calibration: Path | None, uncalibrated: bool, model_sha256: str
+) -> dict[str, float]:
+    """A dec teacher's per-type temperatures: its calibration report, or T = 1 for a
+    checkpoint served without calibration (a released package with ``calibration: null``).
+    """
+    if uncalibrated == (calibration is not None):
+        raise ValueError(
+            "dec teachers need exactly one of a calibration report or uncalibrated"
+        )
+    if uncalibrated:
+        return dict.fromkeys(("choice", "noul", "score"), 1.0)
+    return calibration_temperatures(calibration, model_sha256)
+
+
 def calibration_temperatures(path: Path, model_sha256: str) -> dict[str, float]:
     report = json.loads(path.read_text(encoding="utf-8"))
     if report.get("model_sha256") != model_sha256:
@@ -101,6 +116,16 @@ def main() -> None:
         type=Path,
         help="dec teachers: calibration report (temperature_by_type) of that checkpoint",
     )
+    parser.add_argument(
+        "--uncalibrated",
+        action="store_true",
+        help="dec teachers served without calibration: T = 1 for every type",
+    )
+    parser.add_argument(
+        "--teacher-source-path",
+        type=Path,
+        help="dec teachers: the --source-path their readouts load them with",
+    )
     parser.add_argument("--teacher-repo", required=True)
     parser.add_argument("--teacher-revision", required=True)
     parser.add_argument("--train", type=Path, required=True)
@@ -116,8 +141,15 @@ def main() -> None:
     args = parser.parse_args()
     if not 0 <= args.shard_index < args.shard_count:
         parser.error("need 0 <= --shard-index < --shard-count")
-    if (args.teacher_kind == "dec") != bool(args.teacher_calibration):
-        parser.error("--teacher-calibration goes with --teacher-kind dec (only)")
+    if args.teacher_kind == "dec":
+        if bool(args.teacher_calibration) == args.uncalibrated:
+            parser.error(
+                "--teacher-kind dec needs exactly one of --teacher-calibration or --uncalibrated"
+            )
+    elif args.teacher_calibration or args.uncalibrated or args.teacher_source_path:
+        parser.error(
+            "--teacher-calibration / --uncalibrated / --teacher-source-path go with --teacher-kind dec"
+        )
     if args.output.exists():
         raise FileExistsError(args.output)
     runtime = require_runtime()
@@ -130,9 +162,15 @@ def main() -> None:
     if args.teacher_kind == "dec":
         from .dec_model import dec_fingerprint, load_dec_checkpoint
 
-        source = dec_fingerprint(args.teacher_path, None)["model_sha256"]
-        temperatures = calibration_temperatures(args.teacher_calibration, source)
-        model, tokenizer = load_dec_checkpoint(args.teacher_path, None)
+        source = dec_fingerprint(args.teacher_path, args.teacher_source_path)[
+            "model_sha256"
+        ]
+        temperatures = dec_temperatures(
+            args.teacher_calibration, args.uncalibrated, source
+        )
+        model, tokenizer = load_dec_checkpoint(
+            args.teacher_path, args.teacher_source_path
+        )
     else:
         temperatures = teacher_temperatures(args.teacher_path)
         source = source_fingerprint(args.teacher_path)
@@ -220,6 +258,10 @@ def main() -> None:
                 file_sha256(args.teacher_calibration)
                 if args.teacher_calibration
                 else None
+            ),
+            "teacher_uncalibrated": args.uncalibrated,
+            "teacher_source_path": (
+                str(args.teacher_source_path) if args.teacher_source_path else None
             ),
             "teacher_temperatures": temperatures,
             "train_sha256": file_sha256(args.train),

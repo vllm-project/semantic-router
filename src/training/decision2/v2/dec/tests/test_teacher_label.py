@@ -51,6 +51,31 @@ class TeacherTemperatureTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.read(self.root)
 
+    def test_dec_teacher_needs_exactly_one_temperature_source(self) -> None:
+        from v2.dec.teacher_label import dec_temperatures
+
+        self.assertEqual(
+            dec_temperatures(None, True, "x"),
+            dict.fromkeys(("choice", "noul", "score"), 1.0),
+        )
+        report = self.root / "cal.json"
+        report.write_text(
+            json.dumps(
+                {
+                    "model_sha256": "x",
+                    "temperature_by_type": {"choice": 1.1, "noul": 0.9, "score": 1.2},
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.assertEqual(dec_temperatures(report, False, "x")["score"], 1.2)
+        with self.assertRaises(ValueError):
+            dec_temperatures(report, True, "x")
+        with self.assertRaises(ValueError):
+            dec_temperatures(None, False, "x")
+        with self.assertRaises(ValueError):
+            dec_temperatures(report, False, "y")
+
 
 if __name__ == "__main__":
     unittest.main()

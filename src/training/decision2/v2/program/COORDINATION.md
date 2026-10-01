@@ -205,6 +205,73 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 22:35 — **User directive (22:20): fix the 0.8B Index regression vs 1.0 first; 9B / 2B gains are too
+  small; 4B / 27B ranks are not good enough; use all compute in parallel to reach the same-size Pareto frontier.**
+  - **Coordinator exception (recorded before any new result): `08b-RA` (M12) gets ONE formal attempt.**
+    - What it failed: exactly one development family floor (`attribute_gate` 277 vs 280, −3 of 400).
+    - What it passed: every type floor, HT-DEV v2 (GAIN +.049), retention (GAIN +.044) and the breadth families
+      (+.190).
+    - The family floor is a development screen. **Successor items 1–8 stay binding with no exception.**
+    - Owner: the new 0.8B fast-track worker (below). M13 keeps running RA-SD / RA-AG. Whichever line passes first
+      becomes the release, and later ones are judged against the then-current release.
+  - **IB3 data (new worker):** phishing (licence-clean URL / email sources), grounding / faithfulness, product-search
+    relevance, knowledge MCQ with shortcut-robust construction, contracts (non-CUAD). These are the remaining Index
+    deficit families for 4B / 9B / 27B (private profile). Same exclusions, gates and review as IB1 / IB2.
+  - **Idle GPUs** (≈ 18): node A GPU0–1 / 3–5, node B GPU2–4 / 6–7, node D GPU2–7 (unless the M6 hedge took them),
+    node E GPU6–7, node F GPU4–5. They are reassigned as results land. The fast-track takes node E GPU6–7.
+  - **Workers launched:**
+    - **0.8B fast-track (1afc17e8):** a single formal run of `08b-RA` → items 1–7 → C1 recheck + item 8 → release on
+      `4afea305` → private Index.
+    - **IB3 data (611782db):** phishing URLs / emails, grounding, ESCI E-vs-I, shortcut-robust MCQ, contracts.
+    - **M14 (ad17bb4f):** typed-row **upweighting** arms (0.8B RA-UP, 2B RA-UP, 4B LHA10-UP), complementary to M13's
+      self-distillation, on node A GPU3–5 + node B GPU2–4; 80 GPU-h.
+  - Running at the same time: M13, 27B M6 continuation, 9B M9 continuation (stage 2 / 3), the card redesign.
+
+- 2026-10-01 22:20 — **User directive (22:10): model cards SHOULD include the Decision Index comparison vs Decision
+  1.0 and a size–quality Pareto chart, in a premium, frontier-lab style with white backgrounds.** This overrides the
+  original brief's "no Index on cards / no Pareto on cards" for model cards.
+  - **Labelling (mandatory).**
+    - Decision 2.0 values are an *independent reproduction with the 0.2.1 kit on the released packages*, not official
+      board submissions.
+    - Other entrants (incl. Decision 1.0) come from the *public board snapshot of 2026-09-28*.
+    - The Index has its own section and charts, never merged into the JevArena chart or table.
+    - Regressions vs 1.0 are shown as they are (0.8B is −0.3).
+    - Chart titles must not claim frontier status the data does not show.
+  - **Still private:** Index values never go into the public GitHub branch, gists or commit messages. Cards are built
+    from private reports at release time.
+  - **Visual standard.** Prototype charts are in the local private `card-preview/proto/`
+    (`make_proto_charts.py`, `index-pareto.*`, `index-v2-vs-v1.*`):
+    - Inter (OFL) on white;
+    - one accent (indigo) for 2.0, soft accent for 1.0, grey entrants, a dashed frontier step;
+    - direct labels and a source footnote.
+    - The JevArena chart follows the same style.
+  - **Naming** is under discussion with the user. No repo renames until decided.
+  - **Next:** when the card-redesign round (4c0a68cd) reports, resume it to add the Index section plus both charts in
+    this style, then apply the naming decision.
+
+- 2026-10-01 22:05 — **User directive (21:58): redesign the DEV2.0 model cards as formal, user-facing release cards
+  (4c0a68cd, resumed).**
+  - Keep only "Use with 🤗 Transformers" as the quickstart (remove "Download and decide").
+  - Rename "JevArena v3" to **"JevArena"** in all user-facing text.
+  - Charts: white background, standard professional style.
+  - Remove the technical-report / notes content (post-key and C1 boxes, gate and decision IDs, hashes, runtime notes,
+    Brier / ECE, mlx-diag columns, tier breakdowns, long footnotes). Internal records keep it;
+    `evaluation/EVALUATION.md` keeps methods and full tables.
+  - New structure:
+    1. metadata;
+    2. title and description;
+    3. highlights;
+    4. overview table;
+    5. one chart and one compact table (JevArena / human-labelled transfer / JevBench public vs the 1.0 counterpart and
+       peers);
+    6. Transformers quickstart;
+    7. limitations (honest, concise);
+    8. training data with the required attributions;
+    9. license and citation.
+  - Implemented in the card template and chart generator, so successors inherit it; card-only revisions for all six.
+  - **Applies to all tracks:** successor hand-offs must use the new card template; internal results stay in records,
+    not cards.
+
 - 2026-10-01 21:25 — **Forward-budget fix shipped (4c0a68cd): runtime-only revisions for 0.8B / 2B / 9B / 27B.**
   Records and gist 07; integration `88de5d8b7`; ≈ 4.8 GPU-h.
   - **Current `main` revisions (all sizes):**
