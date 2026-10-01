@@ -1,10 +1,14 @@
 # 9B M9 state (resume file)
 
 **Continuation worker cba71646 (from 14:37Z; rules → lock / GO → formal → items → C1 → release → private Index).**
-Poll 14:47Z: K-a13IBX at 1,445 / 1,472 / 1,384 of ≈ 1,990 (ETA ≈ 15:30Z); every chain PID alive (node C
-`chain-c{2,1,4}-s3`, `post-c-KIBX`; node A `post-a-KIBX`, `formal-s3`); no `select/9b-finalists-s3.json` yet. Integration
-merged (`a9df14980`, signed off). New: `lux9b/m9/items.py` (items 1–7 from `successor.json`, the exposure receipts and
-a line-level TRAIN ⊂ x60 ∪ IB1-r3 ∪ IB2 check), committed before any formal run.
+Poll 15:10Z: K-a13IBX at 1,743 / 1,762 / 1,682 of ≈ 1,990 (ETA ≈ 15:32Z); every chain PID alive (node C
+`chain-c{2,1,4}-s3`, `post-c-KIBX`; node A `post-a-KIBX`, `formal-s3`); no `select/9b-finalists-s3.json` yet (ETA
+≈ 16:15Z). Integration merged (`a9df14980`, signed off). New: `lux9b/m9/items.py` (`f1bb2a50f`; items 1–7 from
+`successor.json`, the exposure receipts and a line-level TRAIN ⊂ x60 ∪ IB1-r3 ∪ IB2 check), committed before any
+formal run. **Item 6 subset checks done (node C, mirror `f1bb2a50f`):** `exposure/kib-subset.json` (`1dfb1843…`):
+151,015 of 151,015 K-a13IB TRAIN rows (`2cd09292…`) occur in x60 (`a66131b1…`, the released K file) ∪ IB1-r3 TRAIN
+(`1e1b08f3…`, 24,325) ∪ IB2 TRAIN (`ee137efa…`, 24,518); `exposure/kibx-subset.json` (`af6ca288…`): 145,480 of 145,480
+(`548b61a5…`). IB exposure receipt `exposure/ib1-ib2-train.json` (node A, `9fd9d3db…`): 0 groups.
 
 Updated: 2026-10-01 22:40 UTC+8 (14:35Z) by continuation worker b23ed249 (hand-off point). **Stage 2 closed 13:28Z: NO FINALIST**
 (record `lux9b-m9-stage2-result-2026-10-01.md`; rules `select/9b-finalists-s2.json` `df0ef550…`, readout
