@@ -141,6 +141,7 @@ the L128 training runs from `e76e56d4c`).
 
 ## Poll log (newest first)
 
+- 02:27Z: continuation worker 4 (worker 3 stopped silently after its 16:50Z poll). Chain L128 COMPLETED 21:01:55Z (exit 0): L128-s1 / s2 complete (BEST = final update 3561; 9.99 / 9.94 GPU-h); soup M5-L128 95d61175… finalist (DEVGATES-20260930T201334Z: HT-DEV v2 TIE −.011); formal v3 74.725; VERDICTS-20260930T210155Z: items 1–7 false (item 1 lower bound −0.559, item 4 mlx-diag card −.013 [−.024, −.002]), beats-AutoJev false (lower bound −0.295): no successor. Node A watchers ended; no 27B container running. Receipts 70.99 GPU-h. Results record next
 - 16:50Z: L128-s1 2,652 / 3,561 (9.9 s/upd; ETA ≈ 19:18Z), s2 2,687 / 3,561 (ETA ≈ 19:13Z); s2 SELECT700 at 2676 .915 (new BEST, checkpoint written). All processes alive; no incident
 - 16:25Z: L128-s1 2,490 / 3,561 (9.9 s/upd; ETA ≈ 19:18Z), s2 2,533 / 3,561 (ETA ≈ 19:11Z). SELECT700 family macro at 1338 / 1784 / 2230: s1 .909 / .913 / .925, s2 .906 / .912 / .914 (each a new BEST). Chain L128, node A watchers and drivers alive. rrsync on node A allows --mkpath (the chain's SKIP / mlx push)
 - 16:25Z: L128-s1 2,490 / 3,561 (9.9 s/upd; ETA ≈ 19:18Z), s2 2,533 / 3,561 (ETA ≈ 19:11Z). SELECT700 family macro at 1338 / 1784 / 2230: s1 .909 / .913 / .925, s2 .906 / .912 / .914 (each a new BEST). Chain L128, node A watchers and drivers alive. rrsync on node A allows --mkpath (the chain's SKIP / mlx push)
