@@ -2,13 +2,16 @@
 
     python3 -m v2.data.hr2.build build --raw RAW --out CAND
     python3 -m v2.data.hr2.build finalize --cand CAND --out FINAL \
-        [--drop-groups FILE ...] [--drop-dev-groups FILE ...] [--drop-families NAME ...] [--drop-ids FILE ...]
+        [--drop-groups FILE ...] [--drop-dev-groups FILE ...] [--drop-families NAME ...] [--drop-ids FILE ...] \
+        [--drop-licence-families NAME ...] [--drop-construction-families NAME ...] \
+        [--drop-construction-ids FILE ...]
 
 ``build`` reads the pinned publisher TRAIN files under RAW, converts every family, merges groups that
 share a normalized state, removes exact duplicates and assigns the group-isolated DEV slice. It writes
 ``hr2.train.cand.jsonl``, ``hr2.dev.cand.jsonl`` and ``build.json``. ``finalize`` only removes rows
-from the candidates (quarantined groups, DEV near-duplicates of TRAIN, dropped families, review
-errors) and re-balances by downsampling, so every final row was scanned as a candidate.
+from the candidates (licence and construction drops of amendment 4, quarantined groups, DEV
+near-duplicates of TRAIN, dropped families, review errors) and re-balances by downsampling, so every
+final row was scanned as a candidate.
 """
 
 from __future__ import annotations
@@ -390,12 +393,22 @@ def finalize(args: argparse.Namespace) -> int:
     drop_dev = read_list(args.drop_dev_groups)
     drop_ids = read_list(args.drop_ids)
     drop_leak = read_list(args.drop_leak_ids)
+    drop_construction = read_list(args.drop_construction_ids)
     drop_families = set(args.drop_families)
+    licence_families = set(args.drop_licence_families)
+    construction_families = set(args.drop_construction_families)
+    unknown = (drop_families | licence_families | construction_families) - set(FAMILIES)
+    if unknown:
+        raise ValueError(f"unknown families {sorted(unknown)}")
     report: dict[str, Any] = collections.defaultdict(collections.Counter)
 
     def keep(row: Mapping[str, Any], dev_slice: bool) -> bool:
         reason = None
-        if row["family"] in drop_families:
+        if row["family"] in licence_families:
+            reason = "licence"
+        elif row["family"] in construction_families:
+            reason = "construction_family"
+        elif row["family"] in drop_families:
             reason = "family"
         elif row["group_id"] in drop_groups:
             reason = "quarantine_group"
@@ -405,6 +418,8 @@ def finalize(args: argparse.Namespace) -> int:
             reason = "review_error"
         elif row["id"] in drop_leak:
             reason = "leak_guard"
+        elif row["id"] in drop_construction:
+            reason = "construction"
         if reason:
             report[f"{'dev' if dev_slice else 'train'}:{reason}"][row["family"]] += 1
         return reason is None
@@ -440,7 +455,13 @@ def finalize(args: argparse.Namespace) -> int:
                 "count": len(drop_leak),
                 "sha256": sha("\n".join(sorted(drop_leak))),
             },
+            "construction_ids": {
+                "count": len(drop_construction),
+                "sha256": sha("\n".join(sorted(drop_construction))),
+            },
             "families": sorted(drop_families),
+            "licence_families": sorted(licence_families),
+            "construction_families": sorted(construction_families),
             "removed": {
                 key: dict(sorted(value.items()))
                 for key, value in sorted(report.items())
@@ -470,7 +491,10 @@ def main(argv: list[str] | None = None) -> int:
     two.add_argument("--drop-dev-groups", action="append", default=[], type=Path)
     two.add_argument("--drop-ids", action="append", default=[], type=Path)
     two.add_argument("--drop-leak-ids", action="append", default=[], type=Path)
+    two.add_argument("--drop-construction-ids", action="append", default=[], type=Path)
     two.add_argument("--drop-families", nargs="*", default=[])
+    two.add_argument("--drop-licence-families", nargs="*", default=[])
+    two.add_argument("--drop-construction-families", nargs="*", default=[])
     args = parser.parse_args(argv)
     return build(args) if args.command == "build" else finalize(args)
 
