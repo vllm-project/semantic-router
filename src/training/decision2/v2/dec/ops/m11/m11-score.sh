@@ -5,8 +5,13 @@
 # items that hit the tier's TRAIN, prereg "Probe TRAIN-overlap per tier").
 #
 #   m11-score.sh pull <user@node> <point> [<point> ...]   lines/<point>/ predictions and manifests from node E / F
-#   m11-score.sh probe-gold <user@node>                   probes/hits-<tier>.json from node E (ids only), then the
-#                                                         tier probe gold files (private/dec/m11/) -> probes/gold-*.json
+#   m11-score.sh probe-gold <user@node> [<tier> ...]      probes/hits-<tier>.json from node E (ids only), then the
+#                                                         tier probe gold files (private/dec/m11/); tiers 2b 08b, or
+#                                                         4b (stage 2: hits against both stage-2 TRAIN files)
+#   m11-score.sh ibdev-panel <user@node> [...]            stage 2: the IB DEV panel from node A's IB1-r3 / IB2 read-back
+#                                                         DEV files (m11_ibdev.py prompts; gold stays in private/dec/m11),
+#                                                         prompts relayed to each node's panels/ib-dev.prompts.jsonl
+#   m11-score.sh ibdev <REF> <point> [<point> ...]        stage 2: IB DEV / transfer macros vs REF -> diag/<point>.ibdev.json
 #   m11-score.sh points <REF> <point> [<point> ...]       per point vs REF: HT-DEV v2 (m7_htdev2.py), Score5-typed-DEV
 #                                                         (m8_rules.py score5t; also REF), retention probes
 #                                                         (m10_probes.py score, tier gold); hs1-dev (v2.data.hs1.validity)
@@ -90,9 +95,11 @@ case ${1:-} in
     ;;
   probe-gold)
     from=$2
+    shift 2
     [ "$(sha256sum "$PROBE_GOLD_M10" | cut -d' ' -f1)" = "$PROBE_GOLD_SHA" ] || die "M10 probe gold is not $PROBE_GOLD_SHA"
     mkdir -p "$M/probes" "$PG"
-    for t in 2b 08b; do
+    [ $# -gt 0 ] || set -- 2b 08b
+    for t in "$@"; do
       rsync -a -e 'ssh -i /root/.ssh/d2_temp_cd -o BatchMode=yes' "$from:$M/probes/hits-$t.json" "$M/probes/" \
         || die "pull of hits-$t.json failed"
       [ -f "$PG/m10-probes.$t.gold.jsonl" ] && continue
@@ -110,6 +117,39 @@ with open(sys.argv[2]) as src, open(sys.argv[3], "x") as out:
 print(kept, dropped)
 EOF2
       log "tier probe gold $t: $(sha256sum "$PG/m10-probes.$t.gold.jsonl" | cut -c1-16) ($(wc -l < "$PG/m10-probes.$t.gold.jsonl") items)"
+    done
+    ;;
+  ibdev-panel)
+    shift
+    IB1D=/data/dev2/private/data/ib1/r3/hf/readback/m6/ib1/ib1.dev.jsonl
+    IB2D=/data/dev2/private/data/ib2/c3/hf/readback/m6/ib2/ib2.dev.jsonl
+    B=$PG/ibdev-build
+    if [ ! -f "$B/manifest.json" ]; then
+      mkdir -p "$PG" && chmod 700 "$PG"
+      py "$OPS/m11/m11_ibdev.py" prompts --ib1 "$IB1D" \
+        --ib1-sha 3f56aa418e90e58f3fbaa50bf2f9f4f0405eeb9dd2f0c51ffca6f602711c693f --ib2 "$IB2D" \
+        --ib2-sha ab009fb12f9563c3ef4a846f5455dd5233f2a2c5fafe6ac8a9c74349532eb923 --output "$B" > "$PG/ibdev-build.log" 2>&1 \
+        || die "IB DEV panel build FAILED (see $PG/ibdev-build.log)"
+      chmod 600 "$B"/*.jsonl
+      cp "$B/ib-dev.gold.jsonl" "$PG/ib-dev.gold.jsonl" && chmod 600 "$PG/ib-dev.gold.jsonl"
+      log "IB DEV panel: $(tail -1 "$PG/ibdev-build.log")"
+    fi
+    for to in "$@"; do
+      rsync -a --chmod=F444 -e 'ssh -i /root/.ssh/d2_temp_cd -o BatchMode=yes' "$B/ib-dev.prompts.jsonl" \
+        "$to:/data/dev2/runs/dec/panels/ib-dev.prompts.jsonl" || die "relay of ib-dev prompts failed"
+      log "ib-dev prompts relayed ($(sha256sum "$B/ib-dev.prompts.jsonl" | cut -c1-16))"
+    done
+    ;;
+  ibdev)
+    ref=$2
+    shift 2
+    for p in "$@"; do
+      out=$L/diag/$p.ibdev.json
+      [ -f "$out" ] && continue
+      py "$OPS/m11/m11_ibdev.py" score --gold "$PG/ib-dev.gold.jsonl" --predictions "$(pred "$p" ib-dev)" --name "$p" \
+        --reference "$(pred "$ref" ib-dev)" --reference-name "$ref" --exclude isarc,hover,gsm2 --output "$out" \
+        > "$L/diag/$p.ibdev.log" 2>&1 || die "$p IB DEV FAILED (see $L/diag/$p.ibdev.log)"
+      log "$p ib-dev: $(tail -1 "$L/diag/$p.ibdev.log" | cut -c1-300)"
     done
     ;;
   contrast)
@@ -145,5 +185,5 @@ EOF2
       || die "rules FAILED (see $M/select/rules-$tier.log)"
     log "finalists $tier: $(tail -1 "$M/select/rules-$tier.log" | cut -c1-600)"
     ;;
-  *) sed -n '2,17p' "$0"; exit 2 ;;
+  *) sed -n '2,22p' "$0"; exit 2 ;;
 esac

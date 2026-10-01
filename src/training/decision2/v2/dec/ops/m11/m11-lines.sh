@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Decoder M11 development readouts (prereg dec-m11-prereg-2026-10-01.md, "Development readouts"), node E / F, from an
 # exact mirror. Every point is read the same way: v2.dec.infer_dec through m11-launch.sh, one container per panel,
-# 16,384 tokens, T = 1, image dbe5f32b, the node's <tier>-read Triton cache (tier = the point's prefix, 2b or 08b).
+# 16,384 tokens, T = 1, image dbe5f32b, the node's <tier>-read Triton cache (tier = the point's prefix: 2b, 08b or
+# 4b, stage 2).
 # Outputs: /data/dev2/runs/dec/m11/lines/<point>/<panel>/<panel>.predictions.jsonl (+ manifest and launch receipt). A
 # panel already read is skipped; a failed read is recorded and not rerun. The caller holds the GPU's chain flock
 # (m11-post.sh, m11-refs.sh), so reads never share a GPU with training.
@@ -42,7 +43,7 @@ case $MODE in
     mkdir -p "$(dirname "$lease")"
     printf 'track=dec-m11\nstatus=busy\npurpose=decoder M11 readouts (%s)\nstart_utc=%s\nexpected_end_utc=%s\n' \
       "$POINT" "$(date -u +%FT%TZ)" "$(date -u -d '+60 min' +%FT%TZ)" > "$lease"
-    case ${POINT%%-*} in 2b | 08b) ;; *) log "$POINT: point names start with 2b- or 08b-"; exit 2 ;; esac
+    case ${POINT%%-*} in 2b | 08b | 4b) ;; *) log "$POINT: point names start with 2b-, 08b- or 4b-"; exit 2 ;; esac
     ck=$(incontainer "$CK") || exit 2
     source=$(incontainer "$SOURCE") || exit 2
     for panel in $PANELS; do
