@@ -48,7 +48,7 @@ case "$STAGE" in
     ond "umask 077; mkdir -p $MD"
     echo "$(date -u +%FT%TZ) $ARM: copying the soup checkpoint node B -> node D"
     onb "rsync -a -e 'ssh -i /root/.ssh/d2_temp_cd -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes' \
-      $R6/$ARM/checkpoint/ root@\$(cat /data/dev2/tmp/27b-m6-xfer/peer-d):$CK/"
+      $R6/$ARM/checkpoint/ root@${D#*@}:$CK/"
     b=$(onb "$(sums "$R6/$ARM/checkpoint")") d=$(ond "$(sums "$CK")")
     [ -n "$b" ] && [ "$b" = "$d" ] || { echo "node D checkpoint differs from node B's" >&2; exit 3; }
     echo "checkpoint: $(wc -l <<< "$b") files, SHA-256 lists equal"

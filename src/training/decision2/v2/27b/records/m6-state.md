@@ -214,10 +214,18 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
    allowance ≤ 12 GPU-h = one 27B run; first finalist passing items 1–7). The release (§4) builds on DEV2.0-27B
    `main` `09280791` through the release pipeline, only if items 1–8 pass.
 4. After the last chain (M6-IB2PN ≈ 08:30Z Oct 2): attribution (`m6-gates.sh` with every sealed finalist), final
-   results, gist 06, milestone-end cleanup ("Hand-off" above), merge (signed) into integration.
+   results, gist 06, milestone-end cleanup ("Hand-off" above), merge (signed) into integration. **Order:** the
+   chosen finalist's `m6-stage-a.sh` (node A, item 8 / release) runs before `m6-link.sh remove`, which deletes node
+   B's link directory.
 
 ## Poll log (newest first)
 
+- 15:47Z (poll 3 at 15:43Z): all alive. M6-IB 2,990 / 2,830 (13.5 / 13.9 h); M6-IB2 2,878 / 2,870 (17.8 / 17.8 h);
+  M6-IBX 2,573 / 2,540 (13.9 / 14.1 h; **s2 at 2500 .9116, BEST = 2500**); M6-IB2PN 1,500 / 1,471 (18.8 / 18.8 h).
+  Node D disk 597 GB. Committed with this entry: `m6/m6-stage-a.sh` (stages the chosen finalist's frozen files on
+  node A for item 8 and the release; runbook §2 step 1), and `m6-index.sh stage` now addresses node D directly
+  (it no longer reads the link directory's `peer-d`, which `m6-link.sh remove` deletes). Runbook
+  `m6-handoff-2026-10-01.md` rewritten at `c8acde617` (item 8, the Index and the release are this track's steps).
 - 15:36Z (poll 2 at 15:32Z): all alive. M6-IB 2,917 / 2,760 (13.4 / 13.9 h); M6-IB2 2,807 / 2,800 (17.8 / 17.8 h);
   M6-IBX 2,501 / 2,478 (13.9 / 14.1 h; **s1 at 2500 .8950, BEST = 2500**); M6-IB2PN 1,429 / 1,401 (18.9 / 18.7 h).
   **Private Index tooling for finalists** committed with this entry: `m6/m6-index.sh` (workstation: `stage` node B

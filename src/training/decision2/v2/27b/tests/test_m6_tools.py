@@ -682,6 +682,13 @@ class M6ScriptTest(unittest.TestCase):
                     )
                     self.assertEqual(out.returncode, 2)
                     self.assertIn(message, out.stderr)
+        out = subprocess.run(
+            ["bash", str(M6 / "m6-stage-a.sh"), "M6-IB3"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("bad ARM", out.stderr)
 
     def test_bash_n(self):
         scripts = sorted(M6.glob("*.sh"))
