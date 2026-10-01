@@ -1,8 +1,11 @@
 # 9B M9 state (resume file)
 
-Updated: 2026-10-01 20:20 UTC+8 (12:20Z) by continuation worker b23ed249. **Poll 12:20Z:** L9IB-s2 1,891 / 2,344,
-L9IBX-s1 1,821 / 2,196, L9IBX-s2 1,801 / 2,187 (ETA ≈ 12:48–12:54Z); K-a13IB-s1 / s2 / s3 1,190 / 1,185 / 1,134 of
-2,083 (≈ 13 updates / min, ETA ≈ 13:29–13:33Z); every chain PID alive. **Stage 1 closed (no finalist); stage 2
+Updated: 2026-10-01 21:40 UTC+8 (13:40Z) by continuation worker b23ed249. **Stage 2 closed 13:28Z: NO FINALIST**
+(record `lux9b-m9-stage2-result-2026-10-01.md`; rules `select/9b-finalists-s2.json` `df0ef550…`, readout
+`lines/readout/m9-s2.json` `cda87bcf…`; the s2 formal chain stopped by rule). L9IB fails the Choice / Score type
+floors, HT-DEV v2 (FLAG −.021), Y1 (+.117) and Y3 (.229 vs .152); L9IBX fails HT-DEV v2 (FLAG −.022), Y1 (+.058) and
+Y3 (.271). **Stage 3:** K-a13IB seeds DONE 13:23–13:28Z, soup `soup/KIB/build/KIB-soup` built 13:30Z (node C);
+K-a13IBX seeds on GPU2 / 1 / 4 since 12:51–12:57Z (all preflights PASS), ETA ≈ 15:30Z. **Stage 1 closed (no finalist); stage 2
 training (unattended); stage 3 (amendment 3) launched 10:47Z.** Branch `xunzhuo/decision-2-training-9b-m9`
 (worktree `vllm-sr-dev2-9b-m9`). Prereg `records/lux9b-m9-prereg-2026-10-01.md` (`8570a5896`); amendment 1
 (`0b84e0db4`), amendment 2 (`51c80ddc9`, stage 2), **amendment 3 (`787abdc54`, stage 3 = K-a13 recipe + IB1-r3 + IB2 at
@@ -17,13 +20,13 @@ L9 fails the Noul floor, HT-DEV v2 (FLAG −.031) and Y1 (+.042); L9L fails Y1 o
 
 | Where | Chain (mirror) | State at 11:00Z |
 | --- | --- | --- |
-| node C GPU5 / 2 / 4 / 1 | stage 2 `chains2.sh` (`1b0830c0c`): L9IB-s1 / L9IB-s2 / L9IBX-s1 / L9IBX-s2 | **L9IB-s1 DONE 10:55Z**; the others ≈ 400 / 2,344 at 10:25Z, ETA ≈ 13:05–13:15Z |
-| node C (GPU5 / GPU4) | stage 2 `post-c.sh` L9IB / L9IBX (`1b0830c0c`): LoRA merges + soup | waiting for both seeds |
-| node A GPU6 / GPU7 | stage 2 `post-a.sh` `M9_STAGE=2` L9IB / L9IBX (pids 137614 / 137627) → `select/9b-finalists-s2.json` | waiting for node C's soups |
-| node A | stage 2 `formal-chain.sh` `M9_STAGE=2` (`54c420357`, pid 206896) | waiting for the s2 rules, then **`status/formal-s2.GO`** |
-| node C GPU3 / 6 / 7 | **stage 3 `chains3.sh` (`787abdc54`)**: K-a13IB-s1 (pre-warm, alone first) / -s2 / -s3 | s1 preflight PASS 10:54Z (pre-warm marker 10:52Z), s2 / s3 preflights passing; full runs ETA ≈ 13:30–13:40Z (2,083 updates each) |
-| node C GPU2 / 1 / 4 | stage 3 `chains3.sh`: K-a13IBX-s1 / -s2 / -s3 | queued on the GPUs' flocks behind the stage-2 chains (GPU4 also after node C's L9IBX merges); ETA start ≈ 13:15–13:25Z, end ≈ 16:00Z |
-| node C (CPU) | stage 3 `post-c.sh` KIB / KIBX (`787abdc54`): three-seed FP32 soups | waiting for the seeds |
+| node C GPU5 / 2 / 4 / 1 | stage 2 `chains2.sh` (`1b0830c0c`): L9IB-s1 / L9IB-s2 / L9IBX-s1 / L9IBX-s2 | all DONE (10:55–12:53Z), chains ended |
+| node C (GPU5 / GPU4) | stage 2 `post-c.sh` L9IB / L9IBX (`1b0830c0c`): LoRA merges + soup | done 12:56–12:58Z |
+| node A GPU6 / GPU7 | stage 2 `post-a.sh` `M9_STAGE=2` L9IB / L9IBX → `select/9b-finalists-s2.json` | done: scored 13:19–13:21Z, rules 13:28Z (no finalist) |
+| node A | stage 2 `formal-chain.sh` `M9_STAGE=2` (`54c420357`) | stopped by rule 13:28Z: no finalist |
+| node C GPU3 / 6 / 7 | **stage 3 `chains3.sh` (`787abdc54`)**: K-a13IB-s1 (pre-warm, alone first) / -s2 / -s3 | all DONE 13:23–13:28Z (BEST = last checkpoint: 2,083 / 2,081 / 2,084); GPUs idle |
+| node C GPU2 / 1 / 4 | stage 3 `chains3.sh`: K-a13IBX-s1 / -s2 / -s3 | full runs since 12:53 / 12:51 / 12:57Z (preflights PASS; GPU4 waited for the L9IBX merges), ETA ≈ 15:30Z |
+| node C (CPU) | stage 3 `post-c.sh` KIB / KIBX (`787abdc54`): three-seed FP32 soups | KIB built 13:30Z (`soup/KIB/build/KIB-soup`); KIBX waiting |
 | node A GPU6 / GPU7 | **stage 3 `post-a3.sh` KIB / KIBX (`624f94027`, pids 215950 / 215963)**: pull → K-a13IB / K-a13IBX = [arm soup, Lux, Lux] (α ⅓) → 10 panels → score vs C0 → `readout/m9-s3.json` → contrasts → `select/9b-finalists-s3.json` | waiting for node C's soups |
 | node A | stage 3 `formal-chain.sh` `M9_STAGE=3` (`787abdc54`, pid 214241) | waiting for the s3 rules, then **`status/formal-s3.GO`** |
 
