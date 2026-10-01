@@ -107,6 +107,14 @@ is still fixing the long-input runtime bug and staging its M5-L128 Index diagnos
 
 ## Poll log (newest first)
 
+- 08:12Z: all four preflights passed (onestep exit 0, 0.072–0.077 GPU-h; reload 0 argmax changes on 32 rows, max |Δp|
+  3e-8 / 6e-8; 0.018–0.020 GPU-h); full runs since ≈ 08:03Z. After ≈ 26 updates: M6-IB-s1 9.57 s/upd (projection
+  13.5 h of cap 16), M6-IB-s2 9.50 (13.4 h), M6-IB2-s1 9.36 (17.2 h of cap 20), M6-IB2-s2 9.70 (17.8 h). The cost is
+  mostly per row (short IB rows cost ≈ 0.6 s each, like A20 rows), so amendment 1's projection was optimistic; the
+  caps still hold with 11–16% margin. Watch M6-IB2-s2's margin at every poll. ETAs: M6-IB ≈ 21:35Z, M6-IB2 ≈ 01:35Z
+  (Oct 2). Reference reading (CPU): M5-L128 − A20r on IB DEV is level (`ib` −.003 [−.016, +.009]; `ib12` +.004
+  [−.006, +.012]); A20r's B_dev is .920 (`ib`) / .901 (`ib12`), headroom in `args`, `isarc`, `gsm2`, `hover`. Node D
+  runs IX1's M5-L128 Index run until ≈ 11:00Z.
 - 08:00Z: **launched** (amendment 1 `b74685ddb`; build 07:31–07:36Z, two builds identical, all checks pass). Four seeds in
   onestep preflight; chains and node A watchers alive with first log lines. Incident (harmless): the workstation
   launch was started twice (a tool-call retry); the second copy stopped at the `ib12` reference-slice step on a
