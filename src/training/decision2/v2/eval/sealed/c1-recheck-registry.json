@@ -6,7 +6,7 @@
     "retired_sha256": "bbf095c70917f028d691fce570b114725e4f22fd6a1987456f6ae2c30f22990a",
     "scored_items": 2840
   },
-  "rule": "v2/eval/records/c1-recheck-r1-2026-10-01.md section 3: G0 rules E, N1, N2, G with boilerplate B1 / B2 only, plus the registered scanner (no exemption), P2 class (a)",
+  "rule": "v2/eval/records/c1-recheck-r1-2026-10-01.md section 3 (r2 reuses it unchanged): G0 rules E, N1, N2, G with boilerplate B1 / B2 only, plus the registered scanner (no exemption), P2 class (a)",
   "rechecks": {
     "r1-ib1r3-ib2-pn1r2": {
       "spec": "v2/eval/sealed/c1-recheck/r1-ib1r3-ib2-pn1r2.json",
@@ -18,6 +18,17 @@
       "verdict_sha256": "0823a1a86d0767fe2c633830d92ba2036df5037e56649258844223c5556d7742",
       "receipts": "v2/eval/records/c1-recheck-r1/",
       "record": "v2/eval/records/c1-recheck-r1-2026-10-01.md"
+    },
+    "r2-ib3r2": {
+      "spec": "v2/eval/sealed/c1-recheck/r2-ib3r2.json",
+      "spec_sha256": "151cc291ca989ae19a3584764f97f502dd44ef38be8933bbcab5a3f967dc0230",
+      "mirror": "6ef468097d324c15b3180eab5a9c9f76655c1426",
+      "utc": "2026-10-01T16:52:32Z",
+      "job": "/data/dev2/runs/eval/c1-recheck/r2-ib3r2-20261001T165232Z",
+      "verdict": "PASS",
+      "verdict_sha256": "77fff54399329926952503142b55ab80248b06796a20a348736e945fa994a6c6",
+      "receipts": "v2/eval/records/c1-recheck-r2/",
+      "record": "v2/eval/records/c1-recheck-r2-2026-10-02.md"
     }
   },
   "files": {
@@ -56,6 +67,15 @@
       "exposed_scored_items": 0,
       "quarantine_groups": 0,
       "recheck": "r1-ib1r3-ib2-pn1r2"
+    },
+    "9d92d92a207109a585ceead7fa5e1bdb0b2c61859de8227a2a6058428f852dea": {
+      "key": "ib3-r2",
+      "label": "IB3-r2 TRAIN, mqa only (decision-2.0-training-data@1c8452da m6/ib3/ib3.train.jsonl)",
+      "rows": 8752,
+      "verdict": "PASS",
+      "exposed_scored_items": 0,
+      "quarantine_groups": 0,
+      "recheck": "r2-ib3r2"
     }
   },
   "covered": {
@@ -97,6 +117,6 @@
     "decoder M14": ["08b-RAUP", "2b-RAUP", "4b-LHA10UP"]
   },
   "pending": {
-    "IB3": "not rechecked. The first round (decision-2.0-training-data@c2401ab4 m6/ib3/, TRAIN 688b643e..., 24,148 rows) is not release-safe; IB3-r2 is being built. A recheck r2 with the adopted IB3 TRAIN file (and any mixture that adds it) runs before item 8 of an IB3-trained arm (runner: record section 4)."
+    "IB3": "IB3-r2 TRAIN rechecked: PASS (r2-ib3r2, files 9d92d92a...). No arm uses it yet; an arm that adds IB3-r2 as a block is covered for those rows, while a new mixture file that adds it needs its own recheck or a raw-line entry under covered. The first round (decision-2.0-training-data@c2401ab4 m6/ib3/, TRAIN 688b643e..., 24,148 rows) is superseded, not release-safe and not rechecked: no arm may use it."
   }
 }
