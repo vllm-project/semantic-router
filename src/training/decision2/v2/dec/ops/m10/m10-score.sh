@@ -9,6 +9,11 @@
 #   m10-score.sh contrast <A> <B>                         HT-DEV v2 and probes of A vs B (A-vs-B.*.json; report only)
 #   m10-score.sh readout <REF> <point> [<point> ...]      typed DEV + CSS pilot (v2.dec.dev_readout) -> readout/m10.json
 #   m10-score.sh rules <X=REF> [...] [-- <A:B> ...]       m10_rules.py -> m10/select/4b-finalists.json (runs once)
+#   m10-score.sh formal-pull <user@node> <run>            formal/m10/<run> from node E / F (gold-free outputs, receipts,
+#                                                         seal, header stubs; no weights or caches), content-manifest
+#                                                         checked on both sides; refuses gold-named files
+#   m10-score.sh formal-mark <user@node> <run>            REPORT.json / SEAL.json hashes -> <node>:<run>/V3-SEALED.json
+#                                                         (gates m6-formal.sh mlx there; no score leaves node A)
 set -u
 S=$(cd "$(dirname "$0")/../../../.." && pwd)
 MIRROR=${S%/src/training/decision2}
@@ -113,5 +118,31 @@ case ${1:-} in
       --output "$M/select/4b-finalists.json" > "$M/select/rules.log" 2>&1 || die "rules FAILED (see $M/select/rules.log)"
     log "finalists: $(tail -1 "$M/select/rules.log" | cut -c1-600)"
     ;;
-  *) sed -n '2,13p' "$0"; exit 2 ;;
+  formal-pull)
+    from=$2 run=$3 FM=/data/dev2/runs/dec/formal/m10
+    on() { ssh -i /root/.ssh/d2_temp_cd -o BatchMode=yes "$from" "$@"; }
+    manifest='find . -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum | sha256sum | cut -d" " -f1'
+    [ ! -e "$FM/$run" ] || die "$FM/$run exists on node A"
+    on "test -f '$FM/$run/M6-RECEIPT.json'" || die "$run has no M6 receipt on $from"
+    on "! find '$FM/$run' -iname '*gold*' | grep -q ." || die "$run contains gold-named files"
+    on "! find '$FM/$run' -name '*.safetensors' -size +1M | grep -q ." || die "$run contains weights"
+    mb=$(on "cd '$FM/$run' && $manifest")
+    mkdir -p "$FM"
+    rsync -a -e 'ssh -i /root/.ssh/d2_temp_cd -o BatchMode=yes' "$from:$FM/$run/" "$FM/$run/" || die "pull of $run failed"
+    ma=$(cd "$FM/$run" && eval "$manifest")
+    [ "$ma" = "$mb" ] || die "$run manifest differs after the pull ($mb vs $ma)"
+    log "formal run $run pulled ($ma)"
+    ;;
+  formal-mark)
+    from=$2 run=$3 FM=/data/dev2/runs/dec/formal/m10
+    on() { ssh -i /root/.ssh/d2_temp_cd -o BatchMode=yes "$from" "$@"; }
+    seal_a=$(sha256sum "$FM/$run/SEAL.json" | cut -d' ' -f1)
+    seal_b=$(on "sha256sum '$FM/$run/SEAL.json' | cut -d' ' -f1")
+    [ "$seal_a" = "$seal_b" ] || die "$run: node-A seal differs from $from"
+    python3 -c 'import json,sys,datetime as d; print(json.dumps({"run": sys.argv[1], "report_sha256": sys.argv[2], "seal_sha256": sys.argv[3], "marked_utc": d.datetime.now(d.timezone.utc).isoformat()}))' \
+      "$run" "$(sha256sum "$FM/$run/REPORT.json" | cut -d' ' -f1)" "$seal_a" \
+      | on "set -o noclobber; cat > '$FM/$run/V3-SEALED.json'" || die "mark of $run failed"
+    log "formal run $run marked on its node"
+    ;;
+  *) sed -n '2,18p' "$0"; exit 2 ;;
 esac
