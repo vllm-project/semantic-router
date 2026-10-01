@@ -21,6 +21,11 @@ completed run's BEST, in ``v2.eval.dev_readout`` rows aligned with the options.
 ``exec`` (GPU, container): run a module (``v2.27b.aho_eval``) on the verified
 kernel path and write the runtime identity.
 
+``slices`` (GPU, container; Milestone 6): raw (T = 1) logits and probabilities
+of one frozen checkpoint on SELECT-format row files (PN1 dev, IB DEV) through
+the same ``collect_logits`` as ``fit``, in one model load; each file's SHA-256
+is pinned on the command line and every row id must be unique across slices.
+
 ``t1-calibration`` (host): the T = 1 package calibration of a checkpoint whose
 CAL698 fit was rejected. The kernel adapter always passes ``--calibration``;
 this report keeps the rejected fit's binding (model, checkpoint and CAL hashes,
@@ -204,6 +209,108 @@ def fit(args: argparse.Namespace) -> None:
             sort_keys=True,
         )
     )
+
+
+def parse_slices(specs: list[str]) -> list[tuple[str, Path, str]]:
+    """``NAME=PATH=SHA256`` entries: distinct names, full SHA-256 values."""
+    parsed, names = [], set()
+    for spec in specs:
+        name, _, rest = spec.partition("=")
+        path, _, sha = rest.rpartition("=")
+        if not re.fullmatch(r"[A-Za-z0-9._-]+", name) or not path:
+            raise SystemExit(f"bad --slice {spec!r}; use NAME=PATH=SHA256")
+        if not re.fullmatch(r"[0-9a-f]{64}", sha):
+            raise SystemExit(f"--slice {name}: {sha!r} is not a SHA-256")
+        if name in names:
+            raise SystemExit(f"--slice {name} repeats")
+        names.add(name)
+        parsed.append((name, Path(path), sha))
+    if not parsed:
+        raise SystemExit("slices needs at least one --slice")
+    return parsed
+
+
+def slice_rows(
+    records: list[dict[str, Any]], rows: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    out = []
+    for record, row in zip(records, rows, strict=True):
+        if record["id"] != row["id"]:
+            raise SystemExit("slice logit collection dropped or reordered rows")
+        out.append(
+            {
+                "id": row["id"],
+                "task_type": record["task_type"],
+                "label": record["label"],
+                "keys": [option["key"] for option in row["options"]],
+                "logits": record["logits"],
+                "probabilities": probabilities(record["logits"], 1.0),
+            }
+        )
+    return out
+
+
+def slices(args: argparse.Namespace) -> None:
+    out: Path = args.out_dir
+    specs = parse_slices(args.slice)
+    names = [f"{name}.probs.jsonl" for name, _, _ in specs] + ["slices.json"]
+    if any((out / name).exists() for name in names + ["runtime.json"]):
+        raise FileExistsError(f"{out} already holds slice outputs")
+    by_slice, seen = {}, set()
+    for name, path, sha in specs:
+        if file_sha256(path) != sha:
+            raise SystemExit(f"slice {name}: {path} differs from its pinned SHA-256")
+        rows = load_partition(path, "select")
+        if seen & {row["id"] for row in rows}:
+            raise SystemExit(f"slice {name} repeats a row id of another slice")
+        seen |= {row["id"] for row in rows}
+        by_slice[name] = rows
+    runtime = kernel.kernel_runtime()
+    from training.model.calibrate import collect_logits
+    from training.model.infer import checkpoint_fingerprint
+
+    identity = checkpoint_fingerprint(args.checkpoint, args.source_path)
+    every = [row for rows in by_slice.values() for row in rows]
+    records = collect_logits(
+        args.checkpoint,
+        every,
+        source_path=args.source_path,
+        max_length=args.max_length,
+        batch_size=args.batch_size,
+        device_name="cuda:0",
+    )
+    if len(records) != len(every):
+        raise SystemExit("slice logit collection dropped rows")
+    out.mkdir(parents=True, exist_ok=True)
+    report, start = {}, 0
+    for name, path, sha in specs:
+        rows = by_slice[name]
+        part = slice_rows(records[start : start + len(rows)], rows)
+        start += len(rows)
+        write_jsonl(out / f"{name}.probs.jsonl", part)
+        report[name] = {
+            "rows": len(rows),
+            "input": str(path),
+            "input_sha256": sha,
+            "output_sha256": file_sha256(out / f"{name}.probs.jsonl"),
+        }
+    write_json(
+        out / "runtime.json",
+        {**runtime, "versions": kernel.versions(), "memory": kernel.memory()},
+    )
+    write_json(
+        out / "slices.json",
+        {
+            "schema": "decision2-27b-slices/1",
+            "role": "development slices; raw T = 1 probabilities; never a release score",
+            "model_sha256": identity["model_sha256"],
+            "checkpoint": str(args.checkpoint),
+            "max_length": args.max_length,
+            "batch_size": args.batch_size,
+            "slices": report,
+        },
+    )
+    print(json.dumps({"model_sha256": identity["model_sha256"], "slices": report}))
 
 
 def trainer_select_rows(
@@ -403,6 +510,15 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--batch-size", type=int, default=1)
     p.add_argument("--select", type=Path, help="SELECT rows for raw probabilities")
     p.add_argument("--out-dir", type=Path, required=True)
+    p = sub.add_parser("slices")
+    p.add_argument("--checkpoint", type=Path, required=True)
+    p.add_argument("--source-path", type=Path)
+    p.add_argument("--max-length", type=int, required=True)
+    p.add_argument("--batch-size", type=int, default=1)
+    p.add_argument(
+        "--slice", action="append", default=[], help="NAME=PATH=SHA256 (SELECT rows)"
+    )
+    p.add_argument("--out-dir", type=Path, required=True)
     p = sub.add_parser("select-from-trainer")
     p.add_argument("--run-dir", type=Path, required=True)
     p.add_argument("--rows", type=Path, required=True, help="SELECT700 rows")
@@ -426,6 +542,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     {
         "fit": fit,
+        "slices": slices,
         "select-from-trainer": select_from_trainer,
         "cal-summary": cal_summary,
         "exec": run_module,
