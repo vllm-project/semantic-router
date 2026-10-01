@@ -135,7 +135,7 @@ def main() -> None:
     if page.status_code == 200:
         rendered.update(
             contains_title=title in page.text,
-            contains_charts=all(Path(c).name in page.text for c in layout.CHART_FILES),
+            contains_charts=all(Path(c).name in page.text for c in layout.CARD_ASSETS),
         )
     result = {
         "schema": "dev2-hub-card-http/1",

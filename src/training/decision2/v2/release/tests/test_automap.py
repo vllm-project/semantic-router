@@ -6,6 +6,7 @@ import ast
 import importlib.util
 import json
 import os
+import re
 import sys
 import tempfile
 import types
@@ -15,7 +16,7 @@ from unittest import mock
 
 from v2.release import automap, card, examples, layout
 from v2.release.runtime import api
-from v2.release.tests.test_release import ROSTER, TEXT, card_entries, facts
+from v2.release.tests.test_release import build_test_card, card_entries, facts
 
 HAS_TORCH = (
     importlib.util.find_spec("torch") is not None
@@ -85,27 +86,15 @@ class RemoteCodeFilesTest(unittest.TestCase):
 class CardSectionTest(unittest.TestCase):
     def build(self, remote_code, requirements=None):
         scratch = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        out = scratch / "pkg"
         details = {**facts(), "profile": "qwen-adapter", "remote_code": remote_code}
         if requirements:
             details["runtime_requirements"] = requirements
-        card.build_card(
-            entries=card_entries(),
-            roster=ROSTER,
-            paired=None,
-            facts=details,
-            text={**TEXT, "staging_notice": "Staging."},
-            work=scratch / "work",
-            output=out,
+        result = build_test_card(
+            scratch, card_entries(), details, {"staging_notice": "Staging."}
         )
-        files = {p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()}
-        return (out / "README.md").read_text(), files | {
-            "LICENSE",
-            "NOTICE",
-            "ATTRIBUTIONS.md",
-        }
+        return result["readme"], result["files"] | {"LICENSE"}
 
-    def test_section_with_example_base_note_and_versions(self):
+    def test_quickstart_is_code_only(self):
         base = {
             "repo_id": "Qwen/Qwen3.8-27B",
             "revision": "1" * 40,
@@ -126,32 +115,31 @@ class CardSectionTest(unittest.TestCase):
         self.assertIn(json.dumps(examples.EXAMPLES[0]["state"]), code)
         with self.assertRaises(ValueError):
             examples.card_block(readme, transformers=False)
+        quickstart = readme.split("## Quickstart\n", 1)[1].split("\n## ", 1)[0]
+        prose = re.sub(r"```.*?```", "", quickstart, flags=re.S).strip()
+        self.assertEqual(prose, "")
         self.assertIn(
-            'pip install "transformers>=5.17" torch safetensors peft\n', readme
+            'pip install "transformers>=5.17" torch safetensors peft\n', quickstart
         )
-        self.assertIn(
-            "downloads the pinned base [Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B)",
-            readme,
-        )
-        self.assertIn("Install `flash-linear-attention` and `causal-conv1d`", readme)
-        self.assertIn("CPU inference was not verified.", readme)
-        self.assertNotIn('device_map="cpu"', readme)
-        self.assertIn("Tested with Transformers 5.17.0 and 5.18.0.", readme)
-        self.assertIn('pipeline("decision"', readme)
+        for word in (
+            "flash-linear-attention",
+            "device_map",
+            "Tested with",
+            "pinned base",
+        ):
+            self.assertNotIn(word, readme)
+        self.assertEqual(readme.count('pipeline("decision"'), 1)
         self.assertEqual(card.check_rendered(readme, files), [])
-        self.assertEqual(
+        self.assertIn(
+            f"missing section: {card.TRANSFORMERS_HEADING}",
             card.check_rendered(
-                readme.replace(card.TRANSFORMERS_HEADING, "### Other"), files
+                readme.replace(card.TRANSFORMERS_HEADING, "## Other"), files
             ),
-            [f"missing section: {card.TRANSFORMERS_HEADING}"],
         )
 
-    def test_plain_install_without_peft_or_kernels(self):
+    def test_plain_install_without_peft(self):
         readme, files = self.build({"tested": ["5.17.0"], "base": None})
         self.assertIn('pip install "transformers>=5.17" torch safetensors\n', readme)
-        self.assertNotIn("flash-linear-attention", readme)
-        self.assertNotIn("pinned base", readme)
-        self.assertIn('pass `device_map="cpu"` or `device_map="cuda:1"`', readme)
         self.assertEqual(card.check_rendered(readme, files), [])
 
 

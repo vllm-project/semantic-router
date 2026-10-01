@@ -774,6 +774,40 @@ def check_scored_runtime(
     return result
 
 
+def _pinned(item: Any, what: str, key: str = "path") -> Path:
+    if not isinstance(item, dict) or not item.get(key):
+        raise ValueError(f"card.{what} needs {key} and its SHA-256")
+    path = Path(item[key])
+    return path if path.is_absolute() else SOURCE_ROOT / path
+
+
+def card_inputs(spec: dict[str, Any]) -> tuple[Path, Path]:
+    """The private Index input and the rendered card assets, both pinned by SHA-256."""
+    card = spec["card"]
+    index = _pinned(card.get("index"), "index")
+    if layout.sha_file(index) != card["index"].get("sha256"):
+        raise ValueError("card.index differs from its pinned SHA-256")
+    assets = _pinned(card.get("assets"), "assets", "dir")
+    receipt = assets / card_module.ASSETS_RECEIPT
+    if not receipt.is_file() or layout.sha_file(receipt) != card["assets"].get(
+        "receipt_sha256"
+    ):
+        raise ValueError("card.assets receipt differs from its pinned SHA-256")
+    return index, assets
+
+
+def card_speed(spec: dict[str, Any]) -> dict[str, Any]:
+    """Median single-question latency from a pinned bench receipt of this runtime."""
+    item = spec["card"]["speed"]
+    path = _pinned(item, "speed", "evidence")
+    if layout.sha_file(path) != item.get("sha256"):
+        raise ValueError("card.speed evidence differs from its pinned SHA-256")
+    bench = json.loads(path.read_text(encoding="utf-8"))
+    if bench.get("passed") is not True or not bench.get("count"):
+        raise ValueError("card.speed evidence is not a passed bench receipt")
+    return {"median_ms": bench["latency_ms"]["p50"], "requests": bench["count"]}
+
+
 def write_licences(spec: dict[str, Any], stage: Path, decision: dict[str, Any]) -> None:
     lic = spec["licence"]
     for item in lic.get("files", []):
@@ -788,33 +822,12 @@ def write_licences(spec: dict[str, Any], stage: Path, decision: dict[str, Any]) 
         shutil.copyfile(source, target)
     if not (stage / "LICENSE").is_file():
         raise ValueError("Every package carries a root LICENSE")
-    notice = [
-        f"{spec['model_name']} (Decision 2.0)",
-        "",
-        "Original Decision 2.0 package code and model card (text and charts) are released",
-        "under the Apache License 2.0 in LICENSE. Third-party material keeps its own",
-        "licence and notices, listed in ATTRIBUTIONS.md"
-        + (" and LICENSING.md." if decision["spdx"] == "other" else "."),
-    ]
     upstream = lic.get("notice")
     if upstream:
         path = Path(upstream["source"])
         if layout.sha_file(path) != upstream["sha256"]:
             raise ValueError("Upstream NOTICE differs from its pinned bytes")
-        notice += [
-            "",
-            "The upstream NOTICE of the direct weight origin follows unchanged.",
-            "",
-            "-" * 72,
-            "",
-        ]
-        notice.append(path.read_text(encoding="utf-8").rstrip("\n"))
-    (stage / "NOTICE").write_text("\n".join(notice) + "\n", encoding="utf-8")
-    attributions = ["# Attributions", ""]
-    attributions += [f"- {line}" for line in lic.get("attributions", [])]
-    (stage / "ATTRIBUTIONS.md").write_text(
-        "\n".join(attributions) + "\n", encoding="utf-8"
-    )
+        shutil.copyfile(path, stage / "NOTICE")
     if decision["spdx"] == "other":
         rows = [
             "# Component licences",
@@ -1002,7 +1015,8 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             "max_input_tokens": spec["max_input_tokens"],
             "origin": spec["origin"],
             "licence": decision,
-            "attributions": spec["licence"].get("attributions", []),
+            "model_sha256": identity["model_sha256"],
+            **({"speed": card_speed(spec)} if spec["card"].get("speed") else {}),
             "runtime_requirements": spec.get("runtime_requirements", {}),
             **(
                 {"name_basis": name_basis, "name_base_model": base_model}
@@ -1033,6 +1047,7 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             ),
         }
         roster = Path(spec["card"]["roster"])
+        index, assets = card_inputs(spec)
         card = card_module.build_card(
             entries=spec["card"]["reports"],
             roster=roster if roster.is_absolute() else SOURCE_ROOT / roster,
@@ -1041,6 +1056,8 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             text=spec["card"]["text"],
             work=work / "card-work",
             output=stage,
+            index=index,
+            assets=assets,
             paired_peers={
                 key: Path(path)
                 for key, path in (spec["card"].get("paired_peers") or {}).items()
@@ -1133,6 +1150,8 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
             "card": {
                 "readme_sha256": card["readme_sha256"],
                 "figures_sha256": card["figures_sha256"],
+                "assets_receipt_sha256": card["assets_receipt_sha256"],
+                "index_sha256": card["index_sha256"],
             },
             "builder": {
                 "source_commit": (mirror or {}).get("commit"),
@@ -1153,7 +1172,7 @@ def build(spec_path: Path, output: Path) -> dict[str, Any]:
         stage.rename(output)
         receipt_dir = output.parent / f"{output.name}.build"
         receipt_dir.mkdir()
-        for name in ("charts-receipt.json",):
+        for name in (card_module.ASSETS_RECEIPT,):
             source = work / "card-work" / name
             if source.is_file():
                 shutil.copyfile(source, receipt_dir / name)

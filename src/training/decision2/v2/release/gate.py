@@ -644,7 +644,7 @@ def evaluate(work: Path) -> dict[str, Any]:
         "2_regressions_disclosed": {
             "passed": readback.get("passed", False)
             and not readback.get("card_problems"),
-            "evidence": f"{len(build['card']['tradeoffs'])} results below {below} summarised in the card limitations and listed in evaluation/EVALUATION.md",
+            "evidence": f"{len(build['card']['tradeoffs'])} results below {below} listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included",
         },
         "3_download_hash_parameters": {
             "passed": bool(downloaded)

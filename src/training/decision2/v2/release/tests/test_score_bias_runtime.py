@@ -20,6 +20,7 @@ from training.model.infer import checkpoint_fingerprint, product_answer, run_pro
 from training.model.score_bias import SCORE_BIAS_FORMAT, validate_offsets
 from v2.release import build, layout
 from v2.release.runtime import api
+from v2.release.tests import card_fixture
 from v2.release.tests.test_release import ROSTER, card_entries, fake_safetensors
 
 REAL_MODULES = (
@@ -520,15 +521,13 @@ def qwen_full_spec(scratch: Path) -> tuple[dict, str]:
             ],
             "attributions": ["Qwen3-0.6B (Apache-2.0)."],
         },
-        "card": {
-            "reports": card_entries(),
-            "roster": str(ROSTER),
-            "text": {
-                "model_type": "Decision model",
-                "training_summary": "Fine-tuned on decision data.",
-                "staging_notice": "Staging.",
-            },
-        },
+        "card": card_fixture.pinned_card(
+            scratch,
+            card_entries(),
+            "Decision-2.0-Kai-0.6B",
+            model_sha256,
+            {"staging_notice": "Staging."},
+        ),
     }
     return spec, model_sha256
 

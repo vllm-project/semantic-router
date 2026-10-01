@@ -24,9 +24,9 @@ config.json                ROOT query file: vllm-sr-decision pointer, format_ver
                            runtime reads it first); maps every model file by role
 MODEL_MANIFEST.json        SHA-256 of every other file, parameter counts by component,
                            scored identity, origin, base binding, runtime and licence
-LICENSE NOTICE ATTRIBUTIONS.md [LICENSING.md LICENSES/...]
-assets/jevarena.svg  assets/jevbench-public-231.svg
-evaluation/EVALUATION.md  evaluation/manifest.json
+LICENSE [NOTICE (upstream only)] [LICENSING.md]
+assets/banner.png  assets/jevarena.png  assets/jevarena-types.png
+assets/index-pareto.png  assets/index-areas.png
 decision2/                 local System One runtime: __init__.py, api.py, <profile>.py
 decision2/_vendor/         exact scored inference sources (hash-recorded in the manifest)
 <model files by profile>
@@ -170,47 +170,48 @@ to a retired name.
 
 ## Model card
 
-`card.py` writes a standard model-release card, from same-panel REPORT.json
-files only. README.md, in order: YAML metadata (`license`, `base_model`,
-`base_model_relation`, `library_name: transformers`, tags); `# Decision-2.0-<codename>-<size>`,
-one paragraph and a link row (collection, evaluation details); **Highlights**
-(JevArena versus the Decision 1.0 counterpart with the paired interval, the
-standing among the same-size models shown, the three decision types, stock
-Transformers); **Model overview** (type, base, parameters, context, decision
-types, precision, licence); **Evaluation** (a JevArena bar chart, a JevBench
-public-231 bar chart, one table of this model, its counterpart and the
-same-size peers, one footnote line); **Quickstart** with only "Use with 🤗
-Transformers" (pip line, the `AutoModel` + `system_one` example the verifier
-executes, the `pipeline("decision")` line); **Limitations** (at most five: one
-line summarising every result below the counterpart, one for gaps to stronger
-peers, the spec's own lines, scope and trust); **Training data** (the spec's
-summary, the base-model licence and the CC BY / CC BY-SA sources parsed from the
-spec's attributions); **License**; **Citation**. `lint_readme` refuses internal
-vocabulary on the README (panel versions, post-key, Brier / ECE, mlx-diag,
-native-runtime usage, revision hashes) on top of the shared `lint`.
+`card.py` writes a product card. README.md, in order: YAML metadata (`license`,
+`base_model`, `base_model_relation`, `library_name: transformers`, tags); the
+banner; `# Decision-2.0-<codename>-<size>`; one paragraph; an at-a-glance table
+(parameters, context length, decision types, licence); **Highlights** (top
+JevArena score of its size, only when true and "statistically level" when the
+paired interval includes zero; the gain over the Decision 1.0 counterpart on
+JevArena and, only when positive, on the Jev Decision Index, or for a size
+without Decision 1.0 the gain over the family's next size when it is the
+family's best; the median single-question latency from a pinned bench receipt;
+many questions in one forward pass); **Quickstart**, code only (the pip line and
+one Python block: `AutoModel` + `system_one`, which the verifier executes, and
+one commented `pipeline("decision")` line); **Evaluation** (one table of
+JevArena, human-labelled transfer and Index; JevArena overall and by decision
+type; the Index against model size and by area, with the Index footnote);
+**License**; **Citation**. No training details, limitations, NOTICE of our own,
+attributions or `evaluation/` pages. `lint_readme` refuses internal vocabulary
+(panel versions, post-key, Brier / ECE, mlx-diag, JevBench, training and
+precision details, removed sections and files, native-runtime usage, revision
+hashes) on top of the shared `lint`.
 
-`evaluation/EVALUATION.md` keeps the method (JevArena definition, post-key
-scope, the public-231 note, native runs and the bootstrap, the C1 sentence,
-the multilingual diagnostic, the licence filter and comparator notes), the full
-results table (typed, transfer, per type, public tiers, Brier / ECE, mlx-diag,
-invalid counts), per-task results and every result below the counterpart.
-Internal release facts (gate items, decision IDs, revision and weights hashes,
-runtime-update notes) stay in the release records.
+The banner and charts are PNGs rendered by `card_assets.py` (matplotlib, Inter,
+white background, blue #30A0FC and yellow #FCB414, the vLLM-SR logo bottom-right)
+outside the build. Its receipt `card-assets.json` holds input and output SHA-256
+digests only. The spec pins the private Index input (`card.index`, schema
+`dev2-card-index/1`, see `card_index.py`), the rendered assets directory
+(`card.assets`) and the bench receipt (`card.speed`); the build re-checks that
+the receipt names exactly the card's reports, Index input and weights before it
+copies the PNGs. Index values therefore appear only on the published cards, never
+in commits or records; tests use synthetic values (`tests/card_fixture.py`).
+Internal release facts (gate items, every result below the counterpart, decision
+IDs, revision and weights hashes) stay in the build receipt and release records.
 
-The charts (`card_charts.py`) are plain SVG on a white background: horizontal
-bars sorted by score, the released model in accent blue and every other model
-grey, value labels and light gridlines. No Pareto chart. Comparators pass a
-fail-closed licence filter (`licence.py`): CC BY-NC, research-only, unknown and
-internal-only models are excluded. A peer measured from a sibling of its
-Decision Index board artifact (e.g. the BF16 weights of an FP8 entry) names
-`board_entry` and takes that roster entry's licence only if the entry names it
-as its base model; disclose it in `comparator_note`. Card metadata is
-`apache-2.0` only when every upstream component of the weight lineage is
-Apache-compatible; otherwise `other` with `LICENSING.md`.
+Comparators pass a fail-closed licence filter (`licence.py`): CC BY-NC,
+research-only, unknown and internal-only models are excluded. A peer measured
+from a sibling of its Decision Index board artifact (e.g. the BF16 weights of an
+FP8 entry) names `board_entry` and takes that roster entry's licence only if the
+entry names it as its base model. Card metadata is `apache-2.0` only when every
+upstream component of the weight lineage is Apache-compatible; otherwise `other`
+with `LICENSING.md`.
 
-Spec `card.text` keys: `model_type` and `training_summary` (required),
-`description`, `base_model`, `precision`, `limitations`, `comparator_note`,
-`c1_result`, `transformers_note`, `staging_notice`; unknown keys are refused.
+Spec `card.text` keys: `description` (replaces the paragraph) and
+`staging_notice`; unknown keys are refused.
 
 `brand/` keeps the owl banners of earlier card revisions; current cards do not
 use them.

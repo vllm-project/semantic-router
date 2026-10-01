@@ -44,11 +44,7 @@ class HubLinksTest(unittest.TestCase):
     def test_check_hashes_files_and_uses_the_api_for_hub_pages(self):
         with tempfile.TemporaryDirectory() as scratch:
             package = Path(scratch)
-            files = {
-                "README.md": README,
-                "ATTRIBUTIONS.md": "- [x](LICENSE)\n",
-                "LICENSE": "L\n",
-            }
+            files = {"README.md": README, "LICENSE": "L\n"}
             for name, text in files.items():
                 (package / name).write_text(text, encoding="utf-8")
             (package / "assets").mkdir()
@@ -85,7 +81,7 @@ class HubLinksTest(unittest.TestCase):
                     "org/Decision-2.0-Kai-0.6B", "rev", package, "t"
                 )
             self.assertTrue(result["passed"], result["failed"])
-            self.assertEqual(result["checked"], 6)
+            self.assertEqual(result["checked"], 5)
             self.assertIn(
                 "https://huggingface.co/api/models/Qwen/Qwen3-0.6B-Base", calls
             )
@@ -99,7 +95,7 @@ class HubLinksTest(unittest.TestCase):
                     "org/Decision-2.0-Kai-0.6B", "rev", package, "t"
                 )
             self.assertFalse(result["passed"])
-            self.assertEqual(result["failed"], ["LICENSE", "LICENSE"])
+            self.assertEqual(result["failed"], ["LICENSE"])
 
 
 if __name__ == "__main__":

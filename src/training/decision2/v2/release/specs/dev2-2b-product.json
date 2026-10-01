@@ -1,0 +1,183 @@
+{
+  "schema": "dev2-release-spec/1",
+  "_release": {
+    "card_product": "Card-only revision under the new name (user job 2026-10-02 00:05 UTC+8, release worker 4c0a68cd): the product card of v2.release.card (banner, title, one paragraph, at-a-glance table, highlights, code-only quickstart, JevArena and Jev Decision Index charts with one compact table, licence, citation). card.text is empty; card.index and card.assets pin the private Index input and the assets rendered by v2.release.card_assets; card.speed pins the 400-request bench receipt of this runtime. licence.files keeps the LICENSE only; the upstream NOTICE and the attributions are dropped (no NOTICE, ATTRIBUTIONS.md, LICENSES/ or evaluation/ in the package). Weights, tokenizer, the package runtime, the vendored sources and the Transformers remote code are byte-identical to the replaced revision; config.json and MODEL_MANIFEST.json carry the new model name.",
+    "renamed_from": "llm-semantic-router/DEV2.0-2B",
+    "replaces_spec": {
+      "spec": "v2/release/specs/dev2-2b-card.json",
+      "sha256": "9aefa0dbf5a8bf83330fd662b83034157826ddc761d367f6c9ca094d129344a7"
+    },
+    "previous": {
+      "card_redesign": "Card-only revision (user card job 2026-10-01 21:58 UTC+8, release worker 4c0a68cd): a standard model-release card from v2.release.card (highlights, model overview, one evaluation chart pair and table, a Transformers-only quickstart, at most five limitations, training data with the licence attributions, licence, citation); methods and every result below the counterpart in evaluation/EVALUATION.md; internal release facts in the records. card.text is the short card text; banner, calibration_text and requirements_text are dropped; the attributions lose the internal panel version and the banner credit. Weights, tokenizer, configs, the package runtime, the vendored sources and the Transformers remote code are byte-identical to the replaced revision (same runtime_source, vendor_source and automap_source).",
+      "replaces_spec": {
+        "spec": "v2/release/specs/dev2-2b-budget.json",
+        "sha256": "d912c5e0e40641841b0ee4566deffdd0c92f9e81c522b865ea07c0c1f03bad09"
+      },
+      "previous": {
+        "forward_token_budget": "Runtime-only revision (user release round 2026-10-01 18:08 UTC+8; IX1 hand-off dev2-runtime-forward-budget-2026-10-01): the package runtime (runtime_source 99432d1a7) is the auto_map runtime plus the forward token budget of decision2/qwen.py (8e6bdfc33, e876fbefc). Weights, tokenizer, model configs, the vendored training/model sources and the Transformers remote code are byte-identical to the replaced revision. Adopted only with 0 answer changes on every scored prompt and on mlx-diag, AutoModel equal to native and the long-input regression passing.",
+        "replaces_spec": {
+          "spec": "v2/release/specs/dev2-2b-automap.json",
+          "sha256": "b1928bc3d6f75879dcb5b347c30e666e255da2f2a69105fa08cb3e9dc24f0100"
+        },
+        "previous": {
+          "transformers_remote_code": "Runtime-only revision (user request 2026-10-01 10:53 UTC+8; coordinator note 11:20, worker 4c0a68cd): the package gains the Transformers remote code and config.json fields; the package runtime (runtime_source 8e8082440) is the BF16-resident runtime plus the remote-code prompt fix. Weights, tokenizer, model configs and the vendored training/model sources are byte-identical to the replaced revision. Adopted only with 0 answer changes against the native runtime on every scored prompt and on mlx-diag.",
+          "replaces_spec": {
+            "spec": "v2/release/specs/dev2-2b-bf16r.json",
+            "sha256": "c40549439787e026aab223dd5c983431a531603b9c1747209a18e69e075be6a6"
+          },
+          "previous": {
+            "bf16_resident_runtime": "Runtime-only revision (coordinator note 2026-10-01 10:30 UTC+8, b5f60b33): the package runtime comes from the BF16-resident commit 5dc962b00 (runtime_source); weights, tokenizer, configs and the vendored training/model sources (vendor_source, the mirror the replaced revision vendors) are byte-identical to the replaced revision. Adopted only with 0 answer changes on every scored prompt and on mlx-diag. The card gains one runtime-update line and runtime_equivalence one runtime sentence.",
+            "replaces_spec": {
+              "spec": "v2/release/specs/dev2-2b-bf16.json",
+              "sha256": "cef36904af02f08ba1bbfda2a1d5bde097d502630282027b3e1c2bd812b1199e"
+            },
+            "previous": {
+              "bf16_storage": "Storage-only revision (coordinator note 2026-09-30 06:10 UTC+8, 27B release path step 1): the FP32 backbone of the replaced revision is stored as its v2.release.bf16_copy (receipt a5229ef1, identity 073bd1f2 -> 32872f29; 186 Linear projection matrices in BF16 as BF16 autocast rounds them, every other tensor FP32 bit for bit). Adopted only with 0 answer changes on every scored prompt and on mlx-diag. The card, scored run, runtime and vendored sources (pinned to the mirror that built the replaced revision) are unchanged; the runtime-equivalence text gains one storage sentence.",
+              "previous": {
+                "card_c1": "Card-only revision after JevArena-C1 event 3 (item set v1.2, scored 2026-09-29; eval record v2/eval/records/m4-c1-event3-prep-2026-09-29.md section 0000), coordinator note 2026-09-29 23:40 UTC+8: the C1 line replaces the placeholder. The card re-renders with the current public-231 note of card.py. Every model file stays byte-identical to the released revision 5ad3e9a3cc4865ce0360f4ecce2b345020bfdb38. The package runtime (decision2/*.py) and the vendored inference sources come from the mirror that built 5ad3e9a3 (33de83cea), so only card files change."
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "kind": "release",
+  "repo_id": "llm-semantic-router/Decision-2.0-Sol-2B",
+  "model_name": "Decision-2.0-Sol-2B",
+  "profile": "qwen-full",
+  "checkpoint": "/data/dev2/runs/release/inputs/dev2-2b-bf16/checkpoint",
+  "expected_identity": {
+    "model_sha256": "32872f2968e38aa99901797aaab5e12e32e281bf67bb924037d443394411170d"
+  },
+  "calibration": null,
+  "max_input_tokens": 16384,
+  "gate_receipt": "/data/dev2/runs/release/decisions/Decision-2.0-Sol-2B.decision.card2.json",
+  "origin": {
+    "repo_id": "llm-semantic-router/Decision-1.0-Sol-2B",
+    "revision": "ce0c018a28de16d6639b1cd203b761bf643b89e6",
+    "relation": "finetune",
+    "summary": "Every weight of Decision 1.0 Sol was fine-tuned (nothing frozen, no adapter), with Decision 1.0 Sol's own answer probabilities as soft targets, and the release is the uniform average of three seeds of that fine-tune. Decision 1.0 Sol is itself a text-only fine-tune of [Qwen/Qwen3.5-2B](https://huggingface.co/Qwen/Qwen3.5-2B) at `15852e8c16360a2fea060d615a32b45270f8a8fc` (Apache-2.0), whose text backbone and tokenizer this model inherits; the Qwen3.5 vision tower is not part of it."
+  },
+  "runtime_requirements": {
+    "python": "3.12.13",
+    "torch": "2.12.0+git6bbd260 (ROCm 7.2 build; one ROCm GPU tested)",
+    "transformers": "5.17.0",
+    "tokenizers": "0.23.2",
+    "safetensors": "0.8.0",
+    "flash-linear-attention": "0.5.2 (GPU gated-delta kernels)",
+    "causal-conv1d": "1.7.0 (GPU convolution kernels)",
+    "triton": "3.7.1 (persisted autotune cache)"
+  },
+  "runtime_equivalence": "decision2/qwen.py loads this full checkpoint with the vendored training/model sources whose SHA-256 equal the scored adapter sources (checked at build time) and applies the per-item batching, BF16-backbone / FP32-head execution, raw probabilities (temperature 1; no calibration file) and answer normalization of v2.dec.infer_dec, which for this non-residual checkpoint wraps the same DecisionModel without extra readouts. The scored checkpoint (073bd1f2) stored every tensor in FP32; this package (v2.release.bf16_copy, receipt a5229ef1) stores its 186 Linear projection matrices in BF16 exactly as BF16 autocast rounds them and every other tensor bit for bit in FP32. From this revision the runtime holds the backbone's BF16-exact Linear weights in BF16, the values BF16 autocast multiplies with, instead of FP32 copies cast before every matmul; it was checked with 0 answer changes on every scored prompt and on mlx-diag (2,275). From this revision the package also ships 🤗 Transformers remote code (configuration_decision2.py, modeling_decision2.py, pipeline_decision2.py; config.json gains model_type, auto_map and custom_pipelines): AutoModel with trust_remote_code loads the package through this runtime, which now also refuses Transformers' remote-code prompt while loading the tokenizer; it was checked with 0 answer changes against the native runtime on every scored prompt and on mlx-diag (2,275). From this revision the runtime runs a request whose padded question batch would put more than 2**30 elements in a gated-delta q / k / v tensor (the FLA kernels' 32-bit offsets) as several GPU-sized batches, longest questions first; requests within that budget, every scored prompt among them, keep the single-batch path, and it was checked with 0 answer changes on every scored prompt and on mlx-diag (2,275). Checked on one GPU of the scoring node against the T = 1 predictions derived exactly from the sealed CAL698 predictions of every scored prompt (typed-final 1,600, css15 6,547, public231 231) and of the mlx-diag diagnostic (2,275) by release.sh --parity, with the scored run's persisted Triton autotune cache.",
+  "vendor_source": "/data/dev2/src/33de83cea695e8988e385866ee603d492f7f0e3a-src_training_decision2/src/training/decision2",
+  "runtime_source": "/data/dev2/src/99432d1a7da5adbc70212df78ae7ebf7e50b41e4-src_training_decision2/src/training/decision2",
+  "scored": {
+    "label": "post-key same-panel run m3-S2T-soup-nodeA at T = 1 (predictions derived from the sealed CAL698 run by undoing its temperatures; adopted and sealed)",
+    "report_sha256": "08745acf9fc753bc1d3b0335dc3e341c697a657a9e6c7c26d85eebfebf4d160c",
+    "seal_sha256": "91a3df051724344b4c4d18bddb2215a81636af98de0d74f9eb9e7f286d88beab",
+    "predictions_sha256": {
+      "typed-final": "177e62c1ed5263f484ed43285a50c481c4103dd9d7f4056a3dd34f9d76d64647",
+      "css15": "2cdcf415bbd891f64f3c865067394b3e9a7479e2b26059e55d8ced3a719cf1c7",
+      "public231": "f3af4853b325f38754a3ee0f977c1aaf943ee04159a28ccd55c1faa68dd46b29",
+      "mlx-diag": "736a984af6304bf91bd6bfb0950522a09788236dd23978100dd06e76e767bf48"
+    },
+    "paired_sha256": "bca44e5f286312f2e96ac69b590347ddf37d81899dd762f5ce48475365c824ab",
+    "native_manifest": "/data/dev2/runs/dec/formal/m3/m3-S2T-soup-nodeA/output/typed-final.predictions.jsonl.manifest.json"
+  },
+  "licence": {
+    "components": [
+      {
+        "component": "Decision-2.0-Sol-2B weights, decision head, package runtime, card and artwork",
+        "licence": "apache-2.0",
+        "source": "llm-semantic-router/Decision-2.0-Sol-2B"
+      },
+      {
+        "component": "Decision 1.0 Sol-2B weights (direct weight origin, fully fine-tuned)",
+        "licence": "apache-2.0",
+        "source": "llm-semantic-router/Decision-1.0-Sol-2B@ce0c018a"
+      },
+      {
+        "component": "Qwen3.5-2B text backbone and tokenizer (upstream of Decision 1.0 Sol)",
+        "licence": "apache-2.0",
+        "source": "Qwen/Qwen3.5-2B@15852e8c"
+      }
+    ],
+    "files": [
+      {
+        "source": "/data/dev2/hf-cache/models--llm-semantic-router--Decision-1.0-Sol-2B/snapshots/ce0c018a28de16d6639b1cd203b761bf643b89e6/LICENSE",
+        "path": "LICENSE",
+        "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a"
+      }
+    ]
+  },
+  "card": {
+    "roster": "v2/eval/records/decision-index-peer-roster-2026-09-28.json",
+    "paired": "/data/dev2/runs/release/dev2-2b-t1-derived/PAIRED-vs-same-limit-16k.json",
+    "text": {},
+    "reports": [
+      {
+        "key": "candidate",
+        "role": "candidate",
+        "report": "/data/dev2/runs/release/dev2-2b-t1-derived/REPORT.json",
+        "mlx": "/data/dev2/runs/release/dev2-2b-t1-derived-mlx/mlx-diag.score.json",
+        "label": "Decision-2.0-Sol-2B"
+      },
+      {
+        "key": "sol1",
+        "role": "own-1.0",
+        "report": "/data/dev2/runs/dec/formal/m3/sol1-16k/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/mlx/x-sol1/mlx-diag.score.json",
+        "repo_id": "llm-semantic-router/Decision-1.0-Sol-2B",
+        "label": "Decision 1.0 Sol"
+      },
+      {
+        "key": "decider2b",
+        "role": "peer",
+        "report": "/data/dev2/runs/eval/m1-adopt/decider2b/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/mlx/x-decider2b/mlx-diag.score.json",
+        "repo_id": "Mapika/decider-2b",
+        "label": "Decider 2B"
+      },
+      {
+        "key": "thisthat12",
+        "role": "peer",
+        "report": "/data/dev2/runs/eval/m2/q4-thisthat12/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/q4-thisthat12/mlx-diag.score.json",
+        "repo_id": "flock-io/this-that-model-1.2",
+        "label": "This-That 1.2"
+      },
+      {
+        "key": "bosun17b",
+        "role": "peer",
+        "report": "/data/dev2/runs/eval/m1/p3-bosun17b/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/mlx/x-bosun17b/mlx-diag.score.json",
+        "repo_id": "Hanno-Labs/bosun-v3.1-1.7b",
+        "label": "Bosun v3.1 1.7B"
+      }
+    ],
+    "index": {
+      "path": "/data/dev2/private/release/card2/decision-index-card.json",
+      "sha256": "47e59a9550767b07d8aa82effb3cee4d5fbde75c4abed725e6ed2e6551826a01"
+    },
+    "assets": {
+      "dir": "/data/dev2/private/release/card2/2b",
+      "receipt_sha256": "318aec32352e099f041351b503df7d8dd697fd225085003c3a511a990b75e2b2"
+    },
+    "speed": {
+      "evidence": "v2/release/records/dev2-budget-2026-10-01/2b/extra/receipts/bench-new.json",
+      "sha256": "5c7439b2aee77cd1476c759c2b824663558ec8f14267bf294f0e15b8612db879"
+    }
+  },
+  "bf16_copy": {
+    "receipt": "/data/dev2/runs/release/inputs/dev2-2b-bf16/bf16-copy.json",
+    "sha256": "a5229ef121b8f081087bc636a247c76be5fa6c8e70ecabf3156d01c0ff2becd1"
+  },
+  "automap_source": "/data/dev2/src/99432d1a7da5adbc70212df78ae7ebf7e50b41e4-src_training_decision2/src/training/decision2",
+  "remote_code": {
+    "tested": [
+      "5.17.0",
+      "5.18.0"
+    ]
+  }
+}

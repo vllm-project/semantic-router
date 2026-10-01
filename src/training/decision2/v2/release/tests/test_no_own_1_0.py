@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 from v2.release import card, gate, layout
-from v2.release.tests.test_release import REPORTS, ROSTER, TEXT, facts
+from v2.release.tests.test_release import REPORTS, ROSTER, build_test_card, facts
 
 OK_TYPES = {kind: {"verdict": "OK"} for kind in ("choice", "noul", "score")}
 
@@ -134,7 +134,7 @@ class NoOwnGateTest(unittest.TestCase):
         items = gate.evaluate(self.work)["items"]
         self.assertFalse(items["1_beats_own_1_0"]["passed"])
         self.assertIn(
-            "results below own 1.0 summarised in the card limitations",
+            "results below own 1.0 listed in the build receipt",
             items["2_regressions_disclosed"]["evidence"],
         )
 
@@ -218,6 +218,9 @@ def entries(reference: dict | None = None) -> list[dict]:
     ]
 
 
+VEGA = "Decision-2.0-Vega-27B"
+
+
 class NoOwnCardTest(unittest.TestCase):
     def build(
         self,
@@ -226,82 +229,57 @@ class NoOwnCardTest(unittest.TestCase):
         peers: dict[str, dict] | None = None,
     ) -> dict:
         with tempfile.TemporaryDirectory() as scratch:
-            out = Path(scratch) / "pkg"
-            path = None
-            if paired:
-                path = write(Path(scratch) / "paired.json", paired)
-            result = card.build_card(
-                entries=items,
-                roster=ROSTER,
-                paired=path,
-                facts={**facts(), "comparison": "no-1.0"},
-                text=TEXT,
-                work=Path(scratch) / "work",
-                output=out,
+            scratch = Path(scratch)
+            return build_test_card(
+                scratch,
+                items,
+                {**facts(), "model_name": VEGA, "comparison": "no-1.0"},
+                paired=write(scratch / "paired.json", paired) if paired else None,
                 paired_peers={
-                    key: write(Path(scratch) / f"paired-{key}.json", value)
+                    key: write(scratch / f"paired-{key}.json", value)
                     for key, value in (peers or {}).items()
                 },
             )
-            files = {
-                p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()
-            }
-            files |= {"LICENSE", "NOTICE", "ATTRIBUTIONS.md"}
-            readme = (out / "README.md").read_text()
-            return {
-                **result,
-                "readme": readme,
-                "evaluation": (out / "evaluation/EVALUATION.md").read_text(),
-                "manifest": json.loads((out / "evaluation/manifest.json").read_text()),
-                "problems": card.check_rendered(readme, files),
-            }
 
-    def test_reference_fills_the_slot_with_the_no_1_0_statement(self):
-        paired = {
-            "point": {"delta": {"score": -1.5}},
-            "ci95": {"low": -3.0, "high": 0.2},
-        }
-        result = self.build(entries(), paired)
+    def test_index_compares_with_the_family_and_names_no_decision_1_0(self):
+        result = self.build(entries())
         readme = result["readme"]
         self.assertEqual(result["problems"], [])
+        # Synthetic Index: Vega 27B 60.5, Lux 9B 50.5; Lex is the weakest JevArena model here.
         self.assertIn(
-            "level with the reference same-size model, Bosun (38.52; difference -7.50, "
-            "paired 95% CI -3.00 to +0.20). There is no Decision 1.0 model at this size.",
+            "**The strongest Decision 2.0 model:** +10.0 on the Jev Decision Index over "
+            "Decision-2.0-Lux-9B.",
             readme,
         )
-        self.assertIn("- **Below Bosun in places:** typed decisions", readme)
-        self.assertIn(
-            "There is no Decision 1.0 model at this size. The Decision-2.0-Kai-0.6B minus Bosun "
-            "JevArena difference is -1.50 (paired 95% interval [-3.00, +0.20]).",
-            result["evaluation"],
-        )
-        self.assertIn("## Results below Bosun", result["evaluation"])
-        self.assertIsNone(result["manifest"]["decision_1_0"])
-        self.assertNotIn("paired_vs_own_1_0", result["manifest"])
-        self.assertEqual(result["manifest"]["paired_vs_reference"]["delta"], -1.5)
+        self.assertIn("by area: Decision-2.0-Vega-27B and Decision-2.0-Lux-9B", readme)
+        self.assertNotIn("Top JevArena", readme)
+        self.assertNotIn("Ahead of", readme)
         self.assertTrue(result["tradeoffs"])
 
-    def test_strongest_reference_is_the_strongest_other_model(self):
-        items = entries(
-            {
-                "key": "gliner",
-                "role": "reference",
-                "report": str(REPORTS / "gliner25.json"),
-                "repo_id": "fastino/GLiNER2.5-Decide",
-            }
-        )
+    def test_a_level_lead_over_the_reference_is_called_level(self):
+        items = entries()
+        items[0] = {**items[0], "report": str(REPORTS / "gliner25.json")}
         items[2] = {
-            "key": "bosun",
+            "key": "lex",
             "role": "peer",
-            "report": str(REPORTS / "bosun.json"),
-            "repo_id": "Hanno-Labs/bosun-v3.1-0.6b",
-            "label": "Bosun",
+            "report": str(REPORTS / "lex.json"),
+            "label": "Decision 1.0 Lex",
         }
-        readme = self.build(items)["readme"]
-        self.assertIn("the strongest other same-size model, GLiNER2.5-Decide", readme)
-        self.assertNotIn("the reference same-size model", readme)
+        level = {"point": {"delta": {"score": 4.0}}, "ci95": {"low": -0.5, "high": 8.0}}
+        readme = self.build(items, level)["readme"]
+        self.assertIn(
+            "**Top JevArena score of its size:** 42.5 among the 2 same-size models compared, "
+            "statistically level with Bosun (38.5).",
+            readme,
+        )
+        above = {"point": {"delta": {"score": 4.0}}, "ci95": {"low": 1.0, "high": 8.0}}
+        readme = self.build(items, above)["readme"]
+        self.assertIn(
+            "**Top JevArena score of its size:** 42.5, ahead of the other same-size model compared.",
+            readme,
+        )
 
-    def test_paired_intervals_of_the_other_peers_on_the_evaluation_page(self):
+    def test_peer_intervals_must_pair_the_candidate_with_that_peer(self):
         v3 = {
             name: json.loads((REPORTS / f"{name}.json").read_text())["v3"]["score"]
             for name in ("lex", "gliner25")
@@ -314,13 +292,9 @@ class NoOwnCardTest(unittest.TestCase):
             },
             "ci95": {"low": -2.0, "high": 1.0},
         }
-        result = self.build(entries(), peers={"gliner": gliner})
-        self.assertIn(
-            "Against the other models shown: GLiNER2.5-Decide", result["evaluation"]
+        self.assertEqual(
+            self.build(entries(), peers={"gliner": gliner})["problems"], []
         )
-        self.assertIn("[-2.00, +1.00].", result["evaluation"])
-        self.assertIn("gliner", str(result["manifest"]["paired_vs_peers"]).lower())
-        self.assertNotIn("paired_vs_peers", self.build(entries())["manifest"])
         gliner["point"]["right"]["score"] += 1.0
         with self.assertRaises(ValueError):
             self.build(entries(), peers={"gliner": gliner})
@@ -337,9 +311,6 @@ class NoOwnCardTest(unittest.TestCase):
         self.assertEqual(result["problems"], [])
         self.assertEqual(result["tradeoffs"], [])
         self.assertNotIn("JPT", result["readme"])
-        self.assertIn("There is no Decision 1.0 model at this size.", result["readme"])
-        self.assertNotIn("Below", result["readme"])
-        self.assertIsNone(result["manifest"]["paired_vs_reference"])
 
     def test_roles_follow_the_comparison(self):
         own = {

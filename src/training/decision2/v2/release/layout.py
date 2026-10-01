@@ -61,18 +61,15 @@ NAME_BASES = ("tier", "loaded-parameters", "base")
 BASE_SIZE = re.compile(r"(?:^|[-_])([0-9]+(?:\.[0-9]+)?)B(?=$|[-_])")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 REVISION = re.compile(r"[0-9a-f]{40}\Z")
-CARD_FILES = (
-    "README.md",
-    "LICENSE",
-    "NOTICE",
-    "ATTRIBUTIONS.md",
-    "evaluation/EVALUATION.md",
-    "evaluation/manifest.json",
-)
+CARD_FILES = ("README.md", "LICENSE")
+# JevArena overall and by type, then the Jev Decision Index against size and by area.
 CHART_FILES = (
-    "assets/jevarena.svg",
-    "assets/jevbench-public-231.svg",
+    "assets/jevarena.png",
+    "assets/jevarena-types.png",
+    "assets/index-pareto.png",
+    "assets/index-areas.png",
 )
+CARD_ASSETS = ("assets/banner.png", *CHART_FILES)
 # Hub-side files that a real download may add; never part of the package.
 HUB_ADDED = (".gitattributes",)
 TRAINING_ONLY = {"trainer_state.pt", "checkpoint.json", "optimizer.pt", "scheduler.pt"}

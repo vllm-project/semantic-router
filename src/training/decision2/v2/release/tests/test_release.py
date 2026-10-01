@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import struct
 import tempfile
 import unittest
@@ -11,6 +12,7 @@ from pathlib import Path
 
 from v2.release import automap, build, card, examples, layout, licence
 from v2.release.runtime import api
+from v2.release.tests import card_fixture
 
 ROOT = Path(__file__).resolve().parents[3]
 REPORTS = ROOT / "v2/eval/records/m1-reports"
@@ -250,65 +252,124 @@ def facts(licence_spdx="apache-2.0"):
             "license_name": "decision-2.0-component-licences",
             "components": [],
         },
+        "model_sha256": "b" * 64,
+        "speed": {"median_ms": 12.34, "requests": 400},
         "remote_code": {"tested": ["5.17.0"], "base": None},
     }
 
 
-TEXT = {
-    "model_type": "Decision model (structured classification)",
-    "training_summary": "Fine-tuned on typed decision data.",
-}
+TEXT: dict[str, str] = {}
+
+
+def build_test_card(
+    scratch: Path,
+    entries: list[dict],
+    values: dict,
+    text: dict | None = None,
+    paired: Path | None = None,
+    paired_peers: dict[str, Path] | None = None,
+    family: dict[str, float] | None = None,
+) -> dict:
+    """Build a card from synthetic Index values and placeholder assets; README, files and digests."""
+    entries = card_fixture.relabel(entries, values["model_name"])
+    index, assets = card_fixture.card_inputs(
+        scratch,
+        entries,
+        values["model_name"],
+        values["model_sha256"],
+        values.get("comparison", "own-1.0"),
+        family=family,
+    )
+    out = scratch / "pkg"
+    result = card.build_card(
+        entries=entries,
+        roster=ROSTER,
+        paired=paired,
+        facts=values,
+        text=TEXT if text is None else text,
+        work=scratch / "work",
+        output=out,
+        index=index,
+        assets=assets,
+        paired_peers=paired_peers,
+    )
+    files = {p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()}
+    readme = (out / "README.md").read_text()
+    return {
+        **result,
+        "readme": readme,
+        "files": files,
+        "out": out,
+        "index": index,
+        "assets": assets,
+        "problems": card.check_rendered(readme, files | {"LICENSE"}),
+    }
 
 
 class CardTest(unittest.TestCase):
-    def test_card_from_same_panel_reports(self):
+    def test_product_card_from_same_panel_reports(self):
         with tempfile.TemporaryDirectory() as scratch:
-            out = Path(scratch) / "pkg"
-            result = card.build_card(
-                entries=card_entries(),
-                roster=ROSTER,
-                paired=None,
-                facts=facts("other"),
-                text={**TEXT, "staging_notice": "Staging dry run."},
-                work=Path(scratch) / "work",
-                output=out,
+            result = build_test_card(
+                Path(scratch),
+                card_entries(),
+                facts(),
+                {"staging_notice": "Staging dry run."},
             )
-            readme = (out / "README.md").read_text()
-            evaluation = (out / "evaluation/EVALUATION.md").read_text()
-            files = {
-                p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()
-            }
-            files |= {"LICENSE", "LICENSING.md", "NOTICE", "ATTRIBUTIONS.md"}
-            self.assertEqual(card.check_rendered(readme, files), [])
+            readme = result["readme"]
+            self.assertEqual(result["problems"], [])
             self.assertEqual({e["key"] for e in result["excluded"]}, {"old", "jpt"})
+            self.assertEqual(result["files"], {"README.md", *layout.CARD_ASSETS})
             self.assertIn(
                 "Typed Choice (correct): 235/800 versus 277/800", result["tradeoffs"]
             )
-            self.assertIn("| Typed Choice (correct) | 235/800 | 277/800 |", evaluation)
-            self.assertIn(
-                "**Below Decision 1.0 Kai in places:** typed decisions (Choice 235 vs 277 of 800",
-                readme,
-            )
-            self.assertIn("so other languages are less well measured", readme)
-            self.assertIn("license: other", readme)
-            self.assertIn("library_name: transformers", readme)
-            self.assertIn(
-                "license_link: https://huggingface.co/llm-semantic-router/dev2-release-staging/blob/main/LICENSING.md",
-                readme,
-            )
-            self.assertNotIn("Decision 2.0 collection", readme)
-            for word in ("post-key", "Brier", "mlx-diag", "owl", "Download and decide"):
-                self.assertNotIn(word, readme)
-            self.assertNotRegex(readme, r"JevArena v3|\bv3\b(?!\.)")
-            self.assertIn("post-key", evaluation)
-            for chart in layout.CHART_FILES:
-                svg = (out / chart).read_text()
-                self.assertRegex(
-                    svg, r'<rect x="0" y="0" width="760" height="\d+" fill="#FFFFFF"/>'
+            body = readme.split("\n---\n", 1)[1]
+            self.assertTrue(
+                body.startswith(
+                    "\n![Decision-2.0-Kai-0.6B](assets/banner.png)\n\n# Decision-2.0-Kai-0.6B\n"
                 )
-                self.assertIn('fill="#2563EB"', svg)
-                self.assertNotIn("Pareto", svg)
-                self.assertNotIn("Gradient", svg)
+            )
+            headings = re.findall(r"^#{2} .+$", readme, flags=re.M)
+            self.assertEqual(
+                headings,
+                [
+                    "## Highlights",
+                    "## Quickstart",
+                    "## Evaluation",
+                    "## License",
+                    "## Citation",
+                ],
+            )
+            self.assertIn("license: apache-2.0", readme)
+            self.assertIn(
+                "base_model: llm-semantic-router/Decision-1.0-Kai-0.6B", readme
+            )
+            self.assertIn("| **Context length** | 8,192 tokens |", readme)
+            self.assertIn("| **Decision types** | Choice · Yes / No · Score |", readme)
+            self.assertIn("Apache-2.0 ([LICENSE](LICENSE)).", readme)
+            self.assertIn(
+                "**Speed:** a median of 12.3 ms per single-question request on a single GPU.",
+                readme,
+            )
+            self.assertIn("**Many questions, one pass:**", readme)
+            # Synthetic Index: Kai 0.6B 10.5, Decision 1.0 Kai 8.25.
+            self.assertIn("+2.2 on the Jev Decision Index", readme)
+            self.assertIn("| **10.5** |", readme)
+            self.assertIn("| 8.2 |", readme)
+            self.assertIn(f"<sub>{card_fixture.FOOTNOTE}</sub>", readme)
+            for word in (
+                "Limitations",
+                "Training data",
+                "NOTICE",
+                "ATTRIBUTIONS",
+                "JevBench",
+                "EVALUATION",
+                "LoRA",
+                "BF16",
+                "stock",
+                "Decision 2.0 collection",
+            ):
+                self.assertNotIn(word, readme)
+            self.assertNotIn("](https://huggingface.co/collections/", readme)
             self.assertEqual(readme.count("```python"), 1)
             code = readme.split("```python\n", 1)[1].split("```", 1)[0]
             compile(code, "card", "exec")
@@ -316,200 +377,80 @@ class CardTest(unittest.TestCase):
                 'AutoModel.from_pretrained("llm-semantic-router/dev2-release-staging", trust_remote_code=True)',
                 code,
             )
-
-    def test_card_score_table_mlx_calibration_and_disclosures(self):
-        m2 = ROOT / "v2/eval/records/m2-reports"
-        entries = [
-            {
-                "key": "cand",
-                "role": "candidate",
-                "report": str(m2 / "kev08b.json"),
-                "mlx": str(m2 / "mlx-kev08b.json"),
-                "label": "Decision-2.0-Eos-0.8B",
-            },
-            {
-                "key": "eos1",
-                "role": "own-1.0",
-                "report": str(REPORTS / "eos1.json"),
-                "mlx": str(m2 / "mlx-eos1.json"),
-                "repo_id": "llm-semantic-router/Decision-1.0-Eos-0.8B",
-                "label": "Decision 1.0 Eos",
-            },
-            {
-                "key": "intern",
-                "role": "peer",
-                "report": str(m2 / "intern08b.json"),
-                "mlx": str(m2 / "mlx-intern08b.json"),
-                "repo_id": "internlm/Intern-Decision-0.8B",
-            },
-            {
-                "key": "jpt",
-                "role": "peer",
-                "report": str(REPORTS / "jpt08b.json"),
-                "repo_id": "kirp/jpt-0.8b",
-            },
-        ]
-        text = {
-            **TEXT,
-            "c1_result": "Independent confirmation: one sentence.",
-            "limitations": ["The runtime targets one GPU."],
-        }
-        values = {
-            **facts(),
-            "model_name": "Decision-2.0-Eos-0.8B",
-            "repo_id": "llm-semantic-router/Decision-2.0-Eos-0.8B",
-            "profile": "qwen-full",
-            "parameters": {
-                "loaded": 753_446_208,
-                "components_text": "backbone 752,393,024; decision head 1,053,184",
-            },
-        }
-        with tempfile.TemporaryDirectory() as scratch:
-            out = Path(scratch) / "pkg"
-            result = card.build_card(
-                entries=entries,
-                roster=ROSTER,
-                paired=None,
-                facts=values,
-                text=text,
-                work=Path(scratch) / "work",
-                output=out,
+            self.assertEqual(code.count('pipeline("decision"'), 1)
+            self.assertTrue(
+                next(
+                    l for l in code.splitlines() if 'pipeline("decision"' in l
+                ).startswith("# ")
             )
-            readme = (out / "README.md").read_text()
-            evaluation = (out / "evaluation/EVALUATION.md").read_text()
-            manifest = json.loads((out / "evaluation/manifest.json").read_text())
-            files = {
-                p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()
-            }
-            files |= {"LICENSE", "NOTICE", "ATTRIBUTIONS.md"}
-            self.assertEqual(card.check_rendered(readme, files), [])
-            self.assertEqual({e["key"] for e in result["excluded"]}, {"jpt"})
-            self.assertIn(card.PUBLIC231_NOTE, evaluation)
-            self.assertIn(f"{text['c1_result']}\n", evaluation)
-            self.assertNotIn(text["c1_result"], readme)
-            self.assertIn("Typed Brier and ECE", evaluation)
-            self.assertIn(
-                "| **Decision-2.0-Eos-0.8B** | **0.75B** | **43.22** | **39.0** | **147** |",
-                readme,
-            )
-            self.assertIn(
-                "| Intern-Decision 0.8B | 0.85B | 43.54 | 38.2 | 164 |", readme
-            )
-            self.assertIn("147 (48 / 58 / 41)", evaluation)
-            self.assertIn("- The runtime targets one GPU.\n", readme)
-            self.assertIn(
-                "typed decisions (Noul 407 vs 410 of 800; Score 82 vs 120 of 400)",
-                readme,
-            )
-            self.assertIn(
-                "Random Acts of Pizza 31.1 vs 51.5, Conversations Gone Awry 41.9 vs 57.1",
-                readme,
-            )
-            self.assertIn(
-                "non-English Choice and Noul on a multilingual diagnostic (61.5% vs 68.5%; 58.7% vs 59.2%)",
-                readme,
-            )
-            self.assertIn(
-                "**Against other same-size models:** trails Intern-Decision 0.8B on JevArena "
-                "(43.22 vs 43.54) and JevBench public 231 (147 vs 164).",
-                readme,
-            )
-            self.assertLessEqual(
-                readme.split("## Limitations", 1)[1].split("##", 1)[0].count("\n- "), 5
-            )
-            self.assertIn(
-                "Human-labelled transfer (median task macro-F1): 0.390 versus 0.461",
-                result["tradeoffs"],
-            )
-            self.assertIn(
-                "mlx-diag non-English Choice (accuracy): 61.5% versus 68.5%",
-                result["tradeoffs"],
-            )
-            self.assertIn(
-                "mlx-diag non-English Noul (accuracy): 58.7% versus 59.2%",
-                result["tradeoffs"],
-            )
-            self.assertFalse(any("Score (accuracy)" in t for t in result["tradeoffs"]))
-            self.assertIn("| 61.5 / 58.7 |", evaluation)
-            self.assertIn(
-                "| Transfer: Random Acts of Pizza (macro-F1) | 31.1% | 51.5% |",
-                evaluation,
-            )
-            self.assertIn(
-                "753,446,208 parameters its packaged runtime loads", evaluation
-            )
-            self.assertIn("752,917,824 from the backbone safetensors only", evaluation)
-            self.assertIn("XNLI (CC BY-NC 4.0) and is not shown", evaluation)
-            model = next(m for m in manifest["models"] if m["role"] == "candidate")
-            self.assertEqual(model["loaded_parameters"], 753_446_208)
-            self.assertEqual(model["report_loaded_parameters"], 752_917_824)
-            self.assertEqual(
-                model["mlx_diag_sha256"], layout.sha_file(m2 / "mlx-kev08b.json")
-            )
-            other = Path(scratch) / "mlx-other.json"
-            other.write_text(
-                json.dumps(
-                    {
-                        **json.loads((m2 / "mlx-eos1.json").read_text()),
-                        "gold_sha256": "0" * 64,
-                    }
+            for name in layout.CARD_ASSETS:
+                self.assertEqual(
+                    (result["out"] / name).read_bytes(),
+                    (result["assets"] / name).read_bytes(),
                 )
-            )
-            with self.assertRaises(ValueError):
-                card.select_reports(
-                    [entries[0], {**entries[1], "mlx": str(other)}], ROSTER
-                )
+            self.assertEqual(set(result["figures_sha256"]), set(layout.CARD_ASSETS))
+            self.assertEqual(result["index_sha256"], layout.sha_file(result["index"]))
+            receipt = (Path(scratch) / "work" / card.ASSETS_RECEIPT).read_text()
+            self.assertNotIn("10.5", receipt)
 
-    def test_training_attributions_group_cc_sources_and_the_qwen_base(self):
-        attributions = [
-            "[Qwen3.5-4B-Base](https://huggingface.co/Qwen/Qwen3.5-4B-Base) at `abc`: direct weight "
-            "origin (Apache-2.0); licence text in `LICENSES/Qwen3.5-4B-Base-LICENSE.txt`.",
-            "Training data (not redistributed here): CLINC150 (Larson et al., 2019; CC BY 3.0), the labels "
-            "of KLUE YNAT, MRC and STS (Park et al., 2021; CC BY-SA 4.0), KLUE STS (Park et al.; CC BY-SA 4.0) "
-            "and MuSiQue (Trivedi et al., 2022; CC BY 4.0, Wikipedia text CC BY-SA).",
-            "Evaluation data: JevArena and JevBench public 231.",
-        ]
-        self.assertEqual(
-            card.cc_sources(attributions),
-            {
-                "CC BY 3.0": ["CLINC150"],
-                "CC BY 4.0": ["MuSiQue"],
-                "CC BY-SA 4.0": ["KLUE MRC", "KLUE STS", "KLUE YNAT"],
-                "Wikipedia text under CC BY-SA": ["MuSiQue"],
-            },
-        )
-        files = {"LICENSES/Qwen3.5-4B-Base-LICENSE.txt"}
-        self.assertEqual(
-            card.base_notice(attributions, files),
-            [
-                "[Qwen3.5-4B-Base](https://huggingface.co/Qwen/Qwen3.5-4B-Base) (Apache-2.0; "
-                "[licence text](LICENSES/Qwen3.5-4B-Base-LICENSE.txt))"
-            ],
-        )
-        self.assertEqual(
-            card.base_notice(attributions, set()),
-            [
-                "[Qwen3.5-4B-Base](https://huggingface.co/Qwen/Qwen3.5-4B-Base) (Apache-2.0)"
-            ],
-        )
-
-    def test_card_needs_text_keys_and_remote_code(self):
+    def test_index_gain_is_stated_only_when_positive(self):
         with tempfile.TemporaryDirectory() as scratch:
-            for facts_value, text in (
-                (facts(), {"model_type": "x"}),
-                (facts(), {**TEXT, "tagline": "old key"}),
-                ({**facts(), "remote_code": None}, TEXT),
+            result = build_test_card(
+                Path(scratch), card_entries(), facts(), family={"0.6B": 8.0}
+            )
+            self.assertEqual(result["problems"], [])
+            self.assertNotIn("on the Jev Decision Index", result["readme"])
+            self.assertIn(card.CHART_AREAS, result["readme"])
+            self.assertIn("| **8.0** |", result["readme"])
+
+    def test_released_card_links_the_collection_and_project(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            readme = build_test_card(Path(scratch), card_entries(), facts())["readme"]
+            self.assertIn(f"[Decision 2.0]({card.COLLECTION_URL})", readme)
+            self.assertIn(f"[vLLM Semantic Router]({card.PROJECT_URL})", readme)
+
+    def test_card_refuses_unknown_text_missing_remote_code_and_foreign_inputs(self):
+        for values, text in (
+            (facts(), {"model_type": "round-1 key"}),
+            ({**facts(), "remote_code": None}, {}),
+            ({**facts(), "model_name": "DEV2.0-0.6B"}, {}),
+        ):
+            with tempfile.TemporaryDirectory() as scratch, self.assertRaises(
+                (ValueError, TypeError)
             ):
-                with self.assertRaises(ValueError):
-                    card.build_card(
-                        entries=card_entries(),
-                        roster=ROSTER,
-                        paired=None,
-                        facts=facts_value,
-                        text=text,
-                        work=Path(scratch) / "work",
-                        output=Path(scratch) / "pkg",
-                    )
+                build_test_card(Path(scratch), card_entries(), values, text)
+        with tempfile.TemporaryDirectory() as scratch:
+            scratch = Path(scratch)
+            entries = card_fixture.relabel(card_entries(), facts()["model_name"])
+            index, assets = card_fixture.card_inputs(
+                scratch, entries, facts()["model_name"], facts()["model_sha256"]
+            )
+
+            def attempt(values=None, **paths):
+                card.build_card(
+                    entries=entries,
+                    roster=ROSTER,
+                    paired=None,
+                    facts=values or facts(),
+                    text={},
+                    work=scratch / "work",
+                    output=scratch / "pkg",
+                    index=paths.get("index", index),
+                    assets=paths.get("assets", assets),
+                )
+
+            with self.assertRaisesRegex(ValueError, "other weights"):
+                attempt({**facts(), "model_sha256": "c" * 64})
+            other = card_fixture.index_file(
+                scratch / "other-index.json",
+                {"0.6B": facts()["model_sha256"]},
+                {"0.6B": 99.5},
+            )
+            with self.assertRaisesRegex(ValueError, "another Index input"):
+                attempt(index=other)
+            (assets / layout.CHART_FILES[0]).write_bytes(b"\x89PNG\r\n\x1a\nchanged")
+            with self.assertRaisesRegex(ValueError, "differs from its receipt"):
+                attempt()
 
     def test_card_needs_own_comparator(self):
         entries = [e for e in card_entries() if e["role"] != "own-1.0"]
@@ -526,7 +467,7 @@ class CardTest(unittest.TestCase):
         )
 
     def test_lint(self):
-        self.assertTrue(card.lint("A Pareto frontier"))
+        self.assertFalse(card.lint("A Pareto frontier"))
         self.assertTrue(card.lint("ran on node A"))
         self.assertTrue(card.lint("path /data/dev2/runs"))
         self.assertTrue(card.lint("JevArena v3 score"))
@@ -535,6 +476,18 @@ class CardTest(unittest.TestCase):
         self.assertEqual(card.lint_readme("post-key results"), ["post-key wording"])
         self.assertTrue(card.lint_readme("typed Brier / ECE"))
         self.assertTrue(card.lint_readme("revision " + "a" * 40))
+        for removed in (
+            "JevBench public 231",
+            "rank-128 LoRA",
+            "BF16 backbone",
+            "## Limitations",
+            "## Training data",
+            "see ATTRIBUTIONS.md",
+            "[NOTICE](NOTICE)",
+            "evaluation/EVALUATION.md",
+            "Runs with stock 🤗 Transformers",
+        ):
+            self.assertTrue(card.lint_readme(removed), removed)
         self.assertFalse(card.lint_readme("JevArena 43.22, Transformers 5.17"))
 
 
@@ -868,15 +821,13 @@ class BuildTest(unittest.TestCase):
                     ],
                     "attributions": ["Qwen3.5-4B-Base (Apache-2.0)."],
                 },
-                "card": {
-                    "reports": entries,
-                    "roster": str(ROSTER),
-                    "text": {
-                        "model_type": "Decision model",
-                        "training_summary": "Fine-tuned on decision data.",
-                        "staging_notice": "Staging.",
-                    },
-                },
+                "card": card_fixture.pinned_card(
+                    scratch,
+                    entries,
+                    "Decision-2.0-Nox-4B",
+                    identity["model_sha256"],
+                    {"staging_notice": "Staging."},
+                ),
             }
             spec_path = scratch / "spec.json"
             spec_path.write_text(json.dumps(spec))
@@ -910,6 +861,12 @@ class BuildTest(unittest.TestCase):
                     manifest["remote_code"]["files"][name]["sha256"],
                 )
             self.assertIn(card.TRANSFORMERS_HEADING, (pkg / "README.md").read_text())
+            for name in ("NOTICE", "ATTRIBUTIONS.md", "evaluation/EVALUATION.md"):
+                self.assertFalse((pkg / name).exists(), name)
+            self.assertEqual(
+                manifest["card"]["figures_sha256"],
+                {n: manifest["files_sha256"][n] for n in layout.CARD_ASSETS},
+            )
             (pkg / "README.md").write_text("tampered")
             with self.assertRaises(ValueError):
                 api.verify_bundle(pkg)
