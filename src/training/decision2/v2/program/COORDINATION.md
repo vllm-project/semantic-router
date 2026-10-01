@@ -205,6 +205,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 01:00 — **C1 recheck r2 PASSED for IB3-r2 (3c7679b0).**
+  - **Result.** 0 exposed scored items; all 8 sources 0 / 0; planted controls 200 / 200.
+  - **Records.** `v2/eval/records/c1-recheck-r2-2026-10-02.md`; the registry marks IB3-r2 PASS. Integration `3c5d30837`.
+  - **Coverage rule.** An arm adding IB3-r2 as a block counts it as exposure 0. A new mixture file needs its own
+    coverage entry or recheck. IB3 round 1 (`688b643e…`) is not covered.
+
 - 2026-10-02 00:50 — **IB3-r2 is RELEASE-SAFE (611782db): maths only.** Private `@1c8452da` `m6/ib3/` (round 1
   remains readable at `@c2401ab4`); records merged at `a12b5b44c`; gist 02.
   - **Contents.** `mqa` (MathQA per-option yes / no, formula-verified keys): TRAIN 8,752 rows (4,376 problems), DEV
