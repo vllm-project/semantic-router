@@ -26,6 +26,7 @@
     {"name": "prompt_routed_experts", "patch": {"prompt_routed_experts": null}},
     {"name": "prompt_text", "patch": {"prompt_text": null}},
     {"name": "prompt_token_ids", "patch": {"prompt_token_ids": [1, 2, 3]}},
+    {"name": "provider", "patch": {"provider": "OpenAI"}},
     {"name": "remote_block_ids", "patch": {"remote_block_ids": [11, 12]}},
     {"name": "remote_engine_id", "patch": {"remote_engine_id": "engine-1"}},
     {"name": "remote_host", "patch": {"remote_host": "provider.internal"}},

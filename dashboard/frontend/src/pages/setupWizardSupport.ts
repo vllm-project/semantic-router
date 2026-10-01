@@ -218,6 +218,23 @@ export function createModelDraft(
   };
 }
 
+export function switchSetupModelProvider(
+  model: ModelDraft,
+  providerKind: ProviderKind,
+): ModelDraft {
+  const previousDefault = getSetupProviderOption(model.providerKind).initialBaseUrl;
+  const nextDefault = getSetupProviderOption(providerKind).initialBaseUrl;
+  const baseUrl = model.baseUrl.trim();
+  const generatedVllmEndpoint = model.providerKind === "vllm" && /^vllm:\d+$/.test(baseUrl);
+  return {
+    ...model,
+    providerKind,
+    baseUrl: !baseUrl || baseUrl === previousDefault || generatedVllmEndpoint
+      ? nextDefault
+      : model.baseUrl,
+  };
+}
+
 function nextRuntimeBaseUrl(existingModels: ModelDraft[]): string {
   const usedEndpoints = new Set(
     existingModels

@@ -282,7 +282,7 @@ func TestRecipeActivatorRevocationDuringPlanningLeavesNoActivationWrites(t *test
 			return errors.New("activation check used the canceled request context")
 		}
 		if !allowed.Load() {
-			return errors.New("permission revoked")
+			return auth.ErrPermissionDenied
 		}
 		return nil
 	})
@@ -296,8 +296,8 @@ func TestRecipeActivatorRevocationDuringPlanningLeavesNoActivationWrites(t *test
 	cancel()
 	close(release)
 	assertActivationPermissionRevoked(t, <-finished)
-	if revalidations.Load() != 1 {
-		t.Fatalf("live revalidations = %d, want one before the first write", revalidations.Load())
+	if revalidations.Load() != 2 {
+		t.Fatalf("live revalidations = %d, want one before recovery and one after planning", revalidations.Load())
 	}
 	if _, err := os.Stat(filepath.Join(store.Root(), "source-baseline.json")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("revoked activation wrote the source baseline: %v", err)
@@ -348,7 +348,7 @@ func TestRecipeActivatorRevocationDuringPlanningLeavesNoDeactivationWrites(t *te
 	ctx := auth.WithPermissionRevalidator(context.Background(), func(context.Context) error {
 		revalidations.Add(1)
 		if !allowed.Load() {
-			return errors.New("permission revoked")
+			return auth.ErrPermissionDenied
 		}
 		return nil
 	})
@@ -361,8 +361,8 @@ func TestRecipeActivatorRevocationDuringPlanningLeavesNoDeactivationWrites(t *te
 	allowed.Store(false)
 	close(release)
 	assertActivationPermissionRevoked(t, <-finished)
-	if revalidations.Load() != 1 {
-		t.Fatalf("live revalidations = %d, want one before the journal write", revalidations.Load())
+	if revalidations.Load() != 2 {
+		t.Fatalf("live revalidations = %d, want one before recovery and one before the journal write", revalidations.Load())
 	}
 	assertNoActivationJournal(t, store)
 	if _, state, err := store.ActivationStatus(); err != nil || state != recipe.ActivationActive {

@@ -6,6 +6,7 @@ skip, and the exact runtime.env contents -- not just that the right strings
 appear in the script.
 """
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -146,3 +147,41 @@ def test_first_launch_reuses_runtime_for_dashboard_check() -> None:
 
     assert "--runtime podman" in serve, invocations
     assert "--runtime podman" in dashboard, invocations
+
+
+def test_dashboard_access_uses_the_stack_port_offset() -> None:
+    """The first-run link, browser target, and SSH tunnel must agree."""
+    out = _run_harness("print-dashboard-offset")
+    access = out.split("[DASHBOARD_ACCESS]\n", 1)[1].split("[NEXT_STEPS]\n", 1)[0]
+    next_steps = out.split("[NEXT_STEPS]\n", 1)[1].split("OPENED_URL=", 1)[0]
+
+    assert "http://localhost:9700" in access
+    assert "http://192.0.2.10:9700" in access
+    assert "ssh -L 9700:localhost:9700 fixture-user@fixture.example" in access
+    assert "http://localhost:9700" in next_steps
+    assert "http://192.0.2.10:9700" in next_steps
+    assert "ssh -L 9700:localhost:9700 fixture-user@fixture.example" in next_steps
+    assert "OPENED_URL=http://localhost:9700" in out
+    assert ":8700" not in access + next_steps
+
+
+def test_dashboard_offset_respects_runtime_host_port_range() -> None:
+    """Router gRPC uses 50051 + offset, so 15484 is the largest valid value."""
+    script = REPO_ROOT / "install.sh"
+    for offset, expected_success in (
+        ("15484", True),
+        ("15485", False),
+        ("-1", False),
+        ("invalid", False),
+    ):
+        result = subprocess.run(
+            ["bash", str(script), "--help"],
+            env={**os.environ, "VLLM_SR_PORT_OFFSET": offset},
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        assert (result.returncode == 0) is expected_success, (offset, result.stderr)
+        if not expected_success:
+            assert "VLLM_SR_PORT_OFFSET" in result.stderr
