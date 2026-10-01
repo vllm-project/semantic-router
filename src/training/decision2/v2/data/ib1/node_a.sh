@@ -21,7 +21,8 @@
 # IB1_PREV (no G4 there); then
 #   node_a.sh <commit> rescan <n>   re-scan pass <n> (G0, overlap, quarantine, C1 names) into rescan<n>/
 #   node_a.sh <commit> pass <n>     finalize pass <n> (n >= 2) with every rescan<1..n-1> list; G4 on it
-#   node_a.sh <commit> rescan final re-scan of the final files after the review drops
+#   node_a.sh <commit> rescan final<k> re-scan of the final files after the review drops (k = "" or 2, 3, ...);
+#                                   every rescanfinal* list present is dropped by the next `final`
 # and `review` samples pass IB1_SAMPLE_PASS with round-2 salts, leaving out the round-1 screened and reviewed rows.
 set -euo pipefail
 umask 077
@@ -192,7 +193,10 @@ pass_drops() {
 # rescan <n|final>: the finalized files of pass <n> (or final/) against the Index rows and the held-out panels.
 rescan() {
   local tag=$1 src
-  [ "$tag" = final ] && src=$R/final/out || src=$R/pass$tag/out
+  case $tag in
+    final*) src=$R/final/out ;;
+    *) src=$R/pass$tag/out ;;
+  esac
   fresh "rescan$tag"
   local X=$R/rescan$tag O=$R/overlap
   local M=(-v "$src:$src:ro" -v "$X:$X:rw")
@@ -312,8 +316,11 @@ final() {
   if [ "$ROUND" = 2 ]; then
     mapfile -t drops < "$R/shortcut/shortcut-fail.txt"
     mapfile -t lists < <(pass_drops $((SAMPLE_PASS - 1)))
-    [ ! -e "$R/rescanfinal" ] || lists+=(--drop-groups "$R/rescanfinal/lists/drop-groups.txt"
-      --drop-groups "$R/rescanfinal/g0/drop-groups.txt" --drop-dev-groups "$R/rescanfinal/lists/drop-dev-groups.txt")
+    local X
+    for X in "$R"/rescanfinal*; do
+      [ ! -e "$X/lists" ] || lists+=(--drop-groups "$X/lists/drop-groups.txt" --drop-groups "$X/g0/drop-groups.txt"
+        --drop-dev-groups "$X/lists/drop-dev-groups.txt")
+    done
     extra=(-v "$PREV:$PREV:ro")
   else
     mapfile -t drops < "$R/screen/families-out.txt"
