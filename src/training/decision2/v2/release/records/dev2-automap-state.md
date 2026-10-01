@@ -8,6 +8,19 @@ pinned base (PEFT auto-detection tested). Worktree `/home/xunliu/code/vllm-sr-de
 
 ## Now
 
+- 05:55Z — **Rollout DONE** (all six, record `587c0e490` in integration; mains 0.6B `def20a1c`, 0.8B `e13a40f8`,
+  2B `56950ec5`, 4B `4f560ae5`, 9B `b4f65fa8`, 27B `4e89288d`). Integration merged (`eb359fdbc`); all six finals
+  derived (`07e2c3ffe`, mirrored on node E); `automap.sh --release` refuses unless `main` = the superseded revision.
+  - **Verify: all six tiers pass** — AutoModel vs native **0 of 11,053 answers changed, max drift 0.0** for 0.6B,
+    0.8B, 2B, 4B (mlx-diag in its own run), 9B; 27B AutoModel parity finishing on GPU7.
+  - **Transformers 5.18.0** (`--tf518`, AutoModel parity vs the 5.17 native answers): 0.6B 10,653 / 10,653
+    prompts identical, drift 0.0.
+  - **Publishing** (queues on node E, logs `/data/dev2/logs/automap-gpu{6,7}-publish-20261001T054050Z.log`):
+    GPU6 `for t in 0.6B 0.8B 2B 4B 9B: --tf518 && --release` (0.6B release running from 05:52Z), then the GPU
+    integration re-run; GPU7 after the 27B verify: 27B `--tf518 && --release`.
+  - Handoff if not done by ~08:00Z: wait for both chains, `ops/fetch_receipts.sh <node-e>`, `ops/summary.py` into
+    the record's Result table, card HTTP / links are in each `<key>/release/extra/`, gist 07 entry, merge into
+    integration (`git merge origin/xunzhuo/decision-2-training`, tests, push HEAD:xunzhuo/decision-2-training).
 - 05:20Z — **Verify runs (draft specs, no upload; native parity + AutoModel steps, prompt-by-prompt compare):**
   0.6B, 0.8B, 2B **passed**: 0 answer changes vs native on typed-final 1,600 / css15 6,547 / public231 231 /
   mlx-diag 2,275, max drift **0.0** (bit-identical); native vs sealed 0 changes (drift ≤ 9e-16; 0.6B 0.0).
