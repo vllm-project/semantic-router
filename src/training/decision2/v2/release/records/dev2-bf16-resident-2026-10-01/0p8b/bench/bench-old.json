@@ -1,0 +1,65 @@
+{
+  "answers_file": "bench-old.answers.jsonl",
+  "answers_sha256": "80dd0d875442c404e95c5440b13803f4b0da06f1794a842be3cead91da7ee45d",
+  "count": 400,
+  "device_name": "",
+  "fp32_master": false,
+  "ids_sha256": "eed99a82102f2679efc132c34ef7719cf6d81999e5019c829c87be010452c3c7",
+  "input_tokens_mean": 346.2825,
+  "items_per_s": 39.46962468645595,
+  "latency_ms": {
+    "max": 767.660547979176,
+    "mean": 25.335938913631253,
+    "min": 21.915285848081112,
+    "p50": 22.6744432002306,
+    "p95": 22.903861943632364
+  },
+  "load_seconds": 8.434584280010313,
+  "memory_gib": {
+    "after_load": 2.806821823120117,
+    "load_peak": 2.806821823120117,
+    "request_peak": 2.9094033241271973
+  },
+  "mode": "run",
+  "model_name": "DEV2.0-0.8B",
+  "package_manifest_sha256": "a653dde2f40bd0f67300f64343bcc0537a486fcf116c2de0994984ad1399fcc2",
+  "parameter_bytes": 3013784832,
+  "passed": true,
+  "profile": "qwen-full",
+  "prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd",
+  "runtime": {
+    "hip": "7.2.53211",
+    "kernels": {
+      "causal_conv1d": "1.7.0",
+      "fla_path": "/opt/decision-fla/fla",
+      "flash_linear_attention": "0.5.2",
+      "kernel_bindings": {
+        "causal_conv1d_fn": "causal_conv1d.causal_conv1d_interface.causal_conv1d_fn",
+        "causal_conv1d_update": "causal_conv1d.causal_conv1d_interface.causal_conv1d_update",
+        "torch_chunk_gated_delta_rule": "fla.ops.gated_delta_rule.chunk.chunk_gated_delta_rule",
+        "torch_recurrent_gated_delta_rule": "fla.ops.gated_delta_rule.fused_recurrent.fused_recurrent_gated_delta_rule"
+      },
+      "runtime_check_sha256": "4517d9e001d9e1e2b520086b5153fa69b642a191efb19b8c9a6a9ef126e1fc2d",
+      "triton": "3.7.1+gitf0b55c07",
+      "triton_cache_autotuning": "1",
+      "triton_cache_dir": "/data/dev2/runs/release/triton/dev2-bf16r-bench-0.8B-old-20261001T032556Z"
+    },
+    "numpy": "2.3.5",
+    "parameter_dtypes": {
+      "float32": 753446208
+    },
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "residency": null,
+    "safetensors": "0.8.0",
+    "sites": [
+      "/opt/decision-fla"
+    ],
+    "threads": 4,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0"
+  },
+  "schema": "dev2-runtime-bench/1",
+  "warmup": 400
+}

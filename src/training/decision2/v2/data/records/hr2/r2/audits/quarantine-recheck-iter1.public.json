@@ -1,0 +1,50 @@
+{
+ "dev_near_train": {
+  "by_family": {
+   "hs3_pref": {
+    "dev_rows": 6,
+    "groups": 6,
+    "train_rows": 0
+   },
+   "prm_step": {
+    "dev_rows": 1,
+    "groups": 1,
+    "train_rows": 0
+   }
+  },
+  "groups": 7
+ },
+ "drop_dev_groups_sha256": "12ddac44233edbe60fcbc1a756f35ed068053c0bff0682b3c4e52b2a54845b31",
+ "drop_groups_sha256": "d575a2d3883845f1c43f0a783ac3aad80ee91f9208eb5212b109b4d40de47c77",
+ "quarantine": {
+  "by_family": {
+   "hs3_pref": {
+    "dev_rows": 1,
+    "groups": 155,
+    "train_rows": 161
+   },
+   "prm_step": {
+    "dev_rows": 0,
+    "groups": 8,
+    "train_rows": 8
+   }
+  },
+  "groups": 163
+ },
+ "report_only_roles_hit": {
+  "a7_train_A7h": 35,
+  "a7_train_A7m": 20,
+  "a7_train_A7q": 2158,
+  "a7_train_A7s": 3,
+  "rights_clean_train": 5,
+  "v1_train_a1": 16,
+  "v1_train_a3": 103,
+  "v1_train_a6h": 7,
+  "v2_aho_E11": 11,
+  "v2_aho_H1": 26,
+  "v2_aho_H3": 194,
+  "v2_aho_H5": 3,
+  "v2_aho_H6": 59
+ },
+ "schema": "decision2.hr2.quarantine.v1"
+}

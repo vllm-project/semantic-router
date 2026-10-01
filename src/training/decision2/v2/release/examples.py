@@ -190,16 +190,34 @@ def write_exclusive(path: Path, value: Any) -> str:
 
 
 def load_package(
-    package: Path, device: str | None, threads: int | None, base_path: str | None
+    package: Path,
+    device: str | None,
+    threads: int | None,
+    base_path: str | None,
+    fp32_master: bool = False,
 ):
     sys.path.insert(0, str(package.resolve()))
     from decision2 import Decision2
 
+    # Runtimes before the BF16-resident one take no such keyword.
+    options = {"bf16_resident": False} if fp32_master else {}
     started = time.perf_counter()
     model = Decision2.from_pretrained(
-        package, device=device, threads=threads, base_path=base_path
+        package, device=device, threads=threads, base_path=base_path, **options
     )
     return model, time.perf_counter() - started
+
+
+def parameter_dtypes(backend: Any) -> dict[str, int] | None:
+    """Loaded elements by dtype, for torch-module backends."""
+    module = getattr(backend, "model", None)
+    if not callable(getattr(module, "parameters", None)):
+        return None
+    counts: dict[str, int] = {}
+    for parameter in module.parameters():
+        key = str(parameter.dtype).removeprefix("torch.")
+        counts[key] = counts.get(key, 0) + parameter.numel()
+    return dict(sorted(counts.items()))
 
 
 def runtime_versions() -> dict[str, Any]:
@@ -240,7 +258,7 @@ def kernel_runtime(required: bool) -> dict[str, Any] | None:
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
     model, load_seconds = load_package(
-        args.package, args.device, args.threads, args.base_path
+        args.package, args.device, args.threads, args.base_path, args.fp32_master
     )
     kernels = kernel_runtime(args.require_kernels)
     examples = [*EXAMPLES, over_budget_example(model.max_input_tokens)]
@@ -270,7 +288,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "device": str(getattr(model.backend, "device", args.device)),
         "loaded_parameters": model.backend.parameter_count(),
         "load_seconds": load_seconds,
-        "runtime": {**runtime_versions(), "sites": args.site, "kernels": kernels},
+        "runtime": {
+            **runtime_versions(),
+            "sites": args.site,
+            "kernels": kernels,
+            "residency": getattr(model.backend, "residency", None),
+            "parameter_dtypes": parameter_dtypes(model.backend),
+            "fp32_master": args.fp32_master,
+        },
         "outputs": outputs,
         "answers_sha256": digest(
             [{"id": o["id"], "response": o["response"]} for o in outputs]
@@ -565,7 +590,13 @@ def parity(args: argparse.Namespace) -> dict[str, Any]:
         "mode": "parity",
         "package_manifest_sha256": sha_file(args.package / "MODEL_MANIFEST.json"),
         "device": str(getattr(model.backend, "device", args.device)),
-        "runtime": {**runtime_versions(), "sites": args.site, "kernels": kernels},
+        "runtime": {
+            **runtime_versions(),
+            "sites": args.site,
+            "kernels": kernels,
+            "residency": getattr(model.backend, "residency", None),
+            "parameter_dtypes": parameter_dtypes(model.backend),
+        },
         "load_seconds": load_seconds,
         "tolerance": args.tolerance,
         "panels": panels,
@@ -593,6 +624,11 @@ def main() -> None:
             p.add_argument("--threads", type=int)
             p.add_argument("--base-path")
             p.add_argument("--require-kernels", action="store_true")
+    sub.choices["run"].add_argument(
+        "--fp32-master",
+        action="store_true",
+        help="load with bf16_resident=False: FP32 Linear weights cast on every call",
+    )
     sub.choices["card"].add_argument("--reference", type=Path, required=True)
     sub.choices["card"].add_argument("--tolerance", type=float, default=0.0)
     sub.choices["parity"].add_argument(
