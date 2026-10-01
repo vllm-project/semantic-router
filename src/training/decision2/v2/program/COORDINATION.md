@@ -205,6 +205,25 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 11:25 — **User (11:10): add auto_map / trust_remote_code to all Decision 1.0 models too, for
+  uniformity. Worker 1.0-automap (b1? see below).**
+  - **Repos.** Decision 1.0 (all PUBLIC): Kai-0.6B, Lex-0.6B and Route-0.6B (encoders); Eos-0.8B, Sol-2B, Nox-4B
+    and Lux-9B (decoders).
+    - Today they are "model-only" (no `.py`, a custom `config.json`), served by the vLLM-SR decision runtime.
+    - The collaborator's private `DEV2.0-Route-0.6B` (2.0 format) gets a PR only, never merged by us.
+  - **Collaborator.** **subin** is actively editing these repos through HF PRs (today ~03:08Z: neutral hardware
+    wording on Eos / Sol / Nox / Lux, new Route weights). Rules for all our changes to 1.0 repos:
+    - HF PRs only, based on the current head;
+    - never overwrite or revert others' edits, and never touch their open PRs;
+    - merge our own PR only after the checks pass and when no open PR touches the same files.
+  - **Uniform API.** `AutoModel.from_pretrained(repo, trust_remote_code=True)` plus `system_one(state, questions)`,
+    using the same System One schema vLLM-SR serves, and `pipeline("decision", ...)`. The spec lives at
+    `v2/release/automap/API.md`; the 1.0 worker aligns with the 2.0 auto_map worker's branch
+    (`xunzhuo/decision-2-automap`) and reconciles before publishing.
+  - **Parity.** 0 answer changes vs the vLLM-SR / native 1.0 runtime on our scored 1.0 comparator prompts.
+  - **Public cards.** A "Use with 🤗 Transformers" snippet; nothing private.
+  - **GPUs.** Lease-polite sharing on nodes C–F (free leases only, short jobs); foreign GPUs are never touched.
+
 - 2026-10-01 11:20 — **Nodes E, F; user directive 10:53; three new workers.**
   - **User directive (10:53), re-sent in substance:**
     - keep pushing every size to SOTA and to the Index Pareto frontier;
