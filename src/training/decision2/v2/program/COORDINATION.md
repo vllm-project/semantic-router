@@ -205,6 +205,34 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 18:10 — **All six DEV2.0 repos support stock Transformers (`trust_remote_code`); unified `API.md`; the
+  forward-budget fix round is queued (4c0a68cd).**
+  - **Current `main` revisions:**
+
+    | Model | `main` |
+    | --- | --- |
+    | 0.6B | `08b00e07` |
+    | 0.8B | `1188dd33` |
+    | 2B | `ffe291b4` |
+    | 4B | `13d42143` (LH; it already carries the fix) |
+    | 9B | `41cb6a08` |
+    | 27B | `3236518c` |
+
+    - AutoModel equals native on 11,053 answers each, under 5.17 / 5.18. Hub smoke tests pass.
+    - The 27B needed one resume after a release-script docker-flag bug in its smoke step (`2cfa500fe`); its two
+      revisions differ only in the builder commit.
+    - Records integration `99432d1a7`; ≈ 10.6 GPU-h on node E GPU6–7.
+  - **`API.md` (`ac94cda53`)** covers 1.0 and 2.0:
+    - the common surface first (AutoModel, `system_one`, `pipeline("decision")`, the schema);
+    - then the divergences: over-length admission (per request vs per question), confidence (`decision_type_aware_v1`
+      vs 1 − normalised entropy), the 1.0 encoder tokenizer subfolder, CPU vs GPU numerics, and the 27B base download.
+  - **Next (4c0a68cd, resumed):** runtime-only revisions with the forward-budget fix for 0.8B / 2B / 9B / 27B.
+    - Built from the current mains; they refuse to upload if `main` moved.
+    - Gates: 0 answer changes, AutoModel = native, the synthetic long-input test, and the 27B private ToolRet repro now
+      valid.
+    - A card runtime line; node E GPU6–7.
+    - **Successor releases on these repos (M6 / M9 / M11) must build on top of these fix revisions.**
+
 - 2026-10-01 18:00 — **DEV2.0-4B → `m10-4b-LH` released (b5f60b33): private `main` `13d42143`; successor items 1–8
   pass.** Record and gist 07; integration `2ee92c13b`.
   - **Parity.** 0 answer changes vs the sealed T = 1 predictions on typed-final / css15 / public231 / mlx-diag (max
