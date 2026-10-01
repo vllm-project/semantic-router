@@ -167,6 +167,13 @@ is still fixing the long-input runtime bug and staging its M5-L128 Index diagnos
 
 ## Poll log (newest first)
 
+- 11:55Z (poll at 11:49Z): all eight seeds in full runs (M6-IB2PN-s2 passed both preflights; full run since ≈ 11:44Z).
+  M6-IB2PN 54 / 14 of 6,886 at 9.59 / 9.88 s per update (≈ 18.6–19.2 GPU-h at that rate; early wall-clock projections
+  include the baseline SELECT700 pass). **Reporter `m6_report.py` (`4ee6b920e`, tests pass):** `devgates` and
+  `verdicts` print the results tables; with `--root` / `--pn1-rows` it recomputes each arm's PN1 report from the stored
+  probabilities, including the es / fr view. Real-data check on node B reproduces step 0 (M5-L128 − A20r clean
+  gold-no +.0188 [+.0095, +.0294]); **the es / fr view sees L128's yes-bias too: +.0179 [+.0036, +.0349] (279 rows),
+  hop .000 (18)**, so the view is sensitive in languages absent from PN1H TRAIN.
 - 11:50Z (poll 2 of worker 2, at 11:43Z): all eight seeds and every chain / relay / watcher alive. M6-IB 1,409 / 1,346
   of 5,081 (13.2 / 13.8 h; second SELECT700 at 1272: .8740 / .8659, BEST = 1272), M6-IB2 1,387 / 1,382 of 6,614
   (17.4 / 17.5 h), M6-IBX 1,113 / 1,095 of 4,997 (13.7 / 13.9 h), M6-IB2PN-s1 15 of 6,886 (9.56 s per update),
