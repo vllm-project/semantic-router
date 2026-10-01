@@ -1,4 +1,4 @@
-# 27B MoE milestone (MoE-1): results — formal verdicts final; private Index run in progress
+# 27B MoE milestone (MoE-1): results — FINAL
 
 Preregistration `moe-prereg-2026-10-01.md` (signed `bc82b771e`; amendments 1–4). Gate `moe-gate-2026-10-01.md`.
 Development readouts are never release scores; post-key numbers are "post-key same-panel". Nothing was uploaded to
@@ -13,7 +13,9 @@ holds only the procedure, row accounting, hashes and GPU-hours of that run.
 [−.108, −.062]), mostly Noul (.784 vs .921), and mlx-diag Choice + Noul is also below (−.036 [−.052, −.020]).
 Successor items 1 and 4 fail; items 2, 3, 5, 6 and 7 pass. vs AutoJev-27B: −3.39 [−5.60, +0.79].
 At the A20r recipe the dense 27B base is the better base for this panel; the MoE base keeps human transfer, not
-typed accuracy. DEV2.0-27B stays A20r.
+typed accuracy. DEV2.0-27B stays A20r. The private Decision Index run of the frozen package (IX1 harness, parity
+gate bit-identical, dual scoring passed) does not clear the 27B-class frontier bar either, so no release hand-off
+is issued (values private).
 
 ## Summary
 
@@ -207,7 +209,16 @@ reference's own predictions (`readouts/A20r-s1-c892`, SHA-256 `a809af48…`).
   panel under the package's encoder (inputs only): 149.0M tokens, 0 questions over 32,768 tokens, 20 requests of
   ≥ 196,608 padded tokens (ToolRet / BRIGHT 32-question requests). IX1's rule applies: those are taken out of their
   shards and rerun alone afterwards; a request that fails alone is a final error (counted wrong by both scorers).
-- Running on node A GPU3 / 4 / 5 from 09:03:45Z (three shards); merge and dual scoring follow (`v2/eval/ix1/score.sh`).
+- **Run** (node A GPU3 / 4 / 5, 09:03:45–11:37Z): three shards (40,010 / 40,302 / 39,894 requests, every one `ok`)
+  then the 20 pre-split requests alone (18 `ok`; the two largest 32-question ToolRet requests, ≈ 488K and 751K
+  padded tokens, ran out of memory alone and are final errors). Row accounting (IX1 merge): **120,224 `ok` + 2
+  `error`**, 0 missing, 0 duplicates, 0 superseded; results `bbfc7a98…`. **Dual scoring: PASS** (port vs kit
+  87d4650b, per benchmark ≤ 1.5e-4, headline ≤ 0.01). Public receipt: [`moe-index/receipt-MOE-Git-soup.json`](moe-index/receipt-MOE-Git-soup.json).
+- **Outcome (private values):** the package does **not** clear the 27B-class frontier bar, so the hand-off is
+  not issued (`moe-handoff-2026-10-01.md`). Headline, areas, per-benchmark gaps and the frontier comparison are
+  in the private report (node A private dir and the local private folder), labelled "independent provisional
+  0.2.1 reproduction".
+- GPU-hours: full run 7.126 (shards 6.575, alone-reruns 0.551), parity gate 0.065, path checks 0.127.
 
 ## Licence of a derived release (Gemma terms; from the gate)
 
@@ -228,9 +239,8 @@ reference's own predictions (`readouts/A20r-s1-c892`, SHA-256 `a809af48…`).
 - **Receipts at 09:45Z: 33.987 finished** — node A 26.151 (P0 0.199, failed launches 0.001, preflights 0.344,
   Q-it full 4.993, G-it s1 full 10.240, G-it s2 full 10.373), node B 7.836 (Q-pt preflights + full 5.148; screen,
   reference and smoke readouts 1.615; path checks 0.167 incl. the formal smoke check 0.069; Stage B 0.906:
-  readout 0.253, CAL698 0.048, formal smoke 0.069, formal 0.404, mlx-diag 0.107, latency 0.025) — **plus the private
-  Index run**: path checks 0.127 and parity gate 0.065 finished, three shards running since 09:04Z (≈ 3 × 4–4.5 h).
-  Projected total ≈ 47 of 60.
+  readout 0.253,   CAL698 0.048, formal smoke 0.069, formal 0.404, mlx-diag 0.107, latency 0.025) — **plus the private
+  Index run 7.318** (full run 7.126, parity gate 0.065, path checks 0.127). **Milestone total 41.31 of 60 GPU-h.**
 - Receipts at 03:15Z: 22.64 finished (+ MOE-Git-s1 full 10.240, path checks 0.069, A20r latency reference 0.030)
   **plus MOE-Git-s2 running (≈ 5.2) → ≈ 27.8.**
 - Receipts at 02:30Z: 12.301 finished — probes 0.150, kernel checks 0.049, failed launches 0.001, preflights 0.513
