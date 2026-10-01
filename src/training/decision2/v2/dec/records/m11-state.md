@@ -57,3 +57,23 @@ Prereg `b8c3caf22`; ops `cef1a1b66`; data lock `7c3aed8c8`; amendment 1 (node F 
   `m10_formal_select.py --tier`, `ops/m11/m11-formal.sh` (`c7d50a0c2`).
 - Stage 1: all six 2B seeds DONE (≈07:40–07:45Z); soups `2b-LH` (merges 128 / 128, 128 / 128, 126 / 128 SELECT argmax)
   and `2b-NT` built and reading; all six 0.8B preflights PASS, 0.8B seeds training.
+
+## 2026-10-01 08:40Z — 2B gates closed (no 2B finalist); stage 2 training
+
+- Amendment 2 (`3bf17e6c2`): the first 2B rules output (08:20:49Z) lacked the retention and `hs1-dev` inputs (tier-gold
+  probe scoring `KeyError`; two concurrent scoring runs); moved aside as
+  `2b-finalists.invalid-incomplete-inputs.json`; probe predictions now restricted to the tier gold's ids; scoring
+  lock. Rules rerun once on complete inputs (08:29Z, readout `1c151bd3ce83f1e7`).
+- **2B: no finalist.** `2b-LH` (vs `2b-C0-f`): HT-DEV v2 −.001 [−.020, +.019] TIE; fails the typed Noul and Score type
+  floors, the `set_reconciliation` family floor, the Noul `rule_precedence` floor and the Score5-typed-DEV check
+  (COLLAPSE); retention macro .585, +.014 [−.001, +.028]; `hs1-dev` false-yes .444 vs .625. `2b-NT` (vs `2b-C0-e`):
+  HT-DEV v2 +.029 [+.015, +.042] GAIN; fails retention, macro .554, −.017 [−.030, −.004]; false-yes .580 vs .625.
+  Contrast `2b-LH` vs `2b-NT`: HT-DEV v2 −.029 [−.048, −.010]; typed T −.078 (choice +26, Noul −36, Score −115);
+  retention +.031 [+.016, +.045].
+- 2B base ceiling (`2b-BASE-e` vs `2b-C0-e`): retention macro .635, +.064 [+.046, +.082]; HT-DEV v2 −.057 FLAG;
+  Score5-typed-DEV COLLAPSE.
+- 2B C0 parity: node F vs node E exact on five panels (0 decisions differ, drift 0.0); E vs node B's `2b-I` exact
+  (above), so no 2B formal and no 2B hand-off; DEV2.0-2B stays the 2B release.
+- 4B stage-2 tier probe gold built on node A (2,461 items = 3,089 − 628). `4b-LH-f` vs M10's stored `4b-LH`: exact.
+- Training at 08:30Z: 0.8B NT seeds ≈1,050–1,450 / ≈2,540 steps (E0–2); 0.8B LH ≈750–960 (F2/3/6); `4b-LHBx-s1`
+  593 / ≈1,270 (E3); `4b-LHB-s1` 276 / ≈1,240 (F7; slowed by the co-tenant reference reads until 08:21Z).
