@@ -1,5 +1,11 @@
 # Decoder M15 — state (prereg `dec-m15-prereg-2026-10-01.md`)
 
+## 2026-10-01 17:16Z
+
+- Every preflight PASS (pre-warms 16:49–16:53Z); all eight seeds training (2B near the end of its cosine schedule; 4B
+  ≈ 6 of 8 checkpoints; 0.8B ≈ 2–4). Post chains queued on their GPUs' flocks.
+- Part A: shards 0 and 1 done (exit 0, ≈ 17 min each), shard 2 running; private.
+
 ## 2026-10-01 16:50Z
 
 - Timeline: prereg `c62a78619` (committed ≈16:22Z; its header's "≈16:40Z" is a slip, nothing M15 had run); IX1
