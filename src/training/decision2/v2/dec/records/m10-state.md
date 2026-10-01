@@ -8,6 +8,20 @@ GPU-h). Preregistration [`dec-m10-prereg-2026-10-01.md`](dec-m10-prereg-2026-10-
 
 ## Now
 
+- 2026-10-01 ≈13:05 UTC+8 (05:05Z) — **First-wave seeds done; FB and LH read and scored; LT2 reading; NT2 training.**
+  - Per-seed BEST SELECT700: LH .895 / .890 / .905, FB .897 / .906 / .913 (N4XF's seeds from Nox ≈ .88–.90); LT2
+    BESTs at the final updates; LoRA merges agree with the adapters on 128 / 128 SELECT rows (drift ≈ .011).
+  - Amendment 2 (`88aacb9fb`, before any arm readout): two gate waves; shared reference `4b-C0-e`.
+    **Cross-node parity:** `4b-C0-f` = `4b-C0-e` on all seven panels (0 differing decisions, drift 0.0).
+  - **Retention ceiling** (probe macro of MMLU / ARC / GSM8K; development diagnostic): base (label-token zero-shot)
+    .762 vs C0 .710, +.052 [+.035, +.067] (MMLU +.048, GSM8K +.122, ARC −.015 n.s.).
+  - **FB:** HT-DEV v2 −.011 [−.027, +.006] TIE; Score5t clean; retention .787, +.077 [+.063, +.089] vs C0 (+.025
+    above the base); typed DEV T .869 vs .704 but Score 342 < floor 350 (362 − 12): fails gate 1 as preregistered.
+  - **LH:** HT-DEV v2 −.014 [−.031, +.003] TIE; Score5t clean; retention .770, +.060 [+.047, +.072] vs C0 (level
+    with the base). FB − LH: HT-DEV v2 +.003 TIE, retention +.017 [+.008, +.027].
+  - **Formal path parity (node F, isolated runner):** C0 collected in 5.8 min, 0 differing answers on typed FINAL,
+    CSS15 and public 231 vs the stored bar run → the bar run stands for M10 finalists.
+
 - 2026-10-01 ≈12:42 UTC+8 (04:42Z) — **Training ≈ 75–98%; post chains armed; formal path ready.**
   - FB 747–769 / 787, LH 671–718, LT2 558–587 (correction: the 04:50Z header below was 04:20Z; ETAs ≈ 04:45Z
     node F, ≈ 04:58Z node E).
