@@ -9,6 +9,16 @@ its "written ≈11:10" line is a typo for ≈10:35); data lock [`dec-m9-datalock
 
 ## Now
 
+- 2026-10-01 ≈11:55 UTC+8 (03:55Z) — **Control line done; formal path exact; waiting for H9.**
+  - **L-N7C (control, M7's N7C on the M9 path; identical to M7's readings):** α 1 HT-DEV v2 vs `4b-I` −.0081
+    [−.0217, +.0057] TIE, typed DEV T .648 (Choice 440 < 477, Score 338 < 350: fails the typed floors), Score5t no
+    flag (top .41), HR2 DEV .693 (+.005); α ½ +.0010 [−.0093, +.0115] TIE, T .703 (passes), Score5t no flag, HR2 DEV
+    .689.
+  - **Formal-path parity EXACT** (`m9/formal/m9-ref-N4XF/PARITY.json`): 0 category changes on typed FINAL / CSS15 /
+    public 231 vs `dev2-4b-t1-derived`; v3 63.151; the stored bar stays the paired reference. Its mlx-diag collected.
+  - **H9:** s1 / s2 at step ≈ 470 of 1,128 (even8 checkpoints every 141 updates); s1 ≈ 04:40Z, s2 ≈ 04:47Z, s3
+    (GPU6) ≈ 06:25Z, soup ≈ 06:35Z. No co-tenant jobs on GPU6 during s3. Post chain (GPU7) armed.
+
 - 2026-10-01 ≈11:25 UTC+8 (03:25Z) — **H9 training (3 seeds); control = M7's N7C (amendment 1); post chain armed.**
   - **C9 stopped:** m9-C9-s1 preflight FAIL 03:04Z on `zero_trainer_cross_process` (698 / 700, drift 0.0187; every
     other gate passed; cold shared autotune cache filled by both chains at once). No rerun (rules). E1 does not apply.
