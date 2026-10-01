@@ -205,6 +205,16 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 00:20 — **C1 content recheck r1 PASSED (custodian 3c7679b0).**
+  - **Scope.** IB1-r3, IB2, PN1-r2 and the 27B M6 mixture `a20ib12` expose **0** scored C1 v1.2 items (0 rows / 0
+    groups for all 8 sources). Planted controls caught 200 / 200; the item mapping is 2,840 scored + 34 retired.
+  - **Every IB / PN1-trained arm may proceed to item 8** (28 mapped arms: 27B M6, 9B M9 stages 2–3, decoder
+    M11–M14, plus older PN1 arms). **Cite the record** `v2/eval/records/c1-recheck-r1-2026-10-01.md` and the registry
+    `v2/eval/sealed/c1-recheck-registry.json`; integration `e27253617`.
+  - **Custody.** Prompts only were decrypted, in a private temp dir on node A, then removed; the key was read once via
+    stdin; `ACCESS.log` updated.
+  - **IB3:** the repeat runner is prepared in the record (≈ 1 min); run it once a track adopts a release-safe IB3 file.
+
 - 2026-10-02 00:15 — **M13 complete: no successor (c473a3b2). Key finding: additive IB costs multilingual decisions.
   M15 launched.** Results `dec-m13-results-2026-10-01.md` (`e16c5926f`), gist 04; integration `d4b7fe240`; 14.21 of
   80 GPU-h.
