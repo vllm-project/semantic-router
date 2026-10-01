@@ -6,10 +6,14 @@ Each point X is gated against its tier's C0 (DEV2.0-<t>'s weights) read on the s
        COLLAPSE (0.8B), the Score floor is M8s amendment 3's (ops/m8s/m8s_rules.py score_floor) instead;
   4.   yes-bias guard: the hs1-dev false-yes rate on unmet conditions not above C0's by more than 0.10;
   5.   0.8B only: HT-DEV v2 delta >= 0 (point estimate).
-Finalists (<= 2 per tier): passing points with an HT-DEV v2 GAIN first, then the larger retention-macro delta.
+Stage 2 (--tier 4b, prereg dec-m11-stage2-prereg-2026-10-01.md): the reference is the LH release candidate read on the
+same node; gates 1-4 as above plus breadth: IB DEV macro delta vs the reference >= 0 (m11_ibdev.py score,
+diag/<point>.ibdev.json).
+Finalists (<= 2 per tier): passing points with an HT-DEV v2 GAIN first, then the larger retention-macro delta (4b: the
+larger IB DEV macro delta).
 Development only; never a release or post-key score; never v3, C1, mlx-diag, public 231 or Index rows.
 
-usage: m11_rules.py --tier 2b|08b --lines-root L --readout R.json --point X=REF [...] [--contrast A:B ...] --output OUT
+usage: m11_rules.py --tier 2b|08b|4b --lines-root L --readout R.json --point X=REF [...] [--contrast A:B ...] --output OUT
 """
 
 from __future__ import annotations
@@ -74,8 +78,27 @@ def gate(
         reasons.append("yes-bias guard: hs1-dev false-yes rate missing")
     elif fy > fy_ref + YES_BIAS_TOL:
         reasons.append(
-            f"yes-bias guard: hs1-dev false-yes {fy:.3f} > C0 {fy_ref:.3f} + {YES_BIAS_TOL}"
+            f"yes-bias guard: hs1-dev false-yes {fy:.3f} > {ref} {fy_ref:.3f} + {YES_BIAS_TOL}"
         )
+    if tier == "4b":
+        ib = load_opt(diag / f"{point}.ibdev.json")
+        row["ib_dev"] = (
+            None
+            if ib is None
+            else {
+                "macro": ib["ib_dev"]["family_macro"],
+                "delta": ib["ib_dev"].get("delta_family_macro"),
+                "ci95": ib["ib_dev"].get("paired", {}).get("ci95"),
+                "transfer_delta": ib["transfer"].get("delta_family_macro"),
+                "transfer_ci95": ib["transfer"].get("paired", {}).get("ci95"),
+            }
+        )
+        if ib is None or ib.get("reference_name") != ref:
+            reasons.append(f"breadth: no IB DEV score of {point} against {ref}")
+        elif ib["ib_dev"]["delta_family_macro"] < 0:
+            reasons.append(
+                f"breadth: IB DEV macro delta {ib['ib_dev']['delta_family_macro']:+.4f} < 0 vs {ref}"
+            )
     if tier == "08b":
         ht = row["htdev2"]
         if ht is not None and ht["delta"] < 0:
@@ -89,7 +112,7 @@ def gate(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tier", choices=("2b", "08b"), required=True)
+    parser.add_argument("--tier", choices=("2b", "08b", "4b"), required=True)
     parser.add_argument("--lines-root", type=Path, required=True)
     parser.add_argument("--readout", type=Path, required=True)
     parser.add_argument("--point", action="append", required=True, help="X=REF")
@@ -110,18 +133,22 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError(f"{spec}: points and references must be tier {args.tier}")
         rows.append(gate(m10, m8, m8s, arms, diag, args.tier, point, ref))
     passing = [r for r in rows if r["eligible"]]
+
+    def second(r: dict[str, Any]) -> float:
+        if args.tier == "4b":
+            return -((r.get("ib_dev") or {}).get("delta") or 0.0)
+        return -(r["retention"] or {}).get("macro_delta", 0.0)
+
     passing.sort(
-        key=lambda r: (
-            (r["htdev2"] or {}).get("verdict") != "GAIN",
-            -(r["retention"] or {}).get("macro_delta", 0.0),
-        )
+        key=lambda r: ((r["htdev2"] or {}).get("verdict") != "GAIN", second(r))
     )
     result = {
         "schema": SCHEMA,
         "tier": args.tier,
         "rule": "M10 gate (M8 eligibility, Score5t floor [m8s amendment 3 when C0 COLLAPSEs], HT-DEV v2 not FLAG, "
-        "retention macro CI upper >= 0) + yes-bias guard (hs1-dev false-yes <= C0 + 0.10) + 0.8B HT-DEV v2 delta >= 0; "
-        "pick: HT-DEV v2 GAIN first, then the larger retention-macro delta; at most two",
+        "retention macro CI upper >= 0) + yes-bias guard (hs1-dev false-yes <= reference + 0.10) + 0.8B HT-DEV v2 "
+        "delta >= 0 + 4b breadth (IB DEV macro delta >= 0); pick: HT-DEV v2 GAIN first, then the larger "
+        "retention-macro delta (4b: IB DEV macro delta); at most two",
         "points": rows,
         "finalists": [r["point"] for r in passing[:MAX_FINALISTS]],
         "contrasts": [

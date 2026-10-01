@@ -5,8 +5,13 @@
 # items that hit the tier's TRAIN, prereg "Probe TRAIN-overlap per tier").
 #
 #   m11-score.sh pull <user@node> <point> [<point> ...]   lines/<point>/ predictions and manifests from node E / F
-#   m11-score.sh probe-gold <user@node>                   probes/hits-<tier>.json from node E (ids only), then the
-#                                                         tier probe gold files (private/dec/m11/) -> probes/gold-*.json
+#   m11-score.sh probe-gold <user@node> [<tier> ...]      probes/hits-<tier>.json from node E (ids only), then the
+#                                                         tier probe gold files (private/dec/m11/); tiers 2b 08b, or
+#                                                         4b (stage 2: hits against both stage-2 TRAIN files)
+#   m11-score.sh ibdev-panel <user@node> [...]            stage 2: the IB DEV panel from node A's IB1-r3 / IB2 read-back
+#                                                         DEV files (m11_ibdev.py prompts; gold stays in private/dec/m11),
+#                                                         prompts relayed to each node's panels/ib-dev.prompts.jsonl
+#   m11-score.sh ibdev <REF> <point> [<point> ...]        stage 2: IB DEV / transfer macros vs REF -> diag/<point>.ibdev.json
 #   m11-score.sh points <REF> <point> [<point> ...]       per point vs REF: HT-DEV v2 (m7_htdev2.py), Score5-typed-DEV
 #                                                         (m8_rules.py score5t; also REF), retention probes
 #                                                         (m10_probes.py score, tier gold); hs1-dev (v2.data.hs1.validity)
@@ -25,11 +30,15 @@ HT_GOLD=$GOLD/ht-dev2.gold.jsonl HT_GOLD_SHA=659c92b45d2a5b37e250ccb728cdbf5580b
 PROBE_GOLD_M10=/data/dev2/private/dec/m10/m10-probes.gold.jsonl
 PROBE_GOLD_SHA=5c674e35142bc1aae2526d38b6930a0e570d99b5ca5185b0a7ac428dc8b7bae2
 PG=/data/dev2/private/dec/m11
+IMAGE_A=sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54
 log() { echo "$(date -u +%FT%TZ) score $*" | tee -a "$L/OPERATIONS-nodeA.log"; }
 die() { log "$*"; exit 1; }
 py() { (cd "$S" && PYTHONPATH=$S python3 -B "$@"); }
 pred() { echo "$L/$1/$2/$2.predictions.jsonl"; }
 mkdir -p "$L/diag" "$L/readout" "$M/select"
+# one scoring process at a time (two concurrent runs once raced the run-once rules step; amendment 2)
+exec 9> "$M/select/.m11-score.lock"
+flock -n 9 || die "another m11-score.sh is running"
 
 ht() {  # <left> <right> <out name>
   local out=$L/diag/$3.htdev2.json
@@ -44,8 +53,24 @@ probes() {  # <left> <right> <out name>
   [ -f "$out" ] && return 0
   local gold=$PG/m10-probes.${1%%-*}.gold.jsonl
   [ -f "$gold" ] || die "no tier probe gold $gold (m11-score.sh probe-gold)"
-  py "$OPS/m10/m10_probes.py" score --gold "$gold" --predictions "$(pred "$1" m10-probes)" \
-    --reference "$(pred "$2" m10-probes)" --output "$out" > "$L/diag/$3.probes.log" 2>&1 \
+  # the tier gold drops the probe items that hit the tier's TRAIN; the scorer expects gold for every prediction,
+  # so both sides' predictions are restricted to the tier gold's ids first
+  local lp=$L/diag/$3.left.m10-probes.jsonl rp=$L/diag/$3.right.m10-probes.jsonl
+  python3 - "$gold" "$(pred "$1" m10-probes)" "$lp" "$(pred "$2" m10-probes)" "$rp" << 'EOF2' || die "$3 probe filter FAILED"
+import json, sys
+ids = {json.loads(line)["id"] for line in open(sys.argv[1])}
+for src, dst in ((sys.argv[2], sys.argv[3]), (sys.argv[4], sys.argv[5])):
+    kept = 0
+    with open(src) as f, open(dst, "w") as out:
+        for line in f:
+            if json.loads(line)["id"] in ids:
+                out.write(line)
+                kept += 1
+    if kept != len(ids):
+        raise SystemExit(f"{src}: {kept} predictions for {len(ids)} gold items")
+EOF2
+  py "$OPS/m10/m10_probes.py" score --gold "$gold" --predictions "$lp" \
+    --reference "$rp" --output "$out" > "$L/diag/$3.probes.log" 2>&1 \
     || die "$3 probes FAILED (see $L/diag/$3.probes.log)"
   log "$3 probes: $(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print({k: d.get(k) for k in ("macro_mmlu_arc_gsm8k","macro_delta","macro_delta_ci95")})' "$out")"
 }
@@ -90,9 +115,11 @@ case ${1:-} in
     ;;
   probe-gold)
     from=$2
+    shift 2
     [ "$(sha256sum "$PROBE_GOLD_M10" | cut -d' ' -f1)" = "$PROBE_GOLD_SHA" ] || die "M10 probe gold is not $PROBE_GOLD_SHA"
     mkdir -p "$M/probes" "$PG"
-    for t in 2b 08b; do
+    [ $# -gt 0 ] || set -- 2b 08b
+    for t in "$@"; do
       rsync -a -e 'ssh -i /root/.ssh/d2_temp_cd -o BatchMode=yes' "$from:$M/probes/hits-$t.json" "$M/probes/" \
         || die "pull of hits-$t.json failed"
       [ -f "$PG/m10-probes.$t.gold.jsonl" ] && continue
@@ -110,6 +137,43 @@ with open(sys.argv[2]) as src, open(sys.argv[3], "x") as out:
 print(kept, dropped)
 EOF2
       log "tier probe gold $t: $(sha256sum "$PG/m10-probes.$t.gold.jsonl" | cut -c1-16) ($(wc -l < "$PG/m10-probes.$t.gold.jsonl") items)"
+    done
+    ;;
+  ibdev-panel)
+    shift
+    IB1D=/data/dev2/private/data/ib1/r3/hf/readback/m6/ib1/ib1.dev.jsonl
+    IB2D=/data/dev2/private/data/ib2/c3/hf/readback/m6/ib2/ib2.dev.jsonl
+    B=$PG/ibdev-build
+    if [ ! -f "$B/manifest.json" ]; then
+      mkdir -p "$PG" && chmod 700 "$PG"
+      # the prompt renderer imports the trainer's model module (torch): node A's decoder image, no network
+      docker run --rm --network none --mount "type=bind,src=$S,dst=/code,readonly" \
+        --mount "type=bind,src=/data/dev2/private/data,dst=/in,readonly" --mount "type=bind,src=$PG,dst=/out" \
+        -e PYTHONPATH=/code -w /code "$IMAGE_A" python3 v2/dec/ops/m11/m11_ibdev.py prompts \
+        --ib1 "/in/${IB1D#/data/dev2/private/data/}" \
+        --ib1-sha 3f56aa418e90e58f3fbaa50bf2f9f4f0405eeb9dd2f0c51ffca6f602711c693f --ib2 "/in/${IB2D#/data/dev2/private/data/}" \
+        --ib2-sha ab009fb12f9563c3ef4a846f5455dd5233f2a2c5fafe6ac8a9c74349532eb923 --output /out/ibdev-build \
+        > "$PG/ibdev-build.log" 2>&1 || die "IB DEV panel build FAILED (see $PG/ibdev-build.log)"
+      chmod 600 "$B"/*.jsonl
+      cp "$B/ib-dev.gold.jsonl" "$PG/ib-dev.gold.jsonl" && chmod 600 "$PG/ib-dev.gold.jsonl"
+      log "IB DEV panel: $(tail -1 "$PG/ibdev-build.log")"
+    fi
+    for to in "$@"; do
+      rsync -a --chmod=F444 -e 'ssh -i /root/.ssh/d2_temp_cd -o BatchMode=yes' "$B/ib-dev.prompts.jsonl" \
+        "$to:/data/dev2/runs/dec/panels/ib-dev.prompts.jsonl" || die "relay of ib-dev prompts failed"
+      log "ib-dev prompts relayed ($(sha256sum "$B/ib-dev.prompts.jsonl" | cut -c1-16))"
+    done
+    ;;
+  ibdev)
+    ref=$2
+    shift 2
+    for p in "$@"; do
+      out=$L/diag/$p.ibdev.json
+      [ -f "$out" ] && continue
+      py "$OPS/m11/m11_ibdev.py" score --gold "$PG/ib-dev.gold.jsonl" --predictions "$(pred "$p" ib-dev)" --name "$p" \
+        --reference "$(pred "$ref" ib-dev)" --reference-name "$ref" --exclude isarc,hover,gsm2 --output "$out" \
+        > "$L/diag/$p.ibdev.log" 2>&1 || die "$p IB DEV FAILED (see $L/diag/$p.ibdev.log)"
+      log "$p ib-dev: $(tail -1 "$L/diag/$p.ibdev.log" | cut -c1-300)"
     done
     ;;
   contrast)
@@ -145,5 +209,5 @@ EOF2
       || die "rules FAILED (see $M/select/rules-$tier.log)"
     log "finalists $tier: $(tail -1 "$M/select/rules-$tier.log" | cut -c1-600)"
     ;;
-  *) sed -n '2,17p' "$0"; exit 2 ;;
+  *) sed -n '2,22p' "$0"; exit 2 ;;
 esac
