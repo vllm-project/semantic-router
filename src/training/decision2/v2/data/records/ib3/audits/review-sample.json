@@ -1,0 +1,46 @@
+{
+ "cells": {
+  "esci|false": 27,
+  "esci|true": 27,
+  "mqa|false": 27,
+  "mqa|true": 27,
+  "phiu|false": 27,
+  "phiu|true": 27,
+  "wpd|false": 27,
+  "wpd|true": 27
+ },
+ "excluded_key_rows": 50,
+ "families": [
+  "esci",
+  "mqa",
+  "phiu",
+  "wpd"
+ ],
+ "families_excluded": [
+  "fdial2"
+ ],
+ "n": 216,
+ "per_family": 54,
+ "population": {
+  "esci": 9986,
+  "mqa": 8762,
+  "phiu": 1730,
+  "wpd": 3708
+ },
+ "rows": 29162,
+ "rows_sha256": "89ea11aa1b546a262f4cc06b901e31b28b5bd306d23c3b3c3e51b72b59df5632",
+ "salt": "ib3-review-v1",
+ "sampled": {
+  "esci": 54,
+  "mqa": 54,
+  "phiu": 54,
+  "wpd": 54
+ },
+ "schema": "decision2.ib3.review-sample.v1",
+ "thresholds": {
+  "error_max": 0.05,
+  "error_upper_max": 0.08,
+  "family_lower_max": 0.05,
+  "weighted_error_max": 0.05
+ }
+}

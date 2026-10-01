@@ -50,9 +50,8 @@ CARD_FILES = (
     "evaluation/manifest.json",
 )
 CHART_FILES = (
-    "assets/jevarena-v3-rank.svg",
-    "assets/jevarena-v3-model-task.svg",
-    "assets/jevbench-public231-rank.svg",
+    "assets/jevarena.svg",
+    "assets/jevbench-public-231.svg",
 )
 # Hub-side files that a real download may add; never part of the package.
 HUB_ADDED = (".gitattributes",)

@@ -1,0 +1,133 @@
+{
+  "checked": 13,
+  "failed": [],
+  "links": [
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": true,
+      "source": "README.md",
+      "status": 200,
+      "target": "https://huggingface.co/collections/llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00"
+    },
+    {
+      "image": false,
+      "kind": "file",
+      "ok": true,
+      "sha256": "8d62877a481ed401eb8ea1660746f0e5e3ce119b0933cdddde37717abd2f0429",
+      "source": "README.md",
+      "status": 200,
+      "target": "evaluation/EVALUATION.md"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": false,
+      "source": "README.md",
+      "status": 200,
+      "target": "https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": false,
+      "source": "README.md",
+      "status": 200,
+      "target": "https://huggingface.co/Qwen/Qwen3.5-2B"
+    },
+    {
+      "image": false,
+      "kind": "file",
+      "ok": true,
+      "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a",
+      "source": "README.md",
+      "status": 200,
+      "target": "LICENSE"
+    },
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "9bcb34999b25b561c107b329d5c320ee404e3fa4331e97570e470ad83f420fd9",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/jevarena.svg"
+    },
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "b1fe51462402074e7bc485095cf7eaea0a1151cac29f4c9bf8c96f725dfaac96",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/jevbench-public-231.svg"
+    },
+    {
+      "image": false,
+      "kind": "file",
+      "ok": true,
+      "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a",
+      "source": "README.md",
+      "status": 200,
+      "target": "LICENSES/Qwen3.5-2B-LICENSE.txt"
+    },
+    {
+      "image": false,
+      "kind": "file",
+      "ok": true,
+      "sha256": "ac31e0c400a2bd1937a7dd6838db33ca0c381e2cac7cd3c85e5850ce0061282b",
+      "source": "README.md",
+      "status": 200,
+      "target": "ATTRIBUTIONS.md"
+    },
+    {
+      "image": false,
+      "kind": "file",
+      "ok": true,
+      "sha256": "c2151d404543c66e1a42a528d103ffdf0b3869ce378874d688bab9b40ac6a12e",
+      "source": "README.md",
+      "status": 200,
+      "target": "NOTICE"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": false,
+      "source": "ATTRIBUTIONS.md",
+      "status": 200,
+      "target": "https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B"
+    },
+    {
+      "image": false,
+      "kind": "external",
+      "ok": true,
+      "source": "ATTRIBUTIONS.md",
+      "status": 200,
+      "target": "https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B/blob/ce0c018a28de16d6639b1cd203b761bf643b89e6/ATTRIBUTIONS.md"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": false,
+      "source": "ATTRIBUTIONS.md",
+      "status": 200,
+      "target": "https://huggingface.co/Qwen/Qwen3.5-2B"
+    }
+  ],
+  "passed": true,
+  "rendered_page": {
+    "bytes": 0,
+    "charts_referenced": false,
+    "status": 401,
+    "title_present": false
+  },
+  "repo": "llm-semantic-router/DEV2.0-2B",
+  "revision": "9f6ca45d76776f3d461ae8afea4531a18a1ae624",
+  "schema": "dev2-hub-links/1",
+  "utc": "2026-10-01T15:17:03.141407+00:00"
+}

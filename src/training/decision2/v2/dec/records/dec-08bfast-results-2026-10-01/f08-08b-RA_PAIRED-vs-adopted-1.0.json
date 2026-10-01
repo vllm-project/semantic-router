@@ -1,0 +1,66 @@
+{
+ "label": "post-key same-panel",
+ "models": {
+  "left": "decision2-dec-f08-08b-RA",
+  "right": "adopted-1.0"
+ },
+ "point": {
+  "delta": {
+   "H": 0.05237165095279611,
+   "T": 0.15656250000000005,
+   "score": 10.555519408978903
+  },
+  "left": {
+   "H": 0.5135746606334841,
+   "T": 0.5490625,
+   "score": 53.102220961469435
+  },
+  "right": {
+   "H": 0.461203009680688,
+   "T": 0.39249999999999996,
+   "score": 42.54670155249053
+  }
+ },
+ "ci95": {
+  "high": 14.753443158033773,
+  "low": 3.140760543595945
+ },
+ "axis_ci95": {
+  "H": {
+   "delta": {
+    "high": 0.13742175521650105,
+    "low": -0.07370510273810457
+   },
+   "left": {
+    "high": 0.542448812888717,
+    "low": 0.34460431973058564
+   },
+   "right": {
+    "high": 0.516546884817218,
+    "low": 0.3483938297829842
+   }
+  },
+  "T": {
+   "delta": {
+    "high": 0.18844531249999993,
+    "low": 0.12343750000000003
+   },
+   "left": {
+    "high": 0.570625,
+    "low": 0.5265625
+   },
+   "right": {
+    "high": 0.4178125,
+    "low": 0.36843750000000003
+   }
+  }
+ },
+ "replicates": 5000,
+ "seed": 20260927,
+ "bootstrap": {
+  "confidence_level": 0.95,
+  "fixed_css_label_universe": true,
+  "invalid_or_missing": "counted as incorrect; never removed from draws",
+  "unit": "paired typed groups within family; CSS tasks then paired items within sampled task"
+ }
+}

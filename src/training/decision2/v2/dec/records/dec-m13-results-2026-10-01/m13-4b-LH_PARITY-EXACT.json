@@ -1,0 +1,17 @@
+{
+ "category_changes": {
+  "css15": 0,
+  "public231": 0,
+  "typed-final": 0
+ },
+ "checked_utc": "2026-10-01T15:52:40.141278+00:00",
+ "exact": true,
+ "repeat": "/data/dev2/runs/dec/formal/m13/m13-4b-LH/REPEAT-vs-bar-lh.json",
+ "repeat_sha256": "407eeaf1a6115c857d58b6e4db09ede63c2d75e4ca6ed5a13bde098534c12c6a",
+ "report_sha256": "b8ff114100cfffe40f3edc7a537ea6dfbea2683d54b760f16d8e3b5e8044b6eb",
+ "rule": "0 differing answers on typed FINAL, CSS15 and public 231",
+ "run": "/data/dev2/runs/dec/formal/m13/m13-4b-LH",
+ "schema": "dec-m13-parity-exact/1",
+ "seal_sha256": "e2357879452c5ca38734fa655ce000789ea3e7b0a8d51c07f37acc114551c4b8",
+ "stored_bar": "bar-lh"
+}
