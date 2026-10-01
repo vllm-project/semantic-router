@@ -12,7 +12,9 @@
 #                 with the final spec and decision (R1', R2-R8) and exact parity of typed-final 1,600, css15 6,547,
 #                 public231 231 and mlx-diag 2,275 before upload (AutoModel against native on every scored prompt);
 #                 then the C1-scored package vs the released one (weights and identity equal), the revision diff,
-#                 collection order, card HTTP, links and gate evaluate
+#                 collection order, card HTTP, links and gate evaluate; only if all pass, purge_superseded.py plan
+#                 and apply (the superseded weight blobs, rewrite_history=False; node copy = the verified
+#                 BF16-resident package of the same weights)
 # Usage (node A): bash <mirror>/v2/release/records/dev2-9b-ka13ib-2026-10-02/ops/release_ka13ib.sh <mode> [--gpu 6|7]
 set -euo pipefail
 mode="${1:-}"
@@ -47,6 +49,7 @@ superseded=586af77916ee508320421bda6c22f7f0305a7279
 TF518=/data/dev2/tools/tf518
 TF518_DIGEST=${TF518_DIGEST:-}
 C1PKG=${C1PKG:-}
+PURGE_NODE_COPY=/data/dev2/runs/release/dev2-bf16r-9B-20261001T042603Z/package/DEV2.0-9B
 export TMPDIR=/data/dev2/tmp PYTHONPATH=$S
 mkdir -p "$TMPDIR" /data/dev2/runs/release/triton "$D"
 digest() { (cd "$1" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-64); }
@@ -152,5 +155,13 @@ PY
   --package "$PKG" --output "$W/extra/hub-links.json" || status=1
 python3 -m v2.release.gate evaluate --work "$W" > "$W/extra/gate-evaluate.json" || status=1
 bash "$S/v2/common/hf_headroom.sh" --min-free-gb 0
+if [[ "$status" == 0 ]]; then
+  # Only a verified new revision lets the superseded weight blobs go; node copies stay the durable store.
+  for step in plan apply; do
+    "$HFPY" "$R/ops/purge_superseded.py" "$step" "$W/extra/purge-$step.json" --repo "$REPO" \
+      --old-revision "$superseded" --new-revision "$REV" --node-copy "$PURGE_NODE_COPY" || { status=1; break; }
+  done
+  bash "$S/v2/common/hf_headroom.sh" --min-free-gb 0
+fi
 echo "work=$W revision=$REV gpu=$gpu post_checks=$([[ $status == 0 ]] && echo ok || echo FAILED)"
 exit "$status"
