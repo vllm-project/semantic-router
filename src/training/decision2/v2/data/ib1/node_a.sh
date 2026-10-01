@@ -71,7 +71,7 @@ elif [ "$ROUND" = 3 ]; then
   PREV2=$H/r2
   CONS=(--drop-construction sumedit-shakespeare --drop-construction sumedit-sales_email)
   CARRY=(--drop-ids "$PREV/drop-ids.txt" --drop-ids "$PREV2/drop-ids.txt" --drop-leak-ids "$PREV/leak/drop-ids.txt")
-  FAMOUT=(wands csqa)
+  FAMOUT=(wands csqa sumedit)
   PREVM+=(-v "$PREV2:$PREV2:ro")
   RKEYS+=(--screen-key "$PREV2/review/sample/key.jsonl" --screen-key "$PREV2/review-v1-unreviewed/sample/key.jsonl")
 fi

@@ -76,6 +76,15 @@ IB1 round 3 then has 10 families, and `sentfin` becomes its largest family (abou
     stage-R keys, the round-2 stage-R key and the unreviewed round-2 first draw.
   - Fresh salts: `ib1-r3-review-v1`, `ib1-r3-packet-v1`, `ib1-r3-review-r2-order-v1` and
     `ib1-r3-review-r3-order-v1`. Item ids use the prefix `u`.
+- **Addendum (committed after the first draw and before any round-3 item was reviewed).**
+  - **What happened.** The first draw (216 items, 24 per family) had no `sumedit` item. All 354 `sumedit` rows left
+    by the domain rule sit in 17 groups, and rounds 1 and 2 already sampled every one of them. So the family cannot
+    be freshly reviewed under the exclusion rule above.
+  - **Rule.** A family with no row outside the excluded groups leaves IB1, because it cannot be certified. So
+    **`sumedit` leaves IB1 in round 3**, and the faithfulness target family is no longer covered.
+  - **Consequence.** The first draw is set aside unreviewed. Pass 4 removes the family, pass 4 is re-scanned (it
+    must be clean), G4 runs on pass 4, and the sample is drawn again from pass 4.
+  - **Expected size.** About 24,330 TRAIN rows in 9 families.
 - **Reviewers.**
   - Fresh reviewers (new subagents), blind to gold, source and family, with the round-1 instructions. Stage S is not
     repeated.
