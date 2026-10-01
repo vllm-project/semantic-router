@@ -22,7 +22,9 @@ Decisive blind review 29 / 216 = 13.43% (P1, P2, P3 fail); every audit passes.
 
 ## Log (newest first)
 
-- 2026-10-02 00:00 UTC+8 — records, card and status; merge into `xunzhuo/decision-2-training` and gist 02 next.
+- 2026-10-02 00:05 UTC+8 — merged into `xunzhuo/decision-2-training` (`e96eb833a`; IB1, IB2, IB3 and guard tests pass)
+  and gist 02 entry added. **Worker done.**
+- 2026-10-02 00:00 UTC+8 — records, card and status written.
 - 2026-10-01 23:50 UTC+8 — uploaded `m6/ib3/` (38 files, read-back SHA-256 equal, private before / after; revision
   `c2401ab4`, parent `31b200a3`); `hf_headroom.sh` 47.49 GB free.
 - 2026-10-01 23:47 UTC+8 — final: TRAIN 24,148 / DEV 1,762; final re-scan clean; leak guard 0; G5, G7 PASS.
