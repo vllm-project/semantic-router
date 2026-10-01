@@ -1,0 +1,164 @@
+{
+ "candidate_inputs": {
+  "ib1.dev.cand.jsonl": "6816bf43834a88c43c8351cc6e3f98e732a53ae9d2d40ccb64dc90ff2c1eca92",
+  "ib1.train.cand.jsonl": "888dad522420dafe6759aa1957dd35a628be579e4873934d89e0ee9ed9ecbdb1"
+ },
+ "candidates": {
+  "args": {
+   "select": 576,
+   "train": 5424
+  },
+  "copa": {
+   "select": 110,
+   "train": 888
+  },
+  "csqa": {
+   "select": 530,
+   "train": 5470
+  },
+  "isarc": {
+   "select": 88,
+   "train": 875
+  },
+  "maud": {
+   "select": 344,
+   "train": 5656
+  },
+  "medmcqa": {
+   "select": 821,
+   "train": 7179
+  },
+  "poem": {
+   "select": 416,
+   "train": 3584
+  },
+  "procb": {
+   "select": 36,
+   "train": 324
+  },
+  "sentfin": {
+   "select": 805,
+   "train": 7193
+  },
+  "sms": {
+   "select": 121,
+   "train": 1163
+  },
+  "snips_rel": {
+   "select": 287,
+   "train": 2709
+  },
+  "snips_sel": {
+   "select": 322,
+   "train": 2674
+  },
+  "sumedit": {
+   "select": 199,
+   "train": 1706
+  },
+  "w2c": {
+   "select": 335,
+   "train": 3181
+  },
+  "wands": {
+   "select": 742,
+   "train": 7256
+  },
+  "wanli": {
+   "select": 923,
+   "train": 8077
+  }
+ },
+ "drop_groups_sha256": "4b5e4c1a66f9abff09cb5c56f85fe9cea9a3767904f436cb0a4ed3919b90de98",
+ "flagged": {
+  "args": {
+   "groups_dropped": 0
+  },
+  "copa": {
+   "groups_dropped": 1,
+   "rows": 2,
+   "rows_E": 2
+  },
+  "csqa": {
+   "groups_dropped": 6,
+   "rows": 15,
+   "rows_E": 15
+  },
+  "isarc": {
+   "groups_dropped": 0
+  },
+  "maud": {
+   "groups_dropped": 38,
+   "rows": 38,
+   "rows_G": 38
+  },
+  "medmcqa": {
+   "groups_dropped": 292,
+   "rows": 292,
+   "rows_E": 272,
+   "rows_G": 1,
+   "rows_N2": 22
+  },
+  "poem": {
+   "groups_dropped": 0
+  },
+  "procb": {
+   "groups_dropped": 48,
+   "rows": 49,
+   "rows_E": 6,
+   "rows_G": 42,
+   "rows_N1": 8,
+   "rows_N2": 27
+  },
+  "sentfin": {
+   "groups_dropped": 1,
+   "rows": 1,
+   "rows_E": 1
+  },
+  "sms": {
+   "groups_dropped": 0
+  },
+  "snips_rel": {
+   "groups_dropped": 0
+  },
+  "snips_sel": {
+   "groups_dropped": 0
+  },
+  "sumedit": {
+   "groups_dropped": 1,
+   "rows": 26,
+   "rows_N2": 26
+  },
+  "w2c": {
+   "groups_dropped": 2849,
+   "rows": 2936,
+   "rows_E": 88,
+   "rows_G": 2906,
+   "rows_N1": 89,
+   "rows_N2": 586
+  },
+  "wands": {
+   "groups_dropped": 33,
+   "rows": 39,
+   "rows_G": 39,
+   "rows_N2": 11
+  },
+  "wanli": {
+   "groups_dropped": 4,
+   "rows": 4,
+   "rows_E": 1,
+   "rows_G": 1,
+   "rows_N1": 2,
+   "rows_N2": 2
+  }
+ },
+ "groups_dropped": 3273,
+ "reference": "every Decision Index suite row (selected and added rows); statistics kept on the node",
+ "rules": {
+  "E": "raw leaf equality, leaves >= 20 characters",
+  "G": "shared word 13-gram",
+  "N1": "normalized whole-leaf equality, >= 6 tokens",
+  "N2": "normalized sentence or leaf equality, >= 8 tokens"
+ },
+ "schema": "decision2.ib1.index-guard.v1"
+}

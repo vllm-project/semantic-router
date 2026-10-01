@@ -205,8 +205,190 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 14:30 — **4B HR2 efficacy pilot (M9, 57551951): HR2 is NOT a human-transfer lever → HR2 work stops.**
+  Records: `dec-m9-results-2026-10-01.md` (`db728251d`), gist 04; integration `d29181e4a`; 5.94 of 16 GPU-h.
+  - **HT-DEV v2 (all TIE):** HR2 soup − control −.004 [−.018, +.010], whose upper bound rules out a gain-sized
+    effect; vs DEV2.0-4B −.012 [−.025, +.001].
+  - **Learned in distribution only:** HR2 DEV +.140. It raised typed Choice but dropped typed Noul below its floor
+    (`rule_precedence` 241 vs 260), and raised the `hs1-dev` false-yes rate. Hence no formal run.
+  - **Deviation:** the matched control failed its seed-1 preflight (an autotune-cache race), so amendment 1 used M7's
+    N7C (near-matched, −5.7% tokens).
+  - **Decision:** no HR2-r3 and no HR2 release-candidate milestone at any size (the priors for 2B / 0.8B / 9B are
+    negative). HR2-r2 stays as archived data. The next human-transfer lever is the **training method** (the 27B
+    adapter finding; 4B M10). 27B M6 and 9B M9 do not use HR2.
+  - **New convention, all tracks (especially on the new nodes C–F):** on a fresh node or a fresh image / Triton
+    autotune cache, run the first job alone, or pre-warm the cache, **before launching parallel seeds**. A
+    concurrent cold-cache fill corrupted a preflight gate (698/700).
+  - **GPUs:** node A GPU6–7 are back to 9B, idle until 9B M9 launches (after IB1-r3).
+
+- 2026-10-01 14:25 — **IB1-r2 NOT release-safe → IB1-r3 commissioned; 27B M6 launched (11741ee2).** Data: private
+  `82bf70a7` `m6/ib1/` (TRAIN 31,923 / DEV 2,366); records merged into integration at `50bae2ddd`.
+  - **r2 review:** 12/225 = 5.33% [2.79, 9.13], weighted 5.97%, `wands` 4/19 → P1, P2 and P3 fail.
+    - 5 of the 12 errors were reviewers choosing the class r2 dropped from gold but **kept as an option** (WANDS
+      `Partial`, SEntFiN neutral).
+    - The rest: SummEdits 3, CSQA 2, and one each in SEntFiN, SNIPS selection and When2Call.
+  - **IB1-r3 (1bad770e)**, with amendment 3 committed before sampling:
+    - SEntFiN becomes a true {negative, positive} item;
+    - drop WANDS;
+    - drop CommonsenseQA (already in the released mixtures);
+    - a SummEdits domain rule from the r1 + r2 errors;
+    - a fresh review of ≥ 216 items in the foreground.
+  - **27B M6 (11741ee2):**
+    - A20r adapter recipe (rank 64 / 128), no extra typed dose;
+    - stage 1 A20 + IB1 (when release-safe), with an ablation without the IB1 in-distribution families;
+    - stage 2 + IB2;
+    - gates: HT-DEV v2, typed / Noul floors, an mlx-diag-style Noul guard on development data, IB DEV slices;
+    - formal for ≤ 2, then items 1–8 vs `4e89288d` (a custodian C1 recheck first for IB-trained models) and
+      beats-AutoJev;
+    - the private Index only on frozen finalists.
+    - GPUs: the 27B reserved-idle leases (node B GPU0 / 1 / 5, node A GPU2) and node D GPU0–7 after IX1's follow-up
+      releases them; 140 GPU-h.
+  - **9B M9** launches when IB1-r3 passes; same staged design.
+
+- 2026-10-01 13:45 — **BF16-resident runtime rollout complete (b5f60b33): six runtime-only revisions; 0 answer
+  changes on every scored prompt and mlx-diag (pre-upload and real download); weights byte-identical.** Records and
+  gist 07; integration `c6db2623d`; 2.68 GPU-h.
+  - **Runtime commit `5dc962b00`.** The backbone's Linear weights are held in BF16 on GPU only where BF16 represents
+    them exactly; the FP32 parts stay FP32. The 27B LoRA stays unmerged, with its factors in FP32. `bf16_resident=False`
+    restores the old behaviour.
+  - **New `main` revisions:**
+
+    | Model | `main` |
+    | --- | --- |
+    | 0.6B | `def20a1c` |
+    | 0.8B | `e13a40f8` |
+    | 2B | `56950ec5` |
+    | 4B | `4f560ae5` |
+    | 9B | `b4f65fa8` |
+    | 27B | `4e89288d` |
+
+    Final decisions carry the superseded judgement forward with the same gate profile.
+  - **Latency and memory:**
+    - p50 falls 0.4–2.6 ms up to 4B, 6.7 ms at 9B and **29.6 ms at 27B (122.9 → 93.3)**;
+    - peak memory falls 31–47% (27B 97.6 → 52.1 GiB).
+  - **Storage:** 52.13 / 100 GB.
+  - **Coordination.**
+    - The 2.0 auto_map worker (4c0a68cd) may now publish on top of these revisions.
+    - IX1's long-input runtime fix will ride with the next runtime-only revision (ideally merged before auto_map
+      publishes).
+    - Optional later: the 27B LoRA factors in BF16 (identical compute under autocast), bundled with its next
+      revision.
+
+- 2026-10-01 13:40 — **IX1 complete (private report); runtime long-input bug; IB2 launched; 27B M6 / 9B M9 wait for
+  IB1-r2.** Score-free here by rule: every number is in `private/ix1/ix1-report-2026-10-01.md`, the node private
+  directories and the private eval-artifacts dataset (`ix1/`). Code and score-free records are merged into integration
+  at `40c14b760`; ≈ 18.7 GPU-h.
+  - **What IX1 established.**
+    - All six released packages ran on nodes C / D (38 panel benchmarks + HLE) with the 86-request native parity gate
+      bit-identical, dual-scored by the port and the kit.
+    - **The external report is confirmed**: every benchmark is within 1 skill point at every size.
+    - Contamination is negligible (one known public-split duplicate at 0.8B).
+    - Frontier status per size, the area profiles and the deficit families are in the private report.
+    - **The 27B gap is concentrated in tool-call decisions and phishing.**
+  - **Calibration decision: keep T = 1 everywhere; no calibration-only revisions.**
+    - Fits on our own CAL show a near-zero Noul bias.
+    - Temperature-plus-bias changes 14–33 typed answers per size, so item 1 cannot pass; a small 9B benefit rides with
+      its next successor.
+    - The CAL refit discrepancy goes to release as a hand-off.
+  - **Runtime bug (shipped runtime, 27B).** Two long ToolRet requests fail every time: one returns an invalid output,
+    and one crashes the GPU process with a memory fault, on two GPUs. → **IX1 follow-up (c0ce08eb, resumed):**
+    - a private repro, a synthetic-length public test, the root cause;
+    - a fix as a separate runtime commit with tests and parity;
+    - a release hand-off (the next runtime-only revisions carry it).
+    - IX1 also runs a private Index diagnostic of the frozen M5-L128 soup (not releasable) to inform the 27B M6
+      design.
+  - **IB2 (24a520c1), research & data, CPU on node A.**
+    - Families: tool-call decisions (Glaive v2 / ToolACE / xLAM / API-Bank-train class), phishing / spam corpora,
+      stance / sarcasm, grounding / fact verification, knowledge MCQ, checkable maths, ContractNLI train
+      (in-distribution).
+    - Licences: clear CC BY-SA allowed with attribution; unclear / missing / NC dropped.
+    - **Objectively checkable labels preferred**; no generator imitating any Index benchmark.
+    - The same exclusions and review as IB1.
+  - **Next:** 27B M6 and 9B M9 are preregistered and launched when IB1-r2 is release-safe, using nodes C / D and the
+    27B reserved-idle GPUs; IB2 arms join when it lands. MoE frozen finalists go to IX1-style Index runs.
+
+- 2026-10-01 13:10 — **IB1 published but NOT release-safe → IB1-r2 commissioned (same worker, 1bad770e).** Data: private
+  `decision-2.0-training-data@1371c287` `m6/ib1/`; records merged into integration at `233ce24c9`; gist 02.
+  - **Contents.** TRAIN 37,314 rows, 10.47M tokens, 12 families, all licences CC BY 4.0 / CC0 / MIT:
+    - SummEdits faithfulness, SMS spam, SNIPS function relevance, args.me stance, Gutenberg poetry perturbation,
+      SEntFiN, WANDS, Balanced COPA, CommonsenseQA;
+    - in-distribution, disclosed and separable: When2Call `train_pref` and iSarcasmEval `train`.
+  - **Exclusions and audits.**
+    - The Index-row exclusion dropped 3,273 groups; the positive controls flagged 2,000 / 2,000 exact and 2,000 / 2,000
+      perturbed copies.
+    - Panels, C1 names, balance and isolation pass.
+    - Families the source audit or the shortcut gate removed: RAGTruth / HellaSwag (NC), VAST / FinEntity / Humicroedit
+      (no licence), ANLI (NC), contracts (MAUD) and knowledge MCQ (MedMCQA) by option-only shortcuts, the WANLI
+      hypothesis-only shortcut, and ProcessBench too small.
+  - **Decisive blind review.** 13/216 = 6.02% [3.24, 10.07]; weighted 8.33%. 9 of the 13 errors sit in three boundary
+    constructions: SEntFiN neutral, the SummEdits Shakespeare domain, WANDS "Partial". The four objectively checkable
+    families had 0 errors in 72 rows.
+  - **IB1-r2**, the same method as PN1-r2:
+    - an amendment before sampling drops exactly those three constructions;
+    - every audit is re-run, with a fresh scan of the final files;
+    - a fresh review of ≥ 216 rows;
+    - publish with `release_safe` only on a pass.
+    - M10 starts its IB1 arms automatically when a release-safe IB1 record lands.
+  - **IB2 later.** It will cover the uncovered families (contracts, knowledge MCQ, maths verification, an NLI
+    substitute, select-all-that-apply). **Prefer objectively checkable labels.** HR2, HR2-r2 and IB1 all hit 5–6% on
+    crowd-labelled boundary classes. Clear CC BY-SA sources are allowed with attribution (12:10 policy).
+  - **Guard.** Any model trained on IB1 needs the custodian C1 content recheck before C1 scoring.
+
+- 2026-10-01 12:10 — **HR2-r2 published but still NOT release-safe; licence policy clarified; HR2 next step waits for
+  the 4B pilot.** Data: private `decision-2.0-training-data@16ea6cf7` `m5/hr2/` (round 1 stays at `afc3bc1e`); records
+  merged into integration at `73617e609`; gist 02.
+  - **Contents.** TRAIN 16,095 rows (Choice 9,983 / Noul 6,112; no Score family), 10.61M tokens, `820cb5a7…`; DEV 954
+    rows. G1–G8 pass.
+  - **Fresh blind review (288 rows).** Every failure comes from the HelpSteer3 preference family; its 7 errors were all
+    medium / low reviewer confidence. Amendment 4 has no fix rule, so it is published flagged and not tuned further.
+    - P1 4.51% [2.43, 7.60] pass;
+    - **P2 8.02% [3.83, 12.82] fail;**
+    - **P3 `hs3_pref` 7/48 fail.**
+    - Over both rounds: HelpSteer3 preferences 8/72, PRM800K 4/72, ETHICS 6/288.
+  - **Licence policy (coordinator decision; the user may override):**
+    - **Sources with an unclear or missing licence are dropped**: VitaminC (per-article Wikipedia terms) and Allegro
+      (no licence in the pinned snapshot).
+    - **Sources with a clear CC BY-SA licence remain allowed with attribution**, as in the existing card policy for
+      the released mixtures. Nothing is changed retroactively.
+    - IB1 follows the same rule.
+  - **Next.** No HR2-r3 until the 4B HR2 efficacy pilot (57551951) reports.
+    - If HR2 helps, preregister r3 from the cleanest families (ETHICS, possibly PRM800K). HelpSteer3 preferences then
+      need human adjudication, or a stricter margin rule validated on fresh rows.
+    - If it does not help, stop investing in HR2.
+    - Any C1-scored model trained on HR2 still needs the custodian C1 content recheck.
+  - **27B M6 inputs** are now IX1 + IB1 (+ HR2 only if r3 passes).
+
+- 2026-10-01 11:35 — **27B M5 closed: NO successor; DEV2.0-27B stays A20r (72.36).** Records: `27b/records/m5-results-2026-09-30.md`
+  (final), gist 06, integration `7a4ba9326`; 70.99 of 72 GPU-h.
+  - **Unattended run.** `chain-L128` ran every stage unattended (finished 21:01Z); nothing was missing.
+  - **M5-L128 was the only finalist.** Rank-256 soup `95d61175…`, post-key v3 **74.73** (the best 27B so far), T .948,
+    H .589, public 231: 202 vs 203. Verdicts vs A20r:
+    - item 1 +2.37 [−0.56, +3.82] **fail**;
+    - item 4 mlx-diag Choice + Noul −.013 [−.024, −.002] (Noul −.026) **fail**;
+    - beats-AutoJev +2.59 [−0.29, +6.28] **fail**;
+    - items 2, 3, 5, 6 and 7 pass.
+  - **Why it fell short.** All of the gain is typed (+.052). Human transfer only looks level, because a different task
+    became the median: 10 of the 15 human tasks are lower.
+  - **New descriptive attribution (not preregistered).** On the same rows, the L128 adapter beats full FT on HT-DEV v2
+    by +.039 [+.021, +.057]. **Adapters keep the human transfer that full FT loses**, which is consistent with the
+    4B M10 hypothesis H1.
+  - **Cleanup.**
+    - The 27B link key was removed; the A/B → C–F transfer keys are verified intact.
+    - **The coordinator approved and deleted the 19 non-BEST FF20 / FF20H checkpoints (≈ 1.8 TB).** The one remaining
+      checkpoint per arm equals the recorded BEST.
+    - Leases node B GPU0 / 1 / 5 and node A GPU2 are reserved-idle for 27B.
+  - **Next 27B milestone (M6), preregistered after the inputs land; no filler runs meanwhile.** Inputs: IX1's 27B
+    Index result and private gap profile, IB1 breadth data, and HR2-r2 (release-safe).
+    - Design direction:
+      - the adapter recipe (L128-class) plus a human-transfer lever (HR2-r2) and breadth (IB1), not more typed dose;
+      - an mlx-diag Noul guard;
+      - the Noul T+b calibration study from IX1.
+    - **The MoE milestone continues.** Its base (Gemma-4-26B-A4B-it) equals that of the 25.8B Index frontier entrant.
+    - **Optional IX1 diagnostic:** an Index run of the frozen M5-L128 soup on the reserved-idle 27B GPUs, to see
+      whether typed gains appear on the Index. Not releasable either way.
+
 - 2026-10-01 11:25 — **User (11:10): add auto_map / trust_remote_code to all Decision 1.0 models too, for
-  uniformity. Worker 1.0-automap (b1? see below).**
+  uniformity. Worker 1.0-automap (2a4d413a).**
   - **Repos.** Decision 1.0 (all PUBLIC): Kai-0.6B, Lex-0.6B and Route-0.6B (encoders); Eos-0.8B, Sol-2B, Nox-4B
     and Lux-9B (decoders).
     - Today they are "model-only" (no `.py`, a custom `config.json`), served by the vLLM-SR decision runtime.

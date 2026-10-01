@@ -1,0 +1,1313 @@
+{
+ "control": "N7C",
+ "formal": {
+  "m9-ref-N4XF": {
+   "H": 0.5796,
+   "T": 0.6881,
+   "paired": {
+    "bar-t1": {
+     "H_ci95": [
+      0.0,
+      0.0
+     ],
+     "T_ci95": [
+      0.0,
+      0.0
+     ],
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "dH": 0.0,
+     "dT": 0.0,
+     "delta": 0.0
+    }
+   },
+   "public231": 171,
+   "v3": 63.1513
+  }
+ },
+ "formal_parity": {
+  "category_changes": {
+   "css15": 0,
+   "public231": 0,
+   "typed-final": 0
+  },
+  "checked_utc": "2026-10-01T03:30:45.965823+00:00",
+  "exact": true,
+  "max_abs_numeric_drift": {
+   "css15": 0.0007689685059306672,
+   "public231": 1.765254609153999e-14,
+   "typed-final": 1.2212453270876722e-15
+  },
+  "repeat_sha256": "1683fb394049d3fadfc1f3b08dda753f20a702cb81d33ea9a0e9084645fca30a",
+  "report_sha256": "b522cb95e6a88241c6133f458013fea64f30575d23b285ee8069910a3fdb78d9",
+  "rule": "0 category changes on typed FINAL, CSS15 and public 231 vs dev2-4b-t1-derived -> the stored run is the bar; otherwise the node-A incumbent run is the paired reference and both comparisons are reported",
+  "schema": "dec-m9-formal-parity/1"
+ },
+ "gpu_hours": {
+  "arms_gpu_h_for_caps": {
+   "C9": 0.0997,
+   "H9": 4.4603
+  },
+  "jobs": {
+   "m9-4b-H9-a1-css-pilot": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1/css-pilot.launch.json",
+    "seconds": 70.0
+   },
+   "m9-4b-H9-a1-dev": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1/dev.launch.json",
+    "seconds": 73.0
+   },
+   "m9-4b-H9-a1-hr2-dev": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1/hr2-dev.launch.json",
+    "seconds": 79.0
+   },
+   "m9-4b-H9-a1-hs1-dev": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1/hs1-dev.launch.json",
+    "seconds": 118.0
+   },
+   "m9-4b-H9-a1-ht-dev2": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1/ht-dev2.launch.json",
+    "seconds": 86.0
+   },
+   "m9-4b-H9-a1-score5t-dev": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1/score5t-dev.launch.json",
+    "seconds": 50.0
+   },
+   "m9-4b-H9-a1_2-css-pilot": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1_2/css-pilot.launch.json",
+    "seconds": 69.0
+   },
+   "m9-4b-H9-a1_2-dev": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1_2/dev.launch.json",
+    "seconds": 71.0
+   },
+   "m9-4b-H9-a1_2-hr2-dev": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1_2/hr2-dev.launch.json",
+    "seconds": 74.0
+   },
+   "m9-4b-H9-a1_2-ht-dev2": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1_2/ht-dev2.launch.json",
+    "seconds": 87.0
+   },
+   "m9-4b-H9-a1_2-score5t-dev": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1_2/score5t-dev.launch.json",
+    "seconds": 50.0
+   },
+   "m9-4b-H9-s1-ht-dev2": {
+    "exit": 0,
+    "gpu": "node A GPU6",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-s1/ht-dev2.launch.json",
+    "seconds": 86.0
+   },
+   "m9-4b-I-css-pilot": {
+    "exit": 0,
+    "gpu": "node A GPU6",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-I/css-pilot.launch.json",
+    "seconds": 73.0
+   },
+   "m9-4b-I-dev": {
+    "exit": 0,
+    "gpu": "node A GPU6",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-I/dev.launch.json",
+    "seconds": 83.0
+   },
+   "m9-4b-I-hr2-dev": {
+    "exit": 0,
+    "gpu": "node A GPU6",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-I/hr2-dev.launch.json",
+    "seconds": 135.0
+   },
+   "m9-4b-I-hs1-dev": {
+    "exit": 0,
+    "gpu": "node A GPU6",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-I/hs1-dev.launch.json",
+    "seconds": 271.0
+   },
+   "m9-4b-I-ht-dev2": {
+    "exit": 0,
+    "gpu": "node A GPU6",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-I/ht-dev2.launch.json",
+    "seconds": 104.0
+   },
+   "m9-4b-I-score5t-dev": {
+    "exit": 0,
+    "gpu": "node A GPU6",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-I/score5t-dev.launch.json",
+    "seconds": 52.0
+   },
+   "m9-4b-N7C-a1-css-pilot": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1/css-pilot.launch.json",
+    "seconds": 192.0
+   },
+   "m9-4b-N7C-a1-dev": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1/dev.launch.json",
+    "seconds": 216.0
+   },
+   "m9-4b-N7C-a1-hr2-dev": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1/hr2-dev.launch.json",
+    "seconds": 197.0
+   },
+   "m9-4b-N7C-a1-hs1-dev": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1/hs1-dev.launch.json",
+    "seconds": 344.0
+   },
+   "m9-4b-N7C-a1-ht-dev2": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1/ht-dev2.launch.json",
+    "seconds": 179.0
+   },
+   "m9-4b-N7C-a1-score5t-dev": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1/score5t-dev.launch.json",
+    "seconds": 110.0
+   },
+   "m9-4b-N7C-a1_2-css-pilot": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1_2/css-pilot.launch.json",
+    "seconds": 172.0
+   },
+   "m9-4b-N7C-a1_2-dev": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1_2/dev.launch.json",
+    "seconds": 174.0
+   },
+   "m9-4b-N7C-a1_2-hr2-dev": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1_2/hr2-dev.launch.json",
+    "seconds": 171.0
+   },
+   "m9-4b-N7C-a1_2-ht-dev2": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1_2/ht-dev2.launch.json",
+    "seconds": 224.0
+   },
+   "m9-4b-N7C-a1_2-score5t-dev": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1_2/score5t-dev.launch.json",
+    "seconds": 102.0
+   },
+   "m9-C9-s1-gate": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/arms/gates/m9-C9-s1.launch.json",
+    "seconds": 88.0
+   },
+   "m9-C9-s1-one": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/arms/pre/m9-C9-s1-one.launch.json",
+    "seconds": 161.0
+   },
+   "m9-C9-s1-zero": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/arms/pre/m9-C9-s1-zero.launch.json",
+    "seconds": 110.0
+   },
+   "m9-H9-s1-full": {
+    "exit": 0,
+    "gpu": "node A GPU6",
+    "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s1.launch.json",
+    "seconds": 5022.0
+   },
+   "m9-H9-s1-gate": {
+    "exit": 0,
+    "gpu": "node A GPU6",
+    "receipt": "/data/dev2/runs/dec/m9/arms/gates/m9-H9-s1.launch.json",
+    "seconds": 97.0
+   },
+   "m9-H9-s1-one": {
+    "exit": 0,
+    "gpu": "node A GPU6",
+    "receipt": "/data/dev2/runs/dec/m9/arms/pre/m9-H9-s1-one.launch.json",
+    "seconds": 162.0
+   },
+   "m9-H9-s1-zero": {
+    "exit": 0,
+    "gpu": "node A GPU6",
+    "receipt": "/data/dev2/runs/dec/m9/arms/pre/m9-H9-s1-zero.launch.json",
+    "seconds": 112.0
+   },
+   "m9-H9-s2-full": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s2.launch.json",
+    "seconds": 4989.0
+   },
+   "m9-H9-s2-gate": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/arms/gates/m9-H9-s2.launch.json",
+    "seconds": 102.0
+   },
+   "m9-H9-s2-one": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/arms/pre/m9-H9-s2-one.launch.json",
+    "seconds": 131.0
+   },
+   "m9-H9-s2-zero": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/arms/pre/m9-H9-s2-zero.launch.json",
+    "seconds": 96.0
+   },
+   "m9-H9-s3-full": {
+    "exit": 0,
+    "gpu": "node A GPU6",
+    "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s3.launch.json",
+    "seconds": 4495.0
+   },
+   "m9-H9-s3-gate": {
+    "exit": 0,
+    "gpu": "node A GPU6",
+    "receipt": "/data/dev2/runs/dec/m9/arms/gates/m9-H9-s3.launch.json",
+    "seconds": 96.0
+   },
+   "m9-H9-s3-one": {
+    "exit": 0,
+    "gpu": "node A GPU6",
+    "receipt": "/data/dev2/runs/dec/m9/arms/pre/m9-H9-s3-one.launch.json",
+    "seconds": 118.0
+   },
+   "m9-H9-s3-zero": {
+    "exit": 0,
+    "gpu": "node A GPU6",
+    "receipt": "/data/dev2/runs/dec/m9/arms/pre/m9-H9-s3-zero.launch.json",
+    "seconds": 92.0
+   },
+   "m9-arms-full-m9-H9-s1-cal": {
+    "exit": 0,
+    "gpu": "node A GPU6",
+    "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s1-post/cal.launch.json",
+    "seconds": 40.0
+   },
+   "m9-arms-full-m9-H9-s1-css-pilot": {
+    "exit": 0,
+    "gpu": "node A GPU6",
+    "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s1-post/css-pilot.launch.json",
+    "seconds": 72.0
+   },
+   "m9-arms-full-m9-H9-s1-dev": {
+    "exit": 0,
+    "gpu": "node A GPU6",
+    "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s1-post/dev.launch.json",
+    "seconds": 78.0
+   },
+   "m9-arms-full-m9-H9-s2-cal": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s2-post/cal.launch.json",
+    "seconds": 36.0
+   },
+   "m9-arms-full-m9-H9-s2-css-pilot": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s2-post/css-pilot.launch.json",
+    "seconds": 70.0
+   },
+   "m9-arms-full-m9-H9-s2-dev": {
+    "exit": 0,
+    "gpu": "node A GPU7",
+    "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s2-post/dev.launch.json",
+    "seconds": 71.0
+   },
+   "m9-arms-full-m9-H9-s3-cal": {
+    "exit": 0,
+    "gpu": "node A GPU6",
+    "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s3-post/cal.launch.json",
+    "seconds": 36.0
+   },
+   "m9-arms-full-m9-H9-s3-css-pilot": {
+    "exit": 0,
+    "gpu": "node A GPU6",
+    "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s3-post/css-pilot.launch.json",
+    "seconds": 71.0
+   },
+   "m9-arms-full-m9-H9-s3-dev": {
+    "exit": 0,
+    "gpu": "node A GPU6",
+    "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s3-post/dev.launch.json",
+    "seconds": 71.0
+   },
+   "runner:formal/m9-ref-N4XF": {
+    "exit": 0,
+    "gpu": 6,
+    "receipt": "/data/dev2/runs/dec/m9/formal/m9-ref-N4XF/GPU-TIME.json",
+    "seconds": 981.329921245575
+   },
+   "runner:formal/m9-ref-N4XF-mlx": {
+    "exit": 0,
+    "gpu": 6,
+    "receipt": "/data/dev2/runs/dec/m9/formal/m9-ref-N4XF-mlx/GPU-TIME.json",
+    "seconds": 272.97825932502747
+   }
+  },
+  "node": "a",
+  "seeds_gpu_h": {
+   "C9-s1": 0.0997,
+   "H9-s1": 1.5508,
+   "H9-s2": 1.5264,
+   "H9-s3": 1.3831
+  },
+  "total_gpu_h": 5.9395,
+  "updated_utc": "2026-10-01T06:16:15Z"
+ },
+ "pairs": {
+  "a1": {
+   "H": {
+    "4b-H9-a1": 0.5274,
+    "4b-N7C-a1": 0.5313
+   },
+   "ci95": [
+    -0.0184,
+    0.0099
+   ],
+   "delta": -0.0039,
+   "left": "4b-H9-a1",
+   "p_le_0": 0.692,
+   "right": "4b-N7C-a1",
+   "tasks": {
+    "conv_go_awry": {
+     "4b-H9-a1": 0.5015,
+     "4b-N7C-a1": 0.5557
+    },
+    "emotion": {
+     "4b-H9-a1": 0.5402,
+     "4b-N7C-a1": 0.5397
+    },
+    "ibc": {
+     "4b-H9-a1": 0.5254,
+     "4b-N7C-a1": 0.5831
+    },
+    "media_ideology": {
+     "4b-H9-a1": 0.4157,
+     "4b-N7C-a1": 0.4083
+    },
+    "mrf": {
+     "4b-H9-a1": 0.7655,
+     "4b-N7C-a1": 0.7714
+    },
+    "reddit_humor": {
+     "4b-H9-a1": 0.5934,
+     "4b-N7C-a1": 0.5422
+    },
+    "talklife": {
+     "4b-H9-a1": 0.2288,
+     "4b-N7C-a1": 0.2448
+    },
+    "tempowic": {
+     "4b-H9-a1": 0.7292,
+     "4b-N7C-a1": 0.7006
+    },
+    "wiki_corpus": {
+     "4b-H9-a1": 0.4467,
+     "4b-N7C-a1": 0.4358
+    }
+   },
+   "verdict": "TIE"
+  },
+  "a1_2": {
+   "H": {
+    "4b-H9-a1_2": 0.5362,
+    "4b-N7C-a1_2": 0.5403
+   },
+   "ci95": [
+    -0.0142,
+    0.0061
+   ],
+   "delta": -0.0041,
+   "left": "4b-H9-a1_2",
+   "p_le_0": 0.793,
+   "right": "4b-N7C-a1_2",
+   "tasks": {
+    "conv_go_awry": {
+     "4b-H9-a1_2": 0.5171,
+     "4b-N7C-a1_2": 0.5315
+    },
+    "emotion": {
+     "4b-H9-a1_2": 0.536,
+     "4b-N7C-a1_2": 0.5455
+    },
+    "ibc": {
+     "4b-H9-a1_2": 0.563,
+     "4b-N7C-a1_2": 0.59
+    },
+    "media_ideology": {
+     "4b-H9-a1_2": 0.4221,
+     "4b-N7C-a1_2": 0.4382
+    },
+    "mrf": {
+     "4b-H9-a1_2": 0.7655,
+     "4b-N7C-a1_2": 0.7474
+    },
+    "reddit_humor": {
+     "4b-H9-a1_2": 0.5897,
+     "4b-N7C-a1_2": 0.5814
+    },
+    "talklife": {
+     "4b-H9-a1_2": 0.2516,
+     "4b-N7C-a1_2": 0.2488
+    },
+    "tempowic": {
+     "4b-H9-a1_2": 0.7296,
+     "4b-N7C-a1_2": 0.7336
+    },
+    "wiki_corpus": {
+     "4b-H9-a1_2": 0.4514,
+     "4b-N7C-a1_2": 0.4467
+    }
+   },
+   "verdict": "TIE"
+  }
+ },
+ "pick": {
+  "lines": {
+   "L-H9": [
+    {
+     "G": 0.0006249999999999867,
+     "H3": 0.5553112755044075,
+     "T": 0.705,
+     "by_type": {
+      "choice": 536,
+      "noul": 241,
+      "score": 351
+     },
+     "eligible": false,
+     "hr2dev_family_macro": 0.8283744375368828,
+     "htdev2": {
+      "ci95": [
+       -0.02456073334920017,
+       0.0012129420312976258
+      ],
+      "delta": -0.011970331227017628,
+      "verdict": "TIE"
+     },
+     "point": "4b-H9-a1",
+     "proxy": 63.268019959577124,
+     "reasons": [
+      "type floor noul: 241 < 264 - 0.03*400",
+      "Noul floor: rule_precedence 241 < 264 - 0.01*400"
+     ],
+     "rule_precedence": 241,
+     "score5t_check_flags": [],
+     "score5t_check_top_share": 0.35,
+     "step": "1"
+    },
+    {
+     "G": -0.0068749999999999645,
+     "H3": 0.5700671100859627,
+     "T": 0.6975,
+     "by_type": {
+      "choice": 496,
+      "noul": 258,
+      "score": 362
+     },
+     "eligible": false,
+     "hr2dev_family_macro": 0.7943775907651175,
+     "htdev2": {
+      "ci95": [
+       -0.013338832144581758,
+       0.007705151673524924
+      ],
+      "delta": -0.0031336640231505175,
+      "verdict": "TIE"
+     },
+     "point": "4b-H9-a1_2",
+     "proxy": 63.63384899251252,
+     "reasons": [
+      "Noul floor: rule_precedence 258 < 264 - 0.01*400"
+     ],
+     "rule_precedence": 258,
+     "score5t_check_flags": [],
+     "score5t_check_top_share": 0.3975,
+     "step": "1/2"
+    }
+   ],
+   "L-N7C": [
+    {
+     "G": -0.05687500000000001,
+     "H3": 0.5633889210081819,
+     "T": 0.6475,
+     "by_type": {
+      "choice": 440,
+      "noul": 258,
+      "score": 338
+     },
+     "eligible": false,
+     "hr2dev_family_macro": 0.6931163220112757,
+     "htdev2": {
+      "ci95": [
+       -0.021745886687620786,
+       0.005656382059748277
+      ],
+      "delta": -0.00807223554361558,
+      "verdict": "TIE"
+     },
+     "point": "4b-N7C-a1",
+     "proxy": 59.86471435142604,
+     "reasons": [
+      "type floor choice: 440 < 501 - 0.03*800",
+      "type floor score: 338 < 362 - 0.03*400",
+      "family floor transition_table: 111/400 < 160/400 - 0.10",
+      "Noul floor: rule_precedence 258 < 264 - 0.01*400"
+     ],
+     "rule_precedence": 258,
+     "score5t_check_flags": [],
+     "score5t_check_top_share": 0.41,
+     "step": "1"
+    },
+    {
+     "G": -0.0012499999999999734,
+     "H3": 0.5662605783604941,
+     "T": 0.703125,
+     "by_type": {
+      "choice": 491,
+      "noul": 266,
+      "score": 368
+     },
+     "eligible": true,
+     "hr2dev_family_macro": 0.6885608376334604,
+     "htdev2": {
+      "ci95": [
+       -0.009283413409219454,
+       0.011459751640000682
+      ],
+      "delta": 0.0009931439735008096,
+      "verdict": "TIE"
+     },
+     "point": "4b-N7C-a1_2",
+     "proxy": 62.90628589809471,
+     "reasons": [],
+     "rule_precedence": 266,
+     "score5t_check_flags": [],
+     "score5t_check_top_share": 0.415,
+     "step": "1/2"
+    }
+   ]
+  },
+  "no_pick_reasons": [
+   "Noul floor: rule_precedence 241 < 264 - 0.01*400",
+   "Noul floor: rule_precedence 258 < 264 - 0.01*400",
+   "type floor noul: 241 < 264 - 0.03*400"
+  ],
+  "point": null
+ },
+ "points": {
+  "4b-H9-a1": {
+   "hr2dev": {
+    "ci95": [
+     0.1117,
+     0.1671
+    ],
+    "delta_vs_I": 0.14,
+    "families": {
+     "allegro": 0.712,
+     "eth_cs": 0.9149,
+     "eth_deon": 0.96,
+     "eth_just": 0.9057,
+     "eth_util": 0.9746,
+     "hs3_help": 0.4286,
+     "hs3_pref": 0.8669,
+     "prm_step": 0.75,
+     "vitc": 0.9427
+    },
+    "family_macro": 0.8284,
+    "type_macro": {
+     "choice": 0.9207,
+     "noul": 0.8947,
+     "score": 0.5703
+    }
+   },
+   "hs1": {
+    "hs1_policy_packet": {
+     "accuracy": {
+      "4b-H9-a1": 0.6234,
+      "4b-I": 0.6088
+     }
+    },
+    "hs1_quote_check": {
+     "I_f1_adopt_rate": 0.775,
+     "accuracy": {
+      "4b-H9-a1": 0.5261,
+      "4b-I": 0.5344
+     },
+     "f1_adopt_rate": 0.7579
+    },
+    "hs1_unmet_condition": {
+     "I_f3_false_yes_rate": 0.2619,
+     "accuracy": {
+      "4b-H9-a1": 0.7396,
+      "4b-I": 0.774
+     },
+     "f3_false_yes_rate": 0.3155
+    }
+   },
+   "htdev2_vs_I": {
+    "H": 0.5274,
+    "I": 0.5394,
+    "ci95": [
+     -0.0246,
+     0.0012
+    ],
+    "delta": -0.012,
+    "tasks": {
+     "conv_go_awry": {
+      "4b-H9-a1": 0.5015,
+      "4b-I": 0.5315
+     },
+     "emotion": {
+      "4b-H9-a1": 0.5402,
+      "4b-I": 0.5351
+     },
+     "ibc": {
+      "4b-H9-a1": 0.5254,
+      "4b-I": 0.596
+     },
+     "media_ideology": {
+      "4b-H9-a1": 0.4157,
+      "4b-I": 0.4394
+     },
+     "mrf": {
+      "4b-H9-a1": 0.7655,
+      "4b-I": 0.7356
+     },
+     "reddit_humor": {
+      "4b-H9-a1": 0.5934,
+      "4b-I": 0.592
+     },
+     "talklife": {
+      "4b-H9-a1": 0.2288,
+      "4b-I": 0.2576
+     },
+     "tempowic": {
+      "4b-H9-a1": 0.7292,
+      "4b-I": 0.7124
+     },
+     "wiki_corpus": {
+      "4b-H9-a1": 0.4467,
+      "4b-I": 0.4545
+     }
+    },
+    "verdict": "TIE"
+   },
+   "score5t_check": {
+    "flags": [],
+    "top_share": 0.35
+   }
+  },
+  "4b-H9-a1_2": {
+   "hr2dev": {
+    "ci95": [
+     0.0794,
+     0.1318
+    ],
+    "delta_vs_I": 0.106,
+    "families": {
+     "allegro": 0.672,
+     "eth_cs": 0.9043,
+     "eth_deon": 0.9,
+     "eth_just": 0.8962,
+     "eth_util": 0.9548,
+     "hs3_help": 0.4286,
+     "hs3_pref": 0.8251,
+     "prm_step": 0.6333,
+     "vitc": 0.9351
+    },
+    "family_macro": 0.7944,
+    "type_macro": {
+     "choice": 0.8899,
+     "noul": 0.8538,
+     "score": 0.5503
+    }
+   },
+   "hs1": null,
+   "htdev2_vs_I": {
+    "H": 0.5362,
+    "I": 0.5394,
+    "ci95": [
+     -0.0133,
+     0.0077
+    ],
+    "delta": -0.0031,
+    "tasks": {
+     "conv_go_awry": {
+      "4b-H9-a1_2": 0.5171,
+      "4b-I": 0.5315
+     },
+     "emotion": {
+      "4b-H9-a1_2": 0.536,
+      "4b-I": 0.5351
+     },
+     "ibc": {
+      "4b-H9-a1_2": 0.563,
+      "4b-I": 0.596
+     },
+     "media_ideology": {
+      "4b-H9-a1_2": 0.4221,
+      "4b-I": 0.4394
+     },
+     "mrf": {
+      "4b-H9-a1_2": 0.7655,
+      "4b-I": 0.7356
+     },
+     "reddit_humor": {
+      "4b-H9-a1_2": 0.5897,
+      "4b-I": 0.592
+     },
+     "talklife": {
+      "4b-H9-a1_2": 0.2516,
+      "4b-I": 0.2576
+     },
+     "tempowic": {
+      "4b-H9-a1_2": 0.7296,
+      "4b-I": 0.7124
+     },
+     "wiki_corpus": {
+      "4b-H9-a1_2": 0.4514,
+      "4b-I": 0.4545
+     }
+    },
+    "verdict": "TIE"
+   },
+   "score5t_check": {
+    "flags": [],
+    "top_share": 0.3975
+   }
+  },
+  "4b-H9-s1": {
+   "hr2dev": null,
+   "hs1": null,
+   "htdev2_vs_I": {
+    "H": 0.5216,
+    "I": 0.5394,
+    "ci95": [
+     -0.0327,
+     -0.0023
+    ],
+    "delta": -0.0178,
+    "tasks": {
+     "conv_go_awry": {
+      "4b-H9-s1": 0.4828,
+      "4b-I": 0.5315
+     },
+     "emotion": {
+      "4b-H9-s1": 0.5604,
+      "4b-I": 0.5351
+     },
+     "ibc": {
+      "4b-H9-s1": 0.4842,
+      "4b-I": 0.596
+     },
+     "media_ideology": {
+      "4b-H9-s1": 0.4066,
+      "4b-I": 0.4394
+     },
+     "mrf": {
+      "4b-H9-s1": 0.7306,
+      "4b-I": 0.7356
+     },
+     "reddit_humor": {
+      "4b-H9-s1": 0.596,
+      "4b-I": 0.592
+     },
+     "talklife": {
+      "4b-H9-s1": 0.2403,
+      "4b-I": 0.2576
+     },
+     "tempowic": {
+      "4b-H9-s1": 0.6936,
+      "4b-I": 0.7124
+     },
+     "wiki_corpus": {
+      "4b-H9-s1": 0.4999,
+      "4b-I": 0.4545
+     }
+    },
+    "verdict": "TIE"
+   },
+   "score5t_check": null
+  },
+  "4b-I": {
+   "hr2dev": {
+    "ci95": null,
+    "delta_vs_I": null,
+    "families": {
+     "allegro": 0.56,
+     "eth_cs": 0.9043,
+     "eth_deon": 0.67,
+     "eth_just": 0.8113,
+     "eth_util": 0.9068,
+     "hs3_help": 0.3175,
+     "hs3_pref": 0.749,
+     "prm_step": 0.4333,
+     "vitc": 0.8435
+    },
+    "family_macro": 0.6884,
+    "type_macro": {
+     "choice": 0.8279,
+     "noul": 0.7325,
+     "score": 0.4387
+    }
+   },
+   "hs1": null,
+   "htdev2_vs_I": null,
+   "score5t_check": {
+    "flags": [],
+    "top_share": 0.39
+   }
+  },
+  "4b-N7C-a1": {
+   "hr2dev": {
+    "ci95": [
+     -0.0126,
+     0.0231
+    ],
+    "delta_vs_I": 0.0047,
+    "families": {
+     "allegro": 0.508,
+     "eth_cs": 0.883,
+     "eth_deon": 0.68,
+     "eth_just": 0.7925,
+     "eth_util": 0.9237,
+     "hs3_help": 0.3175,
+     "hs3_pref": 0.7757,
+     "prm_step": 0.5333,
+     "vitc": 0.8244
+    },
+    "family_macro": 0.6931,
+    "type_macro": {
+     "choice": 0.8497,
+     "noul": 0.7426,
+     "score": 0.4127
+    }
+   },
+   "hs1": {
+    "hs1_policy_packet": {
+     "accuracy": {
+      "4b-I": 0.6088,
+      "4b-N7C-a1": 0.6276
+     }
+    },
+    "hs1_quote_check": {
+     "I_f1_adopt_rate": 0.775,
+     "accuracy": {
+      "4b-I": 0.5344,
+      "4b-N7C-a1": 0.5407
+     },
+     "f1_adopt_rate": 0.7789
+    },
+    "hs1_unmet_condition": {
+     "I_f3_false_yes_rate": 0.2619,
+     "accuracy": {
+      "4b-I": 0.774,
+      "4b-N7C-a1": 0.7792
+     },
+     "f3_false_yes_rate": 0.2054
+    }
+   },
+   "htdev2_vs_I": {
+    "H": 0.5313,
+    "I": 0.5394,
+    "ci95": [
+     -0.0217,
+     0.0057
+    ],
+    "delta": -0.0081,
+    "tasks": {
+     "conv_go_awry": {
+      "4b-I": 0.5315,
+      "4b-N7C-a1": 0.5557
+     },
+     "emotion": {
+      "4b-I": 0.5351,
+      "4b-N7C-a1": 0.5397
+     },
+     "ibc": {
+      "4b-I": 0.596,
+      "4b-N7C-a1": 0.5831
+     },
+     "media_ideology": {
+      "4b-I": 0.4394,
+      "4b-N7C-a1": 0.4083
+     },
+     "mrf": {
+      "4b-I": 0.7356,
+      "4b-N7C-a1": 0.7714
+     },
+     "reddit_humor": {
+      "4b-I": 0.592,
+      "4b-N7C-a1": 0.5422
+     },
+     "talklife": {
+      "4b-I": 0.2576,
+      "4b-N7C-a1": 0.2448
+     },
+     "tempowic": {
+      "4b-I": 0.7124,
+      "4b-N7C-a1": 0.7006
+     },
+     "wiki_corpus": {
+      "4b-I": 0.4545,
+      "4b-N7C-a1": 0.4358
+     }
+    },
+    "verdict": "TIE"
+   },
+   "score5t_check": {
+    "flags": [],
+    "top_share": 0.41
+   }
+  },
+  "4b-N7C-a1_2": {
+   "hr2dev": {
+    "ci95": [
+     -0.0145,
+     0.0149
+    ],
+    "delta_vs_I": 0.0001,
+    "families": {
+     "allegro": 0.536,
+     "eth_cs": 0.8723,
+     "eth_deon": 0.64,
+     "eth_just": 0.8302,
+     "eth_util": 0.9181,
+     "hs3_help": 0.3413,
+     "hs3_pref": 0.7643,
+     "prm_step": 0.4667,
+     "vitc": 0.8282
+    },
+    "family_macro": 0.6886,
+    "type_macro": {
+     "choice": 0.8412,
+     "noul": 0.7275,
+     "score": 0.4386
+    }
+   },
+   "hs1": null,
+   "htdev2_vs_I": {
+    "H": 0.5403,
+    "I": 0.5394,
+    "ci95": [
+     -0.0093,
+     0.0115
+    ],
+    "delta": 0.001,
+    "tasks": {
+     "conv_go_awry": {
+      "4b-I": 0.5315,
+      "4b-N7C-a1_2": 0.5315
+     },
+     "emotion": {
+      "4b-I": 0.5351,
+      "4b-N7C-a1_2": 0.5455
+     },
+     "ibc": {
+      "4b-I": 0.596,
+      "4b-N7C-a1_2": 0.59
+     },
+     "media_ideology": {
+      "4b-I": 0.4394,
+      "4b-N7C-a1_2": 0.4382
+     },
+     "mrf": {
+      "4b-I": 0.7356,
+      "4b-N7C-a1_2": 0.7474
+     },
+     "reddit_humor": {
+      "4b-I": 0.592,
+      "4b-N7C-a1_2": 0.5814
+     },
+     "talklife": {
+      "4b-I": 0.2576,
+      "4b-N7C-a1_2": 0.2488
+     },
+     "tempowic": {
+      "4b-I": 0.7124,
+      "4b-N7C-a1_2": 0.7336
+     },
+     "wiki_corpus": {
+      "4b-I": 0.4545,
+      "4b-N7C-a1_2": 0.4467
+     }
+    },
+    "verdict": "TIE"
+   },
+   "score5t_check": {
+    "flags": [],
+    "top_share": 0.415
+   }
+  }
+ },
+ "readout_parity": {
+  "css-pilot": {
+   "answer_differences": 0,
+   "answers": 1430,
+   "ids_only_one_side": 0,
+   "m9_path": "/data/dev2/runs/dec/m9/lines/4b/4b-I/css-pilot/css-pilot.predictions.jsonl",
+   "max_probability_drift": 0.0,
+   "panel": "css-pilot",
+   "stored_node_b": "/data/dev2/runs/dec/m9/parity/m7/4b-I/css-pilot/css-pilot.predictions.jsonl"
+  },
+  "dev": {
+   "answer_differences": 0,
+   "answers": 1600,
+   "ids_only_one_side": 0,
+   "m9_path": "/data/dev2/runs/dec/m9/lines/4b/4b-I/dev/dev.predictions.jsonl",
+   "max_probability_drift": 0.0,
+   "panel": "dev",
+   "stored_node_b": "/data/dev2/runs/dec/m9/parity/m7/4b-I/dev/dev.predictions.jsonl"
+  },
+  "hs1-dev": {
+   "answer_differences": 0,
+   "answers": 2396,
+   "ids_only_one_side": 0,
+   "m9_path": "/data/dev2/runs/dec/m9/lines/4b/4b-I/hs1-dev/hs1-dev.predictions.jsonl",
+   "max_probability_drift": 0.0,
+   "panel": "hs1-dev",
+   "stored_node_b": "/data/dev2/runs/dec/m9/parity/m7/4b-I/hs1-dev/hs1-dev.predictions.jsonl"
+  },
+  "ht-dev2": {
+   "answer_differences": 0,
+   "answers": 1944,
+   "ids_only_one_side": 0,
+   "m9_path": "/data/dev2/runs/dec/m9/lines/4b/4b-I/ht-dev2/ht-dev2.predictions.jsonl",
+   "max_probability_drift": 0.0,
+   "panel": "ht-dev2",
+   "stored_node_b": "/data/dev2/runs/dec/m9/parity/m7/4b-I/ht-dev2/ht-dev2.predictions.jsonl"
+  },
+  "ht-dev2-vs-eval-reference": {
+   "H_dev2": {
+    "4b-I-m9": 0.5393525487170227,
+    "eval-dec-m4-N4XF-soup": 0.5393525487170227
+   },
+   "H_dev2_median": {
+    "4b-I-m9": 0.5351320947772237,
+    "eval-dec-m4-N4XF-soup": 0.5351320947772237
+   },
+   "band_10pct_risk": 0.045,
+   "ci95": [
+    0.0,
+    0.0
+   ],
+   "delta": 0.0,
+   "files": {
+    "4b-I-m9": "f7fa8f63136a4ddac8edb8c3a755892eeec0000d6af15d7d7f82d7618aba07d7",
+    "eval-dec-m4-N4XF-soup": "15f975fa9543212e35e9cef6ccbfe237fb5097bc4c101a7ab1bf77a1af93dd01",
+    "gold": "659c92b45d2a5b37e250ccb728cdbf5580ba361b3fc4b2f2ab505a13e0a556cc"
+   },
+   "invalid_or_missing": {
+    "4b-I-m9": 0,
+    "eval-dec-m4-N4XF-soup": 0
+   },
+   "items": 1944,
+   "left": "4b-I-m9",
+   "p_le_0": 1.0,
+   "right": "eval-dec-m4-N4XF-soup",
+   "role": "development readout (decoder M9, HR2 efficacy pilot); never a release or post-key score; HT-DEV v2 screen (COORDINATION 2026-09-30 04:10)",
+   "schema": "dec-m9-htdev2/1",
+   "tasks": {
+    "conv_go_awry": {
+     "4b-I-m9": 0.5314762009212546,
+     "eval-dec-m4-N4XF-soup": 0.5314762009212546
+    },
+    "emotion": {
+     "4b-I-m9": 0.5351320947772237,
+     "eval-dec-m4-N4XF-soup": 0.5351320947772237
+    },
+    "ibc": {
+     "4b-I-m9": 0.5959649958454756,
+     "eval-dec-m4-N4XF-soup": 0.5959649958454756
+    },
+    "media_ideology": {
+     "4b-I-m9": 0.43941318814277075,
+     "eval-dec-m4-N4XF-soup": 0.43941318814277075
+    },
+    "mrf": {
+     "4b-I-m9": 0.7356412273800157,
+     "eval-dec-m4-N4XF-soup": 0.7356412273800157
+    },
+    "reddit_humor": {
+     "4b-I-m9": 0.5920329670329669,
+     "eval-dec-m4-N4XF-soup": 0.5920329670329669
+    },
+    "talklife": {
+     "4b-I-m9": 0.25755821000448464,
+     "eval-dec-m4-N4XF-soup": 0.25755821000448464
+    },
+    "tempowic": {
+     "4b-I-m9": 0.7124085998035579,
+     "eval-dec-m4-N4XF-soup": 0.7124085998035579
+    },
+    "wiki_corpus": {
+     "4b-I-m9": 0.45454545454545453,
+     "eval-dec-m4-N4XF-soup": 0.45454545454545453
+    }
+   },
+   "tie_band": 0.02,
+   "verdict": "TIE"
+  },
+  "score5t-dev": {
+   "answer_differences": 0,
+   "answers": 800,
+   "ids_only_one_side": 0,
+   "m9_path": "/data/dev2/runs/dec/m9/lines/4b/4b-I/score5t-dev/score5t-dev.predictions.jsonl",
+   "max_probability_drift": 0.0,
+   "panel": "score5t-dev",
+   "stored_node_b": "/data/dev2/runs/dec/m9/parity/m8/score5t-dev/score5t-dev.predictions.jsonl"
+  }
+ },
+ "readouts": {
+  "L-H9": {
+   "4b-H9-a1": {
+    "H3": 0.5553,
+    "H_pilot": 0.5678,
+    "T": 0.705,
+    "by_family": {
+     "attribute_gate": 352,
+     "rule_precedence": 241,
+     "set_reconciliation": 351,
+     "transition_table": 184
+    },
+    "by_type": {
+     "choice": 536,
+     "noul": 241,
+     "score": 351
+    },
+    "proxy": 63.268,
+    "rule_precedence": 241
+   },
+   "4b-H9-a1_2": {
+    "H3": 0.5701,
+    "H_pilot": 0.5805,
+    "T": 0.6975,
+    "by_family": {
+     "attribute_gate": 338,
+     "rule_precedence": 258,
+     "set_reconciliation": 362,
+     "transition_table": 158
+    },
+    "by_type": {
+     "choice": 496,
+     "noul": 258,
+     "score": 362
+    },
+    "proxy": 63.6338,
+    "rule_precedence": 258
+   },
+   "4b-I": {
+    "H3": 0.5625,
+    "H_pilot": 0.5364,
+    "T": 0.7044,
+    "by_family": {
+     "attribute_gate": 341,
+     "rule_precedence": 264,
+     "set_reconciliation": 362,
+     "transition_table": 160
+    },
+    "by_type": {
+     "choice": 501,
+     "noul": 264,
+     "score": 362
+    },
+    "proxy": 61.4698,
+    "rule_precedence": 264
+   }
+  },
+  "L-N7C": {
+   "4b-I": {
+    "H3": 0.5625,
+    "H_pilot": 0.5364,
+    "T": 0.7044,
+    "by_family": {
+     "attribute_gate": 341,
+     "rule_precedence": 264,
+     "set_reconciliation": 362,
+     "transition_table": 160
+    },
+    "by_type": {
+     "choice": 501,
+     "noul": 264,
+     "score": 362
+    },
+    "proxy": 61.4698,
+    "rule_precedence": 264
+   },
+   "4b-N7C-a1": {
+    "H3": 0.5634,
+    "H_pilot": 0.5535,
+    "T": 0.6475,
+    "by_family": {
+     "attribute_gate": 329,
+     "rule_precedence": 258,
+     "set_reconciliation": 338,
+     "transition_table": 111
+    },
+    "by_type": {
+     "choice": 440,
+     "noul": 258,
+     "score": 338
+    },
+    "proxy": 59.8647,
+    "rule_precedence": 258
+   },
+   "4b-N7C-a1_2": {
+    "H3": 0.5663,
+    "H_pilot": 0.5628,
+    "T": 0.7031,
+    "by_family": {
+     "attribute_gate": 339,
+     "rule_precedence": 266,
+     "set_reconciliation": 368,
+     "transition_table": 152
+    },
+    "by_type": {
+     "choice": 491,
+     "noul": 266,
+     "score": 368
+    },
+    "proxy": 62.9063,
+    "rule_precedence": 266
+   }
+  }
+ }
+}

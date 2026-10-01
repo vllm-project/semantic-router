@@ -1,0 +1,34 @@
+{
+ "schema": "decision2.ib1.status.v1",
+ "round": 2,
+ "release_safe": false,
+ "reason": "round-2 decisive blind label review failed P1, P2 and P3 (12 / 225 gold errors, 5.33%, exact 95% upper 9.13%; population-weighted 5.97%; wands 4 / 19 errors, exact 95% lower above 5%); published flagged, not tuned further in this round",
+ "review": {
+  "n": 225,
+  "errors": 12,
+  "error": 0.053333,
+  "error_cp95": [0.027858, 0.091309],
+  "weighted_error": 0.059728,
+  "weighted_bootstrap95": [0.026101, 0.097706],
+  "failing_families": ["wands"],
+  "P1": false,
+  "P2": false,
+  "P3": false,
+  "errors_answering_a_dropped_class": 5
+ },
+ "constructions_dropped": ["sentfin-neutral", "sumedit-shakespeare", "wands-partial"],
+ "rows_removed_from_train": {
+  "round2_review_gold_errors": 12,
+  "round1_review_and_screen": 17,
+  "leak_guard": 12
+ },
+ "families_dropped": {
+  "empty_under_rule": ["expqa"],
+  "shortcut_gate": ["medmcqa", "procb", "wanli"],
+  "empty_after_rescan": ["maud"]
+ },
+ "in_distribution_families": ["w2c", "isarc"],
+ "index_rows": "every candidate group with an exact, normalized or 13-gram match to any Index suite row was dropped (G0); positive controls 2,000 / 2,000 exact and 2,000 / 2,000 perturbed",
+ "prereg": "v2/data/records/ib1-prereg-2026-10-01.md (amendments 1 and 2)",
+ "round1": "previous revision of m6/ib1 (decision-2.0-training-data@1371c28777ae24e2632145dff3ea55050d47c014), NOT release-safe"
+}

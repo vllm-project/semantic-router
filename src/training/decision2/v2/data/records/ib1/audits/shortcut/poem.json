@@ -1,0 +1,460 @@
+{
+ "folds": {
+  "groups": [
+   719,
+   715,
+   694,
+   739,
+   717
+  ],
+  "rows": [
+   719,
+   715,
+   694,
+   739,
+   717
+  ],
+  "rule": "int(sha256(group_id).hexdigest(), 16) % 5"
+ },
+ "gate": {
+  "margin": 0.05,
+  "min_rows": 30,
+  "rule": "PASS iff accuracy <= majority + margin; majority is the cross-validated position prior on the same rows",
+  "views": [
+   "state_removed",
+   "option_only",
+   "hypothesis_only"
+  ]
+ },
+ "gates": [
+  {
+   "accuracy": 0.511998,
+   "delta": 0.018136,
+   "families_over_margin": [],
+   "majority": 0.493862,
+   "n": 3584,
+   "pass": true,
+   "task_type": "choice",
+   "threshold": 0.543862,
+   "view": "state_removed",
+   "wilson95": [
+    0.495629,
+    0.528341
+   ]
+  },
+  {
+   "accuracy": 0.494699,
+   "delta": 0.000837,
+   "families_over_margin": [],
+   "majority": 0.493862,
+   "n": 3584,
+   "pass": true,
+   "task_type": "choice",
+   "threshold": 0.543862,
+   "view": "option_only",
+   "wilson95": [
+    0.478345,
+    0.511064
+   ]
+  }
+ ],
+ "groups": 3584,
+ "heuristics": {
+  "lexical_overlap": {
+   "by_family": {
+    "poem": {
+     "accuracy": 0.494699,
+     "correct": 1773,
+     "delta": 0.000837,
+     "exceeds_margin": false,
+     "majority": 0.493862,
+     "n": 3584,
+     "wilson95": [
+      0.478345,
+      0.511064
+     ]
+    }
+   },
+   "by_source": {
+    "gutenberg_poetry_cc0": {
+     "accuracy": 0.494699,
+     "correct": 1773,
+     "delta": 0.000837,
+     "exceeds_margin": false,
+     "majority": 0.493862,
+     "n": 3584,
+     "wilson95": [
+      0.478345,
+      0.511064
+     ]
+    }
+   },
+   "by_task_family": {
+    "choice": {
+     "poem": {
+      "accuracy": 0.494699,
+      "correct": 1773,
+      "delta": 0.000837,
+      "exceeds_margin": false,
+      "majority": 0.493862,
+      "n": 3584,
+      "wilson95": [
+       0.478345,
+       0.511064
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "choice": {
+     "accuracy": 0.494699,
+     "correct": 1773,
+     "delta": 0.000837,
+     "exceeds_margin": false,
+     "majority": 0.493862,
+     "n": 3584,
+     "wilson95": [
+      0.478345,
+      0.511064
+     ]
+    }
+   },
+   "n_rows": 3584
+  },
+  "longest_option": {
+   "by_family": {
+    "poem": {
+     "accuracy": 0.494699,
+     "correct": 1773,
+     "delta": 0.000837,
+     "exceeds_margin": false,
+     "majority": 0.493862,
+     "n": 3584,
+     "wilson95": [
+      0.478345,
+      0.511064
+     ]
+    }
+   },
+   "by_source": {
+    "gutenberg_poetry_cc0": {
+     "accuracy": 0.494699,
+     "correct": 1773,
+     "delta": 0.000837,
+     "exceeds_margin": false,
+     "majority": 0.493862,
+     "n": 3584,
+     "wilson95": [
+      0.478345,
+      0.511064
+     ]
+    }
+   },
+   "by_task_family": {
+    "choice": {
+     "poem": {
+      "accuracy": 0.494699,
+      "correct": 1773,
+      "delta": 0.000837,
+      "exceeds_margin": false,
+      "majority": 0.493862,
+      "n": 3584,
+      "wilson95": [
+       0.478345,
+       0.511064
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "choice": {
+     "accuracy": 0.494699,
+     "correct": 1773,
+     "delta": 0.000837,
+     "exceeds_margin": false,
+     "majority": 0.493862,
+     "n": 3584,
+     "wilson95": [
+      0.478345,
+      0.511064
+     ]
+    }
+   },
+   "n_rows": 3584
+  },
+  "position_prior": {
+   "by_family": {
+    "poem": {
+     "accuracy": 0.493862,
+     "correct": 1770,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.493862,
+     "n": 3584,
+     "wilson95": [
+      0.477509,
+      0.510228
+     ]
+    }
+   },
+   "by_source": {
+    "gutenberg_poetry_cc0": {
+     "accuracy": 0.493862,
+     "correct": 1770,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.493862,
+     "n": 3584,
+     "wilson95": [
+      0.477509,
+      0.510228
+     ]
+    }
+   },
+   "by_task_family": {
+    "choice": {
+     "poem": {
+      "accuracy": 0.493862,
+      "correct": 1770,
+      "delta": 0.0,
+      "exceeds_margin": false,
+      "majority": 0.493862,
+      "n": 3584,
+      "wilson95": [
+       0.477509,
+       0.510228
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "choice": {
+     "accuracy": 0.493862,
+     "correct": 1770,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.493862,
+     "n": 3584,
+     "wilson95": [
+      0.477509,
+      0.510228
+     ]
+    }
+   },
+   "n_rows": 3584
+  }
+ },
+ "input": {
+  "rows": 3584,
+  "sha256": "3171605b8a87114ecebde30998ddbfc9ef5fab37e433d6558d4b830de3a1af32"
+ },
+ "learner": {
+  "bits": 20,
+  "epochs": 4,
+  "instruction_cross_cap": 64,
+  "l2": 1e-06,
+  "learning_rate": 0.1,
+  "seed": 0,
+  "state_cross_cap": 128,
+  "state_cross_unigrams": 64,
+  "state_gram_cap": 128,
+  "text_gram_cap": 1024
+ },
+ "majority": {
+  "choice": {
+   "accuracy": 0.493862,
+   "n": 3584
+  }
+ },
+ "rows": 3584,
+ "schema": "decision2.v2.shortcut.v1",
+ "verdict": "PASS",
+ "views": {
+  "full_input": {
+   "by_family": {
+    "poem": {
+     "accuracy": 0.504743,
+     "correct": 1809,
+     "delta": 0.010882,
+     "exceeds_margin": false,
+     "majority": 0.493862,
+     "n": 3584,
+     "wilson95": [
+      0.488378,
+      0.521098
+     ]
+    }
+   },
+   "by_source": {
+    "gutenberg_poetry_cc0": {
+     "accuracy": 0.504743,
+     "correct": 1809,
+     "delta": 0.010882,
+     "exceeds_margin": false,
+     "majority": 0.493862,
+     "n": 3584,
+     "wilson95": [
+      0.488378,
+      0.521098
+     ]
+    }
+   },
+   "by_task_family": {
+    "choice": {
+     "poem": {
+      "accuracy": 0.504743,
+      "correct": 1809,
+      "delta": 0.010882,
+      "exceeds_margin": false,
+      "majority": 0.493862,
+      "n": 3584,
+      "wilson95": [
+       0.488378,
+       0.521098
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "choice": {
+     "accuracy": 0.504743,
+     "correct": 1809,
+     "delta": 0.010882,
+     "exceeds_margin": false,
+     "majority": 0.493862,
+     "n": 3584,
+     "wilson95": [
+      0.488378,
+      0.521098
+     ]
+    }
+   },
+   "n_rows": 3584
+  },
+  "hypothesis_only": {
+   "n_rows": 0
+  },
+  "option_only": {
+   "by_family": {
+    "poem": {
+     "accuracy": 0.494699,
+     "correct": 1773,
+     "delta": 0.000837,
+     "exceeds_margin": false,
+     "majority": 0.493862,
+     "n": 3584,
+     "wilson95": [
+      0.478345,
+      0.511064
+     ]
+    }
+   },
+   "by_source": {
+    "gutenberg_poetry_cc0": {
+     "accuracy": 0.494699,
+     "correct": 1773,
+     "delta": 0.000837,
+     "exceeds_margin": false,
+     "majority": 0.493862,
+     "n": 3584,
+     "wilson95": [
+      0.478345,
+      0.511064
+     ]
+    }
+   },
+   "by_task_family": {
+    "choice": {
+     "poem": {
+      "accuracy": 0.494699,
+      "correct": 1773,
+      "delta": 0.000837,
+      "exceeds_margin": false,
+      "majority": 0.493862,
+      "n": 3584,
+      "wilson95": [
+       0.478345,
+       0.511064
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "choice": {
+     "accuracy": 0.494699,
+     "correct": 1773,
+     "delta": 0.000837,
+     "exceeds_margin": false,
+     "majority": 0.493862,
+     "n": 3584,
+     "wilson95": [
+      0.478345,
+      0.511064
+     ]
+    }
+   },
+   "n_rows": 3584
+  },
+  "state_removed": {
+   "by_family": {
+    "poem": {
+     "accuracy": 0.511998,
+     "correct": 1835,
+     "delta": 0.018136,
+     "exceeds_margin": false,
+     "majority": 0.493862,
+     "n": 3584,
+     "wilson95": [
+      0.495629,
+      0.528341
+     ]
+    }
+   },
+   "by_source": {
+    "gutenberg_poetry_cc0": {
+     "accuracy": 0.511998,
+     "correct": 1835,
+     "delta": 0.018136,
+     "exceeds_margin": false,
+     "majority": 0.493862,
+     "n": 3584,
+     "wilson95": [
+      0.495629,
+      0.528341
+     ]
+    }
+   },
+   "by_task_family": {
+    "choice": {
+     "poem": {
+      "accuracy": 0.511998,
+      "correct": 1835,
+      "delta": 0.018136,
+      "exceeds_margin": false,
+      "majority": 0.493862,
+      "n": 3584,
+      "wilson95": [
+       0.495629,
+       0.528341
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "choice": {
+     "accuracy": 0.511998,
+     "correct": 1835,
+     "delta": 0.018136,
+     "exceeds_margin": false,
+     "majority": 0.493862,
+     "n": 3584,
+     "wilson95": [
+      0.495629,
+      0.528341
+     ]
+    }
+   },
+   "n_rows": 3584
+  }
+ }
+}

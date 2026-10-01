@@ -1,0 +1,460 @@
+{
+ "folds": {
+  "groups": [
+   78,
+   84,
+   110,
+   98,
+   69
+  ],
+  "rows": [
+   156,
+   168,
+   220,
+   196,
+   138
+  ],
+  "rule": "int(sha256(group_id).hexdigest(), 16) % 5"
+ },
+ "gate": {
+  "margin": 0.05,
+  "min_rows": 30,
+  "rule": "PASS iff accuracy <= majority + margin; majority is the cross-validated position prior on the same rows",
+  "views": [
+   "state_removed",
+   "option_only",
+   "hypothesis_only"
+  ]
+ },
+ "gates": [
+  {
+   "accuracy": 0.494305,
+   "delta": 0.020501,
+   "families_over_margin": [],
+   "majority": 0.473804,
+   "n": 878,
+   "pass": true,
+   "task_type": "choice",
+   "threshold": 0.523804,
+   "view": "state_removed",
+   "wilson95": [
+    0.461332,
+    0.527329
+   ]
+  },
+  {
+   "accuracy": 0.47836,
+   "delta": 0.004556,
+   "families_over_margin": [],
+   "majority": 0.473804,
+   "n": 878,
+   "pass": true,
+   "task_type": "choice",
+   "threshold": 0.523804,
+   "view": "option_only",
+   "wilson95": [
+    0.445484,
+    0.511424
+   ]
+  }
+ ],
+ "groups": 439,
+ "heuristics": {
+  "lexical_overlap": {
+   "by_family": {
+    "copa": {
+     "accuracy": 0.480638,
+     "correct": 422,
+     "delta": 0.006834,
+     "exceeds_margin": false,
+     "majority": 0.473804,
+     "n": 878,
+     "wilson95": [
+      0.447746,
+      0.513698
+     ]
+    }
+   },
+   "by_source": {
+    "balanced_copa_train": {
+     "accuracy": 0.480638,
+     "correct": 422,
+     "delta": 0.006834,
+     "exceeds_margin": false,
+     "majority": 0.473804,
+     "n": 878,
+     "wilson95": [
+      0.447746,
+      0.513698
+     ]
+    }
+   },
+   "by_task_family": {
+    "choice": {
+     "copa": {
+      "accuracy": 0.480638,
+      "correct": 422,
+      "delta": 0.006834,
+      "exceeds_margin": false,
+      "majority": 0.473804,
+      "n": 878,
+      "wilson95": [
+       0.447746,
+       0.513698
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "choice": {
+     "accuracy": 0.480638,
+     "correct": 422,
+     "delta": 0.006834,
+     "exceeds_margin": false,
+     "majority": 0.473804,
+     "n": 878,
+     "wilson95": [
+      0.447746,
+      0.513698
+     ]
+    }
+   },
+   "n_rows": 878
+  },
+  "longest_option": {
+   "by_family": {
+    "copa": {
+     "accuracy": 0.501139,
+     "correct": 440,
+     "delta": 0.027335,
+     "exceeds_margin": false,
+     "majority": 0.473804,
+     "n": 878,
+     "wilson95": [
+      0.468133,
+      0.534135
+     ]
+    }
+   },
+   "by_source": {
+    "balanced_copa_train": {
+     "accuracy": 0.501139,
+     "correct": 440,
+     "delta": 0.027335,
+     "exceeds_margin": false,
+     "majority": 0.473804,
+     "n": 878,
+     "wilson95": [
+      0.468133,
+      0.534135
+     ]
+    }
+   },
+   "by_task_family": {
+    "choice": {
+     "copa": {
+      "accuracy": 0.501139,
+      "correct": 440,
+      "delta": 0.027335,
+      "exceeds_margin": false,
+      "majority": 0.473804,
+      "n": 878,
+      "wilson95": [
+       0.468133,
+       0.534135
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "choice": {
+     "accuracy": 0.501139,
+     "correct": 440,
+     "delta": 0.027335,
+     "exceeds_margin": false,
+     "majority": 0.473804,
+     "n": 878,
+     "wilson95": [
+      0.468133,
+      0.534135
+     ]
+    }
+   },
+   "n_rows": 878
+  },
+  "position_prior": {
+   "by_family": {
+    "copa": {
+     "accuracy": 0.473804,
+     "correct": 416,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.473804,
+     "n": 878,
+     "wilson95": [
+      0.440963,
+      0.506874
+     ]
+    }
+   },
+   "by_source": {
+    "balanced_copa_train": {
+     "accuracy": 0.473804,
+     "correct": 416,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.473804,
+     "n": 878,
+     "wilson95": [
+      0.440963,
+      0.506874
+     ]
+    }
+   },
+   "by_task_family": {
+    "choice": {
+     "copa": {
+      "accuracy": 0.473804,
+      "correct": 416,
+      "delta": 0.0,
+      "exceeds_margin": false,
+      "majority": 0.473804,
+      "n": 878,
+      "wilson95": [
+       0.440963,
+       0.506874
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "choice": {
+     "accuracy": 0.473804,
+     "correct": 416,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.473804,
+     "n": 878,
+     "wilson95": [
+      0.440963,
+      0.506874
+     ]
+    }
+   },
+   "n_rows": 878
+  }
+ },
+ "input": {
+  "rows": 878,
+  "sha256": "7918053872c8bf81dae48093934b360765d04db6643369cff6741babee9d6287"
+ },
+ "learner": {
+  "bits": 20,
+  "epochs": 4,
+  "instruction_cross_cap": 64,
+  "l2": 1e-06,
+  "learning_rate": 0.1,
+  "seed": 0,
+  "state_cross_cap": 128,
+  "state_cross_unigrams": 64,
+  "state_gram_cap": 128,
+  "text_gram_cap": 1024
+ },
+ "majority": {
+  "choice": {
+   "accuracy": 0.473804,
+   "n": 878
+  }
+ },
+ "rows": 878,
+ "schema": "decision2.v2.shortcut.v1",
+ "verdict": "PASS",
+ "views": {
+  "full_input": {
+   "by_family": {
+    "copa": {
+     "accuracy": 0.474943,
+     "correct": 417,
+     "delta": 0.001139,
+     "exceeds_margin": false,
+     "majority": 0.473804,
+     "n": 878,
+     "wilson95": [
+      0.442093,
+      0.508012
+     ]
+    }
+   },
+   "by_source": {
+    "balanced_copa_train": {
+     "accuracy": 0.474943,
+     "correct": 417,
+     "delta": 0.001139,
+     "exceeds_margin": false,
+     "majority": 0.473804,
+     "n": 878,
+     "wilson95": [
+      0.442093,
+      0.508012
+     ]
+    }
+   },
+   "by_task_family": {
+    "choice": {
+     "copa": {
+      "accuracy": 0.474943,
+      "correct": 417,
+      "delta": 0.001139,
+      "exceeds_margin": false,
+      "majority": 0.473804,
+      "n": 878,
+      "wilson95": [
+       0.442093,
+       0.508012
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "choice": {
+     "accuracy": 0.474943,
+     "correct": 417,
+     "delta": 0.001139,
+     "exceeds_margin": false,
+     "majority": 0.473804,
+     "n": 878,
+     "wilson95": [
+      0.442093,
+      0.508012
+     ]
+    }
+   },
+   "n_rows": 878
+  },
+  "hypothesis_only": {
+   "n_rows": 0
+  },
+  "option_only": {
+   "by_family": {
+    "copa": {
+     "accuracy": 0.47836,
+     "correct": 420,
+     "delta": 0.004556,
+     "exceeds_margin": false,
+     "majority": 0.473804,
+     "n": 878,
+     "wilson95": [
+      0.445484,
+      0.511424
+     ]
+    }
+   },
+   "by_source": {
+    "balanced_copa_train": {
+     "accuracy": 0.47836,
+     "correct": 420,
+     "delta": 0.004556,
+     "exceeds_margin": false,
+     "majority": 0.473804,
+     "n": 878,
+     "wilson95": [
+      0.445484,
+      0.511424
+     ]
+    }
+   },
+   "by_task_family": {
+    "choice": {
+     "copa": {
+      "accuracy": 0.47836,
+      "correct": 420,
+      "delta": 0.004556,
+      "exceeds_margin": false,
+      "majority": 0.473804,
+      "n": 878,
+      "wilson95": [
+       0.445484,
+       0.511424
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "choice": {
+     "accuracy": 0.47836,
+     "correct": 420,
+     "delta": 0.004556,
+     "exceeds_margin": false,
+     "majority": 0.473804,
+     "n": 878,
+     "wilson95": [
+      0.445484,
+      0.511424
+     ]
+    }
+   },
+   "n_rows": 878
+  },
+  "state_removed": {
+   "by_family": {
+    "copa": {
+     "accuracy": 0.494305,
+     "correct": 434,
+     "delta": 0.020501,
+     "exceeds_margin": false,
+     "majority": 0.473804,
+     "n": 878,
+     "wilson95": [
+      0.461332,
+      0.527329
+     ]
+    }
+   },
+   "by_source": {
+    "balanced_copa_train": {
+     "accuracy": 0.494305,
+     "correct": 434,
+     "delta": 0.020501,
+     "exceeds_margin": false,
+     "majority": 0.473804,
+     "n": 878,
+     "wilson95": [
+      0.461332,
+      0.527329
+     ]
+    }
+   },
+   "by_task_family": {
+    "choice": {
+     "copa": {
+      "accuracy": 0.494305,
+      "correct": 434,
+      "delta": 0.020501,
+      "exceeds_margin": false,
+      "majority": 0.473804,
+      "n": 878,
+      "wilson95": [
+       0.461332,
+       0.527329
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "choice": {
+     "accuracy": 0.494305,
+     "correct": 434,
+     "delta": 0.020501,
+     "exceeds_margin": false,
+     "majority": 0.473804,
+     "n": 878,
+     "wilson95": [
+      0.461332,
+      0.527329
+     ]
+    }
+   },
+   "n_rows": 878
+  }
+ }
+}

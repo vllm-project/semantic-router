@@ -28,6 +28,7 @@ from training.model.decision_model import DecisionModel, collate, encode
 from training.model.train import atomic_json
 
 from .dec_model import RESIDUAL_FILE, dec_fingerprint, load_dec_checkpoint
+from .label_token import LabelTokenModel, encode_label
 from .runtime_check import require_runtime
 
 EXACT_TOLERANCE = 1e-6
@@ -46,6 +47,7 @@ def select_probabilities(
     rows: list[dict[str, Any]],
     batch_size: int,
     max_length: int,
+    encode_fn: Any = encode,
 ) -> list[list[float]]:
     device = torch.device("cuda:0")
     pad_id = (
@@ -53,7 +55,7 @@ def select_probabilities(
         if tokenizer.pad_token_id is not None
         else tokenizer.eos_token_id
     )
-    encoded = [encode(row, tokenizer, max_length) for row in rows]
+    encoded = [encode_fn(row, tokenizer, max_length) for row in rows]
     output: list[list[float]] = []
     model.eval()
     with torch.inference_mode():
@@ -108,8 +110,6 @@ def full_tensors_match_files(
     model: Any, checkpoint: Path, zero_checkpoint: Path
 ) -> dict[str, Any]:
     """Full-training reload: every backbone and head tensor equals its file."""
-    from safetensors.torch import load_file
-
     saved = backbone_files(checkpoint)
     live = {k: v.detach().cpu() for k, v in model.backbone.state_dict().items()}
     backbone_equal = set(saved) == set(live) and all(
@@ -117,11 +117,7 @@ def full_tensors_match_files(
     )
     zero = backbone_files(zero_checkpoint)
     changed = sum(not torch.equal(zero[k], saved[k]) for k in saved if k in zero)
-    head_file = load_file(str(checkpoint / "decision_head.safetensors"))
-    head_live = {k: v.detach().cpu() for k, v in model.head.state_dict().items()}
-    head_equal = set(head_file) == set(head_live) and all(
-        torch.equal(head_file[k], head_live[k].float()) for k in head_file
-    )
+    head_equal = head_matches_file(model, checkpoint)
     return {
         "adapter_equal": backbone_equal,
         "head_equal": head_equal,
@@ -130,6 +126,20 @@ def full_tensors_match_files(
         "backbone_tensors_changed_from_zero_step": changed,
         "lora_b_abs_sum": float(changed),
     }
+
+
+def head_matches_file(model: Any, checkpoint: Path) -> bool:
+    """Reloaded head equals its file; a label-token model has neither."""
+    from safetensors.torch import load_file
+
+    head_live = {k: v.detach().cpu() for k, v in model.head.state_dict().items()}
+    path = checkpoint / "decision_head.safetensors"
+    if isinstance(model, LabelTokenModel):
+        return not path.exists() and not head_live
+    head_file = load_file(str(path))
+    return set(head_file) == set(head_live) and all(
+        torch.equal(head_file[k], head_live[k].float()) for k in head_file
+    )
 
 
 def tensors_match_files(model: Any, checkpoint: Path) -> dict[str, Any]:
@@ -144,11 +154,7 @@ def tensors_match_files(model: Any, checkpoint: Path) -> dict[str, Any]:
     adapter_equal = set(adapter) == set(live) and all(
         torch.equal(adapter[k], live[k].float()) for k in adapter
     )
-    head_file = load_file(str(checkpoint / "decision_head.safetensors"))
-    head_live = {k: v.detach().cpu() for k, v in model.head.state_dict().items()}
-    head_equal = set(head_file) == set(head_live) and all(
-        torch.equal(head_file[k], head_live[k].float()) for k in head_file
-    )
+    head_equal = head_matches_file(model, checkpoint)
     residual_equal = True
     if (checkpoint / RESIDUAL_FILE).is_file():
         residual_file = load_file(str(checkpoint / RESIDUAL_FILE))
@@ -229,6 +235,8 @@ def main() -> None:
 
     zero_ckpt = args.zero_run / "checkpoint-0000000"
     full = contract.get("train_mode", "lora") == "full"
+    label = contract.get("readout", "head") == "label_token"
+    encode_fn = encode_label if label else encode
     if contract.get("init_kind", "decision1") == "decision1":
         reference, tokenizer = DecisionModel.from_decision1(
             args.source_path, contract["head_dim"]
@@ -241,22 +249,28 @@ def main() -> None:
         reference, tokenizer = DecisionModel.from_base(
             args.source_path, contract["base_revision"], contract["head_dim"]
         )
-        # An official start's head is freshly initialized by the trainer.
-        reference.head.load_state_dict(
-            load_file(str(zero_ckpt / "decision_head.safetensors")), strict=True
-        )
+        if not label:
+            # An official start's head is freshly initialized by the trainer.
+            reference.head.load_state_dict(
+                load_file(str(zero_ckpt / "decision_head.safetensors")), strict=True
+            )
+    if label:
+        reference = LabelTokenModel.wrap(reference, tokenizer)
     source_head = {
         k: v.detach().clone() for k, v in reference.head.state_dict().items()
     }
     reference = reference.float().to(device)
-    ref_probs = select_probabilities(reference, tokenizer, rows, batch, max_length)
+    ref_probs = select_probabilities(
+        reference, tokenizer, rows, batch, max_length, encode_fn
+    )
     del reference
     torch.cuda.empty_cache()
 
     zero_model, zero_tok = load_dec_checkpoint(zero_ckpt, args.source_path)
     zero_model = zero_model.float().to(device)
     checks["zero_source_vs_reload_in_process"] = compare(
-        ref_probs, select_probabilities(zero_model, zero_tok, rows, batch, max_length)
+        ref_probs,
+        select_probabilities(zero_model, zero_tok, rows, batch, max_length, encode_fn),
     )
     del zero_model
     torch.cuda.empty_cache()
@@ -268,15 +282,20 @@ def main() -> None:
     one_ckpt = args.one_run / "checkpoint-0000001"
     one_model, one_tok = load_dec_checkpoint(one_ckpt, args.source_path)
     one_model = one_model.float().to(device)
-    one_probs = select_probabilities(one_model, one_tok, rows, batch, max_length)
+    one_probs = select_probabilities(
+        one_model, one_tok, rows, batch, max_length, encode_fn
+    )
     checks["one_step_tensors"] = (
         full_tensors_match_files(one_model, one_ckpt, zero_ckpt)
         if full
         else tensors_match_files(one_model, one_ckpt)
     )
     checks["one_step_head_max_change"] = max(
-        (one_model.head.state_dict()[k].detach().cpu() - v).abs().max().item()
-        for k, v in source_head.items()
+        (
+            (one_model.head.state_dict()[k].detach().cpu() - v).abs().max().item()
+            for k, v in source_head.items()
+        ),
+        default=None,
     )
     checks["one_step_gates"] = {
         name: getattr(one_model, name).gate.item()
@@ -323,7 +342,7 @@ def main() -> None:
         and tensors["head_equal"]
         and tensors["residual_equal"],
         "one_step_moved": tensors["lora_b_abs_sum"] > 0
-        and checks["one_step_head_max_change"] > 0
+        and (label or (checks["one_step_head_max_change"] or 0) > 0)
         and all(v != 0 for v in checks["one_step_gates"].values()),
         "one_step_finite": bool(events)
         and all(math.isfinite(events[0][k]) for k in ("loss", "gradient_norm")),
@@ -350,6 +369,7 @@ def main() -> None:
                 "dec_model.py",
                 "train_dec.py",
                 "runtime_check.py",
+                "label_token.py",
             )
         },
     }

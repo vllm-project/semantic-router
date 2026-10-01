@@ -1,0 +1,164 @@
+{
+  "schema": "dev2-release-spec/1",
+  "_release": {
+    "bf16_resident_runtime": "Runtime-only revision (coordinator note 2026-10-01 10:30 UTC+8, b5f60b33): the package runtime comes from the BF16-resident commit 5dc962b00 (runtime_source); weights, tokenizer, configs and the vendored training/model sources (vendor_source, the mirror the replaced revision vendors) are byte-identical to the replaced revision. Adopted only with 0 answer changes on every scored prompt and on mlx-diag. The card gains one runtime-update line and runtime_equivalence one runtime sentence.",
+    "replaces_spec": {
+      "spec": "v2/release/specs/dev2-9b-card-c1.json",
+      "sha256": "eddbaa03eca8981006f0f03c7e9980db0090cff87f9a4efd20b33b8886f1fc01"
+    },
+    "previous": {
+      "rename": "user directive 2026-09-29 16:05 UTC+8: names follow the base model's size. llm-semantic-router/DEV2.0-8B was moved to llm-semantic-router/DEV2.0-9B with move_repo on 2026-09-29 (history, revisions and privacy unchanged; the old ID redirects). This spec builds the card-only revision: name, banner, labels and the naming sentence; the weights are byte-identical to the released revision 53bac735be58def53673d0d290b9baa3f2af1cf9.",
+      "card_c1": "Card-only revision after JevArena-C1 event 3 (item set v1.2, scored 2026-09-29; eval record v2/eval/records/m4-c1-event3-prep-2026-09-29.md section 0000), coordinator note 2026-09-29 23:40 UTC+8: the C1 line replaces the placeholder. The card re-renders with the current public-231 note of card.py. Every model file stays byte-identical to the released revision ae6831960dd1114296cb15a59248b79832c42959. The package runtime (decision2/*.py) come from the mirror that built ae683196 (2926952c1), so only card files change."
+    }
+  },
+  "kind": "release",
+  "repo_id": "llm-semantic-router/DEV2.0-9B",
+  "model_name": "DEV2.0-9B",
+  "name_basis": "base",
+  "name_base_model": "Qwen/Qwen3.5-9B",
+  "profile": "qwen-full",
+  "checkpoint": "/data/dev2/runs/release/inputs/dev2-8b-bf16/checkpoint",
+  "expected_identity": {
+    "model_sha256": "b1ed5a71038b474902d2a6dfebeee0c6f7ce901097553b4621f6f0a23fb6da98"
+  },
+  "calibration": null,
+  "max_input_tokens": 16384,
+  "gate_receipt": "/data/dev2/runs/release/decisions/DEV2.0-9B.decision.bf16r.json",
+  "origin": {
+    "repo_id": "llm-semantic-router/Decision-1.0-Lux-9B",
+    "revision": "bd45a30aee8c84032791c245c70f86dee5389cc8",
+    "relation": "finetune",
+    "summary": "Every weight of Decision 1.0 Lux was fine-tuned (nothing frozen, no adapter), with Decision 1.0 Lux's own answer probabilities as soft targets on every training row; three seeds of that fine-tune were averaged, and the release is one third of that average plus two thirds of the original Decision 1.0 Lux weights (a weight interpolation back toward Decision 1.0 Lux). Decision 1.0 Lux is itself a text-only decision adaptation of [Qwen/Qwen3.5-9B](https://huggingface.co/Qwen/Qwen3.5-9B) at `c202236235762e1c871ad0ccb60c8ee5ba337b9a` (Apache-2.0), whose text backbone and tokenizer this model inherits; the Qwen3.5 vision tower is not part of it."
+  },
+  "runtime_requirements": {
+    "python": "3.12.13",
+    "torch": "2.12.0+git6bbd260 (ROCm 7.2 build; one ROCm GPU tested)",
+    "transformers": "5.17.0",
+    "tokenizers": "0.23.2",
+    "safetensors": "0.8.0",
+    "flash-linear-attention": "0.5.2 (GPU gated-delta kernels)",
+    "causal-conv1d": "1.7.0 (GPU convolution kernels)",
+    "triton": "3.7.1 (persisted autotune cache)"
+  },
+  "runtime_equivalence": "decision2/qwen.py loads this full checkpoint with the training/model sources vendored from the scored run's own source mirror (3277dec9d), whose SHA-256 equal the scored adapter sources (checked at build time), and applies the per-item batching, BF16-backbone / FP32-head execution, raw probabilities (temperature 1; no calibration file) and answer normalization of v2.dec.infer_dec, which for this non-residual checkpoint wraps the same DecisionModel without extra readouts. The scored checkpoint (b9d973b3) stored every tensor in FP32; this package (v2.release.bf16_copy) stores its 248 Linear projection matrices in BF16 exactly as BF16 autocast rounds them and every other tensor bit for bit in FP32. From this revision the runtime holds the backbone's BF16-exact Linear weights in BF16, the values BF16 autocast multiplies with, instead of FP32 copies cast before every matmul; it was checked with 0 answer changes on every scored prompt and on mlx-diag (2,275). Checked on one GPU of the scoring node against the T = 1 predictions derived exactly from the sealed CAL698 predictions of every scored prompt (typed-final 1,600, css15 6,547, public231 231) and of the mlx-diag diagnostic (2,275) by release.sh --parity, with a copy of the persisted Triton autotune cache that the formal run and its mlx-diag run shared.",
+  "vendor_source": "/data/dev2/src/3277dec9d81708fa374405ca884043443bab1b49-src_training_decision2/src/training/decision2",
+  "runtime_source": "/data/dev2/src/5dc962b003cc15b12a3568fe3c8ac8c2931b03a0-src_training_decision2/src/training/decision2",
+  "scored": {
+    "label": "post-key same-panel run K-a13-16k at T = 1 (predictions derived from the sealed CAL698 run by undoing its temperatures; adopted and sealed)",
+    "report_sha256": "66106ef9123bf0bb9ac8aeb5024384cc98d5194dd231ff71cebc541b88cf3b17",
+    "seal_sha256": "d00e453b14badafaca0e3b70acfa0820c333252b5f945e604dd47e691b372c43",
+    "predictions_sha256": {
+      "typed-final": "22c9c689b7991701641114bcfa27ccd2c6b885b87f3794ccf207c7c0049e4ba3",
+      "css15": "e8f378b8a0147328fa96f8afe1c5bfcbe420475027f7e1886d3795ecae8e304e",
+      "public231": "813b54417eb84f74c2a367f862ad303f51c4b60babf95ae8248da5b240da7621",
+      "mlx-diag": "1acda62f2253eb96a0044ba0c3bd368c3a4414cb49045c37ac4ce521337280be"
+    },
+    "paired_sha256": "ae559e9a1e13afca5ebb677e98706a027db415313f102e9059607d5114e99550",
+    "native_manifest": "/data/dev2/runs/9b/formal-m4/K-a13-16k/output/typed-final.predictions.jsonl.manifest.json"
+  },
+  "licence": {
+    "components": [
+      {
+        "component": "DEV2.0-9B weights, decision head, package runtime, card and artwork",
+        "licence": "apache-2.0",
+        "source": "llm-semantic-router/DEV2.0-9B"
+      },
+      {
+        "component": "Decision 1.0 Lux-9B weights (direct weight origin: fully fine-tuned, then interpolated back toward it)",
+        "licence": "apache-2.0",
+        "source": "llm-semantic-router/Decision-1.0-Lux-9B@bd45a30a"
+      },
+      {
+        "component": "Qwen3.5-9B text backbone and tokenizer (upstream of Decision 1.0 Lux)",
+        "licence": "apache-2.0",
+        "source": "Qwen/Qwen3.5-9B@c2022362"
+      }
+    ],
+    "files": [
+      {
+        "source": "/data/decision20-20260926/models/Decision-1.0-Lux-9B/LICENSE",
+        "path": "LICENSE",
+        "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a"
+      },
+      {
+        "source": "/data/dev2/hf-cache/models--Qwen--Qwen3.5-9B/snapshots/c202236235762e1c871ad0ccb60c8ee5ba337b9a/LICENSE",
+        "path": "LICENSES/Qwen3.5-9B-LICENSE.txt",
+        "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a"
+      }
+    ],
+    "attributions": [
+      "[Decision 1.0 Lux-9B](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B) at `bd45a30aee8c84032791c245c70f86dee5389cc8`: direct weight origin; every weight was fine-tuned, and the release keeps two thirds of the original weights through interpolation (Apache-2.0, `LICENSE`). Its own training data reach this model through its weights, among them Cosmos QA, SQuAD 2.0 answerability labels, SNLI, MultiNLI, CLINC150 and BANKING77; see its [attributions](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/blob/bd45a30aee8c84032791c245c70f86dee5389cc8/ATTRIBUTIONS.md).",
+      "[Qwen3.5-9B](https://huggingface.co/Qwen/Qwen3.5-9B) at `c202236235762e1c871ad0ccb60c8ee5ba337b9a`: upstream text backbone and tokenizer of Decision 1.0 Lux (Apache-2.0, `LICENSES/Qwen3.5-9B-LICENSE.txt`).",
+      "Decision 1.0 Lux-9B, our own model, was also the only teacher: its answer probabilities on all 122,651 training rows were soft training targets.",
+      "Training data of this fine-tune (not redistributed here; each keeps its own licence). Own Decision 1.0 corpora: CLINC150 (Larson et al., EMNLP-IJCNLP 2019; CC BY 3.0), BANKING77 (Casanueva et al., 2020; CC BY 4.0), MultiNLI non-fiction genres (Williams, Nangia and Bowman, NAACL 2018; OANC terms), SNLI (Bowman et al., EMNLP 2015; CC BY-SA 4.0), OpenAssistant OASST1 (Köpf et al., NeurIPS 2023 Datasets and Benchmarks; Apache-2.0), KLUE STS (Park et al., 2021; CC BY-SA 4.0), JGLUE JSTS (Kurihara et al., LREC 2022; CC BY-SA 4.0), SentiMix Hinglish (Patwa et al., SemEval 2020; CC BY 4.0), AfriSenti Swahili (Muhammad et al., EMNLP 2023; CC BY 4.0). Decision 2.0 data: GoEmotions (Demszky et al., ACL 2020; CC BY 4.0), SNLI (Bowman et al., EMNLP 2015; CC BY-SA 4.0), TyDi QA (Clark et al., TACL 2020; Apache-2.0, Wikipedia text CC BY-SA), MIRACL (Zhang et al., TACL 2023; Apache-2.0, Wikipedia text CC BY-SA), WinoGrande (Sakaguchi et al., AAAI 2020; Apache-2.0), SQuAD 2.0 (Rajpurkar et al., ACL 2018; CC BY-SA 4.0), Natural Questions (Kwiatkowski et al., TACL 2019; CC BY-SA 3.0), GSM8K (Cobbe et al., 2021; MIT), MLQE-PE (Fomicheva et al., LREC 2022; CC0 annotations, Wikipedia text CC BY-SA), 2WikiMultihopQA (Ho et al., COLING 2020; Apache-2.0, Wikipedia text CC BY-SA), HotpotQA (Yang et al., EMNLP 2018; CC BY-SA 4.0), HoVer (Jiang et al., Findings of EMNLP 2020; CC BY-SA 4.0, Wikipedia text CC BY-SA), KLUE YNAT, MRC and STS (Park et al., 2021; CC BY-SA 4.0), IBM ArgQ-30k (Gretz et al., AAAI 2020; CC BY-SA 3.0), JGLUE JCommonsenseQA, JNLI, JSQuAD and JSTS (Kurihara et al., LREC 2022; CC BY-SA 4.0), QuAC (Choi et al., EMNLP 2018; CC BY-SA 4.0, its dataset card says MIT), DRCD (Shao et al., 2018; CC BY-SA 3.0), SQAC (Gutiérrez-Fandiño et al., 2022; CC BY-SA 4.0), CMRC 2018 (Cui et al., EMNLP 2019; CC BY-SA 4.0), GermanQuAD (Möller et al., 2021; CC BY 4.0), CommonsenseQA (Talmor et al., NAACL 2019; MIT), MultiWOZ 2.2 (Zang et al., 2020; MIT), Schema-Guided Dialogue (Rastogi et al., AAAI 2020; CC BY-SA 4.0), ABCD (Chen et al., NAACL 2021; MIT), MTOP (Li et al., EACL 2021; CC BY-SA 4.0), PIAF (Keraron et al., LREC 2020; MIT), SciTail (Khot et al., AAAI 2018; Apache-2.0), MuSiQue (Trivedi et al., TACL 2022; CC BY 4.0, Wikipedia text CC BY-SA), DBpedia-14 (Zhang et al., NeurIPS 2015; CC BY-SA 3.0), Taskmaster-2 (Byrne et al., 2020; CC BY 4.0), ROPES (Lin et al., MRQA 2019; CC BY 4.0), SAF (Filighera et al., ACL 2022; CC BY 4.0), QuaRTz (Tafjord et al., EMNLP 2019; CC BY 4.0), OneStopEnglish (Vajjala and Lučić, BEA 2018; CC BY-SA 4.0), SentiMix Spanglish (Patwa et al., SemEval 2020; CC BY 4.0), and project-generated decision tasks.",
+      "Evaluation data shown on the card: JevArena v3 and JevBench public 231 (panels described in `evaluation/EVALUATION.md`); mlx-diag Choice from the MASSIVE 1.1 test split (FitzGerald et al., 2022; CC BY 4.0) and Noul from the PAWS-X test split (Yang et al., EMNLP 2019).",
+      "Owl banner: Decision 1.0 Lux mosaic owl, unchanged pixels, in the DEV2.0 name layout; wordmark set in Poppins (SIL Open Font License) and DejaVu Sans Bold."
+    ]
+  },
+  "card": {
+    "banner": "DEV2.0-9B-owl-banner.png",
+    "roster": "v2/eval/records/decision-index-peer-roster-2026-09-28.json",
+    "paired": "/data/dev2/runs/release/dev2-8b-t1-derived/PAIRED-vs-adopted-1.0.json",
+    "calibration_text": "raw model probabilities (temperature 1). Per-type temperatures fitted on the clean 698-item calibration partition (Choice 1.420, Noul 1.037, Score 0.563) were evaluated on out-of-distribution development data and not adopted: they lowered the calibration error there but raised the Brier score of both development panels, and temperatures are adopted only if no development calibration measure worsens.",
+    "requirements_text": "Tested on one ROCm GPU with Python 3.12, PyTorch 2.12 and Transformers 5.17 (BF16 backbone, FP32 head). GPU answers match the evaluated predictions with the flash-linear-attention 0.5.2 and causal-conv1d 1.7.0 kernels and a persisted Triton autotune cache; without those kernels Transformers uses its reference implementation of the same operations, which is slower and differs slightly in the last digits.",
+    "text": {
+      "tagline": "A decision model for routing choices, yes/no checks and rubric scores over one state: native System One Choice, Noul and Score answers with probabilities, no chat API.",
+      "architecture": "The 32-layer Qwen3.5 text backbone inherited from Decision 1.0 Lux (24 gated-delta and 8 attention layers) reads the state, the question and every supplied candidate once; a shared candidate head scores the candidates against a global query and returns probabilities without generating text.",
+      "runtime_note": "The download includes a small local runtime (`decision2/`) for one CUDA or ROCm GPU; it does not start a hosted endpoint.",
+      "confirmation": "**Independent sealed confirmation** — JevArena-C1 v1.2 (2,840 human-labeled items from 8 sources published after the relevant cutoffs, never used for training or development; scored once): DEV2.0-9B **53.77** vs Decision 1.0 Lux 51.97 (+1.80, 95% CI [+0.55, +3.07]); Nimble v2 52.77 (+1.00, 95% CI [−0.69, +2.75]). Measured on the frozen package `53bac735` (weights identical to this revision); items Nimble v2 cannot answer at its 8,192-token limit (58 of 2,840) count as wrong. It is significantly above Decision 1.0 Lux and level with Nimble v2.",
+      "comparator_note": "Decision 1.0 Lux is shown from its native run at this model's 16,384-token limit (JevArena v3 65.81), the comparator of this size's release bar; run through this model's own renderer at the same limit it scores 65.23. Nimble v2 (a LoRA over Qwen3.5-9B; Apache-2.0 with a LICENSE file) ran with its bundled scorer on ROCm, a platform its card does not list, at its native 8,192-token limit (21 human-transfer answers over that limit count as failures); its parameter count includes its vision tower and the unmerged LoRA.",
+      "training": [
+        "**Recipe:** one epoch of full fine-tuning of every weight of Decision 1.0 Lux (backbone learning rate 1e-5, head 1e-4; weight decay 0.01, 5% warmup; cross-entropy plus 0.5 × Brier plus 1.0 × KL divergence to Decision 1.0 Lux's own answer probabilities on every row) on 122,651 decision rows (60.2M tokens, 35 languages, English 55% of rows, inputs up to 8,192 tokens) with seeds 20260926, 1 and 2, each seed's checkpoint chosen on a held-out selection set; the three fine-tunes were averaged uniformly, and the released weights are one third of that average plus two thirds of Decision 1.0 Lux, the interpolation weight chosen by a preregistered rule on development panels.",
+        "**Teacher:** Decision 1.0 Lux-9B only, the model this one starts from (our own model, [`llm-semantic-router/Decision-1.0-Lux-9B`](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B) at `bd45a30a`); its answer probabilities, mostly computed on a runtime without the causal-conv1d kernel, are the soft targets on all 122,651 rows, including the long-evidence and multilingual human-label rows. No outputs of Jev or of any third-party decision model were used.",
+        "**Own Decision 1.0 training corpora (42,511 rows):** program-generated English and Chinese decision tasks labeled by program oracles (18,431 rows; no model-written states or labels), plus the human labels of CLINC150 (CC BY 3.0), BANKING77 (CC BY 4.0), MultiNLI non-fiction genres (OANC terms) and SNLI (CC BY-SA 4.0), and, rebuilt from their upstream files with human labels only, OpenAssistant OASST1 reply ratings (Apache-2.0), KLUE STS and JGLUE JSTS similarity (CC BY-SA 4.0), and SentiMix Hinglish and AfriSenti Swahili sentiment (CC BY 4.0).",
+        "**Decision 2.0 data (80,140 rows):** project-generated verifiable rules, counterfactuals, hard negatives and multi-level Score tasks, plus the human labels of public datasets: reading comprehension, retrieval and multi-hop evidence (TyDi QA, MIRACL, SQuAD 2.0, QuAC, Natural Questions, HotpotQA, 2WikiMultihopQA, MuSiQue, HoVer, DRCD, CMRC 2018, JSQuAD, KLUE MRC, SQAC, GermanQuAD, PIAF), commonsense and math (WinoGrande, CommonsenseQA, JCommonsenseQA, GSM8K, SciTail, ROPES, QuaRTz), dialogue and intent (MultiWOZ 2.2, Taskmaster-2, Schema-Guided Dialogue, ABCD, MTOP, CLINC150, BANKING77), topic, emotion, sentiment and inference labels (DBpedia-14, KLUE YNAT, GoEmotions, SentiMix Spanglish, SNLI, JNLI), and graded similarity and quality ratings (KLUE STS, JGLUE JSTS, MLQE-PE, IBM ArgQ-30k, SAF, OneStopEnglish). Most reading sources are CC BY-SA (3.0 or 4.0, or Wikipedia text under CC BY-SA); the others are CC BY, MIT, Apache-2.0 or CC0. The human-label arms among them are cross-domain short tasks (WinoGrande, GSM8K, CommonsenseQA, SciTail, MultiWOZ 2.2, DBpedia-14, Taskmaster-2, ROPES, QuaRTz), long evidence (HoVer, Natural Questions page windows) and multilingual tasks (JCommonsenseQA, MIRACL, SentiMix Spanglish, TyDi QA); like every other row they carry both the gold label and Decision 1.0 Lux's probabilities.",
+        "**Not used:** outputs of Jev or of any third-party decision model; the Cosmos QA and SQuAD 2.0 answerability labels that Decision 1.0 Lux was trained on (two shortcut-prone reading families; SQuAD 2.0 enters only through project-built evidence-removal pairs); and the MASSIVE, PAWS-X and XNLI sources behind the multilingual diagnostic. Datasets keep their own licences ([attributions](ATTRIBUTIONS.md))."
+      ],
+      "limitations": [
+        "**Where it improves over Decision 1.0 Lux and where it does not.** The gain is typed reasoning (T 0.811 vs 0.776, +0.034, 95% CI [+0.015, +0.054]; Choice 736 vs 711 of 800, Noul 715 vs 704 of 800, Score 246 vs 227 of 400). Human transfer is level (H 0.566 vs 0.558, +0.008, 95% CI [−0.011, +0.042]; 11 of 15 tasks up), and four transfer tasks are lower: talklife (−0.022), wiki_corpus (−0.021), tropes (−0.011) and conv_go_awry (−0.001), as the tradeoffs table lists.",
+        "**JevBench public 231 and long inputs.** JevBench public 231 is 5 items below Decision 1.0 Lux, within noise (178 vs 183; 95% CI [−11, +1]; hard tier 64 vs 68 of 111, standard tier 66 vs 67 of 72), and so are its inputs over 4,000 characters (19 vs 22 of 37; −3, 95% CI [−7, +1]); on the human-transfer panel long inputs are level (265 vs 262 of 509; +3, 95% CI [−10, +16]).",
+        "**Against Nimble v2** JevArena v3 is higher (+5.68, 95% CI [+3.19, +10.09]) through typed accuracy (T +0.092, 95% CI [+0.063, +0.121]); human transfer is not significantly different (H +0.030, 95% CI [−0.007, +0.102]). Typed Choice is lower (0.920 vs 0.980), and JevBench public 231 is level (178 vs 185; −7 items, 95% CI [−18, +4]; inputs over 4,000 characters 19 vs 23 of 37).",
+        "**Weight origin and seeds.** Each full fine-tune on its own scored below Decision 1.0 Lux on the development panels (development proxy 65.8, 65.1 and 61.5 vs 70.8; a development-only measure, not comparable with JevArena v3), and so did their uniform average (67.2); the gain comes from interpolating one third of that average back into Decision 1.0 Lux (73.2). Only this interpolation of the recipe was evaluated on JevArena v3; a retrained seed can land elsewhere.",
+        "**Multilingual.** On the mlx-diag diagnostic, non-English Choice is level with Decision 1.0 Lux (79.4% vs 78.3%), while non-English Noul (paraphrase pairs) is 2.5 points lower (80.8% vs 83.3%; −2.5, 95% CI [−4.7, −0.3]); Korean Noul is the weakest language and the largest drop (70% vs 77%, 100 items), followed by Spanish (84% vs 88%), and English Noul is also lower (84% vs 88%).",
+        "**Score levels.** It uses all five typed Score levels but predicts the lowest less often than Decision 1.0 Lux (42 vs 63 of 400 predictions; recall 0.51 vs 0.69 on the 35 level-0 items) and under-predicts the highest (104 predictions for 128 level-4 items); recall is higher on levels 1–4.",
+        "**Calibration.** At temperature 1 the typed-panel Brier score is lower than Decision 1.0 Lux's (0.100 vs 0.119) and the calibration error is level with it (ECE 0.016 vs 0.017); on the human-transfer panel the median calibration error (0.114) is below Decision 1.0 Lux's (0.137) and above Nimble v2's (0.082).",
+        "**Evaluation familiarity.** A later screen of the program's training pools found topical-phrase overlap (no exact duplicates) between some training groups and 84 items of the reported evaluation panels. This model's fine-tuning data was built after that screen and contains none of those groups; the screen does not cover the data behind the Decision 1.0 Lux weights it builds on. Rescored without the 84 items, post-key v3 stays 67.74 and none of this card's v3 or human-transfer comparisons change; the margin over Decision 1.0 Lux moves from +1.93 to +2.06.",
+        "**CPU.** CPU inference was not verified for this release: where the GPU-only causal-conv1d package is installed, Transformers routes the convolution to that kernel and a CPU run fails."
+      ],
+      "details": [
+        "**Size:** the model is the Qwen3.5 text backbone with a decision head; the Qwen3.5 vision tower is not part of it.",
+        "**Weights:** one third of the uniform average of three full fine-tunes of Decision 1.0 Lux that share the recipe and the start and differ in seed (each seed's checkpoint chosen on a held-out selection set: updates 1,624, 1,420 and 1,424) plus two thirds of Decision 1.0 Lux.",
+        "**Storage:** the 248 projection matrices are stored in BF16, the precision the GPU runtime multiplies them in, and every other tensor (embedding table, norms, gated-delta parameters, convolution filters, decision head) in FP32; on every evaluated prompt the answers equal those of the evaluated all-FP32 checkpoint (largest probability difference below 1e-15).",
+        "**Runtime update:** BF16-resident weights; answers unchanged; latency p50 33.8 → 27.2 ms, p95 53.3 → 27.6 ms; peak GPU memory 29.8 → 16.8 GiB (400 single requests, 346 input tokens on average, one AMD MI325X GPU)."
+      ]
+    },
+    "reports": [
+      {
+        "key": "candidate",
+        "role": "candidate",
+        "report": "/data/dev2/runs/release/dev2-8b-t1-derived/REPORT.json",
+        "mlx": "/data/dev2/runs/release/dev2-8b-t1-derived-mlx/mlx-diag.score.json",
+        "label": "DEV2.0-9B"
+      },
+      {
+        "key": "lux1",
+        "role": "own-1.0",
+        "report": "/data/dev2/runs/eval/m1/d1-lux1-autotune-cache/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/mlx/x-lux1/mlx-diag.score.json",
+        "repo_id": "llm-semantic-router/Decision-1.0-Lux-9B",
+        "label": "Decision 1.0 Lux"
+      },
+      {
+        "key": "nimble2",
+        "role": "peer",
+        "report": "/data/dev2/runs/eval/m2/q6-nimble2/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/q6-nimble2/mlx-diag.score.json",
+        "repo_id": "bespokelabs/Bespoke-Nimble-9B-v2",
+        "label": "Nimble v2"
+      }
+    ],
+    "paired_peers": {
+      "nimble2": "/data/dev2/runs/release/dev2-8b-t1-derived/PAIRED-vs-nimble2.json"
+    }
+  }
+}

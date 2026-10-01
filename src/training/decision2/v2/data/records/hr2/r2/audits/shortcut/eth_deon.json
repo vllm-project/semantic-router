@@ -1,0 +1,402 @@
+{
+ "folds": {
+  "groups": [
+   191,
+   212,
+   190,
+   202,
+   186
+  ],
+  "rows": [
+   220,
+   234,
+   211,
+   221,
+   208
+  ],
+  "rule": "int(sha256(group_id).hexdigest(), 16) % 5"
+ },
+ "gate": {
+  "margin": 0.05,
+  "min_rows": 30,
+  "rule": "PASS iff accuracy <= majority + margin; majority is the cross-validated position prior on the same rows",
+  "views": [
+   "state_removed",
+   "option_only",
+   "hypothesis_only"
+  ]
+ },
+ "gates": [
+  {
+   "accuracy": 0.502742,
+   "delta": 0.015539,
+   "families_over_margin": [],
+   "majority": 0.487203,
+   "n": 1094,
+   "pass": true,
+   "task_type": "noul",
+   "threshold": 0.537203,
+   "view": "state_removed",
+   "wilson95": [
+    0.473156,
+    0.532309
+   ]
+  },
+  {
+   "accuracy": 0.498172,
+   "delta": 0.010969,
+   "families_over_margin": [],
+   "majority": 0.487203,
+   "n": 1094,
+   "pass": true,
+   "task_type": "noul",
+   "threshold": 0.537203,
+   "view": "option_only",
+   "wilson95": [
+    0.468602,
+    0.527755
+   ]
+  }
+ ],
+ "groups": 981,
+ "heuristics": {
+  "lexical_overlap": {
+   "n_rows": 0
+  },
+  "longest_option": {
+   "by_family": {
+    "eth_deon": {
+     "accuracy": 0.5,
+     "correct": 547,
+     "delta": 0.012797,
+     "exceeds_margin": false,
+     "majority": 0.487203,
+     "n": 1094,
+     "wilson95": [
+      0.470423,
+      0.529577
+     ]
+    }
+   },
+   "by_source": {
+    "ethics_train": {
+     "accuracy": 0.5,
+     "correct": 547,
+     "delta": 0.012797,
+     "exceeds_margin": false,
+     "majority": 0.487203,
+     "n": 1094,
+     "wilson95": [
+      0.470423,
+      0.529577
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "eth_deon": {
+      "accuracy": 0.5,
+      "correct": 547,
+      "delta": 0.012797,
+      "exceeds_margin": false,
+      "majority": 0.487203,
+      "n": 1094,
+      "wilson95": [
+       0.470423,
+       0.529577
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.5,
+     "correct": 547,
+     "delta": 0.012797,
+     "exceeds_margin": false,
+     "majority": 0.487203,
+     "n": 1094,
+     "wilson95": [
+      0.470423,
+      0.529577
+     ]
+    }
+   },
+   "n_rows": 1094
+  },
+  "position_prior": {
+   "by_family": {
+    "eth_deon": {
+     "accuracy": 0.487203,
+     "correct": 533,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.487203,
+     "n": 1094,
+     "wilson95": [
+      0.457681,
+      0.516815
+     ]
+    }
+   },
+   "by_source": {
+    "ethics_train": {
+     "accuracy": 0.487203,
+     "correct": 533,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.487203,
+     "n": 1094,
+     "wilson95": [
+      0.457681,
+      0.516815
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "eth_deon": {
+      "accuracy": 0.487203,
+      "correct": 533,
+      "delta": 0.0,
+      "exceeds_margin": false,
+      "majority": 0.487203,
+      "n": 1094,
+      "wilson95": [
+       0.457681,
+       0.516815
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.487203,
+     "correct": 533,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.487203,
+     "n": 1094,
+     "wilson95": [
+      0.457681,
+      0.516815
+     ]
+    }
+   },
+   "n_rows": 1094
+  }
+ },
+ "input": {
+  "rows": 1094,
+  "sha256": "518bc7acdd85d562f5b9571ba0ca385876da1a70c3ae20f23b9393d8c05d52d3"
+ },
+ "learner": {
+  "bits": 20,
+  "epochs": 4,
+  "instruction_cross_cap": 64,
+  "l2": 1e-06,
+  "learning_rate": 0.1,
+  "seed": 0,
+  "state_cross_cap": 128,
+  "state_cross_unigrams": 64,
+  "state_gram_cap": 128,
+  "text_gram_cap": 1024
+ },
+ "majority": {
+  "noul": {
+   "accuracy": 0.487203,
+   "n": 1094
+  }
+ },
+ "rows": 1094,
+ "schema": "decision2.v2.shortcut.v1",
+ "verdict": "PASS",
+ "views": {
+  "full_input": {
+   "by_family": {
+    "eth_deon": {
+     "accuracy": 0.631627,
+     "correct": 691,
+     "delta": 0.144424,
+     "exceeds_margin": true,
+     "majority": 0.487203,
+     "n": 1094,
+     "wilson95": [
+      0.602629,
+      0.659704
+     ]
+    }
+   },
+   "by_source": {
+    "ethics_train": {
+     "accuracy": 0.631627,
+     "correct": 691,
+     "delta": 0.144424,
+     "exceeds_margin": true,
+     "majority": 0.487203,
+     "n": 1094,
+     "wilson95": [
+      0.602629,
+      0.659704
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "eth_deon": {
+      "accuracy": 0.631627,
+      "correct": 691,
+      "delta": 0.144424,
+      "exceeds_margin": true,
+      "majority": 0.487203,
+      "n": 1094,
+      "wilson95": [
+       0.602629,
+       0.659704
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.631627,
+     "correct": 691,
+     "delta": 0.144424,
+     "exceeds_margin": true,
+     "majority": 0.487203,
+     "n": 1094,
+     "wilson95": [
+      0.602629,
+      0.659704
+     ]
+    }
+   },
+   "n_rows": 1094
+  },
+  "hypothesis_only": {
+   "n_rows": 0
+  },
+  "option_only": {
+   "by_family": {
+    "eth_deon": {
+     "accuracy": 0.498172,
+     "correct": 545,
+     "delta": 0.010969,
+     "exceeds_margin": false,
+     "majority": 0.487203,
+     "n": 1094,
+     "wilson95": [
+      0.468602,
+      0.527755
+     ]
+    }
+   },
+   "by_source": {
+    "ethics_train": {
+     "accuracy": 0.498172,
+     "correct": 545,
+     "delta": 0.010969,
+     "exceeds_margin": false,
+     "majority": 0.487203,
+     "n": 1094,
+     "wilson95": [
+      0.468602,
+      0.527755
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "eth_deon": {
+      "accuracy": 0.498172,
+      "correct": 545,
+      "delta": 0.010969,
+      "exceeds_margin": false,
+      "majority": 0.487203,
+      "n": 1094,
+      "wilson95": [
+       0.468602,
+       0.527755
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.498172,
+     "correct": 545,
+     "delta": 0.010969,
+     "exceeds_margin": false,
+     "majority": 0.487203,
+     "n": 1094,
+     "wilson95": [
+      0.468602,
+      0.527755
+     ]
+    }
+   },
+   "n_rows": 1094
+  },
+  "state_removed": {
+   "by_family": {
+    "eth_deon": {
+     "accuracy": 0.502742,
+     "correct": 550,
+     "delta": 0.015539,
+     "exceeds_margin": false,
+     "majority": 0.487203,
+     "n": 1094,
+     "wilson95": [
+      0.473156,
+      0.532309
+     ]
+    }
+   },
+   "by_source": {
+    "ethics_train": {
+     "accuracy": 0.502742,
+     "correct": 550,
+     "delta": 0.015539,
+     "exceeds_margin": false,
+     "majority": 0.487203,
+     "n": 1094,
+     "wilson95": [
+      0.473156,
+      0.532309
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "eth_deon": {
+      "accuracy": 0.502742,
+      "correct": 550,
+      "delta": 0.015539,
+      "exceeds_margin": false,
+      "majority": 0.487203,
+      "n": 1094,
+      "wilson95": [
+       0.473156,
+       0.532309
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.502742,
+     "correct": 550,
+     "delta": 0.015539,
+     "exceeds_margin": false,
+     "majority": 0.487203,
+     "n": 1094,
+     "wilson95": [
+      0.473156,
+      0.532309
+     ]
+    }
+   },
+   "n_rows": 1094
+  }
+ }
+}

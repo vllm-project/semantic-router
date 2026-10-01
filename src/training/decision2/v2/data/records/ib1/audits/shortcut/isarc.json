@@ -1,0 +1,460 @@
+{
+ "folds": {
+  "groups": [
+   181,
+   185,
+   173,
+   174,
+   161
+  ],
+  "rows": [
+   181,
+   185,
+   173,
+   174,
+   161
+  ],
+  "rule": "int(sha256(group_id).hexdigest(), 16) % 5"
+ },
+ "gate": {
+  "margin": 0.05,
+  "min_rows": 30,
+  "rule": "PASS iff accuracy <= majority + margin; majority is the cross-validated position prior on the same rows",
+  "views": [
+   "state_removed",
+   "option_only",
+   "hypothesis_only"
+  ]
+ },
+ "gates": [
+  {
+   "accuracy": 0.502288,
+   "delta": -0.006865,
+   "families_over_margin": [],
+   "majority": 0.509153,
+   "n": 874,
+   "pass": true,
+   "task_type": "choice",
+   "threshold": 0.559153,
+   "view": "state_removed",
+   "wilson95": [
+    0.469203,
+    0.535354
+   ]
+  },
+  {
+   "accuracy": 0.47254,
+   "delta": -0.036613,
+   "families_over_margin": [],
+   "majority": 0.509153,
+   "n": 874,
+   "pass": true,
+   "task_type": "choice",
+   "threshold": 0.559153,
+   "view": "option_only",
+   "wilson95": [
+    0.439634,
+    0.505686
+   ]
+  }
+ ],
+ "groups": 874,
+ "heuristics": {
+  "lexical_overlap": {
+   "by_family": {
+    "isarc": {
+     "accuracy": 0.490847,
+     "correct": 429,
+     "delta": -0.018307,
+     "exceeds_margin": false,
+     "majority": 0.509153,
+     "n": 874,
+     "wilson95": [
+      0.457816,
+      0.523957
+     ]
+    }
+   },
+   "by_source": {
+    "isarcasmeval_train": {
+     "accuracy": 0.490847,
+     "correct": 429,
+     "delta": -0.018307,
+     "exceeds_margin": false,
+     "majority": 0.509153,
+     "n": 874,
+     "wilson95": [
+      0.457816,
+      0.523957
+     ]
+    }
+   },
+   "by_task_family": {
+    "choice": {
+     "isarc": {
+      "accuracy": 0.490847,
+      "correct": 429,
+      "delta": -0.018307,
+      "exceeds_margin": false,
+      "majority": 0.509153,
+      "n": 874,
+      "wilson95": [
+       0.457816,
+       0.523957
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "choice": {
+     "accuracy": 0.490847,
+     "correct": 429,
+     "delta": -0.018307,
+     "exceeds_margin": false,
+     "majority": 0.509153,
+     "n": 874,
+     "wilson95": [
+      0.457816,
+      0.523957
+     ]
+    }
+   },
+   "n_rows": 874
+  },
+  "longest_option": {
+   "by_family": {
+    "isarc": {
+     "accuracy": 0.490847,
+     "correct": 429,
+     "delta": -0.018307,
+     "exceeds_margin": false,
+     "majority": 0.509153,
+     "n": 874,
+     "wilson95": [
+      0.457816,
+      0.523957
+     ]
+    }
+   },
+   "by_source": {
+    "isarcasmeval_train": {
+     "accuracy": 0.490847,
+     "correct": 429,
+     "delta": -0.018307,
+     "exceeds_margin": false,
+     "majority": 0.509153,
+     "n": 874,
+     "wilson95": [
+      0.457816,
+      0.523957
+     ]
+    }
+   },
+   "by_task_family": {
+    "choice": {
+     "isarc": {
+      "accuracy": 0.490847,
+      "correct": 429,
+      "delta": -0.018307,
+      "exceeds_margin": false,
+      "majority": 0.509153,
+      "n": 874,
+      "wilson95": [
+       0.457816,
+       0.523957
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "choice": {
+     "accuracy": 0.490847,
+     "correct": 429,
+     "delta": -0.018307,
+     "exceeds_margin": false,
+     "majority": 0.509153,
+     "n": 874,
+     "wilson95": [
+      0.457816,
+      0.523957
+     ]
+    }
+   },
+   "n_rows": 874
+  },
+  "position_prior": {
+   "by_family": {
+    "isarc": {
+     "accuracy": 0.509153,
+     "correct": 445,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.509153,
+     "n": 874,
+     "wilson95": [
+      0.476043,
+      0.542184
+     ]
+    }
+   },
+   "by_source": {
+    "isarcasmeval_train": {
+     "accuracy": 0.509153,
+     "correct": 445,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.509153,
+     "n": 874,
+     "wilson95": [
+      0.476043,
+      0.542184
+     ]
+    }
+   },
+   "by_task_family": {
+    "choice": {
+     "isarc": {
+      "accuracy": 0.509153,
+      "correct": 445,
+      "delta": 0.0,
+      "exceeds_margin": false,
+      "majority": 0.509153,
+      "n": 874,
+      "wilson95": [
+       0.476043,
+       0.542184
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "choice": {
+     "accuracy": 0.509153,
+     "correct": 445,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.509153,
+     "n": 874,
+     "wilson95": [
+      0.476043,
+      0.542184
+     ]
+    }
+   },
+   "n_rows": 874
+  }
+ },
+ "input": {
+  "rows": 874,
+  "sha256": "3328ab1def175a773afde50217366d484369f81404cde6cce20f5e418fd5b8c4"
+ },
+ "learner": {
+  "bits": 20,
+  "epochs": 4,
+  "instruction_cross_cap": 64,
+  "l2": 1e-06,
+  "learning_rate": 0.1,
+  "seed": 0,
+  "state_cross_cap": 128,
+  "state_cross_unigrams": 64,
+  "state_gram_cap": 128,
+  "text_gram_cap": 1024
+ },
+ "majority": {
+  "choice": {
+   "accuracy": 0.509153,
+   "n": 874
+  }
+ },
+ "rows": 874,
+ "schema": "decision2.v2.shortcut.v1",
+ "verdict": "PASS",
+ "views": {
+  "full_input": {
+   "by_family": {
+    "isarc": {
+     "accuracy": 0.526316,
+     "correct": 460,
+     "delta": 0.017162,
+     "exceeds_margin": false,
+     "majority": 0.509153,
+     "n": 874,
+     "wilson95": [
+      0.49317,
+      0.559231
+     ]
+    }
+   },
+   "by_source": {
+    "isarcasmeval_train": {
+     "accuracy": 0.526316,
+     "correct": 460,
+     "delta": 0.017162,
+     "exceeds_margin": false,
+     "majority": 0.509153,
+     "n": 874,
+     "wilson95": [
+      0.49317,
+      0.559231
+     ]
+    }
+   },
+   "by_task_family": {
+    "choice": {
+     "isarc": {
+      "accuracy": 0.526316,
+      "correct": 460,
+      "delta": 0.017162,
+      "exceeds_margin": false,
+      "majority": 0.509153,
+      "n": 874,
+      "wilson95": [
+       0.49317,
+       0.559231
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "choice": {
+     "accuracy": 0.526316,
+     "correct": 460,
+     "delta": 0.017162,
+     "exceeds_margin": false,
+     "majority": 0.509153,
+     "n": 874,
+     "wilson95": [
+      0.49317,
+      0.559231
+     ]
+    }
+   },
+   "n_rows": 874
+  },
+  "hypothesis_only": {
+   "n_rows": 0
+  },
+  "option_only": {
+   "by_family": {
+    "isarc": {
+     "accuracy": 0.47254,
+     "correct": 413,
+     "delta": -0.036613,
+     "exceeds_margin": false,
+     "majority": 0.509153,
+     "n": 874,
+     "wilson95": [
+      0.439634,
+      0.505686
+     ]
+    }
+   },
+   "by_source": {
+    "isarcasmeval_train": {
+     "accuracy": 0.47254,
+     "correct": 413,
+     "delta": -0.036613,
+     "exceeds_margin": false,
+     "majority": 0.509153,
+     "n": 874,
+     "wilson95": [
+      0.439634,
+      0.505686
+     ]
+    }
+   },
+   "by_task_family": {
+    "choice": {
+     "isarc": {
+      "accuracy": 0.47254,
+      "correct": 413,
+      "delta": -0.036613,
+      "exceeds_margin": false,
+      "majority": 0.509153,
+      "n": 874,
+      "wilson95": [
+       0.439634,
+       0.505686
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "choice": {
+     "accuracy": 0.47254,
+     "correct": 413,
+     "delta": -0.036613,
+     "exceeds_margin": false,
+     "majority": 0.509153,
+     "n": 874,
+     "wilson95": [
+      0.439634,
+      0.505686
+     ]
+    }
+   },
+   "n_rows": 874
+  },
+  "state_removed": {
+   "by_family": {
+    "isarc": {
+     "accuracy": 0.502288,
+     "correct": 439,
+     "delta": -0.006865,
+     "exceeds_margin": false,
+     "majority": 0.509153,
+     "n": 874,
+     "wilson95": [
+      0.469203,
+      0.535354
+     ]
+    }
+   },
+   "by_source": {
+    "isarcasmeval_train": {
+     "accuracy": 0.502288,
+     "correct": 439,
+     "delta": -0.006865,
+     "exceeds_margin": false,
+     "majority": 0.509153,
+     "n": 874,
+     "wilson95": [
+      0.469203,
+      0.535354
+     ]
+    }
+   },
+   "by_task_family": {
+    "choice": {
+     "isarc": {
+      "accuracy": 0.502288,
+      "correct": 439,
+      "delta": -0.006865,
+      "exceeds_margin": false,
+      "majority": 0.509153,
+      "n": 874,
+      "wilson95": [
+       0.469203,
+       0.535354
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "choice": {
+     "accuracy": 0.502288,
+     "correct": 439,
+     "delta": -0.006865,
+     "exceeds_margin": false,
+     "majority": 0.509153,
+     "n": 874,
+     "wilson95": [
+      0.469203,
+      0.535354
+     ]
+    }
+   },
+   "n_rows": 874
+  }
+ }
+}
