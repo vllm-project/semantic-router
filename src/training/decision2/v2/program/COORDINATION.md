@@ -205,6 +205,22 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 14:30 — **4B HR2 efficacy pilot (M9, 57551951): HR2 is NOT a human-transfer lever → HR2 work stops.**
+  Records: `dec-m9-results-2026-10-01.md` (`db728251d`), gist 04; integration `d29181e4a`; 5.94 of 16 GPU-h.
+  - **HT-DEV v2 (all TIE):** HR2 soup − control −.004 [−.018, +.010], whose upper bound rules out a gain-sized
+    effect; vs DEV2.0-4B −.012 [−.025, +.001].
+  - **Learned in distribution only:** HR2 DEV +.140. It raised typed Choice but dropped typed Noul below its floor
+    (`rule_precedence` 241 vs 260), and raised the `hs1-dev` false-yes rate. Hence no formal run.
+  - **Deviation:** the matched control failed its seed-1 preflight (an autotune-cache race), so amendment 1 used M7's
+    N7C (near-matched, −5.7% tokens).
+  - **Decision:** no HR2-r3 and no HR2 release-candidate milestone at any size (the priors for 2B / 0.8B / 9B are
+    negative). HR2-r2 stays as archived data. The next human-transfer lever is the **training method** (the 27B
+    adapter finding; 4B M10). 27B M6 and 9B M9 do not use HR2.
+  - **New convention, all tracks (especially on the new nodes C–F):** on a fresh node or a fresh image / Triton
+    autotune cache, run the first job alone, or pre-warm the cache, **before launching parallel seeds**. A
+    concurrent cold-cache fill corrupted a preflight gate (698/700).
+  - **GPUs:** node A GPU6–7 are back to 9B, idle until 9B M9 launches (after IB1-r3).
+
 - 2026-10-01 14:25 — **IB1-r2 NOT release-safe → IB1-r3 commissioned; 27B M6 launched (11741ee2).** Data: private
   `82bf70a7` `m6/ib1/` (TRAIN 31,923 / DEV 2,366); records merged into integration at `50bae2ddd`.
   - **r2 review:** 12/225 = 5.33% [2.79, 9.13], weighted 5.97%, `wands` 4/19 → P1, P2 and P3 fail.
