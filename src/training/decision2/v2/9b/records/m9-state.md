@@ -1,6 +1,6 @@
 # 9B M9 state (resume file)
 
-Updated: 2026-10-01 18:35 UTC+8 (10:35Z). **Hand-off point: stage 1 is closed (no finalist; result record `lux9b-m9-stage1-result-2026-10-01.md`); stage 2 runs unattended.** Branch `xunzhuo/decision-2-training-9b-m9` (worktree `vllm-sr-dev2-9b-m9`).
+Updated: 2026-10-01 18:25 UTC+8 (10:25Z). **Hand-off point: stage 1 is closed (no finalist; result record `lux9b-m9-stage1-result-2026-10-01.md`); stage 2 runs unattended.** Branch `xunzhuo/decision-2-training-9b-m9` (worktree `vllm-sr-dev2-9b-m9`).
 Prereg `records/lux9b-m9-prereg-2026-10-01.md` (`8570a5896`); amendment 1 (`0b84e0db4`, B0 read through the base's
 untied LM head); amendment 2 (`51c80ddc9`, stage 2 = L9 recipe + IB1-r3 + IB2 and the transfer-only ablation, started
 as node-C GPUs free). Every amendment preceded the GPU jobs it governs; no stage-1 arm had been read.
@@ -32,7 +32,7 @@ readouts, never release scores. Every contrast is against C0 (DEV2.0-9B) on the 
 | node A GPU6 / GPU7 | `post-a.sh` L9 / L9L (`fb2cc87cc`) | done: scored 10:06–10:08Z, rules 10:09Z |
 | node A | `formal-chain.sh` (`ad272def4`), stage 1 | **stopped by rule: no finalist** (10:09Z) |
 | node A | `formal-chain.sh` with `M9_STAGE=2` (`54c420357`, pid 206896): reads `select/9b-finalists-s2.json`; no finalist → stop; else **waits for `status/formal-s2.GO`**, then `formal.sh` per finalist (GPU6 / GPU7) | waiting for the stage-2 rules |
-| node C GPU5 / 2 / 4 / 1 | stage 2 `chains2.sh` (`1b0830c0c`): L9IB-s1 (GPU5, started 07:46Z), L9IB-s2 (GPU2), L9IBX-s1 (GPU4), L9IBX-s2 (GPU1, after the L9 merges) | L9IB-s1 full run (ETA ≈ 10:55Z); L9IB-s2 (GPU2), L9IBX-s1 (GPU4), L9IBX-s2 (GPU1) started 09:46–09:50Z after the stage-1 chains / L9 merges; ETA ≈ 13:00Z |
+| node C GPU5 / 2 / 4 / 1 | stage 2 `chains2.sh` (`1b0830c0c`): L9IB-s1 (GPU5, started 07:46Z), L9IB-s2 (GPU2), L9IBX-s1 (GPU4), L9IBX-s2 (GPU1, after the L9 merges) | at 10:19Z: L9IB-s1 update 1,892 / 2,343 (ETA ≈ 10:55Z); L9IB-s2 296 / 2,344, L9IBX-s1 304 / 2,196, L9IBX-s2 248 / 2,187 (≈ 12 / min → ETA ≈ 12:40–12:50Z); every chain PID alive |
 | node C GPU5 / GPU4 | `post-c.sh` L9IB / L9IBX | waiting |
 | node A GPU6 / GPU7 | `post-a.sh` with `M9_STAGE=2` (L9IB / L9IBX): + IB1 / IB2 DEV diagnostics, rules `select/9b-finalists-s2.json` | waiting |
 
@@ -78,8 +78,10 @@ the Noul floors, MLX-DEV-9B and retention, and passes the yes-bias guard, as exp
 
 ## GPU-hours
 
-≈ 3.0 at 07:47Z (node C preflights + running seeds; node A readouts ≈ 0.4; B0 0.03). Projection: stage 1 ≈ 12,
-stage 2 ≈ 16, readouts / formal ≈ 4. Cap 120.
+**≈ 16.3 used at 10:19Z** (node C 15.07 incl. running containers: L9 5.38, L9L 5.42, L9IB 3.11, L9IBX 1.04, merges
+0.08, B0 0.04; node A: readouts 1.03, formal-path parity 0.20). Stage 1 ≈ 12.1 (closed). Stage 2 projection ≈ 16
+including its readouts; any stage-2 formal ≈ 0.2 per finalist. Cap 120. (`m9/gpuh.py table --running` on node C;
+node A `gpuh.py table` double-counts 0.08 of merge receipts copied in with the soup side files.)
 
 ## Hand-off: finishing stage 2 (a continuation worker; everything below is already running or scripted)
 
