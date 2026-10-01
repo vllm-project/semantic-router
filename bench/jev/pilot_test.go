@@ -22,11 +22,11 @@ func TestSharedPilotDraftRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	var q question
-	if err := json.Unmarshal(qdata, &q); err != nil {
-		t.Fatal(err)
+	if decodeErr := json.Unmarshal(qdata, &q); decodeErr != nil {
+		t.Fatal(decodeErr)
 	}
-	if err := validateQuestion(q); err != nil {
-		t.Fatal(err)
+	if validationErr := validateQuestion(q); validationErr != nil {
+		t.Fatal(validationErr)
 	}
 	data, err := os.ReadFile(filepath.Join(root, "shared-pilot.draft-v0.1.jsonl"))
 	if err != nil {
@@ -52,13 +52,13 @@ func TestSharedPilotDraftRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			t.Error(err)
+		body, readErr := io.ReadAll(r.Body)
+		if readErr != nil {
+			t.Error(readErr)
 		}
 		var sent map[string]json.RawMessage
-		if err := json.Unmarshal(body, &sent); err != nil {
-			t.Error(err)
+		if decodeErr := json.Unmarshal(body, &sent); decodeErr != nil {
+			t.Error(decodeErr)
 		}
 		if len(sent) != 3 || sent["model"] == nil || sent["state"] == nil || sent["questions"] == nil {
 			t.Error("unexpected request fields or leaked evaluation metadata")
@@ -145,9 +145,9 @@ func TestPilotDiagnosticScoring(t *testing.T) {
 				t.Fatal(err)
 			}
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				body, err := io.ReadAll(r.Body)
+				body, readErr := io.ReadAll(r.Body)
 				want, marshalErr := json.Marshal(request{Model: "jev-1.13.0", State: diagnostic[5].State, Questions: map[string]question{"intent": q}})
-				if err != nil || marshalErr != nil || !bytes.Equal(body, want) {
+				if readErr != nil || marshalErr != nil || !bytes.Equal(body, want) {
 					t.Error("diagnostic metadata changed the API request")
 				}
 				_, _ = w.Write(stub)
