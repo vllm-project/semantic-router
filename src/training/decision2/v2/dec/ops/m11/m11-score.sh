@@ -30,6 +30,7 @@ HT_GOLD=$GOLD/ht-dev2.gold.jsonl HT_GOLD_SHA=659c92b45d2a5b37e250ccb728cdbf5580b
 PROBE_GOLD_M10=/data/dev2/private/dec/m10/m10-probes.gold.jsonl
 PROBE_GOLD_SHA=5c674e35142bc1aae2526d38b6930a0e570d99b5ca5185b0a7ac428dc8b7bae2
 PG=/data/dev2/private/dec/m11
+IMAGE_A=sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54
 log() { echo "$(date -u +%FT%TZ) score $*" | tee -a "$L/OPERATIONS-nodeA.log"; }
 die() { log "$*"; exit 1; }
 py() { (cd "$S" && PYTHONPATH=$S python3 -B "$@"); }
@@ -126,10 +127,14 @@ EOF2
     B=$PG/ibdev-build
     if [ ! -f "$B/manifest.json" ]; then
       mkdir -p "$PG" && chmod 700 "$PG"
-      py "$OPS/m11/m11_ibdev.py" prompts --ib1 "$IB1D" \
-        --ib1-sha 3f56aa418e90e58f3fbaa50bf2f9f4f0405eeb9dd2f0c51ffca6f602711c693f --ib2 "$IB2D" \
-        --ib2-sha ab009fb12f9563c3ef4a846f5455dd5233f2a2c5fafe6ac8a9c74349532eb923 --output "$B" > "$PG/ibdev-build.log" 2>&1 \
-        || die "IB DEV panel build FAILED (see $PG/ibdev-build.log)"
+      # the prompt renderer imports the trainer's model module (torch): node A's decoder image, no network
+      docker run --rm --network none --mount "type=bind,src=$S,dst=/code,readonly" \
+        --mount "type=bind,src=/data/dev2/private/data,dst=/in,readonly" --mount "type=bind,src=$PG,dst=/out" \
+        -e PYTHONPATH=/code -w /code "$IMAGE_A" python3 v2/dec/ops/m11/m11_ibdev.py prompts \
+        --ib1 "/in/${IB1D#/data/dev2/private/data/}" \
+        --ib1-sha 3f56aa418e90e58f3fbaa50bf2f9f4f0405eeb9dd2f0c51ffca6f602711c693f --ib2 "/in/${IB2D#/data/dev2/private/data/}" \
+        --ib2-sha ab009fb12f9563c3ef4a846f5455dd5233f2a2c5fafe6ac8a9c74349532eb923 --output /out/ibdev-build \
+        > "$PG/ibdev-build.log" 2>&1 || die "IB DEV panel build FAILED (see $PG/ibdev-build.log)"
       chmod 600 "$B"/*.jsonl
       cp "$B/ib-dev.gold.jsonl" "$PG/ib-dev.gold.jsonl" && chmod 600 "$PG/ib-dev.gold.jsonl"
       log "IB DEV panel: $(tail -1 "$PG/ibdev-build.log")"
