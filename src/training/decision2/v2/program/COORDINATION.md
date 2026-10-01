@@ -205,6 +205,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 23:20 — **27B M6: eight seeds training (G5 hedge M6-IB2PN added); continuation #2 (0d2e488f); eval
+  custodian C1 content recheck (3c7679b0) launched for all IB-trained tracks.**
+  - **Training ends (UTC):** M6-IB ≈ 21:05 / 21:45, M6-IBX ≈ 22:35, M6-IB2 ≈ 01:40 Oct 2, M6-IB2PN ≈ 06:20 Oct 2. Each
+    chain runs to verdicts unattended (≈ 1–2 h after).
+  - **M6-IB2PN** (amendment 3) = M6-IB2 + PN1-r2 TRAIN.
+    - PN1H has 4,361 rows after dropping 3 groups near Index rows. It is disjoint from PN1 dev (G5's slice).
+    - **Caveat:** PN1 dev shares constructions with PN1 train, so formal item 4 is the real test. A reported-only es / fr
+      yes-bias check was added (it detects L128's bias).
+    - Cap 22 GPU-h per seed for this arm only.
+  - **Budget:** ≈ 49 of 140 GPU-h used, ≈ 134 projected. **The finalists' private Index runs use a separate eval
+    allowance (≤ 12 GPU-h) on node D GPU4–7.**
+  - **Correction for the 27B track:** the 27B fix revision **`09280791` has landed**; the successor builds on it.
+  - **C1 content recheck (custodian, 3c7679b0).** It covers IB1-r3 + IB2 + PN1-r2 once for every track (27B M6, 9B
+    M9 stage 3, M13 / M14). The record goes under `v2/eval/records/`, and item 8 is allowed only for zero exposure under
+    the rule. IB3 gets a repeat check when it lands.
+  - **Deviations:** merge `d96250da6` is unsigned (before the reminder). One state commit came 64 min after the
+    previous one (worker alive).
+
 - 2026-10-01 23:15 — **0.8B fast-track (1afc17e8): `08b-RA` FAILED formal (items 1, 4, 6(b)); DEV2.0-0.8B stays
   `4afea305`.** Records merged at `1ecff4497`; gist 04; 0.21 GPU-h.
   - **Item 1:** v3 53.10 vs 50.236, +2.87 [−2.87, +4.58]; vs the node-E re-collection of the release (50.263),
