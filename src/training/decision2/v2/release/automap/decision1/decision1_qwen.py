@@ -95,6 +95,38 @@ def cpu_reference_layers(root: nn.Module) -> int:
     return len(layers)
 
 
+def rocm_conv_layers(root: nn.Module, device: torch.device) -> int:
+    """Eos's native ROCm convolution (``decision1_rocm_conv``) on gfx942 GPUs; returns the layers rebound."""
+    if torch.version.hip is None or device.type != "cuda":
+        return 0
+    if torch.cuda.get_device_properties(device).gcnArchName.split(":")[0] != "gfx942":
+        return 0
+    try:
+        from .decision1_rocm_conv import ConvController
+    except ImportError:
+        return 0
+    modeling = sys.modules.get(QWEN3_5_MODELING)
+    layer_class = getattr(modeling, "Qwen3_5GatedDeltaNet", None)
+    if layer_class is None:
+        return 0
+    forward = inspect.unwrap(layer_class.forward)
+    controlled = types.FunctionType(
+        forward.__code__,
+        {
+            **forward.__globals__,
+            "causal_conv1d_fn": ConvController(modeling.causal_conv1d_fn),
+        },
+        forward.__name__,
+        forward.__defaults__,
+        forward.__closure__,
+    )
+    controlled.__kwdefaults__ = forward.__kwdefaults__
+    layers = [m for m in root.modules() if isinstance(m, layer_class)]
+    for layer in layers:
+        layer.forward = types.MethodType(controlled, layer)
+    return len(layers)
+
+
 class CandidateHead(nn.Module):
     def __init__(self, hidden_size: int, head_dim: int):
         super().__init__()
@@ -180,6 +212,7 @@ class QwenRuntime:
         *,
         max_input_tokens: int,
         choice_null_description: str,
+        rocm_conv: bool = False,
         device,
     ):
         from safetensors.torch import load_file
@@ -230,6 +263,8 @@ class QwenRuntime:
         model.to(device).eval()
         if device.type == "cpu":
             cpu_reference_layers(model)
+        elif rocm_conv:
+            rocm_conv_layers(model, device)
         tokenizer = AutoTokenizer.from_pretrained(
             str((root / descriptor["tokenizer"]["json"]).parent),
             trust_remote_code=False,

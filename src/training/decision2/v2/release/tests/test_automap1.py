@@ -6,6 +6,7 @@ import ast
 import importlib.util
 import json
 import math
+import re
 import sys
 import tempfile
 import unittest
@@ -31,7 +32,11 @@ ALLOWED_IMPORTS = {
     "transformers",
     "safetensors",
     "huggingface_hub",
+    "triton",
 }
+# What Transformers' remote-code loader requires to be installed (dynamic_module_utils.get_imports).
+REQUIRED_PACKAGES = {"torch", "transformers", "safetensors", "huggingface_hub"}
+STDLIB = set(sys.stdlib_module_names)
 
 
 def load(path: Path, name: str):
@@ -199,6 +204,23 @@ class HygieneTest(unittest.TestCase):
                     self.assertIn(
                         name.split(".")[0], ALLOWED_IMPORTS, f"{path.name}: {name}"
                     )
+
+    def test_loader_requires_only_the_documented_packages(self):
+        for path in CODE.glob("*.py"):
+            content = re.sub(
+                r"\s*try\s*:.*?except.*?:",
+                "",
+                path.read_text(encoding="utf-8"),
+                flags=re.DOTALL,
+            )
+            imports = re.findall(r"^\s*import\s+(\S+)\s*$", content, flags=re.MULTILINE)
+            imports += re.findall(
+                r"^\s*from\s+(\S+)\s+import", content, flags=re.MULTILINE
+            )
+            needed = {
+                name.split(".")[0] for name in imports if not name.startswith(".")
+            }
+            self.assertLessEqual(needed - STDLIB, REQUIRED_PACKAGES, path.name)
 
     def test_config_fields_match_the_files(self):
         auto_map = stage1.HF_KEYS["auto_map"]

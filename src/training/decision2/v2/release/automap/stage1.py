@@ -34,6 +34,7 @@ CODE_FILES = (
     "decision1_system_one.py",
     "decision1_vela.py",
     "decision1_qwen.py",
+    "decision1_rocm_conv.py",
 )
 HF_KEYS = {
     "model_type": "decision1",

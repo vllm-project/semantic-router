@@ -59,7 +59,10 @@ FAMILY_PROFILES = {
         "choice_null_description": "preserve_json_null",
     },
 }
-MODEL_PROFILES = {"Decision-1.0-Nox-4B": {"choice_null_description": "render_key"}}
+MODEL_PROFILES = {
+    "Decision-1.0-Nox-4B": {"choice_null_description": "render_key"},
+    "Decision-1.0-Eos-0.8B": {"rocm_conv": True},
+}
 
 __all__ = ["Decision1Model", "DecisionInputError", "DecisionInputTooLongError"]
 
@@ -234,6 +237,7 @@ class Decision1Model(PreTrainedModel):
                 descriptor,
                 max_input_tokens=profile["max_input_tokens"],
                 choice_null_description=profile["choice_null_description"],
+                rocm_conv=profile.get("rocm_conv", False),
                 device=device,
             )
         self._modules.pop("decision", None)
