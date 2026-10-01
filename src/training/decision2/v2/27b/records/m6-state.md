@@ -220,8 +220,9 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 3. **Superseded by worker 3 (15:50Z; `m6-handoff-2026-10-01.md` is now the runbook):** item 8 is this track's own
    step (§2: one attempt, `c1-postkey.sh` on node A GPU2, only for the choice-rule finalist and only with zero
    exposure in the custodian's §1 record), and so is the private Index (§3: `m6-index.sh` on node D GPU4–7, eval
-   allowance ≤ 12 GPU-h = one 27B run; first finalist passing items 1–7). The release (§4) builds on DEV2.0-27B
-   `main` `09280791` through the release pipeline, only if items 1–8 pass.
+   allowance ≤ 12 GPU-h = one 27B run; first finalist passing items 1–7). The release (§4) supersedes DEV2.0-27B's
+   current `main` through the release pipeline, only if items 1–8 pass: **`main` moved to `e7b4a372` at 15:41Z** (the
+   card-redesign worker's card-only revision on top of the fix revision `09280791`; spec `dev2-27b-card.json`).
 4. After the last chain (M6-IB2PN ≈ 08:30Z Oct 2): attribution (`m6-gates.sh <mirror> contrast` and `verdicts` with
    every sealed finalist; never `gates` again for an arm already gated), final
    results, gist 06, milestone-end cleanup ("Hand-off" above), merge (signed) into integration. **Order:** the
