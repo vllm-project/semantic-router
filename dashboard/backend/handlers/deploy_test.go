@@ -572,6 +572,58 @@ func TestDeployHandler_SuccessfulDeploy(t *testing.T) {
 	assertSnapshotMode(t, dslFile, 0o600)
 }
 
+func TestDeployHandler_ValidatesWithoutDashboardEnvironment(t *testing.T) {
+	// The Router has this key; the Dashboard does not.
+	t.Setenv("DEPLOY_TEST_OPENAI_API_KEY", "")
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+
+	deployYAML := `routing:
+  modelCards:
+    - name: test-model
+  signals:
+    domains:
+      - name: business
+        description: Business and management related queries
+  decisions:
+    - name: docs-route
+      priority: 5
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: business
+      modelRefs:
+        - model: test-model
+          use_reasoning: false
+      plugins:
+        - type: rag
+          configuration:
+            enabled: true
+            backend: openai
+            backend_config:
+              vector_store_id: vs_docs
+              api_key: ${DEPLOY_TEST_OPENAI_API_KEY}
+`
+	bodyBytes, _ := json.Marshal(DeployRequest{YAML: deployYAML, Mode: DeployModeReplace})
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/deploy", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	DeployHandler(configPath, false, tempDir)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d. Body: %s", w.Code, w.Body.String())
+	}
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("Failed to read config after deploy: %v", err)
+	}
+	if !strings.Contains(string(data), "api_key: ${DEPLOY_TEST_OPENAI_API_KEY}") {
+		t.Fatalf("expected the API key reference to be written as is:\n%s", data)
+	}
+}
+
 func TestDeployHandler_DeepMergePreservesExistingFields(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
