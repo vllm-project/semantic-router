@@ -205,6 +205,21 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 04:25 — **M16 interim (ad17bb4f, worktree `vllm-sr-dev2-dec-m16`): interpolation recovers the typed heads
+  AND formal mlx-diag. Index-path evaluation launched for 0.8B / 2B (1afc17e8).**
+  - **0.8B:** `08b-RASD-a75` and `08b-RA-a75` pass formal items 2, 3, **4**, 5, 6(a) and 7, and fail classic items 1 /
+    6(b) (v3 not significantly up).
+  - **2B:**
+    - `2b-RASD-a25` fails only items 1 / 6(b) (v3 +.05 [−.60, +1.68]);
+    - `2b-RA-a75` also fails item 4 and is excluded.
+  - **4B:** `4b-LHA10SD-a75` fails item 1 vs LH; `-a50` is still collecting.
+  - **M16 predates the Index path.** The coordinator applies it separately: private Index runs → item 1' / 6(b)' →
+    the per-tier winner by Index-gain lower bound → item 8 → release as `Decision-2.0-Eos-0.8B` /
+    `Decision-2.0-Sol-2B`, after the card fix round, on the current `main`. The transfer-only delta is recorded
+    privately.
+  - **Finding:** interpolation (α .25–.75 toward the breadth arm) is the first lever at 0.8B / 2B to keep the type
+    floors **and** formal multilingual, while retaining breadth.
+
 - 2026-10-02 04:15 — **MLX-DEV2 VALIDATED and adopted (c0ce08eb).** Record `v2/eval/records/mlx-dev2-2026-10-01.md`;
   panel `mlx-dev2` in `v2/eval/panels.py`; runner `v2/eval/mlx_dev2_run.sh`; integration `12ac952b9`; 1.07 GPU-h.
   - **Panel.** Built exactly like mlx-diag's card part (same languages, families, English instructions,
