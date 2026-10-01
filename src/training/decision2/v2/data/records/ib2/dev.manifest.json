@@ -1,0 +1,182 @@
+{
+ "arm_id": "IB2",
+ "canonical_form": "rows sorted by id; canonical(row) + '\\n' per row; UTF-8",
+ "canonical_path": "ib2.dev.jsonl",
+ "choice": {
+  "by_option_bucket": {
+   "2": 408
+  },
+  "gold_position_by_bucket": {
+   "2": {
+    "0": 204,
+    "1": 204
+   }
+  }
+ },
+ "content_sha256": "ab009fb12f9563c3ef4a846f5455dd5233f2a2c5fafe6ac8a9c74349532eb923",
+ "counts": {
+  "family": {
+   "argq": 408,
+   "gsm2": 572,
+   "hover": 200,
+   "ytspam": 92
+  },
+  "language": {
+   "en": 1272
+  },
+  "source": {
+   "gsm8k_train": 572,
+   "hover_train": 200,
+   "ibm_argq_30k": 408,
+   "uci_youtube_spam": 92
+  },
+  "task_type": {
+   "choice": 408,
+   "noul": 864
+  }
+ },
+ "groups": 1212,
+ "input": {
+  "is_canonical": true,
+  "path": "ib2.dev.jsonl",
+  "sha256": "ab009fb12f9563c3ef4a846f5455dd5233f2a2c5fafe6ac8a9c74349532eb923"
+ },
+ "license_registry_sha256": "145ece6620c4a98d1874e3843f719d3b732e54efe91f33604fe11ee207c1f3ae",
+ "licenses": {
+  "gsm8k_train": {
+   "attribution": "Cobbe, Kosaraju, Bavarian, Chen, Jun, Kaiser, Plappert, Tworek, Hilton, Nakano, Hesse and Schulman, Training Verifiers to Solve Math Word Problems (2021); openai/gsm8k@740312add88f781978c0658806c59bc2815b9866 main/train only; human-written problems and solutions; IN-DISTRIBUTION for the Index's GSM8K benchmark; already in earlier 2.0 mixtures",
+   "evidence": "https://huggingface.co/datasets/openai/gsm8k/blob/740312add88f781978c0658806c59bc2815b9866/README.md (license: mit)",
+   "license": "MIT",
+   "redistribution": "permitted with the MIT notice"
+  },
+  "hover_train": {
+   "attribution": "Jiang, Bordia, Zhong, Dognin, Singh and Bansal, HoVer: A Dataset for Many-Hop Fact Extraction and Claim Verification (Findings of EMNLP 2020); hover-nlp/hover@39b84697f196308f398a251a7aea9b82ae0f0562 data/hover/hover_train_release_v1.1.json (train only); evidence passages are HoVer-wiki introductions (wiki_wo_links.db, sha256 c37ee397916ec0bffacfe8902db454a5cda88a7a188409217b2e15231fe5ee2f) from Wikipedia, by Wikipedia contributors; IN-DISTRIBUTION for the Index's HoVer benchmark",
+   "evidence": "https://huggingface.co/datasets/hover-nlp/hover/blob/c0e43052759879b3461642ca6c0dd26658f47691/README.md (license: cc-by-sa-4.0); https://hover-nlp.github.io/ (CC BY-SA 4.0); repository code MIT",
+   "license": "CC-BY-SA-4.0",
+   "redistribution": "permitted with attribution under the same licence (ShareAlike); Wikipedia text CC BY-SA"
+  },
+  "ibm_argq_30k": {
+   "attribution": "Gretz, Friedman, Cohen-Karlik, Toledo, Lahav, Aharonov and Slonim, A Large-scale Dataset for Argument Quality Ranking: Construction and Analysis (AAAI 2020); IBM-ArgQ-Rank-30kArgs, ibm-research/argument_quality_ranking_30k@590726b3765b1b90c5e53a17e3b1f77d92d3aa8a train.csv; (c) Copyright IBM 2014, released under CC BY-SA 3.0; crowd-written arguments with stance labels from 10 annotators",
+   "evidence": "https://huggingface.co/datasets/ibm-research/argument_quality_ranking_30k/blob/590726b3765b1b90c5e53a17e3b1f77d92d3aa8a/README.md (Licensing Information: CC-BY-SA 3.0; metadata cc-by-3.0, the stricter ShareAlike terms are applied)",
+   "license": "CC-BY-SA-3.0",
+   "redistribution": "permitted with attribution under the same licence (ShareAlike)"
+  },
+  "uci_youtube_spam": {
+   "attribution": "Alberto, Lochter and Almeida, TubeSpam: Comment Spam Filtering on YouTube (ICMLA 2015); YouTube Spam Collection, UCI Machine Learning Repository dataset 380 (DOI 10.24432/C58885), youtube+spam+collection.zip",
+   "evidence": "https://archive.ics.uci.edu/dataset/380/youtube+spam+collection (Creative Commons Attribution 4.0 International)",
+   "license": "CC-BY-4.0",
+   "redistribution": "permitted with attribution"
+  }
+ },
+ "noul": {
+  "labels": {
+   "false": 412,
+   "true": 452
+  },
+  "true_fraction": 0.523148
+ },
+ "partition": "select",
+ "role": "aho",
+ "rows": 1272,
+ "rows_per_group": {
+  "1": 1166,
+  "2": 34,
+  "3": 10,
+  "4": 2
+ },
+ "schema": "decision2.v2.freeze.v1",
+ "score": {
+  "by_levels": {},
+  "by_levels_grade": {}
+ },
+ "state_chars": {
+  "p0": 16,
+  "p10": 123,
+  "p100": 3016,
+  "p25": 166,
+  "p50": 225,
+  "p75": 330,
+  "p90": 935,
+  "p99": 1953
+ },
+ "tokens": [
+  {
+   "by_language": {
+    "en": 205236
+   },
+   "by_task_type": {
+    "choice": 43792,
+    "noul": 161444
+   },
+   "kind": "native_decoder",
+   "name": "qwen3-0.6b-base@da87bfb6",
+   "padded8_total": 209696,
+   "path": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+   "quantiles": {
+    "p0": 90,
+    "p10": 101,
+    "p100": 713,
+    "p25": 110,
+    "p50": 126,
+    "p75": 154,
+    "p90": 306,
+    "p99": 570
+   },
+   "revision": null,
+   "tokenizer_json_sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539",
+   "total": 205236
+  },
+  {
+   "by_language": {
+    "en": 216180
+   },
+   "by_task_type": {
+    "choice": 47418,
+    "noul": 168762
+   },
+   "kind": "native_decoder",
+   "name": "qwen3.5-0.8b-base@dc7cdfe2",
+   "padded8_total": 220552,
+   "path": "dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68",
+   "quantiles": {
+    "p0": 99,
+    "p10": 110,
+    "p100": 714,
+    "p25": 118,
+    "p50": 135,
+    "p75": 163,
+    "p90": 314,
+    "p99": 569
+   },
+   "revision": null,
+   "tokenizer_json_sha256": null,
+   "total": 216180
+  },
+  {
+   "by_language": {
+    "en": 137825
+   },
+   "by_task_type": {
+    "choice": 22687,
+    "noul": 115138
+   },
+   "kind": "raw",
+   "name": "kai-0.6b@7185f514",
+   "padded8_total": 142168,
+   "path": "tokenizer",
+   "quantiles": {
+    "p0": 38,
+    "p10": 49,
+    "p100": 653,
+    "p25": 58,
+    "p50": 75,
+    "p75": 102,
+    "p90": 246,
+    "p99": 490
+   },
+   "revision": null,
+   "tokenizer_json_sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
+   "total": 137825
+  }
+ ]
+}

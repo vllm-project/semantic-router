@@ -1,0 +1,62 @@
+{
+  "bit_identical_answers": true,
+  "left": {
+    "answers_sha256": "54e15fd6b5e685adebece4867e31fe3fee7da55944b609930f134d3c7ab95b83",
+    "manifest": "4f7480796d629af8641c3f53fa5f11fcea567173e4434a98f00a2f837c0dc01f",
+    "sha256": "3e0e16c4ed7a72b0e7a01b684987f2fa980846aa3cf0ba9348e34ac83c593daf"
+  },
+  "mode": "compare",
+  "passed": true,
+  "per_example": {
+    "multilingual": {
+      "category_changes": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "slots": 1
+    },
+    "null-description": {
+      "category_changes": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "slots": 1
+    },
+    "over-budget": {
+      "category_changes": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "slots": 2
+    },
+    "policy-check": {
+      "category_changes": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "slots": 2
+    },
+    "structured-state": {
+      "category_changes": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "slots": 2
+    },
+    "support-routing": {
+      "category_changes": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "slots": 3
+    }
+  },
+  "right": {
+    "answers_sha256": "54e15fd6b5e685adebece4867e31fe3fee7da55944b609930f134d3c7ab95b83",
+    "manifest": "4f7480796d629af8641c3f53fa5f11fcea567173e4434a98f00a2f837c0dc01f",
+    "sha256": "40301cfcc48ec1683b6af924a7e89fa1bd153cfc132a64e01a6f57c4f211cc6e"
+  },
+  "same_package_manifest": true,
+  "schema": "dev2-release-examples/1",
+  "tolerance": 0.0,
+  "totals": {
+    "category_changes": 0,
+    "max_abs_drift": 0.0,
+    "missing": 0,
+    "slots": 11
+  }
+}

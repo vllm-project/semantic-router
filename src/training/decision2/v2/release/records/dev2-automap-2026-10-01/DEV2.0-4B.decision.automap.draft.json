@@ -1,0 +1,163 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "draft",
+  "decision": "release",
+  "model_name": "DEV2.0-4B",
+  "repo_id": "llm-semantic-router/DEV2.0-4B",
+  "identity": {
+    "model_sha256": "8b0a8bc7f504faa69904329225a11f36cc7352abb9bd64f778d7b777f91c5b79"
+  },
+  "report_sha256": "57fa23efddef219c83eb39bad58ba2e46c4ff48bd2f1379a1309afe3060102c2",
+  "paired_sha256": "27f1419f9604eaef711abf102952612fcd99a8de7b7a81f03a48010bf07dd186",
+  "calibration": "none: raw model probabilities (temperature 1), no calibration.json; the CAL698 temperatures 176a2f0e (Choice 0.667, Noul 0.496, Score 0.212) were evaluated on the development panels and rejected under the coordinator's 2026-09-28 23:15 UTC+8 rule, which has no tolerance band (receipt 5b1d2e37: CSS-pilot ECE-15 0.063 -> 0.068 worsens while typed-DEV Brier, typed-DEV ECE-10 and CSS-pilot Brier improve; 0 answer changes); no calibration-only revision",
+  "prepared_by": "Decision 2.0 release engineering, auto_map worker (worktree vllm-sr-dev2-automap)",
+  "decided_utc": "2026-10-01T03:20:00Z",
+  "action": "Runtime-only revision of the private repository llm-semantic-router/DEV2.0-4B: the package gains Transformers remote code (configuration_decision2.py, modeling_decision2.py, pipeline_decision2.py at the root; config.json model_type decision2, auto_map, custom_pipelines decision) so AutoConfig, AutoTokenizer, AutoModel and pipeline('decision') load it with trust_remote_code=True through its own runtime, and the card gains a 'Use with 🤗 Transformers' section. The package runtime is the BF16-resident runtime plus the remote-code prompt fix (runtime_source 8e8082440). Weights, tokenizer, model configs, the vendored training/model sources, calibration and any Score offsets are byte-identical to the released revision the BF16-resident revision (pending). The repository stays in the private collection '🎲 Decision 2.0', ordered 0.6B, 0.8B, 2B, 4B, 9B, 27B; everything stays private.",
+  "revision_binding": "This decision names no revision; receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified.",
+  "supersedes": {
+    "final_sha256": "b33fb92af1610a9f0ef5e317c6462b5bd07415b5e86608af56dd0e5e585edae1",
+    "released_as": null,
+    "released_manifest_sha256": null,
+    "released_gate_sha256": null,
+    "earlier": {
+      "final_sha256": "d6bcdea2e59dc0db16383107e18ac36b3d9f5a2b73d5a8ed2cb54a6bddbd53d7",
+      "released_as": "llm-semantic-router/DEV2.0-4B@fadbba4ff671b4948fb7530fa6748f522b1ac9e4",
+      "released_manifest_sha256": "d683a54182fb46718cf55db2c567248950e13d55fac972317bffad9a5f8096ab",
+      "released_gate_sha256": "d349da59c22c50a4d29b707f760fa3b8b33a7bf8246775af1063284f881a6bfd",
+      "card_revision": null,
+      "earlier": {
+        "final_sha256": "4d31cdab845e02063717432578ac2271336727130a7245d12c2764ba4d5bd9e5",
+        "released_as": "llm-semantic-router/DEV2.0-4B@197b70ca90759aca48410a9f94bb534e8ae2919f",
+        "released_manifest_sha256": "8d3d618de3a6ed148b2355ca8404c6b2d1e6bd82d6a2d09e93734ac184c1b2fd",
+        "released_gate_sha256": "5e62220ac6c18de6791965c66d4aaec05aecc16245ad908426cad105e0e1adf6",
+        "card_revision": {
+          "kind": "card-only",
+          "spec": "v2/release/specs/dev2-4b-card-c1.json",
+          "spec_sha256": "03f334ddc87ab36d12ca330f4661dd9b9017055feb33b728ab8f9c5717feb6c5",
+          "c1_record": "v2/eval/records/m4-c1-event3-prep-2026-09-29.md (section 0000)"
+        },
+        "earlier": {
+          "final_sha256": "bfd457855538313ecf15e92a0f1a6f086ed2a3e2c0fad9d7185fdc78207b6172",
+          "released_as": "llm-semantic-router/DEV2.0-4B@452f133211de292a87bc29ab7e24a3bd0704e40d",
+          "released_manifest_sha256": "8fa3be690678b545380042f161c4c9101503fcf52ef7f3f65e2a44037d881f8c",
+          "released_gate_sha256": "e8a38a01b79a023729aa50cf1f36fc4e634daf2ee5731541ad3be14065a3cc6a",
+          "earlier": {
+            "draft_sha256": "ec50b04bdbea6440e0c51682bcfe693168e552b435f9f50855159ea155e1a2d7",
+            "earlier_draft_sha256": "d5baa5bf048d819e20635c3bcdf2fd5d94d8f145d447d3d20aab543e03f5201c",
+            "build_draft_sha256": "00c25bb61faa3f5f24a002747e230eb48c4316f4ea4d5369d8fa3d6dbceb4fe6",
+            "verified_revision": "8052eb6c99c0b3b6a9980dcd77fb868c27da353a"
+          }
+        }
+      }
+    }
+  },
+  "rationale": "The release judgement of the superseded final decision b33fb92a… stands unchanged: the same identity 8b0a8bc7, scored report, paired comparison, calibration and licence decision. Only package code, config.json and the card change. Adopted only with 0 answer changes (0 missing, 0 input mismatches) against the native runtime on every scored prompt (typed-final 1,600, css15 6,547, public231 231) and on mlx-diag (2,275), compared prompt by prompt, with native parity against the scored predictions before and after the real download, and the card's Transformers example run from the Hub in a fresh environment; release.sh blocks the upload or the collection step otherwise.",
+  "gate_evidence": {
+    "post_key_v3": {
+      "candidate": 63.151,
+      "nox1_adopted": 56.47,
+      "delta": 6.68,
+      "ci95": [
+        0.99,
+        9.64
+      ],
+      "paired_sha256": "27f1419f9604eaef711abf102952612fcd99a8de7b7a81f03a48010bf07dd186"
+    },
+    "vs_nox1_16k_control": {
+      "delta": 7.46,
+      "ci95": [
+        1.8,
+        10.45
+      ]
+    },
+    "vs_decider_4b": {
+      "delta": 1.27,
+      "ci95": [
+        -5.71,
+        4.31
+      ],
+      "H_delta": 0.024,
+      "H_ci95": [
+        -0.095,
+        0.073
+      ],
+      "T_delta": -0.001,
+      "T_ci95": [
+        -0.03,
+        0.029
+      ]
+    },
+    "vs_jet_v6p2": {
+      "delta": 2.78,
+      "ci95": [
+        -3.33,
+        5.94
+      ],
+      "H_delta": 0.042,
+      "H_ci95": [
+        -0.061,
+        0.093
+      ]
+    },
+    "no_type_collapsed": {
+      "choice": 0.728,
+      "noul": 0.917,
+      "score": 0.463
+    },
+    "public231": {
+      "candidate": 171,
+      "nox1_adopted": 173,
+      "decider_4b": 192,
+      "jet_v6p2": 174
+    },
+    "overlap_exposure": {
+      "record": "v2/eval/records/m4-dev2-4b-gates-2026-09-29.md",
+      "integration": "e1ea4f5c7",
+      "exposed_groups": 0,
+      "v3_without_flagged": 63.151
+    }
+  },
+  "licence_decision": "apache-2.0: own weights, Decision 1.0 Nox-4B @cde2a68d and Qwen/Qwen3.5-4B @851bf6e8 text backbone and tokenizer are all Apache-2.0; teacher Decision 1.0 Lux-9B (own, Apache-2.0, no weights included); training-data licences (CC BY, CC BY-SA, MIT, Apache-2.0, CC0, OANC) credited in ATTRIBUTIONS.md; Decider 4B (Apache-2.0, card metadata only) and Jet v6.2 (Apache-2.0 LICENSE) shown; Hopper (G) 1.2 and JPT-4B not card-eligible; the XNLI-based mlx-diag Score part and the overall mlx-diag macro that includes it stay off the card.",
+  "release_rationale": "Per-size release gate under the full-autonomy mandate. (1) Post-key same-panel JevArena v3 63.151 vs the adopted Decision 1.0 Nox run 56.470 (the stricter comparator and the 4B bar): +6.68 [+0.99, +9.64] (lower bound > 0); vs the Nox 1.0 16K same-renderer control +7.46 [+1.80, +10.45]; 63.15 >= 55.7 (90% of Decider 4B 61.88). (2) Eval gates (record m4-dev2-4b-gates-2026-09-29, integration e1ea4f5c7, approval 08:05 UTC+8): human transfer not below Decider 4B (+0.024 [-0.095, +0.073]) or Jet v6.2 (+0.042 [-0.061, +0.093]); no type collapsed (Choice .728, Noul .917, Score .463 vs chance .267 / .50 / .20). (3) No training-row exposure to the 84 flagged items; v3 stays 63.151 without them. (4) Calibration: T = 1 under the 23:15 rule. (5) Package verified (real download, re-hash 36/36, loaded parameters 4,208,383,488, examples bit-identical in three processes, full-panel parity 0 changes with each panel's scored-run autotune cache). (6) Card in the 1.0 design with every disclosure; C1 line pending event 3 (placeholder). Licence apache-2.0.",
+  "c1": "Event 3 (v1.2) on the released weights (452f1332, identity 11b5ca1c): 48.38 vs Decision 1.0 Nox 49.70 (-1.32 [-3.00, +0.35]), Decider 4B 49.65 (-1.27 [-3.05, +0.49]) and Jet v6.2 50.44 (-2.06 [-3.86, -0.18]). The post-key v3 lead over Nox (+6.68) does not carry over to C1, and Jet v6.2 is significantly ahead. The BF16 storage copy computes the same BF16 matmuls as the scored FP32 checkpoint, so the C1 baseline of these weights stays valid for this revision. The runtime-only revision computes the same products, so this line stays valid for it.",
+  "disclosures": [
+    "gain over Decision 1.0 Nox is typed reasoning (T +0.074 [+0.051, +0.096]); human transfer +0.061 not significant ([-0.037, +0.113])",
+    "transfer tasks below Nox 1.0: wiki_corpus -0.065, mrf -0.045, media_ideology -0.016, talklife -0.001 (tradeoffs table)",
+    "vs the 4B peers: v3 margins not significant; T and H level with Decider 4B; typed Choice far below both peers (0.728 vs 0.938 / 0.900)",
+    "public 231 171 vs 173 (hard 56 vs 59); significantly below Decider 4B 192 (-21 [-32, -10]); level with Jet v6.2 174",
+    "long inputs level with Nox 1.0, weaker than both peers",
+    "typed Score rarely predicts level 0 (4 of 400; recall 0.11, Nox 0.14); level-2 recall 0.19 vs 0.30",
+    "mlx-diag Choice / Noul parts only: non-English Choice 75.1% vs 75.9%, non-English Noul 72.7% vs 80.0%, Korean 63% vs 69%, Japanese 67% vs 77%",
+    "typed ECE at T = 1 0.116 vs Nox 0.092; CAL698 evaluated and not adopted",
+    "evaluation familiarity: no training-row exposure; v3 unchanged without the 84 flagged items",
+    "weight origin, own-Lux teacher (targets computed without causal-conv1d), training data by family with licences, three-seed soup and seed dependence",
+    "peer licence notes; Jet v6.2 measured on ROCm; CPU not verified; 4 invalid CSS15 answers; C1 line pending",
+    "C1 (event 3, v1.2): the post-key v3 lead over Nox 1.0 does not carry over (-1.32 [-3.00, +0.35]); C1 Noul is significantly below Nox 1.0 (-3.21 [-6.28, -0.09]); Jet v6.2 is significantly ahead (-2.06 [-3.86, -0.18]; Score -6.03 [-9.70, -2.05], Noul +4.16 [+0.41, +7.92]); Decider 4B level (-1.27 [-3.05, +0.49])",
+    "C1 tasks below Nox 1.0: is_rapport 69.5 vs 78.5, preferred_idea 50.8 vs 57.9, moment_type 67.2 vs 72.3, hallucination 68.6 vs 72.3, setting_concreteness 32.3 vs 35.6, star_rating 34.9 vs 38.1 (three more within 0.6); languages fi .485 vs .618, ru .400 vs .423, en .508 vs .516",
+    "C1 tasks below Jet v6.2: moment_type 67.2 vs 79.2, likelihood 10.1 vs 21.0, temporal_grounding 31.2 vs 39.6, is_rapport 69.5 vs 76.6, legal 50.6 vs 55.1 (five more within 3.2); en .508 vs .538",
+    "JevBench public 231 vs Decider 4B -21 [-32, -10] (hard 56 vs 73), mostly two hard-tier skills: applying long policy documents with amendments and precedence, and checking a quoted person's plausible but wrong conclusion against the evidence (eval record v2/eval/records/jevbench-value-2026-09-29.md); long_policy 3 vs 10 of 19, planted conclusions 18 vs 30 of 46 (Nox 1.0: 5 and 22); vs Nox 1.0 -2 [-9, +5] (within noise)"
+  ],
+  "storage_revision": {
+    "kind": "bf16-storage",
+    "spec": "v2/release/specs/dev2-4b-bf16.json",
+    "spec_sha256": "7d472bd4dc85f07a69b3e3fbedcbe5784c9b74d756ba255024580518a41133bf",
+    "bf16_copy_receipt_sha256": "66fe6c02d358a6a3b30b49b943fbde33a400fc011326711e29f5b45e1de86a43",
+    "source_model_sha256": "11b5ca1c22f8cd38d67d718cbfa59a3fb4dc8f4e7bfd75b3e988f34e35fad0ad",
+    "tensors_by_storage_dtype": {
+      "BF16": 248,
+      "F32": 178
+    },
+    "tensor_bytes": 9684824064
+  },
+  "previous_rationale": "The release judgement of the superseded final decision d6bcdea2… stands unchanged: the same identity 8b0a8bc7, scored report, paired comparison, calibration and licence decision. Only the package runtime changes, and it computes the same BF16 products as before. Adopted only with exact parity (0 answer changes, 0 missing, 0 input mismatches) against the scored predictions on every scored prompt (typed-final 1,600, css15 6,547, public231 231) and on mlx-diag (2,275), with the scored image, kernels and frozen autotune cache: release.sh parity-pre blocks the upload otherwise, and parity-post repeats it on the real download.",
+  "runtime_revision": {
+    "kind": "transformers-remote-code",
+    "runtime_commit": "8e808244072cef8735b8f3fdcfb8487f36605c5c",
+    "spec": "v2/release/specs/dev2-4b-automap.draft.json",
+    "spec_sha256": "b5330a5243407928a78cde51b79af971beed6d6b57d8f95832b7b495a4a7ee3c",
+    "tested_transformers": [
+      "5.17.0",
+      "5.18.0"
+    ]
+  }
+}

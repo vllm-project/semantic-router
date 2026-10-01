@@ -1,19 +1,19 @@
 {
  "candidate_files": [
   {
-   "rows": 63359,
-   "sha256": "888dad522420dafe6759aa1957dd35a628be579e4873934d89e0ee9ed9ecbdb1"
+   "rows": 63001,
+   "sha256": "468cf7f202b8b1f4e7f42bea199df281774bd712f3fe8eb3c59f1251c30e27e2"
   },
   {
-   "rows": 6655,
-   "sha256": "6816bf43834a88c43c8351cc6e3f98e732a53ae9d2d40ccb64dc90ff2c1eca92"
+   "rows": 6605,
+   "sha256": "8ce859f4fd6f652cfe9f0600aafdd5075e99d6005723c52665876f31f1f44f79"
   }
  ],
  "candidates": {
-  "distinct_leaves_scanned": 94295,
-  "groups": 45825,
-  "rows": 70014,
-  "states_keyed": 69934
+  "distinct_leaves_scanned": 93850,
+  "groups": 45449,
+  "rows": 69606,
+  "states_keyed": 69526
  },
  "flagged": {
   "boilerplate": {
@@ -48,16 +48,16 @@
     "rows": 0
    },
    "L": {
-    "groups": 75,
-    "rows": 362
+    "groups": 76,
+    "rows": 365
    },
    "N": {
     "groups": 356,
     "rows": 5047
    },
    "S": {
-    "groups": 23,
-    "rows": 410
+    "groups": 22,
+    "rows": 409
    }
   },
   "by_role": {
@@ -163,12 +163,12 @@
      "rows": 14
     },
     "S": {
-     "groups": 5,
-     "rows": 6
+     "groups": 4,
+     "rows": 5
     },
     "any": {
-     "groups": 17,
-     "rows": 20
+     "groups": 16,
+     "rows": 19
     }
    },
    "a7_aho_A7o": {
@@ -221,8 +221,8 @@
      "rows": 0
     },
     "L": {
-     "groups": 7,
-     "rows": 7
+     "groups": 8,
+     "rows": 8
     },
     "N": {
      "groups": 31,
@@ -233,8 +233,8 @@
      "rows": 25
     },
     "any": {
-     "groups": 40,
-     "rows": 304
+     "groups": 41,
+     "rows": 305
     }
    },
    "a7_aho_A7r": {
@@ -617,8 +617,8 @@
      "rows": 0
     },
     "L": {
-     "groups": 43,
-     "rows": 286
+     "groups": 42,
+     "rows": 285
     },
     "N": {
      "groups": 117,
@@ -629,8 +629,8 @@
      "rows": 189
     },
     "any": {
-     "groups": 161,
-     "rows": 775
+     "groups": 160,
+     "rows": 774
     }
    },
    "css15_native": {
@@ -639,8 +639,8 @@
      "rows": 0
     },
     "L": {
-     "groups": 43,
-     "rows": 286
+     "groups": 42,
+     "rows": 285
     },
     "N": {
      "groups": 117,
@@ -651,8 +651,8 @@
      "rows": 189
     },
     "any": {
-     "groups": 161,
-     "rows": 775
+     "groups": 160,
+     "rows": 774
     }
    },
    "css_pilot": {
@@ -1168,7 +1168,7 @@
     },
     "L": {
      "groups": 18,
-     "rows": 66
+     "rows": 68
     },
     "N": {
      "groups": 31,
@@ -1180,7 +1180,7 @@
     },
     "any": {
      "groups": 49,
-     "rows": 182
+     "rows": 184
     }
    },
    "v1_aho_a4v2h": {
@@ -1339,8 +1339,8 @@
    }
   },
   "quarantine": {
-   "groups": 441,
-   "rows": 5598
+   "groups": 442,
+   "rows": 5601
   }
  },
  "methods": {

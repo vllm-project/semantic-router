@@ -1,0 +1,402 @@
+{
+ "folds": {
+  "groups": [
+   258,
+   307,
+   306,
+   281,
+   289
+  ],
+  "rows": [
+   262,
+   309,
+   310,
+   284,
+   291
+  ],
+  "rule": "int(sha256(group_id).hexdigest(), 16) % 5"
+ },
+ "gate": {
+  "margin": 0.05,
+  "min_rows": 30,
+  "rule": "PASS iff accuracy <= majority + margin; majority is the cross-validated position prior on the same rows",
+  "views": [
+   "state_removed",
+   "option_only",
+   "hypothesis_only"
+  ]
+ },
+ "gates": [
+  {
+   "accuracy": 0.495192,
+   "delta": 0.012363,
+   "families_over_margin": [],
+   "majority": 0.48283,
+   "n": 1456,
+   "pass": true,
+   "task_type": "noul",
+   "threshold": 0.53283,
+   "view": "state_removed",
+   "wilson95": [
+    0.469557,
+    0.520852
+   ]
+  },
+  {
+   "accuracy": 0.500687,
+   "delta": 0.017857,
+   "families_over_margin": [],
+   "majority": 0.48283,
+   "n": 1456,
+   "pass": true,
+   "task_type": "noul",
+   "threshold": 0.53283,
+   "view": "option_only",
+   "wilson95": [
+    0.475036,
+    0.526334
+   ]
+  }
+ ],
+ "groups": 1441,
+ "heuristics": {
+  "lexical_overlap": {
+   "n_rows": 0
+  },
+  "longest_option": {
+   "by_family": {
+    "ytspam": {
+     "accuracy": 0.5,
+     "correct": 728,
+     "delta": 0.01717,
+     "exceeds_margin": false,
+     "majority": 0.48283,
+     "n": 1456,
+     "wilson95": [
+      0.474351,
+      0.525649
+     ]
+    }
+   },
+   "by_source": {
+    "uci_youtube_spam": {
+     "accuracy": 0.5,
+     "correct": 728,
+     "delta": 0.01717,
+     "exceeds_margin": false,
+     "majority": 0.48283,
+     "n": 1456,
+     "wilson95": [
+      0.474351,
+      0.525649
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "ytspam": {
+      "accuracy": 0.5,
+      "correct": 728,
+      "delta": 0.01717,
+      "exceeds_margin": false,
+      "majority": 0.48283,
+      "n": 1456,
+      "wilson95": [
+       0.474351,
+       0.525649
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.5,
+     "correct": 728,
+     "delta": 0.01717,
+     "exceeds_margin": false,
+     "majority": 0.48283,
+     "n": 1456,
+     "wilson95": [
+      0.474351,
+      0.525649
+     ]
+    }
+   },
+   "n_rows": 1456
+  },
+  "position_prior": {
+   "by_family": {
+    "ytspam": {
+     "accuracy": 0.48283,
+     "correct": 703,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.48283,
+     "n": 1456,
+     "wilson95": [
+      0.457241,
+      0.508508
+     ]
+    }
+   },
+   "by_source": {
+    "uci_youtube_spam": {
+     "accuracy": 0.48283,
+     "correct": 703,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.48283,
+     "n": 1456,
+     "wilson95": [
+      0.457241,
+      0.508508
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "ytspam": {
+      "accuracy": 0.48283,
+      "correct": 703,
+      "delta": 0.0,
+      "exceeds_margin": false,
+      "majority": 0.48283,
+      "n": 1456,
+      "wilson95": [
+       0.457241,
+       0.508508
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.48283,
+     "correct": 703,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.48283,
+     "n": 1456,
+     "wilson95": [
+      0.457241,
+      0.508508
+     ]
+    }
+   },
+   "n_rows": 1456
+  }
+ },
+ "input": {
+  "rows": 1456,
+  "sha256": "dc050ce4353a6bc68bda0032ab8e3da5210a1153a249f5ebf34f2e3ac44bb0e6"
+ },
+ "learner": {
+  "bits": 20,
+  "epochs": 4,
+  "instruction_cross_cap": 64,
+  "l2": 1e-06,
+  "learning_rate": 0.1,
+  "seed": 0,
+  "state_cross_cap": 128,
+  "state_cross_unigrams": 64,
+  "state_gram_cap": 128,
+  "text_gram_cap": 1024
+ },
+ "majority": {
+  "noul": {
+   "accuracy": 0.48283,
+   "n": 1456
+  }
+ },
+ "rows": 1456,
+ "schema": "decision2.v2.shortcut.v1",
+ "verdict": "PASS",
+ "views": {
+  "full_input": {
+   "by_family": {
+    "ytspam": {
+     "accuracy": 0.900412,
+     "correct": 1311,
+     "delta": 0.417582,
+     "exceeds_margin": true,
+     "majority": 0.48283,
+     "n": 1456,
+     "wilson95": [
+      0.883961,
+      0.914756
+     ]
+    }
+   },
+   "by_source": {
+    "uci_youtube_spam": {
+     "accuracy": 0.900412,
+     "correct": 1311,
+     "delta": 0.417582,
+     "exceeds_margin": true,
+     "majority": 0.48283,
+     "n": 1456,
+     "wilson95": [
+      0.883961,
+      0.914756
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "ytspam": {
+      "accuracy": 0.900412,
+      "correct": 1311,
+      "delta": 0.417582,
+      "exceeds_margin": true,
+      "majority": 0.48283,
+      "n": 1456,
+      "wilson95": [
+       0.883961,
+       0.914756
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.900412,
+     "correct": 1311,
+     "delta": 0.417582,
+     "exceeds_margin": true,
+     "majority": 0.48283,
+     "n": 1456,
+     "wilson95": [
+      0.883961,
+      0.914756
+     ]
+    }
+   },
+   "n_rows": 1456
+  },
+  "hypothesis_only": {
+   "n_rows": 0
+  },
+  "option_only": {
+   "by_family": {
+    "ytspam": {
+     "accuracy": 0.500687,
+     "correct": 729,
+     "delta": 0.017857,
+     "exceeds_margin": false,
+     "majority": 0.48283,
+     "n": 1456,
+     "wilson95": [
+      0.475036,
+      0.526334
+     ]
+    }
+   },
+   "by_source": {
+    "uci_youtube_spam": {
+     "accuracy": 0.500687,
+     "correct": 729,
+     "delta": 0.017857,
+     "exceeds_margin": false,
+     "majority": 0.48283,
+     "n": 1456,
+     "wilson95": [
+      0.475036,
+      0.526334
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "ytspam": {
+      "accuracy": 0.500687,
+      "correct": 729,
+      "delta": 0.017857,
+      "exceeds_margin": false,
+      "majority": 0.48283,
+      "n": 1456,
+      "wilson95": [
+       0.475036,
+       0.526334
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.500687,
+     "correct": 729,
+     "delta": 0.017857,
+     "exceeds_margin": false,
+     "majority": 0.48283,
+     "n": 1456,
+     "wilson95": [
+      0.475036,
+      0.526334
+     ]
+    }
+   },
+   "n_rows": 1456
+  },
+  "state_removed": {
+   "by_family": {
+    "ytspam": {
+     "accuracy": 0.495192,
+     "correct": 721,
+     "delta": 0.012363,
+     "exceeds_margin": false,
+     "majority": 0.48283,
+     "n": 1456,
+     "wilson95": [
+      0.469557,
+      0.520852
+     ]
+    }
+   },
+   "by_source": {
+    "uci_youtube_spam": {
+     "accuracy": 0.495192,
+     "correct": 721,
+     "delta": 0.012363,
+     "exceeds_margin": false,
+     "majority": 0.48283,
+     "n": 1456,
+     "wilson95": [
+      0.469557,
+      0.520852
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "ytspam": {
+      "accuracy": 0.495192,
+      "correct": 721,
+      "delta": 0.012363,
+      "exceeds_margin": false,
+      "majority": 0.48283,
+      "n": 1456,
+      "wilson95": [
+       0.469557,
+       0.520852
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.495192,
+     "correct": 721,
+     "delta": 0.012363,
+     "exceeds_margin": false,
+     "majority": 0.48283,
+     "n": 1456,
+     "wilson95": [
+      0.469557,
+      0.520852
+     ]
+    }
+   },
+   "n_rows": 1456
+  }
+ }
+}

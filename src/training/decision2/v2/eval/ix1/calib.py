@@ -103,7 +103,11 @@ def fit(labels_path: Path, ref_path: Path) -> dict[str, Any]:
             missing += 1
             continue
         logp = _log_probs(meta["type"], record["answers"]["q"], meta["keys"])
-        items[meta["type"]].append((logp, int(meta["label"])))
+        label = int(meta["label"])
+        if meta["type"] == "noul":
+            # logp is ordered (false, true) whatever order the row lists its options in.
+            label = int(meta["keys"][label] == "true")
+        items[meta["type"]].append((logp, label))
     report: dict[str, Any] = {
         "rows": {k: len(v) for k, v in items.items()},
         "not_ok": missing,
@@ -111,6 +115,8 @@ def fit(labels_path: Path, ref_path: Path) -> dict[str, Any]:
     temperatures = {}
     nll = {}
     for kind, data in items.items():
+        if not data:
+            continue
         result = minimize(
             lambda x: _nll_temperature(x[0], data), x0=[0.0], method="Nelder-Mead"
         )

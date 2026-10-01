@@ -132,6 +132,9 @@ SENTFIN_OPTIONS = (
     {"key": "neutral", "description": "Neutral toward the entity"},
     {"key": "positive", "description": "Positive toward the entity"},
 )
+# Round 3 (amendment 3 §A.1): a true two-option item; neutral is neither an option nor gold.
+SENTFIN_2WAY_LABELS = ("negative", "positive")
+SENTFIN_2WAY_OPTIONS = (SENTFIN_OPTIONS[0], SENTFIN_OPTIONS[2])
 SENTFIN_CAP = 8000
 WANDS_INSTRUCTIONS = "How well does this product match the shopper's search query?"
 WANDS_LABELS = ("Exact", "Partial", "Irrelevant")
@@ -842,7 +845,13 @@ def procb(records: Sequence[Mapping[str, Any]], report: collections.Counter) -> 
 # --------------------------------------------------------------------------- financial entity sentiment
 
 
-def sentfin(records: Sequence[Mapping[str, str]], report: collections.Counter) -> Rows:
+def sentfin(
+    records: Sequence[Mapping[str, str]],
+    report: collections.Counter,
+    two_way: bool = False,
+) -> Rows:
+    labels = SENTFIN_2WAY_LABELS if two_way else SENTFIN_LABELS
+    options = SENTFIN_2WAY_OPTIONS if two_way else SENTFIN_OPTIONS
     rows: Rows = []
     for record in records:
         title = " ".join(str(record.get("Title") or "").split())
@@ -857,6 +866,9 @@ def sentfin(records: Sequence[Mapping[str, str]], report: collections.Counter) -
             if not title or not entity or decision not in SENTFIN_LABELS:
                 report["drop_empty_or_label"] += 1
                 continue
+            if decision not in labels:
+                report["drop_class_not_used"] += 1
+                continue
             key = sha(title + "\x1f" + entity)[:24]
             rows.append(
                 row(
@@ -868,9 +880,9 @@ def sentfin(records: Sequence[Mapping[str, str]], report: collections.Counter) -
                     key=key,
                     state={"headline": title, "entity": entity},
                     instructions=SENTFIN_INSTRUCTIONS,
-                    options=SENTFIN_OPTIONS,
-                    label=SENTFIN_LABELS.index(decision),
-                    template="ib1_sentfin_v1",
+                    options=options,
+                    label=labels.index(decision),
+                    template="ib1_sentfin_2way_v1" if two_way else "ib1_sentfin_v1",
                     cell=decision,
                 )
             )

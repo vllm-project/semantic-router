@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from v2.release.automap import CONFIG_FIELDS
+
 PACKAGE_SCHEMA = "dev2-package/1"
 MANIFEST_SCHEMA = "dev2-package-manifest/1"
 MANIFEST_NAME = "MODEL_MANIFEST.json"
@@ -373,11 +375,17 @@ def pointer(
     calibration: str | None,
     base: dict[str, Any] | None,
     max_input_tokens: int,
+    remote_code: bool = False,
 ) -> dict[str, Any]:
-    """Root query file: a truthful map of the model files, read first at load."""
+    """Root query file: a truthful map of the model files, read first at load.
+
+    ``remote_code`` adds the 🤗 Transformers fields (``model_type``, ``auto_map``, ...) of the
+    ``trust_remote_code`` modules the package ships at its root (``v2/release/automap``).
+    """
     present = set(files)
     weights = sorted(n for n in files if is_weight(n))
     result: dict[str, Any] = {
+        **(CONFIG_FIELDS if remote_code else {}),
         **POINTER,
         "model_name": model_name,
         "runtime_family": PROFILES[profile].runtime_family,
