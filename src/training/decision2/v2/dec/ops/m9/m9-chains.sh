@@ -28,6 +28,8 @@ mkdir -p "$C" "$ST" "$M/logs" "$M/soup" "$M/arms" "$M/early"
 case $CH in
   g6) GPU=6 ITEMS="H9:1 C9:2 H9:3" ;;
   g7) GPU=7 ITEMS="C9:1 H9:2 C9:3" ;;
+  # amendment 2: the GPU6 chain replaced in flight (H9-s1 adopted through chains/adopt-m9-H9-s1.pid)
+  g6b) GPU=6 ITEMS="H9:1 C9:2 H9:3" ;;
   *) echo "unknown chain $CH" >&2; exit 2 ;;
 esac
 
@@ -43,7 +45,7 @@ fi
 NOX=/hf/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259
 COMMON=(--train-mode full --batching tokens --max-batch-tokens 32768 --max-batch-rows 64 --update-rows 64 --teacher-partial)
 SEEDS=(20260926 20260927 20260928)
-CAP=4.8 BUDGET_STOP=14
+CAP=${M9_CAP:-4.8} BUDGET_STOP=14  # amendment 2: the H9 chain runs with M9_CAP=5.8
 EST=1.45  # expected GPU-h per seed until a seed of the arm has finished (M7: 1.35 at 43.5M tokens)
 RUNENV=(DEC_NODE=a DEC_IMAGE_A=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1
   DEC_DATA_DIR=/data/dev2/runs/dec/m3/data-sel700-cal698)
@@ -138,11 +140,51 @@ e1_gate() {  # prints continue | stop | na once the early rule is decided or can
   done
 }
 
+finish_item() {  # <ARM> <seed index> <seed>: markers after a seed's drive_arm.sh run, then the seed-1 early read
+  local g=$1 i=$2 seed=$3 r=m9-$1-s$2 out note
+  gpuh write
+  out=$(outcome "$r")
+  note="seed $seed; GPU-h $(gpuh seed "$g" "$i"); $(date -u +%FT%TZ)"
+  if [ -f "$ST/$r.capstop" ]; then
+    if [ "$out" = complete ] || [ "$out" = nopost ]; then
+      echo "full run complete; postrun $([ "$out" = complete ] && echo complete || echo 'stopped at the cap'); $note" > "$ST/$r.DONE"
+    else
+      echo "stopped at the arm cap $CAP GPU-h (stage result: $out); $note" > "$ST/$r.STOPPED"
+    fi
+    log "$r reached the cap ($out)"
+  else
+    case $out in
+      preflight)
+        echo "preflight failed; $note" > "$ST/$r.FAILED"
+        log "$r preflight failed: arm $g stops (no rerun, no replacement seed)"
+        ;;
+      complete | nopost)
+        echo "full run complete; postrun $([ "$out" = complete ] && echo complete || echo FAILED); $note" > "$ST/$r.DONE"
+        log "$r finished ($out)"
+        ;;
+      *)
+        echo "full run failed ($out); $note" > "$ST/$r.FAILED"
+        log "$r failed ($out); the arm continues with its next seed"
+        ;;
+    esac
+  fi
+  [ "$i" = 1 ] && early_read "$g"
+  return 0
+}
+
 item() {  # <ARM> <seed index>
-  local g=$1 i=$2 seed r t0 wd used est total out note fin=() decision
+  local g=$1 i=$2 seed r t0 wd used est total fin=() decision apid
   seed=${SEEDS[$((i - 1))]} r=m9-$g-s$i
   terminal "$g" "$i" && return 0
   [ -f "$ST/$g.DONE" ] || [ -f "$ST/$g.FAILED" ] && { log "$r skipped: $g already has an arm marker"; return 0; }
+  if [ -f "$C/adopt-$r.pid" ]; then  # amendment 2: a run started by the replaced chain, finished here
+    apid=$(cat "$C/adopt-$r.pid")
+    lease busy "$r (adopted drive_arm.sh pid $apid)" 60
+    log "$r: adopting the running drive_arm.sh (pid $apid)"
+    while kill -0 "$apid" 2> /dev/null; do sleep 60; done
+    finish_item "$g" "$i" "$seed"
+    return 0
+  fi
   local train=$M/data/4b/mix/m9-4b-$g/train.jsonl teach=$M/teacher/m9-4b-$g/teacher.jsonl
   lease busy "$r waiting for the data lock (READY)" 60
   wait_file "$(dirname "$train")/READY"
@@ -199,34 +241,7 @@ item() {  # <ARM> <seed index>
     --teacher-kl-weight 1.0 "${COMMON[@]}" --backbone-lr 5e-6 --head-lr 5e-5 --seed "$seed"
   kill "$wd" 2> /dev/null
   wait "$wd" 2> /dev/null
-  gpuh write
-  out=$(outcome "$r")
-  note="seed $seed; GPU-h $(gpuh seed "$g" "$i"); $(date -u +%FT%TZ)"
-  if [ -f "$ST/$r.capstop" ]; then
-    if [ "$out" = complete ] || [ "$out" = nopost ]; then
-      echo "full run complete; postrun $([ "$out" = complete ] && echo complete || echo 'stopped at the cap'); $note" > "$ST/$r.DONE"
-    else
-      echo "stopped at the arm cap $CAP GPU-h (stage result: $out); $note" > "$ST/$r.STOPPED"
-    fi
-    log "$r reached the cap ($out)"
-  else
-    case $out in
-      preflight)
-        echo "preflight failed; $note" > "$ST/$r.FAILED"
-        log "$r preflight failed: arm $g stops (no rerun, no replacement seed)"
-        ;;
-      complete | nopost)
-        echo "full run complete; postrun $([ "$out" = complete ] && echo complete || echo FAILED); $note" > "$ST/$r.DONE"
-        log "$r finished ($out)"
-        ;;
-      *)
-        echo "full run failed ($out); $note" > "$ST/$r.FAILED"
-        log "$r failed ($out); the arm continues with its next seed"
-        ;;
-    esac
-  fi
-  [ "$i" = 1 ] && early_read "$g"
-  return 0
+  finish_item "$g" "$i" "$seed"
 }
 
 log "chain $CH started on node A GPU$GPU from $SRC: $ITEMS"
