@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -48,8 +49,33 @@ def _correct(answer: dict[str, Any], gold: Any) -> bool | None:
     return answer.get("choice") == gold
 
 
+def to_t1(answer: dict[str, Any], source: dict[str, float] | None) -> dict[str, Any]:
+    """Return predictions scored under source temperatures to T = 1 (answers unchanged)."""
+    if not source:
+        return answer
+    kind = answer.get("type")
+    if kind == "noul":
+        p = min(max(float(answer["noul"]), 1e-12), 1 - 1e-12)
+        z = math.log(p / (1 - p)) * source["noul"]
+        return {**answer, "noul": 1 / (1 + math.exp(-z))}
+    if kind == "choice":
+        keys = list(answer["probabilities"])
+        logs = [
+            math.log(max(answer["probabilities"][k], 1e-300)) * source["choice"]
+            for k in keys
+        ]
+        top = max(logs)
+        weights = [math.exp(v - top) for v in logs]
+        total = sum(weights)
+        return {
+            **answer,
+            "probabilities": {k: w / total for k, w in zip(keys, weights)},
+        }
+    return answer
+
+
 def panel_effect(
-    fitted, mode: str, predictions: Path, gold_path: Path
+    fitted, mode: str, predictions: Path, gold_path: Path, source=None
 ) -> dict[str, Any]:
     gold = _gold(gold_path)
     counts = {
@@ -70,6 +96,7 @@ def panel_effect(
             counts["answers"][kind] = counts["answers"].get(kind, 0) + 1
             if kind not in ("noul", "choice"):
                 continue
+            answer = to_t1(answer, source)
             new = _transform(answer, kind, fitted, mode)
             before = answer["noul"] >= 0.5 if kind == "noul" else answer.get("choice")
             after = (
@@ -97,14 +124,27 @@ def main() -> None:
         "--panel", action="append", required=True, help="NAME=PREDICTIONS:GOLD"
     )
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument(
+        "--source-calibration",
+        type=Path,
+        help="calibration.json the stored predictions were scored with (undone first)",
+    )
     args = parser.parse_args()
     fitted = json.loads(args.fit.read_text())
-    report = {"schema": "ix1-calib-panels/1", "mode": args.mode, "panels": {}}
+    source = None
+    if args.source_calibration:
+        source = json.loads(args.source_calibration.read_text())["temperature_by_type"]
+    report = {
+        "schema": "ix1-calib-panels/1",
+        "mode": args.mode,
+        "source": source,
+        "panels": {},
+    }
     for spec in args.panel:
         name, _, paths = spec.partition("=")
         predictions, _, gold = paths.partition(":")
         report["panels"][name] = panel_effect(
-            fitted, args.mode, Path(predictions), Path(gold)
+            fitted, args.mode, Path(predictions), Path(gold), source
         )
     args.out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     print(
