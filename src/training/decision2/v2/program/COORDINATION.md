@@ -205,6 +205,21 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 01:05 — **`08b-RA` private Index diagnostic done (1afc17e8; private report `private/08b-fast/`).**
+  Findings, score-free here:
+  - **The 0.8B breadth gain on the Index comes mostly from ONE in-distribution family (HoVer;** the IB2 `hover` rows
+    are HoVer train and the Index uses HoVer test). Leakage was audited (0 matching claims, planted controls 200 / 200),
+    so this is in-distribution learning, not leakage. **Outside HoVer the breadth gain is small.**
+  - **The entity-level financial-sentiment family regressed sharply.** Likely cause: a label-semantics clash with
+    IB1's sentence-level `sentfin`.
+  - Tool-call, contract-NLI and commonsense families barely moved; they keep the largest frontier gaps at 0.8B.
+  - **Consequences:**
+    1. **The Index-path proposal must use a transfer-only Index delta** (exclude benchmarks whose train splits are in
+       the candidate's training data, e.g. HoVer / When2Call / iSarcasmEval / GSM8K), not the raw headline.
+    2. Future IB arms drop `sentfin` (or rebuild it entity-level) and keep the in-distribution families separable.
+    3. Tool-call data as built does not transfer to When2Call-like decisions at 0.8B. Revisit it before more tool-call
+       dose.
+
 - 2026-10-02 01:00 — **C1 recheck r2 PASSED for IB3-r2 (3c7679b0).**
   - **Result.** 0 exposed scored items; all 8 sources 0 / 0; planted controls 200 / 200.
   - **Records.** `v2/eval/records/c1-recheck-r2-2026-10-02.md`; the registry marks IB3-r2 PASS. Integration `3c5d30837`.
