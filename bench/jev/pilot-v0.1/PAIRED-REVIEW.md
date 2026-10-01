@@ -65,6 +65,10 @@ This review corrected two actual documentation errors in Vela's `run.md`: case 0
 
 Vela's saved P50 15.952 ms and P95 17.582 ms match the third and sixth sorted `latency_wall_ms` observations, consistent with nearest-rank percentiles. The ordinary median is 16.141 ms. The summary-generation method is not supplied in the runner. Both timing fields bracket the forward pass, not end-to-end inference. The original summary is preserved. Metadata also says “unrecorded warmup” despite the separate warmup capture; this historical wording is noted rather than silently changing metadata.
 
+In the [Vela contributor review](https://github.com/vllm-project/semantic-router/pull/4336#issuecomment-5907015346), lyy confirmed the predictions, corrected probabilities, six valid distributions, 4/5 score and nearest-rank formula `ceil(q*n)`. The reported ordinary median is 16.141479 ms. The contributor also confirmed that enrichment/summary generation was a separate step not included in the runner, and checked the saved artifacts offline; that reproduction limitation remains. No inference rerun was needed.
+
+On 2026-10-01, the unsigned Vela commit `0132c13c6c1d75cbcef405f912dbf22f78bba237` was replaced with the author's signed commit `384c7de11f9a93cdc3b78017746cbeca691dac9d`. Their Git trees are identical. Only the three descendant commits were rebuilt with new parent references, retaining their trees, authors and sign-offs. The repaired tip before this documentation update has the exact same tree as `026b1a5f322b15132202ed6632d935608de8d3c5`; earlier commit IDs in this report remain historical evidence references.
+
 Checksums of the primary record files:
 
 - Jev: `45a176c8b1e4524197601b0d7868bdeb44d568fe2b3d3732aa0192d46c19014d`.
@@ -91,11 +95,11 @@ Proposed handoff, not new assignments:
 | --- | --- | --- |
 | Yuki | Synthesis and documentation corrections submitted; PR description updated | Initial handoff complete |
 | subin | Kai evidence checked; requested host-venv caveat incorporated | Contributor acknowledgement linked above |
-| lyy | Review Vela rows/caveats and clarify summary/enrichment procedure | Corrections or acknowledgement on the PR |
+| lyy | Vela evidence checked; nearest-rank convention confirmed; signed replacement supplied | Contributor acknowledgement linked above; enrichment script remains unbundled |
 | Yuki with contributors | Triage the separate Jev contract-failure evidence, then propose adopt/defer/reject against issue criteria | Linked evidence and bounded recommendation |
 | Maintainer | Review recommendation and sufficient closure evidence | Explicit decision or specific remaining work |
 
-Local evidence collection and cross-checking are complete. Joint review and the research decision remain open. Do not automatically expand into a larger benchmark or production adapter.
+Local evidence collection and cross-checking are complete, and both contributors have checked their respective arms. The research recommendation and maintainer decision remain open; these acknowledgements do not constitute approval of the entire conclusion. Do not automatically expand into a larger benchmark or production adapter.
 
 No external comments, merges, pushes, paid calls or model downloads were made
 as part of this review.
