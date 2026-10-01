@@ -9,6 +9,16 @@ its "written ≈11:10" line is a typo for ≈10:35); data lock [`dec-m9-datalock
 
 ## Now
 
+- 2026-10-01 ≈12:00 UTC+8 (03:58Z) — **Amendment 2 applied: H9 arm cap 5.8 GPU-h; GPU6 chain replaced by `g6b`.**
+  - [Amendment 2](dec-m9-amendment-2-2026-10-01.md) (`29057a4de`, before any H9 readout; its "≈12:05 / 04:05Z" means
+    ≈11:57 / 03:57Z): H9 seeds cost ≈ 1.75–1.8 GPU-h, so the 4.8 cap would have refused H9-s3; C9's unused budget
+    funds it; totals unchanged.
+  - 03:57Z: old g6 chain bash + watchdog stopped (its flock exited with it); H9-s1 `drive_arm.sh` pid 4082191 and
+    container `dec-m9-H9-s1-full` kept running (step ≈ 665 / 1,128). `g6b` (mirror `29057a4de…`, `M9_CAP=5.8`, flock
+    pid 4163090) waits on `gpu6.flock` until H9-s1's process tree exits (≈ 04:45Z), then adopts it via
+    `chains/adopt-m9-H9-s1.pid`, runs the early read, STOPs C9-s2 and starts H9-s3 (≈ 04:50Z → ≈ 06:25Z).
+  - g7 unchanged: H9-s2 (≈ 04:52Z) → C9-s3 STOPPED → C9 no soup → ends. Post chain armed on GPU7.
+
 - 2026-10-01 ≈11:55 UTC+8 (03:55Z) — **Control line done; formal path exact; waiting for H9.**
   - **L-N7C (control, M7's N7C on the M9 path; identical to M7's readings):** α 1 HT-DEV v2 vs `4b-I` −.0081
     [−.0217, +.0057] TIE, typed DEV T .648 (Choice 440 < 477, Score 338 < 350: fails the typed floors), Score5t no
