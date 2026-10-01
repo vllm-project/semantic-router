@@ -96,6 +96,29 @@ is still fixing the long-input runtime bug and staging its M5-L128 Index diagnos
    mlx watchers, one chain per arm; prints driver PIDs and first log lines). Record everything here.
 5. M6-IBX later: `m6-launch.sh <mirror> M6-IBX:a20ib1x:ib:<s1>,<s2>:<aux>` on the next free pair.
 
+## Hand-off templates (use when a chain's verdicts exist)
+
+- **Read a chain's outcome:** node B `m6/logs/chain-<ARM>.log` (last line `m6 chain complete…`), the newest
+  `m6/readouts/DEVGATES-*.json` naming the arm (gates G1–G6, `finalists`), `m6/gates/VERDICTS-*.json` (items 1–7,
+  beats-AutoJev, `choice`). Fill `m6-results-2026-10-01.md` (development table with CIs, formal table, verdicts,
+  attribution from `m6/gates/contrast.json`, GPU-h from receipts on node A / B / D).
+- **Item 8 (only for a finalist passing items 1–7):** ask the eval custodian (COORDINATION thread) for (1) the C1 content
+  recheck with the IB1-r3 and IB2 rescan roots: the data track's node A private run directories
+  (`/data/dev2/private/data/ib1/`, `/data/dev2/private/data/ib2/`), the published `m6/ib1` (`31b200a3`) and `m6/ib2`
+  (`c5dbdd0a`) files and the M6 TRAIN file of the finalist (node B `/data/dev2/private/27b/m6-data/mixtures-m6-1/`);
+  then (2) the C1 post-key successor run against A20r's C1 baseline, from a frozen package copied to node A plus a
+  successor spec. The worker never opens C1.
+- **Private Index (frozen finalists only; never selects):** ask IX1 (or run its harness under the 27B node D leases once
+  free) to restage the finalist's frozen package (node B `m6/<ARM>/package`, LoRA rank 256, T = 1 or CAL698) as a
+  diagnostic package answering as DEV2.0-27B at `4e89288d` with the current runtime, run the full 0.2.1 panel with the
+  86-request parity gate and dual scoring, and write values only to node `/data/dev2/private/eval/index021/` and
+  `decision2-program/private/`. Compare per benchmark with A20r's IX1 run and the 25.8B frontier entrant privately.
+- **Release hand-off (only if items 1–8 pass):** adapter package, `runtime_source` = current runtime (BF16-resident
+  `5dc962b00`, plus IX1's long-input fix once merged), the C1 spec, the disclosures of prereg "Disclosures" (IB1 / IB2
+  families, licences and attributions, in-distribution families of the released arm), to the 27B release worker.
+- **Milestone end:** `m6/m6-link.sh remove`; leases back to `reserved-idle`; node D leases released (owner files);
+  staged node D inputs may stay for later 27B work (≈ 53 GB on node D's data disk).
+
 ## Next steps
 
 1. Confirm the four preflights (onestep finite, reload parity 0 argmax changes) and the first full-run updates; record
