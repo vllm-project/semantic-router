@@ -384,7 +384,7 @@
    "sha256": "34baa42307b61c4013215afdf4deef4d69f9d39c071d0fc16fb378ba047e9d66"
   }
  ],
- "protected_inventory_sha256": "434f146777e6cbe2ba76653cde6dac7daf590adeac04e7dc279ffbea98dc4cea",
+ "protected_inventory_sha256": "519c76eb6c31f0466e29c0f352abaaf9593af8fdabb075a39081aa5f7503d198",
  "protected_leaves_over_800_chars_not_near_scanned": 0,
  "schema": "decision2.v2.overlap.public.v1"
 }

@@ -11,7 +11,7 @@ track; nothing has been uploaded and C1 has not been opened.
 | Package dir (M6 staging layout) | node A `/data/dev2/runs/dec/formal/m10/pkg/m10-4b-LH` (file list `pkg/m10-4b-LH.sha256`; revision = its SHA-256 `da0d982fda1ac2d7fb6bc84437159d7d0920d8d4aeb0f38397d15e6c1836360a`) |
 | Checkpoint | `m6/m10-4b-LH/checkpoint`: full FP32 `qwen3.5-text-endpoints-global-query-shared-bilinear-mlp`, prompt `decision2-segmented-options-global-query-v1` (the released runtime's head path); uniform soup of the three LH seeds, each a rank-128 LoRA merged into Qwen3.5-4B-Base `1001bb4d…` |
 | Identity (`dec_fingerprint`) | `5fa2a6998ede6290e1c741c71b44d145b7564b622b0c8e4561ef8f7f69c4c489` |
-| Calibration | `m6/m10-4b-LH/cal698-16k/calibration.json`, adopted by the 23:15 rule (`calibration-decision.json`): T choice .621 / noul .479 / score .209 |
+| Calibration | `m6/m10-4b-LH/cal698-16k/calibration.json`, adopted by the 23:15 rule (`calibration-decision.json`): T choice .621 / noul .479 / score .209. Under the 13:40 T = 1 policy the package can ship T = 1: the retempered run `formal/m10/m10-4b-LH-t1-derived` has 0 answer changes and the same v3 (67.345, +4.19 [+0.10, +9.88]) |
 | Parameters | 4,208,383,488 loaded (the same count as DEV2.0-4B) |
 | Scored formal run | node A `/data/dev2/runs/dec/formal/m10/m10-4b-LH` (seal `f015d4f0…`; typed FINAL predictions `1d9189b1…`, public 231 `8543f7b8…`, `COLLECT.json` `f6e50377…`); mlx-diag `m10-4b-LH-mlx`; successor evaluation `formal/m10/successor/4b-m10-4b-LH.{json,md}` |
 | Formal runtime | `v2.dec.infer_dec` with `v2/dec/adapter-spec-infer-dec.json` (calibrated), 16,384 tokens, image `dbe5f32b` (kernel), node F GPU3 with an isolated render node; persisted autotune cache staged frozen on node A at `formal/m10/m10-4b-LH-cache-frozen` (1,654 files, manifest `569e86f5…`) |
@@ -51,8 +51,14 @@ A's transfer key. Results go only to `decision2-program/private/` and the node's
 every public artifact carry no Index numbers, and nothing in M10 was selected or tuned on Index rows. The retention
 probes excluded every item with a 13-gram in the suite (checked on node C).
 
+## Second finalist (not the C1 candidate)
+
+`m10-4b-NT2` (the N4XF recipe from Nox 1.0 with the label-token readout) also passes items 1–7. Its post-key v3 is
+65.25, +2.10 [+0.49, +5.82] vs DEV2.0-4B. Package on node F: `formal/m10/pkg/m10-4b-NT2`, revision `e607a58a…`,
+T = 1. The M6 choice rule ranks it second (lower bound vs Decider 4B −1.64 against LH's +0.28), so it is not sent
+to C1. It is the fallback if LH fails item 8, and then needs its own release-format package (label-token profile:
+the builder vendors `label_token.py`, `de275f9fb`).
+
 ## Remaining M10 work (this track)
 
-- NT2 (wave 2: the N4XF recipe on Nox with the label-token readout) is read and gated as soon as it finishes. It can
-  take the second finalist slot only under amendment 2's order.
 - IB1 arms on the LH recipe start when a release-safe IB1 record lands (IB1-r2).

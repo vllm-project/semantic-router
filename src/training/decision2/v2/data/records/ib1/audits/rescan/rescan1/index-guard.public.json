@@ -1,0 +1,132 @@
+{
+ "candidate_inputs": {
+  "ib1.dev.jsonl": "9091f2009f9e695f1012bd1750022629b5979c91e24b0c67c47b88f50d8df6f7",
+  "ib1.train.jsonl": "4730291bdd107ac3f23242436f01b0eb983a7dba640b135934dcf88e68bfd6af"
+ },
+ "candidates": {
+  "args": {
+   "select": 374,
+   "train": 5192
+  },
+  "copa": {
+   "select": 108,
+   "train": 878
+  },
+  "csqa": {
+   "select": 513,
+   "train": 4983
+  },
+  "isarc": {
+   "select": 82,
+   "train": 874
+  },
+  "maud": {
+   "select": 0,
+   "train": 1275
+  },
+  "medmcqa": {
+   "select": 591,
+   "train": 6891
+  },
+  "poem": {
+   "select": 411,
+   "train": 3584
+  },
+  "procb": {
+   "select": 12,
+   "train": 258
+  },
+  "sentfin": {
+   "select": 496,
+   "train": 4780
+  },
+  "sms": {
+   "select": 62,
+   "train": 1152
+  },
+  "snips_rel": {
+   "select": 16,
+   "train": 2700
+  },
+  "snips_sel": {
+   "select": 310,
+   "train": 2673
+  },
+  "sumedit": {
+   "select": 0,
+   "train": 608
+  },
+  "w2c": {
+   "select": 0,
+   "train": 483
+  },
+  "wands": {
+   "select": 0,
+   "train": 4238
+  },
+  "wanli": {
+   "select": 873,
+   "train": 7926
+  }
+ },
+ "drop_groups_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+ "flagged": {
+  "args": {
+   "groups_dropped": 0
+  },
+  "copa": {
+   "groups_dropped": 0
+  },
+  "csqa": {
+   "groups_dropped": 0
+  },
+  "isarc": {
+   "groups_dropped": 0
+  },
+  "maud": {
+   "groups_dropped": 0
+  },
+  "medmcqa": {
+   "groups_dropped": 0
+  },
+  "poem": {
+   "groups_dropped": 0
+  },
+  "procb": {
+   "groups_dropped": 0
+  },
+  "sentfin": {
+   "groups_dropped": 0
+  },
+  "sms": {
+   "groups_dropped": 0
+  },
+  "snips_rel": {
+   "groups_dropped": 0
+  },
+  "snips_sel": {
+   "groups_dropped": 0
+  },
+  "sumedit": {
+   "groups_dropped": 0
+  },
+  "w2c": {
+   "groups_dropped": 0
+  },
+  "wands": {
+   "groups_dropped": 0
+  },
+  "wanli": {
+   "groups_dropped": 0
+  }
+ },
+ "groups_dropped": 0,
+ "reference": "every Decision Index suite row (selected and added rows); statistics kept on the node",
+ "rules": {
+  "E": "raw leaf equality, leaves >= 20 characters",
+  "G": "shared word 13-gram",
+  "N1": "normalized whole-leaf equality, >= 6 tokens",
+  "N2": "normalized sentence or leaf equality, >= 8 tokens"
+ },
+ "schema": "decision2.ib1.index-guard.v1"
+}

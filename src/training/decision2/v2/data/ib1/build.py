@@ -88,6 +88,34 @@ CLASS_FAMILIES = ("sentfin", "wands", "wanli")
 AB_FAMILIES = ("w2c", "isarc", "poem", "copa")
 ROTATED_FAMILIES = ("snips_sel", "maud", "csqa", "medmcqa")
 TWIN_FAMILIES = ("args",)
+# Round-2 constructions (amendment 2 §A): name -> (family, audit field, value); a row matches when its family is the
+# named one and `label` (gold class index) or `domain` (audit metadata) equals the value.
+CONSTRUCTIONS: dict[str, tuple[str, str, Any]] = {
+    "sentfin-neutral": ("sentfin", "label", fam.SENTFIN_LABELS.index("neutral")),
+    "sumedit-shakespeare": ("sumedit", "domain", "shakespeare"),
+    "wands-partial": ("wands", "label", fam.WANDS_LABELS.index("Partial")),
+}
+
+
+def construction(row: Mapping[str, Any], names: Iterable[str]) -> str | None:
+    """The first named construction ``row`` belongs to, if any."""
+    for name in names:
+        family, field, value = CONSTRUCTIONS[name]
+        if row["family"] != family:
+            continue
+        got = row["label"] if field == "label" else row["audit_metadata"]["ib1"][field]
+        if got == value:
+            return name
+    return None
+
+
+def excluded_labels(names: Iterable[str]) -> dict[str, set[int]]:
+    out: dict[str, set[int]] = collections.defaultdict(set)
+    for name in names:
+        family, field, value = CONSTRUCTIONS[name]
+        if field == "label":
+            out[family].add(value)
+    return out
 
 
 def file_sha256(path: Path) -> str:
@@ -386,11 +414,14 @@ def within_bounds(
     return free + yes + no
 
 
-def equal_labels(rows: list[dict[str, Any]], salt: str) -> list[dict[str, Any]]:
+def equal_labels(
+    rows: list[dict[str, Any]], salt: str, excluded: Iterable[int] = ()
+) -> list[dict[str, Any]]:
     by: dict[int, list[dict[str, Any]]] = collections.defaultdict(list)
     for row in ranked(rows, salt):
         by[row["label"]].append(row)
-    if len(by) < len(rows[0]["options"]):
+    expected = set(range(len(rows[0]["options"]))) - set(excluded)
+    if set(by) != expected:
         return []
     size = min(len(members) for members in by.values())
     return [row for label in sorted(by) for row in by[label][:size]]
@@ -432,8 +463,11 @@ def twins(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
-def rebalance(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def rebalance(
+    rows: list[dict[str, Any]], constructions: Sequence[str] = ()
+) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
+    excluded = excluded_labels(constructions)
     for name in FAMILIES:
         members = [row for row in rows if row["family"] == name]
         if not members:
@@ -445,7 +479,7 @@ def rebalance(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 ]
                 out += equal_labels(cell, BALANCE_SALT) if cell else []
         elif name in NOUL_FAMILIES or name in CLASS_FAMILIES:
-            out += equal_labels(members, BALANCE_SALT)
+            out += equal_labels(members, BALANCE_SALT, excluded[name])
         elif name in TWIN_FAMILIES:
             out += twins(members)
         elif name in AB_FAMILIES:
@@ -473,12 +507,15 @@ def finalize(args: argparse.Namespace) -> int:
     drop_ids = read_list(args.drop_ids)
     drop_leak = read_list(args.drop_leak_ids)
     drop_families = set(args.drop_families)
+    constructions = sorted(set(args.drop_construction))
     report: dict[str, Any] = collections.defaultdict(collections.Counter)
 
     def keep(row: Mapping[str, Any], dev_slice: bool) -> bool:
         reason = None
         if row["family"] in drop_families:
             reason = "family"
+        elif construction(row, constructions):
+            reason = "construction"
         elif row["group_id"] in drop_groups:
             reason = "dropped_group"
         elif dev_slice and row["group_id"] in drop_dev:
@@ -491,8 +528,8 @@ def finalize(args: argparse.Namespace) -> int:
             report[f"{'dev' if dev_slice else 'train'}:{reason}"][row["family"]] += 1
         return reason is None
 
-    train = rebalance([row for row in train if keep(row, False)])
-    dev = rebalance([row for row in dev if keep(row, True)])
+    train = rebalance([row for row in train if keep(row, False)], constructions)
+    dev = rebalance([row for row in dev if keep(row, True)], constructions)
     for row in train:
         validate_row(row, "train")
     for row in dev:
@@ -518,6 +555,7 @@ def finalize(args: argparse.Namespace) -> int:
             "ids": listed(drop_ids),
             "leak_ids": listed(drop_leak),
             "families": sorted(drop_families),
+            "constructions": constructions,
             "removed": {
                 key: dict(sorted(value.items()))
                 for key, value in sorted(report.items())
@@ -548,6 +586,12 @@ def main(argv: list[str] | None = None) -> int:
     two.add_argument("--drop-ids", action="append", default=[], type=Path)
     two.add_argument("--drop-leak-ids", action="append", default=[], type=Path)
     two.add_argument("--drop-families", nargs="*", default=[])
+    two.add_argument(
+        "--drop-construction",
+        action="append",
+        default=[],
+        choices=sorted(CONSTRUCTIONS),
+    )
     args = parser.parse_args(argv)
     return build(args) if args.command == "build" else finalize(args)
 

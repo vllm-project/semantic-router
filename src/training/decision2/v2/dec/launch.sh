@@ -46,6 +46,8 @@ argv=(docker run --name "dec-$name" --rm --network none --shm-size 16g
   --mount "type=bind,src=$out,dst=/out")
 if [[ $cpu == 0 ]]; then
   argv+=(--device /dev/kfd --device "$render" -e ROCR_VISIBLE_DEVICES=0 -e HIP_VISIBLE_DEVICES=0)
+  # Opt-in (DEC_KERNARG=1): the node-A collection setting of the scored node-A runs.
+  if [[ ${DEC_KERNARG:-0} == 1 ]]; then argv+=(-e HIP_FORCE_DEV_KERNARG=1); fi
   # Every GPU job shares one persisted Triton kernel + autotune cache per node
   # and image, so training, reload and readout processes pick the same kernel
   # configurations (FLA does not reproduce across processes without it).

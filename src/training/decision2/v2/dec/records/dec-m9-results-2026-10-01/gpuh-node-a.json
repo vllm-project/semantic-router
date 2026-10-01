@@ -1,0 +1,347 @@
+{
+ "node": "a",
+ "updated_utc": "2026-10-01T06:16:15Z",
+ "total_gpu_h": 5.9395,
+ "arms_gpu_h_for_caps": {
+  "C9": 0.0997,
+  "H9": 4.4603
+ },
+ "seeds_gpu_h": {
+  "C9-s1": 0.0997,
+  "H9-s1": 1.5508,
+  "H9-s2": 1.5264,
+  "H9-s3": 1.3831
+ },
+ "jobs": {
+  "m9-4b-H9-a1-css-pilot": {
+   "seconds": 70.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1/css-pilot.launch.json"
+  },
+  "m9-4b-H9-a1-dev": {
+   "seconds": 73.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1/dev.launch.json"
+  },
+  "m9-4b-H9-a1-hr2-dev": {
+   "seconds": 79.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1/hr2-dev.launch.json"
+  },
+  "m9-4b-H9-a1-hs1-dev": {
+   "seconds": 118.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1/hs1-dev.launch.json"
+  },
+  "m9-4b-H9-a1-ht-dev2": {
+   "seconds": 86.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1/ht-dev2.launch.json"
+  },
+  "m9-4b-H9-a1-score5t-dev": {
+   "seconds": 50.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1/score5t-dev.launch.json"
+  },
+  "m9-4b-H9-a1_2-css-pilot": {
+   "seconds": 69.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1_2/css-pilot.launch.json"
+  },
+  "m9-4b-H9-a1_2-dev": {
+   "seconds": 71.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1_2/dev.launch.json"
+  },
+  "m9-4b-H9-a1_2-hr2-dev": {
+   "seconds": 74.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1_2/hr2-dev.launch.json"
+  },
+  "m9-4b-H9-a1_2-ht-dev2": {
+   "seconds": 87.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1_2/ht-dev2.launch.json"
+  },
+  "m9-4b-H9-a1_2-score5t-dev": {
+   "seconds": 50.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-a1_2/score5t-dev.launch.json"
+  },
+  "m9-4b-H9-s1-ht-dev2": {
+   "seconds": 86.0,
+   "gpu": "node A GPU6",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-H9-s1/ht-dev2.launch.json"
+  },
+  "m9-4b-I-css-pilot": {
+   "seconds": 73.0,
+   "gpu": "node A GPU6",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-I/css-pilot.launch.json"
+  },
+  "m9-4b-I-dev": {
+   "seconds": 83.0,
+   "gpu": "node A GPU6",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-I/dev.launch.json"
+  },
+  "m9-4b-I-hr2-dev": {
+   "seconds": 135.0,
+   "gpu": "node A GPU6",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-I/hr2-dev.launch.json"
+  },
+  "m9-4b-I-hs1-dev": {
+   "seconds": 271.0,
+   "gpu": "node A GPU6",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-I/hs1-dev.launch.json"
+  },
+  "m9-4b-I-ht-dev2": {
+   "seconds": 104.0,
+   "gpu": "node A GPU6",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-I/ht-dev2.launch.json"
+  },
+  "m9-4b-I-score5t-dev": {
+   "seconds": 52.0,
+   "gpu": "node A GPU6",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-I/score5t-dev.launch.json"
+  },
+  "m9-4b-N7C-a1-css-pilot": {
+   "seconds": 192.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1/css-pilot.launch.json"
+  },
+  "m9-4b-N7C-a1-dev": {
+   "seconds": 216.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1/dev.launch.json"
+  },
+  "m9-4b-N7C-a1-hr2-dev": {
+   "seconds": 197.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1/hr2-dev.launch.json"
+  },
+  "m9-4b-N7C-a1-hs1-dev": {
+   "seconds": 344.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1/hs1-dev.launch.json"
+  },
+  "m9-4b-N7C-a1-ht-dev2": {
+   "seconds": 179.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1/ht-dev2.launch.json"
+  },
+  "m9-4b-N7C-a1-score5t-dev": {
+   "seconds": 110.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1/score5t-dev.launch.json"
+  },
+  "m9-4b-N7C-a1_2-css-pilot": {
+   "seconds": 172.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1_2/css-pilot.launch.json"
+  },
+  "m9-4b-N7C-a1_2-dev": {
+   "seconds": 174.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1_2/dev.launch.json"
+  },
+  "m9-4b-N7C-a1_2-hr2-dev": {
+   "seconds": 171.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1_2/hr2-dev.launch.json"
+  },
+  "m9-4b-N7C-a1_2-ht-dev2": {
+   "seconds": 224.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1_2/ht-dev2.launch.json"
+  },
+  "m9-4b-N7C-a1_2-score5t-dev": {
+   "seconds": 102.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/lines/4b/4b-N7C-a1_2/score5t-dev.launch.json"
+  },
+  "m9-C9-s1-gate": {
+   "seconds": 88.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/gates/m9-C9-s1.launch.json"
+  },
+  "m9-C9-s1-one": {
+   "seconds": 161.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/pre/m9-C9-s1-one.launch.json"
+  },
+  "m9-C9-s1-zero": {
+   "seconds": 110.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/pre/m9-C9-s1-zero.launch.json"
+  },
+  "m9-H9-s1-full": {
+   "seconds": 5022.0,
+   "gpu": "node A GPU6",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s1.launch.json"
+  },
+  "m9-H9-s1-gate": {
+   "seconds": 97.0,
+   "gpu": "node A GPU6",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/gates/m9-H9-s1.launch.json"
+  },
+  "m9-H9-s1-one": {
+   "seconds": 162.0,
+   "gpu": "node A GPU6",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/pre/m9-H9-s1-one.launch.json"
+  },
+  "m9-H9-s1-zero": {
+   "seconds": 112.0,
+   "gpu": "node A GPU6",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/pre/m9-H9-s1-zero.launch.json"
+  },
+  "m9-H9-s2-full": {
+   "seconds": 4989.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s2.launch.json"
+  },
+  "m9-H9-s2-gate": {
+   "seconds": 102.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/gates/m9-H9-s2.launch.json"
+  },
+  "m9-H9-s2-one": {
+   "seconds": 131.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/pre/m9-H9-s2-one.launch.json"
+  },
+  "m9-H9-s2-zero": {
+   "seconds": 96.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/pre/m9-H9-s2-zero.launch.json"
+  },
+  "m9-H9-s3-full": {
+   "seconds": 4495.0,
+   "gpu": "node A GPU6",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s3.launch.json"
+  },
+  "m9-H9-s3-gate": {
+   "seconds": 96.0,
+   "gpu": "node A GPU6",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/gates/m9-H9-s3.launch.json"
+  },
+  "m9-H9-s3-one": {
+   "seconds": 118.0,
+   "gpu": "node A GPU6",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/pre/m9-H9-s3-one.launch.json"
+  },
+  "m9-H9-s3-zero": {
+   "seconds": 92.0,
+   "gpu": "node A GPU6",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/pre/m9-H9-s3-zero.launch.json"
+  },
+  "m9-arms-full-m9-H9-s1-cal": {
+   "seconds": 40.0,
+   "gpu": "node A GPU6",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s1-post/cal.launch.json"
+  },
+  "m9-arms-full-m9-H9-s1-css-pilot": {
+   "seconds": 72.0,
+   "gpu": "node A GPU6",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s1-post/css-pilot.launch.json"
+  },
+  "m9-arms-full-m9-H9-s1-dev": {
+   "seconds": 78.0,
+   "gpu": "node A GPU6",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s1-post/dev.launch.json"
+  },
+  "m9-arms-full-m9-H9-s2-cal": {
+   "seconds": 36.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s2-post/cal.launch.json"
+  },
+  "m9-arms-full-m9-H9-s2-css-pilot": {
+   "seconds": 70.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s2-post/css-pilot.launch.json"
+  },
+  "m9-arms-full-m9-H9-s2-dev": {
+   "seconds": 71.0,
+   "gpu": "node A GPU7",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s2-post/dev.launch.json"
+  },
+  "m9-arms-full-m9-H9-s3-cal": {
+   "seconds": 36.0,
+   "gpu": "node A GPU6",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s3-post/cal.launch.json"
+  },
+  "m9-arms-full-m9-H9-s3-css-pilot": {
+   "seconds": 71.0,
+   "gpu": "node A GPU6",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s3-post/css-pilot.launch.json"
+  },
+  "m9-arms-full-m9-H9-s3-dev": {
+   "seconds": 71.0,
+   "gpu": "node A GPU6",
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/arms/full/m9-H9-s3-post/dev.launch.json"
+  },
+  "runner:formal/m9-ref-N4XF": {
+   "seconds": 981.329921245575,
+   "gpu": 6,
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/formal/m9-ref-N4XF/GPU-TIME.json"
+  },
+  "runner:formal/m9-ref-N4XF-mlx": {
+   "seconds": 272.97825932502747,
+   "gpu": 6,
+   "exit": 0,
+   "receipt": "/data/dev2/runs/dec/m9/formal/m9-ref-N4XF-mlx/GPU-TIME.json"
+  }
+ }
+}
