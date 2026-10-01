@@ -1,5 +1,17 @@
 # 9B M9 state (resume file)
 
+## Follow-ups A / B (2026-10-02, continuation cba71646; COORDINATION 00:35)
+
+- 16:50Z — **B (amendment 4, `78b01441e`):** K-a12IB = [KIB soup, Lux 1.0] built on node A 16:46Z (`model_sha256`
+  `68fed4cb…`); `post-a4.sh` reading the eight panels + IB DEV on node A GPU6 (ETA ≈ 17:50Z), then scoring, readout
+  `m9-s4`, rules `select/9b-finalists-s4.json`. Formal only if it passes (`M9_STAGE=4`, after a lock record and
+  `status/formal-s4.GO`).
+- **A (private Index of K-a13IB):** `m9/ix.sh` (IX1 harness); restaging K-a13IB and the FP32 control K-a13-fp32 into
+  DEV2.0-9B e51f9881 on node C; then the parity gate (GPU1), the control, and the 7-shard run on node C GPU1–7
+  (leases `track=eval-ix1`, node C GPU0 never). Values stay private (`private/9b-ka13ib/`, node C `ix1/runs/`); only
+  counts / hashes here. `paired_boot.py` smoke on two stored DEV2.0-9B result files: identity resample reproduces
+  both headlines; 8 replicates in 64 s.
+
 ## Now (2026-10-02 00:35 UTC+8, 16:35Z; continuation worker cba71646): **M9 CLOSED — no successor; DEV2.0-9B stands**
 
 - **Stage 3 result** [`lux9b-m9-stage3-result-2026-10-01.md`](lux9b-m9-stage3-result-2026-10-01.md): the official
