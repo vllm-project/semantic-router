@@ -1,0 +1,83 @@
+{
+ "cache": {
+  "after_manifest": "/data/dev2/runs/dec/formal/m13/m13-4b-LH.cache-after.sha256",
+  "after_manifest_sha256": "5b4981c2ee77c2844087e5bb9ca5ba345c743fa7b9b44db1c4b6626672642de1",
+  "changed_entries": 13,
+  "changed_entry_names": [
+   "./63D7T26ITTXXEGOYKTA4BFY4BLV2UE56HJN7JGY5ZK6ZRNMRNDVA/__grp__chunk_gated_delta_rule_fwd_kernel_h_blockdim64.json",
+   "./BH2F2EGJV4N6EWMBE5ERKEJ6TQ2SLJYJ5JLJYD6O3ZBJHUR4POBQ/__grp__l2norm_fwd_kernel.json",
+   "./CCXBJUMNA35JYWNQRBGYSIOGO3FR7QBBQLNUMBCORS2IWOMX5P7Q/__grp__chunk_gated_delta_rule_fwd_kkt_solve_kernel.json",
+   "./DGJEK55XV42EXBXUPFAAW5DDRXQOEXTQWW3PQYGAPZIIPPLV4YWA/__grp__l2norm_fwd_kernel.json",
+   "./DWRDX4TEWZXID47FDBTTZOAXM3P37QMNNCSUEEW3IGCV6OXPDQ7A/__grp__l2norm_fwd_kernel.json",
+   "./JDVN6VRA3BZDLLEZ2ABQD7O6UBC62XJ52F5Q7NVQ3WFWMSUQMDBA/__grp__l2norm_fwd_kernel.json",
+   "./OEUKVSSQHJDP65GEZXCH4TCLXIQ77A7ZVAIQQEMAZXBCVZPCOLRQ/__grp__l2norm_fwd_kernel.json",
+   "./PGKLILTEQKY323CHSQT2PLZIQ2MAITSNQ4NHGY62B3VMWW42OCAA/__grp__chunk_local_cumsum_scalar_kernel.json",
+   "./S56D7RNVKRF465MIT5CVSY3IZJI76YLULGK4UX2IFR2BMHT63NPA/__grp__chunk_fwd_kernel_o.json",
+   "./SY44ZG6BFZ5JUH3CU4G7SL4ONWQSUVTGQS23I74CIHL3BCU22HYQ/__grp__recompute_w_u_fwd_kernel.json",
+   "./UFRPVB3EXCYNCLNKDZPU2KHD7SPU7E3DZSHWQGAEQP2ROBHQT4GA/__grp__l2norm_fwd_kernel.json",
+   "./XR47BECIIVU37GATJ2CIXAGOB7OK7YLPOJ777W3FB57ALHUATBXQ/__grp__l2norm_fwd_kernel.json",
+   "./ZNXOJ3FMHHEPTND5C4BAIGA6FKRWKQG3EDYAE4HFSMRNKIFM2ODQ/__grp__chunk_local_cumsum_scalar_kernel.json"
+  ],
+  "dir": "/data/dev2/runs/dec/formal/m13/m13-4b-LH-cache",
+  "entries_after": 1654,
+  "entries_master": 1654,
+  "flag_new_cache_entries": true,
+  "master_manifest": "/data/dev2/runs/dec/formal/m5/cache-frozen.sha256",
+  "master_manifest_sha256": "f6d0f9207e436aa0090f51d1d4163e9f58edeb067ac28b894fb5e58612ea11d8",
+  "new_entries": 0,
+  "new_entry_names": [],
+  "removed_entries": 0
+ },
+ "calibration_rule": {
+  "adopt": true,
+  "candidate_sha256": "8d88e163630da9a8aeba91bb1333ce1f84019fdf082082d7e9a2fe3dc4524e8f",
+  "candidate_temperatures": {
+   "choice": 0.6214423083626255,
+   "noul": 0.4785121154658649,
+   "score": 0.20898008986060554
+  },
+  "file": "/data/dev2/runs/dec/formal/m13/pkg/m13-4b-LH/m6/m13-4b-LH/calibration-decision.json",
+  "sha256": "6c712ee207ae236fc4e4a997a340964e6d47ff338529ad9701e9c7731defae16",
+  "worsened": []
+ },
+ "calibration_used": "/data/dev2/runs/dec/formal/m13/pkg/m13-4b-LH/m6/m13-4b-LH/cal698-16k/calibration.json",
+ "collect_args": [
+  "--extra",
+  "model_id=decision2-dec-m13-4b-LH",
+  "--extra",
+  "calibration=/data/dev2/runs/dec/formal/m13/pkg/m13-4b-LH/m6/m13-4b-LH/cal698-16k/calibration.json"
+ ],
+ "gpu": 6,
+ "gpu_hours": 0.09915501574675242,
+ "image_id": "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1",
+ "kind": "finalist",
+ "label": "decision2-dec-m13-4b-LH",
+ "m5_receipt_note": "M5-RECEIPT.json comes from ops/m5/m5-receipt.py, whose node field is fixed to B; node here is authoritative",
+ "m5_receipt_sha256": "bd31ddf47a2977ef6aaa08202671c576297346eee7be09f5565596ca0052a67a",
+ "model": "/data/dev2/runs/dec/formal/m13/pkg/m13-4b-LH/m6/m13-4b-LH/checkpoint",
+ "name": "m13-4b-LH",
+ "node": "F",
+ "package_dir": "/data/dev2/runs/dec/formal/m13/pkg/m13-4b-LH",
+ "parameters": 4208383488,
+ "point": "4b-LH",
+ "revision": "9bbcd60e0464e2ef9a61d0938ccdee40cfdc2c2452f49a8ee7985554cdea8e98",
+ "revision_matches_list": true,
+ "schema": "dec-m6-formal-receipt/1",
+ "seal_sha256": "e2357879452c5ca38734fa655ce000789ea3e7b0a8d51c07f37acc114551c4b8",
+ "selection": {
+  "G": null,
+  "H3": null,
+  "T": null,
+  "effective_weights": null,
+  "line": "4b-LH",
+  "proxy": null,
+  "slot": 0,
+  "step": null
+ },
+ "spec": "/data/dev2/src/c2610143be2ff302c080a5cdfe093e41d173f8da-src_training_decision2/src/training/decision2/v2/dec/adapter-spec-infer-dec.json",
+ "tier": "4b",
+ "tier_label": "4B",
+ "wall_seconds": 356.9580566883087,
+ "weights_json": "/data/dev2/runs/dec/formal/m13/pkg/m13-4b-LH/m6/m13-4b-LH/weights.json",
+ "weights_json_sha256": "d9ea46dab16fa1c36dd7ee3cd10d2e058bdf5ce9273d915a3ec213b98a1b6e77"
+}

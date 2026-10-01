@@ -102,3 +102,10 @@
     [−.018, +.037]; transfer +.194.
   - vs M12 `08b-RA` (C / N / S 600 / 216 / 202, `attribute_gate` 277): RASD HT −.009 tie, `attribute_gate` +16, choice
     −26; RAAG retention −.035 [−.062, −.007]. Upweighting the proxy families lowered `attribute_gate` itself.
+
+## 2026-10-01 16:20Z — M13 done: no model passes items 1–7
+
+- 4B mlx-diag collected 15:57Z (both points); scored 16:01Z. **`m13-4b-LHA10SD` successor: FAIL** — item 1 (v3 tie
+  vs LH) and item 4 (mlx-diag card-eligible −.0287 [−.0394, −.0184]); items 2, 3, 5, 6(a), 7 pass; 6(b) not
+  evaluated (overlap spec error in `m13-fscore.sh`, fixed afterwards; not rerun).
+- No hand-offs. Results [`dec-m13-results-2026-10-01.md`](dec-m13-results-2026-10-01.md); GPU-h 14.21 of 80.

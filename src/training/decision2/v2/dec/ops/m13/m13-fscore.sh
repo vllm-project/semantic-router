@@ -192,7 +192,7 @@ spec = {"label": "post-key same-panel", "panel_root": "/data/dev2/private/panels
         "models": models,
         "tiers": {"m13": {"candidate": cand, "own_1_0": own, "peers": peers, "internal_peers": bars,
                           "threshold_pool": peers}},
-        "reproduce": [{"left": cand, "right": n, "stored": f"{run}/PAIRED-vs-{n}.json"} for n in comparators
+        "reproduce": [{"left": cand, "right": n, "stored": f"{run}/PAIRED-vs-{n}.json"} for n in [*bars, *own, *peers]
                       if Path(f"{run}/PAIRED-vs-{n}.json").is_file()]}
 Path(out).write_text(json.dumps(spec, indent=1) + "\n")
 EOF
