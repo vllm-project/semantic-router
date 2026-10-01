@@ -10,9 +10,10 @@ v2.release.bf16_copy and served by the released runtime (forward token budget, T
 
 The spec derives from the product-card spec of the current revision (specs/dev2-9b-product.json, card round 2,
 revision 586af779): roster, peers, runtime, remote code, licence and the product card carry over; the weights, the
-scored run, the gate evidence and the card's Index input and assets are K-a13IB's. The Index input is the round-2
-file with the 9B point replaced by an independent kit run on exactly these weights (K-a13IB-bf16) and the footnote of
-the coordinator decision; it and the rendered assets stay in node A's private tree, pinned by SHA-256.
+scored run, the gate evidence and the card's Index input and assets are K-a13IB's. The Index input is the round-3
+file (user card fix 2026-10-02 03:04 UTC+8: board-served parameter counts, the audited footnote of
+card_index.FOOTNOTE; Lux 9B left to this release) with the 9B scores replaced by an independent kit run on exactly
+these weights (K-a13IB-bf16); it and the rendered assets stay in node A's private tree, pinned by SHA-256.
 
 Run on node A from the exact mirror holding this file (host python3; every file it hashes is a node A path):
   PYTHONPATH=<mirror>/src/training/decision2 python3 <this file> draft --out DIR
@@ -110,10 +111,11 @@ def spec(summary_path: str | None) -> dict:
         "runtime": "vendor_source = the formal run's runner mirror 787abdc54 (training/model checked equal to the "
         "scored adapter sources at build time); runtime_source = automap_source = 99432d1a7, the released runtime "
         "(BF16-resident, Transformers remote code, forward token budget), unchanged from the current revision.",
-        "card": "the product card of the current revision (card round 2) with K-a13IB's reports; card.index = the "
-        "round-2 Index input with the 9B point from an independent kit run on exactly these weights (K-a13IB-bf16) "
-        "and the footnote of the coordinator decision; card.assets rendered by v2.release.card_assets in the "
-        "round-2 environment (Python 3.12.13, matplotlib 3.11.2, Pillow 12.3.0, the same Inter fonts and logo); "
+        "card": "the product card of the current revision (card round 2) with K-a13IB's reports and the card "
+        "round-3 Index conventions (user card fix 2026-10-02 03:04 UTC+8, which leaves Lux 9B to this release): "
+        "card.index = the round-3 Index input (board-served parameter counts, the audited footnote of "
+        "card_index.FOOTNOTE) with the 9B scores from an independent kit run on exactly these weights "
+        "(K-a13IB-bf16); card.assets rendered by the round-3 v2.release.card_assets in the round-2 environment (Python 3.12.13, matplotlib 3.11.2, Pillow 12.3.0, the same Inter fonts and logo); "
         "card.speed keeps the 400-request bench receipt of this runtime (same architecture, runtime and shapes).",
         "c1": (
             "final: post-key C1 summary bound as R8"
@@ -259,7 +261,7 @@ def decision(s: dict, summary_path: str | None) -> dict:
         "action": f"New main revision of the private repository {REPO}: the 9B M9 successor K-a13IB (the K-a13 recipe "
         "with the IB1-r3 / IB2 rows; [KIB soup, Lux 1.0, Lux 1.0] at alpha 1/3; qwen-full, BF16 storage, T = 1, "
         f"16,384 tokens) replaces the K-a13 weights ({CURRENT['weights_identity'][:8]}, revision "
-        f"{CURRENT['revision'][:8]}) with the product card of card round 2; then the superseded weight blobs are "
+        f"{CURRENT['revision'][:8]}) with the product card of card round 2 and the round-3 Index conventions; then the superseded weight blobs are "
         "purged with rewrite_history=False (hf_headroom.sh first) and the C1 baseline registry takes this "
         "revision's post-key run. The repository stays private and in the private collection.",
         "rationale": "Index path (coordinator decision 2026-10-02 02:05 UTC+8). Item 1': post-key v3 "
