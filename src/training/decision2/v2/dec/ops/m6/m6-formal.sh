@@ -34,7 +34,9 @@ case $TIER in 4b|2b|08b) ;; *) sed -n '2,28p' "$0"; exit 2 ;; esac
 # shellcheck source=src/training/decision2/v2/dec/ops/m6/m6-formal-lib.sh
 . "$S/v2/dec/ops/m6/m6-formal-lib.sh"
 tier_setup
-if [ "$NODE" != A ]; then
+if [ "$NODE" = A ] && [ "$TIER" = 4b ]; then
+  [ -d "$MASTER" ] && [ -d "$MASTER_MLX" ] || die "4B on node A needs the master caches $MASTER and $MASTER_MLX"
+elif [ "$NODE" != A ]; then
   [ -d "$R/formal/m5/cache-frozen" ] || die "tier $TIER collects on node $NODE (no formal/m5/cache-frozen here)"
 else
   [ -d "$R/formal/m2/m2-E8F-soup-nodeA-triton" ] || die "tier $TIER collects on node A (no formal/m2/m2-E8F-soup-nodeA-triton here)"

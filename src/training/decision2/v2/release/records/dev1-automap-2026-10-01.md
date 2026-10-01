@@ -15,8 +15,8 @@ Decision 1.0 section of the shared `automap/API.md`). State log: [`dev1-automap-
 | Decision-1.0-Sol-2B | `a1c9f252` | [#2](https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B/discussions/2) merged | `fc210c8f` | 0 changes, 0.0 (bit-identical) | pass | pass |
 | Decision-1.0-Nox-4B | `eab48e99` | [#2](https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B/discussions/2) merged | `f098bdec` | 0 changes, 0.0105 (16 long CSS15 prompts) | pass | pass |
 | Decision-1.0-Lux-9B | `8db79130` | [#2](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/discussions/2) merged | `a31b9e2c` | 0 changes, 0.0103; 0.0 with the published FLA profile | pass | pass |
-| Decision-1.0-Eos-0.8B | `a66df1b5` | not opened | unchanged | **fails vs the stored set: 47 changes, 0.031** | — | — |
-| DEV2.0-Route-0.6B (private) | `72a2d317` | not opened (waits for the 2.0 remote code on the Hub) | unchanged | — | — | — |
+| Decision-1.0-Eos-0.8B | `a66df1b5` | [#3](https://huggingface.co/llm-semantic-router/Decision-1.0-Eos-0.8B/discussions/3) merged | `bbdc2221` | 0 changes, 0.0 vs the native Eos runtime on the same GPU and kernels (the stored set is not reproducible, see below) | pass | pass |
+| DEV2.0-Route-0.6B (private) | `72a2d317` | [#1](https://huggingface.co/llm-semantic-router/DEV2.0-Route-0.6B/discussions/1) open (PR only) | unchanged (never merged by us) | native answers unchanged by the `api.py` fix (68 prompts, CPU); AutoModel vs native: state log | — | — |
 
 Every PR was opened against the head current at staging (`parent_commit`), after checking that no open PR
 touched the same files; the heads included subin's merges of the same morning (neutral hardware wording on
@@ -77,18 +77,24 @@ drift is the largest absolute difference of any probability, `noul` or `score`.
 | Lux, published FLA l2norm profile | 0 | 0 | 4 / 4 | 0 | 0.0 / 0.0 / 0.0 | 0 |
 | Eos | **47** (14 / 32 / 1) | 0 | 4 / 4 | 0 | 0.031 / 0.023 / 0.021 | 8,366 |
 | Eos with its native ROCm convolution | **71** | 0 | 4 / 4 | 0 | 0.039 / 0.047 / 0.018 | 8,295 |
+| **Eos vs the native Eos runtime, same GPU, same pinned FLA l2norm configs** | **0** | 0 | 4 / 4 | 0 | 0.0 / 0.0 / 0.0 | 0 |
+| (native Eos unpinned vs the stored set) | 56 (24 / 32 / 0) | — | — | — | 0.039 / 0.023 / 0.021 | 8,294 |
+| (native Eos pinned vs the stored set) | 46 (14 / 32 / 0) | — | — | — | 0.031 / 0.023 / 0.021 | 8,294 |
+| (native Eos unpinned vs pinned) | 30 (30 / 0 / 0) | — | — | — | 0.051 / 0.0 / 0.0 | 1,600 |
 
 - The encoders' remaining drift is only the Score expected value (summed in float64 here, in FP32 on the device
   natively). Route's numbers equal Kai's because Route keeps Kai's Score path.
 - Nox's drift is confined to 16 CSS15 prompts of 6.1k–8.1k tokens; the other 8,362 prompts are bit-identical.
   With the FLA l2norm launch configurations the native Sol / Nox / Lux runtimes pinned (`FLA_CACHE_MODE=strict`),
   Lux is bit-identical on every prompt, so this drift is FLA autotuning, an environment property.
-- **Eos** fails against its stored set. Its files and model code are identical to Sol's; nearly every prompt
-  drifts. Eos's native runtime is the only one that never pinned the FLA l2norm configurations, so its stored
-  predictions carry that run's autotune picks; its native ROCm convolution (vendored for parity) did not close
-  the gap. The decisive check (native Eos `3c2d6326` code and the remote code on the same GPU with the same pinned
-  configurations; native Eos unpinned against the stored set) is queued on node D for the first free lease
-  (`/data/dev2/runs/release/dev1-automap/eos-d`). No Eos PR until it passes.
+- **Eos** cannot be held to its stored set: the native Eos runtime itself (revision `3c2d6326` code, run by the
+  scored-run collector `inference.run`, same image, byte-identical files) reproduces it with 46–56 answer changes
+  and drift on nearly every prompt, and two native runs that differ only in FLA's l2norm launch configurations
+  differ by 30 answers on typed-final. Eos's native runtime is the only 1.0 runtime that never pinned those
+  configurations, so its stored predictions carry that run's autotune picks. Against the native Eos runtime on the
+  same GPU with the same pinned configurations (node D GPU1, `eos-d/`), the uploaded remote code is bit-identical
+  on all 8,378 prompts (0 changes, drift 0.0, 0 prompts with any drift), including Eos's native ROCm convolution
+  (vendored as `decision1_rocm_conv.py`, gfx942, batch × length ≥ 2048, as the native runtime installs it).
 
 Equivalence of the parity-tested and the uploaded code (`equivalence1.sh`, CPU, clean venv): identical
 responses for Kai, Lex and Route (231 prompts each), Sol (40), Nox (30) and Lux (25); the uploaded files differ
@@ -98,11 +104,25 @@ only in Eos-gated code and the Hub download helper.
 
 - PR revisions (`refs/pr/N`), clean venv (Python 3.12, torch 2.14.1 CPU, Transformers 5.18.0, huggingface_hub
   1.33.0): `AutoConfig` → `Decision1Config`, tokenizer, `AutoModel` → `Decision1Model` (loaded parameters
-  571,909,635 / 1,883,930,944 / 4,208,383,488 / 7,940,895,744), `pipeline("decision")` equal to `system_one`,
+  571,909,635 for each encoder; 753,446,208 / 1,883,930,944 / 4,208,383,488 / 7,940,895,744 for Eos / Sol / Nox / Lux), `pipeline("decision")` equal to `system_one`,
   over-length → `max_length_exceeded` on every question, malformed question → `invalid_question`: all pass.
 - After merge: readback of every file at the new `main` (above); fresh-cache smoke (empty Hugging Face cache)
-  that also runs each card's Python block verbatim: pass for all six (Transformers 5.18.0, CPU).
+  that also runs each card's Python block verbatim: pass for all seven (Transformers 5.18.0, CPU).
 - Also checked locally: Transformers 4.57.6 (encoders) and 5.17.0.
+
+## DEV2.0-Route-0.6B (a collaborator's private 2.0 package; PR only)
+
+Prepared after the 2.0 auto_map release published its remote code on DEV2.0-0.6B (`25669e2d`), mirroring
+that revision (`stage_dev2route1.py`): the three files `configuration_decision2.py`, `modeling_decision2.py`,
+`pipeline_decision2.py` byte for byte (checked against DEV2.0-0.6B's `MODEL_MANIFEST.json` and the 2.0
+branch source), the 2.0 `config.json` fields (sorted rendering as in 2.0), `MODEL_MANIFEST.json` with the new
+hashes, a `remote_code` section naming its source package and an amended runtime equivalence note, a 2.0-style
+card section (example built from the repository's `QUESTIONS.json`), and one sentence corrected. The package's
+own runtime predates the 2.0 BF16-resident rollout and the 2.0 loading fix, so `decision2/api.py` gets only that
+fix (commit `0cbf1033e`: Transformers' remote-code prompt answered "no" while the vendored loader reads the
+tokenizer), applied as one change. Native answers through the package runtime before and after the change are
+identical on 68 prompts (public 231 and typed-final, CPU). PR #1 is open for the owner's review and is not
+merged by us.
 
 ## Divergences and follow-ups
 
@@ -122,5 +142,6 @@ only in Eos-gated code and the Hub download helper.
 
 ## GPU-hours
 
-Parity and references on one MI325X at a time: ≈ 0.75 GPU-hour (runs of 75–340 s each plus loads), node E
-GPU6 / GPU7 under this worker's leases, released after each job. CPU work (smokes, equivalence) on node E.
+Parity and references on one MI325X at a time: ≈ 0.95 GPU-hour (runs of 75–340 s each plus loads): node E
+GPU6 / GPU7 and, for the Eos references, node D GPU1, each under this worker's own lease, released after each
+job. CPU work (smokes, equivalence, DEV2.0-Route checks) on node E.

@@ -18,6 +18,8 @@ from pathlib import Path
 def receipts(root: Path) -> list[dict]:
     found = []
     for path in sorted(root.rglob("*.launch.json")):
+        if "inputs" in path.relative_to(root).parts:
+            continue  # receipts copied in with node B's readouts belong to earlier milestones
         try:
             data = json.loads(path.read_text())
         except (OSError, ValueError):
