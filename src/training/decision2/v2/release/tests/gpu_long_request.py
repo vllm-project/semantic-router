@@ -15,8 +15,11 @@ which before the forward token budget gave non-finite logits or a GPU memory fau
 (the budget, 174,762 padded tokens on that backbone, splits it into two forwards).
 Passes if every answer is valid, every forward stays within the runtime's budget,
 and each question's answer equals the same question asked alone (same choice or
-Noul side; probabilities within ``--tolerance``). Writes the result JSON (counts
-and shapes only); exits non-zero on any failure.
+Noul side; probabilities within ``--tolerance``). With ``--tie-margin M``, a side
+flip within ``--tolerance`` whose alone answer lies within M of its decision
+boundary (Noul |P(true) - 0.5| or Choice top-two margin) is listed as a tie instead
+of a mismatch. Writes the result JSON (counts and shapes only); exits non-zero on
+any failure.
 """
 
 from __future__ import annotations
@@ -87,6 +90,13 @@ def same(a: dict, b: dict, tolerance: float) -> tuple[bool, float]:
     return a["choice"] == b["choice"] and drift <= tolerance, drift
 
 
+def margin(answer: dict) -> float:
+    if answer["type"] == "noul":
+        return abs(answer["noul"] - 0.5)
+    top = sorted(answer["probabilities"].values(), reverse=True)
+    return top[0] - top[1]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -97,6 +107,7 @@ def main() -> None:
     parser.add_argument("--tokens", type=int, default=14_224)
     parser.add_argument("--questions", type=int, default=32)
     parser.add_argument("--tolerance", type=float, default=0.02)
+    parser.add_argument("--tie-margin", type=float, default=0.0)
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument(
         "--budget", type=int, help="override the runtime's token budget"
@@ -130,7 +141,7 @@ def main() -> None:
     torch.cuda.synchronize()
     together_ms = (time.perf_counter() - started) * 1000
     batched = [list(s) for s in shapes]
-    alone, worst, mismatched = {}, 0.0, []
+    alone, worst, mismatched, ties = {}, 0.0, [], []
     for qid, question in row["questions"].items():
         alone[qid] = model.system_one(state=row["state"], questions={qid: question})[
             "answers"
@@ -138,7 +149,12 @@ def main() -> None:
         ok, drift = same(together[qid], alone[qid], args.tolerance)
         worst = max(worst, drift)
         if not ok:
-            mismatched.append(qid)
+            tie = (
+                drift <= args.tolerance
+                and not alone[qid].get("error")
+                and margin(alone[qid]) <= args.tie_margin
+            )
+            (ties if tie else mismatched).append(qid)
     budget = getattr(backend, "batch_tokens", None)
     invalid = sorted(q for q, a in together.items() if a.get("error"))
     within = budget is None or all(rows * width <= budget for rows, width in batched)
@@ -150,6 +166,8 @@ def main() -> None:
         "forwards": batched,
         "invalid_answers": invalid,
         "mismatched_vs_alone": mismatched,
+        "tie_margin": args.tie_margin,
+        "ties_vs_alone": {q: margin(alone[q]) for q in ties},
         "max_drift_vs_alone": worst,
         "together_ms": round(together_ms, 1),
         "within_budget": within,

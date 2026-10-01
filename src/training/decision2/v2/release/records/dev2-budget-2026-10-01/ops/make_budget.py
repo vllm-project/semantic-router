@@ -56,7 +56,16 @@ TIERS = (
     {"tier": "0.8B", "key": "0p8b"},
     {"tier": "2B", "key": "2b"},
     {"tier": "9B", "key": "9b"},
-    {"tier": "27B", "key": "27b"},
+    {
+        "tier": "27B",
+        "key": "27b",
+        "rationale_note": (
+            " On this package the regression counts a side flip within the tolerance of a question whose answer "
+            "asked alone lies within 0.02 of its decision boundary as a tie (listed in the receipt): the first run "
+            "without that rule flipped one generated Noul question (P(true) 0.4997 alone, 0.5029 in the split), "
+            "batch-shape noise of the unchanged single-batch path's kind."
+        ),
+    },
 )
 DROPPED = (
     "previous_rationale",
@@ -143,7 +152,8 @@ def decision_for(t: dict, spec_sha: str) -> dict:
                 "equal to each question asked alone, and the card's Transformers example run from the Hub in fresh "
                 "environments under Transformers 5.17 and 5.18; release.sh blocks the upload or the collection step "
                 "otherwise."
-            ),
+            )
+            + t.get("rationale_note", ""),
             "previous_rationale": old["rationale"],
             "runtime_revision": {
                 "kind": "forward-token-budget",

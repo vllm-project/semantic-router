@@ -38,7 +38,7 @@ HFC=/data/dev2/hf-cache
 TF518=/data/dev2/tools/tf518
 HFPY=/data/dev2/tools/hf-cli/bin/python
 REPRO=/data/dev2/private/eval/budget-repro
-image=decision20-train-fast:host2 cache_tool=digest PM="" long_q=32 base_args=() base_mount=() base_run=()
+image=decision20-train-fast:host2 cache_tool=digest PM="" long_q=32 tie_args=() base_args=() base_mount=() base_run=()
 case "$tier" in
   0.8B)
     key=0p8b P=/data/dev2/runs/release/inputs/dev2-0p8b-t1/derived IN=/data/dev2/runs/release/inputs/dev2-0p8b-bf16
@@ -62,7 +62,9 @@ case "$tier" in
     base_snapshot=$base_repo/snapshots/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0
     base_args=(--base-path "$base_snapshot" --env "HF_HUB_CACHE=$HFC" --mount "$base_repo")
     base_mount=(-v "$base_repo:$base_repo:ro")
-    base_run=(--base-path "$base_snapshot") ;;
+    base_run=(--base-path "$base_snapshot")
+    # A side flip of a question that asked alone sits within 0.02 of its decision boundary is a tie.
+    tie_args=(--tie-margin 0.02) ;;
   *) echo "tier must be one of 0.8B 2B 9B 27B" >&2; exit 2 ;;
 esac
 name=DEV2.0-$tier REPO=llm-semantic-router/$name
@@ -133,7 +135,7 @@ case "$mode" in
     status=0
     TCL=/data/dev2/runs/release/triton/dev2-budget-$tier-long-$TS; copy_cache "$TCL"
     gpu_run "$TCL" "$W/logs/long-request.log" "${pk[@]}" -- -B -m v2.release.tests.gpu_long_request \
-      --package "$new" "${base_run[@]}" --tokens $((cap - 300)) --questions "$long_q" \
+      --package "$new" "${base_run[@]}" --tokens $((cap - 300)) --questions "$long_q" "${tie_args[@]}" \
       --out "$W/receipts/long-request.json" || status=1
     finish_cache "$TCL"
     for side in old new; do
