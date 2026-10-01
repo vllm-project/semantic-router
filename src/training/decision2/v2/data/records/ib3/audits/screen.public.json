@@ -1,0 +1,29 @@
+{
+ "confidence": {
+  "high": 39,
+  "low": 3,
+  "medium": 8
+ },
+ "defect_flags": 0,
+ "disagreements": 5,
+ "disagreements_by_family": {
+  "esci": 0,
+  "fdial2": 3,
+  "mqa": 1,
+  "phiu": 1,
+  "wpd": 0
+ },
+ "drop_at": 3,
+ "families_dropped": [
+  "fdial2"
+ ],
+ "families_kept": [
+  "esci",
+  "mqa",
+  "phiu",
+  "wpd"
+ ],
+ "n": 50,
+ "per_family": 10,
+ "schema": "decision2.ib3.screen.v1"
+}

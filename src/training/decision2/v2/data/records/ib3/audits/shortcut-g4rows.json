@@ -1,0 +1,33 @@
+{
+ "hypothesis_fields": {
+  "esci": "product",
+  "fdial": "response",
+  "fdial2": "response",
+  "haluqa": "answer",
+  "maud": "proposed_answer",
+  "mqa": "proposed_answer"
+ },
+ "input": "89ea11aa1b546a262f4cc06b901e31b28b5bd306d23c3b3c3e51b72b59df5632",
+ "rows": {
+  "esci": 9986,
+  "fdial2": 4976,
+  "mqa": 8762,
+  "phiu": 1730,
+  "wpd": 3708
+ },
+ "schema": "decision2.ib3.g4rows.v1",
+ "url_shape_baseline": {
+  "phiu": {
+   "cell_baseline_accuracy": 0.4659,
+   "cells": 4,
+   "rows": 1730,
+   "yes_share": 0.5
+  },
+  "wpd": {
+   "cell_baseline_accuracy": 0.4315,
+   "cells": 34,
+   "rows": 3708,
+   "yes_share": 0.5
+  }
+ }
+}

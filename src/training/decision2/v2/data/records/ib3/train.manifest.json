@@ -1,0 +1,177 @@
+{
+ "arm_id": "IB3",
+ "canonical_form": "rows sorted by id; canonical(row) + '\\n' per row; UTF-8",
+ "canonical_path": "ib3.train.jsonl",
+ "choice": {
+  "by_option_bucket": {},
+  "gold_position_by_bucket": {}
+ },
+ "content_sha256": "688b643ed6ada12adedb1c18c028be3a41fedca77c4c9cb661f2c9ded4b5504e",
+ "counts": {
+  "family": {
+   "esci": 9970,
+   "mqa": 8758,
+   "phiu": 1720,
+   "wpd": 3700
+  },
+  "language": {
+   "en": 20760,
+   "es": 1490,
+   "ja": 1898
+  },
+  "source": {
+   "amazon_esci_train": 9970,
+   "mathqa_train": 8758,
+   "mendeley_web_page_phishing": 3700,
+   "uci_phiusiil": 1720
+  },
+  "task_type": {
+   "noul": 24148
+  }
+ },
+ "groups": 14507,
+ "input": {
+  "is_canonical": true,
+  "path": "ib3.train.jsonl",
+  "sha256": "688b643ed6ada12adedb1c18c028be3a41fedca77c4c9cb661f2c9ded4b5504e"
+ },
+ "license_registry_sha256": "1b225a2c453ac12b338f89afd1535c8bc15c17f59b2226b21383202b67f27219",
+ "licenses": {
+  "amazon_esci_train": {
+   "attribution": "Reddy, Màrquez, Valero, Rao, Zaragoza, Bandyopadhyay, Biswas, Xing and Subbian, Shopping Queries Dataset: A Large-Scale ESCI Benchmark for Improving Product Search (2022); amazon-science/esci-data@7916cdf6ab75a462e77f20ab40428a10923998d5 shopping_queries_dataset_examples.parquet and shopping_queries_dataset_products.parquet, split = train only, labels E and I only; IN-DISTRIBUTION for the Index's Amazon ESCI benchmark",
+   "evidence": "https://github.com/amazon-science/esci-data/blob/7916cdf6ab75a462e77f20ab40428a10923998d5/LICENSE (Apache License 2.0)",
+   "license": "Apache-2.0",
+   "redistribution": "permitted with the Apache-2.0 notice"
+  },
+  "mathqa_train": {
+   "attribution": "Amini, Gabriel, Lin, Koncel-Kedziorski, Choi and Hajishirzi, MathQA: Towards Interpretable Math Word Problem Solving with Operation-Based Formalisms (NAACL 2019); math-qa.github.io/math-QA/data/MathQA.zip (sha256 7344f30456a7aef3176d4866cc953b35b41bec44eda6b00cdbcfde2876b2f07a), train.json only; problems from AQuA-RAT (Ling, Yogatama, Dyer and Blunsom, ACL 2017; Apache-2.0)",
+   "evidence": "https://huggingface.co/datasets/allenai/math_qa/blob/c4f1cc784c04c4957b50c97858f23893b633eea6/README.md (license: apache-2.0); https://huggingface.co/datasets/deepmind/aqua_rat (license: apache-2.0)",
+   "license": "Apache-2.0",
+   "redistribution": "permitted with the Apache-2.0 notice"
+  },
+  "mendeley_web_page_phishing": {
+   "attribution": "Hannousse and Yahiouche, Towards benchmark datasets for machine learning based website phishing detection: An experimental study (Engineering Applications of Artificial Intelligence 104, 2021); Web page phishing detection, Mendeley Data c2gw7fy2j4 version 3 (DOI 10.17632/c2gw7fy2j4.3), dataset_B_05_2020.csv, columns url and status only",
+   "evidence": "https://data.mendeley.com/datasets/c2gw7fy2j4/3 (data_licence: CC BY 4.0, Creative Commons Attribution 4.0 International)",
+   "license": "CC-BY-4.0",
+   "redistribution": "permitted with attribution"
+  },
+  "uci_phiusiil": {
+   "attribution": "Prasad and Chandra, PhiUSIIL: A diverse security profile empowered phishing URL detection framework based on similarity index and incremental learning (Computers & Security 136, 2024); PhiUSIIL Phishing URL (Website), UCI Machine Learning Repository dataset 967, phiusiil+phishing+url+dataset.zip, columns URL, Title and label only",
+   "evidence": "https://archive.ics.uci.edu/dataset/967/phiusiil+phishing+url+dataset (This dataset is licensed under a Creative Commons Attribution 4.0 International (CC BY 4.0) license)",
+   "license": "CC-BY-4.0",
+   "redistribution": "permitted with attribution"
+  }
+ },
+ "noul": {
+  "labels": {
+   "false": 12074,
+   "true": 12074
+  },
+  "true_fraction": 0.5
+ },
+ "partition": "train",
+ "role": "train",
+ "rows": 24148,
+ "rows_per_group": {
+  "1": 4866,
+  "2": 9641
+ },
+ "schema": "decision2.v2.freeze.v1",
+ "score": {
+  "by_levels": {},
+  "by_levels_grade": {}
+ },
+ "state_chars": {
+  "p0": 22,
+  "p10": 57,
+  "p100": 1339,
+  "p25": 96,
+  "p50": 234,
+  "p75": 408,
+  "p90": 964,
+  "p99": 1095
+ },
+ "tokens": [
+  {
+   "by_language": {
+    "en": 3568267,
+    "es": 420140,
+    "ja": 556366
+   },
+   "by_task_type": {
+    "noul": 4544773
+   },
+   "kind": "native_decoder",
+   "name": "qwen3-0.6b-base@da87bfb6",
+   "padded8_total": 4629048,
+   "path": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+   "quantiles": {
+    "p0": 97,
+    "p10": 107,
+    "p100": 952,
+    "p25": 121,
+    "p50": 159,
+    "p75": 207,
+    "p90": 328,
+    "p99": 553
+   },
+   "revision": null,
+   "tokenizer_json_sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539",
+   "total": 4544773
+  },
+  {
+   "by_language": {
+    "en": 3750853,
+    "es": 403382,
+    "ja": 498088
+   },
+   "by_task_type": {
+    "noul": 4652323
+   },
+   "kind": "native_decoder",
+   "name": "qwen3.5-0.8b-base@dc7cdfe2",
+   "padded8_total": 4736712,
+   "path": "dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68",
+   "quantiles": {
+    "p0": 106,
+    "p10": 116,
+    "p100": 853,
+    "p25": 129,
+    "p50": 167,
+    "p75": 213,
+    "p90": 331,
+    "p99": 487
+   },
+   "revision": null,
+   "tokenizer_json_sha256": null,
+   "total": 4652323
+  },
+  {
+   "by_language": {
+    "en": 2482369,
+    "es": 299019,
+    "ja": 369149
+   },
+   "by_task_type": {
+    "noul": 3150537
+   },
+   "kind": "raw",
+   "name": "kai-0.6b@7185f514",
+   "padded8_total": 3236072,
+   "path": "tokenizer",
+   "quantiles": {
+    "p0": 46,
+    "p10": 57,
+    "p100": 743,
+    "p25": 71,
+    "p50": 106,
+    "p75": 150,
+    "p90": 263,
+    "p99": 413
+   },
+   "revision": null,
+   "tokenizer_json_sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
+   "total": 3150537
+  }
+ ]
+}

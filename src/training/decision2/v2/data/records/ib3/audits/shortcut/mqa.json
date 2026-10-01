@@ -1,0 +1,475 @@
+{
+ "folds": {
+  "groups": [
+   874,
+   890,
+   886,
+   920,
+   811
+  ],
+  "rows": [
+   1748,
+   1780,
+   1772,
+   1840,
+   1622
+  ],
+  "rule": "int(sha256(group_id).hexdigest(), 16) % 5"
+ },
+ "gate": {
+  "margin": 0.05,
+  "min_rows": 30,
+  "rule": "PASS iff accuracy <= majority + margin; majority is the cross-validated position prior on the same rows",
+  "views": [
+   "state_removed",
+   "option_only",
+   "hypothesis_only"
+  ]
+ },
+ "gates": [
+  {
+   "accuracy": 0.5,
+   "delta": 0.0,
+   "families_over_margin": [],
+   "majority": 0.5,
+   "n": 8762,
+   "pass": true,
+   "task_type": "noul",
+   "threshold": 0.55,
+   "view": "state_removed",
+   "wilson95": [
+    0.489533,
+    0.510467
+   ]
+  },
+  {
+   "accuracy": 0.5,
+   "delta": 0.0,
+   "families_over_margin": [],
+   "majority": 0.5,
+   "n": 8762,
+   "pass": true,
+   "task_type": "noul",
+   "threshold": 0.55,
+   "view": "option_only",
+   "wilson95": [
+    0.489533,
+    0.510467
+   ]
+  },
+  {
+   "accuracy": 0.543141,
+   "delta": 0.043141,
+   "families_over_margin": [],
+   "majority": 0.5,
+   "n": 8762,
+   "pass": true,
+   "task_type": "noul",
+   "threshold": 0.55,
+   "view": "hypothesis_only",
+   "wilson95": [
+    0.532694,
+    0.55355
+   ]
+  }
+ ],
+ "groups": 4381,
+ "heuristics": {
+  "lexical_overlap": {
+   "n_rows": 0
+  },
+  "longest_option": {
+   "by_family": {
+    "mqa": {
+     "accuracy": 0.5,
+     "correct": 4381,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.5,
+     "n": 8762,
+     "wilson95": [
+      0.489533,
+      0.510467
+     ]
+    }
+   },
+   "by_source": {
+    "mathqa_train": {
+     "accuracy": 0.5,
+     "correct": 4381,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.5,
+     "n": 8762,
+     "wilson95": [
+      0.489533,
+      0.510467
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "mqa": {
+      "accuracy": 0.5,
+      "correct": 4381,
+      "delta": 0.0,
+      "exceeds_margin": false,
+      "majority": 0.5,
+      "n": 8762,
+      "wilson95": [
+       0.489533,
+       0.510467
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.5,
+     "correct": 4381,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.5,
+     "n": 8762,
+     "wilson95": [
+      0.489533,
+      0.510467
+     ]
+    }
+   },
+   "n_rows": 8762
+  },
+  "position_prior": {
+   "by_family": {
+    "mqa": {
+     "accuracy": 0.5,
+     "correct": 4381,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.5,
+     "n": 8762,
+     "wilson95": [
+      0.489533,
+      0.510467
+     ]
+    }
+   },
+   "by_source": {
+    "mathqa_train": {
+     "accuracy": 0.5,
+     "correct": 4381,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.5,
+     "n": 8762,
+     "wilson95": [
+      0.489533,
+      0.510467
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "mqa": {
+      "accuracy": 0.5,
+      "correct": 4381,
+      "delta": 0.0,
+      "exceeds_margin": false,
+      "majority": 0.5,
+      "n": 8762,
+      "wilson95": [
+       0.489533,
+       0.510467
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.5,
+     "correct": 4381,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.5,
+     "n": 8762,
+     "wilson95": [
+      0.489533,
+      0.510467
+     ]
+    }
+   },
+   "n_rows": 8762
+  }
+ },
+ "input": {
+  "rows": 8762,
+  "sha256": "ff6beb10813f7bbd794103ef10228fa2a292ee678fe0b0459d9de1d3ff7590d7"
+ },
+ "learner": {
+  "bits": 20,
+  "epochs": 4,
+  "instruction_cross_cap": 64,
+  "l2": 1e-06,
+  "learning_rate": 0.1,
+  "seed": 0,
+  "state_cross_cap": 128,
+  "state_cross_unigrams": 64,
+  "state_gram_cap": 128,
+  "text_gram_cap": 1024
+ },
+ "majority": {
+  "noul": {
+   "accuracy": 0.5,
+   "n": 8762
+  }
+ },
+ "rows": 8762,
+ "schema": "decision2.v2.shortcut.v1",
+ "verdict": "PASS",
+ "views": {
+  "full_input": {
+   "by_family": {
+    "mqa": {
+     "accuracy": 0.50913,
+     "correct": 4461,
+     "delta": 0.00913,
+     "exceeds_margin": false,
+     "majority": 0.5,
+     "n": 8762,
+     "wilson95": [
+      0.498661,
+      0.519592
+     ]
+    }
+   },
+   "by_source": {
+    "mathqa_train": {
+     "accuracy": 0.50913,
+     "correct": 4461,
+     "delta": 0.00913,
+     "exceeds_margin": false,
+     "majority": 0.5,
+     "n": 8762,
+     "wilson95": [
+      0.498661,
+      0.519592
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "mqa": {
+      "accuracy": 0.50913,
+      "correct": 4461,
+      "delta": 0.00913,
+      "exceeds_margin": false,
+      "majority": 0.5,
+      "n": 8762,
+      "wilson95": [
+       0.498661,
+       0.519592
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.50913,
+     "correct": 4461,
+     "delta": 0.00913,
+     "exceeds_margin": false,
+     "majority": 0.5,
+     "n": 8762,
+     "wilson95": [
+      0.498661,
+      0.519592
+     ]
+    }
+   },
+   "n_rows": 8762
+  },
+  "hypothesis_only": {
+   "by_family": {
+    "mqa": {
+     "accuracy": 0.543141,
+     "correct": 4759,
+     "delta": 0.043141,
+     "exceeds_margin": false,
+     "majority": 0.5,
+     "n": 8762,
+     "wilson95": [
+      0.532694,
+      0.55355
+     ]
+    }
+   },
+   "by_source": {
+    "mathqa_train": {
+     "accuracy": 0.543141,
+     "correct": 4759,
+     "delta": 0.043141,
+     "exceeds_margin": false,
+     "majority": 0.5,
+     "n": 8762,
+     "wilson95": [
+      0.532694,
+      0.55355
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "mqa": {
+      "accuracy": 0.543141,
+      "correct": 4759,
+      "delta": 0.043141,
+      "exceeds_margin": false,
+      "majority": 0.5,
+      "n": 8762,
+      "wilson95": [
+       0.532694,
+       0.55355
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.543141,
+     "correct": 4759,
+     "delta": 0.043141,
+     "exceeds_margin": false,
+     "majority": 0.5,
+     "n": 8762,
+     "wilson95": [
+      0.532694,
+      0.55355
+     ]
+    }
+   },
+   "n_rows": 8762
+  },
+  "option_only": {
+   "by_family": {
+    "mqa": {
+     "accuracy": 0.5,
+     "correct": 4381,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.5,
+     "n": 8762,
+     "wilson95": [
+      0.489533,
+      0.510467
+     ]
+    }
+   },
+   "by_source": {
+    "mathqa_train": {
+     "accuracy": 0.5,
+     "correct": 4381,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.5,
+     "n": 8762,
+     "wilson95": [
+      0.489533,
+      0.510467
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "mqa": {
+      "accuracy": 0.5,
+      "correct": 4381,
+      "delta": 0.0,
+      "exceeds_margin": false,
+      "majority": 0.5,
+      "n": 8762,
+      "wilson95": [
+       0.489533,
+       0.510467
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.5,
+     "correct": 4381,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.5,
+     "n": 8762,
+     "wilson95": [
+      0.489533,
+      0.510467
+     ]
+    }
+   },
+   "n_rows": 8762
+  },
+  "state_removed": {
+   "by_family": {
+    "mqa": {
+     "accuracy": 0.5,
+     "correct": 4381,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.5,
+     "n": 8762,
+     "wilson95": [
+      0.489533,
+      0.510467
+     ]
+    }
+   },
+   "by_source": {
+    "mathqa_train": {
+     "accuracy": 0.5,
+     "correct": 4381,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.5,
+     "n": 8762,
+     "wilson95": [
+      0.489533,
+      0.510467
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "mqa": {
+      "accuracy": 0.5,
+      "correct": 4381,
+      "delta": 0.0,
+      "exceeds_margin": false,
+      "majority": 0.5,
+      "n": 8762,
+      "wilson95": [
+       0.489533,
+       0.510467
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.5,
+     "correct": 4381,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.5,
+     "n": 8762,
+     "wilson95": [
+      0.489533,
+      0.510467
+     ]
+    }
+   },
+   "n_rows": 8762
+  }
+ }
+}

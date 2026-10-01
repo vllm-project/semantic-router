@@ -1,0 +1,157 @@
+{
+ "dev": {
+  "family": {
+   "esci": 1160,
+   "fdial2": 610,
+   "mqa": 1018,
+   "phiu": 193,
+   "wpd": 453
+  },
+  "groups": 1903,
+  "label_by_family": {
+   "esci": {
+    "0": 580,
+    "1": 580
+   },
+   "fdial2": {
+    "0": 305,
+    "1": 305
+   },
+   "mqa": {
+    "0": 509,
+    "1": 509
+   },
+   "phiu": {
+    "0": 104,
+    "1": 89
+   },
+   "wpd": {
+    "0": 238,
+    "1": 215
+   }
+  },
+  "language": {
+   "en": 3106,
+   "es": 128,
+   "ja": 200
+  },
+  "rows": 3434,
+  "sha256": "29c5a2a422a923914dbd2a6625fb40c7bd5f14073f74fb4615944fce001390a7",
+  "task_type": {
+   "noul": 3434
+  }
+ },
+ "inputs": {
+  "amazon_esci/shopping_queries_dataset_examples.parquet": "4a735b693b4a424a6fc67f5be6e4c811495c488bbf66d02a602d308b2744263a",
+  "amazon_esci/shopping_queries_dataset_products.parquet": "25124442d064d64b26f74082d6fa09438d679efc0c183cf28d19064a2b65a265",
+  "mathqa/train.json": "00e8919347d65dbba9289bf04ed998a6c48dbf451ca909eeb66a35f2419c2bf6",
+  "mcgill_faithdial/data/train.json": "51eff8212d804b1954b7eefa8987265750f0412b0b18b534ed2dbe636e524512",
+  "mendeley_wpd/dataset_B_05_2020.csv": "21093e2902e5441c86a6daf95e86e7c332046e477fdf109a579d7bd81e586d6c",
+  "rucaibox_halueval/data/qa_data.json": "89ed139ec5e3a3169a0b30e45569ac1283846f76f27f7bb5e908ee6deed57e88",
+  "theatticusproject_maud/MAUD_v1/MAUD_train.csv": "bac9f2d034ad487d5398ee2ac1c876679afea509ba8e7f1092112955c6180ff9",
+  "uci_phiusiil/phiusiil+phishing+url+dataset.zip": "0a639fd03aea6308c5b1c10c92aa23c2ce1505447a9137271865cd0badc9a59a"
+ },
+ "prereg": "records/ib3-prereg-2026-10-01.md",
+ "report": {
+  "duplicates": {
+   "conflicting": {},
+   "exact": {}
+  },
+  "families": {
+   "esci": {
+    "drop_boundary_class": 475752,
+    "drop_exact_duplicates": 0,
+    "drop_not_train": 638016,
+    "eligible": 12000,
+    "queries_with_both": 36649,
+    "read": 1983272,
+    "selected": 12000,
+    "selected_yes": 6000
+   },
+   "fdial2": {
+    "drop_exact_duplicates": 0,
+    "drop_no_other_knowledge": 14,
+    "drop_not_entailment": 14602,
+    "eligible": 7482,
+    "read": 18357,
+    "selected": 6000,
+    "selected_yes": 3000
+   },
+   "mqa": {
+    "drop_exact_duplicates": 0,
+    "drop_formula_not_executable": 253,
+    "drop_key_not_verified": 8975,
+    "drop_no_distant_option": 158,
+    "drop_non_numeric_option": 4350,
+    "eligible": 10000,
+    "read": 29837,
+    "selected": 10000,
+    "selected_yes": 5000,
+    "verified": 16101
+   },
+   "phiu": {
+    "drop_exact_duplicates": 2,
+    "drop_shape_cell": 99909,
+    "drop_title": 6,
+    "eligible": 135878,
+    "read": 235795,
+    "selected": 1946,
+    "selected_yes": 973
+   },
+   "wpd": {
+    "drop_exact_duplicates": 1,
+    "drop_ipv4": 86,
+    "drop_shortener": 54,
+    "drop_url_length": 242,
+    "eligible": 11047,
+    "read": 11430,
+    "selected": 4440,
+    "selected_yes": 2220
+   }
+  },
+  "group_merges": 0
+ },
+ "schema": "decision2.ib3.build.v1",
+ "train": {
+  "family": {
+   "esci": 10840,
+   "fdial2": 5390,
+   "mqa": 8982,
+   "phiu": 1753,
+   "wpd": 3987
+  },
+  "groups": 17200,
+  "label_by_family": {
+   "esci": {
+    "0": 5420,
+    "1": 5420
+   },
+   "fdial2": {
+    "0": 2695,
+    "1": 2695
+   },
+   "mqa": {
+    "0": 4491,
+    "1": 4491
+   },
+   "phiu": {
+    "0": 869,
+    "1": 884
+   },
+   "wpd": {
+    "0": 1982,
+    "1": 2005
+   }
+  },
+  "language": {
+   "en": 27464,
+   "es": 1562,
+   "ja": 1926
+  },
+  "rows": 30952,
+  "sha256": "89b47eb4a972e2fc124e27ff249b23a63a5c2f95bc7273efea2ee5f1d401f5c5",
+  "task_type": {
+   "noul": 30952
+  }
+ }
+}
