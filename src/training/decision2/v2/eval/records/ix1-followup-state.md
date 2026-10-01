@@ -10,6 +10,12 @@ shapes and GPU-hours.
 
 ## Now
 
+- 07:50Z — C extra: the IX1 calibration study rerun with the fixed `calib.py` on all six sizes (old outputs kept as
+  `*-v1-labelbug`; 12 rescorings, both scorers pass each). Results in the private C note only.
+  - A20r baseline for B: its merged results with the two failed long requests replaced by the fixed-runtime
+    reruns (`runs/DEV2.0-27B/merged-budget`): 120,226 / 120,226 ok, scorers pass.
+  - Tool `v2/eval/ix1/family_delta.py` (`ddd977c54`; per-family difference of two compare files, private output).
+  - B: M5-L128 shards about 45% (6,300–8,800 of ~15,000 rows each).
 - 07:35Z — **A done.** 27B parity passes (0 changes on all four panels, drift 0). Benches old vs new, 400 / 400
   bit-identical each: p50 ms 0.8B 25.6 → 23.2, 9B 28.7 → 28.6, 27B 98.9 → 98.8; request peak unchanged. Hand-off
   record `v2/release/records/dev2-runtime-forward-budget-2026-10-01.md` (`5517093c1`). Merged into
