@@ -36,6 +36,9 @@ die() { log "$*"; exit 1; }
 py() { (cd "$S" && PYTHONPATH=$S python3 -B "$@"); }
 pred() { echo "$L/$1/$2/$2.predictions.jsonl"; }
 mkdir -p "$L/diag" "$L/readout" "$M/select"
+# one scoring process at a time (two concurrent runs once raced the run-once rules step; amendment 2)
+exec 9> "$M/select/.m11-score.lock"
+flock -n 9 || die "another m11-score.sh is running"
 
 ht() {  # <left> <right> <out name>
   local out=$L/diag/$3.htdev2.json
@@ -50,8 +53,24 @@ probes() {  # <left> <right> <out name>
   [ -f "$out" ] && return 0
   local gold=$PG/m10-probes.${1%%-*}.gold.jsonl
   [ -f "$gold" ] || die "no tier probe gold $gold (m11-score.sh probe-gold)"
-  py "$OPS/m10/m10_probes.py" score --gold "$gold" --predictions "$(pred "$1" m10-probes)" \
-    --reference "$(pred "$2" m10-probes)" --output "$out" > "$L/diag/$3.probes.log" 2>&1 \
+  # the tier gold drops the probe items that hit the tier's TRAIN; the scorer expects gold for every prediction,
+  # so both sides' predictions are restricted to the tier gold's ids first
+  local lp=$L/diag/$3.left.m10-probes.jsonl rp=$L/diag/$3.right.m10-probes.jsonl
+  python3 - "$gold" "$(pred "$1" m10-probes)" "$lp" "$(pred "$2" m10-probes)" "$rp" << 'EOF2' || die "$3 probe filter FAILED"
+import json, sys
+ids = {json.loads(line)["id"] for line in open(sys.argv[1])}
+for src, dst in ((sys.argv[2], sys.argv[3]), (sys.argv[4], sys.argv[5])):
+    kept = 0
+    with open(src) as f, open(dst, "w") as out:
+        for line in f:
+            if json.loads(line)["id"] in ids:
+                out.write(line)
+                kept += 1
+    if kept != len(ids):
+        raise SystemExit(f"{src}: {kept} predictions for {len(ids)} gold items")
+EOF2
+  py "$OPS/m10/m10_probes.py" score --gold "$gold" --predictions "$lp" \
+    --reference "$rp" --output "$out" > "$L/diag/$3.probes.log" 2>&1 \
     || die "$3 probes FAILED (see $L/diag/$3.probes.log)"
   log "$3 probes: $(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print({k: d.get(k) for k in ("macro_mmlu_arc_gsm8k","macro_delta","macro_delta_ci95")})' "$out")"
 }
