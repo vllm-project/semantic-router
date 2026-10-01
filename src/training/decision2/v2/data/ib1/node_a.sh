@@ -467,7 +467,8 @@ hf_upload() {
   read -r before parent < <(info)
   [ "$before" = "True" ] || { echo "dataset is not private; refusing to upload" >&2; exit 1; }
   echo "$(date -u +%FT%TZ) parent=$parent private=$before" | tee -a "$log"
-  hf upload "$repo" "$tree" m6/ib1 --repo-type dataset --commit-message "$msg" >> "$log" 2>&1
+  # --delete patterns are relative to m6/ib1: files of an earlier revision that this tree lacks are removed.
+  hf upload "$repo" "$tree" m6/ib1 --repo-type dataset --delete '*' --commit-message "$msg" >> "$log" 2>&1
   read -r after head < <(info)
   [ "$after" = "True" ] || { echo "dataset private flag changed" >&2; exit 1; }
   rev=$("$py" "$CODE/v2/data/hr2/hf_readback.py" pin "$repo" "$parent" "$msg")
