@@ -11,7 +11,7 @@
 #      examples, the card's Transformers example on the package, on the download and from the Hub in fresh caches
 #      under Transformers 5.17 and 5.18, readback, gate and collection; the released package must equal step 2's
 #   4. card HTTP, links and gate evaluate
-# GPU: node E GPU6 or GPU7 only, as a co-tenant entry (--shared-lease) where the owner's lease allows release smokes.
+# GPU: node E GPU6 or GPU7 only, under this track's own lease (track=release-automap), removed afterwards if still ours.
 # Usage: bash <mirror>/v2/release/records/dev2-card2-2026-10-02/ops/card2.sh <tier> --gpu 6|7 [--resume REV]
 set -euo pipefail
 tier="${1:-}"
@@ -25,6 +25,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 [[ "$gpu" =~ ^[67]$ ]] || { echo "node E GPU6 or GPU7 only (--gpu)" >&2; exit 2; }
+lease=/data/dev2/leases/gpu$gpu.lock
+if [[ -e "$lease" ]] && [[ -n "$(ls -A "$lease")" ]]; then
+  echo "gpu$gpu already has a lease entry ($(ls "$lease")): refusing" >&2; exit 1
+fi
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 S=$(cd "$(dirname "$0")/../../../../.." && pwd)
 SRC=$(basename "$(cd "$S/../../.." && pwd)")
@@ -122,12 +126,14 @@ echo "mirror $SRC tier $tier gpu $gpu work $W"
 set -x
 status=0
 "$S/v2/release/release.sh" --spec "$SPEC" --src "$SRC" --work "$W" --image "$image" \
-  --gpu "$gpu" --track release-automap --shared-lease release-card --threads 4 \
+  --gpu "$gpu" --track release-automap --threads 4 \
   "${kernel_args[@]}" "${base_args[@]}" --env HIP_FORCE_DEV_KERNARG=1 "${cache_args[@]}" \
   --upload --collect --already-collected --hub-site "tf518=$TF518" || status=$?
 set +x
 [[ "$cache_tool" != 27b || ! -d "$TC" ]] || (cd "$S" && python3 -m v2.27b.triton_cache finish --dest "$TC") || true
-rm -f "/data/dev2/leases/gpu$gpu.lock/owner.release-card"
+if grep -qx "track=release-automap" "$lease/owner" 2>/dev/null && grep -qx "run_dir=$W" "$lease/owner"; then
+  rm -f "$lease/owner" && rmdir "$lease" 2>/dev/null || true
+fi
 python3 - "$W/receipts" <<'PY' || true
 import json, sys
 from pathlib import Path
