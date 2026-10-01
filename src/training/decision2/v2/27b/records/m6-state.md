@@ -197,6 +197,10 @@ is still fixing the long-input runtime bug and staging its M5-L128 Index diagnos
 
 ## Poll log (newest first)
 
+- 13:32Z (poll at 13:31Z; a 38-min wait ran ≈ 63 min, so this commit is ≈ 64 min after the previous one; worker
+  alive): all alive. M6-IB 2,129 / 2,014 (13.0 / 13.8 h; third SELECT700 at 1908: **.9148 / .8894**, BEST = 1908);
+  M6-IB2 2,058 / 2,046 (17.5 / 17.6 h; s2 at 1654 .8748, BEST stays 827); M6-IBX 1,776 / 1,750 (13.7 / 13.9 h);
+  **M6-IB2PN 687 / 653 (18.7 / 18.5 h, cap 22)**. GPU-h ≈ 34.6 (closed 1.314 + running ≈ 33.3).
 - 12:30Z (poll at 12:27Z): all alive. M6-IB 1,707 / 1,621 (13.1 / 13.8 h); M6-IB2 1,657 / 1,654 (17.5 / 17.5 h; s1's
   second SELECT700 at 1654 .8695, BEST = 1654); M6-IBX 1,376 / 1,357 (13.8 / 13.9 h; at 1250 .8692 / .8873, BEST =
   1250); **M6-IB2PN 290 / 253 of 6,886 (projections 19.0 / 18.8 h, cap 22)**; M6-IB2PN-s2 preflights: onestep 0.071,
