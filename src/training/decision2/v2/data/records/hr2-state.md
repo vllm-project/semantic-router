@@ -9,16 +9,22 @@ files) and the run directory `b2-c54b8d444cac/` (candidates, scans, review keys,
 **Status: round 1 DONE, flagged NOT release-safe.** Private `llm-semantic-router/decision-2.0-training-data@afc3bc1e1d6849058f6fafdfbc3dfe007d067400`,
 `m5/hr2/`: TRAIN 27,697 rows (`0fd9b2db…`), DEV 1,615 (`697c3142…`). Blind review 13 / 216 = 6.02% (P1 / P2 fail).
 
-**HR2-r2: IN PROGRESS** (worker started 2026-10-01 10:24 UTC+8). Amendment 4
-(`records/hr2-prereg-amendment-4-2026-10-01.md`): drop VitaminC and Allegro (licence uncertain), drop `hs3_help`
-(C1) and PRM800K boundary yes rows (C2); fresh review 6 × 48 = 288 rows (P1 ≤ 13 errors, P3 ≥ 7 / 48 fails, no fix
-rule). Runner `v2/data/hr2/node_a_r2.sh`; run directory `/data/dev2/private/data/hr2/b2-c54b8d444cac-r2/` (reads the
-round-1 directory read-only). Stages: analyze ✔ → pass → audits → review → splits → score → final → hf-assemble →
-hf-upload.
+**HR2-r2: DONE, flagged NOT release-safe.** Amendment 4 (`records/hr2-prereg-amendment-4-2026-10-01.md`,
+`84a2fb714`): VitaminC and Allegro dropped (licence uncertain), `hs3_help` (C1) and PRM800K boundary yes rows (C2)
+dropped; fresh review 288 rows: 13 errors, 4.51% [2.43, 7.60] (P1 pass), weighted 8.02% (P2 fail), `hs3_pref` 7 / 48
+(P3 fail); no fix rule. Private `…@16ea6cf7b3c8229eb51ecb5782bab7e10d93aa01`, `m5/hr2/` (38 files, replaces round 1;
+round 1 stays at `afc3bc1e`): TRAIN 16,095 rows (`820cb5a7…`, 10.61M tokens), DEV 954 (`dff8f4ea…`). Results
+`records/hr2-r2-results-2026-10-01.md`; receipts `records/hr2/r2/`. Runner `v2/data/hr2/node_a_r2.sh`; run directory
+`/data/dev2/private/data/hr2/b2-c54b8d444cac-r2/` (review keys, packets, answers and error ids stay there).
 
 ## Log (newest first)
 
-- 2026-10-01 12:00 UTC+8 — **round-2 blind review FAILED** (288 rows; R1 / R2 four fresh subagents, R3 fresh on 3
+- 2026-10-01 11:58 UTC+8 — **r2 published**: final TRAIN 16,095 / DEV 954 (G5 PASS, G7 PASS, leak 0; final-files
+  recheck 0 / 0); `hf_headroom.sh` 47.98 GB free; upload `16ea6cf7` on `afc3bc1e` with `--delete '*'` under
+  `m5/hr2/`: read-back 37 / 37 SHA-equal, remote folder = registry, other 750 files unchanged, private before and
+  after. Records written (results, card, status, receipts). Local review copies to be removed after the merge.
+
+- 2026-10-01 11:47 UTC+8 — **round-2 blind review FAILED** (288 rows; R1 / R2 four fresh subagents, R3 fresh on 3
   splits): 13 / 288 = 4.51% [2.43, 7.60] (P1 pass), population-weighted 8.02% [3.83, 12.82] (P2 fail), `hs3_pref`
   7 / 48 (P3 fail); `prm_step` 3, `eth_cs` 1, `eth_just` 1, `eth_util` 1, `eth_deon` 0. κ .986. No fix rule
   (amendment 4): HR2-r2 is published flagged `release_safe: false`; the 13 round-2 errors leave TRAIN. Next: final,
@@ -67,7 +73,11 @@ hf-upload.
 
 ## Next steps (for the coordinator)
 
-1. ~~Gist 02 entry and the merge into `xunzhuo/decision-2-training`.~~ Done.
-2. Coordinator decision: use HR2 for experiments only (not release-safe), or commission a separately
-   preregistered HR2-r2 (for example without VitaminC "refutes" rows and `hs3_help`, fresh blind review).
-3. Before any C1-scored model trained on HR2: the custodian C1 content recheck (HR2 is inside the rescan roots).
+1. Gist 02 entry and the merge into `xunzhuo/decision-2-training` for HR2-r2 (worker, in progress).
+2. Coordinator decision: HR2-r2 (`16ea6cf7`) for experiments only (not release-safe; it supersedes round 1 for
+   experiments), or a separately preregistered round. Cleanest candidates: ETHICS (6 / 288 errors over both rounds)
+   and PRM800K (4 / 72); HelpSteer3 preferences are the open problem (8 / 72; all round-2 errors at medium or low
+   reviewer confidence), for example a human adjudication of the disagreements or a margin rule tested on fresh rows.
+3. Licence: amendment 4 applied "ShareAlike not established compatible with Apache-2.0 releases → drop"; the same
+   question applies to CC BY-SA sources already in released mixtures (the 22:20 card policy credits them).
+4. Before any C1-scored model trained on HR2 / HR2-r2: the custodian C1 content recheck (inside the rescan roots).

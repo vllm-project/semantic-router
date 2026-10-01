@@ -1,0 +1,62 @@
+{
+ "cells": {
+  "allegro|0": 5,
+  "allegro|1": 5,
+  "allegro|2": 5,
+  "allegro|3": 5,
+  "allegro|4": 4,
+  "eth_cs|false": 12,
+  "eth_cs|true": 12,
+  "eth_deon|false": 12,
+  "eth_deon|true": 12,
+  "eth_just|false": 12,
+  "eth_just|true": 12,
+  "eth_util|a": 12,
+  "eth_util|b": 12,
+  "hs3_help|0": 4,
+  "hs3_help|1": 5,
+  "hs3_help|2": 5,
+  "hs3_help|3": 5,
+  "hs3_help|4": 5,
+  "hs3_pref|a": 12,
+  "hs3_pref|b": 12,
+  "prm_step|false": 12,
+  "prm_step|true": 12,
+  "vitc|false": 12,
+  "vitc|true": 12
+ },
+ "n": 216,
+ "per_family": 24,
+ "population": {
+  "allegro": 3125,
+  "eth_cs": 1086,
+  "eth_deon": 1094,
+  "eth_just": 1082,
+  "eth_util": 3108,
+  "hs3_help": 4030,
+  "hs3_pref": 7120,
+  "prm_step": 3564,
+  "vitc": 3534
+ },
+ "rows": 27743,
+ "rows_sha256": "dbbe6a6c5531f23bdbe4a60025b8b97f072cb3050f9c728d50fd60ab99062851",
+ "salt": "hr2-review-v1",
+ "sampled": {
+  "allegro": 24,
+  "eth_cs": 24,
+  "eth_deon": 24,
+  "eth_just": 24,
+  "eth_util": 24,
+  "hs3_help": 24,
+  "hs3_pref": 24,
+  "prm_step": 24,
+  "vitc": 24
+ },
+ "schema": "decision2.hr2.review-sample.v1",
+ "thresholds": {
+  "error_max": 0.05,
+  "error_upper_max": 0.08,
+  "family_errors_fail": 5,
+  "weighted_error_max": 0.05
+ }
+}
