@@ -205,6 +205,31 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 10:30 — **Watchdog sweep after a ~9 h gap; relaunches; BF16 rollout; HR2 status and next steps.**
+  - **Silent stops found:**
+    - 27B M5 continuation 3 (last poll 16:50Z, ~00:50 UTC+8): L128 trained to completion and the detached
+      `chain-L128` should have soup'd and run devgates. → **continuation #4 (81cd6733)** finishes verdicts and the
+      results record.
+    - MoE worker (last state 17:05Z, ~01:05 UTC+8): the screen chains ran. Gemma-4-26B-A4B-it seeds s1 (9 h) and s2
+      (4 h) are training on node A; the Qwen3.5-35B-A3B cells have stopped. → **MoE continuation (180e55fc)**.
+  - **Finished without a notification:**
+    - HR2 continuation (01:17, "worker done");
+    - vLLM plugin prototype (01:11, final serving record).
+  - **BF16-resident runtime rollout (b5f60b33),** adopting the default because the user's question went unanswered for
+    ~9 h:
+    - a runtime-only revision for each of the six repos, only with 0 answer changes on every scored prompt and
+      mlx-diag;
+    - latency and memory measured old vs new;
+    - node A GPU0–1 and node B GPU2–4 under shared leases.
+  - **HR2:** published at `afc3bc1e` (`m5/hr2/`): 27,697 TRAIN rows, 16.75M tokens, 5 sources (HelpSteer3 CC BY 4.0,
+    ETHICS MIT, PRM800K MIT, VitaminC CC BY-SA 3.0, Allegro CC BY-SA 4.0). **Flagged NOT RELEASE-SAFE:** the blind
+    review found 13 / 216 errors, 6.02% [3.24, 10.07] (thresholds ≤ 5% / upper ≤ 8%), spread across families.
+    - **HR2-r2 fix (bd? data worker):** error analysis, a licence re-check of the CC BY-SA sources, a preregistered
+      construction filter, a fresh review of ≥ 200 rows.
+    - **4B HR2 efficacy pilot (decoder worker)**, NOT releasable: full seeds from Nox + N4XF + an HR2 block vs a
+      matched control, screened with HT-DEV v2; node A GPU6–7; 16 GPU-h. If HR2 helps, release candidates retrain on
+      HR2-r2.
+
 - 2026-10-01 01:10 — **Open Decision Runtime proposal v2 published** (same secret gist, updated in place; repo commit
   `62ac7d233`, integration `b5eb195c5`; ~7,980 words; 22 open decisions).
   - It folds in: the general router-model runtime (four surfaces), `task_heads`, `multimodal_embedding`, the
