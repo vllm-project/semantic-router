@@ -24,7 +24,7 @@ def entries(decider_repo: str | None = "Mapika/decider-2b") -> list[dict]:
             "key": "cand",
             "role": "candidate",
             "report": str(REPORTS / "bosun17b.json"),
-            "label": "DEV2.0-2B",
+            "label": "Decision-2.0-Sol-2B",
         },
         {
             "key": "sol1",

@@ -14,8 +14,10 @@
   },
   "tiers": {
     "0.6B": {
-      "model": "DEV2.0-0.6B",
-      "repo": "llm-semantic-router/DEV2.0-0.6B",
+      "model": "Decision-2.0-Kai-0.6B",
+      "former_model": "DEV2.0-0.6B",
+      "repo": "llm-semantic-router/Decision-2.0-Kai-0.6B",
+      "former_repo": "llm-semantic-router/DEV2.0-0.6B",
       "revision": "b21313375ad77ddf4a8e420fa5195e6e09582043",
       "identity": "bb806f31a14d4532a1b5e00984442128f47f46cbbc68e57e7623327c81cfb983",
       "manifest_sha256": "816827dd836d21ab0b7555605fdc56dd5189ee4462a541a84de27de97f637796",
@@ -27,8 +29,10 @@
       "backup": "private eval-artifacts c1-postkey/0.6B/dev2-0p6b-b2131337-20260929T161232Z (afcbb407)"
     },
     "0.8B": {
-      "model": "DEV2.0-0.8B",
-      "repo": "llm-semantic-router/DEV2.0-0.8B",
+      "model": "Decision-2.0-Eos-0.8B",
+      "former_model": "DEV2.0-0.8B",
+      "repo": "llm-semantic-router/Decision-2.0-Eos-0.8B",
+      "former_repo": "llm-semantic-router/DEV2.0-0.8B",
       "revision": "7d08d0e12082ee6810a4221063342cefe45b6ac3",
       "identity": "60356482ceeb669c4a97eb14dcfae5144b1b181f6c8b7a628ea5d02c86a6dd8b",
       "manifest_sha256": "2a19a65a0141a8d71939bbf82025e299266db404cadd8b2bc712d1a992e98e7e",
@@ -40,8 +44,10 @@
       "backup": "private eval-artifacts m4/c1-event1/ (event run) and c1-postkey/0.8B/ (derivation and v1.2 report; 758acf53)"
     },
     "2B": {
-      "model": "DEV2.0-2B",
-      "repo": "llm-semantic-router/DEV2.0-2B",
+      "model": "Decision-2.0-Sol-2B",
+      "former_model": "DEV2.0-2B",
+      "repo": "llm-semantic-router/Decision-2.0-Sol-2B",
+      "former_repo": "llm-semantic-router/DEV2.0-2B",
       "revision": "5ad3e9a3cc4865ce0360f4ecce2b345020bfdb38",
       "identity": "073bd1f2fe62e39fe993f57006bab17ece50a7e6fc7c5ee72107fefddeb81da4",
       "manifest_sha256": "6c4e1885ec68f1047b7bb9e9604373cc44129178dc900791f5617612016c6e51",
@@ -53,8 +59,10 @@
       "backup": "private eval-artifacts m4/c1-event3/cand2b (1561a3a5)"
     },
     "4B": {
-      "model": "DEV2.0-4B",
-      "repo": "llm-semantic-router/DEV2.0-4B",
+      "model": "Decision-2.0-Nox-4B",
+      "former_model": "DEV2.0-4B",
+      "repo": "llm-semantic-router/Decision-2.0-Nox-4B",
+      "former_repo": "llm-semantic-router/DEV2.0-4B",
       "revision": "13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f",
       "identity": "6a555335e077fd26952fd58df06a7dcca1f5ef317194f2e3e4d7664d5c071cd7",
       "manifest_sha256": "7517d321a88f946020e53ae1369e5f2d2301adf564e7fc1b61f04bb7b53c2947",
@@ -66,8 +74,10 @@
       "backup": "private eval-artifacts c1-postkey/4B/dev2-4b-m10lh-20261001T071945Z (18d45a76)"
     },
     "9B": {
-      "model": "DEV2.0-9B",
-      "repo": "llm-semantic-router/DEV2.0-9B",
+      "model": "Decision-2.0-Lux-9B",
+      "former_model": "DEV2.0-9B",
+      "repo": "llm-semantic-router/Decision-2.0-Lux-9B",
+      "former_repo": "llm-semantic-router/DEV2.0-9B",
       "revision": "53bac735be58def53673d0d290b9baa3f2af1cf9",
       "identity": "b1ed5a71038b474902d2a6dfebeee0c6f7ce901097553b4621f6f0a23fb6da98",
       "manifest_sha256": "d5007cdb83cd9e29c353efb5dff92a72035c53a4312468c660cb73af2a3accfa",
@@ -79,8 +89,10 @@
       "backup": "private eval-artifacts m4/c1-event3/cand9b (1561a3a5)"
     },
     "27B": {
-      "model": "DEV2.0-27B",
-      "repo": "llm-semantic-router/DEV2.0-27B",
+      "model": "Decision-2.0-Vega-27B",
+      "former_model": "DEV2.0-27B",
+      "repo": "llm-semantic-router/Decision-2.0-Vega-27B",
+      "former_repo": "llm-semantic-router/DEV2.0-27B",
       "revision": "5323310327e52d4eadd119cd10accac9b106c97d",
       "identity": "2e07451107a2ca9735064cc01f7e43e8522b4bae48f2d77bdf29f7ea2fe6362c",
       "manifest_sha256": "0d7953cc5d85a6fde6bdf71913795d1d7849e32fbed7df10103c6da6669b254a",

@@ -28,15 +28,35 @@ POINTER = {"decision_format": "vllm-sr-decision", "format_version": 2}
 RUNTIME_DIR = "decision2"
 VENDOR_DIR = "decision2/_vendor"
 ORG = "llm-semantic-router"
-RELEASE_REPO = re.compile(r"llm-semantic-router/DEV2\.0-(0\.[1-9]|[1-9][0-9]?)B\Z")
+TIERS = {"0.6B": 0.6e9, "0.8B": 0.8e9, "2B": 2e9, "4B": 4e9, "9B": 9e9, "27B": 27e9}
+# The codename follows the size slot across generations (user naming decision 2026-10-02 00:05 UTC+8).
+CODENAMES = {
+    "0.6B": "Kai",
+    "0.8B": "Eos",
+    "2B": "Sol",
+    "4B": "Nox",
+    "9B": "Lux",
+    "27B": "Vega",
+}
+NAME_PREFIX = "Decision-2.0"
+MODEL_NAME = re.compile(
+    r"Decision-2\.0-(?P<codename>Kai|Eos|Sol|Nox|Lux|Vega)-(?P<size>0\.[1-9]|[1-9][0-9]?)B\Z"
+)
+RELEASE_REPO = re.compile(
+    r"llm-semantic-router/Decision-2\.0-(?:Kai|Eos|Sol|Nox|Lux|Vega)-(?:0\.[1-9]|[1-9][0-9]?)B\Z"
+)
 STAGING_REPO = re.compile(
     r"llm-semantic-router/dev2-release-staging(?:-[a-z0-9]{1,24})?\Z"
 )
-MODEL_NAME = re.compile(r"DEV2\.0-(0\.[1-9]|[1-9][0-9]?)B\Z")
-TIERS = {"0.6B": 0.6e9, "0.8B": 0.8e9, "2B": 2e9, "4B": 4e9, "9B": 9e9, "27B": 27e9}
+# Repositories released before the rename (moved with HfApi.move_repo, so the old IDs redirect). Historical
+# gate receipts and decisions keep these IDs; new releases never use them.
+FORMER_REPOS = {
+    f"{ORG}/DEV2.0-{tier}": f"{ORG}/{NAME_PREFIX}-{codename}-{tier}"
+    for tier, codename in CODENAMES.items()
+}
 SAME_SIZE_RATIO = 1.25
-# "tier": DEV2.0-<size tier>; "loaded-parameters": DEV2.0-<rounded loaded count> (brief section 2);
-# "base": DEV2.0-<size label of the base model>, which must fall in the loaded count's tier.
+# "tier": Decision-2.0-<codename>-<size tier>; "loaded-parameters": ...-<rounded loaded count> (brief section 2);
+# "base": ...-<size label of the base model>, which must fall in the loaded count's tier. The codename is the tier's.
 NAME_BASES = ("tier", "loaded-parameters", "base")
 BASE_SIZE = re.compile(r"(?:^|[-_])([0-9]+(?:\.[0-9]+)?)B(?=$|[-_])")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -188,19 +208,29 @@ def tier_for(parameters: int) -> str | None:
     return tier if ratio <= SAME_SIZE_RATIO else None
 
 
+def tier_name(tier: str, size: str | None = None) -> str:
+    """Decision-2.0-<codename of the tier>-<size label, default the tier>."""
+    return f"{NAME_PREFIX}-{CODENAMES[tier]}-{size or tier}"
+
+
 def name_for(parameters: int) -> str:
     tier = tier_for(parameters)
     if tier is None:
         raise ValueError(f"{parameters:,} parameters fall outside every size tier")
-    return f"DEV2.0-{tier}"
+    return tier_name(tier)
 
 
 def count_name(parameters: int) -> str:
-    """DEV2.0-<loaded count>: one decimal below 1B, whole billions from 1B, inside a size tier."""
+    """Decision-2.0-<codename>-<loaded count>: one decimal below 1B, whole billions from 1B."""
     name_for(parameters)
     billions = parameters / 1e9
     size = f"{billions:.1f}" if billions < 1 else f"{round(billions)}"
-    return f"DEV2.0-{size}B"
+    return tier_name(tier_for(parameters), f"{size}B")
+
+
+def current_repo(repo_id: str) -> str:
+    """The repository ID now, for an ID that may predate the rename."""
+    return FORMER_REPOS.get(repo_id, repo_id)
 
 
 def base_size_label(base_model: str) -> str:
@@ -212,7 +242,7 @@ def base_size_label(base_model: str) -> str:
 
 
 def base_name(parameters: int, base_model: str) -> str:
-    """DEV2.0-<base model size>, if that size and the loaded count share a size tier."""
+    """Decision-2.0-<codename>-<base model size>, if that size and the loaded count share a size tier."""
     label = base_size_label(base_model)
     tier = tier_for(parameters)
     if tier is None:
@@ -221,7 +251,7 @@ def base_name(parameters: int, base_model: str) -> str:
         raise ValueError(
             f"{base_model} ({label}) is outside the {tier} tier of {parameters:,} loaded parameters"
         )
-    return f"DEV2.0-{label}"
+    return tier_name(tier, label)
 
 
 def release_name(
@@ -244,10 +274,18 @@ def check_repo(repo_id: str, model_name: str, *, staging: bool) -> None:
             raise ValueError(
                 "Staging packages go only to llm-semantic-router/dev2-release-staging*"
             )
+    elif repo_id in FORMER_REPOS:
+        raise ValueError(f"{repo_id} was renamed; use {FORMER_REPOS[repo_id]}")
     elif not RELEASE_REPO.fullmatch(repo_id) or repo_id.rsplit("/", 1)[1] != model_name:
         raise ValueError("Release repositories are llm-semantic-router/<model name>")
-    if not MODEL_NAME.fullmatch(model_name):
-        raise ValueError("Model names are DEV2.0-<size>B")
+    match = MODEL_NAME.fullmatch(model_name)
+    tier = match and tier_for(round(float(match["size"]) * 1e9))
+    if not match or tier is None or CODENAMES[tier] != match["codename"]:
+        raise ValueError(
+            "Model names are Decision-2.0-<codename>-<size>B with the size tier's codename ("
+            + ", ".join(f"{t} {c}" for t, c in CODENAMES.items())
+            + ")"
+        )
 
 
 @dataclass(frozen=True)

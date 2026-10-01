@@ -130,7 +130,7 @@ def main() -> None:
     model.save(work / "lora", tokenizer)
     licence = work / "LICENSE"
     licence.write_text("Apache License 2.0 (test)\n")
-    layout.name_for = lambda parameters: "DEV2.0-0.6B"
+    layout.name_for = lambda parameters: "Decision-2.0-Kai-0.6B"
     hidden = work / "no-causal-conv1d"
     (hidden / "causal_conv1d").mkdir(parents=True)
     (hidden / "causal_conv1d" / "__init__.py").write_text(

@@ -17,7 +17,7 @@ license: apache-2.0
 
 ![banner](assets/b.png)
 
-# DEV2.0-0.6B
+# Decision-2.0-Kai-0.6B
 
 [Collection](https://huggingface.co/collections/org/decision-20-abc) · [Download](#download-and-decide)
 
@@ -54,7 +54,7 @@ class HubLinksTest(unittest.TestCase):
             (package / "assets").mkdir()
             (package / "assets/b.png").write_bytes(b"png")
             manifest = {
-                "model_name": "DEV2.0-0.6B",
+                "model_name": "Decision-2.0-Kai-0.6B",
                 "files_sha256": {
                     name: hashlib.sha256((package / name).read_bytes()).hexdigest()
                     for name in (*files, "assets/b.png")
@@ -76,12 +76,14 @@ class HubLinksTest(unittest.TestCase):
                             200,
                             json.dumps({"private": "collections" in url}).encode(),
                         )
-                    return 200, b"<h1>DEV2.0-0.6B</h1> owl-banner.png"
+                    return 200, b"<h1>Decision-2.0-Kai-0.6B</h1> owl-banner.png"
 
                 return fake
 
             with mock.patch.object(hub_links, "fetch", side_effect=hub(None)):
-                result = hub_links.check("org/DEV2.0-0.6B", "rev", package, "t")
+                result = hub_links.check(
+                    "org/Decision-2.0-Kai-0.6B", "rev", package, "t"
+                )
             self.assertTrue(result["passed"], result["failed"])
             self.assertEqual(result["checked"], 6)
             self.assertIn(
@@ -93,7 +95,9 @@ class HubLinksTest(unittest.TestCase):
             self.assertTrue(result["rendered_page"]["title_present"])
 
             with mock.patch.object(hub_links, "fetch", side_effect=hub("LICENSE")):
-                result = hub_links.check("org/DEV2.0-0.6B", "rev", package, "t")
+                result = hub_links.check(
+                    "org/Decision-2.0-Kai-0.6B", "rev", package, "t"
+                )
             self.assertFalse(result["passed"])
             self.assertEqual(result["failed"], ["LICENSE", "LICENSE"])
 

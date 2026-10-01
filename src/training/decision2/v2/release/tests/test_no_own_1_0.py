@@ -53,8 +53,8 @@ class NoOwnGateTest(unittest.TestCase):
         self.decision = self.work / "decision.json"
         self.spec = {
             "kind": "release",
-            "model_name": "DEV2.0-26B",
-            "repo_id": "llm-semantic-router/DEV2.0-26B",
+            "model_name": "Decision-2.0-Vega-26B",
+            "repo_id": "llm-semantic-router/Decision-2.0-Vega-26B",
             "expected_identity": {"model_sha256": "c" * 64},
             "scored": {"report_sha256": layout.sha_file(candidate)},
             "gate_receipt": str(self.decision),
@@ -81,8 +81,8 @@ class NoOwnGateTest(unittest.TestCase):
             "schema": gate.DECISION_SCHEMA,
             "status": "final",
             "decision": "release",
-            "model_name": "DEV2.0-26B",
-            "repo_id": "llm-semantic-router/DEV2.0-26B",
+            "model_name": "Decision-2.0-Vega-26B",
+            "repo_id": "llm-semantic-router/Decision-2.0-Vega-26B",
             "identity": {"model_sha256": "c" * 64},
             "report_sha256": self.spec["scored"]["report_sha256"],
             "paired_sha256": layout.sha_file(self.paired),
@@ -199,7 +199,7 @@ def entries(reference: dict | None = None) -> list[dict]:
             "key": "cand",
             "role": "candidate",
             "report": str(REPORTS / "lex.json"),
-            "label": "DEV2.0-0.6B",
+            "label": "Decision-2.0-Kai-0.6B",
         },
         reference
         or {
@@ -271,7 +271,7 @@ class NoOwnCardTest(unittest.TestCase):
         )
         self.assertIn("- **Below Bosun in places:** typed decisions", readme)
         self.assertIn(
-            "There is no Decision 1.0 model at this size. The DEV2.0-0.6B minus Bosun "
+            "There is no Decision 1.0 model at this size. The Decision-2.0-Kai-0.6B minus Bosun "
             "JevArena difference is -1.50 (paired 95% interval [-3.00, +0.20]).",
             result["evaluation"],
         )

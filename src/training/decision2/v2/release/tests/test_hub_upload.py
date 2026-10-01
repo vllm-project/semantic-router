@@ -28,12 +28,12 @@ class FakeApi:
 class HubUploadTest(unittest.TestCase):
     def test_upload_deletes_remote_files_the_package_no_longer_has(self):
         with tempfile.TemporaryDirectory() as scratch:
-            package = Path(scratch) / "DEV2.0-0.6B"
+            package = Path(scratch) / "Decision-2.0-Kai-0.6B"
             package.mkdir()
             (package / "README.md").write_text("card\n")
             manifest = {
                 "kind": "staging",
-                "model_name": "DEV2.0-0.6B",
+                "model_name": "Decision-2.0-Kai-0.6B",
                 "repo_id": "llm-semantic-router/dev2-release-staging",
                 "files_sha256": {"README.md": layout.sha_file(package / "README.md")},
             }

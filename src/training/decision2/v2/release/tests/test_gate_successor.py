@@ -57,7 +57,7 @@ class SuccessorGateTest(unittest.TestCase):
             root / "current.gate.json",
             {
                 "schema": gate.GATE_SCHEMA,
-                "repo_id": "llm-semantic-router/DEV2.0-0.6B",
+                "repo_id": "llm-semantic-router/Decision-2.0-Kai-0.6B",
                 "revision": REVISION,
                 "decision_sha256": layout.sha_file(self.current_decision),
             },
@@ -118,8 +118,8 @@ class SuccessorGateTest(unittest.TestCase):
         self.decision = root / "decision.json"
         self.spec = {
             "kind": "release",
-            "model_name": "DEV2.0-0.6B",
-            "repo_id": "llm-semantic-router/DEV2.0-0.6B",
+            "model_name": "Decision-2.0-Kai-0.6B",
+            "repo_id": "llm-semantic-router/Decision-2.0-Kai-0.6B",
             "expected_identity": {"model_sha256": "a" * 64},
             "scored": {
                 "report_sha256": layout.sha_file(report),
@@ -183,6 +183,17 @@ class SuccessorGateTest(unittest.TestCase):
         items = self.items()
         self.assertEqual(list(items), list(gate.SUCCESSOR_ITEMS))
         self.assertEqual(self.failing(), [], items)
+
+    def test_current_gate_sealed_under_the_former_id_counts(self):
+        gate_value = json.loads(self.current_gate.read_text())
+        for repo, passes in (
+            ("llm-semantic-router/DEV2.0-0.6B", True),
+            ("llm-semantic-router/DEV2.0-0.8B", False),
+            ("llm-semantic-router/DEV2.0-Route-0.6B", False),
+        ):
+            self.current_gate.write_text(json.dumps({**gate_value, "repo_id": repo}))
+            failing = self.failing()
+            self.assertEqual(failing == [], passes, (repo, failing))
 
     def test_each_rule_fails_on_its_criterion(self):
         cases = {
@@ -261,8 +272,8 @@ class SuccessorGateTest(unittest.TestCase):
         value = {
             "schema": gate.DECISION_SCHEMA,
             "decision": "release",
-            "model_name": "DEV2.0-0.6B",
-            "repo_id": "llm-semantic-router/DEV2.0-0.6B",
+            "model_name": "Decision-2.0-Kai-0.6B",
+            "repo_id": "llm-semantic-router/Decision-2.0-Kai-0.6B",
             "identity": {"model_sha256": "a" * 64},
             "report_sha256": self.spec["scored"]["report_sha256"],
             "paired_sha256": layout.sha_file(Path(self.spec["card"]["paired"])),
@@ -364,7 +375,10 @@ class SuccessorGateTest(unittest.TestCase):
                 "role": "successor",
                 "c1": 38.1,
                 "baseline_entry": {"identity": "a" * 64},
-                "item8": {**rule, "name": "DEV2.0-0.6B 99999999 (current revision)"},
+                "item8": {
+                    **rule,
+                    "name": "Decision-2.0-Kai-0.6B 99999999 (current revision)",
+                },
             },
         )
         self.spec["gate_profile"]["c1_postkey"] = str(path)
