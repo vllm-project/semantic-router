@@ -1,0 +1,255 @@
+{
+ "candidates": {
+  "dev": "6816bf43834a88c43c8351cc6e3f98e732a53ae9d2d40ccb64dc90ff2c1eca92",
+  "train": "888dad522420dafe6759aa1957dd35a628be579e4873934d89e0ee9ed9ecbdb1"
+ },
+ "dev": {
+  "family": {
+   "args": 374,
+   "copa": 108,
+   "csqa": 513,
+   "isarc": 82,
+   "poem": 411,
+   "sentfin": 494,
+   "sms": 62,
+   "snips_rel": 12,
+   "snips_sel": 310
+  },
+  "groups": 1708,
+  "label_by_family": {
+   "args": {
+    "0": 187,
+    "1": 187
+   },
+   "copa": {
+    "0": 56,
+    "1": 52
+   },
+   "csqa": {
+    "0": 88,
+    "1": 99,
+    "2": 117,
+    "3": 95,
+    "4": 114
+   },
+   "isarc": {
+    "0": 45,
+    "1": 37
+   },
+   "poem": {
+    "0": 219,
+    "1": 192
+   },
+   "sentfin": {
+    "0": 247,
+    "2": 247
+   },
+   "sms": {
+    "0": 31,
+    "1": 31
+   },
+   "snips_rel": {
+    "0": 6,
+    "1": 6
+   },
+   "snips_sel": {
+    "0": 65,
+    "1": 75,
+    "2": 90,
+    "3": 80
+   }
+  },
+  "language": {
+   "ar": 43,
+   "en": 2323
+  },
+  "rows": 2366,
+  "sha256": "eefab90932fb07fb6afaee0853fc3a98d1d05cf14e5478f319e3d09b29bc925d",
+  "task_type": {
+   "choice": 2292,
+   "noul": 74
+  }
+ },
+ "drops": {
+  "constructions": [
+   "sentfin-neutral",
+   "sumedit-shakespeare",
+   "wands-partial"
+  ],
+  "dev_groups": {
+   "count": 1071,
+   "sha256": "06048b2a2e0518ffa2ab031256d80de00c3222adcd1c01abe6f2326bc15e9c5d"
+  },
+  "families": [
+   "medmcqa",
+   "procb",
+   "wanli"
+  ],
+  "groups": {
+   "count": 3792,
+   "sha256": "fadff88370f186849b9e13e747b9881c6cd87c5cfd2c08421ccba2cb1e70f69b"
+  },
+  "ids": {
+   "count": 29,
+   "sha256": "5138d8334329ee992897454e13d2700c43b6eeecef2eaeaa9ad26f203b3012ff"
+  },
+  "leak_ids": {
+   "count": 12,
+   "sha256": "1838e39623b76533215955164265a7fb6195c7ee02e106b6204a385cd4a1bd7d"
+  },
+  "removed": {
+   "dev:construction": {
+    "sentfin": 273,
+    "sumedit": 56,
+    "wands": 253
+   },
+   "dev:dev_near_train": {
+    "args": 174,
+    "copa": 2,
+    "csqa": 10,
+    "maud": 132,
+    "poem": 5,
+    "sentfin": 17,
+    "sms": 24,
+    "snips_rel": 275,
+    "snips_sel": 12,
+    "sumedit": 43,
+    "w2c": 50,
+    "wands": 435
+   },
+   "dev:dropped_group": {
+    "args": 28,
+    "csqa": 7,
+    "maud": 212,
+    "sentfin": 2,
+    "sumedit": 100,
+    "w2c": 285,
+    "wands": 54
+   },
+   "dev:family": {
+    "medmcqa": 821,
+    "procb": 36,
+    "wanli": 923
+   },
+   "train:construction": {
+    "sentfin": 2393,
+    "sumedit": 689,
+    "wands": 2413
+   },
+   "train:dropped_group": {
+    "args": 238,
+    "copa": 10,
+    "csqa": 486,
+    "maud": 5656,
+    "sentfin": 3,
+    "snips_rel": 2,
+    "snips_sel": 1,
+    "sumedit": 421,
+    "w2c": 2690,
+    "wands": 677
+   },
+   "train:family": {
+    "medmcqa": 7179,
+    "procb": 324,
+    "wanli": 8077
+   },
+   "train:leak_guard": {
+    "w2c": 12
+   },
+   "train:review_or_screen": {
+    "args": 1,
+    "csqa": 3,
+    "isarc": 1,
+    "sentfin": 1,
+    "snips_rel": 1,
+    "snips_sel": 1,
+    "sumedit": 3,
+    "w2c": 3,
+    "wands": 6
+   }
+  }
+ },
+ "schema": "decision2.ib1.final.v1",
+ "train": {
+  "family": {
+   "args": 5184,
+   "copa": 878,
+   "csqa": 4981,
+   "isarc": 874,
+   "poem": 3584,
+   "sentfin": 4778,
+   "sms": 1152,
+   "snips_rel": 2700,
+   "snips_sel": 2672,
+   "sumedit": 576,
+   "w2c": 476,
+   "wands": 4068
+  },
+  "groups": 20755,
+  "label_by_family": {
+   "args": {
+    "0": 2592,
+    "1": 2592
+   },
+   "copa": {
+    "0": 426,
+    "1": 452
+   },
+   "csqa": {
+    "0": 995,
+    "1": 1013,
+    "2": 1033,
+    "3": 945,
+    "4": 995
+   },
+   "isarc": {
+    "0": 429,
+    "1": 445
+   },
+   "poem": {
+    "0": 1773,
+    "1": 1811
+   },
+   "sentfin": {
+    "0": 2389,
+    "2": 2389
+   },
+   "sms": {
+    "0": 576,
+    "1": 576
+   },
+   "snips_rel": {
+    "0": 1350,
+    "1": 1350
+   },
+   "snips_sel": {
+    "0": 663,
+    "1": 679,
+    "2": 657,
+    "3": 673
+   },
+   "sumedit": {
+    "0": 288,
+    "1": 288
+   },
+   "w2c": {
+    "0": 251,
+    "1": 225
+   },
+   "wands": {
+    "0": 2034,
+    "2": 2034
+   }
+  },
+  "language": {
+   "ar": 410,
+   "en": 31513
+  },
+  "rows": 31923,
+  "sha256": "f44d7f5fe9ccaf63386fc213394282466f2c26c6a2da2945b32207adc8c62c5c",
+  "task_type": {
+   "choice": 27495,
+   "noul": 4428
+  }
+ }
+}

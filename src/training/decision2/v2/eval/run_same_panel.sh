@@ -5,7 +5,9 @@
 #   run_same_panel.sh --gpu N --track TRACK --src SRC --run-dir DIR --model-dir DIR \
 #       [--image IMAGE] [--mount HOST_PATH]... [--mount-rw HOST_PATH]... [--env KEY=VALUE]... \
 #       [--purpose TEXT] [--expected-end UTC] [--lease-name NAME [--shared] | --shared-lease NAME] \
-#       -- <same_panel collect arguments except --run-dir>
+#       [--isolate] -- <same_panel collect arguments except --run-dir>
+# --isolate (required on nodes C-F) passes only the GPU's own render node (resolved from its PCI
+# address with amd-smi) plus /dev/kfd, with ROCR_VISIBLE_DEVICES=0, instead of all of /dev/dri.
 # --lease-name writes this track's entry as gpuN.lock/NAME (for a GPU shared with its owner track,
 # e.g. owner.eval) and leaves the owner track's gpuN.lock/owner untouched. --shared (only with a
 # named entry) skips the idle-VRAM check for an approved co-tenancy and records it in GPU-TIME.json.
@@ -26,6 +28,7 @@ usage() { sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 gpu="" track="" sha="" run_dir="" model_dir="" image="decision20-train-fast:host2"
 purpose="same-panel native collection" expected_end="" mounts=() rw_mounts=() envs=() lease_name="owner" shared=0
+isolate=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --gpu) gpu="$2"; shift 2 ;;
@@ -41,6 +44,7 @@ while [[ $# -gt 0 ]]; do
     --expected-end) expected_end="$2"; shift 2 ;;
     --lease-name) lease_name="$2"; shift 2 ;;
     --shared) shared=1; shift ;;
+    --isolate) isolate=1; shift ;;
     --shared-lease)
       [[ "$2" =~ ^[a-z0-9-]+$ ]] || { echo "--shared-lease takes a short lowercase name" >&2; exit 2; }
       lease_name="owner.$2" shared=1; shift 2 ;;
@@ -87,13 +91,21 @@ for mount in "${rw_mounts[@]}"; do
   volumes+=(-v "$mount:$mount")
 done
 
+devices=(--device /dev/kfd --device /dev/dri) rocr="$gpu"
+if [[ "$isolate" == 1 ]]; then
+  bdf="$(amd-smi list 2>/dev/null | awk -v g="GPU: $gpu" '$0 ~ "^"g"$" {getline; print tolower($2)}')"
+  render="$(readlink -f "/dev/dri/by-path/pci-${bdf}-render" 2>/dev/null || true)"
+  [[ -n "$bdf" && -c "$render" ]] || { echo "no render node for gpu$gpu" >&2; exit 1; }
+  devices=(--device /dev/kfd --device "$render") rocr=0
+fi
+
 name="dev2-${track}-gpu${gpu}-$(date -u +%H%M%S)"
 started="$(date +%s.%N)"
 set +e
 docker run --rm --name "$name" --network none \
-  --device /dev/kfd --device /dev/dri --group-add video --ipc host \
+  "${devices[@]}" --group-add video --ipc host \
   --security-opt seccomp=unconfined \
-  -e ROCR_VISIBLE_DEVICES="$gpu" -e DEV2_IMAGE_ID="$image_id" -e DEV2_GPU_LABEL="gpu$gpu" \
+  -e ROCR_VISIBLE_DEVICES="$rocr" -e DEV2_IMAGE_ID="$image_id" -e DEV2_GPU_LABEL="gpu$gpu" \
   "${envs[@]}" "${volumes[@]}" -w "$src/src/training/decision2" --entrypoint python3 "$image" \
   -m v2.eval.same_panel collect --run-dir "$run_dir" --panel-root "$panel_root" "$@"
 code=$?

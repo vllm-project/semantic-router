@@ -1,0 +1,248 @@
+{
+ "arm_id": "IB1",
+ "canonical_form": "rows sorted by id; canonical(row) + '\\n' per row; UTF-8",
+ "canonical_path": "ib1.dev.jsonl",
+ "choice": {
+  "by_option_bucket": {
+   "2": 975,
+   "3": 494,
+   "4": 310,
+   "5-8": 513
+  },
+  "gold_position_by_bucket": {
+   "2": {
+    "0": 507,
+    "1": 468
+   },
+   "3": {
+    "0": 247,
+    "2": 247
+   },
+   "4": {
+    "0": 65,
+    "1": 75,
+    "2": 90,
+    "3": 80
+   },
+   "5-8": {
+    "0": 88,
+    "1": 99,
+    "2": 117,
+    "3": 95,
+    "4": 114
+   }
+  }
+ },
+ "content_sha256": "eefab90932fb07fb6afaee0853fc3a98d1d05cf14e5478f319e3d09b29bc925d",
+ "counts": {
+  "family": {
+   "args": 374,
+   "copa": 108,
+   "csqa": 513,
+   "isarc": 82,
+   "poem": 411,
+   "sentfin": 494,
+   "sms": 62,
+   "snips_rel": 12,
+   "snips_sel": 310
+  },
+  "language": {
+   "ar": 43,
+   "en": 2323
+  },
+  "source": {
+   "args_me_portals": 374,
+   "balanced_copa_train": 108,
+   "commonsenseqa_train": 513,
+   "gutenberg_poetry_cc0": 411,
+   "isarcasmeval_train": 82,
+   "sentfin_v1": 494,
+   "sms_spam_collection": 62,
+   "snips_2017_custom_intents": 322
+  },
+  "task_type": {
+   "choice": 2292,
+   "noul": 74
+  }
+ },
+ "groups": 1708,
+ "input": {
+  "is_canonical": true,
+  "path": "ib1.dev.jsonl",
+  "sha256": "eefab90932fb07fb6afaee0853fc3a98d1d05cf14e5478f319e3d09b29bc925d"
+ },
+ "license_registry_sha256": "c06ce6ca15da5f0744ccdcac2ad71cbc69e0e7e9a8a5a886a8b51c2482740b5f",
+ "licenses": {
+  "args_me_portals": {
+   "attribution": "Ajjour, Wachsmuth, Kiesel, Potthast, Hagen and Stein, Data Acquisition for Argument Search: The args.me Corpus (KI 2019); webis/args_me@042bdf645bc980c751e9b217cc77e47624394390 args-me.jsonl, arguments from idebate.org, debatewise.org and debatepedia.org only",
+   "evidence": "https://huggingface.co/datasets/webis/args_me/blob/042bdf645bc980c751e9b217cc77e47624394390/README.md (Licensing Information: CC BY 4.0)",
+   "license": "CC-BY-4.0",
+   "redistribution": "permitted with attribution"
+  },
+  "balanced_copa_train": {
+   "attribution": "Kavumba, Inoue, Heinzerling, Singh, Reisert and Inui, When Choosing Plausible Alternatives, Clever Hans can be Clever (COIN 2019); COPA by Roemmele, Bejan and Gordon (2011); pkavumba/balanced-copa@813bd03cd6e07d9bd8d7333896ad5d40abb95ea9 train.csv",
+   "evidence": "https://huggingface.co/datasets/pkavumba/balanced-copa/blob/813bd03cd6e07d9bd8d7333896ad5d40abb95ea9/README.md (Licensing Information: CC BY 4.0)",
+   "license": "CC-BY-4.0",
+   "redistribution": "permitted with attribution"
+  },
+  "commonsenseqa_train": {
+   "attribution": "Talmor, Herzig, Lourie and Berant, CommonsenseQA: A Question Answering Challenge Targeting Commonsense Knowledge (NAACL 2019); tau/commonsense_qa@94630fe30dad47192a8546eb75f094926d47e155 train",
+   "evidence": "https://huggingface.co/datasets/tau/commonsense_qa/blob/94630fe30dad47192a8546eb75f094926d47e155/README.md (The dataset is licensed under the MIT License)",
+   "license": "MIT",
+   "redistribution": "permitted with the MIT notice"
+  },
+  "gutenberg_poetry_cc0": {
+   "attribution": "Allison Parrish, Gutenberg Poetry Corpus (public-domain poems from Project Gutenberg); biglam/gutenberg-poetry-corpus@fcd42e249fed48dbd1d3b9b969528ef9298d3464; one-word perturbations constructed for IB1",
+   "evidence": "https://huggingface.co/datasets/biglam/gutenberg-poetry-corpus/blob/fcd42e249fed48dbd1d3b9b969528ef9298d3464/README.md (license: cc0-1.0)",
+   "license": "CC0-1.0",
+   "redistribution": "permitted"
+  },
+  "isarcasmeval_train": {
+   "attribution": "Abu Farha, Oprea, Wilson and Magdy, SemEval-2022 Task 6: iSarcasmEval, Intended Sarcasm Detection in English and Arabic (SemEval 2022); iabufarha/iSarcasmEval@dfc708b53bde1bb571abfb5692f63231c2232195 train/train.En.csv and train/train.Ar.csv only; IN-DISTRIBUTION for the Index's iSarcasmEval benchmark (which uses the test files, never read here)",
+   "evidence": "https://github.com/iabufarha/iSarcasmEval/blob/dfc708b53bde1bb571abfb5692f63231c2232195/LICENSE (MIT)",
+   "license": "MIT",
+   "redistribution": "permitted with the MIT notice"
+  },
+  "sentfin_v1": {
+   "attribution": "Sinha, Kedas, Kumar and Malo, SEntFiN 1.0: Entity-aware sentiment analysis for financial news (JASIST 2022); pyRis/SEntFiN@eba43610fe3cb57a3e5773cd6c037da1f8992ad5 SEntFiN.csv",
+   "evidence": "https://github.com/pyRis/SEntFiN/blob/eba43610fe3cb57a3e5773cd6c037da1f8992ad5/LICENSE (MIT)",
+   "license": "MIT",
+   "redistribution": "permitted with the MIT notice"
+  },
+  "sms_spam_collection": {
+   "attribution": "Almeida, Gomez Hidalgo and Yamakami, Contributions to the Study of SMS Spam Filtering (DocEng 2011); SMS Spam Collection, UCI Machine Learning Repository dataset 228; ucirvine/sms_spam@cae486f927c250fe1d4a5b55f11357964ed1646c",
+   "evidence": "https://archive.ics.uci.edu/dataset/228/sms+spam+collection (Creative Commons Attribution 4.0 International); https://huggingface.co/datasets/ucirvine/sms_spam/tree/cae486f927c250fe1d4a5b55f11357964ed1646c",
+   "license": "CC-BY-4.0",
+   "redistribution": "permitted with attribution"
+  },
+  "snips_2017_custom_intents": {
+   "attribution": "Coucke et al., Snips Voice Platform: an embedded Spoken Language Understanding system for private-by-design voice interfaces (2018); sonos/nlu-benchmark@b86ac7f1577868c42158d0dec77db50956046696 2017-06-custom-intent-engines/*/train_*_full.json; function schemas written for IB1",
+   "evidence": "https://github.com/sonos/nlu-benchmark/blob/b86ac7f1577868c42158d0dec77db50956046696/LICENSE (CC0 1.0 Universal)",
+   "license": "CC0-1.0",
+   "redistribution": "permitted"
+  }
+ },
+ "noul": {
+  "labels": {
+   "false": 37,
+   "true": 37
+  },
+  "true_fraction": 0.5
+ },
+ "partition": "select",
+ "role": "aho",
+ "rows": 2366,
+ "rows_per_group": {
+  "1": 1306,
+  "10": 1,
+  "12": 3,
+  "13": 1,
+  "17": 1,
+  "2": 326,
+  "3": 26,
+  "4": 14,
+  "5": 8,
+  "6": 6,
+  "7": 9,
+  "8": 4,
+  "9": 3
+ },
+ "schema": "decision2.v2.freeze.v1",
+ "score": {
+  "by_levels": {},
+  "by_levels_grade": {}
+ },
+ "state_chars": {
+  "p0": 24,
+  "p10": 53,
+  "p100": 2368,
+  "p25": 72,
+  "p50": 100,
+  "p75": 312,
+  "p90": 626,
+  "p99": 1500
+ },
+ "tokens": [
+  {
+   "by_language": {
+    "ar": 5499,
+    "en": 375557
+   },
+   "by_task_type": {
+    "choice": 370571,
+    "noul": 10485
+   },
+   "kind": "native_decoder",
+   "name": "qwen3-0.6b-base@da87bfb6",
+   "padded8_total": 389456,
+   "path": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+   "quantiles": {
+    "p0": 83,
+    "p10": 110,
+    "p100": 620,
+    "p25": 120,
+    "p50": 143,
+    "p75": 190,
+    "p90": 210,
+    "p99": 407
+   },
+   "revision": null,
+   "tokenizer_json_sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539",
+   "total": 381056
+  },
+  {
+   "by_language": {
+    "ar": 5663,
+    "en": 401303
+   },
+   "by_task_type": {
+    "choice": 395827,
+    "noul": 11139
+   },
+   "kind": "native_decoder",
+   "name": "qwen3.5-0.8b-base@dc7cdfe2",
+   "padded8_total": 415064,
+   "path": "dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68",
+   "quantiles": {
+    "p0": 92,
+    "p10": 121,
+    "p100": 624,
+    "p25": 130,
+    "p50": 157,
+    "p75": 200,
+    "p90": 219,
+    "p99": 411
+   },
+   "revision": null,
+   "tokenizer_json_sha256": null,
+   "total": 406966
+  },
+  {
+   "by_language": {
+    "ar": 3102,
+    "en": 218973
+   },
+   "by_task_type": {
+    "choice": 215263,
+    "noul": 6812
+   },
+   "kind": "raw",
+   "name": "kai-0.6b@7185f514",
+   "padded8_total": 230416,
+   "path": "tokenizer",
+   "quantiles": {
+    "p0": 29,
+    "p10": 38,
+    "p100": 568,
+    "p25": 45,
+    "p50": 61,
+    "p75": 126,
+    "p90": 156,
+    "p99": 344
+   },
+   "revision": null,
+   "tokenizer_json_sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
+   "total": 222075
+  }
+ ]
+}

@@ -33,7 +33,7 @@ SHARED = (
     "source.py",
     "calibration.py",
 )
-OWN = ("infer_dec.py", "dec_model.py")
+OWN = ("infer_dec.py", "dec_model.py", "label_token.py")
 
 
 def adapter_sources() -> dict[str, str]:
@@ -74,8 +74,13 @@ def main() -> None:
     from training.model.decision_model import collate, encode
 
     from .dec_model import dec_fingerprint, load_dec_checkpoint
+    from .label_token import LABEL_READOUT, encode_label
     from .runtime_check import require_runtime
 
+    metadata = json.loads(
+        (args.checkpoint / "decision_config.json").read_text(encoding="utf-8")
+    )
+    encode_fn = encode_label if metadata.get("readout") == LABEL_READOUT else encode
     runtime = require_runtime()
     identity = dec_fingerprint(args.checkpoint, args.source_path)
     calibration = report = None
@@ -115,14 +120,11 @@ def main() -> None:
         tokenizer=tokenizer,
         max_length=args.max_length,
         temperature=calibration if calibration is not None else 1.0,
-        encode_fn=encode,
+        encode_fn=encode_fn,
         predict_fn=predict,
         model_sha256=identity["model_sha256"],
         adapter_sha256=adapter_sha,
         calibration_sha256=file_sha256(args.calibration) if args.calibration else None,
-    )
-    metadata = json.loads(
-        (args.checkpoint / "decision_config.json").read_text(encoding="utf-8")
     )
     manifest = {
         "adapter_version": (
@@ -135,6 +137,8 @@ def main() -> None:
         "model_files_sha256": identity["files_sha256"],
         "checkpoint_format": metadata.get("checkpoint_format", "full"),
         "dec_residual": metadata.get("dec_residual"),
+        "readout": metadata.get("readout", "head"),
+        "prompt_version": metadata.get("prompt_version"),
         "peft_version": version("peft"),
         "adapter_sha256": adapter_sha,
         "adapter_files_sha256": sources,

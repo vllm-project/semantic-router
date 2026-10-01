@@ -1,23 +1,27 @@
-"""HR2 blind label review (prereg ``records/hr2-prereg-2026-09-30.md`` §4).
+"""HR2 blind label review (prereg ``records/hr2-prereg-2026-09-30.md`` §4; round 2: amendment 4).
 
-    python3 -m v2.data.hr2.review sample --train TRAIN --out-dir DIR
+    python3 -m v2.data.hr2.review sample --train TRAIN --out-dir DIR \
+        [--round hr2-r2 --exclude-key R1/key.jsonl]
     python3 -m v2.data.hr2.review splits --key DIR/key.jsonl --r1 A1 --r1 A2 --r2 B1 --r2 B2 \
-        --out DIR3/r3.packet.jsonl
+        --out DIR3/r3.packet.jsonl [--round hr2-r2]
     python3 -m v2.data.hr2.review score --sample DIR/sample.json --key DIR/key.jsonl \
-        --r1 A1 --r1 A2 --r2 B1 --r2 B2 [--r3 C] --out REPORT.json --private PRIVATE.json
+        --r1 A1 --r1 A2 --r2 B1 --r2 B2 [--r3 C] --out REPORT.json --private PRIVATE.json \
+        [--round hr2-r2]
 
-``sample`` draws 24 TRAIN rows per family, one per group, stratified by gold, in salted-hash order,
-and writes two blind packets per reviewer order (R1 order and R2 order) plus the key, which stays on
-the node. An item agrees with gold on the same key (Choice / Noul) or within one level (Score). R1
-and R2 split when exactly one of them agrees; ``splits`` writes those items, in a fresh order, as the
-R3 packet (it needs the key, so it runs on the node). A gold error is an item both R1 and R2
-disagree with, or a split R3 disagrees with.
+``sample`` draws a fixed number of TRAIN rows per family (24 in round 1, 48 in round 2), one per
+group, stratified by gold, in salted-hash order, and writes two blind packets per reviewer order (R1
+order and R2 order) plus the key, which stays on the node. Round 2 leaves out every row and group of
+the round-1 key. An item agrees with gold on the same key (Choice / Noul) or within one level
+(Score). R1 and R2 split when exactly one of them agrees; ``splits`` writes those items, in a fresh
+order, as the R3 packet (it needs the key, so it runs on the node). A gold error is an item both R1
+and R2 disagree with, or a split R3 disagrees with.
 """
 
 from __future__ import annotations
 
 import argparse
 import collections
+import dataclasses
 import json
 import math
 from collections.abc import Mapping, Sequence
@@ -59,6 +63,51 @@ NOUL_ALIASES = {"yes": "true", "no": "false"}
 LINE_BREAKS = {"\x85": "\\u0085", "\u2028": "\\u2028", "\u2029": "\\u2029"}
 
 
+@dataclasses.dataclass(frozen=True)
+class Round:
+    """Allocation, salts, review-id prefix, thresholds and fix rule of one HR2 review round."""
+
+    name: str
+    per_family: int
+    salt: str
+    packet_salt: str
+    r2_salt: str
+    r3_salt: str
+    prefix: str
+    thresholds: Mapping[str, Any]
+    fix_rule: bool
+
+    def family_fails(self, errors: int, n: int) -> bool:
+        if "family_fail_cp_lower" in self.thresholds:
+            lower, _ = clopper_pearson(errors, n)
+            return lower > self.thresholds["family_fail_cp_lower"]
+        return errors >= self.thresholds["family_errors_fail"]
+
+
+ROUND1 = Round(
+    "hr2", PER_FAMILY, SALT, PACKET_SALT, R2_SALT, R3_SALT, "h", THRESHOLDS, True
+)
+# Amendment 4: a family fails when its exact lower bound exceeds 5% (7 of 48), the rationale
+# behind round 1's 5 of 24; no fix rule.
+ROUND2 = Round(
+    "hr2-r2",
+    48,
+    "hr2-r2-review-v1",
+    "hr2-r2-packet-v1",
+    "hr2-r2-review-r2-order-v1",
+    "hr2-r2-review-r3-order-v1",
+    "q",
+    {
+        "error_max": 0.05,
+        "error_upper_max": 0.08,
+        "weighted_error_max": 0.05,
+        "family_fail_cp_lower": 0.05,
+    },
+    False,
+)
+ROUNDS = {spec.name: spec for spec in (ROUND1, ROUND2)}
+
+
 def write_packet(path: Path, packet: Sequence[Mapping[str, Any]]) -> str:
     lines = []
     for item in packet:
@@ -73,12 +122,20 @@ def gold_key(row: Mapping[str, Any]) -> str:
     return str(row["options"][row["label"]]["key"])
 
 
-def cell_cap(row: Mapping[str, Any]) -> int:
-    return math.ceil(PER_FAMILY / len(row["options"]))
+def cell_cap(row: Mapping[str, Any], per_family: int = PER_FAMILY) -> int:
+    return math.ceil(per_family / len(row["options"]))
 
 
-def sample(rows: Sequence[Mapping[str, Any]]) -> tuple[list[Mapping[str, Any]], dict]:
-    """``PER_FAMILY`` rows per family, one per group overall, gold cells capped evenly."""
+def sample(
+    rows: Sequence[Mapping[str, Any]],
+    rnd: Round = ROUND1,
+    exclude_ids: frozenset[str] = frozenset(),
+    exclude_groups: frozenset[str] = frozenset(),
+) -> tuple[list[Mapping[str, Any]], dict]:
+    """``rnd.per_family`` rows per family, one per group overall, gold cells capped evenly.
+
+    Rows whose id or group is excluded are never drawn; the population (P2 weights) still counts
+    every TRAIN row."""
     population = collections.Counter()
     for row in rows:
         if row.get("split") != "train":
@@ -86,13 +143,14 @@ def sample(rows: Sequence[Mapping[str, Any]]) -> tuple[list[Mapping[str, Any]], 
         population[row["family"]] += 1
     taken: collections.Counter = collections.Counter()
     cells: collections.Counter = collections.Counter()
-    used: set[str] = set()
+    used: set[str] = set(exclude_groups)
     picked = []
-    for row in sorted(rows, key=lambda r: sha(f"{SALT}:{r['id']}")):
+    for row in sorted(rows, key=lambda r: sha(f"{rnd.salt}:{r['id']}")):
         cell = (row["family"], row["label"])
         if (
-            taken[row["family"]] >= PER_FAMILY
-            or cells[cell] >= cell_cap(row)
+            row["id"] in exclude_ids
+            or taken[row["family"]] >= rnd.per_family
+            or cells[cell] >= cell_cap(row, rnd.per_family)
             or row["group_id"] in used
         ):
             continue
@@ -131,10 +189,19 @@ def key_item(rid: str, row: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def build(rows: Sequence[Mapping[str, Any]], rows_sha256: str) -> dict[str, Any]:
-    picked, population = sample(rows)
-    ordered = sorted(picked, key=lambda r: sha(f"{PACKET_SALT}:{r['id']}"))
-    rids = {row["id"]: f"h{index + 1:03d}" for index, row in enumerate(ordered)}
+def build(
+    rows: Sequence[Mapping[str, Any]],
+    rows_sha256: str,
+    rnd: Round = ROUND1,
+    exclude_key: Sequence[Mapping[str, Any]] = (),
+) -> dict[str, Any]:
+    exclude_ids = frozenset(item["id"] for item in exclude_key)
+    exclude_groups = frozenset(item["group_id"] for item in exclude_key)
+    picked, population = sample(rows, rnd, exclude_ids, exclude_groups)
+    ordered = sorted(picked, key=lambda r: sha(f"{rnd.packet_salt}:{r['id']}"))
+    rids = {
+        row["id"]: f"{rnd.prefix}{index + 1:03d}" for index, row in enumerate(ordered)
+    }
     items = [packet_item(rids[row["id"]], row) for row in ordered]
     key = [key_item(rids[row["id"]], row) for row in ordered]
     secrets = (
@@ -146,27 +213,35 @@ def build(rows: Sequence[Mapping[str, Any]], rows_sha256: str) -> dict[str, Any]
     size = math.ceil(len(items) / PACKETS)
     packets_r1 = [items[i : i + size] for i in range(0, len(items), size)]
     packets_r2 = [
-        sorted(chunk, key=lambda item: sha(f"{R2_SALT}:{item['rid']}"))
+        sorted(chunk, key=lambda item: sha(f"{rnd.r2_salt}:{item['rid']}"))
         for chunk in packets_r1
     ]
     sampled = collections.Counter(item["family"] for item in key)
     cells = collections.Counter(f"{item['family']}|{item['gold']}" for item in key)
+    info = {
+        "schema": "decision2.hr2.review-sample.v1",
+        "rows_sha256": rows_sha256,
+        "rows": len(rows),
+        "salt": rnd.salt,
+        "per_family": rnd.per_family,
+        "n": len(key),
+        "population": population,
+        "sampled": dict(sorted(sampled.items())),
+        "cells": dict(sorted(cells.items())),
+        "thresholds": dict(rnd.thresholds),
+    }
+    if rnd is not ROUND1:
+        info["round"] = rnd.name
+        info["excluded"] = {
+            "key_items": len(exclude_key),
+            "ids_in_rows": sum(row["id"] in exclude_ids for row in rows),
+            "groups_in_rows": len({r["group_id"] for r in rows} & exclude_groups),
+        }
     return {
         "packets_r1": packets_r1,
         "packets_r2": packets_r2,
         "key": key,
-        "sample": {
-            "schema": "decision2.hr2.review-sample.v1",
-            "rows_sha256": rows_sha256,
-            "rows": len(rows),
-            "salt": SALT,
-            "per_family": PER_FAMILY,
-            "n": len(key),
-            "population": population,
-            "sampled": dict(sorted(sampled.items())),
-            "cells": dict(sorted(cells.items())),
-            "thresholds": THRESHOLDS,
-        },
+        "sample": info,
     }
 
 
@@ -192,6 +267,7 @@ def split_rids(
     key: Sequence[Mapping[str, Any]],
     r1: Mapping[str, Mapping[str, Any]],
     r2: Mapping[str, Mapping[str, Any]],
+    rnd: Round = ROUND1,
 ) -> list[str]:
     out = []
     for row in key:
@@ -199,7 +275,7 @@ def split_rids(
         b = answer(r2[row["rid"]], row["keys"], row["task_type"])
         if agrees(a, row) != agrees(b, row):
             out.append(row["rid"])
-    return sorted(out, key=lambda rid: sha(f"{R3_SALT}:{rid}"))
+    return sorted(out, key=lambda rid: sha(f"{rnd.r3_salt}:{rid}"))
 
 
 def items(
@@ -242,7 +318,9 @@ def items(
 
 
 def verdict(
-    scored: Sequence[Mapping[str, Any]], population: Mapping[str, int]
+    scored: Sequence[Mapping[str, Any]],
+    population: Mapping[str, int],
+    rnd: Round = ROUND1,
 ) -> dict[str, Any]:
     n, errors = len(scored), sum(i["error"] for i in scored)
     _, upper = clopper_pearson(errors, n)
@@ -257,12 +335,11 @@ def verdict(
     failing = sorted(
         name
         for name, k in family_errors.items()
-        if k >= THRESHOLDS["family_errors_fail"]
+        if rnd.family_fails(k, len(by_family[name]))
     )
-    p1 = (
-        errors / n <= THRESHOLDS["error_max"] and upper <= THRESHOLDS["error_upper_max"]
-    )
-    p2 = weighted <= THRESHOLDS["weighted_error_max"]
+    limits = rnd.thresholds
+    p1 = errors / n <= limits["error_max"] and upper <= limits["error_upper_max"]
+    p2 = weighted <= limits["weighted_error_max"]
     return {
         "n": n,
         "errors": errors,
@@ -294,17 +371,18 @@ def score(
     r1: Mapping[str, Mapping[str, Any]],
     r2: Mapping[str, Mapping[str, Any]],
     r3: Mapping[str, Mapping[str, Any]] | None,
+    rnd: Round = ROUND1,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     scored = items(key, r1, r2, r3)
     population = sample_info["population"]
     by_family: dict[str, list[Mapping[str, Any]]] = collections.defaultdict(list)
     for item in scored:
         by_family[item["family"]].append(item)
-    first = verdict(scored, population)
+    first = verdict(scored, population, rnd)
     fixed = None
-    if first["verdict"] == "FAIL" and first["failing_families"]:
+    if rnd.fix_rule and first["verdict"] == "FAIL" and first["failing_families"]:
         rest = [i for i in scored if i["family"] not in first["failing_families"]]
-        fixed = verdict(rest, population) if rest else None
+        fixed = verdict(rest, population, rnd) if rest else None
     weighted_ci = stratified_bootstrap(
         by_family, lambda draw: weighted_error(draw, population)
     )
@@ -322,7 +400,7 @@ def score(
     report = {
         "schema": "decision2.hr2.review.v1",
         "sample": {k: sample_info[k] for k in ("rows_sha256", "rows", "salt", "n")},
-        "thresholds": THRESHOLDS,
+        "thresholds": dict(rnd.thresholds),
         "verdict": first,
         "fix_rule_f1": fixed,
         "error_unweighted": proportion(first["errors"], n),
@@ -366,6 +444,9 @@ def score(
             "r2": dict(collections.Counter(i["r2_confidence"] for i in scored)),
         },
     }
+    if rnd is not ROUND1:
+        report["round"] = rnd.name
+        report["fix_rule_f1"] = "not applied in this round"
     private = {
         "schema": "decision2.hr2.review-private.v1",
         "errors": [i for i in scored if i["error"]],
@@ -384,12 +465,15 @@ def main(argv: list[str] | None = None) -> int:
     one = sub.add_parser("sample")
     one.add_argument("--train", type=Path, required=True)
     one.add_argument("--out-dir", type=Path, required=True)
+    one.add_argument("--exclude-key", type=Path, action="append", default=[])
     two = sub.add_parser("splits")
     three = sub.add_parser("score")
     for p in (two, three):
         p.add_argument("--key", type=Path, required=True)
         p.add_argument("--r1", type=Path, action="append", required=True)
         p.add_argument("--r2", type=Path, action="append", required=True)
+    for p in (one, two, three):
+        p.add_argument("--round", choices=sorted(ROUNDS), default=ROUND1.name)
     two.add_argument("--packets", type=Path, action="append", required=True)
     two.add_argument("--out", type=Path, required=True)
     three.add_argument("--sample", type=Path, required=True)
@@ -397,10 +481,14 @@ def main(argv: list[str] | None = None) -> int:
     three.add_argument("--out", type=Path, required=True)
     three.add_argument("--private", type=Path, required=True)
     args = parser.parse_args(argv)
+    rnd = ROUNDS[args.round]
     if args.command == "sample":
         text = args.train.read_bytes().decode("utf-8")
         rows = [json.loads(line) for line in text.split("\n") if line]
-        built = build(rows, sha(text))
+        exclude = [item for path in args.exclude_key for item in read_jsonl(path)]
+        if rnd is not ROUND1 and not exclude:
+            raise ValueError(f"round {rnd.name} needs --exclude-key (the earlier keys)")
+        built = build(rows, sha(text), rnd, exclude)
         args.out_dir.mkdir(mode=0o700)
         for order in ("r1", "r2"):
             for index, packet in enumerate(built[f"packets_{order}"], 1):
@@ -414,18 +502,18 @@ def main(argv: list[str] | None = None) -> int:
     r1 = read_answers(args.r1, rids)
     r2 = read_answers(args.r2, rids)
     if args.command == "splits":
-        wanted = set(split_rids(key, r1, r2))
+        wanted = set(split_rids(key, r1, r2, rnd))
         by_rid = {
             item["rid"]: item for path in args.packets for item in read_jsonl(path)
         }
-        packet = [by_rid[rid] for rid in split_rids(key, r1, r2)]
+        packet = [by_rid[rid] for rid in split_rids(key, r1, r2, rnd)]
         assert_blind(packet, FIELDS, {row["id"] for row in key})
         write_packet(args.out, packet)
         print(json.dumps({"splits": len(wanted)}))
         return 0
-    splits = split_rids(key, r1, r2)
+    splits = split_rids(key, r1, r2, rnd)
     r3 = read_answers(args.r3, splits) if args.r3 else None
-    report, private = score(json.loads(args.sample.read_text()), key, r1, r2, r3)
+    report, private = score(json.loads(args.sample.read_text()), key, r1, r2, r3, rnd)
     write_json(args.out, report)
     write_json(args.private, private)
     print(json.dumps({"verdict": report["verdict"], "fix": report["fix_rule_f1"]}))

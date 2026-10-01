@@ -1,0 +1,50 @@
+{
+ "cells": {
+  "eth_cs|false": 24,
+  "eth_cs|true": 24,
+  "eth_deon|false": 24,
+  "eth_deon|true": 24,
+  "eth_just|false": 24,
+  "eth_just|true": 24,
+  "eth_util|a": 24,
+  "eth_util|b": 24,
+  "hs3_pref|a": 24,
+  "hs3_pref|b": 24,
+  "prm_step|false": 24,
+  "prm_step|true": 24
+ },
+ "excluded": {
+  "groups_in_rows": 146,
+  "ids_in_rows": 135,
+  "key_items": 216
+ },
+ "n": 288,
+ "per_family": 48,
+ "population": {
+  "eth_cs": 1084,
+  "eth_deon": 1094,
+  "eth_just": 1080,
+  "eth_util": 3108,
+  "hs3_pref": 6883,
+  "prm_step": 2858
+ },
+ "round": "hr2-r2",
+ "rows": 16107,
+ "rows_sha256": "06e8e29e37376752df1420b58eb39c371207e47364f29498b9d2a9188b034528",
+ "salt": "hr2-r2-review-v1",
+ "sampled": {
+  "eth_cs": 48,
+  "eth_deon": 48,
+  "eth_just": 48,
+  "eth_util": 48,
+  "hs3_pref": 48,
+  "prm_step": 48
+ },
+ "schema": "decision2.hr2.review-sample.v1",
+ "thresholds": {
+  "error_max": 0.05,
+  "error_upper_max": 0.08,
+  "family_fail_cp_lower": 0.05,
+  "weighted_error_max": 0.05
+ }
+}

@@ -9,6 +9,10 @@ intended difference:
 * ``--teacher``: KL(teacher || student) on every TRAIN row, from a pinned
   own-family teacher distribution file keyed by row ID and input hash.
 * ``--residual``: zero-gated residual readouts from ``dec_model``.
+* ``--readout label_token``: the tied LM head's label-token logits at the
+  answer cue (``label_token``) instead of the candidate head.
+* ``--head-init-seed``: one fresh-head initialization shared by every seed of
+  an arm, so a uniform soup averages heads that started from the same point.
 
 Run from ``src/training/decision2`` as ``python3 -m v2.dec.train_dec``.
 """
@@ -40,6 +44,7 @@ from training.model.train import atomic_json, evaluate, fsync_tree, learning_fac
 
 from .batching import row_windows, token_batches
 from .dec_model import RESIDUALS, DecModel
+from .label_token import LABEL_PROMPT_VERSION, LabelTokenModel, encode_label
 from .runtime_check import require_runtime
 
 TRAINER_VERSION = "dec-factor-trainer/1"
@@ -54,7 +59,13 @@ SHARED_FILES = (
     "train.py",
     "infer.py",
 )
-OWN_FILES = ("train_dec.py", "dec_model.py", "runtime_check.py", "batching.py")
+OWN_FILES = (
+    "train_dec.py",
+    "dec_model.py",
+    "runtime_check.py",
+    "batching.py",
+    "label_token.py",
+)
 
 
 def utc_now() -> str:
@@ -227,6 +238,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--teacher-kl-weight", type=float, default=0.0)
     parser.add_argument("--residual", action="append", default=[], choices=RESIDUALS)
     parser.add_argument("--residual-lr", type=float, default=5e-4)
+    parser.add_argument("--readout", choices=("head", "label_token"), default="head")
+    parser.add_argument(
+        "--head-init-seed",
+        type=int,
+        help="Seed for building the start model (a fresh head); --seed drives the rest",
+    )
     parser.add_argument("--brier-weight", type=float, default=0.5)
     parser.add_argument("--lora-rank", type=int, default=16)
     parser.add_argument("--lora-alpha", type=int, default=32)
@@ -278,6 +295,12 @@ def parse_args() -> argparse.Namespace:
         parser.error("--teacher-partial needs --teacher")
     if args.batching == "tokens" and args.smoke_window_type:
         parser.error("--smoke-window-type needs --batching rows")
+    if args.readout == "label_token" and (
+        args.residual or args.init == "decision2" or args.head_init_seed is not None
+    ):
+        parser.error(
+            "--readout label_token has no head, residual or decision2 continuation"
+        )
     return args
 
 
@@ -310,8 +333,9 @@ def main() -> None:
         data_sha["teacher"] = file_sha256(args.teacher)
 
     random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    torch.cuda.manual_seed_all(args.seed)
+    init_seed = args.seed if args.head_init_seed is None else args.head_init_seed
+    torch.manual_seed(init_seed)
+    torch.cuda.manual_seed_all(init_seed)
     device = torch.device("cuda:0")
     source = source_fingerprint(args.model_path)
     if args.init == "decision1":
@@ -326,7 +350,16 @@ def main() -> None:
         base, tokenizer = DecisionModel.from_base(
             args.model_path, args.revision, args.head_dim
         )
-    model = DecModel.wrap(base, tuple(args.residual))
+    if args.head_init_seed is not None:
+        torch.manual_seed(args.seed)
+        torch.cuda.manual_seed_all(args.seed)
+    label = args.readout == "label_token"
+    model = (
+        LabelTokenModel.wrap(base, tokenizer)
+        if label
+        else DecModel.wrap(base, tuple(args.residual))
+    )
+    encode_fn = encode_label if label else encode
     if args.train_mode == "lora":
         attach_lora(
             model,
@@ -369,12 +402,12 @@ def main() -> None:
     if pad_id is None:
         raise ValueError("Tokenizer needs a pad or EOS token")
 
-    train_items = [encode(row, tokenizer, args.max_length) for row in train_rows]
+    train_items = [encode_fn(row, tokenizer, args.max_length) for row in train_rows]
     if teacher is not None:
         for row, item in zip(train_rows, train_items):
             if row["id"] in teacher:
                 attach_teacher_probs(item, teacher[row["id"]])
-    select_items = [encode(row, tokenizer, args.max_length) for row in select_rows]
+    select_items = [encode_fn(row, tokenizer, args.max_length) for row in select_rows]
     train_lengths = [len(item["ids"]) for item in train_items]
     example_weights = [weights_by_type[row["task_type"]] for row in train_rows]
     token_windows = None
@@ -412,7 +445,10 @@ def main() -> None:
     contract = {
         "trainer_version": TRAINER_VERSION,
         "arm": args.arm,
-        "prompt_version": PROMPT_VERSION,
+        "prompt_version": LABEL_PROMPT_VERSION if label else PROMPT_VERSION,
+        "readout": args.readout,
+        "label_token": model.metadata.get("label_token"),
+        "head_init_seed": args.head_init_seed,
         "loss_version": LOSS_VERSION,
         "objective": "ce_brier",
         "brier_weight": args.brier_weight,
@@ -491,13 +527,16 @@ def main() -> None:
                 "name": "backbone",
             }
         ),
-        {
-            "params": list(model.head.parameters()),
-            "lr": args.head_lr,
-            "peak_lr": args.head_lr,
-            "name": "head",
-        },
     ]
+    if list(model.head.parameters()):
+        groups.append(
+            {
+                "params": list(model.head.parameters()),
+                "lr": args.head_lr,
+                "peak_lr": args.head_lr,
+                "name": "head",
+            }
+        )
     if model.residual_parameters():
         groups.append(
             {

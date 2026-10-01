@@ -1,0 +1,117 @@
+{
+ "documents": [
+  {
+   "path": "data/records/license-registry-v1.json",
+   "sha256": "c2f04a0f4ee8fda418652cadff449b55c8b4bf63ac1b522060684c12129dd39a"
+  },
+  {
+   "path": "data/records/license-registry-v2.json",
+   "sha256": "5fc46a97a41dc8b552506486c7db5f81bd676cce0c3e8ff942fcd19842aa17bc"
+  },
+  {
+   "path": "data/records/license-registry-m3b.json",
+   "sha256": "5042aa32387a34dad3f9fbf795732e025cce647aeb73bb35fcfb8ff327342b75"
+  },
+  {
+   "path": "data/records/license-registry-m4.json",
+   "sha256": "0b37fe3b30e0e901ab4b37127c8bb9513bf1ac9c401e34c8fa54fab7804d1324"
+  },
+  {
+   "path": "data/records/license-registry-hs1.json",
+   "sha256": "05c88396f825d85f82c056c907ad62f9576d6b2700e5c6c14e779186ac64bcf9"
+  },
+  {
+   "path": "data/a7/license-registry-a7-v1.json",
+   "sha256": "29bc7ea8e97afd540c1d3177d720150326f949d87211bcd1db574e7a80bf9d01"
+  },
+  {
+   "path": "data/a7/license-registry-a7-v2.json",
+   "sha256": "f32bb58b97c4f68324659541c52ec93f3fea69ab86a1dd13cd84b41df00a5bdb"
+  },
+  {
+   "path": "release/records/dev2-0p6b-m8-release-2026-09-29/credits/m6-sources.json",
+   "sha256": "05ad69e039c806af42503e4d89849011a90874f38bf04a57dc1a4be68d07638f"
+  },
+  {
+   "path": "release/records/dev2-0p6b-m8-release-2026-09-29/credits/training-attribution.txt",
+   "sha256": "280091ca6706b448d33154cc05c625b2931a11f84886388708fe3031b405f6ce"
+  },
+  {
+   "path": "data/a7/records/a7-inventory-2026-09-28.md",
+   "sha256": "61d7b1f62e0c316b01798332265874b1f09118e383a260c6525c112d6217299f"
+  },
+  {
+   "path": "eval/sealed/c1-source-terms.json",
+   "sha256": "c49c0b76f406b855b30dd8a9872ea6b88008cbd031a5f61d0b28a6e35db3577c"
+  },
+  {
+   "path": "eval/sealed/c1-config.json",
+   "sha256": "42e8c9407ba55190c0f7bb0c9127395171ffde900a8fdc7329ab648e2926195f"
+  },
+  {
+   "path": "eval/records/sealed-c1-source-registry-2026-09-28.md",
+   "sha256": "ea2668b48deecc4a6d2bdbade13ea7b66fb496f19be18a2f91e6a81f9fb5da18"
+  },
+  {
+   "path": "eval/records/htdev-prereg-2026-09-29.md",
+   "sha256": "89d97a3960169bd44007feb50113e184e1d9dc7d53e98981857f00e072070c2d"
+  },
+  {
+   "path": "eval/records/htdev-isolation-2026-09-29.md",
+   "sha256": "fc36e8d5d4939ce91180e687a1f42f835030d909143bad27d488f3c28f12fb85"
+  },
+  {
+   "path": "eval/records/htdev2-prereg-2026-09-30.md",
+   "sha256": "316ceeaa0d79801573c6bb0a431e03ad53c71e13ee7138af817a2552412905e5"
+  },
+  {
+   "path": "eval/records/mlx-diag-v1-2026-09-28.md",
+   "sha256": "e6d5b9120c26b670bfae3c32a0d3e4d2c341d472ef018e50c397adbc68e0f50e"
+  },
+  {
+   "path": "eval/records/jevbench-value-2026-09-29.md",
+   "sha256": "7c772d2fe7127234a526dcf69dd29470fc836bf357e4dce892be99bcc2359b4f"
+  }
+ ],
+ "hits": {},
+ "schema": "decision2.hr2.names.v1",
+ "terms": {
+  "allegro_reviews_train": [
+   "allegro",
+   "klej"
+  ],
+  "ethics_train": [
+   "hendrycks/ethics",
+   "ethics dataset",
+   "shared human values"
+  ],
+  "helpsteer3_train": [
+   "helpsteer3",
+   "helpsteer 3",
+   "wildchat",
+   "sharegpt"
+  ],
+  "indonli_train": [
+   "indonli",
+   "ir-nlp-csui",
+   "indosum"
+  ],
+  "kobest_boolq_train": [
+   "kobest",
+   "kb-boolq",
+   "skt/kobest"
+  ],
+  "prm800k_train": [
+   "prm800k",
+   "prm 800k",
+   "competition_math",
+   "hendrycks/math"
+  ],
+  "vitaminc_real_train": [
+   "vitaminc",
+   "vitamin c",
+   "vitamin-c"
+  ]
+ },
+ "verdict": "PASS"
+}

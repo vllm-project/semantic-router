@@ -1,0 +1,402 @@
+{
+ "folds": {
+  "groups": [
+   493,
+   541,
+   579,
+   543,
+   541
+  ],
+  "rows": [
+   493,
+   541,
+   582,
+   543,
+   541
+  ],
+  "rule": "int(sha256(group_id).hexdigest(), 16) % 5"
+ },
+ "gate": {
+  "margin": 0.05,
+  "min_rows": 30,
+  "rule": "PASS iff accuracy <= majority + margin; majority is the cross-validated position prior on the same rows",
+  "views": [
+   "state_removed",
+   "option_only",
+   "hypothesis_only"
+  ]
+ },
+ "gates": [
+  {
+   "accuracy": 0.493333,
+   "delta": 0.008889,
+   "families_over_margin": [],
+   "majority": 0.484444,
+   "n": 2700,
+   "pass": true,
+   "task_type": "noul",
+   "threshold": 0.534444,
+   "view": "state_removed",
+   "wilson95": [
+    0.474498,
+    0.512187
+   ]
+  },
+  {
+   "accuracy": 0.503704,
+   "delta": 0.019259,
+   "families_over_margin": [],
+   "majority": 0.484444,
+   "n": 2700,
+   "pass": true,
+   "task_type": "noul",
+   "threshold": 0.534444,
+   "view": "option_only",
+   "wilson95": [
+    0.484853,
+    0.522544
+   ]
+  }
+ ],
+ "groups": 2697,
+ "heuristics": {
+  "lexical_overlap": {
+   "n_rows": 0
+  },
+  "longest_option": {
+   "by_family": {
+    "snips_rel": {
+     "accuracy": 0.5,
+     "correct": 1350,
+     "delta": 0.015556,
+     "exceeds_margin": false,
+     "majority": 0.484444,
+     "n": 2700,
+     "wilson95": [
+      0.481154,
+      0.518846
+     ]
+    }
+   },
+   "by_source": {
+    "snips_2017_custom_intents": {
+     "accuracy": 0.5,
+     "correct": 1350,
+     "delta": 0.015556,
+     "exceeds_margin": false,
+     "majority": 0.484444,
+     "n": 2700,
+     "wilson95": [
+      0.481154,
+      0.518846
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "snips_rel": {
+      "accuracy": 0.5,
+      "correct": 1350,
+      "delta": 0.015556,
+      "exceeds_margin": false,
+      "majority": 0.484444,
+      "n": 2700,
+      "wilson95": [
+       0.481154,
+       0.518846
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.5,
+     "correct": 1350,
+     "delta": 0.015556,
+     "exceeds_margin": false,
+     "majority": 0.484444,
+     "n": 2700,
+     "wilson95": [
+      0.481154,
+      0.518846
+     ]
+    }
+   },
+   "n_rows": 2700
+  },
+  "position_prior": {
+   "by_family": {
+    "snips_rel": {
+     "accuracy": 0.484444,
+     "correct": 1308,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.484444,
+     "n": 2700,
+     "wilson95": [
+      0.465629,
+      0.503304
+     ]
+    }
+   },
+   "by_source": {
+    "snips_2017_custom_intents": {
+     "accuracy": 0.484444,
+     "correct": 1308,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.484444,
+     "n": 2700,
+     "wilson95": [
+      0.465629,
+      0.503304
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "snips_rel": {
+      "accuracy": 0.484444,
+      "correct": 1308,
+      "delta": 0.0,
+      "exceeds_margin": false,
+      "majority": 0.484444,
+      "n": 2700,
+      "wilson95": [
+       0.465629,
+       0.503304
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.484444,
+     "correct": 1308,
+     "delta": 0.0,
+     "exceeds_margin": false,
+     "majority": 0.484444,
+     "n": 2700,
+     "wilson95": [
+      0.465629,
+      0.503304
+     ]
+    }
+   },
+   "n_rows": 2700
+  }
+ },
+ "input": {
+  "rows": 2700,
+  "sha256": "63fd0ca79049fc30aedd0c22e6849d7e97037ec4a7331849d8650f10684b3a16"
+ },
+ "learner": {
+  "bits": 20,
+  "epochs": 4,
+  "instruction_cross_cap": 64,
+  "l2": 1e-06,
+  "learning_rate": 0.1,
+  "seed": 0,
+  "state_cross_cap": 128,
+  "state_cross_unigrams": 64,
+  "state_gram_cap": 128,
+  "text_gram_cap": 1024
+ },
+ "majority": {
+  "noul": {
+   "accuracy": 0.484444,
+   "n": 2700
+  }
+ },
+ "rows": 2700,
+ "schema": "decision2.v2.shortcut.v1",
+ "verdict": "PASS",
+ "views": {
+  "full_input": {
+   "by_family": {
+    "snips_rel": {
+     "accuracy": 0.626296,
+     "correct": 1691,
+     "delta": 0.141852,
+     "exceeds_margin": true,
+     "majority": 0.484444,
+     "n": 2700,
+     "wilson95": [
+      0.607881,
+      0.644353
+     ]
+    }
+   },
+   "by_source": {
+    "snips_2017_custom_intents": {
+     "accuracy": 0.626296,
+     "correct": 1691,
+     "delta": 0.141852,
+     "exceeds_margin": true,
+     "majority": 0.484444,
+     "n": 2700,
+     "wilson95": [
+      0.607881,
+      0.644353
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "snips_rel": {
+      "accuracy": 0.626296,
+      "correct": 1691,
+      "delta": 0.141852,
+      "exceeds_margin": true,
+      "majority": 0.484444,
+      "n": 2700,
+      "wilson95": [
+       0.607881,
+       0.644353
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.626296,
+     "correct": 1691,
+     "delta": 0.141852,
+     "exceeds_margin": true,
+     "majority": 0.484444,
+     "n": 2700,
+     "wilson95": [
+      0.607881,
+      0.644353
+     ]
+    }
+   },
+   "n_rows": 2700
+  },
+  "hypothesis_only": {
+   "n_rows": 0
+  },
+  "option_only": {
+   "by_family": {
+    "snips_rel": {
+     "accuracy": 0.503704,
+     "correct": 1360,
+     "delta": 0.019259,
+     "exceeds_margin": false,
+     "majority": 0.484444,
+     "n": 2700,
+     "wilson95": [
+      0.484853,
+      0.522544
+     ]
+    }
+   },
+   "by_source": {
+    "snips_2017_custom_intents": {
+     "accuracy": 0.503704,
+     "correct": 1360,
+     "delta": 0.019259,
+     "exceeds_margin": false,
+     "majority": 0.484444,
+     "n": 2700,
+     "wilson95": [
+      0.484853,
+      0.522544
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "snips_rel": {
+      "accuracy": 0.503704,
+      "correct": 1360,
+      "delta": 0.019259,
+      "exceeds_margin": false,
+      "majority": 0.484444,
+      "n": 2700,
+      "wilson95": [
+       0.484853,
+       0.522544
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.503704,
+     "correct": 1360,
+     "delta": 0.019259,
+     "exceeds_margin": false,
+     "majority": 0.484444,
+     "n": 2700,
+     "wilson95": [
+      0.484853,
+      0.522544
+     ]
+    }
+   },
+   "n_rows": 2700
+  },
+  "state_removed": {
+   "by_family": {
+    "snips_rel": {
+     "accuracy": 0.493333,
+     "correct": 1332,
+     "delta": 0.008889,
+     "exceeds_margin": false,
+     "majority": 0.484444,
+     "n": 2700,
+     "wilson95": [
+      0.474498,
+      0.512187
+     ]
+    }
+   },
+   "by_source": {
+    "snips_2017_custom_intents": {
+     "accuracy": 0.493333,
+     "correct": 1332,
+     "delta": 0.008889,
+     "exceeds_margin": false,
+     "majority": 0.484444,
+     "n": 2700,
+     "wilson95": [
+      0.474498,
+      0.512187
+     ]
+    }
+   },
+   "by_task_family": {
+    "noul": {
+     "snips_rel": {
+      "accuracy": 0.493333,
+      "correct": 1332,
+      "delta": 0.008889,
+      "exceeds_margin": false,
+      "majority": 0.484444,
+      "n": 2700,
+      "wilson95": [
+       0.474498,
+       0.512187
+      ]
+     }
+    }
+   },
+   "by_task_type": {
+    "noul": {
+     "accuracy": 0.493333,
+     "correct": 1332,
+     "delta": 0.008889,
+     "exceeds_margin": false,
+     "majority": 0.484444,
+     "n": 2700,
+     "wilson95": [
+      0.474498,
+      0.512187
+     ]
+    }
+   },
+   "n_rows": 2700
+  }
+ }
+}
