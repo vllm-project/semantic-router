@@ -106,6 +106,10 @@ N4XF batching and seeds 20260926 / 27 / 28.
 - The receipts flag changed autotune entries in the formal caches (LH 13, NT2 13 + 201 new for the label prompts'
   shapes); every answer is deterministic given the persisted cache, which is staged on node A for item 8.
 - Choice (`formal/m10/successor/4b-choice.md`): C1 candidate `m10-4b-LH`.
+- **T = 1 (COORDINATION 13:40 "keep T = 1 everywhere").** LH's calibrated predictions retempered to T = 1
+  (`v2.release.retemper_predictions --undo`, 0 answer changes on typed FINAL, CSS15 and public 231) score the same:
+  `formal/m10/m10-4b-LH-t1-derived` v3 67.345, +4.19 [+0.10, +9.88] vs the bar. The package can ship T = 1 without
+  changing any item.
 
 ## Recipe recommendation (preregistered rule)
 
