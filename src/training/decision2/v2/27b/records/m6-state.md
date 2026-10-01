@@ -213,7 +213,8 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
    exposure in the custodian's §1 record), and so is the private Index (§3: `m6-index.sh` on node D GPU4–7, eval
    allowance ≤ 12 GPU-h = one 27B run; first finalist passing items 1–7). The release (§4) builds on DEV2.0-27B
    `main` `09280791` through the release pipeline, only if items 1–8 pass.
-4. After the last chain (M6-IB2PN ≈ 08:30Z Oct 2): attribution (`m6-gates.sh` with every sealed finalist), final
+4. After the last chain (M6-IB2PN ≈ 08:30Z Oct 2): attribution (`m6-gates.sh <mirror> contrast` and `verdicts` with
+   every sealed finalist; never `gates` again for an arm already gated), final
    results, gist 06, milestone-end cleanup ("Hand-off" above), merge (signed) into integration. **Order:** the
    chosen finalist's `m6-stage-a.sh` (node A, item 8 / release) runs before `m6-link.sh remove`, which deletes node
    B's link directory.

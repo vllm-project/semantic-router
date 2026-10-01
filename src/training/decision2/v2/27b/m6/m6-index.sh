@@ -95,7 +95,7 @@ for k in range(8):
     print(f"shard {k}: {rows} records, {'ended exit ' + code if end else 'running'}")
 print(f"GPU-h so far (current intervals) {total:.2f}")
 EOF
-    ond "tail -n 4 $R/logs/m6-index-$ARM.log" ;;
+    ond "tail -n 4 $R/logs/m6-index-$ARM.log 2> /dev/null || echo 'no run log yet'" ;;
   score)
     ond "for k in 0 1 2 3 4 5 6 7; do test \"\$(cat $R/runs/$ARM/shard-\$k/exit_code 2>/dev/null)\" = 0 || exit 1; done" ||
       { echo "not every shard ended with exit code 0" >&2; exit 3; }
