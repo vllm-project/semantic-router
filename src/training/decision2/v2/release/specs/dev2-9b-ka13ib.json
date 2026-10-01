@@ -6,7 +6,7 @@
     "scored": "T = 1: the sealed CAL698 formal run formal-m9/K-a13IB-16k (node A GPU6, image f83b1d10) returned to T = 1 offline with 0 answer changes on every panel and mlx-diag, then adopted, sealed and paired on node A (ops/prep.sh derive / paired).",
     "storage": "v2.release.bf16_copy of the frozen FP32 soup (identity 4701ba41 -> b9a65d60; receipt 773d9b0c).",
     "runtime": "vendor_source = the formal run's runner mirror 787abdc54 (training/model checked equal to the scored adapter sources at build time); runtime_source = automap_source = 99432d1a7, the released runtime (BF16-resident, Transformers remote code, forward token budget), unchanged from the current revision.",
-    "card": "the product card of the current revision (card round 2) with K-a13IB's reports; card.index = the round-2 Index input with the 9B point from an independent kit run on exactly these weights (K-a13IB-bf16) and the footnote of the coordinator decision; card.assets rendered by v2.release.card_assets in the round-2 environment (Python 3.12.13, matplotlib 3.11.2, Pillow 12.3.0, the same Inter fonts and logo); card.speed keeps the 400-request bench receipt of this runtime (same architecture, runtime and shapes).",
+    "card": "the product card of the current revision (card round 2) with K-a13IB's reports and the card round-3 Index conventions (user card fix 2026-10-02 03:04 UTC+8, which leaves Lux 9B to this release): card.index = the round-3 Index input (board-served parameter counts, the audited footnote of card_index.FOOTNOTE) with the 9B scores from an independent kit run on exactly these weights (K-a13IB-bf16); card.assets rendered by the round-3 v2.release.card_assets in the round-2 environment (Python 3.12.13, matplotlib 3.11.2, Pillow 12.3.0, the same Inter fonts and logo); card.speed keeps the 400-request bench receipt of this runtime (same architecture, runtime and shapes).",
     "c1": "final: post-key C1 summary bound as R8",
     "replaces_spec": {
       "spec": "v2/release/specs/dev2-9b-product.json",
@@ -158,11 +158,11 @@
     },
     "index": {
       "path": "/data/dev2/private/release/ka13ib/decision-index-card.json",
-      "sha256": "dc8f7278ce22a57a1d112793050b642cc17ba5f329964591523cc88984384f20"
+      "sha256": "0899dca4ab9ae2b288347017f8dce41d4b4b9003ac87f96938d834b89037fd12"
     },
     "assets": {
       "dir": "/data/dev2/private/release/ka13ib/9b",
-      "receipt_sha256": "89357f15a22759acb3d84942a7cc4fb96d5c5c96890f43fd74e542d1f1e7e8bd"
+      "receipt_sha256": "b911708f6396f9596528d99e8a8db7073ab71126610ad81c07cf1196249af18f"
     },
     "speed": {
       "evidence": "v2/release/records/dev2-budget-2026-10-01/9b/extra/receipts/bench-new.json",
