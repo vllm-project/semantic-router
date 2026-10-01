@@ -96,6 +96,7 @@ Running full attempts have no receipt until they end: add (now − start) for ea
 
 ## Poll log (newest first)
 
+- 05:08Z: MOE-Git-s2 update 2,421 (BEST 1,784; SELECT at 2,230 .8201); ends ≈ 08:25Z. Both chains alive.
 - 04:40Z: MOE-Git-s2 update 2,250 (BEST still 1,784; ends ≈ 08:25Z). Both chains alive.
 - 04:12Z: MOE-Git-s2 update 2,099 (BEST so far 1,784); ends ≈ 08:20Z. Both chains alive and waiting.
 - 03:48Z: more path checks under `pathcheck/` (tests only; scratch removed from the relay / mlx hand-over dirs):
