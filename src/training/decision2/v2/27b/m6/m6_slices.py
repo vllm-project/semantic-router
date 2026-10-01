@@ -9,6 +9,7 @@ yes = P(true) > 0.5; **hop** = yes-rate on ``pn-hop`` (true paraphrases, all eig
 yes-rate on gold-no rows of ``pn-near`` / ``pn-name`` / ``pn-twin`` outside the constructions PN1-r2 dropped for label
 noise. The guard passes when hop Δ ≥ −0.03 and clean gold-no Δ ≤ 0 against the reference (point estimates).
 Gold, family, language and group come from the PN1 SELECT rows (label = index into the ``false`` / ``true`` options).
+``heldout_es_fr`` (reported only, amendment 3) repeats hop and clean gold-no on the languages absent from PN1-r2 TRAIN.
 
 ``breadth``: IB DEV accuracy by family (argmax of the probabilities against the label); B_dev = macro accuracy over
 the families with at least 50 rows; candidate − reference paired group bootstrap (2,000 draws, seed 20261001).
@@ -36,6 +37,7 @@ from lux9b import m7_rules  # noqa: E402
 SCHEMA = "decision2-27b-m6-slices/1"
 ROLE = "development slice; never a release, formal or Index score"
 HOP_SLACK = m7_rules.HOP_SLACK
+HELDOUT_LANGUAGES = ("es", "fr")
 BREADTH_MIN_ROWS = 50
 BREADTH_REPS = 2000
 BREADTH_SEED = 20261001
@@ -115,6 +117,36 @@ def pn1_report(
         reasons.append(f"hop yes {delta['hop']:+.4f} < -{HOP_SLACK}")
     if delta["clean_no"] > 0:
         reasons.append(f"clean gold-no yes {delta['clean_no']:+.4f} > 0")
+    held = [g for g in gold if g["language"] in HELDOUT_LANGUAGES]
+    heldout = None
+    if held:
+        hc = {g["id"]: yes_c[g["id"]] for g in held}
+        hr = {g["id"]: yes_r[g["id"]] for g in held}
+        rate = {
+            side: {
+                k: {"n": len(v), "yes": sum(y[g["id"]] for g in v) / len(v)}
+                for k, v in (
+                    ("hop", [g for g in held if g["family"] == "pn-hop"]),
+                    ("clean_no", [g for g in held if m7_rules.clean_no(g)]),
+                )
+                if v
+            }
+            for side, y in (("candidate", hc), ("reference", hr))
+        }
+        heldout = {
+            "languages": list(HELDOUT_LANGUAGES),
+            "note": "reported only (amendment 3): languages absent from PN1-r2 / PN1H TRAIN",
+            **rate,
+            "delta": {
+                k: rate["candidate"][k]["yes"] - rate["reference"][k]["yes"]
+                for k in rate["candidate"]
+            },
+            "delta_ci95": (
+                m7_rules.pn1_compare(held, hr, hc)
+                if len(rate["candidate"]) == 2
+                else None
+            ),
+        }
     return {
         "schema": SCHEMA,
         "role": ROLE,
@@ -129,6 +161,7 @@ def pn1_report(
         "noisy_constructions_excluded": sorted(
             f"{f}/{lang}" for f, lang in m7_rules.PN1_NOISY
         ),
+        "heldout_es_fr": heldout,
         "pass": not reasons,
         "reasons": reasons,
     }

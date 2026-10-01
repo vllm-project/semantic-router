@@ -43,3 +43,66 @@ Prereg `b8c3caf22`; ops `cef1a1b66`; data lock `7c3aed8c8`; amendment 1 (node F 
      these manifests before the first copy. C0 first, path-checked against the bars (2B node-A
      `dev2-2b-t1-derived`; 0.8B node-B `m8s-ref-08b-I`); 0.8B scoring via the `m8s-score08b.sh` pairing.
   4. Stage 2 only when IB1-r3 is release-safe on origin (data lock first).
+
+## 2026-10-01 08:00Z — resumed (COORDINATION 15:28: IB1-r3 and IB2 release-safe; stage 2 now)
+
+- Stage-2 prereg `9c8798576` (4B LH + IB1 + IB2: `4b-LHB` all 15 IB families, `4b-LHBx` without `w2c` / `isarc` /
+  `hover` / `gsm2`; 25% IB tokens at LH's matched total; one shared base subsample; seeds 26 / 27; co-tenant on E GPU3 /
+  F GPU7); ops `698787dee` + `9c3c68292`; data lock `3773f99a0` (builds byte-identical on E and F; 628 GSM8K probe
+  items overlap stage-2 TRAIN and leave the 4B stage-2 probe gold).
+- IB DEV panel (3,339 rows, 12 families) built on node A in its decoder image; prompts on E / F (`7cf53e47…`).
+- LH soup copied F → E through node A (hash-equal). Stage-2 chains launched 07:52Z; `4b-LHB-s1` preflight PASS
+  (07:57Z), pre-warm marker `warm-4b-f`.
+- Formal: `M6_SMALL_NODE=E|F` + `M6_EF_GPUS` in the M6 library (flagged shared-module change, tests in `test_m11.py`),
+  `m10_formal_select.py --tier`, `ops/m11/m11-formal.sh` (`c7d50a0c2`).
+- Stage 1: all six 2B seeds DONE (≈07:40–07:45Z); soups `2b-LH` (merges 128 / 128, 128 / 128, 126 / 128 SELECT argmax)
+  and `2b-NT` built and reading; all six 0.8B preflights PASS, 0.8B seeds training.
+
+## 2026-10-01 08:40Z — 2B gates closed (no 2B finalist); stage 2 training
+
+- Amendment 2 (`3bf17e6c2`): the first 2B rules output (08:20:49Z) lacked the retention and `hs1-dev` inputs (tier-gold
+  probe scoring `KeyError`; two concurrent scoring runs); moved aside as
+  `2b-finalists.invalid-incomplete-inputs.json`; probe predictions now restricted to the tier gold's ids; scoring
+  lock. Rules rerun once on complete inputs (08:29Z, readout `1c151bd3ce83f1e7`).
+- **2B: no finalist.** `2b-LH` (vs `2b-C0-f`): HT-DEV v2 −.001 [−.020, +.019] TIE; fails the typed Noul and Score type
+  floors, the `set_reconciliation` family floor, the Noul `rule_precedence` floor and the Score5-typed-DEV check
+  (COLLAPSE); retention macro .585, +.014 [−.001, +.028]; `hs1-dev` false-yes .444 vs .625. `2b-NT` (vs `2b-C0-e`):
+  HT-DEV v2 +.029 [+.015, +.042] GAIN; fails retention, macro .554, −.017 [−.030, −.004]; false-yes .580 vs .625.
+  Contrast `2b-LH` vs `2b-NT`: HT-DEV v2 −.029 [−.048, −.010]; typed T −.078 (choice +26, Noul −36, Score −115);
+  retention +.031 [+.016, +.045].
+- 2B base ceiling (`2b-BASE-e` vs `2b-C0-e`): retention macro .635, +.064 [+.046, +.082]; HT-DEV v2 −.057 FLAG;
+  Score5-typed-DEV COLLAPSE.
+- 2B C0 parity: node F vs node E exact on five panels (0 decisions differ, drift 0.0); E vs node B's `2b-I` exact
+  (above).
+- No 2B formal and no 2B hand-off; DEV2.0-2B stays the 2B release.
+- 4B stage-2 tier probe gold built on node A (2,461 items = 3,089 − 628). `4b-LH-f` vs M10's stored `4b-LH`: exact.
+- Training at 08:30Z: 0.8B NT seeds ≈1,050–1,450 / ≈2,540 steps (E0–2); 0.8B LH ≈750–960 (F2/3/6); `4b-LHBx-s1`
+  593 / ≈1,270 (E3); `4b-LHB-s1` 276 / ≈1,240 (F7; slowed by the co-tenant reference reads until 08:21Z).
+
+## 2026-10-01 09:55Z — 0.8B gates closed (no 0.8B finalist); stage 1 closed
+
+- 0.8B seeds DONE 08:47–09:14Z (≈2,035 steps each); soups `08b-NT` (E, 08:57Z) and `08b-LH` (F, 09:29Z); readouts
+  done 09:05 / 09:41Z. Node A: pull, points, contrast, readout `3ff5b7c47271d6ea`, rules once (09:49Z).
+- **0.8B: no finalist.** `08b-LH` (vs `08b-C0-f`): HT-DEV v2 +.030 [+.008, +.050] GAIN; fails the typed choice floor
+  (501 < 610 − 24) and the `attribute_gate` family floor (247 / 400 < 320 / 400 − .10); retention macro .445, +.004
+  [−.009, +.017]; `hs1-dev` false-yes .682 vs .720; Score5-typed-DEV NO-GAIN (C0 COLLAPSE, NO-GAIN). `08b-NT` (vs
+  `08b-C0-e`): HT-DEV v2 +.018 [−.001, +.035] TIE; fails the choice (571) and Score (146 < 159 − 12) type floors and
+  the Noul `rule_precedence` floor (207 < 212 − 4); retention .433, −.008 [−.020, +.003]; false-yes .563 vs .720.
+  Contrast `08b-LH` vs `08b-NT`: HT-DEV v2 +.012 [−.009, +.033]; typed T +.033 (choice −70, Noul +23, Score +100);
+  retention +.012 [−.001, +.025].
+- 0.8B base ceiling (`08b-BASE-e` vs `08b-C0-e`): retention .495, +.054 [+.034, +.075]; HT-DEV v2 −.095 FLAG;
+  Score5-typed-DEV COLLAPSE.
+- 0.8B C0 parity: F vs E exact, E vs node B's `08b-I` exact (five panels, 0 decisions differ, drift 0.0).
+- Stage 1 closed: no tier has a finalist, so no stage-1 formal, successor items or release hand-offs; DEV2.0-2B and
+  DEV2.0-0.8B stay. Stage 2: `4b-LHBx-s1` DONE 08:56Z, `4b-LHB-s1` DONE 09:06Z; seeds 2 training (E3 / F7).
+
+## 2026-10-01 10:50Z — stage 2 closed (no finalist); M11 complete
+
+- Stage-2 seeds 2 DONE 09:57Z (E3) / 10:08Z (F7); soups built 10:00 / 10:10Z; readouts 10:11 / 10:22Z. Node A: pull,
+  points, `ibdev`, contrast, readout `663d91aed2c113e8`, rules once (10:40Z).
+- **4B stage 2: no finalist.** `4b-LHB` vs `4b-LH-f`: HT-DEV v2 TIE, IB DEV +.092 [+.078, +.106]; fails Noul / Score
+  type floors and two family floors. `4b-LHBx` vs `4b-LH-e`: HT-DEV v2 TIE, IB DEV +.030 [+.019, +.042]; fails the
+  choice type floor and retention (−.034 [−.049, −.019]). `4b-LH-e` vs `4b-LH-f` exact (seven panels).
+- M11 has no finalist: no formal, no successor items, no hand-offs, no Index requests; C1 recheck not needed.
+  Results [`dec-m11-results-2026-10-01.md`](dec-m11-results-2026-10-01.md). GPU-h 18.17 (E 8.47, F 9.70); no M11 job
+  running; all M11 lease entries idle.

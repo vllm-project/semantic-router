@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Decoder M11 arm artifact (prereg "Training"): the uniform FP32 soup of the seeds' BEST checkpoints. LoRA seeds
-# (<t>-LH) are first merged into full FP32 checkpoints on an M11 GPU (M10's m10_merge.py, with its SELECT agreement
+# (<t>-LH, stage 2's 4b-LHB / 4b-LHBx) are first merged into full FP32 checkpoints on an M11 GPU (M10's m10_merge.py, with its SELECT agreement
 # check; the tier's read cache); full seeds (<t>-NT) are souped directly. An arm with fewer than two finished seeds has
 # no soup (two are disclosed). Outputs: /data/dev2/runs/dec/m11/soup/<ARM>/{merged/s<i>,build/<ARM>-soup}, markers
 # soup/<ARM>/{DONE,FAILED}.
@@ -21,6 +21,7 @@ fail() { echo "$*" > "$OUT/FAILED"; log "FAILED: $*"; exit 1; }
 case $ARM in
   2b-LH) lora=1 source=/models/Qwen--Qwen3.5-2B-Base/b1485b2fa6dfa1287294f269f5fb618e03d52d7c ;;
   08b-LH) lora=1 source=/models/Qwen--Qwen3.5-0.8B-Base/dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68 ;;
+  4b-LHB | 4b-LHBx) lora=1 source=/models/Qwen--Qwen3.5-4B-Base/1001bb4d826a52d1f399e183466143f4da7b741b ;;
   2b-NT | 08b-NT) lora=0 ;;
   *) fail "unknown arm $ARM" ;;
 esac

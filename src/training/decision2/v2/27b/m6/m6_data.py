@@ -4,6 +4,10 @@
 ``family`` is listed (the in-distribution families ``w2c`` and ``isarc``), every other line copied byte for byte and in
 order; refuses unknown families and an output that exists; prints the counts and SHA-256 values for the data lock.
 
+``drop-groups``: amendment 3's PN1H block, a TRAIN file without the rows whose ``group_id`` is listed in the group
+files (one id per line; the scans' ``drop-groups.txt``), every other line copied byte for byte and in order; refuses a
+listed group with no row and an output that exists.
+
 ``concat``: stage 2's IB DEV slice, the IB1 and IB2 DEV files joined in order (row ids unique across them).
 
 ``soup-check``: M5's ``lsoup`` check of a ``v2.27b.lora_soup`` output: members, rank and alpha are the members' sums,
@@ -11,6 +15,7 @@ the verification passed within its tolerance, the manifest lists the members in 
 another node (``--relay-sums "CKPT=SHA256SUMS ..."``) matches its relay list file by file.
 
     python3 -m v2.27b.m6.m6_data drop-families --input IB.train.jsonl --drop w2c --drop isarc --output IBX.train.jsonl
+    python3 -m v2.27b.m6.m6_data drop-groups --input PN1.train.jsonl --groups G0.txt --groups SCAN.txt --output PN1H.train.jsonl
     python3 -m v2.27b.m6.m6_data concat --input IB1.dev.jsonl --input IB2.dev.jsonl --output IB12.dev.jsonl
     python3 -m v2.27b.m6.m6_data soup-check --manifest SOUP/soup_manifest.json [--relay-sums ...] CKPT CKPT...
 """
@@ -50,6 +55,48 @@ def drop_families(source: Path, drop: list[str], output: Path) -> dict:
         "rows_dropped": sum(counts[f] for f in drop),
         "rows_out": len(kept),
         "families_out": {f: n for f, n in sorted(counts.items()) if f not in drop},
+        "output": str(output),
+        "output_sha256": hashlib.sha256(out).hexdigest(),
+    }
+
+
+def drop_groups(source: Path, group_files: list[Path], output: Path) -> dict:
+    drop = set()
+    for path in group_files:
+        drop |= {
+            g.strip()
+            for g in path.read_text(encoding="utf-8").splitlines()
+            if g.strip()
+        }
+    data = source.read_bytes()
+    kept, seen, dropped = [], set(), Counter()
+    for line in data.splitlines(keepends=True):
+        if not line.strip():
+            raise ValueError(f"{source}: blank line")
+        row = json.loads(line)
+        if row["group_id"] in drop:
+            seen.add(row["group_id"])
+            dropped[f"{row['language']}/{row['family']}/{row['label']}"] += 1
+        else:
+            kept.append(line)
+    missing = sorted(drop - seen)
+    if missing:
+        raise ValueError(f"{source}: no rows of groups {missing}")
+    out = b"".join(kept)
+    fd = os.open(output, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    with os.fdopen(fd, "wb") as stream:
+        stream.write(out)
+    return {
+        "input": str(source),
+        "input_sha256": hashlib.sha256(data).hexdigest(),
+        "group_files_sha256": {
+            str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in group_files
+        },
+        "groups_dropped": len(drop),
+        "rows_in": len(kept) + sum(dropped.values()),
+        "rows_dropped": sum(dropped.values()),
+        "rows_dropped_by_cell": dict(sorted(dropped.items())),
+        "rows_out": len(kept),
         "output": str(output),
         "output_sha256": hashlib.sha256(out).hexdigest(),
     }
@@ -131,6 +178,10 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--input", type=Path, required=True)
     p.add_argument("--drop", action="append", required=True)
     p.add_argument("--output", type=Path, required=True)
+    p = sub.add_parser("drop-groups")
+    p.add_argument("--input", type=Path, required=True)
+    p.add_argument("--groups", type=Path, action="append", required=True)
+    p.add_argument("--output", type=Path, required=True)
     p = sub.add_parser("concat")
     p.add_argument("--input", type=Path, action="append", required=True)
     p.add_argument("--output", type=Path, required=True)
@@ -145,6 +196,13 @@ def main(argv: list[str] | None = None) -> None:
         print(
             json.dumps(
                 drop_families(args.input, args.drop, args.output), sort_keys=True
+            )
+        )
+        return
+    if args.mode == "drop-groups":
+        print(
+            json.dumps(
+                drop_groups(args.input, args.groups, args.output), sort_keys=True
             )
         )
         return
