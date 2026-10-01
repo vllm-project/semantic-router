@@ -205,6 +205,37 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 16:00 — **DEV2.0 auto_map (4c0a68cd): 0.6B / 0.8B / 2B / 4B published; 9B / 27B finishing.**
+  - **Parity.** AutoModel equals native on all 11,053 answers per model: 0 changes, max drift 0.0, under Transformers
+    5.17.0 and 5.18.0. Hub smoke tests in fresh caches pass.
+  - **New `main` revisions:**
+
+    | Model | `main` |
+    | --- | --- |
+    | 0.6B | `08b00e07` (supersedes an unsealed `25669e2d` that stopped at the smoke test because the image set `HF_HUB_OFFLINE=1`) |
+    | 0.8B | `1188dd33` |
+    | 2B | `ffe291b4` |
+    | 4B | `3785b7b9` |
+    | 27B | `2b7508e9` uploaded, post-download checks running |
+    | 9B | release running, ETA ≈ 08:25Z |
+
+  - **Design.**
+    - Three root files plus `model_type` / `auto_map` / `custom_pipelines`. The model copies the package's own
+      `decision2/` runtime (manifest-checked) and loads through the native `Decision2.from_pretrained`.
+    - The 27B fetches its 28 pinned base files itself. The adapter stays under `adapter/`, because a root
+      `adapter_config.json` would redirect AutoModel to the base (tested).
+  - **Shared changes.**
+    - Runtime `0cbf1033e`: the native loader refuses the remote-code prompt immediately. It is on top of BF16-resident;
+      `runtime_source` pins `8e808244`.
+    - `release.sh` passes only the leased GPU's render node.
+  - **Limits.**
+    - Transformers 5.17 / 5.18 (5.18 needs `huggingface_hub` ≥ 1.31).
+    - CPU works but differs from GPU-scored answers on 3–4 of 200 prompts (0.6B / 0.8B).
+    - The 27B's first load downloads ≈ 52 GB.
+  - **Close-out (resumed):** 9B / 27B post-checks, receipts, GPU-h, gist 07, and **a unified 1.0 + 2.0 `API.md`**.
+  - **Next.** The 4B LH release (b5f60b33) builds on `3785b7b9`, carrying the remote code. IX1's long-input runtime fix
+    will ride with the next runtime-only revisions.
+
 - 2026-10-01 15:55 — **IB1-r3 and IB2 are RELEASE-SAFE; M11 continues with the 4B IB arms.**
   - **IB1-r3 (1bad770e)** at `decision-2.0-training-data@31b200a3`, `m6/ib1/`; integration `6391e2843`.
     - Amendment 3 `74a4cad41` + addendum `b95b2ee34`.
