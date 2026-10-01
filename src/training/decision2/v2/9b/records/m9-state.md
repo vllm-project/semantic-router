@@ -1,9 +1,27 @@
 # 9B M9 state (resume file)
 
-Updated: 2026-10-01 17:55 UTC+8 (09:55Z). Branch `xunzhuo/decision-2-training-9b-m9` (worktree `vllm-sr-dev2-9b-m9`).
+Updated: 2026-10-01 18:15 UTC+8 (10:15Z). Branch `xunzhuo/decision-2-training-9b-m9` (worktree `vllm-sr-dev2-9b-m9`).
 Prereg `records/lux9b-m9-prereg-2026-10-01.md` (`8570a5896`); amendment 1 (`0b84e0db4`, B0 read through the base's
 untied LM head); amendment 2 (`51c80ddc9`, stage 2 = L9 recipe + IB1-r3 + IB2 and the transfer-only ablation, started
 as node-C GPUs free). Every amendment preceded the GPU jobs it governs; no stage-1 arm had been read.
+
+## Stage-1 verdict (10:09Z): NO FINALIST, no stage-1 formal run
+
+Rules `select/9b-finalists.json` (`7b43dad3…`), typed readout `lines/readout/m9.json` (`4ab78036…`); development
+readouts, never release scores. Every contrast is against C0 (DEV2.0-9B) on the M9 node-A path.
+
+| Point | typed T | C / N / S | RP | H3 | HT-DEV v2 Δ | PN1 clean gold-no (Δ [CI]) | hop | hs1 false-yes | MLX-DEV-9B Noul / Choice Δ | retention macro (Δ [CI]) | gates failed |
+| --- | ---: | --- | ---: | ---: | --- | --- | ---: | ---: | --- | --- | --- |
+| C0 | .9250 | 799 / 338 / 343 | 338 | .5622 | — | .262 | .987 | .152 | — | .792 | (reference) |
+| L9 | .9369 | 789 / 330 / 380 | 330 | .5841 | −.031 [−.046, −.018] FLAG | .305 (+.042 [+.023, +.060]) | .987 | .140 | +.025 / +.007 | .814 (+.022 [+.011, +.034]) | Noul floor (330 < 334), HT-DEV v2 FLAG, Y1 |
+| L9L | .9287 | 784 / 336 / 366 | 336 | .5558 | −.006 [−.019, +.006] TIE | .348 (+.086 [+.066, +.106]) | .987 | .152 | +.021 / +.007 | .807 (+.015 [+.004, +.026]) | Y1 only |
+
+- L9 − L9L: HT-DEV v2 −.025 [−.040, −.012] FLAG, retention +.008 [−.003, +.019], PN1 clean gold-no −.044
+  [−.062, −.025], typed +.008 (Score +14, Noul −6, Choice +5).
+- H1 (retention): supported (L9 +.022, CI above 0). H2 (transfer without the yes-bias): not supported. H3: the
+  base start transfers worse to held-out decision families than the Lux start at 9B, with less near-miss yes-bias.
+- The formal chain stopped by rule ("no finalist: no formal run"). Stage 2 (L9 recipe + IB) keeps running as
+  preregistered (amendment 2); it is gated on its own.
 
 ## Everything runs unattended (detached chains; liveness by PID + container, first log lines confirmed)
 
