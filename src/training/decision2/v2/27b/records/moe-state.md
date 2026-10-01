@@ -84,12 +84,21 @@ Running full attempts have no receipt until they end: add (now − start) for ea
    checkpoint + base pin + `grouped_mm` + BOS prompt) and a C1 post-key spec draft for the eval custodian (template
    `v2/eval/sealed/c1-postkey/dev2-27b-a20r.json`; adapter spec `v2/27b/moe/adapters/moe-lora-cal.json`; stage the
    package, the base and the formal run's stored predictions on node A). Naming (DEV2.0-26B-A4B) and placement
-   (replace the 27B tier or add a family member) are the coordinator's call.
+   (replace the 27B tier or add a family member) are the coordinator's call. **Release gap to flag:** the release
+   builder (`v2/release/build.py`) has only a `qwen-adapter` LoRA profile; a Gemma MoE package needs a new profile
+   and a native runtime that loads Gemma 4 MoE with `grouped_mm` and the BOS prompt (A20r's C1 spec used a release
+   pre-build, so item 8 waits for that build).
+   Matched latency for the report: A20r's formal per-prompt `latency_ms` (FP32-resident + BF16 autocast, the formal
+   path) p50 / p95 typed FINAL 118.8 / 145.1, CSS15 103.8 / 232.6, public 231 106.2 / 418.2 ms; compare the soup's
+   formal predictions the same way. A20r's whole formal run was 0.407 GPU-h.
 5. Results record final, gist 06c, merge into `xunzhuo/decision-2-training` (merge-only), remove the temporary link
    (above), release the leases, report.
 
 ## Poll log (newest first)
 
+- 03:42Z: MOE-Git-s2 update 1,919 (10.1 s per update; BEST so far 1,784, SELECT .8214); ends ≈ 08:25Z. Both chains
+  alive and waiting. MOE-Git-s1's BEST already relayed to node B by the relay stage (path check of the relay; the
+  chain relays both seeds again when s2 ends). Integration fast-forwarded to `63582e120`.
 - 03:15Z: MOE-Git-s1 finished (10.240 GPU-h; BEST 2,676). Amendment 4 `eacb6b85c`; Stage B chains launched on both
   nodes from it. Path checks passed (cal698, adoption, gates, package, latency; A20r latency reference). Receipts
   22.64 finished + s2 running.
