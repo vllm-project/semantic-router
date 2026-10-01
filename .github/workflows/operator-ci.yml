@@ -75,9 +75,6 @@ jobs:
         uses: golangci/golangci-lint-action@v7
         with:
           version: ${{ steps.golangci_lint.outputs.version }}
-          # goinstall fetches the pinned release through the Go module proxy, so
-          # a 5xx from the release CDN can no longer fail the job. This matches
-          # the `go install` that make check uses locally.
           install-mode: goinstall
           working-directory: deploy/operator
           args: --timeout=5m
