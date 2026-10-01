@@ -224,9 +224,9 @@ exactly one gist file and updates it in place:
   - **HR2:** published at `afc3bc1e` (`m5/hr2/`): 27,697 TRAIN rows, 16.75M tokens, 5 sources (HelpSteer3 CC BY 4.0,
     ETHICS MIT, PRM800K MIT, VitaminC CC BY-SA 3.0, Allegro CC BY-SA 4.0). **Flagged NOT RELEASE-SAFE:** the blind
     review found 13 / 216 errors, 6.02% [3.24, 10.07] (thresholds ≤ 5% / upper ≤ 8%), spread across families.
-    - **HR2-r2 fix (bd? data worker):** error analysis, a licence re-check of the CC BY-SA sources, a preregistered
-      construction filter, a fresh review of ≥ 200 rows.
-    - **4B HR2 efficacy pilot (decoder worker)**, NOT releasable: full seeds from Nox + N4XF + an HR2 block vs a
+    - **HR2-r2 fix (data worker 2aa752f9):** error analysis, a licence re-check of the CC BY-SA sources, a
+      preregistered construction filter, a fresh review of ≥ 200 rows.
+    - **4B HR2 efficacy pilot (decoder worker 57551951)**, NOT releasable: full seeds from Nox + N4XF + an HR2 block vs a
       matched control, screened with HT-DEV v2; node A GPU6–7; 16 GPU-h. If HR2 helps, release candidates retrain on
       HR2-r2.
 
