@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from v2.eval.ix1 import merge, panel, parity
+from v2.eval.ix1 import family_delta, merge, panel, parity
 
 
 def _ok(run_id: str, p: float, noul: float) -> dict:
@@ -128,6 +128,43 @@ class CalibrationTests(unittest.TestCase):
         )
         self.assertLess(fits["tf"]["temperatures"]["noul"], 1.0)
         self.assertEqual(fits["ft"]["noul_tb"], fits["tf"]["noul_tb"])
+
+
+class FamilyDeltaTests(unittest.TestCase):
+    @staticmethod
+    def _compare(values: dict[str, float], port: float) -> dict:
+        names = [n for family in family_delta.FAMILIES.values() for n in family]
+        return {
+            "benchmarks": [
+                {"benchmark": n, "ours": values.get(n, 50.0), "weight": 0.5}
+                for n in names
+            ],
+            "headline": {"port_balanced_skill": port, "kit_balanced_skill": port},
+            "counts": {"ok": 10, "error": 0, "pending": 0},
+        }
+
+    def test_families_sum_weighted_benchmark_changes(self):
+        base = self._compare({}, 40.0)
+        new = self._compare({"BFCL": 54.0, "When2Call": 48.0, "ANLI": 50.5}, 41.0)
+        result = family_delta.delta(base, new)
+        tools = next(
+            f for f in result["families"] if f["family"] == "tool-call decisions"
+        )
+        self.assertEqual(tools["weighted_delta"], 1.0)
+        self.assertEqual(tools["up"], ["BFCL"])
+        self.assertEqual(tools["down"], ["When2Call"])
+        entail = next(f for f in result["families"] if "entailment" in f["family"])
+        self.assertEqual((entail["up"], entail["down"]), ([], []))
+        self.assertEqual(result["families"][0]["family"], "tool-call decisions")
+        self.assertEqual(result["weighted_delta_sum"], 1.25)
+        self.assertEqual(result["headline"]["port_balanced_skill"]["delta"], 1.0)
+
+    def test_different_benchmark_sets_are_refused(self):
+        base = self._compare({}, 40.0)
+        new = self._compare({}, 40.0)
+        new["benchmarks"].pop()
+        with self.assertRaises(SystemExit):
+            family_delta.delta(base, new)
 
 
 if __name__ == "__main__":
