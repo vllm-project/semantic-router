@@ -5,13 +5,12 @@ import Link from '@docusaurus/Link'
 import Layout from '@theme/Layout'
 import Translate, { translate } from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
+import useBaseUrl from '@docusaurus/useBaseUrl'
 import IntegrationArchitecture from '@site/src/components/homepage/IntegrationArchitecture'
 import UseCaseExplorer from '@site/src/components/homepage/UseCaseExplorer'
-import CompatibilityBand from '@site/src/components/homepage/CompatibilityBand'
 import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
 import InstallQuickStartSection from '@site/src/components/InstallQuickStartSection'
 import YouTubeSection from '@site/src/components/YouTubeSection'
-import PaperFigureShowcase from '@site/src/components/PaperFigureShowcase'
 import ResearchPaperCarousel from '@site/src/components/ResearchPaperCarousel'
 import TeamCarousel from '@site/src/components/TeamCarousel'
 import TestimonialsRail from '@site/src/components/TestimonialsRail'
@@ -737,6 +736,7 @@ function FinalCtaSection(): JSX.Element {
 
 export default function Home(): JSX.Element {
   const { siteConfig } = useDocusaurusContext()
+  const filmPoster = useBaseUrl('/videos/vllm-sr-intro/vllm-sr-intro-poster.webp')
   const ogImage = new URL(
     SITE_SOCIAL_PREVIEW_IMAGE_PATH,
     siteConfig.url,
@@ -762,6 +762,7 @@ export default function Home(): JSX.Element {
   return (
     <Layout title={homepageMetaTitle} description={homepageMetaDescription}>
       <Head>
+        <link rel="preload" as="image" href={filmPoster} fetchPriority="high" />
         <meta property="og:title" content={homepageSocialTitle} />
         <meta property="og:description" content={homepageMetaDescription} />
         <meta property="og:image" content={ogImage} />
@@ -811,21 +812,15 @@ export default function Home(): JSX.Element {
         </div>
 
         <div className={styles.bandBlack}>
-          <IntegrationArchitecture />
+          <CapabilitySection />
         </div>
 
         <div className={styles.bandGraphite}>
-          <CapabilitySection />
+          <IntegrationArchitecture />
         </div>
 
         <div className={styles.bandBlack}>
           <AlternativesSection />
-        </div>
-
-        <div className={styles.bandRaised}>
-          <ScrollReveal delay={60}>
-            <PaperFigureShowcase />
-          </ScrollReveal>
         </div>
 
         <div className={styles.bandBlack}>
@@ -838,10 +833,6 @@ export default function Home(): JSX.Element {
 
         <div className={styles.bandRaised}>
           <DataSovereigntySection />
-        </div>
-
-        <div className={styles.bandGraphite}>
-          <CompatibilityBand />
         </div>
 
         <div className={styles.bandBlack}>
