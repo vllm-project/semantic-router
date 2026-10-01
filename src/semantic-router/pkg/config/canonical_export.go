@@ -61,6 +61,7 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 		Projections:           canonicalProjectionsFromProjections(cfg.RoutingProfileProjections()),
 		Decisions:             copyDecisions(cfg.Decisions),
 		Strategy:              cfg.Strategy,
+		Fallback:              cfg.Fallback.Clone(),
 	}
 }
 
@@ -309,6 +310,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			SkipProcessing: cfg.SkipProcessing,
 			ModelSelection: cfg.ModelSelection,
 			Learning:       cfg.RouterLearning,
+			Fallback:       cfg.Fallback.Clone(),
 		},
 		Services: CanonicalServiceGlobal{
 			API:           cfg.API,

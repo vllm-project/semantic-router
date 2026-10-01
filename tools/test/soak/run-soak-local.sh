@@ -74,7 +74,7 @@ cleanup() {
   stop_pid envoy "${ENVOY_PID}"
   stop_pid router "${ROUTER_PID}"
   stop_pid fault-proxy "${PROXY_PID}"
-  stop_pid mock-vllm "${MOCK_PID}"
+  stop_pid provider-mocker "${MOCK_PID}"
   exit "${status}"
 }
 trap cleanup EXIT
@@ -95,7 +95,7 @@ wait_for_url() {
 
 PYTHON_MAX_MINOR=13
 python_is_supported() {
-  "$1" -c "import sys; sys.exit(0 if (3, 9) <= sys.version_info[:2] <= (3, ${PYTHON_MAX_MINOR}) else 1)" 2>/dev/null
+  "$1" -c "import sys; sys.exit(0 if (3, 11) <= sys.version_info[:2] <= (3, ${PYTHON_MAX_MINOR}) else 1)" 2>/dev/null
 }
 
 select_python() {
@@ -104,19 +104,19 @@ select_python() {
     path=$(command -v "${PYTHON_BIN}" 2>/dev/null) ||
       die "PYTHON_BIN=${PYTHON_BIN} not found"
     python_is_supported "${path}" ||
-      die "PYTHON_BIN=${PYTHON_BIN} is $(${path} -V 2>&1); tools/test/services/mock-vllm needs CPython 3.9-3.${PYTHON_MAX_MINOR}"
+      die "PYTHON_BIN=${PYTHON_BIN} is $(${path} -V 2>&1); tools/test/services/provider-mocker needs CPython 3.11-3.${PYTHON_MAX_MINOR}"
     echo "${path}"
     return
   fi
   local candidate
-  for candidate in python3.13 python3.12 python3.11 python3.10 python3; do
+  for candidate in python3.13 python3.12 python3.11 python3; do
     path=$(command -v "${candidate}" 2>/dev/null) || continue
     if python_is_supported "${path}"; then
       echo "${path}"
       return
     fi
   done
-  die "no CPython 3.9-3.${PYTHON_MAX_MINOR} on PATH; tools/test/services/mock-vllm pins pydantic 2.9.2, which has no wheels for newer interpreters. Set PYTHON_BIN=/path/to/python3.13"
+  die "no CPython 3.11-3.${PYTHON_MAX_MINOR} on PATH; tools/test/services/provider-mocker pins pydantic 2.9.2, which has no wheels for newer interpreters. Set PYTHON_BIN=/path/to/python3.13"
 }
 
 require_port_free() {
@@ -160,7 +160,7 @@ command -v curl >/dev/null || die "curl is required"
 PYTHON_BIN=$(select_python)
 log "using python ${PYTHON_BIN} ($(${PYTHON_BIN} -V 2>&1))"
 
-for spec in "mock-vllm:${SOAK_MOCK_PORT}" "fault-proxy:${SOAK_BACKEND_PORT}" \
+for spec in "provider-mocker:${SOAK_MOCK_PORT}" "fault-proxy:${SOAK_BACKEND_PORT}" \
   "router-metrics:${SOAK_METRICS_PORT}" "router-pprof:${SOAK_PPROF_PORT}" \
   "envoy:${SOAK_ENVOY_PORT}" "envoy-admin:${SOAK_ENVOY_ADMIN_PORT}"; do
   require_port_free "${spec%%:*}" "${spec##*:}"
@@ -174,19 +174,19 @@ if [[ ! -x "${SOAK_VENV_DIR}/bin/python" ]]; then
   log "creating venv at ${SOAK_VENV_DIR}"
   "${PYTHON_BIN}" -m venv "${SOAK_VENV_DIR}"
 fi
-log "installing tools/test/services/mock-vllm requirements"
+log "installing tools/test/services/provider-mocker requirements"
 "${SOAK_VENV_DIR}/bin/python" -m pip install --quiet --upgrade pip
 "${SOAK_VENV_DIR}/bin/python" -m pip install --quiet --only-binary=:all: \
-  pyyaml -r tools/test/services/mock-vllm/requirements.txt
+  pyyaml -r tools/test/services/provider-mocker/requirements.txt
 
-log "starting mock-vllm on :${SOAK_MOCK_PORT}"
+log "starting provider-mocker on :${SOAK_MOCK_PORT}"
 (
-  cd tools/test/services/mock-vllm
-  exec "${SOAK_VENV_DIR}/bin/python" -m uvicorn app:app \
-    --host 127.0.0.1 --port "${SOAK_MOCK_PORT}" --log-level warning
-) >"${SOAK_LOG_DIR}/mock-vllm.log" 2>&1 &
+  cd tools/test/services/provider-mocker
+  exec "${SOAK_VENV_DIR}/bin/python" -m provider_mocker \
+    --host 127.0.0.1 --port "${SOAK_MOCK_PORT}"
+) >"${SOAK_LOG_DIR}/provider-mocker.log" 2>&1 &
 MOCK_PID=$!
-wait_for_url mock-vllm "http://127.0.0.1:${SOAK_MOCK_PORT}/openapi.json"
+wait_for_url provider-mocker "http://127.0.0.1:${SOAK_MOCK_PORT}/openapi.json"
 
 log "starting fault proxy on :${SOAK_BACKEND_PORT} (response ${SOAK_RESPONSE_MODE}, first-byte delay ${SOAK_PROXY_DELAY_MS}ms + 0..${SOAK_PROXY_DELAY_JITTER_MS}ms jitter, stream interval ${SOAK_PROXY_STREAM_INTERVAL_MS}ms, content frames ${SOAK_PROXY_STREAM_FRAMES})"
 "${SOAK_VENV_DIR}/bin/python" bench/openai_fault_proxy.py \
@@ -326,7 +326,7 @@ cat <<EOF
 
 soak run finished with exit code ${SOAK_STATUS}
   artifacts: ${SR_ROOT}/${SOAK_OUT_DIR#"${SR_ROOT}/"}
-  logs:      ${SOAK_LOG_DIR} (router.log, envoy.log, fault-proxy.log, mock-vllm.log)
+  logs:      ${SOAK_LOG_DIR} (router.log, envoy.log, fault-proxy.log, provider-mocker.log)
 EOF
 
 exit "${SOAK_STATUS}"

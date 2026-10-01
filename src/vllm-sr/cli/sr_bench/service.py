@@ -24,6 +24,12 @@ from .datasets import DatasetReader
 from .engine import Engine, EngineClosedError, ReviewedPlanChangedError
 from .experiments import ActiveExperimentError, ExperimentDeletedError, Experiments
 from .offline import export_training, regrade, replay
+from .preparations import (
+    PreparationBusyError,
+    Preparations,
+    PreparationUnavailableError,
+    preparation_options,
+)
 from .recovery import RecoveryPlanError, recover, recovery_plan
 from .replay_validation import ReplayEligibilityError
 from .report import compare, make_report
@@ -74,6 +80,7 @@ class Server(ThreadingHTTPServer):
         self.engine = Engine(store)
         self.experiments = Experiments(store)
         self.datasets = DatasetReader(store.root)
+        self.preparations = Preparations(store.root)
         self.token = token
         self.store_identity = (
             store_identity or hashlib.sha256(str(store.root).encode()).hexdigest()
@@ -81,6 +88,7 @@ class Server(ThreadingHTTPServer):
         super().__init__(address, Handler)
 
     def shutdown(self):
+        self.preparations.close()
         self.engine.close()
         super().shutdown()
 
@@ -146,6 +154,15 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(value, dict):
             raise ValueError("JSON body must be an object")
         return value
+
+    def _body_fields(self, allowed, message="Unsupported request fields"):
+        """Read the request body and reject fields this route does not consume."""
+        if int(self.headers.get("Content-Length", "0")) <= 0:
+            return {}
+        body = self._body()
+        if set(body) - allowed:
+            raise ValueError(message)
+        return body
 
     def _registry_targets(self):
         file = self.server.store.root / "targets.json"
@@ -322,8 +339,8 @@ class Handler(BaseHTTPRequestHandler):
                             200, self.server.experiments.runs(route[1], owner, **page)
                         )
                 if method == "POST":
-                    body = self._body()
                     if len(route) == 1:
+                        body = self._body_fields({"name", "idempotency_key"})
                         return self._send(
                             201,
                             self.server.experiments.create(
@@ -331,6 +348,7 @@ class Handler(BaseHTTPRequestHandler):
                             ),
                         )
                     if len(route) == RUN_ACTION_ROUTE_PARTS and route[2] == "runs":
+                        body = self._body_fields({"run_id", "role", "hypothesis"})
                         return self._send(
                             200,
                             self.server.experiments.attach(
@@ -343,6 +361,22 @@ class Handler(BaseHTTPRequestHandler):
                         )
             if route == ["catalog"] and method == "GET":
                 return self._send(200, catalog())
+            if route == ["dataset-preparations", "options"] and method == "GET":
+                return self._send(200, preparation_options())
+            if route == ["dataset-preparations"]:
+                if method == "GET":
+                    return self._send(200, self.server.preparations.list())
+                if method == "POST":
+                    job = self.server.preparations.submit(self._body())
+                    return self._send(202, {"preparation": job})
+            if (
+                route[0] == "dataset-preparations"
+                and len(route) == RUN_ROUTE_PARTS
+                and method == "GET"
+            ):
+                return self._send(
+                    200, {"preparation": self.server.preparations.get(route[1])}
+                )
             if route == ["datasets"] and method == "GET":
                 return self._send(200, {"datasets": datasets(self.server.store)})
             if route == ["datasets", "selection"] and method == "GET":
@@ -353,9 +387,9 @@ class Handler(BaseHTTPRequestHandler):
                     200, self.server.datasets.selection(query["profile"][0])
                 )
             if route == ["datasets", "compose"] and method == "POST":
-                body = self._body()
-                if set(body) - {"dataset_ids", "benchmarks"}:
-                    raise ValueError("Unsupported dataset compose fields")
+                body = self._body_fields(
+                    {"dataset_ids", "benchmarks"}, "Unsupported dataset compose fields"
+                )
                 return self._send(
                     200,
                     {
@@ -388,6 +422,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"targets": self._registry_targets()})
             if route == ["plans"] and method == "POST":
                 body = self._body()
+                if "manifest" in body and set(body) - {"manifest"}:
+                    raise ValueError("Unsupported plan request fields")
                 return self._send(
                     200, self._plan(body.get("manifest", body), role, actor)
                 )
@@ -396,7 +432,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(
                         200, {"runs": self.server.store.list(owner, summary=True)}
                     )
-                body = self._body()
+                body = self._body_fields({"manifest", "idempotency_key"})
                 manifest = body.get("manifest")
                 if not manifest:
                     raise ValueError("manifest is required")
@@ -411,7 +447,9 @@ class Handler(BaseHTTPRequestHandler):
                     ),
                 )
             if route == ["replays"] and method == "POST":
-                body = self._body()
+                body = self._body_fields(
+                    {"baseline_run_id", "preview_run_id", "idempotency_key"}
+                )
                 for key in ("baseline_run_id", "preview_run_id"):
                     self.server.store.get(body[key], owner)
                 return self._send(
@@ -423,10 +461,11 @@ class Handler(BaseHTTPRequestHandler):
                         actor,
                         body.get("idempotency_key"),
                         actor_role=role,
+                        engine=self.server.engine,
                     ),
                 )
             if route == ["comparisons"] and method == "POST":
-                body = self._body()
+                body = self._body_fields({"baseline_run_id", "candidate_run_id"})
                 for key in ("baseline_run_id", "candidate_run_id"):
                     self.server.store.get(body[key], owner)
                 return self._send(
@@ -451,9 +490,10 @@ class Handler(BaseHTTPRequestHandler):
                 if len(route) == RUN_ACTION_ROUTE_PARTS:
                     action = route[2]
                     if action == "candidate-plan" and method == "POST":
-                        body = self._body()
-                        if set(body) - {"target_ids", "mode", "name", "experiment"}:
-                            raise ValueError("Unsupported candidate plan fields")
+                        body = self._body_fields(
+                            {"target_ids", "mode", "name", "experiment"},
+                            "Unsupported candidate plan fields",
+                        )
                         ids = body.get("target_ids")
                         if (
                             not isinstance(ids, list)
@@ -476,26 +516,38 @@ class Handler(BaseHTTPRequestHandler):
                         validate_candidate_protocol(run, result["manifest"])
                         return self._send(200, result)
                     if action == "reconcile-usage" and method == "POST":
+                        self._body_fields(set())
                         return self._send(
                             200, reconcile_usage(self.server.store, run_id)
                         )
-                    if action in {"recover-plan", "recover"} and method == "POST":
-                        body = self._body()
-                        result = (
+                    if action == "recover-plan" and method == "POST":
+                        body = self._body_fields({"mode"})
+                        return self._send(
+                            200,
                             recovery_plan(
                                 self.server.store,
                                 run_id,
                                 body.get("mode", "undispatched"),
-                            )
-                            if action == "recover-plan"
-                            else recover(
-                                self.server.engine, run_id, body, actor, actor_role=role
-                            )
+                            ),
+                        )
+                    if action == "recover" and method == "POST":
+                        body = self._body_fields(
+                            {
+                                "mode",
+                                "plan_sha256",
+                                "cells",
+                                "idempotency_key",
+                                "acknowledge_new_attempt",
+                            }
                         )
                         return self._send(
-                            200 if action == "recover-plan" else 201, result
+                            201,
+                            recover(
+                                self.server.engine, run_id, body, actor, actor_role=role
+                            ),
                         )
                     if action in {"regrade", "export"} and method == "POST":
+                        self._body_fields(set())
                         return self._send(
                             200,
                             (regrade if action == "regrade" else export_training)(
@@ -534,6 +586,7 @@ class Handler(BaseHTTPRequestHandler):
                             200, {"events": self.server.store.events(run_id, after)}
                         )
                     if action == "cancel" and method == "POST":
+                        self._body_fields(set())
                         return self._send(200, self.server.engine.cancel(run_id))
             self._send(404, {"error": "not found"})
         except EngineClosedError as exc:
@@ -594,6 +647,17 @@ class Handler(BaseHTTPRequestHandler):
                     "active_run_count": exc.active_run_count,
                 },
             )
+        except PreparationBusyError as exc:
+            self._send(409, {"error": str(exc), "code": "preparation_busy"})
+        except PreparationUnavailableError as exc:
+            self._send(
+                503,
+                {
+                    "error": str(exc),
+                    "code": "preparation_unavailable",
+                    "model_requests": 0,
+                },
+            )
         except PermissionError as exc:
             self._send(403, {"error": str(exc)})
         except KeyError:
@@ -617,6 +681,11 @@ def serve(store=DEFAULT_STORE, host="127.0.0.1", port=8090, store_identity=None)
         raise ValueError("store-identity must be a SHA256 digest")
     root = Path(store).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    # This process owns both preparation and source-backed dataset reads. Keep
+    # their default task cache together under the persistent service store.
+    os.environ.setdefault(
+        "SR_BENCH_HOME", str(root / "preparation-runtime" / "sources")
+    )
     lock = (root / "service.lock").open("a+")
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -637,6 +706,7 @@ def serve(store=DEFAULT_STORE, host="127.0.0.1", port=8090, store_identity=None)
     try:
         server.serve_forever(poll_interval=0.2)
     finally:
+        server.preparations.close()
         server.engine.close()
         server.server_close()
         for thread in list(server.engine.threads.values()):

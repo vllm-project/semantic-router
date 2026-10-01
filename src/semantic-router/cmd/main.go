@@ -110,7 +110,7 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	}
 
 	embeddingRuntime := routerServer.EmbeddingRuntimeState()
-	if err = warmupRouterRuntime(ctx, routerServer, embeddingRuntime); err != nil {
+	if err = warmupRouterRuntime(ctx, routerServer); err != nil {
 		return recordStartupError(startupWriter, "warm up router runtime", err)
 	}
 	logStartupSummary(cfg, opts, embeddingRuntime.AnyReady)
@@ -251,14 +251,12 @@ func shutdownConcurrently(ctx context.Context, shutdowns ...func(context.Context
 	return errors.Join(shutdownErrors...)
 }
 
-var (
-	ensureKubernetesConfigModels = func(ctx context.Context, cfg *config.RouterConfig, writer startupstatus.StatusWriter) error {
-		if writer != nil {
-			return ensureModelsDownloaded(ctx, cfg, writer)
-		}
-		return modeldownload.EnsureModelsForConfigWithProgressContext(ctx, cfg, nil)
+var ensureKubernetesConfigModels = func(ctx context.Context, cfg *config.RouterConfig, writer startupstatus.StatusWriter) error {
+	if writer != nil {
+		return ensureModelsDownloaded(ctx, cfg, writer)
 	}
-)
+	return modeldownload.EnsureModelsForConfigWithProgressContext(ctx, cfg, nil)
+}
 
 func applyBackendRuntimeTuningDefaults() {
 	backend := strings.TrimSpace(strings.ToLower(os.Getenv("EMBEDDING_BACKEND_OVERRIDE")))

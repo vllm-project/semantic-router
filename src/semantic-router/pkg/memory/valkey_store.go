@@ -91,10 +91,14 @@ func NewValkeyStore(options ValkeyStoreOptions) (*ValkeyStore, error) {
 	if metricType == "" {
 		metricType = "COSINE"
 	}
-	dimension := vc.Dimension
-	if dimension <= 0 {
-		dimension = 384
+	dimension, err := StorageDimension(vc.Dimension, embeddingCfg)
+	if err != nil {
+		return nil, err
 	}
+	copied := *vc
+	vc = &copied
+	vc.Dimension = dimension
+	embeddingCfg.Dimension = dimension
 
 	store := &ValkeyStore{
 		client:           options.Client,

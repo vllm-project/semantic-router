@@ -29,6 +29,20 @@ func (c *Classifier) PreloadKnowledgeBases() error {
 	return nil
 }
 
+// HasPreparedKnowledgeBases reports whether KB consumers have their own prepared
+// embedding providers. Other recipe or global providers cannot satisfy this.
+func (c *Classifier) HasPreparedKnowledgeBases() bool {
+	if c == nil || len(c.kbClassifiers) == 0 {
+		return false
+	}
+	for _, kb := range c.kbClassifiers {
+		if kb == nil || kb.provider == nil {
+			return false
+		}
+	}
+	return true
+}
+
 // Classifier handles text classification, model selection, and jailbreak detection functionality
 type Classifier struct {
 	closeOnce         sync.Once
@@ -39,15 +53,14 @@ type Classifier struct {
 	ownsEmbeddingSet  bool
 	models            *classifierModelRuntime
 	// Dependencies - In-tree classifiers
-	categoryInitializer         CategoryInitializer
-	categoryInference           CategoryInference
-	jailbreakInitializer        JailbreakInitializer
-	jailbreakInference          SequenceClassifierBackend
-	piiInitializer              PIIInitializer
-	piiInference                PIIInference
-	keywordClassifier           *KeywordClassifier
-	keywordEmbeddingInitializer EmbeddingClassifierInitializer
-	keywordEmbeddingClassifier  *EmbeddingClassifier
+	categoryInitializer        CategoryInitializer
+	categoryInference          CategoryInference
+	jailbreakInitializer       JailbreakInitializer
+	jailbreakInference         SequenceClassifierBackend
+	piiInitializer             PIIInitializer
+	piiInference               PIIInference
+	keywordClassifier          *KeywordClassifier
+	keywordEmbeddingClassifier *EmbeddingClassifier
 
 	// Dependencies - MCP-based classifiers
 	mcpCategoryInitializer MCPCategoryInitializer
@@ -150,9 +163,8 @@ func withKeywordClassifier(keywordClassifier *KeywordClassifier) option {
 	}
 }
 
-func withKeywordEmbeddingClassifier(keywordEmbeddingInitializer EmbeddingClassifierInitializer, keywordEmbeddingClassifier *EmbeddingClassifier) option {
+func withKeywordEmbeddingClassifier(keywordEmbeddingClassifier *EmbeddingClassifier) option {
 	return func(c *Classifier) {
-		c.keywordEmbeddingInitializer = keywordEmbeddingInitializer
 		c.keywordEmbeddingClassifier = keywordEmbeddingClassifier
 	}
 }

@@ -180,18 +180,8 @@ test-vllm:
 
 # ============== E2E Tests ==============
 
-# Start LLM Katan servers for e2e testing (foreground mode for development)
-start-llm-katan: ## Start LLM Katan servers in foreground mode for e2e testing
-start-llm-katan:
-	@echo "Starting LLM Katan servers in foreground mode..."
-	@echo "Press Ctrl+C to stop servers"
-	@./e2e/testing/start-llm-katan.sh
-
-# Run e2e tests with LLM Katan (lightweight real models)
-test-e2e-vllm: ## Run e2e tests with LLM Katan servers (make sure servers are running)
-test-e2e-vllm:
-	@echo "Running e2e tests with LLM Katan servers..."
-	@echo "Note: Make sure LLM Katan servers are running with 'make start-llm-katan'"
+test-e2e-vllm: ## Run endpoint tests against running provider backends
+	@echo "Start deterministic backends with make start-provider-mocker, or real inference with make tiny-model-serve"
 	@python3 e2e/testing/run_all_tests.py
 
 # Run the deterministic Router Learning architecture eval and gate it against a
@@ -246,7 +236,7 @@ bench-hallucination-full:
 		--dataset $${DATASET:-halueval} \
 		--max-samples $${MAX_SAMPLES:-200}
 
-# Note: Use the manual workflow: make start-llm-katan in one terminal, then run tests in another
+# Start the selected backend in one terminal, then run tests in another.
 
 # ============== Hallucination Detection Tests ==============
 
@@ -259,15 +249,15 @@ run-router-hallucination: build-router download-models
 
 # Test hallucination detection models by verifying router startup and model loading
 test-hallucination-detection: ## Test hallucination detection pipeline (fact-check, hallucination detector, NLI)
-test-hallucination-detection: build-router download-models
+test-hallucination-detection: build-router download-models provider-mocker-install
 	@echo "=============================================="
 	@echo "Testing Hallucination Detection Pipeline"
 	@echo "=============================================="
 	@echo ""
-	@echo "1. Starting mock vLLM server on port 8002..."
-	@nohup python3 e2e/testing/mock-vllm-hallucination.py --port 8002 --host 127.0.0.1 > /tmp/mock_vllm.log 2>&1 & echo $$! > /tmp/mock_vllm_pid.txt
+	@echo "1. Starting provider mocker on port 8002..."
+	@nohup env PROVIDER_MOCKER_SCENARIO=hallucination PYTHONPATH=tools/test/services/provider-mocker "$(PROVIDER_MOCKER_PYTHON)" -m provider_mocker --port 8002 --host 127.0.0.1 > /tmp/provider_mocker_hallucination.log 2>&1 & echo $$! > /tmp/provider_mocker_hallucination.pid
 	@sleep 2
-	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   Mock vLLM server is healthy" || (echo "   ✗ Mock vLLM failed to start"; cat /tmp/mock_vllm.log; exit 1)
+	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   Provider mocker is healthy" || (echo "   ✗ Provider mocker failed to start"; cat /tmp/provider_mocker_hallucination.log; exit 1)
 	@echo ""
 	@echo "2. Starting router with hallucination detection config..."
 	@export $(NATIVE_ENV) && \
@@ -319,20 +309,20 @@ test-hallucination-detection: build-router download-models
 	@echo "8. Cleanup - stopping servers..."
 	@-kill $$(cat /tmp/envoy_hal_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/envoy_hal_pid.txt
 	@-kill $$(cat /tmp/router_hal_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/router_hal_pid.txt
-	@-kill $$(cat /tmp/mock_vllm_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/mock_vllm_pid.txt
+	@-kill $$(cat /tmp/provider_mocker_hallucination.pid 2>/dev/null) 2>/dev/null; rm -f /tmp/provider_mocker_hallucination.pid
 	@echo ""
 	@echo "=============================================="
 	@echo "Hallucination Detection E2E Test Complete"
 	@echo "=============================================="
 	@echo ""
 	@echo "Pipeline tested:"
-	@echo "  1. Mock vLLM -> returns controlled responses"
+	@echo "  1. Provider mocker -> returns controlled responses"
 	@echo "  2. Router -> fact-check + hallucination detection"
 	@echo "  3. Envoy -> proxies requests through extproc"
 	@echo "  4. OpenAI Chat API -> /v1/chat/completions"
 
 test-hallucination-detection-manual: ## Start hallucination detection services for manual testing (press Ctrl+C to stop)
-test-hallucination-detection-manual: build-router download-models
+test-hallucination-detection-manual: build-router download-models provider-mocker-install
 	@echo "=============================================="
 	@echo "Starting Hallucination Detection Services"
 	@echo "=============================================="
@@ -340,21 +330,20 @@ test-hallucination-detection-manual: build-router download-models
 	@echo "0. Cleaning up any existing services..."
 	@-kill $$(cat /tmp/envoy_hal_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/envoy_hal_pid.txt
 	@-kill $$(cat /tmp/router_hal_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/router_hal_pid.txt
-	@-kill $$(cat /tmp/mock_vllm_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/mock_vllm_pid.txt
-	@-pkill -f "mock-vllm-hallucination" 2>/dev/null || true
+	@-kill $$(cat /tmp/provider_mocker_hallucination.pid 2>/dev/null) 2>/dev/null; rm -f /tmp/provider_mocker_hallucination.pid
 	@-pkill -f "router.*config.hallucination" 2>/dev/null || true
 	@-pkill -f "func-e.*envoy" 2>/dev/null || true
 	@-lsof -ti:8002 | xargs kill -9 2>/dev/null || true
 	@-lsof -ti:50051 | xargs kill -9 2>/dev/null || true
 	@-lsof -ti:8801 | xargs kill -9 2>/dev/null || true
-	@rm -f /tmp/mock_vllm.log /tmp/router_hal.log /tmp/envoy_hal.log
+	@rm -f /tmp/provider_mocker_hallucination.log /tmp/router_hal.log /tmp/envoy_hal.log
 	@sleep 2
 	@echo "   Cleanup complete"
 	@echo ""
-	@echo "1. Starting mock vLLM server on port 8002..."
-	@nohup python3 e2e/testing/mock-vllm-hallucination.py --port 8002 --host 127.0.0.1 > /tmp/mock_vllm.log 2>&1 & echo $$! > /tmp/mock_vllm_pid.txt
+	@echo "1. Starting provider mocker on port 8002..."
+	@nohup env PROVIDER_MOCKER_SCENARIO=hallucination PYTHONPATH=tools/test/services/provider-mocker "$(PROVIDER_MOCKER_PYTHON)" -m provider_mocker --port 8002 --host 127.0.0.1 > /tmp/provider_mocker_hallucination.log 2>&1 & echo $$! > /tmp/provider_mocker_hallucination.pid
 	@sleep 2
-	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   Mock vLLM server is healthy" || (echo "   ✗ Mock vLLM failed to start"; exit 1)
+	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   Provider mocker is healthy" || (echo "   ✗ Provider mocker failed to start"; exit 1)
 	@echo ""
 	@echo "2. Starting router with hallucination detection config..."
 	@export $(NATIVE_ENV) && \
@@ -379,7 +368,7 @@ test-hallucination-detection-manual: build-router download-models
 	@echo "Endpoints:"
 	@echo "  - Envoy (HTTP):  http://localhost:8801"
 	@echo "  - Router (gRPC): localhost:50051"
-	@echo "  - Mock vLLM:     http://localhost:8002"
+	@echo "  - Provider mocker:     http://localhost:8002"
 	@echo ""
 	@echo "Example curl command:"
 	@echo '  curl -X POST http://localhost:8801/v1/chat/completions \'
@@ -389,7 +378,7 @@ test-hallucination-detection-manual: build-router download-models
 	@echo "Logs:"
 	@echo "  - Router: tail -f /tmp/router_hal.log"
 	@echo "  - Envoy:  tail -f /tmp/envoy_hal.log"
-	@echo "  - Mock:   tail -f /tmp/mock_vllm.log"
+	@echo "  - Mock:   tail -f /tmp/provider_mocker_hallucination.log"
 	@echo ""
 	@echo "Press Enter to stop all services..."
 	@read dummy
@@ -397,8 +386,7 @@ test-hallucination-detection-manual: build-router download-models
 	@echo "Stopping services..."
 	@-kill $$(cat /tmp/envoy_hal_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/envoy_hal_pid.txt
 	@-kill $$(cat /tmp/router_hal_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/router_hal_pid.txt
-	@-kill $$(cat /tmp/mock_vllm_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/mock_vllm_pid.txt
-	@-pkill -f "mock-vllm-hallucination" 2>/dev/null || true
+	@-kill $$(cat /tmp/provider_mocker_hallucination.pid 2>/dev/null) 2>/dev/null; rm -f /tmp/provider_mocker_hallucination.pid
 	@-pkill -f "router.*config.hallucination" 2>/dev/null || true
 	@-pkill -f "func-e.*envoy" 2>/dev/null || true
 	@echo "All services stopped"
@@ -409,8 +397,7 @@ stop-hallucination-services:
 	@echo "Stopping hallucination detection services..."
 	@-kill $$(cat /tmp/envoy_hal_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/envoy_hal_pid.txt
 	@-kill $$(cat /tmp/router_hal_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/router_hal_pid.txt
-	@-kill $$(cat /tmp/mock_vllm_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/mock_vllm_pid.txt
-	@-pkill -f "mock-vllm-hallucination" 2>/dev/null || true
+	@-kill $$(cat /tmp/provider_mocker_hallucination.pid 2>/dev/null) 2>/dev/null; rm -f /tmp/provider_mocker_hallucination.pid
 	@-pkill -f "router.*config.hallucination" 2>/dev/null || true
 	@-pkill -f "func-e.*envoy" 2>/dev/null || true
 	@-lsof -ti:8002 | xargs kill -9 2>/dev/null || true
@@ -420,19 +407,19 @@ stop-hallucination-services:
 
 # Hallucination Detection Demo with Tool Calling
 demo-hallucination: ## Run interactive hallucination detection demo (CLI)
-demo-hallucination: build-router download-models
+demo-hallucination: build-router download-models provider-mocker-install
 	@echo "Starting Hallucination Detection Demo (CLI)..."
-	@./e2e/testing/hallucination-demo/run_demo.sh
+	@PROVIDER_MOCKER_PYTHON="$(PROVIDER_MOCKER_PYTHON)" ./e2e/testing/hallucination-demo/run_demo.sh
 
 demo-hallucination-web: ## Run hallucination demo with browser-based UI (recommended)
-demo-hallucination-web: build-router download-models
+demo-hallucination-web: build-router download-models provider-mocker-install
 	@echo "Starting Hallucination Detection Demo (Web UI)..."
-	@./e2e/testing/hallucination-demo/run_demo.sh --web
+	@PROVIDER_MOCKER_PYTHON="$(PROVIDER_MOCKER_PYTHON)" ./e2e/testing/hallucination-demo/run_demo.sh --web
 
 demo-hallucination-auto: ## Run hallucination demo with predefined questions (non-interactive)
-demo-hallucination-auto: build-router download-models
+demo-hallucination-auto: build-router download-models provider-mocker-install
 	@echo "Starting Hallucination Detection Demo (auto mode)..."
-	@./e2e/testing/hallucination-demo/run_demo.sh --demo
+	@PROVIDER_MOCKER_PYTHON="$(PROVIDER_MOCKER_PYTHON)" ./e2e/testing/hallucination-demo/run_demo.sh --demo
 
 # ============== Image Generation Tests ==============
 

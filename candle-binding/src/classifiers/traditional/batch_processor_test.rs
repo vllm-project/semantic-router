@@ -147,7 +147,7 @@ fn test_batch_processor_traditional_batch_processor_process_large_batch(cpu_devi
             }
 
             println!("TraditionalBatchProcessor.process_large_batch test passed: {} items processed in {} chunks",
-                batch_result.results.len(), (texts.len() + 2) / 3); // Ceiling division
+                batch_result.results.len(), texts.len().div_ceil(3)); // Ceiling division
         }
         Err(e) => {
             println!(

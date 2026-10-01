@@ -31,7 +31,8 @@ fn generic_classifier_checkpoint_loads_and_classifies_on_cpu() {
         let probabilities = unsafe {
             std::slice::from_raw_parts(result.probabilities, result.num_classes as usize).to_vec()
         };
-        free_probabilities(result.probabilities, result.num_classes);
+        // SAFETY: the successful classifier result owns this live boxed probability array.
+        unsafe { free_probabilities(result.probabilities, result.num_classes) };
         assert!(result.label.is_null());
         assert!(probabilities
             .iter()

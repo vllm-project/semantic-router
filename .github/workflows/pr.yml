@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   ci:
-    name: Product Verification
+    name: CI
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read

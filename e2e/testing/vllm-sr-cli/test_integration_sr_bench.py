@@ -112,6 +112,7 @@ class TestManagedBenchmarkIntegration(ServeSessionMixin, CLITestBase):
             "benchmark",
             "dataset",
             "prepare",
+            "--local",
             "--benchmark",
             "mmlu-pro",
             "--profile",

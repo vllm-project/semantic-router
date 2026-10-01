@@ -53,7 +53,7 @@ def test_dashboard_dockerfile_retries_runtime_apk_installs() -> None:
 
     assert "FROM ${IMAGE_REGISTRY}library/python:3.11-slim-bookworm" in content
     assert (
-        "apt_get_install_with_retry ca-certificates curl docker.io gosu libseccomp2 wget"
+        "apt_get_install_with_retry ca-certificates curl docker.io git gosu libseccomp2 wget"
         in content
     )
     assert (

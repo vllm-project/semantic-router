@@ -213,3 +213,21 @@ func TestWindowedJailbreakAdmitsDocumentBeyondForwardCapacity(t *testing.T) {
 		t.Fatal("changed prepared forward window")
 	}
 }
+
+func TestWindowedJailbreakReportsTheWindowItKept(t *testing.T) {
+	backend, model, _ := windowedGuardFixture(t)
+	model.windows = []tasks.LabelDistributionWindow{
+		{Start: 0, End: 126, Probabilities: []float32{.9, .05, .05}},
+		{Start: 63, End: 189, Probabilities: []float32{.1, .3, .6}},
+	}
+	result, err := backend.Classify(context.Background(), "request")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Window == nil {
+		t.Fatal("a score one window decided reports no window")
+	}
+	if *result.Window != (tasks.ScanWindow{Start: 63, End: 189, Count: 2}) {
+		t.Fatalf("incorrect window provenance: %+v", *result.Window)
+	}
+}

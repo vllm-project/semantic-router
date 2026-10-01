@@ -843,7 +843,7 @@ recipes:
       - type: response_cache
         configuration:
           enabled: true
-          similarity_threshold: 0.9
+          mode: exact
           ttl_seconds: 900
     strategy: priority
 - name: cost-first
@@ -986,7 +986,7 @@ recipes:
       - type: response_cache
         configuration:
           enabled: true
-          similarity_threshold: 0.88
+          mode: exact
           ttl_seconds: 3600
     strategy: priority
 - name: accuracy-first
@@ -1838,7 +1838,7 @@ global:
       prompt_guard: models/Vela-1.0-Encoder-307M-Guard
       pii_classifier: models/Vela-1.0-Encoder-307M-PII
       fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck
-      hallucination_detector: models/mom-halugate-detector
+      hallucination_detector: models/Vela-1.0-Encoder-307M-Halu
       hallucination_explainer: models/mom-halugate-explainer
       feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
     modules:
@@ -1878,13 +1878,13 @@ global:
           use_mmbert_32k: true
           model_ref: fact_check_classifier
         detector:
-          model_id: models/mom-halugate-detector
-          threshold: 0.8
+          model_id: models/Vela-1.0-Encoder-307M-Halu
+          threshold: 0.5
           use_cpu: true
-          min_span_length: 2
-          min_span_confidence: 0.6
+          min_span_length: 1
+          min_span_confidence: 0.0
           context_window_size: 50
-          enable_nli_filtering: true
+          enable_nli_filtering: false
           nli_entailment_threshold: 0.75
           model_ref: hallucination_detector
         explainer:

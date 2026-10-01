@@ -35,7 +35,7 @@ type Registry struct {
 	plugins               pluginruntime.Capabilities
 	configActivation      ConfigActivation
 	instanceID            string
-	startupStatus         *StartupObservation
+	startupStatus         *localStartupSnapshot
 }
 
 // RouterRuntimeSnapshot is the router-owned management surface published as

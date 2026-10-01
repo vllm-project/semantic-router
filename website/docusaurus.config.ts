@@ -405,6 +405,10 @@ const config: Config = {
               label: 'Vision Paper',
               to: '/vision-paper',
             },
+            {
+              label: 'Decision Paper',
+              to: '/decision-paper',
+            },
 
             {
               label: 'License',

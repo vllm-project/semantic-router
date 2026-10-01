@@ -26,7 +26,7 @@ func TestPublishedVelaModels(t *testing.T) {
 			case "Hazard":
 				testPublishedVelaHazard(t, spec, registered)
 			case "Embedding":
-				testPublishedVelaEmbedding(t, spec)
+				testPublishedVelaEmbedding(t, spec, registered)
 			case "Reranker":
 				testPublishedVelaReranker(t, spec)
 			default:
@@ -193,7 +193,7 @@ func testPublishedVelaHazard(t *testing.T, spec config.ResolvedModelBinding, reg
 	}
 }
 
-func testPublishedVelaEmbedding(t *testing.T, spec config.ResolvedModelBinding) {
+func testPublishedVelaEmbedding(t *testing.T, spec config.ResolvedModelBinding, registered *config.ModelSpec) {
 	t.Helper()
 	defaults := config.DefaultGlobalConfig().EmbeddingConfig
 	spec.Binding.Adapter, spec.Binding.Contract = "mmbert", "embedding.v1"
@@ -204,6 +204,13 @@ func testPublishedVelaEmbedding(t *testing.T, spec config.ResolvedModelBinding) 
 	}
 	t.Cleanup(func() { assertPublishedVelaClose(t, model.Close()) })
 	assertPublishedVelaCapability(t, spec, model.text.Capability(), nil)
+	dimension := defaults.TargetDimension
+	if dimension == 0 {
+		dimension = registered.EmbeddingDim
+	}
+	if dimension <= 0 || model.Dimension() != dimension {
+		t.Fatalf("prepared embedding dimension=%d, want registered/requested width %d", model.Dimension(), dimension)
+	}
 	texts := []string{"The capital of France is Paris.", "Paris is the French capital.", "A compiler translates source code into machine instructions.", strings.Repeat("hello ", 640)}
 	vectors := make([][]float32, 0, len(texts))
 	for index, text := range texts {
@@ -212,7 +219,7 @@ func testPublishedVelaEmbedding(t *testing.T, spec config.ResolvedModelBinding) 
 			t.Fatal(err)
 		}
 		assertPublishedVelaUsage(t, result.Input, index == len(texts)-1)
-		assertPublishedVelaVector(t, result.Embedding, defaults.TargetDimension)
+		assertPublishedVelaVector(t, result.Embedding, dimension)
 		vectors = append(vectors, result.Embedding)
 		t.Logf("input_index=%d dimension=%d usage=%+v", index, len(result.Embedding), result.Input)
 	}

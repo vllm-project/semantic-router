@@ -10,6 +10,7 @@ import {
   removeSetupModel,
   restoreSetupModel,
   summarizeSetupConfig,
+  switchSetupModelProvider,
   type ModelDraft,
 } from "./setupWizardSupport";
 
@@ -47,6 +48,31 @@ describe("setup wizard model drafts", () => {
     ]);
 
     expect(next.baseUrl).toBe("vllm:8002");
+  });
+
+  it("selects an Ollama endpoint when switching an untouched local model", () => {
+    const model = switchSetupModelProvider(modelDraft(), "ollama");
+    expect(model.providerKind).toBe("ollama");
+    expect(model.baseUrl).toBe("host.docker.internal:11434");
+
+    const config = buildSetupConfig([model], model.id) as {
+      providers: { models: Array<{ backend_refs: Array<Record<string, unknown>> }> };
+    };
+    expect(config.providers.models[0].backend_refs[0]).toMatchObject({
+      provider: "ollama",
+      endpoint: "host.docker.internal:11434",
+      protocol: "http",
+    });
+    expect(switchSetupModelProvider(modelDraft({ baseUrl: "vllm:8001" }), "ollama").baseUrl)
+      .toBe("host.docker.internal:11434");
+  });
+
+  it("keeps an explicitly entered endpoint when changing providers", () => {
+    const model = switchSetupModelProvider(
+      modelDraft({ baseUrl: "http://my-model-host:11434" }),
+      "ollama",
+    );
+    expect(model.baseUrl).toBe("http://my-model-host:11434");
   });
 
   it("reports duplicate model names and local endpoints at field level", () => {

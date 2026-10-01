@@ -17,7 +17,7 @@ providers:
     - name: qwen3
       provider_model_id: qwen3
       backend_refs:
-        - name: llm_katan
+        - name: provider_mocker
           provider: vllm
           weight: 1
           endpoint: host.docker.internal:8000

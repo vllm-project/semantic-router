@@ -24,6 +24,9 @@
 #                                   (serve + dashboard check) with a stubbed
 #                                   launcher and asserts both invocations carry
 #                                   `--runtime podman`.
+#   print-dashboard-offset       --runtime docker with port offset 1000
+#                                -> verifies the printed and opened Dashboard
+#                                   URL and SSH tunnel use port 9700.
 
 set -u
 
@@ -114,6 +117,12 @@ case "$SCENARIO" in
     write_stub podman ready
     export VLLM_SR_RUNTIME="podman"
     ;;
+  print-dashboard-offset)
+    write_stub docker ready
+    write_stub podman ready
+    export VLLM_SR_RUNTIME="docker"
+    export VLLM_SR_PORT_OFFSET="1000"
+    ;;
   *)
     printf 'unknown scenario: %s\n' "$SCENARIO" >&2
     exit 2
@@ -192,6 +201,32 @@ if [ "$SCENARIO" = "first-launch-podman" ]; then
   if [ -f "$ARGV_TRACE" ]; then
     cat "$ARGV_TRACE"
   fi
+fi
+
+if [ "$SCENARIO" = "print-dashboard-offset" ]; then
+  detect_primary_ip() { printf '192.0.2.10\n'; }
+  detect_host_label() { printf 'fixture.example\n'; }
+  is_remote_session() { return 0; }
+  resolve_launch_platform() { printf '\n'; }
+  BIN_DIR="$STUB_BIN"
+  AUTO_LAUNCH_RAN=1
+  LAUNCH_PLATFORM=""
+  USER="fixture-user"
+
+  # Record the URL passed to the browser without opening a real browser.
+  OPEN_TRACE="$INSTALL_ROOT_TMP/opened-url.log"
+  cat > "$STUB_BIN/xdg-open" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$1" >> "$OPEN_TRACE"
+EOF
+  chmod +x "$STUB_BIN/xdg-open"
+
+  printf '[DASHBOARD_ACCESS]\n'
+  print_dashboard_access
+  printf '[NEXT_STEPS]\n'
+  print_next_steps
+  open_dashboard_url
+  printf 'OPENED_URL=%s\n' "$(cat "$OPEN_TRACE")"
 fi
 
 # Accumulated trace for every scenario, taken after the print path has run.

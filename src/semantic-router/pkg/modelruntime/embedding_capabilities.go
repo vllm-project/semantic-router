@@ -38,6 +38,9 @@ func validatePreparedEmbeddings(ctx context.Context, requirements []config.Embed
 			if !ok || !slices.Contains(info.EmbeddingInfo().Modalities, requirement.Modality) {
 				return fmt.Errorf("%w: %s requires an actual %s encoder", binding.ErrCapability, requirement.Consumer, requirement.Modality)
 			}
+			if requirement.Modality == "audio" && info.EmbeddingInfo().Audio == nil {
+				return fmt.Errorf("%w: %s requires original-PCM audio input, not precomputed audio features", binding.ErrCapability, requirement.Consumer)
+			}
 		}
 		if requirement.Windows {
 			windows, ok := provider.(embedding.WindowProvider)

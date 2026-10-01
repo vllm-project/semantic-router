@@ -19,6 +19,8 @@ def prepare_replacement(tmp_path, monkeypatch):
     source = tmp_path / "config.yaml"
     source.write_text(
         "version: v0.3\nlisteners:\n- name: main\n  address: 0.0.0.0\n  port: 8888\n"
+        # Keep tracing explicit so these tests isolate watched-file replacement.
+        "global:\n  services:\n    observability:\n      tracing:\n        enabled: false\n"
     )
     old = source.read_bytes()
     active = runtime_paths.materialize_runtime_config(source, old)

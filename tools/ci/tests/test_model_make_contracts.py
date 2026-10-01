@@ -17,23 +17,28 @@ class ModelMakeContractsTests(unittest.TestCase):
         self,
     ) -> None:
         for failure, count in (
-            ("", 2),
-            ("go:image-calibration", 1),
-            ("python3:image-calibration", 2),
+            ("", 3),
+            ("python3:model-artifacts", 1),
+            ("python3:image-calibration-manifest", 2),
+            ("python3:image-calibration", 3),
         ):
             with self.subTest(failure=failure):
                 result, calls = self._run_target(
-                    "candle", failure, "verify-image-routing-calibration"
+                    "ort", failure, "verify-image-routing-calibration"
                 )
                 self.assertEqual(
                     result.returncode == 0, not failure, result.stdout + result.stderr
                 )
                 self.assertEqual(len(calls), count)
                 self.assertTrue(
-                    all(call["suite"] == "image-calibration" for call in calls)
+                    calls[0]["suite"] == "model-artifacts"
+                    and all(
+                        call["suite"].startswith("image-calibration")
+                        for call in calls[1:]
+                    )
                 )
                 if not failure:
-                    self.assertEqual(calls[0]["manifest"], calls[1]["manifest"])
+                    self.assertEqual(calls[1]["manifest"], calls[2]["manifest"])
 
     def test_candle_runs_both_suites_with_separate_manifests_and_reports(self) -> None:
         result, calls = self._run_target("candle")
@@ -76,10 +81,26 @@ class ModelMakeContractsTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(
             [(call["command"], call["suite"]) for call in calls],
-            [("go", "runtime"), ("python3", "runtime")],
+            [("python3", "model-artifacts"), ("go", "runtime"), ("python3", "runtime")],
         )
-        self.assertEqual(calls[0]["provider"], "ort")
-        self.assertEqual(calls[1]["device"], "cpu")
+        self.assertEqual(calls[1]["provider"], "ort")
+        self.assertEqual(calls[2]["device"], "cpu")
+
+    def test_runtime_and_calibration_use_the_shared_preparation_directory(self):
+        for target in ("test-models", "verify-image-routing-calibration"):
+            with self.subTest(target=target):
+                result, calls = self._run_target("ort", target=target)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                root = Path(calls[1]["manifest"]).parent.parent
+                self.assertEqual(
+                    calls[0]["output"], str(root / "models/vela-omni-artifacts")
+                )
+                self.assertEqual(calls[0]["variants"], "nano")
+
+    def test_ort_preparation_failure_stops_execution(self):
+        result, calls = self._run_target("ort", "python3:model-artifacts")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(len(calls), 1)
 
     def _run_target(
         self, provider: str, failure: str = "", target: str = "test-models"
@@ -95,7 +116,7 @@ class ModelMakeContractsTests(unittest.TestCase):
                 "LOG_TARGET = :\nNATIVE_ENV = MODEL_CONTRACT_NATIVE=1\n"
                 ".PHONY: rust-ci\nrust-ci:\n\t@:\n"
             )
-            for name in ("go", "python3"):
+            for name in ("go", "python3", "docker"):
                 executable = root / "bin" / name
                 executable.write_text(
                     f"#!{sys.executable}\n"
@@ -103,10 +124,12 @@ class ModelMakeContractsTests(unittest.TestCase):
                     "args = sys.argv[1:]\n"
                     "def option(name, default=''):\n"
                     "    return args[args.index(name) + 1] if name in args else default\n"
-                    "default_suite = 'image-calibration' if args[0].endswith('image_calibration.py') else 'runtime'\n"
+                    "default_suite = 'image-calibration' if args[0].endswith('image_calibration.py') or pathlib.Path(sys.argv[0]).name == 'docker' else 'runtime'\n"
+                    "if args[0].endswith('prepare_model_test_assets.py'): default_suite = 'model-artifacts'\n"
+                    "if '--prepare-manifest' in args: default_suite += '-manifest'\n"
                     "call = {'command': pathlib.Path(sys.argv[0]).name,\n"
                     "        'suite': option('--suite', default_suite)}\n"
-                    "for name in ('manifest', 'output', 'provider', 'device'):\n"
+                    "for name in ('manifest', 'output', 'provider', 'device', 'variants'):\n"
                     "    call[name] = option('--' + name)\n"
                     "with open(os.environ['MODEL_CONTRACT_CALLS'], 'a') as output:\n"
                     "    output.write(json.dumps(call) + '\\n')\n"

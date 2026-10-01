@@ -7,7 +7,7 @@ use candle_nn::{VarBuilder, VarMap};
 use candle_transformers::models::bert::{BertModel, Config as BertConfig};
 use std::ffi::CString;
 
-fn bert_fixture() -> TempDir {
+pub(super) fn bert_fixture() -> TempDir {
     let dir = fixture(&["weather", "travel", "other"], 2);
     let config = json!({
         "model_type": "bert", "vocab_size": 16, "hidden_size": 4,
@@ -134,7 +134,8 @@ fn generic_classifier_ffi_returns_full_distribution_after_failed_load() {
     assert_eq!(result.num_classes, 3);
     assert!(!result.probabilities.is_null());
     let probabilities = unsafe { std::slice::from_raw_parts(result.probabilities, 3).to_vec() };
-    free_probabilities(result.probabilities, result.num_classes);
+    // SAFETY: this live result owns the matching allocation and is released once.
+    unsafe { free_probabilities(result.probabilities, result.num_classes) };
     assert!(result.label.is_null());
     assert_eq!(result.predicted_class, 2);
     assert_eq!(top.predicted_class, result.predicted_class);

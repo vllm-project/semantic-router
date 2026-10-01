@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v2"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 )
 
 // CanonicalGlobal contains router-managed runtime defaults plus sparse
@@ -19,16 +21,17 @@ type CanonicalGlobal struct {
 
 // CanonicalRouterGlobal captures router-engine control knobs.
 type CanonicalRouterGlobal struct {
-	ConfigSource              ConfigSource          `yaml:"config_source,omitempty"`
-	Strategy                  RoutingStrategy       `yaml:"strategy,omitempty"`
-	AutoModelName             string                `yaml:"auto_model_name,omitempty"`
-	AutoModelNames            *[]string             `yaml:"auto_model_names,omitempty"`
-	IncludeConfigModelsInList bool                  `yaml:"include_config_models_in_list"`
-	ClearRouteCache           bool                  `yaml:"clear_route_cache"`
-	StreamedBody              CanonicalStreamedBody `yaml:"streamed_body"`
-	SkipProcessing            SkipProcessingConfig  `yaml:"skip_processing"`
-	ModelSelection            ModelSelectionConfig  `yaml:"model_selection"`
-	Learning                  RouterLearningConfig  `yaml:"learning,omitempty"`
+	ConfigSource              ConfigSource             `yaml:"config_source,omitempty"`
+	Strategy                  RoutingStrategy          `yaml:"strategy,omitempty"`
+	AutoModelName             string                   `yaml:"auto_model_name,omitempty"`
+	AutoModelNames            *[]string                `yaml:"auto_model_names,omitempty"`
+	IncludeConfigModelsInList bool                     `yaml:"include_config_models_in_list"`
+	ClearRouteCache           bool                     `yaml:"clear_route_cache"`
+	StreamedBody              CanonicalStreamedBody    `yaml:"streamed_body"`
+	SkipProcessing            SkipProcessingConfig     `yaml:"skip_processing"`
+	ModelSelection            ModelSelectionConfig     `yaml:"model_selection"`
+	Learning                  RouterLearningConfig     `yaml:"learning,omitempty"`
+	Fallback                  *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -192,6 +195,7 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 	if err != nil {
 		return CanonicalGlobal{}, err
 	}
+	normalizeSparseCanonicalEmbeddingOverride(&resolved, rawOverride)
 	if err := normalizeSparseCanonicalCategoryOverride(&resolved, rawOverride); err != nil {
 		return CanonicalGlobal{}, err
 	}
@@ -199,6 +203,27 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 		return CanonicalGlobal{}, err
 	}
 	return resolved, nil
+}
+
+// Representation defaults belong to the default mmBERT model. Selecting a
+// different family must not silently request mmBERT's layer 22 from that owner.
+func normalizeSparseCanonicalEmbeddingOverride(resolved *CanonicalGlobal, raw *StructuredPayload) {
+	if raw == nil {
+		return
+	}
+	global, err := raw.AsStringMap()
+	if err != nil {
+		return
+	}
+	catalog := nestedStringMap(global["model_catalog"])
+	embeddings := nestedStringMap(catalog["embeddings"])
+	semantic := nestedStringMap(embeddings["semantic"])
+	settings := nestedStringMap(semantic["embedding_config"])
+	if model, ok := settings["model_type"].(string); ok && strings.TrimSpace(model) != "" && strings.ToLower(strings.TrimSpace(model)) != "mmbert" {
+		if !hasRawKey(settings, "target_layer") {
+			resolved.ModelCatalog.Embeddings.Semantic.EmbeddingConfig.TargetLayer = 0
+		}
+	}
 }
 
 func mergeCanonicalGlobalOverride(
@@ -358,6 +383,9 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.SkipProcessing = router.SkipProcessing
 	cfg.ModelSelection = router.ModelSelection
 	cfg.RouterLearning = router.Learning
+	if router.Fallback != nil && cfg.Fallback == nil {
+		cfg.Fallback = router.Fallback.Clone()
+	}
 }
 
 func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {

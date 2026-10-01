@@ -40,6 +40,7 @@ cuda-dynamic = ["cuda", "ort/load-dynamic"]
 # ONNX Runtime via ort crate - supports AMD GPU (ROCm), NVIDIA GPU (CUDA), and more
 ort = { version = "=2.0.0-rc.10", default-features = false, features = ["std", "ndarray", "half", "copy-dylibs", "download-binaries"] }
 ndarray = "0.17"
+rustfft = "6.4"
 tokenizers = { version = "0.21.0", features = ["http"] }
 serde = { version = "1.0", features = ["derive"] }
 sha2 = "0.10"
@@ -49,9 +50,10 @@ tracing = "0.1"
 libc = "0.2"
 parking_lot = "0.12"
 half = "2.4"
-# Image decode+resize for multimodal preprocessing. Same version/features as
-# candle-binding's Cargo.toml so both bindings resize through identical code
-# (see multimodal_encode_image_from_bytes in src/ffi/multimodal.rs).
+# Pillow uses libjpeg-turbo's accurate JPEG decoder. Vendor it statically so
+# exported model preprocessing has no undeclared runtime JPEG dependency.
+turbojpeg = { version = "=1.5.1", default-features = false, features = ["cmake"] }
+# Other image formats use the Rust decoder; resizing follows the model processor.
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 
 [dev-dependencies]

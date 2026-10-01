@@ -122,7 +122,12 @@ func (d *HallucinationDetector) detectSpans(ctx context.Context, contextText, qu
 	if contextText == "" {
 		return merged, fmt.Errorf("context is required for hallucination detection")
 	}
-	chunks := hallucinationAnswerChunks(answer)
+	chunks := []string{answer}
+	// The published pair adapter owns its complete answer budget. Splitting it
+	// here would change the evidence and the artifact's measured task.
+	if d.spec.Binding.Adapter != "vela_halu" {
+		chunks = hallucinationAnswerChunks(answer)
+	}
 	searchStart := 0
 	for _, chunk := range chunks {
 		start := strings.Index(answer[searchStart:], chunk)

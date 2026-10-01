@@ -8,76 +8,76 @@ config:
       - name: ratings-model-a
         provider_model_id: ratings-model-a
         backend_refs:
-          - name: looper-fake-backend
+          - name: looper-provider-mocker
             provider: vllm
-            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+            endpoint: looper-provider-mocker.default.svc.cluster.local:8000
             weight: 1
       - name: ratings-model-b
         provider_model_id: ratings-model-b
         backend_refs:
-          - name: looper-fake-backend
+          - name: looper-provider-mocker
             provider: vllm
-            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+            endpoint: looper-provider-mocker.default.svc.cluster.local:8000
             weight: 1
       - name: confidence-model-low
         provider_model_id: confidence-model-low
         backend_refs:
-          - name: looper-fake-backend
-            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+          - name: looper-provider-mocker
+            endpoint: looper-provider-mocker.default.svc.cluster.local:8000
             weight: 1
       - name: confidence-model-high
         provider_model_id: confidence-model-high
         backend_refs:
-          - name: looper-fake-backend
-            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+          - name: looper-provider-mocker
+            endpoint: looper-provider-mocker.default.svc.cluster.local:8000
             weight: 1
       - name: fusion-panel-valid
         provider_model_id: fusion-panel-valid
         backend_refs:
-          - name: looper-fake-backend
-            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+          - name: looper-provider-mocker
+            endpoint: looper-provider-mocker.default.svc.cluster.local:8000
             weight: 1
       - name: fusion-panel-empty
         provider_model_id: fusion-panel-empty
         backend_refs:
-          - name: looper-fake-backend
-            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+          - name: looper-provider-mocker
+            endpoint: looper-provider-mocker.default.svc.cluster.local:8000
             weight: 1
       - name: fusion-panel-fail
         provider_model_id: fusion-panel-fail
         backend_refs:
-          - name: looper-fake-backend
-            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+          - name: looper-provider-mocker
+            endpoint: looper-provider-mocker.default.svc.cluster.local:8000
             weight: 1
       - name: fusion-judge
         provider_model_id: fusion-judge
         backend_refs:
-          - name: looper-fake-backend
-            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+          - name: looper-provider-mocker
+            endpoint: looper-provider-mocker.default.svc.cluster.local:8000
             weight: 1
       - name: fusion-fallback-target
         provider_model_id: fusion-fallback-target
         backend_refs:
-          - name: looper-fake-backend
-            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+          - name: looper-provider-mocker
+            endpoint: looper-provider-mocker.default.svc.cluster.local:8000
             weight: 1
       - name: fusion-fallback-broken
         provider_model_id: fusion-fallback-broken
         backend_refs:
-          - name: looper-fake-backend
-            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+          - name: looper-provider-mocker
+            endpoint: looper-provider-mocker.default.svc.cluster.local:8000
             weight: 1
       - name: fusion-fallback-tiny-window
         provider_model_id: fusion-fallback-tiny-window
         backend_refs:
-          - name: looper-fake-backend
-            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+          - name: looper-provider-mocker
+            endpoint: looper-provider-mocker.default.svc.cluster.local:8000
             weight: 1
       - name: fusion-panel-slow
         provider_model_id: fusion-panel-slow
         backend_refs:
-          - name: looper-fake-backend
-            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+          - name: looper-provider-mocker
+            endpoint: looper-provider-mocker.default.svc.cluster.local:8000
             weight: 1
   routing:
     modelCards:
@@ -571,7 +571,7 @@ config:
       tools:
         enabled: false
       looper:
-        endpoint: http://looper-fake-backend.default.svc.cluster.local:8000/v1/chat/completions
+        endpoint: http://looper-provider-mocker.default.svc.cluster.local:8000/v1/chat/completions
 
 resources:
   limits:

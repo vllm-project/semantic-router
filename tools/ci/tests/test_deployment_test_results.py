@@ -11,9 +11,48 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from deployment_test_results import go_unit, kubernetes, operator
+from release_guard_waiver import GUARD_WAIVER
 
 
 class DeploymentResultsTests(unittest.TestCase):
+    def test_release_guard_case_remains_failed_and_other_cases_are_required(self):
+        report = {
+            "profile": "production-stack",
+            "expected_cases": ["routing", "jailbreak-detection"],
+            "test_results": [
+                {"Name": "routing", "Passed": True},
+                {"Name": "jailbreak-detection", "Passed": False},
+            ],
+            "status": "FAILED",
+            "exit_code": 1,
+            "total_tests": 2,
+            "passed_tests": 1,
+            "failed_tests": 1,
+        }
+        evidence = kubernetes(report, "production-stack", waiver=GUARD_WAIVER)
+        self.assertEqual(
+            evidence["cases"][-1],
+            {"id": "jailbreak-detection", "status": "failed"},
+        )
+        with self.assertRaises(ValueError):
+            kubernetes(report, "production-stack")
+        for mutation in (
+            {
+                "test_results": [
+                    {"Name": "routing", "Passed": False},
+                    *report["test_results"][1:],
+                ]
+            },
+            {"expected_cases": ["jailbreak-detection"]},
+            {"failed_tests": 0},
+            {"status": "PASSED"},
+            {"exit_code": 0},
+        ):
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                kubernetes(
+                    {**report, **mutation}, "production-stack", waiver=GUARD_WAIVER
+                )
+
     def test_kubernetes_requires_exact_passed_inventory(self):
         report = {
             "profile": "envoy-ai-gateway",
@@ -46,6 +85,36 @@ class DeploymentResultsTests(unittest.TestCase):
         for change in changes:
             with self.subTest(change=change), self.assertRaises(ValueError):
                 kubernetes({**report, **change}, "envoy-ai-gateway")
+
+    def test_a_case_that_passed_only_on_a_retry_does_not_count_as_failed(self):
+        # `bin/e2e -flake-attempts=2` marks a case that passed on a later attempt
+        # with `Flaked: true` and `Attempts: 2`. It is still a pass, so
+        # `failed_tests` stays 0 and the #4120 waiver checks keep working.
+        report = {
+            "profile": "envoy-ai-gateway",
+            "expected_cases": ["route", "cache"],
+            "test_results": [
+                {"Name": "route", "Passed": True, "Attempts": 1, "Flaked": False},
+                {"Name": "cache", "Passed": True, "Attempts": 2, "Flaked": True},
+            ],
+            "status": "PASSED",
+            "exit_code": 0,
+            "total_tests": 2,
+            "passed_tests": 2,
+            "failed_tests": 0,
+            "flaky_tests": 1,
+        }
+        evidence = kubernetes(report, "envoy-ai-gateway")
+        self.assertEqual(
+            evidence["cases"],
+            [
+                {"id": "route", "status": "passed"},
+                {"id": "cache", "status": "passed"},
+            ],
+        )
+        # Counting the retried case as failed would break the runner counters.
+        with self.assertRaises(ValueError):
+            kubernetes({**report, "failed_tests": 1}, "envoy-ai-gateway")
 
     def test_go_discovery_and_subtests_are_both_mandatory(self):
         discovery = [
@@ -122,8 +191,11 @@ class DeploymentResultsTests(unittest.TestCase):
                         del bad[job]
                     else:
                         bad[job]["result"] = state
-                    with self.subTest(job=job, state=state), self.assertRaisesRegex(
-                        ValueError, f"prerequisite did not succeed: {job}"
+                    with (
+                        self.subTest(job=job, state=state),
+                        self.assertRaisesRegex(
+                            ValueError, f"prerequisite did not succeed: {job}"
+                        ),
                     ):
                         operator(directory, variants, bad)
             with self.assertRaises(ValueError):
@@ -141,7 +213,7 @@ class DeploymentResultsTests(unittest.TestCase):
         self.assertEqual(
             jobs["result"]["needs"], ["checks", "bundle-validate", "integration-test"]
         )
-        self.assertEqual(jobs["integration-test"]["strategy"]["max-parallel"], 2)
+        self.assertNotIn("max-parallel", jobs["integration-test"]["strategy"])
         steps = jobs["checks"]["steps"]
         self.assertEqual(
             sum(step.get("uses") == "actions/setup-go@v5" for step in steps), 1

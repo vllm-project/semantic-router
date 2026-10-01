@@ -56,6 +56,7 @@ func (r *OpenAIRouter) handleRequestBody(
 	}
 	ctx.UserContent = snapshot.UserContent
 	ctx.RequestImageURL = snapshot.FirstImageURL
+	ctx.RequestAudio = snapshot.FirstAudio
 
 	decisionState, earlyResponse := r.runRequestPreRoutingStages(originalModel, snapshot, ctx)
 	if earlyResponse != nil {
@@ -87,7 +88,7 @@ func (r *OpenAIRouter) handleModelRoutingWithPersonalizedCache(
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
 	if response, hit := r.lookupPersonalizedExactCache(ctx, decisionState.decisionName, decisionState.selectedModel); hit {
-		inflight.End(decisionState.selectedModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		return response, nil
 	}

@@ -138,9 +138,17 @@ const (
 	// Example: "adaptation=sampled_win,protection=switch_allowed"
 	VSRLearningReasons = "x-vsr-learning-reasons"
 
+	// VSRFallbackAttempts indicates the number of candidate attempts during execution fallback.
+	VSRFallbackAttempts = "x-vsr-fallback-attempts"
+
 	// VSRInjectedSystemPrompt indicates whether a system prompt was injected into the request.
 	// Values: "true" or "false"
 	VSRInjectedSystemPrompt = "x-vsr-injected-system-prompt"
+
+	VSRPromptCacheAction    = "x-vsr-prompt-cache-action"
+	VSRPromptCacheReason    = "x-vsr-prompt-cache-reason"
+	VSRPromptCacheInserted  = "x-vsr-prompt-cache-inserted"
+	VSRPromptCachePreserved = "x-vsr-prompt-cache-preserved"
 
 	// --- v0.4 keystone response-contract headers (issue #2203) ---
 	// These two headers are emitted on every VSR-processed response and form
@@ -165,6 +173,7 @@ const (
 	ResponsePathBlocked         = "blocked"          // rejected by a guardrail (e.g. jailbreak/PII)
 	ResponsePathRateLimited     = "rate_limited"     // rejected by rate limiting
 	ResponsePathError           = "error"            // router-side error response
+	ResponsePathFallback        = "fallback"         // produced by upstream error fallback
 
 	// SchemaVersionValue is the current response-header contract revision
 	// emitted in VSRSchemaVersion. v0.4 is contract revision "2".
@@ -417,6 +426,15 @@ const (
 	// VSRInternalAuth authenticates in-process request context that must not
 	// be accepted from external callers or forwarded to model backends.
 	VSRInternalAuth = "x-vsr-internal-auth"
+
+	// VSROutcomeSource carries server-attested outcome provenance between a
+	// trusted control plane and the Router management API. External callers
+	// must not be allowed to supply this header through a proxy.
+	VSROutcomeSource = "x-vsr-outcome-source"
+
+	// VSROutcomePrincipal carries an opaque, server-attested identity used to
+	// isolate outcome-ingest rate limits. It is not persisted with the outcome.
+	VSROutcomePrincipal = "x-vsr-outcome-principal"
 )
 
 // Looper Request Headers

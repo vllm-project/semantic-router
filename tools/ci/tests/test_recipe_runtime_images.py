@@ -21,10 +21,17 @@ if name == 'docker':
         stream.write(json.dumps({'docker': args}) + '\n')
     if args[:2] == ['image', 'inspect']:
         sys.exit(0 if args[2] == os.environ['VLLM_SR_ROUTER_IMAGE'] else 1)
-    assert args[0] == 'pull', args
-    if os.environ.get('IMAGE_CONTRACT_PULL_FAILURE'):
-        sys.exit(37)
-    prepared.write_text(args[1])
+    if args[0] == 'pull':
+        if os.environ.get('IMAGE_CONTRACT_PULL_FAILURE'):
+            sys.exit(37)
+        prepared.write_text(args[1])
+    elif args[:2] == ['run', '--rm']:
+        assert args[2] == prepared.read_text(), args
+        assert args[3:] == ['--version'], args
+        if os.environ.get('IMAGE_CONTRACT_SMOKE_FAILURE'):
+            sys.exit(38)
+    else:
+        raise AssertionError(args)
 elif name == 'python3':
     assert args[-3:] == ['sources', '--format', 'pipe'], args
     print('default|config/recipes|default|balance,knowledge')
@@ -62,7 +69,17 @@ class RecipeRuntimeImageTests(unittest.TestCase):
             with self.subTest(target=target):
                 self.run_target(target, pull_failure=True)
 
-    def run_target(self, target, *, override=None, pull_failure=False):
+    def test_unexecutable_envoy_prevents_recipe_execution(self):
+        for target in (
+            "recipe-conformance-live-cpu",
+            "recipe-conformance-live-cpu-all",
+        ):
+            with self.subTest(target=target):
+                self.run_target(target, smoke_failure=True)
+
+    def run_target(
+        self, target, *, override=None, pull_failure=False, smoke_failure=False
+    ):
         constants = ast.parse((ROOT / "src/vllm-sr/cli/consts.py").read_text())
         default_envoy = next(
             ast.literal_eval(node.value)
@@ -103,6 +120,8 @@ class RecipeRuntimeImageTests(unittest.TestCase):
             )
             if pull_failure:
                 environment["IMAGE_CONTRACT_PULL_FAILURE"] = "1"
+            if smoke_failure:
+                environment["IMAGE_CONTRACT_SMOKE_FAILURE"] = "1"
             arguments = [
                 "make",
                 "--no-print-directory",
@@ -136,16 +155,22 @@ class RecipeRuntimeImageTests(unittest.TestCase):
             if pull_failure:
                 self.assertNotEqual(result.returncode, 0)
             else:
-                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                expected.append(
-                    {
-                        "serve": {
-                            "router": router,
-                            "envoy": envoy,
-                            "recipes": "balance,knowledge",
+                expected.append({"docker": ["run", "--rm", envoy, "--version"]})
+                if smoke_failure:
+                    self.assertNotEqual(result.returncode, 0)
+                else:
+                    self.assertEqual(
+                        result.returncode, 0, result.stdout + result.stderr
+                    )
+                    expected.append(
+                        {
+                            "serve": {
+                                "router": router,
+                                "envoy": envoy,
+                                "recipes": "balance,knowledge",
+                            }
                         }
-                    }
-                )
+                    )
             self.assertEqual(calls, expected)
 
 

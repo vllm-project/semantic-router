@@ -581,9 +581,10 @@ impl Default for MultiModalEmbeddingResult {
     }
 }
 
-/// Validate that a C structure pointer is not null and properly aligned
-pub unsafe fn validate_c_struct_ptr<T>(ptr: *const T) -> bool {
-    !ptr.is_null() && (ptr as usize) % std::mem::align_of::<T>() == 0
+/// Validate that a C structure pointer is not null and properly aligned.
+/// This does not dereference the pointer or establish that its allocation is live.
+pub fn validate_c_struct_ptr<T>(ptr: *const T) -> bool {
+    !ptr.is_null() && ptr.is_aligned()
 }
 
 /// Get the size of any C structure for ABI compatibility checking

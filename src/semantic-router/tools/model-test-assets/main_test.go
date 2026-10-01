@@ -14,16 +14,33 @@ import (
 func TestAssetSelection(t *testing.T) {
 	for suite, count := range map[string]int{"runtime": 10, "perf": 4, "openvino": 2} {
 		for _, provider := range []string{"candle", "ort"} {
+			expectedCount := count
+			if suite == "runtime" {
+				if provider == "candle" {
+					expectedCount++
+				} else {
+					expectedCount += 2
+				}
+			}
 			m, specs, err := assets(suite, provider, t.TempDir())
-			if err != nil || len(m.Models) != count || len(specs) != count {
+			if err != nil || len(m.Models) != expectedCount || len(specs) != expectedCount {
 				t.Fatalf("%s/%s: models=%d specs=%d err=%v", suite, provider, len(m.Models), len(specs), err)
 			}
 			for i, spec := range specs {
+				if spec.PreparedArtifact != "" {
+					if provider != "ort" || spec.PreparedArtifact != "vela_omni" || filepath.Base(spec.LocalPath) != spec.ArtifactBundle || filepath.Base(filepath.Dir(spec.LocalPath)) != "vela-omni-artifacts" || !spec.Strict || spec.Revision != m.Models[i].Revision {
+						t.Fatalf("invalid prepared Omni contract: %+v", spec)
+					}
+					continue
+				}
 				if filepath.Base(spec.LocalPath) != spec.Revision || filepath.Base(filepath.Dir(spec.LocalPath)) != provider || !strings.Contains(spec.LocalPath, "Vela-") {
 					t.Fatalf("artifact is not isolated by runtime and revision: %s", spec.LocalPath)
 				}
 				if !spec.Strict || spec.Revision != m.Models[i].Revision || spec.RepoID != m.Models[i].RepoID || spec.CheckONNX != (provider == "ort") {
 					t.Fatalf("incomplete artifact contract: %+v", spec)
+				}
+				if m.Models[i].Name == "Halu" && (!slices.Contains(spec.RequiredFiles, "operating_point.json") || len(spec.RequiredFileGroups) != 1) {
+					t.Fatalf("Halu lost its token-span checkpoint: %+v", spec)
 				}
 				if m.Models[i].Name == "Hazard" {
 					if !slices.Contains(spec.RequiredFiles, "model.safetensors") || !slices.Contains(spec.RequiredFiles, "operating_point.json") || slices.Contains(spec.ExcludePatterns, "*.safetensors") {
@@ -107,31 +124,6 @@ func TestMultimodalRegistryRevisionTakesPrecedence(t *testing.T) {
 	model.Revision = "main"
 	if _, _, err := assets("multimodal", "candle", t.TempDir()); err == nil {
 		t.Fatal("mutable registered revision was accepted")
-	}
-}
-
-func TestImageCalibrationRequiresItsFrozenSnapshotAndFiveFiles(t *testing.T) {
-	m, specs, err := assets("image-calibration", "candle", t.TempDir())
-	if err != nil || len(m.Models) != 1 || len(specs) != 1 {
-		t.Fatalf("invalid calibration assets: %+v %v", m, err)
-	}
-	if m.Models[0].Revision != multimodalCompatibilityRevision || len(specs[0].RequiredFiles) != 5 {
-		t.Fatalf("calibration provenance contract lost: %+v", specs[0])
-	}
-	for _, name := range []string{"config.json", "model.safetensors", "tokenizer.json", "tokenizer_config.json", "special_tokens_map.json"} {
-		if !slices.Contains(specs[0].RequiredFiles, name) {
-			t.Fatalf("required file missing: %s", name)
-		}
-	}
-	registered := config.GetModelByPath("models/mom-embedding-multimodal")
-	original := registered.Revision
-	t.Cleanup(func() { registered.Revision = original })
-	registered.Revision = strings.Repeat("b", 40)
-	if _, _, err := assets("image-calibration", "candle", t.TempDir()); err == nil {
-		t.Fatal("calibration silently followed a different production revision")
-	}
-	if _, _, err := assets("image-calibration", "ort", t.TempDir()); err == nil {
-		t.Fatal("calibration accepted an unqualified runtime")
 	}
 }
 

@@ -132,9 +132,10 @@ type ClassificationOptions struct {
 type EmbeddingRequest struct {
 	Recipe          string   `json:"recipe,omitempty"`
 	Texts           []string `json:"texts,omitempty"`
+	Audios          []string `json:"audios,omitempty"`           // Inline base64 WAV, up to 30 seconds; original rate and channels preserved
 	Images          []string `json:"images,omitempty"`           // Inline base64 image data URIs (data:image/...;base64,...); encoded via the multi-modal model
-	Model           string   `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma", "mmbert"
-	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128, 64
+	Model           string   `json:"model,omitempty"`            // Prepared model alias; auto selects among the current recipe's providers
+	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 0 (default) selects the loaded model output; other values require model support
 	TargetLayer     int      `json:"target_layer,omitempty"`     // Target layer for early exit (mmbert only): 3, 6, 11, 22 (0=full)
 	QualityPriority float32  `json:"quality_priority,omitempty"` // 0.0-1.0, default 0.5 (only used when model="auto")
 	LatencyPriority float32  `json:"latency_priority,omitempty"` // 0.0-1.0, default 0.5 (only used when model="auto")
@@ -165,8 +166,8 @@ type SimilarityRequest struct {
 	Recipe          string  `json:"recipe,omitempty"`
 	Text1           string  `json:"text1"`
 	Text2           string  `json:"text2"`
-	Model           string  `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma", "mmbert"
-	Dimension       int     `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128, 64
+	Model           string  `json:"model,omitempty"`            // Prepared model alias; auto selects among the current recipe's providers
+	Dimension       int     `json:"dimension,omitempty"`        // Target dimension: 0 (default) selects the loaded model output; other values require model support
 	TargetLayer     int     `json:"target_layer,omitempty"`     // Target layer for early exit (mmbert only): 3, 6, 11, 22 (0=full)
 	QualityPriority float32 `json:"quality_priority,omitempty"` // 0.0-1.0, only for "auto" model
 	LatencyPriority float32 `json:"latency_priority,omitempty"` // 0.0-1.0, only for "auto" model
@@ -186,8 +187,8 @@ type BatchSimilarityRequest struct {
 	Query           string   `json:"query"`                      // Query text
 	Candidates      []string `json:"candidates"`                 // Array of candidate texts
 	TopK            int      `json:"top_k,omitempty"`            // Max number of matches to return (0 = return all)
-	Model           string   `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma", "mmbert"
-	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128, 64
+	Model           string   `json:"model,omitempty"`            // Prepared model alias; auto selects among the current recipe's providers
+	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 0 (default) selects the loaded model output; other values require model support
 	TargetLayer     int      `json:"target_layer,omitempty"`     // Target layer for early exit (mmbert only): 3, 6, 11, 22 (0=full)
 	QualityPriority float32  `json:"quality_priority,omitempty"` // 0.0-1.0, only for "auto" model
 	LatencyPriority float32  `json:"latency_priority,omitempty"` // 0.0-1.0, only for "auto" model

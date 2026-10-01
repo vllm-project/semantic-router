@@ -22,7 +22,7 @@ in [`../../profiles/hallucination/values.yaml`](../../profiles/hallucination/val
 
 | File | Role |
 | --- | --- |
-| `mock_vllm_toolcall.py` | Returns a tool call, then a deliberately inconsistent final answer. |
+| `provider-mocker` with `PROVIDER_MOCKER_SCENARIO=toolcall` | Returns a tool call, then a deliberately inconsistent final answer. |
 | `mock_web_search.py` | Supplies deterministic reference facts to the client. |
 | `chat_client.py` | Runs the CLI tool-call loop and prints Router warning headers. |
 | `web_client.py` | Provides a browser client for the same local services. |
@@ -37,7 +37,8 @@ quality on an open-ended dataset.
 The launcher expects:
 
 - a Router binary and downloaded Candle models;
-- Python 3 with the client dependencies used by the scripts;
+- the isolated provider environment from `make provider-mocker-install`
+  (Python 3.11+) and the client dependencies used by the scripts;
 - `curl`, `lsof`, and `func-e` on `PATH`;
 - ports 50051, 8002, 8003, 8080, 8801, and optionally 8888 to be free.
 

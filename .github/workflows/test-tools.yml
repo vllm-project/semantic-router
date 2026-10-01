@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   tests:
-    name: ${{ fromJSON(inputs.batch).display_name }}
+    name: Execute Contracts
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:

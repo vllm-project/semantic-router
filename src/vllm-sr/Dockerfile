@@ -14,6 +14,34 @@ ARG GO_RUNTIME_COMPAT_IMAGE=library/golang:1.25-bookworm
 # The router runtime image is Debian bookworm-slim. Build the Rust and Go stages
 # on bookworm too, so the copied binaries need no newer glibc than the runtime.
 # Debian 11 (bullseye) security packages are no longer reliably served.
+# Shared model-production stage: its cache depends only on the pinned exporter.
+# Python/Torch and native source stay here; final images receive verified tensors.
+# Use --build-arg VELA_OMNI_VARIANTS="nano mini" to bundle Mini as well.
+# Frozen development image prototypes; no model download or inference in this stage.
+FROM --platform=$BUILDPLATFORM python:3.12-slim-bookworm AS image-routing-assets
+WORKDIR /source
+COPY tools/calibration/image-routing/prepare_assets.py tools/calibration/image-routing/prepare_assets.py
+COPY config/assets/image-routing/manifest.json config/assets/image-routing/manifest.json
+COPY website/static/img/ website/static/img/
+COPY dashboard/frontend/public/ dashboard/frontend/public/
+RUN python tools/calibration/image-routing/prepare_assets.py --repository-root /source --output /out
+
+FROM --platform=$BUILDPLATFORM python:3.12-slim-bookworm AS vela-omni-builder
+ENV HF_HOME=/tmp/vela-hf-cache PIP_DISABLE_PIP_VERSION_CHECK=1
+WORKDIR /build/vela-omni
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
+COPY tools/models/vela_omni/requirements.txt ./
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.8.0 torchaudio==2.8.0 && \
+    pip install --no-cache-dir -r requirements.txt
+COPY tools/models/vela_omni/ ./
+RUN OMP_NUM_THREADS=4 python -m unittest discover -s . -p "test_*.py"
+ARG VELA_OMNI_VARIANTS=nano
+# E2E images retain official-reference inputs/outputs for native parity checks.
+ARG VELA_OMNI_KEEP_GOLDEN=0
+RUN case "$VELA_OMNI_KEEP_GOLDEN" in 0) set -- ;; 1) set -- --keep-golden ;; *) exit 1 ;; esac && \
+    python prepare.py --variants ${VELA_OMNI_VARIANTS} "$@" --work /tmp/vela-export --output /opt/router-model-artifacts && \
+    rm -rf /tmp/vela-export /tmp/vela-hf-cache
+
 FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${RUST_RUNTIME_COMPAT_IMAGE} AS rust-builder
 ARG TARGETARCH
 ARG GIT_SSL_NO_VERIFY
@@ -21,13 +49,21 @@ WORKDIR /build
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 
 # Install cross-compilation toolchain and OpenSSL for arm64 (needed by hf-hub -> openssl-sys, esaxx-rs -> g++)
+# libssl is Multi-Arch: same, so both architectures get the newest version they share.
+# An upload skew can require downgrading preinstalled OpenSSL in this builder;
+# the runtime stage installs its own packages from the current archive.
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
       dpkg --add-architecture arm64 && \
-      apt-get update && apt-get install -y \
+      apt-get update && \
+      host_versions="$(apt-cache madison libssl-dev | awk '{print $3}')" && \
+      ssl_version="$(apt-cache madison libssl-dev:arm64 | awk '{print $3}' | grep -Fxm1 "$host_versions")" && \
+      apt-get install -y --allow-downgrades --no-remove \
         gcc-aarch64-linux-gnu \
         g++-aarch64-linux-gnu \
-        libssl-dev:arm64 \
-        libssl-dev \
+        "libssl-dev:arm64=${ssl_version}" \
+        "libssl3:arm64=${ssl_version}" \
+        "libssl-dev=${ssl_version}" \
+        "libssl3=${ssl_version}" \
         pkg-config && \
       rm -rf /var/lib/apt/lists/* && \
       rustup target add aarch64-unknown-linux-gnu; \
@@ -200,6 +236,9 @@ RUN mkdir -p /build/out && \
 # Build independent ORT instances using the existing CPU cross toolchain.
 FROM rust-builder AS onnx-builder
 ARG TARGETARCH
+# Vendored libjpeg-turbo keeps JPEG decoding identical to the native reference.
+RUN apt-get update && apt-get install -y --no-install-recommends cmake && \
+    rm -rf /var/lib/apt/lists/*
 WORKDIR /build/onnx
 COPY onnx-binding/Cargo.toml onnx-binding/Cargo.loc[k] ./
 COPY onnx-binding/src/ ./src/
@@ -269,12 +308,20 @@ RUN bash /build/check-native-abi.sh \
 
 # Build router (cross-compile for arm64 when TARGETARCH=arm64)
 # arm64: need libssl-dev:arm64 because libcandle_semantic_router.so dynamically links OpenSSL
+# libssl is Multi-Arch: same, so both architectures get the newest version they share.
+# Keep all four packages pinned, including a preinstalled native libssl-dev.
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
       dpkg --add-architecture arm64 && \
-      apt-get update && apt-get install -y \
+      apt-get update && \
+      host_versions="$(apt-cache madison libssl-dev | awk '{print $3}')" && \
+      ssl_version="$(apt-cache madison libssl-dev:arm64 | awk '{print $3}' | grep -Fxm1 "$host_versions")" && \
+      apt-get install -y --allow-downgrades --no-remove \
         gcc-aarch64-linux-gnu \
         g++-aarch64-linux-gnu \
-        libssl-dev:arm64 && \
+        "libssl-dev:arm64=${ssl_version}" \
+        "libssl3:arm64=${ssl_version}" \
+        "libssl-dev=${ssl_version}" \
+        "libssl3=${ssl_version}" && \
       rm -rf /var/lib/apt/lists/* && \
       CC=aarch64-linux-gnu-gcc \
       CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
@@ -286,6 +333,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 
 # Stage 3: Final router runtime image
 FROM ${IMAGE_REGISTRY}library/debian:bookworm-slim
+
 
 ENV VIRTUAL_ENV=/opt/vllm-sr-venv
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
@@ -329,6 +377,11 @@ COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /app/cl
 COPY config/recipes/built-in/ /app/cli/model_assets/
 COPY src/vllm-sr/start-router.sh /app/start-router.sh
 RUN chmod +x /app/start-router.sh
+
+# Keep immutable artifacts outside the mounted model cache, in an independent layer.
+COPY --link --from=vela-omni-builder /opt/router-model-artifacts/ /opt/router-model-artifacts/
+COPY --link --from=image-routing-assets /out/ /app/share/image-routing/
+
 
 EXPOSE 50051 8080 9190
 

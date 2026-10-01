@@ -14,12 +14,12 @@ config:
         backend_refs:
           - name: test-endpoint
             provider: vllm
-            endpoint: mock-vllm.default.svc.cluster.local:8000
+            endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
       - name: openai/shadow-candidate
         backend_refs:
           - name: shadow-endpoint
-            endpoint: mock-vllm.default.svc.cluster.local:8000
+            endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
       - name: openai/shadow-unreachable
         backend_refs:
@@ -29,17 +29,17 @@ config:
       - name: openai/shadow-timeout
         backend_refs:
           - name: shadow-timeout-endpoint
-            endpoint: mock-vllm.default.svc.cluster.local:8000
+            endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
       - name: openai/shadow-malformed
         backend_refs:
           - name: shadow-malformed-endpoint
-            endpoint: mock-vllm.default.svc.cluster.local:8000
+            endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
       - name: openai/shadow-queue
         backend_refs:
           - name: shadow-queue-endpoint
-            endpoint: mock-vllm.default.svc.cluster.local:8000
+            endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
   routing:
     decisions:
@@ -144,7 +144,7 @@ config:
                 configuration:
                   enabled: true
                   max_records: 1000
-                  capture_request_body: false
+                  capture_request_body: true
                   capture_response_body: true
                   max_body_bytes: 65536
               - type: shadow_dispatch

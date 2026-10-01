@@ -1,8 +1,6 @@
 package classification
 
 import (
-	"os"
-	"strings"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -21,15 +19,16 @@ type EmbeddingClassifier struct {
 	// NewEmbeddingClassifier and shared by every classify call.
 	rulesByModality map[config.QueryModality][]config.EmbeddingRule
 
-	candidateEmbeddings map[string][]float32
-	rulePrototypeBanks  map[string]*prototypeBank
+	candidateEmbeddings        map[string][]float32
+	imageCandidateEmbeddings   map[string][]float32
+	rulePrototypeBanks         map[string]*prototypeBank
+	negativeRulePrototypeBanks map[string]*prototypeBank
 
 	optimizationConfig config.HNSWConfig
 	preloadRequested   bool
 	preloadComplete    bool
 	preloadMu          sync.Mutex
 	modelType          string
-	backend            string
 	provider           embedding.Provider
 }
 
@@ -51,7 +50,6 @@ func NewEmbeddingClassifierWithProvider(cfgRules []config.EmbeddingRule, optConf
 		optimizationConfig:  optConfig,
 		preloadRequested:    optConfig.PreloadEmbeddings,
 		modelType:           optConfig.ModelType,
-		backend:             strings.ToLower(strings.TrimSpace(optConfig.Backend)),
 		provider:            provider,
 	}
 
@@ -69,15 +67,7 @@ func NewEmbeddingClassifierWithProvider(cfgRules []config.EmbeddingRule, optConf
 }
 
 // getModelType returns the model type to use for embeddings.
-func (c *EmbeddingClassifier) getModelType() string {
-	if model := os.Getenv("EMBEDDING_MODEL_OVERRIDE"); model != "" {
-		logging.ComponentDebugEvent("classifier", "embedding_model_override_enabled", map[string]interface{}{
-			"model_type": model,
-		})
-		return model
-	}
-	return c.modelType
-}
+func (c *EmbeddingClassifier) getModelType() string { return c.modelType }
 
 // buildRulesByModality groups rules by their effective query modality so the
 // classifier can dispatch each request to the correct subset without per-call
@@ -103,6 +93,9 @@ type EmbeddingRuleScore struct {
 	Score          float64
 	Best           float64
 	Support        float64
+	PositiveScore  float64
+	NegativeScore  float64
+	Contrastive    bool
 	Threshold      float64
 	PrototypeCount int
 }

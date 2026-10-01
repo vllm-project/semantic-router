@@ -17,6 +17,7 @@ const SECTION_PRESENTATION: Record<
   Lifecycle: { size: 'compact' },
   'Decision Information': { size: 'compact' },
   'Model Selection': { size: 'compact' },
+  Outcomes: { size: 'compact' },
   'Selection Stages': {
     size: 'wide',
     collapsible: true,

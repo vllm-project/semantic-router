@@ -108,7 +108,7 @@ func TestModelDiagnosticsHTTPAllVelaTaskContractsAndExplicitScope(t *testing.T) 
 	if status != 200 || !strings.Contains(string(body), `"end":3`) {
 		t.Fatalf("pii byte offsets: %d %s", status, body)
 	}
-	diagnosticTestHandle(t, runtime, "default", "embedding", "embedding.v1", binding.Capability{Embedding: &binding.EmbeddingCapability{Dimension: 2, Layer: 7}}, func(input embedding.TextRequest) (tasks.EmbeddingResult, error) {
+	diagnosticTestHandle(t, runtime, "default", "embedding", "embedding.v1", binding.Capability{Embedding: &binding.EmbeddingCapability{Dimension: 2, Layer: 7, AvailableDimensions: []int{2}, Audio: &binding.AudioCapability{SampleRates: []int{16000, 48000}, MaxSampleRate: 48000, MaxSeconds: 30, MaxChannels: 8, Layout: "channels_first"}}}, func(input embedding.TextRequest) (tasks.EmbeddingResult, error) {
 		calls.Add(1)
 		if input.Options.Dimension != 2 || input.Options.Layer != 7 {
 			t.Errorf("prepared representation lost: %+v", input)
@@ -116,7 +116,7 @@ func TestModelDiagnosticsHTTPAllVelaTaskContractsAndExplicitScope(t *testing.T) 
 		return tasks.EmbeddingResult{Embedding: []float32{.3, .4}, Input: usage}, nil
 	})
 	status, body = diagnosticRequest(t, server, "embeddings", `{"recipe":"default","binding":"embedding","text":"query"}`)
-	if status != 200 || !strings.Contains(string(body), `"embedding":[0.3,0.4]`) {
+	if status != 200 || !strings.Contains(string(body), `"embedding":[0.3,0.4]`) || !strings.Contains(string(body), `"dimensions":[2]`) || !strings.Contains(string(body), `"sample_rates":[16000,48000]`) || !strings.Contains(string(body), `"max_seconds":30`) {
 		t.Fatalf("embedding: %d %s", status, body)
 	}
 	diagnosticTestHandle(t, runtime, "default", "rag.reranker", "relevance_scores.v1", binding.Capability{}, func(input []tasks.QueryDocument) (tasks.RelevanceScores, error) {

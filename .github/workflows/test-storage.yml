@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   storage:
-    name: Storage Integration
+    name: Service Contracts
     runs-on: ubuntu-24.04
     services:
       postgres:

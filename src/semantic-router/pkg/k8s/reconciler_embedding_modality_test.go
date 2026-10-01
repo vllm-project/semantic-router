@@ -35,13 +35,14 @@ import (
 func TestReconcileEmbeddingModalityValidation(t *testing.T) {
 	cases := []reconcileEmbeddingModalityCase{
 		{
-			name:              "AudioRejected",
+			name:              "AudioWithoutMultimodalRejected",
 			queryModality:     "audio",
 			ruleName:          "audio_rule_under_test",
-			baseModelType:     "multimodal",
+			baseModelType:     "mmbert",
 			wantValidationErr: true,
-			errSubstrings:     []string{"audio_rule_under_test", "audio FFI", "planned"},
+			errSubstrings:     []string{"audio_rule_under_test", "model_type=multimodal"},
 		},
+		{name: "AudioWithMultimodalAccepted", queryModality: "audio", ruleName: "audio_rule_under_test", baseModelType: "multimodal"},
 		{
 			name:              "ImageWithoutMultimodalRejected",
 			queryModality:     "image",

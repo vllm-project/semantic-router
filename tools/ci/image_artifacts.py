@@ -13,22 +13,14 @@ import tarfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+import provider_mocker_image as mocker
+
 DUAL = ["linux/amd64", "linux/arm64"]
 DEFINITIONS = {
-    "anthropic-shim": (
-        "e2e/testing/anthropic-shim",
-        "e2e/testing/anthropic-shim/Dockerfile",
-        DUAL,
-    ),
     "dashboard": (".", "dashboard/backend/Dockerfile", DUAL),
     "extproc": (".", "tools/docker/Dockerfile.extproc", DUAL),
     "extproc-rocm": (".", "tools/docker/Dockerfile.extproc-rocm", ["linux/amd64"]),
-    "llm-katan": ("e2e/testing/llm-katan", "e2e/testing/llm-katan/Dockerfile", DUAL),
-    "mock-vllm": (
-        "tools/test/services/mock-vllm",
-        "tools/test/services/mock-vllm/Dockerfile",
-        ["linux/amd64"],
-    ),
+    mocker.IMAGE: (mocker.CONTEXT, mocker.CONTEXT + "/Dockerfile", DUAL),
     "operator": (".", "deploy/operator/Dockerfile", DUAL),
     "operator-bundle": ("deploy/operator", "deploy/operator/bundle/Dockerfile", DUAL),
     "vllm-sr": (".", "src/vllm-sr/Dockerfile", DUAL),
@@ -42,9 +34,7 @@ IMAGE_ENV = {
     "extproc": ["E2E_PREBUILT_EXT_PROC_IMAGE"],
     "operator": ["E2E_PREBUILT_OPERATOR_IMAGE"],
     "operator-bundle": ["E2E_PREBUILT_OPERATOR_BUNDLE_IMAGE"],
-    "llm-katan": ["E2E_PREBUILT_LLM_KATAN_IMAGE", "LLM_KATAN_IMAGE"],
-    "anthropic-shim": ["E2E_PREBUILT_ANTHROPIC_SHIM_IMAGE"],
-    "mock-vllm": ["E2E_PREBUILT_MOCK_VLLM_IMAGE"],
+    mocker.IMAGE: ["E2E_PREBUILT_PROVIDER_MOCKER_IMAGE", "PROVIDER_MOCKER_IMAGE"],
 }
 
 
@@ -115,6 +105,15 @@ def verify(directory: Path, image: str) -> dict:
         archive
     ):
         raise ValueError("Image artifact content differs from its receipt")
+    if image == mocker.IMAGE:
+        if manifest.get("inputs_sha256") != mocker.input_fingerprint():
+            raise ValueError("provider-mocker build inputs differ from this checkout")
+        if manifest.get("acquisition") == "published":
+            mocker.validate_acquisition(manifest, manifest)
+            if manifest["images"] != manifest.get("published_images"):
+                raise ValueError(
+                    "imported provider-mocker content differs from registry receipt"
+                )
     return manifest
 
 
@@ -157,14 +156,18 @@ def verify_loaded_image(archive: Path, expected: dict, actual: dict) -> None:
 def publication_tags(
     image: str, mode: str, tag: str, latest: bool, date: str
 ) -> list[str]:
+    if image == mocker.IMAGE:
+        if mode != "main":
+            raise ValueError(
+                "provider-mocker is only published after main qualification"
+            )
+        return [mocker.input_tag(mocker.input_fingerprint())]
     if mode == "release":
         if not re.fullmatch(r"v\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?", tag):
             raise ValueError("Release publication requires a semantic version tag")
         tags = [tag]
     elif mode == "nightly":
         tags = ["nightly-" + date]
-        if image in {"llm-katan", "anthropic-shim"}:
-            tags.append("nightly")
     elif mode == "main":
         tags = [source_sha()]
     else:
@@ -177,7 +180,8 @@ def publication_tags(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "command", choices=["definition", "seal", "load", "promote", "verify"]
+        "command",
+        choices=["definition", "seal", "load", "promote", "verify", "acquire"],
     )
     parser.add_argument("--image", choices=sorted(DEFINITIONS))
     parser.add_argument("--images", default="[]", help="JSON list, used by load")
@@ -189,6 +193,9 @@ def main() -> None:
     parser.add_argument("--tag", default="")
     parser.add_argument("--latest", action="store_true")
     args = parser.parse_args()
+    if args.command == "acquire":
+        acquire_published(args.directory)
+        return
     if args.command == "load":
         names = json.loads(args.images)
         if not isinstance(names, list) or not names or len(set(names)) != len(names):
@@ -261,6 +268,11 @@ def main() -> None:
         with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
             for key, value in values.items():
                 output.write(f"{key}={value}\n")
+            output.write("labels<<IMAGE_LABELS\n")
+            if args.image == mocker.IMAGE:
+                for key, value in mocker.labels(args.mode, source_sha()).items():
+                    output.write(f"{key}={value}\n")
+            output.write("IMAGE_LABELS\n")
     elif args.command == "seal":
         archive = args.directory / "image.tar"
         images = oci_images(archive)
@@ -279,16 +291,39 @@ def main() -> None:
             "sha256": sha256(archive),
             "images": images,
         }
+        if args.image == mocker.IMAGE:
+            manifest["inputs_sha256"] = mocker.input_fingerprint()
+            manifest["acquisition"] = "candidate"
         (args.directory / "manifest.json").write_text(
             json.dumps(manifest, indent=2) + "\n"
         )
     else:
         manifest = verify(args.directory, args.image)
         if args.command == "promote":
+            if (
+                args.image == mocker.IMAGE
+                and manifest.get("acquisition") != "candidate"
+            ):
+                raise ValueError("A reused provider-mocker cannot be republished")
             if manifest["mode"] != args.mode or manifest["tag"] != args.tag:
                 raise ValueError(
                     "Publication context differs from the tested candidate"
                 )
+            if args.image == mocker.IMAGE:
+                publication_tags(args.image, args.mode, args.tag, args.latest, "")
+                try:
+                    existing = mocker.resolve_published(
+                        {
+                            "id": mocker.IMAGE,
+                            "source": "published",
+                            "inputs_sha256": manifest["inputs_sha256"],
+                        }
+                    )
+                except mocker.PublicationUnavailableError:
+                    pass
+                else:
+                    print(json.dumps({"reused_qualified_publication": existing["ref"]}))
+                    return
             owner = os.environ["GITHUB_REPOSITORY_OWNER"].lower()
             for tag in publication_tags(
                 args.image, args.mode, args.tag, args.latest, manifest["date"]
@@ -299,12 +334,55 @@ def main() -> None:
                         "copy",
                         "--all",
                         "--preserve-digests",
+                        "--digestfile",
+                        str(args.directory / "published-digest.txt"),
                         f"oci-archive:{args.directory / 'image.tar'}",
                         f"docker://ghcr.io/{owner}/semantic-router/{args.image}:{tag}",
                     ],
                     check=True,
                 )
         print(json.dumps(manifest, indent=2))
+
+
+def acquire_published(directory: Path) -> None:
+    """Import a planned registry digest into the existing immutable OCI handoff."""
+    record = json.loads(os.environ["PUBLISHED_IMAGE"])
+    mocker.validate_acquisition(record, record)
+    if (
+        record["id"] != mocker.IMAGE
+        or record["inputs_sha256"] != mocker.input_fingerprint()
+    ):
+        raise ValueError("published image does not match provider-mocker build inputs")
+    directory.mkdir(parents=True, exist_ok=True)
+    archive = directory / "image.tar"
+    subprocess.run(
+        [
+            "skopeo",
+            "copy",
+            "--all",
+            "--preserve-digests",
+            "docker://" + record["ref"],
+            "oci-archive:" + str(archive),
+        ],
+        check=True,
+    )
+    images = oci_images(archive)
+    if images != record["images"]:
+        raise ValueError(
+            "downloaded provider-mocker differs from planned registry content"
+        )
+    manifest = {
+        **record,
+        "schema": 1,
+        "acquisition": "published",
+        "source_sha": source_sha(),
+        "context": mocker.CONTEXT,
+        "dockerfile": mocker.CONTEXT + "/Dockerfile",
+        "sha256": sha256(archive),
+        "published_images": record["images"],
+        "images": images,
+    }
+    (directory / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
 
 if __name__ == "__main__":

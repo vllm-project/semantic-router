@@ -45,6 +45,8 @@ interface AuthenticatedAppRoutesProps {
   settingsLoading: boolean
   srBenchAvailable: boolean
   srBenchUnavailableReason: string
+  settingsError: string | null
+  onRefreshAccess: () => void
 }
 
 const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
@@ -86,6 +88,8 @@ const renderShellElement = (
   settingsLoading: boolean,
   srBenchAvailable: boolean,
   srBenchUnavailableReason: string,
+  settingsError: string | null,
+  onRefreshAccess: () => void,
 ) => {
   const content = renderShellContent(route, shellPageElements[route.page])
   if (route.page !== 'evaluation') return content
@@ -94,6 +98,8 @@ const renderShellElement = (
       available={srBenchAvailable}
       isLoading={settingsLoading}
       reason={srBenchUnavailableReason}
+      settingsError={settingsError}
+      onRefreshAccess={onRefreshAccess}
     >
       {content}
     </EvaluationAvailabilityRoute>
@@ -107,6 +113,8 @@ export const renderAuthenticatedAppRoutes = ({
   settingsLoading,
   srBenchAvailable,
   srBenchUnavailableReason,
+  settingsError,
+  onRefreshAccess,
 }: AuthenticatedAppRoutesProps): React.ReactElement => (
   <>
     <Route
@@ -119,7 +127,14 @@ export const renderAuthenticatedAppRoutes = ({
         path={route.path}
         element={
           canAccessDashboardPath(user, route.path) ? (
-            renderShellElement(route, settingsLoading, srBenchAvailable, srBenchUnavailableReason)
+            renderShellElement(
+              route,
+              settingsLoading,
+              srBenchAvailable,
+              srBenchUnavailableReason,
+              settingsError,
+              onRefreshAccess,
+            )
           ) : (
             <Navigate to="/dashboard" replace />
           )

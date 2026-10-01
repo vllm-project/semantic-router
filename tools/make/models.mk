@@ -17,6 +17,7 @@ onnx-artifact-test: ck-rewrite-deps ## Verify external ONNX weight packing with 
 	@"$(AGENT_PYTHON)" -m unittest discover -s onnx-binding/scripts/artifact_tests -p 'test_*.py'
 
 test-training-contracts: harness-venv-install ## Run dependency-light model training contract tests
+	@"$(AGENT_PYTHON)" -m unittest src.training.control_plane.test_contracts
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s onnx-binding/scripts/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/mmbert_32k/tests -p 'test_*.py'
@@ -174,7 +175,11 @@ MULTIMODAL_TEST_REPORT_DIR ?= $(MODEL_TEST_REPORT_DIR)/multimodal
 MULTIMODAL_TEST_MANIFEST ?= $(MULTIMODAL_TEST_REPORT_DIR)/models.json
 PERF_MODEL_MANIFEST ?= $(CURDIR)/reports/models.json
 
-download-models-test: ## Provision every maintained runtime model at its registered revision
+download-models-test: ## Provision every supported runtime model at its registered revision
+	@if [ "$(MODEL_TEST_PROVIDER)" = ort ]; then \
+		CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" python3 tools/ci/prepare_model_test_assets.py \
+			--variants nano mini --output "$(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts"; \
+	fi
 	@cd src/semantic-router && go run ./tools/model-test-assets \
 		--provider "$(MODEL_TEST_PROVIDER)" --suite runtime \
 		--output "$(MODEL_TEST_MODELS_DIR)" --manifest "$(MODEL_TEST_MANIFEST)" --download
@@ -197,10 +202,12 @@ test-multimodal-models: rust-ci download-models-multimodal-test ## Require exist
 		--manifest "$(MULTIMODAL_TEST_MANIFEST)" --output "$(MULTIMODAL_TEST_REPORT_DIR)" \
 		--device "$(MODEL_TEST_DEVICE)"
 
-download-models-image-calibration: ## Provision the frozen image-threshold calibration checkpoint
-	@cd src/semantic-router && go run ./tools/model-test-assets \
-		--provider candle --suite image-calibration \
-		--output "$(MODEL_TEST_MODELS_DIR)" --manifest "$(MODEL_TEST_MANIFEST)" --download
+download-models-image-calibration: ## Prepare the pinned Nano ONNX artifact and attest its manifest
+	@CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" python3 tools/ci/prepare_model_test_assets.py \
+		--variants nano --output "$(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts"
+	@python3 tools/ci/image_calibration.py --prepare-manifest \
+		--artifact "$(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts/vela-1.0-omni-nano" \
+		--manifest "$(MODEL_TEST_MANIFEST)"
 
 verify-image-routing-calibration: rust-ci download-models-image-calibration ## Verify shipped image thresholds and the multimodal profile against source-bound fixtures
 	@export $(NATIVE_ENV) && python3 tools/ci/image_calibration.py \

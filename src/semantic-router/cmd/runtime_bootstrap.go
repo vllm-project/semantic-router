@@ -493,8 +493,8 @@ func registerVectorStoreShutdownHook(
 	})
 }
 
-func warmupRouterRuntime(ctx context.Context, server *extproc.Server, embeddingState modelruntime.EmbeddingRuntimeState) error {
-	return server.WarmupRouter(ctx, embeddingState, modelruntime.WarmupRouterOptions{
+func warmupRouterRuntime(ctx context.Context, server *extproc.Server) error {
+	return server.WarmupRouter(ctx, modelruntime.WarmupRouterOptions{
 		Component:      "router",
 		MaxParallelism: 2,
 		OnEvent:        logRuntimeLifecycleEvent,

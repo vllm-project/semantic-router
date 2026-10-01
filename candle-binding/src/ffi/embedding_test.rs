@@ -101,7 +101,8 @@ fn test_get_embedding_smart_medium_text(_setup_embedding_models: ()) {
 
     // Cleanup
     if !result.data.is_null() && result.length > 0 {
-        crate::ffi::memory::free_embedding(result.data, result.length);
+        // SAFETY: this live result owns the matching allocation and is released once.
+        unsafe { crate::ffi::memory::free_embedding(result.data, result.length) };
     }
 }
 
@@ -145,7 +146,8 @@ fn test_get_embedding_smart_priority_combinations(
 
     // Cleanup
     if !result.data.is_null() && result.length > 0 {
-        crate::ffi::memory::free_embedding(result.data, result.length);
+        // SAFETY: this live result owns the matching allocation and is released once.
+        unsafe { crate::ffi::memory::free_embedding(result.data, result.length) };
     }
 }
 

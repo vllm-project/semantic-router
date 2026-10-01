@@ -96,14 +96,14 @@ func (r *Runtime) openvinoEmbedding(ctx context.Context, spec config.ResolvedMod
 		if loadErr != nil {
 			return nil, openvinoError(loadErr)
 		}
-		return &embeddingEngine{openvino: &openvinoEmbeddingEngine{model: model}}, nil
+		return &openvinoEmbeddingEngine{model: model}, nil
 	})
 	if err != nil {
 		return nil, err
 	}
 	prepared := &preparedEmbedding{resource: resource, identity: identity, capability: a.capability(spec)}
 	err = resource.Use(ctx, func(value io.Closer) error {
-		dimension, warmErr := warmEmbeddingModel(value.(*embeddingEngine), view, nil)
+		dimension, warmErr := warmEmbeddingModel(value.(embeddingEngine), view, nil)
 		prepared.capability.Embedding = &binding.EmbeddingCapability{Dimension: dimension, Pooling: "mean_or_exported", Normalization: "none", Modalities: []string{"text"}}
 		return warmErr
 	})

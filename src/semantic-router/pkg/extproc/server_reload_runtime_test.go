@@ -8,7 +8,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
@@ -53,12 +52,6 @@ func TestReloadRouterFromConfigSkipsReplaceForKubernetesSource(t *testing.T) {
 		t.Fatalf("ensureReloadConfigModels() should not run during kubernetes watcher reload")
 		return nil
 	}
-	prepareReloadRuntime = func(cfg *config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
-		if cfg != candidateCfg {
-			t.Fatalf("prepareReloadRuntime() cfg = %p, want %p", cfg, candidateCfg)
-		}
-		return modelruntime.EmbeddingRuntimeState{AnyReady: true}, nil
-	}
 
 	buildCalls := 0
 	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
@@ -69,13 +62,10 @@ func TestReloadRouterFromConfigSkipsReplaceForKubernetesSource(t *testing.T) {
 		return &OpenAIRouter{Config: cfg}, nil
 	}
 	warmupCalls := 0
-	warmupReloadRouter = func(router *OpenAIRouter, state modelruntime.EmbeddingRuntimeState) error {
+	warmupReloadRouter = func(router *OpenAIRouter) error {
 		warmupCalls++
 		if router == nil || router.Config != candidateCfg {
 			t.Fatalf("warmupReloadRouter() router config mismatch")
-		}
-		if !state.AnyReady {
-			t.Fatalf("warmupReloadRouter() state = %+v, want AnyReady=true", state)
 		}
 		return nil
 	}
@@ -120,14 +110,13 @@ func TestReloadRouterFromConfigDoesNotSwapWhenRuntimePreparationFails(t *testing
 	writeReloadTestDocument(t, server.configPath, "candidate", candidateCfg)
 
 	ensureReloadConfigModels = func(cfg *config.RouterConfig) error { return nil }
-	prepareReloadRuntime = func(cfg *config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
-		return modelruntime.EmbeddingRuntimeState{}, errors.New("modality init failed")
-	}
 	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
-		t.Fatalf("buildReloadRouter() should not be called when runtime prep fails")
-		return nil, nil
+		if cfg != candidateCfg {
+			t.Fatal("model preparation received a foreign candidate")
+		}
+		return nil, errors.New("modality init failed")
 	}
-	warmupReloadRouter = func(router *OpenAIRouter, state modelruntime.EmbeddingRuntimeState) error {
+	warmupReloadRouter = func(router *OpenAIRouter) error {
 		t.Fatalf("warmupReloadRouter() should not be called when runtime prep fails")
 		return nil
 	}
@@ -139,7 +128,7 @@ func TestReloadRouterFromConfigDoesNotSwapWhenRuntimePreparationFails(t *testing
 	if err == nil {
 		t.Fatal("reloadRouterFromConfig() error = nil, want failure")
 	}
-	if got := err.Error(); got != "runtime dependency init failed: modality init failed" {
+	if got := err.Error(); got != "modality init failed" {
 		t.Fatalf("reloadRouterFromConfig() error = %q", got)
 	}
 	if got := server.service.GetRouter(); got != oldRouter {
@@ -180,9 +169,6 @@ func TestReloadRouterFromConfigPublishesRuntimeRegistryAfterSwap(t *testing.T) {
 	writeReloadTestDocument(t, server.configPath, "new", newCfg)
 
 	ensureReloadConfigModels = func(cfg *config.RouterConfig) error { return nil }
-	prepareReloadRuntime = func(cfg *config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
-		return modelruntime.EmbeddingRuntimeState{AnyReady: true, ToolsReady: true}, nil
-	}
 	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
 		return &OpenAIRouter{
 			Config:                newCfg,
@@ -191,7 +177,7 @@ func TestReloadRouterFromConfigPublishesRuntimeRegistryAfterSwap(t *testing.T) {
 			ModelSelector:         newModelSelector,
 		}, nil
 	}
-	warmupReloadRouter = func(router *OpenAIRouter, state modelruntime.EmbeddingRuntimeState) error { return nil }
+	warmupReloadRouter = func(router *OpenAIRouter) error { return nil }
 	replaceReloadConfig = func(cfg *config.RouterConfig) {
 		t.Fatalf("replaceReloadConfig() should not run for registry-backed reload")
 	}

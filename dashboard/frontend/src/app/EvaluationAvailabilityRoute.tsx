@@ -6,6 +6,8 @@ interface EvaluationAvailabilityRouteProps {
   available: boolean
   isLoading: boolean
   reason: string
+  settingsError: string | null
+  onRefreshAccess: () => void
   children: ReactNode
 }
 
@@ -14,6 +16,8 @@ export default function EvaluationAvailabilityRoute({
   available,
   isLoading,
   reason,
+  settingsError,
+  onRefreshAccess,
   children,
 }: EvaluationAvailabilityRouteProps) {
   const navigate = useNavigate()
@@ -26,6 +30,17 @@ export default function EvaluationAvailabilityRoute({
         actionLabel=""
         onAction={() => undefined}
         variant="loading"
+      />
+    )
+  }
+
+  if (settingsError) {
+    return (
+      <SetupStatusPage
+        title="Unable to check Evaluation access"
+        description={settingsError}
+        actionLabel="Refresh access"
+        onAction={onRefreshAccess}
       />
     )
   }

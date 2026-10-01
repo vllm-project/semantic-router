@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	valuesFile   = "e2e/profiles/looper/values.yaml"
-	fakeManifest = "e2e/profiles/looper/manifests/fake-backend.yaml"
+	valuesFile       = "e2e/profiles/looper/values.yaml"
+	providerManifest = "e2e/profiles/looper/manifests/provider-mocker.yaml"
 )
 
 var gatewayResources = []string{
@@ -29,10 +29,10 @@ func NewProfile() *Profile {
 	return &Profile{stack: gatewaystack.New(gatewaystack.Config{
 		Name:                     "looper",
 		SemanticRouterValuesFile: valuesFile,
-		PrerequisiteManifests:    []string{fakeManifest},
+		PrerequisiteManifests:    []string{providerManifest},
 		ResourceManifests:        gatewayResources,
 		WaitDeployments: []helpers.DeploymentRef{
-			{Namespace: "default", Name: "looper-fake-backend"},
+			{Namespace: "default", Name: "looper-provider-mocker"},
 			{Namespace: "default", Name: "vllm-llama3-8b-instruct"},
 		},
 	})}
