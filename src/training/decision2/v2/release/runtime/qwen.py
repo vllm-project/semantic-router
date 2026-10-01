@@ -8,7 +8,9 @@ by repository revision and SHA-256; a supplied or downloaded copy is verified
 before use. GPU inference uses a BF16 backbone with an FP32 head; CPU uses FP32.
 A package whose manifest names a weight ``storage`` codec (bf16z) is first restored
 to exact safetensors files in a cache directory; the restored checkpoint must
-reproduce the scored identity.
+reproduce the scored identity. A checkpoint whose ``decision_config.json`` declares
+``readout: label_token`` is read through its tied LM head's label-token logits at
+the answer cue (vendored ``label_token.py``) instead of a candidate head.
 """
 
 from __future__ import annotations
@@ -69,6 +71,7 @@ class QwenDecision:
         cap: int,
         torch: Any,
         score_bias: dict[int, list[float]] | None = None,
+        encode_fn: Any = None,
     ):
         self.model = model
         self.tokenizer = tokenizer
@@ -77,6 +80,7 @@ class QwenDecision:
         self.cap = cap
         self.torch = torch
         self.score_bias = score_bias
+        self.encode_fn = encode_fn
 
     @classmethod
     def load(
@@ -108,7 +112,12 @@ class QwenDecision:
             (model_root / "decision_config.json").read_text(encoding="utf-8")
         )
         residual = metadata.get("dec_residual") is not None
-        if residual:
+        label = metadata.get("readout") == "label_token"
+        if label:
+            from ._vendor.dev2model.label_token import label_fingerprint
+
+            identity = label_fingerprint(model_root, source)
+        elif residual:
             from ._vendor.dev2model.dec_model import dec_fingerprint
 
             identity = dec_fingerprint(model_root, source)
@@ -134,7 +143,16 @@ class QwenDecision:
             not torch.cuda.is_available() or not torch.cuda.is_bf16_supported()
         ):
             raise RuntimeError("A CUDA/ROCm BF16 GPU is required for GPU inference")
-        if residual:
+        encode_fn = None
+        if label:
+            from ._vendor.dev2model.label_token import (
+                encode_label,
+                load_label_checkpoint,
+            )
+
+            model, tokenizer = load_label_checkpoint(model_root, source)
+            encode_fn = encode_label
+        elif residual:
             from ._vendor.dev2model.dec_model import load_dec_checkpoint
 
             model, tokenizer = load_dec_checkpoint(model_root, source)
@@ -153,6 +171,7 @@ class QwenDecision:
             manifest["max_input_tokens"],
             torch,
             score_bias,
+            encode_fn,
         )
 
     def parameter_count(self) -> int:
@@ -182,7 +201,7 @@ class QwenDecision:
         for qid, question in questions.items():
             try:
                 row = question_to_row(item, qid, question)
-                encoded = encode(row, self.tokenizer, self.cap)
+                encoded = (self.encode_fn or encode)(row, self.tokenizer, self.cap)
             except ValueError as exc:
                 reason = (
                     "max_length_exceeded"
