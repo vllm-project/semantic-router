@@ -101,6 +101,11 @@ def main() -> None:
     parser.add_argument(
         "--changes", type=Path, help="private JSONL of changed prompt IDs"
     )
+    parser.add_argument(
+        "--answers",
+        type=Path,
+        help="private JSONL of every response (run-to-run checks)",
+    )
     args = parser.parse_args()
 
     import torch
@@ -116,6 +121,7 @@ def main() -> None:
     load_seconds = time.perf_counter() - started
     loaded = sum(parameter.numel() for parameter in model.parameters())
     panels, changes = {}, []
+    dump = args.answers.open("x", encoding="utf-8") if args.answers else None
     for spec in args.panel:
         name, prompts_path, predictions_path, *limit = spec.split(":")
         prompts = read_jsonl(Path(prompts_path))
@@ -148,6 +154,13 @@ def main() -> None:
             )
             totals["native_over_budget"] += native_over
             response = model.system_one(**payload)
+            if dump is not None:
+                dump.write(
+                    json.dumps(
+                        {"panel": name, "id": prompt["id"], "response": response}
+                    )
+                    + "\n"
+                )
             answers = response["answers"]
             ours_over = all(
                 isinstance(value, dict) and value.get("error") == "max_length_exceeded"
@@ -234,6 +247,8 @@ def main() -> None:
         "panels": panels,
         "passed": passed,
     }
+    if dump is not None:
+        dump.close()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
         json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8"
