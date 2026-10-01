@@ -1,0 +1,44 @@
+{
+  "mendeley_web_page_phishing": {
+    "attribution": "Hannousse and Yahiouche, Towards benchmark datasets for machine learning based website phishing detection: An experimental study (Engineering Applications of Artificial Intelligence 104, 2021); Web page phishing detection, Mendeley Data c2gw7fy2j4 version 3 (DOI 10.17632/c2gw7fy2j4.3), dataset_B_05_2020.csv, columns url and status only",
+    "evidence": "https://data.mendeley.com/datasets/c2gw7fy2j4/3 (data_licence: CC BY 4.0, Creative Commons Attribution 4.0 International)",
+    "license": "CC-BY-4.0",
+    "redistribution": "permitted with attribution"
+  },
+  "uci_phiusiil": {
+    "attribution": "Prasad and Chandra, PhiUSIIL: A diverse security profile empowered phishing URL detection framework based on similarity index and incremental learning (Computers & Security 136, 2024); PhiUSIIL Phishing URL (Website), UCI Machine Learning Repository dataset 967, phiusiil+phishing+url+dataset.zip, columns URL, Title and label only",
+    "evidence": "https://archive.ics.uci.edu/dataset/967/phiusiil+phishing+url+dataset (This dataset is licensed under a Creative Commons Attribution 4.0 International (CC BY 4.0) license)",
+    "license": "CC-BY-4.0",
+    "redistribution": "permitted with attribution"
+  },
+  "faithdial_train": {
+    "attribution": "Dziri, Kamalloo, Milton, Zaiane, Yu, Ponti and Reddy, FaithDial: A Faithful Benchmark for Information-Seeking Dialogue (TACL 2022); McGill-NLP/FaithDial@7a414e80725eac766f2602676dc8b39f80b061e4 data/train.json; built on Wizard of Wikipedia (Dinan et al., ICLR 2019; CC BY 4.0) with knowledge sentences from Wikipedia, by Wikipedia contributors (CC BY-SA)",
+    "evidence": "https://huggingface.co/datasets/McGill-NLP/FaithDial/blob/7a414e80725eac766f2602676dc8b39f80b061e4/README.md (license: mit); https://github.com/McGill-NLP/FaithDial/blob/main/LICENSE (MIT); https://github.com/facebookresearch/ParlAI/blob/main/parlai/tasks/wizard_of_wikipedia/README.md (CC-BY-4.0)",
+    "license": "MIT",
+    "redistribution": "permitted with the MIT notice; Wikipedia sentences are CC BY-SA text, credited on the card (ShareAlike-derived content)"
+  },
+  "halueval_qa": {
+    "attribution": "Li, Cheng, Zhao, Nie and Wen, HaluEval: A Large-Scale Hallucination Evaluation Benchmark for Large Language Models (EMNLP 2023); RUCAIBox/HaluEval@b7253db3cdaa0ab2c382f92b26b390109174f77e data/qa_data.json; knowledge and right answers from HotpotQA (Yang et al., EMNLP 2018; CC BY-SA 4.0; Wikipedia text by Wikipedia contributors); hallucinated answers generated and filtered by the HaluEval authors",
+    "evidence": "https://github.com/RUCAIBox/HaluEval/blob/b7253db3cdaa0ab2c382f92b26b390109174f77e/LICENSE (MIT); https://hotpotqa.github.io/ (CC BY-SA 4.0)",
+    "license": "MIT",
+    "redistribution": "permitted with the MIT notice; HotpotQA / Wikipedia text is CC BY-SA, credited on the card (ShareAlike-derived content)"
+  },
+  "amazon_esci_train": {
+    "attribution": "Reddy, Màrquez, Valero, Rao, Zaragoza, Bandyopadhyay, Biswas, Xing and Subbian, Shopping Queries Dataset: A Large-Scale ESCI Benchmark for Improving Product Search (2022); amazon-science/esci-data@7916cdf6ab75a462e77f20ab40428a10923998d5 shopping_queries_dataset_examples.parquet and shopping_queries_dataset_products.parquet, split = train only, labels E and I only; IN-DISTRIBUTION for the Index's Amazon ESCI benchmark",
+    "evidence": "https://github.com/amazon-science/esci-data/blob/7916cdf6ab75a462e77f20ab40428a10923998d5/LICENSE (Apache License 2.0)",
+    "license": "Apache-2.0",
+    "redistribution": "permitted with the Apache-2.0 notice"
+  },
+  "mathqa_train": {
+    "attribution": "Amini, Gabriel, Lin, Koncel-Kedziorski, Choi and Hajishirzi, MathQA: Towards Interpretable Math Word Problem Solving with Operation-Based Formalisms (NAACL 2019); math-qa.github.io/math-QA/data/MathQA.zip (sha256 7344f30456a7aef3176d4866cc953b35b41bec44eda6b00cdbcfde2876b2f07a), train.json only; problems from AQuA-RAT (Ling, Yogatama, Dyer and Blunsom, ACL 2017; Apache-2.0)",
+    "evidence": "https://huggingface.co/datasets/allenai/math_qa/blob/c4f1cc784c04c4957b50c97858f23893b633eea6/README.md (license: apache-2.0); https://huggingface.co/datasets/deepmind/aqua_rat (license: apache-2.0)",
+    "license": "Apache-2.0",
+    "redistribution": "permitted with the Apache-2.0 notice"
+  },
+  "maud_train_main": {
+    "attribution": "Wang, Zhong, Hendrycks, Hartmann and others (The Atticus Project), MAUD: An Expert-Annotated Legal NLP Dataset for Merger Agreement Understanding (EMNLP 2023); theatticusproject/maud@37d5c3b95d18dcd8404cc5ce3fd5069be062392f MAUD_v1/MAUD_train.csv, data_type main",
+    "evidence": "https://huggingface.co/datasets/theatticusproject/maud/blob/37d5c3b95d18dcd8404cc5ce3fd5069be062392f/README.md (license: cc-by-4.0)",
+    "license": "CC-BY-4.0",
+    "redistribution": "permitted with attribution"
+  }
+}
