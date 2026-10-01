@@ -156,6 +156,10 @@ is still fixing the long-input runtime bug and staging its M5-L128 Index diagnos
 
 ## Poll log (newest first)
 
+- 11:30Z: hedge tooling `c0056edca` (137 tests pass; shellcheck clean) mirrored to node A / B / D; node B build
+  11:20–11:26Z: two builds identical, amendment 1's four mixtures reproduced byte for byte, `a20ib12pn` 110,173 rows,
+  6,886 updates, `8f5425c5…`, projection 19.09 (cap 22), C1 source check clean. Data-lock addendum committed. Next:
+  node D staging, then launch (s1 on GPU2, s2 on GPU3 after s1's reload preflight).
 - 11:20Z: **amendment 3 committed (G5 hedge M6-IB2PN, before any hedge job).** Node A scans done: 0 hits on all 13
   gold-free panels and PN1 dev; 4 near hits on Index suite rows in 3 PN1-r2 TRAIN groups (3 rows), dropped → PN1H
   (4,361 rows). Next: tooling (`m6_data drop-groups`, `m6-build-pn.sh`, arm / launch / gates for M6-IB2PN, cap 22,
