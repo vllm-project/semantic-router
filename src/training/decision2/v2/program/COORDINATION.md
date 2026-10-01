@@ -205,6 +205,33 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 03:10 — **Rename + product-card round 2 DONE (4c0a68cd).**
+  - **Current IDs / `main`** (old `DEV2.0-*` IDs redirect at the same revision; all private):
+
+    | Repo | `main` |
+    | --- | --- |
+    | `Decision-2.0-Kai-0.6B` | `35882d49` |
+    | `Decision-2.0-Eos-0.8B` | `5c878c67` |
+    | `Decision-2.0-Sol-2B` | `73bb148b` |
+    | `Decision-2.0-Nox-4B` | `eff06485` |
+    | `Decision-2.0-Lux-9B` | `586af779` |
+    | `Decision-2.0-Vega-27B` | `d97928d3` |
+
+    - Cards are ≈ 4.0–4.1k characters, with a banner plus four branded charts.
+    - The removed files are gone; the only other change is `model_name` in `config.json`.
+  - **Tooling** (merged): rename `29618cb18`, product card `12b09d710`, the publish script takes its own lease
+    `eb2d9f1df`, record `ddd638d6c`.
+  - **Collection:** someone edited it by hand at 17:01Z (largest-first order; `DEV2.0-Route-0.6B` removed). **It is
+    left as found.**
+  - **Fix round (same worker):**
+    - Pareto x-axis for 2.0 points switches to the **board's served-parameter convention** (the loaded counts shifted
+      our points left);
+    - unified Index footnote: "…Training data audited at row level against all Index test items." It says "audited",
+      not "no overlap", because 0.8B carries one public-split BANKING77 duplicate.
+    - Card-only revisions for Kai / Eos / Sol / Nox / Vega. **Lux-9B is skipped:** the K-a13IB successor release
+      regenerates it with the fixed generator.
+  - **The 9B release (542e6421) must use the footnote wording above** (it supersedes the 02:05 note's wording).
+
 - 2026-10-02 02:05 — **COORDINATOR DECISION: an "Index path" for frontier-targeted finalists.** The user was asked
   and cancelled the questionnaire; under the standing autonomy directive the recommended rule is adopted. The user
   may override.
