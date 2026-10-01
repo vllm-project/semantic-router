@@ -152,6 +152,15 @@ node B GPU0, GPU1, GPU5 and node A GPU2: track 27b, running the four M6-IB / M6-
 
 ## Infrastructure
 
+- **Contrast guard on node B (worker 3, since 15:59Z): PID 2868454**, mirror `b980dd144`, log
+  `m6/logs/contrast-guard.log`. The four chains share `m6/gates/`, and each chain's `m6-gates.sh gates` ends with
+  `m4_contrast --output gates/contrast.json`, which refuses an existing file, so every chain after the first one
+  with a sealed finalist would have stopped there, before `overlap` and `verdicts` (found by reading the code; no
+  chain has reached it yet). The guard moves each complete `contrast.json` to `contrast-<finalists>-<UTC>.json`
+  within 5 s and exits when no chain PID (2769370, 2789875, 2769422, 2818836) is alive. **Fallback** if a chain still
+  stops at its contrast step (the chain log ends in a `FileExistsError` after `m6 gates gates <ARM>: start`): from
+  that chain's mirror, `m6-gates.sh <sha> overlap <ARM>` and then `verdicts <ARM>` on node B (CPU; the chain's
+  formal, mlx and per-arm gate files are complete by then). Nothing reads `contrast.json` downstream.
 - **M6 node link (node B → node A): UP since 07:07Z** (`m6/m6-link.sh setup`, then `check` passed). Key in node B
   `/data/dev2/tmp/27b-m6-xfer/` (mode 700; `peer`, `known_hosts` with node A's host key, verified against node A's own);
   node A `authorized_keys` line `dev2-27b-m6-xfer-temp` = `from=<node B source>`, `command="/usr/bin/rrsync
@@ -221,6 +230,11 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 16:06Z (poll 4 at 16:03Z): all alive, plus the new contrast guard (node B PID 2868454; see "Infrastructure").
+  M6-IB 3,107 / 2,948 (13.5 / 14.0 h; ETA 21:27Z / 21:59Z); M6-IB2 2,999 / 2,996 (17.8 / 17.8 h); M6-IBX 2,695 /
+  2,659 (13.8 / 14.0 h); M6-IB2PN 1,621 / 1,595 (18.9 / 18.7 h). **GPU-h ≈ 56.9** (closed 1.314 + running full runs
+  ≈ 55.5). Fix `b980dd144` (guard, `m6-gates.sh contrast` stage for the final attribution) mirrored to node B and
+  node D.
 - 15:47Z (poll 3 at 15:43Z): all alive. M6-IB 2,990 / 2,830 (13.5 / 13.9 h); M6-IB2 2,878 / 2,870 (17.8 / 17.8 h);
   M6-IBX 2,573 / 2,540 (13.9 / 14.1 h; **s2 at 2500 .9116, BEST = 2500**); M6-IB2PN 1,500 / 1,471 (18.8 / 18.8 h).
   Node D disk 597 GB. Committed with this entry: `m6/m6-stage-a.sh` (stages the chosen finalist's frozen files on
