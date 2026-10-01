@@ -11,11 +11,13 @@ packages on one GPU.
 from __future__ import annotations
 
 import importlib
+import inspect
 import shutil
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from v2.release import build
 
@@ -223,6 +225,19 @@ class BackboneParityTest(unittest.TestCase):
 
     @unittest.skipUnless(has_qwen3_5(), "needs Transformers with Qwen3.5")
     def test_qwen3_5_hybrid_keeps_gated_delta_tensors_fp32(self):
+        from transformers.models.qwen3_5 import modeling_qwen3_5
+
+        # The image's causal-conv1d / FLA kernels are GPU-only; on CPU use the torch paths.
+        for name in (
+            "causal_conv1d_fn",
+            "causal_conv1d_update",
+            "torch_chunk_gated_delta_rule",
+            "torch_recurrent_gated_delta_rule",
+        ):
+            reference = inspect.unwrap(getattr(modeling_qwen3_5, name))
+            patch = mock.patch.object(modeling_qwen3_5, name, reference)
+            patch.start()
+            self.addCleanup(patch.stop)
         model = tiny_decision_model("qwen3_5")
         linear = sum(isinstance(m, torch.nn.Linear) for m in model.backbone.modules())
         kinds = self.check(model, linear=linear)
