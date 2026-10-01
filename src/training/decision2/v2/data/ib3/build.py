@@ -52,7 +52,8 @@ PINS = {
     "mathqa/train.json": "00e8919347d65dbba9289bf04ed998a6c48dbf451ca909eeb66a35f2419c2bf6",
     "theatticusproject_maud/MAUD_v1/MAUD_train.csv": "bac9f2d034ad487d5398ee2ac1c876679afea509ba8e7f1092112955c6180ff9",
 }
-FAMILIES = ("wpd", "phiu", "fdial", "haluqa", "esci", "mqa", "maud")
+# Amendment 1 removed `maud`; amendment 2 removed `fdial` and `haluqa` (G4 on run d1) and added `fdial2`.
+FAMILIES = ("wpd", "phiu", "fdial2", "esci", "mqa")
 
 
 def csv_rows(text: str) -> list[dict[str, str]]:
@@ -102,19 +103,9 @@ def convert(raw: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
             csv_rows(archive.read("PhiUSIIL_Phishing_URL_Dataset.csv").decode("utf-8")),
             reports["phiu"],
         )
-    rows += fam.fdial(
+    rows += fam.fdial2(
         json.loads((raw / "mcgill_faithdial/data/train.json").read_text("utf-8")),
-        reports["fdial"],
-    )
-    rows += fam.haluqa(
-        [
-            json.loads(line)
-            for line in (raw / "rucaibox_halueval/data/qa_data.json")
-            .read_text("utf-8")
-            .split("\n")
-            if line.strip()
-        ],
-        reports["haluqa"],
+        reports["fdial2"],
     )
     examples = parquet(
         raw / "amazon_esci/shopping_queries_dataset_examples.parquet",
@@ -144,12 +135,6 @@ def convert(raw: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     del examples
     rows += fam.mqa(
         json.loads((raw / "mathqa/train.json").read_text("utf-8")), reports["mqa"]
-    )
-    rows += fam.maud(
-        csv_rows(
-            (raw / "theatticusproject_maud/MAUD_v1/MAUD_train.csv").read_text("utf-8")
-        ),
-        reports["maud"],
     )
     return rows, {
         "families": {name: dict(sorted(r.items())) for name, r in reports.items()}

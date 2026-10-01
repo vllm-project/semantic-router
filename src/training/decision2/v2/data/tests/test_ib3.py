@@ -89,6 +89,37 @@ class CellBalance(unittest.TestCase):
         self.assertEqual(fam.mqa([wrong], report), [])
         self.assertEqual(report["drop_key_not_verified"], 1)
 
+    def test_fdial2_passage_swap_twins(self):
+        def turn(k, r, begin):
+            return {
+                "knowledge": k,
+                "history": ["hi"],
+                "original_response": r,
+                "response": r,
+                "BEGIN": begin,
+            }
+
+        dialogues = [
+            {
+                "dialog_idx": 7,
+                "utterances": [
+                    turn(
+                        "Cats are mammals.",
+                        "Cats are mammals, you know.",
+                        ["Entailment"],
+                    ),
+                    turn("Cats sleep a lot.", "I love cats!", ["Hallucination"]),
+                    turn("Cats purr.", "They purr.", ["Hallucination", "Entailment"]),
+                ],
+            }
+        ]
+        report = collections.Counter()
+        rows = fam.fdial2(dialogues, report)
+        self.assertEqual(sorted(r["label"] for r in rows), [0, 1])
+        self.assertEqual(len({r["state"]["response"] for r in rows}), 1)
+        self.assertEqual(len({r["state"]["knowledge"] for r in rows}), 2)
+        self.assert_balanced(rows)
+
     def test_maud_option_cells(self):
         records = []
         for i, answer in enumerate(["Yes", "No", "Yes", "No"]):

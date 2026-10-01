@@ -58,12 +58,14 @@ TEMPLATE_STRINGS = frozenset(
 # The state field each construction could leak the label through (G4 hypothesis view, prereg §3).
 HYPOTHESIS_FIELDS = {
     "fdial": "response",
+    "fdial2": "response",
     "haluqa": "answer",
     "esci": "product",
     "mqa": "proposed_answer",
     "maud": "proposed_answer",
 }
 FDIAL_CAP = 6000
+FDIAL2_PER_DIALOGUE = 2
 ESCI_QUERIES = 6000
 MQA_PROBLEMS = 5000
 MAUD_CAP = 4000
@@ -373,6 +375,95 @@ def fdial(dialogues: Sequence[Mapping[str, Any]], report: collections.Counter) -
             per_group(rs, 2, "ib3-fdial-group-v1"), FDIAL_CAP, "ib3-fdial-v1"
         ),
     )
+
+
+def fdial_entailed(
+    dialogues: Sequence[Mapping[str, Any]], report: collections.Counter
+) -> list[tuple[str, str, int, str, str, str, list[str]]]:
+    """(dialog id, key, index, knowledge, previous turn, response, other knowledge) of {Entailment} turns."""
+    out = []
+    for dialogue in dialogues:
+        turns = dialogue.get("utterances") or []
+        knowledge = [collapse(turn.get("knowledge")) for turn in turns]
+        for index, turn in enumerate(turns):
+            report["read"] += 1
+            if tuple(sorted(turn.get("BEGIN") or [])) != ("Entailment",):
+                report["drop_not_entailment"] += 1
+                continue
+            original = turn.get("original_response")
+            text = collapse(original if original is not None else turn.get("response"))
+            history = turn.get("history") or []
+            previous = collapse(history[-1]) if history else ""
+            if not text or not knowledge[index]:
+                report["drop_shape"] += 1
+                continue
+            others = sorted(
+                {
+                    k
+                    for k in knowledge
+                    if k and normalize(k) != normalize(knowledge[index])
+                }
+            )
+            dialog = str(dialogue.get("dialog_idx"))
+            out.append(
+                (
+                    dialog,
+                    f"{dialog}:{index}",
+                    index,
+                    knowledge[index],
+                    previous,
+                    text,
+                    others,
+                )
+            )
+    return out
+
+
+def fdial2(dialogues: Sequence[Mapping[str, Any]], report: collections.Counter) -> Rows:
+    """Amendment 2: passage-swap twins; each response is asked once with its own knowledge and once with another."""
+    rows: Rows = []
+    for dialog, key, _, own, previous, text, others in fdial_entailed(
+        dialogues, report
+    ):
+        if not others:
+            report["drop_no_other_knowledge"] += 1
+            continue
+        other = min(others, key=lambda k: order("ib3-fdial2-other-v1", f"{key}:{k}"))
+        for yes, knowledge in ((True, own), (False, other)):
+            state = {"knowledge": knowledge}
+            if previous:
+                state["previous_turn"] = previous
+            state["response"] = text
+            rows.append(
+                noul(
+                    yes=yes,
+                    source="faithdial_train",
+                    family="fdial2",
+                    group_key="fdial:" + dialog,
+                    key=f"{key}:{'own' if yes else 'other'}",
+                    state=state,
+                    instructions=FDIAL_INSTRUCTIONS,
+                    template="ib3_fdial2_v1",
+                    cell=key,
+                )
+            )
+
+    def select(rs: Rows) -> Rows:
+        by_cell: dict[str, Rows] = collections.defaultdict(list)
+        for item in rs:
+            by_cell[cell_of(item)].append(item)
+        complete = [c for c, members in by_cell.items() if len(members) == 2]
+        taken: collections.Counter = collections.Counter()
+        kept: Rows = []
+        for cell in sorted(complete, key=lambda c: (order("ib3-fdial2-v1", c), c)):
+            group = by_cell[cell][0]["group_id"]
+            if taken[group] >= FDIAL2_PER_DIALOGUE or len(kept) + 2 > FDIAL_CAP:
+                continue
+            taken[group] += 1
+            kept += by_cell[cell]
+        return cell_balance(kept, None, "ib3-fdial2-bal-v1")
+
+    return finish(rows, report, select)
 
 
 def haluqa(records: Sequence[Mapping[str, Any]], report: collections.Counter) -> Rows:
