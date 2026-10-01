@@ -7,7 +7,9 @@ records an import-only rewrite. A base-bound adapter's source files are pinned
 by repository revision and SHA-256; a supplied or downloaded copy is verified
 before use. GPU inference runs the backbone under BF16 autocast with its
 BF16-exact Linear weights held in BF16 and every other tensor, the head
-included, in FP32; CPU uses FP32.
+included, in FP32; CPU uses FP32. A request's questions run as one padded
+batch unless, on a GPU, that batch would pass the gated-delta kernels' 32-bit
+element offsets (``forward_token_budget``); then they run as several batches.
 A package whose manifest names a weight ``storage`` codec (bf16z) is first restored
 to exact safetensors files in a cache directory; the restored checkpoint must
 reproduce the scored identity.
@@ -98,6 +100,51 @@ def keep_linear_bf16(module: Any, torch: Any) -> dict[str, int]:
     return counts
 
 
+INT32_MAX = 2**31 - 1
+
+
+def forward_token_budget(config: Any) -> int | None:
+    """Most padded tokens one GPU forward may hold; None when nothing limits it.
+
+    The FLA gated-delta kernels of Qwen3.5-family backbones compute some
+    element offsets of their [batch, tokens, value heads, head dim] q / k / v
+    tensors in 32-bit integers (the L2-norm forward and the fused KKT-solve
+    kernel among them). A forward whose tensors exceed 2**31 - 1 elements reads
+    and writes the wrong memory for the later batch rows: wrong answers,
+    non-finite logits or a GPU memory fault.
+    """
+    config = getattr(config, "text_config", None) or config
+    heads = getattr(config, "linear_num_value_heads", None)
+    if not heads:
+        return None
+    width = heads * max(config.linear_key_head_dim, config.linear_value_head_dim)
+    return INT32_MAX // width
+
+
+def micro_batches(lengths: list[int], budget: int | None) -> list[list[int]]:
+    """Indices of each forward: one batch when its padded size fits the budget.
+
+    Otherwise the questions go longest first into batches whose padded size
+    (``collate`` pads to the longest, rounded up to 8) stays within the budget,
+    each batch listing its indices in request order.
+    """
+
+    def padded(length: int) -> int:
+        return -(-length // 8) * 8
+
+    if budget is None or padded(max(lengths)) * len(lengths) <= budget:
+        return [list(range(len(lengths)))]
+    order = sorted(range(len(lengths)), key=lambda i: (-lengths[i], i))
+    if padded(lengths[order[0]]) > budget:
+        raise ValueError("A single question exceeds the forward token budget")
+    groups: list[list[int]] = []
+    while order:
+        rows = budget // padded(lengths[order[0]])
+        groups.append(sorted(order[:rows]))
+        order = order[rows:]
+    return groups
+
+
 class QwenDecision:
     def __init__(
         self,
@@ -109,6 +156,7 @@ class QwenDecision:
         torch: Any,
         score_bias: dict[int, list[float]] | None = None,
         residency: dict[str, int] | None = None,
+        batch_tokens: int | None = None,
     ):
         self.model = model
         self.tokenizer = tokenizer
@@ -118,6 +166,7 @@ class QwenDecision:
         self.torch = torch
         self.score_bias = score_bias
         self.residency = residency
+        self.batch_tokens = batch_tokens
 
     @classmethod
     def load(
@@ -191,6 +240,11 @@ class QwenDecision:
         model = model.to(target).eval()
         if tokenizer.pad_token_id is None and tokenizer.eos_token_id is None:
             raise ValueError("Tokenizer needs a pad or EOS token")
+        batch_tokens = (
+            forward_token_budget(model.backbone.config)
+            if target.type == "cuda"
+            else None
+        )
         return cls(
             model,
             tokenizer,
@@ -200,6 +254,7 @@ class QwenDecision:
             torch,
             score_bias,
             residency,
+            batch_tokens,
         )
 
     def parameter_count(self) -> int:
@@ -250,21 +305,29 @@ class QwenDecision:
         pad_id = self.tokenizer.pad_token_id
         if pad_id is None:
             pad_id = self.tokenizer.eos_token_id
-        batch = {
-            key: value.to(self.device) if self.torch.is_tensor(value) else value
-            for key, value in collate(
-                [encoded for _, _, encoded in jobs], pad_id
-            ).items()
-        }
-        autocast = (
-            self.torch.autocast(device_type="cuda", dtype=self.torch.bfloat16)
-            if self.device.type == "cuda"
-            else nullcontext()
-        )
-        with self.torch.inference_mode(), autocast:
-            logits = self.model(**batch)
-        if len(logits) != len(jobs):
-            raise RuntimeError("Model returned the wrong number of question answers")
+        logits: list[Any] = [None] * len(jobs)
+        for group in micro_batches(
+            [len(encoded["ids"]) for _, _, encoded in jobs], self.batch_tokens
+        ):
+            batch = {
+                key: value.to(self.device) if self.torch.is_tensor(value) else value
+                for key, value in collate(
+                    [jobs[index][2] for index in group], pad_id
+                ).items()
+            }
+            autocast = (
+                self.torch.autocast(device_type="cuda", dtype=self.torch.bfloat16)
+                if self.device.type == "cuda"
+                else nullcontext()
+            )
+            with self.torch.inference_mode(), autocast:
+                output = self.model(**batch)
+            if len(output) != len(group):
+                raise RuntimeError(
+                    "Model returned the wrong number of question answers"
+                )
+            for index, values in zip(group, output):
+                logits[index] = values
         if self.score_bias is not None:
             from ._vendor.dev2model.score_bias import apply as apply_score_bias
         for (qid, row, encoded), values in zip(jobs, logits):
