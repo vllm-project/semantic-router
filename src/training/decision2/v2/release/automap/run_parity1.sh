@@ -39,15 +39,8 @@ image="decision20-train-fast:host2"
 snapshot="/data/dev2/hf-cache/models--llm-semantic-router--${repo}/snapshots/${head}"
 [[ -d "$snapshot" ]] || { echo "missing snapshot $snapshot" >&2; exit 1; }
 [[ -e "$work" ]] && { echo "work dir exists: $work" >&2; exit 1; }
-mkdir -p "$work/modules"
-python3 "$here/stage1.py" --repo "llm-semantic-router/$repo" --head "$head" \
-  --snapshot "$snapshot" --output "$work/stage" --staged "$work/staged" > "$work/stage.log"
 
-docker_args=(--rm --network none --ipc host --security-opt seccomp=unconfined
-  -v /data/dev2/hf-cache:/data/dev2/hf-cache:ro -v /data/dev2/private:/data/dev2/private:ro
-  -v /data/dev2/tools:/data/dev2/tools:ro
-  -v "$decision2:$decision2:ro" -v "$work:$work"
-  -e HF_HUB_OFFLINE=1 -e HF_MODULES_CACHE="$work/modules" -e PYTHONDONTWRITEBYTECODE=1)
+docker_args=()
 device=cpu
 lease=""
 release() { [[ -n "$lease" ]] && rm -f "$lease/owner"; }
@@ -66,6 +59,14 @@ if [[ "$target" == gpu* ]]; then
   docker_args+=(--device /dev/kfd --device "$render" --group-add video --group-add render -e ROCR_VISIBLE_DEVICES=0)
   device="cuda:0"
 fi
+mkdir -p "$work/modules"
+python3 "$here/stage1.py" --repo "llm-semantic-router/$repo" --head "$head" \
+  --snapshot "$snapshot" --output "$work/stage" --staged "$work/staged" > "$work/stage.log"
+docker_args+=(--rm --network none --ipc host --security-opt seccomp=unconfined
+  -v /data/dev2/hf-cache:/data/dev2/hf-cache:ro -v /data/dev2/private:/data/dev2/private:ro
+  -v /data/dev2/tools:/data/dev2/tools:ro
+  -v "$decision2:$decision2:ro" -v "$work:$work"
+  -e HF_HUB_OFFLINE=1 -e HF_MODULES_CACHE="$work/modules" -e PYTHONDONTWRITEBYTECODE=1)
 if [[ -n "$profile" ]]; then
   docker_args+=(-v "$profile:/fla-profile:ro" -e FLA_CACHE_MODE=strict -e FLA_CONFIG_DIR=/fla-profile)
 fi

@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA = "dev1-automap-parity/1"
+DRIFT_BOUNDS = (1e-6, 1e-4, 1e-2)
 HERE = Path(__file__).resolve().parent
 
 
@@ -131,6 +132,7 @@ def main() -> None:
             "native_over_budget": 0,
             "over_budget_agree": 0,
             "input_tokens_mismatch": 0,
+            **{f"prompts_drift_over_{bound:g}": 0 for bound in DRIFT_BOUNDS},
         }
         drift_by_type: dict[str, float] = {}
         panel_started = time.perf_counter()
@@ -186,7 +188,14 @@ def main() -> None:
                     drift_by_type[kind] = max(
                         drift_by_type.get(kind, 0.0), single["max_abs_drift"]
                     )
-            if result["category_changes"] or result["missing"]:
+            for bound in DRIFT_BOUNDS:
+                if result["max_abs_drift"] > bound:
+                    totals[f"prompts_drift_over_{bound:g}"] += 1
+            if (
+                result["category_changes"]
+                or result["missing"]
+                or result["max_abs_drift"] > 1e-4
+            ):
                 changes.append({"panel": name, "id": prompt["id"], **result})
         panels[name] = {
             **totals,
