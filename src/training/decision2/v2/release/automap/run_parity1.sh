@@ -67,6 +67,8 @@ docker_args+=(--rm --network none --ipc host --security-opt seccomp=unconfined
   -v /data/dev2/tools:/data/dev2/tools:ro
   -v "$decision2:$decision2:ro" -v "$work:$work"
   -e HF_HUB_OFFLINE=1 -e HF_MODULES_CACHE="$work/modules" -e PYTHONDONTWRITEBYTECODE=1)
+real_cache="$(readlink -f /data/dev2/hf-cache)"
+[[ "$real_cache" != /data/dev2/hf-cache ]] && docker_args+=(-v "$real_cache:$real_cache:ro")
 if [[ -n "$profile" ]]; then
   docker_args+=(-v "$profile:/fla-profile:ro" -e FLA_CACHE_MODE=strict -e FLA_CONFIG_DIR=/fla-profile)
 fi
