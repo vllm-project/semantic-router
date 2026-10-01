@@ -8,6 +8,20 @@ GPU: lease-polite sharing on nodes C–F only; never node C GPU0, node E GPU4–
 
 ## Now
 
+- 2026-10-01 12:55 UTC+8 (04:55Z) — **Parity: Kai, Lex, Route, Sol, Nox, Lux pass; Eos needs its native convolution
+  (rerun queued).** Node E GPU7, work root `/data/dev2/runs/release/dev1-automap/p2-3684c2d8`.
+  - 0 answer changes / 0 missing on all 8,378 scored prompts: Kai and Lex (max drift 2.4e-7 / 2.6e-7, Score
+    expected value only; CSS15 bit-identical), Route vs its native Kai-runtime reference (`reference-route`, same GPU;
+    2.4e-7), Sol (bit-identical, drift 0.0), Nox (0.0105, CSS15 only), Lux (0.0103, CSS15 only). Nox: only 16 CSS15
+    prompts differ at all, all 6.1k–8.1k tokens; Lux rerun with the published FLA l2norm profile running.
+  - **Eos failed on the plain path:** 47 answer changes (14 / 32 / 1), drift 0.031. Cause: the native Eos runtime
+    (`3c2d6326`) swaps in its own ROCm Triton causal conv + SiLU (FP64 accumulation) for batch × length ≥ 2048 on
+    gfx942. Vendored as `decision1_rocm_conv.py` (Eos profile only, same conditions, Triton optional), commit
+    `f1fddc759`; rerun `eos3` queued.
+  - The 2.0 worker pushed `origin/xunzhuo/decision-2-automap`; its API.md is the draft I aligned with. Mirrored its
+    `HF_HUB_OFFLINE` fix. 1.0 section kept in `automap/API-decision1.md` until their API.md is integrated.
+  - Transformers 4.57.6 (`/data/dev2/tools/envs/tf4576`) and a clean venv with Transformers 5.18.0 / torch 2.14.1 CPU
+    (`/data/dev2/tools/envs/fresh-cpu`) both load the staged Lex repo; pipeline, forward, error answers, refusals OK.
 - 2026-10-01 12:25 UTC+8 (04:25Z) — **Remote code aligned with the 2.0 draft API; Kai and Lex pass parity; decoder runs
   queued on node E GPU7.**
   - Code (`v2/release/automap/decision1/`, commit `3684c2d8b`): `configuration_decision1.py`, `modeling_decision1.py`,
