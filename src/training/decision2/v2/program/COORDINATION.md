@@ -205,6 +205,113 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-01 16:25 — **IX1 follow-ups done (c0ce08eb).**
+  - **Shipped-runtime long-request bug.**
+    - **Root cause:** FLA 0.5.2 gated-delta kernels compute some offsets in int32. A request's padded question batch
+      (each question repeats the prompt) past 2³¹ − 1 q/k/v elements gives wrong / non-finite rows or a GPU page
+      fault. On 27B that is ≈ 349,525 padded tokens; the two failing ToolRet requests padded to 455,168 and 725,760.
+    - **Fix** (`8e6bdfc33`, `e876fbefc`, only `decision2/qwen.py`; merged into integration at `fea2f016b`):
+      over-budget requests are split into GPU-sized question batches with a budget of 2³⁰ elements (27B 174,762
+      padded tokens). Requests that fit keep the old path.
+    - **Verification:**
+      - both real requests are valid and equal to per-question answers;
+      - the synthetic 14k / 18k / 23k-token regression test (generated text, public) passes;
+      - 0 changes on all four panels for 0.8B / 9B / 27B; p50 and memory unchanged.
+    - **Hand-off (release):** runtime-only revisions for **27B, 9B, 4B, 2B, 0.8B** (0.6B optional, no gated-delta
+      layers), each built from that repo's **current `main`** (the auto_map revisions), with the standard parity set.
+      Ordering: 4B rides with the LH release (b5f60b33 was told to carry the fix if merged). The others follow the
+      auto_map close-out (4c0a68cd), never concurrent with another publisher on the same repo.
+  - **The M5-L128 private Index diagnostic is done** (private report addendum). It informs 27B M6, whose
+    breadth-data design is unchanged.
+  - **CAL refit discrepancy** resolved as IX1's own label-order bug (42 of 290 Noul rows list `true` first). The
+    release's fits stand; "keep T = 1" stands.
+  - **Deviation:** merge `fea2f016b` on the public integration branch lacks a DCO sign-off. History is not rewritten;
+    noted here.
+
+- 2026-10-01 16:00 — **DEV2.0 auto_map (4c0a68cd): 0.6B / 0.8B / 2B / 4B published; 9B / 27B finishing.**
+  - **Parity.** AutoModel equals native on all 11,053 answers per model: 0 changes, max drift 0.0, under Transformers
+    5.17.0 and 5.18.0. Hub smoke tests in fresh caches pass.
+  - **New `main` revisions:**
+
+    | Model | `main` |
+    | --- | --- |
+    | 0.6B | `08b00e07` (supersedes an unsealed `25669e2d` that stopped at the smoke test because the image set `HF_HUB_OFFLINE=1`) |
+    | 0.8B | `1188dd33` |
+    | 2B | `ffe291b4` |
+    | 4B | `3785b7b9` |
+    | 27B | `2b7508e9` uploaded, post-download checks running |
+    | 9B | release running, ETA ≈ 08:25Z |
+
+  - **Design.**
+    - Three root files plus `model_type` / `auto_map` / `custom_pipelines`. The model copies the package's own
+      `decision2/` runtime (manifest-checked) and loads through the native `Decision2.from_pretrained`.
+    - The 27B fetches its 28 pinned base files itself. The adapter stays under `adapter/`, because a root
+      `adapter_config.json` would redirect AutoModel to the base (tested).
+  - **Shared changes.**
+    - Runtime `0cbf1033e`: the native loader refuses the remote-code prompt immediately. It is on top of BF16-resident;
+      `runtime_source` pins `8e808244`.
+    - `release.sh` passes only the leased GPU's render node.
+  - **Limits.**
+    - Transformers 5.17 / 5.18 (5.18 needs `huggingface_hub` ≥ 1.31).
+    - CPU works but differs from GPU-scored answers on 3–4 of 200 prompts (0.6B / 0.8B).
+    - The 27B's first load downloads ≈ 52 GB.
+  - **Close-out (resumed):** 9B / 27B post-checks, receipts, GPU-h, gist 07, and **a unified 1.0 + 2.0 `API.md`**.
+  - **Next.** The 4B LH release (b5f60b33) builds on `3785b7b9`, carrying the remote code. IX1's long-input runtime fix
+    will ride with the next runtime-only revisions.
+
+- 2026-10-01 15:55 — **IB1-r3 and IB2 are RELEASE-SAFE; M11 continues with the 4B IB arms.**
+  - **IB1-r3 (1bad770e)** at `decision-2.0-training-data@31b200a3`, `m6/ib1/`; integration `6391e2843`.
+    - Amendment 3 `74a4cad41` + addendum `b95b2ee34`.
+    - TRAIN 24,325 / DEV 2,067; 9 families:
+
+      | Family | Rows |
+      | --- | ---: |
+      | `sentfin` (binary) | 6,808 |
+      | `args` | 5,182 |
+      | `poem` | 3,584 |
+      | `snips_rel` | 2,700 |
+      | `snips_sel` | 2,672 |
+      | `sms` | 1,152 |
+      | `copa` | 878 |
+      | `isarc` (in-distribution) | 874 |
+      | `w2c` (in-distribution) | 475 |
+
+    - Review: 3/216 = 1.39% [0.29, 4.01], weighted 2.14%, ≤ 1 error per family.
+    - SummEdits left: its remaining groups were all sampled in r1 / r2.
+  - **IB2 (24a520c1)** at `@c5dbdd0a`, `m6/ib2/`; integration `7d9841c36`.
+    - TRAIN 24,518 / DEV 1,272; 6 families:
+
+      | Family | Source and licence | Rows |
+      | --- | --- | ---: |
+      | `fc_rel` (call vs abstain) | Glaive v2, Apache-2.0 | 5,732 |
+      | `fc_ready` (call vs clarify) | Glaive v2, Apache-2.0 | 2,582 |
+      | `ytspam` | YouTube Spam Collection, CC BY 4.0 | 1,450 |
+      | `argq` (stance, unanimous annotators) | IBM ArgQ-30k, CC BY-SA 3.0 | 5,152 |
+      | `hover` (in-distribution) | HoVer train, CC BY-SA 4.0 | 4,020 |
+      | `gsm2` (stated-answer correctness, in-distribution) | GSM8K train, MIT | 5,582 |
+
+    - Review: 5/216 = 2.31% [0.76, 5.32], weighted 1.41%.
+    - Shortcut-gated out: function selection / arguments, knowledge MCQ (QASC / ARC train), the first GSM8K design.
+      ContractNLI was emptied by the exclusions.
+    - Licence drops: SpamAssassin (no grant), FEVER (per-article Wikipedia), Sarcasm Headlines / OpenBookQA
+      (unknown), MMLU-aux (contains RACE, NC), xLAM (research-only), ToolACE / API-Bank (feed Index tool benchmarks).
+    - The reviewers were one model family (disclosed).
+  - **Coverage gaps remaining:**
+    - **phishing email + link** (the PhishNChips-like family is the largest 27B deficit with When2Call). Nazario is
+      CC BY 4.0 but phishing-only, and no licensed legitimate-email corpus has been found yet;
+    - faithfulness / grounding (RAGTruth-like);
+    - knowledge MCQ (largely covered instead by the from-base recipe's retention);
+    - contracts;
+    - product-search relevance.
+    - A possible later IB3 needs a licence-clean legitimate-email source.
+  - **Guard:** every IB-trained model needs the custodian C1 content recheck before C1 scoring.
+  - **M11 (c473a3b2, resumed again):**
+    - stage 1 runs (2B seeds on node E GPU0–2 / node F GPU2, 3, 6; 0.8B next); the E/F formal wrapper is to be built;
+    - **4B stage 2 now: LH + IB1 + IB2, plus a transfer-only ablation without `w2c` / `isarc` / `hover` / `gsm2`**;
+    - gates vs LH.
+  - **27B M6 (11741ee2) and 9B M9 (dfc44bae)** poll for the release-safe records and start their IB stages
+    themselves.
+
 - 2026-10-01 15:40 — **Decision 1.0 auto_map done (2a4d413a); vLLM-SR parser fixed on PR #4086.** Record
   `v2/release/records/dev1-automap-2026-10-01.md`, gist 07; integration `f6b750119`.
   - **Seven public 1.0 repos merged through our own HF PRs** on their current heads (after subin's merges); weights

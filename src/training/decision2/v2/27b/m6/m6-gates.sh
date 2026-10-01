@@ -23,7 +23,7 @@ BUILDS=${BUILDS:-/data/dev2/private/27b/m6-data}
 declare -A PEER=([AutoJev-27B]=$B/m2-peer-autojev27-nodeB-kernel [Eikos-27B]=$B/m3-peer-eikos27-nodeB-kernel
   [Jebadiah-27B]=$B/m3-peer-jebadiah-nodeB-kernel)
 declare -A RUN=([M4-A20r-soup]=$A20R [M5-L128]=$B/m5/M5-L128/formal ["DEV2.0-27B (F1)"]=$B/M3-A-soup/formal)
-declare -A MIX=([M6-IB]=a20ib1 [M6-IBX]=a20ib1x [M6-IB2]=${IB2_MIX:-a20ib2})
+declare -A MIX=([M6-IB]=a20ib1 [M6-IBX]=a20ib1x [M6-IB2]=${IB2_MIX:-a20ib12})
 for name in "$@"; do
   [ -n "${MIX[$name]:-}" ] || { echo "unknown M6 finalist $name" >&2; exit 2; }
   [ -f "$R/$name/formal/SEAL.json" ] || { echo "$name has no sealed formal run" >&2; exit 2; }

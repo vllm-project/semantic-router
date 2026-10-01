@@ -36,8 +36,8 @@ NODE_GPUS = {
 }
 ALLOWED_GPUS = NODE_GPUS["b"]
 MAX_CAP_HOURS = 13.0
-# Milestone 6 (opt-in with DEV2_27B_ALLOC=m6): the 27B leases node B GPU0 / GPU1 / GPU5 and node A GPU2, and an 18 GPU-hour
-# ceiling per launch (an A20 + IB1 rank-128 arm-seed projects to 12.5-14 GPU-h).
+# Milestone 6 (opt-in with DEV2_27B_ALLOC=m6): the 27B leases node B GPU0 / GPU1 / GPU5 and node A GPU2, and a 20 GPU-hour
+# ceiling per launch (rank-128 arm-seeds on A20 + IB1 / + IB2 project to about 12.4 / 14.8 GPU-h).
 M6_NODE_GPUS = {
     "b": {
         0: ("0000:83:00.0", "renderD129"),
@@ -45,8 +45,13 @@ M6_NODE_GPUS = {
         5: NODE_GPUS["b"][5],
     },
     "a": {2: NODE_GPUS["a"][2]},
+    # node D (once IX1 releases it; per-GPU render node only, as on every node C-F); node B's PCI layout
+    "d": {
+        gpu: (f"0000:{0x83 + 8 * gpu:02x}:00.0", f"renderD{129 + 8 * gpu}")
+        for gpu in range(8)
+    },
 }
-M6_MAX_CAP_HOURS = 18.0
+M6_MAX_CAP_HOURS = 20.0
 LEASE_ROOT = Path("/data/dev2/leases")
 
 
@@ -63,8 +68,9 @@ def max_cap_hours() -> float:
 
 def node_name() -> str:
     node = os.environ.get("DEV2_NODE", "b")
-    if node not in NODE_GPUS:
-        raise ValueError(f"DEV2_NODE must be one of {sorted(NODE_GPUS)}, not {node!r}")
+    nodes = M6_NODE_GPUS if m6_allocation() else NODE_GPUS
+    if node not in nodes:
+        raise ValueError(f"DEV2_NODE must be one of {sorted(nodes)}, not {node!r}")
     return node
 
 
@@ -90,7 +96,7 @@ def render_node(
     gpus = allowed_gpus(node_id)
     if gpu not in gpus:
         where = (
-            "node B GPU0/1/5, node A GPU2"
+            "node B GPU0/1/5, node A GPU2, node D GPU0-7"
             if m6_allocation()
             else "node B GPU5-7, node A GPU2-4"
         )

@@ -54,6 +54,11 @@ ALLOCATIONS = {
         "the M6 allocation on node B (GPU0, GPU1, GPU5)",
     ),
     "m6-a": ("27b", dict(base.M6_NODE_GPUS["a"]), "the M6 allocation on node A (GPU2)"),
+    "m6-d": (
+        "27b",
+        dict(base.M6_NODE_GPUS["d"]),
+        "the M6 allocation on node D (GPU0-7)",
+    ),
 }
 ALLOCATION = os.environ.get("DEV2_27B_LAUNCH_ALLOC", "m4b")
 if ALLOCATION not in ALLOCATIONS:
@@ -63,6 +68,14 @@ if ALLOCATION not in ALLOCATIONS:
 TRACK, ALLOWED_GPUS, ALLOCATION_TEXT = ALLOCATIONS[ALLOCATION]
 LEASE_ROOT = base.LEASE_ROOT
 IDLE_STATUSES = {"idle", "released", "reserved-idle"}
+
+
+def idle_status(status) -> bool:
+    """A foreign owner may be moved aside when idle; other tracks also write free text ("released (IX1 complete)")."""
+    text = str(status or "")
+    return text in IDLE_STATUSES or text.startswith(("released", "idle"))
+
+
 COTENANT_OK = {"released", "idle", "ended", "done"}
 COTENANT_RELEASED_PREFIXES = ("idle-released", "released")
 COTENANT_END_KEYS = ("released_utc", "last_job_end_utc", "end_utc")
@@ -187,7 +200,7 @@ def take_lease(
     if owner.is_file():
         current = base.read_lease(owner)
         if current.get("track") != TRACK:
-            if current.get("status") not in IDLE_STATUSES:
+            if not idle_status(current.get("status")):
                 raise ValueError(
                     f"GPU{gpu} owner {current.get('track')} is {current.get('status')!r}, not idle"
                 )
