@@ -1,8 +1,10 @@
 """Decoder M14 GPU-hours on this node from the launch receipts (wall clock x one GPU per container).
 
-usage: m14_gpuh.py total | arm <ARM> | seed <ARM> <i> | table   [--root /data/dev2/runs/dec/m14]
+usage: m14_gpuh.py total | arm <ARM> | seed <ARM> <i> | table   [--root /data/dev2/runs/dec/m14] [--node A|B]
 
-Every GPU job writes ``<out>.launch.json`` (m14-launch.sh); CPU jobs have ``gpu: null`` and are not counted. A job
+Every GPU job writes ``<out>.launch.json`` (m14-launch.sh); CPU jobs have ``gpu: null`` and are not counted. Only
+receipts of jobs that ran on this node count (``--node``, default ``$M14_NODE``): readouts relayed from the other
+node and M12's readouts staged as ``<point>-m12`` keep their original receipts, which name another node. A job
 still running has no receipt yet; ``table`` adds running containers' elapsed time from ``running/*.start`` files when
 present (none are written by the chains, so the stop rules see finished jobs only).
 """
@@ -11,11 +13,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 
 
-def receipts(root: Path) -> list[dict]:
+def receipts(root: Path, node: str | None = None) -> list[dict]:
     found = []
     for path in sorted(root.rglob("*.launch.json")):
         if "inputs" in path.relative_to(root).parts:
@@ -25,6 +28,8 @@ def receipts(root: Path) -> list[dict]:
         except (OSError, ValueError):
             continue
         if not data.get("gpu"):
+            continue
+        if node and not data["gpu"].startswith(f"node {node.upper()} GPU"):
             continue
         start = datetime.fromisoformat(data["start_utc"].replace("Z", "+00:00"))
         end = datetime.fromisoformat(data["end_utc"].replace("Z", "+00:00"))
@@ -45,8 +50,9 @@ def main() -> None:
     parser.add_argument("mode", choices=("total", "arm", "seed", "table"))
     parser.add_argument("rest", nargs="*")
     parser.add_argument("--root", type=Path, default=Path("/data/dev2/runs/dec/m14"))
+    parser.add_argument("--node", default=os.environ.get("M14_NODE"))
     args = parser.parse_args()
-    rows = receipts(args.root)
+    rows = receipts(args.root, args.node)
     if args.mode == "total":
         print(round(sum(r["hours"] for r in rows), 4))
     elif args.mode == "arm":

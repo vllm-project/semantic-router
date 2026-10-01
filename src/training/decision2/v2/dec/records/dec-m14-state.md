@@ -48,3 +48,19 @@ Prereg [`dec-m14-prereg-2026-10-01.md`](dec-m14-prereg-2026-10-01.md). Branch `x
   +.025] (TIE band); retention +.006 [−.021, +.032]. Score ×2 moved Score up by 9 items and Choice / Noul down: the loss
   moves between heads again, and the Score floor is still 9 short. No 2B formal; DEV2.0-2B stays.
 - 4B seeds training on node B GPU2 / GPU3 (s1 15:39Z pre-warm, s2 15:44Z); 0.8B seeds on node A GPU3 / GPU4.
+
+## 2026-10-01 16:15Z — poll; amendment 1; bars unchanged
+
+- [Amendment 1](dec-m14-amendment-1-2026-10-01.md) `efb303494` (before any 0.8B / 4B rules output): M13's two-bar
+  formal scoring adopted for node B (`m14-fscore.sh`, `m14_successor.py`, tests 7 / 7), the mlx-diag step, and
+  `formal-pull` / `formal-mark` through node E; `4f853c0fe` applies M13's overlap-spec fix before first use.
+- **Bars stay the current releases.** The 0.8B fast track's `08b-RA` failed formal (items 1, 4, 6(b); COORDINATION
+  23:15), so DEV2.0-0.8B `4afea305` stands; M13 closed with no model passing items 1–7 (its `4b-LHA10SD` tied LH on v3
+  and failed mlx-diag), so LH (`13d42143`) and DEV2.0-2B stand.
+- Pre-staged on node B for a possible 0.8B formal: the DEV2.0-0.8B package from node E (manifest `26baab01…`, equal to
+  node A's) and the `08b-C0-a` readouts (relayed).
+- Training at 16:10Z: `08b-RAUP` 2,699 / 4,115 and 2,283 / 4,109 (≈ 54 / min; ETA ≈ 16:36 / 16:45Z);
+  `4b-LHA10UP` 416 / 980 and 335 / 991 (≈ 17 / min; ETA ≈ 16:42 / 16:51Z).
+- GPU-h of finished jobs: node A 0.41, node B 1.68. `m14_gpuh.py` now counts only receipts of jobs that ran on the
+  node (`--node` / `$M14_NODE`): the staged `<point>-m12` readouts and relayed node-B readouts carry their original
+  receipts and were being double-counted (the running chains' 30 GPU-h gate only became more conservative).
