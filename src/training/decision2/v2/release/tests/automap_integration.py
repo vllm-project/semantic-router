@@ -172,7 +172,7 @@ def main() -> None:
             )
         )
         spec = spec_for(profile, checkpoint, identity, cal, licence, base)
-        spec["remote_code"] = {"tested": ["Transformers (integration test)"]}
+        spec["remote_code"] = {"tested": ["(integration test)"]}
         (work / f"spec-{name}.json").write_text(json.dumps(spec))
         target = work / f"pkg-{name}" / "dev2-release-staging"
         build.build(work / f"spec-{name}.json", target)

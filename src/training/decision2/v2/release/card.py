@@ -446,7 +446,7 @@ def transformers_note(facts: dict[str, Any], text: dict[str, Any]) -> str:
         )
     tested = remote.get("tested")
     if tested:
-        note += " Tested with " + ", ".join(tested) + "."
+        note += f" Tested with Transformers {' and '.join(tested)}."
     if text.get("transformers_note"):
         note += f" {text['transformers_note']}"
     return note

@@ -113,9 +113,7 @@ class CardSectionTest(unittest.TestCase):
             "revision": "1" * 40,
             "files_sha256": {f"f{i}": "0" * 64 for i in range(28)},
         }
-        readme, files = self.build(
-            {"tested": ["Transformers 5.17.0", "5.18.0"], "base": base}
-        )
+        readme, files = self.build({"tested": ["5.17.0", "5.18.0"], "base": base})
         self.assertIn(card.TRANSFORMERS_HEADING, readme)
         code = examples.card_block(readme, transformers=True)
         compile(code, "card", "exec")
@@ -129,7 +127,7 @@ class CardSectionTest(unittest.TestCase):
             "Decision2.from_pretrained", examples.card_block(readme, transformers=False)
         )
         self.assertIn("downloads the 28 pinned files of [Qwen/Qwen3.8-27B]", readme)
-        self.assertIn("Tested with Transformers 5.17.0, 5.18.0.", readme)
+        self.assertIn("Tested with Transformers 5.17.0 and 5.18.0.", readme)
         self.assertIn('pipeline("decision"', readme)
         files.add("modeling_decision2.py")
         self.assertEqual(card.check_rendered(readme, files), [])
