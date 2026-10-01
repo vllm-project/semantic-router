@@ -36,3 +36,15 @@ Prereg [`dec-m14-prereg-2026-10-01.md`](dec-m14-prereg-2026-10-01.md). Branch `x
   minutes (M6 / M8 receipts: finalist 0.07–0.10 GPU-h), so reference parity runs follow each tier's rules directly.
 - The workstation relay was too slow (≈ 11 MB per point in > 10 min); `m14-relay.sh` now hops through an M14-only
   transit directory on node E (two points in 72 s). The interrupted first copy on node A was removed before the hop.
+
+## 2026-10-01 16:00Z — 2B closed (no finalist)
+
+- `2b-RAUP` seeds DONE 15:39Z / 15:43Z; soup 15:44Z; eight panels 15:53Z (node B GPU4); relayed through node E.
+  Rules (run once, 15:55Z, readout `4193a337…`): **not eligible — Score type floor 236 < 257 − 0.03·400.** Otherwise:
+  T .629 vs C0 .610 (choice / Noul / Score 538 / 232 / 236; C0 – / 230 / 257); HT-DEV v2 +.010 [−.006, +.026] TIE;
+  retention .564, −.004 [−.034, +.025]; Score5t no flags; `hs1-dev` false-yes .557 vs .625; IB DEV +.180 [+.156,
+  +.206], transfer +.156 [+.127, +.188].
+- Contrast vs M12 `2b-RA` (exact path): typed T −.013 (choice −20, Noul −9, **Score +9**); HT-DEV v2 +.014 [+.002,
+  +.025] (TIE band); retention +.006 [−.021, +.032]. Score ×2 moved Score up by 9 items and Choice / Noul down: the loss
+  moves between heads again, and the Score floor is still 9 short. No 2B formal; DEV2.0-2B stays.
+- 4B seeds training on node B GPU2 / GPU3 (s1 15:39Z pre-warm, s2 15:44Z); 0.8B seeds on node A GPU3 / GPU4.
