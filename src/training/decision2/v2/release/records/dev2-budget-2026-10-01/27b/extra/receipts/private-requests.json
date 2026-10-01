@@ -1,0 +1,90 @@
+{
+  "package_model": "DEV2.0-27B",
+  "budget_tokens": 174762,
+  "tolerance": 0.02,
+  "requests": [
+    {
+      "questions": 32,
+      "padded_tokens_single_batch": 455168,
+      "runs": [
+        {
+          "wall_ms": 35014.0,
+          "peak_gib": 95.2,
+          "forwards": [
+            [
+              12,
+              14224
+            ],
+            [
+              20,
+              272
+            ]
+          ],
+          "invalid": 0
+        },
+        {
+          "wall_ms": 22898.8,
+          "peak_gib": 95.2,
+          "forwards": [
+            [
+              12,
+              14224
+            ],
+            [
+              20,
+              272
+            ]
+          ],
+          "invalid": 0,
+          "changes_vs_first_run": 0
+        }
+      ],
+      "valid": 32,
+      "equal_to_alone": 32,
+      "max_drift_vs_alone": 0.003381018977940742,
+      "within_budget": true
+    },
+    {
+      "questions": 32,
+      "padded_tokens_single_batch": 725760,
+      "runs": [
+        {
+          "wall_ms": 30539.0,
+          "peak_gib": 93.42,
+          "forwards": [
+            [
+              7,
+              22680
+            ],
+            [
+              25,
+              464
+            ]
+          ],
+          "invalid": 0
+        },
+        {
+          "wall_ms": 24412.5,
+          "peak_gib": 93.42,
+          "forwards": [
+            [
+              7,
+              22680
+            ],
+            [
+              25,
+              464
+            ]
+          ],
+          "invalid": 0,
+          "changes_vs_first_run": 0
+        }
+      ],
+      "valid": 32,
+      "equal_to_alone": 32,
+      "max_drift_vs_alone": 0.0021794727993605933,
+      "within_budget": true
+    }
+  ],
+  "pass": true
+}

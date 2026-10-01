@@ -1,0 +1,123 @@
+{
+  "checked": 12,
+  "failed": [],
+  "links": [
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "d79ea73acba508e250101bfec09b06d69b93fbd80a3758a0e5da03618f2321a8",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/DEV2.0-27B-owl-banner.png"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": true,
+      "source": "README.md",
+      "status": 200,
+      "target": "https://huggingface.co/collections/llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00"
+    },
+    {
+      "image": false,
+      "kind": "anchor",
+      "ok": true,
+      "source": "README.md",
+      "target": "#download-and-decide"
+    },
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "3846dacfcb571bc9ae895325e6b05e4b99cd30fdcae5d5fefba9e5bbe52ebc5b",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/jevarena-v3-rank.svg"
+    },
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "5426cb26b78320aae1ad1864fa5d8c82efb53e9ab9a112b7a63d55e545252fbe",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/jevarena-v3-model-task.svg"
+    },
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "1030dc1307763752783787a29b166b93e43f768df9377ab2cb280459f47b5db3",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/jevbench-public231-rank.svg"
+    },
+    {
+      "image": false,
+      "kind": "file",
+      "ok": true,
+      "sha256": "8455b6a9f57e64a2e01e97e11d34d37aace2a6dd67722c1bd7f8b62b4728b17b",
+      "source": "README.md",
+      "status": 200,
+      "target": "evaluation/EVALUATION.md"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": false,
+      "source": "README.md",
+      "status": 200,
+      "target": "https://huggingface.co/Qwen/Qwen3.8-27B"
+    },
+    {
+      "image": false,
+      "kind": "file",
+      "ok": true,
+      "sha256": "152b5b6a8c9c9c393fd1295afa660b9bbdcd7ee8de372bbe14b1b21dee51ae44",
+      "source": "README.md",
+      "status": 200,
+      "target": "ATTRIBUTIONS.md"
+    },
+    {
+      "image": false,
+      "kind": "file",
+      "ok": true,
+      "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a",
+      "source": "README.md",
+      "status": 200,
+      "target": "LICENSE"
+    },
+    {
+      "image": false,
+      "kind": "file",
+      "ok": true,
+      "sha256": "5bed74b9ddf1eaf79c2bfd4293d65fc1f854d7befe88307e58264e231bc40667",
+      "source": "README.md",
+      "status": 200,
+      "target": "NOTICE"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": false,
+      "source": "ATTRIBUTIONS.md",
+      "status": 200,
+      "target": "https://huggingface.co/Qwen/Qwen3.8-27B"
+    }
+  ],
+  "passed": true,
+  "rendered_page": {
+    "banner_referenced": false,
+    "bytes": 0,
+    "status": 401,
+    "title_present": false
+  },
+  "repo": "llm-semantic-router/DEV2.0-27B",
+  "revision": "0928079151171e60f0d202648ce62ed777d2fe8c",
+  "schema": "dev2-hub-links/1",
+  "utc": "2026-10-01T13:15:48.855614+00:00"
+}

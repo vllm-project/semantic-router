@@ -1,0 +1,8 @@
+{
+  "staged_manifest": "f0761a1cf45cbe134acd2535fa8bd95e0433996476d0598bb6991af6658c9300",
+  "pass": false,
+  "long-request": false,
+  "bench-compare": true,
+  "private-requests": true,
+  "staged_work": "/data/dev2/runs/release/dev2-budget-27B-stage-20261001T103337Z"
+}
