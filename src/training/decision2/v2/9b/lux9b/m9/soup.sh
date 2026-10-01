@@ -4,8 +4,10 @@
 # soup of the merged seeds (v2.dec.soup, CPU). One finished seed: that merged seed is the artifact (disclosed).
 # Outputs: /data/dev2/runs/9b/m9/soup/<ARM>/{merged/s<i>,build/<ARM>-soup}, markers soup/<ARM>/{DONE,FAILED}
 # (DONE holds the artifact's host path).
+# Stage 3 (amendment 3): KIB / KIBX seeds are full checkpoints, so there is no merge: the uniform FP32 soup (CPU) of
+# the finished seeds' BEST checkpoints (K-a13's three-seed soup); one finished seed is the artifact itself (disclosed).
 #
-# usage: M9_NODE=c soup.sh <mirror-dir> <ARM> <gpu>
+# usage: M9_NODE=c soup.sh <mirror-dir> <ARM> <gpu>   (gpu unused for KIB / KIBX)
 set -u
 SRC=$1 ARM=$2 GPU=$3
 NODE=${M9_NODE:?set M9_NODE=c}
@@ -22,8 +24,31 @@ fail() { echo "$*" > "$OUT/FAILED"; log "FAILED: $*"; exit 1; }
 case $ARM in
   L9 | L9IB | L9IBX) source=$BASE ;;
   L9L) source=/lux ;;
+  KIB | KIBX) source="" ;;
   *) fail "unknown arm $ARM" ;;
 esac
+if [ -z "$source" ]; then
+  members=() hosts=()
+  for s in 1 2 3; do
+    [ -f "$ST/m9-$ARM-s$s.DONE" ] || continue
+    best=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["checkpoint"])' \
+      "$M/arms/full/m9-$ARM-s$s/BEST.json")
+    [ -f "$M/arms/full/m9-$ARM-s$s/$best/decision_config.json" ] || fail "s$s BEST $best is not a checkpoint"
+    members+=(--member "/runs/m9/arms/full/m9-$ARM-s$s/$best")
+    hosts+=("$M/arms/full/m9-$ARM-s$s/$best")
+    echo "s$s $best" >> "$OUT/members.txt"
+  done
+  case ${#hosts[@]} in
+    0) fail "no finished seed" ;;
+    1) echo "${hosts[0]}" > "$OUT/DONE"
+       log "one finished seed: the artifact is ${hosts[0]} (disclosed)" ;;
+    *) M9_NODE=$NODE bash "$L" "soup-$ARM" "$SRC" "$OUT/build" --cpu -- -m v2.dec.soup "${members[@]}" \
+         --output "/out/$ARM-soup" || fail "soup build failed (see $OUT/build.stderr.log)"
+       echo "$OUT/build/$ARM-soup" > "$OUT/DONE"
+       log "built $OUT/build/$ARM-soup from ${#hosts[@]} seeds: $(tail -c 300 "$OUT/build.stdout.log" | tr '\n' ' ')" ;;
+  esac
+  exit 0
+fi
 members=()
 for s in 1 2; do
   [ -f "$ST/m9-$ARM-s$s.DONE" ] || continue

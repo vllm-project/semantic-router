@@ -192,5 +192,150 @@ class Stage2BuildTest(unittest.TestCase):
             )
 
 
+class Stage3MatchedBuildTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        x60 = self.tmp / "x60"
+        x60.mkdir()
+        rows, ids = [], []
+        for g in range(20):
+            for k in range(2):
+                rid = f"x{g:02d}{k}"
+                rows.append(
+                    {
+                        "id": rid,
+                        "group_id": f"g{g}",
+                        "input_sha256": f"h{rid}",
+                        "source": "s1" if g < 10 else "s2",
+                        "task_type": "noul" if g % 2 else "choice",
+                        "language": "en",
+                    }
+                )
+                ids.append(
+                    {"id": rid, "source": rows[-1]["source"], "pool": "P", "native": 5}
+                )
+        write_jsonl(x60 / "train.jsonl", rows)
+        write_jsonl(x60 / "teacher.jsonl", [{"id": r["id"], "p": 1} for r in rows])
+        (x60 / "manifest.json").write_text(json.dumps({"recipe": {"tokens": 200}}))
+        write_jsonl(self.tmp / "ids.jsonl", ids)
+        self.x60 = x60
+        self.ib1 = self.tmp / "ib1.train.jsonl"
+        write_jsonl(
+            self.ib1,
+            [
+                {
+                    "id": "a1",
+                    "group_id": "ga",
+                    "input_sha256": "ha1",
+                    "family": "args",
+                    "task_type": "choice",
+                },
+                {
+                    "id": "a2",
+                    "group_id": "ga",
+                    "input_sha256": "ha2",
+                    "family": "isarc",
+                    "task_type": "noul",
+                },
+            ],
+        )
+        self.ib2 = self.tmp / "ib2.train.jsonl"
+        write_jsonl(
+            self.ib2,
+            [
+                {
+                    "id": "b1",
+                    "group_id": "gb",
+                    "input_sha256": "hb1",
+                    "family": "hover",
+                    "task_type": "noul",
+                }
+            ],
+        )
+        self.tokens(self.ib1, {"a1": 20, "a2": 20})
+        self.tokens(self.ib2, {"b1": 20})
+
+    def tokens(self, path, counts):
+        write_jsonl(
+            path.with_name(path.name.replace(".jsonl", ".tokens.jsonl")),
+            [{"id": k, "native": v} for k, v in counts.items()],
+        )
+
+    def build(self, out, *extra):
+        return m9_data.main(
+            [
+                "--x60-dir",
+                str(self.x60),
+                "--ib1",
+                str(self.ib1),
+                "--ib2",
+                str(self.ib2),
+                "--match-tokens",
+                "200",
+                "--x60-ids",
+                str(self.tmp / "ids.jsonl"),
+                "--keep-seed",
+                "t:keep",
+                "--keep-tolerance",
+                "0.2",
+                *extra,
+                "--output",
+                str(out),
+            ]
+        )
+
+    def test_cuts_x60_to_the_matched_budget_in_whole_groups(self):
+        out = self.tmp / "kib"
+        self.build(out)
+        manifest = json.loads((out / "manifest.json").read_text())
+        self.assertEqual(manifest["ib_native_tokens_kept"], 60)
+        self.assertEqual(manifest["x60_keep"]["budget_tokens"], 140)
+        kept_tokens = manifest["x60_keep"]["native_tokens"]
+        self.assertTrue(140 <= kept_tokens <= 168)
+        self.assertEqual(manifest["train_native_tokens"], kept_tokens + 60)
+        lines = (out / "train.jsonl").read_bytes().splitlines(keepends=True)
+        x60_lines = (self.x60 / "train.jsonl").read_bytes().splitlines(keepends=True)
+        kept = lines[: manifest["x60_rows_kept"]]
+        self.assertEqual(kept, [x for x in x60_lines if x in set(kept)])
+        groups = {json.loads(x)["group_id"] for x in kept}
+        self.assertEqual(len(kept), 2 * len(groups))
+        self.assertEqual(
+            [json.loads(x)["id"] for x in lines[len(kept) :]], ["a1", "a2", "b1"]
+        )
+        teacher = (out / "teacher.jsonl").read_text().splitlines()
+        self.assertEqual(
+            [json.loads(t)["id"] for t in teacher], [json.loads(x)["id"] for x in kept]
+        )
+
+    def test_ablation_keeps_more_x60_and_nests(self):
+        self.build(self.tmp / "kib")
+        self.build(
+            self.tmp / "kibx", "--exclude-family", "isarc", "--exclude-family", "hover"
+        )
+        a = json.loads((self.tmp / "kib" / "manifest.json").read_text())
+        b = json.loads((self.tmp / "kibx" / "manifest.json").read_text())
+        self.assertEqual(b["ib_native_tokens_kept"], 20)
+        self.assertEqual(b["x60_keep"]["budget_tokens"], 180)
+        ids = lambda d, n: {
+            json.loads(x)["id"]
+            for x in (self.tmp / d / "train.jsonl").read_text().splitlines()[:n]
+        }
+        self.assertTrue(
+            ids("kib", a["x60_rows_kept"]) <= ids("kibx", b["x60_rows_kept"])
+        )
+
+    def test_refuses_missing_counts_and_missing_ids(self):
+        self.tokens(self.ib2, {})
+        with self.assertRaises(ValueError):
+            self.build(self.tmp / "o1")
+        self.tokens(self.ib2, {"b1": 20})
+        write_jsonl(
+            self.tmp / "ids.jsonl",
+            [{"id": "x000", "source": "s1", "pool": "P", "native": 5}],
+        )
+        with self.assertRaises(ValueError):
+            self.build(self.tmp / "o2")
+
+
 if __name__ == "__main__":
     unittest.main()
