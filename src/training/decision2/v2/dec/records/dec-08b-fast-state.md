@@ -5,6 +5,28 @@ Assignment: COORDINATION 2026-10-01 22:35 — one formal attempt for M12's `08b-
 the release on `4afea305` and a private Index run. Branch `xunzhuo/decision-2-training-dec-08bfast`. Lock record
 [`dec-08bfast-formal-lock-2026-10-01.md`](dec-08bfast-formal-lock-2026-10-01.md).
 
+## 2026-10-01 17:05Z — Index diagnostic closed (values private)
+
+- Full run done 16:39Z: 120,226 rows (120,224 ok, 2 unsupported `max_length_exceeded`, 0 errors), 8 shards, results
+  `9c28a430…`. Dual scoring (port vs kit `87d4650b`) **PASS**. Receipt
+  [`dec-08bfast-index-diagnostic-receipt-2026-10-01.json`](dec-08bfast-index-diagnostic-receipt-2026-10-01.json).
+- Contamination audit (CPU, node C, IX1 method, planted 200 / 200): the 08b-RA TRAIN file (`12bd63d8…`) has 18
+  duplicate-class rows and 1 item row against the Index, vs 20 and 1 for the DEV2.0-0.8B TRAIN file in the same run.
+- Comparison with DEV2.0-0.8B, Eos 1.0 and the 0.8B frontier entrant, and the family deltas, went to the private
+  folder and to the coordinator only.
+- GPU-h: parity 0.026, voided start 0.001, full run 1.234 → 1.26 on node D GPU5; lease released 16:39Z.
+
+## 2026-10-01 15:25Z — follow-up: private Index diagnostic of the frozen `08b-RA` soup (not releasable)
+
+- Coordinator follow-up: IX1 harness (`40c14b760`), 86-request parity gate, full 38-benchmark panel + HLE, dual
+  scoring, family comparison with DEV2.0-0.8B's IX1 run. All values private; the repo gets counts and hashes only.
+- Frozen soup copied node E → node D (tree `83926edf…` re-verified); restaged with `v2.eval.ix1.restage` onto the
+  DEV2.0-0.8B `bede7938` package (runtime unchanged; backbone `f6d9cc55…`, head `3bbfa5cb…`; identity
+  `f25beedd…` = the formal run's model hash). Diagnostic name `DEV2.0-0.8B-08bRA` in `ix1/launch.sh` (`7b9fff09a`).
+- Node D GPU5 (no prior lease) leased `track=eval-ix1`. Parity gate **PASS** (86 / 86 ok). A first parity start
+  failed before loading (identity set to the tree hash instead of the runtime fingerprint), voided.
+- Full run: panel-8 shards 0–7 one after another on GPU5, started 15:22Z.
+
 ## 2026-10-01 15:10Z — closed: `08b-RA` fails items 1–7 (items 1, 4, 6(b)); stop
 
 - `f08-08b-RA` (seal `50b65064…`, T = 1): v3 53.102, T .5491, H .5136, public 231 166. Item 1 vs `bar-t1` +2.866

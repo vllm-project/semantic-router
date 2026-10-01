@@ -1,0 +1,221 @@
+{
+ "by_source": {
+  "delichess": {
+   "CLEAN": 510,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 510,
+   "labels": {}
+  },
+  "hallutruthqa": {
+   "CLEAN": 555,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 555,
+   "labels": {}
+  },
+  "implicaturex": {
+   "CLEAN": 160,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 160,
+   "labels": {}
+  },
+  "innoduel": {
+   "CLEAN": 85,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 85,
+   "labels": {}
+  },
+  "legal_case_law": {
+   "CLEAN": 210,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 210,
+   "labels": {}
+  },
+  "narrative_gold": {
+   "CLEAN": 654,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 654,
+   "labels": {}
+  },
+  "tutormoments": {
+   "CLEAN": 400,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 400,
+   "labels": {}
+  },
+  "wb_reviews": {
+   "CLEAN": 300,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 300,
+   "labels": {}
+  }
+ },
+ "by_task": {
+  "delichess/communicative_function": {
+   "CLEAN": 270,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 270
+  },
+  "delichess/epistemic_stance": {
+   "CLEAN": 240,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 240
+  },
+  "hallutruthqa/find_truth": {
+   "CLEAN": 300,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 300
+  },
+  "hallutruthqa/hallucination": {
+   "CLEAN": 255,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 255
+  },
+  "implicaturex/likelihood": {
+   "CLEAN": 160,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 160
+  },
+  "innoduel/preferred_idea": {
+   "CLEAN": 85,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 85
+  },
+  "legal_case_law/argument_function": {
+   "CLEAN": 210,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 210
+  },
+  "narrative_gold/event_causality": {
+   "CLEAN": 129,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 129
+  },
+  "narrative_gold/setting_concreteness": {
+   "CLEAN": 150,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 150
+  },
+  "narrative_gold/setting_temporal_grounding": {
+   "CLEAN": 135,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 135
+  },
+  "narrative_gold/span_is_event": {
+   "CLEAN": 240,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 240
+  },
+  "tutormoments/is_rapport": {
+   "CLEAN": 200,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 200
+  },
+  "tutormoments/moment_type": {
+   "CLEAN": 200,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 200
+  },
+  "wb_reviews/star_rating": {
+   "CLEAN": 300,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 300
+  }
+ },
+ "corpora": {
+  "ib3-r2": {
+   "bytes": 8067406,
+   "candidates_hit": 1,
+   "exact": 0,
+   "files": 1,
+   "rows": 8752,
+   "seconds": 0.4,
+   "strings": 78746,
+   "tokens": 611468,
+   "unparsed_lines": 0,
+   "verdicts": {
+    "OVERLAP": 0,
+    "REVIEW": 0
+   }
+  }
+ },
+ "hits_sha256": "dad05d59e27a2e0d63f0916ffae9fca6f18bc81ebe420eff31c10f221d1fe5ca",
+ "manifest_sha256": null,
+ "overlap_reasons": {
+  "both": 0,
+  "containment_only": 0,
+  "exact_only": 0,
+  "exact_only_shared_text": 0,
+  "exact_only_tokens": {
+   "0-4": 0,
+   "12-19": 0,
+   "20+": 0,
+   "5-7": 0,
+   "8-11": 0
+  },
+  "review_short_exact": 0
+ },
+ "params": {
+  "chunk_bytes": 16777216,
+  "cjk_split": true,
+  "contains_tokens": 12,
+  "exact_min_tokens": 8,
+  "min_chars": 20,
+  "min_tokens": 5,
+  "overlap": 0.5,
+  "review": 0.2,
+  "shingle": 8
+ },
+ "protected": {
+  "candidates": 2874,
+  "contains_texts": 9210,
+  "distinct_shingles": 231986,
+  "exact_texts": 19602,
+  "sha256": "30a332ab8cf6fce99b54c2b07c13bb58fe031f0c08d93c33243d3c5db91aed40",
+  "shared_exact_texts": 2537,
+  "shared_shingles": 59220,
+  "shingles": 317640,
+  "sources": 8,
+  "tasks": 14,
+  "texts": 31321,
+  "unscreenable": 0,
+  "without_shingles": 0
+ },
+ "resources": {
+  "manifest_files_verified": 0,
+  "max_rss_parent_mb": 83,
+  "max_rss_worker_mb": 71,
+  "peak_pss_mb": 138,
+  "peak_rss_sum_mb": 3522,
+  "tasks": 1,
+  "wall_seconds": 1.2,
+  "workers": 48
+ },
+ "schema": "dev2-sealed-c1-overlap/1",
+ "verdicts": {
+  "CLEAN": 2874,
+  "OVERLAP": 0,
+  "REVIEW": 0
+ }
+}

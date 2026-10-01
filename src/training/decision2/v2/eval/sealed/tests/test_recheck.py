@@ -486,6 +486,14 @@ class CommittedSpecTest(unittest.TestCase):
         tracks = {arm["track"] for arm in spec["arms"]}
         self.assertTrue({"27B M6", "9B M9", "decoder M13", "decoder M14"} <= tracks)
 
+    def test_r2_spec_pins_ib3_r2(self):
+        spec = recheck.load_spec(SEALED / "c1-recheck" / "r2-ib3r2.json")
+        (entry,) = spec["datasets"]
+        self.assertEqual((entry["key"], entry["rows"]), ("ib3-r2", 8752))
+        self.assertEqual(entry["sha256"][:8], "9d92d92a")
+        self.assertIn("@1c8452da", entry["source"])
+        self.assertEqual(spec["arms"], [])
+
     def test_bad_specs_are_refused(self):
         spec = json.loads(SPEC.read_text())
         with tempfile.TemporaryDirectory() as tmp:

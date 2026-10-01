@@ -1,6 +1,6 @@
 """Build and finalize IB3 (prereg ``records/ib3-prereg-2026-10-01.md`` §2–§3).
 
-    python3 -m v2.data.ib3.build build --raw RAW --out CAND
+    python3 -m v2.data.ib3.build build --raw RAW --out CAND [--families NAME ...] [--prereg RECORD]
     python3 -m v2.data.ib3.build finalize --cand CAND --out FINAL \
         [--drop-groups FILE ...] [--drop-dev-groups FILE ...] [--drop-families NAME ...] \
         [--drop-ids FILE ...] [--drop-leak-ids FILE ...]
@@ -87,26 +87,45 @@ def esci_products(
 # --------------------------------------------------------------------------- build
 
 
-def convert(raw: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def convert(
+    raw: Path, families: tuple[str, ...] = FAMILIES
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     reports: dict[str, collections.Counter] = {
-        name: collections.Counter() for name in FAMILIES
+        name: collections.Counter() for name in families
     }
     rows: list[dict[str, Any]] = []
-    rows += fam.wpd(
-        csv_rows((raw / "mendeley_wpd/dataset_B_05_2020.csv").read_text("utf-8")),
-        reports["wpd"],
-    )
-    with zipfile.ZipFile(
-        raw / "uci_phiusiil/phiusiil+phishing+url+dataset.zip"
-    ) as archive:
-        rows += fam.phiu(
-            csv_rows(archive.read("PhiUSIIL_Phishing_URL_Dataset.csv").decode("utf-8")),
-            reports["phiu"],
+    if "wpd" in families:
+        rows += fam.wpd(
+            csv_rows((raw / "mendeley_wpd/dataset_B_05_2020.csv").read_text("utf-8")),
+            reports["wpd"],
         )
-    rows += fam.fdial2(
-        json.loads((raw / "mcgill_faithdial/data/train.json").read_text("utf-8")),
-        reports["fdial2"],
-    )
+    if "phiu" in families:
+        with zipfile.ZipFile(
+            raw / "uci_phiusiil/phiusiil+phishing+url+dataset.zip"
+        ) as archive:
+            rows += fam.phiu(
+                csv_rows(
+                    archive.read("PhiUSIIL_Phishing_URL_Dataset.csv").decode("utf-8")
+                ),
+                reports["phiu"],
+            )
+    if "fdial2" in families:
+        rows += fam.fdial2(
+            json.loads((raw / "mcgill_faithdial/data/train.json").read_text("utf-8")),
+            reports["fdial2"],
+        )
+    if "esci" in families:
+        rows += esci_rows(raw, reports["esci"])
+    if "mqa" in families:
+        rows += fam.mqa(
+            json.loads((raw / "mathqa/train.json").read_text("utf-8")), reports["mqa"]
+        )
+    return rows, {
+        "families": {name: dict(sorted(r.items())) for name, r in reports.items()}
+    }
+
+
+def esci_rows(raw: Path, report: collections.Counter) -> list[dict[str, Any]]:
     examples = parquet(
         raw / "amazon_esci/shopping_queries_dataset_examples.parquet",
         [
@@ -122,23 +141,16 @@ def convert(raw: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     examples = [
         e
         for e in examples
-        if e["split"] == "train" or reports["esci"].update(["drop_not_train"])
+        if e["split"] == "train" or report.update(["drop_not_train"])
     ]
     wanted = {(str(e["product_id"]), str(e["product_locale"])) for e in examples}
-    rows += fam.esci(
+    return fam.esci(
         examples,
         esci_products(
             raw / "amazon_esci/shopping_queries_dataset_products.parquet", wanted
         ),
-        reports["esci"],
+        report,
     )
-    del examples
-    rows += fam.mqa(
-        json.loads((raw / "mathqa/train.json").read_text("utf-8")), reports["mqa"]
-    )
-    return rows, {
-        "families": {name: dict(sorted(r.items())) for name, r in reports.items()}
-    }
 
 
 def is_dev(group_id: str) -> bool:
@@ -152,13 +164,17 @@ def as_dev(row: Mapping[str, Any]) -> dict[str, Any]:
 def build(args: argparse.Namespace) -> int:
     eval_only.guard(args)
     raw = args.raw
+    families = tuple(args.families)
+    unknown = set(families) - set(FAMILIES)
+    if unknown:
+        raise ValueError(f"unknown families {sorted(unknown)}")
     inputs = {}
     for rel, expected in PINS.items():
         actual = file_sha256(raw / rel)
         if actual != expected:
             raise ValueError(f"{rel}: sha256 {actual} != pinned {expected}")
         inputs[rel] = actual
-    rows, report = convert(raw)
+    rows, report = convert(raw, families)
     unique, report["duplicates"] = dedup(rows)
     report["group_merges"] = merge_groups(unique)
     train = [row for row in unique if not is_dev(row["group_id"])]
@@ -167,7 +183,8 @@ def build(args: argparse.Namespace) -> int:
     args.out.mkdir(parents=True, exist_ok=True, mode=0o700)
     manifest = {
         "schema": "decision2.ib3.build.v1",
-        "prereg": "records/ib3-prereg-2026-10-01.md",
+        "prereg": args.prereg,
+        "families": list(families),
         "inputs": inputs,
         "report": report,
         "train": {
@@ -282,6 +299,8 @@ def main(argv: list[str] | None = None) -> int:
     one = sub.add_parser("build")
     one.add_argument("--raw", required=True, type=Path)
     one.add_argument("--out", required=True, type=Path)
+    one.add_argument("--families", nargs="+", default=list(FAMILIES))
+    one.add_argument("--prereg", default="records/ib3-prereg-2026-10-01.md")
     two = sub.add_parser("finalize")
     two.add_argument("--cand", required=True, type=Path)
     two.add_argument("--out", required=True, type=Path)

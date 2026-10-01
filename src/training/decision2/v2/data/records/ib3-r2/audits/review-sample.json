@@ -1,0 +1,29 @@
+{
+ "cells": {
+  "mqa|false": 108,
+  "mqa|true": 108
+ },
+ "excluded_key_rows": 266,
+ "families": [
+  "mqa"
+ ],
+ "families_excluded": [],
+ "n": 216,
+ "per_family": 216,
+ "population": {
+  "mqa": 8762
+ },
+ "rows": 8762,
+ "rows_sha256": "2dd4ac5477cfb070f693c4f9319ebbe0f2a2e5599b88a0e36cfe78ba358b2e8c",
+ "salt": "ib3-review-v1",
+ "sampled": {
+  "mqa": 216
+ },
+ "schema": "decision2.ib3.review-sample.v1",
+ "thresholds": {
+  "error_max": 0.05,
+  "error_upper_max": 0.08,
+  "family_lower_max": 0.05,
+  "weighted_error_max": 0.05
+ }
+}

@@ -205,6 +205,57 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 01:05 — **`08b-RA` private Index diagnostic done (1afc17e8; private report `private/08b-fast/`).**
+  Findings, score-free here:
+  - **The 0.8B breadth gain on the Index comes mostly from ONE in-distribution family (HoVer;** the IB2 `hover` rows
+    are HoVer train and the Index uses HoVer test). Leakage was audited (0 matching claims, planted controls 200 / 200),
+    so this is in-distribution learning, not leakage. **Outside HoVer the breadth gain is small.**
+  - **The entity-level financial-sentiment family regressed sharply.** Likely cause: a label-semantics clash with
+    IB1's sentence-level `sentfin`.
+  - Tool-call, contract-NLI and commonsense families barely moved; they keep the largest frontier gaps at 0.8B.
+  - **Consequences:**
+    1. **The Index-path proposal must use a transfer-only Index delta** (exclude benchmarks whose train splits are in
+       the candidate's training data, e.g. HoVer / When2Call / iSarcasmEval / GSM8K), not the raw headline.
+    2. Future IB arms drop `sentfin` (or rebuild it entity-level) and keep the in-distribution families separable.
+    3. Tool-call data as built does not transfer to When2Call-like decisions at 0.8B. Revisit it before more tool-call
+       dose.
+
+- 2026-10-02 01:00 — **C1 recheck r2 PASSED for IB3-r2 (3c7679b0).**
+  - **Result.** 0 exposed scored items; all 8 sources 0 / 0; planted controls 200 / 200.
+  - **Records.** `v2/eval/records/c1-recheck-r2-2026-10-02.md`; the registry marks IB3-r2 PASS. Integration `3c5d30837`.
+  - **Coverage rule.** An arm adding IB3-r2 as a block counts it as exposure 0. A new mixture file needs its own
+    coverage entry or recheck. IB3 round 1 (`688b643e…`) is not covered.
+
+- 2026-10-02 00:50 — **IB3-r2 is RELEASE-SAFE (611782db): maths only.** Private `@1c8452da` `m6/ib3/` (round 1
+  remains readable at `@c2401ab4`); records merged at `a12b5b44c`; gist 02.
+  - **Contents.** `mqa` (MathQA per-option yes / no, formula-verified keys): TRAIN 8,752 rows (4,376 problems), DEV
+    426, ≈ 1.52M tokens.
+  - **Review:** 3/216 = 1.39% [0.29, 4.01].
+  - **Audits.** All pass; the proposed-answer-only shortcut is .543 vs the .550 threshold (the same as r1).
+  - **Grounding dropped on licence:** WiCE's evidence text comes from third-party sites with no licence. Phishing /
+    ESCI are excluded.
+  - **Use.** It is a small block: add it as one block against a matched-token control in future arms (4B / 9B / 27B
+    maths-like deficits).
+  - **C1 recheck r2** for IB3-r2 has been requested from the custodian (3c7679b0).
+  - **Still open:** phishing, claim-level grounding, contracts.
+
+- 2026-10-02 00:35 — **9B M9 stage 3 (542e6421): K-a13IB was the only finalist and FAILED item 1; no 9B successor.**
+  Records `5d28495fa`, lock `5d0c1c234`, gist 05; integration `9eb632e03`; ≈ 41.5 of 120 GPU-h.
+  - **Formal.** v3 68.02 vs 67.737, +0.29 [−1.57, +1.20], so item 1 fails. Items 2–7 **pass**, including **item 4
+    multilingual −.004 [−.011, +.003]** (the swap design preserved multilingual, unlike additive IB), human transfer
+    +.007, and vs Lux1 +2.22.
+  - **The development typed gain did not hold formally** (.807 vs .811; Noul 704 vs 715).
+  - **Rules.** K-a13IBX failed the Noul floors and the yes-bias guard (excluding the in-distribution families hurt at
+    this recipe).
+  - **Structural issue, for the user.** IB breadth targets Index families that JevArena v3 does not measure, so
+    breadth candidates tie on v3 (9B +0.29, 4B −0.16) and cannot pass item 1.
+    - Coordinator proposal, pending data and a user decision: an **Index-path alternative to item 1** for
+      frontier-targeted finalists, requiring v3 non-inferior plus a significant paired private-Index gain, with items
+      2–8 unchanged.
+    - Data being collected: private Index diagnostics of K-a13IB (9B) and `4b-LHA10SD` (4B; M15 part A).
+  - **Follow-ups (542e6421, resumed):** (A) the K-a13IB private Index with a paired bootstrap CI; (B) a ½-interpolation
+    point with gates → formal → items 1–7.
+
 - 2026-10-02 00:25 — **Card round 1 done (4c0a68cd); rename + product-card round 2 launched (same worker).**
   - **Round 1 card-only revisions:**
 

@@ -1,0 +1,6 @@
+{
+ "carried_drop_ids": 34,
+ "families_out": [],
+ "schema": "decision2.ib3.screen-skipped.v1",
+ "stage_s": "not run (IB3-r2 prereg: its only family passed IB3's stage S)"
+}

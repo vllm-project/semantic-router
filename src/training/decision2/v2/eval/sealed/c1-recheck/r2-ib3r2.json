@@ -1,0 +1,21 @@
+{
+  "schema": "dev2-c1-recheck-spec/1",
+  "name": "r2-ib3r2",
+  "item_set": "v1.2",
+  "record": "v2/eval/records/c1-recheck-r2-2026-10-02.md",
+  "datasets": [
+    {
+      "key": "ib3-r2",
+      "label": "IB3-r2 TRAIN (mqa only)",
+      "source": "llm-semantic-router/decision-2.0-training-data@1c8452da9f8024b1d79403cfcd95778fdab18cbb m6/ib3/ib3.train.jsonl",
+      "path": "/data/dev2/private/data/ib3/r2/final/out/ib3.train.jsonl",
+      "sha256": "9d92d92a207109a585ceead7fa5e1bdb0b2c61859de8227a2a6058428f852dea",
+      "rows": 8752
+    }
+  ],
+  "arms": [],
+  "notes": [
+    "No arm uses IB3-r2 yet (COORDINATION 2026-10-02 00:50). A future arm that adds it as a block is covered by this file's verdict for its IB3-r2 rows; a mixture file that adds it needs its own recheck or a raw-line coverage entry in the registry.",
+    "The node-A path is the data track's final output; its read-back copy from the published revision has the same SHA-256."
+  ]
+}
