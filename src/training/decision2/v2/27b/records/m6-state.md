@@ -197,6 +197,9 @@ is still fixing the long-input runtime bug and staging its M5-L128 Index diagnos
 
 ## Poll log (newest first)
 
+- 14:35Z (poll at 14:34Z): all alive. M6-IB 2,546 / 2,412 (13.0 / 13.7 h; s1 at 2544 .9013, BEST stays 1908); M6-IB2
+  2,454 / 2,445 (17.5 / 17.6 h); M6-IBX 2,159 / 2,129 (13.7 / 13.9 h); M6-IB2PN 1,074 / 1,043 (18.7 / 18.6 h).
+  GPU-h ≈ 44.9.
 - 14:14Z (poll at 14:13Z): all alive. M6-IB 2,413 / 2,280 (13.0 / 13.7 h); M6-IB2 2,322 / 2,312 (17.5 / 17.6 h);
   M6-IBX 2,029 / 2,000 (13.7 / 13.9 h; s2 at 1875 .8702, BEST stays 1250); **M6-IB2PN 943 / 911 (18.8 / 18.6 h;
   first SELECT700 at 861: .8173 / .8631, BEST = 861)**. Node D disk 566 GB (first hedge checkpoints). GPU-h ≈ 42.1.
