@@ -96,6 +96,13 @@ class ScanTests(unittest.TestCase):
                 "language": "en",
                 "text": "turn off the lights now",
             },
+            {
+                "source": "massive",
+                "source_id": "4",
+                "language": "ar",
+                "text": "اكتم الصوت",
+            },
+            {"source": "massive", "source_id": "5", "language": "en", "text": "mute"},
         ]
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -118,7 +125,13 @@ class ScanTests(unittest.TestCase):
                 )
             write_jsonl(
                 root / "c.jsonl",
-                [{"prompt": "User: could you turn off the lights now? Thanks a lot."}],
+                [
+                    {
+                        "prompt": "User: could you turn off the lights now? Thanks a lot.",
+                        "state": "اكتم  الصوت",
+                        "x": "mute it",
+                    }
+                ],
             )
             files = [
                 root / "a.jsonl",
@@ -128,12 +141,13 @@ class ScanTests(unittest.TestCase):
             ]
             result = mlx_dev2.scan(root / "pool.jsonl", files, workers=2)
         self.assertEqual(
-            result["excluded_source_items"], {"massive": ["1", "3"], "pawsx": ["7"]}
+            result["excluded_source_items"],
+            {"massive": ["1", "3", "4"], "pawsx": ["7"]},
         )
         self.assertEqual(result["corpus"]["files"], 3)
         self.assertEqual(result["corpus"]["unreadable"], 1)
         reasons = result["flagged_parts_by_source_and_reason"]
-        self.assertEqual(reasons["massive/exact"], 1)
+        self.assertEqual(reasons["massive/exact"], 2)
         self.assertEqual(reasons["massive/contained"], 2)
         self.assertEqual(reasons["pawsx/shingle"], 1)
         self.assertNotIn("text", json.dumps(result))

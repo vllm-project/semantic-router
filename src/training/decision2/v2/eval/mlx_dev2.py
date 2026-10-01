@@ -224,12 +224,12 @@ def _scan_file(path: str) -> dict[str, Any]:
                     continue
                 rows += 1
                 for text in _strings(row):
-                    if len(text) < 12:
-                        continue
-                    strings += 1
                     found = exact.get(_normalize(text))
                     if found:
                         hits["exact"].update(found)
+                    if len(text) < 12:
+                        continue
+                    strings += 1
                     for s in _shingles(text):
                         if s in shingle:
                             seen.add(s)
