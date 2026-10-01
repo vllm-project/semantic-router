@@ -76,3 +76,15 @@ Prereg [`dec-m14-prereg-2026-10-01.md`](dec-m14-prereg-2026-10-01.md). Branch `x
 - Contrast vs M12 `08b-RA` (exact path): typed T −.044 (**Choice −76**, Noul +3, Score +2); HT-DEV v2 −.021 [−.039,
   −.002] FLAG; retention −.033 [−.060, −.005] (GSM8K −.096). Giving the released rows 1.5× the IB rows' weight did not
   protect the Choice head at 0.8B; it lost more Choice items and raised the unmet-condition yes-bias.
+
+## 2026-10-01 17:15Z — 4B closed; M14 complete (no finalist)
+
+- `4b-LHA10UP` seeds DONE 16:45Z / 16:50Z (980 / 991 updates; BEST 858 / 867); merges 128 / 128 and 127 / 128 SELECT
+  argmax; soup 16:53Z; eight panels 17:05Z (node B GPU3); relayed through node E.
+- Rules (run once, 17:07Z, readout `3b11fb2e…`): **not eligible — Score type floor 345 < 371 − 12; retention −.042
+  [−.071, −.014].** Otherwise: T .908 vs LH .868 (C / N / S 799 / 309 / 345 vs 728 / 290 / 371); **HT-DEV v2 +.028
+  [+.013, +.043] GAIN**; false-yes .196 vs .199; IB DEV +.078; transfer +.045 [+.034, +.058]. vs M12 `4b-LHA10`: typed T
+  +.035 (C +56, N −16, S +16), HT-DEV v2 +.024 [+.011, +.038] GAIN, retention −.019 [−.046, +.006].
+- **M14 has no finalist at any tier**: no formal, no successor items, no hand-offs, no Index requests. Results
+  [`dec-m14-results-2026-10-01.md`](dec-m14-results-2026-10-01.md). GPU-h 7.12 of 80 (A 3.18, B 3.94); no M14 job
+  running; all M14 leases released; node E transit directory removed.
