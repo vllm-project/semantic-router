@@ -87,8 +87,8 @@ def main(argv: list[str] | None = None) -> int:
                             raise ValueError(
                                 f"{row['id']}: {key} {row[key]} already in the build"
                             )
-                    for key in seen:
-                        seen[key].add(row[key])
+                    seen["id"].add(row["id"])
+                    seen["input_sha256"].add(row["input_sha256"])
                     if not raw.endswith(b"\n"):
                         raw += b"\n"
                     out.write(raw)
