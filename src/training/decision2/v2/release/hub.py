@@ -1,16 +1,18 @@
-"""Private Hugging Face operations for Decision 2.0 packages (run on a node).
+"""Hugging Face operations for Decision 2.0 packages (run on a node).
 
 Uses the node's authenticated HF CLI environment; the token stays in its
-default file and never appears in argv, logs or receipts. Every command refuses
-public repositories and collections. Staging repositories can never be added
-to the Decision 2.0 collection; release repositories only with a gate receipt.
+default file and never appears in argv, logs or receipts. Every command checks
+visibility against the policy: the six Decision 2.0 release repositories and
+their collection are public, every other repository stays private. Staging
+repositories can never be added to the Decision 2.0 collection; release
+repositories only with a gate receipt.
 
-  ensure   create the repository PRIVATE if absent; refuse if it is public
+  ensure   create the repository with its policy visibility if absent; refuse any other
   upload   upload a verified package directory; record the commit
   download real ``hf download`` of one exact revision into a fresh directory
   tree     re-hash a downloaded tree against MODEL_MANIFEST.json and the package
-  readback private flag, revision, remote file hashes, Hub-parsed card, collection
-  collect  add a gated release repository to the private collection, then read back
+  readback visibility, revision, remote file hashes, Hub-parsed card, collection
+  collect  add a gated release repository to the Decision 2.0 collection, then read back
 """
 
 from __future__ import annotations
@@ -32,6 +34,35 @@ from v2.release import layout
 COLLECTION = f"{layout.ORG}/decision-20-6ab7cf7bdfb506bf8269cb00"
 COLLECTION_TITLE = "Decision 2.0"
 HF_CLI = os.environ.get("DEV2_HF_CLI", "hf")
+PUBLIC = frozenset(
+    {
+        COLLECTION,
+        *(
+            f"{layout.ORG}/Decision-2.0-{name}"
+            for name in (
+                "Kai-0.6B",
+                "Eos-0.8B",
+                "Sol-2B",
+                "Nox-4B",
+                "Lux-9B",
+                "Vega-27B",
+            )
+        ),
+    }
+)
+
+
+def expected_private(repo: str) -> bool:
+    return repo not in PUBLIC
+
+
+def _check_visibility(repo: str, private: Any, when: str) -> None:
+    want = expected_private(repo)
+    if private is not want:
+        state = "private" if private else "public"
+        raise RuntimeError(
+            f"{repo} is {state} {when}; expected {'private' if want else 'public'}"
+        )
 
 
 def now() -> str:
@@ -71,12 +102,16 @@ def ensure(args: argparse.Namespace) -> dict[str, Any]:
     except Exception as exc:  # RepositoryNotFoundError without importing the class
         if type(exc).__name__ not in ("RepositoryNotFoundError", "HfHubHTTPError"):
             raise
-        api.create_repo(args.repo, repo_type="model", private=True, exist_ok=False)
+        api.create_repo(
+            args.repo,
+            repo_type="model",
+            private=expected_private(args.repo),
+            exist_ok=False,
+        )
         created = True
         info = api.model_info(args.repo)
     _same_repository(args.repo, info)
-    if info.private is not True:
-        raise RuntimeError(f"{args.repo} is not private; refusing to use it")
+    _check_visibility(args.repo, info.private, "on the Hub")
     return {
         "schema": "dev2-hub-ensure/1",
         "utc": now(),
@@ -106,8 +141,7 @@ def upload(args: argparse.Namespace) -> dict[str, Any]:
     api = _api()
     target = api.model_info(args.repo)
     _same_repository(args.repo, target)
-    if target.private is not True:
-        raise RuntimeError("Target repository is not private")
+    _check_visibility(args.repo, target.private, "before upload")
     started = time.perf_counter()
     commit = api.upload_folder(
         repo_id=args.repo,
@@ -122,8 +156,7 @@ def upload(args: argparse.Namespace) -> dict[str, Any]:
     )
     revision = commit.oid
     info = api.model_info(args.repo, revision=revision)
-    if info.private is not True:
-        raise RuntimeError("Repository became non-private during upload")
+    _check_visibility(args.repo, info.private, "after upload")
     return {
         "schema": "dev2-hub-upload/1",
         "utc": now(),
@@ -278,7 +311,7 @@ def readback(args: argparse.Namespace) -> dict[str, Any]:
     expect_item = kind == "release" and (
         args.expect_collected or args.already_collected
     )
-    collection_ok = collection.private is True and (
+    collection_ok = collection.private is expected_private(args.collection) and (
         in_collection if expect_item else not in_collection
     )
     return {
@@ -310,7 +343,7 @@ def readback(args: argparse.Namespace) -> dict[str, Any]:
             "contains_repo": in_collection,
             "expected_repo": expect_item,
         },
-        "passed": info.private is True
+        "passed": info.private is expected_private(args.repo)
         and info.sha == args.revision
         and not mismatched
         and set(expected) == set(remote)
@@ -344,8 +377,8 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     # The collection is identified by its pinned slug; its title is the user's to curate.
     if args.collection != COLLECTION or getattr(collection, "slug", None) != COLLECTION:
         raise RuntimeError("Releases enter only the pinned Decision 2.0 collection")
-    if info.private is not True or collection.private is not True:
-        raise RuntimeError("Repository and collection must both be private")
+    _check_visibility(args.repo, info.private, "at collect")
+    _check_visibility(args.collection, collection.private, "at collect")
     api.add_collection_item(
         args.collection, item_id=args.repo, item_type="model", exists_ok=True
     )
@@ -362,7 +395,8 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
             "private": collection.private,
             "items": items,
         },
-        "passed": collection.private is True and args.repo in items,
+        "passed": collection.private is expected_private(args.collection)
+        and args.repo in items,
     }
 
 
