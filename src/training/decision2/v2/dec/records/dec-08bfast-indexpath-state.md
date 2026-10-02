@@ -7,6 +7,12 @@ Branch `xunzhuo/decision-2-training-dec-08bfast`. Index values stay private (nod
 `/data/dev2/private/eval/index021/ix1/runs/<name>/` and `decision2-program/private/m16-indexpath/`); this file holds
 verdicts, counts and hashes only.
 
+## 2026-10-02 07:25Z — poll: still held by the Vega-27B release on node A
+
+- The 27B prerelease ended about 07:02Z; the same worker's `release.sh --upload --collect` for
+  `Decision-2.0-Vega-27B` (GPU0, lease `release-27b-27bif`) started 07:02:35Z and is at its pre-upload parity.
+  The 2B upload waits for it to end.
+
 ## 2026-10-02 06:55Z — 2B release inputs final; upload waits for another worker's `release.sh` on node A
 
 - **Index run `M16-2b-RASD-bf16` (node C GPU1–3):** shards 05:47–06:27Z, 120,224 ok + 2 unsupported, scorers
