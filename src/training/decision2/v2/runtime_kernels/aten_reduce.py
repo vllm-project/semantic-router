@@ -5,7 +5,7 @@ one 64-lane wavefront per row. For H > 128 the input is vectorised by ``VEC`` (4
 lane t keeps VEC accumulators, accumulator i adds element ``VEC*(t + 64*c) + i`` for
 c = 0, 1, ... in order, the accumulators are combined left to right, and the 64 lane values
 are combined by ``shfl_down`` with offsets 1, 2, 4, ..., 32 (a pairwise tree in lane order).
-For H <= 128 there is no vectorisation: lane t adds elements t and t + 64. Reproducing that
+For H = 128 the vector width is still 4 but only 32 lanes take part (one load each). Reproducing that
 association makes the FP32 mean bit-identical, so the RMSNorm kernels round exactly like the
 reference. ``probe_mean`` checked the order (and ``rsqrt_rn``) bit for bit against ATen for every
 hidden size we use; ``probe_reduce`` checks the kernels built on them.
@@ -59,10 +59,25 @@ def sumsq_vec4_chunk(x, R: tl.constexpr):
 
 @triton.jit
 def sumsq_128(x, R: tl.constexpr):
-    """[R, 128] FP32 -> [R] sum of squares in ATen's non-vectorised order (lane t: x_t + x_{t+64})."""
-    s = tl.permute(tl.reshape(x * x, [R, 2, 64]), (0, 2, 1))
-    lo, hi = tl.split(s)
-    return lane_tree64(lo + hi, R)
+    """[R, 128] FP32 -> [R] sum of squares in ATen's order for 128-wide rows.
+
+    The input is vectorised by 4 over 32 lanes (one load each); the lane tree then has five
+    levels (``probe_mean`` variant 1, bit-identical; unvectorised orders are not).
+    """
+    even, odd = tl.split(tl.reshape(x * x, [R, 32, 2, 2]))
+    a0, a2 = tl.split(even)
+    a1, a3 = tl.split(odd)
+    v = ((a0 + a1) + a2) + a3
+    a, b = tl.split(tl.reshape(v, [R, 16, 2]))
+    v = a + b
+    a, b = tl.split(tl.reshape(v, [R, 8, 2]))
+    v = a + b
+    a, b = tl.split(tl.reshape(v, [R, 4, 2]))
+    v = a + b
+    a, b = tl.split(tl.reshape(v, [R, 2, 2]))
+    v = a + b
+    a, b = tl.split(tl.reshape(v, [R, 1, 2]))
+    return tl.reshape(a + b, [R])
 
 
 @triton.jit
