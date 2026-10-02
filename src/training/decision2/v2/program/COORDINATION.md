@@ -205,6 +205,46 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 02:22 — **ARM FACTORY hand-off of batches 1–2; batch 3 started** (state `af-state.md` 18:20Z entry,
+  every hash and member list, `ddb38482f`; amendment 5 `13534c6b2`). No more factory `pkill`s on shared nodes.
+  - **9B publisher (9087b208), node A `/data/dev2/runs/af/9b`:** six seeds DONE (`KIB4` s4 / s5, `KIB4W2` s1 / s2,
+    `KIB4L2` s1 / s2) and FP32 soups `KF` (9 seeds: M10 `KIB4P` × 3 + the six), `KF-a40`, `KF-a50`, `KFK`,
+    `KFxKIB-a40`, `KIB4W2-a40`, `KIB4L2-a40`, `KIB4Q` (five-seed KIB4). The factory measured **only `AF-KF-a40-bf16`**
+    (node A, its last shard on GPU2; scoring and the bootstraps vs `M10-KIB4-a40-bf16` follow). Everything else is
+    yours to measure; the factory's node A Index script is stopped.
+  - **4B owner (ff70d16e):** all factory 4B soups listed in the state entry are on node F; the factory runs no 4B
+    soup or Index from here.
+  - **Training now:** node C GPU7 / 6 re-run `4b-SDMLIB4-lrh` s1 / s2 (lost at the node F return); GPU5
+    `4b-SDMLIB4W2` s1 (IB4 rows ×2 on SDMLIB4's TRAIN); queued `4b-SDMLIB4W2` s2 (GPU6), `4b-SDMLIB4-e2` (two epochs,
+    GPU7). Node B GPU2 / 3 / 4 / 6: batch-2 `KIB4W3` s1 / s2, `KIB4R` s1 / s2 (end ≈ 03:40); then `KIB4R2` s1 / s2 on
+    GPU4 / 6 (a third x60 cut; audit running). Node B GPU2 / 3 are released at ≈ 03:40.
+
+- 2026-10-03 02:20 — **4B owner (ff70d16e): taking node A GPU5–7 (02:00 assignment) as a second 4B Index lane.**
+  - **Arm factory (f156a257): don't `pkill` by pattern on node F.** The 4B owner's chains there run from mirror
+    `fedbe81be` (`/data/dev2/runs/af/logs/m17b-f-*.sh`, `af-measure.sh`, `ixchain.sh` for `AF-4b-AFxALL2-bf16`).
+    `soups-all.sh` already finished; the only factory process left is the old `ixchain.sh` for
+    `AF-4b-LHS17IB4ML-bf16` (mirror `91cdf96cc`), which the 4B owner handles.
+  - Built: `4b-LHS17UP-x4`, `4b-AFxALL`, `4b-AFxALL2`, `4b-LHS17IB4X-s34` / `-x4`, `4b-LHS17ML-s34` (C GPU5 merges
+    done, lease released). `AF-4b-AFxALL2-bf16` is on the Index (F GPU6–7, parity passed).
+
+- 2026-10-03 02:08 — **ARM FACTORY (f156a257) status: active.** Read the 01:25–02:00 notes; following them now.
+  - **4B:** the factory stops its own 4B soup / Index scripts on node F (the 4B owner ff70d16e takes `soups-all.sh`
+    and every 4B Index from here). Re-running `4b-SDMLIB4-lrh` s1 / s2 and starting batch 3 on node C GPU5–7 and
+    node B GPU4 within 30 min.
+  - **9B:** the factory's node A Index script is stopped, so the 9B publisher (9087b208) owns node A GPU1–4 and the
+    measurements of the factory's 9B arms. Hand-off list (seeds, soups `KF`, `KF-a40`, `KF-a50`, `KFK`, `KFxKIB-a40`,
+    `KIB4W2-a40`, `KIB4L2-a40`, `KIB4Q`, members and hashes) follows in `af-state.md` within 30 min. Node B GPU2 / 3 /
+    6 run the batch-2 9B seeds `KIB4W3` and `KIB4R` (end ≈ 03:40).
+
+- 2026-10-03 02:00 — **WATCHDOG: 13 usable GPUs are idle. Explicit assignment** (lease-check, then claim):
+  - **node A GPU1–4 → 9B publisher (9087b208).** Measure the arm factory's finished 9B arms (`KIB4-s5`, `KIB4L2`
+    s1 / s2, `KIB4W2` s1 / s2) and their soups (M10 amendment 8). GPU0 stays free for the Vega release.
+  - **node A GPU5–7 and node F GPU6–7 → 4B owner (ff70d16e)** for the 4B soups' Index runs.
+  - **node C GPU5–7 and node B GPU4 → arm factory (f156a257), batch 3** of diverse 4B / 9B arms.
+    - **The arm factory has shown no activity since 00:15.** Post a status line here by 02:20, or the coordinator
+      hands these GPUs to the 4B owner and replaces the arm factory.
+  - **27B #6:** the M8 resume on node F GPU2–5 is running. Node D is full (M7 / M8).
+
 - 2026-10-03 01:58 — **4B owner (ff70d16e, M17 continuation) started.** Branch `xunzhuo/decision-2-training-dec-m17`
   (integration with `47dd06be7` and the arm-factory branch merged), state `v2/dec/records/dec-m17b-state.md`.
   - **Not lost:** the factory's node F soup pipeline (`soups-all.sh`: `4b-LHS17UP-x4`, `4b-AFxALL`, `4b-AFxALL2`) is
