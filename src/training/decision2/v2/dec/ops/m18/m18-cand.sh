@@ -56,11 +56,15 @@ case "$POINT" in
   2b-SWRA) BUILD="$D/m16/inputs/arms/2b-RA $D/m18/soup/2b-RS17UP/build/2b-RS17UP-soup 0.5" SRCNODE=e ;;
   2b-UPRAM) BUILD="$D/m18/soup/2b-RAM/build/2b-RAM-soup $D/m18/soup/2b-RAUPM/build/2b-RAUPM-soup 0.5" SRCNODE=e ;;
   08b-RAM-a75) BUILD="$D/m14/inputs/refs/DEV2.0-0.8B/$REV $D/m18/soup/08b-RAM/build/08b-RAM-soup 0.75" ;;
+  2b-U5) BUILD="multi $D/m14/soup/2b-RAUP/build/2b-RAUP-soup $D/m16/inputs/arms/2b-RA $D/m18/soup/2b-RS17UP/build/2b-RS17UP-soup $D/m18/soup/2b-RAUPM/build/2b-RAUPM-soup $D/m18/soup/2b-RAM/build/2b-RAM-soup" SRCNODE=e ;;
+  2b-U4) BUILD="multi $D/m14/soup/2b-RAUP/build/2b-RAUP-soup $D/m16/inputs/arms/2b-RA $D/m18/soup/2b-RAUPM/build/2b-RAUPM-soup $D/m18/soup/2b-RAM/build/2b-RAM-soup" SRCNODE=e ;;
+  08b-RRM) BUILD="multi $D/m16/inputs/arms/08b-RA $D/m18/soup/08b-RAM/build/08b-RAM-soup" ;;
+  08b-RRM-a75) BUILD="$D/m14/inputs/refs/DEV2.0-0.8B/$REV $P/08b-RRM/build/08b-RRM 0.75" ;;
   *) echo "no recipe for $POINT" >&2; exit 2 ;;
 esac
 [[ "$BUILD" == adopt || "$BUILD" == soup ]] || FP32=$P/$POINT/build/$POINT
 home() {  # <node path>: the node an input of an M18 point lives on
-  case $1 in */m16/inputs/arms/2b-*) echo b ;; */m18/soup/2b-RAM/*) echo a ;; */m18/soup/*) echo f ;; *) echo "$SRCNODE" ;; esac
+  case $1 in */m16/inputs/arms/2b-* | */m14/soup/2b-RAUP/*) echo b ;; */m18/soup/2b-RAM/*) echo a ;; */m18/soup/*) echo f ;; *) echo "$SRCNODE" ;; esac
 }
 PKG=$MD/$NAME-r${REV:0:8} CK=$MD/$NAME-ckpt BASEPKG=/data/dev2/models/ix1/$REF-${REV:0:8}
 sums() {
@@ -91,8 +95,19 @@ case "$STAGE" in
       [ "$SRCNODE" = b ] && on b "test ! -e $P/$POINT && mkdir -p $P/$POINT/build && cp -al $FP32 $P/$POINT/build/$POINT && echo adopted-from-m16 > $P/$POINT/DONE"
       exit 0
     fi
-    read -r rel arm alpha <<< "$BUILD"
     on "$SRCNODE" "test ! -e $P/$POINT" || { echo "$POINT already built or building" >&2; exit 3; }
+    if [[ "$BUILD" == multi* ]]; then  # uniform FP32 soup of the listed artifacts (v2.dec.soup)
+      members=""
+      for x in ${BUILD#multi }; do members+=" --member $x"; done
+      on "$SRCNODE" "umask 022; mkdir -p $P/$POINT/build && docker run --name m18-build-$POINT --rm --network none --shm-size 16g \
+        -e PYTHONPATH=/code:/opt/decision-fla -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 \
+        --mount type=bind,src=$S,dst=/code,readonly --mount type=bind,src=$D,dst=$D,readonly \
+        --mount type=bind,src=$P/$POINT/build,dst=/out -w /code $DEC_IMAGE \
+        python3 -m v2.dec.soup $members --output /out/$POINT \
+        > $P/$POINT/build.stdout.log 2> $P/$POINT/build.stderr.log && echo $SHA > $P/$POINT/DONE && tail -1 $P/$POINT/build.stdout.log"
+      exit 0
+    fi
+    read -r rel arm alpha <<< "$BUILD"
     on "$SRCNODE" "umask 022; mkdir -p $P/$POINT/build && docker run --name m18-build-$POINT --rm --network none --shm-size 16g \
       -e PYTHONPATH=/code:/opt/decision-fla -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 \
       --mount type=bind,src=$S,dst=/code,readonly --mount type=bind,src=$D,dst=$D,readonly \
@@ -102,8 +117,8 @@ case "$STAGE" in
   ship)
     [ "$TIER" = 2b ] || { echo "ship is for 2B points" >&2; exit 2; }
     if [ "$SRCNODE" = e ]; then  # the build's inputs, each from its home node if node E lacks it
-      read -r rel arm alpha <<< "$BUILD"
-      for x in $rel $arm; do
+      for x in $BUILD; do
+        [[ "$x" == /* ]] || continue
         on e "test -f $x/decision_config.json" && continue
         on e "mkdir -p $(dirname "$x")"
         hop "$(home "$x")" e "$(dirname "$x")" "$(basename "$x")"

@@ -37,3 +37,12 @@ Index values stay private (node private dirs and the program's private folder); 
   BF16 copies restaged (identity / loaded / calibration checks pass); IX1 pool on node E GPU0-3 / 6-7 since 06:08Z
   (node E leases of the finished M18 runs set to released first).
 - Bootstraps of `2b-UPRA` / `2b-UPRAa75` vs the `IS-2b-RAUP` run (the likely next Sol release) running on node C.
+
+## 2026-10-02T06:50Z
+
+- Part B / amendment-1 soups built: `2b-RS17UP` (06:03Z), `2b-RAUPM` (06:37Z), `2b-RAM` (06:42Z); all four seeds of
+  each 2B arm passed preflight and completed. `08b-RAM` seeds 1 / 2 running on node A.
+- Index: `2b-RS17UP`, `2b-SWRA` scored on node C (scorer gates pass). `2b-RAUPM` running on node F GPU4-5; `2b-UPRAM`
+  (½ RAM + ½ RAUPM, lineage check PASS) and `2b-RAM` on node E GPU0-3 / 6-7.
+- Bootstraps of `2b-UPRA` / `2b-UPRAa75` vs the `IS-2b-RAUP` run: 95% lower bounds below 0 (not releasable over it).
+- Amendment 2: wider uniform soups `2b-U5`, `2b-U4`, `08b-RRM-a75`.
