@@ -7,8 +7,9 @@
 #            network) -> dec-indexpath/<point>-bf16-ckpt and bf16-copy.json
 #   stage    v2.eval.ix1.restage of that copy into the tier's IX1 package (DEV2.0-0.8B bede7938 / DEV2.0-2B a53cf66a)
 #            with the copy's model SHA-256; checks the loaded count and the identity
-#   parity   launch.sh parity on GPU1 (86 requests, foreground on the node); parity.json must pass
-#   run      launch.sh run: 7 shards of panel-7 on GPU1-7 with the parity step's frozen cache; waits; score.sh
+#   parity   launch.sh parity on GPU2 (86 requests, foreground on the node); parity.json must pass
+#   run      launch.sh run: the 7 shards of panel-7 with the parity step's frozen cache, shards 0-5 on GPU2-7 and
+#            shard 6 on GPU2 once shard 0 has ended (GPU1 holds the 27B M6 Index run since 02:12Z); waits; score.sh
 #   boot     paired bootstraps vs the tier's DEV2.0 IX1 run (full panel, and transfer-only without HoVer, When2Call,
 #            iSarcasmEval, GSM8K, BPoMP), 2,000 replicates, seed 20261002; family delta; row comparison with the FP32
 #            run of the same point (identical answers expected)
@@ -37,7 +38,7 @@ BASEPKG=/data/dev2/models/ix1/$REF-$REV8
 FORMAL=/data/dev2/runs/dec/formal/m16/m16-$POINT
 IMAGE=decision20-train-fast:host2
 IMAGE_ID=sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54
-GPUS="1 2 3 4 5 6 7"
+GPUS="2 3 4 5 6 7 2"
 EXCLUDE="HoVer When2Call iSarcasmEval GSM8K BPoMP"
 onc "test -f $S/v2/eval/ix1/launch.sh" || { echo "mirror $SHA is not on node C" >&2; exit 2; }
 onc "grep -q '^  \[$NAME\]=\"$REF [0-9a-f]* $PKG\"' $S/v2/eval/ix1/launch.sh" ||
@@ -73,10 +74,10 @@ EOF
   parity)
     onc "test -f $PKG/MODEL_MANIFEST.json" || { echo "run stage first" >&2; exit 3; }
     onc "test ! -e $R/logs/ixp-parity-$NAME.exit" || { echo "parity of $NAME already ran" >&2; exit 3; }
-    onc "mkdir -p $R/logs; setsid nohup bash -c 'cd $S && bash v2/eval/ix1/launch.sh parity --src $M --model $NAME --gpu 1 \
+    onc "mkdir -p $R/logs; setsid nohup bash -c 'cd $S && bash v2/eval/ix1/launch.sh parity --src $M --model $NAME --gpu 2 \
       --run $R/parity/$NAME --rows $R/panel-7/compat-86.gold-free.jsonl.gz; echo \$? > $R/logs/ixp-parity-$NAME.exit' \
       > $R/logs/ixp-parity-$NAME.log 2>&1 < /dev/null &"
-    echo "$(date -u +%FT%TZ) $NAME parity gate started on node C GPU1"
+    echo "$(date -u +%FT%TZ) $NAME parity gate started on node C GPU2"
     until onc "test -f $R/logs/ixp-parity-$NAME.exit"; do sleep 30; done
     onc "cat $R/logs/ixp-parity-$NAME.exit; python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps({k: d[k] for k in (\"pass\", \"requests\", \"statuses\", \"max_abs_dp\")})); sys.exit(0 if d[\"pass\"] else 1)' $R/parity/$NAME/parity.json" ;;
   run)
@@ -84,8 +85,12 @@ EOF
       { echo "parity gate has not passed" >&2; exit 3; }
     onc "test ! -e $R/runs/$NAME" || { echo "run dir exists" >&2; exit 3; }
     onc "cd $S && bash v2/eval/ix1/launch.sh run --src $M --model $NAME --gpus '$GPUS' --run $R/runs/$NAME \
-      --rows-dir $R/panel-7 --cache $R/parity/$NAME/cache-frozen"
-    echo "$(date -u +%FT%TZ) $NAME: 7 shards started on node C GPU1-7"
+      --rows-dir $R/panel-7 --cache $R/parity/$NAME/cache-frozen --only '0 1 2 3 4 5'"
+    echo "$(date -u +%FT%TZ) $NAME: shards 0-5 started on node C GPU2-7"
+    until onc "test -f $R/runs/$NAME/shard-0/end_epoch"; do sleep 60; done
+    onc "cd $S && bash v2/eval/ix1/launch.sh run --src $M --model $NAME --gpus '$GPUS' --run $R/runs/$NAME \
+      --rows-dir $R/panel-7 --cache $R/parity/$NAME/cache-frozen --only 6"
+    echo "$(date -u +%FT%TZ) $NAME: shard 6 started on node C GPU2"
     for k in 0 1 2 3 4 5 6; do
       until onc "test -f $R/runs/$NAME/shard-$k/end_epoch"; do sleep 60; done
       e=$(onc "cat $R/runs/$NAME/shard-$k/exit_code")
