@@ -148,6 +148,7 @@ func registerMCPServerOperationRoutes(mux routeRegistrar, mcpHandler *handlers.M
 		auth.ProtectedMutationRoute("/api/mcp/servers/{id}/disconnect", auth.PermMcpManage, "mcp.server.disconnect", auth.SensitivitySensitive, auth.ResourceOwnerTools, 2<<20, http.MethodPost),
 		auth.ProtectedRoute("/api/mcp/servers/{id}/status", auth.PermMcpRead, auth.SensitivitySensitive, auth.ResourceOwnerTools, http.MethodGet),
 		auth.ProtectedMutationRoute("/api/mcp/servers/{id}/test", auth.PermMcpManage, "mcp.server.test", auth.SensitivitySensitive, auth.ResourceOwnerTools, 2<<20, http.MethodPost),
+		auth.ProtectedMutationRoute("/api/mcp/servers/test", auth.PermMcpManage, "mcp.server.test", auth.SensitivitySensitive, auth.ResourceOwnerTools, 2<<20, http.MethodPost),
 	}, serverHandler)
 }
 

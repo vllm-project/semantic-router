@@ -2303,6 +2303,25 @@
           "if": {
             "properties": {
               "type": {
+                "const": "prompt_cache"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/PromptCachePluginConfig"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "shadow_dispatch"
               }
             },
@@ -2328,6 +2347,7 @@
             "hallucination",
             "header_mutation",
             "memory",
+            "prompt_cache",
             "rag",
             "request_params",
             "response_cache",
@@ -4896,6 +4916,27 @@
         },
         "miss": {
           "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PromptCachePluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "ttl": {
+          "type": "string"
+        },
+        "targets": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "on_unsupported": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -7645,6 +7686,12 @@
         "display_name": "Context Compression",
         "description": "Compress selected context before provider dispatch.",
         "schema_ref": "#/$defs/ContextCompressionPluginConfig"
+      },
+      {
+        "type": "prompt_cache",
+        "display_name": "Prompt Cache",
+        "description": "Add bounded Anthropic prompt-cache markers after route selection.",
+        "schema_ref": "#/$defs/PromptCachePluginConfig"
       },
       {
         "type": "shadow_dispatch",

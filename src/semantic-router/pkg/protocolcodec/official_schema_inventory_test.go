@@ -45,7 +45,7 @@ func TestOfficialRequestFieldInventoriesAreClosed(t *testing.T) {
 				"stream_options", "temperature", "text", "tool_choice", "tools", "top_logprobs", "top_p",
 				"truncation", "user",
 			),
-			extensions: fields("auto_store"),
+			extensions: fields("auto_store", "client_metadata"),
 		},
 		{
 			name: "Anthropic Messages",
@@ -77,18 +77,20 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 		transport   []string
 		unsupported []string
 		extensions  []string
+		dropped     []string
 	}{
 		{
 			name: "OpenAI Chat Completions",
 			wire: chatRequestWire{},
 			semantic: fields(
 				"frequency_penalty", "max_completion_tokens", "max_tokens", "messages", "metadata", "model",
-				"n", "parallel_tool_calls", "presence_penalty", "reasoning_effort", "response_format", "seed",
-				"stop", "store", "stream", "temperature", "tool_choice", "tools", "top_p", "user",
+				"n", "parallel_tool_calls", "presence_penalty", "prompt_cache_key", "reasoning_effort",
+				"response_format", "seed", "stop", "store", "stream", "temperature", "tool_choice", "tools",
+				"top_p", "user",
 			),
 			unsupported: fields(
 				"audio", "function_call", "functions", "logit_bias", "logprobs", "modalities", "moderation",
-				"prediction", "prompt_cache_key", "prompt_cache_options", "prompt_cache_retention",
+				"prediction", "prompt_cache_options", "prompt_cache_retention",
 				"safety_identifier", "service_tier", "top_logprobs", "verbosity", "web_search_options",
 			),
 			extensions: fields("chat_template_kwargs", "reasoning_budget_tokens", "top_k", "min_p", "repetition_penalty", "cache_salt"),
@@ -99,16 +101,18 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 			wire: responsesRequestWire{},
 			semantic: fields(
 				"conversation", "input", "instructions", "max_output_tokens", "metadata", "model",
-				"parallel_tool_calls", "previous_response_id", "reasoning", "store", "stream", "temperature",
-				"text", "tool_choice", "tools", "top_p", "truncation", "user",
+				"parallel_tool_calls", "previous_response_id", "prompt_cache_key", "reasoning", "store",
+				"stream", "temperature", "text", "tool_choice", "tools", "top_p", "truncation", "user",
 			),
 			unsupported: fields(
-				"background", "context_management", "include", "max_tool_calls", "moderation", "prompt",
-				"prompt_cache_key", "prompt_cache_options", "prompt_cache_retention", "safety_identifier",
+				"background", "context_management", "max_tool_calls", "moderation", "prompt",
+				"prompt_cache_options", "prompt_cache_retention", "safety_identifier",
 				"service_tier", "top_logprobs",
 			),
 			transport:  fields("stream_options"),
 			extensions: fields("auto_store"),
+			// Accepted but never forwarded; decode reports each as a dropped diagnostic.
+			dropped: fields("client_metadata", "include"),
 		},
 		{
 			name: "Anthropic Messages",
@@ -125,6 +129,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 			assertClosedFieldDisposition(t, test.name, jsonFieldNames(reflect.TypeOf(test.wire)), map[string][]string{
 				"semantic": test.semantic, "transport": test.transport,
 				"unsupported": test.unsupported, "extension": test.extensions,
+				"dropped": test.dropped,
 			})
 		})
 	}
@@ -146,27 +151,27 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 			extensions: fields(
 				"do_remote_decode", "do_remote_prefill", "ec_transfer_params", "error", "kv_transfer_params", "metrics",
 				"prompt_logprobs", "prompt_routed_experts", "prompt_text", "prompt_token_ids", "remote_block_ids", "remote_engine_id",
-				"remote_host", "remote_port", "usage_breakdown", "x_groq",
+				"provider", "remote_host", "remote_port", "usage_breakdown", "x_groq",
 			),
 		},
 		{
 			name: "OpenAI Responses",
 			wire: responsesResponseWire{},
 			official: fields(
-				"background", "completed_at", "conversation", "created_at", "error", "id",
+				"access_programs", "background", "completed_at", "conversation", "created_at", "error", "id",
 				"incomplete_details", "instructions", "max_output_tokens", "max_tool_calls", "metadata",
 				"model", "moderation", "object", "output", "output_text", "parallel_tool_calls", "previous_response_id",
 				"prompt", "prompt_cache_key", "prompt_cache_options", "prompt_cache_retention", "reasoning",
 				"safety_identifier", "service_tier", "status", "temperature", "text", "tool_choice",
 				"tools", "top_logprobs", "top_p", "truncation", "usage", "user",
 			),
-			extensions: fields("conversation_id", "store"),
+			extensions: fields("billing", "conversation_id", "frequency_penalty", "presence_penalty", "store", "tool_usage"),
 		},
 		{
 			name: "Anthropic Messages",
 			wire: anthropicResponseWire{},
 			official: fields(
-				"container", "content", "context_management", "id", "model", "role", "stop_details", "stop_reason",
+				"container", "content", "context_management", "diagnostics", "id", "model", "role", "stop_details", "stop_reason",
 				"stop_sequence", "type", "usage",
 			),
 			extensions: fields("error"),
@@ -198,9 +203,10 @@ func TestOfficialUsageFieldInventoriesAreClosed(t *testing.T) {
 				"completion_tokens", "completion_tokens_details", "compute_units", "prompt_tokens",
 				"prompt_tokens_details", "total_tokens",
 			),
-			// xAI and Groq accounting fields on their OpenAI-compatible endpoints.
+			// xAI, Groq and OpenRouter accounting fields on their Chat endpoints.
 			extensions: fields(
-				"completion_time", "cost_in_usd_ticks", "num_sources_used", "prompt_time", "queue_time", "service_tier", "total_time",
+				"completion_time", "cost", "cost_details", "cost_in_usd_ticks", "is_byok", "num_sources_used",
+				"prompt_time", "queue_time", "server_tool_use", "service_tier", "total_time",
 			),
 		},
 		{

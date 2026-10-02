@@ -105,19 +105,30 @@ def matrix_payload(inventory: list[RecipeType], shard_count: int) -> dict[str, A
 
 def source_matrix_payload(
     source_inventories: list[RecipeSourceInventory[RecipeType]],
-    shard_count: int,
+    shard_count: int | None,
     repo_root: Path,
 ) -> dict[str, Any]:
     include: list[dict[str, Any]] = []
     for source_inventory in source_inventories:
         source = source_inventory.source
-        for index, shard in enumerate(
-            shard_inventory(list(source_inventory.recipes), shard_count)
-        ):
+        if shard_count is None:
+            shards = [
+                [recipe]
+                for recipe in sorted(
+                    source_inventory.recipes, key=lambda item: item.name
+                )
+            ]
+        else:
+            shards = shard_inventory(list(source_inventory.recipes), shard_count)
+        for index, shard in enumerate(shards):
             include.append(
                 {
                     "source": source.name,
-                    "shard": f"{source.name}-{index}",
+                    "shard": (
+                        f"{source.name}-{shard[0].name}"
+                        if shard_count is None
+                        else f"{source.name}-{index}"
+                    ),
                     "recipes": ",".join(recipe.name for recipe in shard),
                     "variants": sum(recipe.variants for recipe in shard),
                     "recipes_root": repo_relative_path(source.recipes_root, repo_root),
