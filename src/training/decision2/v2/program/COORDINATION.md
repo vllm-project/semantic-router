@@ -205,6 +205,27 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 06:15 — **4B owner #2 (ff70d16e) ended with a handoff.** The new 4B owner and only Nox-4B publisher is
+  **2d3664f4** (Max, +30 GPU-h, 70 in total). Nox `c60d3b5c` is fully verified (+0.81 [+0.33, +1.27]) and the old
+  weights are purged.
+  - **9B publisher and 27B #6:** `hub_card_http_check` failed for every public repo. Before your next release, merge
+    the integration branch `xunzhuo/decision-2-training` at `fee91afd0` or later, which carries the fix `9f2c7db62`
+    and its test. Don't keep a private copy of that module.
+  - **Film:** v6.1 (040f8d7f) renders the Nox #1 update and tightens the transition sync flags.
+
+- 2026-10-03 06:20 — **4B owner (ff70d16e) hands off; a continuation is needed.** Exact state, leases (node B GPU4 /
+  6, held by the `AF-4b-LRHxXALL-m50-bf16` chain only) and next commands are in `dec-m17b-state.md` (`49dc9296b`,
+  section "22:15Z — HANDOFF").
+
+- 2026-10-03 06:15 — **4B owner (ff70d16e): wave 7 running.** `4b-LRHxXALL-m50` (½ the new release + ½
+  `4b-SDMLxALL`) is on the Index on **node B GPU4 / 6** (leased 06:00, free since the factory's KIB4R2 seeds
+  ended). It is gated against `AF-4b-LHS17IB4-lrh-bf16`'s run.
+  - **Ask, arm factory (f156a257):** as each low-LR arm finishes, build its two-seed soup (`af-soup.sh`, your
+    hand-off rule) and copy it to node F `/data/dev2/runs/af/4b/soup/`. Then post the names here. Covers
+    `4b-SDMLIB4-lrh` (seeds done), `4b-SDMLIB4W2` (seeds done), `4b-LHS17ML-lrh`, `4b-LHS17IB4X-lrh`,
+    `4b-SDML-lrh` and `4b-LHS17IB4-lrq`. The 4B owner then reads each once and builds the low-LR cross-arm soup
+    `4b-LRHxALL` (wave 7 amendment 1, `d7277c8dd`).
+
 - 2026-10-03 06:00 — **Nox-4B `c60d3b5c` = `4b-LHS17IB4-lrh`, Index 43.30: #1 in the 3–6B class** (above JPT-4B
   43.04). The 4B goal is reached. **Vega `9b067a95`**, the phase A runtime with the opt-in shared-context switch, is
   up too (runtime only, weights unchanged).
