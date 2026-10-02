@@ -28,6 +28,14 @@
 #                          M10_SHARDS=N: GPUS is a pool and each of the N shards takes the first idle pool GPU
 #   status NODE NAME...    per model: parity verdict, shards, merged rows, bootstraps present
 #   fetch  NODE NAME...    small private summaries -> ~/code/decision2-program/private/9b-m10/NAME/ (mode 700)
+# Amendment 7 (gate vs the current release KIB4-a40, whose run M10-KIB4-a40-bf16 is on node C):
+#   kref   NODE            copy M10-KIB4-a40-bf16's merged results, compare and receipt from node C to NODE ix1/m10/refs
+#   gate   NODE RUN...     detached paired bootstraps (full, transfer; as ixchain.sh runs them) of a scored run on NODE
+#                          (an M10 or arm-factory run, read in place) minus M10-KIB4-a40-bf16 ->
+#                          ix1/m10/gate/RUN/paired-boot-{full,transfer}-vs-kib4a40.json
+#   gstatus NODE RUN...    which gate bootstraps exist
+#   gfetch NODE RUN...     the run's receipt, compare and kit index plus the gate bootstraps -> private/9b-m10/RUN/
+# Same-node copies (ship / soupcopy on node A or B) are local cp -a with the same SHA-256 list check.
 set -euo pipefail
 SHA=${1:?MIRROR_SHA} STAGE=${2:?STAGE}
 shift 2
@@ -62,6 +70,7 @@ copy() {  # SRC_NODE SRC_DIR DST_NODE DST_DIR: whole directory, SHA-256 lists eq
   on "$dn" "test ! -e '$dd'" || { echo "$dd exists on node $dn" >&2; return 3; }
   on "$dn" "mkdir -p '$(dirname "$dd")'"
   case "$sn$dn" in  # node A / B hold the key authorized on C-F; C-F pairs relay through node A
+    aa | bb) on "$sn" "cp -a '$sd' '$dd.part'" ;;
     a[c-f] | b[c-f]) on "$sn" "rsync -a -e '$KEY' '$sd/' '$(host "$dn"):$dd.part/'" ;;
     [c-f]a | [c-f]b) on "$dn" "rsync -a -e '$KEY' '$(host "$sn"):$sd/' '$dd.part/'" ;;
     [c-f][c-f])
@@ -231,6 +240,45 @@ EOF
       on "$N" "cat $R/parity/$NAME/parity.json" > "$d/parity.json" 2> /dev/null || rm -f "$d/parity.json"
       chmod 600 "$d"/*.json 2> /dev/null || true
       echo "$NAME -> $d ($(ls "$d" | wc -l) files)"
+    done ;;
+  kref)
+    N=${1:?NODE} K=M10-KIB4-a40-bf16
+    [ "$N" != c ] || { echo "node C reads its own runs" >&2; exit 2; }
+    on c "test -f $R/runs/$K/merged/results.jsonl" || { echo "no $K run on node C" >&2; exit 3; }
+    on "$N" "test -f $R/m10/refs/$K/merged/results.jsonl" && { echo "node $N has $K"; exit 0; }
+    on c "umask 077; rm -rf $R/m10/export/$K && mkdir -p $R/m10/export/$K/merged && \
+      cp -p $R/runs/$K/merged/{results.jsonl,compare.json,receipt.json} $R/m10/export/$K/merged/"
+    on "$N" "umask 077; mkdir -p $R/m10/refs"
+    copy c "$R/m10/export/$K" "$N" "$R/m10/refs/$K"
+    on c "rm -rf $R/m10/export/$K" ;;
+  gate)
+    N=${1:?NODE}
+    shift
+    on "$N" "test -f $S/v2/9b/lux9b/m10/gate.sh" || { echo "mirror $SHA is not on node $N" >&2; exit 2; }
+    on "$N" "mkdir -p $R/logs; setsid nohup bash $S/v2/9b/lux9b/m10/gate.sh $M $* >> $R/logs/m10gate.log 2>&1 < /dev/null & \
+      echo gate bootstraps started on node $N: $*" ;;
+  gstatus)
+    N=${1:?NODE}
+    shift
+    for RUN in "$@"; do on "$N" "echo $RUN: \$(ls $R/m10/gate/$RUN 2> /dev/null | tr '\n' ' ')"; done
+    on "$N" "tail -n 4 $R/logs/m10gate.log 2> /dev/null" ;;
+  gfetch)
+    N=${1:?NODE}
+    shift
+    for RUN in "$@"; do
+      d=$LOCAL/$RUN
+      (umask 077 && mkdir -p "$d")
+      for pair in runs/$RUN/merged/compare.json:compare.json runs/$RUN/merged/receipt.json:receipt.json \
+        runs/$RUN/merged/kit/index.json:kit-index.json runs/$RUN/family-delta-vs-ref.json:family-delta-vs-ref.json \
+        runs/$RUN/paired-boot-full-vs-ref.json:paired-boot-full-vs-ref.json \
+        runs/$RUN/paired-boot-transfer-vs-ref.json:paired-boot-transfer-vs-ref.json m10/gate/$RUN/ref.json:gate-ref.json \
+        m10/gate/$RUN/paired-boot-full-vs-kib4a40.json:paired-boot-full-vs-kib4a40.json \
+        m10/gate/$RUN/paired-boot-transfer-vs-kib4a40.json:paired-boot-transfer-vs-kib4a40.json; do
+        on "$N" "cat $R/${pair%%:*}" > "$d/${pair#*:}" 2> /dev/null || rm -f "$d/${pair#*:}"
+      done
+      on "$N" "cat $R/parity/$RUN/parity.json" > "$d/parity.json" 2> /dev/null || rm -f "$d/parity.json"
+      chmod 600 "$d"/*.json 2> /dev/null || true
+      echo "$RUN -> $d ($(ls "$d" | wc -l) files)"
     done ;;
   *) echo "unknown stage $STAGE" >&2; exit 2 ;;
 esac
