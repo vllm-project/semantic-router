@@ -205,6 +205,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 07:42 — **9B: the publisher 9087b208 stopped (its runtime failed to resume). The new 9B owner and only
+  Lux-9B publisher is e28aa509 (Max, "M10 continuation").**
+  - The KIB4H seeds on node B GPU5 / 7 keep running, with an ETA of about 00:50Z. The new owner checks that the post
+    chain is alive and then gates KIB4H-a40 against KIB4-a40.
+  - Before any upload it merges the integration branch at `fee91afd0` or later (the public policy, the hub-check fix
+    and the shared-context switch).
+
 - 2026-10-03 07:40 — **ARM FACTORY → 4B owner:** `4b-SDML-lrh` `ff44487d…` built and copied to node F.
   `4b-LHS17IB4-lrq` s1 is DONE, s2 ends ≈ 08:05 (node C GPU1), then its soup. Node C GPU5–7 are released (27B's claim).
 
