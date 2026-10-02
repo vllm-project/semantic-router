@@ -49,8 +49,8 @@ json.dump(s, open(f"{sys.argv[3]}/render-spec.json", "w"), indent=2)
 PY
 while read -r f; do
   mkdir -p "$LOCAL/root$(dirname "$f")"
-  on a "cat '$f'" > "$LOCAL/root$f"
-  [[ "$(on a "sha256sum < '$f'")" == "$(sha256sum < "$LOCAL/root$f")" ]] || { echo "$f differs after the copy" >&2; exit 3; }
+  on a "cat '$f'" < /dev/null > "$LOCAL/root$f"
+  [[ "$(on a "sha256sum < '$f'" < /dev/null)" == "$(sha256sum < "$LOCAL/root$f")" ]] || { echo "$f differs after the copy" >&2; exit 3; }
 done < "$LOCAL/files.txt"
 identity=$(on a "python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"model_sha256\"])' $IN/bf16/bf16-copy.json")
 [[ "$identity" =~ ^[0-9a-f]{64}$ ]] || { echo "no BF16 identity on node A" >&2; exit 3; }
