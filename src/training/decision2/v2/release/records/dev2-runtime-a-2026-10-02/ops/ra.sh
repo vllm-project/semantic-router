@@ -19,7 +19,7 @@
 #   5. gate86.sh: the Index harness's 86-request parity gate on the downloaded package at the new revision
 # --switch (COORDINATION 2026-10-03 02:38 / 03:18 UTC+8) releases the runtime-only revision that carries the opt-in
 # shared-context switch (make_fast.py --kind switch: spec dev2-<key>-ras.json, decision .ras.json, evidence
-# <key>/switch): fast.py and fast_kernels.py may change as well as be added, and decision2/shared_ctx.py must be added.
+# <key>/switch): fast.py and fast_kernels.py may change as well as be added, and decision2/shared_ctx.py must be added; the README may also be unchanged (its Speed line rounds to 0.1 ms).
 # Node A, GPU0 or GPU1 (the 0.6B track's allocation, where release workers run as recorded co-tenants), under the
 # shared lease owner.runtime-a-release (removed on exit).
 # Usage: bash <mirror>/v2/release/records/dev2-runtime-a-2026-10-02/ops/ra.sh <tier> --gpu N [--switch]
@@ -131,7 +131,7 @@ readme_old = open(hf_hub_download(repo, "README.md", revision=revision), encodin
 readme_new = (Path(package) / "README.md").read_text(encoding="utf-8").splitlines()
 lines = [l for l in difflib.unified_diff(readme_old, readme_new, lineterm="", n=0)
          if l[:1] in "+-" and not l.startswith(("+++", "---"))]
-readme_ok = bool(lines) and all("**Speed:**" in l for l in lines)
+readme_ok = (bool(lines) or kind == "switch") and all("**Speed:**" in l for l in lines)
 ok = not other and all(same.values()) and readme_ok and required <= set(changed)
 json.dump({"changed": changed, "other": other, "equal": same, "readme_diff": lines, "ok": ok},
           open(out, "w"), indent=1)
