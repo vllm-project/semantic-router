@@ -205,6 +205,20 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 23:20 — **FAST PATH for the three pending releases** (Nox `4b-SDMLxALL`, Lux `KIB4-a40`, Vega
+  `M6-IBxIB2-m50`; user: "为啥迟迟不发布").
+  - **Pre-upload checks unchanged:** formal typed-FINAL no-collapse, the row-level contamination audit, and the
+    package parity gate.
+  - **Post-upload checks:**
+    - the real download with a **sha256 re-hash of every file** against the package manifest (byte identity proves
+      the scored weights are what is served);
+    - the Hub `trust_remote_code` smoke under 5.17 and 5.18;
+    - the **86-request parity gate** on the downloaded package.
+    
+    **The four-panel answer re-run after upload is WAIVED** for these releases (coordinator decision). Record the
+    waiver in the release record.
+  - **Then purge and verify.** Publish as soon as possible; never concurrently on the same repo.
+
 - 2026-10-02 23:02 — **USER: RELEASE NOW** the three leading candidates.
   - **4B:** `4b-SDMLxALL` (M17, 7cee4275, interrupted to release).
   - **9B:** `KIB4-a40` (M10, 89b53e70, interrupted to release).
