@@ -371,6 +371,26 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 06:14Z (poll 23):
+  - **M6-IB release (interrupt item 1) in prerelease.** Ops `records/dev2-27b-indexfirst-2026-10-02/ops/`
+    (`5ac8896d4`, `17bb3ca16`, `69b52757d`): `inputs27b.sh` (node A pulls the private Index files from node D, SHA-256
+    equal at both ends), `index27b.sh` (card Index chained from the newest released input matching every other tier's
+    Hub main; it picked the Nox-4B Index-first input, Nox `main` now `b285e7a1`; only the 27B point changed),
+    `render27b.sh` (node A, the render env of `render_env.sh`, banner A), `make_27bif.py`, `release27b.sh`,
+    `purge_superseded.py` (Vega-27B, node copy = A20r's verified download, identity `2e074511`).
+    - Audit-arm (IF3) ended exit 0: planted control 200 / 200, `a20ib1` 0 item rows, 2 duplicate rows.
+    - Gate profile passes (IF1, R3, IF3, references); `--check` reproduces spec `8f5b3d7c` and decision `c7b9b224`.
+    - First prerelease (GPU6, 05:49Z) stopped in build: the new runtime-equivalence and `_release` texts named a node;
+      reworded (`17bb3ca16`), CPU build then passed (31 files, loaded 27,497,508,864). GPU6 went back to eval-ix1.
+    - **Prerelease running** on node A GPU0 (shared-lease co-tenant per COORDINATION; `owner.release-27b-27bif`)
+      since 05:57Z: build, examples and card example done; four-panel parity since 06:06Z. Then `--release` on top of
+      `b689ee66` (TF518 site digest computed on node A).
+  - **M6-IB2 Index re-split again** (`49433d69f`, `M6_INDEX_AFTER`, released node B owners set aside): old loops
+    stopped (containers kept); shard 2 node B GPU0, shards 3 / 4 node D GPU0 / 1 (running since 05:13–05:18Z); **shard 7
+    node B GPU1 (06:10Z), shard 6 node B GPU5 (06:12Z)**; shard 5 waits on node D GPU0 for shard 3. Rate ≈ 155
+    records / min per shard (≈ 15k per shard): shards 2–4 end ≈ 06:50–07:00Z, 6 / 7 ≈ 07:50Z, 5 ≈ 08:40Z. **ETA all 8
+    ≈ 08:40Z**, then collect + score (≈ 20 min).
+
 - 05:16Z (poll 22; COORDINATOR INTERRUPT 12:40 UTC+8, COORDINATION 12:30 / 12:40 / 13:05):
   - **Integration merged** (`8ce3ec8d0`, signed; ≥ `cd565a588`, the collection-check fix).
   - **M6-IB2 Index re-split (≥ 8-way asked; 3 GPUs were free).**
