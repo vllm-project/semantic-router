@@ -1,10 +1,10 @@
 {
   "schema": "dev2-release-spec/1",
   "_release": {
-    "successor": "Decision-2.0-Sol-2B successor 2b-RASD (decoder M13: the uniform average of two seeds of a full fine-tune of Decision 1.0 Sol on M12's 2b-RA TRAIN rows with the previous Decision 2.0 Sol 2B's answer probabilities as soft targets, KL weight 1.0; formal collection on the M16 path) under the user's Index-first release rule of 2026-10-02 09:55 UTC+8 and the coordinator's 13:05 UTC+8 choice: the private Index delta vs the current release significantly positive, plus the integrity checks; the per-tier choice by the largest Index-gain lower bound.",
+    "successor": "Decision-2.0-Sol-2B successor 2b-RASDML (decoder M15: the uniform average of two seeds of a full fine-tune of Decision 1.0 Sol on M12's 2b-RA TRAIN rows plus multilingual copies of released rows, with the previous Decision 2.0 Sol 2B's answer probabilities as soft targets, KL weight 1.0; formal collection on the M16 path) under the user's Index-first release rule of 2026-10-02 09:55 UTC+8 and the coordinator's 15:35 UTC+8 choice: the private Index delta vs the current release significantly positive, plus the integrity checks; the per-tier choice by the largest Index-gain lower bound.",
     "gate": "successor profile with the Index-first rule (index_first block, gate.py f3590ef2a) against the current revision 8ed41433 (its scored run dev2-2b-t1-derived): IF1 the full-panel private Index bootstrap of exactly these weights minus the current release's (both IX1 receipts bound, one panel), R3 no type collapsed, IF3 the row-level contamination audit; v3, human transfer, mlx-diag, exposure and public 231 (and at 2B the tier gates) are bound and printed as references. The Index files stay in node A's private tree. No mlx-diag run (COORDINATION 11:40: no reference-only evals).",
-    "scored": "T = 1: the sealed M16 formal run m16-2b-RASD (node B, image dbe5f32b), collected without calibration, adopted unchanged on node A (ops/prep.sh adopt / paired).",
-    "storage": "v2.release.bf16_copy of the frozen FP32 point (identity 341c2bd2 -> 40061c70; receipt dd1c0b9f).",
+    "scored": "T = 1: the sealed M16 formal run m16-2b-RASDML (node B, image dbe5f32b), collected without calibration, adopted unchanged on node A (ops/prep.sh adopt / paired).",
+    "storage": "v2.release.bf16_copy of the frozen FP32 point (identity 8c8e98e3 -> e20df76c; receipt 51b10eae).",
     "runtime": "vendor_source = the formal run's runner mirror 5b246b110 (training/model checked equal to the scored adapter sources at build time); runtime_source = automap_source = 99432d1a7, the released runtime, unchanged from the current revision.",
     "card": "the product card of the current revision with the successor's reports, the default banner (concept A, card round 4) and the round-3 Index conventions: card.index is built by python -m v2.release.card_index from the kit runs of every tier's current release weights, this tier's point scored on exactly these weights; card.assets rendered by v2.release.card_assets (Python 3.12.13, matplotlib 3.11.2, Pillow 12.3.0, Inter, the same logo); card.speed keeps the bench receipt of this runtime (same architecture, runtime and shapes).",
     "replaces_spec": {
@@ -74,7 +74,7 @@
   "profile": "qwen-full",
   "checkpoint": "/data/dev2/runs/release/inputs/dev2-2b-ixf/bf16/checkpoint",
   "expected_identity": {
-    "model_sha256": "40061c70b9df5efe46c42150dd638ada4c0f658f0cd54780dd16ca2ea3e8752e"
+    "model_sha256": "e20df76c14edb0d28ef17593f49a1870fdea9438ff4805594402e39766f3546c"
   },
   "calibration": null,
   "max_input_tokens": 16384,
@@ -83,7 +83,7 @@
     "repo_id": "llm-semantic-router/Decision-1.0-Sol-2B",
     "revision": "ce0c018a28de16d6639b1cd203b761bf643b89e6",
     "relation": "finetune",
-    "summary": "Every weight of Decision 1.0 Sol was fine-tuned (nothing frozen, no adapter). The release is the uniform average of two seeds of that fine-tune, trained with the previous Decision 2.0 Sol 2B's answer probabilities as soft targets (self-distillation). Decision 1.0 Sol is itself a text-only fine-tune of [Qwen/Qwen3.5-2B](https://huggingface.co/Qwen/Qwen3.5-2B) at `15852e8c16360a2fea060d615a32b45270f8a8fc` (Apache-2.0), whose text backbone and tokenizer this model inherits; the Qwen3.5 vision tower is not part of it."
+    "summary": "Every weight of Decision 1.0 Sol was fine-tuned (nothing frozen, no adapter). The release is the uniform average of two seeds of that fine-tune, trained with the previous Decision 2.0 Sol 2B's answer probabilities as soft targets (self-distillation) and with extra copies of released multilingual rows that keep the released multilingual token share. Decision 1.0 Sol is itself a text-only fine-tune of [Qwen/Qwen3.5-2B](https://huggingface.co/Qwen/Qwen3.5-2B) at `15852e8c16360a2fea060d615a32b45270f8a8fc` (Apache-2.0), whose text backbone and tokenizer this model inherits; the Qwen3.5 vision tower is not part of it."
   },
   "runtime_requirements": {
     "python": "3.12.13",
@@ -95,20 +95,20 @@
     "causal-conv1d": "1.7.0 (GPU convolution kernels)",
     "triton": "3.7.1 (persisted autotune cache)"
   },
-  "runtime_equivalence": "decision2/qwen.py loads this full checkpoint with the training/model sources vendored from the scored run's own runner mirror (5b246b110), whose SHA-256 equal the scored adapter sources (checked at build time), and applies the per-item batching, BF16-backbone / FP32-head execution, raw probabilities (temperature 1; no calibration file) and answer normalization of v2.dec.infer_dec, which for this non-residual checkpoint wraps the same DecisionModel without extra readouts. The scored checkpoint (341c2bd2) stored every tensor in FP32; this package (v2.release.bf16_copy) stores its Linear projection matrices in BF16 exactly as BF16 autocast rounds them and every other tensor bit for bit in FP32, and the runtime holds the backbone's BF16-exact Linear weights in BF16, the values BF16 autocast multiplies with. The runtime, the Transformers remote code (AutoModel with trust_remote_code) and the forward token budget are the current revision's. Checked on one GPU, in the scored image with a copy of the persisted Triton autotune cache of the formal run, against the sealed formal predictions of every scored prompt (typed-final 1,600, css15 6,547, public231 231) by release.sh --parity before and after the download, and AutoModel against the native runtime on every scored prompt.",
+  "runtime_equivalence": "decision2/qwen.py loads this full checkpoint with the training/model sources vendored from the scored run's own runner mirror (5b246b110), whose SHA-256 equal the scored adapter sources (checked at build time), and applies the per-item batching, BF16-backbone / FP32-head execution, raw probabilities (temperature 1; no calibration file) and answer normalization of v2.dec.infer_dec, which for this non-residual checkpoint wraps the same DecisionModel without extra readouts. The scored checkpoint (8c8e98e3) stored every tensor in FP32; this package (v2.release.bf16_copy) stores its Linear projection matrices in BF16 exactly as BF16 autocast rounds them and every other tensor bit for bit in FP32, and the runtime holds the backbone's BF16-exact Linear weights in BF16, the values BF16 autocast multiplies with. The runtime, the Transformers remote code (AutoModel with trust_remote_code) and the forward token budget are the current revision's. Checked on one GPU, in the scored image with a copy of the persisted Triton autotune cache of the formal run, against the sealed formal predictions of every scored prompt (typed-final 1,600, css15 6,547, public231 231) by release.sh --parity before and after the download, and AutoModel against the native runtime on every scored prompt.",
   "vendor_source": "/data/dev2/src/5b246b11096adbb8df73b6ba34f96b7373f7c95c-src_training_decision2/src/training/decision2",
   "runtime_source": "/data/dev2/src/99432d1a7da5adbc70212df78ae7ebf7e50b41e4-src_training_decision2/src/training/decision2",
   "scored": {
-    "label": "post-key same-panel run m16-2b-RASD at T = 1 (the sealed M16 formal run, collected without calibration; adopted and sealed)",
-    "report_sha256": "78f8b33016edb76946dbbb0700dcd12d79d7f5f82bcdfde7918db0103329784d",
-    "seal_sha256": "b77c7c1807de003f9c95891f8302d0d999508cc0b6b5e547fc0bf449e1c35d0e",
+    "label": "post-key same-panel run m16-2b-RASDML at T = 1 (the sealed M16 formal run, collected without calibration; adopted and sealed)",
+    "report_sha256": "6610c86ca1a9249c21cce031ee6df36b3c97d1ad7541458e91c4061154a10385",
+    "seal_sha256": "8283b9b76adb89e47dd92db5bfd6b8f4088a6be939ee0a0de962cc13d322d52f",
     "predictions_sha256": {
-      "typed-final": "3d3a4c60752b9b4e267b184d57853340bf3c3b196cf4b686631d9960014a071b",
-      "css15": "220d1004eca4630302bd6a822d548b605f5d99b308615100b8a48298bf382e99",
-      "public231": "e1dc4f8f449e7d18a534d37d4a5e5bca51535e2184b0f4587096f5d8f9160ebd"
+      "typed-final": "9439972f4338f9c102fee78df0669f78badaa80b1b1db9c3a4776b3ad8eff96e",
+      "css15": "036b677425af74a05d988f6bb07f2bd89abf1b23aca25c86ae5fafb81c980a23",
+      "public231": "51beacfa0409954da9dddf0e330b9c04fa6d22b9883c48b6b8b8687d8f8d9142"
     },
-    "paired_sha256": "93fd5017054e26a936a5db3a369e39e0b111034e561e534311a0ffa43aae6d1f",
-    "native_manifest": "/data/dev2/runs/dec/formal/m16/m16-2b-RASD/output/typed-final.predictions.jsonl.manifest.json"
+    "paired_sha256": "677e8edece5f40c85fce279fd7fbcaed547d60cfe881a496649fabe5a5082047",
+    "native_manifest": "/data/dev2/runs/dec/formal/m16/m16-2b-RASDML/output/typed-final.predictions.jsonl.manifest.json"
   },
   "licence": {
     "components": [
@@ -182,11 +182,11 @@
     ],
     "index": {
       "path": "/data/dev2/private/release/ixf-2b/decision-index-card.json",
-      "sha256": "7ee4035e5a381269ca4b6a5e0bbcd920284d3fd6b860e3e385583f14576ffe8d"
+      "sha256": "97a95897fb13b81addf033dee7984d53e996ddb8baad5076f706a0b7c752e22e"
     },
     "assets": {
       "dir": "/data/dev2/private/release/ixf-2b/2b",
-      "receipt_sha256": "5c7a370abfd42bbea89ce233e825b2d134b5f7592423c9fa2cd0478ed20fd106"
+      "receipt_sha256": "c7ed58103fb423e9ae0240c93c7ee86d8255892a2608cc1a18b8769225c00b97"
     },
     "speed": {
       "evidence": "v2/release/records/dev2-budget-2026-10-01/2b/extra/receipts/bench-new.json",
@@ -195,7 +195,7 @@
   },
   "bf16_copy": {
     "receipt": "/data/dev2/runs/release/inputs/dev2-2b-ixf/bf16/bf16-copy.json",
-    "sha256": "dd1c0b9f5ed6dbc9b2520e3d25e9fc4df542117b0da4c19b62cb833dcd3cd898"
+    "sha256": "51b10eae6d65944f4b3465200d4f67a60285ba5a7de1c2c94bd734717c692f3b"
   },
   "automap_source": "/data/dev2/src/99432d1a7da5adbc70212df78ae7ebf7e50b41e4-src_training_decision2/src/training/decision2",
   "remote_code": {
@@ -229,6 +229,6 @@
     }
   },
   "frozen_autotune_cache": {
-    "formal": "/data/dev2/runs/dec/formal/m16/m16-2b-RASD-cache (typed-final, css15, public231; manifest /data/dev2/runs/dec/formal/m16/m16-2b-RASD-cache.sha256)"
+    "formal": "/data/dev2/runs/dec/formal/m16/m16-2b-RASDML-cache (typed-final, css15, public231; manifest /data/dev2/runs/dec/formal/m16/m16-2b-RASDML-cache.sha256)"
   }
 }
