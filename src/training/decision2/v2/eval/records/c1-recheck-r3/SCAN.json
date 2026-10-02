@@ -1,0 +1,75 @@
+{
+ "boilerplate": {
+  "B1": "a training instructions or option text in >= 50 rows of its family in the file",
+  "B2": "an item unit in >= 50 items of the item's own task"
+ },
+ "controls": {
+  "eligible": 2295,
+  "exact_flagged": 200,
+  "pass": true,
+  "perturbed_flagged": 200,
+  "planted": 200
+ },
+ "datasets": {
+  "ib4-p1": {
+   "b1_template_strings": 13,
+   "boilerplate_only": {
+    "rows": 0,
+    "rows_by_kind": {},
+    "scored_items": 0
+   },
+   "exposed": {
+    "c1_groups": 0,
+    "c1_groups_by_source": {},
+    "groups": 0,
+    "rows": 0,
+    "rows_by_family": {},
+    "rows_by_rule": {},
+    "scored_items": 0,
+    "scored_items_by_source": {},
+    "scored_items_by_task": {}
+   },
+   "families": {
+    "fc_pick": 468,
+    "isarc2": 2636,
+    "sentfin3": 2661,
+    "sqa2": 3694
+   },
+   "groups": 5605,
+   "retired_items": {
+    "items": 0,
+    "rows_only_on_retired": 0
+   },
+   "rows": 9459,
+   "rows_matched": 0,
+   "sha256": "6045b456d4b3032db4b76d70d792e3e9e30aad13e16a8f86fb3e99bc325806fb"
+  }
+ },
+ "items": {
+  "items": 2874,
+  "scored": 2840,
+  "template_units": {
+   "E": 61,
+   "G": 603,
+   "N1": 59,
+   "N2": 83
+  },
+  "units": {
+   "E": 17758,
+   "G": 192479,
+   "N1": 15539,
+   "N2": 24194
+  }
+ },
+ "items_sha256": "d9e05aed6ee5c3917417e04a749398fac8b7acbc3fe03e3a9270c3705bcee427",
+ "rules": {
+  "E": "raw equality of a leaf of >= 20 characters",
+  "G": "a shared word 13-gram of normalized tokens within one leaf",
+  "N1": "equality of a whole normalized leaf of >= 6 tokens",
+  "N2": "equality of a normalized sentence or whole leaf of >= 8 tokens",
+  "normalization": "NFKC, casefold, \\w+ tokens (v2.data.ib1.index_guard)"
+ },
+ "schema": "dev2-c1-recheck-scan/1",
+ "spec": "r3-ib4p1",
+ "spec_sha256": "9601ad9490cd1f55ce53726e86e4119cb00827ba4b293cec5ae63ba89bc796b8"
+}
