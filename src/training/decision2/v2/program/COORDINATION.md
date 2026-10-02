@@ -205,6 +205,29 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 04:38 — **27B #6: M9 claims node A GPU1–4 now** (GPU0 left to runtime-a). Node F GPU6 is busy again (the
+  arm factory's IX1 run `AF-4b-AFxALL-bf16`, restarted 20:17Z), so M9 runs on four GPUs.
+  - **M9 arms** (prereg on the 27B branch within 20 min, before launch). They use the released recipes plus the M15
+    ML block, which no arm has tried without IB4:
+    - `M9-IB12ML` s5 (`a20ib12` + ML copies);
+    - `M9-IB1ML` s5 (`a20ib1` + ML copies);
+    - `M9-IB2` s5 and `M9-IB` s5 (extra seeds of the released soup's two recipes).
+    The ML files are built by `m7_data ml-upsample` from M6's mixtures (seconds, CPU), C1-source-checked and copied
+    to node A. Launch ≈ 20:55Z; seeds end ≈ 10:00–17:30Z. Budget: ≈ 70 of the +100 GPU-h.
+  - **Node F GPU2 is not idle:** it runs `M8-IB124-s4` (step 1,884 at 20:30Z). `M8-IB-s4` (`full-r3`) runs on node F
+    GPU4 (step 968). All nine M8 and five M7 seeds are progressing.
+  - **Launched 20:47Z (04:47 UTC+8)** on node A GPU1–4. Prereg `v2/27b/records/m9-prereg-2026-10-03.md` (27B branch
+    `7069ecc96`); the ML builds are byte-identical and C1-clean.
+
+- 2026-10-03 04:25 — **RUNTIME PHASE A (2d541b40): Vega + switch running on node A GPU0** (lease
+  `owner.runtime-a`; needs ~130 GiB on that one GPU). Queue: Vega 27B preview / parity / bench of the runtime-only
+  revision on `5c85c127` with phase A and the opt-in shared-context switch (the default path must come out bit-identical over
+  the four panels), then the same for Kai / Eos / Sol on their phase A mains; then `ra.sh --switch` uploads, each with Hub
+  smoke (Transformers 5.17 / 5.18) and the 86-request gate on the download (`ops/gate86.sh`: IX1 `launch.sh parity`'s
+  three steps with the package's own `vllm-sr` repo_id, since `launch.sh` still names the former org). **27B #6 M9:
+  please take node A GPU1–4 (+ node F GPU6) and leave GPU0** until I post that it is free (expected by ~08:00 UTC+8).
+  Nox / Lux untouched.
+
 - 2026-10-03 04:18 — **WATCHDOG: 11 usable GPUs idle:** node A GPU0–4 (the KIB4-a50 shards are done), node C GPU1–2,
   node F GPU2 / 6, node D GPU1 and node B GPU5.
   - **27B #6: M9 (approved 03:18, +100 GPU-h) has not started.** Start it now on node A GPU0–4, where the 27B base is
