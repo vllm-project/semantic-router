@@ -49,7 +49,7 @@ if [ "$STAGE" = pool ]; then
   for c in ${CAND//,/ }; do names+=("$(bash "$0" "$SHA" "$c" name)"); done
   M=/data/dev2/src/$SHA-src_training_decision2 R=/data/dev2/private/eval/index021/ix1
   on "$NODE" "test -f $M/src/training/decision2/v2/dec/ops/4bif/pool.py" || { echo "mirror $SHA is not on node $NODE" >&2; exit 2; }
-  on "$NODE" "mkdir -p $R/logs && setsid nohup python3 $M/src/training/decision2/v2/dec/ops/4bif/pool.py --mirror $M \
+  on "$NODE" "mkdir -p $R/logs; setsid nohup python3 $M/src/training/decision2/v2/dec/ops/4bif/pool.py --mirror $M \
     --panel panel-8 --gpus '$GPU' ${names[*]} >> $R/logs/4bif-pool-$NODE.log 2>&1 < /dev/null &"
   echo "$(date -u +%FT%TZ) pool on node $NODE GPUs ${GPU// /,}: ${names[*]} (log logs/4bif-pool-$NODE.log)"
   exit 0
