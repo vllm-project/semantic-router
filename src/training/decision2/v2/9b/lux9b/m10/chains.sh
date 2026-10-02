@@ -2,6 +2,8 @@
 # 9B M10 training chains on node B (prereg lux9b-m10-prereg-2026-10-02.md), one per GPU, each under the GPU's flock:
 #   GPU3 "KUP:1 KIBM:3"  (KUP-s1 pre-warms: its preflights run alone; status/prewarm.DONE after its one-step run)
 #   GPU2 "KUP:2"   GPU4 "KUP:3"   GPU6 "KIBM:1"   GPU7 "KIBM:2"   (after the pre-warm marker)
+#   M10_PHASE=2 (amendment 1; launched by ksw.sh teach once KSW is locked): GPU2 / 4 / 6 "KSW:1" / "KSW:2" / "KSW:3"
+#   (KSW = English-only x60 cut, IB1-r3 minus `sentfin` + IB2, K-a13IB self-distillation targets on the x60 rows)
 # Arms = the K-a13IB recipe (full fine-tuning of Lux 1.0, own-Lux KL 1.0 on x60 rows, IB rows gold only, CE + 0.5
 # Brier, backbone LR 1e-5, head LR 1e-4, seeds 20260926 / 1 / 2) at K-a13's 60,183,732 native tokens:
 #   KUP  = K-a13IB's TRAIN byte for byte, x60 rows loss weight 1.5, IB rows 1 (--example-weights);
@@ -19,15 +21,20 @@ M=/data/dev2/runs/9b/m10
 C=$M/chains ST=$M/status
 OPS=/data/dev2/src/$SRC/src/training/decision2/v2/9b/lux9b/m10
 mkdir -p "$C" "$ST" "$M/logs"
-case $GPU in
-  3) ITEMS="KUP:1 KIBM:3" ;;
-  2) ITEMS="KUP:2" ;;
-  4) ITEMS="KUP:3" ;;
-  6) ITEMS="KIBM:1" ;;
-  7) ITEMS="KIBM:2" ;;
-  *) echo "no M10 chain for node B GPU$GPU" >&2; exit 2 ;;
+PHASE=${M10_PHASE:-1}
+case $PHASE:$GPU in
+  1:3) ITEMS="KUP:1 KIBM:3" ;;
+  1:2) ITEMS="KUP:2" ;;
+  1:4) ITEMS="KUP:3" ;;
+  1:6) ITEMS="KIBM:1" ;;
+  1:7) ITEMS="KIBM:2" ;;
+  2:2) ITEMS="KSW:1" ;;
+  2:4) ITEMS="KSW:2" ;;
+  2:6) ITEMS="KSW:3" ;;
+  *) echo "no M10 phase-$PHASE chain for node B GPU$GPU" >&2; exit 2 ;;
 esac
 TAG=b$GPU
+[ "$PHASE" = 1 ] || TAG=b$GPU-p$PHASE
 
 if [ "$MODE" = launch ]; then
   mkdir "$C/launch-$TAG.lock" 2> /dev/null || { echo "M10 chain $TAG already launched"; exit 0; }
