@@ -74,25 +74,25 @@ class TaskSpec:
 # reported as coverage gaps rather than measured with a stand-in dataset.
 TASK_SPECS: dict[str, TaskSpec] = {
     "jailbreak": TaskSpec(
-        dataset_repo="llm-semantic-router/jailbreak-detection-dataset",
+        dataset_repo="vllm-sr/jailbreak-detection-dataset",
         split="test",
         text_field="text",
         label_field="label",
         compatible_artifact_repos=(
             LEGACY_MODEL_REGISTRY["jailbreak"]["id"],
             LEGACY_MODEL_REGISTRY["jailbreak"]["lora_id"],
-            "llm-semantic-router/mmbert-jailbreak-detector-merged",
-            "llm-semantic-router/mmbert-jailbreak-detector-lora",
+            "vllm-sr/mmbert-jailbreak-detector-merged",
+            "vllm-sr/mmbert-jailbreak-detector-lora",
         ),
     ),
     "fact-check": TaskSpec(
-        dataset_repo="llm-semantic-router/fact-check-classification-dataset",
+        dataset_repo="vllm-sr/fact-check-classification-dataset",
         split="test",
         text_field="text",
         label_field="label_id",
     ),
     "feedback": TaskSpec(
-        dataset_repo="llm-semantic-router/feedback-detector-dataset",
+        dataset_repo="vllm-sr/feedback-detector-dataset",
         split="validation",
         text_field="text",
         # The published split names this column label_name. The evaluation

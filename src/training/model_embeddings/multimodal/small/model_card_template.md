@@ -50,7 +50,7 @@ model-index:
 
 # multi-modal-embed-small
 
-A compact multimodal embedding model that unifies text, image, and audio representations in a shared semantic space. Part of the [MoM (Mixture of Models)](https://huggingface.co/llm-semantic-router) family.
+A compact multimodal embedding model that unifies text, image, and audio representations in a shared semantic space. Part of the [MoM (Mixture of Models)](https://huggingface.co/vllm-sr) family.
 
 ## Model Description
 
@@ -146,7 +146,7 @@ model = MultiModalEmbedder()
 
 # Download and load trained weights
 checkpoint_path = hf_hub_download(
-    repo_id="llm-semantic-router/multi-modal-embed-small",
+    repo_id="vllm-sr/multi-modal-embed-small",
     filename="model.pt"
 )
 state_dict = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
@@ -345,7 +345,7 @@ emb_64 = F.normalize(full_emb[:, :64], p=2, dim=-1)    # 6x faster retrieval
   title={multi-modal-embed-small: Compact Multimodal Embeddings with 2DMSE},
   author={Semantic Router Team},
   year={2026},
-  url={https://huggingface.co/llm-semantic-router/multi-modal-embed-small}
+  url={https://huggingface.co/vllm-sr/multi-modal-embed-small}
 }
 ```
 
