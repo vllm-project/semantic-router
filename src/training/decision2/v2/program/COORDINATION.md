@@ -205,6 +205,68 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 13:05 — **Eos-0.8B released** (`3de61185`, M16 `08b-RA-a75`, BF16; all checks pass; old weights purged).
+  - **Sol-2B goes straight to the highest candidate.** Not `2b-RA-a75`: a successor must significantly beat the
+    then-current release, so shipping RA-a75 first would likely block RAUP / RASD.
+  - **GPUs.** b49d1f36 runs the formal collections of `IS-2b-RASD` / `IS-2b-RAUP` on node B GPU1 and GPU5. They were
+    idle 27B leases, now `track=dec-2b-formal`. The 9B M10 seeds on node B GPU2–4 / 6–7 are untouched.
+  - **27B (355ad916).** Your node B pool is now GPU0 only; shard M6-IB2 over node D GPU0–1 and GPU4–7, plus the eval
+    fast lane (node E) as free.
+
+- 2026-10-02 12:40 — **SERVER-ONLY WORK (user directive; the local PC has little capacity and performance) and FILL
+  THE IDLE GPUs.**
+  - **Server-only.** Everything runs on the SSH servers:
+    - computation, tests (pytest in containers on node A / B), card rendering, bootstraps, analysis and data
+      processing;
+    - transfers: node to node directly. A / B hold the temporary key authorized on C–F; relay between C–F through A
+      or B, **never through the workstation**;
+    - storage: large artifacts and private results go to the node private store (`/data/dev2/private/...`). The local
+      private folder holds only small summaries (under 1 MB).
+    
+    The local PC only runs the agent shells, ssh / scp control commands and small git commits / pushes of text
+    records; GitHub credentials stay local.
+  - **GPU audit, 12:25:** only 15 of 43 usable GPUs were busy.
+    - Idle: node A GPU1, 2, 7; node B GPU0–7; node C GPU3; node D GPU4–7; node E GPU0–3, 6, 7; node F GPU2–7.
+    - Every track must put its assigned GPUs to work **within 30 min** and preregister in parallel. Long-lived idle
+      leases get reclaimed.
+  - **Latest private results:**
+    - 4B: M17 `LHS17SD-bf16` is the highest 4B candidate, ahead of `LHS10SD-bf16` and M13 `LHA10SD-bf16`.
+      5e7b8132 releases the highest.
+    - 9B: `IS-L9IB` fails (below K-a13IB), so **the Lux-9B publisher is now the 9B frontier worker (7e1c9ce8)**.
+    - 27B: `M6-IB` is measured; release it if its lower bound vs A20r is > 0.
+  - **Allocation v2 stands** (see 12:30), plus:
+    - the sweep takes node E GPU0–3 / 6–7 and node D GPU4–7 for its queue and any further frozen candidates;
+    - 27B re-shards M6-IB2's Index over node B GPU0, 1, 5 (and node D GPU4–7 if the sweep doesn't need them).
+
+- 2026-10-02 12:30 — **The user wants every size at #1 in its size class, plus efficient GPU use for the eval and train
+  loops. Release the HIGHEST candidate directly; never release a lower one when a higher one is measured.**
+  - **GPU audit (12:15):**
+    - About 16 usable GPUs were idle, many held by finished tracks.
+    - Reclaimed (owner files moved to `owner.prev-coord-*`): node A GPU1–2, node B GPU2–4, node E GPU0–2, node F
+      GPU4–5.
+    - Paused speed-up workers release node A GPU7, node B GPU6–7 and node E GPU3. The open-jev-fast study and the ROCm
+      kernels are paused by the user; their plan is in a gist and is not to be started.
+  - **Allocation v2 (preferred; leases remain the source of truth):**
+    - node A: GPU1–2 and 7 → 2B / 0.8B next arms (new worker); GPU3–6 → Index sweep chains.
+    - node B: GPU0, 1, 5 → 27B; shard M6-IB2's Index wider **now**, because two shards take about 4.7 h. GPU2–4 and
+      6–7 → 9B frontier push (new worker).
+    - node C: GPU1–7 → shared Index pool.
+    - node D: GPU0–1 → 27B Index; GPU2–3 → M6-IB2PN training; GPU4–7 → sweep, then the shared pool.
+    - node E: GPU0–3 and 6–7 → **eval fast lane**: release-critical Index runs on BF16 release weights, sharded at
+      least 6 ways, lease `track=eval-fast`, ≤ 2 h per lease.
+    - node F: GPU2, 3, 6, 7 → M17; GPU4–5 → 2B / 0.8B next arms.
+  - **Publisher per repo (single owner):**
+    - Eos-0.8B and Sol-2B: b49d1f36 for the releases in flight, then the 2B / 0.8B worker.
+    - Nox-4B: 5e7b8132 only. M17 (7cee4275) hands its candidates over; `LHS10SD-bf16` is the highest measured 4B
+      candidate.
+    - Lux-9B: the sweep for L9IB, then the 9B frontier worker.
+    - Vega-27B: 355ad916.
+  - **Eval-loop rules for everyone:** measure each candidate **once, on its BF16 release copy**; shard wide on free
+    GPUs; run independent release steps in parallel; no reference-only evaluations for releases.
+  - **Gap data.** The common deficits vs the size leaders (private analysis in `private/gap-2026-10-02/`):
+    RAGTruth, PhishNChips, VAST, iSarcasmEval, FinEntity, When2Call, Home appliances and GSM8K; plus HellaSwag at 2B,
+    and BFCL and ContractNLI at ≤ 0.8B. A new IB4 data worker builds licence-clean, non-test data for them.
+
 - 2026-10-02 11:35 — **PROGRESSIVE RELEASE DIRECTIVE (user standing intent: "让模型 repo 始终有最好的成绩的模型文件";
   "快速推进"). Applies to every Index-first release track.**
   1. **Release as soon as a frozen candidate qualifies:** Index 95% lower bound > 0 vs the **current** release, plus
