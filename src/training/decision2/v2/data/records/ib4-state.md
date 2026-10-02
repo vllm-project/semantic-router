@@ -8,3 +8,5 @@
 - 13:10 +08 — run a1 (`ae9eeeeb`): G0 / G0u controls pass, G1 / C1 names clean; G4 fails `sentfin3`, `fc_pick`,
   `w2c_act`, `smish`. Amendment 2: `smish`, `w2c_act` out of phase 1; `sentfin3` per-entity and `fc_pick` per-name
   balance; full re-audit in a fresh run.
+- 13:15 +08 — **phase 1 published**: `m6/ib4/p1` @ `76cea510` (sqa2, isarc2, sentfin3, fc_pick; TRAIN 9,459, DEV 782),
+  release-safe pending C1; results / announcement `ib4-p1-results-2026-10-02.md`. C1 custodian run requested.
