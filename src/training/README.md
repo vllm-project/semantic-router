@@ -119,8 +119,9 @@ codes (such as `INCOMPATIBLE_HARDWARE`, `INCOMPATIBLE_ARCHITECTURE`, `UNSUPPORTE
 ### Generate and verify
 
 From the repository root, run `make training-contract-generate` after changing Go
-types, then `make training-contract-check` to check generated drift, Go semantics,
-Python schema validation and provenance compatibility. In `dashboard/frontend`,
+types or the default capability descriptors, then `make training-contract-check`
+to check generated drift, Go semantics, Python schema validation and provenance
+compatibility. In `dashboard/frontend`,
 run `npx vitest run src/utils/trainingContract.test.ts` for Console consumption.
 
 The shared [selector and neural fixtures](../semantic-router/pkg/trainingcontract/testdata/)

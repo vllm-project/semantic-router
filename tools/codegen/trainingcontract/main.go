@@ -1,4 +1,5 @@
-// Command trainingcontract generates schema and TypeScript from the canonical Go contract.
+// Command trainingcontract generates schema, TypeScript and the default capability
+// catalog fixture from the canonical Go contract.
 package main
 
 import (
@@ -26,6 +27,9 @@ func main() {
 	data, err := json.MarshalIndent(schema, "", "  ")
 	must(err)
 	write(*root, "src/semantic-router/pkg/trainingcontract/training-v1.schema.json", append(data, '\n'), *check)
+	capabilities, err := json.MarshalIndent(c.DefaultRegistry().Catalog(), "", "  ")
+	must(err)
+	write(*root, "src/semantic-router/pkg/trainingcontract/testdata/capabilities.json", append(capabilities, '\n'), *check)
 	types := map[string]reflect.Type{}
 	var collect func(reflect.Type)
 	collect = func(t reflect.Type) {

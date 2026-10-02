@@ -363,6 +363,100 @@ func TestExtensionWithoutEditingSwitchStatement(t *testing.T) {
 	}
 }
 
+func TestPlanEnforcesDescriptorConstraints(t *testing.T) {
+	registry := DefaultRegistry()
+	minK, maxK := 1.0, 64.0
+	onnxOnly := ArchitectureDriverDescriptor{
+		ID:                "architecture/onnx-only@v1",
+		Family:            "onnx-only",
+		SupportedTargets:  []Target{LabelScores},
+		SupportedFormats:  []CapabilityID{"format/onnx@v1"},
+		SupportedRuntimes: []CapabilityID{"runtime/onnxruntime@v1"},
+	}
+	trainer := TrainerDescriptor{
+		ID:                     "trainer/constrained@v1",
+		Component:              Component{Name: "constrained", Version: "1"},
+		SupportedTargets:       []Target{LabelScores},
+		SupportedArchitectures: []CapabilityID{onnxOnly.ID},
+		SupportedExecutors:     []CapabilityID{"executor/train@v1"},
+		SupportedHardware:      []CapabilityID{"hardware/cuda@v1"},
+		SupportedPrecisions:    []CapabilityID{"precision/fp16@v1"},
+		ProducedFormats:        []CapabilityID{"format/safetensors@v1"},
+		Parameters: map[string]ParameterConstraint{
+			"k":      {Type: "int", Minimum: &minK, Maximum: &maxK},
+			"layers": {Type: "array"},
+		},
+	}
+	if err := registry.RegisterArchitecture(onnxOnly); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.RegisterTrainer(trainer); err != nil {
+		t.Fatal(err)
+	}
+	planner := NewPlanner(registry)
+	request := func() TrainingPlanRequest {
+		return TrainingPlanRequest{
+			SchemaVersion:     Version,
+			TargetContract:    LabelScores,
+			Trainer:           trainer.ID,
+			TrainingHardware:  "hardware/cuda@v1",
+			TrainingPrecision: "precision/fp16@v1",
+			Parameters:        map[string]any{"k": 8.0, "layers": []any{256.0, 128.0}},
+			QualificationTargets: []QualificationTargetRequest{{
+				Key: "onnx-cuda", Runtime: "runtime/onnxruntime@v1", Hardware: "hardware/cuda@v1", Precision: "precision/fp16@v1",
+			}},
+		}
+	}
+	if resp := planner.Plan(request()); !resp.Valid {
+		t.Fatalf("expected constrained plan to be valid, got diagnostics: %+v", resp.Diagnostics)
+	}
+
+	cases := []struct {
+		name   string
+		modify func(*TrainingPlanRequest)
+		code   DiagnosticCode
+		field  string
+	}{
+		{"below minimum", func(r *TrainingPlanRequest) { r.Parameters["k"] = 0.0 }, CodeInvalidParameter, "parameters.k"},
+		{"above maximum", func(r *TrainingPlanRequest) { r.Parameters["k"] = 65.0 }, CodeInvalidParameter, "parameters.k"},
+		{"not an array", func(r *TrainingPlanRequest) { r.Parameters["layers"] = "256,128" }, CodeInvalidParameter, "parameters.layers"},
+		{"runtime outside architecture", func(r *TrainingPlanRequest) {
+			r.QualificationTargets[0] = QualificationTargetRequest{
+				Key: "candle-cpu", Runtime: "runtime/candle@v1", Hardware: "hardware/cpu@v1", Precision: "precision/fp32@v1",
+			}
+		}, CodeIncompatibleArchitecture, "qualification_targets.candle-cpu.runtime"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := request()
+			tc.modify(&req)
+			resp := planner.Plan(req)
+			if resp.Valid || len(resp.Diagnostics) != 1 || resp.Diagnostics[0].Code != tc.code || resp.Diagnostics[0].Field != tc.field {
+				t.Fatalf("expected only %s on %s, got valid=%v diagnostics=%+v", tc.code, tc.field, resp.Valid, resp.Diagnostics)
+			}
+		})
+	}
+}
+
+func TestPlanParameterDiagnosticsFollowParameterNames(t *testing.T) {
+	resp := NewPlanner(DefaultRegistry()).Plan(TrainingPlanRequest{
+		SchemaVersion:     Version,
+		TargetContract:    Selector,
+		Trainer:           "trainer/selector@v1",
+		TrainingHardware:  "hardware/cpu@v1",
+		TrainingPrecision: "precision/fp32@v1",
+		Parameters:        map[string]any{"seed": "abc", "kernel": "bogus", "normalize": "yes"},
+	})
+	fields := make([]string, 0, len(resp.Diagnostics))
+	for _, d := range resp.Diagnostics {
+		fields = append(fields, d.Field)
+	}
+	want := []string{"parameters.kernel", "parameters.normalize", "parameters.seed"}
+	if !reflect.DeepEqual(fields, want) {
+		t.Fatalf("expected diagnostics %v, got %v", want, fields)
+	}
+}
+
 func TestCapabilityCatalogRoundTrip(t *testing.T) {
 	cat := DefaultRegistry().Catalog()
 	data, err := json.Marshal(cat)
@@ -390,24 +484,15 @@ func TestCapabilityCatalogRoundTrip(t *testing.T) {
 }
 
 func TestCapabilitiesFixture(t *testing.T) {
-	cat := DefaultRegistry().Catalog()
-	expected, err := json.MarshalIndent(cat, "", "  ")
+	expected, err := json.MarshalIndent(DefaultRegistry().Catalog(), "", "  ")
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected = append(expected, '\n')
-	path := "testdata/capabilities.json"
-	existing, err := os.ReadFile(path)
+	existing, err := os.ReadFile("testdata/capabilities.json")
 	if err != nil {
-		if os.IsNotExist(err) {
-			if err := os.WriteFile(path, expected, 0o644); err != nil {
-				t.Fatal(err)
-			}
-			return
-		}
 		t.Fatal(err)
 	}
-	if string(existing) != string(expected) {
-		_ = os.WriteFile(path, expected, 0o644)
+	if string(existing) != string(expected)+"\n" {
+		t.Fatal("testdata/capabilities.json is stale; run make training-contract-generate")
 	}
 }

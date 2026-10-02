@@ -2,6 +2,12 @@
   "schema_version": "semantic-router.training/v1",
   "targets": [
     {
+      "id": "target/selector.model-choice@v1",
+      "target_contract": "selector.model-choice/v1",
+      "display_name": "Model Selector",
+      "description": "Query-level model selection based on quality, latency, and cost objectives"
+    },
+    {
       "id": "target/signal.label-scores@v1",
       "target_contract": "signal.label-scores/v1",
       "display_name": "Label Scores (Classifier)",
@@ -12,145 +18,56 @@
       "target_contract": "signal.spans/v1",
       "display_name": "Signal Spans (Token/Span Classifier)",
       "description": "Entity and token-span level detection with unicode codepoint offsets"
-    },
-    {
-      "id": "target/selector.model-choice@v1",
-      "target_contract": "selector.model-choice/v1",
-      "display_name": "Model Selector",
-      "description": "Query-level model selection based on quality, latency, and cost objectives"
     }
   ],
   "trainers": [
     {
-      "id": "trainer/selector@v1",
+      "id": "trainer/hf-peft@v1",
       "component": {
-        "name": "selector",
+        "name": "hf-peft",
         "version": "1"
       },
-      "display_name": "Unified Model Selector Trainer",
+      "display_name": "Hugging Face Parameter-Efficient Fine-Tuning (LoRA)",
       "supported_targets": [
-        "selector.model-choice/v1"
+        "signal.label-scores/v1",
+        "signal.spans/v1"
       ],
       "supported_architectures": [
-        "architecture/selector-tabular@v1"
+        "architecture/hf-modernbert@v1",
+        "architecture/hf-bert@v1"
       ],
       "supported_executors": [
         "executor/train@v1"
       ],
       "supported_hardware": [
-        "hardware/cpu@v1"
+        "hardware/cuda@v1",
+        "hardware/rocm@v1"
       ],
       "supported_precisions": [
-        "precision/fp32@v1"
+        "precision/fp16@v1",
+        "precision/bf16@v1"
       ],
       "produced_formats": [
-        "format/selector-v2@v1"
+        "format/safetensors@v1"
       ],
       "parameters": {
-        "kernel": {
-          "type": "string",
+        "learning_rate": {
+          "type": "float",
           "required": false,
-          "default": "rbf",
-          "enum": [
-            "linear",
-            "rbf",
-            "poly"
-          ]
+          "default": 0.0002,
+          "description": "Learning rate"
         },
-        "normalize": {
-          "type": "bool",
-          "required": false,
-          "default": true,
-          "description": "Normalize observation features"
-        },
-        "seed": {
+        "lora_alpha": {
           "type": "int",
           "required": false,
-          "default": 42,
-          "description": "Random seed for splitting and initialization"
-        }
-      }
-    },
-    {
-      "id": "trainer/selector-knn@v1",
-      "component": {
-        "name": "selector-knn",
-        "version": "1"
-      },
-      "display_name": "K-Nearest Neighbors Selector",
-      "supported_targets": [
-        "selector.model-choice/v1"
-      ],
-      "supported_architectures": [
-        "architecture/selector-tabular@v1"
-      ],
-      "supported_executors": [
-        "executor/train@v1"
-      ],
-      "supported_hardware": [
-        "hardware/cpu@v1"
-      ],
-      "supported_precisions": [
-        "precision/fp32@v1"
-      ],
-      "produced_formats": [
-        "format/selector-v2@v1"
-      ],
-      "parameters": {
-        "k": {
-          "type": "int",
-          "required": false,
-          "default": 5,
-          "description": "Number of nearest neighbors"
+          "default": 16,
+          "description": "LoRA scaling alpha"
         },
-        "metric": {
-          "type": "string",
-          "required": false,
-          "default": "cosine",
-          "enum": [
-            "cosine",
-            "euclidean"
-          ]
-        }
-      }
-    },
-    {
-      "id": "trainer/selector-kmeans@v1",
-      "component": {
-        "name": "selector-kmeans",
-        "version": "1"
-      },
-      "display_name": "K-Means Selector",
-      "supported_targets": [
-        "selector.model-choice/v1"
-      ],
-      "supported_architectures": [
-        "architecture/selector-tabular@v1"
-      ],
-      "supported_executors": [
-        "executor/train@v1"
-      ],
-      "supported_hardware": [
-        "hardware/cpu@v1"
-      ],
-      "supported_precisions": [
-        "precision/fp32@v1"
-      ],
-      "produced_formats": [
-        "format/selector-v2@v1"
-      ],
-      "parameters": {
-        "k": {
+        "r": {
           "type": "int",
           "required": false,
           "default": 8,
-          "description": "Requested cluster count"
-        },
-        "max_iter": {
-          "type": "int",
-          "required": false,
-          "default": 300,
-          "description": "Maximum Lloyd iterations"
+          "description": "LoRA attention dimension"
         }
       }
     },
@@ -202,61 +119,144 @@
       }
     },
     {
-      "id": "trainer/hf-peft@v1",
+      "id": "trainer/selector-kmeans@v1",
       "component": {
-        "name": "hf-peft",
+        "name": "selector-kmeans",
         "version": "1"
       },
-      "display_name": "Hugging Face Parameter-Efficient Fine-Tuning (LoRA)",
+      "display_name": "K-Means Selector",
       "supported_targets": [
-        "signal.label-scores/v1",
-        "signal.spans/v1"
+        "selector.model-choice/v1"
       ],
       "supported_architectures": [
-        "architecture/hf-modernbert@v1",
-        "architecture/hf-bert@v1"
+        "architecture/selector-tabular@v1"
       ],
       "supported_executors": [
         "executor/train@v1"
       ],
       "supported_hardware": [
-        "hardware/cuda@v1",
-        "hardware/rocm@v1"
+        "hardware/cpu@v1"
       ],
       "supported_precisions": [
-        "precision/fp16@v1",
-        "precision/bf16@v1"
+        "precision/fp32@v1"
       ],
       "produced_formats": [
-        "format/safetensors@v1"
+        "format/selector-v2@v1"
       ],
       "parameters": {
-        "learning_rate": {
-          "type": "float",
-          "required": false,
-          "default": 0.0002,
-          "description": "Learning rate"
-        },
-        "lora_alpha": {
-          "type": "int",
-          "required": false,
-          "default": 16,
-          "description": "LoRA scaling alpha"
-        },
-        "r": {
+        "k": {
           "type": "int",
           "required": false,
           "default": 8,
-          "description": "LoRA attention dimension"
+          "description": "Requested cluster count"
+        },
+        "max_iter": {
+          "type": "int",
+          "required": false,
+          "default": 300,
+          "description": "Maximum Lloyd iterations"
+        }
+      }
+    },
+    {
+      "id": "trainer/selector-knn@v1",
+      "component": {
+        "name": "selector-knn",
+        "version": "1"
+      },
+      "display_name": "K-Nearest Neighbors Selector",
+      "supported_targets": [
+        "selector.model-choice/v1"
+      ],
+      "supported_architectures": [
+        "architecture/selector-tabular@v1"
+      ],
+      "supported_executors": [
+        "executor/train@v1"
+      ],
+      "supported_hardware": [
+        "hardware/cpu@v1"
+      ],
+      "supported_precisions": [
+        "precision/fp32@v1"
+      ],
+      "produced_formats": [
+        "format/selector-v2@v1"
+      ],
+      "parameters": {
+        "k": {
+          "type": "int",
+          "required": false,
+          "default": 5,
+          "description": "Number of nearest neighbors"
+        },
+        "metric": {
+          "type": "string",
+          "required": false,
+          "default": "cosine",
+          "enum": [
+            "cosine",
+            "euclidean"
+          ]
+        }
+      }
+    },
+    {
+      "id": "trainer/selector@v1",
+      "component": {
+        "name": "selector",
+        "version": "1"
+      },
+      "display_name": "Unified Model Selector Trainer",
+      "supported_targets": [
+        "selector.model-choice/v1"
+      ],
+      "supported_architectures": [
+        "architecture/selector-tabular@v1"
+      ],
+      "supported_executors": [
+        "executor/train@v1"
+      ],
+      "supported_hardware": [
+        "hardware/cpu@v1"
+      ],
+      "supported_precisions": [
+        "precision/fp32@v1"
+      ],
+      "produced_formats": [
+        "format/selector-v2@v1"
+      ],
+      "parameters": {
+        "kernel": {
+          "type": "string",
+          "required": false,
+          "default": "rbf",
+          "enum": [
+            "linear",
+            "rbf",
+            "poly"
+          ]
+        },
+        "normalize": {
+          "type": "bool",
+          "required": false,
+          "default": true,
+          "description": "Normalize observation features"
+        },
+        "seed": {
+          "type": "int",
+          "required": false,
+          "default": 42,
+          "description": "Random seed for splitting and initialization"
         }
       }
     }
   ],
   "architectures": [
     {
-      "id": "architecture/hf-modernbert@v1",
-      "family": "modernbert",
-      "display_name": "Hugging Face ModernBERT",
+      "id": "architecture/hf-bert@v1",
+      "family": "bert",
+      "display_name": "Hugging Face BERT / RoBERTa",
       "supported_targets": [
         "signal.label-scores/v1",
         "signal.spans/v1"
@@ -275,9 +275,9 @@
       ]
     },
     {
-      "id": "architecture/hf-bert@v1",
-      "family": "bert",
-      "display_name": "Hugging Face BERT / RoBERTa",
+      "id": "architecture/hf-modernbert@v1",
+      "family": "modernbert",
+      "display_name": "Hugging Face ModernBERT",
       "supported_targets": [
         "signal.label-scores/v1",
         "signal.spans/v1"
@@ -312,27 +312,25 @@
   ],
   "executors": [
     {
-      "id": "executor/train@v1",
-      "component": {
-        "name": "train",
-        "version": "1"
-      },
-      "display_name": "Standard Training Task Executor",
-      "supported_hardware": [
-        "hardware/cpu@v1",
-        "hardware/cuda@v1",
-        "hardware/rocm@v1",
-        "hardware/metal@v1"
-      ],
-      "isolation_level": "container"
-    },
-    {
       "id": "executor/evaluate@v1",
       "component": {
         "name": "evaluate",
         "version": "1"
       },
       "display_name": "Standard Evaluation Task Executor",
+      "supported_hardware": [
+        "hardware/cpu@v1",
+        "hardware/cuda@v1"
+      ],
+      "isolation_level": "container"
+    },
+    {
+      "id": "executor/onnx-exporter@v1",
+      "component": {
+        "name": "onnx-exporter",
+        "version": "1"
+      },
+      "display_name": "Safetensors to ONNX Exporter",
       "supported_hardware": [
         "hardware/cpu@v1",
         "hardware/cuda@v1"
@@ -354,15 +352,17 @@
       "isolation_level": "container"
     },
     {
-      "id": "executor/onnx-exporter@v1",
+      "id": "executor/train@v1",
       "component": {
-        "name": "onnx-exporter",
+        "name": "train",
         "version": "1"
       },
-      "display_name": "Safetensors to ONNX Exporter",
+      "display_name": "Standard Training Task Executor",
       "supported_hardware": [
         "hardware/cpu@v1",
-        "hardware/cuda@v1"
+        "hardware/cuda@v1",
+        "hardware/rocm@v1",
+        "hardware/metal@v1"
       ],
       "isolation_level": "container"
     }
@@ -383,20 +383,6 @@
       ]
     },
     {
-      "id": "format/selector-v2@v1",
-      "component": {
-        "name": "selector-v2",
-        "version": "1"
-      },
-      "display_name": "Selector Model Format v2",
-      "file_extensions": [
-        ".json"
-      ],
-      "direct_runtimes": [
-        "runtime/native@v1"
-      ]
-    },
-    {
       "id": "format/safetensors@v1",
       "component": {
         "name": "safetensors",
@@ -410,30 +396,23 @@
       "direct_runtimes": [
         "runtime/candle@v1"
       ]
+    },
+    {
+      "id": "format/selector-v2@v1",
+      "component": {
+        "name": "selector-v2",
+        "version": "1"
+      },
+      "display_name": "Selector Model Format v2",
+      "file_extensions": [
+        ".json"
+      ],
+      "direct_runtimes": [
+        "runtime/native@v1"
+      ]
     }
   ],
   "runtimes": [
-    {
-      "id": "runtime/native@v1",
-      "component": {
-        "name": "native",
-        "version": "1"
-      },
-      "display_name": "Native Router Runtime",
-      "supported_targets": [
-        "selector.model-choice/v1"
-      ],
-      "accepted_formats": [
-        "format/selector-v2@v1"
-      ],
-      "supported_hardware": [
-        "hardware/cpu@v1"
-      ],
-      "supported_precisions": [
-        "precision/fp32@v1"
-      ],
-      "connector": "sr.native.embedded.v1"
-    },
     {
       "id": "runtime/candle@v1",
       "component": {
@@ -457,6 +436,27 @@
         "precision/fp16@v1"
       ],
       "connector": "sr.candle.embedded.v1"
+    },
+    {
+      "id": "runtime/native@v1",
+      "component": {
+        "name": "native",
+        "version": "1"
+      },
+      "display_name": "Native Router Runtime",
+      "supported_targets": [
+        "selector.model-choice/v1"
+      ],
+      "accepted_formats": [
+        "format/selector-v2@v1"
+      ],
+      "supported_hardware": [
+        "hardware/cpu@v1"
+      ],
+      "supported_precisions": [
+        "precision/fp32@v1"
+      ],
+      "connector": "sr.native.embedded.v1"
     },
     {
       "id": "runtime/onnxruntime@v1",
@@ -486,9 +486,9 @@
   ],
   "precisions": [
     {
-      "id": "precision/fp32@v1",
-      "name": "float32",
-      "bits_per_element": 32
+      "id": "precision/bf16@v1",
+      "name": "bfloat16",
+      "bits_per_element": 16
     },
     {
       "id": "precision/fp16@v1",
@@ -496,9 +496,9 @@
       "bits_per_element": 16
     },
     {
-      "id": "precision/bf16@v1",
-      "name": "bfloat16",
-      "bits_per_element": 16
+      "id": "precision/fp32@v1",
+      "name": "float32",
+      "bits_per_element": 32
     },
     {
       "id": "precision/int8@v1",
@@ -507,27 +507,6 @@
     }
   ],
   "hardware": [
-    {
-      "id": "hardware/rocm@v1",
-      "provider": "amd",
-      "device_type": "gpu",
-      "display_name": "AMD ROCm GPU",
-      "supported_precisions": [
-        "precision/fp32@v1",
-        "precision/fp16@v1",
-        "precision/bf16@v1"
-      ]
-    },
-    {
-      "id": "hardware/metal@v1",
-      "provider": "apple",
-      "device_type": "gpu",
-      "display_name": "Apple Silicon Metal GPU",
-      "supported_precisions": [
-        "precision/fp32@v1",
-        "precision/fp16@v1"
-      ]
-    },
     {
       "id": "hardware/cpu@v1",
       "provider": "cpu",
@@ -547,6 +526,27 @@
         "precision/fp16@v1",
         "precision/bf16@v1",
         "precision/int8@v1"
+      ]
+    },
+    {
+      "id": "hardware/metal@v1",
+      "provider": "apple",
+      "device_type": "gpu",
+      "display_name": "Apple Silicon Metal GPU",
+      "supported_precisions": [
+        "precision/fp32@v1",
+        "precision/fp16@v1"
+      ]
+    },
+    {
+      "id": "hardware/rocm@v1",
+      "provider": "amd",
+      "device_type": "gpu",
+      "display_name": "AMD ROCm GPU",
+      "supported_precisions": [
+        "precision/fp32@v1",
+        "precision/fp16@v1",
+        "precision/bf16@v1"
       ]
     }
   ],

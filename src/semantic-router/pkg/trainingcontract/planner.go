@@ -2,7 +2,9 @@ package trainingcontract
 
 import (
 	"fmt"
+	"maps"
 	"math"
+	"reflect"
 	"slices"
 	"sort"
 
@@ -104,15 +106,15 @@ type PlannedVariant struct {
 
 // ResolvedTrainingPlan is the executable, deterministic plan resulting from capability planning.
 type ResolvedTrainingPlan struct {
-	TargetContract     Target            `json:"target_contract"`
-	Trainer            CapabilityID      `json:"trainer"`
-	Architecture       CapabilityID      `json:"architecture,omitempty"`
-	Executor           CapabilityID      `json:"executor"`
-	TrainingHardware   CapabilityID      `json:"training_hardware"`
-	TrainingPrecision  CapabilityID      `json:"training_precision"`
-	Tasks              []TaskSpec        `json:"tasks"`
-	ArtifactVariants   []PlannedVariant  `json:"artifact_variants"`
-	ResolvedParameters map[string]any    `json:"resolved_parameters"`
+	TargetContract     Target           `json:"target_contract"`
+	Trainer            CapabilityID     `json:"trainer"`
+	Architecture       CapabilityID     `json:"architecture,omitempty"`
+	Executor           CapabilityID     `json:"executor"`
+	TrainingHardware   CapabilityID     `json:"training_hardware"`
+	TrainingPrecision  CapabilityID     `json:"training_precision"`
+	Tasks              []TaskSpec       `json:"tasks"`
+	ArtifactVariants   []PlannedVariant `json:"artifact_variants"`
+	ResolvedParameters map[string]any   `json:"resolved_parameters"`
 }
 
 // TrainingPlanResponse returns either a fully resolved plan or structured diagnostics.
@@ -166,12 +168,10 @@ func (p *Planner) Plan(req TrainingPlanRequest) TrainingPlanResponse {
 		addError(CodeUnknownCapability, "trainer",
 			fmt.Sprintf("unknown trainer capability ID %q", req.Trainer),
 			"Register the trainer descriptor or choose an existing trainer from the capability catalog")
-	} else {
-		if !slices.Contains(trainer.SupportedTargets, req.TargetContract) {
-			addError(CodeUnsupportedTarget, "trainer",
-				fmt.Sprintf("trainer %q does not support target contract %q", req.Trainer, req.TargetContract),
-				fmt.Sprintf("Trainer supports targets: %v", trainer.SupportedTargets))
-		}
+	} else if !slices.Contains(trainer.SupportedTargets, req.TargetContract) {
+		addError(CodeUnsupportedTarget, "trainer",
+			fmt.Sprintf("trainer %q does not support target contract %q", req.Trainer, req.TargetContract),
+			fmt.Sprintf("Trainer supports targets: %v", trainer.SupportedTargets))
 	}
 
 	// 2. Resolve Architecture (if provided)
@@ -199,6 +199,7 @@ func (p *Planner) Plan(req TrainingPlanRequest) TrainingPlanResponse {
 		// Default to first supported architecture
 		resolvedArch = trainer.SupportedArchitectures[0]
 	}
+	archDesc, archKnown := p.registry.GetArchitecture(resolvedArch)
 
 	// 3. Resolve Training Hardware
 	hw, hwOk := p.registry.GetHardware(req.TrainingHardware)
@@ -274,7 +275,8 @@ func (p *Planner) Plan(req TrainingPlanRequest) TrainingPlanResponse {
 	// 6. Validate & Resolve Parameters
 	resolvedParams := make(map[string]any)
 	if ok {
-		for paramName, constraint := range trainer.Parameters {
+		for _, paramName := range slices.Sorted(maps.Keys(trainer.Parameters)) {
+			constraint := trainer.Parameters[paramName]
 			val, present := req.Parameters[paramName]
 			if !present {
 				if constraint.Required {
@@ -288,32 +290,20 @@ func (p *Planner) Plan(req TrainingPlanRequest) TrainingPlanResponse {
 			}
 
 			// Validate type and constraints
+			field := fmt.Sprintf("parameters.%s", paramName)
+			number, isNumber := numberValue(val)
 			validType := true
 			switch constraint.Type {
 			case "int":
-				switch n := val.(type) {
-				case float64:
-					if math.Mod(n, 1.0) != 0 {
-						validType = false
-					}
-				case int, int64:
-					// OK
-				default:
-					validType = false
-				}
+				validType = isNumber && math.Mod(number, 1.0) == 0
 			case "float":
-				switch val.(type) {
-				case float64, float32, int, int64:
-					// OK
-				default:
-					validType = false
-				}
+				validType = isNumber
 			case "string":
 				strVal, isStr := val.(string)
 				if !isStr {
 					validType = false
 				} else if len(constraint.Enum) > 0 && !slices.Contains(constraint.Enum, strVal) {
-					addError(CodeInvalidParameter, fmt.Sprintf("parameters.%s", paramName),
+					addError(CodeInvalidParameter, field,
 						fmt.Sprintf("parameter %q value %q is not in allowed enum %v", paramName, strVal, constraint.Enum),
 						fmt.Sprintf("Choose one of: %v", constraint.Enum))
 				}
@@ -321,13 +311,24 @@ func (p *Planner) Plan(req TrainingPlanRequest) TrainingPlanResponse {
 				if _, isBool := val.(bool); !isBool {
 					validType = false
 				}
+			case "array":
+				validType = val != nil && reflect.TypeOf(val).Kind() == reflect.Slice
 			}
 
-			if !validType {
-				addError(CodeInvalidParameter, fmt.Sprintf("parameters.%s", paramName),
+			switch {
+			case !validType:
+				addError(CodeInvalidParameter, field,
 					fmt.Sprintf("parameter %q has invalid type, expected %s", paramName, constraint.Type),
 					fmt.Sprintf("Provide a valid %s value", constraint.Type))
-			} else {
+			case isNumber && constraint.Minimum != nil && number < *constraint.Minimum:
+				addError(CodeInvalidParameter, field,
+					fmt.Sprintf("parameter %q value %v is below the minimum %v", paramName, val, *constraint.Minimum),
+					fmt.Sprintf("Use a value of at least %v", *constraint.Minimum))
+			case isNumber && constraint.Maximum != nil && number > *constraint.Maximum:
+				addError(CodeInvalidParameter, field,
+					fmt.Sprintf("parameter %q value %v is above the maximum %v", paramName, val, *constraint.Maximum),
+					fmt.Sprintf("Use a value of at most %v", *constraint.Maximum))
+			default:
 				resolvedParams[paramName] = val
 			}
 		}
@@ -385,6 +386,12 @@ func (p *Planner) Plan(req TrainingPlanRequest) TrainingPlanResponse {
 				addError(CodeUnsupportedQualification, fmt.Sprintf("qualification_targets.%s.runtime", qTarget.Key),
 					fmt.Sprintf("runtime %q does not support target contract %q", qTarget.Runtime, req.TargetContract),
 					fmt.Sprintf("Runtime supports targets: %v", runtime.SupportedTargets))
+				continue
+			}
+			if archKnown && len(archDesc.SupportedRuntimes) > 0 && !slices.Contains(archDesc.SupportedRuntimes, qTarget.Runtime) {
+				addError(CodeIncompatibleArchitecture, fmt.Sprintf("qualification_targets.%s.runtime", qTarget.Key),
+					fmt.Sprintf("architecture %q does not support runtime %q", resolvedArch, qTarget.Runtime),
+					fmt.Sprintf("Architecture supports runtimes: %v", archDesc.SupportedRuntimes))
 				continue
 			}
 			qHw, qHwOk := p.registry.GetHardware(qTarget.Hardware)
@@ -543,4 +550,18 @@ func (p *Planner) Plan(req TrainingPlanRequest) TrainingPlanResponse {
 		},
 		Diagnostics: diagnostics,
 	}
+}
+
+func numberValue(val any) (float64, bool) {
+	switch n := val.(type) {
+	case float64:
+		return n, true
+	case float32:
+		return float64(n), true
+	case int:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	}
+	return 0, false
 }

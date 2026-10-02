@@ -2,7 +2,9 @@ package trainingcontract
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 
@@ -395,43 +397,26 @@ func (r *CapabilityRegistry) Catalog() CapabilityCatalog {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	cat := CapabilityCatalog{
+	return CapabilityCatalog{
 		SchemaVersion: Version,
-		Targets:       make([]TargetDescriptor, 0, len(r.targets)),
-		Trainers:      make([]TrainerDescriptor, 0, len(r.trainers)),
-		Architectures: make([]ArchitectureDriverDescriptor, 0, len(r.architectures)),
-		Executors:     make([]ExecutorDescriptor, 0, len(r.executors)),
-		Formats:       make([]ArtifactFormatDescriptor, 0, len(r.formats)),
-		Runtimes:      make([]RuntimeAdapterDescriptor, 0, len(r.runtimes)),
-		Precisions:    make([]PrecisionDescriptor, 0, len(r.precisions)),
-		Hardware:      make([]HardwareProviderDescriptor, 0, len(r.hardware)),
+		Targets:       sortedByID(r.targets),
+		Trainers:      sortedByID(r.trainers),
+		Architectures: sortedByID(r.architectures),
+		Executors:     sortedByID(r.executors),
+		Formats:       sortedByID(r.formats),
+		Runtimes:      sortedByID(r.runtimes),
+		Precisions:    sortedByID(r.precisions),
+		Hardware:      sortedByID(r.hardware),
 		Conversions:   append([]ConversionRule(nil), r.conversions...),
 	}
-	for _, t := range r.targets {
-		cat.Targets = append(cat.Targets, t)
+}
+
+func sortedByID[T any](descriptors map[CapabilityID]T) []T {
+	sorted := make([]T, 0, len(descriptors))
+	for _, id := range slices.Sorted(maps.Keys(descriptors)) {
+		sorted = append(sorted, descriptors[id])
 	}
-	for _, tr := range r.trainers {
-		cat.Trainers = append(cat.Trainers, tr)
-	}
-	for _, a := range r.architectures {
-		cat.Architectures = append(cat.Architectures, a)
-	}
-	for _, e := range r.executors {
-		cat.Executors = append(cat.Executors, e)
-	}
-	for _, f := range r.formats {
-		cat.Formats = append(cat.Formats, f)
-	}
-	for _, rt := range r.runtimes {
-		cat.Runtimes = append(cat.Runtimes, rt)
-	}
-	for _, p := range r.precisions {
-		cat.Precisions = append(cat.Precisions, p)
-	}
-	for _, h := range r.hardware {
-		cat.Hardware = append(cat.Hardware, h)
-	}
-	return cat
+	return sorted
 }
 
 // DefaultRegistry returns the populated standard registry with built-in capabilities.
