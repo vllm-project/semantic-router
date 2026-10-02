@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Decision-2.0-Lux-9B Index-first successor from 9B M10 (user rule 2026-10-02 09:55; the Lux-9B publisher): one node A
 # GPU under the shared lease owner.release-9b-m10, the scored image host2 (f83b1d10) with its kernels,
-# HIP_FORCE_DEV_KERNARG=1 and a fresh copy of the formal runs' persisted autotune cache (formal-m9/triton-cache,
-# digest-checked).
+# HIP_FORCE_DEV_KERNARG=1 and a fresh copy of the current revision's frozen pre-warmed autotune cache
+# (release/triton/runtime-a-9b: the formal runs' persisted cache plus the phase A fused kernels; digest-checked).
 #   --prerelease  release.sh without upload on the final spec and decision: build, native and card examples, AutoModel
 #                 and pipeline before upload, exact parity of typed-final 1,600 / css15 6,547 / public231 231 /
 #                 mlx-diag 2,275 against the T = 1 derivation of the formal run, then verify_bundle
-#   --release     only if the Hub main is the current revision 6af07f36 (checked right before the upload; never
+#   --release     only if the Hub main is the current revision f77b41f5 (checked right before the upload; never
 #                 concurrently) and no other release.sh runs on node A: hf_headroom.sh, then release.sh --upload
 #                 --collect --already-collected --hub-site tf518=... with the same parity before upload and after the
 #                 real download, AutoModel against native on every scored prompt and the Hub trust_remote_code smoke
@@ -39,13 +39,13 @@ LEASE=release-9b-m10
 IMAGE=decision20-train-fast:host2
 IMAGE_ID=sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54
 name=Decision-2.0-Lux-9B REPO=vllm-sr/Decision-2.0-Lux-9B
-superseded=6af07f3684132ab684d4f064a723ae623ec3956f
+superseded=f77b41f5c1a98974548d929c03e7bce008f71bd0
 SPEC=$S/v2/release/specs/dev2-9b-m10-$CAND.json
 DECISION=$R/$name.decision.m10-$CAND.json
 [[ -f "$SPEC" && -f "$DECISION" ]] || { echo "no spec / decision for $CAND in this mirror" >&2; exit 2; }
 IN=/data/dev2/runs/release/inputs/dev2-9b-m10-$CAND
 P=$IN/t1
-FORMAL_CACHE=/data/dev2/runs/9b/formal-m9/triton-cache
+FORMAL_CACHE=/data/dev2/runs/release/triton/runtime-a-9b
 FORMAL_CACHE_DIGEST=${FORMAL_CACHE_DIGEST:-}
 TF518=/data/dev2/tools/tf518
 TF518_DIGEST=${TF518_DIGEST:-}

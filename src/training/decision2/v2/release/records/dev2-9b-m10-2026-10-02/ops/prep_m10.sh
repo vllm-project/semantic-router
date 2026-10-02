@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Decision-2.0-Lux-9B Index-first successor from 9B M10: release inputs of one candidate on node A, CPU only, from the
-# exact mirror holding this file (as K-a13IB's ops/prep.sh, with the current revision 6af07f36 as the comparator).
+# exact mirror holding this file (as K-a13IB's ops/prep.sh, with the current revision f77b41f5 as the comparator).
 #   current  the current revision's sealed gate receipt and final decision (card round 4) -> $IN/current/, checked
 #            against make_m10.py's digests
 #   derive   the sealed CAL698 formal run formal-m9/M10-CAND-16k and its mlx-diag run returned to T = 1 offline
@@ -15,7 +15,7 @@ CAND=${1:?CAND} STAGE=${2:?STAGE}
 [[ "$CAND" =~ ^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$ ]] || { echo "bad CAND $CAND" >&2; exit 2; }
 S=$(cd "$(dirname "$0")/../../../../.." && pwd)
 R=$S/v2/release/records/dev2-9b-m10-2026-10-02
-ORG=$S/v2/release/records/dev2-org-2026-10-02
+RA=$S/v2/release/records/dev2-runtime-a-2026-10-02
 G=/data/dev2/private/panels/goldfree
 MLXP=/data/dev2/private/panels/mlx-diag-v1
 F=/data/dev2/runs/9b/formal-m9
@@ -43,8 +43,8 @@ cd "$S"
 case "$STAGE" in
 current)
   mkdir -p "$IN/current"
-  for pair in "$ORG/9b/release/receipts/gate.json:org-9b-gate.json" \
-    "$ORG/Decision-2.0-Lux-9B.decision.org.json:Decision-2.0-Lux-9B.decision.org.json"; do
+  for pair in "$RA/9b/release/receipts/gate.json:ra-9b-gate.json" \
+    "$RA/Decision-2.0-Lux-9B.decision.ra.json:Decision-2.0-Lux-9B.decision.ra.json"; do
     src=${pair%%:*} dst=$IN/current/${pair#*:}
     if [[ -e "$dst" ]]; then cmp "$src" "$dst"; else cp "$src" "$dst"; chmod 444 "$dst"; fi
   done
@@ -52,7 +52,7 @@ current)
 import hashlib, re, sys
 from pathlib import Path
 text = Path(sys.argv[2]).read_text()
-for name, key in (("org-9b-gate.json", "gate_sha256"), ("Decision-2.0-Lux-9B.decision.org.json", "decision_sha256")):
+for name, key in (("ra-9b-gate.json", "gate_sha256"), ("Decision-2.0-Lux-9B.decision.ra.json", "decision_sha256")):
     want = re.search(rf'"{key}": "([0-9a-f]{{64}})"', text).group(1)
     got = hashlib.sha256((Path(sys.argv[1]) / name).read_bytes()).hexdigest()
     assert got == want, (name, got)

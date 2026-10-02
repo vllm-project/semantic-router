@@ -8,8 +8,8 @@ collapsed on the formal typed panel), IF3 (the row-level Index contamination aud
 release items 2-7. v3, human transfer, mlx-diag, the tier gates, overlap exposure and public 231 are references
 (``1_successor_references``); C1 is not run. The highest measured passer ships (``CHOICE``; values stay private).
 
-The spec derives from the spec of the current revision (specs/dev2-9b-org.json, ``main`` 6af07f36, the organization
-card-only revision of K-a13IB on vllm-sr): roster, peers, runtime (BF16-resident, forward token budget, Transformers remote code),
+The spec derives from the spec of the current revision (specs/dev2-9b-ra.json, ``main`` f77b41f5, the speed-up
+phase A runtime-only revision of K-a13IB on vllm-sr): roster, peers, runtime (BF16-resident, forward token budget, Transformers remote code),
 remote code, licence and the product card carry over; the weights, the scored run, the gate evidence and the card's
 Index input and assets (the default generator, banner concept A) are the candidate's. The scored run is the
 candidate's sealed CAL698 formal run (m9/formal.sh, runner mirror unchanged since 787abdc54) returned to T = 1
@@ -34,7 +34,7 @@ from v2.release import gate
 
 ROOT = Path(__file__).resolve().parents[5]
 RECORD = Path(__file__).resolve().parents[1]
-BASE_SPEC = ROOT / "v2/release/specs/dev2-9b-org.json"
+BASE_SPEC = ROOT / "v2/release/specs/dev2-9b-ra.json"
 SPECS = ROOT / "v2/release/specs"
 NAME = "Decision-2.0-Lux-9B"
 REPO = f"vllm-sr/{NAME}"
@@ -44,10 +44,10 @@ DECISIONS = f"{REL}/decisions"
 CURRENT_RUN = f"{REL}/dev2-9b-ka13ib-t1-derived"
 CURRENT_MLX = f"{REL}/dev2-9b-ka13ib-t1-derived-mlx"
 CURRENT = {
-    "revision": "6af07f3684132ab684d4f064a723ae623ec3956f",
-    "gate_sha256": "2606a94f6e9e86c3bd8a8a152c053a66d80b3f441eb68012a968589ff7eabe31",
-    "decision_sha256": "821d747a4d6f6509f46d5cdb75d309ee45f38d7e390201cd5d03aa5749af8ba7",
-    "manifest_sha256": "3272c53173e254ceaf614599677b18e4684d7a5d73a39b865e39e6f3c5d46304",
+    "revision": "f77b41f5c1a98974548d929c03e7bce008f71bd0",
+    "gate_sha256": "c89524587ae955376eac98979c8aedf6c5e1d8242ce4dc4e4568c9c9953181b6",
+    "decision_sha256": "0b092b4ec335db826f83034436ad63c2e27e1aaa82126dcb0f92e43a745b84d4",
+    "manifest_sha256": "f5a37c42140106a663d27493d2a2ce993ee5511ccb138f7c79efdfef11e9df55",
     "weights_identity": "b9a65d601bb6780c2c07998aecbfab322ede459c26fcb8ed262281ad08f909fb",
 }
 VENDOR = "/data/dev2/src/787abdc54946ccdb05e52cc5c34ecb619dced237-src_training_decision2/src/training/decision2"
@@ -133,8 +133,8 @@ def paths(cand: str) -> dict:
         "in": inputs,
         "private": f"/data/dev2/private/release/m10/{cand}",
         "gates": f"{inputs}/gates",
-        "current_gate": f"{inputs}/current/org-9b-gate.json",
-        "current_decision": f"{inputs}/current/{NAME}.decision.org.json",
+        "current_gate": f"{inputs}/current/ra-9b-gate.json",
+        "current_decision": f"{inputs}/current/{NAME}.decision.ra.json",
     }
 
 
@@ -170,14 +170,15 @@ def spec(cand: str) -> dict:
         f"receipt {bf16_receipt[:8]}), the copy the Index run {p['index_name']} scored.",
         "runtime": "vendor_source = K-a13IB's formal runner mirror 787abdc54 (training/model checked equal to the "
         "scored adapter sources at build time); runtime_source = automap_source = the current revision's "
-        "(BF16-resident, Transformers remote code, forward token budget), unchanged.",
+        "(the phase A runtime: HIP-graph replay of each padded input shape and, on gfx942, fused Triton "
+        "element-wise kernels; BF16-resident, Transformers remote code, forward token budget), unchanged.",
         "card": "the product card of the current revision with this candidate's reports, an Index input built by "
         "python -m v2.release.card_index (board-served parameter counts, the audited footnote) with the 9B point "
         "from the Index run on exactly these weights, and assets rendered by the default v2.release.card_assets "
         "(banner concept A); card.speed keeps the current revision's bench receipt (same architecture, runtime and "
         "shapes).",
         "replaces_spec": {
-            "spec": "v2/release/specs/dev2-9b-org.json",
+            "spec": "v2/release/specs/dev2-9b-ra.json",
             "sha256": sha(BASE_SPEC),
         },
         "previous": old["_release"],
@@ -197,10 +198,14 @@ def spec(cand: str) -> dict:
         "calibration file) and answer normalization of v2.dec.infer_dec. The scored checkpoint "
         f"({p['fp32'][:8]}) stored every tensor in FP32; this package (v2.release.bf16_copy) stores its 248 Linear "
         "projection matrices in BF16 exactly as BF16 autocast rounds them and every other tensor bit for bit in "
-        "FP32. The runtime, the Transformers remote code and the forward token budget are the current revision's. "
+        "FP32. The runtime, the Transformers remote code and the forward token budget are the current revision's: "
+        "the phase A runtime, which replays the backbone of each exact padded input shape as a HIP graph and, on "
+        "MI300-class (gfx942) GPUs, fuses the element-wise ops of each decoder layer into Triton kernels that round "
+        "exactly as the ops they replace. "
         "Checked on one GPU against the T = 1 predictions derived exactly from the sealed CAL698 predictions of "
         "every scored prompt (typed-final 1,600, css15 6,547, public231 231) and of the mlx-diag diagnostic "
-        "(2,275) by release.sh --parity, with a copy of the persisted Triton autotune cache of the formal run, and "
+        "(2,275) by release.sh --parity, with a copy of the current revision's frozen pre-warmed autotune cache "
+        "(the formal run's persisted cache plus the fused kernels' configurations), and "
         "AutoModel against the native runtime on every scored prompt."
     )
     s["scored"] = {
