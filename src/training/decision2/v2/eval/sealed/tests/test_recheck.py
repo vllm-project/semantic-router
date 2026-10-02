@@ -494,6 +494,14 @@ class CommittedSpecTest(unittest.TestCase):
         self.assertIn("@1c8452da", entry["source"])
         self.assertEqual(spec["arms"], [])
 
+    def test_r3_spec_pins_ib4_p1(self):
+        spec = recheck.load_spec(SEALED / "c1-recheck" / "r3-ib4p1.json")
+        (entry,) = spec["datasets"]
+        self.assertEqual((entry["key"], entry["rows"]), ("ib4-p1", 9459))
+        self.assertEqual(entry["sha256"][:8], "6045b456")
+        self.assertIn("m6/ib4/p1/ib4.train.jsonl", entry["source"])
+        self.assertEqual(spec["arms"], [])
+
     def test_bad_specs_are_refused(self):
         spec = json.loads(SPEC.read_text())
         with tempfile.TemporaryDirectory() as tmp:
