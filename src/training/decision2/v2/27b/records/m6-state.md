@@ -1,7 +1,32 @@
 # ~27B M6 state (resume file)
 
-Updated: 2026-10-02 17:45 UTC+8 (09:45Z; **continuation #5 from 08:44Z**: the cross-arm soups and M7;
-see its section first). Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
+Updated: 2026-10-02 22:15 UTC+8 (14:15Z; **continuation #6 from 13:40Z**: the M6-IBxIB2-m50 release and M8; see its
+section first). Earlier: 2026-10-02 17:45 UTC+8 (09:45Z; continuation #5 from 08:44Z: the cross-arm soups and M7).
+
+## Continuation #6 (from 13:40Z): release M6-IBxIB2-m50, M8 on the idle GPUs, M7 watch — read this first
+
+- **Assignment (parent, 13:40Z; COORDINATION 21:20 UTC+8):** (1) release the cross-arm candidate with the larger
+  lower bound on top of Vega's then-current `main` (`e60bd8e3`, the org card-only revision; derive from
+  `specs/dev2-27b-org.json` and the org gate / decision); (2) new, diverse M8 arms on node D GPU5–7, node E GPU0–2 / 6,
+  node B GPU0–1; (3) M7 soups in release form when they land, cross-arm soups with M6 / M8.
+- **Choice: `M6-IBxIB2-m50`** (lower bound above m67's; uniform weights; m67 is the fallback). R3: choice / noul /
+  score OK (`gates/M6-IBxIB2-m50/types.json`, xarm complete 13:42Z on node B). IF3: 0 item rows over a20ib1 + a20ib12,
+  control 200 / 200. Parity of the restaged package 86 / 86, max |dp| 0.0. Values private.
+- **Release ops** (`8eff6a15c`, spec / decision `b9297450d`): base spec `dev2-27b-org.json`; current = `e60bd8e3`
+  (org gate `e9591a86…`, decision `08d19f0e…`, manifest `23a04016…`, weights M6-IB `e50fb4c1…`); vendor = the formal
+  runs' mirror `8351e7c4d`. `make_27bx.py --check` passes on node A (mirror `22b3f0268`): spec `dfa26f1f…`, decision
+  `5b2a3018…` (decided 14:03:02Z). Other tiers' mains unchanged since the card Index input (13:35Z).
+- **Staged on node A** (`m6-stage-a.sh`, 13:52–14:02Z): 10,840 files equal to node B's; node A's extra
+  `gates/contrast.log` (an earlier stage) made the script's strict list compare fail; nothing else differs.
+  Card assets rendered (`card-assets.json` `bf3d6d64…`, default generator, banner A).
+- **Prerelease running** on node A GPU0 (shared lease `owner.release-27b-27bx`) since 14:08Z, mirror `22b3f0268`;
+  log `/data/dev2/logs/27bx-M6-IBxIB2-m50-prerelease-20261002T140804Z.log`. Then `--release` (TF518 digest as M6-IB's)
+  once Vega `main` is still `e60bd8e3` and no other Vega release.sh runs. The runtime phase A worker holds its Vega
+  runtime-only revision until this release lands (its record §5).
+- **M8 launched** (prereg `m8-prereg-2026-10-02.md`, `22b3f0268`): M8-IB-s3 node B GPU0, M8-IB2-s3 node B GPU1 (14:06Z),
+  M8-IB14ML-s3 node D GPU5 (14:07Z); M8-IB14-s4 / -s5 (node D GPU6 / 7) and M8-IB124-s4 / -s5, M8-IB-s4, M8-IB2-s4
+  (node E GPU0 / 1 / 2 / 6) start once node D / node E staging ends (`m6-stage-d.sh`, `M6_STAGE_NODE=e`).
+- **M7:** 5 / 5 seeds on node D GPU0–4, untouched (caps end ≈ 03:20Z IB14ML, ≈ 06:18Z IB124ML). Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
 continuation #3, 4a20f83f, 19:37–20:10Z, silently stopped after its 20:10Z poll; its entries below say "cba71646",
 which is the coordinator's ID; worker 3 0d2e488f ran 15:12–19:40Z; worker 2 a56025bb 10:44–15:15Z; worker 1 11741ee2
 06:17–10:55Z). **Amendment 6 (`6bbb2512d`): the MLX-DEV2 guard for every M6 finalist** (COORDINATION 04:15).

@@ -11,7 +11,7 @@
 #                 and pipeline before upload, exact parity of typed-final 1,600 / css15 6,547 / public231 231 against
 #                 the formal run's and of mlx-diag 2,275 against the mlx-diag run's predictions, then verify_bundle
 #   --release     only if the Hub main is the current revision e60bd8e3 (never concurrently: checked right before the
-#                 upload) and no other release.sh runs on node A: hf_headroom.sh, then release.sh --upload --collect
+#                 upload) and no other release.sh for Vega-27B runs on node A: hf_headroom.sh, then release.sh --upload --collect
 #                 --already-collected --hub-site tf518=... with the formal panels' parity before upload and after the
 #                 real download, AutoModel against native on every scored prompt and the Hub trust_remote_code smoke
 #                 under Transformers 5.17 and 5.18; then the revision diff, collection order, card HTTP, links and
@@ -97,7 +97,11 @@ if [[ "$mode" == --prerelease ]]; then
 else
   [[ -n "$TF518_DIGEST" && "$(digest "$TF518")" == "$TF518_DIGEST" ]] \
     || { echo "Transformers 5.18 site $TF518 does not match TF518_DIGEST" >&2; exit 1; }
-  if pgrep -f "v2/release/release[.]sh" >/dev/null; then echo "another release.sh runs on this node" >&2; exit 1; fi
+  # COORDINATION 2026-10-02 15:35: "never publish concurrently" is per repository; every Vega-27B spec is dev2-27b-*.
+  if pgrep -af "v2/release/release[.]sh" | grep -q -- "/specs/dev2-27b-"; then
+    echo "another release.sh for $REPO runs on this node" >&2
+    exit 1
+  fi
   # Publish only on top of the revision the final decision supersedes (never concurrently with another worker).
   main=$("$HFPY" -c 'import sys; from huggingface_hub import HfApi; print(HfApi().model_info(sys.argv[1]).sha)' "$REPO")
   [[ "$main" == "$superseded" ]] || { echo "$REPO main is $main, not the superseded revision $superseded" >&2; exit 1; }

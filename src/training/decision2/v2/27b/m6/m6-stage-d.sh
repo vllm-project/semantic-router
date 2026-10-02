@@ -30,7 +30,7 @@ DATA=${M6_DATA:-m6-data}
 [[ "$DATA" =~ ^m[67]-data$ ]] || { echo "bad M6_DATA $DATA" >&2; exit 2; }
 build=$(onb "cat /data/dev2/private/27b/$DATA/$BUILD_FILE")
 MX=/data/dev2/private/27b/$DATA/$(python3 -c "import json,sys; print(json.loads(sys.argv[1]).get('mixtures_dir', sys.argv[2]))" "$build" "mixtures-${DATA%-data}-1")
-ond "test -f $SRC/v2/27b/triton_cache.py" || { echo "mirror $SHA is not on node D" >&2; exit 2; }
+ond "test -f $SRC/v2/27b/triton_cache.py" || { echo "mirror $SHA is not on node ${STAGE_NODE^^}" >&2; exit 2; }
 for m in "$@"; do [[ "$m" =~ ^a20ib[0-9a-z]+$ ]] || { echo "bad mixture $m" >&2; exit 2; }; done
 onb "umask 077; test -d /data/dev2/tmp/27b-m6-xfer && printf '%s\n' '${D#*@}' > /data/dev2/tmp/27b-m6-xfer/peer-$STAGE_NODE"
 ond "set -e; mkdir -p /data/decision20-20260926/models /data/decision20-20260926/data/rights_clean_goemotions_v2 \
@@ -43,14 +43,14 @@ onb "set -e; E='ssh -i /root/.ssh/d2_temp_cd -o IdentitiesOnly=yes -o BatchMode=
   for f in $FILES; do rsync -a -e \"\$E\" /data/decision20-20260926/\$f \$P:/data/decision20-20260926/\$f; done; \
   rsync -a -e \"\$E\" $T0/ \$P:$T0/; \
   for m in $*; do rsync -a -e \"\$E\" $MX/\$m.train.jsonl \$P:$MX/; done"
-echo "$(date -u +%FT%TZ) copy done; verifying on node D"
+echo "$(date -u +%FT%TZ) copy done; verifying on node ${STAGE_NODE^^}"
 tree=$(ond "cd $SRC && PYTHONPATH=$SRC python3 -m v2.27b.triton_cache digest $BASE")
-[ "$tree" = "$BASE_TREE" ] || { echo "node D base tree $tree is not $BASE_TREE" >&2; exit 3; }
+[ "$tree" = "$BASE_TREE" ] || { echo "node ${STAGE_NODE^^} base tree $tree is not $BASE_TREE" >&2; exit 3; }
 tree=$(ond "cd $SRC && PYTHONPATH=$SRC python3 -m v2.27b.triton_cache digest $T0")
-[ "$tree" = "$T0_TREE" ] || { echo "node D T0 tree $tree is not $T0_TREE" >&2; exit 3; }
+[ "$tree" = "$T0_TREE" ] || { echo "node ${STAGE_NODE^^} T0 tree $tree is not $T0_TREE" >&2; exit 3; }
 for f in $FILES; do
   b=$(onb "sha256sum < /data/decision20-20260926/$f | cut -c1-64") d=$(ond "sha256sum < /data/decision20-20260926/$f | cut -c1-64")
-  [ "$b" = "$d" ] || { echo "node D $f differs from node B" >&2; exit 3; }
+  [ "$b" = "$d" ] || { echo "node ${STAGE_NODE^^} $f differs from node B" >&2; exit 3; }
 done
 for m in "$@"; do
   want=$(python3 -c "
@@ -58,7 +58,7 @@ import json, sys
 b, m = json.loads(sys.argv[1]), sys.argv[2]
 print(b['files_sha256'][m + '.train.jsonl'] if 'files_sha256' in b else b['mixtures'][m]['sha256'])" "$build" "$m")
   got=$(ond "sha256sum < $MX/$m.train.jsonl | cut -c1-64")
-  [ "$got" = "$want" ] || { echo "node D $m is not $want" >&2; exit 3; }
+  [ "$got" = "$want" ] || { echo "node ${STAGE_NODE^^} $m is not $want" >&2; exit 3; }
 done
 ond "docker image inspect sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1 --format '{{.Id}}'" > /dev/null
 echo "node ${STAGE_NODE^^} staged: base tree, T0 tree, data files and mixtures ($*) equal to node B; training image present"
