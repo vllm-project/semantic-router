@@ -59,7 +59,7 @@ case $MODE in
     check "$IB1" 1e1b08f3d37f9051ffe2e4b99fd7be673f315d05cc74a27a8d350eae2bb706c5
     check "$IB2" ee137efa8bbf86e5c62574f3b8fbd6204063e095a8da514f32600ba3d51d1cfa
     check "$IDS" 7843afb7b2bbb315902b6748d6559532f384283d8efd836b935daac5f55dbd4a
-    [ -f "$IB3" ] || { log "missing IB3-r2 TRAIN"; exit 1; }
+    check "$IB3" 9d92d92a207109a585ceead7fa5e1bdb0b2c61859de8227a2a6058428f852dea
     M10_NODE=b bash "$L" prep-kibm "$SRC" "$M/data/kibm-build" --cpu -- v2/9b/lux9b/m9_data.py \
       --x60-dir /runs/m10/inputs/m9/data/x60 \
       --ib1 /runs/m10/inputs/m9/inputs/ib/ib1-31b200a3/m6/ib1/ib1.train.jsonl \

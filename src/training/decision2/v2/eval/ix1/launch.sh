@@ -81,6 +81,10 @@ declare -A DIAGNOSTIC=(  # name -> "repository revision package-dir"
   [IS-L9IB]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/index-sweep/L9IB-d7c48f9a-re51f9881"
   [IS-K-a12IB]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/index-sweep/K-a12IB-68fed4cb-re51f9881"
 )
+for _m10 in KUP-a33 KUP-a25 KUP-a40 KIBM-a33 KIBM-a25 KIBM-a40; do  # 9B M10 BF16 release copies
+  DIAGNOSTIC[M10-$_m10-bf16]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/9b-m10/$_m10-bf16-re51f9881"
+done
+unset _m10
 
 mode="${1:-}"; shift || true
 src="" model="" gpu="" gpus="" run="" rows="" rows_dir="" cache="" only="" tag=""
