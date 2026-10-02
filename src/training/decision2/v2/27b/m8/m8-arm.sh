@@ -4,8 +4,9 @@
 # training cache, the M6 launcher allocation DEV2_27B_ALLOC=m6) with an existing M6 or M7 mixture (SHA-256 checked
 # here) and new seeds, so the next cross-arm soup has more distinct members. The driver is detached; its PID is
 # printed. One attempt per arm-seed. M8_RESUME=1 continues an interrupted arm-seed instead (its run directory copied
-# from a node that left the pool, COORDINATION 2026-10-03 01:25): run_lora_arm.sh's exact resume from the latest
-# complete checkpoint (stage full only, attempt 2: container and receipt full-r2), the same mixture, seed and caps.
+# from a node that left the pool, COORDINATION 2026-10-03 01:25, or a hung attempt stopped by hand): run_lora_arm.sh's
+# exact resume from the latest complete checkpoint (stage full only, attempt 2 or 3: container and receipt full-rN),
+# the same mixture, seed and caps.
 # Usage: m8-arm.sh NODE GPU ARM SEED MIXTURE MIXTURE_SHA SAVE_EVERY CAP
 #   NODE b (GPU0-1) | d (GPU0-7) | e (GPU0-3, 6-7; never GPU4-5) | f (GPU2-7; never GPU0-1)
 #   ARM:MIXTURE  M8-IB:a20ib1 | M8-IB2:a20ib12 (m6-data/mixtures-m6-1; M6-IB / M6-IB2's files)
@@ -36,13 +37,16 @@ BASE=/data/decision20-20260926/models/Qwen3.8-27B REV=1d4bf0f2ff6012fd82039f2fa5
 [ -d "$BASE" ] && [ -d "$T0" ] || { echo "missing base or T0" >&2; exit 2; }
 RUN=/data/dev2/runs/27b/$NAME STAGES=admit,onestep,reload,full ATTEMPT=1 MODE="seed $SEED_VALUE"
 if [ "${M8_RESUME:-0}" = 1 ]; then
-  [ -f "$RUN/receipts/reload.json" ] && [ ! -e "$RUN/full/run/COMPLETE.json" ] && [ ! -e "$RUN/receipts/full-r2.json" ] ||
-    { echo "$RUN is not an interrupted arm-seed (preflights passed, no full-r2, not complete)" >&2; exit 66; }
+  # attempt 2 resumes the copy from the node that left; attempt 3 is run_lora_arm.sh's last recovery (a hung attempt
+  # stopped by hand counts as an interruption, like exit 139)
+  for ATTEMPT in 2 3 none; do [ ! -e "$RUN/receipts/full-r$ATTEMPT.json" ] && break; done
+  [ -f "$RUN/receipts/reload.json" ] && [ ! -e "$RUN/full/run/COMPLETE.json" ] && [ "$ATTEMPT" != none ] ||
+    { echo "$RUN is not an interrupted arm-seed (preflights passed, not complete, a recovery left)" >&2; exit 66; }
   latest=$(find "$RUN/full/run" -maxdepth 1 -type d -name 'checkpoint-*' ! -name '*.pending' | sort | tail -1)
   [ -n "$latest" ] || { echo "$RUN has no complete checkpoint to resume from" >&2; exit 66; }
   grep -q " $MIX ($MIX_SHA) seed $SEED_VALUE rank 128 alpha 256 save-every $SAVE cap $CAP " "$RUN/driver.log" ||
     { echo "$RUN/driver.log names another mixture, seed, save interval or cap" >&2; exit 66; }
-  STAGES=full ATTEMPT=2 MODE="exact resume from $(basename "$latest"), seed $SEED_VALUE"
+  STAGES=full MODE="exact resume from $(basename "$latest") as attempt $ATTEMPT, seed $SEED_VALUE"
 else
   [ ! -e "$RUN" ] || { echo "$RUN exists: one attempt per arm-seed" >&2; exit 66; }
 fi
