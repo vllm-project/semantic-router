@@ -56,6 +56,7 @@ declare -A TIER=(
   [IS-2b-RA]=2B [IS-2b-RASD]=2B [IS-2b-RAUP]=2B [IS-2b-RA-a75]=2B
   [IS-L9IB]=9B [IS-K-a12IB]=9B
   [IS-K-a13IBX]=9B [IS-L9IBX]=9B [IS-4b-LHA10SDML]=4B
+  [IS-08b-RAUP-a75]=0.8B [IS-08b-RAUP-a50]=0.8B [IS-2b-RAUP-a75]=2B [IS-2b-RAUP-a50]=2B
 )
 declare -A SOUP=(  # node:directory of the frozen FP32 soup (or a copy whose content manifest equals the soup's)
   [IS-08b-RASD]=a:/data/dev2/runs/dec/m16/inputs/arms/08b-RASD
@@ -70,6 +71,10 @@ declare -A SOUP=(  # node:directory of the frozen FP32 soup (or a copy whose con
   [IS-K-a13IBX]=a:/data/dev2/runs/9b/m9/soup/K-a13IBX/build/K-a13IBX
   [IS-L9IBX]=a:/data/dev2/runs/9b/m9/soup/L9IBX/build/L9IBX-soup
   [IS-4b-LHA10SDML]=f:/data/dev2/runs/dec/m15/soup/4b-LHA10SDML/build/4b-LHA10SDML-soup
+  [IS-08b-RAUP-a75]=a:/data/dev2/runs/dec/m16/points/08b-RAUP-a75/build/08b-RAUP-a75
+  [IS-08b-RAUP-a50]=a:/data/dev2/runs/dec/m16/points/08b-RAUP-a50/build/08b-RAUP-a50
+  [IS-2b-RAUP-a75]=b:/data/dev2/runs/dec/m16/points/2b-RAUP-a75/build/2b-RAUP-a75
+  [IS-2b-RAUP-a50]=b:/data/dev2/runs/dec/m16/points/2b-RAUP-a50/build/2b-RAUP-a50
 )
 declare -A MODEL=(  # model_sha256 from each soup's build log (the identity its development readouts carry)
   [IS-08b-RASD]=02c170864d0c00895236e2c0c5ee592f38d8360878c53a56da875197ead0e8de
@@ -84,6 +89,10 @@ declare -A MODEL=(  # model_sha256 from each soup's build log (the identity its 
   [IS-K-a13IBX]=d559b85c2254c5fd77c7e207b02f157b0174cbecf877b1a53d09ee36ff00abc4
   [IS-L9IBX]=695c0ce2cdece30482ee2fad287caf3a101d78c062351bbb3b8d20ee0dbc5b5f
   [IS-4b-LHA10SDML]=1b51567523426b896ae50afeefca4f133c2e3c220c349ebfb9b9c630600dd19d
+  [IS-08b-RAUP-a75]=bd7ce3f525fb4fea12c5312247c13e87aff92be7e09061f4a187a10e03f06a0c
+  [IS-08b-RAUP-a50]=69b56648b8624af24f91362f6f3fde1dcf63799a75ac50c70fdf86280172be8b
+  [IS-2b-RAUP-a75]=c75202293e3173e952b6bcfb9afff3890c472299d9a880fe4cdc3d4bc8602fa3
+  [IS-2b-RAUP-a50]=56cbb2c3131563c6ed25f8b8236ba82c6e2334067d5140c3bb87d9911ababd56
 )
 declare -A BASEPKG=([0.8B]=DEV2.0-0.8B-bede7938 [2B]=DEV2.0-2B-a53cf66a [4B]=DEV2.0-4B-13d42143 [9B]=DEV2.0-9B-e51f9881)
 declare -A LOADED=([0.8B]=753446208 [2B]=1883930944 [4B]=4208383488 [9B]=7940895744)
