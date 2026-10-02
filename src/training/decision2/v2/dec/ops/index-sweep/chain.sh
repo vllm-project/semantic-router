@@ -80,6 +80,7 @@ while (( i < ${#names[@]} )); do
     i=$((i + 1))
     if passed "$R/parity/$m/parity.json"; then log "parity $m already passed"; continue; fi
     [ -e "$R/parity/$m" ] && { log "parity $m ran before without a pass; dropped"; continue; }
+    wait_idle "$g" || { log "GPU $g stayed busy; parity $m not run"; continue; }
     (cd "$S" && bash "$L" parity --src "$M" --model "$m" --gpu "$g" --run "$R/parity/$m" \
       --rows "$P/compat-86.gold-free.jsonl.gz" > "$R/logs/isweep-parity-$m.log" 2>&1
      echo $? > "$R/logs/isweep-parity-$m.exit") &
