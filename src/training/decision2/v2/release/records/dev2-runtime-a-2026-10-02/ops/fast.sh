@@ -33,27 +33,40 @@ RENAME_OPS=$S/v2/release/records/dev2-rename-9b-27b-2026-09-29/ops
 G=/data/dev2/private/panels/goldfree
 HFPY=/data/dev2/tools/hf-cli/bin/python
 HFC=/data/dev2/hf-cache
-image=decision20-train-fast:host2 kernels=1 frozen="" frozen_digest="" cache_tool=digest PM="" base_mounts=() base_args=()
+LATEST=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1
+REL=/data/dev2/runs/release
+image=decision20-train-fast:host2 kernels=1 frozen="" P="" PM="" vram=40 base_mounts=() base_args=()
+# Each tier: the image, spec and autotune cache of the release that built the repository's current main (as
+# make_org.py of dev2-org-2026-10-02 names it). Kai keeps its scored predictions for the report against the seal;
+# the others answer against an empty seal (only the old-vs-new comparison decides).
+release_of() { base_spec=$REL/$1/receipts/spec.json frozen=$REL/triton/$1; }
 case "$tier" in
   0.6B)
     key=0p6b codename=Kai kernels=0 base_spec=$S/v2/release/specs/dev2-0p6b-card4.json
     P=/data/dev2/runs/06b/m8/formal/m8-s5-b05/output PM=/data/dev2/runs/06b/m8/formal/m8-s5-b05-mlx/output ;;
-  *) echo "tier must be one of: 0.6B" >&2; exit 2 ;;
+  0.8B) key=0p8b codename=Eos image=$LATEST; release_of dev2-0p8b-ixf-release-20261002T043541Z ;;
+  2B) key=2b codename=Sol image=$LATEST; release_of dev2-2b-ixf-release-20261002T075545Z ;;
+  4B) key=4b codename=Nox image=$LATEST; release_of dev2-4b-sdml-release-20261002T085835Z ;;
+  9B) key=9b codename=Lux vram=60; release_of dev2-card4-9B-20261002T033640Z ;;
+  27B)
+    key=27b codename=Vega image=$LATEST vram=130; release_of dev2-27b-27bif-M6-IB-release-20261002T070233Z
+    base_repo=$HFC/models--Qwen--Qwen3.8-27B
+    base_args=(--base-path "$base_repo/snapshots/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0")
+    base_mounts=(-v "$base_repo:$base_repo:ro")
+    [[ ! -d "$HFC/blobs" ]] || base_mounts+=(-v "$HFC/blobs:$HFC/blobs:ro") ;;
+  *) echo "tier must be one of 0.6B 0.8B 2B 4B 9B 27B" >&2; exit 2 ;;
 esac
 name=Decision-2.0-$codename-$tier REPO=vllm-sr/$name STAGE=dev2-release-staging-ra$key
 T=/data/dev2/runs/runtime-a/$tier
 export TMPDIR=/data/dev2/tmp PYTHONPATH=$S
 mkdir -p "$TMPDIR" "$T" /data/dev2/runs/runtime-a/triton
 digest() { (cd "$1" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-64); }
+# copy_cache SOURCE DEST: an empty SOURCE starts an empty cache.
 copy_cache() {
-  if [[ -z "$frozen" ]]; then mkdir -p "$1"; return; fi
-  if [[ "$cache_tool" == 27b ]]; then
-    (cd "$S" && python3 -m v2.27b.triton_cache copy --frozen "$frozen" --expect "$frozen_digest" --dest "$1")
-  else
-    [[ "$(digest "$frozen")" == "$frozen_digest" ]] || { echo "frozen cache $frozen changed" >&2; exit 1; }
-    cp -a "$frozen" "$1"
-    chmod -R u+w "$1"
-  fi
+  if [[ -z "$1" ]]; then mkdir -p "$2"; return; fi
+  cp -a "$1" "$2"
+  chmod -R u+w "$2"
+  echo "cache $2 from $1 files=$(find "$2" -type f | wc -l) digest=$(digest "$2")" | tee -a "$W/logs/wall.txt"
 }
 
 if [[ "$mode" == --preview ]]; then
@@ -91,7 +104,7 @@ PY
 fi
 
 [[ "$gpu" =~ ^[0-7]$ ]] || { echo "--gpu N" >&2; exit 2; }
-rocm-smi --showuse --showmeminfo vram --json | python3 "$RENAME_OPS/pick_gpu.py" 40 "$gpu" >/dev/null \
+rocm-smi --showuse --showmeminfo vram --json | python3 "$RENAME_OPS/pick_gpu.py" "$vram" "$gpu" >/dev/null \
   || { echo "GPU$gpu is busy or lacks free VRAM" >&2; exit 1; }
 W0=$(ls -d "$T"/preview-* | tail -1)
 OLD=$W0/old/$name NEW=$W0/new/$STAGE
@@ -103,6 +116,11 @@ printf 'track=runtime-a\nstatus=busy\npurpose=speed-up phase A %s %s (worker 2d5
   "$name" "${mode#--}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$W" > "$lease"
 trap 'printf "track=runtime-a\nstatus=idle (last run %s ended %s)\n" "$W" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$lease"' EXIT
 echo "mirror $SRC tier $tier gpu $gpu old $OLD new $NEW work $W"
+if [[ -z "$P" ]]; then
+  P=$W/seal-none
+  mkdir -p "$P"
+  for panel in typed-final css15 public231 mlx-diag; do : > "$P/$panel.predictions.jsonl"; done
+fi
 panels=(
   "typed-final:$G/typed-final.prompts.jsonl:$P/typed-final.predictions.jsonl:1600"
   "css15:$G/css15.prompts.jsonl:$P/css15.predictions.jsonl:6547"
@@ -111,11 +129,14 @@ panels=(
 )
 kernel_args=()
 [[ "$kernels" != 1 ]] || kernel_args=(--site /opt/decision-fla --require-kernels)
+source_cache=$frozen
 for side in old new; do
   pkg=$OLD
   [[ "$side" == new ]] && pkg=$NEW
   TC=/data/dev2/runs/runtime-a/triton/$tier-${mode#--}-$side-$TS
-  copy_cache "$TC"
+  # The new side starts from the old side's cache after its run: both use the same autotuned configurations.
+  copy_cache "$source_cache" "$TC"
+  source_cache=$TC
   volumes=(-v "$M:$M:ro" -v "$W0:$W0:ro" -v "$W:$W" -v "$G:$G:ro" -v "$P:$P:ro" -v "$TC:$TC" "${base_mounts[@]}")
   [[ -z "$PM" ]] || volumes+=(-v "$PM:$PM:ro")
   envs=(-e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 -e TOKENIZERS_PARALLELISM=false -e HIP_FORCE_DEV_KERNARG=1
