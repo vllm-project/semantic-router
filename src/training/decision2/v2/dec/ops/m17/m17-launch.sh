@@ -25,7 +25,7 @@ fi
 node=${M17_NODE:?set M17_NODE=e or f}
 case $node in
   e) allowed=" 0 1 2 3 " ;;
-  f) allowed=" 2 3 6 7 " ;;
+  f) allowed=" 2 3 4 5 6 7 " ;;
   *) echo "unknown node $node" >&2; exit 2 ;;
 esac
 image=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1

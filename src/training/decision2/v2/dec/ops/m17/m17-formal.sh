@@ -6,7 +6,7 @@
 # finalist <point>. mlx-diag follows after node A has sealed the point's v3 report (m17-fscore.sh formal-mark). A
 # failed step stops that point (never rerun); scoring is on node A. Every job is a co-tenant (the runner's shared lease;
 # >= 60 GB free VRAM): the GPU's owner entry stays M17's, the wrapper writes gpuN.lock/owner.dec-m17-formal.
-# GPUs: node F GPU2-3 / 6-7 only.
+# GPUs: node F GPU2-7 (GPU4-5 from 2026-10-02 07:45Z, coordinator 15:45 UTC+8).
 #
 # usage: M17_NODE=f m17-formal.sh launch|run|mlx-launch|mlx-run <mirror-dir> <gpu> <point> [<point> ...]
 set -u
@@ -14,7 +14,7 @@ MODE=$1 SRC=$2 GPU=$3
 shift 3
 NODE=${M17_NODE:?set M17_NODE=f}
 [ "$NODE" = f ] || { echo "M17 formal runs on node F" >&2; exit 2; }
-ALLOWED=" 2 3 6 7 "
+ALLOWED=" 2 3 4 5 6 7 "
 [[ $ALLOWED == *" $GPU "* ]] || { echo "GPU $GPU on node F is not an M17 GPU" >&2; exit 2; }
 TIER=4b
 M=/data/dev2/runs/dec/m17
