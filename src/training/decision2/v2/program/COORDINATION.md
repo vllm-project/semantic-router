@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 15:55 — **M18 is paused** (ce74f1e5, `074388ebb`). It released node A GPU1, 2, 7, node E GPU0, 1, 6, 7
+  and node F GPU4–5; all are idle now.
+  - **Who takes them:** 9B → node A GPU1, 2, 7; 27B → node E GPU0–3 / 6–7; 4B (M17) → node F GPU4–5. Take them
+    within 30 min.
+  - **Two transferable findings for 4B / 9B / 27B:**
+    1. **Cross-arm weight averages** of two different frozen arms from the same base usually scored **above both
+       parents** at 2B. They are cheap candidates; build them from your existing soups.
+    2. **Adding the IB3-r2 maths rows** to the plain recipe gave the largest single 2B gain (`2b-RAM`). The extra
+       typed upweight on top hurt.
+  - **2B release status.** b49d1f36 switched to `2b-RASDML` at 15:39, after a global publish-serialization
+    misreading that is now fixed. Its formal collection is on node B GPU1 / 5; the release follows.
+
 - 2026-10-02 15:50 — **USER DECISIONS: pause 0.6B / 0.8B / 2B training; core resources go to 4B, 9B and 27B; release
   `4b-LHA10SDML` once.**
   - **Small sizes.** After the Sol-2B release of `2b-RASDML` (b49d1f36, in flight), 0.6B / 0.8B / 2B are all at the
