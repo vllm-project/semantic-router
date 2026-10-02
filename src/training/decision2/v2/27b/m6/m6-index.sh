@@ -18,7 +18,8 @@
 #   control  once for M6 (any ARM): A20r's own package through the same runtime (DEV2.0-27B-budget) read by its entry
 #            point over the 86 compatibility requests on node D GPU4, vs IX1's A20r kit results -> must pass
 #   parity   launch.sh parity on node D GPU4 (detached; waits for it, ~0.1 GPU-h); parity/ARM/parity.json must pass
-#   stage-e  after stage: node D's restaged package and A20r's frozen cache relayed node D -> node E through node B
+#   stage-e  after stage: node D's restaged package and A20r's frozen cache (with its .sha256) relayed node D -> node E
+#            through node B
 #            (node E holds the same base snapshot, kit and panel), SHA-256 lists equal to node D's
 #   run      m6-index-run.sh detached on each node with shards (log ix1/logs/m6-index-ARM-NODE.log): the shards of
 #            M6_INDEX_SHARDS (default all 8, e.g. "2 3 4 5 6 7" to re-split shards not yet run) on the entries of
@@ -172,7 +173,6 @@ case "$STAGE" in
     has_mirror e
     model=$(model_sha)
     ond "test -f $PKG/MODEL_MANIFEST.json" || { echo "run stage (node D) first" >&2; exit 3; }
-    one "test ! -e $PKG" || { echo "node E $PKG exists: refusing to overwrite" >&2; exit 3; }
     ond "python3 -c 'import json,sys; sys.exit(json.load(open(sys.argv[1]))[\"identity\"][\"model_sha256\"] != sys.argv[2])' \
       $PKG/MODEL_MANIFEST.json $model" || { echo "node D's package does not carry $ARM's identity" >&2; exit 3; }
     for dir in $PKG $CACHE; do
@@ -184,7 +184,12 @@ case "$STAGE" in
       t=$(ond "$(sums "$dir")") c=$(one "$(sums "$dir")")
       [ -n "$t" ] && [ "$t" = "$c" ] || { echo "node E's ${dir##*/} differs from node D's" >&2; exit 3; }
       echo "node E ${dir##*/}: $(wc -l <<< "$c") files, SHA-256 list equal to node D's"
-    done ;;
+    done
+    one "test -e $CACHE.sha256" ||
+      onb "$XFER root@${D#*@} 'cat $CACHE.sha256' | $XFER root@${E#*@} 'umask 077; cat > $CACHE.sha256'"
+    [ "$(ond "sha256sum < $CACHE.sha256")" = "$(one "sha256sum < $CACHE.sha256")" ] ||
+      { echo "node E's cache digest file differs from node D's" >&2; exit 3; }
+    echo "node E cache digest file equal to node D's" ;;
   control)
     has_mirror d
     C0=$R/runs/DEV2.0-27B-budget-control
@@ -229,8 +234,9 @@ case "$STAGE" in
       t=$(ond "$(sums "$PKG")") c=$("on$node" "test -f $PKG/MODEL_MANIFEST.json && $(sums "$PKG")" || true)
       [ -n "$t" ] && [ "$t" = "$c" ] ||
         { echo "node ${node^^} has no package equal to node D's: run stage-$node first" >&2; exit 3; }
-      [ "$(ond "$(sums "$CACHE")")" = "$("on$node" "$(sums "$CACHE")")" ] ||
-        { echo "node ${node^^}'s frozen cache differs from node D's" >&2; exit 3; }
+      [ "$(ond "$(sums "$CACHE")"; ond "sha256sum < $CACHE.sha256")" = \
+        "$("on$node" "$(sums "$CACHE")"; "on$node" "sha256sum < $CACHE.sha256")" ] ||
+        { echo "node ${node^^}'s frozen cache or its digest file differs from node D's" >&2; exit 3; }
       if ! "on$node" "test -f $R/parity/$ARM/parity.json"; then
         ond "cat $R/parity/$ARM/parity.json" |
           "on$node" "umask 077; mkdir -p $R/parity/$ARM && cat > $R/parity/$ARM/parity.json"
