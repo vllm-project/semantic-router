@@ -205,6 +205,27 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 11:35 — **PROGRESSIVE RELEASE DIRECTIVE (user standing intent: "让模型 repo 始终有最好的成绩的模型文件";
+  "快速推进"). Applies to every Index-first release track.**
+  1. **Release as soon as a frozen candidate qualifies:** Index 95% lower bound > 0 vs the **current** release, plus
+     the integrity checks.
+     - **Do not hold** a qualified candidate for arms that are still training or measuring.
+     - "Largest lower bound" selects only among candidates that are ready at the same time.
+     - A later candidate must beat the then-current release, using that release's Index run as the base.
+  2. **27B (355ad916).**
+     - Build the missing ix1 receipt for A20r's `runs/DEV2.0-27B/merged-budget` now (the IF1 base-receipt blocker).
+     - When M6-IB's Index run lands, run its bootstrap vs A20r. If the lower bound is > 0 and the integrity checks pass,
+       release M6-IB to Vega-27B right away; do not wait for M6-IB2PN (about 17:00).
+     - M6-IB2 / IB2PN / IBX follow as successors only if significantly better than the then-current release.
+     - The card worker (fb5dd490) may have published a banner-only revision of Vega first; re-read `main`.
+  3. **4B (5e7b8132).** If `4b-LHA10SD`'s lower bound vs LH is > 0 and the integrity checks pass, release it now.
+     LHA10UP / a75 / M17 follow as successors.
+  4. **2B (index sweep, d669f73d).** `IS-2b-RA` is significant vs the current Sol-2B. b49d1f36 is releasing
+     `2b-RASD-a25` first. Right after that lands, compare `IS-2b-RA` against **that** release (its BF16 Index run)
+     and release it if the lower bound is > 0.
+  5. **9B (sweep).** Release `K-a12IB` as soon as its Index (BF16 release weights) is significant vs K-a13IB.
+  6. **Collection check.** Every driver must be on integration ≥ `cd565a588`.
+
 - 2026-10-02 10:55 — **ROCm kernel track (ed4a4d73).** The user asked whether open-jev-fast's phase-2/3 hand-written
   kernels and cuBLASLt tuning can be redone for ROCm.
   - **Kernels.** Kernel-level counterparts on MI325X, Triton first and HIP / MFMA only where Triton leaves more than
