@@ -293,16 +293,43 @@ func (r *Runner) runSingleTest(ctx context.Context, kubeClient *kubernetes.Clien
 		},
 	}
 
-	err := tc.Fn(ctx, kubeClient, opts)
+	attempts := r.opts.FlakeAttempts
+	if attempts < 1 {
+		attempts = 1
+	}
+	if tc.MutatesClusterState && attempts > 1 {
+		r.log("↻ Not retrying %s: it changes cluster state", tc.Name)
+		attempts = 1
+	}
+
+	var err error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		if attempt > 1 {
+			r.log("↻ Retrying test %s (attempt %d/%d)", tc.Name, attempt, attempts)
+		}
+		err = tc.Fn(ctx, kubeClient, opts)
+		result.Attempts = attempt
+		if err == nil {
+			break
+		}
+		if attempt < attempts {
+			r.log("⚠️ Test %s failed on attempt %d/%d: %v", tc.Name, attempt, attempts, err)
+		}
+	}
+
 	duration := time.Since(start)
 
 	result.Passed = err == nil
 	result.Error = err
+	result.Flaked = result.Passed && result.Attempts > 1
 	result.Duration = duration.String()
 
-	if err != nil {
+	switch {
+	case err != nil:
 		r.log("❌ Test %s failed: %v", tc.Name, err)
-	} else {
+	case result.Flaked:
+		r.log("⚠️ Test %s passed on attempt %d/%d — flaky (%s)", tc.Name, result.Attempts, attempts, duration)
+	default:
 		r.log("✅ Test %s passed (%s)", tc.Name, duration)
 	}
 
@@ -316,24 +343,37 @@ func (r *Runner) printResults(results []TestResult) {
 
 	passed := 0
 	failed := 0
+	flaked := 0
 
 	for _, result := range results {
 		status := "✅ PASSED"
-		if !result.Passed {
+		switch {
+		case !result.Passed:
 			status = "❌ FAILED"
 			failed++
-		} else {
+		case result.Flaked:
+			status = "⚠️ FLAKY"
+			passed++
+			flaked++
+		default:
 			passed++
 		}
 
 		fmt.Printf("%s - %s (%s)\n", status, result.Name, result.Duration)
+		if result.Flaked {
+			fmt.Printf("  Passed on attempt %d after failing earlier\n", result.Attempts)
+		}
 		if result.Error != nil {
 			fmt.Printf("  Error: %v\n", result.Error)
 		}
 	}
 
 	fmt.Println(strings.Repeat("=", 80))
-	fmt.Printf("Total: %d | Passed: %d | Failed: %d\n", len(results), passed, failed)
+	fmt.Printf("Total: %d | Passed: %d | Failed: %d", len(results), passed, failed)
+	if flaked > 0 {
+		fmt.Printf(" | Flaky: %d", flaked)
+	}
+	fmt.Println()
 	fmt.Println(strings.Repeat("=", 80))
 }
 
