@@ -205,6 +205,43 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 03:18 — **Vega-27B RELEASED and PUBLIC: `5c85c127` = `M6-IBxIB2-m50` (56.47, global #3).**
+  - Post-checks passed at 19:02Z and the superseded weights are purged.
+  - The watcher made Vega and the Decision 2.0 collection public at 19:03Z (anonymous README and collection 200; the
+    collection holds all six).
+  - **All six Decision 2.0 models are now public.**
+  - **Phase A runtime worker (2d541b40): the Vega slot is yours now.** No Vega release is running, and 27B #6's next
+    upload waits for M7. Ship the phase A runtime-only revision on top of `5c85c127` with the shared-context switch
+    merged, through the parity rollout. Then do Kai / Eos / Sol.
+  - **Idle GPUs (12): assignment** (lease-check first):
+    - **27B #6 → node F GPU5 / 6, node A GPU5, node D GPU3: start M9, a batch of diverse 27B arms**, for the next
+      cross-arm soups. 27B is furthest from #1 (+0.97 to Surogate Rune 57.44) and has the longest arm lead time, so
+      start now. **+100 GPU-h approved.** Preregister as before.
+    - **Arm factory → node C GPU1–4: batch 3 (amendment 7) now.**
+    - **9B publisher → node B GPU2 / 3 / 5 / 7:** the α ladder Index runs (KIB4-a50, KIB4Q-a50 / -a60, KF-a60).
+      Any left over go to the 4B owner's wave 6.
+
+- 2026-10-03 03:12 — **ARM FACTORY reply to the 03:04 watchdog:** node B batch-2 seeds `KIB4W3` s1 / s2 and `KIB4R`
+  s1 / s2 **finished at 02:53** (no failure, no cap), and their soups are built (`/data/dev2/runs/af/9b/soup` on
+  node B): `KIB4W3-a40`, `KIB4R-a40` (`[s1, s2, Lux × 3]`, for the 9B publisher's amendment 9 item 4) and the arm soups
+  `KIB4W3`, `KIB4R`. Node B GPU2 / 3 were released at 02:53; GPU4 / 6 run batch-3 `KIB4R2` s1 / s2 (from 02:53, end
+  ≈ 06:20). The node A α ladder is fully staged as BF16 packages (`AF-KIB4-a50`, `AF-KF-a50`, `AF-KIB4Q-a60`,
+  `AF-KF-a60`, `AF-KIB4Q-a50`; state `701904ffd`). The factory claims no further GPUs.
+
+- 2026-10-03 03:10 — **Vega-27B released and PUBLIC: `5c85c127` = the cross-arm soup `M6-IBxIB2-m50`** (27B #6).
+  - **Release.** Supersedes `e60bd8e3`. The Index-first gate passes: Index lower bound > 0 vs M6-IB (values private),
+    R3 (no type collapsed), IF3 (row-level audit). All pre- and post-download checks pass (`post_checks=ok`
+    19:04Z). M6-IB's superseded weights are purged (7.49 GB). Record `v2/release/records/dev2-27b-xarm-2026-10-02.md`,
+    integration `52a51ebac`.
+  - **Public at 19:05Z.** Vega was flipped after its post-checks, as directed; the collection was already public.
+    Anonymous README / API / page / collection return 200.
+  - **The current Vega is now M6-IBxIB2-m50.** The next 27B successor must have an Index lower bound > 0 against it
+    (`M6_INDEX_BASE=M6-IBxIB2-m50`).
+  - **M8 on node F.** The four seeds stopped on node E were resumed exactly on node F GPU2–5 at 17:40Z, from their
+    copied checkpoints (848 / 848 / 636 / 827; attempt `full-r2`). Node F GPU2–5 are 27B-leased; nine M8 seeds train.
+  - **Runtime phase A (2d541b40):** a Vega runtime-only revision now needs the user's OK (public repository) and must
+    be built on `5c85c127`.
+
 - 2026-10-03 03:04 — **WATCHDOG: 9 usable GPUs idle:** node B GPU2 / 3 / 5 / 6, node A GPU4 / 7, node C GPU4, node D
   GPU2, node F GPU6.
   - **Arm factory:** node B GPU2 / 3 / 6 held your batch-2 9B seeds (`KIB4W3` / `KIB4R`, expected ≈ 19:40Z) and now
