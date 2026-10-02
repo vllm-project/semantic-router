@@ -20,19 +20,24 @@
 #   boot     node C: paired bootstraps vs the tier's DEV2.0 IX1 run (full panel, and transfer-only without HoVer,
 #            When2Call, iSarcasmEval, GSM8K, BPoMP), 2,000 replicates, seed 20261002; family delta; row comparison
 #            with the FP32 run of the same point (identical answers expected)
-#   release  the IX node's IX_GPU owner file, if this name's runs wrote it -> status released
+#   release  the IX node's IX_GPU owner file, if this name's runs wrote it -> status released; with IX_SHARED,
+#            the co-tenant entry owner.<IX_SHARED> is removed instead
+# IX_SHARED=<name>: launch.sh writes the co-tenant entry owner.<name> (IX1_SHARED_LEASE) and leaves the GPU
+# owner's file alone (node A GPU0 / GPU1: the 0.6B allocation allows recorded release co-tenants).
 # Usage: [IX_NODE=a|c|d] IX_GPU=N ix.sh MIRROR_SHA NAME STAGE
 #   NAME: M16-08b-RA-a75-bf16 | M16-08b-RASD-a75-bf16 | M16-2b-RASD-a25-bf16
 set -euo pipefail
 SHA=${1:?MIRROR_SHA} NAME=${2:?NAME} STAGE=${3:?STAGE}
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "MIRROR_SHA must be a full commit SHA" >&2; exit 2; }
-IX_NODE=${IX_NODE:-c} IX_GPU=${IX_GPU:-}
+IX_NODE=${IX_NODE:-c} IX_GPU=${IX_GPU:-} IX_SHARED=${IX_SHARED:-}
+[[ -z "$IX_SHARED" || "$IX_SHARED" =~ ^[a-z0-9-]+$ ]] || { echo "IX_SHARED must match [a-z0-9-]+" >&2; exit 2; }
 case "$IX_NODE" in
   a) PANEL=${IX_PANEL:-panel-3} ;; c) PANEL=${IX_PANEL:-panel-7} ;; d) PANEL=${IX_PANEL:-panel-8} ;;
   *) echo "IX_NODE a, c or d" >&2; exit 2 ;;
 esac
 case "$STAGE" in claim | parity | run | release)
-  [[ "$IX_GPU" =~ ^[1-7]$ ]] || { echo "IX_GPU 1-7 is required for $STAGE" >&2; exit 2; } ;;
+  [[ "$IX_GPU" =~ ^[1-7]$ || ( "$IX_NODE" = a && "$IX_GPU" = 0 ) ]] ||
+    { echo "IX_GPU 1-7 (node A: 0-7) is required for $STAGE" >&2; exit 2; } ;;
 esac
 NODES=${DEV2_NODES_FILE:-$HOME/.config/decision2/nodes.env}
 A=$(grep '^node-a=' "$NODES" | cut -d= -f2-) C=$(grep '^node-c=' "$NODES" | cut -d= -f2-)
@@ -127,7 +132,7 @@ EOF
   parity)
     onx "test -f $PKG/MODEL_MANIFEST.json" || { echo "run stage first" >&2; exit 3; }
     onx "test ! -e $R/logs/ixp-parity-$NAME.exit" || { echo "parity of $NAME already ran" >&2; exit 3; }
-    onx "mkdir -p $R/logs; setsid nohup bash -c 'cd $S && bash v2/eval/ix1/launch.sh parity --src $M --model $NAME --gpu $IX_GPU \
+    onx "mkdir -p $R/logs; setsid nohup bash -c 'cd $S && IX1_SHARED_LEASE=$IX_SHARED bash v2/eval/ix1/launch.sh parity --src $M --model $NAME --gpu $IX_GPU \
       --run $R/parity/$NAME --rows $R/$PANEL/compat-86.gold-free.jsonl.gz; echo \$? > $R/logs/ixp-parity-$NAME.exit' \
       > $R/logs/ixp-parity-$NAME.log 2>&1 < /dev/null &"
     echo "$(date -u +%FT%TZ) $NAME parity gate started on node $IX_NODE GPU$IX_GPU"
@@ -142,7 +147,7 @@ EOF
     for k in $(seq 0 $((n - 1))); do
       if ! onx "test -f $R/runs/$NAME/shard-$k/end_epoch"; then
         onx "test ! -e $R/runs/$NAME/shard-$k" || { echo "shard $k started earlier and has not ended" >&2; exit 3; }
-        onx "cd $S && bash v2/eval/ix1/launch.sh run --src $M --model $NAME --gpus '$gpus' --run $R/runs/$NAME \
+        onx "cd $S && IX1_SHARED_LEASE=$IX_SHARED bash v2/eval/ix1/launch.sh run --src $M --model $NAME --gpus '$gpus' --run $R/runs/$NAME \
           --rows-dir $R/$PANEL --cache $R/parity/$NAME/cache-frozen --only $k"
         echo "$(date -u +%FT%TZ) $NAME shard $k of $n started on node $IX_NODE GPU$IX_GPU"
         until onx "test -f $R/runs/$NAME/shard-$k/end_epoch"; do sleep 45; done
@@ -207,6 +212,10 @@ EOF
   release)
     onx "docker ps --format '{{.Names}}' | grep -q '^ix1-$(tr 'A-Z.' 'a-z_' <<< "$NAME")-'" &&
       { echo "a $NAME Index container is still running" >&2; exit 3; }
+    if [ -n "$IX_SHARED" ]; then
+      onx "f=/data/dev2/leases/gpu$IX_GPU.lock/owner.$IX_SHARED; if grep -q 'IX1 .* $NAME\$' \$f 2>/dev/null; then rm -f \$f; echo gpu$IX_GPU co-tenant entry removed; fi"
+      exit 0
+    fi
     onx "f=/data/dev2/leases/gpu$IX_GPU.lock/owner; if grep -q 'IX1 .* $NAME\$' \$f 2>/dev/null; then \
       printf 'track=eval-ix1\nstatus=released (0.8B / 2B Index-path release run of $NAME done)\nlast_job_end_utc=%s\n' \
       \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" > \$f; echo gpu$IX_GPU released; fi" ;;
