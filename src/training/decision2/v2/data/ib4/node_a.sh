@@ -372,10 +372,10 @@ items = [
     (run / "rescan/c1-names.json", "audits/c1-names-final.json"),
 ]
 items += [(p, f"audits/shortcut/{p.name}") for p in sorted((run / "shortcut").glob("*.json")) if p.name != "g4rows.json"]
-print(json.dumps([{"src": str(src), "dst": f"ib4/{phase}/" + dst} for src, dst in items], indent=1))
+print(json.dumps([{"src": str(src), "dst": f"{phase}/" + dst} for src, dst in items], indent=1))
 EOF
   run hf-assemble -v "$R:$R:ro" -v "$CAND:$CAND:ro" -v "$R/hf:$R/hf:rw" "$IMG" -m v2.data.assemble_hf_upload \
-    --spec "$spec" --out-dir "$R/hf/upload/m6"
+    --spec "$spec" --out-dir "$R/hf/upload/m6/ib4"
   local rc=0
   (cd "$R/hf/upload/m6/ib4/$RUN" && bash "$CODE/v2/common/check_no_private.sh" -- .) \
     > "$R/logs/hf-leak-guard.out" 2> "$R/logs/hf-leak-guard.err" || rc=$?
