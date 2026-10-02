@@ -371,6 +371,30 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 02:57Z (poll 18):
+  - **M6-IB2's chain** (`DEVGATES-20261002T025243Z`): soup 01:55–02:2xZ, readout, slices; **development gates
+    02:52Z:**
+
+    | Gate | Result |
+    | --- | --- |
+    | G1 collapse | **FAIL**: typed-DEV Noul modal share .9675 (387 False / 13 True) |
+    | G4 Noul | **FAIL**: .5125 < .52 |
+    | G5 | **FAIL**: clean gold-no yes Δ +.0435 [+.0294, +.0581] |
+    | G2 HT-DEV v2 | TIE (+.009) |
+    | G3 | pass (T_dev .8781) |
+    | G6 | pass (B_dev .9611, +.0597 [+.0470, +.0729]) |
+
+    No finalist; chain complete (no finalist) at 02:52:51Z.
+  - **Under amendment 7 the type-collapse check is the formal one.** Formal runs were started by hand on node B at
+    02:54:36Z for the integrity check and the references:
+    - M6-IB2 on GPU0 (mirror `b74685ddb`, PID 3087635, log `m6/logs/formal-M6-IB2-manual.log`);
+    - M6-IBX on GPU5 (mirror `d8edcf4e1`, PID 3087637).
+
+    An Index run follows only for a candidate whose formal typed FINAL shows no collapsed type.
+  - M5-L128's paired bootstrap finished (exit 0); private copies are in `private/m6/M5-L128/`.
+  - `m6-index.sh` can stage a candidate without a formal package (`M6_INDEX_FROM_SOUP=1`; `199daf794`, mirrored to
+    nodes B–D).
+  - M6-IB Index: shards at 1.4k–6.4k of ≈ 15k rows (02:49Z).
 - 02:40Z (poll 17):
   - Read COORDINATION 09:55 / 10:00 / 10:35 (the Index-first rule, the 27B sweep, the banner card-only revision) and
     merged integration (`256c804c7`).
