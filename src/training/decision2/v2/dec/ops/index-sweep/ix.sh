@@ -10,7 +10,10 @@
 #   ref    NODE TIER       copy the tier's reference run (merged results, compare, receipt) from node C to
 #                          NODE ix1/index-sweep/refs/<REF>/ (node D through a node A relay directory)
 #   stage  NODE NAME       the candidate's frozen soup -> NODE (SHA-256 lists equal; used in place when already
-#                          there), v2.eval.ix1.restage into the tier package, then identity / loaded count / T = 1 checks
+#                          there), v2.eval.ix1.restage into the tier package, then identity / loaded count / T = 1 checks;
+#                          ISWEEP_SOUP_FROM=node:dir reads a verified relay copy instead of the table's soup
+#   panel  NODE PANEL      copy an IX1 panel directory from node A to NODE (SHA-256 lists equal)
+#   relay  NAME NODE       copy the table's soup to NODE models/ix1/index-sweep/relay/NAME (for a two-hop route)
 #   lease  NODE "GPUS"     owner files of other tracks' released leases -> track=eval-ix1 idle (old file kept)
 #   chain  NODE PANEL "GPUS" NAME...   chain.sh detached on NODE (parity gates, runs, scoring, bootstraps)
 #   status NODE NAME...    per model: parity verdict, shards, merged rows, bootstraps present; chain log tail
@@ -98,6 +101,14 @@ copy() {  # SRC_NODE SRC_DIR DST_NODE DST_DIR: whole directory, SHA-256 lists eq
 }
 
 case "$STAGE" in
+  panel)
+    N=${1:?NODE} PNAME=${2:?PANEL}
+    on "$N" "test -f $R/$PNAME/panel.json" && { echo "node $N has $PNAME"; exit 0; }
+    copy a "$R/$PNAME" "$N" "$R/$PNAME" ;;
+  relay)
+    NAME=${1:?NAME} N=${2:?NODE}
+    src=${SOUP[$NAME]:?unknown NAME}
+    copy "${src%%:*}" "${src#*:}" "$N" "$MD/index-sweep/relay/$NAME" ;;
   pkg)
     N=${1:?NODE} T=${2:?TIER}
     on "$N" "test -d $MD/${BASEPKG[$T]}" && { echo "node $N has ${BASEPKG[$T]}"; exit 0; }
@@ -114,7 +125,7 @@ case "$STAGE" in
     on c "rm -rf $R/index-sweep/export/$ref" ;;
   stage)
     N=${1:?NODE} NAME=${2:?NAME}
-    T=${TIER[$NAME]:?unknown NAME} src=${SOUP[$NAME]} model=${MODEL[$NAME]}
+    T=${TIER[$NAME]:?unknown NAME} src=${ISWEEP_SOUP_FROM:-${SOUP[$NAME]}} model=${MODEL[$NAME]}
     sn=${src%%:*} sd=${src#*:}
     on "$N" "test -f $S/v2/eval/ix1/restage.py" || { echo "mirror $SHA is not on node $N" >&2; exit 2; }
     pkg=$(pkgdir "$N" "$NAME")
