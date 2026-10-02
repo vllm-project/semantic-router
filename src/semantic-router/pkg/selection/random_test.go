@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestRandomSelector_UniformDistribution(t *testing.T) {
@@ -147,5 +149,78 @@ func TestRandomSelector_FactoryAndRegistry(t *testing.T) {
 	}
 	if _, ok := registered.(*RandomSelector); !ok {
 		t.Fatalf("registry holds %T for MethodRandom, want *RandomSelector", registered)
+	}
+}
+
+// Two adapters on one base, and one model at two reasoning settings, are
+// distinct candidates that a model-only result cannot disambiguate (#3884 review).
+func TestRandomSelector_ResolvesThroughSharedCandidatePath(t *testing.T) {
+	enabled, disabled := true, false
+	pools := map[string][]config.ModelRef{
+		"two adapters on one base": {
+			{Model: "base-model", LoRAName: "adapter-a"},
+			{Model: "base-model", LoRAName: "adapter-b"},
+		},
+		"one model at two reasoning settings": {
+			{Model: "base-model", ModelReasoningControl: config.ModelReasoningControl{UseReasoning: &enabled}},
+			{Model: "base-model", ModelReasoningControl: config.ModelReasoningControl{UseReasoning: &disabled}},
+		},
+	}
+
+	for name, candidates := range pools {
+		t.Run(name, func(t *testing.T) {
+			for index := range candidates {
+				selector := NewRandomSelector()
+				selector.intn = func(int) int { return index }
+				selCtx := &SelectionContext{CandidateModels: candidates}
+
+				result, err := selector.Select(context.Background(), selCtx)
+				if err != nil {
+					t.Fatalf("Select failed: %v", err)
+				}
+				if result.SelectedCandidate == nil {
+					t.Fatal("SelectedCandidate is nil; the shared resolver cannot disambiguate")
+				}
+				if validateErr := ValidateSelectionResult(selCtx, result); validateErr != nil {
+					t.Fatalf("ValidateSelectionResult: %v", validateErr)
+				}
+
+				resolved, err := ResolveSelectionCandidate(selCtx, result)
+				if err != nil {
+					t.Fatalf("ResolveSelectionCandidate: %v", err)
+				}
+				if CandidateIdentity(*resolved) != CandidateIdentity(candidates[index]) {
+					t.Fatalf("resolved candidate %+v, want %+v", *resolved, candidates[index])
+				}
+			}
+		})
+	}
+}
+
+func TestRandomSelector_ScoresEveryCandidateSlot(t *testing.T) {
+	candidates := []config.ModelRef{
+		{Model: "base-model", LoRAName: "adapter-a"},
+		{Model: "base-model", LoRAName: "adapter-b"},
+	}
+	selCtx := &SelectionContext{CandidateModels: candidates}
+
+	result, err := NewRandomSelector().Select(context.Background(), selCtx)
+	if err != nil {
+		t.Fatalf("Select failed: %v", err)
+	}
+	if len(result.CandidateScores) != 2 {
+		t.Fatalf("CandidateScores has %d rows, want 2: %+v", len(result.CandidateScores), result.CandidateScores)
+	}
+	for _, candidate := range candidates {
+		score, ok := result.CandidateScores.Get(candidate)
+		if !ok {
+			t.Fatalf("CandidateScores is missing %+v", candidate)
+		}
+		if score != 0.5 {
+			t.Errorf("score for %+v = %v, want 0.5", candidate, score)
+		}
+	}
+	if len(result.AllScores) != 2 {
+		t.Errorf("AllScores collapsed adapters into %d key(s): %v", len(result.AllScores), result.AllScores)
 	}
 }

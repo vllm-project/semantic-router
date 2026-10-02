@@ -39,24 +39,24 @@ func (s *RandomSelector) Select(_ context.Context, selCtx *SelectionContext) (*S
 	}
 
 	candidates := selCtx.CandidateModels
-	chosen := &candidates[s.intn(len(candidates))]
+	chosen := candidates[s.intn(len(candidates))]
 
+	// Each ModelRef is one equal slot, so scores stay per-candidate: two
+	// adapters on one base must not collapse into a single model-keyed score.
 	score := 1.0 / float64(len(candidates))
-	allScores := make(map[string]float64, len(candidates))
+	scores := make(CandidateScores, 0, len(candidates))
 	for _, candidate := range candidates {
-		allScores[candidate.Model] = score
+		scores = append(scores, CandidateScore{Candidate: candidate, Score: score})
 	}
 
 	logging.Infof("[RandomSelector] %v → %s (1/%d)",
 		getModelNames(candidates), chosen.Model, len(candidates))
 
-	return &SelectionResult{
-		SelectedModel: chosen.Model,
-		LoRAName:      chosen.LoRAName,
-		Score:         score,
-		Confidence:    score,
-		Method:        MethodRandom,
-		Reasoning:     "uniform random selection among eligible candidates",
-		AllScores:     allScores,
-	}, nil
+	result := &SelectionResult{
+		Score:      score,
+		Confidence: score,
+		Method:     MethodRandom,
+		Reasoning:  "uniform random selection among eligible candidates",
+	}
+	return result.WithScores(scores).WithCandidate(chosen), nil
 }
