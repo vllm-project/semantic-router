@@ -266,25 +266,21 @@ func TestOfficialUnsupportedAnthropicToolDiscriminatorsAreTyped(t *testing.T) {
 	}
 }
 
-func TestOfficialUnsupportedChatCustomToolCallsAreTyped(t *testing.T) {
+func TestOfficialChatCustomToolCallsRejectFunctionPayloads(t *testing.T) {
 	engine := NewBuiltinEngine()
 	request := []byte(`{
 		"model":"m",
 		"messages":[
 			{"role":"user","content":"use the grammar"},
-			{"role":"assistant","tool_calls":[{"id":"call_1","type":"custom","custom":{"name":"grammar","input":"answer"}}]}
+			{"role":"assistant","tool_calls":[{"id":"call_1","type":"custom","custom":{"name":"grammar","input":"answer"},"function":{"name":"grammar","arguments":"{}"}}]}
 		]
 	}`)
 	_, _, _, err := engine.DecodeRequest(llmprotocol.OpenAIChatV1, request)
-	assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_tool_call")
+	assertProtocolError(t, err, llmprotocol.ErrorInvalidRequest, "invalid_tool_call")
 
-	response := []byte(`{
-		"id":"chatcmpl_1","object":"chat.completion","model":"m",
-		"choices":[{"index":0,"message":{"role":"assistant","tool_calls":[{"id":"call_1","type":"custom","custom":{"name":"grammar","input":"answer"}}]},"finish_reason":"tool_calls"}],
-		"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}
-	}`)
-	_, _, _, err = engine.DecodeResponse(llmprotocol.OpenAIChatV1, response)
-	assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_tool_call")
+	request = []byte(`{"model":"m","messages":[{"role":"user","content":"hi"}],"tools":[{"type":"custom","custom":{"name":"grammar"},"function":{"name":"grammar"}}]}`)
+	_, _, _, err = engine.DecodeRequest(llmprotocol.OpenAIChatV1, request)
+	assertProtocolError(t, err, llmprotocol.ErrorInvalidRequest, "invalid_tool_variant")
 }
 
 func TestOfficialChatRequestContentBlockUnionsAreRoleScoped(t *testing.T) {
@@ -393,12 +389,12 @@ func TestOfficialChatResponseMessageShapeIsStrict(t *testing.T) {
 
 func TestOfficialUnsupportedToolChoiceDiscriminatorsAreTyped(t *testing.T) {
 	engine := NewBuiltinEngine()
-	chatUnsupported := fields("allowed_tools", "custom")
+	chatUnsupported := fields("allowed_tools")
 	assertClosedDiscriminatorInventory(
 		t,
 		"OpenAI Chat Completions object tool choice",
 		3,
-		fields("function"),
+		fields("function", "custom"),
 		chatUnsupported,
 	)
 	for _, choiceType := range chatUnsupported {
@@ -423,14 +419,14 @@ func TestOfficialUnsupportedToolChoiceDiscriminatorsAreTyped(t *testing.T) {
 
 	responsesUnsupported := fields(
 		"allowed_tools", "apply_patch", "code_interpreter", "computer", "computer_use",
-		"computer_use_preview", "custom", "file_search", "mcp",
+		"computer_use_preview", "file_search", "mcp",
 		"programmatic_tool_calling", "shell", "web_search_preview", "web_search_preview_2025_03_11",
 	)
 	assertClosedDiscriminatorInventory(
 		t,
 		"OpenAI Responses object tool choice",
 		15,
-		fields("function", "image_generation"),
+		fields("function", "custom", "image_generation"),
 		responsesUnsupported,
 	)
 	for _, choiceType := range responsesUnsupported {

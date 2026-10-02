@@ -11,7 +11,12 @@ zh-Hans	benchmarking/agent-routing-protection.md
 zh-Hans	benchmarking/custom-evaluations.md
 zh-Hans	benchmarking/open-intelligence-index.md
 zh-Hans	benchmarking/overview.md
-zh-Hans	benchmarking/sr-bench.md
+zh-Hans	benchmarking/sr-bench/index.md
+zh-Hans	benchmarking/sr-bench/iterate.md
+zh-Hans	benchmarking/sr-bench/plan-and-run.md
+zh-Hans	benchmarking/sr-bench/results.md
+zh-Hans	benchmarking/sr-bench/shared-worker.md
+zh-Hans	benchmarking/sr-bench/tasks-and-targets.md
 zh-Hans	community/code-style.md
 zh-Hans	community/development.md
 zh-Hans	community/documentation.md

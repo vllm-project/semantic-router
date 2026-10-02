@@ -224,7 +224,7 @@ export default function ConfigPageRouterConfigSection({
             <h2>One place for router-wide behavior</h2>
             <p>
               {routerDefaults
-                ? 'Effective values are live. Edit a section to override only what should change.'
+                ? 'These are the saved configuration values. Edit a section to override what should change; Kubernetes deployments need a rollout to apply saved changes.'
                 : 'Router defaults are offline. Saved overrides remain available to inspect and edit.'}
             </p>
           </div>

@@ -1,6 +1,8 @@
 package catalog
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -37,9 +39,17 @@ func BuiltIn() (*Registry, error) {
 			builtInErr = fmt.Errorf("decode generated model catalog: %w", err)
 			return
 		}
-		builtIn, builtInErr = registryFromSnapshot(document, builtInCatalogDigest)
+		builtIn, builtInErr = registryFromSnapshot(document, builtInCatalogDigest())
 	})
 	return builtIn, builtInErr
+}
+
+// builtInCatalogDigest equals the SHA-256 of the published public catalog. It is
+// computed rather than generated so concurrent catalog changes do not conflict
+// on a stored hash.
+func builtInCatalogDigest() string {
+	sum := sha256.Sum256([]byte(builtInCatalogJSON + "\n"))
+	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
 func registryFromSnapshot(document snapshot, digest string) (*Registry, error) {

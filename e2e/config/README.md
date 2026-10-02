@@ -35,7 +35,8 @@ Run it against the current local image with:
 
 ```bash
 make vllm-sr-dev
-OPENAI_API_KEY="<provider-key>" vllm-sr serve \
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr:latest \
+  OPENAI_API_KEY="<provider-key>" vllm-sr serve \
   --config e2e/config/config.remote-embedding-smoke.yaml \
   --image-pull-policy never \
   --minimal

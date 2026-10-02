@@ -70,7 +70,7 @@ def build_message(body: dict) -> dict:
             position, matched = min(stops)
             content[0]["text"] = text[:position]
             reason = "stop_sequence"
-    return {
+    response = {
         "id": "msg_provider_fixture",
         "type": "message",
         "role": "assistant",
@@ -80,6 +80,14 @@ def build_message(body: dict) -> dict:
         "stop_sequence": matched,
         "usage": {"input_tokens": 6, "output_tokens": 3},
     }
+    if contains_text(body["messages"], "__mock_anthropic_diagnostics__"):
+        response["diagnostics"] = {
+            "cache_miss_reason": {
+                "type": "tools_changed",
+                "cache_missed_input_tokens": 4,
+            }
+        }
+    return response
 
 
 def sse(event: str, payload: dict) -> str:
