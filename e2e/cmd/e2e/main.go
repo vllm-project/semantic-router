@@ -26,6 +26,7 @@ func main() {
 		useExistingCluster = flag.Bool("use-existing-cluster", false, "Use existing cluster instead of creating a new one")
 		verbose            = flag.Bool("verbose", false, "Enable verbose logging")
 		parallel           = flag.Bool("parallel", false, "Run tests in parallel")
+		flakeAttempts      = flag.Int("flake-attempts", 1, "Attempts for a failing test before it is reported as failed (1 disables retries)")
 		testCases          = flag.String("tests", "", "Comma-separated list of test cases to run (empty means all)")
 		setupOnly          = flag.Bool("setup-only", false, "Only setup the profile without running tests")
 		skipSetup          = flag.Bool("skip-setup", false, "Skip profile setup and only run tests (assumes environment is already deployed)")
@@ -48,6 +49,11 @@ func main() {
 	// Validate flags
 	if *setupOnly && *skipSetup {
 		fmt.Fprintf(os.Stderr, "Error: --setup-only and --skip-setup cannot be used together\n")
+		os.Exit(1)
+	}
+
+	if *flakeAttempts < 1 {
+		fmt.Fprintf(os.Stderr, "Error: --flake-attempts must be 1 or greater, got %d\n", *flakeAttempts)
 		os.Exit(1)
 	}
 
@@ -79,6 +85,7 @@ func main() {
 		SetupOnly:          *setupOnly,
 		SkipSetup:          *skipSetup,
 		UseWorkspaceModels: *useWorkspaceModels,
+		FlakeAttempts:      *flakeAttempts,
 	}
 
 	// Get the profile implementation
