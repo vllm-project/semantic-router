@@ -20,20 +20,22 @@
 # Node A (Eos 0.8B, Sol 2B, Nox 4B, Lux 9B, Vega 27B, where their release inputs are): a GPU whose owner file reads
 # released, or the 0.6B track's idle allocation, under the shared lease owner.release-org-<key> (removed on exit).
 # Node E (Kai 0.6B): GPU6 or GPU7 without a lease entry, under this track's own lease (track=release-org).
-# Kernel tiers autotune into a fresh cache (card-only, no scored-panel parity), as round 4 did for 4B.
-# Usage: bash <mirror>/v2/release/records/dev2-org-2026-10-02/ops/org.sh <tier> --gpu N [--resume REV]
+# Kernel tiers autotune into a fresh cache (card-only, no scored-panel parity), as round 4 did for 4B. A tier without
+# kernels may run every check on CPU (--cpu: no GPU, no lease) when no GPU of the node is free to it.
+# Usage: bash <mirror>/v2/release/records/dev2-org-2026-10-02/ops/org.sh <tier> --gpu N|--cpu [--resume REV]
 set -euo pipefail
 tier="${1:-}"
 shift || true
-gpu="" resume=""
+gpu="" resume="" cpu=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --gpu) gpu=$2; shift 2 ;;
+    --cpu) cpu=1; shift ;;
     --resume) resume=$2; shift 2 ;;
     *) echo "unknown argument $1" >&2; exit 2 ;;
   esac
 done
-[[ "$gpu" =~ ^[0-7]$ ]] || { echo "--gpu N" >&2; exit 2; }
+[[ "$cpu" == 1 && -z "$gpu" || "$cpu" == 0 && "$gpu" =~ ^[0-7]$ ]] || { echo "--gpu N or --cpu" >&2; exit 2; }
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 S=$(cd "$(dirname "$0")/../../../../.." && pwd)
 SRC=$(basename "$(cd "$S/../../.." && pwd)")
@@ -62,7 +64,10 @@ case "$tier" in
 esac
 [[ "$(docker image inspect -f '{{.Id}}' "$image")" == "$image" ]] || { echo "image $image is missing" >&2; exit 1; }
 lease=/data/dev2/leases/gpu$gpu.lock
-if [[ "$node" == E ]]; then
+if [[ "$cpu" == 1 ]]; then
+  [[ "$kernels" == 0 ]] || { echo "$tier needs its GPU kernels (--gpu)" >&2; exit 2; }
+  device_args=(--cpu --threads 16)
+elif [[ "$node" == E ]]; then
   [[ "$gpu" =~ ^[67]$ ]] || { echo "node E GPU6 or GPU7 only (--gpu)" >&2; exit 2; }
   if [[ -e "$lease" ]] && [[ -n "$(ls -A "$lease")" ]]; then
     echo "gpu$gpu already has a lease entry ($(ls "$lease")): refusing" >&2; exit 1
@@ -76,8 +81,11 @@ else
   lease_args=(--track release-org --shared-lease "release-org-$key")
   trap 'rm -f "$lease/owner.release-org-$key"' EXIT
 fi
-rocm-smi --showuse --showmeminfo vram --json | python3 "$RENAME_OPS/pick_gpu.py" "$vram" "$gpu" >/dev/null \
-  || { echo "GPU$gpu is busy or lacks free VRAM" >&2; exit 1; }
+if [[ "$cpu" == 0 ]]; then
+  device_args=(--gpu "$gpu" "${lease_args[@]}" --threads 4)
+  rocm-smi --showuse --showmeminfo vram --json | python3 "$RENAME_OPS/pick_gpu.py" "$vram" "$gpu" >/dev/null \
+    || { echo "GPU$gpu is busy or lacks free VRAM" >&2; exit 1; }
+fi
 name=Decision-2.0-$codename-$tier REPO=vllm-sr/$name
 SPEC=$S/v2/release/specs/dev2-$key-org.json
 export TMPDIR=/data/dev2/tmp PYTHONPATH=$S
@@ -140,15 +148,14 @@ if [[ "$kernels" == 1 ]]; then
   kernel_args=(--site /opt/decision-fla --require-kernels --env TRITON_CACHE_AUTOTUNING=1)
   cache_args=(--env "TRITON_CACHE_DIR=$TC" --mount-rw "$TC")
 fi
-echo "mirror $SRC tier $tier node $node gpu $gpu work $W tf518 $(cd "$TF518" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)"
+echo "mirror $SRC tier $tier node $node gpu ${gpu:-cpu} work $W tf518 $(cd "$TF518" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)"
 set -x
 status=0
-"$S/v2/release/release.sh" --spec "$SPEC" --src "$SRC" --work "$W" --image "$image" \
-  --gpu "$gpu" "${lease_args[@]}" --threads 4 \
+"$S/v2/release/release.sh" --spec "$SPEC" --src "$SRC" --work "$W" --image "$image" "${device_args[@]}" \
   "${kernel_args[@]}" "${base_args[@]}" --env HIP_FORCE_DEV_KERNARG=1 "${cache_args[@]}" \
   --upload --collect --already-collected --hub-site "tf518=$TF518" || status=$?
 set +x
-if [[ "$node" == E ]] && grep -qx "track=release-org" "$lease/owner" 2>/dev/null \
+if [[ "$cpu" == 0 && "$node" == E ]] && grep -qx "track=release-org" "$lease/owner" 2>/dev/null \
   && grep -qx "run_dir=$W" "$lease/owner"; then
   rm -f "$lease/owner" && rmdir "$lease" 2>/dev/null || true
 fi
