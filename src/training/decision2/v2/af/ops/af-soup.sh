@@ -56,11 +56,14 @@ if [ "${AF_WAIT:-0}" = 1 ]; then
 fi
 LEASE=/data/dev2/leases/gpu$GPU.lock/owner
 held=0
-hold() {
+hold() {  # a chain writes its seed's DONE marker just before it releases its lease: wait <= 15 min for the release
+  local w=0
   [ "$GPU" != - ] && [ "$held" = 0 ] || return 0
-  if ! grep -qs '^track=arm-factory' "$LEASE" || ! grep -qsE '^status=(released|idle)' "$LEASE"; then
-    fail "GPU$GPU's lease is not a released arm-factory lease"
-  fi
+  until grep -qs '^track=arm-factory' "$LEASE" && grep -qsE '^status=(released|idle)' "$LEASE"; do
+    w=$((w + 1))
+    [ $w -gt 90 ] && fail "GPU$GPU's lease is not a released arm-factory lease"
+    sleep 10
+  done
   printf 'track=arm-factory\nstatus=busy\npurpose=arm factory LoRA merges for %s\nstart_utc=%s\n' "$NAME" \
     "$(date -u +%FT%TZ)" > "$LEASE"
   held=1
