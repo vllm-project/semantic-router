@@ -20,6 +20,8 @@ from pathlib import Path
 
 from huggingface_hub import HfApi
 
+from v2.release import hub
+
 RUNTIME_FILES = {
     "decision2/__init__.py",
     "decision2/api.py",
@@ -41,6 +43,36 @@ def card_rules():
     return module
 
 
+def files(api: HfApi, repo: str, revision: str) -> dict:
+    """revision_diff.py's file listing, with the visibility the hub policy expects (the six are public)."""
+    info = api.model_info(repo, revision=revision, files_metadata=True)
+    if (
+        info.id != repo
+        or info.sha != revision
+        or info.private is not hub.expected_private(repo)
+    ):
+        raise SystemExit(
+            f"{repo}@{revision} resolves to {info.id}@{info.sha} (private={info.private})"
+        )
+    out = {}
+    for s in info.siblings:
+        lfs = getattr(s, "lfs", None)
+        sha = (
+            (
+                getattr(lfs, "sha256", None)
+                or (lfs.get("sha256") if isinstance(lfs, dict) else None)
+            )
+            if lfs
+            else None
+        )
+        out[s.rfilename] = {
+            "size": s.size,
+            "lfs_sha256": sha,
+            "blob_id": getattr(s, "blob_id", None),
+        }
+    return out
+
+
 def main() -> int:
     repo, released, new, out = sys.argv[1:5]
     switch = sys.argv[5:] == ["--switch"]
@@ -49,7 +81,7 @@ def main() -> int:
     required = {SWITCH_FILE} if switch else ADDED_RUNTIME_FILES
     rules = card_rules()
     api = HfApi()
-    a, b = rules.files(api, repo, released), rules.files(api, repo, new)
+    a, b = files(api, repo, released), files(api, repo, new)
     changed = sorted(n for n in set(a) | set(b) if a.get(n) != b.get(n))
     runtime = [
         n
