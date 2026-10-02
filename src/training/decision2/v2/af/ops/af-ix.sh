@@ -8,6 +8,8 @@
 # ~/code/decision2-program/private/arm-factory/; this script prints none.
 #
 # usage: af-ix.sh MIRROR_SHA STAGE ARGS...
+#   env NODE                        the scoring environment (venv, suite-0.2, kits, external) node C -> NODE
+#   ref4b NODE                      IS-4b-LHA10SDML-bf16's merged results node C -> NODE ix1/af/refs (hash pinned)
 #   soup NODE NAME GPU|- MEMBER...  af-soup.sh detached on NODE (log logs/soup-NAME.log)
 #   stage NODE NAME                 af-stage.sh on NODE (BF16 copy + restage, checks)
 #   soupcopy NAME FROM TO           a built soup (soup/NAME with its markers) FROM -> TO (SHA-256 lists equal)
@@ -41,6 +43,7 @@ S=$M/src/training/decision2
 R=/data/dev2/private/eval/index021/ix1
 MD=/data/dev2/models/ix1/af
 KEY="ssh -i /root/.ssh/d2_temp_cd -o BatchMode=yes"
+SDML_RESULTS=a459ce7c5be0383c355c49a702a4377f22b48e07cff7d2c653c85c50c0a34ea6
 LOCAL=${AF_LOCAL:-$HOME/code/decision2-program/private/arm-factory}
 size_of() { case $1 in a) echo 9b ;; *) echo 4b ;; esac; }
 tag_of() { case $1 in 4b-*) echo r13d42143 ;; *) echo re51f9881 ;; esac; }
@@ -58,6 +61,7 @@ copy() {  # SRC_NODE SRC_DIR DST_NODE DST_DIR: whole directory, SHA-256 lists eq
         rsync -a -e '$KEY' '$relay/' '$(host "$dn"):$dd.part/' && rm -rf '$relay'" ;;
     ab | ba)
       relay=/data/dev2/tmp/af-relay/$sn$dn-$(basename "$dd")
+      on c "test ! -e '$relay' && mkdir -p '$(dirname "$relay")'"
       on "$sn" "rsync -a -e '$KEY' '$sd/' '$(host c):$relay/'"
       on "$dn" "rsync -a -e '$KEY' '$(host c):$relay/' '$dd.part/'"
       on c "rm -rf '$relay'" ;;
@@ -70,6 +74,22 @@ copy() {  # SRC_NODE SRC_DIR DST_NODE DST_DIR: whole directory, SHA-256 lists eq
 }
 
 case "$STAGE" in
+  env)
+    N=${1:?NODE}
+    for x in venv suite-0.2 kit-19ad28ec kit-87d4650b external; do
+      on "$N" "test -e $R/../$x" && { echo "node $N has $x"; continue; }
+      copy c "$R/../$x" "$N" "$R/../$x"
+    done ;;
+  ref4b)
+    N=${1:?NODE}
+    X=$R/af/export/IS-4b-LHA10SDML-bf16
+    on "$N" "test -f $R/af/refs/IS-4b-LHA10SDML-bf16/merged/results.jsonl" && { echo "node $N has the 4B reference run"; exit 0; }
+    on c "umask 077; rm -rf $X && mkdir -p $X/merged && cp -p $R/runs/IS-4b-LHA10SDML-bf16/merged/{results.jsonl,compare.json,receipt.json} $X/merged/"
+    on "$N" "umask 077; mkdir -p $R/af/refs"
+    copy c "$X" "$N" "$R/af/refs/IS-4b-LHA10SDML-bf16"
+    on c "rm -rf $R/af/export"
+    [ "$(on "$N" "sha256sum < $R/af/refs/IS-4b-LHA10SDML-bf16/merged/results.jsonl | cut -c1-64")" = "$SDML_RESULTS" ] \
+      || { echo "the copied IS-4b-LHA10SDML-bf16 results are not $SDML_RESULTS" >&2; exit 3; } ;;
   soup)
     N=${1:?NODE} NAME=${2:?NAME} G=${3:?GPU}
     shift 3
@@ -106,8 +126,8 @@ case "$STAGE" in
     specs=""
     for NAME in "$@"; do
       case $NAME in
-        4b-*) [ "$N" = c ] || { echo "4B Index runs are scored on node C" >&2; exit 2; }
-              specs+=" AF-$NAME-bf16=4B=$R/runs/IS-4b-LHA10SDML-bf16" ;;
+        4b-*) if [ "$N" = c ]; then ref=$R/runs/IS-4b-LHA10SDML-bf16; else ref=$R/af/refs/IS-4b-LHA10SDML-bf16; fi
+              specs+=" AF-$NAME-bf16=4B=$ref" ;;
         *) if [ "$N" = c ]; then ref=$R/runs/K-a13IB-bf16; else ref=$R/m10/refs/K-a13IB-bf16; fi
            specs+=" AF-$NAME-bf16=9B=$ref" ;;
       esac
