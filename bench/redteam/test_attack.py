@@ -168,6 +168,100 @@ def test_max_flip_rate_gate_needs_detections(
     assert (gate_message in capsys.readouterr().err) == (flip_rate is None)
 
 
+class BoundaryTransformerScorer:
+    scenario: str = "flip"
+
+    def __init__(
+        self, model_path: str, device: str | None = None, batch_size: int = 64
+    ) -> None:
+        self.device = device or "cpu"
+
+    def score(self, texts: Sequence[str]) -> list[float]:
+        scores: list[float] = []
+        for text in texts:
+            prompt, _, suffix = text.partition(" ")
+            if self.scenario == "recall" and prompt == "prompt-00000" and not suffix:
+                scores.append(0.2)
+            elif (
+                self.scenario == "flip"
+                and prompt == "prompt-00000"
+                and suffix == "weather"
+            ):
+                scores.append(0.1)
+            else:
+                scores.append(0.95)
+        return scores
+
+
+@pytest.mark.parametrize(
+    ("scenario", "gate", "limit", "report_field", "report_value", "failure"),
+    [
+        (
+            "flip",
+            "--max-flip-rate",
+            "0",
+            "flip_rate",
+            0.0,
+            "flip_rate 3.3333333333333335e-05 above 0.0",
+        ),
+        (
+            "recall",
+            "--min-baseline-recall",
+            "1",
+            "baseline_recall",
+            1.0,
+            "baseline_recall 0.9999666666666667 below 1.0",
+        ),
+    ],
+    ids=["flip-rate-rounds-to-zero", "recall-rounds-to-one"],
+)
+def test_rate_gates_compare_unrounded_values(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    scenario: str,
+    gate: str,
+    limit: str,
+    report_field: str,
+    report_value: float,
+    failure: str,
+) -> None:
+    corpus = tmp_path / "behaviors.jsonl"
+    corpus.write_text(
+        "".join(
+            json.dumps({"goal": f"prompt-{index:05d}"}) + "\n"
+            for index in range(30000)
+        )
+    )
+    word_pool = tmp_path / "words.txt"
+    word_pool.write_text("weather\n")
+    report_path = tmp_path / "report.json"
+    monkeypatch.setattr(BoundaryTransformerScorer, "scenario", scenario)
+    monkeypatch.setattr(evaluate, "TransformerScorer", BoundaryTransformerScorer)
+
+    code = evaluate.main(
+        argv=[
+            "--model",
+            "unused",
+            "--dataset",
+            str(corpus),
+            "--word-pool",
+            str(word_pool),
+            "--max-words",
+            "1",
+            gate,
+            limit,
+            "--output",
+            str(report_path),
+        ]
+    )
+
+    report = json.loads(report_path.read_text())
+    assert code == 1
+    assert report[report_field] == report_value
+    assert f"gate failed: {failure}" in capsys.readouterr().err
+
+
 def test_local_dataset_reads_goal_field(tmp_path: Path) -> None:
     path = tmp_path / "behaviors.json"
     path.write_text(json.dumps([{"goal": "first"}, {"prompt": "second"}]))

@@ -75,7 +75,8 @@ def main(argv: list[str] | None = None) -> int:
         for prompt in prompts
     ]
 
-    report = summarize(results).as_dict()
+    summary = summarize(results)
+    report = summary.as_dict()
     report["model"] = args.model
     report["dataset"] = args.dataset
     report["threshold"] = args.threshold
@@ -86,19 +87,19 @@ def main(argv: list[str] | None = None) -> int:
 
     failures: list[str] = []
     if args.min_baseline_recall is not None:
-        recall = float(report["baseline_recall"])
+        recall = summary.baseline_recall
         if recall < args.min_baseline_recall:
             failures.append(
                 f"baseline_recall {recall} below {args.min_baseline_recall}"
             )
     if args.max_flip_rate is not None:
-        flip_rate = report["flip_rate"]
+        flip_rate = summary.flip_rate
         if flip_rate is None:
             failures.append(
                 "flip_rate is undefined because the model detected "
                 f"0 of {report['total']} prompts"
             )
-        elif float(flip_rate) > args.max_flip_rate:
+        elif flip_rate > args.max_flip_rate:
             failures.append(f"flip_rate {flip_rate} above {args.max_flip_rate}")
 
     for failure in failures:
