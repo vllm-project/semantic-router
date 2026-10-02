@@ -35,6 +35,7 @@ from triton.language.extra import libdevice
 from .aten_reduce import (
     combine_vec4,
     lane_tree64,
+    rsqrt_rn,
     sumsq_128,
     sumsq_256,
     sumsq_vec4_chunk,
