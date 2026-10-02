@@ -1,0 +1,309 @@
+{
+  "base": null,
+  "builder": {
+    "module_sha256": "b1b4d1daed6cc391309cb34b0975897c947bb8277124764f956b43f963c293f8",
+    "source_commit": "534b52dc42835466ec53225222fca0d6391b2998"
+  },
+  "calibration": null,
+  "card": {
+    "assets_receipt_sha256": "c7ed58103fb423e9ae0240c93c7ee86d8255892a2608cc1a18b8769225c00b97",
+    "figures_sha256": {
+      "assets/banner.png": "2363db1a11ea3d8c61656a078c2b2cdf10623177e54ca3ac5a48b22ccb0be724",
+      "assets/index-areas.png": "3670b08f2c186c03a78028ad0c0c9ab07a4475ffb33b81ce88daea600b1a0d37",
+      "assets/index-pareto.png": "bbc3b1c70755ff97ed5943bfa65f5b1c1e24041b0923c102610104182db5ecba",
+      "assets/jevarena-types.png": "4e95e33f4f5f4d673e26970cbaf9637a8c762b9d3eedbac3843ee32562b3a771",
+      "assets/jevarena.png": "0d97e2ecf10414cf211a37e8f8f16fbebddbc1dc5a85f4a243b1ce029d489081"
+    },
+    "index_sha256": "97a95897fb13b81addf033dee7984d53e996ddb8baad5076f706a0b7c752e22e",
+    "readme_sha256": "8a5be6775fb2645dbffd2d49d6c7a7507345bf912fcb1ed8b7b4f3d3bc530a3c"
+  },
+  "files_sha256": {
+    "LICENSE": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a",
+    "README.md": "8a5be6775fb2645dbffd2d49d6c7a7507345bf912fcb1ed8b7b4f3d3bc530a3c",
+    "assets/banner.png": "2363db1a11ea3d8c61656a078c2b2cdf10623177e54ca3ac5a48b22ccb0be724",
+    "assets/index-areas.png": "3670b08f2c186c03a78028ad0c0c9ab07a4475ffb33b81ce88daea600b1a0d37",
+    "assets/index-pareto.png": "bbc3b1c70755ff97ed5943bfa65f5b1c1e24041b0923c102610104182db5ecba",
+    "assets/jevarena-types.png": "4e95e33f4f5f4d673e26970cbaf9637a8c762b9d3eedbac3843ee32562b3a771",
+    "assets/jevarena.png": "0d97e2ecf10414cf211a37e8f8f16fbebddbc1dc5a85f4a243b1ce029d489081",
+    "backbone/config.json": "071e97d8291168ba712237744c9a60e733acce554e6164322d22550dc96de19b",
+    "backbone/model-00001-of-00002.safetensors": "2213a6559dd4a20e252a78f7df46d36baff9101059e561a889180b1e9cc22d5b",
+    "backbone/model-00002-of-00002.safetensors": "ff7a564a5aa73901dfa9b5ab3ba54276d269eaba202f1be2d583f19fe48ce33b",
+    "backbone/model.safetensors.index.json": "7607bb56aa11afe3a32bba1855e6bc3e54767b4a29c28216765f368b01da45a2",
+    "chat_template.jinja": "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80",
+    "config.json": "60c6f61ba93b64fec2d62697cfdb8a474bd0c0299d049592615e36dfde705d03",
+    "configuration_decision2.py": "b88ce8380cb0f210776f3f3ccc06219489b96502c520317790f3f4253e2a9367",
+    "decision2/__init__.py": "10fea99a87686a8f5d99e9a8a91573ce1ddb7bc702f22b1fa21d3de258a4054a",
+    "decision2/_vendor/__init__.py": "fe3babbdd871fa7c0cf919320a66efd1249253abe6bd7cdc5e33352dc46adeef",
+    "decision2/_vendor/dev2model/__init__.py": "4611a85789fae8f06395702a2975592e66e16a8632487c5f9255c0ce68c700d1",
+    "decision2/_vendor/dev2model/calibration.py": "71633a04533c7022e1606ed2734107f33839454c34c993fe16d80c8413d1c561",
+    "decision2/_vendor/dev2model/data.py": "632bd60555f63459ff08ffe82c8263ca6a96f75360bc8c06469fcb10f1e2e99c",
+    "decision2/_vendor/dev2model/decision_model.py": "7195ce78e997bd1e1d5da8d6c3ebb28f54c45cfb40256142fde8c7a3964351e4",
+    "decision2/_vendor/dev2model/infer.py": "e67515f1fc44aa9756aa8ce5a7cb26c8994c258255f73012aa85ac4989fc61ef",
+    "decision2/_vendor/dev2model/lora.py": "171cb0aaf4c71ba3cf69292b1f3efad8ec63db66bd2631e3b1445f08ff83ada4",
+    "decision2/_vendor/dev2model/score_bias.py": "837974bb8abb8c51c907e4f025e2632bd59bc2875eb55a4343d7bd4274622646",
+    "decision2/_vendor/dev2model/source.py": "ef7b30171c4befb26163ea4d3d6e5add9dc602228a476d6f0ead9d40b450c7e3",
+    "decision2/api.py": "a9af6e0a0888df0bab7ddebf813d1f6e40b8730f0a7c8fc8d9f375df0d7b112b",
+    "decision2/fast.py": "b1792167711a3755de2c1edc10d8b6409539069110ba7a52da6457d42fe3c701",
+    "decision2/fast_kernels.py": "6126a3c8334cfbb9d6d9c85a62d28efdee4db90a78ac3242709360c0698ab023",
+    "decision2/qwen.py": "e1f5c170492080894ebdc462d48d2438e268cd09f43ed6a13176179f0901c6aa",
+    "decision_config.json": "d96b7a70b46e2c3aca10d1d6acfa2744eee3241bee99b2b72f158a3baaa650be",
+    "decision_head.safetensors": "0999f3c4bec47508c5ffb22d030ae57d1a74a888965c303270b8ab6f1ec54e7a",
+    "modeling_decision2.py": "a3f700b3d2a5deb344821802248a5ea7ea06ccedc5af1823dca4e3e813c17fbb",
+    "pipeline_decision2.py": "3393faec770ddaa9045a7e41092ad17cee5310fe74187deb6f58bbe718b0c1c3",
+    "tokenizer.json": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+    "tokenizer_config.json": "bee8eba30f0eb4af73c0fe2cd06d0f89b657d7819941c438157ec42f7c80ea87"
+  },
+  "identity": {
+    "fingerprint_files": {
+      "backbone/config.json": "071e97d8291168ba712237744c9a60e733acce554e6164322d22550dc96de19b",
+      "backbone/model-00001-of-00002.safetensors": "2213a6559dd4a20e252a78f7df46d36baff9101059e561a889180b1e9cc22d5b",
+      "backbone/model-00002-of-00002.safetensors": "ff7a564a5aa73901dfa9b5ab3ba54276d269eaba202f1be2d583f19fe48ce33b",
+      "backbone/model.safetensors.index.json": "7607bb56aa11afe3a32bba1855e6bc3e54767b4a29c28216765f368b01da45a2",
+      "chat_template.jinja": "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80",
+      "decision_config.json": "d96b7a70b46e2c3aca10d1d6acfa2744eee3241bee99b2b72f158a3baaa650be",
+      "decision_head.safetensors": "0999f3c4bec47508c5ffb22d030ae57d1a74a888965c303270b8ab6f1ec54e7a",
+      "tokenizer.json": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+      "tokenizer_config.json": "bee8eba30f0eb4af73c0fe2cd06d0f89b657d7819941c438157ec42f7c80ea87"
+    },
+    "model_sha256": "e20df76c14edb0d28ef17593f49a1870fdea9438ff4805594402e39766f3546c"
+  },
+  "kind": "release",
+  "licence": {
+    "components": [
+      {
+        "component": "Decision-2.0-Sol-2B weights, decision head, package runtime, card and artwork",
+        "licence": "apache-2.0",
+        "source": "vllm-sr/Decision-2.0-Sol-2B"
+      },
+      {
+        "component": "Decision 1.0 Sol-2B weights (direct weight origin, fully fine-tuned)",
+        "licence": "apache-2.0",
+        "source": "vllm-sr/Decision-1.0-Sol-2B@ce0c018a"
+      },
+      {
+        "component": "Qwen3.5-2B text backbone and tokenizer (upstream of Decision 1.0 Sol)",
+        "licence": "apache-2.0",
+        "source": "Qwen/Qwen3.5-2B@15852e8c"
+      }
+    ],
+    "spdx": "apache-2.0"
+  },
+  "max_input_tokens": 16384,
+  "model_files": [
+    "backbone/config.json",
+    "backbone/model-00001-of-00002.safetensors",
+    "backbone/model-00002-of-00002.safetensors",
+    "backbone/model.safetensors.index.json",
+    "chat_template.jinja",
+    "decision_config.json",
+    "decision_head.safetensors",
+    "tokenizer.json",
+    "tokenizer_config.json"
+  ],
+  "model_name": "Decision-2.0-Sol-2B",
+  "origin": {
+    "relation": "finetune",
+    "repo_id": "vllm-sr/Decision-1.0-Sol-2B",
+    "revision": "ce0c018a28de16d6639b1cd203b761bf643b89e6",
+    "summary": "Every weight of Decision 1.0 Sol was fine-tuned (nothing frozen, no adapter). The release is the uniform average of two seeds of that fine-tune, trained with the previous Decision 2.0 Sol 2B's answer probabilities as soft targets (self-distillation) and with extra copies of released multilingual rows that keep the released multilingual token share. Decision 1.0 Sol is itself a text-only fine-tune of [Qwen/Qwen3.5-2B](https://huggingface.co/Qwen/Qwen3.5-2B) at `15852e8c16360a2fea060d615a32b45270f8a8fc` (Apache-2.0), whose text backbone and tokenizer this model inherits; the Qwen3.5 vision tower is not part of it."
+  },
+  "package_schema": "dev2-package/1",
+  "parameters": {
+    "external_base_text": null,
+    "loaded": 1883930944,
+    "packaged": {
+      "backbone": 1881825088,
+      "head": 2105856,
+      "residual": 0
+    },
+    "packaged_files": {
+      "backbone": [
+        "backbone/model-00001-of-00002.safetensors",
+        "backbone/model-00002-of-00002.safetensors"
+      ],
+      "head": [
+        "decision_head.safetensors"
+      ],
+      "residual": []
+    },
+    "source": "safetensors header element counts; the runtime asserts the loaded count"
+  },
+  "profile": "qwen-full",
+  "remote_code": {
+    "architectures": [
+      "Decision2Model"
+    ],
+    "auto_map": {
+      "AutoConfig": "configuration_decision2.Decision2Config",
+      "AutoModel": "modeling_decision2.Decision2Model"
+    },
+    "automap_source": {
+      "commit": "99432d1a7da5adbc70212df78ae7ebf7e50b41e4",
+      "content_manifest_sha256": "3bede2ca1fc0b805c167bf5ae6b2bd824a3b64d1b6ae98478d04add1cc1444ff",
+      "tree": "fbf37474b1ce2efd228b7f50803848c6f60ebbd2"
+    },
+    "custom_pipelines": {
+      "decision": {
+        "impl": "pipeline_decision2.Decision2Pipeline",
+        "pt": [
+          "AutoModel"
+        ],
+        "type": "text"
+      }
+    },
+    "files": {
+      "configuration_decision2.py": {
+        "sha256": "b88ce8380cb0f210776f3f3ccc06219489b96502c520317790f3f4253e2a9367",
+        "source": "v2/release/automap/configuration_decision2.py",
+        "source_sha256": "b88ce8380cb0f210776f3f3ccc06219489b96502c520317790f3f4253e2a9367"
+      },
+      "modeling_decision2.py": {
+        "sha256": "a3f700b3d2a5deb344821802248a5ea7ea06ccedc5af1823dca4e3e813c17fbb",
+        "source": "v2/release/automap/modeling_decision2.py",
+        "source_sha256": "a3f700b3d2a5deb344821802248a5ea7ea06ccedc5af1823dca4e3e813c17fbb"
+      },
+      "pipeline_decision2.py": {
+        "sha256": "3393faec770ddaa9045a7e41092ad17cee5310fe74187deb6f58bbe718b0c1c3",
+        "source": "v2/release/automap/pipeline_decision2.py",
+        "source_sha256": "3393faec770ddaa9045a7e41092ad17cee5310fe74187deb6f58bbe718b0c1c3"
+      }
+    },
+    "model_type": "decision2",
+    "tested": [
+      "5.17.0",
+      "5.18.0"
+    ]
+  },
+  "repo_id": "vllm-sr/Decision-2.0-Sol-2B",
+  "runtime": {
+    "equivalence": "decision2/qwen.py loads this full checkpoint with the training/model sources vendored from the scored run's own runner mirror (5b246b110), whose SHA-256 equal the scored adapter sources (checked at build time), and applies the per-item batching, BF16-backbone / FP32-head execution, raw probabilities (temperature 1; no calibration file) and answer normalization of v2.dec.infer_dec, which for this non-residual checkpoint wraps the same DecisionModel without extra readouts. The scored checkpoint (8c8e98e3) stored every tensor in FP32; this package (v2.release.bf16_copy) stores its Linear projection matrices in BF16 exactly as BF16 autocast rounds them and every other tensor bit for bit in FP32, and the runtime holds the backbone's BF16-exact Linear weights in BF16, the values BF16 autocast multiplies with. The runtime, the Transformers remote code (AutoModel with trust_remote_code) and the forward token budget are the current revision's. From this revision the runtime replays the backbone of each exact padded input shape as a HIP graph, casts a Linear input shared by several layers to BF16 once and, on MI300-class (gfx942) GPUs, fuses the element-wise ops of each decoder layer into Triton kernels that round exactly as the ops they replace; it was checked with 0 answer changes and 0.0 drift on every scored prompt and on mlx-diag (10,653 prompts) against the previous runtime. Checked on one GPU, in the scored image with a copy of the persisted Triton autotune cache of the formal run, against the sealed formal predictions of every scored prompt (typed-final 1,600, css15 6,547, public231 231) by release.sh --parity before and after the download, and AutoModel against the native runtime on every scored prompt.",
+    "requirements": {
+      "causal-conv1d": "1.7.0 (GPU convolution kernels)",
+      "flash-linear-attention": "0.5.2 (GPU gated-delta kernels)",
+      "python": "3.12.13",
+      "safetensors": "0.8.0",
+      "tokenizers": "0.23.2",
+      "torch": "2.12.0+git6bbd260 (ROCm 7.2 build; one ROCm GPU tested)",
+      "transformers": "5.17.0",
+      "triton": "3.7.1 (persisted autotune cache)"
+    },
+    "runtime_source": {
+      "commit": "54303117be355595ddf5bb184905be6c6d2ecae9",
+      "content_manifest_sha256": "adeab2b90d1ae3b9b2c202a16202f5b94ddf2282e5b4c7ac7a30f24f2646eeb9",
+      "tree": "d4112ee2f4982ce76b0d40a92797c245e73cc241"
+    },
+    "scored_runtime_check": {
+      "checked": {
+        "training/model/calibration.py": "71633a04533c7022e1606ed2734107f33839454c34c993fe16d80c8413d1c561",
+        "training/model/data.py": "632bd60555f63459ff08ffe82c8263ca6a96f75360bc8c06469fcb10f1e2e99c",
+        "training/model/decision_model.py": "7195ce78e997bd1e1d5da8d6c3ebb28f54c45cfb40256142fde8c7a3964351e4",
+        "training/model/infer.py": "e67515f1fc44aa9756aa8ce5a7cb26c8994c258255f73012aa85ac4989fc61ef",
+        "training/model/lora.py": "171cb0aaf4c71ba3cf69292b1f3efad8ec63db66bd2631e3b1445f08ff83ada4",
+        "training/model/source.py": "ef7b30171c4befb26163ea4d3d6e5add9dc602228a476d6f0ead9d40b450c7e3"
+      },
+      "native_manifest_sha256": "571a204432f5789f4e8a187565770b56582cd1abfc8893eb251bb80ac54676a7"
+    },
+    "vendor_source": {
+      "commit": "5b246b11096adbb8df73b6ba34f96b7373f7c95c",
+      "content_manifest_sha256": "6c1a31f39327bc3443baac4a928de11191d10ae1406583e09af64e4f887d0cff",
+      "tree": "a2232382d2436317dd2aa2bcd3d5031b06f7122e"
+    }
+  },
+  "runtime_files": {
+    "decision2/__init__.py": {
+      "rewritten": false,
+      "sha256": "10fea99a87686a8f5d99e9a8a91573ce1ddb7bc702f22b1fa21d3de258a4054a",
+      "source": "v2/release/runtime/__init__.py",
+      "source_sha256": "10fea99a87686a8f5d99e9a8a91573ce1ddb7bc702f22b1fa21d3de258a4054a"
+    },
+    "decision2/_vendor/__init__.py": {
+      "rewritten": false,
+      "sha256": "fe3babbdd871fa7c0cf919320a66efd1249253abe6bd7cdc5e33352dc46adeef",
+      "source": null
+    },
+    "decision2/_vendor/dev2model/__init__.py": {
+      "rewritten": false,
+      "sha256": "4611a85789fae8f06395702a2975592e66e16a8632487c5f9255c0ce68c700d1",
+      "source": null
+    },
+    "decision2/_vendor/dev2model/calibration.py": {
+      "rewritten": false,
+      "sha256": "71633a04533c7022e1606ed2734107f33839454c34c993fe16d80c8413d1c561",
+      "source": "training/model/calibration.py",
+      "source_sha256": "71633a04533c7022e1606ed2734107f33839454c34c993fe16d80c8413d1c561"
+    },
+    "decision2/_vendor/dev2model/data.py": {
+      "rewritten": false,
+      "sha256": "632bd60555f63459ff08ffe82c8263ca6a96f75360bc8c06469fcb10f1e2e99c",
+      "source": "training/model/data.py",
+      "source_sha256": "632bd60555f63459ff08ffe82c8263ca6a96f75360bc8c06469fcb10f1e2e99c"
+    },
+    "decision2/_vendor/dev2model/decision_model.py": {
+      "rewritten": false,
+      "sha256": "7195ce78e997bd1e1d5da8d6c3ebb28f54c45cfb40256142fde8c7a3964351e4",
+      "source": "training/model/decision_model.py",
+      "source_sha256": "7195ce78e997bd1e1d5da8d6c3ebb28f54c45cfb40256142fde8c7a3964351e4"
+    },
+    "decision2/_vendor/dev2model/infer.py": {
+      "rewritten": false,
+      "sha256": "e67515f1fc44aa9756aa8ce5a7cb26c8994c258255f73012aa85ac4989fc61ef",
+      "source": "training/model/infer.py",
+      "source_sha256": "e67515f1fc44aa9756aa8ce5a7cb26c8994c258255f73012aa85ac4989fc61ef"
+    },
+    "decision2/_vendor/dev2model/lora.py": {
+      "rewritten": false,
+      "sha256": "171cb0aaf4c71ba3cf69292b1f3efad8ec63db66bd2631e3b1445f08ff83ada4",
+      "source": "training/model/lora.py",
+      "source_sha256": "171cb0aaf4c71ba3cf69292b1f3efad8ec63db66bd2631e3b1445f08ff83ada4"
+    },
+    "decision2/_vendor/dev2model/score_bias.py": {
+      "rewritten": false,
+      "sha256": "837974bb8abb8c51c907e4f025e2632bd59bc2875eb55a4343d7bd4274622646",
+      "source": "training/model/score_bias.py",
+      "source_sha256": "837974bb8abb8c51c907e4f025e2632bd59bc2875eb55a4343d7bd4274622646"
+    },
+    "decision2/_vendor/dev2model/source.py": {
+      "rewritten": false,
+      "sha256": "ef7b30171c4befb26163ea4d3d6e5add9dc602228a476d6f0ead9d40b450c7e3",
+      "source": "training/model/source.py",
+      "source_sha256": "ef7b30171c4befb26163ea4d3d6e5add9dc602228a476d6f0ead9d40b450c7e3"
+    },
+    "decision2/api.py": {
+      "rewritten": false,
+      "sha256": "a9af6e0a0888df0bab7ddebf813d1f6e40b8730f0a7c8fc8d9f375df0d7b112b",
+      "source": "v2/release/runtime/api.py",
+      "source_sha256": "a9af6e0a0888df0bab7ddebf813d1f6e40b8730f0a7c8fc8d9f375df0d7b112b"
+    },
+    "decision2/fast.py": {
+      "rewritten": false,
+      "sha256": "b1792167711a3755de2c1edc10d8b6409539069110ba7a52da6457d42fe3c701",
+      "source": "v2/release/runtime/fast.py",
+      "source_sha256": "b1792167711a3755de2c1edc10d8b6409539069110ba7a52da6457d42fe3c701"
+    },
+    "decision2/fast_kernels.py": {
+      "rewritten": false,
+      "sha256": "6126a3c8334cfbb9d6d9c85a62d28efdee4db90a78ac3242709360c0698ab023",
+      "source": "v2/release/runtime/fast_kernels.py",
+      "source_sha256": "6126a3c8334cfbb9d6d9c85a62d28efdee4db90a78ac3242709360c0698ab023"
+    },
+    "decision2/qwen.py": {
+      "rewritten": false,
+      "sha256": "e1f5c170492080894ebdc462d48d2438e268cd09f43ed6a13176179f0901c6aa",
+      "source": "v2/release/runtime/qwen.py",
+      "source_sha256": "e1f5c170492080894ebdc462d48d2438e268cd09f43ed6a13176179f0901c6aa"
+    }
+  },
+  "schema": "dev2-package-manifest/1",
+  "scored": {
+    "label": "post-key same-panel run m16-2b-RASDML at T = 1 (the sealed M16 formal run, collected without calibration; adopted and sealed)",
+    "paired_sha256": "677e8edece5f40c85fce279fd7fbcaed547d60cfe881a496649fabe5a5082047",
+    "predictions_sha256": {
+      "css15": "036b677425af74a05d988f6bb07f2bd89abf1b23aca25c86ae5fafb81c980a23",
+      "public231": "51beacfa0409954da9dddf0e330b9c04fa6d22b9883c48b6b8b8687d8f8d9142",
+      "typed-final": "9439972f4338f9c102fee78df0669f78badaa80b1b1db9c3a4776b3ad8eff96e"
+    },
+    "report_sha256": "6610c86ca1a9249c21cce031ee6df36b3c97d1ad7541458e91c4061154a10385",
+    "seal_sha256": "8283b9b76adb89e47dd92db5bfd6b8f4088a6be939ee0a0de962cc13d322d52f"
+  },
+  "tier": "2B"
+}
