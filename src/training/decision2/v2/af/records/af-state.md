@@ -2,6 +2,15 @@
 
 Index values stay private (node private stores and `decision2-program/private/arm-factory/`); this file has none.
 
+## 2026-10-02 23:05Z (07:05 UTC+8) — low-LR soups delivered as their seeds end
+
+- Built on node C and copied to node F (lists equal), FP32 model SHA-256: `4b-SDMLIB4-lrh` `de1ab06b…`,
+  `4b-LHS17ML-lrh` `a9ab8c81…`, `4b-LHS17IB4X-lrh` `77f3dba1…`; full-LR `4b-SDMLIB4W2` `69c4f53f…`, `4b-SDMLIB4-UP`
+  `4ca2e5f8…`, `4b-LHS17IB4-UP` `7a5b0505…`. `4b-LHS17ML-lrh` s1 / s2 and `4b-LHS17IB4X-lrh` s1 / s2 DONE ≈ 22:35Z;
+  node C GPU2–4 released to the 4B owner.
+- Training: node C GPU5 / 6 `4b-SDML-lrh` s1 / s2, GPU7 / 1 `4b-LHS17IB4-lrq` s1 / s2; node A GPU5–7 `KIB4-lrh` s1 / s2,
+  `KIB4-lrq` s1; node B GPU2 / 3 `KIB4-lrhh` s1 / s2.
+
 ## 2026-10-02 22:25Z (06:25 UTC+8) — low-LR soups for the 4B owner; Nox-4B is the factory's arm
 
 - **Nox-4B `c60d3b5c` = `4b-LHS17IB4-lrh`** (the factory's half-LR arm, amendment 4), released by the 4B owner
