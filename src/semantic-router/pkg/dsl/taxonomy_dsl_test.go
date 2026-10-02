@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -114,6 +115,23 @@ func assertCompiledKBDecision(t *testing.T, cfg *config.RouterConfig) {
 	}
 	if toolsCfg.EffectiveMode() != config.ToolsPluginModePassthrough {
 		t.Errorf("tools mode = %q", toolsCfg.EffectiveMode())
+	}
+}
+
+func TestProgramToJSONKeepsKBMetricProjectionInput(t *testing.T) {
+	prog, errs := Parse(taxonomyDSLFixture())
+	if len(errs) > 0 {
+		t.Fatalf("Parse errors: %v", errs)
+	}
+
+	encoded, err := json.Marshal(ProgramToJSON(prog).ProjectionScores[0].Inputs[0])
+	if err != nil {
+		t.Fatalf("marshal projection input: %v", err)
+	}
+	for _, field := range []string{`"kb":"privacy_kb"`, `"metric":"private_vs_public"`} {
+		if !strings.Contains(string(encoded), field) {
+			t.Errorf("projection input JSON %s is missing %s", encoded, field)
+		}
 	}
 }
 
