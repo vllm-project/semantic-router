@@ -371,6 +371,23 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 05:16Z (poll 22; COORDINATOR INTERRUPT 12:40 UTC+8, COORDINATION 12:30 / 12:40 / 13:05):
+  - **Integration merged** (`8ce3ec8d0`, signed; ≥ `cd565a588`, the collection-check fix).
+  - **M6-IB2 Index re-split (≥ 8-way asked; 3 GPUs were free).**
+    - Node D's static loops (shards 2–5 queued) were stopped at 04:33Z; shards 0 / 1 kept running and **ended exit 0
+      at ≈ 05:12Z**.
+    - Node E GPU0–3 / 6–7 were staged (`stage-e`, package + A20r cache + digest file SHA-256 equal) but the 2B M18
+      runs took all of them at 04:48Z (two launches failed before a container started: the missing `cache-frozen.sha256`,
+      fixed in `d3f228e85`; then GPU0 busy). Node E is the sweep's per COORDINATION 12:40.
+    - Node B GPU1 / GPU5 went to the 2B formal collection at 05:03:44Z (COORDINATION 13:05); **node B GPU0 only**.
+      `stage-b` (`a073d8be8`: image host2 pulled from node D, ID checked; base snapshot equal; kit, panel-8, package,
+      cache SHA-256 equal) done 05:06Z; GPU0's 27B owner set aside as `owner.m6-set-aside-20261002T050651Z`.
+    - Node D GPU4–7 went to the 4B worker's LHA10UP / LHA10SDML runs at 05:05–05:08Z.
+    - **Now:** node B GPU0 shards 2 → 7 (05:13Z, mirror `6d1bfee10`); node D GPU0 / GPU1 shards 3 → 5 / 4 → 6
+      (05:14Z). **ETA ≈ 07:40Z** for the last shard, then `collect` (node B → node D) and `score`.
+  - **M6-IB release (Index-first, qualifies):** preparing the 27B Index-first ops from the 4B worker's
+    (`dev2-4b-indexfirst-2026-10-02`) and A20r's (`dev2-27b-a20r-release-2026-09-30`) drivers; base = card4 spec,
+    current = `b689ee66` (card4 gate and decision); all steps on nodes.
 - 04:25Z (poll 21):
   - **M6-IB scored** (`m6-index.sh 14ec16de5 M6-IB score`): 120,226 / 120,226 ok, scorers pass, 0 flagged, 8.95
     GPU-h; private outputs in `private/m6/M6-IB/`.
