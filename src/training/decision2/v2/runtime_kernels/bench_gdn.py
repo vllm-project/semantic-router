@@ -32,13 +32,22 @@ def fla_kernels() -> dict[str, Any]:
     from fla.ops.gated_delta_rule import chunk_fwd, wy_fast
     from fla.ops.utils import cumsum
 
+    def autotuner(kernel: Any) -> Any:
+        # triton.heuristics wraps the autotuner; walk .fn down to the object holding the configs
+        while not hasattr(kernel, "configs"):
+            kernel = kernel.fn
+        return kernel
+
     return {
-        "l2norm": l2norm.l2norm_fwd_kernel,
-        "cumsum": cumsum.chunk_local_cumsum_scalar_kernel,
-        "kkt_solve": chunk_fwd.chunk_gated_delta_rule_fwd_kkt_solve_kernel,
-        "w_u": wy_fast.recompute_w_u_fwd_kernel,
-        "fwd_h": chunk_delta_h.chunk_gated_delta_rule_fwd_kernel_h_blockdim64,
-        "fwd_o": chunk_o.chunk_fwd_kernel_o,
+        name: autotuner(k)
+        for name, k in {
+            "l2norm": l2norm.l2norm_fwd_kernel,
+            "cumsum": cumsum.chunk_local_cumsum_scalar_kernel,
+            "kkt_solve": chunk_fwd.chunk_gated_delta_rule_fwd_kkt_solve_kernel,
+            "w_u": wy_fast.recompute_w_u_fwd_kernel,
+            "fwd_h": chunk_delta_h.chunk_gated_delta_rule_fwd_kernel_h_blockdim64,
+            "fwd_o": chunk_o.chunk_fwd_kernel_o,
+        }.items()
     }
 
 
