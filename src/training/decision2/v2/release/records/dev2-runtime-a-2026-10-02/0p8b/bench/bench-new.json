@@ -1,0 +1,94 @@
+{
+  "answers_file": "bench-new.answers.jsonl",
+  "answers_sha256": "2af6234826f536063438630dfaef4928ecfbaa5d20c3862df4f06c295054b307",
+  "count": 400,
+  "device_name": "",
+  "fp32_master": false,
+  "ids_sha256": "eed99a82102f2679efc132c34ef7719cf6d81999e5019c829c87be010452c3c7",
+  "input_tokens_mean": 346.2825,
+  "items_per_s": 159.483557325705,
+  "latency_ms": {
+    "max": 6.8865688517689705,
+    "mean": 6.270238868310116,
+    "min": 5.6417949963361025,
+    "p50": 5.985933123156428,
+    "p95": 6.8679689429700375
+  },
+  "load_seconds": 7.9777041238266975,
+  "memory_gib": {
+    "after_load": 1.9027957916259766,
+    "load_peak": 1.9027957916259766,
+    "request_peak": 2.505086898803711
+  },
+  "mode": "run",
+  "model_name": "Decision-2.0-Eos-0.8B",
+  "package_manifest_sha256": "9f101869a40dccd7e4f26f144d3b6dba72b6f9e4c9b05675e63636924afb512f",
+  "parameter_bytes": 2018555136,
+  "passed": true,
+  "profile": "qwen-full",
+  "prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd",
+  "runtime": {
+    "fast_path": {
+      "fused_layers": 24,
+      "graph_stats": {
+        "cached": 6,
+        "captures": 6,
+        "eager": 6,
+        "evicted": 0,
+        "failed": 0,
+        "replays": 1194
+      },
+      "graphs": {
+        "capture_after": 2,
+        "max_graphs": 512,
+        "max_output_bytes": 4294967296,
+        "max_tokens": 65536
+      },
+      "lora": {
+        "lean": 0,
+        "peft": 0
+      },
+      "rmsnorm_plus_one": 61,
+      "shared_cast_linears": 186,
+      "transformers": "5.17.0"
+    },
+    "hip": "7.2.53211",
+    "kernels": {
+      "causal_conv1d": "1.7.0",
+      "fla_path": "/opt/decision-fla/fla",
+      "flash_linear_attention": "0.5.2",
+      "kernel_bindings": {
+        "causal_conv1d_fn": "causal_conv1d.causal_conv1d_interface.causal_conv1d_fn",
+        "causal_conv1d_update": "causal_conv1d.causal_conv1d_interface.causal_conv1d_update",
+        "torch_chunk_gated_delta_rule": "fla.ops.gated_delta_rule.chunk.chunk_gated_delta_rule",
+        "torch_recurrent_gated_delta_rule": "fla.ops.gated_delta_rule.fused_recurrent.fused_recurrent_gated_delta_rule"
+      },
+      "runtime_check_sha256": "4517d9e001d9e1e2b520086b5153fa69b642a191efb19b8c9a6a9ef126e1fc2d",
+      "triton": "3.7.1+gitf0b55c07",
+      "triton_cache_autotuning": "1",
+      "triton_cache_dir": "/data/dev2/runs/runtime-a/triton/0.8B-bench-new-20261002T115205Z"
+    },
+    "numpy": "2.3.5",
+    "parameter_dtypes": {
+      "bfloat16": 497614848,
+      "float32": 255831360
+    },
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "residency": {
+      "linear_bf16": 186,
+      "linear_fp32": 0
+    },
+    "safetensors": "0.8.0",
+    "sites": [
+      "/opt/decision-fla"
+    ],
+    "threads": 4,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0"
+  },
+  "schema": "dev2-runtime-bench/1",
+  "warmup": 400,
+  "warmup_passes": 2
+}
