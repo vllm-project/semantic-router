@@ -908,7 +908,9 @@ class M6ScriptTest(unittest.TestCase):
 
     def test_index_run_node_checks(self):
         for args, message in (
-            (["e", "0", "4"], "NODE must be c or d"),
+            (["f", "0", "4"], "NODE must be c, d or e"),
+            (["e", "0", "4"], "node e: GPU 4 is not allowed"),
+            (["e", "0", "5"], "node e: GPU 5 is not allowed"),
             (["d", "0,8", "4"], "SHARDS"),
             (["d", "0,0", "4"], "lists a shard twice"),
             (["d", "0,1"], "no GPU listed"),
@@ -937,12 +939,26 @@ class M6ScriptTest(unittest.TestCase):
         out = self.index_run("d", "0,1", "4", "5", "6", "7")
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertIn('launch.sh --gpus "4 5 9 9 9 9 9 9"', out.stdout)
+        out = self.index_run("e", "2,3", "0", "7")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn('launch.sh --gpus "9 9 0 7 9 9 9 9"', out.stdout)
+        env = dict(os.environ, M6_INDEX_DRY="1", M6_INDEX_STAGGER="2m")
+        out = subprocess.run(
+            ["bash", str(M6 / "m6-index-run.sh"), "0" * 40, "M6-IB", "e", "2", "0"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("M6_INDEX_STAGGER", out.stderr)
         out = self.index_run("d", "0,1", "4", dry=False)
         self.assertEqual(out.returncode, 2)
         self.assertIn("missing mirror", out.stderr)
 
-    def index_plan(self, gpus):
+    def index_plan(self, gpus, shards=None):
         env = dict(os.environ, M6_INDEX_GPUS=gpus, DEV2_NODES_FILE="/nonexistent")
+        if shards is not None:
+            env["M6_INDEX_SHARDS"] = shards
         return subprocess.run(
             ["bash", str(M6 / "m6-index.sh"), "0" * 40, "M6-IB", "plan"],
             capture_output=True,
@@ -971,7 +987,23 @@ class M6ScriptTest(unittest.TestCase):
         self.assertEqual(
             out.stdout.splitlines()[0], "node d: shards 0,1,2,3,4,5,6,7 on GPU 4 5 6 7"
         )
+        out = self.index_plan("e0 e1 e2 e3 e6 e7", shards="2 3 4 5 6 7")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        lines = out.stdout.splitlines()
+        self.assertEqual(lines[0], "node e: shards 2,3,4,5,6,7 on GPU 0 1 2 3 6 7")
+        self.assertIn('  launch.sh --gpus "9 9 0 1 2 3 6 7"', lines)
+        for shards, message in (
+            ("2 8", "not '8'"),
+            ("2 2", "lists 2 twice"),
+            (" ", "at least one shard"),
+        ):
+            with self.subTest(shards=shards):
+                out = self.index_plan("e0", shards=shards)
+                self.assertEqual(out.returncode, 2)
+                self.assertIn(message, out.stderr)
         for gpus, message in (
+            ("e4", "not 'e4'"),
+            ("e5", "not 'e5'"),
             ("c0", "not 'c0'"),
             ("d8", "not 'd8'"),
             ("d4 d4", "lists d4 twice"),
@@ -997,7 +1029,9 @@ class M6ScriptTest(unittest.TestCase):
             for stub in ("ssh", "sleep"):
                 (bin_dir / stub).chmod(0o755)
             nodes = Path(tmp) / "nodes.env"
-            nodes.write_text("node-b=root@b\nnode-c=root@c\nnode-d=root@d\n")
+            nodes.write_text(
+                "node-b=root@b\nnode-c=root@c\nnode-d=root@d\nnode-e=root@e\n"
+            )
             out = subprocess.run(
                 ["bash", str(M6 / "m6-index.sh"), "0" * 40, "M6-IB", "run"],
                 capture_output=True,
@@ -1008,13 +1042,16 @@ class M6ScriptTest(unittest.TestCase):
                     os.environ,
                     PATH=f"{bin_dir}:{os.environ['PATH']}",
                     DEV2_NODES_FILE=str(nodes),
-                    M6_INDEX_GPUS="d4 c1",
+                    M6_INDEX_GPUS="d4 c1 e0",
+                    M6_INDEX_STAGGER="120",
                 ),
             )
             self.assertEqual(out.returncode, 0, out.stderr)
             calls = log.read_text()
-            self.assertIn("m6-index-run.sh " + "0" * 40 + " M6-IB d 0,2,4,6 4", calls)
-            self.assertIn("m6-index-run.sh " + "0" * 40 + " M6-IB c 1,3,5,7 1", calls)
+            self.assertIn("m6-index-run.sh " + "0" * 40 + " M6-IB d 0,3,6 4", calls)
+            self.assertIn("m6-index-run.sh " + "0" * 40 + " M6-IB c 1,4,7 1", calls)
+            self.assertIn("m6-index-run.sh " + "0" * 40 + " M6-IB e 2,5 0", calls)
+            self.assertIn("M6_INDEX_STAGGER=120 setsid", calls)
             self.assertIn(
                 "head -n 3 /data/dev2/private/eval/index021/ix1/logs/m6-index-M6-IB-c.log",
                 calls,
