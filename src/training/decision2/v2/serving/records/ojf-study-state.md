@@ -6,6 +6,15 @@ scratch directory; no released package is changed. Times are UTC.
 
 ## Log (newest first)
 
+- 2026-10-02 03:50 — **Formal-panel fidelity of the bit-identical stack (graphs + host masks + exact kernel trims):
+  0.8B and 4B answer all four scored panels bit-identically** (typed-final 2,000, css15 6,547, public231 231,
+  mlx-diag 2,275 answers; 0 changes, drift 0.0; 525 captured shapes each). 27B (lean LoRA + trims + graphs) on
+  the latency panel: p50 93.4 → 75.2 ms, 400 / 400 bit-identical; its formal-panel run is in progress.
+  - Kernel trims: one BF16 cast per shared Linear input and RMSNorm's `1 + w` computed once (0.8B graph
+    10.7 → 9.5 ms, still bit-identical). Open-Jev's fused RMSNorm on top: 8.6 ms but 3 / 400 decisions changed.
+  - TunableOp (27B, hipBLASLt + rocBLAS search, 77 GEMM shapes tuned): released path −1%, full stack −4%, and
+    3 / 400 decisions changed (max dp 0.11). Not adopted.
+
 - 2026-10-02 03:30 — Latency panel (first 400 typed-final prompts, single requests, 400 warm-up), one leased GPU each:
 
   | Tier | Released runtime p50 / p95 ms | Prototype | p50 / p95 ms | Answers vs released |
