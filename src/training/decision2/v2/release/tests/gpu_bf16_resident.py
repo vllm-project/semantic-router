@@ -299,7 +299,7 @@ def main() -> None:
     factors = 2 * len(model.metadata["lora"]["target_modules"])
     identity = checkpoint_fingerprint(work / "lora", work / "full")["model_sha256"]
     base_block = {
-        "repo_id": "llm-semantic-router/dev2-release-staging-base",
+        "repo_id": "vllm-sr/dev2-release-staging-base",
         "revision": "0" * 40,
         "path": str(work / "full"),
         "licence": "apache-2.0",

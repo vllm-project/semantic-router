@@ -14,7 +14,7 @@ import argparse
 import json
 from pathlib import Path
 
-REPO = "llm-semantic-router/decision-2.0-training-data"
+REPO = "vllm-sr/decision-2.0-training-data"
 
 
 def main(argv: list[str] | None = None) -> int:

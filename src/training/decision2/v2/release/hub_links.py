@@ -32,6 +32,9 @@ MODEL_URL = re.compile(r"https://huggingface\.co/([\w.-]+/[\w.-]+)/?\Z")
 COLLECTION_URL = re.compile(
     r"https://huggingface\.co/collections/([\w.-]+/[\w.-]+)/?\Z"
 )
+FORMER_ORG_URL = re.compile(
+    rf"huggingface\.co/(?:collections/)?{re.escape(layout.FORMER_ORG)}/"
+)
 
 
 def links(text: str) -> list[tuple[bool, str]]:
@@ -92,8 +95,13 @@ def check(repo: str, revision: str, package: Path, token: str | None) -> dict[st
                     )
                 )
                 status, body = fetch(api or target, token)
+                # Links to the former organization still resolve through the Hub's redirect.
+                former = FORMER_ORG_URL.search(target) is not None
                 entry.update(
-                    kind="api" if api else "external", status=status, ok=status == 200
+                    kind="api" if api else "external",
+                    status=status,
+                    ok=status == 200 and not former,
+                    **({"former_org": True} if former else {}),
                 )
                 if api and status == 200:
                     entry["private"] = json.loads(body).get("private")

@@ -27,7 +27,10 @@ POINTER_NAME = "config.json"
 POINTER = {"decision_format": "vllm-sr-decision", "format_version": 2}
 RUNTIME_DIR = "decision2"
 VENDOR_DIR = "decision2/_vendor"
-ORG = "llm-semantic-router"
+ORG = "vllm-sr"
+# The organization was renamed on 2026-10-02; its repositories moved with it and the old IDs redirect.
+# Receipts, reports and decisions written before then keep the former IDs; new packages never use them.
+FORMER_ORG = "llm-semantic-router"
 TIERS = {"0.6B": 0.6e9, "0.8B": 0.8e9, "2B": 2e9, "4B": 4e9, "9B": 9e9, "27B": 27e9}
 # The codename follows the size slot across generations (user naming decision 2026-10-02 00:05 UTC+8).
 CODENAMES = {
@@ -43,17 +46,24 @@ MODEL_NAME = re.compile(
     r"Decision-2\.0-(?P<codename>Kai|Eos|Sol|Nox|Lux|Vega)-(?P<size>0\.[1-9]|[1-9][0-9]?)B\Z"
 )
 RELEASE_REPO = re.compile(
-    r"llm-semantic-router/Decision-2\.0-(?:Kai|Eos|Sol|Nox|Lux|Vega)-(?:0\.[1-9]|[1-9][0-9]?)B\Z"
+    re.escape(ORG)
+    + r"/Decision-2\.0-(?:Kai|Eos|Sol|Nox|Lux|Vega)-(?:0\.[1-9]|[1-9][0-9]?)B\Z"
 )
 STAGING_REPO = re.compile(
-    r"llm-semantic-router/dev2-release-staging(?:-[a-z0-9]{1,24})?\Z"
+    re.escape(ORG) + r"/dev2-release-staging(?:-[a-z0-9]{1,24})?\Z"
 )
-# Repositories released before the rename (moved with HfApi.move_repo, so the old IDs redirect). Historical
+# Repositories released before the model rename (moved with HfApi.move_repo, so the old IDs redirect). Historical
 # gate receipts and decisions keep these IDs; new releases never use them.
 FORMER_REPOS = {
-    f"{ORG}/DEV2.0-{tier}": f"{ORG}/{NAME_PREFIX}-{codename}-{tier}"
+    f"{FORMER_ORG}/DEV2.0-{tier}": f"{ORG}/{NAME_PREFIX}-{codename}-{tier}"
     for tier, codename in CODENAMES.items()
 }
+# A Hub reference in a spec: a repository ID, optionally with @revision and :path (licence and figure sources).
+HUB_REFERENCE = re.compile(
+    r"(?P<repo>[\w.-]+/[\w.-]+)(?P<rest>(?:@[0-9a-f]{7,40})?(?::\S+)?)\Z"
+)
+# Spec keys whose values name Hugging Face repositories (never local paths or free-text history).
+HUB_REFERENCE_KEYS = ("repo_id", "source", "name_base_model", "repository", "model_id")
 SAME_SIZE_RATIO = 1.25
 # "tier": Decision-2.0-<codename>-<size tier>; "loaded-parameters": ...-<rounded loaded count> (brief section 2);
 # "base": ...-<size label of the base model>, which must fall in the loaded count's tier. The codename is the tier's.
@@ -226,8 +236,35 @@ def count_name(parameters: int) -> str:
 
 
 def current_repo(repo_id: str) -> str:
-    """The repository ID now, for an ID that may predate the rename."""
-    return FORMER_REPOS.get(repo_id, repo_id)
+    """The repository ID now, for an ID that may predate the model rename or the organization rename."""
+    if repo_id in FORMER_REPOS:
+        return FORMER_REPOS[repo_id]
+    owner, slash, name = repo_id.partition("/")
+    return f"{ORG}/{name}" if owner == FORMER_ORG and slash and name else repo_id
+
+
+def current_ids(value: Any) -> Any:
+    """A copy of a spec (or part of one) whose Hub references use the current repository IDs.
+
+    Only values under ``HUB_REFERENCE_KEYS`` that name a repository of the former organization change, keeping
+    their ``@revision`` and ``:path``; local paths (e.g. HF cache directories) and free text stay as they are.
+    """
+    if isinstance(value, list):
+        return [current_ids(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    result = {}
+    for key, item in value.items():
+        match = (
+            HUB_REFERENCE.fullmatch(item)
+            if key in HUB_REFERENCE_KEYS and isinstance(item, str)
+            else None
+        )
+        if match and match["repo"].startswith(f"{FORMER_ORG}/"):
+            result[key] = current_repo(match["repo"]) + match["rest"]
+        else:
+            result[key] = current_ids(item)
+    return result
 
 
 def base_size_label(base_model: str) -> str:
@@ -266,15 +303,13 @@ def release_name(
 
 
 def check_repo(repo_id: str, model_name: str, *, staging: bool) -> None:
+    if current_repo(repo_id) != repo_id:
+        raise ValueError(f"{repo_id} was renamed; use {current_repo(repo_id)}")
     if staging:
         if not STAGING_REPO.fullmatch(repo_id):
-            raise ValueError(
-                "Staging packages go only to llm-semantic-router/dev2-release-staging*"
-            )
-    elif repo_id in FORMER_REPOS:
-        raise ValueError(f"{repo_id} was renamed; use {FORMER_REPOS[repo_id]}")
+            raise ValueError(f"Staging packages go only to {ORG}/dev2-release-staging*")
     elif not RELEASE_REPO.fullmatch(repo_id) or repo_id.rsplit("/", 1)[1] != model_name:
-        raise ValueError("Release repositories are llm-semantic-router/<model name>")
+        raise ValueError(f"Release repositories are {ORG}/<model name>")
     match = MODEL_NAME.fullmatch(model_name)
     tier = match and tier_for(round(float(match["size"]) * 1e9))
     if not match or tier is None or CODENAMES[tier] != match["codename"]:

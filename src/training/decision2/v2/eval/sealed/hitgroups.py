@@ -27,7 +27,11 @@ from typing import Any
 
 SCHEMA = "dev2-c1-hitgroups/1"
 RANK = ("CLEAN", "REVIEW", "OVERLAP")
-TRAINING = "datasets--llm-semantic-router--decision-2.0-training-data"
+# HF cache directories of the training dataset: downloads before the organization rename keep the former name.
+TRAINING = {
+    "datasets--vllm-sr--decision-2.0-training-data",
+    "datasets--llm-semantic-router--decision-2.0-training-data",
+}
 DELTA = re.compile(
     r"^/data/dev2/private/c1-rescan-hf-delta/[^/]+/files/[0-9a-f]{12}/(.+)$"
 )
@@ -60,7 +64,7 @@ def group(path: str) -> str:
     match = SNAPSHOT.match(path)
     if match:
         repo, rest = match.groups()
-        if repo == TRAINING:
+        if repo in TRAINING:
             return "training-data:" + "/".join(rest.split("/")[:-1][:4])
         return "hf:" + repo
     if path.startswith("/data/dev2/hf-cache/blobs/"):
