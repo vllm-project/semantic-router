@@ -50,7 +50,7 @@ const videos: Video[] = [
 ]
 
 function getEmbedUrl(videoId: string): string {
-  return `https://www.youtube-nocookie.com/embed/${videoId}?rel=0`
+  return `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&autoplay=1`
 }
 
 function getThumbnailUrl(videoId: string): string {
@@ -59,6 +59,7 @@ function getThumbnailUrl(videoId: string): string {
 
 export default function YouTubeSection(): JSX.Element {
   const [activeIndex, setActiveIndex] = useState(0)
+  const [playingId, setPlayingId] = useState<string | null>(null)
   const activeVideo = videos[activeIndex]
   const pageCount = Math.ceil(videos.length / VIDEOS_PER_PAGE)
   const activePage = Math.floor(activeIndex / VIDEOS_PER_PAGE)
@@ -66,11 +67,13 @@ export default function YouTubeSection(): JSX.Element {
   const visibleVideos = videos.slice(pageStart, pageStart + VIDEOS_PER_PAGE)
 
   const selectRelativeVideo = (offset: number) => {
+    setPlayingId(null)
     setActiveIndex(current => (current + offset + videos.length) % videos.length)
   }
 
   const selectRelativePage = (offset: number) => {
     const nextPage = (activePage + offset + pageCount) % pageCount
+    setPlayingId(null)
     setActiveIndex(nextPage * VIDEOS_PER_PAGE)
   }
 
@@ -105,16 +108,44 @@ export default function YouTubeSection(): JSX.Element {
             </div>
 
             <div className={styles.playerFrame}>
-              <iframe
-                key={activeVideo.id}
-                className={styles.player}
-                src={getEmbedUrl(activeVideo.id)}
-                title={activeVideo.title}
-                loading="lazy"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                referrerPolicy="strict-origin-when-cross-origin"
-                allowFullScreen
-              />
+              {playingId === activeVideo.id
+                ? (
+                    <iframe
+                      key={activeVideo.id}
+                      className={styles.player}
+                      src={getEmbedUrl(activeVideo.id)}
+                      title={activeVideo.title}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      referrerPolicy="strict-origin-when-cross-origin"
+                      allowFullScreen
+                    />
+                  )
+                : (
+                    <button
+                      type="button"
+                      className={styles.playerPoster}
+                      aria-label={translate(
+                        {
+                          id: 'homepage.videos.playFeatured.aria',
+                          message: 'Play video: {title}',
+                        },
+                        { title: activeVideo.title },
+                      )}
+                      onClick={() => setPlayingId(activeVideo.id)}
+                    >
+                      <img
+                        src={getThumbnailUrl(activeVideo.id)}
+                        alt=""
+                        loading="lazy"
+                        width="480"
+                        height="360"
+                      />
+                      <span className={styles.posterPlay}>
+                        <span aria-hidden="true">▶</span>
+                        <Translate id="homepage.videos.playFeatured">Play video</Translate>
+                      </span>
+                    </button>
+                  )}
             </div>
 
             <div className={styles.playerControls}>
@@ -179,6 +210,7 @@ export default function YouTubeSection(): JSX.Element {
                       { title: video.title },
                     )}
                     onClick={() => {
+                      setPlayingId(null)
                       setActiveIndex(videoIndex)
                     }}
                   >

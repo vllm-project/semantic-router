@@ -19,9 +19,10 @@ const workflowRedisKeyPrefix = "vllm-sr:flow:state:"
 
 func init() {
 	pkgtestcases.Register("workflow-resume-restart-recovery", pkgtestcases.TestCase{
-		Description: "Workflow tool pause/resume state persists in Redis across Semantic Router pod restarts",
-		Tags:        []string{"workflow", "functional", "redis", "restart"},
-		Fn:          testWorkflowResumeRestartRecovery,
+		Description:         "Workflow tool pause/resume state persists in Redis across Semantic Router pod restarts",
+		Tags:                []string{"workflow", "functional", "redis", "restart"},
+		MutatesClusterState: true,
+		Fn:                  testWorkflowResumeRestartRecovery,
 	})
 }
 
