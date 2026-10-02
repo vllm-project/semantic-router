@@ -100,6 +100,51 @@ The Dashboard edits the same v0.3 document as YAML. Use one authoring owner for
 a deployment and review the exported YAML before serving it. See
 [Configuration workflows](configuration-workflows).
 
+## Routing capabilities
+
+Author-declared model capabilities act as an eligibility filter before model
+selection: candidates whose declared capabilities cannot express a request are
+filtered out before the configured selection algorithm scores the survivors, so
+a compatible model with a higher score can win over one that merely appears
+first. Final dispatch only validates the chosen model: a late capability
+mismatch returns an error rather than restarting the selection or replacing the
+chosen candidate. Declare them on a model card:
+
+```yaml
+routing:
+  modelCards:
+    - name: image-backend
+      capabilities: [image_generation]
+```
+
+The protocol capability vocabulary is defined by the `llmprotocol` package,
+and a declaration reaches capability-aware dispatch in one of these states:
+
+1. **No recognized declaration** — the model is unannotated and stays eligible
+   on wire expressibility alone.
+2. **Task/modality declaration** — names like `image_input`, `image_output`,
+   `image_generation`, `audio_input`, `audio_output`, `video_input`,
+   `video_output`, `file_input`, and `file_output` steer the declared-task
+   filter: an annotated model must declare every task bit the request requires,
+   otherwise the dispatch is rejected with `unsupported_capability`.
+3. **Transport/accounting declaration** — names like `tools`, `reasoning`,
+   `streaming`, and `structured_json` are recognized, yet they carry no task
+   bit. Such a model is annotated, so it does not qualify for a media task it
+   never declared; text requests require no task bit and are unaffected.
+4. **Catalog aliases** — `vision`, `audio`, and `video` project onto
+   `image_input`, `audio_input`, and `video_input`; `structured_output` maps to
+   `structured_json` and `tool_use` maps to `tools`. Projection runs before the
+   filter, so a card declaring `[image_input, vision]` is filtered on
+   `image_input` alone: it stays eligible for image requests and is rejected
+   for audio, which it never declared.
+5. **Descriptive labels** — names outside the protocol vocabulary and its
+   aliases (e.g. `long_context`, `coding`) are metadata: they contribute no
+   task bit and do not void recognized names in the same declaration, so a
+   declaration of descriptive labels alone is treated as unannotated.
+
+The pre-scoring filter and the final validation apply the same qualification,
+so validation cannot admit a model the filter would have denied.
+
 ## Validate the result
 
 ```bash

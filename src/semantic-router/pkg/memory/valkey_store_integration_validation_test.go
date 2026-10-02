@@ -16,6 +16,7 @@ import (
 // Store validation errors
 // ---------------------------------------------------------------------------
 
+// StorageIntegration: valkey
 func TestValkeyStoreInteg_StoreValidation(t *testing.T) {
 	store, _ := setupValkeyMemoryIntegration(t)
 	ctx := context.Background()
@@ -43,6 +44,7 @@ func TestValkeyStoreInteg_StoreValidation(t *testing.T) {
 // Retrieve validation errors
 // ---------------------------------------------------------------------------
 
+// StorageIntegration: valkey
 func TestValkeyStoreInteg_RetrieveValidation(t *testing.T) {
 	store, _ := setupValkeyMemoryIntegration(t)
 	ctx := context.Background()
@@ -64,6 +66,7 @@ func TestValkeyStoreInteg_RetrieveValidation(t *testing.T) {
 // IsEnabled / disabled store
 // ---------------------------------------------------------------------------
 
+// StorageIntegration: valkey
 func TestValkeyStoreInteg_DisabledStore(t *testing.T) {
 	t.Parallel()
 
@@ -93,6 +96,7 @@ func TestValkeyStoreInteg_DisabledStore(t *testing.T) {
 // The actual TLS handshake is not tested here (would require a TLS-enabled
 // Valkey instance); the wiring from config to glide client lives in
 // router_memory.go and is validated via the unit tests in valkey_store_test.go.
+// StorageIntegration: valkey
 func TestValkeyStoreInteg_TLS_ConfigPropagation(t *testing.T) {
 	t.Parallel()
 
@@ -124,6 +128,7 @@ func TestValkeyStoreInteg_TLS_ConfigPropagation(t *testing.T) {
 // would fail with a clear error when given a non-existent CA path. We test
 // this at the config level since the actual client creation happens in
 // router_memory.go and requires the full extproc wiring.
+// StorageIntegration: valkey
 func TestValkeyStoreInteg_TLS_BadCAPathConfig(t *testing.T) {
 	t.Parallel()
 

@@ -26,6 +26,16 @@ Install vLLM Semantic Router, start the local stack, and send one request.
 - Python 3.10 or newer
 - Docker; Linux can fall back to Podman
 
+For the curl installer, pass `--runtime podman` to force Podman or
+`--runtime skip` to skip container-runtime preparation. For example:
+
+```bash
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel stable --runtime skip
+```
+
+These are installer options. `vllm-sr serve --runtime` selects a container
+runtime (`docker` or `podman`); `skip` is not a `serve` runtime.
+
 ## Install
 
 <Tabs groupId="install-method" defaultValue="curl" values={[

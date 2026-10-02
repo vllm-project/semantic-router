@@ -1193,7 +1193,8 @@ func (l *ConfidenceLooper) performAutoMixEntailment(
 		attempt.finish(attemptResult{
 			reason: reason, usable: &usable, accepted: &accepted,
 			score: &confidence, threshold: &evaluator.Threshold,
-			verifierType: MethodAutoMixEntailment,
+			verifierType:    MethodAutoMixEntailment,
+			verifierVersion: result.Version,
 		})
 	}
 	return confidence, accepted, nil

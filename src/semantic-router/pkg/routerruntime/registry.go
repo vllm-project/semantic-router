@@ -1,6 +1,7 @@
 package routerruntime
 
 import (
+	"crypto/rand"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
@@ -9,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/pluginruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
@@ -30,6 +32,10 @@ type Registry struct {
 	responseCache         *cache.ResponseCacheService
 	contextCompression    *contextcompression.Service
 	compressionRecovery   contextcompression.RecoveryStore
+	plugins               pluginruntime.Capabilities
+	configActivation      ConfigActivation
+	instanceID            string
+	startupStatus         *localStartupSnapshot
 }
 
 // RouterRuntimeSnapshot is the router-owned management surface published as
@@ -52,6 +58,7 @@ type RouterRuntimeSnapshot struct {
 	ResponseCache         *cache.ResponseCacheService
 	ContextCompression    *contextcompression.Service
 	CompressionRecovery   contextcompression.RecoveryStore
+	Plugins               pluginruntime.Capabilities
 }
 
 func (r *Registry) ContextCompression() (
@@ -139,7 +146,7 @@ type LearningRuntime interface {
 }
 
 func NewRegistry(cfg *config.RouterConfig) *Registry {
-	return &Registry{config: cfg, modelPool: binding.NewPool()}
+	return &Registry{config: cfg, modelPool: binding.NewPool(), instanceID: rand.Text()}
 }
 
 func (r *Registry) CurrentConfig() *config.RouterConfig {
@@ -414,6 +421,7 @@ func (r *Registry) PublishRouterRuntimeSnapshot(snapshot RouterRuntimeSnapshot) 
 	r.responseCache = snapshot.ResponseCache
 	r.contextCompression = snapshot.ContextCompression
 	r.compressionRecovery = snapshot.CompressionRecovery
+	r.plugins = snapshot.Plugins
 	r.mu.Unlock()
 }
 

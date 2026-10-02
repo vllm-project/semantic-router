@@ -67,6 +67,16 @@ func (d *decompiler) decompileEmbeddingSignals() {
 		if emb.AggregationMethodConfiged != "" {
 			d.write("  aggregation_method: %q\n", string(emb.AggregationMethodConfiged))
 		}
+		for _, list := range []struct {
+			name   string
+			values []string
+		}{
+			{"image_candidates", emb.ImageCandidates}, {"negative_candidates", emb.NegativeCandidates}, {"negative_image_candidates", emb.NegativeImageCandidates},
+		} {
+			if len(list.values) > 0 {
+				d.write("  %s: %s\n", list.name, formatStringArray(list.values))
+			}
+		}
 		if emb.QueryModality != "" && emb.QueryModality != config.QueryModalityText {
 			d.write("  query_modality: %q\n", string(emb.QueryModality))
 		}
@@ -234,6 +244,9 @@ func (d *decompiler) decompileClassifierSignals() {
 		d.write("  labels: %s\n", formatStringArray(rule.Labels))
 		if rule.Instructions != "" {
 			d.write("  instructions: %q\n", rule.Instructions)
+		}
+		if rule.DisableRationale {
+			d.write("  disable_rationale: true\n")
 		}
 		if rule.UseCPU {
 			d.write("  use_cpu: true\n")

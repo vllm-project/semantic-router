@@ -151,13 +151,14 @@ func (s *StaticSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 		getModelNames(selCtx.CandidateModels), bestModel.Model)
 
 	return &SelectionResult{
-		SelectedModel: bestModel.Model,
-		LoRAName:      bestModel.LoRAName,
-		Score:         bestScore,
-		Confidence:    1.0, // Static selection is always "confident"
-		Method:        MethodStatic,
-		Reasoning:     reasoning,
-		AllScores:     allScores,
+		SelectedModel:     bestModel.Model,
+		SelectedCandidate: bestModel,
+		LoRAName:          bestModel.LoRAName,
+		Score:             bestScore,
+		Confidence:        1.0, // Static selection is always "confident"
+		Method:            MethodStatic,
+		Reasoning:         reasoning,
+		AllScores:         allScores,
 	}, nil
 }
 

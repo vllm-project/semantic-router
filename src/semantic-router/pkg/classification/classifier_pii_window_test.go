@@ -3,6 +3,7 @@ package classification
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -55,6 +56,54 @@ func TestDefaultPIIWindowUsesCompleteInputWithoutChangingSource(t *testing.T) {
 	spans := c.piiInputSpans(text)
 	if len(spans) != 1 || spans[0].Text != text || spans[0].StartByte != 0 {
 		t.Fatal("details API lost global offset origin")
+	}
+}
+
+func TestDefaultPIIWindowRespectsArtifactSelection(t *testing.T) {
+	registered := config.GetModelByPath(config.DefaultSystemModels().PIIClassifier)
+	absolute, err := filepath.Abs(registered.LocalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name, artifact string
+		windowed       bool
+	}{
+		{"custom", "models/custom-modernbert-pii-8k", false},
+		{"legacy", "models/mmbert32k-pii-detector-merged", false},
+		{"same basename elsewhere", filepath.Join(t.TempDir(), filepath.Base(registered.LocalPath)), false},
+		{"registered alias", registered.Aliases[0], true},
+		{"relative path", "./" + registered.LocalPath, true},
+		{"absolute path", absolute, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := config.DefaultGlobalConfig()
+			cfg.PIIModel.ModelID = test.artifact
+			original := cfg.PIIModel
+			models, err := newClassifierModelRuntime(&cfg, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resolved := models.cfg.PIIModel
+			if !reflect.DeepEqual(cfg.PIIModel, original) {
+				t.Fatal("runtime preparation changed the source policy")
+			}
+			if test.windowed {
+				if resolved.MaxSequenceLength != registered.MaxContextLength || resolved.Window == nil {
+					t.Fatalf("default artifact lost its window policy: %+v", resolved)
+				}
+			} else if !reflect.DeepEqual(resolved, original) {
+				t.Fatalf("custom artifact inherited the default model's policy: %+v", resolved)
+			}
+			_, inference, err := buildPIIDependencies(models.cfg, nil, models)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, windowed := inference.(*windowedPIIBackend)
+			if windowed != test.windowed {
+				t.Fatalf("unexpected preparation backend: %T", inference)
+			}
+		})
 	}
 }
 

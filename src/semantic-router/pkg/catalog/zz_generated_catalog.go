@@ -2,8 +2,6 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:d3347f367d177f9e3ace5eb34599755046fb0878dd314b592f1629abd84cacb6"
-
 const builtInCatalogJSON = `{
   "benchmarks": [
     {
@@ -12957,6 +12955,336 @@ const builtInCatalogJSON = `{
         "run_kind": "independent",
         "source_model": "Gemma 3 12B Instruct",
         "source_model_slug": "gemma-3-12b"
+      }
+    },
+    {
+      "benchmark": "allenai/ifbench@1.0.0",
+      "benchmark_profile": "prompt-loose",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/ibm-granite/granite-4.2-30b",
+        "verification": "claimed"
+      },
+      "id": "ibm/granite-4.2-30b-model-card-ifbench@1.0.0",
+      "metrics": {
+        "accuracy": 0.7717
+      },
+      "model": "ibm/granite-4.2-30b",
+      "observed_at": "2026-09-17",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Granite 4.2 30B"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/ibm-granite/granite-4.2-30b",
+        "verification": "claimed"
+      },
+      "id": "ibm/granite-4.2-30b-model-card-aime@2025.0.0",
+      "metrics": {
+        "pass_at_1": 0.8917
+      },
+      "model": "ibm/granite-4.2-30b",
+      "observed_at": "2026-09-17",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Granite 4.2 30B"
+      }
+    },
+    {
+      "benchmark": "livecodebench/livecodebench@6.0.0",
+      "benchmark_profile": "published-code-generation",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/ibm-granite/granite-4.2-30b",
+        "verification": "claimed"
+      },
+      "id": "ibm/granite-4.2-30b-model-card-livecodebench@6.0.0",
+      "metrics": {
+        "pass_at_1": 0.7577
+      },
+      "model": "ibm/granite-4.2-30b",
+      "observed_at": "2026-09-17",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Granite 4.2 30B"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/ibm-granite/granite-4.2-30b",
+        "verification": "claimed"
+      },
+      "id": "ibm/granite-4.2-30b-model-card-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.776
+      },
+      "model": "ibm/granite-4.2-30b",
+      "observed_at": "2026-09-17",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Granite 4.2 30B"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/ibm-granite/granite-4.2-30b",
+        "verification": "claimed"
+      },
+      "id": "ibm/granite-4.2-30b-model-card-scicode@1.0.0",
+      "metrics": {
+        "score": 0.3876
+      },
+      "model": "ibm/granite-4.2-30b",
+      "observed_at": "2026-09-17",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Granite 4.2 30B"
+      }
+    },
+    {
+      "benchmark": "allenai/ifbench@1.0.0",
+      "benchmark_profile": "prompt-loose",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/ibm-granite/granite-4.2-8b",
+        "verification": "claimed"
+      },
+      "id": "ibm/granite-4.2-8b-model-card-ifbench@1.0.0",
+      "metrics": {
+        "accuracy": 0.7933
+      },
+      "model": "ibm/granite-4.2-8b",
+      "observed_at": "2026-09-17",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Granite 4.2 8B"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/ibm-granite/granite-4.2-8b",
+        "verification": "claimed"
+      },
+      "id": "ibm/granite-4.2-8b-model-card-aime@2025.0.0",
+      "metrics": {
+        "pass_at_1": 0.8667
+      },
+      "model": "ibm/granite-4.2-8b",
+      "observed_at": "2026-09-17",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Granite 4.2 8B"
+      }
+    },
+    {
+      "benchmark": "livecodebench/livecodebench@6.0.0",
+      "benchmark_profile": "published-code-generation",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/ibm-granite/granite-4.2-8b",
+        "verification": "claimed"
+      },
+      "id": "ibm/granite-4.2-8b-model-card-livecodebench@6.0.0",
+      "metrics": {
+        "pass_at_1": 0.7324
+      },
+      "model": "ibm/granite-4.2-8b",
+      "observed_at": "2026-09-17",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Granite 4.2 8B"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/ibm-granite/granite-4.2-8b",
+        "verification": "claimed"
+      },
+      "id": "ibm/granite-4.2-8b-model-card-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.7404
+      },
+      "model": "ibm/granite-4.2-8b",
+      "observed_at": "2026-09-17",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Granite 4.2 8B"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/ibm-granite/granite-4.2-8b",
+        "verification": "claimed"
+      },
+      "id": "ibm/granite-4.2-8b-model-card-scicode@1.0.0",
+      "metrics": {
+        "score": 0.3609
+      },
+      "model": "ibm/granite-4.2-8b",
+      "observed_at": "2026-09-17",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Granite 4.2 8B"
+      }
+    },
+    {
+      "benchmark": "allenai/ifbench@1.0.0",
+      "benchmark_profile": "prompt-loose",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/ibm-granite/granite-4.2-3b",
+        "verification": "claimed"
+      },
+      "id": "ibm/granite-4.2-3b-model-card-ifbench@1.0.0",
+      "metrics": {
+        "accuracy": 0.7433
+      },
+      "model": "ibm/granite-4.2-3b",
+      "observed_at": "2026-09-17",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Granite 4.2 3B"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/ibm-granite/granite-4.2-3b",
+        "verification": "claimed"
+      },
+      "id": "ibm/granite-4.2-3b-model-card-aime@2025.0.0",
+      "metrics": {
+        "pass_at_1": 0.7833
+      },
+      "model": "ibm/granite-4.2-3b",
+      "observed_at": "2026-09-17",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Granite 4.2 3B"
+      }
+    },
+    {
+      "benchmark": "livecodebench/livecodebench@6.0.0",
+      "benchmark_profile": "published-code-generation",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/ibm-granite/granite-4.2-3b",
+        "verification": "claimed"
+      },
+      "id": "ibm/granite-4.2-3b-model-card-livecodebench@6.0.0",
+      "metrics": {
+        "pass_at_1": 0.6971
+      },
+      "model": "ibm/granite-4.2-3b",
+      "observed_at": "2026-09-17",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Granite 4.2 3B"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/ibm-granite/granite-4.2-3b",
+        "verification": "claimed"
+      },
+      "id": "ibm/granite-4.2-3b-model-card-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.6784
+      },
+      "model": "ibm/granite-4.2-3b",
+      "observed_at": "2026-09-17",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Granite 4.2 3B"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/ibm-granite/granite-4.2-3b",
+        "verification": "claimed"
+      },
+      "id": "ibm/granite-4.2-3b-model-card-scicode@1.0.0",
+      "metrics": {
+        "score": 0.2411
+      },
+      "model": "ibm/granite-4.2-3b",
+      "observed_at": "2026-09-17",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Granite 4.2 3B"
       }
     },
     {
@@ -34559,6 +34887,116 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "datacurve/deep-swe@1.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/blob/5711b268169967567844e1e560e8a3966da959b1/README.md",
+        "verification": "claimed"
+      },
+      "id": "xiaomi/mimo-v2.6-flash-model-card-deep-swe-1.1@1.0.0",
+      "metrics": {
+        "resolved": 0.679
+      },
+      "model": "xiaomi/mimo-v2.6-flash",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "MiMo-V2.6-Flash-RL"
+      }
+    },
+    {
+      "benchmark": "zapier/automation-bench@1.0.6",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/blob/5711b268169967567844e1e560e8a3966da959b1/README.md",
+        "verification": "claimed"
+      },
+      "id": "xiaomi/mimo-v2.6-flash-model-card-automation-bench@1.0.0",
+      "metrics": {
+        "score": 0.523
+      },
+      "model": "xiaomi/mimo-v2.6-flash",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "MiMo-V2.6-Flash-RL"
+      }
+    },
+    {
+      "benchmark": "berkeley-rdi/agents-last-exam@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/blob/5711b268169967567844e1e560e8a3966da959b1/README.md",
+        "verification": "claimed"
+      },
+      "id": "xiaomi/mimo-v2.6-flash-model-card-agents-last-exam@1.0.0",
+      "metrics": {
+        "pass_rate": 0.276
+      },
+      "model": "xiaomi/mimo-v2.6-flash",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "MiMo-V2.6-Flash-RL"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/blob/5711b268169967567844e1e560e8a3966da959b1/README.md",
+        "verification": "claimed"
+      },
+      "id": "xiaomi/mimo-v2.6-flash-model-card-terminal-bench-2.1@1.0.0",
+      "metrics": {
+        "resolved": 0.876
+      },
+      "model": "xiaomi/mimo-v2.6-flash",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "MiMo-V2.6-Flash-RL"
+      }
+    },
+    {
+      "benchmark": "osworld/verified@1.0.0",
+      "benchmark_profile": "official",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/blob/5711b268169967567844e1e560e8a3966da959b1/README.md",
+        "verification": "claimed"
+      },
+      "id": "xiaomi/mimo-v2.6-flash-model-card-osworld-verified@1.0.0",
+      "metrics": {
+        "success_rate": 0.808
+      },
+      "model": "xiaomi/mimo-v2.6-flash",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "MiMo-V2.6-Flash-RL"
+      }
+    },
+    {
       "benchmark": "artificial-analysis/critpt@1.0.0",
       "benchmark_profile": "independent-standard",
       "evidence": {
@@ -52558,6 +52996,1002 @@ const builtInCatalogJSON = `{
         "mmlu-pro-leaderboard/gemma-3-12b-it@1.0.0"
       ],
       "reasoning_effort": "disabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "ibm/granite-4.2-30b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "ibm/granite-4.2-30b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "ibm/granite-4.2-30b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "ibm/granite-4.2-30b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "ibm/granite-4.2-30b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "ibm/granite-4.2-30b-model-card-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.776,
+          "status": "available",
+          "value": 0.776,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "general_reasoning": 77.60000000000001
+      },
+      "index": "vllm-sr/general@1.0.0",
+      "model": "ibm/granite-4.2-30b",
+      "provenance": [
+        "ibm/granite-4.2-30b-model-card-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": 77.60000000000001,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "ibm/granite-4.2-30b",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profile": "published-code-generation",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "evaluation": "ibm/granite-4.2-30b-model-card-livecodebench@6.0.0",
+          "metric": "pass_at_1",
+          "normalized": 0.7577,
+          "status": "available",
+          "value": 0.7577,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "ibm/granite-4.2-30b-model-card-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.3876,
+          "status": "available",
+          "value": 0.3876,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "competitive_programming": 75.77000000000001,
+        "scientific_coding": 38.76
+      },
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "ibm/granite-4.2-30b",
+      "provenance": [
+        "ibm/granite-4.2-30b-model-card-livecodebench@6.0.0",
+        "ibm/granite-4.2-30b-model-card-scicode@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": 57.265,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "ibm/granite-4.2-30b",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": 0.7760000000000001,
+          "status": "available",
+          "value": 0.7760000000000001,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": 0.57265,
+          "status": "available",
+          "value": 0.57265,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.4,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "ibm/granite-4.2-30b",
+      "provenance": [
+        "ibm/granite-4.2-30b-model-card-livecodebench@6.0.0",
+        "ibm/granite-4.2-30b-model-card-mmlu-pro@1.0.0",
+        "ibm/granite-4.2-30b-model-card-scicode@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "ibm/granite-4.2-8b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "ibm/granite-4.2-8b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "ibm/granite-4.2-8b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "ibm/granite-4.2-8b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "ibm/granite-4.2-8b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "ibm/granite-4.2-8b-model-card-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.7404,
+          "status": "available",
+          "value": 0.7404,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "general_reasoning": 74.03999999999999
+      },
+      "index": "vllm-sr/general@1.0.0",
+      "model": "ibm/granite-4.2-8b",
+      "provenance": [
+        "ibm/granite-4.2-8b-model-card-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": 74.03999999999999,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "ibm/granite-4.2-8b",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profile": "published-code-generation",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "evaluation": "ibm/granite-4.2-8b-model-card-livecodebench@6.0.0",
+          "metric": "pass_at_1",
+          "normalized": 0.7324,
+          "status": "available",
+          "value": 0.7324,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "ibm/granite-4.2-8b-model-card-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.3609,
+          "status": "available",
+          "value": 0.3609,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "competitive_programming": 73.24000000000001,
+        "scientific_coding": 36.09
+      },
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "ibm/granite-4.2-8b",
+      "provenance": [
+        "ibm/granite-4.2-8b-model-card-livecodebench@6.0.0",
+        "ibm/granite-4.2-8b-model-card-scicode@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": 54.665000000000006,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "ibm/granite-4.2-8b",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": 0.7404,
+          "status": "available",
+          "value": 0.7404,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": 0.5466500000000001,
+          "status": "available",
+          "value": 0.5466500000000001,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.4,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "ibm/granite-4.2-8b",
+      "provenance": [
+        "ibm/granite-4.2-8b-model-card-livecodebench@6.0.0",
+        "ibm/granite-4.2-8b-model-card-mmlu-pro@1.0.0",
+        "ibm/granite-4.2-8b-model-card-scicode@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "ibm/granite-4.2-3b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "ibm/granite-4.2-3b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "ibm/granite-4.2-3b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "ibm/granite-4.2-3b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "ibm/granite-4.2-3b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "ibm/granite-4.2-3b-model-card-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.6784,
+          "status": "available",
+          "value": 0.6784,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "general_reasoning": 67.84
+      },
+      "index": "vllm-sr/general@1.0.0",
+      "model": "ibm/granite-4.2-3b",
+      "provenance": [
+        "ibm/granite-4.2-3b-model-card-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": 67.84,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "ibm/granite-4.2-3b",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profile": "published-code-generation",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "evaluation": "ibm/granite-4.2-3b-model-card-livecodebench@6.0.0",
+          "metric": "pass_at_1",
+          "normalized": 0.6971,
+          "status": "available",
+          "value": 0.6971,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "ibm/granite-4.2-3b-model-card-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.2411,
+          "status": "available",
+          "value": 0.2411,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "competitive_programming": 69.71000000000001,
+        "scientific_coding": 24.11
+      },
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "ibm/granite-4.2-3b",
+      "provenance": [
+        "ibm/granite-4.2-3b-model-card-livecodebench@6.0.0",
+        "ibm/granite-4.2-3b-model-card-scicode@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": 46.910000000000004,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "ibm/granite-4.2-3b",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": 0.6784,
+          "status": "available",
+          "value": 0.6784,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": 0.4691,
+          "status": "available",
+          "value": 0.4691,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.4,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "ibm/granite-4.2-3b",
+      "provenance": [
+        "ibm/granite-4.2-3b-model-card-livecodebench@6.0.0",
+        "ibm/granite-4.2-3b-model-card-mmlu-pro@1.0.0",
+        "ibm/granite-4.2-3b-model-card-scicode@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
       "score": null,
       "status": "partial"
     },
@@ -82012,6 +83446,480 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "xiaomi/mimo-v2.6-flash-model-card-terminal-bench-2.1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.876,
+          "status": "available",
+          "value": 0.876,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 87.6
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [
+        "xiaomi/mimo-v2.6-flash-model-card-terminal-bench-2.1@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": 87.6,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.8759999999999999,
+          "status": "available",
+          "value": 0.8759999999999999,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [
+        "xiaomi/mimo-v2.6-flash-model-card-terminal-bench-2.1@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "xiaomi/mimo-v2.5-pro",
       "provenance": [],
       "reasoning_effort": "enabled",
@@ -86420,7 +88328,7 @@ const builtInCatalogJSON = `{
       "description": "Amazon's most capable Nova 1 multimodal model for complex tasks.",
       "display_name": "Amazon Nova Premier",
       "distribution": {
-        "source": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
+        "source": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-premier.html",
         "type": "proprietary_api"
       },
       "family": "nova-1",
@@ -86429,7 +88337,7 @@ const builtInCatalogJSON = `{
       "lifecycle": "active",
       "limits": {
         "context_window_size": 1000000,
-        "max_output_tokens": 10000
+        "max_output_tokens": 25000
       },
       "modalities": {
         "input": [
@@ -86456,9 +88364,9 @@ const builtInCatalogJSON = `{
       ],
       "verification": {
         "authority": "Amazon",
-        "source": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
+        "source": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-premier.html",
         "status": "claimed",
-        "verified_at": "2026-09-05"
+        "verified_at": "2026-09-24"
       }
     },
     {
@@ -86472,7 +88380,7 @@ const builtInCatalogJSON = `{
       "description": "Amazon's multimodal model for complex reasoning and code generation.",
       "display_name": "Amazon Nova Pro",
       "distribution": {
-        "source": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
+        "source": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-pro.html",
         "type": "proprietary_api"
       },
       "family": "nova-1",
@@ -86481,7 +88389,7 @@ const builtInCatalogJSON = `{
       "lifecycle": "active",
       "limits": {
         "context_window_size": 300000,
-        "max_output_tokens": 10000
+        "max_output_tokens": 5000
       },
       "modalities": {
         "input": [
@@ -86507,9 +88415,9 @@ const builtInCatalogJSON = `{
       ],
       "verification": {
         "authority": "Amazon",
-        "source": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
+        "source": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-pro.html",
         "status": "claimed",
-        "verified_at": "2026-09-05"
+        "verified_at": "2026-09-24"
       }
     },
     {
@@ -87042,7 +88950,7 @@ const builtInCatalogJSON = `{
       "family": "seed-2.0",
       "id": "bytedance/seed-2.0-pro",
       "kind": "physical",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "limits": {
         "context_window_size": 262144
       },
@@ -87071,9 +88979,9 @@ const builtInCatalogJSON = `{
       ],
       "verification": {
         "authority": "ByteDance Seed Team",
-        "source": "https://seed.bytedance.com/en/seed2",
+        "source": "https://docs.volcengine.com/docs/ark/model-deprecation-notice?lang=zh",
         "status": "claimed",
-        "verified_at": "2026-09-05"
+        "verified_at": "2026-09-26"
       }
     },
     {
@@ -87963,6 +89871,163 @@ const builtInCatalogJSON = `{
         "source": "https://huggingface.co/google/gemma-3-12b-it",
         "status": "claimed",
         "verified_at": "2026-09-09"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "coding",
+        "long_context"
+      ],
+      "description": "IBM's flagship Granite 4.2 reasoning model for reasoning, coding, tool calling, agentic workflows and multilingual dialogue.",
+      "display_name": "Granite 4.2 30B",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/ibm-granite/granite-4.2-30b",
+        "type": "open_weights"
+      },
+      "family": "granite-4.2",
+      "id": "ibm/granite-4.2-30b",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 131072
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "30B",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "IBM"
+      },
+      "publisher": "IBM / Granite",
+      "released_at": "2026-08-25",
+      "tags": [
+        "open_weights",
+        "reasoning",
+        "dense",
+        "coding",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "Granite Team, IBM",
+        "source": "https://huggingface.co/ibm-granite/granite-4.2-30b",
+        "status": "claimed",
+        "verified_at": "2026-09-17"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "coding",
+        "long_context"
+      ],
+      "description": "IBM's mid size Granite 4.2 reasoning model for reasoning, coding, tool calling, agentic workflows and multilingual dialogue.",
+      "display_name": "Granite 4.2 8B",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/ibm-granite/granite-4.2-8b",
+        "type": "open_weights"
+      },
+      "family": "granite-4.2",
+      "id": "ibm/granite-4.2-8b",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 131072
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "8B",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "IBM"
+      },
+      "publisher": "IBM / Granite",
+      "released_at": "2026-08-25",
+      "tags": [
+        "open_weights",
+        "reasoning",
+        "dense",
+        "coding",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "Granite Team, IBM",
+        "source": "https://huggingface.co/ibm-granite/granite-4.2-8b",
+        "status": "claimed",
+        "verified_at": "2026-09-17"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "coding",
+        "long_context"
+      ],
+      "description": "IBM's compact Granite 4.2 reasoning model for reasoning, coding, tool calling, agentic workflows and multilingual dialogue.",
+      "display_name": "Granite 4.2 3B",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/ibm-granite/granite-4.2-3b",
+        "type": "open_weights"
+      },
+      "family": "granite-4.2",
+      "id": "ibm/granite-4.2-3b",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 131072
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "3B",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "IBM"
+      },
+      "publisher": "IBM / Granite",
+      "released_at": "2026-08-25",
+      "tags": [
+        "open_weights",
+        "reasoning",
+        "dense",
+        "coding",
+        "agentic",
+        "efficient"
+      ],
+      "verification": {
+        "authority": "Granite Team, IBM",
+        "source": "https://huggingface.co/ibm-granite/granite-4.2-3b",
+        "status": "claimed",
+        "verified_at": "2026-09-17"
       }
     },
     {
@@ -90902,6 +92967,67 @@ const builtInCatalogJSON = `{
         "reasoning",
         "tools",
         "structured_output",
+        "vision",
+        "audio",
+        "video",
+        "long_context"
+      ],
+      "description": "Efficiency-balanced open-weight omnimodal Xiaomi MoE model for coding and agentic workloads.",
+      "display_name": "MiMo V2.6 Flash",
+      "distribution": {
+        "license": "MIT",
+        "source": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL",
+        "type": "open_weights"
+      },
+      "family": "mimo-v2",
+      "id": "xiaomi/mimo-v2.6-flash",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video",
+          "audio"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "309B (15B active)",
+      "presentation": {
+        "logo": "package:xiaomimimo",
+        "monochrome": false,
+        "monogram": "Mi"
+      },
+      "publisher": "Xiaomi",
+      "reasoning_family": "mimo",
+      "released_at": "2026-09-22",
+      "tags": [
+        "open_weights",
+        "reasoning",
+        "coding",
+        "agentic",
+        "multimodal",
+        "efficient",
+        "moe"
+      ],
+      "verification": {
+        "authority": "Xiaomi",
+        "source": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL",
+        "status": "claimed",
+        "verified_at": "2026-09-23"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
         "long_context"
       ],
       "description": "High-capability open-weight Xiaomi model for complex software agents.",
@@ -91360,7 +93486,7 @@ const builtInCatalogJSON = `{
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:4ec508ccba95e613d2fccf0337a561d8ea98e59781bcc67c773c659cb10a99d0",
+        "asset_sha256": "sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -91450,7 +93576,7 @@ const builtInCatalogJSON = `{
         "tools"
       ],
       "verification": {
-        "asset_sha256": "sha256:4ec508ccba95e613d2fccf0337a561d8ea98e59781bcc67c773c659cb10a99d0",
+        "asset_sha256": "sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -91543,7 +93669,7 @@ const builtInCatalogJSON = `{
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:4ec508ccba95e613d2fccf0337a561d8ea98e59781bcc67c773c659cb10a99d0",
+        "asset_sha256": "sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -91655,7 +93781,7 @@ const builtInCatalogJSON = `{
         "orchestration"
       ],
       "verification": {
-        "asset_sha256": "sha256:4ec508ccba95e613d2fccf0337a561d8ea98e59781bcc67c773c659cb10a99d0",
+        "asset_sha256": "sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -91725,7 +93851,7 @@ const builtInCatalogJSON = `{
         "private_deployment"
       ],
       "verification": {
-        "asset_sha256": "sha256:4ec508ccba95e613d2fccf0337a561d8ea98e59781bcc67c773c659cb10a99d0",
+        "asset_sha256": "sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -92095,6 +94221,71 @@ const builtInCatalogJSON = `{
       "description": "Azure-hosted OpenAI deployments.",
       "display_name": "Azure OpenAI",
       "id": "azure-openai",
+      "models": [
+        {
+          "catalog": "openai/gpt-6-astra",
+          "id": "gpt-6-astra",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "reasoning_efforts": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "reasoning_efforts_by_protocol": {
+            "openai/chat-completions@1": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          },
+          "reasoning_modes": [
+            "enabled"
+          ],
+          "relationship": "managed_cloud",
+          "restrictions": {
+            "catalog_model_name": "gpt-6-astra",
+            "provider_model_id_kind": "deployment_name",
+            "tools_protocols": [
+              "openai/responses@1"
+            ],
+            "unsupported_include_values": [
+              "message.output_text.logprobs"
+            ],
+            "unsupported_request_fields": {
+              "openai/chat-completions@1": [
+                "temperature",
+                "top_p",
+                "top_logprobs",
+                "logprobs"
+              ],
+              "openai/responses@1": [
+                "temperature",
+                "top_p",
+                "top_logprobs"
+              ]
+            }
+          },
+          "verification": {
+            "source": "https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/reasoning",
+            "status": "claimed",
+            "verified_at": "2026-09-08"
+          }
+        }
+      ],
+      "operation_overrides": {
+        "openai/responses@1#create": {
+          "absolute_path": true,
+          "path": "/openai/v1/responses",
+          "suppress_api_version": true
+        }
+      },
       "path_overrides": {
         "openai/chat-completions@1#create": "/chat/completions"
       },
@@ -92105,11 +94296,14 @@ const builtInCatalogJSON = `{
         "monogram": "Az"
       },
       "protocols": [
-        "openai/chat-completions@1"
+        "openai/chat-completions@1",
+        "openai/responses@1"
       ],
+      "reasoning_transport": "top_level_effort",
       "support_tier": "native",
       "supported_operations": [
-        "openai/chat-completions@1#create"
+        "openai/chat-completions@1#create",
+        "openai/responses@1#create"
       ]
     },
     {
@@ -92284,58 +94478,15 @@ const builtInCatalogJSON = `{
         "verified_at": "2026-09-04"
       },
       "default_protocol": "openai/chat-completions@1",
-      "description": "Models exposed through Amazon Bedrock-compatible routing.",
+      "description": "Custom models exposed through Amazon Bedrock's OpenAI-compatible Chat Completions API.",
       "display_name": "Amazon Bedrock",
       "id": "bedrock",
-      "models": [
-        {
-          "catalog": "amazon/nova-pro-v1",
-          "id": "amazon.nova-pro-v1:0",
-          "lifecycle": "active",
-          "protocols": [
-            "openai/chat-completions@1"
-          ],
-          "relationship": "first_party",
-          "verification": {
-            "source": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
-            "status": "claimed",
-            "verified_at": "2026-09-05"
-          }
-        },
-        {
-          "catalog": "amazon/nova-premier-v1",
-          "id": "amazon.nova-premier-v1:0",
-          "lifecycle": "active",
-          "protocols": [
-            "openai/chat-completions@1"
-          ],
-          "relationship": "first_party",
-          "verification": {
-            "source": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
-            "status": "claimed",
-            "verified_at": "2026-09-05"
-          }
-        },
-        {
-          "catalog": "amazon/nova-2-lite",
-          "id": "amazon.nova-2-lite-v1:0",
-          "lifecycle": "active",
-          "protocols": [
-            "openai/chat-completions@1"
-          ],
-          "relationship": "first_party",
-          "verification": {
-            "source": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
-            "status": "claimed",
-            "verified_at": "2026-09-05"
-          }
-        }
-      ],
+      "models": [],
       "path_overrides": {
         "openai/chat-completions@1#create": "/chat/completions"
       },
       "presentation": {
-        "featured": true,
+        "featured": false,
         "logo": "monogram",
         "monochrome": false,
         "monogram": "AWS"
@@ -92413,12 +94564,14 @@ const builtInCatalogJSON = `{
     {
       "auth": {
         "header": "Authorization",
+        "injected_header": "x-user-cloudflare-workers-ai-key",
         "prefix": "Bearer",
         "strategy": "bearer"
       },
       "category": "model_api",
       "conformance": {
-        "status": "unverified"
+        "status": "live_verified",
+        "verified_at": "2026-09-19"
       },
       "default_protocol": "openai/chat-completions@1",
       "description": "Cloudflare Workers AI OpenAI-compatible inference.",
@@ -93567,21 +95720,6 @@ const builtInCatalogJSON = `{
       "id": "moonshot",
       "models": [
         {
-          "catalog": "moonshot/kimi-k2.5",
-          "id": "kimi-k2.5",
-          "lifecycle": "active",
-          "protocols": [
-            "openai/chat-completions@1"
-          ],
-          "reasoning_transport": "thinking_object",
-          "relationship": "first_party",
-          "verification": {
-            "source": "https://platform.moonshot.ai/docs/api/chat",
-            "status": "claimed",
-            "verified_at": "2026-09-05"
-          }
-        },
-        {
           "catalog": "moonshot/kimi-k2.6",
           "id": "kimi-k2.6",
           "lifecycle": "active",
@@ -94295,6 +96433,20 @@ const builtInCatalogJSON = `{
             "source": "https://openrouter.ai/bytedance-seed/seed-2-1-turbo",
             "status": "claimed",
             "verified_at": "2026-09-05"
+          }
+        },
+        {
+          "catalog": "amazon/nova-2-lite",
+          "id": "amazon/nova-2-lite-v1",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "gateway",
+          "verification": {
+            "source": "https://openrouter.ai/amazon/nova-2-lite-v1",
+            "status": "claimed",
+            "verified_at": "2026-09-24"
           }
         },
         {
@@ -95169,6 +97321,39 @@ const builtInCatalogJSON = `{
       },
       "category": "model_api",
       "conformance": {
+        "status": "fixture_verified",
+        "verified_at": "2026-09-20"
+      },
+      "default_headers": {
+        "anthropic-version": "2023-06-01"
+      },
+      "default_protocol": "openai/chat-completions@1",
+      "description": "Frontier models hosted and governed inside your Snowflake perimeter.",
+      "display_name": "Snowflake Cortex AI",
+      "id": "snowflake-cortex",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "SF"
+      },
+      "protocols": [
+        "openai/chat-completions@1",
+        "anthropic/messages@1"
+      ],
+      "support_tier": "native",
+      "supported_operations": [
+        "openai/chat-completions@1#create",
+        "anthropic/messages@1#create"
+      ]
+    },
+    {
+      "auth": {
+        "header": "Authorization",
+        "prefix": "Bearer",
+        "strategy": "bearer"
+      },
+      "category": "model_api",
+      "conformance": {
         "status": "unverified"
       },
       "default_base_url": "https://api.stepfun.ai/v1",
@@ -95237,6 +97422,79 @@ const builtInCatalogJSON = `{
       "description": "Open models through a hosted API.",
       "display_name": "Together AI",
       "id": "together",
+      "models": [
+        {
+          "catalog": "minimax/minimax-m3",
+          "id": "MiniMaxAI/MiniMax-M3",
+          "lifecycle": "active",
+          "pricing": {
+            "cached_input_per_1m": 0.06,
+            "completion_per_1m": 1.2,
+            "currency": "USD",
+            "prompt_per_1m": 0.3
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "restrictions": {
+            "context_window_size": 524288,
+            "quantization": "FP4"
+          },
+          "verification": {
+            "source": "https://docs.together.ai/docs/serverless/models",
+            "status": "claimed",
+            "verified_at": "2026-09-16"
+          }
+        },
+        {
+          "catalog": "moonshot/kimi-k3",
+          "id": "moonshotai/Kimi-K3",
+          "lifecycle": "active",
+          "pricing": {
+            "cached_input_per_1m": 0.3,
+            "completion_per_1m": 15.0,
+            "currency": "USD",
+            "prompt_per_1m": 3.0
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "restrictions": {
+            "context_window_size": 1048576
+          },
+          "verification": {
+            "source": "https://docs.together.ai/docs/serverless/models",
+            "status": "claimed",
+            "verified_at": "2026-09-16"
+          }
+        },
+        {
+          "catalog": "zai/glm-5.2",
+          "id": "zai-org/GLM-5.2",
+          "lifecycle": "active",
+          "pricing": {
+            "cached_input_per_1m": 0.26,
+            "completion_per_1m": 4.4,
+            "currency": "USD",
+            "prompt_per_1m": 1.4
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "restrictions": {
+            "context_window_size": 1048575,
+            "quantization": "FP4"
+          },
+          "verification": {
+            "source": "https://docs.together.ai/docs/serverless/models",
+            "status": "claimed",
+            "verified_at": "2026-09-16"
+          }
+        }
+      ],
       "presentation": {
         "featured": true,
         "logo": "package:together",
@@ -96365,6 +98623,51 @@ const builtInCatalogJSON = `{
             "status": "claimed",
             "verified_at": "2026-09-09"
           }
+        },
+        {
+          "catalog": "ibm/granite-4.2-30b",
+          "id": "ibm-granite/granite-4.2-30b",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/ibm-granite/granite-4.2-30b",
+            "status": "claimed",
+            "verified_at": "2026-09-17"
+          }
+        },
+        {
+          "catalog": "ibm/granite-4.2-8b",
+          "id": "ibm-granite/granite-4.2-8b",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/ibm-granite/granite-4.2-8b",
+            "status": "claimed",
+            "verified_at": "2026-09-17"
+          }
+        },
+        {
+          "catalog": "ibm/granite-4.2-3b",
+          "id": "ibm-granite/granite-4.2-3b",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/ibm-granite/granite-4.2-3b",
+            "status": "claimed",
+            "verified_at": "2026-09-17"
+          }
         }
       ],
       "presentation": {
@@ -96419,16 +98722,16 @@ const builtInCatalogJSON = `{
         {
           "catalog": "bytedance/seed-2.0-pro",
           "id": "doubao-seed-2-0-pro-260215",
-          "lifecycle": "active",
+          "lifecycle": "deprecated",
           "protocols": [
             "openai/chat-completions@1",
             "openai/responses@1"
           ],
           "relationship": "first_party",
           "verification": {
-            "source": "https://www.volcengine.com/docs/82379/1795150",
+            "source": "https://www.volcengine.com/docs/82379/1330310",
             "status": "claimed",
-            "verified_at": "2026-09-05"
+            "verified_at": "2026-09-24"
           }
         }
       ],
@@ -96612,6 +98915,20 @@ const builtInCatalogJSON = `{
             "source": "https://platform.xiaomimimo.com/docs/en-US/usage-guide/passing-back-reasoning_content",
             "status": "claimed",
             "verified_at": "2026-09-05"
+          }
+        },
+        {
+          "catalog": "xiaomi/mimo-v2.6-flash",
+          "id": "mimo-v2.6-flash",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://mimo.mi.com/docs/en-US/quick-start/summary/model",
+            "status": "claimed",
+            "verified_at": "2026-09-23"
           }
         }
       ],

@@ -55,6 +55,30 @@ pub struct ExecutionInput {
     pub shape: Vec<i64>,
 }
 
+/// Describe inputs from the session ORT actually loaded, independently of any
+/// fixed execution contract. In particular, an empty execution contract does
+/// not prove that a graph is dynamic: its declared dimensions are authoritative.
+pub fn session_input_schema(inputs: &[Input]) -> Vec<ExecutionInput> {
+    inputs
+        .iter()
+        .map(|input| {
+            let (dtype, shape) = match &input.input_type {
+                ValueType::Tensor { ty, shape, .. } => {
+                    (format!("{ty:?}").to_ascii_lowercase(), shape.to_vec())
+                }
+                // Preserve unsupported kinds as explicit evidence, not as a
+                // tensor with an inferred or fabricated dynamic shape.
+                other => (format!("{other:?}"), Vec::new()),
+            };
+            ExecutionInput {
+                name: input.name.clone(),
+                dtype,
+                shape,
+            }
+        })
+        .collect()
+}
+
 pub fn validate_contract(inputs: &[ExecutionInput]) -> UnifiedResult<()> {
     let mut names = BTreeSet::new();
     if inputs.is_empty() {

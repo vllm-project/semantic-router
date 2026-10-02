@@ -1,0 +1,4243 @@
+{
+  "primary": "mean_task_type",
+  "supplementary": "mean_task",
+  "scope": "Same complete dedicated registry cohorts plus both current Vela releases",
+  "panels": {
+    "English41": {
+      "coverage": {
+        "source_rows": 337,
+        "complete_rows": 186,
+        "distinct_complete_model_names": 186,
+        "excluded_incomplete_rows": 151,
+        "known_size_complete_rows": 173,
+        "unknown_size_complete_rows": 13,
+        "task_coverage_histogram": {
+          "1": 10,
+          "2": 15,
+          "3": 9,
+          "4": 3,
+          "6": 17,
+          "9": 1,
+          "10": 4,
+          "12": 1,
+          "16": 1,
+          "19": 2,
+          "20": 1,
+          "21": 13,
+          "22": 1,
+          "23": 3,
+          "25": 10,
+          "27": 25,
+          "28": 6,
+          "29": 2,
+          "32": 1,
+          "35": 3,
+          "36": 2,
+          "37": 1,
+          "38": 3,
+          "39": 9,
+          "40": 8,
+          "41": 186
+        },
+        "ranking_population_with_two_current_models": 188,
+        "size_plot_population_with_two_current_models": 175
+      },
+      "ranks": {
+        "nano": {
+          "mean_task": {
+            "score": 0.6488431514310018,
+            "display_score_100": 64.88431514310018,
+            "global_rank": 65,
+            "global_population": 188,
+            "tied_other_models": 0,
+            "same_or_smaller_rank": 7,
+            "same_or_smaller_population": 75,
+            "best_same_or_smaller_other_model": {
+              "id": "scores_MTEB_eng_v2:row:68",
+              "model": "Tarka-AIR/Tarka-Embedding-150M-V1",
+              "kind": "registry_reported",
+              "parameters_billion": 0.156,
+              "mean_task": 0.6639085365853659
+            },
+            "gap_pp_above_best_same_or_smaller": -1.5065385154364064,
+            "observed_frontier": false,
+            "dominator_count": 6,
+            "all_dominator_ids": [
+              "scores_MTEB_eng_v2:row:61",
+              "scores_MTEB_eng_v2:row:65",
+              "scores_MTEB_eng_v2:row:68",
+              "scores_MTEB_eng_v2:row:71",
+              "scores_MTEB_eng_v2:row:72",
+              "scores_MTEB_eng_v2:row:74"
+            ]
+          },
+          "mean_task_type": {
+            "score": 0.6078184975654924,
+            "display_score_100": 60.78184975654924,
+            "global_rank": 65,
+            "global_population": 188,
+            "tied_other_models": 0,
+            "same_or_smaller_rank": 5,
+            "same_or_smaller_population": 75,
+            "best_same_or_smaller_other_model": {
+              "id": "scores_MTEB_eng_v2:row:61",
+              "model": "avsolatorio/GIST-Embedding-v0",
+              "kind": "registry_reported",
+              "parameters_billion": 0.109,
+              "mean_task_type": 0.613959243054458
+            },
+            "gap_pp_above_best_same_or_smaller": -0.6140745488965593,
+            "observed_frontier": false,
+            "dominator_count": 4,
+            "all_dominator_ids": [
+              "scores_MTEB_eng_v2:row:61",
+              "scores_MTEB_eng_v2:row:65",
+              "scores_MTEB_eng_v2:row:68",
+              "scores_MTEB_eng_v2:row:74"
+            ]
+          }
+        },
+        "mini": {
+          "mean_task": {
+            "score": 0.6349232047933884,
+            "display_score_100": 63.49232047933884,
+            "global_rank": 82,
+            "global_population": 188,
+            "tied_other_models": 0,
+            "same_or_smaller_rank": 42,
+            "same_or_smaller_population": 134,
+            "best_same_or_smaller_other_model": {
+              "id": "scores_MTEB_eng_v2:row:1",
+              "model": "infgrad/Jasper-Token-Compression-600M",
+              "kind": "registry_reported",
+              "parameters_billion": 0.607,
+              "mean_task": 0.7474843170731708
+            },
+            "gap_pp_above_best_same_or_smaller": -11.256111227978238,
+            "observed_frontier": false,
+            "dominator_count": 41,
+            "all_dominator_ids": [
+              "scores_MTEB_eng_v2:row:1",
+              "scores_MTEB_eng_v2:row:14",
+              "scores_MTEB_eng_v2:row:18",
+              "scores_MTEB_eng_v2:row:19",
+              "scores_MTEB_eng_v2:row:21",
+              "scores_MTEB_eng_v2:row:26",
+              "scores_MTEB_eng_v2:row:31",
+              "scores_MTEB_eng_v2:row:33",
+              "scores_MTEB_eng_v2:row:34",
+              "scores_MTEB_eng_v2:row:35",
+              "scores_MTEB_eng_v2:row:36",
+              "scores_MTEB_eng_v2:row:40",
+              "scores_MTEB_eng_v2:row:43",
+              "scores_MTEB_eng_v2:row:44",
+              "scores_MTEB_eng_v2:row:48",
+              "scores_MTEB_eng_v2:row:49",
+              "scores_MTEB_eng_v2:row:51",
+              "scores_MTEB_eng_v2:row:53",
+              "scores_MTEB_eng_v2:row:60",
+              "scores_MTEB_eng_v2:row:61",
+              "scores_MTEB_eng_v2:row:63",
+              "scores_MTEB_eng_v2:row:65",
+              "scores_MTEB_eng_v2:row:66",
+              "scores_MTEB_eng_v2:row:67",
+              "scores_MTEB_eng_v2:row:68",
+              "scores_MTEB_eng_v2:row:70",
+              "scores_MTEB_eng_v2:row:71",
+              "scores_MTEB_eng_v2:row:72",
+              "scores_MTEB_eng_v2:row:73",
+              "scores_MTEB_eng_v2:row:74",
+              "scores_MTEB_eng_v2:row:79",
+              "scores_MTEB_eng_v2:row:80",
+              "scores_MTEB_eng_v2:row:81",
+              "scores_MTEB_eng_v2:row:82",
+              "scores_MTEB_eng_v2:row:83",
+              "scores_MTEB_eng_v2:row:86",
+              "scores_MTEB_eng_v2:row:89",
+              "scores_MTEB_eng_v2:row:91",
+              "scores_MTEB_eng_v2:row:96",
+              "scores_MTEB_eng_v2:row:97",
+              "current:nano"
+            ]
+          },
+          "mean_task_type": {
+            "score": 0.5878669411134946,
+            "display_score_100": 58.786694111349455,
+            "global_rank": 92,
+            "global_population": 188,
+            "tied_other_models": 0,
+            "same_or_smaller_rank": 50,
+            "same_or_smaller_population": 134,
+            "best_same_or_smaller_other_model": {
+              "id": "scores_MTEB_eng_v2:row:1",
+              "model": "infgrad/Jasper-Token-Compression-600M",
+              "kind": "registry_reported",
+              "parameters_billion": 0.607,
+              "mean_task_type": 0.6845585456349206
+            },
+            "gap_pp_above_best_same_or_smaller": -9.6691604521426,
+            "observed_frontier": false,
+            "dominator_count": 49,
+            "all_dominator_ids": [
+              "scores_MTEB_eng_v2:row:1",
+              "scores_MTEB_eng_v2:row:14",
+              "scores_MTEB_eng_v2:row:18",
+              "scores_MTEB_eng_v2:row:19",
+              "scores_MTEB_eng_v2:row:21",
+              "scores_MTEB_eng_v2:row:26",
+              "scores_MTEB_eng_v2:row:31",
+              "scores_MTEB_eng_v2:row:33",
+              "scores_MTEB_eng_v2:row:34",
+              "scores_MTEB_eng_v2:row:35",
+              "scores_MTEB_eng_v2:row:36",
+              "scores_MTEB_eng_v2:row:40",
+              "scores_MTEB_eng_v2:row:43",
+              "scores_MTEB_eng_v2:row:44",
+              "scores_MTEB_eng_v2:row:48",
+              "scores_MTEB_eng_v2:row:49",
+              "scores_MTEB_eng_v2:row:51",
+              "scores_MTEB_eng_v2:row:53",
+              "scores_MTEB_eng_v2:row:60",
+              "scores_MTEB_eng_v2:row:61",
+              "scores_MTEB_eng_v2:row:63",
+              "scores_MTEB_eng_v2:row:65",
+              "scores_MTEB_eng_v2:row:66",
+              "scores_MTEB_eng_v2:row:67",
+              "scores_MTEB_eng_v2:row:68",
+              "scores_MTEB_eng_v2:row:70",
+              "scores_MTEB_eng_v2:row:71",
+              "scores_MTEB_eng_v2:row:72",
+              "scores_MTEB_eng_v2:row:73",
+              "scores_MTEB_eng_v2:row:74",
+              "scores_MTEB_eng_v2:row:79",
+              "scores_MTEB_eng_v2:row:80",
+              "scores_MTEB_eng_v2:row:82",
+              "scores_MTEB_eng_v2:row:83",
+              "scores_MTEB_eng_v2:row:84",
+              "scores_MTEB_eng_v2:row:86",
+              "scores_MTEB_eng_v2:row:87",
+              "scores_MTEB_eng_v2:row:88",
+              "scores_MTEB_eng_v2:row:89",
+              "scores_MTEB_eng_v2:row:90",
+              "scores_MTEB_eng_v2:row:91",
+              "scores_MTEB_eng_v2:row:92",
+              "scores_MTEB_eng_v2:row:96",
+              "scores_MTEB_eng_v2:row:97",
+              "scores_MTEB_eng_v2:row:100",
+              "scores_MTEB_eng_v2:row:102",
+              "scores_MTEB_eng_v2:row:104",
+              "scores_MTEB_eng_v2:row:106",
+              "current:nano"
+            ]
+          }
+        }
+      },
+      "full_rankings": {
+        "mean_task": [
+          {
+            "rank": 1,
+            "id": "scores_MTEB_eng_v2:row:0",
+            "model": "jcorners/ingot-8b-r3",
+            "score": 0.7597950975609756,
+            "parameters_billion": 7.567
+          },
+          {
+            "rank": 2,
+            "id": "scores_MTEB_eng_v2:row:2",
+            "model": "Kingsoft-LLM/QZhou-Embedding",
+            "score": 0.7597192439024391,
+            "parameters_billion": 7.071
+          },
+          {
+            "rank": 3,
+            "id": "scores_MTEB_eng_v2:row:4",
+            "model": "Qwen/Qwen3-Embedding-8B",
+            "score": 0.7522560487804878,
+            "parameters_billion": 7.567
+          },
+          {
+            "rank": 4,
+            "id": "scores_MTEB_eng_v2:row:3",
+            "model": "ByteDance-Seed/Seed1.5-Embedding",
+            "score": 0.747613243902439,
+            "parameters_billion": null
+          },
+          {
+            "rank": 5,
+            "id": "scores_MTEB_eng_v2:row:1",
+            "model": "infgrad/Jasper-Token-Compression-600M",
+            "score": 0.7474843170731708,
+            "parameters_billion": 0.607
+          },
+          {
+            "rank": 6,
+            "id": "scores_MTEB_eng_v2:row:6",
+            "model": "Qwen/Qwen3-Embedding-4B",
+            "score": 0.7460537804878048,
+            "parameters_billion": 4.022
+          },
+          {
+            "rank": 7,
+            "id": "scores_MTEB_eng_v2:row:5",
+            "model": "annamodels/LGAI-Embedding-Preview",
+            "score": 0.7412059024390244,
+            "parameters_billion": 7.11
+          },
+          {
+            "rank": 8,
+            "id": "scores_MTEB_eng_v2:row:7",
+            "model": "Bytedance/Seed1.6-embedding",
+            "score": 0.7407039268292682,
+            "parameters_billion": null
+          },
+          {
+            "rank": 9,
+            "id": "scores_MTEB_eng_v2:row:17",
+            "model": "codefuse-ai/F2LLM-4B",
+            "score": 0.7367060487804878,
+            "parameters_billion": 4.022
+          },
+          {
+            "rank": 10,
+            "id": "scores_MTEB_eng_v2:row:8",
+            "model": "google/gemini-embedding-001",
+            "score": 0.7329878292682926,
+            "parameters_billion": null
+          },
+          {
+            "rank": 11,
+            "id": "scores_MTEB_eng_v2:row:10",
+            "model": "codefuse-ai/F2LLM-v2-14B",
+            "score": 0.7307962926829269,
+            "parameters_billion": 13.99
+          },
+          {
+            "rank": 12,
+            "id": "scores_MTEB_eng_v2:row:9",
+            "model": "codefuse-ai/F2LLM-v2-8B",
+            "score": 0.7286161219512195,
+            "parameters_billion": 7.568
+          },
+          {
+            "rank": 13,
+            "id": "scores_MTEB_eng_v2:row:16",
+            "model": "codefuse-ai/F2LLM-v2-4B",
+            "score": 0.7241223902439025,
+            "parameters_billion": 4.022
+          },
+          {
+            "rank": 14,
+            "id": "scores_MTEB_eng_v2:row:12",
+            "model": "ai-sage/Giga-Embeddings-instruct-10B-A1.8B-0826",
+            "score": 0.7223401463414635,
+            "parameters_billion": 10.476
+          },
+          {
+            "rank": 15,
+            "id": "scores_MTEB_eng_v2:row:25",
+            "model": "codefuse-ai/F2LLM-1.7B",
+            "score": 0.7201440243902439,
+            "parameters_billion": 1.721
+          },
+          {
+            "rank": 16,
+            "id": "scores_MTEB_eng_v2:row:11",
+            "model": "ai-sage/Giga-Embeddings-instruct-3B-0826",
+            "score": 0.7190430731707317,
+            "parameters_billion": 3.151
+          },
+          {
+            "rank": 17,
+            "id": "scores_MTEB_eng_v2:row:13",
+            "model": "jinaai/jina-embeddings-v5-omni-small",
+            "score": 0.7177546341463414,
+            "parameters_billion": 1.626
+          },
+          {
+            "rank": 18,
+            "id": "scores_MTEB_eng_v2:row:14",
+            "model": "jinaai/jina-embeddings-v5-text-small",
+            "score": 0.7177513414634146,
+            "parameters_billion": 0.596
+          },
+          {
+            "rank": 19,
+            "id": "scores_MTEB_eng_v2:row:31",
+            "model": "IEITYuan/Yuan-embedding-2.0-en",
+            "score": 0.7174371951219513,
+            "parameters_billion": 0.596
+          },
+          {
+            "rank": 20,
+            "id": "scores_MTEB_eng_v2:row:20",
+            "model": "codefuse-ai/F2LLM-v2-1.7B",
+            "score": 0.7163071951219512,
+            "parameters_billion": 1.721
+          },
+          {
+            "rank": 21,
+            "id": "scores_MTEB_eng_v2:row:15",
+            "model": "NovaSearch/jasper_en_vision_language_v1",
+            "score": 0.7141166097560975,
+            "parameters_billion": 1.565
+          },
+          {
+            "rank": 22,
+            "id": "scores_MTEB_eng_v2:row:21",
+            "model": "KaLM-Embedding/KaLM-embedding-multilingual-mini-instruct-v2.5",
+            "score": 0.7128882096750967,
+            "parameters_billion": 0.494
+          },
+          {
+            "rank": 23,
+            "id": "scores_MTEB_eng_v2:row:18",
+            "model": "jinaai/jina-embeddings-v5-omni-nano",
+            "score": 0.7111337804878048,
+            "parameters_billion": 0.986
+          },
+          {
+            "rank": 23,
+            "id": "scores_MTEB_eng_v2:row:19",
+            "model": "jinaai/jina-embeddings-v5-text-nano",
+            "score": 0.7111337804878048,
+            "parameters_billion": 0.212
+          },
+          {
+            "rank": 25,
+            "id": "scores_MTEB_eng_v2:row:30",
+            "model": "ai-sage/Giga-Embeddings-instruct",
+            "score": 0.7107208048780488,
+            "parameters_billion": 3.227
+          },
+          {
+            "rank": 26,
+            "id": "scores_MTEB_eng_v2:row:28",
+            "model": "Alibaba-NLP/gte-Qwen2-7B-instruct",
+            "score": 0.7071656789982222,
+            "parameters_billion": 7.069
+          },
+          {
+            "rank": 27,
+            "id": "scores_MTEB_eng_v2:row:26",
+            "model": "Qwen/Qwen3-Embedding-0.6B",
+            "score": 0.704719512195122,
+            "parameters_billion": 0.596
+          },
+          {
+            "rank": 28,
+            "id": "scores_MTEB_eng_v2:row:46",
+            "model": "GeoGPT-Research-Project/GeoEmbedding",
+            "score": 0.7020541219512195,
+            "parameters_billion": 7.111
+          },
+          {
+            "rank": 29,
+            "id": "scores_MTEB_eng_v2:row:37",
+            "model": "ICT-TIME-and-Querit/ICT-TIME-and-Querit-embedding-v1",
+            "score": 0.7011618780487805,
+            "parameters_billion": 4.022
+          },
+          {
+            "rank": 30,
+            "id": "scores_MTEB_eng_v2:row:44",
+            "model": "codefuse-ai/F2LLM-0.6B",
+            "score": 0.7003470731707317,
+            "parameters_billion": 0.596
+          },
+          {
+            "rank": 31,
+            "id": "scores_MTEB_eng_v2:row:36",
+            "model": "codefuse-ai/F2LLM-v2-0.6B",
+            "score": 0.6997131707317074,
+            "parameters_billion": 0.596
+          },
+          {
+            "rank": 32,
+            "id": "scores_MTEB_eng_v2:row:41",
+            "model": "Salesforce/SFR-Embedding-2_R",
+            "score": 0.6981742694733529,
+            "parameters_billion": 7.111
+          },
+          {
+            "rank": 33,
+            "id": "scores_MTEB_eng_v2:row:24",
+            "model": "nvidia/NV-Embed-v2",
+            "score": 0.6980760203301699,
+            "parameters_billion": 7.85
+          },
+          {
+            "rank": 34,
+            "id": "scores_MTEB_eng_v2:row:22",
+            "model": "Linq-AI-Research/Linq-Embed-Mistral",
+            "score": 0.6979659305421375,
+            "parameters_billion": 7.111
+          },
+          {
+            "rank": 35,
+            "id": "scores_MTEB_eng_v2:row:33",
+            "model": "google/embeddinggemma-300m",
+            "score": 0.6967362195121951,
+            "parameters_billion": 0.308
+          },
+          {
+            "rank": 36,
+            "id": "scores_MTEB_eng_v2:row:27",
+            "model": "google/text-embedding-005",
+            "score": 0.6959541707317073,
+            "parameters_billion": null
+          },
+          {
+            "rank": 37,
+            "id": "scores_MTEB_eng_v2:row:29",
+            "model": "google/text-embedding-004",
+            "score": 0.6952770487804878,
+            "parameters_billion": null
+          },
+          {
+            "rank": 38,
+            "id": "scores_MTEB_eng_v2:row:43",
+            "model": "ai-sage/Giga-Embeddings-instruct-480M-0826",
+            "score": 0.6951773902439025,
+            "parameters_billion": 0.484
+          },
+          {
+            "rank": 39,
+            "id": "scores_MTEB_eng_v2:row:32",
+            "model": "NovaSearch/stella_en_1.5B_v5",
+            "score": 0.6942559205904169,
+            "parameters_billion": 1.54
+          },
+          {
+            "rank": 40,
+            "id": "scores_MTEB_eng_v2:row:35",
+            "model": "NovaSearch/stella_en_400M_v5",
+            "score": 0.6939390178691194,
+            "parameters_billion": 0.435
+          },
+          {
+            "rank": 41,
+            "id": "scores_MTEB_eng_v2:row:23",
+            "model": "Salesforce/SFR-Embedding-Mistral",
+            "score": 0.6931134522826354,
+            "parameters_billion": 7.111
+          },
+          {
+            "rank": 42,
+            "id": "scores_MTEB_eng_v2:row:40",
+            "model": "Tarka-AIR/Tarka-Embedding-350M-V1",
+            "score": 0.6929310731707318,
+            "parameters_billion": 0.354
+          },
+          {
+            "rank": 43,
+            "id": "scores_MTEB_eng_v2:row:49",
+            "model": "codefuse-ai/F2LLM-v2-330M",
+            "score": 0.6885837804878049,
+            "parameters_billion": 0.334
+          },
+          {
+            "rank": 44,
+            "id": "scores_MTEB_eng_v2:row:50",
+            "model": "nvidia/NV-Embed-v1",
+            "score": 0.6831500238312479,
+            "parameters_billion": 7.85
+          },
+          {
+            "rank": 45,
+            "id": "scores_MTEB_eng_v2:row:38",
+            "model": "intfloat/e5-mistral-7b-instruct",
+            "score": 0.6797131612883873,
+            "parameters_billion": 7.111
+          },
+          {
+            "rank": 46,
+            "id": "scores_MTEB_eng_v2:row:34",
+            "model": "KiteFishAI/Nano-Em1-0.6B-v2.1",
+            "score": 0.6786009512195121,
+            "parameters_billion": 0.596
+          },
+          {
+            "rank": 47,
+            "id": "scores_MTEB_eng_v2:row:54",
+            "model": "google/text-multilingual-embedding-002",
+            "score": 0.6767027073170732,
+            "parameters_billion": null
+          },
+          {
+            "rank": 48,
+            "id": "scores_MTEB_eng_v2:row:39",
+            "model": "BidirLM/BidirLM-Omni-2.5B-Embedding",
+            "score": 0.6746906341463415,
+            "parameters_billion": 2.445
+          },
+          {
+            "rank": 49,
+            "id": "scores_MTEB_eng_v2:row:42",
+            "model": "Alibaba-NLP/gte-Qwen2-1.5B-instruct",
+            "score": 0.6719870460269243,
+            "parameters_billion": 1.543
+          },
+          {
+            "rank": 50,
+            "id": "scores_MTEB_eng_v2:row:47",
+            "model": "GritLM/GritLM-7B",
+            "score": 0.670707780399812,
+            "parameters_billion": 7.24
+          },
+          {
+            "rank": 51,
+            "id": "scores_MTEB_eng_v2:row:53",
+            "model": "WhereIsAI/UAE-Large-V1",
+            "score": 0.6640187986366449,
+            "parameters_billion": 0.335
+          },
+          {
+            "rank": 52,
+            "id": "scores_MTEB_eng_v2:row:68",
+            "model": "Tarka-AIR/Tarka-Embedding-150M-V1",
+            "score": 0.6639085365853659,
+            "parameters_billion": 0.156
+          },
+          {
+            "rank": 53,
+            "id": "scores_MTEB_eng_v2:row:51",
+            "model": "mixedbread-ai/mxbai-embed-large-v1",
+            "score": 0.662622240804676,
+            "parameters_billion": 0.335
+          },
+          {
+            "rank": 54,
+            "id": "scores_MTEB_eng_v2:row:48",
+            "model": "avsolatorio/GIST-large-Embedding-v0",
+            "score": 0.6625134256133555,
+            "parameters_billion": 0.335
+          },
+          {
+            "rank": 55,
+            "id": "scores_MTEB_eng_v2:row:56",
+            "model": "Cohere/Cohere-embed-english-v3.0",
+            "score": 0.662088595731706,
+            "parameters_billion": null
+          },
+          {
+            "rank": 56,
+            "id": "scores_MTEB_eng_v2:row:52",
+            "model": "GritLM/GritLM-8x7B",
+            "score": 0.6615586695812335,
+            "parameters_billion": 57.92
+          },
+          {
+            "rank": 57,
+            "id": "scores_MTEB_eng_v2:row:57",
+            "model": "Cohere/Cohere-embed-multilingual-v3.0",
+            "score": 0.6600906022277376,
+            "parameters_billion": null
+          },
+          {
+            "rank": 58,
+            "id": "scores_MTEB_eng_v2:row:74",
+            "model": "codefuse-ai/F2LLM-v2-160M",
+            "score": 0.6592689512195122,
+            "parameters_billion": 0.159
+          },
+          {
+            "rank": 59,
+            "id": "scores_MTEB_eng_v2:row:63",
+            "model": "BAAI/bge-large-en-v1.5",
+            "score": 0.6588837954348156,
+            "parameters_billion": 0.335
+          },
+          {
+            "rank": 60,
+            "id": "scores_MTEB_eng_v2:row:60",
+            "model": "intfloat/multilingual-e5-large-instruct",
+            "score": 0.6553055551266775,
+            "parameters_billion": 0.56
+          },
+          {
+            "rank": 61,
+            "id": "scores_MTEB_eng_v2:row:61",
+            "model": "avsolatorio/GIST-Embedding-v0",
+            "score": 0.6550466210091898,
+            "parameters_billion": 0.109
+          },
+          {
+            "rank": 62,
+            "id": "scores_MTEB_eng_v2:row:71",
+            "model": "BAAI/bge-base-en-v1.5",
+            "score": 0.6513711720715847,
+            "parameters_billion": 0.109
+          },
+          {
+            "rank": 63,
+            "id": "scores_MTEB_eng_v2:row:72",
+            "model": "prdev/mini-gte",
+            "score": 0.6505740731707317,
+            "parameters_billion": 0.066
+          },
+          {
+            "rank": 64,
+            "id": "scores_MTEB_eng_v2:row:65",
+            "model": "infgrad/stella-base-en-v2",
+            "score": 0.6490399096837327,
+            "parameters_billion": 0.109
+          },
+          {
+            "rank": 65,
+            "id": "current:nano",
+            "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
+            "score": 0.6488431514310018,
+            "parameters_billion": 0.163771288
+          },
+          {
+            "rank": 66,
+            "id": "scores_MTEB_eng_v2:row:67",
+            "model": "thenlper/gte-large",
+            "score": 0.6476698050696447,
+            "parameters_billion": 0.335
+          },
+          {
+            "rank": 67,
+            "id": "scores_MTEB_eng_v2:row:66",
+            "model": "avsolatorio/GIST-small-Embedding-v0",
+            "score": 0.6475937830352264,
+            "parameters_billion": 0.033
+          },
+          {
+            "rank": 68,
+            "id": "scores_MTEB_eng_v2:row:75",
+            "model": "Cohere/Cohere-embed-english-light-v3.0",
+            "score": 0.6459237252188289,
+            "parameters_billion": null
+          },
+          {
+            "rank": 69,
+            "id": "scores_MTEB_eng_v2:row:64",
+            "model": "McGill-NLP/LLM2Vec-Mistral-7B-Instruct-v2-mntp-supervised",
+            "score": 0.6456632207605192,
+            "parameters_billion": 7.153
+          },
+          {
+            "rank": 70,
+            "id": "scores_MTEB_eng_v2:row:91",
+            "model": "codefuse-ai/F2LLM-v2-80M",
+            "score": 0.6454793658536585,
+            "parameters_billion": 0.08
+          },
+          {
+            "rank": 71,
+            "id": "scores_MTEB_eng_v2:row:83",
+            "model": "BAAI/bge-small-en-v1.5",
+            "score": 0.6430120254016622,
+            "parameters_billion": 0.033
+          },
+          {
+            "rank": 72,
+            "id": "scores_MTEB_eng_v2:row:81",
+            "model": "HIT-TMG/KaLM-embedding-multilingual-mini-v1",
+            "score": 0.6413111871230771,
+            "parameters_billion": 0.494
+          },
+          {
+            "rank": 73,
+            "id": "scores_MTEB_eng_v2:row:73",
+            "model": "VPLabs/SearchMap_Preview",
+            "score": 0.6408451219512196,
+            "parameters_billion": 0.435
+          },
+          {
+            "rank": 74,
+            "id": "scores_MTEB_eng_v2:row:82",
+            "model": "KiteFishAI/Nano-Em1-0.6B-v2",
+            "score": 0.6408008536585366,
+            "parameters_billion": 0.596
+          },
+          {
+            "rank": 75,
+            "id": "scores_MTEB_eng_v2:row:86",
+            "model": "abhinand/MedEmbed-small-v0.1",
+            "score": 0.6397950769087808,
+            "parameters_billion": 0.033
+          },
+          {
+            "rank": 76,
+            "id": "scores_MTEB_eng_v2:row:79",
+            "model": "MongoDB/mdbr-leaf-mt",
+            "score": 0.6396570975609756,
+            "parameters_billion": 0.023
+          },
+          {
+            "rank": 77,
+            "id": "scores_MTEB_eng_v2:row:80",
+            "model": "thenlper/gte-base",
+            "score": 0.6390384426519458,
+            "parameters_billion": 0.109
+          },
+          {
+            "rank": 78,
+            "id": "scores_MTEB_eng_v2:row:70",
+            "model": "Lajavaness/bilingual-embedding-large",
+            "score": 0.6376620272557523,
+            "parameters_billion": 0.56
+          },
+          {
+            "rank": 79,
+            "id": "scores_MTEB_eng_v2:row:96",
+            "model": "nomic-ai/nomic-embed-text-v2-moe",
+            "score": 0.6363502926829268,
+            "parameters_billion": 0.475
+          },
+          {
+            "rank": 80,
+            "id": "scores_MTEB_eng_v2:row:89",
+            "model": "nomic-ai/nomic-embed-text-v1",
+            "score": 0.6360401547037337,
+            "parameters_billion": 0.137
+          },
+          {
+            "rank": 81,
+            "id": "scores_MTEB_eng_v2:row:97",
+            "model": "Snowflake/snowflake-arctic-embed-l-v2.0",
+            "score": 0.6360280243902439,
+            "parameters_billion": 0.568
+          },
+          {
+            "rank": 82,
+            "id": "current:mini",
+            "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+            "score": 0.6349232047933884,
+            "parameters_billion": 1.361475288
+          },
+          {
+            "rank": 83,
+            "id": "scores_MTEB_eng_v2:row:87",
+            "model": "mixedbread-ai/deepset-mxbai-embed-de-large-v1",
+            "score": 0.6342877041386201,
+            "parameters_billion": 0.487
+          },
+          {
+            "rank": 84,
+            "id": "scores_MTEB_eng_v2:row:77",
+            "model": "LCO-Embedding/LCO-Embedding-Omni-7B",
+            "score": 0.6324147560975609,
+            "parameters_billion": 8.932
+          },
+          {
+            "rank": 85,
+            "id": "scores_MTEB_eng_v2:row:90",
+            "model": "thenlper/gte-small",
+            "score": 0.6321994180544178,
+            "parameters_billion": 0.033
+          },
+          {
+            "rank": 86,
+            "id": "scores_MTEB_eng_v2:row:92",
+            "model": "intfloat/e5-large",
+            "score": 0.6312911305854118,
+            "parameters_billion": 0.335
+          },
+          {
+            "rank": 87,
+            "id": "scores_MTEB_eng_v2:row:104",
+            "model": "nomic-ai/nomic-embed-text-v1-ablated",
+            "score": 0.6292927790245313,
+            "parameters_billion": 0.137
+          },
+          {
+            "rank": 88,
+            "id": "scores_MTEB_eng_v2:row:99",
+            "model": "ibm-granite/granite-embedding-english-r2",
+            "score": 0.6283573902439025,
+            "parameters_billion": 0.149
+          },
+          {
+            "rank": 89,
+            "id": "scores_MTEB_eng_v2:row:100",
+            "model": "intfloat/e5-large-v2",
+            "score": 0.6279303728815129,
+            "parameters_billion": 0.335
+          },
+          {
+            "rank": 90,
+            "id": "scores_MTEB_eng_v2:row:113",
+            "model": "Cohere/Cohere-embed-multilingual-light-v3.0",
+            "score": 0.6274740812892552,
+            "parameters_billion": null
+          },
+          {
+            "rank": 91,
+            "id": "scores_MTEB_eng_v2:row:106",
+            "model": "intfloat/e5-base-v2",
+            "score": 0.6266703590913638,
+            "parameters_billion": 0.109
+          },
+          {
+            "rank": 92,
+            "id": "scores_MTEB_eng_v2:row:112",
+            "model": "Snowflake/snowflake-arctic-embed-m-v2.0",
+            "score": 0.6256529756097561,
+            "parameters_billion": 0.305
+          },
+          {
+            "rank": 93,
+            "id": "scores_MTEB_eng_v2:row:93",
+            "model": "LCO-Embedding/LCO-Embedding-Omni-3B",
+            "score": 0.6232579756097562,
+            "parameters_billion": 4.703
+          },
+          {
+            "rank": 94,
+            "id": "scores_MTEB_eng_v2:row:84",
+            "model": "sdadas/mmlw-e5-large",
+            "score": 0.6232231463414634,
+            "parameters_billion": 0.56
+          },
+          {
+            "rank": 95,
+            "id": "scores_MTEB_eng_v2:row:114",
+            "model": "nomic-ai/nomic-embed-text-v1-unsupervised",
+            "score": 0.622929334085075,
+            "parameters_billion": 0.137
+          },
+          {
+            "rank": 96,
+            "id": "scores_MTEB_eng_v2:row:109",
+            "model": "hotchpotch/bekko-embedding-v1-a25m",
+            "score": 0.6225406829268293,
+            "parameters_billion": 0.123
+          },
+          {
+            "rank": 97,
+            "id": "scores_MTEB_eng_v2:row:94",
+            "model": "HIT-TMG/KaLM-embedding-multilingual-mini-instruct-v1",
+            "score": 0.6219683040043787,
+            "parameters_billion": 0.494
+          },
+          {
+            "rank": 98,
+            "id": "scores_MTEB_eng_v2:row:115",
+            "model": "nomic-ai/nomic-embed-text-v1.5",
+            "score": 0.6219673472399526,
+            "parameters_billion": 0.137
+          },
+          {
+            "rank": 99,
+            "id": "scores_MTEB_eng_v2:row:95",
+            "model": "ManiacLabs/miniac-embed",
+            "score": 0.6208456218717298,
+            "parameters_billion": 0.033
+          },
+          {
+            "rank": 100,
+            "id": "scores_MTEB_eng_v2:row:110",
+            "model": "ibm-granite/granite-embedding-125m-english",
+            "score": 0.6207979268292684,
+            "parameters_billion": 0.125
+          },
+          {
+            "rank": 101,
+            "id": "scores_MTEB_eng_v2:row:103",
+            "model": "avsolatorio/GIST-all-MiniLM-L6-v2",
+            "score": 0.6206267877701865,
+            "parameters_billion": 0.023
+          },
+          {
+            "rank": 102,
+            "id": "scores_MTEB_eng_v2:row:102",
+            "model": "deepvk/USER-bge-m3",
+            "score": 0.6205859512195122,
+            "parameters_billion": 0.359
+          },
+          {
+            "rank": 103,
+            "id": "scores_MTEB_eng_v2:row:123",
+            "model": "Snowflake/snowflake-arctic-embed-l",
+            "score": 0.6204052527763326,
+            "parameters_billion": 0.335
+          },
+          {
+            "rank": 104,
+            "id": "scores_MTEB_eng_v2:row:88",
+            "model": "sdadas/mmlw-roberta-large",
+            "score": 0.6180039268292683,
+            "parameters_billion": 0.435
+          },
+          {
+            "rank": 105,
+            "id": "scores_MTEB_eng_v2:row:118",
+            "model": "intfloat/e5-base",
+            "score": 0.6178992076453981,
+            "parameters_billion": 0.109
+          },
+          {
+            "rank": 106,
+            "id": "scores_MTEB_eng_v2:row:130",
+            "model": "Snowflake/snowflake-arctic-embed-s",
+            "score": 0.6159299468389157,
+            "parameters_billion": 0.033
+          },
+          {
+            "rank": 107,
+            "id": "scores_MTEB_eng_v2:row:129",
+            "model": "Snowflake/snowflake-arctic-embed-m-v1.5",
+            "score": 0.6150532944035461,
+            "parameters_billion": 0.109
+          },
+          {
+            "rank": 108,
+            "id": "scores_MTEB_eng_v2:row:117",
+            "model": "OrdalieTech/Solon-embeddings-large-0.1",
+            "score": 0.6148004390243902,
+            "parameters_billion": 0.56
+          },
+          {
+            "rank": 109,
+            "id": "scores_MTEB_eng_v2:row:98",
+            "model": "sdadas/mmlw-e5-base",
+            "score": 0.6142770243902439,
+            "parameters_billion": 0.278
+          },
+          {
+            "rank": 110,
+            "id": "scores_MTEB_eng_v2:row:127",
+            "model": "voyageai/voyage-3",
+            "score": 0.6137765609756097,
+            "parameters_billion": null
+          },
+          {
+            "rank": 111,
+            "id": "scores_MTEB_eng_v2:row:134",
+            "model": "intfloat/e5-small-v2",
+            "score": 0.6132269161875277,
+            "parameters_billion": 0.033
+          },
+          {
+            "rank": 112,
+            "id": "scores_MTEB_eng_v2:row:107",
+            "model": "Lajavaness/bilingual-embedding-base",
+            "score": 0.6132028292635484,
+            "parameters_billion": 0.278
+          },
+          {
+            "rank": 113,
+            "id": "scores_MTEB_eng_v2:row:122",
+            "model": "manu/bge-m3-custom-fr",
+            "score": 0.6122317073170732,
+            "parameters_billion": 0.568
+          },
+          {
+            "rank": 114,
+            "id": "scores_MTEB_eng_v2:row:101",
+            "model": "sdadas/mmlw-roberta-base",
+            "score": 0.6115019512195122,
+            "parameters_billion": 0.124
+          },
+          {
+            "rank": 115,
+            "id": "scores_MTEB_eng_v2:row:133",
+            "model": "Snowflake/snowflake-arctic-embed-m",
+            "score": 0.6108756553360901,
+            "parameters_billion": 0.109
+          },
+          {
+            "rank": 116,
+            "id": "scores_MTEB_eng_v2:row:125",
+            "model": "ibm-granite/granite-embedding-small-english-r2",
+            "score": 0.610681024390244,
+            "parameters_billion": 0.048
+          },
+          {
+            "rank": 117,
+            "id": "scores_MTEB_eng_v2:row:137",
+            "model": "intfloat/multilingual-e5-base",
+            "score": 0.6100213457411223,
+            "parameters_billion": 0.278
+          },
+          {
+            "rank": 118,
+            "id": "scores_MTEB_eng_v2:row:128",
+            "model": "Mihaiii/Ivysaur",
+            "score": 0.608025992501295,
+            "parameters_billion": 0.023
+          },
+          {
+            "rank": 119,
+            "id": "scores_MTEB_eng_v2:row:132",
+            "model": "hotchpotch/bekko-embedding-v1-a8m",
+            "score": 0.6080209756097561,
+            "parameters_billion": 0.106
+          },
+          {
+            "rank": 120,
+            "id": "scores_MTEB_eng_v2:row:76",
+            "model": "Haon-Chen/speed-embedding-7b-instruct",
+            "score": 0.6062405328330406,
+            "parameters_billion": 7.111
+          },
+          {
+            "rank": 121,
+            "id": "scores_MTEB_eng_v2:row:142",
+            "model": "voyageai/voyage-3-lite",
+            "score": 0.604377,
+            "parameters_billion": null
+          },
+          {
+            "rank": 122,
+            "id": "scores_MTEB_eng_v2:row:135",
+            "model": "intfloat/e5-small",
+            "score": 0.6040957544710008,
+            "parameters_billion": 0.033
+          },
+          {
+            "rank": 123,
+            "id": "scores_MTEB_eng_v2:row:148",
+            "model": "ibm-granite/granite-embedding-278m-multilingual",
+            "score": 0.6036324390243902,
+            "parameters_billion": 0.278
+          },
+          {
+            "rank": 124,
+            "id": "scores_MTEB_eng_v2:row:124",
+            "model": "dwzhu/e5-base-4k",
+            "score": 0.6032403106889277,
+            "parameters_billion": 0.112
+          },
+          {
+            "rank": 125,
+            "id": "scores_MTEB_eng_v2:row:140",
+            "model": "ibm-granite/granite-embedding-30m-english",
+            "score": 0.6019757560975609,
+            "parameters_billion": 0.03
+          },
+          {
+            "rank": 126,
+            "id": "scores_MTEB_eng_v2:row:160",
+            "model": "Snowflake/snowflake-arctic-embed-xs",
+            "score": 0.5976673272696803,
+            "parameters_billion": 0.023
+          },
+          {
+            "rank": 127,
+            "id": "scores_MTEB_eng_v2:row:144",
+            "model": "Haon-Chen/e5-omni-3B",
+            "score": 0.5969691463414635,
+            "parameters_billion": 4.703
+          },
+          {
+            "rank": 128,
+            "id": "scores_MTEB_eng_v2:row:153",
+            "model": "intfloat/multilingual-e5-small",
+            "score": 0.5968822955065252,
+            "parameters_billion": 0.118
+          },
+          {
+            "rank": 129,
+            "id": "scores_MTEB_eng_v2:row:139",
+            "model": "Lajavaness/bilingual-embedding-small",
+            "score": 0.5962482625119004,
+            "parameters_billion": 0.118
+          },
+          {
+            "rank": 130,
+            "id": "scores_MTEB_eng_v2:row:143",
+            "model": "sentence-transformers/all-MiniLM-L6-v2",
+            "score": 0.5903039027409025,
+            "parameters_billion": 0.023
+          },
+          {
+            "rank": 131,
+            "id": "scores_MTEB_eng_v2:row:151",
+            "model": "Mihaiii/gte-micro-v4",
+            "score": 0.5889789209527495,
+            "parameters_billion": 0.019
+          },
+          {
+            "rank": 132,
+            "id": "scores_MTEB_eng_v2:row:136",
+            "model": "sdadas/mmlw-e5-small",
+            "score": 0.5886495365853658,
+            "parameters_billion": 0.118
+          },
+          {
+            "rank": 133,
+            "id": "scores_MTEB_eng_v2:row:169",
+            "model": "ibm-granite/granite-embedding-107m-multilingual",
+            "score": 0.5876386829268293,
+            "parameters_billion": 0.107
+          },
+          {
+            "rank": 134,
+            "id": "scores_MTEB_eng_v2:row:152",
+            "model": "Haon-Chen/e5-omni-7B",
+            "score": 0.5867044634146341,
+            "parameters_billion": 8.932
+          },
+          {
+            "rank": 135,
+            "id": "scores_MTEB_eng_v2:row:150",
+            "model": "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+            "score": 0.5826828776243405,
+            "parameters_billion": 0.278
+          },
+          {
+            "rank": 136,
+            "id": "scores_MTEB_eng_v2:row:186",
+            "model": "manu/sentence_croissant_alpha_v0.3",
+            "score": 0.578017,
+            "parameters_billion": 1.28
+          },
+          {
+            "rank": 137,
+            "id": "scores_MTEB_eng_v2:row:166",
+            "model": "Mihaiii/Bulbasaur",
+            "score": 0.5774624020975746,
+            "parameters_billion": 0.017
+          },
+          {
+            "rank": 138,
+            "id": "scores_MTEB_eng_v2:row:177",
+            "model": "manu/sentence_croissant_alpha_v0.4",
+            "score": 0.5770828048780489,
+            "parameters_billion": 1.28
+          },
+          {
+            "rank": 139,
+            "id": "scores_MTEB_eng_v2:row:154",
+            "model": "Tevatron/OmniEmbed-v0.1",
+            "score": 0.5769762439024391,
+            "parameters_billion": 8.932
+          },
+          {
+            "rank": 140,
+            "id": "scores_MTEB_eng_v2:row:192",
+            "model": "ai-forever/ru-en-RoSBERTa",
+            "score": 0.5726126097560975,
+            "parameters_billion": 0.404
+          },
+          {
+            "rank": 141,
+            "id": "scores_MTEB_eng_v2:row:162",
+            "model": "Omartificial-Intelligence-Space/Arabic-all-nli-triplet-Matryoshka",
+            "score": 0.5692984460286736,
+            "parameters_billion": 0.278
+          },
+          {
+            "rank": 142,
+            "id": "scores_MTEB_eng_v2:row:191",
+            "model": "manu/sentence_croissant_alpha_v0.2",
+            "score": 0.5655929268292683,
+            "parameters_billion": 1.28
+          },
+          {
+            "rank": 143,
+            "id": "scores_MTEB_eng_v2:row:187",
+            "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+            "score": 0.5641676699090004,
+            "parameters_billion": 0.118
+          },
+          {
+            "rank": 144,
+            "id": "scores_MTEB_eng_v2:row:165",
+            "model": "McGill-NLP/LLM2Vec-Mistral-7B-Instruct-v2-mntp-unsup-simcse",
+            "score": 0.5619834999667115,
+            "parameters_billion": 7.153
+          },
+          {
+            "rank": 145,
+            "id": "scores_MTEB_eng_v2:row:172",
+            "model": "bigscience/sgpt-bloom-7b1-msmarco",
+            "score": 0.5608368916035635,
+            "parameters_billion": 7.068
+          },
+          {
+            "rank": 146,
+            "id": "scores_MTEB_eng_v2:row:195",
+            "model": "sergeyzh/LaBSE-ru-turbo",
+            "score": 0.5567629756097561,
+            "parameters_billion": 0.129
+          },
+          {
+            "rank": 147,
+            "id": "scores_MTEB_eng_v2:row:203",
+            "model": "minishlab/potion-base-32M",
+            "score": 0.5462935609756098,
+            "parameters_billion": 0.032
+          },
+          {
+            "rank": 148,
+            "id": "scores_MTEB_eng_v2:row:197",
+            "model": "Omartificial-Intelligence-Space/Arabic-MiniLM-L12-v2-all-nli-triplet",
+            "score": 0.5443176110241625,
+            "parameters_billion": 0.118
+          },
+          {
+            "rank": 149,
+            "id": "scores_MTEB_eng_v2:row:198",
+            "model": "Mihaiii/Wartortle",
+            "score": 0.541114379269468,
+            "parameters_billion": 0.017
+          },
+          {
+            "rank": 150,
+            "id": "scores_MTEB_eng_v2:row:212",
+            "model": "minishlab/potion-retrieval-32M",
+            "score": 0.5392212195121951,
+            "parameters_billion": 0.032
+          },
+          {
+            "rank": 151,
+            "id": "scores_MTEB_eng_v2:row:199",
+            "model": "Mihaiii/gte-micro",
+            "score": 0.5388580641928595,
+            "parameters_billion": 0.017
+          },
+          {
+            "rank": 152,
+            "id": "scores_MTEB_eng_v2:row:218",
+            "model": "minishlab/potion-base-8M",
+            "score": 0.5332783730985786,
+            "parameters_billion": 0.008
+          },
+          {
+            "rank": 153,
+            "id": "scores_MTEB_eng_v2:row:200",
+            "model": "Omartificial-Intelligence-Space/Arabic-labse-Matryoshka",
+            "score": 0.5297848826642666,
+            "parameters_billion": 0.471
+          },
+          {
+            "rank": 154,
+            "id": "scores_MTEB_eng_v2:row:213",
+            "model": "encord-team/ebind-full",
+            "score": 0.5263819268292682,
+            "parameters_billion": 1.79
+          },
+          {
+            "rank": 155,
+            "id": "scores_MTEB_eng_v2:row:217",
+            "model": "Mihaiii/Squirtle",
+            "score": 0.5200412681968019,
+            "parameters_billion": 0.016
+          },
+          {
+            "rank": 156,
+            "id": "scores_MTEB_eng_v2:row:220",
+            "model": "Mihaiii/Venusaur",
+            "score": 0.5198573527620314,
+            "parameters_billion": 0.016
+          },
+          {
+            "rank": 157,
+            "id": "scores_MTEB_eng_v2:row:230",
+            "model": "minishlab/potion-base-4M",
+            "score": 0.5179691030231456,
+            "parameters_billion": 0.004
+          },
+          {
+            "rank": 158,
+            "id": "scores_MTEB_eng_v2:row:233",
+            "model": "sentence-transformers/static-retrieval-mrl-en-v1",
+            "score": 0.5125121951219512,
+            "parameters_billion": 0.031
+          },
+          {
+            "rank": 159,
+            "id": "scores_MTEB_eng_v2:row:171",
+            "model": "Gameselo/STS-multilingual-mpnet-base-v2",
+            "score": 0.5121227860460326,
+            "parameters_billion": 0.278
+          },
+          {
+            "rank": 160,
+            "id": "scores_MTEB_eng_v2:row:202",
+            "model": "omarelshehy/arabic-english-sts-matryoshka",
+            "score": 0.5119084125839304,
+            "parameters_billion": 0.56
+          },
+          {
+            "rank": 161,
+            "id": "scores_MTEB_eng_v2:row:232",
+            "model": "sentence-transformers/static-similarity-mrl-multilingual-v1",
+            "score": 0.5082728780487805,
+            "parameters_billion": 0.108
+          },
+          {
+            "rank": 162,
+            "id": "scores_MTEB_eng_v2:row:234",
+            "model": "minishlab/M2V_base_glove",
+            "score": 0.5080929421535388,
+            "parameters_billion": 0.102
+          },
+          {
+            "rank": 163,
+            "id": "scores_MTEB_eng_v2:row:221",
+            "model": "aari1995/German_Semantic_STS_V2",
+            "score": 0.5031185365853658,
+            "parameters_billion": 0.336
+          },
+          {
+            "rank": 164,
+            "id": "scores_MTEB_eng_v2:row:238",
+            "model": "minishlab/M2V_base_glove_subword",
+            "score": 0.49799925782544757,
+            "parameters_billion": 0.103
+          },
+          {
+            "rank": 165,
+            "id": "scores_MTEB_eng_v2:row:236",
+            "model": "consciousAI/cai-lunaris-text-embeddings",
+            "score": 0.49503329269811414,
+            "parameters_billion": 0.335
+          },
+          {
+            "rank": 166,
+            "id": "scores_MTEB_eng_v2:row:243",
+            "model": "minishlab/M2V_base_output",
+            "score": 0.48993722944975676,
+            "parameters_billion": 0.008
+          },
+          {
+            "rank": 167,
+            "id": "scores_MTEB_eng_v2:row:239",
+            "model": "deepvk/USER-base",
+            "score": 0.4884698780487805,
+            "parameters_billion": 0.427
+          },
+          {
+            "rank": 168,
+            "id": "scores_MTEB_eng_v2:row:231",
+            "model": "sentence-transformers/LaBSE",
+            "score": 0.4880703676191831,
+            "parameters_billion": 0.471
+          },
+          {
+            "rank": 169,
+            "id": "scores_MTEB_eng_v2:row:241",
+            "model": "minishlab/potion-base-2M",
+            "score": 0.4870834407957507,
+            "parameters_billion": 0.002
+          },
+          {
+            "rank": 170,
+            "id": "scores_MTEB_eng_v2:row:245",
+            "model": "cnmoro/static-nomic-384-pten-v2-st",
+            "score": 0.4864763658536585,
+            "parameters_billion": 0.106
+          },
+          {
+            "rank": 171,
+            "id": "scores_MTEB_eng_v2:row:235",
+            "model": "cointegrated/LaBSE-en-ru",
+            "score": 0.4821785776075582,
+            "parameters_billion": 0.129
+          },
+          {
+            "rank": 172,
+            "id": "scores_MTEB_eng_v2:row:246",
+            "model": "sergeyzh/rubert-tiny-turbo",
+            "score": 0.45984706557339117,
+            "parameters_billion": 0.029
+          },
+          {
+            "rank": 173,
+            "id": "scores_MTEB_eng_v2:row:173",
+            "model": "jinaai/jina-embeddings-v2-base-en",
+            "score": 0.4596777257608364,
+            "parameters_billion": 0.137
+          },
+          {
+            "rank": 174,
+            "id": "scores_MTEB_eng_v2:row:254",
+            "model": "cointegrated/rubert-tiny2",
+            "score": 0.4156474390243902,
+            "parameters_billion": 0.029
+          },
+          {
+            "rank": 175,
+            "id": "scores_MTEB_eng_v2:row:252",
+            "model": "Omartificial-Intelligence-Space/Arabic-mpnet-base-all-nli-triplet",
+            "score": 0.41461050490202594,
+            "parameters_billion": 0.109
+          },
+          {
+            "rank": 176,
+            "id": "scores_MTEB_eng_v2:row:253",
+            "model": "cointegrated/rubert-tiny",
+            "score": 0.4010163658536585,
+            "parameters_billion": 0.012
+          },
+          {
+            "rank": 177,
+            "id": "scores_MTEB_eng_v2:row:257",
+            "model": "silma-ai/silma-embeddding-matryoshka-v0.1",
+            "score": 0.4009250301338436,
+            "parameters_billion": 0.135
+          },
+          {
+            "rank": 178,
+            "id": "scores_MTEB_eng_v2:row:255",
+            "model": "Omartificial-Intelligence-Space/Marbert-all-nli-triplet-Matryoshka",
+            "score": 0.3976659506396052,
+            "parameters_billion": 0.163
+          },
+          {
+            "rank": 179,
+            "id": "scores_MTEB_eng_v2:row:260",
+            "model": "Omartificial-Intelligence-Space/Arabert-all-nli-triplet-Matryoshka",
+            "score": 0.39042342463565616,
+            "parameters_billion": 0.135
+          },
+          {
+            "rank": 180,
+            "id": "scores_MTEB_eng_v2:row:242",
+            "model": "Jaume/gemma-2b-embeddings",
+            "score": 0.37718144504276213,
+            "parameters_billion": 2.506
+          },
+          {
+            "rank": 181,
+            "id": "scores_MTEB_eng_v2:row:258",
+            "model": "DeepPavlov/distilrubert-small-cased-conversational",
+            "score": 0.36611760975609753,
+            "parameters_billion": 0.107
+          },
+          {
+            "rank": 182,
+            "id": "scores_MTEB_eng_v2:row:263",
+            "model": "ai-forever/sbert_large_mt_nlu_ru",
+            "score": 0.3550000243902439,
+            "parameters_billion": 0.427
+          },
+          {
+            "rank": 183,
+            "id": "scores_MTEB_eng_v2:row:264",
+            "model": "DeepPavlov/rubert-base-cased-sentence",
+            "score": 0.3532973414634146,
+            "parameters_billion": 0.107
+          },
+          {
+            "rank": 184,
+            "id": "scores_MTEB_eng_v2:row:265",
+            "model": "ai-forever/sbert_large_nlu_ru",
+            "score": 0.32928921951219514,
+            "parameters_billion": 0.427
+          },
+          {
+            "rank": 185,
+            "id": "scores_MTEB_eng_v2:row:267",
+            "model": "deepvk/deberta-v1-base",
+            "score": 0.32897407317073174,
+            "parameters_billion": 0.124
+          },
+          {
+            "rank": 186,
+            "id": "scores_MTEB_eng_v2:row:268",
+            "model": "malenia1/ternary-weight-embedding",
+            "score": 0.3281327317073171,
+            "parameters_billion": 0.099
+          },
+          {
+            "rank": 187,
+            "id": "scores_MTEB_eng_v2:row:266",
+            "model": "DeepPavlov/rubert-base-cased",
+            "score": 0.3078829756097561,
+            "parameters_billion": 1.28
+          },
+          {
+            "rank": 188,
+            "id": "scores_MTEB_eng_v2:row:270",
+            "model": "mteb/baseline-random-encoder",
+            "score": 0.1326469756097561,
+            "parameters_billion": null
+          }
+        ],
+        "mean_task_type": [
+          {
+            "rank": 1,
+            "id": "scores_MTEB_eng_v2:row:0",
+            "model": "jcorners/ingot-8b-r3",
+            "score": 0.6998357579365079,
+            "parameters_billion": 7.567
+          },
+          {
+            "rank": 2,
+            "id": "scores_MTEB_eng_v2:row:2",
+            "model": "Kingsoft-LLM/QZhou-Embedding",
+            "score": 0.6951907480158731,
+            "parameters_billion": 7.071
+          },
+          {
+            "rank": 3,
+            "id": "scores_MTEB_eng_v2:row:4",
+            "model": "Qwen/Qwen3-Embedding-8B",
+            "score": 0.6870739623015873,
+            "parameters_billion": 7.567
+          },
+          {
+            "rank": 4,
+            "id": "scores_MTEB_eng_v2:row:3",
+            "model": "ByteDance-Seed/Seed1.5-Embedding",
+            "score": 0.6855526031746032,
+            "parameters_billion": null
+          },
+          {
+            "rank": 5,
+            "id": "scores_MTEB_eng_v2:row:1",
+            "model": "infgrad/Jasper-Token-Compression-600M",
+            "score": 0.6845585456349206,
+            "parameters_billion": 0.607
+          },
+          {
+            "rank": 6,
+            "id": "scores_MTEB_eng_v2:row:5",
+            "model": "annamodels/LGAI-Embedding-Preview",
+            "score": 0.6840282916666667,
+            "parameters_billion": 7.11
+          },
+          {
+            "rank": 7,
+            "id": "scores_MTEB_eng_v2:row:6",
+            "model": "Qwen/Qwen3-Embedding-4B",
+            "score": 0.6809905555555557,
+            "parameters_billion": 4.022
+          },
+          {
+            "rank": 8,
+            "id": "scores_MTEB_eng_v2:row:7",
+            "model": "Bytedance/Seed1.6-embedding",
+            "score": 0.6798059980158729,
+            "parameters_billion": null
+          },
+          {
+            "rank": 9,
+            "id": "scores_MTEB_eng_v2:row:8",
+            "model": "google/gemini-embedding-001",
+            "score": 0.6766678353174603,
+            "parameters_billion": null
+          },
+          {
+            "rank": 10,
+            "id": "scores_MTEB_eng_v2:row:17",
+            "model": "codefuse-ai/F2LLM-4B",
+            "score": 0.6729337658730159,
+            "parameters_billion": 4.022
+          },
+          {
+            "rank": 11,
+            "id": "scores_MTEB_eng_v2:row:9",
+            "model": "codefuse-ai/F2LLM-v2-8B",
+            "score": 0.6695207698412698,
+            "parameters_billion": 7.568
+          },
+          {
+            "rank": 12,
+            "id": "scores_MTEB_eng_v2:row:12",
+            "model": "ai-sage/Giga-Embeddings-instruct-10B-A1.8B-0826",
+            "score": 0.6694375753968254,
+            "parameters_billion": 10.476
+          },
+          {
+            "rank": 13,
+            "id": "scores_MTEB_eng_v2:row:16",
+            "model": "codefuse-ai/F2LLM-v2-4B",
+            "score": 0.6668032321428571,
+            "parameters_billion": 4.022
+          },
+          {
+            "rank": 14,
+            "id": "scores_MTEB_eng_v2:row:15",
+            "model": "NovaSearch/jasper_en_vision_language_v1",
+            "score": 0.6665139186507937,
+            "parameters_billion": 1.565
+          },
+          {
+            "rank": 15,
+            "id": "scores_MTEB_eng_v2:row:10",
+            "model": "codefuse-ai/F2LLM-v2-14B",
+            "score": 0.6646437976190477,
+            "parameters_billion": 13.99
+          },
+          {
+            "rank": 16,
+            "id": "scores_MTEB_eng_v2:row:11",
+            "model": "ai-sage/Giga-Embeddings-instruct-3B-0826",
+            "score": 0.6638313134920635,
+            "parameters_billion": 3.151
+          },
+          {
+            "rank": 17,
+            "id": "scores_MTEB_eng_v2:row:20",
+            "model": "codefuse-ai/F2LLM-v2-1.7B",
+            "score": 0.6637037777777778,
+            "parameters_billion": 1.721
+          },
+          {
+            "rank": 18,
+            "id": "scores_MTEB_eng_v2:row:30",
+            "model": "ai-sage/Giga-Embeddings-instruct",
+            "score": 0.6614513511904762,
+            "parameters_billion": 3.227
+          },
+          {
+            "rank": 19,
+            "id": "scores_MTEB_eng_v2:row:28",
+            "model": "Alibaba-NLP/gte-Qwen2-7B-instruct",
+            "score": 0.6576746723017133,
+            "parameters_billion": 7.069
+          },
+          {
+            "rank": 20,
+            "id": "scores_MTEB_eng_v2:row:13",
+            "model": "jinaai/jina-embeddings-v5-omni-small",
+            "score": 0.6567853551587302,
+            "parameters_billion": 1.626
+          },
+          {
+            "rank": 21,
+            "id": "scores_MTEB_eng_v2:row:14",
+            "model": "jinaai/jina-embeddings-v5-text-small",
+            "score": 0.6567829444444444,
+            "parameters_billion": 0.596
+          },
+          {
+            "rank": 22,
+            "id": "scores_MTEB_eng_v2:row:25",
+            "model": "codefuse-ai/F2LLM-1.7B",
+            "score": 0.6567133650793651,
+            "parameters_billion": 1.721
+          },
+          {
+            "rank": 23,
+            "id": "scores_MTEB_eng_v2:row:37",
+            "model": "ICT-TIME-and-Querit/ICT-TIME-and-Querit-embedding-v1",
+            "score": 0.6546366686507936,
+            "parameters_billion": 4.022
+          },
+          {
+            "rank": 24,
+            "id": "scores_MTEB_eng_v2:row:32",
+            "model": "NovaSearch/stella_en_1.5B_v5",
+            "score": 0.6532072889893524,
+            "parameters_billion": 1.54
+          },
+          {
+            "rank": 25,
+            "id": "scores_MTEB_eng_v2:row:21",
+            "model": "KaLM-Embedding/KaLM-embedding-multilingual-mini-instruct-v2.5",
+            "score": 0.6530866149924203,
+            "parameters_billion": 0.494
+          },
+          {
+            "rank": 26,
+            "id": "scores_MTEB_eng_v2:row:41",
+            "model": "Salesforce/SFR-Embedding-2_R",
+            "score": 0.6530850043606933,
+            "parameters_billion": 7.111
+          },
+          {
+            "rank": 27,
+            "id": "scores_MTEB_eng_v2:row:22",
+            "model": "Linq-AI-Research/Linq-Embed-Mistral",
+            "score": 0.6529145684545827,
+            "parameters_billion": 7.111
+          },
+          {
+            "rank": 28,
+            "id": "scores_MTEB_eng_v2:row:31",
+            "model": "IEITYuan/Yuan-embedding-2.0-en",
+            "score": 0.6522543333333334,
+            "parameters_billion": 0.596
+          },
+          {
+            "rank": 29,
+            "id": "scores_MTEB_eng_v2:row:18",
+            "model": "jinaai/jina-embeddings-v5-omni-nano",
+            "score": 0.6522176388888888,
+            "parameters_billion": 0.986
+          },
+          {
+            "rank": 29,
+            "id": "scores_MTEB_eng_v2:row:19",
+            "model": "jinaai/jina-embeddings-v5-text-nano",
+            "score": 0.6522176388888888,
+            "parameters_billion": 0.212
+          },
+          {
+            "rank": 31,
+            "id": "scores_MTEB_eng_v2:row:33",
+            "model": "google/embeddinggemma-300m",
+            "score": 0.6510841587301588,
+            "parameters_billion": 0.308
+          },
+          {
+            "rank": 32,
+            "id": "scores_MTEB_eng_v2:row:24",
+            "model": "nvidia/NV-Embed-v2",
+            "score": 0.6500422867967929,
+            "parameters_billion": 7.85
+          },
+          {
+            "rank": 33,
+            "id": "scores_MTEB_eng_v2:row:23",
+            "model": "Salesforce/SFR-Embedding-Mistral",
+            "score": 0.6493612264821235,
+            "parameters_billion": 7.111
+          },
+          {
+            "rank": 34,
+            "id": "scores_MTEB_eng_v2:row:35",
+            "model": "NovaSearch/stella_en_400M_v5",
+            "score": 0.6483779629064552,
+            "parameters_billion": 0.435
+          },
+          {
+            "rank": 35,
+            "id": "scores_MTEB_eng_v2:row:29",
+            "model": "google/text-embedding-004",
+            "score": 0.648150121031746,
+            "parameters_billion": null
+          },
+          {
+            "rank": 36,
+            "id": "scores_MTEB_eng_v2:row:27",
+            "model": "google/text-embedding-005",
+            "score": 0.6477057281746031,
+            "parameters_billion": null
+          },
+          {
+            "rank": 37,
+            "id": "scores_MTEB_eng_v2:row:26",
+            "model": "Qwen/Qwen3-Embedding-0.6B",
+            "score": 0.6471592777777778,
+            "parameters_billion": 0.596
+          },
+          {
+            "rank": 38,
+            "id": "scores_MTEB_eng_v2:row:36",
+            "model": "codefuse-ai/F2LLM-v2-0.6B",
+            "score": 0.6458062857142857,
+            "parameters_billion": 0.596
+          },
+          {
+            "rank": 39,
+            "id": "scores_MTEB_eng_v2:row:43",
+            "model": "ai-sage/Giga-Embeddings-instruct-480M-0826",
+            "score": 0.6438398968253969,
+            "parameters_billion": 0.484
+          },
+          {
+            "rank": 40,
+            "id": "scores_MTEB_eng_v2:row:46",
+            "model": "GeoGPT-Research-Project/GeoEmbedding",
+            "score": 0.6413342222222222,
+            "parameters_billion": 7.111
+          },
+          {
+            "rank": 41,
+            "id": "scores_MTEB_eng_v2:row:34",
+            "model": "KiteFishAI/Nano-Em1-0.6B-v2.1",
+            "score": 0.6410028392857142,
+            "parameters_billion": 0.596
+          },
+          {
+            "rank": 42,
+            "id": "scores_MTEB_eng_v2:row:38",
+            "model": "intfloat/e5-mistral-7b-instruct",
+            "score": 0.6400129579463661,
+            "parameters_billion": 7.111
+          },
+          {
+            "rank": 43,
+            "id": "scores_MTEB_eng_v2:row:54",
+            "model": "google/text-multilingual-embedding-002",
+            "score": 0.6351595932539683,
+            "parameters_billion": null
+          },
+          {
+            "rank": 44,
+            "id": "scores_MTEB_eng_v2:row:50",
+            "model": "nvidia/NV-Embed-v1",
+            "score": 0.6336560820698756,
+            "parameters_billion": 7.85
+          },
+          {
+            "rank": 45,
+            "id": "scores_MTEB_eng_v2:row:40",
+            "model": "Tarka-AIR/Tarka-Embedding-350M-V1",
+            "score": 0.632978753968254,
+            "parameters_billion": 0.354
+          },
+          {
+            "rank": 46,
+            "id": "scores_MTEB_eng_v2:row:44",
+            "model": "codefuse-ai/F2LLM-0.6B",
+            "score": 0.6328696666666668,
+            "parameters_billion": 0.596
+          },
+          {
+            "rank": 47,
+            "id": "scores_MTEB_eng_v2:row:42",
+            "model": "Alibaba-NLP/gte-Qwen2-1.5B-instruct",
+            "score": 0.632637051909893,
+            "parameters_billion": 1.543
+          },
+          {
+            "rank": 48,
+            "id": "scores_MTEB_eng_v2:row:47",
+            "model": "GritLM/GritLM-7B",
+            "score": 0.6322378334323554,
+            "parameters_billion": 7.24
+          },
+          {
+            "rank": 49,
+            "id": "scores_MTEB_eng_v2:row:49",
+            "model": "codefuse-ai/F2LLM-v2-330M",
+            "score": 0.6306509365079365,
+            "parameters_billion": 0.334
+          },
+          {
+            "rank": 50,
+            "id": "scores_MTEB_eng_v2:row:39",
+            "model": "BidirLM/BidirLM-Omni-2.5B-Embedding",
+            "score": 0.6249779007936508,
+            "parameters_billion": 2.445
+          },
+          {
+            "rank": 51,
+            "id": "scores_MTEB_eng_v2:row:52",
+            "model": "GritLM/GritLM-8x7B",
+            "score": 0.6242021552253313,
+            "parameters_billion": 57.92
+          },
+          {
+            "rank": 52,
+            "id": "scores_MTEB_eng_v2:row:51",
+            "model": "mixedbread-ai/mxbai-embed-large-v1",
+            "score": 0.6204089300001941,
+            "parameters_billion": 0.335
+          },
+          {
+            "rank": 53,
+            "id": "scores_MTEB_eng_v2:row:48",
+            "model": "avsolatorio/GIST-large-Embedding-v0",
+            "score": 0.6195554064301206,
+            "parameters_billion": 0.335
+          },
+          {
+            "rank": 54,
+            "id": "scores_MTEB_eng_v2:row:63",
+            "model": "BAAI/bge-large-en-v1.5",
+            "score": 0.6187356835002327,
+            "parameters_billion": 0.335
+          },
+          {
+            "rank": 55,
+            "id": "scores_MTEB_eng_v2:row:53",
+            "model": "WhereIsAI/UAE-Large-V1",
+            "score": 0.6184890492784308,
+            "parameters_billion": 0.335
+          },
+          {
+            "rank": 56,
+            "id": "scores_MTEB_eng_v2:row:56",
+            "model": "Cohere/Cohere-embed-english-v3.0",
+            "score": 0.6176977090489031,
+            "parameters_billion": null
+          },
+          {
+            "rank": 57,
+            "id": "scores_MTEB_eng_v2:row:57",
+            "model": "Cohere/Cohere-embed-multilingual-v3.0",
+            "score": 0.6142607985232323,
+            "parameters_billion": null
+          },
+          {
+            "rank": 58,
+            "id": "scores_MTEB_eng_v2:row:61",
+            "model": "avsolatorio/GIST-Embedding-v0",
+            "score": 0.613959243054458,
+            "parameters_billion": 0.109
+          },
+          {
+            "rank": 59,
+            "id": "scores_MTEB_eng_v2:row:68",
+            "model": "Tarka-AIR/Tarka-Embedding-150M-V1",
+            "score": 0.6134907281746032,
+            "parameters_billion": 0.156
+          },
+          {
+            "rank": 60,
+            "id": "scores_MTEB_eng_v2:row:60",
+            "model": "intfloat/multilingual-e5-large-instruct",
+            "score": 0.6121379717618056,
+            "parameters_billion": 0.56
+          },
+          {
+            "rank": 61,
+            "id": "scores_MTEB_eng_v2:row:65",
+            "model": "infgrad/stella-base-en-v2",
+            "score": 0.6096627559632669,
+            "parameters_billion": 0.109
+          },
+          {
+            "rank": 62,
+            "id": "scores_MTEB_eng_v2:row:67",
+            "model": "thenlper/gte-large",
+            "score": 0.6086366460362088,
+            "parameters_billion": 0.335
+          },
+          {
+            "rank": 63,
+            "id": "scores_MTEB_eng_v2:row:74",
+            "model": "codefuse-ai/F2LLM-v2-160M",
+            "score": 0.6082052996031747,
+            "parameters_billion": 0.159
+          },
+          {
+            "rank": 64,
+            "id": "scores_MTEB_eng_v2:row:64",
+            "model": "McGill-NLP/LLM2Vec-Mistral-7B-Instruct-v2-mntp-supervised",
+            "score": 0.6079903800781008,
+            "parameters_billion": 7.153
+          },
+          {
+            "rank": 65,
+            "id": "current:nano",
+            "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
+            "score": 0.6078184975654924,
+            "parameters_billion": 0.163771288
+          },
+          {
+            "rank": 66,
+            "id": "scores_MTEB_eng_v2:row:71",
+            "model": "BAAI/bge-base-en-v1.5",
+            "score": 0.6077083420155586,
+            "parameters_billion": 0.109
+          },
+          {
+            "rank": 67,
+            "id": "scores_MTEB_eng_v2:row:66",
+            "model": "avsolatorio/GIST-small-Embedding-v0",
+            "score": 0.6069640403411686,
+            "parameters_billion": 0.033
+          },
+          {
+            "rank": 68,
+            "id": "scores_MTEB_eng_v2:row:77",
+            "model": "LCO-Embedding/LCO-Embedding-Omni-7B",
+            "score": 0.6068855178571428,
+            "parameters_billion": 8.932
+          },
+          {
+            "rank": 69,
+            "id": "scores_MTEB_eng_v2:row:72",
+            "model": "prdev/mini-gte",
+            "score": 0.6065340892857142,
+            "parameters_billion": 0.066
+          },
+          {
+            "rank": 70,
+            "id": "scores_MTEB_eng_v2:row:75",
+            "model": "Cohere/Cohere-embed-english-light-v3.0",
+            "score": 0.6057007065169617,
+            "parameters_billion": null
+          },
+          {
+            "rank": 71,
+            "id": "scores_MTEB_eng_v2:row:73",
+            "model": "VPLabs/SearchMap_Preview",
+            "score": 0.6046997202380952,
+            "parameters_billion": 0.435
+          },
+          {
+            "rank": 72,
+            "id": "scores_MTEB_eng_v2:row:70",
+            "model": "Lajavaness/bilingual-embedding-large",
+            "score": 0.6019595392695329,
+            "parameters_billion": 0.56
+          },
+          {
+            "rank": 73,
+            "id": "scores_MTEB_eng_v2:row:79",
+            "model": "MongoDB/mdbr-leaf-mt",
+            "score": 0.5999959801587301,
+            "parameters_billion": 0.023
+          },
+          {
+            "rank": 74,
+            "id": "scores_MTEB_eng_v2:row:82",
+            "model": "KiteFishAI/Nano-Em1-0.6B-v2",
+            "score": 0.5999657123015874,
+            "parameters_billion": 0.596
+          },
+          {
+            "rank": 75,
+            "id": "scores_MTEB_eng_v2:row:80",
+            "model": "thenlper/gte-base",
+            "score": 0.5994302449572613,
+            "parameters_billion": 0.109
+          },
+          {
+            "rank": 76,
+            "id": "scores_MTEB_eng_v2:row:83",
+            "model": "BAAI/bge-small-en-v1.5",
+            "score": 0.5993186197555714,
+            "parameters_billion": 0.033
+          },
+          {
+            "rank": 77,
+            "id": "scores_MTEB_eng_v2:row:97",
+            "model": "Snowflake/snowflake-arctic-embed-l-v2.0",
+            "score": 0.5980666904761904,
+            "parameters_billion": 0.568
+          },
+          {
+            "rank": 78,
+            "id": "scores_MTEB_eng_v2:row:86",
+            "model": "abhinand/MedEmbed-small-v0.1",
+            "score": 0.5980494434439964,
+            "parameters_billion": 0.033
+          },
+          {
+            "rank": 79,
+            "id": "scores_MTEB_eng_v2:row:91",
+            "model": "codefuse-ai/F2LLM-v2-80M",
+            "score": 0.5973124166666667,
+            "parameters_billion": 0.08
+          },
+          {
+            "rank": 80,
+            "id": "scores_MTEB_eng_v2:row:84",
+            "model": "sdadas/mmlw-e5-large",
+            "score": 0.5969861686507937,
+            "parameters_billion": 0.56
+          },
+          {
+            "rank": 81,
+            "id": "scores_MTEB_eng_v2:row:92",
+            "model": "intfloat/e5-large",
+            "score": 0.5968062830228915,
+            "parameters_billion": 0.335
+          },
+          {
+            "rank": 82,
+            "id": "scores_MTEB_eng_v2:row:89",
+            "model": "nomic-ai/nomic-embed-text-v1",
+            "score": 0.5959597477546804,
+            "parameters_billion": 0.137
+          },
+          {
+            "rank": 83,
+            "id": "scores_MTEB_eng_v2:row:93",
+            "model": "LCO-Embedding/LCO-Embedding-Omni-3B",
+            "score": 0.5957475615079365,
+            "parameters_billion": 4.703
+          },
+          {
+            "rank": 84,
+            "id": "scores_MTEB_eng_v2:row:88",
+            "model": "sdadas/mmlw-roberta-large",
+            "score": 0.594527363095238,
+            "parameters_billion": 0.435
+          },
+          {
+            "rank": 85,
+            "id": "scores_MTEB_eng_v2:row:106",
+            "model": "intfloat/e5-base-v2",
+            "score": 0.5943158445110301,
+            "parameters_billion": 0.109
+          },
+          {
+            "rank": 86,
+            "id": "scores_MTEB_eng_v2:row:100",
+            "model": "intfloat/e5-large-v2",
+            "score": 0.5939686197051147,
+            "parameters_billion": 0.335
+          },
+          {
+            "rank": 87,
+            "id": "scores_MTEB_eng_v2:row:96",
+            "model": "nomic-ai/nomic-embed-text-v2-moe",
+            "score": 0.5933127043650793,
+            "parameters_billion": 0.475
+          },
+          {
+            "rank": 88,
+            "id": "scores_MTEB_eng_v2:row:102",
+            "model": "deepvk/USER-bge-m3",
+            "score": 0.5931971646825397,
+            "parameters_billion": 0.359
+          },
+          {
+            "rank": 89,
+            "id": "scores_MTEB_eng_v2:row:90",
+            "model": "thenlper/gte-small",
+            "score": 0.5929791393255972,
+            "parameters_billion": 0.033
+          },
+          {
+            "rank": 90,
+            "id": "scores_MTEB_eng_v2:row:104",
+            "model": "nomic-ai/nomic-embed-text-v1-ablated",
+            "score": 0.5904514242694265,
+            "parameters_billion": 0.137
+          },
+          {
+            "rank": 91,
+            "id": "scores_MTEB_eng_v2:row:87",
+            "model": "mixedbread-ai/deepset-mxbai-embed-de-large-v1",
+            "score": 0.5894147129138955,
+            "parameters_billion": 0.487
+          },
+          {
+            "rank": 92,
+            "id": "current:mini",
+            "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+            "score": 0.5878669411134946,
+            "parameters_billion": 1.361475288
+          },
+          {
+            "rank": 93,
+            "id": "scores_MTEB_eng_v2:row:109",
+            "model": "hotchpotch/bekko-embedding-v1-a25m",
+            "score": 0.5875176190476191,
+            "parameters_billion": 0.123
+          },
+          {
+            "rank": 94,
+            "id": "scores_MTEB_eng_v2:row:118",
+            "model": "intfloat/e5-base",
+            "score": 0.5867084519716154,
+            "parameters_billion": 0.109
+          },
+          {
+            "rank": 95,
+            "id": "scores_MTEB_eng_v2:row:98",
+            "model": "sdadas/mmlw-e5-base",
+            "score": 0.5860808333333333,
+            "parameters_billion": 0.278
+          },
+          {
+            "rank": 96,
+            "id": "scores_MTEB_eng_v2:row:99",
+            "model": "ibm-granite/granite-embedding-english-r2",
+            "score": 0.5860255238095238,
+            "parameters_billion": 0.149
+          },
+          {
+            "rank": 97,
+            "id": "scores_MTEB_eng_v2:row:95",
+            "model": "ManiacLabs/miniac-embed",
+            "score": 0.5856827540145372,
+            "parameters_billion": 0.033
+          },
+          {
+            "rank": 98,
+            "id": "scores_MTEB_eng_v2:row:115",
+            "model": "nomic-ai/nomic-embed-text-v1.5",
+            "score": 0.5852156216124843,
+            "parameters_billion": 0.137
+          },
+          {
+            "rank": 99,
+            "id": "scores_MTEB_eng_v2:row:112",
+            "model": "Snowflake/snowflake-arctic-embed-m-v2.0",
+            "score": 0.5850693333333333,
+            "parameters_billion": 0.305
+          },
+          {
+            "rank": 100,
+            "id": "scores_MTEB_eng_v2:row:114",
+            "model": "nomic-ai/nomic-embed-text-v1-unsupervised",
+            "score": 0.5849903304203516,
+            "parameters_billion": 0.137
+          },
+          {
+            "rank": 101,
+            "id": "scores_MTEB_eng_v2:row:117",
+            "model": "OrdalieTech/Solon-embeddings-large-0.1",
+            "score": 0.5848560972222222,
+            "parameters_billion": 0.56
+          },
+          {
+            "rank": 102,
+            "id": "scores_MTEB_eng_v2:row:113",
+            "model": "Cohere/Cohere-embed-multilingual-light-v3.0",
+            "score": 0.5848542833920265,
+            "parameters_billion": null
+          },
+          {
+            "rank": 103,
+            "id": "scores_MTEB_eng_v2:row:81",
+            "model": "HIT-TMG/KaLM-embedding-multilingual-mini-v1",
+            "score": 0.5848207711447265,
+            "parameters_billion": 0.494
+          },
+          {
+            "rank": 104,
+            "id": "scores_MTEB_eng_v2:row:122",
+            "model": "manu/bge-m3-custom-fr",
+            "score": 0.5837682777777777,
+            "parameters_billion": 0.568
+          },
+          {
+            "rank": 105,
+            "id": "scores_MTEB_eng_v2:row:101",
+            "model": "sdadas/mmlw-roberta-base",
+            "score": 0.5828009404761906,
+            "parameters_billion": 0.124
+          },
+          {
+            "rank": 106,
+            "id": "scores_MTEB_eng_v2:row:134",
+            "model": "intfloat/e5-small-v2",
+            "score": 0.5818582397575748,
+            "parameters_billion": 0.033
+          },
+          {
+            "rank": 107,
+            "id": "scores_MTEB_eng_v2:row:103",
+            "model": "avsolatorio/GIST-all-MiniLM-L6-v2",
+            "score": 0.5817883082766372,
+            "parameters_billion": 0.023
+          },
+          {
+            "rank": 108,
+            "id": "scores_MTEB_eng_v2:row:110",
+            "model": "ibm-granite/granite-embedding-125m-english",
+            "score": 0.5814315496031747,
+            "parameters_billion": 0.125
+          },
+          {
+            "rank": 109,
+            "id": "scores_MTEB_eng_v2:row:130",
+            "model": "Snowflake/snowflake-arctic-embed-s",
+            "score": 0.5804295777968334,
+            "parameters_billion": 0.033
+          },
+          {
+            "rank": 110,
+            "id": "scores_MTEB_eng_v2:row:124",
+            "model": "dwzhu/e5-base-4k",
+            "score": 0.5791011555884135,
+            "parameters_billion": 0.112
+          },
+          {
+            "rank": 111,
+            "id": "scores_MTEB_eng_v2:row:107",
+            "model": "Lajavaness/bilingual-embedding-base",
+            "score": 0.577888719384281,
+            "parameters_billion": 0.278
+          },
+          {
+            "rank": 112,
+            "id": "scores_MTEB_eng_v2:row:129",
+            "model": "Snowflake/snowflake-arctic-embed-m-v1.5",
+            "score": 0.5744944659621811,
+            "parameters_billion": 0.109
+          },
+          {
+            "rank": 113,
+            "id": "scores_MTEB_eng_v2:row:135",
+            "model": "intfloat/e5-small",
+            "score": 0.5742365607629715,
+            "parameters_billion": 0.033
+          },
+          {
+            "rank": 114,
+            "id": "scores_MTEB_eng_v2:row:128",
+            "model": "Mihaiii/Ivysaur",
+            "score": 0.5728820935673122,
+            "parameters_billion": 0.023
+          },
+          {
+            "rank": 115,
+            "id": "scores_MTEB_eng_v2:row:127",
+            "model": "voyageai/voyage-3",
+            "score": 0.5725203095238095,
+            "parameters_billion": null
+          },
+          {
+            "rank": 116,
+            "id": "scores_MTEB_eng_v2:row:132",
+            "model": "hotchpotch/bekko-embedding-v1-a8m",
+            "score": 0.5711056250000001,
+            "parameters_billion": 0.106
+          },
+          {
+            "rank": 117,
+            "id": "scores_MTEB_eng_v2:row:137",
+            "model": "intfloat/multilingual-e5-base",
+            "score": 0.570891072105273,
+            "parameters_billion": 0.278
+          },
+          {
+            "rank": 118,
+            "id": "scores_MTEB_eng_v2:row:76",
+            "model": "Haon-Chen/speed-embedding-7b-instruct",
+            "score": 0.5702122943783373,
+            "parameters_billion": 7.111
+          },
+          {
+            "rank": 119,
+            "id": "scores_MTEB_eng_v2:row:148",
+            "model": "ibm-granite/granite-embedding-278m-multilingual",
+            "score": 0.5694155436507937,
+            "parameters_billion": 0.278
+          },
+          {
+            "rank": 120,
+            "id": "scores_MTEB_eng_v2:row:125",
+            "model": "ibm-granite/granite-embedding-small-english-r2",
+            "score": 0.5688134761904762,
+            "parameters_billion": 0.048
+          },
+          {
+            "rank": 121,
+            "id": "scores_MTEB_eng_v2:row:142",
+            "model": "voyageai/voyage-3-lite",
+            "score": 0.5686525952380952,
+            "parameters_billion": null
+          },
+          {
+            "rank": 122,
+            "id": "scores_MTEB_eng_v2:row:136",
+            "model": "sdadas/mmlw-e5-small",
+            "score": 0.5660023015873016,
+            "parameters_billion": 0.118
+          },
+          {
+            "rank": 123,
+            "id": "scores_MTEB_eng_v2:row:139",
+            "model": "Lajavaness/bilingual-embedding-small",
+            "score": 0.5655084891588569,
+            "parameters_billion": 0.118
+          },
+          {
+            "rank": 124,
+            "id": "scores_MTEB_eng_v2:row:123",
+            "model": "Snowflake/snowflake-arctic-embed-l",
+            "score": 0.5652036768151204,
+            "parameters_billion": 0.335
+          },
+          {
+            "rank": 125,
+            "id": "scores_MTEB_eng_v2:row:153",
+            "model": "intfloat/multilingual-e5-small",
+            "score": 0.5640434604006107,
+            "parameters_billion": 0.118
+          },
+          {
+            "rank": 126,
+            "id": "scores_MTEB_eng_v2:row:160",
+            "model": "Snowflake/snowflake-arctic-embed-xs",
+            "score": 0.5612169214437632,
+            "parameters_billion": 0.023
+          },
+          {
+            "rank": 127,
+            "id": "scores_MTEB_eng_v2:row:151",
+            "model": "Mihaiii/gte-micro-v4",
+            "score": 0.5603923138402777,
+            "parameters_billion": 0.019
+          },
+          {
+            "rank": 128,
+            "id": "scores_MTEB_eng_v2:row:140",
+            "model": "ibm-granite/granite-embedding-30m-english",
+            "score": 0.5602491011904762,
+            "parameters_billion": 0.03
+          },
+          {
+            "rank": 129,
+            "id": "scores_MTEB_eng_v2:row:143",
+            "model": "sentence-transformers/all-MiniLM-L6-v2",
+            "score": 0.5592615794413434,
+            "parameters_billion": 0.023
+          },
+          {
+            "rank": 130,
+            "id": "scores_MTEB_eng_v2:row:133",
+            "model": "Snowflake/snowflake-arctic-embed-m",
+            "score": 0.5583307513514469,
+            "parameters_billion": 0.109
+          },
+          {
+            "rank": 131,
+            "id": "scores_MTEB_eng_v2:row:94",
+            "model": "HIT-TMG/KaLM-embedding-multilingual-mini-instruct-v1",
+            "score": 0.5579886812085307,
+            "parameters_billion": 0.494
+          },
+          {
+            "rank": 132,
+            "id": "scores_MTEB_eng_v2:row:150",
+            "model": "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+            "score": 0.5571373645897648,
+            "parameters_billion": 0.278
+          },
+          {
+            "rank": 133,
+            "id": "scores_MTEB_eng_v2:row:169",
+            "model": "ibm-granite/granite-embedding-107m-multilingual",
+            "score": 0.5556592341269841,
+            "parameters_billion": 0.107
+          },
+          {
+            "rank": 134,
+            "id": "scores_MTEB_eng_v2:row:144",
+            "model": "Haon-Chen/e5-omni-3B",
+            "score": 0.5524891765873016,
+            "parameters_billion": 4.703
+          },
+          {
+            "rank": 135,
+            "id": "scores_MTEB_eng_v2:row:166",
+            "model": "Mihaiii/Bulbasaur",
+            "score": 0.5518972795781584,
+            "parameters_billion": 0.017
+          },
+          {
+            "rank": 136,
+            "id": "scores_MTEB_eng_v2:row:162",
+            "model": "Omartificial-Intelligence-Space/Arabic-all-nli-triplet-Matryoshka",
+            "score": 0.5491239609075494,
+            "parameters_billion": 0.278
+          },
+          {
+            "rank": 137,
+            "id": "scores_MTEB_eng_v2:row:177",
+            "model": "manu/sentence_croissant_alpha_v0.4",
+            "score": 0.545477375,
+            "parameters_billion": 1.28
+          },
+          {
+            "rank": 138,
+            "id": "scores_MTEB_eng_v2:row:152",
+            "model": "Haon-Chen/e5-omni-7B",
+            "score": 0.5442442638888889,
+            "parameters_billion": 8.932
+          },
+          {
+            "rank": 139,
+            "id": "scores_MTEB_eng_v2:row:186",
+            "model": "manu/sentence_croissant_alpha_v0.3",
+            "score": 0.543608498015873,
+            "parameters_billion": 1.28
+          },
+          {
+            "rank": 140,
+            "id": "scores_MTEB_eng_v2:row:195",
+            "model": "sergeyzh/LaBSE-ru-turbo",
+            "score": 0.5404520773809524,
+            "parameters_billion": 0.129
+          },
+          {
+            "rank": 141,
+            "id": "scores_MTEB_eng_v2:row:187",
+            "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+            "score": 0.5399292173180352,
+            "parameters_billion": 0.118
+          },
+          {
+            "rank": 142,
+            "id": "scores_MTEB_eng_v2:row:165",
+            "model": "McGill-NLP/LLM2Vec-Mistral-7B-Instruct-v2-mntp-unsup-simcse",
+            "score": 0.5393478973320204,
+            "parameters_billion": 7.153
+          },
+          {
+            "rank": 143,
+            "id": "scores_MTEB_eng_v2:row:192",
+            "model": "ai-forever/ru-en-RoSBERTa",
+            "score": 0.5389534761904762,
+            "parameters_billion": 0.404
+          },
+          {
+            "rank": 144,
+            "id": "scores_MTEB_eng_v2:row:172",
+            "model": "bigscience/sgpt-bloom-7b1-msmarco",
+            "score": 0.5361675067425767,
+            "parameters_billion": 7.068
+          },
+          {
+            "rank": 145,
+            "id": "scores_MTEB_eng_v2:row:191",
+            "model": "manu/sentence_croissant_alpha_v0.2",
+            "score": 0.535915126984127,
+            "parameters_billion": 1.28
+          },
+          {
+            "rank": 146,
+            "id": "scores_MTEB_eng_v2:row:154",
+            "model": "Tevatron/OmniEmbed-v0.1",
+            "score": 0.5282555456349206,
+            "parameters_billion": 8.932
+          },
+          {
+            "rank": 147,
+            "id": "scores_MTEB_eng_v2:row:197",
+            "model": "Omartificial-Intelligence-Space/Arabic-MiniLM-L12-v2-all-nli-triplet",
+            "score": 0.5281660345554073,
+            "parameters_billion": 0.118
+          },
+          {
+            "rank": 148,
+            "id": "scores_MTEB_eng_v2:row:198",
+            "model": "Mihaiii/Wartortle",
+            "score": 0.5264480127542829,
+            "parameters_billion": 0.017
+          },
+          {
+            "rank": 149,
+            "id": "scores_MTEB_eng_v2:row:199",
+            "model": "Mihaiii/gte-micro",
+            "score": 0.5250311694481825,
+            "parameters_billion": 0.017
+          },
+          {
+            "rank": 150,
+            "id": "scores_MTEB_eng_v2:row:200",
+            "model": "Omartificial-Intelligence-Space/Arabic-labse-Matryoshka",
+            "score": 0.5219643264164274,
+            "parameters_billion": 0.471
+          },
+          {
+            "rank": 151,
+            "id": "scores_MTEB_eng_v2:row:203",
+            "model": "minishlab/potion-base-32M",
+            "score": 0.5212938511904762,
+            "parameters_billion": 0.032
+          },
+          {
+            "rank": 152,
+            "id": "scores_MTEB_eng_v2:row:202",
+            "model": "omarelshehy/arabic-english-sts-matryoshka",
+            "score": 0.5114179768403356,
+            "parameters_billion": 0.56
+          },
+          {
+            "rank": 153,
+            "id": "scores_MTEB_eng_v2:row:218",
+            "model": "minishlab/potion-base-8M",
+            "score": 0.5108157275161401,
+            "parameters_billion": 0.008
+          },
+          {
+            "rank": 154,
+            "id": "scores_MTEB_eng_v2:row:217",
+            "model": "Mihaiii/Squirtle",
+            "score": 0.5088025798197255,
+            "parameters_billion": 0.016
+          },
+          {
+            "rank": 155,
+            "id": "scores_MTEB_eng_v2:row:212",
+            "model": "minishlab/potion-retrieval-32M",
+            "score": 0.5083070099206349,
+            "parameters_billion": 0.032
+          },
+          {
+            "rank": 156,
+            "id": "scores_MTEB_eng_v2:row:220",
+            "model": "Mihaiii/Venusaur",
+            "score": 0.5079713670239484,
+            "parameters_billion": 0.016
+          },
+          {
+            "rank": 157,
+            "id": "scores_MTEB_eng_v2:row:171",
+            "model": "Gameselo/STS-multilingual-mpnet-base-v2",
+            "score": 0.5060079897283704,
+            "parameters_billion": 0.278
+          },
+          {
+            "rank": 158,
+            "id": "scores_MTEB_eng_v2:row:221",
+            "model": "aari1995/German_Semantic_STS_V2",
+            "score": 0.49946843849206346,
+            "parameters_billion": 0.336
+          },
+          {
+            "rank": 159,
+            "id": "scores_MTEB_eng_v2:row:234",
+            "model": "minishlab/M2V_base_glove",
+            "score": 0.4979256631936826,
+            "parameters_billion": 0.102
+          },
+          {
+            "rank": 160,
+            "id": "scores_MTEB_eng_v2:row:230",
+            "model": "minishlab/potion-base-4M",
+            "score": 0.4976773742492734,
+            "parameters_billion": 0.004
+          },
+          {
+            "rank": 161,
+            "id": "scores_MTEB_eng_v2:row:232",
+            "model": "sentence-transformers/static-similarity-mrl-multilingual-v1",
+            "score": 0.49640100793650793,
+            "parameters_billion": 0.108
+          },
+          {
+            "rank": 162,
+            "id": "scores_MTEB_eng_v2:row:213",
+            "model": "encord-team/ebind-full",
+            "score": 0.4954567936507937,
+            "parameters_billion": 1.79
+          },
+          {
+            "rank": 163,
+            "id": "scores_MTEB_eng_v2:row:231",
+            "model": "sentence-transformers/LaBSE",
+            "score": 0.49451466313575126,
+            "parameters_billion": 0.471
+          },
+          {
+            "rank": 164,
+            "id": "scores_MTEB_eng_v2:row:238",
+            "model": "minishlab/M2V_base_glove_subword",
+            "score": 0.48921979547736955,
+            "parameters_billion": 0.103
+          },
+          {
+            "rank": 165,
+            "id": "scores_MTEB_eng_v2:row:235",
+            "model": "cointegrated/LaBSE-en-ru",
+            "score": 0.48913104789124795,
+            "parameters_billion": 0.129
+          },
+          {
+            "rank": 166,
+            "id": "scores_MTEB_eng_v2:row:233",
+            "model": "sentence-transformers/static-retrieval-mrl-en-v1",
+            "score": 0.48563619047619044,
+            "parameters_billion": 0.031
+          },
+          {
+            "rank": 167,
+            "id": "scores_MTEB_eng_v2:row:239",
+            "model": "deepvk/USER-base",
+            "score": 0.48528506944444444,
+            "parameters_billion": 0.427
+          },
+          {
+            "rank": 168,
+            "id": "scores_MTEB_eng_v2:row:245",
+            "model": "cnmoro/static-nomic-384-pten-v2-st",
+            "score": 0.48163520833333334,
+            "parameters_billion": 0.106
+          },
+          {
+            "rank": 169,
+            "id": "scores_MTEB_eng_v2:row:236",
+            "model": "consciousAI/cai-lunaris-text-embeddings",
+            "score": 0.4804549159855535,
+            "parameters_billion": 0.335
+          },
+          {
+            "rank": 170,
+            "id": "scores_MTEB_eng_v2:row:243",
+            "model": "minishlab/M2V_base_output",
+            "score": 0.4796242824417174,
+            "parameters_billion": 0.008
+          },
+          {
+            "rank": 171,
+            "id": "scores_MTEB_eng_v2:row:241",
+            "model": "minishlab/potion-base-2M",
+            "score": 0.47487597548412647,
+            "parameters_billion": 0.002
+          },
+          {
+            "rank": 172,
+            "id": "scores_MTEB_eng_v2:row:246",
+            "model": "sergeyzh/rubert-tiny-turbo",
+            "score": 0.46733688927893124,
+            "parameters_billion": 0.029
+          },
+          {
+            "rank": 173,
+            "id": "scores_MTEB_eng_v2:row:173",
+            "model": "jinaai/jina-embeddings-v2-base-en",
+            "score": 0.44727228456197327,
+            "parameters_billion": 0.137
+          },
+          {
+            "rank": 174,
+            "id": "scores_MTEB_eng_v2:row:252",
+            "model": "Omartificial-Intelligence-Space/Arabic-mpnet-base-all-nli-triplet",
+            "score": 0.4279539516029058,
+            "parameters_billion": 0.109
+          },
+          {
+            "rank": 175,
+            "id": "scores_MTEB_eng_v2:row:254",
+            "model": "cointegrated/rubert-tiny2",
+            "score": 0.4199497043650794,
+            "parameters_billion": 0.029
+          },
+          {
+            "rank": 176,
+            "id": "scores_MTEB_eng_v2:row:255",
+            "model": "Omartificial-Intelligence-Space/Marbert-all-nli-triplet-Matryoshka",
+            "score": 0.4146456385114891,
+            "parameters_billion": 0.163
+          },
+          {
+            "rank": 177,
+            "id": "scores_MTEB_eng_v2:row:257",
+            "model": "silma-ai/silma-embeddding-matryoshka-v0.1",
+            "score": 0.4123117319125014,
+            "parameters_billion": 0.135
+          },
+          {
+            "rank": 178,
+            "id": "scores_MTEB_eng_v2:row:253",
+            "model": "cointegrated/rubert-tiny",
+            "score": 0.4106684007936508,
+            "parameters_billion": 0.012
+          },
+          {
+            "rank": 179,
+            "id": "scores_MTEB_eng_v2:row:260",
+            "model": "Omartificial-Intelligence-Space/Arabert-all-nli-triplet-Matryoshka",
+            "score": 0.40832936166764927,
+            "parameters_billion": 0.135
+          },
+          {
+            "rank": 180,
+            "id": "scores_MTEB_eng_v2:row:258",
+            "model": "DeepPavlov/distilrubert-small-cased-conversational",
+            "score": 0.37585911904761904,
+            "parameters_billion": 0.107
+          },
+          {
+            "rank": 181,
+            "id": "scores_MTEB_eng_v2:row:242",
+            "model": "Jaume/gemma-2b-embeddings",
+            "score": 0.3617717881364667,
+            "parameters_billion": 2.506
+          },
+          {
+            "rank": 182,
+            "id": "scores_MTEB_eng_v2:row:263",
+            "model": "ai-forever/sbert_large_mt_nlu_ru",
+            "score": 0.36010801587301583,
+            "parameters_billion": 0.427
+          },
+          {
+            "rank": 183,
+            "id": "scores_MTEB_eng_v2:row:264",
+            "model": "DeepPavlov/rubert-base-cased-sentence",
+            "score": 0.35937270833333335,
+            "parameters_billion": 0.107
+          },
+          {
+            "rank": 184,
+            "id": "scores_MTEB_eng_v2:row:267",
+            "model": "deepvk/deberta-v1-base",
+            "score": 0.3433367718253968,
+            "parameters_billion": 0.124
+          },
+          {
+            "rank": 185,
+            "id": "scores_MTEB_eng_v2:row:268",
+            "model": "malenia1/ternary-weight-embedding",
+            "score": 0.34261648214285717,
+            "parameters_billion": 0.099
+          },
+          {
+            "rank": 186,
+            "id": "scores_MTEB_eng_v2:row:265",
+            "model": "ai-forever/sbert_large_nlu_ru",
+            "score": 0.337224123015873,
+            "parameters_billion": 0.427
+          },
+          {
+            "rank": 187,
+            "id": "scores_MTEB_eng_v2:row:266",
+            "model": "DeepPavlov/rubert-base-cased",
+            "score": 0.321838498015873,
+            "parameters_billion": 1.28
+          },
+          {
+            "rank": 188,
+            "id": "scores_MTEB_eng_v2:row:270",
+            "model": "mteb/baseline-random-encoder",
+            "score": 0.14696110317460317,
+            "parameters_billion": null
+          }
+        ]
+      },
+      "frontiers": {
+        "mean_task": [
+          {
+            "id": "scores_MTEB_eng_v2:row:241",
+            "model": "minishlab/potion-base-2M",
+            "kind": "registry_reported",
+            "parameters_billion": 0.002,
+            "mean_task": 0.4870834407957507
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:230",
+            "model": "minishlab/potion-base-4M",
+            "kind": "registry_reported",
+            "parameters_billion": 0.004,
+            "mean_task": 0.5179691030231456
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:218",
+            "model": "minishlab/potion-base-8M",
+            "kind": "registry_reported",
+            "parameters_billion": 0.008,
+            "mean_task": 0.5332783730985786
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:166",
+            "model": "Mihaiii/Bulbasaur",
+            "kind": "registry_reported",
+            "parameters_billion": 0.017,
+            "mean_task": 0.5774624020975746
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:151",
+            "model": "Mihaiii/gte-micro-v4",
+            "kind": "registry_reported",
+            "parameters_billion": 0.019,
+            "mean_task": 0.5889789209527495
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:79",
+            "model": "MongoDB/mdbr-leaf-mt",
+            "kind": "registry_reported",
+            "parameters_billion": 0.023,
+            "mean_task": 0.6396570975609756
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:66",
+            "model": "avsolatorio/GIST-small-Embedding-v0",
+            "kind": "registry_reported",
+            "parameters_billion": 0.033,
+            "mean_task": 0.6475937830352264
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:72",
+            "model": "prdev/mini-gte",
+            "kind": "registry_reported",
+            "parameters_billion": 0.066,
+            "mean_task": 0.6505740731707317
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:61",
+            "model": "avsolatorio/GIST-Embedding-v0",
+            "kind": "registry_reported",
+            "parameters_billion": 0.109,
+            "mean_task": 0.6550466210091898
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:68",
+            "model": "Tarka-AIR/Tarka-Embedding-150M-V1",
+            "kind": "registry_reported",
+            "parameters_billion": 0.156,
+            "mean_task": 0.6639085365853659
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:19",
+            "model": "jinaai/jina-embeddings-v5-text-nano",
+            "kind": "registry_reported",
+            "parameters_billion": 0.212,
+            "mean_task": 0.7111337804878048
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:21",
+            "model": "KaLM-Embedding/KaLM-embedding-multilingual-mini-instruct-v2.5",
+            "kind": "registry_reported",
+            "parameters_billion": 0.494,
+            "mean_task": 0.7128882096750967
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:14",
+            "model": "jinaai/jina-embeddings-v5-text-small",
+            "kind": "registry_reported",
+            "parameters_billion": 0.596,
+            "mean_task": 0.7177513414634146
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:1",
+            "model": "infgrad/Jasper-Token-Compression-600M",
+            "kind": "registry_reported",
+            "parameters_billion": 0.607,
+            "mean_task": 0.7474843170731708
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:2",
+            "model": "Kingsoft-LLM/QZhou-Embedding",
+            "kind": "registry_reported",
+            "parameters_billion": 7.071,
+            "mean_task": 0.7597192439024391
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:0",
+            "model": "jcorners/ingot-8b-r3",
+            "kind": "registry_reported",
+            "parameters_billion": 7.567,
+            "mean_task": 0.7597950975609756
+          }
+        ],
+        "mean_task_type": [
+          {
+            "id": "scores_MTEB_eng_v2:row:241",
+            "model": "minishlab/potion-base-2M",
+            "kind": "registry_reported",
+            "parameters_billion": 0.002,
+            "mean_task_type": 0.47487597548412647
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:230",
+            "model": "minishlab/potion-base-4M",
+            "kind": "registry_reported",
+            "parameters_billion": 0.004,
+            "mean_task_type": 0.4976773742492734
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:218",
+            "model": "minishlab/potion-base-8M",
+            "kind": "registry_reported",
+            "parameters_billion": 0.008,
+            "mean_task_type": 0.5108157275161401
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:166",
+            "model": "Mihaiii/Bulbasaur",
+            "kind": "registry_reported",
+            "parameters_billion": 0.017,
+            "mean_task_type": 0.5518972795781584
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:151",
+            "model": "Mihaiii/gte-micro-v4",
+            "kind": "registry_reported",
+            "parameters_billion": 0.019,
+            "mean_task_type": 0.5603923138402777
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:79",
+            "model": "MongoDB/mdbr-leaf-mt",
+            "kind": "registry_reported",
+            "parameters_billion": 0.023,
+            "mean_task_type": 0.5999959801587301
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:66",
+            "model": "avsolatorio/GIST-small-Embedding-v0",
+            "kind": "registry_reported",
+            "parameters_billion": 0.033,
+            "mean_task_type": 0.6069640403411686
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:61",
+            "model": "avsolatorio/GIST-Embedding-v0",
+            "kind": "registry_reported",
+            "parameters_billion": 0.109,
+            "mean_task_type": 0.613959243054458
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:19",
+            "model": "jinaai/jina-embeddings-v5-text-nano",
+            "kind": "registry_reported",
+            "parameters_billion": 0.212,
+            "mean_task_type": 0.6522176388888888
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:21",
+            "model": "KaLM-Embedding/KaLM-embedding-multilingual-mini-instruct-v2.5",
+            "kind": "registry_reported",
+            "parameters_billion": 0.494,
+            "mean_task_type": 0.6530866149924203
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:14",
+            "model": "jinaai/jina-embeddings-v5-text-small",
+            "kind": "registry_reported",
+            "parameters_billion": 0.596,
+            "mean_task_type": 0.6567829444444444
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:1",
+            "model": "infgrad/Jasper-Token-Compression-600M",
+            "kind": "registry_reported",
+            "parameters_billion": 0.607,
+            "mean_task_type": 0.6845585456349206
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:2",
+            "model": "Kingsoft-LLM/QZhou-Embedding",
+            "kind": "registry_reported",
+            "parameters_billion": 7.071,
+            "mean_task_type": 0.6951907480158731
+          },
+          {
+            "id": "scores_MTEB_eng_v2:row:0",
+            "model": "jcorners/ingot-8b-r3",
+            "kind": "registry_reported",
+            "parameters_billion": 7.567,
+            "mean_task_type": 0.6998357579365079
+          }
+        ]
+      }
+    },
+    "audio19": {
+      "coverage": {
+        "source_rows": 69,
+        "complete_rows": 62,
+        "distinct_complete_model_names": 62,
+        "excluded_incomplete_rows": 7,
+        "known_size_complete_rows": 62,
+        "unknown_size_complete_rows": 0,
+        "task_coverage_histogram": {
+          "1": 1,
+          "3": 1,
+          "4": 1,
+          "15": 1,
+          "18": 3,
+          "19": 62
+        },
+        "ranking_population_with_two_current_models": 64,
+        "size_plot_population_with_two_current_models": 64
+      },
+      "ranks": {
+        "nano": {
+          "mean_task": {
+            "score": 0.43593843064595883,
+            "display_score_100": 43.59384306459588,
+            "global_rank": 22,
+            "global_population": 64,
+            "tied_other_models": 0,
+            "same_or_smaller_rank": 5,
+            "same_or_smaller_population": 27,
+            "best_same_or_smaller_other_model": {
+              "id": "scores_MAEB_beta_audio-only:row:9",
+              "model": "openai/whisper-base",
+              "kind": "registry_reported",
+              "parameters_billion": 0.074,
+              "mean_task": 0.44856370433436527
+            },
+            "gap_pp_above_best_same_or_smaller": -1.2625273688406435,
+            "observed_frontier": false,
+            "dominator_count": 4,
+            "all_dominator_ids": [
+              "scores_MAEB_beta_audio-only:row:9",
+              "scores_MAEB_beta_audio-only:row:17",
+              "scores_MAEB_beta_audio-only:row:18",
+              "scores_MAEB_beta_audio-only:row:20"
+            ]
+          },
+          "mean_task_type": {
+            "score": 0.5233540613685161,
+            "display_score_100": 52.33540613685162,
+            "global_rank": 19,
+            "global_population": 64,
+            "tied_other_models": 0,
+            "same_or_smaller_rank": 6,
+            "same_or_smaller_population": 27,
+            "best_same_or_smaller_other_model": {
+              "id": "scores_MAEB_beta_audio-only:row:17",
+              "model": "microsoft/msclap-2023",
+              "kind": "registry_reported",
+              "parameters_billion": 0.16,
+              "mean_task_type": 0.5584816090017826
+            },
+            "gap_pp_above_best_same_or_smaller": -3.512754763326642,
+            "observed_frontier": false,
+            "dominator_count": 5,
+            "all_dominator_ids": [
+              "scores_MAEB_beta_audio-only:row:14",
+              "scores_MAEB_beta_audio-only:row:17",
+              "scores_MAEB_beta_audio-only:row:19",
+              "scores_MAEB_beta_audio-only:row:20",
+              "scores_MAEB_beta_audio-only:row:25"
+            ]
+          }
+        },
+        "mini": {
+          "mean_task": {
+            "score": 0.47771979797569325,
+            "display_score_100": 47.77197979756932,
+            "global_rank": 9,
+            "global_population": 64,
+            "tied_other_models": 0,
+            "same_or_smaller_rank": 3,
+            "same_or_smaller_population": 50,
+            "best_same_or_smaller_other_model": {
+              "id": "scores_MAEB_beta_audio-only:row:10",
+              "model": "jinaai/jina-embeddings-v5-omni-nano",
+              "kind": "registry_reported",
+              "parameters_billion": 0.986,
+              "mean_task": 0.4974013005444365
+            },
+            "gap_pp_above_best_same_or_smaller": -1.9681502568743237,
+            "observed_frontier": false,
+            "dominator_count": 2,
+            "all_dominator_ids": [
+              "scores_MAEB_beta_audio-only:row:1",
+              "scores_MAEB_beta_audio-only:row:10"
+            ]
+          },
+          "mean_task_type": {
+            "score": 0.5486789236087452,
+            "display_score_100": 54.867892360874514,
+            "global_rank": 12,
+            "global_population": 64,
+            "tied_other_models": 0,
+            "same_or_smaller_rank": 5,
+            "same_or_smaller_population": 50,
+            "best_same_or_smaller_other_model": {
+              "id": "scores_MAEB_beta_audio-only:row:10",
+              "model": "jinaai/jina-embeddings-v5-omni-nano",
+              "kind": "registry_reported",
+              "parameters_billion": 0.986,
+              "mean_task_type": 0.5771661288773795
+            },
+            "gap_pp_above_best_same_or_smaller": -2.8487205268634352,
+            "observed_frontier": false,
+            "dominator_count": 4,
+            "all_dominator_ids": [
+              "scores_MAEB_beta_audio-only:row:10",
+              "scores_MAEB_beta_audio-only:row:17",
+              "scores_MAEB_beta_audio-only:row:20",
+              "scores_MAEB_beta_audio-only:row:22"
+            ]
+          }
+        }
+      },
+      "full_rankings": {
+        "mean_task": [
+          {
+            "rank": 1,
+            "id": "scores_MAEB_beta_audio-only:row:8",
+            "model": "BidirLM/BidirLM-Omni-2.5B-Embedding",
+            "score": 0.5357349241486068,
+            "parameters_billion": 2.445
+          },
+          {
+            "rank": 2,
+            "id": "scores_MAEB_beta_audio-only:row:7",
+            "model": "LCO-Embedding/LCO-Embedding-Omni-7B",
+            "score": 0.5153867371001032,
+            "parameters_billion": 8.932
+          },
+          {
+            "rank": 3,
+            "id": "scores_MAEB_beta_audio-only:row:0",
+            "model": "Qwen/Qwen2-Audio-7B",
+            "score": 0.5098905797213622,
+            "parameters_billion": 7.0
+          },
+          {
+            "rank": 4,
+            "id": "scores_MAEB_beta_audio-only:row:5",
+            "model": "jinaai/jina-embeddings-v5-omni-small",
+            "score": 0.502493257952982,
+            "parameters_billion": 1.626
+          },
+          {
+            "rank": 5,
+            "id": "scores_MAEB_beta_audio-only:row:3",
+            "model": "Haon-Chen/e5-omni-7B",
+            "score": 0.5024212843137255,
+            "parameters_billion": 8.932
+          },
+          {
+            "rank": 6,
+            "id": "scores_MAEB_beta_audio-only:row:16",
+            "model": "LCO-Embedding/LCO-Embedding-Omni-3B",
+            "score": 0.49754643627450984,
+            "parameters_billion": 4.703
+          },
+          {
+            "rank": 7,
+            "id": "scores_MAEB_beta_audio-only:row:10",
+            "model": "jinaai/jina-embeddings-v5-omni-nano",
+            "score": 0.4974013005444365,
+            "parameters_billion": 0.986
+          },
+          {
+            "rank": 8,
+            "id": "scores_MAEB_beta_audio-only:row:1",
+            "model": "openai/whisper-medium",
+            "score": 0.48419600154798764,
+            "parameters_billion": 0.769
+          },
+          {
+            "rank": 9,
+            "id": "current:mini",
+            "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+            "score": 0.47771979797569325,
+            "parameters_billion": 1.361475288
+          },
+          {
+            "rank": 10,
+            "id": "scores_MAEB_beta_audio-only:row:2",
+            "model": "Tevatron/OmniEmbed-v0.1",
+            "score": 0.4732293820949433,
+            "parameters_billion": 8.932
+          },
+          {
+            "rank": 11,
+            "id": "scores_MAEB_beta_audio-only:row:15",
+            "model": "Haon-Chen/e5-omni-3B",
+            "score": 0.46606807868937045,
+            "parameters_billion": 4.703
+          },
+          {
+            "rank": 12,
+            "id": "scores_MAEB_beta_audio-only:row:4",
+            "model": "laion/larger_clap_general",
+            "score": 0.45505683952528375,
+            "parameters_billion": 0.194
+          },
+          {
+            "rank": 13,
+            "id": "scores_MAEB_beta_audio-only:row:6",
+            "model": "laion/larger_clap_music_and_speech",
+            "score": 0.45431867569659445,
+            "parameters_billion": 0.194
+          },
+          {
+            "rank": 14,
+            "id": "scores_MAEB_beta_audio-only:row:11",
+            "model": "openai/whisper-small",
+            "score": 0.4513534935500516,
+            "parameters_billion": 0.244
+          },
+          {
+            "rank": 15,
+            "id": "scores_MAEB_beta_audio-only:row:9",
+            "model": "openai/whisper-base",
+            "score": 0.44856370433436527,
+            "parameters_billion": 0.074
+          },
+          {
+            "rank": 16,
+            "id": "scores_MAEB_beta_audio-only:row:20",
+            "model": "MIT/ast-finetuned-audioset-10-10-0.4593",
+            "score": 0.4469431259029928,
+            "parameters_billion": 0.087
+          },
+          {
+            "rank": 17,
+            "id": "scores_MAEB_beta_audio-only:row:21",
+            "model": "encord-team/ebind-full",
+            "score": 0.44637126470588234,
+            "parameters_billion": 1.79
+          },
+          {
+            "rank": 18,
+            "id": "scores_MAEB_beta_audio-only:row:23",
+            "model": "EximiusLabs/fusion-embedding-2-2b-preview",
+            "score": 0.44402964164086683,
+            "parameters_billion": 2.8
+          },
+          {
+            "rank": 19,
+            "id": "scores_MAEB_beta_audio-only:row:17",
+            "model": "microsoft/msclap-2023",
+            "score": 0.44155628921568624,
+            "parameters_billion": 0.16
+          },
+          {
+            "rank": 20,
+            "id": "scores_MAEB_beta_audio-only:row:13",
+            "model": "openai/whisper-large-v3",
+            "score": 0.4396769486584107,
+            "parameters_billion": 1.55
+          },
+          {
+            "rank": 21,
+            "id": "scores_MAEB_beta_audio-only:row:18",
+            "model": "openai/whisper-tiny",
+            "score": 0.43637871465428274,
+            "parameters_billion": 0.039
+          },
+          {
+            "rank": 22,
+            "id": "current:nano",
+            "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
+            "score": 0.43593843064595883,
+            "parameters_billion": 0.163771288
+          },
+          {
+            "rank": 23,
+            "id": "scores_MAEB_beta_audio-only:row:19",
+            "model": "laion/clap-htsat-fused",
+            "score": 0.43475542389060884,
+            "parameters_billion": 0.154
+          },
+          {
+            "rank": 24,
+            "id": "scores_MAEB_beta_audio-only:row:14",
+            "model": "laion/clap-htsat-unfused",
+            "score": 0.42935003353973167,
+            "parameters_billion": 0.153
+          },
+          {
+            "rank": 25,
+            "id": "scores_MAEB_beta_audio-only:row:41",
+            "model": "facebook/mms-1b-fl102",
+            "score": 0.41367276031991745,
+            "parameters_billion": 1.0
+          },
+          {
+            "rank": 26,
+            "id": "scores_MAEB_beta_audio-only:row:42",
+            "model": "facebook/seamless-m4t-v2-large",
+            "score": 0.4131003795149639,
+            "parameters_billion": 2.3
+          },
+          {
+            "rank": 27,
+            "id": "scores_MAEB_beta_audio-only:row:25",
+            "model": "google/vggish",
+            "score": 0.4109744040247678,
+            "parameters_billion": 0.072
+          },
+          {
+            "rank": 28,
+            "id": "scores_MAEB_beta_audio-only:row:12",
+            "model": "matthewagi/HeAR-s1.1",
+            "score": 0.41088769685242515,
+            "parameters_billion": 0.022
+          },
+          {
+            "rank": 29,
+            "id": "scores_MAEB_beta_audio-only:row:30",
+            "model": "facebook/wav2vec2-xls-r-2b",
+            "score": 0.4095841483488132,
+            "parameters_billion": 2.0
+          },
+          {
+            "rank": 30,
+            "id": "scores_MAEB_beta_audio-only:row:22",
+            "model": "OpenMuQ/MuQ-MuLan-large",
+            "score": 0.4089651437048504,
+            "parameters_billion": 0.63
+          },
+          {
+            "rank": 31,
+            "id": "scores_MAEB_beta_audio-only:row:35",
+            "model": "facebook/mms-1b-all",
+            "score": 0.4070234414344685,
+            "parameters_billion": 1.0
+          },
+          {
+            "rank": 32,
+            "id": "scores_MAEB_beta_audio-only:row:33",
+            "model": "microsoft/msclap-2022",
+            "score": 0.40099675438596494,
+            "parameters_billion": 0.196
+          },
+          {
+            "rank": 33,
+            "id": "scores_MAEB_beta_audio-only:row:31",
+            "model": "facebook/mms-1b-l1107",
+            "score": 0.3998511984004128,
+            "parameters_billion": 1.0
+          },
+          {
+            "rank": 34,
+            "id": "scores_MAEB_beta_audio-only:row:29",
+            "model": "facebook/wav2vec2-lv-60-espeak-cv-ft",
+            "score": 0.3983267115583075,
+            "parameters_billion": 0.317
+          },
+          {
+            "rank": 35,
+            "id": "scores_MAEB_beta_audio-only:row:26",
+            "model": "microsoft/wavlm-large",
+            "score": 0.39761450748194016,
+            "parameters_billion": 0.317
+          },
+          {
+            "rank": 36,
+            "id": "scores_MAEB_beta_audio-only:row:27",
+            "model": "facebook/hubert-base-ls960",
+            "score": 0.3945639084107327,
+            "parameters_billion": 0.095
+          },
+          {
+            "rank": 37,
+            "id": "scores_MAEB_beta_audio-only:row:28",
+            "model": "google/yamnet",
+            "score": 0.3925795033539732,
+            "parameters_billion": 0.004
+          },
+          {
+            "rank": 38,
+            "id": "scores_MAEB_beta_audio-only:row:24",
+            "model": "lyrebird/wav2clip",
+            "score": 0.3884514055727554,
+            "parameters_billion": 0.163
+          },
+          {
+            "rank": 39,
+            "id": "scores_MAEB_beta_audio-only:row:37",
+            "model": "vitouphy/wav2vec2-xls-r-300m-phoneme",
+            "score": 0.38092308178534573,
+            "parameters_billion": 0.3
+          },
+          {
+            "rank": 40,
+            "id": "scores_MAEB_beta_audio-only:row:40",
+            "model": "microsoft/speecht5_multimodal",
+            "score": 0.37693520794633645,
+            "parameters_billion": 0.298
+          },
+          {
+            "rank": 41,
+            "id": "scores_MAEB_beta_audio-only:row:36",
+            "model": "microsoft/wavlm-base",
+            "score": 0.3710318996388029,
+            "parameters_billion": 0.095
+          },
+          {
+            "rank": 42,
+            "id": "scores_MAEB_beta_audio-only:row:38",
+            "model": "microsoft/wavlm-base-sd",
+            "score": 0.37094663648090814,
+            "parameters_billion": 0.095
+          },
+          {
+            "rank": 42,
+            "id": "scores_MAEB_beta_audio-only:row:39",
+            "model": "microsoft/wavlm-base-sv",
+            "score": 0.37094663648090814,
+            "parameters_billion": 0.095
+          },
+          {
+            "rank": 44,
+            "id": "scores_MAEB_beta_audio-only:row:43",
+            "model": "facebook/wav2vec2-base",
+            "score": 0.3701817605779154,
+            "parameters_billion": 0.095
+          },
+          {
+            "rank": 45,
+            "id": "scores_MAEB_beta_audio-only:row:44",
+            "model": "facebook/wav2vec2-xls-r-1b",
+            "score": 0.3691236424148607,
+            "parameters_billion": 1.0
+          },
+          {
+            "rank": 46,
+            "id": "scores_MAEB_beta_audio-only:row:45",
+            "model": "microsoft/wavlm-base-plus",
+            "score": 0.36333828379772964,
+            "parameters_billion": 0.095
+          },
+          {
+            "rank": 46,
+            "id": "scores_MAEB_beta_audio-only:row:46",
+            "model": "microsoft/wavlm-base-plus-sd",
+            "score": 0.36333828379772964,
+            "parameters_billion": 0.095
+          },
+          {
+            "rank": 46,
+            "id": "scores_MAEB_beta_audio-only:row:47",
+            "model": "microsoft/wavlm-base-plus-sv",
+            "score": 0.36333828379772964,
+            "parameters_billion": 0.095
+          },
+          {
+            "rank": 49,
+            "id": "scores_MAEB_beta_audio-only:row:49",
+            "model": "speechbrain/m-ctc-t-large",
+            "score": 0.3580106416408669,
+            "parameters_billion": 1.059
+          },
+          {
+            "rank": 50,
+            "id": "scores_MAEB_beta_audio-only:row:51",
+            "model": "facebook/hubert-large-ls960-ft",
+            "score": 0.3515173761609907,
+            "parameters_billion": 0.317
+          },
+          {
+            "rank": 51,
+            "id": "scores_MAEB_beta_audio-only:row:32",
+            "model": "speechbrain/cnn14-esc50",
+            "score": 0.3504612143962848,
+            "parameters_billion": 0.081
+          },
+          {
+            "rank": 52,
+            "id": "scores_MAEB_beta_audio-only:row:55",
+            "model": "facebook/data2vec-audio-large-960h",
+            "score": 0.3472344383384933,
+            "parameters_billion": 0.313
+          },
+          {
+            "rank": 53,
+            "id": "scores_MAEB_beta_audio-only:row:61",
+            "model": "Qwen/Qwen2.5-Omni-3B",
+            "score": 0.33528121723426213,
+            "parameters_billion": 5.537
+          },
+          {
+            "rank": 54,
+            "id": "scores_MAEB_beta_audio-only:row:58",
+            "model": "microsoft/unispeech-sat-base-100h-libri-ft",
+            "score": 0.33148004850361196,
+            "parameters_billion": 0.094
+          },
+          {
+            "rank": 55,
+            "id": "scores_MAEB_beta_audio-only:row:56",
+            "model": "asapp/sew-d-tiny-100k-ft-ls100h",
+            "score": 0.3301357631578947,
+            "parameters_billion": 0.02
+          },
+          {
+            "rank": 56,
+            "id": "scores_MAEB_beta_audio-only:row:53",
+            "model": "facebook/wav2vec2-xls-r-300m",
+            "score": 0.32400034907120745,
+            "parameters_billion": 0.3
+          },
+          {
+            "rank": 57,
+            "id": "scores_MAEB_beta_audio-only:row:60",
+            "model": "facebook/data2vec-audio-base-960h",
+            "score": 0.32320648555211556,
+            "parameters_billion": 0.093
+          },
+          {
+            "rank": 58,
+            "id": "scores_MAEB_beta_audio-only:row:50",
+            "model": "facebook/wav2vec2-large",
+            "score": 0.32308087796697627,
+            "parameters_billion": 0.317
+          },
+          {
+            "rank": 59,
+            "id": "scores_MAEB_beta_audio-only:row:63",
+            "model": "facebook/wav2vec2-base-960h",
+            "score": 0.3125975069659443,
+            "parameters_billion": 0.095
+          },
+          {
+            "rank": 60,
+            "id": "scores_MAEB_beta_audio-only:row:57",
+            "model": "asapp/sew-d-base-plus-400k-ft-ls100h",
+            "score": 0.30888363028895766,
+            "parameters_billion": 0.095
+          },
+          {
+            "rank": 61,
+            "id": "scores_MAEB_beta_audio-only:row:52",
+            "model": "laion/larger_clap_music",
+            "score": 0.30556257327141384,
+            "parameters_billion": 0.194
+          },
+          {
+            "rank": 62,
+            "id": "scores_MAEB_beta_audio-only:row:64",
+            "model": "asapp/sew-d-mid-400k-ft-ls100h",
+            "score": 0.30533560448916414,
+            "parameters_billion": 0.139
+          },
+          {
+            "rank": 63,
+            "id": "scores_MAEB_beta_audio-only:row:62",
+            "model": "facebook/encodec_24khz",
+            "score": 0.3041336648606811,
+            "parameters_billion": 0.023
+          },
+          {
+            "rank": 64,
+            "id": "scores_MAEB_beta_audio-only:row:65",
+            "model": "facebook/wav2vec2-large-xlsr-53",
+            "score": 0.2640128725490196,
+            "parameters_billion": 0.317
+          }
+        ],
+        "mean_task_type": [
+          {
+            "rank": 1,
+            "id": "scores_MAEB_beta_audio-only:row:3",
+            "model": "Haon-Chen/e5-omni-7B",
+            "score": 0.5964708376114082,
+            "parameters_billion": 8.932
+          },
+          {
+            "rank": 2,
+            "id": "scores_MAEB_beta_audio-only:row:21",
+            "model": "encord-team/ebind-full",
+            "score": 0.5863627459893048,
+            "parameters_billion": 1.79
+          },
+          {
+            "rank": 3,
+            "id": "scores_MAEB_beta_audio-only:row:5",
+            "model": "jinaai/jina-embeddings-v5-omni-small",
+            "score": 0.5835463911492378,
+            "parameters_billion": 1.626
+          },
+          {
+            "rank": 4,
+            "id": "scores_MAEB_beta_audio-only:row:10",
+            "model": "jinaai/jina-embeddings-v5-omni-nano",
+            "score": 0.5771661288773795,
+            "parameters_billion": 0.986
+          },
+          {
+            "rank": 5,
+            "id": "scores_MAEB_beta_audio-only:row:2",
+            "model": "Tevatron/OmniEmbed-v0.1",
+            "score": 0.5684814713903743,
+            "parameters_billion": 8.932
+          },
+          {
+            "rank": 6,
+            "id": "scores_MAEB_beta_audio-only:row:15",
+            "model": "Haon-Chen/e5-omni-3B",
+            "score": 0.5618740756684492,
+            "parameters_billion": 4.703
+          },
+          {
+            "rank": 7,
+            "id": "scores_MAEB_beta_audio-only:row:17",
+            "model": "microsoft/msclap-2023",
+            "score": 0.5584816090017826,
+            "parameters_billion": 0.16
+          },
+          {
+            "rank": 8,
+            "id": "scores_MAEB_beta_audio-only:row:7",
+            "model": "LCO-Embedding/LCO-Embedding-Omni-7B",
+            "score": 0.5578458546345811,
+            "parameters_billion": 8.932
+          },
+          {
+            "rank": 9,
+            "id": "scores_MAEB_beta_audio-only:row:22",
+            "model": "OpenMuQ/MuQ-MuLan-large",
+            "score": 0.5533301041889482,
+            "parameters_billion": 0.63
+          },
+          {
+            "rank": 10,
+            "id": "scores_MAEB_beta_audio-only:row:20",
+            "model": "MIT/ast-finetuned-audioset-10-10-0.4593",
+            "score": 0.55212392228164,
+            "parameters_billion": 0.087
+          },
+          {
+            "rank": 11,
+            "id": "scores_MAEB_beta_audio-only:row:8",
+            "model": "BidirLM/BidirLM-Omni-2.5B-Embedding",
+            "score": 0.54874262228164,
+            "parameters_billion": 2.445
+          },
+          {
+            "rank": 12,
+            "id": "current:mini",
+            "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+            "score": 0.5486789236087452,
+            "parameters_billion": 1.361475288
+          },
+          {
+            "rank": 13,
+            "id": "scores_MAEB_beta_audio-only:row:6",
+            "model": "laion/larger_clap_music_and_speech",
+            "score": 0.5393674637254902,
+            "parameters_billion": 0.194
+          },
+          {
+            "rank": 14,
+            "id": "scores_MAEB_beta_audio-only:row:4",
+            "model": "laion/larger_clap_general",
+            "score": 0.5376392718360071,
+            "parameters_billion": 0.194
+          },
+          {
+            "rank": 15,
+            "id": "scores_MAEB_beta_audio-only:row:25",
+            "model": "google/vggish",
+            "score": 0.5349608971479501,
+            "parameters_billion": 0.072
+          },
+          {
+            "rank": 16,
+            "id": "scores_MAEB_beta_audio-only:row:14",
+            "model": "laion/clap-htsat-unfused",
+            "score": 0.5329466721925133,
+            "parameters_billion": 0.153
+          },
+          {
+            "rank": 17,
+            "id": "scores_MAEB_beta_audio-only:row:16",
+            "model": "LCO-Embedding/LCO-Embedding-Omni-3B",
+            "score": 0.5297655870766489,
+            "parameters_billion": 4.703
+          },
+          {
+            "rank": 18,
+            "id": "scores_MAEB_beta_audio-only:row:19",
+            "model": "laion/clap-htsat-fused",
+            "score": 0.5297281827985739,
+            "parameters_billion": 0.154
+          },
+          {
+            "rank": 19,
+            "id": "current:nano",
+            "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
+            "score": 0.5233540613685161,
+            "parameters_billion": 0.163771288
+          },
+          {
+            "rank": 20,
+            "id": "scores_MAEB_beta_audio-only:row:33",
+            "model": "microsoft/msclap-2022",
+            "score": 0.5156324,
+            "parameters_billion": 0.196
+          },
+          {
+            "rank": 21,
+            "id": "scores_MAEB_beta_audio-only:row:23",
+            "model": "EximiusLabs/fusion-embedding-2-2b-preview",
+            "score": 0.5116159368092692,
+            "parameters_billion": 2.8
+          },
+          {
+            "rank": 22,
+            "id": "scores_MAEB_beta_audio-only:row:28",
+            "model": "google/yamnet",
+            "score": 0.510955464795009,
+            "parameters_billion": 0.004
+          },
+          {
+            "rank": 23,
+            "id": "scores_MAEB_beta_audio-only:row:1",
+            "model": "openai/whisper-medium",
+            "score": 0.5071337459893048,
+            "parameters_billion": 0.769
+          },
+          {
+            "rank": 24,
+            "id": "scores_MAEB_beta_audio-only:row:12",
+            "model": "matthewagi/HeAR-s1.1",
+            "score": 0.5022611316399287,
+            "parameters_billion": 0.022
+          },
+          {
+            "rank": 25,
+            "id": "scores_MAEB_beta_audio-only:row:0",
+            "model": "Qwen/Qwen2-Audio-7B",
+            "score": 0.49261104875222816,
+            "parameters_billion": 7.0
+          },
+          {
+            "rank": 26,
+            "id": "scores_MAEB_beta_audio-only:row:24",
+            "model": "lyrebird/wav2clip",
+            "score": 0.48892121889483064,
+            "parameters_billion": 0.163
+          },
+          {
+            "rank": 27,
+            "id": "scores_MAEB_beta_audio-only:row:26",
+            "model": "microsoft/wavlm-large",
+            "score": 0.4848395147058824,
+            "parameters_billion": 0.317
+          },
+          {
+            "rank": 28,
+            "id": "scores_MAEB_beta_audio-only:row:9",
+            "model": "openai/whisper-base",
+            "score": 0.48299134028520496,
+            "parameters_billion": 0.074
+          },
+          {
+            "rank": 29,
+            "id": "scores_MAEB_beta_audio-only:row:13",
+            "model": "openai/whisper-large-v3",
+            "score": 0.4818755459001783,
+            "parameters_billion": 1.55
+          },
+          {
+            "rank": 30,
+            "id": "scores_MAEB_beta_audio-only:row:11",
+            "model": "openai/whisper-small",
+            "score": 0.48186107352941177,
+            "parameters_billion": 0.244
+          },
+          {
+            "rank": 31,
+            "id": "scores_MAEB_beta_audio-only:row:18",
+            "model": "openai/whisper-tiny",
+            "score": 0.4774227983957219,
+            "parameters_billion": 0.039
+          },
+          {
+            "rank": 32,
+            "id": "scores_MAEB_beta_audio-only:row:27",
+            "model": "facebook/hubert-base-ls960",
+            "score": 0.4762437683600713,
+            "parameters_billion": 0.095
+          },
+          {
+            "rank": 33,
+            "id": "scores_MAEB_beta_audio-only:row:45",
+            "model": "microsoft/wavlm-base-plus",
+            "score": 0.45655371622103386,
+            "parameters_billion": 0.095
+          },
+          {
+            "rank": 33,
+            "id": "scores_MAEB_beta_audio-only:row:46",
+            "model": "microsoft/wavlm-base-plus-sd",
+            "score": 0.45655371622103386,
+            "parameters_billion": 0.095
+          },
+          {
+            "rank": 33,
+            "id": "scores_MAEB_beta_audio-only:row:47",
+            "model": "microsoft/wavlm-base-plus-sv",
+            "score": 0.45655371622103386,
+            "parameters_billion": 0.095
+          },
+          {
+            "rank": 36,
+            "id": "scores_MAEB_beta_audio-only:row:32",
+            "model": "speechbrain/cnn14-esc50",
+            "score": 0.44843354679144387,
+            "parameters_billion": 0.081
+          },
+          {
+            "rank": 37,
+            "id": "scores_MAEB_beta_audio-only:row:30",
+            "model": "facebook/wav2vec2-xls-r-2b",
+            "score": 0.4449300209447415,
+            "parameters_billion": 2.0
+          },
+          {
+            "rank": 38,
+            "id": "scores_MAEB_beta_audio-only:row:43",
+            "model": "facebook/wav2vec2-base",
+            "score": 0.44053195365418896,
+            "parameters_billion": 0.095
+          },
+          {
+            "rank": 39,
+            "id": "scores_MAEB_beta_audio-only:row:62",
+            "model": "facebook/encodec_24khz",
+            "score": 0.43361836301247775,
+            "parameters_billion": 0.023
+          },
+          {
+            "rank": 40,
+            "id": "scores_MAEB_beta_audio-only:row:36",
+            "model": "microsoft/wavlm-base",
+            "score": 0.4301310198752228,
+            "parameters_billion": 0.095
+          },
+          {
+            "rank": 41,
+            "id": "scores_MAEB_beta_audio-only:row:38",
+            "model": "microsoft/wavlm-base-sd",
+            "score": 0.4298070198752228,
+            "parameters_billion": 0.095
+          },
+          {
+            "rank": 41,
+            "id": "scores_MAEB_beta_audio-only:row:39",
+            "model": "microsoft/wavlm-base-sv",
+            "score": 0.4298070198752228,
+            "parameters_billion": 0.095
+          },
+          {
+            "rank": 43,
+            "id": "scores_MAEB_beta_audio-only:row:37",
+            "model": "vitouphy/wav2vec2-xls-r-300m-phoneme",
+            "score": 0.42729945249554363,
+            "parameters_billion": 0.3
+          },
+          {
+            "rank": 44,
+            "id": "scores_MAEB_beta_audio-only:row:40",
+            "model": "microsoft/speecht5_multimodal",
+            "score": 0.4270312960784314,
+            "parameters_billion": 0.298
+          },
+          {
+            "rank": 45,
+            "id": "scores_MAEB_beta_audio-only:row:41",
+            "model": "facebook/mms-1b-fl102",
+            "score": 0.42429112326203205,
+            "parameters_billion": 1.0
+          },
+          {
+            "rank": 46,
+            "id": "scores_MAEB_beta_audio-only:row:35",
+            "model": "facebook/mms-1b-all",
+            "score": 0.42246804946524064,
+            "parameters_billion": 1.0
+          },
+          {
+            "rank": 47,
+            "id": "scores_MAEB_beta_audio-only:row:31",
+            "model": "facebook/mms-1b-l1107",
+            "score": 0.4162056867201426,
+            "parameters_billion": 1.0
+          },
+          {
+            "rank": 48,
+            "id": "scores_MAEB_beta_audio-only:row:42",
+            "model": "facebook/seamless-m4t-v2-large",
+            "score": 0.4107715129233512,
+            "parameters_billion": 2.3
+          },
+          {
+            "rank": 49,
+            "id": "scores_MAEB_beta_audio-only:row:29",
+            "model": "facebook/wav2vec2-lv-60-espeak-cv-ft",
+            "score": 0.4107034155080214,
+            "parameters_billion": 0.317
+          },
+          {
+            "rank": 50,
+            "id": "scores_MAEB_beta_audio-only:row:44",
+            "model": "facebook/wav2vec2-xls-r-1b",
+            "score": 0.40892008253119433,
+            "parameters_billion": 1.0
+          },
+          {
+            "rank": 51,
+            "id": "scores_MAEB_beta_audio-only:row:50",
+            "model": "facebook/wav2vec2-large",
+            "score": 0.40498438814616755,
+            "parameters_billion": 0.317
+          },
+          {
+            "rank": 52,
+            "id": "scores_MAEB_beta_audio-only:row:52",
+            "model": "laion/larger_clap_music",
+            "score": 0.404464434402852,
+            "parameters_billion": 0.194
+          },
+          {
+            "rank": 53,
+            "id": "scores_MAEB_beta_audio-only:row:61",
+            "model": "Qwen/Qwen2.5-Omni-3B",
+            "score": 0.39829975383244204,
+            "parameters_billion": 5.537
+          },
+          {
+            "rank": 54,
+            "id": "scores_MAEB_beta_audio-only:row:49",
+            "model": "speechbrain/m-ctc-t-large",
+            "score": 0.3920138095365419,
+            "parameters_billion": 1.059
+          },
+          {
+            "rank": 55,
+            "id": "scores_MAEB_beta_audio-only:row:53",
+            "model": "facebook/wav2vec2-xls-r-300m",
+            "score": 0.3907727630124777,
+            "parameters_billion": 0.3
+          },
+          {
+            "rank": 56,
+            "id": "scores_MAEB_beta_audio-only:row:51",
+            "model": "facebook/hubert-large-ls960-ft",
+            "score": 0.39037903297682713,
+            "parameters_billion": 0.317
+          },
+          {
+            "rank": 57,
+            "id": "scores_MAEB_beta_audio-only:row:58",
+            "model": "microsoft/unispeech-sat-base-100h-libri-ft",
+            "score": 0.37826058645276295,
+            "parameters_billion": 0.094
+          },
+          {
+            "rank": 58,
+            "id": "scores_MAEB_beta_audio-only:row:55",
+            "model": "facebook/data2vec-audio-large-960h",
+            "score": 0.37800380597147953,
+            "parameters_billion": 0.313
+          },
+          {
+            "rank": 59,
+            "id": "scores_MAEB_beta_audio-only:row:56",
+            "model": "asapp/sew-d-tiny-100k-ft-ls100h",
+            "score": 0.36999171212121207,
+            "parameters_billion": 0.02
+          },
+          {
+            "rank": 60,
+            "id": "scores_MAEB_beta_audio-only:row:63",
+            "model": "facebook/wav2vec2-base-960h",
+            "score": 0.3624263508912656,
+            "parameters_billion": 0.095
+          },
+          {
+            "rank": 61,
+            "id": "scores_MAEB_beta_audio-only:row:60",
+            "model": "facebook/data2vec-audio-base-960h",
+            "score": 0.36147766470588233,
+            "parameters_billion": 0.093
+          },
+          {
+            "rank": 62,
+            "id": "scores_MAEB_beta_audio-only:row:65",
+            "model": "facebook/wav2vec2-large-xlsr-53",
+            "score": 0.3451420650623886,
+            "parameters_billion": 0.317
+          },
+          {
+            "rank": 63,
+            "id": "scores_MAEB_beta_audio-only:row:64",
+            "model": "asapp/sew-d-mid-400k-ft-ls100h",
+            "score": 0.34092338458110516,
+            "parameters_billion": 0.139
+          },
+          {
+            "rank": 64,
+            "id": "scores_MAEB_beta_audio-only:row:57",
+            "model": "asapp/sew-d-base-plus-400k-ft-ls100h",
+            "score": 0.3371242298573975,
+            "parameters_billion": 0.095
+          }
+        ]
+      },
+      "frontiers": {
+        "mean_task": [
+          {
+            "id": "scores_MAEB_beta_audio-only:row:28",
+            "model": "google/yamnet",
+            "kind": "registry_reported",
+            "parameters_billion": 0.004,
+            "mean_task": 0.3925795033539732
+          },
+          {
+            "id": "scores_MAEB_beta_audio-only:row:12",
+            "model": "matthewagi/HeAR-s1.1",
+            "kind": "registry_reported",
+            "parameters_billion": 0.022,
+            "mean_task": 0.41088769685242515
+          },
+          {
+            "id": "scores_MAEB_beta_audio-only:row:18",
+            "model": "openai/whisper-tiny",
+            "kind": "registry_reported",
+            "parameters_billion": 0.039,
+            "mean_task": 0.43637871465428274
+          },
+          {
+            "id": "scores_MAEB_beta_audio-only:row:9",
+            "model": "openai/whisper-base",
+            "kind": "registry_reported",
+            "parameters_billion": 0.074,
+            "mean_task": 0.44856370433436527
+          },
+          {
+            "id": "scores_MAEB_beta_audio-only:row:4",
+            "model": "laion/larger_clap_general",
+            "kind": "registry_reported",
+            "parameters_billion": 0.194,
+            "mean_task": 0.45505683952528375
+          },
+          {
+            "id": "scores_MAEB_beta_audio-only:row:1",
+            "model": "openai/whisper-medium",
+            "kind": "registry_reported",
+            "parameters_billion": 0.769,
+            "mean_task": 0.48419600154798764
+          },
+          {
+            "id": "scores_MAEB_beta_audio-only:row:10",
+            "model": "jinaai/jina-embeddings-v5-omni-nano",
+            "kind": "registry_reported",
+            "parameters_billion": 0.986,
+            "mean_task": 0.4974013005444365
+          },
+          {
+            "id": "scores_MAEB_beta_audio-only:row:5",
+            "model": "jinaai/jina-embeddings-v5-omni-small",
+            "kind": "registry_reported",
+            "parameters_billion": 1.626,
+            "mean_task": 0.502493257952982
+          },
+          {
+            "id": "scores_MAEB_beta_audio-only:row:8",
+            "model": "BidirLM/BidirLM-Omni-2.5B-Embedding",
+            "kind": "registry_reported",
+            "parameters_billion": 2.445,
+            "mean_task": 0.5357349241486068
+          }
+        ],
+        "mean_task_type": [
+          {
+            "id": "scores_MAEB_beta_audio-only:row:28",
+            "model": "google/yamnet",
+            "kind": "registry_reported",
+            "parameters_billion": 0.004,
+            "mean_task_type": 0.510955464795009
+          },
+          {
+            "id": "scores_MAEB_beta_audio-only:row:25",
+            "model": "google/vggish",
+            "kind": "registry_reported",
+            "parameters_billion": 0.072,
+            "mean_task_type": 0.5349608971479501
+          },
+          {
+            "id": "scores_MAEB_beta_audio-only:row:20",
+            "model": "MIT/ast-finetuned-audioset-10-10-0.4593",
+            "kind": "registry_reported",
+            "parameters_billion": 0.087,
+            "mean_task_type": 0.55212392228164
+          },
+          {
+            "id": "scores_MAEB_beta_audio-only:row:17",
+            "model": "microsoft/msclap-2023",
+            "kind": "registry_reported",
+            "parameters_billion": 0.16,
+            "mean_task_type": 0.5584816090017826
+          },
+          {
+            "id": "scores_MAEB_beta_audio-only:row:10",
+            "model": "jinaai/jina-embeddings-v5-omni-nano",
+            "kind": "registry_reported",
+            "parameters_billion": 0.986,
+            "mean_task_type": 0.5771661288773795
+          },
+          {
+            "id": "scores_MAEB_beta_audio-only:row:5",
+            "model": "jinaai/jina-embeddings-v5-omni-small",
+            "kind": "registry_reported",
+            "parameters_billion": 1.626,
+            "mean_task_type": 0.5835463911492378
+          },
+          {
+            "id": "scores_MAEB_beta_audio-only:row:21",
+            "model": "encord-team/ebind-full",
+            "kind": "registry_reported",
+            "parameters_billion": 1.79,
+            "mean_task_type": 0.5863627459893048
+          },
+          {
+            "id": "scores_MAEB_beta_audio-only:row:3",
+            "model": "Haon-Chen/e5-omni-7B",
+            "kind": "registry_reported",
+            "parameters_billion": 8.932,
+            "mean_task_type": 0.5964708376114082
+          }
+        ]
+      }
+    }
+  }
+}

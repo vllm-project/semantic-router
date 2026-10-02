@@ -25,10 +25,24 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 	scopes := []*config.RouterConfig{}
 	defaultScope := *cfg.ModelConsumerScope()
 	defaultScope.Recipes, defaultScope.Entrypoints = nil, nil
+	defaultScope.SemanticCache.Enabled = false
+	defaultScope.Tools.Enabled, defaultScope.Memory.Enabled = false, false
+	defaultScope.VectorStore = nil
+	serviceScope := cfg.ConfigForGlobalModelServices()
+	projectedServices, err := config.ProjectRecipeModelBindings(serviceScope, plan, config.GlobalModelScope)
+	if err != nil {
+		return nil, err
+	}
+	if err := inventory.addScope(projectedServices, plan); err != nil {
+		return nil, err
+	}
+
 	scopes = append(scopes, &defaultScope)
 	for _, recipe := range cfg.ReachableRoutingRecipes() {
 		if recipe.Name != config.DefaultRecipeName {
-			scopes = append(scopes, cfg.ConfigForRecipe(recipe))
+			scoped := cfg.ConfigForRecipe(recipe)
+			scoped.SemanticCache.Enabled = false
+			scopes = append(scopes, scoped)
 		}
 	}
 	for _, scope := range scopes {
@@ -62,11 +76,16 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 	if primary == "" {
 		primary = "qwen3"
 	}
-	needed := config.EmbeddingModelsNeeded(cfg, primary, cfg.RoutingScope == config.DefaultRecipeName)
+	global := cfg.RoutingScope == config.GlobalModelScope
+	sharedServices := global
+	needed := config.EmbeddingModelsNeeded(cfg, primary, sharedServices)
 	scoped := *cfg
 	scoped.Recipes, scoped.Entrypoints = nil, nil
 	paths := map[string]*string{"qwen3": &scoped.Qwen3ModelPath, "gemma": &scoped.GemmaModelPath, "mmbert": &scoped.MmBertModelPath, "multimodal": &scoped.MultiModalModelPath, "bert": &scoped.BertModelPath}
 	explicitEmbedding, hasEmbedding := plan.Lookup(cfg.RoutingScope, "embedding")
+	if global {
+		explicitEmbedding, hasEmbedding = plan.LookupGlobal("embedding")
+	}
 	for model, path := range paths {
 		if !needed[model] || (cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() && !hasEmbedding) || (hasEmbedding && model == primary) {
 			*path = ""
@@ -96,6 +115,7 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 	}
 	required := ExtractRequiredFilesByModel(&scoped)
 	defaultProvider, _ := config.DefaultModelExecution(cfg.EmbeddingModels.UseCPU)
+	embeddingProvider, _ := config.DefaultEmbeddingExecution(cfg.EmbeddingModels)
 	if defaultProvider == "candle" {
 		for path, files := range candleEmbeddingModelRequiredFiles(&scoped) {
 			required[path] = append(required[path], files...)
@@ -124,27 +144,65 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 		}
 		explicitPaths[config.ResolveModelPath(head.ModelID)] = true
 	}
-	if defaultProvider == "ort" && scoped.EmbeddingModels.EmbeddingBackend() == config.EmbeddingBackendCandle {
-		// Resolve implicit embeddings with the same provider artifact contract
-		// as explicit bindings. In particular, ROCm requires ONNX graphs and
-		// their external tensors rather than Candle safetensors.
-		for model, path := range paths {
-			if *path == "" {
-				continue
+	// The Halu release ships native weights and a mandatory task policy. Use
+	// its declared provider even when the build's generic default is ORT.
+	if active["hallucination_detector"] {
+		path := config.ResolveModelPath(cfg.HallucinationMitigation.HallucinationModel.ModelID)
+		if model := config.GetModelByPath(path); model != nil && model.DefaultAdapter == "vela_halu" {
+			if _, explicit := plan.Lookup(cfg.RoutingScope, "hallucination_detector"); !explicit {
+				spec := config.ResolvedModelBinding{
+					Recipe: cfg.RoutingScope, Name: "hallucination_detector",
+					Binding:    config.ModelBinding{Adapter: model.DefaultAdapter, Contract: config.RemoteClassifierContractTokenSpans},
+					Deployment: config.ModelDeployment{Provider: model.DefaultProvider, Device: model.DefaultDevice, Artifact: path},
+				}
+				if err := i.addDefaultDeployment(cfg, spec); err != nil {
+					return err
+				}
+				explicitPaths[path] = true
 			}
-			spec := config.ResolvedModelBinding{
-				Recipe: cfg.RoutingScope, Name: "embedding",
-				Binding:    config.ModelBinding{Adapter: model, Contract: "embedding.v1"},
-				Deployment: config.ModelDeployment{Provider: defaultProvider, Artifact: *path},
-			}
+		}
+	}
+	// Catalog adapters may require a different execution format from the build
+	// default. Resolve them identically for inventory and runtime ownership.
+	for model, path := range paths {
+		if *path == "" {
+			continue
+		}
+		provider, adapter := defaultProvider, model
+		if model == primary {
+			provider = embeddingProvider
+		}
+		if catalog := config.GetModelByPath(*path); catalog != nil && catalog.DefaultAdapter != "" {
+			provider, adapter = catalog.DefaultProvider, catalog.DefaultAdapter
+		}
+		if provider == "candle" {
+			continue
+		}
+		spec := config.ResolvedModelBinding{
+			Recipe: cfg.RoutingScope, Name: "embedding",
+			Binding:    config.ModelBinding{Adapter: adapter, Contract: "embedding.v1"},
+			Deployment: config.ModelDeployment{Provider: provider, Artifact: *path},
+		}
+		if err := i.addDefaultDeployment(cfg, spec); err != nil {
+			return err
+		}
+		explicitPaths[config.ResolveModelPath(*path)] = true
+	}
+
+	if provider, device := config.DefaultCategoryExecution(cfg.CategoryModel.UseCPU); provider == "openvino" && active["domain_classifier"] {
+		if _, explicit := plan.Lookup(cfg.RoutingScope, "domain_classifier"); !explicit {
+			spec := config.ResolvedModelBinding{Recipe: cfg.RoutingScope, Name: "domain_classifier", Binding: config.ModelBinding{Contract: config.RemoteClassifierContractLabelDistribution, Adapter: "auto"}, Deployment: config.ModelDeployment{Provider: provider, Device: device, Artifact: cfg.CategoryModel.ModelID}}
 			if err := i.addDefaultDeployment(cfg, spec); err != nil {
 				return err
 			}
-			explicitPaths[config.ResolveModelPath(*path)] = true
+			explicitPaths[config.ResolveModelPath(cfg.CategoryModel.ModelID)] = true
 		}
 	}
 	for name := range cfg.ModelBindings {
 		spec, ok := plan.Lookup(cfg.RoutingScope, name)
+		if global {
+			spec, ok = plan.LookupGlobal(name)
+		}
 		if !ok || !active[name] {
 			continue
 		}
@@ -190,14 +248,44 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 
 func (i *modelInventory) addDeployment(cfg *config.RouterConfig, spec config.ResolvedModelBinding) error {
 	path := config.ResolveModelPath(spec.Deployment.Artifact)
+	if spec.Binding.Adapter == "vela_omni" {
+		if spec.Deployment.Provider != "ort" || spec.Binding.Head != "" {
+			return fmt.Errorf("vela_omni requires a complete prepared ORT artifact without a head override")
+		}
+		bundle := ""
+		if catalog := config.GetModelByPath(path); catalog != nil {
+			bundle = catalog.ArtifactBundle
+		}
+		return i.add(ModelSpec{LocalPath: path, Revision: spec.Deployment.Revision, PreparedArtifact: "vela_omni", ArtifactBundle: bundle, Strict: true})
+	}
 	files := []string{"config.json", "tokenizer.json"}
+	if spec.Binding.Adapter == "vela_halu" {
+		files = append(files, "operating_point.json")
+	}
 	if spec.Binding.Contract == config.RelevanceScoresContract {
 		files = append(files, "matryoshka_config.json")
 	}
 	groups := [][]string{}
 	var rerankerSelections []config.PairScorerSelection
 	excludes := []string(nil)
-	if spec.Deployment.Provider == "ort" {
+	switch spec.Deployment.Provider {
+	case "openvino":
+		if spec.Binding.Head != "" {
+			graph := spec.Binding.Head
+			if !filepath.IsAbs(graph) {
+				graph = filepath.Join(path, graph)
+			}
+			for _, file := range []string{graph, strings.TrimSuffix(graph, ".xml") + ".bin", filepath.Join(filepath.Dir(graph), "openvino_tokenizer.xml"), filepath.Join(filepath.Dir(graph), "openvino_tokenizer.bin")} {
+				if err := i.addFile(file, path, spec.Deployment.Revision); err != nil {
+					return err
+				}
+			}
+		} else {
+			for _, file := range []string{"openvino_model.xml", "openvino_model.bin", "openvino_tokenizer.xml", "openvino_tokenizer.bin"} {
+				groups = append(groups, []string{file, "openvino/" + file})
+			}
+		}
+	case "ort":
 		if spec.Binding.OperatingPoint != nil {
 			// A calibrated policy also binds its native source checkpoint.
 			// An existing graph-only cache cannot satisfy that identity check.
@@ -228,7 +316,8 @@ func (i *modelInventory) addDeployment(cfg *config.RouterConfig, spec config.Res
 				// single-graph export remains supported by the provider.
 				groups = append(groups, []string{"model.onnx", "onnx/model.onnx", "onnx/layer-22/model.onnx"})
 				layers := []int{cfg.EmbeddingConfig.TargetLayer}
-				if cfg.RoutingScope == config.DefaultRecipeName && cfg.SemanticCache.Enabled && config.SemanticCacheEmbeddingModel(cfg) == "mmbert" {
+				ownsCache := cfg.RoutingScope == config.GlobalModelScope || (cfg.RoutingScope == config.DefaultRecipeName && cfg.GlobalModelBindings["embedding"].Deployment == "")
+				if ownsCache && cfg.SemanticCache.Enabled && config.SemanticCacheEmbeddingModel(cfg) == "mmbert" {
 					layers = append(layers, 6)
 				}
 				for _, layer := range layers {
@@ -242,7 +331,7 @@ func (i *modelInventory) addDeployment(cfg *config.RouterConfig, spec config.Res
 				}
 			}
 		}
-	} else {
+	default:
 		// A registered Candle snapshot must contain native weights, even if an
 		// ONNX export already exists. Sharded safetensors remain valid.
 		groups = append(groups, []string{"*.safetensors", "*.safetensors.index.json", "pytorch_model*.bin"})
@@ -350,6 +439,9 @@ func (i *modelInventory) add(next ModelSpec) error {
 		}
 		if next.Revision == "" {
 			next.Revision = previous.Revision
+		}
+		if previous.PreparedArtifact != next.PreparedArtifact || previous.ArtifactBundle != next.ArtifactBundle {
+			return fmt.Errorf("artifact %q is required in conflicting prepared/native formats", next.LocalPath)
 		}
 		next.RequiredFiles = append(previous.RequiredFiles, next.RequiredFiles...)
 		next.RequiredFileGroups = append(previous.RequiredFileGroups, next.RequiredFileGroups...)

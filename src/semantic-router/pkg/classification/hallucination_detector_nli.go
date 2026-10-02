@@ -32,6 +32,7 @@ type EnhancedHallucinationSpan struct {
 	Text                    string   `json:"text"`
 	Start                   int      `json:"start"`
 	End                     int      `json:"end"`
+	Label                   string   `json:"label,omitempty"`
 	HallucinationConfidence float32  `json:"hallucination_confidence,omitempty"`
 	ScoreAvailable          bool     `json:"score_available"`
 	NLILabel                NLILabel `json:"nli_label"`
@@ -154,7 +155,7 @@ func (d *HallucinationDetector) DetectWithNLI(ctx context.Context, contextText, 
 		result.ScoreKind = spans.SummarySemantics.Unit
 	}
 	for _, span := range spans.Entities {
-		enhanced := EnhancedHallucinationSpan{Text: span.Text, Start: span.Start, End: span.End, HallucinationConfidence: span.Confidence, ScoreAvailable: spans.HasScores(), NLILabel: NLIUnknown, NLILabelStr: NLIUnknown.String(), Severity: 2, Explanation: "Unsupported span detected"}
+		enhanced := EnhancedHallucinationSpan{Text: span.Text, Start: span.Start, End: span.End, Label: span.EntityType, HallucinationConfidence: span.Confidence, ScoreAvailable: spans.HasScores(), NLILabel: NLIUnknown, NLILabelStr: NLIUnknown.String(), Severity: 2, Explanation: "Unsupported span detected"}
 		if spans.HasScores() {
 			enhanced.Explanation = fmt.Sprintf("Unsupported claim detected (token score: %.1f%%)", span.Confidence*100)
 			if span.Confidence > 0.8 {

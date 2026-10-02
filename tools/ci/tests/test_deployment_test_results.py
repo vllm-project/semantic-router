@@ -1,0 +1,263 @@
+"""Real framework-shaped evidence must retain each selected deployment assertion."""
+
+import copy
+import json
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from deployment_test_results import go_unit, kubernetes, operator
+from release_guard_waiver import GUARD_WAIVER
+
+
+class DeploymentResultsTests(unittest.TestCase):
+    def test_release_guard_case_remains_failed_and_other_cases_are_required(self):
+        report = {
+            "profile": "production-stack",
+            "expected_cases": ["routing", "jailbreak-detection"],
+            "test_results": [
+                {"Name": "routing", "Passed": True},
+                {"Name": "jailbreak-detection", "Passed": False},
+            ],
+            "status": "FAILED",
+            "exit_code": 1,
+            "total_tests": 2,
+            "passed_tests": 1,
+            "failed_tests": 1,
+        }
+        evidence = kubernetes(report, "production-stack", waiver=GUARD_WAIVER)
+        self.assertEqual(
+            evidence["cases"][-1],
+            {"id": "jailbreak-detection", "status": "failed"},
+        )
+        with self.assertRaises(ValueError):
+            kubernetes(report, "production-stack")
+        for mutation in (
+            {
+                "test_results": [
+                    {"Name": "routing", "Passed": False},
+                    *report["test_results"][1:],
+                ]
+            },
+            {"expected_cases": ["jailbreak-detection"]},
+            {"failed_tests": 0},
+            {"status": "PASSED"},
+            {"exit_code": 0},
+        ):
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                kubernetes(
+                    {**report, **mutation}, "production-stack", waiver=GUARD_WAIVER
+                )
+
+    def test_kubernetes_requires_exact_passed_inventory(self):
+        report = {
+            "profile": "envoy-ai-gateway",
+            "expected_cases": ["route", "cache"],
+            "test_results": [
+                {"Name": "route", "Passed": True},
+                {"Name": "cache", "Passed": True},
+            ],
+            "status": "PASSED",
+            "exit_code": 0,
+            "total_tests": 2,
+            "passed_tests": 2,
+            "failed_tests": 0,
+        }
+        self.assertEqual(len(kubernetes(report, "envoy-ai-gateway")["cases"]), 2)
+        changes = [
+            {"expected_cases": []},
+            {"expected_cases": ["route", "missing"]},
+            {"test_results": report["test_results"] * 2},
+            {"profile": "foreign"},
+            {
+                "test_results": [
+                    {"Name": "route", "Passed": True},
+                    {"Name": "cache", "Passed": False},
+                ]
+            },
+            {"total_tests": 3},
+            {"status": "FAILED"},
+        ]
+        for change in changes:
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                kubernetes({**report, **change}, "envoy-ai-gateway")
+
+    def test_a_case_that_passed_only_on_a_retry_does_not_count_as_failed(self):
+        # `bin/e2e -flake-attempts=2` marks a case that passed on a later attempt
+        # with `Flaked: true` and `Attempts: 2`. It is still a pass, so
+        # `failed_tests` stays 0 and the #4120 waiver checks keep working.
+        report = {
+            "profile": "envoy-ai-gateway",
+            "expected_cases": ["route", "cache"],
+            "test_results": [
+                {"Name": "route", "Passed": True, "Attempts": 1, "Flaked": False},
+                {"Name": "cache", "Passed": True, "Attempts": 2, "Flaked": True},
+            ],
+            "status": "PASSED",
+            "exit_code": 0,
+            "total_tests": 2,
+            "passed_tests": 2,
+            "failed_tests": 0,
+            "flaky_tests": 1,
+        }
+        evidence = kubernetes(report, "envoy-ai-gateway")
+        self.assertEqual(
+            evidence["cases"],
+            [
+                {"id": "route", "status": "passed"},
+                {"id": "cache", "status": "passed"},
+            ],
+        )
+        # Counting the retried case as failed would break the runner counters.
+        with self.assertRaises(ValueError):
+            kubernetes({**report, "failed_tests": 1}, "envoy-ai-gateway")
+
+    def test_go_discovery_and_subtests_are_both_mandatory(self):
+        discovery = [
+            {"Action": "output", "Package": "operator/api", "Output": "TestReconcile\n"}
+        ]
+        events = [
+            {"Action": action, "Package": "operator/api", "Test": name}
+            for name in ("TestReconcile", "TestReconcile/routing")
+            for action in ("run", "pass")
+        ]
+        self.assertEqual(len(go_unit(discovery, events)["cases"]), 2)
+        for mutation in (
+            events[:-1],
+            [],
+            [*events, events[-1]],
+            [
+                (
+                    {**row, "Action": "skip"}
+                    if row["Test"].endswith("routing") and row["Action"] == "pass"
+                    else row
+                )
+                for row in events
+            ],
+        ):
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                go_unit(discovery, mutation)
+
+    def test_operator_requires_every_variant_job_and_image_identity(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            unit = {
+                "cases": [{"id": "TestReconcile", "status": "passed"}],
+                "expected_cases": ["TestReconcile"],
+            }
+            request = {
+                "cases": [{"id": "operator-routed-request", "status": "passed"}],
+                "expected_cases": ["operator-routed-request"],
+            }
+            for name in (
+                "operator-unit",
+                "operator-bundle",
+                "operator-request-memory",
+                "operator-request-redis",
+            ):
+                (directory / name).mkdir()
+            (directory / "operator-unit/operator-unit.json").write_text(
+                json.dumps(unit)
+            )
+            (directory / "operator-bundle/artifacts.json").write_text(
+                json.dumps([{"id": "image:operator-bundle", "sha256": "a" * 64}])
+            )
+            for name in ("memory", "redis"):
+                base = directory / f"operator-request-{name}"
+                (base / "operator-request.json").write_text(json.dumps(request))
+                (base / "artifacts.json").write_text(
+                    json.dumps([{"id": "image:operator", "sha256": "b" * 64}])
+                )
+            jobs = {
+                name: {"result": "success"}
+                for name in (
+                    "checks",
+                    "bundle-validate",
+                    "integration-test",
+                )
+            }
+            variants = [{"cache-backend": name} for name in ("memory", "redis")]
+            result = operator(directory, variants, jobs)
+            self.assertEqual(len(result["cases"]), 3)
+            self.assertEqual(len(result["artifacts"]), 2)
+            for job in jobs:
+                for state in ("skipped", "cancelled", "failure", "missing"):
+                    bad = copy.deepcopy(jobs)
+                    if state == "missing":
+                        del bad[job]
+                    else:
+                        bad[job]["result"] = state
+                    with (
+                        self.subTest(job=job, state=state),
+                        self.assertRaisesRegex(
+                            ValueError, f"prerequisite did not succeed: {job}"
+                        ),
+                    ):
+                        operator(directory, variants, bad)
+            with self.assertRaises(ValueError):
+                operator(directory, variants * 2, jobs)
+            (directory / "operator-request-redis/operator-request.json").unlink()
+            with self.assertRaises(FileNotFoundError):
+                operator(directory, variants, jobs)
+
+    def test_operator_checks_share_setup_without_masking_section_failures(self):
+        root = Path(__file__).resolve().parents[3]
+        jobs = yaml.safe_load((root / ".github/workflows/operator-ci.yml").read_text())[
+            "jobs"
+        ]
+        self.assertFalse({"lint", "test", "manifests"} & jobs.keys())
+        self.assertEqual(
+            jobs["result"]["needs"], ["checks", "bundle-validate", "integration-test"]
+        )
+        self.assertNotIn("max-parallel", jobs["integration-test"]["strategy"])
+        steps = jobs["checks"]["steps"]
+        self.assertEqual(
+            sum(step.get("uses") == "actions/setup-go@v5" for step in steps), 1
+        )
+        sections = {
+            "Check Go Formatting": "dependencies",
+            "Vet Operator Code": "dependencies",
+            "Lint Operator Code": "golangci_lint",
+            "Discover Operator Unit Tests": "dependencies",
+            "Run Operator Unit Tests": "discovery",
+            "Install controller-gen": "dependencies",
+            "Generate manifests and API code": "controller_gen",
+            "Verify no changes": "manifests",
+        }
+        for name, prerequisite in sections.items():
+            with self.subTest(section=name):
+                step = next(step for step in steps if step.get("name") == name)
+                # Explicit status functions keep independent sections running
+                # after a sibling failure; failures themselves stay blocking.
+                self.assertEqual(
+                    step["if"],
+                    "${{ !cancelled() && steps."
+                    + prerequisite
+                    + ".outcome == 'success' }}",
+                )
+                self.assertFalse(step.get("continue-on-error", False))
+        upload = next(
+            step
+            for step in steps
+            if step.get("with", {}).get("name") == "operator-unit"
+        )
+        self.assertEqual(upload["if"], "always()")
+        self.assertTrue(upload["with"]["include-hidden-files"])
+
+    def test_kubernetes_loads_shared_images_after_runner_cleanup(self):
+        root = Path(__file__).resolve().parents[3]
+        workflow = yaml.safe_load(
+            (root / ".github/workflows/integration-test-k8s.yml").read_text()
+        )
+        steps = workflow["jobs"]["integration-test"]["steps"]
+        actions = [step.get("uses", "") for step in steps]
+        # setup-kind prunes unused Docker images while reclaiming/relocating disk.
+        # Loading first would delete every verified tag before framework use.
+        self.assertLess(
+            actions.index("./.github/actions/setup-kind"),
+            actions.index("./.github/actions/load-ci-images"),
+        )

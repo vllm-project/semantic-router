@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -55,6 +56,48 @@ func TestTypedOperatorSampleUsesPublishedPIIMapping(t *testing.T) {
 	}
 }
 
+func TestOperatorCIUsesCanonicalVelaModels(t *testing.T) {
+	workflow, err := os.ReadFile("../../../.github/workflows/operator-ci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, resource, ok := strings.Cut(string(workflow), "          apiVersion: vllm.ai/v1alpha1\n")
+	if !ok {
+		t.Fatal("operator CI SemanticRouter resource is missing")
+	}
+	resource, _, ok = strings.Cut(resource, "\n          EOF")
+	if !ok {
+		t.Fatal("operator CI resource heredoc is not terminated")
+	}
+	lines := []string{"apiVersion: vllm.ai/v1alpha1"}
+	for _, line := range strings.Split(resource, "\n") {
+		// Cache backends vary across the matrix; model selection is shared.
+		if strings.TrimSpace(line) != "${CACHE_CONFIG}" {
+			lines = append(lines, strings.TrimPrefix(line, "          "))
+		}
+	}
+	canonical := operatorModelConfig(t, []byte(strings.Join(lines, "\n")))
+	data, err := yaml.Marshal(canonical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := routerconfig.ParseYAMLBytes(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defaults := routerconfig.DefaultGlobalConfig()
+	system := routerconfig.DefaultSystemModels()
+	if cfg.MmBertModelPath != defaults.MmBertModelPath || cfg.EmbeddingConfig.ModelType != "mmbert" || !cfg.UseCPU {
+		t.Fatalf("CI embedding must use the canonical CPU model: %+v", cfg.EmbeddingModels)
+	}
+	if cfg.CategoryModel.ModelID != system.DomainClassifier || cfg.Variant != routerconfig.CategoryVariantMmBERT32K || !cfg.CategoryModel.UseCPU {
+		t.Fatalf("CI domain classifier must inherit canonical CPU defaults: %+v", cfg.CategoryModel)
+	}
+	if cfg.PIIModel.ModelID != system.PIIClassifier || !cfg.PIIModel.UseMmBERT32K || !cfg.PIIModel.UseCPU {
+		t.Fatalf("CI PII classifier must inherit canonical CPU defaults: %+v", cfg.PIIModel)
+	}
+}
+
 func TestOperatorClassifierOverrideKeepsUnspecifiedModels(t *testing.T) {
 	reconciler := &SemanticRouterReconciler{}
 	defaults := routerconfig.DefaultCanonicalGlobal().ModelCatalog.Modules.Classifier
@@ -84,8 +127,13 @@ func sampleModelConfig(t *testing.T, name string) *routerconfig.CanonicalConfig 
 	if err != nil {
 		t.Fatal(err)
 	}
+	return operatorModelConfig(t, data)
+}
+
+func operatorModelConfig(t *testing.T, data []byte) *routerconfig.CanonicalConfig {
+	t.Helper()
 	var sample vllmv1alpha1.SemanticRouter
-	if err = kubeyaml.Unmarshal(data, &sample); err != nil {
+	if err := kubeyaml.Unmarshal(data, &sample); err != nil {
 		t.Fatal(err)
 	}
 	// Backend discovery is independent of model configuration and needs a

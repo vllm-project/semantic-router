@@ -13,6 +13,10 @@ func applySelectionEligibility(selCtx *selection.SelectionContext, result *selec
 	if result.EligibleModels == nil {
 		return selCtx, nil
 	}
+	selected, err := selection.ResolveSelectionCandidate(selCtx, result)
+	if err != nil {
+		return nil, err
+	}
 	for _, ref := range result.EligibleModels {
 		if !modelRefInEligibility(ref, selCtx.CandidateModels) {
 			return nil, fmt.Errorf("%w: selector eligibility contains an undeclared model %q", selection.ErrNoEligibleCandidates, ref.Model)
@@ -26,8 +30,7 @@ func applySelectionEligibility(selCtx *selection.SelectionContext, result *selec
 			continue
 		}
 		eligible = append(eligible, ref)
-		if (ref.Model == result.SelectedModel && ref.LoRAName == result.LoRAName) ||
-			(ref.LoRAName != "" && ref.LoRAName == result.SelectedModel) {
+		if selection.CandidateIdentity(ref) == selection.CandidateIdentity(*selected) {
 			selectedAllowed = true
 		}
 	}
@@ -48,7 +51,7 @@ func applySelectionEligibility(selCtx *selection.SelectionContext, result *selec
 
 func modelRefInEligibility(ref config.ModelRef, refs []config.ModelRef) bool {
 	for _, candidate := range refs {
-		if ref.Model == candidate.Model && ref.LoRAName == candidate.LoRAName {
+		if selection.CandidateIdentity(ref) == selection.CandidateIdentity(candidate) {
 			return true
 		}
 	}

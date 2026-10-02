@@ -3,6 +3,7 @@ package classification
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -49,6 +50,20 @@ func newClassifierModelRuntime(cfg *config.RouterConfig, runtime *native.Runtime
 	return models, nil
 }
 
+// Match registry aliases and equivalent local paths without treating an
+// unrelated directory with the same basename as the default artifact.
+func isDefaultModelArtifact(selected, defaultPath string) bool {
+	if model := config.GetModelByPath(filepath.Clean(selected)); model != nil {
+		return model.LocalPath == defaultPath
+	}
+	selectedPath, err := filepath.Abs(selected)
+	if err != nil {
+		return false
+	}
+	registeredPath, err := filepath.Abs(defaultPath)
+	return err == nil && selectedPath == registeredPath
+}
+
 // localSpec materializes the existing canonical module default when no recipe
 // override is declared. A module's name is its default binding, not its physical
 // identity: native preparation fingerprints the artifact and execution options.
@@ -64,11 +79,29 @@ func (m *classifierModelRuntime) localSpec(name, artifact, adapter, contract str
 	if len(maxTokens) > 0 {
 		limit = maxTokens[0]
 	}
+	overflow := "truncate"
+	if model := config.GetModelByPath(artifact); model != nil && model.DefaultAdapter != "" {
+		adapter = model.DefaultAdapter
+		// Only a declared task adapter changes implicit execution policy. The
+		// historical classifier defaults continue to use their 512-token policy.
+		if adapter == "vela_halu" {
+			if limit == 0 {
+				limit = model.MaxContextLength
+			}
+			overflow = "reject"
+		}
+	}
 	provider, device := config.DefaultModelExecution(useCPU)
+	if name == "domain_classifier" {
+		provider, device = config.DefaultCategoryExecution(useCPU)
+	}
+	if model := config.GetModelByPath(artifact); model != nil && model.DefaultProvider != "" {
+		provider, device = model.DefaultProvider, model.DefaultDevice
+	}
 	return config.ResolvedModelBinding{
 		Recipe: m.recipe, Name: name,
 		Binding:    config.ModelBinding{Deployment: name, Adapter: adapter, Contract: contract},
-		Deployment: config.ModelDeployment{Artifact: config.ResolveModelPath(artifact), Provider: provider, Device: device, Precision: "native", Input: config.ModelInputBudget{MaxTokens: limit, Overflow: "truncate"}},
+		Deployment: config.ModelDeployment{Artifact: config.ResolveModelPath(artifact), Provider: provider, Device: device, Precision: "native", Input: config.ModelInputBudget{MaxTokens: limit, Overflow: overflow}},
 		Admission:  m.cfg.ModelAdmission[name],
 	}
 }

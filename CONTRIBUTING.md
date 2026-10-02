@@ -91,15 +91,27 @@ Use the repository's local image workflow:
 
 ```bash
 make vllm-sr-dev
-vllm-sr serve --image-pull-policy never
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr:latest \
+  vllm-sr serve --image-pull-policy never
 ```
+
+The build tags local images as `latest`. Set `VLLM_SR_IMAGE` explicitly because
+an editable CLI installation with a stable package version defaults to that
+release's image tag. The CLI derives the official Dashboard image with the same
+tag; `--image-pull-policy never` prevents pulling missing images.
 
 For the AMD local image:
 
 ```bash
 make vllm-sr-dev VLLM_SR_PLATFORM=amd
-vllm-sr serve --image-pull-policy never --platform amd
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest \
+  vllm-sr serve --image-pull-policy never --platform amd
 ```
+
+If you customize `DOCKER_TAG`, `DOCKER_REGISTRY`, or the Make image variables,
+pass the actual built images to `serve` through `VLLM_SR_IMAGE` and, when needed,
+`VLLM_SR_DASHBOARD_IMAGE`. The build's completion message prints a startup
+command with the selected images.
 
 Use `vllm-sr logs <service>`, `vllm-sr status`, and `vllm-sr stop` to inspect
 and stop the stack.
@@ -149,12 +161,23 @@ Run the branch check on demand with:
 make check
 ```
 
+Python formatting checks report trailing whitespace, file-ending, and Black
+formatting issues without rewriting source. To apply the native Python formatters
+deliberately, run:
+
+```bash
+.venv-agent/bin/pre-commit run python-format --hook-stage manual --files path/to/file.py
+```
+
+Pre-commit exits nonzero when a formatter changes files. Review the diff, then
+rerun `make check`.
+
 Follow the language's standard formatter and keep modules focused:
 
 - Go: `gofmt`, meaningful exported API comments, and `make check-go-mod-tidy`.
 - Rust: `cargo fmt`, `cargo clippy`, explicit error handling, and public API
   documentation.
-- Python: Ruff-compatible formatting, type hints where they improve the
+- Python: Black formatting, type hints where they improve the
   interface, and tests for behavior changes.
 
 Behavior-visible config, routing, CLI, Docker, startup, or API changes require

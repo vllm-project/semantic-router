@@ -12,7 +12,7 @@ func TestSampleQueryWindowsKeepsBothEnds(t *testing.T) {
 		windows[i] = embedding.Window{Start: i * 10, End: i*10 + 10}
 	}
 
-	kept := sampleQueryWindows(windows, 8)
+	kept := embedding.SampleWindows(windows, ragQueryWindowLimit)
 	if len(kept) != 8 {
 		t.Fatalf("kept %d windows, want 8", len(kept))
 	}
@@ -31,10 +31,10 @@ func TestSampleQueryWindowsKeepsBothEnds(t *testing.T) {
 
 func TestSampleQueryWindowsBelowTheLimit(t *testing.T) {
 	windows := []embedding.Window{{Start: 0, End: 10}, {Start: 5, End: 15}}
-	if kept := sampleQueryWindows(windows, 8); len(kept) != 2 {
+	if kept := embedding.SampleWindows(windows, ragQueryWindowLimit); len(kept) != 2 {
 		t.Fatalf("kept %d windows, want both", len(kept))
 	}
-	if kept := sampleQueryWindows(windows, 1); len(kept) != 1 || kept[0] != windows[0] {
+	if kept := embedding.SampleWindows(windows, 1); len(kept) != 1 || kept[0] != windows[0] {
 		t.Fatalf("a limit of one keeps the first window, got %v", kept)
 	}
 }

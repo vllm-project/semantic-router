@@ -5,9 +5,10 @@ package responsestore
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,9 +30,7 @@ import (
 
 func skipRedisIntegrationTests(t *testing.T) {
 	t.Helper()
-	if os.Getenv("SKIP_REDIS_TESTS") == "true" {
-		t.Skip("Redis integration tests skipped due to SKIP_REDIS_TESTS=true")
-	}
+	storagetest.Require(t, "redis")
 }
 
 func setupRedisStore(t *testing.T) *RedisStore {
@@ -42,9 +41,9 @@ func setupRedisStore(t *testing.T) *RedisStore {
 		TTLSeconds:  300, // 5 minutes
 		BackendType: RedisStoreType,
 		Redis: RedisStoreConfig{
-			Address:   "localhost:6379",
+			Address:   storageRedisAddress(),
 			DB:        15, // Use DB 15 for testing to avoid conflicts
-			KeyPrefix: "sr:",
+			KeyPrefix: fmt.Sprintf("sr_ci_%d:", time.Now().UnixNano()),
 		},
 	}
 
@@ -63,6 +62,7 @@ func setupRedisStore(t *testing.T) *RedisStore {
 	return store
 }
 
+// StorageIntegration: redis
 func TestRedisStoreIntegration_BasicCRUD(t *testing.T) {
 	store := setupRedisStore(t)
 	defer store.Close()
@@ -130,6 +130,7 @@ func TestRedisStoreIntegration_BasicCRUD(t *testing.T) {
 	})
 }
 
+// StorageIntegration: redis
 func TestRedisStoreIntegration_ConversationChain(t *testing.T) {
 	store := setupRedisStore(t)
 	defer store.Close()
@@ -205,6 +206,7 @@ func TestRedisStoreIntegration_ConversationChain(t *testing.T) {
 	})
 }
 
+// StorageIntegration: redis
 func TestRedisStoreIntegration_TTL(t *testing.T) {
 	skipRedisIntegrationTests(t)
 
@@ -214,9 +216,9 @@ func TestRedisStoreIntegration_TTL(t *testing.T) {
 		TTLSeconds:  2, // 2 seconds
 		BackendType: RedisStoreType,
 		Redis: RedisStoreConfig{
-			Address:   "localhost:6379",
+			Address:   storageRedisAddress(),
 			DB:        15,
-			KeyPrefix: "sr:",
+			KeyPrefix: fmt.Sprintf("sr_ci_%d:", time.Now().UnixNano()),
 		},
 	}
 
@@ -250,6 +252,7 @@ func TestRedisStoreIntegration_TTL(t *testing.T) {
 	})
 }
 
+// StorageIntegration: redis
 func TestRedisStoreIntegration_ConversationOperations(t *testing.T) {
 	store := setupRedisStore(t)
 	defer store.Close()
@@ -293,6 +296,7 @@ func TestRedisStoreIntegration_ConversationOperations(t *testing.T) {
 	})
 }
 
+// StorageIntegration: redis
 func TestRedisStoreIntegration_ListOperations(t *testing.T) {
 	store := setupRedisStore(t)
 	defer store.Close()
@@ -327,6 +331,7 @@ func TestRedisStoreIntegration_ListOperations(t *testing.T) {
 	})
 }
 
+// StorageIntegration: redis
 func TestRedisStoreIntegration_ConcurrentAccess(t *testing.T) {
 	store := setupRedisStore(t)
 	defer store.Close()
@@ -363,6 +368,7 @@ func TestRedisStoreIntegration_ConcurrentAccess(t *testing.T) {
 	})
 }
 
+// StorageIntegration: redis
 func TestRedisStoreIntegration_CircularReferenceProtection(t *testing.T) {
 	store := setupRedisStore(t)
 	defer store.Close()

@@ -1,6 +1,8 @@
 package extproc
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -8,9 +10,11 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
@@ -26,7 +30,6 @@ func (r *OpenAIRouter) createLooperResponse(
 	return response
 }
 
-//nolint:gocognit,cyclop,nestif // Looper output normalizes buffered and streaming terminal variants at one boundary.
 func (r *OpenAIRouter) prepareLooperResponse(
 	resp *looper.Response,
 	reqCtx *RequestContext,
@@ -38,6 +41,12 @@ func (r *OpenAIRouter) prepareLooperResponse(
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	return r.prepareLooperResponseWithEngine(resp, reqCtx, engine)
+}
+
+//nolint:gocognit,cyclop,nestif // Buffered/native/translated streams converge at one final transport gate.
+func (r *OpenAIRouter) prepareLooperResponseWithEngine(resp *looper.Response, reqCtx *RequestContext, engine *protocolcodec.Engine) (*ext_proc.ProcessingResponse, *llmprotocol.Response, []byte, error) {
+	var err error
 	target := reqCtx.SourceFormat
 	if target == "" {
 		target = llmprotocol.OpenAIChatV1
@@ -45,6 +54,9 @@ func (r *OpenAIRouter) prepareLooperResponse(
 	var semantic *llmprotocol.Response
 	var body []byte
 	contentType := "application/json"
+	// Only a router emitter can supply the separate extension channel. No field
+	// is removed from provider data based on its JSON name.
+	codecBody := resp.ProtocolBody()
 	streaming := strings.Contains(strings.ToLower(resp.ContentType), "text/event-stream")
 	if streaming && target == llmprotocol.OpenAIChatV1 && len(resp.BufferedBody) > 0 {
 		semantic, body, err = prepareNativeLooperStream(engine, resp, reqCtx)
@@ -53,12 +65,21 @@ func (r *OpenAIRouter) prepareLooperResponse(
 		}
 		contentType = "text/event-stream"
 	} else if streaming {
-		stream, streamErr := engine.NewStream(
+		streamContext := llmprotocol.StreamContext{
+			Context: reqCtx.TraceContext, Options: clientStreamOptions(reqCtx), PublicModel: resp.Model,
+			ResponseID: responseObjectPublicID(reqCtx), PreviousResponseID: responseObjectPreviousID(reqCtx),
+		}
+		var mutation protocolcodec.StreamEventMutation
+		if streamContext.ResponseID != "" {
+			mutation = func(event *llmprotocol.Event) error {
+				event.ResponseID = streamContext.ResponseID
+				return nil
+			}
+		}
+		stream, streamErr := engine.NewStreamWithMutation(
 			llmprotocol.OpenAIChatV1,
 			target,
-			llmprotocol.StreamContext{
-				Context: reqCtx.TraceContext, Options: clientStreamOptions(reqCtx), PublicModel: resp.Model,
-			},
+			streamContext, mutation,
 		)
 		if streamErr != nil {
 			return nil, nil, nil, streamErr
@@ -67,7 +88,7 @@ func (r *OpenAIRouter) prepareLooperResponse(
 			usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable},
 			items: make(map[int]*semanticStreamItem),
 		}
-		frames, events, diagnostics, streamErr := stream.Push(resp.Body)
+		frames, events, diagnostics, streamErr := stream.Push(codecBody)
 		reqCtx.ProtocolDiagnostics = append(reqCtx.ProtocolDiagnostics, diagnostics...)
 		state.observe(events)
 		for _, frame := range frames {
@@ -95,24 +116,21 @@ func (r *OpenAIRouter) prepareLooperResponse(
 		}
 		contentType = "text/event-stream"
 	} else {
-		translated, translateErr := engine.TranslateResponse(
-			llmprotocol.OpenAIChatV1,
-			target,
-			resp.Body,
-			func(response *llmprotocol.Response) error {
-				if response.Model != resp.Model {
-					response.Model = resp.Model
-				}
-				return nil
-			},
-		)
-		if translateErr != nil {
-			return nil, nil, nil, translateErr
+		semantic, body, err = prepareBufferedLooperResponse(engine, resp, reqCtx, target)
+		if err != nil {
+			return nil, nil, nil, err
 		}
-		semantic = &translated.Response
-		body = translated.Body
-		reqCtx.ResponseEnvelope = translated.Envelope
-		reqCtx.ProtocolDiagnostics = append(reqCtx.ProtocolDiagnostics, translated.Diagnostics...)
+		streaming = reqCtx.ExpectStreamingResponse
+		if streaming {
+			contentType = "text/event-stream"
+		}
+	}
+	if headerValueCI(reqCtx, headers.SRBenchExpectedConfigHash) != "" {
+		reqCtx.BenchmarkModelUsage = r.benchmarkLooperUsage(resp, reqCtx)
+	}
+	body, err = finalizeLooperResponseExtensions(engine, body, resp.RouterExtensions(), reqCtx, streaming)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 	reqCtx.SemanticResponse = semantic
 	reqCtx.ImmediateResponseEncoded = true
@@ -152,6 +170,11 @@ func buildLooperResponseHeaders(
 		appendLooperTraceHeaders(&setHeaders, resp)
 		appendLooperDecisionDetailHeaders(&setHeaders, reqCtx)
 		appendLooperSignalHeaders(&setHeaders, reqCtx)
+	}
+	if reqCtx != nil {
+		builder := newResponseHeaderMutationBuilder()
+		builder.addProtocolDiagnostics(reqCtx, reqCtx.ProtocolDiagnostics)
+		setHeaders = append(setHeaders, builder.setHeaders...)
 	}
 	return setHeaders
 }
@@ -303,4 +326,88 @@ func newHeaderValueOption(key string, value string) *core.HeaderValueOption {
 			RawValue: []byte(value),
 		},
 	}
+}
+
+func looperShouldRestoreWorkflowTrace(reqCtx *RequestContext, flow json.RawMessage) bool {
+	if looperIncludeIntermediateResponses(reqCtx) {
+		return true
+	}
+	return looperIsWorkflowDecision(reqCtx) && looperWorkflowTraceHasFailedModels(flow)
+}
+
+func looperIsWorkflowDecision(reqCtx *RequestContext) bool {
+	if reqCtx == nil || reqCtx.VSRSelectedDecision == nil {
+		return false
+	}
+	alg := reqCtx.VSRSelectedDecision.Algorithm
+	return alg != nil && alg.Type == config.DecisionAlgorithmWorkflows
+}
+
+func looperWorkflowTraceHasFailedModels(flow json.RawMessage) bool {
+	var trace struct {
+		FailedModels []json.RawMessage `json:"failed_models"`
+	}
+	if err := json.Unmarshal(flow, &trace); err != nil {
+		return false
+	}
+	return len(trace.FailedModels) > 0
+}
+
+func looperIncludeIntermediateResponses(reqCtx *RequestContext) bool {
+	if reqCtx == nil || reqCtx.VSRSelectedDecision == nil {
+		return false
+	}
+	alg := reqCtx.VSRSelectedDecision.Algorithm
+	if alg == nil || alg.Type != config.DecisionAlgorithmWorkflows {
+		return false
+	}
+	if alg.Workflows == nil || alg.Workflows.IncludeIntermediateResponses == nil {
+		return true
+	}
+	return *alg.Workflows.IncludeIntermediateResponses
+}
+
+func isLooperSSEBody(body []byte) bool {
+	trimmed := bytes.TrimSpace(body)
+	return bytes.HasPrefix(trimmed, []byte("data:")) || bytes.Contains(body, []byte("\ndata:"))
+}
+
+func restoreLooperFieldSSE(body []byte, flow json.RawMessage, field string) []byte {
+	if len(flow) == 0 {
+		return body
+	}
+	lines := bytes.Split(body, []byte("\n"))
+	out := make([]byte, 0, len(body)+len(flow)+8)
+	restored := false
+	for i, line := range lines {
+		if rest, ok := bytes.CutPrefix(line, []byte("data:")); ok && !restored {
+			payload := bytes.TrimSpace(rest)
+			if len(payload) > 0 && payload[0] == '{' && !bytes.Equal(payload, []byte("[DONE]")) {
+				payload = restoreLooperFieldJSON(payload, flow, field)
+				line = append([]byte("data: "), payload...)
+				restored = true
+			}
+		}
+		out = append(out, line...)
+		if i < len(lines)-1 {
+			out = append(out, '\n')
+		}
+	}
+	return out
+}
+
+func restoreLooperFieldJSON(body []byte, flow json.RawMessage, field string) []byte {
+	if len(flow) == 0 {
+		return body
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(body, &obj); err != nil {
+		return body
+	}
+	obj[field] = flow
+	restored, err := json.Marshal(obj)
+	if err != nil {
+		return body
+	}
+	return restored
 }

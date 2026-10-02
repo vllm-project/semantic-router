@@ -11,6 +11,7 @@ CHANGED_FILES ?=
 CHANGED_FILES_PATH ?=
 BASE_REF ?=
 HARNESS_BOOTSTRAP_DONE ?=
+CI_STATIC_ONLY ?= false
 
 AGENT_GOLANGCI_LINT_VERSION ?= $(shell cat $(CURDIR)/tools/linter/go/golangci-lint.version)
 AGENT_MARKDOWNLINT_VERSION ?= 0.43.0
@@ -24,8 +25,10 @@ AGENT_PRIMARY_WORKTREE ?= $(if $(filter %/.git,$(AGENT_GIT_COMMON_DIR)),$(patsub
 AGENT_WORKTREE_VENV ?= $(CURDIR)/.venv-agent
 AGENT_VENV ?= $(AGENT_PRIMARY_WORKTREE)/.venv-agent
 AGENT_PYTHON ?= $(AGENT_VENV)/bin/python
+AGENT_BOOTSTRAP_PYTHON ?= python3
 AGENT_PRE_COMMIT ?= $(AGENT_VENV)/bin/pre-commit
 AGENT_REQUIREMENTS_STAMP ?= $(AGENT_VENV)/.agent-requirements.txt
+AGENT_DOCS_REQUIREMENTS_STAMP ?= $(AGENT_VENV)/.docs-requirements.txt
 AGENT_NODEENV ?= $(AGENT_VENV)/nodeenv
 AGENT_NODE_TOOLS ?= $(AGENT_VENV)/node-tools
 AGENT_MARKDOWNLINT ?= $(AGENT_NODE_TOOLS)/node_modules/.bin/markdownlint
@@ -44,7 +47,7 @@ impact: $(HARNESS_VENV_DEPS) ## Show changed files, owners, checks, candidate CI
 
 check: $(HARNESS_BOOTSTRAP_DEPS) ## Lint changed files and run their owning domains' unit/contract checks
 	@$(LOG_TARGET)
-	@"$(AGENT_PYTHON)" tools/agent/scripts/harness.py check --base-ref "$(BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(CHANGED_FILES_PATH)"
+	@"$(AGENT_PYTHON)" tools/agent/scripts/harness.py check $(if $(filter true,$(CI_STATIC_ONLY)),--ci-static-only) --base-ref "$(BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(CHANGED_FILES_PATH)"
 
 verify: $(HARNESS_VENV_DEPS) ## Run explicitly selected integration checks (DOMAIN=... and/or PROFILE=...)
 	@$(LOG_TARGET)
@@ -55,7 +58,7 @@ ci-full: ## Reproduce the complete baseline PR checks locally
 	@$(MAKE) precommit-local BASE_REF="$(BASE_REF)"
 	@$(MAKE) test-and-build-local
 
-harness-check: $(HARNESS_BOOTSTRAP_DEPS) ## Validate the domain registry, workflows, and harness tests
+harness-check: $(HARNESS_BOOTSTRAP_DEPS) test-tiny-model ## Validate the domain registry, workflows, and harness tests
 	@$(LOG_TARGET)
 	@"$(AGENT_PYTHON)" tools/agent/scripts/harness.py validate
 	@"$(AGENT_PYTHON)" tools/agent/scripts/sync_public_skill.py --check
@@ -72,14 +75,17 @@ harness-check: $(HARNESS_BOOTSTRAP_DEPS) ## Validate the domain registry, workfl
 	fi
 
 harness-venv-install: ## Install the repository check dependencies
-	@if [ ! -x "$(AGENT_PYTHON)" ]; then \
+	@if ! "$(AGENT_PYTHON)" -c 'import sys; sys.exit(sys.version_info < (3, 10))' 2>/dev/null; then \
+		"$(AGENT_BOOTSTRAP_PYTHON)" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else "Error: %s needs Python 3.10 or newer, but %s is Python %d.%d.%d at %s. Set AGENT_BOOTSTRAP_PYTHON to a newer interpreter, for example AGENT_BOOTSTRAP_PYTHON=python3.12." % (tuple(sys.argv[1:]) + sys.version_info[:3] + (sys.executable,)))' "$(AGENT_VENV)" "$(AGENT_BOOTSTRAP_PYTHON)" || exit 1; \
 		echo "Creating $(AGENT_VENV)..."; \
-		python3 -m venv "$(AGENT_VENV)"; \
+		"$(AGENT_BOOTSTRAP_PYTHON)" -m venv --clear "$(AGENT_VENV)"; \
 	fi
 	@if [ ! -f "$(AGENT_REQUIREMENTS_STAMP)" ] || \
-		! cmp -s tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)"; then \
+		! cmp -s tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)" || \
+		! cmp -s tools/docs/requirements.txt "$(AGENT_DOCS_REQUIREMENTS_STAMP)"; then \
 		"$(AGENT_PYTHON)" -m pip install -r tools/agent/requirements.txt && \
-		cp tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)"; \
+		cp tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)" && \
+		cp tools/docs/requirements.txt "$(AGENT_DOCS_REQUIREMENTS_STAMP)"; \
 	fi
 	@if [ "$(abspath $(AGENT_WORKTREE_VENV))" != "$(abspath $(AGENT_VENV))" ]; then \
 		if [ -e "$(AGENT_WORKTREE_VENV)" ] && [ ! -L "$(AGENT_WORKTREE_VENV)" ]; then \
@@ -112,10 +118,14 @@ harness-markdown-bootstrap: harness-node-bootstrap ## Install repo-local markdow
 		PATH="$$NODE_PATH" npm install --prefix "$(AGENT_NODE_TOOLS)" --no-audit --no-fund --loglevel=error markdownlint-cli@$(AGENT_MARKDOWNLINT_VERSION); \
 	fi
 
+# golangci-lint cannot type-check a standard library newer than the Go that
+# built it, so rebuild it after a Go release upgrade such as 1.26 to 1.27.
 harness-go-bootstrap: ## Install Go lint tooling only when Go changed
 	@if command -v go >/dev/null 2>&1; then \
 		GOLANGCI_BIN="$$(go env GOPATH)/bin/golangci-lint"; \
-		if [ ! -x "$$GOLANGCI_BIN" ] || ! "$$GOLANGCI_BIN" version 2>/dev/null | grep -q " $(AGENT_GOLANGCI_LINT_VERSION) "; then \
+		GO_MINOR='s/.*go1\.\([0-9][0-9]*\).*/\1/p'; \
+		if [ ! -x "$$GOLANGCI_BIN" ] || ! "$$GOLANGCI_BIN" version 2>/dev/null | grep -q " $(AGENT_GOLANGCI_LINT_VERSION) " || \
+			[ "$$(go version "$$GOLANGCI_BIN" | sed -n "$$GO_MINOR")" -lt "$$(go env GOVERSION | sed -n "$$GO_MINOR")" ]; then \
 			go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$(AGENT_GOLANGCI_LINT_VERSION); \
 		fi; \
 	fi
@@ -137,7 +147,7 @@ test-and-build-local: ## Reproduce the CI Test And Build job locally
 	$(MAKE) start-qdrant; \
 	$(MAKE) start-redis; \
 	$(MAKE) start-valkey; \
-	CI=true CI_MINIMAL_MODELS=true CGO_ENABLED=1 $(NATIVE_ENV) MILVUS_URI=localhost:19530 SKIP_MILVUS_TESTS=false SKIP_QDRANT_TESTS=false SKIP_REDIS_TESTS=false SKIP_VALKEY_TESTS=false VALKEY_HOST=localhost VALKEY_PORT=6380 HF_TOKEN="$(HF_TOKEN)" HUGGINGFACE_HUB_TOKEN="$(HUGGINGFACE_HUB_TOKEN)" $(MAKE) test
+	CI=true CGO_ENABLED=1 $(NATIVE_ENV) MILVUS_URI=localhost:19530 SKIP_MILVUS_TESTS=false SKIP_QDRANT_TESTS=false SKIP_REDIS_TESTS=false SKIP_VALKEY_TESTS=false VALKEY_HOST=localhost VALKEY_PORT=6380 HF_TOKEN="$(HF_TOKEN)" HUGGINGFACE_HUB_TOKEN="$(HUGGINGFACE_HUB_TOKEN)" $(MAKE) test
 
 .PHONY: impact check verify ci-full harness-check harness-venv-install harness-bootstrap \
 	harness-node-bootstrap harness-markdown-bootstrap harness-go-bootstrap harness-rust-bootstrap \

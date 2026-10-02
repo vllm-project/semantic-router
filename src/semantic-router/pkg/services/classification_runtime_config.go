@@ -7,6 +7,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -73,8 +74,7 @@ func (s *ClassificationService) TryRefreshRuntimeConfig(
 	if err != nil {
 		return fmt.Errorf("rebuild classifier: %w", err)
 	}
-	s.publishClassifiers(newConfig, rebuiltClassifier, nil, rebuiltClassifier)
-	return nil
+	return s.prepareAndPublishClassifiers(newConfig, rebuiltClassifier, nil, rebuiltClassifier, options.Runtime)
 }
 
 func (s *ClassificationService) refreshRecipeClassifiers(
@@ -111,20 +111,20 @@ func (s *ClassificationService) refreshRecipeClassifiers(
 		return fmt.Errorf("default routing recipe classifier is unavailable")
 	}
 
-	s.publishClassifiers(newConfig, defaultClassifier, rebuilt, rebuilt)
-	return nil
+	return s.prepareAndPublishClassifiers(newConfig, defaultClassifier, rebuilt, rebuilt, options.Runtime)
 }
 
 // Preparation leaves old requests running. Only publication/retirement waits
 // for standalone service calls; normal router replacement uses its generation
 // lease and never mutates this service's classifier graph.
-func (s *ClassificationService) publishClassifiers(cfg *config.RouterConfig, classifier *classification.Classifier, recipes *classification.RecipeClassifiers, owner io.Closer) {
+func (s *ClassificationService) publishClassifiers(cfg *config.RouterConfig, classifier *classification.Classifier, recipes *classification.RecipeClassifiers, owner io.Closer, embeddings *embedding.Set) {
 	s.runtimeMutex.Lock()
 	defer s.runtimeMutex.Unlock()
 	s.configMutex.Lock()
 	previousOwner, previousUnified := s.runtimeOwner, s.unifiedClassifier
 	s.classifier, s.recipeClassifiers, s.config = classifier, recipes, cfg
 	s.runtimeOwner = owner
+	s.globalEmbeddings = embeddings
 	s.unifiedClassifier = classification.NewUnifiedClassifierFromRecipe(classifier)
 	s.configMutex.Unlock()
 	if err := previousUnified.Close(); err != nil {

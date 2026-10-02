@@ -1,16 +1,20 @@
 package classification
 
 import (
+	"context"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 func TestEmbeddingClassifier_SoftMatchingDisabledWithoutHardMatch(t *testing.T) {
-	stubEmbeddingLookup(t, map[string][]float32{
+	provider := stubEmbeddingLookup(t, map[string][]float32{
 		"query":        makeEmbedding(1.0, 0.0, 0.0),
 		"candidate_a1": makeEmbedding(0.60, 0.0, 0.0),
 		"candidate_a2": makeEmbedding(0.55, 0.0, 0.0),
@@ -26,7 +30,7 @@ func TestEmbeddingClassifier_SoftMatchingDisabledWithoutHardMatch(t *testing.T) 
 		EnableSoftMatching: &softMatchingDisabled,
 		MinScoreThreshold:  0.5,
 		TopK:               intPtr(1),
-	})
+	}, provider)
 
 	ruleName, score, err := classifier.Classify("query")
 	if err != nil {
@@ -38,7 +42,7 @@ func TestEmbeddingClassifier_SoftMatchingDisabledWithoutHardMatch(t *testing.T) 
 }
 
 func TestEmbeddingClassifier_DefaultsRespectRuleThreshold(t *testing.T) {
-	stubEmbeddingLookup(t, map[string][]float32{
+	provider := stubEmbeddingLookup(t, map[string][]float32{
 		"request":   makeEmbedding(1.0, 0.0, 0.0),
 		"reference": makeEmbedding(0.60, 0.0, 0.0),
 	})
@@ -51,7 +55,7 @@ func TestEmbeddingClassifier_DefaultsRespectRuleThreshold(t *testing.T) {
 			classifier := newTestEmbeddingClassifier(t, []config.EmbeddingRule{{
 				Name: "intent", Candidates: []string{"reference"},
 				SimilarityThreshold: 0.8, AggregationMethodConfiged: config.AggregationMethodMax,
-			}}, settings)
+			}}, settings, provider)
 			result, err := classifier.ClassifyDetailed("request")
 			if err != nil {
 				t.Fatal(err)
@@ -67,7 +71,7 @@ func TestEmbeddingClassifier_DefaultsRespectRuleThreshold(t *testing.T) {
 }
 
 func TestEmbeddingClassifier_SoftMatchingEnabledReturnsBestRule(t *testing.T) {
-	stubEmbeddingLookup(t, map[string][]float32{
+	provider := stubEmbeddingLookup(t, map[string][]float32{
 		"query":        makeEmbedding(1.0, 0.0, 0.0),
 		"candidate_a1": makeEmbedding(0.60, 0.0, 0.0),
 		"candidate_a2": makeEmbedding(0.55, 0.0, 0.0),
@@ -83,7 +87,7 @@ func TestEmbeddingClassifier_SoftMatchingEnabledReturnsBestRule(t *testing.T) {
 		EnableSoftMatching: &softMatchingEnabled,
 		MinScoreThreshold:  0.5,
 		TopK:               intPtr(1),
-	})
+	}, provider)
 
 	ruleName, score, err := classifier.Classify("query")
 	if err != nil {
@@ -98,7 +102,7 @@ func TestEmbeddingClassifier_SoftMatchingEnabledReturnsBestRule(t *testing.T) {
 }
 
 func TestEmbeddingClassifier_ClassifyAllExplicitTopOneReturnsBestHardMatch(t *testing.T) {
-	stubEmbeddingLookup(t, map[string][]float32{
+	provider := stubEmbeddingLookup(t, map[string][]float32{
 		"TensorFlow pipeline":  makeEmbedding(0.90, 0.85, 0.10),
 		"machine learning":     makeEmbedding(0.85, 0.0, 0.0),
 		"neural network":       makeEmbedding(0.80, 0.0, 0.0),
@@ -108,7 +112,7 @@ func TestEmbeddingClassifier_ClassifyAllExplicitTopOneReturnsBestHardMatch(t *te
 		"ingredients":          makeEmbedding(0.0, 0.0, 0.25),
 	})
 
-	classifier := newTestEmbeddingClassifier(t, topicRules(), config.HNSWConfig{PreloadEmbeddings: true, TopK: intPtr(1)})
+	classifier := newTestEmbeddingClassifier(t, topicRules(), config.HNSWConfig{PreloadEmbeddings: true, TopK: intPtr(1)}, provider)
 
 	matched, err := classifier.ClassifyAll("TensorFlow pipeline")
 	if err != nil {
@@ -126,7 +130,7 @@ func TestEmbeddingClassifier_ClassifyAllExplicitTopOneReturnsBestHardMatch(t *te
 }
 
 func TestEmbeddingClassifier_ClassifyAllExplicitTopKReturnsMultipleHardMatches(t *testing.T) {
-	stubEmbeddingLookup(t, map[string][]float32{
+	provider := stubEmbeddingLookup(t, map[string][]float32{
 		"TensorFlow pipeline":  makeEmbedding(0.90, 0.85, 0.10),
 		"machine learning":     makeEmbedding(0.85, 0.0, 0.0),
 		"neural network":       makeEmbedding(0.80, 0.0, 0.0),
@@ -139,7 +143,7 @@ func TestEmbeddingClassifier_ClassifyAllExplicitTopKReturnsMultipleHardMatches(t
 	classifier := newTestEmbeddingClassifier(t, topicRules(), config.HNSWConfig{
 		PreloadEmbeddings: true,
 		TopK:              intPtr(2),
-	})
+	}, provider)
 
 	matched, err := classifier.ClassifyAll("TensorFlow pipeline")
 	if err != nil {
@@ -164,7 +168,7 @@ func TestEmbeddingClassifier_ClassifyAllExplicitTopKReturnsMultipleHardMatches(t
 }
 
 func TestEmbeddingClassifier_ClassifyDetailedReturnsAllAcceptedMatchesBeforeTopK(t *testing.T) {
-	stubEmbeddingLookup(t, map[string][]float32{
+	provider := stubEmbeddingLookup(t, map[string][]float32{
 		"TensorFlow pipeline":  makeEmbedding(0.90, 0.85, 0.10),
 		"machine learning":     makeEmbedding(0.85, 0.0, 0.0),
 		"neural network":       makeEmbedding(0.80, 0.0, 0.0),
@@ -177,7 +181,7 @@ func TestEmbeddingClassifier_ClassifyDetailedReturnsAllAcceptedMatchesBeforeTopK
 	classifier := newTestEmbeddingClassifier(t, topicRules(), config.HNSWConfig{
 		PreloadEmbeddings: true,
 		TopK:              intPtr(1),
-	})
+	}, provider)
 
 	detailed, err := classifier.ClassifyDetailed("TensorFlow pipeline")
 	if err != nil {
@@ -203,7 +207,7 @@ func TestEmbeddingClassifier_ClassifyDetailedReturnsAllAcceptedMatchesBeforeTopK
 }
 
 func TestEmbeddingClassifier_ClassifyAllMatchesClassify(t *testing.T) {
-	stubEmbeddingLookup(t, map[string][]float32{
+	provider := stubEmbeddingLookup(t, map[string][]float32{
 		"query":                makeEmbedding(1.0, 0.0, 0.0),
 		"machine learning":     makeEmbedding(0.85, 0.0, 0.0),
 		"neural network":       makeEmbedding(0.80, 0.0, 0.0),
@@ -213,7 +217,7 @@ func TestEmbeddingClassifier_ClassifyAllMatchesClassify(t *testing.T) {
 		"ingredients":          makeEmbedding(0.05, 0.0, 0.0),
 	})
 
-	classifier := newTestEmbeddingClassifier(t, topicRules(), config.HNSWConfig{PreloadEmbeddings: true})
+	classifier := newTestEmbeddingClassifier(t, topicRules(), config.HNSWConfig{PreloadEmbeddings: true}, provider)
 
 	matched, err := classifier.ClassifyAll("query")
 	if err != nil {
@@ -236,7 +240,7 @@ func TestEmbeddingClassifier_ClassifyAllMatchesClassify(t *testing.T) {
 }
 
 func TestEmbeddingClassifier_ClassifyAllSoftMatchesRespectConfiguredTopK(t *testing.T) {
-	stubEmbeddingLookup(t, map[string][]float32{
+	provider := stubEmbeddingLookup(t, map[string][]float32{
 		"query":       makeEmbedding(1.0, 0.0, 0.0),
 		"candidate_a": makeEmbedding(0.71, 0.0, 0.0),
 		"candidate_b": makeEmbedding(0.68, 0.0, 0.0),
@@ -268,7 +272,7 @@ func TestEmbeddingClassifier_ClassifyAllSoftMatchesRespectConfiguredTopK(t *test
 		EnableSoftMatching: &softMatchingEnabled,
 		MinScoreThreshold:  0.5,
 		TopK:               intPtr(2),
-	})
+	}, provider)
 
 	matched, err := classifier.ClassifyAll("query")
 	if err != nil {
@@ -288,7 +292,7 @@ func TestEmbeddingClassifier_ClassifyAllSoftMatchesRespectConfiguredTopK(t *test
 }
 
 func TestEmbeddingClassifier_MaxAggregationUsesPrototypeAwareScoring(t *testing.T) {
-	stubEmbeddingLookup(t, map[string][]float32{
+	provider := stubEmbeddingLookup(t, map[string][]float32{
 		"query":      makeEmbedding(1.0, 0.0, 0.0),
 		"candidate1": makeEmbedding(1.0, 0.0, 0.0),
 		"candidate2": makeEmbedding(0.4, 0.0, 0.0),
@@ -307,7 +311,7 @@ func TestEmbeddingClassifier_MaxAggregationUsesPrototypeAwareScoring(t *testing.
 			BestWeight: 0.75,
 			TopM:       2,
 		},
-	})
+	}, provider)
 
 	detailed, err := classifier.ClassifyDetailed("query")
 	if err != nil {
@@ -385,10 +389,15 @@ func newTestEmbeddingClassifier(
 	t *testing.T,
 	rules []config.EmbeddingRule,
 	hnswConfig config.HNSWConfig,
+	providers ...embedding.Provider,
 ) *EmbeddingClassifier {
 	t.Helper()
 
-	classifier, err := NewEmbeddingClassifier(rules, hnswConfig)
+	var provider embedding.Provider
+	if len(providers) > 0 {
+		provider = providers[0]
+	}
+	classifier, err := NewEmbeddingClassifierWithProvider(rules, hnswConfig, provider)
 	if err != nil {
 		t.Fatalf("Failed to create classifier: %v", err)
 	}
@@ -397,16 +406,12 @@ func newTestEmbeddingClassifier(
 
 func TestEmbeddingClassifierConstructorDoesNotPreloadCandidates(t *testing.T) {
 	calls := 0
-	originalFunc := getEmbedding2DMatryoshka
-	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*tasks.EmbeddingResult, error) {
+	provider := &testEmbeddingProvider{text: func(_ context.Context, text string, options embedding.Options) ([]float32, error) {
 		calls++
 		return nil, errors.New("constructor must not call embedding backend")
-	}
-	t.Cleanup(func() {
-		getEmbedding2DMatryoshka = originalFunc
-	})
+	}}
 
-	classifier, err := NewEmbeddingClassifier(topicRules(), config.HNSWConfig{PreloadEmbeddings: true})
+	classifier, err := NewEmbeddingClassifierWithProvider(topicRules(), config.HNSWConfig{PreloadEmbeddings: true}, provider)
 	if err != nil {
 		t.Fatalf("NewEmbeddingClassifier failed: %v", err)
 	}
@@ -420,23 +425,19 @@ func TestEmbeddingClassifierConstructorDoesNotPreloadCandidates(t *testing.T) {
 
 func TestEmbeddingClassifierWarmupFailureDoesNotPublishPartialEmbeddings(t *testing.T) {
 	failBadCandidate := true
-	originalFunc := getEmbedding2DMatryoshka
-	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*tasks.EmbeddingResult, error) {
+	provider := &testEmbeddingProvider{text: func(_ context.Context, text string, options embedding.Options) ([]float32, error) {
 		if text == "bad" && failBadCandidate {
 			return nil, errors.New("synthetic embedding failure")
 		}
-		return &tasks.EmbeddingResult{Embedding: makeEmbedding(1.0, 0.0, 0.0)}, nil
-	}
-	t.Cleanup(func() {
-		getEmbedding2DMatryoshka = originalFunc
-	})
+		return makeEmbedding(1.0, 0.0, 0.0), nil
+	}}
 
-	classifier, err := NewEmbeddingClassifier([]config.EmbeddingRule{{
+	classifier, err := NewEmbeddingClassifierWithProvider([]config.EmbeddingRule{{
 		Name:                      "safe_publish",
 		Candidates:                []string{"good", "bad"},
 		SimilarityThreshold:       0.70,
 		AggregationMethodConfiged: config.AggregationMethodMax,
-	}}, config.HNSWConfig{PreloadEmbeddings: true})
+	}}, config.HNSWConfig{PreloadEmbeddings: true}, provider)
 	if err != nil {
 		t.Fatalf("NewEmbeddingClassifier failed: %v", err)
 	}
@@ -457,27 +458,14 @@ func TestEmbeddingClassifierWarmupFailureDoesNotPublishPartialEmbeddings(t *test
 	}
 }
 
-func stubEmbeddingLookup(t *testing.T, mockEmbeddings map[string][]float32) {
+func stubEmbeddingLookup(t *testing.T, values map[string][]float32) *testEmbeddingProvider {
 	t.Helper()
-
-	originalLegacyFunc := getEmbeddingWithModelType
-	originalMatryoshkaFunc := getEmbedding2DMatryoshka
-	lookup := func(text string) *tasks.EmbeddingResult {
-		if emb, ok := mockEmbeddings[text]; ok {
-			return &tasks.EmbeddingResult{Embedding: emb}
+	return &testEmbeddingProvider{text: func(_ context.Context, text string, _ embedding.Options) ([]float32, error) {
+		if vector, ok := values[text]; ok {
+			return vector, nil
 		}
-		return &tasks.EmbeddingResult{Embedding: makeEmbedding(0.0)}
-	}
-	getEmbeddingWithModelType = func(text string, modelType string, targetDim int) (*tasks.EmbeddingResult, error) {
-		return lookup(text), nil
-	}
-	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*tasks.EmbeddingResult, error) {
-		return lookup(text), nil
-	}
-	t.Cleanup(func() {
-		getEmbeddingWithModelType = originalLegacyFunc
-		getEmbedding2DMatryoshka = originalMatryoshkaFunc
-	})
+		return makeEmbedding(0), nil
+	}}
 }
 
 func makeEmbedding(values ...float32) []float32 {
@@ -494,27 +482,27 @@ func intPtr(value int) *int {
 	return &value
 }
 
-// stubMultiModalImageLookup overrides getMultiModalImageEmbedding for tests.
-// keys map raw image payloads (the same string passed to ClassifyDetailedMultimodal)
-// to the embedding the multimodal model would have produced. Tests must
-// populate every payload they expect the classifier to embed; an unmocked
-// payload fails the test loudly so dimension or stub mismatches surface as
-// real failures instead of silently classifying against a 1-D zero vector.
-func stubMultiModalImageLookup(t *testing.T, mockEmbeddings map[string][]float32) {
+// stubMultiModalImageLookup receives decoded bytes through the real input boundary.
+func stubMultiModalImageLookup(t *testing.T, values map[string][]float32) func(context.Context, []byte, int) ([]float32, error) {
 	t.Helper()
-
-	originalFunc := getMultiModalImageEmbedding
-	getMultiModalImageEmbedding = func(imageRef string, targetDim int) ([]float32, error) {
-		if emb, ok := mockEmbeddings[imageRef]; ok {
-			return emb, nil
+	decoded := make(map[string][]float32, len(values))
+	for ref, vector := range values {
+		data := ref
+		if index := strings.Index(ref, ";base64,"); index >= 0 {
+			bytes, err := base64.StdEncoding.DecodeString(ref[index+8:])
+			if err != nil {
+				t.Fatal(err)
+			}
+			data = string(bytes)
 		}
-		t.Errorf("stubMultiModalImageLookup called with unmocked payload %q; populate the fixture or stub the embedding explicitly", imageRef)
-		t.FailNow()
-		return nil, nil
+		decoded[data] = vector
 	}
-	t.Cleanup(func() {
-		getMultiModalImageEmbedding = originalFunc
-	})
+	return func(_ context.Context, data []byte, _ int) ([]float32, error) {
+		if vector, ok := decoded[string(data)]; ok {
+			return vector, nil
+		}
+		return nil, fmt.Errorf("unmocked image payload %q", data)
+	}
 }
 
 // chipFabImageRules returns a small, fictional anchor pack matching what
@@ -578,12 +566,12 @@ func mixedModalityRules() []config.EmbeddingRule {
 }
 
 func TestEmbeddingClassifier_ClassifyDetailedMultimodalImageHardMatch(t *testing.T) {
-	stubMultiModalImageLookup(t, map[string][]float32{
-		"data:image/png;base64,FAKE_WAFER_BYTES": makeEmbedding(0.9, 0.1, 0.0),
+	image := stubMultiModalImageLookup(t, map[string][]float32{
+		"data:image/png;base64,RkFLRV9XQUZFUl9CWVRFUw==": makeEmbedding(0.9, 0.1, 0.0),
 	})
-	stubEmbeddingLookup(t, map[string][]float32{
+	provider := stubEmbeddingLookup(t, map[string][]float32{
 		// Text candidates are embedded the same way as for the text-query path
-		// because preloading goes through getEmbedding2DMatryoshka regardless
+		// because preloading uses the owned text provider regardless
 		// of the rule's query modality. The multimodal model emits text and
 		// image embeddings in the same shared space, so this is a valid stub.
 		"wafer photo":       makeEmbedding(0.95, 0.0, 0.0),
@@ -591,12 +579,13 @@ func TestEmbeddingClassifier_ClassifyDetailedMultimodalImageHardMatch(t *testing
 		"office whiteboard": makeEmbedding(0.0, 0.95, 0.0),
 		"conference room":   makeEmbedding(0.0, 0.85, 0.0),
 	})
+	provider.image = image
 
-	classifier := newTestEmbeddingClassifier(t, chipFabImageRules(), multimodalHNSWConfig(true))
+	classifier := newTestEmbeddingClassifier(t, chipFabImageRules(), multimodalHNSWConfig(true), provider)
 
 	result, err := classifier.ClassifyDetailedMultimodal(
 		config.QueryModalityImage,
-		"data:image/png;base64,FAKE_WAFER_BYTES",
+		"data:image/png;base64,RkFLRV9XQUZFUl9CWVRFUw==",
 	)
 	if err != nil {
 		t.Fatalf("ClassifyDetailedMultimodal failed: %v", err)
@@ -613,7 +602,7 @@ func TestEmbeddingClassifier_ClassifyDetailedMultimodalImageHardMatch(t *testing
 }
 
 func TestEmbeddingClassifier_ClassifyDetailedFiltersOutImageRules(t *testing.T) {
-	stubEmbeddingLookup(t, map[string][]float32{
+	provider := stubEmbeddingLookup(t, map[string][]float32{
 		"machine learning":             makeEmbedding(0.0, 0.0, 0.95),
 		"neural network":               makeEmbedding(0.0, 0.0, 0.85),
 		"wafer photo":                  makeEmbedding(0.95, 0.0, 0.0),
@@ -621,7 +610,7 @@ func TestEmbeddingClassifier_ClassifyDetailedFiltersOutImageRules(t *testing.T) 
 		"TensorFlow training pipeline": makeEmbedding(0.0, 0.0, 0.95),
 	})
 
-	classifier := newTestEmbeddingClassifier(t, mixedModalityRules(), multimodalHNSWConfig(true))
+	classifier := newTestEmbeddingClassifier(t, mixedModalityRules(), multimodalHNSWConfig(true), provider)
 
 	result, err := classifier.ClassifyDetailed("TensorFlow training pipeline")
 	if err != nil {
@@ -638,21 +627,22 @@ func TestEmbeddingClassifier_ClassifyDetailedFiltersOutImageRules(t *testing.T) 
 }
 
 func TestEmbeddingClassifier_ClassifyDetailedMultimodalFiltersOutTextRules(t *testing.T) {
-	stubMultiModalImageLookup(t, map[string][]float32{
-		"data:image/png;base64,FAKE_WAFER_BYTES": makeEmbedding(0.9, 0.0, 0.0),
+	image := stubMultiModalImageLookup(t, map[string][]float32{
+		"data:image/png;base64,RkFLRV9XQUZFUl9CWVRFUw==": makeEmbedding(0.9, 0.0, 0.0),
 	})
-	stubEmbeddingLookup(t, map[string][]float32{
+	provider := stubEmbeddingLookup(t, map[string][]float32{
 		"machine learning": makeEmbedding(0.0, 0.0, 0.95),
 		"neural network":   makeEmbedding(0.0, 0.0, 0.85),
 		"wafer photo":      makeEmbedding(0.95, 0.0, 0.0),
 		"SEM micrograph":   makeEmbedding(0.85, 0.0, 0.0),
 	})
+	provider.image = image
 
-	classifier := newTestEmbeddingClassifier(t, mixedModalityRules(), multimodalHNSWConfig(true))
+	classifier := newTestEmbeddingClassifier(t, mixedModalityRules(), multimodalHNSWConfig(true), provider)
 
 	result, err := classifier.ClassifyDetailedMultimodal(
 		config.QueryModalityImage,
-		"data:image/png;base64,FAKE_WAFER_BYTES",
+		"data:image/png;base64,RkFLRV9XQUZFUl9CWVRFUw==",
 	)
 	if err != nil {
 		t.Fatalf("ClassifyDetailedMultimodal failed: %v", err)
@@ -689,24 +679,24 @@ func TestEmbeddingClassifier_ClassifyDetailedMultimodalRejectsEmptyPayload(t *te
 	}
 }
 
-func TestEmbeddingClassifier_ClassifyDetailedMultimodalRejectsAudioUntilWired(t *testing.T) {
+func TestEmbeddingClassifier_ClassifyDetailedMultimodalSkipsUnconfiguredAudio(t *testing.T) {
 	classifier := newTestEmbeddingClassifier(t, chipFabImageRules(), multimodalHNSWConfig(false))
 
-	_, err := classifier.ClassifyDetailedMultimodal(config.QueryModalityAudio, "data:audio/wav;base64,XYZ")
-	if err == nil {
-		t.Fatal("expected error for audio modality (not yet wired), got nil")
+	result, err := classifier.ClassifyDetailedMultimodal(config.QueryModalityAudio, "data:audio/wav;base64,XYZ")
+	if err != nil || len(result.Scores) != 0 {
+		t.Fatalf("unconfigured audio performed inference: %v, %v", result, err)
 	}
 }
 
 func TestEmbeddingClassifier_PreloadCoversImageModalityCandidates(t *testing.T) {
-	stubEmbeddingLookup(t, map[string][]float32{
+	provider := stubEmbeddingLookup(t, map[string][]float32{
 		"wafer photo":       makeEmbedding(0.95, 0.0, 0.0),
 		"SEM micrograph":    makeEmbedding(0.85, 0.0, 0.0),
 		"office whiteboard": makeEmbedding(0.0, 0.95, 0.0),
 		"conference room":   makeEmbedding(0.0, 0.85, 0.0),
 	})
 
-	classifier, err := NewEmbeddingClassifier(chipFabImageRules(), multimodalHNSWConfig(true))
+	classifier, err := NewEmbeddingClassifierWithProvider(chipFabImageRules(), multimodalHNSWConfig(true), provider)
 	if err != nil {
 		t.Fatalf("NewEmbeddingClassifier failed: %v", err)
 	}
@@ -730,22 +720,18 @@ func TestEmbeddingClassifier_PreloadCoversImageModalityCandidates(t *testing.T) 
 func TestEmbeddingClassifier_ClassifyDetailedMultimodalSurfacesEmbeddingErrors(t *testing.T) {
 	wantErr := errors.New("synthetic FFI failure")
 
-	originalFunc := getMultiModalImageEmbedding
-	getMultiModalImageEmbedding = func(imageRef string, targetDim int) ([]float32, error) {
+	provider := &testEmbeddingProvider{image: func(context.Context, []byte, int) ([]float32, error) {
 		return nil, wantErr
-	}
-	t.Cleanup(func() {
-		getMultiModalImageEmbedding = originalFunc
-	})
+	}}
 
-	classifier, err := NewEmbeddingClassifier(chipFabImageRules(), multimodalHNSWConfig(false))
+	classifier, err := NewEmbeddingClassifierWithProvider(chipFabImageRules(), multimodalHNSWConfig(false), provider)
 	if err != nil {
 		t.Fatalf("NewEmbeddingClassifier failed: %v", err)
 	}
 
-	_, err = classifier.ClassifyDetailedMultimodal(config.QueryModalityImage, "data:image/png;base64,WHATEVER")
+	_, err = classifier.ClassifyDetailedMultimodal(config.QueryModalityImage, "data:image/png;base64,V0hBVEVWRVI=")
 	if err == nil {
-		t.Fatal("expected error to surface from getMultiModalImageEmbedding, got nil")
+		t.Fatal("expected owned image provider error, got nil")
 	}
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected wrapped error to satisfy errors.Is for synthetic failure, got: %v", err)
@@ -773,7 +759,7 @@ func TestEmbeddingClassifier_ClassifyDetailedMultimodalNoMatchingRulesReturnsEmp
 
 	result, err := classifier.ClassifyDetailedMultimodal(
 		config.QueryModalityImage,
-		"data:image/png;base64,WHATEVER",
+		"data:image/png;base64,V0hBVEVWRVI=",
 	)
 	if err != nil {
 		t.Fatalf("expected no error when classifier has no image rules, got: %v", err)

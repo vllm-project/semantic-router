@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 )
 
 // RecipeName identifies an isolated routing namespace.
@@ -45,6 +47,7 @@ type RoutingProfile struct {
 	Projections           Projections
 	Decisions             []Decision
 	Strategy              RoutingStrategy
+	Fallback              *fallback.FallbackPolicy
 }
 
 // RoutingRecipe gives an isolated routing profile a stable name and optional
@@ -161,6 +164,7 @@ func (c *RouterConfig) DefaultRecipe() *RoutingRecipe {
 			Projections:           c.Projections,
 			Decisions:             c.Decisions,
 			Strategy:              c.Strategy,
+			Fallback:              c.Fallback.Clone(),
 		},
 	}
 }
@@ -278,13 +282,14 @@ func (c *RouterConfig) ConfigForRecipe(recipe *RoutingRecipe) *RouterConfig {
 	scoped := *c
 	scoped.RoutingScope = recipe.Name
 	scoped.IntelligentRouting = IntelligentRouting{
-		ModelBindings:         cloneModelMap(recipe.Profile.ModelBindings),
+		ModelBindings:         c.EffectiveModelBindings(recipe.Profile.Signals, recipe.Profile.ModelBindings),
 		CandidateRequirements: recipe.Profile.CandidateRequirements.Clone(),
 		DataPolicy:            recipe.Profile.DataPolicy.Clone(),
 		Signals:               recipe.Profile.Signals,
 		Projections:           recipe.Profile.Projections,
 		Decisions:             recipe.Profile.Decisions,
 		Strategy:              recipe.Profile.Strategy,
+		Fallback:              recipe.Profile.Fallback.Clone(),
 		ModelSelection:        c.ModelSelection,
 		ReasoningConfig:       c.ReasoningConfig,
 	}

@@ -6,7 +6,8 @@ package classification
 // To use onnx-binding instead, build with: go build -tags=onnx
 
 /*
-#cgo LDFLAGS: -L../../../../candle-binding/target/release -lcandle_semantic_router
+#cgo !riscv64 LDFLAGS: -L../../../../candle-binding/target/release -lcandle_semantic_router
+#cgo riscv64 LDFLAGS: -L../../../../candle-binding/target/riscv64gc-unknown-linux-gnu/release -lcandle_semantic_router
 */
 import "C"
 

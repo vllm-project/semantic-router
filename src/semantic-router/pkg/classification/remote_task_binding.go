@@ -12,7 +12,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/diagnostics"
 )
 
 // remoteReservation owns no external process or model. It shares only the
@@ -63,7 +62,7 @@ func remoteTaskBinding[I, O any](ctx context.Context, models *classifierModelRun
 		_ = resource.Close()
 		return nil, err
 	}
-	registry := binding.NewRegistry(diagnostics.Observe)
+	registry := binding.NewRegistry(models.runtime.ObserveBinding)
 	task, err := binding.Register(registry, spec.Binding.Contract, func(I) error { return nil }, validate)
 	if err != nil {
 		_ = resource.Close()

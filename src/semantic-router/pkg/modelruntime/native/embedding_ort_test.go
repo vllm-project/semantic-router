@@ -53,13 +53,13 @@ func TestORTEmbeddingPoolPrecisionPreservesRepresentationMath(t *testing.T) {
 					if loadErr != nil {
 						return nil, loadErr
 					}
-					return &embeddingEngine{multi: model}, nil
+					return &ortMultimodalEmbeddingEngine{MultiModalModel: model}, nil
 				}
 				model, loadErr := ort.LoadEmbeddingModel(options)
 				if loadErr != nil {
 					return nil, loadErr
 				}
-				return &embeddingEngine{ort: model}, nil
+				return &ortTextEmbeddingEngine{EmbeddingModel: model}, nil
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -80,7 +80,7 @@ func TestORTEmbeddingPoolPrecisionPreservesRepresentationMath(t *testing.T) {
 					t.Fatal("different physical precision identities shared an owner")
 				}
 				var inferErr error
-				reference, inferErr = value.(*embeddingEngine).embed("hello world", view)
+				reference, inferErr = value.(embeddingEngine).embed("hello world", view)
 				return inferErr
 			}); useErr != nil {
 				t.Fatal(useErr)

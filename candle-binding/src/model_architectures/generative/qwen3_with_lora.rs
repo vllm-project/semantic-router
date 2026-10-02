@@ -775,8 +775,8 @@ mod chunked_attention_tests {
             .forward(&row(&suffix[..suffix.len() - 1]), prefix_len)
             .unwrap();
         let mut tokens = suffix.clone();
-        let mut total = prefix_len + tokens.len();
         for (step, (want_logits, want_next)) in want.iter().enumerate() {
+            let total = prefix_len + tokens.len();
             let last = *tokens.last().unwrap();
             let logits = model.forward(&row(&[last]), total - 1).unwrap();
             assert_eq!(
@@ -789,7 +789,6 @@ mod chunked_attention_tests {
             let next = argmax(&logits);
             assert_eq!(next, *want_next, "step {step}: sampled token");
             tokens.push(next);
-            total += 1;
         }
     }
 }

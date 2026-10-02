@@ -1,0 +1,20 @@
+name: Load candidate images
+description: Load exact source and content verified images from this workflow run.
+inputs:
+  images:
+    description: JSON list of canonical image IDs.
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        if ! command -v skopeo >/dev/null; then
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+        fi
+    - shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        CI_IMAGE_IDS: ${{ inputs.images }}
+      run: python3 tools/ci/image_artifacts.py load --images "$CI_IMAGE_IDS"

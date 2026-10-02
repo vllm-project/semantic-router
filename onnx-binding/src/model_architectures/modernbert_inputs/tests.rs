@@ -205,6 +205,14 @@ fn pre_load_input_contract_matches_actual_ort_schema_and_cpu_stays_dynamic() {
             .create_session_with_contract(&path, &expected)
             .unwrap();
         assert!(options.evidence.lock()[0].execution_inputs.is_empty());
+        let expected_schema = schema()
+            .into_iter()
+            .chain(explicit.then(|| input("position_ids", &[1, -1], TensorElementType::Int64)))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            options.evidence.lock()[0].input_schema,
+            crate::core::execution_contract::session_input_schema(&expected_schema)
+        );
         assert_eq!(
             options.evidence.lock()[0].execution_max_input_tokens,
             Some(2048)
@@ -236,6 +244,74 @@ fn pre_load_input_contract_matches_actual_ort_schema_and_cpu_stays_dynamic() {
         let bytes = graph(explicit);
         std::fs::write(&path, &bytes[..bytes.len() - 1]).unwrap();
         assert!(resolved_inputs(&path, 1, 2048).is_err());
+    }
+}
+
+#[test]
+fn loaded_cpu_evidence_distinguishes_fixed_large_and_dynamic_input_shapes() {
+    use crate::core::{execution_contract::ExecutionInput, instance_options::InstanceOptions};
+
+    let directory = tempfile::tempdir().unwrap();
+    // Small protobuf fixtures declare large inputs without allocating model
+    // weights or downloading a checkpoint. Read the loaded ORT session, not
+    // caller-supplied execution contracts or a pre-load graph parser.
+    for (dimensions, element_type, dtype) in [
+        ([-1, -1], 7, "int64"),
+        ([1, -1], 7, "int64"),
+        ([1, 32768], 7, "int64"),
+        ([1, 32768], 1, "float32"),
+    ] {
+        let value = |name: &str| {
+            let shape = dimensions
+                .iter()
+                .enumerate()
+                .flat_map(|(axis, &size)| {
+                    let dimension = if size < 0 {
+                        field(2, if axis == 0 { b"batch" } else { b"sequence" })
+                    } else {
+                        integer(1, size as u64)
+                    };
+                    field(1, &dimension)
+                })
+                .collect::<Vec<_>>();
+            let tensor = [integer(1, element_type), field(2, &shape)].concat();
+            [field(1, name.as_bytes()), field(2, &field(1, &tensor))].concat()
+        };
+        let graph = [
+            field(2, b"session-input-schema"),
+            field(11, &value("input_ids")),
+            field(11, &value("attention_mask")),
+            field(12, &value("output")),
+            field(1, &node("Add", &["input_ids", "attention_mask"], "output")),
+        ]
+        .concat();
+        let model = [integer(1, 8), field(7, &graph), field(8, &integer(2, 13))].concat();
+        let path = directory.path().join("schema.onnx");
+        std::fs::write(&path, model).unwrap();
+        let options = InstanceOptions {
+            model_path: directory.path().display().to_string(),
+            intra_threads: Some(1),
+            ..Default::default()
+        };
+        let session = options.create_session(&path).unwrap();
+        assert_eq!(session.inputs.len(), 2);
+        let evidence = options.evidence.lock()[0].clone();
+        assert!(evidence.execution_inputs.is_empty());
+        let expected = ["input_ids", "attention_mask"]
+            .into_iter()
+            .map(|name| ExecutionInput {
+                name: name.into(),
+                dtype: dtype.into(),
+                shape: dimensions.to_vec(),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(evidence.input_schema, expected);
+        let json = serde_json::to_value(&evidence).unwrap();
+        assert_eq!(
+            json["input_schema"],
+            serde_json::to_value(&expected).unwrap()
+        );
+        assert_eq!(json["execution_inputs"], serde_json::json!([]));
     }
 }
 

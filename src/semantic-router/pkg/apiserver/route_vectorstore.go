@@ -90,9 +90,9 @@ func (s *ClassificationAPIServer) handleListVectorStores(w http.ResponseWriter, 
 
 	stores := manager.ListStores(params)
 
-	response := map[string]interface{}{
-		"object": "list",
-		"data":   stores,
+	response := objectListResponse[*vectorstore.VectorStore]{
+		Object: "list",
+		Data:   stores,
 	}
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
@@ -165,10 +165,10 @@ func (s *ClassificationAPIServer) handleDeleteVectorStore(w http.ResponseWriter,
 		return
 	}
 
-	s.writeJSONResponse(w, http.StatusOK, map[string]interface{}{
-		"id":      id,
-		"object":  "vector_store.deleted",
-		"deleted": true,
+	s.writeJSONResponse(w, http.StatusOK, objectDeletedResponse{
+		ID:      id,
+		Object:  "vector_store.deleted",
+		Deleted: true,
 	})
 }
 

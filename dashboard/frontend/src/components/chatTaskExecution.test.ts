@@ -99,7 +99,10 @@ describe('runPlaygroundTask', () => {
       max_completion_tokens: 512,
       stream: true,
     })
-    expect(requestInit.headers).toMatchObject({ 'x-session-id': 'conversation-1' })
+    expect(requestInit.headers).toMatchObject({
+      'x-session-id': 'conversation-1',
+      'x-conversation-id': 'conversation-1',
+    })
     expect(messages[messages.length - 1]).toMatchObject({
       role: 'assistant',
       isStreaming: false,
@@ -194,78 +197,87 @@ describe('runPlaygroundTask', () => {
     })
   })
 
-  it('preserves a streamed follow-up answer when the initial tool stream finishes within one frame', async () => {
-    const encoder = new TextEncoder()
-    const streamResponse = (chunks: string[]) =>
-      new Response(
-        new ReadableStream({
-          start(controller) {
-            chunks.forEach((chunk) => controller.enqueue(encoder.encode(chunk)))
-            controller.close()
-          },
-        }),
-        { headers: { 'content-type': 'text/event-stream' } },
-      )
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        streamResponse([
-          'data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"lookup_policy","arguments":"{}"}}]}}]}\n\n',
-          'data: {"choices":[{"index":0,"finish_reason":"tool_calls"}]}\n\n',
-          'data: [DONE]\n\n',
+  it.each(['conversation-tool-loop', 'another-conversation'])(
+    'preserves the streamed answer and conversation identity across both fetches for %s',
+    async (conversationId) => {
+      const encoder = new TextEncoder()
+      const streamResponse = (chunks: string[]) =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              chunks.forEach((chunk) => controller.enqueue(encoder.encode(chunk)))
+              controller.close()
+            },
+          }),
+          { headers: { 'content-type': 'text/event-stream' } },
+        )
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          streamResponse([
+            'data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"lookup_policy","arguments":"{}"}}]}}]}\n\n',
+            'data: {"choices":[{"index":0,"finish_reason":"tool_calls"}]}\n\n',
+            'data: [DONE]\n\n',
+          ]),
+        )
+        .mockResolvedValueOnce(
+          streamResponse([
+            'data: {"choices":[{"index":0,"delta":{"content":"Policy found."}}]}\n\n',
+            'data: [DONE]\n\n',
+          ]),
+        )
+      vi.stubGlobal('fetch', fetchMock)
+
+      const task: PlaygroundTask = {
+        id: 'task-tool-loop',
+        conversationId,
+        prompt: 'Check the policy.',
+        createdAt: 1,
+        requestOptions: {
+          enableClawMode: false,
+          enableWebSearch: false,
+          model: 'vllm-sr/auto',
+        },
+      }
+      let messages: Message[] = []
+      let nextId = 0
+
+      await runPlaygroundTask({
+        buildTaskTools: () => [probeTool],
+        clawManagementDisabled: false,
+        clearConversationActiveTask: vi.fn(),
+        endpoint: '/api/router/v1/chat/completions',
+        executeTools: vi.fn(async () => [
+          { callId: 'call-1', name: 'lookup_policy', content: { found: true } },
         ]),
-      )
-      .mockResolvedValueOnce(
-        streamResponse([
-          'data: {"choices":[{"index":0,"delta":{"content":"Policy found."}}]}\n\n',
-          'data: [DONE]\n\n',
-        ]),
-      )
-    vi.stubGlobal('fetch', fetchMock)
+        expandedToolCardCount: 0,
+        generateId: () => `message-${nextId++}`,
+        getConversationMessagesSnapshot: () => messages,
+        registerAbortController: vi.fn(),
+        setConversationError: vi.fn(),
+        setConversationThinking: vi.fn(),
+        setExpandedToolCards: vi.fn(),
+        task,
+        updateConversationMessages: (_conversationId, updater) => {
+          messages = updater(messages)
+        },
+      })
 
-    const task: PlaygroundTask = {
-      id: 'task-tool-loop',
-      conversationId: 'conversation-tool-loop',
-      prompt: 'Check the policy.',
-      createdAt: 1,
-      requestOptions: {
-        enableClawMode: false,
-        enableWebSearch: false,
-        model: 'vllm-sr/auto',
-      },
-    }
-    let messages: Message[] = []
-    let nextId = 0
-
-    await runPlaygroundTask({
-      buildTaskTools: () => [probeTool],
-      clawManagementDisabled: false,
-      clearConversationActiveTask: vi.fn(),
-      endpoint: '/api/router/v1/chat/completions',
-      executeTools: vi.fn(async () => [
-        { callId: 'call-1', name: 'lookup_policy', content: { found: true } },
-      ]),
-      expandedToolCardCount: 0,
-      generateId: () => `message-${nextId++}`,
-      getConversationMessagesSnapshot: () => messages,
-      registerAbortController: vi.fn(),
-      setConversationError: vi.fn(),
-      setConversationThinking: vi.fn(),
-      setExpandedToolCards: vi.fn(),
-      task,
-      updateConversationMessages: (_conversationId, updater) => {
-        messages = updater(messages)
-      },
-    })
-
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(messages[messages.length - 1]).toMatchObject({
-      role: 'assistant',
-      content: 'Policy found.',
-      isStreaming: false,
-      toolCalls: [{ id: 'call-1', status: 'completed' }],
-    })
-  })
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      for (const [, requestInit] of fetchMock.mock.calls as [string, RequestInit][]) {
+        expect(requestInit.headers).toMatchObject({
+          'x-session-id': conversationId,
+          'x-conversation-id': conversationId,
+        })
+      }
+      expect(messages[messages.length - 1]).toMatchObject({
+        role: 'assistant',
+        content: 'Policy found.',
+        isStreaming: false,
+        toolCalls: [{ id: 'call-1', status: 'completed' }],
+      })
+    },
+  )
 
   it('separates an actionable HTTP failure from the raw response body', async () => {
     const rawResponse = 'worker://private-stack upstream=http://internal.example'

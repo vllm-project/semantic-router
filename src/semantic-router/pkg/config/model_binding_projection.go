@@ -14,8 +14,12 @@ func ProjectRecipeModelBindings(cfg *RouterConfig, plan *ModelBindingPlan, recip
 	}
 	scoped := *cfg
 	scoped.ClassifierRules = slices.Clone(cfg.ClassifierRules)
+	scoped.ModelBindings = cfg.EffectiveModelBindings(cfg.Signals, cfg.ModelBindings)
 	for name := range scoped.ModelBindings {
 		spec, ok := plan.Lookup(recipe, name)
+		if recipe == GlobalModelScope {
+			spec, ok = plan.LookupGlobal(name)
+		}
 		if !ok {
 			return nil, fmt.Errorf("model binding %q is absent from recipe %q", name, recipe)
 		}
@@ -55,7 +59,6 @@ func ProjectRecipeModelBindings(cfg *RouterConfig, plan *ModelBindingPlan, recip
 			scoped.PromptGuard.ModelID = artifact
 			scoped.PromptGuard.MaxSequenceLength = spec.Deployment.Input.MaxTokens
 			scoped.PromptGuard.Backend = remote
-			scoped.PromptGuard.Protocol = ""
 			scoped.PromptGuard.Variant = ""
 			if mapping != "" {
 				scoped.PromptGuard.JailbreakMappingPath = mapping

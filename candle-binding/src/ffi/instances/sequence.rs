@@ -199,14 +199,19 @@ impl Instance {
         let model = self.sequence_model()?;
         let input_tokens = self.count_tokens(text)?;
         ensure!(
-            input_tokens <= self.info.max_input_tokens,
-            "input_limit: input has {input_tokens} tokens, task budget is {}",
+            input_tokens <= self.info.document_max_input_tokens,
+            "input_limit: input has {input_tokens} tokens, document budget is {}",
+            self.info.document_max_input_tokens
+        );
+        ensure!(
+            size > 0 && size <= self.info.max_input_tokens,
+            "input_limit: window size {size} exceeds physical input budget {}",
             self.info.max_input_tokens
         );
         let planned = crate::core::sequence_windows::encode_windows(
             self.tokenizer()?,
             text,
-            self.info.max_input_tokens,
+            self.info.document_max_input_tokens,
             size,
             overlap,
         )

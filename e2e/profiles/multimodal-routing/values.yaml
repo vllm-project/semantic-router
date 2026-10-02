@@ -33,22 +33,22 @@ config:
       kbs: []
       embeddings:
         semantic:
-          # Multi-modal embedding model that exposes both a text encoder and an
-          # image encoder in a shared 384-dim space. Loaded by candle-binding
-          # from /app/models/mom-embedding-multimodal (auto-downloaded by the
-          # router's modeldownload package on first start). Required for any
-          # IntelligentRoute embedding rule with query_modality=image.
-          multimodal_model_path: models/mom-embedding-multimodal
+          # Prepared Vela Omni artifact loaded by the manifest-validated ORT
+          # adapter. Text, image and audio share its full 384-dimension space.
+          multimodal_model_path: models/vela-1.0-omni-nano
           embedding_config:
             model_type: multimodal
-            target_dimension: 384
-            # Helm deep-merges this map with the chart's mmBERT defaults. Use
-            # the multimodal text tower's final layer explicitly so the value
-            # also survives the Kubernetes canonical YAML round trip.
-            target_layer: 6
+            target_dimension: 0
+            # Explicit zero disables mmBERT layer defaults during Helm merging.
+            # Omni publishes one complete representation and has no layer exits.
+            target_layer: 0
             preload_embeddings: true
             enable_soft_matching: false
-            top_k: 1
+            # 0 is unlimited: the matched-embeddings header carries every rule
+            # at or above its threshold, so the E2E cross-rule negatives can
+            # observe a second rule firing. top-1 would hide it behind the
+            # winning rule and make those cases pass on ranking alone.
+            top_k: 0
     router:
       config_source: kubernetes
     services:
@@ -112,17 +112,3 @@ resources:
   requests:
     memory: 6Gi
     cpu: '1'
-  # The chart's deploy/helm/semantic-router/values.yaml has an `observability:`
-  # block misindented as a child of `resources:` (lines 3876 and 9294), which
-  # gets merged into the rendered Pod's container resources spec and rejected
-  # by the apps/v1 Deployment schema (`field not declared in schema`). Null it
-  # out at this path so the chart deploys cleanly. Remove this line once the
-  # upstream chart corrects the indentation.
-  observability: null
-
-# Force multimodal embedding model so image-modality rules fire.
-# Without this override the chart default selects qwen3 (text-only)
-# and the e2e profile cannot exercise image-modality routing.
-extraEnv:
-  - name: EMBEDDING_MODEL_OVERRIDE
-    value: multimodal

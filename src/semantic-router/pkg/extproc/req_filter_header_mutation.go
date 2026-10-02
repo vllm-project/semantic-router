@@ -5,6 +5,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/pluginruntime"
 )
 
 // buildHeaderMutations builds header mutations based on the decision's header_mutation plugin configuration
@@ -30,29 +31,17 @@ func (r *OpenAIRouter) buildHeaderMutations(decision *config.Decision) ([]*corev
 	var setHeaders []*corev3.HeaderValueOption
 	var removeHeaders []string
 
-	// Apply additions (add new headers)
-	for _, headerPair := range headerConfig.Add {
-		setHeaders = append(setHeaders, &corev3.HeaderValueOption{
-			Header: &corev3.HeaderValue{
-				Key:      headerPair.Name,
-				RawValue: []byte(headerPair.Value),
-			},
-		})
+	for _, mutation := range pluginruntime.HeaderMutations(headerConfig) {
+		if mutation.Operation == "remove" {
+			removeHeaders = append(removeHeaders, mutation.Name)
+			continue
+		}
+		header := &corev3.HeaderValueOption{Header: &corev3.HeaderValue{Key: mutation.Name, RawValue: []byte(mutation.Value)}}
+		if mutation.Operation == "set" {
+			header.AppendAction = corev3.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD
+		}
+		setHeaders = append(setHeaders, header)
 	}
-
-	// Apply updates (modify existing headers - in Envoy this is the same as set)
-	for _, headerPair := range headerConfig.Update {
-		setHeaders = append(setHeaders, &corev3.HeaderValueOption{
-			Header: &corev3.HeaderValue{
-				Key:      headerPair.Name,
-				RawValue: []byte(headerPair.Value),
-			},
-			AppendAction: corev3.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
-		})
-	}
-
-	// Apply deletions
-	removeHeaders = append(removeHeaders, headerConfig.Delete...)
 
 	return setHeaders, removeHeaders
 }

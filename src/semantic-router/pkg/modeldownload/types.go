@@ -11,6 +11,10 @@ type ModelSpec struct {
 	// Git revision (commit hash, tag, or branch). Empty leaves the revision
 	// unspecified for local reuse; a download uses HuggingFace's default branch.
 	Revision string
+	// PreparedArtifact selects a verified offline tensor-bundle contract rather
+	// than a native Hugging Face snapshot. ArtifactBundle is the image bundle name.
+	PreparedArtifact string
+	ArtifactBundle   string
 	// Required files to verify model completeness
 	RequiredFiles []string
 	// Each group requires at least one matching file, allowing native sharded

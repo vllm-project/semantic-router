@@ -136,7 +136,7 @@ func TestSpanCreation(t *testing.T) {
 	}()
 
 	// Test span creation
-	spanCtx, span := StartSpan(ctx, SpanRequestReceived)
+	spanCtx, span := StartSpan(ctx, SpanRequest)
 	if span == nil {
 		t.Fatal("StartSpan returned nil span")
 	}
@@ -148,8 +148,7 @@ func TestSpanCreation(t *testing.T) {
 	)
 
 	// Test recording error
-	testErr := context.Canceled
-	RecordError(span, testErr)
+	RecordError(span, "request_canceled")
 	span.SetStatus(codes.Error, "test error")
 
 	span.End()
@@ -286,19 +285,10 @@ func TestSpanAttributeConstants(t *testing.T) {
 	// signal -> decision -> plugin -> model
 	spanNames := []string{
 		// Root span
-		SpanRequestReceived,
+		SpanRequest,
 
 		// Signal evaluation layer
 		SpanSignalEvaluation,
-		SpanSignalKeyword,
-		SpanSignalEmbedding,
-		SpanSignalDomain,
-		SpanSignalFactCheck,
-		SpanSignalUserFeedback,
-		SpanSignalReask,
-		SpanSignalPreference,
-		SpanSignalLanguage,
-		SpanSignalLatency,
 
 		// Decision evaluation layer
 		SpanDecisionEvaluation,
@@ -308,10 +298,8 @@ func TestSpanAttributeConstants(t *testing.T) {
 
 		// Model invocation layer
 		SpanUpstreamRequest,
-		SpanResponseProcessing,
 
-		// Legacy spans (for backward compatibility)
-		SpanClassification,
+		// Current request lifecycle
 	}
 
 	for _, name := range spanNames {
@@ -327,10 +315,6 @@ func TestSpanAttributeConstants(t *testing.T) {
 	attrKeys := []string{
 		AttrRequestID,
 		AttrModelName,
-		AttrCategoryName,
-		AttrRoutingStrategy,
-		AttrPIIDetected,
-		AttrJailbreakDetected,
 		AttrCacheHit,
 		AttrReasoningEnabled,
 	}

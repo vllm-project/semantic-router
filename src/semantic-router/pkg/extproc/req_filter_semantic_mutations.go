@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -11,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/pluginruntime"
 )
 
 func (r *OpenAIRouter) applySemanticReasoningMode(
@@ -21,6 +21,9 @@ func (r *OpenAIRouter) applySemanticReasoningMode(
 	decision *config.Decision,
 ) bool {
 	if request == nil {
+		return false
+	}
+	if preserveExplicitAnthropicReasoning(request, targetFormat) {
 		return false
 	}
 	family := r.getModelReasoningFamily(model)
@@ -158,23 +161,21 @@ func (r *OpenAIRouter) addSemanticSystemPromptIfConfigured(
 		return false, nil
 	}
 	start := time.Now()
-	promptContext, span := tracing.StartPluginSpan(ctx.TraceContext, "system_prompt", decisionName)
+	_, span := tracing.StartPluginSpan(ctx.TraceContext, "system_prompt", decisionName)
 	mode := decision.GetSystemPromptMode()
 	injected := llmprotocol.SetSystemInstruction(request, promptConfig.SystemPrompt, mode)
 	latency := time.Since(start).Milliseconds()
 	tracing.SetSpanAttributes(span,
 		attribute.Bool("system_prompt.injected", injected),
 		attribute.String("system_prompt.mode", mode),
-		attribute.String(tracing.AttrCategoryName, decisionName),
+		attribute.String(tracing.AttrDecisionName, decisionName),
 	)
 	tracing.EndPluginSpan(span, "success", latency, "prompt_injected")
-	ctx.TraceContext = promptContext
 	ctx.VSRInjectedSystemPrompt = true
 	logging.Infof("Applied system instruction for decision %q to model %q", decisionName, model)
 	return true, nil
 }
 
-//nolint:cyclop // Each supported request parameter is applied through the closed neutral contract.
 func (r *OpenAIRouter) applySemanticRequestParams(
 	decision *config.Decision,
 	request *llmprotocol.Request,
@@ -183,31 +184,16 @@ func (r *OpenAIRouter) applySemanticRequestParams(
 	if decision == nil || request == nil || decision.GetRequestParamsConfig() == nil {
 		return false, nil
 	}
-	params := decision.GetRequestParamsConfig()
+	result, err := pluginruntime.ApplyRequestParams(request, decision.GetRequestParamsConfig())
 	decisionKey := config.RoutingDecisionKey(routingScope, decision.Name)
-	changed := false
-	for _, field := range params.BlockedParams {
-		blocked, err := blockSemanticRequestField(request, strings.TrimSpace(field))
-		if err != nil {
-			return false, err
-		}
-		if blocked {
-			changed = true
-			metrics.RecordBlockedParam(decisionKey, field)
-		}
+	for _, field := range result.Blocked {
+		metrics.RecordBlockedParam(decisionKey, field)
 	}
-	changed = llmprotocol.DefaultOutputTokens(request, params.DefaultMaxTokens) || changed
-	if llmprotocol.CapOutputTokens(request, params.MaxTokensLimit) {
+	if result.CappedOutputTokens {
 		metrics.RecordMaxTokensCapped(decisionKey)
-		changed = true
 	}
-	if llmprotocol.CapCandidateCount(request, params.MaxN) {
+	if result.CappedCandidateCount {
 		metrics.RecordMaxNCapped(decisionKey)
-		changed = true
 	}
-	return changed, nil
-}
-
-func blockSemanticRequestField(request *llmprotocol.Request, field string) (bool, error) {
-	return llmprotocol.BlockRequestField(request, field)
+	return result.Changed, err
 }

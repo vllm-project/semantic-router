@@ -98,7 +98,10 @@ func TestProtectionRescueRespectsHardRequestOwnership(t *testing.T) {
 				SelectedModel: "frontier", Method: selection.MethodStatic,
 				AllScores: map[string]float64{"cheap": .1, "frontier": .9},
 			}
-			_, result, selected, _ := router.applyRouterLearning(selCtx, base, &refs[1], ctx)
+			_, result, selected, _, learningErr := router.applyRouterLearning(selCtx, base, &refs[1], ctx)
+			if learningErr != nil {
+				t.Fatal(learningErr)
+			}
 			policy, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodProtection)
 			if !ok {
 				t.Fatal("missing protection policy")

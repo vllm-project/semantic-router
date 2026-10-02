@@ -180,7 +180,7 @@ func (c *ComplexityClassifier) ClassifyDetailedWithImage(query string, imageURL 
 // the same (imageURL, targetDim=0) pair within this request. Text-side
 // embeddings (text and mmText) are not cached because no other signal
 // currently consumes the multimodal text embedding.
-func (c *ComplexityClassifier) classifyDetailedWithImageCached(ctx context.Context, query string, imageURL string, cache *requestImageEmbeddingCache) ([]ComplexityRuleResult, error) {
+func (c *ComplexityClassifier) classifyDetailedWithImageCached(ctx context.Context, query string, imageURL string, cache *requestMediaEmbeddingCache) ([]ComplexityRuleResult, error) {
 	if len(c.rules) == 0 {
 		return nil, nil
 	}

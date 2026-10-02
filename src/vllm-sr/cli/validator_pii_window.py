@@ -1,6 +1,6 @@
 """Validate PII token-window geometry without loading any model resources."""
 
-from cli.config_contract import iter_routing_profiles
+from cli.model_runtime_defaults import iter_effective_routing_profiles
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
 
@@ -12,7 +12,7 @@ def validate_pii_windows(
     pii = ((catalog.get("modules") or {}).get("classifier") or {}).get("pii") or {}
     window = pii.get("window")
     errors = []
-    for name, routing in iter_routing_profiles(config):
+    for name, routing in iter_effective_routing_profiles(config):
         prefix = "routing" if name == "default" else f"recipes.{name}.routing"
         binding = routing.model_bindings.get("pii_classifier")
         field = "global.model_catalog.modules.classifier.pii.window"

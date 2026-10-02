@@ -69,7 +69,7 @@ func TestExtractModelPaths(t *testing.T) {
 					},
 				},
 			},
-			expected: []string{"models/lora_intent_classifier_bert-base-uncased_model"},
+			expected: []string{"models/mom-domain-classifier"},
 		},
 		{
 			name: "Extract multiple model paths",
@@ -451,7 +451,7 @@ func TestBuildModelSpecsIncludesCoreClassifierUsedViaProjection(t *testing.T) {
 	}
 }
 
-func TestBuildModelSpecsIncludesRouterOwnedDefaultsForScratchCanonicalConfig(t *testing.T) {
+func TestBuildModelSpecsSkipsUnusedRouterOwnedDefaultsForScratchCanonicalConfig(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
 version: v0.3
 listeners:
@@ -493,12 +493,12 @@ routing:
 		t.Fatalf("BuildModelSpecs() error = %v", err)
 	}
 
-	assertContainsAllModelSpecs(t, specs,
-		"models/Vela-1.0-Encoder-307M-Embedding",
-	)
+	if len(specs) != 0 {
+		t.Fatalf("unused defaults requested model downloads: %+v", specs)
+	}
 }
 
-func TestBuildModelSpecsIncludesRouterOwnedDefaultsForSparseAMDGlobalOverride(t *testing.T) {
+func TestBuildModelSpecsSkipsUnusedRouterOwnedDefaultsForSparseAMDGlobalOverride(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
 version: v0.3
 listeners:
@@ -562,9 +562,9 @@ global:
 		t.Fatalf("BuildModelSpecs() error = %v", err)
 	}
 
-	assertContainsAllModelSpecs(t, specs,
-		"models/Vela-1.0-Encoder-307M-Embedding",
-	)
+	if len(specs) != 0 {
+		t.Fatalf("unused defaults requested model downloads: %+v", specs)
+	}
 }
 
 func TestBuildModelSpecsSkipsUnusedFeedbackDetectorDefaults(t *testing.T) {
@@ -679,6 +679,37 @@ func TestBuildModelSpecsSkipsRouterOwnedDefaultsForAgentSmokeConfigs(t *testing.
 				t.Fatalf("BuildModelSpecs() returned %d specs, want 0: %#v", len(specs), specs)
 			}
 		})
+	}
+}
+
+func TestBuildModelSpecsDownloadsOnlyVelaDomainForRiscvQemuConfig(t *testing.T) {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("failed to resolve RISC-V QEMU config path")
+	}
+	configPath := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "e2e", "config", "config.riscv-qemu.yaml"))
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", configPath, err)
+	}
+	cfg, err := config.ParseYAMLBytes(data)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes() error = %v", err)
+	}
+	if !cfg.IsCategoryClassifierEnabled() {
+		t.Fatal("RISC-V QEMU config must enable the Vela Domain classifier")
+	}
+	specs, err := BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatalf("BuildModelSpecs() error = %v", err)
+	}
+	if len(specs) != 1 {
+		t.Fatalf("BuildModelSpecs() returned %d specs, want only Vela Domain: %#v", len(specs), specs)
+	}
+	if specs[0].LocalPath != "models/Vela-1.0-Encoder-307M-Domain" ||
+		specs[0].RepoID != "llm-semantic-router/Vela-1.0-Encoder-307M-Domain" ||
+		specs[0].Revision == "" {
+		t.Fatalf("RISC-V QEMU must download the pinned Vela Domain classifier: %#v", specs[0])
 	}
 }
 

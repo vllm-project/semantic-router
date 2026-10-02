@@ -174,9 +174,19 @@ func normalizeListStoresParams(params ListStoresParams) ListStoresParams {
 
 func sortVectorStores(stores []*VectorStore, order string) {
 	if order == "asc" {
-		sort.Slice(stores, func(i, j int) bool { return stores[i].CreatedAt < stores[j].CreatedAt })
+		sort.Slice(stores, func(i, j int) bool {
+			if stores[i].CreatedAt != stores[j].CreatedAt {
+				return stores[i].CreatedAt < stores[j].CreatedAt
+			}
+			return stores[i].ID < stores[j].ID
+		})
 	} else {
-		sort.Slice(stores, func(i, j int) bool { return stores[i].CreatedAt > stores[j].CreatedAt })
+		sort.Slice(stores, func(i, j int) bool {
+			if stores[i].CreatedAt != stores[j].CreatedAt {
+				return stores[i].CreatedAt > stores[j].CreatedAt
+			}
+			return stores[i].ID > stores[j].ID
+		})
 	}
 }
 

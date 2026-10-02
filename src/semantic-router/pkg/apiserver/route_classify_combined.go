@@ -10,6 +10,7 @@ import (
 )
 
 type CombinedClassificationRequest struct {
+	Recipe          string                    `json:"recipe,omitempty"`
 	Text            string                    `json:"text"`
 	IntentOptions   *services.IntentOptions   `json:"intent_options,omitempty"`
 	PIIOptions      *services.PIIOptions      `json:"pii_options,omitempty"`
@@ -17,6 +18,7 @@ type CombinedClassificationRequest struct {
 }
 
 type CombinedClassificationResponse struct {
+	Recipe           string                     `json:"recipe,omitempty"`
 	Intent           *services.IntentResponse   `json:"intent"`
 	PII              *services.PIIResponse      `json:"pii"`
 	Security         *services.SecurityResponse `json:"security"`
@@ -33,8 +35,15 @@ func (s *ClassificationAPIServer) handleCombinedClassification(w http.ResponseWr
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "text cannot be empty")
 		return
 	}
-	service, release := s.acquireClassificationService()
+	_, service, release := s.acquireClassificationRuntime()
 	defer release()
+	selected, releaseRecipe, scopeErr := recipeDiagnosticService(service, req.Recipe)
+	defer releaseRecipe()
+	if scopeErr != nil {
+		s.writeClassificationError(w, scopeErr)
+		return
+	}
+	service = selected
 
 	start := time.Now()
 
@@ -48,6 +57,7 @@ func (s *ClassificationAPIServer) handleCombinedClassification(w http.ResponseWr
 	}
 
 	piiResp, err := service.DetectPII(r.Context(), services.PIIRequest{
+		Recipe:  req.Recipe,
 		Text:    req.Text,
 		Options: req.PIIOptions,
 	})
@@ -57,6 +67,7 @@ func (s *ClassificationAPIServer) handleCombinedClassification(w http.ResponseWr
 	}
 
 	securityResp, err := service.CheckSecurity(r.Context(), services.SecurityRequest{
+		Recipe:  req.Recipe,
 		Text:    req.Text,
 		Options: req.SecurityOptions,
 	})
@@ -66,6 +77,7 @@ func (s *ClassificationAPIServer) handleCombinedClassification(w http.ResponseWr
 	}
 
 	s.writeJSONResponse(w, http.StatusOK, CombinedClassificationResponse{
+		Recipe:           diagnosticRecipeName(req.Recipe),
 		Intent:           intentResp,
 		PII:              piiResp,
 		Security:         securityResp,

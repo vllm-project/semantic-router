@@ -21,6 +21,14 @@ const HEADER_INFO: Record<
     label: 'Model',
     type: 'info',
   },
+  'x-vsr-effective-input-tokens': {
+    label: 'Rendered input tokens',
+    type: 'info',
+  },
+  'x-vsr-effective-max-output-tokens': {
+    label: 'Output token limit',
+    type: 'info',
+  },
   'x-vsr-selected-algorithm': {
     label: 'Algorithm',
     type: 'info',

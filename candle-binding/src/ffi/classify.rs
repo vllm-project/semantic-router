@@ -14,6 +14,7 @@
 #![allow(clippy::doc_overindented_list_items)]
 
 use crate::core::UnifiedError;
+use crate::ffi::generic_classifier::GenericClassifier;
 use crate::ffi::memory::{
     allocate_bert_token_entity_array, allocate_c_float_array, allocate_c_string,
     allocate_lora_intent_array, allocate_lora_pii_array, allocate_lora_security_array,
@@ -29,7 +30,6 @@ use crate::model_architectures::traditional::modernbert::{
     TRADITIONAL_MODERNBERT_JAILBREAK_CLASSIFIER, TRADITIONAL_MODERNBERT_PII_CLASSIFIER,
     TRADITIONAL_MODERNBERT_TOKEN_CLASSIFIER,
 };
-use crate::BertClassifier;
 use std::ffi::CString;
 use std::ffi::{c_char, CStr};
 use std::sync::Arc;
@@ -83,9 +83,10 @@ pub extern "C" fn init_generic_classifier(
         }
     };
     if num_classes < 2 {
+        eprintln!("Number of classes must be at least 2, got {num_classes}");
         return false;
     }
-    match BertClassifier::new(model_id, num_classes as usize, use_cpu) {
+    match GenericClassifier::new(model_id, num_classes as usize, use_cpu) {
         Ok(classifier) => BERT_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
         Err(error) => {
             eprintln!("Failed to initialize generic classifier: {error}");
@@ -155,12 +156,10 @@ pub extern "C" fn classify_text_with_probabilities(
 
     if let Some(classifier) = BERT_CLASSIFIER.get() {
         let classifier = classifier.clone();
-        match classifier.classify_text(text) {
-            Ok((class_idx, confidence)) => {
-                // For now, we don't have probabilities from the new BERT implementation
-                // Return empty probabilities array
-                let prob_len = 0;
-                let prob_ptr = std::ptr::null_mut();
+        match classifier.classify_text_with_probabilities(text) {
+            Ok((class_idx, confidence, probabilities)) => {
+                let prob_len = probabilities.len();
+                let prob_ptr = Box::into_raw(probabilities.into_boxed_slice()).cast::<f32>();
 
                 ClassificationResultWithProbs {
                     predicted_class: class_idx as i32,

@@ -2,21 +2,17 @@ package testcases
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
-
-// Shadow dispatch contract: the primary response is served normally and the
-// replay record for that request gains exactly one shadow_dispatch outcome
-// whose verdict reflects the shadow backend, never the other way around.
 
 const (
 	shadowDispatchOutcomeSource = "shadow_dispatch"
@@ -47,16 +43,14 @@ func testShadowDispatchObservesCandidateModel(
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
 ) error {
-	outcome, err := runShadowDispatchScenario(ctx, client, opts, "vllm-sr/shadow-ok")
+	record, err := runShadowDispatchScenario(ctx, client, opts, "vllm-sr/shadow-ok")
 	if err != nil {
 		return err
 	}
-	if outcome.Verdict != "completed" || outcome.Reason != "completed" {
-		return fmt.Errorf("shadow outcome verdict=%q reason=%q, want completed", outcome.Verdict, outcome.Reason)
+	if err = requireShadowOutcome(record, "openai/shadow-candidate", "completed", "completed"); err != nil {
+		return err
 	}
-	if outcome.TargetRef != "openai/shadow-candidate" {
-		return fmt.Errorf("shadow outcome target_ref=%q, want openai/shadow-candidate", outcome.TargetRef)
-	}
+	outcome := record.Outcomes[0]
 	for _, key := range []string{"shadow_request_id", "latency_ms", "response_sha256", "status_code"} {
 		if strings.TrimSpace(outcome.Metadata[key]) == "" {
 			return fmt.Errorf("shadow outcome metadata missing %q: %v", key, outcome.Metadata)
@@ -73,85 +67,35 @@ func testShadowDispatchFailOpenUnreachableBackend(
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
 ) error {
-	outcome, err := runShadowDispatchScenario(ctx, client, opts, "vllm-sr/shadow-down")
+	record, err := runShadowDispatchScenario(ctx, client, opts, "vllm-sr/shadow-down")
 	if err != nil {
 		return err
 	}
-	if outcome.Verdict != "failed" {
-		return fmt.Errorf("shadow outcome verdict=%q, want failed", outcome.Verdict)
-	}
+	outcome := record.Outcomes[0]
 	switch outcome.Reason {
 	case "transport_error", "timeout":
 	default:
 		return fmt.Errorf("shadow outcome reason=%q, want transport_error or timeout", outcome.Reason)
 	}
-	if _, provenance := outcome.Metadata["response_sha256"]; provenance {
-		return fmt.Errorf("failed shadow outcome must not carry response provenance")
-	}
-	return nil
+	return requireShadowOutcome(record, "openai/shadow-unreachable", "failed", outcome.Reason)
 }
 
-// runShadowDispatchScenario sends one chat completion into the given
-// entrypoint, asserts the primary response contract, and returns the single
-// shadow_dispatch outcome attached to that request's replay record.
 func runShadowDispatchScenario(
 	ctx context.Context,
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
 	entrypointModel string,
-) (*shadowReplayOutcome, error) {
-	if opts.Verbose {
-		fmt.Printf("[Test] Shadow dispatch via entrypoint %s\n", entrypointModel)
-	}
-	session, err := fixtures.OpenServiceSession(ctx, client, opts)
+) (*shadowReplayRecord, error) {
+	run, err := openShadowDispatchRun(ctx, client, opts)
 	if err != nil {
-		return nil, fmt.Errorf("open session: %w", err)
+		return nil, err
 	}
-	defer session.Close()
-	apiSession, err := fixtures.OpenRouterAPISession(ctx, client, opts)
+	defer run.Close()
+	sessionID, err := run.primary(ctx, entrypointModel, shadowPrimaryCeiling)
 	if err != nil {
-		return nil, fmt.Errorf("open Router management API session: %w", err)
+		return nil, err
 	}
-	defer apiSession.Close()
-
-	sessionID := fmt.Sprintf("e2e_shadow_%d", time.Now().UnixNano())
-	chat := fixtures.NewChatCompletionsClient(session, 45*time.Second)
-	started := time.Now()
-	resp, err := chat.Create(ctx, fixtures.ChatCompletionsRequest{
-		Model: entrypointModel,
-		User:  "e2e-shadow-user",
-		Messages: []fixtures.ChatMessage{
-			{Role: "user", Content: "shadow dispatch e2e prompt " + sessionID},
-		},
-	}, map[string]string{
-		"x-authz-user-id": "e2e-shadow-user",
-		"x-session-id":    sessionID,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("chat completions: %w", err)
-	}
-	primaryLatency := time.Since(started)
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("primary chat completions status %d: %s", resp.StatusCode, string(resp.Body))
-	}
-	var completion struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if err := json.Unmarshal(resp.Body, &completion); err != nil {
-		return nil, fmt.Errorf("decode primary completion: %w", err)
-	}
-	if len(completion.Choices) == 0 || strings.TrimSpace(completion.Choices[0].Message.Content) == "" {
-		return nil, fmt.Errorf("primary completion has no assistant content: %s", string(resp.Body))
-	}
-	if opts.Verbose {
-		fmt.Printf("[Test] primary completion served in %s\n", primaryLatency)
-	}
-
-	return waitForShadowOutcome(ctx, apiSession, sessionID, opts.Verbose)
+	return run.replay(ctx, sessionID, 1)
 }
 
 type shadowReplayOutcome struct {
@@ -165,47 +109,50 @@ type shadowReplayOutcome struct {
 }
 
 type shadowReplayRecord struct {
-	ID       string                `json:"id"`
-	Outcomes []shadowReplayOutcome `json:"outcomes"`
+	ID             string                `json:"id"`
+	SessionID      string                `json:"session_id"`
+	SelectedModel  string                `json:"selected_model"`
+	ResponseBody   string                `json:"response_body"`
+	ResponseStatus int                   `json:"response_status"`
+	Outcomes       []shadowReplayOutcome `json:"outcomes"`
 }
 
-// waitForShadowOutcome polls the replay record for the session until exactly
-// one shadow_dispatch outcome is present. The shadow runs in the background,
-// so the record can legitimately lag the primary response by a few seconds.
-func waitForShadowOutcome(
+func waitForShadowReplay(
 	ctx context.Context,
 	apiSession *fixtures.ServiceSession,
 	sessionID string,
-	verbose bool,
-) (*shadowReplayOutcome, error) {
-	deadline := time.Now().Add(shadowDispatchPollTimeout)
-	var lastErr error
-	for time.Now().Before(deadline) {
-		outcome, err := fetchShadowOutcome(ctx, apiSession, sessionID)
-		if err == nil {
-			if verbose {
-				fmt.Printf("[Test] shadow outcome verdict=%s reason=%s\n", outcome.Verdict, outcome.Reason)
-			}
-			return outcome, nil
+	outcomeCount int,
+) (*shadowReplayRecord, error) {
+	var record *shadowReplayRecord
+	pollErr := wait.PollUntilContextTimeout(ctx, shadowDispatchPollInterval, shadowDispatchPollTimeout, true, func(pollCtx context.Context) (bool, error) {
+		var fetchErr error
+		record, fetchErr = fetchShadowReplay(pollCtx, apiSession, sessionID)
+		if fetchErr != nil || record == nil {
+			return false, fetchErr
 		}
-		lastErr = err
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(shadowDispatchPollInterval):
+		if len(record.Outcomes) > outcomeCount || (record.ResponseStatus != 0 && record.ResponseStatus != http.StatusOK) {
+			return false, fmt.Errorf("replay %s has status %d and %d shadow outcomes, want 200 and %d",
+				record.ID, record.ResponseStatus, len(record.Outcomes), outcomeCount)
 		}
+		return len(record.Outcomes) == outcomeCount && record.ResponseStatus == http.StatusOK && record.ResponseBody != "", nil
+	})
+	if pollErr != nil {
+		return nil, fmt.Errorf("shadow replay for session %q not ready: last=%+v: %w", sessionID, record, pollErr)
 	}
-	return nil, fmt.Errorf("shadow outcome for session %q not recorded within %s: %w", sessionID, shadowDispatchPollTimeout, lastErr)
+	return record, nil
 }
 
-func fetchShadowOutcome(
+func fetchShadowReplay(
 	ctx context.Context,
 	apiSession *fixtures.ServiceSession,
 	sessionID string,
-) (*shadowReplayOutcome, error) {
+) (*shadowReplayRecord, error) {
 	items, err := fetchReplayListForSession(apiSession, sessionID, 5)
 	if err != nil {
 		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, nil
 	}
 	if len(items) != 1 {
 		return nil, fmt.Errorf("expected one replay row for session %q, got %d", sessionID, len(items))
@@ -218,7 +165,7 @@ func fetchShadowOutcome(
 		return nil, fmt.Errorf("GET replay record status %d: %s", raw.StatusCode, string(raw.Body))
 	}
 	var record shadowReplayRecord
-	if err := raw.DecodeJSON(&record); err != nil {
+	if err = raw.DecodeJSON(&record); err != nil {
 		return nil, fmt.Errorf("decode replay record: %w", err)
 	}
 	var found []shadowReplayOutcome
@@ -227,11 +174,11 @@ func fetchShadowOutcome(
 			found = append(found, outcome)
 		}
 	}
-	if len(found) != 1 {
-		return nil, fmt.Errorf("replay record %s has %d shadow outcomes, want 1", record.ID, len(found))
+	for _, outcome := range found {
+		if outcome.ContentRedacted {
+			return nil, fmt.Errorf("replay record %s shadow outcome was redacted; the detail token lacks replay.detail", record.ID)
+		}
 	}
-	if found[0].ContentRedacted {
-		return nil, fmt.Errorf("replay record %s shadow outcome was redacted; the detail token lacks replay.detail", record.ID)
-	}
-	return &found[0], nil
+	record.Outcomes = found
+	return &record, nil
 }

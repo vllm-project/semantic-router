@@ -13,7 +13,7 @@ func TestExplicitORTEmbeddingRequiresSelectedLayerInCandleProcess(t *testing.T) 
 	cfg := newEmbeddingOnlyConfig()
 	cfg.EmbeddingConfig.TargetLayer = 16
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"embed": {Provider: "ort", Artifact: testEmbeddingModelPath}}
-	cfg.ModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "embed", Contract: "embedding.v1", Adapter: "mmbert"}}
+	cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "embed", Contract: "embedding.v1", Adapter: "mmbert"}}
 	specs, err := BuildModelSpecs(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +69,7 @@ func TestImplicitEmbeddingProvisioningFollowsBuildProvider(t *testing.T) {
 	}
 
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"explicit": {Provider: "candle", Artifact: testEmbeddingModelPath}}
-	cfg.ModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "explicit", Contract: "embedding.v1", Adapter: "mmbert"}}
+	cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "explicit", Contract: "embedding.v1", Adapter: "mmbert"}}
 	specs, err = BuildModelSpecs(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -94,7 +94,7 @@ func TestORTEmbeddingRequiresEveryReachableLayerAcrossLayouts(t *testing.T) {
 			cfg.SemanticCache.Enabled = true
 			cfg.SemanticCache.EmbeddingModel = "mmbert"
 			cfg.ModelDeployments = map[string]config.ModelDeployment{"embed": {Provider: "ort", Artifact: testEmbeddingModelPath}}
-			cfg.ModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "embed", Contract: "embedding.v1", Adapter: "mmbert"}}
+			cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "embed", Contract: "embedding.v1", Adapter: "mmbert"}}
 			specs, err := BuildModelSpecs(cfg)
 			if err != nil {
 				t.Fatal(err)

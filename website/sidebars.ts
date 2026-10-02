@@ -15,6 +15,7 @@ const sidebars: SidebarsConfig = {
   // By default, Docusaurus generates a sidebar from the docs folder structure
   tutorialSidebar: [
     'intro',
+    'faq',
     {
       type: 'category',
       label: 'Overview',
@@ -210,6 +211,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/router-replay',
                 'tutorials/plugin/shadow-dispatch',
                 'tutorials/plugin/response-cache',
+                'tutorials/plugin/prompt-cache',
               ],
             },
             {
@@ -373,6 +375,7 @@ const sidebars: SidebarsConfig = {
               label: 'Run models',
               items: [
                 'installation/runtime/in-process',
+                'installation/runtime/openvino',
                 'installation/runtime/external',
               ],
             },
@@ -391,19 +394,6 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Fleet Simulator',
-      collapsed: false,
-      items: [
-        'fleet-sim/overview',
-        'fleet-sim/getting-started',
-        'fleet-sim/use-cases',
-        'fleet-sim/sim-algorithms',
-        'fleet-sim/power-model',
-        'fleet-sim/guide',
-      ],
-    },
-    {
-      type: 'category',
       label: 'Proposals',
       collapsed: false,
       link: {
@@ -415,6 +405,7 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Routing & Selection',
           items: [
+            'proposals/decision-ranking-semantics',
             'proposals/batch-and-capacity-aware-routing',
             'proposals/router-learning-memory-and-adaptations',
             'proposals/prompt-classification-routing',
@@ -510,7 +501,21 @@ const sidebars: SidebarsConfig = {
         'benchmarking/open-intelligence-index',
         'benchmarking/agent-evaluation-loop',
         'benchmarking/custom-evaluations',
-        'benchmarking/evaluation-plane',
+        {
+          type: 'category',
+          label: 'sr-bench 1.0',
+          link: {
+            type: 'doc',
+            id: 'benchmarking/sr-bench/index',
+          },
+          items: [
+            'benchmarking/sr-bench/shared-worker',
+            'benchmarking/sr-bench/tasks-and-targets',
+            'benchmarking/sr-bench/plan-and-run',
+            'benchmarking/sr-bench/iterate',
+            'benchmarking/sr-bench/results',
+          ],
+        },
       ],
     },
     {
@@ -518,6 +523,7 @@ const sidebars: SidebarsConfig = {
       label: 'API Reference',
       collapsed: false,
       items: [
+        'api/cli',
         'api/router',
         'api/configuration-schema',
         'api/apiserver',
@@ -525,6 +531,19 @@ const sidebars: SidebarsConfig = {
         'api/session-identification',
         'api/semantic-router-crd',
         'api/crd-reference',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Fleet Simulator',
+      collapsed: false,
+      items: [
+        'fleet-sim/overview',
+        'fleet-sim/getting-started',
+        'fleet-sim/use-cases',
+        'fleet-sim/sim-algorithms',
+        'fleet-sim/power-model',
+        'fleet-sim/guide',
       ],
     },
     {

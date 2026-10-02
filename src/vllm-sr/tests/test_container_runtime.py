@@ -1,4 +1,5 @@
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -12,11 +13,20 @@ from cli import container_runtime  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
-def clear_runtime_detection_cache(monkeypatch):
+def clear_runtime_detection_cache(monkeypatch, tmp_path):
     monkeypatch.setattr(container_runtime.sys, "platform", "linux")
+    # Isolate the install.sh-persisted runtime.env per test so detection never
+    # reads a real ~/.local/share/vllm-sr from the developer machine.
+    monkeypatch.setenv("VLLM_SR_INSTALL_ROOT", str(tmp_path))
     container_runtime._detect_container_runtime.cache_clear()
     yield
     container_runtime._detect_container_runtime.cache_clear()
+
+
+def _write_persisted_runtime_env(tmp_path, value):
+    (tmp_path / "runtime.env").write_text(
+        f"CONTAINER_RUNTIME={value}\n", encoding="utf-8"
+    )
 
 
 class _Result:
@@ -109,6 +119,176 @@ def test_detect_container_runtime_rejects_unknown_env_runtime(monkeypatch):
 
     with pytest.raises(SystemExit):
         container_runtime.get_container_runtime()
+
+
+def test_detect_container_runtime_honors_persisted_runtime_env_over_autodetect(
+    monkeypatch, tmp_path
+):
+    """#3370: runtime.env persisted by install.sh must beat auto-detection.
+
+    A Podman-only install persists `CONTAINER_RUNTIME=podman`; when Docker
+    shows up later, auto-detection would prefer Docker and silently switch
+    the runtime away from the documented persisted choice.
+    """
+    _write_persisted_runtime_env(tmp_path, "podman")
+    monkeypatch.delenv("CONTAINER_RUNTIME", raising=False)
+
+    def fake_which(name):
+        if name == "docker":
+            return "/usr/local/bin/docker"
+        if name == "podman":
+            return "/usr/bin/podman"
+        return None
+
+    monkeypatch.setattr(container_runtime.shutil, "which", fake_which)
+    monkeypatch.setattr(container_runtime.os.path, "realpath", lambda path: path)
+    _stub_docker_version(monkeypatch)
+    _stub_podman_info(monkeypatch)
+
+    assert container_runtime.get_container_runtime() == "podman"
+
+
+def test_detect_container_runtime_env_var_overrides_persisted_file(
+    monkeypatch, tmp_path
+):
+    """An explicit session env var is the stronger contract; the persisted
+    file must not win over it."""
+    _write_persisted_runtime_env(tmp_path, "podman")
+    monkeypatch.setenv("CONTAINER_RUNTIME", "docker")
+    monkeypatch.setattr(
+        container_runtime.shutil,
+        "which",
+        lambda name: "/usr/local/bin/docker" if name == "docker" else None,
+    )
+    monkeypatch.setattr(container_runtime.os.path, "realpath", lambda path: path)
+    _stub_docker_version(monkeypatch)
+
+    assert container_runtime.get_container_runtime() == "docker"
+
+
+def test_detect_container_runtime_ignores_unsupported_persisted_value(
+    monkeypatch, tmp_path, caplog
+):
+    """A stale or hand-edited runtime.env must not abort; fall back to
+    auto-detection with a warning."""
+    _write_persisted_runtime_env(tmp_path, "lxc")
+    monkeypatch.delenv("CONTAINER_RUNTIME", raising=False)
+    monkeypatch.setattr(
+        container_runtime.shutil,
+        "which",
+        lambda name: "/usr/local/bin/docker" if name == "docker" else None,
+    )
+    monkeypatch.setattr(container_runtime.os.path, "realpath", lambda path: path)
+    _stub_docker_version(monkeypatch)
+
+    with caplog.at_level(logging.WARNING, logger="cli.container_runtime"):
+        assert container_runtime.get_container_runtime() == "docker"
+
+    assert any(
+        "Ignoring unsupported CONTAINER_RUNTIME=lxc" in record.message
+        for record in caplog.records
+    )
+
+
+def test_detect_container_runtime_falls_back_when_persisted_runtime_missing_from_path(
+    monkeypatch, tmp_path, caplog
+):
+    """A persisted runtime whose binary is gone is a stale hint, not an
+    error: warn and auto-detect."""
+    _write_persisted_runtime_env(tmp_path, "podman")
+    monkeypatch.delenv("CONTAINER_RUNTIME", raising=False)
+    monkeypatch.setattr(
+        container_runtime.shutil,
+        "which",
+        lambda name: "/usr/local/bin/docker" if name == "docker" else None,
+    )
+    monkeypatch.setattr(container_runtime.os.path, "realpath", lambda path: path)
+    _stub_docker_version(monkeypatch)
+
+    with caplog.at_level(logging.WARNING, logger="cli.container_runtime"):
+        assert container_runtime.get_container_runtime() == "docker"
+
+    assert any(
+        "CONTAINER_RUNTIME=podman" in record.message
+        and "was not found in PATH" in record.message
+        for record in caplog.records
+    )
+
+
+def test_detect_container_runtime_ignores_malformed_persisted_file(
+    monkeypatch, tmp_path
+):
+    """A runtime.env without a CONTAINER_RUNTIME line reads as absent."""
+    (tmp_path / "runtime.env").write_text(
+        "# a comment\nOTHER_KEY=value\n\n", encoding="utf-8"
+    )
+    monkeypatch.delenv("CONTAINER_RUNTIME", raising=False)
+    monkeypatch.setattr(
+        container_runtime.shutil,
+        "which",
+        lambda name: "/usr/local/bin/docker" if name == "docker" else None,
+    )
+    monkeypatch.setattr(container_runtime.os.path, "realpath", lambda path: path)
+    _stub_docker_version(monkeypatch)
+
+    assert container_runtime.get_container_runtime() == "docker"
+
+
+def test_detect_container_runtime_warns_when_persisted_file_unreadable(
+    monkeypatch, tmp_path, caplog
+):
+    """An existing but unreadable runtime.env warns (so the ignored persisted
+    selection stays diagnosable) and falls back to auto-detection."""
+    env_path = tmp_path / "runtime.env"
+    env_path.write_text("CONTAINER_RUNTIME=podman\n", encoding="utf-8")
+
+    def unreadable_open(path, *args, **kwargs):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.delenv("CONTAINER_RUNTIME", raising=False)
+    monkeypatch.setattr(
+        container_runtime.shutil,
+        "which",
+        lambda name: "/usr/local/bin/docker" if name == "docker" else None,
+    )
+    monkeypatch.setattr(container_runtime.os.path, "realpath", lambda path: path)
+    _stub_docker_version(monkeypatch)
+    monkeypatch.setattr("builtins.open", unreadable_open)
+
+    with caplog.at_level(logging.WARNING, logger="cli.container_runtime"):
+        assert container_runtime.get_container_runtime() == "docker"
+
+    assert any(
+        "Could not read persisted CONTAINER_RUNTIME" in record.message
+        for record in caplog.records
+    )
+
+
+def test_detect_container_runtime_warns_on_invalid_utf8_persisted_file(
+    monkeypatch, tmp_path, caplog
+):
+    """A runtime.env containing invalid UTF-8 bytes warns (so the corrupted
+    persisted selection stays diagnosable) and falls back to auto-detection."""
+    env_path = tmp_path / "runtime.env"
+    # Write raw invalid UTF-8 bytes that decode() cannot handle.
+    env_path.write_bytes(b"\x80\x81CONTAINER_RUNTIME=podman\n")
+
+    monkeypatch.delenv("CONTAINER_RUNTIME", raising=False)
+    monkeypatch.setattr(
+        container_runtime.shutil,
+        "which",
+        lambda name: "/usr/local/bin/docker" if name == "docker" else None,
+    )
+    monkeypatch.setattr(container_runtime.os.path, "realpath", lambda path: path)
+    _stub_docker_version(monkeypatch)
+
+    with caplog.at_level(logging.WARNING, logger="cli.container_runtime"):
+        assert container_runtime.get_container_runtime() == "docker"
+
+    assert any(
+        "Could not read persisted CONTAINER_RUNTIME" in record.message
+        for record in caplog.records
+    )
 
 
 def test_detect_container_runtime_rejects_native_windows(monkeypatch):

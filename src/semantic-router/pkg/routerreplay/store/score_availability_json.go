@@ -20,22 +20,28 @@ func availableFloat32(value float32, available bool) *float32 {
 	return &value
 }
 
-// Unmarked historical records remain unknown. Neither a structural decision
-// constant nor an unavailable guard verdict is serialized as a model score.
-func (r Record) MarshalJSON() ([]byte, error) {
-	type alias Record
+type recordJSONFields Record
+
+type recordJSON struct {
+	recordJSONFields
+	ConfidenceScore             *float64 `json:"confidence_score"`
+	JailbreakConfidence         *float32 `json:"jailbreak_confidence,omitempty"`
+	ResponseJailbreakConfidence *float32 `json:"response_jailbreak_confidence,omitempty"`
+}
+
+// JSONWire is the shared representation for serialization and schema discovery.
+// Unmarked historical records remain unknown; unavailable guard verdicts are
+// never serialized as model scores.
+func (r Record) JSONWire() any {
 	var score *float64
 	if r.ConfidenceScoreAvailable {
 		score = &r.ConfidenceScore
 	}
-	return json.Marshal(struct {
-		alias
-		ConfidenceScore             *float64 `json:"confidence_score"`
-		JailbreakConfidence         *float32 `json:"jailbreak_confidence,omitempty"`
-		ResponseJailbreakConfidence *float32 `json:"response_jailbreak_confidence,omitempty"`
-	}{
-		alias: alias(r), ConfidenceScore: score,
+	return recordJSON{
+		recordJSONFields: recordJSONFields(r), ConfidenceScore: score,
 		JailbreakConfidence:         availableFloat32(r.JailbreakConfidence, r.JailbreakScoreAvailable),
 		ResponseJailbreakConfidence: availableFloat32(r.ResponseJailbreakConfidence, r.ResponseJailbreakScoreAvailable),
-	})
+	}
 }
+
+func (r Record) MarshalJSON() ([]byte, error) { return json.Marshal(r.JSONWire()) }

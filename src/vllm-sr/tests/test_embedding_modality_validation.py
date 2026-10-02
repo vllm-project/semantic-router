@@ -7,9 +7,12 @@ misconfiguration the router would reject at config-load.
 import os
 import tempfile
 
+import pytest
 import yaml
+from cli.models import EmbeddingSignal
 from cli.parser import parse_user_config
 from cli.validator import validate_embedding_modality_compatibility
+from pydantic import ValidationError
 
 
 def _parse_config_from_yaml(config_yaml: str):
@@ -98,16 +101,36 @@ def test_image_modality_passes_with_multimodal_model_type():
     assert errors == [], f"image modality should pass under multimodal, got: {errors}"
 
 
-def test_audio_modality_rejected_with_planned_message():
-    config = _parse_config_from_yaml(
-        _base_config_with_embeddings(query_modality="audio", model_type="multimodal")
-    )
-    errors = validate_embedding_modality_compatibility(config)
-    assert len(errors) == 1
-    msg = str(errors[0])
-    assert "example_rule" in msg
-    assert "MultiModalEncodeAudioFromBase64" in msg
-    assert "planned" in msg
+def test_audio_modality_requires_multimodal_model():
+    for model_type, valid in (("multimodal", True), ("mmbert", False)):
+        config = _parse_config_from_yaml(
+            _base_config_with_embeddings(query_modality="audio", model_type=model_type)
+        )
+        errors = validate_embedding_modality_compatibility(config)
+        assert (errors == []) == valid
+        if errors:
+            assert "example_rule" in str(errors[0])
+            assert "multimodal" in str(errors[0])
+
+
+def test_explicit_binding_defers_media_capability_to_loaded_provider():
+    raw = yaml.safe_load(_base_config_with_embeddings(query_modality="audio"))
+    raw["routing"]["model_bindings"] = {
+        "embedding": {
+            "deployment": "omni",
+            "contract": "embedding.v1",
+            "adapter": "vela_omni",
+        }
+    }
+    raw["global"]["model_catalog"]["deployments"] = {
+        "omni": {
+            "artifact": "models/vela-1.0-omni-nano",
+            "provider": "ort",
+            "device": "cpu",
+        }
+    }
+    config = _parse_config_from_yaml(yaml.safe_dump(raw))
+    assert validate_embedding_modality_compatibility(config) == []
 
 
 def test_no_embeddings_returns_no_errors():
@@ -194,3 +217,33 @@ routing:
     errors = validate_embedding_modality_compatibility(config)
     assert len(errors) == 1
     assert "image_rule_no_model_type" in str(errors[0])
+
+
+def test_image_candidates_require_image_encoder_for_text_queries():
+    raw = yaml.safe_load(_base_config_with_embeddings(query_modality="text"))
+    raw["routing"]["signals"]["embeddings"][0]["image_candidates"] = ["./positive.png"]
+    config = _parse_config_from_yaml(yaml.safe_dump(raw))
+    assert "image candidates" in str(
+        validate_embedding_modality_compatibility(config)[0]
+    )
+
+
+def test_embedding_candidate_banks_typed_contract():
+    rule = EmbeddingSignal(
+        name="images",
+        threshold=-0.1,
+        image_candidates=["./positive.png"],
+        negative_candidates=["a different subject"],
+        negative_image_candidates=["./negative.png"],
+    )
+    assert rule.candidates == []
+    assert rule.model_dump()["negative_image_candidates"] == ["./negative.png"]
+    for values in (
+        {"negative_candidates": ["negative"]},
+        {"candidates": [""]},
+        {"candidates": [17]},
+    ):
+        with pytest.raises(ValidationError):
+            EmbeddingSignal(name="bad", threshold=0.1, **values)
+    with pytest.raises(ValidationError):
+        EmbeddingSignal(name="bad", threshold=1.1, candidates=["positive"])

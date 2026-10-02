@@ -9,6 +9,8 @@ import (
 	"math"
 	"sort"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // ErrIdentityUnsupported means this provider has no verified local representation
@@ -60,7 +62,7 @@ type RepresentationProvider interface {
 }
 
 func ResolveProviderIdentity(provider Provider, settings ConsumerSettings) (ContentIdentity, error) {
-	if strings.ToLower(strings.TrimSpace(settings.ModelType)) != "mmbert" {
+	if strings.TrimSpace(settings.ModelType) == "" {
 		return ContentIdentity{}, fmt.Errorf("%w: %s", ErrIdentityUnsupported, settings.ModelType)
 	}
 	if settings.Layer < 0 || settings.Dimension < 0 || settings.Layer > math.MaxInt32 || settings.Dimension > math.MaxInt32 {
@@ -81,6 +83,29 @@ func (s *Set) ResolveIdentity(settings ConsumerSettings) (ContentIdentity, error
 	return ResolveProviderIdentity(provider, settings)
 }
 
+// candleBERTNamespace keys Candle `bert` vectors, which have no content
+// descriptor. Bump it whenever a Candle BERT change moves stored vectors.
+const candleBERTNamespace = "candle-bert-unpadded-mean-v1"
+
+// ResolveNamespaceIdentity isolates persisted memory and cache vectors. Candle
+// BERT is keyed by candleBERTNamespace; other `bert` runtimes keep their storage.
+func ResolveNamespaceIdentity(provider Provider, settings ConsumerSettings) (ContentIdentity, error) {
+	if !strings.EqualFold(strings.TrimSpace(settings.ModelType), "bert") {
+		return ResolveProviderIdentity(provider, settings)
+	}
+	if provider == nil || provider.Backend() != config.EmbeddingBackendCandle {
+		return ContentIdentity{}, ErrIdentityUnsupported
+	}
+	dimension, err := ResolveDimension(provider, settings.Dimension)
+	if err != nil {
+		return ContentIdentity{}, err
+	}
+	return ContentIdentity{
+		Fingerprint: fmt.Sprintf("%s:dimension=%d:%s", candleBERTNamespace, dimension, settings.InputPolicy),
+		Descriptor:  RuntimeDescriptor{ModelType: "bert", Dimension: dimension},
+	}, nil
+}
+
 // IdentityFromDescriptor combines the native representation with the caller's
 // explicit, versioned input policy. It never reads mutable files after model load.
 func IdentityFromDescriptor(raw []byte, inputPolicy string) (ContentIdentity, error) {
@@ -88,7 +113,7 @@ func IdentityFromDescriptor(raw []byte, inputPolicy string) (ContentIdentity, er
 	if err := json.Unmarshal(raw, &descriptor); err != nil {
 		return ContentIdentity{}, fmt.Errorf("decode embedding descriptor: %w", err)
 	}
-	if descriptor.Version != 1 || descriptor.ModelType != "mmbert" || descriptor.Runtime == "" || descriptor.PoolingContract == "" || descriptor.Layer <= 0 || descriptor.Dimension <= 0 || descriptor.MaxSequenceLength <= 0 || inputPolicy == "" {
+	if descriptor.Version != 1 || strings.TrimSpace(descriptor.ModelType) == "" || descriptor.Runtime == "" || descriptor.PoolingContract == "" || descriptor.Layer < 0 || descriptor.Dimension <= 0 || descriptor.MaxSequenceLength <= 0 || inputPolicy == "" {
 		return ContentIdentity{}, fmt.Errorf("incomplete or unsupported embedding runtime descriptor")
 	}
 	validDigest := func(value string) bool {

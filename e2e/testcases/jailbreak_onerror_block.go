@@ -12,14 +12,14 @@ import (
 
 func init() {
 	pkgtestcases.Register("jailbreak-onerror-block", pkgtestcases.TestCase{
-		Description: "Test explicit unknown no-match and legacy PromptGuard fail-closed behavior against an unreachable classifier",
+		Description: "Test explicit unknown no-match and PromptGuard fail-closed behavior against an unreachable classifier",
 		Tags:        []string{"kubernetes", "security", "jailbreak", "prompt-guard"},
 		Fn:          testJailbreakOnErrorBlock,
 	})
 }
 
 // testJailbreakOnErrorBlock sends an ordinary, non-adversarial prompt against
-// the jailbreak-onerror profile (prompt_guard.protocol points at an endpoint
+// the jailbreak-onerror profile (prompt_guard.backend points at an endpoint
 // nothing listens on, with on_error: block). It must be blocked: with the
 // classifier unreachable, on_error: block treats the classify failure as a
 // positive detection rather than letting a request through unchecked.

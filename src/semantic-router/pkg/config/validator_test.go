@@ -101,7 +101,7 @@ func registerValidateConfigStructureCoreSpecs() {
 }
 
 func registerValidateConfigStructureCoreDispatchSpecs() {
-	It("skips everything in k8s mode", func() {
+	It("defers routing contracts until CRDs are available in k8s mode", func() {
 		cfg := &RouterConfig{
 			ConfigSource: ConfigSourceKubernetes,
 			IntelligentRouting: IntelligentRouting{
@@ -133,6 +133,7 @@ func registerValidateConfigStructureCoreDispatchSpecs() {
 	It("keeps the shared dispatch table wired for file and k8s validation", func() {
 		for _, validators := range [][]configContractValidator{
 			globalConfigContractValidators,
+			routingConfigContractValidators,
 			routingProfileContractValidators,
 		} {
 			Expect(validators).NotTo(BeEmpty())
@@ -1051,7 +1052,7 @@ var _ = Describe("validateConfigStructure", func() {
 })
 
 var _ = Describe("validatePromptGuardBackendConfig", func() {
-	It("accepts an unset variant/protocol (defaults to candle)", func() {
+	It("accepts an unset variant/backend (defaults to candle)", func() {
 		cfg := &PromptGuardConfig{}
 		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
 	})
@@ -1066,25 +1067,30 @@ var _ = Describe("validatePromptGuardBackendConfig", func() {
 		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
 	})
 
-	It("accepts protocol http_chat", func() {
-		cfg := &PromptGuardConfig{Protocol: PromptGuardProtocolHTTPChat}
+	It("accepts backend http_chat", func() {
+		cfg := &PromptGuardConfig{
+			Backend: &RemoteClassifierBackend{
+				Protocol: RemoteClassifierProtocolHTTPChat,
+				Contract: RemoteClassifierContractLabelDecision,
+				Model:    "guard",
+			},
+		}
 		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
 	})
 
-	It("accepts protocol http_classify", func() {
-		cfg := &PromptGuardConfig{Protocol: PromptGuardProtocolHTTPClassify}
+	It("accepts backend http_classify", func() {
+		cfg := &PromptGuardConfig{
+			Backend: &RemoteClassifierBackend{
+				Protocol: RemoteClassifierProtocolHTTPClassify,
+				Contract: RemoteClassifierContractLabelDistribution,
+				Model:    "guard",
+			},
+		}
 		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
 	})
 
 	It("rejects an unrecognized variant", func() {
 		cfg := &PromptGuardConfig{Variant: "some_typo"}
-		err := validatePromptGuardBackendConfig(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("some_typo"))
-	})
-
-	It("rejects an unrecognized protocol", func() {
-		cfg := &PromptGuardConfig{Protocol: "some_typo"}
 		err := validatePromptGuardBackendConfig(cfg)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("some_typo"))
@@ -1096,8 +1102,15 @@ var _ = Describe("validatePromptGuardBackendConfig", func() {
 		Expect(err).To(HaveOccurred())
 	})
 
-	It("rejects setting both variant and protocol", func() {
-		cfg := &PromptGuardConfig{Variant: PromptGuardVariantCandle, Protocol: PromptGuardProtocolHTTPChat}
+	It("rejects setting both variant and backend", func() {
+		cfg := &PromptGuardConfig{
+			Variant: PromptGuardVariantCandle,
+			Backend: &RemoteClassifierBackend{
+				Protocol: RemoteClassifierProtocolHTTPChat,
+				Contract: RemoteClassifierContractLabelDecision,
+				Model:    "guard",
+			},
+		}
 		err := validatePromptGuardBackendConfig(cfg)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("mutually exclusive"))

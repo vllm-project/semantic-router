@@ -43,7 +43,14 @@ func TestBuildModelSpecsCoversNamedRecipeSignalsAndPlugins(t *testing.T) {
 
 func TestBuildModelSpecsSkipsLocalHallucinationSnapshotsForEndpointBackend(t *testing.T) {
 	cfg := loadGenericMultiRecipeModelNeedsConfig(t)
+	// The legacy endpoint form desugars into a remote binding when compiled, so
+	// it has to be complete: an endpoint backend without an endpoint is a
+	// configuration error, not a local model to download.
 	cfg.HallucinationMitigation.HallucinationModel.Backend = config.HallucinationBackendEndpoint
+	cfg.HallucinationMitigation.HallucinationModel.Endpoint = "http://127.0.0.1:8077/v1"
+	if cfg.HallucinationMitigation.HallucinationModel.ModelID == "" {
+		cfg.HallucinationMitigation.HallucinationModel.ModelID = "remote-detector"
+	}
 
 	specs, err := BuildModelSpecs(cfg)
 	if err != nil {

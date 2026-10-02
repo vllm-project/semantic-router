@@ -10,7 +10,8 @@ import (
 // budget/backend/window retain their operator-authored policy.
 func (m *classifierModelRuntime) resolveDefaultPIIWindow() error {
 	pii := m.cfg.PIIModel
-	if _, bound := m.plan.Lookup(m.recipe, "pii_classifier"); bound || !pii.Active() || pii.Backend != nil || !pii.UseMmBERT32K || pii.MaxSequenceLength != 0 || pii.Window != nil {
+	if _, bound := m.plan.Lookup(m.recipe, "pii_classifier"); bound || !pii.Active() || pii.Backend != nil || !pii.UseMmBERT32K || pii.MaxSequenceLength != 0 || pii.Window != nil ||
+		!isDefaultModelArtifact(pii.ModelID, config.DefaultSystemModels().PIIClassifier) {
 		return nil
 	}
 	model := config.GetModelByPath(config.DefaultSystemModels().PIIClassifier)

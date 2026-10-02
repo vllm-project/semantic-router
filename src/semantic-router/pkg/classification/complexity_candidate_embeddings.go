@@ -153,19 +153,9 @@ func (c *ComplexityClassifier) startCandidateEmbeddingWorkers(
 
 func (c *ComplexityClassifier) computeCandidateEmbedding(task complexityCandidateTask) ([]float32, error) {
 	if task.isImage {
-		if c.multiModalProvider != nil {
-			return embedding.Image(context.Background(), c.multiModalProvider, task.candidate, 0)
-		}
-		return getMultiModalImageEmbedding(task.candidate, 0)
+		return embedding.Image(context.Background(), c.multiModalProvider, task.candidate, 0)
 	}
-	if c.provider != nil {
-		return c.provider.Embed(context.Background(), task.candidate)
-	}
-	output, err := getEmbeddingWithModelType(task.candidate, c.modelType, 0)
-	if err != nil {
-		return nil, err
-	}
-	return output.Embedding, nil
+	return embedding.Embed(context.Background(), c.provider, task.candidate, embedding.Options{})
 }
 
 func (c *ComplexityClassifier) collectCandidateEmbeddingResults(

@@ -70,9 +70,9 @@ func (s *ClassificationAPIServer) handleListVectorStoreFiles(w http.ResponseWrit
 
 	files := pipeline.ListFileStatuses(id)
 
-	response := map[string]interface{}{
-		"object": "list",
-		"data":   files,
+	response := objectListResponse[*vectorstore.VectorStoreFile]{
+		Object: "list",
+		Data:   files,
 	}
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
@@ -99,9 +99,9 @@ func (s *ClassificationAPIServer) handleDetachFile(w http.ResponseWriter, r *htt
 		return
 	}
 
-	s.writeJSONResponse(w, http.StatusOK, map[string]interface{}{
-		"id":      vsfID,
-		"object":  "vector_store.file.deleted",
-		"deleted": true,
+	s.writeJSONResponse(w, http.StatusOK, objectDeletedResponse{
+		ID:      vsfID,
+		Object:  "vector_store.file.deleted",
+		Deleted: true,
 	})
 }

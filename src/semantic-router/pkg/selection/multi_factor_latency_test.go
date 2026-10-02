@@ -13,7 +13,7 @@ func TestMultiFactorComparesTheRequestedLatencyMetric(t *testing.T) {
 	tpot := map[string]float64{"streaming": 0.01, "interactive": 0.04, "unknown": 0.001}
 	ttft := map[string]float64{"streaming": 2, "interactive": 0.1}
 	for _, tc := range []struct{ metric, want string }{
-		{"ttft", "interactive"}, {"tpot", "unknown"}, {"", "unknown"},
+		{"ttft", "streaming"}, {"tpot", "unknown"}, {"", "unknown"},
 	} {
 		t.Run("metric="+tc.metric, func(t *testing.T) {
 			cfg := DefaultMultiFactorConfig()
@@ -33,8 +33,11 @@ func TestMultiFactorComparesTheRequestedLatencyMetric(t *testing.T) {
 				t.Fatalf("metric=%q: result=%+v err=%v; want %s", tc.metric, result, err, tc.want)
 			}
 			if tc.metric == "ttft" {
-				if _, known := s.latencySignal("unknown"); known {
+				if _, known, _ := s.latencyMeasurement("unknown"); known {
 					t.Fatal("TPOT was substituted for missing TTFT")
+				}
+				if stage := result.MultiFactor.Stages[0]; stage.Action != "skipped" || stage.Available != 2 || stage.Total != 3 {
+					t.Fatalf("partial TTFT coverage must preserve all candidates: %+v", stage)
 				}
 			}
 		})

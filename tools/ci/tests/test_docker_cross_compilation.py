@@ -6,11 +6,8 @@ import re
 import shlex
 import subprocess
 import sys
-import tempfile
 import unittest
 from pathlib import Path
-
-import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CPU_DOCKERFILES = (
@@ -19,21 +16,8 @@ CPU_DOCKERFILES = (
 )
 
 
-def image_platforms(workflow: str, image: str) -> str:
-    document = yaml.safe_load((REPO_ROOT / ".github/workflows" / workflow).read_text())
-    steps = next(iter(document["jobs"].values()))["steps"]
-    resolver = next(step for step in steps if step.get("id") == "definition")
-    with tempfile.TemporaryDirectory() as directory:
-        output = Path(directory) / "output"
-        subprocess.run(
-            ["bash", "-e", "-c", resolver["run"]],
-            env=os.environ | {"IMAGE": image, "GITHUB_OUTPUT": str(output)},
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        values = dict(line.split("=", 1) for line in output.read_text().splitlines())
-    return values["platforms"]
+sys.path.insert(0, str(REPO_ROOT / "tools/ci"))
+from image_artifacts import DEFINITIONS  # noqa: E402
 
 
 class DockerCrossCompilationTests(unittest.TestCase):
@@ -86,11 +70,14 @@ class DockerCrossCompilationTests(unittest.TestCase):
     def test_cpu_router_validation_covers_published_architectures(self) -> None:
         for image in ("extproc", "vllm-sr"):
             with self.subTest(image=image):
-                published = image_platforms("docker-publish.yml", image)
-                self.assertEqual(published, "linux/amd64,linux/arm64")
-                self.assertEqual(
-                    image_platforms("docker-validate.yml", image), published
-                )
+                published = DEFINITIONS[image][2]
+                self.assertEqual(published, ["linux/amd64", "linux/arm64"])
+        builder = (REPO_ROOT / ".github/workflows/build-artifacts.yml").read_text()
+        publisher = (REPO_ROOT / ".github/workflows/docker-publish.yml").read_text()
+        self.assertIn("image_artifacts.py", builder)
+        self.assertIn("--multiarch", builder)
+        self.assertIn("image_artifacts.py promote", publisher)
+        self.assertNotIn("docker/build-push-action", publisher)
 
 
 if __name__ == "__main__":

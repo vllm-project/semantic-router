@@ -7,12 +7,21 @@ import (
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 var (
 	jsonRawMessageType = reflect.TypeOf(json.RawMessage{})
 	timeType           = reflect.TypeOf(time.Time{})
 )
+
+// jsonWireRepresentation is implemented by owners with a custom JSON encoder.
+// JSONWire must return the same concrete representation for every value,
+// including the zero value, and MarshalJSON must serialize that representation.
+// Keeping this structural interface here avoids dependencies from runtime DTOs
+// to the management API or route-specific schema overrides.
+type jsonWireRepresentation interface{ JSONWire() any }
 
 // openAPIRequestSchemaFor derives request fields from the same Go type decoded
 // by a route handler. Request structs remain the field-level source of truth;
@@ -24,8 +33,17 @@ func openAPIRequestSchemaFor[T any]() *OpenAPISchema {
 }
 
 func openAPISchemaFromType(valueType reflect.Type, visiting map[reflect.Type]bool) OpenAPISchema {
-	for valueType.Kind() == reflect.Pointer {
-		valueType = valueType.Elem()
+	if valueType.Kind() == reflect.Pointer {
+		schema := openAPISchemaFromType(valueType.Elem(), visiting)
+		schema.Nullable = true
+		return schema
+	}
+	if valueType == reflect.TypeOf(config.OutputTokenDefault{}) {
+		minimum := int64(1)
+		return OpenAPISchema{OneOf: []OpenAPISchema{
+			{Type: "integer", Minimum: &minimum},
+			{Type: "string", Enum: []string{"auto"}},
+		}}
 	}
 	if valueType == jsonRawMessageType {
 		return OpenAPISchema{}
@@ -33,22 +51,27 @@ func openAPISchemaFromType(valueType reflect.Type, visiting map[reflect.Type]boo
 	if valueType == timeType {
 		return OpenAPISchema{Type: "string", Format: "date-time"}
 	}
+	if wire, ok := reflect.Zero(valueType).Interface().(jsonWireRepresentation); ok {
+		if representation := reflect.TypeOf(wire.JSONWire()); representation != nil && representation != valueType {
+			return openAPISchemaFromType(representation, visiting)
+		}
+	}
 
 	switch valueType.Kind() {
 	case reflect.Struct:
 		return openAPIObjectSchema(valueType, visiting)
 	case reflect.Slice, reflect.Array:
 		item := openAPISchemaFromType(valueType.Elem(), visiting)
-		return OpenAPISchema{Type: "array", Items: &item}
+		return OpenAPISchema{Type: "array", Items: &item, Nullable: valueType.Kind() == reflect.Slice}
 	case reflect.Map:
 		if valueType.Key().Kind() != reflect.String {
 			return OpenAPISchema{Type: "object"}
 		}
 		if valueType.Elem().Kind() == reflect.Interface {
-			return OpenAPISchema{Type: "object", AdditionalProperties: true}
+			return OpenAPISchema{Type: "object", AdditionalProperties: true, Nullable: true}
 		}
 		additional := openAPISchemaFromType(valueType.Elem(), visiting)
-		return OpenAPISchema{Type: "object", AdditionalProperties: &additional}
+		return OpenAPISchema{Type: "object", AdditionalProperties: &additional, Nullable: true}
 	case reflect.Interface:
 		return OpenAPISchema{}
 	case reflect.Bool:
@@ -76,9 +99,10 @@ func openAPIObjectSchema(valueType reflect.Type, visiting map[reflect.Type]bool)
 		Type:       "object",
 		Properties: make(map[string]OpenAPISchema),
 	}
+	required := make(map[string]bool)
 	for index := 0; index < valueType.NumField(); index++ {
 		field := valueType.Field(index)
-		if !field.IsExported() {
+		if !field.IsExported() && !field.Anonymous {
 			continue
 		}
 		name, optional, skip := openAPIJSONField(field)
@@ -90,14 +114,31 @@ func openAPIObjectSchema(valueType reflect.Type, visiting map[reflect.Type]bool)
 			for childName, childSchema := range fieldSchema.Properties {
 				schema.Properties[childName] = childSchema
 			}
-			schema.Required = append(schema.Required, fieldSchema.Required...)
+			if field.Type.Kind() != reflect.Pointer {
+				for _, childName := range fieldSchema.Required {
+					if !required[childName] {
+						schema.Required = append(schema.Required, childName)
+					}
+					required[childName] = true
+				}
+			}
 			continue
 		}
 		schema.Properties[name] = fieldSchema
-		if !optional {
+		if !optional && !required[name] {
 			schema.Required = append(schema.Required, name)
 		}
+		required[name] = !optional
 	}
+	// A custom wire representation can shadow embedded compatibility fields.
+	// Its outer JSON tag controls optionality, and each required name occurs once.
+	filtered := schema.Required[:0]
+	for _, name := range schema.Required {
+		if required[name] {
+			filtered = append(filtered, name)
+		}
+	}
+	schema.Required = filtered
 	if len(schema.Properties) == 0 {
 		schema.Properties = nil
 	}

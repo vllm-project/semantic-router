@@ -422,8 +422,21 @@ def _baseline_findings(baseline: dict[str, Any]) -> list[tuple[str, str]]:
 
     findings += _threshold_findings(baseline, task, name)
 
+    per_label = baseline["metrics"]["per_label"]
+    unmeasured = sorted(
+        label for label, entry in per_label.items() if not entry["support"]
+    )
+    if unmeasured:
+        findings.append(
+            (
+                "coverage",
+                f"{task}: `{name}` was scored on a split with no rows for "
+                f"{', '.join(f'`{label}`' for label in unmeasured)}; those labels are "
+                "unmeasured and left out of macro F1",
+            )
+        )
     worst = min(
-        baseline["metrics"]["per_label"].items(),
+        ((label, entry) for label, entry in per_label.items() if entry["support"]),
         key=lambda item: item[1]["recall"],
         default=None,
     )

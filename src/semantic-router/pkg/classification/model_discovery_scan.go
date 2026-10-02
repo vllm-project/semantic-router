@@ -24,8 +24,8 @@ func normalizeModelDiscoveryDir(modelsDir string) (string, error) {
 		modelsDir = resolved
 	}
 
-	if _, statErr := os.Stat(modelsDir); os.IsNotExist(statErr) {
-		return "", fmt.Errorf("models directory does not exist: %s", modelsDir)
+	if _, statErr := os.Stat(modelsDir); statErr != nil {
+		return "", fmt.Errorf("stat models directory %q: %w", modelsDir, statErr)
 	}
 	return modelsDir, nil
 }

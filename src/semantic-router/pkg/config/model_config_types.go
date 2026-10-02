@@ -117,9 +117,8 @@ func (c HNSWConfig) WithDefaults() HNSWConfig {
 			result.ModelType = EmbeddingModelTypeQwen3
 		}
 	}
-	if result.TargetDimension <= 0 {
-		result.TargetDimension = 768
-	}
+	// Zero selects the prepared model's native dimension. The provider validates
+	// explicit dimensions; a shared default must not resize another model.
 	if result.EnableSoftMatching == nil {
 		defaultEnabled := false
 		result.EnableSoftMatching = &defaultEnabled
@@ -191,13 +190,9 @@ type PromptGuardConfig struct {
 	PositiveLabels       []string                  `yaml:"positive_labels,omitempty"`
 
 	// Variant selects a local Candle-backed model variant. Mutually
-	// exclusive with Protocol. Defaults to PromptGuardVariantMmBERT32K when
-	// both are unset.
+	// exclusive with Backend. Defaults to PromptGuardVariantMmBERT32K when
+	// unset.
 	Variant string `yaml:"variant,omitempty"`
-	// Protocol selects a remote HTTP backend's wire contract. Mutually
-	// exclusive with Variant. Requires an external model configured with
-	// model_role="guardrail".
-	Protocol string `yaml:"protocol,omitempty"`
 
 	// ClassifierOnErrorConfig contributes OnError (allow|block), shared with
 	// every other pluggable classifier backend instead of being redeclared
@@ -256,19 +251,30 @@ func (c ComplexityModelConfig) WithDefaults() ComplexityModelConfig {
 }
 
 type ExternalModelConfig struct {
-	Name             string                 `yaml:"name,omitempty"`
-	Provider         string                 `yaml:"llm_provider"`
-	ModelRole        string                 `yaml:"model_role"`
-	ModelEndpoint    ClassifierVLLMEndpoint `yaml:"llm_endpoint,omitempty"`
-	ModelName        string                 `yaml:"llm_model_name,omitempty"`
-	TimeoutSeconds   int                    `yaml:"llm_timeout_seconds,omitempty"`
-	ParserType       string                 `yaml:"parser_type,omitempty"`
-	Threshold        float32                `yaml:"threshold,omitempty"`
-	AccessKey        string                 `yaml:"access_key,omitempty" json:"-"`
-	MaxTokens        int                    `yaml:"max_tokens,omitempty"`
-	Temperature      float64                `yaml:"temperature,omitempty"`
-	MaxRequestBytes  int64                  `yaml:"max_request_bytes,omitempty"`
-	MaxResponseBytes int64                  `yaml:"max_response_bytes,omitempty"`
+	Name             string                        `yaml:"name,omitempty"`
+	Provider         string                        `yaml:"llm_provider"`
+	ModelRole        string                        `yaml:"model_role"`
+	ModelEndpoint    ClassifierVLLMEndpoint        `yaml:"llm_endpoint,omitempty"`
+	ModelName        string                        `yaml:"llm_model_name,omitempty"`
+	TimeoutSeconds   int                           `yaml:"llm_timeout_seconds,omitempty"`
+	ParserType       string                        `yaml:"parser_type,omitempty"`
+	Threshold        float32                       `yaml:"threshold,omitempty"`
+	AccessKey        string                        `yaml:"access_key,omitempty" json:"-"`
+	MaxTokens        int                           `yaml:"max_tokens,omitempty"`
+	Temperature      float64                       `yaml:"temperature,omitempty"`
+	Reasoning        *ExternalModelReasoningConfig `yaml:"reasoning,omitempty"`
+	MaxRequestBytes  int64                         `yaml:"max_request_bytes,omitempty"`
+	MaxResponseBytes int64                         `yaml:"max_response_bytes,omitempty"`
+}
+
+// ExternalModelReasoningConfig controls reasoning for requests made to a
+// vLLM-backed external classifier. Family references the shared reasoning-family
+// catalog; the external model contract intentionally does not support inline
+// family definitions.
+type ExternalModelReasoningConfig struct {
+	Family          string `yaml:"family" jsonschema:"required"`
+	UseReasoning    *bool  `yaml:"use_reasoning" jsonschema:"required"`
+	ReasoningEffort string `yaml:"reasoning_effort,omitempty"`
 }
 
 // AdmissionConfig bounds concurrent inference for one Router Model

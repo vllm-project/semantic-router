@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -31,7 +32,7 @@ func (r *OpenAIRouter) responseCacheService() *cache.ResponseCacheService {
 func newResponseCacheService(cfg *config.RouterConfig, backend cache.CacheBackend, boundIdentity string, embeddings *embedding.Set) (*cache.ResponseCacheService, error) {
 	backendType, options := (&OpenAIRouter{Config: cfg}).responseCacheServiceConfig()
 	var provider embedding.Provider
-	if cfg != nil && embeddings != nil {
+	if cfg != nil && cfg.NeedsSemanticResponseCache() && embeddings != nil {
 		var err error
 		provider, err = embeddings.Get(detectSemanticCacheEmbeddingModel(cfg), 0, 0)
 		if err != nil && backend != nil && backend.IsEnabled() {
@@ -39,10 +40,10 @@ func newResponseCacheService(cfg *config.RouterConfig, backend cache.CacheBacken
 		}
 	}
 	identity := boundIdentity
-	if identity == "" {
+	if identity == "" && (cfg == nil || cfg.NeedsSemanticResponseCache()) {
 		var err error
 		identity, err = responseCacheEmbeddingIdentity(cfg, backend, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
-			return embedding.ResolveProviderIdentity(provider, settings)
+			return embedding.ResolveNamespaceIdentity(provider, settings)
 		})
 		if err != nil {
 			return nil, err
@@ -67,6 +68,9 @@ func responseCacheEmbeddingIdentity(cfg *config.RouterConfig, backend cache.Cach
 		return "", nil
 	}
 	identity, err := initialize(settings)
+	if settings.ModelType == "bert" && errors.Is(err, embedding.ErrIdentityUnsupported) {
+		return "", nil
+	}
 	if err != nil {
 		return "", fmt.Errorf("initialize semantic cache embedding identity: %w", err)
 	}

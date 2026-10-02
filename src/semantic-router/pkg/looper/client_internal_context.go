@@ -20,6 +20,9 @@ func setInternalRequestHeaders(
 ) {
 	header.Set(headers.VSRInternalAuth, internalauth.Token())
 	header.Set(headers.VSRLooperRequest, "true")
+	if hash := expectedConfigHashFromContext(ctx); hash != "" {
+		header.Set(headers.SRBenchExpectedConfigHash, hash)
+	}
 	header.Set(headers.VSRLooperIteration, fmt.Sprintf("%d", options.Iteration))
 	depth := options.FusionDepth
 	if depth <= 0 {

@@ -1176,6 +1176,42 @@ impl MmBertTokenClassifier {
         self.session.finish_profiling()
     }
 
+    /// Return ordered token probabilities for an exact task-owned encoding.
+    pub fn classify_encoded_tokens(
+        &mut self,
+        encoding: &tokenizers::Encoding,
+    ) -> UnifiedResult<Vec<Vec<f32>>> {
+        let length = encoding.len();
+        if length > self.max_sequence_length {
+            return Err(errors::validation(
+                "input_tokens",
+                &format!("at most {}", self.max_sequence_length),
+                &length.to_string(),
+            ));
+        }
+        let execution_len = self.session.execution_length(1, length)?;
+        let mut ids = vec![self.config.pad_token_id as i64; execution_len];
+        let mut mask = vec![0i64; execution_len];
+        for index in 0..length {
+            ids[index] = encoding.get_ids()[index] as i64;
+            mask[index] = encoding.get_attention_mask()[index] as i64;
+        }
+        let output = self.session.run(ids, mask, 1, execution_len)?;
+        let logits = extract_token_logits_from_outputs(&output)?;
+        validate_classifier_logits(&logits, execution_len, self.config.num_labels)?;
+        Ok(logits
+            .rows()
+            .into_iter()
+            .take(length)
+            .map(|row| {
+                let maximum = row.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+                let values: Vec<f32> = row.iter().map(|value| (value - maximum).exp()).collect();
+                let total: f32 = values.iter().sum();
+                values.into_iter().map(|value| value / total).collect()
+            })
+            .collect())
+    }
+
     /// Detect PII entities in text
     pub fn detect_entities(&mut self, text: &str) -> UnifiedResult<TokenClassificationResult> {
         // Tokenize with offsets

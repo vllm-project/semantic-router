@@ -12,6 +12,7 @@ var pluginFieldsDecoders = map[string]pluginFieldsDecoder{
 	"system_prompt":       pluginFieldsSystemPrompt,
 	"response_cache":      pluginFieldsResponseCache,
 	"context_compression": pluginFieldsStructuredConfiguration,
+	"prompt_cache":        pluginFieldsStructuredConfiguration,
 	"router_replay":       pluginFieldsRouterReplay,
 	"shadow_dispatch":     pluginFieldsStructuredConfiguration,
 	"memory":              pluginFieldsMemory,
@@ -164,7 +165,11 @@ func pluginFieldsRequestParams(p *config.DecisionPlugin) map[string]Value {
 		fields["blocked_params"] = ArrayValue{Items: items}
 	}
 	if cfg.DefaultMaxTokens != nil {
-		fields["default_max_tokens"] = IntValue{V: *cfg.DefaultMaxTokens}
+		if cfg.DefaultMaxTokens.Auto {
+			fields["default_max_tokens"] = StringValue{V: "auto"}
+		} else {
+			fields["default_max_tokens"] = IntValue{V: cfg.DefaultMaxTokens.Value}
+		}
 	}
 	if cfg.MaxTokensLimit != nil {
 		fields["max_tokens_limit"] = IntValue{V: *cfg.MaxTokensLimit}

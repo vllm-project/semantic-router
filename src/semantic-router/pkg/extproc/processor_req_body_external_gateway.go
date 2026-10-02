@@ -46,8 +46,11 @@ func (r *OpenAIRouter) handleExternalGatewayModelRouting(
 	ctx.VSRSelectedDecisionConfidenceScored = false
 	ctx.VSRSelectionMethod = ""
 	ctx.VSRSelectionReasoning = ""
+	ctx.VSRSelectionTrace = nil
 	ctx.VSREligibleModelRefs = nil
 	ctx.VSRPolicyEligibleModelRefs = nil
+	ctx.VSRSelectedCandidate = nil
+	ctx.pendingSessionDecision = nil
 	ctx.VSRReasoningMode = "off"
 
 	changed, err := r.prepareProviderRequest(request, dispatch, ctx)

@@ -20,8 +20,8 @@ func checkResultLabels(got, want []string, size int) error {
 	return nil
 }
 
-func (r *Runtime) prepareCandleScores(ctx context.Context, spec config.ResolvedModelBinding) (*binding.Resource, *candle.LabelScorer, error) {
-	resource, err := r.candleResource(ctx, spec, false)
+func (r *Runtime) prepareCandleScores(ctx context.Context, spec config.ResolvedModelBinding, windowSize int) (*binding.Resource, *candle.LabelScorer, error) {
+	resource, err := r.candleResourceWithWindow(ctx, spec, false, windowSize)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -64,7 +64,7 @@ func (r *Runtime) Scores(ctx context.Context, spec config.ResolvedModelBinding) 
 	if spec.Deployment.Provider != "candle" {
 		return nil, fmt.Errorf("%w: label score provider unavailable", binding.ErrCapability)
 	}
-	resource, model, err := r.prepareCandleScores(ctx, spec)
+	resource, model, err := r.prepareCandleScores(ctx, spec, 0)
 	if err != nil {
 		return nil, err
 	}

@@ -38,9 +38,9 @@ func sseDataPayload(line []byte) ([]byte, bool) {
 // parseStreamingUsage extracts token usage from an SSE stream. OpenAI-compatible
 // backends report usage in a trailing chunk (only when the request set
 // stream_options.include_usage), so the last non-null usage block wins. Returns
-// zero usage when none is present.
+// unreported usage when none is present.
 func parseStreamingUsage(body []byte) TokenUsage {
-	var usage TokenUsage
+	usage := TokenUsage{Unreported: true}
 	for _, line := range bytes.Split(body, []byte("\n")) {
 		data, ok := sseDataPayload(line)
 		if !ok {
@@ -52,13 +52,13 @@ func parseStreamingUsage(body []byte) TokenUsage {
 		}
 
 		var chunk struct {
-			Usage *TokenUsage `json:"usage"`
+			Usage json.RawMessage `json:"usage"`
 		}
 		if err := json.Unmarshal(data, &chunk); err != nil {
 			continue
 		}
-		if chunk.Usage != nil {
-			usage = *chunk.Usage
+		if len(chunk.Usage) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.Usage), []byte("null")) {
+			usage = parseResponseUsage(data)
 		}
 	}
 	return usage

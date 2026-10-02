@@ -5,9 +5,11 @@ from cli.config_contract import (
     CLASSIFIER_TYPE_LOCAL,
     CLASSIFIER_TYPE_SEQUENCE,
     iter_condition_leaves,
-    iter_routing_profiles,
 )
-from cli.model_runtime_defaults import effective_model_deployments
+from cli.model_runtime_defaults import (
+    effective_model_deployments,
+    iter_effective_routing_profiles,
+)
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
 from cli.validator_model_runtime import project_classifier_rule
@@ -22,7 +24,7 @@ def validate_classifier_contracts(
     errors: list[ValidationError] = []
     external_models = _external_models(config)
     deployments = effective_model_deployments(config)
-    for profile_name, routing in iter_routing_profiles(config):
+    for profile_name, routing in iter_effective_routing_profiles(config):
         profile_field = (
             "routing"
             if profile_name == "default"

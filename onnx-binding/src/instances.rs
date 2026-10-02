@@ -1,5 +1,6 @@
 //! Owned task instances. A handle owns a reference, never a process-global role.
 
+use crate::model_architectures::embedding::omni::{AudioCapability, OmniModel};
 use crate::{
     core::{
         instance_options::{InstanceOptions, Overflow, SessionEvidence},
@@ -20,9 +21,11 @@ use std::{
 };
 use tokenizers::Tokenizer;
 
+mod grounding;
 mod pair_scores;
 mod sequence;
 use crate::model_architectures::reranking::{PairScorer, PairScorerSelection};
+pub use grounding::{grounded, load_grounded};
 pub use pair_scores::{load_pair_scorer, score_pairs};
 pub use sequence::{classify, classify_windows, score, score_windows};
 
@@ -31,8 +34,10 @@ enum Model {
     Sequence(MmBertSequenceClassifier),
     LabelScores(MmBertSequenceClassifier),
     Token(MmBertTokenClassifier),
+    GroundedToken(MmBertTokenClassifier),
     Embedding(Box<MmBertEmbeddingModel>),
     MultiModal(MultiModalEmbeddingModel),
+    Omni(Box<OmniModel>),
 }
 
 struct Instance {
@@ -43,6 +48,7 @@ struct Instance {
     model_limit: usize,
     task_limit: usize,
     effective_limit: usize,
+    document_max_input_tokens: usize,
     labels: Vec<String>,
     dimension: usize,
     available_layers: Vec<usize>,
@@ -113,6 +119,12 @@ pub fn load_embedding(options: InstanceOptions) -> UnifiedResult<u64> {
     let model = MmBertEmbeddingModel::load_with_options(&options)?;
     prepare(Model::Embedding(Box::new(model)), options)
 }
+pub fn load_omni(options: InstanceOptions) -> UnifiedResult<u64> {
+    let options = fresh_options(options);
+    let model = OmniModel::load(&options)?;
+    prepare(Model::Omni(Box::new(model)), options)
+}
+
 pub fn load_multimodal(options: InstanceOptions) -> UnifiedResult<u64> {
     let options = fresh_options(options);
     let model = MultiModalEmbeddingModel::load_with_options(&options)?;
@@ -132,6 +144,7 @@ pub fn embedding_runtime_descriptor(
         Model::Embedding(model) => model
             .runtime_descriptor(layer, dimension)
             .map_err(|error| errors::config_error("embedding_descriptor", &error.to_string())),
+        Model::Omni(model) => model.descriptor(layer, dimension),
         _ => Err(errors::config_error(
             "embedding_descriptor",
             "handle is not an mmbert embedding instance",
@@ -167,6 +180,16 @@ fn prepare(model: Model, options: InstanceOptions) -> UnifiedResult<u64> {
                 .collect(),
             0,
         ),
+        Model::GroundedToken(m) => (
+            m.tokenizer(),
+            "grounded_text",
+            m.config().max_position_embeddings,
+            m.config().max_position_embeddings.min(8192),
+            (0..m.config().num_labels)
+                .map(|n| m.config().get_label(n as i32))
+                .collect(),
+            0,
+        ),
         Model::Token(m) => (
             m.tokenizer(),
             "token_classification",
@@ -185,6 +208,14 @@ fn prepare(model: Model, options: InstanceOptions) -> UnifiedResult<u64> {
             vec![],
             m.config().hidden_size,
         ),
+        Model::Omni(m) => (
+            m.tokenizer(),
+            "omni_embedding",
+            m.max_text_length(),
+            m.effective_limit(),
+            vec![],
+            m.dimension(),
+        ),
         Model::MultiModal(m) => (
             m.tokenizer(),
             "multimodal_embedding",
@@ -199,7 +230,9 @@ fn prepare(model: Model, options: InstanceOptions) -> UnifiedResult<u64> {
         .with_truncation(None)
         .map_err(|e| errors::tokenization_error(&e.to_string()))?;
     tokenizer.with_padding(None);
-    let effective_limit = if matches!(
+    let effective_limit = if let Model::Omni(model) = &model {
+        model.effective_limit()
+    } else if matches!(
         &model,
         Model::Sequence(_) | Model::LabelScores(_) | Model::Token(_)
     ) {
@@ -207,6 +240,13 @@ fn prepare(model: Model, options: InstanceOptions) -> UnifiedResult<u64> {
     } else {
         options.effective_limit(task_limit)?
     };
+    let document_max_input_tokens = options.document_limit(
+        effective_limit,
+        matches!(
+            &model,
+            Model::Sequence(_) | Model::LabelScores(_) | Model::Token(_)
+        ),
+    )?;
     let available_layers = match &model {
         Model::Embedding(model) => model.available_exit_layers(),
         _ => vec![],
@@ -219,6 +259,7 @@ fn prepare(model: Model, options: InstanceOptions) -> UnifiedResult<u64> {
         model_limit,
         task_limit,
         effective_limit,
+        document_max_input_tokens,
         labels,
         dimension,
         available_layers,
@@ -254,9 +295,45 @@ impl Instance {
             truncated: original_tokens > self.effective_limit,
         })
     }
+    /// Admit an entire document without applying the single-forward truncation
+    /// policy. Each planned window is still bounded by the loaded execution.
+    fn window_input(&self, text: &str, size: usize) -> UnifiedResult<InputUsage> {
+        let physical_limit = self
+            .options
+            .execution_max_input_tokens
+            .unwrap_or(self.effective_limit)
+            .min(self.effective_limit);
+        if size == 0 || size > physical_limit {
+            return Err(errors::validation(
+                "window_size",
+                &format!("1..={physical_limit}"),
+                &size.to_string(),
+            ));
+        }
+        let original_tokens = self
+            .tokenizer
+            .encode(text, true)
+            .map_err(|e| errors::tokenization_error(&e.to_string()))?
+            .len();
+        if original_tokens > self.document_max_input_tokens {
+            return Err(errors::validation(
+                "input_tokens",
+                &format!("at most {}", self.document_max_input_tokens),
+                &original_tokens.to_string(),
+            ));
+        }
+        Ok(InputUsage {
+            original_tokens,
+            processed_tokens: original_tokens,
+            truncated: false,
+        })
+    }
     fn dimension(&self, target: Option<usize>) -> UnifiedResult<()> {
         if let Some(target) = target {
-            if target == 0 || target > self.dimension {
+            if target == 0
+                || target > self.dimension
+                || (self.task == "omni_embedding" && target != self.dimension)
+            {
                 return Err(errors::validation(
                     "target_dimension",
                     &format!("1..={}", self.dimension),
@@ -280,10 +357,17 @@ pub struct InstanceInfo {
     pub model_limit: usize,
     pub task_limit: usize,
     pub effective_limit: usize,
+    pub document_max_input_tokens: usize,
     pub overflow: Overflow,
     pub labels: Vec<String>,
     pub dimension: usize,
     pub available_layers: Vec<usize>,
+    pub available_dimensions: Vec<usize>,
+    pub modalities: Vec<String>,
+    pub pooling: String,
+    pub normalization: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio: Option<AudioCapability>,
     pub sessions: Vec<SessionEvidence>,
     /// Counts successfully completed real native inference calls, not loads.
     pub completed_inferences: u64,
@@ -294,15 +378,32 @@ pub struct InstanceInfo {
 pub fn info(handle: u64) -> UnifiedResult<InstanceInfo> {
     let instance = get(handle)?;
     let sessions = instance.options.evidence.lock().clone();
+    let model = instance.model.lock();
+    let (modalities, pooling, normalization, dimensions, audio) = match &*model {
+        Model::Omni(model) => (
+            vec!["text".into(), "image".into(), "audio".into()],
+            model.pooling().to_owned(),
+            "l2".into(),
+            vec![model.dimension()],
+            Some(model.audio_capability()),
+        ),
+        _ => (vec![], String::new(), String::new(), vec![], None),
+    };
     Ok(InstanceInfo {
         task: instance.task,
         model_limit: instance.model_limit,
         task_limit: instance.task_limit,
         effective_limit: instance.effective_limit,
+        document_max_input_tokens: instance.document_max_input_tokens,
         overflow: instance.options.overflow,
         labels: instance.labels.clone(),
         dimension: instance.dimension,
         available_layers: instance.available_layers.clone(),
+        available_dimensions: dimensions,
+        modalities,
+        pooling,
+        normalization,
+        audio,
         sessions,
         completed_inferences: instance.completed.load(Ordering::Relaxed),
         pair_scorer: instance.pair_scorer,
@@ -373,18 +474,11 @@ pub fn detect_token_windows(
     overlap: usize,
 ) -> UnifiedResult<TokenWindows> {
     let instance = get(handle)?;
-    let input = instance.input(text)?;
-    if input.truncated {
-        return Err(errors::validation(
-            "input_tokens",
-            &format!("at most {}", instance.effective_limit),
-            &input.original_tokens.to_string(),
-        ));
-    }
+    let input = instance.window_input(text, size)?;
     let plan = crate::core::sequence_windows::encode_token_windows(
         &instance.tokenizer,
         text,
-        instance.effective_limit,
+        instance.document_max_input_tokens,
         size,
         overlap,
     )
@@ -463,8 +557,12 @@ pub fn encode_text(
 ) -> UnifiedResult<Embedding> {
     let instance = get(handle)?;
     instance.dimension(dimension)?;
-    let input = instance.input(text)?;
     let mut model = instance.model.lock();
+    let text = match &*model {
+        Model::Omni(model) => model.prepare_text(text),
+        _ => text,
+    };
+    let input = instance.input(text)?;
     let values = match &mut *model {
         Model::Embedding(model) => {
             if layer.is_some_and(|layer| !instance.available_layers.contains(&layer)) {
@@ -476,6 +574,7 @@ pub fn encode_text(
             model.encode_single(text, layer, dimension)?.to_vec()
         }
         Model::MultiModal(model) if layer.is_none() => model.encode_text(text, dimension)?.to_vec(),
+        Model::Omni(model) if layer.is_none() => model.encode_text(text, dimension)?,
         _ => {
             return Err(instance.wrong_task("embedding or multimodal_embedding without layer exit"))
         }
@@ -528,6 +627,19 @@ pub fn encode_image_bytes(
     dimension: Option<usize>,
 ) -> UnifiedResult<Embedding> {
     let instance = get(handle)?;
+    instance.dimension(dimension)?;
+    {
+        let model = instance.model.lock();
+        if let Model::Omni(model) = &*model {
+            return embedding_result(
+                &instance,
+                model.encode_image(bytes, dimension)?,
+                "image",
+                None,
+                false,
+            );
+        }
+    }
     let size = {
         let model = instance.model.lock();
         let Model::MultiModal(model) = &*model else {
@@ -542,6 +654,28 @@ pub fn encode_image_bytes(
     // Keep our Arc alive across decoding and the nested native call. Close may
     // remove the handle concurrently; then the nested lookup safely rejects it.
     encode_image(handle, &pixels, size, size, dimension)
+}
+
+pub fn encode_audio_pcm(
+    handle: u64,
+    pcm: &[f32],
+    sample_rate: usize,
+    channels: usize,
+    dimension: Option<usize>,
+) -> UnifiedResult<Embedding> {
+    let instance = get(handle)?;
+    instance.dimension(dimension)?;
+    let model = instance.model.lock();
+    let Model::Omni(model) = &*model else {
+        return Err(instance.wrong_task("omni_embedding"));
+    };
+    embedding_result(
+        &instance,
+        model.encode_audio(pcm, sample_rate, channels, dimension)?,
+        "audio",
+        None,
+        false,
+    )
 }
 
 pub fn encode_audio(
@@ -592,9 +726,10 @@ pub fn finish_profiling(handle: u64) -> UnifiedResult<Vec<String>> {
     match &mut *model {
         Model::PairScorer(model) => Ok(vec![model.finish_profiling()?]),
         Model::Sequence(m) | Model::LabelScores(m) => m.finish_profiling(),
-        Model::Token(m) => m.finish_profiling(),
+        Model::Token(m) | Model::GroundedToken(m) => m.finish_profiling(),
         Model::Embedding(m) => m.finish_profiling(),
         Model::MultiModal(m) => m.finish_profiling(),
+        Model::Omni(m) => m.finish_profiling(),
     }
 }
 
@@ -609,7 +744,10 @@ pub struct TextWindow {
 /// run inference or increment completed_inferences.
 pub fn text_windows(handle: u64, text: &str, max_tokens: usize) -> UnifiedResult<Vec<TextWindow>> {
     let instance = get(handle)?;
-    if !matches!(instance.task, "embedding" | "multimodal_embedding") {
+    if !matches!(
+        instance.task,
+        "embedding" | "multimodal_embedding" | "omni_embedding"
+    ) {
         return Err(instance.wrong_task("embedding"));
     }
     let limit = if max_tokens == 0 {

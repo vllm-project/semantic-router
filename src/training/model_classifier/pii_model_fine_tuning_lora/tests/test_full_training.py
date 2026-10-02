@@ -313,7 +313,12 @@ class FullTokenTrainingTests(unittest.TestCase):
         model, tokenizer, _, _ = self.fresh()
         path = self.root / "native"
         save_full_checkpoint(model, tokenizer, path, {})
-        original = load_file(str(path / "model.safetensors"))
+        # Keep an independent snapshot: load_file tensors share the checkpoint's
+        # mmap, which is invalidated when each corruption fixture truncates it.
+        original = {
+            name: tensor.clone()
+            for name, tensor in load_file(str(path / "model.safetensors")).items()
+        }
         key = "classifier.weight"
         for kind in ("missing", "shape", "dtype", "nonfinite"):
             weights = dict(original)

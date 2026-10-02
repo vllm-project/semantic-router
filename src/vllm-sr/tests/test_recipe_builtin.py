@@ -5,13 +5,16 @@ from pathlib import Path
 
 import pytest
 import yaml
-from cli import builtin_recipes
+from cli import builtin_recipes, storage_backends
 from cli.builtin_recipes import list_builtin_recipes
 from cli.commands.runtime_kb import _resolve_kb_source_root
+from cli.commands.runtime_support import resolve_effective_config_path
 from cli.config_translator import translate_config_to_helm_values
 from cli.main import main as cli
 from cli.model_bundle import model_bundle_digest
 from cli.parser import parse_user_config
+from cli.runtime_stack import resolve_runtime_stack
+from cli.storage_secrets import POSTGRES_PASSWORD_PLACEHOLDER
 from click.testing import CliRunner
 
 
@@ -107,6 +110,7 @@ def test_offline_list_and_export_preserve_verified_bundle(tmp_path):
 def test_init_binds_each_recipe_and_validates_without_touching_source(
     tmp_path,
     recipe_name,
+    monkeypatch,
 ):
     source, bindings, refs = _inputs(tmp_path, recipe_name)
     original = source.read_bytes()
@@ -128,6 +132,17 @@ def test_init_binds_each_recipe_and_validates_without_touching_source(
         "adaptation": {"enabled": False},
         "protection": {"enabled": True, "scope": "conversation"},
     }
+    replay = document["global"]["services"]["router_replay"]
+    assert replay == {
+        "enabled": True,
+        "store_backend": "postgres",
+        "ttl_seconds": 604800,
+        "async_writes": False,
+    }
+    assert (
+        document["recipes"][0]["routing"].get("data_policy", {}).get("replay")
+        is not False
+    )
     assert (
         parse_user_config(str(output), log_summary=False).global_["router"]["learning"]
         == learning
@@ -143,6 +158,77 @@ def test_init_binds_each_recipe_and_validates_without_touching_source(
     validated = CliRunner().invoke(cli, ["config", "validate", "--config", str(output)])
     assert validated.exit_code == 0, validated.output
     assert _init(source, bindings, output, recipe_name=recipe_name).exit_code != 0
+
+    # Follow the same initialization -> local materialization -> storage
+    # provisioning boundary as serve, without starting containers in unit tests.
+    layout = resolve_runtime_stack()
+    effective = resolve_effective_config_path(output, None, False, None)
+    runtime = yaml.safe_load(effective.read_text())
+    postgres = runtime["global"]["services"]["router_replay"]["postgres"]
+    assert postgres == {
+        "host": layout.postgres_container_name,
+        "port": 5432,
+        "database": "vsr",
+        "user": "router",
+        "password": POSTGRES_PASSWORD_PLACEHOLDER,
+        "ssl_mode": "disable",
+    }
+    started = []
+
+    def start(required, selected_layout, *, state_root_dir):
+        started.append((required, selected_layout, state_root_dir))
+        return required
+
+    monkeypatch.setattr(storage_backends, "start_storage_backends", start)
+    state_root = str(tmp_path / ".vllm-sr")
+    assert storage_backends.provision_storage_backends(
+        runtime, layout, state_root_dir=state_root
+    ) == {"postgres", "redis"}
+    assert started == [({"postgres", "redis"}, layout, state_root)]
+
+
+@pytest.mark.parametrize(
+    "authored",
+    [
+        {"enabled": False},
+        {"store_backend": "memory", "ttl_seconds": 0},
+        {
+            "store_backend": "postgres",
+            "postgres": {
+                "host": "audit.example.test",
+                "database": "audit",
+                "user": "auditor",
+                "password": "${AUDIT_DB_PASSWORD}",
+                "ssl_mode": "require",
+            },
+        },
+    ],
+)
+def test_init_preserves_authored_replay_settings(tmp_path, authored):
+    source, bindings, _ = _inputs(tmp_path, "vault")
+    document = yaml.safe_load(source.read_text())
+    document["global"] = {"services": {"router_replay": authored}}
+    source.write_text(yaml.safe_dump(document))
+    output = tmp_path / "initialized.yaml"
+    result = _init(source, bindings, output, recipe_name="vault")
+    assert result.exit_code == 0, result.output
+    replay = yaml.safe_load(output.read_text())["global"]["services"]["router_replay"]
+    expected = {
+        "enabled": True,
+        "store_backend": "postgres",
+        "ttl_seconds": 604800,
+        "async_writes": False,
+        **authored,
+    }
+    assert replay == expected
+    effective = resolve_effective_config_path(output, None, False, None)
+    runtime = yaml.safe_load(effective.read_text())
+    effective_replay = runtime["global"]["services"]["router_replay"]
+    assert all(effective_replay[key] == value for key, value in authored.items())
+    if authored.get("enabled") is False:
+        assert "postgres" not in storage_backends.detect_required_backends(
+            runtime, resolve_runtime_stack()
+        )
 
 
 @pytest.mark.parametrize(
@@ -309,7 +395,8 @@ def test_init_preserves_config_relative_kb_assets(tmp_path):
     assert _resolve_kb_source_root(sibling, "private-kb") == kb_root.resolve()
     resolved_global = yaml.safe_load(sibling.read_text())["global"]
     assert resolved_global["model_catalog"] == document["global"]["model_catalog"]
-    assert set(resolved_global) == {"model_catalog", "router"}
+    assert set(resolved_global) == {"model_catalog", "router", "services"}
+    assert resolved_global["services"]["router_replay"]["store_backend"] == "postgres"
     assert resolved_global["router"]["learning"]["protection"]["enabled"] is True
     assert source.read_bytes() == original_source
     assert manifest.read_bytes() == original_manifest

@@ -70,6 +70,10 @@ func TestRouterSessionIdentitySeparatesDecisionWriters(t *testing.T) {
 				if err != nil || selected == nil {
 					t.Fatalf("selection failed for recipe=%q SID=%q CID=%q: selected=%+v err=%v", recipe, sid, cid, selected, err)
 				}
+				// This identity test models successful dispatches, not just proposals.
+				if err := commitAgenticSessionDecision(ctx); err != nil {
+					t.Fatal(err)
+				}
 				if ctx.Headers["x-session-id"] != sid || ctx.Headers["x-conversation-id"] != cid {
 					t.Fatal("storage identity changed public headers")
 				}

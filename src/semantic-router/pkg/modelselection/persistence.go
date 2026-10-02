@@ -17,13 +17,10 @@ limitations under the License.
 package modelselection
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
-	"strings"
 
 	ml_binding "github.com/vllm-project/semantic-router/ml-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -36,347 +33,6 @@ type SaveableSelector interface {
 	Save(path string) error
 	// Load restores a trained model from a file
 	Load(path string) error
-}
-
-// ============================================================================
-// Training Data Loading
-// ============================================================================
-
-// RoutingDataRecord represents a single training record from JSONL file
-type RoutingDataRecord struct {
-	Query       string             `json:"query"`
-	QueryType   string             `json:"query_type"`
-	BestModel   string             `json:"best_model"`
-	ModelScores map[string]float64 `json:"model_scores"`
-	EmbeddingID int                `json:"embedding_id"` // For pre-computed embedding lookup
-}
-
-// LLMCandidate represents an LLM model configuration
-type LLMCandidate struct {
-	Provider             string   `json:"provider"`
-	ModelID              string   `json:"model_id"`
-	DisplayName          string   `json:"display_name"`
-	Category             string   `json:"category"`
-	CostPerKInputTokens  float64  `json:"cost_per_1k_input_tokens"`
-	CostPerKOutputTokens float64  `json:"cost_per_1k_output_tokens"`
-	MaxContextLength     int      `json:"max_context_length"`
-	Strengths            []string `json:"strengths"`
-	AvgLatencyMs         float64  `json:"avg_latency_ms"`
-	QualityScore         float64  `json:"quality_score"`
-}
-
-// LLMCandidatesConfig holds all LLM candidates configuration
-type LLMCandidatesConfig struct {
-	LLMCandidates map[string]LLMCandidate  `json:"llm_candidates"`
-	QueryTypes    map[string]QueryTypeInfo `json:"query_types"`
-}
-
-// QueryTypeInfo defines a category of queries
-type QueryTypeInfo struct {
-	Description    string   `json:"description"`
-	BestModels     []string `json:"best_models"`
-	ExampleQueries []string `json:"example_queries"`
-}
-
-// BenchmarkRecord represents a single record from training_data_with_category.jsonl
-type BenchmarkRecord struct {
-	TaskName     string  `json:"task_name"`
-	Query        string  `json:"query"`
-	Category     string  `json:"category"`
-	ModelName    string  `json:"model_name"`
-	Performance  float64 `json:"performance"`
-	ResponseTime float64 `json:"response_time"`
-	EmbeddingID  int     `json:"embedding_id"`
-	Response     string  `json:"response"`     // Model's response
-	GroundTruth  string  `json:"ground_truth"` // Correct answer for quality scoring
-}
-
-// LoadBenchmarkData loads training data from training_data_with_category.jsonl
-// Returns records grouped by embedding_id (unique queries)
-func LoadBenchmarkData(path string) (map[int][]BenchmarkRecord, error) {
-	return LoadBenchmarkDataFiltered(path, nil)
-}
-
-// LoadBenchmarkDataFiltered loads training data filtered by specific models
-// If allowedModels is nil or empty, loads all models
-// Returns records grouped by embedding_id (unique queries)
-func LoadBenchmarkDataFiltered(path string, allowedModels []string) (map[int][]BenchmarkRecord, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open benchmark data file: %w", err)
-	}
-	defer file.Close()
-
-	// Build allowed models map for fast lookup
-	allowedMap := make(map[string]bool)
-	filterByModel := len(allowedModels) > 0
-	for _, m := range allowedModels {
-		allowedMap[m] = true
-	}
-
-	// Use larger buffer for big files
-	scanner := bufio.NewScanner(file)
-	buf := make([]byte, 0, 64*1024)
-	scanner.Buffer(buf, 1024*1024)
-
-	recordsByQuery := make(map[int][]BenchmarkRecord)
-	lineNum := 0
-	includedRecords := 0
-
-	for scanner.Scan() {
-		lineNum++
-		line := scanner.Text()
-		if line == "" {
-			continue
-		}
-
-		var record BenchmarkRecord
-		if err := json.Unmarshal([]byte(line), &record); err != nil {
-			logging.Warnf("Failed to parse line %d: %v", lineNum, err)
-			continue
-		}
-
-		// Filter by allowed models if specified
-		if filterByModel && !allowedMap[record.ModelName] {
-			continue
-		}
-
-		recordsByQuery[record.EmbeddingID] = append(recordsByQuery[record.EmbeddingID], record)
-		includedRecords++
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading benchmark data: %w", err)
-	}
-
-	if filterByModel {
-		logging.Infof("Loaded %d unique queries (%d records from %d models) from %s",
-			len(recordsByQuery), includedRecords, len(allowedModels), path)
-	} else {
-		logging.Infof("Loaded %d unique queries (%d total records) from %s",
-			len(recordsByQuery), lineNum, path)
-	}
-	return recordsByQuery, nil
-}
-
-// ConvertBenchmarkToRoutingData converts benchmark format to RoutingDataRecord format
-// Implements RouteLLM-style scoring: quality (from correctness) + efficiency (from latency)
-// qualityWeight: 0.0 = pure speed, 1.0 = pure quality (default: 0.7)
-func ConvertBenchmarkToRoutingData(recordsByQuery map[int][]BenchmarkRecord, qualityWeight float64) []RoutingDataRecord {
-	var routingData []RoutingDataRecord
-
-	for embeddingID, records := range recordsByQuery {
-		if len(records) == 0 {
-			continue
-		}
-
-		// Get query info from first record
-		first := records[0]
-
-		// Find min/max latency for normalization
-		minLatency := math.MaxFloat64
-		maxLatency := 0.0
-		for _, r := range records {
-			if r.ResponseTime > 0 {
-				if r.ResponseTime < minLatency {
-					minLatency = r.ResponseTime
-				}
-				if r.ResponseTime > maxLatency {
-					maxLatency = r.ResponseTime
-				}
-			}
-		}
-
-		// Build model scores for this query
-		// RouteLLM approach: combine quality with efficiency
-		// Score = quality_weight * quality + efficiency_weight * (1 - normalized_latency)
-		modelScores := make(map[string]float64)
-		var bestModel string
-		bestScore := -1.0
-
-		// First pass: collect all quality scores
-		qualityScores := make(map[string]float64)
-		efficiencyScores := make(map[string]float64)
-
-		for _, r := range records {
-			// Quality score: use Performance if available, or compute from correctness
-			qualityScore := r.Performance
-			if qualityScore == 0 && r.GroundTruth != "" && r.Response != "" {
-				// Compute quality from response correctness
-				qualityScore = computeResponseQuality(r.Response, r.GroundTruth)
-			}
-			qualityScores[r.ModelName] = qualityScore
-
-			// Efficiency score: inverse normalized latency (faster = better)
-			efficiencyScore := 0.5 // Default if no latency data
-			if r.ResponseTime > 0 && maxLatency > minLatency {
-				// Normalize: 1.0 for fastest, 0.0 for slowest
-				efficiencyScore = 1.0 - (r.ResponseTime-minLatency)/(maxLatency-minLatency)
-			} else if r.ResponseTime > 0 && maxLatency == minLatency {
-				efficiencyScore = 1.0 // All same latency
-			}
-			efficiencyScores[r.ModelName] = efficiencyScore
-		}
-
-		// RouteLLM approach: Quality first, then efficiency as tiebreaker
-		// When quality is equal, faster model wins (correct behavior)
-		// qualityWeight is passed as parameter (default 0.7 = 70% quality, 30% speed)
-		efficiencyWeight := 1.0 - qualityWeight
-
-		for _, r := range records {
-			qScore := qualityScores[r.ModelName]
-			eScore := efficiencyScores[r.ModelName]
-
-			// Combined score: quality primary, efficiency tiebreaker
-			combinedScore := qualityWeight*qScore + efficiencyWeight*eScore
-
-			modelScores[r.ModelName] = combinedScore
-			if combinedScore > bestScore {
-				bestScore = combinedScore
-				bestModel = r.ModelName
-			}
-		}
-
-		// Use category as query_type, preserve embedding_id for pre-computed lookup
-		routingData = append(routingData, RoutingDataRecord{
-			Query:       first.Query,
-			QueryType:   first.Category, // Use category field
-			BestModel:   bestModel,
-			ModelScores: modelScores,
-			EmbeddingID: embeddingID, // Preserve for pre-computed embedding lookup
-		})
-	}
-
-	logging.Infof("Converted %d routing data records", len(routingData))
-	return routingData
-}
-
-// computeResponseQuality computes quality score by comparing response to ground truth
-// Returns 1.0 for correct, 0.0 for incorrect, with partial matching for text responses
-func computeResponseQuality(response, groundTruth string) float64 {
-	// Normalize strings for comparison
-	response = strings.TrimSpace(strings.ToLower(response))
-	groundTruth = strings.TrimSpace(strings.ToLower(groundTruth))
-
-	// Exact match
-	if response == groundTruth {
-		return 1.0
-	}
-
-	// For multiple choice, check if response contains the correct option letter
-	if len(groundTruth) == 1 && (groundTruth[0] >= 'a' && groundTruth[0] <= 'z') {
-		// Ground truth is a single letter (A, B, C, D)
-		if strings.HasPrefix(response, groundTruth) ||
-			strings.Contains(response, " "+groundTruth) ||
-			strings.Contains(response, groundTruth+".") ||
-			strings.Contains(response, groundTruth+")") {
-			return 1.0
-		}
-		// Check for uppercase version
-		upperGT := strings.ToUpper(groundTruth)
-		if strings.HasPrefix(strings.ToUpper(response), upperGT) ||
-			strings.Contains(strings.ToUpper(response), " "+upperGT) {
-			return 1.0
-		}
-	}
-
-	// For numeric answers, try to extract and compare numbers
-	respNum := extractFirstNumber(response)
-	gtNum := extractFirstNumber(groundTruth)
-	if respNum != "" && gtNum != "" && respNum == gtNum {
-		return 1.0
-	}
-
-	// Partial match: check if ground truth is contained in response
-	if strings.Contains(response, groundTruth) {
-		return 0.8
-	}
-
-	// Check word overlap for longer responses
-	gtWords := strings.Fields(groundTruth)
-	respWords := strings.Fields(response)
-	if len(gtWords) > 3 && len(respWords) > 3 {
-		matchCount := 0
-		for _, gtw := range gtWords {
-			for _, rw := range respWords {
-				if gtw == rw && len(gtw) > 2 {
-					matchCount++
-					break
-				}
-			}
-		}
-		overlap := float64(matchCount) / float64(len(gtWords))
-		if overlap > 0.3 {
-			return overlap * 0.5 // Partial credit
-		}
-	}
-
-	return 0.0
-}
-
-// extractFirstNumber extracts the first number from a string
-func extractFirstNumber(s string) string {
-	var num strings.Builder
-	inNumber := false
-	for _, c := range s {
-		if c >= '0' && c <= '9' || (c == '.' && inNumber) || (c == '-' && !inNumber) {
-			num.WriteRune(c)
-			inNumber = true
-		} else if inNumber {
-			break
-		}
-	}
-	return num.String()
-}
-
-// LoadRoutingData loads training data from a JSONL file
-func LoadRoutingData(path string) ([]RoutingDataRecord, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open routing data file: %w", err)
-	}
-	defer file.Close()
-
-	var records []RoutingDataRecord
-	scanner := bufio.NewScanner(file)
-	lineNum := 0
-	for scanner.Scan() {
-		lineNum++
-		line := scanner.Text()
-		if line == "" {
-			continue
-		}
-
-		var record RoutingDataRecord
-		if err := json.Unmarshal([]byte(line), &record); err != nil {
-			logging.Warnf("Failed to parse line %d: %v", lineNum, err)
-			continue
-		}
-		records = append(records, record)
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading routing data: %w", err)
-	}
-
-	logging.Infof("Loaded %d routing data records from %s", len(records), path)
-	return records, nil
-}
-
-// LoadLLMCandidates loads LLM candidate configurations
-func LoadLLMCandidates(path string) (*LLMCandidatesConfig, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read LLM candidates file: %w", err)
-	}
-
-	var cfg LLMCandidatesConfig
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse LLM candidates: %w", err)
-	}
-
-	logging.Infof("Loaded %d LLM candidates from %s", len(cfg.LLMCandidates), path)
-	return &cfg, nil
 }
 
 // ============================================================================
@@ -727,19 +383,33 @@ func loadModelJSON(path string, data interface{}) error {
 	return nil
 }
 
-// GetDefaultModelsPath returns the default path for saved models
-func GetDefaultModelsPath() string {
-	return "models/model_selection"
-}
+// LoadPretrainedSelector loads a pre-trained selector from file
+func LoadPretrainedSelector(algorithm, path string) (Selector, error) {
+	switch algorithm {
+	case "knn":
+		s := NewKNNSelector(5)
+		if err := s.Load(path); err != nil {
+			return nil, err
+		}
+		return s, nil
 
-// GetDefaultDataPath returns the default path for training data
-func GetDefaultDataPath() string {
-	return "data/model_selection"
-}
+	case "kmeans":
+		s := NewKMeansSelector(8)
+		if err := s.Load(path); err != nil {
+			return nil, err
+		}
+		return s, nil
 
-// GetPretrainedPath returns the path to pre-trained models
-func GetPretrainedPath() string {
-	return "pretrained"
+	case "svm":
+		s := NewSVMSelector("rbf")
+		if err := s.Load(path); err != nil {
+			return nil, err
+		}
+		return s, nil
+
+	default:
+		return nil, fmt.Errorf("unknown algorithm: %s", algorithm)
+	}
 }
 
 // ListPretrainedModels returns a list of available pre-trained models

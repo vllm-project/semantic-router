@@ -111,20 +111,22 @@ func testResponseAPIGet(ctx context.Context, client *kubernetes.Clientset, opts 
 	defer session.Close()
 
 	apiClient := fixtures.NewResponseAPIClient(session, 30*time.Second)
-	responseID, err := createTestResponse(ctx, apiClient, opts.Verbose)
+	storeTrue := true
+	created, _, err := apiClient.Create(ctx, fixtures.ResponseAPIRequest{
+		Model: "openai/gpt-oss-20b",
+		Input: "Hello, how are you?",
+		Store: &storeTrue,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to create test response: %w", err)
 	}
 
-	apiResp, _, err := apiClient.Get(ctx, responseID)
+	apiResp, _, err := apiClient.Get(ctx, created.ID)
 	if err != nil {
 		return err
 	}
-	if apiResp.ID != responseID {
-		return fmt.Errorf("response ID mismatch: got %s, expected %s", apiResp.ID, responseID)
-	}
-	if apiResp.Object != "response" {
-		return fmt.Errorf("invalid object type: %s", apiResp.Object)
+	if err := validateRetrievedResponse(created, apiResp); err != nil {
+		return err
 	}
 
 	if opts.SetDetails != nil {

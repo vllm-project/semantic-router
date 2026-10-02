@@ -108,8 +108,7 @@ func handleRAGRetrievalError(
 	err error,
 	latency float64,
 ) error {
-	tracing.RecordError(ragSpan, err)
-	ragSpan.SetStatus(codes.Error, err.Error())
+	tracing.RecordError(ragSpan, "retrieval_failed")
 	metrics.RecordRAGRetrieval(ragConfig.Backend, requestDecisionStateKey(ctx), "error", latency)
 
 	switch ragFailureMode(ragConfig) {

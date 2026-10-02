@@ -1,8 +1,10 @@
 """Recipe-scoped content safety model reference validation."""
 
-from cli.config_contract import iter_routing_profiles
 from cli.config_schema import schema_document
-from cli.model_runtime_defaults import effective_model_deployments
+from cli.model_runtime_defaults import (
+    effective_model_deployments,
+    iter_effective_routing_profiles,
+)
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
 from cli.validator_classifier import _external_model_endpoint_errors, _external_models
@@ -16,7 +18,7 @@ def validate_safety_contracts(config: UserConfig) -> list[ValidationError]:
     deployments = effective_model_deployments(config)
     system = catalog.get("system") or {}
     system_keys = schema_document()["$defs"]["CanonicalSystemModels"]["properties"]
-    for profile, routing in iter_routing_profiles(config):
+    for profile, routing in iter_effective_routing_profiles(config):
         prefix = "routing" if profile == "default" else f"recipes.{profile}.routing"
         for rule in routing.signals.safety:
             heads = [

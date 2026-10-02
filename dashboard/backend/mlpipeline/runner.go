@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
@@ -182,7 +184,7 @@ func (r *Runner) setJobRunning(j *Job) {
 }
 
 func (r *Runner) createJob(jobType string) *Job {
-	id := fmt.Sprintf("ml-%s-%d", jobType, time.Now().UnixMilli())
+	id := fmt.Sprintf("ml-%s-%s", jobType, uuid.NewString())
 	job := &Job{
 		ID:        id,
 		Type:      jobType,
@@ -282,12 +284,6 @@ func (r *Runner) ListProgressEvents(jobID string, limit int) ([]workflowstore.ML
 // JobDir returns the working directory for a given job.
 func (r *Runner) JobDir(jobID string) string {
 	return filepath.Join(r.dataDir, jobID)
-}
-
-// TrainDir returns the fixed directory for trained model output.
-// All training runs write to the same directory so the path is stable.
-func (r *Runner) TrainDir() string {
-	return filepath.Join(r.dataDir, "ml-train")
 }
 
 // ensureDir creates a directory (and parents) if it does not exist.

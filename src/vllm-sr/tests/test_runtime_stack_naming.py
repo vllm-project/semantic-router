@@ -236,6 +236,7 @@ def test_start_vllm_sr_uses_state_root_override(monkeypatch, tmp_path):
 
     monkeypatch.setenv("VLLM_SR_STATE_ROOT_DIR", str(state_root))
     monkeypatch.setattr(core, "ensure_clean_runtime_container", lambda _name: None)
+    monkeypatch.setattr(core, "container_status_strict", lambda _name: "not found")
     monkeypatch.setattr(
         core,
         "load_config",
@@ -333,6 +334,7 @@ def test_container_start_vllm_sr_applies_custom_stack_name_and_port_offset(
     _stub_valid_container_cli(monkeypatch, tmp_path)
     monkeypatch.setenv("VLLM_SR_STACK_NAME", "audit-a")
     monkeypatch.setenv("VLLM_SR_PORT_OFFSET", "200")
+    monkeypatch.setenv("OPENCLAW_ENABLED", "true")
 
     rc, _, _ = container_cli.container_start_vllm_sr(
         str(config_path),
@@ -354,7 +356,7 @@ def test_container_start_vllm_sr_applies_custom_stack_name_and_port_offset(
     assert "0.0.0.0:9099:8899" in envoy_cmd
     assert "127.0.0.1:50251:50051" in router_cmd
     assert "127.0.0.1:9390:9190" in router_cmd
-    assert "8900:8700" in dashboard_cmd
+    assert "127.0.0.1:8900:8700" in dashboard_cmd
     assert "127.0.0.1:8280:8080" in router_cmd
 
 

@@ -1,12 +1,13 @@
-//go:build !windows && cgo && (amd64 || arm64)
+//go:build !windows && cgo && (amd64 || arm64 || riscv64)
 // +build !windows
 // +build cgo
-// +build amd64 arm64
+// +build amd64 arm64 riscv64
 
 package candle_binding
 
 /*
-#cgo LDFLAGS: -L${SRCDIR}/target/release -lcandle_semantic_router -ldl -lm
+#cgo !riscv64 LDFLAGS: -L${SRCDIR}/target/release -lcandle_semantic_router -ldl -lm
+#cgo riscv64 LDFLAGS: -L${SRCDIR}/target/riscv64gc-unknown-linux-gnu/release -lcandle_semantic_router -ldl -lm
 #include <stdlib.h>
 #include <stdbool.h>
 

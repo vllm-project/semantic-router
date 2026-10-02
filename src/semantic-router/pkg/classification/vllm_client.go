@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/packages/param"
 	"github.com/openai/openai-go/shared"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -62,13 +63,15 @@ func newVLLMClientWithLimits(endpoint *config.ClassifierVLLMEndpoint, accessKey 
 // vllmChatCompletionRequest extends openai.ChatCompletionNewParams with
 // the vLLM-specific extra_body field for guided decoding, LoRA adapters, etc.
 type vllmChatCompletionRequest struct {
-	Model          string                                             `json:"model"`
-	Messages       []openai.ChatCompletionMessageParamUnion           `json:"messages"`
-	MaxTokens      int                                                `json:"max_tokens,omitempty"`
-	Temperature    float64                                            `json:"temperature,omitempty"`
-	Stream         bool                                               `json:"stream,omitempty"`
-	ExtraBody      map[string]interface{}                             `json:"extra_body,omitempty"`
-	ResponseFormat *openai.ChatCompletionNewParamsResponseFormatUnion `json:"response_format,omitempty"`
+	Model              string                                             `json:"model"`
+	Messages           []openai.ChatCompletionMessageParamUnion           `json:"messages"`
+	MaxTokens          int                                                `json:"max_tokens,omitempty"`
+	Temperature        float64                                            `json:"temperature,omitempty"`
+	Stream             bool                                               `json:"stream,omitempty"`
+	ExtraBody          map[string]interface{}                             `json:"extra_body,omitempty"`
+	ResponseFormat     *openai.ChatCompletionNewParamsResponseFormatUnion `json:"response_format,omitempty"`
+	ReasoningEffort    *string                                            `json:"reasoning_effort,omitempty"`
+	ChatTemplateKwargs map[string]json.RawMessage                         `json:"chat_template_kwargs,omitempty"`
 }
 
 // GenerationOptions contains options for vLLM generation
@@ -78,6 +81,18 @@ type GenerationOptions struct {
 	Stream      bool
 	ExtraBody   map[string]interface{}
 	JSONMode    bool
+	// JSONSchema requests strict structured output: when set, the request
+	// carries response_format {type: json_schema, strict: true} and JSONMode
+	// is ignored. This pins the model's output to the classifier's contract
+	// instead of relying on prompt instructions alone.
+	JSONSchema *GenerationJSONSchema
+	reasoning  *reasoningRequestControl
+}
+
+// GenerationJSONSchema describes a strict structured-output contract.
+type GenerationJSONSchema struct {
+	Name   string
+	Schema map[string]interface{}
 }
 
 func (c *VLLMClient) buildMessages(prompt string) []openai.ChatCompletionMessageParamUnion {
@@ -151,7 +166,23 @@ func (c *VLLMClient) generateWithMessages(
 		req.Temperature = options.Temperature
 		req.Stream = options.Stream
 		req.ExtraBody = options.ExtraBody
-		if options.JSONMode {
+		if options.reasoning != nil {
+			req.ReasoningEffort = options.reasoning.reasoningEffort
+			req.ChatTemplateKwargs = options.reasoning.chatTemplateKwargs
+		}
+		switch {
+		case options.JSONSchema != nil:
+			responseFormat := openai.ChatCompletionNewParamsResponseFormatUnion{
+				OfJSONSchema: &shared.ResponseFormatJSONSchemaParam{
+					JSONSchema: shared.ResponseFormatJSONSchemaJSONSchemaParam{
+						Name:   options.JSONSchema.Name,
+						Strict: param.NewOpt(true),
+						Schema: options.JSONSchema.Schema,
+					},
+				},
+			}
+			req.ResponseFormat = &responseFormat
+		case options.JSONMode:
 			jsonObjectFormat := shared.NewResponseFormatJSONObjectParam()
 			responseFormat := openai.ChatCompletionNewParamsResponseFormatUnion{
 				OfJSONObject: &jsonObjectFormat,

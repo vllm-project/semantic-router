@@ -140,10 +140,12 @@ def resolve_state_root_dir(
     """
 
     env_vars = env_vars or {}
-    override = env_vars.get(STATE_ROOT_DIR_ENV) or os.getenv(STATE_ROOT_DIR_ENV)
+    override = (
+        env_vars.get(STATE_ROOT_DIR_ENV) or os.getenv(STATE_ROOT_DIR_ENV) or ""
+    ).strip()
     if override:
-        return os.path.abspath(override)
-    return os.path.dirname(os.path.abspath(source_config_file))
+        return os.path.abspath(Path(override).expanduser())
+    return os.path.dirname(os.path.abspath(Path(source_config_file).expanduser()))
 
 
 def _runtime_config_output_dir(
@@ -284,6 +286,57 @@ def write_runtime_config_bytes(path: Path, data: bytes) -> Path:
             f"Runtime config parent must be an owned directory: {path.parent}"
         )
     _atomic_write_private_bytes(path, data)
+    return path
+
+
+def runtime_config_projection_receipt(path: Path, data: bytes) -> dict[str, object]:
+    """Describe a projection before publishing it under the runtime config lock."""
+    try:
+        provenance = _load_provenance(_runtime_config_provenance_path(path))
+    except ValueError:
+        provenance = None
+    return {
+        "pre_projection_digest": _digest_bytes(path.read_bytes()),
+        "projected_digest": _digest_bytes(data),
+        "provenance": provenance,
+    }
+
+
+def recover_runtime_config_projection(path: Path, receipt: dict[str, object]) -> None:
+    """Finish only the provenance write for an exact CLI-owned projection.
+
+    A differing active document or provenance belongs to another edit. Never
+    adopt it, even when its tracing block happens to match the projection.
+    """
+    provenance = receipt.get("provenance")
+    if not isinstance(provenance, dict) or provenance.get(
+        "last_materialized_active_digest"
+    ) != receipt.get("pre_projection_digest"):
+        return
+    if not path.exists() or _digest_bytes(path.read_bytes()) != receipt.get(
+        "projected_digest"
+    ):
+        return
+    provenance_path = _runtime_config_provenance_path(path)
+    try:
+        current = _load_provenance(provenance_path)
+    except ValueError:
+        return
+    if current != provenance:
+        return
+    updated = dict(provenance)
+    updated["last_materialized_active_digest"] = receipt["projected_digest"]
+    write_private_state_bytes(
+        provenance_path, (json.dumps(updated, sort_keys=True) + "\n").encode()
+    )
+
+
+def write_runtime_config_projection(
+    path: Path, data: bytes, receipt: dict[str, object]
+) -> Path:
+    """Publish a journaled projection without adopting unrelated active edits."""
+    write_runtime_config_bytes(path, data)
+    recover_runtime_config_projection(path, receipt)
     return path
 
 

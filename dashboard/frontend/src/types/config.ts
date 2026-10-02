@@ -210,6 +210,7 @@ export interface ClassifierSignal {
   model_path?: string
   labels: string[]
   instructions?: string
+  disable_rationale?: boolean
   use_cpu?: boolean
 }
 
@@ -381,6 +382,7 @@ export interface PluginConfig {
     | 'request_params'
     | 'response_jailbreak'
     | 'context_compression'
+    | 'prompt_cache'
     | 'shadow_dispatch'
     | 'masking'
   configuration: Record<string, unknown>

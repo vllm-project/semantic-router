@@ -15,14 +15,15 @@ import (
 // tokens. ModernBERT adapters accept an explicit budget up to checkpoint capacity;
 // unsupported adapter budgets fail preparation.
 type InstanceOptions struct {
-	ModelPath           string            `json:"model_path"`
-	ModelType           string            `json:"model_type,omitempty"`
-	Device              string            `json:"device,omitempty"`
-	Precision           string            `json:"precision,omitempty"`
-	MaxInputTokens      int               `json:"max_input_tokens,omitempty"`
-	Overflow            string            `json:"overflow,omitempty"`
-	Adapters            []InstanceAdapter `json:"adapters,omitempty"`
-	GenerationMaxTokens int               `json:"generation_max_tokens,omitempty"`
+	ModelPath              string            `json:"model_path"`
+	ModelType              string            `json:"model_type,omitempty"`
+	Device                 string            `json:"device,omitempty"`
+	Precision              string            `json:"precision,omitempty"`
+	MaxInputTokens         int               `json:"max_input_tokens,omitempty"`
+	DocumentMaxInputTokens int               `json:"document_max_input_tokens,omitempty"` // typed window tasks only
+	Overflow               string            `json:"overflow,omitempty"`
+	Adapters               []InstanceAdapter `json:"adapters,omitempty"`
+	GenerationMaxTokens    int               `json:"generation_max_tokens,omitempty"`
 }
 
 // InstanceAdapter is prepared during generative model loading. Adapter mutation
@@ -36,6 +37,7 @@ type InstanceAdapter struct {
 // inferred from a checkpoint's name. ResourceID identifies the actual owned
 // backbone. Explicit head bindings and clones retain the same ResourceID.
 type InstanceInfo struct {
+	AvailableDimensions    []int                `json:"available_dimensions"`
 	PairScorer             *PairScorerSelection `json:"pair_scorer,omitempty"`
 	ResourceID             uint64               `json:"resource_id"`
 	Task                   string               `json:"task"`
@@ -44,6 +46,7 @@ type InstanceInfo struct {
 	Precision              string               `json:"precision"`
 	ArchitecturalMaxTokens int                  `json:"architectural_max_tokens"`
 	MaxInputTokens         int                  `json:"max_input_tokens"`
+	DocumentMaxInputTokens int                  `json:"document_max_input_tokens"`
 	Overflow               string               `json:"overflow"`
 	Labels                 []string             `json:"labels"`
 	Modalities             []string             `json:"modalities"`

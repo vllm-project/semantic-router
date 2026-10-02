@@ -264,6 +264,7 @@ func (c *InMemoryCache) AddPendingRequest(
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
+	polarityTokens := tokenizeForPolarity(query, nil)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -278,15 +279,16 @@ func (c *InMemoryCache) AddPendingRequest(
 	// Create cache entry for the pending request
 	now := time.Now()
 	entry := CacheEntry{
-		RequestID:    requestID,
-		RequestBody:  requestBody,
-		Model:        model,
-		Query:        query,
-		Embedding:    embedding,
-		Timestamp:    now,
-		LastAccessAt: now,
-		HitCount:     0,
-		TTLSeconds:   ttlSeconds,
+		RequestID:      requestID,
+		RequestBody:    requestBody,
+		Model:          model,
+		Query:          query,
+		polarityTokens: polarityTokens,
+		Embedding:      embedding,
+		Timestamp:      now,
+		LastAccessAt:   now,
+		HitCount:       0,
+		TTLSeconds:     ttlSeconds,
 	}
 
 	// Calculate expiration time if TTL is set
@@ -412,6 +414,7 @@ func (c *InMemoryCache) AddEntry(
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
+	polarityTokens := tokenizeForPolarity(query, nil)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -431,16 +434,17 @@ func (c *InMemoryCache) AddEntry(
 
 	now := time.Now()
 	entry := CacheEntry{
-		RequestID:    requestID,
-		RequestBody:  requestBody,
-		ResponseBody: responseBody,
-		Model:        model,
-		Query:        query,
-		Embedding:    embedding,
-		Timestamp:    now,
-		LastAccessAt: now,
-		HitCount:     0,
-		TTLSeconds:   ttlSeconds,
+		RequestID:      requestID,
+		RequestBody:    requestBody,
+		ResponseBody:   responseBody,
+		Model:          model,
+		Query:          query,
+		polarityTokens: polarityTokens,
+		Embedding:      embedding,
+		Timestamp:      now,
+		LastAccessAt:   now,
+		HitCount:       0,
+		TTLSeconds:     ttlSeconds,
 	}
 
 	// Calculate expiration time if TTL is set

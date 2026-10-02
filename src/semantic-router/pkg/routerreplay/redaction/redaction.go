@@ -193,7 +193,7 @@ func redactOutcomes(raw any) bool {
 
 func redactOutcome(outcome map[string]any) bool {
 	changed := false
-	for _, field := range []string{"target_ref", "reason"} {
+	for _, field := range []string{"target_ref", "reason", "idempotency_key"} {
 		if clearStringField(outcome, field) {
 			changed = true
 		}
@@ -227,6 +227,9 @@ func redactRouteDiagnosticsMap(diagnostics map[string]any) bool {
 			changed = true
 		}
 	}
+	if deleteField(diagnostics, "prepared_dispatch") {
+		changed = true
+	}
 	return changed
 }
 
@@ -250,6 +253,14 @@ func redactLearningDiagnosticsMap(learning map[string]any) bool {
 		}
 	}
 	return changed
+}
+
+func deleteField(value map[string]any, field string) bool {
+	if _, ok := value[field]; !ok {
+		return false
+	}
+	delete(value, field)
+	return true
 }
 
 func clearStringField(value map[string]any, field string) bool {

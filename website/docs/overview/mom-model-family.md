@@ -126,6 +126,14 @@ model's published category thresholds.
 Assign Vault's other decisions to backends that meet your privacy requirements;
 the recipe cannot establish their physical location or provider retention.
 
+Vault's default Vela Guard, PII, and Hazard tasks each have a 32,768-token
+triage input budget, including the conversation text evaluated by that task.
+This check runs before backend context checks. Exceeding it fails closed:
+Preview returns HTTP 503 with signal errors and no selected model. A larger
+backend context window does not extend the triage budget. Hazard runs on CPU
+by default, so measure long-input triage latency even for requests within the
+budget; an accelerated deployment needs separate qualification.
+
 Start or resume the stack:
 
 ```bash

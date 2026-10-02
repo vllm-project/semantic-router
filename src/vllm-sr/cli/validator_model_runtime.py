@@ -2,7 +2,11 @@
 
 from pathlib import PurePosixPath
 
-from cli.model_runtime_defaults import effective_model_deployments
+from cli.model_runtime_defaults import (
+    effective_model_deployments,
+    global_model_bindings,
+    iter_effective_routing_profiles,
+)
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
 from cli.validator_pii_window import validate_pii_windows
@@ -32,8 +36,24 @@ def validate_model_runtime_references(config: UserConfig) -> list[ValidationErro
                     message, field=f"global.model_catalog.deployments.{name}"
                 )
             )
-    profiles = [("routing", config.routing)] + [
-        (f"recipes.{recipe.name}.routing", recipe.routing) for recipe in config.recipes
+    for consumer, binding in global_model_bindings(config).items():
+        field = f"global.model_catalog.bindings.{consumer}"
+        if binding.deployment not in deployments:
+            errors.append(
+                ValidationError(
+                    f"Unknown model deployment '{binding.deployment}'",
+                    field=field + ".deployment",
+                )
+            )
+            continue
+        message = _binding_error(
+            consumer, binding, deployments[binding.deployment], global_default=True
+        )
+        if message:
+            errors.append(ValidationError(message, field=field))
+    profiles = [
+        ("routing" if name == "default" else f"recipes.{name}.routing", profile)
+        for name, profile in iter_effective_routing_profiles(config)
     ]
     for prefix, profile in profiles:
         for decision in profile.decisions:
@@ -72,7 +92,9 @@ def validate_model_runtime_references(config: UserConfig) -> list[ValidationErro
     return errors
 
 
-def _binding_error(consumer, binding, deployment, profile=None):
+def _binding_error(
+    consumer, binding, deployment, profile=None, *, global_default=False
+):
     provider = deployment.get("provider") or "candle"
     if binding.operating_point is not None and not consumer.startswith("classifier."):
         return "operating_point is only supported by generic classifier bindings"
@@ -100,7 +122,13 @@ def _binding_error(consumer, binding, deployment, profile=None):
             )
         if ((deployment.get("input") or {}).get("overflow") or "reject") != "reject":
             return "Reranker requires reject overflow for complete tokenizer pairs"
-    if consumer.startswith("safety."):
+    if global_default and consumer.startswith("safety."):
+        contracts[consumer] = (
+            binding.contract
+            if binding.contract in {"label_distribution.v1", "label_scores.v1"}
+            else "label_distribution.v1"
+        )
+    elif consumer.startswith("safety."):
         matches = []
         for rule in profile.signals.safety if profile else []:
             if consumer == f"safety.{rule.name}":
@@ -114,7 +142,13 @@ def _binding_error(consumer, binding, deployment, profile=None):
             return "Safety labels define the mapping; mapping_path is not supported"
         if provider == "http" and binding.adapter != "http_classify":
             return "Safety HTTP head requires http_classify adapter"
-    if consumer.startswith("classifier."):
+    if global_default and consumer.startswith("classifier."):
+        contracts[consumer] = (
+            "label_scores.v1"
+            if binding.contract == "label_scores.v1"
+            else "label_distribution.v1"
+        )
+    elif consumer.startswith("classifier."):
         contracts[consumer] = "label_distribution.v1"
         name = consumer.removeprefix("classifier.")
         rule = (
@@ -197,6 +231,22 @@ def _binding_error(consumer, binding, deployment, profile=None):
             )
         if consumer == "hallucination_detector" and binding.adapter != "http_chat":
             return "Hallucination detector requires http_chat adapter"
+    if provider == "openvino":
+        if binding.contract not in {"embedding.v1", "label_distribution.v1"}:
+            return (
+                "OpenVINO supports text embedding and sequence label distributions only"
+            )
+        if binding.adapter not in {
+            "auto",
+            "bert",
+            "modernbert",
+            "mmbert",
+            "mmbert32k",
+            "mmbert-32k",
+        }:
+            return f"Unsupported OpenVINO adapter '{binding.adapter}'"
+        if binding.head and not binding.head.endswith(".xml"):
+            return "OpenVINO head must identify a complete IR XML graph"
     if provider == "ort" and consumer in {
         "hallucination_detector",
         "hallucination_explainer",
@@ -243,6 +293,18 @@ def _deployment_error(name, deployment, external_names):
                 return f"Device '{device}' is incompatible with provider '{provider}'"
         if (deployment.get("precision") or "native") not in {"native", "fp32", "fp16"}:
             return "Precision must be native, fp32 or fp16"
+    elif provider == "openvino":
+        if not (deployment.get("artifact") or "").strip() or deployment.get(
+            "external_model"
+        ):
+            return "Local deployment requires artifact and cannot set external_model"
+        device = deployment.get("device") or "CPU"
+        if device.strip() != device or "\x00" in device:
+            return "OpenVINO device must be non-empty and trimmed"
+        if (deployment.get("precision") or "native") != "native":
+            return "OpenVINO executes the exported IR with native precision"
+        if (deployment.get("input") or {}).get("overflow") == "window":
+            return "OpenVINO supports reject or truncate input policy"
     elif provider == "http":
         if (
             deployment.get("artifact")

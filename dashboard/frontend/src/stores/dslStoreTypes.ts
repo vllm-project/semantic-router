@@ -32,7 +32,11 @@ interface DSLState {
 
   // --- UI ---
   mode: EditorMode
+  /** Whether compiled outputs are stale relative to the current source. */
   dirty: boolean
+  /** DSL source snapshot taken at the last load, import, reset, or successful deploy.
+   * The unsaved signal is derived: dslSource !== savedSource. */
+  savedSource: string
   lastCompileAt: number | null
 
   // --- Deploy ---
@@ -65,8 +69,8 @@ interface DSLActions {
   /** Parse DSL → AST + diagnostics + symbols (for Visual Builder). */
   parseAST(): void
 
-  /** Decompile YAML → DSL-owned models, routing, entrypoints, and recipes. */
-  decompile(yaml: string): string | null
+  /** Decompile YAML → DSL-owned scopes, throwing the compiler's error on failure. */
+  decompile(yaml: string): string
 
   /** Format the current DSL source. */
   format(): void

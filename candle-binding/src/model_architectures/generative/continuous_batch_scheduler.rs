@@ -340,7 +340,7 @@ impl ContinuousBatchScheduler {
         for req in requests.drain(..) {
             adapter_groups
                 .entry(req.adapter_name.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(req);
         }
 
@@ -385,10 +385,8 @@ impl ContinuousBatchScheduler {
                     // Collect all latencies first
                     let mut latencies = Vec::with_capacity(batch_size);
 
-                    for (i, (req, result)) in adapter_requests
-                        .into_iter()
-                        .zip(batch_results.into_iter())
-                        .enumerate()
+                    for (i, (req, result)) in
+                        adapter_requests.into_iter().zip(batch_results).enumerate()
                     {
                         let req_start = request_starts[i];
                         let latency_ms = req_start.elapsed().as_secs_f64() * 1000.0;

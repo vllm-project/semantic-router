@@ -40,6 +40,9 @@ func (s *ClassificationAPIServer) loadStartupState() *startupstatus.State {
 	if s.startupStateLoader != nil {
 		return s.startupStateLoader()
 	}
+	if s.runtimeRegistry != nil {
+		return s.runtimeRegistry.StartupState()
+	}
 
 	var startupConfig *config.StartupStatusConfig
 	if s.startupStatusConfig != nil {

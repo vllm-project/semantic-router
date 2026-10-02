@@ -40,6 +40,7 @@ var pluginTutorialBuckets = map[string]string{
 	"header-mutation":     "response-and-mutation",
 	"masking":             "response-and-mutation",
 	"memory":              "retrieval-and-memory",
+	"prompt-cache":        "retrieval-and-memory",
 	"rag":                 "retrieval-and-memory",
 	"request-params":      "response-and-mutation",
 	"response-jailbreak":  "safety-and-generation",

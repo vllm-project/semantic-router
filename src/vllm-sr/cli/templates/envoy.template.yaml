@@ -67,15 +67,9 @@ static_resources:
                   {% else %}
                   host_rewrite_literal: "{{ model.endpoints[0].host_authority }}"
                   {% endif %}
-                  {% if model.path_prefix %}
-                  # Prepend path prefix to /v1 requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions).
-                  # Match only the complete /v1 segment so route recomputation cannot rewrite /v1beta/... again.
-                  regex_rewrite:
-                    pattern:
-                      google_re2: {}
-                      regex: "^/v1([/?].*)?$"
-                    substitution: "{{ model.path_prefix }}\\1"
-                  {% endif %}
+                  # ext_proc has already resolved the complete provider path for
+                  # requests carrying x-selected-model, so this route must not
+                  # prefix it a second time.
               {% endfor %}
               # Default route (no x-selected-model header)
               - match:
@@ -137,10 +131,15 @@ static_resources:
                   local auth = request_handle:headers():get("authorization") or
                                request_handle:headers():get("Authorization") or ""
                   local token = string.match(auth, "^[Bb]earer%s+(.+)$")
+                  if not (token and VALID_KEYS[token]) then
+                    -- Azure OpenAI clients send the key in api-key instead.
+                    token = request_handle:headers():get("api-key")
+                  end
                   if token and VALID_KEYS[token] then
                     -- The listener credential authenticates the Router client;
                     -- it is never an upstream provider credential.
                     request_handle:headers():remove("authorization")
+                    request_handle:headers():remove("api-key")
                     return
                   end
                   request_handle:respond(

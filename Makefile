@@ -8,6 +8,7 @@ _run:
 		-f tools/make/deps.mk \
 		-f tools/make/envoy.mk \
 		-f tools/make/golang.mk \
+		-f tools/make/go-tools.mk \
 		-f tools/make/rust.mk \
                 -f tools/make/openvino.mk \
 		-f tools/make/build-run-test.mk \
@@ -31,6 +32,7 @@ _run:
 		-f tools/make/helm.mk \
 		-f tools/make/openshift.mk \
 		-f tools/make/recipe-conformance.mk \
+		-f tools/make/tooling.mk \
 		-f tools/make/e2e.mk \
 		-f tools/make/performance.mk \
 		-f tools/make/soak.mk \

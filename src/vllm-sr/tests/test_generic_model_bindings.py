@@ -3,6 +3,7 @@
 import copy
 
 import pytest
+import yaml
 from cli.config_schema.validation import validate_config_structure
 from cli.models import OperatingPointReference, UserConfig
 from cli.validator_classifier import validate_classifier_contracts
@@ -178,6 +179,55 @@ def test_bound_llm_rejects_unscored_parser():
     document["global"]["model_catalog"]["external"][0]["parser_type"] = "qwen3guard"
     errors = validate_classifier_contracts(UserConfig.model_validate(document))
     assert any("parser_type must be json" in error.message for error in errors)
+
+
+@pytest.mark.parametrize("named", [False, True])
+@pytest.mark.parametrize("disabled", [None, False, True])
+def test_llm_rationale_setting_survives_canonical_yaml_and_binding(
+    named: bool, disabled: bool | None
+) -> None:
+    document = generic_document(provider="http", rule_type="llm", named=named)
+    profile = document["recipes"][0]["routing"] if named else document["routing"]
+    if disabled is not None:
+        profile["signals"]["classifiers"][0]["disable_rationale"] = disabled
+    document["global"]["model_catalog"]["external"][0]["parser_type"] = "json"
+    loaded = yaml.safe_load(yaml.safe_dump(document))
+    assert validate_config_structure(loaded) == []
+    config = UserConfig.model_validate(loaded)
+    assert validate_model_runtime_references(config) == []
+    assert validate_classifier_contracts(config) == []
+    routing = config.recipes[0].routing if named else config.routing
+    resolved = project_classifier_rule(
+        rule=routing.signals.classifiers[0],
+        bindings=routing.model_bindings,
+        deployments=config.global_["model_catalog"]["deployments"],
+    )
+    assert resolved.disable_rationale is bool(disabled)
+    emitted = config.model_dump(mode="json", by_alias=True, exclude_none=True)
+    assert validate_config_structure(emitted) == []
+    reloaded = UserConfig.model_validate(yaml.safe_load(yaml.safe_dump(emitted)))
+    assert reloaded == config
+    document["global"]["model_catalog"]["external"][0]["parser_type"] = "simple"
+    errors = validate_classifier_contracts(UserConfig.model_validate(document))
+    assert any("parser_type must be json" in error.message for error in errors)
+
+
+@pytest.mark.parametrize("rule_type", ["local", "sequence_classifier"])
+@pytest.mark.parametrize("provider", ["candle", "http"])
+def test_disable_rationale_rejects_non_llm_rules(rule_type: str, provider: str) -> None:
+    document = generic_document(provider=provider, rule_type=rule_type)
+    document["routing"]["signals"]["classifiers"][0]["disable_rationale"] = True
+    with pytest.raises(ValidationError, match="disable_rationale"):
+        UserConfig.model_validate(document)
+
+
+@pytest.mark.parametrize("value", ["true", 1, None])
+def test_disable_rationale_requires_boolean(value: object) -> None:
+    document = generic_document(provider="http", rule_type="llm")
+    document["routing"]["signals"]["classifiers"][0]["disable_rationale"] = value
+    assert validate_config_structure(document)
+    with pytest.raises(ValidationError, match="disable_rationale"):
+        UserConfig.model_validate(document)
 
 
 @pytest.mark.parametrize("named", [False, True])

@@ -7,8 +7,8 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.28);
+  border-bottom: 1px solid var(--site-border);
+  background: var(--site-surface);
 }
 
 .tab,
@@ -22,10 +22,10 @@
   gap: 0.18rem 0.65rem;
   padding: 1rem 1.15rem;
   border: 0;
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  border-right: 1px solid var(--site-border);
   border-radius: 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--site-muted);
   text-align: left;
   cursor: pointer;
   transition:
@@ -40,14 +40,14 @@
 
 .tab:hover {
   background: var(--site-hover-surface-bg-soft);
-  color: rgba(255, 255, 255, 0.96);
+  color: var(--site-text-strong);
 }
 
 .tabActive {
   background:
     linear-gradient(180deg, rgba(48, 162, 255, 0.2), rgba(48, 162, 255, 0.06)),
-    rgba(255, 255, 255, 0.03);
-  color: #ffffff;
+    var(--site-surface-soft);
+  color: var(--site-text-strong);
 }
 
 .tabActive::after {
@@ -64,7 +64,7 @@
 .tabIndex {
   grid-area: index;
   align-self: center;
-  color: rgba(117, 197, 255, 0.72);
+  color: var(--site-accent-strong);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.72rem;
   font-weight: 700;
@@ -72,7 +72,7 @@
 }
 
 .tabActive .tabIndex {
-  color: var(--site-brand-blue-light);
+  color: var(--site-accent-strong);
 }
 
 .tabLabel {
@@ -87,11 +87,11 @@
 .tabSubtitle {
   grid-area: subtitle;
   font-size: 0.74rem;
-  color: rgba(255, 255, 255, 0.42);
+  color: var(--site-muted);
 }
 
 .tabActive .tabSubtitle {
-  color: rgba(255, 255, 255, 0.68);
+  color: var(--site-muted-bright);
 }
 
 .panelStack {
@@ -128,7 +128,7 @@
 
 .panelIntro h3 {
   margin: 0;
-  color: #ffffff;
+  color: var(--site-text-strong);
   font-size: clamp(1.5rem, 2.8vw, 2.1rem);
   font-weight: 500;
   letter-spacing: -0.03em;
@@ -137,7 +137,7 @@
 
 .panelIntro p {
   margin: 0;
-  color: rgba(255, 255, 255, 0.68);
+  color: var(--site-muted-bright);
   font-size: 0.98rem;
   line-height: 1.65;
 }
@@ -154,9 +154,9 @@
   display: grid;
   gap: 0;
   padding: 1rem;
-  border: 1px solid rgba(48, 162, 255, 0.22);
+  border: 1px solid var(--site-hover-border);
   border-radius: 0.85rem;
-  background: rgba(6, 6, 12, 0.65);
+  background: var(--site-surface);
 }
 
 .flowStep {
@@ -172,10 +172,10 @@
   place-items: center;
   width: 1.75rem;
   height: 1.75rem;
-  border: 1px solid rgba(48, 162, 255, 0.35);
+  border: 1px solid var(--site-hover-border);
   border-radius: 0.4rem;
-  background: rgba(48, 162, 255, 0.14);
-  color: var(--site-brand-blue-light);
+  background: var(--site-accent-soft);
+  color: var(--site-accent-strong);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.68rem;
   font-weight: 700;
@@ -188,14 +188,14 @@
 }
 
 .flowStepCopy strong {
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--site-text-strong);
   font-size: 0.86rem;
   font-weight: 600;
   line-height: 1.25;
 }
 
 .flowStepCopy span {
-  color: rgba(255, 255, 255, 0.48);
+  color: var(--site-muted);
   font-size: 0.74rem;
   line-height: 1.35;
 }
@@ -211,9 +211,9 @@
 .featureList {
   display: grid;
   gap: 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--site-border);
   border-radius: 0.85rem;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--site-surface-soft);
   overflow: hidden;
 }
 
@@ -223,7 +223,7 @@
   gap: 0.85rem;
   align-items: center;
   padding: 0.95rem 1.1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--site-border);
   color: inherit;
   text-decoration: none;
   transition:
@@ -242,7 +242,7 @@
 }
 
 .featureIndex {
-  color: rgba(117, 197, 255, 0.8);
+  color: var(--site-accent-strong);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.72rem;
   font-weight: 700;
@@ -256,7 +256,7 @@
 }
 
 .featureCopy strong {
-  color: rgba(255, 255, 255, 0.94);
+  color: var(--site-text-strong);
   font-size: 0.92rem;
   font-weight: 600;
   line-height: 1.3;
@@ -264,23 +264,23 @@
 
 .featureCopy p {
   margin: 0;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--site-muted);
   font-size: 0.84rem;
   line-height: 1.5;
 }
 
 .featureRow:hover .featureCopy strong {
-  color: var(--site-brand-blue);
+  color: var(--site-accent-strong);
 }
 
 .featureArrow {
-  color: rgba(117, 197, 255, 0.55);
+  color: var(--site-accent-strong);
   font-size: 1rem;
   transition: transform 180ms ease, color 180ms ease;
 }
 
 .featureRow:hover .featureArrow {
-  color: var(--site-brand-blue);
+  color: var(--site-accent-strong);
   transform: translateX(3px);
 }
 
@@ -298,7 +298,7 @@
 }
 
 .integrationLabel {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--site-muted);
   font-size: var(--site-text-caption);
   font-weight: var(--site-font-weight-semibold);
   letter-spacing: 0.02em;
@@ -310,10 +310,10 @@
   align-items: center;
   min-height: 1.9rem;
   padding: 0.28rem 0.65rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--site-border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.78);
+  background: var(--site-surface-soft);
+  color: var(--site-muted-bright);
   font-size: 0.74rem;
   font-weight: 600;
   text-decoration: none;
@@ -327,7 +327,7 @@
 .integrationChip:focus-visible {
   border-color: var(--site-hover-border);
   background: var(--site-hover-surface-bg);
-  color: #ffffff;
+  color: var(--site-text-strong);
   text-decoration: none;
   transform: translateY(-2px);
   box-shadow: 0 8px 18px rgba(48, 162, 255, 0.16);
@@ -347,7 +347,7 @@
   .tab,
   .tabActive {
     border-right: 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid var(--site-border);
   }
 
   .tab:last-child,

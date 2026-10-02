@@ -8,6 +8,7 @@ import ProductLoadingState from '../components/ProductLoadingState'
 import configStyles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import styles from './InsightsPage.module.css'
+import InsightsEmptyState from './InsightsEmptyState'
 import { isInsightsReplayUnavailableError } from './insightsPageApi'
 import { fetchAbortableInsightsJSON, isAbortError } from './insightsPageRequestSupport'
 import {
@@ -359,58 +360,7 @@ export default function InsightsPage() {
           </div>
 
           {!hasReplayData && !loading ? (
-            <div className={styles.emptyState}>
-              {replayUnavailable ? (
-                <div className={styles.emptyHint}>
-                  <p>
-                    Insights stay empty until router replay is enabled and requests flow through the
-                    router.
-                  </p>
-                  <p className={styles.emptySubtext}>
-                    If capture is intended, check the global and decision replay settings together
-                    with the recipe's privacy policy.
-                  </p>
-                </div>
-              ) : error ? (
-                <div className={styles.emptyHint}>
-                  <p>
-                    Unable to load insights. Check the Router connection and replay configuration.
-                  </p>
-                  <pre className={styles.configHint}>{`global:
-  services:
-    router_replay:
-      enabled: true
-      store_backend: memory  # or redis, postgres, milvus
-
-routing:
-  decisions:
-    - name: some-route
-      plugins:
-        - type: router_replay
-          configuration:
-            enabled: false  # optional per-decision opt-out`}</pre>
-                  <p className={styles.emptySubtext}>
-                    Apply capture settings only where the recipe's privacy policy permits them.
-                  </p>
-                </div>
-              ) : (
-                <div className={styles.emptyHint}>
-                  <p>No replay records are available for this view.</p>
-                  <p className={styles.emptySubtext}>
-                    Check the filters, capture settings, and whether requests have reached the
-                    router.
-                  </p>
-                </div>
-              )}
-              <p className={styles.emptySubtext}>
-                A recipe with <code>routing.data_policy.replay: false</code> produces no replay
-                records, even when global or decision capture is enabled. See{' '}
-                <a href="https://vllm-sr.ai/docs/api/router#router-replay">
-                  Replay privacy controls
-                </a>
-                .
-              </p>
-            </div>
+            <InsightsEmptyState replayUnavailable={replayUnavailable} hasError={Boolean(error)} />
           ) : (
             <DataTable
               columns={tableColumns}

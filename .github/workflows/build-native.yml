@@ -1,0 +1,63 @@
+name: Build CPU Libraries
+
+on:
+  workflow_call:
+    outputs:
+      artifact-name:
+        description: Verified native CPU library artifact for this source revision.
+        value: ${{ jobs.build.outputs.artifact-name }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: CPU / amd64
+    runs-on: ubuntu-24.04
+    outputs:
+      artifact-name: ${{ steps.identity.outputs.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/free-disk-space
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.90"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            candle-binding/target
+            ml-binding/target
+            nlp-binding/target
+            onnx-binding/target
+          key: native-cpu-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            native-cpu-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}-
+      - name: Build the CPU libraries once
+        run: make rust-ci
+      - name: Run native Rust contracts against the build
+        run: |
+          make test-rust-ci
+          cargo test --release --locked --manifest-path ml-binding/Cargo.toml
+      - name: Package source and library identities
+        id: identity
+        run: |
+          python3 tools/ci/native_artifact.py package --directory .agent-harness/native-output
+          echo "name=native-cpu-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.identity.outputs.name }}
+          path: .agent-harness/native-output/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-build-native-cpu
+          path: |
+            .agent-harness/native-output/manifest.json
+            .agent-harness/native-output/receipt.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7

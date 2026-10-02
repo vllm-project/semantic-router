@@ -10,13 +10,15 @@ import (
 )
 
 // CandidateDemand contains only request facts, never messages or tool schemas.
-// InputTokens is an estimate and excludes the output reserve.
+// InputTokens excludes the output reserve. It is normally estimated; resolved
+// automatic output uses the provider-rendered token count.
 type CandidateDemand struct {
 	Known             bool
 	Capabilities      llmprotocol.CapabilitySet
 	ModelCapabilities llmprotocol.CapabilitySet
 	InputTokens       int
 	MaxOutputTokens   *int64
+	AutomaticOutput   bool
 }
 
 func DemandForRequest(request *llmprotocol.Request) CandidateDemand {
@@ -50,6 +52,10 @@ func DemandForRequest(request *llmprotocol.Request) CandidateDemand {
 	}
 	modelRequired, _ = llmprotocol.ParseCapabilities(filtered)
 	demand := CandidateDemand{Known: true, Capabilities: required, ModelCapabilities: modelRequired, InputTokens: llmprotocol.EstimateInput(request).Tokens}
+	demand.AutomaticOutput = request.Sampling.AutomaticOutput
+	if request.Sampling.AutomaticInputTokens != nil {
+		demand.InputTokens = int(*request.Sampling.AutomaticInputTokens)
+	}
 	if request.Sampling.MaxOutputTokens != nil {
 		value := *request.Sampling.MaxOutputTokens
 		demand.MaxOutputTokens = &value
@@ -57,37 +63,13 @@ func DemandForRequest(request *llmprotocol.Request) CandidateDemand {
 	return demand
 }
 
-// EffectiveCandidateDemand previews only deterministic decision mutations. The
-// ingress request stays untouched for signals, retention and actual plugins.
+// EffectiveCandidateDemand previews deterministic policy without changing ingress.
 func EffectiveCandidateDemand(request *llmprotocol.Request, decision *config.Decision) (CandidateDemand, error) {
-	if request == nil {
-		return CandidateDemand{}, nil
+	view, err := EffectiveCandidateRequest(request, decision)
+	if err != nil {
+		return CandidateDemand{}, err
 	}
-	view := *request
-	view.Instructions = append([]llmprotocol.InstructionBlock(nil), request.Instructions...)
-	view.Messages = append([]llmprotocol.Message(nil), request.Messages...)
-	for i := range view.Messages {
-		view.Messages[i].Content = append([]llmprotocol.Content(nil), request.Messages[i].Content...)
-	}
-	if decision != nil {
-		if prompt := decision.GetSystemPromptConfig(); prompt != nil && decision.IsSystemPromptEnabled() {
-			llmprotocol.SetSystemInstruction(&view, prompt.SystemPrompt, decision.GetSystemPromptMode())
-		}
-		if tools := decision.GetToolsConfig(); tools != nil && tools.Enabled && tools.EffectiveMode() == config.ToolsPluginModeNone {
-			llmprotocol.StripTools(&view, tools.StripToolHistory)
-		}
-		if params := decision.GetRequestParamsConfig(); params != nil {
-			for _, field := range params.BlockedParams {
-				if _, err := llmprotocol.BlockRequestField(&view, strings.TrimSpace(field)); err != nil {
-					return CandidateDemand{}, err
-				}
-			}
-			llmprotocol.DefaultOutputTokens(&view, params.DefaultMaxTokens)
-			llmprotocol.CapOutputTokens(&view, params.MaxTokensLimit)
-			llmprotocol.CapCandidateCount(&view, params.MaxN)
-		}
-	}
-	return DemandForRequest(&view), nil
+	return DemandForRequest(view), nil
 }
 
 func CandidateRequirementsEnabled(requirements *config.CandidateRequirements) bool {
@@ -122,7 +104,7 @@ func ValidateCandidateRequirements(requirements *config.CandidateRequirements, m
 		reserve := 0
 		if demand.MaxOutputTokens != nil {
 			if *demand.MaxOutputTokens <= 0 || *demand.MaxOutputTokens > int64(params.MaxOutputTokens) {
-				return fmt.Errorf("%w: model %q cannot satisfy the requested output limit", ErrNoEligibleCandidates, model)
+				return &RequestBudgetError{Code: "max_output_tokens_exceeded", Message: fmt.Sprintf("requested output token limit must be between 1 and %d for model %q", params.MaxOutputTokens, model)}
 			}
 			if *demand.MaxOutputTokens > int64(math.MaxInt) {
 				reserve = math.MaxInt
@@ -131,7 +113,7 @@ func ValidateCandidateRequirements(requirements *config.CandidateRequirements, m
 			}
 		}
 		if llmprotocol.SaturatingTokenSum(demand.InputTokens, reserve) > params.ContextWindowSize {
-			return fmt.Errorf("%w: model %q cannot satisfy the estimated input plus output budget", ErrNoEligibleCandidates, model)
+			return &RequestBudgetError{Code: "context_length_exceeded", Message: fmt.Sprintf("estimated input (%d tokens) plus requested output (%d tokens) exceeds the %d-token context window for model %q", demand.InputTokens, reserve, params.ContextWindowSize, model)}
 		}
 	}
 	return nil

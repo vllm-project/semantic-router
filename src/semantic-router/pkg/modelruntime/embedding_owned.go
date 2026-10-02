@@ -16,16 +16,16 @@ import (
 // PrepareOwnedEmbeddings prepares the catalog for a candidate generation.
 // Failure releases only the candidate's independent resource references.
 func PrepareOwnedEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *native.Runtime) (*embedding.Set, error) {
-	return prepareEmbeddings(ctx, cfg, runtime, true)
+	return prepareEmbeddings(ctx, cfg, runtime, false, embedding.Options{})
 }
 
 // PrepareOwnedRecipeEmbeddings excludes service-owned cache, tools, memory and
 // ingestion resources. A standalone classifier owns only its recipe consumers.
 func PrepareOwnedRecipeEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *native.Runtime) (*embedding.Set, error) {
-	return prepareEmbeddings(ctx, cfg, runtime, false)
+	return prepareEmbeddings(ctx, cfg, runtime, false, embedding.Options{})
 }
 
-func prepareEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *native.Runtime, sharedServices bool) (*embedding.Set, error) {
+func prepareEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *native.Runtime, sharedServices bool, view embedding.Options) (*embedding.Set, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("embedding configuration is required")
 	}
@@ -51,25 +51,18 @@ func prepareEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *n
 		recipe = config.DefaultRecipeName
 	}
 	explicit, hasExplicit := plan.Lookup(recipe, "embedding")
+	if recipe == config.GlobalModelScope {
+		explicit, hasExplicit = plan.LookupGlobal("embedding")
+		explicit.Name = globalEmbeddingConsumerName(cfg, primary, primary)
+	}
 
+	if hasExplicit && view == (embedding.Options{}) && cfg.GlobalModelBindings["embedding"].Deployment != "" && primary == "mmbert" {
+		configured := cfg.EmbeddingConfig.WithDefaults()
+		view = embedding.Options{Dimension: configured.TargetDimension, Layer: configured.TargetLayer}
+	}
 	needed := embeddingNeedsForScope(cfg, primary, sharedServices)
 	requirements := config.EmbeddingRequirements(cfg, primary, sharedServices)
-	if cfg.EmbeddingModels.EmbeddingBackend() == config.EmbeddingBackendOpenVINO && !hasExplicit {
-		// Legacy OpenVINO recipe classifiers initialize their own primary.
-		// Independent service providers still belong to this owned snapshot.
-		delete(needed, primary)
-		ownedRequirements := requirements[:0]
-		for _, requirement := range requirements {
-			if requirement.Model == primary && !requirement.SharedService {
-				continue
-			}
-			ownedRequirements = append(ownedRequirements, requirement)
-			if requirement.SharedService {
-				needed[requirement.Model] = true
-			}
-		}
-		requirements = ownedRequirements
-	}
+
 	if len(needed) == 0 {
 		return embedding.NewSet(providers, primary), nil
 	}
@@ -115,7 +108,15 @@ func prepareEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *n
 		if path == "" {
 			return fail(fmt.Errorf("required embedding model %q has no artifact path", model))
 		}
-		provider, err := runtime.Embedding(ctx, embeddingCatalogSpec(cfg, recipe, model, path), 0, 0)
+		spec := embeddingCatalogSpec(cfg, recipe, model, path)
+		if recipe == config.GlobalModelScope {
+			spec.Name = globalEmbeddingConsumerName(cfg, model, primary)
+		}
+		var options embedding.Options
+		if recipe == config.GlobalModelScope && cfg.SemanticCache.Enabled && model == config.SemanticCacheEmbeddingModel(cfg) {
+			options = view
+		}
+		provider, err := runtime.Embedding(ctx, spec, options.Dimension, options.Layer)
 		if err != nil {
 			return fail(fmt.Errorf("prepare %s embedding: %w", model, err))
 		}
@@ -145,7 +146,7 @@ func prepareEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *n
 			}
 			provider, err = runtime.RemoteEmbedding(ctx, explicit, embedding.OpenAICompatibleConfig{BaseURL: address, Model: external.ModelName, APIKey: external.AccessKey, TimeoutSeconds: external.TimeoutSeconds, MaxResponseBytes: external.MaxResponseBytes, ExpectedDimension: cfg.EmbeddingConfig.TargetDimension})
 		} else {
-			provider, err = runtime.Embedding(ctx, explicit, 0, 0)
+			provider, err = runtime.Embedding(ctx, explicit, view.Dimension, view.Layer)
 		}
 
 		if err != nil {
@@ -162,12 +163,25 @@ func prepareEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *n
 
 func embeddingCatalogSpec(cfg *config.RouterConfig, recipe config.RecipeName, model, path string) config.ResolvedModelBinding {
 	provider, device := config.DefaultModelExecution(cfg.EmbeddingModels.UseCPU)
-	return config.ResolvedModelBinding{Recipe: recipe, Name: "embedding", Binding: config.ModelBinding{Deployment: "embedding:" + model, Contract: "embedding.v1", Adapter: model}, Deployment: config.ModelDeployment{Artifact: path, Provider: provider, Device: device, Precision: "native", Input: config.ModelInputBudget{Overflow: "truncate"}}, Admission: cfg.ModelAdmission["embedding:"+model]}
+	primary := strings.ToLower(strings.TrimSpace(cfg.EmbeddingConfig.ModelType))
+	if primary == "" {
+		primary = "qwen3"
+	}
+	if model == primary {
+		provider, device = config.DefaultEmbeddingExecution(cfg.EmbeddingModels)
+	}
+	adapter, overflow := model, "truncate"
+	if catalog := config.GetModelByPath(path); catalog != nil && catalog.DefaultAdapter != "" {
+		adapter = catalog.DefaultAdapter
+		provider, device = catalog.DefaultProvider, catalog.DefaultDevice
+		overflow = "reject"
+	}
+	return config.ResolvedModelBinding{Recipe: recipe, Name: "embedding", Binding: config.ModelBinding{Deployment: "embedding:" + model, Contract: "embedding.v1", Adapter: adapter}, Deployment: config.ModelDeployment{Artifact: path, Provider: provider, Device: device, Precision: "native", Input: config.ModelInputBudget{Overflow: overflow}}, Admission: cfg.ModelAdmission["embedding:"+model]}
 }
 
-// EmbeddingState describes the already warmed generation without another call.
+// EmbeddingState describes one prepared set without inferring consumer readiness.
 func EmbeddingState(cfg *config.RouterConfig, set *embedding.Set) EmbeddingRuntimeState {
-	state := EmbeddingRuntimeState{Embeddings: set, AnyReady: set.Ready(), ToolsReady: set.Has("")}
+	state := EmbeddingRuntimeState{Embeddings: set, AnyReady: set.Ready()}
 	if provider, err := set.Default(); err == nil && provider.Backend() == config.EmbeddingBackendOpenAICompatible {
 		state.EmbeddingProvider = remoteEmbeddingProviderProbeStatus(cfg, provider, provider.Dimension(), nil)
 		if state.EmbeddingProvider.Model == "" {

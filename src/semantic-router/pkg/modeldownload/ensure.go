@@ -73,8 +73,13 @@ func EnsureModelsForConfigWithProgressContext(
 		return nil
 	}
 
-	if err := CheckHuggingFaceCLIContext(ctx); err != nil {
-		return fmt.Errorf("huggingface-cli check failed: %w", err)
+	for _, spec := range missing {
+		if spec.PreparedArtifact == "" {
+			if err := CheckHuggingFaceCLIContext(ctx); err != nil {
+				return fmt.Errorf("huggingface-cli check failed: %w", err)
+			}
+			break
+		}
 	}
 
 	downloadConfig := GetDownloadConfig()

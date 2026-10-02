@@ -25,7 +25,7 @@ func TestPreviewCandidateDemandUsesEffectiveNeutralRequest(t *testing.T) {
 	stub := &evalModelSelectorStub{}
 	service := &ClassificationService{}
 	service.SetEvalModelSelector(stub)
-	service.populateEvalModelSelection(&EvalResponse{}, input, &decision.DecisionResult{Decision: d})
+	service.populateEvalModelSelection(&EvalResponse{}, input, &decision.DecisionResult{Decision: d}, nil)
 	body, err := intentRequestEnvelope(req, "")
 	if err != nil {
 		t.Fatal(err)

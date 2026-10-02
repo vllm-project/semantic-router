@@ -115,6 +115,15 @@ and resets positions in each window.
 The total input must fit `max_sequence_length`; overflow is an inference
 error, never an uninspected suffix.
 
+For an explicit local binding, the deployment's `input.max_tokens` supplies the
+complete-document budget. With window scanning, that budget can exceed the
+checkpoint's single-forward capacity: `input: {max_tokens: 65536, overflow: window}`
+and `window: {size: 32768, overlap: 256}` scan up to 64K tokens using forwards of
+at most 32K tokens. Preparation checks each window against the loaded checkpoint
+and graph; a 32K document budget alone does not establish 32K forward support.
+All counts use the Guard tokenizer, including its special tokens. Explicit
+non-window `reject` and `truncate` deployments keep their existing input policy.
+
 Request rules, the detection API, and response scans use the same maximum
 positive-label risk across windows. For multiple positive labels, the runtime
 sums their probabilities within each window before choosing the riskiest

@@ -6,7 +6,9 @@
 use crate::core::{
     artifact_identity::{ArtifactDigest, ArtifactSnapshot},
     compilation_cache::{CompilationCacheLease, CompilationIdentity, SharedCacheEvidence},
-    execution_contract::{validate_contract, validate_session, ExecutionInput},
+    execution_contract::{
+        session_input_schema, validate_contract, validate_session, ExecutionInput,
+    },
     onnx_artifacts::capture_onnx,
     unified_error::{errors, UnifiedResult},
 };
@@ -75,7 +77,10 @@ pub struct InstanceOptions {
     /// promise that the CPU nodes are limited to shape/control operations.
     pub allow_cpu_fallback: bool,
     pub max_input_tokens: Option<usize>,
-    /// Physical execution window; cannot raise the document input budget.
+    /// Whole-document budget used only by typed sequence/token window tasks.
+    /// Omission preserves the physical input budget.
+    pub document_max_input_tokens: Option<usize>,
+    /// Physical execution window; cannot raise the single-forward input budget.
     pub execution_max_input_tokens: Option<usize>,
     /// Optional owned MIGraphX compiled-program storage root.
     pub compilation_cache_dir: Option<PathBuf>,
@@ -101,6 +106,8 @@ pub struct SessionEvidence {
     pub artifacts: Vec<ArtifactDigest>,
     pub execution_max_input_tokens: Option<usize>,
     pub execution_inputs: Vec<ExecutionInput>,
+    /// Actual loaded session declarations; -1 denotes a dynamic dimension.
+    pub input_schema: Vec<ExecutionInput>,
     pub compilation_cache: Option<SharedCacheEvidence>,
     /// Effective provider compiler controls captured once before preparation.
     pub compiler_flags: BTreeMap<String, String>,
@@ -148,6 +155,7 @@ impl InstanceOptions {
             ));
         }
         if self.max_input_tokens == Some(0)
+            || self.document_max_input_tokens == Some(0)
             || self.execution_max_input_tokens == Some(0)
             || self.intra_threads == Some(0)
         {
@@ -218,6 +226,13 @@ impl InstanceOptions {
         &self,
         environment: impl IntoIterator<Item = (OsString, OsString)>,
     ) -> UnifiedResult<BTreeMap<String, String>> {
+        if self.provider == Provider::Rocm {
+            return Ok([
+                ("arena_extend_strategy".into(), "kSameAsRequested".into()),
+                ("memory_limit".into(), "usize_max".into()),
+            ]
+            .into());
+        }
         if self.provider != Provider::Migraphx {
             return Ok(BTreeMap::new());
         }
@@ -284,13 +299,35 @@ impl InstanceOptions {
         Ok(limit)
     }
 
+    pub fn document_limit(
+        &self,
+        physical_limit: usize,
+        supports_windows: bool,
+    ) -> UnifiedResult<usize> {
+        if self.document_max_input_tokens.is_some() && !supports_windows {
+            return Err(errors::config_error(
+                "document_max_input_tokens",
+                "requires a typed sequence or token window task",
+            ));
+        }
+        let limit = self.document_max_input_tokens.unwrap_or(physical_limit);
+        if limit == 0 || limit < physical_limit {
+            return Err(errors::validation(
+                "document_max_input_tokens",
+                &format!("at least {physical_limit}"),
+                &limit.to_string(),
+            ));
+        }
+        Ok(limit)
+    }
+
     pub fn execution_limit(&self, task_limit: usize) -> UnifiedResult<usize> {
-        let document_limit = self.effective_limit(task_limit)?;
-        let limit = self.execution_max_input_tokens.unwrap_or(document_limit);
-        if limit == 0 || limit > document_limit {
+        let physical_limit = self.effective_limit(task_limit)?;
+        let limit = self.execution_max_input_tokens.unwrap_or(physical_limit);
+        if limit == 0 || limit > physical_limit {
             return Err(errors::validation(
                 "execution_max_input_tokens",
-                &format!("1..={document_limit}"),
+                &format!("1..={physical_limit}"),
                 &limit.to_string(),
             ));
         }
@@ -340,7 +377,7 @@ impl InstanceOptions {
                 "this architecture must provide resolved inputs and retain the cache lease",
             ));
         }
-        Ok(self.create_session_impl(path, &[])?.session)
+        Ok(self.create_session_impl(path, &[], false)?.session)
     }
 
     /// Prepare a dynamic, uncached architecture while retaining artifact evidence.
@@ -351,7 +388,7 @@ impl InstanceOptions {
                 "cached preparation requires resolved execution inputs",
             ));
         }
-        self.create_session_impl(path, &[])
+        self.create_session_impl(path, &[], false)
     }
 
     pub fn create_session_with_contract(
@@ -362,17 +399,32 @@ impl InstanceOptions {
         validate_contract(inputs)?;
         let mut inputs = inputs.to_vec();
         inputs.sort_by(|a, b| a.name.cmp(&b.name));
-        self.create_session_impl(path, &inputs)
+        self.create_session_impl(path, &inputs, false)
+    }
+
+    /// Prepare an explicitly fixed input contract on any provider. The owner
+    /// must pad/reject requests to these exact shapes. Resolving symbolic sizes
+    /// before partitioning lets ORT fold shape-only work without CPU fallback.
+    pub fn create_session_with_fixed_contract(
+        &self,
+        path: &Path,
+        inputs: &[ExecutionInput],
+    ) -> UnifiedResult<PreparedSession> {
+        validate_contract(inputs)?;
+        let mut inputs = inputs.to_vec();
+        inputs.sort_by(|a, b| a.name.cmp(&b.name));
+        self.create_session_impl(path, &inputs, true)
     }
 
     fn create_session_impl(
         &self,
         path: &Path,
         inputs: &[ExecutionInput],
+        fixed_shapes: bool,
     ) -> UnifiedResult<PreparedSession> {
         self.validate_configuration()?;
         let mut compiler_flags = self.compiler_flags(std::env::vars_os())?;
-        if self.provider == Provider::Migraphx {
+        if self.provider == Provider::Migraphx || fixed_shapes {
             compiler_flags.insert(
                 "input_dimensions".into(),
                 if inputs.is_empty() {
@@ -446,7 +498,7 @@ impl InstanceOptions {
             .map_err(ort_error)?
             .with_no_environment_execution_providers()
             .map_err(ort_error)?;
-        if self.provider == Provider::Migraphx && !inputs.is_empty() {
+        if (self.provider == Provider::Migraphx || fixed_shapes) && !inputs.is_empty() {
             let declared = crate::core::onnx_artifacts::input_schema(path)
                 .map_err(|error| errors::config_error("execution_inputs", &error.to_string()))?;
             let overrides = crate::core::execution_contract::dimension_overrides(&declared, inputs)
@@ -471,6 +523,10 @@ impl InstanceOptions {
             Provider::Cpu => {
                 builder = builder
                     .with_execution_providers([CPUExecutionProvider::default()
+                        // Reuse CPU work buffers across operators and Loop iterations.
+                        // The crate default disables this arena, repeatedly faulting
+                        // and zeroing large attention buffers on long inputs.
+                        .with_arena_allocator(true)
                         .build()
                         .error_on_failure()])
                     .map_err(ort_error)?;
@@ -506,6 +562,13 @@ impl InstanceOptions {
                         .with_execution_providers([
                             ort::execution_providers::ROCmExecutionProvider::default()
                                 .with_device_id(self.device_id)
+                                // Loop subgraphs retain their working arenas.
+                                // Geometric growth can exhaust VRAM despite a
+                                // bounded attention working set; reserve the
+                                // requested size without changing execution.
+                                .with_arena_extend_strategy(
+                                    ort::execution_providers::ArenaExtendStrategy::SameAsRequested,
+                                )
                                 .build()
                                 .error_on_failure(),
                         ])
@@ -583,11 +646,12 @@ impl InstanceOptions {
             profile_prefix,
             artifacts: artifacts.iter().map(|item| item.digest.clone()).collect(),
             execution_max_input_tokens: self.execution_max_input_tokens,
-            execution_inputs: if self.provider == Provider::Migraphx {
+            execution_inputs: if self.provider == Provider::Migraphx || fixed_shapes {
                 inputs.to_vec()
             } else {
                 Vec::new()
             },
+            input_schema: session_input_schema(&session.inputs),
             compilation_cache: cache_lease.as_ref().map(|lease| lease.evidence.clone()),
             compiler_flags,
         });
@@ -708,6 +772,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn rocm_allocation_policy_participates_in_execution_evidence() {
+        let options = InstanceOptions {
+            provider: Provider::Rocm,
+            ..Default::default()
+        };
+        let flags = options.compiler_flags([]).unwrap();
+        assert_eq!(flags["arena_extend_strategy"], "kSameAsRequested");
+        assert_eq!(flags["memory_limit"], "usize_max");
+        assert!(InstanceOptions::default()
+            .compiler_flags([])
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
     fn removed_classifier_session_bank_option_is_rejected() {
         let error = serde_json::from_str::<InstanceOptions>(
             r#"{"model_path":"unused","short_sequence_tokens":512}"#,
@@ -797,6 +876,31 @@ mod tests {
             ..Default::default()
         };
         assert!(options.effective_limit(512).is_err());
+    }
+
+    #[test]
+    fn document_budget_does_not_raise_physical_execution_capacity() {
+        let mut options = InstanceOptions {
+            model_path: "unused".into(),
+            max_input_tokens: Some(32768),
+            document_max_input_tokens: Some(262144),
+            execution_max_input_tokens: Some(32768),
+            ..Default::default()
+        };
+        assert_eq!(options.document_limit(32768, true).unwrap(), 262144);
+        assert_eq!(options.effective_limit(32768).unwrap(), 32768);
+        assert_eq!(options.execution_limit(32768).unwrap(), 32768);
+        assert!(options.document_limit(32768, false).is_err());
+        options.execution_max_input_tokens = Some(32769);
+        assert!(options.execution_limit(32768).is_err());
+        options.execution_max_input_tokens = None;
+        options.document_max_input_tokens = Some(32767);
+        assert!(options.document_limit(32768, true).is_err());
+        options.document_max_input_tokens = Some(0);
+        assert!(options.validate_configuration().is_err());
+        options.document_max_input_tokens = None;
+        assert_eq!(options.document_limit(32768, true).unwrap(), 32768);
+        assert_eq!(options.document_limit(32768, false).unwrap(), 32768);
     }
 
     #[test]

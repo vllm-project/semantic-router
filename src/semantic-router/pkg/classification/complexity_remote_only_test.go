@@ -45,11 +45,11 @@ func TestRemoteComplexityDoesNotBuildTheLocalClassifier(t *testing.T) {
 	} {
 		builder := newClassifierOptionBuilder(remoteComplexityConfig(contract), nil)
 
-		option, err := builder.buildComplexityClassifierOption()
+		classifierOption, err := builder.buildComplexityClassifierOption()
 		if err != nil {
 			t.Fatalf("contract %q: buildComplexityClassifierOption: %v", contract, err)
 		}
-		if option != nil {
+		if classifierOption != nil {
 			t.Errorf("contract %q: the local prototype classifier was built for a remote-only config", contract)
 		}
 	}

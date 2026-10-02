@@ -30,7 +30,7 @@ export default function MonitoringPage() {
   }, [])
 
   const src = useMemo(
-    () => `/embedded/grafana/goto/llm-router-metrics?orgId=1&theme=${theme}&refresh=30s`,
+    () => `/embedded/grafana/d/vllm-semantic-router?orgId=1&theme=${theme}&refresh=30s`,
     [theme],
   )
 

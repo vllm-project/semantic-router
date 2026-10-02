@@ -30,3 +30,6 @@ paper/*
 candle-binding/target-mkl/*
 candle-binding/target-cpu/*
 *.patch
+src/training/model_classifier/modality_routing_classifier/exported_modality_routing_dataset/*.jsonl
+src/training/model_classifier/modality_routing_classifier/label_audit/human_review.tsv
+src/training/model_classifier/modality_routing_classifier/label_audit/audit_report_*.txt

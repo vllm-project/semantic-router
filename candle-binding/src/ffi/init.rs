@@ -11,6 +11,7 @@ use crate::core::similarity::BertSimilarity;
 use crate::BertClassifier;
 
 use super::classifier_slot::ClassifierSlot;
+use super::generic_classifier::GenericClassifier;
 
 // Global state using OnceLock for zero-cost reads after initialization
 // OnceLock<Arc<T>> pattern provides:
@@ -25,7 +26,7 @@ pub static BERT_SIMILARITY: OnceLock<Arc<BertSimilarity>> = OnceLock::new();
 // init_generic_classifier happened to also write - but only to its own,
 // separate copy). Every reader in classify.rs keyed off its own dead or
 // partially-dead copy instead of the one these init_* functions populate.
-pub static BERT_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
+pub static BERT_CLASSIFIER: OnceLock<Arc<GenericClassifier>> = OnceLock::new();
 pub static BERT_PII_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
 pub static BERT_JAILBREAK_CLASSIFIER: OnceLock<Arc<BertClassifier>> = OnceLock::new();
 // Feedback detector classifier (exported for use in classify.rs)
@@ -216,7 +217,9 @@ pub unsafe extern "C" fn init_classifier(
     }
 
     match BertClassifier::new(model_id, num_classes as usize, use_cpu) {
-        Ok(classifier) => BERT_CLASSIFIER.set(Arc::new(classifier)).is_ok(),
+        Ok(classifier) => BERT_CLASSIFIER
+            .set(Arc::new(GenericClassifier::Bert(Box::new(classifier))))
+            .is_ok(),
         Err(e) => {
             eprintln!("Failed to initialize BERT classifier: {e}");
             false

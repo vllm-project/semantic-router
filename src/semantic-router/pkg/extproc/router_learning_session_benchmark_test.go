@@ -72,6 +72,7 @@ func TestRouterLearningSessionCorpusRejectsInvalidInput(t *testing.T) {
 		{"missing coverage omitted", func(c *protectionCorpus) { c.MissingCoverage = nil }},
 		{"duplicate scenario", func(c *protectionCorpus) { c.Scenarios = append(c.Scenarios, c.Scenarios[0]) }},
 		{"ineligible expectation", func(c *protectionCorpus) { c.Scenarios[0].Steps[0].Expected.Model = "unconfigured" }},
+		{"rejection with selected model", func(c *protectionCorpus) { c.Scenarios[0].Steps[0].Expected.Rejected = true }},
 		{"unknown category", func(c *protectionCorpus) { c.Scenarios[0].Steps[0].Expected.Category = "typo" }},
 	} {
 		t.Run(mutate.name, func(t *testing.T) {

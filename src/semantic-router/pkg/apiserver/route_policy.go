@@ -19,6 +19,7 @@ const (
 	PermDataRead           RoutePermission = "data.read"
 	PermDataWrite          RoutePermission = "data.write"
 	PermMetricsRead        RoutePermission = "metrics.read"
+	PermAuditRead          RoutePermission = "audit.read"
 	PermCacheRead          RoutePermission = "cache.read"
 	PermCacheInvalidate    RoutePermission = "cache.invalidate"
 	PermCacheManage        RoutePermission = "cache.manage"
@@ -70,7 +71,7 @@ func managedRoute(
 	meta EndpointMetadata,
 	policy routePolicy,
 	handler apiRouteHandler,
-	body ...apiRequestBody,
+	options ...apiRouteOption,
 ) apiRoute {
 	route := apiRoute{
 		EndpointMetadata: meta,
@@ -79,8 +80,8 @@ func managedRoute(
 		Sensitivity:      policy.Sensitivity,
 		AuditAction:      policy.AuditAction,
 	}
-	if len(body) > 0 {
-		route.RequestBody = body[0]
+	for _, option := range options {
+		option.applyRoute(&route)
 	}
 	return route
 }

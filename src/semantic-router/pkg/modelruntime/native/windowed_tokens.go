@@ -38,11 +38,12 @@ func (r *Runtime) TokenWindows(ctx context.Context, spec config.ResolvedModelBin
 	if spec.Deployment.Provider != "candle" {
 		return nil, fmt.Errorf("%w: token window provider unavailable", binding.ErrCapability)
 	}
-	resource, model, info, err := r.prepareCandleTokens(ctx, windowLoadSpec(spec))
+	resource, model, info, err := r.prepareCandleTokens(ctx, windowLoadSpec(spec), window.Size)
 	if err != nil {
 		return nil, err
 	}
 	capability := candleCapability(spec, info)
+	capability.Limits.DocumentTokens = info.DocumentMaxInputTokens
 	if err := validateTokenWindowBudget(spec, capability); err != nil {
 		_ = resource.Close()
 		return nil, err
@@ -64,7 +65,7 @@ func (r *Runtime) TokenWindows(ctx context.Context, spec config.ResolvedModelBin
 
 func validateTokenWindowBudget(spec config.ResolvedModelBinding, capability binding.Capability) error {
 	limit := spec.Deployment.Input.MaxTokens
-	if limit <= 0 || capability.Limits.ModelTokens < limit || capability.Limits.TaskTokens < limit {
+	if limit <= 0 || capability.Limits.DocumentTokens < limit {
 		return fmt.Errorf("%w: native token task cannot cover the document budget", binding.ErrCapability)
 	}
 	return nil
@@ -80,6 +81,7 @@ func (r *Runtime) ortTokenWindows(ctx context.Context, spec config.ResolvedModel
 	var capability binding.Capability
 	if err == nil {
 		capability, err = ortCapability(spec, info)
+		capability.Limits.DocumentTokens = info.DocumentMaxInputTokens
 	}
 	if err == nil {
 		err = validateTokenWindowBudget(spec, capability)

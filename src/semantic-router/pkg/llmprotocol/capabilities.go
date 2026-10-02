@@ -51,6 +51,13 @@ const (
 	// including its request options, output item, and progress events. It is not
 	// interchangeable with generic image input or output support.
 	CapabilityImageGeneration
+	CapabilitySamplingMinP
+	CapabilityRepetitionPenalty
+	CapabilityCacheIsolation
+	// CapabilityCustomTools covers free-form custom tools and their calls, which
+	// a JSON Schema function tool cannot represent.
+	CapabilityCustomTools
+	CapabilityTextVerbosity
 )
 
 // CapabilitySet is an immutable value bitset.
@@ -121,6 +128,9 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityReasoningEffort, "reasoning_effort"},
 		{CapabilityReasoningBudget, "reasoning_budget"},
 		{CapabilitySamplingTopK, "sampling_top_k"},
+		{CapabilitySamplingMinP, "sampling_min_p"},
+		{CapabilityRepetitionPenalty, "repetition_penalty"},
+		{CapabilityCacheIsolation, "cache_isolation"},
 		{CapabilitySamplingSeed, "sampling_seed"},
 		{CapabilitySamplingPenalties, "sampling_penalties"},
 		{CapabilityStopSequences, "stop_sequences"},
@@ -133,6 +143,8 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityReasoningDisplay, "reasoning_display"},
 		{CapabilityMatchedStopSequence, "matched_stop_sequence"},
 		{CapabilityImageGeneration, "image_generation"},
+		{CapabilityCustomTools, "custom_tools"},
+		{CapabilityTextVerbosity, "text_verbosity"},
 	}
 	names := make([]string, 0, len(known))
 	for _, item := range known {
@@ -184,13 +196,20 @@ func requestTransportCapabilities(request Request) Capability {
 
 func requestSamplingCapabilities(request Request) Capability {
 	var required Capability
+	if request.Sampling.MinP != nil {
+		required |= CapabilitySamplingMinP
+	}
+	if request.Sampling.RepetitionPenalty != nil {
+		required |= CapabilityRepetitionPenalty
+	}
 	if request.Sampling.TopK != nil {
 		required |= CapabilitySamplingTopK
 	}
 	if request.Sampling.Seed != nil {
 		required |= CapabilitySamplingSeed
 	}
-	if request.Sampling.FrequencyPenalty != nil || request.Sampling.PresencePenalty != nil {
+	if (request.Sampling.FrequencyPenalty != nil && *request.Sampling.FrequencyPenalty != 0) ||
+		(request.Sampling.PresencePenalty != nil && *request.Sampling.PresencePenalty != 0) {
 		required |= CapabilitySamplingPenalties
 	}
 	if len(request.Sampling.Stop) > 0 {
@@ -201,6 +220,9 @@ func requestSamplingCapabilities(request Request) Capability {
 
 func requestStateCapabilities(request Request) Capability {
 	var required Capability
+	if request.CacheSalt != nil {
+		required |= CapabilityCacheIsolation
+	}
 	if len(request.Metadata) > 0 {
 		required |= CapabilityRequestMetadata
 	}
@@ -218,6 +240,9 @@ func requestStateCapabilities(request Request) Capability {
 
 func outputOptionCapabilities(request Request) Capability {
 	var required Capability
+	if request.TextVerbosity != "" {
+		required |= CapabilityTextVerbosity
+	}
 	if request.OutputFormat.Kind == OutputJSONObject {
 		required |= CapabilityStructuredJSON
 	}
@@ -250,6 +275,9 @@ func toolCapabilities(tools []Tool) Capability {
 		}
 		if tool.Cache != nil {
 			required |= CapabilityCacheDirectives
+		}
+		if tool.Kind == ToolKindCustom {
+			required |= CapabilityCustomTools
 		}
 	}
 	return required
@@ -307,6 +335,9 @@ func RequiredEventCapabilities(event Event) CapabilitySet {
 		event.Content != nil && event.Content.Kind == ContentGeneratedImage {
 		required.bits |= CapabilityImageGeneration
 	}
+	if event.ToolCall != nil && event.ToolCall.Kind == ToolKindCustom {
+		required.bits |= CapabilityCustomTools
+	}
 	return required
 }
 
@@ -314,6 +345,9 @@ func capabilityForRequestContent(content Content) Capability {
 	var cache Capability
 	if content.Cache != nil {
 		cache = CapabilityCacheDirectives
+	}
+	if isCustomToolCall(content) {
+		return CapabilityTools | CapabilityCustomTools | cache
 	}
 	if capability, found := requestContentCapability[content.Kind]; found {
 		return capability | cache
@@ -331,6 +365,9 @@ func capabilityForRequestContent(content Content) Capability {
 }
 
 func capabilityForResponseContent(content Content) Capability {
+	if isCustomToolCall(content) {
+		return CapabilityTools | CapabilityCustomTools
+	}
 	if capability, found := responseContentCapability[content.Kind]; found {
 		return capability
 	}
@@ -371,6 +408,9 @@ func requestToolResultCapabilities(result *ToolResult) Capability {
 	if result == nil {
 		return capabilities
 	}
+	if result.Kind == ToolKindCustom {
+		capabilities |= CapabilityCustomTools
+	}
 	for _, nested := range result.Content {
 		capabilities |= capabilityForRequestContent(nested)
 	}
@@ -381,6 +421,9 @@ func responseToolResultCapabilities(result *ToolResult) Capability {
 	capabilities := CapabilityTools
 	if result == nil {
 		return capabilities
+	}
+	if result.Kind == ToolKindCustom {
+		capabilities |= CapabilityCustomTools
 	}
 	for _, nested := range result.Content {
 		capabilities |= capabilityForResponseContent(nested)
@@ -394,6 +437,10 @@ func reasoningContentCapabilities(signature string) Capability {
 		capabilities |= CapabilityReasoningSignature
 	}
 	return capabilities
+}
+
+func isCustomToolCall(content Content) bool {
+	return content.Kind == ContentToolCall && content.ToolCall != nil && content.ToolCall.Kind == ToolKindCustom
 }
 
 func ParseCapabilities(names []string) (CapabilitySet, error) {
@@ -415,6 +462,9 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"reasoning_effort":      CapabilityReasoningEffort,
 		"reasoning_budget":      CapabilityReasoningBudget,
 		"sampling_top_k":        CapabilitySamplingTopK,
+		"sampling_min_p":        CapabilitySamplingMinP,
+		"repetition_penalty":    CapabilityRepetitionPenalty,
+		"cache_isolation":       CapabilityCacheIsolation,
 		"sampling_seed":         CapabilitySamplingSeed,
 		"sampling_penalties":    CapabilitySamplingPenalties,
 		"stop_sequences":        CapabilityStopSequences,
@@ -427,6 +477,8 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"reasoning_display":     CapabilityReasoningDisplay,
 		"matched_stop_sequence": CapabilityMatchedStopSequence,
 		"image_generation":      CapabilityImageGeneration,
+		"custom_tools":          CapabilityCustomTools,
+		"text_verbosity":        CapabilityTextVerbosity,
 	}
 	var set CapabilitySet
 	for _, name := range names {

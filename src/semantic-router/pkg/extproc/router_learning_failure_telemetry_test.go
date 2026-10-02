@@ -32,8 +32,14 @@ func TestProtectionOnlyResponseFailuresReachRescueBeforeMinimumTurns(t *testing.
 				SelectedModel: "cheap", Score: .9, Method: selection.MethodStatic,
 				AllScores: map[string]float64{"cheap": .9, "frontier": .8},
 			}
-			initialCtx, initialResult, initialRef, _ := router.applyRouterLearning(selCtx, base, &refs[0], ctx)
-			recordAgenticSessionDecision(initialCtx, initialResult, initialRef, ctx)
+			initialCtx, initialResult, initialRef, _, initialErr := router.applyRouterLearning(selCtx, base, &refs[0], ctx)
+			if initialErr != nil {
+				t.Fatal(initialErr)
+			}
+			stageAgenticSessionDecision(initialCtx, initialResult, initialRef, ctx)
+			if err := commitAgenticSessionDecision(ctx); err != nil {
+				t.Fatal(err)
+			}
 			ctx.RequestModel = initialRef.Model
 			base.SelectedModel = "frontier"
 			base.AllScores = map[string]float64{"cheap": .8, "frontier": .9}
@@ -45,7 +51,10 @@ func TestProtectionOnlyResponseFailuresReachRescueBeforeMinimumTurns(t *testing.
 					t.Fatalf("actual response %d: failures=%d, want %d", status, experience.FailedCount, index+1)
 				}
 				if index == 0 {
-					_, result, selected, _ := router.applyRouterLearning(selCtx, base, &refs[1], ctx)
+					_, result, selected, _, stepErr := router.applyRouterLearning(selCtx, base, &refs[1], ctx)
+					if stepErr != nil {
+						t.Fatal(stepErr)
+					}
 					if selected.Model != "cheap" || result.SessionPolicy == nil || !result.SessionPolicy.HardLocked {
 						t.Fatalf("one failure must not manufacture rescue before minimum turns: %+v", result)
 					}
@@ -64,7 +73,10 @@ func TestProtectionOnlyResponseFailuresReachRescueBeforeMinimumTurns(t *testing.
 			case "nonportable":
 				ctx.PreviousResponseID = "opaque-provider-state"
 			}
-			_, result, selected, _ := router.applyRouterLearning(selCtx, base, &refs[1], ctx)
+			_, result, selected, _, learningErr := router.applyRouterLearning(selCtx, base, &refs[1], ctx)
+			if learningErr != nil {
+				t.Fatal(learningErr)
+			}
 			policy, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodProtection)
 			if !ok {
 				t.Fatal("missing protection diagnostics")

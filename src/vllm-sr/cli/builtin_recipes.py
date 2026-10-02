@@ -101,16 +101,21 @@ def export_builtin_bundle(
     }
 
 
-def apply_builtin_learning_defaults(
+def apply_builtin_runtime_defaults(
     candidate: dict[str, Any], bundle_document: dict[str, Any]
 ) -> None:
-    """Fill omitted learning settings from the bundle; authored leaves win.
+    """Fill omitted learning and replay settings; authored leaves win.
 
     These are configuration-wide defaults, materialized during initialization.
     Runtime parsing does not infer policy from built-in recipe names.
     """
-    learning = bundle_document.get("global", {}).get("router", {}).get("learning")
-    if learning is None:
+    bundle_global = bundle_document.get("global", {})
+    defaults: dict[str, Any] = {}
+    for section, setting in (("router", "learning"), ("services", "router_replay")):
+        value = bundle_global.get(section, {}).get(setting)
+        if value is not None:
+            defaults.setdefault(section, {})[setting] = value
+    if not defaults:
         return
 
     def fill_missing(target: dict[str, Any], defaults: dict[str, Any]) -> None:
@@ -120,7 +125,7 @@ def apply_builtin_learning_defaults(
             elif isinstance(target[key], dict) and isinstance(value, dict):
                 fill_missing(target[key], value)
 
-    fill_missing(candidate, {"global": {"router": {"learning": learning}}})
+    fill_missing(candidate, {"global": defaults})
 
 
 def initialize_builtin_recipe(
@@ -220,7 +225,7 @@ def initialize_builtin_recipe(
     candidate.setdefault("entrypoints", []).append(
         {"model_names": [model_name], "recipe": name}
     )
-    apply_builtin_learning_defaults(candidate, document)
+    apply_builtin_runtime_defaults(candidate, document)
     # Setup envelopes disable the Router; a configured candidate is an explicit
     # deployment, so callers must start from a provider config, not setup mode.
     if (candidate.get("setup") or {}).get("mode"):

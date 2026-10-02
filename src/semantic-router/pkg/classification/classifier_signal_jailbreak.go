@@ -266,7 +266,17 @@ func (c *Classifier) evaluateBERTJailbreakRule(rule config.JailbreakRule, conten
 		if results.SignalValues == nil {
 			results.SignalValues = make(map[string]float64)
 		}
-		results.SignalValues[signalConfidenceKey(config.SignalTypeJailbreak, rule.Name)] = float64(observed.riskScore)
+		key := signalConfidenceKey(config.SignalTypeJailbreak, rule.Name)
+		results.SignalValues[key] = float64(observed.riskScore)
+		// A scan reads a long prompt in several windows and reports the riskiest
+		// one, so the value above belongs to a span rather than to the whole
+		// prompt. Without these a tail window blocking a benign document reads
+		// the same as the document itself scoring high.
+		if observed.window != nil {
+			results.SignalValues[key+":window_start"] = float64(observed.window.Start)
+			results.SignalValues[key+":window_end"] = float64(observed.window.End)
+			results.SignalValues[key+":windows"] = float64(observed.window.Count)
+		}
 		mu.Unlock()
 	}
 	if observed.unresolved {
@@ -293,6 +303,7 @@ type jailbreakCandidate struct {
 	jailbreakType string
 	riskScore     float32
 	riskAvailable bool
+	window        *tasks.ScanWindow
 }
 
 // evaluateCachedJailbreakResult classifies a single cached result into a
@@ -321,7 +332,7 @@ func (c *Classifier) evaluateCachedJailbreakResult(rule config.JailbreakRule, ca
 		return jailbreakCandidate{outcome: jailbreakCandidateUnknown, errorCode: jailbreakEvaluationFailedCode}
 	}
 	aboveThreshold, riskScore := isJailbreakRiskAboveThreshold(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, cached.result, rule.Threshold)
-	candidate := jailbreakCandidate{jailbreakType: jailbreakType, riskScore: riskScore, riskAvailable: true}
+	candidate := jailbreakCandidate{jailbreakType: jailbreakType, riskScore: riskScore, riskAvailable: true, window: cached.result.Window}
 	if aboveThreshold {
 		candidate.outcome = jailbreakCandidateMatched
 	}
@@ -350,6 +361,7 @@ type jailbreakRuleObservation struct {
 	riskAvailable bool
 	unresolved    bool
 	errorCode     string
+	window        *tasks.ScanWindow
 }
 
 func (c *Classifier) findJailbreakRuleObservation(rule config.JailbreakRule, contents []string, cache map[string][]cachedJailbreakResult) jailbreakRuleObservation {
@@ -363,6 +375,7 @@ func (c *Classifier) findJailbreakRuleObservation(rule config.JailbreakRule, con
 			if candidate.riskAvailable && (!observed.riskAvailable || candidate.riskScore > observed.riskScore) {
 				observed.riskScore = candidate.riskScore
 				observed.riskAvailable = true
+				observed.window = candidate.window
 			}
 			switch candidate.outcome {
 			case jailbreakCandidateUnknown:

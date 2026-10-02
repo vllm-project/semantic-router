@@ -2,11 +2,16 @@
 
 import json
 import os
+import sys
+from pathlib import Path
 
 import torch
 from jailbreak_provenance import emit_training_manifests
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from transformers import TrainingArguments
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from training_args_compat import create_training_arguments
 
 
 def split_training_data(sample_data: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -35,7 +40,8 @@ def create_security_training_args(
     output_dir: str, num_epochs: int, batch_size: int, learning_rate: float
 ) -> TrainingArguments:
     """Create the TrainingArguments for jailbreak LoRA fine-tuning."""
-    return TrainingArguments(
+    return create_training_arguments(
+        TrainingArguments,
         output_dir=output_dir,
         num_train_epochs=num_epochs,
         per_device_train_batch_size=batch_size,

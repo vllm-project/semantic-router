@@ -13,8 +13,8 @@ func TestCoreObservabilityMetricContract(t *testing.T) {
 	model := "contract-test-model"
 
 	RecordModelCompletionLatency(model, 0.42)
-	RecordModelTTFT(model, 0.12)
-	RecordModelTPOT(model, 0.01)
+	RecordModelFirstResponseObservation(model, 0.12)
+	RecordModelResponseDurationPerOutputToken(model, 0.01)
 	RecordModelRoutingLatency(0.004)
 
 	inflight.Reset()
@@ -26,8 +26,8 @@ func TestCoreObservabilityMetricContract(t *testing.T) {
 
 	for _, metricName := range []string{
 		"llm_model_completion_latency_seconds",
-		"llm_model_ttft_seconds",
-		"llm_model_tpot_seconds",
+		"llm_model_first_response_observation_seconds",
+		"llm_model_response_duration_per_output_token_seconds",
 		"llm_model_routing_latency_seconds",
 		"llm_model_inflight_requests",
 	} {

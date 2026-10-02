@@ -100,6 +100,13 @@ type sectionSummary struct {
 	Maximum      any            `json:"maximum,omitempty"`
 }
 
+// IndexResponse and SectionResponse are the compact representations served by
+// Render. Shared aliases let the management contract describe the actual DTOs.
+type (
+	IndexResponse   = schemaIndex
+	SectionResponse = sectionSummary
+)
+
 // Render returns the requested full, index, section, or routing-surface view.
 func Render(options ViewOptions) (Representation, error) {
 	view := strings.ToLower(strings.TrimSpace(options.View))

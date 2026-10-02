@@ -3,6 +3,7 @@ package extproc
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -31,13 +32,15 @@ func TestResponsesRetentionPolicyAcrossCompletionPaths(t *testing.T) {
 		for _, backend := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1, llmprotocol.AnthropicMessagesV1} {
 			for _, path := range []string{"buffered", "streaming", "immediate"} {
 				t.Run(tc.name+"/"+string(backend)+"/"+path, func(t *testing.T) {
-					router, ctx, responseStore, memoryStore := responseRetentionTestContext(t, tc.store)
+					router, ctx, responseStore, memoryStore, runner := responseRetentionTestContext(t, tc.store)
 					ctx.TargetFormat = backend
 					if tc.drop != nil {
 						ctx.EmittedRetention = &config.RetentionDirective{Drop: tc.drop}
 					}
 					completeRetentionTestResponse(t, router, ctx, path)
-					router.backgroundTasks.Wait()
+					if err := runner.RetireAndWait(time.Second); err != nil {
+						t.Fatal(err)
+					}
 					if ctx.SemanticResponse == nil || ctx.SemanticResponse.ID != ctx.ResponseObjectState.GeneratedResponseID {
 						t.Fatal("retention policy changed successful response identity")
 					}
@@ -73,7 +76,7 @@ func TestResponsesRetentionPolicyAcrossCompletionPaths(t *testing.T) {
 	}
 }
 
-func responseRetentionTestContext(t *testing.T, store *bool) (*OpenAIRouter, *RequestContext, *MockResponseStore, *countingPolicyMemoryStore) {
+func responseRetentionTestContext(t *testing.T, store *bool) (*OpenAIRouter, *RequestContext, *MockResponseStore, *countingPolicyMemoryStore, *memory.PersistenceRunner) {
 	t.Helper()
 	responseStore := NewMockResponseStore()
 	parent := &responseapi.StoredResponse{ID: "resp_parent", OutputText: "The conference starts on Monday."}
@@ -81,9 +84,12 @@ func responseRetentionTestContext(t *testing.T, store *bool) (*OpenAIRouter, *Re
 		t.Fatal(err)
 	}
 	memoryStore := &countingPolicyMemoryStore{}
+	runner := memory.NewPersistenceRunner(time.Second, 1, 1)
+	t.Cleanup(func() { _ = runner.RetireAndWait(time.Second) })
 	router := &OpenAIRouter{
 		Config:            &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, AutoStore: true}},
 		ResponseAPIFilter: NewResponseAPIFilter(responseStore), MemoryExtractor: memory.NewMemoryChunkStore(memoryStore),
+		memoryPersistence: runner,
 	}
 	ctx := memoryPolicyContext(nil)
 	ctx.TraceContext = t.Context()
@@ -101,7 +107,7 @@ func responseRetentionTestContext(t *testing.T, store *bool) (*OpenAIRouter, *Re
 	if len(ctx.SemanticRequest.Messages) != 2 || state.PreviousResponseID != parent.ID {
 		t.Fatal("no-store must still materialize an explicitly requested existing parent")
 	}
-	return router, ctx, responseStore, memoryStore
+	return router, ctx, responseStore, memoryStore, runner
 }
 
 func completeRetentionTestResponse(t *testing.T, router *OpenAIRouter, ctx *RequestContext, path string) {

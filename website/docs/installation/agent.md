@@ -28,7 +28,7 @@ The Skill directs the agent to:
 
 1. Inspect the host, existing installation, container runtime, accelerator, and
    available model endpoints without changing them.
-2. Install the latest published dev CLI when needed, then verify its supported
+2. Install the latest published stable CLI when needed, then verify its supported
    commands before changing a runtime. Discover configuration progressively from
    the CLI and the selected Router's schema and OpenAPI contract.
 3. Create or update canonical YAML for the available model pool while keeping
@@ -92,9 +92,10 @@ Mixture-of-Models evaluation, use the
 The single authored source is
 [`tools/agent/skills/vllm-sr-agent-operations/`](https://github.com/vllm-project/semantic-router/tree/main/tools/agent/skills/vllm-sr-agent-operations),
 including its optional references. Edit those files and run
-`make agent-skill-sync`; do not edit the public copies directly. The generator
-changes only the public skill name and relative reference links to absolute URLs
-on the same site. Commit the generated files alongside their source; the website
+`make agent-skill-sync`; do not edit the public copies directly. Use absolute
+URLs in the Skill and every reference so either copy can be installed alone.
+The generator changes the public skill name, checks linked documents, and makes
+any relative links absolute. Commit the generated files alongside their source; the website
 publishes those static files directly. A remote agent can load each reference
 without a repository checkout.
 

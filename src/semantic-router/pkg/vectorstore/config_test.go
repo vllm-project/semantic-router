@@ -130,7 +130,7 @@ var _ = Describe("VectorStoreConfig ApplyDefaults", func() {
 		Expect(cfg.FileStorageDir).To(Equal("/var/lib/vsr/data"))
 		Expect(cfg.MaxFileSizeMB).To(Equal(50))
 		Expect(cfg.EmbeddingModel).To(Equal("bert"))
-		Expect(cfg.EmbeddingDimension).To(Equal(384))
+		Expect(cfg.EmbeddingDimension).To(Equal(0))
 		Expect(cfg.IngestionWorkers).To(Equal(2))
 		Expect(cfg.SupportedFormats).To(ContainElements(".txt", ".md", ".json", ".csv", ".html"))
 	})

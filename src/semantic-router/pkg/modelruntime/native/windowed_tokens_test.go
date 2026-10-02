@@ -49,7 +49,34 @@ func TestTokenWindowModeCannotFallThroughToSingleInput(t *testing.T) {
 		t.Fatal("custom low-capacity model silently promoted")
 	}
 	spec.Deployment.Input.MaxTokens = 512
+	limits.Limits.DocumentTokens = 512
 	if err := validateTokenWindowBudget(spec, limits); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestWindowCapabilityAdmitsDocumentsOnlyWithNativeScanEvidence(t *testing.T) {
+	spec := config.ResolvedModelBinding{Deployment: config.ModelDeployment{Input: config.ModelInputBudget{MaxTokens: 262144, Overflow: "window"}}}
+	window := tasks.TextWindowsRequest{Size: 32768, Overlap: 16383}
+	capability := binding.Capability{Limits: binding.Limits{ModelTokens: 32768, TaskTokens: 32768, DocumentTokens: 262144}}
+	if err := validateWindowCapability(spec, capability, window); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateTokenWindowBudget(spec, capability); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*binding.Capability, *tasks.TextWindowsRequest){
+		"unknown scan":     func(c *binding.Capability, _ *tasks.TextWindowsRequest) { c.Limits.DocumentTokens = 0 },
+		"short scan":       func(c *binding.Capability, _ *tasks.TextWindowsRequest) { c.Limits.DocumentTokens = 32768 },
+		"task too small":   func(c *binding.Capability, _ *tasks.TextWindowsRequest) { c.Limits.TaskTokens = 512 },
+		"window too large": func(_ *binding.Capability, w *tasks.TextWindowsRequest) { w.Size = 32769 },
+	} {
+		t.Run(name, func(t *testing.T) {
+			c, w := capability, window
+			mutate(&c, &w)
+			if !errors.Is(validateWindowCapability(spec, c, w), binding.ErrCapability) {
+				t.Fatal("unsupported full-document scan accepted")
+			}
+		})
 	}
 }

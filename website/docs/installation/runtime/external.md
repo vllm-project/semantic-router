@@ -11,7 +11,7 @@ signal. For models running inside the Router, see [In-process models](in-process
 
 | Service | Configuration | Typical use |
 | --- | --- | --- |
-| Classification API | `adapter: http_classify` | Domain, custom labels, prompt attacks, PII, complexity |
+| Classification API | `adapter: http_classify` | Domain, custom labels, prompt attacks, PII, hallucination detection, complexity |
 | Chat API | `adapter: http_chat` | Prompt attacks, hallucination detection, LLM classification |
 | OpenAI-compatible embedding API | `backend: openai_compatible` | [Remote embeddings](embeddings.md#remote-embeddings) |
 | MCP tool | `modules.classifier.mcp` | Classification through an MCP server |
@@ -78,13 +78,21 @@ curl -fsS 'http://localhost:8080/api/v1/routing/preview?trace=true' \
 
 Replace `auto` with your public entrypoint name if different. Check
 `signal_errors` as well as the decision. Preview evaluates signals without
-calling a generation backend.
+generating an answer. Native output selection may call the backend's render
+endpoint to check capacity.
 
 ## Avoid common integration errors
 
 - Return every configured classification label exactly once with a valid score.
 - For PII, return scored entities with valid Unicode offsets. For hallucination
-  detection, return spans relative to the answer.
+  detection, return spans relative to the answer: a classify service receives
+  the answer as `inputs` and the context and question under `parameters`; a
+  chat service receives all three in the prompt. Span labels come from the
+  binding's `mapping_path`, or from the built-in set (`HALLUCINATED`,
+  `unsupported`, `contradicted`, `unverifiable`, and the chat taxonomy
+  categories). The older `backend: endpoint` form with `endpoint` and
+  `model_id` is shorthand for an `http_chat` binding and keeps working; an
+  explicit `hallucination_detector` binding takes precedence.
 - Configure timeouts, response-size limits, and service credentials. Enforce
   token limits in the service; local tokenizer `input` settings do not apply.
 - A classify request contains text but no model name. Use separate endpoints

@@ -91,7 +91,7 @@
   border: 1px solid var(--site-border);
   border-radius: 12px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 36%),
+    linear-gradient(180deg, var(--site-surface-soft), transparent 36%),
     var(--site-surface-alt);
   transition:
     border-color 180ms ease,
@@ -116,7 +116,7 @@
 
 .memberCard:hover .memberName,
 .memberCard:focus-visible .memberName {
-  color: var(--site-brand-blue);
+  color: var(--site-accent-strong);
 }
 
 .avatarWrapper {
@@ -140,7 +140,7 @@
   width: fit-content;
   padding: 0.18rem 0.46rem;
   border: 1px solid var(--site-border);
-  background: rgba(255, 255, 255, 0.045);
+  background: var(--site-surface-soft);
   color: var(--site-muted-bright);
   font-size: 0.62rem;
   font-weight: 600;
@@ -151,16 +151,16 @@
 
 .steering,
 .maintainer {
-  background: rgba(48, 162, 255, 0.12);
-  color: var(--site-brand-blue);
+  background: var(--site-accent-soft);
+  color: var(--site-accent-strong);
 }
 
 .committer {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--site-surface-soft);
 }
 
 .contributor {
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--site-surface-soft);
 }
 
 .memberName {

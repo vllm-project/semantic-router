@@ -31,7 +31,9 @@ func TestOwnedImplicitORTEmbeddingAndExplicitCandleOverride(t *testing.T) {
 	}
 	cfg := &config.RouterConfig{}
 	cfg.EmbeddingConfig = config.HNSWConfig{ModelType: "mmbert", TargetDimension: 3}
-	cfg.MmBertModelPath, cfg.UseCPU, cfg.Tools.Enabled = artifact, true, true
+	cfg.MmBertModelPath, cfg.UseCPU = artifact, true
+	// Tools belong to the global service owner; this fixture needs a recipe consumer.
+	cfg.EmbeddingRules = []config.EmbeddingRule{{Name: "route", Candidates: []string{"hello"}}}
 	prepared, err := PrepareOwnedEmbeddings(context.Background(), cfg, nil)
 	if err != nil {
 		t.Fatal(err)

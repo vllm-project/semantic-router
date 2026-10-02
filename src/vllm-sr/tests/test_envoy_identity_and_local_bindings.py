@@ -142,7 +142,7 @@ def test_bridge_listener_is_reachable_without_widening_host_publication(
     # Build the real Envoy argv, including the unchanged host address and offset.
     command = container_start._build_envoy_runtime_command(
         runtime="docker",
-        envoy_image="envoyproxy/envoy:v1.34-latest",
+        envoy_image="envoyproxy/envoy:v1.35.3",
         nofile_limit=65536,
         runtime_network_name=layout.network_name,
         common_env={},

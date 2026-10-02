@@ -311,6 +311,8 @@ def _start_support_services(
     stack_layout,
     enable_observability,
 ):
+    if not enable_observability:
+        _stop_observability_containers(stack_layout)
     started_backends = provision_storage_backends(
         user_config, stack_layout, state_root_dir=state_root_dir
     )
@@ -376,7 +378,10 @@ def stop_vllm_sr():
         stack_network_names,
         load_openclaw_registry(openclaw_data_dir),
     )
-    for container_name in _runtime_container_names(stack_layout):
+    for container_name in (
+        *_runtime_container_names(stack_layout),
+        stack_layout.sr_bench_container_name,
+    ):
         if not _stop_managed_container(
             container_name,
             container_statuses[container_name],
@@ -422,6 +427,7 @@ def stop_vllm_sr():
 def _managed_container_statuses(stack_layout: RuntimeStackLayout) -> dict[str, str]:
     container_names = [
         *_runtime_container_names(stack_layout),
+        stack_layout.sr_bench_container_name,
         *_observability_container_names(stack_layout),
         *_storage_container_names(stack_layout),
     ]
@@ -542,6 +548,27 @@ def _observability_container_names(stack_layout: RuntimeStackLayout) -> tuple[st
     )
 
 
+def _stop_observability_containers(stack_layout: RuntimeStackLayout) -> None:
+    """Stop this stack's old collectors when switching to minimal mode.
+
+    Keep containers and their data for the next full-mode start. Strict checks
+    prevent an unavailable container runtime from looking like an empty stack.
+    The caller holds the stack lifecycle lock throughout deployment.
+    """
+    names = _observability_container_names(stack_layout)
+    stopped_states = {"not found", "exited", "created", "dead"}
+    states = {name: container_status_strict(name) for name in names}
+    for name, state in states.items():
+        if state in {"running", "paused", "restarting"}:
+            if not container_stop_container(name):
+                raise RuntimeError(f"Failed to stop observability container: {name}")
+        elif state not in stopped_states:
+            raise RuntimeError(f"Observability container is not stopped: {name}")
+    for name in names:
+        if container_status_strict(name) not in stopped_states:
+            raise RuntimeError(f"Observability container is not stopped: {name}")
+
+
 def _storage_container_names(stack_layout: RuntimeStackLayout) -> tuple[str, ...]:
     return stack_layout.storage_container_names
 
@@ -553,6 +580,11 @@ def _remove_runtime_network(network_name: str) -> bool:
         return True
     detail = (stderr or "").strip()
     if "not found" in detail.lower() or "no such network" in detail.lower():
+        return True
+    if "active endpoints" in detail.lower():
+        log.warning(
+            f"Keeping network {network_name}: external containers are still attached"
+        )
         return True
     log.error(
         f"Failed to remove network {network_name}: "
