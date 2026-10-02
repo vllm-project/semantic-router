@@ -1,13 +1,14 @@
-"""Fetch a private release card's images and links from the Hub over HTTP (run on a node).
+"""Fetch a release card's images and links from the Hub over HTTP (run on a node).
 
 Complements ``hub readback`` (metadata, remote hashes, links against the package
 file list) with what a signed-in reader receives: every relative image and link
 of README.md is downloaded at the exact revision and hashed against
 MODEL_MANIFEST.json, in-page anchors must name a heading, absolute links must
 answer 200 (Hub links with the node's token), the model API at that revision
-must report the repository private with the card's metadata, and anonymous
-requests for the repository, its README and its model API must be refused. Hub
-web pages refuse token auth, so a private collection link is checked through the
+must report the repository's policy visibility (``hub.expected_private``) with the
+card's metadata, and anonymous requests for the repository, its README and its
+model API must be refused for a private repository and answer 200 for a public
+one. Hub web pages refuse token auth, so a collection link is checked through the
 collections API and the rendered model page's status is only recorded. The token
 stays in the HF CLI's default file and never enters the receipt.
 
@@ -29,6 +30,13 @@ from v2.release import hub, layout
 IMAGE = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
 LINK = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
 REFUSED = (401, 403, 404)
+
+
+def visibility_ok(repo: str, private: object, anonymous: dict[str, int]) -> bool:
+    """The model API's visibility and the anonymous statuses match the repository's policy."""
+    if hub.expected_private(repo):
+        return private is True and all(s in REFUSED for s in anonymous.values())
+    return private is False and all(s == 200 for s in anonymous.values())
 
 
 def anchor(heading: str) -> str:
@@ -74,7 +82,7 @@ def main() -> None:
                 {"target": target, "kind": "anchor", "passed": target[1:] in headings}
             )
         elif target.startswith("http"):
-            # Hub web pages refuse token auth; a private collection is checked through its API.
+            # Hub web pages refuse token auth; a collection is checked through its API.
             collection = re.fullmatch(
                 r"https://huggingface\.co/collections/(.+)", target
             )
@@ -151,8 +159,7 @@ def main() -> None:
         "passed": all(c["passed"] for c in checks)
         and model_api["status"] == 200
         and model_api["sha"] == args.revision
-        and model_api["private"] is True
-        and all(status in REFUSED for status in anonymous.values()),
+        and visibility_ok(args.repo, model_api["private"], anonymous),
     }
     layout.write_json(args.output, result)
     print(
