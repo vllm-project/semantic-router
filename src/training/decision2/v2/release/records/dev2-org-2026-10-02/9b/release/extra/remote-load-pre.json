@@ -1,0 +1,19 @@
+{
+  "checks": {
+    "downloaded_revision": true,
+    "remote_config": true,
+    "tokenizer": true
+  },
+  "config_class": "Decision2Config",
+  "downloaded_revisions": [
+    "7195360df53b30ae625435fb3d9ec21bdbda279c"
+  ],
+  "model_type": "decision2",
+  "passed": true,
+  "repo": "vllm-sr/Decision-2.0-Lux-9B",
+  "revision": "7195360df53b30ae625435fb3d9ec21bdbda279c",
+  "schema": "dev2-org-remote-load/1",
+  "tokenizer_class": "Qwen2Tokenizer",
+  "tokenizer_size": 248077,
+  "utc": "2026-10-02T10:58:46.864915+00:00"
+}

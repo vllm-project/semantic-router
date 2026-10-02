@@ -1,0 +1,13 @@
+{
+  "checks": {
+    "former_id_redirects": true,
+    "main_is_the_superseded_revision": true,
+    "new_id_resolves_to_itself": true,
+    "private": true
+  },
+  "main": "781b2b2431abccbdcfcbfa98b66c80b332725513",
+  "passed": true,
+  "repo": "vllm-sr/Decision-2.0-Vega-27B",
+  "schema": "dev2-org-precheck/1",
+  "utc": "2026-10-02T11:38:31.830241+00:00"
+}

@@ -1,0 +1,13 @@
+{
+  "checks": {
+    "former_id_redirects": true,
+    "main_is_the_superseded_revision": true,
+    "new_id_resolves_to_itself": true,
+    "private": true
+  },
+  "main": "7195360df53b30ae625435fb3d9ec21bdbda279c",
+  "passed": true,
+  "repo": "vllm-sr/Decision-2.0-Lux-9B",
+  "schema": "dev2-org-precheck/1",
+  "utc": "2026-10-02T10:58:42.117752+00:00"
+}

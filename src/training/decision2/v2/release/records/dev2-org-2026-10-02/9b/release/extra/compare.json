@@ -1,0 +1,26 @@
+{
+  "changed_files": [
+    "README.md"
+  ],
+  "files": [
+    39,
+    39
+  ],
+  "manifest_changed_fields": [
+    "builder.source_commit",
+    "card.readme_sha256",
+    "files_sha256.README.md"
+  ],
+  "package_former_org_occurrences": {},
+  "passed": true,
+  "problems": [],
+  "readme_former_org_occurrences": [
+    5,
+    0
+  ],
+  "readme_is_renamed_release_readme": true,
+  "released_revision": "7195360df53b30ae625435fb3d9ec21bdbda279c",
+  "repo": "vllm-sr/Decision-2.0-Lux-9B",
+  "schema": "dev2-org-compare/1",
+  "utc": "2026-10-02T10:58:40.720132+00:00"
+}

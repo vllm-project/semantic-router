@@ -1,0 +1,2 @@
+v2/release/specs/dev2-2b-org.json e9c88e72f8fa98a5c505fbc3e036def3501f279a02955b81f5f49d94310387fa
+v2/release/records/dev2-org-2026-10-02/Decision-2.0-Sol-2B.decision.org.json 9baa254b1ec77ab65d86f843c3bdb5987cb717791a33bbfec67d6b2373941fee

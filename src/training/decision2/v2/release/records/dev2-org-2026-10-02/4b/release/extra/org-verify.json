@@ -1,0 +1,25 @@
+{
+  "changed_files": [
+    "MODEL_MANIFEST.json",
+    "README.md"
+  ],
+  "checks": {
+    "former_id_redirects": true,
+    "main_is_the_revision": true,
+    "no_former_org_text": true,
+    "only_card_and_manifest_changed": true,
+    "private": true
+  },
+  "files": [
+    37,
+    37
+  ],
+  "former_org_occurrences": {},
+  "passed": true,
+  "repo": "vllm-sr/Decision-2.0-Nox-4B",
+  "revision": "36596d27503796f94c41e66999ba71bb3fa5c8e4",
+  "schema": "dev2-org-verify/1",
+  "superseded": "9f2ddafc57f60c62239c0ca47c54c5cd3ec4aff9",
+  "text_files_scanned": 26,
+  "utc": "2026-10-02T10:40:28.724749+00:00"
+}

@@ -205,6 +205,64 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 21:20 — **WATCHDOG: GPU utilisation fell to 16/43 when all Index waves finished at once.**
+  - **27B (f5779f55): RELEASE NOW.** The cross-arm `M6-IBxIB2-m50` / `-m67` both measure about 56.47 (node D runs),
+    above M6-IB and above AutoJev-27B: **global and class rank 3**.
+    - Bootstrap vs M6-IB, run the integrity checks, and release the larger lower bound to Vega-27B on top of
+      `e60bd8e3` (the org card revision).
+  - **Every track: fill your idle GPUs within 30 min** with NEW, DIVERSE training arms, since cross-arm soups are
+    today's strongest lever (4B SDMLxALL, 27B IBxIB2, 2B, 0.8B).
+    - Use different data mixes, seeds or doses, so the next cross-arm soup has more distinct members.
+    - **4B (M17):** node F GPU2–7 and node C GPU3–7.
+    - **9B (M10):** node A GPU1, 3–6 and node B GPU3, 4, 6, 7. More KIB4-family arms: IB4 + ML, IB4 + SW, KIB4 seeds.
+    - **27B:** node D GPU5–7 and node E GPU0–2, 6. M8 arms on the M6-IB / IB2 recipes with IB4 + ML, plus extra seeds.
+  - Release any lease you won't use within 30 min.
+
+- 2026-10-02 20:30 — **Org rename COMPLETE.** Six 2.0 repos and the 60 other model repos were updated, and the
+  main-repo PR #4455 is open.
+  - **Pipeline on `vllm-sr`:** integration `ae0bc1e2f`, merged at `f72f4de36`, records at `220910f33`.
+  - **Successor releases:**
+    - Eos, Lux and Vega: derive from `specs/dev2-<key>-org.json` and the org decision and gate;
+    - Kai, Sol and Nox: the phase A runtime-only revisions are the current `main`.
+  - **Open follow-up for the eval track:** `eval/adapters.py` still uses old-org Decision 1.0 IDs, because offline eval
+    caches are stored under the old names. Rename them only when no eval run is in flight, re-pointing the caches.
+
+- 2026-10-02 20:25 — **Org rename for Decision 2.0 is DONE: 0 `llm-semantic-router` in all six repos** (org worker
+  (2)). Merged into integration at `220910f33`; record `v2/release/records/dev2-org-2026-10-02.md`.
+  - **Card-only org revisions:** Kai `c441862b`, Eos `25f0914a`, Sol `951e7f7f`, Nox `36596d27`, Lux `6af07f36`,
+    Vega `e60bd8e3`. Only README.md and MODEL_MANIFEST.json changed. All checks pass, including gate seal, card
+    HTTP, links, the collection check and `gate evaluate`.
+  - **Current `main`:** runtime phase A has since put runtime-only revisions on top for Kai `51b7b474`, Sol
+    `6a62b319` and Nox `137e28ce`. They keep `vllm-sr`.
+  - **Collection:** private, with the six `vllm-sr` items in the curated order. Every former ID redirects.
+  - **Successors** (9B KIB4-a33, 27B, M17): supersede the current `main`. For Eos, Lux and Vega, derive from
+    `specs/dev2-<key>-org.json` and the org gate and decision. Integration now also carries the gate commits
+    `5e2c3fa92` and `c6c754a41` (cherry-picked).
+  - **Leases:** none left. Vega's CPU attempt on node C failed before upload (`causal_conv1d` needs a GPU); its
+    copied inputs were removed.
+
+- 2026-10-02 20:20 — **Watchdog to the 9B worker (89b53e70).**
+  - Node A GPU1–6 (`eval-ix1`) have been idle since about 20:03.
+  - While KIB4-a33 releases, put them on the remaining 9B candidates: the cross-arm averages X1–X6, KIB4 / KX
+    interpolations, and the soups with the extra seeds. KIB4 is the strongest 9B signal so far (`KIB4-a33` beats
+    `KX-a33`), so prioritise KIB4-based crosses.
+  - Release any lease you won't use within 30 min.
+  - **Note to all workers:** the coordinator no longer resumes or interrupts you, because that downgrades the model.
+    Instructions arrive here, so re-read this file at every poll.
+
+- 2026-10-02 19:35 — **Org card-only revisions are live on five repos** (org worker (2); 0 `llm-semantic-router` in
+  any text file of each).
+  - **New `main`:** Kai-0.6B `c441862b`, Eos-0.8B `25f0914a`, Sol-2B `951e7f7f`, Nox-4B `36596d27`, Lux-9B
+    `6af07f36`. Only README.md and MODEL_MANIFEST.json changed; weights, assets and runtime are byte-identical.
+  - **Vega-27B** is publishing now (node C, CPU: every node A / C GPU went to 9B M10 Index runs).
+  - **Release workers (M17 4B, 9B M10, 27B, runtime phase A):** your next upload supersedes these revisions.
+    - Derive from `specs/dev2-<key>-org.json`.
+    - Your `gate_profile.current` names the org gate (the run's `receipts/gate.json`) and decision
+      (`/data/dev2/runs/release/decisions/<name>.decision.org.json`).
+    - Files are on branch `xunzhuo/decision-2-org-vllm-sr-20`; they merge into integration after Vega.
+    - The two release-gate commits that the Eos / Sol and Nox releases used (`5e2c3fa92`, `c6c754a41`) come along,
+      cherry-picked.
+
 - 2026-10-02 18:50 — **USER APPROVED a shared-context prefill SWITCH** (new worker, `track=shared-ctx`).
   - **ON:** the shared input of a multi-question request is computed once and reused, for near-flat latency in N, with
     some accuracy loss accepted. **OFF:** today's exact path, and the default.

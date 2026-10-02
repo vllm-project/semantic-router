@@ -1,0 +1,76 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's instruction of 2026-10-02 17:35 UTC+8 (the Hugging Face organization llm-semantic-router is now vllm-sr): card-only revisions of the Decision 2.0 repositories naming the new organization; every card keeps its release's Index data, charts and banner",
+  "decision": "release",
+  "decision_sha256": "b98c4983a12c8644366af8a75ca6406fc8fdbaceaecdc9a3fbbb15079764e0fd",
+  "gate_profile": "successor",
+  "items": {
+    "1_successor_IF1_index_gain": {
+      "evidence": "private Index paired bootstrap f296935f83d6 (2000 replicates over 138645 cases) of these weights (991a8fb855f2) minus the current revision's (74ec8b2f838d): 95% lower bound > 0: NO; user override 9d196ffa2e75 (2026-10-02T07:45:00Z, the user, relayed by the coordinator (parent agent, Decision 2.0 program) at 15:45 UTC+8): \"the Index is equal within noise, transfer is significantly better\"",
+      "passed": true
+    },
+    "1_successor_IF3_index_audit": {
+      "evidence": "row-level Index audit b0f4fc5e4230 of 120226 Index rows: 4b-LHA10SDML 77099 training lines, 0 item rows, 114 familiar-text rows; planted control 200 / 200",
+      "passed": true
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "evidence": "types choice OK, noul OK, score OK",
+      "passed": true
+    },
+    "1_successor_references": {
+      "evidence": "references only under the Index-first rule (user 2026-10-02 09:55): v3: v3 65.684 vs current 62.090: +3.59 [+2.11, +8.83] (clears its former bar); human transfer: human transfer delta 95% [-0.019, +0.089] (clears its former bar); mlx-diag: mlx-diag card-eligible macro -0.0075 [-0.0176, +0.0026] (clears its former bar); tier gates: own 1.0 low +5.50; v3 65.684 vs 90% of Decider 4B 61.882; H vs Decider 4B [-0.085, +0.054]; own 1.0 low > 0 ok, v3 >= 55.693 ok, H vs Decider 4B upper >= 0 ok, no type collapsed ok (clears its former bar); overlap exposure: not run; public 231: public 231 174 vs 174 (+0; McNemar p 1.000) (clears its former bar); C1 post-key: not run",
+      "passed": true,
+      "reference": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "6 results below own 1.0 listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 36 files re-hashed; loaded 4208383488",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "b51ed83d384290970bc4895464fe330a92fad84daff61b197c6026656ef31286",
+  "model_name": "Decision-2.0-Nox-4B",
+  "receipts_sha256": {
+    "automap-card-pre": "972028b700c4e6d4f9f9a3cf311bec44cd546eb5abd074e63c58b5d85eb3c928",
+    "automap-hub": "a659cb02b5d6e0f33481285f89b584e72d6b64e28f365d58636720df9edb8508",
+    "automap-hub-tf518": "98622b81307f1dd21dec91963165e7fd97c6cda210f6775968eb1d84a7156d13",
+    "automap-post": "16e8467fc02a49cc404033bc6fc0f8c04d2683a9291b90b1da813646c26314fe",
+    "automap-pre": "98c51ed869f27b096b4dd7d3cc177e4c022fafba48c5fe2ef6ac40e1d42f7f9c",
+    "card-post": "3841b3e663aa23a28c74fc09c1db7f765e53ee72f47c7faaee13d01ae9ca8fe3",
+    "card-pre": "e1d9886592b7292f0f606dc52faa30395d7a91e13aeb629e301a4372ef8d06c9",
+    "download": "d9bef27cff100a7d85986aebc963e0e1bcbe9411eb0862d873654dd0c890fb77",
+    "post": "fe0b384163996b191386fb76ffea1eecffef578be689f239f319f9753dd2c465",
+    "readback": "8d6ed3feafa4346f2f23839d890063601ed6986e1bee1a89b3ea84de46847c4e",
+    "repeat-post": "88fa3c196612bf5ab23a99c94fba661cdf4b683f4c338c04f2be964808a0f2a7",
+    "repeat-pre": "25fe4b5ee67f2775452234400725ab4a7a034991a3ea0a37bc91c8b53c268c72",
+    "tree": "3b7ee801b7905324f38d737309c794f70824b00c046e7dd1970a3702cba3a267",
+    "upload": "c1b83b04cbca89ddef9c0c92540663a873a5cec3623524f0384c0931ba65d45f"
+  },
+  "repo_id": "vllm-sr/Decision-2.0-Nox-4B",
+  "revision": "36596d27503796f94c41e66999ba71bb3fa5c8e4",
+  "rule": "index-first",
+  "schema": "dev2-release-gate/1",
+  "supersedes": {
+    "gate_sha256": "54a8c2aba52aee4d6b035e57c22ed0c7c025a75d469a73c0036952710ea5d70c",
+    "revision": "b285e7a17791a06058817680592484868dde9545"
+  },
+  "utc": "2026-10-02T10:40:25.980514+00:00"
+}

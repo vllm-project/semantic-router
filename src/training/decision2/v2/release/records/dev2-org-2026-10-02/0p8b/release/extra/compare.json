@@ -1,0 +1,26 @@
+{
+  "changed_files": [
+    "README.md"
+  ],
+  "files": [
+    29,
+    29
+  ],
+  "manifest_changed_fields": [
+    "builder.source_commit",
+    "card.readme_sha256",
+    "files_sha256.README.md"
+  ],
+  "package_former_org_occurrences": {},
+  "passed": true,
+  "problems": [],
+  "readme_former_org_occurrences": [
+    5,
+    0
+  ],
+  "readme_is_renamed_release_readme": true,
+  "released_revision": "3de61185ade42cc307c26a6062df4baac327eac5",
+  "repo": "vllm-sr/Decision-2.0-Eos-0.8B",
+  "schema": "dev2-org-compare/1",
+  "utc": "2026-10-02T10:43:35.320800+00:00"
+}
