@@ -12,8 +12,11 @@
 #   stage  NODE NAME       the candidate's frozen soup -> NODE (SHA-256 lists equal; used in place when already
 #                          there), v2.eval.ix1.restage into the tier package, then identity / loaded count / T = 1 checks;
 #                          ISWEEP_SOUP_FROM=node:dir reads a verified relay copy instead of the table's soup
-#   panel  NODE PANEL      copy an IX1 panel directory from node A to NODE (SHA-256 lists equal)
+#   panel  NODE PANEL [FROM]  copy an IX1 panel directory from node FROM (default A) to NODE (SHA-256 lists equal)
 #   relay  NAME NODE       copy the table's soup to NODE models/ix1/index-sweep/relay/NAME (for a two-hop route)
+#   bf16   NODE NAME       the release weights: v2.release.bf16_copy of NAME's FP32 soup on NODE in the scored image
+#                          (CPU, no network) -> models/ix1/index-sweep/bf16/NAME (+ .receipt/bf16-copy.json), then
+#                          restaged as NAME-bf16 with the copy's model SHA-256 (identity / loaded count / T = 1 checks)
 #   lease  NODE "GPUS"     owner files of other tracks' released leases -> track=eval-ix1 idle (old file kept)
 #   chain  NODE PANEL "GPUS" NAME...   chain.sh detached on NODE (parity gates, runs, scoring, bootstraps)
 #   status NODE NAME...    per model: parity verdict, shards, merged rows, bootstraps present; chain log tail
@@ -102,9 +105,9 @@ copy() {  # SRC_NODE SRC_DIR DST_NODE DST_DIR: whole directory, SHA-256 lists eq
 
 case "$STAGE" in
   panel)
-    N=${1:?NODE} PNAME=${2:?PANEL}
+    N=${1:?NODE} PNAME=${2:?PANEL} FROM=${3:-a}
     on "$N" "test -f $R/$PNAME/panel.json" && { echo "node $N has $PNAME"; exit 0; }
-    copy a "$R/$PNAME" "$N" "$R/$PNAME" ;;
+    copy "$FROM" "$R/$PNAME" "$N" "$R/$PNAME" ;;
   relay)
     NAME=${1:?NAME} N=${2:?NODE}
     src=${SOUP[$NAME]:?unknown NAME}
@@ -152,6 +155,36 @@ assert m["calibration"] is None
 print(f"restaged: identity {sys.argv[2][:12]}, loaded {m['parameters']['loaded']:,}, T = 1")
 EOF
     echo "$NAME manifest $(on "$N" "sha256sum < $pkg/MODEL_MANIFEST.json | cut -c1-64")" ;;
+  bf16)
+    N=${1:?NODE} NAME=${2:?NAME}
+    T=${TIER[$NAME]:?unknown NAME} src=${SOUP[$NAME]}
+    on "$N" "test -f $S/v2/release/bf16_copy.py" || { echo "mirror $SHA is not on node $N" >&2; exit 2; }
+    pkg=$(pkgdir "$N" "$NAME") bpkg=$(pkgdir "$N" "$NAME-bf16")
+    [[ "$bpkg" == $MD/index-sweep/* ]] || { echo "mirror $SHA has no launch.sh entry for $NAME-bf16" >&2; exit 2; }
+    if [ "${src%%:*}" = "$N" ]; then ck=${src#*:}; else ck=$MD/index-sweep/ckpt/$(basename "$pkg"); fi
+    out=$MD/index-sweep/bf16/$NAME
+    on "$N" "test -f '$ck/decision_config.json' && test ! -e '$out' && test ! -e '$bpkg'" \
+      || { echo "no FP32 soup at $ck, or $out / $bpkg exists" >&2; exit 3; }
+    on "$N" "test \"\$(docker image inspect -f '{{.Id}}' decision20-train-fast:host2)\" = sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54" \
+      || { echo "node $N lacks the scored image" >&2; exit 3; }
+    on "$N" "umask 022; mkdir -p $out.receipt && docker run --rm --network none -e HIP_VISIBLE_DEVICES= -e CUDA_VISIBLE_DEVICES= \
+      -e ROCR_VISIBLE_DEVICES= -e PYTHONPATH=$S -v $S:$S:ro -v '$ck':'$ck':ro -v $MD/index-sweep/bf16:$MD/index-sweep/bf16 -w $S \
+      --entrypoint python3 decision20-train-fast:host2 -B -m v2.release.bf16_copy --source '$ck' --output $out \
+      --receipt $out.receipt/bf16-copy.json > /dev/null"
+    read -r source_sha model < <(on "$N" "python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); print(r[\"source_model_sha256\"], r[\"model_sha256\"])' $out.receipt/bf16-copy.json")
+    [ "$source_sha" = "${MODEL[$NAME]}" ] || { echo "the copy's source identity $source_sha is not $NAME's" >&2; exit 3; }
+    echo "$NAME-bf16: identity ${source_sha:0:12} -> ${model:0:12}, receipt $(on "$N" "sha256sum < $out.receipt/bf16-copy.json | cut -c1-64")"
+    on "$N" "umask 022; cd $S && PYTHONPATH=$S python3 -m v2.eval.ix1.restage --package $MD/${BASEPKG[$T]} --out $bpkg \
+      --checkpoint $out --model-sha256 $model"
+    onin "$N" "python3 - $bpkg/MODEL_MANIFEST.json $model ${LOADED[$T]}" << 'EOF'
+import json, sys
+m = json.load(open(sys.argv[1]))
+assert m["identity"]["model_sha256"] == sys.argv[2], "identity"
+assert m["parameters"]["loaded"] == int(sys.argv[3]), f"loaded {m['parameters']['loaded']}"
+assert m["calibration"] is None
+print(f"restaged: identity {sys.argv[2][:12]}, loaded {m['parameters']['loaded']:,}, T = 1")
+EOF
+    echo "$NAME-bf16 manifest $(on "$N" "sha256sum < $bpkg/MODEL_MANIFEST.json | cut -c1-64")" ;;
   lease)
     N=${1:?NODE} G=${2:?GPUS}
     on "$N" "stamp=\$(date -u +%Y%m%dT%H%M%SZ); for g in $G; do d=/data/dev2/leases/gpu\$g.lock; mkdir -p \$d; \
@@ -164,7 +197,7 @@ EOF
     shift 3
     specs=""
     for NAME in "$@"; do
-      T=${TIER[$NAME]:?unknown $NAME}
+      T=${TIER[${NAME%-bf16}]:?unknown $NAME}
       if [ "$N" = c ]; then refdir=$R/runs/${REF[$T]}; else refdir=$R/index-sweep/refs/${REF[$T]}; fi
       specs+=" $NAME=$T=$refdir"
     done

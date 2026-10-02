@@ -75,6 +75,15 @@ declare -A DIAGNOSTIC=(  # name -> "repository revision package-dir"
   [IS-2b-RA-a75]="DEV2.0-2B a53cf66a0d9d492a84b6617b61e7ce35fcd03af0 /data/dev2/models/ix1/index-sweep/2b-RA-a75-bbba9fad-ra53cf66a"
   [IS-L9IB]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/index-sweep/L9IB-d7c48f9a-re51f9881"
   [IS-K-a12IB]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/index-sweep/K-a12IB-68fed4cb-re51f9881"
+  [IS-08b-RASD-bf16]="DEV2.0-0.8B bede7938a8c209c09f27400b79eed57948d6b75e /data/dev2/models/ix1/index-sweep/08b-RASD-bf16-rbede7938"
+  [IS-08b-RAUP-bf16]="DEV2.0-0.8B bede7938a8c209c09f27400b79eed57948d6b75e /data/dev2/models/ix1/index-sweep/08b-RAUP-bf16-rbede7938"
+  [IS-08b-RASDML-bf16]="DEV2.0-0.8B bede7938a8c209c09f27400b79eed57948d6b75e /data/dev2/models/ix1/index-sweep/08b-RASDML-bf16-rbede7938"
+  [IS-2b-RA-bf16]="DEV2.0-2B a53cf66a0d9d492a84b6617b61e7ce35fcd03af0 /data/dev2/models/ix1/index-sweep/2b-RA-bf16-ra53cf66a"
+  [IS-2b-RASD-bf16]="DEV2.0-2B a53cf66a0d9d492a84b6617b61e7ce35fcd03af0 /data/dev2/models/ix1/index-sweep/2b-RASD-bf16-ra53cf66a"
+  [IS-2b-RAUP-bf16]="DEV2.0-2B a53cf66a0d9d492a84b6617b61e7ce35fcd03af0 /data/dev2/models/ix1/index-sweep/2b-RAUP-bf16-ra53cf66a"
+  [IS-2b-RA-a75-bf16]="DEV2.0-2B a53cf66a0d9d492a84b6617b61e7ce35fcd03af0 /data/dev2/models/ix1/index-sweep/2b-RA-a75-bf16-ra53cf66a"
+  [IS-L9IB-bf16]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/index-sweep/L9IB-bf16-re51f9881"
+  [IS-K-a12IB-bf16]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/index-sweep/K-a12IB-bf16-re51f9881"
 )
 
 mode="${1:-}"; shift || true
