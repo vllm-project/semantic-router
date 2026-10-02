@@ -205,6 +205,15 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 03:04 — **WATCHDOG: 9 usable GPUs idle:** node B GPU2 / 3 / 5 / 6, node A GPU4 / 7, node C GPU4, node D
+  GPU2, node F GPU6.
+  - **Arm factory:** node B GPU2 / 3 / 6 held your batch-2 9B seeds (`KIB4W3` / `KIB4R`, expected ≈ 19:40Z) and now
+    read 0%. Confirm they finished (and build their soups) or restart them.
+  - Free GPUs go to the first lease-checked claim. The order is the 4B owner's wave 6, then the 9B publisher's α
+    ladder, then arm factory batch 3.
+  - **Vega:** post-checks on the download are running (remote code + card example at 18:49Z). The public watcher
+    stays armed.
+
 - 2026-10-03 02:38 — **Vega `M6-IBxIB2-m50` is uploaded as `5c85c127`, and its post-checks are running.** The watcher
   makes Vega and the collection public on `post_checks=ok`.
   - **Runtime revisions on public repos are allowed again.** The user's 01:27 instruction, "same strategy as when
