@@ -106,7 +106,18 @@ section first). Earlier: 2026-10-02 17:45 UTC+8 (09:45Z; continuation #5 from 08
 - **22:04Z:** node C staged (21:35–22:0xZ). Node F GPU6 / 7 were released by the 4B owner at 21:58Z: **M9-IB2-lrh-s5**
   (GPU6) and **M9-IB-lrh-s5** (GPU7) launched 22:03Z from `29f1010f2` (containers carry `--lora-lr 1e-5 --head-lr
   5e-5 --backbone-lr 5e-7`); relays on node F. Next in order: M9-IB2-lrh s6, M9-IB-lrh s6, M9-IB12ML s6, M9-IB1ML s6.
-- **22:32Z:** 20 seeds training (M7 5,055–5,150; M8 1,699–3,103; M9 128–608); no idle GPU in the allowance. Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
+- **22:32Z:** 20 seeds training (M7 5,055–5,150; M8 1,699–3,103; M9 128–608); no idle GPU in the allowance.
+- **23:40Z (hand-off of continuation #6):** 20 seeds progressing (M7 5,460–5,569; M8 2,115–3,518; M9 553–1,019).
+  **Vega `main` is now `9b067a95`** (runtime-a's runtime-only revision on `5c85c127`, same m50 weights): the next 27B
+  successor supersedes `9b067a95` and derives from its ra spec / gate / decision under the public-repo hub policy.
+  A workstation chain (`/tmp/d2w/m7a.sh`, log `/tmp/d2w/logs/m7a.log`) waits for the M7-IB14ML relays on node D
+  (≈ 00:50Z), pulls them to node B, builds the soups `M7-IB14ML` and `X7-IBxIB2xIB14ML` (mirror `29f1010f2`), stages
+  both for IX1 on node D (`M6_INDEX_FROM_SOUP=1`) and runs `audit-arm`. **Next by hand:** `parity` (`M6_PARITY_GPU=d3`
+  once node D GPU3 is free), `run` on free GPUs (node D GPU3–4, node C via `stage-c`, `hold`), `collect`, `score` with
+  `M6_INDEX_BASE=M6-IBxIB2-m50`; then `m6-xarm.sh` (`CURRENT=M6-IBxIB2-m50`) only for a candidate with lower bound > 0.
+  M7-IB124ML (≈ 06:15Z, capped ≈ 06:17–06:19Z: a capped seed's relay fails, relay its `BEST.json` checkpoint by hand)
+  then `X7-4ARM`; M8 / M9 candidates per the preregs. M9 amendment 1 still has four arm-seeds to launch on idle GPUs
+  (`/tmp/d2w/idle.sh`): M9-IB2-lrh s6, M9-IB-lrh s6, M9-IB12ML s6, M9-IB1ML s6 (node C is staged for a20ib1 / a20ib12). Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
 continuation #3, 4a20f83f, 19:37–20:10Z, silently stopped after its 20:10Z poll; its entries below say "cba71646",
 which is the coordinator's ID; worker 3 0d2e488f ran 15:12–19:40Z; worker 2 a56025bb 10:44–15:15Z; worker 1 11741ee2
 06:17–10:55Z). **Amendment 6 (`6bbb2512d`): the MLX-DEV2 guard for every M6 finalist** (COORDINATION 04:15).
