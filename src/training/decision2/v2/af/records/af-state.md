@@ -2,6 +2,14 @@
 
 Index values stay private (node private stores and `decision2-program/private/arm-factory/`); this file has none.
 
+## 2026-10-02 19:40Z (03:40 UTC+8) — batch-3 4B seeds partly done
+
+- DONE on node C (no failure, no cap): `4b-SDMLIB4-lrh` s1 (GPU7) / s2 (GPU6), 19:25–19:27Z; `4b-SDMLIB4W2` s1 (GPU5),
+  19:32Z. Handed to the 4B owner (COORDINATION 03:38). Training: `4b-SDMLIB4W2` s2 (GPU6, since 19:25Z),
+  `4b-SDMLIB4-e2` s1 (GPU7, since 19:27Z, cap 3.5); node B `KIB4R2` s1 / s2 (GPU4 / 6). Node C GPU5 released.
+- GPU-h so far ≈ 54 (training and merges ≈ 49 from the launch receipts; Index ≈ 4.6: `AF-KF-a40` 2.71 and the
+  factory's share of `AF-4b-LHS17IB4ML`'s shards ≈ 1.9, plus parity gates). Projected end ≈ 64 of 130.
+
 ## 2026-10-02 19:10Z (03:10 UTC+8) — batch-2 9B points built; α ladder staged; batch 3 training
 
 - **`AF-KF-a40-bf16` gate (paired bootstrap vs `M10-KIB4-a40-bf16`, 2,000 replicates):** the 95% upper bound is
