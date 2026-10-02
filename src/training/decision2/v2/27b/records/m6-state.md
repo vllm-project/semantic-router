@@ -371,6 +371,22 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 08:25Z (poll 26):
+  - **M6-IB release:** uploaded (07:59Z); post-download examples / parity on the real Hub download since 07:59:44Z,
+    then post checks and the purge (≈ 09:05Z).
+  - **M6-IB2 vs M6-IB:** paired bootstrap done (private); not a release candidate over M6-IB. IB2's families go on in
+    M7-IB124ML.
+  - **M7 build:** `ceefc7863` (ML records `ml-K-MIX.json` outside the compared dirs); build 08:05–08:11Z on node B,
+    two builds identical, C1 clean for both mixtures. `a20ib124ml` 127,819 rows / 7,989 updates (projection 20.6 GPU-h),
+    `a20ib14ml` 94,099 rows / 5,882 updates (16.0 GPU-h); ML share restored to a20's (.386). Staged to node D
+    (`m6-stage-d.sh`, all hashes equal). Incident (harmless): a retried edit command reported a failed assertion after
+    the first copy had applied the fix; the rebuild was stopped once and restarted from the same mirror.
+  - **M7 launched** 08:16–08:20Z from mirror `ceefc7863`: node D GPU0–2 M7-IB124ML s1 / s2 / s3 (save every 999, cap
+    22), GPU3–4 M7-IB14ML s1 / s2 (save every 736, cap 19); all five past admit. Node D GPU4 taken from eval-ix1's
+    released owner (`owner.prev-ix1-*`). Node D GPU5–7 left released for the Index runs.
+  - **Budget (120 GPU-h):** ≈ 94 GPU-h of seeds + ≈ 18 for two Index runs. Stop rule: if the measured rate projects
+    past 120, M7-IB124ML-s3 stops and that arm soups two seeds.
+
 - 07:56Z (poll 25; COORDINATOR UPDATE 15:50 UTC+8: 27B goal top 3 of 15–40B, node D GPU0–7 + node E GPU0–3 / 6–7 +
   node B GPU0 for 27B, M7 budget 120 GPU-h):
   - **M6-IB release:** pre-upload parity passed again; AutoModel parity since 07:39:51Z, then upload.
