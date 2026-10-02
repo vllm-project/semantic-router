@@ -2,6 +2,16 @@
 
 Index values stay private (node private stores and `decision2-program/private/arm-factory/`); this file has none.
 
+## 2026-10-02 18:35Z (02:35 UTC+8) — amendment 7 not started; node B 9B points queued for M10 amendment 9
+
+- **Amendment 7** (`1e5060c3d`; `4b-LHS17IB4-e2`, `4b-LHS17IB4W2` on node C GPU3–4): **not started**. The 9B publisher
+  had leased those GPUs for its `M10-KIB4W2-a40-bf16` run before the factory's lease check; both chains were cancelled
+  (by their recorded process groups) and the runs marked STOPPED. The `4b-LHS17IB4W2` weights file is built and locked
+  on node C (unused).
+- **Node B soups (CPU, waiting for the seeds; `86777e681`):** `KIB4W3-a40`, `KIB4R-a40` (M10 amendment 9 item 4,
+  `[s1, s2, Lux × 3]`), then the arm soups `KIB4W3`, `KIB4R`, then `KIB4R2-a40` / `KIB4R2`. Node B's Lux member is
+  `9b-KIB4W3-s1`'s zero-step checkpoint, byte-equal to the pinned K-a13IB Lux member list.
+
 ## 2026-10-02 18:30Z (02:30 UTC+8) — KF-a40 measured; 9B α ladder (amendment 6); batch 3 running
 
 - **`AF-KF-a40-bf16` measured once** (node A, panel-7, parity PASS, 7 / 7 shards exit 0, 120,224 ok + 2 unsupported
