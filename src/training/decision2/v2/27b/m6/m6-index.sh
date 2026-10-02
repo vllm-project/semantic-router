@@ -27,8 +27,10 @@
 #            node D's run directory, SHA-256 lists equal; never overwrites a node D shard
 #   score    after all 8 shards ended 0 on node D: score.sh (merge, port + kit scoring, compare incl. the frontier peer),
 #            family_delta vs A20r's IX1 run (merged-budget) and vs M5-L128's, and the paired bootstrap vs A20r
-#            (paired_boot: 2,000 replicates, seed 20261002; item 1' (b) = its 95% lower bound > 0); private outputs
-#            copied to ~/code/decision2-program/private/m6/ARM/ (mode 700)
+#            (paired_boot: 2,000 replicates, seed 20261002; the Index gate = its 95% lower bound > 0) over
+#            merged-budget-r: the same records as merged-budget, re-merged by v2.eval.ix1.merge from the same shard and
+#            rerun files, with the ix1 run receipt the release gate's IF1 binds; private outputs copied to
+#            ~/code/decision2-program/private/m6/ARM/ (mode 700)
 #   audit    once for M6 (any ARM; CPU): v2.eval.ix1.contamination of a20ib12pn (it contains every arm's rows) and
 #            a20ib1x against the panel -> ix1/runs/m6-audit (backs the card's "audited at row level" footnote)
 #   release  owner files that launch.sh wrote for ARM on node D GPU4-7 and node C GPU1-7 -> status released (no ARM
@@ -259,7 +261,7 @@ EOF
       PYTHONPATH=$S python3 -m v2.eval.ix1.family_delta --base M5-L128=$R/runs/M5-L128/merged/compare.json \
         --new $ARM=$R/runs/$ARM/merged/compare.json --out $R/runs/$ARM/family-delta-vs-m5-l128.json > /dev/null && \
       cd $R/.. && PYTHONPATH=$S:\$PWD/kit-19ad28ec venv/bin/python -m v2.eval.ix1.paired_boot --suite-dir suite-0.2 \
-        --base $R/runs/DEV2.0-27B/merged-budget/results.jsonl --new $R/runs/$ARM/merged/results.jsonl \
+        --base $R/runs/DEV2.0-27B/merged-budget-r/results.jsonl --new $R/runs/$ARM/merged/results.jsonl \
         --external $R/../external/index021-frontier-gap-2026-10-01.json --replicates 2000 --seed 20261002 --workers 24 \
         --out $R/runs/$ARM/paired-boot-vs-a20r.json > $R/logs/m6-boot-$ARM.log 2>&1"
     (umask 077 && mkdir -p "$LOCAL")
@@ -268,6 +270,7 @@ EOF
       ond "cat $R/runs/$ARM/$f" > "$LOCAL/$(basename "$f")"
     done
     ond "cat $R/runs/DEV2.0-27B/merged-budget/compare.json" > "$LOCAL/compare-a20r.json"
+    ond "cat $R/runs/DEV2.0-27B/merged-budget-r/receipt.json" > "$LOCAL/receipt-a20r.json"
     ond "cat $R/parity/$ARM/parity.json" > "$LOCAL/parity.json"
     ond "cat $R/runs/DEV2.0-27B-budget-control/control.json 2> /dev/null" > "$LOCAL/control-a20r.json" || true
     chmod 600 "$LOCAL"/*.json
