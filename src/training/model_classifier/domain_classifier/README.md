@@ -40,7 +40,8 @@ python -m src.training.model_classifier.domain_classifier.prepare_data \
   --output artifacts/vela/domain
 ```
 
-The reference contract supplies the original 14 label IDs. New Vela Domain
+The reference contract supplies the original 14 label IDs, and the written
+contract sets `classifier_pooling` to `cls`, as the released Vela Domain uses. New Vela Domain
 training starts from the shared Vela Base with a fresh classification head,
 using [`sequence_repair.train`](../sequence_repair/README.md). Record the exact
 Base revision and downloaded weights with the training run. Continuing a Vela
