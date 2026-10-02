@@ -7,7 +7,7 @@
 #      upload of this package)
 #   2. builds the package from the card4 spec (private Index input and regenerated assets pinned by SHA-256) and
 #      compares MODEL_MANIFEST.json files_sha256 with the released revision's: only assets/banner.png may change;
-#      nothing is added or removed
+#      nothing is added or removed; then gate profile on the spec (the superseded release's items) must pass
 #   3. refuses while another release.sh runs on this node or when main moved since step 1; hf_headroom.sh, then
 #      release.sh --upload --collect --already-collected (no parity: card-only) with the native examples, the card's
 #      Transformers example on the package, on the download and from the Hub in fresh caches under Transformers 5.17
@@ -118,6 +118,9 @@ sys.exit(1 if other else 0)
 PY
 rm -rf "$check"
 echo "fresh build $built: only the banner differs from $expected"
+python3 -m v2.release.gate profile --spec "$SPEC" > "$TMPDIR/dev2-card4-$tier-profile-$TS.json" \
+  || { echo "gate profile of $SPEC does not pass: refusing" >&2; exit 1; }
+echo "gate profile passes ($TMPDIR/dev2-card4-$tier-profile-$TS.json)"
 
 if pgrep -f "v2/release/release.sh" > /dev/null; then echo "another release.sh runs on this node: refusing" >&2; exit 1; fi
 [[ "$(hub_main)" == "$main" ]] || { echo "$REPO main moved since the check: refusing" >&2; exit 1; }
