@@ -1,0 +1,13 @@
+{
+ "schema": "dev2-verify-identity/1",
+ "download_manifest_sha256": "01d642a1195edb60ca18b7846bc76e8bc0df4fe50fec254b39e2761fc4d26ab5",
+ "model_sha256": "b9a65d601bb6780c2c07998aecbfab322ede459c26fcb8ed262281ad08f909fb",
+ "manifest_identity": "b9a65d601bb6780c2c07998aecbfab322ede459c26fcb8ed262281ad08f909fb",
+ "identity_equal": true,
+ "fingerprint_files": 16,
+ "frozen_manifest_sha256": "055c86f153530a3790cf4fc98c2d554b9659783f7349c111d959f34b4c4049e3",
+ "frozen_identity": "b9a65d601bb6780c2c07998aecbfab322ede459c26fcb8ed262281ad08f909fb",
+ "weight_files": 10,
+ "weights_equal_frozen": true,
+ "passed": true
+}

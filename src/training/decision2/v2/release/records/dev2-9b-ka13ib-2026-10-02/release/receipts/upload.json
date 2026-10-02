@@ -1,0 +1,12 @@
+{
+  "bytes": 17947491134,
+  "commit_url": "https://huggingface.co/llm-semantic-router/Decision-2.0-Lux-9B/commit/259a45502bfca2f585a59ef99079533106e0b136",
+  "files": 40,
+  "manifest_sha256": "01d642a1195edb60ca18b7846bc76e8bc0df4fe50fec254b39e2761fc4d26ab5",
+  "private": true,
+  "repo": "llm-semantic-router/Decision-2.0-Lux-9B",
+  "revision": "259a45502bfca2f585a59ef99079533106e0b136",
+  "schema": "dev2-hub-upload/1",
+  "seconds": 23.149515582015738,
+  "utc": "2026-10-01T20:37:55.795873+00:00"
+}

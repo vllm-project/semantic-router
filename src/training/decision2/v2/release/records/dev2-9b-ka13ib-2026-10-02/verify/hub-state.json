@@ -1,0 +1,233 @@
+{
+ "huggingface_hub": "1.33.0",
+ "main": {
+  "id": "llm-semantic-router/Decision-2.0-Lux-9B",
+  "sha": "259a45502bfca2f585a59ef99079533106e0b136",
+  "private": true,
+  "gated": false,
+  "disabled": false,
+  "last_modified": "2026-10-01 20:37:55+00:00",
+  "used_storage_bytes": 17948791275,
+  "sha_is_259a4550": true
+ },
+ "old_id": {
+  "requested": "llm-semantic-router/DEV2.0-9B",
+  "resolved_id": "llm-semantic-router/Decision-2.0-Lux-9B",
+  "sha": "259a45502bfca2f585a59ef99079533106e0b136",
+  "private": true,
+  "api_no_follow": [
+   307,
+   "/api/models/llm-semantic-router/Decision-2.0-Lux-9B"
+  ],
+  "resolve_config_no_follow": [
+   307,
+   "/llm-semantic-router/Decision-2.0-Lux-9B/resolve/main/config.json"
+  ],
+  "resolve_config_follow": 206
+ },
+ "refs": {
+  "branches": {
+   "main": "259a45502bfca2f585a59ef99079533106e0b136"
+  },
+  "tags": {}
+ },
+ "commits": {
+  "count": 11,
+  "latest": [
+   {
+    "id": "259a45502bfc",
+    "title": "Decision 2.0 package Decision-2.0-Lux-9B (release) from 9e84f05f48760a5f4df236e37e4d4f861926b988-src_training_decision2",
+    "created_at": "2026-10-01 20:37:55+00:00"
+   },
+   {
+    "id": "586af77916ee",
+    "title": "Decision 2.0 package Decision-2.0-Lux-9B (release) from eb2d9f1df8f17fe4e7e62949675ed6a599ae9fe6-src_training_decision2",
+    "created_at": "2026-10-01 18:11:11+00:00"
+   },
+   {
+    "id": "a12ef72ef467",
+    "title": "Decision 2.0 package DEV2.0-9B (release) from f85ea4e1728203aaacc7c5ecc77a15f7de9ee75d-src_training_decision2",
+    "created_at": "2026-10-01 15:22:11+00:00"
+   }
+  ]
+ },
+ "tree_new": {
+  "files": 41,
+  "lfs_files": 15
+ },
+ "manifest": {
+  "sha256": "01d642a1195edb60ca18b7846bc76e8bc0df4fe50fec254b39e2761fc4d26ab5",
+  "is_01d642a1": true,
+  "files": 39,
+  "identity": "b9a65d601bb6780c2c07998aecbfab322ede459c26fcb8ed262281ad08f909fb",
+  "runtime_source": "99432d1a7da5adbc70212df78ae7ebf7e50b41e4",
+  "vendor_source": "787abdc54946ccdb05e52cc5c34ecb619dced237",
+  "remote_code": {
+   "architectures": [
+    "Decision2Model"
+   ],
+   "auto_map": {
+    "AutoConfig": "configuration_decision2.Decision2Config",
+    "AutoModel": "modeling_decision2.Decision2Model"
+   },
+   "automap_source": {
+    "commit": "99432d1a7da5adbc70212df78ae7ebf7e50b41e4",
+    "content_manifest_sha256": "3bede2ca1fc0b805c167bf5ae6b2bd824a3b64d1b6ae98478d04add1cc1444ff",
+    "tree": "fbf37474b1ce2efd228b7f50803848c6f60ebbd2"
+   },
+   "custom_pipelines": {
+    "decision": {
+     "impl": "pipeline_decision2.Decision2Pipeline",
+     "pt": [
+      "AutoModel"
+     ],
+     "type": "text"
+    }
+   },
+   "files": {
+    "configuration_decision2.py": {
+     "sha256": "b88ce8380cb0f210776f3f3ccc06219489b96502c520317790f3f4253e2a9367",
+     "source": "v2/release/automap/configuration_decision2.py",
+     "source_sha256": "b88ce8380cb0f210776f3f3ccc06219489b96502c520317790f3f4253e2a9367"
+    },
+    "modeling_decision2.py": {
+     "sha256": "a3f700b3d2a5deb344821802248a5ea7ea06ccedc5af1823dca4e3e813c17fbb",
+     "source": "v2/release/automap/modeling_decision2.py",
+     "source_sha256": "a3f700b3d2a5deb344821802248a5ea7ea06ccedc5af1823dca4e3e813c17fbb"
+    },
+    "pipeline_decision2.py": {
+     "sha256": "3393faec770ddaa9045a7e41092ad17cee5310fe74187deb6f58bbe718b0c1c3",
+     "source": "v2/release/automap/pipeline_decision2.py",
+     "source_sha256": "3393faec770ddaa9045a7e41092ad17cee5310fe74187deb6f58bbe718b0c1c3"
+    }
+   },
+   "model_type": "decision2",
+   "tested": [
+    "5.17.0",
+    "5.18.0"
+   ]
+  }
+ },
+ "hub_vs_released_manifest": {
+  "mismatch": [],
+  "extra_on_hub": []
+ },
+ "hub_vs_frozen_c1_package": {
+  "frozen_manifest_sha256": "055c86f153530a3790cf4fc98c2d554b9659783f7349c111d959f34b4c4049e3",
+  "frozen_identity": "b9a65d601bb6780c2c07998aecbfab322ede459c26fcb8ed262281ad08f909fb",
+  "weight_files": 10,
+  "weights_equal_on_hub": true,
+  "weight_bytes_on_hub": 17926620224,
+  "files_differing_from_frozen": [
+   "README.md",
+   "assets/index-areas.png",
+   "assets/index-pareto.png"
+  ],
+  "identity_equal": true
+ },
+ "identity_check": {
+  "recomputed_from_fingerprint_files": "b9a65d601bb6780c2c07998aecbfab322ede459c26fcb8ed262281ad08f909fb",
+  "fingerprint_files_equal_manifest": true
+ },
+ "runtime": {
+  "auto_map": {
+   "AutoConfig": "configuration_decision2.Decision2Config",
+   "AutoModel": "modeling_decision2.Decision2Model"
+  },
+  "custom_pipelines": [
+   "decision"
+  ],
+  "remote_code_files": [
+   "configuration_decision2.py",
+   "modeling_decision2.py",
+   "pipeline_decision2.py"
+  ],
+  "qwen_py_sha256": "97ba565f95d5a5ac9af6632e7397c05cfe9ab47fde68b56df19aabfa2d8fb187",
+  "qwen_py_has_forward_token_budget": true,
+  "qwen_py_has_micro_batches": true,
+  "qwen_py_equal_to": {
+   "586af779": true,
+   "5de3f9ed": true
+  },
+  "runtime_and_remote_code_blobs_vs_586af779": {
+   "config.json": "same",
+   "configuration_decision2.py": "same",
+   "decision2/__init__.py": "same",
+   "decision2/api.py": "same",
+   "decision2/qwen.py": "same",
+   "modeling_decision2.py": "same",
+   "pipeline_decision2.py": "same"
+  }
+ },
+ "lfs": {
+  "objects": 20,
+  "bytes": 17948791275,
+  "referenced_by_main": 15,
+  "unreferenced": [
+   [
+    "assets/DEV2.0-8B-owl-banner.png",
+    570778,
+    "7263ca30a2a5"
+   ],
+   [
+    "assets/DEV2.0-9B-owl-banner.png",
+    570282,
+    "d318952d49f5"
+   ],
+   [
+    "assets/index-areas.png",
+    134290,
+    "86ec0c5a491d"
+   ],
+   [
+    "assets/index-pareto.png",
+    204976,
+    "8e69c7318a71"
+   ],
+   [
+    "assets/jevarena-types.png",
+    104834,
+    "102b7d094583"
+   ]
+  ],
+  "unreferenced_safetensors": 0,
+  "purged_targets_still_present": []
+ },
+ "superseded_weight_paths_served": {
+  "backbone/model-00001-of-00009.safetensors": 403,
+  "backbone/model-00002-of-00009.safetensors": 403,
+  "backbone/model-00003-of-00009.safetensors": 403,
+  "backbone/model-00004-of-00009.safetensors": 403,
+  "backbone/model-00005-of-00009.safetensors": 403,
+  "backbone/model-00006-of-00009.safetensors": 403,
+  "backbone/model-00007-of-00009.safetensors": 403,
+  "backbone/model-00008-of-00009.safetensors": 403,
+  "backbone/model-00009-of-00009.safetensors": 403,
+  "decision_head.safetensors": 403
+ },
+ "main_weight_paths_served": {
+  "backbone/model-00001-of-00009.safetensors": 206,
+  "backbone/model-00002-of-00009.safetensors": 206,
+  "backbone/model-00003-of-00009.safetensors": 206,
+  "backbone/model-00004-of-00009.safetensors": 206,
+  "backbone/model-00005-of-00009.safetensors": 206,
+  "backbone/model-00006-of-00009.safetensors": 206,
+  "backbone/model-00007-of-00009.safetensors": 206,
+  "backbone/model-00008-of-00009.safetensors": 206,
+  "backbone/model-00009-of-00009.safetensors": 206,
+  "decision_head.safetensors": 206
+ },
+ "collection": {
+  "title": "\ud83c\udfb2 Decision 2.0",
+  "private": true,
+  "items": [
+   "llm-semantic-router/Decision-2.0-Vega-27B",
+   "llm-semantic-router/Decision-2.0-Lux-9B",
+   "llm-semantic-router/Decision-2.0-Nox-4B",
+   "llm-semantic-router/Decision-2.0-Sol-2B",
+   "llm-semantic-router/Decision-2.0-Eos-0.8B",
+   "llm-semantic-router/Decision-2.0-Kai-0.6B"
+  ],
+  "contains_repo": true
+ }
+}

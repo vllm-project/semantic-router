@@ -1,7 +1,8 @@
 # 9B M9: K-a13IB on the Index path — items 1′–8 and the successor release (2026-10-02)
 
-> **Result: K-a13IB passes items 1′ and 2–8.** It is released as the 9B successor on `Decision-2.0-Lux-9B`
-> (section 4). Index values stay in private files; this record carries verdicts, counts and hashes only.
+> **Result: K-a13IB passes items 1′ and 2–8.** It is released as the 9B successor on `Decision-2.0-Lux-9B`,
+> `main` `259a4550`, verified (section 4). Index values stay in private files; this record carries verdicts, counts
+> and hashes only.
 
 ## 0. The decision
 
@@ -108,4 +109,22 @@ identity and runtime are equal. `release_ka13ib.sh --release` checks this on the
 
 ### 4.2 Publication
 
-RELEASE-SECTION
+**`main` = `259a45502bfca2f585a59ef99079533106e0b136`** (private), published at 20:37:55Z by
+`release_ka13ib.sh --release --gpu 6` (mirror `9e84f05f4`, node A GPU6, 20:19–20:50Z). The full chain, receipts and
+verification are in the release record
+[`dev2-9b-ka13ib-2026-10-02.md`](../../release/records/dev2-9b-ka13ib-2026-10-02.md).
+
+- **Package:** manifest `01d642a1…`, identity `b9a65d60…`, 7,940,895,744 loaded parameters. The 10 weight files
+  equal the C1-scored package `055c86f1`.
+- **Gate:** sealed in `gate.json` `f3d79e24…` (decision `99621f30…`, supersedes `586af779`); `gate evaluate`
+  14 / 14.
+- **Parity:** 0 answer changes on typed-final, css15, public231 and mlx-diag, before the upload and on the real
+  download. AutoModel equals native. The Hub `trust_remote_code` smoke passes under Transformers 5.17.0 and 5.18.0.
+- **Hub:** the old ID `DEV2.0-9B` redirects. The collection is unchanged.
+- **Purge:** the 10 superseded weight objects of `586af779` were deleted with `rewrite_history=False`. Storage is
+  back to 52.55 GB of 100.
+- **Interruption:** a session interruption stopped this worker before its receipts were committed. The verification
+  after it (worker 68fece59, 2026-10-02 01:35–01:50Z) found every required receipt present and passing. A post-purge
+  real download re-hashes equal, and the card is the default generator's round-3 product card.
+- **Issue:** the driver's stale collection-order step (former `DEV2.0-*` IDs) printed `post_checks=FAILED`, so the
+  purge was run by hand right after. See the release record, section 5.
