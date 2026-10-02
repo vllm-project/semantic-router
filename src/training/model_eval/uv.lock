@@ -3191,7 +3191,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "datasets", specifier = ">=2.10,<5" },
+    { name = "datasets", specifier = ">=2.19,<5" },
     { name = "huggingface-hub", specifier = ">=0.20,<2" },
     { name = "jsonschema", specifier = ">=4.18,<5" },
     { name = "matplotlib", specifier = ">=3.5,<4" },
