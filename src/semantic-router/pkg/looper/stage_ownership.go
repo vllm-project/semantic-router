@@ -220,14 +220,15 @@ func resolveFusionFinalStage(req *Request) StageOwnership {
 	if req.Algorithm != nil && req.Algorithm.Fusion != nil {
 		targetModel = strings.TrimSpace(req.Algorithm.Fusion.Model)
 	}
-	if targetModel == "" && len(req.ModelRefs) > 0 {
+	if targetModel != "" {
+		targetModel = matchModelOrLoRA(targetModel, req.ModelRefs)
+	} else if len(req.ModelRefs) > 0 {
 		targetModel = req.ModelRefs[0].Model
 		if req.ModelRefs[0].LoRAName != "" {
 			targetModel = req.ModelRefs[0].LoRAName
 		}
-	}
-	if targetModel == "" && req.Algorithm != nil && req.Algorithm.Fusion != nil && len(req.Algorithm.Fusion.AnalysisModels) > 0 {
-		targetModel = strings.TrimSpace(req.Algorithm.Fusion.AnalysisModels[0])
+	} else if req.Algorithm != nil && req.Algorithm.Fusion != nil && len(req.Algorithm.Fusion.AnalysisModels) > 0 {
+		targetModel = matchModelOrLoRA(strings.TrimSpace(req.Algorithm.Fusion.AnalysisModels[0]), req.ModelRefs)
 	}
 	return ClassifyStage(req, "synthesis", StageRoleSynthesis, targetModel)
 }
@@ -260,16 +261,111 @@ func resolveReMoMFinalStage(req *Request) StageOwnership {
 func resolveWorkflowsFinalStage(req *Request) StageOwnership {
 	cfg := resolveWorkflowsExecutionConfig(req)
 	targetModel := strings.TrimSpace(cfg.Final.Model)
-	if targetModel == "" && strings.TrimSpace(cfg.PlannerModel) != "" {
-		targetModel = strings.TrimSpace(cfg.PlannerModel)
+	if targetModel != "" {
+		targetModel = matchModelOrLoRA(targetModel, req.ModelRefs)
+		return ClassifyStage(req, "synthesis", StageRoleSynthesis, targetModel)
 	}
-	if targetModel == "" && len(req.ModelRefs) > 0 {
+
+	// In dynamic workflows without explicit final.model, the final producer is decided
+	// dynamically by the planner during execution and is unknown at request admission.
+	// Therefore, it must remain buffered until the actual plan resolves the final producer.
+	if cfg.Mode == config.WorkflowModeDynamic {
+		return StageOwnership{
+			AlgorithmType:      config.DecisionAlgorithmWorkflows,
+			StageName:          "synthesis",
+			StageRole:          StageRoleSynthesis,
+			TargetModel:        "",
+			IsFinalUserVisible: true,
+			Eligibility:        StreamingIneligibleBufferingRequired,
+			BufferingReason:    BufferingReasonSelectionPending,
+		}
+	}
+
+	// In static workflows without explicit final.model, resolve the final producer from the static roles.
+	if len(cfg.Roles) > 0 {
+		roleModels := normalizeModelNames(cfg.Roles[0].Models)
+		if len(roleModels) == 1 {
+			targetModel = matchModelOrLoRA(roleModels[0], req.ModelRefs)
+			return ClassifyStage(req, "synthesis", StageRoleSynthesis, targetModel)
+		}
+		// If the first static role specifies multiple alternative candidates, winner selection is pending.
+		return StageOwnership{
+			AlgorithmType:      config.DecisionAlgorithmWorkflows,
+			StageName:          "synthesis",
+			StageRole:          StageRoleSynthesis,
+			TargetModel:        "",
+			IsFinalUserVisible: true,
+			Eligibility:        StreamingIneligibleBufferingRequired,
+			BufferingReason:    BufferingReasonSelectionPending,
+		}
+	}
+
+	if len(req.ModelRefs) == 1 {
 		targetModel = req.ModelRefs[0].Model
 		if req.ModelRefs[0].LoRAName != "" {
 			targetModel = req.ModelRefs[0].LoRAName
 		}
+		return ClassifyStage(req, "synthesis", StageRoleSynthesis, targetModel)
 	}
+
+	return StageOwnership{
+		AlgorithmType:      config.DecisionAlgorithmWorkflows,
+		StageName:          "synthesis",
+		StageRole:          StageRoleSynthesis,
+		TargetModel:        "",
+		IsFinalUserVisible: true,
+		Eligibility:        StreamingIneligibleBufferingRequired,
+		BufferingReason:    BufferingReasonSelectionPending,
+	}
+}
+
+// ResolveWorkflowPlanFinalStage determines final stage ownership when the actual workflowPlan
+// or stepResults are available (e.g. after dynamic planning or step execution).
+func ResolveWorkflowPlanFinalStage(req *Request, plan *workflowPlan, stepResults []workflowStepResult) StageOwnership {
+	if req == nil {
+		return StageOwnership{
+			AlgorithmType:      config.DecisionAlgorithmWorkflows,
+			StageName:          "",
+			StageRole:          StageRoleCandidate,
+			IsFinalUserVisible: false,
+			Eligibility:        StreamingIneligibleBufferingRequired,
+			BufferingReason:    BufferingReasonNoModels,
+		}
+	}
+	cfg := resolveWorkflowsExecutionConfig(req)
+	modelName, err := resolveWorkflowFinalModel(cfg, plan, stepResults)
+	if err != nil || strings.TrimSpace(modelName) == "" {
+		return StageOwnership{
+			AlgorithmType:      config.DecisionAlgorithmWorkflows,
+			StageName:          "synthesis",
+			StageRole:          StageRoleSynthesis,
+			TargetModel:        "",
+			IsFinalUserVisible: true,
+			Eligibility:        StreamingIneligibleBufferingRequired,
+			BufferingReason:    BufferingReasonSelectionPending,
+		}
+	}
+	targetModel := matchModelOrLoRA(modelName, req.ModelRefs)
 	return ClassifyStage(req, "synthesis", StageRoleSynthesis, targetModel)
+}
+
+func matchModelOrLoRA(modelName string, modelRefs []config.ModelRef) string {
+	modelName = strings.TrimSpace(modelName)
+	if modelName == "" {
+		return ""
+	}
+	for _, ref := range modelRefs {
+		if ref.Model == modelName {
+			if ref.LoRAName != "" {
+				return ref.LoRAName
+			}
+			return ref.Model
+		}
+		if ref.LoRAName == modelName {
+			return ref.LoRAName
+		}
+	}
+	return modelName
 }
 
 func resolveConfidenceFinalStage(req *Request) StageOwnership {
