@@ -29,7 +29,8 @@ var (
 	ErrConversationNotEmpty = errors.New("conversation is not empty")
 
 	// ErrIndexContended is returned when a conversation index keeps changing
-	// while a list operation is conditionally pruning stale memberships.
+	// under a conditional operation: a list pruning stale memberships, or a
+	// write installing its generation witness.
 	ErrIndexContended = errors.New("conversation index is contended")
 
 	// ErrIndexTraversalBlocked is returned when a conversation's index holds

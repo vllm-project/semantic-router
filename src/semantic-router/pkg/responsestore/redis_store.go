@@ -184,6 +184,14 @@ const (
 	// page or prove the clearable run exhausted.
 	listIndexScanMaxStride = redisBackfillBatchSize
 
+	// witnessInstallMaxRounds bounds how many times indexResponse re-observes
+	// a witness that changed between its observation and its compare-and-set
+	// install. Each lost round means another write to the same response landed
+	// in that window, so exhausting the budget reports ErrIndexContended and
+	// hands the caller its rollback rather than chasing a response being
+	// rewritten without pause.
+	witnessInstallMaxRounds = 8
+
 	// listIndexMaxContentionRounds bounds consecutive list cleanup rounds that
 	// identify stale candidates but remove none. A conditional no-op normally
 	// means another caller removed or recreated a member, so re-reading the

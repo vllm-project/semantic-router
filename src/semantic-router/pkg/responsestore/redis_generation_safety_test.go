@@ -3,6 +3,8 @@ package responsestore
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -207,9 +209,7 @@ func TestListPruneDoesNotRemoveMovedBackGeneration(t *testing.T) {
 	require.NoError(t, writer.UpdateResponse(ctx, &moved))
 	// Recreate the stale A/G1 membership a delayed pre-sidecar cleanup would
 	// have left. The current payload is B/G2.
-	require.NoError(t, store.indexResponse(
-		ctx, conversationA, responseID, oldGeneration, original.CreatedAt, store.ttlMillis(),
-	))
+	forceIndexWitness(t, store, conversationA, responseID, oldGeneration, original.CreatedAt)
 
 	movedBack := moved
 	movedBack.ConversationID = conversationA
@@ -343,4 +343,188 @@ func TestRollbackGenerationCASRejectsByteIdenticalConcurrentWrite(t *testing.T) 
 		"a rejected stale rollback must not reindex its predecessor")
 	assert.Equal(t, []string{responseID}, conversationIndexMembers(t, store, failed.ConversationID))
 	assert.Equal(t, record.generation, indexedGeneration(t, store, failed.ConversationID, responseID))
+}
+
+// blockBeforeScriptHook parks the first call to one script until released,
+// signalling when that call has arrived, so a test can hold an operation at
+// the exact boundary between two of its commands.
+type blockBeforeScriptHook struct {
+	hash    string
+	reached chan struct{}
+	release chan struct{}
+	fired   atomic.Bool
+}
+
+func (h *blockBeforeScriptHook) DialHook(next redis.DialHook) redis.DialHook { return next }
+func (h *blockBeforeScriptHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return next
+}
+
+func (h *blockBeforeScriptHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		args := cmd.Args()
+		if cmd.Name() == "evalsha" && len(args) > 1 && args[1] == h.hash && h.fired.CompareAndSwap(false, true) {
+			close(h.reached)
+			<-h.release
+		}
+		return next(ctx, cmd)
+	}
+}
+
+// recreateDuringDelayedIndexWrite reproduces the reviewer's interleaving with
+// the real public operations. delayedWrite is a Store or Update issued through
+// store, and its first witness install is held. While it is held, on separate
+// clients, a DeleteResponse takes the payload the delayed write just wrote and
+// parks right before its conditional unindex, and a StoreResponse recreates
+// the same ID and indexes it. The delayed write then resumes, and only after
+// it returns is the parked delete released to run its unindex.
+func recreateDuringDelayedIndexWrite(t *testing.T, store *RedisStore, conversationID, responseID string, delayedWrite func() error) {
+	t.Helper()
+	ctx := context.Background()
+	deleter := newConcurrentRedisStore(t, store)
+	writer := newConcurrentRedisStore(t, store)
+	for _, script := range []*redis.Script{conversationIndexAddScript, conditionalUnindexScript, takeResponsePayloadScript} {
+		require.NoError(t, script.Load(ctx, store.client).Err())
+	}
+
+	parked := &blockBeforeScriptHook{
+		hash: conditionalUnindexScript.Hash(), reached: make(chan struct{}), release: make(chan struct{}),
+	}
+	deleter.client.AddHook(parked)
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(parked.release) }) }
+	t.Cleanup(release)
+
+	deleteDone := make(chan error, 1)
+	var recreateErr, parkErr error
+	held := &commandInterleavingHook{
+		before: true,
+		match: func(cmd redis.Cmder) bool {
+			args := cmd.Args()
+			return cmd.Name() == "evalsha" && len(args) > 1 && args[1] == conversationIndexAddScript.Hash()
+		},
+		inject: func() {
+			go func() { deleteDone <- deleter.DeleteResponse(context.Background(), responseID) }()
+			select {
+			case <-parked.reached:
+			case <-time.After(10 * time.Second):
+				parkErr = errors.New("the delete never reached its conditional unindex")
+				return
+			}
+			recreateErr = writer.StoreResponse(context.Background(), &responseapi.StoredResponse{
+				ID: responseID, ConversationID: conversationID, Status: "recreated", CreatedAt: time.Now().Unix() + 10,
+			})
+		},
+	}
+	store.client.AddHook(held)
+
+	require.NoError(t, delayedWrite())
+	require.NoError(t, parkErr)
+	require.NoError(t, recreateErr)
+	require.True(t, held.fired.Load(), "the delayed write's witness install must be the call that was held")
+
+	release()
+	require.NoError(t, <-deleteDone)
+}
+
+// assertRecreatedResponseListed checks the state the race must leave: the
+// recreated payload is the live one, its own generation holds the witness, and
+// the ordinary read path — which past finalization never rescans — lists it.
+func assertRecreatedResponseListed(t *testing.T, store *RedisStore, conversationID, responseID string) {
+	t.Helper()
+	ctx := context.Background()
+
+	raw, err := store.client.Get(ctx, store.buildKey(ResponseKeyPrefix+responseID)).Bytes()
+	require.NoError(t, err, "the recreated payload must still exist")
+	record, err := decodeResponseRecord(raw)
+	require.NoError(t, err)
+	require.Equal(t, "recreated", record.response.Status)
+
+	assert.Equal(t, record.generation, optionalIndexedGeneration(t, store, conversationID, responseID),
+		"the witness must name the live payload's generation, not the superseded one")
+	responses, err := store.ListResponsesByConversation(ctx, conversationID, ListOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{responseID}, responseIDsOf(responses),
+		"the live recreated response must stay listed after finalization")
+}
+
+// TestStoreDoesNotRegressRecreatedWitness is the reviewer's regression.
+// Store(G1) stalls after writing its payload; a delete takes G1 and stalls
+// before unindexing it; Store(G2) recreates the ID and indexes it. When
+// Store(G1)'s index write lands it must not regress the witness to G1, or the
+// stalled delete's conditional unindex matches G1 and removes G2's only
+// membership — a live response that, past finalization, nothing ever lists.
+// StorageIntegration: redis
+func TestStoreDoesNotRegressRecreatedWitness(t *testing.T) {
+	store := newConversationIndexStore(t)
+	markStoreFinalized(t, store)
+
+	const conversationID = "conv_store_recreated_witness"
+	const responseID = "resp_store_recreated_witness"
+	recreateDuringDelayedIndexWrite(t, store, conversationID, responseID, func() error {
+		return store.StoreResponse(context.Background(), &responseapi.StoredResponse{
+			ID: responseID, ConversationID: conversationID, Status: "original", CreatedAt: time.Now().Unix(),
+		})
+	})
+	assertRecreatedResponseListed(t, store, conversationID, responseID)
+}
+
+// TestUpdateDoesNotRegressRecreatedWitness is the same interleaving through
+// UpdateResponse, whose index write was unconditional for the same reason:
+// having just written its payload, it was assumed to hold the newest
+// generation. A delayed update must not regress a recreated response's
+// witness either.
+// StorageIntegration: redis
+func TestUpdateDoesNotRegressRecreatedWitness(t *testing.T) {
+	store := newConversationIndexStore(t)
+	markStoreFinalized(t, store)
+	ctx := context.Background()
+
+	const conversationID = "conv_update_recreated_witness"
+	const responseID = "resp_update_recreated_witness"
+	require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
+		ID: responseID, ConversationID: conversationID, Status: "original", CreatedAt: time.Now().Unix(),
+	}))
+	recreateDuringDelayedIndexWrite(t, store, conversationID, responseID, func() error {
+		return store.UpdateResponse(ctx, &responseapi.StoredResponse{
+			ID: responseID, ConversationID: conversationID, Status: "updated", CreatedAt: time.Now().Unix(),
+		})
+	})
+	assertRecreatedResponseListed(t, store, conversationID, responseID)
+}
+
+// TestStoreReplacesStaleWitnessFromPriorIncarnation keeps the behavior the
+// unconditional write used to provide. A witness left by an earlier
+// incarnation whose cleanup never ran — a membership naming a generation with
+// no payload behind it — is still replaced by a live store, because the
+// writer observes it and then proves its own payload current. The late
+// cleanup that left it then no longer matches anything.
+// StorageIntegration: redis
+func TestStoreReplacesStaleWitnessFromPriorIncarnation(t *testing.T) {
+	store := newConversationIndexStore(t)
+	markStoreFinalized(t, store)
+	ctx := context.Background()
+
+	const conversationID = "conv_store_stale_incarnation"
+	const responseID = "resp_store_stale_incarnation"
+	stale := newResponseGeneration()
+	forceIndexWitness(t, store, conversationID, responseID, stale, time.Now().Unix())
+
+	require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
+		ID: responseID, ConversationID: conversationID, Status: "live", CreatedAt: time.Now().Unix(),
+	}))
+	raw, err := store.client.Get(ctx, store.buildKey(ResponseKeyPrefix+responseID)).Bytes()
+	require.NoError(t, err)
+	record, err := decodeResponseRecord(raw)
+	require.NoError(t, err)
+	assert.Equal(t, record.generation, optionalIndexedGeneration(t, store, conversationID, responseID),
+		"a live store must replace a dead incarnation's witness")
+
+	removed, err := store.unindexResponseGenerations(ctx, conversationID,
+		responseGenerationWitness{responseID: responseID, generation: stale})
+	require.NoError(t, err)
+	assert.Zero(t, removed, "the dead incarnation's late cleanup must no longer match")
+	responses, err := store.ListResponsesByConversation(ctx, conversationID, ListOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{responseID}, responseIDsOf(responses))
 }

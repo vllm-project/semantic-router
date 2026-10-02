@@ -63,32 +63,28 @@ const (
 // prune or CAS delete. The two keys are extended to the same monotonic
 // lifetime, so the witness cannot expire before the membership it protects.
 //
-// ARGV[2] selects who is allowed to overwrite an existing witness, and the
-// distinction is a correctness boundary, not a convenience:
+// Every witness install is compare-and-set: it lands only while the current
+// witness still equals the expected value ARGV[i+3] the caller supplies, with
+// a missing field read as the empty string. There is no unconditional
+// overwrite, not even for the caller that just wrote the payload. Such a
+// caller can be delayed long enough for its payload to be deleted and the ID
+// recreated; an unconditional write would then regress the recreated
+// response's witness to the dead generation, and the delayed delete's
+// conditional unindex would match it and remove the live response's only
+// membership. Which expected value a caller may supply is the protocol that
+// keeps a superseded writer from winning — see indexResponse for writers and
+// repairResponseWitness for readers. A scan passes the empty string, the
+// "install only while absent" rule; cascade passes the witness its own
+// snapshot read.
 //
-//   - "owned": the caller wrote this exact payload generation moments ago
-//     (StoreResponse, UpdateResponse, a rollback restore), so it is by
-//     definition the newest and overwrites unconditionally.
-//   - "repair": the caller only *read* the generation, so its observation may
-//     already be stale. The witness is installed compare-and-set, only while
-//     it still equals the value ARGV[i+3] says the caller observed. A scan
-//     passes the empty string here, which is the maintainer's "install only
-//     while absent" rule; cascade passes the witness its own snapshot read.
-//
-// Without that split, a delayed scan could stamp the generation it read weeks
-// of keyspace ago over a witness a live update had just installed — after
-// which a conditional prune, quite correctly, removes a membership whose
-// payload is alive, and the response is left indexed nowhere.
-//
-// Returns how many witnesses were actually written, so a repair caller can
-// tell a real install from a compare-and-set that legitimately lost.
+// Returns how many witnesses were actually written, so a caller can tell a
+// real install from a compare-and-set that legitimately lost.
 var conversationIndexAddScript = redis.NewScript(`
 local zset_ttl = redis.call("PTTL", KEYS[1])
 local generation_ttl = redis.call("PTTL", KEYS[2])
-local owned = ARGV[2] == "owned"
 local installed = 0
 
-for i = 3, #ARGV, 4 do
+for i = 2, #ARGV, 4 do
 	local score = ARGV[i]
 	local response_id = ARGV[i + 1]
 	local generation = ARGV[i + 2]
@@ -97,10 +93,6 @@ for i = 3, #ARGV, 4 do
 		if redis.call("HEXISTS", KEYS[2], response_id) == 0 then
 			redis.call("ZADD", KEYS[1], "NX", score, response_id)
 		end
-	elseif owned then
-		redis.call("ZADD", KEYS[1], score, response_id)
-		redis.call("HSET", KEYS[2], response_id, generation)
-		installed = installed + 1
 	else
 		local current = redis.call("HGET", KEYS[2], response_id)
 		if current == false then
@@ -184,25 +176,12 @@ end
 return removed
 `)
 
-// indexWitnessMode says whether a caller is entitled to overwrite an existing
-// generation witness. See conversationIndexAddScript.
-type indexWitnessMode string
-
-const (
-	// witnessOwned is for a caller that just wrote the payload carrying this
-	// generation, and therefore holds the newest one by construction.
-	witnessOwned indexWitnessMode = "owned"
-	// witnessRepair is for a caller that only read the generation. Its write
-	// is compare-and-set against conversationIndexMember.expected.
-	witnessRepair indexWitnessMode = "repair"
-)
-
 type conversationIndexMember struct {
 	responseID string
 	generation string
-	// expected is the witness value the caller observed, and is honored only
-	// in witnessRepair mode. The empty string means "observed absent", which
-	// is what every scan passes.
+	// expected is the witness value this install compares against. The empty
+	// string means "absent", which is what every scan passes and what a fresh
+	// store presumes.
 	expected string
 	score    float64
 }
@@ -213,10 +192,11 @@ type responseGenerationWitness struct {
 }
 
 // conversationIndexAddArgs builds conversationIndexAddScript's ARGV: the
-// requested lifetime, then each member's score and value.
-func conversationIndexAddArgs(lifetimeMillis int64, mode indexWitnessMode, members []conversationIndexMember) []interface{} {
-	args := make([]interface{}, 0, 2+4*len(members))
-	args = append(args, lifetimeMillis, string(mode))
+// requested lifetime, then each member's score, ID, generation, and expected
+// current witness.
+func conversationIndexAddArgs(lifetimeMillis int64, members []conversationIndexMember) []interface{} {
+	args := make([]interface{}, 0, 1+4*len(members))
+	args = append(args, lifetimeMillis)
 	for _, member := range members {
 		args = append(args, member.score, member.responseID, member.generation, member.expected)
 	}
@@ -226,9 +206,9 @@ func conversationIndexAddArgs(lifetimeMillis int64, mode indexWitnessMode, membe
 // addConversationIndexMembers runs conversationIndexAddScript as a standalone
 // command. EVALSHA with go-redis's NOSCRIPT fallback, which is only available
 // outside a pipeline.
-func (s *RedisStore) addConversationIndexMembers(ctx context.Context, conversationID string, mode indexWitnessMode, lifetimeMillis int64, members []conversationIndexMember) (int, error) {
+func (s *RedisStore) addConversationIndexMembers(ctx context.Context, conversationID string, lifetimeMillis int64, members []conversationIndexMember) (int, error) {
 	keys := []string{s.conversationIndexKey(conversationID), s.conversationIndexGenerationKey(conversationID)}
-	res, err := conversationIndexAddScript.Run(ctx, s.client, keys, conversationIndexAddArgs(lifetimeMillis, mode, members)...).Result()
+	res, err := conversationIndexAddScript.Run(ctx, s.client, keys, conversationIndexAddArgs(lifetimeMillis, members)...).Result()
 	if err != nil {
 		return 0, err
 	}
@@ -247,9 +227,9 @@ func (s *RedisStore) addConversationIndexMembers(ctx context.Context, conversati
 // until Exec, so a NOSCRIPT against a Redis that has never seen this script
 // would fail the whole batch. Redis caches by SHA on EVAL too, so the only
 // cost is shipping the script body once per conversation in the batch.
-func (s *RedisStore) queueConversationIndexMembers(ctx context.Context, pipe redis.Pipeliner, conversationID string, mode indexWitnessMode, lifetimeMillis int64, members []conversationIndexMember) {
+func (s *RedisStore) queueConversationIndexMembers(ctx context.Context, pipe redis.Pipeliner, conversationID string, lifetimeMillis int64, members []conversationIndexMember) {
 	keys := []string{s.conversationIndexKey(conversationID), s.conversationIndexGenerationKey(conversationID)}
-	conversationIndexAddScript.Eval(ctx, pipe, keys, conversationIndexAddArgs(lifetimeMillis, mode, members)...)
+	conversationIndexAddScript.Eval(ctx, pipe, keys, conversationIndexAddArgs(lifetimeMillis, members)...)
 }
 
 // longerIndexLifetime folds one member payload's remaining lifetime into the
@@ -308,8 +288,44 @@ func (r scannedResponse) indexLifetime(storeTTLMillis int64) int64 {
 	return longerIndexLifetime(storeTTLMillis, r.ttlMillis)
 }
 
-// indexResponse adds a response to its conversation index, scored by
-// created_at, and makes the index outlive the payload it just named.
+// indexResponse adds a response whose payload this call has just written to
+// its conversation index, scored by created_at, and makes the index outlive
+// the payload it names — without ever displacing a newer generation's witness.
+//
+// Having written the payload does not make a caller the newest writer by the
+// time its index write lands. Store(G1) can stall after its payload write
+// while a delete takes G1 and a new Store(G2) recreates the ID and indexes it;
+// if Store(G1) then wrote its witness unconditionally, the stalled delete's
+// conditional unindex would match G1 and remove G2's only membership, leaving
+// a live response that after finalization nothing ever lists. So the install
+// is fenced by ordering instead:
+//
+//   - It is first attempted against presumed, the witness this caller already
+//     knows to be older than its own generation: absent for a fresh store,
+//     whose SETNX just proved no payload existed, and the displaced payload's
+//     generation for an update or a rollback restore.
+//   - If that compare-and-set loses, the current witness W is observed first
+//     and only then is the payload checked. If the payload no longer carries
+//     this generation, a newer write owns it and this call stops without
+//     installing anything. Otherwise W is replaced, compare-and-set against
+//     the observed value.
+//
+// Observing before checking is what makes the replacement safe. A writer
+// installs its witness only after writing its payload, so if W was observed
+// at t1 and the payload still carried this generation at t2, W's payload was
+// written before this one and W is the older generation; the compare-and-set
+// then lands only if nothing changed since t1. Installing over an absent
+// witness needs no such proof, because absence is no generation's claim. The
+// worst it can do is land transiently ahead of a newer payload whose writer
+// has not indexed yet, and that writer then observes this witness and
+// replaces it through this same protocol. A superseded writer therefore never
+// regresses a newer witness, and the index converges on the current payload
+// provided that payload's writer finishes.
+//
+// Rounds that keep losing the compare-and-set — the witness changing between
+// observation and install — are bounded by witnessInstallMaxRounds and then
+// report ErrIndexContended, so the caller's rollback runs instead of a loop
+// chasing a response that is being rewritten without pause.
 //
 // Deliberately touches no migrated proof at all — neither setting one nor
 // extending one. Setting: this call proves nothing about whether a
@@ -337,18 +353,71 @@ func (r scannedResponse) indexLifetime(storeTTLMillis int64) int64 {
 // and a repair is re-indexing a payload written at some earlier time. The
 // index is extended to cover it and never shortened — see
 // conversationIndexAddScript for why that matters.
-func (s *RedisStore) indexResponse(ctx context.Context, conversationID, responseID, generation string, createdAt, memberLifetimeMillis int64) error {
+func (s *RedisStore) indexResponse(ctx context.Context, conversationID, responseID, generation, presumed string, createdAt, memberLifetimeMillis int64) error {
 	if conversationID == "" || responseID == "" {
 		return nil
 	}
 	lifetime := longerIndexLifetime(s.ttlMillis(), memberLifetimeMillis)
-	members := []conversationIndexMember{{responseID: responseID, generation: generation, score: float64(createdAt)}}
+	member := conversationIndexMember{responseID: responseID, generation: generation, expected: presumed, score: float64(createdAt)}
 
-	if _, err := s.addConversationIndexMembers(ctx, conversationID, witnessOwned, lifetime, members); err != nil {
-		return fmt.Errorf("failed to index response %s in conversation %s: %w", responseID, conversationID, err)
+	for round := 0; ; round++ {
+		installed, err := s.addConversationIndexMembers(ctx, conversationID, lifetime, []conversationIndexMember{member})
+		if err != nil {
+			return fmt.Errorf("failed to index response %s in conversation %s: %w", responseID, conversationID, err)
+		}
+		if installed == 1 {
+			return nil
+		}
+		if round >= witnessInstallMaxRounds {
+			return fmt.Errorf("%w: response %s witness in conversation %s kept changing across %d install attempts",
+				ErrIndexContended, responseID, conversationID, round+1)
+		}
+
+		observed, err := s.indexedWitness(ctx, conversationID, responseID)
+		if err != nil {
+			return err
+		}
+		current, err := s.payloadGeneration(ctx, responseID)
+		if err != nil {
+			return err
+		}
+		if current != generation {
+			logging.Debugf("RedisStore: response %s generation %s was superseded before its index write landed; leaving conversation %s to the newer write",
+				responseID, generation, conversationID)
+			return nil
+		}
+		member.expected = observed
 	}
+}
 
-	return nil
+// indexedWitness reads the generation witness a conversation currently holds
+// for a response, the empty string when it holds none.
+func (s *RedisStore) indexedWitness(ctx context.Context, conversationID, responseID string) (string, error) {
+	witness, err := s.client.HGet(ctx, s.conversationIndexGenerationKey(conversationID), responseID).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to read witness for response %s in conversation %s: %w", responseID, conversationID, err)
+	}
+	return witness, nil
+}
+
+// payloadGeneration reads the generation the response payload currently
+// carries, the empty string when no payload exists.
+func (s *RedisStore) payloadGeneration(ctx context.Context, responseID string) (string, error) {
+	raw, err := s.client.Get(ctx, s.buildKey(ResponseKeyPrefix+responseID)).Bytes()
+	if errors.Is(err, redis.Nil) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to read response %s payload: %w", responseID, err)
+	}
+	record, err := decodeResponseRecord(raw)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode response %s payload: %w", responseID, err)
+	}
+	return record.generation, nil
 }
 
 // repairResponseWitness installs a witness a caller only *read*, and reports
@@ -359,8 +428,9 @@ func (s *RedisStore) indexResponse(ctx context.Context, conversationID, response
 // it writes: a live update that installed its own witness in between owns the
 // membership, and stamping a read-somewhere-earlier generation over it would
 // leave the next conditional prune correctly removing a membership whose
-// payload is alive. Callers that just wrote the payload use indexResponse
-// instead — they hold the newest generation by construction.
+// payload is alive. Callers that just wrote the payload use indexResponse,
+// which builds on the same compare-and-set and adds the ordering fence a
+// writer needs.
 //
 // expected == "" means "I observed no witness", which is both what a scan
 // asserts and what a cascade batch reads for a legacy member. A blank
@@ -376,7 +446,7 @@ func (s *RedisStore) repairResponseWitness(ctx context.Context, conversationID, 
 		responseID: responseID, generation: generation, expected: expected, score: float64(createdAt),
 	}}
 
-	installed, err := s.addConversationIndexMembers(ctx, conversationID, witnessRepair, lifetime, members)
+	installed, err := s.addConversationIndexMembers(ctx, conversationID, lifetime, members)
 	if err != nil {
 		return 0, fmt.Errorf("failed to repair witness for response %s in conversation %s: %w", responseID, conversationID, err)
 	}
@@ -652,7 +722,7 @@ func (s *RedisStore) finishEmptyBackfill(ctx context.Context, conversationID str
 // bring it back down to s.ttl. Both steps are best-effort; see
 // markConversationMigrated.
 func (s *RedisStore) finishPopulatedBackfill(ctx context.Context, conversationID string) {
-	if _, err := s.addConversationIndexMembers(ctx, conversationID, witnessRepair, s.ttlMillis(), nil); err != nil {
+	if _, err := s.addConversationIndexMembers(ctx, conversationID, s.ttlMillis(), nil); err != nil {
 		logging.Warnf("RedisStore: failed to refresh TTL on backfilled conversation index %s: %v",
 			conversationID, err)
 	}
@@ -674,9 +744,10 @@ func (s *RedisStore) indexBackfillBatch(ctx context.Context, conversationID stri
 	if len(members) == 0 {
 		return nil
 	}
-	// witnessRepair: a scan only ever *read* these generations, and a live
-	// writer that has since claimed a member owns its witness.
-	if _, err := s.addConversationIndexMembers(ctx, conversationID, witnessRepair, lifetimeMillis, members); err != nil {
+	// Compare-and-set against absent: a scan only ever *read* these
+	// generations, and a live writer that has since claimed a member keeps
+	// its witness.
+	if _, err := s.addConversationIndexMembers(ctx, conversationID, lifetimeMillis, members); err != nil {
 		return fmt.Errorf("failed to backfill conversation index: %w", err)
 	}
 	return nil

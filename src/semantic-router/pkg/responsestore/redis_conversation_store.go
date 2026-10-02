@@ -383,8 +383,8 @@ func (s *RedisStore) AddResponseToConversation(ctx context.Context, conversation
 		return ErrInvalidInput
 	}
 
-	// witnessRepair: this only read the generation, so it must not overwrite a
-	// witness a live writer already owns.
+	// Compare-and-set against absent: this only read the generation, so it
+	// must not overwrite a witness a live writer has already installed.
 	if _, err := s.repairResponseWitness(ctx, conversationID, responseID, stored.generation, "",
 		stored.response.CreatedAt, lifetimeMillis); err != nil {
 		return fmt.Errorf("failed to index response in Redis: %w", err)

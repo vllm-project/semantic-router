@@ -262,9 +262,20 @@ func TestScanUpgradeDoesNotClobberNewerWitness(t *testing.T) {
 	assert.Zero(t, installed, "a scan must not install over a witness a live writer owns")
 	assert.Equal(t, live, indexedGeneration(t, store, convID, responseID))
 
-	// A writer that owns the generation it just wrote still overwrites.
-	owned := newResponseGeneration()
-	require.NoError(t, store.indexResponse(ctx, convID, responseID, owned, createdAt, store.ttlMillis()))
+	// A writer displaces the live witness only once its own payload is
+	// current. A generation no payload carries is refused, however it got
+	// there: it is exactly what a writer superseded before its index write
+	// landed would present.
+	unwritten := newResponseGeneration()
+	require.NoError(t, store.indexResponse(ctx, convID, responseID, unwritten, "", createdAt, store.ttlMillis()))
+	assert.Equal(t, live, indexedGeneration(t, store, convID, responseID),
+		"a generation no payload carries must not displace the live witness")
+
+	// A writer whose payload is current does displace it.
+	rewritten := &responseapi.StoredResponse{ID: responseID, ConversationID: convID, Status: "rewritten", CreatedAt: createdAt}
+	payload, owned := mustMarshalGeneratedResponse(t, rewritten)
+	require.NoError(t, store.client.Set(ctx, store.buildKey(ResponseKeyPrefix+responseID), payload, store.ttl).Err())
+	require.NoError(t, store.indexResponse(ctx, convID, responseID, owned, "", createdAt, store.ttlMillis()))
 	assert.Equal(t, owned, indexedGeneration(t, store, convID, responseID))
 
 	// And a repair that names the witness it observed wins its compare-and-set.
@@ -454,7 +465,7 @@ func TestCascadeDeleteRepairsStaleWitnessInsteadOfRemoving(t *testing.T) {
 	// Force the sidecar to disagree with the payload, the state a delayed scan
 	// write or an in-flight index write produces.
 	stale := newResponseGeneration()
-	require.NoError(t, store.indexResponse(ctx, convID, responseID, stale, createdAt, store.ttlMillis()))
+	forceIndexWitness(t, store, convID, responseID, stale, createdAt)
 	require.Equal(t, stale, indexedGeneration(t, store, convID, responseID))
 
 	require.NoError(t, store.DeleteConversation(ctx, convID, true))
@@ -485,7 +496,7 @@ func TestCascadeWitnessRepairDoesNotCountAsDrainProgress(t *testing.T) {
 	require.NoError(t, err)
 
 	stale := newResponseGeneration()
-	require.NoError(t, store.indexResponse(ctx, convID, responseID, stale, createdAt, store.ttlMillis()))
+	forceIndexWitness(t, store, convID, responseID, stale, createdAt)
 	progress, err := store.deleteConversationResponseBatch(ctx, convID, []cascadeCandidate{{
 		responseID: responseID,
 		generation: stale,

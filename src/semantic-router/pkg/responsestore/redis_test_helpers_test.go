@@ -444,7 +444,7 @@ func seedLegacyIndexMembers(t *testing.T, store *RedisStore, conversationID, idP
 	}
 
 	_, err := store.addConversationIndexMembers(
-		context.Background(), conversationID, witnessRepair, store.ttlMillis(), members,
+		context.Background(), conversationID, store.ttlMillis(), members,
 	)
 	require.NoError(t, err)
 	return ids
@@ -459,12 +459,30 @@ func seedLegacyIndexMember(t *testing.T, store *RedisStore, conversationID, resp
 	t.Helper()
 
 	_, err := store.addConversationIndexMembers(
-		context.Background(), conversationID, witnessRepair, store.ttlMillis(),
+		context.Background(), conversationID, store.ttlMillis(),
 		[]conversationIndexMember{{responseID: responseID, generation: "", score: float64(createdAt)}},
 	)
 	require.NoError(t, err)
 	require.Empty(t, optionalIndexedGeneration(t, store, conversationID, responseID),
 		"precondition: the seeded member must carry no witness")
+}
+
+// forceIndexWitness installs a membership whose witness deliberately disagrees
+// with whatever payload exists — the state a delayed scan write or an
+// in-flight index write leaves behind, which tests set up on purpose. The
+// production writer refuses to create it, by design, so the fixture compares
+// against the witness it observes instead. Single-threaded fixture setup
+// only: it goes through the production add script so the keys and lifetimes
+// match what the store really writes, but nothing fences it.
+func forceIndexWitness(t *testing.T, store *RedisStore, conversationID, responseID, generation string, createdAt int64) {
+	t.Helper()
+
+	observed, err := store.indexedWitness(context.Background(), conversationID, responseID)
+	require.NoError(t, err)
+	installed, err := store.addConversationIndexMembers(context.Background(), conversationID, store.ttlMillis(),
+		[]conversationIndexMember{{responseID: responseID, generation: generation, expected: observed, score: float64(createdAt)}})
+	require.NoError(t, err)
+	require.Equal(t, 1, installed, "fixture witness must land")
 }
 
 // optionalIndexedGeneration reads a member's sidecar witness, reporting an

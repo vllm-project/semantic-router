@@ -183,7 +183,7 @@ func TestCascadeDeleteStaleMovedMemberPreservesNewOwnerPayload(t *testing.T) {
 		ID: respID, ConversationID: newConvID, Status: "completed", CreatedAt: time.Now().Unix(),
 	})
 	require.NoError(t, store.client.Set(ctx, store.buildKey(ResponseKeyPrefix+respID), movedPayload, store.ttl).Err())
-	require.NoError(t, store.indexResponse(ctx, newConvID, respID, movedGeneration, time.Now().Unix(), store.ttlMillis()))
+	require.NoError(t, store.indexResponse(ctx, newConvID, respID, movedGeneration, "", time.Now().Unix(), store.ttlMillis()))
 	require.Equal(t, []string{respID}, conversationIndexMembers(t, store, oldConvID),
 		"precondition: the stale member is still in the old conversation's index")
 

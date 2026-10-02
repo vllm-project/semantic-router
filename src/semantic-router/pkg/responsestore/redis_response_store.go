@@ -117,7 +117,9 @@ func (s *RedisStore) StoreResponse(ctx context.Context, response *responseapi.St
 		return nil
 	}
 
-	if err := s.indexResponse(ctx, response.ConversationID, response.ID, generation, response.CreatedAt, s.ttlMillis()); err != nil {
+	// Presumed absent: the SETNX above just proved no payload existed, so no
+	// live generation can hold this response's witness.
+	if err := s.indexResponse(ctx, response.ConversationID, response.ID, generation, "", response.CreatedAt, s.ttlMillis()); err != nil {
 		return s.rollbackStoredPayload(ctx, key, generation, err)
 	}
 
@@ -214,7 +216,8 @@ func (s *RedisStore) repairExistingResponseIndex(ctx context.Context, attempted 
 		return nil
 	}
 
-	// witnessRepair: the stored payload was read, not written, by this call.
+	// Compare-and-set against absent: the stored payload was read, not
+	// written, by this call, so it must not displace any existing witness.
 	if _, err := s.repairResponseWitness(ctx, stored.response.ConversationID, stored.response.ID, stored.generation, "",
 		stored.response.CreatedAt, lifetimeMillis); err != nil {
 		return fmt.Errorf("response already exists but failed to repair conversation index: %w", err)
@@ -287,7 +290,14 @@ func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.S
 	}
 
 	if response.ConversationID != "" {
-		if err := s.indexResponse(ctx, response.ConversationID, response.ID, generation, response.CreatedAt, s.ttlMillis()); err != nil {
+		// Presumed: the witness the displaced payload carried here, which the
+		// atomic replacement proves older than this generation. A conversation
+		// the previous payload did not belong to presumes absent.
+		presumed := ""
+		if snapshot.conversationID == response.ConversationID {
+			presumed = snapshot.generation
+		}
+		if err := s.indexResponse(ctx, response.ConversationID, response.ID, generation, presumed, response.CreatedAt, s.ttlMillis()); err != nil {
 			return s.rollbackUpdatePayload(ctx, key, response.ID, generation, snapshot, err)
 		}
 	}
@@ -432,7 +442,11 @@ func (s *RedisStore) rollbackUpdatePayload(ctx context.Context, key, responseID,
 			// The restored payload carries the snapshot's own remaining
 			// lifetime, not a fresh store TTL, so the index is extended to
 			// match what was actually put back.
-			if reindexErr := s.indexResponse(rollbackCtx, snapshot.conversationID, responseID, restoredGeneration, snapshot.createdAt, remainingTTL); reindexErr != nil {
+			// Presumed: the snapshot's own generation, still this conversation's
+			// witness unless the failed update's index write landed here too, in
+			// which case indexResponse observes and replaces that one instead.
+			if reindexErr := s.indexResponse(rollbackCtx, snapshot.conversationID, responseID, restoredGeneration,
+				snapshot.generation, snapshot.createdAt, remainingTTL); reindexErr != nil {
 				logging.Warnf("RedisStore: failed to reindex restored response %s under previous conversation %s after update rollback: %v",
 					responseID, snapshot.conversationID, reindexErr)
 			}

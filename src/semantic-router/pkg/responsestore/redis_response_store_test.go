@@ -329,7 +329,7 @@ func TestRedisUpdateResponseRollbackConflictPreservesNewerWrite(t *testing.T) {
 	}
 	newerData, newerGeneration := mustMarshalGeneratedResponse(t, newer)
 	require.NoError(t, store.client.Set(ctx, key, newerData, store.ttl).Err())
-	require.NoError(t, store.indexResponse(ctx, newer.ConversationID, responseID, newerGeneration, newer.CreatedAt, store.ttlMillis()))
+	require.NoError(t, store.indexResponse(ctx, newer.ConversationID, responseID, newerGeneration, "", newer.CreatedAt, store.ttlMillis()))
 
 	injectedErr := errors.New("injected index failure")
 	err = store.rollbackUpdatePayload(ctx, key, responseID, failedGeneration, snapshot, injectedErr)
@@ -381,7 +381,7 @@ func TestRedisUpdateResponseRollbackRestoresImmediatePredecessor(t *testing.T) {
 
 	// The first update can finish its index write while the second update is
 	// still in flight. The second update then fails and rolls itself back.
-	require.NoError(t, store.indexResponse(ctx, first.ConversationID, responseID, firstGeneration, first.CreatedAt, store.ttlMillis()))
+	require.NoError(t, store.indexResponse(ctx, first.ConversationID, responseID, firstGeneration, "", first.CreatedAt, store.ttlMillis()))
 	injectedErr := errors.New("injected second update index failure")
 	err = store.rollbackUpdatePayload(ctx, key, responseID, secondGeneration, secondSnapshot, injectedErr)
 	require.ErrorIs(t, err, injectedErr)

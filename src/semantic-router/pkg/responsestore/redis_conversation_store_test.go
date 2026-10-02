@@ -191,7 +191,7 @@ func TestRedisDeleteConversationCascadeFailureLeavesConversation(t *testing.T) {
 		ID: "resp_cascade_failure", ConversationID: convID, Status: "completed", CreatedAt: time.Now().Unix(),
 	})
 	require.NoError(t, store.client.Set(ctx, store.buildKey(ResponseKeyPrefix+"resp_cascade_failure"), repaired, store.ttl).Err())
-	require.NoError(t, store.indexResponse(ctx, convID, "resp_cascade_failure", repairedGeneration, time.Now().Unix(), store.ttlMillis()))
+	require.NoError(t, store.indexResponse(ctx, convID, "resp_cascade_failure", repairedGeneration, "", time.Now().Unix(), store.ttlMillis()))
 	require.NoError(t, store.DeleteConversation(ctx, convID, true))
 	_, getErr = store.GetConversation(ctx, convID)
 	assert.ErrorIs(t, getErr, ErrNotFound)
