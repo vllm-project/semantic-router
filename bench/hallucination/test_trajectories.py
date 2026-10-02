@@ -1,5 +1,6 @@
 import copy
 import json
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,7 @@ from bench.hallucination.evaluate_trajectories import (
     ContextWindow,
     evaluate_steps,
     first_false_steps,
+    tokenizer_window,
 )
 from bench.hallucination.trajectories import (
     FORMAT,
@@ -365,7 +367,13 @@ def test_context_window_records_how_much_context_each_step_saw(
     context_window = (
         None
         if window is None
-        else ContextWindow(tokens=window, count_tokens=lambda text: len(text.split()))
+        else ContextWindow(
+            tokens=window,
+            count_tokens=lambda text: len(text.split()),
+            token_ends=lambda text: [
+                match.end() for match in re.finditer(r"\S+", text)
+            ],
+        )
     )
 
     metrics, (row,) = evaluate_steps(
@@ -390,3 +398,20 @@ def test_context_window_records_how_much_context_each_step_saw(
         "fn": 0,
         "tn": int(truncated),
     }
+
+
+def test_context_window_keeps_whole_words_with_a_real_tokenizer() -> None:
+    pytest.importorskip("transformers")
+    window = tokenizer_window(512, "KRLabsOrg/lettucedect-base-modernbert-en-v1")
+    context = "failed " * 600
+    question, answer = "Did the tests pass?", "The tests passed."
+    tail = f" Question: {question} [SEP] {answer}"
+
+    seen = window.fit(context=context, question=question, answer=answer)
+
+    # Cutting by characters kept 3,474 characters ending in "fa", although the
+    # 3,478 characters ending in the whole word also fit in 512 tokens.
+    assert len(seen) == 3478
+    assert seen.endswith(" failed")
+    assert window.count_tokens(seen + tail) <= 512
+    assert window.count_tokens(context[: len(seen) + 7] + tail) > 512

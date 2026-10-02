@@ -28,6 +28,8 @@ class SpanDetector(Protocol):
 class ContextWindow:
     tokens: int
     count_tokens: Callable[[str], int]
+    # Character offsets where each token of a text ends.
+    token_ends: Callable[[str], list[int]]
 
     def fit(self, *, context: str, question: str, answer: str) -> str:
         """The longest start of the context that fits with the question and answer."""
@@ -35,14 +37,20 @@ class ContextWindow:
         # the context and cuts the context from the end to fit, in
         # candle-binding/src/ffi/instances/tasks.rs.
         tail = f" Question: {question} [SEP] {answer}"
-        low, high = 0, len(context)
+        if self.count_tokens(context + tail) <= self.tokens:
+            return context
+        # Token counts are not monotonic across character prefixes: a cut word
+        # can take more tokens than the whole word. Cut only where a context
+        # token ends, as the router does.
+        ends = [0, *self.token_ends(context)]
+        low, high = 0, len(ends) - 1
         while low < high:
             middle = (low + high + 1) // 2
-            if self.count_tokens(context[:middle] + tail) <= self.tokens:
+            if self.count_tokens(context[: ends[middle]] + tail) <= self.tokens:
                 low = middle
             else:
                 high = middle - 1
-        return context[:low]
+        return context[: ends[low]]
 
 
 def evaluate_steps(
@@ -179,11 +187,24 @@ def format_first_false_step(result: dict[str, Any]) -> str:
     return f"{where}, {verdict}{alarm}"
 
 
-def token_counter(name: str) -> Callable[[str], int]:
+def tokenizer_window(tokens: int, name: str) -> ContextWindow:
     if not HAS_TRANSFORMERS:
         raise ImportError("transformers not installed. Run: pip install lettucedetect")
     tokenizer = AutoTokenizer.from_pretrained(name)
-    return lambda text: len(tokenizer(text)["input_ids"])
+    if not tokenizer.is_fast:
+        raise ValueError(f"{name} has no fast tokenizer to report token offsets")
+
+    def token_ends(text: str) -> list[int]:
+        offsets = tokenizer(
+            text, add_special_tokens=False, return_offsets_mapping=True
+        )["offset_mapping"]
+        return [end for start, end in offsets if end > start]
+
+    return ContextWindow(
+        tokens=tokens,
+        count_tokens=lambda text: len(tokenizer(text)["input_ids"]),
+        token_ends=token_ends,
+    )
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -226,9 +247,7 @@ def main(argv: list[str] | None = None) -> None:
         )
         if tokenizer_name is None:
             parser.error("--context-window needs --tokenizer for an llm detector")
-        context_window = ContextWindow(
-            tokens=args.context_window, count_tokens=token_counter(tokenizer_name)
-        )
+        context_window = tokenizer_window(args.context_window, tokenizer_name)
 
     trajectories = load_trajectories(args.trajectories)
     metrics, rows = evaluate_steps(

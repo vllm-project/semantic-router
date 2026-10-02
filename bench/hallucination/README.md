@@ -171,7 +171,8 @@ Tool output gets long quickly. The router's ModernBERT detector
 (`models/mom-halugate-detector`) reads at most 512 tokens: it keeps the question
 and the answer, and cuts the context from the end until the input fits. Tool
 outputs are joined oldest first, so the most recent output is the first to go.
-`--context-window 512` applies the same cut before calling the detector. Every
+`--context-window 512` applies the same cut before calling the detector. It
+cuts only where a context token ends, so it never keeps part of a token. Every
 row records `context_chars` and `context_chars_seen`, and sets `truncated` when
 the step saw only part of its context; `truncated_steps` in the metrics counts
 the outcomes of those steps. A miss caused by the cut then no longer looks like a
@@ -199,7 +200,8 @@ python3 -m bench.hallucination.evaluate_trajectories \
 per trajectory, and writes step-level, character-level and first-false-step
 metrics to the results directory. The examples show that a detector runs on
 every step; they are too few to compare detectors. The loader and scoring tests
-need no model:
+need no model. When `transformers` is installed, one more test downloads the
+ModernBERT tokenizer to check the cut against real token counts:
 
 ```bash
 python3 -m pytest -q bench/hallucination/test_trajectories.py
