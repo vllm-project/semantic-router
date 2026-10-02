@@ -437,6 +437,13 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 13:40Z (hand-off, continuation #5 stops on the coordinator's interrupt): both cross-arm Index runs are scored
+  against M6-IB (values private). The candidate is `M6-IBxIB2-m50`, with m67 as the fallback. `m6-xarm.sh` for both is
+  still running on node B GPU0 and GPU1, waiting for node A's mlx-diag pairing. The card Index input and the release
+  inputs for m50 are on node A. Not run yet: stage-a, render, spec / decision and release. Vega's `main` is now
+  `e60bd8e3` (org card-only revision), so the superseded revision in `make_27bx.py` and `release27bx.sh` must change.
+  The exact next steps are in the private hand-off file `private/m6/HANDOFF-27B-2140.md`. M7: 5 / 5 seeds untouched.
+
 - 10:30Z (poll 28, continuation #5):
   - **Soups:** the first m50 soup failed its own check (FP32 accumulation over four members > 1e-6 on 28 projections);
     `8351e7c4d` checks the factor layout bit for bit plus a float64 update check on 256 rows per projection. Both soups
