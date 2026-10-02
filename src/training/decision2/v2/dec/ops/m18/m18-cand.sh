@@ -7,9 +7,10 @@
 #   build    on the arm's node (2B: node B, 0.8B: node A): ops/m16/m16_interp.py build in image dbe5f32b (CPU,
 #            --network none) -> /data/dev2/runs/dec/m18/points/<point>/build/<point>; M16's existing points are adopted
 #            (their build directory and model SHA-256 are recorded, nothing is rebuilt)
-#   ship     2B only: the FP32 point node B -> node A (per-file SHA-256 lists equal)
-#   bf16     node A: test_bf16_copy, then v2.release.bf16_copy in image host2 (CPU, --network none)
-#   restage  node A: v2.eval.ix1.restage onto the tier's IX1 package with the copy's model SHA-256 (identity, loaded
+#   ship     2B only: the FP32 point node B -> node E, and the 2B IX1 base package node A -> node E if absent
+#            (node B's key reaches C-F only; 2B points are copied, restaged and run on node E)
+#   bf16     WORK node (0.8B: node A, 2B: node E): test_bf16_copy, then v2.release.bf16_copy in image host2 (CPU, --network none)
+#   restage  WORK node: v2.eval.ix1.restage onto the tier's IX1 package with the copy's model SHA-256 (identity, loaded
 #            count and calibration none checked)
 #   push     NODE: the restaged package (and the tier's IX1 base package if absent) node A -> NODE (lists equal)
 #   pool     NODE "GPUS": m18_ixpool.py detached for NAME (NAME may be a comma list) over the node's panel
@@ -37,8 +38,8 @@ IMAGE_ID=sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54
 NAME=${NAMES%%,*}
 # name -> tier, the point's node path (FP32), and either "adopt" or "release-path arm-path alpha" (node-local paths)
 case "$NAME" in
-  M18-2b-*) TIER=2b REF=DEV2.0-2B REV=a53cf66a0d9d492a84b6617b61e7ce35fcd03af0 LOADED=1883930944 SRCNODE=b ;;
-  M18-08b-*) TIER=08b REF=DEV2.0-0.8B REV=bede7938a8c209c09f27400b79eed57948d6b75e LOADED=753446208 SRCNODE=a ;;
+  M18-2b-*) TIER=2b REF=DEV2.0-2B REV=a53cf66a0d9d492a84b6617b61e7ce35fcd03af0 LOADED=1883930944 SRCNODE=b WORK=e ;;
+  M18-08b-*) TIER=08b REF=DEV2.0-0.8B REV=bede7938a8c209c09f27400b79eed57948d6b75e LOADED=753446208 SRCNODE=a WORK=a ;;
   *) echo "bad NAME $NAME" >&2; exit 2 ;;
 esac
 POINT=${NAME#M18-}; POINT=${POINT%-bf16}
@@ -64,8 +65,9 @@ hop() {  # <from> <to> <parent> <name> [lean]: tar stream between nodes through 
   on "$to" "test ! -e '$parent/$item'" || { echo "$parent/$item exists on node $to" >&2; exit 3; }
   src="tar -C '$parent' $ex -cf - '$item'"
   dst="umask 022; mkdir -p '$parent/.m18-part' && tar -C '$parent/.m18-part' -xf - && mv -T '$parent/.m18-part/$item' '$parent/$item' && rmdir '$parent/.m18-part'"
-  if [ "$from" = a ]; then on a "$src | ssh $KEY $(addr "$to") \"$dst\""
-  elif [ "$to" = a ]; then on a "ssh $KEY $(addr "$from") \"$src\" | bash -c \"$dst\""
+  # node A / B hold the key authorized on C-F (not on each other): a copy starts on A / B or relays through A
+  if [ "$from" = a ] || [ "$from" = b ]; then on "$from" "$src | ssh $KEY $(addr "$to") \"$dst\""
+  elif [ "$to" = a ] || [ "$to" = b ]; then on "$to" "ssh $KEY $(addr "$from") \"$src\" | bash -c \"$dst\""
   else on a "ssh $KEY $(addr "$from") \"$src\" | ssh $KEY $(addr "$to") \"$dst\""; fi
   a=$(on "$from" "$(sums "$parent/$item" "$lean")") b=$(on "$to" "$(sums "$parent/$item" "$lean")")
   [ -n "$a" ] && [ "$a" = "$b" ] || { echo "$item: node $to copy differs from node $from" >&2; exit 3; }
@@ -89,26 +91,28 @@ case "$STAGE" in
       > $P/$POINT/build.stdout.log 2> $P/$POINT/build.stderr.log && echo $SHA > $P/$POINT/DONE && tail -1 $P/$POINT/build.stdout.log" ;;
   ship)
     [ "$SRCNODE" = b ] || { echo "ship is for 2B points" >&2; exit 2; }
-    on a "mkdir -p $P/$POINT/build"
-    hop b a "$P/$POINT/build" "$POINT" ;;
+    on e "mkdir -p $P/$POINT/build /data/dev2/models/ix1"
+    on e "test -f $BASEPKG/MODEL_MANIFEST.json" || hop a e "$(dirname "$BASEPKG")" "$(basename "$BASEPKG")"
+    on e "rmdir $P/$POINT/build/.m18-part 2>/dev/null; true"
+    hop b e "$P/$POINT/build" "$POINT" ;;
   bf16)
     src=$FP32; [ "$SRCNODE" = b ] && src=$P/$POINT/build/$POINT
-    on a "test -f $src/decision_config.json" || { echo "no FP32 point $src on node A" >&2; exit 3; }
-    on a "test ! -e $CK" || { echo "$CK exists" >&2; exit 3; }
-    on a "test \"\$(docker image inspect -f '{{.Id}}' $IMAGE)\" = $IMAGE_ID" || { echo "image $IMAGE is not $IMAGE_ID" >&2; exit 3; }
+    on "$WORK" "test -f $src/decision_config.json" || { echo "no FP32 point $src on node $WORK" >&2; exit 3; }
+    on "$WORK" "test ! -e $CK" || { echo "$CK exists" >&2; exit 3; }
+    on "$WORK" "test \"\$(docker image inspect -f '{{.Id}}' $IMAGE)\" = $IMAGE_ID" || { echo "image $IMAGE is not $IMAGE_ID" >&2; exit 3; }
     cpu="docker run --rm --network none -e HIP_VISIBLE_DEVICES= -e CUDA_VISIBLE_DEVICES= -e ROCR_VISIBLE_DEVICES= \
       -e PYTHONPATH=$S -v $S:$S:ro -v $src:$src:ro -v $MD:$MD -w $S --entrypoint python3 $IMAGE -B"
-    on a "umask 022; mkdir -p $MD && $cpu -m unittest v2.release.tests.test_bf16_copy > $MD/$NAME-test_bf16_copy.log 2>&1 && \
+    on "$WORK" "umask 022; mkdir -p $MD && $cpu -m unittest v2.release.tests.test_bf16_copy > $MD/$NAME-test_bf16_copy.log 2>&1 && \
       $cpu -m v2.release.bf16_copy --source $src --output $CK --receipt $MD/$NAME-bf16-copy.json > $MD/$NAME-bf16.log 2>&1" \
-      || { echo "bf16 copy FAILED (see $MD/$NAME-*.log on node A)" >&2; exit 3; }
-    on a "python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); print(\"bf16\", r[\"source_model_sha256\"][:12], \"->\", r[\"model_sha256\"][:12])' $MD/$NAME-bf16-copy.json" ;;
+      || { echo "bf16 copy FAILED (see $MD/$NAME-*.log on node $WORK)" >&2; exit 3; }
+    on "$WORK" "python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); print(\"bf16\", r[\"source_model_sha256\"][:12], \"->\", r[\"model_sha256\"][:12])' $MD/$NAME-bf16-copy.json" ;;
   restage)
-    model=$(on a "python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"model_sha256\"])' $MD/$NAME-bf16-copy.json")
+    model=$(on "$WORK" "python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"model_sha256\"])' $MD/$NAME-bf16-copy.json")
     [[ "$model" =~ ^[0-9a-f]{64}$ ]] || { echo "bad bf16 receipt" >&2; exit 3; }
-    on a "grep -q '^  \[$NAME\]=\"$REF $REV $PKG\"' $S/v2/eval/ix1/launch.sh" || { echo "no DIAGNOSTIC entry $NAME -> $PKG" >&2; exit 2; }
-    on a "test ! -e $PKG" || { echo "$PKG exists" >&2; exit 3; }
-    on a "cd $S && PYTHONPATH=$S python3 -B -m v2.eval.ix1.restage --package $BASEPKG --out $PKG --checkpoint $CK --model-sha256 $model" > /dev/null
-    on a "python3 - $PKG/MODEL_MANIFEST.json $model $LOADED" << 'EOF'
+    on "$WORK" "grep -q '^  \[$NAME\]=\"$REF $REV $PKG\"' $S/v2/eval/ix1/launch.sh" || { echo "no DIAGNOSTIC entry $NAME -> $PKG" >&2; exit 2; }
+    on "$WORK" "test ! -e $PKG" || { echo "$PKG exists" >&2; exit 3; }
+    on "$WORK" "cd $S && PYTHONPATH=$S python3 -B -m v2.eval.ix1.restage --package $BASEPKG --out $PKG --checkpoint $CK --model-sha256 $model" > /dev/null
+    on "$WORK" "python3 - $PKG/MODEL_MANIFEST.json $model $LOADED" << 'EOF'
 import json, sys
 m = json.load(open(sys.argv[1]))
 assert m["identity"]["model_sha256"] == sys.argv[2], "identity"
@@ -118,16 +122,16 @@ print(f"restaged: identity {sys.argv[2][:12]}, loaded {m['parameters']['loaded']
 EOF
     ;;
   push)
-    [ -n "$NODE" ] && [ "$NODE" != a ] || { echo "push NODE (not a)" >&2; exit 2; }
+    [ -n "$NODE" ] && [ "$NODE" != "$WORK" ] || { echo "push NODE (not $WORK)" >&2; exit 2; }
     on "$NODE" "mkdir -p $MD"
     on "$NODE" "test -f $BASEPKG/MODEL_MANIFEST.json" || hop a "$NODE" "$(dirname "$BASEPKG")" "$(basename "$BASEPKG")"
-    hop a "$NODE" "$MD" "$(basename "$PKG")" ;;
+    hop "$WORK" "$NODE" "$MD" "$(basename "$PKG")" ;;
   pool)
     [ -n "$NODE" ] && [ -n "$GPUS" ] || { echo "pool NODE GPUS" >&2; exit 2; }
     panel=$(on "$NODE" "ls -d $R/panel-* | sort -t- -k2 -n | tail -1 | xargs basename")
     names=${NAMES//,/ }
-    on "$NODE" "mkdir -p $R/logs && setsid nohup python3 $S/v2/dec/ops/m18/m18_ixpool.py --mirror $M --panel $panel --gpus '$GPUS' $names \
-      >> $R/logs/m18-pool-$(date -u +%H%M%S).log 2>&1 < /dev/null & echo pool started on node $NODE GPUs $GPUS panel $panel" ;;
+    timeout 60 ssh -n -o BatchMode=yes "$(addr "$NODE")" "mkdir -p $R/logs && setsid nohup python3 $S/v2/dec/ops/m18/m18_ixpool.py --mirror $M --panel $panel --gpus '$GPUS' $names \
+      >> $R/logs/m18-pool-$(date -u +%H%M%S).log 2>&1 < /dev/null & disown; echo pool started on node $NODE GPUs $GPUS panel $panel" ;;
   status)
     for n in ${NAMES//,/ }; do
       on "${NODE:-a}" "cd $R; printf '%s parity=%s ' $n \"\$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"pass\"])' parity/$n/parity.json 2>/dev/null || echo -)\"; \
