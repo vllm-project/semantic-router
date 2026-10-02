@@ -10,14 +10,17 @@ import (
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 )
 
+// StorageIntegration: milvus
 func TestMemoryRetrievalDropsSupersededFactsWithLiveMilvus(t *testing.T) {
-	address := os.Getenv("PR4260_MILVUS_ADDR")
+	storagetest.Require(t, "milvus")
+	address := os.Getenv("MILVUS_ADDRESS")
 	if address == "" {
-		t.Skip("PR4260_MILVUS_ADDR is not set")
+		address = "localhost:19530"
 	}
 	t.Setenv("VLLM_SR_DETERMINISTIC_EMBEDDINGS", "1")
 
@@ -64,6 +67,16 @@ func TestMemoryRetrievalDropsSupersededFactsWithLiveMilvus(t *testing.T) {
 			turns: []storedMemoryTurn{
 				{user: "I live in Boston, near the Charles River.", assistant: "Got it, you live in Boston."},
 				{user: "Please translate this sentence: ‘I just moved to Denver, and I live there now.’"},
+			},
+			query:   "Does my Boston residence change after asking to translate a Denver move?",
+			present: []string{"I live in Boston"},
+		},
+		{
+			name:   "straight single-quoted translation preserves residence",
+			userID: "pr4260-straight-quote",
+			turns: []storedMemoryTurn{
+				{user: "I live in Boston, near the Charles River.", assistant: "Got it, you live in Boston."},
+				{user: "Please translate this sentence: 'Yesterday I just moved to Denver, and I live there now.'"},
 			},
 			query:   "Does my Boston residence change after asking to translate a Denver move?",
 			present: []string{"I live in Boston"},
