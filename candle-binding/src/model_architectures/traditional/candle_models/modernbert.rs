@@ -4,7 +4,7 @@
 //! using the context capacity and RoPE theta declared by each checkpoint.
 
 use crate::model_architectures::modernbert_rope::{Parameters, RopeOptions, RotaryEmbedding};
-use candle_core::{DType, Device, IndexOp, Result, Tensor, D};
+use candle_core::{CpuStorage, DType, Device, IndexOp, Layout, Result, Shape, Tensor, D};
 use candle_nn::{
     embedding, layer_norm_no_bias, linear, linear_no_bias, ops::softmax, Embedding, LayerNorm,
     Linear, Module, VarBuilder,
@@ -164,6 +164,11 @@ impl ModernBertAttention {
         let (b, seq_len, d) = hidden_states.dims3()?;
         let (q, k, v) = self.project_qkv(hidden_states)?;
 
+        // With no real padding, `prepare_padding_mask` produces an all-zero tensor
+        // and handing it to the kernel only buys a broadcast add of zeros over every
+        // block. `x + 0.0 == x` in IEEE arithmetic, so omitting it is exact.
+        let pad_mask = if has_padding { Some(pad_mask) } else { None };
+
         let scale = (self.attention_head_size as f64).powf(-0.5);
 
         // Memory-bounded attention: the shared kernel walks the query dimension in
@@ -187,7 +192,7 @@ impl ModernBertAttention {
         // the optional kernel must never reduce a model's requested precision.
         // All other cases use the memory-bounded exact kernel.
         let xs = if hidden_states.device().is_cpu() && q.dtype() == DType::F32 {
-            chunked_sdpa_cpu_softmax(&q, &k, &v, Some(pad_mask), &cfg)?
+            chunked_sdpa_cpu_softmax(&q, &k, &v, pad_mask, &cfg)?
         } else if can_use_flash_attention(
             self.use_flash_attn,
             hidden_states.device().is_cuda(),
@@ -217,17 +222,17 @@ impl ModernBertAttention {
                             "⚠️  Flash Attention failed, falling back to standard attention: {}",
                             e
                         );
-                        chunked_sdpa(&q, &k, &v, Some(pad_mask), &cfg)?
+                        chunked_sdpa(&q, &k, &v, pad_mask, &cfg)?
                     }
                 }
             }
             #[cfg(not(feature = "flash-attn"))]
             {
                 // flash-attn feature not enabled, use the chunked kernel
-                chunked_sdpa(&q, &k, &v, Some(pad_mask), &cfg)?
+                chunked_sdpa(&q, &k, &v, pad_mask, &cfg)?
             }
         } else {
-            chunked_sdpa(&q, &k, &v, Some(pad_mask), &cfg)?
+            chunked_sdpa(&q, &k, &v, pad_mask, &cfg)?
         };
 
         let xs = xs.transpose(1, 2)?.reshape((b, seq_len, d))?;
@@ -235,6 +240,69 @@ impl ModernBertAttention {
         let xs = xs.reshape((b, seq_len, d))?;
 
         Ok(xs)
+    }
+}
+
+/// GeGLU (`gelu_erf(gate) * up`) in a single pass over the CPU activations.
+///
+/// The generic formulation runs `gelu_erf` and the multiply as two separate
+/// ops: two full-size allocations, two traversals, and — because the unary
+/// kernel takes its single-block branch for tensors this size — a serial
+/// `iter().map()` rather than the rayon path. Fusing removes one allocation
+/// and parallelizes by row.
+///
+/// This is a pure fusion, not a different approximation: it calls the same
+/// `candle_core::cpu::erf::erf` on the same f64 expression as
+/// `impl UnaryOpT for GeluErf` in candle-core's `op.rs`, then narrows to f32,
+/// so the result is bit-identical to `Tensor::gelu_erf`.
+#[derive(Debug, Clone)]
+struct FusedGeGluErf;
+
+#[inline(always)]
+fn gelu_erf_f32(x: f32) -> f32 {
+    // Mirrors GeluErf exactly: `f64(v) = (erf(v / sqrt(2)) + 1) * 0.5 * v`,
+    // `f32(v) = f64(v as f64) as f32`.
+    let v = x as f64;
+    ((candle_core::cpu::erf::erf(v / std::f64::consts::SQRT_2) + 1.0) * 0.5 * v) as f32
+}
+
+impl candle_core::CustomOp1 for FusedGeGluErf {
+    fn name(&self) -> &'static str {
+        "fused-geglu-erf"
+    }
+
+    fn cpu_fwd(&self, storage: &CpuStorage, layout: &Layout) -> Result<(CpuStorage, Shape)> {
+        use rayon::prelude::*;
+
+        let (start, end) = layout.contiguous_offsets().ok_or_else(|| {
+            candle_core::Error::Msg("fused-geglu-erf: input must be contiguous".to_string())
+        })?;
+        let src = &storage.as_slice::<f32>()?[start..end];
+        let dims = layout.shape().dims();
+        let last = *dims.last().ok_or_else(|| {
+            candle_core::Error::Msg("fused-geglu-erf: zero-dimensional input".to_string())
+        })?;
+        if last == 0 || last % 2 != 0 {
+            candle_core::bail!(
+                "fused-geglu-erf: last dim must be a positive even number, got {last}"
+            );
+        }
+        let half = last / 2;
+        let rows = layout.shape().elem_count() / last;
+        let mut out = vec![0f32; rows * half];
+        // The gate occupies the first half of each row and `up` the second half,
+        // so rows are independent and parallelize without synchronization.
+        out.par_chunks_mut(half).enumerate().for_each(|(r, orow)| {
+            let base = r * last;
+            for (j, o) in orow.iter_mut().enumerate() {
+                *o = gelu_erf_f32(src[base + j]) * src[base + half + j];
+            }
+        });
+        let mut out_dims = dims.to_vec();
+        if let Some(d) = out_dims.last_mut() {
+            *d = half;
+        }
+        Ok((CpuStorage::F32(out), Shape::from_dims(&out_dims)))
     }
 }
 
@@ -259,6 +327,11 @@ impl ModernBertMLP {
 impl Module for ModernBertMLP {
     fn forward(&self, xs: &Tensor) -> Result<Tensor> {
         let xs = xs.apply(&self.wi)?;
+        // Fused GeGLU on the common CPU f32 path; every other case (CUDA, f16/bf16
+        // compute, non-contiguous input) keeps the generic two-op formulation.
+        if xs.dtype() == DType::F32 && xs.device().is_cpu() && xs.is_contiguous() {
+            return xs.apply_op1_no_bwd(&FusedGeGluErf)?.apply(&self.wo);
+        }
         let xs = xs.chunk(2, D::Minus1)?;
         let xs = (&xs[0].gelu_erf()? * &xs[1])?.apply(&self.wo)?; // GeGLU
         Ok(xs)
@@ -475,16 +548,22 @@ impl ModernBert {
         // previous (b, 1, seq, seq) expansion and the (seq, seq) sliding-window band
         // were both O(seq^2); the window is now applied inside the kernel per block.
         let pad_mask = prepare_padding_mask(mask, DType::F32)?.to_device(xs.device())?;
-        // Inspect padding once per model call, not once per layer. The transfer
-        // is only needed when Flash Attention is available on this device.
-        let has_padding = if cfg!(feature = "flash-attn") && xs.device().is_cuda() {
-            mask.flatten_all()?
-                .to_dtype(DType::U32)?
-                .to_vec1::<u32>()?
-                .contains(&0)
-        } else {
-            false
-        };
+        // Inspect padding once per model call, not once per layer: the mask is a
+        // few bytes and the scan is O(seq). Knowing precisely whether padding
+        // exists lets the CPU path drop an all-zero padding mask — the common
+        // no-padding case — and on CUDA it gates the fixed-length Flash Attention
+        // API, which cannot take a mask at all. When Flash Attention is
+        // unavailable there is no reason to pull the mask off the device, so
+        // report padding conservatively and leave those devices' behavior intact.
+        let has_padding =
+            if xs.device().is_cpu() || (cfg!(feature = "flash-attn") && xs.device().is_cuda()) {
+                mask.flatten_all()?
+                    .to_dtype(DType::U32)?
+                    .to_vec1::<u32>()?
+                    .contains(&0)
+            } else {
+                true
+            };
         let window = self.local_attention_size / 2;
         let mut xs = xs.apply(&self.word_embeddings)?.apply(&self.norm)?;
         for layer in self.layers.iter().take(layer) {

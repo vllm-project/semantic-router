@@ -131,6 +131,114 @@ fn test_chunked_sdpa_matches_dense() {
     }
 }
 
+/// First premise of the zero-drift CPU optimizations: passing an all-zero
+/// padding mask must be bit-identical to passing `None` (`max|Δ| == 0.0`).
+///
+/// This is what licenses `ModernBertAttention` to omit the mask when the
+/// sequence carries no real padding — `prepare_padding_mask` yields all zeros
+/// there, and `x + 0.0 == x` in IEEE arithmetic.
+#[test]
+fn test_all_zero_pad_mask_is_bit_exact_noop() {
+    let device = Device::Cpu;
+    let (heads, head_dim) = (4usize, 8usize);
+    let scale = (head_dim as f64).powf(-0.5);
+    for &seq_len in &[1usize, 5, 16, 40, 64] {
+        let (q, k, v) = random_qkv(heads, seq_len, head_dim, &device);
+        // (b, 1, 1, seq) all zeros: same shape and values as the no-padding output.
+        let zeros = Tensor::zeros((1, 1, 1, seq_len), DType::F32, &device).unwrap();
+        for &window in &[None, Some(4usize)] {
+            for &block in &[0usize, 8, 512] {
+                let cfg = ChunkedSdpaConfig {
+                    block_size: block,
+                    window,
+                    causal: false,
+                    scale,
+                    q_offset: 0,
+                };
+                let with_zero_mask =
+                    chunked_sdpa_cpu_softmax(&q, &k, &v, Some(&zeros), &cfg).unwrap();
+                let without_mask = chunked_sdpa_cpu_softmax(&q, &k, &v, None, &cfg).unwrap();
+                let diff = max_abs_diff(&with_zero_mask, &without_mask);
+                assert_eq!(
+                    diff, 0.0,
+                    "window={window:?} seq={seq_len} block={block}: adding an all-zero \
+                     padding mask is not the identity, max|Δ|={diff}"
+                );
+            }
+        }
+    }
+}
+
+/// Second premise: when the window spans the whole key range, a local layer
+/// (`window = Some(w)` with `w >= seq_len - 1`) must be bit-identical to a
+/// global one (`window = None`).
+///
+/// The band mask is identically zero then — no `|i - j|` exceeds the window —
+/// so the kernel skips building and adding it on the integer `max_gap` test.
+/// This case holds before and after the optimization; it pins down that the
+/// skip is legitimate.
+#[test]
+fn test_window_covering_all_keys_equals_global_bit_exact() {
+    let device = Device::Cpu;
+    let (heads, head_dim) = (4usize, 8usize);
+    let scale = (head_dim as f64).powf(-0.5);
+    for &seq_len in &[1usize, 5, 16, 40] {
+        let (q, k, v) = random_qkv(heads, seq_len, head_dim, &device);
+        let window = seq_len - 1; // every |i - j| <= window, so the band is all zeros
+        for &block in &[0usize, 8, 512] {
+            let local = ChunkedSdpaConfig {
+                block_size: block,
+                window: Some(window),
+                causal: false,
+                scale,
+                q_offset: 0,
+            };
+            let global = ChunkedSdpaConfig {
+                block_size: block,
+                window: None,
+                causal: false,
+                scale,
+                q_offset: 0,
+            };
+            let a = chunked_sdpa_cpu_softmax(&q, &k, &v, None, &local).unwrap();
+            let b = chunked_sdpa_cpu_softmax(&q, &k, &v, None, &global).unwrap();
+            let diff = max_abs_diff(&a, &b);
+            assert_eq!(
+                diff, 0.0,
+                "seq={seq_len} block={block}: local layer diverged from global with a \
+                 covering window, max|Δ|={diff}"
+            );
+        }
+    }
+}
+
+/// Boundary case for the same shortcut: with `window = seq_len - 2` the band is
+/// *not* all zeros, so the skip must not engage and the result still has to
+/// match the dense reference.
+#[test]
+fn test_window_one_short_of_covering_still_matches_dense() {
+    let device = Device::Cpu;
+    let (heads, head_dim) = (4usize, 8usize);
+    let scale = (head_dim as f64).powf(-0.5);
+    for &seq_len in &[5usize, 16, 40] {
+        let (q, k, v) = random_qkv(heads, seq_len, head_dim, &device);
+        let window = seq_len - 2;
+        let reference = dense_sdpa_reference(&q, &k, &v, None, Some(window), false, scale);
+        for &block in &[0usize, 8, 512] {
+            let cfg = ChunkedSdpaConfig {
+                block_size: block,
+                window: Some(window),
+                causal: false,
+                scale,
+                q_offset: 0,
+            };
+            let chunked = chunked_sdpa(&q, &k, &v, None, &cfg).unwrap();
+            let diff = max_abs_diff(&chunked, &reference);
+            assert!(diff < 1e-4, "seq={seq_len} block={block}: max|Δ|={diff}");
+        }
+    }
+}
+
 #[test]
 fn test_chunked_sdpa_matches_dense_with_padding() {
     let device = Device::Cpu;
