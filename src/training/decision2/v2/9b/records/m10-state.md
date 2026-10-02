@@ -2,6 +2,22 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 18:25Z (10-03 02:25 UTC+8), M10 continuation
+
+- **Arm-factory hand-off** (COORDINATION 02:00 / 02:22). The factory measured only `AF-KF-a40-bf16`, and M10 now
+  measures its other 9B points on node A GPU1–4. **Amendment 9** (`a35efba33` with the IX1 entries; mirror on A, B and
+  C) sets the order: KF-a40 (gate) → KIB4W2-a40 / KIB4L2-a40 → KF-a50 → the batch-2 points KIB4W3-a40 / KIB4R-a40 →
+  Y1 / Y2 → KFxKIB-a40 (last, budget permitting).
+- **Index:**
+  - X8-a40 is scored on node C (120,224 rows + 2 unsupported), and its bootstraps are running.
+  - X7-a40 is at shard 5 of 7 on node B GPU7.
+  - KIB4W2-a40 is on node C GPU1–4 (shards 0–3). The chain was restarted for W2 alone, and KIB4L2-a40 moves to node A.
+  - On node A GPU1–4: KIB4L2-a40 (package C → A), then KF-a50 (linked from the factory, model `2a1c8624…`).
+  - AF-KF-a40 is scored on node A, and its gate bootstraps vs KIB4-a40 are running.
+- **Formal:** AF-KF-a40 done (node A GPU7, 17:43–17:57Z, exit 0; choice / noul / score OK). Node A GPU7 is now the
+  4B owner's (COORDINATION 02:00).
+- **GPU-h (continuation):** ≈ 7.0 (Index: X8 2.70, X7 2.3 so far, W2 0.5 so far; parity 0.4; formal 0.5).
+
 ## 2026-10-02 17:55Z (10-03 01:55 UTC+8), M10 continuation
 
 - **Node E went to the user** (COORDINATION 01:25), during X8-a40's run. Shards 0–2 had finished (exit 0) and
