@@ -18,6 +18,8 @@
 #   pkgcopy NAME FROM NODE  a restaged M10-NAME-bf16 package from node FROM to NODE (SHA-256 lists equal, manifest
 #                          checks repeated)
 #   ckcopy NAME FROM NODE  a shipped FP32 point (ckpt/NAME and its model SHA-256) from node FROM to NODE, for its formal run
+#   soupcopy ARM FROM NODE  a built arm soup (soup/ARM/build/ARM) from node FROM to NODE (A <-> B relays through C), for
+#                          m10/xarm.sh's cross-arm points
 #   lease  NODE "GPUS"     owner files of other tracks' released leases -> track=eval-ix1 idle (old file kept)
 #   chain  NODE PANEL "GPUS" NAME...   m10/ixchain.sh detached on NODE (parity gates, runs, scoring, bootstraps);
 #                          M10_SHARDS=N: GPUS is a pool and each of the N shards takes the first idle pool GPU
@@ -58,7 +60,7 @@ copy() {  # SRC_NODE SRC_DIR DST_NODE DST_DIR: whole directory, SHA-256 lists eq
   on "$dn" "mkdir -p '$(dirname "$dd")'"
   case "$sn$dn" in  # node A / B hold the key authorized on C-F; C-F pairs relay through node A
     a[c-f] | b[c-f]) on "$sn" "rsync -a -e '$KEY' '$sd/' '$(host "$dn"):$dd.part/'" ;;
-    [c-f]a) on a "rsync -a -e '$KEY' '$(host "$sn"):$sd/' '$dd.part/'" ;;
+    [c-f]a | [c-f]b) on "$dn" "rsync -a -e '$KEY' '$(host "$sn"):$sd/' '$dd.part/'" ;;
     [c-f][c-f])
       local relay
       relay=/data/dev2/tmp/m10-relay/$sn$dn-$(basename "$dd")
@@ -146,6 +148,21 @@ case "$STAGE" in
     copy "$FROM" "$MD/9b-m10/ckpt/$NAME" "$N" "$MD/9b-m10/ckpt/$NAME"
     on "$N" "echo $(on "$FROM" "cat $MD/9b-m10/ckpt/$NAME.model_sha256") > $MD/9b-m10/ckpt/$NAME.model_sha256"
     echo "$NAME FP32 point on node $N, model $(on "$N" "cut -c1-12 $MD/9b-m10/ckpt/$NAME.model_sha256")" ;;
+  soupcopy)
+    ARM=${1:?ARM} FROM=${2:?FROM} N=${3:?NODE}
+    d=$B9/soup/$ARM/build/$ARM
+    on "$FROM" "test -f $B9/soup/$ARM/DONE && test \"\$(cat $B9/soup/$ARM/DONE)\" = $d" \
+      || { echo "no built arm soup $ARM on node $FROM" >&2; exit 3; }
+    if [[ "$FROM$N" == ab || "$FROM$N" == ba ]]; then
+      on c "test ! -e $MD/9b-m10/xfer/$ARM" || { echo "relay $MD/9b-m10/xfer/$ARM exists on node C" >&2; exit 3; }
+      copy "$FROM" "$d" c "$MD/9b-m10/xfer/$ARM"
+      copy c "$MD/9b-m10/xfer/$ARM" "$N" "$d"
+      on c "rm -rf $MD/9b-m10/xfer/$ARM"
+    else
+      copy "$FROM" "$d" "$N" "$d"
+    fi
+    on "$N" "echo $d > $B9/soup/$ARM/DONE.copied && cp $B9/soup/$ARM/DONE.copied $B9/soup/$ARM/DONE"
+    echo "arm soup $ARM on node $N (for m10/xarm.sh)" ;;
   lease)
     N=${1:?NODE} G=${2:?GPUS}
     on "$N" "stamp=\$(date -u +%Y%m%dT%H%M%SZ); for g in $G; do d=/data/dev2/leases/gpu\$g.lock; mkdir -p \$d; \
