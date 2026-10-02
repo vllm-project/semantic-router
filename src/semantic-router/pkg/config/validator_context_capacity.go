@@ -103,14 +103,57 @@ func logContextCapacityFindings(findings []contextCapacityFinding) {
 	}
 }
 
-// bandReachableModels returns every model named by a decision whose rule tree
-// references the band, sorted so findings are deterministic.
+// bandReachableModels returns every model named by a decision that a request
+// inside the band can match, sorted so findings are deterministic. A decision
+// must reference the band and its rule tree must still be satisfiable with the
+// band true, so a decision gated on NOT band is excluded.
 func bandReachableModels(decisions []Decision, band string) []string {
 	return decisionModels(decisions, func(decision Decision) bool {
 		names := make(map[string]bool)
 		collectRuleNames(decision.Rules, SignalTypeContext, names)
-		return names[band]
+		if !names[band] {
+			return false
+		}
+		canMatch, _ := bandRuleOutcomes(&decision.Rules, band)
+		return canMatch
 	})
+}
+
+// bandRuleOutcomes reports whether node can evaluate true, and whether it can
+// evaluate false, for a request inside band. Every other leaf is left free, so
+// correlated leaves are not cross-checked and the result can only overstate
+// what matches.
+func bandRuleOutcomes(node *RuleNode, band string) (canTrue, canFalse bool) {
+	if node.IsLeaf() {
+		if node.Type == SignalTypeContext && node.Name == band {
+			return true, false
+		}
+		return true, true
+	}
+	switch node.Operator {
+	case RuleOperatorNot:
+		if len(node.Conditions) != 1 {
+			return true, true
+		}
+		childTrue, childFalse := bandRuleOutcomes(&node.Conditions[0], band)
+		return childFalse, childTrue
+	case RuleOperatorOr:
+		canTrue, canFalse = false, true
+		for i := range node.Conditions {
+			childTrue, childFalse := bandRuleOutcomes(&node.Conditions[i], band)
+			canTrue, canFalse = canTrue || childTrue, canFalse && childFalse
+		}
+		return canTrue, canFalse
+	case RuleOperatorAnd, "":
+		canTrue, canFalse = true, false
+		for i := range node.Conditions {
+			childTrue, childFalse := bandRuleOutcomes(&node.Conditions[i], band)
+			canTrue, canFalse = canTrue && childTrue, canFalse || childFalse
+		}
+		return canTrue, canFalse
+	default:
+		return true, true
+	}
 }
 
 // routedModels returns every model any decision names, sorted.

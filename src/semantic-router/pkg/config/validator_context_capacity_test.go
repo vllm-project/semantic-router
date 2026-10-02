@@ -15,16 +15,24 @@ func capacityConfig(rules []ContextRule, models map[string]int, decisions ...Dec
 	return cfg
 }
 
-func gatedDecision(name string, band string, models ...string) Decision {
+func ruleDecision(name string, rules RuleCombination, models ...string) Decision {
 	refs := make([]ModelRef, 0, len(models))
 	for _, model := range models {
 		refs = append(refs, ModelRef{Model: model})
 	}
-	return Decision{
-		Name:      name,
-		Rules:     RuleCombination{Type: SignalTypeContext, Name: band},
-		ModelRefs: refs,
-	}
+	return Decision{Name: name, Rules: rules, ModelRefs: refs}
+}
+
+func gatedDecision(name string, band string, models ...string) Decision {
+	return ruleDecision(name, bandLeaf(band), models...)
+}
+
+func bandLeaf(band string) RuleNode {
+	return RuleNode{Type: SignalTypeContext, Name: band}
+}
+
+func notRule(child RuleNode) RuleCombination {
+	return RuleCombination{Operator: RuleOperatorNot, Conditions: []RuleNode{child}}
 }
 
 func TestContextCapacityWarnsWhenALargerModelIsUnreachable(t *testing.T) {
@@ -83,6 +91,42 @@ func TestContextCapacityIgnoresALargerModelNoDecisionRoutesTo(t *testing.T) {
 
 	if findings := contextCapacityIssues(cfg); len(findings) != 0 {
 		t.Errorf("a model no decision routes to must not be reported as a missed alternative, got %+v", findings)
+	}
+}
+
+func TestContextCapacityExcludesDecisionsThatOnlyMatchOutsideTheBand(t *testing.T) {
+	// A decision gated on NOT oversized only matches requests outside the
+	// band, so its larger model is not reachable from inside it.
+	cfg := capacityConfig(
+		[]ContextRule{{Name: "oversized", MinTokens: "180K"}},
+		map[string]int{"frontier": 200000, "large-window": 262000},
+		gatedDecision("large-context", "oversized", "frontier"),
+		ruleDecision("everything-else", notRule(bandLeaf("oversized")), "large-window"),
+	)
+
+	findings := contextCapacityIssues(cfg)
+	if len(findings) != 1 || findings[0].unreachableModel != "large-window" {
+		t.Fatalf("expected one finding naming large-window, got %+v", findings)
+	}
+}
+
+func TestContextCapacityKeepsDecisionsReachableThroughANegatedConjunction(t *testing.T) {
+	// NOT (oversized AND x) still matches inside the band whenever x is false,
+	// so reachability has to be evaluated over the tree, not read off the
+	// nearest NOT.
+	negated := notRule(RuleNode{
+		Operator:   RuleOperatorAnd,
+		Conditions: []RuleNode{bandLeaf("oversized"), {Type: SignalTypeKeyword, Name: "x"}},
+	})
+	cfg := capacityConfig(
+		[]ContextRule{{Name: "oversized", MinTokens: "180K"}},
+		map[string]int{"frontier": 200000, "large-window": 262000},
+		gatedDecision("large-context", "oversized", "frontier"),
+		ruleDecision("mixed", negated, "large-window"),
+	)
+
+	if findings := contextCapacityIssues(cfg); len(findings) != 0 {
+		t.Errorf("large-window is reachable from inside the band when x is false, got %+v", findings)
 	}
 }
 
