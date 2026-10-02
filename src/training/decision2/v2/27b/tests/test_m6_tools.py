@@ -91,6 +91,18 @@ class M6LaunchTest(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         launch.render_node(gpu, drm)
 
+    def test_m6_node_f_map_excludes_k8s_gpus(self):
+        with mock.patch.dict(
+            os.environ, {"DEV2_27B_ALLOC": "m6", "DEV2_NODE": "f"}, clear=True
+        ):
+            self.assertEqual(sorted(launch.allowed_gpus()), [2, 3, 4, 5, 6, 7])
+            with tempfile.TemporaryDirectory() as tmp:
+                drm = fake_sysfs(Path(tmp), "renderD153", "0000:9b:00.0")
+                self.assertEqual(launch.render_node(3, drm).name, "renderD153")
+                for gpu in (0, 1):
+                    with self.assertRaises(ValueError):
+                        launch.render_node(gpu, drm)
+
     def test_read_lease_single_line_owner(self):
         with tempfile.TemporaryDirectory() as tmp:
             owner = Path(tmp) / "owner"

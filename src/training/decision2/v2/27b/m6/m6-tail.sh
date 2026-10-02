@@ -9,7 +9,8 @@
 #                             -> slices/NAME/breadth-vs-REF.json
 #   pull ARM-SEED             a node A relay (BEST checkpoint + SHA-256 list) over the M6 node link -> m6/relay/ARM-SEED
 #   pull-d ARM-SEED           the same from node D's relay over the node B -> node D transfer key (/root/.ssh/d2_temp_cd)
-#   pull-e ARM-SEED           the same from node E's relay (peer-e, written by m6-stage-d.sh M6_STAGE_NODE=e)
+#   pull-e / pull-f ARM-SEED  the same from node E's / F's relay (peer-e / peer-f, written by m6-stage-d.sh
+#                             M6_STAGE_NODE=e / f)
 #   lsoup NAME CKPT CKPT...   v2.27b.lora_soup (exact rank concatenation) in a CPU-only container -> m6/NAME/checkpoint;
 #                             members with a relay list (RELAY_SUMS="CKPT=SHA256SUMS ...") must match it file by file;
 #                             SOUP_WEIGHTS="W1 W2 ..." (one per CKPT) makes a weighted soup, SOUP_CPUS (default 16)
@@ -62,7 +63,7 @@ case "$STAGE" in
       --candidate "$NAME=$R/slices/$NAME/probs/$slice.probs.jsonl" \
       --reference "$REF=$R/slices/$REF/probs/$slice.probs.jsonl" "${extra[@]}" \
       --output "$R/slices/$NAME/$STAGE-vs-$REF.json") ;;
-  pull | pull-d | pull-e)
+  pull | pull-d | pull-e | pull-f)
     NAME=${1:?ARM-SEED}; link
     [[ "$NAME" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "ARM-SEED must be one directory name" >&2; exit 2; }
     DEST=$R/relay/$NAME

@@ -2,8 +2,8 @@
 # ~27B M6 on node A (host side): wait for one arm-seed to finish (run_lora_arm.sh writes full/RUN_DIR after
 # COMPLETE.json), then hardlink its BEST checkpoint into /data/dev2/xfer/27b-m6/relay/NAME/ with its SHA-256 list,
 # BEST.json, COMPLETE.json and the arm-seed's receipts; BUDGET-nodeA.json sums node A's M6 GPU-hour receipts (the node B
-# chain's budget check; BUDGET-noded.json on node D, RELAY_NODE=d; node E RELAY_NODE=e). Node B pulls it with
-# `m6-tail.sh pull NAME` over the M6 node link (node A) or `m6-tail.sh pull-d NAME` / `pull-e NAME` over node B's
+# chain's budget check; BUDGET-noded.json on node D, RELAY_NODE=d; node E / F RELAY_NODE=e / f). Node B pulls it with
+# `m6-tail.sh pull NAME` over the M6 node link (node A) or `m6-tail.sh pull-d|pull-e|pull-f NAME` over node B's
 # transfer key. If the driver exits without a finished run, RELAY-FAILED.txt records it and nothing is relayed (no rerun).
 # Usage: m6-relay.sh NAME DRIVER_PID     (NAME an M6 / M7 / M8 arm-seed, e.g. M6-IBX-s2, M7-IB14ML-s1, M8-IB124-s4;
 #        DRIVER_PID the pid the arm launcher printed). Detached.
@@ -13,7 +13,7 @@ NAME=${1:?NAME} PID=${2:?DRIVER_PID}
 [[ "$NAME" =~ ^M[678]-[A-Za-z0-9]+-s[1-5]$ ]] || { echo "NAME is an M6 / M7 / M8 arm-seed (M6-IBX-s2, ...)" >&2; exit 2; }
 [[ "$PID" =~ ^[0-9]+$ ]] || { echo "DRIVER_PID must be a pid" >&2; exit 2; }
 RUN=/data/dev2/runs/27b/$NAME RELAY=/data/dev2/xfer/27b-m6/relay/$NAME NODE=${RELAY_NODE:-a}
-case "$NODE" in a | d | e) ;; *) echo "RELAY_NODE is a, d or e" >&2; exit 2 ;; esac
+case "$NODE" in a | d | e | f) ;; *) echo "RELAY_NODE is a, d, e or f" >&2; exit 2 ;; esac
 [ -d "$RUN" ] || { echo "no arm-seed run $RUN" >&2; exit 2; }
 [ ! -e "$RELAY" ] || { echo "$RELAY exists: refusing to overwrite" >&2; exit 66; }
 mkdir -p "$(dirname "$RELAY")"

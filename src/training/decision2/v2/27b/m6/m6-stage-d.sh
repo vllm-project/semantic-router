@@ -8,13 +8,13 @@
 # Usage: m6-stage-d.sh MIRROR_SHA MIXTURE...   (e.g. a20ib1x; the mirror must already be on node D)
 # Environment: M6_BUILD (build record in m6-data, default BUILD.json; BUILD-pn.json stages amendment 3's a20ib12pn from
 #   its mixtures_dir, mixtures-m6pn-1); M6_DATA=m7-data stages M7 mixtures (m7-data/mixtures-m7-1, M7's BUILD.json);
-#   M6_STAGE_NODE=e stages node E the same way (27B M8; peer file peer-e) instead of node D.
+#   M6_STAGE_NODE=e / f stages node E / F the same way (27B M8; peer file peer-e / peer-f) instead of node D.
 set -euo pipefail
 SHA=${1:?MIRROR_SHA}
 shift
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "MIRROR_SHA must be a full commit SHA" >&2; exit 2; }
 STAGE_NODE=${M6_STAGE_NODE:-d}
-[[ "$STAGE_NODE" =~ ^[de]$ ]] || { echo "M6_STAGE_NODE is d or e" >&2; exit 2; }
+[[ "$STAGE_NODE" =~ ^[def]$ ]] || { echo "M6_STAGE_NODE is d, e or f" >&2; exit 2; }
 NODES=${DEV2_NODES_FILE:-$HOME/.config/decision2/nodes.env}
 B=$(grep '^node-b=' "$NODES" | cut -d= -f2-) D=$(grep "^node-$STAGE_NODE=" "$NODES" | cut -d= -f2-)
 [ -n "$B" ] && [ -n "$D" ] || { echo "node-b / node-$STAGE_NODE missing in $NODES" >&2; exit 2; }
