@@ -17,3 +17,15 @@ its first 56,141 lines, `1527b38b…`; M13's 2B SD targets `2b9858d8…`; the ow
 - `2b-RAUPM`: `2b-RA` TRAIN byte for byte, then the IB3-r2 TRAIN byte for byte (35,005 IB1 / IB2 rows + 8,752
   `mqa` rows, weight 1); teacher = the own-Sol teacher on the released rows (KL 0.5).
 - Weights: released Choice / Noul 1.5, Score 2.0, IB 1.0 (`ops/m14/m14_weights.py`).
+
+## Amendment 1 arms (node A, `ops/m18/m18-prep-a.sh` from mirror `c9616d873`, 2026-10-02T05:56Z)
+
+Inputs checked: M14's staged M12 `2b-RA` (`08140409…`, ids `22854cfc…`) and `08b-RA` (`12bd63d8…`) TRAIN files,
+the own-Sol teacher `3f92e8c1…` and IB3-r2 TRAIN `9d92d92a…` (both pulled node F -> node A).
+
+| Arm | TRAIN | weights | teacher | rows |
+| --- | --- | --- | --- | ---: |
+| `2b-RAM` | `a747cbc15a549e68b263a9d5d6f2f4617730c99d3b54525062f09fa03a822ede` (= `2b-RAUPM`'s) | none | `3f92e8c108c5a9949fda4b08638907fcc80175f68efec18bece912d0edc8eea1` | 99,898 |
+| `08b-RAM` | `e414cb2d2e7f492f96e674e4216ded44b52f32f029bda03f779b19ba25b250e3` | `e52dec07de0a15f9071eff3756d3baf0c31e37cbf3f2d089b7be04effbd1ab4f` | none | 317,977 |
+
+`08b-RAM` weights: 1.0 for the 309,225 `08b-RA` rows, 3.0 for the 8,752 IB3-r2 rows.

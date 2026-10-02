@@ -14,7 +14,7 @@ Index values stay private (node private dirs and the program's private folder); 
   `m18_gpuh.py`. IB3-r2 TRAIN fetched to node F from the dataset revision `1c8452da` (hash matches `9d92d92a…`).
 - Next: build the data, commit the data lock, write READY-m18.json, launch the chains.
 
-## 2026-10-02T06:10Z
+## 2026-10-02T05:50Z
 
 - Part A 2B: all four runs scored on node C (scorer gates pass); bootstraps vs DEV2.0-2B running on node C.
   `2b-UPRAa75`: one `invalid_model_output` row, scored with `--allow-errors` (amendment 1).
