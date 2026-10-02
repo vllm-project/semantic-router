@@ -34,6 +34,9 @@
 # and causal-conv1d kernels exits 97, and a parity log showing the reference-kernel fallback fails.
 # Leases: /data/dev2/leases/gpu<N>.lock/owner is written only when absent or already track=eval-ix1;
 # a GPU leased by anyone else (node C GPU0: a K8s pod) is refused, and so is a busy GPU.
+# IX1_SHARED_LEASE=<name> writes the named co-tenant entry gpu<N>.lock/owner.<name> instead and leaves
+# the owner file alone (release work on a GPU whose allocation allows recorded co-tenants); a busy GPU
+# is still refused.
 set -euo pipefail
 
 IMAGE="decision20-train-fast:host2"
@@ -130,9 +133,14 @@ render_nodes() {  # rocm-smi index -> "/dev/dri/renderDN /dev/dri/cardM"
 }
 
 take_lease() {  # gpu purpose hours
-  local lease="/data/dev2/leases/gpu$1.lock"
+  local lease="/data/dev2/leases/gpu$1.lock" entry
   mkdir -p "$lease"
-  if [[ -s "$lease/owner" ]] && ! grep -qx "track=eval-ix1" "$lease/owner"; then
+  entry="$lease/owner"
+  if [[ -n "${IX1_SHARED_LEASE:-}" ]]; then
+    # A recorded co-tenant on a GPU whose owner allows release work: the owner file is left as it is.
+    [[ "$IX1_SHARED_LEASE" =~ ^[a-z0-9-]+$ ]] || { echo "IX1_SHARED_LEASE must match [a-z0-9-]+" >&2; return 1; }
+    entry="$lease/owner.$IX1_SHARED_LEASE"
+  elif [[ -s "$lease/owner" ]] && ! grep -qx "track=eval-ix1" "$lease/owner"; then
     echo "gpu$1 is leased by another owner; refusing" >&2; return 1
   fi
   local tries=0
@@ -148,7 +156,7 @@ if use > 5 or used > 2 * 2**30:
     sleep 15
   done
   printf 'track=eval-ix1\npurpose=%s\nstart_utc=%s\nexpected_end_utc=%s\nrun_dir=%s\n' "$2" \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(date -u -d "+$3 hours" +%Y-%m-%dT%H:%M:%SZ)" "$run" > "$lease/owner"
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(date -u -d "+$3 hours" +%Y-%m-%dT%H:%M:%SZ)" "$run" > "$entry"
 }
 
 digest_dir() { (cd "$1" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum | sha256sum | cut -c1-64); }
