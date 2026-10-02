@@ -4,6 +4,31 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17` (r
 stopped after creating the worktree, nothing had run). Prereg `da770d98a`, ops `1ce8b2220` (mirror on nodes E / F),
 data lock `4f68f1eb0`.
 
+## 2026-10-02 03:55Z — references complete; Index runs finishing
+
+- **Development (node A, vs `4b-LH-f`; references under amendment 1; the arms rules ran once, 03:30Z):**
+
+  | Arm | Typed C / N / S (LH 728 / 290 / 371) | HT-DEV v2 | Retention Δ | Transfer Δ (IB DEV Δ) | MLX-DEV2 card Δ [95% CI] | Gates failed |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | `4b-LHS10SD` | 699 / – / 333 | −.010 [−.026, +.005] TIE | −.048 [−.076, −.024] | +.043 (+.080) | **−.023 [−.029, −.017]** | 1 (choice, Score floors), 4, 7 |
+  | `4b-LHS17SD` | – | −.026 [−.041, −.010] **FLAG** | −.026 [−.052, +.000] | +.046 (+.082) | **−.026 [−.032, −.019]** | 3, 7 |
+
+  M13 `4b-LHA10SD` re-scored here (report): HT −.003 TIE, retention −.022, transfer +.046. Contrasts: `4b-LHS10SD` vs
+  `4b-LHA10SD` HT −.007 TIE, retention −.026 [−.052, −.003]; `4b-LHS17SD` vs `4b-LHS10SD` HT −.015 TIE.
+  The prereg's anchor trigger fired (better arm `4b-LHS17SD`), but amendment 1 builds anchors only on a
+  type-collapse-only failure: none built.
+- **Formal (references; two bars agree, the parity run is exact):** `4b-LHS10SD` v3 64.252, −3.09 [−7.49, +0.93];
+  `4b-LHS17SD` v3 62.090, **−5.25 [−11.26, −1.67]**. Types OK / OK / OK for both (the type-collapse integrity check
+  passes). mlx-diag card-eligible −.0257 [−.0358, −.0161] / −.0279 [−.0395, −.0167]: **MLX-DEV2's flags confirmed** (as
+  additive `4b-LHA10SD`, −.0287). Public 231 174 vs 172. Exposure 0 groups for both TRAIN files; overlap 5 / 5 pairs
+  reproduced. Classic items 1–7 FAIL (items 1, 4, 6(b)); 02:05 Index-path items: `LHS10SD` 1'(a) / 6(b)' pass but
+  item 4 fails, `LHS17SD` fails 1'(a) / 6(b)'.
+- **Integrity checks so far:** IX1 parity 86 / 86 (both); Index contamination audit of both TRAIN files: 0 item rows
+  (planted 200 / 200; 100 / 90 duplicate-class rows); no collapsed type.
+- **Index runs:** `4b-LHS10SD` on node E GPU0–2 (shards 0–2 done exit 0; 3, 4, 6 running; lanes for 5, 7 after the
+  pool was stopped at 03:33Z), `4b-LHS17SD` on node F GPU2, 3, 6, 7 (its parity gate copied from node E with its frozen
+  cache, per-file lists equal; shards 0–3 running). Both end ≈04:10Z; then relay to node C, scoring, bootstrap.
+
 ## 2026-10-02 03:20Z
 
 - **Training done** (all four preflights and full runs completed; no cap stop): `4b-LHS10SD` s1 / s2 DONE 02:59 /
