@@ -13,12 +13,15 @@ scaled by w_i instead of 1/N and the head is the w-weighted mean, so B'A' * scal
 cross-arm average of seeds of different arms of one recipe on the same base).
 Without weights the model files are byte-identical to the uniform tool's.
 
-Before the output is renamed into place the tool checks, on CPU in row chunks,
-that every projection satisfies max|dW_soup - mean dW_i| <= 1e-6 max|mean dW_i|
-(FP32; the weighted mean for a weighted soup), that ``verify_adapter_config``
-accepts the new adapter, and that the reloaded head equals the mean;
-``soup_manifest.json`` records the inputs, the output identity, per-file SHA-256
-and the verification statistics.
+Before the output is renamed into place the tool checks, on CPU, that every
+projection's A and B blocks are the members' factors bit for bit (B scaled by
+1/N or w_i), that its update satisfies max|dW_soup - mean dW_i| <= 1e-6
+max|mean dW_i| on its first 256 rows (float64 from the stored FP32 factors; the
+weighted mean for a weighted soup; FP32 accumulation over four members exceeded
+1e-6 on some projections), that ``verify_adapter_config`` accepts the new
+adapter, and that the reloaded head equals the mean; ``soup_manifest.json``
+records the inputs, the output identity, per-file SHA-256 and the verification
+statistics.
 
     python3 -m v2.27b.lora_soup --member CKPT_S1 --member CKPT_S2 \
         --source-path BASE --output SOUP [--weight W1 --weight W2]
@@ -46,6 +49,7 @@ from training.model.lora import LORA_FORMAT, verify_adapter_config
 TOOL_VERSION = "dev2-27b-lora-soup/1"
 TOLERANCE = 1e-6
 CHUNK_ELEMENTS = 1 << 24
+SAMPLE_ROWS = 256
 ADAPTER_WEIGHTS = "adapter/adapter_model.safetensors"
 ADAPTER_CONFIG = "adapter/adapter_config.json"
 HEAD = "decision_head.safetensors"
@@ -194,32 +198,56 @@ def projection_stats(
     soup: tuple[torch.Tensor, torch.Tensor],
     soup_scale: float,
     weights: list[float] | None = None,
+    rows: int | None = None,
 ) -> tuple[float, float]:
-    """(max|dW_soup - mean dW_i|, max|mean dW_i|) in FP32, computed in row chunks."""
+    """(max|dW_soup - mean dW_i|, max|mean dW_i|) in float64 from the stored FP32 factors, in row
+    chunks, over the first ``rows`` output rows (all rows by default)."""
     soup_a, soup_b = soup
-    rows = soup_b.shape[0]
+    total = soup_b.shape[0] if rows is None else min(rows, soup_b.shape[0])
     step = max(1, CHUNK_ELEMENTS // soup_a.shape[1])
+    shares = weights or [1 / len(factors)] * len(factors)
+    members_a = [a.double() for a, _ in factors]
+    soup_a64 = soup_a.double()
     worst = peak = 0.0
-    for start in range(0, rows, step):
-        stop = min(rows, start + step)
-        reference = torch.zeros(stop - start, soup_a.shape[1], dtype=torch.float32)
-        if weights is None:
-            for a, b in factors:
-                reference += (b[start:stop] @ a) * scale
-            reference /= len(factors)
-        else:
-            for (a, b), w in zip(factors, weights):
-                reference += (b[start:stop] @ a) * (scale * w)
-        delta = (soup_b[start:stop] @ soup_a) * soup_scale
+    for start in range(0, total, step):
+        stop = min(total, start + step)
+        reference = torch.zeros(stop - start, soup_a.shape[1], dtype=torch.float64)
+        for a64, (_, b), w in zip(members_a, factors, shares):
+            reference += (b[start:stop].double() @ a64) * (scale * w)
+        delta = (soup_b[start:stop].double() @ soup_a64) * soup_scale
         worst = max(worst, (delta - reference).abs().max().item())
         peak = max(peak, reference.abs().max().item())
     return worst, peak
 
 
+def layout_matches(
+    loaded: list[dict[str, torch.Tensor]],
+    soup: dict[str, torch.Tensor],
+    name: str,
+    weights: list[float] | None = None,
+) -> bool:
+    """The soup's factors are exactly the members' blocks: A' = [A_1; ...; A_N] and
+    B' = [s_1 B_1, ..., s_N B_N] with s_i = 1/N (or w_i), bit for bit as soup_adapter wrote them.
+    """
+    a, b = f"{_stem(name)}.lora_A.weight", f"{_stem(name)}.lora_B.weight"
+    count, rank = len(loaded), loaded[0][a].shape[0]
+    if soup[a].shape[0] != count * rank or soup[b].shape[1] != count * rank:
+        return False
+    for i, t in enumerate(loaded):
+        block = slice(i * rank, (i + 1) * rank)
+        expected_b = t[b] / count if weights is None else t[b] * weights[i]
+        if not torch.equal(soup[a][block], t[a]) or not torch.equal(
+            soup[b][:, block], expected_b
+        ):
+            return False
+    return True
+
+
 def verify(
     members: list[Path], output: Path, weights: list[float] | None = None
 ) -> dict[str, Any]:
-    """Recompute every projection update and the head from the written files."""
+    """Check every projection's factor blocks bit for bit against the members, its update in
+    float64 on its first SAMPLE_ROWS rows, and the head, from the written files."""
     meta = _json(output / "decision_config.json")
     config = _json(output / ADAPTER_CONFIG)
     contract = meta["lora"]
@@ -231,22 +259,29 @@ def verify(
         raise ValueError("Soup LoRA scale differs from the members' scale")
     loaded = [_tensors(m / ADAPTER_WEIGHTS) for m in members]
     soup = _tensors(output / ADAPTER_WEIGHTS)
-    per_projection, failures = [], []
+    per_projection, failures, layout = [], [], []
     worst_ratio = 0.0
     for name in contract["target_modules"]:
         a, b = f"{_stem(name)}.lora_A.weight", f"{_stem(name)}.lora_B.weight"
+        if not layout_matches(loaded, soup, name, weights):
+            layout.append(name)
         diff, peak = projection_stats(
             [(t[a], t[b]) for t in loaded],
             scale,
             (soup[a], soup[b]),
             soup_scale,
             weights,
+            rows=SAMPLE_ROWS,
         )
         ratio = diff / peak if peak > 0 else (0.0 if diff == 0 else float("inf"))
         worst_ratio = max(worst_ratio, ratio)
         per_projection.append([name, diff, peak])
         if not diff <= TOLERANCE * peak:
             failures.append(name)
+    if layout:
+        raise ValueError(
+            f"Soup factors are not the members' blocks on {len(layout)} projections: {layout[:5]}"
+        )
     if failures:
         raise ValueError(
             f"Soup update differs from the mean update on {len(failures)} projections: {failures[:5]}"
@@ -275,7 +310,8 @@ def verify(
         "verify_adapter_config": True,
         "head_tensors": len(head),
         "head_max_abs_dev_from_float64_mean": head_dev,
-        "compute": "FP32 CPU, row chunks",
+        "layout": "every projection's A and B blocks equal the members' (B scaled) bit for bit",
+        "compute": f"float64 CPU from the stored FP32 factors, the first {SAMPLE_ROWS} rows of every projection",
     }
 
 
