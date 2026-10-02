@@ -639,6 +639,9 @@ class IndexFirstGateTest(SuccessorGateTest):
         bound = gate.evidence_sha256(gate.gate_profile(self.spec))
         self.assertNotIn("paired", bound)
         self.assertEqual(bound["index_first_audit"], layout.sha_file(self.audit))
+        first, below = gate.first_items(self.spec)
+        self.assertEqual(list(first), list(items))
+        self.assertEqual(below, "own 1.0")
 
     def test_each_integrity_item_fails_on_its_criterion(self):
         cases = (
