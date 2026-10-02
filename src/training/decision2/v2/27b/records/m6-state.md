@@ -71,7 +71,11 @@ section first). Earlier: 2026-10-02 17:45 UTC+8 (09:45Z; continuation #5 from 08
 - **18:01Z:** node F staged (17:36–17:41Z; base, T0 and data files equal to node B's, `a20ib124`, `a20ib1`, `a20ib12`).
   The four seeds resumed at 17:40:44Z on node F GPU2–5 (`full-r2`, exact resume from 848 / 848 / 636 / 827) and are
   past their checkpoints (958 / 956 / 645 / 937); relays run on node F (`RELAY_NODE=f`). Release: pre-upload checks
-  passed through remote code; AutoModel parity since 18:00Z, then the upload. Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
+  passed through remote code; AutoModel parity since 18:00Z, then the upload.
+- **18:27Z: UPLOADED** — Vega-27B revision **`5c85c127828f4b5dfe0ca95d933be033a8a4caa3`** (≈ 18:17–18:20Z); real Hub
+  download and tree check passed, post-download examples passed; remaining post checks (remote code on the download,
+  card from the Hub under 5.17 / 5.18, scored parity, readback, collection, gate seal, card HTTP, links, gate evaluate)
+  and then the purge of M6-IB's weights are running. Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
 continuation #3, 4a20f83f, 19:37–20:10Z, silently stopped after its 20:10Z poll; its entries below say "cba71646",
 which is the coordinator's ID; worker 3 0d2e488f ran 15:12–19:40Z; worker 2 a56025bb 10:44–15:15Z; worker 1 11741ee2
 06:17–10:55Z). **Amendment 6 (`6bbb2512d`): the MLX-DEV2 guard for every M6 finalist** (COORDINATION 04:15).
