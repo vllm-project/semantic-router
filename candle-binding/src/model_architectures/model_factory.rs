@@ -153,6 +153,18 @@ impl ModelFactory {
     }
 
     /// Register a traditional model
+    /// Reports whether an mmBERT embedding model is registered. The legacy
+    /// global-factory FFI entry points use this to report honestly when a
+    /// requested model is absent instead of claiming success.
+    pub fn has_mmbert_embedding_model(&self) -> bool {
+        self.mmbert_embedding_model.is_some()
+    }
+
+    /// Reports whether a Qwen3 embedding model is registered.
+    pub fn has_qwen3_embedding_model(&self) -> bool {
+        self.qwen3_embedding_model.is_some()
+    }
+
     pub fn register_traditional_model(
         &mut self,
         name: &str,
@@ -878,5 +890,17 @@ mod tokenizer_contract_tests {
         assert_eq!(encoded.get_ids().len(), 5);
         assert_eq!(encoded.get_attention_mask(), &[1, 1, 1, 1, 1]);
         assert_eq!(encoded.get_offsets().last(), Some(&(8, 9)));
+    }
+}
+
+#[cfg(test)]
+mod model_presence_tests {
+    use super::*;
+
+    #[test]
+    fn fresh_factory_reports_no_registered_embedding_models() {
+        let factory = ModelFactory::new(candle_core::Device::Cpu);
+        assert!(!factory.has_mmbert_embedding_model());
+        assert!(!factory.has_qwen3_embedding_model());
     }
 }

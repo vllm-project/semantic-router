@@ -21,9 +21,10 @@ const routerReplayManagementToken = "router-replay-e2e-viewer-token"
 
 func init() {
 	pkgtestcases.Register("router-replay-restart-recovery", pkgtestcases.TestCase{
-		Description: "Router Replay records stored in Postgres survive a semantic-router pod restart",
-		Tags:        []string{"router-replay", "functional", "postgres", "restart"},
-		Fn:          testRouterReplayRestartRecovery,
+		Description:         "Router Replay records stored in Postgres survive a semantic-router pod restart",
+		Tags:                []string{"router-replay", "functional", "postgres", "restart"},
+		MutatesClusterState: true,
+		Fn:                  testRouterReplayRestartRecovery,
 	})
 }
 
