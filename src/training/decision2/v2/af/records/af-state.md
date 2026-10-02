@@ -2,6 +2,18 @@
 
 Index values stay private (node private stores and `decision2-program/private/arm-factory/`); this file has none.
 
+## 2026-10-02 15:20Z (23:20 UTC+8) — unattended soups and Index pipelines armed
+
+- `4b-AFxALL`'s base set (amendment-2 rule, decided on M17's two Index runs, values private): `SDMLxALL9`'s nine.
+- Detached node-side pipelines (mirror `91cdf96cc`), each waiting for its seeds:
+  - node F: soups `4b-LHS17IB4ML` (merges on GPU2), `4b-LHS23IB4` (GPU4), then their Index runs (panel-8, GPU2–5,
+    8 shards greedy) as soon as each is staged;
+  - node C: soups `4b-LHS17IB4-s45` (GPU7), `4b-SDMLIB4-s45` (GPU6), `4b-LHS17UP-s34` (GPU5), `4b-LHS17IB4-lrh` (GPU3);
+  - node A: `KF`, `KF-a40`, `KF-a50`, `KFK`, `KFxKIB-a40`, `KIB4W2-a40`, `KIB4L2-a40`, `KIB4Q` built in sequence (CPU),
+    then the Index runs of `KF-a40`, `KF-a50`, `KFxKIB-a40` (panel-7, GPU1–6, 7 shards greedy).
+- Seed ends (estimates): node C ≈ 15:30–15:55Z then ≈ 17:05Z (second items); node F ≈ 16:20Z; node A ≈ 17:45–18:05Z
+  (≈ 3.4 GPU-h per 9B seed).
+
 ## 2026-10-02 15:05Z (23:05 UTC+8) — all 15 preflights PASS; candidates pinned (amendment 2)
 
 - All 15 seeds passed their preflights (node A 14:29–14:38Z, node C 14:27–14:35Z, node F 14:38–14:44Z) and are in
