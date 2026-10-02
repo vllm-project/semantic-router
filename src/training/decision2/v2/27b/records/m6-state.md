@@ -75,7 +75,15 @@ section first). Earlier: 2026-10-02 17:45 UTC+8 (09:45Z; continuation #5 from 08
 - **18:27Z: UPLOADED** — Vega-27B revision **`5c85c127828f4b5dfe0ca95d933be033a8a4caa3`** (≈ 18:17–18:20Z); real Hub
   download and tree check passed, post-download examples passed; remaining post checks (remote code on the download,
   card from the Hub under 5.17 / 5.18, scored parity, readback, collection, gate seal, card HTTP, links, gate evaluate)
-  and then the purge of M6-IB's weights are running. Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
+  and then the purge of M6-IB's weights are running.
+- **19:05Z: RELEASED and PUBLIC.** `post_checks=ok` at 19:04Z (work
+  `dev2-27b-27bx-M6-IBxIB2-m50-release-20261002T172034Z`; gate `530ce9e8…`, all ten items pass; manifest `b24f6f4f…`;
+  `RELEASE-RECEIPT.json` `3182e5e6…`). Purge of M6-IB's 7.49 GB passed every check. Vega made public per COORDINATION
+  01:25 (`update_repo_settings`; the collection was already public): anonymous README / API / page / collection 200.
+  Record `v2/release/records/dev2-27b-xarm-2026-10-02.md` (receipts under `dev2-27b-xarm-2026-10-02/27b/release/`).
+  **The current Vega is now M6-IBxIB2-m50**: M7 / M8 candidates are scored with `M6_INDEX_BASE=M6-IBxIB2-m50`,
+  `m6-xarm.sh` with `CURRENT=M6-IBxIB2-m50`, and a successor spec derives from `dev2-27b-27bx-M6-IBxIB2-m50.json` with
+  this release's gate and decision, under the public-repository hub policy of integration `47dd06be7`. Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
 continuation #3, 4a20f83f, 19:37–20:10Z, silently stopped after its 20:10Z poll; its entries below say "cba71646",
 which is the coordinator's ID; worker 3 0d2e488f ran 15:12–19:40Z; worker 2 a56025bb 10:44–15:15Z; worker 1 11741ee2
 06:17–10:55Z). **Amendment 6 (`6bbb2512d`): the MLX-DEV2 guard for every M6 finalist** (COORDINATION 04:15).

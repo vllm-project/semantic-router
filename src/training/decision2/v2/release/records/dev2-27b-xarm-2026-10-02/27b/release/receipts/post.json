@@ -1,0 +1,256 @@
+{
+  "answers_sha256": "0a1111b394ed962c7c98e69c6e4e37332bd940f7dd33edf0d1c70b2de588d22a",
+  "checks": {
+    "multilingual": {
+      "passed": true,
+      "problems": []
+    },
+    "null-description": {
+      "passed": true,
+      "problems": []
+    },
+    "over-budget": {
+      "passed": true,
+      "problems": []
+    },
+    "policy-check": {
+      "passed": true,
+      "problems": []
+    },
+    "structured-state": {
+      "passed": true,
+      "problems": []
+    },
+    "support-routing": {
+      "passed": true,
+      "problems": []
+    }
+  },
+  "device": "cuda:0",
+  "load_seconds": 177.9590185629204,
+  "loaded_parameters": 29365153792,
+  "mode": "run",
+  "model_name": "Decision-2.0-Vega-27B",
+  "outputs": [
+    {
+      "id": "support-routing",
+      "input_sha256": "d97b537c37ddf12ca4117ff655a31fa14afbfd968729bc2b512beadca6054f88",
+      "latency_ms": 5134.923774050549,
+      "response": {
+        "answers": {
+          "receipt": {
+            "noul": 0.9730751494632374,
+            "type": "noul"
+          },
+          "route": {
+            "choice": "returns",
+            "confidence": 0.812291919404599,
+            "probabilities": {
+              "billing": 0.019059393198346028,
+              "returns": 0.9571823077377958,
+              "technical": 0.02375829906385817
+            },
+            "type": "choice"
+          },
+          "urgency": {
+            "confidence": 0.30630039133548015,
+            "legend": {
+              "0": "Routine",
+              "1": "Soon",
+              "2": "Today"
+            },
+            "probabilities": {
+              "0": 0.08976253252272137,
+              "1": 0.18541809058040412,
+              "2": 0.7248193768968745
+            },
+            "score": 1.635056844374153,
+            "type": "score"
+          }
+        },
+        "model": "Decision-2.0-Vega-27B",
+        "usage": {
+          "input_tokens": 317,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "structured-state",
+      "input_sha256": "b8557ad323a641d6ea898abb86818d9e13d91e0d327bb0dabc8fe696c840d829",
+      "latency_ms": 109.92510290816426,
+      "response": {
+        "answers": {
+          "escalate": {
+            "noul": 0.7862849986624637,
+            "type": "noul"
+          },
+          "severity": {
+            "confidence": 0.08379071602422838,
+            "legend": {
+              "0": "Minor",
+              "1": "Moderate",
+              "2": "Major",
+              "3": "Critical",
+              "4": "Full outage"
+            },
+            "probabilities": {
+              "0": 0.058435209461116445,
+              "1": 0.11932499382704628,
+              "2": 0.2275148097543708,
+              "3": 0.2667006001543242,
+              "4": 0.3280243868031423
+            },
+            "score": 2.6865539610113296,
+            "type": "score"
+          }
+        },
+        "model": "Decision-2.0-Vega-27B",
+        "usage": {
+          "input_tokens": 283,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "policy-check",
+      "input_sha256": "af52e9c0442937e0032aca068ae665a0abe8a64c60de0cbe69de386d569ce7c0",
+      "latency_ms": 105.2367549855262,
+      "response": {
+        "answers": {
+          "action": {
+            "choice": "decline",
+            "confidence": 0.6417135001196086,
+            "probabilities": {
+              "approve": 0.020449111020490306,
+              "decline": 0.8924752125126014,
+              "escalate": 0.08707567646690827
+            },
+            "type": "choice"
+          },
+          "eligible": {
+            "noul": 0.04638009087892775,
+            "type": "noul"
+          }
+        },
+        "model": "Decision-2.0-Vega-27B",
+        "usage": {
+          "input_tokens": 236,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "multilingual",
+      "input_sha256": "28be6206986889181cc9bf19c4ad593721955ecdffc1c03da97e1be473bf496a",
+      "latency_ms": 109.50437397696078,
+      "response": {
+        "answers": {
+          "queue": {
+            "choice": "hardware",
+            "confidence": 0.769621527854689,
+            "probabilities": {
+              "account": 0.014401568887088607,
+              "hardware": 0.942272684718665,
+              "shipping": 0.04332574639424643
+            },
+            "type": "choice"
+          }
+        },
+        "model": "Decision-2.0-Vega-27B",
+        "usage": {
+          "input_tokens": 112,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "null-description",
+      "input_sha256": "78429233af527c450bc84b2757198df46d011c93dad94bed70d567637c953928",
+      "latency_ms": 100.66568595357239,
+      "response": {
+        "answers": {
+          "intent": {
+            "choice": "cancel",
+            "confidence": 0.6175963266193709,
+            "probabilities": {
+              "cancel": 0.881364755732775,
+              "pause": 0.09728582579489131,
+              "upgrade": 0.02134941847233371
+            },
+            "type": "choice"
+          }
+        },
+        "model": "Decision-2.0-Vega-27B",
+        "usage": {
+          "input_tokens": 99,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "over-budget",
+      "input_sha256": "e71b67ec6c62c5db4858d7a24ef686f0cfa02d82f3c0237f504846e653baa3d0",
+      "latency_ms": 141.77357591688633,
+      "response": {
+        "answers": {
+          "tone": {
+            "error": "max_length_exceeded",
+            "type": "score"
+          },
+          "weather": {
+            "error": "max_length_exceeded",
+            "type": "noul"
+          }
+        },
+        "model": "Decision-2.0-Vega-27B",
+        "usage": {
+          "input_tokens": 0,
+          "output_tokens": 0
+        }
+      }
+    }
+  ],
+  "package_manifest_sha256": "b24f6f4fecdb407f20015a91fe968f7048a58c16f6011f97c735664ef694dc7e",
+  "passed": true,
+  "profile": "qwen-adapter",
+  "runtime": {
+    "fp32_master": false,
+    "hip": "7.2.53211",
+    "kernels": {
+      "causal_conv1d": "1.7.0",
+      "fla_path": "/opt/decision-fla/fla",
+      "flash_linear_attention": "0.5.2",
+      "kernel_bindings": {
+        "causal_conv1d_fn": "causal_conv1d.causal_conv1d_interface.causal_conv1d_fn",
+        "causal_conv1d_update": "causal_conv1d.causal_conv1d_interface.causal_conv1d_update",
+        "torch_chunk_gated_delta_rule": "fla.ops.gated_delta_rule.chunk.chunk_gated_delta_rule",
+        "torch_recurrent_gated_delta_rule": "fla.ops.gated_delta_rule.fused_recurrent.fused_recurrent_gated_delta_rule"
+      },
+      "runtime_check_sha256": "4517d9e001d9e1e2b520086b5153fa69b642a191efb19b8c9a6a9ef126e1fc2d",
+      "triton": "3.7.1+gitf0b55c07",
+      "triton_cache_autotuning": "1",
+      "triton_cache_dir": "/data/dev2/runs/release/triton/dev2-27b-27bx-M6-IBxIB2-m50-release-20261002T172034Z"
+    },
+    "numpy": "2.3.5",
+    "parameter_dtypes": {
+      "bfloat16": 24350556160,
+      "float32": 5014597632
+    },
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "residency": {
+      "linear_bf16": 496,
+      "linear_fp32": 992
+    },
+    "safetensors": "0.8.0",
+    "sites": [
+      "/opt/decision-fla"
+    ],
+    "threads": 4,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0"
+  },
+  "schema": "dev2-release-examples/1"
+}
