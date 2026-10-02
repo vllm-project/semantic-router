@@ -5,6 +5,27 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17`. M
 (public since 2026-10-03 01:17 UTC+8). Index values stay private (node private stores and
 `decision2-program/private/m17b/`); this file has none. Times UTC.
 
+## 2026-10-02 19:05Z — wave 6a on the Index (two lanes); release inputs staged
+
+- **Soups built** (uniform FP32, `af-soup.sh` from this branch's mirror; node C merges on GPU5, SELECT agreement
+  checked): `4b-LHS17IB4X-s34` `9c9e9355…`, `4b-LHS17ML-s34` `e4056234…` (node C, copied to F, lists equal); on node F
+  `4b-LHS17UP-x4` `4422a353…`, `4b-AFxALL` `8f282287…` (12), `4b-AFxALL2` `70612d1c…` (10), `4b-LHS17IB4X-x4`
+  `6edd6165…`, `4b-LHS17ML-x4` `8c69cd51…`, `4b-AFxALL3` `df95b286…` (10).
+- **Index (reference `DEV2.0-4B-SDMLxALL-bf16`, results `54389c5a…` pinned on F and A):**
+  - `AF-4b-AFxALL2-bf16` (BF16 `3cfe2816…`): node F GPU6–7, parity PASS 18:12Z, shards running.
+  - `AF-4b-AFxALL3-bf16` (BF16 `06b3633f…`): node A GPU5–7 (02:00 assignment; panel-8 copied C → A, lists equal),
+    parity PASS 18:22Z, last two shards running.
+  - Queued: `AF-4b-AFxALL` on node F after AFxALL2; information point `AF-4b-LHS23IB4-bf16` on node A.
+- **IF3:** `audit6` (node C CPU, one audit of the ten distinct member TRAIN files of every wave-6 candidate): 120,226
+  Index rows, planted 200 / 200, **0 item rows in all ten**.
+- **Formal path (R3, card reports) run ahead of the Index results**, since it costs about 15 GPU-minutes per
+  candidate: `m17-4b-AFxALL2` and `m17-4b-AFxALL3` collected on node F (co-tenant, T = 1), scored on node A: types
+  choice / Noul / Score OK for both; mlx-diag collected and scored.
+- **Release ops** `v2/release/records/dev2-4b-w6-2026-10-03/ops/` (`ca2b8fe94`). The card's Index input takes each
+  other tier's point from the released input that scored its current main (9B Lux `f3122c7c`, 27B Vega `5c85c127`).
+  Already staged on node A for both candidates: current-revision receipts, the gate files, the BF16 checkpoints.
+- GPU-h so far ≈ 4.5 (Index ≈ 3.5, formal and readouts ≈ 0.6, merges ≈ 0.1, parity ≈ 0.3).
+
 ## 2026-10-02 18:05Z — started; wave 6 preregistered
 
 - Merged integration (`47dd06be7`, the central Hub visibility policy) and the arm-factory branch (its soup, staging
