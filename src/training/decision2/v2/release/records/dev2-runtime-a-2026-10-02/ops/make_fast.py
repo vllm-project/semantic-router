@@ -48,7 +48,8 @@ DECIDED_BY = (
 PREPARED_BY = "Decision 2.0 runtime phase A worker 2d541b40 (track=runtime-a, worktree vllm-sr-dev2-runtime-a)"
 DECIDED_UTC = "2026-10-02T10:00:00Z"
 # The current main of each repository and the release work directory on node A that built and sealed it (the org
-# worker's card-only revisions; Kai's was built on node E and its receipts copied to the same path on node A).
+# worker's card-only revisions; Kai's was built on node E and its receipts copied to the same path on node A; Vega's
+# is the 27B release M6-IBxIB2-m50 of 2026-10-02 18:20Z, which superseded the org revision e60bd8e3).
 TIERS: dict[str, tuple[str, str, str | None, str | None]] = {
     "0.6B": (
         "0p6b",
@@ -83,8 +84,8 @@ TIERS: dict[str, tuple[str, str, str | None, str | None]] = {
     "27B": (
         "27b",
         "Vega",
-        "e60bd8e346110b3348b6e5a25c07329d350c4b21",
-        "dev2-org-27B-20261002T113747Z",
+        "5c85c127828f4b5dfe0ca95d933be033a8a4caa3",
+        "dev2-27b-27bx-M6-IBxIB2-m50-release-20261002T172034Z",
     ),
 }
 

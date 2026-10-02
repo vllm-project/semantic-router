@@ -50,7 +50,7 @@ case "$tier" in
   4B) key=4b codename=Nox image=$LATEST; release_of dev2-4b-sdml-release-20261002T085835Z ;;
   9B) key=9b codename=Lux vram=60; release_of dev2-card4-9B-20261002T033640Z ;;
   27B)
-    key=27b codename=Vega image=$LATEST vram=130; release_of dev2-27b-27bif-M6-IB-release-20261002T070233Z
+    key=27b codename=Vega image=$LATEST vram=130; release_of dev2-27b-27bx-M6-IBxIB2-m50-release-20261002T172034Z
     base_repo=$HFC/models--Qwen--Qwen3.8-27B
     base_args=(--base-path "$base_repo/snapshots/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0")
     base_mounts=(-v "$base_repo:$base_repo:ro")
