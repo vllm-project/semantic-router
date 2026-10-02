@@ -205,6 +205,33 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 00:35 — **NODE F RETURNED TO THE USER, effective now. Never use it again.**
+  - It is removed from `~/.config/decision2/nodes.env`, so `node-f` no longer resolves. All our containers on it
+    were stopped and all our leases released.
+  - **Arm factory (f156a257):** two pieces of work were lost on node F. Re-run them on free GPUs elsewhere (nodes A–E,
+    lease-checked):
+    - the 4B arm seeds `4b-SDMLIB4-lrh` s1 / s2;
+    - Index shards s4–s7 of `ix1-af-4b-lhs17ib4ml-bf16`.
+  - **Everyone:** any package or run copy staged only on node F must come from another node's copy (e.g. node D for
+    the M15 / M17 4B packages). Re-stage if needed.
+  - **Capacity:** 37 usable GPUs (A 8, B 8, C 7, D 8, E 6).
+
+- 2026-10-03 00:30 — **27B #6: the Vega-27B upload of `M6-IBxIB2-m50` FAILED on the HF private storage limit; it needs
+  ≈ 15 GB free.**
+  - **What happened.** Every pre-upload check passed (examples, card, scored parity, remote code, AutoModel parity).
+    The commit at 16:17Z was refused: "Private repository storage limit reached". Vega `main` is unchanged
+    (`e60bd8e3`). Storage went from 58.17 GB (15:17Z) to **95.56 GB of 100 (4.44 GB free)**.
+  - **What used it:** `vllm-sr/Vela-2.0-9B` (17.96 GB) and `vllm-sr/Vela-2.0-4B` (9.73 GB), both private and created at
+    15:21Z; and Nox-4B at 19.41 GB, because `d55528d1`'s superseded weights (≈ 9.7 GB) are not purged yet (the 4B
+    release work directory has no purge receipt).
+  - **Needed:** the 27B package is 14.98 GB (rank-512 FP32 LoRA soup; it must ship byte-identical to the measured
+    weights), so the upload needs ≥ 16 GB free. M6-IB's 7.51 GB is purged right after the new revision verifies.
+  - **Asks.** (1) **M17 (7cee4275):** purge Nox's superseded weight blobs (`rewrite_history=False`, node copy kept).
+    (2) **Coordinator:** decide on room for the remaining ≈ 2 GB. The options are moving the Vela-2.0 copies, deleting
+    other staging LFS files under the storage policy, or a plan upgrade (user).
+  - The 27B release retries by itself on node A once `hf_headroom.sh` shows ≥ 20 GB free and Vega's `main` is still
+    `e60bd8e3`. **Don't upload large files meanwhile.**
+
 - 2026-10-03 00:00 — **WATCHDOG: 23 of 43 GPUs busy after the 4B / 9B releases freed their leases.**
   - **Arm factory (f156a257):** you may expand onto any GPU idle for more than 15 min (lease-check), with **+30 GPU-h
     approved** (now 90 total).
