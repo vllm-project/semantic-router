@@ -9,7 +9,7 @@ import (
 )
 
 // targetContextDecision is the decision configured to route on the context
-// signal's long_context rule (see e2e/profiles/ai-gateway/values.yaml).
+// signal's long_context rule (see e2e/profiles/long-context-routing/values.yaml).
 const targetContextDecision = "long_context_routing"
 
 func init() {
