@@ -8,10 +8,13 @@ import (
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
-// targetActionDecision is the decision configured to route on the action
-// signal matching an explanation request (see
-// e2e/profiles/ai-gateway/values.yaml).
-const targetActionDecision = "explain_action"
+// The action decisions live in the e2e-action recipe of
+// e2e/profiles/ai-gateway/values.yaml, so they never compete with the default
+// recipe's domain routes. targetActionDecision routes explanation requests.
+const (
+	actionRoutingModel   = "e2e-action"
+	targetActionDecision = "explain_action"
+)
 
 func init() {
 	pkgtestcases.Register("action-routing", pkgtestcases.TestCase{
@@ -28,5 +31,6 @@ func testActionRouting(ctx context.Context, client *kubernetes.Clientset, opts p
 		TargetDecision: targetActionDecision,
 		ResultsTitle:   "ACTION ROUTING TEST RESULTS",
 		LogLabel:       "Action",
+		Model:          actionRoutingModel,
 	})
 }

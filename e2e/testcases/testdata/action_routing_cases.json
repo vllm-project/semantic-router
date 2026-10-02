@@ -25,8 +25,8 @@
   },
   {
     "name": "Other request - no action",
-    "description": "A request that names no action should not trigger any action decision",
-    "query": "What is the capital of France?",
+    "description": "A message that names no action should not trigger any action decision",
+    "query": "Sounds good, thanks for the help.",
     "expected_decision": "",
     "expected_matched_signal": "",
     "should_match": false
