@@ -56,7 +56,18 @@ section first). Earlier: 2026-10-02 17:45 UTC+8 (09:45Z; continuation #5 from 08
   `e60bd8e3` with no other Vega release.sh, it runs `release27bx.sh M6-IBxIB2-m50 --release --gpu 0` once (log
   `/data/dev2/logs/27bx-M6-IBxIB2-m50-retry-20261002T163029Z.log`). Failed work dir:
   `dev2-27b-27bx-M6-IBxIB2-m50-release-20261002T151745Z` (1.0 GPU-h).
-- **16:55Z:** storage still 95.56 GB (watcher waiting). M7 at steps 3,009–3,076; M8 at 924–1,015; no relay yet. Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
+- **16:55Z:** storage still 95.56 GB (watcher waiting). M7 at steps 3,009–3,076; M8 at 924–1,015; no relay yet.
+- **17:37Z:** private storage fell to 49.82 GB (USER 01:11 UTC+8: **Decision 2.0 goes public**; Kai, Eos, Sol, Nox and
+  Lux are public, and public repos don't count). The watcher started the release at 17:20Z (`release27bx.sh --release`,
+  in scored parity since 17:31Z). **After `post_checks=ok`: make Vega public, then the collection, and check an
+  anonymous README 200** (COORDINATION 01:25). Before the next 27B upload the hub guard must accept the six public
+  Decision-2.0 repos.
+- **Node E left the pool at 17:22Z** (returned to the user). The four M8 seeds there (M8-IB124-s4 / -s5, M8-IB-s4,
+  M8-IB2-s4) and their relays were stopped; the coordinator copied their run directories to node F (checkpoints at
+  848 / 848 / 636 / 827, with optimizer state). Plan (COORDINATION 01:25: resume or restart on node F): **exact resume**
+  from those checkpoints with `m8-arm.sh` `M8_RESUME=1` (attempt `full-r2`; `14d48a005` adds node F GPU2–7 to the
+  launcher, `pull-f`, `RELAY_NODE=f`, `M6_STAGE_NODE=f`). Node F GPU2–5 leased for 27B (reserved-idle); staging
+  node F since 17:35Z. The node E attempts cost ≈ 4 × 3.1 GPU-h before the stop. Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
 continuation #3, 4a20f83f, 19:37–20:10Z, silently stopped after its 20:10Z poll; its entries below say "cba71646",
 which is the coordinator's ID; worker 3 0d2e488f ran 15:12–19:40Z; worker 2 a56025bb 10:44–15:15Z; worker 1 11741ee2
 06:17–10:55Z). **Amendment 6 (`6bbb2512d`): the MLX-DEV2 guard for every M6 finalist** (COORDINATION 04:15).
