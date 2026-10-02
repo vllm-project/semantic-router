@@ -1,0 +1,4 @@
+cache /data/dev2/runs/runtime-a/triton/27B-bench-old-20261002T132320Z from /data/dev2/runs/release/triton/dev2-27b-27bif-M6-IB-release-20261002T070233Z files=2692 digest=5751cc52702ce8f2e95ea7c78cca7e4fed8689a5d4fdb806c239dfbf640842e5
+old exit=0 wall_seconds=312.6 cache_files=2692
+cache /data/dev2/runs/runtime-a/triton/27B-bench-new-20261002T132320Z from /data/dev2/runs/runtime-a/triton/27B-bench-old-20261002T132320Z files=2692 digest=ea75ddf60960b9388117956e33cfac8feca04788359237e58dc333a2d965ba18
+new exit=0 wall_seconds=244.3 cache_files=2788
