@@ -19,8 +19,10 @@
 #            onto DEV2.0-4B-13d42143 with the copy's model SHA-256, checking the identity, the loaded count
 #            4,208,383,488 and calibration none
 #   parity   NODE GPU: launch.sh parity over the 86 compatibility requests; parity/NAME/parity.json must pass
-#   run      NODE "GPUS": node C, 7 GPUs: launch.sh run over panel-7; node D, 4 GPUs: lanes.sh over panel-8 (two
-#            shards per GPU, one after another); detached on the node
+#   run      NODE "GPUS": node C with 7 GPUs: launch.sh run over panel-7; otherwise lanes.sh over panel-8 (the 8 shards
+#            dealt round-robin to the GPUs, each GPU's shards one after another); detached on the node; the panel
+#            used is recorded in runs/NAME/4bif-panel for score
+#   void     NODE: a parity attempt the harness refused before its reference pass (busy or foreign GPU) -> void/
 #   status   NODE: per shard records, end and exit code; GPU-h of the current intervals
 #   score    NODE: score.sh (merge, port + kit, compare) once every shard ended 0
 #   pull     node D -> node C through node B (transfer keys; the workstation link is too slow): merged/ results,
@@ -132,20 +134,34 @@ EOF
     on "$NODE" "cat $R/logs/4bif-parity-$NAME.exit; python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); \
       print(json.dumps({k: d[k] for k in (\"pass\", \"requests\", \"statuses\", \"max_abs_dp\")})); \
       sys.exit(0 if d[\"pass\"] and d[\"requests\"] == 86 else 1)' $R/parity/$NAME/parity.json" ;;
+  void)
+    need_node
+    on "$NODE" "test -f $R/logs/4bif-parity-$NAME.exit && test ! -e $R/parity/$NAME/parity.json && test ! -e $R/parity/$NAME/ref/start_epoch" ||
+      { echo "nothing to void: no refused parity attempt of $NAME (a refused attempt has no reference pass)" >&2; exit 3; }
+    on "$NODE" "docker ps --format '{{.Names}}' | grep -q '^ix1-parity-$(tr 'A-Z.' 'a-z_' <<< "$NAME")-'" &&
+      { echo "a $NAME parity container is running" >&2; exit 3; }
+    on "$NODE" "v=$R/void/4bif-$NAME-\$(date -u +%Y%m%dT%H%M%SZ) && mkdir -p \$v && mv $R/parity/$NAME \$v/parity && \
+      mv $R/logs/4bif-parity-$NAME.exit $R/logs/4bif-parity-$NAME.log \$v/ && echo voided into \$v" ;;
   run)
     need_node; mirror_on "$NODE"
     on "$NODE" "python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1]))[\"pass\"] else 1)' $R/parity/$NAME/parity.json" ||
       { echo "parity gate missing or failed" >&2; exit 3; }
     read -r -a g <<< "$GPU"
-    if [ "$NODE" = c ]; then
-      [ "${#g[@]}" = 7 ] || { echo "node C runs panel-7 on 7 GPUs" >&2; exit 2; }
-      [[ " $GPU " != *" 0 "* ]] || { echo "node C GPU0 is foreign" >&2; exit 2; }
-      on c "setsid nohup bash -c 'cd $S && bash v2/eval/ix1/launch.sh run --src $M --model $NAME --gpus \"$GPU\" \
-        --run $R/runs/$NAME --rows-dir $R/panel-7 --cache $R/parity/$NAME/cache-frozen' > $R/logs/4bif-run-$NAME.log 2>&1 < /dev/null &"
+    [[ " $GPU " != *" 0 "* || "$NODE" != c ]] || { echo "node C GPU0 is foreign" >&2; exit 2; }
+    on "$NODE" "test ! -e $R/runs/$NAME/4bif-panel" || { echo "$NAME already launched on node $NODE" >&2; exit 3; }
+    if [ "$NODE" = c ] && [ "${#g[@]}" = 7 ]; then
+      on c "mkdir -p $R/runs/$NAME && echo panel-7 > $R/runs/$NAME/4bif-panel && setsid nohup bash -c 'cd $S && \
+        bash v2/eval/ix1/launch.sh run --src $M --model $NAME --gpus \"$GPU\" --run $R/runs/$NAME --rows-dir $R/panel-7 \
+        --cache $R/parity/$NAME/cache-frozen' > $R/logs/4bif-run-$NAME.log 2>&1 < /dev/null &"
     else
-      [ "${#g[@]}" = 4 ] || { echo "node D runs panel-8 as four lanes" >&2; exit 2; }
-      on d "setsid nohup bash $S/v2/dec/ops/4bif/lanes.sh $M $NAME panel-8 '${g[0]}:0,4 ${g[1]}:1,5 ${g[2]}:2,6 ${g[3]}:3,7' \
-        > $R/logs/4bif-run-$NAME.log 2>&1 < /dev/null &"
+      [ "${#g[@]}" -ge 1 ] && [ "${#g[@]}" -le 8 ] || { echo "1 to 8 GPUs" >&2; exit 2; }
+      plan=""
+      for i in "${!g[@]}"; do
+        ks=""; for ((k = i; k < 8; k += ${#g[@]})); do ks="${ks:+$ks,}$k"; done
+        plan="${plan:+$plan }${g[$i]}:$ks"
+      done
+      on "$NODE" "mkdir -p $R/runs/$NAME && echo panel-8 > $R/runs/$NAME/4bif-panel && \
+        setsid nohup bash $S/v2/dec/ops/4bif/lanes.sh $M $NAME panel-8 '$plan' > $R/logs/4bif-run-$NAME.log 2>&1 < /dev/null &"
     fi
     echo "$(date -u +%FT%TZ) $NAME full run launched on node $NODE GPU ${GPU// /,}" ;;
   status)
@@ -167,7 +183,7 @@ EOF
     ;;
   score)
     need_node; mirror_on "$NODE"
-    P=$(panel_of "$NODE") n=$([ "$NODE" = c ] && echo 7 || echo 8)
+    P=$(on "$NODE" "cat $R/runs/$NAME/4bif-panel") n=${P#panel-}
     on "$NODE" "for k in \$(seq 0 $((n - 1))); do test \"\$(cat $R/runs/$NAME/shard-\$k/exit_code 2>/dev/null)\" = 0 || exit 1; done" ||
       { echo "not every shard ended with exit code 0" >&2; exit 3; }
     on "$NODE" "test ! -e $R/runs/$NAME/merged" || { echo "$NAME is already scored" >&2; exit 3; }
