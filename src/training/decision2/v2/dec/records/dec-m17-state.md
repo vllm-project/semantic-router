@@ -4,6 +4,31 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17` (r
 stopped after creating the worktree, nothing had run). Prereg `da770d98a`, ops `1ce8b2220` (mirror on nodes E / F),
 data lock `4f68f1eb0`.
 
+## 2026-10-02 07:30Z — the sweep's 4B candidate is not a successor; stage-2 Index runs in flight
+
+- **`IS-4b-LHA10SDML-bf16` (handed over by the Index sweep, coordinator 07:30Z): not a successor.** M15
+  `4b-LHA10SDML` soup `1b515675…`, BF16 copy `991a8fb8…`. The sweep's cross bootstrap vs the release's run (node D
+  `ix1/index-sweep/cross/IS-4b-LHA10SDML-bf16-vs-LHS17SD-bf16-full.json` `f296935f…`; base input = the
+  `DEV2.0-4B-LHS17SD-bf16` results `bb726d5d…`) has a 95% lower bound **≤ 0**, so it fails the release gate; no
+  integrity check is run for release. Its transfer-only part (`…-transfer.json` `a3e8ae26…`; without HoVer,
+  When2Call, iSarcasmEval, GSM8K, BPoMP) is significantly positive vs the release (private values; the release's
+  own gain is in-distribution). No formal v3 / mlx-diag run of it exists (M15 ran development only: MLX-DEV-M15
+  above LH, retention below LH); its formal references are queued with stage 2's formal collections.
+- Wave 2 (`4b-LHS17IB4`, `4b-LHS17IB4X`) training on node F GPU2 / 3 / 6 / 7 since 07:02Z.
+- Wave-1 candidates, each staged as its BF16 release copy (receipt source = soup SHA-256) and restaged onto
+  `DEV2.0-4B-13d42143` (identity checked, loaded 4,208,383,488, T = 1):
+
+  | Candidate | FP32 soup → BF16 identity | Package manifest | Index run |
+  | --- | --- | --- | --- |
+  | `DEV2.0-4B-LHS17UP-bf16` | `b5617263…` → `2e754a80…` | `9ff9286b…` | node C GPU1–5, parity PASS 07:12Z, shards running |
+  | `DEV2.0-4B-LHS23SD-bf16` | `5b0268b5…` → `3f70e632…` | `fb38ba05…` | node E fast lane, parity started 07:23Z |
+  | `DEV2.0-4B-LHS17UP-m50-bf16` | `495aadad…` → `3135d10b…` | `53755d67…` | node E fast lane, parity started 07:23Z |
+  | `DEV2.0-4B-LHS23SD-m50-bf16` | `57b71da8…` → `4c902a6e…` | `13dddccb…` | node E fast lane, parity started 07:23Z |
+
+- Formal-path readouts (typed DEV, CSS pilot) of all four finished on node F 07:07–07:12Z (co-tenant).
+- Contamination audit of the stage-2 TRAIN files (`audit2`, node C CPU) running since 06:12Z.
+- C1 recheck r3 (IB4 phase 1): PASS (verdict `54bc9361…`), so IB4 arms may be released.
+
 ## 2026-10-02 06:15Z — stage 2 training (wave 1 running, wave 2 queued)
 
 - 05:55Z coordinator: `4b-LHS17SD` is the released Nox-4B (`b285e7a1`, by 5e7b8132); M17 is now the 4B trainer and
