@@ -12,6 +12,18 @@ values live in the node private directories and the local private folder only.
 Reference: the released LH, `Decision-2.0-Nox-4B` `main` `54b084f9` (weights `6a555335…`, the same weights and
 runtime as DEV2.0-4B `13d42143`); its IX1 run `DEV2.0-4B-LH` (node C, panel run IDs `6455d7be…`).
 
+## 2026-10-02 04:40Z
+
+- **Coordinator interrupt (12:25 UTC+8): release the highest-scoring candidate; never a lower one once a higher one
+  is measured.** The comparison set is every finished BF16 Index run: M13 `DEV2.0-4B-LHA10SD-bf16` and M17
+  `DEV2.0-4B-LHS10SD-bf16` / `DEV2.0-4B-LHS17SD-bf16` (both finished, scorers PASS; M17 hand-over
+  [`dec-m17-handover-2026-10-02.md`](dec-m17-handover-2026-10-02.md) on `xunzhuo/decision-2-training-dec-m17`).
+  a75 / a50 / UP are not waited for.
+- Paired bootstraps vs `DEV2.0-4B-LH` (2,000 replicates, seed 20261002; full panel and transfer-only) running on CPU:
+  SDB and LHS10SD on node C; LHS17SD on node D (node C at load > 160), on SHA-256-checked copies of the two
+  `results.jsonl` files (`runs/4bif-bootcopy/`), mirror `3b8f2cf85` (`v2/eval/ix1` identical to `535a884db`).
+- Integration merged (`055affd2a`, includes the collection-check fix `cd565a588`).
+
 ## 2026-10-02 03:40Z
 
 - **Progressive-release directive (COORDINATION 11:35 UTC+8):** release M13 `4b-LHA10SD` now if its lower bound vs LH
