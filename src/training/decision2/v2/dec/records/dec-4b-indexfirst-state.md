@@ -12,6 +12,12 @@ values live in the node private directories and the local private folder only.
 Reference: the released LH, `Decision-2.0-Nox-4B` `main` `54b084f9` (weights `6a555335…`, the same weights and
 runtime as DEV2.0-4B `13d42143`); its IX1 run `DEV2.0-4B-LH` (node C, panel run IDs `6455d7be…`).
 
+## 2026-10-02 05:52Z
+
+- LHA10UP Index run finished (8 / 8 shards, node D); scoring, relay to node C and bootstraps running (CPU) for the
+  successor record only. The node-D pool was stopped and the four a50 shards it had started were stopped unfinished
+  (a50 cannot change the choice: a75 is already below the release). Node D GPU4–7 leases released.
+
 ## 2026-10-02 05:45Z — released: `Decision-2.0-Nox-4B` `main` `b285e7a1`
 
 - M17 `4b-LHS17SD` (BF16 `74ec8b2f…`, manifest `35eba181…`) published 05:33Z on top of `54b084f9` (main checked right
