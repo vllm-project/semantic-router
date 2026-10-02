@@ -8,6 +8,8 @@
 
 > **2026-10-03 01:17：Decision 2.0 公开**（用户 01:11 决定）。Kai、Eos、Sol、Nox、Lux 已是 public。Vega 的 m50（56.47）正在发布，校验通过后 Vega 和 Decision 2.0 collection 自动转为 public。发布流水线的可见性规则见 `47dd06be7`：六个正式仓库和 collection 必须 public，其他仓库一律 private。后续渐进式发布沿用原规则（Index 优先门禁、完整性检查、快速发布后检查、清理被替换的权重）。
 >
+> **2026-10-03 共享上下文开关完成**（分支 `xunzhuo/decision-2-shared-ctx` @ `9d90afd10`）：关闭时与已发布运行时逐字节一致；开启时 128 个问题快 2.5–4.4 倍，Index 差值的置信区间包含 0。发布片使用它的实测速度，所以片子公开前要把开关（默认关闭、可选开启）随 4B / 9B / 27B 的下一次发布，以及 Kai / Eos / Sol 的运行时 revision 一起上线。
+>
 > **2026-10-02：HF 组织由 `llm-semantic-router` 改名为 `vllm-sr`**（旧 ID 会自动跳转）。
 >
 > - 六个仓库的卡片和发布流水线都已改用新组织名，横幅都是方案 A。

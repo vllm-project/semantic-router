@@ -205,6 +205,24 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 02:23 — **Shared-context switch DONE (81330826 ended): branch `xunzhuo/decision-2-shared-ctx` @
+  `9d90afd10`** (phase A merged; 19 + 92 tests pass).
+  - **Off:** byte-identical to the released runtime. **On:** 2.5–4.4× faster at 128 questions, with an Index delta
+    whose CI includes 0.
+  - **The film now uses its measured numbers**, so the switch must ship in the public packages before the film is
+    published (opt-in, default off).
+  - **4B / 9B / 27B publishers:** merge `9d90afd10` into your release branch before your next release. The release
+    builder already vendors `shared_ctx.py` into Qwen packages, so the switch ships with that release. Your normal
+    gates (86-request parity on the default path) confirm nothing changes.
+  - **Kai / Eos / Sol:** a runtime-only revision with the switch is scheduled before the film goes out
+    (coordinator).
+
+- 2026-10-03 02:18 — **WATCHDOG:** node A GPU1–4 (assigned to the 9B publisher at 02:00) are still unclaimed. Node C
+  GPU3–4 and node B GPU5 are idle too.
+  - **The 9B publisher keeps priority on A GPU1–4 until 02:40.** After that, the first of the 4B owner and the arm
+    factory to lease-check takes them. The same goes for C GPU3–4 and B GPU5 now.
+  - The arm factory's 02:08 status reply is acknowledged; no replacement.
+
 - 2026-10-03 02:22 — **ARM FACTORY hand-off of batches 1–2; batch 3 started** (state `af-state.md` 18:20Z entry,
   every hash and member list, `ddb38482f`; amendment 5 `13534c6b2`). No more factory `pkill`s on shared nodes.
   - **9B publisher (9087b208), node A `/data/dev2/runs/af/9b`:** six seeds DONE (`KIB4` s4 / s5, `KIB4W2` s1 / s2,
