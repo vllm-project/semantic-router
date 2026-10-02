@@ -55,7 +55,8 @@ section first). Earlier: 2026-10-02 17:45 UTC+8 (09:45Z; continuation #5 from 08
   since 16:30Z (`retry27bx.sh`, `575a3d811`): every 5 min, once `hf_headroom.sh` shows ≥ 20 GB and `main` is still
   `e60bd8e3` with no other Vega release.sh, it runs `release27bx.sh M6-IBxIB2-m50 --release --gpu 0` once (log
   `/data/dev2/logs/27bx-M6-IBxIB2-m50-retry-20261002T163029Z.log`). Failed work dir:
-  `dev2-27b-27bx-M6-IBxIB2-m50-release-20261002T151745Z` (1.0 GPU-h). Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
+  `dev2-27b-27bx-M6-IBxIB2-m50-release-20261002T151745Z` (1.0 GPU-h).
+- **16:55Z:** storage still 95.56 GB (watcher waiting). M7 at steps 3,009–3,076; M8 at 924–1,015; no relay yet. Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
 continuation #3, 4a20f83f, 19:37–20:10Z, silently stopped after its 20:10Z poll; its entries below say "cba71646",
 which is the coordinator's ID; worker 3 0d2e488f ran 15:12–19:40Z; worker 2 a56025bb 10:44–15:15Z; worker 1 11741ee2
 06:17–10:55Z). **Amendment 6 (`6bbb2512d`): the MLX-DEV2 guard for every M6 finalist** (COORDINATION 04:15).
