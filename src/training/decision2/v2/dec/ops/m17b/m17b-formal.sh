@@ -8,7 +8,8 @@
 #                             /data/dev2/runs/dec/m17/soup/NAME/build/NAME-soup (+ MODEL_SHA256, DONE, LINKED.json;
 #                             inode lists equal), so M17's readout and formal tools read it under /data/dev2/runs/dec
 #   readouts GPU NAME...      node F, detached, co-tenant (M17_COTENANT=1): the 16K typed DEV and CSS pilot readouts
-#                             (m17-lines.sh read dev css-pilot) the formal library's 23:15 calibration rule needs
+#                             (m17-lines.sh read dev css-pilot) the formal library's 23:15 calibration rule needs;
+#                             M17_COTENANT_ANY=1 (coordinator-approved) reads beside another track's job on that GPU
 #   select TAG NAME...        node F: m10_formal_select.py --tier 4b over NAME... -> /data/dev2/runs/dec/m17b/select/TAG
 #   formal TAG GPU NAME...    node F, detached: m17-formal.sh run with M17_SELECT=that directory (smoke, collection)
 #   mlx TAG GPU NAME...       node F, detached: m17-formal.sh mlx-run (after node A marked the v3 report)
@@ -46,7 +47,7 @@ case "$STAGE" in
     cmds=""
     for n in "$@"; do
       on f "test -f $M/soup/$n/DONE" || { echo "$n is not linked" >&2; exit 3; }
-      cmds+="M17_COTENANT=1 M17_NODE=f bash $OPS/m17-lines.sh read $MIR $G $n $(ck "$n") $BASE dev css-pilot; "
+      cmds+="M17_COTENANT=1 M17_COTENANT_ANY=${M17_COTENANT_ANY:-0} M17_NODE=f bash $OPS/m17-lines.sh read $MIR $G $n $(ck "$n") $BASE dev css-pilot; "
     done
     on f "mkdir -p $M/logs; setsid nohup bash -c '$cmds' > $M/logs/m17b-readouts-g$G-$(date -u +%H%M%S).log 2>&1 < /dev/null &"
     echo "readouts of $* on node F GPU$G started" ;;
