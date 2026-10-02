@@ -29,7 +29,7 @@ func TestVelaReleaseRegistryContracts(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := "models/" + tc.name
-			repo := "llm-semantic-router/" + tc.name
+			repo := "vllm-sr/" + tc.name
 			for _, alias := range []string{path, tc.name} {
 				model := GetModelByPath(alias)
 				if model == nil {
