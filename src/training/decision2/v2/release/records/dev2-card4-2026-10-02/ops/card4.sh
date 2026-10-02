@@ -14,9 +14,10 @@
 #      and 5.18, readback, gate and collection; the released package must equal step 2's
 #   4. card HTTP, links, the read-only collection check and gate evaluate
 # GPU: node E GPU6 or GPU7 only, under this track's own lease (track=release-automap), removed afterwards if still ours.
-# Lux 9B runs on node A, where its K-a13IB release inputs are: GPU6 or GPU7 when the owner file reads released and the
-# GPU is idle, under the shared lease owner.release-card4 (the K-a13IB release's convention), removed on exit.
-# Usage: bash <mirror>/v2/release/records/dev2-card4-2026-10-02/ops/card4.sh <tier> --gpu 6|7 [--resume REV]
+# Lux 9B runs on node A, where its K-a13IB release inputs are, under the shared lease owner.release-card4 (the K-a13IB
+# release's convention, removed on exit) on an idle GPU: GPU6 or GPU7 when the owner file reads released, or GPU1,
+# where the allocation table admits short shared-lease release jobs while the 0.6B track's allocation is idle.
+# Usage: bash <mirror>/v2/release/records/dev2-card4-2026-10-02/ops/card4.sh <tier> --gpu N [--resume REV]
 set -euo pipefail
 tier="${1:-}"
 shift || true
@@ -28,7 +29,7 @@ while [[ $# -gt 0 ]]; do
     *) echo "unknown argument $1" >&2; exit 2 ;;
   esac
 done
-[[ "$gpu" =~ ^[67]$ ]] || { echo "GPU6 or GPU7 only (--gpu)" >&2; exit 2; }
+[[ "$gpu" =~ ^[0-7]$ ]] || { echo "--gpu N" >&2; exit 2; }
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 S=$(cd "$(dirname "$0")/../../../../.." && pwd)
 SRC=$(basename "$(cd "$S/../../.." && pwd)")
@@ -68,11 +69,17 @@ esac
 lease=/data/dev2/leases/gpu$gpu.lock
 lease_args=(--track release-automap)
 if [[ "$node" == E ]]; then
+  [[ "$gpu" =~ ^[67]$ ]] || { echo "node E GPU6 or GPU7 only (--gpu)" >&2; exit 2; }
   if [[ -e "$lease" ]] && [[ -n "$(ls -A "$lease")" ]]; then
     echo "gpu$gpu already has a lease entry ($(ls "$lease")): refusing" >&2; exit 1
   fi
 else
-  grep -qx "status=released" "$lease/owner" 2>/dev/null || { echo "gpu$gpu is not released by its owner" >&2; exit 1; }
+  case "$gpu" in
+    1) { grep -qx "track=06b-encoder" "$lease/owner" && grep -q "^status=idle" "$lease/owner"; } 2>/dev/null \
+         || { echo "gpu1 is not the 0.6B track's idle allocation" >&2; exit 1; } ;;
+    6|7) grep -qx "status=released" "$lease/owner" 2>/dev/null || { echo "gpu$gpu is not released by its owner" >&2; exit 1; } ;;
+    *) echo "node A GPU1, GPU6 or GPU7 only (--gpu)" >&2; exit 2 ;;
+  esac
   [[ ! -e "$lease/owner.release-card4" ]] || { echo "gpu$gpu already has owner.release-card4" >&2; exit 1; }
   rocm-smi --showuse --showmeminfo vram --json | python3 "$RENAME_OPS/pick_gpu.py" 60 "$gpu" >/dev/null \
     || { echo "GPU$gpu is busy or lacks free VRAM" >&2; exit 1; }
