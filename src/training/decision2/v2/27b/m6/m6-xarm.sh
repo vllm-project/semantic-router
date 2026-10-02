@@ -11,6 +11,9 @@
 #            pairs it), then pulled back
 #   gates    m6-gates.sh gates NAME (types = the release gate's R3, paired vs A20r / AutoJev-27B / peers, public 231);
 #            gates/contrast.json, which m4_contrast refuses to overwrite, is moved to contrast-NAME-<UTC>.json under a lock
+#   current  the references against the current release CURRENT (default M6-IB, Vega-27B 781b2b24): paired v3 and
+#            public 231 vs its formal run, and node A's mlx-diag pairing vs its collection (MLX_ALSO of the watcher)
+#            pulled to gates/mlx/NAME-vs-CURRENT.json
 # Each stage is skipped when its output exists. Usage: m6-xarm.sh MIRROR_SHA NAME GPU (detached; log on stdout)
 set -euo pipefail
 echo "m6 xarm $*: start $(date -u +%FT%TZ)"
@@ -58,6 +61,22 @@ if [ ! -f "$R/gates/$NAME/types.json" ]; then
   for f in contrast.json contrast.log; do [ ! -e "$R/gates/$f" ] || mv "$R/gates/$f" "$R/gates/${f%%.*}-$NAME-$t.${f#*.}"; done
   flock -u 9
 fi
+CURRENT=${CURRENT:-M6-IB}
+G=$R/gates/$NAME
+[ -f "$R/$CURRENT/formal/SEAL.json" ] || { echo "no sealed formal run of the current release $CURRENT" >&2; exit 2; }
+(cd "$S" && export PYTHONPATH=$S PYTHONDONTWRITEBYTECODE=1 TMPDIR=/data/dev2/tmp &&
+  { [ -f "$G/paired-vs-$CURRENT.json" ] || python3 -m v2.eval.gates paired --left "$R/$NAME/formal" --left-name "$NAME" \
+    --right "$R/$CURRENT/formal" --right-name "$CURRENT" --output "$G/paired-vs-$CURRENT.json" > "$G/paired-vs-$CURRENT.log"; } &&
+  { [ -f "$G/public231-vs-$CURRENT.json" ] || python3 -m v2.eval.gates public231 --left "$R/$NAME/formal" \
+    --right "$R/$CURRENT/formal" --left-name "$NAME" --right-name "$CURRENT" --output "$G/public231-vs-$CURRENT.json" \
+    > "$G/public231-vs-$CURRENT.log"; })
+if [ ! -f "$R/gates/mlx/$NAME-vs-$CURRENT.json" ]; then
+  if on_a "mlx/$NAME-vs-$CURRENT.json"; then
+    rsync -a -e "$X" "root@$(cat "$KEY/peer"):mlx/$NAME-vs-$CURRENT.json" "$R/gates/mlx/$NAME-vs-$CURRENT.json"
+  else
+    echo "$(stamp) $NAME: node A has no mlx-diag pairing vs $CURRENT (start its watcher with MLX_ALSO)" >&2
+  fi
+fi
 python3 -c 'import json,sys; t=json.load(open(sys.argv[1])); print("types", json.dumps(t.get("verdicts", t)))' \
-  "$R/gates/$NAME/types.json" | cut -c1-400
+  "$G/types.json" | cut -c1-400
 echo "m6 xarm $NAME complete: $(stamp)"
