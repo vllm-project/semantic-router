@@ -89,7 +89,9 @@ class RenamedRepositoryTest(unittest.TestCase):
     def api(self, resolved: str | None):
         return SimpleNamespace(
             model_info=lambda repo, **_: SimpleNamespace(
-                id=resolved or repo, private=True, sha="a" * 40
+                id=resolved or repo,
+                private=hub.expected_private(resolved or repo),
+                sha="a" * 40,
             )
         )
 
