@@ -147,7 +147,7 @@ This document defines the project-level surfaces used by skills, reports, and va
 ## `training_stack`
 
 - Training-stack workflows, selector or embedding artifacts, evaluation scripts, and runtime-facing training outputs under `src/training`.
-- Typical paths: `src/training/**`, `tools/make/models.mk`, `src/training/model_classifier/train-mmbert32k-gpu.sh`, `website/docs/training/**`
+- Typical paths: `src/training/**`, `src/training/kv_mapper/**`, `tools/make/models.mk`, `src/training/model_classifier/train-mmbert32k-gpu.sh`, `website/docs/training/**`
 - Task rules: `training-stack`, `repo-docs`
 
 ## `docs_examples`
