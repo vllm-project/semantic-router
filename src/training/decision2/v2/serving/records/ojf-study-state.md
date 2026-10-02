@@ -6,6 +6,20 @@ scratch directory; no released package is changed. Times are UTC.
 
 ## Log (newest first)
 
+- 2026-10-02 04:13 — **PAUSED by user decision** (speed-up work to be planned for all Decision 2.0 sizes first).
+  All study containers stopped, the three study GPU leases released (`owner.prev-ojf-<time>`), GPUs verified idle.
+  Write-up: [`open-jev-fast-study-2026-10-02.md`](open-jev-fast-study-2026-10-02.md).
+  - Measured and final: latency panel at 0.8B / 4B / 27B (table below); 27B best bit-identical stack (lean LoRA +
+    trims + graphs) p50 / p95 75.2 / 80.6 ms; 0.8B graph + trims 9.5 / 11.4 ms; kernels per request 0.8B 1,661 →
+    1,494 (trims), 27B 7,914 → 5,384 (lean LoRA + trims); launch calls per request about 20 with graphs; scored-panel
+    fidelity 0.8B and 4B 0 changes on all four panels; TunableOp not adopted.
+  - Not completed: 27B scored-panel pass of the stack (released-runtime pass done), 27B and full private-panel runs,
+    a batch-composition control, 2B / 9B, `torch.compile`, graphed candidate heads, length bucketing, batch-invariant
+    kernels.
+  - Resume: on go-ahead, lease one GPU per job again, redeploy the private harness and rerun its queued jobs (27B
+    scored panels with the stack, 27B private-panel sample, 0.8B full private panel); then the rollout of
+    recommendations 1–3 through the standard parity gate.
+
 - 2026-10-02 03:50 — **Formal-panel fidelity of the bit-identical stack (graphs + host masks + exact kernel trims):
   0.8B and 4B answer all four scored panels bit-identically** (typed-final 2,000, css15 6,547, public231 231,
   mlx-diag 2,275 answers; 0 changes, drift 0.0; 525 captured shapes each). 27B (lean LoRA + trims + graphs) on
