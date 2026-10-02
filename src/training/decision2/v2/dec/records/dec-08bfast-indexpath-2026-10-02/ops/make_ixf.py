@@ -85,6 +85,7 @@ TIERS = {
         "Index delta vs the current release significantly positive, plus the integrity checks; the per-tier choice "
         "by the largest Index-gain lower bound.",
         "uncalibrated": "collected at T = 1 (no CAL698 fit)",
+        "decided_utc": "2026-10-02T05:05:00Z",
         "current": "8ed41433f5f20c73bf04fe7ef92f2d69c1145002",
         "current_run": f"{REL}/dev2-2b-t1-derived",
         "own": "same-limit-16k",
@@ -400,7 +401,7 @@ def decision(key: str, s: dict) -> dict:
         ],
         "prepared_by": PREPARED_BY,
         "decided_by": DECIDED_BY,
-        "decided_utc": DECIDED_UTC,
+        "decided_utc": t.get("decided_utc", DECIDED_UTC),
     }
 
 

@@ -1,0 +1,55 @@
+{
+ "schema": "dev2-release-decision/1",
+ "status": "final",
+ "decision": "release",
+ "model_name": "Decision-2.0-Sol-2B",
+ "repo_id": "llm-semantic-router/Decision-2.0-Sol-2B",
+ "identity": {
+  "model_sha256": "40061c70b9df5efe46c42150dd638ada4c0f658f0cd54780dd16ca2ea3e8752e"
+ },
+ "report_sha256": "78f8b33016edb76946dbbb0700dcd12d79d7f5f82bcdfde7918db0103329784d",
+ "paired_sha256": "93fd5017054e26a936a5db3a369e39e0b111034e561e534311a0ffa43aae6d1f",
+ "gate_profile": "successor",
+ "rule": "index-first",
+ "current_revision": "8ed41433f5f20c73bf04fe7ef92f2d69c1145002",
+ "evidence_sha256": {
+  "current_decision": "ea4b72cfb3da8bd1730c17a39f305a4cff4af878de04240075e7e7b0766a9dd1",
+  "current_gate": "445ca889f4c286b46580925627cf0e8a37b502894fda073a231ad0fcfb2603a8",
+  "index_first_audit": "7d8fc7d1372ac979e7cca5d1c944b7171bea2b2818c08aa953d60a03a21fc95d",
+  "index_first_base_receipt": "75b04a842e029f54cc472d1fa778c4ae3013ecc5220ea2cf19893ad59c62e447",
+  "index_first_bootstrap": "97807910e26721501924d34b1c6f03e95a8567f24e0dbddef155b0ecd231da74",
+  "index_first_receipt": "d75283e845f1bd8ad2655816ee7df3196ccd17e178b79e187f04727e5b127d23",
+  "paired": "90b23192764e7e955787c4f11f1127301dc5071568487935240d0b1a7705467d",
+  "public231": "e68d42dcde00e021e0e2c416a0f14b1525603cccdedc1c8c97927b0393714008",
+  "tier_paired": "3698dea802cc3d1c555e3097cef4436b9b9f4b7089ce1e4138bd9f5217f02bd5",
+  "types": "942eb576f981792e270f28d5f39f3284cbab97244cebf38bcf25e3a1c73c3460"
+ },
+ "calibration": "none (temperature 1; every Decision 2.0 model keeps T = 1): the formal run was collected at T = 1 (no CAL698 fit)",
+ "action": "New main revision of the private repository llm-semantic-router/Decision-2.0-Sol-2B: the M13 soup 2b-RASD (qwen-full, BF16 storage, T = 1, 16,384 tokens) replaces the weights 32872f29 of revision 8ed41433, with the product card (banner concept A, round-3 Index conventions); then the superseded weight blobs are purged with rewrite_history=False (hf_headroom.sh first). The repository stays private and in the private collection.",
+ "rationale": "Index-first rule (user decision 2026-10-02 09:55 UTC+8). Release gate: the private Index paired bootstrap of exactly these weights minus the current release (full panel, 2,000 replicates) has a 95% lower bound > 0 (values in private files only; evidence_sha256.index_bootstrap); the per-tier choice is the largest Index-gain lower bound among the measured candidates. Integrity: types choice OK, noul OK, score OK; row-level Index contamination audit of the arm's TRAIN file (08140409; the previous release's rows plus the IB1-r3 / IB2 rows) with the planted control complete; exact package parity and the Hub / trust_remote_code checks are release.sh steps (gate items 2-7). References (not gating): post-key v3 52.927 vs 53.437, -0.51 [-2.06, +4.67]; human transfer -0.062 to +0.058; vs Decision 1.0 Sol (16K) +7.15 [+5.43, +11.25]; peers decider2b +3.43 [-1.77, +6.63]; thisthat12 +6.81 [-0.65, +13.95]; mlx-diag not run; public 231 173 vs 171 (McNemar p 0.754). C1 item 8 was not run (09:55: a reference, run only if already in progress).",
+ "approved_package": {
+  "identity": "40061c70b9df5efe46c42150dd638ada4c0f658f0cd54780dd16ca2ea3e8752e",
+  "fp32_identity": "341c2bd2873731a24a2df49e8c0bd7da59a1d23aa9429e0757235174890ca8a3",
+  "profile": "qwen-full (BF16 storage of the Linear projections)",
+  "temperature": 1,
+  "max_input_tokens": 16384,
+  "revision_binding": "receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified."
+ },
+ "licence_decision": "apache-2.0, unchanged: own weights; the Decision 1.0 base and the Qwen3.5 text backbone and tokenizer are Apache-2.0 (the product card ships the Apache-2.0 LICENSE).",
+ "supersedes": {
+  "revision": "8ed41433f5f20c73bf04fe7ef92f2d69c1145002",
+  "released_as": "llm-semantic-router/Decision-2.0-Sol-2B@8ed41433f5f20c73bf04fe7ef92f2d69c1145002",
+  "final_sha256": "ea4b72cfb3da8bd1730c17a39f305a4cff4af878de04240075e7e7b0766a9dd1",
+  "gate_sha256": "445ca889f4c286b46580925627cf0e8a37b502894fda073a231ad0fcfb2603a8",
+  "manifest_sha256": "241c72a2e07d234bcf0a700d9f4c75c86f8a7b9a73ff86c0800a3859e1a68109",
+  "weights_identity": "32872f2968e38aa99901797aaab5e12e32e281bf67bb924037d443394411170d"
+ },
+ "disclosures": [
+  "items 1 and 6(b) of the successor rule (v3 significantly above the current revision) are not met; the Index-first rule makes v3 a reference",
+  "the training rows include the IB1-r3 / IB2 families matched to Index benchmark families (HoVer, When2Call, iSarcasmEval, GSM8K) and the BPoMP format; the internal records report the transfer-only Index delta without those benchmarks (private values)",
+  "card.speed is the current revision's bench receipt (same architecture, runtime and shapes)"
+ ],
+ "prepared_by": "Decision 2.0 decoder track, 0.8B / 2B Index-path continuation (worktree vllm-sr-dev2-dec-08bfast)",
+ "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's Index-first release rule of 2026-10-02 09:55 UTC+8 (the private Index delta vs the current release significantly positive; integrity checks; v3, human transfer, mlx-diag, public 231 and C1 reported as references) and the per-tier choice by the largest Index-gain lower bound, applied to M16's Index-path candidates by the 0.8B / 2B continuation",
+ "decided_utc": "2026-10-02T05:05:00Z"
+}
