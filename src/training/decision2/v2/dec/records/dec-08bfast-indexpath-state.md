@@ -7,6 +7,21 @@ Branch `xunzhuo/decision-2-training-dec-08bfast`. Index values stay private (nod
 `/data/dev2/private/eval/index021/ix1/runs/<name>/` and `decision2-program/private/m16-indexpath/`); this file holds
 verdicts, counts and hashes only.
 
+## 2026-10-02 06:55Z — 2B release inputs final; upload waits for another worker's `release.sh` on node A
+
+- **Index run `M16-2b-RASD-bf16` (node C GPU1–3):** shards 05:47–06:27Z, 120,224 ok + 2 unsupported, scorers
+  pass; co-tenant entries removed. FP32 and BF16 runs agree on 119,520 of 120,226 choices. Full-panel and
+  transfer-only bootstraps (2,000 replicates, seed 20261002) done 06:41Z: **IF1 passes** (95% lower bound > 0;
+  values private).
+- **`stage_private` (mirror `41fb29c6c`):** bootstraps, both IX1 receipts and the `out-2bRA` audit copied to node
+  A (hash-checked); `card_index` input `7ee4035e…` (decision 1.0 entrants and footnote equal to the 9B release's).
+  Assets rendered on node A (card-render venv; receipt `5c7a370a…`, 5 files).
+- **Spec / decision (`a1382cee2`):** `dev2-2b-ixf.json` `c7f34871…`, `Decision-2.0-Sol-2B.decision.ixf.json`
+  `091db6d7…` (`decided_utc` 05:05Z = the coordinator's 13:05 UTC+8 choice); `make_ixf --check` on node A is
+  byte-equal for 2B and 0.8B. Sol main is still `8ed41433`; Transformers 5.18 site `93df9002…`.
+- **Held:** a 27B prerelease `release.sh` (lease `release-27b-27bif`, started 05:57Z) runs on node A. The 2B
+  upload starts only after it ends (never concurrent), on node A GPU0 or GPU1, whichever is free.
+
 ## 2026-10-02 06:20Z — poll: `M16-2b-RASD-bf16` shards at about 80%
 
 - Node C GPU1–3 (co-tenant `release-2b-ixf`; parity 86 / 86 ok, max |Δp| 0.0) started 05:47Z; each shard is at
