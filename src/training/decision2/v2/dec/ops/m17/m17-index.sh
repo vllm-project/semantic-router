@@ -36,6 +36,8 @@
 #   audit2-stage / audit2-run / audit2-status (ARM ignored): the same audit of the stage-2 TRAIN files (node F's
 #            locked copies: 4b-LHS23SD, 4b-LHS17IB4, 4b-LHS17IB4X; 4b-LHS17UP trains on the audited 4b-LHS17SD file)
 #            -> node C ix1/audit/m17s2
+#   audit3-stage / audit3-run / audit3-status (ARM ignored): the same audit of the M15 4b-LHA10SDML TRAIN (node F
+#            m15/data/4b, locked fef6b036 in READY-m15.json) for its release -> node C ix1/audit/m17sdml
 #   audit-stage / audit-run / audit-status (ARM ignored): the row-level Index contamination audit (integrity check;
 #            v2.eval.ix1.contamination, the IX1 method with 200 planted controls, as the 4B worker's audit4b.sh) of both
 #            M17 TRAIN files on node C, CPU only; the files come from node E's data lock copies (hash-checked);
@@ -76,6 +78,8 @@ hop() {  # <from> <to> <parent> <name> [lean]: tar stream through node A, then e
 }
 A=$R/audit/m17
 A2=$R/audit/m17s2
+A3=$R/audit/m17sdml
+SDML_TRAIN=fef6b036f33de6756dab083fd21ab462ec2975cfa63120f2452d3c9145d33dd4
 case "$STAGE" in
   audit2-stage)
     on c "test ! -e $A2/train/FILES.txt" || { echo "audit2 already staged" >&2; exit 3; }
@@ -96,6 +100,20 @@ case "$STAGE" in
       --train 4b-LHS17IB4=$A2/train/4b-LHS17IB4.train.jsonl --train 4b-LHS17IB4X=$A2/train/4b-LHS17IB4X.train.jsonl \
       --workers 24 --out $A2/out; echo \$? > $A2/exit' > $A2/audit.log 2>&1 < /dev/null &"
     echo "$(date -u +%FT%TZ) audit2 started on node C (CPU)" ;;
+  audit3-stage)
+    on c "test ! -e $A3/train/FILES.txt" || { echo "audit3 already staged" >&2; exit 3; }
+    [ "$(on f "python3 -c 'import json; print(json.load(open(\"/data/dev2/runs/dec/m15/data/READY-m15.json\"))[\"arms\"][\"4b-LHA10SDML\"])'")" = $SDML_TRAIN ] \
+      || { echo "READY-m15.json does not lock 4b-LHA10SDML at $SDML_TRAIN" >&2; exit 3; }
+    on c "umask 077; mkdir -p $A3/train"
+    on a "ssh $KEY $(addr f) 'cat /data/dev2/runs/dec/m15/data/4b/4b-LHA10SDML/train.jsonl' | ssh $KEY $(addr c) 'umask 077; cat > $A3/train/4b-LHA10SDML.train.jsonl'"
+    [ "$(on c "sha256sum < $A3/train/4b-LHA10SDML.train.jsonl | cut -c1-64")" = $SDML_TRAIN ] || { echo "4b-LHA10SDML TRAIN copy is not $SDML_TRAIN" >&2; exit 3; }
+    on c "printf '4b-LHA10SDML %s rows %s\n' $SDML_TRAIN \"\$(wc -l < $A3/train/4b-LHA10SDML.train.jsonl)\" >> $A3/train/FILES.txt; cat $A3/train/FILES.txt" ;;
+  audit3-run)
+    on c "test -f $S/v2/eval/ix1/contamination.py && test -f $A3/train/FILES.txt && test ! -e $A3/out" || { echo "not staged, or already run" >&2; exit 3; }
+    on c "umask 077; setsid nohup bash -c 'cd $S && CUDA_VISIBLE_DEVICES= HIP_VISIBLE_DEVICES= PYTHONHASHSEED=0 PYTHONPATH=$S nice -n 10 \
+      python3 -m v2.eval.ix1.contamination --panel $R/panel-7 --train 4b-LHA10SDML=$A3/train/4b-LHA10SDML.train.jsonl \
+      --workers 24 --out $A3/out; echo \$? > $A3/exit' > $A3/audit.log 2>&1 < /dev/null &"
+    echo "$(date -u +%FT%TZ) audit3 started on node C (CPU)" ;;
   audit-stage)
     on c "test ! -e $A/train/FILES.txt" || { echo "audit already staged" >&2; exit 3; }
     on c "umask 077; mkdir -p $A/train"
@@ -113,8 +131,9 @@ case "$STAGE" in
       python3 -m v2.eval.ix1.contamination --panel $R/panel-7 --train 4b-LHS10SD=$A/train/4b-LHS10SD.train.jsonl \
       --train 4b-LHS17SD=$A/train/4b-LHS17SD.train.jsonl --workers 24 --out $A/out; echo \$? > $A/exit' > $A/audit.log 2>&1 < /dev/null &"
     echo "$(date -u +%FT%TZ) audit started on node C (CPU)" ;;
-  audit-status | audit2-status)
+  audit-status | audit2-status | audit3-status)
     [ "$STAGE" = audit2-status ] && A=$A2
+    [ "$STAGE" = audit3-status ] && A=$A3
     on c "cat $A/exit 2>/dev/null || echo running; test -f $A/out/audit.json && python3 - $A/out/audit.json" << 'EOF'
 import json, sys
 a = json.load(open(sys.argv[1]))
@@ -125,7 +144,7 @@ print(json.dumps({"index_rows": a["index_rows"], "planted": a["planted_control"]
 EOF
     exit 0 ;;
 esac
-case "$STAGE" in audit-stage | audit-run | audit2-stage | audit2-run) exit 0 ;; esac
+case "$STAGE" in audit-stage | audit-run | audit2-stage | audit2-run | audit3-stage | audit3-run) exit 0 ;; esac
 [[ "$ARM" =~ ^LHS[0-9A-Za-z-]+(,LHS[0-9A-Za-z-]+)*$ ]] || { echo "bad ARM $ARM" >&2; exit 2; }
 NAME=$(name_of "${ARM%%,*}")
 PKG=$MD/$NAME-r13d42143 CK=$MD/$NAME-ckpt
