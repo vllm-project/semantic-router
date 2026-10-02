@@ -5,7 +5,7 @@
 
 Builds ``hipblaslt_search.cpp`` with hipcc (split-K variant first, plain if that fails), runs it
 over every (M, N, K) of the selected backbones' per-layer GEMMs (see ``shapes.Backbone.gemms``),
-and times PyTorch's own ``F.linear`` on the same shapes (hipBLASLt default heuristic, and rocBLAS)
+and times PyTorch's own ``F.linear`` on the same shapes (hipBLASLt default heuristic, rocBLAS and CK backends)
 with rotating weight copies so the 256 MB Infinity Cache cannot serve the weights. ``--triton``
 adds an autotuned Triton GEMM (gfx942 config grid). Writes RUN/gemm.json and RUN/hipblaslt.jsonl.
 """
@@ -163,8 +163,13 @@ def main() -> None:
         try:
             torch.backends.cuda.preferred_blas_library("hipblaslt")
             rec["torch_hipblaslt_us"] = torch_linear_us(torch, M, N, K, args.iters)
-            torch.backends.cuda.preferred_blas_library("rocblas")
+            torch.backends.cuda.preferred_blas_library("hipblas")
             rec["torch_rocblas_us"] = torch_linear_us(torch, M, N, K, args.iters)
+            try:
+                torch.backends.cuda.preferred_blas_library("ck")
+                rec["torch_ck_us"] = torch_linear_us(torch, M, N, K, args.iters)
+            except Exception:  # noqa: BLE001
+                rec["torch_ck_error"] = traceback.format_exc()[-400:]
             torch.backends.cuda.preferred_blas_library("hipblaslt")
         except Exception:  # noqa: BLE001
             rec["torch_error"] = traceback.format_exc()[-1000:]
@@ -181,6 +186,7 @@ def main() -> None:
                     "shape": f"M{M}/N{N}/K{K}",
                     "torch": round(rec.get("torch_hipblaslt_us", -1), 1),
                     "rocblas": round(rec.get("torch_rocblas_us", -1), 1),
+                    "ck": round(rec.get("torch_ck_us", -1), 1),
                     "heur": round(h.get("heuristic_us", -1), 1),
                     "best": round(h.get("best_us", -1), 1),
                     "splitk": [

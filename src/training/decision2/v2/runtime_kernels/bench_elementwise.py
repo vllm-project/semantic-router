@@ -90,11 +90,12 @@ def kernels(
                 torch, x["res"], x["delta"], x["norm_w"], eps
             )[1],
             "triton": lambda: tk.add_rmsnorm(x["res"], x["delta"], w1, eps)[1],
+            "triton_fast": lambda: tk.add_rmsnorm(
+                x["res"], x["delta"], w1, eps, exact=False
+            )[1],
         },
         "bf16_cast": {
-            "ref": lambda: ref.add_rmsnorm(torch, x["res"], None, x["norm_w"], eps)[
-                0
-            ].to(torch.bfloat16),
+            "ref": lambda: x["res"].to(torch.bfloat16),
         },
         "silu_mul": {
             "ref": lambda: ref.silu_mul(torch, x["gate"], x["up"]),
@@ -116,6 +117,19 @@ def kernels(
             )[:2],
             "triton": lambda: tk.attn_prep(
                 x["qp"], x["kp"], qw1, kw1, x["cos"], x["sin"], nh, nkv, hd, eps
+            ),
+            "triton_fast": lambda: tk.attn_prep(
+                x["qp"],
+                x["kp"],
+                qw1,
+                kw1,
+                x["cos"],
+                x["sin"],
+                nh,
+                nkv,
+                hd,
+                eps,
+                exact=False,
             ),
         },
         "sigmoid_gate": {
@@ -175,6 +189,9 @@ def kernels(
         out["gated_rmsnorm"] = {
             "ref": lambda: ref.gated_rmsnorm(torch, x["core"], x["z"], x["gn_w"], eps),
             "triton": lambda: tk.gated_rmsnorm(x["core"], x["z"], x["gn_w"], eps),
+            "triton_fast": lambda: tk.gated_rmsnorm(
+                x["core"], x["z"], x["gn_w"], eps, exact=False
+            ),
         }
     return out
 

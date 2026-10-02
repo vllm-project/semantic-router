@@ -9,7 +9,7 @@
 // For every shape it times the heuristic's first choice (what PyTorch's hipBLASLt path runs) and
 // every algorithm hipblaslt_ext::getAllAlgos returns that supports the problem: a quick pass of
 // quick_iters calls each, then the best `top` again with `iters` calls; for those it also tries
-// split-K (GemmTuning.splitK = 2, 4, 8, 16). Weights rotate over enough copies to exceed the
+// split-K (GemmTuning::setSplitK(2, 4, 8, 16)). Weights rotate over enough copies to exceed the
 // 256 MB Infinity Cache, as a real forward (new weights every layer) never hits it.
 // Output: one JSON object per shape.
 #include <hip/hip_runtime.h>
@@ -205,7 +205,7 @@ int main(int argc, char** argv) {
       int i = refined[j].second;
       for (int sk : {2, 4, 8, 16}) {
         hipblaslt_ext::GemmTuning tuning;
-        tuning.splitK = sk;
+        tuning.setSplitK(sk);
         size_t ws = 0;
         if (gemm.isAlgoSupported(all[i].algo, tuning, ws) != HIPBLAS_STATUS_SUCCESS || ws > kWorkspace) continue;
         if (gemm.initialize(all[i].algo, tuning, workspace) != HIPBLAS_STATUS_SUCCESS) continue;
