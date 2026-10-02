@@ -64,7 +64,12 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
   },
 
   setDslSource(source: string) {
-    set({ dslSource: source, dirty: true, diagnostics: [], compileError: null })
+    set({
+      dslSource: source,
+      dirty: true,
+      diagnostics: [],
+      compileError: null,
+    })
 
     // Debounced auto-validation
     if (validateTimer) clearTimeout(validateTimer)
@@ -229,7 +234,11 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
         set({ compileError: result.error, diagnostics: [] })
         return
       }
-      set({ dslSource: result.dsl, dirty: true, compileError: null })
+      set({
+        dslSource: result.dsl,
+        dirty: true,
+        compileError: null,
+      })
       get().validate()
     } catch (err) {
       set({
@@ -252,6 +261,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     set({
       dslSource: source,
       dirty: false,
+      savedSource: source,
       diagnostics: [],
       compileError: null,
       baseConfigYaml: '',
@@ -272,6 +282,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     set({
       dslSource: dsl,
       dirty: false,
+      savedSource: dsl,
       diagnostics: [],
       compileError: null,
       baseConfigYaml: yaml,
@@ -580,9 +591,10 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
           deployResult: {
             status: 'success',
             version: data.version,
-            message: data.message || 'Configuration saved. Roll out Router and Envoy to activate it.',
+            message:
+              data.message || 'Configuration saved. Roll out Router and Envoy to activate it.',
           },
-          dirty: false,
+          savedSource: dslSource,
         })
         get().fetchVersions()
         return
@@ -622,7 +634,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
             ? `Deployed v${data.version} — Router and Envoy reloaded successfully.`
             : `Deployed v${data.version} — Runtime reload status unknown (check logs).`,
         },
-        dirty: false,
+        savedSource: dslSource,
       })
 
       // Refresh versions list
@@ -731,6 +743,24 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
   },
 }))
 
+/** The unsaved signal, derived so no mutation can leave it stale: the source
+ * differs from the snapshot taken at the last load, import, reset, or
+ * successful deploy. */
+export const selectHasUnsavedChanges = (state: DSLStore) => state.dslSource !== state.savedSource
+
 // Eagerly start WASM init on store creation (module-level side-effect).
 // This overlaps with network fetch of JS/CSS bundles for faster perceived load.
 useDSLStore.getState().initWasm()
+
+// The edits live in this store, so the unload guard belongs to the store's
+// lifetime rather than to any page: in-app navigation unmounts the editor and
+// its listener, which would drop pending edits to a reload on the next route.
+// One listener derives the signal when the event fires, so no mutation can
+// leave it stale. Vitest runs in Node, where no window exists.
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', (event: BeforeUnloadEvent) => {
+    if (!selectHasUnsavedChanges(useDSLStore.getState())) return
+    event.preventDefault()
+    event.returnValue = ''
+  })
+}

@@ -57,7 +57,7 @@ func AutoDiscoverModels(modelsDir string) (*ModelPaths, error) {
 }
 
 // AutoDiscoverModelsWithRegistry discovers models using mom_registry for LoRA detection
-// modelRegistry maps local paths to HuggingFace repo IDs (e.g., "models/mom-domain-classifier" -> "LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model")
+// modelRegistry maps local paths to HuggingFace repo IDs (e.g., "models/mom-domain-classifier" -> "vllm-sr/lora_intent_classifier_bert-base-uncased_model")
 func AutoDiscoverModelsWithRegistry(modelsDir string, modelRegistry map[string]string) (*ModelPaths, error) {
 	modelsDir, err := normalizeModelDiscoveryDir(modelsDir)
 	if err != nil {
