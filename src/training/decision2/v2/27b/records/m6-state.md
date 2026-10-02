@@ -437,6 +437,21 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 10:30Z (poll 28, continuation #5):
+  - **Soups:** the first m50 soup failed its own check (FP32 accumulation over four members > 1e-6 on 28 projections);
+    `8351e7c4d` checks the factor layout bit for bit plus a float64 update check on 256 rows per projection. Both soups
+    rebuilt from that mirror 09:59–10:04Z: m50 identity `58469731…`, m67 `3d120c67…`, rank 512, loaded 29,365,153,792.
+  - **Audit-arm** (IF3): both 0 items over a20ib1 + a20ib12, planted control 200 / 200.
+  - **Index:** restaged on node D, B and E; parity 86 / 86 ok, max |dp| 0.0 (node D GPU5 / 6). m50 runs 8 shards on node D
+    GPU5–7 + node B GPU0–1 since 10:24Z; m67 8 shards on node E GPU0 / 1 / 2 / 6 since 10:27Z (two rounds each,
+    ≈ 2.3 h). Node C and node E GPU3 / 7 were busy with the 4B and 9B Index runs; node D GPU2 is M7-IB124ML-s3.
+  - **Org rename:** integration merged (`f72f4de36`, the vllm-sr pipeline); the cross-arm release ops name
+    `vllm-sr/Decision-2.0-Vega-27B`, the spec derives from `layout.current_ids` of M6-IB's spec, `index27bx.sh` and an
+    own `purge_superseded.py` on vllm-sr (`3cdccffde`).
+  - **M7:** 5 / 5 alive, steps 728–752 at ≈ 9.82 s/update: IB124ML ends ≈ 06:10Z 10-03 (cap ≈ 06:19Z for s3, tight),
+    IB14ML ≈ 00:30Z.
+  - **GPU-h:** cross-arm parity 0.3, Index running (≈ 18.5 projected); M7 ≈ 11.
+
 - 09:45Z (poll 27, continuation #5): both soups in their verification pass (node B, 16 CPUs each); M7 5 / 5 seeds alive
   (≈ 300–330 updates; rates above); node D GPU5–7 held; node E busy with the 4B pool; audit-arm of `M6-IBxIB2-m50`
   copying a20ib12 to node D. GPU-h: cross-arm 0 so far (CPU only); M7 ≈ 6.9 (5 seeds × ≈ 1.4 h) of 120.
