@@ -10,7 +10,8 @@
 # folder; this script prints none.
 # Usage: m6-index.sh MIRROR_SHA ARM STAGE
 #   ARM      an M6 arm, a cross-arm soup M6-IBxIB2-mNN (seeds of M6-IB and M6-IB2; NN = M6-IB2's weight in percent) or
-#            an M7 arm soup (M7-IB124ML, M7-IB14ML); its soup is node B m6/ARM/checkpoint
+#            an M7 arm soup (M7-IB124ML, M7-IB14ML), an M8 arm soup (M8-IB14, M8-IB124) or a preregistered M7 / M8
+#            cross-arm soup (X7-IBxIB2xIB14ML, X7-4ARM, X8-IBxIB2-8, X8-ML); its soup is node B m6/ARM/checkpoint
 #   plan     prints which shards run on which node and GPU for M6_INDEX_GPUS (no node is touched)
 #   stage    node B m6/ARM/checkpoint -> node D /data/dev2/models/ix1/m6/ARM-ckpt over node B's transfer key (SHA-256
 #            lists equal), then v2.eval.ix1.restage -> /data/dev2/models/ix1/m6/ARM-re876fbe with the model SHA-256 of
@@ -59,7 +60,7 @@
 set -euo pipefail
 SHA=${1:?MIRROR_SHA} ARM=${2:?ARM} STAGE=${3:?STAGE}
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "MIRROR_SHA must be a full commit SHA" >&2; exit 2; }
-ARM_RE='^(M6-(IB|IBX|IB2|IB2PN|IBxIB2-m[0-9]{2})|M7-(IB124ML|IB14ML))$'
+ARM_RE='^(M6-(IB|IBX|IB2|IB2PN|IBxIB2-m[0-9]{2})|M7-(IB124ML|IB14ML)|M8-(IB14|IB124)|X7-(IBxIB2xIB14ML|4ARM)|X8-(IBxIB2-8|ML))$'
 [[ "$ARM" =~ $ARM_RE ]] || { echo "bad ARM $ARM" >&2; exit 2; }
 placement() {  # one line per node with shards: "NODE SHARDS GPU..." (i-th shard of M6_INDEX_SHARDS on entry i mod n)
   local entries=() norm=() todo=() e i k node g
@@ -271,6 +272,14 @@ case "$STAGE" in
       M6-IBxIB2-*) mixes="m6-data:mixtures-m6:a20ib1 m6-data:mixtures-m6:a20ib12" ;;
       M7-IB124ML) mixes="m7-data:mixtures-m7:a20ib124ml" ;;
       M7-IB14ML) mixes="m7-data:mixtures-m7:a20ib14ml" ;;
+      M8-IB14) mixes="m7-data:mixtures-m7:a20ib14" ;;
+      M8-IB124) mixes="m7-data:mixtures-m7:a20ib124" ;;
+      X7-IBxIB2xIB14ML) mixes="m6-data:mixtures-m6:a20ib1 m6-data:mixtures-m6:a20ib12 m7-data:mixtures-m7:a20ib14ml" ;;
+      X7-4ARM) mixes="m6-data:mixtures-m6:a20ib1 m6-data:mixtures-m6:a20ib12 m7-data:mixtures-m7:a20ib14ml
+        m7-data:mixtures-m7:a20ib124ml" ;;
+      X8-IBxIB2-8) mixes="m6-data:mixtures-m6:a20ib1 m6-data:mixtures-m6:a20ib12" ;;
+      X8-ML) mixes="m6-data:mixtures-m6:a20ib1 m6-data:mixtures-m6:a20ib12 m7-data:mixtures-m7:a20ib14ml
+        m7-data:mixtures-m7:a20ib124ml m7-data:mixtures-m7:a20ib14 m7-data:mixtures-m7:a20ib124" ;;
     esac
     A7=$R/runs/m6-audit-$ARM
     ond "test ! -e $R/logs/m6-audit-$ARM.exit" || { echo "the $ARM audit already ran ($A7)" >&2; exit 3; }

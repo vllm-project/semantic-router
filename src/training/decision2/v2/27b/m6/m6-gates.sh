@@ -29,10 +29,12 @@ declare -A PEER=([AutoJev-27B]=$B/m2-peer-autojev27-nodeB-kernel [Eikos-27B]=$B/
   [Jebadiah-27B]=$B/m3-peer-jebadiah-nodeB-kernel)
 declare -A RUN=([M4-A20r-soup]=$A20R [M5-L128]=$B/m5/M5-L128/formal ["DEV2.0-27B (F1)"]=$B/M3-A-soup/formal)
 declare -A MIX=([M6-IB]=a20ib1 [M6-IBX]=a20ib1x [M6-IB2]=${IB2_MIX:-a20ib12} [M6-IB2PN]=a20ib12pn
-  [M7-IB124ML]=a20ib124ml [M7-IB14ML]=a20ib14ml)
+  [M7-IB124ML]=a20ib124ml [M7-IB14ML]=a20ib14ml [M8-IB14]=a20ib14 [M8-IB124]=a20ib124 [X8-IBxIB2-8]=a20ib12)
 for name in "$@"; do
   # a cross-arm soup of M6-IB and M6-IB2 seeds: every a20ib1 row is an a20ib12 row, so a20ib12 is its training rows
   [[ "$name" =~ ^M6-IBxIB2-m[0-9]{2}$ ]] && MIX[$name]=a20ib12
+  # the M7 / M8 cross-arm soups train on several mixtures, none holding the others: no single exposure file
+  [[ "$name" =~ ^X7-|^X8-ML$ ]] && MIX[$name]=several
   [ -n "${MIX[$name]:-}" ] || { echo "unknown M6 finalist $name" >&2; exit 2; }
   [ -f "$R/$name/formal/SEAL.json" ] || { echo "$name has no sealed formal run" >&2; exit 2; }
   RUN[$name]=$R/$name/formal
@@ -85,6 +87,7 @@ case "$STAGE" in
     FLAGGED=/data/dev2/runs/eval/m5/overlap-effects/final/excluded-groups.json
     for name in "$@"; do
       mix=${MIX[$name]}
+      [ "$mix" != several ] || { echo "$name trains on several mixtures: run overlap for each M6 arm" >&2; exit 2; }
       file=$(find "$BUILDS" -path "*/mixtures-m6*-1/$mix.train.jsonl" | sort | head -n 1)
       [ -n "$file" ] || { echo "no frozen $mix.train.jsonl under $BUILDS" >&2; exit 2; }
       sha=$(python3 - "$(dirname "$(dirname "$file")")" "$(basename "$(dirname "$file")")" "$mix.train.jsonl" <<'EOF'

@@ -891,6 +891,12 @@ class M6ScriptTest(unittest.TestCase):
             "M6-IBxIB2-m67",
             "M7-IB124ML",
             "M7-IB14ML",
+            "M8-IB14",
+            "M8-IB124",
+            "X7-IBxIB2xIB14ML",
+            "X7-4ARM",
+            "X8-IBxIB2-8",
+            "X8-ML",
         ):
             entry = (
                 f'  [{arm}]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 '
