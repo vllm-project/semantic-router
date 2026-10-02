@@ -30,7 +30,7 @@ $E/m2/q1-kev08b kev
 $E/m1/p2-jpt08b jpt08b"
     PAIRED_NAMES="dev2-0p8b adopted-1.0 intern kev" ;;
   2b)
-    POINT=2b-RASD ORIGIN=M13 TIER=2B NAME=Decision-2.0-Sol-2B CUR=$REL/dev2-2b-t1-derived NOMLX=1
+    POINT=2b-RASDML ORIGIN=M15 TIER=2B NAME=Decision-2.0-Sol-2B CUR=$REL/dev2-2b-t1-derived NOMLX=1
     WHY="no CAL698 fit"
     CURM_PRED=$REL/inputs/dev2-2b-t1/derived/mlx-diag.predictions.jsonl CURM_SCORE=$REL/dev2-2b-t1-derived-mlx/mlx-diag.score.json
     COMPARATORS="$CUR dev2-2b

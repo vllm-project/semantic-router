@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 0.8B / 2B Index-first successors (user decision 2026-10-02 09:55; M16 08b-RA-a75 -> Decision-2.0-Eos-0.8B,
-# M13 2b-RASD -> Decision-2.0-Sol-2B, coordinator 13:05), node A GPU0 or GPU1 as a recorded co-tenant (shared lease
+# M15 2b-RASDML -> Decision-2.0-Sol-2B, coordinator 15:35), node A GPU0 or GPU1 as a recorded co-tenant (shared lease
 # owner.release-<key>-ixf; the 0.6B allocation allows release work), the scored image dbe5f32b with its kernels,
 # HIP_FORCE_DEV_KERNARG=1 and a fresh copy of the persisted autotune cache of the formal run that scored each panel
 # (relayed from node B by relay_cache.sh, checked against its manifest before the copy).
@@ -29,7 +29,7 @@ done
 [[ "$mode" =~ ^--(stage|mlx|release)$ ]] || { echo "mode: --stage|--mlx|--release" >&2; exit 2; }
 case "$KEY" in
   0p8b) name=Decision-2.0-Eos-0.8B POINT=08b-RA-a75 superseded=9c7f3ea09a2b04a0647e5919af23c20ed982f246 ;;
-  2b) name=Decision-2.0-Sol-2B POINT=2b-RASD superseded=8ed41433f5f20c73bf04fe7ef92f2d69c1145002 CARD=card4 ;;
+  2b) name=Decision-2.0-Sol-2B POINT=2b-RASDML superseded=8ed41433f5f20c73bf04fe7ef92f2d69c1145002 CARD=card4 ;;
   *) echo "tier key 0p8b or 2b" >&2; exit 2 ;;
 esac
 TS=$(date -u +%Y%m%dT%H%M%SZ)
@@ -100,7 +100,11 @@ else
   [[ "$main" == "$superseded" ]] || { echo "$REPO main is $main, not the superseded revision $superseded" >&2; exit 1; }
   [[ -n "$TF518_DIGEST" && "$(digest "$TF518")" == "$TF518_DIGEST" ]] \
     || { echo "Transformers 5.18 site $TF518 does not match TF518_DIGEST" >&2; exit 1; }
-  if pgrep -f "v2/release/release.sh" >/dev/null; then echo "another release.sh runs on this node" >&2; exit 1; fi
+  # One publisher per repository (COORDINATION 15:35); other repositories may publish in parallel.
+  if pgrep -af "[v]2/release/release[.]sh" | grep -q -- "specs/dev2-$KEY-"; then
+    echo "another release.sh for $REPO runs on this node" >&2
+    exit 1
+  fi
   bash "$S/v2/common/hf_headroom.sh" --min-free-gb 10
   copy_cache "$FORMAL_CACHE" "$F/M6-RECEIPT.json" "$TC"
   parity_args=(

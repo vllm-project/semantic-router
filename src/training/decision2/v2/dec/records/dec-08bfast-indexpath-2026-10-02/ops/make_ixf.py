@@ -1,11 +1,11 @@
-"""Release specs and decisions of the 0.8B / 2B Index-first successors (M16 08b-RA-a75 / M13 2b-RASD).
+"""Release specs and decisions of the 0.8B / 2B Index-first successors (M16 08b-RA-a75 / M15 2b-RASDML).
 
 User decision 2026-10-02 09:55 UTC+8 (COORDINATION): the release gate is the private Jev Decision Index delta of the
 frozen candidate vs the current release (paired bootstrap, >= 2,000 replicates, 95% lower bound > 0) plus integrity
 checks (exact package parity, Hub / trust_remote_code, the row-level contamination audit, no collapsed type); v3,
 human transfer, mlx-diag, public 231 and C1 are references; per tier the largest Index-gain lower bound is chosen.
-The winners are M16's interpolation 08b-RA-a75 (Decision-2.0-Eos-0.8B) and, by the coordinator's 13:05 UTC+8
-decision, M13's soup 2b-RASD (Decision-2.0-Sol-2B; formal T = 1 collection on the M16 path, no mlx-diag run),
+The winners are M16's interpolation 08b-RA-a75 (Decision-2.0-Eos-0.8B) and, by the coordinator's 15:35 UTC+8
+decision, M15's soup 2b-RASDML (Decision-2.0-Sol-2B; formal T = 1 collection on the M16 path, no mlx-diag run),
 shipped at T = 1 as the v2.release.bf16_copy of the FP32 points and served by the released runtime.
 
 Each spec derives from the tier's current-main card spec (0.8B round 3, 2B round 4): roster, peers, runtime, remote code, licence and
@@ -74,18 +74,18 @@ TIERS = {
     "2b": {
         "tier": "2B",
         "name": "Decision-2.0-Sol-2B",
-        "point": "2b-RASD",
+        "point": "2b-RASDML",
         "card": "card4",
         "mlx": False,
-        "what": "the M13 soup",
-        "successor": "Decision-2.0-Sol-2B successor 2b-RASD (decoder M13: the uniform average of two seeds of a full "
-        "fine-tune of Decision 1.0 Sol on M12's 2b-RA TRAIN rows with the previous Decision 2.0 Sol 2B's answer "
-        "probabilities as soft targets, KL weight 1.0; formal collection on the M16 path) under the user's "
-        "Index-first release rule of 2026-10-02 09:55 UTC+8 and the coordinator's 13:05 UTC+8 choice: the private "
-        "Index delta vs the current release significantly positive, plus the integrity checks; the per-tier choice "
-        "by the largest Index-gain lower bound.",
+        "what": "the M15 soup",
+        "successor": "Decision-2.0-Sol-2B successor 2b-RASDML (decoder M15: the uniform average of two seeds of a "
+        "full fine-tune of Decision 1.0 Sol on M12's 2b-RA TRAIN rows plus multilingual copies of released rows, "
+        "with the previous Decision 2.0 Sol 2B's answer probabilities as soft targets, KL weight 1.0; formal "
+        "collection on the M16 path) under the user's Index-first release rule of 2026-10-02 09:55 UTC+8 and the "
+        "coordinator's 15:35 UTC+8 choice: the private Index delta vs the current release significantly positive, "
+        "plus the integrity checks; the per-tier choice by the largest Index-gain lower bound.",
         "uncalibrated": "collected at T = 1 (no CAL698 fit)",
-        "decided_utc": "2026-10-02T05:05:00Z",
+        "decided_utc": "2026-10-02T07:35:00Z",
         "current": "8ed41433f5f20c73bf04fe7ef92f2d69c1145002",
         "current_run": f"{REL}/dev2-2b-t1-derived",
         "own": "same-limit-16k",
@@ -96,11 +96,13 @@ TIERS = {
             "v3_share": 0.9,
             "paired": f"{g}/paired-vs-decider2b.json",
         },
-        "train_note": "the arm's TRAIN file (08140409; the previous release's rows plus the IB1-r3 / IB2 rows)",
+        "train_note": "the arm's TRAIN file (97157068; the previous release's rows plus the IB1-r3 / IB2 rows and "
+        "multilingual copies of released rows)",
         "origin": (
             "Every weight of Decision 1.0 Sol was fine-tuned (nothing frozen, no adapter). The release is the uniform "
             "average of two seeds of that fine-tune, trained with the previous Decision 2.0 Sol 2B's answer "
-            "probabilities as soft targets (self-distillation). Decision 1.0 Sol is itself a "
+            "probabilities as soft targets (self-distillation) and with extra copies of released multilingual rows "
+            "that keep the released multilingual token share. Decision 1.0 Sol is itself a "
             "text-only fine-tune of [Qwen/Qwen3.5-2B](https://huggingface.co/Qwen/Qwen3.5-2B) at "
             "`15852e8c16360a2fea060d615a32b45270f8a8fc` (Apache-2.0), whose text backbone and tokenizer this model "
             "inherits; the Qwen3.5 vision tower is not part of it."
