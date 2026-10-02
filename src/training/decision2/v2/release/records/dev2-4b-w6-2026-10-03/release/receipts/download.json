@@ -1,0 +1,14 @@
+{
+  "bytes": 9716481650,
+  "command": "hf download <repo> --revision <sha> --local-dir <fresh dir> (fresh HF_HUB_CACHE)",
+  "files": 39,
+  "hub_added": [
+    ".gitattributes"
+  ],
+  "passed": true,
+  "repo": "vllm-sr/Decision-2.0-Nox-4B",
+  "revision": "c60d3b5ca7d71a36669392bc4fb94a1596df6739",
+  "schema": "dev2-hub-download/1",
+  "seconds": 9.709258936112747,
+  "utc": "2026-10-02T21:41:51.971407+00:00"
+}
