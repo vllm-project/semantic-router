@@ -20,8 +20,9 @@
 # Node A (Eos 0.8B, Sol 2B, Nox 4B, Lux 9B, Vega 27B, where their release inputs are): a GPU whose owner file reads
 # released, or the 0.6B track's idle allocation, under the shared lease owner.release-org-<key> (removed on exit).
 # Node E (Kai 0.6B): GPU6 or GPU7 without a lease entry, under this track's own lease (track=release-org).
-# Kernel tiers autotune into a fresh cache (card-only, no scored-panel parity), as round 4 did for 4B. A tier without
-# kernels may run every check on CPU (--cpu: no GPU, no lease) when no GPU of the node is free to it.
+# Kernel tiers autotune into a fresh cache (card-only, no scored-panel parity), as round 4 did for 4B. When no GPU of
+# the node is free to it, a tier may run every check on CPU (--cpu: no GPU, no lease; the runtime's FP32 CPU path,
+# without the GPU kernels). The card-only checks compare answers within the run, never with the scored predictions.
 # Usage: bash <mirror>/v2/release/records/dev2-org-2026-10-02/ops/org.sh <tier> --gpu N|--cpu [--resume REV]
 set -euo pipefail
 tier="${1:-}"
@@ -65,8 +66,8 @@ esac
 [[ "$(docker image inspect -f '{{.Id}}' "$image")" == "$image" ]] || { echo "image $image is missing" >&2; exit 1; }
 lease=/data/dev2/leases/gpu$gpu.lock
 if [[ "$cpu" == 1 ]]; then
-  [[ "$kernels" == 0 ]] || { echo "$tier needs its GPU kernels (--gpu)" >&2; exit 2; }
-  device_args=(--cpu --threads 16)
+  kernels=0
+  device_args=(--cpu --threads 32)
 elif [[ "$node" == E ]]; then
   [[ "$gpu" =~ ^[67]$ ]] || { echo "node E GPU6 or GPU7 only (--gpu)" >&2; exit 2; }
   if [[ -e "$lease" ]] && [[ -n "$(ls -A "$lease")" ]]; then
