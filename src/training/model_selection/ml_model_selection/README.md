@@ -176,6 +176,12 @@ cargo test --manifest-path ml-binding/Cargo.toml
 The generator also writes `ml-binding/tests/fixtures/python_kmeans.json`, the
 KMeans v2 cases for the native loader.
 
+`evaluation.py` scores a selector on the test split against the strongest, cheapest,
+global-best, random and (optionally) current-router baselines and against the oracle,
+reporting quality, latency, cost, regret, coverage, route share and per-category slices.
+Baselines learn from the train split only. A selector is a function from a query and its
+eligible models to one of them, or `None` to abstain.
+
 Use a held-out split and report the dataset, candidate models, scoring method,
 embedding model, selector parameters, random seed, and quality/latency tradeoff.
 Do not copy one local run's output into this README as a general performance
