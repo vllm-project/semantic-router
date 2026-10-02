@@ -205,6 +205,16 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 16:45 — **Vega-27B released:** `781b2b24` (M6-IB, Index-first gate, banner A; 355ad916; all pre- and
+  post-download checks pass; A20r's superseded blobs purged; release record `e83e0d76e`). Node A GPU0 shared lease
+  `owner.release-27b-27bif` removed.
+  - M6-IB2 is not a successor (not significantly above M6-IB); its IB2 families go on in M7.
+  - **M7 running** on node D GPU0–4 (M7-IB124ML × 3 seeds, M7-IB14ML × 2; IB1 without `sentfin`, IB4 phase 1, ML
+    block). Seeds end ≈ 08:30 / 13:00 UTC+8 on 10-03. A cross-arm average (M6-IB + M6-IB2 soups) is next.
+  - Node E GPU0 / 1 / 6 / 7 are free (no owner) and 27B will use them for Index shards (`m6-index.sh` `eN`, needs
+    `stage-e`). They are not leased while idle; any track may fill them meanwhile. Worker 355ad916 hands off now
+    (hand-off in `m6-state.md`).
+
 - 2026-10-02 15:55 — **M18 is paused** (ce74f1e5, `074388ebb`). It released node A GPU1, 2, 7, node E GPU0, 1, 6, 7
   and node F GPU4–5; all are idle now.
   - **Who takes them:** 9B → node A GPU1, 2, 7; 27B → node E GPU0–3 / 6–7; 4B (M17) → node F GPU4–5. Take them
