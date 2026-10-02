@@ -4,7 +4,9 @@
 // Everything is validated before anything is written, and everything written is
 // named by its content, so a published file is never replaced by a different
 // one. Judge tasks are read to check the judgments against but never written:
-// they carry prompt and answer text, and the manifest and judgments do not.
+// they carry prompt and answer text, and the manifest and judgments do not. The
+// blinding key the tasks were built with is read to check them against the
+// manifest, and never written either.
 package main
 
 import (
@@ -18,6 +20,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/shadowdataset"
 )
@@ -71,12 +75,13 @@ func main() {
 	manifestPath := flag.String("manifest", "", "Manifest from GET /api/v1/observability/replays/dataset")
 	tasksPath := flag.String("tasks", "", "Judge tasks the judgments answer, read for validation and never published")
 	judgmentsPath := flag.String("judgments", "", "Judgment set to validate and publish with its report")
+	key := flag.String("blinding-key", "", "Key the judge tasks were built with, used to check them against the manifest and never published")
 	flag.Parse()
 	if *dest == "" {
 		fmt.Fprintln(os.Stderr, "--dest is required")
 		os.Exit(1)
 	}
-	names, err := publish(DirectoryDestination{Root: *dest}, *manifestPath, *tasksPath, *judgmentsPath)
+	names, err := publish(DirectoryDestination{Root: *dest}, *manifestPath, *tasksPath, *judgmentsPath, *key)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -94,12 +99,12 @@ type publishedFile struct {
 
 // publish validates the inputs and writes them, returning the names written.
 // Nothing is written unless every input validates.
-func publish(dest Destination, manifestPath, tasksPath, judgmentsPath string) ([]string, error) {
+func publish(dest Destination, manifestPath, tasksPath, judgmentsPath, key string) ([]string, error) {
 	if manifestPath == "" {
 		return nil, fmt.Errorf("--manifest is required")
 	}
-	if (tasksPath == "") != (judgmentsPath == "") {
-		return nil, fmt.Errorf("--tasks and --judgments are given together")
+	if (tasksPath == "") != (judgmentsPath == "") || (tasksPath == "") != (key == "") {
+		return nil, fmt.Errorf("--tasks, --judgments and --blinding-key are given together")
 	}
 	var manifest shadowdataset.Manifest
 	if err := readJSON(manifestPath, &manifest); err != nil {
@@ -115,7 +120,7 @@ func publish(dest Destination, manifestPath, tasksPath, judgmentsPath string) ([
 	files := []publishedFile{{name: "manifests/" + manifest.Digest + ".json", body: body}}
 
 	if judgmentsPath != "" {
-		judged, judgedErr := judgedFiles(manifest, tasksPath, judgmentsPath)
+		judged, judgedErr := judgedFiles(manifest, tasksPath, judgmentsPath, key)
 		if judgedErr != nil {
 			return nil, judgedErr
 		}
@@ -135,13 +140,16 @@ func publish(dest Destination, manifestPath, tasksPath, judgmentsPath string) ([
 // judgedFiles validates a judgment set against the tasks it answers and the
 // manifest they came from. The set is named by the digest of its bytes, under
 // its manifest, and its report is named after the set.
-func judgedFiles(manifest shadowdataset.Manifest, tasksPath, judgmentsPath string) ([]publishedFile, error) {
+func judgedFiles(manifest shadowdataset.Manifest, tasksPath, judgmentsPath, key string) ([]publishedFile, error) {
 	var tasks shadowdataset.JudgeTaskSet
 	if err := readJSON(tasksPath, &tasks); err != nil {
 		return nil, err
 	}
 	if tasks.ManifestDigest != manifest.Digest {
 		return nil, fmt.Errorf("tasks came from manifest %q, not %q", tasks.ManifestDigest, manifest.Digest)
+	}
+	if err := checkTasks(manifest, tasks, key); err != nil {
+		return nil, err
 	}
 	file, err := os.Open(judgmentsPath)
 	if err != nil {
@@ -169,6 +177,45 @@ func judgedFiles(manifest shadowdataset.Manifest, tasksPath, judgmentsPath strin
 		{name: base + ".json", body: setBody},
 		{name: base + ".report.json", body: reportBody},
 	}, nil
+}
+
+// checkTasks refuses tasks that the manifest and the blinding key did not
+// produce. A manifest digest only names a manifest, so the tasks are built again
+// from the manifest, the key and the text each arm carries, and must come out
+// the same: text that does not hash back to the manifest leaves its pair out of
+// the rebuild, and an ID the key does not derive from the manifest has no
+// counterpart in it.
+func checkTasks(manifest shadowdataset.Manifest, tasks shadowdataset.JudgeTaskSet, key string) error {
+	armText := map[string]string{}
+	armInput := map[string]string{}
+	for _, task := range tasks.Tasks {
+		for _, side := range []shadowdataset.Candidate{task.First, task.Second} {
+			armText[side.Arm] = side.Text
+			armInput[side.Arm] = task.Input
+		}
+	}
+	texts := make(map[string]shadowdataset.ExampleText, len(manifest.Examples))
+	for _, example := range manifest.Examples {
+		text := shadowdataset.ExampleText{Shadows: make([]string, len(example.Shadows))}
+		for index := range example.Shadows {
+			primary := shadowdataset.ArmID(key, example.ID, index, true)
+			if text.Primary == "" {
+				text.Input, text.Primary = armInput[primary], armText[primary]
+			}
+			text.Shadows[index] = armText[shadowdataset.ArmID(key, example.ID, index, false)]
+		}
+		texts[example.ID] = text
+	}
+	rebuilt, err := shadowdataset.BuildJudgeTasks(manifest, texts, key)
+	if err != nil {
+		return err
+	}
+	imported := slices.Clone(tasks.Tasks)
+	sort.Slice(imported, func(i, j int) bool { return imported[i].ID < imported[j].ID })
+	if tasks.Version != rebuilt.Version || !slices.Equal(imported, rebuilt.Tasks) {
+		return fmt.Errorf("tasks are not the ones manifest %q and the blinding key produce from their text", manifest.Digest)
+	}
+	return nil
 }
 
 func encode(value any) ([]byte, error) {

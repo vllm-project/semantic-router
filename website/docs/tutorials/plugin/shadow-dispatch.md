@@ -134,11 +134,12 @@ The tasks carry prompt and answer text, so the route needs `replay.detail` and r
 
 ### Publish the dataset and its judgments
 
-`tools/calibration/shadow-dataset` publishes a manifest, and optionally the judgments a judge returned for it, into a storage directory. Any object store mounted as a filesystem works as that directory. The tool validates every input before it writes anything: the manifest has to match its own digest, and the judgments have to answer the tasks they name, under the manifest those tasks came from, with no field the judgment record does not define.
+`tools/calibration/shadow-dataset` publishes a manifest, and optionally the judgments a judge returned for it, into a storage directory. Any object store mounted as a filesystem works as that directory. The tool validates every input before it writes anything: the manifest has to match its own digest, the tasks have to be the ones the manifest and the blinding key produce from the text they carry, and the judgments have to answer those tasks with no field the judgment record does not define. The key is read for that check and never published.
 
 ```bash
 make run-shadow-dataset GO_TOOL_ARGS="--dest /mnt/shadow-datasets \
-  --manifest $PWD/manifest.json --tasks $PWD/tasks.json --judgments $PWD/judgments.json"
+  --manifest $PWD/manifest.json --tasks $PWD/tasks.json --judgments $PWD/judgments.json \
+  --blinding-key $JUDGE_KEY"
 ```
 
 The manifest lands at `manifests/<digest>.json`, and the judgment set lands at `judgments/<manifest digest>/<digest of the set>.json` beside a `.report.json` that counts outcomes, slot picks and how many pairs followed the slot rather than the answer. Every name comes from content, so publishing the same files twice changes nothing and a published name is never replaced with different bytes. The judge tasks are read to check the judgments against but never published, because they carry the prompt and both answers. Keep datasets out of this repository.

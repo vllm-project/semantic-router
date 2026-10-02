@@ -141,11 +141,12 @@ curl -H "Authorization: Bearer $ROUTER_MANAGEMENT_TOKEN" \
 
 ### 发布数据集与评审结果
 
-`tools/calibration/shadow-dataset` 把清单，以及评审模型针对它返回的评审结果（可选），发布到一个存储目录中。任何挂载为文件系统的对象存储都可以作为该目录。该工具在写入任何内容之前会校验全部输入：清单必须与其自身摘要一致，评审结果必须回答其引用的任务，这些任务必须来自同一份清单，且评审记录中不能出现未定义的字段。
+`tools/calibration/shadow-dataset` 把清单，以及评审模型针对它返回的评审结果（可选），发布到一个存储目录中。任何挂载为文件系统的对象存储都可以作为该目录。该工具在写入任何内容之前会校验全部输入：清单必须与其自身摘要一致，任务必须正是该清单与盲化密钥根据任务所携带的文本生成的那一组，评审结果必须回答这些任务，且评审记录中不能出现未定义的字段。密钥只用于这项校验，永远不会被发布。
 
 ```bash
 make run-shadow-dataset GO_TOOL_ARGS="--dest /mnt/shadow-datasets \
-  --manifest $PWD/manifest.json --tasks $PWD/tasks.json --judgments $PWD/judgments.json"
+  --manifest $PWD/manifest.json --tasks $PWD/tasks.json --judgments $PWD/judgments.json \
+  --blinding-key $JUDGE_KEY"
 ```
 
 清单写入 `manifests/<digest>.json`，评审结果写入 `judgments/<manifest digest>/<digest of the set>.json`，旁边附带一份 `.report.json`，统计各类结果、各位置被选中的次数，以及有多少对任务跟随了位置而不是答案。所有名称都由内容决定，因此重复发布相同文件不会产生变化，已发布的名称也永远不会被替换为不同的内容。评审任务只用于校验评审结果，永远不会被发布，因为它们携带提示词与两个回答。不要把数据集提交到本仓库。

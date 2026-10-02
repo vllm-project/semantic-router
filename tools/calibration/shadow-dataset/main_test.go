@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -15,9 +16,26 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/shadowdataset"
 )
 
+// judgeKey contains "secret" so the check that nothing published carries
+// captured text also shows the key is never published.
+const judgeKey = "secret blinding key"
+
 func sha(text string) string {
 	sum := sha256.Sum256([]byte(text))
 	return hex.EncodeToString(sum[:])
+}
+
+func writeJSON(t *testing.T, dir, name string, value any) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	body, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(path, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 // fixture writes a manifest, its judge tasks and one valid judgment set to a
@@ -41,7 +59,7 @@ func fixture(t *testing.T, seed string) (dir, manifestPath, tasksPath, judgments
 	}
 	tasks, err = shadowdataset.BuildJudgeTasks(manifest, map[string]shadowdataset.ExampleText{
 		manifest.Examples[0].ID: {Input: "secret prompt", Primary: "secret primary answer", Shadows: []string{"secret shadow answer"}},
-	}, "key")
+	}, judgeKey)
 	if err != nil {
 		t.Fatalf("BuildJudgeTasks: %v", err)
 	}
@@ -56,18 +74,8 @@ func fixture(t *testing.T, seed string) (dir, manifestPath, tasksPath, judgments
 	}
 
 	dir = t.TempDir()
-	write := func(name string, value any) string {
-		path := filepath.Join(dir, name)
-		body, marshalErr := json.Marshal(value)
-		if marshalErr != nil {
-			t.Fatal(marshalErr)
-		}
-		if writeErr := os.WriteFile(path, body, 0o644); writeErr != nil {
-			t.Fatal(writeErr)
-		}
-		return path
-	}
-	return dir, write("manifest.json", manifest), write("tasks.json", tasks), write("judgments.json", judgments), tasks
+	return dir, writeJSON(t, dir, "manifest.json", manifest), writeJSON(t, dir, "tasks.json", tasks),
+		writeJSON(t, dir, "judgments.json", judgments), tasks
 }
 
 func publishedTree(t *testing.T, root string) map[string]string {
@@ -95,7 +103,7 @@ func TestPublishWritesManifestJudgmentsAndReportButNoText(t *testing.T) {
 	_, manifestPath, tasksPath, judgmentsPath, tasks := fixture(t, "seed")
 	dest := t.TempDir()
 
-	names, err := publish(DirectoryDestination{Root: dest}, manifestPath, tasksPath, judgmentsPath)
+	names, err := publish(DirectoryDestination{Root: dest}, manifestPath, tasksPath, judgmentsPath, judgeKey)
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
@@ -146,10 +154,47 @@ func TestDirectoryDestinationNeverReplacesAPublishedFile(t *testing.T) {
 	}
 }
 
+// A manifest digest in a task set only names a manifest. An answer changed in
+// both orders of its pair, under the original IDs and digest, stops the publish
+// before anything is written, or the manifest would describe answers other than
+// the ones judged.
+func TestPublishRefusesTasksWhoseAnswerNoLongerMatchesTheManifest(t *testing.T) {
+	dir, manifestPath, tasksPath, judgmentsPath, tasks := fixture(t, "seed")
+	altered := tasks
+	altered.Tasks = slices.Clone(tasks.Tasks)
+	for i := range altered.Tasks {
+		for _, side := range []*shadowdataset.Candidate{&altered.Tasks[i].First, &altered.Tasks[i].Second} {
+			if side.Text == "secret shadow answer" {
+				side.Text = "secret shadow answer, edited"
+			}
+		}
+	}
+	alteredPath := writeJSON(t, dir, "altered.json", altered)
+
+	for name, tc := range map[string]struct {
+		tasks   string
+		written int
+	}{
+		"unaltered":                     {tasks: tasksPath, written: 3},
+		"answer altered in both orders": {tasks: alteredPath, written: 0},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dest := t.TempDir()
+			_, err := publish(DirectoryDestination{Root: dest}, manifestPath, tc.tasks, judgmentsPath, judgeKey)
+			if (err == nil) != (tc.written > 0) {
+				t.Fatalf("publish returned %v", err)
+			}
+			if tree := publishedTree(t, dest); len(tree) != tc.written {
+				t.Fatalf("publish wrote %v, want %d files", tree, tc.written)
+			}
+		})
+	}
+}
+
 // Every input is validated before anything is written, so a bad judgment set
 // does not leave its manifest published on its own.
 func TestPublishWritesNothingWhenAnInputFails(t *testing.T) {
-	dir, manifestPath, tasksPath, judgmentsPath, _ := fixture(t, "seed")
+	dir, manifestPath, tasksPath, judgmentsPath, tasks := fixture(t, "seed")
 	reasoned := filepath.Join(dir, "reasoned.json")
 	body, err := os.ReadFile(judgmentsPath)
 	if err != nil {
@@ -169,15 +214,28 @@ func TestPublishWritesNothingWhenAnInputFails(t *testing.T) {
 
 	_, otherManifest, _, _, _ := fixture(t, "another-seed")
 
-	for name, inputs := range map[string][3]string{
-		"judgment carrying reasoning": {manifestPath, tasksPath, reasoned},
-		"edited manifest":             {edited, "", ""},
-		"judgments without tasks":     {manifestPath, "", judgmentsPath},
-		"tasks from another manifest": {otherManifest, tasksPath, judgmentsPath},
+	// The arms keep their text but trade labels, so each label shows the other
+	// model's answer while the judgments still name arms the tasks show.
+	swapped := tasks
+	swapped.Tasks = slices.Clone(tasks.Tasks)
+	for i := range swapped.Tasks {
+		first, second := &swapped.Tasks[i].First, &swapped.Tasks[i].Second
+		first.Arm, second.Arm = second.Arm, first.Arm
+	}
+	swappedPath := writeJSON(t, dir, "swapped.json", swapped)
+
+	for name, inputs := range map[string][4]string{
+		"judgment carrying reasoning": {manifestPath, tasksPath, reasoned, judgeKey},
+		"edited manifest":             {edited, "", "", ""},
+		"judgments without tasks":     {manifestPath, "", judgmentsPath, judgeKey},
+		"tasks without the key":       {manifestPath, tasksPath, judgmentsPath, ""},
+		"tasks from another manifest": {otherManifest, tasksPath, judgmentsPath, judgeKey},
+		"another blinding key":        {manifestPath, tasksPath, judgmentsPath, "another key"},
+		"arm labels swapped":          {manifestPath, swappedPath, judgmentsPath, judgeKey},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dest := t.TempDir()
-			if _, err := publish(DirectoryDestination{Root: dest}, inputs[0], inputs[1], inputs[2]); err == nil {
+			if _, err := publish(DirectoryDestination{Root: dest}, inputs[0], inputs[1], inputs[2], inputs[3]); err == nil {
 				t.Fatal("publish accepted the inputs")
 			}
 			if tree := publishedTree(t, dest); len(tree) != 0 {
