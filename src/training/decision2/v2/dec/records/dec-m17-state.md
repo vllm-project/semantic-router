@@ -4,6 +4,23 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17` (r
 stopped after creating the worktree, nothing had run). Prereg `da770d98a`, ops `1ce8b2220` (mirror on nodes E / F),
 data lock `4f68f1eb0`.
 
+## 2026-10-02 06:40Z — stage 2 training (wave 1 running, wave 2 queued)
+
+- 05:55Z coordinator: `4b-LHS17SD` is the released Nox-4B (`b285e7a1`, by 5e7b8132); M17 is now the 4B trainer and
+  the single Nox-4B publisher. 5e7b8132's branch is merged here (`8af7f2d89`; `ix1/launch.sh` conflict resolved as
+  the union of both entry lists) for its release ops (`release/records/dev2-4b-indexfirst-2026-10-02/ops/`,
+  `dec/ops/4bif/`).
+- Stage 2 prereg `5bedf6f6f`, amendment 1 `da9416b8a` (wave-1 data lock; arm (a) = S17 + IB4 p1 + IB3-r2, with and
+  without `isarc2`).
+- Node F wave 1 started 06:00:56Z (5 min after the note): GPU2 / 3 `4b-LHS17UP` s1 / s2, GPU6 / 7 `4b-LHS23SD`
+  s1 / s2; all four preflights PASS 06:06Z. Wave 2 (`4b-LHS17IB4` GPU2 / 3, `4b-LHS17IB4X` GPU6 / 7) is queued on
+  the GPU flocks; data built 06:05Z (`READY-m17s3.json`).
+- Ops for the measurement path (this commit): `m17-index.sh` takes the stage-2 names, `M17_REF=S17` (bootstrap base =
+  the current release's run `DEV2.0-4B-LHS17SD-bf16`), the eval fast lane node E GPU0–3 / 6–7, and `audit2-*` for
+  the new TRAIN files; `m17-soup.sh` builds the stage-2 arms and the interpolation points `4b-<X>-m50` (uniform
+  .5 / .5 with the `4b-LHS17SD` soup, the prereg's arm (d) rule); IX1 DIAGNOSTIC entries for the seven names.
+- GPU-h stage 2 so far ≈ 2.6 (4 GPUs × 0.65 h). Nothing measured yet.
+
 ## 2026-10-02 04:35Z — candidates handed to the Nox-4B publisher
 
 - Coordinator interrupt (12:25 UTC+8): M17 does not publish; 4B Index-first worker 5e7b8132 is the single Nox-4B

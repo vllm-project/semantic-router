@@ -9,7 +9,9 @@
 # ~/code/decision2-program/private/m17/; this script prints none.
 #
 # Usage: m17-index.sh MIRROR_SHA ARM STAGE [NODE] ["GPUS"]
-#   ARM      LHS10SD | LHS17SD (the M17 arm soups on node F)
+#   ARM      LHS10SD | LHS17SD (the M17 arm soups on node F); stage 2: LHS17UP | LHS23SD | LHS17IB4 | LHS17IB4X or an
+#            interpolation point (soup/4b-ARM with DONE and MODEL_SHA256, as an arm soup). With M17_REF=S17 the
+#            reference run is the current release's (runs/DEV2.0-4B-LHS17SD-bf16) and boot / fetch write *-vs-s17.json
 #   stage    node F: test_bf16_copy, v2.release.bf16_copy (CPU container of host2, no network) -> NAME-ckpt, then
 #            v2.eval.ix1.restage onto DEV2.0-4B-13d42143 with the copy's model SHA-256 -> NAME-r13d42143 (checked)
 #   ship     NODE: the restaged package node F -> NODE through node A (per-file SHA-256 lists equal)
@@ -26,11 +28,14 @@
 #            through node A (lists equal)
 #   score    node C: score.sh --size 4B over panel-8 (merge, port + kit, compare)
 #   boot     node C, CPU, detached: family_delta vs DEV2.0-4B-LH and the paired bootstrap of the full panel
-#            (v2.eval.ix1.paired_boot, 2,000 replicates, seed 20261002) -> runs/NAME/m17-boot-full-vs-lh.json
+#            (v2.eval.ix1.paired_boot, 2,000 replicates, seed 20261002) -> runs/NAME/m17-boot-full-vs-lh.json (-vs-s17 with M17_REF=S17)
 #   fetch    node C -> the local private folder (mode 700): parity, receipt, compare, port, kit index, family delta,
 #            bootstrap, and the transfer-only weighted delta (family delta without HoVer, When2Call, iSarcasmEval,
 #            GSM8K and BPoMP)
 #   release  NODE "GPUS": owner files back to track=dec-m17 (no M17 Index container running)
+#   audit2-stage / audit2-run / audit2-status (ARM ignored): the same audit of the stage-2 TRAIN files (node F's
+#            locked copies: 4b-LHS23SD, 4b-LHS17IB4, 4b-LHS17IB4X; 4b-LHS17UP trains on the audited 4b-LHS17SD file)
+#            -> node C ix1/audit/m17s2
 #   audit-stage / audit-run / audit-status (ARM ignored): the row-level Index contamination audit (integrity check;
 #            v2.eval.ix1.contamination, the IX1 method with 200 planted controls, as the 4B worker's audit4b.sh) of both
 #            M17 TRAIN files on node C, CPU only; the files come from node E's data lock copies (hash-checked);
@@ -48,7 +53,8 @@ R=/data/dev2/private/eval/index021/ix1
 MD=/data/dev2/models/ix1/dec-m17
 BASEPKG=/data/dev2/models/ix1/DEV2.0-4B-13d42143
 LOADED=4208383488
-REF=DEV2.0-4B-LH
+REF=DEV2.0-4B-LH VS=lh
+[ "${M17_REF:-LH}" = S17 ] && REF=DEV2.0-4B-LHS17SD-bf16 VS=s17
 KEY="-i /root/.ssh/d2_temp_cd -o BatchMode=yes -o ConnectTimeout=30"
 IMAGE=decision20-train-fast:host2
 IMAGE_ID=sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54
@@ -69,7 +75,27 @@ hop() {  # <from> <to> <parent> <name> [lean]: tar stream through node A, then e
   echo "$item node $from -> node $to: $(wc -l <<< "$a") files, SHA-256 lists equal"
 }
 A=$R/audit/m17
+A2=$R/audit/m17s2
 case "$STAGE" in
+  audit2-stage)
+    on c "test ! -e $A2/train/FILES.txt" || { echo "audit2 already staged" >&2; exit 3; }
+    on c "umask 077; mkdir -p $A2/train"
+    for x in 4b-s2/4b-LHS23SD=c629913c3570505d919f4ed48af49e4a24e50286d2991e5bec396f6fb7bec6a8 \
+      4b-s3/4b-LHS17IB4 4b-s3/4b-LHS17IB4X; do
+      p=${x%%=*} a=$(basename "${x%%=*}") want=${x#*=}
+      [ "$want" = "$x" ] && want=$(on f "python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"arms\"][sys.argv[2]])' /data/dev2/runs/dec/m17/data/READY-m17s3.json $a")
+      on a "ssh $KEY $(addr f) 'cat /data/dev2/runs/dec/m17/data/$p/train.jsonl' | ssh $KEY $(addr c) 'umask 077; cat > $A2/train/$a.train.jsonl'"
+      [ "$(on c "sha256sum < $A2/train/$a.train.jsonl | cut -c1-64")" = "$want" ] || { echo "$a TRAIN copy is not $want" >&2; exit 3; }
+      on c "printf '%s %s rows %s\n' $a $want \"\$(wc -l < $A2/train/$a.train.jsonl)\" >> $A2/train/FILES.txt"
+    done
+    on c "cat $A2/train/FILES.txt" ;;
+  audit2-run)
+    on c "test -f $S/v2/eval/ix1/contamination.py && test -f $A2/train/FILES.txt && test ! -e $A2/out" || { echo "not staged, or already run" >&2; exit 3; }
+    on c "umask 077; setsid nohup bash -c 'cd $S && CUDA_VISIBLE_DEVICES= HIP_VISIBLE_DEVICES= PYTHONHASHSEED=0 PYTHONPATH=$S nice -n 10 \
+      python3 -m v2.eval.ix1.contamination --panel $R/panel-7 --train 4b-LHS23SD=$A2/train/4b-LHS23SD.train.jsonl \
+      --train 4b-LHS17IB4=$A2/train/4b-LHS17IB4.train.jsonl --train 4b-LHS17IB4X=$A2/train/4b-LHS17IB4X.train.jsonl \
+      --workers 24 --out $A2/out; echo \$? > $A2/exit' > $A2/audit.log 2>&1 < /dev/null &"
+    echo "$(date -u +%FT%TZ) audit2 started on node C (CPU)" ;;
   audit-stage)
     on c "test ! -e $A/train/FILES.txt" || { echo "audit already staged" >&2; exit 3; }
     on c "umask 077; mkdir -p $A/train"
@@ -87,7 +113,8 @@ case "$STAGE" in
       python3 -m v2.eval.ix1.contamination --panel $R/panel-7 --train 4b-LHS10SD=$A/train/4b-LHS10SD.train.jsonl \
       --train 4b-LHS17SD=$A/train/4b-LHS17SD.train.jsonl --workers 24 --out $A/out; echo \$? > $A/exit' > $A/audit.log 2>&1 < /dev/null &"
     echo "$(date -u +%FT%TZ) audit started on node C (CPU)" ;;
-  audit-status)
+  audit-status | audit2-status)
+    [ "$STAGE" = audit2-status ] && A=$A2
     on c "cat $A/exit 2>/dev/null || echo running; test -f $A/out/audit.json && python3 - $A/out/audit.json" << 'EOF'
 import json, sys
 a = json.load(open(sys.argv[1]))
@@ -98,11 +125,8 @@ print(json.dumps({"index_rows": a["index_rows"], "planted": a["planted_control"]
 EOF
     exit 0 ;;
 esac
-case "$STAGE" in audit-stage | audit-run) exit 0 ;; esac
-case "$ARM" in
-  LHS10SD | LHS17SD | LHS10SD,LHS17SD | LHS17SD,LHS10SD) ;;
-  *) echo "bad ARM $ARM" >&2; exit 2 ;;
-esac
+case "$STAGE" in audit-stage | audit-run | audit2-stage | audit2-run) exit 0 ;; esac
+[[ "$ARM" =~ ^LHS[0-9A-Za-z-]+(,LHS[0-9A-Za-z-]+)*$ ]] || { echo "bad ARM $ARM" >&2; exit 2; }
 NAME=$(name_of "${ARM%%,*}")
 PKG=$MD/$NAME-r13d42143 CK=$MD/$NAME-ckpt
 SOUP=/data/dev2/runs/dec/m17/soup/4b-${ARM%%,*}
@@ -152,15 +176,15 @@ EOF
   lease | release)
     [ -n "$NODE" ] && [ -n "$GPUS" ] || { echo "$STAGE needs NODE and GPUS" >&2; exit 2; }
     for g in $GPUS; do
-      case "$NODE:$g" in e:0 | e:1 | e:2 | e:3 | f:2 | f:3 | f:6 | f:7) ;; *) echo "node $NODE GPU$g is not M17's" >&2; exit 2 ;; esac
+      case "$NODE:$g" in e:0 | e:1 | e:2 | e:3 | e:6 | e:7 | f:2 | f:3 | f:6 | f:7) ;; *) echo "node $NODE GPU$g is not M17's or the eval fast lane's" >&2; exit 2 ;; esac
     done
     if [ "$STAGE" = lease ]; then
       on "$NODE" "for g in $GPUS; do f=/data/dev2/leases/gpu\$g.lock/owner; mkdir -p \$(dirname \$f); \
         if grep -qs '^status=busy' \$f; then echo \"gpu\$g is busy (\$(head -3 \$f | tr '\n' ' '))\"; exit 3; fi; \
-        printf 'track=eval-ix1\nstatus=reserved (decoder M17 GPU in the harness form)\npurpose=IX1 dec-m17 reserved for DEV2.0-4B-LHS10SD-bf16 DEV2.0-4B-LHS17SD-bf16\nstart_utc=%s\n' \
+        printf 'track=eval-ix1\nstatus=released (eval fast lane, decoder M17 stage 2)\npurpose=IX1 dec-m17 eval-fast\nstart_utc=%s\n' \
         \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" > \$f; echo gpu\$g handed to the harness form; done"
     else
-      on "$NODE" "docker ps --format '{{.Names}}' | grep -q '^ix1-.*dev2_0-4b-lhs1' && { echo 'an M17 Index container is running'; exit 3; }; \
+      on "$NODE" "docker ps --format '{{.Names}}' | grep -q '^ix1-.*dev2_0-4b-lhs' && { echo 'an M17 Index container is running'; exit 3; }; \
         for g in $GPUS; do printf 'track=dec-m17\nstatus=released\npurpose=decoder M17 (Index runs finished)\nlast_job_end_utc=%s\n' \
         \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" > /data/dev2/leases/gpu\$g.lock/owner; echo gpu\$g released; done"
     fi ;;
@@ -229,33 +253,33 @@ EOF
     ;;
   boot)
     on c "test -f $R/runs/$NAME/merged/results.jsonl && test -f $R/runs/$REF/merged/results.jsonl" || { echo "missing results" >&2; exit 3; }
-    on c "test ! -e $R/runs/$NAME/m17-boot-full-vs-lh.json && test ! -e $R/logs/m17-boot-$NAME.started" || { echo "boot of $NAME already started" >&2; exit 3; }
+    on c "test ! -e $R/runs/$NAME/m17-boot-full-vs-$VS.json && test ! -e $R/logs/m17-boot-$NAME.started" || { echo "boot of $NAME already started" >&2; exit 3; }
     on c "cd $S && PYTHONPATH=$S python3 -m v2.eval.ix1.family_delta --base $REF=$R/runs/$REF/merged/compare.json \
-      --new $NAME=$R/runs/$NAME/merged/compare.json --out $R/runs/$NAME/family-delta-vs-lh.json > /dev/null"
+      --new $NAME=$R/runs/$NAME/merged/compare.json --out $R/runs/$NAME/family-delta-vs-$VS.json > /dev/null"
     boot="cd $R/.. && CUDA_VISIBLE_DEVICES= HIP_VISIBLE_DEVICES= ROCR_VISIBLE_DEVICES= PYTHONPATH=$S:$R/../kit-19ad28ec nice -n 10 \
       venv/bin/python -m v2.eval.ix1.paired_boot --suite-dir suite-0.2 --base $R/runs/$REF/merged/results.jsonl \
       --new $R/runs/$NAME/merged/results.jsonl --external $R/../external/index021-frontier-gap-2026-10-01.json \
       --replicates 2000 --seed 20261002 --workers 16"
     on c "umask 077; date -u +%FT%TZ > $R/logs/m17-boot-$NAME.started; \
-      setsid nohup bash -c '$boot --out $R/runs/$NAME/m17-boot-full-vs-lh.json; echo \$? > $R/logs/m17-boot-full-$NAME.exit' \
+      setsid nohup bash -c '$boot --out $R/runs/$NAME/m17-boot-full-vs-$VS.json; echo \$? > $R/logs/m17-boot-full-$NAME.exit' \
         > $R/logs/m17-boot-full-$NAME.log 2>&1 < /dev/null &"
     echo "$(date -u +%FT%TZ) $NAME bootstrap started on node C (CPU)" ;;
   fetch)
     on c "test \"\$(cat $R/logs/m17-boot-full-$NAME.exit 2>/dev/null)\" = 0" || { echo "bootstrap of $NAME not finished with exit 0" >&2; exit 3; }
     LOCAL=${M17_LOCAL:-$HOME/code/decision2-program/private/m17}/$NAME
     (umask 077 && mkdir -p "$LOCAL")
-    for f in merged/compare.json merged/receipt.json merged/port.json merged/kit/index.json family-delta-vs-lh.json \
-      m17-boot-full-vs-lh.json; do
+    for f in merged/compare.json merged/receipt.json merged/port.json merged/kit/index.json family-delta-vs-$VS.json \
+      m17-boot-full-vs-$VS.json; do
       out=$(basename "$f"); [ "$f" = merged/kit/index.json ] && out=kit-index.json
       on c "cat $R/runs/$NAME/$f" > "$LOCAL/$out"
     done
     pnode=${NODE:-e}
     on "$pnode" "cat $R/parity/$NAME/parity.json" > "$LOCAL/parity.json"
-    python3 - "$LOCAL" "${EXCLUDE[@]}" << 'EOF'
+    python3 - "$LOCAL" "$VS" "${EXCLUDE[@]}" << 'EOF'
 import json, sys
 from pathlib import Path
-local, exclude = Path(sys.argv[1]), sys.argv[2:]
-d = json.loads((local / "family-delta-vs-lh.json").read_text())
+local, vs, exclude = Path(sys.argv[1]), sys.argv[2], sys.argv[3:]
+d = json.loads((local / f"family-delta-vs-{vs}.json").read_text())
 rows = d["benchmarks"]
 excluded = [n for n in exclude if n in rows]
 out = {"excluded": excluded, "weighted_delta_sum": d["weighted_delta_sum"],
