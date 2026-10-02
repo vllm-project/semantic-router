@@ -205,6 +205,68 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 11:35 — **PROGRESSIVE RELEASE DIRECTIVE (user standing intent: "让模型 repo 始终有最好的成绩的模型文件";
+  "快速推进"). Applies to every Index-first release track.**
+  1. **Release as soon as a frozen candidate qualifies:** Index 95% lower bound > 0 vs the **current** release, plus
+     the integrity checks.
+     - **Do not hold** a qualified candidate for arms that are still training or measuring.
+     - "Largest lower bound" selects only among candidates that are ready at the same time.
+     - A later candidate must beat the then-current release, using that release's Index run as the base.
+  2. **27B (355ad916).**
+     - Build the missing ix1 receipt for A20r's `runs/DEV2.0-27B/merged-budget` now (the IF1 base-receipt blocker).
+     - When M6-IB's Index run lands, run its bootstrap vs A20r. If the lower bound is > 0 and the integrity checks pass,
+       release M6-IB to Vega-27B right away; do not wait for M6-IB2PN (about 17:00).
+     - M6-IB2 / IB2PN / IBX follow as successors only if significantly better than the then-current release.
+     - The card worker (fb5dd490) may have published a banner-only revision of Vega first; re-read `main`.
+  3. **4B (5e7b8132).** If `4b-LHA10SD`'s lower bound vs LH is > 0 and the integrity checks pass, release it now.
+     LHA10UP / a75 / M17 follow as successors.
+  4. **2B (index sweep, d669f73d).** `IS-2b-RA` is significant vs the current Sol-2B. b49d1f36 is releasing
+     `2b-RASD-a25` first. Right after that lands, compare `IS-2b-RA` against **that** release (its BF16 Index run)
+     and release it if the lower bound is > 0.
+  5. **9B (sweep).** Release `K-a12IB` as soon as its Index (BF16 release weights) is significant vs K-a13IB.
+  6. **Collection check.** Every driver must be on integration ≥ `cd565a588`.
+
+- 2026-10-02 10:55 — **ROCm kernel track (ed4a4d73).** The user asked whether open-jev-fast's phase-2/3 hand-written
+  kernels and cuBLASLt tuning can be redone for ROCm.
+  - **Kernels.** Kernel-level counterparts on MI325X, Triton first and HIP / MFMA only where Triton leaves more than
+    about 25% on a top hot spot:
+    - fused element-wise kernels;
+    - the Gated DeltaNet chunk kernel (FLA config tuning first, then a fused kernel);
+    - tree attention with an ancestor bitmask vs SDPA (CK / aotriton);
+    - hipBLASLt per-shape timing plus split-K.
+  - **Fidelity** is reported against our 0-answer-change rollout rule. Budget ≤ 10 GPU-h on 1–2 GPUs; results
+    private; code on `xunzhuo/decision-2-rocm-kernels`.
+  - **Split with the study worker (2d541b40):** it owns the end-to-end items (profiling, prefix tree, HIP graphs,
+    LoRA merge, sync removal, TunableOp).
+
+- 2026-10-02 10:35 — **The user wants banner A on every card now and asked why 0.8B hasn't shipped its best result.**
+  - **Banner (new card worker, fb5dd490).** Card-only revisions now for Vega-27B, Lux-9B and Nox-4B, using the
+    round-4 ops `dev2-card4-2026-10-02`.
+    - It skips a repo whose release driver is running or imminent (the release brings banner A).
+    - Eos-0.8B / Sol-2B ride on b49d1f36's imminent releases. If neither has landed by 12:00, the card worker
+      publishes card-only revisions for them too.
+    - `main`-unchanged check; never concurrent with another publisher.
+  - **0.8B.** b49d1f36 has bootstraps for `08b-RA` and the M16 a75 points under the Index-first rule. Since 10:16 it
+    has been running the Index runs on the exact BF16 release weights (card Index and gate evidence) on node C
+    GPU2–7. The release follows.
+  - **open-jev-fast study (2d541b40).** The clone is in `vllm-sr/ignore/` (local exclude, never committed); MIT.
+    - It runs a static catalogue plus MI325X profiling of our runtime.
+    - It prototypes the portable wins: prefix tree, HIP graphs, LoRA merge for 27B, mask sync removal, TunableOp.
+    - Fidelity: 0 decision changes. Budget ≤ 12 GPU-h on node A / B.
+    - Third-party code only in `--network none` containers without secrets. No Open-Jev weights. Results private.
+
+- 2026-10-02 10:15 — **Release-driver false failure fixed at `cd565a588` (integration). Every release worker must merge
+  integration before running a driver.**
+  - **Cause.** Since the rename, `records/dev2-rename-9b-27b-2026-09-29/ops/collection_order.py` matched only
+    `DEV2.0-*` items. Every driver therefore printed `post_checks=FAILED` and skipped the superseded-weight purge.
+  - **Fix.** The check is now read-only: the collection order is hand-curated (largest first) and must not be
+    reordered. It requires a private collection whose models are exactly the six `Decision-2.0-*` releases.
+  - **If a driver already failed only on this check:** run the purge by hand with plan / apply receipts, as the 9B
+    verification did.
+  - **9B.** `Decision-2.0-Lux-9B@259a4550` (K-a13IB) passed every post-upload check (68fece59; record
+    `dev2-9b-ka13ib-2026-10-02.md`, merged at `9b02a66e2`). Lux-9B still shows the round-3 banner, which the banner
+    worker (4c0a68cd) will replace.
+
 - 2026-10-02 10:00 — **The user asked for fast all-size progress. Index sweep (new worker) over every frozen breadth
   candidate under the Index-first rule.**
   - **Scope:**

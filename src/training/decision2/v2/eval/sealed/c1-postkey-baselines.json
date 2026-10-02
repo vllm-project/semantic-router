@@ -78,15 +78,15 @@
       "former_model": "DEV2.0-9B",
       "repo": "llm-semantic-router/Decision-2.0-Lux-9B",
       "former_repo": "llm-semantic-router/DEV2.0-9B",
-      "revision": "53bac735be58def53673d0d290b9baa3f2af1cf9",
-      "identity": "b1ed5a71038b474902d2a6dfebeee0c6f7ce901097553b4621f6f0a23fb6da98",
-      "manifest_sha256": "d5007cdb83cd9e29c353efb5dff92a72035c53a4312468c660cb73af2a3accfa",
-      "run": "/data/dev2/runs/eval/m4/c1-event3/cand9b",
-      "seal_sha256": "2457cb74e16c9e28af1f834aa30b1a71168536f72f3f1156cbd3ea865f5ab215",
-      "predictions_sha256": "37d96d973b27de7f09c2036f126587be5936e5ea8c56c876be12c398ebc7889f",
-      "c1": 53.77373085445,
-      "source": "C1 event 3 (independent confirmation, v1.2), stored predictions of the frozen package DEV2.0-8B@53bac735 (BF16 storage); valid for every revision with these weights (the DEV2.0-9B rename and card-only revisions included)",
-      "backup": "private eval-artifacts m4/c1-event3/cand9b (1561a3a5)"
+      "revision": "259a45502bfca2f585a59ef99079533106e0b136",
+      "identity": "b9a65d601bb6780c2c07998aecbfab322ede459c26fcb8ed262281ad08f909fb",
+      "manifest_sha256": "055c86f153530a3790cf4fc98c2d554b9659783f7349c111d959f34b4c4049e3",
+      "run": "/data/dev2/runs/eval/c1-postkey/9B/dev2-9b-ka13ib-20261001T192542Z/cand",
+      "seal_sha256": "e5b7e2db45b48be8955861ba8945d8d29d4517b45f56c330077ef50e769e3a94",
+      "predictions_sha256": "31c6bd94317c34860217b4bf10f009ca0666652dc9a265f6f85e253a7e350249",
+      "c1": 53.49361000501876,
+      "source": "post-key C1 v1.2 collection dev2-9b-ka13ib-20261001T192542Z (spec c1-postkey/dev2-9b-ka13ib.json; mirror 24228e13b) of the pre-release package (manifest 055c86f1), whose weights are those of the released revision 259a45502bfc (identity b9a65d60; the release differs only in README.md and the two Index charts, the card round-3 Index conventions); item 8 vs the previous entry 53.77 (weights b1ed5a71, event-3 run cand9b): -0.28 [-1.31, +0.65], PASS; not an independent validation",
+      "backup": "private eval-artifacts c1-postkey/9B/dev2-9b-ka13ib-20261001T192542Z (980181d8)"
     },
     "27B": {
       "model": "Decision-2.0-Vega-27B",
@@ -110,6 +110,7 @@
     "0.8B: registered 2026-09-30 by the coordinator's decision, from the event-1 predictions (0 answer changes at T = 1); no new collection.",
     "27B: replaced 2026-09-30 by the successor DEV2.0-27B 5323310327e5 (27B M4-A20r soup, identity 2e07451107a2; coordinator 07:20). The previous entry was the event-3 run cand27 of 5683c6f0 (identity b7fd44e3, C1 57.33, seal f41d44c5); a second 27B successor against this entry needs --approval.",
     "4B: replaced 2026-10-01 by the successor DEV2.0-4B 13d4214361d0 (decoder M10 m10-4b-LH, rank-128 LoRA on Qwen3.5-4B-Base merged, identity 6a555335; user release job 2026-10-01). The previous entry was the event-3 run cand4b of 452f1332 (identity 11b5ca1c, C1 48.38, seal b73e25f1); a second 4B successor against this entry needs --approval.",
+    "9B: replaced 2026-10-02 by the successor Decision-2.0-Lux-9B 259a45502bfc (9B M9 K-a13IB, the K-a13 recipe with IB1-r3 / IB2, identity b9a65d60; coordinator decision 2026-10-02 02:05 UTC+8, the Index path). The previous entry was the event-3 run cand9b of 53bac735 (identity b1ed5a71, C1 53.77, seal 2457cb74); a second 9B successor against this entry needs --approval.",
     "New training data: a successor trained on rows C1 was not rechecked against needs every such TRAIN file listed with verdict PASS in c1-recheck-registry.json (the custodian's content recheck, c1-recheck.sh) before its post-key run."
   ]
 }

@@ -1,0 +1,127 @@
+{
+ "approval": null,
+ "baseline_entry": {
+  "c1": 53.49361000501876,
+  "identity": "b9a65d601bb6780c2c07998aecbfab322ede459c26fcb8ed262281ad08f909fb",
+  "model": "Decision-2.0-Lux-9B",
+  "predictions_sha256": "31c6bd94317c34860217b4bf10f009ca0666652dc9a265f6f85e253a7e350249",
+  "repo": "llm-semantic-router/Decision-2.0-Lux-9B",
+  "revision": "manifest-sha256:055c86f153530a3790cf4fc98c2d554b9659783f7349c111d959f34b4c4049e3",
+  "run": "/data/dev2/runs/eval/c1-postkey/9B/dev2-9b-ka13ib-20261001T192542Z/cand",
+  "seal_sha256": "e5b7e2db45b48be8955861ba8945d8d29d4517b45f56c330077ef50e769e3a94",
+  "source": "post-key C1 v1.2 collection dev2-9b-ka13ib-20261001T192542Z"
+ },
+ "by_type": {
+  "choice": 58.90022520084788,
+  "noul": 72.29394650561058,
+  "score": 29.93178103687394
+ },
+ "c1": 53.49361000501876,
+ "comparisons": [
+  {
+   "by_type": {
+    "choice": {
+     "ci95": [
+      -1.1443291846514982,
+      1.5368546036768802
+     ],
+     "delta": 0.18683813968448248,
+     "p": 0.7921584316863373
+    },
+    "noul": {
+     "ci95": [
+      -2.84043656391126,
+      -0.2856947551206542
+     ],
+     "delta": -1.5165738883290487,
+     "p": 0.014802960592118424
+    },
+    "score": {
+     "ci95": [
+      -2.617753212786199,
+      1.9818131722644148
+     ],
+     "delta": -0.16995930121044367,
+     "p": 0.8173634726945389
+    }
+   },
+   "ci95": [
+    -1.3120492618817152,
+    0.6492388838572197
+   ],
+   "delta": -0.28012084943124194,
+   "key": "baseline",
+   "kind": "item8",
+   "name": "Decision-2.0-Lux-9B 53bac735 (current revision)",
+   "p": 0.5257051410282056,
+   "right_c1": 53.77373085445,
+   "run": "/data/dev2/runs/eval/m4/c1-event3/cand9b",
+   "sha256": "8042a25d6022ee55d4d2b04d2a958586dc8cb36d8e1f14dc85849677c54fc01e",
+   "verdict": "PASS"
+  }
+ ],
+ "gpu": {
+  "cand": {
+   "exit_code": 0,
+   "gpu": 6,
+   "gpu_hours": 0.043654494749175175,
+   "shared": true,
+   "wall_seconds": 157.15618109703064
+  },
+  "smoke": {
+   "exit_code": 0,
+   "gpu": 6,
+   "gpu_hours": 0.020224070615238614,
+   "shared": true,
+   "wall_seconds": 72.80665421485901
+  }
+ },
+ "gpu_hours": 0.06387856536441379,
+ "item8": {
+  "ci95": [
+   -1.3120492618817152,
+   0.6492388838572197
+  ],
+  "delta": -0.28012084943124194,
+  "name": "Decision-2.0-Lux-9B 53bac735 (current revision)",
+  "p": 0.5257051410282056,
+  "verdict": "PASS"
+ },
+ "item_set": {
+  "dropped_by_task": {
+   "delichess/communicative_function": 6,
+   "delichess/epistemic_stance": 6,
+   "implicaturex/likelihood": 1,
+   "legal_case_law/argument_function": 20,
+   "narrative_gold/span_is_event": 1
+  },
+  "dropped_items": 34,
+  "gold_items": 2874,
+  "retired_candidates": 555,
+  "retired_sha256": "bbf095c70917f028d691fce570b114725e4f22fd6a1987456f6ae2c30f22990a",
+  "scored_items": 2840,
+  "tasks_emptied": [],
+  "version": "v1.2"
+ },
+ "items": 2840,
+ "label": "JevArena-C1 v1.2, post-key (not an independent validation)",
+ "model": {
+  "adapter_spec": "v2/eval/sealed/adapters/dev2-dec-package-t1.json",
+  "identity": "b9a65d601bb6780c2c07998aecbfab322ede459c26fcb8ed262281ad08f909fb",
+  "label": "Decision-2.0-Lux-9B",
+  "limit": "16,384 tokens (package limit), no truncation",
+  "manifest_sha256": "055c86f153530a3790cf4fc98c2d554b9659783f7349c111d959f34b4c4049e3",
+  "repo": "llm-semantic-router/Decision-2.0-Lux-9B",
+  "revision": "manifest-sha256:055c86f153530a3790cf4fc98c2d554b9659783f7349c111d959f34b4c4049e3"
+ },
+ "name": "dev2-9b-ka13ib",
+ "predictions_sha256": "31c6bd94317c34860217b4bf10f009ca0666652dc9a265f6f85e253a7e350249",
+ "report_sha256": "a3172e2c0ff6382e4a806ff4085eda948a48d5fb3aa25c33017c0be409de0b37",
+ "role": "successor",
+ "schema": "dev2-c1-postkey/1/summary",
+ "seal_sha256": "e5b7e2db45b48be8955861ba8945d8d29d4517b45f56c330077ef50e769e3a94",
+ "tier": "9B",
+ "use": "successor-rule item 8 only: never training data, never a selection criterion (development or siblings)",
+ "utc": "2026-10-01T19:32:52Z",
+ "valid": 2840
+}

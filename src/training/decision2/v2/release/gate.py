@@ -41,6 +41,19 @@ paired v3 interval's upper bound > 0 (not significantly below) and the paired
 bootstrap's Index-delta 95% lower bound > 0. The bootstrap file stays private;
 the gate binds its SHA-256 and prints no Index value.
 
+The Index-first rule (user decision 2026-10-02 09:55) names ``index_first:
+{"bootstrap", "receipt", "base_receipt", "audit"}`` instead (``index_path`` does
+not combine with it). The only quality gate is IF1: the full-panel paired
+Index bootstrap of the candidate minus the current revision has a 95% lower
+bound > 0, its two inputs are the ix1 run receipts of exactly this package's
+weights and of the current revision's weights, over one panel. The integrity
+items are R3 (no type collapsed on the scored run) and IF3 (a row-level ix1
+contamination audit of the training file whose planted control is complete);
+package parity and the Hub / remote-code checks are gate items 2-7 as for every
+release. v3, human transfer, mlx-diag, the tier gates, overlap exposure,
+public 231 and C1 become references: whichever evidence the profile names is
+bound, read and printed under ``1_successor_references``, which never fails.
+
   evaluate  print the six gate items with evidence from a work directory
   profile   print item 1 (or the successor items) from a spec, before any upload
   seal      write <work>/receipts/gate.json if every item passes
@@ -81,6 +94,17 @@ SUCCESSOR_ITEMS = (
 SUCCESSOR_C1 = "1_successor_R8_c1_postkey"
 SUCCESSOR_R1_INDEX = "1_successor_R1p_v3_not_below_index_gain"
 INDEX_BOOT_SCHEMA = "ix1-paired-boot/1"
+INDEX_RUN_SCHEMA = "ix1-run-receipt/1"
+INDEX_AUDIT_SCHEMA = "ix1-contamination/1"
+INDEX_FIRST = "index-first"
+INDEX_FIRST_EVIDENCE = ("bootstrap", "receipt", "base_receipt", "audit")
+SUCCESSOR_REFERENCES = "1_successor_references"
+INDEX_FIRST_ITEMS = (
+    "1_successor_IF1_index_gain",
+    "1_successor_R3_no_type_collapsed",
+    "1_successor_IF3_index_audit",
+    SUCCESSOR_REFERENCES,
+)
 MLX_PAIRED_9B = "dev2-9b-mlx-paired/1"
 C1_SUMMARY_SCHEMA = "dev2-c1-postkey/1/summary"
 DECISION_TYPES = ("choice", "noul", "score")
@@ -140,6 +164,26 @@ def successor_profile(spec: dict[str, Any], value: dict[str, Any]) -> dict[str, 
     current, tier = value.get("current") or {}, value.get("tier") or {}
     keys = {e["key"] for e in spec["card"]["reports"]}
     share = tier.get("v3_share")
+    chain_ok = all(
+        current.get(k) for k in ("gate", "decision", "run")
+    ) and re.fullmatch(r"[0-9a-f]{40}", str(current.get("revision", "")))
+    if "index_first" in value:
+        first = value["index_first"] or {}
+        if (
+            not all(value.get(k) for k in ("run", "types"))
+            or not chain_ok
+            or not all(first.get(k) for k in INDEX_FIRST_EVIDENCE)
+            or "index_path" in value
+            or (tier and tier.get("reference") not in keys)
+            or not spec["card"].get("paired")
+        ):
+            raise ValueError(
+                "an index_first successor gate_profile needs run, types, current {revision "
+                "(40 hex), gate, decision, run}, index_first {bootstrap, receipt, base_receipt, "
+                "audit} and card.paired; a named tier needs a card report key; index_path "
+                "does not combine with it"
+            )
+        return value
     if (
         not all(value.get(k) for k in ("run", *SUCCESSOR_EVIDENCE))
         or not all(current.get(k) for k in ("gate", "decision", "run"))
@@ -174,7 +218,10 @@ def no_own_1_0(tier: dict[str, Any]) -> bool:
 
 
 def successor_names(profile: dict[str, Any]) -> tuple[str, ...]:
-    """R1 (R1' on the Index path)-R7, plus R8 (the C1 post-key guard) when the profile names its summary."""
+    """R1 (R1' on the Index path)-R7, plus R8 (the C1 post-key guard) when the profile names its summary;
+    under the Index-first rule IF1, R3, IF3 and the references."""
+    if profile.get("index_first"):
+        return INDEX_FIRST_ITEMS
     first = (SUCCESSOR_R1_INDEX,) if profile.get("index_path") else SUCCESSOR_ITEMS[:1]
     return (
         first
@@ -184,7 +231,31 @@ def successor_names(profile: dict[str, Any]) -> tuple[str, ...]:
 
 
 def evidence_sha256(profile: dict[str, Any]) -> dict[str, str]:
-    """The files a successor decision binds by SHA-256."""
+    """The files a successor decision binds by SHA-256 (under Index-first: the named references too)."""
+    if profile.get("index_first"):
+        files = {
+            name: profile[name]
+            for name in ("types", "paired", "mlx_paired", "public231", "c1_postkey")
+            if profile.get(name)
+        }
+        files.update(
+            {
+                f"index_first_{k}": profile["index_first"][k]
+                for k in INDEX_FIRST_EVIDENCE
+            }
+        )
+        if profile.get("exposure"):
+            exposures = _exposures(profile)
+            files.update(
+                {"exposure": exposures[0]}
+                if len(exposures) == 1
+                else {f"exposure_{i}": p for i, p in enumerate(exposures, 1)}
+            )
+        if (profile.get("tier") or {}).get("paired"):
+            files["tier_paired"] = profile["tier"]["paired"]
+        files["current_gate"] = profile["current"]["gate"]
+        files["current_decision"] = profile["current"]["decision"]
+        return {name: sha_file(Path(path)) for name, path in sorted(files.items())}
     files = {name: profile[name] for name in SUCCESSOR_EVIDENCE if name != "exposure"}
     exposures = _exposures(profile)
     if len(exposures) == 1:
@@ -477,6 +548,116 @@ def successor_items(spec: dict[str, Any], profile: dict[str, Any]) -> dict[str, 
             problems,
         )
 
+    def index_gain() -> Any:
+        first = profile["index_first"]
+        boot = _json(Path(first["bootstrap"]))
+        inputs = boot.get("inputs_sha256") or {}
+        problems = []
+        if boot.get("schema") != INDEX_BOOT_SCHEMA or boot.get("excluded"):
+            problems.append("Index evidence is not a full-panel ix1 paired bootstrap")
+        runs = {}
+        for side, key, label in (
+            ("new", "receipt", "candidate"),
+            ("base", "base_receipt", "current revision"),
+        ):
+            runs[side] = _json(Path(first[key]))
+            if runs[side].get("schema") != INDEX_RUN_SCHEMA:
+                problems.append(f"the {label} Index receipt is not an ix1 run receipt")
+            if runs[side].get("results_sha256") != inputs.get(side):
+                problems.append(
+                    f"the bootstrap's {side} run is not the {label} Index run"
+                )
+        scored = {
+            s: (r.get("model_source") or {}).get("model_sha256")
+            for s, r in runs.items()
+        }
+        if scored["new"] != spec["expected_identity"]["model_sha256"]:
+            problems.append(
+                "the candidate Index run scored other weights than this package"
+            )
+        current_identity = _json(Path(current["decision"])).get("identity") or {}
+        if scored["base"] != current_identity.get("model_sha256"):
+            problems.append(
+                "the reference Index run did not score the current revision's weights"
+            )
+        if runs["new"].get("panel_run_ids_sha256") != runs["base"].get(
+            "panel_run_ids_sha256"
+        ):
+            problems.append("the two Index runs scored different panels")
+        low = boot["headline"]["ci95"][0]
+        return (
+            low > 0,
+            f"private Index paired bootstrap {sha_file(Path(first['bootstrap']))[:12]} "
+            f"({boot.get('replicates')} replicates over {boot.get('cases')} cases) of these weights "
+            f"({str(scored['new'])[:12]}) minus the current revision's ({str(scored['base'])[:12]}): "
+            f"95% lower bound > 0: {'yes' if low > 0 else 'NO'}",
+            problems,
+        )
+
+    def index_audit() -> Any:
+        path = Path(profile["index_first"]["audit"])
+        audit = _json(path)
+        planted = audit.get("planted_control") or {}
+        sets = audit.get("training_sets") or {}
+        problems = []
+        if audit.get("schema") != INDEX_AUDIT_SCHEMA:
+            problems.append("not an ix1 row-level contamination audit")
+        if (
+            not audit.get("index_rows")
+            or not sets
+            or not all(s.get("training_lines") for s in sets.values())
+        ):
+            problems.append("the audit read no Index or training rows")
+        complete = (
+            bool(planted.get("planted"))
+            and planted.get("found") == planted.get("planted")
+            and not planted.get("missed")
+        )
+        return (
+            complete,
+            f"row-level Index audit {sha_file(path)[:12]} of {audit.get('index_rows')} Index rows: "
+            + "; ".join(
+                f"{name} {s.get('training_lines')} training lines, {s.get('item_rows')} item rows, "
+                f"{s.get('duplicate_rows')} familiar-text rows"
+                for name, s in sorted(sets.items())
+            )
+            + f"; planted control {planted.get('found')} / {planted.get('planted')}",
+            problems,
+        )
+
+    def references() -> dict[str, Any]:
+        readings = []
+        named = (
+            ("v3", "paired", r1_r2("v3")),
+            ("human transfer", "paired", r1_r2("H")),
+            ("mlx-diag", "mlx_paired", r4),
+            ("tier gates", "tier", r5),
+            ("overlap exposure", "exposure", r6),
+            ("public 231", "public231", r7),
+            ("C1 post-key", "c1_postkey", r8),
+        )
+        for label, key, reading in named:
+            if not profile.get(key):
+                readings.append(f"{label}: not run")
+                continue
+            item = _item(reading, [])
+            readings.append(
+                f"{label}: {item['evidence']} ({'clears' if item['passed'] else 'below'} its former bar)"
+            )
+        return {
+            "passed": True,
+            "reference": True,
+            "evidence": "references only under the Index-first rule (user 2026-10-02 09:55): "
+            + "; ".join(readings),
+        }
+
+    if profile.get("index_first"):
+        items = {
+            name: _item(check, chain)
+            for name, check in zip(INDEX_FIRST_ITEMS, (index_gain, r3, index_audit))
+        }
+        items[SUCCESSOR_REFERENCES] = references()
+        return items
     checks = [r1_r2("v3"), r1_r2("H"), r3, r4, r5, r6, r7]
     if profile.get("c1_postkey"):
         checks.append(r8)
@@ -609,6 +790,10 @@ def check(
         ):
             problems.append(
                 "decision names a different gate profile, current revision or evidence"
+            )
+        if bool(profile.get("index_first")) != (decision.get("rule") == INDEX_FIRST):
+            problems.append(
+                "the decision and the profile disagree on the Index-first rule"
             )
     elif profile and (
         decision.get("gate_profile") != NO_OWN_1_0
@@ -760,6 +945,8 @@ def seal(work: Path) -> dict[str, Any]:
     profile = gate_profile(spec)
     if profile and profile["name"] == SUCCESSOR:
         gate["gate_profile"] = SUCCESSOR
+        if profile.get("index_first"):
+            gate["rule"] = INDEX_FIRST
         gate["supersedes"] = {
             "revision": profile["current"]["revision"],
             "gate_sha256": sha_file(Path(profile["current"]["gate"])),

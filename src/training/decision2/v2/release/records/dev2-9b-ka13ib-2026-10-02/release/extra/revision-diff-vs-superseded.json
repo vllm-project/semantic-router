@@ -1,0 +1,40 @@
+{
+  "schema": "dev2-revision-diff/1",
+  "repo": "llm-semantic-router/Decision-2.0-Lux-9B",
+  "released": "586af77916ee508320421bda6c22f7f0305a7279",
+  "new": "259a45502bfca2f585a59ef99079533106e0b136",
+  "files": {
+    "released": 40,
+    "new": 41
+  },
+  "changed_card_files": [
+    "MODEL_MANIFEST.json",
+    "README.md",
+    "assets/index-areas.png",
+    "assets/index-pareto.png",
+    "assets/jevarena-types.png",
+    "assets/jevarena.png"
+  ],
+  "changed_hub_managed_files": [],
+  "changed_other_files": [
+    "backbone/model-00001-of-00009.safetensors",
+    "backbone/model-00002-of-00009.safetensors",
+    "backbone/model-00003-of-00009.safetensors",
+    "backbone/model-00004-of-00009.safetensors",
+    "backbone/model-00005-of-00009.safetensors",
+    "backbone/model-00006-of-00009.safetensors",
+    "backbone/model-00007-of-00009.safetensors",
+    "backbone/model-00008-of-00009.safetensors",
+    "backbone/model-00009-of-00009.safetensors",
+    "decision2/_vendor/dev2model/decision_model.py",
+    "decision2/_vendor/dev2model/infer.py",
+    "decision2/_vendor/dev2model/lora.py",
+    "decision2/_vendor/dev2model/score_bias.py",
+    "decision_config.json",
+    "decision_head.safetensors"
+  ],
+  "weight_files": 10,
+  "weight_bytes": 17926620224,
+  "weights_byte_identical": false,
+  "ok": false
+}
