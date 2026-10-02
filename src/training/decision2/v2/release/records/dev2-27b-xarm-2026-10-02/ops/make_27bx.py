@@ -32,14 +32,14 @@ import json
 import sys
 from pathlib import Path
 
-from v2.release import gate
+from v2.release import gate, layout
 
 ROOT = Path(__file__).resolve().parents[5]
 RECORD = Path(__file__).resolve().parents[1]
 BASE_SPEC = ROOT / "v2/release/specs/dev2-27b-27bif-M6-IB.json"
 SPECS = ROOT / "v2/release/specs"
 NAME = "Decision-2.0-Vega-27B"
-REPO = f"llm-semantic-router/{NAME}"
+REPO = f"vllm-sr/{NAME}"
 REL = "/data/dev2/runs/release"
 DECISIONS = f"{REL}/decisions"
 M6 = "/data/dev2/runs/27b/m6"
@@ -123,7 +123,7 @@ def loaded(soup: dict) -> int:
 
 def spec(arm: str) -> dict:
     p = paths(arm)
-    old = load(BASE_SPEC)
+    old = layout.current_ids(load(BASE_SPEC))
     assert (
         old["repo_id"] == REPO
         and old["expected_identity"]["model_sha256"] == CURRENT["weights_identity"]

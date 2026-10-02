@@ -19,7 +19,7 @@ read -r PRIV CKPT < <(cd "$S" && PYTHONPATH=$S python3 -c '
 import importlib.util, sys
 spec = importlib.util.spec_from_file_location("make_27bx", sys.argv[1]); m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m); p = m.paths(sys.argv[2]); print(p["private"], p["checkpoint"])' "$OPS/make_27bx.py" "$ARM")
-[[ -f "$PRIV/decision-index-card.json" ]] || { echo "run index27b.sh $ARM first" >&2; exit 3; }
+[[ -f "$PRIV/decision-index-card.json" ]] || { echo "run index27bx.sh $ARM first" >&2; exit 3; }
 [[ ! -e "$PRIV/27b" ]] || { echo "$PRIV/27b exists" >&2; exit 3; }
 W=$(mktemp -d /data/dev2/tmp/render27bx-XXXXXX)
 trap 'rm -rf "$W"' EXIT

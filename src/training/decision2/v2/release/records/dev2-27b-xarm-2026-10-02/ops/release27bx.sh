@@ -34,16 +34,16 @@ TS=$(date -u +%Y%m%dT%H%M%SZ)
 S=$(cd "$(dirname "$0")/../../../../.." && pwd)
 SRC=$(basename "$(cd "$S/../../.." && pwd)")
 R=$S/v2/release/records/dev2-27b-xarm-2026-10-02
-PURGE=$S/v2/release/records/dev2-27b-indexfirst-2026-10-02/ops/purge_superseded.py
+PURGE=$R/ops/purge_superseded.py
 RENAME_OPS=$S/v2/release/records/dev2-rename-9b-27b-2026-09-29/ops
 G=/data/dev2/private/panels/goldfree
 D=/data/dev2/runs/release/decisions
 HFPY=/data/dev2/tools/hf-cli/bin/python
 HFC=/data/dev2/hf-cache
-COLL=llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00
+COLL=vllm-sr/decision-20-6ab7cf7bdfb506bf8269cb00
 TRACK=release-27b-27bx
 IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1
-name=Decision-2.0-Vega-27B REPO=llm-semantic-router/Decision-2.0-Vega-27B
+name=Decision-2.0-Vega-27B REPO=vllm-sr/Decision-2.0-Vega-27B
 superseded=781b2b2431abccbdcfcbfa98b66c80b332725513
 SPEC=$S/v2/release/specs/dev2-27b-27bx-$ARM.json
 DECISION=$R/$name.decision.27bx-$ARM.json
