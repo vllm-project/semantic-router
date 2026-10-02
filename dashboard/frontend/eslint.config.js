@@ -75,7 +75,6 @@ export default tseslint.config(
       "src/pages/builderPageGuideDrawer.tsx",
       "src/pages/builderPageOutputPanel.tsx",
       "src/pages/builderPageRouteSharedControls.tsx",
-      "src/pages/builderPageVisualShell.tsx",
       "src/pages/topology/components/CustomNodes/DecisionNode.tsx",
       "src/pages/topology/components/CustomNodes/PluginChainNode.tsx",
       "src/pages/topology/components/CustomNodes/SignalGroupNode.tsx",

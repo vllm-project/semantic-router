@@ -3,9 +3,11 @@ package extproc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
@@ -28,7 +30,7 @@ func TestSelectionUsesPreparedProviderForEveryLocalBackend(t *testing.T) {
 			}
 			set := embedding.NewSet(map[string]embedding.Provider{"multimodal": provider}, "multimodal")
 			embed, options := resolveSelectionEmbeddingFunc(cfg, set)
-			vector, err := embed("query", options)
+			vector, err := embed(context.Background(), "query", options)
 			if err != nil || len(vector) != 768 || calls != 1 {
 				t.Fatalf("selection bypassed its prepared provider: dimension=%d calls=%d err=%v", len(vector), calls, err)
 			}
@@ -76,12 +78,56 @@ func TestSelectionEmbeddingRuntimeUsesRequestedRemoteConfig(t *testing.T) {
 	defer prepared.Close()
 	embed, defaultConfig := resolveSelectionEmbeddingFunc(cfg, prepared)
 
-	embedding, err := embed("hello", defaultConfig)
+	embedding, err := embed(context.Background(), "hello", defaultConfig)
 	if err != nil {
 		t.Fatalf("selection embedding function error = %v", err)
 	}
 	if len(embedding) != 2 || embedding[0] != float32(0.1) {
 		t.Fatalf("embedding = %#v, want two remote values", embedding)
+	}
+}
+
+func TestSelectionEmbeddingPropagatesCancellationContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	started := make(chan struct{})
+
+	provider, err := embedding.NewFuncProvider("test", 1, func(got context.Context, _ string) ([]float32, error) {
+		if got != ctx {
+			t.Errorf("embedding context = %p, want request context %p", got, ctx)
+		}
+		close(started)
+		<-got.Done()
+		return nil, got.Err()
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	set := embedding.NewSet(map[string]embedding.Provider{"test": provider}, "test")
+	cfg := &config.RouterConfig{}
+	cfg.EmbeddingConfig = config.HNSWConfig{ModelType: "test"}
+	embed, options := resolveSelectionEmbeddingFunc(cfg, set)
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := embed(ctx, "cancel me", options)
+		errCh <- err
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("embedding provider was not called")
+	}
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("embedding error = %v, want context cancellation", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("embedding did not stop after request cancellation")
 	}
 }
 
