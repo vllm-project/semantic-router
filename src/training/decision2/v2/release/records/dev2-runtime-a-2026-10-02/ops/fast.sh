@@ -10,6 +10,7 @@
 #                      examples.py compare-answers old new at tolerance 0 (0 answer changes, max drift 0.0)
 #   --bench --gpu N    runtime_bench.py on the first 400 typed-final prompts, old then new, two untimed passes
 #                      (the fast path captures a shape's HIP graph on its second use) then one timed; compare
+#   --profile --gpu N  profile_request.py on the same 400 prompts, old then new: per-step milliseconds
 # Usage: bash <mirror>/v2/release/records/dev2-runtime-a-2026-10-02/ops/fast.sh <tier> <mode> [--gpu N]
 # Work: /data/dev2/runs/runtime-a/<tier>/ (the newest preview is used by --parity and --bench).
 # Lease: /data/dev2/leases/gpuN.lock/owner.runtime-a (a co-tenant entry; status set to idle on exit).
@@ -23,7 +24,7 @@ while [[ $# -gt 0 ]]; do
     *) echo "unknown argument $1" >&2; exit 2 ;;
   esac
 done
-[[ "$mode" =~ ^--(preview|parity|bench)$ ]] || { echo "mode: --preview|--parity|--bench" >&2; exit 2; }
+[[ "$mode" =~ ^--(preview|parity|bench|profile)$ ]] || { echo "mode: --preview|--parity|--bench|--profile" >&2; exit 2; }
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 S=$(cd "$(dirname "$0")/../../../../.." && pwd)
 SRC=$(basename "$(cd "$S/../../.." && pwd)")
@@ -145,6 +146,9 @@ for side in old new; do
     args=(examples.py parity --package "$pkg" --device cuda:0 --threads 4 --tolerance 1
           --output "$W/receipts/parity-$side.json" --answers "$W/answers-$side.jsonl")
     for panel in "${panels[@]}"; do args+=(--panel "$panel"); done
+  elif [[ "$mode" == --profile ]]; then
+    args=(records/dev2-runtime-a-2026-10-02/ops/profile_request.py --package "$pkg" --prompts "$G/typed-final.prompts.jsonl"
+          --count 400 --output "$W/receipts/profile-$side.json")
   else
     args=(runtime_bench.py run --package "$pkg" --prompts "$G/typed-final.prompts.jsonl" --count 400 --warmup 400
           --warmup-passes 2 --threads 4 --output "$W/receipts/bench-$side.json")
@@ -163,6 +167,8 @@ if [[ "$mode" == --parity ]]; then
     --output "$W/receipts/answers-compare.json" > /dev/null || true
   python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); print(json.dumps({"passed": c["passed"], "max_abs_drift": c["max_abs_drift"], "panels": {k: [v["prompts"], v["identical_prompts"], v["category_changes"], v["missing"], v["max_abs_drift"]] for k, v in c["panels"].items()}}))' \
     "$W/receipts/answers-compare.json"
+elif [[ "$mode" == --profile ]]; then
+  tail -n 1 "$W/logs/old.log" "$W/logs/new.log"
 else
   python3 "$S/v2/release/runtime_bench.py" compare "$W/receipts/bench-old.json" "$W/receipts/bench-new.json" \
     --output "$W/receipts/compare.json" > /dev/null || true

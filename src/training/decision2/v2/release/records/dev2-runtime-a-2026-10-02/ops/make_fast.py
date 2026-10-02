@@ -4,7 +4,7 @@
 
 ``preview``: a staging spec that builds the tier's released package with the new
 runtime: the released spec (Hub IDs made current), kind ``staging`` under
-``vllm-sr/dev2-release-staging-ra<key>``, no release decision or gate profile,
+``vllm-sr/dev2-release-staging-ra<key>``, no release decision (the gate profile stays: the card's comparison follows it),
 and ``runtime_source`` set to the new runtime's mirror. Weights, tokenizer,
 vendored sources and remote code stay those of the released spec; only the
 package runtime (and the staging name in config / manifest / card) differs.
@@ -21,7 +21,7 @@ from v2.release import layout
 
 def preview(base: dict, runtime_source: str, key: str) -> dict:
     spec = layout.current_ids(base)
-    for name in ("_release", "gate_receipt", "gate_profile"):
+    for name in ("_release", "gate_receipt"):
         spec.pop(name, None)
     spec["kind"] = "staging"
     spec["repo_id"] = f"{layout.ORG}/dev2-release-staging-ra{key}"
