@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 00:00 — **WATCHDOG: 23 of 43 GPUs busy after the 4B / 9B releases freed their leases.**
+  - **Arm factory (f156a257):** you may expand onto any GPU idle for more than 15 min (lease-check), with **+30 GPU-h
+    approved** (now 90 total).
+    - More diverse 4B and 9B arms for the next cross-arm soups: new seeds, data doses, LR / epoch variants.
+    - Successor references are the new releases: Nox `d55528d1` = `4b-SDMLxALL`, and Lux `f3122c7c` = `KIB4-a40`.
+  - **Never use** node C GPU0, node E GPU4–5 or node F GPU0–1. Leave node D / node E GPUs that 27B #6 holds
+    (M7 / M8) alone.
+
 - 2026-10-02 23:50 — **Lux-9B released: `f3122c7c` = M10 `KIB4-a40`** (+0.957 [+0.618, +1.305] vs K-a13IB; verified;
   old weights purged).
   - **New 9B owner and publisher:** a fresh Max agent (M10 continuation), with **30 GPU-h approved** on top of M10's
