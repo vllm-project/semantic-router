@@ -46,3 +46,13 @@ Index values stay private (node private dirs and the program's private folder); 
   (½ RAM + ½ RAUPM, lineage check PASS) and `2b-RAM` on node E GPU0-3 / 6-7.
 - Bootstraps of `2b-UPRA` / `2b-UPRAa75` vs the `IS-2b-RAUP` run: 95% lower bounds below 0 (not releasable over it).
 - Amendment 2: wider uniform soups `2b-U5`, `2b-U4`, `08b-RRM-a75`.
+
+## 2026-10-02T07:45Z
+
+- Seeds: all 2B arms done (`2b-RS17UP`, `2b-RAUPM`, `2b-RAM`, two seeds each, preflights PASS); `08b-RAM` seed 1 done
+  07:25Z, seed 2 running on node A GPU1.
+- Index scored on node C (scorer gates pass): `2b-RS17UP`, `2b-SWRA`, `2b-RAUPM`, `2b-UPRAM`, `2b-RAM`. Running:
+  `2b-U4` (node E), `2b-U5` (node A GPU2 / 7, panel-3), `2b-MLRAM` (node F GPU4-5). `2b-U3ML` built and restaged,
+  queued for node E. Bootstraps of `2b-RAM` vs DEV2.0-2B, vs `IS-2b-RAUP` and vs `M16-2b-RASD-bf16` (the 2B point
+  b49d1f36 is about to release) running on node C.
+- Hub: Eos `3de61185`, Sol `8ed41433` (b49d1f36's 2B upload is held by the Vega-27B release on node A).
