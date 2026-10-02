@@ -17,6 +17,7 @@ class GroupTest(unittest.TestCase):
             "/data/dev2/private/sources/m3b/nq/default/train-1.parquet": "/data/dev2/private/sources/m3b/nq",
             "/data/dev2/private/a7/sources/enc10/massive/x.jsonl": "/data/dev2/private/a7/sources/enc10",
             "/data/dev2/hf-cache/datasets--llm-semantic-router--decision-2.0-training-data/snapshots/r/v2/a7/arms/A7q/train.jsonl": "training-data:v2/a7/arms/A7q",
+            "/data/dev2/hf-cache/datasets--vllm-sr--decision-2.0-training-data/snapshots/r/m6/ib4/p1/ib4.train.jsonl": "training-data:m6/ib4/p1",
             "/data/dev2/private/c1-rescan-hf-delta/v1_3-x/files/0123456789ab/m2/arms/H1/train.jsonl": "training-data:m2/arms/H1",
             "/data/dev2/hf-cache/datasets--demelin--moral_stories/snapshots/r/data/t.jsonl": "hf:datasets--demelin--moral_stories",
             "/data/dev2/hf-cache/blobs/ab/abcdef.json": "hf-blobs",

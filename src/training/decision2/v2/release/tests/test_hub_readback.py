@@ -13,7 +13,7 @@ from unittest import mock
 
 from v2.release import hub, layout
 
-REPO = "llm-semantic-router/Decision-2.0-Eos-0.8B"
+REPO = "vllm-sr/Decision-2.0-Eos-0.8B"
 REVISION = "b" * 40
 RELEASE = Path(__file__).resolve().parents[1] / "release.sh"
 

@@ -70,7 +70,7 @@ import json
 from huggingface_hub import hf_hub_download
 from transformers import AutoModel
 
-repo = "llm-semantic-router/DEV2.0-Route-0.6B"
+repo = "vllm-sr/DEV2.0-Route-0.6B"
 questions = json.load(open(hf_hub_download(repo, "QUESTIONS.json")))
 model = AutoModel.from_pretrained(repo, trust_remote_code=True)  # cuda:0 if a GPU is visible, else CPU
 result = model.system_one(
@@ -80,7 +80,7 @@ result = model.system_one(
 print(json.dumps(result["answers"], indent=2))
 ```
 
-`trust_remote_code=True` runs this repository's `modeling_decision2.py`, which loads the same `decision2/` runtime as the download above after checking every file, so the answers are the native ones. `pipeline("decision", model="llm-semantic-router/DEV2.0-Route-0.6B", trust_remote_code=True)` returns the same response for `{"state": ..., "questions": {...}}`. Pass `device_map="cpu"` or `"cuda:1"` to choose the device; the model runs on one device with the runtime's own numerics, so `dtype` stays unset. Tested with Transformers 5.17.0 and 5.18.0.
+`trust_remote_code=True` runs this repository's `modeling_decision2.py`, which loads the same `decision2/` runtime as the download above after checking every file, so the answers are the native ones. `pipeline("decision", model="vllm-sr/DEV2.0-Route-0.6B", trust_remote_code=True)` returns the same response for `{"state": ..., "questions": {...}}`. Pass `device_map="cpu"` or `"cuda:1"` to choose the device; the model runs on one device with the runtime's own numerics, so `dtype` stays unset. Tested with Transformers 5.17.0 and 5.18.0.
 
 """
 EQUIVALENCE_OLD = "decision2/ is DEV2.0-0.6B's runtime unchanged;"
@@ -176,7 +176,7 @@ def main() -> None:
         **{key: value for key, value in remote.items() if key != "files"},
         "files": remote["files"],
         "source_package": {
-            "repo_id": "llm-semantic-router/DEV2.0-0.6B",
+            "repo_id": "vllm-sr/Decision-2.0-Kai-0.6B",
             "revision": args.source_revision,
         },
     }
@@ -216,11 +216,11 @@ def main() -> None:
         (staged / name).write_bytes(data)
     receipt = {
         "schema": "dev1-automap-stage/1",
-        "repo_id": "llm-semantic-router/DEV2.0-Route-0.6B",
+        "repo_id": "vllm-sr/DEV2.0-Route-0.6B",
         "head": args.head,
         "operations": operations,
         "source": {
-            "repo_id": "llm-semantic-router/DEV2.0-0.6B",
+            "repo_id": "vllm-sr/Decision-2.0-Kai-0.6B",
             "revision": args.source_revision,
         },
     }

@@ -34,13 +34,13 @@ class HubUploadTest(unittest.TestCase):
             manifest = {
                 "kind": "staging",
                 "model_name": "Decision-2.0-Kai-0.6B",
-                "repo_id": "llm-semantic-router/dev2-release-staging",
+                "repo_id": "vllm-sr/dev2-release-staging",
                 "files_sha256": {"README.md": layout.sha_file(package / "README.md")},
             }
             (package / layout.MANIFEST_NAME).write_text(json.dumps(manifest))
             api = FakeApi()
             args = argparse.Namespace(
-                repo="llm-semantic-router/dev2-release-staging",
+                repo="vllm-sr/dev2-release-staging",
                 package=package,
                 message="m",
             )

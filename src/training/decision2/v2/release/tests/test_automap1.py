@@ -159,9 +159,7 @@ class StageTest(unittest.TestCase):
             + " ".join(old for old, _ in spec["edits"])
             + "\n\n## Use\n\ntext\n"
         )
-        rendered = stage1.render_card(
-            card, "llm-semantic-router/Decision-1.0-Kai-0.6B", spec
-        )
+        rendered = stage1.render_card(card, "vllm-sr/Decision-1.0-Kai-0.6B", spec)
         self.assertIn(stage1.HEADING, rendered)
         self.assertLess(rendered.index(stage1.HEADING), rendered.index("## Use\n"))
         for old, new in spec["edits"]:

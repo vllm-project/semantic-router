@@ -9,7 +9,7 @@ where the two families differ.
 ```python
 from transformers import AutoConfig, AutoModel, AutoTokenizer, pipeline
 
-repo = "llm-semantic-router/Decision-2.0-Eos-0.8B"  # or e.g. "llm-semantic-router/Decision-1.0-Sol-2B"
+repo = "vllm-sr/Decision-2.0-Eos-0.8B"  # or e.g. "vllm-sr/Decision-1.0-Sol-2B"
 config = AutoConfig.from_pretrained(repo, trust_remote_code=True)
 tokenizer = AutoTokenizer.from_pretrained(repo, trust_remote_code=True)  # 1.0 encoders: see Tokenizer
 model = AutoModel.from_pretrained(repo, trust_remote_code=True)  # cuda:0 if a GPU is visible, else CPU

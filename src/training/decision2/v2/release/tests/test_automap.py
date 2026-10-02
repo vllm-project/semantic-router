@@ -108,7 +108,7 @@ class CardSectionTest(unittest.TestCase):
         code = examples.card_block(readme, transformers=True)
         compile(code, "card", "exec")
         self.assertIn(
-            'AutoModel.from_pretrained("llm-semantic-router/dev2-release-staging", '
+            'AutoModel.from_pretrained("vllm-sr/dev2-release-staging", '
             "trust_remote_code=True)",
             code,
         )
