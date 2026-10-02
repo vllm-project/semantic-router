@@ -8,6 +8,8 @@
 # References: 4B IS-4b-LHA10SDML-bf16 (node C's run, or ix1/af/refs elsewhere); 9B K-a13IB-bf16 (node C's run, or
 # ix1/m10/refs on node A).
 #
+# AF_LEASE_AFTER_SOUPS=1: take the leases only once every NAME's soup is built (when its LoRA merges use these GPUs).
+#
 # usage: AF_NODE=a|c|f af-measure.sh <mirror-dir> <PANEL> "<GPUS>" <SHARDS> <NAME>...
 set -u
 SRC=$1 PANEL=$2 GPUS=$3 SHARDS=$4
@@ -27,6 +29,16 @@ case $SIZE in
   9b) TAG=re51f9881 BIG=9B ref=$R/m10/refs/K-a13IB-bf16; [ "$NODE" = c ] && ref=$R/runs/K-a13IB-bf16 ;;
 esac
 [ -f "$ref/merged/results.jsonl" ] || { log "no reference run $ref"; exit 1; }
+if [ "${AF_LEASE_AFTER_SOUPS:-0}" = 1 ]; then  # soups that merge LoRA seeds on these GPUs finish first
+  for NAME in "$@"; do
+    n=0
+    until [ -f "$M/soup/$NAME/DONE" ] || [ -f "$M/soup/$NAME/FAILED" ] || [ $n -gt 480 ]; do
+      [ $((n % 30)) = 0 ] && log "$NAME: waits for its soup before the leases are taken"
+      n=$((n + 1))
+      sleep 60
+    done
+  done
+fi
 for g in $GPUS; do
   d=/data/dev2/leases/gpu$g.lock n=0
   mkdir -p "$d"
