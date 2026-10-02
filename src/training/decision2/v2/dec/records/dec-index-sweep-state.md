@@ -4,6 +4,30 @@ Branch `xunzhuo/decision-2-training-index-sweep`, worktree `vllm-sr-dev2-index-s
 [`dec-index-sweep-prereg-2026-10-02.md`](dec-index-sweep-prereg-2026-10-02.md) (`e6cb71541`, mirrored to nodes
 A / C / D before any job). Index values are private (node runs, local private folder); this file has none.
 
+## 2026-10-02 03:10Z
+
+- **Shared-module change:** the Index-first successor gate profile (`gate_profile.index_first`, `f3590ef2a`,
+  tests in `test_gate_successor`, 23 new cases) is merged into `xunzhuo/decision-2-training` at `d3000ffcb`, for
+  every Index-first release worker. IF1 is the Index gain, R3 no collapsed type, IF3 the row-level Index audit; the
+  other successor items are references only.
+- **GPU sharing.**
+  - The 0.8B / 2B release worker (b49d1f36) and the 4B worker's pool also need node C / A GPUs for their release
+    weights' Index runs.
+  - Node C GPU5 was released after `IS-2b-RA` (the 4B pool now holds it). The node C queue continues on GPU6–7 with
+    a 2-shard panel (`panel-2`, same run-ID set).
+  - Node A GPU6 / GPU7 are held by b49d1f36 and the open-jev-fast study; this sweep never touched them.
+  - Node D GPU4–7 (free once the 27B M6-IB shards end) take L9IB, 08b-RAUP and 08b-RASD on `panel-4` (built on node
+    D, same run-ID set; packages restaged there with identical manifests).
+- **Done:** `IS-2b-RA`: parity PASS, 120,224 `ok` + 2 `unsupported`, scorer gate PASS, both bootstraps written;
+  1.30 GPU-h.
+- **Running:**
+  - node A GPU3–5: `IS-K-a12IB`;
+  - node C GPU6–7: `IS-2b-RA-a75`, then 2b-RAUP, 2b-RASD, 08b-RASDML;
+  - node D: waiting for GPU4–7.
+- **Release weights.** The BF16 storage copy of K-a12IB (`v2.release.bf16_copy`, identity `5cb68d17…`, receipt
+  `c58c5e25…`) is restaged as `IS-K-a12IB-bf16`. Its Index run queues on node A GPU4–5 after K-a12IB; GPU3 then
+  takes K-a12IB's formal panel on the 9B formal path (`M9_FORMAL_GPUS`, `165dff605`).
+
 ## 2026-10-02 02:25Z
 
 - **GPUs.**
