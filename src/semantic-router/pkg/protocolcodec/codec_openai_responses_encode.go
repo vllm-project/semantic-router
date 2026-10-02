@@ -198,7 +198,16 @@ func encodeResponsesMessage(message llmprotocol.Message, textDirection string) (
 	if err != nil {
 		return nil, err
 	}
-	state := responsesMessageEncodingState{messageID: message.ID, role: role, textDirection: textDirection}
+	// The wire content type follows the message role: a prior assistant turn is
+	// an output message and must use output_text, while every other role uses
+	// input_text. This is independent of textDirection, which still governs id
+	// and status policy (history that arrived without provider ids must not get
+	// synthesized ones — see itemID).
+	contentDirection := textDirection
+	if message.Role == llmprotocol.RoleAssistant {
+		contentDirection = "output"
+	}
+	state := responsesMessageEncodingState{messageID: message.ID, role: role, textDirection: textDirection, contentDirection: contentDirection}
 	for _, content := range message.Content {
 		if err := state.appendContent(content); err != nil {
 			return nil, err
@@ -214,12 +223,13 @@ func encodeResponsesMessage(message llmprotocol.Message, textDirection string) (
 }
 
 type responsesMessageEncodingState struct {
-	messageID     string
-	role          string
-	textDirection string
-	ordinary      []llmprotocol.Content
-	reasoning     []llmprotocol.Content
-	items         []responsesItemWire
+	messageID        string
+	role             string
+	textDirection    string
+	contentDirection string
+	ordinary         []llmprotocol.Content
+	reasoning        []llmprotocol.Content
+	items            []responsesItemWire
 }
 
 func (state *responsesMessageEncodingState) appendContent(content llmprotocol.Content) error {
@@ -281,7 +291,7 @@ func (state *responsesMessageEncodingState) flushOrdinary() error {
 	if len(state.ordinary) == 0 {
 		return nil
 	}
-	content, err := encodeResponsesContent(state.ordinary, state.textDirection)
+	content, err := encodeResponsesContent(state.ordinary, state.contentDirection)
 	if err != nil {
 		return err
 	}
