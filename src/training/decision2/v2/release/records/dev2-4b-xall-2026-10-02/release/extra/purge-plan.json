@@ -1,0 +1,71 @@
+{
+  "before": {
+    "commits": 17,
+    "heads": {
+      "branch:main": "d55528d1635fc474061ec59e31a7c722d3e7ab95"
+    },
+    "lfs_objects": 30,
+    "main_lfs_served": {
+      "assets/banner.png": 206,
+      "assets/index-areas.png": 206,
+      "assets/index-pareto.png": 206,
+      "assets/jevarena-types.png": 206,
+      "backbone/model-00001-of-00005.safetensors": 206,
+      "backbone/model-00002-of-00005.safetensors": 206,
+      "backbone/model-00003-of-00005.safetensors": 206,
+      "backbone/model-00004-of-00005.safetensors": 206,
+      "backbone/model-00005-of-00005.safetensors": 206,
+      "decision_head.safetensors": 206,
+      "tokenizer.json": 206
+    },
+    "old_paths_served": {
+      "backbone/model-00001-of-00005.safetensors": 206,
+      "backbone/model-00002-of-00005.safetensors": 206,
+      "backbone/model-00003-of-00005.safetensors": 206,
+      "backbone/model-00004-of-00005.safetensors": 206,
+      "backbone/model-00005-of-00005.safetensors": 206,
+      "decision_head.safetensors": 206
+    }
+  },
+  "mode": "plan",
+  "new_revision": "d55528d1635fc474061ec59e31a7c722d3e7ab95",
+  "node_copy": "/data/dev2/runs/release/dev2-ra-4B-20261002T115340Z/package/Decision-2.0-Nox-4B",
+  "old_revision": "137e28ceebd52b9611bb72e3645536867e0ec1ec",
+  "repo": "vllm-sr/Decision-2.0-Nox-4B",
+  "rewrite_history": false,
+  "schema": "dev2-release-purge-superseded/1",
+  "target_bytes": 9695398936,
+  "targets": {
+    "11927ccaa8f2ef46166d68609eed4af5dda66c25c283eab58fd6286108ae035a": {
+      "bytes": 1974414912,
+      "node_copy_sha256": "11927ccaa8f2ef46166d68609eed4af5dda66c25c283eab58fd6286108ae035a",
+      "path": "backbone/model-00002-of-00005.safetensors"
+    },
+    "298b1013752b061113b88d0e6f5ad74a0d29d72d801484dd7b6879e029b27857": {
+      "bytes": 488124128,
+      "node_copy_sha256": "298b1013752b061113b88d0e6f5ad74a0d29d72d801484dd7b6879e029b27857",
+      "path": "backbone/model-00005-of-00005.safetensors"
+    },
+    "34f244ac026e09c870666eb7f33e7f7a39bbf55e05677bdaae2d776264034c2d": {
+      "bytes": 3267759176,
+      "node_copy_sha256": "34f244ac026e09c870666eb7f33e7f7a39bbf55e05677bdaae2d776264034c2d",
+      "path": "backbone/model-00001-of-00005.safetensors"
+    },
+    "43c63d8611ce19b6fe6170ed2214167e0fed594e928156e08c983fe10c0036b9": {
+      "bytes": 10529624,
+      "node_copy_sha256": "43c63d8611ce19b6fe6170ed2214167e0fed594e928156e08c983fe10c0036b9",
+      "path": "decision_head.safetensors"
+    },
+    "9b60e3124640a4d6df50ef4c05c5ece609f3aa7f63f33c992a963658dac5cc43": {
+      "bytes": 1990469200,
+      "node_copy_sha256": "9b60e3124640a4d6df50ef4c05c5ece609f3aa7f63f33c992a963658dac5cc43",
+      "path": "backbone/model-00003-of-00005.safetensors"
+    },
+    "a30c3cb0883b2b820f85042094a2ae813c2411f61f38d3c2205f3fd9ed89b324": {
+      "bytes": 1964101896,
+      "node_copy_sha256": "a30c3cb0883b2b820f85042094a2ae813c2411f61f38d3c2205f3fd9ed89b324",
+      "path": "backbone/model-00004-of-00005.safetensors"
+    }
+  },
+  "utc": "2026-10-02T17:03:53.650111+00:00"
+}

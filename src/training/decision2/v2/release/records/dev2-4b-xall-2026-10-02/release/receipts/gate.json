@@ -1,0 +1,76 @@
+{
+  "decided_by": "the user (decision relayed by the coordinator, parent agent, Decision 2.0 program, 2026-10-02 23:02 UTC+8): release 4b-SDMLxALL to Decision-2.0-Nox-4B now, on top of the phase A runtime-only main 137e28ce, as the highest 4B candidate passing the Index-first gate; the integrity checks stay; applied to the 4B tier by decoder M17, the single Nox-4B publisher",
+  "decision": "release",
+  "decision_sha256": "95903cb6b4ffcef4ce1160605d6f7cabfdb6b7f0d162ca93cf33b38cafc878f9",
+  "gate_profile": "successor",
+  "items": {
+    "1_successor_IF1_index_gain": {
+      "evidence": "private Index paired bootstrap fc45b9b257f3 (2000 replicates over 138645 cases) of these weights (48e8c023d0f4) minus the current revision's (991a8fb855f2): 95% lower bound > 0: yes",
+      "passed": true
+    },
+    "1_successor_IF3_index_audit": {
+      "evidence": "row-level Index audit f084fb1131de of 120226 Index rows: 4b-LHA10SDML 77099 training lines, 0 item rows, 114 familiar-text rows; 4b-LHS17IB4 89299 training lines, 0 item rows, 90 familiar-text rows; 4b-LHS17IB4X 86663 training lines, 0 item rows, 90 familiar-text rows; 4b-LHS17ML 75340 training lines, 0 item rows, 90 familiar-text rows; 4b-LHS17SD 71088 training lines, 0 item rows, 90 familiar-text rows; 4b-SDMLIB4 95310 training lines, 0 item rows, 114 familiar-text rows; planted control 200 / 200",
+      "passed": true
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "evidence": "types choice OK, noul OK, score OK",
+      "passed": true
+    },
+    "1_successor_references": {
+      "evidence": "references only under the Index-first rule (user 2026-10-02 09:55): v3: v3 66.720 vs current 65.684: +1.04 [-1.75, +2.95] (below its former bar); human transfer: human transfer delta 95% [-0.025, +0.046] (clears its former bar); mlx-diag: mlx-diag card-eligible macro +0.0185 [+0.0097, +0.0276] (clears its former bar); tier gates: own 1.0 low +5.81; v3 66.720 vs 90% of Decider 4B 61.882; H vs Decider 4B [-0.085, +0.061]; own 1.0 low > 0 ok, v3 >= 55.693 ok, H vs Decider 4B upper >= 0 ok, no type collapsed ok (clears its former bar); overlap exposure: not run; public 231: public 231 176 vs 174 (+2; McNemar p 0.774) (clears its former bar); C1 post-key: not run",
+      "passed": true,
+      "reference": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "6 results below own 1.0 listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 38 files re-hashed; loaded 4208383488",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "c87715ba9a56cf8e95e97102f9518d9edea7e4282290462f5682d4cef9764133",
+  "model_name": "Decision-2.0-Nox-4B",
+  "receipts_sha256": {
+    "automap-card-pre": "700e71cfb4f11cfb89c0a5e4ccf3fea8080fdfdbaa69b65fdaaafa556acdd6ee",
+    "automap-hub": "be641054bb4ca8ae9bf490d2e4befcbdb0d353c1060898014567f8bb8b0e2323",
+    "automap-hub-tf518": "372d23263a7659f2fb673db2aba5fc3da8d9185c138686de3e924be3ca001d93",
+    "automap-post": "265e95e4f3b201c1a56201f4c1691ff396251e7955f2f8c72af807bd15d738c2",
+    "automap-pre": "f0dd39157d4f2305a73261a836883fd59976eed571b90d44ae3ff7a235fb58bd",
+    "card-post": "ec6fe656c888cb18cc83d31e7d32313b3181a549ed375fed436a593df80e9017",
+    "card-pre": "2d5c5838916a060d405b028b157261d945b2346922e16dea1035f5bddaa3df77",
+    "download": "767072421f9e038af786c65585cf8f99293153f811e356dbc41317d7093454f3",
+    "post": "6ea5cfb82b7da56712b8f8f370542a10d7e88590940d6be56c9e69c9d1891599",
+    "readback": "0f51779556ab95e42ca9566b4dddb4a35bad574f1e2245196a8224f484b22c05",
+    "repeat-post": "cdf6f6366527e51ad8a34ac881185f0c7de25827a7869fe122f9751dc48f7971",
+    "repeat-pre": "231a71e9f4ea6276b116a8d47a530beb433a31598541773e5db44907256548f8",
+    "tree": "53ecc6267650ecee411932053b14b0b8df999d3f0796e122d21cff00aa72bc78",
+    "upload": "ac29e1fe33ce8f1d84c44a84b0e96bc50d669e6fc690dfc8b7954ec755da8696"
+  },
+  "repo_id": "vllm-sr/Decision-2.0-Nox-4B",
+  "revision": "d55528d1635fc474061ec59e31a7c722d3e7ab95",
+  "rule": "index-first",
+  "schema": "dev2-release-gate/1",
+  "supersedes": {
+    "gate_sha256": "83437564d547737030eed56a9d96181ec42385b4d5af05a308d601104d8f5b56",
+    "revision": "137e28ceebd52b9611bb72e3645536867e0ec1ec"
+  },
+  "utc": "2026-10-02T15:38:59.527288+00:00"
+}

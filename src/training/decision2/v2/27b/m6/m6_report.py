@@ -53,6 +53,9 @@ def devgates_table(paths: list[Path]) -> list[str]:
                 g["G6_breadth_vs_A20r"],
             )
             g5ci = g5.get("delta_ci95") or {}
+            b_dev = g6["B_dev"]
+            if isinstance(b_dev, dict):
+                b_dev = b_dev["candidate"]
             lines.append(
                 f"| {name} | {mark(g1['pass'])}{'' if g1['pass'] else ' ' + '; '.join(map(str, g1['flags']))} "
                 f"| {g2['delta']:+.3f} {ci(g2.get('ci95'))} {g2['verdict']} ({mark(g2['pass'])}) "
@@ -61,7 +64,7 @@ def devgates_table(paths: list[Path]) -> list[str]:
                 f"| {g4['noul_accuracy']:.4f} ({g4['floor']:.4f}) ({mark(g4['pass'])}) "
                 f"| {g5['delta']['clean_no']:+.4f} {ci(g5ci.get('clean_no'), 4)} / "
                 f"{g5['delta']['hop']:+.4f} {ci(g5ci.get('hop'), 4)} ({mark(g5['pass'])}) "
-                f"| {g6['B_dev']:.4f}, {g6['delta']:+.4f} {ci(g6.get('delta_ci95'), 4)} ({mark(g6['pass'])}) "
+                f"| {b_dev:.4f}, {g6['delta']:+.4f} {ci(g6.get('delta_ci95'), 4)} ({mark(g6['pass'])}) "
                 f"| {mark(cand['pass'])} |"
             )
     lines.append("")

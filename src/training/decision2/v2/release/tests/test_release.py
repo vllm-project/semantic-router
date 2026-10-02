@@ -548,6 +548,22 @@ class CardTest(unittest.TestCase):
             "results-below-decision-10-eos",
         )
 
+    def test_card_http_visibility_follows_the_hub_policy(self):
+        from v2.release import hub
+        from v2.release.tests.hub_card_http_check import visibility_ok
+
+        public = "vllm-sr/Decision-2.0-Nox-4B"
+        staging = "vllm-sr/DEV2.0-4B-staging"
+        self.assertFalse(hub.expected_private(public))
+        served = {"model_api": 200, "readme": 200, "model_page": 200}
+        refused = {"model_api": 401, "readme": 401, "model_page": 404}
+        self.assertTrue(visibility_ok(public, False, served))
+        self.assertFalse(visibility_ok(public, True, refused))
+        self.assertFalse(visibility_ok(public, False, refused))
+        self.assertTrue(visibility_ok(staging, True, refused))
+        self.assertFalse(visibility_ok(staging, False, served))
+        self.assertFalse(visibility_ok(staging, True, served))
+
     def test_lint(self):
         self.assertFalse(card.lint("A Pareto frontier"))
         self.assertTrue(card.lint("ran on node A"))

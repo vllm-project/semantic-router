@@ -58,6 +58,16 @@ declare -A DIAGNOSTIC=(  # name -> "repository revision package-dir"
   [M6-IBX]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/M6-IBX-re876fbe"
   [M6-IB2]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/M6-IB2-re876fbe"
   [M6-IB2PN]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/M6-IB2PN-re876fbe"
+  [M6-IBxIB2-m50]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/M6-IBxIB2-m50-re876fbe"
+  [M6-IBxIB2-m67]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/M6-IBxIB2-m67-re876fbe"
+  [M7-IB124ML]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/M7-IB124ML-re876fbe"
+  [M7-IB14ML]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/M7-IB14ML-re876fbe"
+  [M8-IB14]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/M8-IB14-re876fbe"
+  [M8-IB124]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/M8-IB124-re876fbe"
+  [X7-IBxIB2xIB14ML]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X7-IBxIB2xIB14ML-re876fbe"
+  [X7-4ARM]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X7-4ARM-re876fbe"
+  [X8-IBxIB2-8]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X8-IBxIB2-8-re876fbe"
+  [X8-ML]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X8-ML-re876fbe"
   [M5-L128]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/fix2/M5-L128-95d61175-re876fbe"
   [DEV2.0-27B-budget]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/fix2/DEV2.0-27B-4e89288d-re876fbe"
   [DEV2.0-4B-LH]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/DEV2.0-4B-13d42143"
@@ -66,6 +76,29 @@ declare -A DIAGNOSTIC=(  # name -> "repository revision package-dir"
   [K-a13-fp32]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/9b/K-a13-fp32-e51f9881"
   [K-a13IB-bf16]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/9b/K-a13IB-bf16-e51f9881"
   [DEV2.0-4B-LHA10SD]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m15/DEV2.0-4B-LHA10SD-255021e0-r13d42143"
+  [DEV2.0-4B-LHS10SD-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-LHS10SD-bf16-r13d42143"
+  [DEV2.0-4B-LHS17SD-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-LHS17SD-bf16-r13d42143"
+  [DEV2.0-4B-LHS17UP-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-LHS17UP-bf16-r13d42143"
+  [DEV2.0-4B-LHS23SD-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-LHS23SD-bf16-r13d42143"
+  [DEV2.0-4B-LHS17IB4-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-LHS17IB4-bf16-r13d42143"
+  [DEV2.0-4B-LHS17IB4X-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-LHS17IB4X-bf16-r13d42143"
+  [DEV2.0-4B-LHS17UP-m50-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-LHS17UP-m50-bf16-r13d42143"
+  [DEV2.0-4B-LHS23SD-m50-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-LHS23SD-m50-bf16-r13d42143"
+  [DEV2.0-4B-LHS17IB4-m50-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-LHS17IB4-m50-bf16-r13d42143"
+  [DEV2.0-4B-LHS17IB4X-m50-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-LHS17IB4X-m50-bf16-r13d42143"
+  [DEV2.0-4B-SDMLIB4-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-SDMLIB4-bf16-r13d42143"
+  [DEV2.0-4B-LHS17ML-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-LHS17ML-bf16-r13d42143"
+  [DEV2.0-4B-SDMLIB4-m50-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-SDMLIB4-m50-bf16-r13d42143"
+  [DEV2.0-4B-LHS17ML-m50-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-LHS17ML-m50-bf16-r13d42143"
+  [DEV2.0-4B-LHS17IB4-x3-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-LHS17IB4-x3-bf16-r13d42143"
+  [DEV2.0-4B-SDMLIB4-x3-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-SDMLIB4-x3-bf16-r13d42143"
+  [DEV2.0-4B-SDMLxS17xIB4-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-SDMLxS17xIB4-bf16-r13d42143"
+  [DEV2.0-4B-SDMLxALL-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-SDMLxALL-bf16-r13d42143"
+  [DEV2.0-4B-SDMLxALL9-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-SDMLxALL9-bf16-r13d42143"
+  [DEV2.0-4B-SDMLxALL15-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-SDMLxALL15-bf16-r13d42143"
+  [DEV2.0-4B-SDMLxALL-hub]="vllm-sr/Decision-2.0-Nox-4B d55528d1635fc474061ec59e31a7c722d3e7ab95 /data/dev2/models/ix1/dec-m17/DEV2.0-4B-SDMLxALL-hub"
+  [DEV2.0-4B-LHS17IB4-lrh-hub]="vllm-sr/Decision-2.0-Nox-4B c60d3b5ca7d71a36669392bc4fb94a1596df6739 /data/dev2/models/ix1/dec-m17/DEV2.0-4B-LHS17IB4-lrh-hub"
+  [DEV2.0-4B-SDMLxS17-m50-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-SDMLxS17-m50-bf16-r13d42143"
   [DEV2.0-4B-LHA10UP-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-4bif/DEV2.0-4B-LHA10UP-bf16-r13d42143"
   [DEV2.0-4B-LHA10SD-a75-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-4bif/DEV2.0-4B-LHA10SD-a75-bf16-r13d42143"
   [DEV2.0-4B-LHA10SD-a50-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-4bif/DEV2.0-4B-LHA10SD-a50-bf16-r13d42143"
@@ -87,6 +120,13 @@ for _m10 in KUP-a33 KUP-a25 KUP-a40 KIBM-a33 KIBM-a25 KIBM-a40 KSW-a33 KSW-a25 K
   DIAGNOSTIC[M10-$_m10-bf16]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/9b-m10/$_m10-bf16-re51f9881"
 done
 unset _m10
+for _af in 4b-LHS17IB4-lrh 4b-LHS17IB4ML 4b-LHS23IB4 4b-LHS17IB4-s45 4b-SDMLIB4-s45 4b-LHS17UP-s34 4b-AFxALL 4b-AFxALL2 4b-AFxALL3 4b-XALLx 4b-XALLU2 4b-LRHxXALL-m50 4b-SDMLIB4-lrh 4b-LRHxALL 4b-LHS17IB4-lrq 4b-LHS17ML-lrh 4b-LHS17IB4X-lrh 4b-SDML-lrh ; do  # arm factory 4B BF16 release copies (4B owner: 4b-XALLx, 4b-XALLU2, wave 7 low-LR points)
+  DIAGNOSTIC[AF-$_af-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/af/AF-$_af-bf16-r13d42143"
+done
+for _af in KIB4W2-a40 KIB4L2-a40 KIB4Q-a40 KF-a33 KF-a40 KF-a50 KFxKIB-a40 KFxKIB-a50 KFxKIB2-a40 KF2-a40 KF2-a50 ; do  # arm factory 9B BF16 release copies
+  DIAGNOSTIC[AF-$_af-bf16]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/af/AF-$_af-bf16-re51f9881"
+done
+unset _af
 
 mode="${1:-}"; shift || true
 src="" model="" gpu="" gpus="" run="" rows="" rows_dir="" cache="" only="" tag=""
@@ -115,8 +155,9 @@ usage() { sed -n '2,/^set -euo/p' "$0" | sed '$d' >&2; exit 2; }
 S="$src/src/training/decision2"
 if [[ -n "${DIAGNOSTIC[$model]:-}" ]]; then
   read -r repo revision pkg <<< "${DIAGNOSTIC[$model]}"
+  [[ "$repo" == */* ]] || repo="llm-semantic-router/$repo"
 else
-  repo="$model" revision="${REVISION[$model]}" pkg="$MODELS/$model-${REVISION[$model]:0:8}"
+  repo="llm-semantic-router/$model" revision="${REVISION[$model]}" pkg="$MODELS/$model-${REVISION[$model]:0:8}"
 fi
 manifest_sha="$(sha256sum "$pkg/MODEL_MANIFEST.json" | cut -c1-64)"
 base_dir="$(python3 - "$pkg/MODEL_MANIFEST.json" "$HF_CACHE" <<'EOF'
@@ -214,7 +255,7 @@ wait_for_room() {
 }
 
 kit_run() {  # rows out -> shell command
-  printf 'python3 -m decision_index run --engine %s --option model_id=llm-semantic-router/%s --option revision=%s --option package_manifest_sha256=%s --option device=cuda:0 --rows %q --out %q --compact' \
+  printf 'python3 -m decision_index run --engine %s --option model_id=%s --option revision=%s --option package_manifest_sha256=%s --option device=cuda:0 --rows %q --out %q --compact' \
     "$ENGINE" "$repo" "$revision" "$manifest_sha" "$1" "$2"
 }
 

@@ -1,0 +1,11 @@
+{
+ "schema": "dev2-user-override/1",
+ "rule": "index-first IF1 (95% lower bound of the private Index delta vs the current revision > 0)",
+ "decided_utc": "2026-10-02T07:45:00Z",
+ "decided_by": "the user, relayed by the coordinator (parent agent, Decision 2.0 program) at 15:45 UTC+8",
+ "decision": "release 4b-LHA10SDML to Decision-2.0-Nox-4B now, once, on top of main b285e7a1; the integrity checks stay; if a type collapses, stop and report",
+ "quote": "the Index is equal within noise, transfer is significantly better",
+ "candidate": "M15 4b-LHA10SDML, BF16 copy (Index run IS-4b-LHA10SDML-bf16)",
+ "identity": "991a8fb855f23317f33fc77179867b1c57d62a5d4a760309f4c110d284614a68",
+ "current_revision": "b285e7a17791a06058817680592484868dde9545"
+}

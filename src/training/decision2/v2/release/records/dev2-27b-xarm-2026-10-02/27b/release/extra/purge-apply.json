@@ -1,0 +1,71 @@
+{
+  "after": {
+    "commits": 18,
+    "heads": {
+      "branch:main": "5c85c127828f4b5dfe0ca95d933be033a8a4caa3"
+    },
+    "lfs_objects": 18,
+    "main_lfs_served": {
+      "adapter/adapter_model.safetensors": 206,
+      "assets/banner.png": 206,
+      "assets/index-areas.png": 206,
+      "assets/index-pareto.png": 206,
+      "assets/jevarena-types.png": 206,
+      "decision_head.safetensors": 206,
+      "tokenizer.json": 206
+    },
+    "old_paths_served": {
+      "adapter/adapter_model.safetensors": 403,
+      "decision_head.safetensors": 403
+    }
+  },
+  "before": {
+    "commits": 18,
+    "heads": {
+      "branch:main": "5c85c127828f4b5dfe0ca95d933be033a8a4caa3"
+    },
+    "lfs_objects": 20,
+    "main_lfs_served": {
+      "adapter/adapter_model.safetensors": 206,
+      "assets/banner.png": 206,
+      "assets/index-areas.png": 206,
+      "assets/index-pareto.png": 206,
+      "assets/jevarena-types.png": 206,
+      "decision_head.safetensors": 206,
+      "tokenizer.json": 206
+    },
+    "old_paths_served": {
+      "adapter/adapter_model.safetensors": 206,
+      "decision_head.safetensors": 206
+    }
+  },
+  "checks": {
+    "commits_unchanged": true,
+    "exactly_targets_gone": true,
+    "main_still_served": true,
+    "old_weights_not_served": true,
+    "refs_unchanged": true
+  },
+  "mode": "apply",
+  "new_revision": "5c85c127828f4b5dfe0ca95d933be033a8a4caa3",
+  "node_copy": "/data/dev2/runs/release/dev2-27b-27bif-M6-IB-release-20261002T070233Z/download/Decision-2.0-Vega-27B",
+  "old_revision": "e60bd8e346110b3348b6e5a25c07329d350c4b21",
+  "passed": true,
+  "repo": "vllm-sr/Decision-2.0-Vega-27B",
+  "rewrite_history": false,
+  "schema": "dev2-release-purge-superseded/1",
+  "target_bytes": 7491769712,
+  "targets": {
+    "929c6ac07f4bf20e8c9a1f07679a3c28c3c446e89ca86580634ae3524f41f488": {
+      "bytes": 21056344,
+      "node_copy_sha256": "929c6ac07f4bf20e8c9a1f07679a3c28c3c446e89ca86580634ae3524f41f488",
+      "path": "decision_head.safetensors"
+    },
+    "d42519cd5251b7fe8eb1a55c7d16716a8f1be04f5585474d9d7fbc9ee2d5b81d": {
+      "bytes": 7470713368,
+      "node_copy_sha256": "d42519cd5251b7fe8eb1a55c7d16716a8f1be04f5585474d9d7fbc9ee2d5b81d",
+      "path": "adapter/adapter_model.safetensors"
+    }
+  },
+  "utc": "2026-10-02T19:03:04.597759+00:00"
+}

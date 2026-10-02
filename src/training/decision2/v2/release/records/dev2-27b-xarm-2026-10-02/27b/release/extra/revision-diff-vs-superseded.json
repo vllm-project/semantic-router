@@ -1,0 +1,29 @@
+{
+  "schema": "dev2-revision-diff/1",
+  "repo": "vllm-sr/Decision-2.0-Vega-27B",
+  "released": "e60bd8e346110b3348b6e5a25c07329d350c4b21",
+  "new": "5c85c127828f4b5dfe0ca95d933be033a8a4caa3",
+  "files": {
+    "released": 32,
+    "new": 32
+  },
+  "changed_card_files": [
+    "MODEL_MANIFEST.json",
+    "README.md",
+    "assets/index-areas.png",
+    "assets/index-pareto.png",
+    "assets/jevarena-types.png",
+    "assets/jevarena.png"
+  ],
+  "changed_hub_managed_files": [],
+  "changed_other_files": [
+    "adapter/adapter_config.json",
+    "adapter/adapter_model.safetensors",
+    "decision_config.json",
+    "decision_head.safetensors"
+  ],
+  "weight_files": 2,
+  "weight_bytes": 7491769712,
+  "weights_byte_identical": false,
+  "ok": false
+}
