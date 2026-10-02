@@ -59,7 +59,7 @@ case "$tier" in
 esac
 name=Decision-2.0-$codename-$tier REPO=vllm-sr/$name STAGE=dev2-release-staging-ra$key
 T=/data/dev2/runs/runtime-a/$tier
-export TMPDIR=/data/dev2/tmp PYTHONPATH=$S
+export TMPDIR=/data/dev2/tmp PYTHONPATH=$S PYTHONDONTWRITEBYTECODE=1
 mkdir -p "$TMPDIR" "$T" /data/dev2/runs/runtime-a/triton
 digest() { (cd "$1" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-64); }
 # copy_cache SOURCE DEST: an empty SOURCE starts an empty cache.

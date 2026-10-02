@@ -66,7 +66,7 @@ rocm-smi --showuse --showmeminfo vram --json | python3 "$RENAME_OPS/pick_gpu.py"
 trap 'rm -f "$lease/owner.runtime-a-release"' EXIT
 name=Decision-2.0-$codename-$tier REPO=vllm-sr/$name
 SPEC=$S/v2/release/specs/dev2-$key-ra.json
-export TMPDIR=/data/dev2/tmp PYTHONPATH=$S
+export TMPDIR=/data/dev2/tmp PYTHONPATH=$S PYTHONDONTWRITEBYTECODE=1
 mkdir -p "$TMPDIR" /data/dev2/runs/release/triton "$D" /data/dev2/runs/release/runtime-a
 exec 9> "/data/dev2/runs/release/runtime-a/$key.lock"
 flock -n 9 || { echo "another ra.sh for $tier runs on this node" >&2; exit 1; }
