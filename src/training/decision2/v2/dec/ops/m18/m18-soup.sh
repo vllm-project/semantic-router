@@ -3,10 +3,10 @@
 # seeds, souped directly as M14's 2b-RAUP). An arm with fewer than two finished seeds has no soup. Outputs:
 # /data/dev2/runs/dec/m18/soup/<ARM>/build/<ARM>-soup, markers soup/<ARM>/{DONE,FAILED}; DONE holds the soup path.
 #
-# usage: M18_NODE=f m18-soup.sh <mirror-dir> <ARM>
+# usage: M18_NODE=a|f m18-soup.sh <mirror-dir> <ARM>
 set -u
 SRC=$1 ARM=$2
-NODE=${M18_NODE:?set M18_NODE=f}
+NODE=${M18_NODE:?set M18_NODE=a or f}
 M=/data/dev2/runs/dec/m18
 ST=$M/status
 OUT=$M/soup/$ARM
@@ -17,7 +17,7 @@ fail() { echo "$*" > "$OUT/FAILED"; log "FAILED: $*"; exit 1; }
 [ -f "$OUT/DONE" ] && { log "already built"; exit 0; }
 [ -f "$OUT/FAILED" ] && { log "failed earlier; not rebuilt"; exit 1; }
 case $ARM in
-  2b-RS17UP | 2b-RAUPM) ;;
+  2b-RS17UP | 2b-RAUPM | 2b-RAM | 08b-RAM) ;;
   *) fail "unknown arm $ARM" ;;
 esac
 members=()

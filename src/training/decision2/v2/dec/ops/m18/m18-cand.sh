@@ -64,7 +64,7 @@ hop() {  # <from> <to> <parent> <name> [lean]: tar stream between nodes through 
   [ "$lean" = lean ] && ex="--exclude=*/triton --exclude=*/home"
   on "$to" "test ! -e '$parent/$item'" || { echo "$parent/$item exists on node $to" >&2; exit 3; }
   src="tar -C '$parent' $ex -cf - '$item'"
-  dst="umask 022; mkdir -p '$parent/.m18-part' && tar -C '$parent/.m18-part' -xf - && mv -T '$parent/.m18-part/$item' '$parent/$item' && rmdir '$parent/.m18-part'"
+  dst="umask 022; mkdir -p '$parent/.m18-part-$item' && tar -C '$parent/.m18-part-$item' -xf - && mv -T '$parent/.m18-part-$item/$item' '$parent/$item' && rmdir '$parent/.m18-part-$item'"
   # node A / B hold the key authorized on C-F (not on each other): a copy starts on A / B or relays through A
   if [ "$from" = a ] || [ "$from" = b ]; then on "$from" "$src | ssh $KEY $(addr "$to") \"$dst\""
   elif [ "$to" = a ] || [ "$to" = b ]; then on "$to" "ssh $KEY $(addr "$from") \"$src\" | bash -c \"$dst\""

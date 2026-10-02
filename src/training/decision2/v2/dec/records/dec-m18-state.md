@@ -13,3 +13,15 @@ Index values stay private (node private dirs and the program's private folder); 
   `m18-chains.sh` / `m18-arm.sh` / `m18-launch.sh` (node F GPU4-5, after the node's Index pool), `m18-soup.sh`,
   `m18_gpuh.py`. IB3-r2 TRAIN fetched to node F from the dataset revision `1c8452da` (hash matches `9d92d92a…`).
 - Next: build the data, commit the data lock, write READY-m18.json, launch the chains.
+
+## 2026-10-02T06:10Z
+
+- Part A 2B: all four runs scored on node C (scorer gates pass); bootstraps vs DEV2.0-2B running on node C.
+  `2b-UPRAa75`: one `invalid_model_output` row, scored with `--allow-errors` (amendment 1).
+- Part A 0.8B: `08b-RAUP-a75`, `08b-UPRAa75` scored, bootstraps vs the current Eos release (`M16-08b-RA-a75`) running;
+  `08b-UPRA` shards running on node A; `08b-RAUP-a50` dropped (amendment 1; node A pool stopped before its parity).
+- Hub: Eos `main` = `3de61185` (b49d1f36's `08b-RA-a75` release, 04:44Z); Sol `main` still `8ed41433`.
+- Part B: data lock committed; node F chains started 05:32Z (`2b-RS17UP` seeds 1 / 2, then `2b-RAUPM`).
+- `m18-cand.sh` hop: per-item staging directory (two concurrent relays to one parent collided on `.m18-part`; the
+  copy itself was complete and verified by SHA-256 list).
+- Amendment 1 arms (`2b-RAM`, `08b-RAM`) on node A GPU1-2 / 7: inputs copied node F -> node A (pulled by node A).
