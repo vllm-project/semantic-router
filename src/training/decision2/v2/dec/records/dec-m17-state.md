@@ -4,6 +4,20 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17` (r
 stopped after creating the worktree, nothing had run). Prereg `da770d98a`, ops `1ce8b2220` (mirror on nodes E / F),
 data lock `4f68f1eb0`.
 
+## 2026-10-02 02:30Z
+
+- All four preflights PASS (pre-warm `4b-LHS10SD` s1 02:04Z; the other three 02:09–02:10Z); full runs at update
+  ≈ 190–290, ≈ 15–19 updates / min: seeds end ≈ 03:05–03:15Z.
+- Post chains queued on the GPU flocks (02:16Z, mirror `4dfd484a1`): GPU6 = the reference MLX-DEV2 read (LH's own IX1
+  package, fresh Triton cache, then frozen), then `4b-LHS10SD` (soup, 8 panels, old MLX-DEV, MLX-DEV2); GPU2 =
+  `4b-LHS17SD` (the same, its MLX-DEV2 after the reference read).
+- MLX-DEV2 inputs on node F: LH's IX1 package `DEV2.0-4B-13d42143` copied from node C through node A (tree digest
+  `29bc37d4…` equal on C and F, 0 manifest mismatches); gold-free prompts `35747a26…` from node A. Gold stays on A.
+- Ops for scoring, rules, anchors, formal and the successor (with the Index path's public items) at `a25cfb391`,
+  mirrored on F and A.
+- Incident (no effect): a local lint command with an empty tool path executed `m17-arm.sh` on the workstation; it
+  stopped at its first `mkdir` (no `/data` there). Nothing ran on any node.
+
 ## 2026-10-02 02:00Z
 
 - Data built on E and F (01:58Z), byte-identical: `4b-LHS10SD` 66,004 rows / T + 64 tokens (IB .100, 17.1% of English
