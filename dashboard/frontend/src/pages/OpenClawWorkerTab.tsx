@@ -228,7 +228,7 @@ export const WorkerTab: React.FC<WorkerTabProps> = ({
   return (
     <div className={styles.teamManager}>
       <div className={styles.entityToolbarActionsTop}>
-        {!readOnly ? (
+        {!readOnly && !workersError ? (
           <button type="button" className={styles.btnPrimary} onClick={openCreateModal}>
             New Worker
           </button>
@@ -288,7 +288,7 @@ export const WorkerTab: React.FC<WorkerTabProps> = ({
             </select>
           </label>
 
-          {visibleWorkers.length === 0 ? (
+          {workersError ? null : visibleWorkers.length === 0 ? (
             <div className={styles.emptyState}>
               <div className={styles.emptyStateText}>
                 {containers.length === 0

@@ -486,7 +486,7 @@ export const StatusTab: React.FC<StatusTabProps> = ({
         </select>
       </label>
 
-      {visibleContainers.length === 0 ? (
+      {statusError ? null : visibleContainers.length === 0 ? (
         <>
           <div className={styles.emptyState}>
             <div className={styles.emptyStateText}>

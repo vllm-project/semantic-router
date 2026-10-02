@@ -203,20 +203,19 @@ func revalidateOpenClawProxyConnection(r *http.Request, cancel context.CancelFun
 }
 
 func registerDisabledOpenClawRoutes(mux routeRegistrar) {
-	for _, path := range []string{"/api/openclaw/status", "/api/openclaw/teams", "/api/openclaw/workers", "/api/openclaw/rooms"} {
-		registerRouteFunc(mux, auth.ProtectedRoute(path, auth.PermOpenClawRead, auth.SensitivityOperational, auth.ResourceOwnerOpenClaw, http.MethodGet), writeOpenClawArray)
-	}
-	registerRouteFunc(mux, auth.ProtectedRoute("/api/openclaw/rooms/{id}", auth.PermOpenClawRead, auth.SensitivityOperational, auth.ResourceOwnerOpenClaw, http.MethodGet), func(w http.ResponseWriter, r *http.Request) {
+	// Every route answers with the same disabled contract: an empty array is
+	// indistinguishable from a disabled feature with no data, and it invites
+	// the user to run operations the disabled branch never registers.
+	disabled := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		http.Error(w, `{"error":"OpenClaw feature disabled"}`, http.StatusServiceUnavailable)
-	})
+	}
+	for _, path := range []string{"/api/openclaw/status", "/api/openclaw/teams", "/api/openclaw/workers", "/api/openclaw/rooms"} {
+		registerRouteFunc(mux, auth.ProtectedRoute(path, auth.PermOpenClawRead, auth.SensitivityOperational, auth.ResourceOwnerOpenClaw, http.MethodGet), disabled)
+	}
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/openclaw/rooms/{id}", auth.PermOpenClawRead, auth.SensitivityOperational, auth.ResourceOwnerOpenClaw, http.MethodGet), disabled)
 	registerRouteFunc(mux,
 		auth.ProtectedRoute("/embedded/openclaw/", auth.PermOpenClawRead, auth.SensitivityOperational, auth.ResourceOwnerOpenClaw, http.MethodGet),
 		serviceUnavailableHTMLHandler("OpenClaw", "OPENCLAW_ENABLED", "true"),
 	)
-}
-
-func writeOpenClawArray(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte(`[]`))
 }
