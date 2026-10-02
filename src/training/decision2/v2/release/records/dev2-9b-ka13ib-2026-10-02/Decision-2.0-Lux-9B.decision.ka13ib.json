@@ -1,0 +1,57 @@
+{
+ "schema": "dev2-release-decision/1",
+ "status": "final",
+ "decision": "release",
+ "model_name": "Decision-2.0-Lux-9B",
+ "repo_id": "llm-semantic-router/Decision-2.0-Lux-9B",
+ "name_basis": "base",
+ "name_base_model": "Qwen/Qwen3.5-9B",
+ "identity": {
+  "model_sha256": "b9a65d601bb6780c2c07998aecbfab322ede459c26fcb8ed262281ad08f909fb"
+ },
+ "report_sha256": "e8d2ba9d88f0400620cf2e0b293bf19127c386c8601ac6b5f0f845b8c553e91e",
+ "paired_sha256": "191718f5ac0f1247de217079edd4993ac8c2a973ef40d2fa58a445472df6db62",
+ "gate_profile": "successor",
+ "current_revision": "586af77916ee508320421bda6c22f7f0305a7279",
+ "evidence_sha256": {
+  "c1_postkey": "16fd38fbcb1111e99a6cb5a663e9f788e1f70a7f20ada21a7673f62898dddf5c",
+  "current_decision": "5e9f13ae73cd52d24155885e6666cd6aee2afa466b1e1906a634e1143e9a0a6e",
+  "current_gate": "6343afa6cb7804002997616edbab03e1cff7eebd3c7dd333100a60f8b4e64476",
+  "exposure_1": "14e7c0ca5ecf9c396a464af55784bd466a71774c186672dcb9a7c46dbb598ff5",
+  "exposure_2": "9fd9d3dbec72bb4f035ebcc72d152063b8a1f6c61648c97f5a21d18a9d814a7d",
+  "index_path": "92fd2fb00ad3649ab1a1ab4462385f3c1366d0a5bac08863fe7069b353159b94",
+  "mlx_paired": "403625fe601b6a2d481a554ac1bc9a15fce02f96d019afb1f8d591ce3aa13509",
+  "paired": "bb7e76ab46fee6288e8826f4e71445ee797b2e0530d14e3e5103bdcffb3efb4f",
+  "public231": "19a70ca74473f6670497bfcee8bfdb411b3b74255dedac1027dc4cc57bd4e771",
+  "tier_paired": "6e73a2043124e7199e1cc53f5d992945834af2a6a7bcd5534ca9334fe5813f94",
+  "types": "7fc850e5ab6e3e9906e0e47d8a83d5fdf81def88a22d1dc273dcc1439321f7d4"
+ },
+ "calibration": "none (temperature 1; every Decision 2.0 model keeps T = 1): the CAL698 per-type temperatures of the formal run (calibration 4563f992) are not shipped; undoing them changes 0 answers on every scored panel and mlx-diag",
+ "action": "New main revision of the private repository llm-semantic-router/Decision-2.0-Lux-9B: the 9B M9 successor K-a13IB (the K-a13 recipe with the IB1-r3 / IB2 rows; [KIB soup, Lux 1.0, Lux 1.0] at alpha 1/3; qwen-full, BF16 storage, T = 1, 16,384 tokens) replaces the K-a13 weights (b1ed5a71, revision 586af779) with the product card of card round 2 and the round-3 Index conventions; then the superseded weight blobs are purged with rewrite_history=False (hf_headroom.sh first) and the C1 baseline registry takes this revision's post-key run. The repository stays private and in the private collection.",
+ "rationale": "Index path (coordinator decision 2026-10-02 02:05 UTC+8). Item 1': post-key v3 68.024 vs 67.737, +0.29 [-1.57, +1.20] (not significantly below); private Index paired bootstrap 95% lower bound > 0 (values in private files only; evidence_sha256.index_path). Items 2-7: human transfer -0.021 to +0.020 (not below); types OK; card-eligible mlx-diag -0.0037 [-0.0110, +0.0034]; tier gates (adopted Lux 1.0 +2.22 [+0.11, +3.95]; v3 >= 0.9 x Nimble v2; human transfer vs Nimble v2 upper +0.097); 0 exposed training groups in both exposure receipts; public 231 182 vs 178 (McNemar p 0.125). Item 8 (JevArena-C1 v1.2 post-key guard vs the registered 9B baseline): C1 53.49, -0.28 [-1.31, +0.65], PASS; bound by evidence_sha256.c1_postkey. ",
+ "approved_package": {
+  "identity": "b9a65d601bb6780c2c07998aecbfab322ede459c26fcb8ed262281ad08f909fb",
+  "fp32_identity": "4701ba41c70636b5e215cf1f296bc920a9ee39960d4d28a2338e20b2b81e0d91",
+  "profile": "qwen-full (BF16 storage of the Linear projections)",
+  "temperature": 1,
+  "max_input_tokens": 16384,
+  "revision_binding": "receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified."
+ },
+ "licence_decision": "apache-2.0: own weights; Decision 1.0 Lux-9B @bd45a30a (direct weight origin, interpolated) and the Qwen/Qwen3.5-9B @c2022362 text backbone and tokenizer are Apache-2.0; the package keeps the Apache-2.0 LICENSE (product card: no NOTICE, attributions or evaluation/ files).",
+ "supersedes": {
+  "revision": "586af77916ee508320421bda6c22f7f0305a7279",
+  "final_sha256": "5e9f13ae73cd52d24155885e6666cd6aee2afa466b1e1906a634e1143e9a0a6e",
+  "gate_sha256": "6343afa6cb7804002997616edbab03e1cff7eebd3c7dd333100a60f8b4e64476",
+  "manifest_sha256": "cd710f2656e50cbc62c245c93c0b8700e28c91d533b321c743b4e7abb54f166c",
+  "weights_identity": "b1ed5a71038b474902d2a6dfebeee0c6f7ce901097553b4621f6f0a23fb6da98"
+ },
+ "disclosures": [
+  "item 1 of the successor rule (v3 significantly above the current revision) is not met; the Index path replaces it with item 1' for frontier-targeted finalists",
+  "the training rows include the IB1-r3 / IB2 families matched to Index benchmark families (HoVer, When2Call, iSarcasmEval, GSM8K) and the BPoMP format; the internal records report the transfer-only Index delta without those benchmarks (private values)",
+  "Index contamination audit of the training rows: 0 item duplicates; familiar text in ANLI, BANKING77 and HoVer, as in the current revision's own audit",
+  "card.speed is the current revision's bench receipt (same architecture, runtime and shapes)"
+ ],
+ "prepared_by": "Decision 2.0 9B worker (worktree vllm-sr-dev2-9b-m9)",
+ "decided_by": "coordinator (parent agent), Decision 2.0 program: decision 2026-10-02 02:05 UTC+8 (the Index path for frontier-targeted finalists, items 1'-8; the user did not answer and the recommended rule was adopted; the user may override), shipping K-a13IB as the Decision-2.0-Lux-9B successor after item 8",
+ "decided_utc": "2026-10-01T18:05:00Z"
+}
