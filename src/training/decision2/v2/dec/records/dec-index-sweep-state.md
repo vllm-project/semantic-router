@@ -4,6 +4,39 @@ Branch `xunzhuo/decision-2-training-index-sweep`, worktree `vllm-sr-dev2-index-s
 [`dec-index-sweep-prereg-2026-10-02.md`](dec-index-sweep-prereg-2026-10-02.md) (`e6cb71541`, mirrored to nodes
 A / C / D before any job). Index values are private (node runs, local private folder); this file has none.
 
+## 2026-10-02 03:55Z
+
+- **Verdicts so far** (Index-first gate: full-panel paired bootstrap 95% lower bound > 0 vs the tier's current
+  release; values private):
+
+  | Candidate | Gate vs current release | Transfer-only delta (private record) |
+  | --- | --- | --- |
+  | `IS-2b-RA` | PASS | significantly negative |
+  | `IS-2b-RA-a75` | PASS; the largest 2B lower bound so far, also larger than M16 `2b-RASD-a25`'s | not significant |
+  | `IS-K-a12IB` | **FAIL** (CI includes 0 vs Lux-9B K-a13IB) | significantly negative |
+
+- **K-a12IB is out.**
+  - Its release-weight run (`IS-K-a12IB-bf16`) was stopped at about 6.5k rows (the gate cannot pass), and the
+    partial run is kept as `runs/IS-K-a12IB-bf16` with `STOPPED.json`.
+  - Its formal panel did run: types OK / OK / OK; v3, human transfer and public 231 are flat vs K-a13IB; mlx-diag
+    card-eligible is significantly below K-a13IB (reference).
+  - The prepared release ops (`release/records/dev2-9b-ka12ib-2026-10-02/ops/`) are not used.
+- **L9IB** is the remaining 9B candidate. Its formal panel: types OK / OK / OK; v3 not significantly different from
+  K-a13 (reference).
+  - **Deviation from the prereg (recorded before its result):** its Index run uses the BF16 release copy
+    (`IS-L9IB-bf16`, identity `78836b25…`) instead of the FP32 soup. The copy is answer-identical by construction
+    (Linear weights rounded as the runtime's autocast rounds them), and if L9IB passes it is the release evidence,
+    which saves a second 2.7 GPU-h run.
+  - The FP32 run started at 03:41Z was stopped after about 900 rows per shard and moved to `void/`.
+- **2B release weights:** the BF16 copy of `2b-RA-a75` (`IS-2b-RA-a75-bf16`, identity `d58577a2…`) is restaged on
+  node C and queued after `IS-2b-RAUP`. If it stays the 2B selection, its run is the card Index and gate evidence.
+- **Queues:**
+  - node A GPU3: 08b-RAUP, then 08b-RASD (`panel-3` in waves);
+  - node A GPU4–5: L9IB-bf16 (`panel-2`);
+  - node C GPU6–7: 2b-RAUP, 2b-RA-a75-bf16, 2b-RASD, 08b-RASDML.
+  - Node D was left to the 27B and 4B workers (its GPUs were taken one at a time); the L9IB / 08b packages staged
+    there are unused.
+
 ## 2026-10-02 03:10Z
 
 - **Shared-module change:** the Index-first successor gate profile (`gate_profile.index_first`, `f3590ef2a`,
