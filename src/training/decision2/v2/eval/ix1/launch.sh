@@ -110,7 +110,7 @@ unset _m10
 for _af in 4b-LHS17IB4-lrh 4b-LHS17IB4ML 4b-LHS23IB4 4b-LHS17IB4-s45 4b-SDMLIB4-s45 4b-LHS17UP-s34 4b-AFxALL 4b-AFxALL2 4b-AFxALL3 ; do  # arm factory 4B BF16 release copies
   DIAGNOSTIC[AF-$_af-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/af/AF-$_af-bf16-r13d42143"
 done
-for _af in KIB4W2-a40 KIB4L2-a40 KIB4Q-a40 KF-a33 KF-a40 KF-a50 KFxKIB-a40 KFxKIB-a50 KFxKIB2-a40 KF2-a40 KF2-a50 ; do  # arm factory 9B BF16 release copies
+for _af in KIB4W2-a40 KIB4L2-a40 KIB4Q-a40 KF-a33 KF-a40 KF-a50 KFxKIB-a40 KFxKIB-a50 KFxKIB2-a40 KF2-a40 KF2-a50 KIB4-a50 KIB4Q-a50 KIB4Q-a60 KF-a60 ; do  # arm factory 9B BF16 release copies
   DIAGNOSTIC[AF-$_af-bf16]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/af/AF-$_af-bf16-re51f9881"
 done
 unset _af
