@@ -2,6 +2,18 @@
 
 Index values stay private (node private stores and `decision2-program/private/arm-factory/`); this file has none.
 
+## 2026-10-02 19:50Z (03:50 UTC+8) — 4B wave 7 (amendment 8, the 4B owner's UP request) scheduled
+
+- UP weights (teacher-target rows ×1.5, IB rows ×1; byte-equal to M17's `4b-LHS17UP` weights on S17's TRAIN) built and
+  locked on node C: `4b-SDMLIB4-UP` `26e84ee3…` (released share of the loss weight .745), `4b-LHS17IB4-UP` `c75dbb98…`
+  (.644), `4b-LHS17ML-UP` `bfa245a2…` (.782), `4b-LHS17IB4X-UP` `debe1c54…` (.659). TRAIN / teacher files unchanged
+  (audited).
+- Node C chains (seeds 20260926 / 20260927): GPU5 `4b-SDMLIB4-UP` s1 → `4b-LHS17ML-UP` s1 → `4b-LHS17IB4X-UP` s1;
+  GPU6 `4b-SDMLIB4W2` s2 → `4b-SDMLIB4-UP` s2 → `4b-LHS17ML-UP` s2; GPU7 `4b-LHS17IB4-UP` s1 → s2 →
+  `4b-LHS17IB4X-UP` s2. End ≈ 00:00–00:30Z.
+- **`4b-SDMLIB4-e2` s1 stopped** at 19:42Z after ≈ 18 min of its full run, to free GPU7 for wave 7 (marker STOPPED;
+  not rerun). Its arm has no artifact.
+
 ## 2026-10-02 19:40Z (03:40 UTC+8) — batch-3 4B seeds partly done
 
 - DONE on node C (no failure, no cap): `4b-SDMLIB4-lrh` s1 (GPU7) / s2 (GPU6), 19:25–19:27Z; `4b-SDMLIB4W2` s1 (GPU5),
