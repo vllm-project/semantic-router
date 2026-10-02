@@ -88,7 +88,7 @@ CANDS: dict[str, dict] = {
     },
 }
 # The release choice (the highest measured passer); set when chosen.
-CHOICE = "KIB4-a33"
+CHOICE = "KIB4-a40"
 DECIDED_BY = (
     "coordinator (parent agent), Decision 2.0 program: the user's Index-first rule of 2026-10-02 09:55 UTC+8 "
     "(release gate = a significantly positive private Index delta vs the current release; integrity checks; "
