@@ -44,9 +44,19 @@ class TaskSpec:
     label_field: str
     split_rule: str = "predefined"
     compatible_artifact_repos: tuple[str, ...] = ()
+    # Rows whose ``exclude_prefix[0]`` value starts with ``exclude_prefix[1]`` are
+    # left out. ``trained_on_repos`` names artifacts trained on the dataset
+    # itself, for which none of its rows is held out.
+    exclude_prefix: tuple[str, str] | None = None
+    trained_on_repos: tuple[str, ...] = ()
 
     def validate_artifact(self, repo: str) -> None:
         """Refuse source labels that describe a different classification task."""
+        if repo in self.trained_on_repos:
+            raise BaselineError(
+                f"{repo} was trained on {self.dataset_repo}, so no split of it is "
+                "held out for this artifact."
+            )
         if (
             self.compatible_artifact_repos
             and repo not in self.compatible_artifact_repos
@@ -90,11 +100,20 @@ TASK_SPECS: dict[str, TaskSpec] = {
         # fallback, so the field is pinned here instead.
         label_field="label_name",
     ),
+    # Vela Domain trains on Global-MMLU and moves the MMLU questions that match
+    # MMLU-Pro into training, so the MMLU-derived rows are left out. The legacy
+    # intent classifier trained on MMLU-Pro itself.
     "domain": TaskSpec(
         dataset_repo="TIGER-Lab/MMLU-Pro",
         split="test",
         text_field="question",
         label_field="category",
+        split_rule="by_source",
+        exclude_prefix=("src", "ori_mmlu"),
+        trained_on_repos=(
+            LEGACY_MODEL_REGISTRY["intent"]["id"],
+            LEGACY_MODEL_REGISTRY["intent"]["lora_id"],
+        ),
     ),
 }
 
@@ -192,6 +211,9 @@ def load_rows(
 ) -> tuple[list[str], np.ndarray, int]:
     """Load the held-out split and map every row onto the artifact's class order."""
     dataset = load_dataset(spec.dataset_repo, split=spec.split)
+    if spec.exclude_prefix is not None:
+        field, prefix = spec.exclude_prefix
+        dataset = dataset.filter(lambda row: not str(row[field]).startswith(prefix))
     available = len(dataset)
     if limit is not None:
         dataset = dataset.select(range(min(available, limit)))
