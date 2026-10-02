@@ -1,0 +1,110 @@
+{
+  "schema": "dev2-card3-verify/1",
+  "repos": [
+    {
+      "repo": "llm-semantic-router/Decision-2.0-Kai-0.6B",
+      "revision": "dcfb7d3e104dc777d95c9e4079fdccc5d9f6cbb5",
+      "superseded": "35882d496478472e95c862e0bc6bb2eeae4c09da",
+      "main_is_revision": true,
+      "private": true,
+      "former_redirects": true,
+      "changed_vs_superseded": [
+        "README.md",
+        "assets/index-areas.png",
+        "assets/index-pareto.png"
+      ],
+      "only_card_files_changed": true,
+      "matches_reviewed_preview": true,
+      "footnote_discloses_audit": true,
+      "readme_chars": 4187,
+      "passed": true
+    },
+    {
+      "repo": "llm-semantic-router/Decision-2.0-Eos-0.8B",
+      "revision": "9c7f3ea09a2b04a0647e5919af23c20ed982f246",
+      "superseded": "5c878c67d6a0c665b1c71e54eee8710593889eca",
+      "main_is_revision": true,
+      "private": true,
+      "former_redirects": true,
+      "changed_vs_superseded": [
+        "README.md",
+        "assets/index-areas.png",
+        "assets/index-pareto.png"
+      ],
+      "only_card_files_changed": true,
+      "matches_reviewed_preview": true,
+      "footnote_discloses_audit": true,
+      "readme_chars": 4130,
+      "passed": true
+    },
+    {
+      "repo": "llm-semantic-router/Decision-2.0-Sol-2B",
+      "revision": "b42b6ff3efeedcd6534a3169a5db60247b363fb8",
+      "superseded": "73bb148b08891047c5ae96656548a9fbc387f2c8",
+      "main_is_revision": true,
+      "private": true,
+      "former_redirects": true,
+      "changed_vs_superseded": [
+        "README.md",
+        "assets/index-areas.png",
+        "assets/index-pareto.png"
+      ],
+      "only_card_files_changed": true,
+      "matches_reviewed_preview": true,
+      "footnote_discloses_audit": true,
+      "readme_chars": 4170,
+      "passed": true
+    },
+    {
+      "repo": "llm-semantic-router/Decision-2.0-Nox-4B",
+      "revision": "54b084f98e1713480f7d5b83b11e37171cba2270",
+      "superseded": "eff064856fd99342b5bf46a2ee41b4b3ecdac5b8",
+      "main_is_revision": true,
+      "private": true,
+      "former_redirects": true,
+      "changed_vs_superseded": [
+        "README.md",
+        "assets/index-areas.png",
+        "assets/index-pareto.png"
+      ],
+      "only_card_files_changed": true,
+      "matches_reviewed_preview": true,
+      "footnote_discloses_audit": true,
+      "readme_chars": 4109,
+      "passed": true
+    },
+    {
+      "repo": "llm-semantic-router/Decision-2.0-Vega-27B",
+      "revision": "1efb5cbb51476a906466bf751b63865c8036df18",
+      "superseded": "d97928d3f0b99eb93b0ccd57ec1517841de02a8f",
+      "main_is_revision": true,
+      "private": true,
+      "former_redirects": true,
+      "changed_vs_superseded": [
+        "README.md",
+        "assets/index-areas.png",
+        "assets/index-pareto.png"
+      ],
+      "only_card_files_changed": true,
+      "matches_reviewed_preview": true,
+      "footnote_discloses_audit": true,
+      "readme_chars": 4179,
+      "passed": true
+    }
+  ],
+  "collection": {
+    "slug": "llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00",
+    "private": true,
+    "last_updated": "2026-10-01 17:01:30.949000+00:00",
+    "items": [
+      "llm-semantic-router/Decision-2.0-Vega-27B",
+      "llm-semantic-router/Decision-2.0-Lux-9B",
+      "llm-semantic-router/Decision-2.0-Nox-4B",
+      "llm-semantic-router/Decision-2.0-Sol-2B",
+      "llm-semantic-router/Decision-2.0-Eos-0.8B",
+      "llm-semantic-router/Decision-2.0-Kai-0.6B"
+    ],
+    "unchanged": true
+  },
+  "passed": true
+}

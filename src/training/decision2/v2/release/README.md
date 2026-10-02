@@ -191,8 +191,14 @@ precision details, removed sections and files, native-runtime usage, revision
 hashes) on top of the shared `lint`.
 
 The banner and charts are PNGs rendered by `card_assets.py` (matplotlib, Inter,
-white background, blue #30A0FC and yellow #FCB414, the vLLM-SR logo bottom-right)
-outside the build. Its receipt `card-assets.json` holds input and output SHA-256
+white background, blue #30A0FC and yellow #FCB414, the vLLM-SR logo bottom-right
+of every chart) outside the build. The banner's focal point is the codename in a
+`#0A5BD8` → `#5CC8FF` gradient (Inter Display Bold), with the size in ink on its
+baseline, the "DECISION 2.0" eyebrow, the tagline, the small logo top-left and
+the translucent V-mark of the logo bleeding off the right edge;
+`tests/test_card_banner.py` renders all six sizes and checks that no element
+overlaps another or the V-mark (set `DEV2_CARD_FONTS` to the Inter TTF directory).
+Its receipt `card-assets.json` holds input and output SHA-256
 digests only. The spec pins the private Index input (`card.index`, schema
 `dev2-card-index/1`, see `card_index.py`), the rendered assets directory
 (`card.assets`) and the bench receipt (`card.speed`); the build re-checks that

@@ -1,0 +1,36 @@
+{
+  "files": {
+    "assets/banner.png": "97d1b46c638b4036223ba36bd3df3a58dafcdb48f01a7809ebcfe54c4faa4fe5",
+    "assets/index-areas.png": "67656b3c3f4da32c48279715c857287fbeb47bdb203572a48758f4d7fa04e5f4",
+    "assets/index-pareto.png": "59f939566656519cf8eeb9dbf84ea2f7f51c5754dd5aa1df42260c6ee1d1432d",
+    "assets/jevarena-types.png": "c48d403fc73fbf551ff2f32372e4ee997dadab90b19d7e0db55c9485ae27f82e",
+    "assets/jevarena.png": "2da9b8e6039f5c90165d7a19b7027fb75bf05449aa8756a8ed8486e1a0e5d039"
+  },
+  "inputs": {
+    "fonts_sha256": {
+      "Inter-Bold": "288316099b1e0a47a4716d159098005eef7c0066921f34e3200393dbdb01947f",
+      "Inter-Medium": "97ad806f526e41546d46365bb3a393145f75b7b1568913db74549ad8b8dba872",
+      "Inter-Regular": "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82",
+      "Inter-SemiBold": "78a843fade9d4612a5567302fb595b56976eb5fcebf4fea5a5912d638bafcde3",
+      "InterDisplay-Bold": "b74c8e0dd744b3347faca4c96bc7b2e32f7d6f62300a79b1d1a99331e44a5bc4",
+      "InterDisplay-SemiBold": "0310d7a325896129730c6c8cf9a6e0f81ee258bedf77b1ff059b2a7b75f74e02"
+    },
+    "index_sha256": "bf2bd02d1359de5f1bdd871cb3e240b6f5022cc2e3d6638580e921cd4386ad4a",
+    "logo_sha256": "e6b8428eb67f9318450e4b938639055d20e5f3643aa3b6f676a7b96a7beda94a",
+    "reports": {
+      "candidate": "1f5cf33d85be3f4c8c8dea29654275e1e9939848a9d8d4d6d381c1152a8f0a11",
+      "eos1": "078d780c524602c7e51d57fe7ae40d99a35f5591a2abf91f78096a768aed3ca7",
+      "intern": "ddcdba6db2da3cfd93fafeb51bc1634694f5a6ed94aaf4ed1d9973dbe4d3f159",
+      "kev": "66fcffaf1353974e6b92fba56be7e9e9a4dfc030fcc39a21703fd131bf5da754"
+    }
+  },
+  "model_name": "Decision-2.0-Eos-0.8B",
+  "model_sha256": "3f02f0e5fc68a1fd985ce48bf3a3bb2d4ed16d1a1705c2258317b78a4d6514f4",
+  "schema": "dev2-card-assets/1",
+  "software": {
+    "matplotlib": "3.11.2",
+    "pillow": "12.3.0",
+    "python": "3.12.13"
+  },
+  "tier": "0.8B"
+}

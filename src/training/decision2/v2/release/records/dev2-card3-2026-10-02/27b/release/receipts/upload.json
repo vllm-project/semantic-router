@@ -1,0 +1,12 @@
+{
+  "bytes": 1909755186,
+  "commit_url": "https://huggingface.co/llm-semantic-router/Decision-2.0-Vega-27B/commit/1efb5cbb51476a906466bf751b63865c8036df18",
+  "files": 31,
+  "manifest_sha256": "635c9042bd0d9e5bb17045101a2cf47cf7cadb3b8fed5fdf5eb8e671831bfed6",
+  "private": true,
+  "repo": "llm-semantic-router/Decision-2.0-Vega-27B",
+  "revision": "1efb5cbb51476a906466bf751b63865c8036df18",
+  "schema": "dev2-hub-upload/1",
+  "seconds": 2.1535089350072667,
+  "utc": "2026-10-01T19:53:37.511312+00:00"
+}
