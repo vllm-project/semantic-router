@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 9B M10: run one job in the pinned 9B image (M9's) on one M10 GPU (node B GPU2-4 / 6-7, node A GPU1 / 2 / 7), or on CPU.
+# 9B M10: run one job in the pinned 9B image (M9's) on one M10 GPU (node B GPU2-7, node A GPU1 / 2 / 7), or on CPU.
 #
 # usage: M10_NODE=b launch.sh <job> <mirror-dir> <out-dir> (--cpu | --gpu N) -- <python3 args...>
 #
@@ -23,7 +23,7 @@ fi
 
 node=${M10_NODE:?set M10_NODE=b}
 case $node in
-  b) allowed=" 2 3 4 6 7 " lux=/data/dev2/models/Decision-1.0-Lux-9B/bd45a30aee8c84032791c245c70f86dee5389cc8
+  b) allowed=" 2 3 4 5 6 7 " lux=/data/dev2/models/Decision-1.0-Lux-9B/bd45a30aee8c84032791c245c70f86dee5389cc8
      sel=/data/dev2/runs/9b/m10/inputs/m9/inputs/sel700-cal698 ;;
   a) allowed=" 1 2 7 " lux=/data/decision20-20260926/models/Decision-1.0-Lux-9B  # file for file node B's bd45a30a
      sel=/data/dev2/runs/9b/m9/inputs/sel700-cal698 ;;
