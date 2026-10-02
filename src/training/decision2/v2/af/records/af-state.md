@@ -2,6 +2,13 @@
 
 Index values stay private (node private stores and `decision2-program/private/arm-factory/`); this file has none.
 
+## 2026-10-02 23:40Z (07:40 UTC+8) — SDML-lrh delivered; last seeds running
+
+- `4b-SDML-lrh` s1 / s2 DONE (23:13 / 23:10Z); soup `ff44487d…` built and copied to node F. `4b-LHS17IB4-lrq` s1 DONE
+  (23:07Z), s2 on node C GPU1 (≈ 00:05Z). Node C GPU5–7 released.
+- 9B: `KIB4-lrh` s1 / s2 and `KIB4-lrq` s1 (node A) and `KIB4-lrhh` s1 / s2 (node B) at ≈ 75% (≈ 00:30Z); their α = .4
+  points and arm soups build automatically for the 9B publisher.
+
 ## 2026-10-02 23:05Z (07:05 UTC+8) — low-LR soups delivered as their seeds end
 
 - Built on node C and copied to node F (lists equal), FP32 model SHA-256: `4b-SDMLIB4-lrh` `de1ab06b…`,
