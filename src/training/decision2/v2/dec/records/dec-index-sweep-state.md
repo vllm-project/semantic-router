@@ -4,6 +4,18 @@ Branch `xunzhuo/decision-2-training-index-sweep`, worktree `vllm-sr-dev2-index-s
 [`dec-index-sweep-prereg-2026-10-02.md`](dec-index-sweep-prereg-2026-10-02.md) (`e6cb71541`, mirrored to nodes
 A / C / D before any job). Index values are private (node runs, local private folder); this file has none.
 
+## 2026-10-02 06:10Z
+
+- **New verdicts** (values private):
+  - `IS-2b-RASD` **PASS**, the largest 2B lower bound measured (above `IS-2b-RAUP`'s); node C `ix1/runs/IS-2b-RASD`.
+    b49d1f36 has already chosen it and runs its BF16 release copy (`M16-2b-RASD-bf16`, node C GPU1–3), so this
+    sweep does not. A paired RASD-vs-RAUP bootstrap (FP32 runs) is written to node C
+    `ix1/index-sweep/cross/IS-2b-RASD-vs-IS-2b-RAUP-{full,transfer}.json` for that decision.
+  - `IS-08b-RAUP` **FAIL** vs DEV2.0-0.8B (CI includes 0); node A `ix1/runs/IS-08b-RAUP`.
+- **GPU sharing.** The 4B pool started `DEV2.0-4B-LHA10SD-a50-bf16` on node D GPU4–7 at 05:38Z while this sweep's
+  node D chain was waiting; that chain now follows it (4B `LHA10SDML`, 08b `RASDML`, `RAAG`). `IS-08b-RA10SDML-bf16`
+  moved to node A GPU6 (free, released), one GPU in three waves.
+
 ## 2026-10-02 05:10Z
 
 - **New verdicts** (Index-first gate vs the tier's current release; values private):
