@@ -31,7 +31,11 @@ section first). Earlier: 2026-10-02 17:45 UTC+8 (09:45Z; continuation #5 from 08
   (base, T0, data files, `a20ib124`, `a20ib1`, `a20ib12`; a second staging run first failed on a script edited while it
   ran, then passed from a copy). Relay watchers (`48e4d4807`, `m6-relay.sh` for M7 / M8 seeds) run on node D for the
   five M7 and three M8 seeds and on node E for its four; node B's two M8 seeds soup in place. Prerelease in scored-panel
-  parity since 14:17Z. M8 prereg amendment 1: the M7 cross-arm candidates and their order, fixed before any M7 result. Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
+  parity since 14:17Z. M8 prereg amendment 1: the M7 cross-arm candidates and their order, fixed before any M7 result.
+- **14:53Z:** prerelease passed pre-upload examples, card example, four-panel scored parity (14:17–14:41Z) and remote
+  code; AutoModel parity since 14:50Z. M7 at steps 2,147–2,193 (14:32Z, 9.5–9.9 s / update): IB14ML ends ≈ 00:50Z;
+  IB124ML projects ≈ 06:10–06:20Z against caps 06:17–06:19Z (a capped seed keeps its BEST among saves ≤ 6,993).
+  TF518 site digest `93df9002…` (unchanged since 10-01 07:52, the 4B / 9B / M6-IB releases' site). Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
 continuation #3, 4a20f83f, 19:37–20:10Z, silently stopped after its 20:10Z poll; its entries below say "cba71646",
 which is the coordinator's ID; worker 3 0d2e488f ran 15:12–19:40Z; worker 2 a56025bb 10:44–15:15Z; worker 1 11741ee2
 06:17–10:55Z). **Amendment 6 (`6bbb2512d`): the MLX-DEV2 guard for every M6 finalist** (COORDINATION 04:15).
