@@ -176,7 +176,9 @@ EOF
   lease | release)
     [ -n "$NODE" ] && [ -n "$GPUS" ] || { echo "$STAGE needs NODE and GPUS" >&2; exit 2; }
     for g in $GPUS; do
-      case "$NODE:$g" in e:0 | e:1 | e:2 | e:3 | e:6 | e:7 | f:2 | f:3 | f:6 | f:7) ;; *) echo "node $NODE GPU$g is not M17's or the eval fast lane's" >&2; exit 2 ;; esac
+      case "$NODE:$g" in e:0 | e:1 | e:2 | e:3 | e:6 | e:7 | f:2 | f:3 | f:6 | f:7 | c:[1-7] | d:[4-7]) ;;
+        *) echo "node $NODE GPU$g is not M17's, the eval fast lane's or the shared Index pool's" >&2; exit 2 ;;
+      esac
     done
     if [ "$STAGE" = lease ]; then
       on "$NODE" "for g in $GPUS; do f=/data/dev2/leases/gpu\$g.lock/owner; mkdir -p \$(dirname \$f); \
