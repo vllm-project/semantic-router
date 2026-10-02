@@ -1,0 +1,6 @@
+{
+ "path": "/data/dev2/runs/release/triton/runtime-a-9b",
+ "digest": "0e0b73429705b813f63a8e7786991edd31d3435c6d3f4bb53e5afd246e89dc3b",
+ "files": 4881,
+ "from": "the new-side autotune cache of fast.sh 9B --parity 20261002T120256Z (all four scored panels through the phase A runtime, mirror 2233fcbf8; runtime files as at 54303117b; it started from the release autotune cache after the old runtime ran the same panels), frozen read-only"
+}

@@ -1,0 +1,26 @@
+{
+  "schema": "dev2-runtime-diff/1",
+  "repo": "vllm-sr/Decision-2.0-Kai-0.6B",
+  "released": "c441862b8c3021957c9b5cc2080a3ed5351c1f67",
+  "new": "51b7b4740c8c70282648d3849d233a962234e4ec",
+  "files": {
+    "released": 33,
+    "new": 35
+  },
+  "changed_runtime_files": [
+    "decision2/api.py",
+    "decision2/fast.py",
+    "decision2/fast_kernels.py",
+    "decision2/qwen.py"
+  ],
+  "changed_card_files": [
+    "MODEL_MANIFEST.json",
+    "README.md"
+  ],
+  "changed_hub_managed_files": [],
+  "changed_other_files": [],
+  "weight_files": 2,
+  "weight_bytes": 1507642792,
+  "weights_byte_identical": true,
+  "ok": true
+}

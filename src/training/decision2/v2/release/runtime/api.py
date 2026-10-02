@@ -163,6 +163,8 @@ class Decision2:
         base_path: str | Path | None = None,
         threads: int | None = None,
         bf16_resident: bool = True,
+        graphs: bool = True,
+        kernels: bool = True,
         share_context: Any = False,
     ) -> Decision2:
         """Load a verified package. ``device`` defaults to cuda:0 if present, else cpu.
@@ -175,6 +177,11 @@ class Decision2:
         BF16-exact Linear weights in BF16, the values BF16 autocast multiplies
         with, instead of FP32 copies cast on every call. Answers are identical;
         False keeps the FP32 copies. CPU inference is FP32 either way.
+
+        ``graphs`` / ``kernels`` (Qwen profiles, BF16-resident, on a ROCm GPU
+        with the verified Transformers release): replay each padded shape's
+        forward as a HIP graph / run the fused element-wise kernels. Answers are
+        identical; False runs the eager forward.
 
         ``share_context`` (Qwen profiles): the default for requests that do not
         set it. True runs the shared input of a multi-question request once
@@ -203,6 +210,8 @@ class Decision2:
                 base_path=base_path,
                 threads=threads,
                 bf16_resident=bf16_resident,
+                graphs=graphs,
+                kernels=kernels,
                 share_context=share_context,
             )
         loaded = backend.parameter_count()

@@ -1,0 +1,55 @@
+{
+  "answers_file": "bench-old.answers.jsonl",
+  "answers_sha256": "67ca6d8478b647dd2cbbe4667451122ab7a86499b3b912a3319c60eea04209e1",
+  "count": 400,
+  "device_name": "",
+  "fp32_master": false,
+  "ids_sha256": "eed99a82102f2679efc132c34ef7719cf6d81999e5019c829c87be010452c3c7",
+  "input_tokens_mean": 331.4925,
+  "items_per_s": 63.84407040039982,
+  "latency_ms": {
+    "max": 17.76005607098341,
+    "mean": 15.663161727134138,
+    "min": 12.815069872885942,
+    "p50": 15.958614880219102,
+    "p95": 16.149993054568768
+  },
+  "load_seconds": 5.697300967993215,
+  "memory_gib": {
+    "after_load": 1.4045591354370117,
+    "load_peak": 1.4045591354370117,
+    "request_peak": 1.4983553886413574
+  },
+  "mode": "run",
+  "model_name": "Decision-2.0-Kai-0.6B",
+  "package_manifest_sha256": "187dc4ae23869b22f7002fe00ccdf6f9eb92ac375e33038361b4feb99ed19879",
+  "parameter_bytes": 1507608576,
+  "passed": true,
+  "profile": "qwen-full",
+  "prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd",
+  "runtime": {
+    "fast_path": null,
+    "hip": "7.2.53211",
+    "kernels": null,
+    "numpy": "2.3.5",
+    "parameter_dtypes": {
+      "bfloat16": 440401920,
+      "float32": 156701184
+    },
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "residency": {
+      "linear_bf16": 196,
+      "linear_fp32": 0
+    },
+    "safetensors": "0.8.0",
+    "sites": [],
+    "threads": 4,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0"
+  },
+  "schema": "dev2-runtime-bench/1",
+  "warmup": 400,
+  "warmup_passes": 2
+}

@@ -1,0 +1,13 @@
+{
+  "checks": {
+    "former_id_redirects": true,
+    "main_is_the_superseded_revision": true,
+    "new_id_resolves_to_itself": true,
+    "private": true
+  },
+  "main": "9f2ddafc57f60c62239c0ca47c54c5cd3ec4aff9",
+  "passed": true,
+  "repo": "vllm-sr/Decision-2.0-Nox-4B",
+  "schema": "dev2-org-precheck/1",
+  "utc": "2026-10-02T10:32:00.541180+00:00"
+}

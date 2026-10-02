@@ -50,7 +50,11 @@ weights and of the current revision's weights, over one panel. The integrity
 items are R3 (no type collapsed on the scored run) and IF3 (a row-level ix1
 contamination audit of the training file whose planted control is complete);
 package parity and the Hub / remote-code checks are gate items 2-7 as for every
-release. v3, human transfer, mlx-diag, the tier gates, overlap exposure,
+release. ``index_first.user_override`` may name a ``dev2-user-override/1``
+record (the user's decision to release these weights over the current revision
+although IF1's lower bound is not above 0: decided_utc, decided_by, quote,
+identity, current_revision); IF1 then passes on that record, still printing
+the lower-bound verdict, and the decision binds the record's SHA-256. v3, human transfer, mlx-diag, the tier gates, overlap exposure,
 public 231 and C1 become references: whichever evidence the profile names is
 bound, read and printed under ``1_successor_references``, which never fails.
 
@@ -98,6 +102,7 @@ INDEX_RUN_SCHEMA = "ix1-run-receipt/1"
 INDEX_AUDIT_SCHEMA = "ix1-contamination/1"
 INDEX_FIRST = "index-first"
 INDEX_FIRST_EVIDENCE = ("bootstrap", "receipt", "base_receipt", "audit")
+USER_OVERRIDE_SCHEMA = "dev2-user-override/1"
 SUCCESSOR_REFERENCES = "1_successor_references"
 INDEX_FIRST_ITEMS = (
     "1_successor_IF1_index_gain",
@@ -173,6 +178,7 @@ def successor_profile(spec: dict[str, Any], value: dict[str, Any]) -> dict[str, 
             not all(value.get(k) for k in ("run", "types"))
             or not chain_ok
             or not all(first.get(k) for k in INDEX_FIRST_EVIDENCE)
+            or ("user_override" in first and not first["user_override"])
             or "index_path" in value
             or (tier and tier.get("reference") not in keys)
             or not spec["card"].get("paired")
@@ -180,7 +186,8 @@ def successor_profile(spec: dict[str, Any], value: dict[str, Any]) -> dict[str, 
             raise ValueError(
                 "an index_first successor gate_profile needs run, types, current {revision "
                 "(40 hex), gate, decision, run}, index_first {bootstrap, receipt, base_receipt, "
-                "audit} and card.paired; a named tier needs a card report key; index_path "
+                "audit} (user_override, when named, a path) and card.paired; a named tier needs "
+                "a card report key; index_path "
                 "does not combine with it"
             )
         return value
@@ -241,7 +248,8 @@ def evidence_sha256(profile: dict[str, Any]) -> dict[str, str]:
         files.update(
             {
                 f"index_first_{k}": profile["index_first"][k]
-                for k in INDEX_FIRST_EVIDENCE
+                for k in (*INDEX_FIRST_EVIDENCE, "user_override")
+                if profile["index_first"].get(k)
             }
         )
         if profile.get("exposure"):
@@ -585,12 +593,29 @@ def successor_items(spec: dict[str, Any], profile: dict[str, Any]) -> dict[str, 
         ):
             problems.append("the two Index runs scored different panels")
         low = boot["headline"]["ci95"][0]
-        return (
-            low > 0,
+        evidence = (
             f"private Index paired bootstrap {sha_file(Path(first['bootstrap']))[:12]} "
             f"({boot.get('replicates')} replicates over {boot.get('cases')} cases) of these weights "
             f"({str(scored['new'])[:12]}) minus the current revision's ({str(scored['base'])[:12]}): "
-            f"95% lower bound > 0: {'yes' if low > 0 else 'NO'}",
+            f"95% lower bound > 0: {'yes' if low > 0 else 'NO'}"
+        )
+        if not first.get("user_override"):
+            return low > 0, evidence, problems
+        path = Path(first["user_override"])
+        override = _json(path)
+        if override.get("schema") != USER_OVERRIDE_SCHEMA or not all(
+            override.get(k) for k in ("decided_utc", "decided_by", "quote")
+        ):
+            problems.append("the user override is not a dev2-user-override/1 record")
+        if override.get("identity") != spec["expected_identity"]["model_sha256"]:
+            problems.append("the user override names other weights than this package")
+        if override.get("current_revision") != current["revision"]:
+            problems.append("the user override names another current revision")
+        return (
+            True,
+            evidence
+            + f"; user override {sha_file(path)[:12]} ({override.get('decided_utc')}, "
+            f"{override.get('decided_by')}): \"{override.get('quote')}\"",
             problems,
         )
 
@@ -813,7 +838,7 @@ def first_items(spec: dict[str, Any]) -> tuple[dict[str, Any], str]:
     profile = gate_profile(spec)
     if profile and profile["name"] == SUCCESSOR:
         below = "own 1.0"
-        if no_own_1_0(profile["tier"]):
+        if no_own_1_0(profile.get("tier") or {}):
             below = (
                 next(
                     e.get("label") or e["key"]

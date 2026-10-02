@@ -1,0 +1,256 @@
+{
+  "answers_sha256": "2b5b3ac3c8334bba79e34a5db3ea9f4b7d53e1c7ae630c6444de5fc271d621bf",
+  "checks": {
+    "multilingual": {
+      "passed": true,
+      "problems": []
+    },
+    "null-description": {
+      "passed": true,
+      "problems": []
+    },
+    "over-budget": {
+      "passed": true,
+      "problems": []
+    },
+    "policy-check": {
+      "passed": true,
+      "problems": []
+    },
+    "structured-state": {
+      "passed": true,
+      "problems": []
+    },
+    "support-routing": {
+      "passed": true,
+      "problems": []
+    }
+  },
+  "device": "cuda:0",
+  "load_seconds": 51.410537479911,
+  "loaded_parameters": 7940895744,
+  "mode": "run",
+  "model_name": "Decision-2.0-Lux-9B",
+  "outputs": [
+    {
+      "id": "support-routing",
+      "input_sha256": "d97b537c37ddf12ca4117ff655a31fa14afbfd968729bc2b512beadca6054f88",
+      "latency_ms": 6895.361959934235,
+      "response": {
+        "answers": {
+          "receipt": {
+            "noul": 0.9981745173402755,
+            "type": "noul"
+          },
+          "route": {
+            "choice": "returns",
+            "confidence": 0.9832539084079845,
+            "probabilities": {
+              "billing": 0.0003683329279991217,
+              "returns": 0.9975200241021174,
+              "technical": 0.0021116429698835766
+            },
+            "type": "choice"
+          },
+          "urgency": {
+            "confidence": 0.47812693486735214,
+            "legend": {
+              "0": "Routine",
+              "1": "Soon",
+              "2": "Today"
+            },
+            "probabilities": {
+              "0": 0.03922875528945066,
+              "1": 0.1451119806583997,
+              "2": 0.8156592640521496
+            },
+            "score": 1.776430508762699,
+            "type": "score"
+          }
+        },
+        "model": "Decision-2.0-Lux-9B",
+        "usage": {
+          "input_tokens": 317,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "structured-state",
+      "input_sha256": "b8557ad323a641d6ea898abb86818d9e13d91e0d327bb0dabc8fe696c840d829",
+      "latency_ms": 66.2953860592097,
+      "response": {
+        "answers": {
+          "escalate": {
+            "noul": 0.8201375421737576,
+            "type": "noul"
+          },
+          "severity": {
+            "confidence": 0.17048049894136208,
+            "legend": {
+              "0": "Minor",
+              "1": "Moderate",
+              "2": "Major",
+              "3": "Critical",
+              "4": "Full outage"
+            },
+            "probabilities": {
+              "0": 0.019320057527481827,
+              "1": 0.0859377033314285,
+              "2": 0.23585379198817602,
+              "3": 0.2403668660149756,
+              "4": 0.41852158113793797
+            },
+            "score": 2.952832209904459,
+            "type": "score"
+          }
+        },
+        "model": "Decision-2.0-Lux-9B",
+        "usage": {
+          "input_tokens": 283,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "policy-check",
+      "input_sha256": "af52e9c0442937e0032aca068ae665a0abe8a64c60de0cbe69de386d569ce7c0",
+      "latency_ms": 29.08536698669195,
+      "response": {
+        "answers": {
+          "action": {
+            "choice": "decline",
+            "confidence": 0.9716715467183811,
+            "probabilities": {
+              "approve": 0.00028819393795856743,
+              "decline": 0.9952711152244754,
+              "escalate": 0.004440690837566079
+            },
+            "type": "choice"
+          },
+          "eligible": {
+            "noul": 0.002964317300045749,
+            "type": "noul"
+          }
+        },
+        "model": "Decision-2.0-Lux-9B",
+        "usage": {
+          "input_tokens": 236,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "multilingual",
+      "input_sha256": "28be6206986889181cc9bf19c4ad593721955ecdffc1c03da97e1be473bf496a",
+      "latency_ms": 74.07031091861427,
+      "response": {
+        "answers": {
+          "queue": {
+            "choice": "hardware",
+            "confidence": 0.9935888275437411,
+            "probabilities": {
+              "account": 7.803528832511259e-05,
+              "hardware": 0.9991606893479366,
+              "shipping": 0.0007612753637384101
+            },
+            "type": "choice"
+          }
+        },
+        "model": "Decision-2.0-Lux-9B",
+        "usage": {
+          "input_tokens": 112,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "null-description",
+      "input_sha256": "78429233af527c450bc84b2757198df46d011c93dad94bed70d567637c953928",
+      "latency_ms": 30.408011050894856,
+      "response": {
+        "answers": {
+          "intent": {
+            "choice": "cancel",
+            "confidence": 0.9623995566749035,
+            "probabilities": {
+              "cancel": 0.9935141150694983,
+              "pause": 0.0058104673813542725,
+              "upgrade": 0.0006754175491475064
+            },
+            "type": "choice"
+          }
+        },
+        "model": "Decision-2.0-Lux-9B",
+        "usage": {
+          "input_tokens": 99,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "over-budget",
+      "input_sha256": "9022743d7cdc7a9aab2c39bd872384a75af79f16f7974461f12219ad7ae47fb9",
+      "latency_ms": 63.38112009689212,
+      "response": {
+        "answers": {
+          "tone": {
+            "error": "max_length_exceeded",
+            "type": "score"
+          },
+          "weather": {
+            "error": "max_length_exceeded",
+            "type": "noul"
+          }
+        },
+        "model": "Decision-2.0-Lux-9B",
+        "usage": {
+          "input_tokens": 0,
+          "output_tokens": 0
+        }
+      }
+    }
+  ],
+  "package_manifest_sha256": "3272c53173e254ceaf614599677b18e4684d7a5d73a39b865e39e6f3c5d46304",
+  "passed": true,
+  "profile": "qwen-full",
+  "runtime": {
+    "fp32_master": false,
+    "hip": "7.2.53211",
+    "kernels": {
+      "causal_conv1d": "1.7.0",
+      "fla_path": "/opt/decision-fla/fla",
+      "flash_linear_attention": "0.5.2",
+      "kernel_bindings": {
+        "causal_conv1d_fn": "causal_conv1d.causal_conv1d_interface.causal_conv1d_fn",
+        "causal_conv1d_update": "causal_conv1d.causal_conv1d_interface.causal_conv1d_update",
+        "torch_chunk_gated_delta_rule": "fla.ops.gated_delta_rule.chunk.chunk_gated_delta_rule",
+        "torch_recurrent_gated_delta_rule": "fla.ops.gated_delta_rule.fused_recurrent.fused_recurrent_gated_delta_rule"
+      },
+      "runtime_check_sha256": "4517d9e001d9e1e2b520086b5153fa69b642a191efb19b8c9a6a9ef126e1fc2d",
+      "triton": "3.7.1+gitf0b55c07",
+      "triton_cache_autotuning": "1",
+      "triton_cache_dir": "/data/dev2/runs/release/triton/dev2-ra-9B-20261002T122701Z-superseded"
+    },
+    "numpy": "2.3.5",
+    "parameter_dtypes": {
+      "bfloat16": 6918504448,
+      "float32": 1022391296
+    },
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "residency": {
+      "linear_bf16": 248,
+      "linear_fp32": 0
+    },
+    "safetensors": "0.8.0",
+    "sites": [
+      "/opt/decision-fla"
+    ],
+    "threads": 4,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0"
+  },
+  "schema": "dev2-release-examples/1"
+}

@@ -1,0 +1,78 @@
+{
+  "answers_file": "bench-new.answers.jsonl",
+  "answers_sha256": "67ca6d8478b647dd2cbbe4667451122ab7a86499b3b912a3319c60eea04209e1",
+  "count": 400,
+  "device_name": "",
+  "fp32_master": false,
+  "ids_sha256": "eed99a82102f2679efc132c34ef7719cf6d81999e5019c829c87be010452c3c7",
+  "input_tokens_mean": 331.4925,
+  "items_per_s": 193.7933749592881,
+  "latency_ms": {
+    "max": 6.094330921769142,
+    "mean": 5.1601351192221045,
+    "min": 4.507308127358556,
+    "p50": 4.89305704832077,
+    "p95": 6.052390905097127
+  },
+  "load_seconds": 5.944894987856969,
+  "memory_gib": {
+    "after_load": 1.4045591354370117,
+    "load_peak": 1.4045591354370117,
+    "request_peak": 1.9316177368164062
+  },
+  "mode": "run",
+  "model_name": "Decision-2.0-Kai-0.6B",
+  "package_manifest_sha256": "68a048d3629cbc2cee145de45d344ffd8cbbc3d76a75795d17382b4577083a36",
+  "parameter_bytes": 1507608576,
+  "passed": true,
+  "profile": "qwen-full",
+  "prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd",
+  "runtime": {
+    "fast_path": {
+      "fused_layers": 28,
+      "graph_stats": {
+        "cached": 5,
+        "captures": 5,
+        "eager": 5,
+        "evicted": 0,
+        "failed": 0,
+        "replays": 1195
+      },
+      "graphs": {
+        "capture_after": 2,
+        "max_graphs": 512,
+        "max_output_bytes": 4294967296,
+        "max_tokens": 65536
+      },
+      "lora": {
+        "lean": 0,
+        "peft": 0
+      },
+      "rmsnorm_plus_one": 0,
+      "shared_cast_linears": 196,
+      "transformers": "5.17.0"
+    },
+    "hip": "7.2.53211",
+    "kernels": null,
+    "numpy": "2.3.5",
+    "parameter_dtypes": {
+      "bfloat16": 440401920,
+      "float32": 156701184
+    },
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "residency": {
+      "linear_bf16": 196,
+      "linear_fp32": 0
+    },
+    "safetensors": "0.8.0",
+    "sites": [],
+    "threads": 4,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0"
+  },
+  "schema": "dev2-runtime-bench/1",
+  "warmup": 400,
+  "warmup_passes": 2
+}

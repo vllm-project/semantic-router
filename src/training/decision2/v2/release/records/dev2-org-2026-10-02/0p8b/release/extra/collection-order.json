@@ -1,0 +1,81 @@
+{
+  "slug": "vllm-sr/decision-20-6ab7cf7bdfb506bf8269cb00",
+  "resolved_slug": "vllm-sr/decision-20-6ab7cf7bdfb506bf8269cb00",
+  "title": "🎲 Decision 2.0",
+  "title_unchanged": true,
+  "private": true,
+  "before": [
+    [
+      0,
+      "vllm-sr/Decision-2.0-Vega-27B",
+      "6abb693d1dd495f6980919d5"
+    ],
+    [
+      1,
+      "vllm-sr/Decision-2.0-Lux-9B",
+      "6abb6bbb61fba9d4e6a2ecdc"
+    ],
+    [
+      2,
+      "vllm-sr/Decision-2.0-Nox-4B",
+      "6abb0f9ae72aa5d5f67bb938"
+    ],
+    [
+      3,
+      "vllm-sr/Decision-2.0-Sol-2B",
+      "6abad08addd854b57289eb3d"
+    ],
+    [
+      4,
+      "vllm-sr/Decision-2.0-Eos-0.8B",
+      "6aba79f5dc43bcce5a7b5bb4"
+    ],
+    [
+      5,
+      "vllm-sr/Decision-2.0-Kai-0.6B",
+      "6abaadad8c15254728de5a8a"
+    ]
+  ],
+  "moved": [],
+  "after": [
+    [
+      0,
+      "vllm-sr/Decision-2.0-Vega-27B",
+      "6abb693d1dd495f6980919d5"
+    ],
+    [
+      1,
+      "vllm-sr/Decision-2.0-Lux-9B",
+      "6abb6bbb61fba9d4e6a2ecdc"
+    ],
+    [
+      2,
+      "vllm-sr/Decision-2.0-Nox-4B",
+      "6abb0f9ae72aa5d5f67bb938"
+    ],
+    [
+      3,
+      "vllm-sr/Decision-2.0-Sol-2B",
+      "6abad08addd854b57289eb3d"
+    ],
+    [
+      4,
+      "vllm-sr/Decision-2.0-Eos-0.8B",
+      "6aba79f5dc43bcce5a7b5bb4"
+    ],
+    [
+      5,
+      "vllm-sr/Decision-2.0-Kai-0.6B",
+      "6abaadad8c15254728de5a8a"
+    ]
+  ],
+  "expected": [
+    "vllm-sr/Decision-2.0-Kai-0.6B",
+    "vllm-sr/Decision-2.0-Eos-0.8B",
+    "vllm-sr/Decision-2.0-Sol-2B",
+    "vllm-sr/Decision-2.0-Nox-4B",
+    "vllm-sr/Decision-2.0-Lux-9B",
+    "vllm-sr/Decision-2.0-Vega-27B"
+  ],
+  "releases_in_order": true
+}

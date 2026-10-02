@@ -1,0 +1,2 @@
+v2/release/specs/dev2-9b-org.json 1c41326e80d4267281fd31ae9e9de1b8dba0f72f8729f73eeb9785ab02bcebe4
+v2/release/records/dev2-org-2026-10-02/Decision-2.0-Lux-9B.decision.org.json 821d747a4d6f6509f46d5cdb75d309ee45f38d7e390201cd5d03aa5749af8ba7

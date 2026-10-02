@@ -1,0 +1,254 @@
+{
+  "schema": "dev2-release-spec/1",
+  "kind": "release",
+  "repo_id": "vllm-sr/Decision-2.0-Nox-4B",
+  "model_name": "Decision-2.0-Nox-4B",
+  "profile": "qwen-full",
+  "checkpoint": "/data/dev2/runs/release/inputs/dev2-4b-sdml/bf16/checkpoint",
+  "expected_identity": {
+    "model_sha256": "991a8fb855f23317f33fc77179867b1c57d62a5d4a760309f4c110d284614a68"
+  },
+  "calibration": null,
+  "max_input_tokens": 16384,
+  "gate_receipt": "/data/dev2/runs/release/decisions/Decision-2.0-Nox-4B.decision.org.json",
+  "origin": {
+    "repo_id": "Qwen/Qwen3.5-4B-Base",
+    "revision": "1001bb4d826a52d1f399e183466143f4da7b741b",
+    "relation": "finetune",
+    "summary": "A rank-128 LoRA on all 248 text projections of Qwen3.5-4B-Base (Apache-2.0), merged into the base weights, with a new candidate head; the release is the uniform weight average of three seeds of that merged fine-tune. The Qwen3.5 vision tower is not part of it. The tokenizer files are Decision 1.0 Nox's (the Qwen3.5-4B vocabulary), unchanged from earlier revisions."
+  },
+  "runtime_requirements": {
+    "python": "3.12.13",
+    "torch": "2.12.0+git6bbd260 (ROCm 7.2 build; one ROCm GPU tested)",
+    "transformers": "5.17.0",
+    "tokenizers": "0.23.2",
+    "safetensors": "0.8.0",
+    "flash-linear-attention": "0.5.2 (GPU gated-delta kernels)",
+    "causal-conv1d": "1.7.0 (GPU convolution kernels)",
+    "triton": "3.7.1 (persisted autotune cache)"
+  },
+  "runtime_equivalence": "decision2/qwen.py loads this full checkpoint with the training/model sources vendored from the formal run's own runner mirror (8f6a04a2c), whose SHA-256 equal the scored adapter sources (checked at build time), and applies the per-item batching, BF16-backbone / FP32-head execution, raw probabilities (temperature 1; no calibration file) and answer normalization of v2.dec.infer_dec. The scored checkpoint (1b515675) stored every tensor in FP32; this package (v2.release.bf16_copy) stores its 248 Linear projection matrices in BF16 exactly as BF16 autocast rounds them and every other tensor bit for bit in FP32. The runtime, the Transformers remote code and the forward token budget are the current revision's. Checked on one GPU against the formal run's predictions of every scored prompt (typed-final 1,600, css15 6,547, public231 231) and of the mlx-diag diagnostic (2,275) by release.sh --parity, with copies of the formal and mlx-diag runs' persisted Triton autotune caches, and AutoModel against the native runtime on every scored prompt.",
+  "vendor_source": "/data/dev2/src/8f6a04a2c7cd96775f203ce33c780d7a277488ff-src_training_decision2/src/training/decision2",
+  "runtime_source": "/data/dev2/src/08ec0834ebd6d1be808ab1a756e1412047c35f74-src_training_decision2/src/training/decision2",
+  "scored": {
+    "label": "post-key same-panel run m17-4b-LHA10SDML at T = 1 (the formal run kept T = 1 under the 23:15 rule; sealed)",
+    "report_sha256": "0947c15d9a94b8c83ecb7c45376f44f9000f69629dce2d0429f29fb06ad3b047",
+    "seal_sha256": "92bedd42265be0d9328cbabcc9a5475e2420bbd09092994903c523d69650db46",
+    "predictions_sha256": {
+      "typed-final": "0ef085141b6ae3ce94f149771b35efb4d0488224c37daa808531da437e0d24fb",
+      "css15": "0373fe271c3b00acb701c6d59ba1c7d4b88347e26122f7c975eed75cc14de0f4",
+      "public231": "73ff102793d72c84694b4f308afc6c1d4ccc8da0459d17f9305c297a260213a8",
+      "mlx-diag": "f9d1780a3c1ebe292a23be2eeaf34ae869ad939cba555fcf1d84eecccca2acea"
+    },
+    "paired_sha256": "40ebccc7331c8b26ead36c80cb4194af867e330c07983ab78712213493b8a028",
+    "native_manifest": "/data/dev2/runs/dec/formal/m17/m17-4b-LHA10SDML/output/typed-final.predictions.jsonl.manifest.json"
+  },
+  "licence": {
+    "components": [
+      {
+        "component": "Decision-2.0-Nox-4B weights, decision head, package runtime, card and artwork",
+        "licence": "apache-2.0",
+        "source": "vllm-sr/Decision-2.0-Nox-4B"
+      },
+      {
+        "component": "Qwen3.5-4B-Base text backbone (direct weight origin; rank-128 LoRA merged)",
+        "licence": "apache-2.0",
+        "source": "Qwen/Qwen3.5-4B-Base@1001bb4d"
+      },
+      {
+        "component": "tokenizer files of Decision 1.0 Nox-4B (the Qwen3.5-4B vocabulary)",
+        "licence": "apache-2.0",
+        "source": "vllm-sr/Decision-1.0-Nox-4B@cde2a68d"
+      },
+      {
+        "component": "Qwen3.5-4B tokenizer and chat template (upstream of Decision 1.0 Nox's tokenizer files)",
+        "licence": "apache-2.0",
+        "source": "Qwen/Qwen3.5-4B@851bf6e8"
+      }
+    ],
+    "files": [
+      {
+        "source": "/data/dev2/hf-cache/models--llm-semantic-router--Decision-1.0-Nox-4B/snapshots/cde2a68dbaa557ea65dc458104d410a0802ee259/LICENSE",
+        "path": "LICENSE",
+        "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a"
+      }
+    ]
+  },
+  "card": {
+    "roster": "v2/eval/records/decision-index-peer-roster-2026-09-28.json",
+    "paired": "/data/dev2/runs/release/inputs/dev2-4b-sdml/gates/paired-vs-adopted-1.0.json",
+    "text": {},
+    "reports": [
+      {
+        "key": "candidate",
+        "role": "candidate",
+        "report": "/data/dev2/runs/dec/formal/m17/m17-4b-LHA10SDML/REPORT.json",
+        "mlx": "/data/dev2/runs/dec/formal/m17/m17-4b-LHA10SDML-mlx/mlx-diag.score.json",
+        "label": "Decision-2.0-Nox-4B"
+      },
+      {
+        "key": "nox1",
+        "role": "own-1.0",
+        "report": "/data/dev2/runs/eval/m1-adopt/nox1/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/mlx/x-nox1/mlx-diag.score.json",
+        "repo_id": "vllm-sr/Decision-1.0-Nox-4B",
+        "label": "Decision 1.0 Nox"
+      },
+      {
+        "key": "decider4b",
+        "role": "peer",
+        "report": "/data/dev2/runs/eval/m1-adopt/decider4b/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/mlx/x-decider4b/mlx-diag.score.json",
+        "repo_id": "Mapika/decider-4b",
+        "label": "Decider 4B"
+      },
+      {
+        "key": "jet62",
+        "role": "peer",
+        "report": "/data/dev2/runs/eval/m2/q5b-jet62/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/q5b-jet62/mlx-diag.score.json",
+        "repo_id": "michaljach/jet",
+        "label": "Jet v6.2"
+      }
+    ],
+    "paired_peers": {
+      "decider4b": "/data/dev2/runs/dec/formal/m17/m17-4b-LHA10SDML/PAIRED-vs-decider4b.json",
+      "jet62": "/data/dev2/runs/dec/formal/m17/m17-4b-LHA10SDML/PAIRED-vs-jet62.json"
+    },
+    "index": {
+      "path": "/data/dev2/private/release/4bif/SDML/decision-index-card.json",
+      "sha256": "aecda3864492afe644a520343c51657f30f25b8b01a2c8fb323eb5d334c0a5b0"
+    },
+    "assets": {
+      "dir": "/data/dev2/private/release/4bif/SDML/4b",
+      "receipt_sha256": "2fb50688cae0fb011b52579135c1d8e3754df1103617d4971055083ea2d2105a"
+    },
+    "speed": {
+      "evidence": "v2/release/records/dev2-4b-m10lh-2026-10-01/prerelease/dev2-4b-lh-bench-20261001T080621Z/receipts/bench-new.json",
+      "sha256": "36e5cc080c78f9c9bfe26de45bf96d74fd8e05c4dbecc3693643bc28329f0e89"
+    }
+  },
+  "bf16_copy": {
+    "receipt": "/data/dev2/runs/release/inputs/dev2-4b-sdml/bf16/bf16-copy.json",
+    "sha256": "8ffce1027ff5886e3cc6bad5f4ffffaa33e1dc81cd7ad7b079a78bee44e94f16"
+  },
+  "automap_source": "/data/dev2/src/08ec0834ebd6d1be808ab1a756e1412047c35f74-src_training_decision2/src/training/decision2",
+  "remote_code": {
+    "tested": [
+      "5.17.0",
+      "5.18.0"
+    ]
+  },
+  "gate_profile": {
+    "name": "successor",
+    "run": "/data/dev2/runs/dec/formal/m17/m17-4b-LHA10SDML",
+    "current": {
+      "revision": "b285e7a17791a06058817680592484868dde9545",
+      "gate": "/data/dev2/runs/release/inputs/dev2-4b-sdml/current/4bif-S17-4b-gate.json",
+      "decision": "/data/dev2/runs/release/inputs/dev2-4b-sdml/current/Decision-2.0-Nox-4B.decision.4bif-S17.json",
+      "run": "/data/dev2/runs/dec/formal/m17/m17-4b-LHS17SD",
+      "mlx_predictions": "/data/dev2/runs/dec/formal/m17/m17-4b-LHS17SD-mlx/output/mlx-diag.predictions.jsonl"
+    },
+    "types": "/data/dev2/runs/release/inputs/dev2-4b-sdml/gates/types.json",
+    "paired": "/data/dev2/runs/release/inputs/dev2-4b-sdml/gates/paired-vs-nox-4b.json",
+    "mlx_paired": "/data/dev2/runs/release/inputs/dev2-4b-sdml/gates/mlx-paired-vs-nox-4b.json",
+    "public231": "/data/dev2/runs/release/inputs/dev2-4b-sdml/gates/public231-vs-nox-4b.json",
+    "tier": {
+      "reference": "decider4b",
+      "v3_share": 0.9,
+      "paired": "/data/dev2/runs/release/inputs/dev2-4b-sdml/gates/paired-vs-decider4b.json"
+    },
+    "index_first": {
+      "bootstrap": "/data/dev2/private/release/4bif/SDML/boot-full-vs-s17.json",
+      "receipt": "/data/dev2/private/release/4bif/SDML/receipt.json",
+      "base_receipt": "/data/dev2/private/release/4bif/SDML/base-receipt.json",
+      "audit": "/data/dev2/private/release/4bif/SDML/audit.json",
+      "user_override": "/data/dev2/runs/release/inputs/dev2-4b-sdml/user-override.json"
+    }
+  },
+  "frozen_autotune_cache": {
+    "formal": "/data/dev2/runs/release/inputs/dev2-4b-sdml/formal-cache (the formal run's persisted cache, manifest c1472278, relayed from the collecting node)",
+    "mlx-diag": "/data/dev2/runs/release/inputs/dev2-4b-sdml/mlx-cache (the mlx-diag run's persisted cache, manifest 9832c2ae, relayed from the collecting node)"
+  },
+  "_release": {
+    "card_org": "Card-only revision (user instruction 2026-10-02 17:35 UTC+8, org worker (2)): the Hugging Face organization llm-semantic-router is now vllm-sr, so README.md and MODEL_MANIFEST.json name vllm-sr/Decision-2.0-Nox-4B. The spec is the one that built llm-semantic-router/Decision-2.0-Nox-4B@9f2ddafc with its Hub references on the renamed organization; card.index, card.assets and every model, runtime and remote-code input are unchanged, so the Index data, the charts and the banner stay as released.",
+    "replaces_spec": {
+      "spec": "/data/dev2/runs/release/dev2-4b-sdml-release-20261002T085835Z/receipts/spec.json",
+      "sha256": "ae7156afe721e8e7fb798be03472417bf43412bbe42741d523a5fbdff6e0637c"
+    },
+    "previous": {
+      "successor": "Decision-2.0-Nox-4B successor by user decision: the decoder M15 arm 4b-LHA10SDML (the released LH recipe, rank-128 LoRA on Qwen/Qwen3.5-4B-Base @1001bb4d, merged, scoring head, on the released 4B mixture plus 10% IB1-r3 / IB2 breadth rows and copies of released non-English rows, with typed-row self-distillation from LH; soup of two seeds); stored as its v2.release.bf16_copy.",
+      "gate": "successor profile with index_first and a user override of IF1 (user decision 2026-10-02 15:45 UTC+8: \"the Index is equal within noise, transfer is significantly better\"): IF1 = the private Index paired bootstrap of these weights minus the current revision's, bound to both IX1 run receipts, its lower-bound verdict printed and passed on the user override record; R3 = no type collapsed on the formal typed panel; IF3 = the row-level Index contamination audit of the training file; items 2-7 as for every release. v3, human transfer, mlx-diag, tier gates and public 231 are references; overlap exposure and C1 are not run. The Index files stay in node A's private tree.",
+      "scored": "T = 1: the sealed formal run m17-4b-LHA10SDML (image dbe5f32b, the 4B formal library's master cache), kept at T = 1 by the 23:15 rule, scored on node A by m6-score.sh.",
+      "storage": "v2.release.bf16_copy of the frozen FP32 weights (identity 1b515675 -> 991a8fb8; receipt 8ffce102), the copy the Index run IS-4b-LHA10SDML-bf16 scored.",
+      "runtime": "vendor_source = the formal run's runner mirror (training/model checked equal to the scored adapter sources at build time); runtime_source = automap_source = the current revision's (BF16-resident, Transformers remote code, forward token budget), unchanged.",
+      "card": "the product card of the current revision with this candidate's reports, an Index input built by python -m v2.release.card_index (board-served parameter counts, the audited footnote) with the 4B point from the Index run on exactly these weights, and assets rendered by the default v2.release.card_assets; card.speed keeps the current revision's bench receipt (same architecture, runtime and shapes).",
+      "replaces_spec": {
+        "spec": "v2/release/specs/dev2-4b-4bif-S17.json",
+        "sha256": "35ccc4115e7bc540c259b6786ce470026d18c09149de94a0aa1e1b46c3586659"
+      },
+      "previous": {
+        "successor": "Decision-2.0-Nox-4B Index-first successor: the decoder M17 arm 4b-LHS17SD (the released LH recipe at LH's token count with English released rows of 17% of the tokens swapped for IB1-r3 / IB2 breadth rows, every non-English row kept, typed-row self-distillation from LH; soup of two seeds); stored as its v2.release.bf16_copy.",
+        "gate": "successor profile with index_first (user rule 2026-10-02 09:55): IF1 = the private Index paired bootstrap of these weights minus the current revision's, 95% lower bound > 0, bound to both IX1 run receipts; R3 = no type collapsed on the formal typed panel; IF3 = the row-level Index contamination audit of the training file; items 2-7 as for every release. v3, human transfer, mlx-diag, tier gates, exposure and public 231 are references; C1 is not run. The Index files stay in node A's private tree.",
+        "scored": "T = 1: the sealed formal run m17-4b-LHS17SD (image dbe5f32b, the 4B formal library's master cache), kept at T = 1 by the 23:15 rule, scored on node A by m6-score.sh.",
+        "storage": "v2.release.bf16_copy of the frozen FP32 weights (identity 8995bd9d -> 74ec8b2f; receipt 09dd39ed), the copy the Index run DEV2.0-4B-LHS17SD-bf16 scored.",
+        "runtime": "vendor_source = the formal run's runner mirror (training/model checked equal to the scored adapter sources at build time); runtime_source = automap_source = the current revision's (BF16-resident, Transformers remote code, forward token budget), unchanged.",
+        "card": "the product card of the current revision with this candidate's reports, an Index input built by python -m v2.release.card_index (board-served parameter counts, the audited footnote) with the 4B point from the Index run on exactly these weights, and assets rendered by the default v2.release.card_assets (banner concept A); card.speed keeps the current revision's bench receipt (same architecture, runtime and shapes).",
+        "replaces_spec": {
+          "spec": "v2/release/specs/dev2-4b-card3.json",
+          "sha256": "ca7485d9dc648eafa015423d2cffd1cc37025eec3d69083d689d843ce27ec48c"
+        },
+        "previous": {
+          "card_fix": "Card-only revision (user card fix 2026-10-02 03:04 UTC+8, release worker 4c0a68cd): the Jev Decision Index charts plot every Decision 2.0 point at the board's served-parameter count for its base (card_index.BOARD_BASES), as the board does for Decision 1.0 and the public entrants, and the Index footnote is card_index.FOOTNOTE with the row-level training-data audit. card.index and card.assets pin the regenerated private Index input and assets. Everything else, the at-a-glance table's loaded parameter count included, is the round-2 product card.",
+          "replaces_spec": {
+            "spec": "v2/release/specs/dev2-4b-product.json",
+            "sha256": "2ecae5983cbf7cf7ad5faf07860998a23a74dbf3bf777dd4bf9be2fd7f794a88"
+          },
+          "previous": {
+            "card_product": "Card-only revision under the new name (user job 2026-10-02 00:05 UTC+8, release worker 4c0a68cd): the product card of v2.release.card (banner, title, one paragraph, at-a-glance table, highlights, code-only quickstart, JevArena and Jev Decision Index charts with one compact table, licence, citation). card.text is empty; card.index and card.assets pin the private Index input and the assets rendered by v2.release.card_assets; card.speed pins the 400-request bench receipt of this runtime. licence.files keeps the LICENSE only; the upstream NOTICE and the attributions are dropped (no NOTICE, ATTRIBUTIONS.md, LICENSES/ or evaluation/ in the package). Weights, tokenizer, the package runtime, the vendored sources and the Transformers remote code are byte-identical to the replaced revision; config.json and MODEL_MANIFEST.json carry the new model name.",
+            "renamed_from": "llm-semantic-router/DEV2.0-4B",
+            "replaces_spec": {
+              "spec": "v2/release/specs/dev2-4b-card.json",
+              "sha256": "f15a5bccf4afa1fc5474c5cb7d360c21dec30948f6b80a51cc904e0b235d509f"
+            },
+            "previous": {
+              "card_redesign": "Card-only revision (user card job 2026-10-01 21:58 UTC+8, release worker 4c0a68cd): a standard model-release card from v2.release.card (highlights, model overview, one evaluation chart pair and table, a Transformers-only quickstart, at most five limitations, training data with the licence attributions, licence, citation); methods and every result below the counterpart in evaluation/EVALUATION.md; internal release facts in the records. card.text is the short card text; banner, calibration_text and requirements_text are dropped; the attributions lose the internal panel version and the banner credit. Weights, tokenizer, configs, the package runtime, the vendored sources and the Transformers remote code are byte-identical to the replaced revision (same runtime_source, vendor_source and automap_source).",
+              "replaces_spec": {
+                "spec": "v2/release/specs/dev2-4b-m10lh.json",
+                "sha256": "84faba9e706da5c6c8a92c3ff471cfc3c4bdaf24839f3c6841d2bf92aca69317"
+              },
+              "previous": {
+                "candidate": "decoder Milestone 10 successor m10-4b-LH (user release job 2026-10-01): rank-128 LoRA on Qwen3.5-4B-Base (merged) with the candidate head, uniform soup of three seeds; decoder records v2/dec/records/dec-m10-results-2026-10-01.md and dec-m10-handoff-2026-10-01.md.",
+                "gate": "successor profile: R1-R7 against the current revision 3785b7b9 (its scored run dev2-4b-t1-derived), R5 = the tier gates (own Decision 1.0 Nox adopted run, v3 >= 0.9 x Decider 4B, human transfer vs Decider 4B), and R8 = the JevArena-C1 v1.2 post-key guard (item 8).",
+                "scored": "T = 1 (COORDINATION 2026-10-01 13:40): the sealed CAL698 formal run m10-4b-LH (node F GPU3, image dbe5f32b) returned to T = 1 offline with 0 answer changes, byte-equal to the decoder's own T = 1 derivation, then adopted, sealed and paired on node A (ops/prep_lh.sh derive).",
+                "storage": "v2.release.bf16_copy of the decoder's frozen FP32 checkpoint (identity 5fa2a699 -> 6a555335; receipt 7d8f21f5).",
+                "runtime": "vendor_source = the formal run's source mirror 88aacb9fb (training/model byte-identical); runtime_source = automap_source = 08ec0834e (the BF16-resident runtime with the auto_map remote-code prompt fix 0cbf1033e and the IX1 forward token budget for long multi-question requests 8e6bdfc33 / e876fbefc; the Transformers remote code of the auto_map revision 3785b7b9).",
+                "c1": "final: post-key C1 line from the collected SUMMARY.json",
+                "previous": {
+                  "transformers_remote_code": "Runtime-only revision (user request 2026-10-01 10:53 UTC+8; coordinator note 11:20, worker 4c0a68cd): the package gains the Transformers remote code and config.json fields; the package runtime (runtime_source 8e8082440) is the BF16-resident runtime plus the remote-code prompt fix. Weights, tokenizer, model configs and the vendored training/model sources are byte-identical to the replaced revision. Adopted only with 0 answer changes against the native runtime on every scored prompt and on mlx-diag.",
+                  "replaces_spec": {
+                    "spec": "v2/release/specs/dev2-4b-bf16r.json",
+                    "sha256": "bd90157637d18e53067b90e9cbb53e35ec7634ff2a27f297232064682de0567d"
+                  },
+                  "previous": {
+                    "bf16_resident_runtime": "Runtime-only revision (coordinator note 2026-10-01 10:30 UTC+8, b5f60b33): the package runtime comes from the BF16-resident commit 5dc962b00 (runtime_source); weights, tokenizer, configs and the vendored training/model sources (vendor_source, the mirror the replaced revision vendors) are byte-identical to the replaced revision. Adopted only with 0 answer changes on every scored prompt and on mlx-diag. The card gains one runtime-update line and runtime_equivalence one runtime sentence.",
+                    "replaces_spec": {
+                      "spec": "v2/release/specs/dev2-4b-bf16.json",
+                      "sha256": "7d472bd4dc85f07a69b3e3fbedcbe5784c9b74d756ba255024580518a41133bf"
+                    },
+                    "previous": {
+                      "bf16_storage": "Storage-only revision (coordinator note 2026-09-30 06:10 UTC+8, 27B release path step 1): the FP32 backbone of the replaced revision is stored as its v2.release.bf16_copy (receipt 66fe6c02, identity 11b5ca1c -> 8b0a8bc7; 248 Linear projection matrices in BF16 as BF16 autocast rounds them, every other tensor FP32 bit for bit). Adopted only with 0 answer changes on every scored prompt and on mlx-diag. The card, scored run, runtime and vendored sources (pinned to the mirror that built the replaced revision) are unchanged; the runtime-equivalence text gains one storage sentence.",
+                      "previous": {
+                        "card_c1": "Card-only revision after JevArena-C1 event 3 (item set v1.2, scored 2026-09-29; eval record v2/eval/records/m4-c1-event3-prep-2026-09-29.md section 0000), coordinator note 2026-09-29 23:40 UTC+8: the C1 line replaces the placeholder; a C1 disclosure (the v3 lead over Nox 1.0 does not carry over; Jet v6.2 significantly ahead; C1 tasks and languages below Nox 1.0 and Jet v6.2) and the two JevBench hard-tier skills behind the Decider 4B gap are added. The card re-renders with the current public-231 note of card.py. Every model file stays byte-identical to the released revision 452f133211de292a87bc29ab7e24a3bd0704e40d. The package runtime (decision2/*.py) and the vendored inference sources come from the mirror that built 452f1332 (f8f52c695), so only card files change."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

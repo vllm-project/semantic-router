@@ -643,6 +643,9 @@ class IndexFirstGateTest(SuccessorGateTest):
         bound = gate.evidence_sha256(gate.gate_profile(self.spec))
         self.assertNotIn("paired", bound)
         self.assertEqual(bound["index_first_audit"], layout.sha_file(self.audit))
+        first, below = gate.first_items(self.spec)
+        self.assertEqual(list(first), list(items))
+        self.assertEqual(below, "own 1.0")
 
     def test_each_integrity_item_fails_on_its_criterion(self):
         cases = (
@@ -711,6 +714,46 @@ class IndexFirstGateTest(SuccessorGateTest):
         del self.spec["gate_profile"]["index_first"]
         with self.assertRaises(ValueError):
             gate.check(self.spec, self.decision_for(), final=True)
+
+    def override(self, **changes) -> Path:
+        record = {
+            "schema": gate.USER_OVERRIDE_SCHEMA,
+            "decided_utc": "2026-10-02T07:45:00Z",
+            "decided_by": "user, relayed by the coordinator",
+            "quote": "equal within noise, transfer significantly better",
+            "identity": self.spec["expected_identity"]["model_sha256"],
+            "current_revision": self.spec["gate_profile"]["current"]["revision"],
+            **changes,
+        }
+        path = write(self.root / "private" / "override.json", record)
+        self.spec["gate_profile"]["index_first"]["user_override"] = str(path)
+        return path
+
+    def test_user_override_passes_a_non_positive_lower_bound(self):
+        self.edit(str(self.boot), **{"headline.ci95": [-0.18, 0.7]})
+        self.assertEqual(self.failing(), ["1_successor_IF1_index_gain"])
+        path = self.override()
+        items = self.items()
+        self.assertEqual(self.failing(), [], items)
+        evidence = items["1_successor_IF1_index_gain"]["evidence"]
+        self.assertIn("95% lower bound > 0: NO", evidence)
+        self.assertIn(f"user override {layout.sha_file(path)[:12]}", evidence)
+        self.assertNotIn("-0.18", evidence)
+        bound = gate.evidence_sha256(gate.gate_profile(self.spec))
+        self.assertEqual(bound["index_first_user_override"], layout.sha_file(path))
+        gate.check(self.spec, self.decision_for(), final=True)
+
+    def test_user_override_must_name_these_weights_and_revision(self):
+        self.edit(str(self.boot), **{"headline.ci95": [-0.18, 0.7]})
+        for changes in (
+            {"identity": "d" * 64},
+            {"current_revision": "8" * 40},
+            {"schema": "other"},
+            {"quote": ""},
+        ):
+            with self.subTest(changes=changes):
+                self.override(**changes)
+                self.assertEqual(self.failing(), ["1_successor_IF1_index_gain"])
 
     def test_profile_cli(self):
         spec_path = write(self.root / "spec.json", self.spec)

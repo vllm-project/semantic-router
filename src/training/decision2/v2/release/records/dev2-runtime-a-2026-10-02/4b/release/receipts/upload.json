@@ -1,0 +1,12 @@
+{
+  "bytes": 9716441812,
+  "commit_url": "https://huggingface.co/vllm-sr/Decision-2.0-Nox-4B/commit/137e28ceebd52b9611bb72e3645536867e0ec1ec",
+  "files": 38,
+  "manifest_sha256": "8fccfa69a3d33b2ccbb74067441caa080c03792a8d3283e0e47cc26fa7c84c79",
+  "private": true,
+  "repo": "vllm-sr/Decision-2.0-Nox-4B",
+  "revision": "137e28ceebd52b9611bb72e3645536867e0ec1ec",
+  "schema": "dev2-hub-upload/1",
+  "seconds": 3.4947766959667206,
+  "utc": "2026-10-02T11:57:37.266264+00:00"
+}

@@ -1,0 +1,20 @@
+{
+  "device": "cuda:0",
+  "env": [
+    "HIP_FORCE_DEV_KERNARG=1",
+    "TRITON_CACHE_AUTOTUNING=1",
+    "TRITON_CACHE_DIR=/data/dev2/runs/release/triton/dev2-ra-0.8B-20261002T122005Z"
+  ],
+  "gpu": "0",
+  "image": "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1",
+  "image_id": "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1",
+  "require_kernels": true,
+  "rw_mounts": [
+    "/data/dev2/runs/release/triton/dev2-ra-0.8B-20261002T122005Z"
+  ],
+  "schema": "dev2-release-launcher/1",
+  "sites": [
+    "/opt/decision-fla"
+  ],
+  "track": "runtime-a"
+}

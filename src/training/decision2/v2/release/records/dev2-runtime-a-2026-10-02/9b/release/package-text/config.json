@@ -1,0 +1,55 @@
+{
+  "architectures": [
+    "Decision2Model"
+  ],
+  "auto_map": {
+    "AutoConfig": "configuration_decision2.Decision2Config",
+    "AutoModel": "modeling_decision2.Decision2Model"
+  },
+  "backbone": {
+    "config": "backbone/config.json",
+    "index": "backbone/model.safetensors.index.json",
+    "weights": [
+      "backbone/model-00001-of-00009.safetensors",
+      "backbone/model-00002-of-00009.safetensors",
+      "backbone/model-00003-of-00009.safetensors",
+      "backbone/model-00004-of-00009.safetensors",
+      "backbone/model-00005-of-00009.safetensors",
+      "backbone/model-00006-of-00009.safetensors",
+      "backbone/model-00007-of-00009.safetensors",
+      "backbone/model-00008-of-00009.safetensors",
+      "backbone/model-00009-of-00009.safetensors"
+    ]
+  },
+  "calibration": null,
+  "custom_pipelines": {
+    "decision": {
+      "impl": "pipeline_decision2.Decision2Pipeline",
+      "pt": [
+        "AutoModel"
+      ],
+      "type": "text"
+    }
+  },
+  "decision_format": "vllm-sr-decision",
+  "decision_weights": {
+    "decision_head": "decision_head.safetensors"
+  },
+  "format_version": 2,
+  "manifest": "MODEL_MANIFEST.json",
+  "max_input_tokens": 16384,
+  "model_config": "decision_config.json",
+  "model_name": "Decision-2.0-Lux-9B",
+  "model_type": "decision2",
+  "package_schema": "dev2-package/1",
+  "runtime": {
+    "entry": "decision2.Decision2.from_pretrained",
+    "python_package": "decision2"
+  },
+  "runtime_family": "decision2-qwen-full",
+  "tokenizer": {
+    "chat_template": "chat_template.jinja",
+    "config": "tokenizer_config.json",
+    "json": "tokenizer.json"
+  }
+}

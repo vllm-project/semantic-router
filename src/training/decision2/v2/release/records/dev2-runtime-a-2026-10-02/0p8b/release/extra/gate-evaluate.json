@@ -1,0 +1,50 @@
+{
+  "passed": true,
+  "decision": {
+    "sha256": "8a1e8c49bcbf9e9cb39724f657d518cd67347187aff61c43b242e99b08076bcf",
+    "status": "final"
+  },
+  "items": {
+    "1_successor_IF1_index_gain": {
+      "passed": true,
+      "evidence": "private Index paired bootstrap b080e76d14b5 (2000 replicates over 138645 cases) of these weights (d97127991870) minus the current revision's (3f02f0e5fc68): 95% lower bound > 0: yes"
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "passed": true,
+      "evidence": "types choice OK, noul OK, score OK"
+    },
+    "1_successor_IF3_index_audit": {
+      "passed": true,
+      "evidence": "row-level Index audit 1cacd98a0a64 of 120226 Index rows: 0.8B 162777 training lines, 1 item rows, 20 familiar-text rows; 08bRA 309225 training lines, 1 item rows, 18 familiar-text rows; planted control 200 / 200"
+    },
+    "1_successor_references": {
+      "passed": true,
+      "reference": true,
+      "evidence": "references only under the Index-first rule (user 2026-10-02 09:55): v3: v3 53.913 vs current 50.236: +3.68 [-2.76, +4.82] (below its former bar); human transfer: human transfer delta 95% [-0.046, +0.079] (clears its former bar); mlx-diag: mlx-diag card-eligible macro -0.0037 [-0.0139, +0.0065] (clears its former bar); tier gates: not run; overlap exposure: 1 training files, 0 exposed groups (clears its former bar); public 231: public 231 162 vs 156 (+6; McNemar p 0.327) (clears its former bar); C1 post-key: not run"
+    },
+    "2_regressions_disclosed": {
+      "passed": true,
+      "evidence": "8 results below own 1.0 listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included"
+    },
+    "3_download_hash_parameters": {
+      "passed": true,
+      "evidence": "tree 32 files re-hashed; loaded 753446208"
+    },
+    "4_native_examples": {
+      "passed": true,
+      "evidence": "examples and the card's Python block reproduced from the download"
+    },
+    "5_output_consistency": {
+      "passed": true,
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run"
+    },
+    "6_card_design": {
+      "passed": true,
+      "evidence": "Hub card apache-2.0 / problems []"
+    },
+    "7_transformers_remote_code": {
+      "passed": true,
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "passed": true,
+  "items": {
+    "1_successor_IF1_index_gain": {
+      "passed": true,
+      "evidence": "private Index paired bootstrap f296935f83d6 (2000 replicates over 138645 cases) of these weights (991a8fb855f2) minus the current revision's (74ec8b2f838d): 95% lower bound > 0: NO; user override 9d196ffa2e75 (2026-10-02T07:45:00Z, the user, relayed by the coordinator (parent agent, Decision 2.0 program) at 15:45 UTC+8): \"the Index is equal within noise, transfer is significantly better\""
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "passed": true,
+      "evidence": "types choice OK, noul OK, score OK"
+    },
+    "1_successor_IF3_index_audit": {
+      "passed": true,
+      "evidence": "row-level Index audit b0f4fc5e4230 of 120226 Index rows: 4b-LHA10SDML 77099 training lines, 0 item rows, 114 familiar-text rows; planted control 200 / 200"
+    },
+    "1_successor_references": {
+      "passed": true,
+      "reference": true,
+      "evidence": "references only under the Index-first rule (user 2026-10-02 09:55): v3: v3 65.684 vs current 62.090: +3.59 [+2.11, +8.83] (clears its former bar); human transfer: human transfer delta 95% [-0.019, +0.089] (clears its former bar); mlx-diag: mlx-diag card-eligible macro -0.0075 [-0.0176, +0.0026] (clears its former bar); tier gates: own 1.0 low +5.50; v3 65.684 vs 90% of Decider 4B 61.882; H vs Decider 4B [-0.085, +0.054]; own 1.0 low > 0 ok, v3 >= 55.693 ok, H vs Decider 4B upper >= 0 ok, no type collapsed ok (clears its former bar); overlap exposure: not run; public 231: public 231 174 vs 174 (+0; McNemar p 1.000) (clears its former bar); C1 post-key: not run"
+    }
+  }
+}
