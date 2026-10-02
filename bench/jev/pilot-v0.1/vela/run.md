@@ -80,3 +80,8 @@ the `.venv-semantic-router-eval` directory is an operator-created environment,
 not a bundled checkout dependency. Use fresh output paths: this runner overwrites
 existing output files. Updated `SHA256SUMS` reflects this run-note edit and the two
 added configuration files; hashes of the captured evidence remain unchanged.
+
+The label-identity guard and its offline regressions live in
+`bench/jev/pilot-v0.1/tests/test_vela_runner.py`. The saved result metadata's
+`runner_source_sha256` identifies the runner used for the historical captured
+run; this follow-up changes preflight validation and does not claim a rerun.

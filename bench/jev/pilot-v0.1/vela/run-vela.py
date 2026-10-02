@@ -11,6 +11,7 @@ use an already downloaded snapshot without changing that identity.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Mapping
 import hashlib
 import json
 import math
@@ -71,6 +72,65 @@ def load_mapping(path: Path) -> dict[str, int]:
     if reverse != expected_reverse:
         raise ValueError(f"{path} has inconsistent forward and reverse mappings")
     return normalized
+
+
+def normalize_id2label(raw: object, num_labels: int) -> dict[int, str]:
+    """Normalize Transformers' string- or integer-keyed id2label mapping."""
+    if not isinstance(raw, Mapping) or not raw:
+        return {}
+
+    normalized: dict[int, str] = {}
+    for raw_index, raw_label in raw.items():
+        try:
+            index = int(raw_index)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"model id2label has a non-integer index: {raw_index!r}"
+            ) from exc
+        if index in normalized:
+            raise ValueError(f"model id2label repeats index {index}")
+        if not isinstance(raw_label, str) or not raw_label:
+            raise ValueError(f"model id2label has an invalid label at index {index}")
+        normalized[index] = raw_label
+
+    expected_indices = set(range(num_labels))
+    if set(normalized) != expected_indices:
+        raise ValueError(
+            "model id2label indices do not exactly cover "
+            f"0..{num_labels - 1}: {sorted(normalized)}"
+        )
+    return normalized
+
+
+def validate_label_identity(model_config: object, mapping: dict[str, int]) -> None:
+    """Reject a semantic id2label permutation while allowing LABEL_n metadata."""
+    actual_by_index = normalize_id2label(
+        getattr(model_config, "id2label", {}), len(mapping)
+    )
+    if not actual_by_index:
+        return
+
+    expected_by_index = {index: label for label, index in mapping.items()}
+    generic_labels = all(
+        actual_by_index[index] == f"LABEL_{index}" for index in range(len(mapping))
+    )
+    if generic_labels:
+        # Generic Transformers labels carry no semantic claim; the pinned
+        # category_mapping.json remains the source of semantic names.
+        return
+    if actual_by_index != expected_by_index:
+        mismatches = {
+            index: {
+                "expected": expected_by_index[index],
+                "actual": actual_by_index[index],
+            }
+            for index in range(len(mapping))
+            if actual_by_index[index] != expected_by_index[index]
+        }
+        raise ValueError(
+            "model id2label ordering differs from category_mapping.json: "
+            f"{mismatches}"
+        )
 
 
 def load_eval_config(path: Path) -> dict[str, Any]:
@@ -175,11 +235,7 @@ def run(args: argparse.Namespace) -> None:
         raise ValueError(
             f"model has {model.config.num_labels} labels, mapping has {len(mapping)}"
         )
-    config_id2label = getattr(model.config, "id2label", {})
-    if config_id2label and all(str(i) in config_id2label for i in range(len(mapping))):
-        declared = {str(config_id2label[str(i)]) for i in range(len(mapping))}
-        if not declared.intersection(mapping):
-            raise ValueError("model config labels do not match category_mapping.json")
+    validate_label_identity(model.config, mapping)
 
     if args.warmup_runs < 0:
         raise ValueError("--warmup-runs cannot be negative")
