@@ -371,6 +371,20 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 04:25Z (poll 21):
+  - **M6-IB scored** (`m6-index.sh 14ec16de5 M6-IB score`): 120,226 / 120,226 ok, scorers pass, 0 flagged, 8.95
+    GPU-h; private outputs in `private/m6/M6-IB/`.
+  - **`m6_index_first`: M6-IB passes the Index gate, types OK → eligible; choice so far = M6-IB.** M5-L128 fails.
+  - **Index path: M6-IB passes items 1' and 2–7.**
+  - A20r's `merged-budget` had no ix1 receipt.
+    - `v2.eval.ix1.merge` over the same files gives `merged-budget-r` (records equal; 2 rerun lines differ in
+      serialization only), with a receipt (`2e074511…`, panel `6455d7be…`, 120,226 ok).
+    - M6-IB's bootstrap is being recomputed against it (`runs/M6-IB/paired-boot-vs-a20r-r.json`, since 04:14Z), so
+      that gate IF1 can bind both receipts. `score` uses it from `c44db3447` (mirrored to nodes B–D).
+  - **`m6-stage-a.sh M6-IB`** staged it on node A (10,786 files, SHA-256 lists equal; 04:18–04:22Z) while the link
+    is up.
+  - **Vega-27B `main` is `b689ee66`** (03:19Z, the card worker's banner-A card-only revision).
+  - M6-IB2 Index: shards 0 / 1 running on node D GPU0 / GPU1.
 - 04:00Z (poll 20; the state commit came 60 min after poll 19, during a GPU-contention fix; code commits in between):
   - **Manual formals sealed 03:29Z** (references; T = 1; `m6-gates.sh 199daf794 gates / overlap / verdicts M6-IB2
     M6-IBX`, `VERDICTS` at 03:32Z; the guard moved `contrast.json` at 03:32:28Z):
