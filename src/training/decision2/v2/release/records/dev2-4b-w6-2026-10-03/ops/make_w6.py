@@ -50,6 +50,8 @@ CURRENT = {
 }
 CURRENT_RECORD = ROOT / "v2/release/records/dev2-4b-xall-2026-10-02"
 VENDOR = "95cc6e548ceece6ca852eee729c99da68057e078"
+# The phase A runtime plus the opt-in shared-context switch (9d90afd10 merged; COORDINATION 2026-10-03 02:23).
+RUNTIME = "b50e8650b87ef5129ea6c26223d494fa86480d4d"
 SEVEN = "the released M15 4b-LHA10SDML, 4b-LHS17SD, 4b-LHS17UP, 4b-LHS17IB4, 4b-LHS17IB4X, 4b-SDMLIB4 and 4b-LHS17ML"
 NEW3 = "the arm factory's 4b-LHS17IB4-lrh (half LR), 4b-LHS17IB4ML and 4b-LHS23IB4"
 RECIPE = (
@@ -170,9 +172,11 @@ def spec(cand: str) -> dict:
         "storage": f"v2.release.bf16_copy of the frozen FP32 weights (identity {p['fp32'][:8]} -> {identity[:8]}; "
         f"receipt {bf16_receipt[:8]}), the copy the Index run {p['index_name']} scored.",
         "runtime": "vendor_source = the formal run's runner mirror (training/model checked equal to the scored "
-        "adapter sources at build time); runtime_source = automap_source = the current revision's, unchanged: the "
-        "speed-up phase A runtime (HIP-graph replay, shared BF16 casts, the gfx942 fused Triton kernels), with its "
-        "frozen pre-warmed autotune cache for parity.",
+        "adapter sources at build time); runtime_source = this branch's mirror "
+        f"{RUNTIME[:9]}: the current revision's speed-up phase A runtime (HIP-graph replay, shared BF16 casts, the "
+        "gfx942 fused Triton kernels) plus the opt-in shared-context switch (shared_ctx.py, off by default, the "
+        "default path byte-identical; COORDINATION 2026-10-03 02:23), with the phase A frozen pre-warmed autotune "
+        "cache for parity; automap_source = the current revision's, unchanged.",
         "card": "the product card of the current revision with this candidate's reports, an Index input built by "
         "python -m v2.release.card_index (board-served parameter counts, the audited footnote) with the 4B point "
         "from the Index run on exactly these weights and every other tier's point at its current Hub main, and "
@@ -193,6 +197,9 @@ def spec(cand: str) -> dict:
     s["vendor_source"] = (
         f"/data/dev2/src/{p['vendor']}-src_training_decision2/src/training/decision2"
     )
+    s["runtime_source"] = (
+        f"/data/dev2/src/{RUNTIME}-src_training_decision2/src/training/decision2"
+    )
     s["gate_receipt"] = f"{DECISIONS}/{NAME}.decision.{p['key']}.json"
     s["runtime_equivalence"] = (
         "decision2/qwen.py loads this full checkpoint with the training/model sources vendored from the formal run's "
@@ -201,8 +208,9 @@ def spec(cand: str) -> dict:
         "(temperature 1; no calibration file) and answer normalization of v2.dec.infer_dec. The scored checkpoint "
         f"({p['fp32'][:8]}) stored every tensor in FP32; this package (v2.release.bf16_copy) stores its 248 Linear "
         "projection matrices in BF16 exactly as BF16 autocast rounds them and every other tensor bit for bit in "
-        "FP32. The runtime (the speed-up phase A runtime), the Transformers remote code and the forward token "
-        "budget are the current revision's. Checked on one GPU against the formal run's predictions of every "
+        "FP32. The runtime is the current revision's speed-up phase A runtime plus the opt-in shared-context "
+        "switch (off by default; the default path is unchanged); the Transformers remote code and the forward "
+        "token budget are the current revision's. Checked on one GPU against the formal run's predictions of every "
         "scored prompt (typed-final 1,600, css15 6,547, public231 231) and of the mlx-diag diagnostic (2,275) by "
         "release.sh --parity, with a copy of the current revision's frozen pre-warmed autotune cache, and AutoModel "
         "against the native runtime on every scored prompt."
