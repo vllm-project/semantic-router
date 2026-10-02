@@ -14,7 +14,7 @@ R=/data/dev2/runs/dec
 M=$R/m17
 OPS=/data/dev2/src/$SRC/src/training/decision2/v2/dec/ops/m17
 D=$M/data/4b-s2
-mkdir -p "$D" "$M/logs"
+mkdir -p "$M/data" "$M/logs"  # m17_data.py creates $D itself
 log() { echo "$(date -u +%FT%TZ) prep2 $*" | tee -a "$M/OPERATIONS.log"; }
 sha() { sha256sum "$1" | cut -d' ' -f1; }
 check() { [ "$(sha "$1")" = "$2" ] || { log "FAILED: $1 is not $2"; exit 1; }; }
