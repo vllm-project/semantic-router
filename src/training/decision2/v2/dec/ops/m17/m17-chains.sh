@@ -15,6 +15,7 @@
 # GPU-h. The node's 4B train cache is already warm (stage 1), so no stage-2 item pre-warms. M17_STAGE=3 is stage 2's
 # wave 2 (arm (a), data/4b-s3, READY-m17s3.json); its chain waits on the GPU's flock until wave 1's chain ends.
 # M17_STAGE=4 is wave 3 on the released 4b-LHA10SDML base (amendment 2; data/4b-s4, READY-m17s4.json).
+# Wave 4 (amendment 3): seed 3 (20260928) of 4b-LHS17IB4 (stage 3) on GPU4 and of 4b-SDMLIB4 (stage 4) on GPU5.
 # usage: M17_NODE=f [M17_STAGE=2] m17-chains.sh launch|run <mirror-dir> <gpu>
 set -u
 MODE=$1 SRC=$2 GPU=$3
@@ -39,6 +40,8 @@ case $STAGE:$NODE:$GPU in
   3:f:3) ITEMS="4b-LHS17IB4:2" ;;
   3:f:6) ITEMS="4b-LHS17IB4X:1" ;;
   3:f:7) ITEMS="4b-LHS17IB4X:2" ;;
+  3:f:4) ITEMS="4b-LHS17IB4:3" ;;
+  4:f:5) ITEMS="4b-SDMLIB4:3" ;;
   4:f:2) ITEMS="4b-SDMLIB4:1" ;;
   4:f:3) ITEMS="4b-SDMLIB4:2" ;;
   4:f:6) ITEMS="4b-LHS17ML:1" ;;
@@ -64,7 +67,7 @@ fi
 
 REV_4b=1001bb4d826a52d1f399e183466143f4da7b741b
 BASE_4b=/models/Qwen--Qwen3.5-4B-Base/$REV_4b
-SEEDS=(20260926 20260927)
+SEEDS=(20260926 20260927 20260928)
 BATCH="--batching tokens --max-batch-tokens 32768 --max-batch-rows 64 --update-rows 64"
 ARM_CAP=5.0 WARM_WAIT_MIN=360
 LEASE_DIR=/data/dev2/leases/gpu$GPU.lock
