@@ -8,6 +8,7 @@ Data locks live on each node at ``/data/dev2/runs/af/<size>/data/READY-af.json``
 
 usage:
   af_arms.py recipe <ARM>                    print "<size> <start> <trainer args...>"
+  af_arms.py locked <ARM>                    exit 0 iff the arm's data key has a lock entry
   af_arms.py ready <ARM>                     exit 0 iff every locked file of the arm's data hashes as locked
   af_arms.py lock <size> <DATA> <args-json> <rel>=<sha256> [...]   add a data entry (each file is re-hashed)
 """
@@ -96,6 +97,9 @@ def main() -> None:
                 for x in [size, START[size], *entry["args"], *COMMON[size], *extra]
             )
         )
+    elif mode == "locked":
+        size, key, _ = ARMS[rest[0]]
+        sys.exit(0 if key in load(size)["data"] else 1)
     elif mode == "ready":
         size, key, _ = ARMS[rest[0]]
         entry = load(size)["data"].get(key)

@@ -2,8 +2,8 @@
 # Arm factory training chain on one GPU (prereg v2/af/records/af-prereg-2026-10-02.md). A chain holds its GPU's flock
 # for its whole run, keeps the GPU's lease owner file current (track=arm-factory) and runs its items in order. An item
 # is ARM:sN:SEED (run name <size>-<ARM>-sN; recipe and data from af_arms.py). Per item:
-#   - skip it if it has a terminal marker; stop it if its data differs from the node's lock, if a preflight of the
-#     same arm already failed, or if this node's arm-factory training GPU-h reached the node gate;
+#   - skip it if it has a terminal marker; wait <= 4 h for its data lock entry; stop it if its data differs from the
+#     node's lock, if a preflight of the same arm already failed, or if this node's training GPU-h reached the gate;
 #   - wait for the node's pre-warm marker unless AF_PREWARM=1 names this chain's first item as the pre-warm seed
 #     (its preflights run alone on the node's Triton cache);
 #   - take the GPU only if its lease is free (absent, released / idle, or arm-factory); wait <= 60 min, else stop;
@@ -67,7 +67,14 @@ item() {  # <ARM> <sN> <SEED>
   [ "$first" = 1 ] && [ "${AF_PREWARM:-0}" = 1 ] && pw=1
   first=0
   terminal "$r" && return 0
-  python3 "$OPS/af_arms.py" ready "$arm" || { stop "$r" "data differs from data/READY-af.json (or no lock entry)"; return 0; }
+  until python3 "$OPS/af_arms.py" locked "$arm"; do
+    [ $((n % 15)) = 0 ] && log "$r waits for its data lock entry"
+    n=$((n + 1))
+    [ $n -gt 240 ] && { stop "$r" "no data lock entry after 4 h"; return 0; }
+    sleep 60
+  done
+  n=0
+  python3 "$OPS/af_arms.py" ready "$arm" || { stop "$r" "data differs from data/READY-af.json"; return 0; }
   if grep -qs "preflight failed" "$ST/$SIZE-$arm"-s*.FAILED 2> /dev/null; then
     stop "$r" "a preflight of arm $arm failed"
     return 0
@@ -75,6 +82,7 @@ item() {  # <ARM> <sN> <SEED>
   used=$(python3 "$OPS/af_gpuh.py" prefix "$SIZE-" --root "$M/arms" --running)
   gt "$used" "$GATE" && { stop "$r" "node arm-factory training GPU-h $used above the node gate $GATE"; return 0; }
   if [ "$pw" != 1 ]; then
+    lease_free && lease busy "$r waits for the node's pre-warm marker (training next)" 60
     until [ -f "$warm" ]; do
       [ $((n % 15)) = 0 ] && log "$r waits for the node's pre-warm marker"
       n=$((n + 1))
