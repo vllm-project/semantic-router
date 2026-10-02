@@ -56,3 +56,46 @@ Index values stay private (node private dirs and the program's private folder); 
   queued for node E. Bootstraps of `2b-RAM` vs DEV2.0-2B, vs `IS-2b-RAUP` and vs `M16-2b-RASD-bf16` (the 2B point
   b49d1f36 is about to release) running on node C.
 - Hub: Eos `3de61185`, Sol `8ed41433` (b49d1f36's 2B upload is held by the Vega-27B release on node A).
+
+## 2026-10-02T07:45Z — PAUSED (coordinator interrupt 15:45 UTC+8: user pauses all 0.6B / 0.8B / 2B training)
+
+Sol-2B and Eos-0.8B are not touched by this milestone (b49d1f36 releases `2b-RASDML`). Index values: private only
+(node C `ix1/runs/M18-*/merged/compare.json`, `m18-boot-*.json`; `decision2-program/private/dec-m18/index-summary.txt`).
+
+**Stopped (07:40Z):** node A chain `a1` (`08b-RAM` seed 2, mid full run: container `m18-m18-08b-RAM-s2-full`) and
+the A pool (`2b-U5`, shards 1 / 2 running); node E pool (`2b-U4`, shards 4-7 running); node F pool (`2b-MLRAM`,
+shards 0 / 1 running); node C bootstraps still running. No M18 process or container is left. Leases: owner files
+of node A GPU1 / 2 / 7, node E GPU0 / 1 / 6 / 7, node F GPU4 / 5 moved to `owner.prev-m18-<UTC>`; all nine GPUs idle
+(0% use, 0 GiB). M18 held no node C GPU.
+
+**Candidates (verdicts; values private):**
+
+| Candidate | State | Verdict |
+| --- | --- | --- |
+| `2b-RAUP-a75`, `2b-RAUP-a50`, `2b-UPRA`, `2b-UPRAa75` | scored, bootstrapped | above DEV2.0-2B; `UPRA` / `UPRAa75` not significant over `IS-2b-RAUP` |
+| `2b-RS17UP`, `2b-SWRA`, `2b-RAUPM`, `2b-UPRAM` | scored | below the 2B point being released |
+| `2b-RAM` (2b-RA recipe + IB3-r2 maths) | scored, bootstrapped | 95% lower bound > 0 vs DEV2.0-2B, `IS-2b-RAUP` and `M16-2b-RASD-bf16`; below the sweep's `IS-2b-RASDML` point estimate |
+| `2b-U4`, `2b-U5`, `2b-MLRAM` | Index run stopped part-way | not measured |
+| `2b-U3ML` | BF16 restaged on node E | not run |
+| `08b-RAUP-a75`, `08b-UPRA`, `08b-UPRAa75` | scored (`08b-UPRA` with one error row counted wrong) | below the Eos release (bootstrap upper bounds < 0 for the two run) |
+| `08b-RAUP-a50` | dropped (amendment 1) | — |
+| `08b-RAM` | seed 1 done, seed 2 stopped | no soup; `08b-RAM-a75` / `08b-RRM-a75` not built |
+
+Training used: 2B arms 6 seeds (≈ 2.2 GPU-h), `08b-RAM` ≈ 2.6 GPU-h; Index ≈ 19.9 GPU-h finished + ≈ 3 GPU-h in the
+stopped runs. Total ≈ 28 GPU-h of the 40 cap.
+
+**How to resume** (only on a new coordinator decision; mirror = the commit holding this entry, mirrored to the node):
+
+1. GPUs: take leases again (track `dec-m18` for training, `eval-ix1` for Index), never node C GPU0, E GPU4-5, F GPU0-1.
+2. Stopped Index runs (`2b-U4` node E, `2b-U5` node A, `2b-MLRAM` node F): their shard directories exist without an
+   end, so `m18_ixpool.py` refuses them. Either resume the ended / killed shards with
+   `v2/eval/ix1/launch.sh resume --src <mirror> --model <NAME> --gpus "<g>" --run <runs/NAME> --rows-dir <panel>
+   --only "<k>"` (the kit runner keeps finished rows), or move `runs/<NAME>` and `parity/<NAME>` to `void/` and run
+   `m18-cand.sh <sha> <NAME> pool <node> "<gpus>"` afresh. Then `relay` / `score` / `boot` with `m18-cand.sh`.
+   `2b-U3ML`: `m18-cand.sh <sha> M18-2b-U3ML-bf16 pool e "0 1 2 3 6 7"` (package already restaged on node E).
+3. `08b-RAM` seed 2: the chain marks a killed full run FAILED only when it exits normally; it was killed, so no
+   marker exists. Move `m18/arms/full/m18-08b-RAM-s2*` aside (keep for the record), write the node A lease, then
+   `M18_NODE=a m18-chains.sh launch <mirror> 1` after editing GPU1's items to `08b-RAM:2` (remove the chain lock
+   `m18/chains/launch-a1.lock` first). Then `m18-soup.sh <mirror> 08b-RAM` on node A, and `m18-cand.sh` build /
+   bf16 / restage / pool for `M18-08b-RRM-bf16` (build only), `M18-08b-RRM-a75-bf16` and `M18-08b-RAM-a75-bf16`.
+4. Release rule unchanged (prereg "Release"): bootstrap lower bound > 0 vs the tier's then-current release run.
