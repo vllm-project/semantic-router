@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Terse: mock LLM selects terse_answers",
+    "description": "The marker the mock preference LLM maps to the terse_answers route",
+    "query": "__PREFERENCE_TERSE__ Please keep your answer short, no elaboration.",
+    "expected_decision": "terse_preference_routing",
+    "expected_matched_signal": "terse_answers",
+    "should_match": true
+  },
+  {
+    "name": "Detailed: mock LLM selects detailed_answers",
+    "description": "The marker the mock preference LLM maps to the detailed_answers route",
+    "query": "__PREFERENCE_DETAILED__ Please explain your full reasoning, step by step.",
+    "expected_decision": "detailed_preference_routing",
+    "expected_matched_signal": "detailed_answers",
+    "should_match": true
+  },
+  {
+    "name": "No preference rule matches",
+    "description": "No marker is present, so the mock LLM replies with the documented \"other\" fallback, which isn't a configured rule name",
+    "query": "What's the capital of France?",
+    "expected_decision": "",
+    "expected_matched_signal": "",
+    "should_match": false
+  }
+]

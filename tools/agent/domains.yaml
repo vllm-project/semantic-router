@@ -893,6 +893,19 @@ profiles:
       - src/semantic-router/pkg/classification/contrastive_preference_scoring.go
       - src/semantic-router/pkg/classification/classifier_signal_preference_support.go
       - src/semantic-router/pkg/classification/classifier_preference_lifecycle.go
+  preference-external-routing:
+    display_name: Preference External Routing
+    owner: e2e
+    coverage_role: preference-external-routing
+    selection: pr
+    paths:
+      - e2e/profiles/preference-external-routing/**
+      - e2e/testcases/preference_external_routing.go
+      - e2e/testcases/testdata/preference_external_routing_cases.json
+      - src/semantic-router/pkg/classification/preference_classifier.go
+      - src/semantic-router/pkg/classification/preference_classifier_external.go
+      - src/semantic-router/pkg/classification/classifier_signal_preference_support.go
+      - src/semantic-router/pkg/classification/classifier_preference_lifecycle.go
   external-gateway-responses:
     display_name: External Gateway Responses
     owner: e2e
