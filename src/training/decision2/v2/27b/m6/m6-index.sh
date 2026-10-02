@@ -38,6 +38,8 @@
 #            merged-budget-r: the same records as merged-budget, re-merged by v2.eval.ix1.merge from the same shard and
 #            rerun files, with the ix1 run receipt the release gate's IF1 binds; private outputs copied to
 #            ~/code/decision2-program/private/m6/ARM/ (mode 700)
+#   audit-arm  the ARM's own seed-1 / seed-2 training files (node B mixtures, SHA-256 checked) audited the same way on
+#            node D -> ix1/runs/m6-audit-ARM (the release gate's IF3 evidence; prints the planted control only)
 #   audit    once for M6 (any ARM; CPU): v2.eval.ix1.contamination of a20ib12pn (it contains every arm's rows) and
 #            a20ib1x against the panel -> ix1/runs/m6-audit (backs the card's "audited at row level" footnote)
 #   release  owner files that launch.sh wrote for ARM on node D GPU0-7, node B GPU0 / 1 / 5, node C GPU1-7 and node E
@@ -236,6 +238,32 @@ case "$STAGE" in
     (umask 077 && mkdir -p "${LOCAL%/*}/audit")
     ond "cat $A6/audit.json" > "${LOCAL%/*}/audit/audit.json"
     chmod 600 "${LOCAL%/*}/audit/audit.json" ;;
+  audit-arm)  # the arm's own seed-1 / seed-2 training files (mixtures-m6-1 / -2 on node B), checked against the
+    # mixtures' SHA-256 lists, copied to node D over node B's transfer key and audited there (CPU) -> ix1/runs/m6-audit-ARM
+    has_mirror d
+    case $ARM in M6-IB) mix=a20ib1 ;; M6-IBX) mix=a20ib1x ;; M6-IB2) mix=a20ib12 ;; M6-IB2PN) mix=a20ib12pn ;; esac
+    [ "$ARM" = M6-IB2PN ] && sets="m6pn-1 m6pn-2" || sets="m6-1 m6-2"
+    X6=/data/dev2/private/27b/m6-data A7=$R/runs/m6-audit-$ARM T7=$X6/audit-$ARM
+    ond "test ! -e $R/logs/m6-audit-$ARM.exit" || { echo "the $ARM audit already ran ($A7)" >&2; exit 3; }
+    args=""
+    for m in $sets; do
+      want=$(onb "cd $X6 && awk '\$2 == \"$mix.train.jsonl\" { print \$1 }' mixtures-$m.sha256")
+      [[ "$want" =~ ^[0-9a-f]{64}$ ]] || { echo "mixtures-$m.sha256 lists no $mix.train.jsonl" >&2; exit 3; }
+      ond "test -f $T7/$m.$mix.train.jsonl" ||
+        onb "$XFER root@${D#*@} 'umask 077; mkdir -p $T7' && cat $X6/mixtures-$m/$mix.train.jsonl | \
+          $XFER root@${D#*@} 'cat > $T7/$m.$mix.train.jsonl'"
+      [ "$(ond "sha256sum < $T7/$m.$mix.train.jsonl | cut -c1-64")" = "$want" ] ||
+        { echo "node D's copy of mixtures-$m/$mix.train.jsonl is not the listed file" >&2; exit 3; }
+      echo "mixtures-$m/$mix.train.jsonl ${want:0:12} on node D"
+      args+=" --train $mix-${m##*-}=$T7/$m.$mix.train.jsonl"
+    done
+    ond "mkdir -p $R/logs; setsid nohup bash -c 'cd $S && PYTHONHASHSEED=0 PYTHONPATH=$S python3 -m v2.eval.ix1.contamination \
+      --panel $R/panel-8$args --workers 24 --out $A7; echo \$? > $R/logs/m6-audit-$ARM.exit' \
+      > $R/logs/m6-audit-$ARM.log 2>&1 < /dev/null &"
+    echo "$(date -u +%FT%TZ) $ARM contamination audit started on node D (CPU)"
+    until ond "test -f $R/logs/m6-audit-$ARM.exit"; do sleep 60; done
+    ond "echo exit \$(cat $R/logs/m6-audit-$ARM.exit); tail -n 3 $R/logs/m6-audit-$ARM.log"
+    ond "python3 -c 'import json,sys; a=json.load(open(sys.argv[1])); p=a[\"planted_control\"]; print(\"planted control\", p[\"found\"], \"/\", p[\"planted\"]); sys.exit(0 if p[\"found\"] == p[\"planted\"] and not p.get(\"missed\") else 1)' $A7/audit.json" ;;
   parity)
     has_mirror d
     ond "test -f $PKG/MODEL_MANIFEST.json" || { echo "run stage first" >&2; exit 3; }
