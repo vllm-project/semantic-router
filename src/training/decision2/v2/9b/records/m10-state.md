@@ -2,6 +2,13 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 05:45Z (13:45 UTC+8), worker 7e1c9ce8
+
+- Seeds at update 570–724 of 2,083 (KUP) / 2,365 (KIBM), ≈ 15 updates per minute: KUP ends ≈ 07:05–07:20Z, KIBM-s1 /
+  s2 ≈ 07:35Z. No failure.
+- KSW labeling now waits for GPU2 / 4 only (mirror `8266426aa`; two shards), so those GPUs go straight from KUP to
+  labeling and KSW seeds; KSW-s3 follows KIBM-s1 on GPU6. GPU7's phase-1 chain idles its lease when KIBM-s2 ends.
+
 ## 2026-10-02 05:15Z (13:15 UTC+8), worker 7e1c9ce8
 
 - **Arm (c) KSW** (amendments 1 / 2): data built (TRAIN `e5cc44bb…`, 146,600 rows, 60,272,054 native tokens, IB share
