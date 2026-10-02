@@ -362,7 +362,9 @@ class Tree:
     """A request packed into one row: the shared prefix, then every suffix in order.
 
     ``rows``/``packed`` move suffix tokens between the packed row and a padded
-    [questions, width] layout (padding reads zeros).
+    [questions, width] layout. Padding sits after each suffix and repeats one of
+    its tokens: causal attention, convolution and recurrence never carry it
+    into a real token, and the head never reads it.
     """
 
     def __init__(self, prefix: int, lengths: list[int], width: int, device, torch):
@@ -373,12 +375,15 @@ class Tree:
         starts = [0]
         for length in lengths[:-1]:
             starts.append(starts[-1] + length)
-        index = torch.full((len(lengths), width), self.suffix, dtype=torch.long)
+        index = torch.empty((len(lengths), width), dtype=torch.long)
+        valid = torch.zeros((len(lengths), width), dtype=torch.bool)
         for row, (start, length) in enumerate(zip(starts, lengths)):
             index[row, :length] = torch.arange(start, start + length)
+            index[row, length:] = start + length - 1
+            valid[row, :length] = True
         self.index = index.to(device)
         # Index (not mask) gathers: a boolean mask would sync the host on every use.
-        self.flat = (index.reshape(-1) < self.suffix).nonzero().squeeze(1).to(device)
+        self.flat = valid.reshape(-1).nonzero().squeeze(1).to(device)
         ends = [start + length for start, length in zip(starts, lengths)]
         self.cu_seqlens_cpu = torch.tensor([0, *ends], dtype=torch.long)
         self.cu_seqlens = self.cu_seqlens_cpu.to(device)
@@ -390,8 +395,7 @@ class Tree:
 
     def rows(self, packed: Any) -> Any:
         """[suffix tokens, ...] -> [questions, width, ...]."""
-        zero = packed.new_zeros((1, *packed.shape[1:]))
-        return self.torch.cat([packed, zero])[self.index]
+        return packed[self.index]
 
     def packed(self, rows: Any) -> Any:
         """[questions, width, ...] -> [suffix tokens, ...]."""
@@ -469,15 +473,13 @@ def _tree_attention(
     out_own, lse_own = _attend(
         rows(q[:, :, p:]), rows(k[:, :, p:]), rows(v[:, :, p:]), True, scale, torch
     )
-    out_own = tree.packed(out_own.permute(0, 2, 1, 3)).transpose(0, 1)[None]
-    lse_own = tree.packed(lse_own.permute(0, 2, 1)).transpose(0, 1)[None]
-    top = torch.maximum(lse_prefix, lse_own)
-    w_prefix, w_own = (lse_prefix - top).exp(), (lse_own - top).exp()
-    tail = (
-        out_prefix.float() * w_prefix[..., None] + out_own.float() * w_own[..., None]
-    ) / (w_prefix + w_own)[..., None]
-    out = torch.cat([head, tail.to(dtype)], dim=2)
-    return out.transpose(1, 2).contiguous(), None
+    out_own = tree.packed(out_own.transpose(1, 2))
+    lse_own = tree.packed(lse_own.transpose(1, 2))
+    # softmax over [prefix; own] = the two parts weighted by sigmoid of their lse gap
+    weight = torch.sigmoid(lse_prefix[0].transpose(0, 1) - lse_own)[..., None]
+    tail = torch.lerp(out_own.float(), out_prefix[0].transpose(0, 1).float(), weight)
+    out = torch.cat([head[0].transpose(0, 1), tail.to(dtype)], dim=0)
+    return out[None], None
 
 
 def _tree_gated_delta(
@@ -516,8 +518,9 @@ def _tree_gated_delta(
     tail = modeling.causal_conv1d_fn(
         rows.transpose(1, 2), weight, bias, activation=m.activation
     )[:, :, window - 1 :]
-    mixed = torch.cat([head[0], tree.packed(tail.transpose(1, 2)).transpose(0, 1)], 1)
-    mixed = mixed.transpose(0, 1)[None]
+    mixed = torch.cat(
+        [head[0].transpose(0, 1), tree.packed(tail.transpose(1, 2))], dim=0
+    )[None]
     query, key, value = torch.split(mixed, [m.key_dim, m.key_dim, m.value_dim], dim=-1)
     query = query.reshape(1, length, -1, m.head_k_dim)
     key = key.reshape(1, length, -1, m.head_k_dim)
