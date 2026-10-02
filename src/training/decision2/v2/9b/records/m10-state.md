@@ -2,6 +2,23 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 16:15Z (10-03 00:15 UTC+8), M10 continuation (amendment 7; 30 GPU-h)
+
+- **Amendment 7** (`d802c97c4`): every candidate is now gated vs `M10-KIB4-a40-bf16`. The candidates are the arm
+  factory's 9B hand-offs, `Y1` / `Y2` (averages of the best factory point with KIB4-a40 / X5-a33) and the cheap
+  weightings `X7-a40` (KIB4 + KX + KSW at α = 2/5) and `X8-a40` (KIB4 + KSW at α = 2/5).
+- **Ops** (mirror `96c1bd3ff` on nodes A, B and C): `m10/ix.sh kref | gate | gstatus | gfetch` (gate bootstraps vs
+  KIB4-a40, `m10/gate.sh`), `m10/xpts.sh` (averages of points; `link` for arm-factory points); IX1 names
+  (`259b6fc2a`, a separate commit to `v2/eval/ix1/launch.sh`). The continuation release ops are in
+  `v2/release/records/dev2-9b-m10c-2026-10-03/ops/`: they supersede `f3122c7c`, take KIB4-a40's gate and
+  decision, and purge with KIB4-a40's node A package as the node copy.
+- **Built on node B (CPU):** X8-a40 (model `310228cb…`) and X7-a40 (building). KX-a40 was copied A → C → B with
+  equal lists. KIB4-a40's run is on nodes A and B (`kref`, equal lists).
+- **Next:** stage X7 / X8 (BF16 copy, restage), then their Index chain on node B GPU2 / 3 / 4 / 6 / 7 (7 shards,
+  greedy) and their gate bootstraps. The factory's 9B seeds end ≈ 17:45–18:05Z, and its KF soups follow. The KF-a40
+  formal starts on node A GPU7 as soon as KF-a40 exists.
+- **GPU-h (continuation):** 0 so far.
+
 ## 2026-10-02 15:50Z (23:50 UTC+8), M10 continuation worker
 
 - **RELEASED: Lux-9B `main` = `f3122c7c8abd302326c22220aac4095eb1799f37`** (KIB4-a40, user 23:02 UTC+8), superseding
