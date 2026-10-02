@@ -4,6 +4,31 @@ Branch `xunzhuo/decision-2-training-index-sweep`, worktree `vllm-sr-dev2-index-s
 [`dec-index-sweep-prereg-2026-10-02.md`](dec-index-sweep-prereg-2026-10-02.md) (`e6cb71541`, mirrored to nodes
 A / C / D before any job). Index values are private (node runs, local private folder); this file has none.
 
+## 2026-10-02 05:10Z
+
+- **New verdicts** (Index-first gate vs the tier's current release; values private):
+
+  | Candidate | Gate | Run (node, `ix1/runs/…`) | Hand to |
+  | --- | --- | --- | --- |
+  | `IS-L9IB` | **FAIL** (the whole CI is below K-a13IB; confirmed) | D `IS-L9IB` | 7e1c9ce8 |
+  | `IS-2b-RAUP` | PASS; the largest 2B lower bound measured so far (above `IS-2b-RA-a75`'s) | C `IS-2b-RAUP` | b49d1f36 |
+  | `IS-08b-RASD` | PASS vs DEV2.0-0.8B; lower bound below M16 `08b-RA-a75`'s | D `IS-08b-RASD` | b49d1f36 / ce74f1e5 |
+
+  `IS-2b-RASD` (C) and `IS-08b-RAUP` (A) are scored; their bootstraps run on those nodes.
+- **No overlap with M18:** M18 (prereg 04:50Z) owns the RAUP interpolation points (`2b-RAUP-a75/-a50`,
+  `08b-RAUP-a75/-a50`) and runs them on node E GPU0–3 / 6–7 and node A GPU1 / 2 / 7, so this sweep dropped them and
+  does not use node E's GPUs. Node E only did CPU work (BF16 copies of `08b-RAAG`, `08b-RA10SDML`).
+- **Widened queue, all on BF16 release copies** (mirror `789356e4c`; copies node to node, C–F through node A):
+  - node A GPU4–5 (`panel-2`): `IS-K-a13IBX-bf16`, then `IS-L9IBX-bf16` (9B, to 7e1c9ce8);
+  - node A GPU3 (`panel-3`, waves): `IS-08b-RA-a50-bf16`, `IS-08b-RASD-a50-bf16`;
+  - node D GPU4–7 (`panel-4`): `IS-4b-LHA10SDML-bf16` vs `DEV2.0-4B-LH` (to 5e7b8132), `IS-08b-RASDML-bf16`,
+    `IS-08b-RAAG-bf16`, `IS-08b-RA10SDML-bf16`;
+  - node C GPU6–7 (`panel-2`): `IS-2b-RA-a50-bf16`, `IS-2b-RASD-a75-bf16`, `IS-2b-RASDML-bf16`,
+    `IS-2b-RA10SDML-bf16`.
+  - 0.8B / 2B results go to ce74f1e5 after b49d1f36's releases; each is bootstrapped vs the tier's current-release
+    run (and re-based on the new release when it lands).
+- GPU-h so far ≈ 16 (well within 45).
+
 ## 2026-10-02 04:45Z (COORDINATION 11:35 / 12:30 / 12:40: no 2B or 9B release from this sweep)
 
 - **9B verdicts (for the Lux-9B publisher, 7e1c9ce8): no 9B candidate of this sweep qualifies.**
