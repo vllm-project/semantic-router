@@ -10,6 +10,9 @@
 # m6-relay.sh mark has placed V3-SEALED.json). A failed step stops that point (never rerun); scoring is on node A.
 # Every job is a co-tenant (the runner's shared lease; >= 60 GB free VRAM): the GPU's owner entry stays M16's, the
 # wrapper writes gpuN.lock/owner.dec-m16-formal. GPUs: node B GPU3 / GPU4 only (the library's node-B render map).
+# Overrides for a later track's collection on the same path: M16_FORMAL_GPUS (other node-B GPUs, exported to the
+# library as M6_B_GPUS), M16_FORMAL_SELECT (another select directory), M16_FORMAL_TRACK (the co-tenant entry's track);
+# M6_FORCE_T1 passes through (T = 1 staging, no CAL698 fit).
 #
 # mlx-launch / mlx-run (amendment 1): m6-formal.sh <tier> mlx m16-<point> for each point whose v3 report node A has
 # sealed (<run>/V3-SEALED.json, m16-relay.sh formal-mark); a failed mlx-diag collection stops that point.
@@ -43,7 +46,9 @@ if [ "$MODE" = masters ]; then
 fi
 GPU=$3 TIER=$4
 shift 4
-case $GPU in 3 | 4) ;; *) echo "GPU $GPU is not an M16 formal GPU (node B GPU3 / GPU4)" >&2; exit 2 ;; esac
+GPUS=${M16_FORMAL_GPUS:-3 4}
+[[ " $GPUS " == *" $GPU "* ]] || { echo "GPU $GPU is not an M16 formal GPU (node B GPU${GPUS// / / GPU})" >&2; exit 2; }
+[ -n "${M16_FORMAL_GPUS:-}" ] && export M6_B_GPUS=$GPUS
 case $TIER in 2b | 08b | 4b) ;; *) echo "tier must be 2b, 08b or 4b" >&2; exit 2 ;; esac
 TAG=$TIER-b$GPU
 case $MODE in mlx-launch | mlx-run) TAG=mlx-$TAG ;; esac
@@ -56,14 +61,14 @@ if [ "$MODE" = launch ] || [ "$MODE" = mlx-launch ]; then
 fi
 [ "$MODE" = run ] || [ "$MODE" = mlx-run ] || { echo "unknown mode $MODE" >&2; exit 2; }
 log() { echo "$(date -u +%FT%TZ) formal-$TAG $*" | tee -a "$M/OPERATIONS.log"; }
-export M6_FORMAL_ROOT=$F M6_SELECT=$M/select/formal M6_PREFIX=m16 M6_GPU=$GPU
+export M6_FORMAL_ROOT=$F M6_SELECT=${M16_FORMAL_SELECT:-$M/select/formal} M6_PREFIX=m16 M6_GPU=$GPU
 if [ "$TIER" != 4b ]; then
   export M6_SMALL_NODE=B M6_SMALL_MASTER_DIR=$F/masters
   [ -f "$F/masters/cache-frozen-$TIER.sha256" ] || { log "no node-B masters for $TIER (m16-formal.sh masters)"; exit 1; }
 fi
 entry=/data/dev2/leases/gpu$GPU.lock/owner.dec-m16-formal
-printf 'track=dec-m16\nstatus=busy (co-tenant)\npurpose=decoder M16 formal %s %s (runner entries owner.dec-formal)\nstart_utc=%s\nexpected_end_utc=%s\n' \
-  "$TIER" "$*" "$(date -u +%FT%TZ)" "$(date -u -d '+120 min' +%FT%TZ)" > "$entry"
+printf 'track=%s\nstatus=busy (co-tenant)\npurpose=decoder M16 formal %s %s (runner entries owner.dec-formal)\nstart_utc=%s\nexpected_end_utc=%s\n' \
+  "${M16_FORMAL_TRACK:-dec-m16}" "$TIER" "$*" "$(date -u +%FT%TZ)" "$(date -u -d '+120 min' +%FT%TZ)" > "$entry"
 # A finished runner entry (track=dec, last_job_end_utc, no dev2-dec container on the GPU) would refuse the next CAL
 # fit's entry (M10 amendment 3): move it aside, as M8's / M10's wrappers do.
 clear_stale() {

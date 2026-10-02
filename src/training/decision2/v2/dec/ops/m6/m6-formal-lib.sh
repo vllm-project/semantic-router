@@ -121,7 +121,15 @@ tier_setup() {
       fi ;;
     *) echo "tier must be 4b, 2b or 08b" >&2; exit 2 ;;
   esac
-  if [ "$NODE" = B ]; then
+  if [ "$NODE" = B ] && [ -n "${M6_B_GPUS:-}" ]; then
+    # M6_B_GPUS names other node-B decoder GPUs (a coordinator's reservation), resolved as on nodes E / F.
+    local g bdf
+    GPU=${M6_GPU:-}
+    for g in $M6_B_GPUS; do
+      bdf=$(amd-smi list 2>/dev/null | awk -v n="GPU: $g" '$0 ~ "^"n"$" {getline; print tolower($2)}')
+      [ -n "$bdf" ] && RENDER_OF[$g]=$(readlink -f "/dev/dri/by-path/pci-$bdf-render")
+    done
+  elif [ "$NODE" = B ]; then
     GPU=${M6_GPU:-} RENDER_OF=([3]=/dev/dri/renderD153 [4]=/dev/dri/renderD161)
   elif [ "$NODE" = E ] || [ "$NODE" = F ]; then
     local g bdf allowed

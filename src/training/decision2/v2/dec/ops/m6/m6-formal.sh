@@ -23,7 +23,8 @@
 # f83b1d10, HIP_FORCE_DEV_KERNARG=1, copy of formal/m3/m3-S2T-soup-nodeA-triton, package relayed by m6-relay.sh pkg,
 # or staged on node A with M6_2B_STAGE_A=1 when the points live there); M6_PREFIX (default m6) names runs/packages;
 # 08b node A (copy of formal/m2/m2-E8F-soup-nodeA-triton). CAL698 is data-sel700-cal698/cal.jsonl (19cc1a8c...;
-# relay it to node A with m6-relay.sh cal698). No upload anywhere.
+# relay it to node A with m6-relay.sh cal698). No upload anywhere. M6_FORCE_T1=1 stages a point for a T = 1 release:
+# no CAL698 fit and no 23:15 rule (the select entry's readouts may be "-"), calibration decision none.
 set -u
 S=$(cd "$(dirname "$0")/../../../.." && pwd)
 MIRROR=${S%/src/training/decision2}
@@ -73,12 +74,16 @@ EOF
     ) || die "$point is not a finalist ($fj)"
     local art wj fl dev css
     read -r art wj fl dev css <<< "$info"
-    for f in "$art/decision_config.json" "$wj" "$fl" "$dev" "$css"; do [ -f "$f" ] || die "missing $f"; done
+    local need=("$art/decision_config.json" "$wj" "$fl")
+    [ -n "${M6_FORCE_T1:-}" ] || need+=("$dev" "$css")
+    for f in "${need[@]}"; do [ -f "$f" ] || die "missing $f"; done
     (cd "$art" && sha256sum -c --quiet "$fl") > "$F/stage-cal/$NAME.checkpoint-verify.log" 2>&1 \
       || die "$NAME checkpoint differs from its line hash list $fl"
     [ "$(tree_manifest "$art" | sha256sum | cut -d' ' -f1)" = "$(sha "$fl")" ] || die "$NAME checkpoint has extra or missing files"
     local C16=$F/stage-cal/$NAME-cal698-16k DC=$F/stage-cal/$NAME-devcal.json
-    if [ ! -f "$C16/calibration.json" ]; then
+    if [ -n "${M6_FORCE_T1:-}" ]; then
+      :
+    elif [ ! -f "$C16/calibration.json" ]; then
       [ "$(sha "$CAL698_DIR/cal.jsonl")" = "$CAL698_SHA" ] || die "CAL698 $CAL698_DIR/cal.jsonl is not $CAL698_SHA"
       [ ! -e "$C16.launch.json" ] || die "$NAME: earlier 16K calibration failed (receipt $C16.launch.json); not rerun"
       gpu_check "$NAME CAL698 16K fit"
@@ -92,12 +97,16 @@ EOF
       gpu_seconds launch "$C16.launch.json" "$NAME" "CAL698 16K fit"
       [ $rc = 0 ] || die "$NAME 16K calibration FAILED"
     fi
-    devcal "$NAME" "$dev" "$css" "$C16/calibration.json" "$DC" || die "$NAME 23:15 rule check FAILED"
+    [ -n "${M6_FORCE_T1:-}" ] || devcal "$NAME" "$dev" "$css" "$C16/calibration.json" "$DC" \
+      || die "$NAME 23:15 rule check FAILED"
     local D=$PKG/m6/$NAME
-    mkdir -p "$D/cal698-16k"
+    mkdir -p "$D"
     cp -al "$art" "$D/checkpoint" || die "$NAME checkpoint copy FAILED"
-    cp "$C16/calibration.json" "$D/cal698-16k/calibration.json"
-    cp "$DC" "$D/calibration-decision.json"
+    if [ -z "${M6_FORCE_T1:-}" ]; then
+      mkdir -p "$D/cal698-16k"
+      cp "$C16/calibration.json" "$D/cal698-16k/calibration.json"
+      cp "$DC" "$D/calibration-decision.json"
+    fi
     cp "$wj" "$D/weights.json"
     cp "$fl" "$D/checkpoint.files.sha256"
     tree_manifest "$PKG" > "$LIST"
@@ -106,11 +115,16 @@ EOF
       py "$M5OPS/m5-params.py" --package "$D/checkpoint" --stubs "$PARAMS/pkg-headers" --output "$PARAMS/PARAMS.json" \
         > "$PARAMS.log" 2>&1 || die "$NAME parameter count FAILED"
     fi
-    flog "$NAME staged: $(wc -l < "$LIST") files, revision $(sha "$LIST"), CAL698 16K adopt=$(jget "$DC" adopt), parameters $(jget "$PARAMS/PARAMS.json" parameters)"
+    local adopt="not fitted (T = 1)"
+    [ -n "${M6_FORCE_T1:-}" ] || adopt=$(jget "$DC" adopt)
+    flog "$NAME staged: $(wc -l < "$LIST") files, revision $(sha "$LIST"), CAL698 16K adopt=$adopt, parameters $(jget "$PARAMS/PARAMS.json" parameters)"
   fi
   [ -f "$PARAMS/PARAMS.json" ] || die "$NAME: no parameter count $PARAMS/PARAMS.json"
   REV=$(sha "$LIST") MODEL=$PKG/m6/$NAME/checkpoint DECISION=$PKG/m6/$NAME/calibration-decision.json
-  if [ "$(jget "$DECISION" adopt)" = True ]; then
+  if [ -n "${M6_FORCE_T1:-}" ]; then
+    [ ! -e "$DECISION" ] || die "$NAME was staged with a CAL698 decision; not a T = 1 package"
+    SPEC=$SPEC_T1 CAL=none DECISION=none CALX=()
+  elif [ "$(jget "$DECISION" adopt)" = True ]; then
     SPEC=$SPEC_CAL CAL=$PKG/m6/$NAME/cal698-16k/calibration.json CALX=(--extra "calibration=$CAL")
   else
     SPEC=$SPEC_T1 CAL=none CALX=()
