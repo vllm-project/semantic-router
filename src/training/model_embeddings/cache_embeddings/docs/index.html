@@ -498,7 +498,7 @@ base_model = SentenceTransformer("sentence-transformers/all-MiniLM-L12-v2")
 # Apply multi-domain LoRA
 base_model[0].auto_model = PeftModel.from_pretrained(
     base_model[0].auto_model,
-    "llm-semantic-router/multi-domain-cache-lora-L12"
+    "vllm-sr/multi-domain-cache-lora-L12"
 )
 
 # Use for embeddings
@@ -509,16 +509,16 @@ embedding = base_model.encode("What are the symptoms of diabetes?")</code></pre>
                 <div class="card">
                     <div class="card-title">🤗 Models</div>
                     <div class="card-content">
-                        <a href="https://huggingface.co/llm-semantic-router/multi-domain-cache-lora-L12" target="_blank">Multi-Domain LoRA</a><br>
-                        <a href="https://huggingface.co/llm-semantic-router/medical-cache-lora" target="_blank">Medical LoRA</a><br>
-                        <a href="https://huggingface.co/llm-semantic-router/law-cache-lora" target="_blank">Law LoRA</a><br>
-                        <a href="https://huggingface.co/llm-semantic-router/programming-cache-lora" target="_blank">Programming LoRA</a>
+                        <a href="https://huggingface.co/vllm-sr/multi-domain-cache-lora-L12" target="_blank">Multi-Domain LoRA</a><br>
+                        <a href="https://huggingface.co/vllm-sr/medical-cache-lora" target="_blank">Medical LoRA</a><br>
+                        <a href="https://huggingface.co/vllm-sr/law-cache-lora" target="_blank">Law LoRA</a><br>
+                        <a href="https://huggingface.co/vllm-sr/programming-cache-lora" target="_blank">Programming LoRA</a>
                     </div>
                 </div>
                 <div class="card">
                     <div class="card-title">📊 Test Datasets</div>
                     <div class="card-content">
-                        <a href="https://huggingface.co/datasets/llm-semantic-router/cache-embedding-test-sets" target="_blank">
+                        <a href="https://huggingface.co/datasets/vllm-sr/cache-embedding-test-sets" target="_blank">
                             Test Sets Repository
                         </a><br>
                         • Medical: 200 triplets<br>
@@ -554,7 +554,7 @@ embedding = base_model.encode("What are the symptoms of diabetes?")</code></pre>
         <p>Multi-Domain Cache LoRA Training Results</p>
         <p style="margin-top: 0.5rem;">
             <a href="https://github.com/vllm-project/semantic-router" target="_blank">GitHub Repository</a> |
-            <a href="https://huggingface.co/llm-semantic-router" target="_blank">HuggingFace Organization</a>
+            <a href="https://huggingface.co/vllm-sr" target="_blank">HuggingFace Organization</a>
         </p>
     </footer>
 </body>

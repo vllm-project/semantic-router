@@ -1,8 +1,8 @@
 # Omni complete-panel and selected-task figures
 
 These are the original Matplotlib SVGs and complete observation data from the
-[Nano revision `0496b39a`](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/tree/0496b39a51c8199592e58cbff81c250f056bd94b)
-and [Mini revision `f7fafd36`](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/tree/f7fafd36abf49adf88b1b2ec0186c68b008eeb07).
+[Nano revision `0496b39a`](https://huggingface.co/vllm-sr/Vela-1.0-Omni-Nano/tree/0496b39a51c8199592e58cbff81c250f056bd94b)
+and [Mini revision `f7fafd36`](https://huggingface.co/vllm-sr/Vela-1.0-Omni-Mini/tree/f7fafd36abf49adf88b1b2ec0186c68b008eeb07).
 Every input has a pinned URL and SHA-256 in `provenance.json`; no peer observation
 is selected or dropped locally. Shared numeric data agrees across these pins.
 
@@ -50,5 +50,5 @@ rankings but are excluded from size-constrained ranks and scatter plots.
 Training exposure is source-declared, not independently audited; an empty
 training declaration does not prove zero exposure. Peer protocols differ.
 
-See the pinned [methodology](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/0496b39a51c8199592e58cbff81c250f056bd94b/benchmarks/pareto-methodology.md)
+See the pinned [methodology](https://huggingface.co/vllm-sr/Vela-1.0-Omni-Nano/blob/0496b39a51c8199592e58cbff81c250f056bd94b/benchmarks/pareto-methodology.md)
 for evaluation modes, source identities, aggregate definitions and limitations.

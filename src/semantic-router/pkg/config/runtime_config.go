@@ -260,12 +260,12 @@ type MemoryRedisCacheConfig struct {
 }
 
 type MemoryReflectionConfig struct {
-	Enabled          *bool    `yaml:"enabled,omitempty"`
-	Algorithm        string   `yaml:"algorithm,omitempty"`
-	MaxInjectTokens  int      `yaml:"max_inject_tokens,omitempty"`
-	RecencyDecayDays int      `yaml:"recency_decay_days,omitempty"`
-	DedupThreshold   float32  `yaml:"dedup_threshold,omitempty"`
-	BlockPatterns    []string `yaml:"block_patterns,omitempty"`
+	Enabled          *bool    `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	Algorithm        string   `yaml:"algorithm,omitempty" json:"algorithm,omitempty"`
+	MaxInjectTokens  int      `yaml:"max_inject_tokens,omitempty" json:"max_inject_tokens,omitempty"`
+	RecencyDecayDays int      `yaml:"recency_decay_days,omitempty" json:"recency_decay_days,omitempty"`
+	DedupThreshold   float32  `yaml:"dedup_threshold,omitempty" json:"dedup_threshold,omitempty"`
+	BlockPatterns    []string `yaml:"block_patterns,omitempty" json:"block_patterns,omitempty"`
 }
 
 func (c MemoryReflectionConfig) ReflectionEnabled() bool {
