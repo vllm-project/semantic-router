@@ -24,12 +24,16 @@
 #            the co-tenant entry owner.<IX_SHARED> is removed instead
 # IX_SHARED=<name>: launch.sh writes the co-tenant entry owner.<name> (IX1_SHARED_LEASE) and leaves the GPU
 # owner's file alone (node A GPU0 / GPU1: the 0.6B allocation allows recorded release co-tenants).
+# IX_GPUS="g0 g1 ...": run starts shard k on the k-th listed GPU, all at once (one GPU per shard); a GPU also in
+# IX_SHARED_GPUS gets the co-tenant entry owner.<IX_SHARED>, the others an eval-ix1 owner file.
+# IX_FP32=<run>: the FP32 run of the point that boot compares rows with (default M16-<point>; the sweep's
+# IS-2b-RA-a75 for 2b-RA-a75).
 # Usage: [IX_NODE=a|c|d] IX_GPU=N ix.sh MIRROR_SHA NAME STAGE
 #   NAME: M16-08b-RA-a75-bf16 | M16-08b-RASD-a75-bf16 | M16-2b-RASD-a25-bf16 | M16-2b-RA-a75-bf16
 set -euo pipefail
 SHA=${1:?MIRROR_SHA} NAME=${2:?NAME} STAGE=${3:?STAGE}
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "MIRROR_SHA must be a full commit SHA" >&2; exit 2; }
-IX_NODE=${IX_NODE:-c} IX_GPU=${IX_GPU:-} IX_SHARED=${IX_SHARED:-}
+IX_NODE=${IX_NODE:-c} IX_GPU=${IX_GPU:-} IX_SHARED=${IX_SHARED:-} IX_GPUS=${IX_GPUS:-} IX_SHARED_GPUS=${IX_SHARED_GPUS:-}
 [[ -z "$IX_SHARED" || "$IX_SHARED" =~ ^[a-z0-9-]+$ ]] || { echo "IX_SHARED must match [a-z0-9-]+" >&2; exit 2; }
 case "$IX_NODE" in
   a) PANEL=${IX_PANEL:-panel-3} ;; c) PANEL=${IX_PANEL:-panel-7} ;; d) PANEL=${IX_PANEL:-panel-8} ;;
@@ -53,7 +57,7 @@ case "$NAME" in
   M16-2b-RA-a75-bf16) POINT=2b-RA-a75 SIZE=2B REF=DEV2.0-2B REV8=a53cf66a LOADED=1883930944 ;;
   *) echo "bad NAME $NAME" >&2; exit 2 ;;
 esac
-FP32=M16-$POINT
+FP32=${IX_FP32:-M16-$POINT}
 M=/data/dev2/src/$SHA-src_training_decision2
 S=$M/src/training/decision2
 R=/data/dev2/private/eval/index021/ix1
@@ -144,9 +148,25 @@ EOF
       { echo "parity gate has not passed" >&2; exit 3; }
     n=$(onx "ls $R/$PANEL/shard-0-of-*.jsonl.gz | sed 's/.*-of-\([0-9]*\).jsonl.gz/\1/'")
     [[ "$n" =~ ^[0-9]+$ ]] || { echo "no shards in $PANEL" >&2; exit 3; }
-    gpus=$(printf "$IX_GPU %.0s" $(seq "$n"))
+    if [ -n "$IX_GPUS" ]; then
+      read -r -a gl <<< "$IX_GPUS"
+      [ "${#gl[@]}" = "$n" ] || { echo "IX_GPUS needs $n GPUs" >&2; exit 2; }
+      for k in $(seq 0 $((n - 1))); do
+        onx "test ! -e $R/runs/$NAME/shard-$k" || { echo "shard $k started earlier" >&2; exit 3; }
+      done
+      for k in $(seq 0 $((n - 1))); do
+        g=${gl[$k]} sh=""
+        [[ " $IX_SHARED_GPUS " == *" $g "* ]] && sh=$IX_SHARED
+        onx "cd $S && IX1_SHARED_LEASE=$sh bash v2/eval/ix1/launch.sh run --src $M --model $NAME --gpus '$IX_GPUS' --run $R/runs/$NAME \
+          --rows-dir $R/$PANEL --cache $R/parity/$NAME/cache-frozen --only $k"
+        echo "$(date -u +%FT%TZ) $NAME shard $k of $n started on node $IX_NODE GPU$g${sh:+ (co-tenant $sh)}"
+      done
+    fi
+    gpus=${IX_GPUS:-$(printf "$IX_GPU %.0s" $(seq "$n"))}
     for k in $(seq 0 $((n - 1))); do
-      if ! onx "test -f $R/runs/$NAME/shard-$k/end_epoch"; then
+      if [ -n "$IX_GPUS" ]; then
+        until onx "test -f $R/runs/$NAME/shard-$k/end_epoch"; do sleep 45; done
+      elif ! onx "test -f $R/runs/$NAME/shard-$k/end_epoch"; then
         onx "test ! -e $R/runs/$NAME/shard-$k" || { echo "shard $k started earlier and has not ended" >&2; exit 3; }
         onx "cd $S && IX1_SHARED_LEASE=$IX_SHARED bash v2/eval/ix1/launch.sh run --src $M --model $NAME --gpus '$gpus' --run $R/runs/$NAME \
           --rows-dir $R/$PANEL --cache $R/parity/$NAME/cache-frozen --only $k"
