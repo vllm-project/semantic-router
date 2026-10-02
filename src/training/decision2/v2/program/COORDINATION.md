@@ -205,6 +205,34 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 06:00 — **Nox-4B `c60d3b5c` = `4b-LHS17IB4-lrh`, Index 43.30: #1 in the 3–6B class** (above JPT-4B
+  43.04). The 4B goal is reached. **Vega `9b067a95`**, the phase A runtime with the opt-in shared-context switch, is
+  up too (runtime only, weights unchanged).
+  - **4B owner:** finish the post-checks and the purge. Then **widen the margin**: the wave-7 low-LR soups
+    (`4b-LRHxXALL-m50`, `4b-SDMLIB4-lrh`, `4b-LRHxALL`, `4b-LHS17IB4-lrq`), gated against `c60d3b5c`.
+  - **The half-LR lever is confirmed.** 9B KIB4H and the 27B M9 half-LR seeds are the top priority on their tracks.
+
+- 2026-10-03 06:05 — **Nox-4B RELEASED: `vllm-sr/Decision-2.0-Nox-4B@c60d3b5c` = `4b-LHS17IB4-lrh`, Index 43.30
+  (#1 of the 4B class; JPT-4B 43.04, Jet v6.2 42.60).** 4B owner ff70d16e.
+  - **Gate:** IF1 vs `d55528d1` is +0.81 [+0.33, +1.27] (2,000 replicates); R3 types OK; IF3 audit6, 0 item rows;
+    parity 86 / 86.
+  - **Post-checks:** download re-hash, Hub smoke on 5.17 / 5.18, 86 / 86 on the download, card HTTP, links 8 / 8,
+    collection order and gate evaluate all pass. `post_checks=ok` 21:58Z.
+  - **Purge:** the `d55528d1` weights (9.70 GB), `rewrite_history=False`, the node copy re-hashed.
+  - **Card:** every other tier at its current main (Lux `f3122c7c`, Vega `5c85c127`). The opt-in shared-context
+    switch ships (default off; default path byte-identical).
+  - **Disclosed references:** post-key v3 below the old weights; mlx-diag and public 231 above.
+  - **Shared-module fix** (`9f2c7db62`, with a test): `hub_card_http_check` now follows the visibility policy, since
+    it still required private repos after `47dd06be7`. **Other publishers of public repos: merge it before your
+    next release.**
+  - **Nox-4B is free** for the phase A / shared-ctx runtime worker after this note. The 4B owner's next successor
+    is gated against `AF-4b-LHS17IB4-lrh-bf16`'s run.
+
+- 2026-10-03 05:55 — **ARM FACTORY:** batch-3 `KIB4R2` s1 / s2 DONE (05:28 / 05:30); node B built `soup/KIB4R2-a40`
+  (`[s1, s2, Lux × 3]`, model `c778fe65…`) and the arm soup `KIB4R2` (`b484ef18…`) under `/data/dev2/runs/af/9b` →
+  **9B publisher**. Node B GPU4 / 6 are released for 27B #6 (05:38). The factory claims no new GPU; next idle GPUs go
+  to 27B. Its remaining seeds end ≈ 06:10–08:20 on node C GPU1–7, node A GPU5–7 and node B GPU2 / 3.
+
 - 2026-10-03 05:38 — **Approvals.**
   - **9B publisher:** budget request approved, **+30 GPU-h** (60 for the continuation). That covers the KIB4H release if
     it passes and further half-LR points (the factory's KIB4-lrh, a four-seed half-LR soup).
