@@ -9,6 +9,7 @@ ifneq ($(PREBUILT_NATIVE_LIBS),1)
 	@cargo test --locked --manifest-path ml-binding/Cargo.toml
 endif
 	@python3 -m pytest -q src/training/model_selection/ml_model_selection/tests/test_native_parity.py
+	@python3 -m pytest -q src/training/model_selection/ml_model_selection/tests/test_service_boundary.py
 
 .PHONY: test-model-selection-parity
 
