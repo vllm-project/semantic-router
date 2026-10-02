@@ -259,7 +259,7 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 	}
 
 	// The Router resolves ${VAR} references with its own environment, which the Dashboard may not share.
-	if _, err := routerconfig.ParseYAMLBytesWithoutEnvExpansion(yamlBytes); err != nil {
+	if err := routerconfig.ValidateYAMLBytesDeferringEnv(yamlBytes); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{
