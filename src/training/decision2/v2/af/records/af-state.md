@@ -2,6 +2,45 @@
 
 Index values stay private (node private stores and `decision2-program/private/arm-factory/`); this file has none.
 
+## 2026-10-02 18:20Z (02:20 UTC+8) — HAND-OFF of batches 1–2; new split (COORDINATION 01:47–02:00)
+
+The 4B owner (ff70d16e) builds every 4B soup and runs every 4B Index; the 9B publisher (9087b208) measures the
+factory's 9B arms and soups (M10 amendment 8). The factory only trains arms from now on. Factory scripts that would
+start soups or Index runs were stopped (node F `next-f-2.sh` / `next-f-3.sh`, node A `af-measure.sh`); node F's
+`soups-all.sh` (owner-requested) finished `4b-LHS17UP-x4`, `4b-AFxALL`, `4b-AFxALL2`.
+
+### 9B → 9B publisher (node A, `/data/dev2/runs/af/9b`; Lux member = `9b-KIB4-s4` zero-step, = K-a13IB's)
+
+| Item | Model SHA-256 | Members (BEST checkpoints) |
+| --- | --- | --- |
+| seeds | — | `KIB4` s4 (seed 3) `checkpoint-0002082`, s5 (4) `-0001568`; `KIB4W2` s1 (5) `-0002078`, s2 (6) `-0001824`; `KIB4L2` s1 (7) `-0002081`, s2 (8) `-0001826` (`arms/full/9b-<arm>-s<n>/`) |
+| `KF` | `2c1aae96…` | M10 `KIB4P` × 3 (`159bfda1…`, imported), the six factory seeds |
+| `KF-a40` / `KF-a50` | `f555d2f7…` / `2a1c8624…` | `[KF, KF, Lux × 3]` / `[KF, Lux]` |
+| `KFK`, `KFxKIB-a40` | `0d1dd279…`, `900d4045…` | `[KF, KF, KIB]` (KIB `794ebfd2…`, imported); `[KFK, KFK, Lux × 3]` |
+| `KIB4W2-a40` / `KIB4L2-a40` | `9f467afe…` / `1cacc2c4…` | the arm's two seeds + Lux × 3 |
+| `KIB4Q` | `da595d06…` | M10 `KIB4P` × 3, KIB4 s4, s5 (five-seed KIB4) |
+
+- **Measured by the factory:** only `AF-KF-a40-bf16` (BF16 package `ix1/af/AF-KF-a40-bf16-re51f9881`; node A, panel-7,
+  parity PASS; scoring and the bootstraps vs `M10-KIB4-a40-bf16` follow its last shard). Every other 9B point is
+  unmeasured and staged only as FP32 soups.
+- **Batch-2 9B seeds still training on node B:** `KIB4W3` s1 / s2 (GPU2 / 3), `KIB4R` s1 / s2 (GPU4 / 6); end ≈ 19:40Z.
+
+### 4B → 4B owner (soups on node F `/data/dev2/runs/af/4b/soup`, seed soups also on node C)
+
+| Soup | Model SHA-256 | Members |
+| --- | --- | --- |
+| `4b-LHS17IB4-s45` / `4b-SDMLIB4-s45` / `4b-LHS17UP-s34` | `ce5c1401…` / `16b34cfb…` / `6fa1e8da…` | the factory's two seeds of each |
+| `4b-LHS17IB4-x5` / `4b-SDMLIB4-x5` / `4b-LHS17UP-x4` | `54c5d80e…` / `61a925d7…` / `4422a353…` | M17's x3 (× 3) or two-seed soup (× 2) + the factory's two-seed soup (× 2) |
+| `4b-LHS17IB4-lrh` / `4b-LHS17IB4ML` / `4b-LHS23IB4` | `0b40be94…` / `9cb18a6a…` / `2d0a50bd…` | the arm's two seeds |
+| `4b-AFxALL` / `4b-AFxALL2` | `8f282287…` / `70612d1c…` | amendment 2 (12 / 10 members) |
+
+- Batch-2 4B seeds DONE on node C: `4b-LHS17IB4X` s3 / s4, `4b-LHS17ML` s3 / s4 (the owner builds their `-s34` soups).
+- `4b-SDMLIB4-lrh` s1 / s2 were lost at the node F return (00:35 UTC+8, markers FAILED there, not a preflight
+  failure); re-run on node C GPU7 / GPU6 since 18:08Z (same seeds). A first GPU5 launch overlapped the owner's merge
+  job for ≈ 1 min; it was stopped at its zero-step and its outputs moved to `arms/void/gpu5-overlap-*`.
+- `AF-4b-LHS17IB4ML-bf16` (node F; 6 of 8 shards ended before the return) and `AF-4b-LHS23IB4-bf16` (never started):
+  the owner's.
+
 ## 2026-10-02 16:20Z (00:20 UTC+8) — batch 2 launched (amendment 4; +30 GPU-h, 90 total)
 
 | Node / GPU | Batch-2 seed | Since |
