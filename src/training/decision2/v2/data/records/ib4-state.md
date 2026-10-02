@@ -14,3 +14,6 @@
   (HellaSwag-like gap). Other phase-2 gaps stay uncovered (reasons in amendment 3).
 - 13:35 +08 — phase-2 run a3 (`3578ff58`) passed every audit, but the author spot-check estimated 10-15% wrong labels
   in the generic dimensions; amendment 4 narrows `atom` to intent / precondition with a fixed 2-of-40 publication bar.
+- 13:50 +08 — phase-2 run a4 (`6f1daa11`) passed every audit but failed the preregistered spot-check bar (5 of 40
+  clearly wrong; bar <= 2): **phase 2 publishes nothing** (`ib4-p2-results-2026-10-02.md`). IB4 ends with phase 1
+  (`m6/ib4/p1` @ `76cea510`, release-safe pending the custodian's C1 recheck `r3-ib4p1`). No node job running.
