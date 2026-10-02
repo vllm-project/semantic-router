@@ -27,12 +27,15 @@ Reference runs: 0.8B `DEV2.0-0.8B`, 2B `DEV2.0-2B`, 4B `DEV2.0-4B-LH`, 9B `K-a13
 | `IS-K-a12IB` | FP32 soup, restaged | FAIL | A | 7e1c9ce8 |
 | `IS-L9IB` | FP32 soup, restaged | FAIL (whole CI below) | D | 7e1c9ce8 |
 | `IS-K-a13IBX-bf16` | BF16 release copy | FAIL (whole CI below) | A | 7e1c9ce8 |
-| `IS-4b-LHA10SDML-bf16` | BF16 release copy | PASS vs LH; point above the new Nox run (`LHS17SD`); paired test vs it on node D | D | 5e7b8132 |
+| `IS-4b-LHA10SDML-bf16` | BF16 release copy | PASS vs LH; **not significant vs the new Nox release (`LHS17SD`)** | D | 5e7b8132 |
+| `IS-2b-RASD-a75-bf16` | BF16 release copy | PASS; lower bound marginally above `M16-2b-RASD-bf16`'s; paired test vs it on node C | C | b49d1f36 |
+| `IS-08b-RA10SDML-bf16` | BF16 release copy | PASS; below M16 `08b-RA-a75` | A | ce74f1e5 |
+| `IS-08b-RASDML-bf16` | BF16 release copy | FAIL (significantly below) | D | — |
+| `IS-08b-RAAG-bf16` | BF16 release copy | FAIL | D | — |
 | `IS-08b-RA-a50-bf16` | BF16 release copy | PASS; below M16 `08b-RA-a75` | A | ce74f1e5 |
 | `IS-2b-RA-a50-bf16` | BF16 release copy | PASS; below `IS-2b-RASD` | C | ce74f1e5 |
 
-Pending (BF16 release copies, running unattended; see the state file's 06:55Z handoff): `IS-L9IBX-bf16`,
-`IS-08b-RASDML-bf16`, `IS-08b-RAAG-bf16`, `IS-08b-RA10SDML-bf16`, `IS-08b-RASD-a50-bf16`, `IS-2b-RASD-a75-bf16`,
+Pending (BF16 release copies, running unattended; see the state file): `IS-L9IBX-bf16`, `IS-08b-RASD-a50-bf16`,
 `IS-2b-RASDML-bf16`, `IS-2b-RA10SDML-bf16`. M18 owns the RAUP interpolation points, so they are not in this sweep.
 
 ## Integrity

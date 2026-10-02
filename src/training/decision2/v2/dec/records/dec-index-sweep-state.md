@@ -4,6 +4,23 @@ Branch `xunzhuo/decision-2-training-index-sweep`, worktree `vllm-sr-dev2-index-s
 [`dec-index-sweep-prereg-2026-10-02.md`](dec-index-sweep-prereg-2026-10-02.md) (`e6cb71541`, mirrored to nodes
 A / C / D before any job). Index values are private (node runs, local private folder); this file has none.
 
+## 2026-10-02 07:35Z
+
+- **4B (for 5e7b8132): `4b-LHA10SDML` does not qualify over the new Nox release.** The paired test vs
+  `DEV2.0-4B-LHS17SD-bf16` (node D `ix1/index-sweep/cross/IS-4b-LHA10SDML-bf16-vs-LHS17SD-bf16-*.json`): the 95% CI
+  includes 0. No 4B action.
+- **2B (for b49d1f36):**
+  - `IS-2b-RASD` vs `IS-2b-RAUP` (FP32 runs, node C `ix1/index-sweep/cross/IS-2b-RASD-vs-IS-2b-RAUP-*.json`): CI
+    includes 0, so the two are statistically tied; RASD keeps the larger lower bound vs DEV2.0-2B.
+  - `IS-2b-RASD-a75-bf16` PASS vs DEV2.0-2B; its lower bound is marginally above `M16-2b-RASD-bf16`'s (the point
+    estimates are nearly equal). It has no formal typed panel, so it is not ready now. Under the 11:35 directive
+    RASD's release should not wait for it. A paired test of RASD-a75 vs `M16-2b-RASD-bf16` (the base it would have to
+    beat after RASD ships) runs on node C: `ix1/index-sweep/cross/IS-2b-RASD-a75-bf16-vs-M16-2b-RASD-bf16-*.json`.
+- **0.8B (for ce74f1e5 after b49d1f36):** `IS-08b-RA10SDML-bf16` PASS vs DEV2.0-0.8B, below M16 `08b-RA-a75`;
+  `IS-08b-RASDML-bf16` **FAIL** (significantly below); `IS-08b-RAAG-bf16` **FAIL** (CI includes 0).
+- Still running: `IS-L9IBX-bf16` (A, scoring soon), `IS-08b-RASD-a50-bf16` (A, scored, bootstraps), `IS-2b-RASDML-bf16`
+  (C, bootstraps), `IS-2b-RA10SDML-bf16` (C GPU6–7, ≈ 08:00Z).
+
 ## 2026-10-02 06:55Z — handoff (session ≈ 5 h); everything left runs unattended on the nodes
 
 - **New verdicts** (BF16 release copies; values private):
