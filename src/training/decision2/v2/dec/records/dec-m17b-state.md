@@ -5,6 +5,24 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17`. M
 (public since 2026-10-03 01:17 UTC+8). Index values stay private (node private stores and
 `decision2-program/private/m17b/`); this file has none. Times UTC.
 
+## 2026-10-02 20:05Z — wave 6a: no successor; wave 6b on node C
+
+- **Not successors** (full-panel paired bootstrap vs `DEV2.0-4B-SDMLxALL-bf16`, 2,000 replicates; values private):
+  `AF-4b-AFxALL3-bf16` (95% CI entirely below 0) and `AF-4b-AFxALL2-bf16` (point below 0, lower bound below 0).
+  Both lose most on RAGTruth, then GPQA Diamond, When2Call and MuSR; RAGTruth follows `4b-LHS17UP`'s share of a soup.
+- **Amendment 1** (`0e444cb1a`, written before any further result): `4b-XALLx` (`7ae47bc2…`, the release's seven
+  arms at their most seeds) and `4b-XALLU2` (`58fa0585…`, UP listed twice); `4b-AFxALL4` dropped. Both on node C
+  GPU1–4 (leased 19:30Z, idle since 19:07Z), parity PASS 19:44Z. Their formal runs are collected and scored (node F
+  co-tenant, node A); mlx-diag collecting.
+- `AF-4b-AFxALL-bf16` (node F GPU6–7) and the information points `AF-4b-LHS23IB4-bf16` (scored) and
+  `AF-4b-LHS17IB4-lrh-bf16` (node A GPU5–7) follow the prereg.
+- Merged `9d90afd10` (shared-context switch, COORDINATION 02:23): the wave-6 spec's `runtime_source` is this
+  branch's mirror `b50e8650b` (phase A plus the opt-in switch); 40 release tests pass on node A (vendor source,
+  shared ctx, bf16 copy, hub upload / collect).
+- Fixes: `af-stage.sh` now finds an IX1 entry that is the first name of its list (`b3a917279`); the launcher's
+  `AF-4b-XALLx` / `AF-4b-XALLU2` entries sit on the factory's 4B line (`247440f37`).
+- GPU-h so far ≈ 14 (Index ≈ 11.5, formal and readouts ≈ 1.5, parity and merges ≈ 1).
+
 ## 2026-10-02 19:05Z — wave 6a on the Index (two lanes); release inputs staged
 
 - **Soups built** (uniform FP32, `af-soup.sh` from this branch's mirror; node C merges on GPU5, SELECT agreement
