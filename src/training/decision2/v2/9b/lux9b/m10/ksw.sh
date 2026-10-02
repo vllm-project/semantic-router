@@ -5,11 +5,10 @@
 #        SHA-256 must be K-a13IB's
 #   ksw.sh data <mirror-dir>                        (CPU) m9_data.py --cut-language en: IB1-r3 minus `sentfin` + IB2 at
 #        K-a13's 60,183,732 native tokens (K-a13IB's cut seed); x60-kept.jsonl = the kept x60 rows (TRAIN order)
-#   ksw.sh teach launch|run <mirror-dir>            (GPU) after the phase-1 chains of GPU2 / 4 / 6 / 7 release their
-#        flocks: K-a13IB's T = 1 targets on x60-kept.jsonl (v2.dec.teacher_label --teacher-kind dec --uncalibrated,
-#        source Lux 1.0; a 1/1000 pre-warm shard, then four shards), joined in TRAIN order into teacher-sd.jsonl
+#   ksw.sh teach launch|run <mirror-dir>            (GPU) after the phase-1 chains of GPU2 / 4 release their flocks: K-a13IB's T = 1 targets on x60-kept.jsonl (v2.dec.teacher_label --teacher-kind dec --uncalibrated,
+#        source Lux 1.0; a 1/1000 pre-warm shard, then two shards), joined in TRAIN order into teacher-sd.jsonl
 #        (every kept x60 id once, input hashes equal); KSW enters data/READY-m10.json; then the phase-2 chains
-#        (chains.sh, M10_PHASE=2) start on GPU2 / 4 / 6 and GPU7's lease goes idle.
+#        (chains.sh, M10_PHASE=2) start on GPU2 / 4 / 6 (GPU6's after its phase-1 chain).
 # A failed step writes ksw/FAILED and is never rerun.
 set -euo pipefail
 MODE=$1
@@ -21,7 +20,7 @@ KA13IB=4701ba41c70636b5e215cf1f296bc920a9ee39960d4d28a2338e20b2b81e0d91
 LUXSUMS=$M/inputs/lux-zero-m9-KIB-s1.sha256
 LUXHOST=$M/arms/pre/m10-KUP-s1-zero/checkpoint-0000000
 LUXCK=/runs/m10/arms/pre/m10-KUP-s1-zero/checkpoint-0000000
-GPUS=(2 4 6 7)
+GPUS=(2 4)
 mkdir -p "$K" "$M/logs"
 log() { echo "$(date -u +%FT%TZ) ksw $*" | tee -a "$M/OPERATIONS.log"; }
 fail() { echo "$*" > "$K/FAILED"; log "FAILED: $*"; exit 1; }
@@ -159,8 +158,7 @@ os.replace(lock_path + ".tmp", lock_path)
 print(json.dumps(lock["arms"]["KSW"]))
 EOF
     log "KSW locked"
-    lease 7 idle "KSW labeling finished; GPU idle" 30
-    for fd in 20 21 22 23; do eval "exec $fd>&-"; done
+    for fd in 20 21; do eval "exec $fd>&-"; done
     for g in 2 4 6; do M10_NODE=b M10_PHASE=2 bash "$OPS/chains.sh" launch "$SRC" "$g"; done
     log "phase-2 chains launched"
     ;;
