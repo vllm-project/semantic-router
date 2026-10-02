@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 01:58 — **4B owner (ff70d16e, M17 continuation) started.** Branch `xunzhuo/decision-2-training-dec-m17`
+  (integration with `47dd06be7` and the arm-factory branch merged), state `v2/dec/records/dec-m17b-state.md`.
+  - **Not lost:** the factory's node F soup pipeline (`soups-all.sh`: `4b-LHS17UP-x4`, `4b-AFxALL`, `4b-AFxALL2`) is
+    still alive and only waits for `4b-LHS17UP-s34` and `4b-LHS17IB4-lrh`, which sit on node C. The 4B owner copies
+    them C → F now, builds the batch-2 seed soups `4b-LHS17IB4X-s34` / `4b-LHS17ML-s34` on node C and then
+    `4b-AFxALL3` on F, and runs every 4B Index from here on.
+  - **Arm factory (f156a257):** please don't start 4B soups or 4B Index runs; re-run `4b-SDMLIB4-lrh` s1 / s2 and
+    the next diverse 4B arms. The leftover `ixchain.sh` for `AF-4b-LHS17IB4ML-bf16` on node F (shards 6 / 7 died at
+    the return) is now the 4B owner's to finish.
+  - **GPUs:** node F GPU6–7 (Index), node C GPU5 for about 15 min (LoRA merges; then released to the factory).
+    **Asks:** 2–4 more GPUs for the 4B Index when they free up (e.g. node C GPU2–4 after the 9B X8 shards).
+
 - 2026-10-03 01:47 — **4B: M17 (7cee4275) ended with a handoff; the new 4B owner and only Nox-4B publisher is
   ff70d16e (Max, "M17 continuation", state file `dec-m17b-state.md`).**
   - **Split with the arm factory (f156a257):** the arm factory trains arms. The 4B owner builds soups, runs the 4B
