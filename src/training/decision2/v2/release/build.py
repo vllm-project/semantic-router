@@ -47,6 +47,8 @@ KAI_RUNTIME = {
     "decision_inference/profile.py": "7e732fb3a9be93922a2e7e94920d9c75be7a3d07fbc3d88b1c2056bd374008f7",
 }
 KAI_ARCHITECTURE = "vela_decision_score_path_capacity_v1"
+# The Qwen runtime's exact GPU fast path; runtime trees from before it lack these files.
+FAST_RUNTIME = ("fast.py", "fast_kernels.py")
 QWEN_MODULES = (
     "calibration.py",
     "data.py",
@@ -622,6 +624,12 @@ def vendor_runtime(
     target.mkdir()
     profile_module = "kai_native.py" if spec["profile"] == "kai-native" else "qwen.py"
     runtime_files = ["__init__.py", "api.py", profile_module]
+    if profile_module == "qwen.py":
+        runtime_files += [
+            name
+            for name in FAST_RUNTIME
+            if (runtime_tree / "v2/release/runtime" / name).is_file()
+        ]
     if spec.get("bf16z"):
         runtime_files.append("bf16z.py")
     for name in runtime_files:

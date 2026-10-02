@@ -1,0 +1,129 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "final",
+  "decision": "release",
+  "model_name": "Decision-2.0-Nox-4B",
+  "repo_id": "vllm-sr/Decision-2.0-Nox-4B",
+  "name_basis": null,
+  "name_base_model": null,
+  "identity": {
+    "model_sha256": "991a8fb855f23317f33fc77179867b1c57d62a5d4a760309f4c110d284614a68"
+  },
+  "report_sha256": "0947c15d9a94b8c83ecb7c45376f44f9000f69629dce2d0429f29fb06ad3b047",
+  "paired_sha256": "8d3d15583a691f5f42914389d6118162701f5c53aa8a6b79a1863981a7e7bbe3",
+  "gate_profile": "successor",
+  "rule": "index-first",
+  "current_revision": "b285e7a17791a06058817680592484868dde9545",
+  "evidence_sha256": {
+    "current_decision": "18d60dac94fe64ca06042d4dfc1d5dbda881fd5e4fbb699085db09e57a9ece63",
+    "current_gate": "54a8c2aba52aee4d6b035e57c22ed0c7c025a75d469a73c0036952710ea5d70c",
+    "index_first_audit": "b0f4fc5e4230607940cfe265e81fcf7d9454490c57dd5f2e8aabc2532b8885d3",
+    "index_first_base_receipt": "c2c72651baaae063b7634fbfb1f89016933a0dadf9822a86391b72935f7da836",
+    "index_first_bootstrap": "f296935f83d6304ad79fe8eb29091d2127d46a6ba23d2c413d139f01885ab4df",
+    "index_first_receipt": "72d6a7101c853243bf137035f87a928b89c174b61dc62379244e26daca901ea3",
+    "index_first_user_override": "9d196ffa2e75aa43d31538455ff370c8653bfc2ba36cd557715609cf56541d38",
+    "mlx_paired": "011363da3f704602b8d02156e6dd696337b926062d92978d7b2ae8050aa12f83",
+    "paired": "4a7c0c1844b187d9a866aab72a4f9257a97cdb639edfcd56aa6a25ceffc330f5",
+    "public231": "65d97858f1e1ff0ecb0e9e4fe48a4aeb9494b3d8f0fa5337ef4b1cda5be138d8",
+    "tier_paired": "5edaecb1ef3bc91328ae09167051183e9c51c38d4051ae97b20e3ffca841cf4e",
+    "types": "6590c39af724c2f61c771773631b92936bbcc1ef9010e382655be85b6d7fd150"
+  },
+  "calibration": "none (temperature 1; every Decision 2.0 model keeps T = 1): the formal run kept T = 1 under the 23:15 rule; no calibration file is shipped",
+  "action": "Runtime-only revision of the private repository vllm-sr/Decision-2.0-Nox-4B: the package runtime decision2/*.py comes from the phase A runtime commit 54303117b, which on a ROCm GPU under Transformers 5.17 replays the backbone of each exact padded shape as a HIP graph, casts shared Linear inputs to BF16 once and (on gfx942) runs fused Triton element-wise kernels that round exactly as the ops they replace. Weights, tokenizer, configs, the vendored training/model sources, calibration, any Score offsets, the banner and the charts are byte-identical to the released revision 36596d27503796f94c41e66999ba71bb3fa5c8e4; README.md states the new median latency and MODEL_MANIFEST.json the new runtime hashes and one runtime sentence. The collection is not changed; everything stays private.",
+  "rationale": "The release judgement of the superseded final decision b98c4983… stands unchanged: the same identity 991a8fb8, scored report, paired comparison, calibration and licence decision. Only the package runtime changes, and it computes the same values bit for bit: every prompt of the four scored panels (typed-final 1,600, css15 6,547, public231 231, mlx-diag 2,275) answered through the released package and through this package on the released weights gave 0 answer changes and 0.0 drift; 400 single requests: p50 27.26 -> 12.94 ms, p95 28.36 -> 14.58 ms, all bit-identical. release.sh checks the native examples, the card's Transformers example before upload, after the real download and from the Hub in fresh environments under Transformers 5.17 and 5.18, the card structure and every card link.",
+  "approved_package": {
+    "identity": "991a8fb855f23317f33fc77179867b1c57d62a5d4a760309f4c110d284614a68",
+    "fp32_identity": "1b51567523426b896ae50afeefca4f133c2e3c220c349ebfb9b9c630600dd19d",
+    "loaded_parameters": 4208383488,
+    "profile": "qwen-full (BF16 storage of the Linear projections)",
+    "temperature": 1,
+    "max_input_tokens": 16384,
+    "revision_binding": "receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified."
+  },
+  "licence_decision": "apache-2.0: own LoRA (merged), head, runtime and card; base Qwen/Qwen3.5-4B-Base @1001bb4d Apache-2.0 (LICENSE = Apache License 2.0, Copyright 2026 Alibaba Cloud); tokenizer files of Decision 1.0 Nox-4B @cde2a68d (Qwen3.5-4B vocabulary, Apache-2.0); the IB1-r3 / IB2 training rows are licence-clean (release-safe data records) and the multilingual copies are released training rows; the package keeps the Apache-2.0 LICENSE (product card: no NOTICE, attributions or evaluation/ files).",
+  "supersedes": {
+    "final_sha256": "b98c4983a12c8644366af8a75ca6406fc8fdbaceaecdc9a3fbbb15079764e0fd",
+    "released_as": "vllm-sr/Decision-2.0-Nox-4B@36596d27503796f94c41e66999ba71bb3fa5c8e4",
+    "released_manifest_sha256": "b51ed83d384290970bc4895464fe330a92fad84daff61b197c6026656ef31286",
+    "released_gate_sha256": "b99e0412239f12fff85a21dc985b4b0b2db715ac39dbda60173ac2fd9cae31fa",
+    "card_revision": {
+      "kind": "card-org",
+      "spec": "v2/release/specs/dev2-4b-org.json",
+      "spec_sha256": "d126603dde2a13f32e7a7c221f53c9fac0e9e167093c5d2f8c9220e95eec9814"
+    },
+    "earlier": {
+      "final_sha256": "f315621f66b71e247f92cf0ed0dcdf0b97efee03195fd3e59473e81c87c18e56",
+      "released_as": "llm-semantic-router/Decision-2.0-Nox-4B@9f2ddafc57f60c62239c0ca47c54c5cd3ec4aff9",
+      "released_manifest_sha256": "09d235750a9232b3e065a86148d3f5752ff08fbf3030988b737cf7b8f312e398",
+      "released_gate_sha256": "bd4837c9f9d69d647d683343a0d0624c50ab85ace6efd65001ca5ac324370041",
+      "earlier": {
+        "revision": "b285e7a17791a06058817680592484868dde9545",
+        "final_sha256": "18d60dac94fe64ca06042d4dfc1d5dbda881fd5e4fbb699085db09e57a9ece63",
+        "gate_sha256": "54a8c2aba52aee4d6b035e57c22ed0c7c025a75d469a73c0036952710ea5d70c",
+        "manifest_sha256": "35eba1817fc7f45183deba0cad0b12c0cad84177dd4937e4a6fd5c83019b0469",
+        "weights_identity": "74ec8b2f838df1b8c26e94f83845f389e963da3a4a0576111a71cf8a617297d7"
+      }
+    }
+  },
+  "disclosures": [
+    "released by user decision over the Index-first significance rule: the private Index delta vs the current revision is not significant (equal within noise); the transfer-only Index delta (without the IB-matched benchmarks) is significantly positive (private values)",
+    "the training rows include the IB1-r3 / IB2 families matched to Index benchmark families (HoVer, When2Call, iSarcasmEval, GSM8K) and the BPoMP format",
+    "Index contamination audit of the training rows (fef6b036, 77099 lines): 0 item rows and 114 familiar-text rows",
+    "card.speed is the current revision's bench receipt (same architecture, runtime and shapes)"
+  ],
+  "prepared_by": "Decision 2.0 runtime phase A worker 2d541b40 (track=runtime-a, worktree vllm-sr-dev2-runtime-a)",
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's approval of speed-up phase A (2026-10-02 18:00 UTC+8, COORDINATION 18:00): runtime-only revisions of the six Decision 2.0 repositories with the exact GPU fast path, each only with 0 answer changes and 0.0 drift on all four scored panels against the released runtime",
+  "decided_utc": "2026-10-02T10:00:00Z",
+  "previous_rationale": "The release judgement of the superseded final decision f315621f… stands unchanged: the same identity 991a8fb8, scored report, paired comparison, calibration and licence decision. Only the organization in the card and the manifest changes; release.sh checks the native examples, the card's Transformers example before upload, after the real download and from the Hub in fresh environments under Transformers 5.17 and 5.18, the card structure and every card link.",
+  "runtime_revision": {
+    "kind": "fast-path-runtime",
+    "runtime_commit": "54303117be355595ddf5bb184905be6c6d2ecae9",
+    "spec": "v2/release/specs/dev2-4b-ra.json",
+    "spec_sha256": "50925d7eb626ca8e0949ddb667e15d8e67bc400472e38210426e5346b5f61318",
+    "parity": {
+      "compare": "v2/release/records/dev2-runtime-a-2026-10-02/4b/parity/answers-compare.json",
+      "sha256": "bc0dd18dab94e03d115610edf605ebb1e2b443f57a9a049305a1aab0c2f0a1ab",
+      "panels": {
+        "css15": [
+          6547,
+          6547,
+          0
+        ],
+        "mlx-diag": [
+          2275,
+          2275,
+          0
+        ],
+        "public231": [
+          231,
+          231,
+          0
+        ],
+        "typed-final": [
+          1600,
+          1600,
+          0
+        ]
+      },
+      "max_abs_drift": 0.0
+    },
+    "bench": {
+      "compare": "v2/release/records/dev2-runtime-a-2026-10-02/4b/bench/compare.json",
+      "sha256": "1ded80079810d4e719d833d364dd1d118531d103f96da179439dfcd5ef7318b4",
+      "items": 400,
+      "bit_identical_items": 400,
+      "p50_ms": [
+        27.255849912762642,
+        12.939297128468752
+      ],
+      "p95_ms": [
+        28.356696013361216,
+        14.58210009150207
+      ],
+      "request_peak_gib": [
+        9.253693103790283,
+        9.740035057067871
+      ]
+    }
+  }
+}

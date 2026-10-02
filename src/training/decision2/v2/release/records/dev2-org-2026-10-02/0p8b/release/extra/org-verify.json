@@ -1,0 +1,25 @@
+{
+  "changed_files": [
+    "MODEL_MANIFEST.json",
+    "README.md"
+  ],
+  "checks": {
+    "former_id_redirects": true,
+    "main_is_the_revision": true,
+    "no_former_org_text": true,
+    "only_card_and_manifest_changed": true,
+    "private": true
+  },
+  "files": [
+    31,
+    31
+  ],
+  "former_org_occurrences": {},
+  "passed": true,
+  "repo": "vllm-sr/Decision-2.0-Eos-0.8B",
+  "revision": "25f0914a188e5449c7e107f13e1376ddd47a43bc",
+  "schema": "dev2-org-verify/1",
+  "superseded": "3de61185ade42cc307c26a6062df4baac327eac5",
+  "text_files_scanned": 24,
+  "utc": "2026-10-02T10:47:58.535220+00:00"
+}

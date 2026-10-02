@@ -1,0 +1,80 @@
+{
+  "device": "cuda:0",
+  "load_seconds": 6.722958410857245,
+  "mode": "parity",
+  "package_manifest_sha256": "68a048d3629cbc2cee145de45d344ffd8cbbc3d76a75795d17382b4577083a36",
+  "panels": {
+    "css15": {
+      "category_changes": 0,
+      "ids_sha256": "1fe4e47bc733558252d84f27fbfcfdfac170242f67d34147bb90a08eb13d1e12",
+      "input_mismatch": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "predictions_sha256": "6788c1da8b6755baad1ab7d8f95207aada7b44e6791b830f5b7dd958d4875d38",
+      "prompts": 6547,
+      "prompts_sha256": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6",
+      "seconds": 51.18978403811343,
+      "slots": 6547
+    },
+    "mlx-diag": {
+      "category_changes": 0,
+      "ids_sha256": "8db2c13b74553334a8331717e63ac859befa4f08e6addf49cdc444a0c21deb32",
+      "input_mismatch": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "predictions_sha256": "b452f016921999af6f0bebe34465939937c4c5f20b904772549be345b8e60f11",
+      "prompts": 2275,
+      "prompts_sha256": "25fde28f4b227a9cc8588da79a597ce816ba4a8f979139f99f69aeb595580a5f",
+      "seconds": 11.682949245907366,
+      "slots": 2275
+    },
+    "public231": {
+      "category_changes": 0,
+      "ids_sha256": "3cac6d401ca18059628f0f48c8d7f974cbbea020f39f28109eaf84bd1a0f22e1",
+      "input_mismatch": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "predictions_sha256": "0993d7239e8cccc3b471f5faf5cd08b50579276a12aa1730d32d6f7539953116",
+      "prompts": 231,
+      "prompts_sha256": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd",
+      "seconds": 3.022334042005241,
+      "slots": 231
+    },
+    "typed-final": {
+      "category_changes": 0,
+      "ids_sha256": "e0ca7afa2ceed4b1096b3cdc56a0a9acb2fce8ca57940a9fd287331de74bada9",
+      "input_mismatch": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "predictions_sha256": "99c5a0147b69a7292cbbae0ffd31d5d874235c29eed8b6de130a78ea010e1c60",
+      "prompts": 1600,
+      "prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd",
+      "seconds": 15.772095118882135,
+      "slots": 2000
+    }
+  },
+  "passed": true,
+  "runtime": {
+    "hip": "7.2.53211",
+    "kernels": null,
+    "numpy": "2.3.5",
+    "parameter_dtypes": {
+      "bfloat16": 440401920,
+      "float32": 156701184
+    },
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "residency": {
+      "linear_bf16": 196,
+      "linear_fp32": 0
+    },
+    "safetensors": "0.8.0",
+    "sites": [],
+    "threads": 4,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0"
+  },
+  "schema": "dev2-release-examples/1",
+  "tolerance": 1.0
+}

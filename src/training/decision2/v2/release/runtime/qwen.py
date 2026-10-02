@@ -11,6 +11,9 @@ included, in FP32; CPU uses FP32. A request's questions run as one padded
 batch unless, on a GPU, that batch would put more than 2**30 elements in a
 gated-delta q / k / v tensor (``forward_token_budget``); then they run as
 several batches.
+On a ROCm GPU with the verified Transformers release, ``fast.py`` replays each
+padded shape's backbone forward as a HIP graph and trims and fuses kernels,
+reproducing the eager forward bit for bit (``graphs`` / ``kernels`` switch it off).
 A package whose manifest names a weight ``storage`` codec (bf16z) is first restored
 to exact safetensors files in a cache directory; the restored checkpoint must
 reproduce the scored identity. A checkpoint whose ``decision_config.json`` declares
@@ -163,6 +166,7 @@ class QwenDecision:
         residency: dict[str, int] | None = None,
         encode_fn: Any = None,
         batch_tokens: int | None = None,
+        fast: Any = None,
     ):
         self.model = model
         self.tokenizer = tokenizer
@@ -174,6 +178,7 @@ class QwenDecision:
         self.residency = residency
         self.encode_fn = encode_fn
         self.batch_tokens = batch_tokens
+        self.fast = fast
 
     @classmethod
     def load(
@@ -185,6 +190,8 @@ class QwenDecision:
         base_path: str | Path | None,
         threads: int | None,
         bf16_resident: bool = True,
+        graphs: bool = True,
+        kernels: bool = True,
     ) -> QwenDecision:
         import torch
 
@@ -266,6 +273,11 @@ class QwenDecision:
             if target.type == "cuda"
             else None
         )
+        fast = None
+        if target.type == "cuda" and bf16_resident:
+            from .fast import install
+
+            fast = install(model, torch, graphs=graphs, kernels=kernels)
         return cls(
             model,
             tokenizer,
@@ -277,6 +289,7 @@ class QwenDecision:
             residency,
             encode_fn,
             batch_tokens,
+            fast,
         )
 
     def parameter_count(self) -> int:
@@ -343,7 +356,13 @@ class QwenDecision:
                 else nullcontext()
             )
             with self.torch.inference_mode(), autocast:
-                output = self.model(**batch)
+                if self.fast is None:
+                    output = self.model(**batch)
+                else:
+                    with self.fast.forward(
+                        [len(jobs[index][2]["ids"]) for index in group]
+                    ):
+                        output = self.model(**batch)
             if len(output) != len(group):
                 raise RuntimeError(
                     "Model returned the wrong number of question answers"

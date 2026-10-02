@@ -1,0 +1,2 @@
+v2/release/specs/dev2-0p8b-org.json 5cad992e48fd3bf1f930a6261aba0b30e109ac1daa3480a7e4ee8f6b2579c2a2
+v2/release/records/dev2-org-2026-10-02/Decision-2.0-Eos-0.8B.decision.org.json 900a9d190a982e09baa574e5afdc54513468fbed601d4d7049aac70ac16b6001

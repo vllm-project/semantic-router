@@ -1,0 +1,95 @@
+{
+  "builder_commit": "534b52dc42835466ec53225222fca0d6391b2998",
+  "card": {
+    "assets_receipt_sha256": "c7ed58103fb423e9ae0240c93c7ee86d8255892a2608cc1a18b8769225c00b97",
+    "excluded": [],
+    "figures_sha256": {
+      "assets/banner.png": "2363db1a11ea3d8c61656a078c2b2cdf10623177e54ca3ac5a48b22ccb0be724",
+      "assets/index-areas.png": "3670b08f2c186c03a78028ad0c0c9ab07a4475ffb33b81ce88daea600b1a0d37",
+      "assets/index-pareto.png": "bbc3b1c70755ff97ed5943bfa65f5b1c1e24041b0923c102610104182db5ecba",
+      "assets/jevarena-types.png": "4e95e33f4f5f4d673e26970cbaf9637a8c762b9d3eedbac3843ee32562b3a771",
+      "assets/jevarena.png": "0d97e2ecf10414cf211a37e8f8f16fbebddbc1dc5a85f4a243b1ce029d489081"
+    },
+    "index_sha256": "97a95897fb13b81addf033dee7984d53e996ddb8baad5076f706a0b7c752e22e",
+    "paired": {
+      "ci95": [
+        3.526669427544733,
+        10.565248761560836
+      ],
+      "delta": 6.2931144649903885,
+      "replicates": 5000,
+      "sha256": "677e8edece5f40c85fce279fd7fbcaed547d60cfe881a496649fabe5a5082047"
+    },
+    "readme_sha256": "8a5be6775fb2645dbffd2d49d6c7a7507345bf912fcb1ed8b7b4f3d3bc530a3c",
+    "shown": [
+      {
+        "key": "candidate",
+        "licence": "package",
+        "report_sha256": "6610c86ca1a9249c21cce031ee6df36b3c97d1ad7541458e91c4061154a10385"
+      },
+      {
+        "key": "sol1",
+        "licence": "apache-2.0",
+        "report_sha256": "09892d3e6ebaa8196a0f72184c05f303c5f8d1773dcb43c7b52c85dd5d39ffbb"
+      },
+      {
+        "key": "decider2b",
+        "licence": "apache-2.0",
+        "report_sha256": "dd91e5ba628dbb5a3d2fc4092e9fd62d336c0b88f732419c7dfadd83f634e8a2"
+      },
+      {
+        "key": "thisthat12",
+        "licence": "mit",
+        "report_sha256": "33daa04aa94d831b630401875dfec50c16cfc63e7214be32eb9008807dd29ea3"
+      },
+      {
+        "key": "bosun17b",
+        "licence": "apache-2.0",
+        "report_sha256": "7003d0ecead9db7710943cf350ade4a3096962ca816eb81dfc962f67abe9895c"
+      }
+    ],
+    "tradeoffs": [
+      "Typed Score (correct): 147/400 versus 155/400",
+      "Transfer: FLUTE figurative language (macro-F1): 52.3% versus 66.1%",
+      "Transfer: Misinfo Reaction Frames (macro-F1): 51.3% versus 63.1%",
+      "Transfer: Wikipedia power (macro-F1): 48.8% versus 49.5%"
+    ]
+  },
+  "ended_utc": "2026-10-02T11:46:55.625395+00:00",
+  "files": 35,
+  "identity": {
+    "architecture": "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp",
+    "bf16_copy": {
+      "receipt_sha256": "51b10eae6d65944f4b3465200d4f67a60285ba5a7de1c2c94bd734717c692f3b",
+      "source_model_sha256": "8c8e98e34eb3200492a9f22d76a4cacfd4a6dee8855c1b6aec303d3cbbf88b9a"
+    },
+    "dec_residual": false,
+    "head_variant": "shared",
+    "model_sha256": "e20df76c14edb0d28ef17593f49a1870fdea9438ff4805594402e39766f3546c",
+    "readout": "head",
+    "temperature_by_type": null,
+    "text_parameter_count": 1881825088
+  },
+  "licence": "apache-2.0",
+  "manifest_sha256": "296e611633f2a1a49c65b672e351d298a816e113903b12ca465969e45c492b39",
+  "package": "/data/dev2/runs/release/dev2-ra-2B-20261002T114630Z/package/Decision-2.0-Sol-2B",
+  "parameters": {
+    "external_base_text": null,
+    "loaded": 1883930944,
+    "packaged": {
+      "backbone": 1881825088,
+      "head": 2105856,
+      "residual": 0
+    }
+  },
+  "release_decision": {
+    "sha256": "6e128d9bf669d4349fcded2397d4c64a549e95379fa660a3c4a7f2a5f2be311b",
+    "status": "final"
+  },
+  "schema": "dev2-release-build/1",
+  "screen": {
+    "text_files_screened": 30
+  },
+  "spec_sha256": "5c2bf886a7c05309c7dff3e64b09922ebf2aa31ce192f3e381344816d4d13e92",
+  "started_utc": "2026-10-02T11:46:44.101001+00:00"
+}

@@ -1,0 +1,118 @@
+{
+  "builder_commit": "7e78259d030c8c58730c2ffe28ae05aacc885ce7",
+  "card": {
+    "assets_receipt_sha256": "d66497c4ec2461a6d6fd53da7d8dd6d83b78a3a6c6229382cb7616eaed66134a",
+    "excluded": [],
+    "figures_sha256": {
+      "assets/banner.png": "51437980d848bd5be3115c4f955438c171586c49d849a72aa3a98aae9707f7f8",
+      "assets/index-areas.png": "233684ce714bbd89102c8a46ca585a641e4f4b9126944d1f1f01769f697d60dd",
+      "assets/index-pareto.png": "c29bfb43c79b7081505cd651e09ff82c8738c9d0720549d5ad78541218aeadd8",
+      "assets/jevarena-types.png": "33e46f237d4ec9ebea78578d856496409cf552337ef53c5d81d1a417e0f56220",
+      "assets/jevarena.png": "01814a5a0955c0dda6f951ce35181a210df6853746312ee47a189b8a8e544d22"
+    },
+    "index_sha256": "bf2bd02d1359de5f1bdd871cb3e240b6f5022cc2e3d6638580e921cd4386ad4a",
+    "paired": {
+      "ci95": [
+        10.00203051669837,
+        17.49987266238486
+      ],
+      "delta": 12.698059641241464,
+      "replicates": 5000,
+      "sha256": "7b391cb2f5ab08b798e3ba6817dcf269ae0b9fb4843dabe4ac434b8177b77f98"
+    },
+    "readme_sha256": "155fe13afc8f4d75ceb24bb4f29f8667f9650a54c1195b19f3f401d6497ced75",
+    "shown": [
+      {
+        "key": "candidate",
+        "licence": "package",
+        "report_sha256": "b2083796ed0a03728edffb2aa8af5c9c60db38df3ad8182ea5c9e08d6bb6a2ed"
+      },
+      {
+        "key": "kai1",
+        "licence": "apache-2.0",
+        "report_sha256": "1b0140e360d35613d973cf36182978b54a1679e355ba62bc3cc2785714f06716"
+      },
+      {
+        "key": "gliner25",
+        "licence": "apache-2.0",
+        "report_sha256": "7dc5be9242d07a59696e37b8caef1ed18a540ab96dfae547a3ffa2ae445f162d"
+      },
+      {
+        "key": "bosun",
+        "licence": "apache-2.0",
+        "report_sha256": "80c539bfb19116105d15b4e29978f517fb67716bd688f66c7929b6265ed3aade"
+      },
+      {
+        "key": "lex1",
+        "licence": "apache-2.0",
+        "report_sha256": "45f7d5c9c8e35b70e069ffe2400c96b3401dd145994b17779e7897e8c3a4b3a9"
+      }
+    ],
+    "tradeoffs": [
+      "Transfer: Misinfo Reaction Frames (macro-F1): 55.5% versus 56.6%"
+    ]
+  },
+  "ended_utc": "2026-10-02T11:27:56.602121+00:00",
+  "files": 34,
+  "identity": {
+    "architecture": "qwen3-text-endpoints-global-query-shared-bilinear-mlp",
+    "bf16_copy": {
+      "receipt_sha256": "2a991bfb4388d36f4767e8fa843aeb4b77f422aabb603f179fb609768b576c6b",
+      "source_model_sha256": "01fae75098ce29314c5de2990321fcfd31457de7c02bb757bd8345662a823854"
+    },
+    "dec_residual": false,
+    "head_variant": "shared",
+    "model_sha256": "bb806f31a14d4532a1b5e00984442128f47f46cbbc68e57e7623327c81cfb983",
+    "readout": "head",
+    "score_bias": {
+      "offsets": {
+        "5": [
+          0.039188,
+          0.203049,
+          0.079362,
+          -0.15162,
+          -0.169979
+        ]
+      },
+      "sha256": "7d3a060fe1823aa7fe759776df3db872408de580f227120fbe08b9eef53dcf6e"
+    },
+    "temperature_by_type": null,
+    "text_parameter_count": 596049920
+  },
+  "licence": "apache-2.0",
+  "manifest_sha256": "3a9f2817a3ddabb7340fd8249a3da2de1b8fde8e19c7b2a43271fda55fc90a98",
+  "package": "/data/dev2/runs/release/dev2-ra-0.6B-20261002T112747Z/package/Decision-2.0-Kai-0.6B",
+  "parameters": {
+    "external_base_text": null,
+    "loaded": 597103104,
+    "packaged": {
+      "backbone": 596049920,
+      "head": 1053184,
+      "residual": 0
+    }
+  },
+  "release_decision": {
+    "sha256": "62cf9d841c4d6b6c4eab0b649622b3bbf5649789d566922a41551b81d9d6e11f",
+    "status": "final"
+  },
+  "schema": "dev2-release-build/1",
+  "score_bias": {
+    "file": "score_bias.json",
+    "offsets": {
+      "5": [
+        0.039188,
+        0.203049,
+        0.079362,
+        -0.15162,
+        -0.169979
+      ]
+    },
+    "scored_sha256": "03f0c9c777de95f8ea56112c05a3c29521687609aa67c9c7ca466c14bf8dadae",
+    "sha256": "7d3a060fe1823aa7fe759776df3db872408de580f227120fbe08b9eef53dcf6e"
+  },
+  "screen": {
+    "text_files_screened": 29
+  },
+  "spec_sha256": "4110e649aaf40d70201ac4451767425dba2ac5190c2bd064f929831b543dcdb3",
+  "started_utc": "2026-10-02T11:27:52.817053+00:00"
+}

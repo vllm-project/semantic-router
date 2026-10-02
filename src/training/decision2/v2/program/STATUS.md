@@ -6,16 +6,19 @@
 
 ## 发布状态（全部为 private）
 
-> **2026-10-02 起改用新名字**（旧 ID 会自动跳转）。六个仓库都已换上横幅方案 A：Kai、Sol、Lux、Vega 是只改卡片的 revision，Eos 和 Nox 随新权重一起换上：
+> **2026-10-02：HF 组织由 `llm-semantic-router` 改名为 `vllm-sr`**（旧 ID 会自动跳转）。
 >
-> | 尺寸 | 新名字 | 当前 `main` |
+> - 六个仓库的卡片和发布流水线都已改用新组织名，横幅都是方案 A。
+> - Kai、Sol、Nox 已上线阶段 A 的运行时优化版本，这是只改运行时的 revision，答案逐位不变。
+>
+> | 尺寸 | 名字 | 当前 `main`（权重来源） |
 > | --- | --- | --- |
-> | 0.6B | `Decision-2.0-Kai-0.6B` | `479ea8d1`（横幅 A） |
-> | 0.8B | `Decision-2.0-Eos-0.8B` | `3de61185`（M16 `08b-RA-a75`，2026-10-02 12:44 发布，横幅 A） |
-> | 2B | `Decision-2.0-Sol-2B` | `1b7c47ea`（M15 `2b-RASDML`，2026-10-02 16:20 发布，横幅 A） |
-> | 4B | `Decision-2.0-Nox-4B` | `9f2ddafc`（M15 `4b-LHA10SDML`，2026-10-02 17:2x 发布，用户破例；横幅 A） |
-> | 9B | `Decision-2.0-Lux-9B` | `7195360d`（K-a13IB，横幅 A） |
-> | 27B | `Decision-2.0-Vega-27B` | `781b2b24`（M6-IB，2026-10-02 16:3x 发布，横幅 A） |
+> | 0.6B | `vllm-sr/Decision-2.0-Kai-0.6B` | `51b7b474`（阶段 A 运行时；权重同 2.0 首发） |
+> | 0.8B | `vllm-sr/Decision-2.0-Eos-0.8B` | `25f0914a`（M16 `08b-RA-a75`） |
+> | 2B | `vllm-sr/Decision-2.0-Sol-2B` | `6a62b319`（阶段 A 运行时；M15 `2b-RASDML`） |
+> | 4B | `vllm-sr/Decision-2.0-Nox-4B` | `137e28ce`（阶段 A 运行时；M15 `4b-LHA10SDML`，用户破例） |
+> | 9B | `vllm-sr/Decision-2.0-Lux-9B` | `6af07f36`（K-a13IB；M10 `KIB4-a33` 发布中） |
+> | 27B | `vllm-sr/Decision-2.0-Vega-27B` | `e60bd8e3`（M6-IB） |
 >
 > 下表各行保留了历史上的旧名字和旧版本号，仅作记录。
 

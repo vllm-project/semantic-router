@@ -1,0 +1,88 @@
+{
+  "checked": 8,
+  "failed": [],
+  "links": [
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "51437980d848bd5be3115c4f955438c171586c49d849a72aa3a98aae9707f7f8",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/banner.png"
+    },
+    {
+      "image": false,
+      "kind": "api",
+      "ok": true,
+      "private": true,
+      "source": "README.md",
+      "status": 200,
+      "target": "https://huggingface.co/collections/vllm-sr/decision-20-6ab7cf7bdfb506bf8269cb00"
+    },
+    {
+      "image": false,
+      "kind": "external",
+      "ok": true,
+      "source": "README.md",
+      "status": 200,
+      "target": "https://github.com/vllm-project/semantic-router"
+    },
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "01814a5a0955c0dda6f951ce35181a210df6853746312ee47a189b8a8e544d22",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/jevarena.png"
+    },
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "33e46f237d4ec9ebea78578d856496409cf552337ef53c5d81d1a417e0f56220",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/jevarena-types.png"
+    },
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "c29bfb43c79b7081505cd651e09ff82c8738c9d0720549d5ad78541218aeadd8",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/index-pareto.png"
+    },
+    {
+      "image": true,
+      "kind": "file",
+      "ok": true,
+      "sha256": "233684ce714bbd89102c8a46ca585a641e4f4b9126944d1f1f01769f697d60dd",
+      "source": "README.md",
+      "status": 200,
+      "target": "assets/index-areas.png"
+    },
+    {
+      "image": false,
+      "kind": "file",
+      "ok": true,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "source": "README.md",
+      "status": 200,
+      "target": "LICENSE"
+    }
+  ],
+  "passed": true,
+  "rendered_page": {
+    "bytes": 0,
+    "charts_referenced": false,
+    "status": 401,
+    "title_present": false
+  },
+  "repo": "vllm-sr/Decision-2.0-Kai-0.6B",
+  "revision": "51b7b4740c8c70282648d3849d233a962234e4ec",
+  "schema": "dev2-hub-links/1",
+  "utc": "2026-10-02T11:31:56.331662+00:00"
+}

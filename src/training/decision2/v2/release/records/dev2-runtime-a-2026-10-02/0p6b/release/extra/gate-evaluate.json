@@ -1,0 +1,61 @@
+{
+  "passed": true,
+  "decision": {
+    "sha256": "62cf9d841c4d6b6c4eab0b649622b3bbf5649789d566922a41551b81d9d6e11f",
+    "status": "final"
+  },
+  "items": {
+    "1_successor_R1_v3": {
+      "passed": true,
+      "evidence": "v3 48.636 vs current 43.541: +5.09 [+2.65, +9.30]"
+    },
+    "1_successor_R2_human_transfer": {
+      "passed": true,
+      "evidence": "human transfer delta 95% [-0.064, +0.061]"
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "passed": true,
+      "evidence": "types choice OK, noul OK, score OK"
+    },
+    "1_successor_R4_mlx_diag": {
+      "passed": true,
+      "evidence": "mlx-diag card-eligible macro +0.0044 [-0.0058, +0.0144]"
+    },
+    "1_successor_R5_tier_gates": {
+      "passed": true,
+      "evidence": "own 1.0 low +10.00; v3 48.636 vs 90% of GLiNER2.5-Decide 42.524; H vs GLiNER2.5-Decide [-0.013, +0.161]; own 1.0 low > 0 ok, v3 >= 38.272 ok, H vs GLiNER2.5-Decide upper >= 0 ok, no type collapsed ok"
+    },
+    "1_successor_R6_no_overlap_exposure": {
+      "passed": true,
+      "evidence": "6 training files, 0 exposed groups"
+    },
+    "1_successor_R7_public231": {
+      "passed": true,
+      "evidence": "public 231 152 vs 142 (+10; McNemar p 0.087)"
+    },
+    "2_regressions_disclosed": {
+      "passed": true,
+      "evidence": "1 results below own 1.0 listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included"
+    },
+    "3_download_hash_parameters": {
+      "passed": true,
+      "evidence": "tree 34 files re-hashed; loaded 597103104"
+    },
+    "4_native_examples": {
+      "passed": true,
+      "evidence": "examples and the card's Python block reproduced from the download"
+    },
+    "5_output_consistency": {
+      "passed": true,
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run"
+    },
+    "6_card_design": {
+      "passed": true,
+      "evidence": "Hub card apache-2.0 / problems []"
+    },
+    "7_transformers_remote_code": {
+      "passed": true,
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518"
+    }
+  }
+}

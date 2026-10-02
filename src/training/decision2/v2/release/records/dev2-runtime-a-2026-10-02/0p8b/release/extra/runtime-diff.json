@@ -1,0 +1,26 @@
+{
+  "schema": "dev2-runtime-diff/1",
+  "repo": "vllm-sr/Decision-2.0-Eos-0.8B",
+  "released": "25f0914a188e5449c7e107f13e1376ddd47a43bc",
+  "new": "1d380452ef703b283438732ec6393dd11d38ff24",
+  "files": {
+    "released": 31,
+    "new": 33
+  },
+  "changed_runtime_files": [
+    "decision2/api.py",
+    "decision2/fast.py",
+    "decision2/fast_kernels.py",
+    "decision2/qwen.py"
+  ],
+  "changed_card_files": [
+    "MODEL_MANIFEST.json",
+    "README.md"
+  ],
+  "changed_hub_managed_files": [],
+  "changed_other_files": [],
+  "weight_files": 2,
+  "weight_bytes": 2018591008,
+  "weights_byte_identical": true,
+  "ok": true
+}
