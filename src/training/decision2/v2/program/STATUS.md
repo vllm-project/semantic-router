@@ -16,8 +16,8 @@
 > | 0.6B | `vllm-sr/Decision-2.0-Kai-0.6B` | `51b7b474`（阶段 A 运行时；权重同 2.0 首发） |
 > | 0.8B | `vllm-sr/Decision-2.0-Eos-0.8B` | `25f0914a`（M16 `08b-RA-a75`） |
 > | 2B | `vllm-sr/Decision-2.0-Sol-2B` | `6a62b319`（阶段 A 运行时；M15 `2b-RASDML`） |
-> | 4B | `vllm-sr/Decision-2.0-Nox-4B` | `137e28ce`（阶段 A 运行时；M15 `4b-LHA10SDML`，用户破例） |
-> | 9B | `vllm-sr/Decision-2.0-Lux-9B` | `6af07f36`（K-a13IB；M10 `KIB4-a33` 发布中） |
+> | 4B | `vllm-sr/Decision-2.0-Nox-4B` | `d55528d1`（M17 跨分支平均 `4b-SDMLxALL`，2026-10-02 23:34 发布） |
+> | 9B | `vllm-sr/Decision-2.0-Lux-9B` | `f3122c7c`（M10 `KIB4-a40`，2026-10-02 23:30 发布） |
 > | 27B | `vllm-sr/Decision-2.0-Vega-27B` | `e60bd8e3`（M6-IB） |
 >
 > 下表各行保留了历史上的旧名字和旧版本号，仅作记录。
