@@ -6,7 +6,7 @@ they train on gold only under ``--teacher-partial``). ``--exclude-family`` drops
 ablation drops the in-distribution ones). The build refuses (no silent drop) any IB row whose id, lineage group or
 canonical input hash also occurs in x60, or whose id or input hash occurs earlier in the build (an IB lineage group
 holds several rows by design, so groups are checked against x60 only). IB token counts come from the releases'
-``*.tokens.jsonl``.
+``*.tokens.jsonl``. ``--ib3 F`` (9B M10) appends a third release-safe block after IB2 under the same rules.
 
 Stage 3 (amendment 3), ``--match-tokens N``: the same IB blocks at matched tokens. x60 is first cut to N minus the
 kept IB native tokens in whole groups, stratified by pool x source x task type x language as the x60 recipe was
@@ -14,7 +14,7 @@ kept IB native tokens in whole groups, stratified by pool x source x task type x
 kept x60 lines and their own-Lux target lines stay byte for byte in file order; every kept IB row needs a token
 count. Duplicate checks run against the whole of x60, as in stage 2.
 
-usage: m9_data.py --x60-dir D --ib1 F --ib2 F [--exclude-family NAME ...]
+usage: m9_data.py --x60-dir D --ib1 F --ib2 F [--ib3 F] [--exclude-family NAME ...]
                   [--match-tokens N --x60-ids F --keep-seed S [--keep-tolerance T]] --output DIR
 """
 
@@ -24,6 +24,7 @@ import argparse
 import hashlib
 import json
 import shutil
+import sys
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -53,7 +54,11 @@ def x60_cut(
     rows: list[dict[str, Any]], ids_path: Path, budget: int, seed: str, tolerance: float
 ) -> tuple[set[str], dict[str, Any]]:
     """Ids of the x60 rows kept by the stratified whole-group cut to ``budget`` native tokens."""
-    from lux9b.m3_data import recipe_budget
+    try:
+        from lux9b.m3_data import recipe_budget
+    except ModuleNotFoundError:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from lux9b.m3_data import recipe_budget
 
     entries: dict[str, dict[str, Any]] = {}
     with ids_path.open(encoding="utf-8") as stream:
@@ -89,6 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--x60-dir", type=Path, required=True)
     parser.add_argument("--ib1", type=Path, required=True)
     parser.add_argument("--ib2", type=Path, required=True)
+    parser.add_argument("--ib3", type=Path)
     parser.add_argument("--exclude-family", action="append", default=[])
     parser.add_argument("--match-tokens", type=int)
     parser.add_argument("--x60-ids", type=Path)
@@ -128,7 +134,10 @@ def main(argv: list[str] | None = None) -> int:
     ib_by_type: Counter[str] = Counter()
     sources: dict[str, Any] = {}
     ib_lines: list[bytes] = []
-    for name, path in (("ib1", args.ib1), ("ib2", args.ib2)):
+    blocks = [("ib1", args.ib1), ("ib2", args.ib2)] + (
+        [("ib3", args.ib3)] if args.ib3 else []
+    )
+    for name, path in blocks:
         counts = tokens_by_id(
             path.with_name(path.name.replace(".jsonl", ".tokens.jsonl"))
         )
