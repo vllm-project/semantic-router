@@ -8,19 +8,21 @@
 # exact resume from the latest complete checkpoint (stage full only, attempt 2 or 3: container and receipt full-rN),
 # the same mixture, seed and caps.
 # Usage: m8-arm.sh NODE GPU ARM SEED MIXTURE MIXTURE_SHA SAVE_EVERY CAP
-#   NODE b (GPU0-1) | d (GPU0-7) | e (GPU0-3, 6-7; never GPU4-5) | f (GPU2-7; never GPU0-1)
-#   ARM:MIXTURE  M8-IB:a20ib1 | M8-IB2:a20ib12 (m6-data/mixtures-m6-1; M6-IB / M6-IB2's files)
-#                M8-IB14:a20ib14 | M8-IB124:a20ib124 | M8-IB14ML:a20ib14ml | M8-IB124ML:a20ib124ml (m7-data/mixtures-m7-1)
+#   NODE a (GPU1-4; M9) | b (GPU0-1) | d (GPU0-7) | e (GPU0-3, 6-7; never GPU4-5) | f (GPU2-7; never GPU0-1)
+#   ARM:MIXTURE  M8-IB:a20ib1 | M8-IB2:a20ib12 | M9-IB:a20ib1 | M9-IB2:a20ib12 (m6-data/mixtures-m6-1; M6-IB / M6-IB2's
+#                files); M8-IB14:a20ib14 | M8-IB124:a20ib124 | M8-IB14ML:a20ib14ml | M8-IB124ML:a20ib124ml
+#                (m7-data/mixtures-m7-1); M9-IB1ML:a20ib1ml | M9-IB12ML:a20ib12ml (m9-data/mixtures-m9-1, M9 prereg)
 #   SEED s3 | s4 | s5; CAP <= 22 GPU-h
 set -euo pipefail
 NODE=${1:?NODE} GPU=${2:?GPU} ARM=${3:?ARM} SEED=${4:?SEED} MIX=${5:?MIXTURE} MIX_SHA=${6:?MIXTURE_SHA}
 SAVE=${7:?SAVE_EVERY} CAP=${8:?CAP}
 S=$(cd "$(dirname "$0")/../../.." && pwd)
 SRC=$(basename "$(cd "$S/../../.." && pwd)")
-case "$NODE:$GPU" in b:[01] | d:[0-7] | e:[0-3] | e:[67] | f:[2-7]) ;; *) echo "node $NODE GPU$GPU is outside M8's allocation" >&2; exit 2 ;; esac
+case "$NODE:$GPU" in a:[1-4] | b:[01] | d:[0-7] | e:[0-3] | e:[67] | f:[2-7]) ;; *) echo "node $NODE GPU$GPU is outside M8's allocation" >&2; exit 2 ;; esac
 case "$ARM:$MIX" in
-  M8-IB:a20ib1 | M8-IB2:a20ib12) DATA=m6-data/mixtures-m6-1 ;;
+  M8-IB:a20ib1 | M8-IB2:a20ib12 | M9-IB:a20ib1 | M9-IB2:a20ib12) DATA=m6-data/mixtures-m6-1 ;;
   M8-IB14:a20ib14 | M8-IB124:a20ib124 | M8-IB14ML:a20ib14ml | M8-IB124ML:a20ib124ml) DATA=m7-data/mixtures-m7-1 ;;
+  M9-IB1ML:a20ib1ml | M9-IB12ML:a20ib12ml) DATA=m9-data/mixtures-m9-1 ;;
   *) echo "unknown arm / mixture $ARM $MIX" >&2; exit 2 ;;
 esac
 case "$SEED" in s3) SEED_VALUE=20261002 ;; s4) SEED_VALUE=20261003 ;; s5) SEED_VALUE=20261004 ;; *) echo "SEED is s3, s4 or s5" >&2; exit 2 ;; esac

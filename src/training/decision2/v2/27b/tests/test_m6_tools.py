@@ -49,7 +49,8 @@ class M6LaunchTest(unittest.TestCase):
     def test_m6_allocation(self):
         with mock.patch.dict(os.environ, {"DEV2_27B_ALLOC": "m6"}, clear=True):
             self.assertEqual(sorted(launch.allowed_gpus("b")), [0, 1, 5])
-            self.assertEqual(sorted(launch.allowed_gpus("a")), [2])
+            self.assertEqual(sorted(launch.allowed_gpus("a")), [1, 2, 3, 4])
+            self.assertEqual(launch.allowed_gpus("a")[2], launch.NODE_GPUS["a"][2])
             self.assertEqual(launch.max_cap_hours(), 22.0)
             with tempfile.TemporaryDirectory() as tmp:
                 drm = fake_sysfs(Path(tmp), "renderD129", "0000:83:00.0")
