@@ -1,31 +1,37 @@
 #!/usr/bin/env bash
 # 0.8B / 2B Index-path releases: the private Index run on exactly the release weights (the v2.release.bf16_copy of a
 # winner's FP32 checkpoint), as the 9B release did (lux9b/m9/ix.sh, K-a13IB-bf16), for the card's Index values and
-# the release evidence. Run on the workstation; values stay private. The IX node is node C (default) or node D
-# (IX_NODE=d); every GPU job uses the one GPU IX_GPU (node C GPU0 never), shards one after another, because the
-# other node C / D GPUs hold the 27B M6 and the Index-sweep runs.
+# the release evidence. Run on the workstation; values stay private. The IX node is node C (default), node D
+# (IX_NODE=d) or node A (IX_NODE=a); every GPU job uses the one GPU IX_GPU (node C GPU0 never), shards one after
+# another, because the other node C / D GPUs hold the 27B M6 and the Index-sweep runs.
 #   bf16     node C: the FP32 checkpoint that IX1 staged (dec-indexpath/<point>-ckpt) checked file by file against
 #            the formal run's PACKAGE.sha256 (node A), then v2.release.bf16_copy in the scored image (CPU, no
 #            network) -> dec-indexpath/<point>-bf16-ckpt and bf16-copy.json
-#   push     IX_NODE=d: that copy and its receipt node C -> node D through node A (SHA-256 lists equal)
+#   push     IX_NODE=a|d: that copy and its receipt node C -> the IX node through node A (SHA-256 lists equal)
+#   base     IX_NODE=a|d: the tier's IX1 package node C -> the IX node if it is missing there (SHA-256 lists equal)
+#   claim    IX_GPU's owner file on the IX node, when its owner released the GPU ("status=released") and it is
+#            idle, becomes this run's eval-ix1 entry (the old entry is kept as owner.before-ixp-<UTC>)
 #   stage    v2.eval.ix1.restage of the copy into the tier's IX1 package (DEV2.0-0.8B bede7938 / DEV2.0-2B a53cf66a)
 #            on the IX node with the copy's model SHA-256; checks the loaded count and the identity
 #   parity   launch.sh parity on IX_GPU (86 requests); parity.json must pass
-#   run      launch.sh run: every shard of IX_PANEL (panel-7 on node C, panel-8 on node D: the same rows) on IX_GPU,
-#            one after another, with the parity step's frozen cache; then score.sh (dual scoring)
-#   pull     IX_NODE=d: runs/<name>/merged and the launcher receipts node D -> node C through node A
+#   run      launch.sh run: every shard of IX_PANEL (panel-7 on node C, panel-8 on node D, panel-3 on node A: the
+#            same rows) on IX_GPU, one after another, with the parity step's frozen cache; then score.sh (dual scoring)
+#   pull     IX_NODE=a|d: runs/<name>/merged and the launcher receipts the IX node -> node C through node A
 #   boot     node C: paired bootstraps vs the tier's DEV2.0 IX1 run (full panel, and transfer-only without HoVer,
 #            When2Call, iSarcasmEval, GSM8K, BPoMP), 2,000 replicates, seed 20261002; family delta; row comparison
 #            with the FP32 run of the same point (identical answers expected)
 #   release  the IX node's IX_GPU owner file, if this name's runs wrote it -> status released
-# Usage: [IX_NODE=c|d] IX_GPU=N ix.sh MIRROR_SHA NAME STAGE
+# Usage: [IX_NODE=a|c|d] IX_GPU=N ix.sh MIRROR_SHA NAME STAGE
 #   NAME: M16-08b-RA-a75-bf16 | M16-08b-RASD-a75-bf16 | M16-2b-RASD-a25-bf16
 set -euo pipefail
 SHA=${1:?MIRROR_SHA} NAME=${2:?NAME} STAGE=${3:?STAGE}
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "MIRROR_SHA must be a full commit SHA" >&2; exit 2; }
 IX_NODE=${IX_NODE:-c} IX_GPU=${IX_GPU:-}
-case "$IX_NODE" in c) PANEL=${IX_PANEL:-panel-7} ;; d) PANEL=${IX_PANEL:-panel-8} ;; *) echo "IX_NODE c or d" >&2; exit 2 ;; esac
-case "$STAGE" in parity | run | release)
+case "$IX_NODE" in
+  a) PANEL=${IX_PANEL:-panel-3} ;; c) PANEL=${IX_PANEL:-panel-7} ;; d) PANEL=${IX_PANEL:-panel-8} ;;
+  *) echo "IX_NODE a, c or d" >&2; exit 2 ;;
+esac
+case "$STAGE" in claim | parity | run | release)
   [[ "$IX_GPU" =~ ^[1-7]$ ]] || { echo "IX_GPU 1-7 is required for $STAGE" >&2; exit 2; } ;;
 esac
 NODES=${DEV2_NODES_FILE:-$HOME/.config/decision2/nodes.env}
@@ -53,6 +59,20 @@ IMAGE=decision20-train-fast:host2
 IMAGE_ID=sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54
 EXCLUDE="HoVer When2Call iSarcasmEval GSM8K BPoMP"
 sums() { echo "cd $1 && find . -type f | LC_ALL=C sort | xargs -r sha256sum"; }
+# copy_from_c DIR: node C's DIR (absent on the IX node) -> the same path on the IX node, through node A.
+copy_from_c() {
+  local d=$1 a b
+  onx "test ! -e $d" || { echo "$d exists on node $IX_NODE" >&2; exit 3; }
+  onx "umask 077; mkdir -p $(dirname "$d")"
+  if [ "$IX_NODE" = a ]; then
+    ona "ssh $KEY $C 'tar -C $(dirname "$d") -cf - $(basename "$d")' | tar -C $(dirname "$d") -xf -"
+  else
+    ona "ssh $KEY $C 'tar -C $(dirname "$d") -cf - $(basename "$d")' | ssh $KEY $X 'tar -C $(dirname "$d") -xf -'"
+  fi
+  a=$(onc "$(sums "$d")") b=$(onx "$(sums "$d")")
+  [ -n "$a" ] && [ "$a" = "$b" ] || { echo "node $IX_NODE copy of $d differs" >&2; exit 3; }
+  echo "$d: $(wc -l <<< "$a") files, SHA-256 lists equal"
+}
 onx "test -f $S/v2/eval/ix1/launch.sh" || { echo "mirror $SHA is not on node $IX_NODE" >&2; exit 2; }
 onx "grep -q '^  \[$NAME\]=\"$REF [0-9a-f]* $PKG\"' $S/v2/eval/ix1/launch.sh" ||
   { echo "mirror $SHA has no DIAGNOSTIC entry $NAME -> $PKG" >&2; exit 2; }
@@ -71,15 +91,25 @@ case "$STAGE" in
     onc "python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); print(json.dumps({k: r.get(k) for k in (\"source_model_sha256\", \"model_sha256\")}))' $BCK.receipt/bf16-copy.json"
     echo "receipt $(onc "sha256sum < $BCK.receipt/bf16-copy.json | cut -c1-64")" ;;
   push)
-    [ "$IX_NODE" = d ] || { echo "push is for IX_NODE=d" >&2; exit 2; }
-    onx "test ! -e $BCK" || { echo "$BCK exists on node D" >&2; exit 3; }
-    onx "umask 077; mkdir -p $MD"
-    for d in "$BCK" "$BCK.receipt"; do
-      ona "ssh $KEY $C 'tar -C $(dirname "$d") -cf - $(basename "$d")' | ssh $KEY $X 'tar -C $(dirname "$d") -xf -'"
-      a=$(onc "$(sums "$d")") b=$(onx "$(sums "$d")")
-      [ -n "$a" ] && [ "$a" = "$b" ] || { echo "node D copy of $d differs" >&2; exit 3; }
-      echo "$d: $(wc -l <<< "$a") files, SHA-256 lists equal"
-    done ;;
+    [ "$IX_NODE" != c ] || { echo "push is for IX_NODE=a|d" >&2; exit 2; }
+    copy_from_c "$BCK"
+    copy_from_c "$BCK.receipt" ;;
+  base)
+    [ "$IX_NODE" != c ] || { echo "base is for IX_NODE=a|d" >&2; exit 2; }
+    if onx "test -f $BASEPKG/MODEL_MANIFEST.json"; then
+      a=$(onc "$(sums "$BASEPKG")") b=$(onx "$(sums "$BASEPKG")")
+      [ "$a" = "$b" ] || { echo "node $IX_NODE $BASEPKG differs from node C's" >&2; exit 3; }
+      echo "$BASEPKG present on node $IX_NODE and equal to node C's"
+    else
+      copy_from_c "$BASEPKG"
+    fi ;;
+  claim)
+    onx "f=/data/dev2/leases/gpu$IX_GPU.lock/owner; test -f \$f && grep -q '^status=released' \$f || { echo 'gpu$IX_GPU is not released' >&2; exit 3; }; \
+      rocm-smi --showuse --showmeminfo vram --json | python3 -c 'import json,sys; c=json.load(sys.stdin)[\"card$IX_GPU\"]; sys.exit(0 if float(c[\"GPU use (%)\"]) <= 5 and int(c[\"VRAM Total Used Memory (B)\"]) < 2 * 2**30 else 1)' \
+      || { echo 'gpu$IX_GPU is busy' >&2; exit 3; }; \
+      cp -p \$f /data/dev2/leases/gpu$IX_GPU.lock/owner.before-ixp-\$(date -u +%Y%m%dT%H%M%SZ); \
+      printf 'track=eval-ix1\nstatus=claimed for the 0.8B / 2B Index-path release run $NAME (the previous owner released it for any track)\nstart_utc=%s\n' \
+      \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" > \$f; echo gpu$IX_GPU claimed on node $IX_NODE" ;;
   stage)
     model=$(onx "python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"model_sha256\"])' $BCK.receipt/bf16-copy.json")
     [[ "$model" =~ ^[0-9a-f]{64}$ ]] || { echo "bad model SHA-256 in the bf16-copy receipt" >&2; exit 3; }
@@ -124,14 +154,18 @@ EOF
     onx "cd $S && bash v2/eval/ix1/score.sh --src $M --model $NAME --size $SIZE --panel $R/$PANEL > $R/logs/ixp-score-$NAME.log 2>&1; \
       e=\$?; tail -2 $R/logs/ixp-score-$NAME.log; exit \$e" ;;
   pull)
-    [ "$IX_NODE" = d ] || { echo "pull is for IX_NODE=d" >&2; exit 2; }
+    [ "$IX_NODE" != c ] || { echo "pull is for IX_NODE=a|d" >&2; exit 2; }
     onc "test ! -e $R/runs/$NAME" || { echo "node C already has runs/$NAME" >&2; exit 3; }
     onc "umask 077; mkdir -p $R/runs/$NAME"
-    ona "ssh $KEY $X 'cd $R/runs/$NAME && tar -cf - merged launcher-*.json' | ssh $KEY $C 'umask 077; tar -C $R/runs/$NAME -xf -'"
+    if [ "$IX_NODE" = a ]; then
+      ona "cd $R/runs/$NAME && tar -cf - merged launcher-*.json | ssh $KEY $C 'umask 077; tar -C $R/runs/$NAME -xf -'"
+    else
+      ona "ssh $KEY $X 'cd $R/runs/$NAME && tar -cf - merged launcher-*.json' | ssh $KEY $C 'umask 077; tar -C $R/runs/$NAME -xf -'"
+    fi
     a=$(onx "cd $R/runs/$NAME && find merged launcher-*.json -type f | LC_ALL=C sort | xargs sha256sum")
     b=$(onc "cd $R/runs/$NAME && find merged launcher-*.json -type f | LC_ALL=C sort | xargs sha256sum")
     [ -n "$a" ] && [ "$a" = "$b" ] || { echo "node C copy of runs/$NAME differs" >&2; exit 3; }
-    onc "printf 'merged/ and launcher receipts copied from node D (run there on panel-8) through node A, %s\n' \$(date -u +%FT%TZ) > $R/runs/$NAME/COPIED-FROM-NODE-D.txt"
+    onc "printf 'merged/ and launcher receipts copied from node $IX_NODE (run there on $PANEL) through node A, %s\n' \$(date -u +%FT%TZ) > $R/runs/$NAME/COPIED-FROM-NODE-$IX_NODE.txt"
     echo "runs/$NAME: $(wc -l <<< "$a") files, SHA-256 lists equal" ;;
   boot)
     onc "test -f $R/runs/$NAME/merged/results.jsonl" || { echo "no merged results on node C" >&2; exit 3; }
