@@ -1,0 +1,86 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's banner decision of 2026-10-02 09:44 UTC+8 (concept A: the gradient codename as the focal point), card-only revision of Kai 0.6B now; the other sizes take it through their pending releases",
+  "decision": "release",
+  "decision_sha256": "d1a718e16ecf8232015db5f52c387b3b285125f33c86951f354db6104aa62cec",
+  "gate_profile": "successor",
+  "items": {
+    "1_successor_R1_v3": {
+      "evidence": "v3 48.636 vs current 43.541: +5.09 [+2.65, +9.30]",
+      "passed": true
+    },
+    "1_successor_R2_human_transfer": {
+      "evidence": "human transfer delta 95% [-0.064, +0.061]",
+      "passed": true
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "evidence": "types choice OK, noul OK, score OK",
+      "passed": true
+    },
+    "1_successor_R4_mlx_diag": {
+      "evidence": "mlx-diag card-eligible macro +0.0044 [-0.0058, +0.0144]",
+      "passed": true
+    },
+    "1_successor_R5_tier_gates": {
+      "evidence": "own 1.0 low +10.00; v3 48.636 vs 90% of GLiNER2.5-Decide 42.524; H vs GLiNER2.5-Decide [-0.013, +0.161]; own 1.0 low > 0 ok, v3 >= 38.272 ok, H vs GLiNER2.5-Decide upper >= 0 ok, no type collapsed ok",
+      "passed": true
+    },
+    "1_successor_R6_no_overlap_exposure": {
+      "evidence": "6 training files, 0 exposed groups",
+      "passed": true
+    },
+    "1_successor_R7_public231": {
+      "evidence": "public 231 152 vs 142 (+10; McNemar p 0.087)",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "1 results below own 1.0 listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 32 files re-hashed; loaded 597103104",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "35f521eee6d4ec9ddeabbc39950e0b2298b88e2f2493950892107700d241f982",
+  "model_name": "Decision-2.0-Kai-0.6B",
+  "receipts_sha256": {
+    "automap-card-pre": "3fcad8c0769e0e568514ae9fe56057a4b710161874e6fb13f7435f2a1d2b2950",
+    "automap-hub": "e6b5b1d7cbdf101f53a69220f293e8ce598b2d573a2605e921f0af8eb58ba60b",
+    "automap-hub-tf518": "4794afd57697dce94175a3a7d0325da37e65bec9ef74806d6599d8b395f42eef",
+    "automap-post": "70ffc7c39746c690883984d38ac6e72c4648c89392c22d8e6a32818e52a39836",
+    "automap-pre": "97affa8fbce960634ee20f00cf8d8eb6b118298d685a8ec12a8ff5977d210439",
+    "card-post": "4cd59831461a5d8237906a0930c4da0d3302446b0599d53fc6f5adabb949d100",
+    "card-pre": "1096aafb9c54c819d6353aaeb89d4ef6101d71855b4b0934bdbaaa8eebc838f2",
+    "download": "3f7f96d8510f9544b72a8c0859e0ead9a111332050777bcebda0722cfa02f921",
+    "post": "d73361d1da0b5d2d23be287a44ce07889c8108c27ae14148f5eaaf3c6bb318e7",
+    "readback": "453a5df702b35c21299cc94c830a6489d9758a81f7dbcc702804dc16d3e60860",
+    "repeat-post": "e0160d955bd321ab14dc2d8d4252cec62dc83ed7a49ec17fabd38a74214f072b",
+    "repeat-pre": "335444bc41a90bf9feb27f853c4566add58d55d771a77daa9667651ce33766bd",
+    "tree": "3433c509da1e019c05202d6ee8d734f52b366e1a9275e3fd915b7210c6923a6b",
+    "upload": "628a7bdb99602228e1e275c8c7ddb3c324fea59cf5987568f9ab29d4731e9572"
+  },
+  "repo_id": "llm-semantic-router/Decision-2.0-Kai-0.6B",
+  "revision": "479ea8d1b46dfc87361d620029f1c27a9d304cd0",
+  "schema": "dev2-release-gate/1",
+  "supersedes": {
+    "gate_sha256": "787c31c9e5bf618c788d28acbe6b1009181d62b6e37fa16e6c231b2dd2ca2bc1",
+    "revision": "99c4e799392afa73241915aeb16fefa5ef3518d7"
+  },
+  "utc": "2026-10-02T02:00:57.301442+00:00"
+}

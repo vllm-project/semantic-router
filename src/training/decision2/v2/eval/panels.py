@@ -9,7 +9,9 @@ Score5-typed-DEV, 800 fresh 5-level typed Score items from the typed FINAL
 generator's Score family in fit / check halves (v2/eval/score5t.py), and
 HS1-DEV, 2,396 held-out rows of the data track's HS1 hard-skill families
 (v2/data/hs1/; records/hs1-prereg-2026-09-29.md), and HT-DEV v2, 1,944 held-out
-items of nine CSS15 task sources in the formal CSS format (v2/eval/htdev2/).
+items of nine CSS15 task sources in the formal CSS format (v2/eval/htdev2/), and
+MLX-DEV2, 5,215 held-out MASSIVE dev / PAWS-X validation items in the mlx-diag
+Choice / Noul format (v2/eval/mlx_dev2.py; records/mlx-dev2-2026-10-01.md).
 
 Layout under a panel root (default ``/data/dev2/private/panels``)::
 
@@ -83,6 +85,13 @@ DEVELOPMENT: dict[str, dict[str, Any]] = {
         "gold": "gold/mlx-diag.gold.jsonl",
         "gold_sha256": "71515a41583e7c4792c7058d45e6b12980f033bc9de2847b15dd3fb7b940b484",
         "originals": 2275,
+    },
+    "mlx-dev2": {
+        "prompts": "goldfree/mlx-dev2.prompts.jsonl",
+        "prompts_sha256": "35747a2679c86cac6577ed2e254f6fe9fafb673ef1af6fb5ff29589d2f9d8b73",
+        "gold": "gold/mlx-dev2.gold.jsonl",
+        "gold_sha256": "9d9398f4a5753cebf750429c6089ef833e7bf1f9d8f67bb5c330f9cdc01ee426",
+        "originals": 5215,
     },
     "ht-dev": {
         "prompts": "goldfree/ht-dev.prompts.jsonl",

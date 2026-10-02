@@ -1,0 +1,129 @@
+{
+  "builder_commit": "9e8e4653c956d4e196a7db9a1a762a6b377ac9a7",
+  "card": {
+    "assets_receipt_sha256": "b6b1e1731f7392f8c8a1b429fe583935a3589408ef3bb2c210debda1dd57494c",
+    "excluded": [],
+    "figures_sha256": {
+      "assets/banner.png": "64eeaf8b07e200d0d621921ec1b8b196f2535018db3db888a6b4139ae337cd83",
+      "assets/index-areas.png": "53a37d2b46c003110f79709f74c27d50991b80ff4912b764641df30ebd433912",
+      "assets/index-pareto.png": "e434c1c8b2edaa38c1fe9a8f73340967cf5867ac56b47a905f4c598cdf87517e",
+      "assets/jevarena-types.png": "285e144fca426edeb92cf7ec8163b78df71ca5830e5abedca2837fff7940efda",
+      "assets/jevarena.png": "5d41d15cd46a715a76d6cfb8ce7a7134cde92b7ae8b7c4cd9e2ce15f8fe4cb88"
+    },
+    "index_sha256": "bf2bd02d1359de5f1bdd871cb3e240b6f5022cc2e3d6638580e921cd4386ad4a",
+    "paired": {
+      "ci95": [
+        -1.5983844938613967,
+        4.73945179837806
+      ],
+      "delta": 0.22694625815822178,
+      "replicates": 5000,
+      "sha256": "09ff4b0f872b60fe665124440b111afe03575d44a458c8743446a0ca7d0200c6"
+    },
+    "readme_sha256": "e4fad576980af360309ccb50787fdf2b51a14344752aeee96ee7833994a63f56",
+    "shown": [
+      {
+        "key": "candidate",
+        "licence": "package",
+        "report_sha256": "e9a7c4700bd97bb78efa1c28117aa2a8a7a92fc2b3a29ead6d4f7e9c7f49b600"
+      },
+      {
+        "key": "autojev27",
+        "licence": "apache-2.0",
+        "report_sha256": "71dbd7fe3e1b73c6a3747d2d66aa151a9e7115e85c3b8adadaede6798547bc2c"
+      },
+      {
+        "key": "eikos27",
+        "licence": "mit",
+        "report_sha256": "a07e6b6bf7d1530c17af13ee4eb2e46e2ac3b32dabec61f071cfe5fd87bcfdf4"
+      },
+      {
+        "key": "jebadiah27",
+        "licence": "apache-2.0",
+        "report_sha256": "27ca2cb2340a202983bfe11e7119bc145fc84da5fe1e447c886badb8a42b2ab3"
+      }
+    ],
+    "tradeoffs": [
+      "Typed Choice (correct): 753/800 versus 800/800",
+      "Human-labelled transfer (median task macro-F1): 0.584 versus 0.587",
+      "mlx-diag non-English Noul (accuracy): 86.0% versus 88.7%",
+      "Transfer: Wikipedia politeness (macro-F1): 49.0% versus 52.9%",
+      "Transfer: Reddit humour (macro-F1): 56.9% versus 60.7%",
+      "Transfer: TempoWiC (macro-F1): 71.3% versus 73.6%",
+      "Transfer: Media ideology (macro-F1): 61.3% versus 63.3%",
+      "Transfer: Persuasion (macro-F1): 59.4% versus 61.1%",
+      "Transfer: FLUTE figurative language (macro-F1): 87.0% versus 88.6%",
+      "Transfer: Misinfo Reaction Frames (macro-F1): 77.2% versus 77.5%"
+    ]
+  },
+  "ended_utc": "2026-10-01T19:40:29.204853+00:00",
+  "files": 31,
+  "identity": {
+    "architecture": "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp",
+    "base": {
+      "files_sha256": {
+        "config.json": "191e0af232104ed8b65258cf3fb2b842e288008baca7633c11b82a1ac7203aab",
+        "crc32.txt": "b42dd291f5f98b05807e458f5b47849969a9b3326acbf0c97d28b05826740b83",
+        "generation_config.json": "e70c136c1b78ddc1fb0905bac8e733a4dc448d4f852a5dd75143fffc70be550e",
+        "merges.txt": "a9d356d7bdf1ef4949e3e748e95b8e10ad9d4e2e838eddc38a0a7b6b94d1db8d",
+        "model-00001-of-00018.safetensors": "ba0ce20aae489ad196733da5064bcdf159a1fe84f53336648196e1ebb7751b1c",
+        "model-00002-of-00018.safetensors": "06a148c01bfbe3faa14a5f184a7ff29a706f7ae1c8b2705d2058e26d17a001fb",
+        "model-00003-of-00018.safetensors": "2e1bf62cbcd406eaa64b60d10353e1f0ef4039d0976e56f05cabe953454f9968",
+        "model-00004-of-00018.safetensors": "511e34063187882659753c4d93f3859f93c019fd438d8813071921c81d9a3f1a",
+        "model-00005-of-00018.safetensors": "635cb53446dc74f219740fc59e18b774f877b803b9722e289ca62575a6efa701",
+        "model-00006-of-00018.safetensors": "0bc5214fac607f0e6cc92eec3789d4b8559410ef9fce66621ba8158e8410dae0",
+        "model-00007-of-00018.safetensors": "80b0c49033e9a0d5762562aa12f4acdb7f54da586f3d0110f28c48d91cf07892",
+        "model-00008-of-00018.safetensors": "7192c5b66185d3592927daabee1cc19e6f6e0ce75988ee20e824b624765fda79",
+        "model-00009-of-00018.safetensors": "af3c48cc37af44f3db6ae0579baf019180d48d9c527caa0a1f03ff85813a56d8",
+        "model-00010-of-00018.safetensors": "163490a76f3bea3a40855b7efc04ce6d27afaf1a34f0bbde495b9491f76457c9",
+        "model-00011-of-00018.safetensors": "5f3ae1b948aeee39da77aec558e8236cd65fe4d7cb7686a76bb007acc563c6d8",
+        "model-00012-of-00018.safetensors": "a3de1c7114677a8f5ac5c4892c90e8238ea5c1e2038c80e757dfc87c3902ca55",
+        "model-00013-of-00018.safetensors": "06ab79a41f74c9c5cb734816feb0c7fc364104b227165ee7391231e1155aa02a",
+        "model-00014-of-00018.safetensors": "4138ed94603065ba884bbcadedb04d7718bb40117e85e6f5c6fc5b9c05b7a85b",
+        "model-00015-of-00018.safetensors": "69224e27b9de4e7dbf6fc936c6eaae08447bda3b80a6c31a871ab451173afd22",
+        "model-00016-of-00018.safetensors": "73cb9a1089fb6155cb648609478d6633be8a5c7d9ca5a05bc8925ce8a553cefe",
+        "model-00017-of-00018.safetensors": "beb51f01056142ac4984bd800507b0dd0fd18de57f8e9ef6ea41d1a3598983a8",
+        "model-00018-of-00018.safetensors": "1d3479509e21494658f9b64d317f5ea8e55c4025d28c702d6c4d0b356ce8ea06",
+        "model.safetensors.index.json": "77042094076611b69791a610065f28b7013b8c621795fa86ddccc8bac7d1b9df",
+        "preprocessor_config.json": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516",
+        "tokenizer.json": "0997f410c57a1f4e53b09e4be8f4a172d90edd9564368fb0847030937229b9f3",
+        "tokenizer_config.json": "b11349aafa7cdc6a320767cf7ceb29ed82f7eda5d65e8e0819e76f0ce947bf27",
+        "video_preprocessor_config.json": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13",
+        "vocab.json": "ce99b4cb2983d118806ce0a8b777a35b093e2000a503ebde25853284c9dfa003"
+      },
+      "licence": "apache-2.0",
+      "redistribution": "not redistributed: the package pins the base by repository revision and per-file SHA-256, and it is fetched or supplied at load time",
+      "repo_id": "Qwen/Qwen3.8-27B",
+      "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+      "source_kind": "posttrained"
+    },
+    "dec_residual": false,
+    "head_variant": "shared",
+    "model_sha256": "2e07451107a2ca9735064cc01f7e43e8522b4bae48f2d77bdf29f7ea2fe6362c",
+    "readout": "head",
+    "temperature_by_type": null,
+    "text_parameter_count": 25624600064
+  },
+  "licence": "apache-2.0",
+  "manifest_sha256": "635c9042bd0d9e5bb17045101a2cf47cf7cadb3b8fed5fdf5eb8e671831bfed6",
+  "package": "/data/dev2/runs/release/dev2-card3-27B-20261001T193932Z/package/Decision-2.0-Vega-27B",
+  "parameters": {
+    "external_base_text": 25624600064,
+    "loaded": 26096775168,
+    "packaged": {
+      "adapter": 466911232,
+      "head": 5263872,
+      "residual": 0
+    }
+  },
+  "release_decision": {
+    "sha256": "34c4a1bdab2bc7b33271188ebd8cc58d0185842cdfde89de20ccca0a3b4ad3ff",
+    "status": "final"
+  },
+  "schema": "dev2-release-build/1",
+  "screen": {
+    "text_files_screened": 26
+  },
+  "spec_sha256": "4736dbd4e7bdba439eebd6387dbfcc90c2021f6beaf00dae34bdb43bc520cbe1",
+  "started_utc": "2026-10-01T19:40:01.218249+00:00"
+}

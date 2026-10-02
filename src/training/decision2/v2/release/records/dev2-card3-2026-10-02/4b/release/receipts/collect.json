@@ -1,0 +1,21 @@
+{
+  "collection": {
+    "items": [
+      "llm-semantic-router/Decision-2.0-Vega-27B",
+      "llm-semantic-router/Decision-2.0-Lux-9B",
+      "llm-semantic-router/Decision-2.0-Nox-4B",
+      "llm-semantic-router/Decision-2.0-Sol-2B",
+      "llm-semantic-router/Decision-2.0-Eos-0.8B",
+      "llm-semantic-router/Decision-2.0-Kai-0.6B"
+    ],
+    "private": true,
+    "slug": "llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00",
+    "title": "🎲 Decision 2.0"
+  },
+  "gate_sha256": "6f03954ab404287e68f93a91fdfe094e15a899d73f7c5e7833fc5b5574511f53",
+  "passed": true,
+  "repo": "llm-semantic-router/Decision-2.0-Nox-4B",
+  "revision": "54b084f98e1713480f7d5b83b11e37171cba2270",
+  "schema": "dev2-hub-collect/1",
+  "utc": "2026-10-01T19:39:28.304602+00:00"
+}

@@ -205,6 +205,144 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 10:00 — **The user asked for fast all-size progress. Index sweep (new worker) over every frozen breadth
+  candidate under the Index-first rule.**
+  - **Scope:**
+    - 0.8B: M13 `08b-RASD`, M14 `08b-RAUP`, M15 `08b-RASDML`, plus the measured `08b-RA`;
+    - 2B: M12 `2b-RA`, M13 `2b-RASD`, M14 `2b-RAUP`, M16 `2b-RA-a75`;
+    - 9B: `L9IB`, `K-a12IB`.
+  - **Rules.** Paired CI vs the current release of each tier; the best lower bound > 0 plus the integrity checks →
+    release; ≤ 30 GPU-h; node A GPU3–5, node B GPU2–4 (if the suite is mirrored), and free node C / D GPUs.
+  - **Coordination.** The 0.8B / 2B Index-path continuation (b49d1f36) may release first. The sweep then compares
+    against the new release.
+  - **Owners:** 4B (5e7b8132) and 27B (355ad916).
+
+- 2026-10-02 09:55 — **USER DECISION (09:38 / 09:55): the release rule becomes INDEX-FIRST; banner concept A.**
+  It supersedes the 02:05 Index path and successor items 1–8 as release blockers.
+  - **Release gate (the only quality blocker):** the frozen candidate's private **Jev Decision Index delta vs the
+    current release is significantly positive** (paired bootstrap over rows within benchmarks through the board's area
+    weights, ≥ 2,000 replicates, 95% CI lower bound > 0). One Index run per frozen candidate.
+  - **Kept as integrity checks (not quality comparisons):**
+    - exact package parity and Hub / `trust_remote_code` checks;
+    - the row-level Index contamination audit (the card footnote stays "audited");
+    - **no decision type collapsed** (the Index has no Score questions, so a collapsed Score head would otherwise
+      ship).
+  - **References, reported but NOT blockers:** JevArena (v3), human-labelled transfer, mlx-diag / MLX-DEV2,
+    JevBench public 231, C1 post-key. Always record them. The coordinator flags material regressions to the user.
+  - **Selection among candidates of a tier:** the largest Index-gain CI lower bound.
+  - Always record (privately) the transfer-only Index delta.
+  - **For all running workers (re-read before any GO / upload):**
+    - finish the current measurement;
+    - judge releases by this rule, not items 1–8;
+    - do not run C1 item 8 unless it is already in progress (it is a reference now);
+    - never publish concurrently (`main`-unchanged check).
+  - **Banner:** concept A ("codename hero"; gradient codename + size, an eyebrow "DECISION 2.0", a tagline, a large
+    translucent vLLM-SR V-mark) from `private/card-preview/banner-v3/make_banners.py`. It goes into the default card
+    generator, and card-only revisions go out repo by repo.
+  - **Candidates newly eligible** (private Index already measured): 4B `4b-LHA10SD` and 0.8B `08b-RA`. Others are
+    being measured.
+  - **Launched:**
+    - **4B Index-first release (5e7b8132):** paired CI for `4b-LHA10SD`; measure `4b-LHA10UP` and M16 `-a75`
+      (`-a50`, `LHA10SDML` optional); an item-3 sanity check; release the winner to `Decision-2.0-Nox-4B`; ≤ 15
+      GPU-h.
+    - **Banner A (4c0a68cd):** goes into the default generator first. A card-only revision for Kai now. Eos / Sol /
+      Nox / Lux / Vega pick it up through their pending releases (card-only only if nothing lands within 3 h).
+    - **0.8B:** when the Index-path continuation (b49d1f36) reports, the coordinator compares `08b-RA` with the M16
+      a75 points by Index-gain lower bound under the 09:55 rule.
+
+- 2026-10-02 09:40 — **Watchdog: a session interruption (≈ 04:40–09:30 UTC+8) silently stopped every worker;
+  continuations relaunched.**
+  - **9B:** K-a13IB passed items 1' and 2–8 (state 19:47Z), and **`Decision-2.0-Lux-9B` `259a4550` was published at
+    20:37Z**, but the worker never reported.
+    - → **release verification + records (68fece59):** Hub state, post-upload checks, card generator, release
+      record, gists.
+  - **27B M6:** the last poll was 20:10Z. The M6-IB / IBX chains ran unattended (no containers left). M6-IB2 is still
+    training (ETA ≈ 01:40Z), M6-IB2PN ETA ≈ 06:20Z.
+    - → **continuation #4 (355ad916):** reconstruct the gap, verdicts on both paths, MLX-DEV2 report, item 8, Index,
+      release to Vega-27B.
+  - **0.8B / 2B Index path:** stopped after `00401c9b5` (04:17); no Index containers were running.
+    - → **continuation (b49d1f36):** find the finished runs, finish the Index runs, item 1' / 6(b)', item 8, releases
+      to Eos-0.8B / Sol-2B.
+  - **M17:** stopped right after creating its worktree; nothing ran.
+    - → **M17 restart (7cee4275):** 4B IB swap + typed SD + MLX-DEV2; node E / F.
+
+- 2026-10-02 04:40 — **M16 final (ad17bb4f): no classic successor; three Index-path candidates already in evaluation;
+  4B excluded on mlx-diag; M17 launched (4B IB swap + MLX-DEV2).** Results `949ff508c`; integration `456c996fe`; 5.95
+  of 30 GPU-h.
+  - **Development.** Interpolation recovered the gates: 15 of 24 points pass. Transfer: 0.8B a75 +.19 to +.20, 2B
+    +.10 to +.15, 4B +.03 to +.045.
+  - **Formal verdicts:**
+
+    | Finalist | v3 | mlx-diag | Verdict |
+    | --- | --- | --- | --- |
+    | `08b-RA-a75` | +3.68 [−2.76, +4.82] | pass | classic items 1 / 6(b) fail |
+    | `08b-RASD-a75` | +1.45 [−4.27, +4.63] | pass | classic items 1 / 6(b) fail |
+    | `2b-RASD-a25` | +.05 [−.60, +1.67] | pass | classic items 1 / 6(b) fail |
+    | `2b-RA-a75` | −2.05 [−3.31, +3.14] | −.018 | fail |
+    | `4b-LHA10SD-a50` | +.02 [−1.81, +2.65] | −.015 | fail |
+    | `4b-LHA10SD-a75` | −.07 [−2.53, +2.38] | −.019 | fail |
+
+    - The two 0.8B bars both bind (the parity run differs from the stored run at 0.8B).
+    - **The Index-path evaluation of `08b-RA-a75`, `08b-RASD-a75` and `2b-RASD-a25` is already running (1afc17e8).**
+  - **The old MLX-DEV passed the 2B / 4B points whose formal mlx-diag then fell.** MLX-DEV2 is mandatory from now on.
+  - **M17 (c473a3b2, resumed):** 4B **swap** (constant tokens; ≈ 10% / 17% of the *English* rows replaced by IB; all
+    non-English rows kept) plus typed self-distillation, an optional ⅔ / ⅓ anchor interpolation, **MLX-DEV2 before
+    formal**, both paths; node E / F; 50 GPU-h.
+
+- 2026-10-02 04:30 — **Card fix round 3 published (4c0a68cd).**
+  - **Current `main` revisions:**
+
+    | Repo | `main` |
+    | --- | --- |
+    | Kai-0.6B | `dcfb7d3e` |
+    | Eos-0.8B | `9c7f3ea0` |
+    | Sol-2B | `b42b6ff3` |
+    | Nox-4B | `54b084f9` |
+    | Vega-27B | `1efb5cbb` |
+    | Lux-9B | `586af779` (unchanged; its successor release regenerates the card) |
+
+    The collection is untouched.
+  - **Generator default** (`065c5bfe1` / merge `d1a8b5ab4`; layout `d152f93e5`):
+    - `python -m v2.release.card_index` builds the Index file with the **board's served-parameter convention** and
+      the "audited" footnote;
+    - it **refuses** any Index file with another convention or footnote.
+  - Records `744aa935b`; integration `1e12fce43`.
+  - **All pending releases** (9B K-a13IB 542e6421; 0.8B / 2B Index path 1afc17e8; 27B M6 4a20f83f) build on these
+    mains with this generator.
+
+- 2026-10-02 04:25 — **M16 interim (ad17bb4f, worktree `vllm-sr-dev2-dec-m16`): interpolation recovers the typed heads
+  AND formal mlx-diag. Index-path evaluation launched for 0.8B / 2B (1afc17e8).**
+  - **0.8B:** `08b-RASD-a75` and `08b-RA-a75` pass formal items 2, 3, **4**, 5, 6(a) and 7, and fail classic items 1 /
+    6(b) (v3 not significantly up).
+  - **2B:**
+    - `2b-RASD-a25` fails only items 1 / 6(b) (v3 +.05 [−.60, +1.68]);
+    - `2b-RA-a75` also fails item 4 and is excluded.
+  - **4B:** `4b-LHA10SD-a75` fails item 1 vs LH; `-a50` is still collecting.
+  - **M16 predates the Index path.** The coordinator applies it separately: private Index runs → item 1' / 6(b)' →
+    the per-tier winner by Index-gain lower bound → item 8 → release as `Decision-2.0-Eos-0.8B` /
+    `Decision-2.0-Sol-2B`, after the card fix round, on the current `main`. The transfer-only delta is recorded
+    privately.
+  - **Finding:** interpolation (α .25–.75 toward the breadth arm) is the first lever at 0.8B / 2B to keep the type
+    floors **and** formal multilingual, while retaining breadth.
+
+- 2026-10-02 04:15 — **MLX-DEV2 VALIDATED and adopted (c0ce08eb).** Record `v2/eval/records/mlx-dev2-2026-10-01.md`;
+  panel `mlx-dev2` in `v2/eval/panels.py`; runner `v2/eval/mlx_dev2_run.sh`; integration `12ac952b9`; 1.07 GPU-h.
+  - **Panel.** Built exactly like mlx-diag's card part (same languages, families, English instructions,
+    target-language states) from the publishers' **non-test** splits:
+    - Choice: MASSIVE 1.1 dev, CC BY 4.0, 345 × 7;
+    - Noul: PAWS-X validation, 400 × 7.
+    - 5,215 prompts; the isolation scan covers all program data on nodes A / B.
+    - No Score part (mlx-diag's Score is XNLI, NC).
+  - **Validation:** **5 / 5 verdicts correct.** It flags `4b-LHA10SD` (−.028), `08b-RA` (−.019) and M5-L128 (−.009),
+    and passes LH (+.015) and K-a13IB (−.002, n.s.). Spearman vs formal mlx-diag **1.00**; CI half-widths .004–.007.
+  - **RULE (mandatory for every breadth / IB arm before any formal panel is read):** MLX-DEV2 card-eligible
+    (Choice + Noul) paired delta vs the reference must have a 95% CI upper bound ≥ 0 (stratified paired bootstrap,
+    5,000 replicates, seed 20260927; `guard_pass` in `mlx_dev2 compare`).
+    - It replaces the old MLX-DEV guard, which is now report-only.
+    - Formal item 4 still applies at release.
+  - **M16 (ad17bb4f)** was launched with the old guard. Its finalists must also pass MLX-DEV2 before formal; the
+    coordinator enforces this at hand-off.
+
 - 2026-10-02 03:40 — **27B M6 continuation #2 handed off (0d2e488f); continuation #3 launched.**
   - **No results yet.** First gates ≈ 22:30Z, first verdict ≈ 23:30Z, the M6-IB2PN hedge ends ≈ 06:20Z Oct 2.
   - **#2's work:**

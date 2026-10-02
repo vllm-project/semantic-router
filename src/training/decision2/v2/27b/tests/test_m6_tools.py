@@ -835,6 +835,93 @@ class M6ScriptTest(unittest.TestCase):
         self.assertEqual(out.returncode, 2)
         self.assertIn("bad ARM", out.stderr)
 
+    def index_run(self, *args, dry=True):
+        env = dict(os.environ, M6_INDEX_DRY="1" if dry else "0")
+        return subprocess.run(
+            ["bash", str(M6 / "m6-index-run.sh"), "0" * 40, "M6-IB", *args],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+    def test_index_run_node_checks(self):
+        for args, message in (
+            (["e", "0", "4"], "NODE must be c or d"),
+            (["d", "0,8", "4"], "SHARDS"),
+            (["d", "0,0", "4"], "lists a shard twice"),
+            (["d", "0,1"], "no GPU listed"),
+            (["d", "0,1", "3"], "node d: GPU 3 is not allowed"),
+            (["c", "0,1", "0"], "node c: GPU 0 is not allowed"),
+            (["c", "0,1", "1", "1"], "listed twice"),
+        ):
+            with self.subTest(args=args):
+                out = self.index_run(*args)
+                self.assertEqual(out.returncode, 2)
+                self.assertIn(message, out.stderr)
+
+    def test_index_run_deals_shards_to_gpus(self):
+        out = self.index_run("c", "4,5,6,7", "1", "2")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(
+            out.stdout.splitlines(),
+            [
+                "shard 4: node c GPU1",
+                "shard 5: node c GPU2",
+                "shard 6: node c GPU1",
+                "shard 7: node c GPU2",
+                'launch.sh --gpus "9 9 9 9 1 2 1 2"',
+            ],
+        )
+        out = self.index_run("d", "0,1", "4", "5", "6", "7")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn('launch.sh --gpus "4 5 9 9 9 9 9 9"', out.stdout)
+        out = self.index_run("d", "0,1", "4", dry=False)
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("missing mirror", out.stderr)
+
+    def index_plan(self, gpus):
+        env = dict(os.environ, M6_INDEX_GPUS=gpus, DEV2_NODES_FILE="/nonexistent")
+        return subprocess.run(
+            ["bash", str(M6 / "m6-index.sh"), "0" * 40, "M6-IB", "plan"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+    def test_index_plan_splits_shards_across_nodes(self):
+        out = self.index_plan("d4 d5 d6 d7 c1 c2 c3 c4")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        lines = out.stdout.splitlines()
+        self.assertIn("node d: shards 0,1,2,3 on GPU 4 5 6 7", lines)
+        self.assertIn("node c: shards 4,5,6,7 on GPU 1 2 3 4", lines)
+        self.assertIn('  launch.sh --gpus "9 9 9 9 1 2 3 4"', lines)
+        out = self.index_plan("d4 c1 d5 c2")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        lines = out.stdout.splitlines()
+        self.assertIn("node d: shards 0,2,4,6 on GPU 4 5", lines)
+        self.assertIn("node c: shards 1,3,5,7 on GPU 1 2", lines)
+        self.assertIn('  launch.sh --gpus "4 9 5 9 4 9 5 9"', lines)
+        self.assertIn('  launch.sh --gpus "9 1 9 2 9 1 9 2"', lines)
+        self.assertIn("  shard 6: node d GPU5", lines)
+        self.assertIn("  shard 7: node c GPU2", lines)
+        out = self.index_plan("4 5 6 7")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(
+            out.stdout.splitlines()[0], "node d: shards 0,1,2,3,4,5,6,7 on GPU 4 5 6 7"
+        )
+        for gpus, message in (
+            ("c0", "not 'c0'"),
+            ("d3", "not 'd3'"),
+            ("d4 d4", "lists d4 twice"),
+            ("4 d4", "lists d4 twice"),
+            (" ", "1-8 entries"),
+            ("c1 c2 c3 c4 c5 c6 c7 d4 d5", "1-8 entries"),
+        ):
+            with self.subTest(gpus=gpus):
+                out = self.index_plan(gpus)
+                self.assertEqual(out.returncode, 2)
+                self.assertIn(message, out.stderr)
+
     def test_bash_n(self):
         scripts = sorted(M6.glob("*.sh"))
         self.assertTrue(scripts)

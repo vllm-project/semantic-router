@@ -6,6 +6,15 @@ repositories with a standard, formal model-release card. Worktree `vllm-sr-dev2-
 
 ## Now
 
+- 02:10Z (2026-10-02) — **Round 4 (banner concept A):** default generator `cc7151c5b` / `032f33009`, merged at
+  01:51Z. Kai 0.6B published as `479ea8d1`; verification passes, and the lease is removed. Eos, Sol, Nox, Lux and
+  Vega are left to their pending releases. The three-hour check is due at 04:51Z. Record:
+  `dev2-card4-2026-10-02.md`.
+- 20:30Z (2026-10-01) — **Round 3 DONE** (user card fix 03:04 UTC+8): the Index charts use the board's
+  served-parameter convention, and the footnote adds the row-level audit. Kai 0.6B `dcfb7d3e`, Eos 0.8B `9c7f3ea0`,
+  Sol 2B `b42b6ff3`, Nox 4B `54b084f9`, Vega 27B `1efb5cbb`. Lux 9B is untouched, left to its successor release,
+  which uses the fixed generator (`065c5bfe1` / `d1a8b5ab4`, `d152f93e5`). The collection is unchanged and no
+  leases remain. Record: `dev2-card3-2026-10-02.md`.
 - 18:50Z (2026-10-01) — **Round 2 DONE** (COORDINATION 2026-10-02 00:05): rename to `Decision-2.0-<codename>-<size>`
   and product cards. Kai 0.6B `35882d49`, Eos 0.8B `5c878c67`, Sol 2B `73bb148b`, Nox 4B `eff06485`, Lux 9B
   `586af779`, Vega 27B `d97928d3`. Every receipt, gate re-evaluation and Hub smoke passes; former IDs redirect; the
