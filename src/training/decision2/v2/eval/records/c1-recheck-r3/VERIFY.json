@@ -1,0 +1,20 @@
+{
+ "datasets": {
+  "ib4-p1": {
+   "families": {
+    "fc_pick": 468,
+    "isarc2": 2636,
+    "sentfin3": 2661,
+    "sqa2": 3694
+   },
+   "groups": 5605,
+   "path": "/data/dev2/private/data/ib4/p1/final/out/ib4.train.jsonl",
+   "rows": 9459,
+   "sha256": "6045b456d4b3032db4b76d70d792e3e9e30aad13e16a8f86fb3e99bc325806fb"
+  }
+ },
+ "ok": true,
+ "schema": "dev2-c1-recheck-verify/1",
+ "spec": "r3-ib4p1",
+ "spec_sha256": "9601ad9490cd1f55ce53726e86e4119cb00827ba4b293cec5ae63ba89bc796b8"
+}
