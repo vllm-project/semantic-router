@@ -4,6 +4,15 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17` (r
 stopped after creating the worktree, nothing had run). Prereg `da770d98a`, ops `1ce8b2220` (mirror on nodes E / F),
 data lock `4f68f1eb0`.
 
+## 2026-10-02 17:10Z — Nox-4B d55528d1 released (4b-SDMLxALL)
+
+- `vllm-sr/Decision-2.0-Nox-4B@d55528d1` is `main` and private: the `4b-SDMLxALL` weights (`48e8c023…`) on the
+  phase A runtime. Gate evaluate passed. Fast-path post checks pass: download re-hash, Hub smoke under 5.17 and 5.18,
+  the 86-request gate (86 / 86, max |Δp| 0). The superseded `137e28ce` weights were purged (9.70 GB).
+  Record: [`dev2-4b-xall-2026-10-02.md`](../../release/records/dev2-4b-xall-2026-10-02.md).
+- M17 holds no GPU leases (node E GPU3 / 7 are marked released). Next: the arm factory's 4B soups and `4b-AFxALL`
+  point, then a wave-6 plan toward JPT-4B 43.04.
+
 ## 2026-10-02 15:30Z — 4b-SDMLxALL release running (user 23:02 UTC+8, fast path)
 
 - The user asked for `4b-SDMLxALL` (the highest 4B candidate; IF1 lower bound vs the current weights > 0) on top of
