@@ -213,6 +213,10 @@ type RequestContext struct {
 	// VSRSelectedCandidate is the exact post-policy choice used at dispatch.
 	// Never recover its reasoning settings by searching model names again.
 	VSRSelectedCandidate *config.ModelRef
+	// primaryBackendName is the exact provider backend selected for the primary
+	// dispatch. It is separate from VSRSelectedModel, which preserves the
+	// client-facing logical model or LoRA identity for telemetry and headers.
+	primaryBackendName string
 
 	// FallbackRecord tracks bounded cross-candidate execution attempts and token accounting.
 	FallbackRecord        *fallback.ExecutionRecord

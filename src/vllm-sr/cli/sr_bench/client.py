@@ -27,6 +27,9 @@ class Client:
         self.autostart = autostart
         self.verify_store = verify_store
         self.headers = {}
+        # Last version reported by a successful /health response, kept so a
+        # readiness failure can name the observed skew instead of a bare timeout.
+        self._last_observed_version = None
         self.token_env, token = service_credentials()
         if token:
             self.headers["Authorization"] = "Bearer " + token
@@ -38,20 +41,20 @@ class Client:
             )
             if response.status_code in {401, 403}:
                 raise ValueError(f"Service authentication failed; set {self.token_env}")
-            if (
-                response.status_code == HTTPStatus.OK
-                and response.json().get("version") == VERSION
-            ):
-                if (
-                    self.verify_store
-                    and urlparse(self.url).hostname in {"127.0.0.1", "localhost"}
-                    and response.json().get("store_id")
-                    != hashlib.sha256(str(self.store).encode()).hexdigest()
-                ):
-                    raise ValueError(
-                        "This URL belongs to a different sr-bench store; select its --store or a different --url"
-                    )
-                return True
+            if response.status_code == HTTPStatus.OK:
+                observed_version = response.json().get("version")
+                self._last_observed_version = observed_version
+                if observed_version == VERSION:
+                    if (
+                        self.verify_store
+                        and urlparse(self.url).hostname in {"127.0.0.1", "localhost"}
+                        and response.json().get("store_id")
+                        != hashlib.sha256(str(self.store).encode()).hexdigest()
+                    ):
+                        raise ValueError(
+                            "This URL belongs to a different sr-bench store; select its --store or a different --url"
+                        )
+                    return True
             return False
         except requests.ConnectionError:
             return False
@@ -120,7 +123,13 @@ class Client:
             if self.ready():
                 return
             time.sleep(0.1)
-        raise ValueError("sr-bench service did not become ready; inspect service.log")
+        message = "sr-bench service did not become ready; inspect service.log"
+        if self._last_observed_version not in (None, VERSION):
+            message += (
+                f" (service reports version {self._last_observed_version},"
+                f" expected {VERSION})"
+            )
+        raise ValueError(message)
 
     def request(self, method, path, body=None):
         self.ensure()
