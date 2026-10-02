@@ -35,7 +35,14 @@ section first). Earlier: 2026-10-02 17:45 UTC+8 (09:45Z; continuation #5 from 08
 - **14:53Z:** prerelease passed pre-upload examples, card example, four-panel scored parity (14:17–14:41Z) and remote
   code; AutoModel parity since 14:50Z. M7 at steps 2,147–2,193 (14:32Z, 9.5–9.9 s / update): IB14ML ends ≈ 00:50Z;
   IB124ML projects ≈ 06:10–06:20Z against caps 06:17–06:19Z (a capped seed keeps its BEST among saves ≤ 6,993).
-  TF518 site digest `93df9002…` (unchanged since 10-01 07:52, the 4B / 9B / M6-IB releases' site). Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
+  TF518 site digest `93df9002…` (unchanged since 10-01 07:52, the 4B / 9B / M6-IB releases' site).
+- **15:18Z: prerelease PASSED** (14:08–15:17Z, node A GPU0): build, two example processes, repeat, card example,
+  four-panel scored parity (typed-final 1,600, css15 6,547, public231 231, mlx-diag 2,275), remote code, AutoModel
+  parity on every scored prompt, `verify_bundle` ok (30 files, identity `58469731…`); manifest `a0d3129f…` (no upload).
+  **Release launched 15:17:45Z** (`release27bx.sh M6-IBxIB2-m50 --release --gpu 0`, mirror `aaf270df1`): Vega `main`
+  was `e60bd8e3` right before; storage 58.17 GB of 100. The 9B M10 KIB4-a40 release (Lux-9B, another repository) runs
+  on node A at the same time, which COORDINATION 15:35 allows (headroom ≥ 10 GB; both uploads fit).
+  Log `/data/dev2/logs/27bx-M6-IBxIB2-m50-release-20261002T151745Z.log`. Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
 continuation #3, 4a20f83f, 19:37–20:10Z, silently stopped after its 20:10Z poll; its entries below say "cba71646",
 which is the coordinator's ID; worker 3 0d2e488f ran 15:12–19:40Z; worker 2 a56025bb 10:44–15:15Z; worker 1 11741ee2
 06:17–10:55Z). **Amendment 6 (`6bbb2512d`): the MLX-DEV2 guard for every M6 finalist** (COORDINATION 04:15).
