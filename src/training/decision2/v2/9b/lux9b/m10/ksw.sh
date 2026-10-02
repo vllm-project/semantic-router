@@ -43,8 +43,18 @@ case $MODE in
       log "KIB soup pulled from node C ($(wc -l <<< "$a") files, SHA-256 lists equal)"
     fi
     (cd "$LUXHOST" && sha256sum -c --quiet "$LUXSUMS") || fail "Lux zero-step member differs from K-a13IB's"
+    # decision_config.json records the member paths, so the members sit (hard links) at M9's container paths
+    m9=/data/dev2/runs/9b/m9
+    if [ ! -d "$m9/soup/KIB/build/KIB-soup" ]; then
+      mkdir -p "$m9/soup/KIB/build" "$m9/arms/pre/m9-KIB-s1-zero"
+      cp -al "$dst" "$m9/soup/KIB/build/KIB-soup"
+      cp -al "$LUXHOST" "$m9/arms/pre/m9-KIB-s1-zero/checkpoint-0000000"
+      echo "node B: hard links of M10's KIB soup copy and Lux zero-step member at M9's paths (9B M10 KSW teacher)" \
+        > "$m9/README.node-b"
+    fi
     M10_NODE=b bash "$L" ksw-teacher "$SRC" "$K/teacher" --cpu -- -m v2.dec.soup \
-      --member /runs/m10/inputs/m9-KIB-soup --member "$LUXCK" --member "$LUXCK" --output /out/K-a13IB \
+      --member /runs/m9/soup/KIB/build/KIB-soup --member /runs/m9/arms/pre/m9-KIB-s1-zero/checkpoint-0000000 \
+      --member /runs/m9/arms/pre/m9-KIB-s1-zero/checkpoint-0000000 --output /out/K-a13IB \
       || fail "teacher soup build failed"
     got=$(grep -o '"model_sha256": *"[0-9a-f]\{64\}"' "$K/teacher.stdout.log" | tail -1 | grep -o '[0-9a-f]\{64\}')
     [ "$got" = "$KA13IB" ] || fail "rebuilt teacher identity $got is not K-a13IB's"
@@ -62,7 +72,7 @@ case $MODE in
       --keep-seed 20261001:m9-s3:keep --cut-language en --output /out/ksw || fail "KSW data build failed"
     n=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["x60_rows_kept"])' "$K/build/ksw/manifest.json")
     head -n "$n" "$K/build/ksw/train.jsonl" > "$K/x60-kept.jsonl"
-    log "KSW data: $(python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); k=m["x60_keep"]; print(f"rows {m[\"rows\"]}, x60 kept {m[\"x60_rows_kept\"]} (fixed non-English groups {k[\"fixed_groups\"]}), tokens {m[\"train_native_tokens\"]}, IB share {m[\"ib_token_share\"]}, train {m[\"train_sha256\"][:12]}")' "$K/build/ksw/manifest.json")"
+    log "KSW data: $(python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); k=m["x60_keep"]; print("rows", m["rows"], "x60 kept", m["x60_rows_kept"], "fixed groups", k["fixed_groups"], "tokens", m["train_native_tokens"], "IB share", m["ib_token_share"], "train", m["train_sha256"][:12])' "$K/build/ksw/manifest.json")"
     ;;
   teach)
     SUB=$2 SRC=$3
