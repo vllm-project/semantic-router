@@ -469,7 +469,7 @@ class M6ReportTest(unittest.TestCase):
                 "pass": False,
             },
             "G6_breadth_vs_A20r": {
-                "B_dev": 0.93,
+                "B_dev": {"candidate": 0.93, "reference": 0.92},
                 "delta": 0.01,
                 "delta_ci95": [0.002, 0.018],
                 "pass": True,
@@ -490,6 +490,7 @@ class M6ReportTest(unittest.TestCase):
                 "+0.0120 [+0.0020, +0.0220] / +0.0000 [+0.0000, +0.0000] (**FAIL**)",
                 lines[2],
             )
+            self.assertIn("| 0.9300, +0.0100 [+0.0020, +0.0180] (pass) |", lines[2])
             self.assertEqual(lines[-1], "Finalists: none.")
             rows = [noul_row(f"es{i}", "pn-name", "es", 0) for i in range(4)]
             rows += [noul_row(f"hop{i}", "pn-hop", "fr", 1) for i in range(2)]
@@ -921,6 +922,32 @@ class M6ScriptTest(unittest.TestCase):
                 out = self.index_plan(gpus)
                 self.assertEqual(out.returncode, 2)
                 self.assertIn(message, out.stderr)
+
+    def test_contrast_guard_moves_m4_contrast_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            gates = Path(tmp)
+            (gates / "contrast.json").write_text(
+                json.dumps({"pairs": {}, "runs": {}, "score_levels": {"M6-IB": {}}})
+            )
+            (gates / "contrast.log").write_text("log\n")
+            chain = subprocess.run(  # not our child: init reaps it, so kill -0 fails once it ends
+                ["bash", "-c", "sleep 2 > /dev/null 2>&1 & echo $!"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            out = subprocess.run(
+                ["bash", str(M6 / "m6-contrast-guard.sh"), chain],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                env=dict(os.environ, M6_GATES=tmp, M6_GUARD_LOG_DELAY="0"),
+            )
+            self.assertEqual(out.returncode, 0, out.stderr)
+            self.assertFalse((gates / "contrast.json").exists())
+            moved = sorted(p.name for p in gates.glob("contrast-M6-IB-*"))
+            self.assertEqual([Path(n).suffix for n in moved], [".json", ".log"])
+            self.assertIn("complete (no listed chain alive)", out.stdout)
 
     def test_bash_n(self):
         scripts = sorted(M6.glob("*.sh"))
