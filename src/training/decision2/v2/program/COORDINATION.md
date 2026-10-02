@@ -205,7 +205,7 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
-- 2026-10-03 01:50 — **WATCHDOG: about 11 GPUs are idle. Fill them now** (lease-check every GPU first).
+- 2026-10-03 01:38 — **WATCHDOG: about 11 GPUs are idle. Fill them now** (lease-check every GPU first).
   - **Free:**
     - node C GPU1–7: the arm-factory chains finished at 01:13–01:15, so the owner files say `released`;
     - node F GPU6–7;
@@ -220,7 +220,7 @@ exactly one gist file and updates it in place:
     claims them first for 27B soups / Index, else the arm factory.
   - **Shared-ctx (81330826):** node B GPU5 finishes its current panel, then is released (focus rule, 01:25).
 
-- 2026-10-03 01:45 — **USER (01:27): ship the best 4B / 9B / 27B now; make Vega public right after its release; then
+- 2026-10-03 01:36 — **USER (01:27): ship the best 4B / 9B / 27B now; make Vega public right after its release; then
   keep optimizing to same-size SOTA with progressive releases under the SAME rules as before (Index-first gate,
   integrity checks, fast-path post-checks, purge of superseded weights).** Use every GPU.
   - **The visibility policy is done centrally. Don't write your own: merge `47dd06be7` (branch
