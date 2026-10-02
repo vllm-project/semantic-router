@@ -17,6 +17,10 @@ routing:
     - name: model-a
       modality: text
   signals:
+    keywords:
+      - name: urgent
+        operator: OR
+        keywords: [urgent]
     classifiers:
       - name: safety-score
         type: local
@@ -34,10 +38,15 @@ routing:
             label: unsafe
             predicate:
               gte: 0.5
+          - type: keyword
+            name: urgent
+            predicate:
+              gt: 0.0000001
       modelRefs:
         - model: model-a
 `
-const condition = 'classifier("safety-score", label: "unsafe", predicate: { gte: 0.5 })'
+const condition =
+  'classifier("safety-score", label: "unsafe", predicate: { gte: 0.5 }) AND keyword("urgent", predicate: { gt: 0.0000001 })'
 
 test('keeps condition fields when a Builder route is edited and saved', async ({ page }) => {
   await mockAuthenticatedAppShell(page)
@@ -72,4 +81,5 @@ test('keeps condition fields when a Builder route is edited and saved', async ({
   const compiled = page.locator('pre').filter({ hasText: 'name: unsafe_prompts_route' })
   await expect(compiled).toContainText('label: unsafe')
   await expect(compiled).toContainText('gte: 0.5')
+  await expect(compiled).toContainText('gt: 1e-07')
 })

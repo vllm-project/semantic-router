@@ -29,6 +29,22 @@ describe('expression builder condition fields', () => {
     expect(tree && serializeNode(tree)).toBe(expected)
   })
 
+  it('writes small numbers as decimal literals that parse back', () => {
+    const when: BoolExprNode = {
+      type: 'signal_ref',
+      signalType: 'keyword',
+      signalName: 'urgent',
+      fields: { predicate: { gt: -2.5e-7, lte: 1e-7 } },
+      pos,
+    }
+    const expected = 'keyword("urgent", predicate: { gt: -0.00000025, lte: 0.0000001 })'
+
+    expect(serializeBoolExpr(when)).toBe(expected)
+    const tree = boolExprToRuleNode(when as unknown as Record<string, unknown>)
+    expect(tree && serializeNode(tree)).toBe(expected)
+    expect(parseExprText(expected)).toEqual(tree)
+  })
+
   it('reads condition fields from raw expression text', () => {
     const tree = parseExprText(
       'classifier("risk", label: "unsafe" predicate: {gte: 0.5, lt: 1}) OR keyword("urgent", terms: ["a", "b"], strict: true)',
