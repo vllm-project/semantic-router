@@ -49,7 +49,7 @@ A truncated classifier response — the provider only scanned part of the text �
 
 ## Router Replay does not capture request content on a masking route
 
-[Router Replay](/docs/tutorials/plugin/router-replay) snapshots the neutral request before dispatch, which is *before* masking runs. Enabling `masking` on a decision therefore disables request-body and prompt capture in Router Replay for that decision: `RequestBody` and `Prompt` are left empty. Routing metadata, signals, and decisions are still recorded — only the content is not. Tool definitions are still recorded, since they are operator-authored, not user content.
+[Router Replay](/docs/tutorials/plugin/router-replay) snapshots the neutral request before dispatch, which is *before* masking runs. Enabling `masking` on a decision therefore drops every request-derived field Replay would otherwise store for that decision: `RequestBody`, `Prompt`, and the request tool trace (user text, tool-call arguments, tool results) are all left empty. That applies on the internal Looper path and when masking itself fails, both of which also record before the final mask. Routing metadata, signals, and decisions are still recorded — only request content is not. Tool definitions are still recorded, since they are operator-authored, not user content. The response tool trace is unaffected: the model only ever saw masked content.
 
 Masking the stored Replay copy instead of suppressing it is a reasonable idea, but it needs a Replay update path that does not currently exist. It is not implemented here.
 
@@ -65,14 +65,18 @@ If a response happens to echo a placeholder like `[EMAIL_ADDRESS_0]` back to the
 
 ## What is deliberately not masked
 
-The masking walk touches message content, system/developer instructions, and structured tool-call arguments — and nothing else. Specifically left alone:
+The masking walk touches message content, system/developer instructions, tool-call arguments, and tool results — and nothing else.
+
+Tool payloads are masked according to their kind. A function call's JSON arguments and a structured (JSON object or array) tool result are decoded first and masked at their string leaves, so object keys stay intact, the payload stays valid JSON, and an escaped value such as `alice@example.com` is still caught. A custom tool's free-form input and a plain-text tool result are masked as text.
+
+Specifically left alone:
 
 - **Reasoning blocks.** Anthropic-style thinking blocks carry a provider signature over their text; rewriting the text would invalidate it and the provider would reject the request.
 - **Tool definitions** (`Tools[].Description`, `InputSchema`). These are operator-authored, not user input — masking them would corrupt the model's understanding of its own tools for no privacy benefit.
 - **Media payloads and references** (image/audio/video/file `Data`, `URL`, `FileID`, `Filename`).
 - **Identifiers** used for correlation: `ToolCall.ID`, `ToolResult.CallID`, `Request.Model`, `PreviousResponseID`, `ConversationID`.
 - **`Request.Metadata`** (client-supplied key/value pairs) — out of the issue's stated scope.
-- **JSON object keys** inside tool-call arguments. Only string *values* are scanned; a key that happens to look like PII is never touched.
+- **JSON object keys** inside tool-call arguments and structured tool results. Only string *values* are scanned; a key that happens to look like PII is never touched.
 
 ## Citations
 

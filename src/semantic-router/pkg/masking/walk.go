@@ -62,32 +62,36 @@ func applyToContent(blocks []llmprotocol.Content, a *Allocator, scan ScanFunc, o
 		return fmt.Errorf("masking: tool result nesting exceeds depth %d", maxToolResultDepth)
 	}
 	for i := range blocks {
-		block := &blocks[i] // a range copy would silently discard mutations
-		switch block.Kind {
-		case llmprotocol.ContentText:
-			if err := maskTextBlock(block, a, scan, out); err != nil {
-				return err
-			}
-		case llmprotocol.ContentToolCall:
-			if err := maskToolCallArguments(block.ToolCall, a, scan, out); err != nil {
-				return err
-			}
-		case llmprotocol.ContentToolResult:
-			if block.ToolResult != nil {
-				if err := applyToContent(block.ToolResult.Content, a, scan, out, depth+1); err != nil {
-					return err
-				}
-			}
-		case llmprotocol.ContentReasoning:
-			// Anthropic thinking blocks carry a provider Signature over their
-			// text. Rewriting the text invalidates it and the provider
-			// rejects the request, so reasoning is never masked (#3566).
-		default:
-			// Media (image/audio/video/file), generated images, and refusal
-			// blocks are explicit non-goals: the issue scopes masking to text
-			// and structured tool payloads, not binary payloads, URLs, or
-			// opaque identifiers.
+		// A range copy would silently discard mutations.
+		if err := applyToBlock(&blocks[i], a, scan, out, depth); err != nil {
+			return err
 		}
+	}
+	return nil
+}
+
+// applyToBlock dispatches one content block by kind.
+func applyToBlock(
+	block *llmprotocol.Content, a *Allocator, scan ScanFunc, out *Result, depth int,
+) error {
+	switch block.Kind {
+	case llmprotocol.ContentText:
+		return maskTextBlock(block, a, scan, out)
+	case llmprotocol.ContentToolCall:
+		return maskToolCallArguments(block.ToolCall, a, scan, out)
+	case llmprotocol.ContentToolResult:
+		if block.ToolResult != nil {
+			return maskToolResult(block.ToolResult, a, scan, out, depth)
+		}
+	case llmprotocol.ContentReasoning:
+		// Anthropic thinking blocks carry a provider Signature over their
+		// text. Rewriting the text invalidates it and the provider
+		// rejects the request, so reasoning is never masked (#3566).
+	default:
+		// Media (image/audio/video/file), generated images, and refusal
+		// blocks are explicit non-goals: the issue scopes masking to text
+		// and structured tool payloads, not binary payloads, URLs, or
+		// opaque identifiers.
 	}
 	return nil
 }
@@ -126,6 +130,51 @@ func maskTextBlock(block *llmprotocol.Content, a *Allocator, scan ScanFunc, out 
 	return nil
 }
 
+// maskToolResult masks a tool result's content. A structured (JSON object or
+// array) text payload is masked as decoded JSON leaves, so object keys stay
+// intact, escapes are seen through, and the result stays valid JSON. Custom
+// tools and plain-text payloads keep ordinary text masking.
+func maskToolResult(
+	result *llmprotocol.ToolResult, a *Allocator, scan ScanFunc, out *Result, depth int,
+) error {
+	if depth+1 > maxToolResultDepth {
+		return fmt.Errorf("masking: tool result nesting exceeds depth %d", maxToolResultDepth)
+	}
+	for i := range result.Content {
+		block := &result.Content[i]
+		structured := block.Kind == llmprotocol.ContentText &&
+			result.Kind != llmprotocol.ToolKindCustom &&
+			looksLikeJSONDocument(block.Text)
+		if !structured {
+			if err := applyToBlock(block, a, scan, out, depth+1); err != nil {
+				return err
+			}
+			continue
+		}
+		masked, changed, err := maskJSONDocument(block.Text, a, scan, out)
+		if err != nil {
+			return fmt.Errorf("masking: tool result %q content: %w", result.CallID, err)
+		}
+		if !changed {
+			continue
+		}
+		out.Changed = true
+		block.Text = masked
+		// Offsets into a rewritten JSON document no longer denote anything,
+		// and a citation on tool output is not attribution worth keeping (D6).
+		out.CitationsDropped += len(block.Citations)
+		block.Citations = nil
+	}
+	return nil
+}
+
+// looksLikeJSONDocument reports whether text is a JSON object or array. Bare
+// scalars stay on the text path so a plain result is never reserialised.
+func looksLikeJSONDocument(text string) bool {
+	trimmed := strings.TrimSpace(text)
+	return strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")
+}
+
 // maskToolCallArguments masks string leaves of the arguments JSON. Keys,
 // types and structure are preserved, so tool-call correlation and schema
 // validity survive. ToolCall.ID is never touched.
@@ -133,30 +182,83 @@ func maskToolCallArguments(call *llmprotocol.ToolCall, a *Allocator, scan ScanFu
 	if call == nil || strings.TrimSpace(call.Arguments) == "" {
 		return nil
 	}
-	// UseNumber preserves numeric literals exactly on re-marshal; decoding
-	// into float64 can lose precision for a large int64 (risk 1).
-	decoder := json.NewDecoder(strings.NewReader(call.Arguments))
-	decoder.UseNumber()
-	var decoded any
-	if err := decoder.Decode(&decoded); err != nil {
-		// Arguments the router cannot parse cannot be masked, and dispatching
-		// them unmasked would be a silent bypass (D4).
-		return fmt.Errorf("masking: tool call %q arguments are not valid JSON: %w", call.Name, err)
+	// A custom tool carries free-form text in Arguments, not a JSON object
+	// (llmprotocol.ToolKindCustom). Decoding it as JSON would refuse a valid
+	// call, so it is masked as text.
+	if call.Kind == llmprotocol.ToolKindCustom {
+		masked, changed, err := maskStringValue(call.Arguments, a, scan, out)
+		if err != nil {
+			return err
+		}
+		if changed {
+			out.Changed = true
+			call.Arguments = masked
+		}
+		return nil
 	}
-	masked, changed, err := maskJSONValue(decoded, a, scan, out)
+	masked, changed, err := maskJSONDocument(call.Arguments, a, scan, out)
 	if err != nil {
-		return err
+		return fmt.Errorf("masking: tool call %q arguments: %w", call.Name, err)
 	}
 	if !changed {
 		return nil
 	}
+	out.Changed = true
+	call.Arguments = masked
+	return nil
+}
+
+// maskJSONDocument masks the string leaves of a JSON document and returns it
+// re-serialised. Decoding first is what keeps object keys intact, keeps the
+// result valid JSON, and sees through escapes such as a.
+func maskJSONDocument(document string, a *Allocator, scan ScanFunc, out *Result) (string, bool, error) {
+	// UseNumber preserves numeric literals exactly on re-marshal; decoding
+	// into float64 can lose precision for a large int64 (risk 1).
+	decoder := json.NewDecoder(strings.NewReader(document))
+	decoder.UseNumber()
+	var decoded any
+	if err := decoder.Decode(&decoded); err != nil {
+		// Content the router cannot parse cannot be masked, and dispatching
+		// it unmasked would be a silent bypass (D4).
+		return "", false, fmt.Errorf("not valid JSON: %w", err)
+	}
+	masked, changed, err := maskJSONValue(decoded, a, scan, out)
+	if err != nil {
+		return "", false, err
+	}
+	if !changed {
+		return document, false, nil
+	}
 	serialized, err := json.Marshal(masked)
 	if err != nil {
-		return fmt.Errorf("masking: failed to re-serialize masked arguments for tool call %q: %w", call.Name, err)
+		return "", false, fmt.Errorf("failed to re-serialize masked JSON: %w", err)
 	}
-	out.Changed = true
-	call.Arguments = string(serialized)
-	return nil
+	return string(serialized), true, nil
+}
+
+// maskStringValue masks one plain string, reporting whether it changed.
+func maskStringValue(text string, a *Allocator, scan ScanFunc, out *Result) (string, bool, error) {
+	if text == "" {
+		return text, false, nil
+	}
+	spans, err := scan(text)
+	if err != nil {
+		return "", false, fmt.Errorf("masking: scan failed: %w", err)
+	}
+	merged := MergeSpans(a.filter(spans))
+	if len(merged) == 0 {
+		return text, false, nil
+	}
+	masked, _, err := MaskText(text, spans, nil, a)
+	if err != nil {
+		return "", false, err
+	}
+	out.MaskedCount += len(merged)
+	for _, span := range merged {
+		out.EntityTypes = append(out.EntityTypes, span.EntityType)
+		incrementEntityCount(out, span.EntityType)
+	}
+	return masked, true, nil
 }
 
 // maskJSONValue recurses into a decoded JSON value, masking string leaves and
@@ -164,27 +266,11 @@ func maskToolCallArguments(call *llmprotocol.ToolCall, a *Allocator, scan ScanFu
 func maskJSONValue(value any, a *Allocator, scan ScanFunc, out *Result) (any, bool, error) {
 	switch typed := value.(type) {
 	case string:
-		if typed == "" {
-			return typed, false, nil
-		}
-		spans, err := scan(typed)
-		if err != nil {
-			return nil, false, fmt.Errorf("masking: scan failed: %w", err)
-		}
-		merged := MergeSpans(a.filter(spans))
-		if len(merged) == 0 {
-			return typed, false, nil
-		}
-		masked, _, err := MaskText(typed, spans, nil, a)
+		masked, changed, err := maskStringValue(typed, a, scan, out)
 		if err != nil {
 			return nil, false, err
 		}
-		out.MaskedCount += len(merged)
-		for _, span := range merged {
-			out.EntityTypes = append(out.EntityTypes, span.EntityType)
-			incrementEntityCount(out, span.EntityType)
-		}
-		return masked, true, nil
+		return masked, changed, nil
 	case map[string]any:
 		changed := false
 		for key, child := range typed {

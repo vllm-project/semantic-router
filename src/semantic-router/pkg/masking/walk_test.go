@@ -486,3 +486,138 @@ func TestApply_RequestLevelFieldsUnchanged(t *testing.T) {
 		t.Fatalf("ConversationID was modified: got %q", request.ConversationID)
 	}
 }
+
+// Review #3806 (P2): a custom tool carries free-form text in Arguments, not
+// JSON. Decoding it as JSON refused a valid call, which failed the request
+// closed with a 503 before any scan ran.
+func TestApply_CustomToolInputMaskedAsText(t *testing.T) {
+	request := &llmprotocol.Request{
+		Messages: []llmprotocol.Message{
+			{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{
+					ID: "call_1", Name: "freeform", Kind: llmprotocol.ToolKindCustom,
+					Arguments: "mail alice@example.com about the invoice",
+				}},
+			}},
+		},
+	}
+
+	if _, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com")); err != nil {
+		t.Fatalf("valid custom-tool input was refused: %v", err)
+	}
+	got := request.Messages[0].Content[0].ToolCall.Arguments
+	if want := "mail [EMAIL_ADDRESS_0] about the invoice"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// A custom tool whose free-form input is not JSON must dispatch, not 503.
+func TestApply_CustomToolNonJSONInputDoesNotFail(t *testing.T) {
+	request := &llmprotocol.Request{
+		Messages: []llmprotocol.Message{
+			{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{
+					ID: "call_1", Name: "freeform", Kind: llmprotocol.ToolKindCustom,
+					Arguments: "hello",
+				}},
+			}},
+		},
+	}
+
+	result, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com"))
+	if err != nil {
+		t.Fatalf("plain custom input was refused: %v", err)
+	}
+	if result.Changed {
+		t.Fatalf("nothing to mask, but Changed=true")
+	}
+	if got := request.Messages[0].Content[0].ToolCall.Arguments; got != "hello" {
+		t.Fatalf("custom input was modified: %q", got)
+	}
+}
+
+// Review #3806 (P2): a structured tool result went through generic text
+// masking, which rewrote object keys, could emit invalid JSON, and could not
+// see through \u escapes.
+func TestApply_StructuredToolResultMasksDecodedLeaves(t *testing.T) {
+	request := &llmprotocol.Request{
+		Messages: []llmprotocol.Message{
+			{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{
+					CallID: "call_1",
+					Content: []llmprotocol.Content{{
+						Kind: llmprotocol.ContentText,
+						// The key is PII-shaped, one value is escaped.
+						Text: `{"alice@example.com":"lookup alice@example.com","esc":"alice@example.com","n":3}`,
+					}},
+				}},
+			}},
+		},
+	}
+
+	if _, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com")); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	raw := request.Messages[0].Content[0].ToolResult.Content[0].Text
+
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
+		t.Fatalf("masked tool result is not valid JSON: %v (%s)", err, raw)
+	}
+	if _, ok := decoded["alice@example.com"]; !ok {
+		t.Fatalf("object key was rewritten: %v", decoded)
+	}
+	if decoded["alice@example.com"] != "lookup [EMAIL_ADDRESS_0]" {
+		t.Fatalf("value not masked: %v", decoded["alice@example.com"])
+	}
+	if decoded["esc"] != "[EMAIL_ADDRESS_0]" {
+		t.Fatalf("escaped value not masked: %v", decoded["esc"])
+	}
+	if n, ok := decoded["n"].(float64); !ok || n != 3 {
+		t.Fatalf("number type not preserved: %v (%T)", decoded["n"], decoded["n"])
+	}
+}
+
+// A plain-text tool result keeps ordinary text masking.
+func TestApply_PlainTextToolResultStillMasked(t *testing.T) {
+	request := &llmprotocol.Request{
+		Messages: []llmprotocol.Message{
+			{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{
+					CallID:  "call_1",
+					Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "lookup found alice@example.com"}},
+				}},
+			}},
+		},
+	}
+
+	if _, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com")); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := request.Messages[0].Content[0].ToolResult.Content[0].Text
+	if want := "lookup found [EMAIL_ADDRESS_0]"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// A custom tool's result is free-form text even when it looks like JSON.
+func TestApply_CustomToolResultKeepsTextMasking(t *testing.T) {
+	request := &llmprotocol.Request{
+		Messages: []llmprotocol.Message{
+			{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{
+					CallID: "call_1", Kind: llmprotocol.ToolKindCustom,
+					Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "{not json alice@example.com"}},
+				}},
+			}},
+		},
+	}
+
+	if _, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com")); err != nil {
+		t.Fatalf("custom tool result was refused: %v", err)
+	}
+	got := request.Messages[0].Content[0].ToolResult.Content[0].Text
+	if want := "{not json [EMAIL_ADDRESS_0]"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}

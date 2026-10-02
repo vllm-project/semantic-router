@@ -31,6 +31,13 @@ const (
 	maskingSpanMarker  = "__PII_SPAN__"
 	maskingErrorMarker = "__PII_ERROR__"
 	maskingRawEmail    = "alice@corp.example"
+	// An explicit entrypoint, not a concrete model: a concrete model name
+	// bypasses every recipe-local decision and plugin, so masking would never
+	// run and these assertions would pass vacuously.
+	maskingEntrypoint = "vllm-sr/masking"
+	// The decision inside the masking recipe, asserted on every case so a
+	// bypassed decision fails loudly instead of passing vacuously.
+	maskingDecisionName = "mask_pii"
 )
 
 // maskingEcho is the subset of provider-mocker's deterministic echo this
@@ -81,7 +88,7 @@ func testMaskingCrossProtocol(
 			name: "chat completions",
 			path: "/v1/chat/completions",
 			body: map[string]interface{}{
-				"model":    "openai/mock-model",
+				"model":    maskingEntrypoint,
 				"messages": []map[string]interface{}{{"role": "user", "content": prompt}},
 			},
 		},
@@ -89,7 +96,7 @@ func testMaskingCrossProtocol(
 			name: "responses",
 			path: "/v1/responses",
 			body: map[string]interface{}{
-				"model": "openai/mock-model",
+				"model": maskingEntrypoint,
 				"store": false,
 				"input": []map[string]interface{}{{
 					"role":    "user",
@@ -101,7 +108,7 @@ func testMaskingCrossProtocol(
 			name: "anthropic messages",
 			path: "/v1/messages",
 			body: map[string]interface{}{
-				"model":      "openai/mock-model",
+				"model":      maskingEntrypoint,
 				"max_tokens": 64,
 				"messages":   []map[string]interface{}{{"role": "user", "content": prompt}},
 			},
@@ -161,7 +168,7 @@ func testMaskingClassifierUnavailableFailsClosed(
 
 	prompt := fmt.Sprintf("%s contact %s please", maskingErrorMarker, maskingRawEmail)
 	resp, err := runMaskingRawRequest(ctx, session, "/v1/chat/completions", map[string]interface{}{
-		"model":    "openai/mock-model",
+		"model":    maskingEntrypoint,
 		"messages": []map[string]interface{}{{"role": "user", "content": prompt}},
 	})
 	if err != nil {
@@ -181,6 +188,7 @@ func testMaskingClassifierUnavailableFailsClosed(
 
 type maskingRawResponse struct {
 	StatusCode int
+	Headers    http.Header
 	Body       []byte
 }
 
@@ -202,6 +210,9 @@ func runMaskingRawRequest(
 	if path == "/v1/messages" {
 		request.Header.Set("anthropic-version", "2023-06-01")
 	}
+	// v0.4 demotes the selected-decision header behind x-vsr-debug (#2205);
+	// opt in so the assertions can prove the masking decision was selected.
+	request.Header.Set("x-vsr-debug", "true")
 	response, err := session.HTTPClient(45 * time.Second).Do(request)
 	if err != nil {
 		return nil, err
@@ -211,7 +222,11 @@ func runMaskingRawRequest(
 	if err != nil {
 		return nil, err
 	}
-	return &maskingRawResponse{StatusCode: response.StatusCode, Body: body}, nil
+	return &maskingRawResponse{
+		StatusCode: response.StatusCode,
+		Headers:    response.Header,
+		Body:       body,
+	}, nil
 }
 
 // runMaskingWireCase sends one case's request and returns the exact user-turn
@@ -224,6 +239,14 @@ func runMaskingWireCase(ctx context.Context, session *fixtures.ServiceSession, t
 	}
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("%s returned HTTP %d: %s", tc.path, resp.StatusCode, truncateString(string(resp.Body), 500))
+	}
+	// Without this the whole case can pass vacuously: a request that bypasses
+	// the decision never runs the plugin, so "no raw value" would prove nothing.
+	if decision := resp.Headers.Get("x-vsr-selected-decision"); decision != maskingDecisionName {
+		return "", fmt.Errorf(
+			"selected decision = %q, want %q; the request bypassed the masking decision so nothing was masked",
+			decision, maskingDecisionName,
+		)
 	}
 	content, err := extractAssistantText(tc.path, resp.Body)
 	if err != nil {
