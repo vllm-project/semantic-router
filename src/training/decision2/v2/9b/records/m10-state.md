@@ -2,6 +2,23 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 13:20Z (21:20 UTC+8), M10 continuation worker
+
+- **Release base moved to the runtime phase A revision `f77b41f5`** (Lux-9B runtime-only, released while the
+  KIB4-a33 release waited). Merged `origin/xunzhuo/decision-2-runtime-a`; the M10 ops now derive from
+  `specs/dev2-9b-ra.json` with the ra gate receipt and decision, supersede `f77b41f5`, and run panel parity with a
+  copy of the frozen cache `release/triton/runtime-a-9b` (digest `0e0b7342…`, 4,881 files, checked on node A).
+  KIB4-a33 spec and decision re-derived on node A (decided 12:57:13Z), `make_m10.py --check` passes at `a27aa81ac`;
+  card assets unchanged. Prerelease running on node A GPU7 (the stale card4-base decision on node A was moved aside).
+- **KIB4-a40 Index run finished; it passes the Index gate.** Its speculative formal run started 13:08Z on node A GPU3
+  (FP32 point copied from node C). The release candidate is chosen once X1 / X2 / X3 / X5 and the formal run are in.
+- **KX-s4 / KX-s5 stopped at 13:15Z** (budget rule of amendment 5: KXP is not built, so the seeds have no use);
+  node B GPU3 / 6 / 7 released, then leased to the IX1 queue for KIB4P-a33 (soup built; ship → BF16 → chain).
+- **In flight:** Index X1-a33 / X2-a33 (node C), X3-a33 (node B GPU2 / 4), X5-a33 (node A), KIB4P-a33 (node B
+  GPU3 / 6 / 7); formal KIB4-a40 (node A GPU3); prerelease KIB4-a33 (node A GPU7).
+- **GPU-h:** node B training final 35.18, node A training 8.93; projected M10 total ≈ 81 with everything in flight.
+  No further Index or formal runs after these (85 stop rule).
+
 ## 2026-10-02 12:45Z (20:45 UTC+8), M10 continuation worker
 
 - **Measured, once each** (values private):
