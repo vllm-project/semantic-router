@@ -25,3 +25,15 @@ Index values stay private (node private dirs and the program's private folder); 
 - `m18-cand.sh` hop: per-item staging directory (two concurrent relays to one parent collided on `.m18-part`; the
   copy itself was complete and verified by SHA-256 list).
 - Amendment 1 arms (`2b-RAM`, `08b-RAM`) on node A GPU1-2 / 7: inputs copied node F -> node A (pulled by node A).
+
+## 2026-10-02T06:25Z
+
+- Part A complete: 2B four runs scored and bootstrapped vs DEV2.0-2B (all exit 0); 0.8B three runs scored
+  (`08b-UPRA` with one `invalid_model_output` row counted wrong, as `2b-UPRAa75`); no 0.8B Part A candidate is
+  above the current Eos release, so their bootstraps vs it are report-only.
+- Part B node F: `2b-RS17UP` seeds DONE (preflights PASS), soup built 06:03Z; `2b-RAUPM` seeds running.
+  Node A: `2b-RAM` seeds 1 / 2 and `08b-RAM` seed 1 running (preflights PASS); `08b-RAM` seed 2 follows on GPU1.
+- Candidates `2b-RS17UP` (soup) and `2b-SWRA` (½ RS17UP soup + ½ `2b-RA`, built on node E, lineage check PASS):
+  BF16 copies restaged (identity / loaded / calibration checks pass); IX1 pool on node E GPU0-3 / 6-7 since 06:08Z
+  (node E leases of the finished M18 runs set to released first).
+- Bootstraps of `2b-UPRA` / `2b-UPRAa75` vs the `IS-2b-RAUP` run (the likely next Sol release) running on node C.
