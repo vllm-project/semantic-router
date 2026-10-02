@@ -7,10 +7,16 @@ Nox, Lux and Vega have releases pending under the Index-first rule and build the
 generator; one of them is revised here only if, three hours after the generator merge, it still has no newer
 revision and no pending release.
 
-Each spec is the latest card spec of its tier (round 3; round 2 for Lux 9B, which round 3 skipped) with card.index
-and card.assets re-pinned to the private Index input of round 3 and the regenerated assets, and gate_receipt = the
-new decision. Each decision carries the superseded decision's judgement forward and changes only the action, the
-rationale and the supersedes chain.
+Roll-out (user request 2026-10-02 10:35 UTC+8, COORDINATION 10:35; card worker fb5dd490): banner A on every card
+now, as card-only revisions of Vega 27B, Lux 9B and Nox 4B, and of Eos 0.8B and Sol 2B only if their pending
+releases have not started by 12:00 UTC+8. A repository whose release driver runs or is about to publish is skipped.
+
+Each spec is the latest card spec of its tier (round 3; for Lux 9B the K-a13IB release, which already carries the
+round-3 card) with card.assets re-pinned to the regenerated assets and gate_receipt = the new decision. card.index
+pins the card4 copy of the round-3 private Index input where the released card used that input, and otherwise keeps
+the released card's own Index input in place (Lux 9B), so no card changes its Index data or charts. Each decision
+carries the superseded decision's judgement forward and changes only the action, the rationale and the supersedes
+chain.
 
 Run from src/training/decision2 (the digests come from the private inputs, given on the command line):
 
@@ -41,19 +47,42 @@ DECIDED_BY = (
 )
 PREPARED_BY = "Decision 2.0 release engineering, release worker 4c0a68cd (worktree vllm-sr-dev2-automap)"
 DECIDED_UTC = "2026-10-02T01:44:00Z"
-# The latest published card of each tier: (spec, decision, gate receipt directory).
+ROLLOUT_DECIDED_BY = (
+    "coordinator (parent agent), Decision 2.0 program: the user's request of 2026-10-02 10:35 UTC+8 for banner A "
+    "on every card now (COORDINATION 10:35): card-only revisions of the sizes whose releases are not running or "
+    "about to publish"
+)
+ROLLOUT_PREPARED_BY = "Decision 2.0 release engineering, card worker fb5dd490 (worktree vllm-sr-dev2-card4-rollout)"
+ROLLOUT_DECIDED_UTC = "2026-10-02T02:35:00Z"
+# Kai 0.6B was revised by the banner worker; every other tier belongs to the roll-out.
+BANNER_WORKER_TIERS = {"0.6B"}
+# The latest published card of each tier: (spec key, codename, source).
 TIERS = {
     "0.6B": ("0p6b", "Kai", "card3"),
     "0.8B": ("0p8b", "Eos", "card3"),
     "2B": ("2b", "Sol", "card3"),
     "4B": ("4b", "Nox", "card3"),
-    "9B": ("9b", "Lux", "card2"),
+    "9B": ("9b", "Lux", "ka13ib"),
     "27B": ("27b", "Vega", "card3"),
 }
+# source: (spec name, records directory, decision suffix, gate receipt under the records directory)
 SOURCES = {
-    "card3": ("dev2-{key}-card3.json", RECORDS / "dev2-card3-2026-10-02", "card3"),
-    "card2": ("dev2-{key}-product.json", RECORDS / "dev2-card2-2026-10-02", "card2"),
+    "card3": (
+        "dev2-{key}-card3.json",
+        RECORDS / "dev2-card3-2026-10-02",
+        "card3",
+        "{key}/release/receipts/gate.json",
+    ),
+    "ka13ib": (
+        "dev2-{key}-ka13ib.json",
+        RECORDS / "dev2-9b-ka13ib-2026-10-02",
+        "ka13ib",
+        "release/receipts/gate.json",
+    ),
 }
+# Assets directory under PRIVATE where it is not the spec key: Lux 9B's assets are rendered from the K-a13IB card's
+# own inputs on node A, apart from the banner worker's node-E preview set of the superseded round-2 card.
+ASSETS = {"9B": "9b-ka13ib"}
 
 
 def sha(path: Path) -> str:
@@ -61,15 +90,15 @@ def sha(path: Path) -> str:
 
 
 def _source(tier: str) -> tuple[str, str, Path, Path, Path]:
-    key, codename, round_ = TIERS[tier]
-    spec_name, records, suffix = SOURCES[round_]
+    key, codename, source = TIERS[tier]
+    spec_name, records, suffix, gate = SOURCES[source]
     name = f"Decision-2.0-{codename}-{tier}"
     return (
         key,
         name,
         SPECS / spec_name.format(key=key),
         records / f"{name}.decision.{suffix}.json",
-        records / key / "release/receipts/gate.json",
+        records / gate.format(key=key),
     )
 
 
@@ -79,15 +108,29 @@ def spec_for(tier: str, pins: dict) -> dict:
     assert old["model_name"] == name, tier
     spec = copy.deepcopy(old)
     card = spec["card"]
-    card["index"] = {"path": INDEX, "sha256": pins["index_sha256"]}
-    card["assets"] = {"dir": f"{PRIVATE}/{key}", "receipt_sha256": pins["assets"][tier]}
+    in_place = old["card"]["index"]["sha256"] != pins["index_sha256"]
+    if not in_place:
+        card["index"] = {"path": INDEX, "sha256": pins["index_sha256"]}
+    card["assets"] = {
+        "dir": f"{PRIVATE}/{ASSETS.get(tier, key)}",
+        "receipt_sha256": pins["assets"][tier],
+    }
     spec["gate_receipt"] = f"{DECISIONS}/{name}.decision.card4.json"
+    index_note = (
+        "card.index keeps the released card's own private Index input in place"
+        if in_place
+        else "card.index pins the round-3 private Index input"
+    )
+    who = (
+        "user banner decision 2026-10-02 09:44 UTC+8, release worker 4c0a68cd"
+        if tier in BANNER_WORKER_TIERS
+        else "user request 2026-10-02 10:35 UTC+8 for banner A on every card, card worker fb5dd490"
+    )
     spec["_release"] = {
         "card_banner": (
-            "Card-only revision (user banner decision 2026-10-02 09:44 UTC+8, release worker 4c0a68cd): "
-            "assets/banner.png is concept A, the default banner of v2.release.card_assets. card.index pins the "
-            "round-3 private Index input and card.assets the regenerated assets; the README and the charts are "
-            "those of the current default generator."
+            f"Card-only revision ({who}): assets/banner.png is concept A, the default banner of "
+            f"v2.release.card_assets. {index_note} and card.assets the regenerated assets; the README and the "
+            "charts are those of the current default generator."
         ),
         "replaces_spec": {"spec": source.as_posix(), "sha256": sha(source)},
         "previous": old.get("_release"),
@@ -103,17 +146,27 @@ def decision_for(tier: str, spec_sha: str) -> dict:
     gate = json.loads(gate_path.read_text(encoding="utf-8"))
     assert gate["decision_sha256"] == old_sha and gate["model_name"] == name, tier
     repo = gate["repo_id"]
+    banner_worker = tier in BANNER_WORKER_TIERS
     new = copy.deepcopy(old)
     new.update(
         {
-            "decided_by": DECIDED_BY,
-            "prepared_by": PREPARED_BY,
-            "decided_utc": DECIDED_UTC,
+            "decided_by": DECIDED_BY if banner_worker else ROLLOUT_DECIDED_BY,
+            "prepared_by": PREPARED_BY if banner_worker else ROLLOUT_PREPARED_BY,
+            "decided_utc": DECIDED_UTC if banner_worker else ROLLOUT_DECIDED_UTC,
             "action": (
-                f"Card-only revision of the private repository {repo}: assets/banner.png (and, where the "
-                "superseded card predates them, the README and the Index charts of the current card generator) "
-                f"are regenerated. Every model, tokenizer, runtime and remote-code file is byte-identical to the "
-                f"released revision {gate['revision']}. The collection is not changed; everything stays private."
+                (
+                    f"Card-only revision of the private repository {repo}: assets/banner.png (and, where the "
+                    "superseded card predates them, the README and the Index charts of the current card generator) "
+                    f"are regenerated. Every model, tokenizer, runtime and remote-code file is byte-identical to the "
+                    f"released revision {gate['revision']}. The collection is not changed; everything stays private."
+                )
+                if banner_worker
+                else (
+                    f"Card-only revision of the private repository {repo}: assets/banner.png is regenerated (banner "
+                    "concept A of the current card generator). Every other file, the README and every Index chart "
+                    f"included, and every model, tokenizer, runtime and remote-code file is byte-identical to the "
+                    f"released revision {gate['revision']}. The collection is not changed; everything stays private."
+                )
             ),
             "rationale": (
                 f"The release judgement of the superseded final decision {old_sha[:8]}… stands unchanged: the same "
