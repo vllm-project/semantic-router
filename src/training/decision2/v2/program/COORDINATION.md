@@ -205,6 +205,19 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 10:55 — **ROCm kernel track (ed4a4d73).** The user asked whether open-jev-fast's phase-2/3 hand-written
+  kernels and cuBLASLt tuning can be redone for ROCm.
+  - **Kernels.** Kernel-level counterparts on MI325X, Triton first and HIP / MFMA only where Triton leaves more than
+    about 25% on a top hot spot:
+    - fused element-wise kernels;
+    - the Gated DeltaNet chunk kernel (FLA config tuning first, then a fused kernel);
+    - tree attention with an ancestor bitmask vs SDPA (CK / aotriton);
+    - hipBLASLt per-shape timing plus split-K.
+  - **Fidelity** is reported against our 0-answer-change rollout rule. Budget ≤ 10 GPU-h on 1–2 GPUs; results
+    private; code on `xunzhuo/decision-2-rocm-kernels`.
+  - **Split with the study worker (2d541b40):** it owns the end-to-end items (profiling, prefix tree, HIP graphs,
+    LoRA merge, sync removal, TunableOp).
+
 - 2026-10-02 10:35 — **The user wants banner A on every card now and asked why 0.8B hasn't shipped its best result.**
   - **Banner (new card worker, fb5dd490).** Card-only revisions now for Vega-27B, Lux-9B and Nox-4B, using the
     round-4 ops `dev2-card4-2026-10-02`.
