@@ -1,0 +1,21 @@
+{
+ "changed": [
+  "README.md",
+  "decision2/api.py",
+  "decision2/fast.py",
+  "decision2/fast_kernels.py",
+  "decision2/qwen.py"
+ ],
+ "other": [],
+ "equal": {
+  "identity": true,
+  "parameters": true,
+  "profile": true,
+  "max_input_tokens": true
+ },
+ "readme_diff": [
+  "-- **Speed:** a median of 16.6 ms per single-question request on a single GPU.",
+  "+- **Speed:** a median of 4.9 ms per single-question request on a single GPU."
+ ],
+ "ok": true
+}

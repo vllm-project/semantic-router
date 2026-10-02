@@ -1,0 +1,240 @@
+{
+  "answers_sha256": "abe22a249930a7b9680560ac1e2b0788ae0d0cd802a36d102f8c39fbb52aed77",
+  "checks": {
+    "multilingual": {
+      "passed": true,
+      "problems": []
+    },
+    "null-description": {
+      "passed": true,
+      "problems": []
+    },
+    "over-budget": {
+      "passed": true,
+      "problems": []
+    },
+    "policy-check": {
+      "passed": true,
+      "problems": []
+    },
+    "structured-state": {
+      "passed": true,
+      "problems": []
+    },
+    "support-routing": {
+      "passed": true,
+      "problems": []
+    }
+  },
+  "device": "cuda:0",
+  "load_seconds": 7.353429485112429,
+  "loaded_parameters": 597103104,
+  "mode": "run",
+  "model_name": "Decision-2.0-Kai-0.6B",
+  "outputs": [
+    {
+      "id": "support-routing",
+      "input_sha256": "d97b537c37ddf12ca4117ff655a31fa14afbfd968729bc2b512beadca6054f88",
+      "latency_ms": 6638.865178218111,
+      "response": {
+        "answers": {
+          "receipt": {
+            "noul": 0.9168689439808962,
+            "type": "noul"
+          },
+          "route": {
+            "choice": "returns",
+            "confidence": 0.8316202772749645,
+            "probabilities": {
+              "billing": 0.01320261241142305,
+              "returns": 0.9622983260851818,
+              "technical": 0.024499061503395075
+            },
+            "type": "choice"
+          },
+          "urgency": {
+            "confidence": 0.1837987460195697,
+            "legend": {
+              "0": "Routine",
+              "1": "Soon",
+              "2": "Today"
+            },
+            "probabilities": {
+              "0": 0.16193501104144692,
+              "1": 0.19431381139757542,
+              "2": 0.6437511775609777
+            },
+            "score": 1.4818161665195309,
+            "type": "score"
+          }
+        },
+        "model": "Decision-2.0-Kai-0.6B",
+        "usage": {
+          "input_tokens": 286,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "structured-state",
+      "input_sha256": "b8557ad323a641d6ea898abb86818d9e13d91e0d327bb0dabc8fe696c840d829",
+      "latency_ms": 20.65211604349315,
+      "response": {
+        "answers": {
+          "escalate": {
+            "noul": 0.4578824890738976,
+            "type": "noul"
+          },
+          "severity": {
+            "confidence": 0.0283971890050988,
+            "legend": {
+              "0": "Minor",
+              "1": "Moderate",
+              "2": "Major",
+              "3": "Critical",
+              "4": "Full outage"
+            },
+            "probabilities": {
+              "0": 0.19834237157920656,
+              "1": 0.23926507011961612,
+              "2": 0.15917835252903298,
+              "3": 0.1159488124972211,
+              "4": 0.2872653932749233
+            },
+            "score": 2.0545297857690383,
+            "type": "score"
+          }
+        },
+        "model": "Decision-2.0-Kai-0.6B",
+        "usage": {
+          "input_tokens": 261,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "policy-check",
+      "input_sha256": "af52e9c0442937e0032aca068ae665a0abe8a64c60de0cbe69de386d569ce7c0",
+      "latency_ms": 19.443010911345482,
+      "response": {
+        "answers": {
+          "action": {
+            "choice": "decline",
+            "confidence": 0.23993809543917544,
+            "probabilities": {
+              "approve": 0.1529629223809934,
+              "decline": 0.689279929531605,
+              "escalate": 0.15775714808740166
+            },
+            "type": "choice"
+          },
+          "eligible": {
+            "noul": 0.18171385490904743,
+            "type": "noul"
+          }
+        },
+        "model": "Decision-2.0-Kai-0.6B",
+        "usage": {
+          "input_tokens": 216,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "multilingual",
+      "input_sha256": "28be6206986889181cc9bf19c4ad593721955ecdffc1c03da97e1be473bf496a",
+      "latency_ms": 18.11560895293951,
+      "response": {
+        "answers": {
+          "queue": {
+            "choice": "hardware",
+            "confidence": 0.8622060498607184,
+            "probabilities": {
+              "account": 0.002480133070851504,
+              "hardware": 0.9677042006209189,
+              "shipping": 0.029815666308229658
+            },
+            "type": "choice"
+          }
+        },
+        "model": "Decision-2.0-Kai-0.6B",
+        "usage": {
+          "input_tokens": 102,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "null-description",
+      "input_sha256": "78429233af527c450bc84b2757198df46d011c93dad94bed70d567637c953928",
+      "latency_ms": 21.564803086221218,
+      "response": {
+        "answers": {
+          "intent": {
+            "choice": "cancel",
+            "confidence": 0.3002749909408219,
+            "probabilities": {
+              "cancel": 0.7153971726877881,
+              "pause": 0.20195141199654262,
+              "upgrade": 0.08265141531566916
+            },
+            "type": "choice"
+          }
+        },
+        "model": "Decision-2.0-Kai-0.6B",
+        "usage": {
+          "input_tokens": 88,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "over-budget",
+      "input_sha256": "cd118fc241e7f83a1d91f05a2cf35e8dc54099c6df84f0ef90e348f58a1fdbdd",
+      "latency_ms": 29.31775222532451,
+      "response": {
+        "answers": {
+          "tone": {
+            "error": "max_length_exceeded",
+            "type": "score"
+          },
+          "weather": {
+            "error": "max_length_exceeded",
+            "type": "noul"
+          }
+        },
+        "model": "Decision-2.0-Kai-0.6B",
+        "usage": {
+          "input_tokens": 0,
+          "output_tokens": 0
+        }
+      }
+    }
+  ],
+  "package_manifest_sha256": "187dc4ae23869b22f7002fe00ccdf6f9eb92ac375e33038361b4feb99ed19879",
+  "passed": true,
+  "profile": "qwen-full",
+  "runtime": {
+    "fp32_master": false,
+    "hip": "7.2.53211",
+    "kernels": null,
+    "numpy": "2.3.5",
+    "parameter_dtypes": {
+      "bfloat16": 440401920,
+      "float32": 156701184
+    },
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "residency": {
+      "linear_bf16": 196,
+      "linear_fp32": 0
+    },
+    "safetensors": "0.8.0",
+    "sites": [],
+    "threads": 4,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0"
+  },
+  "schema": "dev2-release-examples/1"
+}

@@ -169,7 +169,23 @@ mkdir -p "$W/extra"
 cp "$X"/*.json "$X/derivation.txt" "$W/extra/"
 cd "$S"
 "$HFPY" "$R/ops/ra_diff.py" "$REPO" "$expected" "$REV" "$W/extra/runtime-diff.json" || status=1
-python3 "$S/v2/release/examples.py" compare "$superseded_work/receipts/pre-a.json" "$W/receipts/pre-a.json" \
+superseded_pre=$superseded_work/receipts/pre-a.json
+if [[ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["device"])' "$superseded_pre")" != cuda:0 ]]; then
+  # The superseded release ran its examples on another device (Kai's org revision: CPU): run its package on this
+  # GPU and image instead. Only for a tier without kernels or base model mounts.
+  [[ "$kernels" == 0 && ${#base_args[@]} == 0 ]] || { echo "superseded examples ran off-GPU" >&2; exit 1; }
+  old=$X/superseded/$name
+  "$HFPY" -c 'import sys; from huggingface_hub import snapshot_download; snapshot_download(sys.argv[1], revision=sys.argv[2], local_dir=sys.argv[3])' \
+    "$REPO" "$expected" "$old" > /dev/null
+  docker run --rm --network none --ipc host --device /dev/kfd --device /dev/dri --group-add video \
+    --security-opt seccomp=unconfined -e ROCR_VISIBLE_DEVICES="$gpu" -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 \
+    -e TOKENIZERS_PARALLELISM=false -e HIP_FORCE_DEV_KERNARG=1 -v "/data/dev2/src/$SRC:/data/dev2/src/$SRC:ro" \
+    -v "$old:$old:ro" -v "$W/extra:$W/extra" --entrypoint python3 "$image" -I -B \
+    "$S/v2/release/examples.py" run --package "$old" --device cuda:0 --threads 4 \
+    --output "$W/extra/examples-superseded-gpu.json" > "$X/examples-superseded-gpu.log" 2>&1 || status=1
+  superseded_pre=$W/extra/examples-superseded-gpu.json
+fi
+python3 "$S/v2/release/examples.py" compare "$superseded_pre" "$W/receipts/pre-a.json" \
   --tolerance 0 --output "$W/extra/examples-vs-superseded.json" || status=1
 "$HFPY" -m v2.release.tests.hub_card_http_check --repo "$REPO" --revision "$REV" \
   --package "$W/package/$name" --output "$W/extra/card-http.json" || status=1

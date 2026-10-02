@@ -1,0 +1,311 @@
+{
+  "base": null,
+  "builder": {
+    "module_sha256": "b1b4d1daed6cc391309cb34b0975897c947bb8277124764f956b43f963c293f8",
+    "source_commit": "7e78259d030c8c58730c2ffe28ae05aacc885ce7"
+  },
+  "calibration": null,
+  "card": {
+    "assets_receipt_sha256": "d66497c4ec2461a6d6fd53da7d8dd6d83b78a3a6c6229382cb7616eaed66134a",
+    "figures_sha256": {
+      "assets/banner.png": "51437980d848bd5be3115c4f955438c171586c49d849a72aa3a98aae9707f7f8",
+      "assets/index-areas.png": "233684ce714bbd89102c8a46ca585a641e4f4b9126944d1f1f01769f697d60dd",
+      "assets/index-pareto.png": "c29bfb43c79b7081505cd651e09ff82c8738c9d0720549d5ad78541218aeadd8",
+      "assets/jevarena-types.png": "33e46f237d4ec9ebea78578d856496409cf552337ef53c5d81d1a417e0f56220",
+      "assets/jevarena.png": "01814a5a0955c0dda6f951ce35181a210df6853746312ee47a189b8a8e544d22"
+    },
+    "index_sha256": "bf2bd02d1359de5f1bdd871cb3e240b6f5022cc2e3d6638580e921cd4386ad4a",
+    "readme_sha256": "155fe13afc8f4d75ceb24bb4f29f8667f9650a54c1195b19f3f401d6497ced75"
+  },
+  "files_sha256": {
+    "LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "README.md": "155fe13afc8f4d75ceb24bb4f29f8667f9650a54c1195b19f3f401d6497ced75",
+    "assets/banner.png": "51437980d848bd5be3115c4f955438c171586c49d849a72aa3a98aae9707f7f8",
+    "assets/index-areas.png": "233684ce714bbd89102c8a46ca585a641e4f4b9126944d1f1f01769f697d60dd",
+    "assets/index-pareto.png": "c29bfb43c79b7081505cd651e09ff82c8738c9d0720549d5ad78541218aeadd8",
+    "assets/jevarena-types.png": "33e46f237d4ec9ebea78578d856496409cf552337ef53c5d81d1a417e0f56220",
+    "assets/jevarena.png": "01814a5a0955c0dda6f951ce35181a210df6853746312ee47a189b8a8e544d22",
+    "backbone/config.json": "fcf62f425b626755c6df66630215aed57c70b38bf779e6ac9aeff376224310ac",
+    "backbone/model.safetensors": "43369a2bfddb61495beb7cea6bf30d7564a5c5caff31f4dbf2e6cfce48423b69",
+    "chat_template.jinja": "87a2728cb8dc9fe424d624542f6060ec05a1d285ebbec578bb078900e33396b5",
+    "config.json": "35ce70886f7642ec5eacf969e27da404915824aa25f6a30a19a1107cb2ec99b3",
+    "configuration_decision2.py": "b88ce8380cb0f210776f3f3ccc06219489b96502c520317790f3f4253e2a9367",
+    "decision2/__init__.py": "10fea99a87686a8f5d99e9a8a91573ce1ddb7bc702f22b1fa21d3de258a4054a",
+    "decision2/_vendor/__init__.py": "fe3babbdd871fa7c0cf919320a66efd1249253abe6bd7cdc5e33352dc46adeef",
+    "decision2/_vendor/dev2model/__init__.py": "4611a85789fae8f06395702a2975592e66e16a8632487c5f9255c0ce68c700d1",
+    "decision2/_vendor/dev2model/calibration.py": "71633a04533c7022e1606ed2734107f33839454c34c993fe16d80c8413d1c561",
+    "decision2/_vendor/dev2model/data.py": "632bd60555f63459ff08ffe82c8263ca6a96f75360bc8c06469fcb10f1e2e99c",
+    "decision2/_vendor/dev2model/decision_model.py": "1ab1e49bccc8b84632a32565ce666a6db94298372ee891dee5b68e54f80957fb",
+    "decision2/_vendor/dev2model/infer.py": "7bb9f3cc88f04cd6e4ded62e69f41dd1c7a3d0154a76acdf44c0d73e4163ef58",
+    "decision2/_vendor/dev2model/lora.py": "7049e35e2a7bf50dd5888902cd0b7030d9bbd448d7d7aba8875ceb89aebff231",
+    "decision2/_vendor/dev2model/score_bias.py": "837974bb8abb8c51c907e4f025e2632bd59bc2875eb55a4343d7bd4274622646",
+    "decision2/_vendor/dev2model/source.py": "ef7b30171c4befb26163ea4d3d6e5add9dc602228a476d6f0ead9d40b450c7e3",
+    "decision2/api.py": "a9af6e0a0888df0bab7ddebf813d1f6e40b8730f0a7c8fc8d9f375df0d7b112b",
+    "decision2/fast.py": "b1792167711a3755de2c1edc10d8b6409539069110ba7a52da6457d42fe3c701",
+    "decision2/fast_kernels.py": "6126a3c8334cfbb9d6d9c85a62d28efdee4db90a78ac3242709360c0698ab023",
+    "decision2/qwen.py": "e1f5c170492080894ebdc462d48d2438e268cd09f43ed6a13176179f0901c6aa",
+    "decision_config.json": "4778b8818f8510bf761eebba48ec5ffd5941c8f95ef2b228a97162fb0c814a6e",
+    "decision_head.safetensors": "508dfe385c8fde8eb0b4eec5c199f5fe8363efeb247de024a08765b53183409d",
+    "modeling_decision2.py": "a3f700b3d2a5deb344821802248a5ea7ea06ccedc5af1823dca4e3e813c17fbb",
+    "pipeline_decision2.py": "3393faec770ddaa9045a7e41092ad17cee5310fe74187deb6f58bbe718b0c1c3",
+    "score_bias.json": "7d3a060fe1823aa7fe759776df3db872408de580f227120fbe08b9eef53dcf6e",
+    "tokenizer.json": "be75606093db2094d7cd20f3c2f385c212750648bd6ea4fb2bf507a6a4c55506",
+    "tokenizer_config.json": "cbea7bca9904d56693d2226b00fd564e3be053609d1e50f8f1885510f0f6e790"
+  },
+  "identity": {
+    "fingerprint_files": {
+      "backbone/config.json": "fcf62f425b626755c6df66630215aed57c70b38bf779e6ac9aeff376224310ac",
+      "backbone/model.safetensors": "43369a2bfddb61495beb7cea6bf30d7564a5c5caff31f4dbf2e6cfce48423b69",
+      "chat_template.jinja": "87a2728cb8dc9fe424d624542f6060ec05a1d285ebbec578bb078900e33396b5",
+      "decision_config.json": "4778b8818f8510bf761eebba48ec5ffd5941c8f95ef2b228a97162fb0c814a6e",
+      "decision_head.safetensors": "508dfe385c8fde8eb0b4eec5c199f5fe8363efeb247de024a08765b53183409d",
+      "tokenizer.json": "be75606093db2094d7cd20f3c2f385c212750648bd6ea4fb2bf507a6a4c55506",
+      "tokenizer_config.json": "cbea7bca9904d56693d2226b00fd564e3be053609d1e50f8f1885510f0f6e790"
+    },
+    "model_sha256": "bb806f31a14d4532a1b5e00984442128f47f46cbbc68e57e7623327c81cfb983"
+  },
+  "kind": "release",
+  "licence": {
+    "components": [
+      {
+        "component": "Decision-2.0-Kai-0.6B weights, Score offsets, decision head, package runtime, card and artwork",
+        "licence": "apache-2.0",
+        "source": "vllm-sr/Decision-2.0-Kai-0.6B"
+      },
+      {
+        "component": "Qwen3-0.6B-Base weights and tokenizer (direct weight origin, fully fine-tuned)",
+        "licence": "apache-2.0",
+        "source": "Qwen/Qwen3-0.6B-Base@da87bfb6"
+      }
+    ],
+    "spdx": "apache-2.0"
+  },
+  "max_input_tokens": 8192,
+  "model_files": [
+    "backbone/config.json",
+    "backbone/model.safetensors",
+    "chat_template.jinja",
+    "decision_config.json",
+    "decision_head.safetensors",
+    "tokenizer.json",
+    "tokenizer_config.json"
+  ],
+  "model_name": "Decision-2.0-Kai-0.6B",
+  "origin": {
+    "relation": "finetune",
+    "repo_id": "Qwen/Qwen3-0.6B-Base",
+    "revision": "da87bfb608c14b7cf20ba1ce41287e8de496c0cd",
+    "summary": "Every weight of the official Qwen3-0.6B-Base (Apache-2.0) was fine-tuned (nothing frozen, no adapter) together with a new candidate head trained from random initialization; the release is the uniform average of six such fine-tunes (two training recipes × three seeds), plus fixed per-level offsets on five-level Score logits. It contains no Decision 1.0 Kai or Lex weights: Decision 1.0 Kai is the comparison model, and our own Decision 1.0 Lux-9B supplied soft training targets only."
+  },
+  "package_schema": "dev2-package/1",
+  "parameters": {
+    "external_base_text": null,
+    "loaded": 597103104,
+    "packaged": {
+      "backbone": 596049920,
+      "head": 1053184,
+      "residual": 0
+    },
+    "packaged_files": {
+      "backbone": [
+        "backbone/model.safetensors"
+      ],
+      "head": [
+        "decision_head.safetensors"
+      ],
+      "residual": []
+    },
+    "source": "safetensors header element counts; the runtime asserts the loaded count"
+  },
+  "profile": "qwen-full",
+  "remote_code": {
+    "architectures": [
+      "Decision2Model"
+    ],
+    "auto_map": {
+      "AutoConfig": "configuration_decision2.Decision2Config",
+      "AutoModel": "modeling_decision2.Decision2Model"
+    },
+    "automap_source": {
+      "commit": "8e808244072cef8735b8f3fdcfb8487f36605c5c",
+      "content_manifest_sha256": "565576439331ef038c4b5c4794b867563bc6ad56964d19b0de948ed4f931f538",
+      "tree": "31010c6ec5e465b2c8d8567e994c9f1dfb571177"
+    },
+    "custom_pipelines": {
+      "decision": {
+        "impl": "pipeline_decision2.Decision2Pipeline",
+        "pt": [
+          "AutoModel"
+        ],
+        "type": "text"
+      }
+    },
+    "files": {
+      "configuration_decision2.py": {
+        "sha256": "b88ce8380cb0f210776f3f3ccc06219489b96502c520317790f3f4253e2a9367",
+        "source": "v2/release/automap/configuration_decision2.py",
+        "source_sha256": "b88ce8380cb0f210776f3f3ccc06219489b96502c520317790f3f4253e2a9367"
+      },
+      "modeling_decision2.py": {
+        "sha256": "a3f700b3d2a5deb344821802248a5ea7ea06ccedc5af1823dca4e3e813c17fbb",
+        "source": "v2/release/automap/modeling_decision2.py",
+        "source_sha256": "a3f700b3d2a5deb344821802248a5ea7ea06ccedc5af1823dca4e3e813c17fbb"
+      },
+      "pipeline_decision2.py": {
+        "sha256": "3393faec770ddaa9045a7e41092ad17cee5310fe74187deb6f58bbe718b0c1c3",
+        "source": "v2/release/automap/pipeline_decision2.py",
+        "source_sha256": "3393faec770ddaa9045a7e41092ad17cee5310fe74187deb6f58bbe718b0c1c3"
+      }
+    },
+    "model_type": "decision2",
+    "tested": [
+      "5.17.0",
+      "5.18.0"
+    ]
+  },
+  "repo_id": "vllm-sr/Decision-2.0-Kai-0.6B",
+  "runtime": {
+    "equivalence": "decision2/qwen.py loads this full checkpoint with the vendored training/model sources whose SHA-256 equal the scored adapter sources (checked at build time) and applies the per-state batching, BF16-backbone / FP32-head execution, raw probabilities (temperature 1; no calibration file), the fixed five-level Score logit offsets of score_bias.json and the answer normalization of training.model.infer (adapter dev2-06b-causal-8k-sb). The scored checkpoint (01fae750) stored every tensor in FP32; this package (v2.release.bf16_copy, receipt 2a991bfb) stores its 196 Linear projection matrices in BF16 exactly as BF16 autocast rounds them and every other tensor bit for bit in FP32, with the same offsets rebound to its hash. From this revision the runtime holds the backbone's BF16-exact Linear weights in BF16, the values BF16 autocast multiplies with, instead of FP32 copies cast before every matmul; it was checked with 0 answer changes on every scored prompt and on mlx-diag (2,275). From this revision the package also ships 🤗 Transformers remote code (configuration_decision2.py, modeling_decision2.py, pipeline_decision2.py; config.json gains model_type, auto_map and custom_pipelines): AutoModel with trust_remote_code loads the package through this runtime, which now also refuses Transformers' remote-code prompt while loading the tokenizer; it was checked with 0 answer changes against the native runtime on every scored prompt and on mlx-diag (2,275). From this revision the runtime replays the backbone of each exact padded input shape as a HIP graph, casts a Linear input shared by several layers to BF16 once and, on MI300-class (gfx942) GPUs, fuses the element-wise ops of each decoder layer into Triton kernels that round exactly as the ops they replace; it was checked with 0 answer changes and 0.0 drift on every scored prompt and on mlx-diag (10,653 prompts) against the previous runtime. Checked on one GPU of the scoring node against the sealed predictions of every scored prompt (typed-final 1,600, css15 6,547, public231 231) and of the mlx-diag diagnostic (2,275) by release.sh --parity at tolerance 0: 0 answer changes, maximum probability drift 0.0.",
+    "requirements": {
+      "python": "3.12.13",
+      "safetensors": "0.8.0",
+      "tokenizers": "0.23.2",
+      "torch": "2.12.0+git6bbd260 (ROCm 7.2 build; one ROCm GPU and CPU tested)",
+      "transformers": "5.17.0"
+    },
+    "runtime_source": {
+      "commit": "54303117be355595ddf5bb184905be6c6d2ecae9",
+      "content_manifest_sha256": "adeab2b90d1ae3b9b2c202a16202f5b94ddf2282e5b4c7ac7a30f24f2646eeb9",
+      "tree": "d4112ee2f4982ce76b0d40a92797c245e73cc241"
+    },
+    "scored_runtime_check": {
+      "checked": {
+        "training/model/data.py": "632bd60555f63459ff08ffe82c8263ca6a96f75360bc8c06469fcb10f1e2e99c",
+        "training/model/decision_model.py": "1ab1e49bccc8b84632a32565ce666a6db94298372ee891dee5b68e54f80957fb",
+        "training/model/infer.py": "7bb9f3cc88f04cd6e4ded62e69f41dd1c7a3d0154a76acdf44c0d73e4163ef58",
+        "training/model/lora.py": "7049e35e2a7bf50dd5888902cd0b7030d9bbd448d7d7aba8875ceb89aebff231",
+        "training/model/score_bias.py": "837974bb8abb8c51c907e4f025e2632bd59bc2875eb55a4343d7bd4274622646",
+        "training/model/source.py": "ef7b30171c4befb26163ea4d3d6e5add9dc602228a476d6f0ead9d40b450c7e3"
+      },
+      "native_manifest_sha256": "51d52730b5401d9e0a0df573bfe2cfd4d0cf5efe5b81f3f128dfabd383509bac",
+      "score_bias_sha256": "03f0c9c777de95f8ea56112c05a3c29521687609aa67c9c7ca466c14bf8dadae"
+    },
+    "vendor_source": {
+      "commit": "2f21790bafc6e172d565236a71101c3ad4a95424",
+      "content_manifest_sha256": "187207cb934ba9978ba0e44ab8bb4f79de4c218898fe0ce04f44794c7ace55bd",
+      "tree": "8cb73fcad2b4df40bd5964b659ff88fc6f8790ed"
+    }
+  },
+  "runtime_files": {
+    "decision2/__init__.py": {
+      "rewritten": false,
+      "sha256": "10fea99a87686a8f5d99e9a8a91573ce1ddb7bc702f22b1fa21d3de258a4054a",
+      "source": "v2/release/runtime/__init__.py",
+      "source_sha256": "10fea99a87686a8f5d99e9a8a91573ce1ddb7bc702f22b1fa21d3de258a4054a"
+    },
+    "decision2/_vendor/__init__.py": {
+      "rewritten": false,
+      "sha256": "fe3babbdd871fa7c0cf919320a66efd1249253abe6bd7cdc5e33352dc46adeef",
+      "source": null
+    },
+    "decision2/_vendor/dev2model/__init__.py": {
+      "rewritten": false,
+      "sha256": "4611a85789fae8f06395702a2975592e66e16a8632487c5f9255c0ce68c700d1",
+      "source": null
+    },
+    "decision2/_vendor/dev2model/calibration.py": {
+      "rewritten": false,
+      "sha256": "71633a04533c7022e1606ed2734107f33839454c34c993fe16d80c8413d1c561",
+      "source": "training/model/calibration.py",
+      "source_sha256": "71633a04533c7022e1606ed2734107f33839454c34c993fe16d80c8413d1c561"
+    },
+    "decision2/_vendor/dev2model/data.py": {
+      "rewritten": false,
+      "sha256": "632bd60555f63459ff08ffe82c8263ca6a96f75360bc8c06469fcb10f1e2e99c",
+      "source": "training/model/data.py",
+      "source_sha256": "632bd60555f63459ff08ffe82c8263ca6a96f75360bc8c06469fcb10f1e2e99c"
+    },
+    "decision2/_vendor/dev2model/decision_model.py": {
+      "rewritten": false,
+      "sha256": "1ab1e49bccc8b84632a32565ce666a6db94298372ee891dee5b68e54f80957fb",
+      "source": "training/model/decision_model.py",
+      "source_sha256": "1ab1e49bccc8b84632a32565ce666a6db94298372ee891dee5b68e54f80957fb"
+    },
+    "decision2/_vendor/dev2model/infer.py": {
+      "rewritten": false,
+      "sha256": "7bb9f3cc88f04cd6e4ded62e69f41dd1c7a3d0154a76acdf44c0d73e4163ef58",
+      "source": "training/model/infer.py",
+      "source_sha256": "7bb9f3cc88f04cd6e4ded62e69f41dd1c7a3d0154a76acdf44c0d73e4163ef58"
+    },
+    "decision2/_vendor/dev2model/lora.py": {
+      "rewritten": false,
+      "sha256": "7049e35e2a7bf50dd5888902cd0b7030d9bbd448d7d7aba8875ceb89aebff231",
+      "source": "training/model/lora.py",
+      "source_sha256": "7049e35e2a7bf50dd5888902cd0b7030d9bbd448d7d7aba8875ceb89aebff231"
+    },
+    "decision2/_vendor/dev2model/score_bias.py": {
+      "rewritten": false,
+      "sha256": "837974bb8abb8c51c907e4f025e2632bd59bc2875eb55a4343d7bd4274622646",
+      "source": "training/model/score_bias.py",
+      "source_sha256": "837974bb8abb8c51c907e4f025e2632bd59bc2875eb55a4343d7bd4274622646"
+    },
+    "decision2/_vendor/dev2model/source.py": {
+      "rewritten": false,
+      "sha256": "ef7b30171c4befb26163ea4d3d6e5add9dc602228a476d6f0ead9d40b450c7e3",
+      "source": "training/model/source.py",
+      "source_sha256": "ef7b30171c4befb26163ea4d3d6e5add9dc602228a476d6f0ead9d40b450c7e3"
+    },
+    "decision2/api.py": {
+      "rewritten": false,
+      "sha256": "a9af6e0a0888df0bab7ddebf813d1f6e40b8730f0a7c8fc8d9f375df0d7b112b",
+      "source": "v2/release/runtime/api.py",
+      "source_sha256": "a9af6e0a0888df0bab7ddebf813d1f6e40b8730f0a7c8fc8d9f375df0d7b112b"
+    },
+    "decision2/fast.py": {
+      "rewritten": false,
+      "sha256": "b1792167711a3755de2c1edc10d8b6409539069110ba7a52da6457d42fe3c701",
+      "source": "v2/release/runtime/fast.py",
+      "source_sha256": "b1792167711a3755de2c1edc10d8b6409539069110ba7a52da6457d42fe3c701"
+    },
+    "decision2/fast_kernels.py": {
+      "rewritten": false,
+      "sha256": "6126a3c8334cfbb9d6d9c85a62d28efdee4db90a78ac3242709360c0698ab023",
+      "source": "v2/release/runtime/fast_kernels.py",
+      "source_sha256": "6126a3c8334cfbb9d6d9c85a62d28efdee4db90a78ac3242709360c0698ab023"
+    },
+    "decision2/qwen.py": {
+      "rewritten": false,
+      "sha256": "e1f5c170492080894ebdc462d48d2438e268cd09f43ed6a13176179f0901c6aa",
+      "source": "v2/release/runtime/qwen.py",
+      "source_sha256": "e1f5c170492080894ebdc462d48d2438e268cd09f43ed6a13176179f0901c6aa"
+    }
+  },
+  "schema": "dev2-package-manifest/1",
+  "score_bias": {
+    "file": "score_bias.json",
+    "offsets": {
+      "5": [
+        0.039188,
+        0.203049,
+        0.079362,
+        -0.15162,
+        -0.169979
+      ]
+    },
+    "scored_sha256": "03f0c9c777de95f8ea56112c05a3c29521687609aa67c9c7ca466c14bf8dadae",
+    "sha256": "7d3a060fe1823aa7fe759776df3db872408de580f227120fbe08b9eef53dcf6e"
+  },
+  "scored": {
+    "label": "post-key same-panel run m8-s5-b05 (frozen runner, 8,192 tokens, raw probabilities with per-level Score offsets)",
+    "paired_sha256": "7b391cb2f5ab08b798e3ba6817dcf269ae0b9fb4843dabe4ac434b8177b77f98",
+    "predictions_sha256": {
+      "css15": "6788c1da8b6755baad1ab7d8f95207aada7b44e6791b830f5b7dd958d4875d38",
+      "mlx-diag": "b452f016921999af6f0bebe34465939937c4c5f20b904772549be345b8e60f11",
+      "public231": "0993d7239e8cccc3b471f5faf5cd08b50579276a12aa1730d32d6f7539953116",
+      "typed-final": "99c5a0147b69a7292cbbae0ffd31d5d874235c29eed8b6de130a78ea010e1c60"
+    },
+    "report_sha256": "b2083796ed0a03728edffb2aa8af5c9c60db38df3ad8182ea5c9e08d6bb6a2ed",
+    "seal_sha256": "0fe8b3f584b033e835d8a53f3062cf0d247481cc74498c8869c01e11131979b1"
+  },
+  "tier": "0.6B"
+}
