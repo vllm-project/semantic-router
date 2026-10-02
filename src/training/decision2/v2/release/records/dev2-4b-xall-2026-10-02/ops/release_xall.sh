@@ -17,12 +17,13 @@
 #                 the download (DEV2.0-4B-SDMLxALL-hub); only if all pass, purge_superseded.py plan and apply (the
 #                 137e28ce weight blobs, rewrite_history=False; node copy = the phase A release's verified package)
 #   --post WORK   for WORK's upload (still main): only the checks after release.sh, the IX1 gate and the purge
+#                 (the earlier extra/ receipts are kept as extra.before-<time>)
 # Never concurrently with another release.sh for this repository (other repositories' releases may share the node).
 # Usage (node A): bash <mirror>/v2/release/records/dev2-4b-xall-2026-10-02/ops/release_xall.sh <mode> --gpu N
 set -euo pipefail
-mode="${1:-}"
-shift || true
-gpu="" post=""
+mode="" post=""
+[[ "${1:-}" == --post ]] || { mode="${1:-}"; shift || true; }
+gpu=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --gpu) gpu=$2; shift 2 ;;
@@ -76,6 +77,8 @@ main=$("$HFPY" -c 'import sys; from huggingface_hub import HfApi; print(HfApi().
 [[ "$main" == "$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['revision'])" "$W/receipts/upload.json")" ]] \
   || { echo "$REPO main $main is not $W's upload" >&2; exit 1; }
 PKG=$W/package/$name
+[[ ! -d "$W/extra" ]] || mv "$W/extra" "$W/extra.before-$TS"
+mkdir -p "$W/extra"
 status=0
 else
 W=/data/dev2/runs/release/dev2-4b-xall-${mode#--}-$TS

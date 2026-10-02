@@ -4,6 +4,21 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17` (r
 stopped after creating the worktree, nothing had run). Prereg `da770d98a`, ops `1ce8b2220` (mirror on nodes E / F),
 data lock `4f68f1eb0`.
 
+## 2026-10-02 15:30Z — 4b-SDMLxALL release running (user 23:02 UTC+8, fast path)
+
+- The user asked for `4b-SDMLxALL` (the highest 4B candidate; IF1 lower bound vs the current weights > 0) on top of
+  Nox `main` `137e28ce`, carrying the phase A runtime. Record:
+  [`dev2-4b-xall-2026-10-02.md`](../../release/records/dev2-4b-xall-2026-10-02.md).
+- Pre-upload checks pass:
+  - R3, no type collapsed (choice, noul and score OK);
+  - IF3, `audit5`: 0 item rows in all six member TRAINs, planted control 200 / 200;
+  - the 86-request package parity gate of the Index run: 86 / 86, max |Δp| 0.
+- Fast path (COORDINATION 23:20): after upload, only the download re-hash, the Hub smoke (Transformers 5.17 / 5.18)
+  and the 86-request gate run. The coordinator waived the four-panel answer re-run.
+- `release_xall.sh --release` started 15:30Z on node A GPU0, shared with the Vega release; the Lux release is on
+  GPU7.
+- No M17 GPU leases are held. The arm factory trains the 4B arms; M17 waits for its soups.
+
 ## 2026-10-02 13:25Z — the cross-arm soup leads; wave 5 widens it
 
 - Lower bound vs SDML > 0: `4b-SDMLxALL` (clearly the highest so far, still short of the 4B goal), `4b-SDMLIB4-m50`,

@@ -86,7 +86,7 @@ declare -A DIAGNOSTIC=(  # name -> "repository revision package-dir"
   [DEV2.0-4B-SDMLxALL-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-SDMLxALL-bf16-r13d42143"
   [DEV2.0-4B-SDMLxALL9-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-SDMLxALL9-bf16-r13d42143"
   [DEV2.0-4B-SDMLxALL15-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-SDMLxALL15-bf16-r13d42143"
-  [DEV2.0-4B-SDMLxALL-hub]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-SDMLxALL-hub"
+  [DEV2.0-4B-SDMLxALL-hub]="vllm-sr/Decision-2.0-Nox-4B d55528d1635fc474061ec59e31a7c722d3e7ab95 /data/dev2/models/ix1/dec-m17/DEV2.0-4B-SDMLxALL-hub"
   [DEV2.0-4B-SDMLxS17-m50-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-SDMLxS17-m50-bf16-r13d42143"
   [DEV2.0-4B-LHA10UP-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-4bif/DEV2.0-4B-LHA10UP-bf16-r13d42143"
   [DEV2.0-4B-LHA10SD-a75-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-4bif/DEV2.0-4B-LHA10SD-a75-bf16-r13d42143"
@@ -131,8 +131,9 @@ usage() { sed -n '2,/^set -euo/p' "$0" | sed '$d' >&2; exit 2; }
 S="$src/src/training/decision2"
 if [[ -n "${DIAGNOSTIC[$model]:-}" ]]; then
   read -r repo revision pkg <<< "${DIAGNOSTIC[$model]}"
+  [[ "$repo" == */* ]] || repo="llm-semantic-router/$repo"
 else
-  repo="$model" revision="${REVISION[$model]}" pkg="$MODELS/$model-${REVISION[$model]:0:8}"
+  repo="llm-semantic-router/$model" revision="${REVISION[$model]}" pkg="$MODELS/$model-${REVISION[$model]:0:8}"
 fi
 manifest_sha="$(sha256sum "$pkg/MODEL_MANIFEST.json" | cut -c1-64)"
 base_dir="$(python3 - "$pkg/MODEL_MANIFEST.json" "$HF_CACHE" <<'EOF'
@@ -230,7 +231,7 @@ wait_for_room() {
 }
 
 kit_run() {  # rows out -> shell command
-  printf 'python3 -m decision_index run --engine %s --option model_id=llm-semantic-router/%s --option revision=%s --option package_manifest_sha256=%s --option device=cuda:0 --rows %q --out %q --compact' \
+  printf 'python3 -m decision_index run --engine %s --option model_id=%s --option revision=%s --option package_manifest_sha256=%s --option device=cuda:0 --rows %q --out %q --compact' \
     "$ENGINE" "$repo" "$revision" "$manifest_sha" "$1" "$2"
 }
 
