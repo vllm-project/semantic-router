@@ -2,6 +2,22 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 19:50Z (10-03 03:50 UTC+8), M10 continuation
+
+- **Gate verdicts vs `M10-KIB4-a40-bf16`** (values private):
+  - `M10-KIB4W2-a40-bf16`: **FAIL**, significantly below.
+  - `M10-KIB4L2-a40-bf16`: **FAIL**. It is significantly below even K-a13IB; its bootstrap vs KIB4-a40 is
+    finishing.
+  - `M10-X7-a40-bf16`: scored. Its point is level with KIB4-a40, so a FAIL is expected; the gate bootstrap is
+    running on node B.
+- **Amendment 10** (`6c0c3d195`): the factory's α ladder. KIB4-a50 runs on node A GPU1–4 (linked, model
+  `319ca812…`; BF16 copy on node A). KIB4Q-a60 and KF-a60 are dropped.
+- **Amendment 11:** KIB4W3-a40 is dropped, Y1 / Y2 become conditional, and no extra KIB4-family arm is planned (see
+  the record).
+- Node C GPU1–4 and node B GPU7 were released when their chains finished.
+- **GPU-h (continuation):** ≈ 12.0 used (Index: X7 2.70, X8 2.70, W2 2.79, L2 2.77; parity gates ≈ 0.6; formals
+  0.47), plus KIB4-a50 running (≈ 2.7).
+
 ## 2026-10-02 19:05Z (10-03 03:05 UTC+8), M10 continuation
 
 - **Gate verdicts vs `M10-KIB4-a40-bf16`** (IF1; values private):
