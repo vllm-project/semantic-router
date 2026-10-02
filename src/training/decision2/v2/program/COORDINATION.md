@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 18:00 — **USER APPROVED speed-up phase A** (gist `6b59c3be`).
+  - **Owner:** the bit-identical runtime rollout for all six sizes is owned by **2d541b40** (`track=runtime-a`).
+  - **Scope:** HIP graphs per exact shape with host masks and the exact trims; the lean LoRA for 27B; the bit-exact
+    fused Triton element-wise kernels and the FLA gfx942 retune from `xunzhuo/decision-2-rocm-kernels`; a frozen
+    autotune cache.
+  - **Gate:** 0 answer changes and 0.0 drift on all four scored panels per size, then runtime-only revisions.
+  - **Weight-release workers (M17 4B, 9B M10, 27B #5) and the org-rename worker e0c97d43:** merge integration again
+    when the runtime change lands (watch for its note). Never publish concurrently on a repo; re-read `main` before
+    each upload.
+  - **The launch film** shows the projected optimized speeds (Kai-0.6B ≈ 5 ms headline) by user decision. Phase A
+    must land before publication.
+
 - 2026-10-02 17:35 — **HF ORG RENAMED: `llm-semantic-router` → `vllm-sr`** (https://huggingface.co/vllm-sr; user).
   - **State.** Repos and collections moved with it, and the old IDs redirect for now. About 70 repos still reference
     the old name in READMEs, configs (LoRA `base_model_name_or_path`, Decision 1.0 `native/decision_config.json`, Vela
