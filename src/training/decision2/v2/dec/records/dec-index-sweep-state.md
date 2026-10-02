@@ -4,6 +4,41 @@ Branch `xunzhuo/decision-2-training-index-sweep`, worktree `vllm-sr-dev2-index-s
 [`dec-index-sweep-prereg-2026-10-02.md`](dec-index-sweep-prereg-2026-10-02.md) (`e6cb71541`, mirrored to nodes
 A / C / D before any job). Index values are private (node runs, local private folder); this file has none.
 
+## 2026-10-02 06:55Z — handoff (session ≈ 5 h); everything left runs unattended on the nodes
+
+- **New verdicts** (BF16 release copies; values private):
+
+  | Candidate | Gate vs the tier's reference run | Run (node) | Hand to |
+  | --- | --- | --- | --- |
+  | `IS-K-a13IBX-bf16` | **FAIL** (whole CI below K-a13IB) | A | 7e1c9ce8 |
+  | `IS-4b-LHA10SDML-bf16` | PASS vs `DEV2.0-4B-LH`; **its point estimate is above the new Nox release's run (`DEV2.0-4B-LHS17SD-bf16`)** | D | **5e7b8132** |
+  | `IS-08b-RA-a50-bf16` | PASS vs DEV2.0-0.8B; point and lower bound below M16 `08b-RA-a75`'s | A | ce74f1e5 |
+  | `IS-2b-RA-a50-bf16` | PASS vs DEV2.0-2B; below `IS-2b-RASD` | C | ce74f1e5 |
+
+- **4B, for the Nox publisher (5e7b8132).** Nox `main` is now M17 `LHS17SD` (`b285e7a1`, 05:33Z), so under the
+  progressive rule `4b-LHA10SDML` must beat that run. Its paired bootstrap vs `DEV2.0-4B-LHS17SD-bf16` runs on node D:
+  `ix1/index-sweep/cross/IS-4b-LHA10SDML-bf16-vs-LHS17SD-bf16-{full,transfer}.json` (the LHS17SD run is copied to
+  node D `ix1/index-sweep/refs/DEV2.0-4B-LHS17SD-bf16`, SHA-256 lists equal). The BF16 copy: M15 soup `1b515675…` →
+  `991a8fb8…` (receipt `8ffce102…`), package manifest `45e69976…`, staged on node F and node D. It has no formal
+  typed panel yet (item 3) and no row-level audit. Release is 5e7b8132's call.
+- **Running unattended** (chains on mirror `789356e4c`; each scores, bootstraps vs the tier reference, and releases its
+  leases; logs `ix1/logs/isweep-chain-<panel>.log`):
+  - node A GPU4–5: `IS-L9IBX-bf16` (≈ 07:35Z);
+  - node A GPU3: `IS-08b-RASD-a50-bf16`; node A GPU6: `IS-08b-RA10SDML-bf16` (both ≈ 07:35Z, one GPU each);
+  - node D GPU4–7: `IS-08b-RASDML-bf16`, then `IS-08b-RAAG-bf16` (≈ 07:20Z);
+  - node C GPU6–7: `IS-2b-RASDML-bf16`, then `IS-2b-RA10SDML-bf16` (≈ 08:00Z); `IS-2b-RASD-a75-bf16` is scored and
+    its bootstraps are running.
+- **For the successor / tier owners:**
+  - fetch with `ix.sh 789356e4c… fetch NODE NAME` (small JSONs to the local private folder) and read
+    `paired-boot-full-vs-ref.json` (gate) and `paired-boot-transfer-vs-ref.json`;
+  - the bootstraps are vs DEV2.0-0.8B / DEV2.0-2B. When b49d1f36's 0.8B / 2B releases land, re-base the pending
+    0.8B / 2B candidates on the new release's run (`paired_boot` on the node of the run, as in `chain.sh`) before
+    any release;
+  - the 9B queue ends with `IS-L9IBX-bf16`.
+- **GPU-h:** ≈ 29.4 so far (A 12.8, C 8.8, D 7.7), ≈ 37 projected when the queue ends (cap 45).
+- **Node clean-up after the queue:** this sweep's packages under `models/ix1/index-sweep/` (A, C, D, E, F) and node E's
+  copy of `DEV2.0-0.8B-bede7938` can be removed once the owners no longer need them.
+
 ## 2026-10-02 06:10Z
 
 - **New verdicts** (values private):

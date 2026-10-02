@@ -8,6 +8,7 @@
 # usage: ix.sh MIRROR_SHA STAGE ARGS...
 #   env    NODE            the bootstrap environment (index021 venv, suite-0.2, kit-19ad28ec, external) from node A
 #   pkgcopy SRC NODE NAME  copy NAME's staged package from node SRC to NODE (SHA-256 lists equal)
+#   xfer   SRC DIR NODE DIR  copy one directory node to node (SHA-256 lists equal)
 #   pkg    NODE TIER       copy the tier's IX1 package from node C to NODE (SHA-256 lists equal)
 #   ref    NODE TIER       copy the tier's reference run (merged results, compare, receipt) from node C to
 #                          NODE ix1/index-sweep/refs/<REF>/ (node D through a node A relay directory)
@@ -136,6 +137,8 @@ case "$STAGE" in
       on "$N" "test -e $R/../$x" && { echo "node $N has $x"; continue; }
       copy a "$R/../$x" "$N" "$R/../$x"
     done ;;
+  xfer)
+    copy "${1:?SRC_NODE}" "${2:?SRC_DIR}" "${3:?NODE}" "${4:?DIR}" ;;
   pkgcopy)
     SN=${1:?SRC_NODE} N=${2:?NODE} NAME=${3:?NAME}
     pkg=$(pkgdir "$SN" "$NAME")
