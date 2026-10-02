@@ -371,6 +371,18 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 07:08Z (poll 24):
+  - **M6-IB prerelease PASSED** (node A GPU0, 05:57–07:02Z; work `dev2-27b-27bif-M6-IB-prerelease-20261002T055720Z`):
+    build, two example processes, card example, scored-panel parity on typed-final / css15 / public231 / mlx-diag,
+    Transformers remote code, parity through AutoModel, `verify_bundle` ok (30 files, identity `e50fb4c1…`).
+  - **Release launched 07:02:33Z** (`release27b.sh M6-IB --release --gpu 0`, mirror `69b52757d`): Vega-27B `main` was
+    `b689ee66` right before; no other `release.sh` on node A; TF518 digest set. In pre-upload examples.
+  - **M6-IB2 Index:** shards 0–4 ended exit 0 (3 / 4 at ≈ 06:26Z, 2 at ≈ 06:35Z); 5 (node D GPU0, since 06:26Z), 6 / 7
+    (node B GPU5 / GPU1) running. ETA all 8 ≈ 08:45Z (shard 5).
+  - **M6-IB2PN:** both seeds ended ≈ 06:30Z; chain `2818836` (node B) in `lsoup` since ≈ 06:47Z.
+  - **M7 plan** committed (`2559343d9`, `records/m7-plan-2026-10-02.md`): arms M7-IB24 / M7-IB14 (+ IB4 phase 1 block,
+    IB1 `sentfin` dropped), warm-start hedge pending approval; M7 needs a new GPU-hour allocation.
+
 - 06:14Z (poll 23):
   - **M6-IB release (interrupt item 1) in prerelease.** Ops `records/dev2-27b-indexfirst-2026-10-02/ops/`
     (`5ac8896d4`, `17bb3ca16`, `69b52757d`): `inputs27b.sh` (node A pulls the private Index files from node D, SHA-256
