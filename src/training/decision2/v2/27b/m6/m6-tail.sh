@@ -10,7 +10,8 @@
 #   pull ARM-SEED             a node A relay (BEST checkpoint + SHA-256 list) over the M6 node link -> m6/relay/ARM-SEED
 #   pull-d ARM-SEED           the same from node D's relay over the node B -> node D transfer key (/root/.ssh/d2_temp_cd)
 #   lsoup NAME CKPT CKPT...   v2.27b.lora_soup (exact rank concatenation) in a CPU-only container -> m6/NAME/checkpoint;
-#                             members with a relay list (RELAY_SUMS="CKPT=SHA256SUMS ...") must match it file by file
+#                             members with a relay list (RELAY_SUMS="CKPT=SHA256SUMS ...") must match it file by file;
+#                             SOUP_WEIGHTS="W1 W2 ..." (one per CKPT) makes a weighted soup, SOUP_CPUS (default 16)
 #   readout NAME CKPT GPU     m4b/run_readout.sh (CAL698 kernel fit, typed DEV + CSS pilot + HT-DEV v2) -> m6/readouts/NAME
 #   devgates NAME...          m6_devgates.py (gates G1-G6 vs A20r and M5-L128) -> m6/readouts/DEVGATES-<UTC>.json
 #   formal NAME CKPT GPU      m4b/run_formal.sh -> m6/NAME (package, formal, paired compares incl. A20r and M5-L128)
@@ -88,8 +89,18 @@ case "$STAGE" in
       args+=(--member "$c")
       mounts+=(--mount "type=bind,src=$c,dst=$c,readonly")
     done
+    read -r -a weights <<< "${SOUP_WEIGHTS:-}"
+    if [ ${#weights[@]} -gt 0 ]; then
+      [ ${#weights[@]} = $# ] || { echo "SOUP_WEIGHTS: one weight per member ($# members)" >&2; exit 2; }
+      for w in "${weights[@]}"; do
+        [[ "$w" =~ ^[0-9]+([.][0-9]+)?$ ]] || { echo "SOUP_WEIGHTS: positive numbers, not '$w'" >&2; exit 2; }
+        args+=(--weight "$w")
+      done
+    fi
+    cpus=${SOUP_CPUS:-16}
+    [[ "$cpus" =~ ^[1-9][0-9]?$ ]] || { echo "SOUP_CPUS: 1-99, not '$cpus'" >&2; exit 2; }
     mkdir -p "$OUT/soup"
-    docker run --rm --name "d2-27b-M6-$NAME-soup" --network none --cpus 16 -e OMP_NUM_THREADS=16 \
+    docker run --rm --name "d2-27b-M6-$NAME-soup" --network none --cpus "$cpus" -e OMP_NUM_THREADS="$cpus" \
       -e HIP_VISIBLE_DEVICES= -e ROCR_VISIBLE_DEVICES= -e PYTHONPATH=/code -e PYTHONDONTWRITEBYTECODE=1 \
       --mount "type=bind,src=$S,dst=/code,readonly" --mount "type=bind,src=$BASE,dst=$BASE,readonly" "${mounts[@]}" \
       --mount "type=bind,src=$OUT,dst=$OUT" -w /code --entrypoint python3 "$IMAGE" \

@@ -17,7 +17,8 @@
 set -euo pipefail
 SHA=${1:?MIRROR_SHA} ARM=${2:?ARM}
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "MIRROR_SHA must be a full commit SHA" >&2; exit 2; }
-[[ "$ARM" =~ ^M6-(IB|IBX|IB2|IB2PN)$ ]] || { echo "bad ARM $ARM" >&2; exit 2; }
+ARM_RE='^(M6-(IB|IBX|IB2|IB2PN|IBxIB2-m[0-9]{2})|M7-(IB124ML|IB14ML))$'
+[[ "$ARM" =~ $ARM_RE ]] || { echo "bad ARM $ARM" >&2; exit 2; }
 NODE=${3:?NODE} SHARDS=${4:?SHARDS}
 shift 4
 case "$NODE" in

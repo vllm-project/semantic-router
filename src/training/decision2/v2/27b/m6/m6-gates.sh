@@ -28,6 +28,8 @@ declare -A PEER=([AutoJev-27B]=$B/m2-peer-autojev27-nodeB-kernel [Eikos-27B]=$B/
 declare -A RUN=([M4-A20r-soup]=$A20R [M5-L128]=$B/m5/M5-L128/formal ["DEV2.0-27B (F1)"]=$B/M3-A-soup/formal)
 declare -A MIX=([M6-IB]=a20ib1 [M6-IBX]=a20ib1x [M6-IB2]=${IB2_MIX:-a20ib12} [M6-IB2PN]=a20ib12pn)
 for name in "$@"; do
+  # a cross-arm soup of M6-IB and M6-IB2 seeds: every a20ib1 row is an a20ib12 row, so a20ib12 is its training rows
+  [[ "$name" =~ ^M6-IBxIB2-m[0-9]{2}$ ]] && MIX[$name]=a20ib12
   [ -n "${MIX[$name]:-}" ] || { echo "unknown M6 finalist $name" >&2; exit 2; }
   [ -f "$R/$name/formal/SEAL.json" ] || { echo "$name has no sealed formal run" >&2; exit 2; }
   RUN[$name]=$R/$name/formal

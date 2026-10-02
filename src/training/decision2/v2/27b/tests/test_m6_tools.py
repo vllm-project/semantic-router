@@ -868,7 +868,16 @@ class M6ScriptTest(unittest.TestCase):
         index = (M6 / "m6-index.sh").read_text()
         self.assertIn("MD=/data/dev2/models/ix1/m6\n", index)
         self.assertIn("PKG=$MD/$ARM-re876fbe", index)
-        for arm in ("M6-IB", "M6-IBX", "M6-IB2", "M6-IB2PN"):
+        for arm in (
+            "M6-IB",
+            "M6-IBX",
+            "M6-IB2",
+            "M6-IB2PN",
+            "M6-IBxIB2-m50",
+            "M6-IBxIB2-m67",
+            "M7-IB124ML",
+            "M7-IB14ML",
+        ):
             entry = (
                 f'  [{arm}]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 '
                 f'/data/dev2/models/ix1/m6/{arm}-re876fbe"\n'
@@ -880,6 +889,9 @@ class M6ScriptTest(unittest.TestCase):
             for args, message in (
                 (["abc", "M6-IB", "stage"], "full commit SHA"),
                 (["0" * 40, "M6-IB3", "stage"], "bad ARM"),
+                (["0" * 40, "M6-IBxIB2-m5", "stage"], "bad ARM"),
+                (["0" * 40, "M6-IBxIB2", "stage"], "bad ARM"),
+                (["0" * 40, "M7-IB24", "stage"], "bad ARM"),
             ):
                 with self.subTest(script=script, args=args):
                     out = subprocess.run(
@@ -1085,6 +1097,7 @@ class M6ScriptTest(unittest.TestCase):
                 "#!/usr/bin/env bash\n"
                 f'cmd="${{@: -1}}"; echo "$cmd" >> {log}; cat > /dev/null\n'
                 'case "$cmd" in "test -f "*PACKAGE.json) exit 1 ;; '
+                "*rank*soup_manifest.json) echo 256 ;; "
                 f"*soup_manifest.json) echo {soup} ;; *) echo ok ;; esac\n"
             )
             (bin_dir / "ssh").chmod(0o755)
@@ -1110,6 +1123,127 @@ class M6ScriptTest(unittest.TestCase):
             )
             self.assertEqual(out.returncode, 0, out.stderr)
             self.assertIn(f"--model-sha256 {soup}", log.read_text())
+            self.assertIn(f"MODEL_MANIFEST.json {soup} 27497508864", log.read_text())
+
+    def fake_nodes(self, tmp, answers):
+        """A fake ssh answering each remote command by the first matching (glob, line) pair, else "ok"."""
+        bin_dir, log = Path(tmp) / "bin", Path(tmp) / "ssh.log"
+        bin_dir.mkdir()
+        cases = " ".join(f"{glob}) echo {line} ;;" for glob, line in answers)
+        (bin_dir / "ssh").write_text(
+            "#!/usr/bin/env bash\n"
+            f'cmd="${{@: -1}}"; echo "$cmd" >> {log}; cat > /dev/null\n'
+            f'case "$cmd" in {cases} *) echo ok ;; esac\n'
+        )
+        (bin_dir / "ssh").chmod(0o755)
+        nodes = Path(tmp) / "nodes.env"
+        nodes.write_text("node-b=root@b\nnode-c=root@c\nnode-d=root@d\nnode-e=root@e\n")
+        env = dict(
+            os.environ,
+            PATH=f"{bin_dir}:{os.environ['PATH']}",
+            DEV2_NODES_FILE=str(nodes),
+        )
+        return env, log
+
+    def test_index_stage_takes_the_loaded_count_from_the_soup_rank(self):
+        soup = "cd" * 32
+        with tempfile.TemporaryDirectory() as tmp:
+            env, log = self.fake_nodes(
+                tmp,
+                [
+                    ('"test -f "*PACKAGE.json', "''; exit 1"),
+                    ("*rank*soup_manifest.json", "512"),
+                    ("*soup_manifest.json", soup),
+                ],
+            )
+            out = subprocess.run(
+                ["bash", str(M6 / "m6-index.sh"), "0" * 40, "M6-IBxIB2-m50", "stage"],
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                env=dict(env, M6_INDEX_FROM_SOUP="1"),
+            )
+            self.assertEqual(out.returncode, 0, out.stderr)
+            calls = log.read_text()
+            self.assertIn("/data/dev2/models/ix1/m6/M6-IBxIB2-m50-re876fbe", calls)
+            self.assertIn(f"MODEL_MANIFEST.json {soup} 29365153792", calls)
+        with tempfile.TemporaryDirectory() as tmp:
+            env, _ = self.fake_nodes(
+                tmp,
+                [
+                    ('"test -f "*PACKAGE.json', "''; exit 1"),
+                    ("*rank*soup_manifest.json", "abc"),
+                    ("*soup_manifest.json", soup),
+                ],
+            )
+            out = subprocess.run(
+                ["bash", str(M6 / "m6-index.sh"), "0" * 40, "M7-IB124ML", "stage"],
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                env=dict(env, M6_INDEX_FROM_SOUP="1"),
+            )
+            self.assertEqual(out.returncode, 3)
+            self.assertIn("bad LoRA rank", out.stderr)
+
+    def test_index_parity_gpu_and_score_base_checks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env, log = self.fake_nodes(tmp, [])
+            for gpu in ("e4", "e5", "c1", "d8", "b0"):
+                with self.subTest(gpu=gpu):
+                    out = subprocess.run(
+                        [
+                            "bash",
+                            str(M6 / "m6-index.sh"),
+                            "0" * 40,
+                            "M6-IBxIB2-m67",
+                            "parity",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        stdin=subprocess.DEVNULL,
+                        env=dict(env, M6_PARITY_GPU=gpu),
+                    )
+                    self.assertEqual(out.returncode, 2)
+                    self.assertIn("M6_PARITY_GPU", out.stderr)
+            for base in ("M6-IB3", "M6-IBxIB2-m67"):
+                with self.subTest(base=base):
+                    out = subprocess.run(
+                        [
+                            "bash",
+                            str(M6 / "m6-index.sh"),
+                            "0" * 40,
+                            "M6-IBxIB2-m67",
+                            "score",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        stdin=subprocess.DEVNULL,
+                        env=dict(env, M6_INDEX_BASE=base),
+                    )
+                    self.assertEqual(out.returncode, 2)
+                    self.assertIn("M6_INDEX_BASE", out.stderr)
+
+    def test_index_parity_on_node_e_copies_the_record_to_node_d(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env, log = self.fake_nodes(
+                tmp, [('"test ! -e "*', "''"), ("*sha256sum*parity.json", "same")]
+            )
+            (Path(tmp) / "bin" / "sleep").write_text("#!/usr/bin/env bash\n")
+            (Path(tmp) / "bin" / "sleep").chmod(0o755)
+            out = subprocess.run(
+                ["bash", str(M6 / "m6-index.sh"), "0" * 40, "M6-IBxIB2-m50", "parity"],
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                timeout=60,
+                env=dict(env, M6_PARITY_GPU="e6"),
+            )
+            self.assertEqual(out.returncode, 0, out.stderr)
+            calls = log.read_text()
+            self.assertIn("launch.sh parity --src", calls)
+            self.assertRegex(calls, r"--model M6-IBxIB2-m50\s+--gpu 6 ")
+            self.assertIn("parity record copied node E -> node D", out.stdout)
 
     def test_contrast_guard_moves_m4_contrast_output(self):
         with tempfile.TemporaryDirectory() as tmp:
