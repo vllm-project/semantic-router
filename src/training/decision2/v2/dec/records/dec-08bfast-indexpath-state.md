@@ -7,6 +7,39 @@ Branch `xunzhuo/decision-2-training-dec-08bfast`. Index values stay private (nod
 `/data/dev2/private/eval/index021/ix1/runs/<name>/` and `decision2-program/private/m16-indexpath/`); this file holds
 verdicts, counts and hashes only.
 
+## 2026-10-02 05:50Z — coordinator 13:05 (option 1): 2B is `2b-RASD`; formal done, types OK; BF16 Index running
+
+- **Formal path on node B GPU1 / GPU5** (reserved `track=dec-2b-formal`). The GPU3 / GPU4 pin was a script default:
+  a static render map in `m6-formal-lib.sh` plus `m16-formal.sh`'s guard; the runner itself passes only the GPU
+  index on node B. Added `M6_B_GPUS` (render nodes looked up by PCI address, as on nodes E / F), `M6_FORCE_T1` (T = 1
+  staging without the CAL698 fit; calibration decision none) and `M16_FORMAL_{GPUS,SELECT,TRACK}` (`b9d56b999`).
+  Select `formal/m16/select-ixf/2b-finalists.json` (node B): RAUP = M14 soup `37c85fff…` (9 files, list
+  `c1c5601f…`), RASD = node B's M16 copy of the M13 soup `341c2bd2…` (list `8639209f…`); each identity matches its
+  M16 lineage receipt. Smoke (8 items) then the finalist collection, both in parallel 05:16–05:22Z: `m16-2b-RAUP` seal
+  `5a010225…`, `m16-2b-RASD` seal `478e1b15…` (package revision `847fcf65…`). Relayed to node A; `m16-fscore.sh
+  2b run` for both exited 0. **RASD types: choice / noul / score all OK** (R3 passes). The GPU1 / GPU5 owner files
+  are released (05:45Z).
+- **Choice:** RASD has the largest FP32 Index lower bound (RASD > RAUP > `2b-RA-a75`; values private). The gap to
+  RAUP is about 7× the FP32 → BF16 shift `2b-RA-a75` showed, so (as the coordinator allowed) only RASD gets a BF16
+  Index run. `2b-RA-a75` is not released.
+- **Contamination audit:** both RASD (M13) and RAUP (M14) train on M12's 2B RA TRAIN `08140409…` (hash-checked on
+  nodes F / B), so `audit/out-2bRA` covers them.
+- **BF16 copy (node C, `ix.sh ckpt` + `bf16`, `2a0010c3a`):** the sweep package's 9 checkpoint files equal node B's
+  formal list; `341c2bd2…` → **`40061c70…`** (receipt `dd1c0b9f…`).
+- **Index run:** node A GPU6 (the only free GPU) ran 05:33–05:43Z (one shard at a time, about 2.3 h). It was stopped
+  and set aside when node C GPU1–3 turned out idle: the 4B run that holds them has finished, merged and
+  bootstrapped. Restaged on node C (manifest `bc0a4ffa…`); parity, then all 3 shards in parallel as co-tenant
+  `release-2b-ixf`. Node A GPU6 was released.
+- **Release inputs (node A, `9b5e2bd32`):** card4 merged in (Sol main `8ed41433`'s spec, gate receipt and decision).
+  `make_ixf` / `prep` / `release_ixf` / `render_assets` use the tier's current card (2B round 4) and skip mlx-diag
+  / exposure for a point without them. `release_ixf --stage`: current gate `445ca889…`, decision `ea4b72cf…`.
+  `prep 2b bf16 / adopt / paired` passed: sealed predictions match, adopted run reproduces the formal report, types
+  OK, every paired file equal to the same_panel compare. The formal autotune cache was relayed to node A (manifest
+  `f56b0a82…`). The unreleased RA-a75 inputs were moved aside (`*.ra-a75-unreleased-*`).
+- **Next:** shards → score → node C bootstraps → `stage_private` (card_index) → assets on node A (its card-render venv
+  matches Python 3.12.13 / matplotlib 3.11.2 / Pillow 12.3.0, with the same logo and fonts) → `make_ixf 2b` →
+  `release_ixf 2b --release` on top of `8ed41433`, then the purge.
+
 ## 2026-10-02 05:05Z — Eos 0.8B released (`3de61185`); 2B choice needs the coordinator
 
 - **Decision-2.0-Eos-0.8B** main = **`3de61185`** (M16 `08b-RA-a75`, BF16 `d9712799…`). Every post-upload check passed;
