@@ -4,7 +4,8 @@
 # 16,384 tokens, T = 1, image dbe5f32b, the node's 4b-read Triton cache.
 # Outputs: /data/dev2/runs/dec/m17/lines/<point>/<panel>/<panel>.predictions.jsonl (+ manifest and launch receipt). A
 # panel already read is skipped; a failed read is recorded and not rerun. The caller holds the GPU's chain flock
-# (m17-post.sh, m17-anchor.sh), so reads never share a GPU with training.
+# (m17-post.sh, m17-anchor.sh), so reads never share a GPU with training; except with M17_COTENANT=1 (stage 2's
+# formal-path readouts, m17-s2post.sh), which reads beside the GPU's training job and leaves its lease owner as it is.
 #
 #   M17_NODE=f m17-lines.sh read <mirror-dir> <gpu> <point> <checkpoint> <source> [panel ...]
 #       <checkpoint> / <source> are host paths under /data/dev2/runs/dec or /data/dev2/models.
@@ -31,10 +32,15 @@ incontainer() {
     *) echo "path outside the mounted roots: $1" >&2; return 1 ;;
   esac
 }
-lease() {  # <gpu> <status> <purpose> <minutes>
+lease() {  # <gpu> <status> <purpose> <minutes>; M17_COTENANT=1: a side entry owner.dec-m17-lines, the owner untouched
+  local f=/data/dev2/leases/gpu$1.lock/owner
   mkdir -p "/data/dev2/leases/gpu$1.lock"
+  if [ "${M17_COTENANT:-0}" = 1 ]; then
+    f=$f.dec-m17-lines
+    [ "$2" = idle ] && { rm -f "$f"; return 0; }
+  fi
   printf 'track=dec-m17\nstatus=%s\npurpose=decoder M17 %s\nstart_utc=%s\nexpected_end_utc=%s\n' \
-    "$2" "$3" "$(date -u +%FT%TZ)" "$(date -u -d "+$4 min" +%FT%TZ)" > "/data/dev2/leases/gpu$1.lock/owner"
+    "$2" "$3" "$(date -u +%FT%TZ)" "$(date -u -d "+$4 min" +%FT%TZ)" > "$f"
 }
 
 case $MODE in
@@ -42,7 +48,8 @@ case $MODE in
     GPU=$3 POINT=$4 CK=$5 SOURCE=$6
     shift 6
     PANELS=${*:-dev css-pilot ht-dev2 score5t-dev hs1-dev pn1-dev m10-probes ib-dev}
-    if grep -qs "^status=busy" "/data/dev2/leases/gpu$GPU.lock/owner" && grep -qs "training" "/data/dev2/leases/gpu$GPU.lock/owner"; then
+    if [ "${M17_COTENANT:-0}" != 1 ] && grep -qs "^status=busy" "/data/dev2/leases/gpu$GPU.lock/owner" \
+      && grep -qs "training" "/data/dev2/leases/gpu$GPU.lock/owner"; then
       log "$POINT: GPU$GPU is training; not read"
       exit 1
     fi
