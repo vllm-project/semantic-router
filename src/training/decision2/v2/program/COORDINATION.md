@@ -205,6 +205,39 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 01:50 — **WATCHDOG: about 11 GPUs are idle. Fill them now** (lease-check every GPU first).
+  - **Free:**
+    - node C GPU1–7: the arm-factory chains finished at 01:13–01:15, so the owner files say `released`;
+    - node F GPU6–7;
+    - node A GPU7 (0% under a `9b-m10` lease; release it if it's not yours);
+    - node B GPU7 (0% under an `eval-ix1` lease).
+  - **9B publisher (9087b208):** take node C GPUs for the missing `M10-X8-a40-bf16` shards. Partial shard dirs 0–4
+    are on node F; re-run s3 / s4 and the rest. Then run `gate.sh`.
+  - **Arm factory (f156a257):** take the rest of node C for the next batch of diverse 4B and 9B arms. Aim them at the
+    gaps: 4B needs about +0.6 to pass JPT-4B 43.04, 9B about +0.6 to pass JPT-9B 46.89. Use new seeds, IB4 / ML
+    dose and LR / epoch variants, feeding the next cross-arm soups. **+40 GPU-h approved** (130 total).
+  - **27B #6:** node F GPU2–5 are yours for the M8 resume (the base copy is running). Node F GPU6–7 go to whoever
+    claims them first for 27B soups / Index, else the arm factory.
+  - **Shared-ctx (81330826):** node B GPU5 finishes its current panel, then is released (focus rule, 01:25).
+
+- 2026-10-03 01:45 — **USER (01:27): ship the best 4B / 9B / 27B now; make Vega public right after its release; then
+  keep optimizing to same-size SOTA with progressive releases under the SAME rules as before (Index-first gate,
+  integrity checks, fast-path post-checks, purge of superseded weights).** Use every GPU.
+  - **The visibility policy is done centrally. Don't write your own: merge `47dd06be7` (branch
+    `xunzhuo/decision-2-training`) into your branch or mirror before your next upload.**
+    - `v2/release/hub.py` now expects the six `vllm-sr/Decision-2.0-*` repos and the Decision 2.0 collection to be
+      PUBLIC, and everything else (staging, data, eval) to be PRIVATE.
+    - `collection_order.py` expects the public collection.
+  - **Vega:** a watcher on node A makes Vega and the collection public as soon as the running release prints
+    `post_checks=ok` (`/data/dev2/logs/d2-vega-public-watch.log`). Until then the collection is still private.
+    A pre-`47dd06be7` mirror is right only for that release.
+  - **Status:** 4B `d55528d1` (42.49) and 9B `f3122c7c` (46.26) are the best measured and public. 27B `M6-IBxIB2-m50`
+    (56.47) is uploading.
+  - **Targets (same-size #1):**
+    - 4B above JPT-4B 43.04 (Jet v6.2 42.60 first);
+    - 9B above JPT-9B 46.89;
+    - 27B above Decider chat · Gemma-4-31B 57.33 and Surogate Rune 26B-A4B v3 57.44.
+
 - 2026-10-03 01:25 — **USER (01:11): DECISION 2.0 GOES PUBLIC. Also, node E was handed to the user and node F is
   back in the pool. Focus: 4B / 9B / 27B optimization and release, plus the film.**
   - **Public now:** Kai, Eos, Sol, Nox and Lux (flipped at 01:17; anonymous README 200).
