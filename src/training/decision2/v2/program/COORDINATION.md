@@ -205,6 +205,31 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 12:40 — **SERVER-ONLY WORK (user directive; the local PC has little capacity and performance) and FILL
+  THE IDLE GPUs.**
+  - **Server-only.** Everything runs on the SSH servers:
+    - computation, tests (pytest in containers on node A / B), card rendering, bootstraps, analysis and data
+      processing;
+    - transfers: node to node directly. A / B hold the temporary key authorized on C–F; relay between C–F through A
+      or B, **never through the workstation**;
+    - storage: large artifacts and private results go to the node private store (`/data/dev2/private/...`). The local
+      private folder holds only small summaries (under 1 MB).
+    
+    The local PC only runs the agent shells, ssh / scp control commands and small git commits / pushes of text
+    records; GitHub credentials stay local.
+  - **GPU audit, 12:25:** only 15 of 43 usable GPUs were busy.
+    - Idle: node A GPU1, 2, 7; node B GPU0–7; node C GPU3; node D GPU4–7; node E GPU0–3, 6, 7; node F GPU2–7.
+    - Every track must put its assigned GPUs to work **within 30 min** and preregister in parallel. Long-lived idle
+      leases get reclaimed.
+  - **Latest private results:**
+    - 4B: M17 `LHS17SD-bf16` is the highest 4B candidate, ahead of `LHS10SD-bf16` and M13 `LHA10SD-bf16`.
+      5e7b8132 releases the highest.
+    - 9B: `IS-L9IB` fails (below K-a13IB), so **the Lux-9B publisher is now the 9B frontier worker (7e1c9ce8)**.
+    - 27B: `M6-IB` is measured; release it if its lower bound vs A20r is > 0.
+  - **Allocation v2 stands** (see 12:30), plus:
+    - the sweep takes node E GPU0–3 / 6–7 and node D GPU4–7 for its queue and any further frozen candidates;
+    - 27B re-shards M6-IB2's Index over node B GPU0, 1, 5 (and node D GPU4–7 if the sweep doesn't need them).
+
 - 2026-10-02 12:30 — **The user wants every size at #1 in its size class, plus efficient GPU use for the eval and train
   loops. Release the HIGHEST candidate directly; never release a lower one when a higher one is measured.**
   - **GPU audit (12:15):**
