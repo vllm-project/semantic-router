@@ -10,27 +10,38 @@
 # status/warm-4b-f. Stop rules: a failed preflight stops the arm (no rerun, no replacement seed); a seed stops at the
 # arm cap (5.0 GPU-h); no seed starts above the M17 gate (45 GPU-h).
 # Markers: /data/dev2/runs/dec/m17/status/m17-<ARM>-s<i>.{DONE,FAILED,STOPPED}.
-# usage: M17_NODE=f m17-chains.sh launch|run <mirror-dir> <gpu>
+# Stage 2 (M17_STAGE=2; prereg dec-m17-stage2-prereg-2026-10-02.md): the same recipe and stop rules on data/4b-s2,
+# locked by data/READY-m17s2.json; an arm with weights.jsonl adds --example-weights (UP); the M17 gate on node F is 50
+# GPU-h. The node's 4B train cache is already warm (stage 1), so no stage-2 item pre-warms.
+# usage: M17_NODE=f [M17_STAGE=2] m17-chains.sh launch|run <mirror-dir> <gpu>
 set -u
 MODE=$1 SRC=$2 GPU=$3
 NODE=${M17_NODE:?set M17_NODE=f}
+STAGE=${M17_STAGE:-1}
 M=/data/dev2/runs/dec/m17
 C=$M/chains ST=$M/status
 OPS=/data/dev2/src/$SRC/src/training/decision2/v2/dec/ops/m17
 mkdir -p "$C" "$ST" "$M/logs"
 PREWARMS=""
-case $NODE:$GPU in
-  f:6) ITEMS="4b-LHS10SD:1" PREWARMS="4b-LHS10SD:1" ;;
-  f:7) ITEMS="4b-LHS10SD:2" ;;
-  f:2) ITEMS="4b-LHS17SD:1" ;;
-  f:3) ITEMS="4b-LHS17SD:2" ;;
-  *) echo "no M17 chain for node $NODE GPU$GPU" >&2; exit 2 ;;
+DATA=4b READY=READY-m17.json GATE=45 TAG=$NODE$GPU
+case $STAGE:$NODE:$GPU in
+  1:f:6) ITEMS="4b-LHS10SD:1" PREWARMS="4b-LHS10SD:1" ;;
+  1:f:7) ITEMS="4b-LHS10SD:2" ;;
+  1:f:2) ITEMS="4b-LHS17SD:1" ;;
+  1:f:3) ITEMS="4b-LHS17SD:2" ;;
+  2:f:2) ITEMS="4b-LHS17UP:1" ;;
+  2:f:3) ITEMS="4b-LHS17UP:2" ;;
+  2:f:6) ITEMS="4b-LHS23SD:1" ;;
+  2:f:7) ITEMS="4b-LHS23SD:2" ;;
+  *) echo "no M17 stage-$STAGE chain for node $NODE GPU$GPU" >&2; exit 2 ;;
 esac
-TAG=$NODE$GPU
+if [ "$STAGE" != 1 ]; then
+  DATA=4b-s2 READY=READY-m17s2.json GATE=50 TAG=s$STAGE-$NODE$GPU
+fi
 
 if [ "$MODE" = launch ]; then
   mkdir "$C/launch-$TAG.lock" 2> /dev/null || { echo "M17 chain $TAG already launched"; exit 0; }
-  M17_NODE=$NODE setsid nohup flock "$C/gpu$GPU.flock" bash "$0" run "$SRC" "$GPU" \
+  M17_NODE=$NODE M17_STAGE=$STAGE setsid nohup flock "$C/gpu$GPU.flock" bash "$0" run "$SRC" "$GPU" \
     > "$M/logs/chain-$TAG.log" 2>&1 < /dev/null &
   echo $! > "$C/chain-$TAG.pid"
   echo "$(date -u +%FT%TZ) M17 chain $TAG ($ITEMS) launched from $SRC (pid $(cat "$C/chain-$TAG.pid"))" \
@@ -43,7 +54,7 @@ REV_4b=1001bb4d826a52d1f399e183466143f4da7b741b
 BASE_4b=/models/Qwen--Qwen3.5-4B-Base/$REV_4b
 SEEDS=(20260926 20260927)
 BATCH="--batching tokens --max-batch-tokens 32768 --max-batch-rows 64 --update-rows 64"
-GATE=45 ARM_CAP=5.0 WARM_WAIT_MIN=360
+ARM_CAP=5.0 WARM_WAIT_MIN=360
 LEASE_DIR=/data/dev2/leases/gpu$GPU.lock
 log() { echo "$(date -u +%FT%TZ) chain-$TAG $*" | tee -a "$M/OPERATIONS.log"; }
 gpuh() { python3 "$OPS/m17_gpuh.py" "$@"; }
@@ -54,9 +65,11 @@ lease() {  # <status> <purpose> <minutes>
     "$1" "$2" "$(date -u +%FT%TZ)" "$(date -u -d "+$3 min" +%FT%TZ)" > "$LEASE_DIR/owner"
 }
 ready() {  # <ARM>: TRAIN and teacher equal the committed data lock
-  python3 - "$M/data/READY-m17.json" "$1" "$M/data/4b/$1/train.jsonl" "$M/data/4b/$1/teacher-s.jsonl" << 'EOF'
+  python3 - "$M/data/$READY" "$1" "$M/data/$DATA/$1/train.jsonl" "$M/data/$DATA/$1/teacher-s.jsonl" \
+    "$M/data/$DATA/$1/weights.jsonl" << 'EOF'
 import hashlib, json, sys
-lock_path, arm, train, teacher = sys.argv[1:]
+lock_path, arm, train, teacher, weights = sys.argv[1:]
+import os
 try:
     lock = json.load(open(lock_path))
 except OSError:
@@ -69,12 +82,15 @@ def sha(p):
     return h.hexdigest()
 ok = arm in lock["arms"] and arm in lock["teachers"]
 ok = ok and sha(train) == lock["arms"][arm] and sha(teacher) == lock["teachers"][arm]
+want = lock.get("weights", {}).get(arm)
+ok = ok and (sha(weights) == want if want else not os.path.exists(weights))
 sys.exit(0 if ok else 1)
 EOF
 }
 args_for() {  # <ARM>: start path, then the trainer arguments
-  local d=/runs/m17/data/4b/$1
-  echo "$BASE_4b --train $d/train.jsonl --teacher $d/teacher-s.jsonl --teacher-kl-weight 1.0 --teacher-partial $BATCH --init base --revision $REV_4b --train-mode lora --lora-rank 128 --lora-alpha 256 --lora-dropout 0.05 --lora-lr 1e-4 --head-lr 1e-4 --head-init-seed 20261001"
+  local d=/runs/m17/data/$DATA/$1 w=""
+  [ -f "$M/data/$DATA/$1/weights.jsonl" ] && w="--example-weights $d/weights.jsonl "
+  echo "$BASE_4b --train $d/train.jsonl ${w}--teacher $d/teacher-s.jsonl --teacher-kl-weight 1.0 --teacher-partial $BATCH --init base --revision $REV_4b --train-mode lora --lora-rank 128 --lora-alpha 256 --lora-dropout 0.05 --lora-lr 1e-4 --head-lr 1e-4 --head-init-seed 20261001"
 }
 terminal() { [ -f "$ST/m17-$1-s$2.DONE" ] || [ -f "$ST/m17-$1-s$2.FAILED" ] || [ -f "$ST/m17-$1-s$2.STOPPED" ]; }
 stop() { echo "$2" > "$ST/$1.STOPPED"; log "$1 not started: $2"; }
@@ -84,7 +100,7 @@ item() {  # <ARM> <seed index>
   [[ " $PREWARMS " == *" $1:$2 "* ]] && pw=1
   seed=${SEEDS[$((i - 1))]} r=m17-$g-s$i
   terminal "$g" "$i" && return 0
-  ready "$g" || { stop "$r" "TRAIN or teacher differs from data/READY-m17.json (or no lock)"; return 0; }
+  ready "$g" || { stop "$r" "TRAIN, teacher or weights differ from data/$READY (or no lock)"; return 0; }
   if grep -qs "preflight failed" "$ST"/m17-"$g"-s?.FAILED 2> /dev/null; then
     stop "$r" "a preflight of arm $g failed"
     return 0
