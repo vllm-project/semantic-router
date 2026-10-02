@@ -221,7 +221,7 @@ export const TeamTab: React.FC<TeamTabProps> = ({
   return (
     <div className={styles.teamManager}>
       <div className={styles.entityToolbarActionsTop}>
-        {!readOnly ? (
+        {!readOnly && !teamsError ? (
           <button type="button" className={styles.btnPrimary} onClick={openCreateModal}>
             New Team
           </button>
@@ -268,7 +268,7 @@ export const TeamTab: React.FC<TeamTabProps> = ({
             onPageChange={setPage}
           />
 
-          {visibleTeams.length === 0 ? (
+          {teamsError ? null : visibleTeams.length === 0 ? (
             <div className={styles.emptyState}>
               <div className={styles.emptyStateText}>
                 {teams.length === 0
