@@ -391,10 +391,11 @@ def switch_decision_for(src: dict, spec_sha: str) -> dict:
                 "css15 6,547, public231 231, mlx-diag 2,275) answered through the released package and through this "
                 "package on the released weights gave 0 answer changes and 0.0 drift; 400 single requests: p50 "
                 f"{lat['p50']['old']:.2f} -> {lat['p50']['new']:.2f} ms, p95 {lat['p95']['old']:.2f} -> "
-                f"{lat['p95']['new']:.2f} ms, all bit-identical. Before the upload the exact package passes the "
-                "Index harness's 86-request parity gate; release.sh checks the native examples, the card's "
+                f"{lat['p95']['new']:.2f} ms, all bit-identical. release.sh checks the native examples, the card's "
                 "Transformers example before upload, after the real download and from the Hub in fresh environments "
-                "under Transformers 5.17 and 5.18, the card structure and every card link."
+                "under Transformers 5.17 and 5.18, the card structure and every card link; then the downloaded "
+                "package must pass the Index harness's 86-request parity gate (the kit runner against the "
+                "package's own entry point; the phase A revisions of Kai, Eos and Sol pass it with 0.0 drift)."
             ),
             "previous_rationale": old["rationale"],
             "runtime_revision": {
