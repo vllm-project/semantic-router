@@ -229,8 +229,8 @@ documents and test RAG through a real chat request using `vela-auto`.
 
 ### Optional 32K Domain and FactCheck on ROCm
 
-[Vela Domain](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Domain)
-and [Vela FactCheck](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-FactCheck)
+[Vela Domain](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-Domain)
+and [Vela FactCheck](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-FactCheck)
 provide a fixed 32K FP32 graph, `onnx/model_rocm_32k.onnx`. The configuration
 below pins model releases containing this graph.
 
