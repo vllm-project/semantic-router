@@ -2477,7 +2477,8 @@ class UserConfig(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
-    version: str
+    # Optional like the Router gate (canonical_version.go), which treats absent as "".
+    version: str = ""
     listeners: List[Listener] = Field(default_factory=list)
     providers: Providers = Field(default_factory=Providers)
     evaluation: Optional[Evaluation] = None

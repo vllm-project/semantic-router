@@ -21,6 +21,9 @@ func TestBaselineScopesPreserveEveryFunctionalCase(t *testing.T) {
 		}
 		selected[name] = true
 	}
+	if !selected["router-config-version-gate"] {
+		t.Fatal("router-config-version-gate must run in the standard CI baseline")
+	}
 	stress := map[string]bool{}
 	for _, name := range BaselineStress {
 		stress[name] = true

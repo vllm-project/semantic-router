@@ -261,7 +261,7 @@ func EmitHelm(cfg *config.RouterConfig) ([]byte, error) {
 
 	values := map[string]interface{}{
 		"config": helmValuesConfig{
-			Version: "v0.3",
+			Version: config.CanonicalConfigVersion,
 			Routing: config.CanonicalRoutingFromRouterConfig(cfg),
 		},
 	}

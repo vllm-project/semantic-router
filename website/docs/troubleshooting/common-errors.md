@@ -38,6 +38,23 @@ vllm-sr config validate --config config.yaml
 Follow the field path in the validation error. Do not add missing fields to a
 random nested block; canonical fields are location-sensitive.
 
+### `version: unsupported "..."`
+
+The `version` field names a canonical contract this build does not read. The
+Router refuses the document before interpreting it, rather than reading it under
+the current contract and producing a configuration you did not write. The error
+names the set the running binary accepts:
+
+```
+version: unsupported "v0.2", this build reads v0.3
+```
+
+Set `version` to a value from that set, or run
+`vllm-sr config migrate --config old-config.yaml` to rewrite an older document.
+An absent `version` is accepted and logs a startup warning instead; it is
+interpreted as the contract the build writes. See
+[Schema version](../installation/configuration#schema-version).
+
 ### `failed to read config file`
 
 The process cannot open the path it received. Check:

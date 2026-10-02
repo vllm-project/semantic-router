@@ -243,16 +243,6 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 	return validateCanonicalDecisions(canonical.Routing.Decisions, aliases, modelsByName)
 }
 
-func validateCanonicalVersion(canonical *CanonicalConfig) error {
-	if canonical == nil {
-		return fmt.Errorf("config cannot be nil")
-	}
-	if canonical.Version != "" && canonical.Version != CanonicalConfigVersion {
-		return fmt.Errorf("unsupported config version %q: %s is required", canonical.Version, CanonicalConfigVersion)
-	}
-	return nil
-}
-
 func validateCanonicalFallback(canonical *CanonicalConfig) error {
 	if canonical == nil {
 		return nil

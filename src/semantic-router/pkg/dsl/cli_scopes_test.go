@@ -89,7 +89,7 @@ func TestCLIDecompilePreservesCanonicalValidationError(t *testing.T) {
 		t.Fatal(err)
 	}
 	err := CLIDecompile(input, output)
-	if err == nil || !strings.Contains(err.Error(), "unsupported config version") {
+	if err == nil || !strings.Contains(err.Error(), `version: unsupported "invalid"`) {
 		t.Fatalf("canonical error lost: %v", err)
 	}
 	if _, err := os.Stat(output); !os.IsNotExist(err) {

@@ -69,6 +69,8 @@ var BaselineRouterContract = []string{
 	"language-routing",
 	// Reask signal rule matching and routing (issue #3178)
 	"reask-routing",
+	// Canonical version gate accepts the supported contract, rejects others (issue #2469)
+	"router-config-version-gate",
 }
 
 // DashboardContract is the canonical E2E contract for the dashboard API surface.
