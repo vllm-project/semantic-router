@@ -67,6 +67,11 @@ ARMS = {
     # 9B: KIB4's TRAIN with the IB4 rows x3; KIB4's construction with a new x60 cut seed (af-prep9b.sh).
     "KIB4W3": ("9b", "KIB4W3", []),
     "KIB4R": ("9b", "KIB4R", []),
+    # Batch 3 (amendment 5). 4B: 4b-SDMLIB4's TRAIN with the IB4 rows x2; the same TRAIN for two epochs.
+    "4b-SDMLIB4W2": ("4b", "4b-SDMLIB4W2", []),
+    "4b-SDMLIB4-e2": ("4b", "4b-SDMLIB4", ["--epochs", "2"]),
+    # 9B: KIB4's construction with a second new x60 cut seed.
+    "KIB4R2": ("9b", "KIB4R2", []),
 }
 
 
