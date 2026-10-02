@@ -22,6 +22,8 @@
 #   run      NODE "GPUS": node C with 7 GPUs: launch.sh run over panel-7; otherwise lanes.sh over panel-8 (the 8 shards
 #            dealt round-robin to the GPUs, each GPU's shards one after another); detached on the node; the panel
 #            used is recorded in runs/NAME/4bif-panel for score
+#   pool     NODE "GPUS", CAND a comma list: pool.py on NODE, detached: in order, each candidate's parity gate and
+#            its panel-8 shards, each dispatched to a GPU of the list that is idle and not held by another job's lease
 #   void     NODE: a parity attempt the harness refused before its reference pass (busy or foreign GPU) -> void/
 #   status   NODE: per shard records, end and exit code; GPU-h of the current intervals
 #   score    NODE: score.sh (merge, port + kit, compare) once every shard ended 0
@@ -40,6 +42,18 @@ SHA=${1:?MIRROR_SHA} CAND=${2:?CAND} STAGE=${3:?STAGE} NODE=${4:-} GPU=${5:-}
 NODES=${DEV2_NODES_FILE:-$HOME/.config/decision2/nodes.env}
 addr() { awk -F= -v k="node-$1" '$1 == k { print substr($0, length(k) + 2); exit }' "$NODES"; }
 on() { local n=$1; shift; ssh -o BatchMode=yes -o ConnectTimeout=30 "$(addr "$n")" "$@"; }
+if [ "$STAGE" = pool ]; then
+  # CAND is a comma list here: every candidate's parity gate and panel-8 shards over the free GPUs of NODE
+  [[ "$NODE" == c || "$NODE" == d ]] || { echo "NODE must be c or d" >&2; exit 2; }
+  names=()
+  for c in ${CAND//,/ }; do names+=("$(bash "$0" "$SHA" "$c" name)"); done
+  M=/data/dev2/src/$SHA-src_training_decision2 R=/data/dev2/private/eval/index021/ix1
+  on "$NODE" "test -f $M/src/training/decision2/v2/dec/ops/4bif/pool.py" || { echo "mirror $SHA is not on node $NODE" >&2; exit 2; }
+  on "$NODE" "mkdir -p $R/logs && setsid nohup python3 $M/src/training/decision2/v2/dec/ops/4bif/pool.py --mirror $M \
+    --panel panel-8 --gpus '$GPU' ${names[*]} >> $R/logs/4bif-pool-$NODE.log 2>&1 < /dev/null &"
+  echo "$(date -u +%FT%TZ) pool on node $NODE GPUs ${GPU// /,}: ${names[*]} (log logs/4bif-pool-$NODE.log)"
+  exit 0
+fi
 case "$CAND" in
   UP) NAME=DEV2.0-4B-LHA10UP-bf16 SRC_NODE=b SRC=/data/dev2/runs/dec/m14/soup/4b-LHA10UP/build/4b-LHA10UP-soup
     FP32=9e80e7654965f539b78fe91c6428253ccf565bf29a9550d1f4c94e911b77007e ;;
@@ -72,6 +86,7 @@ panel_of() { [ "$1" = c ] && echo panel-7 || echo panel-8; }
 need_node() { [[ "$NODE" == c || "$NODE" == d ]] || { echo "NODE must be c or d" >&2; exit 2; }; }
 mirror_on() { on "$1" "test -f $S/v2/eval/ix1/launch.sh" || { echo "mirror $SHA is not on node $1" >&2; exit 2; }; }
 case "$STAGE" in
+  name) echo "$NAME" ;;
   stage)
     need_node; mirror_on "$NODE"
     [ -n "$SRC_NODE" ] || { echo "$CAND has no source checkpoint" >&2; exit 2; }
