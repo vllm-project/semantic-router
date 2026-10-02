@@ -11,16 +11,20 @@
 #   --bench --gpu N    runtime_bench.py on the first 400 typed-final prompts, old then new, two untimed passes
 #                      (the fast path captures a shape's HIP graph on its second use) then one timed; compare
 #   --profile --gpu N  profile_request.py on the same 400 prompts, old then new: per-step milliseconds
-# Usage: bash <mirror>/v2/release/records/dev2-runtime-a-2026-10-02/ops/fast.sh <tier> <mode> [--gpu N]
-# Work: /data/dev2/runs/runtime-a/<tier>/ (the newest preview is used by --parity and --bench).
+#   --switch           (with any mode; 0.6B 0.8B 2B 27B) the shared-context switch revision: the old side is the
+#                      current main (Kai, Eos, Sol: their phase A revisions; Vega: the 27B release) with the image,
+#                      spec and autotune cache of the release that built it; the new side is this mirror's runtime
+# Usage: bash <mirror>/v2/release/records/dev2-runtime-a-2026-10-02/ops/fast.sh <tier> <mode> [--gpu N] [--switch]
+# Work: /data/dev2/runs/runtime-a/<tier>/ or <tier>-switch/ (the newest preview is used by --parity and --bench).
 # Lease: /data/dev2/leases/gpuN.lock/owner.runtime-a (a co-tenant entry; status set to idle on exit).
 set -euo pipefail
 tier="${1:-}" mode="${2:-}"
 shift 2 || true
-gpu=""
+gpu="" switch=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --gpu) gpu=$2; shift 2 ;;
+    --switch) switch=1; shift ;;
     *) echo "unknown argument $1" >&2; exit 2 ;;
   esac
 done
@@ -57,8 +61,17 @@ case "$tier" in
     [[ ! -d "$HFC/blobs" ]] || base_mounts+=(-v "$HFC/blobs:$HFC/blobs:ro") ;;
   *) echo "tier must be one of 0.6B 0.8B 2B 4B 9B 27B" >&2; exit 2 ;;
 esac
+if [[ -n "$switch" ]]; then
+  case "$tier" in
+    0.6B) release_of dev2-ra-0.6B-20261002T112747Z ;;
+    0.8B) release_of dev2-ra-0.8B-20261002T122005Z ;;
+    2B) release_of dev2-ra-2B-20261002T114630Z ;;
+    27B) ;;
+    *) echo "--switch: tier must be one of 0.6B 0.8B 2B 27B" >&2; exit 2 ;;
+  esac
+fi
 name=Decision-2.0-$codename-$tier REPO=vllm-sr/$name STAGE=dev2-release-staging-ra$key
-T=/data/dev2/runs/runtime-a/$tier
+T=/data/dev2/runs/runtime-a/$tier${switch:+-switch}
 export TMPDIR=/data/dev2/tmp PYTHONPATH=$S PYTHONDONTWRITEBYTECODE=1
 mkdir -p "$TMPDIR" "$T" /data/dev2/runs/runtime-a/triton
 digest() { (cd "$1" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-64); }
