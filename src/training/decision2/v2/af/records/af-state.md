@@ -2,6 +2,20 @@
 
 Index values stay private (node private stores and `decision2-program/private/arm-factory/`); this file has none.
 
+## 2026-10-02 18:30Z (02:30 UTC+8) — KF-a40 measured; 9B α ladder (amendment 6); batch 3 running
+
+- **`AF-KF-a40-bf16` measured once** (node A, panel-7, parity PASS, 7 / 7 shards exit 0, 120,224 ok + 2 unsupported
+  rows, 2.71 GPU-h): **not a successor** (below the current Lux release's run; values private). Bootstraps vs
+  `M10-KIB4-a40-bf16` finishing on node A CPU.
+- **Amendment 6** (`6b11fb647`): α ladder for the 9B seed soups, CPU only — `KIB4-a50` (M10's two-seed `KIB4`,
+  imported from node B as `soup/m10-KIB4`, model `2406b058…`, lists equal), `KIB4Q-a50` / `-a60`, `KF-a60`; each
+  built and staged as `AF-<point>-bf16` with `KF-a50` for the 9B publisher (IX1 entries `KIB4-a50`, `KIB4Q-a50`,
+  `KIB4Q-a60`, `KF-a60`, a separate launcher commit).
+- **Batch 3** (amendment 5, `13534c6b2`): `KIB4R2` TRAIN `63d668cf…` / teacher `d0412d31…` (150,902 rows; audit:
+  planted 200 / 200, **0 item rows**, 219 duplicate-class rows, `audit.json` `bfdb24e4…`), locked on node B; its
+  seeds follow `KIB4R` on GPU4 / 6. `4b-SDMLIB4W2` weights (IB4 rows ×2, share .081 → .181 of the loss weight)
+  locked on node C; s1 on GPU5 since 18:14Z; s2 (GPU6) and `4b-SDMLIB4-e2` (GPU7, cap 3.5) queued.
+
 ## 2026-10-02 18:20Z (02:20 UTC+8) — HAND-OFF of batches 1–2; new split (COORDINATION 01:47–02:00)
 
 The 4B owner (ff70d16e) builds every 4B soup and runs every 4B Index; the 9B publisher (9087b208) measures the
