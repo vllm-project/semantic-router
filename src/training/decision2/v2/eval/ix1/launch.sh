@@ -88,6 +88,12 @@ declare -A DIAGNOSTIC=(  # name -> "repository revision package-dir"
   [M18-08b-RAUP-a50-bf16]="DEV2.0-0.8B bede7938a8c209c09f27400b79eed57948d6b75e /data/dev2/models/ix1/dec-m18/M18-08b-RAUP-a50-bf16-rbede7938"
   [M18-08b-UPRA-bf16]="DEV2.0-0.8B bede7938a8c209c09f27400b79eed57948d6b75e /data/dev2/models/ix1/dec-m18/M18-08b-UPRA-bf16-rbede7938"
   [M18-08b-UPRAa75-bf16]="DEV2.0-0.8B bede7938a8c209c09f27400b79eed57948d6b75e /data/dev2/models/ix1/dec-m18/M18-08b-UPRAa75-bf16-rbede7938"
+  [M18-2b-RS17UP-bf16]="DEV2.0-2B a53cf66a0d9d492a84b6617b61e7ce35fcd03af0 /data/dev2/models/ix1/dec-m18/M18-2b-RS17UP-bf16-ra53cf66a"
+  [M18-2b-RAUPM-bf16]="DEV2.0-2B a53cf66a0d9d492a84b6617b61e7ce35fcd03af0 /data/dev2/models/ix1/dec-m18/M18-2b-RAUPM-bf16-ra53cf66a"
+  [M18-2b-RAM-bf16]="DEV2.0-2B a53cf66a0d9d492a84b6617b61e7ce35fcd03af0 /data/dev2/models/ix1/dec-m18/M18-2b-RAM-bf16-ra53cf66a"
+  [M18-2b-SWRA-bf16]="DEV2.0-2B a53cf66a0d9d492a84b6617b61e7ce35fcd03af0 /data/dev2/models/ix1/dec-m18/M18-2b-SWRA-bf16-ra53cf66a"
+  [M18-2b-UPRAM-bf16]="DEV2.0-2B a53cf66a0d9d492a84b6617b61e7ce35fcd03af0 /data/dev2/models/ix1/dec-m18/M18-2b-UPRAM-bf16-ra53cf66a"
+  [M18-08b-RAM-a75-bf16]="DEV2.0-0.8B bede7938a8c209c09f27400b79eed57948d6b75e /data/dev2/models/ix1/dec-m18/M18-08b-RAM-a75-bf16-rbede7938"
 )
 
 mode="${1:-}"; shift || true

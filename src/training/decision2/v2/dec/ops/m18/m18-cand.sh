@@ -4,10 +4,11 @@
 # through node A's or node B's temporary key, never through the workstation. Prints hashes and counts only.
 #
 # Usage: m18-cand.sh MIRROR_SHA NAME STAGE [NODE] ["GPUS"]
-#   build    on the arm's node (2B: node B, 0.8B: node A): ops/m16/m16_interp.py build in image dbe5f32b (CPU,
+#   build    on the point's node (2B: node B, or node E for points of M18 soups; 0.8B: node A): ops/m16/m16_interp.py build in image dbe5f32b (CPU,
 #            --network none) -> /data/dev2/runs/dec/m18/points/<point>/build/<point>; M16's existing points are adopted
 #            (their build directory and model SHA-256 are recorded, nothing is rebuilt)
-#   ship     2B only: the FP32 point node B -> node E, and the 2B IX1 base package node A -> node E if absent
+#   ship     2B only: the FP32 point (node B's interpolations, node F / A arm soups) -> node E, and the 2B IX1 base
+#            package node A -> node E if absent; for points built on node E, their inputs from their home nodes
 #            (node B's key reaches C-F only; 2B points are copied, restaged and run on node E)
 #   bf16     WORK node (0.8B: node A, 2B: node E): test_bf16_copy, then v2.release.bf16_copy in image host2 (CPU, --network none)
 #   restage  WORK node: v2.eval.ix1.restage onto the tier's IX1 package with the copy's model SHA-256 (identity, loaded
@@ -50,9 +51,17 @@ case "$POINT" in
   2b-UPRAa75) BUILD="$D/m16/points/2b-RA-a75/build/2b-RA-a75 $D/m14/soup/2b-RAUP/build/2b-RAUP-soup 0.5" ;;
   08b-UPRA) BUILD="$D/m16/inputs/arms/08b-RA $D/m14/soup/08b-RAUP/build/08b-RAUP-soup 0.5" ;;
   08b-UPRAa75) BUILD="$D/m16/points/08b-RA-a75/build/08b-RA-a75 $D/m14/soup/08b-RAUP/build/08b-RAUP-soup 0.5" ;;
+  2b-RS17UP | 2b-RAUPM) BUILD=soup SRCNODE=f FP32=$D/m18/soup/$POINT/build/$POINT-soup ;;
+  2b-RAM) BUILD=soup SRCNODE=a FP32=$D/m18/soup/$POINT/build/$POINT-soup ;;
+  2b-SWRA) BUILD="$D/m16/inputs/arms/2b-RA $D/m18/soup/2b-RS17UP/build/2b-RS17UP-soup 0.5" SRCNODE=e ;;
+  2b-UPRAM) BUILD="$D/m18/soup/2b-RAM/build/2b-RAM-soup $D/m18/soup/2b-RAUPM/build/2b-RAUPM-soup 0.5" SRCNODE=e ;;
+  08b-RAM-a75) BUILD="$D/m14/inputs/refs/DEV2.0-0.8B/$REV $D/m18/soup/08b-RAM/build/08b-RAM-soup 0.75" ;;
   *) echo "no recipe for $POINT" >&2; exit 2 ;;
 esac
-[[ "$BUILD" == adopt ]] || FP32=$P/$POINT/build/$POINT
+[[ "$BUILD" == adopt || "$BUILD" == soup ]] || FP32=$P/$POINT/build/$POINT
+home() {  # <node path>: the node an input of an M18 point lives on
+  case $1 in */m16/inputs/arms/2b-*) echo b ;; */m18/soup/2b-RAM/*) echo a ;; */m18/soup/*) echo f ;; *) echo "$SRCNODE" ;; esac
+}
 PKG=$MD/$NAME-r${REV:0:8} CK=$MD/$NAME-ckpt BASEPKG=/data/dev2/models/ix1/$REF-${REV:0:8}
 sums() {
   local skip=""
@@ -76,6 +85,7 @@ hop() {  # <from> <to> <parent> <name> [lean]: tar stream between nodes through 
 case "$STAGE" in
   build)
     on "$SRCNODE" "test -f $S/v2/dec/ops/m16/m16_interp.py" || { echo "mirror $SHA is not on node $SRCNODE" >&2; exit 2; }
+    [[ "$BUILD" == soup ]] && { on "$SRCNODE" "cat ${FP32%/build/*}/DONE"; exit 0; }
     if [[ "$BUILD" == adopt ]]; then
       on "$SRCNODE" "tail -1 $D/m16/points/$POINT/build.stdout.log"
       [ "$SRCNODE" = b ] && on b "test ! -e $P/$POINT && mkdir -p $P/$POINT/build && cp -al $FP32 $P/$POINT/build/$POINT && echo adopted-from-m16 > $P/$POINT/DONE"
@@ -90,10 +100,23 @@ case "$STAGE" in
       python3 v2/dec/ops/m16/m16_interp.py build --release $rel --arm $arm --alpha $alpha --output /out/$POINT \
       > $P/$POINT/build.stdout.log 2> $P/$POINT/build.stderr.log && echo $SHA > $P/$POINT/DONE && tail -1 $P/$POINT/build.stdout.log" ;;
   ship)
-    [ "$SRCNODE" = b ] || { echo "ship is for 2B points" >&2; exit 2; }
+    [ "$TIER" = 2b ] || { echo "ship is for 2B points" >&2; exit 2; }
+    if [ "$SRCNODE" = e ]; then  # the build's inputs, each from its home node if node E lacks it
+      read -r rel arm alpha <<< "$BUILD"
+      for x in $rel $arm; do
+        on e "test -f $x/decision_config.json" && continue
+        on e "mkdir -p $(dirname "$x")"
+        hop "$(home "$x")" e "$(dirname "$x")" "$(basename "$x")"
+      done
+      exit 0
+    fi
+    if [ "$BUILD" = soup ]; then
+      on e "mkdir -p $(dirname "$FP32")"
+      hop "$SRCNODE" e "$(dirname "$FP32")" "$(basename "$FP32")"
+      exit 0
+    fi
     on e "mkdir -p $P/$POINT/build /data/dev2/models/ix1"
     on e "test -f $BASEPKG/MODEL_MANIFEST.json" || hop a e "$(dirname "$BASEPKG")" "$(basename "$BASEPKG")"
-    on e "rmdir $P/$POINT/build/.m18-part 2>/dev/null; true"
     hop b e "$P/$POINT/build" "$POINT" ;;
   bf16)
     src=$FP32; [ "$SRCNODE" = b ] && src=$P/$POINT/build/$POINT
