@@ -6,16 +6,16 @@
 
 ## 发布状态（全部为 private）
 
-> **2026-10-02 起改用新名字**（旧 ID 会自动跳转），当前 `main` 为第二轮产品化卡片之后的版本：
+> **2026-10-02 起改用新名字**（旧 ID 会自动跳转），当前 `main` 为第三轮卡片修正（参数量口径统一、脚注更新）之后的版本；Lux-9B 尚未修正，等 9B 继任版本一起发布：
 >
 > | 尺寸 | 新名字 | 当前 `main` |
 > | --- | --- | --- |
-> | 0.6B | `Decision-2.0-Kai-0.6B` | `35882d49` |
-> | 0.8B | `Decision-2.0-Eos-0.8B` | `5c878c67` |
-> | 2B | `Decision-2.0-Sol-2B` | `73bb148b` |
-> | 4B | `Decision-2.0-Nox-4B` | `eff06485`（LH） |
+> | 0.6B | `Decision-2.0-Kai-0.6B` | `dcfb7d3e` |
+> | 0.8B | `Decision-2.0-Eos-0.8B` | `9c7f3ea0` |
+> | 2B | `Decision-2.0-Sol-2B` | `b42b6ff3` |
+> | 4B | `Decision-2.0-Nox-4B` | `54b084f9`（LH） |
 > | 9B | `Decision-2.0-Lux-9B` | `586af779` |
-> | 27B | `Decision-2.0-Vega-27B` | `d97928d3` |
+> | 27B | `Decision-2.0-Vega-27B` | `1efb5cbb` |
 >
 > 下表各行保留了历史上的旧名字和旧版本号，仅作记录。
 
