@@ -77,6 +77,10 @@ ARMS = {
     "KSW": "9B M10 arm KSW ("
     + RECIPE
     + " with the x60 cut over English groups only, IB1 sentfin dropped and self-distillation from K-a13IB)",
+    "KIB4H": "9B M10 arm KIB4H ("
+    + RECIPE
+    + " with IB1 sentfin replaced by the IB4 phase-1 families, at half learning rates: backbone 5e-6, head 5e-5; "
+    "the seeds of KIB4 s1 / s2)",
 }
 ALPHA = {"a33": "1/3", "a25": "1/4", "a40": "2/5", "a50": "1/2"}
 KIB4_FAMILY = (

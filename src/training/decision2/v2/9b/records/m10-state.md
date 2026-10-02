@@ -2,6 +2,11 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 23:00Z (10-03 07:00 UTC+8), M10 continuation
+
+- KIB4H s1 / s2 are at about 39% / 37% of their updates (no failure). Both should end ≈ 01:15Z, and the waiter
+  then takes KIB4H-a40 through measurement. No other continuation job is running.
+
 ## 2026-10-02 22:30Z (10-03 06:30 UTC+8), M10 continuation
 
 - **KIB4H s1 / s2 passed preflight** (21:34–21:35Z, node B GPU5 / 7) and are in their full runs (end ≈ 00:50Z). A
