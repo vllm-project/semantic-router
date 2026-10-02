@@ -31,7 +31,9 @@ use tokenizers::{Tokenizer, TruncationDirection, TruncationParams, TruncationStr
 
 // Training-time truncation and fixed padding are not runtime context policy.
 // The embedding FFI validates the untruncated token count against model capacity.
-fn load_mmbert_tokenizer(path: &str) -> Result<Tokenizer> {
+// Shared by factory registration and the standalone mmBERT fallback in the
+// embedding FFI so both paths apply identical normalization.
+pub(crate) fn load_mmbert_tokenizer(path: &str) -> Result<Tokenizer> {
     let mut tokenizer = Tokenizer::from_file(path).map_err(|e| {
         E::msg(format!(
             "Failed to load mmBERT tokenizer from {path}: {e:?}"
