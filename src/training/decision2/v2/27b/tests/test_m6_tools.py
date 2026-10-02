@@ -1355,6 +1355,26 @@ class M6ScriptTest(unittest.TestCase):
             self.assertEqual([Path(n).suffix for n in moved], [".json", ".log"])
             self.assertIn("complete (no listed chain alive)", out.stdout)
 
+    def test_relay_accepts_m9_arm_seeds(self):
+        for name, message in (
+            ("M8-IB124-s4", "no arm-seed run"),
+            ("M9-IB12ML-s5", "no arm-seed run"),
+            ("M9-IB2-lrh-s6", "no arm-seed run"),
+            ("M9-IB-lrh-s5", "no arm-seed run"),
+            ("M9-IB-lrq-s5", "NAME is an"),
+            ("M9-IB-s7", "NAME is an"),
+            ("X9-LRH-s5", "NAME is an"),
+        ):
+            with self.subTest(name=name):
+                out = subprocess.run(
+                    ["bash", str(M6 / "m6-relay.sh"), name, "1"],
+                    capture_output=True,
+                    text=True,
+                    env=dict(os.environ, RELAY_NODE="c"),
+                )
+                self.assertEqual(out.returncode, 2)
+                self.assertIn(message, out.stderr)
+
     def test_bash_n(self):
         scripts = sorted(M6.glob("*.sh"))
         self.assertTrue(scripts)

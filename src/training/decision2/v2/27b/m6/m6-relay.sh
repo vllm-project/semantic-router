@@ -5,12 +5,13 @@
 # chain's budget check; BUDGET-noded.json on node D, RELAY_NODE=d; node E / F RELAY_NODE=e / f). Node B pulls it with
 # `m6-tail.sh pull NAME` over the M6 node link (node A) or `m6-tail.sh pull-d|pull-e|pull-f NAME` over node B's
 # transfer key. If the driver exits without a finished run, RELAY-FAILED.txt records it and nothing is relayed (no rerun).
-# Usage: m6-relay.sh NAME DRIVER_PID     (NAME an M6 / M7 / M8 arm-seed, e.g. M6-IBX-s2, M7-IB14ML-s1, M8-IB124-s4;
-#        DRIVER_PID the pid the arm launcher printed). Detached.
+# Usage: m6-relay.sh NAME DRIVER_PID     (NAME an M6 / M7 / M8 / M9 arm-seed, e.g. M6-IBX-s2, M7-IB14ML-s1, M8-IB124-s4,
+#        M9-IB2-lrh-s6; DRIVER_PID the pid the arm launcher printed). Detached.
 set -euo pipefail
 echo "m6 relay $*: start $(date -u +%FT%TZ)"
 NAME=${1:?NAME} PID=${2:?DRIVER_PID}
-[[ "$NAME" =~ ^M[678]-[A-Za-z0-9]+-s[1-5]$ ]] || { echo "NAME is an M6 / M7 / M8 arm-seed (M6-IBX-s2, ...)" >&2; exit 2; }
+[[ "$NAME" =~ ^M[6-9]-[A-Za-z0-9]+(-lrh)?-s[1-6]$ ]] ||
+  { echo "NAME is an M6 / M7 / M8 / M9 arm-seed (M6-IBX-s2, M9-IB2-lrh-s6, ...)" >&2; exit 2; }
 [[ "$PID" =~ ^[0-9]+$ ]] || { echo "DRIVER_PID must be a pid" >&2; exit 2; }
 RUN=/data/dev2/runs/27b/$NAME RELAY=/data/dev2/xfer/27b-m6/relay/$NAME NODE=${RELAY_NODE:-a}
 case "$NODE" in a | c | d | e | f) ;; *) echo "RELAY_NODE is a, c, d, e or f" >&2; exit 2 ;; esac
