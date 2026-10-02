@@ -30,11 +30,17 @@ case $ARM in
   4b-LHS17IB4-x3 | 4b-SDMLIB4-x3)
     TR=${ARM%-x3} SEEDN="1 2 3" NEED=6
     source=/models/Qwen--Qwen3.5-4B-Base/1001bb4d826a52d1f399e183466143f4da7b741b ;;
-  4b-*-m50)
-    x=${ARM%-m50} base=4b-LHS17SD
-    case $x in 4b-SDMLIB4 | 4b-LHS17ML) base=4b-LHA10SDML ;; 4b-SDMLxS17) base=4b-LHA10SDML x=4b-LHS17SD ;; esac
+  4b-*-m50 | 4b-SDMLxS17xIB4 | 4b-SDMLxALL)
+    case $ARM in
+      4b-SDMLxS17xIB4) list="4b-LHA10SDML 4b-LHS17SD 4b-LHS17IB4" ;;
+      4b-SDMLxALL) list="4b-LHA10SDML 4b-LHS17SD 4b-LHS17UP 4b-LHS17IB4 4b-LHS17IB4X 4b-SDMLIB4 4b-LHS17ML" ;;
+      *)
+        x=${ARM%-m50} base=4b-LHS17SD
+        case $x in 4b-SDMLIB4 | 4b-LHS17ML) base=4b-LHA10SDML ;; 4b-SDMLxS17) base=4b-LHA10SDML x=4b-LHS17SD ;; esac
+        list="$base $x" ;;
+    esac
     rm -f "$OUT/members.txt"
-    for a in "$base" "$x"; do
+    for a in $list; do
       if [ "$a" = 4b-LHA10SDML ]; then
         [ "$(cat /data/dev2/runs/dec/m15/soup/4b-LHA10SDML/DONE)" = /data/dev2/runs/dec/m15/soup/4b-LHA10SDML/build/4b-LHA10SDML-soup ] \
           || fail "no M15 soup of 4b-LHA10SDML"
@@ -45,13 +51,14 @@ case $ARM in
       echo "$a $(cat "$M/soup/$a/MODEL_SHA256")" >> "$OUT/members.txt"
     done
     member() { if [ "$1" = 4b-LHA10SDML ]; then echo /runs/m15/soup/4b-LHA10SDML/build/4b-LHA10SDML-soup; else echo "/runs/m17/soup/$1/build/$1-soup"; fi; }
-    M17_NODE=$NODE bash "$OPS/m17-launch.sh" "soup-$ARM" "$SRC" "$OUT/build" --cpu -- -m v2.dec.soup \
-      --member "$(member "$base")" --member "$(member "$x")" \
+    mm=()
+    for a in $list; do mm+=(--member "$(member "$a")"); done
+    M17_NODE=$NODE bash "$OPS/m17-launch.sh" "soup-$ARM" "$SRC" "$OUT/build" --cpu -- -m v2.dec.soup "${mm[@]}" \
       --output "/out/$ARM-soup" || fail "interpolation build failed (see $OUT/build.stderr.log)"
     python3 -c 'import json,sys; print(json.loads(open(sys.argv[1]).read().strip().splitlines()[-1])["model_sha256"])' \
       "$OUT/build.stdout.log" > "$OUT/MODEL_SHA256" || fail "no model_sha256 in the interpolation output"
     echo "$OUT/build/$ARM-soup" > "$OUT/DONE"
-    log "built $OUT/build/$ARM-soup (uniform .5 / .5 of $base and $x)"
+    log "built $OUT/build/$ARM-soup (uniform average of $list)"
     exit 0 ;;
   *) fail "unknown arm $ARM" ;;
 esac
