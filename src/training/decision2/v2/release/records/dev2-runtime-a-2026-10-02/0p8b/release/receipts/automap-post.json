@@ -1,0 +1,286 @@
+{
+  "answers_sha256": "e0ccb269e06d3be6211349a4d55ca56ef09e8b75d1bc74c246615b35491216b7",
+  "checks": {
+    "answers": {
+      "bit_identical_to_native": true,
+      "passed": true
+    },
+    "config": {
+      "class": "Decision2Config",
+      "model_type": "decision2",
+      "passed": true
+    },
+    "forward": {
+      "passed": true
+    },
+    "model": {
+      "class": "Decision2Model",
+      "cpu_reference_layers": 0,
+      "module": "transformers_modules",
+      "num_parameters": 753446208,
+      "passed": true,
+      "runtime_module": "decision2_2340872a1eada202"
+    },
+    "peft_detection": {
+      "passed": true,
+      "peft_available": true,
+      "root_adapter_config": null
+    },
+    "pipeline": {
+      "class": "Decision2Pipeline",
+      "passed": true
+    },
+    "tokenizer": {
+      "class": "Qwen2Tokenizer",
+      "passed": true
+    }
+  },
+  "comparison": {
+    "multilingual": {
+      "category_changes": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "slots": 1
+    },
+    "null-description": {
+      "category_changes": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "slots": 1
+    },
+    "over-budget": {
+      "category_changes": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "slots": 2
+    },
+    "policy-check": {
+      "category_changes": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "slots": 2
+    },
+    "structured-state": {
+      "category_changes": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "slots": 2
+    },
+    "support-routing": {
+      "category_changes": 0,
+      "max_abs_drift": 0.0,
+      "missing": 0,
+      "slots": 3
+    }
+  },
+  "device": "cuda:0",
+  "load_seconds": 5.217923516174778,
+  "mode": "automap",
+  "outputs": [
+    {
+      "id": "support-routing",
+      "latency_ms": 5308.725893031806,
+      "response": {
+        "answers": {
+          "receipt": {
+            "noul": 0.9989146921871309,
+            "type": "noul"
+          },
+          "route": {
+            "choice": "returns",
+            "confidence": 0.982827435397823,
+            "probabilities": {
+              "billing": 1.7414522008266053e-05,
+              "returns": 0.9972838912725228,
+              "technical": 0.0026986942054689346
+            },
+            "type": "choice"
+          },
+          "urgency": {
+            "confidence": 0.4358599237452523,
+            "legend": {
+              "0": "Routine",
+              "1": "Soon",
+              "2": "Today"
+            },
+            "probabilities": {
+              "0": 0.08408867244693952,
+              "1": 0.10744432876461567,
+              "2": 0.8084669987884447
+            },
+            "score": 1.7243783263415051,
+            "type": "score"
+          }
+        },
+        "model": "Decision-2.0-Eos-0.8B",
+        "usage": {
+          "input_tokens": 317,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "structured-state",
+      "latency_ms": 23.178464034572244,
+      "response": {
+        "answers": {
+          "escalate": {
+            "noul": 0.9711906782474977,
+            "type": "noul"
+          },
+          "severity": {
+            "confidence": 0.33388730164190916,
+            "legend": {
+              "0": "Minor",
+              "1": "Moderate",
+              "2": "Major",
+              "3": "Critical",
+              "4": "Full outage"
+            },
+            "probabilities": {
+              "0": 0.0814605968699141,
+              "1": 0.10057991857797069,
+              "2": 0.06185266643360836,
+              "3": 0.07904530506288128,
+              "4": 0.6770615130556257
+            },
+            "score": 3.169667218856334,
+            "type": "score"
+          }
+        },
+        "model": "Decision-2.0-Eos-0.8B",
+        "usage": {
+          "input_tokens": 283,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "policy-check",
+      "latency_ms": 14.889177866280079,
+      "response": {
+        "answers": {
+          "action": {
+            "choice": "decline",
+            "confidence": 0.5644229147833228,
+            "probabilities": {
+              "approve": 0.09881630871801964,
+              "decline": 0.8636451167423589,
+              "escalate": 0.037538574539621526
+            },
+            "type": "choice"
+          },
+          "eligible": {
+            "noul": 0.3500098787270064,
+            "type": "noul"
+          }
+        },
+        "model": "Decision-2.0-Eos-0.8B",
+        "usage": {
+          "input_tokens": 236,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "multilingual",
+      "latency_ms": 22.433947073295712,
+      "response": {
+        "answers": {
+          "queue": {
+            "choice": "hardware",
+            "confidence": 0.9352323511241118,
+            "probabilities": {
+              "account": 1.9572442040687747e-05,
+              "hardware": 0.9866209550845855,
+              "shipping": 0.013359472473373728
+            },
+            "type": "choice"
+          }
+        },
+        "model": "Decision-2.0-Eos-0.8B",
+        "usage": {
+          "input_tokens": 112,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "null-description",
+      "latency_ms": 14.446259941905737,
+      "response": {
+        "answers": {
+          "intent": {
+            "choice": "cancel",
+            "confidence": 0.10840057162033068,
+            "probabilities": {
+              "cancel": 0.564788488006441,
+              "pause": 0.2561738023910571,
+              "upgrade": 0.17903770960250195
+            },
+            "type": "choice"
+          }
+        },
+        "model": "Decision-2.0-Eos-0.8B",
+        "usage": {
+          "input_tokens": 99,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "id": "over-budget",
+      "latency_ms": 56.68490403331816,
+      "response": {
+        "answers": {
+          "tone": {
+            "error": "max_length_exceeded",
+            "type": "score"
+          },
+          "weather": {
+            "error": "max_length_exceeded",
+            "type": "noul"
+          }
+        },
+        "model": "Decision-2.0-Eos-0.8B",
+        "usage": {
+          "input_tokens": 0,
+          "output_tokens": 0
+        }
+      }
+    }
+  ],
+  "package_manifest_sha256": "9a3a10980bd554f321865894fec1d2b56c734748d60b84f57ae80d503806e2ea",
+  "passed": true,
+  "reference_sha256": "753045eda0fa9305b3cfe30bb7955a23d63dba02c66d8993e56f7799d23a37b6",
+  "runtime": {
+    "hip": "7.2.53211",
+    "kernels": {
+      "causal_conv1d": "1.7.0",
+      "fla_path": "/opt/decision-fla/fla",
+      "flash_linear_attention": "0.5.2",
+      "kernel_bindings": {
+        "causal_conv1d_fn": "causal_conv1d.causal_conv1d_interface.causal_conv1d_fn",
+        "causal_conv1d_update": "causal_conv1d.causal_conv1d_interface.causal_conv1d_update",
+        "torch_chunk_gated_delta_rule": "fla.ops.gated_delta_rule.chunk.chunk_gated_delta_rule",
+        "torch_recurrent_gated_delta_rule": "fla.ops.gated_delta_rule.fused_recurrent.fused_recurrent_gated_delta_rule"
+      },
+      "runtime_check_sha256": "4517d9e001d9e1e2b520086b5153fa69b642a191efb19b8c9a6a9ef126e1fc2d",
+      "triton": "3.7.1+gitf0b55c07",
+      "triton_cache_autotuning": "1",
+      "triton_cache_dir": "/data/dev2/runs/release/triton/dev2-ra-0.8B-20261002T122005Z"
+    },
+    "numpy": "2.3.5",
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "safetensors": "0.8.0",
+    "sites": [
+      "/opt/decision-fla"
+    ],
+    "threads": 4,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0"
+  },
+  "schema": "dev2-release-examples/1"
+}

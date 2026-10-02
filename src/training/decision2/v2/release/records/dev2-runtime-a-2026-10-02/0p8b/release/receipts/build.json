@@ -1,0 +1,99 @@
+{
+  "builder_commit": "2c969ed8040e27f3123a89871a6f065101ca7b26",
+  "card": {
+    "assets_receipt_sha256": "980fe5c6fd1cd31ed49b7d80305aabd0872ce3ea872b63c754757ed18d4f653f",
+    "excluded": [
+      {
+        "key": "jpt08b",
+        "reason": "non-commercial licence"
+      }
+    ],
+    "figures_sha256": {
+      "assets/banner.png": "ea920e4f3011fd88602f25e8b364715d2630955a769f616f93dec13cc365ce26",
+      "assets/index-areas.png": "f97ff7ffb34dfe13dc72a2ddbb659ecf0080b2ca8b2656b3ab244f13015087b0",
+      "assets/index-pareto.png": "c7bfcdabf04b215397534713cdd2884a9a5573abad2d669d559b79b442e38bc6",
+      "assets/jevarena-types.png": "d99e56c2e98f93a7c987ac30136ac2cfd8cc5bb4da3d94ed032a737da9670d69",
+      "assets/jevarena.png": "3fd4cb4c7b66d0c27def935a54f404a31f27d59c744026e5deb70868328b7f32"
+    },
+    "index_sha256": "42055acaa2c1141530c4ba8be0ffcbf030404759a0ea65baa8dcf66c1ab3a630",
+    "paired": {
+      "ci95": [
+        2.8339845580351204,
+        15.856522964396872
+      ],
+      "delta": 11.366694111348153,
+      "replicates": 5000,
+      "sha256": "954a7092d2f7e3754641ed2b5027f64dd30b63319db05467de424f5fff10c2fa"
+    },
+    "readme_sha256": "5966bf84cf122009981c59a3182ad17532f1f5cc51361bed100c821fdf00c3b2",
+    "shown": [
+      {
+        "key": "candidate",
+        "licence": "package",
+        "report_sha256": "5ce404b0358ae401a79465d08b15bf5b7f9fc80dca90fe0da4cef223c254f48f"
+      },
+      {
+        "key": "eos1",
+        "licence": "apache-2.0",
+        "report_sha256": "078d780c524602c7e51d57fe7ae40d99a35f5591a2abf91f78096a768aed3ca7"
+      },
+      {
+        "key": "intern",
+        "licence": "apache-2.0",
+        "report_sha256": "ddcdba6db2da3cfd93fafeb51bc1634694f5a6ed94aaf4ed1d9973dbe4d3f159"
+      },
+      {
+        "key": "kev",
+        "licence": "apache-2.0",
+        "report_sha256": "66fcffaf1353974e6b92fba56be7e9e9a4dfc030fcc39a21703fd131bf5da754"
+      }
+    ],
+    "tradeoffs": [
+      "mlx-diag non-English Choice (accuracy): 67.5% versus 68.5%",
+      "mlx-diag non-English Noul (accuracy): 54.3% versus 59.2%",
+      "Transfer: FLUTE figurative language (macro-F1): 33.2% versus 46.1%",
+      "Transfer: Misinfo Reaction Frames (macro-F1): 52.3% versus 62.5%",
+      "Transfer: Conversations Gone Awry (macro-F1): 50.3% versus 57.1%",
+      "Transfer: TempoWiC (macro-F1): 51.7% versus 58.2%",
+      "Transfer: Wikipedia power (macro-F1): 43.4% versus 49.2%",
+      "Transfer: Media ideology (macro-F1): 32.8% versus 36.6%"
+    ]
+  },
+  "ended_utc": "2026-10-02T12:20:17.079339+00:00",
+  "files": 32,
+  "identity": {
+    "architecture": "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp",
+    "bf16_copy": {
+      "receipt_sha256": "d1f51ee07babbf8d3114dc28bf0ee5efe5f02d3ff28909aa8b7b7cc390095b1f",
+      "source_model_sha256": "fee82408d47016615da7399649d7cdc6404c44deda4dd332a6120c577a18c96a"
+    },
+    "dec_residual": false,
+    "head_variant": "shared",
+    "model_sha256": "d97127991870ae202017a99eb496bdc56a62afd038594a67febfab0aea9d76fe",
+    "readout": "head",
+    "temperature_by_type": null,
+    "text_parameter_count": 752393024
+  },
+  "licence": "apache-2.0",
+  "manifest_sha256": "9a3a10980bd554f321865894fec1d2b56c734748d60b84f57ae80d503806e2ea",
+  "package": "/data/dev2/runs/release/dev2-ra-0.8B-20261002T122005Z/package/Decision-2.0-Eos-0.8B",
+  "parameters": {
+    "external_base_text": null,
+    "loaded": 753446208,
+    "packaged": {
+      "backbone": 752393024,
+      "head": 1053184,
+      "residual": 0
+    }
+  },
+  "release_decision": {
+    "sha256": "8a1e8c49bcbf9e9cb39724f657d518cd67347187aff61c43b242e99b08076bcf",
+    "status": "final"
+  },
+  "schema": "dev2-release-build/1",
+  "screen": {
+    "text_files_screened": 27
+  },
+  "spec_sha256": "359927773b9540e603130c8d7a2b7f5fabfa37874eb06aaf56fac47d40d04e74",
+  "started_utc": "2026-10-02T12:20:12.303340+00:00"
+}
