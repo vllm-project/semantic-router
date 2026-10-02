@@ -20,11 +20,6 @@ from cli.container_observability import (
 )
 from cli.container_runtime import get_container_runtime
 from cli.container_services import _replace_existing_container
-from cli.grafana_credentials import (
-    CONTAINER_GRAFANA_PASSWORD_PATH,
-    GRAFANA_ADMIN_PASSWORD_FILE_ENV,
-    ensure_grafana_admin_password_file,
-)
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
 from cli.utils import get_logger
 
@@ -162,10 +157,7 @@ def container_start_grafana(
     network_name = network_name or stack_layout.network_name
     _replace_existing_container(container_name)
 
-    # The templates and the credential file must resolve the same state root;
-    # an omitted config_dir means the working directory for both.
-    state_root_dir: str = config_dir if config_dir is not None else os.getcwd()
-    grafana_dir = os.path.join(_ensure_hidden_config_dir(state_root_dir), "grafana")
+    grafana_dir = os.path.join(_ensure_hidden_config_dir(config_dir), "grafana")
     os.makedirs(grafana_dir, exist_ok=True)
 
     template_dir = os.path.join(os.path.dirname(__file__), "templates")
@@ -182,12 +174,6 @@ def container_start_grafana(
             stack_layout,
         )
 
-    # Resolves and materializes the admin password into a file the value is
-    # bind-mounted from, so the mount source always exists (never in argv/env).
-    password_file = ensure_grafana_admin_password_file(
-        state_root_dir, stack_layout=stack_layout
-    )
-
     cmd = [
         runtime,
         "run",
@@ -197,12 +183,9 @@ def container_start_grafana(
         "--network",
         network_name,
         "-e",
-        f"{GRAFANA_ADMIN_PASSWORD_FILE_ENV}={CONTAINER_GRAFANA_PASSWORD_PATH}",
-        "-v",
-        (
-            f"{os.path.abspath(password_file)}:"
-            f"{CONTAINER_GRAFANA_PASSWORD_PATH}:ro,z"
-        ),
+        "GF_SECURITY_ADMIN_USER=admin",
+        "-e",
+        "GF_SECURITY_ADMIN_PASSWORD=admin",
         "-e",
         f"PROMETHEUS_URL={stack_layout.prometheus_container_name}:9090",
         "-v",
