@@ -42,7 +42,10 @@ section first). Earlier: 2026-10-02 17:45 UTC+8 (09:45Z; continuation #5 from 08
   **Release launched 15:17:45Z** (`release27bx.sh M6-IBxIB2-m50 --release --gpu 0`, mirror `aaf270df1`): Vega `main`
   was `e60bd8e3` right before; storage 58.17 GB of 100. The 9B M10 KIB4-a40 release (Lux-9B, another repository) runs
   on node A at the same time, which COORDINATION 15:35 allows (headroom ≥ 10 GB; both uploads fit).
-  Log `/data/dev2/logs/27bx-M6-IBxIB2-m50-release-20261002T151745Z.log`. Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
+  Log `/data/dev2/logs/27bx-M6-IBxIB2-m50-release-20261002T151745Z.log`.
+- **15:54Z:** release passed pre-upload examples, card example and three-panel scored parity (15:28–15:48Z); remote code
+  since 15:48Z, then AutoModel parity and the upload. M8 seeds at steps 577–635 (≈ 9.5 s / update). Tooling `1ffd480fb`:
+  the Index / release-form scripts take the preregistered M7 / M8 candidate names (161 27B tests pass). Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
 continuation #3, 4a20f83f, 19:37–20:10Z, silently stopped after its 20:10Z poll; its entries below say "cba71646",
 which is the coordinator's ID; worker 3 0d2e488f ran 15:12–19:40Z; worker 2 a56025bb 10:44–15:15Z; worker 1 11741ee2
 06:17–10:55Z). **Amendment 6 (`6bbb2512d`): the MLX-DEV2 guard for every M6 finalist** (COORDINATION 04:15).
