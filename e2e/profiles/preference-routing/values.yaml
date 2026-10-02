@@ -1,0 +1,107 @@
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      # general-expert, not a profile-specific name: the shared AIGatewayRoute
+      # in deploy/kubernetes/ai-gateway/aigw-resources/ matches x-ai-eg-model
+      # exactly against six names (math-, science-, social-, humanities-, law-
+      # and general-expert). A model outside that list has no route, so every
+      # request 404s at the gateway while the router itself stays healthy.
+      model: general-expert
+    models:
+      - name: general-expert
+        provider_model_id: general-expert
+        backend_refs:
+          - name: local-vllm
+            provider: vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    modelCards:
+      - name: general-expert
+    signals:
+      # use_contrastive defaults to true, so no global.model_catalog.modules
+      # .classifier.preference override is needed to pick this path - only
+      # margin_threshold is set below, to also exercise that gate. Embeddings
+      # use the canonical default (Vela-1.0-Encoder-307M), same as reask and
+      # complexity.
+      preferences:
+        - name: terse_answers
+          description: Users who prefer short, direct responses with no elaboration.
+          examples:
+            - keep it concise
+            - bullet points only, no explanation
+            - answer in one short paragraph
+            - just give me the short version
+          threshold: 0.6
+        - name: detailed_answers
+          description: Users who want thorough, step-by-step explanations with reasoning.
+          examples:
+            - explain your reasoning in detail
+            - walk me through this step by step
+            - give me a comprehensive, thorough explanation
+            - don't skip any steps, explain everything
+          threshold: 0.6
+    decisions:
+      - name: terse_preference_routing
+        description: Route requests whose preference signal matches terse_answers.
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: preference
+              name: terse_answers
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
+      - name: detailed_preference_routing
+        description: Route requests whose preference signal matches detailed_answers.
+        priority: 90
+        rules:
+          operator: AND
+          conditions:
+            - type: preference
+              name: detailed_answers
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
+      - name: default-route
+        description: Fallback route for requests matching no preference rule.
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
+  global:
+    router:
+      strategy: priority
+    model_catalog:
+      kbs: []
+      modules:
+        classifier:
+          preference:
+            prototype_scoring:
+              # Off by default; set explicitly so an ambiguous query that
+              # narrowly favors one rule over the other still counts as "no
+              # match" rather than a weak, coincidental win.
+              margin_threshold: 0.05
+    services:
+      response_api:
+        enabled: true
+        store_backend: memory
+        ttl_seconds: 3600
+        max_responses: 1000
+
+resources:
+  # 2Gi OOMKills the router on a CI runner: it restarts, never becomes ready,
+  # and the helm wait burns its full 60m timeout. Loading an embedding model
+  # needs at least the headroom the other model-backed profiles settled on.
+  limits:
+    memory: 6Gi
+    cpu: "2"
+  requests:
+    memory: 2Gi
+    cpu: 250m

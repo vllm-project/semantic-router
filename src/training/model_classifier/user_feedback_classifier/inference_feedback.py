@@ -2,7 +2,7 @@
 """
 Feedback Detector Inference
 
-Compatible with: https://huggingface.co/llm-semantic-router/feedback-detector
+Compatible with: https://huggingface.co/vllm-sr/feedback-detector
 
 Classifies the supplied follow-up text. Ambiguous feedback may require preceding
 conversation context; confidence is a model score, not a correctness guarantee.
@@ -61,7 +61,7 @@ class FeedbackDetector:
 
     def __init__(
         self,
-        model_path: str = "llm-semantic-router/feedback-detector",
+        model_path: str = "vllm-sr/feedback-detector",
         device: str | None = None,
         max_length: int = 512,
         revision: str | None = None,
@@ -201,7 +201,7 @@ def demo():
     model_paths = [
         "models/mmbert_feedback_detector_merged",
         "models/mmbert_feedback_detector",
-        "llm-semantic-router/feedback-detector",
+        "vllm-sr/feedback-detector",
     ]
 
     model_path = None
