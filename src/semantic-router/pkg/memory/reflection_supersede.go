@@ -474,29 +474,88 @@ type statementSentence struct {
 	ending   rune
 }
 
+// quoteTracker reports whether a scan position sits inside a quoted span, so
+// sentence splitting and quote stripping treat every quote style alike
+// instead of each keeping its own ad hoc state. A straight or curly double
+// quote, a backtick, and a curly single quote always toggle on their own
+// mark. A straight single quote is ambiguous with an apostrophe, so it acts
+// as a quote mark only when it isn't one: flanked by a letter or digit on
+// both sides it is a contraction or a singular possessive ("don't", "dog's")
+// and never toggles; closing an open span always does; otherwise it opens a
+// span only when it leads a word, so a trailing plural possessive ("dogs' ")
+// isn't mistaken for an opening quote.
+type quoteTracker struct {
+	inDouble, inSmart, inSmartSingle, inSingle, inBacktick bool
+}
+
+func (q *quoteTracker) inQuote() bool {
+	return q.inDouble || q.inSmart || q.inSmartSingle || q.inSingle || q.inBacktick
+}
+
+// advance updates quote state for rune r at byte offset i of s and reports
+// whether r is itself a quote mark, which callers drop rather than keep as text.
+func (q *quoteTracker) advance(s string, i int, r rune) bool {
+	switch r {
+	case '"':
+		q.inDouble = !q.inDouble
+		return true
+	case '“':
+		q.inSmart = true
+		return true
+	case '”':
+		q.inSmart = false
+		return true
+	case '‘':
+		q.inSmartSingle = true
+		return true
+	case '’':
+		q.inSmartSingle = false
+		return true
+	case '`':
+		q.inBacktick = !q.inBacktick
+		return true
+	case '\'':
+		before, after := runeBefore(s, i), runeAfter(s, i, r)
+		switch {
+		case isWordRune(before) && isWordRune(after):
+			return false
+		case q.inSingle:
+			q.inSingle = false
+			return true
+		case isWordRune(after):
+			q.inSingle = true
+			return true
+		default:
+			return false
+		}
+	}
+	return false
+}
+
+// runeBefore and runeAfter return 0 (not a letter or digit) past either end
+// of s; utf8.DecodeRuneInString and DecodeLastRuneInString already resolve
+// an empty slice to RuneError, so no bounds check is needed here.
+func runeBefore(s string, i int) rune {
+	r, _ := utf8.DecodeLastRuneInString(s[:i])
+	return r
+}
+
+func runeAfter(s string, i int, r rune) rune {
+	next, _ := utf8.DecodeRuneInString(s[i+utf8.RuneLen(r):])
+	return next
+}
+
+func isWordRune(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r)
+}
+
 func statementSentences(statement string) []statementSentence {
 	var sentences []statementSentence
 	start := 0
-	inDouble := false
-	inSmart := false
-	inSmartSingle := false
-	inBacktick := false
+	var q quoteTracker
 	for i, r := range statement {
-		switch r {
-		case '"':
-			inDouble = !inDouble
-		case '“':
-			inSmart = true
-		case '”':
-			inSmart = false
-		case '‘':
-			inSmartSingle = true
-		case '’':
-			inSmartSingle = false
-		case '`':
-			inBacktick = !inBacktick
-		}
-		if inDouble || inSmart || inSmartSingle || inBacktick {
+		q.advance(statement, i, r)
+		if q.inQuote() {
 			continue
 		}
 		if r != '.' && r != '!' && r != '?' && r != ';' && r != '\n' {
@@ -518,32 +577,12 @@ func statementSentences(statement string) []statementSentence {
 func withoutQuotedContent(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
-	inDouble := false
-	inSmart := false
-	inSmartSingle := false
-	inBacktick := false
-	for _, r := range s {
-		switch r {
-		case '"':
-			inDouble = !inDouble
-			continue
-		case '“':
-			inSmart = true
-			continue
-		case '”':
-			inSmart = false
-			continue
-		case '‘':
-			inSmartSingle = true
-			continue
-		case '’':
-			inSmartSingle = false
-			continue
-		case '`':
-			inBacktick = !inBacktick
+	var q quoteTracker
+	for i, r := range s {
+		if isMark := q.advance(s, i, r); isMark {
 			continue
 		}
-		if inDouble || inSmart || inSmartSingle || inBacktick {
+		if q.inQuote() {
 			continue
 		}
 		b.WriteRune(r)

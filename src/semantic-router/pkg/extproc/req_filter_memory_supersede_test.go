@@ -32,6 +32,12 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 	quotedTranslation := storedMemoryTurn{
 		user: "Please translate this sentence: ‘I just moved to Denver, and I live there now.’",
 	}
+	straightSingleQuotedTranslation := storedMemoryTurn{
+		user: "Please translate this sentence: 'Yesterday I just moved to Denver, and I live there now.'",
+	}
+	contractionsBeforeAQuotedTask := storedMemoryTurn{
+		user: "I'm in Boston, and it's my home. Boston's my city; I don't plan to move.",
+	}
 	bostonWithAssistantFact := storedMemoryTurn{
 		user:      "I live in Boston.",
 		assistant: "Your dog Biscuit is a beagle.",
@@ -89,6 +95,18 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 			turns:    []storedMemoryTurn{boston, quotedTranslation},
 			query:    "Does my Boston residence change after asking to translate a Denver move?",
 			injected: []string{"I live in Boston", "translate this sentence"},
+		},
+		{
+			name:     "a straight single-quoted translation keeps the user's fact",
+			turns:    []storedMemoryTurn{boston, straightSingleQuotedTranslation},
+			query:    "Does my Boston residence change after asking to translate a Denver move?",
+			injected: []string{"I live in Boston", "translate this sentence"},
+		},
+		{
+			name:     "contractions ahead of a quoted task keep their facts",
+			turns:    []storedMemoryTurn{contractionsBeforeAQuotedTask, straightSingleQuotedTranslation},
+			query:    "Where is my home, and do I plan to move?",
+			injected: []string{"I'm in Boston", "Boston's my city", "I don't plan to move"},
 		},
 		{
 			name:       "a corrected question keeps an independent assistant fact",

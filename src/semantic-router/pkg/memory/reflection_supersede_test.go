@@ -237,6 +237,8 @@ func TestReflectionGateKeepsTurnsWithoutACorrection(t *testing.T) {
 	curlyQuotedTask := formatTurnChunk("Please translate this sentence: ‘I just moved to Denver, and I live there now’.", "Here is the translation.")
 	curlyQuotedTaskWithQuotedPeriod := formatTurnChunk("Please translate this sentence: ‘I just moved to Denver, and I live there now.’", "Here is the translation.")
 	curlyQuotedTaskWithAdverb := formatTurnChunk("Please translate this sentence: ‘I just moved to Denver, and I live there now actually’.", "Here is the translation.")
+	straightSingleQuotedTask := formatTurnChunk("Please translate this sentence: 'Yesterday I just moved to Denver, and I live there now.'", "Here is the translation.")
+	straightSingleQuotedTaskWithContraction := formatTurnChunk("Please translate this sentence: 'I don't live in Boston anymore, I just moved to Denver.'", "Here is the translation.")
 	continueNurse := formatTurnChunk("I moved apartments, and I continue to work as a nurse now.", "Congrats on the new place.")
 	remainNurse := formatTurnChunk("I moved apartments, and I remain a nurse now.", "Congrats on the new place.")
 
@@ -284,6 +286,8 @@ func TestReflectionGateKeepsTurnsWithoutACorrection(t *testing.T) {
 		{name: "a curly-single-quoted change in a task prompt", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: curlyQuotedTask, daysAgo: 9}}},
 		{name: "a curly-single-quoted change with punctuation inside the quote", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: curlyQuotedTaskWithQuotedPeriod, daysAgo: 9}}},
 		{name: "a curly-single-quoted change with a trailing adverb", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: curlyQuotedTaskWithAdverb, daysAgo: 9}}},
+		{name: "a straight-single-quoted change in a task prompt", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: straightSingleQuotedTask, daysAgo: 9}}},
+		{name: "a straight-single-quoted task with a contraction inside the quote", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: straightSingleQuotedTaskWithContraction, daysAgo: 9}}},
 		{name: "a correction that reaffirms an older fact with continue", retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: continueNurse, daysAgo: 9}}},
 		{name: "a correction that reaffirms an older fact with remain", retrieved: []datedContent{{content: nurseTurn, daysAgo: 30}, {content: remainNurse, daysAgo: 9}}},
 		{name: "a turn quoted in an assistant reply", retrieved: []datedContent{{content: bostonTurn, daysAgo: 30}, {content: quotedTurn, daysAgo: 9}}},
@@ -424,6 +428,46 @@ func TestReflectionGateDedupKeepsACorrectionBesideTheFactItCorrects(t *testing.T
 			assert.Equal(t, tc.want, ids)
 		})
 	}
+}
+
+// TestWithoutQuotedContentStripsEveryQuoteStyle pins the quoteTracker
+// mechanism down directly, not just through end-to-end retrieval scenarios:
+// every quote style strips its content, and a straight single quote never
+// mistakes a contraction or a possessive for a quote boundary.
+func TestWithoutQuotedContentStripsEveryQuoteStyle(t *testing.T) {
+	cases := []struct {
+		name string
+		text string
+		want string
+	}{
+		{name: "straight double quotes", text: `He said "hello there" to me.`, want: `He said  to me.`},
+		{name: "curly double quotes", text: "He said “hello there” to me.", want: "He said  to me."},
+		{name: "backticks", text: "Run `go test` now.", want: "Run  now."},
+		{name: "curly single quotes", text: "She said ‘hi’ softly.", want: "She said  softly."},
+		{name: "straight single quotes", text: "She said 'hi' softly.", want: "She said  softly."},
+		{name: "a contraction is not a quote boundary", text: "I don't think so.", want: "I don't think so."},
+		{name: "contractions and a singular possessive are not quote boundaries", text: "I'm sure it's the dog's bowl.", want: "I'm sure it's the dog's bowl."},
+		{name: "a trailing plural possessive is not a quote boundary", text: "The dogs' leashes are here.", want: "The dogs' leashes are here."},
+		{name: "a plural possessive does not desync a later real quote", text: "The dogs' leashes are here. Please translate: 'I moved to Denver.'", want: "The dogs' leashes are here. Please translate: "},
+		{name: "a contraction inside a straight-single-quoted span is still stripped", text: "Please say 'I don't know' aloud.", want: "Please say  aloud."},
+		{name: "a period inside a straight-single-quoted span is stripped", text: "Translate: 'Yesterday I moved to Denver, and I live there now.'", want: "Translate: "},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, withoutQuotedContent(tc.text))
+		})
+	}
+}
+
+// TestStatementSentencesDoesNotSplitInsideAStraightSingleQuote guards the
+// other half of the quoteTracker mechanism: a sentence-ending period quoted
+// with a straight single quote must not end the sentence early, or the
+// unstripped remainder would reach correctionPairs unquoted.
+func TestStatementSentencesDoesNotSplitInsideAStraightSingleQuote(t *testing.T) {
+	text := "Please translate this sentence: 'Yesterday I just moved to Denver, and I live there now.'"
+	sentences := statementSentences(text)
+	require.Len(t, sentences, 1)
+	assert.Equal(t, text, sentences[0].text)
 }
 
 func BenchmarkReflectionGateSupersedesLargeRepetitiveChunks(b *testing.B) {
