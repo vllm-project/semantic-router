@@ -5,6 +5,37 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17`. M
 (public since 2026-10-03 01:17 UTC+8). Index values stay private (node private stores and
 `decision2-program/private/m17b/`); this file has none. Times UTC.
 
+## 2026-10-02 22:50Z — 4B owner #3 (2d3664f4) took over; wave 7 runs on two lanes
+
+Nox-4B stays `c60d3b5c` (`4b-LHS17IB4-lrh`). Took over at 22:12Z. The coordinator approved +30 GPU-h (70 in total).
+
+- **Amendment 2** ([`dec-m17b-wave7-amendment-2-2026-10-03.md`](dec-m17b-wave7-amendment-2-2026-10-03.md),
+  `3d5e86cbf`, 22:24Z) was written before any wave-7 result. It adds:
+  - single-arm reads of every half-LR arm;
+  - `4b-LRHxALL-L2` and the rule-based `4b-LRHxQ`;
+  - the conditional `4b-LRHxXALL-m75` and `4b-LRQxLRH`.
+
+  IX1 entries are at `75a3e3974`, mirrored on A / B / C / F.
+- **Soups:**
+  - the factory's, on node C (merges beside its seed on GPU6): `4b-SDMLIB4-lrh` `de1ab06b…`, `4b-LHS17ML-lrh`
+    `a9ab8c81…` and `4b-LHS17IB4X-lrh` `77f3dba1…`, plus the full-LR `4b-SDMLIB4W2`, `4b-SDMLIB4-UP` and
+    `4b-LHS17IB4-UP`;
+  - mine, on node C (CPU, `af-soup.sh`): `4b-LRHxALL` `2fdee0bc…` (the four half-LR arm soups that existed) and
+    `4b-LRHxALL-L2` `72ba598c…` (`4b-LHS17IB4-lrh` listed twice). Both were copied to node F for the formal path.
+- **Staged on node C** (`af-stage.sh`, BF16): `4b-SDMLIB4-lrh` `9eefa000…`, `4b-LHS17ML-lrh` `9168ea03…`,
+  `4b-LHS17IB4X-lrh` `e89760aa…`, `4b-LRHxALL` `31d4ee92…`, `4b-LRHxALL-L2` `3d11d7f1…`.
+- **Index lanes** (reference `AF-4b-LHS17IB4-lrh-bf16`; results hash pinned on B and C):
+  - lane B (node B GPU4 / 6): `4b-LRHxXALL-m50` (shards end ≈ 23:16Z), then chain B2 with `4b-LHS17ML-lrh` and
+    `4b-LHS17IB4X-lrh`;
+  - lane C (node C GPU2–4, leased 22:36–22:37Z from the factory's released leases): chain C1 `4b-SDMLIB4-lrh`
+    (parity PASS 22:39Z), chain C2 `4b-LRHxALL`, then `4b-LRHxALL-L2`.
+- **Release ops** `v2/release/records/dev2-4b-w7-2026-10-03/ops/` (`f6c9a5f4f`, `588903aca`; mirrored on A). They
+  pin `c60d3b5c` as current, write the weight-origin summary with the true seed count, and stop `--release` before
+  the download's IX1 gate, which needs the `-hub` entry first.
+- **Formal path:** `4b-LRHxXALL-m50` is linked into M17's tree on node F.
+- **Leases:** node B GPU4 / 6 and node C GPU2–4, all `track=eval-ix1`, held by my chains.
+- **GPU-h:** ≈ 26.
+
 ## 2026-10-02 22:15Z — HANDOFF (continuation needed): wave 7 running
 
 **Current release:** `vllm-sr/Decision-2.0-Nox-4B@c60d3b5c` = `4b-LHS17IB4-lrh` (public). The next successor is gated
