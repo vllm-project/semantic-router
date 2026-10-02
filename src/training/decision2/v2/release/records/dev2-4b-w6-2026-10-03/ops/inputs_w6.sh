@@ -13,7 +13,7 @@
 # Usage: inputs_w6.sh CAND bf16|index
 set -euo pipefail
 CAND=${1:?CAND} STAGE=${2:?STAGE}
-case $CAND in AFxALL | AFxALL2) RNODE=f ;; AFxALL3) RNODE=a ;; *) echo "CAND: AFxALL | AFxALL2 | AFxALL3" >&2; exit 2 ;; esac
+case $CAND in AFxALL | AFxALL2) RNODE=f ;; AFxALL3) RNODE=a ;; XALLx | XALLU2) RNODE=c ;; *) echo "CAND: AFxALL | AFxALL2 | AFxALL3 | XALLx | XALLU2" >&2; exit 2 ;; esac
 KEY=${CAND,,}
 NODES=${DEV2_NODES_FILE:-$HOME/.config/decision2/nodes.env}
 addr() { awk -F= -v k="node-$1" '$1 == k { print substr($0, length(k) + 2); exit }' "$NODES"; }

@@ -17,7 +17,7 @@ set -euo pipefail
 S=$(cd "$(dirname "$0")/../../../../.." && pwd)
 CAND=${1:?CAND}
 shift
-[[ "$CAND" =~ ^AFxALL[0-9]?$ ]] || { echo "CAND: AFxALL | AFxALL2 | AFxALL3" >&2; exit 2; }
+[[ "$CAND" =~ ^(AFxALL[23]?|XALLx|XALLU2)$ ]] || { echo "CAND: AFxALL | AFxALL2 | AFxALL3 | XALLx | XALLU2" >&2; exit 2; }
 PRIV=/data/dev2/private/release/4bif/$CAND
 [[ $# -ge 1 ]] || { echo "usage: index_w6.sh CAND BASE [BASE...]" >&2; exit 2; }
 BASES=("$@")

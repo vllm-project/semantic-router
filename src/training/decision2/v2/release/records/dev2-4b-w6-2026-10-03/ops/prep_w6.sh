@@ -10,7 +10,7 @@
 # Usage (node A): bash <mirror>/v2/release/records/dev2-4b-w6-2026-10-03/ops/prep_w6.sh CAND current|gates
 set -euo pipefail
 CAND=${1:?CAND} STAGE=${2:?STAGE}
-[[ "$CAND" =~ ^AFxALL[0-9]?$ ]] || { echo "CAND: AFxALL | AFxALL2 | AFxALL3" >&2; exit 2; }
+[[ "$CAND" =~ ^(AFxALL[23]?|XALLx|XALLU2)$ ]] || { echo "CAND: AFxALL | AFxALL2 | AFxALL3 | XALLx | XALLU2" >&2; exit 2; }
 KEY=${CAND,,}
 S=$(cd "$(dirname "$0")/../../../../.." && pwd)
 R=$S/v2/release/records/dev2-4b-w6-2026-10-03

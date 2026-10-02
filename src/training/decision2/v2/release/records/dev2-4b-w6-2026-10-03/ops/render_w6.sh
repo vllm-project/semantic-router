@@ -11,7 +11,7 @@
 # Usage (from this worktree): render_w6.sh CAND
 set -euo pipefail
 CAND=${1:?CAND}
-[[ "$CAND" =~ ^AFxALL[0-9]?$ ]] || { echo "CAND: AFxALL | AFxALL2 | AFxALL3" >&2; exit 2; }
+[[ "$CAND" =~ ^(AFxALL[23]?|XALLx|XALLU2)$ ]] || { echo "CAND: AFxALL | AFxALL2 | AFxALL3 | XALLx | XALLU2" >&2; exit 2; }
 NODES=${DEV2_NODES_FILE:-$HOME/.config/decision2/nodes.env}
 addr() { awk -F= -v k="node-$1" '$1 == k { print substr($0, length(k) + 2); exit }' "$NODES"; }
 on() { local n=$1; shift; ssh -o BatchMode=yes -o ConnectTimeout=30 "$(addr "$n")" "$@"; }

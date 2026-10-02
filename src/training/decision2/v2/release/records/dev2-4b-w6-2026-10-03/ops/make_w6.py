@@ -74,6 +74,20 @@ CANDS = {
         f"{SEVEN} (UP with four seeds, IB4 and SDMLIB4 with five), plus {NEW3}; "
         + RECIPE,
     },
+    "XALLx": {
+        "fp32": "7ae47bc20bd873e770dd7975b04467a5f4756c8e2c5e18b634095445636d1f8b",
+        "members": 7,
+        "what": "the wave-6 cross-arm soup 4b-XALLx: the uniform FP32 average of the released soup's seven arm "
+        f"soups, {SEVEN}, each at its most seeds (UP and ML and IB4X with four seeds, IB4 and SDMLIB4 with five); "
+        + RECIPE,
+    },
+    "XALLU2": {
+        "fp32": "58fa05858a1ae5f79b5cea268d7b8fc427f1d23a47644303f617b8a56be75a58",
+        "members": 7,
+        "what": "the wave-6 cross-arm soup 4b-XALLU2: the FP32 average of the released soup's seven two-seed arm "
+        f"soups, {SEVEN}, with 4b-LHS17UP at weight 2/8 and the others at 1/8; "
+        + RECIPE,
+    },
     "AFxALL": {
         "fp32": "8f282287620dc5498c09d9bba2f8be0b86fa2f60749a6920e9a760b5fc7a5a93",
         "members": 12,
@@ -366,7 +380,8 @@ def decision(cand: str, s: dict) -> dict:
             "weights_identity": CURRENT["weights_identity"],
         },
         "disclosures": [
-            f"a uniform weight average of {p['members']} arm soups (no new training run); the training rows of its "
+            f"an FP32 weight average of {p['members']} arm soups ({'4b-LHS17UP listed twice' if cand == 'XALLU2' else 'uniform'}; "
+            "no new training run); the training rows of its "
             "members include the IB1-r3 / IB2 / IB3-r2 / IB4 phase-1 families matched to Index benchmark families "
             "(HoVer, When2Call, iSarcasmEval, GSM8K and others) and the BPoMP format",
             *(
