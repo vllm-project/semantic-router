@@ -14,6 +14,7 @@
 # T = 1 run and vs Nimble v2, gates types, lux9b.mlx_paired vs formal-m4/K-a13-16k-mlx, lux9b.score_levels, gates
 # public231 vs the released T = 1 run and successor.json (numbers only, no verdict). CHECKPOINT is a host path (a full
 # checkpoint); SOURCE the host path of its start (Qwen3.5-9B-Base snapshot or the Lux 1.0 package).
+# M9_FORMAL_GPUS (default "6 7") lists the node A GPUs a caller holds for this path (e.g. the Index sweep's GPU3).
 set -uo pipefail
 # shellcheck source=../m8/lib.sh disable=SC1091
 . "$(dirname "${BASH_SOURCE[0]}")/../m8/lib.sh"
@@ -35,7 +36,7 @@ MLX_PANEL=$DATA/dev2/private/panels/mlx-diag-v1
 FROZEN=af623300d71a8fdb9a6a5588d25e17356da3610d57710b08b5830a0c5d6efb6f
 TC=$F/triton-cache
 G=$F/$name.gates
-case $gpu in 6 | 7) ;; *) echo "GPU $gpu is not an M9 formal GPU" >&2; exit 2 ;; esac
+case " ${M9_FORMAL_GPUS:-6 7} " in *" $gpu "*) ;; *) echo "GPU $gpu is not an M9 formal GPU (M9_FORMAL_GPUS: ${M9_FORMAL_GPUS:-6 7})" >&2; exit 2 ;; esac
 [ -f "$MIRROR/.dev2-mirror.json" ] || { echo "run from an exact mirror" >&2; exit 2; }
 [ -f "$ckpt/decision_config.json" ] || { echo "no checkpoint at $ckpt" >&2; exit 2; }
 [ -d "$source" ] || { echo "no source at $source" >&2; exit 2; }

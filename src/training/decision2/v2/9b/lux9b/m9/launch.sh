@@ -2,6 +2,7 @@
 # 9B M9: run one job in the pinned 9B image on one M9 GPU (node C GPU1-7, node A GPU6-7), or on CPU.
 #
 # usage: M9_NODE=c|a launch.sh <job> <mirror-dir> <out-dir> (--cpu | --gpu N) -- <python3 args...>
+# On node A, M9_FORMAL_GPUS (default "6 7") widens the GPU list for a caller that holds another GPU (formal.sh).
 #
 # GPU isolation (nodes C-F rule, also used on node A): the container gets /dev/kfd plus only its GPU's render node,
 # resolved from the GPU's PCI address, with ROCR_VISIBLE_DEVICES=0 and --network none. The GPU's lease owner file
@@ -24,7 +25,7 @@ fi
 node=${M9_NODE:?set M9_NODE=c or a}
 case $node in
   c) allowed=" 1 2 3 4 5 6 7 " lux=/data/dev2/models/Decision-1.0-Lux-9B/bd45a30aee8c84032791c245c70f86dee5389cc8 ;;
-  a) allowed=" 6 7 " lux=/data/decision20-20260926/models/Decision-1.0-Lux-9B ;;
+  a) allowed=" ${M9_FORMAL_GPUS:-6 7} " lux=/data/decision20-20260926/models/Decision-1.0-Lux-9B ;;
   *) echo "unknown node $node" >&2; exit 2 ;;
 esac
 image=sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54
