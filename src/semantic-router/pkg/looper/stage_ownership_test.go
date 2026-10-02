@@ -231,10 +231,12 @@ func TestReMoMFinalStageOwnership(t *testing.T) {
 		}
 
 		ownership := ResolveFinalStageOwnership(req)
+		assert.Equal(t, "synthesis", ownership.StageName)
 		assert.Equal(t, "lora-adapter", ownership.TargetModel)
 		assert.Equal(t, StageRoleSynthesis, ownership.StageRole)
 		assert.True(t, ownership.IsFinalUserVisible)
 		assert.Equal(t, StreamingEligible, ownership.Eligibility)
+		assert.Equal(t, BufferingReasonNone, ownership.BufferingReason)
 	})
 
 	t.Run("eligible when ModelRefs is empty but SynthesisModel is configured", func(t *testing.T) {
@@ -330,6 +332,128 @@ func TestWorkflowsFinalStageOwnership(t *testing.T) {
 		assert.True(t, ownership.StageRole.IsUserVisible())
 		assert.True(t, ownership.IsFinalUserVisible)
 		assert.Equal(t, StreamingEligible, ownership.Eligibility)
+	})
+
+	t.Run("static workflow without explicit final.model resolves to worker from static roles", func(t *testing.T) {
+		req := &Request{
+			IsStreaming: true,
+			Algorithm: &config.AlgorithmConfig{
+				Type: config.DecisionAlgorithmWorkflows,
+				Workflows: &config.WorkflowsAlgorithmConfig{
+					Roles: []config.WorkflowRoleConfig{
+						{
+							Name:   "worker",
+							Models: []string{"worker-b"},
+						},
+					},
+				},
+			},
+			ModelRefs: []config.ModelRef{
+				{Model: "worker-a"},
+				{Model: "worker-b"},
+			},
+		}
+
+		ownership := ResolveFinalStageOwnership(req)
+		assert.Equal(t, config.DecisionAlgorithmWorkflows, ownership.AlgorithmType)
+		assert.Equal(t, "synthesis", ownership.StageName)
+		assert.Equal(t, "worker-b", ownership.TargetModel)
+		assert.Equal(t, StageRoleSynthesis, ownership.StageRole)
+		assert.True(t, ownership.IsFinalUserVisible)
+		assert.Equal(t, StreamingEligible, ownership.Eligibility)
+		assert.Equal(t, BufferingReasonNone, ownership.BufferingReason)
+	})
+
+	t.Run("static workflow preserves LoRA adapter for worker from static roles", func(t *testing.T) {
+		req := &Request{
+			IsStreaming: true,
+			Algorithm: &config.AlgorithmConfig{
+				Type: config.DecisionAlgorithmWorkflows,
+				Workflows: &config.WorkflowsAlgorithmConfig{
+					Roles: []config.WorkflowRoleConfig{
+						{
+							Name:   "worker",
+							Models: []string{"worker-b"},
+						},
+					},
+				},
+			},
+			ModelRefs: []config.ModelRef{
+				{Model: "worker-a"},
+				{Model: "worker-b", LoRAName: "worker-b-lora"},
+			},
+		}
+
+		ownership := ResolveFinalStageOwnership(req)
+		assert.Equal(t, config.DecisionAlgorithmWorkflows, ownership.AlgorithmType)
+		assert.Equal(t, "synthesis", ownership.StageName)
+		assert.Equal(t, "worker-b-lora", ownership.TargetModel)
+		assert.Equal(t, StageRoleSynthesis, ownership.StageRole)
+		assert.True(t, ownership.IsFinalUserVisible)
+		assert.Equal(t, StreamingEligible, ownership.Eligibility)
+		assert.Equal(t, BufferingReasonNone, ownership.BufferingReason)
+	})
+
+	t.Run("dynamic workflow without explicit final.model buffers because final producer is pending", func(t *testing.T) {
+		req := &Request{
+			IsStreaming: true,
+			Algorithm: &config.AlgorithmConfig{
+				Type: config.DecisionAlgorithmWorkflows,
+				Workflows: &config.WorkflowsAlgorithmConfig{
+					Mode: config.WorkflowModeDynamic,
+					Planner: config.WorkflowPlannerConfig{
+						Model: "planner-a",
+					},
+				},
+			},
+			ModelRefs: []config.ModelRef{
+				{Model: "worker-a"},
+				{Model: "worker-b"},
+			},
+		}
+
+		ownership := ResolveFinalStageOwnership(req)
+		assert.Equal(t, config.DecisionAlgorithmWorkflows, ownership.AlgorithmType)
+		assert.Equal(t, "synthesis", ownership.StageName)
+		assert.Empty(t, ownership.TargetModel)
+		assert.Equal(t, StageRoleSynthesis, ownership.StageRole)
+		assert.True(t, ownership.IsFinalUserVisible)
+		assert.Equal(t, StreamingIneligibleBufferingRequired, ownership.Eligibility)
+		assert.Equal(t, BufferingReasonSelectionPending, ownership.BufferingReason)
+	})
+
+	t.Run("dynamic workflow resolves to final producer once actual plan is known", func(t *testing.T) {
+		req := &Request{
+			IsStreaming: true,
+			Algorithm: &config.AlgorithmConfig{
+				Type: config.DecisionAlgorithmWorkflows,
+				Workflows: &config.WorkflowsAlgorithmConfig{
+					Mode: config.WorkflowModeDynamic,
+					Planner: config.WorkflowPlannerConfig{
+						Model: "planner-a",
+					},
+				},
+			},
+			ModelRefs: []config.ModelRef{
+				{Model: "worker-a"},
+				{Model: "worker-b"},
+			},
+		}
+
+		plan := &workflowPlan{
+			Final: &workflowFinalStep{
+				Model: "worker-b",
+			},
+		}
+
+		ownership := ResolveWorkflowPlanFinalStage(req, plan, nil)
+		assert.Equal(t, config.DecisionAlgorithmWorkflows, ownership.AlgorithmType)
+		assert.Equal(t, "synthesis", ownership.StageName)
+		assert.Equal(t, "worker-b", ownership.TargetModel)
+		assert.Equal(t, StageRoleSynthesis, ownership.StageRole)
+		assert.True(t, ownership.IsFinalUserVisible)
+		assert.Equal(t, StreamingEligible, ownership.Eligibility)
+		assert.Equal(t, BufferingReasonNone, ownership.BufferingReason)
 	})
 
 	t.Run("intermediate planning and execution stages are isolated", func(t *testing.T) {
