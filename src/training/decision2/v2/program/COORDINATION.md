@@ -205,6 +205,39 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 23:02 — **USER: RELEASE NOW** the three leading candidates.
+  - **4B:** `4b-SDMLxALL` (M17, 7cee4275, interrupted to release).
+  - **9B:** `KIB4-a40` (M10, 89b53e70, interrupted to release).
+  - **27B: `M6-IBxIB2-m50`.** 27B #6 (2a824a6b), this is for you: release it as soon as the pre-release parity passes,
+    on top of Vega `e60bd8e3`, without waiting for anything else. It is global #3.
+  - **The launch film uses these as the official scores:** Nox 42.49 (class #3, global #17), Lux 46.26 (class #3,
+    global #14), Vega 56.47 (class #3, **global #3**).
+
+- 2026-10-02 22:37 — **ARM FACTORY (`track=arm-factory`): batch 1 is training on 15 GPUs.** Prereg `75da74ff6`,
+  amendment 1 `b1c6e254a`, state `v2/af/records/af-state.md` on `xunzhuo/decision-2-arm-factory`.
+  - **9B, node A GPU1–6 (ends ≈ 01:30):** `KIB4` s4 / s5 (seeds 3 / 4); `KIB4W2` s1 / s2 (KIB4's TRAIN, IB4 rows
+    ×2 loss weight); `KIB4L2` s1 / s2 (backbone LR 2e-5).
+  - **4B, node C GPU3–7 and node F GPU2–5 (ends ≈ 00:30):** new seeds of `4b-LHS17IB4`, `4b-SDMLIB4`, `4b-LHS17UP`
+    (M17's locked data); `4b-LHS17IB4-lrh` (half LR); new mixtures `4b-LHS17IB4ML` (S17 + IB4 + IB3 + the ML copies)
+    and `4b-LHS23IB4` (S23 + IB4 + IB3), both with a row-level audit PASS (0 item rows, planted 200 / 200).
+  - **Leases:** node F GPU2–5 held stale harness leases of M17's finished `SDMLxALL15` run (all shards exit 0 at
+    14:14Z); they are moved to `owner.prev-af-*`. Node F GPU6–7 and node B GPU2 / 4 / 6 / 7 are untouched.
+  - **M17 (7cee4275):** don't train these arms; the factory hands over its arm soups and one `4b-AFxALL` point.
+  - **M10 (89b53e70):** the factory will build the KIB4-family soup `KF` (your KIB4 s1–s3 via the `KIB4P` soup plus
+    its six seeds) and `KF × KIB` points; it copies `KIB4P` and the KIB soup read-only from node B (hash-checked).
+
+- 2026-10-02 22:20 — **27B (continuation #6): idle 27B GPUs filled; the Vega-27B release of `M6-IBxIB2-m50` is in
+  flight.**
+  - **Release.** Choice `M6-IBxIB2-m50`: of the two qualifying cross-arm soups it has the larger Index lower bound vs
+    M6-IB (values private). R3 (no type collapsed), IF3 (row-level audit) and package parity pass. Spec and decision
+    derive from `specs/dev2-27b-org.json` and supersede `e60bd8e3` (27B branch `b9297450d`). Prerelease on node A GPU0
+    (shared lease `release-27b-27bx`) since 14:08Z; the upload runs only if Vega's `main` is still `e60bd8e3`.
+  - **Runtime phase A (2d541b40):** keep holding Vega's runtime-only revision until this release lands, then publish it
+    on top of the new `main`. Never publish concurrently.
+  - **M8** (prereg on the 27B branch, `22b3f0268`): nine seeds on node B GPU0–1, node D GPU5–7 and node E GPU0–2 / 6.
+    They are extra seeds of M6-IB / M6-IB2 / M7-IB14ML plus the ML-free arms M8-IB14 / M8-IB124. They end ≈ 04:00–09:00Z
+    on 10-03 (≈ 145 GPU-h). Node E is staged for 27B training; the 27B launcher allows node E GPU0–3 / 6–7, never 4–5.
+
 - 2026-10-02 22:00 — **New ARM FACTORY worker (fresh Max agent, `track=arm-factory`).**
   - **Why:** GPU utilisation has been about 15 of 43 for 40+ minutes, and the owners are in release / soup phases.
   - **What it does:** trains new, diverse 4B and 9B arms on idle GPUs (9B on node A GPU1–7; 4B on node C GPU3–7,
