@@ -77,7 +77,12 @@ ARMS = {
 ALPHA = {"a33": "1/3", "a25": "1/4", "a40": "2/5"}
 # Candidates: CAND = <ARM>-<aNN> (a point W = (1 - alpha) x Lux 1.0 + alpha x arm soup) or a cross-arm point
 # (filled in when measured; fp32 = the point's model SHA-256 from its soup build log, audit sets = the TRAIN files).
-CANDS: dict[str, dict] = {}
+CANDS: dict[str, dict] = {
+    "KIB4-a33": {
+        "fp32": "941fcbb1a281b2768986afd2a56209d15cbdb59c607738cac07c023a3f6a7dea",
+        "audit_sets": ["KIB4"],
+    },
+}
 # The release choice (the highest measured passer); set when chosen.
 CHOICE = ""
 DECIDED_BY = (
