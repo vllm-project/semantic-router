@@ -12,6 +12,25 @@ values live in the node private directories and the local private folder only.
 Reference: the released LH, `Decision-2.0-Nox-4B` `main` `54b084f9` (weights `6a555335…`, the same weights and
 runtime as DEV2.0-4B `13d42143`); its IX1 run `DEV2.0-4B-LH` (node C, panel run IDs `6455d7be…`).
 
+## 2026-10-02 03:40Z
+
+- **Progressive-release directive (COORDINATION 11:35 UTC+8):** release M13 `4b-LHA10SD` now if its lower bound vs LH
+  is > 0 and the integrity checks pass; LHA10UP / a75 / a50 follow as successors against that release. M13's FP32 run
+  qualifies (private), so the release choice is M13's BF16 copy `DEV2.0-4B-LHA10SD-bf16` (`c6a73881…`), whose own
+  Index run is the IF1 evidence (the gate binds the run to the shipped weights): **parity gate PASS** (86 / 86, node C
+  GPU5, 03:32Z); shards running on node C (moved ahead of a75 in the node-C queue).
+- a75: shards 0–1 done (exit 0); the rest wait behind SDB. Node D: UP, then a50, waiting for GPUs.
+- `pool.py` now judges an abandoned eval-ix1 lease per GPU (the shards the run's launcher records placed on that GPU,
+  ended at least 15 min ago); M6-IB's finished shards on node C GPU1–3 are taken over that way (the old owner files
+  are kept as `owner.prev-4bif-<UTC>`).
+- **M13 release inputs on node A** (`ops` of `v2/release/records/dev2-4b-indexfirst-2026-10-02/`): the BF16 checkpoint
+  (13 files equal to the Index-run copy), the formal and mlx-diag runs' persisted autotune caches (manifests equal to
+  the runs' cache-after: `d58dbddb…`, `e7b23b1e…`), the current revision's gate / decision copies, and the gates on
+  the formal run `m13-4b-LHA10SD`: types OK / OK / OK; references vs the released LH v3 −0.16 [−2.84, +3.64], human
+  transfer [−.036, +.062], public 231 174 vs 172 (OK), card-eligible mlx-diag −.0287 [−.0394, −.0184] (a material
+  multilingual regression, disclosed; not a blocker under the rule); vs adopted Nox 1.0 +10.72 [+6.53, +13.66]; vs
+  Decider 4B +5.30 [+0.41, +8.50].
+
 ## 2026-10-02 03:10Z
 
 ### Candidates and the weights each Index run scores
