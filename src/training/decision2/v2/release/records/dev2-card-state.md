@@ -6,6 +6,10 @@ repositories with a standard, formal model-release card. Worktree `vllm-sr-dev2-
 
 ## Now
 
+- 04:55Z (2026-10-02) — **Three-hour check done.** Vega `b689ee66`, Lux `7195360d`, Sol `8ed41433` and Eos
+  `3de61185` were released by their workers with banner A (byte-identical to the preview). Nox stays `54b084f9`, left
+  to 5e7b8132, its single publisher, which has a release pending (COORDINATION 12:30). This worker publishes no
+  further revisions.
 - 02:10Z (2026-10-02) — **Round 4 (banner concept A):** default generator `cc7151c5b` / `032f33009`, merged at
   01:51Z. Kai 0.6B published as `479ea8d1`; verification passes, and the lease is removed. Eos, Sol, Nox, Lux and
   Vega are left to their pending releases. The three-hour check is due at 04:51Z. Record:
