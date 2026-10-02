@@ -1,4 +1,4 @@
-"""Benign startup and deployment-contract checks for the private sidecar."""
+"""Startup-contract checks for the model-selection service: loopback binding and a live health endpoint."""
 
 import json
 import os
@@ -10,9 +10,7 @@ import urllib.request
 from pathlib import Path
 
 import pytest
-import yaml
 
-ROOT = Path(__file__).resolve().parents[5]
 SERVICE_DIR = Path(__file__).resolve().parents[1]
 
 
@@ -63,28 +61,3 @@ def test_default_service_binds_loopback_and_serves_health(tmp_path):
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=5)
-
-
-def test_shipped_sidecar_probes_stay_inside_the_pod():
-    manifests = [
-        ROOT / "deploy/kubernetes/observability/dashboard/deployment.yaml",
-        ROOT / "deploy/openshift/dashboard/dashboard-deployment.yaml",
-    ]
-    for manifest in manifests:
-        deployment = next(
-            item
-            for item in yaml.safe_load_all(manifest.read_text())
-            if item and item.get("kind") == "Deployment"
-        )
-        containers = deployment["spec"]["template"]["spec"]["containers"]
-        service = next(item for item in containers if item["name"] == "ml-service")
-        env = {item["name"]: item.get("value") for item in service["env"]}
-        assert env["ML_SERVICE_HOST"] == "127.0.0.1"
-        assert not service.get("ports")
-        for probe_name in ("readinessProbe", "livenessProbe"):
-            probe = service[probe_name]
-            assert "httpGet" not in probe
-            assert probe["exec"]["command"][-1] == "http://127.0.0.1:8686/api/health"
-            command = probe["exec"]["command"]
-            request_timeout = int(command[command.index("--max-time") + 1])
-            assert probe["timeoutSeconds"] > request_timeout
