@@ -117,6 +117,30 @@ class RuntimeSourceTest(unittest.TestCase):
                         ),
                     )
 
+    def test_the_shared_context_switch_ships_only_with_trees_that_have_it(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            tree = runtime_tree(Path(scratch))
+            for source, expected in ((str(tree), set()), (None, {"shared_ctx.py"})):
+                spec = {"profile": "qwen-full"}
+                if source:
+                    spec["runtime_source"] = source
+                stage = Path(scratch) / f"stage-{bool(source)}"
+                stage.mkdir()
+                records = build.vendor_runtime(spec, stage, IDENTITY)
+                shipped = {
+                    name.removeprefix("decision2/")
+                    for name in records
+                    if name.removeprefix("decision2/") in build.SHARED_RUNTIME
+                }
+                self.assertEqual(shipped, expected)
+                for name in expected:
+                    self.assertEqual(
+                        records[f"decision2/{name}"]["source_sha256"],
+                        layout.sha_file(
+                            build.SOURCE_ROOT / "v2/release/runtime" / name
+                        ),
+                    )
+
     def test_a_tree_without_the_runtime_or_outside_a_mirror_is_refused(self):
         with tempfile.TemporaryDirectory() as scratch:
             with self.assertRaises(ValueError):
