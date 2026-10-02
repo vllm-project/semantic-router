@@ -1,7 +1,51 @@
 # ~27B M6 state (resume file)
 
-Updated: 2026-10-02 03:52 UTC+8 (19:52Z; **worker 4 = the coordinator's continuation #3, cba71646, from 19:37Z**;
-worker 3 0d2e488f ran 15:12–19:40Z; worker 2 a56025bb ran 10:44–15:15Z; worker 1 11741ee2 ran 06:17–10:55Z).
+Updated: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
+continuation #3, 4a20f83f, 19:37–20:10Z, silently stopped after its 20:10Z poll; its entries below say "cba71646",
+which is the coordinator's ID; worker 3 0d2e488f ran 15:12–19:40Z; worker 2 a56025bb 10:44–15:15Z; worker 1 11741ee2
+06:17–10:55Z). **Amendment 6 (`6bbb2512d`): the MLX-DEV2 guard for every M6 finalist** (COORDINATION 04:15).
+
+## Gap 20:10Z–01:32Z reconstructed from the chain logs (worker 5) — read this first
+
+No M6 worker was active; the detached chains, relays, watchers and the guard kept running.
+
+- **M6-IB (chain `b74685ddb`, node B):** seeds ended 21:30Z / 21:46Z, **BEST = 5081 for both** (final SELECT700 .9338 /
+  .9392). Soup 21:46–22:15Z (`e50fb4c1…`, max rel. diff 9.0e-7), readout 22:15–22:36Z (P_dev 80.76, T_dev .9656,
+  H_dev2 .5770), slices 22:36–22:44Z, **dev gates 22:44Z: G1–G6 all pass → finalist** (`DEVGATES-20261001T224432Z`).
+  Formal 22:44–23:19Z: CAL698 not adopted (worsened `css_pilot_ece_15`, `typed_dev_brier`) → T = 1; smoke 8 / 8 per
+  panel; typed-final 1,600, css15 6,547, public231 231; autotune added 0; seal `0f79a8af…`; 0.510 GPU-h. mlx-diag
+  23:19–23:28Z (2,275 rows), pushed, scored and paired on node A, pulled 23:32Z: **card −.0020 [−.0118, +.0074]
+  (pass)**. Gates 23:32–23:34Z, overlap, **verdicts 23:34Z** (`VERDICTS-20261001T233349Z`): items 2–7 pass, **item 1
+  FAILS (v3 73.16, +0.80 [−1.59, +2.80] vs A20r)**, beats-AutoJev fails (+1.03 [−1.21, +4.92]); `m6 chain complete`
+  23:33:49Z. Upper bound > 0 → **M6-IB is an Index-path candidate (amendment 5 (a))**; its Index run was due at
+  23:34Z and did not start (no worker).
+- **M6-IBX (chain `d8edcf4e1`, node B; seeds on node D):** pulled 22:36Z (BEST 4375 / 4997, SHA-256 lists equal),
+  soup 22:36–23:03Z (`051eec70…`), readout 23:03–23:24Z (P_dev 78.71, T_dev .9013), slices 23:24–23:33Z, **dev gates
+  23:33Z: G5 FAILS** (PN1 clean gold-no yes Δ **+.0012** [−.0092, +.0109] > 0; the rule is a point estimate ≤ 0);
+  G1–G4 and G6 pass → no finalist, `M6-IBX.SKIP`, chain complete (no finalist) 23:32:59Z.
+- **Contrast guard never acted (bug, found by worker 5):** it waited for a `finalists` key that `m4_contrast` writes
+  only with `--gates`, so M6-IB's `gates/contrast.json` (23:33Z) stayed, and M6-IB2's chain would have stopped at its
+  contrast step. Fix `764f03321` (reads `score_levels`, test added; 148 27B tests pass), mirrored to nodes A–D; **new
+  guard node B PID 3068520** (chains 2769422, 2818836; log `m6/logs/contrast-guard-764f033.log`) moved the file to
+  `contrast-M6-IB-20261002T014456Z.json` at 01:44:56Z; the old guard 2868454 was stopped at 01:45Z. `m6_report
+  devgates` also failed on G6's `{candidate, reference}` `B_dev`; fixed in the same commit.
+- Nothing failed; no stage needed a rerun. Node D GPU4–7 owner files were gone at 20:26–20:27Z (not M6's doing);
+  node C GPU1–7 hold the M16 Index worker's `track=eval-ix1` owners (its runs ended 20:35–21:03Z; idle).
+
+## Running now (worker 5)
+
+- **M6-IB Index path (amendment 5 (a), amendment 6 order):** `m6-index.sh 764f03321… M6-IB stage` 01:46Z (node D
+  package `models/ix1/m6/M6-IB-re876fbe`, manifest `68802e7c…`, identity `e50fb4c1…`, loaded 27,497,508,864, T = 1; 31 /
+  31 listed digests checked by hand because the local script was killed with its tool call after the restage wrote the
+  manifest), `stage-c` 01:54–01:56Z (node C package equal file for file), **parity** on node D GPU4 since 01:51Z,
+  **MLX-DEV2** readout on node D GPU5 since 01:51Z (`private/eval/mlx-dev2/runs/M6-IB`, with the mlx-diag prompts and
+  cache `f474e2e9…`). The Index run (`M6_INDEX_GPUS="d4 d5 d6 d7 c1 c2 c3 c4"`) starts only after the MLX-DEV2 PASS
+  is recorded; node C GPU5–7 are left for the 0.8B / 2B Index worker (b49d1f36).
+- **M6-IB2:** s1 complete 01:46Z (BEST 4135), s2 (node A) at 6,594 / 6,614 at 01:48Z; chain 2769422 waits for the
+  relay. **M6-IB2PN:** 5,200 / 6,886 at 01:48Z, ≈ 10.6 s per update now → ETA ≈ 06:50Z (projection ≈ 19.3 GPU-h per
+  seed, cap 22).
+- **Incident (harmless):** at 01:51Z one tool call ran twice; the first copy started parity and MLX-DEV2, the second
+  stopped at the "log / work dir exists" guards. One parity and one MLX-DEV2 container exist.
 Prereg amendment 4 (`c1eafcc08`, the Index path) and **amendment 5 (COORDINATION 03:40: Index runs only for
 Index-path candidates and the chosen successor, ≤ 40 GPU-h on node C GPU1–7 + node D GPU4–7; release target
 `Decision-2.0-Vega-27B` with the "audited" footnote)** apply from now on.
@@ -291,6 +335,13 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 02:00Z (poll 15, worker 5's first; 01:32–02:00Z): integration merged (fast-forward to `3dd2dc72c`); gap
+  reconstructed (above); guard and reporter fixed (`764f03321`); amendment 6 (`6bbb2512d`); M6-IB's Index path staged on
+  node D and node C, parity and MLX-DEV2 running. Containers: node B M6-IB2-s1 ended, node A M6-IB2-s2 and node D
+  M6-IB2PN-s1 / s2 alive. **GPU-h ≈ 121** (89 at 20:10Z + ≈ 30.4 seed-hours since + ≈ 1.6 chain readouts, slices,
+  formal and mlx-diag); projection ≈ 135 of 140 (M6-IB2PN to ≈ 06:50Z, two chains' tails, three MLX-DEV2 readouts).
+  The chains' own budget check reads only node B receipts and node A relay budgets (22:44Z: "28.535"), so it cannot
+  bind; this file's count is the one to watch. Eval allowance used 0.056 of 40.
 - 20:10Z (poll 14 at 20:02Z): all alive, guard alive. M6-IB 4,554 / 4,427 (s1 at 4452 .9171, BEST stays 3816; ETA ≈
   21:30Z / 21:50Z); M6-IB2 4,502 / 4,508 (ETA ≈ 01:35Z / 01:55Z, node A's seed at 10.1 s per update); M6-IBX 4,157 /
   4,106 (ETA ≈ 22:20Z / 22:30Z); M6-IB2PN 3,094 / 3,080 (ETA ≈ 06:35Z / 06:30Z). Node D disk 737 GB. GPU-h ≈ 89.
