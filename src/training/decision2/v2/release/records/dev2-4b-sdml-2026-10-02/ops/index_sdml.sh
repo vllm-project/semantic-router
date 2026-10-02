@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Decision-2.0-Nox-4B M15 4b-LHA10SDML release (decoder M17), as the Index-first release's index4b.sh: the card's
 # private Index input on node A, built by python -m v2.release.card_index (schema dev2-card-index/1).
-#   runs       every family point of the latest released Index input (BASE; the current 4B revision's, b285e7a1), one
-#              run per scored weights; plus this candidate's kit run
+#   runs       for every tier other than 4B, the family point of the released Index inputs BASE... (first = the
+#              primary: edition, board points and footnote) whose weights are the tier's current Hub main (no single
+#              earlier input holds every current main: the 27B and 2B releases each built theirs before the other
+#              shipped), one run per scored weights; plus this candidate's kit run
 #              (kit index.json of the IX1 run on
 #              exactly these weights: balanced skill, area skills x 100, its SHA-256)
 #   board      the public board snapshot of 2026-09-28 (Space index a5a4aa0a)
@@ -11,11 +13,12 @@
 # card_index.build matches a run to each manifest by model_sha256, so a tier released since that Index input with
 # weights no run scored stops the build. Outputs (private, mode 700): $PRIV/{manifests/,runs.json,
 # decision-index-card.json}; prints hashes only.
-# Usage (node A): bash <mirror>/v2/release/records/dev2-4b-sdml-2026-10-02/ops/index_sdml.sh [BASE]
+# Usage (node A): bash <mirror>/v2/release/records/dev2-4b-sdml-2026-10-02/ops/index_sdml.sh BASE [BASE...]
 set -euo pipefail
 S=$(cd "$(dirname "$0")/../../../../.." && pwd)
 PRIV=/data/dev2/private/release/4bif/SDML
-BASE=${1:-/data/dev2/private/release/4bif/S17/decision-index-card.json}
+[[ $# -ge 1 ]] || { echo "usage: index_sdml.sh BASE [BASE...]" >&2; exit 2; }
+BASES=("$@")
 BOARD=/data/dev2/private/eval/index021/space/index-v0.2.1-7cdcea3d.json
 BOARD_SHA=a5a4aa0a2cce1520
 HFPY=/data/dev2/tools/hf-cli/bin/python
@@ -45,12 +48,22 @@ for tier, codename in (("0.6B", "Kai"), ("0.8B", "Eos"), ("2B", "Sol"), ("9B", "
 (out / "mains.json").write_text(json.dumps(mains, indent=1, sort_keys=True) + "\n")
 print(json.dumps({t: [v["revision"][:8], v["identity"][:12]] for t, v in mains.items()}))
 PY
-python3 - "$BASE" "$PRIV" <<'PY'
+python3 - "$PRIV" "${BASES[@]}" <<'PY'
 import hashlib, json, sys
 from pathlib import Path
 from v2.release import card_index
-base = card_index.load(Path(sys.argv[1]))
-priv = Path(sys.argv[2])
+priv = Path(sys.argv[1])
+bases = [card_index.load(Path(b)) for b in sys.argv[2:]]
+base = bases[0]
+mains = json.loads((priv / "manifests" / "mains.json").read_text())
+family = []
+for tier, main in sorted(mains.items()):
+    points = [p for b in bases for p in b["family"] if p["tier"] == tier and p["model_sha256"] == main["identity"]]
+    assert points, f"no released Index input scored the {tier} main {main['revision'][:8]}"
+    assert all(b["edition"] == base["edition"] for b in bases)
+    family.append(points[0])
+family += [p for p in base["family"] if p["tier"] == "4B"]
+(priv / "family.json").write_text(json.dumps(family, sort_keys=True) + "\n")
 receipt = json.loads((priv / "receipt.json").read_text())
 manifest = json.loads((priv / "package-manifest.json").read_text())
 identity = manifest["identity"]["model_sha256"]
@@ -62,7 +75,7 @@ runs = {
         "model_sha256": p["model_sha256"], "edition": base["edition"], "balanced_skill": p["balanced_skill"],
         "areas": p["areas"], "index_sha256": p["kit_index_sha256"],
     }
-    for p in base["family"]
+    for p in family
 }
 runs["candidate-4B"] = {
     "model_sha256": identity, "edition": kit["edition"], "balanced_skill": kit["scores"]["balanced_skill"],
@@ -70,15 +83,15 @@ runs["candidate-4B"] = {
     "index_sha256": hashlib.sha256((priv / "kit-index.json").read_bytes()).hexdigest(),
 }
 (priv / "runs.json").write_text(json.dumps(runs, sort_keys=True) + "\n")  # card_index reads one JSON line
-print(json.dumps({"base_index": base["sha256"][:12], "runs": len(runs)}))
+print(json.dumps({"bases": [b["sha256"][:12] for b in bases], "runs": len(runs)}))
 PY
 python3 -m v2.release.card_index --runs "$PRIV/runs.json" --board "$BOARD" --snapshot 2026-09-28 \
   --manifests "$PRIV/manifests" --out "$PRIV/decision-index-card.json"
-python3 - "$BASE" "$PRIV/decision-index-card.json" <<'PY'
+python3 - "${BASES[0]}" "$PRIV/decision-index-card.json" "$PRIV/family.json" <<'PY'
 import json, sys
 from v2.release import card_index
 old, new = (card_index.load(p) for p in sys.argv[1:3])
-same = {p["tier"]: p for p in old["family"]}
+same = {p["tier"]: p for p in json.load(open(sys.argv[3]))}
 changed = [p["tier"] for p in new["family"] if p != same.get(p["tier"])]
 assert changed == ["4B"] or not (set(changed) - {"4B"}), f"family points other than 4B changed: {changed}"
 assert new["decision1"] == old["decision1"] and new["entrants"] == old["entrants"], "board points changed"
