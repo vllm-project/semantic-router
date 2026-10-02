@@ -20,9 +20,9 @@
 > | 0.6B | `vllm-sr/Decision-2.0-Kai-0.6B` | `51b7b474`（阶段 A 运行时；权重同 2.0 首发） |
 > | 0.8B | `vllm-sr/Decision-2.0-Eos-0.8B` | `1d380452`（M16 `08b-RA-a75`） |
 > | 2B | `vllm-sr/Decision-2.0-Sol-2B` | `6a62b319`（阶段 A 运行时；M15 `2b-RASDML`） |
-> | 4B | `vllm-sr/Decision-2.0-Nox-4B` | `d55528d1`（M17 跨分支平均 `4b-SDMLxALL`，2026-10-02 23:34 发布） |
+> | 4B | `vllm-sr/Decision-2.0-Nox-4B` | `c60d3b5c`（半学习率 `4b-LHS17IB4-lrh`，43.30，同尺寸第 1；2026-10-03 05:41 发布） |
 > | 9B | `vllm-sr/Decision-2.0-Lux-9B` | `f3122c7c`（M10 `KIB4-a40`，2026-10-02 23:30 发布） |
-> | 27B | `vllm-sr/Decision-2.0-Vega-27B` | `5c85c127`（跨分支平均 `M6-IBxIB2-m50`，56.47，全球第 3；2026-10-03 03:02 发布，03:03 转为 public） |
+> | 27B | `vllm-sr/Decision-2.0-Vega-27B` | `9b067a95`（阶段 A 运行时加可选共享上下文开关，只改运行时；权重同 `5c85c127` = `M6-IBxIB2-m50`，56.47，全球第 3） |
 >
 > 下表各行保留了历史上的旧名字和旧版本号，仅作记录。
 
