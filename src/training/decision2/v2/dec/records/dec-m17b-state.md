@@ -5,6 +5,48 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17`. M
 (public since 2026-10-03 01:17 UTC+8). Index values stay private (node private stores and
 `decision2-program/private/m17b/`); this file has none. Times UTC.
 
+## 2026-10-02 22:15Z — HANDOFF (continuation needed): wave 7 running
+
+**Current release:** `vllm-sr/Decision-2.0-Nox-4B@c60d3b5c` = `4b-LHS17IB4-lrh` (public). The next successor is gated
+against `AF-4b-LHS17IB4-lrh-bf16`'s run (results `2d1f1b03…`; node A `ix1/runs/`, node B `ix1/af/refs/`).
+
+**Running (mine):**
+
+- `AF-4b-LRHxXALL-m50-bf16` (BF16 `16baee3d…`) runs on node B GPU4 / 6 under `ixchain.sh`, from mirror
+  `cb9bc22b7` with reference `ix1/af/refs/AF-4b-LHS17IB4-lrh-bf16`. It started 22:08Z and should end around 23:20Z,
+  followed by its bootstraps. The chain releases both leases (`track=eval-ix1`) at its end.
+
+**Leases held:** node B GPU4, GPU6 (`track=eval-ix1`, 4B owner) for that chain only. No others.
+
+**Next commands** (worktree `vllm-sr-dev2-dec-m17`; `H` = the mirrored head):
+
+1. Read the result:
+   `AF_LOCAL=~/code/decision2-program/private/m17b bash src/training/decision2/v2/af/ops/af-ix.sh $H fetch b 4b-LRHxXALL-m50`,
+   then look at `paired-boot-full-vs-ref.json` (headline `ci95[0]` > 0 passes).
+2. Low-LR arms. The factory was asked for the two-seed soups on node F (COORDINATION 06:15). `4b-SDMLIB4-lrh` and
+   `4b-SDMLIB4W2` seeds are DONE on node C; `4b-LHS17ML-lrh`, `4b-LHS17IB4X-lrh`, `4b-SDML-lrh` and
+   `4b-LHS17IB4-lrq` started 21:27Z on node C GPU1–7.
+   - Read each two-seed soup once: stage on F with `af-ix.sh $H stage f <name>`, `pkgcopy` to the lane node, then
+     `ixchain.sh` with the reference above. Their IX1 entries already exist (`a4bed246e`); a new name needs a launcher
+     commit on the factory's 4B line.
+3. `4b-LRHxALL` = uniform soup of the half-LR arm soups that exist by then (wave 7 amendment 1). Build it on F with
+   `af-soup.sh`, then measure it.
+4. Release path for a passing candidate: `dev2-4b-w6-2026-10-03/ops/` is per-candidate (`CAND`). Copy it to a new
+   record `dev2-4b-w7-…` with `CURRENT` = `c60d3b5c`:
+   - `gate_sha256` = `sha256(release/receipts/gate.json)` of this release;
+   - decision `40317389…`;
+   - manifest `0736f6ca…`;
+   - weights `1cef169d…`;
+   - `BASE_SPEC` = `specs/dev2-4b-lhs17ib4-lrh.json`;
+   - `CURRENT_RUN` = `formal/m17/m17-4b-LHS17IB4-lrh`;
+   - `PURGE_NODE_COPY` = node A `/data/dev2/runs/release/dev2-4b-lhs17ib4-lrh-release-20261002T213803Z/package/Decision-2.0-Nox-4B`.
+
+   Also fix `origin.summary` (it still says "three seeds"). The formal path is `m17b-formal.sh`: run `mlx` from the
+   SAME mirror as `formal`. Before `--release` the GPU lease must be `track=eval-ix1` for the IX1 gate, and the
+   download's IX1 `-hub` entry is committed after the upload, then run `--post WORK`.
+
+**Budget:** about 24 of 40 GPU-h used.
+
 ## 2026-10-02 22:05Z — Nox-4B `c60d3b5c` RELEASED (`4b-LHS17IB4-lrh`); wave 7 (low-LR arms) next
 
 - **`vllm-sr/Decision-2.0-Nox-4B@c60d3b5c` is `main` and public.**
