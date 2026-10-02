@@ -12,7 +12,7 @@
 > | --- | --- | --- |
 > | 0.6B | `Decision-2.0-Kai-0.6B` | `479ea8d1`（横幅 A） |
 > | 0.8B | `Decision-2.0-Eos-0.8B` | `3de61185`（M16 `08b-RA-a75`，2026-10-02 12:44 发布，横幅 A） |
-> | 2B | `Decision-2.0-Sol-2B` | `8ed41433`（横幅 A；新权重发布中） |
+> | 2B | `Decision-2.0-Sol-2B` | `1b7c47ea`（M15 `2b-RASDML`，2026-10-02 16:20 发布，横幅 A） |
 > | 4B | `Decision-2.0-Nox-4B` | `b285e7a1`（M17 `4b-LHS17SD`，2026-10-02 13:4x 发布，横幅 A） |
 > | 9B | `Decision-2.0-Lux-9B` | `7195360d`（K-a13IB，横幅 A） |
 > | 27B | `Decision-2.0-Vega-27B` | `b689ee66`（A20r，横幅 A；M6-IB 待发布） |
