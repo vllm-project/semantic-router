@@ -90,16 +90,20 @@ CANDS = {
         "fp32": "255021e0a3f2af49d41ffbd3425d541e6d7749b8cd95a8e8a7b764a81e8a037d",
         "vendor": "c2610143be2ff302c080a5cdfe093e41d173f8da",
         "what": "the decoder M13 arm " + LH_ARM + "; soup of two seeds",
-        "exposure": f"{FR}/m16/exposure-4b-LHA10SD-a75.json",
+        "exposure": f"{FR}/m13/exposure-4b-LHA10SD.json",
     },
 }
-# The candidate with the largest Index-gain lower bound (private bootstraps; set when the runs are scored).
-CHOICE = None
+# The release choice: M13 4b-LHA10SD, the first 4B candidate whose private Index lower bound vs the current release was
+# above 0 (its FP32 run, dec M15 part A); it ships as its BF16 copy, whose own Index run is the IF1 evidence.
+# Progressive-release directive (COORDINATION 2026-10-02 11:35 UTC+8): release as soon as a frozen candidate
+# qualifies; LHA10UP / a75 / a50 follow as successors against this release.
+CHOICE = "SDB"
 DECIDED_BY = (
     "coordinator (parent agent), Decision 2.0 program: the user's Index-first rule of 2026-10-02 09:55 UTC+8 "
     "(release gate = a significantly positive private Index delta vs the current release; integrity checks; "
-    "references not blocking; among candidates the largest Index-gain lower bound), applied to the 4B tier by the "
-    "4B Index-first release worker 5e7b8132 under the coordinator's assignment of 2026-10-02 09:55"
+    "references not blocking; among candidates ready at the same time the largest Index-gain lower bound) and the "
+    "progressive-release directive of 2026-10-02 11:35 UTC+8 (release 4b-LHA10SD now if its lower bound vs LH is > 0 "
+    "and the integrity checks pass), applied to the 4B tier by the 4B Index-first release worker 5e7b8132"
 )
 PREPARED_BY = "Decision 2.0 release engineering, 4B Index-first worker 5e7b8132 (worktree vllm-sr-dev2-4b-indexfirst)"
 
@@ -308,8 +312,8 @@ def decision(s: dict, cand: str) -> dict:
         "rewrite_history=False (hf_headroom.sh first). The repository stays private and in the private collection.",
         "rationale": "Index-first rule (user 2026-10-02 09:55 UTC+8). IF1: the private Index paired bootstrap of "
         "these exact weights minus the current revision's has a 95% lower bound > 0 (2,000 replicates; values in "
-        "private files only; evidence_sha256.index_first_bootstrap), the largest lower bound among the 4B "
-        "candidates. R3: types "
+        "private files only; evidence_sha256.index_first_bootstrap); the first 4B candidate to qualify "
+        "(progressive-release directive 2026-10-02 11:35 UTC+8). R3: types "
         + ", ".join(
             f"{k} {v}" for k, v in gate._verdicts(load(profile["types"])).items()
         )
