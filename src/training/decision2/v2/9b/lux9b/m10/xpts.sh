@@ -7,7 +7,7 @@
 # The output is soup/<NAME>/build/<NAME> with DONE, members.txt and the build log, as post.sh writes it, so ix.sh ship
 # takes it. A failed build writes soup/<NAME>/FAILED and is never rerun.
 #
-#   link AFNAME  (node A) the arm factory's built point runs/af/9b/soup/AFNAME/build/AFNAME, hard-linked (used read-only)
+#   link AFNAME  (node A or B) the arm factory's built point runs/af/9b/soup/AFNAME/build/AFNAME, hard-linked (read-only use)
 #                as soup/AF-AFNAME/build/AF-AFNAME with equal SHA-256 lists; its MODEL_SHA256 is copied next to it.
 #                m10/formal.sh and this script then take AF-AFNAME like any M10 point. M10_LINK_AS=<name> links it
 #                under that M10 name instead (amendment 8: a factory point that M10 measures as M10-<name>-bf16).
@@ -21,7 +21,7 @@ M=/data/dev2/runs/9b/m10
 OPS=/data/dev2/src/$SRC/src/training/decision2/v2/9b/lux9b/m10
 log() { echo "$(date -u +%FT%TZ) xpts-$NAME $*" | tee -a "$M/OPERATIONS.log"; }
 if [ "$MODE" = link ]; then
-  [ "$NODE" = a ] || { echo "arm-factory 9B points are on node A" >&2; exit 2; }
+  [[ "$NODE" == [ab] ]] || { echo "arm-factory 9B points are on node A (batch 1) or node B (batches 2-3)" >&2; exit 2; }
   as=${M10_LINK_AS:-AF-$NAME}
   af=/data/dev2/runs/af/9b/soup/$NAME out=$M/soup/$as
   [ -f "$af/DONE" ] && [ -f "$af/MODEL_SHA256" ] && [ -f "$af/build/$NAME/decision_config.json" ] \
