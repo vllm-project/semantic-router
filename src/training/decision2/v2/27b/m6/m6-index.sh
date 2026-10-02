@@ -28,7 +28,9 @@
 #            seeds ended, under an eval-ix1 owner naming the arm), bN = node B GPU0 / 1 / 5 (27B's idle training leases,
 #            set aside as owner.m6-set-aside-<UTC>), cN = node C GPU N in 1-7, eN = node E GPU N in 0-3 or 6-7 (never
 #            GPU4-5), a bare N = node D), the i-th listed shard on entry i mod n; node B / C / E need stage-b / stage-c /
-#            stage-e, each gets node D's parity record (SHA-256 equal); M6_INDEX_STAGGER (s) passes through
+#            stage-e, each gets node D's parity record (SHA-256 equal); M6_INDEX_STAGGER (s) passes through, and so
+#            does M6_INDEX_AFTER (a shard of an earlier launch every listed GPU first waits for); node B also takes
+#            released owners of other tracks (set aside the same way)
 #   status   per node and shard: records written, ended, exit code; GPU-h so far
 #   collect  after node B's / C's / E's shards ended 0: their result files (no Triton cache, no home) and launcher
 #            records -> node D's run directory, SHA-256 lists equal; never overwrites a node D shard
@@ -299,20 +301,22 @@ case "$STAGE" in
       read -r -a bg <<< "$(grep '^b ' <<< "$plan" | cut -d' ' -f3-)"
       for g in "${bg[@]}"; do
         onb "f=/data/dev2/leases/gpu$g.lock/owner; [ -s \$f ] || exit 0; grep -qx 'track=eval-ix1' \$f && exit 0; \
-          grep -qx 'track=27b' \$f && grep -qx 'status=reserved-idle' \$f || { echo 'node B gpu$g: not an idle 27B lease' >&2; exit 3; }; \
-          mv \$f /data/dev2/leases/gpu$g.lock/owner.m6-set-aside-\$(date -u +%Y%m%dT%H%M%SZ) && echo 'node B gpu$g: 27B owner set aside'" ||
+          { grep -qx 'track=27b' \$f && grep -qx 'status=reserved-idle' \$f; } || grep -q '^status=released' \$f || \
+          { echo 'node B gpu$g: neither an idle 27B lease nor released' >&2; exit 3; }; \
+          mv \$f /data/dev2/leases/gpu$g.lock/owner.m6-set-aside-\$(date -u +%Y%m%dT%H%M%SZ) && echo 'node B gpu$g: owner set aside'" ||
           exit 3
       done
     fi
-    stagger=${M6_INDEX_STAGGER:-300}
+    stagger=${M6_INDEX_STAGGER:-300} after=${M6_INDEX_AFTER:-}
     [[ "$stagger" =~ ^[0-9]{1,4}$ ]] || { echo "M6_INDEX_STAGGER: seconds, not '$stagger'" >&2; exit 2; }
+    [[ "$after" =~ ^[0-7]?$ ]] || { echo "M6_INDEX_AFTER: one shard index, not '$after'" >&2; exit 2; }
     while read -r node shards gpus; do  # ssh reads stdin: without < /dev/null it eats the plan's other lines
-      "on$node" "mkdir -p $R/logs; M6_INDEX_STAGGER=$stagger setsid nohup bash $S/v2/27b/m6/m6-index-run.sh $SHA $ARM $node $shards $gpus \
-        > $R/logs/m6-index-$ARM-$node.log 2>&1 < /dev/null & echo node $node m6-index-run \$!: shards $shards on GPU $gpus" \
-        < /dev/null
+      "on$node" "mkdir -p $R/logs; M6_INDEX_STAGGER=$stagger M6_INDEX_AFTER=$after setsid nohup bash \
+$S/v2/27b/m6/m6-index-run.sh $SHA $ARM $node $shards $gpus >> $R/logs/m6-index-$ARM-$node.log 2>&1 < /dev/null & \
+echo node $node m6-index-run \$!: shards $shards on GPU $gpus" < /dev/null
     done <<< "$plan"
     sleep 20
-    while read -r node _; do "on$node" "head -n 3 $R/logs/m6-index-$ARM-$node.log" < /dev/null; done <<< "$plan" ;;
+    while read -r node _; do "on$node" "tail -n 3 $R/logs/m6-index-$ARM-$node.log" < /dev/null; done <<< "$plan" ;;
   status)
     for node in d b c e; do
       "on$node" "test -d $R/runs/$ARM" || continue

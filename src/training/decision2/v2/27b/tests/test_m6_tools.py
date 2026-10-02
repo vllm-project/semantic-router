@@ -952,6 +952,15 @@ class M6ScriptTest(unittest.TestCase):
         )
         self.assertEqual(out.returncode, 2)
         self.assertIn("M6_INDEX_STAGGER", out.stderr)
+        env = dict(os.environ, M6_INDEX_DRY="1", M6_INDEX_AFTER="8")
+        out = subprocess.run(
+            ["bash", str(M6 / "m6-index-run.sh"), "0" * 40, "M6-IB", "d", "5", "0"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("M6_INDEX_AFTER", out.stderr)
         out = self.index_run("d", "0,1", "4", dry=False)
         self.assertEqual(out.returncode, 2)
         self.assertIn("missing mirror", out.stderr)
@@ -1059,9 +1068,9 @@ class M6ScriptTest(unittest.TestCase):
             self.assertIn("m6-index-run.sh " + "0" * 40 + " M6-IB d 0,3,6 4", calls)
             self.assertIn("m6-index-run.sh " + "0" * 40 + " M6-IB c 1,4,7 1", calls)
             self.assertIn("m6-index-run.sh " + "0" * 40 + " M6-IB e 2,5 0", calls)
-            self.assertIn("M6_INDEX_STAGGER=120 setsid", calls)
+            self.assertIn("M6_INDEX_STAGGER=120 M6_INDEX_AFTER= setsid", calls)
             self.assertIn(
-                "head -n 3 /data/dev2/private/eval/index021/ix1/logs/m6-index-M6-IB-c.log",
+                "tail -n 3 /data/dev2/private/eval/index021/ix1/logs/m6-index-M6-IB-c.log",
                 calls,
             )
 
