@@ -51,6 +51,9 @@
 #            IF3 evidence; prints the planted control only)
 #   audit    once for M6 (any ARM; CPU): v2.eval.ix1.contamination of a20ib12pn (it contains every arm's rows) and
 #            a20ib1x against the panel -> ix1/runs/m6-audit (backs the card's "audited at row level" footnote)
+#   hold     M6_INDEX_GPUS (dN / bN / eN) that are idle and free (no owner, released, or an eval-ix1 run whose 8 shards
+#            ended) get a 27B reserved-idle owner naming ARM, so other tracks' launchers refuse them until run / parity
+#            set it aside; unhold releases the holds of ARM
 #   release  owner files that launch.sh wrote for ARM on node D GPU0-7, node B GPU0 / 1 / 5, node C GPU1-7 and node E
 #            GPU0-3 / 6-7 -> status released, or the set-aside 27B owner back (no ARM container running)
 set -euo pipefail
@@ -295,30 +298,91 @@ case "$STAGE" in
     until ond "test -f $R/logs/m6-audit-$ARM.exit"; do sleep 60; done
     ond "echo exit \$(cat $R/logs/m6-audit-$ARM.exit); tail -n 3 $R/logs/m6-audit-$ARM.log"
     ond "python3 -c 'import json,sys; a=json.load(open(sys.argv[1])); p=a[\"planted_control\"]; print(\"planted control\", p[\"found\"], \"/\", p[\"planted\"]); sys.exit(0 if p[\"found\"] == p[\"planted\"] and not p.get(\"missed\") else 1)' $A7/audit.json" ;;
-  parity)  # M6_PARITY_GPU: dN (node D, default d4; a bare N = node D) or eN (node E after stage-e; the parity record
-    # is then copied to node D, whose record run / score read)
+  parity)  # M6_PARITY_GPU: dN (node D, default d4; a bare N = node D), eN or bN (node E / B after stage-e / stage-b;
+    # the parity record is then copied to node D, whose record run / score read); a 27B hold on the GPU steps aside
     pg=${M6_PARITY_GPU:-d4}
     [[ "$pg" =~ ^[0-7]$ ]] && pg=d$pg
-    [[ "$pg" =~ ^(d[0-7]|e[0-367])$ ]] ||
-      { echo "M6_PARITY_GPU: node D GPU0-7 (dN) or node E GPU0-3 / 6-7 (eN), not '$pg'" >&2; exit 2; }
+    [[ "$pg" =~ ^(d[0-7]|e[0-367]|b[015])$ ]] ||
+      { echo "M6_PARITY_GPU: node D GPU0-7 (dN), node E GPU0-3 / 6-7 (eN) or node B GPU0 / 1 / 5 (bN), not '$pg'" >&2
+        exit 2; }
     pn=${pg:0:1} pgpu=${pg:1}
     has_mirror "$pn"
     "on$pn" "test -f $PKG/MODEL_MANIFEST.json" || { echo "node ${pn^^} has no restaged package (stage / stage-e)" >&2; exit 3; }
     ond "test ! -e $R/parity/$ARM/parity.json" || { echo "parity of $ARM already ran" >&2; exit 3; }
     "on$pn" "test ! -e $R/logs/m6-parity-$ARM.exit" || { echo "parity of $ARM already ran on node ${pn^^}" >&2; exit 3; }
+    "on$pn" "f=/data/dev2/leases/gpu$pgpu.lock/owner; [ -s \$f ] || exit 0; grep -qx 'track=eval-ix1' \$f && exit 0; \
+      { grep -qx 'track=27b' \$f && grep -qx 'status=reserved-idle' \$f; } || grep -q '^status=released' \$f || \
+      { echo 'node ${pn^^} gpu$pgpu: neither an idle 27B lease nor released' >&2; exit 3; }; \
+      mv \$f /data/dev2/leases/gpu$pgpu.lock/owner.m6-set-aside-\$(date -u +%Y%m%dT%H%M%SZ)" || exit 3
     "on$pn" "mkdir -p $R/logs; setsid nohup bash -c 'cd $S && bash v2/eval/ix1/launch.sh parity --src $M --model $ARM \
       --gpu $pgpu --run $R/parity/$ARM --rows $R/panel-8/compat-86.gold-free.jsonl.gz; \
       echo \$? > $R/logs/m6-parity-$ARM.exit' > $R/logs/m6-parity-$ARM.log 2>&1 < /dev/null &"
     echo "$(date -u +%FT%TZ) $ARM parity gate started on node ${pn^^} GPU$pgpu (two 27B passes, ~10 min)"
     until "on$pn" "test -f $R/logs/m6-parity-$ARM.exit"; do sleep 60; done
     "on$pn" "cat $R/logs/m6-parity-$ARM.exit; python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps({k: d[k] for k in (\"pass\", \"requests\", \"statuses\", \"max_abs_dp\")})); sys.exit(0 if d[\"pass\"] else 1)' $R/parity/$ARM/parity.json"
-    if [ "$pn" = e ]; then
-      onb "$XFER root@${E#*@} 'cat $R/parity/$ARM/parity.json' | \
+    if [ "$pn" != d ]; then
+      [ "$pn" = e ] && from="$XFER root@${E#*@}" || from="bash -c"
+      onb "$from 'cat $R/parity/$ARM/parity.json' | \
         $XFER root@${D#*@} 'umask 077; mkdir -p $R/parity/$ARM && cat > $R/parity/$ARM/parity.json'"
-      [ "$(one "sha256sum < $R/parity/$ARM/parity.json")" = "$(ond "sha256sum < $R/parity/$ARM/parity.json")" ] ||
-        { echo "node D's copy of the parity record differs from node E's" >&2; exit 3; }
-      echo "parity record copied node E -> node D (SHA-256 equal)"
+      [ "$("on$pn" "sha256sum < $R/parity/$ARM/parity.json")" = "$(ond "sha256sum < $R/parity/$ARM/parity.json")" ] ||
+        { echo "node D's copy of the parity record differs from node ${pn^^}'s" >&2; exit 3; }
+      echo "parity record copied node ${pn^^} -> node D (SHA-256 equal)"
     fi ;;
+  hold | unhold)  # hold: each idle GPU of M6_INDEX_GPUS (rocm-smi use <= 5%, VRAM <= 2 GiB) whose owner is absent, a
+    # released one or an eval-ix1 run with every shard ended and none of its containers running gets a 27B
+    # reserved-idle owner naming ARM (COORDINATION 2026-10-02 15:50: node D GPU0-7, node E GPU0-3 / 6-7 and node B
+    # GPU0 / 1 / 5 are 27B's); the earlier owner is kept as owner.prev-27b-hold-<UTC>. run and parity set a hold aside.
+    # unhold: a 27B hold of ARM on those GPUs -> status released
+    read -r -a entries <<< "${M6_INDEX_GPUS:-}"
+    [ ${#entries[@]} -ge 1 ] || { echo "M6_INDEX_GPUS lists no GPU" >&2; exit 2; }
+    for e in "${entries[@]}"; do
+      [[ "$e" =~ ^(d[0-7]|b[015]|e[0-367])$ ]] ||
+        { echo "M6_INDEX_GPUS: node D GPU0-7, node B GPU0 / 1 / 5 or node E GPU0-3 / 6-7, not '$e'" >&2; exit 2; }
+    done
+    for e in "${entries[@]}"; do
+      node=${e:0:1} g=${e:1}
+      if [ "$STAGE" = unhold ]; then
+        "on$node" "f=/data/dev2/leases/gpu$g.lock/owner; grep -qx 'purpose=27B Index hold for $ARM' \$f 2> /dev/null || \
+          { echo 'node ${node^^} gpu$g: no 27B hold of $ARM'; exit 0; }; \
+          printf 'track=27b\nstatus=released (27B Index hold of $ARM ended)\nlast_job_end_utc=%s\n' \
+          \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" > \$f; echo 'node ${node^^} gpu$g: released'" < /dev/null
+        continue
+      fi
+      "on$node" "python3 - $node $g $ARM" <<'EOF' || true
+import glob, json, os, subprocess, sys, time
+node, g, arm = sys.argv[1].upper(), sys.argv[2], sys.argv[3]
+lock = f"/data/dev2/leases/gpu{g}.lock"
+owner = f"{lock}/owner"
+card = json.loads(subprocess.run(["rocm-smi", "--showuse", "--showmeminfo", "vram", "--json"],
+                                 capture_output=True, text=True, check=True).stdout)[f"card{g}"]
+if float(card["GPU use (%)"]) > 5 or int(card["VRAM Total Used Memory (B)"]) > 2 * 2**30:
+    sys.exit(print(f"node {node} gpu{g}: busy"))
+text = open(owner).read() if os.path.exists(owner) else ""
+lines = set(text.split("\n"))
+released = any(line.startswith("status=released") for line in lines)
+if f"purpose=27B Index hold for {arm}" in lines:
+    sys.exit(print(f"node {node} gpu{g}: already held for {arm}"))
+if text.strip() and "track=eval-ix1" in lines and not released:
+    run = next((line.split("=", 1)[1] for line in lines if line.startswith("run_dir=")), "")
+    shards = glob.glob(f"{run}/shard-*")  # panel-8: a run is over once its 8 shards have ended
+    open_shards = [w for w in shards if not os.path.exists(f"{w}/end_epoch")]
+    names = subprocess.run(["docker", "ps", "--format", "{{.Names}}"], capture_output=True, text=True).stdout
+    tag = "ix1-" + os.path.basename(run).lower().replace(".", "_") + "-"
+    if not run or len(shards) < 8 or open_shards or any(name.startswith(tag) for name in names.split()):
+        sys.exit(print(f"node {node} gpu{g}: its eval-ix1 run {os.path.basename(run) or '?'} is in progress"))
+elif text.strip() and "track=eval-ix1" not in lines and not released:
+    track = next((line for line in lines if line.startswith("track=")), "track=?")
+    sys.exit(print(f"node {node} gpu{g}: leased ({track})"))
+stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+os.makedirs(lock, exist_ok=True)
+if text.strip():
+    os.replace(owner, f"{owner}.prev-27b-hold-{stamp}")
+with open(owner, "w") as out:
+    out.write(f"track=27b\nstatus=reserved-idle\npurpose=27B Index hold for {arm}\n"
+              f"start_utc={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}\n")
+print(f"node {node} gpu{g}: held for {arm}")
+EOF
+    done ;;
   run)
     plan=$(placement) || exit 2
     has_mirror d
@@ -340,16 +404,15 @@ case "$STAGE" in
       [ "$(ond "sha256sum < $R/parity/$ARM/parity.json")" = "$("on$node" "sha256sum < $R/parity/$ARM/parity.json")" ] ||
         { echo "node ${node^^}'s parity record differs from node D's" >&2; exit 3; }
     done
-    if grep -q '^b ' <<< "$plan"; then  # 27B's own idle node B leases (track=27b) step aside, as on node D GPU0-1
-      read -r -a bg <<< "$(grep '^b ' <<< "$plan" | cut -d' ' -f3-)"
-      for g in "${bg[@]}"; do
-        onb "f=/data/dev2/leases/gpu$g.lock/owner; [ -s \$f ] || exit 0; grep -qx 'track=eval-ix1' \$f && exit 0; \
+    while read -r node _ gpus; do  # 27B's idle leases (track=27b, reserved-idle; e.g. a hold) and released owners step aside
+      for g in $gpus; do
+        "on$node" "f=/data/dev2/leases/gpu$g.lock/owner; [ -s \$f ] || exit 0; grep -qx 'track=eval-ix1' \$f && exit 0; \
           { grep -qx 'track=27b' \$f && grep -qx 'status=reserved-idle' \$f; } || grep -q '^status=released' \$f || \
-          { echo 'node B gpu$g: neither an idle 27B lease nor released' >&2; exit 3; }; \
-          mv \$f /data/dev2/leases/gpu$g.lock/owner.m6-set-aside-\$(date -u +%Y%m%dT%H%M%SZ) && echo 'node B gpu$g: owner set aside'" ||
-          exit 3
+          { echo 'node ${node^^} gpu$g: neither an idle 27B lease nor released' >&2; exit 3; }; \
+          mv \$f /data/dev2/leases/gpu$g.lock/owner.m6-set-aside-\$(date -u +%Y%m%dT%H%M%SZ) && \
+          echo 'node ${node^^} gpu$g: owner set aside'" < /dev/null || exit 3
       done
-    fi
+    done <<< "$plan"
     stagger=${M6_INDEX_STAGGER:-300} after=${M6_INDEX_AFTER:-}
     [[ "$stagger" =~ ^[0-9]{1,4}$ ]] || { echo "M6_INDEX_STAGGER: seconds, not '$stagger'" >&2; exit 2; }
     [[ "$after" =~ ^[0-7]?$ ]] || { echo "M6_INDEX_AFTER: one shard index, not '$after'" >&2; exit 2; }

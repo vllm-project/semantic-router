@@ -1097,6 +1097,7 @@ class M6ScriptTest(unittest.TestCase):
                 "#!/usr/bin/env bash\n"
                 f'cmd="${{@: -1}}"; echo "$cmd" >> {log}; cat > /dev/null\n'
                 'case "$cmd" in "test -f "*PACKAGE.json) exit 1 ;; '
+                '"test -f "*soup_manifest.json) exit 0 ;; '
                 "*rank*soup_manifest.json) echo 256 ;; "
                 f"*soup_manifest.json) echo {soup} ;; *) echo ok ;; esac\n"
             )
@@ -1151,7 +1152,8 @@ class M6ScriptTest(unittest.TestCase):
             env, log = self.fake_nodes(
                 tmp,
                 [
-                    ('"test -f "*PACKAGE.json', "''; exit 1"),
+                    ('"test -f "*PACKAGE.json', "> /dev/null; exit 1"),
+                    ('"test -f "*soup_manifest.json', "> /dev/null"),
                     ("*rank*soup_manifest.json", "512"),
                     ("*soup_manifest.json", soup),
                 ],
@@ -1171,7 +1173,8 @@ class M6ScriptTest(unittest.TestCase):
             env, _ = self.fake_nodes(
                 tmp,
                 [
-                    ('"test -f "*PACKAGE.json', "''; exit 1"),
+                    ('"test -f "*PACKAGE.json', "> /dev/null; exit 1"),
+                    ('"test -f "*soup_manifest.json', "> /dev/null"),
                     ("*rank*soup_manifest.json", "abc"),
                     ("*soup_manifest.json", soup),
                 ],
@@ -1189,7 +1192,7 @@ class M6ScriptTest(unittest.TestCase):
     def test_index_parity_gpu_and_score_base_checks(self):
         with tempfile.TemporaryDirectory() as tmp:
             env, log = self.fake_nodes(tmp, [])
-            for gpu in ("e4", "e5", "c1", "d8", "b0"):
+            for gpu in ("e4", "e5", "c1", "d8", "b2"):
                 with self.subTest(gpu=gpu):
                     out = subprocess.run(
                         [
@@ -1224,10 +1227,57 @@ class M6ScriptTest(unittest.TestCase):
                     self.assertEqual(out.returncode, 2)
                     self.assertIn("M6_INDEX_BASE", out.stderr)
 
+    def test_index_hold_and_xarm_argument_checks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env, log = self.fake_nodes(tmp, [])
+            for gpus in ("", "c1", "e4", "b2", "d8"):
+                with self.subTest(gpus=gpus):
+                    out = subprocess.run(
+                        [
+                            "bash",
+                            str(M6 / "m6-index.sh"),
+                            "0" * 40,
+                            "M6-IBxIB2-m50",
+                            "hold",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        stdin=subprocess.DEVNULL,
+                        env=dict(env, M6_INDEX_GPUS=gpus),
+                    )
+                    self.assertEqual(out.returncode, 2)
+                    self.assertIn("M6_INDEX_GPUS", out.stderr)
+            out = subprocess.run(
+                ["bash", str(M6 / "m6-index.sh"), "0" * 40, "M6-IBxIB2-m50", "unhold"],
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                env=dict(env, M6_INDEX_GPUS="d5 e0 b1"),
+            )
+            self.assertEqual(out.returncode, 0, out.stderr)
+            self.assertEqual(
+                log.read_text().count("27B Index hold for M6-IBxIB2-m50"), 3
+            )
+        for args, message in (
+            (["abc", "M6-IBxIB2-m50", "1"], "full commit SHA"),
+            (["0" * 40, "M6-IB", "1"], "bad NAME"),
+            (["0" * 40, "M6-IBxIB2-m50", "2"], "not an M6 node B GPU"),
+            (["0" * 40, "M7-IB124ML", "1"], "missing mirror"),
+        ):
+            with self.subTest(args=args):
+                out = subprocess.run(
+                    ["bash", str(M6 / "m6-xarm.sh"), *args],
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(out.returncode, 2)
+                self.assertIn(message, out.stderr)
+
     def test_index_parity_on_node_e_copies_the_record_to_node_d(self):
         with tempfile.TemporaryDirectory() as tmp:
             env, log = self.fake_nodes(
-                tmp, [('"test ! -e "*', "''"), ("*sha256sum*parity.json", "same")]
+                tmp,
+                [('"test ! -e "*', "> /dev/null"), ("*sha256sum*parity.json", "same")],
             )
             (Path(tmp) / "bin" / "sleep").write_text("#!/usr/bin/env bash\n")
             (Path(tmp) / "bin" / "sleep").chmod(0o755)

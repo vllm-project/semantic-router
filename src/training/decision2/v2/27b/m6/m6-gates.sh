@@ -2,7 +2,9 @@
 # ~27B M6 host-CPU gates of the sealed finalists (node B; no GPU): successor items 1-7 vs A20r's scored run, the
 # beats-AutoJev check and the attribution contrasts (preregistration "Formal, successor rule and Index",
 # "Attribution"). M5's m5-gates.sh with the M6 root, M5-L128 as a comparator and the M6 mixtures.
-# Usage: m6-gates.sh MIRROR_SHA STAGE NAME...      (NAME: M6-IB, M6-IBX, M6-IB2, M6-IB2PN with a sealed formal run)
+# Usage: m6-gates.sh MIRROR_SHA STAGE NAME...      (NAME: M6-IB, M6-IBX, M6-IB2, M6-IB2PN, a cross-arm soup
+#                                                   M6-IBxIB2-mNN or an M7 arm soup, with a sealed formal run; the
+#                                                   overlap stage reads M6 builds only)
 #   gates     panels verify; per NAME v2.eval.gates paired vs A20r, AutoJev-27B, Eikos-27B, Jebadiah-27B, F1, M5-L128 and
 #             A20r - NAME; types; public231 vs A20r (item 7); family contrasts (m4_contrast.py) -> /data/dev2/runs/27b/m6/gates/
 #   overlap   v2.eval.overlap_effects exposure of each M6 TRAIN file listed in BUILD.json -> gates/overlap/exposure-m6-<mix>.json
@@ -26,7 +28,8 @@ BUILDS=${BUILDS:-/data/dev2/private/27b/m6-data}
 declare -A PEER=([AutoJev-27B]=$B/m2-peer-autojev27-nodeB-kernel [Eikos-27B]=$B/m3-peer-eikos27-nodeB-kernel
   [Jebadiah-27B]=$B/m3-peer-jebadiah-nodeB-kernel)
 declare -A RUN=([M4-A20r-soup]=$A20R [M5-L128]=$B/m5/M5-L128/formal ["DEV2.0-27B (F1)"]=$B/M3-A-soup/formal)
-declare -A MIX=([M6-IB]=a20ib1 [M6-IBX]=a20ib1x [M6-IB2]=${IB2_MIX:-a20ib12} [M6-IB2PN]=a20ib12pn)
+declare -A MIX=([M6-IB]=a20ib1 [M6-IBX]=a20ib1x [M6-IB2]=${IB2_MIX:-a20ib12} [M6-IB2PN]=a20ib12pn
+  [M7-IB124ML]=a20ib124ml [M7-IB14ML]=a20ib14ml)
 for name in "$@"; do
   # a cross-arm soup of M6-IB and M6-IB2 seeds: every a20ib1 row is an a20ib12 row, so a20ib12 is its training rows
   [[ "$name" =~ ^M6-IBxIB2-m[0-9]{2}$ ]] && MIX[$name]=a20ib12
