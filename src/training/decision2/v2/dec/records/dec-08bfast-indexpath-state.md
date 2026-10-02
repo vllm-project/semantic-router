@@ -7,6 +7,15 @@ Branch `xunzhuo/decision-2-training-dec-08bfast`. Index values stay private (nod
 `/data/dev2/private/eval/index021/ix1/runs/<name>/` and `decision2-program/private/m16-indexpath/`); this file holds
 verdicts, counts and hashes only.
 
+## 2026-10-02 08:25Z — Sol-2B released: M15 `2b-RASDML`, revision `1b7c47ea…`; superseded weights purged
+
+- `release.sh` (07:55–08:18Z, node A GPU1): every step PASS (build, pre / post examples, exact parity before and
+  after the download, AutoModel vs native, Hub smoke on both sites, readback, gate seal, collection); verify_bundle
+  ok (32 files, `e20df76c…`); gate evaluate PASS. Card HTTP and links failed on one GitHub 504; re-run PASS
+  (`extra/*-recheck.json`), then the purge: 4.79 GB, `rewrite_history=False`, every check true; headroom 39.94 GB.
+- GPU-h this round: formal 0.10 (node B GPU1), release 0.38 (node A GPU1); the audit and bootstraps ran on CPU. The
+  earlier RASD path (0.14 + 0.17 + 1.91) is unused.
+
 ## 2026-10-02 07:56Z — COORDINATION 15:30 / 15:35: Sol-2B is M15 `2b-RASDML`; release running (node A GPU1)
 
 - **Choice (fixed by the user directive):** `IS-2b-RASDML-bf16`, the Index sweep's run on the BF16 release copy of

@@ -16,7 +16,8 @@ scores, counts and hashes only.
   coordinator's requested comparison) and above `08b-RASD-a75`. `08b-RA-a75` and `2b-RASD-a25` also keep a
   significantly positive transfer-only Index delta (private values).
 - **Item 8 (C1) was not run:** the 09:55 rule makes it a reference, run only if already in progress (it was not).
-- Releases: section 6.
+- Releases: section 6. Eos 0.8B shipped `08b-RA-a75`; Sol 2B shipped M15's `2b-RASDML` (user directive 15:35, the
+  largest 2B Index lower bound once the Index sweep measured it).
 
 ## 0. Rules
 
@@ -123,6 +124,36 @@ evals (v3, C1, human transfer, mlx-diag) are run for it.
   `hf_headroom.sh`. Commits and refs are unchanged, the old weights are no longer served and main is still served.
   Headroom is 47.45 GB; the node copy `inputs/dev2-0p8b-bf16/checkpoint` stays.
 
-### Decision-2.0-Sol-2B
+### Decision-2.0-Sol-2B: M15 `2b-RASDML`, revision `1b7c47eafa3ffec1f4f4b79b0abfe9309d583439`
 
-Pending (see the state file).
+The coordinator's 13:05 choice (M13 `2b-RASD`) was superseded at 15:30 / 15:35 UTC+8 by the user's directive: release
+the 2B candidate with the largest Index lower bound, M15's soup `2b-RASDML` measured on its BF16 release copy by the
+Index sweep. `2b-RASD` (staged, not uploaded) and `2b-RA-a75` are not released.
+
+- **Weights:** M15's soup (node F build, FP32 `8c8e98e3…`) → `v2.release.bf16_copy` identity `e20df76c…` (receipt
+  `51b10eae…`), equal to the package the Index sweep scored.
+- **Index evidence:** the sweep's IX1 run `IS-2b-RASDML-bf16` on exactly these weights (node C, 120,226 rows);
+  full-panel and transfer-only paired bootstraps vs DEV2.0-2B (2,000 replicates, seed `20261002`): both 95% lower
+  bounds > 0. Values are private.
+- **Formal collection:** M15 ran none. It ran on node B GPU1 (M16 formal path, `M6_FORCE_T1`; select `select-ixf2`, the
+  soup copied from node F with equal SHA-256 lists): smoke and collection in 6 minutes, sealed, relayed to node A,
+  scored and adopted unchanged (T = 1, no calibration).
+- **Integrity checks:**
+  - types choice / Noul / Score OK (no collapsed type);
+  - row-level contamination audit of the whole TRAIN `97157068…` (102,402 lines: M12's RA TRAIN plus M15's copies
+    of released multilingual rows), IX1 method, planted control 200 / 200: 76 duplicate-class rows and 0 item rows,
+    as for the RA TRAIN alone, so the copies add none;
+  - exact package parity of typed-final 1,600, css15 6,547 and public231 231 (max |Δp| 0.0, 0 category changes)
+    before and after the real download, plus AutoModel against the native runtime on every scored prompt;
+  - Hub `trust_remote_code` smoke (stock site and Transformers 5.18 site `93df9002…`);
+  - verify_bundle, revision diff, collection order and gate evaluate PASS (`index-first`). Card HTTP and links failed
+    once on a GitHub 504 for the repository link (every Hub target passed); both re-run PASS before the purge.
+- **References (not gating):** v3 52.074 vs 53.437, −1.36 [−3.18, +3.62]; human transfer [−.044, +.075]; vs Sol 1.0
+  16K +6.29 [+3.53, +10.57]; Decider 2B +2.57 [−3.10, +5.85]; This-That 1.2 +5.96 [−1.88, +12.63]; public 231 166 vs
+  171 (McNemar p .227); mlx-diag and C1 not run.
+- **Card:** default generator (`v2.release.card_index`, audited footnote, Index input `97a95897…`), banner A, assets
+  receipt `c7ed5810…`. Spec `dev2-2b-ixf.json`; decision `Decision-2.0-Sol-2B.decision.ixf.json` (`813d0fc2…`).
+  Published in parallel with the Vega-27B release (15:35: one publisher per repository).
+- **Purge:** the superseded weights of `8ed41433` (4.79 GB) were deleted with `rewrite_history=False` after
+  `hf_headroom.sh` (47.43 GB before the upload). Commits and refs are unchanged, the old weights are no longer served
+  and main is still served. Headroom is 39.94 GB; the node copy `inputs/dev2-2b-bf16/checkpoint` stays.
