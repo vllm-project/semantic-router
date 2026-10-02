@@ -48,6 +48,12 @@ def main() -> None:
     parser.add_argument("--base-path")
     parser.add_argument("--site", action="append", default=[])
     parser.add_argument("--require-kernels", action="store_true")
+    parser.add_argument(
+        "--trace",
+        type=int,
+        default=50,
+        help="then trace this many requests eagerly (graphs off) for a per-kernel GPU time table",
+    )
     args = parser.parse_args()
     for site in reversed(args.site):
         sys.path.insert(0, site)
@@ -80,8 +86,10 @@ def main() -> None:
     package = type(backend).__module__.rsplit(".", 1)[0]
     decision_model = sys.modules[f"{package}._vendor.dev2model.decision_model"]
     decision_model.collate = timed("collate", decision_model.collate)
-    encode = backend.encode_fn or decision_model.encode
-    backend.encode_fn = timed("encode", encode)
+    if hasattr(backend, "encode_fn"):
+        backend.encode_fn = timed("encode", backend.encode_fn or decision_model.encode)
+    else:
+        decision_model.encode = timed("encode", decision_model.encode)
     backend.model.forward = timed("model", backend.model.forward)
     backend.model.backbone.forward = timed("backbone", backend.model.backbone.forward)
     to = torch.Tensor.to
@@ -116,8 +124,44 @@ def main() -> None:
         }
         for name in names
     }
+    kernels = None
+    if args.trace:
+        from torch.profiler import ProfilerActivity, profile
+
+        graphs = getattr(getattr(backend, "fast", None), "graphs", None)
+        if graphs is not None:
+            graphs.max_tokens = 0
+            graphs.graphs.clear()
+        with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as trace:
+            for prompt in prompts[: args.trace]:
+                model.system_one(state=prompt["state"], questions=prompt["questions"])
+            torch.cuda.synchronize()
+        table: dict[str, list[float]] = {}
+        for event in trace.events():
+            if event.device_type.name != "CUDA":
+                continue
+            entry = table.setdefault(event.name[:120], [0, 0.0])
+            entry[0] += 1
+            entry[1] += event.device_time_total
+        total = sum(v[1] for v in table.values())
+        kernels = {
+            "requests": args.trace,
+            "gpu_ms_per_request": total / 1000 / args.trace,
+            "launches_per_request": sum(v[0] for v in table.values()) / args.trace,
+            "top": [
+                {
+                    "kernel": name,
+                    "launches_per_request": count / args.trace,
+                    "gpu_ms_per_request": us / 1000 / args.trace,
+                }
+                for name, (count, us) in sorted(
+                    table.items(), key=lambda kv: -kv[1][1]
+                )[:40]
+            ],
+        }
     fast = getattr(backend, "fast", None)
     result = {
+        "kernels": kernels,
         "schema": "dev2-runtime-a-profile/1",
         "package_manifest_sha256": ex.sha_file(args.package / "MODEL_MANIFEST.json"),
         "count": len(rows),
