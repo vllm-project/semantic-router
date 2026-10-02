@@ -12,7 +12,7 @@ from unittest import mock
 
 from v2.release import hub, layout
 
-REPO = "llm-semantic-router/Decision-2.0-Vega-26B"
+REPO = "vllm-sr/Decision-2.0-Vega-26B"
 REVISION = "a" * 40
 
 
@@ -73,7 +73,7 @@ class HubCollectTest(unittest.TestCase):
         self.assertEqual(result["collection"]["items"], [REPO])
 
     def test_any_other_collection_is_refused(self):
-        other = "llm-semantic-router/scratch-0123"
+        other = "vllm-sr/scratch-0123"
         with self.assertRaises(RuntimeError):
             self.collect(FakeApi(other, hub.COLLECTION_TITLE), collection=other)
 

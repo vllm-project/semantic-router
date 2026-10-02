@@ -29,9 +29,19 @@ from typing import Any
 from v2.release import card_index
 from v2.release import licence as licence_policy
 from v2.release.examples import EXAMPLES
-from v2.release.layout import CHART_FILES, CODENAMES, MODEL_NAME, sha_file
+from v2.release.layout import (
+    CHART_FILES,
+    CODENAMES,
+    FORMER_ORG,
+    MODEL_NAME,
+    ORG,
+    current_repo,
+    sha_file,
+)
 
-COLLECTION_URL = "https://huggingface.co/collections/llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00"
+COLLECTION_URL = (
+    f"https://huggingface.co/collections/{ORG}/decision-20-6ab7cf7bdfb506bf8269cb00"
+)
 PROJECT_URL = "https://github.com/vllm-project/semantic-router"
 FORBIDDEN = (
     (
@@ -70,6 +80,7 @@ README_FORBIDDEN = (
         re.compile(r"stock 🤗 Transformers|stock Transformers", re.I),
         "plumbing highlight",
     ),
+    (re.compile(re.escape(FORMER_ORG)), "former Hugging Face organization"),
 )
 TEXT_KEYS = {"description", "staging_notice"}
 CITATION_YEAR = 2026
@@ -162,7 +173,12 @@ def select_reports(
         report = _report(Path(entry["report"]))
         declared = report["model"].get("model_id")
         repo = entry.get("repo_id")
-        if entry["role"] != "candidate" and declared and repo and declared != repo:
+        if (
+            entry["role"] != "candidate"
+            and declared
+            and repo
+            and current_repo(declared) != current_repo(repo)
+        ):
             raise ValueError(
                 f"{entry['key']}: report model {declared} differs from {repo}"
             )

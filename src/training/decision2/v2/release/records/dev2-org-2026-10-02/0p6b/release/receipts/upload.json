@@ -1,0 +1,12 @@
+{
+  "bytes": 1520014688,
+  "commit_url": "https://huggingface.co/vllm-sr/Decision-2.0-Kai-0.6B/commit/c441862b8c3021957c9b5cc2080a3ed5351c1f67",
+  "files": 32,
+  "manifest_sha256": "187dc4ae23869b22f7002fe00ccdf6f9eb92ac375e33038361b4feb99ed19879",
+  "private": true,
+  "repo": "vllm-sr/Decision-2.0-Kai-0.6B",
+  "revision": "c441862b8c3021957c9b5cc2080a3ed5351c1f67",
+  "schema": "dev2-hub-upload/1",
+  "seconds": 2.021369185997173,
+  "utc": "2026-10-02T10:36:36.771500+00:00"
+}

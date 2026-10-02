@@ -33,7 +33,7 @@ SIZES = {
     "0.6B": {
         "accent": "#63d2f0",
         "owl": (
-            "llm-semantic-router/Decision-1.0-Kai-0.6B",
+            "vllm-sr/Decision-1.0-Kai-0.6B",
             "9d6872cde6950c2c2b5786d182ec9a06ca1bdd66",
             "assets/decision-kai-header.png",
             "6e1ed4119bd1554a997aa89c60529e8b1fc1d147a393799b9ca0f3f32ae7605d",
@@ -42,7 +42,7 @@ SIZES = {
     "0.8B": {
         "accent": "#ffb574",
         "owl": (
-            "llm-semantic-router/Decision-1.0-Eos-0.8B",
+            "vllm-sr/Decision-1.0-Eos-0.8B",
             "363c4a5e56afc115b1c78c837633956d0bbb63ab",
             "assets/decision-eos-header.png",
             "02673d96602b3328b59a12831cebfb32e4553d4ac8a417528e17b2c55409a6ca",
@@ -51,7 +51,7 @@ SIZES = {
     "2B": {
         "accent": "#ffd84e",
         "owl": (
-            "llm-semantic-router/Decision-1.0-Sol-2B",
+            "vllm-sr/Decision-1.0-Sol-2B",
             "ce0c018a28de16d6639b1cd203b761bf643b89e6",
             "assets/decision-sol-2b-header.png",
             "fe6b65ab04dc2044c38d383091a03cbc0f176fbb04a13948c12d5ae50d1de710",
@@ -60,7 +60,7 @@ SIZES = {
     "4B": {
         "accent": "#b4a0f6",
         "owl": (
-            "llm-semantic-router/Decision-1.0-Nox-4B",
+            "vllm-sr/Decision-1.0-Nox-4B",
             "cde2a68dbaa557ea65dc458104d410a0802ee259",
             "assets/decision-nox-4b-header.png",
             "58dbd7cf5ff49b760a162c32366bd5312a2acfded1273b79b937afcd31ca6ee4",
@@ -69,7 +69,7 @@ SIZES = {
     "9B": {
         "accent": "#f8ca69",
         "owl": (
-            "llm-semantic-router/Decision-1.0-Lux-9B",
+            "vllm-sr/Decision-1.0-Lux-9B",
             "cdf4d3ef2dda21518e599fe99ebbe468486b197c",
             "assets/decision-lux-9b-header.png",
             "64e55deb635334185a01e1e9787de95503b8f49d11c44a2be5dd1b925d5e8ce1",

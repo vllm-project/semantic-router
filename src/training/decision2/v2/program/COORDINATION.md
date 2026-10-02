@@ -205,6 +205,99 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 20:30 — **Org rename COMPLETE.** Six 2.0 repos and the 60 other model repos were updated, and the
+  main-repo PR #4455 is open.
+  - **Pipeline on `vllm-sr`:** integration `ae0bc1e2f`, merged at `f72f4de36`, records at `220910f33`.
+  - **Successor releases:**
+    - Eos, Lux and Vega: derive from `specs/dev2-<key>-org.json` and the org decision and gate;
+    - Kai, Sol and Nox: the phase A runtime-only revisions are the current `main`.
+  - **Open follow-up for the eval track:** `eval/adapters.py` still uses old-org Decision 1.0 IDs, because offline eval
+    caches are stored under the old names. Rename them only when no eval run is in flight, re-pointing the caches.
+
+- 2026-10-02 20:25 — **Org rename for Decision 2.0 is DONE: 0 `llm-semantic-router` in all six repos** (org worker
+  (2)). Merged into integration at `220910f33`; record `v2/release/records/dev2-org-2026-10-02.md`.
+  - **Card-only org revisions:** Kai `c441862b`, Eos `25f0914a`, Sol `951e7f7f`, Nox `36596d27`, Lux `6af07f36`,
+    Vega `e60bd8e3`. Only README.md and MODEL_MANIFEST.json changed. All checks pass, including gate seal, card
+    HTTP, links, the collection check and `gate evaluate`.
+  - **Current `main`:** runtime phase A has since put runtime-only revisions on top for Kai `51b7b474`, Sol
+    `6a62b319` and Nox `137e28ce`. They keep `vllm-sr`.
+  - **Collection:** private, with the six `vllm-sr` items in the curated order. Every former ID redirects.
+  - **Successors** (9B KIB4-a33, 27B, M17): supersede the current `main`. For Eos, Lux and Vega, derive from
+    `specs/dev2-<key>-org.json` and the org gate and decision. Integration now also carries the gate commits
+    `5e2c3fa92` and `c6c754a41` (cherry-picked).
+  - **Leases:** none left. Vega's CPU attempt on node C failed before upload (`causal_conv1d` needs a GPU); its
+    copied inputs were removed.
+
+- 2026-10-02 20:20 — **Watchdog to the 9B worker (89b53e70).**
+  - Node A GPU1–6 (`eval-ix1`) have been idle since about 20:03.
+  - While KIB4-a33 releases, put them on the remaining 9B candidates: the cross-arm averages X1–X6, KIB4 / KX
+    interpolations, and the soups with the extra seeds. KIB4 is the strongest 9B signal so far (`KIB4-a33` beats
+    `KX-a33`), so prioritise KIB4-based crosses.
+  - Release any lease you won't use within 30 min.
+  - **Note to all workers:** the coordinator no longer resumes or interrupts you, because that downgrades the model.
+    Instructions arrive here, so re-read this file at every poll.
+
+- 2026-10-02 19:35 — **Org card-only revisions are live on five repos** (org worker (2); 0 `llm-semantic-router` in
+  any text file of each).
+  - **New `main`:** Kai-0.6B `c441862b`, Eos-0.8B `25f0914a`, Sol-2B `951e7f7f`, Nox-4B `36596d27`, Lux-9B
+    `6af07f36`. Only README.md and MODEL_MANIFEST.json changed; weights, assets and runtime are byte-identical.
+  - **Vega-27B** is publishing now (node C, CPU: every node A / C GPU went to 9B M10 Index runs).
+  - **Release workers (M17 4B, 9B M10, 27B, runtime phase A):** your next upload supersedes these revisions.
+    - Derive from `specs/dev2-<key>-org.json`.
+    - Your `gate_profile.current` names the org gate (the run's `receipts/gate.json`) and decision
+      (`/data/dev2/runs/release/decisions/<name>.decision.org.json`).
+    - Files are on branch `xunzhuo/decision-2-org-vllm-sr-20`; they merge into integration after Vega.
+    - The two release-gate commits that the Eos / Sol and Nox releases used (`5e2c3fa92`, `c6c754a41`) come along,
+      cherry-picked.
+
+- 2026-10-02 18:50 — **USER APPROVED a shared-context prefill SWITCH** (new worker, `track=shared-ctx`).
+  - **ON:** the shared input of a multi-question request is computed once and reused, for near-flat latency in N, with
+    some accuracy loss accepted. **OFF:** today's exact path, and the default.
+  - **Goal:** maximise the speed gain while minimising the loss, via exactness tricks, a low-margin exact fallback (τ
+    sweep) and auto-enable thresholds.
+  - **Why:** measured, our per-question re-read makes latency linear in N. The official Jev API stays nearly flat and
+    overtakes at 64 or more questions.
+  - **Conflict avoidance:** a separate module with a minimal hook. The phase A runtime worker (2d541b40) owns
+    `decision2/qwen.py`; the shared-ctx work rebases onto phase A when it lands. No released package changes.
+
+- 2026-10-02 18:05 — **Org pipeline change merged at `f72f4de36`** (commit `ae0bc1e2f`; org worker (2)). **Release
+  workers merge integration before the next driver run.**
+  - **Why it's urgent.** The Hub now answers the old IDs with the new ones. On the old pipeline, `hub.py` refuses
+    every upload ("resolves to vllm-sr/..."), `collection_order.py` fails, and `hf_headroom.sh` lists 0 repos under
+    the old author, so it reports 0 GB used and gives false headroom.
+  - **What changed.** `ORG = vllm-sr`, and the pinned collection is `vllm-sr/decision-20-6ab7cf7bdfb506bf8269cb00`.
+    `check_repo` refuses `llm-semantic-router/...` with "renamed; use vllm-sr/...". The README lint refuses the
+    former org. `hub_links` fails links to it. Prior gates and 1.0 reports under the old org still count
+    (`layout.current_repo`).
+  - **Your spec.** Put `vllm-sr/...` in `repo_id`, `origin` / `base` and licence sources. `layout.current_ids(spec)`
+    rewrites these Hub IDs and leaves HF-cache paths alone. Decisions must name `vllm-sr/<model>`.
+  - **Card-only org revisions** of the six 2.0 repos follow, one repo at a time, never during that repo's release
+    run. Re-read `main` before you upload.
+
+- 2026-10-02 18:00 — **USER APPROVED speed-up phase A** (gist `6b59c3be`).
+  - **Owner:** the bit-identical runtime rollout for all six sizes is owned by **2d541b40** (`track=runtime-a`).
+  - **Scope:** HIP graphs per exact shape with host masks and the exact trims; the lean LoRA for 27B; the bit-exact
+    fused Triton element-wise kernels and the FLA gfx942 retune from `xunzhuo/decision-2-rocm-kernels`; a frozen
+    autotune cache.
+  - **Gate:** 0 answer changes and 0.0 drift on all four scored panels per size, then runtime-only revisions.
+  - **Weight-release workers (M17 4B, 9B M10, 27B #5) and the org-rename worker e0c97d43:** merge integration again
+    when the runtime change lands (watch for its note). Never publish concurrently on a repo; re-read `main` before
+    each upload.
+  - **The launch film** shows the projected optimized speeds (Kai-0.6B ≈ 5 ms headline) by user decision. Phase A
+    must land before publication.
+
+- 2026-10-02 17:35 — **HF ORG RENAMED: `llm-semantic-router` → `vllm-sr`** (https://huggingface.co/vllm-sr; user).
+  - **State.** Repos and collections moved with it, and the old IDs redirect for now. About 70 repos still reference
+    the old name in READMEs, configs (LoRA `base_model_name_or_path`, Decision 1.0 `native/decision_config.json`, Vela
+    2.0 code) and integrity manifests.
+  - **Three workers fix it:**
+    - **(1) HF repos except Decision 2.0:** Decision 1.0, Vela 1.0 / 2.0, MoM and older models.
+    - **(2) The Decision 2.0 release pipeline constants,** on integration, plus card-only revisions of the 2.0 repos.
+    - **(3) A PR for the main repo** (router configs, deploy, e2e, docs, website).
+  - **Every release worker (M17 4B, 9B M10, 27B, film):** from now on use `vllm-sr/...` for every new upload or
+    reference. **Merge integration again before your next release driver run,** once worker (2) lands the pipeline
+    change (watch for its COORDINATION note). The film end card uses `huggingface.co/vllm-sr`.
+
 - 2026-10-02 17:20 — **NO MORE UNATTENDED GAPS (the user asked why tracks keep running unattended).**
   - **Cause.** The coordinator's own rule ("hand off near 5 hours") ended workers while their multi-hour training ran
     on. Successors started only when the coordinator saw the completion notice.

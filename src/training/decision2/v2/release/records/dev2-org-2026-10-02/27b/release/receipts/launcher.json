@@ -1,0 +1,21 @@
+{
+  "device": "cuda:0",
+  "env": [
+    "TRITON_CACHE_AUTOTUNING=1",
+    "HF_HUB_CACHE=/data/dev2/hf-cache",
+    "HIP_FORCE_DEV_KERNARG=1",
+    "TRITON_CACHE_DIR=/data/dev2/runs/release/triton/dev2-org-27B-20261002T113747Z"
+  ],
+  "gpu": "7",
+  "image": "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1",
+  "image_id": "sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1",
+  "require_kernels": true,
+  "rw_mounts": [
+    "/data/dev2/runs/release/triton/dev2-org-27B-20261002T113747Z"
+  ],
+  "schema": "dev2-release-launcher/1",
+  "sites": [
+    "/opt/decision-fla"
+  ],
+  "track": "release-org"
+}

@@ -1,0 +1,25 @@
+{
+  "changed_files": [
+    "MODEL_MANIFEST.json",
+    "README.md"
+  ],
+  "checks": {
+    "former_id_redirects": true,
+    "main_is_the_revision": true,
+    "no_former_org_text": true,
+    "only_card_and_manifest_changed": true,
+    "private": true
+  },
+  "files": [
+    32,
+    32
+  ],
+  "former_org_occurrences": {},
+  "passed": true,
+  "repo": "vllm-sr/Decision-2.0-Vega-27B",
+  "revision": "e60bd8e346110b3348b6e5a25c07329d350c4b21",
+  "schema": "dev2-org-verify/1",
+  "superseded": "781b2b2431abccbdcfcbfa98b66c80b332725513",
+  "text_files_scanned": 25,
+  "utc": "2026-10-02T12:15:12.424709+00:00"
+}

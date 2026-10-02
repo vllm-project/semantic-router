@@ -498,7 +498,7 @@ def qwen_full_spec(scratch: Path) -> tuple[dict, str]:
     spec = {
         "schema": build.SPEC_SCHEMA,
         "kind": "staging",
-        "repo_id": "llm-semantic-router/dev2-release-staging",
+        "repo_id": "vllm-sr/dev2-release-staging",
         "model_name": "Decision-2.0-Kai-0.6B",
         "profile": "qwen-full",
         "checkpoint": str(ckpt),

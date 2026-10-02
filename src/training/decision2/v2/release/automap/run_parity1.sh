@@ -36,7 +36,9 @@ done
 here="$(cd "$(dirname "$0")" && pwd)"
 decision2="$(cd "$here/../../.." && pwd)"
 image="decision20-train-fast:host2"
-snapshot="/data/dev2/hf-cache/models--llm-semantic-router--${repo}/snapshots/${head}"
+snapshot="/data/dev2/hf-cache/models--vllm-sr--${repo}/snapshots/${head}"
+# Downloads made before the organization rename are cached under the former organization's name.
+[[ -d "$snapshot" ]] || snapshot="/data/dev2/hf-cache/models--llm-semantic-router--${repo}/snapshots/${head}"
 [[ -d "$snapshot" ]] || { echo "missing snapshot $snapshot" >&2; exit 1; }
 [[ -e "$work" ]] && { echo "work dir exists: $work" >&2; exit 1; }
 
@@ -60,7 +62,7 @@ if [[ "$target" == gpu* ]]; then
   device="cuda:0"
 fi
 mkdir -p "$work/modules"
-python3 "$here/stage1.py" --repo "llm-semantic-router/$repo" --head "$head" \
+python3 "$here/stage1.py" --repo "vllm-sr/$repo" --head "$head" \
   --snapshot "$snapshot" --output "$work/stage" --staged "$work/staged" > "$work/stage.log"
 docker_args+=(--rm --network none --ipc host --security-opt seccomp=unconfined
   -v /data/dev2/hf-cache:/data/dev2/hf-cache:ro -v /data/dev2/private:/data/dev2/private:ro

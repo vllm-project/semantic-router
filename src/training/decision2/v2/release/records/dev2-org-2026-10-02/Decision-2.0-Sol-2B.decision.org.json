@@ -1,0 +1,67 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "final",
+  "decision": "release",
+  "model_name": "Decision-2.0-Sol-2B",
+  "repo_id": "vllm-sr/Decision-2.0-Sol-2B",
+  "identity": {
+    "model_sha256": "e20df76c14edb0d28ef17593f49a1870fdea9438ff4805594402e39766f3546c"
+  },
+  "report_sha256": "6610c86ca1a9249c21cce031ee6df36b3c97d1ad7541458e91c4061154a10385",
+  "paired_sha256": "677e8edece5f40c85fce279fd7fbcaed547d60cfe881a496649fabe5a5082047",
+  "gate_profile": "successor",
+  "rule": "index-first",
+  "current_revision": "8ed41433f5f20c73bf04fe7ef92f2d69c1145002",
+  "evidence_sha256": {
+    "current_decision": "ea4b72cfb3da8bd1730c17a39f305a4cff4af878de04240075e7e7b0766a9dd1",
+    "current_gate": "445ca889f4c286b46580925627cf0e8a37b502894fda073a231ad0fcfb2603a8",
+    "index_first_audit": "6fa6c907a7d1563f01723238fdcffd4a9a7482b171f4121095fafbdf240efb84",
+    "index_first_base_receipt": "75b04a842e029f54cc472d1fa778c4ae3013ecc5220ea2cf19893ad59c62e447",
+    "index_first_bootstrap": "bf1dbeda8d68c2cfe74c769743408567aca3b2bf06245208ddcf3ab04a32dfe3",
+    "index_first_receipt": "86c1d90974699e3d8cfbc643ef5babf96b9b32a401cbe06dade29a70cb938658",
+    "paired": "7fe831607de9b9891a5f399aa1bdc4fdf1ca6241673d333db272b27e97af28fd",
+    "public231": "7e7ccf8d3361bb059467dfad0044498303a8ace275fa91d0882e97d877462e46",
+    "tier_paired": "439ba3fb8a5312f6676717dd00545a1caec277e2be94c9c21d0214d0d41798d1",
+    "types": "a7cba161c8739f3dd43ce59c780130af6d429973e76fa9a46dcf1630947860d3"
+  },
+  "calibration": "none (temperature 1; every Decision 2.0 model keeps T = 1): the formal run was collected at T = 1 (no CAL698 fit)",
+  "action": "Card-only revision of the private repository vllm-sr/Decision-2.0-Sol-2B (formerly llm-semantic-router/Decision-2.0-Sol-2B): README.md and MODEL_MANIFEST.json name the renamed Hugging Face organization vllm-sr. Every other file (the banner and the four charts, every model, tokenizer, runtime and remote-code file) is byte-identical to the released revision 1b7c47eafa3ffec1f4f4b79b0abfe9309d583439. The collection is not changed; everything stays private.",
+  "rationale": "The release judgement of the superseded final decision 813d0fc2… stands unchanged: the same identity e20df76c, scored report, paired comparison, calibration and licence decision. Only the organization in the card and the manifest changes; release.sh checks the native examples, the card's Transformers example before upload, after the real download and from the Hub in fresh environments under Transformers 5.17 and 5.18, the card structure and every card link.",
+  "approved_package": {
+    "identity": "e20df76c14edb0d28ef17593f49a1870fdea9438ff4805594402e39766f3546c",
+    "fp32_identity": "8c8e98e34eb3200492a9f22d76a4cacfd4a6dee8855c1b6aec303d3cbbf88b9a",
+    "profile": "qwen-full (BF16 storage of the Linear projections)",
+    "temperature": 1,
+    "max_input_tokens": 16384,
+    "revision_binding": "receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified."
+  },
+  "licence_decision": "apache-2.0, unchanged: own weights; the Decision 1.0 base and the Qwen3.5 text backbone and tokenizer are Apache-2.0 (the product card ships the Apache-2.0 LICENSE).",
+  "supersedes": {
+    "final_sha256": "813d0fc2fdd05d1d3b3d578ef7e015c5ea05c53c9897cf484886f8edcbf905b6",
+    "released_as": "llm-semantic-router/Decision-2.0-Sol-2B@1b7c47eafa3ffec1f4f4b79b0abfe9309d583439",
+    "released_manifest_sha256": "b16789f1c777beceef5c7bed7484616eb6e32dbc2ce8ef5ac3582c4c749269fb",
+    "released_gate_sha256": "168d83d14cf5dffb0b21cae1236b60bd2d56377b44f52c13a35ce2d042173467",
+    "earlier": {
+      "revision": "8ed41433f5f20c73bf04fe7ef92f2d69c1145002",
+      "released_as": "llm-semantic-router/Decision-2.0-Sol-2B@8ed41433f5f20c73bf04fe7ef92f2d69c1145002",
+      "final_sha256": "ea4b72cfb3da8bd1730c17a39f305a4cff4af878de04240075e7e7b0766a9dd1",
+      "gate_sha256": "445ca889f4c286b46580925627cf0e8a37b502894fda073a231ad0fcfb2603a8",
+      "manifest_sha256": "241c72a2e07d234bcf0a700d9f4c75c86f8a7b9a73ff86c0800a3859e1a68109",
+      "weights_identity": "32872f2968e38aa99901797aaab5e12e32e281bf67bb924037d443394411170d"
+    }
+  },
+  "disclosures": [
+    "items 1 and 6(b) of the successor rule (v3 significantly above the current revision) are not met; the Index-first rule makes v3 a reference",
+    "the training rows include the IB1-r3 / IB2 families matched to Index benchmark families (HoVer, When2Call, iSarcasmEval, GSM8K) and the BPoMP format; the internal records report the transfer-only Index delta without those benchmarks (private values)",
+    "card.speed is the current revision's bench receipt (same architecture, runtime and shapes)"
+  ],
+  "prepared_by": "Decision 2.0 release engineering, org worker (2) (worktree vllm-sr-dev2-org20)",
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's instruction of 2026-10-02 17:35 UTC+8 (the Hugging Face organization llm-semantic-router is now vllm-sr): card-only revisions of the Decision 2.0 repositories naming the new organization; every card keeps its release's Index data, charts and banner",
+  "decided_utc": "2026-10-02T09:35:00Z",
+  "previous_rationale": "Index-first rule (user decision 2026-10-02 09:55 UTC+8). Release gate: the private Index paired bootstrap of exactly these weights minus the current release (full panel, 2,000 replicates) has a 95% lower bound > 0 (values in private files only; evidence_sha256.index_bootstrap); the per-tier choice is the largest Index-gain lower bound among the measured candidates. Integrity: types choice OK, noul OK, score OK; row-level Index contamination audit of the arm's TRAIN file (97157068; the previous release's rows plus the IB1-r3 / IB2 rows and multilingual copies of released rows) with the planted control complete; exact package parity and the Hub / trust_remote_code checks are release.sh steps (gate items 2-7). References (not gating): post-key v3 52.074 vs 53.437, -1.36 [-3.18, +3.62]; human transfer -0.044 to +0.075; vs Decision 1.0 Sol (16K) +6.29 [+3.53, +10.57]; peers decider2b +2.57 [-3.10, +5.85]; thisthat12 +5.96 [-1.88, +12.63]; mlx-diag not run; public 231 166 vs 171 (McNemar p 0.227). C1 item 8 was not run (09:55: a reference, run only if already in progress).",
+  "card_revision": {
+    "kind": "card-org",
+    "spec": "v2/release/specs/dev2-2b-org.json",
+    "spec_sha256": "e9c88e72f8fa98a5c505fbc3e036def3501f279a02955b81f5f49d94310387fa"
+  }
+}

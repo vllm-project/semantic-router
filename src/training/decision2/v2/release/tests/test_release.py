@@ -58,7 +58,7 @@ class LayoutTest(unittest.TestCase):
             "Decision-2.0-Vega-26B",
         )
         layout.check_repo(
-            "llm-semantic-router/Decision-2.0-Vega-26B",
+            "vllm-sr/Decision-2.0-Vega-26B",
             "Decision-2.0-Vega-26B",
             staging=False,
         )
@@ -69,61 +69,135 @@ class LayoutTest(unittest.TestCase):
 
     def test_repository_rules(self):
         layout.check_repo(
-            "llm-semantic-router/dev2-release-staging",
+            "vllm-sr/dev2-release-staging",
             "Decision-2.0-Kai-0.6B",
             staging=True,
         )
         layout.check_repo(
-            "llm-semantic-router/Decision-2.0-Nox-4B",
+            "vllm-sr/Decision-2.0-Nox-4B",
             "Decision-2.0-Nox-4B",
             staging=False,
         )
         for repo, name, staging in (
-            ("llm-semantic-router/Decision-2.0-Nox-4B", "Decision-2.0-Nox-4B", True),
-            ("llm-semantic-router/dev2-release-staging", "Decision-2.0-Nox-4B", False),
+            ("vllm-sr/Decision-2.0-Nox-4B", "Decision-2.0-Nox-4B", True),
+            ("vllm-sr/dev2-release-staging", "Decision-2.0-Nox-4B", False),
             ("someone/Decision-2.0-Nox-4B", "Decision-2.0-Nox-4B", False),
-            ("llm-semantic-router/Decision-2.0-Nox-4B", "Decision-2.0-Lux-9B", False),
-            ("llm-semantic-router/DEV2.0-4B", "DEV2.0-4B", False),
-            ("llm-semantic-router/Decision-2.0-Sol-4B", "Decision-2.0-Sol-4B", False),
+            ("vllm-sr/Decision-2.0-Nox-4B", "Decision-2.0-Lux-9B", False),
+            ("vllm-sr/DEV2.0-4B", "DEV2.0-4B", False),
+            ("vllm-sr/Decision-2.0-Sol-4B", "Decision-2.0-Sol-4B", False),
             (
-                "llm-semantic-router/Decision-2.0-Nox-1.3B",
+                "vllm-sr/Decision-2.0-Nox-1.3B",
                 "Decision-2.0-Nox-1.3B",
                 False,
             ),
             (
-                "llm-semantic-router/Decision-2.0-Route-0.6B",
+                "vllm-sr/Decision-2.0-Route-0.6B",
                 "Decision-2.0-Route-0.6B",
                 False,
             ),
         ):
             with self.assertRaises(ValueError):
                 layout.check_repo(repo, name, staging=staging)
-        with self.assertRaisesRegex(
-            ValueError, "renamed; use llm-semantic-router/Decision-2.0-Lux-9B"
+        for repo, name, staging, current in (
+            (
+                "llm-semantic-router/DEV2.0-9B",
+                "Decision-2.0-Lux-9B",
+                False,
+                "vllm-sr/Decision-2.0-Lux-9B",
+            ),
+            (
+                "llm-semantic-router/Decision-2.0-Nox-4B",
+                "Decision-2.0-Nox-4B",
+                False,
+                "vllm-sr/Decision-2.0-Nox-4B",
+            ),
+            (
+                "llm-semantic-router/dev2-release-staging",
+                "Decision-2.0-Kai-0.6B",
+                True,
+                "vllm-sr/dev2-release-staging",
+            ),
         ):
-            layout.check_repo(
-                "llm-semantic-router/DEV2.0-9B", "Decision-2.0-Lux-9B", staging=False
-            )
+            with self.assertRaisesRegex(ValueError, f"renamed; use {current}\\Z"):
+                layout.check_repo(repo, name, staging=staging)
 
     def test_former_repositories_map_to_the_renamed_ones(self):
         self.assertEqual(
             layout.FORMER_REPOS,
             {
-                "llm-semantic-router/DEV2.0-0.6B": "llm-semantic-router/Decision-2.0-Kai-0.6B",
-                "llm-semantic-router/DEV2.0-0.8B": "llm-semantic-router/Decision-2.0-Eos-0.8B",
-                "llm-semantic-router/DEV2.0-2B": "llm-semantic-router/Decision-2.0-Sol-2B",
-                "llm-semantic-router/DEV2.0-4B": "llm-semantic-router/Decision-2.0-Nox-4B",
-                "llm-semantic-router/DEV2.0-9B": "llm-semantic-router/Decision-2.0-Lux-9B",
-                "llm-semantic-router/DEV2.0-27B": "llm-semantic-router/Decision-2.0-Vega-27B",
+                "llm-semantic-router/DEV2.0-0.6B": "vllm-sr/Decision-2.0-Kai-0.6B",
+                "llm-semantic-router/DEV2.0-0.8B": "vllm-sr/Decision-2.0-Eos-0.8B",
+                "llm-semantic-router/DEV2.0-2B": "vllm-sr/Decision-2.0-Sol-2B",
+                "llm-semantic-router/DEV2.0-4B": "vllm-sr/Decision-2.0-Nox-4B",
+                "llm-semantic-router/DEV2.0-9B": "vllm-sr/Decision-2.0-Lux-9B",
+                "llm-semantic-router/DEV2.0-27B": "vllm-sr/Decision-2.0-Vega-27B",
             },
         )
         for new in layout.FORMER_REPOS.values():
             layout.check_repo(new, new.rsplit("/", 1)[1], staging=False)
             self.assertEqual(layout.current_repo(new), new)
+        for former, current in (
+            ("llm-semantic-router/DEV2.0-Route-0.6B", "vllm-sr/DEV2.0-Route-0.6B"),
+            ("llm-semantic-router/Decision-2.0-Sol-2B", "vllm-sr/Decision-2.0-Sol-2B"),
+            ("llm-semantic-router/Decision-1.0-Lux-9B", "vllm-sr/Decision-1.0-Lux-9B"),
+            ("vllm-sr/DEV2.0-Route-0.6B", "vllm-sr/DEV2.0-Route-0.6B"),
+            ("vllm-sr/DEV2.0-4B", "vllm-sr/DEV2.0-4B"),
+            ("Qwen/Qwen3.5-4B", "Qwen/Qwen3.5-4B"),
+            ("llm-semantic-router", "llm-semantic-router"),
+        ):
+            self.assertEqual(layout.current_repo(former), current)
+
+    def test_current_ids_change_only_hub_references(self):
+        cache = "/data/dev2/hf-cache/models--llm-semantic-router--Decision-1.0-Eos-0.8B/snapshots/363c4a5e/LICENSE"
+        spec = {
+            "repo_id": "llm-semantic-router/Decision-2.0-Eos-0.8B",
+            "origin": {
+                "repo_id": "llm-semantic-router/Decision-1.0-Eos-0.8B",
+                "revision": "a" * 40,
+            },
+            "base": {"repo_id": "Qwen/Qwen3.5-0.8B"},
+            "licence": {
+                "components": [
+                    {"source": "llm-semantic-router/Decision-1.0-Eos-0.8B@363c4a5e"},
+                    {"source": "llm-semantic-router/DEV2.0-0.8B"},
+                ],
+                "files": [{"source": cache}],
+            },
+            "banner": {
+                "source": "llm-semantic-router/Decision-1.0-Eos-0.8B@363c4a5e:assets/x.png"
+            },
+            "_release": {
+                "renamed_from": "llm-semantic-router/DEV2.0-0.8B",
+                "note": "llm-semantic-router/DEV2.0-0.8B was moved",
+            },
+            "notes": [
+                {
+                    "source": "llm-semantic-router/decision-2.0-training-data m6/ib4 (see record)"
+                }
+            ],
+        }
         self.assertEqual(
-            layout.current_repo("llm-semantic-router/DEV2.0-Route-0.6B"),
-            "llm-semantic-router/DEV2.0-Route-0.6B",
+            layout.current_ids(spec),
+            {
+                **spec,
+                "repo_id": "vllm-sr/Decision-2.0-Eos-0.8B",
+                "origin": {
+                    "repo_id": "vllm-sr/Decision-1.0-Eos-0.8B",
+                    "revision": "a" * 40,
+                },
+                "licence": {
+                    "components": [
+                        {"source": "vllm-sr/Decision-1.0-Eos-0.8B@363c4a5e"},
+                        {"source": "vllm-sr/Decision-2.0-Eos-0.8B"},
+                    ],
+                    "files": [{"source": cache}],
+                },
+                "banner": {
+                    "source": "vllm-sr/Decision-1.0-Eos-0.8B@363c4a5e:assets/x.png"
+                },
+            },
         )
+        self.assertEqual(spec["repo_id"], "llm-semantic-router/Decision-2.0-Eos-0.8B")
 
     def test_pointer_lists_only_present_files(self):
         files = [
@@ -170,7 +244,17 @@ class LicenceTest(unittest.TestCase):
         )
         self.assertTrue(self.check("Hanno-Labs/bosun-v3.1-0.6b")["eligible"])
         self.assertTrue(
+            self.check("vllm-sr/Decision-1.0-Kai-0.6B", "decision1")["eligible"]
+        )
+        # Reports scored before the organization rename name the former organization.
+        self.assertEqual(
             self.check("llm-semantic-router/Decision-1.0-Kai-0.6B", "decision1")[
+                "reason"
+            ],
+            "own Decision 1.0",
+        )
+        self.assertFalse(
+            self.check("llm-semantic-router/DEV2.0-0.6B@5380e01e", "decision2")[
                 "eligible"
             ]
         )
@@ -206,7 +290,7 @@ def card_entries():
             "key": "kai1",
             "role": "own-1.0",
             "report": str(REPORTS / "kai1.json"),
-            "repo_id": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+            "repo_id": "vllm-sr/Decision-1.0-Kai-0.6B",
             "label": "Decision 1.0 Kai",
         },
         {
@@ -234,7 +318,7 @@ def card_entries():
 def facts(licence_spdx="apache-2.0"):
     return {
         "model_name": "Decision-2.0-Kai-0.6B",
-        "repo_id": "llm-semantic-router/dev2-release-staging",
+        "repo_id": "vllm-sr/dev2-release-staging",
         "profile": "kai-native",
         "parameters": {
             "loaded": 571_909_635,
@@ -242,7 +326,7 @@ def facts(licence_spdx="apache-2.0"):
         },
         "max_input_tokens": 8192,
         "origin": {
-            "repo_id": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+            "repo_id": "vllm-sr/Decision-1.0-Kai-0.6B",
             "revision": "7" * 40,
             "relation": "unchanged",
             "summary": "Weights unchanged.",
@@ -340,9 +424,7 @@ class CardTest(unittest.TestCase):
                 ],
             )
             self.assertIn("license: apache-2.0", readme)
-            self.assertIn(
-                "base_model: llm-semantic-router/Decision-1.0-Kai-0.6B", readme
-            )
+            self.assertIn("base_model: vllm-sr/Decision-1.0-Kai-0.6B", readme)
             self.assertIn("| **Context length** | 8,192 tokens |", readme)
             self.assertIn("| **Decision types** | Choice · Yes / No · Score |", readme)
             self.assertIn("Apache-2.0 ([LICENSE](LICENSE)).", readme)
@@ -374,7 +456,7 @@ class CardTest(unittest.TestCase):
             code = readme.split("```python\n", 1)[1].split("```", 1)[0]
             compile(code, "card", "exec")
             self.assertIn(
-                'AutoModel.from_pretrained("llm-semantic-router/dev2-release-staging", trust_remote_code=True)',
+                'AutoModel.from_pretrained("vllm-sr/dev2-release-staging", trust_remote_code=True)',
                 code,
             )
             self.assertEqual(code.count('pipeline("decision"'), 1)
@@ -489,6 +571,16 @@ class CardTest(unittest.TestCase):
         ):
             self.assertTrue(card.lint_readme(removed), removed)
         self.assertFalse(card.lint_readme("JevArena 43.22, Transformers 5.17"))
+        self.assertEqual(
+            card.lint_readme(
+                'from_pretrained("llm-semantic-router/Decision-2.0-Kai-0.6B")'
+            ),
+            ["former Hugging Face organization"],
+        )
+        self.assertFalse(
+            card.lint_readme('from_pretrained("vllm-sr/Decision-2.0-Kai-0.6B")')
+        )
+        self.assertIn("/collections/vllm-sr/", card.COLLECTION_URL)
 
 
 class ExamplesTest(unittest.TestCase):
@@ -628,7 +720,7 @@ class GateTest(unittest.TestCase):
             )
             spec = {
                 "model_name": "Decision-2.0-Nox-4B",
-                "repo_id": "llm-semantic-router/Decision-2.0-Nox-4B",
+                "repo_id": "vllm-sr/Decision-2.0-Nox-4B",
                 "expected_identity": {"model_sha256": "a" * 64},
                 "scored": {"report_sha256": "b" * 64},
                 "card": {"paired": str(paired)},
@@ -637,7 +729,7 @@ class GateTest(unittest.TestCase):
                 "schema": gate.DECISION_SCHEMA,
                 "decision": "release",
                 "model_name": "Decision-2.0-Nox-4B",
-                "repo_id": "llm-semantic-router/Decision-2.0-Nox-4B",
+                "repo_id": "vllm-sr/Decision-2.0-Nox-4B",
                 "identity": {"model_sha256": "a" * 64},
                 "report_sha256": "b" * 64,
                 "paired_sha256": layout.sha_file(paired),
@@ -688,7 +780,7 @@ class GateTest(unittest.TestCase):
             spec = {
                 "kind": "release",
                 "model_name": "Decision-2.0-Nox-4B",
-                "repo_id": "llm-semantic-router/Decision-2.0-Nox-4B",
+                "repo_id": "vllm-sr/Decision-2.0-Nox-4B",
                 "expected_identity": {"model_sha256": "c" * 64},
                 "scored": {"report_sha256": "d" * 64},
                 "card": {"paired": str(paired)},
@@ -795,7 +887,7 @@ class BuildTest(unittest.TestCase):
             spec = {
                 "schema": build.SPEC_SCHEMA,
                 "kind": "staging",
-                "repo_id": "llm-semantic-router/dev2-release-staging",
+                "repo_id": "vllm-sr/dev2-release-staging",
                 "model_name": "Decision-2.0-Nox-4B",
                 "profile": "qwen-full",
                 "checkpoint": str(ckpt),

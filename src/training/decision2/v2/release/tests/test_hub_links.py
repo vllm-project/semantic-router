@@ -97,6 +97,27 @@ class HubLinksTest(unittest.TestCase):
             self.assertFalse(result["passed"])
             self.assertEqual(result["failed"], ["LICENSE"])
 
+            # The Hub still answers the former organization's IDs through a redirect.
+            former = (
+                "https://huggingface.co/collections/llm-semantic-router/decision-20-abc"
+            )
+            (package / "README.md").write_text(
+                README.replace(
+                    "https://huggingface.co/collections/org/decision-20-abc", former
+                ),
+                encoding="utf-8",
+            )
+            manifest["files_sha256"]["README.md"] = hashlib.sha256(
+                (package / "README.md").read_bytes()
+            ).hexdigest()
+            (package / "MODEL_MANIFEST.json").write_text(json.dumps(manifest))
+            with mock.patch.object(hub_links, "fetch", side_effect=hub(None)):
+                result = hub_links.check(
+                    "org/Decision-2.0-Kai-0.6B", "rev", package, "t"
+                )
+            self.assertFalse(result["passed"])
+            self.assertEqual(result["failed"], [former])
+
 
 if __name__ == "__main__":
     unittest.main()

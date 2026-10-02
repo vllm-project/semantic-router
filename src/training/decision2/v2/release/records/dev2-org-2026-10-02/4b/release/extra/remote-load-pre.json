@@ -1,0 +1,19 @@
+{
+  "checks": {
+    "downloaded_revision": true,
+    "remote_config": true,
+    "tokenizer": true
+  },
+  "config_class": "Decision2Config",
+  "downloaded_revisions": [
+    "9f2ddafc57f60c62239c0ca47c54c5cd3ec4aff9"
+  ],
+  "model_type": "decision2",
+  "passed": true,
+  "repo": "vllm-sr/Decision-2.0-Nox-4B",
+  "revision": "9f2ddafc57f60c62239c0ca47c54c5cd3ec4aff9",
+  "schema": "dev2-org-remote-load/1",
+  "tokenizer_class": "Qwen2Tokenizer",
+  "tokenizer_size": 248077,
+  "utc": "2026-10-02T10:32:05.426426+00:00"
+}

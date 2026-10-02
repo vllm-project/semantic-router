@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Report the llm-semantic-router organization's PRIVATE Hugging Face storage and headroom;
+# Report the vllm-sr organization's PRIVATE Hugging Face storage and headroom;
 # exit non-zero when the headroom is below a threshold.
 #
 # Usage:
@@ -27,7 +27,8 @@ usage() {
   exit 2
 }
 
-org="llm-semantic-router"
+# The Hub lists a renamed organization's repositories only under its new name.
+org="vllm-sr"
 node=""
 from_json=""
 min_free="0"

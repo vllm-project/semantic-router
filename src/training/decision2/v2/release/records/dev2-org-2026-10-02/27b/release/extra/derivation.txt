@@ -1,0 +1,2 @@
+v2/release/specs/dev2-27b-org.json 9e7dba87bab0e8c40edbbc39f2d64ead742045643d9490ff9fa2e03e60ab5132
+v2/release/records/dev2-org-2026-10-02/Decision-2.0-Vega-27B.decision.org.json 08d19f0e7d482fef162efb2231624f4d52f03ad86f194cac4a2a7257faa03aea
