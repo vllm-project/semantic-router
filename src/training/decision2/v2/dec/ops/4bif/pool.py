@@ -5,10 +5,11 @@
 Every NAME is a ``launch.sh`` DIAGNOSTIC entry of the mirror. In NAME order: the 86-request parity gate on one GPU
 (``launch.sh parity``), then each shard of the panel as its own ``launch.sh run --only k`` with shard k on the GPU it
 is dispatched to. A GPU is taken only if its lease owner file is absent, is a released eval-ix1 lease, names one of
-these NAMEs, or is an abandoned eval-ix1 lease (its run finished STALE seconds ago or more: every shard directory
-ended, or its parity gate wrote parity.json; the GPU idle over IDLE_POLLS consecutive polls; a chain starts its next
-job within a minute), and rocm-smi shows it idle (the harness checks again and refuses a busy GPU). A restarted pool
-adopts its own parity gates and shards whose containers still run.
+these NAMEs, or is an abandoned eval-ix1 lease (its job on this GPU finished STALE seconds ago or more: every shard
+the run's launcher records placed on this GPU ended, or its parity gate wrote parity.json; the GPU idle over
+IDLE_POLLS consecutive polls; a chain starts its next job within a minute), and rocm-smi shows it idle (the harness
+checks again and refuses a busy GPU). A restarted pool adopts its own parity gates and shards whose containers still
+run.
 Another job's active lease is never taken, even between its shards; a taken-over owner file is kept as
 ``owner.prev-4bif-<UTC>``. An attempt the harness refuses before anything ran (its parity
 reference pass or shard directory never started) is moved to ``void/`` with its write-once launcher record and
@@ -37,7 +38,22 @@ STALE = 15 * 60
 IDLE_POLLS = 3
 
 
-def abandoned(text: str) -> bool:
+def shards_on(run: Path, gpu: int) -> list[Path]:
+    """The shard directories of an IX1 run that its launcher records placed on this GPU."""
+    found = []
+    for record in run.glob("launcher-run*.json"):
+        try:
+            gpus = [int(g) for g in json.loads(record.read_text())["gpus"]]
+        except (OSError, ValueError, KeyError):
+            continue
+        only = record.stem.removeprefix("launcher-run").removeprefix("-only-")
+        ks = [int(k) for k in only.split("_")] if only else range(len(gpus))
+        found += [run / f"shard-{k}" for k in ks if k < len(gpus) and gpus[k] == gpu]
+    return found
+
+
+def abandoned(text: str, gpu: int) -> bool:
+    """An eval-ix1 lease whose job on this GPU ended at least STALE seconds ago."""
     if "track=eval-ix1" not in text.splitlines():
         return False
     found = re.search(r"^run_dir=(.+)$", text, re.M)
@@ -47,9 +63,8 @@ def abandoned(text: str) -> bool:
     if (run / "parity.json").is_file():
         ends = [run / "parity.json"]
     else:
-        shards = list(run.glob("shard-*"))
-        ends = [w / "end_epoch" for w in shards]
-        if not shards or not all(e.is_file() for e in ends):
+        ends = [w / "end_epoch" for w in shards_on(run, gpu)]
+        if not ends or not all(e.is_file() for e in ends):
             return False
     return time.time() - max(e.stat().st_mtime for e in ends) >= STALE
 
@@ -93,7 +108,7 @@ def allowed(gpu: int, names: list[str], streak: dict[int, int]) -> str | None:
         return "released"
     if any(re.search(rf"^purpose=IX1 .* {re.escape(n)}$", text, re.M) for n in names):
         return "ours"
-    if streak.get(gpu, 0) >= IDLE_POLLS and abandoned(text):
+    if streak.get(gpu, 0) >= IDLE_POLLS and abandoned(text, gpu):
         return "abandoned"
     return None
 
