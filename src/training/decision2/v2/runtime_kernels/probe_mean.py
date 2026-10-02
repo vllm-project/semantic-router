@@ -121,8 +121,15 @@ def _rsqrt_kernel(v_ptr, out_ptr, eps, N, BLOCK: tl.constexpr, MODE: tl.constexp
         r = libdevice.rsqrt(v)
     elif MODE == 1:
         r = tl.math.rsqrt(v)
-    else:
+    elif MODE == 2:
         r = 1.0 / tl.sqrt_rn(v)
+    elif MODE == 3:
+        r = (1.0 / tl.sqrt_rn(v.to(tl.float64))).to(tl.float32)
+    elif MODE == 4:
+        r = libdevice.rsqrt(v.to(tl.float64)).to(tl.float32)
+    else:
+        r = libdevice.rsqrt(v)
+        r = r * (1.5 - 0.5 * v * r * r)
     tl.store(out_ptr + i, r, mask=m)
 
 
@@ -176,6 +183,9 @@ def main() -> None:
             (0, "ocml_rsqrt"),
             (1, "tl_math_rsqrt"),
             (2, "one_over_sqrt_rn"),
+            (3, "fp64_div_sqrt"),
+            (4, "fp64_ocml_rsqrt"),
+            (5, "ocml_rsqrt_newton"),
         ):
             r = torch.empty_like(ref_mean)
             _rsqrt_kernel[(triton.cdiv(8192, 1024),)](
