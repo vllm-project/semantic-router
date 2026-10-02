@@ -358,6 +358,13 @@ def _context(backend: Any) -> Any:
     return nullcontext()
 
 
+def _release(backend: Any) -> None:
+    """Drop the fast path's cached Linear-input cast (fast.py) after a forward."""
+    memo = getattr(getattr(backend, "fast", None), "memo", None)
+    if memo is not None:
+        memo.clear()
+
+
 class Tree:
     """A request packed into one row: the shared prefix, then every suffix in order.
 
@@ -592,6 +599,9 @@ def _as_tree(backbone: Any, tree: Any, ids: Any, layer_types: set[str]):
         AttentionInterface.register(TREE_ATTENTION, _tree_attention)
     config = _core(backbone).config
     gdn = [m for m in backbone.modules() if type(m).__name__ == "Qwen3_5GatedDeltaNet"]
+    # Fused decoder-layer forwards (fast.py) read tensor masks only: run the originals.
+    fused = [m for m in backbone.modules() if hasattr(m, "_decision2_fused")]
+    swapped = [(m, m.__dict__.get("forward")) for m in fused]
 
     def unpack(hidden: Any) -> Any:
         return tree.rows(hidden[0, tree.prefix :])
@@ -619,12 +629,14 @@ def _as_tree(backbone: Any, tree: Any, ids: Any, layer_types: set[str]):
     ]
     for m in gdn:
         m.forward = partial(_tree_gated_delta, m)
+    for m in fused:
+        m.forward = m._decision2_fused["original"]
     config._attn_implementation = TREE_ATTENTION
     try:
         yield
     finally:
         config._attn_implementation = saved
-        for m, forward in zip(gdn, forwards):
+        for m, forward in [*zip(gdn, forwards), *swapped]:
             if forward is None:
                 del m.forward
             else:
@@ -690,6 +702,7 @@ def exact_rows(
             )
         with torch.inference_mode(), _context(backend):
             output = backend.model(**batch)
+        _release(backend)
         for index, values in zip(subset, output.float().cpu()):
             found[index] = values
     return found
@@ -784,6 +797,7 @@ def _tree_logits(backend: Any, encoded: list, prefix: int, pad_id: int) -> list:
     with torch.inference_mode(), _context(backend):
         with _as_tree(model.backbone, tree, ids, layer_types):
             output = model(**batch)
+    _release(backend)
     if len(output) != len(group):
         raise RuntimeError("Model returned the wrong number of question answers")
     return list(output.float().cpu())
@@ -841,6 +855,7 @@ def _cache_logits(
         with torch.inference_mode(), _context(backend):
             with _with_cache(backbone, _suffix_cache(cache, kv, len(group), torch)):
                 output = model(**batch)
+        _release(backend)
         if len(output) != len(group):
             raise RuntimeError("Model returned the wrong number of question answers")
         for index, values in zip(group, output.float().cpu()):
