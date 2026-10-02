@@ -225,7 +225,7 @@ def auto_shared_tokens(config: Any, graphs: bool = False) -> int:
     if "linear_attention" not in set(getattr(config, "layer_types", None) or ()):
         return 3072 if graphs else 1024
     if hidden <= 1024:
-        return 4096 if graphs else 2048
+        return 6144 if graphs else 2048
     if hidden <= 2048:
         return 3072 if graphs else 1536
     if hidden <= 3072:
