@@ -17,6 +17,11 @@
 #   lease    NODE "GPUS": M17's owner files -> the harness form (track=eval-ix1, status=released, dec-m17 named)
 #   pool     NODE "GPUS": m17_ixpool.py, detached, for ARM's NAME (ARM may be a comma list)
 #   status   NODE: per-shard records, ends and exit codes
+#   stop-pool NODE: stop NODE's m17_ixpool.py (its shard containers run on and record their own ends)
+#   lanes    NODE "GPU:k,k ..." ["GPU:k ..."]: m17-lanes.sh, detached: ARM's remaining shards per GPU, each lane after
+#            the shard already running on its GPU (second list)
+#   parity-copy NODE: ARM's passed parity gate (parity.json, records and frozen cache) node E -> NODE through node A,
+#            so the candidate keeps one parity gate when its shards run on NODE
 #   relay    NODE: runs/NAME (shards, launcher records) NODE -> node C through node A (lists equal)
 #   score    node C: score.sh --size 4B over panel-8 (merge, port + kit, compare)
 #   boot     node C, CPU, detached: family_delta vs DEV2.0-4B-LH and the paired bootstrap of the full panel
@@ -181,6 +186,21 @@ for w in sorted(glob.glob(f"{run}/shard-*"), key=lambda p: int(p.rsplit("-", 1)[
 print(f"GPU-h so far (current intervals) {total:.2f}")
 EOF
     ;;
+  stop-pool)
+    on "$NODE" "pkill -f 'm17_ixpool.py --mirror' && echo stopped || echo 'no pool running'" ;;
+  lanes)
+    [ -n "$NODE" ] && [ -n "$GPUS" ] || { echo "lanes needs NODE and a plan" >&2; exit 2; }
+    on "$NODE" "test -f $S/v2/dec/ops/m17/m17-lanes.sh && python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1]))[\"pass\"] else 1)' $R/parity/$NAME/parity.json" \
+      || { echo "mirror lacks m17-lanes.sh, or $NAME has no passed parity gate on node $NODE" >&2; exit 3; }
+    on "$NODE" "mkdir -p $R/runs/$NAME && echo panel-8 > $R/runs/$NAME/m17-panel && setsid nohup bash $S/v2/dec/ops/m17/m17-lanes.sh $M $NAME panel-8 '$GPUS' '${6:-}' \
+      >> $R/logs/m17-lanes-$NAME-$NODE.log 2>&1 < /dev/null &"
+    echo "$(date -u +%FT%TZ) $NAME lanes on node $NODE: $GPUS (after: ${6:-none})" ;;
+  parity-copy)
+    [ -n "$NODE" ] && [ "$NODE" != e ] || { echo "parity-copy needs a target other than node E" >&2; exit 2; }
+    on e "python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1]))[\"pass\"] else 1)' $R/parity/$NAME/parity.json" \
+      || { echo "$NAME has no passed parity gate on node E" >&2; exit 3; }
+    on "$NODE" "umask 077; mkdir -p $R/parity $R/logs $R/runs"
+    hop e "$NODE" "$R/parity" "$NAME" ;;
   relay)
     [ -n "$NODE" ] && [ "$NODE" != c ] || { echo "relay needs the run's node" >&2; exit 2; }
     on "$NODE" "for k in 0 1 2 3 4 5 6 7; do test \"\$(cat $R/runs/$NAME/shard-\$k/exit_code 2>/dev/null)\" = 0 || exit 1; done" \
