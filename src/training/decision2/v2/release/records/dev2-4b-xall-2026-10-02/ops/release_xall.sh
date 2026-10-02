@@ -16,19 +16,22 @@
 #                 evaluate and the IX1 86-request parity gate (v2/eval/ix1/launch.sh parity) on a hard-linked copy of
 #                 the download (DEV2.0-4B-SDMLxALL-hub); only if all pass, purge_superseded.py plan and apply (the
 #                 137e28ce weight blobs, rewrite_history=False; node copy = the phase A release's verified package)
+#   --post WORK   for WORK's upload (still main): only the checks after release.sh, the IX1 gate and the purge
+# Never concurrently with another release.sh for this repository (other repositories' releases may share the node).
 # Usage (node A): bash <mirror>/v2/release/records/dev2-4b-xall-2026-10-02/ops/release_xall.sh <mode> --gpu N
 set -euo pipefail
 mode="${1:-}"
 shift || true
-gpu=""
+gpu="" post=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --gpu) gpu=$2; shift 2 ;;
+    --post) mode=--post post=$2; shift 2 ;;
     *) echo "unknown argument $1" >&2; exit 2 ;;
   esac
 done
-[[ "$mode" =~ ^--(prerelease|release)$ ]] || { echo "mode: --prerelease|--release" >&2; exit 2; }
-[[ "$gpu" =~ ^[1-7]$ ]] || { echo "--gpu 1-7 (node A)" >&2; exit 2; }
+[[ "$mode" =~ ^--(prerelease|release|post)$ ]] || { echo "mode: --prerelease|--release|--post WORK" >&2; exit 2; }
+[[ "$gpu" =~ ^[0-7]$ ]] || { echo "--gpu 0-7 (node A)" >&2; exit 2; }
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 S=$(cd "$(dirname "$0")/../../../../.." && pwd)
 SRC=$(basename "$(cd "$S/../../.." && pwd)")
@@ -66,6 +69,15 @@ if [[ -e "$D/$name.decision.xall.json" ]]; then cmp "$DECISION" "$D/$name.decisi
   cp "$DECISION" "$D/$name.decision.xall.json"; chmod 444 "$D/$name.decision.xall.json"; fi
 trap 'rm -f "/data/dev2/leases/gpu$gpu.lock/owner.$LEASE"' EXIT
 kernel_args=(--site /opt/decision-fla --require-kernels --env TRITON_CACHE_AUTOTUNING=1 --env HIP_FORCE_DEV_KERNARG=1)
+if [[ "$mode" == --post ]]; then
+W=$post
+[[ -f "$W/receipts/upload.json" ]] || { echo "$W has no upload receipt" >&2; exit 2; }
+main=$("$HFPY" -c 'import sys; from huggingface_hub import HfApi; print(HfApi().model_info(sys.argv[1]).sha)' "$REPO")
+[[ "$main" == "$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['revision'])" "$W/receipts/upload.json")" ]] \
+  || { echo "$REPO main $main is not $W's upload" >&2; exit 1; }
+PKG=$W/package/$name
+status=0
+else
 W=/data/dev2/runs/release/dev2-4b-xall-${mode#--}-$TS
 (cd "$S" && python3 -m v2.release.gate profile --spec "$SPEC") > "/data/dev2/runs/release/dev2-4b-xall-profile-$TS.json" \
   || { echo "the Index-first profile does not pass" >&2; exit 1; }
@@ -82,7 +94,7 @@ hub_args=()
 if [[ "$mode" == --release ]]; then
   [[ -n "$TF518_DIGEST" && "$(digest "$TF518")" == "$TF518_DIGEST" ]] \
     || { echo "Transformers 5.18 site $TF518 does not match TF518_DIGEST" >&2; exit 1; }
-  if pgrep -f "v2/release/release[.]sh" >/dev/null; then echo "another release.sh runs on this node" >&2; exit 1; fi
+  if pgrep -af "v2/release/release[.]sh" | grep -q -- "specs/dev2-4b-"; then echo "another release.sh for $REPO runs" >&2; exit 1; fi
   # Publish only on top of the revision the final decision supersedes (never concurrently with another worker).
   main=$("$HFPY" -c 'import sys; from huggingface_hub import HfApi; print(HfApi().model_info(sys.argv[1]).sha)' "$REPO")
   [[ "$main" == "$superseded" ]] || { echo "$REPO main is $main, not the superseded revision $superseded" >&2; exit 1; }
@@ -104,7 +116,8 @@ PKG=$W/package/$name
 docker run --rm --network none -e HIP_VISIBLE_DEVICES= -e CUDA_VISIBLE_DEVICES= -v "$PKG:$PKG:ro" -w /tmp \
   --entrypoint python3 "$IMAGE" -I -B -c 'import json, sys; sys.path.insert(0, sys.argv[1]); from decision2 import verify_bundle; m = verify_bundle(sys.argv[1]); print(json.dumps({"verify_bundle": "ok", "files": len(m.get("files_sha256") or {}), "identity": (m.get("identity") or {}).get("model_sha256")}))' \
   "$PKG" | tee "$W/extra/verify-bundle.json"
-if [[ "$mode" != --release ]]; then
+fi
+if [[ "$mode" == --prerelease ]]; then
   echo "work=$W package=$PKG manifest=$(sha256sum < "$PKG/MODEL_MANIFEST.json" | cut -c1-64) (no upload)"
   exit 0
 fi
