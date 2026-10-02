@@ -11,7 +11,7 @@
 #   pkg    NODE            copy the 9B IX1 package from node C to NODE (SHA-256 lists equal)
 #   ref    NODE            copy K-a13IB-bf16's run (merged results, compare, receipt) from node C to NODE
 #   panel  NODE PANEL [FROM]  copy an IX1 panel directory from node FROM (default A) to NODE
-#   ship   NAME NODE       node B soup/NAME (an FP32 point of post.sh) -> NODE models/ix1/9b-m10/ckpt/NAME, SHA-256
+#   ship   NAME NODE       node B (M10_FROM=a: node A, KX) soup/NAME (an FP32 point of post.sh) -> NODE models/ix1/9b-m10/ckpt/NAME, SHA-256
 #                          lists equal; its model SHA-256 (the soup build's) is written next to it
 #   bf16   NODE NAME       v2.release.bf16_copy of the shipped point in the scored image (CPU, no network), then
 #                          restaged as M10-NAME-bf16 (identity / loaded count / T = 1 checks)
@@ -108,10 +108,11 @@ case "$STAGE" in
     copy "$FROM" "$R/$PNAME" "$N" "$R/$PNAME" ;;
   ship)
     NAME=${1:?NAME} N=${2:?NODE}
-    dir=$(on b "cat $B9/soup/$NAME/DONE")
-    model=$(on b "grep -o '\"model_sha256\": *\"[0-9a-f]\{64\}\"' $B9/soup/$NAME/build.stdout.log | tail -1 | grep -o '[0-9a-f]\{64\}'")
+    F=${M10_FROM:-b}
+    dir=$(on "$F" "cat $B9/soup/$NAME/DONE")
+    model=$(on "$F" "grep -o '\"model_sha256\": *\"[0-9a-f]\{64\}\"' $B9/soup/$NAME/build.stdout.log | tail -1 | grep -o '[0-9a-f]\{64\}'")
     [[ "$model" =~ ^[0-9a-f]{64}$ ]] || { echo "no model SHA-256 in $NAME's build log" >&2; exit 3; }
-    copy b "$dir" "$N" "$MD/9b-m10/ckpt/$NAME"
+    copy "$F" "$dir" "$N" "$MD/9b-m10/ckpt/$NAME"
     on "$N" "echo $model > $MD/9b-m10/ckpt/$NAME.model_sha256"
     echo "$NAME shipped to node $N, model ${model:0:12}" ;;
   bf16)

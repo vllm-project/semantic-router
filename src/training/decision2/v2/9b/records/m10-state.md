@@ -2,6 +2,30 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 08:15Z (16:15 UTC+8), worker 7e1c9ce8
+
+- **Amendment 4 (arm KX)** committed `c8ef116f9` before any KX row was built, then mirrored to nodes A and B.
+  The KX TRAIN was built on node B (CPU). The base build `4f12c94b…` has 156,687 rows: 60,364,987 native tokens
+  (IB share .2149) with a multilingual share of .3285. The ML block adds 19,472 `~m2` copies (12,429 groups, 33
+  languages, 8,761,244 tokens), giving TRAIN `f1d9ecf8…` / teacher `2a7ac626…`: 176,159 rows and 69,126,231 tokens.
+  The multilingual share is .4136, x60's .4136. The data went node B → C → A (relay removed), was re-hashed and
+  locked on node A (`READY-m10.json` arm KX).
+- Node A's Lux zero-step member (`m9-KIB-s1-zero`) has the same SHA-256 list as node B's (list `6b1d31f3…`). The
+  Triton cache `f83b1d10` was copied from node A's M9 cache.
+- **Training, node A:** KX-s1 (pre-warm) started 07:57Z on GPU1. KX-s2 / s3 started 08:03Z on GPU2 / 7, and all three
+  passed preflight. They should finish ≈ 11:15–11:25Z (≈ 15% more tokens than K-a13IB). The KX post chain waits on
+  node A.
+- **Training, node B:** unchanged. KIBM-s3 is on GPU3, KIB4-s1 / s2 on GPU6 / 7 and KSW-s1 / s2 on GPU2 / 4 (all
+  ≈ 10:05–10:30Z). Node B M10 GPU-h was 14.4 at 07:38Z.
+- **Index:** KUP-a33 runs on node C, greedy over pool GPU1–7 (parity passed; shards placing). KUP-a25 / a40 were
+  restaged on node C (`cedbf102…` / `79da5e4d…`) and copied to node A (`ix.sh pkgcopy`). Panel-7 and the reference run
+  were copied C → A. A second chain runs on node A pool GPU3–6 (parity passed for both; shards placing). The first
+  node A launch used the short names `KUP-a25` / `KUP-a40`, so the IX1 launcher printed usage and exited 2. Nothing
+  was measured. The relaunch used the registered names `M10-KUP-a25-bf16` / `M10-KUP-a40-bf16`.
+- **`ix.sh ship`** now takes `M10_FROM=a` for KX's soups, which are built on node A.
+- **Budget (90 GPU-h):** ≈ 30 for node B training plus labeling, ≈ 10 for KX, and ≈ 2.7 per Index run. If all 15
+  points are measured, the total is ≈ 80.
+
 ## 2026-10-02 07:45Z (15:45 UTC+8), worker 7e1c9ce8
 
 - **Done:** KUP-s1 / s2 / s3 and KIBM-s1 / s2 (07:0x–07:21Z). KUP soup (`61b5bf75…`) and points built on node B:
