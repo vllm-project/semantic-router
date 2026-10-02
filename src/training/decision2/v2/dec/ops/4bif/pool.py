@@ -5,9 +5,10 @@
 Every NAME is a ``launch.sh`` DIAGNOSTIC entry of the mirror. In NAME order: the 86-request parity gate on one GPU
 (``launch.sh parity``), then each shard of the panel as its own ``launch.sh run --only k`` with shard k on the GPU it
 is dispatched to. A GPU is taken only if its lease owner file is absent, is a released eval-ix1 lease, names one of
-these NAMEs, or is an abandoned eval-ix1 lease (its run finished: every shard directory ended, or its parity gate
-wrote parity.json; the file untouched for STALE seconds; the GPU idle over IDLE_POLLS consecutive polls, longer than
-any chain's gap between two shards), and rocm-smi shows it idle (the harness checks again and refuses a busy GPU).
+these NAMEs, or is an abandoned eval-ix1 lease (its run finished STALE seconds ago or more: every shard directory
+ended, or its parity gate wrote parity.json; the GPU idle over IDLE_POLLS consecutive polls; a chain starts its next
+job within a minute), and rocm-smi shows it idle (the harness checks again and refuses a busy GPU). A restarted pool
+adopts its own parity gates and shards whose containers still run.
 Another job's active lease is never taken, even between its shards; a taken-over owner file is kept as
 ``owner.prev-4bif-<UTC>``. An attempt the harness refuses before anything ran (its parity
 reference pass or shard directory never started) is moved to ``void/`` with its write-once launcher record and
@@ -36,19 +37,48 @@ STALE = 15 * 60
 IDLE_POLLS = 3
 
 
-def abandoned(path: Path, text: str) -> bool:
+def abandoned(text: str) -> bool:
     if "track=eval-ix1" not in text.splitlines():
-        return False
-    if time.time() - path.stat().st_mtime < STALE:
         return False
     found = re.search(r"^run_dir=(.+)$", text, re.M)
     if not found:
         return False
     run = Path(found.group(1))
     if (run / "parity.json").is_file():
-        return True
-    shards = list(run.glob("shard-*"))
-    return bool(shards) and all((w / "end_epoch").is_file() for w in shards)
+        ends = [run / "parity.json"]
+    else:
+        shards = list(run.glob("shard-*"))
+        ends = [w / "end_epoch" for w in shards]
+        if not shards or not all(e.is_file() for e in ends):
+            return False
+    return time.time() - max(e.stat().st_mtime for e in ends) >= STALE
+
+
+def containers() -> set[str]:
+    out = subprocess.run(
+        ["docker", "ps", "--format", "{{.Names}}"], capture_output=True, text=True
+    ).stdout
+    return set(out.split())
+
+
+def parity_alive(name: str) -> bool:
+    """A launch.sh parity process of NAME (started by an earlier pool) still runs on this node."""
+    for cmdline in Path("/proc").glob("[0-9]*/cmdline"):
+        try:
+            args = cmdline.read_bytes().split(b"\0")
+        except OSError:
+            continue
+        if (
+            any(a.endswith(b"launch.sh") for a in args)
+            and b"parity" in args
+            and name.encode() in args
+        ):
+            return True
+    return False
+
+
+def slug(name: str) -> str:
+    return name.lower().replace(".", "_")
 
 
 def allowed(gpu: int, names: list[str], streak: dict[int, int]) -> str | None:
@@ -63,7 +93,7 @@ def allowed(gpu: int, names: list[str], streak: dict[int, int]) -> str | None:
         return "released"
     if any(re.search(rf"^purpose=IX1 .* {re.escape(n)}$", text, re.M) for n in names):
         return "ours"
-    if streak.get(gpu, 0) >= IDLE_POLLS and abandoned(path, text):
+    if streak.get(gpu, 0) >= IDLE_POLLS and abandoned(text):
         return "abandoned"
     return None
 
@@ -121,10 +151,17 @@ def main() -> None:
     shards = {name: {k: "pending" for k in range(n)} for name in names}
     mine: dict[int, tuple] = {}
     streak: dict[int, int] = {}
+    running = containers()
     for name in names:
         done = R / "parity" / name / "parity.json"
+        live = [c for c in running if c.startswith(f"ix1-parity-{slug(name)}-g")]
         if done.is_file():
             parity[name] = "pass" if json.loads(done.read_text())["pass"] else "fail"
+        elif live or parity_alive(name):
+            g = int(live[0].rsplit("-g", 1)[1].split("-")[0]) if live else -1
+            parity[name] = "running"
+            mine[g] = (name, "parity", None)
+            log(f"{name}: adopting its running parity gate on gpu{g}")
         elif (R / "parity" / name).exists():
             parity[name] = "fail"
             log(
@@ -134,9 +171,15 @@ def main() -> None:
             parity[name] = "pending"
         run = R / "runs" / name
         for k in range(n):
+            live = [c for c in running if c.startswith(f"ix1-{slug(name)}-s{k}-g")]
             if (run / f"shard-{k}" / "end_epoch").is_file():
                 code = (run / f"shard-{k}" / "exit_code").read_text().strip()
                 shards[name][k] = "done" if code == "0" else "fail"
+            elif live:
+                g = int(live[0].rsplit("-g", 1)[1])
+                shards[name][k] = "running"
+                mine[g] = (name, k)
+                log(f"{name}: adopting its running shard {k} on gpu{g}")
             elif (run / f"shard-{k}").exists():
                 shards[name][k] = "fail"
                 log(
@@ -147,11 +190,17 @@ def main() -> None:
         for g, job in list(mine.items()):
             name, what = job[0], job[1]
             if what == "parity":
-                if job[2].poll() is None:
-                    continue
                 done = R / "parity" / name / "parity.json"
+                if job[2] is None:
+                    if parity_alive(name):
+                        continue
+                    code = 0 if done.is_file() else 1
+                elif job[2].poll() is None:
+                    continue
+                else:
+                    code = job[2].returncode
                 ok = (
-                    job[2].returncode == 0
+                    code == 0
                     and done.is_file()
                     and json.loads(done.read_text())["pass"]
                 )
@@ -167,7 +216,7 @@ def main() -> None:
                 else:
                     parity[name] = "pass" if ok else "fail"
                     log(
-                        f"{name} parity on gpu{g}: {'PASS' if ok else 'FAILED'} (exit {job[2].returncode})"
+                        f"{name} parity on gpu{g}: {'PASS' if ok else 'FAILED'} (exit {code})"
                     )
             else:
                 w = R / "runs" / name / f"shard-{what}"
