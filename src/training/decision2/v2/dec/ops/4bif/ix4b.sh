@@ -4,20 +4,20 @@
 # scoring), each restaged into the released LH package DEV2.0-4B 13d42143 (Decision-2.0-Nox-4B's runtime and package;
 # T = 1, calibration none) and compared with IX1's run of that package (node C runs/DEV2.0-4B-LH, panel run IDs
 # 6455d7be...). A candidate is measured on the weights a release ships: the v2.release.bf16_copy of its frozen FP32
-# soup or interpolation point, built on node B (CPU, image host2) from the M14 / M15 / M16 directories (read only).
-# M13 4b-LHA10SD keeps its existing FP32 run (dec M15 part A, node D runs/DEV2.0-4B-LHA10SD), imported to node C.
-# Index values stay in the node private directories and in ~/code/decision2-program/private/4b-indexfirst/; this
-# script prints none.
+# soup or interpolation point (the M14 / M15 / M16 directories on node B / F, read only), built on the Index node in
+# a CPU-only container of the scored image host2. M13 4b-LHA10SD keeps its existing FP32 run (dec M15 part A, node D
+# runs/DEV2.0-4B-LHA10SD), imported to node C. Index values stay in the node private directories and in
+# ~/code/decision2-program/private/4b-indexfirst/; this script prints none.
 #
 # Usage: ix4b.sh MIRROR_SHA CAND STAGE [NODE] [GPU | "GPUS"]
 #   CAND     UP (M14 4b-LHA10UP soup) | a75 | a50 (M16 4b-LHA10SD-a75 / -a50) | SDML (M15 4b-LHA10SDML soup)
 #            | SDB (the M13 4b-LHA10SD soup as BF16) | SD (M13's FP32 run: import and boot only)
-#   bf16     node B: test_bf16_copy, then v2.release.bf16_copy of the source -> /data/dev2/runs/dec/4bif/bf16/CAND/
-#            {checkpoint, bf16-copy.json}; the receipt's source fingerprint must be the frozen model SHA-256 (SDML:
-#            the node-F soup is first copied to node B over node B's transfer key, per-file SHA-256 lists equal)
-#   stage    NODE (c | d): node B copy -> NODE /data/dev2/models/ix1/dec-4bif/NAME-ckpt over node B's transfer key
-#            (per-file SHA-256 lists equal), then v2.eval.ix1.restage onto DEV2.0-4B-13d42143 with the copy's model
-#            SHA-256; checks the identity, the loaded count 4,208,383,488 and calibration none
+#   stage    NODE (c | d): the FP32 source -> NODE /data/dev2/models/ix1/dec-4bif/src/CAND-fp32 over node B's
+#            transfer key (SDML: node F -> node B first; per-file SHA-256 lists equal at every hop); on NODE, image
+#            host2 without network or GPU: test_bf16_copy, then v2.release.bf16_copy -> NAME-ckpt (receipt
+#            NAME-bf16-copy.json; its source fingerprint must be the frozen model SHA-256); then v2.eval.ix1.restage
+#            onto DEV2.0-4B-13d42143 with the copy's model SHA-256, checking the identity, the loaded count
+#            4,208,383,488 and calibration none
 #   parity   NODE GPU: launch.sh parity over the 86 compatibility requests; parity/NAME/parity.json must pass
 #   run      NODE "GPUS": node C, 7 GPUs: launch.sh run over panel-7; node D, 4 GPUs: lanes.sh over panel-8 (two
 #            shards per GPU, one after another); detached on the node
@@ -56,8 +56,7 @@ S=$M/src/training/decision2
 R=/data/dev2/private/eval/index021/ix1
 MD=/data/dev2/models/ix1/dec-4bif
 BASEPKG=/data/dev2/models/ix1/DEV2.0-4B-13d42143
-PKG=$MD/$NAME-r13d42143 CK=$MD/$NAME-ckpt
-B16=/data/dev2/runs/dec/4bif/bf16/$CAND
+PKG=$MD/$NAME-r13d42143 CK=$MD/$NAME-ckpt FSRC=$MD/src/$CAND-fp32
 LOADED=4208383488
 REF=DEV2.0-4B-LH
 KEY="-i /root/.ssh/d2_temp_cd -o BatchMode=yes -o ConnectTimeout=30"
@@ -70,48 +69,43 @@ panel_of() { [ "$1" = c ] && echo panel-7 || echo panel-8; }
 need_node() { [[ "$NODE" == c || "$NODE" == d ]] || { echo "NODE must be c or d" >&2; exit 2; }; }
 mirror_on() { on "$1" "test -f $S/v2/eval/ix1/launch.sh" || { echo "mirror $SHA is not on node $1" >&2; exit 2; }; }
 case "$STAGE" in
-  bf16)
-    [ -n "$SRC_NODE" ] || { echo "$CAND has no source checkpoint" >&2; exit 2; }
-    mirror_on b
-    on b "test ! -e $B16" || { echo "$B16 exists: refusing to overwrite" >&2; exit 3; }
-    on b "test \"\$(docker image inspect -f '{{.Id}}' $IMAGE)\" = $IMAGE_ID" || { echo "image $IMAGE is not $IMAGE_ID" >&2; exit 3; }
-    src=$SRC
-    if [ "$SRC_NODE" = f ]; then
-      src=/data/dev2/runs/dec/4bif/inputs/$CAND
-      on b "test ! -e $src" || { echo "$src exists on node B" >&2; exit 3; }
-      on b "umask 022; mkdir -p $(dirname "$src") && rsync -a -e 'ssh $KEY' $(addr f):$SRC/ $src.part/ && mv $src.part $src"
-      a=$(on f "$(sums "$SRC")") b=$(on b "$(sums "$src")")
-      [ -n "$a" ] && [ "$a" = "$b" ] || { echo "node B copy of the node-F soup differs" >&2; exit 3; }
-      echo "node-F soup copied to node B: $(wc -l <<< "$a") files, SHA-256 lists equal"
-    fi
-    on b "mkdir -p $B16 && cd $S && docker run --rm --network none -e HIP_VISIBLE_DEVICES= -e CUDA_VISIBLE_DEVICES= \
-      -e ROCR_VISIBLE_DEVICES= -e PYTHONPATH=$S -v $S:$S:ro -v $src:$src:ro -v $B16:$B16 -w $S --entrypoint python3 \
-      $IMAGE -B -m unittest v2.release.tests.test_bf16_copy > $B16/test_bf16_copy.log 2>&1 && \
-      docker run --rm --network none -e HIP_VISIBLE_DEVICES= -e CUDA_VISIBLE_DEVICES= -e ROCR_VISIBLE_DEVICES= \
-      -e PYTHONPATH=$S -v $S:$S:ro -v $src:$src:ro -v $B16:$B16 -w $S --entrypoint python3 $IMAGE \
-      -B -m v2.release.bf16_copy --source $src --output $B16/checkpoint --receipt $B16/bf16-copy.json > $B16/bf16.log 2>&1"
-    on b "python3 - $B16/bf16-copy.json $FP32" << 'EOF'
-import json, sys
-r = json.load(open(sys.argv[1]))
-assert r["source_model_sha256"] == sys.argv[2], f"source fingerprint {r['source_model_sha256']} != {sys.argv[2]}"
-print(f"bf16 copy: source {r['source_model_sha256'][:12]} -> {r['model_sha256']}, "
-      f"tensors {r['tensors_by_storage_dtype']}, bytes {r['tensor_bytes']:,}")
-EOF
-    echo "receipt $(on b "sha256sum < $B16/bf16-copy.json | cut -c1-64")" ;;
   stage)
     need_node; mirror_on "$NODE"
     [ -n "$SRC_NODE" ] || { echo "$CAND has no source checkpoint" >&2; exit 2; }
     on "$NODE" "grep -q '^  \[$NAME\]=\"DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f $PKG\"' $S/v2/eval/ix1/launch.sh" ||
       { echo "mirror $SHA has no DIAGNOSTIC entry $NAME -> $PKG" >&2; exit 2; }
-    model=$(on b "python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"model_sha256\"])' $B16/bf16-copy.json")
-    [[ "$model" =~ ^[0-9a-f]{64}$ ]] || { echo "no model SHA-256 in the bf16 receipt (run bf16 first)" >&2; exit 3; }
-    on "$NODE" "test ! -e $PKG" || { echo "$PKG exists: refusing to overwrite" >&2; exit 3; }
-    on "$NODE" "umask 077; mkdir -p $MD"
-    echo "$(date -u +%FT%TZ) $NAME: copying the BF16 checkpoint node B -> node $NODE"
-    on b "rsync -a -e 'ssh $KEY' $B16/checkpoint/ $(addr "$NODE"):$CK/"
-    a=$(on b "$(sums "$B16/checkpoint")") c=$(on "$NODE" "$(sums "$CK")")
+    on "$NODE" "test ! -e $PKG && test ! -e $CK && test ! -e $FSRC" || { echo "$NAME is already staged on node $NODE" >&2; exit 3; }
+    on "$NODE" "test \"\$(docker image inspect -f '{{.Id}}' $IMAGE)\" = $IMAGE_ID" || { echo "image $IMAGE is not $IMAGE_ID" >&2; exit 3; }
+    src=$SRC
+    if [ "$SRC_NODE" = f ]; then
+      src=/data/dev2/runs/dec/4bif/inputs/$CAND
+      if ! on b "test -d $src"; then
+        on b "mkdir -p $(dirname "$src") && rsync -a -e 'ssh $KEY' $(addr f):$SRC/ $src.part/ && mv $src.part $src"
+      fi
+      a=$(on f "$(sums "$SRC")") b=$(on b "$(sums "$src")")
+      [ -n "$a" ] && [ "$a" = "$b" ] || { echo "node B copy of the node-F soup differs" >&2; exit 3; }
+      echo "node-F soup on node B: $(wc -l <<< "$a") files, SHA-256 lists equal"
+    fi
+    on "$NODE" "umask 077; mkdir -p $MD/src"
+    echo "$(date -u +%FT%TZ) $NAME: copying the FP32 source node B -> node $NODE"
+    on b "rsync -a -e 'ssh $KEY' $src/ $(addr "$NODE"):$FSRC/"
+    a=$(on b "$(sums "$src")") c=$(on "$NODE" "$(sums "$FSRC")")
     [ -n "$a" ] && [ "$a" = "$c" ] || { echo "node $NODE copy differs from node B's" >&2; exit 3; }
-    echo "checkpoint: $(wc -l <<< "$a") files, SHA-256 lists equal"
+    echo "FP32 source: $(wc -l <<< "$a") files, SHA-256 lists equal"
+    cpu="docker run --rm --network none -e HIP_VISIBLE_DEVICES= -e CUDA_VISIBLE_DEVICES= -e ROCR_VISIBLE_DEVICES= \
+      -e PYTHONPATH=$S -v $S:$S:ro -v $FSRC:$FSRC:ro -v $MD:$MD -w $S --entrypoint python3 $IMAGE -B"
+    on "$NODE" "$cpu -m unittest v2.release.tests.test_bf16_copy > $MD/$NAME-test_bf16_copy.log 2>&1 && \
+      $cpu -m v2.release.bf16_copy --source $FSRC --output $CK --receipt $MD/$NAME-bf16-copy.json > $MD/$NAME-bf16.log 2>&1" ||
+      { echo "bf16 copy FAILED (see $MD/$NAME-*.log on node $NODE)" >&2; exit 3; }
+    model=$(on "$NODE" "python3 - $MD/$NAME-bf16-copy.json $FP32" << 'EOF'
+import json, sys
+r = json.load(open(sys.argv[1]))
+assert r["source_model_sha256"] == sys.argv[2], f"source fingerprint {r['source_model_sha256']} != {sys.argv[2]}"
+print(r["model_sha256"])
+EOF
+    )
+    [[ "$model" =~ ^[0-9a-f]{64}$ ]] || { echo "bad bf16 receipt" >&2; exit 3; }
+    echo "bf16 copy: source ${FP32:0:12} -> $model (receipt $(on "$NODE" "sha256sum < $MD/$NAME-bf16-copy.json | cut -c1-64"))"
     on "$NODE" "cd $S && PYTHONPATH=$S python3 -m v2.eval.ix1.restage --package $BASEPKG --out $PKG --checkpoint $CK --model-sha256 $model"
     on "$NODE" "python3 - $PKG/MODEL_MANIFEST.json $model $LOADED" << 'EOF'
 import json, sys
