@@ -2,6 +2,11 @@
 
 Index values stay private (node private stores and `decision2-program/private/arm-factory/`); this file has none.
 
+## 2026-10-02 20:15Z (04:15 UTC+8) — running
+
+- Node C: `4b-SDMLIB4-UP` s1 (GPU5), `4b-LHS17IB4-UP` s1 (GPU7), `4b-SDMLIB4W2` s2 (GPU6) in their full runs; the rest
+  of wave 7 is queued. Node B: `KIB4R2` s1 / s2 in their full runs. No failure. Node C GPU1–4 are the 4B owner's.
+
 ## 2026-10-02 19:50Z (03:50 UTC+8) — 4B wave 7 (amendment 8, the 4B owner's UP request) scheduled
 
 - UP weights (teacher-target rows ×1.5, IB rows ×1; byte-equal to M17's `4b-LHS17UP` weights on S17's TRAIN) built and
