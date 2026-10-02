@@ -7,6 +7,22 @@ Branch `xunzhuo/decision-2-training-dec-08bfast`. Index values stay private (nod
 `/data/dev2/private/eval/index021/ix1/runs/<name>/` and `decision2-program/private/m16-indexpath/`); this file holds
 verdicts, counts and hashes only.
 
+## 2026-10-02 04:42Z — 0.8B release running; 2B pick moves to `2b-RAUP`, whose formal collection is blocked
+
+- **0.8B:** BF16-run bootstraps (full + transfer-only, 2,000 replicates) done; lower bound > 0 (private). The BF16
+  rows match the FP32 run's choices on 120,173 / 120,226 rows. Private inputs staged; Index input
+  (`card_index`, default generator) `42055aca…`; assets rendered (banner A, receipt `980fe5c6…`); spec / decision
+  committed (`38478152`, `--check` byte-equal). Two release attempts stopped before any upload and were fixed:
+  - `gate.first_items` assumed a tier gate (0.8B has none). Fixed in `5e2c3fa92` with a test.
+  - The build screen rejected "node A" in `runtime_equivalence`; the text now names only the parity this release
+    runs.
+  - `--release` has run on node A GPU1 since 04:35:41Z; pre-upload native parity passed. Eos main is `9c7f3ea0`.
+- **2B:** the sweep's `IS-2b-RAUP` (M14 arm, `37c85fff…`) now has the largest lower bound, above `2b-RA-a75`;
+  `IS-2b-RASD` is still running. RAUP never went formal (no typed-FINAL / CSS15 / public 231 predictions). The M6
+  formal library collects only on node B GPU3 / GPU4, which the 9B M10 worker (`7e1c9ce8`) now holds with GPU2 / GPU7.
+  This needs the coordinator. The `2b-RA-a75` BF16 Index run (formal run complete, types OK) continues as the
+  ready alternative. Sol main is `8ed41433` (card-only: `MODEL_MANIFEST.json`, `assets/banner.png`).
+
 ## 2026-10-02 04:05Z — coordinator interrupt (11:40 UTC+8): one release per tier; 2B point is now `2b-RA-a75`
 
 - **Directive:** release only the best candidate per tier, directly. 0.8B: `08b-RA-a75` on its BF16 Index run. 2B:
