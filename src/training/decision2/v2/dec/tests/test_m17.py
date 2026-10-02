@@ -285,5 +285,46 @@ class RulesTest(unittest.TestCase):
         self.assertEqual(r.pick(rows), ["4b-LHS17SD-a33"])
 
 
+class SuccessorTest(unittest.TestCase):
+    def test_index_path_items(self) -> None:
+        succ = load("m17_successor")
+        bars = ["bar-lh", "bar-f"]
+
+        def out(v3_low, v3_high, red_high, rest=True):
+            items = {
+                "1_v3_vs_bar": {
+                    "pass": v3_low > 0,
+                    **{b: {"ci95": {"low": v3_low, "high": v3_high}} for b in bars},
+                },
+                "6b_reduced_panels": {
+                    "pass": v3_low > 0,
+                    **{
+                        b: {
+                            "rule1_v3_vs_bar": {"ci95": {"low": -1.0, "high": red_high}}
+                        }
+                        for b in bars
+                    },
+                },
+            }
+            for k in succ.REST:
+                items[k] = {"pass": rest}
+            return {"items": items, "bars": bars}
+
+        ip = succ.index_path(out(-1.8, 2.6, 2.4), None)
+        self.assertTrue(ip["candidate"])
+        self.assertIsNone(ip["1p_b_index_significantly_positive"])
+        self.assertFalse(ip["items_1p_7_pass"])
+        self.assertTrue(succ.index_path(out(-1.8, 2.6, 2.4), "PASS")["items_1p_7_pass"])
+        self.assertFalse(
+            succ.index_path(out(-1.8, 2.6, 2.4), "FAIL")["items_1p_7_pass"]
+        )
+        self.assertFalse(succ.index_path(out(-3.0, -0.1, 2.4), "PASS")["candidate"])
+        self.assertFalse(succ.index_path(out(-1.8, 2.6, -0.2), "PASS")["candidate"])
+        self.assertFalse(
+            succ.index_path(out(-1.8, 2.6, 2.4, rest=False), "PASS")["candidate"]
+        )
+        self.assertFalse(succ.index_path(out(0.4, 2.6, 2.4), "PASS")["candidate"])
+
+
 if __name__ == "__main__":
     unittest.main()
