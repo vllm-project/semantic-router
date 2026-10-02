@@ -310,10 +310,17 @@ class QwenDecision:
         answers: dict[str, dict[str, Any]] = {}
         jobs: list[tuple[str, dict[str, Any], dict[str, Any]]] = []
         tokens = 0
+        share = self.share_context if share_context is None else share_context
+        policy, tokenizer = None, self.tokenizer
+        if share is not None and share is not False:
+            from .shared_ctx import resolve, shared_logits, tokenizer_for
+
+            policy = resolve(share)
+            tokenizer = tokenizer_for(self.tokenizer, policy, len(questions))
         for qid, question in questions.items():
             try:
                 row = question_to_row(item, qid, question)
-                encoded = (self.encode_fn or encode)(row, self.tokenizer, self.cap)
+                encoded = (self.encode_fn or encode)(row, tokenizer, self.cap)
             except ValueError as exc:
                 reason = (
                     "max_length_exceeded"
@@ -338,11 +345,8 @@ class QwenDecision:
         groups = micro_batches(
             [len(encoded["ids"]) for _, _, encoded in jobs], self.batch_tokens
         )
-        share = self.share_context if share_context is None else share_context
-        if share is not None and share is not False:
-            from .shared_ctx import resolve, shared_logits
-
-            shared = shared_logits(self, jobs, pad_id, resolve(share))
+        if policy is not None:
+            shared = shared_logits(self, jobs, pad_id, policy)
             if shared is not None:
                 logits, groups = shared, []
         for group in groups:
