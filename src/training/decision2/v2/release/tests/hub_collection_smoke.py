@@ -73,7 +73,7 @@ def main() -> None:
         result["created_private"] is True
         and result["readback"]["private"] is True
         and result["readback"]["items"] == [args.repo]
-        and result["decision_2_0"]["private"] is True
+        and result["decision_2_0"]["private"] is hub.expected_private(hub.COLLECTION)
         and not result["decision_2_0"]["contains_repo"]
         and result["deleted"]
     )

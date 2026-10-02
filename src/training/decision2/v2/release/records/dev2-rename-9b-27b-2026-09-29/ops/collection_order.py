@@ -3,7 +3,7 @@
   <hf-cli python> collection_order.py <slug> <out.json>
 
 The collection's order and title are curated by hand, so this script never changes them. Exits 1
-unless the collection is private and its models are exactly the six expected releases, in any
+unless the collection is public and its models are exactly the six expected releases, in any
 order. Receipt fields keep their earlier names; ``moved`` is always empty.
 """
 
@@ -49,7 +49,7 @@ def main() -> int:
             }
         )
     )
-    return 0 if releases_present and collection.private is True else 1
+    return 0 if releases_present and collection.private is False else 1
 
 
 if __name__ == "__main__":
