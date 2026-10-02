@@ -134,7 +134,7 @@ def spec(arm: str) -> dict:
         "bootstrap of these weights minus the current revision's, 95% lower bound > 0, bound to both IX1 run "
         "receipts; R3 = no type collapsed on the formal typed panel; IF3 = the row-level Index contamination "
         "audit of the training file; items 2-7 as for every release. v3, human transfer, mlx-diag, tier gates, "
-        "exposure and public 231 are references; C1 is not run. The Index files stay in node A's private tree.",
+        "exposure and public 231 are references; C1 is not run. The Index files stay in the release node's private tree.",
         "scored": f"T = 1: the sealed formal run {arm}/formal (image dbe5f32b with its kernels, CAL698 not "
         "adopted), the same weights the IX1 Index run scored (restaged into the released runtime).",
         "storage": f"qwen-adapter: the frozen soup checkpoint itself (identity {identity[:8]}); the base is pinned, "
@@ -144,7 +144,7 @@ def spec(arm: str) -> dict:
         "backbone, Transformers remote code, forward token budget), unchanged.",
         "card": "the product card of the current revision with this candidate's reports, an Index input built by "
         "python -m v2.release.card_index (board-served parameter counts, the audited footnote) with the 27B point "
-        "from the Index run on exactly these weights, and assets rendered on node A by the default "
+        "from the Index run on exactly these weights, and assets rendered on the release node by the default "
         "v2.release.card_assets (banner concept A) in the card render environment of the earlier rounds (ops/"
         "render_env.sh); card.speed keeps the current revision's bench receipt (same base, runtime and shapes).",
         "replaces_spec": {
@@ -171,7 +171,7 @@ def spec(arm: str) -> dict:
     assert len(old_check) == 2, "the current runtime_equivalence text changed"
     s["runtime_equivalence"] = (
         old_check[0]
-        + " Checked on one GPU of node A (same image and base bytes as the scoring run) against the "
+        + " Checked on one GPU of the release node (same image and base bytes as the scoring run) against the "
         "scored T = 1 predictions of every formal prompt (typed-final 1,600, css15 6,547, public231 231) and of the "
         "mlx-diag diagnostic (2,275) by release.sh --parity, with the image's FLA and causal-conv1d kernels required "
         "and a fresh copy of the formal run's persisted Triton autotune cache (the cache the mlx-diag run also "
