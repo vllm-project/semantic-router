@@ -31,7 +31,7 @@ if [ "$MODE" = launch ] || [ "$MODE" = mlx-launch ]; then
   exit 0
 fi
 log() { echo "$(date -u +%FT%TZ) formal-$TAG $*" | tee -a "$M/OPERATIONS.log"; }
-export M6_FORMAL_ROOT=$F M6_SELECT=$M/select/formal M6_PREFIX=m17 M6_GPU=$GPU M6_EF_GPUS="${ALLOWED# }" M6_4B_NODE=F
+export M6_FORMAL_ROOT=$F M6_SELECT=${M17_SELECT:-$M/select/formal} M6_PREFIX=m17 M6_GPU=$GPU M6_EF_GPUS="${ALLOWED# }" M6_4B_NODE=F
 T=/data/dev2/runs/dec/triton-cache/dbe5f32b2263
 [ -d "$T" ] || { log "no decoder cache $T for the CAL698 fit; stopped"; exit 1; }
 entry=/data/dev2/leases/gpu$GPU.lock/owner.dec-m17-formal
