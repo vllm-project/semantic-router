@@ -97,9 +97,9 @@ for a category-specific policy.
 ## Select Vela Shield
 
 The built-in Safety module uses
-[Vela Safety](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Safety)
+[Vela Safety](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-Safety)
 by default.
-[Vela Shield](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Shield)
+[Vela Shield](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-Shield)
 is a separately trained alternative with the same `safe`/`unsafe` labels, so
 existing rules and thresholds apply without other changes. Validate thresholds
 again after switching models.
