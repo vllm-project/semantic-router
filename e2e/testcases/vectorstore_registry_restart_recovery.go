@@ -19,9 +19,10 @@ import (
 
 func init() {
 	pkgtestcases.Register("vectorstore-registry-restart-recovery", pkgtestcases.TestCase{
-		Description: "Vector store and file metadata stored in Postgres survive a semantic-router pod restart",
-		Tags:        []string{"vectorstore", "registry", "functional", "postgres", "restart"},
-		Fn:          testVectorStoreRegistryRestartRecovery,
+		Description:         "Vector store and file metadata stored in Postgres survive a semantic-router pod restart",
+		Tags:                []string{"vectorstore", "registry", "functional", "postgres", "restart"},
+		MutatesClusterState: true,
+		Fn:                  testVectorStoreRegistryRestartRecovery,
 	})
 }
 
