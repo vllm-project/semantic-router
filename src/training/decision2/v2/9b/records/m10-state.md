@@ -2,6 +2,11 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 06:20Z (14:20 UTC+8), worker 7e1c9ce8
+
+- Seeds at updates 1,194–1,266 (06:17Z), ≈ 13–14 per minute; no failure. KUP seeds end ≈ 07:15Z, KIBM-s1 / s2
+  ≈ 07:35Z.
+
 ## 2026-10-02 05:55Z (13:55 UTC+8), worker 7e1c9ce8
 
 - **Arm (d) KIB4** (amendment 3; IB4 phase 1 `76cea510`, TRAIN `6045b456…` checked against its `final.json`):
