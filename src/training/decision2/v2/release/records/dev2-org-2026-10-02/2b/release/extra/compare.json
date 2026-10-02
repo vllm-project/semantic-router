@@ -1,0 +1,26 @@
+{
+  "changed_files": [
+    "README.md"
+  ],
+  "files": [
+    32,
+    32
+  ],
+  "manifest_changed_fields": [
+    "builder.source_commit",
+    "card.readme_sha256",
+    "files_sha256.README.md"
+  ],
+  "package_former_org_occurrences": {},
+  "passed": true,
+  "problems": [],
+  "readme_former_org_occurrences": [
+    5,
+    0
+  ],
+  "readme_is_renamed_release_readme": true,
+  "released_revision": "1b7c47eafa3ffec1f4f4b79b0abfe9309d583439",
+  "repo": "vllm-sr/Decision-2.0-Sol-2B",
+  "schema": "dev2-org-compare/1",
+  "utc": "2026-10-02T10:50:56.002404+00:00"
+}

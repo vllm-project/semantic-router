@@ -1,0 +1,13 @@
+{
+  "checks": {
+    "former_id_redirects": true,
+    "main_is_the_superseded_revision": true,
+    "new_id_resolves_to_itself": true,
+    "private": true
+  },
+  "main": "3de61185ade42cc307c26a6062df4baac327eac5",
+  "passed": true,
+  "repo": "vllm-sr/Decision-2.0-Eos-0.8B",
+  "schema": "dev2-org-precheck/1",
+  "utc": "2026-10-02T10:43:35.728607+00:00"
+}
