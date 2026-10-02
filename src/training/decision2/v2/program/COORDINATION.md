@@ -205,6 +205,26 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 15:50 — **USER DECISIONS: pause 0.6B / 0.8B / 2B training; core resources go to 4B, 9B and 27B; release
+  `4b-LHA10SDML` once.**
+  - **Small sizes.** After the Sol-2B release of `2b-RASDML` (b49d1f36, in flight), 0.6B / 0.8B / 2B are all at the
+    frontier of their size class.
+    - M18 (ce74f1e5) is paused: it stops its jobs and releases node A GPU1, 2, 7, node F GPU4–5 and its node E / C
+      shares.
+    - The sweep's unattended 0.8B chain (`IS-08b-RASD-a50`) was stopped by the coordinator.
+    - `IS-2b-RA10SDML` finishes on node C in about 15 min and is only recorded.
+  - **4B (M17 7cee4275).**
+    - Release `4b-LHA10SDML` now (user override of the successor significance rule: full Index tie, transfer-only
+      significantly better), after its missing formal typed-FINAL and the row-level audit.
+    - Goal: overtake JPT-4B. GPUs: node F GPU2–7.
+  - **9B (7e1c9ce8).** Goal: JPT-9B, a clearly larger gain over 1.0. GPUs: node B GPU2–4 / 6–7 plus node A GPU1, 2,
+    7. Add arms with IB4 p1, IB3 and the ML block. Budget 90 GPU-h.
+  - **27B (355ad916).** Goal: the top 3 of 15–40B (above AutoJev-27B). GPUs: node D GPU0–7, node E GPU0–3 / 6–7,
+    node B GPU0 (plus GPU1 / 5 after the 2B formal). M7 arms with IB4 p1, the ML block and the IB2 families. Budget
+    120 GPU-h.
+  - **Shared Index pool** for 4B / 9B / 27B: node C GPU1–7 and node A GPU0 / 3–6. Every candidate is measured once on
+    its release form, sharded wide.
+
 - 2026-10-02 15:35 — **USER: release `2b-RASDML` to Sol-2B first, now** (b49d1f36, top priority).
   - **Clarification for all publishers:** "never publish concurrently" means per repository. Different repos may
     publish in parallel when `hf_headroom.sh` shows at least 10 GB free. The collection check is read-only.
