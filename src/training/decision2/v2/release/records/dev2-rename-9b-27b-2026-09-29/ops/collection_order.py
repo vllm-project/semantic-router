@@ -15,7 +15,7 @@ import sys
 from huggingface_hub import HfApi
 
 EXPECTED = [
-    f"llm-semantic-router/Decision-2.0-{name}"
+    f"vllm-sr/Decision-2.0-{name}"
     for name in ("Kai-0.6B", "Eos-0.8B", "Sol-2B", "Nox-4B", "Lux-9B", "Vega-27B")
 ]
 
@@ -28,6 +28,7 @@ def main() -> int:
     releases_present = sorted(models) == sorted(EXPECTED)
     receipt = {
         "slug": slug,
+        "resolved_slug": collection.slug,
         "title": collection.title,
         "title_unchanged": True,
         "private": collection.private,

@@ -4,7 +4,7 @@ Never touches the "Decision 2.0" collection: creates a private scratch collectio
 adds one private staging repository, reads the collection back, deletes it and
 confirms the deletion. Run on a node with the HF CLI environment:
 
-    <hf-cli python> -m v2.release.tests.hub_collection_smoke --repo llm-semantic-router/dev2-release-staging --output R.json
+    <hf-cli python> -m v2.release.tests.hub_collection_smoke --repo vllm-sr/dev2-release-staging --output R.json
 """
 
 from __future__ import annotations

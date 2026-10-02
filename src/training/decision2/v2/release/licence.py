@@ -23,20 +23,28 @@ CARD_ALLOWED = APACHE_COMPATIBLE | {
     "gemma",
 }
 RESEARCH_ONLY_NAMES = {"research-and-demo", "research-only", "non-commercial"}
+ORG, FORMER_ORG = "vllm-sr", "llm-semantic-router"
 OWN_MODELS = {
-    "llm-semantic-router/Decision-1.0-Kai-0.6B": "apache-2.0",
-    "llm-semantic-router/Decision-1.0-Lex-0.6B": "apache-2.0",
-    "llm-semantic-router/Decision-1.0-Eos-0.8B": "apache-2.0",
-    "llm-semantic-router/Decision-1.0-Sol-2B": "apache-2.0",
-    "llm-semantic-router/Decision-1.0-Nox-4B": "apache-2.0",
-    "llm-semantic-router/Decision-1.0-Lux-9B": "apache-2.0",
+    f"{ORG}/Decision-1.0-Kai-0.6B": "apache-2.0",
+    f"{ORG}/Decision-1.0-Lex-0.6B": "apache-2.0",
+    f"{ORG}/Decision-1.0-Eos-0.8B": "apache-2.0",
+    f"{ORG}/Decision-1.0-Sol-2B": "apache-2.0",
+    f"{ORG}/Decision-1.0-Nox-4B": "apache-2.0",
+    f"{ORG}/Decision-1.0-Lux-9B": "apache-2.0",
 }
 # Internal controls that must never appear on a card (coordinator 2026-09-28).
 INTERNAL_ONLY_MODELS = {
     "research/qwen3-06b-official-full466",
-    "llm-semantic-router/DEV2.0-0.6B@5380e01e",
+    f"{ORG}/DEV2.0-0.6B@5380e01e",
 }
 INTERNAL_ONLY_LABELS = {"DEV2.0-0.6B (private)"}
+
+
+def current_org(repo: str | None) -> str | None:
+    """Reports and specs written before the organization rename name the former organization."""
+    if repo and repo.startswith(f"{FORMER_ORG}/"):
+        return f"{ORG}/{repo[len(FORMER_ORG) + 1:]}"
+    return repo
 
 
 def load_roster(path: Path) -> dict[str, dict[str, Any]]:
@@ -53,7 +61,11 @@ def card_eligibility(
     entry: dict[str, Any], roster: dict[str, dict[str, Any]]
 ) -> dict[str, Any]:
     """Decide whether one same-panel report may appear on a public-facing card."""
-    repo, family, label = entry.get("repo_id"), entry.get("family"), entry.get("label")
+    repo, family, label = (
+        current_org(entry.get("repo_id")),
+        entry.get("family"),
+        entry.get("label"),
+    )
     if label in INTERNAL_ONLY_LABELS or repo in INTERNAL_ONLY_MODELS:
         return {"eligible": False, "licence": None, "reason": "internal-only control"}
     if entry.get("candidate"):
