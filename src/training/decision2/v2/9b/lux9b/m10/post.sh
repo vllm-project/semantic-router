@@ -8,9 +8,12 @@
 # backbone shards and head must be byte-identical to node C's m9-KIB-s1 zero-step checkpoint, K-a13IB's Lux member
 # (SHA-256 list pinned below). A failed step writes soup/<name>/FAILED and is never rerun.
 #
-# usage: M10_NODE=b post.sh launch|run <mirror-dir> <ARM>
+# M10_POST_NAME / M10_POST_SEEDS (amendment 6): the soup and its points are named NAME (default ARM) and take the
+# seeds listed (default the arm's preregistered seeds), e.g. M10_POST_NAME=KIB4P M10_POST_SEEDS="1 2 3" for KIB4.
+# usage: M10_NODE=b [M10_POST_NAME=NAME M10_POST_SEEDS="..."] post.sh launch|run <mirror-dir> <ARM>
 set -u
 MODE=$1 SRC=$2 ARM=$3
+NAME=${M10_POST_NAME:-$ARM}
 NODE=${M10_NODE:?set M10_NODE=b}
 M=/data/dev2/runs/9b/m10
 ST=$M/status
@@ -22,16 +25,17 @@ LUXCK=/runs/m10/arms/pre/$LUXRUN-zero/checkpoint-0000000
 LUXSUMS=${M10_LUX_SUMS:-$M/inputs/lux-zero-m9-KIB-s1.sha256}
 mkdir -p "$M/chains" "$M/logs" "$M/soup"
 if [ "$MODE" = launch ]; then
-  mkdir "$M/chains/post-$ARM.lock" 2> /dev/null || { echo "post chain $ARM already launched"; exit 0; }
-  M10_NODE=$NODE setsid nohup bash "$0" run "$SRC" "$ARM" > "$M/logs/post-$ARM.log" 2>&1 < /dev/null &
-  echo $! > "$M/chains/post-$ARM.pid"
-  echo "$(date -u +%FT%TZ) M10 post chain $ARM launched from $SRC (pid $(cat "$M/chains/post-$ARM.pid"))" \
+  mkdir "$M/chains/post-$NAME.lock" 2> /dev/null || { echo "post chain $NAME already launched"; exit 0; }
+  M10_NODE=$NODE setsid nohup bash "$0" run "$SRC" "$ARM" > "$M/logs/post-$NAME.log" 2>&1 < /dev/null &
+  echo $! > "$M/chains/post-$NAME.pid"
+  echo "$(date -u +%FT%TZ) M10 post chain $NAME launched from $SRC (pid $(cat "$M/chains/post-$NAME.pid"))" \
     | tee -a "$M/OPERATIONS.log"
   exit 0
 fi
-log() { echo "$(date -u +%FT%TZ) post-$ARM $*" | tee -a "$M/OPERATIONS.log"; }
+log() { echo "$(date -u +%FT%TZ) post-$NAME $*" | tee -a "$M/OPERATIONS.log"; }
 terminal() { [ -f "$ST/m10-$ARM-s$1.DONE" ] || [ -f "$ST/m10-$ARM-s$1.FAILED" ] || [ -f "$ST/m10-$ARM-s$1.STOPPED" ]; }
 case $ARM in KSW | KIB4) SEEDS="1 2" ;; *) SEEDS="1 2 3" ;; esac  # two-seed arms: amendment 3
+SEEDS=${M10_POST_SEEDS:-$SEEDS}
 n=0
 log "waiting for the seeds of $ARM"
 all_terminal() { local s; for s in $SEEDS; do terminal "$s" || return 1; done; }
@@ -65,18 +69,18 @@ for s in $SEEDS; do
   best=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["checkpoint"])' "$M/arms/full/m10-$ARM-s$s/BEST.json")
   [ -f "$M/arms/full/m10-$ARM-s$s/$best/decision_config.json" ] || { log "s$s BEST $best is not a checkpoint"; exit 1; }
   members+=("/runs/m10/arms/full/m10-$ARM-s$s/$best")
-  echo "s$s $best" >> "$M/soup/$ARM.seeds.txt"
+  echo "s$s $best" >> "$M/soup/$NAME.seeds.txt"
 done
 case ${#members[@]} in
   0) log "no finished seed; no artifact"; exit 1 ;;
   1) S=${members[0]}
      log "one finished seed: the arm artifact is $S (disclosed)" ;;
-  *) build "$ARM" "${members[@]}" || exit 1
-     S=/runs/m10/soup/$ARM/build/$ARM ;;
+  *) build "$NAME" "${members[@]}" || exit 1
+     S=/runs/m10/soup/$NAME/build/$NAME ;;
 esac
 [ -f "$LUXSUMS" ] || { log "missing pinned Lux member SHA-256 list $LUXSUMS"; exit 1; }
 (cd "$LUXHOST" && sha256sum -c --quiet "$LUXSUMS") || { log "Lux zero-step member differs from K-a13IB's"; exit 1; }
-build "$ARM-a33" "$S" "$LUXCK" "$LUXCK"
-build "$ARM-a25" "$S" "$LUXCK" "$LUXCK" "$LUXCK"
-build "$ARM-a40" "$S" "$S" "$LUXCK" "$LUXCK" "$LUXCK"
+build "$NAME-a33" "$S" "$LUXCK" "$LUXCK"
+build "$NAME-a25" "$S" "$LUXCK" "$LUXCK" "$LUXCK"
+build "$NAME-a40" "$S" "$S" "$LUXCK" "$LUXCK" "$LUXCK"
 log "post chain finished"
