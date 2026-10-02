@@ -4,9 +4,12 @@
 # the release evidence. Run on the workstation; values stay private. The IX node is node C (default), node D
 # (IX_NODE=d) or node A (IX_NODE=a); every GPU job uses the one GPU IX_GPU (node C GPU0 never), shards one after
 # another, because the other node C / D GPUs hold the 27B M6 and the Index-sweep runs.
+#   ckpt     node C, a sweep point (2b-RASD / 2b-RAUP): dec-indexpath/<point>-ckpt hard-linked from the Index sweep's
+#            IX1 package of the same soup, only the files of node B's staged formal package list
 #   bf16     node C: the FP32 checkpoint that IX1 staged (dec-indexpath/<point>-ckpt) checked file by file against
-#            the formal run's PACKAGE.sha256 (node A), then v2.release.bf16_copy in the scored image (CPU, no
-#            network) -> dec-indexpath/<point>-bf16-ckpt and bf16-copy.json
+#            the formal run's PACKAGE.sha256 (node A; a sweep point: node B's staged formal package list), then
+#            v2.release.bf16_copy in the scored image (CPU, no network) -> dec-indexpath/<point>-bf16-ckpt and
+#            bf16-copy.json
 #   push     IX_NODE=a|d: that copy and its receipt node C -> the IX node through node A (SHA-256 lists equal)
 #   base     IX_NODE=a|d: the tier's IX1 package node C -> the IX node if it is missing there (SHA-256 lists equal)
 #   claim    IX_GPU's owner file on the IX node, when its owner released the GPU ("status=released") and it is
@@ -26,10 +29,11 @@
 # owner's file alone (node A GPU0 / GPU1: the 0.6B allocation allows recorded release co-tenants).
 # IX_GPUS="g0 g1 ...": run starts shard k on the k-th listed GPU, all at once (one GPU per shard); a GPU also in
 # IX_SHARED_GPUS gets the co-tenant entry owner.<IX_SHARED>, the others an eval-ix1 owner file.
-# IX_FP32=<run>: the FP32 run of the point that boot compares rows with (default M16-<point>; the sweep's
-# IS-2b-RA-a75 for 2b-RA-a75).
+# IX_FP32=<run>: the FP32 run of the point that boot compares rows with (default M16-<point>, IS-<point> for a sweep
+# point; the sweep's IS-2b-RA-a75 for 2b-RA-a75).
 # Usage: [IX_NODE=a|c|d] IX_GPU=N ix.sh MIRROR_SHA NAME STAGE
-#   NAME: M16-08b-RA-a75-bf16 | M16-08b-RASD-a75-bf16 | M16-2b-RASD-a25-bf16 | M16-2b-RA-a75-bf16
+#   NAME: M16-08b-RA-a75-bf16 | M16-08b-RASD-a75-bf16 | M16-2b-RASD-a25-bf16 | M16-2b-RA-a75-bf16 | M16-2b-RAUP-bf16 |
+#         M16-2b-RASD-bf16
 set -euo pipefail
 SHA=${1:?MIRROR_SHA} NAME=${2:?NAME} STAGE=${3:?STAGE}
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "MIRROR_SHA must be a full commit SHA" >&2; exit 2; }
@@ -50,14 +54,17 @@ ona() { ssh -o BatchMode=yes -o ConnectTimeout=20 "$A" "$@"; }
 onc() { ssh -o BatchMode=yes -o ConnectTimeout=20 "$C" "$@"; }
 onx() { ssh -o BatchMode=yes -o ConnectTimeout=20 "$X" "$@"; }
 KEY="-i /root/.ssh/d2_temp_cd -o BatchMode=yes -o ConnectTimeout=20"
+SWEEP=""
 case "$NAME" in
   M16-08b-RA-a75-bf16) POINT=08b-RA-a75 SIZE=0.8B REF=DEV2.0-0.8B REV8=bede7938 LOADED=753446208 ;;
   M16-08b-RASD-a75-bf16) POINT=08b-RASD-a75 SIZE=0.8B REF=DEV2.0-0.8B REV8=bede7938 LOADED=753446208 ;;
   M16-2b-RASD-a25-bf16) POINT=2b-RASD-a25 SIZE=2B REF=DEV2.0-2B REV8=a53cf66a LOADED=1883930944 ;;
   M16-2b-RA-a75-bf16) POINT=2b-RA-a75 SIZE=2B REF=DEV2.0-2B REV8=a53cf66a LOADED=1883930944 ;;
+  M16-2b-RAUP-bf16) POINT=2b-RAUP SIZE=2B REF=DEV2.0-2B REV8=a53cf66a LOADED=1883930944 SWEEP=2b-RAUP-37c85fff-ra53cf66a ;;
+  M16-2b-RASD-bf16) POINT=2b-RASD SIZE=2B REF=DEV2.0-2B REV8=a53cf66a LOADED=1883930944 SWEEP=2b-RASD-341c2bd2-ra53cf66a ;;
   *) echo "bad NAME $NAME" >&2; exit 2 ;;
 esac
-FP32=${IX_FP32:-M16-$POINT}
+FP32=${IX_FP32:-$([ -n "$SWEEP" ] && echo "IS-$POINT" || echo "M16-$POINT")}
 M=/data/dev2/src/$SHA-src_training_decision2
 S=$M/src/training/decision2
 R=/data/dev2/private/eval/index021/ix1
@@ -86,10 +93,29 @@ copy_from_c() {
 onx "test -f $S/v2/eval/ix1/launch.sh" || { echo "mirror $SHA is not on node $IX_NODE" >&2; exit 2; }
 onx "grep -q '^  \[$NAME\]=\"$REF [0-9a-f]* $PKG\"' $S/v2/eval/ix1/launch.sh" ||
   { echo "mirror $SHA has no DIAGNOSTIC entry $NAME -> $PKG" >&2; exit 2; }
+B=$(grep '^node-b=' "$NODES" | cut -d= -f2-)
+onb() { ssh -o BatchMode=yes -o ConnectTimeout=20 "$B" "$@"; }
+# formal_list: the formal checkpoint's "<sha256>  <path>" lines, sorted by path
+formal_list() {
+  local pat="s#^\([0-9a-f]\{64\}\)  ./m6/m16-$POINT/checkpoint/\(.*\)\$#\1  \2#p"
+  if [ "${IX_FORMAL_NODE:-a}" = b ]; then
+    onb "sed -n '$pat' /data/dev2/runs/dec/formal/m16/pkg/m16-$POINT.sha256 | LC_ALL=C sort -k2"
+  else
+    ona "sed -n '$pat' $FORMAL/PACKAGE.sha256 | LC_ALL=C sort -k2"
+  fi
+}
 case "$STAGE" in
+  ckpt)
+    [ -n "$SWEEP" ] || { echo "ckpt is for a sweep point" >&2; exit 2; }
+    onc "test ! -e $CK" || { echo "$CK exists: refusing to overwrite" >&2; exit 3; }
+    files=$(formal_list | awk '{print $2}')
+    [ -n "$files" ] || { echo "no formal checkpoint list for $POINT" >&2; exit 3; }
+    onc "set -e; umask 077; mkdir $CK; cd /data/dev2/models/ix1/index-sweep/$SWEEP; for f in $(tr '\n' ' ' <<< "$files"); do \
+      mkdir -p $CK/\$(dirname \$f); cp -al \$f $CK/\$f; done"
+    echo "$CK: $(wc -l <<< "$files") files linked from index-sweep/$SWEEP" ;;
   bf16)
     onc "test ! -e $BCK" || { echo "$BCK exists: refusing to overwrite" >&2; exit 3; }
-    want=$(ona "sed -n 's#^\([0-9a-f]\{64\}\)  ./m6/m16-$POINT/checkpoint/\(.*\)\$#\1  \2#p' $FORMAL/PACKAGE.sha256 | LC_ALL=C sort -k2")
+    want=$(formal_list)
     [ -n "$want" ] || { echo "no checkpoint entries in $FORMAL/PACKAGE.sha256" >&2; exit 3; }
     got=$(onc "cd $CK && find . -type f | sed 's#^\./##' | LC_ALL=C sort | xargs sha256sum")
     [ "$want" = "$got" ] || { echo "node C $CK differs from the formal checkpoint" >&2; exit 3; }
