@@ -239,11 +239,11 @@ EOF
     boot="cd $R/.. && CUDA_VISIBLE_DEVICES= HIP_VISIBLE_DEVICES= ROCR_VISIBLE_DEVICES= PYTHONPATH=$S:$R/../kit-19ad28ec nice -n 10 \
       venv/bin/python -m v2.eval.ix1.paired_boot --suite-dir suite-0.2 --base $R/runs/$REF/merged/results.jsonl \
       --new $R/runs/$NAME/merged/results.jsonl --external $R/../external/index021-frontier-gap-2026-10-01.json \
-      --replicates 2000 --seed 20261002 --workers 20"
+      --replicates 2000 --seed 20261002"
     on c "umask 077; date -u +%FT%TZ > $R/logs/4bif-boot-$NAME.started; \
-      setsid nohup bash -c '$boot --out $R/runs/$NAME/4bif-boot-full-vs-lh.json; echo \$? > $R/logs/4bif-boot-full-$NAME.exit' \
+      setsid nohup bash -c '$boot --workers ${BOOT_WORKERS:-40} --out $R/runs/$NAME/4bif-boot-full-vs-lh.json; echo \$? > $R/logs/4bif-boot-full-$NAME.exit' \
         > $R/logs/4bif-boot-full-$NAME.log 2>&1 < /dev/null & \
-      setsid nohup bash -c '$boot --exclude $EXCLUDE --out $R/runs/$NAME/4bif-boot-transfer-vs-lh.json; echo \$? > $R/logs/4bif-boot-transfer-$NAME.exit' \
+      setsid nohup bash -c '$boot --workers 24 --exclude $EXCLUDE --out $R/runs/$NAME/4bif-boot-transfer-vs-lh.json; echo \$? > $R/logs/4bif-boot-transfer-$NAME.exit' \
         > $R/logs/4bif-boot-transfer-$NAME.log 2>&1 < /dev/null &"
     echo "$(date -u +%FT%TZ) $NAME bootstraps started on node C (CPU)" ;;
   fetch)
