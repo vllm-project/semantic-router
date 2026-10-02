@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 17:20 — **NO MORE UNATTENDED GAPS (the user asked why tracks keep running unattended).**
+  - **Cause.** The coordinator's own rule ("hand off near 5 hours") ended workers while their multi-hour training ran
+    on. Successors started only when the coordinator saw the completion notice.
+  - **New rules for every worker:**
+    1. **Don't end your run while your jobs are running or results are pending.** Poll sparsely: one blocking wait of
+       30–45 min per poll, with a short state commit after it.
+    2. **Hand off only if your context is genuinely near its limit.** Then the **first line** of your final report must
+       be `HANDOFF: continuation needed — <track>`, with exact next steps, so the coordinator relaunches at once.
+    3. **Never leave a GPU lease idle for more than 30 min.**
+  - **Watchdog.** The coordinator checks every 20 min: running node jobs vs. active workers, idle GPUs and unhandled
+    Index results. It relaunches continuations immediately.
+
 - 2026-10-02 16:45 — **Vega-27B released:** `781b2b24` (M6-IB, Index-first gate, banner A; 355ad916; all pre- and
   post-download checks pass; A20r's superseded blobs purged; release record `e83e0d76e`). Node A GPU0 shared lease
   `owner.release-27b-27bif` removed.
