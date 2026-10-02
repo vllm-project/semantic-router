@@ -10,5 +10,7 @@
   balance; full re-audit in a fresh run.
 - 13:15 +08 — **phase 1 published**: `m6/ib4/p1` @ `76cea510` (sqa2, isarc2, sentfin3, fc_pick; TRAIN 9,459, DEV 782),
   release-safe pending C1; results / announcement `ib4-p1-results-2026-10-02.md`. C1 custodian run requested.
-- 13:40 +08 — phase 2: source audit done (amendment 3); only ATOMIC (CC BY 4.0) admitted -> family `atom`
+- 13:25 +08 — phase 2: source audit done (amendment 3); only ATOMIC (CC BY 4.0) admitted -> family `atom`
   (HellaSwag-like gap). Other phase-2 gaps stay uncovered (reasons in amendment 3).
+- 13:35 +08 — phase-2 run a3 (`3578ff58`) passed every audit, but the author spot-check estimated 10-15% wrong labels
+  in the generic dimensions; amendment 4 narrows `atom` to intent / precondition with a fixed 2-of-40 publication bar.

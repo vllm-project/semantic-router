@@ -58,13 +58,10 @@ FCPICK_INSTRUCTIONS = (
     "Should the assistant call the candidate function to carry out the user's request?"
 )
 ATOM_INSTRUCTIONS = "Is the inference a likely commonsense inference about the event, for the aspect asked about?"
+# Amendment 4: only the event-specific dimensions (intent, precondition); effects and wants were too generic.
 ATOM_ASPECTS = {
-    "xEffect": "What happens to PersonX as a result",
-    "xWant": "What PersonX likely wants to do next",
     "xNeed": "What PersonX needed to do beforehand",
     "xIntent": "Why PersonX does this",
-    "oEffect": "What happens to the others involved as a result",
-    "oWant": "What the others involved likely want to do next",
 }
 TEMPLATE_STRINGS = frozenset(
     [
@@ -101,6 +98,7 @@ W2C_PER_CLASS = 3000
 FCPICK_CAP = 8000
 ATOM_EVENTS = 6000
 ATOM_MAX_TAIL_EVENTS = 2
+ATOM_MIN_WORDS = 3
 
 Prior = Callable[[Mapping[str, Any]], bool]
 
@@ -642,7 +640,7 @@ def atom(
 ) -> Rows:
     """One aspect per ATOMIC train event: an annotated inference of that event (yes) and, in a per-aspect cycle, the
     inference of another event that shares no content word with this event or any of its inferences (no). Only
-    specific inferences (at most two events per aspect, at least two words, not "none") are used, so each inference is
+    specific inferences (at most two events per aspect, at least three words (amendment 4), not "none") are used, so each inference is
     yes for its own event and no for at most one other; balanced per aspect."""
     events: dict[str, dict[str, set[str]]] = collections.defaultdict(
         lambda: collections.defaultdict(set)
@@ -679,7 +677,7 @@ def atom(
             for aspect, tails in sorted(events[event].items())
             for tail in sorted(tails)
             if spread[(aspect, normalize(tail))] <= ATOM_MAX_TAIL_EVENTS
-            and len(tail.split()) >= 2
+            and len(tail.split()) >= ATOM_MIN_WORDS
         ]
         if not options:
             report["skip_no_specific_inference"] += 1
