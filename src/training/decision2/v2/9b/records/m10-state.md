@@ -2,6 +2,23 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 19:05Z (10-03 03:05 UTC+8), M10 continuation
+
+- **Gate verdicts vs `M10-KIB4-a40-bf16`** (IF1; values private):
+  - `AF-KF-a40-bf16` (the factory's nine-seed KIB4-family soup at α = 2/5): **FAIL**, significantly below the current
+    release.
+  - `M10-X8-a40-bf16` (KIB4 + KSW at α = 2/5): **FAIL**. Its lower bound is ≤ 0, though its point delta is
+    positive. That meets amendment 7's condition for planning one more KIB4-family arm, which the W2 / L2 results
+    will inform first.
+- **KF-a50 dropped before measurement.** It is the same nine-seed soup as KF-a40, and α 1/2 vs 2/5 has moved
+  KIB-family points by about 0.1 (K-a12IB vs K-a13IB, KIB4-a40 vs KIB4-a33). It cannot plausibly pass. Its parity
+  gate (node A) had already run; the node A chain was restarted for KIB4L2-a40 alone.
+- **Index:** X7-a40 is at shard 6 of 7 (node B GPU7), KIB4W2-a40 at shards 4–6 (node C), and KIB4L2-a40 at shards 0–3
+  (node A GPU1–4).
+- **Arm factory:** its amendment 6 stages an α ladder for the 9B publisher (KIB4-a50, KIB4Q-a50 / -a60, KF-a60).
+  Its node B batch-2 soups KIB4W3-a40 / KIB4R-a40 wait for their seeds (≈ 19:40Z).
+- **GPU-h (continuation):** ≈ 9.5 used, ≈ 12.2 with the running shards.
+
 ## 2026-10-02 18:25Z (10-03 02:25 UTC+8), M10 continuation
 
 - **Arm-factory hand-off** (COORDINATION 02:00 / 02:22). The factory measured only `AF-KF-a40-bf16`, and M10 now
