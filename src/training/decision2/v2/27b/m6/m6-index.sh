@@ -270,7 +270,7 @@ case "$STAGE" in
     if grep -q '^b ' <<< "$plan"; then  # 27B's own idle node B leases (track=27b) step aside, as on node D GPU0-1
       read -r -a bg <<< "$(grep '^b ' <<< "$plan" | cut -d' ' -f3-)"
       for g in "${bg[@]}"; do
-        onb "f=/data/dev2/leases/gpu$g.lock/owner; grep -qx 'track=eval-ix1' \$f 2> /dev/null && exit 0; \
+        onb "f=/data/dev2/leases/gpu$g.lock/owner; [ -s \$f ] || exit 0; grep -qx 'track=eval-ix1' \$f && exit 0; \
           grep -qx 'track=27b' \$f && grep -qx 'status=reserved-idle' \$f || { echo 'node B gpu$g: not an idle 27B lease' >&2; exit 3; }; \
           mv \$f /data/dev2/leases/gpu$g.lock/owner.m6-set-aside-\$(date -u +%Y%m%dT%H%M%SZ) && echo 'node B gpu$g: 27B owner set aside'" ||
           exit 3
