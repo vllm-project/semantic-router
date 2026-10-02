@@ -1,0 +1,4 @@
+cache /data/dev2/runs/runtime-a/triton/2B-parity-old-20261002T111903Z from /data/dev2/runs/release/triton/dev2-2b-ixf-release-20261002T075545Z files=1084 digest=ac1301f455473c5a02cc62021cd0093fa31f03475c08470239e216752c587028
+old exit=1 wall_seconds=272.4 cache_files=1084
+cache /data/dev2/runs/runtime-a/triton/2B-parity-new-20261002T111903Z from /data/dev2/runs/runtime-a/triton/2B-parity-old-20261002T111903Z files=1084 digest=c2a1a854b03260724acea55b8b9237ef75003a4a1dd9e580af1b342862726258
+new exit=1 wall_seconds=133.5 cache_files=1180

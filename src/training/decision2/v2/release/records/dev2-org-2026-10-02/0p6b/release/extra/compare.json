@@ -1,0 +1,26 @@
+{
+  "changed_files": [
+    "README.md"
+  ],
+  "files": [
+    31,
+    31
+  ],
+  "manifest_changed_fields": [
+    "builder.source_commit",
+    "card.readme_sha256",
+    "files_sha256.README.md"
+  ],
+  "package_former_org_occurrences": {},
+  "passed": true,
+  "problems": [],
+  "readme_former_org_occurrences": [
+    4,
+    0
+  ],
+  "readme_is_renamed_release_readme": true,
+  "released_revision": "479ea8d1b46dfc87361d620029f1c27a9d304cd0",
+  "repo": "vllm-sr/Decision-2.0-Kai-0.6B",
+  "schema": "dev2-org-compare/1",
+  "utc": "2026-10-02T10:25:12.967545+00:00"
+}

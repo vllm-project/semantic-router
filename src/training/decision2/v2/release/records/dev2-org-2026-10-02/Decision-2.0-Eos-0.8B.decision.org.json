@@ -1,0 +1,68 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "final",
+  "decision": "release",
+  "model_name": "Decision-2.0-Eos-0.8B",
+  "repo_id": "vllm-sr/Decision-2.0-Eos-0.8B",
+  "identity": {
+    "model_sha256": "d97127991870ae202017a99eb496bdc56a62afd038594a67febfab0aea9d76fe"
+  },
+  "report_sha256": "5ce404b0358ae401a79465d08b15bf5b7f9fc80dca90fe0da4cef223c254f48f",
+  "paired_sha256": "954a7092d2f7e3754641ed2b5027f64dd30b63319db05467de424f5fff10c2fa",
+  "gate_profile": "successor",
+  "rule": "index-first",
+  "current_revision": "9c7f3ea09a2b04a0647e5919af23c20ed982f246",
+  "evidence_sha256": {
+    "current_decision": "83e15d203ad2aae621d5e1926ac80140766616b3ba81c1783c376b184ed5ccb2",
+    "current_gate": "221c331e3d75666c5d68b87652d5a4307682485d6d87d8eda2f6acd34fd49959",
+    "exposure": "cfa30cdac2e0821a7c1afa8758425dfdd29c026d45ea91e12548e4cea3a227f6",
+    "index_first_audit": "1cacd98a0a646c52c34e2db0bf3d206f30b4c7cf38e0b4cd46dc86a184b814b7",
+    "index_first_base_receipt": "0c40aff54ab23b9e118c63f12fc3fe5569995dcd496dcd481996920ebef589ed",
+    "index_first_bootstrap": "b080e76d14b5acf59dad312692808caea6397839eb4943844fb3021521006ffa",
+    "index_first_receipt": "70a5ed9a24dec269825e82499e7d9df8024851a85294a120859059a3a8eae6f4",
+    "mlx_paired": "84959ff368da4ae4df5ea7c8a4e6e9067a8fc5dc384df4792df9620178bfa510",
+    "paired": "7b1b25ced793ab911bad1c1d26c88d01c91497cf9f8da5c00c3bd4e1a3a84dbd",
+    "public231": "713e88c3a0336716779ab807a64cd37816acb293aa7c0f8d5f1e42dea72e1bd0",
+    "types": "e4b6d536d34c9432907f611ab4f35ff8aec315772d547198acef4d39af5652c9"
+  },
+  "calibration": "none (temperature 1; every Decision 2.0 model keeps T = 1): the formal run was collected without calibration (CAL698 rejected)",
+  "action": "Card-only revision of the private repository vllm-sr/Decision-2.0-Eos-0.8B (formerly llm-semantic-router/Decision-2.0-Eos-0.8B): README.md and MODEL_MANIFEST.json name the renamed Hugging Face organization vllm-sr. Every other file (the banner and the four charts, every model, tokenizer, runtime and remote-code file) is byte-identical to the released revision 3de61185ade42cc307c26a6062df4baac327eac5. The collection is not changed; everything stays private.",
+  "rationale": "The release judgement of the superseded final decision 7e3dfa05… stands unchanged: the same identity d9712799, scored report, paired comparison, calibration and licence decision. Only the organization in the card and the manifest changes; release.sh checks the native examples, the card's Transformers example before upload, after the real download and from the Hub in fresh environments under Transformers 5.17 and 5.18, the card structure and every card link.",
+  "approved_package": {
+    "identity": "d97127991870ae202017a99eb496bdc56a62afd038594a67febfab0aea9d76fe",
+    "fp32_identity": "fee82408d47016615da7399649d7cdc6404c44deda4dd332a6120c577a18c96a",
+    "profile": "qwen-full (BF16 storage of the Linear projections)",
+    "temperature": 1,
+    "max_input_tokens": 16384,
+    "revision_binding": "receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified."
+  },
+  "licence_decision": "apache-2.0, unchanged: own weights; the Decision 1.0 base and the Qwen3.5 text backbone and tokenizer are Apache-2.0 (the product card ships the Apache-2.0 LICENSE).",
+  "supersedes": {
+    "final_sha256": "7e3dfa05e2ecc33271d3e645e515776c41ecfc3eb260887ecddb162ae04b6fd5",
+    "released_as": "llm-semantic-router/Decision-2.0-Eos-0.8B@3de61185ade42cc307c26a6062df4baac327eac5",
+    "released_manifest_sha256": "03cd040d6bc002ec6f82710a928f515293fde6be831ed4cb54294315d2bbb775",
+    "released_gate_sha256": "f01b6f8c38afc62c124fb7ca110c4d6f1cd2f56eb205ccf28864e9cd2ccec265",
+    "earlier": {
+      "revision": "9c7f3ea09a2b04a0647e5919af23c20ed982f246",
+      "released_as": "llm-semantic-router/Decision-2.0-Eos-0.8B@9c7f3ea09a2b04a0647e5919af23c20ed982f246",
+      "final_sha256": "83e15d203ad2aae621d5e1926ac80140766616b3ba81c1783c376b184ed5ccb2",
+      "gate_sha256": "221c331e3d75666c5d68b87652d5a4307682485d6d87d8eda2f6acd34fd49959",
+      "manifest_sha256": "ca6f6186b9f00eeefa7504e24fc22ea225daade50ef0372da186dcb9e0edbece",
+      "weights_identity": "3f02f0e5fc68a1fd985ce48bf3a3bb2d4ed16d1a1705c2258317b78a4d6514f4"
+    }
+  },
+  "disclosures": [
+    "items 1 and 6(b) of the successor rule (v3 significantly above the current revision) are not met; the Index-first rule makes v3 a reference",
+    "the training rows include the IB1-r3 / IB2 families matched to Index benchmark families (HoVer, When2Call, iSarcasmEval, GSM8K) and the BPoMP format; the internal records report the transfer-only Index delta without those benchmarks (private values)",
+    "card.speed is the current revision's bench receipt (same architecture, runtime and shapes)"
+  ],
+  "prepared_by": "Decision 2.0 release engineering, org worker (2) (worktree vllm-sr-dev2-org20)",
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's instruction of 2026-10-02 17:35 UTC+8 (the Hugging Face organization llm-semantic-router is now vllm-sr): card-only revisions of the Decision 2.0 repositories naming the new organization; every card keeps its release's Index data, charts and banner",
+  "decided_utc": "2026-10-02T09:35:00Z",
+  "previous_rationale": "Index-first rule (user decision 2026-10-02 09:55 UTC+8). Release gate: the private Index paired bootstrap of exactly these weights minus the current release (full panel, 2,000 replicates) has a 95% lower bound > 0 (values in private files only; evidence_sha256.index_bootstrap); the per-tier choice is the largest Index-gain lower bound among the measured candidates. Integrity: types choice OK, noul OK, score OK; row-level Index contamination audit of the arm's TRAIN file (12bd63d8; the previous release's rows plus the IB1-r3 / IB2 rows) with the planted control complete; exact package parity and the Hub / trust_remote_code checks are release.sh steps (gate items 2-7). References (not gating): post-key v3 53.913 vs 50.236, +3.68 [-2.76, +4.82]; human transfer -0.046 to +0.079; vs Decision 1.0 Eos +11.37 [+2.83, +15.86]; peers intern +10.38 [+1.70, +12.35]; kev +10.70 [+2.06, +13.54]; card-eligible mlx-diag -0.0037 [-0.0139, +0.0065]; public 231 162 vs 156 (McNemar p 0.327); 0 exposed training groups. C1 item 8 was not run (09:55: a reference, run only if already in progress).",
+  "card_revision": {
+    "kind": "card-org",
+    "spec": "v2/release/specs/dev2-0p8b-org.json",
+    "spec_sha256": "5cad992e48fd3bf1f930a6261aba0b30e109ac1daa3480a7e4ee8f6b2579c2a2"
+  }
+}

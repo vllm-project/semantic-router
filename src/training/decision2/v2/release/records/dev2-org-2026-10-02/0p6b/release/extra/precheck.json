@@ -1,0 +1,13 @@
+{
+  "checks": {
+    "former_id_redirects": true,
+    "main_is_the_superseded_revision": true,
+    "new_id_resolves_to_itself": true,
+    "private": true
+  },
+  "main": "479ea8d1b46dfc87361d620029f1c27a9d304cd0",
+  "passed": true,
+  "repo": "vllm-sr/Decision-2.0-Kai-0.6B",
+  "schema": "dev2-org-precheck/1",
+  "utc": "2026-10-02T10:25:13.347004+00:00"
+}

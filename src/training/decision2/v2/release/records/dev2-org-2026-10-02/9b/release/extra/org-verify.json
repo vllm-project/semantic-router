@@ -1,0 +1,25 @@
+{
+  "changed_files": [
+    "MODEL_MANIFEST.json",
+    "README.md"
+  ],
+  "checks": {
+    "former_id_redirects": true,
+    "main_is_the_revision": true,
+    "no_former_org_text": true,
+    "only_card_and_manifest_changed": true,
+    "private": true
+  },
+  "files": [
+    41,
+    41
+  ],
+  "former_org_occurrences": {},
+  "passed": true,
+  "repo": "vllm-sr/Decision-2.0-Lux-9B",
+  "revision": "6af07f3684132ab684d4f064a723ae623ec3956f",
+  "schema": "dev2-org-verify/1",
+  "superseded": "7195360df53b30ae625435fb3d9ec21bdbda279c",
+  "text_files_scanned": 26,
+  "utc": "2026-10-02T11:10:49.724280+00:00"
+}

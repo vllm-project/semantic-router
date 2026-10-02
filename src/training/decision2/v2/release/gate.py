@@ -838,7 +838,7 @@ def first_items(spec: dict[str, Any]) -> tuple[dict[str, Any], str]:
     profile = gate_profile(spec)
     if profile and profile["name"] == SUCCESSOR:
         below = "own 1.0"
-        if no_own_1_0(profile["tier"]):
+        if no_own_1_0(profile.get("tier") or {}):
             below = (
                 next(
                     e.get("label") or e["key"]

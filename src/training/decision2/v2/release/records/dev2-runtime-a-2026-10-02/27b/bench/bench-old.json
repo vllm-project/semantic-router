@@ -1,0 +1,71 @@
+{
+  "answers_file": "bench-old.answers.jsonl",
+  "answers_sha256": "131342e6ef3afd5276d34b66cc4d19faba7229b05c7863b749c70d78f95e98a5",
+  "count": 400,
+  "device_name": "",
+  "fp32_master": false,
+  "ids_sha256": "eed99a82102f2679efc132c34ef7719cf6d81999e5019c829c87be010452c3c7",
+  "input_tokens_mean": 346.2825,
+  "items_per_s": 9.1497235461937,
+  "latency_ms": {
+    "max": 122.58875300176442,
+    "mean": 109.29291961132549,
+    "min": 96.6598941013217,
+    "p50": 109.79756503365934,
+    "p95": 113.8700710143894
+  },
+  "load_seconds": 174.88457996305078,
+  "memory_gib": {
+    "after_load": 57.199904441833496,
+    "load_peak": 57.199904441833496,
+    "request_peak": 57.3620023727417
+  },
+  "mode": "run",
+  "model_name": "Decision-2.0-Vega-27B",
+  "package_manifest_sha256": "23a040164046b0fcd4a88006cabc474d0e965a5f091806b027b933ce2a5b24e4",
+  "parameter_bytes": 61288923136,
+  "passed": true,
+  "profile": "qwen-adapter",
+  "prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd",
+  "runtime": {
+    "fast_path": null,
+    "hip": "7.2.53211",
+    "kernels": {
+      "causal_conv1d": "1.7.0",
+      "fla_path": "/opt/decision-fla/fla",
+      "flash_linear_attention": "0.5.2",
+      "kernel_bindings": {
+        "causal_conv1d_fn": "causal_conv1d.causal_conv1d_interface.causal_conv1d_fn",
+        "causal_conv1d_update": "causal_conv1d.causal_conv1d_interface.causal_conv1d_update",
+        "torch_chunk_gated_delta_rule": "fla.ops.gated_delta_rule.chunk.chunk_gated_delta_rule",
+        "torch_recurrent_gated_delta_rule": "fla.ops.gated_delta_rule.fused_recurrent.fused_recurrent_gated_delta_rule"
+      },
+      "runtime_check_sha256": "4517d9e001d9e1e2b520086b5153fa69b642a191efb19b8c9a6a9ef126e1fc2d",
+      "triton": "3.7.1+gitf0b55c07",
+      "triton_cache_autotuning": "1",
+      "triton_cache_dir": "/data/dev2/runs/runtime-a/triton/27B-bench-old-20261002T132320Z"
+    },
+    "numpy": "2.3.5",
+    "parameter_dtypes": {
+      "bfloat16": 24350556160,
+      "float32": 3146952704
+    },
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "residency": {
+      "linear_bf16": 496,
+      "linear_fp32": 992
+    },
+    "safetensors": "0.8.0",
+    "sites": [
+      "/opt/decision-fla"
+    ],
+    "threads": 4,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0"
+  },
+  "schema": "dev2-runtime-bench/1",
+  "warmup": 400,
+  "warmup_passes": 2
+}

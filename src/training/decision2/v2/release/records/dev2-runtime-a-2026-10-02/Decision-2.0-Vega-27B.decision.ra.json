@@ -1,0 +1,128 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "final",
+  "decision": "release",
+  "model_name": "Decision-2.0-Vega-27B",
+  "repo_id": "vllm-sr/Decision-2.0-Vega-27B",
+  "name_basis": "base",
+  "name_base_model": "Qwen/Qwen3.8-27B",
+  "identity": {
+    "model_sha256": "e50fb4c130483d1c889c226f726fcca1e134a3ae0292f20907586738c06c9680"
+  },
+  "report_sha256": "cfcb041e9e768218ed6b100b421d1b73d26ecc3bc49ef1e1e3404f1fbe42f8ff",
+  "paired_sha256": "b9d3e091aff64aeb239bad9b1bc125567bec41debf36c9efe5a108d467a3ef9a",
+  "gate_profile": "successor",
+  "rule": "index-first",
+  "current_revision": "b689ee66b51a0c0c45faf42b63e5aa0eaf187bde",
+  "evidence_sha256": {
+    "current_decision": "1f533d2e3b7671635b8ee42094215b114b8e27f19bf3dc8d5277d01b294a9f42",
+    "current_gate": "8a3da2516d1b8898761986b8bfdac93c42d43b214d82b62dfc9338f198a3ce70",
+    "exposure": "461aa49472dfb6724279a2ca2c07956976942adf9a0077474775356153ca1ca8",
+    "index_first_audit": "d1f1e68e66f2b293f2f0febe04697de7fec5c17ad898292f27c92ded274641c9",
+    "index_first_base_receipt": "44dc1a363a16ec4c4ee6f624bae485510705d46984f94e5d08e7be6a310f8249",
+    "index_first_bootstrap": "70c5bd0ce5e38424e362298ccfe69db57e3670a3942fab53cc2f7cdf3e17f8b1",
+    "index_first_receipt": "4544293a00e9bb77e424b5f75448523d1663d07a83008186ad7a84e77563d19b",
+    "mlx_paired": "35cbb7490018888173a2bbfcac1e2da892bf248f0717dc79acccbd6c6225a89b",
+    "paired": "65d88478387d5f4a6fa848ab93609b20107f4f94a0892eacb2d4c57342d01424",
+    "public231": "04c3da2bf7ba3ddc9288b44c57660c5c6f9e58a43140ce0c3cf84e3b13839fb9",
+    "tier_paired": "b9d3e091aff64aeb239bad9b1bc125567bec41debf36c9efe5a108d467a3ef9a",
+    "types": "1469d39fc5b8470d7c4e109250b8df18aa90a90ddf08b7c15eb7ef83a4096136"
+  },
+  "calibration": "none (temperature 1; every Decision 2.0 model keeps T = 1): CAL698 was not adopted for this soup (it worsened two calibration metrics); no calibration file is shipped",
+  "action": "Runtime-only revision of the private repository vllm-sr/Decision-2.0-Vega-27B: the package runtime decision2/*.py comes from the phase A runtime commit 54303117b, which on a ROCm GPU under Transformers 5.17 replays the backbone of each exact padded shape as a HIP graph, casts shared Linear inputs to BF16 once and (on gfx942) runs fused Triton element-wise kernels that round exactly as the ops they replace. Weights, tokenizer, configs, the vendored training/model sources, calibration, any Score offsets, the banner and the charts are byte-identical to the released revision e60bd8e346110b3348b6e5a25c07329d350c4b21; README.md states the new median latency and MODEL_MANIFEST.json the new runtime hashes and one runtime sentence. The collection is not changed; everything stays private.",
+  "rationale": "The release judgement of the superseded final decision 08d19f0e… stands unchanged: the same identity e50fb4c1, scored report, paired comparison, calibration and licence decision. Only the package runtime changes, and it computes the same values bit for bit: every prompt of the four scored panels (typed-final 1,600, css15 6,547, public231 231, mlx-diag 2,275) answered through the released package and through this package on the released weights gave 0 answer changes and 0.0 drift; 400 single requests: p50 109.80 -> 69.18 ms, p95 113.87 -> 71.50 ms, all bit-identical. release.sh checks the native examples, the card's Transformers example before upload, after the real download and from the Hub in fresh environments under Transformers 5.17 and 5.18, the card structure and every card link.",
+  "approved_package": {
+    "identity": "e50fb4c130483d1c889c226f726fcca1e134a3ae0292f20907586738c06c9680",
+    "loaded_parameters": 27497508864,
+    "profile": "qwen-adapter (unmerged PEFT LoRA and the native head on the pinned Qwen3.8-27B base)",
+    "temperature": 1,
+    "max_input_tokens": 32768,
+    "revision_binding": "receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified."
+  },
+  "licence_decision": "apache-2.0: own LoRA adapter, head, runtime and card; base Qwen/Qwen3.8-27B @1d4bf0f2 Apache-2.0, pinned and not redistributed; the IB1-r3 training rows are licence-clean (release-safe data records); the package keeps the Apache-2.0 LICENSE (product card: no NOTICE, attributions or evaluation/ files).",
+  "supersedes": {
+    "final_sha256": "08d19f0e7d482fef162efb2231624f4d52f03ad86f194cac4a2a7257faa03aea",
+    "released_as": "vllm-sr/Decision-2.0-Vega-27B@e60bd8e346110b3348b6e5a25c07329d350c4b21",
+    "released_manifest_sha256": "23a040164046b0fcd4a88006cabc474d0e965a5f091806b027b933ce2a5b24e4",
+    "released_gate_sha256": "e9591a86c2ba07b1496da1206e5277e68044dfd443e5205f241b82974b0aef6b",
+    "card_revision": {
+      "kind": "card-org",
+      "spec": "v2/release/specs/dev2-27b-org.json",
+      "spec_sha256": "9e7dba87bab0e8c40edbbc39f2d64ead742045643d9490ff9fa2e03e60ab5132"
+    },
+    "earlier": {
+      "final_sha256": "c7b9b224ebb1b734adf0b00006821754176e887f77ec95adde8d7ed23e74964a",
+      "released_as": "llm-semantic-router/Decision-2.0-Vega-27B@781b2b2431abccbdcfcbfa98b66c80b332725513",
+      "released_manifest_sha256": "4d1ca0f55690352b1b524eba95bc4169fd2b3bea2ccf66f4f33184f96cf26cab",
+      "released_gate_sha256": "2851727bf85d1f5af551d67e3bfbfd3cd89972655f185394f2fe715454d4ca99",
+      "earlier": {
+        "revision": "b689ee66b51a0c0c45faf42b63e5aa0eaf187bde",
+        "final_sha256": "1f533d2e3b7671635b8ee42094215b114b8e27f19bf3dc8d5277d01b294a9f42",
+        "gate_sha256": "8a3da2516d1b8898761986b8bfdac93c42d43b214d82b62dfc9338f198a3ce70",
+        "manifest_sha256": "6358ebfa1f081ff40726121ec10f5feb26ac72d39249cc1c48a918e099be1437",
+        "weights_identity": "2e07451107a2ca9735064cc01f7e43e8522b4bae48f2d77bdf29f7ea2fe6362c"
+      }
+    }
+  },
+  "disclosures": [
+    "the former successor item 1 (v3 significantly above the current revision) and the beats-AutoJev reading are not met (v3 not significantly above the current revision); under the Index-first rule they are references",
+    "the training rows include the IB1-r3 families matched to Index benchmark families and formats; the internal records report the transfer-only Index delta without those benchmarks (private values)",
+    "Index contamination audit of the training rows (a2ccf844, 81294 lines, the one file both seeds trained on): 0 item rows and 2 familiar-text rows",
+    "card.speed is the current revision's bench receipt (same base, runtime and shapes; this adapter's rank is 256 instead of 64)"
+  ],
+  "prepared_by": "Decision 2.0 runtime phase A worker 2d541b40 (track=runtime-a, worktree vllm-sr-dev2-runtime-a)",
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's approval of speed-up phase A (2026-10-02 18:00 UTC+8, COORDINATION 18:00): runtime-only revisions of the six Decision 2.0 repositories with the exact GPU fast path, each only with 0 answer changes and 0.0 drift on all four scored panels against the released runtime",
+  "decided_utc": "2026-10-02T10:00:00Z",
+  "previous_rationale": "The release judgement of the superseded final decision c7b9b224… stands unchanged: the same identity e50fb4c1, scored report, paired comparison, calibration and licence decision. Only the organization in the card and the manifest changes; release.sh checks the native examples, the card's Transformers example before upload, after the real download and from the Hub in fresh environments under Transformers 5.17 and 5.18, the card structure and every card link.",
+  "runtime_revision": {
+    "kind": "fast-path-runtime",
+    "runtime_commit": "54303117be355595ddf5bb184905be6c6d2ecae9",
+    "spec": "v2/release/specs/dev2-27b-ra.json",
+    "spec_sha256": "658b56b511e79c8672bb852fa8d9dc4169d26e9ce354d1584bb737341fccb0c2",
+    "parity": {
+      "compare": "v2/release/records/dev2-runtime-a-2026-10-02/27b/parity/answers-compare.json",
+      "sha256": "e72ee2ba4ce659e1ed8750ec0470679d39343042ff09d076e740b1076c5900f2",
+      "panels": {
+        "css15": [
+          6547,
+          6547,
+          0
+        ],
+        "mlx-diag": [
+          2275,
+          2275,
+          0
+        ],
+        "public231": [
+          231,
+          231,
+          0
+        ],
+        "typed-final": [
+          1600,
+          1600,
+          0
+        ]
+      },
+      "max_abs_drift": 0.0
+    },
+    "bench": {
+      "compare": "v2/release/records/dev2-runtime-a-2026-10-02/27b/bench/compare.json",
+      "sha256": "7cbf13ca49f6edcfc0d57cd2d1346c8d36faf2cce46e61d76457f578ebdaf2b7",
+      "items": 400,
+      "bit_identical_items": 400,
+      "p50_ms": [
+        109.79756503365934,
+        69.18272585608065
+      ],
+      "p95_ms": [
+        113.8700710143894,
+        71.5048429556191
+      ],
+      "request_peak_gib": [
+        57.3620023727417,
+        61.49069118499756
+      ]
+    }
+  }
+}
