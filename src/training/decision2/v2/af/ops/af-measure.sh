@@ -9,6 +9,7 @@
 # ix1/m10/refs on node A).
 #
 # AF_LEASE_AFTER_SOUPS=1: take the leases only once every NAME's soup is built (when its LoRA merges use these GPUs).
+# AF_REF=<run dir>: the reference run instead (amendment 3: the then-current release's run).
 #
 # usage: AF_NODE=a|c|f af-measure.sh <mirror-dir> <PANEL> "<GPUS>" <SHARDS> <NAME>...
 set -u
@@ -28,6 +29,7 @@ case $SIZE in
   4b) TAG=r13d42143 BIG=4B ref=$R/af/refs/IS-4b-LHA10SDML-bf16; [ "$NODE" = c ] && ref=$R/runs/IS-4b-LHA10SDML-bf16 ;;
   9b) TAG=re51f9881 BIG=9B ref=$R/m10/refs/K-a13IB-bf16; [ "$NODE" = c ] && ref=$R/runs/K-a13IB-bf16 ;;
 esac
+ref=${AF_REF:-$ref}
 [ -f "$ref/merged/results.jsonl" ] || { log "no reference run $ref"; exit 1; }
 if [ "${AF_LEASE_AFTER_SOUPS:-0}" = 1 ]; then  # soups that merge LoRA seeds on these GPUs finish first
   for NAME in "$@"; do

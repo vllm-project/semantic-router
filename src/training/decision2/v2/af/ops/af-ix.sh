@@ -9,7 +9,8 @@
 #
 # usage: af-ix.sh MIRROR_SHA STAGE ARGS...
 #   env NODE                        the scoring environment (venv, suite-0.2, kits, external) node C -> NODE
-#   ref4b NODE                      IS-4b-LHA10SDML-bf16's merged results node C -> NODE ix1/af/refs (hash pinned)
+#   ref NODE [RUN SHA256]           a reference run's merged results node C -> NODE ix1/af/refs/RUN (results hash
+#                                   pinned; default IS-4b-LHA10SDML-bf16)
 #   soup NODE NAME GPU|- MEMBER...  af-soup.sh detached on NODE (log logs/soup-NAME.log)
 #   stage NODE NAME                 af-stage.sh on NODE (BF16 copy + restage, checks)
 #   soupcopy NAME FROM TO           a built soup (soup/NAME with its markers) FROM -> TO (SHA-256 lists equal)
@@ -80,16 +81,18 @@ case "$STAGE" in
       on "$N" "test -e $R/../$x" && { echo "node $N has $x"; continue; }
       copy c "$R/../$x" "$N" "$R/../$x"
     done ;;
-  ref4b)
-    N=${1:?NODE}
-    X=$R/af/export/IS-4b-LHA10SDML-bf16
-    on "$N" "test -f $R/af/refs/IS-4b-LHA10SDML-bf16/merged/results.jsonl" && { echo "node $N has the 4B reference run"; exit 0; }
-    on c "umask 077; rm -rf $X && mkdir -p $X/merged && cp -p $R/runs/IS-4b-LHA10SDML-bf16/merged/{results.jsonl,compare.json,receipt.json} $X/merged/"
+  ref4b | ref)
+    N=${1:?NODE} RUN=${2:-IS-4b-LHA10SDML-bf16} WANT=${3:-$SDML_RESULTS}
+    X=$R/af/export/$RUN
+    on "$N" "test -f $R/af/refs/$RUN/merged/results.jsonl" && { echo "node $N has the reference run $RUN"; exit 0; }
+    [ "$(on c "sha256sum < $R/runs/$RUN/merged/results.jsonl | cut -c1-64")" = "$WANT" ] \
+      || { echo "node C's $RUN results are not $WANT" >&2; exit 3; }
+    on c "umask 077; rm -rf $X && mkdir -p $X/merged && cp -p $R/runs/$RUN/merged/{results.jsonl,compare.json,receipt.json} $X/merged/"
     on "$N" "umask 077; mkdir -p $R/af/refs"
-    copy c "$X" "$N" "$R/af/refs/IS-4b-LHA10SDML-bf16"
-    on c "rm -rf $R/af/export"
-    [ "$(on "$N" "sha256sum < $R/af/refs/IS-4b-LHA10SDML-bf16/merged/results.jsonl | cut -c1-64")" = "$SDML_RESULTS" ] \
-      || { echo "the copied IS-4b-LHA10SDML-bf16 results are not $SDML_RESULTS" >&2; exit 3; } ;;
+    copy c "$X" "$N" "$R/af/refs/$RUN"
+    on c "rm -rf $X"
+    [ "$(on "$N" "sha256sum < $R/af/refs/$RUN/merged/results.jsonl | cut -c1-64")" = "$WANT" ] \
+      || { echo "the copied $RUN results are not $WANT" >&2; exit 3; } ;;
   soup)
     N=${1:?NODE} NAME=${2:?NAME} G=${3:?GPU}
     shift 3
