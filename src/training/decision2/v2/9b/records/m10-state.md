@@ -2,6 +2,16 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 15:50Z (23:50 UTC+8), M10 continuation worker
+
+- **RELEASED: Lux-9B `main` = `f3122c7c8abd302326c22220aac4095eb1799f37`** (KIB4-a40, user 23:02 UTC+8), superseding
+  `f77b41f5`; private; K-a13IB's weights purged. Record `v2/release/records/dev2-9b-m10-2026-10-02.md` (with the
+  23:20 fast-path waiver note). The upload waited for the 27B prerelease's `release.sh` to end (15:14Z).
+- **All M10 Index runs are in** (values private): X2-a33 and KIB4P-a33 pass IF1 vs K-a13IB but are below KIB4-a40.
+  Later candidates (arm factory hand-offs) must now beat `M10-KIB4-a40-bf16`.
+- **Leases:** node A GPU7 released; node A GPU3 is the arm factory's. KIB4P-a33's release inputs on node A are kept
+  (unused).
+
 ## 2026-10-02 14:10Z (22:10 UTC+8), M10 continuation worker
 
 - **Index runs in:** KIB4-a40, X1-a33, X3-a33 and X5-a33 all pass IF1 vs K-a13IB-bf16 (values private). Still running:
