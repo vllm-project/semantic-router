@@ -38,9 +38,13 @@ No M6 worker was active; the detached chains, relays, watchers and the guard kep
   package `models/ix1/m6/M6-IB-re876fbe`, manifest `68802e7c…`, identity `e50fb4c1…`, loaded 27,497,508,864, T = 1; 31 /
   31 listed digests checked by hand because the local script was killed with its tool call after the restage wrote the
   manifest), `stage-c` 01:54–01:56Z (node C package equal file for file), **parity** on node D GPU4 since 01:51Z,
-  **MLX-DEV2** readout on node D GPU5 since 01:51Z (`private/eval/mlx-dev2/runs/M6-IB`, with the mlx-diag prompts and
-  cache `f474e2e9…`). The Index run (`M6_INDEX_GPUS="d4 d5 d6 d7 c1 c2 c3 c4"`) starts only after the MLX-DEV2 PASS
-  is recorded; node C GPU5–7 are left for the 0.8B / 2B Index worker (b49d1f36).
+  **MLX-DEV2** readout on node D GPU5 01:51–02:08Z (`private/eval/mlx-dev2/runs/M6-IB`, with the mlx-diag prompts and
+  cache `f474e2e9…`; 7,490 answers, 961 s; predictions copied to node A, SHA-256 equal). **Parity PASS** (86 / 86
+  `ok`, max |Δp| 0.0). **MLX-DEV2 guard PASS** (node A `mlx_dev2 compare` vs A20r's validation predictions, code
+  unchanged since the validation): card-eligible **+.0029 [−.0021, +.0079]** (Choice +.0083 [+.0012, +.0157], Noul
+  −.0025 [−.0096, +.0043]); the same container's mlx-diag reading −.0020 [−.0112, +.0077] reproduces the formal
+  item-4 delta (−.0020). The Index run (`M6_INDEX_GPUS="d4 d5 d6 d7 c1 c2 c3 c4"`) starts after this commit; node C
+  GPU5–7 are left for the 0.8B / 2B Index worker (b49d1f36).
 - **M6-IB2:** s1 complete 01:46Z (BEST 4135), s2 (node A) at 6,594 / 6,614 at 01:48Z; chain 2769422 waits for the
   relay. **M6-IB2PN:** 5,200 / 6,886 at 01:48Z, ≈ 10.6 s per update now → ETA ≈ 06:50Z (projection ≈ 19.3 GPU-h per
   seed, cap 22).
