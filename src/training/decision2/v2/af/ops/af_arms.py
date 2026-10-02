@@ -80,6 +80,15 @@ ARMS = {
     "4b-LHS17IB4-UP": ("4b", "4b-LHS17IB4-UP", []),
     "4b-LHS17ML-UP": ("4b", "4b-LHS17ML-UP", []),
     "4b-LHS17IB4X-UP": ("4b", "4b-LHS17IB4X-UP", []),
+    # Amendment 9 (standing backlog). 4B: UP x2 on two IB4 TRAINs; UP x1.5 on the factory's wave-2 TRAINs.
+    "4b-SDMLIB4-UP2": ("4b", "4b-SDMLIB4-UP2", []),
+    "4b-LHS17IB4-UP2": ("4b", "4b-LHS17IB4-UP2", []),
+    "4b-LHS17IB4ML-UP": ("4b", "4b-LHS17IB4ML-UP", []),
+    "4b-LHS23IB4-UP": ("4b", "4b-LHS23IB4-UP", []),
+    # 9B: half backbone LR on KIB4; IB4 x2 on the KIB4R re-cut; two epochs of KIB4.
+    "KIB4-lrh": ("9b", "KIB4", ["--backbone-lr", "5e-6"]),
+    "KIB4R-W2": ("9b", "KIB4R-W2", []),
+    "KIB4-e2": ("9b", "KIB4", ["--epochs", "2"]),
 }
 
 

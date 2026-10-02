@@ -17,11 +17,11 @@ MODE=$1 SRC=$2 GPU=$3
 shift 3
 ITEMS=("$@")
 NODE=${AF_NODE:?set AF_NODE}
-case $NODE:${AF_SIZE:-} in  # node gates: prereg, raised by amendments 4, 5, 7 and 8 (COORDINATION 2026-10-03 00:00, 01:38, 02:18, 03:35)
-  a:*) SIZE=9b CACHE=9b-train CAP=4.5 GATE=26 ;;
-  c:*) SIZE=4b CACHE=4b-train CAP=2.5 GATE=32 ;;
+case $NODE:${AF_SIZE:-} in  # node gates: prereg, raised by amendments 4, 5, 7, 8 and 9 (COORDINATION 2026-10-03 00:00-04:58)
+  a:*) SIZE=9b CACHE=9b-train CAP=4.5 GATE=32 ;;
+  c:*) SIZE=4b CACHE=4b-train CAP=2.5 GATE=44 ;;
   f:*) SIZE=4b CACHE=4b-train CAP=2.5 GATE=9 ;;
-  b:9b) SIZE=9b CACHE=9b-train CAP=4.5 GATE=22 ;;
+  b:9b) SIZE=9b CACHE=9b-train CAP=4.5 GATE=28 ;;
   b:*) SIZE=4b CACHE=4b-train CAP=2.5 GATE=4 ;;
   *) echo "unknown node $NODE" >&2; exit 2 ;;
 esac
