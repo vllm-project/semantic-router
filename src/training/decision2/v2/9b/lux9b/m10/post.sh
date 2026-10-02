@@ -29,9 +29,11 @@ if [ "$MODE" = launch ]; then
 fi
 log() { echo "$(date -u +%FT%TZ) post-$ARM $*" | tee -a "$M/OPERATIONS.log"; }
 terminal() { [ -f "$ST/m10-$ARM-s$1.DONE" ] || [ -f "$ST/m10-$ARM-s$1.FAILED" ] || [ -f "$ST/m10-$ARM-s$1.STOPPED" ]; }
+case $ARM in KSW | KIB4) SEEDS="1 2" ;; *) SEEDS="1 2 3" ;; esac  # two-seed arms: amendment 3
 n=0
 log "waiting for the seeds of $ARM"
-until terminal 1 && terminal 2 && terminal 3; do
+all_terminal() { local s; for s in $SEEDS; do terminal "$s" || return 1; done; }
+until all_terminal; do
   n=$((n + 1))
   [ $((n % 30)) = 0 ] && log "still waiting for the seeds of $ARM"
   sleep 60
@@ -56,7 +58,7 @@ build() {  # <name> <member container path>...
   fi
 }
 members=()
-for s in 1 2 3; do
+for s in $SEEDS; do
   [ -f "$ST/m10-$ARM-s$s.DONE" ] || continue
   best=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["checkpoint"])' "$M/arms/full/m10-$ARM-s$s/BEST.json")
   [ -f "$M/arms/full/m10-$ARM-s$s/$best/decision_config.json" ] || { log "s$s BEST $best is not a checkpoint"; exit 1; }

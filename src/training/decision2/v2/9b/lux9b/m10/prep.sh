@@ -3,9 +3,10 @@
 #   prep.sh kup   KUP weights (x60 rows 1.5, IB rows 1) over K-a13IB's TRAIN (node C's m9/data/kib, copied, hash-checked)
 #   prep.sh kibm  KIBM TRAIN: m9_data.py --match-tokens with IB1-r3 minus `sentfin`, IB2, and IB3-r2 (`mqa`), the
 #                 x60 cut seed of K-a13IB, K-a13's 60,183,732 native tokens
+#   prep.sh kib4  KIB4 TRAIN (amendment 3): the same with IB4 phase 1 (`76cea510`) in place of IB3-r2
 # Each mode adds its arm to the lock (files relative to /data/dev2/runs/9b/m10 with SHA-256, and the trainer's data
 # flags as container paths); an arm already in the lock is never changed.
-# usage: M10_NODE=b prep.sh kup|kibm <mirror-dir>
+# usage: M10_NODE=b prep.sh kup|kibm|kib4 <mirror-dir>
 set -euo pipefail
 MODE=$1 SRC=$2
 M=/data/dev2/runs/9b/m10
@@ -15,6 +16,7 @@ LOCK=$M/data/READY-m10.json
 IB1=$I/inputs/ib/ib1-31b200a3/m6/ib1/ib1.train.jsonl
 IB2=$I/inputs/ib/ib2-c5dbdd0a/m6/ib2/ib2.train.jsonl
 IB3=$M/inputs/ib3-1c8452da/m6/ib3/ib3.train.jsonl
+IB4=$M/inputs/ib4-p1-76cea510/m6/ib4/p1/ib4.train.jsonl
 IDS=$I/inputs/x60-ids/mx-xl-full-r2.ids.jsonl
 mkdir -p "$M/data"
 log() { echo "$(date -u +%FT%TZ) prep $*" | tee -a "$M/OPERATIONS.log"; }
@@ -70,6 +72,23 @@ case $MODE in
     add_lock KIBM '["--train", "/runs/m10/data/kibm-build/kibm/train.jsonl", "--teacher", "/runs/m10/data/kibm-build/kibm/teacher.jsonl"]' \
       data/kibm-build/kibm/train.jsonl data/kibm-build/kibm/teacher.jsonl
     log "KIBM TRAIN built and locked"
+    ;;
+  kib4)
+    check "$IB1" 1e1b08f3d37f9051ffe2e4b99fd7be673f315d05cc74a27a8d350eae2bb706c5
+    check "$IB2" ee137efa8bbf86e5c62574f3b8fbd6204063e095a8da514f32600ba3d51d1cfa
+    check "$IDS" 7843afb7b2bbb315902b6748d6559532f384283d8efd836b935daac5f55dbd4a
+    check "$IB4" 6045b456d4b3032db4b76d70d792e3e9e30aad13e16a8f86fb3e99bc325806fb
+    check "${IB4%.jsonl}.tokens.jsonl" 2af4f8a5104e24d0924474104f0c0ded775ffb2090954ab782cf0ad92642b7e6
+    M10_NODE=b bash "$L" prep-kib4 "$SRC" "$M/data/kib4-build" --cpu -- v2/9b/lux9b/m9_data.py \
+      --x60-dir /runs/m10/inputs/m9/data/x60 \
+      --ib1 /runs/m10/inputs/m9/inputs/ib/ib1-31b200a3/m6/ib1/ib1.train.jsonl \
+      --ib2 /runs/m10/inputs/m9/inputs/ib/ib2-c5dbdd0a/m6/ib2/ib2.train.jsonl \
+      --ib4 /runs/m10/inputs/ib4-p1-76cea510/m6/ib4/p1/ib4.train.jsonl --exclude-family sentfin \
+      --match-tokens 60183732 --x60-ids /runs/m10/inputs/m9/inputs/x60-ids/mx-xl-full-r2.ids.jsonl \
+      --keep-seed 20261001:m9-s3:keep --output /out/kib4
+    add_lock KIB4 '["--train", "/runs/m10/data/kib4-build/kib4/train.jsonl", "--teacher", "/runs/m10/data/kib4-build/kib4/teacher.jsonl"]' \
+      data/kib4-build/kib4/train.jsonl data/kib4-build/kib4/teacher.jsonl
+    log "KIB4 TRAIN built and locked"
     ;;
   *) echo "unknown mode $MODE" >&2; exit 2 ;;
 esac

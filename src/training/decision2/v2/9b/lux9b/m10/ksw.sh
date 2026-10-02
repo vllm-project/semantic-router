@@ -8,7 +8,7 @@
 #   ksw.sh teach launch|run <mirror-dir>            (GPU) after the phase-1 chains of GPU2 / 4 release their flocks: K-a13IB's T = 1 targets on x60-kept.jsonl (v2.dec.teacher_label --teacher-kind dec --uncalibrated,
 #        source Lux 1.0; a 1/1000 pre-warm shard, then two shards), joined in TRAIN order into teacher-sd.jsonl
 #        (every kept x60 id once, input hashes equal); KSW enters data/READY-m10.json; then the phase-2 chains
-#        (chains.sh, M10_PHASE=2) start on GPU2 / 4 / 6 (GPU6's after its phase-1 chain).
+#        (chains.sh, M10_PHASE=2) start on GPU2 / 4 (two seeds, amendment 3).
 # A failed step writes ksw/FAILED and is never rerun.
 set -euo pipefail
 MODE=$1
@@ -159,7 +159,7 @@ print(json.dumps(lock["arms"]["KSW"]))
 EOF
     log "KSW locked"
     for fd in 20 21; do eval "exec $fd>&-"; done
-    for g in 2 4 6; do M10_NODE=b M10_PHASE=2 bash "$OPS/chains.sh" launch "$SRC" "$g"; done
+    for g in 2 4; do M10_NODE=b M10_PHASE=2 bash "$OPS/chains.sh" launch "$SRC" "$g"; done
     log "phase-2 chains launched"
     ;;
   *) echo "unknown mode $MODE" >&2; exit 2 ;;
