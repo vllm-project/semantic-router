@@ -205,6 +205,43 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 19:35 — **Org card-only revisions are live on five repos** (org worker (2); 0 `llm-semantic-router` in
+  any text file of each).
+  - **New `main`:** Kai-0.6B `c441862b`, Eos-0.8B `25f0914a`, Sol-2B `951e7f7f`, Nox-4B `36596d27`, Lux-9B
+    `6af07f36`. Only README.md and MODEL_MANIFEST.json changed; weights, assets and runtime are byte-identical.
+  - **Vega-27B** is publishing now (node C, CPU: every node A / C GPU went to 9B M10 Index runs).
+  - **Release workers (M17 4B, 9B M10, 27B, runtime phase A):** your next upload supersedes these revisions.
+    - Derive from `specs/dev2-<key>-org.json`.
+    - Your `gate_profile.current` names the org gate (the run's `receipts/gate.json`) and decision
+      (`/data/dev2/runs/release/decisions/<name>.decision.org.json`).
+    - Files are on branch `xunzhuo/decision-2-org-vllm-sr-20`; they merge into integration after Vega.
+    - The two release-gate commits that the Eos / Sol and Nox releases used (`5e2c3fa92`, `c6c754a41`) come along,
+      cherry-picked.
+
+- 2026-10-02 18:50 — **USER APPROVED a shared-context prefill SWITCH** (new worker, `track=shared-ctx`).
+  - **ON:** the shared input of a multi-question request is computed once and reused, for near-flat latency in N, with
+    some accuracy loss accepted. **OFF:** today's exact path, and the default.
+  - **Goal:** maximise the speed gain while minimising the loss, via exactness tricks, a low-margin exact fallback (τ
+    sweep) and auto-enable thresholds.
+  - **Why:** measured, our per-question re-read makes latency linear in N. The official Jev API stays nearly flat and
+    overtakes at 64 or more questions.
+  - **Conflict avoidance:** a separate module with a minimal hook. The phase A runtime worker (2d541b40) owns
+    `decision2/qwen.py`; the shared-ctx work rebases onto phase A when it lands. No released package changes.
+
+- 2026-10-02 18:05 — **Org pipeline change merged at `f72f4de36`** (commit `ae0bc1e2f`; org worker (2)). **Release
+  workers merge integration before the next driver run.**
+  - **Why it's urgent.** The Hub now answers the old IDs with the new ones. On the old pipeline, `hub.py` refuses
+    every upload ("resolves to vllm-sr/..."), `collection_order.py` fails, and `hf_headroom.sh` lists 0 repos under
+    the old author, so it reports 0 GB used and gives false headroom.
+  - **What changed.** `ORG = vllm-sr`, and the pinned collection is `vllm-sr/decision-20-6ab7cf7bdfb506bf8269cb00`.
+    `check_repo` refuses `llm-semantic-router/...` with "renamed; use vllm-sr/...". The README lint refuses the
+    former org. `hub_links` fails links to it. Prior gates and 1.0 reports under the old org still count
+    (`layout.current_repo`).
+  - **Your spec.** Put `vllm-sr/...` in `repo_id`, `origin` / `base` and licence sources. `layout.current_ids(spec)`
+    rewrites these Hub IDs and leaves HF-cache paths alone. Decisions must name `vllm-sr/<model>`.
+  - **Card-only org revisions** of the six 2.0 repos follow, one repo at a time, never during that repo's release
+    run. Re-read `main` before you upload.
+
 - 2026-10-02 18:00 — **USER APPROVED speed-up phase A** (gist `6b59c3be`).
   - **Owner:** the bit-identical runtime rollout for all six sizes is owned by **2d541b40** (`track=runtime-a`).
   - **Scope:** HIP graphs per exact shape with host masks and the exact trims; the lean LoRA for 27B; the bit-exact
