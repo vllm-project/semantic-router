@@ -60,6 +60,13 @@ ARMS = {
     "KIB4": ("9b", "KIB4", []),
     "KIB4W2": ("9b", "KIB4W2", []),
     "KIB4L2": ("9b", "KIB4", ["--backbone-lr", "2e-5"]),
+    # Batch 2 (amendment 4). 4B: more seeds of M17's 4b-LHS17IB4X / 4b-LHS17ML; 4b-SDMLIB4's TRAIN at half LR.
+    "4b-LHS17IB4X": ("4b", "4b-LHS17IB4X", []),
+    "4b-LHS17ML": ("4b", "4b-LHS17ML", []),
+    "4b-SDMLIB4-lrh": ("4b", "4b-SDMLIB4", ["--lora-lr", "5e-5", "--head-lr", "5e-5"]),
+    # 9B: KIB4's TRAIN with the IB4 rows x3; KIB4's construction with a new x60 cut seed (af-prep9b.sh).
+    "KIB4W3": ("9b", "KIB4W3", []),
+    "KIB4R": ("9b", "KIB4R", []),
 }
 
 

@@ -3,11 +3,12 @@
 #
 # usage: AF_NODE=a|b|c|f [AF_CACHE=<name>] af-launch.sh <job> <mirror-dir> <out-dir> (--cpu | --gpu N) -- <python3 args...>
 #
-# Sizes and images: node A trains 9B (M10's image f83b1d10, Lux 1.0 mounted as /lux); nodes B, C and F train 4B
-# (M17's image dbe5f32b). GPU isolation (the nodes C-F rule, used on every node here): the container gets /dev/kfd
-# plus only its GPU's render node, resolved from the GPU's PCI address, with ROCR_VISIBLE_DEVICES=0 and --network none.
-# Only the arm factory's GPUs are accepted (COORDINATION 2026-10-02 22:00): node A GPU1-7, node C GPU3-7, node F
-# GPU2-7, node B GPU2 / 4 / 6 / 7, and the GPU's lease owner file must name track=arm-factory. Mounts (read-only
+# Sizes and images: node A trains 9B (M10's image f83b1d10, Lux 1.0 mounted as /lux); nodes C and F train 4B (M17's
+# image dbe5f32b); node B trains 4B, or 9B with AF_SIZE=9b (M10's node B Lux 1.0 and SELECT / CAL). GPU isolation (the
+# nodes C-F rule, used on every node here): the container gets /dev/kfd plus only its GPU's render node, resolved from
+# the GPU's PCI address, with ROCR_VISIBLE_DEVICES=0 and --network none. Only these GPUs are accepted (COORDINATION
+# 2026-10-02 22:00 and 2026-10-03 00:00): node A GPU1-7, node C GPU1-7, node F GPU2-7, node B GPU2-4 / 6-7, and the
+# GPU's lease owner file must name track=arm-factory. Mounts (read-only
 # unless noted): the exact mirror's src/training/decision2 as /code, /data/dev2/models as /models, /data/dev2/runs/af
 # as /runs, the decoder panels as /panels, the owners' run trees /data/dev2/runs/dec and /data/dev2/runs/9b as /dec and
 # /r9b (each when present), the SELECT/CAL directory as /data, <out-dir> as /out (rw) and
@@ -26,12 +27,17 @@ fi
 
 node=${AF_NODE:?set AF_NODE=a, b, c or f}
 lux=""
+sel4=/data/dev2/runs/af/4b/inputs/dec/m10/inputs/sel700-cal698
 case $node in
   a) size=9b allowed=" 1 2 3 4 5 6 7 " lux=/data/decision20-20260926/models/Decision-1.0-Lux-9B
      sel=/data/dev2/runs/9b/m9/inputs/sel700-cal698 ;;
-  c) size=4b allowed=" 3 4 5 6 7 " sel=/data/dev2/runs/af/4b/inputs/dec/m10/inputs/sel700-cal698 ;;
-  f) size=4b allowed=" 2 3 4 5 6 7 " sel=/data/dev2/runs/af/4b/inputs/dec/m10/inputs/sel700-cal698 ;;
-  b) size=4b allowed=" 2 4 6 7 " sel=/data/dev2/runs/af/4b/inputs/dec/m10/inputs/sel700-cal698 ;;
+  c) size=4b allowed=" 1 2 3 4 5 6 7 " sel=$sel4 ;;
+  f) size=4b allowed=" 2 3 4 5 6 7 " sel=$sel4 ;;
+  b) size=${AF_SIZE:-4b} allowed=" 2 3 4 6 7 " sel=$sel4
+     if [[ $size == 9b ]]; then  # M10's node B inputs (Lux 1.0 file for file node A's)
+       lux=/data/dev2/models/Decision-1.0-Lux-9B/bd45a30aee8c84032791c245c70f86dee5389cc8
+       sel=/data/dev2/runs/9b/m10/inputs/m9/inputs/sel700-cal698
+     fi ;;
   *) echo "unknown node $node" >&2; exit 2 ;;
 esac
 case $size in

@@ -2,7 +2,7 @@
 # Arm factory soups and interpolation points (prereg "Candidates"), node side: a uniform FP32 soup (v2.dec.soup, CPU)
 # of a member list; a member listed k times carries weight k / n.
 #
-# usage: AF_NODE=a|b|c|f af-soup.sh <mirror-dir> <NAME> <gpu|-> <member>...
+# usage: AF_NODE=a|b|c|f [AF_SIZE=9b on node B] af-soup.sh <mirror-dir> <NAME> <gpu|-> <member>...
 #   run:<RUN>    a finished seed on this node. 4B: its BEST LoRA checkpoint, merged first into a full FP32 checkpoint
 #                on <gpu> (M10's m10_merge.py with its SELECT agreement check; cached in merged/<RUN>). 9B: its BEST
 #                full checkpoint.
@@ -21,7 +21,7 @@ set -u
 SRC=$1 NAME=$2 GPU=$3
 shift 3
 NODE=${AF_NODE:?set AF_NODE}
-case $NODE in a) SIZE=9b ;; *) SIZE=4b ;; esac
+case $NODE in a) SIZE=9b ;; *) SIZE=${AF_SIZE:-4b} ;; esac
 M=/data/dev2/runs/af/$SIZE
 OUT=$M/soup/$NAME
 OPS=/data/dev2/src/$SRC/src/training/decision2/v2/af/ops
@@ -128,7 +128,7 @@ unhold
 [ ${#paths[@]} -ge 4 ] || fail "fewer than two members"
 mkdir -p "$OUT"
 printf '%s\n' "${lines[@]}" > "$OUT/members.txt"
-AF_NODE=$NODE bash "$L" "soup-$NAME" "$SRC" "$OUT/build" --cpu -- -m v2.dec.soup "${paths[@]}" --output "/out/$NAME" \
+AF_NODE=$NODE AF_SIZE=$SIZE bash "$L" "soup-$NAME" "$SRC" "$OUT/build" --cpu -- -m v2.dec.soup "${paths[@]}" --output "/out/$NAME" \
   || fail "soup build failed (see $OUT/build.stderr.log)"
 python3 -c 'import json,sys; print(json.loads(open(sys.argv[1]).read().strip().splitlines()[-1])["model_sha256"])' \
   "$OUT/build.stdout.log" > "$OUT/MODEL_SHA256" || fail "no model_sha256 in the soup output"

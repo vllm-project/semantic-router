@@ -17,11 +17,12 @@ MODE=$1 SRC=$2 GPU=$3
 shift 3
 ITEMS=("$@")
 NODE=${AF_NODE:?set AF_NODE}
-case $NODE in
-  a) SIZE=9b CACHE=9b-train CAP=4.5 GATE=20 ;;
-  c) SIZE=4b CACHE=4b-train CAP=2.5 GATE=13 ;;
-  f) SIZE=4b CACHE=4b-train CAP=2.5 GATE=6 ;;
-  b) SIZE=4b CACHE=4b-train CAP=2.5 GATE=4 ;;
+case $NODE:${AF_SIZE:-} in  # node gates: prereg, raised by amendment 4 (+30 GPU-h, COORDINATION 2026-10-03 00:00)
+  a:*) SIZE=9b CACHE=9b-train CAP=4.5 GATE=26 ;;
+  c:*) SIZE=4b CACHE=4b-train CAP=2.5 GATE=17 ;;
+  f:*) SIZE=4b CACHE=4b-train CAP=2.5 GATE=9 ;;
+  b:9b) SIZE=9b CACHE=9b-train CAP=4.5 GATE=15 ;;
+  b:*) SIZE=4b CACHE=4b-train CAP=2.5 GATE=4 ;;
   *) echo "unknown node $NODE" >&2; exit 2 ;;
 esac
 M=/data/dev2/runs/af/$SIZE
@@ -32,7 +33,7 @@ TAG=$NODE$GPU-$(date -u +%H%M%S)
 
 if [ "$MODE" = launch ]; then
   [ ${#ITEMS[@]} -gt 0 ] || { echo "no items" >&2; exit 2; }
-  AF_NODE=$NODE AF_PREWARM=${AF_PREWARM:-0} setsid nohup flock "$C/gpu$GPU.flock" bash "$0" run "$SRC" "$GPU" \
+  AF_NODE=$NODE AF_SIZE=${AF_SIZE:-} AF_PREWARM=${AF_PREWARM:-0} setsid nohup flock "$C/gpu$GPU.flock" bash "$0" run "$SRC" "$GPU" \
     "${ITEMS[@]}" > "$M/logs/chain-$TAG.log" 2>&1 < /dev/null &
   echo $! > "$C/chain-$TAG.pid"
   echo "$(date -u +%FT%TZ) chain $TAG (${ITEMS[*]}) launched from $SRC (pid $(cat "$C/chain-$TAG.pid"))" \
@@ -112,7 +113,7 @@ item() {  # <ARM> <sN> <SEED>
     done
   ) &
   wd=$!
-  local env=(AF_NODE="$NODE" AF_CACHE="$CACHE")
+  local env=(AF_NODE="$NODE" AF_SIZE="$SIZE" AF_CACHE="$CACHE")
   [ "$pw" = 1 ] && env+=(AF_WARM_MARKER="$warm")
   # shellcheck disable=SC2086
   env "${env[@]}" bash "$OPS/af-arm.sh" "$r" "$GPU" "$SRC" "$SIZE" "$start" -- $rest --seed "$seed"
