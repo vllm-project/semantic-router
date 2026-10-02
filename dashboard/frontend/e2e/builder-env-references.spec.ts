@@ -59,6 +59,46 @@ const requiredReferenceConfig = `${referencesConfig}        - type: rag
               api_key: \${OPENAI_API_KEY}
 `
 
+// Each typed value is valid only once its reference takes the default, and the
+// RAG key is valid only as written.
+const typedDefaultsConfig = `version: v0.3
+providers:
+  models:
+    - name: model-a
+      reliability:
+        base_ejection_time: \${EJECTION_TIME:-30s}
+      backend_refs:
+        - name: local
+          endpoint: \${BACKEND_HOST:-127.0.0.1}:8000
+          protocol: http
+routing:
+  modelCards:
+    - name: model-a
+      modality: text
+  signals:
+    context:
+      - name: long_context
+        min_tokens: \${CTX_MIN:-4k}
+  decisions:
+    - name: long_route
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: context
+            name: long_context
+      modelRefs:
+        - model: model-a
+      plugins:
+        - type: rag
+          configuration:
+            enabled: true
+            backend: openai
+            backend_config:
+              vector_store_id: vs_billing_docs
+              api_key: \${OPENAI_API_KEY}
+`
+
 test.beforeEach(async ({ page }) => {
   await mockAuthenticatedAppShell(page)
   // Serve the pinned editor dependency locally so the deploy diff works without a CDN.
@@ -95,5 +135,11 @@ test('keeps environment references and $$ escapes when deploying an imported con
 
 test('imports a config whose required field is an environment reference', async ({ page }) => {
   const yaml = await deployPreviewYaml(page, requiredReferenceConfig)
+  expect(yaml).toContain('api_key: ${OPENAI_API_KEY}')
+})
+
+test('imports a config whose typed values take environment defaults', async ({ page }) => {
+  const yaml = await deployPreviewYaml(page, typedDefaultsConfig)
+  expect(yaml).toContain('min_tokens: ${CTX_MIN:-4k}')
   expect(yaml).toContain('api_key: ${OPENAI_API_KEY}')
 })

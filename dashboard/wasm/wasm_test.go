@@ -377,6 +377,76 @@ func TestDecompileAcceptsRequiredEnvironmentReference(t *testing.T) {
 	}
 }
 
+// Each typed value is valid only once its reference takes the default, and the
+// RAG key is valid only as written.
+const typedEnvDefaultsConfig = `version: v0.3
+providers:
+  models:
+    - name: qwen
+      reliability:
+        base_ejection_time: ${EJECTION_TIME:-30s}
+      backend_refs:
+        - name: primary
+          provider: vllm
+          endpoint: ${BACKEND_HOST:-127.0.0.1}:8000
+          protocol: http
+routing:
+  modelCards:
+    - name: qwen
+      modality: text
+  signals:
+    context:
+      - name: long_context
+        min_tokens: ${CTX_MIN:-4k}
+  decisions:
+    - name: long_route
+      priority: 1
+      rules:
+        operator: AND
+        conditions:
+          - type: context
+            name: long_context
+      modelRefs:
+        - model: qwen
+      plugins:
+        - type: rag
+          configuration:
+            enabled: true
+            backend: openai
+            backend_config:
+              vector_store_id: vs_docs
+              api_key: ${OPENAI_API_KEY}
+`
+
+func TestDecompileAcceptsTypedEnvironmentDefaults(t *testing.T) {
+	// The Router resolves these with its own environment, not this one.
+	t.Setenv("CTX_MIN", "lots")
+	t.Setenv("EJECTION_TIME", "soon")
+	t.Setenv("BACKEND_HOST", "not a host")
+
+	dslText, yamlText := decompileAndRecompile(t, typedEnvDefaultsConfig)
+	if !strings.Contains(dslText, `min_tokens: "${CTX_MIN:-4k}"`) {
+		t.Errorf("decompiled DSL lost the token count reference:\n%s", dslText)
+	}
+	for _, want := range []string{"min_tokens: ${CTX_MIN:-4k}", "api_key: ${OPENAI_API_KEY}"} {
+		if !strings.Contains(yamlText, want) {
+			t.Errorf("recompiled YAML lost %q:\n%s", want, yamlText)
+		}
+	}
+}
+
+func TestDecompileRejectsInvalidEnvironmentDefault(t *testing.T) {
+	yamlSource := strings.Replace(typedEnvDefaultsConfig, "${CTX_MIN:-4k}", "${CTX_MIN:-lots}", 1)
+
+	var dr DecompileResult
+	if err := json.Unmarshal([]byte(decompile(js.Undefined(), []js.Value{js.ValueOf(yamlSource)}).(string)), &dr); err != nil {
+		t.Fatalf("failed to unmarshal decompile result: %v", err)
+	}
+	if !strings.Contains(dr.Error, "invalid token count format: lots") {
+		t.Errorf("decompile error = %q, want the invalid default", dr.Error)
+	}
+}
+
 func TestFormatValidDSL(t *testing.T) {
 	input := js.ValueOf(validDSL)
 
