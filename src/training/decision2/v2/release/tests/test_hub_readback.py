@@ -19,9 +19,17 @@ RELEASE = Path(__file__).resolve().parents[1] / "release.sh"
 
 
 class FakeApi:
-    def __init__(self, package: Path, collected: bool):
+    def __init__(
+        self,
+        package: Path,
+        collected: bool,
+        private: bool = False,
+        collection_private: bool = False,
+    ):
         self.package = package
         self.collected = collected
+        self.private = private
+        self.collection_private = collection_private
 
     def model_info(self, repo, revision=None, files_metadata=False):
         siblings = [
@@ -34,7 +42,7 @@ class FakeApi:
         ]
         card = {"license": "apache-2.0", "base_model": "org/base"}
         return SimpleNamespace(
-            private=True,
+            private=self.private,
             sha=revision,
             siblings=siblings,
             card_data=SimpleNamespace(to_dict=lambda: card),
@@ -44,11 +52,20 @@ class FakeApi:
         items = (
             [SimpleNamespace(item_id=REPO, item_type="model")] if self.collected else []
         )
-        return SimpleNamespace(private=True, title=hub.COLLECTION_TITLE, items=items)
+        return SimpleNamespace(
+            private=self.collection_private, title=hub.COLLECTION_TITLE, items=items
+        )
 
 
 class HubReadbackTest(unittest.TestCase):
-    def readback(self, kind: str, collected: bool, **flags) -> dict:
+    def readback(
+        self,
+        kind: str,
+        collected: bool,
+        private: bool = False,
+        collection_private: bool = False,
+        **flags,
+    ) -> dict:
         with tempfile.TemporaryDirectory() as scratch:
             package = Path(scratch) / "Decision-2.0-Eos-0.8B"
             package.mkdir()
@@ -70,10 +87,20 @@ class HubReadbackTest(unittest.TestCase):
                 expect_collected=flags.get("expect_collected", False),
                 already_collected=flags.get("already_collected", False),
             )
-            with mock.patch.object(
-                hub, "_api", return_value=FakeApi(package, collected)
-            ), mock.patch("v2.release.card.check_rendered", return_value=[]):
+            fake = FakeApi(package, collected, private, collection_private)
+            with mock.patch.object(hub, "_api", return_value=fake), mock.patch(
+                "v2.release.card.check_rendered", return_value=[]
+            ):
                 return hub.readback(args)
+
+    def test_release_and_collection_must_be_public(self):
+        self.assertTrue(self.readback("release", collected=False)["passed"])
+        self.assertFalse(
+            self.readback("release", collected=False, private=True)["passed"]
+        )
+        self.assertFalse(
+            self.readback("release", collected=False, collection_private=True)["passed"]
+        )
 
     def test_first_release_must_not_be_collected_before_its_seal(self):
         self.assertTrue(self.readback("release", collected=False)["passed"])
