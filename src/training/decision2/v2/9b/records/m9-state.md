@@ -1,5 +1,36 @@
 # 9B M9 state (resume file)
 
+## Now (2026-10-02 01:50Z, release verification 68fece59): **M9 CLOSED — K-a13IB released as Decision-2.0-Lux-9B `259a4550`, verified**
+
+- **Published 20:37:55Z** by `release_ka13ib.sh --release --gpu 6` (mirror `9e84f05f4`).
+  - Package: manifest `01d642a1…`, identity `b9a65d60…`. The weights equal the C1-scored package `055c86f1`.
+  - Gate: 14 / 14 items (R1′, R2–R8). Item 8 PASS: C1 53.49 vs 53.77, −0.28 [−1.31, +0.65], post-key (not an
+    independent validation).
+  - Parity: 0 answer changes on the four panels, before the upload and on the download. The Hub smoke passes under
+    Transformers 5.17 and 5.18.
+  - Purge: the superseded weights of `586af779` were deleted (`rewrite_history=False`). Storage is 52.55 GB of 100.
+- **The worker stopped in the session interruption before it committed or reported.** The verification found:
+  - every required release receipt on node A, all passing;
+  - a post-purge real download that re-hashes equal, with identity `b9a65d60` recomputed;
+  - the card from the default generator (the round-3 product card, board-served Pareto, audited footnote).
+- **Records:** release record [`dev2-9b-ka13ib-2026-10-02.md`](../../release/records/dev2-9b-ka13ib-2026-10-02.md)
+  (receipts, C1 files, verification). The C1 9B registry entry is now this run. The C1 job backup is private
+  eval-artifacts `980181d8`. The [decision trail](lux9b-m9-index-path-decision-2026-10-02.md) §4.2 is filled in.
+- **Issue:** the driver's collection-order step still expects the former `DEV2.0-*` IDs, so it printed
+  `post_checks=FAILED` and the purge was run by hand. See the record, section 5.
+- **No 9B lease and no 9B job remain** (node A GPU6 / GPU7 owner files read "released").
+- **GPU-h:** M9 ≈ 44.7 before the Index-path decision. After it: the BF16 Index run 2.73 (node C), item 8 0.06, the
+  pre-release 0.08 and the release 0.51 (node A GPU6). **M9 total ≈ 48.1 of 120.**
+
+## Index path release (2026-10-02, continuation cba71646; coordinator decision 02:05 UTC+8)
+
+- 19:47Z — **K-a13IB passes items 1′ and 2–8** ([decision trail](lux9b-m9-index-path-decision-2026-10-02.md)).
+  Item 8: C1 v1.2 post-key 53.49 vs 53.77, −0.28 [−1.31, +0.65], PASS (one attempt, node A GPU6, 0.064 GPU-h).
+  Final spec and decision committed (`9e84f05f4`), re-pinned to the card round-3 Index input and assets (the user's
+  03:04 card fix leaves Lux 9B to this release). Release waits for the card worker's round-3 uploads on node E to
+  finish (never concurrent). Pre-checks done: Hub main `586af779`, private; purge node copy re-hashes to all 10
+  superseded weight objects; Transformers 5.18 site `93df9002…` (same as the 4B release).
+
 ## Follow-ups A / B (2026-10-02, continuation cba71646; COORDINATION 00:35)
 
 - 17:55Z — **A and B done; hand-off.** A: [receipt](lux9b-m9-ix-ka13ib-receipt-2026-10-01.md): parity PASS, FP32-restage
@@ -21,7 +52,7 @@
   counts / hashes here. `paired_boot.py` smoke on two stored DEV2.0-9B result files: identity resample reproduces
   both headlines; 8 replicates in 64 s.
 
-## Now (2026-10-02 00:35 UTC+8, 16:35Z; continuation worker cba71646): **M9 CLOSED — no successor; DEV2.0-9B stands**
+## 2026-10-02 00:35 UTC+8 (16:35Z; continuation worker cba71646): stage 3 closed on the classic path, no successor then (superseded by the Index path above)
 
 - **Stage 3 result** [`lux9b-m9-stage3-result-2026-10-01.md`](lux9b-m9-stage3-result-2026-10-01.md): the official
   rules named **K-a13IB** (passes all seven development gates); K-a13IBX fails the Noul floors and Y1.

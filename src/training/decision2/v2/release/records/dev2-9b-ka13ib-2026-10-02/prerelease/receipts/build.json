@@ -1,0 +1,91 @@
+{
+  "builder_commit": "d531076d39a5f1f014f90b7a84e91705ac4fe8f1",
+  "card": {
+    "assets_receipt_sha256": "89357f15a22759acb3d84942a7cc4fb96d5c5c96890f43fd74e542d1f1e7e8bd",
+    "excluded": [],
+    "figures_sha256": {
+      "assets/banner.png": "4486ed3a16ef697c29b20aad42bd2b7fc7163d51d8b84b37535d78243462b766",
+      "assets/index-areas.png": "8861971d6c8f46eff376a421380c619f166a19c5edccca5519eeeba4d9143d41",
+      "assets/index-pareto.png": "2dc783b50de5cf756f3392fcd02b4a11b97886d06bff11a64e5f3e52408f453b",
+      "assets/jevarena-types.png": "71746126e66b1a44f886bd591578dc91d4ad183e2e2cc97319d5727b5b99b8a8",
+      "assets/jevarena.png": "bd052e11e754389c638c9df4a2210ecab346eb9fb339b9fa3f81992eae7b60de"
+    },
+    "index_sha256": "dc8f7278ce22a57a1d112793050b642cc17ba5f329964591523cc88984384f20",
+    "paired": {
+      "ci95": [
+        0.10566388404845775,
+        3.9459267332650483
+      ],
+      "delta": 2.2161330079505177,
+      "replicates": 5000,
+      "sha256": "191718f5ac0f1247de217079edd4993ac8c2a973ef40d2fa58a445472df6db62"
+    },
+    "readme_sha256": "de0c9b02eddf1f94731a97ab2cfb772b765a0555e6b0e0131a393107fd8a65f3",
+    "shown": [
+      {
+        "key": "candidate",
+        "licence": "package",
+        "report_sha256": "e8d2ba9d88f0400620cf2e0b293bf19127c386c8601ac6b5f0f845b8c553e91e"
+      },
+      {
+        "key": "lux1",
+        "licence": "apache-2.0",
+        "report_sha256": "b4ebe0d24a3756136aa5fe79a1daf614b7509371f76d130c299d536f41add62c"
+      },
+      {
+        "key": "nimble2",
+        "licence": "apache-2.0",
+        "report_sha256": "42636dfa1482ba5d76e9f5ada1186c699b6ab058a762106334911c60d8469cea"
+      }
+    ],
+    "tradeoffs": [
+      "mlx-diag non-English Noul (accuracy): 80.7% versus 83.3%",
+      "Transfer: Indian English dialect (macro-F1): 38.0% versus 41.1%",
+      "Transfer: Conversations Gone Awry (macro-F1): 53.2% versus 55.2%",
+      "Transfer: Wikipedia power (macro-F1): 56.4% versus 58.4%",
+      "Transfer: TalkLife empathy (macro-F1): 24.6% versus 26.6%",
+      "Transfer: Media ideology (macro-F1): 54.9% versus 55.8%",
+      "Transfer: Misinfo Reaction Frames (macro-F1): 78.0% versus 78.4%",
+      "Transfer: Character tropes (macro-F1): 12.4% versus 12.8%",
+      "JevBench public 231 (correct): 182/231 versus 183/231",
+      "JevBench public hard (correct): 67/111 versus 68/111"
+    ]
+  },
+  "ended_utc": "2026-10-01T19:18:12.231000+00:00",
+  "files": 40,
+  "identity": {
+    "architecture": "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp",
+    "bf16_copy": {
+      "receipt_sha256": "773d9b0c262b6435534e4d3967659206926ebd4f6a395f14d81ea4d1a75ba033",
+      "source_model_sha256": "4701ba41c70636b5e215cf1f296bc920a9ee39960d4d28a2338e20b2b81e0d91"
+    },
+    "dec_residual": false,
+    "head_variant": "shared",
+    "model_sha256": "b9a65d601bb6780c2c07998aecbfab322ede459c26fcb8ed262281ad08f909fb",
+    "readout": "head",
+    "temperature_by_type": null,
+    "text_parameter_count": 7936684544
+  },
+  "licence": "apache-2.0",
+  "manifest_sha256": "055c86f153530a3790cf4fc98c2d554b9659783f7349c111d959f34b4c4049e3",
+  "package": "/data/dev2/runs/release/dev2-9b-ka13ib-prerelease-20261001T191732Z/package/Decision-2.0-Lux-9B",
+  "parameters": {
+    "external_base_text": null,
+    "loaded": 7940895744,
+    "packaged": {
+      "backbone": 7936684544,
+      "head": 4211200,
+      "residual": 0
+    }
+  },
+  "release_decision": {
+    "sha256": "933407fa35f7b39975814de5afe55d41f0865a5cf8319ee182d3261c2085de30",
+    "status": "draft"
+  },
+  "schema": "dev2-release-build/1",
+  "screen": {
+    "text_files_screened": 35
+  },
+  "spec_sha256": "e572402a05f9decfe0e018dd4bcad2770ce7790b2ff92191ddc9d73dc6bf8650",
+  "started_utc": "2026-10-01T19:17:33.490895+00:00"
+}

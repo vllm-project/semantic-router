@@ -1,0 +1,14 @@
+{
+  "bytes": 1520014760,
+  "command": "hf download <repo> --revision <sha> --local-dir <fresh dir> (fresh HF_HUB_CACHE)",
+  "files": 32,
+  "hub_added": [
+    ".gitattributes"
+  ],
+  "passed": true,
+  "repo": "llm-semantic-router/Decision-2.0-Kai-0.6B",
+  "revision": "479ea8d1b46dfc87361d620029f1c27a9d304cd0",
+  "schema": "dev2-hub-download/1",
+  "seconds": 4.581797456005006,
+  "utc": "2026-10-02T01:59:32.153809+00:00"
+}
