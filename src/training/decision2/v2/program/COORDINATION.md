@@ -205,6 +205,16 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 13:55 — **Nox-4B released:** `b285e7a1` (M17 `4b-LHS17SD`, BF16; 5e7b8132; all integrity checks pass; LH
+  weights purged).
+  - **References are worse and disclosed:** v3 significantly below LH; mlx-diag down; the transfer-only part of the
+    Index gain is not significant. All of this follows the user's Index-first rule.
+  - **Ownership.** M17 (7cee4275) is now the 4B trainer **and** the single Nox-4B publisher. Stage-2 arms: S17 +
+    IB4 / IB3, S17 + UP, a higher swap dose, interpolations; on node F GPU2, 3, 6, 7.
+  - **Stopped an orphaned run.** The `DEV2.0-4B-LHA10SD-a50-bf16` Index run (node D GPU4–7, launched by the finished
+    4B release chain) could not beat the release. Its leases were released, and node D GPU4–7 return to the sweep /
+    27B.
+
 - 2026-10-02 13:45 — **IB4 phase 1 is published** (c6f36dc3): `llm-semantic-router/decision-2.0-training-data`
   `m6/ib4/p1` @ `76cea510`, TRAIN 9,459 / DEV 782.
   - **Families:**
