@@ -14,6 +14,7 @@
 # locked by data/READY-m17s2.json; an arm with weights.jsonl adds --example-weights (UP); the M17 gate on node F is 50
 # GPU-h. The node's 4B train cache is already warm (stage 1), so no stage-2 item pre-warms. M17_STAGE=3 is stage 2's
 # wave 2 (arm (a), data/4b-s3, READY-m17s3.json); its chain waits on the GPU's flock until wave 1's chain ends.
+# M17_STAGE=4 is wave 3 on the released 4b-LHA10SDML base (amendment 2; data/4b-s4, READY-m17s4.json).
 # usage: M17_NODE=f [M17_STAGE=2] m17-chains.sh launch|run <mirror-dir> <gpu>
 set -u
 MODE=$1 SRC=$2 GPU=$3
@@ -38,11 +39,16 @@ case $STAGE:$NODE:$GPU in
   3:f:3) ITEMS="4b-LHS17IB4:2" ;;
   3:f:6) ITEMS="4b-LHS17IB4X:1" ;;
   3:f:7) ITEMS="4b-LHS17IB4X:2" ;;
+  4:f:2) ITEMS="4b-SDMLIB4:1" ;;
+  4:f:3) ITEMS="4b-SDMLIB4:2" ;;
+  4:f:6) ITEMS="4b-LHS17ML:1" ;;
+  4:f:7) ITEMS="4b-LHS17ML:2" ;;
   *) echo "no M17 stage-$STAGE chain for node $NODE GPU$GPU" >&2; exit 2 ;;
 esac
 case $STAGE in
   2) DATA=4b-s2 READY=READY-m17s2.json GATE=50 TAG=s2-$NODE$GPU ;;
   3) DATA=4b-s3 READY=READY-m17s3.json GATE=50 TAG=s3-$NODE$GPU ;;
+  4) DATA=4b-s4 READY=READY-m17s4.json GATE=50 TAG=s4-$NODE$GPU ;;
 esac
 
 if [ "$MODE" = launch ]; then

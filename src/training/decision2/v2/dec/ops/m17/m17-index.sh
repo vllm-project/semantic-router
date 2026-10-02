@@ -145,7 +145,7 @@ EOF
     exit 0 ;;
 esac
 case "$STAGE" in audit-stage | audit-run | audit2-stage | audit2-run | audit3-stage | audit3-run) exit 0 ;; esac
-[[ "$ARM" =~ ^LHS[0-9A-Za-z-]+(,LHS[0-9A-Za-z-]+)*$ ]] || { echo "bad ARM $ARM" >&2; exit 2; }
+[[ "$ARM" =~ ^(LHS|SDML)[0-9A-Za-z-]+(,(LHS|SDML)[0-9A-Za-z-]+)*$ ]] || { echo "bad ARM $ARM" >&2; exit 2; }
 NAME=$(name_of "${ARM%%,*}")
 PKG=$MD/$NAME-r13d42143 CK=$MD/$NAME-ckpt
 SOUP=/data/dev2/runs/dec/m17/soup/4b-${ARM%%,*}

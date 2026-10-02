@@ -16,7 +16,9 @@ ST=$M/status
 OPS=/data/dev2/src/$SRC/src/training/decision2/v2/dec/ops/m17
 mkdir -p "$M/chains" "$M/logs"
 case $NODE:$GPU in f:2 | f:3 | f:6 | f:7) ;; *) echo "node $NODE GPU$GPU is not M17's" >&2; exit 2 ;; esac
-case $ARM in 4b-LHS17UP | 4b-LHS23SD | 4b-LHS17IB4 | 4b-LHS17IB4X) ;; *) echo "no stage-2 arm $ARM" >&2; exit 2 ;; esac
+case $ARM in 4b-LHS17UP | 4b-LHS23SD | 4b-LHS17IB4 | 4b-LHS17IB4X | 4b-SDMLIB4 | 4b-LHS17ML) ;;
+  *) echo "no stage-2 arm $ARM" >&2; exit 2 ;;
+esac
 if [ "$MODE" = launch ]; then
   mkdir "$M/chains/s2post-$ARM.lock" 2> /dev/null || { echo "s2post $ARM already launched"; exit 0; }
   M17_NODE=$NODE setsid nohup bash "$0" run "$SRC" "$GPU" "$ARM" > "$M/logs/s2post-$ARM.log" 2>&1 < /dev/null &
