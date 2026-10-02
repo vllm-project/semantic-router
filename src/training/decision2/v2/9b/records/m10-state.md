@@ -2,6 +2,26 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 10:15Z (18:15 UTC+8), M10 continuation worker
+
+- **Built (node B, CPU):** the KIBM soup (3 seeds) and the KIB4 soup (2 seeds), each with its a33 / a25 / a40
+  points. The KSW soup (2 seeds) is building, and so is X3-a33 (amendment 5: KIB4 + K-a13IB's KIB arm soup).
+- **Index runs** (mirror `58bad21d9`, panel-7, base K-a13IB-bf16):
+  - Node A, GPU3–5: M10-KIB4-a33-bf16, with parity running.
+  - Node C, greedy over GPU1–7, shared with 4B runs: M10-KIBM-a33-bf16.
+  - Node B, GPU2 / 4 (leases handed to `track=eval-ix1`; IX1 environment copied from node C, SHA-256 lists equal):
+    M10-KSW-a33-bf16, then M10-X3-a33-bf16, once their BF16 packages are copied.
+  - KIBM's first parity on node A was aborted when the queue was reordered to put KIB4 first, and it was moved to
+    `parity-aborted/`. KIBM is measured on node C instead, once.
+- **Speculative formal:** M10-KIB4-a33 on node A GPU6 (`m10/formal.sh`), started 10:08Z.
+- **Extra seeds** (amendment 6, COORDINATOR WATCHDOG 18:00): node B GPU3 runs KIB4-s3, GPU6 / 7 run KX-s4 / s5.
+  All three started 10:04Z, and their preflights run in the chain. KX entered node B's lock with node A's hashes. The
+  `prep.sh kx-lock` log line reads "on node A" because that text is fixed; the lock was written on node B.
+- **Node A KX-s1–s3** (GPU1 / 2 / 7) end ≈ 11:20Z. Then the KX soup is built, KX-a33's Index runs on node A, and its
+  formal starts.
+- **GPU-h:** ≈ 37 (node B training 26.2, node A KX ≈ 5, Index ≈ 6.9 on KUP). Of the 90 total, ≈ 30 are committed
+  ahead: 3 seeds ≈ 9, 4 Index runs ≈ 11, 2 formals ≈ 4, X points ≈ 5.
+
 ## 2026-10-02 09:35Z (17:35 UTC+8), M10 continuation worker
 
 - **KUP dropped** (COORDINATOR UPDATE 17:25): M10-KUP-a25-bf16 is measured (scored, both bootstraps) and does not
