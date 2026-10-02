@@ -129,6 +129,7 @@ json.dump({"changed": changed, "other": other, "equal": same, "readme_diff": lin
 print(json.dumps({"changed": changed, "other": other, "readme_diff": lines, "ok": ok}))
 sys.exit(0 if ok else 1)
 PY
+cp "$check/$name/MODEL_MANIFEST.json" "$X/build-manifest.json"
 rm -rf "$check"
 echo "fresh build $built: only the runtime and the Speed line differ from $expected"
 python3 -m v2.release.gate profile --spec "$SPEC" > "$X/profile.json" \
@@ -175,7 +176,19 @@ PY
 [[ "$status" == 0 ]] || { echo "release.sh failed ($status); work=$W" >&2; exit "$status"; }
 fi
 REV=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['revision'])" "$W/receipts/upload.json")
-[[ "$(manifest_sha "$W/package/$name")" == "$built" ]] || { echo "released package differs from the checked build" >&2; status=1; }
+if [[ -n "$post_only" ]]; then
+  # Rebuilt from this mirror: builder.source_commit names it instead of the mirror that built the upload.
+  python3 - "$X/build-manifest.json" "$W/package/$name/MODEL_MANIFEST.json" <<'PY' \
+    || { echo "released package differs from the checked build" >&2; status=1; }
+import json, sys
+a, b = (json.load(open(p)) for p in sys.argv[1:3])
+for m in (a, b):
+    m["builder"].pop("source_commit")
+sys.exit(0 if a == b else 1)
+PY
+else
+  [[ "$(manifest_sha "$W/package/$name")" == "$built" ]] || { echo "released package differs from the checked build" >&2; status=1; }
+fi
 mkdir -p "$W/extra"
 cp "$X"/*.json "$X/derivation.txt" "$W/extra/"
 cd "$S"
