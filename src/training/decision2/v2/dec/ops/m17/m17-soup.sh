@@ -6,7 +6,8 @@
 # soup path, MODEL_SHA256 its model digest (v2.dec.soup's dec_fingerprint). Stage 2's interpolation points
 # 4b-<X>-m50 are the uniform FP32 average of the 4b-LHS17SD soup and the 4b-<X> soup (CPU; <gpu> unused); wave 3's
 # (amendment 2) average with the released M15 4b-LHA10SDML soup instead, and 4b-SDMLxS17-m50 is the average of the
-# 4b-LHA10SDML and 4b-LHS17SD soups.
+# 4b-LHA10SDML and 4b-LHS17SD soups. 4b-LHS17IB4-x3 / 4b-SDMLIB4-x3 (amendment 3) are the soups of seeds 1-3 of
+# their arm; seeds 1-2 reuse the arm's merged checkpoints when its members.txt names the same BEST checkpoint.
 #
 # usage: M17_NODE=f m17-soup.sh <mirror-dir> <ARM> <gpu>
 set -u
@@ -22,8 +23,12 @@ fail() { echo "$*" > "$OUT/FAILED"; log "FAILED: $*"; exit 1; }
 SDML_FP32=1b51567523426b896ae50afeefca4f133c2e3c220c349ebfb9b9c630600dd19d
 [ -f "$OUT/DONE" ] && { log "already built"; exit 0; }
 [ -f "$OUT/FAILED" ] && { log "failed earlier; not rebuilt"; exit 1; }
+TR=$ARM SEEDN="1 2" NEED=4
 case $ARM in
   4b-LHS10SD | 4b-LHS17SD | 4b-LHS17UP | 4b-LHS23SD | 4b-LHS17IB4 | 4b-LHS17IB4X | 4b-SDMLIB4 | 4b-LHS17ML)
+    source=/models/Qwen--Qwen3.5-4B-Base/1001bb4d826a52d1f399e183466143f4da7b741b ;;
+  4b-LHS17IB4-x3 | 4b-SDMLIB4-x3)
+    TR=${ARM%-x3} SEEDN="1 2 3" NEED=6
     source=/models/Qwen--Qwen3.5-4B-Base/1001bb4d826a52d1f399e183466143f4da7b741b ;;
   4b-*-m50)
     x=${ARM%-m50} base=4b-LHS17SD
@@ -52,14 +57,20 @@ case $ARM in
 esac
 members=()
 rm -f "$OUT/members.txt"
-for s in 1 2; do
-  [ -f "$ST/m17-$ARM-s$s.DONE" ] || continue
-  run=$M/arms/full/m17-$ARM-s$s
+for s in $SEEDN; do
+  [ -f "$ST/m17-$TR-s$s.DONE" ] || continue
+  run=$M/arms/full/m17-$TR-s$s
   best=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["checkpoint"])' "$run/BEST.json")
+  if [ "$TR" != "$ARM" ] && [ -f "$M/soup/$TR/merged/s$s/merge_check.json" ] \
+    && grep -qx "s$s $best" "$M/soup/$TR/members.txt"; then
+    members+=(--member "/runs/m17/soup/$TR/merged/s$s")
+    echo "s$s $best" >> "$OUT/members.txt"
+    continue
+  fi
   merged=$OUT/merged/s$s
   if [ ! -f "$merged/merge_check.json" ]; then
     M17_NODE=$NODE M17_CACHE=4b-read bash "$OPS/m17-launch.sh" "merge-$ARM-s$s" "$SRC" "$OUT/merge-s$s" \
-      --gpu "$GPU" -- v2/dec/ops/m10/m10_merge.py --checkpoint "/runs/m17/arms/full/m17-$ARM-s$s/$best" \
+      --gpu "$GPU" -- v2/dec/ops/m10/m10_merge.py --checkpoint "/runs/m17/arms/full/m17-$TR-s$s/$best" \
       --source-path "$source" --select /data/select.jsonl --output "/out/s$s" \
       || fail "merge of s$s failed (see $OUT/merge-s$s.stderr.log)"
     mkdir -p "$OUT/merged" && mv "$OUT/merge-s$s/s$s" "$merged"
@@ -68,7 +79,7 @@ for s in 1 2; do
   members+=(--member "/runs/m17/soup/$ARM/merged/s$s")
   echo "s$s $best" >> "$OUT/members.txt"
 done
-[ ${#members[@]} -ge 4 ] || fail "fewer than two finished seeds"
+[ ${#members[@]} -ge "$NEED" ] || fail "fewer than $((NEED / 2)) finished seeds"
 M17_NODE=$NODE bash "$OPS/m17-launch.sh" "soup-$ARM" "$SRC" "$OUT/build" --cpu -- -m v2.dec.soup "${members[@]}" \
   --output "/out/$ARM-soup" || fail "soup build failed (see $OUT/build.stderr.log)"
 python3 -c 'import json,sys; print(json.loads(open(sys.argv[1]).read().strip().splitlines()[-1])["model_sha256"])' \

@@ -4,6 +4,20 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17` (r
 stopped after creating the worktree, nothing had run). Prereg `da770d98a`, ops `1ce8b2220` (mirror on nodes E / F),
 data lock `4f68f1eb0`.
 
+## 2026-10-02 10:15Z — Nox-4B 9f2ddafc released; wave 3 on the Index; wave 4 training
+
+- Released `Decision-2.0-Nox-4B@9f2ddafc` (M15 `4b-LHA10SDML`; record `d0875c71d`). Every later candidate is judged
+  against `IS-4b-LHA10SDML-bf16` (`M17_REF=SDML`).
+- Judged vs SDML, not successors (lower bound ≤ 0): `4b-LHS17UP`, `4b-LHS23SD`, `4b-LHS17UP-m50`, `4b-LHS23SD-m50`.
+- Bootstraps running on node C (CPU): `4b-LHS17IB4`, `4b-SDMLxS17-m50`.
+- Index runs in flight: `4b-LHS17IB4X` (node E), `4b-LHS17IB4-m50` and `4b-LHS17IB4X-m50` (node C), wave 3's
+  `4b-SDMLIB4` and `4b-SDMLIB4-m50` (node F GPU2/3/6/7), and `4b-LHS17ML` and `4b-LHS17ML-m50` (node E GPU3/7). All
+  four wave-3 points are staged as BF16 release copies and restaged (loaded 4,208,383,488).
+- Wave 4 (amendment 3, `d02e0bcf`): seed 3 of `4b-LHS17IB4` (F GPU4) and of `4b-SDMLIB4` (F GPU5), started
+  10:09Z, then the three-seed soups `-x3`. Node-F training GPU-h before wave 4: 19.6 of the 50 gate.
+- HF org renamed to `vllm-sr` (COORDINATION 17:35 UTC+8). Before the next release: merge integration once the
+  pipeline change lands, and don't publish during the card-only revision of Nox-4B.
+
 ## 2026-10-02 09:00Z — 4b-LHA10SDML release running (user override); wave 3 on the new base
 
 The coordinator interrupt at 15:45 UTC+8 (07:45Z) carried three user decisions:
