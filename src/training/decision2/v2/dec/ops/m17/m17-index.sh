@@ -146,7 +146,7 @@ EOF
     if [ "$STAGE" = lease ]; then
       on "$NODE" "for g in $GPUS; do f=/data/dev2/leases/gpu\$g.lock/owner; mkdir -p \$(dirname \$f); \
         if grep -qs '^status=busy' \$f; then echo \"gpu\$g is busy (\$(head -3 \$f | tr '\n' ' '))\"; exit 3; fi; \
-        printf 'track=eval-ix1\nstatus=released\npurpose=dec-m17 Index runs (decoder M17 GPU in the harness form)\nlast_job_end_utc=%s\n' \
+        printf 'track=eval-ix1\nstatus=reserved (decoder M17 GPU in the harness form)\npurpose=IX1 dec-m17 reserved for DEV2.0-4B-LHS10SD-bf16 DEV2.0-4B-LHS17SD-bf16\nstart_utc=%s\n' \
         \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" > \$f; echo gpu\$g handed to the harness form; done"
     else
       on "$NODE" "docker ps --format '{{.Names}}' | grep -q '^ix1-.*dev2_0-4b-lhs1' && { echo 'an M17 Index container is running'; exit 3; }; \

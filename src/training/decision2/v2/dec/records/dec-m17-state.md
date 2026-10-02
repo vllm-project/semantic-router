@@ -4,6 +4,26 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17` (r
 stopped after creating the worktree, nothing had run). Prereg `da770d98a`, ops `1ce8b2220` (mirror on nodes E / F),
 data lock `4f68f1eb0`.
 
+## 2026-10-02 03:20Z
+
+- **Training done** (all four preflights and full runs completed; no cap stop): `4b-LHS10SD` s1 / s2 DONE 02:59 /
+  03:07Z (BEST checkpoint-0000896 / -0000669), `4b-LHS17SD` s1 / s2 DONE ≈03:05Z (BEST -0000853 / -0000977). Soups
+  built 03:08Z (`4b-LHS17SD`, model `8995bd9d…`) and 03:10Z (`4b-LHS10SD`, `537553da…`).
+- **Formal parity run `m17-4b-LH` exact** vs the stored LH run (0 / 0 / 0 differing answers on typed FINAL, CSS15,
+  public 231; v3 67.345 reproduced); its mlx-diag collected 02:51Z and scored on node A. A first mlx-diag attempt was
+  launched from a different mirror than the collection's and exited after 0.22 s at loading the adapter spec (no
+  inference); it was moved to `formal/m17/void/mlx-4b-LH-20261002T024703Z/` and relaunched from the collection's
+  mirror.
+- **MLX-DEV2 reference:** LH's own IX1 package read on node F (5,215 predictions, Triton cache then frozen); its answers
+  equal the eval track's LH read on all 5,215 items (card delta 0.0).
+- **Index (amendment 1):** both BF16 copies staged on node F and shipped to node E (`4b-LHS10SD` → `d44a336a…`,
+  `4b-LHS17SD` → `74ec8b2f…`; identity, loaded 4,208,383,488 and calibration none checked; per-file lists equal on F
+  and E). Pool on node E GPU0–2 from 03:14Z: **both 86-request parity gates PASS** (86 / 86 ok, max |Δp| 0.0); panel-8
+  shards running. Node E GPU3 is held by the ROCm kernel track (ed4a4d73, lease from 02:59Z) and is not used.
+- Contamination audit of both M17 TRAIN files running on node C (CPU, from 02:44Z).
+- Readouts: both arms' panels being read on F GPU6 / GPU2 (post chains); formal collections of both arms launched
+  03:19Z on F GPU7 / GPU3 (references + item 3), select file regenerated with slot 0 unchanged (`d5e0c085…`).
+
 ## 2026-10-02 02:45Z
 
 - **Amendment 1 (`367cdfa67`)**, written before any M17 soup or readout: the user's Index-first release rule
