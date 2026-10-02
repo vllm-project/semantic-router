@@ -2,6 +2,24 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 16:35Z (10-03 00:35 UTC+8), M10 continuation
+
+- **Index runs** (mirror `96c1bd3ff`; parity 86 / 86, max |Δp| 0.0 for both):
+  - X7-a40 on node B GPU7, 7 shards in sequence. The arm factory took node B GPU2 / 3 / 4 / 6 at 16:09–16:17Z for
+    its second 9B batch (KIB4W3, KIB4R; COORDINATION 00:00). The first node B chain was stopped before any shard
+    and restarted for X7 alone; its log records this.
+  - X8-a40 on node E GPU3 / 7 (released by dec-m17 at 14:07Z, leased `track=eval-ix1`). Panel-7, the 9B package
+    and both reference runs were copied there with equal SHA-256 lists.
+  - Each candidate is still measured once. The gate bootstraps vs KIB4-a40 follow scoring (`ix.sh gate`).
+- **Formal:** X7-a40 on node A GPU7 since 16:28Z (`m10/formal.sh`; FP32 point copied B → C → A, equal lists). It
+  went first because node A GPU7 was idle and may be taken after 15 min (COORDINATION 00:00), and KF-a40 is not
+  built before ≈ 18:20Z. KF-a40 follows on the first free node A GPU.
+- **Audit `m10c` PASS** (node C CPU, driver `0ae8eaa34`, mirror `96c1bd3ff`): 120,226 Index rows, planted control
+  200 / 200 (0 missed). Every set has 0 item rows: KIB (K-a13IB's TRAIN `2cd09292…`, 151,015 lines; 212
+  familiar-text rows), KIB4 (151,039; 196), KIB4R (the factory's, 151,088; 210), KSW (146,600; 166) and KX
+  (176,159; 189). It covers every continuation candidate, including the points that contain KIB.
+- **GPU-h (continuation):** ≈ 0.2 so far (two parity gates; the X7 shards and formal are running).
+
 ## 2026-10-02 16:15Z (10-03 00:15 UTC+8), M10 continuation (amendment 7; 30 GPU-h)
 
 - **Amendment 7** (`d802c97c4`): every candidate is now gated vs `M10-KIB4-a40-bf16`. The candidates are the arm
