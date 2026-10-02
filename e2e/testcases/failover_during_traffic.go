@@ -14,9 +14,10 @@ import (
 
 func init() {
 	pkgtestcases.Register("failover-during-traffic", pkgtestcases.TestCase{
-		Description: "While sending benign backend-routed requests, delete one vLLM pod and verify failover and recovery",
-		Tags:        []string{"ha", "failover"},
-		Fn:          testFailoverDuringTraffic,
+		Description:         "While sending benign backend-routed requests, delete one vLLM pod and verify failover and recovery",
+		Tags:                []string{"ha", "failover"},
+		MutatesClusterState: true,
+		Fn:                  testFailoverDuringTraffic,
 	})
 }
 

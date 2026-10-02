@@ -44,6 +44,7 @@ import {
   EMPTY_PROJECTIONS,
   EMPTY_SCORES,
   ensureProjectionConfig,
+  projectionInputSource,
   type ProjectionDeleteTarget,
   type ProjectionMappingFormState,
   type ProjectionPartitionFormState,
@@ -149,6 +150,8 @@ export default function ConfigPageProjectionsSection({
           ...(score.inputs || []).flatMap((input) => [
             input.type,
             input.name,
+            input.kb,
+            input.metric,
             input.value_source || '',
           ]),
         ]
@@ -684,11 +687,7 @@ export default function ConfigPageProjectionsSection({
     {
       key: 'sources',
       header: 'Sources',
-      render: (row) =>
-        row.inputs
-          ?.map((input) => `${input.type}:${input.name}`)
-          .slice(0, 3)
-          .join(', ') || 'N/A',
+      render: (row) => row.inputs?.map(projectionInputSource).slice(0, 3).join(', ') || 'N/A',
     },
   ]
 

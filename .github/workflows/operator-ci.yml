@@ -66,7 +66,7 @@ jobs:
         uses: golangci/golangci-lint-action@v7
         with:
           version: ${{ steps.golangci_lint.outputs.version }}
-          install-mode: binary
+          install-mode: goinstall
           working-directory: deploy/operator
           args: --timeout=5m --config=${{ github.workspace }}/tools/linter/go/.golangci.yml
 

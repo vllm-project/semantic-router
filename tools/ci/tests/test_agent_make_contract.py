@@ -68,12 +68,8 @@ class HarnessMakeContractTests(unittest.TestCase):
         unit = source.split("vllm-sr-test: vllm-sr-install-cli", 1)[1].split(
             "vllm-sr-test-integration:", 1
         )[0]
-        for name in (
-            "test_embedding_api_config.py",
-            "test_model_binding_contract.py",
-            "test_dashboard_dockerfile_surface.py",
-        ):
-            self.assertEqual(unit.count(f"src/vllm-sr/tests/{name}"), 1)
+        # The whole directory runs, so no CLI test file can be left out of CI.
+        self.assertIn("-m pytest -q src/vllm-sr/tests\n", unit)
         self.assertIn("run_cli_tests.py --verbose", unit)
 
     def test_cuda_compute_cap_is_optional_and_overrides_reach_the_image_build(

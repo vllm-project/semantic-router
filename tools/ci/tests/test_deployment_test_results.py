@@ -86,6 +86,36 @@ class DeploymentResultsTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 kubernetes({**report, **change}, "envoy-ai-gateway")
 
+    def test_a_case_that_passed_only_on_a_retry_does_not_count_as_failed(self):
+        # `bin/e2e -flake-attempts=2` marks a case that passed on a later attempt
+        # with `Flaked: true` and `Attempts: 2`. It is still a pass, so
+        # `failed_tests` stays 0 and the #4120 waiver checks keep working.
+        report = {
+            "profile": "envoy-ai-gateway",
+            "expected_cases": ["route", "cache"],
+            "test_results": [
+                {"Name": "route", "Passed": True, "Attempts": 1, "Flaked": False},
+                {"Name": "cache", "Passed": True, "Attempts": 2, "Flaked": True},
+            ],
+            "status": "PASSED",
+            "exit_code": 0,
+            "total_tests": 2,
+            "passed_tests": 2,
+            "failed_tests": 0,
+            "flaky_tests": 1,
+        }
+        evidence = kubernetes(report, "envoy-ai-gateway")
+        self.assertEqual(
+            evidence["cases"],
+            [
+                {"id": "route", "status": "passed"},
+                {"id": "cache", "status": "passed"},
+            ],
+        )
+        # Counting the retried case as failed would break the runner counters.
+        with self.assertRaises(ValueError):
+            kubernetes({**report, "failed_tests": 1}, "envoy-ai-gateway")
+
     def test_go_discovery_and_subtests_are_both_mandatory(self):
         discovery = [
             {"Action": "output", "Package": "operator/api", "Output": "TestReconcile\n"}
