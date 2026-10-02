@@ -1,8 +1,11 @@
 """The provider check flags exactly the fields the router rejects."""
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
+
+import pytest
 
 
 def _load(name: str):
@@ -17,6 +20,21 @@ def _load(name: str):
 
 
 problems = _load("check_provider").problems
+
+# The codec's own fixtures are the contract this check has to agree with.
+CODEC_TESTDATA = (
+    Path(__file__).resolve().parents[2]
+    / "src"
+    / "semantic-router"
+    / "pkg"
+    / "protocolcodec"
+    / "testdata"
+)
+
+
+def codec_fixture(*parts: str) -> dict:
+    return json.loads(CODEC_TESTDATA.joinpath(*parts).read_text())
+
 
 OPENAI_REPLY = {
     "id": "chatcmpl-1",
@@ -79,10 +97,72 @@ def test_unknown_fields_bad_tier_and_empty_fingerprint_are_flagged() -> None:
         **OPENAI_REPLY,
         "service_tier": "future",
         "system_fingerprint": "",
-        "provider": "someone",
+        "invented_by_the_provider": "someone",
     }
     assert problems(reply) == [
-        "response.provider is a field the router does not accept",
+        "response.invented_by_the_provider is a field the router does not accept",
         "response.service_tier 'future' is not one the router accepts",
         "response.system_fingerprint must be 1 to 256 characters when present",
     ]
+
+
+@pytest.mark.parametrize(
+    "fixture",
+    [
+        ("contracts", "openrouter-chat-response-in.json"),
+        ("providers", "ollama-chat-tool-call-out.json"),
+    ],
+)
+def test_replies_the_codec_decodes_are_not_rejected(fixture: tuple[str, ...]) -> None:
+    """These are the codec's own fixtures, so a FAIL here is a false alarm."""
+    assert problems(codec_fixture(*fixture)) == []
+
+
+def test_cloudflare_reply_is_flagged_because_it_needs_its_vendor() -> None:
+    """Canonical decoding rejects usage.neurons; only the Cloudflare vendor drops it."""
+    reply = codec_fixture("providers", "cloudflare-workers-ai-chat-out.json")
+    assert problems(reply) == [
+        "response.usage.neurons is a field the router does not accept"
+    ]
+
+
+def test_unknown_fields_inside_nested_provider_objects_are_flagged() -> None:
+    reply = {
+        **OPENAI_REPLY,
+        "usage": {
+            **OPENAI_REPLY["usage"],
+            "cost": 0.0001,
+            "cost_details": {"upstream_inference_cost": 0.0001, "invented": True},
+            "server_tool_use": {"web_search_requests": 0, "also_invented": 1},
+        },
+    }
+    assert problems(reply) == [
+        "response.usage.cost_details.invented is a field the router does not accept",
+        "response.usage.server_tool_use.also_invented is a field the router does not accept",
+    ]
+
+
+def test_openrouter_metadata_and_ollama_tool_call_index_pass() -> None:
+    reply = {
+        **OPENAI_REPLY,
+        "provider": "OpenAI",
+        "choices": [
+            {
+                **OPENAI_REPLY["choices"][0],
+                "native_finish_reason": "stop",
+                "message": {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": "call_1",
+                            "index": 0,
+                            "type": "function",
+                            "function": {"name": "f", "arguments": "{}"},
+                        }
+                    ],
+                },
+            }
+        ],
+    }
+    assert problems(reply) == []

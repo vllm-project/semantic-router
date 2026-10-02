@@ -7,10 +7,12 @@ and once with a tool, and lists every field the router would reject.
 
     python check_provider.py --base-url https://api.x.ai/v1 --api-key-env XAI_API_KEY --model grok-4.20-0309-non-reasoning
 
-Field lists match src/semantic-router/pkg/protocolcodec with the xAI/Groq field
-fix (branch fix/provider-usage-fields). Router images built before that fix
-still reject x_groq and the xAI/Groq usage fields. PASS is a strong signal,
-not a guarantee.
+Field lists match the canonical chat response contract in
+src/semantic-router/pkg/protocolcodec, whose per-object field names are listed in
+that package's testdata/contracts/chat-nested-fields.json. A provider vendor
+policy relaxes this boundary, so a field named here can still get through when
+the router is configured for that vendor. PASS is a strong signal, not a
+guarantee.
 """
 
 from __future__ import annotations
@@ -25,12 +27,15 @@ from typing import Any
 
 MAX_FINGERPRINT_CHARS = 256
 
+MAX_STOP_REASON_CHARS = 128
+
 ALLOWED = {
     "response": {
         "id",
         "object",
         "created",
         "model",
+        "provider",
         "choices",
         "usage",
         "metadata",
@@ -58,6 +63,7 @@ ALLOWED = {
         "index",
         "message",
         "finish_reason",
+        "native_finish_reason",
         "logprobs",
         "stop_reason",
         "token_ids",
@@ -77,9 +83,21 @@ ALLOWED = {
         "annotations",
         "name",
     },
-    "tool_call": {"id", "type", "function", "custom"},
+    "tool_call": {"id", "type", "function", "custom", "index"},
     "function": {"name", "arguments", "TokenizedArguments"},
+    "custom_call": {"name", "input"},
+    "audio": {"id", "data", "transcript", "expires_at"},
+    "legacy_function_call": {"name", "arguments"},
+    "annotation": {"type", "url_citation"},
+    "url_citation": {"url", "title", "start_index", "end_index"},
+    "logprobs": {"content", "refusal"},
+    "token_logprob": {"token", "logprob", "bytes", "top_logprobs"},
+    "top_token_logprob": {"token", "logprob", "bytes"},
+    "error": {"message", "type", "param", "code"},
+    # The only supported kv-transfer marker is an empty object.
+    "kv_transfer_params": set(),
     "usage": {
+        "service_tier",
         "prompt_tokens",
         "completion_tokens",
         "total_tokens",
@@ -92,20 +110,69 @@ ALLOWED = {
         "prompt_time",
         "completion_time",
         "total_time",
+        "cost",
+        "is_byok",
+        "cost_details",
+        "server_tool_use",
     },
+    "cost_details": {
+        "upstream_inference_cost",
+        "upstream_inference_prompt_cost",
+        "upstream_inference_completions_cost",
+        "server_tool_cost",
+    },
+    "server_tool_use": {"web_search_requests"},
     "prompt_tokens_details": {
         "cached_tokens",
         "cache_write_tokens",
+        "created_cache_tokens",
+        "cache_creation_tokens",
+        "multimodal_tokens",
         "audio_tokens",
         "text_tokens",
         "image_tokens",
+        "video_tokens",
     },
     "completion_tokens_details": {
         "accepted_prediction_tokens",
         "audio_tokens",
         "reasoning_tokens",
         "text_tokens",
+        "image_tokens",
         "rejected_prediction_tokens",
+    },
+}
+
+# Nested objects the codec also closes, as field name to (shape, schema).
+CHILDREN = {
+    "response": {
+        "choices": ("array", "choice"),
+        "usage": ("object", "usage"),
+        "error": ("object", "error"),
+        "kv_transfer_params": ("object", "kv_transfer_params"),
+    },
+    "choice": {"message": ("object", "message"), "logprobs": ("object", "logprobs")},
+    "message": {
+        "tool_calls": ("array", "tool_call"),
+        "audio": ("object", "audio"),
+        "function_call": ("object", "legacy_function_call"),
+        "annotations": ("array", "annotation"),
+    },
+    "tool_call": {
+        "function": ("object", "function"),
+        "custom": ("object", "custom_call"),
+    },
+    "annotation": {"url_citation": ("object", "url_citation")},
+    "logprobs": {
+        "content": ("array", "token_logprob"),
+        "refusal": ("array", "token_logprob"),
+    },
+    "token_logprob": {"top_logprobs": ("array", "top_token_logprob")},
+    "usage": {
+        "prompt_tokens_details": ("object", "prompt_tokens_details"),
+        "completion_tokens_details": ("object", "completion_tokens_details"),
+        "cost_details": ("object", "cost_details"),
+        "server_tool_use": ("object", "server_tool_use"),
     },
 }
 NULL_ONLY = {
@@ -124,6 +191,8 @@ SERVICE_TIERS = {
     "on_demand",
     "performance",
 }
+# Mistral reports the served tier inside usage, with its own value set.
+USAGE_SERVICE_TIERS = {"standard", "priority"}
 TOOL = {
     "type": "function",
     "function": {
@@ -152,14 +221,22 @@ CASES = (
 def problems(body: dict[str, Any]) -> list[str]:
     found: list[str] = []
 
-    def unknown(obj: Any, level: str, path: str) -> None:
-        if isinstance(obj, dict):
-            found.extend(
-                f"{path}.{key} is a field the router does not accept"
-                for key in sorted(set(obj) - ALLOWED[level])
-            )
+    def walk(obj: Any, schema: str, path: str) -> None:
+        if not isinstance(obj, dict):
+            return
+        found.extend(
+            f"{path}.{key} is a field the router does not accept"
+            for key in sorted(set(obj) - ALLOWED[schema])
+        )
+        for key, (shape, child) in CHILDREN.get(schema, {}).items():
+            value = obj.get(key)
+            if shape == "object":
+                walk(value, child, f"{path}.{key}")
+            elif isinstance(value, list):
+                for i, item in enumerate(value):
+                    walk(item, child, f"{path}.{key}[{i}]")
 
-    unknown(body, "response", "response")
+    walk(body, "response", "response")
     found.extend(
         f"response.{key} must be null"
         for key in sorted(NULL_ONLY)
@@ -181,30 +258,29 @@ def problems(body: dict[str, Any]) -> list[str]:
             "response.system_fingerprint must be 1 to 256 characters when present"
         )
     for i, choice in enumerate(body.get("choices") or []):
-        unknown(choice, "choice", f"choices[{i}]")
-        message = choice.get("message") if isinstance(choice, dict) else None
-        unknown(message, "message", f"choices[{i}].message")
-        for j, call in enumerate((message or {}).get("tool_calls") or []):
-            unknown(call, "tool_call", f"choices[{i}].message.tool_calls[{j}]")
-            unknown(
-                call.get("function") if isinstance(call, dict) else None,
-                "function",
-                f"choices[{i}].message.tool_calls[{j}].function",
-            )
+        if not isinstance(choice, dict):
+            continue
+        if choice.get("routed_experts") is not None:
+            found.append(f"choices[{i}].routed_experts must be null")
+        found.extend(stop_reason_problems(choice.get("stop_reason"), i))
     usage = body.get("usage")
     if isinstance(usage, dict):
-        unknown(usage, "usage", "usage")
-        unknown(
-            usage.get("prompt_tokens_details"),
-            "prompt_tokens_details",
-            "usage.prompt_tokens_details",
-        )
-        unknown(
-            usage.get("completion_tokens_details"),
-            "completion_tokens_details",
-            "usage.completion_tokens_details",
-        )
+        tier = usage.get("service_tier")
+        if tier is not None and tier not in USAGE_SERVICE_TIERS:
+            found.append(f"usage.service_tier {tier!r} is not one the router accepts")
     return found
+
+
+def stop_reason_problems(reason: Any, index: int) -> list[str]:
+    """The codec takes a 1 to 128 character string or an integer, nothing else."""
+    if reason is None or (isinstance(reason, int) and not isinstance(reason, bool)):
+        return []
+    if isinstance(reason, str) and 1 <= len(reason) <= MAX_STOP_REASON_CHARS:
+        return []
+    return [
+        f"choices[{index}].stop_reason must be an integer or a string of 1 to "
+        f"{MAX_STOP_REASON_CHARS} characters"
+    ]
 
 
 def call(
@@ -276,6 +352,11 @@ def main(argv: list[str] | None = None) -> int:
         failed = failed or bool(found)
     if failed:
         print("\nVerdict: FAIL, the router would reply 502 for this provider")
+        print(
+            "  A provider configured with a matching vendor drops its own extra\n"
+            "  fields instead of rejecting them, so check whether this provider\n"
+            "  has one before ruling it out."
+        )
         return 1
     if refused:
         print(

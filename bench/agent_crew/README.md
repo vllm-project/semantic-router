@@ -83,13 +83,21 @@ rebuilds the report without calling a model.
 python -m pytest bench/agent_crew/test_crew.py bench/agent_crew/test_check_provider.py
 ```
 
-These use a stub router, so they need no models, no keys and no network.
+These use a stub router, so they need no models, no keys and no network. The
+provider-check tests also read the codec's own response fixtures from
+`src/semantic-router/pkg/protocolcodec/testdata`, so a reply the router decodes
+cannot start failing this check unnoticed.
 
 ## Checking a provider
 
 `check_provider.py` calls a provider directly and reports any reply field the
 router's strict decoder would reject. Useful before wiring a new backend into a
 config.
+
+Its field lists follow the canonical chat response contract. A provider
+configured with a matching vendor drops its own extra fields instead of
+rejecting them, so a FAIL on vendor decorations is worth checking against that
+provider's config before ruling the provider out.
 
 ```bash
 python bench/agent_crew/check_provider.py \
