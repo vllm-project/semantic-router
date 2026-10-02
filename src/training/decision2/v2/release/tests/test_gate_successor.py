@@ -536,5 +536,240 @@ class SuccessorNoOwnAndC1Test(SuccessorGateTest):
         pass
 
 
+class IndexFirstGateTest(SuccessorGateTest):
+    """The Index-first rule (user 2026-10-02 09:55): IF1 Index gain, R3 and IF3 gate; the rest are references."""
+
+    def setUp(self):
+        super().setUp()
+        root = self.root
+        self.edit(str(self.current_decision), identity={"model_sha256": "c" * 64})
+        self.edit(
+            str(self.current_gate),
+            decision_sha256=layout.sha_file(self.current_decision),
+        )
+        receipt = {"schema": gate.INDEX_RUN_SCHEMA, "panel_run_ids_sha256": "p" * 64}
+        self.receipt = write(
+            root / "private" / "receipt.json",
+            {
+                **receipt,
+                "results_sha256": "n" * 64,
+                "model_source": {"model_sha256": "a" * 64},
+            },
+        )
+        self.base_receipt = write(
+            root / "private" / "base-receipt.json",
+            {
+                **receipt,
+                "results_sha256": "b" * 64,
+                "model_source": {"model_sha256": "c" * 64},
+            },
+        )
+        self.boot = write(
+            root / "private" / "boot-full.json",
+            {
+                "schema": gate.INDEX_BOOT_SCHEMA,
+                "replicates": 2000,
+                "cases": 138645,
+                "excluded": [],
+                "inputs_sha256": {"base": "b" * 64, "new": "n" * 64},
+                "headline": {
+                    "base": 26.8,
+                    "new": 27.9,
+                    "delta": 1.1,
+                    "ci95": [0.71, 1.43],
+                },
+            },
+        )
+        self.audit = write(
+            root / "private" / "audit.json",
+            {
+                "schema": gate.INDEX_AUDIT_SCHEMA,
+                "index_rows": 120226,
+                "planted_control": {"planted": 200, "found": 200, "missed": []},
+                "training_sets": {
+                    "2b": {
+                        "training_lines": 309225,
+                        "item_rows": 1,
+                        "duplicate_rows": 18,
+                    }
+                },
+            },
+        )
+        self.spec["gate_profile"]["index_first"] = {
+            "bootstrap": str(self.boot),
+            "receipt": str(self.receipt),
+            "base_receipt": str(self.base_receipt),
+            "audit": str(self.audit),
+        }
+
+    def decision_for(self, **changes) -> Path:
+        return super().decision_for(**{"rule": gate.INDEX_FIRST, **changes})
+
+    def test_all_pass(self):
+        items = self.items()
+        self.assertEqual(list(items), list(gate.INDEX_FIRST_ITEMS))
+        self.assertEqual(self.failing(), [], items)
+        for private in ("26.8", "27.9", "1.1", "0.71", "1.43"):
+            self.assertNotIn(private, items["1_successor_IF1_index_gain"]["evidence"])
+        gate.check(self.spec, self.decision_for(), final=True)
+
+    def test_quality_readings_are_references_only(self):
+        for name, changes in (
+            ("paired", {"ci95.low": -3.0, "axis_ci95.H.delta.high": -0.02}),
+            ("mlx_paired", {"bootstrap.card_macro_ci95": [-0.03, -0.001]}),
+            (
+                "public231",
+                {"left_correct": 130, "mcnemar_exact_p": 0.01, "verdict": "REGRESSION"},
+            ),
+            ("exposure", {"groups": [{"group": "g"}]}),
+        ):
+            self.edit(name, **changes)
+        items = self.items()
+        self.assertEqual(self.failing(), [], items)
+        evidence = items[gate.SUCCESSOR_REFERENCES]["evidence"]
+        self.assertIn("v3 48.640 vs current 43.540", evidence)
+        self.assertIn("below its former bar", evidence)
+        self.assertIn("C1 post-key: not run", evidence)
+
+    def test_references_are_optional(self):
+        for name in ("paired", "mlx_paired", "public231", "exposure", "tier"):
+            del self.spec["gate_profile"][name]
+        items = self.items()
+        self.assertEqual(self.failing(), [], items)
+        bound = gate.evidence_sha256(gate.gate_profile(self.spec))
+        self.assertNotIn("paired", bound)
+        self.assertEqual(bound["index_first_audit"], layout.sha_file(self.audit))
+
+    def test_each_integrity_item_fails_on_its_criterion(self):
+        cases = (
+            ("1_successor_IF1_index_gain", "boot", {"headline.ci95": [-0.02, 0.6]}),
+            ("1_successor_IF1_index_gain", "boot", {"excluded": ["HoVer"]}),
+            ("1_successor_IF1_index_gain", "boot", {"inputs_sha256.new": "x" * 64}),
+            (
+                "1_successor_IF1_index_gain",
+                "receipt",
+                {"model_source.model_sha256": "d" * 64},
+            ),
+            (
+                "1_successor_IF1_index_gain",
+                "base_receipt",
+                {"model_source.model_sha256": "a" * 64},
+            ),
+            (
+                "1_successor_IF1_index_gain",
+                "base_receipt",
+                {"panel_run_ids_sha256": "q" * 64},
+            ),
+            (
+                "1_successor_R3_no_type_collapsed",
+                None,
+                {"types.score": {"verdict": "COLLAPSED"}},
+            ),
+            ("1_successor_IF3_index_audit", "audit", {"planted_control.found": 199}),
+            ("1_successor_IF3_index_audit", "audit", {"schema": "other"}),
+        )
+        for item, name, changes in cases:
+            with self.subTest(item=item, changes=changes):
+                self.setUp()
+                self.edit(str(getattr(self, name)) if name else "types", **changes)
+                self.assertEqual(self.failing(), [item])
+
+    def test_current_revision_chain(self):
+        for change in (
+            lambda: self.edit(str(self.current_gate), revision="8" * 40),
+            lambda: self.edit(str(self.current_decision), extra=1),
+            lambda: self.edit(str(self.current_decision), report_sha256="0" * 64),
+        ):
+            with self.subTest():
+                self.setUp()
+                change()
+                self.assertEqual(
+                    sorted(self.failing()), sorted(gate.INDEX_FIRST_ITEMS[:3])
+                )
+
+    def test_profile_validation(self):
+        for change in (
+            lambda s: s["gate_profile"]["index_first"].pop("audit"),
+            lambda s: s["gate_profile"].update(index_path={"bootstrap": "x"}),
+            lambda s: s["gate_profile"].pop("types"),
+            lambda s: s["gate_profile"]["current"].update(revision="abc"),
+        ):
+            spec = json.loads(json.dumps(self.spec))
+            change(spec)
+            with self.subTest(), self.assertRaises(ValueError):
+                gate.gate_profile(spec)
+
+    def test_decision_names_the_rule(self):
+        gate.check(self.spec, self.decision_for(), final=True)
+        for changes in ({"rule": None}, {"rule": "index-path"}):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                gate.check(self.spec, self.decision_for(**changes), final=True)
+        del self.spec["gate_profile"]["index_first"]
+        with self.assertRaises(ValueError):
+            gate.check(self.spec, self.decision_for(), final=True)
+
+    def test_profile_cli(self):
+        spec_path = write(self.root / "spec.json", self.spec)
+        for expected in (0, 1):
+            if expected:
+                self.edit(str(self.boot), **{"headline.ci95": [-0.1, 0.5]})
+            argv = ["gate", "profile", "--spec", str(spec_path)]
+            with mock.patch.object(sys, "argv", argv), contextlib.redirect_stdout(
+                io.StringIO()
+            ) as out:
+                with self.assertRaises(SystemExit) as stop:
+                    gate.main()
+            self.assertEqual(stop.exception.code, expected)
+
+    # These SuccessorGateTest cases read R1-R7 as gates; under Index-first they are references.
+    def test_each_rule_fails_on_its_criterion(self):
+        pass
+
+    def test_human_transfer_below(self):
+        pass
+
+    def test_tier_gates(self):
+        pass
+
+    def test_paired_against_another_run_fails(self):
+        pass
+
+    def test_contradicting_stored_verdict_fails(self):
+        pass
+
+    def test_index_path_replaces_r1(self):
+        pass
+
+    def test_index_path_fails_on_either_criterion(self):
+        pass
+
+    def test_index_path_needs_a_full_panel_bootstrap(self):
+        pass
+
+    def test_several_exposure_receipts(self):
+        pass
+
+    def test_c1_postkey_is_bound_by_the_decision(self):
+        pass
+
+    def test_no_1_0_alias_is_the_no_own_1_0_profile(self):
+        pass
+
+    def test_no_1_0_alias_card_comparison_must_be_the_reference(self):
+        pass
+
+    def test_decision_binds_profile_revision_and_evidence(self):
+        gate.check(self.spec, self.decision_for(), final=True)
+        evidence = gate.evidence_sha256(gate.gate_profile(self.spec))
+        for changes in (
+            {"gate_profile": None},
+            {"current_revision": "8" * 40},
+            {"evidence_sha256": {**evidence, "index_first_bootstrap": "0" * 64}},
+        ):
+            with self.subTest(changes=changes):
+                with self.assertRaises(ValueError):
+                    gate.check(self.spec, self.decision_for(**changes), final=True)
+
+
 if __name__ == "__main__":
     unittest.main()
