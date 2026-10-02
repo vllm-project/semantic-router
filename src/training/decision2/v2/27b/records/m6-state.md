@@ -83,7 +83,13 @@ section first). Earlier: 2026-10-02 17:45 UTC+8 (09:45Z; continuation #5 from 08
   Record `v2/release/records/dev2-27b-xarm-2026-10-02.md` (receipts under `dev2-27b-xarm-2026-10-02/27b/release/`).
   **The current Vega is now M6-IBxIB2-m50**: M7 / M8 candidates are scored with `M6_INDEX_BASE=M6-IBxIB2-m50`,
   `m6-xarm.sh` with `CURRENT=M6-IBxIB2-m50`, and a successor spec derives from `dev2-27b-27bx-M6-IBxIB2-m50.json` with
-  this release's gate and decision, under the public-repository hub policy of integration `47dd06be7`. Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
+  this release's gate and decision, under the public-repository hub policy of integration `47dd06be7`.
+- **19:42Z: M8-IB-s4 hung on node F GPU4** in attempt `full-r2` (no step after 645 from ≈ 17:45Z, GPU at 100%, process
+  alive; the three other resumed seeds progressed). Stopped by hand at 19:31Z (exit 137, 1.83 GPU-h); treated as an
+  interruption like exit 139. `ead59fe86`: `M8_RESUME` takes the next recovery attempt. A first relaunch on node F GPU6
+  was refused before any container started (GPU6 / 7 hold the arm factory's IX1 run since 19:28Z; the launcher was
+  waiting for an idle GPU and was stopped); the seed resumed as `full-r3` on its own GPU4 at 19:34Z (last allowed
+  recovery) and is past step 648. Old relay moved to `relay/M8-IB-s4.failed-r2-*`; new relay running. Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
 continuation #3, 4a20f83f, 19:37–20:10Z, silently stopped after its 20:10Z poll; its entries below say "cba71646",
 which is the coordinator's ID; worker 3 0d2e488f ran 15:12–19:40Z; worker 2 a56025bb 10:44–15:15Z; worker 1 11741ee2
 06:17–10:55Z). **Amendment 6 (`6bbb2512d`): the MLX-DEV2 guard for every M6 finalist** (COORDINATION 04:15).
