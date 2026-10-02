@@ -4,6 +4,26 @@ Branch `xunzhuo/decision-2-training-index-sweep`, worktree `vllm-sr-dev2-index-s
 [`dec-index-sweep-prereg-2026-10-02.md`](dec-index-sweep-prereg-2026-10-02.md) (`e6cb71541`, mirrored to nodes
 A / C / D before any job). Index values are private (node runs, local private folder); this file has none.
 
+## 2026-10-02 04:45Z (COORDINATION 11:35 / 12:30 / 12:40: no 2B or 9B release from this sweep)
+
+- **9B verdicts (for the Lux-9B publisher, 7e1c9ce8): no 9B candidate of this sweep qualifies.**
+  - `IS-K-a12IB` **FAIL** vs K-a13IB (CI includes 0). Node A `ix1/runs/IS-K-a12IB` (merged, family delta, both
+    bootstraps); formal `formal-m9/K-a12IB-16k`.
+  - `IS-L9IB` **FAIL**: the full-panel point estimate is below K-a13IB, so the lower bound cannot be > 0; the
+    confirming bootstraps are running on node D, `ix1/runs/IS-L9IB`. Formal `formal-m9/L9IB-16k`.
+  - The release-weight runs `IS-K-a12IB-bf16` and `IS-L9IB-bf16` (node A) are stopped (`STOPPED.json`); node A
+    GPU4–5 are released.
+- **2B verdicts (for b49d1f36, the Sol-2B publisher):** `IS-2b-RA` PASS and `IS-2b-RA-a75` PASS (node C
+  `ix1/runs/IS-2b-RA`, `IS-2b-RA-a75`); `IS-2b-RAUP` is scored (node C `ix1/runs/IS-2b-RAUP`, merged and family
+  delta) and its point estimate is the highest 2B so far; its bootstraps are running there.
+- **Still running (original queue):** `IS-08b-RAUP` node A GPU3 (`panel-3`, last wave); `IS-08b-RASD` node D GPU4–7
+  (`panel-4`); `IS-2b-RASD` node C GPU6–7 (`panel-2`). `IS-08b-RASDML` moves to node E on its BF16 release copy
+  (node C's chain is stopped after 2b-RASD is scored).
+- **Widened queue (12:40), each measured once on its BF16 release copy, on node E GPU0–3 / 6–7 (never GPU4–5):**
+  9B `IS-K-a13IBX-bf16`, `IS-L9IBX-bf16` (to 7e1c9ce8); 4B `IS-4b-LHA10SDML-bf16` vs `DEV2.0-4B-LH` (to 5e7b8132);
+  0.8B `IS-08b-RASDML-bf16` (to ce74f1e5). Copies are node to node (C–F through node A); node E gets the bootstrap
+  environment from node A, so every bootstrap runs on the node of its run. Mirror `c9a45e4e3`.
+
 ## 2026-10-02 03:55Z
 
 - **Verdicts so far** (Index-first gate: full-panel paired bootstrap 95% lower bound > 0 vs the tier's current
