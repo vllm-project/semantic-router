@@ -5,6 +5,24 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17`. M
 (public since 2026-10-03 01:17 UTC+8). Index values stay private (node private stores and
 `decision2-program/private/m17b/`); this file has none. Times UTC.
 
+## 2026-10-02 22:05Z — Nox-4B `c60d3b5c` RELEASED (`4b-LHS17IB4-lrh`); wave 7 (low-LR arms) next
+
+- **`vllm-sr/Decision-2.0-Nox-4B@c60d3b5c` is `main` and public.**
+  - Gate evaluate and all fast-path post-checks pass (`post_checks=ok` 21:58Z).
+  - The `d55528d1` weights are purged (9.70 GB, `rewrite_history=False`).
+  - Record: [`dev2-4b-w6-2026-10-03.md`](../../release/records/dev2-4b-w6-2026-10-03.md).
+  - Integration fast-forwarded to `fee91afd0`.
+- **The next 4B successor is gated against `AF-4b-LHS17IB4-lrh-bf16`'s run** (node A `ix1/runs`, results
+  `merged/results.jsonl`).
+- **Wave 7, amendment 1 (`d7277c8dd`):**
+  - `4b-LRHxXALL-m50` (`7e256b09…`): ½ the new release + ½ `4b-SDMLxALL`. Built on node F, not staged yet.
+  - `4b-SDMLIB4-lrh`: the factory's seeds are DONE on node C; the soup is not built yet (merges need a node C GPU).
+  - `4b-LRHxALL`: built over the half-LR arms as they finish. The factory has `4b-LHS17ML-lrh`, `4b-LHS17IB4X-lrh`
+    and `4b-SDML-lrh` (two seeds each) and `4b-LHS17IB4-lrq` on node C GPU1–7, from 21:27Z.
+  - `4b-LHS17IB4-lrq`.
+- **Leases:** none held (node A GPU0, node F GPU6–7 released; node C GPU1–4 went to the factory after wave 6b).
+- GPU-h so far ≈ 24.
+
 ## 2026-10-02 21:40Z — the half-LR arm `4b-LHS17IB4-lrh` passes; its Nox-4B release is running
 
 - **Wave 6, every candidate measured once** (full-panel paired bootstrap vs `DEV2.0-4B-SDMLxALL-bf16`, 2,000
