@@ -17,6 +17,7 @@
 #                          restaged as M10-NAME-bf16 (identity / loaded count / T = 1 checks)
 #   pkgcopy NAME FROM NODE  a restaged M10-NAME-bf16 package from node FROM to NODE (SHA-256 lists equal, manifest
 #                          checks repeated)
+#   ckcopy NAME FROM NODE  a shipped FP32 point (ckpt/NAME and its model SHA-256) from node FROM to NODE, for its formal run
 #   lease  NODE "GPUS"     owner files of other tracks' released leases -> track=eval-ix1 idle (old file kept)
 #   chain  NODE PANEL "GPUS" NAME...   m10/ixchain.sh detached on NODE (parity gates, runs, scoring, bootstraps);
 #                          M10_SHARDS=N: GPUS is a pool and each of the N shards takes the first idle pool GPU
@@ -140,6 +141,11 @@ case "$STAGE" in
     copy "$FROM" "$MD/9b-m10/$NAME-bf16-re51f9881" "$N" "$MD/9b-m10/$NAME-bf16-re51f9881"
     check_manifest "$N" "$MD/9b-m10/$NAME-bf16-re51f9881" \
       "$(on "$N" "python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"identity\"][\"model_sha256\"])' $MD/9b-m10/$NAME-bf16-re51f9881/MODEL_MANIFEST.json")" ;;
+  ckcopy)
+    NAME=${1:?NAME} FROM=${2:?FROM} N=${3:?NODE}
+    copy "$FROM" "$MD/9b-m10/ckpt/$NAME" "$N" "$MD/9b-m10/ckpt/$NAME"
+    on "$N" "echo $(on "$FROM" "cat $MD/9b-m10/ckpt/$NAME.model_sha256") > $MD/9b-m10/ckpt/$NAME.model_sha256"
+    echo "$NAME FP32 point on node $N, model $(on "$N" "cut -c1-12 $MD/9b-m10/ckpt/$NAME.model_sha256")" ;;
   lease)
     N=${1:?NODE} G=${2:?GPUS}
     on "$N" "stamp=\$(date -u +%Y%m%dT%H%M%SZ); for g in $G; do d=/data/dev2/leases/gpu\$g.lock; mkdir -p \$d; \

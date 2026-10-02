@@ -2,6 +2,19 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 09:35Z (17:35 UTC+8), M10 continuation worker
+
+- **KUP dropped** (COORDINATOR UPDATE 17:25): M10-KUP-a25-bf16 is measured (scored, both bootstraps) and does not
+  pass the gate, like KUP-a33. **M10-KUP-a40-bf16 was stopped unmeasured** at 09:22Z (4 of 7 shards running, 0.9
+  run GPU-h spent); node A GPU3–6 leases released.
+- **Speculative formal path** (17:25): `m10/formal.sh` runs M9's `formal.sh` (unchanged runner since K-a13IB's formal
+  mirror `787abdc54`) for a point next to its Index run, on any node A GPU under lease `track=9b-m10`
+  (`M9_FORMAL_GPUS` / `M9_FORMAL_TRACK` / `M9_A_GPUS` / `M9_LEASE_TRACK`, defaults unchanged). Node A only: the
+  comparators, CAL698 inputs, frozen formal cache and Lux 1.0 package are node A paths. Planned: KIB4-a33 when the
+  KIB4 soup is built (≈ 10:15Z), KX-a33 when KX's is (≈ 11:25Z). `ix.sh ckcopy` moves a shipped FP32 point C → A.
+- Integration merged (includes `cd565a588`).
+- **GPU-h at 09:20Z:** training 22.8 (node B) + 3.8 (node A, running); Index 3.3 + 2.7 + 0.9 (KUP).
+
 ## 2026-10-02 09:05Z (17:05 UTC+8), worker 7e1c9ce8 (handoff; see `m10-handoff-2026-10-02.md`)
 
 - **M10-KUP-a33-bf16 measured** on node C: parity passed, 7 shards, 120,224 rows merged (2 unsupported), both
