@@ -132,11 +132,11 @@ def paths(key: str) -> dict[str, str]:
         "private": private,
         "gates": f"{inputs}/gates",
         "current_gate": f"{inputs}/current/gate.json",
-        "current_decision": f"{inputs}/current/{t['name']}.decision.{card(key)}.json",
+        "current_decision": f"{inputs}/current/{t['name']}.decision.{card_round(key)}.json",
     }
 
 
-def card(key: str) -> str:
+def card_round(key: str) -> str:
     return TIERS[key].get("card", "card3")
 
 
@@ -146,7 +146,7 @@ def has_mlx(key: str) -> bool:
 
 def spec(key: str) -> dict:
     t, p = TIERS[key], paths(key)
-    base = SPECS / f"dev2-{key}-{card(key)}.json"
+    base = SPECS / f"dev2-{key}-{card_round(key)}.json"
     old = load(base)
     assert old["repo_id"] == f"llm-semantic-router/{t['name']}"
     s = copy.deepcopy(old)
@@ -184,7 +184,7 @@ def spec(key: str) -> dict:
         "matplotlib 3.11.2, Pillow 12.3.0, Inter, the same logo); card.speed keeps the bench receipt of this "
         "runtime (same architecture, runtime and shapes).",
         "replaces_spec": {
-            "spec": f"v2/release/specs/dev2-{key}-{card(key)}.json",
+            "spec": f"v2/release/specs/dev2-{key}-{card_round(key)}.json",
             "sha256": sha(base),
         },
         "previous": old["_release"],
@@ -413,10 +413,11 @@ def main() -> int:
     )
     args = ap.parse_args()
     t, p = TIERS[args.key], paths(args.key)
-    cards = CARDS[card(args.key)]
+    cards = CARDS[card_round(args.key)]
     committed = {
         p["current_gate"]: cards / f"{args.key}/release/receipts/gate.json",
-        p["current_decision"]: cards / f"{t['name']}.decision.{card(args.key)}.json",
+        p["current_decision"]: cards
+        / f"{t['name']}.decision.{card_round(args.key)}.json",
     }
     for node_path, record in committed.items():
         if sha(node_path) != sha(record):
