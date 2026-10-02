@@ -13,35 +13,35 @@ SCRIPT = Path(__file__).resolve().parents[1] / "hf_headroom.sh"
 NODE_HOST = ".".join(["10", "20", "30", "40"])
 
 REPOS = {
-    "org": "llm-semantic-router",
+    "org": "vllm-sr",
     "repos": [
         {
             "kind": "model",
-            "id": "llm-semantic-router/dev2-9b-staging",
+            "id": "vllm-sr/dev2-9b-staging",
             "private": True,
             "used": 31_783_619_693,
         },
         {
             "kind": "model",
-            "id": "llm-semantic-router/DEV2.0-2B",
+            "id": "vllm-sr/DEV2.0-2B",
             "private": True,
             "used": 7_556_388_102,
         },
         {
             "kind": "dataset",
-            "id": "llm-semantic-router/decision-2.0-training-data",
+            "id": "vllm-sr/decision-2.0-training-data",
             "private": True,
             "used": 3_228_804_557,
         },
         {
             "kind": "model",
-            "id": "llm-semantic-router/Decision-1.0-Lux-9B",
+            "id": "vllm-sr/Decision-1.0-Lux-9B",
             "private": False,
             "used": None,
         },
         {
             "kind": "space",
-            "id": "llm-semantic-router/decision-studio",
+            "id": "vllm-sr/decision-studio",
             "private": False,
             "used": None,
         },
@@ -106,7 +106,7 @@ class HfHeadroomTest(unittest.TestCase):
         self.assertEqual(doc["private_repos"], 3)
         self.assertEqual(
             [r["id"] for r in doc["largest"]],
-            ["llm-semantic-router/dev2-9b-staging", "llm-semantic-router/DEV2.0-2B"],
+            ["vllm-sr/dev2-9b-staging", "vllm-sr/DEV2.0-2B"],
         )
 
     def test_usage_and_input_errors_exit_two(self) -> None:
@@ -147,9 +147,7 @@ class HfHeadroomTest(unittest.TestCase):
         self.assertEqual(out.returncode, 0, out.stderr)
         argv = argv_log.read_text().splitlines()
         self.assertIn(f"root@{NODE_HOST}", argv)
-        self.assertEqual(
-            argv[-1], "/data/dev2/tools/hf-cli/bin/python - llm-semantic-router"
-        )
+        self.assertEqual(argv[-1], "/data/dev2/tools/hf-cli/bin/python - vllm-sr")
         self.assertIn('expand=["usedStorage"]', stdin_log.read_text())
         self.assertNotIn(NODE_HOST, out.stdout + out.stderr)
 

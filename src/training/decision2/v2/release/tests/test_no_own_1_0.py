@@ -54,7 +54,7 @@ class NoOwnGateTest(unittest.TestCase):
         self.spec = {
             "kind": "release",
             "model_name": "Decision-2.0-Vega-26B",
-            "repo_id": "llm-semantic-router/Decision-2.0-Vega-26B",
+            "repo_id": "vllm-sr/Decision-2.0-Vega-26B",
             "expected_identity": {"model_sha256": "c" * 64},
             "scored": {"report_sha256": layout.sha_file(candidate)},
             "gate_receipt": str(self.decision),
@@ -82,7 +82,7 @@ class NoOwnGateTest(unittest.TestCase):
             "status": "final",
             "decision": "release",
             "model_name": "Decision-2.0-Vega-26B",
-            "repo_id": "llm-semantic-router/Decision-2.0-Vega-26B",
+            "repo_id": "vllm-sr/Decision-2.0-Vega-26B",
             "identity": {"model_sha256": "c" * 64},
             "report_sha256": self.spec["scored"]["report_sha256"],
             "paired_sha256": layout.sha_file(self.paired),
@@ -317,7 +317,7 @@ class NoOwnCardTest(unittest.TestCase):
             "key": "kai1",
             "role": "own-1.0",
             "report": str(REPORTS / "kai1.json"),
-            "repo_id": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+            "repo_id": "vllm-sr/Decision-1.0-Kai-0.6B",
         }
         with self.assertRaises(ValueError):
             card.select_reports([*entries(), own], ROSTER, "no-1.0")

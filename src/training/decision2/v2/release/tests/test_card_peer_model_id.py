@@ -29,7 +29,7 @@ def entries(decider_repo: str | None = "Mapika/decider-2b") -> list[dict]:
             "key": "sol1",
             "role": "own-1.0",
             "report": str(REPORTS / "sol1.json"),
-            "repo_id": "llm-semantic-router/Decision-1.0-Sol-2B",
+            "repo_id": "vllm-sr/Decision-1.0-Sol-2B",
             "label": "Decision 1.0 Sol",
         },
         decider,

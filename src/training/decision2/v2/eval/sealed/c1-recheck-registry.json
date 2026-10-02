@@ -6,7 +6,7 @@
     "retired_sha256": "bbf095c70917f028d691fce570b114725e4f22fd6a1987456f6ae2c30f22990a",
     "scored_items": 2840
   },
-  "rule": "v2/eval/records/c1-recheck-r1-2026-10-01.md section 3 (r2 reuses it unchanged): G0 rules E, N1, N2, G with boilerplate B1 / B2 only, plus the registered scanner (no exemption), P2 class (a)",
+  "rule": "v2/eval/records/c1-recheck-r1-2026-10-01.md section 3 (r2 and r3 reuse it unchanged): G0 rules E, N1, N2, G with boilerplate B1 / B2 only, plus the registered scanner (no exemption), P2 class (a)",
   "rechecks": {
     "r1-ib1r3-ib2-pn1r2": {
       "spec": "v2/eval/sealed/c1-recheck/r1-ib1r3-ib2-pn1r2.json",
@@ -29,6 +29,17 @@
       "verdict_sha256": "77fff54399329926952503142b55ab80248b06796a20a348736e945fa994a6c6",
       "receipts": "v2/eval/records/c1-recheck-r2/",
       "record": "v2/eval/records/c1-recheck-r2-2026-10-02.md"
+    },
+    "r3-ib4p1": {
+      "spec": "v2/eval/sealed/c1-recheck/r3-ib4p1.json",
+      "spec_sha256": "9601ad9490cd1f55ce53726e86e4119cb00827ba4b293cec5ae63ba89bc796b8",
+      "mirror": "c6ad4910c58092b8abb93090aaad3cc8863cb329",
+      "utc": "2026-10-02T05:51:00Z",
+      "job": "/data/dev2/runs/eval/c1-recheck/r3-ib4p1-20261002T055100Z",
+      "verdict": "PASS",
+      "verdict_sha256": "54bc93618cebb98746c4b984e55030f460779202a3db77c887a1e7200199ac6e",
+      "receipts": "v2/eval/records/c1-recheck-r3/",
+      "record": "v2/eval/records/c1-recheck-r3-2026-10-02.md"
     }
   },
   "files": {
@@ -76,6 +87,15 @@
       "exposed_scored_items": 0,
       "quarantine_groups": 0,
       "recheck": "r2-ib3r2"
+    },
+    "6045b456d4b3032db4b76d70d792e3e9e30aad13e16a8f86fb3e99bc325806fb": {
+      "key": "ib4-p1",
+      "label": "IB4 phase 1 TRAIN, sqa2 / isarc2 / sentfin3 / fc_pick (decision-2.0-training-data@76cea510 m6/ib4/p1/ib4.train.jsonl)",
+      "rows": 9459,
+      "verdict": "PASS",
+      "exposed_scored_items": 0,
+      "quarantine_groups": 0,
+      "recheck": "r3-ib4p1"
     }
   },
   "covered": {
@@ -117,6 +137,7 @@
     "decoder M14": ["08b-RAUP", "2b-RAUP", "4b-LHA10UP"]
   },
   "pending": {
-    "IB3": "IB3-r2 TRAIN rechecked: PASS (r2-ib3r2, files 9d92d92a...). No arm uses it yet; an arm that adds IB3-r2 as a block is covered for those rows, while a new mixture file that adds it needs its own recheck or a raw-line entry under covered. The first round (decision-2.0-training-data@c2401ab4 m6/ib3/, TRAIN 688b643e..., 24,148 rows) is superseded, not release-safe and not rechecked: no arm may use it."
+    "IB3": "IB3-r2 TRAIN rechecked: PASS (r2-ib3r2, files 9d92d92a...). No arm uses it yet; an arm that adds IB3-r2 as a block is covered for those rows, while a new mixture file that adds it needs its own recheck or a raw-line entry under covered. The first round (decision-2.0-training-data@c2401ab4 m6/ib3/, TRAIN 688b643e..., 24,148 rows) is superseded, not release-safe and not rechecked: no arm may use it.",
+    "IB4": "IB4 phase-1 TRAIN rechecked: PASS (r3-ib4p1, file 6045b456...). No arm is in the spec; an arm that adds IB4 phase 1 as a block is covered for those rows, and a release that contains them has its r3 PASS, while a new mixture file that adds it needs its own recheck or a raw-line entry under covered. IB4 phase-1 DEV and the build directories are not rechecked; IB4 phase 2 published nothing."
   }
 }

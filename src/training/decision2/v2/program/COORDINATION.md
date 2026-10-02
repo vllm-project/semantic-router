@@ -205,6 +205,193 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 18:50 — **USER APPROVED a shared-context prefill SWITCH** (new worker, `track=shared-ctx`).
+  - **ON:** the shared input of a multi-question request is computed once and reused, for near-flat latency in N, with
+    some accuracy loss accepted. **OFF:** today's exact path, and the default.
+  - **Goal:** maximise the speed gain while minimising the loss, via exactness tricks, a low-margin exact fallback (τ
+    sweep) and auto-enable thresholds.
+  - **Why:** measured, our per-question re-read makes latency linear in N. The official Jev API stays nearly flat and
+    overtakes at 64 or more questions.
+  - **Conflict avoidance:** a separate module with a minimal hook. The phase A runtime worker (2d541b40) owns
+    `decision2/qwen.py`; the shared-ctx work rebases onto phase A when it lands. No released package changes.
+
+- 2026-10-02 18:05 — **Org pipeline change merged at `f72f4de36`** (commit `ae0bc1e2f`; org worker (2)). **Release
+  workers merge integration before the next driver run.**
+  - **Why it's urgent.** The Hub now answers the old IDs with the new ones. On the old pipeline, `hub.py` refuses
+    every upload ("resolves to vllm-sr/..."), `collection_order.py` fails, and `hf_headroom.sh` lists 0 repos under
+    the old author, so it reports 0 GB used and gives false headroom.
+  - **What changed.** `ORG = vllm-sr`, and the pinned collection is `vllm-sr/decision-20-6ab7cf7bdfb506bf8269cb00`.
+    `check_repo` refuses `llm-semantic-router/...` with "renamed; use vllm-sr/...". The README lint refuses the
+    former org. `hub_links` fails links to it. Prior gates and 1.0 reports under the old org still count
+    (`layout.current_repo`).
+  - **Your spec.** Put `vllm-sr/...` in `repo_id`, `origin` / `base` and licence sources. `layout.current_ids(spec)`
+    rewrites these Hub IDs and leaves HF-cache paths alone. Decisions must name `vllm-sr/<model>`.
+  - **Card-only org revisions** of the six 2.0 repos follow, one repo at a time, never during that repo's release
+    run. Re-read `main` before you upload.
+
+- 2026-10-02 18:00 — **USER APPROVED speed-up phase A** (gist `6b59c3be`).
+  - **Owner:** the bit-identical runtime rollout for all six sizes is owned by **2d541b40** (`track=runtime-a`).
+  - **Scope:** HIP graphs per exact shape with host masks and the exact trims; the lean LoRA for 27B; the bit-exact
+    fused Triton element-wise kernels and the FLA gfx942 retune from `xunzhuo/decision-2-rocm-kernels`; a frozen
+    autotune cache.
+  - **Gate:** 0 answer changes and 0.0 drift on all four scored panels per size, then runtime-only revisions.
+  - **Weight-release workers (M17 4B, 9B M10, 27B #5) and the org-rename worker e0c97d43:** merge integration again
+    when the runtime change lands (watch for its note). Never publish concurrently on a repo; re-read `main` before
+    each upload.
+  - **The launch film** shows the projected optimized speeds (Kai-0.6B ≈ 5 ms headline) by user decision. Phase A
+    must land before publication.
+
+- 2026-10-02 17:35 — **HF ORG RENAMED: `llm-semantic-router` → `vllm-sr`** (https://huggingface.co/vllm-sr; user).
+  - **State.** Repos and collections moved with it, and the old IDs redirect for now. About 70 repos still reference
+    the old name in READMEs, configs (LoRA `base_model_name_or_path`, Decision 1.0 `native/decision_config.json`, Vela
+    2.0 code) and integrity manifests.
+  - **Three workers fix it:**
+    - **(1) HF repos except Decision 2.0:** Decision 1.0, Vela 1.0 / 2.0, MoM and older models.
+    - **(2) The Decision 2.0 release pipeline constants,** on integration, plus card-only revisions of the 2.0 repos.
+    - **(3) A PR for the main repo** (router configs, deploy, e2e, docs, website).
+  - **Every release worker (M17 4B, 9B M10, 27B, film):** from now on use `vllm-sr/...` for every new upload or
+    reference. **Merge integration again before your next release driver run,** once worker (2) lands the pipeline
+    change (watch for its COORDINATION note). The film end card uses `huggingface.co/vllm-sr`.
+
+- 2026-10-02 17:20 — **NO MORE UNATTENDED GAPS (the user asked why tracks keep running unattended).**
+  - **Cause.** The coordinator's own rule ("hand off near 5 hours") ended workers while their multi-hour training ran
+    on. Successors started only when the coordinator saw the completion notice.
+  - **New rules for every worker:**
+    1. **Don't end your run while your jobs are running or results are pending.** Poll sparsely: one blocking wait of
+       30–45 min per poll, with a short state commit after it.
+    2. **Hand off only if your context is genuinely near its limit.** Then the **first line** of your final report must
+       be `HANDOFF: continuation needed — <track>`, with exact next steps, so the coordinator relaunches at once.
+    3. **Never leave a GPU lease idle for more than 30 min.**
+  - **Watchdog.** The coordinator checks every 20 min: running node jobs vs. active workers, idle GPUs and unhandled
+    Index results. It relaunches continuations immediately.
+
+- 2026-10-02 16:45 — **Vega-27B released:** `781b2b24` (M6-IB, Index-first gate, banner A; 355ad916; all pre- and
+  post-download checks pass; A20r's superseded blobs purged; release record `e83e0d76e`). Node A GPU0 shared lease
+  `owner.release-27b-27bif` removed.
+  - M6-IB2 is not a successor (not significantly above M6-IB); its IB2 families go on in M7.
+  - **M7 running** on node D GPU0–4 (M7-IB124ML × 3 seeds, M7-IB14ML × 2; IB1 without `sentfin`, IB4 phase 1, ML
+    block). Seeds end ≈ 08:30 / 13:00 UTC+8 on 10-03. A cross-arm average (M6-IB + M6-IB2 soups) is next.
+  - Node E GPU0 / 1 / 6 / 7 are free (no owner) and 27B will use them for Index shards (`m6-index.sh` `eN`, needs
+    `stage-e`). They are not leased while idle; any track may fill them meanwhile. Worker 355ad916 hands off now
+    (hand-off in `m6-state.md`).
+
+- 2026-10-02 15:55 — **M18 is paused** (ce74f1e5, `074388ebb`). It released node A GPU1, 2, 7, node E GPU0, 1, 6, 7
+  and node F GPU4–5; all are idle now.
+  - **Who takes them:** 9B → node A GPU1, 2, 7; 27B → node E GPU0–3 / 6–7; 4B (M17) → node F GPU4–5. Take them
+    within 30 min.
+  - **Two transferable findings for 4B / 9B / 27B:**
+    1. **Cross-arm weight averages** of two different frozen arms from the same base usually scored **above both
+       parents** at 2B. They are cheap candidates; build them from your existing soups.
+    2. **Adding the IB3-r2 maths rows** to the plain recipe gave the largest single 2B gain (`2b-RAM`). The extra
+       typed upweight on top hurt.
+  - **2B release status.** b49d1f36 switched to `2b-RASDML` at 15:39, after a global publish-serialization
+    misreading that is now fixed. Its formal collection is on node B GPU1 / 5; the release follows.
+
+- 2026-10-02 15:50 — **USER DECISIONS: pause 0.6B / 0.8B / 2B training; core resources go to 4B, 9B and 27B; release
+  `4b-LHA10SDML` once.**
+  - **Small sizes.** After the Sol-2B release of `2b-RASDML` (b49d1f36, in flight), 0.6B / 0.8B / 2B are all at the
+    frontier of their size class.
+    - M18 (ce74f1e5) is paused: it stops its jobs and releases node A GPU1, 2, 7, node F GPU4–5 and its node E / C
+      shares.
+    - The sweep's unattended 0.8B chain (`IS-08b-RASD-a50`) was stopped by the coordinator.
+    - `IS-2b-RA10SDML` finishes on node C in about 15 min and is only recorded.
+  - **4B (M17 7cee4275).**
+    - Release `4b-LHA10SDML` now (user override of the successor significance rule: full Index tie, transfer-only
+      significantly better), after its missing formal typed-FINAL and the row-level audit.
+    - Goal: overtake JPT-4B. GPUs: node F GPU2–7.
+  - **9B (7e1c9ce8).** Goal: JPT-9B, a clearly larger gain over 1.0. GPUs: node B GPU2–4 / 6–7 plus node A GPU1, 2,
+    7. Add arms with IB4 p1, IB3 and the ML block. Budget 90 GPU-h.
+  - **27B (355ad916).** Goal: the top 3 of 15–40B (above AutoJev-27B). GPUs: node D GPU0–7, node E GPU0–3 / 6–7,
+    node B GPU0 (plus GPU1 / 5 after the 2B formal). M7 arms with IB4 p1, the ML block and the IB2 families. Budget
+    120 GPU-h.
+  - **Shared Index pool** for 4B / 9B / 27B: node C GPU1–7 and node A GPU0 / 3–6. Every candidate is measured once on
+    its release form, sharded wide.
+
+- 2026-10-02 15:35 — **USER: release `2b-RASDML` to Sol-2B first, now** (b49d1f36, top priority).
+  - **Clarification for all publishers:** "never publish concurrently" means per repository. Different repos may
+    publish in parallel when `hf_headroom.sh` shows at least 10 GB free. The collection check is read-only.
+  - M15 never went formal, so 2b-RASDML gets its formal collection on node B GPU1 + GPU5 (split) and its row-level
+    contamination audit on CPU, in parallel. Then the release.
+
+- 2026-10-02 15:30 — **The Index sweep (d669f73d) handed off; its chains run unattended on the nodes. Receivers of its
+  results:**
+  - **2B → b49d1f36.** `IS-2b-RASDML-bf16` is now the highest 2B candidate, above Decider 2B. The publisher was told
+    to choose by the largest lower bound and to run its missing formal typed-FINAL / audit if needed. `IS-2b-RA10SDML`
+    lands ≈ 16:00.
+  - **4B → M17 (7cee4275), the Nox publisher; not the finished 5e7b8132.** `IS-4b-LHA10SDML-bf16` is above the
+    released `LHS17SD-bf16`; the cross bootstrap is on node D. It is a successor only if the lower bound is > 0.
+  - **9B → 7e1c9ce8.** `IS-K-a13IBX-bf16` fails; `IS-L9IBX-bf16` lands ≈ 15:35.
+  - **0.8B → ce74f1e5.** None of the sweep's 0.8B points beats the released `08b-RA-a75`.
+  - **27B.** The M6-IB release is in flight (355ad916). The 2B release queues behind it; no concurrent publishing.
+
+- 2026-10-02 14:00 — **IB4 phase 1 is RELEASE-SAFE: C1 content recheck r3 PASS.**
+  - **Result.** 0 of 2,840 scored C1 v1.2 items exposed, 0 overlapping rows or groups for every source, controls
+    200 / 200.
+  - **Record.** `v2/eval/records/c1-recheck-r3-2026-10-02.md` (verdict `54bc9361…`, registry updated), merged into
+    integration at `5f7afcbac` by custodian c3ca46e8.
+  - **Training workers (9B M10, 2B / 0.8B M18, M17 4B, 27B M7).** Arms that add IB4 phase 1
+    (`m6/ib4/p1` @ `76cea510`) as a block are covered by this verdict. A mixture file that adds it needs its own
+    recheck, or a raw-line coverage entry in the registry. The IB4 data-track records still say "pending" because the
+    data worker has finished; the r3 record is authoritative.
+
+- 2026-10-02 13:55 — **Nox-4B released:** `b285e7a1` (M17 `4b-LHS17SD`, BF16; 5e7b8132; all integrity checks pass; LH
+  weights purged).
+  - **References are worse and disclosed:** v3 significantly below LH; mlx-diag down; the transfer-only part of the
+    Index gain is not significant. All of this follows the user's Index-first rule.
+  - **Ownership.** M17 (7cee4275) is now the 4B trainer **and** the single Nox-4B publisher. Stage-2 arms: S17 +
+    IB4 / IB3, S17 + UP, a higher swap dose, interpolations; on node F GPU2, 3, 6, 7.
+  - **Stopped an orphaned run.** The `DEV2.0-4B-LHA10SD-a50-bf16` Index run (node D GPU4–7, launched by the finished
+    4B release chain) could not beat the release. Its leases were released, and node D GPU4–7 return to the sweep /
+    27B.
+
+- 2026-10-02 13:45 — **IB4 phase 1 is published** (c6f36dc3): `llm-semantic-router/decision-2.0-training-data`
+  `m6/ib4/p1` @ `76cea510`, TRAIN 9,459 / DEV 782.
+  - **Families:**
+    - `sqa2` (RAGTruth-style support check; SQuAD 2.0, CC BY-SA 4.0);
+    - `isarc2` (iSarcasmEval train split, MIT; **in-distribution**, keep it separable);
+    - `sentfin3` (FinEntity-style entity sentiment; SEntFiN, MIT; **replaces IB1 `sentfin`**, so drop IB1 `sentfin`
+      in any arm that mixes `sentfin3`);
+    - `fc_pick` (BFCL-style call decision; Glaive v2, Apache-2.0; small, easy negatives).
+  - **Audits.** Every audit passes. **The C1 recheck r3 is running now** (eval custodian, new worker).
+  - **Training workers** (9B M10 7e1c9ce8, 2B / 0.8B M18 ce74f1e5, M17 4B 7cee4275, 27B 355ad916): you may **start
+    IB4 arms now**. A release that contains IB4 needs r3 PASS (check `v2/eval/records/c1-recheck-r3-2026-10-02.md`).
+    Measure each candidate once, on its BF16 release copy.
+  - **No clean source this round:** phishing e-mail, VAST, HellaSwag, RAGTruth contexts, When2Call (failed the
+    shortcut check), ContractNLI, Home appliances.
+
+- 2026-10-02 13:05 — **Eos-0.8B released** (`3de61185`, M16 `08b-RA-a75`, BF16; all checks pass; old weights purged).
+  - **Sol-2B goes straight to the highest candidate.** Not `2b-RA-a75`: a successor must significantly beat the
+    then-current release, so shipping RA-a75 first would likely block RAUP / RASD.
+  - **GPUs.** b49d1f36 runs the formal collections of `IS-2b-RASD` / `IS-2b-RAUP` on node B GPU1 and GPU5. They were
+    idle 27B leases, now `track=dec-2b-formal`. The 9B M10 seeds on node B GPU2–4 / 6–7 are untouched.
+  - **27B (355ad916).** Your node B pool is now GPU0 only; shard M6-IB2 over node D GPU0–1 and GPU4–7, plus the eval
+    fast lane (node E) as free.
+
+- 2026-10-02 12:40 — **SERVER-ONLY WORK (user directive; the local PC has little capacity and performance) and FILL
+  THE IDLE GPUs.**
+  - **Server-only.** Everything runs on the SSH servers:
+    - computation, tests (pytest in containers on node A / B), card rendering, bootstraps, analysis and data
+      processing;
+    - transfers: node to node directly. A / B hold the temporary key authorized on C–F; relay between C–F through A
+      or B, **never through the workstation**;
+    - storage: large artifacts and private results go to the node private store (`/data/dev2/private/...`). The local
+      private folder holds only small summaries (under 1 MB).
+    
+    The local PC only runs the agent shells, ssh / scp control commands and small git commits / pushes of text
+    records; GitHub credentials stay local.
+  - **GPU audit, 12:25:** only 15 of 43 usable GPUs were busy.
+    - Idle: node A GPU1, 2, 7; node B GPU0–7; node C GPU3; node D GPU4–7; node E GPU0–3, 6, 7; node F GPU2–7.
+    - Every track must put its assigned GPUs to work **within 30 min** and preregister in parallel. Long-lived idle
+      leases get reclaimed.
+  - **Latest private results:**
+    - 4B: M17 `LHS17SD-bf16` is the highest 4B candidate, ahead of `LHS10SD-bf16` and M13 `LHA10SD-bf16`.
+      5e7b8132 releases the highest.
+    - 9B: `IS-L9IB` fails (below K-a13IB), so **the Lux-9B publisher is now the 9B frontier worker (7e1c9ce8)**.
+    - 27B: `M6-IB` is measured; release it if its lower bound vs A20r is > 0.
+  - **Allocation v2 stands** (see 12:30), plus:
+    - the sweep takes node E GPU0–3 / 6–7 and node D GPU4–7 for its queue and any further frozen candidates;
+    - 27B re-shards M6-IB2's Index over node B GPU0, 1, 5 (and node D GPU4–7 if the sweep doesn't need them).
+
 - 2026-10-02 12:30 — **The user wants every size at #1 in its size class, plus efficient GPU use for the eval and train
   loops. Release the HIGHEST candidate directly; never release a lower one when a higher one is measured.**
   - **GPU audit (12:15):**

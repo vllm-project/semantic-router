@@ -15,11 +15,11 @@ TWENTY_SEVEN_B = 25_746_591_744
 
 def lineage_spec(**extra):
     return {
-        "origin": {"repo_id": "llm-semantic-router/Decision-1.0-Lux-9B"},
+        "origin": {"repo_id": "vllm-sr/Decision-1.0-Lux-9B"},
         "licence": {
             "components": [
-                {"source": "llm-semantic-router/Decision-2.0-Lux-9B"},
-                {"source": "llm-semantic-router/Decision-1.0-Lux-9B@bd45a30a"},
+                {"source": "vllm-sr/Decision-2.0-Lux-9B"},
+                {"source": "vllm-sr/Decision-1.0-Lux-9B@bd45a30a"},
                 {"source": "Qwen/Qwen3.5-9B@c2022362"},
             ]
         },
@@ -95,23 +95,23 @@ class RenamedRepositoryTest(unittest.TestCase):
 
     def test_an_old_id_that_redirects_is_refused(self):
         args = argparse.Namespace(
-            repo="llm-semantic-router/Decision-2.0-Lux-8B",
+            repo="vllm-sr/Decision-2.0-Lux-8B",
             kind="release",
             model_name="Decision-2.0-Lux-8B",
         )
         with mock.patch.object(
             hub,
             "_api",
-            return_value=self.api("llm-semantic-router/Decision-2.0-Lux-9B"),
+            return_value=self.api("vllm-sr/Decision-2.0-Lux-9B"),
         ):
             with self.assertRaisesRegex(
-                RuntimeError, "resolves to llm-semantic-router/Decision-2.0-Lux-9B"
+                RuntimeError, "resolves to vllm-sr/Decision-2.0-Lux-9B"
             ):
                 hub.ensure(args)
 
     def test_the_repository_itself_is_accepted(self):
         args = argparse.Namespace(
-            repo="llm-semantic-router/Decision-2.0-Lux-9B",
+            repo="vllm-sr/Decision-2.0-Lux-9B",
             kind="release",
             model_name="Decision-2.0-Lux-9B",
         )

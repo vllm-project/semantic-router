@@ -16,7 +16,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 hf_python=/data/dev2/tools/hf-cli/bin/python3
 image=decision20-train-fast:host2
 fresh=/data/dev2/tools/envs/fresh-cpu/bin/python
-id="llm-semantic-router/$repo"
+id="vllm-sr/$repo"
 work="$root/$repo"
 hub() { "$hf_python" "$here/hub1.py" "$@" --repo "$id" --stage "$work/stage"; }
 fresh_run() {

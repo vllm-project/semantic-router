@@ -30,7 +30,7 @@ from pathlib import Path
 from v2.release.tests.cpu_integration import isolated, spec_for
 from v2.release.tests.gpu_bf16_resident import qwen3_5_checkpoint, round_linear_weights
 
-STAGING = "llm-semantic-router/dev2-release-staging"
+STAGING = "vllm-sr/dev2-release-staging"
 
 
 def hub_cache(package: Path, cache: Path, repo_id: str, commit: str) -> Path:
@@ -137,7 +137,7 @@ def main() -> None:
         'raise ImportError("hidden: a machine without the GPU-only causal-conv1d kernel")\n'
     )
     base_block = {
-        "repo_id": "llm-semantic-router/dev2-release-staging-base",
+        "repo_id": "vllm-sr/dev2-release-staging-base",
         "revision": "0" * 40,
         "path": str(work / "full"),
         "licence": "apache-2.0",

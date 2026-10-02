@@ -29,7 +29,7 @@ from typing import Any
 
 from v2.release import layout
 
-COLLECTION = "llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00"
+COLLECTION = f"{layout.ORG}/decision-20-6ab7cf7bdfb506bf8269cb00"
 COLLECTION_TITLE = "Decision 2.0"
 HF_CLI = os.environ.get("DEV2_HF_CLI", "hf")
 

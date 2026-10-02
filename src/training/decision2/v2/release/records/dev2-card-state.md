@@ -6,6 +6,11 @@ repositories with a standard, formal model-release card. Worktree `vllm-sr-dev2-
 
 ## Now
 
+- 04:55Z (2026-10-02) — **Three-hour check done** (worker 4c0a68cd). Vega `b689ee66`, Lux `7195360d` and Sol
+  `8ed41433` are fb5dd490's card-only revisions (entry below). Eos `3de61185` landed at 04:44Z after fb5dd490 skipped
+  it for b49d1f36's release. All four carry banner A, byte-identical to the preview. Nox stays `54b084f9` and is left
+  to 5e7b8132, its single publisher, which has a release pending (COORDINATION 12:30). Worker 4c0a68cd publishes no
+  further revisions.
 - 04:20Z (2026-10-02) — **Round 4 roll-out** (user request 10:35 UTC+8, banner A on every card now; card worker
   fb5dd490, worktree `vllm-sr-dev2-card4-rollout`). Card-only revisions, one at a time, each after a `main` check,
   a read of the owner's records and a check that no publisher runs on any node:

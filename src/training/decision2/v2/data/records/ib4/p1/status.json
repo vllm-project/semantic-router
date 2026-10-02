@@ -1,0 +1,22 @@
+{
+ "schema": "decision2.ib4.status.v1",
+ "round": "IB4 phase 1",
+ "release_status": "release-safe pending C1",
+ "release_safe": false,
+ "release_safe_after": "the custodian C1 content recheck (spec v2/eval/sealed/c1-recheck/r3-ib4p1.json) passes; every other audit passed",
+ "prereg": "v2/data/records/ib4-prereg-2026-10-02.md with amendments 1 and 2",
+ "families": ["sqa2", "isarc2", "sentfin3", "fc_pick"],
+ "in_distribution_families": ["isarc2"],
+ "share_alike_families": ["sqa2"],
+ "replaces": {"sentfin3": "IB1 sentfin (an arm that mixes sentfin3 must drop IB1 sentfin)"},
+ "families_not_included": {
+  "failed_g4_in_run_a1": ["smish", "w2c_act"],
+  "phase_2_candidates": ["vast-like stance", "gsm8k-like maths", "hellaswag-like continuation", "mmlu-pro / gpqa-like multiple choice"],
+  "dropped_no_clean_source": ["ragtruth", "phishing e-mail", "contractnli", "home appliances"]
+ },
+ "index_rows": "every candidate group with an exact, normalized or 13-gram match to any Index suite row was dropped (G0; positive controls 2,000 / 2,000 exact and 2,000 / 2,000 perturbed); every group with a URL or host shared with the suite was dropped (G0u; controls 500 / 500 and 500 / 500); the final files re-scanned clean",
+ "ix1_contamination": "row-level IX1 audit of final TRAIN + DEV against the full private Index panel: 0 duplicate, 0 item, 0 partial rows; planted control 200 / 200",
+ "audits": "G0, G0u, G1 names, C1 names (raw, candidates, final), G2 overlap (PI-v4 full and quarantining, PI-ib4, DEV-vs-TRAIN) with quarantine, G4 (every family passed in this run), G5 balance, G7 isolation, G8 tokens, leak guard: all passed",
+ "review": "no blind review this round (not in the assignment's mandatory list); author spot-check of 12 TRAIN rows per family read on the node: 48 / 48 consistent with the publisher labels, one SQuAD gold answer weak but defensible",
+ "limitations": "labels are the publishers' (SQuAD 2.0, iSarcasmEval author labels, SEntFiN annotators, Glaive's synthetic calls); fc_pick negatives are another listed function, usually unrelated to the request (easy); sqa2 covers 234 Wikipedia articles (at most 20 questions each before audits); fc_pick has no DEV rows (per-name balance and the DEV-near-TRAIN drop left none)"
+}

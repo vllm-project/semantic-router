@@ -39,7 +39,7 @@ def spec_for(
     spec = {
         "schema": build.SPEC_SCHEMA,
         "kind": "staging",
-        "repo_id": "llm-semantic-router/dev2-release-staging",
+        "repo_id": "vllm-sr/dev2-release-staging",
         "model_name": "Decision-2.0-Kai-0.6B",
         "profile": profile,
         "checkpoint": str(checkpoint),
@@ -47,7 +47,7 @@ def spec_for(
         "calibration": {"path": str(cal), "sha256": layout.sha_file(cal)},
         "max_input_tokens": 2048,
         "origin": {
-            "repo_id": "llm-semantic-router/dev2-release-staging",
+            "repo_id": "vllm-sr/dev2-release-staging",
             "revision": "0" * 40,
             "relation": "finetune",
             "summary": "Toy random model for pipeline tests.",
@@ -75,7 +75,7 @@ def spec_for(
                     "key": "kai1",
                     "role": "own-1.0",
                     "report": str(REPORTS / "kai1.json"),
-                    "repo_id": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+                    "repo_id": "vllm-sr/Decision-1.0-Kai-0.6B",
                 },
             ],
             "roster": "v2/eval/records/decision-index-peer-roster-2026-09-28.json",
@@ -263,7 +263,7 @@ def main() -> None:
     model.save(work / "lora", tokenizer)
     lora_id = checkpoint_fingerprint(work / "lora", work / "full")["model_sha256"]
     base_block = {
-        "repo_id": "llm-semantic-router/dev2-release-staging-base",
+        "repo_id": "vllm-sr/dev2-release-staging-base",
         "revision": "0" * 40,
         "path": str(work / "full"),
         "licence": "apache-2.0",

@@ -1,0 +1,353 @@
+{
+ "by_source": {
+  "delichess": {
+   "CLEAN": 12709,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 12709,
+   "labels": {}
+  },
+  "hallutruthqa": {
+   "CLEAN": 4000,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 4000,
+   "labels": {}
+  },
+  "implicaturex": {
+   "CLEAN": 2475,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 2475,
+   "labels": {}
+  },
+  "innoduel": {
+   "CLEAN": 1350,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 1350,
+   "labels": {}
+  },
+  "legal_case_law": {
+   "CLEAN": 8085,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 8085,
+   "labels": {}
+  },
+  "narrative_gold": {
+   "CLEAN": 1696,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 1696,
+   "labels": {}
+  },
+  "tutormoments": {
+   "CLEAN": 10054,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 10054,
+   "labels": {}
+  },
+  "wb_reviews": {
+   "CLEAN": 27248,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 27248,
+   "labels": {}
+  }
+ },
+ "by_task": {
+  "delichess/data/events.csv": {
+   "CLEAN": 7565,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 7565
+  },
+  "delichess/data/utterances.csv": {
+   "CLEAN": 5051,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 5051
+  },
+  "delichess/metadata/gemini_annotation/agreement_summary.csv": {
+   "CLEAN": 1,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 1
+  },
+  "delichess/metadata/gemini_annotation/confusion_counts.csv": {
+   "CLEAN": 81,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 81
+  },
+  "delichess/metadata/gemini_annotation/per_label_metrics.csv": {
+   "CLEAN": 10,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 10
+  },
+  "delichess/metadata/gemini_annotation/run_config.json": {
+   "CLEAN": 1,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 1
+  },
+  "hallutruthqa/dev.jsonl": {
+   "CLEAN": 800,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 800
+  },
+  "hallutruthqa/test.jsonl": {
+   "CLEAN": 1600,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 1600
+  },
+  "hallutruthqa/train.jsonl": {
+   "CLEAN": 1600,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 1600
+  },
+  "implicaturex/expert_responses.csv": {
+   "CLEAN": 54,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 54
+  },
+  "implicaturex/implicatureApprox.csv": {
+   "CLEAN": 271,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 271
+  },
+  "implicaturex/implicatureBot.csv": {
+   "CLEAN": 271,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 271
+  },
+  "implicaturex/implicaturePlus.csv": {
+   "CLEAN": 271,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 271
+  },
+  "implicaturex/implicatureX.csv": {
+   "CLEAN": 271,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 271
+  },
+  "implicaturex/implicatureX_prior.csv": {
+   "CLEAN": 271,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 271
+  },
+  "implicaturex/prolific_responses.csv": {
+   "CLEAN": 1066,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 1066
+  },
+  "innoduel/sample.csv": {
+   "CLEAN": 1350,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 1350
+  },
+  "legal_case_law/data/documents.jsonl": {
+   "CLEAN": 42,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 42
+  },
+  "legal_case_law/data/final_nodes.jsonl": {
+   "CLEAN": 709,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 709
+  },
+  "legal_case_law/data/fold_assignments.jsonl": {
+   "CLEAN": 210,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 210
+  },
+  "legal_case_law/data/iaa_nodes.jsonl": {
+   "CLEAN": 284,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 284
+  },
+  "legal_case_law/data/retrieval_qrels.jsonl": {
+   "CLEAN": 1181,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 1181
+  },
+  "legal_case_law/data/retrieval_queries.jsonl": {
+   "CLEAN": 490,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 490
+  },
+  "legal_case_law/data/sentences.jsonl": {
+   "CLEAN": 5168,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 5168
+  },
+  "legal_case_law/manifest.json": {
+   "CLEAN": 1,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 1
+  },
+  "narrative_gold/agency_annotations.parquet": {
+   "CLEAN": 400,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 400
+  },
+  "narrative_gold/all_annotations.parquet": {
+   "CLEAN": 456,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 456
+  },
+  "narrative_gold/event_relation_annotations.parquet": {
+   "CLEAN": 440,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 440
+  },
+  "narrative_gold/setting_annotations.parquet": {
+   "CLEAN": 400,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 400
+  },
+  "tutormoments/annotations.jsonl": {
+   "CLEAN": 1584,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 1584
+  },
+  "tutormoments/benchmark_520.jsonl": {
+   "CLEAN": 7280,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 7280
+  },
+  "tutormoments/ground_truth.jsonl": {
+   "CLEAN": 207,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 207
+  },
+  "tutormoments/moments.jsonl": {
+   "CLEAN": 520,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 520
+  },
+  "tutormoments/moments.manifest.json": {
+   "CLEAN": 1,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 1
+  },
+  "tutormoments/transcripts.jsonl": {
+   "CLEAN": 462,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 462
+  },
+  "wb_reviews/filtered.csv": {
+   "CLEAN": 27248,
+   "OVERLAP": 0,
+   "REVIEW": 0,
+   "candidates": 27248
+  }
+ },
+ "corpora": {
+  "ib4-p1": {
+   "bytes": 12062804,
+   "candidates_hit": 24,
+   "exact": 0,
+   "files": 1,
+   "rows": 9459,
+   "seconds": 0.8,
+   "strings": 89647,
+   "tokens": 1017688,
+   "unparsed_lines": 0,
+   "verdicts": {
+    "OVERLAP": 0,
+    "REVIEW": 0
+   }
+  }
+ },
+ "hits_sha256": "8147b4aa2cb465ce1ccacb946d7e9a82daf88a144568f01695548c98cff29fbe",
+ "manifest_sha256": null,
+ "overlap_reasons": {
+  "both": 0,
+  "containment_only": 0,
+  "exact_only": 0,
+  "exact_only_shared_text": 0,
+  "exact_only_tokens": {
+   "0-4": 0,
+   "12-19": 0,
+   "20+": 0,
+   "5-7": 0,
+   "8-11": 0
+  },
+  "review_short_exact": 0
+ },
+ "params": {
+  "chunk_bytes": 16777216,
+  "cjk_split": true,
+  "contains_tokens": 12,
+  "exact_min_tokens": 8,
+  "min_chars": 20,
+  "min_tokens": 5,
+  "overlap": 0.5,
+  "review": 0.2,
+  "shingle": 8
+ },
+ "protected": {
+  "candidates": 67617,
+  "contains_texts": 346206,
+  "distinct_shingles": 5494449,
+  "exact_texts": 655231,
+  "sha256": "36797f509bd96c3cb703df37cc48114c9bbdf0d2241802e56262139f4bef0a1a",
+  "shared_exact_texts": 63107,
+  "shared_shingles": 1591304,
+  "shingles": 13462982,
+  "sources": 8,
+  "tasks": 36,
+  "texts": 661595,
+  "unscreenable": 1,
+  "without_shingles": 3657
+ },
+ "resources": {
+  "manifest_files_verified": 0,
+  "max_rss_parent_mb": 1599,
+  "max_rss_worker_mb": 1465,
+  "peak_pss_mb": 1527,
+  "peak_rss_sum_mb": 71794,
+  "tasks": 1,
+  "wall_seconds": 39.0,
+  "workers": 48
+ },
+ "schema": "dev2-sealed-c1-overlap/1",
+ "verdicts": {
+  "CLEAN": 67617,
+  "OVERLAP": 0,
+  "REVIEW": 0
+ }
+}
