@@ -2,6 +2,12 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 06:45Z (14:45 UTC+8), worker 7e1c9ce8
+
+- Seeds at updates 1,495–1,543 (06:37Z); no failure. Index GPUs: node C GPU4 / 5 idle, GPU1–3 / 6–7 and node E's
+  fast lane busy with other IX1 runs (node E until ≈ 10:10Z by its leases); the M10 chain takes node C GPUs as they
+  go idle.
+
 ## 2026-10-02 06:20Z (14:20 UTC+8), worker 7e1c9ce8
 
 - Seeds at updates 1,194–1,266 (06:17Z), ≈ 13–14 per minute; no failure. KUP seeds end ≈ 07:15Z, KIBM-s1 / s2
