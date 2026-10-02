@@ -12,6 +12,15 @@ values live in the node private directories and the local private folder only.
 Reference: the released LH, `Decision-2.0-Nox-4B` `main` `54b084f9` (weights `6a555335…`, the same weights and
 runtime as DEV2.0-4B `13d42143`); its IX1 run `DEV2.0-4B-LH` (node C, panel run IDs `6455d7be…`).
 
+## 2026-10-02 05:45Z — released: `Decision-2.0-Nox-4B` `main` `b285e7a1`
+
+- M17 `4b-LHS17SD` (BF16 `74ec8b2f…`, manifest `35eba181…`) published 05:33Z on top of `54b084f9` (main checked right
+  before the upload); `gate evaluate` 10 / 10; parity 0 changes on all four panels before and after download; Hub
+  smoke 5.17 / 5.18 pass; LH weight blobs purged (9.70 GB, history kept). Record:
+  [`dev2-4b-indexfirst-2026-10-02.md`](../../release/records/dev2-4b-indexfirst-2026-10-02.md).
+- M16 `4b-LHA10SD-a75-bf16` Index run finished during the release (2.63 GPU-h, scorers PASS); its lower bound is below
+  the released candidate's (private). LHA10UP still running on node D; a50 not run.
+
 ## 2026-10-02 05:00Z — release choice M17 `4b-LHS17SD` (BF16 `74ec8b2f…`)
 
 - **Comparison (private values; same panel, seed 20261002, 2,000 replicates, 138,645 cases):** all three BF16 runs
