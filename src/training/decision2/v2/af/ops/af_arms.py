@@ -89,6 +89,22 @@ ARMS = {
     "KIB4-lrh": ("9b", "KIB4", ["--backbone-lr", "5e-6"]),
     "KIB4R-W2": ("9b", "KIB4R-W2", []),
     "KIB4-e2": ("9b", "KIB4", ["--epochs", "2"]),
+    # Amendment 10 (lower LR first). 4B half / quarter LoRA and head LR; SDML's TRAIN at half LR.
+    "4b-LHS17ML-lrh": ("4b", "4b-LHS17ML", ["--lora-lr", "5e-5", "--head-lr", "5e-5"]),
+    "4b-LHS17IB4X-lrh": (
+        "4b",
+        "4b-LHS17IB4X",
+        ["--lora-lr", "5e-5", "--head-lr", "5e-5"],
+    ),
+    "4b-SDML-lrh": ("4b", "4b-SDML", ["--lora-lr", "5e-5", "--head-lr", "5e-5"]),
+    "4b-LHS17IB4-lrq": (
+        "4b",
+        "4b-LHS17IB4",
+        ["--lora-lr", "2.5e-5", "--head-lr", "2.5e-5"],
+    ),
+    # 9B: backbone and head LR both halved / quartered.
+    "KIB4-lrhh": ("9b", "KIB4", ["--backbone-lr", "5e-6", "--head-lr", "5e-5"]),
+    "KIB4-lrq": ("9b", "KIB4", ["--backbone-lr", "2.5e-6", "--head-lr", "2.5e-5"]),
 }
 
 
