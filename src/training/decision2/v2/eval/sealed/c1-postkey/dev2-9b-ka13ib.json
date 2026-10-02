@@ -1,0 +1,59 @@
+{
+  "schema": "dev2-c1-postkey-spec/1",
+  "name": "dev2-9b-ka13ib",
+  "tier": "9B",
+  "role": "successor",
+  "label": "Decision-2.0-Lux-9B",
+  "repo": "llm-semantic-router/Decision-2.0-Lux-9B",
+  "revision": "manifest-sha256:055c86f153530a3790cf4fc98c2d554b9659783f7349c111d959f34b4c4049e3",
+  "image": "host2",
+  "adapter_spec": "v2/eval/sealed/adapters/dev2-dec-package-t1.json",
+  "model_path": "/data/dev2/runs/release/dev2-9b-ka13ib-prerelease-20261001T191732Z/package/Decision-2.0-Lux-9B",
+  "mounts": ["/data/decision20-20260926/models/Decision-1.0-Lux-9B"],
+  "env": ["HIP_FORCE_DEV_KERNARG=1"],
+  "extra": {
+    "source": "/data/decision20-20260926/models/Decision-1.0-Lux-9B",
+    "model_id": "llm-semantic-router/Decision-2.0-Lux-9B",
+    "max_length": "16384"
+  },
+  "limit": "16,384 tokens (package limit), no truncation",
+  "cache": {
+    "frozen": "/data/dev2/runs/9b/formal-m9/triton-cache",
+    "sha256": "48a2611aa852efff9348c1e3f3e0247d5e2a6915bec8ed8aeca488b53563e1ca"
+  },
+  "smoke_items": 80,
+  "parity": {
+    "mode": "exact",
+    "stored": "/data/dev2/runs/release/dev2-9b-ka13ib-t1-derived/output/typed-final.predictions.jsonl",
+    "tolerance": 0.0001
+  },
+  "identity": "b9a65d601bb6780c2c07998aecbfab322ede459c26fcb8ed262281ad08f909fb",
+  "package": {
+    "dir": "/data/dev2/runs/release/dev2-9b-ka13ib-prerelease-20261001T191732Z/package/Decision-2.0-Lux-9B",
+    "manifest_sha256": "055c86f153530a3790cf4fc98c2d554b9659783f7349c111d959f34b4c4049e3",
+    "identity": "b9a65d601bb6780c2c07998aecbfab322ede459c26fcb8ed262281ad08f909fb"
+  },
+  "trees": [
+    {
+      "dir": "/data/decision20-20260926/models/Decision-1.0-Lux-9B",
+      "sha256": "3a7cab7dbe865dae53f7fd2a72410d122f3363b3fb81802c74d68ead2a5143a9"
+    }
+  ],
+  "files": [
+    {
+      "path": "/data/dev2/runs/release/dev2-9b-ka13ib-t1-derived/output/typed-final.predictions.jsonl",
+      "sha256": "a049ce2db38c58961a1df27d4069435a2f9808d3cc862b25676147359e0d8aff"
+    },
+    {
+      "path": "/data/dev2/runs/release/dev2-9b-ka13ib-t1-derived/output/public231.predictions.jsonl",
+      "sha256": "1f4c2321d39efcbee55e227f58499651d04e21974ed1ad1eae2ef58b00fd4dd1"
+    },
+    {
+      "path": "/data/dev2/runs/9b/formal-m9/K-a13IB-16k/COLLECT.json",
+      "sha256": "f64876765ab368e355673c2a3b23f0ccc4178ad080f7933dda9070dd1011d802"
+    }
+  ],
+  "stored_collect": "/data/dev2/runs/9b/formal-m9/K-a13IB-16k/COLLECT.json",
+  "compare": [],
+  "notes": "Successor-rule item 8 for the Decision-2.0-Lux-9B successor K-a13IB (9B M9; coordinator decision 2026-10-02 02:05 UTC+8, the Index path: items 1', 2-7 pass), gated against the registered 9B baseline (weights b1ed5a71, C1 v1.2 53.77, event-3 run cand9b). Frozen package = the pre-release build of v2/release/specs/dev2-9b-ka13ib.draft.json on node A (no upload; manifest 055c86f1, 39 files, identity b9a65d60 = the v2.release.bf16_copy of the scored FP32 soup, receipt 773d9b0c). Formal runtime of the scored run formal-m9/K-a13IB-16k (node A): image host2 f83b1d10 with its kernels, 16,384 tokens, HIP_FORCE_DEV_KERNARG=1 and a fresh copy of that run's persisted autotune cache (48a2611a). T = 1: the package ships no calibration file, so the adapter is dev2-dec-package-t1 and the parity reference is the T = 1 derivation of the sealed CAL698 run (dev2-9b-ka13ib-t1-derived; 0 answer changes). C1 content recheck: v2/eval/records/c1-recheck-r1-2026-10-01.md PASS (IB1-r3, IB2, PN1-r2); c1-recheck-registry arms_exposure_0 lists K-a13IB under 9B M9, so its C1 exposure is 0. The source path (Decision 1.0 Lux) is unused by full checkpoints. --model-revision is metadata only; the revision field names the pre-release package by its manifest, and the registry entry takes the released revision. Post-key (not an independent validation)."
+}

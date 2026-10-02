@@ -30,8 +30,6 @@ TIERS = {
     "27B": "Vega",
 }
 BANNER = "assets/banner.png"
-# Lux 9B skipped round 3, so its banner revision also carries the round-3 card files.
-ROUND3_FILES = {"README.md", "assets/index-pareto.png", "assets/index-areas.png"}
 AUDIT = "Training data audited at row level against all Index test items.</sub>"
 # The collection as the user left it (2026-10-01 17:01:30Z); a card revision must not change it.
 COLLECTION_ITEMS = [
@@ -56,7 +54,7 @@ def check(api: HfApi, tier: str, revision: str, previous: str, expected: dict) -
 
     old, new = files(previous), files(revision)
     changed = sorted(n for n in set(old) | set(new) if old.get(n) != new.get(n))
-    card_files = {BANNER} | (ROUND3_FILES if tier == "9B" else set())
+    card_files = {BANNER}
     published = {
         n: sha(hf_hub_download(repo, n, revision=revision)) for n in card_files
     }

@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "items": {
+    "1_beats_own_1_0": {
+      "passed": true,
+      "evidence": "paired v3 95% interval low +3.265 (sha bca44e5f2863)"
+    }
+  }
+}

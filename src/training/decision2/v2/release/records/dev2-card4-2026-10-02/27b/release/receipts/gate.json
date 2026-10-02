@@ -1,0 +1,90 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's request of 2026-10-02 10:35 UTC+8 for banner A on every card now (COORDINATION 10:35): card-only revisions of the sizes whose releases are not running or about to publish",
+  "decision": "release",
+  "decision_sha256": "1f533d2e3b7671635b8ee42094215b114b8e27f19bf3dc8d5277d01b294a9f42",
+  "gate_profile": "successor",
+  "items": {
+    "1_successor_R1_v3": {
+      "evidence": "v3 72.360 vs current 67.209: +5.15 [+2.19, +8.02]",
+      "passed": true
+    },
+    "1_successor_R2_human_transfer": {
+      "evidence": "human transfer delta 95% [-0.037, +0.056]",
+      "passed": true
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "evidence": "types choice OK, noul OK, score OK",
+      "passed": true
+    },
+    "1_successor_R4_mlx_diag": {
+      "evidence": "mlx-diag card-eligible macro +0.0139 [+0.0025, +0.0250]",
+      "passed": true
+    },
+    "1_successor_R5_tier_gates": {
+      "evidence": "no Decision 1.0 at this size; v3 72.360 vs 90% of AutoJev-27B 72.133; H vs AutoJev-27B [-0.030, +0.066]; v3 >= 64.919 ok, H vs AutoJev-27B upper >= 0 ok, no type collapsed ok",
+      "passed": true
+    },
+    "1_successor_R6_no_overlap_exposure": {
+      "evidence": "1 training files, 0 exposed groups",
+      "passed": true
+    },
+    "1_successor_R7_public231": {
+      "evidence": "public 231 203 vs 198 (+5; McNemar p 0.180)",
+      "passed": true
+    },
+    "1_successor_R8_c1_postkey": {
+      "evidence": "JevArena-C1 v1.2 post-key 57.56 vs DEV2.0-27B 5683c6f0 (current revision): +0.23 [-1.22, +1.70] PASS",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "10 results below AutoJev-27B (no Decision 1.0 at this size) listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 31 files re-hashed; loaded 26096775168",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "6358ebfa1f081ff40726121ec10f5feb26ac72d39249cc1c48a918e099be1437",
+  "model_name": "Decision-2.0-Vega-27B",
+  "receipts_sha256": {
+    "automap-card-pre": "84f95f33e938ee2b20e231e6ed70f499c14d35c5edfb4fd256c5096e66b0c1e0",
+    "automap-hub": "26c15653022780a0a81349f87ff9c397c3b880f1293c31a3f52cc4ebe4a0de17",
+    "automap-hub-tf518": "ac385a01716452b3930203071294d00d71040310180ccaa27b39bf8fafd54806",
+    "automap-post": "e852ee31327d256d92a4ba059684c14c3d11371450acba9f5cbfe1b1a3c93117",
+    "automap-pre": "b156fbf674340c7eaae27dbff05eb0934b98987f961d8177fe9c1119ba9dcc88",
+    "card-post": "d9b22bfba973e8404f56aae5b65937e54f5899598c303dbbbc469c2d2c66c527",
+    "card-pre": "c846989680f5eda855b015fb35e30d2845ce4b21281107fb9ac0c4a643a7dca6",
+    "download": "644d5dc0eb5e7a94ba836f4df15ea5e0fb324a9601cdb438575d43f448540ae8",
+    "post": "20d6ddf175d467193646a026190ed9aef5c7b08a8f8fc4bd8eebbab15400fc64",
+    "readback": "70291e9e880f9dc12b7a5c76f3590852877bad391f0812253762ca19016beb60",
+    "repeat-post": "46e8ece65c9641ded7147e5c9a5a009c817b3e84197d400f06bf4b2a1ac870c1",
+    "repeat-pre": "b83c40cafac6ae213bff2ec90149ec71abf5c9f651ffd7fa52e467f5aadc0617",
+    "tree": "bb346615eb4a837bd24a6f9dbf41661069840dd74605afe119c4b6d8905f89a9",
+    "upload": "079c3bd10cec86d1d22ece1d8d0cebbe938f2a68928d704dd90be2335b27394e"
+  },
+  "repo_id": "llm-semantic-router/Decision-2.0-Vega-27B",
+  "revision": "b689ee66b51a0c0c45faf42b63e5aa0eaf187bde",
+  "schema": "dev2-release-gate/1",
+  "supersedes": {
+    "gate_sha256": "e6965d75e1f7cac175522f19fbabedd333ad2e8136f8e69a0eb9fb7b200b4a3f",
+    "revision": "c0dba600087f582a1033830a2276d22e96e6324c"
+  },
+  "utc": "2026-10-02T03:34:10.961927+00:00"
+}

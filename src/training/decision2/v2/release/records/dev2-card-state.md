@@ -6,10 +6,21 @@ repositories with a standard, formal model-release card. Worktree `vllm-sr-dev2-
 
 ## Now
 
-- 04:55Z (2026-10-02) — **Three-hour check done.** Vega `b689ee66`, Lux `7195360d`, Sol `8ed41433` and Eos
-  `3de61185` were released by their workers with banner A (byte-identical to the preview). Nox stays `54b084f9`, left
-  to 5e7b8132, its single publisher, which has a release pending (COORDINATION 12:30). This worker publishes no
+- 04:55Z (2026-10-02) — **Three-hour check done** (worker 4c0a68cd). Vega `b689ee66`, Lux `7195360d` and Sol
+  `8ed41433` are fb5dd490's card-only revisions (entry below). Eos `3de61185` landed at 04:44Z after fb5dd490 skipped
+  it for b49d1f36's release. All four carry banner A, byte-identical to the preview. Nox stays `54b084f9` and is left
+  to 5e7b8132, its single publisher, which has a release pending (COORDINATION 12:30). Worker 4c0a68cd publishes no
   further revisions.
+- 04:20Z (2026-10-02) — **Round 4 roll-out** (user request 10:35 UTC+8, banner A on every card now; card worker
+  fb5dd490, worktree `vllm-sr-dev2-card4-rollout`). Card-only revisions, one at a time, each after a `main` check,
+  a read of the owner's records and a check that no publisher runs on any node:
+  - Vega 27B `1efb5cbb` → `b689ee66` (node E GPU7);
+  - Lux 9B `259a4550` → `7195360d` (node A GPU1, from its K-a13IB card with that card's own Index input);
+  - Sol 2B `b42b6ff3` → `8ed41433` (node E GPU7; 12:00 UTC+8 check: no 2B release running or imminent).
+
+  Skipped, their releases carry banner A: Nox 4B (5e7b8132's `4b-LHA10SD` release under the 11:35 directive, in
+  its last measurement; its driver pins `54b084f9`) and Eos 0.8B (b49d1f36's release imminent at the 12:00 check).
+  Every Hub check and the verification pass; no lease remains. Record: `dev2-card4-2026-10-02.md` section 4.
 - 02:10Z (2026-10-02) — **Round 4 (banner concept A):** default generator `cc7151c5b` / `032f33009`, merged at
   01:51Z. Kai 0.6B published as `479ea8d1`; verification passes, and the lease is removed. Eos, Sol, Nox, Lux and
   Vega are left to their pending releases. The three-hour check is due at 04:51Z. Record:
