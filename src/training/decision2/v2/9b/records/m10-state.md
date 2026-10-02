@@ -2,6 +2,19 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 05:15Z (13:15 UTC+8), worker 7e1c9ce8
+
+- **Arm (c) KSW** (amendments 1 / 2): data built (TRAIN `e5cc44bb…`, 146,600 rows, 60,272,054 native tokens, IB share
+  .1567); teacher K-a13IB rebuilt on node B with identity `4701ba41…` (second build; the first differed only in the
+  member paths recorded in `decision_config.json`). The labeling chain (`ksw.sh teach`, mirror `7ff21a506`) waits
+  for the GPU2 / 4 / 6 / 7 phase-1 flocks, then labels, locks KSW and starts phase-2 seeds on GPU2 / 4 / 6.
+- **Post chains relaunched** from `7ff21a506` for KUP, KIBM and KSW (the 04:52Z launch passed the mirror as a full
+  path, which the chain does not resolve; nothing had been built).
+- Seeds' full runs started ≈ 04:50Z; expected end ≈ 07:25Z (KIBM-s3 ≈ 10:05Z, KSW seeds ≈ 10:30Z).
+- Arm (d): the IB4 record has no release-safe phase yet (amendment 2 of IB4, re-audit pending).
+- Integrity notes for the gate: KUP's TRAIN is K-a13IB's (audited for its release); KSW's TRAIN rows are a subset
+  of K-a13IB's; KIBM adds IB3-r2 `mqa` rows, which need the row-level Index audit if KIBM passes.
+
 ## 2026-10-02 04:55Z (12:55 UTC+8), worker 7e1c9ce8
 
 - **Training (node B, image `f83b1d10`, leases `track=9b-m10`):** chains launched 04:40Z from mirror `240c8ca79`.
