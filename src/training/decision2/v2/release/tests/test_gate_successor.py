@@ -390,6 +390,75 @@ class SuccessorGateTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             gate.check(self.spec, self.decision, final=True)
 
+    def index_path(self, low: float) -> Path:
+        path = write(
+            self.root / "private" / "boot.json",
+            {
+                "schema": gate.INDEX_BOOT_SCHEMA,
+                "replicates": 2000,
+                "excluded": [],
+                "headline": {
+                    "base": 40.0,
+                    "new": 41.5,
+                    "delta": 1.5,
+                    "ci95": [low, low + 0.6],
+                },
+            },
+        )
+        self.spec["gate_profile"]["index_path"] = {"bootstrap": str(path)}
+        return path
+
+    def test_index_path_replaces_r1(self):
+        self.edit("paired", **{"ci95.low": -1.6, "ci95.high": 1.2})
+        self.assertEqual(self.failing(), ["1_successor_R1_v3"])
+        path = self.index_path(1.27)
+        items = self.items()
+        self.assertEqual(list(items)[0], gate.SUCCESSOR_R1_INDEX)
+        self.assertEqual(self.failing(), [], items)
+        evidence = items[gate.SUCCESSOR_R1_INDEX]["evidence"]
+        for private in ("40.0", "41.5", "1.27", "1.87"):
+            self.assertNotIn(private, evidence)
+        bound = gate.evidence_sha256(gate.gate_profile(self.spec))
+        self.assertEqual(bound["index_path"], layout.sha_file(path))
+        gate.check(self.spec, self.decision_for(), final=True)
+
+    def test_index_path_fails_on_either_criterion(self):
+        for v3_high, index_low in ((-0.1, 1.27), (1.2, -0.05), (1.2, 0.0)):
+            with self.subTest(v3_high=v3_high, index_low=index_low):
+                self.setUp()
+                self.edit("paired", **{"ci95.low": -1.6, "ci95.high": v3_high})
+                self.index_path(index_low)
+                self.assertEqual(self.failing(), [gate.SUCCESSOR_R1_INDEX])
+
+    def test_index_path_needs_a_full_panel_bootstrap(self):
+        path = self.index_path(1.27)
+        self.edit(str(path), excluded=["HoVer"])
+        self.assertEqual(self.failing(), [gate.SUCCESSOR_R1_INDEX])
+        self.spec["gate_profile"]["index_path"] = {}
+        with self.assertRaises(ValueError):
+            gate.gate_profile(self.spec)
+
+    def test_several_exposure_receipts(self):
+        second = write(
+            self.root / "exposure-2.json",
+            {**json.loads(Path(self.files["exposure"]).read_text()), "files": [1]},
+        )
+        self.spec["gate_profile"]["exposure"] = [
+            str(self.files["exposure"]),
+            str(second),
+        ]
+        items = self.items()
+        self.assertEqual(self.failing(), [], items)
+        self.assertIn(
+            "; 1 training files",
+            items["1_successor_R6_no_overlap_exposure"]["evidence"],
+        )
+        bound = gate.evidence_sha256(gate.gate_profile(self.spec))
+        self.assertEqual(bound["exposure_2"], layout.sha_file(second))
+        self.assertNotIn("exposure", bound)
+        self.edit(str(second), groups=[{"group": "g"}])
+        self.assertEqual(self.failing(), ["1_successor_R6_no_overlap_exposure"])
+
 
 class SuccessorNoOwnAndC1Test(SuccessorGateTest):
     """A tier without a Decision 1.0 model, and item 8 (C1 post-key) when named."""

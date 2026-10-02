@@ -32,6 +32,14 @@ collapsed; R4 mlx-diag card-eligible macro upper bound >= 0; R5 the tier gates
 human transfer vs that peer upper bound >= 0, no collapse); R6 no overlap
 exposure; R7 ``v2.eval.gates public231`` vs the current run is not REGRESSION.
 Its decision names the profile, ``current_revision`` and ``evidence_sha256``.
+``exposure`` may list several receipts (every one must be clean).
+
+The Index path for frontier-targeted finalists (coordinator decision
+2026-10-02 02:05) adds ``index_path: {"bootstrap": <private ix1-paired-boot/1
+file of the candidate minus the current revision>}``: R1 becomes R1' -- the
+paired v3 interval's upper bound > 0 (not significantly below) and the paired
+bootstrap's Index-delta 95% lower bound > 0. The bootstrap file stays private;
+the gate binds its SHA-256 and prints no Index value.
 
   evaluate  print the six gate items with evidence from a work directory
   profile   print item 1 (or the successor items) from a spec, before any upload
@@ -71,6 +79,8 @@ SUCCESSOR_ITEMS = (
     "1_successor_R7_public231",
 )
 SUCCESSOR_C1 = "1_successor_R8_c1_postkey"
+SUCCESSOR_R1_INDEX = "1_successor_R1p_v3_not_below_index_gain"
+INDEX_BOOT_SCHEMA = "ix1-paired-boot/1"
 MLX_PAIRED_9B = "dev2-9b-mlx-paired/1"
 C1_SUMMARY_SCHEMA = "dev2-c1-postkey/1/summary"
 DECISION_TYPES = ("choice", "noul", "score")
@@ -139,13 +149,20 @@ def successor_profile(spec: dict[str, Any], value: dict[str, Any]) -> dict[str, 
         or type(share) is not float
         or not 0 < share <= 1
         or not spec["card"].get("paired")
+        or ("index_path" in value and not (value["index_path"] or {}).get("bootstrap"))
     ):
         raise ValueError(
             "successor gate_profile needs run, current {revision (40 hex), gate, "
             "decision, run}, paired, types, mlx_paired, exposure, public231, tier "
-            "{reference (a card report key), v3_share in (0, 1], paired} and card.paired"
+            "{reference (a card report key), v3_share in (0, 1], paired} and card.paired "
+            "(and index_path.bootstrap when index_path is named)"
         )
     return value
+
+
+def _exposures(profile: dict[str, Any]) -> list[str]:
+    value = profile["exposure"]
+    return list(value) if isinstance(value, list) else [value]
 
 
 SUCCESSOR_EVIDENCE = ("paired", "types", "mlx_paired", "exposure", "public231")
@@ -157,13 +174,25 @@ def no_own_1_0(tier: dict[str, Any]) -> bool:
 
 
 def successor_names(profile: dict[str, Any]) -> tuple[str, ...]:
-    """R1-R7, plus R8 (the C1 post-key guard) when the profile names its summary."""
-    return SUCCESSOR_ITEMS + ((SUCCESSOR_C1,) if profile.get("c1_postkey") else ())
+    """R1 (R1' on the Index path)-R7, plus R8 (the C1 post-key guard) when the profile names its summary."""
+    first = (SUCCESSOR_R1_INDEX,) if profile.get("index_path") else SUCCESSOR_ITEMS[:1]
+    return (
+        first
+        + SUCCESSOR_ITEMS[1:]
+        + ((SUCCESSOR_C1,) if profile.get("c1_postkey") else ())
+    )
 
 
 def evidence_sha256(profile: dict[str, Any]) -> dict[str, str]:
     """The files a successor decision binds by SHA-256."""
-    files = {name: profile[name] for name in SUCCESSOR_EVIDENCE}
+    files = {name: profile[name] for name in SUCCESSOR_EVIDENCE if name != "exposure"}
+    exposures = _exposures(profile)
+    if len(exposures) == 1:
+        files["exposure"] = exposures[0]
+    else:
+        files.update({f"exposure_{i}": p for i, p in enumerate(exposures, 1)})
+    if profile.get("index_path"):
+        files["index_path"] = profile["index_path"]["bootstrap"]
     if profile.get("c1_postkey"):
         files["c1_postkey"] = profile["c1_postkey"]
     files["tier_paired"] = profile["tier"]["paired"]
@@ -272,9 +301,21 @@ def successor_items(spec: dict[str, Any], profile: dict[str, Any]) -> dict[str, 
             if axis == "v3":
                 low, high = _low_high(paired["ci95"])
                 delta = paired["point"]["delta"]["score"]
+                evidence = f"v3 {v3:.3f} vs current {current_v3:.3f}: {delta:+.2f} [{low:+.2f}, {high:+.2f}]"
+                if not profile.get("index_path"):
+                    return low > 0, evidence, problems
+                path = Path(profile["index_path"]["bootstrap"])
+                boot = _json(path)
+                if boot.get("schema") != INDEX_BOOT_SCHEMA or boot.get("excluded"):
+                    problems.append(
+                        "Index evidence is not a full-panel ix1 paired bootstrap"
+                    )
+                index_low = boot["headline"]["ci95"][0]
                 return (
-                    low > 0,
-                    f"v3 {v3:.3f} vs current {current_v3:.3f}: {delta:+.2f} [{low:+.2f}, {high:+.2f}]",
+                    high > 0 and index_low > 0,
+                    f"{evidence} (not below: {'yes' if high > 0 else 'NO'}); private Index paired "
+                    f"bootstrap {sha_file(path)[:12]} ({boot.get('replicates')} replicates): 95% lower "
+                    f"bound > 0: {'yes' if index_low > 0 else 'NO'}",
                     problems,
                 )
             h = paired["axis_ci95"]["H"]["delta"]
@@ -377,23 +418,21 @@ def successor_items(spec: dict[str, Any], profile: dict[str, Any]) -> dict[str, 
         return all(checks.values()), evidence, problems
 
     def r6() -> Any:
-        exposure = _json(Path(profile["exposure"]))
-        problems = (
-            []
-            if exposure.get("schema") == EXPOSURE_SCHEMA
-            else ["not an overlap exposure receipt"]
-        )
-        clean = (
-            exposure.get("groups") == []
-            and not exposure.get("matched_rows")
-            and exposure.get("methods_agree") is True
-        )
-        files = exposure.get("files") or []
-        return (
-            clean,
-            f"{len(files)} training files, {len(exposure.get('groups') or [])} exposed groups",
-            problems,
-        )
+        problems, clean, parts = [], True, []
+        for path in _exposures(profile):
+            exposure = _json(Path(path))
+            if exposure.get("schema") != EXPOSURE_SCHEMA:
+                problems.append("not an overlap exposure receipt")
+            clean = clean and (
+                exposure.get("groups") == []
+                and not exposure.get("matched_rows")
+                and exposure.get("methods_agree") is True
+            )
+            files = exposure.get("files") or []
+            parts.append(
+                f"{len(files)} training files, {len(exposure.get('groups') or [])} exposed groups"
+            )
+        return clean, "; ".join(parts), problems
 
     def r7() -> Any:
         public = _json(Path(profile["public231"]))

@@ -67,6 +67,7 @@ declare -A DIAGNOSTIC=(  # name -> "repository revision package-dir"
   [M16-2b-RASD-a25]="DEV2.0-2B a53cf66a0d9d492a84b6617b61e7ce35fcd03af0 /data/dev2/models/ix1/dec-indexpath/2b-RASD-a25-b5248c80-ra53cf66a"
   [K-a13IB]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/9b/K-a13IB-e51f9881"
   [K-a13-fp32]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/9b/K-a13-fp32-e51f9881"
+  [K-a13IB-bf16]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/9b/K-a13IB-bf16-e51f9881"
   [DEV2.0-4B-LHA10SD]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m15/DEV2.0-4B-LHA10SD-255021e0-r13d42143"
 )
 
