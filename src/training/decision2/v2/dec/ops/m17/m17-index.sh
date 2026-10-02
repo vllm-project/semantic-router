@@ -40,6 +40,8 @@
 #            -> node C ix1/audit/m17s2
 #   audit4-stage / audit4-run / audit4-status (ARM ignored): the same audit of wave 3's TRAIN files (node F's locked
 #            copies in data/4b-s4: 4b-SDMLIB4, 4b-LHS17ML) -> node C ix1/audit/m17s4
+#   audit5-run / audit5-status (ARM ignored): one audit of the six distinct TRAIN files of 4b-SDMLxALL's members, the
+#            hash-checked copies of audits 1-4 on node C (4b-LHS17UP trains on the 4b-LHS17SD file) -> ix1/audit/m17xall
 #   audit3-stage / audit3-run / audit3-status (ARM ignored): the same audit of the M15 4b-LHA10SDML TRAIN (node F
 #            m15/data/4b, locked fef6b036 in READY-m15.json) for its release -> node C ix1/audit/m17sdml
 #   audit-stage / audit-run / audit-status (ARM ignored): the row-level Index contamination audit (integrity check;
@@ -86,6 +88,7 @@ A=$R/audit/m17
 A2=$R/audit/m17s2
 A3=$R/audit/m17sdml
 A4=$R/audit/m17s4
+A5=$R/audit/m17xall
 SDML_TRAIN=fef6b036f33de6756dab083fd21ab462ec2975cfa63120f2452d3c9145d33dd4
 case "$STAGE" in
   refcopy-sdml)
@@ -127,6 +130,20 @@ case "$STAGE" in
       python3 -m v2.eval.ix1.contamination --panel $R/panel-7 --train 4b-SDMLIB4=$A4/train/4b-SDMLIB4.train.jsonl \
       --train 4b-LHS17ML=$A4/train/4b-LHS17ML.train.jsonl --workers 24 --out $A4/out; echo \$? > $A4/exit' > $A4/audit.log 2>&1 < /dev/null &"
     echo "$(date -u +%FT%TZ) audit4 started on node C (CPU)" ;;
+  audit5-run)
+    on c "test -f $S/v2/eval/ix1/contamination.py && test ! -e $A5/out" || { echo "no mirror, or already run" >&2; exit 3; }
+    trains=""
+    for x in "$A/train 4b-LHS17SD" "$A2/train 4b-LHS17IB4" "$A2/train 4b-LHS17IB4X" "$A3/train 4b-LHA10SDML" \
+      "$A4/train 4b-SDMLIB4" "$A4/train 4b-LHS17ML"; do
+      read -r d a <<< "$x"
+      want=$(on c "awk -v a=$a '\$1 == a { print \$2 }' $d/FILES.txt")
+      [[ "$want" =~ ^[0-9a-f]{64}$ ]] && [ "$(on c "sha256sum < $d/$a.train.jsonl | cut -c1-64")" = "$want" ] \
+        || { echo "$a: no hash-checked TRAIN copy in $d" >&2; exit 3; }
+      trains="$trains --train $a=$d/$a.train.jsonl"
+    done
+    on c "umask 077; mkdir -p $A5 && setsid nohup bash -c 'cd $S && CUDA_VISIBLE_DEVICES= HIP_VISIBLE_DEVICES= PYTHONHASHSEED=0 PYTHONPATH=$S nice -n 10 \
+      python3 -m v2.eval.ix1.contamination --panel $R/panel-7 $trains --workers 32 --out $A5/out; echo \$? > $A5/exit' > $A5/audit.log 2>&1 < /dev/null &"
+    echo "$(date -u +%FT%TZ) audit5 started on node C (CPU)" ;;
   audit3-stage)
     on c "test ! -e $A3/train/FILES.txt" || { echo "audit3 already staged" >&2; exit 3; }
     [ "$(on f "python3 -c 'import json; print(json.load(open(\"/data/dev2/runs/dec/m15/data/READY-m15.json\"))[\"arms\"][\"4b-LHA10SDML\"])'")" = $SDML_TRAIN ] \
@@ -158,10 +175,11 @@ case "$STAGE" in
       python3 -m v2.eval.ix1.contamination --panel $R/panel-7 --train 4b-LHS10SD=$A/train/4b-LHS10SD.train.jsonl \
       --train 4b-LHS17SD=$A/train/4b-LHS17SD.train.jsonl --workers 24 --out $A/out; echo \$? > $A/exit' > $A/audit.log 2>&1 < /dev/null &"
     echo "$(date -u +%FT%TZ) audit started on node C (CPU)" ;;
-  audit-status | audit2-status | audit3-status | audit4-status)
+  audit-status | audit2-status | audit3-status | audit4-status | audit5-status)
     [ "$STAGE" = audit2-status ] && A=$A2
     [ "$STAGE" = audit3-status ] && A=$A3
     [ "$STAGE" = audit4-status ] && A=$A4
+    [ "$STAGE" = audit5-status ] && A=$A5
     on c "cat $A/exit 2>/dev/null || echo running; test -f $A/out/audit.json && python3 - $A/out/audit.json" << 'EOF'
 import json, sys
 a = json.load(open(sys.argv[1]))
@@ -172,7 +190,7 @@ print(json.dumps({"index_rows": a["index_rows"], "planted": a["planted_control"]
 EOF
     exit 0 ;;
 esac
-case "$STAGE" in audit-stage | audit-run | audit2-stage | audit2-run | audit3-stage | audit3-run | audit4-stage | audit4-run | refcopy-sdml) exit 0 ;; esac
+case "$STAGE" in audit-stage | audit-run | audit2-stage | audit2-run | audit3-stage | audit3-run | audit4-stage | audit4-run | audit5-run | refcopy-sdml) exit 0 ;; esac
 [[ "$ARM" =~ ^(LHS|SDML)[0-9A-Za-z-]+(,(LHS|SDML)[0-9A-Za-z-]+)*$ ]] || { echo "bad ARM $ARM" >&2; exit 2; }
 NAME=$(name_of "${ARM%%,*}")
 PKG=$MD/$NAME-r13d42143 CK=$MD/$NAME-ckpt
