@@ -4,9 +4,12 @@
 
 Every NAME is a ``launch.sh`` DIAGNOSTIC entry of the mirror. In NAME order: the 86-request parity gate on one GPU
 (``launch.sh parity``), then each shard of the panel as its own ``launch.sh run --only k`` with shard k on the GPU it
-is dispatched to. A GPU is taken only if its lease owner file is absent, is a released eval-ix1 lease, or names one
-of these NAMEs (never another job's active lease, even between that job's shards), and rocm-smi shows it idle (the
-harness checks again and refuses a busy GPU). An attempt the harness refuses before anything ran (its parity
+is dispatched to. A GPU is taken only if its lease owner file is absent, is a released eval-ix1 lease, names one of
+these NAMEs, or is an abandoned eval-ix1 lease (its run finished: every shard directory ended, or its parity gate
+wrote parity.json; the file untouched for STALE seconds; the GPU idle over IDLE_POLLS consecutive polls, longer than
+any chain's gap between two shards), and rocm-smi shows it idle (the harness checks again and refuses a busy GPU).
+Another job's active lease is never taken, even between its shards; a taken-over owner file is kept as
+``owner.prev-4bif-<UTC>``. An attempt the harness refuses before anything ran (its parity
 reference pass or shard directory never started) is moved to ``void/`` with its write-once launcher record and
 dispatched again; a parity gate or shard that ran and failed stops its NAME (never rerun); the others go on. The
 panel is recorded in ``runs/NAME/4bif-panel``; progress goes to stdout.
@@ -29,19 +32,50 @@ def log(message: str) -> None:
     print(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), message, flush=True)
 
 
-def allowed(gpu: int, names: list[str]) -> bool:
+STALE = 15 * 60
+IDLE_POLLS = 3
+
+
+def abandoned(path: Path, text: str) -> bool:
+    if "track=eval-ix1" not in text.splitlines():
+        return False
+    if time.time() - path.stat().st_mtime < STALE:
+        return False
+    found = re.search(r"^run_dir=(.+)$", text, re.M)
+    if not found:
+        return False
+    run = Path(found.group(1))
+    if (run / "parity.json").is_file():
+        return True
+    shards = list(run.glob("shard-*"))
+    return bool(shards) and all((w / "end_epoch").is_file() for w in shards)
+
+
+def allowed(gpu: int, names: list[str], streak: dict[int, int]) -> str | None:
     path = LEASES / f"gpu{gpu}.lock" / "owner"
     text = path.read_text() if path.is_file() else ""
     if not text.strip():
-        return True
+        return "free"
     lines = text.splitlines()
     if "track=eval-ix1" in lines and any(
         l.startswith("status=released") for l in lines
     ):
-        return True
-    return any(
-        re.search(rf"^purpose=IX1 .* {re.escape(n)}$", text, re.M) for n in names
-    )
+        return "released"
+    if any(re.search(rf"^purpose=IX1 .* {re.escape(n)}$", text, re.M) for n in names):
+        return "ours"
+    if streak.get(gpu, 0) >= IDLE_POLLS and abandoned(path, text):
+        return "abandoned"
+    return None
+
+
+def keep_owner(gpu: int) -> None:
+    path = LEASES / f"gpu{gpu}.lock" / "owner"
+    if path.is_file():
+        stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+        (path.parent / f"owner.prev-4bif-{stamp}").write_text(path.read_text())
+        log(
+            f"gpu{gpu}: taking over an abandoned eval-ix1 lease (kept as owner.prev-4bif-{stamp})"
+        )
 
 
 def idle(gpus: list[int]) -> set[int]:
@@ -86,6 +120,7 @@ def main() -> None:
     parity: dict[str, str] = {}
     shards = {name: {k: "pending" for k in range(n)} for name in names}
     mine: dict[int, tuple] = {}
+    streak: dict[int, int] = {}
     for name in names:
         done = R / "parity" / name / "parity.json"
         if done.is_file():
@@ -152,13 +187,18 @@ def main() -> None:
             and not mine
         ):
             break
-        free = [g for g in gpus if g not in mine and allowed(g, names)]
-        free = [g for g in free if g in idle(free)] if free else []
+        now_idle = idle([g for g in gpus if g not in mine])
+        for g in gpus:
+            streak[g] = streak.get(g, 0) + 1 if g in now_idle else 0
+        why = {g: allowed(g, names, streak) for g in now_idle}
+        free = [g for g in gpus if why.get(g)]
         for name in active:
             if not free:
                 break
             if parity[name] == "pending":
                 g = free.pop(0)
+                if why[g] == "abandoned":
+                    keep_owner(g)
                 rows = panel / "compat-86.gold-free.jsonl.gz"
                 proc = subprocess.Popen(
                     [
@@ -195,6 +235,8 @@ def main() -> None:
                 if shards[name][k] != "pending":
                     continue
                 g = free.pop(0)
+                if why[g] == "abandoned":
+                    keep_owner(g)
                 order = [g if i == k else gpus[0] for i in range(n)]
                 result = subprocess.run(
                     [
