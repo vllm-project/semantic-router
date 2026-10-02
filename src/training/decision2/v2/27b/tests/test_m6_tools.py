@@ -912,7 +912,7 @@ class M6ScriptTest(unittest.TestCase):
             (["d", "0,8", "4"], "SHARDS"),
             (["d", "0,0", "4"], "lists a shard twice"),
             (["d", "0,1"], "no GPU listed"),
-            (["d", "0,1", "3"], "node d: GPU 3 is not allowed"),
+            (["d", "0,1", "8"], "node d: GPU 8 is not allowed"),
             (["c", "0,1", "0"], "node c: GPU 0 is not allowed"),
             (["c", "0,1", "1", "1"], "listed twice"),
         ):
@@ -973,7 +973,7 @@ class M6ScriptTest(unittest.TestCase):
         )
         for gpus, message in (
             ("c0", "not 'c0'"),
-            ("d3", "not 'd3'"),
+            ("d8", "not 'd8'"),
             ("d4 d4", "lists d4 twice"),
             ("4 d4", "lists d4 twice"),
             (" ", "1-8 entries"),

@@ -19,7 +19,8 @@
 #            point over the 86 compatibility requests on node D GPU4, vs IX1's A20r kit results -> must pass
 #   parity   launch.sh parity on node D GPU4 (detached; waits for it, ~0.1 GPU-h); parity/ARM/parity.json must pass
 #   run      m6-index-run.sh detached on each node with shards (log ix1/logs/m6-index-ARM-NODE.log): 8 shards on the
-#            entries of M6_INDEX_GPUS (default "d4 d5 d6 d7"; dN = node D GPU N in 4-7, cN = node C GPU N in 1-7, a bare
+#            entries of M6_INDEX_GPUS (default "d4 d5 d6 d7"; dN = node D GPU N in 0-7 (GPU0-3 are M6's own leases, used
+#            once its seeds ended, under an eval-ix1 owner naming the arm), cN = node C GPU N in 1-7, a bare
 #            N = node D), shard k on entry k mod n; node C needs stage-c, and gets node D's parity record (SHA-256 equal)
 #   status   per node and shard: records written, ended, exit code; GPU-h so far
 #   collect  after node C's shards ended 0: their result files (no Triton cache, no home) and launcher records ->
@@ -43,8 +44,8 @@ placement() {  # one line per node with shards: "NODE SHARDS GPU..." (shard k on
   (( ${#entries[@]} >= 1 && ${#entries[@]} <= 8 )) || { echo "M6_INDEX_GPUS: 1-8 entries" >&2; return 2; }
   for e in "${entries[@]}"; do
     [[ "$e" =~ ^[4-7]$ ]] && e=d$e
-    [[ "$e" =~ ^(d[4-7]|c[1-7])$ ]] ||
-      { echo "M6_INDEX_GPUS: node D GPU4-7 (d4-d7) or node C GPU1-7 (c1-c7), not '$e'" >&2; return 2; }
+    [[ "$e" =~ ^(d[0-7]|c[1-7])$ ]] ||
+      { echo "M6_INDEX_GPUS: node D GPU0-7 (d0-d7) or node C GPU1-7 (c1-c7), not '$e'" >&2; return 2; }
     [ -z "${seen[$e]:-}" ] || { echo "M6_INDEX_GPUS lists $e twice" >&2; return 2; }
     seen[$e]=1
     norm+=("$e")
@@ -275,12 +276,14 @@ r = json.load(open(sys.argv[1]))
 print(json.dumps({k: r[k] for k in ("rows", "statuses", "gpu_hours", "results_sha256", "panel_run_ids_sha256")}))
 EOF
     echo "private outputs in $LOCAL (never copy a value into a commit, record, gist or card)" ;;
-  release)
+  release)  # a GPU whose M6 owner was set aside (owner.m6-set-aside-<UTC>, node D GPU0-3) gets that owner back
     for node in d c; do
-      [ "$node" = d ] && gs="4 5 6 7" || gs="1 2 3 4 5 6 7"
+      [ "$node" = d ] && gs="0 1 2 3 4 5 6 7" || gs="1 2 3 4 5 6 7"
       "on$node" "docker ps --format '{{.Names}}' | grep -q '^$TAG'" &&
         { echo "an $ARM Index container is still running on node ${node^^}" >&2; exit 3; }
       "on$node" "for g in $gs; do f=/data/dev2/leases/gpu\$g.lock/owner; grep -q 'IX1 .* $ARM\$' \$f 2>/dev/null || continue; \
+        m=\$(ls -t /data/dev2/leases/gpu\$g.lock/owner.m6-set-aside-* 2> /dev/null | head -n 1); \
+        if [ -n \"\$m\" ]; then cp -p \"\$m\" \$f; echo node $node gpu\$g back to its 27b M6 owner; continue; fi; \
         printf 'track=eval-ix1\nstatus=released (27B M6 Index run of $ARM done)\nlast_job_end_utc=%s\n' \
         \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" > \$f; echo node $node gpu\$g released; done"
     done ;;

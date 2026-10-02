@@ -7,7 +7,8 @@
 # did. The GPU loops start 300 s apart so at most one 27B shard loads at a time; a loop stops at the first shard that
 # does not end with exit code 0 (rerun with launch.sh resume, IX1's procedure). Prints run IDs, statuses and times only.
 # Usage: m6-index-run.sh MIRROR_SHA ARM NODE SHARDS GPU...
-#   NODE    d (GPU4-7) or c (GPU1-7; GPU0 is a K8s pod and never used)
+#   NODE    d (GPU0-7: GPU4-7 shared Index GPUs, GPU0-3 M6's own leases once its seeds ended) or c (GPU1-7; GPU0 is a
+#           K8s pod and never used)
 #   SHARDS  comma-separated shard indices 0-7 that this node runs, e.g. 0,1,2,3
 # M6_INDEX_DRY=1 prints the shard -> GPU plan and exits before touching the node.
 set -euo pipefail
@@ -17,7 +18,7 @@ SHA=${1:?MIRROR_SHA} ARM=${2:?ARM}
 NODE=${3:?NODE} SHARDS=${4:?SHARDS}
 shift 4
 case "$NODE" in
-  d) ALLOWED='^[4-7]$' ;;
+  d) ALLOWED='^[0-7]$' ;;
   c) ALLOWED='^[1-7]$' ;;
   *) echo "NODE must be c or d, not $NODE" >&2; exit 2 ;;
 esac
