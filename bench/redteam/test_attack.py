@@ -229,8 +229,7 @@ def test_rate_gates_compare_unrounded_values(
     corpus = tmp_path / "behaviors.jsonl"
     corpus.write_text(
         "".join(
-            json.dumps({"goal": f"prompt-{index:05d}"}) + "\n"
-            for index in range(30000)
+            json.dumps({"goal": f"prompt-{index:05d}"}) + "\n" for index in range(30000)
         )
     )
     word_pool = tmp_path / "words.txt"
