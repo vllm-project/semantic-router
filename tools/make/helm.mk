@@ -477,8 +477,8 @@ _check-k8s:
 		echo "  - For remote clusters: check your kubeconfig and cluster connection"; \
 		echo ""; \
 		echo "$(YELLOW)[TIP]$(NC) You can use the following commands to start a local cluster:"; \
-		echo "  - minikube: make kube-up"; \
-		echo "  - kind: make kind-cluster-create"; \
+		echo "  - minikube: minikube start"; \
+		echo "  - kind: make create-cluster"; \
 		exit 1; \
 	fi
 	@echo "$(GREEN)[✓]$(NC) Kubernetes cluster is accessible"

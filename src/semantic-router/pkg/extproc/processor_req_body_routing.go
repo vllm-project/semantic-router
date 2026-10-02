@@ -33,6 +33,7 @@ type routeHeaderState struct {
 
 type providerDispatch struct {
 	logicalModel   string
+	backendModel   string
 	upstreamModel  string
 	backendAddress string
 	backendName    string
@@ -57,7 +58,7 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	if request == nil || ctx == nil || r == nil || r.Config == nil {
 		return nil, status.Error(codes.Internal, "neutral inference request is unavailable")
 	}
-	dispatch, err := r.resolveProviderDispatch(logicalModel, decisionName, useReasoning)
+	dispatch, err := r.resolveProviderDispatchForCandidate(logicalModel, decisionName, useReasoning, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +69,7 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	if changed {
 		request.Generation++
 	}
-	if err := r.prepareDispatchContextOverflow(ctx, request, dispatch.logicalModel); err != nil {
+	if err := r.prepareDispatchContextOverflow(ctx, request, dispatch.effectiveBackendModel()); err != nil {
 		return nil, err
 	}
 	if err := r.prepareAutomaticDispatch(ctx, request, dispatch); err != nil {
@@ -80,6 +81,9 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 		return nil, protocolErr
 	}
 	ctx.TargetFormat = dispatch.targetFormat
+	if !ctx.LooperRequest {
+		ctx.primaryBackendName = dispatch.backendName
+	}
 	// Bind response policy where the backend is selected.
 	ctx.ResponseVendor = resolveResponseVendor(dispatch.profile)
 	ctx.SemanticRequest = request
@@ -112,7 +116,8 @@ func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
 	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) error {
-	projected, err := r.projectRequestForBackend(*request, dispatch.logicalModel, dispatch.targetFormat)
+	backendModel := dispatch.effectiveBackendModel()
+	projected, err := r.projectRequestForBackend(*request, backendModel, dispatch.targetFormat)
 	if err != nil {
 		var protocolError *llmprotocol.ProtocolError
 		if errors.As(err, &protocolError) && ctx != nil {
@@ -123,7 +128,7 @@ func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
 	if err := r.validateDispatchRequirements(&projected, dispatch, ctx); err != nil {
 		return err
 	}
-	if err := r.providerCapabilityMismatch(dispatch.logicalModel, dispatch.targetFormat, llmprotocol.RequiredCapabilities(projected)); err != nil {
+	if err := r.providerCapabilityMismatch(backendModel, dispatch.targetFormat, llmprotocol.RequiredCapabilities(projected)); err != nil {
 		var protocolError *llmprotocol.ProtocolError
 		if errors.As(err, &protocolError) && ctx != nil {
 			ctx.ImmediateProtocolError = protocolError
@@ -167,27 +172,61 @@ func (r *OpenAIRouter) resolveProviderDispatch(
 	decisionName string,
 	useReasoning bool,
 ) (*providerDispatch, error) {
-	backendAddress, backendName, found, err := r.Config.ResolvePrimaryBackendForModel(logicalModel)
+	return r.resolveProviderDispatchForBackendModel(logicalModel, logicalModel, decisionName, useReasoning)
+}
+
+func (r *OpenAIRouter) resolveProviderDispatchForCandidate(
+	logicalModel string,
+	decisionName string,
+	useReasoning bool,
+	ctx *RequestContext,
+) (*providerDispatch, error) {
+	return r.resolveProviderDispatchForBackendModel(
+		logicalModel,
+		ctx.backendModelForCandidate(logicalModel),
+		decisionName,
+		useReasoning,
+	)
+}
+
+func (r *OpenAIRouter) resolveProviderDispatchForBackendModel(
+	logicalModel string,
+	backendModel string,
+	decisionName string,
+	useReasoning bool,
+) (*providerDispatch, error) {
+	backendAddress, backendName, found, err := r.Config.ResolvePrimaryBackendForModel(backendModel)
 	if err != nil {
-		return nil, fmt.Errorf("resolve backend for model %q: %w", logicalModel, err)
+		return nil, fmt.Errorf("resolve backend for model %q: %w", backendModel, err)
 	}
 	if !found {
-		return nil, fmt.Errorf("model %q has no configured backend", logicalModel)
+		return nil, fmt.Errorf("model %q has no configured backend", backendModel)
 	}
 	profile, err := r.Config.GetProviderProfileForEndpoint(backendName)
 	if err != nil {
-		return nil, fmt.Errorf("resolve provider profile for model %q: %w", logicalModel, err)
+		return nil, fmt.Errorf("resolve provider profile for model %q: %w", backendModel, err)
 	}
-	targetFormat, err := wireFormatForModel(r.Config.GetModelAPIFormat(logicalModel))
+	targetFormat, err := wireFormatForModel(r.Config.GetModelAPIFormat(backendModel))
 	if err != nil {
-		return nil, fmt.Errorf("model %q: %w", logicalModel, err)
+		return nil, fmt.Errorf("model %q: %w", backendModel, err)
 	}
 	return &providerDispatch{
-		logicalModel: logicalModel, upstreamModel: r.Config.ResolveExternalModelID(logicalModel, backendName),
+		logicalModel: logicalModel, backendModel: backendModel,
+		upstreamModel:  r.Config.ResolveExternalModelID(logicalModel, backendName),
 		backendAddress: backendAddress, backendName: backendName,
 		profile: profile, targetFormat: targetFormat,
 		decisionName: decisionName, useReasoning: useReasoning,
 	}, nil
+}
+
+func (dispatch *providerDispatch) effectiveBackendModel() string {
+	if dispatch == nil || dispatch.backendModel == "" {
+		if dispatch == nil {
+			return ""
+		}
+		return dispatch.logicalModel
+	}
+	return dispatch.backendModel
 }
 
 func (r *OpenAIRouter) prepareProviderRequest(
@@ -222,7 +261,8 @@ func (r *OpenAIRouter) applyDispatchDecision(
 	changed := false
 	if dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
 		changed = r.applySemanticReasoningMode(
-			request, dispatch.logicalModel, dispatch.targetFormat, dispatch.useReasoning, ctx.decisionForCandidate(dispatch.logicalModel),
+			request, dispatch.effectiveBackendModel(), dispatch.targetFormat, dispatch.useReasoning,
+			ctx.decisionForBackend(dispatch.logicalModel),
 		)
 	}
 	injected, err := r.addSemanticSystemPromptIfConfigured(
@@ -274,11 +314,11 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 	// extra header can never replace the credential selected for this request.
 	appendProfileHeaders(&state.setHeaders, dispatch.profile)
 	if errorResponse := r.appendProviderCredential(
-		state, dispatch.logicalModel, dispatch.backendName, ctx,
+		state, dispatch.effectiveBackendModel(), dispatch.backendName, ctx,
 	); errorResponse != nil {
 		return errorResponse
 	}
-	appendRoutingHeaders(&state.setHeaders, dispatch.logicalModel)
+	appendRoutingHeaders(&state.setHeaders, dispatch.effectiveBackendModel())
 	setProviderRequestPath(&state.setHeaders, dispatch.profile, dispatch.targetFormat)
 	r.applyDecisionHeaderMutations(state, ctx)
 	// Body-stage model and path mutations can change the Envoy route selected

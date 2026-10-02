@@ -332,6 +332,47 @@ class TestK8sBackend:
             backend.status()
         assert raised.value.code == 17
 
+    def test_wait_for_pods_failure_raises_and_prints_diagnostics(self, monkeypatch):
+        backend = K8sBackend.__new__(K8sBackend)
+        backend.namespace = "test-ns"
+        backend.context = None
+        backend.release_name = "sr"
+
+        diagnostic_calls = []
+        monkeypatch.setattr(
+            backend,
+            "_run",
+            lambda *_args, **_kwargs: subprocess.CompletedProcess(
+                args=[], returncode=1
+            ),
+        )
+        monkeypatch.setattr(backend, "_run_display", diagnostic_calls.append)
+
+        with pytest.raises(SystemExit) as raised:
+            backend._wait_for_pods()
+        assert raised.value.code == 1
+        assert diagnostic_calls, "failed wait must print pod diagnostics"
+        assert any("get" in str(part) for part in diagnostic_calls[0])
+
+    def test_wait_for_pods_success_stays_silent(self, monkeypatch):
+        backend = K8sBackend.__new__(K8sBackend)
+        backend.namespace = "test-ns"
+        backend.context = None
+        backend.release_name = "sr"
+
+        diagnostic_calls = []
+        monkeypatch.setattr(
+            backend,
+            "_run",
+            lambda *_args, **_kwargs: subprocess.CompletedProcess(
+                args=[], returncode=0
+            ),
+        )
+        monkeypatch.setattr(backend, "_run_display", diagnostic_calls.append)
+
+        backend._wait_for_pods()
+        assert diagnostic_calls == []
+
     def test_label_for_service_router(self):
         backend = K8sBackend.__new__(K8sBackend)
         backend.release_name = "sr"

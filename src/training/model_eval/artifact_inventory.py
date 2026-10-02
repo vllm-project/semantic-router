@@ -22,7 +22,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CONFIG = REPO_ROOT / "config" / "config.yaml"
-HF_ORG = "llm-semantic-router"
+HF_ORG = "vllm-sr"
 MODEL_PREFIX = "models/"
 MODEL_PATH_KEYS = ("model_id", "model_path")
 

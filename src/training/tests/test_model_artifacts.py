@@ -54,8 +54,8 @@ class ModelArtifactIndexTest(unittest.TestCase):
         self.assertEqual(
             set(safety),
             {
-                "llm-semantic-router/mmbert-safety-binary-merged",
-                "llm-semantic-router/mmbert-safety-binary-hazard",
+                "vllm-sr/mmbert-safety-binary-merged",
+                "vllm-sr/mmbert-safety-binary-hazard",
             },
         )
         self.assertEqual(
