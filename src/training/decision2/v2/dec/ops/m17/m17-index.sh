@@ -25,6 +25,10 @@
 #            bootstrap, and the transfer-only weighted delta (family delta without HoVer, When2Call, iSarcasmEval,
 #            GSM8K and BPoMP)
 #   release  NODE "GPUS": owner files back to track=dec-m17 (no M17 Index container running)
+#   audit-stage / audit-run / audit-status (ARM ignored): the row-level Index contamination audit (integrity check;
+#            v2.eval.ix1.contamination, the IX1 method with 200 planted controls, as the 4B worker's audit4b.sh) of both
+#            M17 TRAIN files on node C, CPU only; the files come from node E's data lock copies (hash-checked);
+#            outputs private (node C ix1/audit/m17/out); counts only are printed
 set -euo pipefail
 SHA=${1:?MIRROR_SHA} ARM=${2:?ARM} STAGE=${3:?STAGE} NODE=${4:-} GPUS=${5:-}
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "MIRROR_SHA must be a full commit SHA" >&2; exit 2; }
@@ -53,6 +57,37 @@ hop() {  # <from> <to> <parent> <name>: tar stream through node A, then equal pe
   [ -n "$a" ] && [ "$a" = "$b" ] || { echo "$item: node $to copy differs from node $from" >&2; exit 3; }
   echo "$item node $from -> node $to: $(wc -l <<< "$a") files, SHA-256 lists equal"
 }
+A=$R/audit/m17
+case "$STAGE" in
+  audit-stage)
+    on c "test ! -e $A/train/FILES.txt" || { echo "audit already staged" >&2; exit 3; }
+    on c "umask 077; mkdir -p $A/train"
+    for x in LHS10SD=72fa2d844fbf94be890858b9b66af0e26e12a62011929bf1eb0de1ebe93ef025 \
+      LHS17SD=14bce13ce926b354e214581e7cf4718d03f80c975b36dbce6731fbc6517e25a0; do
+      a=${x%%=*} want=${x#*=}
+      on a "ssh $KEY $(addr e) 'cat /data/dev2/runs/dec/m17/data/4b/4b-$a/train.jsonl' | ssh $KEY $(addr c) 'umask 077; cat > $A/train/4b-$a.train.jsonl'"
+      [ "$(on c "sha256sum < $A/train/4b-$a.train.jsonl | cut -c1-64")" = "$want" ] || { echo "4b-$a TRAIN copy is not $want" >&2; exit 3; }
+      on c "printf '4b-%s %s rows %s\n' $a $want \"\$(wc -l < $A/train/4b-$a.train.jsonl)\" >> $A/train/FILES.txt"
+    done
+    on c "cat $A/train/FILES.txt" ;;
+  audit-run)
+    on c "test -f $S/v2/eval/ix1/contamination.py && test -f $A/train/FILES.txt && test ! -e $A/out" || { echo "not staged, or already run" >&2; exit 3; }
+    on c "umask 077; setsid nohup bash -c 'cd $S && CUDA_VISIBLE_DEVICES= HIP_VISIBLE_DEVICES= PYTHONHASHSEED=0 PYTHONPATH=$S nice -n 10 \
+      python3 -m v2.eval.ix1.contamination --panel $R/panel-7 --train 4b-LHS10SD=$A/train/4b-LHS10SD.train.jsonl \
+      --train 4b-LHS17SD=$A/train/4b-LHS17SD.train.jsonl --workers 24 --out $A/out; echo \$? > $A/exit' > $A/audit.log 2>&1 < /dev/null &"
+    echo "$(date -u +%FT%TZ) audit started on node C (CPU)" ;;
+  audit-status)
+    on c "cat $A/exit 2>/dev/null || echo running; test -f $A/out/audit.json && python3 - $A/out/audit.json" << 'EOF'
+import json, sys
+a = json.load(open(sys.argv[1]))
+print(json.dumps({"index_rows": a["index_rows"], "planted": a["planted_control"]["found"],
+                  "missed": len(a["planted_control"]["missed"]),
+                  "sets": {k: {"lines": v["training_lines"], "duplicate_rows": v["duplicate_rows"],
+                               "item_rows": v["item_rows"]} for k, v in a["training_sets"].items()}}))
+EOF
+    exit 0 ;;
+esac
+case "$STAGE" in audit-stage | audit-run) exit 0 ;; esac
 case "$ARM" in
   LHS10SD | LHS17SD | LHS10SD,LHS17SD | LHS17SD,LHS10SD) ;;
   *) echo "bad ARM $ARM" >&2; exit 2 ;;
