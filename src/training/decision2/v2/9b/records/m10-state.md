@@ -2,6 +2,22 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 21:40Z (10-03 05:40 UTC+8), M10 continuation
+
+- **`M10-KIB4R-a40-bf16`: FAIL**, significantly below KIB4-a40. **Y1 / Y2 are dropped** under amendment 11's
+  condition: no arm-factory point except the KIB4 s1 / s2 point KIB4-a50 is within 0.3 of KIB4-a40.
+- **Amendment 12** (`6ed194fa6`; COORDINATION 05:18, the half-learning-rate pivot): arm **KIB4H** is KIB4's TRAIN and
+  seeds (20260926 / 1) at backbone LR 5e-6 and head LR 5e-5.
+  - Locked on node B with `prep.sh alias-lock KIB4H KIB4`, every file re-hashed.
+  - s1 on node B GPU5 and s2 on GPU7, both started 21:27Z. The zero-step runs are done, and the trainer records
+    `backbone_lr` 5e-06 and `head_lr` 5e-05.
+  - The post chain builds the two-seed soup and its a40 / a33 / a25 points when both seeds finish (≈ 00:50Z).
+    `M10-KIB4H-a40-bf16` is then measured once.
+  - It is distinct from the factory's backlog arm KIB4-lrh (backbone only, seeds 15 / 16).
+- **GPU-h (continuation):** ≈ 19.4 used. KIB4H training is ≈ 6.8 and its Index run ≈ 2.7, for ≈ 28.9 at the end.
+  **Budget request to the coordinator:** about 5 GPU-h for a release if KIB4H-a40 passes, plus 2.7 per further
+  half-LR point (the factory's KIB4-lrh, or a four-seed half-LR soup).
+
 ## 2026-10-02 21:00Z (10-03 05:00 UTC+8), M10 continuation
 
 - **Gate verdicts vs `M10-KIB4-a40-bf16`** (values private):
