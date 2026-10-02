@@ -4,6 +4,16 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17` (r
 stopped after creating the worktree, nothing had run). Prereg `da770d98a`, ops `1ce8b2220` (mirror on nodes E / F),
 data lock `4f68f1eb0`.
 
+## 2026-10-02 04:35Z — candidates handed to the Nox-4B publisher
+
+- Coordinator interrupt (12:25 UTC+8): M17 does not publish; 4B Index-first worker 5e7b8132 is the single Nox-4B
+  publisher. Both BF16 candidates are handed over with their integrity evidence in
+  [`dec-m17-handover-2026-10-02.md`](dec-m17-handover-2026-10-02.md). Every hash in it was re-read on the nodes at 04:30Z.
+- Formal typed-FINAL (item 3) already exists for both arms (types OK / OK / OK); no new run was needed.
+- Still running: the two CPU paired bootstraps vs `DEV2.0-4B-LH` on node C (detached; exit files pending). Their
+  output is fetched to the private directory only.
+- No M17 GPU lease or container is active. Next: stage-2 prereg (swap + typed upweight, + a75 interpolation).
+
 ## 2026-10-02 03:55Z — references complete; Index runs finishing
 
 - **Development (node A, vs `4b-LH-f`; references under amendment 1; the arms rules ran once, 03:30Z):**
