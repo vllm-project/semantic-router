@@ -1,0 +1,22 @@
+{
+  "schema": "dev2-c1-recheck-spec/1",
+  "name": "r3-ib4p1",
+  "item_set": "v1.2",
+  "record": "v2/eval/records/c1-recheck-r3-2026-10-02.md",
+  "datasets": [
+    {
+      "key": "ib4-p1",
+      "label": "IB4 phase 1 TRAIN (sqa2, isarc2, sentfin3, fc_pick)",
+      "source": "llm-semantic-router/decision-2.0-training-data m6/ib4/p1/ib4.train.jsonl (revision in v2/data/records/ib4-p1-results-2026-10-02.md)",
+      "path": "/data/dev2/private/data/ib4/p1/final/out/ib4.train.jsonl",
+      "sha256": "6045b456d4b3032db4b76d70d792e3e9e30aad13e16a8f86fb3e99bc325806fb",
+      "rows": 9459
+    }
+  ],
+  "arms": [],
+  "notes": [
+    "No arm uses IB4 phase 1 yet. A future arm that adds it as a block is covered by this file's verdict for its IB4 phase-1 rows; a mixture file that adds it needs its own recheck or a raw-line coverage entry in the registry.",
+    "The node-A path is the data track's final output; its read-back copy from the published revision has the same SHA-256.",
+    "Prepared by the IB4 data worker, who ran --verify-only only; the keyed run is the eval custodian's."
+  ]
+}
