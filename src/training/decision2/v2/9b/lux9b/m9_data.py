@@ -6,16 +6,17 @@ they train on gold only under ``--teacher-partial``). ``--exclude-family`` drops
 ablation drops the in-distribution ones). The build refuses (no silent drop) any IB row whose id, lineage group or
 canonical input hash also occurs in x60, or whose id or input hash occurs earlier in the build (an IB lineage group
 holds several rows by design, so groups are checked against x60 only). IB token counts come from the releases'
-``*.tokens.jsonl``.
+``*.tokens.jsonl``. ``--ib3 F`` / ``--ib4 F`` (9B M10) append further blocks after IB2 under the same rules.
 
 Stage 3 (amendment 3), ``--match-tokens N``: the same IB blocks at matched tokens. x60 is first cut to N minus the
 kept IB native tokens in whole groups, stratified by pool x source x task type x language as the x60 recipe was
 (``lux9b.m3_data.recipe_budget``, M6's KH cut; native tokens and pools from the x60 ids file ``--x60-ids``). The
 kept x60 lines and their own-Lux target lines stay byte for byte in file order; every kept IB row needs a token
-count. Duplicate checks run against the whole of x60, as in stage 2.
+count. Duplicate checks run against the whole of x60, as in stage 2. ``--cut-language en`` (9B M10 KSW) cuts only
+the all-English groups; every group with another language is kept whole.
 
-usage: m9_data.py --x60-dir D --ib1 F --ib2 F [--exclude-family NAME ...]
-                  [--match-tokens N --x60-ids F --keep-seed S [--keep-tolerance T]] --output DIR
+usage: m9_data.py --x60-dir D --ib1 F --ib2 F [--ib3 F] [--ib4 F] [--exclude-family NAME ...]
+                  [--match-tokens N --x60-ids F --keep-seed S [--keep-tolerance T] [--cut-language L]] --output DIR
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ import argparse
 import hashlib
 import json
 import shutil
+import sys
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -50,10 +52,22 @@ def tokens_by_id(path: Path) -> dict[str, int]:
 
 
 def x60_cut(
-    rows: list[dict[str, Any]], ids_path: Path, budget: int, seed: str, tolerance: float
+    rows: list[dict[str, Any]],
+    ids_path: Path,
+    budget: int,
+    seed: str,
+    tolerance: float,
+    cut_language: str | None = None,
 ) -> tuple[set[str], dict[str, Any]]:
-    """Ids of the x60 rows kept by the stratified whole-group cut to ``budget`` native tokens."""
-    from lux9b.m3_data import recipe_budget
+    """Ids of the x60 rows kept by the stratified whole-group cut to ``budget`` native tokens.
+
+    With ``cut_language`` only groups whose every row has that language are cut; every other group is kept whole
+    and its tokens come off the budget first."""
+    try:
+        from lux9b.m3_data import recipe_budget
+    except ModuleNotFoundError:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from lux9b.m3_data import recipe_budget
 
     entries: dict[str, dict[str, Any]] = {}
     with ids_path.open(encoding="utf-8") as stream:
@@ -70,8 +84,25 @@ def x60_cut(
             )
         native[row["id"]] = int(entry["native"])
         pool_of[row["id"]] = entry["pool"]
-    kept, stats = recipe_budget(rows, native, pool_of, budget, seed, tolerance)
+    fixed: list[dict[str, Any]] = []
+    if cut_language is not None:
+        mixed = {r["group_id"] for r in rows if r["language"] != cut_language}
+        fixed = [r for r in rows if r["group_id"] in mixed]
+        rows = [r for r in rows if r["group_id"] not in mixed]
+    fixed_tokens = sum(native[r["id"]] for r in fixed)
+    kept, stats = recipe_budget(
+        rows, native, pool_of, budget - fixed_tokens, seed, tolerance
+    )
+    kept = fixed + kept
     kept_ids = {r["id"] for r in kept}
+    if cut_language is not None:
+        stats |= {
+            "cut_language": cut_language,
+            "fixed_rows": len(fixed),
+            "fixed_groups": len({r["group_id"] for r in fixed}),
+            "fixed_native_tokens": fixed_tokens,
+            "native_tokens": stats["native_tokens"] + fixed_tokens,
+        }
     by_type: Counter[str] = Counter()
     for r in kept:
         by_type[r["task_type"]] += native[r["id"]]
@@ -89,16 +120,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--x60-dir", type=Path, required=True)
     parser.add_argument("--ib1", type=Path, required=True)
     parser.add_argument("--ib2", type=Path, required=True)
+    parser.add_argument("--ib3", type=Path)
+    parser.add_argument("--ib4", type=Path)
     parser.add_argument("--exclude-family", action="append", default=[])
     parser.add_argument("--match-tokens", type=int)
     parser.add_argument("--x60-ids", type=Path)
     parser.add_argument("--keep-seed")
     parser.add_argument("--keep-tolerance", type=float, default=0.01)
+    parser.add_argument("--cut-language")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     match = args.match_tokens is not None
     if match and not (args.x60_ids and args.keep_seed):
         parser.error("--match-tokens needs --x60-ids and --keep-seed")
+    if args.cut_language and not match:
+        parser.error("--cut-language goes with --match-tokens")
     args.output.mkdir(parents=True, exist_ok=False)
     x60_train, x60_teacher = (
         args.x60_dir / "train.jsonl",
@@ -128,7 +164,12 @@ def main(argv: list[str] | None = None) -> int:
     ib_by_type: Counter[str] = Counter()
     sources: dict[str, Any] = {}
     ib_lines: list[bytes] = []
-    for name, path in (("ib1", args.ib1), ("ib2", args.ib2)):
+    blocks = (
+        [("ib1", args.ib1), ("ib2", args.ib2)]
+        + ([("ib3", args.ib3)] if args.ib3 else [])
+        + ([("ib4", args.ib4)] if args.ib4 else [])
+    )
+    for name, path in blocks:
         counts = tokens_by_id(
             path.with_name(path.name.replace(".jsonl", ".tokens.jsonl"))
         )
@@ -164,6 +205,7 @@ def main(argv: list[str] | None = None) -> int:
             args.match_tokens - ib_tokens,
             args.keep_seed,
             args.keep_tolerance,
+            args.cut_language,
         )
         with out_train.open("xb") as out, x60_train.open("rb") as stream:
             n = 0

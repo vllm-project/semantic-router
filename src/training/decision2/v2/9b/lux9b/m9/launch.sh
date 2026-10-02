@@ -24,7 +24,7 @@ fi
 node=${M9_NODE:?set M9_NODE=c or a}
 case $node in
   c) allowed=" 1 2 3 4 5 6 7 " lux=/data/dev2/models/Decision-1.0-Lux-9B/bd45a30aee8c84032791c245c70f86dee5389cc8 ;;
-  a) allowed=" 6 7 " lux=/data/decision20-20260926/models/Decision-1.0-Lux-9B ;;
+  a) allowed=" ${M9_A_GPUS:-6 7} " lux=/data/decision20-20260926/models/Decision-1.0-Lux-9B ;;
   *) echo "unknown node $node" >&2; exit 2 ;;
 esac
 image=sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54
@@ -55,8 +55,9 @@ argv=(docker run --name "m9-$job" --rm --network none --shm-size 16g
 label="node ${node^^} CPU"
 if [[ -n $gpu ]]; then
   [[ $allowed == *" $gpu "* ]] || { echo "GPU $gpu on node $node is not an M9 GPU" >&2; exit 2; }
-  grep -qs "track=9b-m9" "/data/dev2/leases/gpu$gpu.lock/owner" \
-    || { echo "lease gpu$gpu.lock/owner does not name 9b-m9" >&2; exit 2; }
+  lease_track=${M9_LEASE_TRACK:-9b-m9}
+  grep -qs "track=$lease_track" "/data/dev2/leases/gpu$gpu.lock/owner" \
+    || { echo "lease gpu$gpu.lock/owner does not name $lease_track" >&2; exit 2; }
   bdf=$(amd-smi list 2>/dev/null | awk -v g="GPU: $gpu" '$0 == g {getline; print tolower($2)}')
   render=$(readlink -f "/dev/dri/by-path/pci-${bdf}-render")
   [[ -c $render ]] || { echo "no render node for GPU $gpu ($bdf)" >&2; exit 2; }

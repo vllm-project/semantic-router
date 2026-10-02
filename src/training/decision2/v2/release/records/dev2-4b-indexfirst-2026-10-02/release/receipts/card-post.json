@@ -1,0 +1,24 @@
+{
+  "code_sha256": "af203777ba7c5cfdb4be6f0a97c5b361ccfbd9f231a930bdb99c77553cdd8df1",
+  "comparison": {
+    "category_changes": 0,
+    "max_abs_drift": 0.0,
+    "missing": 0,
+    "slots": 3
+  },
+  "example": "transformers",
+  "exit_code": 0,
+  "interpreter_flags": [
+    "-s",
+    "-B"
+  ],
+  "mode": "card",
+  "passed": true,
+  "readme_sha256": "b1582dcb37fd5cf747818612c5d32675223d8c8b08080ca97e6b6eea1664be37",
+  "schema": "dev2-release-examples/1",
+  "seconds": 33.18457988393493,
+  "sites": [
+    "/opt/decision-fla"
+  ],
+  "stderr_tail": ""
+}
