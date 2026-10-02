@@ -41,21 +41,6 @@ paired v3 interval's upper bound > 0 (not significantly below) and the paired
 bootstrap's Index-delta 95% lower bound > 0. The bootstrap file stays private;
 the gate binds its SHA-256 and prints no Index value.
 
-The Index-first rule (user decision 2026-10-02 09:55, superseding the Index
-path and items 1-8 as release blockers) names ``gate_profile: {"name":
-"index_first", "run", "current": {revision, gate, decision, run}, "index":
-{"bootstrap", "receipt", "reference_receipt"}, "types", "contamination":
-{"audit", "training_set"}, "references": {name: path, ...}}``. Item 1 becomes
-I1 the full-panel ix1 paired bootstrap of the release weights minus the
-current revision's weights (``receipt`` / ``reference_receipt``: their IX1 run
-receipts, bound to the bootstrap inputs and to both identities) with a 95%
-lower bound > 0 over >= 2,000 replicates; I2 no decision type collapsed on
-the scored run; I3 the row-level Index contamination audit of the training
-rows (planted control complete, the named training set present). The
-references (v3, human transfer, mlx-diag, public 231, C1) are reported, not
-gating: the decision binds their files by SHA-256. Package parity and the Hub
-checks stay items 2-7.
-
   evaluate  print the six gate items with evidence from a work directory
   profile   print item 1 (or the successor items) from a spec, before any upload
   seal      write <work>/receipts/gate.json if every item passes
@@ -96,15 +81,6 @@ SUCCESSOR_ITEMS = (
 SUCCESSOR_C1 = "1_successor_R8_c1_postkey"
 SUCCESSOR_R1_INDEX = "1_successor_R1p_v3_not_below_index_gain"
 INDEX_BOOT_SCHEMA = "ix1-paired-boot/1"
-INDEX_FIRST = "index_first"
-INDEX_FIRST_ITEMS = (
-    "1_index_first_I1_index_gain",
-    "1_index_first_I2_no_type_collapsed",
-    "1_index_first_I3_contamination_audit",
-)
-INDEX_RECEIPT_SCHEMA = "ix1-run-receipt/1"
-CONTAMINATION_SCHEMA = "ix1-contamination/1"
-INDEX_MIN_REPLICATES = 2000
 MLX_PAIRED_9B = "dev2-9b-mlx-paired/1"
 C1_SUMMARY_SCHEMA = "dev2-c1-postkey/1/summary"
 DECISION_TYPES = ("choice", "noul", "score")
@@ -510,175 +486,13 @@ def successor_items(spec: dict[str, Any], profile: dict[str, Any]) -> dict[str, 
     }
 
 
-def index_first_profile(spec: dict[str, Any], value: dict[str, Any]) -> dict[str, Any]:
-    current, index = value.get("current") or {}, value.get("index") or {}
-    audit = value.get("contamination") or {}
-    references = value.get("references") or {}
-    if (
-        not value.get("run")
-        or not value.get("types")
-        or not all(current.get(k) for k in ("gate", "decision", "run"))
-        or not re.fullmatch(r"[0-9a-f]{40}", str(current.get("revision", "")))
-        or not all(index.get(k) for k in ("bootstrap", "receipt", "reference_receipt"))
-        or not all(audit.get(k) for k in ("audit", "training_set"))
-        or not isinstance(references, dict)
-        or not all(isinstance(p, str) and p for p in references.values())
-        or not spec["card"].get("paired")
-    ):
-        raise ValueError(
-            "index_first gate_profile needs run, current {revision (40 hex), gate, decision, run}, "
-            "index {bootstrap, receipt, reference_receipt}, types, contamination {audit, "
-            "training_set}, references {name: path} and card.paired"
-        )
-    return value
-
-
-def index_first_evidence_sha256(profile: dict[str, Any]) -> dict[str, str]:
-    """The files an index_first decision binds by SHA-256 (references included, not gating)."""
-    files = {
-        "index_bootstrap": profile["index"]["bootstrap"],
-        "index_receipt": profile["index"]["receipt"],
-        "index_reference_receipt": profile["index"]["reference_receipt"],
-        "types": profile["types"],
-        "contamination_audit": profile["contamination"]["audit"],
-        "current_gate": profile["current"]["gate"],
-        "current_decision": profile["current"]["decision"],
-        **{f"reference_{k}": p for k, p in (profile.get("references") or {}).items()},
-    }
-    return {name: sha_file(Path(path)) for name, path in sorted(files.items())}
-
-
-def index_first_items(spec: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
-    """Item 1 under the Index-first rule: I1 Index gain, I2 no type collapsed, I3 contamination audit."""
-    scored = spec.get("scored") or {}
-    current = profile["current"]
-    run, current_run = Path(profile["run"]), Path(current["run"])
-    try:
-        chain = []
-        if sha_file(run / "REPORT.json") != scored.get("report_sha256"):
-            chain.append("candidate run is not the scored run")
-        if (
-            scored.get("seal_sha256")
-            and sha_file(run / "SEAL.json") != scored["seal_sha256"]
-        ):
-            chain.append("candidate seal is not the scored seal")
-        prior = _json(Path(current["gate"]))
-        if (
-            prior.get("schema") != GATE_SCHEMA
-            or layout.current_repo(prior.get("repo_id") or "") != spec["repo_id"]
-            or prior.get("revision") != current["revision"]
-        ):
-            chain.append(
-                "current gate does not seal this repository's current revision"
-            )
-        current_decision = _json(Path(current["decision"]))
-        if prior.get("decision_sha256") != sha_file(Path(current["decision"])):
-            chain.append("current decision is not the one its gate sealed")
-        if current_decision.get("report_sha256") != sha_file(
-            current_run / "REPORT.json"
-        ):
-            chain.append("current run is not the current revision's scored run")
-        current_identity = (current_decision.get("identity") or {}).get("model_sha256")
-    except (OSError, KeyError, TypeError, ValueError) as error:
-        failed = {
-            "passed": False,
-            "evidence": f"current-revision chain unreadable: {error!r}",
-        }
-        return {name: dict(failed) for name in INDEX_FIRST_ITEMS}
-
-    def i1() -> Any:
-        index = profile["index"]
-        boot = _json(Path(index["bootstrap"]))
-        receipt = _json(Path(index["receipt"]))
-        reference = _json(Path(index["reference_receipt"]))
-        problems = []
-        if boot.get("schema") != INDEX_BOOT_SCHEMA or boot.get("excluded"):
-            problems.append("Index evidence is not a full-panel ix1 paired bootstrap")
-        replicates = boot.get("replicates") or 0
-        if replicates < INDEX_MIN_REPLICATES:
-            problems.append(f"fewer than {INDEX_MIN_REPLICATES} bootstrap replicates")
-        inputs = boot.get("inputs_sha256") or {}
-        identity = spec["expected_identity"]["model_sha256"]
-        for role, run_receipt, want in (
-            ("new", receipt, identity),
-            ("base", reference, current_identity),
-        ):
-            if run_receipt.get("schema") != INDEX_RECEIPT_SCHEMA:
-                problems.append(f"the {role} Index run has no ix1 run receipt")
-            if run_receipt.get("results_sha256") != inputs.get(role):
-                problems.append(
-                    f"the bootstrap's {role} input is not that run's results"
-                )
-            if (run_receipt.get("model_source") or {}).get("model_sha256") != want:
-                problems.append(
-                    "the Index run scored other weights than "
-                    + ("this package" if role == "new" else "the current revision")
-                )
-        low = boot["headline"]["ci95"][0]
-        return (
-            low > 0,
-            f"private Index paired bootstrap {sha_file(Path(index['bootstrap']))[:12]} ({replicates} "
-            f"replicates, full panel) of the release weights {identity[:12]} minus the current revision's "
-            f"{str(current_identity)[:12]}: 95% lower bound > 0: {'yes' if low > 0 else 'NO'}",
-            problems,
-        )
-
-    def i2() -> Any:
-        types = _json(Path(profile["types"]))
-        problems = []
-        run_report = Path(types.get("run", "")) / "REPORT.json"
-        if (
-            types.get("schema") != TYPES_SCHEMA
-            or not run_report.is_file()
-            or sha_file(run_report) != scored.get("report_sha256")
-        ):
-            problems.append("type check is not on the scored run")
-        verdicts = _verdicts(types)
-        return (
-            all(v == "OK" for v in verdicts.values()),
-            "types " + ", ".join(f"{k} {v}" for k, v in verdicts.items()),
-            problems,
-        )
-
-    def i3() -> Any:
-        audit = _json(Path(profile["contamination"]["audit"]))
-        name = profile["contamination"]["training_set"]
-        problems = []
-        if audit.get("schema") != CONTAMINATION_SCHEMA:
-            problems.append("not an ix1 contamination audit")
-        planted = audit.get("planted_control") or {}
-        complete = (
-            bool(planted.get("planted"))
-            and planted.get("found") == planted.get("planted")
-            and not planted.get("missed")
-        )
-        rows = (audit.get("training_sets") or {}).get(name)
-        if rows is None:
-            problems.append(f"the audit has no training set {name}")
-            rows = {}
-        return (
-            complete,
-            f"training set {name}: {rows.get('training_lines')} lines, {rows.get('duplicate_rows')} "
-            f"duplicate-class rows, {rows.get('item_rows')} item rows; planted control "
-            f"{planted.get('found')} / {planted.get('planted')}",
-            problems,
-        )
-
-    return {
-        name: _item(check, chain)
-        for name, check in zip(INDEX_FIRST_ITEMS, (i1, i2, i3))
-    }
-
-
 def gate_profile(spec: dict[str, Any]) -> dict[str, Any] | None:
-    """The spec's no-1.0, successor or index_first profile, or None for the own Decision 1.0 gate."""
+    """The spec's no-1.0 or successor profile, or None for the own Decision 1.0 gate."""
     value = spec.get("gate_profile")
     if value is None:
         return None
     if value.get("name") == SUCCESSOR:
         return successor_profile(spec, value)
-    if value.get("name") == INDEX_FIRST:
-        return index_first_profile(spec, value)
     references = {
         e["key"] for e in spec["card"]["reports"] if e.get("role") == "reference"
     }
@@ -796,15 +610,6 @@ def check(
             problems.append(
                 "decision names a different gate profile, current revision or evidence"
             )
-    elif profile and profile["name"] == INDEX_FIRST:
-        if (
-            decision.get("gate_profile") != INDEX_FIRST
-            or decision.get("current_revision") != profile["current"]["revision"]
-            or decision.get("evidence_sha256") != index_first_evidence_sha256(profile)
-        ):
-            problems.append(
-                "decision names a different gate profile, current revision or evidence"
-            )
     elif profile and (
         decision.get("gate_profile") != NO_OWN_1_0
         or decision.get("types_sha256") != sha_file(Path(profile["types"]))
@@ -833,8 +638,6 @@ def first_items(spec: dict[str, Any]) -> tuple[dict[str, Any], str]:
                 + " (no Decision 1.0 at this size)"
             )
         return successor_items(spec, profile), below
-    if profile and profile["name"] == INDEX_FIRST:
-        return index_first_items(spec, profile), "own 1.0"
     if profile:
         below = (
             next(
@@ -955,8 +758,8 @@ def seal(work: Path) -> dict[str, Any]:
         },
     }
     profile = gate_profile(spec)
-    if profile and profile["name"] in (SUCCESSOR, INDEX_FIRST):
-        gate["gate_profile"] = profile["name"]
+    if profile and profile["name"] == SUCCESSOR:
+        gate["gate_profile"] = SUCCESSOR
         gate["supersedes"] = {
             "revision": profile["current"]["revision"],
             "gate_sha256": sha_file(Path(profile["current"]["gate"])),
