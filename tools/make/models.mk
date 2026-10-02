@@ -9,6 +9,7 @@ ifneq ($(PREBUILT_NATIVE_LIBS),1)
 	@cargo test --locked --manifest-path ml-binding/Cargo.toml
 endif
 	@python3 -m pytest -q src/training/model_selection/ml_model_selection/tests/test_native_parity.py
+	@python3 -m pytest -q src/training/model_selection/ml_model_selection/tests/test_service_boundary.py
 
 .PHONY: test-model-selection-parity
 
@@ -25,10 +26,12 @@ test-training-contracts: harness-venv-install ## Run dependency-light model trai
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/multimodal/large/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/safety_classifier/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/user_feedback_classifier/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/escalation_risk/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/pii_model_fine_tuning_lora/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/sequence_repair/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/classifier_model_fine_tuning_lora/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_eval/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/kv_mapper/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m pytest -q \
 		src/training/model_eval/test_provenance.py \
 		src/training/model_eval/test_artifact_inventory.py \
