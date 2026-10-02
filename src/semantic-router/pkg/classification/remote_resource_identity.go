@@ -37,7 +37,7 @@ func remoteOperationIdentity(adapter string, external *config.ExternalModelConfi
 			operation = "/chat/completions"
 		} // Explicit endpoint adapters supply their API base path.
 	case config.RemoteClassifierProtocolHTTPSystemOne:
-		operation, model = "/v1/systemone", external.ModelName // The body names the model explicitly.
+		operation, model = "/v1/systemone", systemOneModel(external) // The body names the model explicitly.
 		if absolute {
 			operation = "/systemone"
 		}

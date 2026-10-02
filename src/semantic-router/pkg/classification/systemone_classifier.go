@@ -78,7 +78,7 @@ func NewSystemOneClassifierInference(
 	if cfg.ModelEndpoint.Address == "" {
 		return nil, fmt.Errorf("http_systemone endpoint address is required")
 	}
-	if strings.TrimSpace(cfg.ModelName) == "" {
+	if systemOneModel(cfg) == "" {
 		return nil, fmt.Errorf("http_systemone requires llm_model_name: the request carries an explicit model")
 	}
 	if isNilMapping(mapping) {
@@ -139,11 +139,18 @@ func NewSystemOneClassifierInference(
 		},
 		timeout:      timeout,
 		mapping:      mapping,
-		model:        strings.TrimSpace(cfg.ModelName),
+		model:        systemOneModel(cfg),
 		questionID:   questionID,
 		instructions: instructions,
 		options:      options,
 	}, nil
+}
+
+// systemOneModel is the model a SystemOne request names. The resource identity
+// reads it here too, so catalog aliases that differ only in surrounding
+// whitespace stay one deployment with one admission gate.
+func systemOneModel(cfg *config.ExternalModelConfig) string {
+	return strings.TrimSpace(cfg.ModelName)
 }
 
 // systemOneOptionsFromMapping reads the declared labels in class-index order.

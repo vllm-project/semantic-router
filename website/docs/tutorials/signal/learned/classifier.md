@@ -167,8 +167,9 @@ A recipe can select execution explicitly with a `classifier.<rule name>` entry
 in `model_bindings`; this replaces the rule's `model` or `model_path` selector.
 Local and sequence rules support local sequence deployments or HTTP
 `http_classify`, while LLM rules retain their scored extraction instructions
-and require HTTP `http_chat`. These use `label_distribution.v1`, with the rule's
-ordered `labels` as the mapping. See [In-process models](../../../installation/runtime/in-process).
+and require HTTP `http_chat`, and `systemone` rules retain their question and
+require HTTP `http_systemone`. These use `label_distribution.v1`, with the
+rule's ordered `labels` as the mapping. See [In-process models](../../../installation/runtime/in-process).
 
 ## Independent labels with a frozen operating point
 

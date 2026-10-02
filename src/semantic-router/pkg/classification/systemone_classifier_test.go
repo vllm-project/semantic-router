@@ -3,11 +3,16 @@ package classification
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -389,5 +394,122 @@ func TestSystemOneRuleBuildsThroughGenericClassifierBuilder(t *testing.T) {
 		if diff := got.Scores[label] - want; diff > 1e-6 || diff < -1e-6 {
 			t.Fatalf("score[%q] = %v, want %v", label, got.Scores[label], want)
 		}
+	}
+}
+
+// An explicit routing.model_bindings entry points a rule at a deployment, so a
+// bound SystemOne rule has to pass the real config loader and still reach the
+// endpoint as its Choice question, not as an http_classify call.
+func TestBoundSystemOneRuleLoadsAndAsksItsQuestion(t *testing.T) {
+	server := httptest.NewServer(systemOneHandler(t, "please advise", 3, map[string]float32{
+		"formal": 0.7, "casual": 0.2, "hostile": 0.1,
+	}))
+	defer server.Close()
+	endpoint := endpointForTestServer(t, server)
+	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.3
+routing:
+  model_bindings:
+    classifier.tone:
+      deployment: decision
+      adapter: http_systemone
+      contract: label_distribution.v1
+  signals:
+    classifiers:
+      - name: tone
+        type: systemone
+        labels: [formal, casual, hostile]
+        instructions: Which tone does this request use?
+global:
+  model_catalog:
+    external:
+      - name: decision-runtime
+        model_role: classification
+        llm_endpoint: {address: %s, port: %d, protocol: http}
+        llm_model_name: decision-kai
+    deployments:
+      decision: {provider: http, external_model: decision-runtime}
+`, endpoint.Address, endpoint.Port)))
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes: %v", err)
+	}
+	models, err := newClassifierModelRuntime(cfg, nil)
+	if err != nil {
+		t.Fatalf("newClassifierModelRuntime: %v", err)
+	}
+	builder := &classifierOptionBuilder{cfg: models.cfg, models: models}
+	apply, err := builder.buildGenericClassifiersOption()
+	if err != nil {
+		t.Fatalf("buildGenericClassifiersOption: %v", err)
+	}
+	classifier := &Classifier{}
+	apply(classifier)
+	t.Cleanup(func() { closeLabelClassifiers(classifier.genericClassifiers) })
+	got, err := classifier.genericClassifiers["tone"].Classify(context.Background(), "please advise")
+	if err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+	if diff := got.Scores["formal"] - 0.7; diff > 1e-6 || diff < -1e-6 {
+		t.Fatalf("scores = %v, want formal 0.7", got.Scores)
+	}
+}
+
+// The request trims llm_model_name, so catalog aliases that differ only in
+// surrounding whitespace address one deployment and must share its gate.
+func TestSystemOneAliasesShareOneAdmissionGate(t *testing.T) {
+	started, release := make(chan struct{}), make(chan struct{})
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			close(started)
+			<-release
+		}
+		systemOneReply("decision-kai", map[string]any{
+			"type": "choice", "choice": "formal", "confidence": 0.5,
+			"probabilities": map[string]float32{"formal": 0.7, "casual": 0.2, "hostile": 0.1},
+		})(w, r)
+	}))
+	defer server.Close()
+	defer func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	}()
+	models := standaloneModelRuntime()
+	rule := systemOneRule()
+	bind := func(name, modelName string) *remoteSequenceBinding {
+		t.Helper()
+		external := systemOneExternal(t, server)
+		external.Name, external.ModelName = name, modelName
+		backend, err := NewSystemOneClassifierInference(external, newDeclaredLabelMapping(rule.Labels), rule.Name, rule.Instructions, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		spec := models.remoteSpec("classifier."+name, &config.RemoteClassifierBackend{
+			Model: name, Protocol: config.RemoteClassifierProtocolHTTPSystemOne, Contract: config.RemoteClassifierContractLabelDistribution,
+		})
+		spec.Admission = config.AdmissionConfig{MaxConcurrency: 1, OnOverflow: "shed"}
+		bound, err := prepareRemoteSequence(models, spec, external, backend)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = bound.Close() })
+		return bound
+	}
+	first, second := bind("kai", "decision-kai"), bind("kai-padded", " decision-kai ")
+	done := make(chan error, 1)
+	go func() { _, err := first.Classify(context.Background(), "hold"); done <- err }()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("request did not start")
+	}
+	if _, err := second.Classify(context.Background(), "overflow"); !errors.Is(err, admission.ErrQueueFull) {
+		t.Fatalf("padded alias bypassed the deployment's admission gate: %v", err)
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
 	}
 }
