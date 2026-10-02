@@ -440,6 +440,67 @@ class M6GatesTest(unittest.TestCase):
             self.gates.pn1_validated(dict(report, candidate="M6-IB"))
 
 
+class M6IndexFirstTest(unittest.TestCase):
+    def test_gate_integrity_and_choice(self):
+        rule = importlib.import_module("v2.27b.m6.m6_index_first")
+
+        def boot(low):
+            return {
+                "headline": {
+                    "delta": low + 1,
+                    "ci95": [low, low + 2],
+                    "se": 0.5,
+                    "p_le_0": 0.01,
+                }
+            }
+
+        ok = {"types": {t: {"verdict": "OK"} for t in ("choice", "noul", "score")}}
+        bad = {
+            "types": {"choice": {"verdict": "OK"}, "score": {"verdict": "COLLAPSED"}}
+        }
+        public, private = rule.decide(
+            {
+                "M6-IB": boot(0.4),
+                "M6-IB2": boot(0.9),
+                "M5-L128": boot(1.5),
+                "M6-IBX": boot(-0.1),
+            },
+            {"M6-IB": ok, "M6-IB2": ok, "M5-L128": bad, "M6-IBX": ok},
+            {
+                "M6-IB2": {
+                    "weighted_delta_sum": 2.0,
+                    "benchmarks": {
+                        "HoVer": {"weighted_delta": 1.2},
+                        "BPoMP": {"weighted_delta": 0.3},
+                        "BANKING77": {"weighted_delta": 0.1},
+                        "MMLU": {"weighted_delta": 0.4},
+                    },
+                }
+            },
+        )
+        self.assertEqual(public["order"], ["M6-IB2", "M6-IB"])
+        self.assertEqual(public["choice"], "M6-IB2")
+        self.assertFalse(public["candidates"]["M5-L128"]["eligible"])
+        self.assertFalse(public["candidates"]["M6-IBX"]["index_gate"])
+        self.assertNotIn("ci95", json.dumps(public))
+        t = private["candidates"]["M6-IB2"]["transfer_only"]
+        self.assertEqual(t["excluded"], ["HoVer", "BPoMP"])
+        self.assertEqual(t["transfer_only_weighted_delta"], 0.5)
+        self.assertEqual(
+            rule.transfer_only(
+                "M5-L128",
+                {
+                    "weighted_delta_sum": 1.0,
+                    "benchmarks": {"BPoMP": {"weighted_delta": 1.0}},
+                },
+            )["excluded"],
+            [],
+        )
+        public, _ = rule.decide({"M6-IB": boot(0.4)}, {}, {})
+        self.assertIsNone(public["choice"])
+        self.assertIsNone(public["candidates"]["M6-IB"]["no_type_collapsed"])
+
+
 class M6ReportTest(unittest.TestCase):
     def test_devgates_and_heldout_tables(self):
         report = importlib.import_module("v2.27b.m6.m6_report")
