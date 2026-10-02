@@ -90,7 +90,7 @@ def test_wait_for_router_health_reads_bearer_from_container_environment(monkeypa
     assert "secret-value" not in repr(command)
 
 
-def test_runtime_summary_is_clean_human_stdout(capsys, tmp_path):
+def test_runtime_summary_is_clean_human_stdout(capsys):
     stack_layout = resolve_runtime_stack(stack_name="terminal-test", port_offset=200)
 
     runtime_lifecycle.log_runtime_summary(
@@ -99,7 +99,6 @@ def test_runtime_summary_is_clean_human_stdout(capsys, tmp_path):
         dashboard_disabled=False,
         enable_observability=True,
         started_backends={"postgres", "redis"},
-        state_root_dir=str(tmp_path),
         config={
             "entrypoints": [{"model_names": ["vllm-sr/balance"], "recipe": "balance"}]
         },
@@ -113,7 +112,6 @@ def test_runtime_summary_is_clean_human_stdout(capsys, tmp_path):
     assert "http://localhost:9099" in captured.out
     assert "Storage" in captured.out
     assert "Observability" in captured.out
-    assert "Grafana admin password file" in captured.out
     assert "Commands" in captured.out
     assert "Try it" in captured.out
     assert '"model": "vllm-sr/balance"' in captured.out

@@ -125,17 +125,14 @@ async def health() -> dict[str, str]:
 
 @router.get("/v1/models")
 async def models(request: Request) -> dict:
-    card: dict = {
-        "id": request.app.state.settings.model,
-        "object": "model",
-        "owned_by": "provider-mocker",
-    }
-    if request.app.state.settings.max_model_len is not None:
-        card["max_model_len"] = request.app.state.settings.max_model_len
     return {
         "object": "list",
         "data": [
-            card,
+            {
+                "id": request.app.state.settings.model,
+                "object": "model",
+                "owned_by": "provider-mocker",
+            },
             {
                 "id": "openai/workflow-planner",
                 "object": "model",

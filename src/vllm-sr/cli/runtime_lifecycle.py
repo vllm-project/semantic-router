@@ -31,7 +31,6 @@ from cli.container_cli import (
     load_openclaw_registry,
 )
 from cli.container_runtime import get_container_runtime
-from cli.grafana_credentials import grafana_password_path
 from cli.runtime_lifecycle_lock import acquire_runtime_lifecycle_lock
 from cli.runtime_stack import RuntimeStackLayout
 from cli.terminal import echo, fields, heading, progress, success
@@ -465,7 +464,6 @@ def log_runtime_summary(
     dashboard_disabled: bool,
     enable_observability: bool,
     started_backends: set[str] | None = None,
-    state_root_dir: str | None = None,
     config: dict | None = None,
 ) -> None:
     """Print the local endpoints and common follow-up commands."""
@@ -498,21 +496,13 @@ def log_runtime_summary(
     if enable_observability:
         echo()
         heading("Observability")
-        observability = [
-            ("Jaeger UI", stack_layout.jaeger_ui_url),
-            ("Grafana", stack_layout.grafana_url),
-        ]
-        if state_root_dir is not None:
-            observability.append(
-                (
-                    "Grafana admin password file",
-                    str(
-                        grafana_password_path(state_root_dir, stack_layout=stack_layout)
-                    ),
-                )
+        fields(
+            (
+                ("Jaeger UI", stack_layout.jaeger_ui_url),
+                ("Grafana", f"{stack_layout.grafana_url} (admin/admin)"),
+                ("Prometheus", stack_layout.prometheus_url),
             )
-        observability.append(("Prometheus", stack_layout.prometheus_url))
-        fields(observability)
+        )
 
     _log_runtime_commands(dashboard_disabled)
     _print_curl_example(listeners, stack_layout, config)
