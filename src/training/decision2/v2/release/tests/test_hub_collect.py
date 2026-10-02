@@ -12,22 +12,23 @@ from unittest import mock
 
 from v2.release import hub, layout
 
-REPO = "vllm-sr/Decision-2.0-Vega-26B"
+REPO = "vllm-sr/Decision-2.0-Vega-27B"
 REVISION = "a" * 40
 
 
 class FakeApi:
-    def __init__(self, slug: str, title: str):
+    def __init__(self, slug: str, title: str, collection_private: bool = False):
         self.slug, self.title, self.items = slug, title, []
+        self.collection_private = collection_private
 
     def model_info(self, repo, revision=None):
-        return SimpleNamespace(private=True, sha=revision)
+        return SimpleNamespace(private=False, sha=revision)
 
     def get_collection(self, slug):
         return SimpleNamespace(
             slug=self.slug,
             title=self.title,
-            private=True,
+            private=self.collection_private,
             items=[SimpleNamespace(item_id=i, item_type="model") for i in self.items],
         )
 
@@ -39,7 +40,7 @@ class FakeApi:
 class HubCollectTest(unittest.TestCase):
     def collect(self, api: FakeApi, collection: str = hub.COLLECTION) -> dict:
         with tempfile.TemporaryDirectory() as scratch:
-            package = Path(scratch) / "Decision-2.0-Vega-26B"
+            package = Path(scratch) / "Decision-2.0-Vega-27B"
             package.mkdir()
             (package / layout.MANIFEST_NAME).write_text(json.dumps({"kind": "release"}))
             gate = Path(scratch) / "gate.json"
@@ -71,6 +72,12 @@ class HubCollectTest(unittest.TestCase):
         self.assertTrue(result["passed"])
         self.assertEqual(result["collection"]["title"], "🎲 Decision 2.0")
         self.assertEqual(result["collection"]["items"], [REPO])
+
+    def test_a_private_collection_is_refused(self):
+        with self.assertRaises(RuntimeError):
+            self.collect(
+                FakeApi(hub.COLLECTION, hub.COLLECTION_TITLE, collection_private=True)
+            )
 
     def test_any_other_collection_is_refused(self):
         other = "vllm-sr/scratch-0123"

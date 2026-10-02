@@ -1,25 +1,32 @@
 #!/usr/bin/env bash
-# ~27B M6 private Index full run on node C or node D (node side; m6-index.sh run starts it detached on every node that
+# ~27B M6 private Index full run on node B, C, D or E (node side; m6-index.sh run starts it detached on every node that
 # has shards). The listed shards of IX1's panel-8 with IX1's launch.sh (run --only k) on the listed GPUs of this node:
 # the i-th listed shard runs on GPU number i mod n of the list, the shards of one GPU in turn, each with a copy of
 # A20r's frozen autotune cache (parity/DEV2.0-27B/cache-frozen, as IX1's M5-L128 diagnostic). Shards that run on the
 # other node get the placeholder GPU 9 in launch.sh's list (it touches only the selected shards), as IX1's node C runs
-# did. The GPU loops start 300 s apart so at most one 27B shard loads at a time; a loop stops at the first shard that
+# did. The GPU loops start M6_INDEX_STAGGER s apart (default 300: at most one 27B shard loads at a time; node E's
+# 1.2 TB host takes 120); with M6_INDEX_AFTER=k every loop first waits for shard k of an earlier launch to end 0
+# (its GPU is still busy with it); a loop stops at the first shard that
 # does not end with exit code 0 (rerun with launch.sh resume, IX1's procedure). Prints run IDs, statuses and times only.
 # Usage: m6-index-run.sh MIRROR_SHA ARM NODE SHARDS GPU...
-#   NODE    d (GPU4-7) or c (GPU1-7; GPU0 is a K8s pod and never used)
+#   NODE    d (GPU0-7: GPU4-7 shared Index GPUs, GPU0-3 M6's own leases once its seeds ended) or c (GPU1-7; GPU0 is a
+#           K8s pod and never used) or e (GPU0-3, GPU6-7: COORDINATION 12:30's eval fast lane; GPU4-5 hold external
+#           vLLM servers and are never used) or b (GPU0, 1, 5: 27B's own training leases, COORDINATION 12:30 / 12:40)
 #   SHARDS  comma-separated shard indices 0-7 that this node runs, e.g. 0,1,2,3
 # M6_INDEX_DRY=1 prints the shard -> GPU plan and exits before touching the node.
 set -euo pipefail
 SHA=${1:?MIRROR_SHA} ARM=${2:?ARM}
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "MIRROR_SHA must be a full commit SHA" >&2; exit 2; }
-[[ "$ARM" =~ ^M6-(IB|IBX|IB2|IB2PN)$ ]] || { echo "bad ARM $ARM" >&2; exit 2; }
+ARM_RE='^(M6-(IB|IBX|IB2|IB2PN|IBxIB2-m[0-9]{2})|M7-(IB124ML|IB14ML)|M8-(IB14|IB124)|X7-(IBxIB2xIB14ML|4ARM)|X8-(IBxIB2-8|ML))$'
+[[ "$ARM" =~ $ARM_RE ]] || { echo "bad ARM $ARM" >&2; exit 2; }
 NODE=${3:?NODE} SHARDS=${4:?SHARDS}
 shift 4
 case "$NODE" in
-  d) ALLOWED='^[4-7]$' ;;
+  d) ALLOWED='^[0-7]$' ;;
   c) ALLOWED='^[1-7]$' ;;
-  *) echo "NODE must be c or d, not $NODE" >&2; exit 2 ;;
+  e) ALLOWED='^[0-367]$' ;;
+  b) ALLOWED='^[015]$' ;;
+  *) echo "NODE must be b, c, d or e, not $NODE" >&2; exit 2 ;;
 esac
 [[ "$SHARDS" =~ ^[0-7](,[0-7]){0,7}$ ]] || { echo "SHARDS: comma-separated shard indices 0-7, not '$SHARDS'" >&2; exit 2; }
 IFS=, read -r -a SHARD_LIST <<< "$SHARDS"
@@ -28,6 +35,9 @@ GPU_LIST=("$@")
 [ ${#GPU_LIST[@]} -gt 0 ] || { echo "no GPU listed" >&2; exit 2; }
 for g in "${GPU_LIST[@]}"; do [[ "$g" =~ $ALLOWED ]] || { echo "node $NODE: GPU $g is not allowed" >&2; exit 2; }; done
 [ "$(printf '%s\n' "${GPU_LIST[@]}" | sort -u | wc -l)" = "${#GPU_LIST[@]}" ] || { echo "a GPU is listed twice" >&2; exit 2; }
+[[ "${M6_INDEX_STAGGER:-300}" =~ ^[0-9]{1,4}$ ]] || { echo "M6_INDEX_STAGGER: seconds, not '$M6_INDEX_STAGGER'" >&2; exit 2; }
+AFTER=${M6_INDEX_AFTER:-}
+[[ "$AFTER" =~ ^[0-7]?$ ]] || { echo "M6_INDEX_AFTER: one shard index, not '$AFTER'" >&2; exit 2; }
 n=${#GPU_LIST[@]}
 (( n <= ${#SHARD_LIST[@]} )) || n=${#SHARD_LIST[@]}
 SLOT=(9 9 9 9 9 9 9 9)
@@ -46,7 +56,12 @@ CACHE=$R/parity/DEV2.0-27B/cache-frozen
 [ -f "$R/parity/$ARM/parity.json" ] || { echo "no parity gate for $ARM" >&2; exit 2; }
 loop() {  # i: GPU GPU_LIST[i] runs the listed shards at positions i, i+n, ...
   local i=$1 j k e g=${GPU_LIST[$1]}
-  sleep $((300 * i))
+  sleep $((${M6_INDEX_STAGGER:-300} * i))
+  if [ -n "$AFTER" ]; then  # the GPU is still running shard AFTER of an earlier launch
+    echo "$(date -u +%FT%TZ) $ARM node $NODE GPU$g: waiting for shard $AFTER to end"
+    while [ ! -f "$R/runs/$ARM/shard-$AFTER/end_epoch" ]; do sleep 60; done
+    [ "$(cat "$R/runs/$ARM/shard-$AFTER/exit_code")" = 0 ] || { echo "shard $AFTER failed; not starting"; return 1; }
+  fi
   for ((j = i; j < ${#SHARD_LIST[@]}; j += n)); do
     k=${SHARD_LIST[$j]}
     echo "$(date -u +%FT%TZ) $ARM shard $k on node $NODE GPU$g: start"

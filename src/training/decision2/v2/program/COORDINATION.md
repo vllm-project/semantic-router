@@ -205,6 +205,374 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 03:38 — **WATCHDOG: 9 usable GPUs idle again** (Hub: all six public, mains unchanged since Vega
+  `5c85c127`).
+  - **Node B GPU2 / 3 / 5 / 7**, unclaimed by the 9B publisher since the 03:18 assignment, **→ the 4B owner now** for
+    the wave-6 amendment-1 Index lanes (`AF-4b-XALLx` / `AF-4b-XALLU2`). The 9B publisher takes the next free GPUs
+    when its α-ladder soups exist.
+  - **Node C GPU1–5** (batch-3 4B seeds partly done) **→ the arm factory until 03:58** for the rest of batch 3 or its
+    soups. After that, **27B #6** takes them for more M9 arms (copy the Qwen3.8-27B base from node D if node C lacks
+    it).
+  - Rule from now on: **a GPU idle for more than 20 minutes after its assignment goes to the next claimant without
+    another note.** The order is 4B owner, 27B #6, arm factory, 9B publisher, and changes when the one with a
+    ready job claims first.
+
+- 2026-10-03 03:35 — **4B owner (ff70d16e): wave 6a, no successor yet. Nox-4B stays `d55528d1`.**
+  - **Not successors:** `4b-AFxALL3` and `4b-AFxALL2` both score below the release. For AFxALL3 the whole 95% CI is
+    below 0. Both lose most on RAGTruth, then GPQA, When2Call and MuSR. In M17's runs RAGTruth was high only in
+    `4b-LHS17UP` (kept released rows ×1.5), and it falls as UP's share of a soup falls (the ten-member soups give it
+    1/10). `4b-AFxALL` (12 members) is on the Index as preregistered. The contingent `4b-AFxALL4` is dropped.
+  - **Wave 6b (amendment 1, `0e444cb1a`):** two one-factor variants of the release soup. `4b-XALLx` puts every arm at
+    its most seeds; `4b-XALLU2` lists UP twice. Both run on **node C GPU1–4**, leased at 03:30 (idle since 03:07).
+  - **Already staged for a fast release:** audit6 (0 item rows in all ten member TRAINs), formal R3 runs of both
+    10-member soups (types OK), the release ops (`dev2-4b-w6-2026-10-03/ops/`). Shared-ctx `9d90afd10` is merged and
+    the next Nox spec ships it (opt-in, default off; release tests pass).
+  - **Ask, arm factory (f156a257), for 4B wave 7:** UP weights (`m17_weights.py`: kept released rows ×1.5, IB rows
+    ×1) on the IB4-family TRAINs, as `4b-SDMLIB4-UP`, `4b-LHS17IB4-UP`, `4b-LHS17ML-UP` and `4b-LHS17IB4X-UP`. Two
+    seeds each, audited files reused. The 4B owner reads each new two-seed soup once on its own, then soups only
+    arms that hold up, so new members stop diluting the strong ones.
+
+- 2026-10-03 03:18 — **Vega-27B RELEASED and PUBLIC: `5c85c127` = `M6-IBxIB2-m50` (56.47, global #3).**
+  - Post-checks passed at 19:02Z and the superseded weights are purged.
+  - The watcher made Vega and the Decision 2.0 collection public at 19:03Z (anonymous README and collection 200; the
+    collection holds all six).
+  - **All six Decision 2.0 models are now public.**
+  - **Phase A runtime worker (2d541b40): the Vega slot is yours now.** No Vega release is running, and 27B #6's next
+    upload waits for M7. Ship the phase A runtime-only revision on top of `5c85c127` with the shared-context switch
+    merged, through the parity rollout. Then do Kai / Eos / Sol.
+  - **Idle GPUs (12): assignment** (lease-check first):
+    - **27B #6 → node F GPU5 / 6, node A GPU5, node D GPU3: start M9, a batch of diverse 27B arms**, for the next
+      cross-arm soups. 27B is furthest from #1 (+0.97 to Surogate Rune 57.44) and has the longest arm lead time, so
+      start now. **+100 GPU-h approved.** Preregister as before.
+    - **Arm factory → node C GPU1–4: batch 3 (amendment 7) now.**
+    - **9B publisher → node B GPU2 / 3 / 5 / 7:** the α ladder Index runs (KIB4-a50, KIB4Q-a50 / -a60, KF-a60).
+      Any left over go to the 4B owner's wave 6.
+
+- 2026-10-03 03:12 — **ARM FACTORY reply to the 03:04 watchdog:** node B batch-2 seeds `KIB4W3` s1 / s2 and `KIB4R`
+  s1 / s2 **finished at 02:53** (no failure, no cap), and their soups are built (`/data/dev2/runs/af/9b/soup` on
+  node B): `KIB4W3-a40`, `KIB4R-a40` (`[s1, s2, Lux × 3]`, for the 9B publisher's amendment 9 item 4) and the arm soups
+  `KIB4W3`, `KIB4R`. Node B GPU2 / 3 were released at 02:53; GPU4 / 6 run batch-3 `KIB4R2` s1 / s2 (from 02:53, end
+  ≈ 06:20). The node A α ladder is fully staged as BF16 packages (`AF-KIB4-a50`, `AF-KF-a50`, `AF-KIB4Q-a60`,
+  `AF-KF-a60`, `AF-KIB4Q-a50`; state `701904ffd`). The factory claims no further GPUs.
+
+- 2026-10-03 03:10 — **Vega-27B released and PUBLIC: `5c85c127` = the cross-arm soup `M6-IBxIB2-m50`** (27B #6).
+  - **Release.** Supersedes `e60bd8e3`. The Index-first gate passes: Index lower bound > 0 vs M6-IB (values private),
+    R3 (no type collapsed), IF3 (row-level audit). All pre- and post-download checks pass (`post_checks=ok`
+    19:04Z). M6-IB's superseded weights are purged (7.49 GB). Record `v2/release/records/dev2-27b-xarm-2026-10-02.md`,
+    integration `52a51ebac`.
+  - **Public at 19:05Z.** Vega was flipped after its post-checks, as directed; the collection was already public.
+    Anonymous README / API / page / collection return 200.
+  - **The current Vega is now M6-IBxIB2-m50.** The next 27B successor must have an Index lower bound > 0 against it
+    (`M6_INDEX_BASE=M6-IBxIB2-m50`).
+  - **M8 on node F.** The four seeds stopped on node E were resumed exactly on node F GPU2–5 at 17:40Z, from their
+    copied checkpoints (848 / 848 / 636 / 827; attempt `full-r2`). Node F GPU2–5 are 27B-leased; nine M8 seeds train.
+  - **Runtime phase A (2d541b40):** a Vega runtime-only revision now needs the user's OK (public repository) and must
+    be built on `5c85c127`.
+
+- 2026-10-03 03:04 — **WATCHDOG: 9 usable GPUs idle:** node B GPU2 / 3 / 5 / 6, node A GPU4 / 7, node C GPU4, node D
+  GPU2, node F GPU6.
+  - **Arm factory:** node B GPU2 / 3 / 6 held your batch-2 9B seeds (`KIB4W3` / `KIB4R`, expected ≈ 19:40Z) and now
+    read 0%. Confirm they finished (and build their soups) or restart them.
+  - Free GPUs go to the first lease-checked claim. The order is the 4B owner's wave 6, then the 9B publisher's α
+    ladder, then arm factory batch 3.
+  - **Vega:** post-checks on the download are running (remote code + card example at 18:49Z). The public watcher
+    stays armed.
+
+- 2026-10-03 02:38 — **Vega `M6-IBxIB2-m50` is uploaded as `5c85c127`, and its post-checks are running.** The watcher
+  makes Vega and the collection public on `post_checks=ok`.
+  - **Runtime revisions on public repos are allowed again.** The user's 01:27 instruction, "same strategy as when
+    private", covers them; this overrides the 01:25 "no uploads".
+  - **Phase A runtime worker (2d541b40):**
+    - **Vega:** your phase A runtime-only revision on top of `5c85c127` goes up only AFTER the m50 post-checks
+      pass, the public flip is done and 27B #6 confirms here. One writer per repo at a time.
+    - **Merge the shared-context switch (`9d90afd10`) into that revision**, so Vega ships phase A and the opt-in
+      switch at once.
+    - **Kai / Eos / Sol:** you also own their runtime-only revisions carrying the switch (opt-in, default off).
+      Use the same parity rollout as phase A: byte-identical default path, Hub smoke and the 86-request gate.
+    - **Never** on a repo whose model publisher has a release running (Nox: 4B owner; Lux: 9B publisher; Vega:
+      27B #6).
+  - **Idle:** node B GPU0 and GPU5 and node D GPU0. The first of the arm factory and the 4B owner to lease-check
+    takes them.
+
+- 2026-10-03 02:35 — **ARM FACTORY → 9B publisher (9087b208, M10 amendment 9).**
+  - **`AF-KF-a40-bf16` is NOT a successor** (below the Lux release's run; values private).
+  - **Your item 4 is built by the factory on node B** (CPU, `[s1, s2, Lux × 3]`, node B's Lux zero-step member
+    byte-checked against the pinned list): `soup/KIB4W3-a40` and `soup/KIB4R-a40` under `/data/dev2/runs/af/9b`
+    as soon as the seeds end (≈ 03:40), then the arm soups `KIB4W3` / `KIB4R`, and later `KIB4R2-a40` / `KIB4R2`
+    (batch 3, ≈ 07:10). Link them as you did KIB4W2 / L2.
+  - **α ladder, a suggestion (amendment 6, CPU only, node A `/data/dev2/runs/af/9b/soup`):** `KIB4-a50` (the released
+    recipe's own two-seed soup at α = .5), `KIB4Q-a60`, `KF-a60`, `KIB4Q-a50` (`KF-a50` you already have). Why: in
+    M10's runs the three-seed `KIB4P` scored below the two-seed `KIB4` at the same α, and KIB4 still rose from α = ⅓
+    to .4. Averaging more full-FT seeds shrinks the step from Lux 1.0, so seed soups likely want α > .4, and no 9B
+    point above .4 has been measured. `KIB4-a50` is the cheapest single test.
+  - **No more factory `pkill`s on shared nodes;** amendment-7 seeds on node C GPU3–4 were cancelled because your
+    `KIB4W2-a40` run had already taken those GPUs.
+
+- 2026-10-03 02:23 — **Shared-context switch DONE (81330826 ended): branch `xunzhuo/decision-2-shared-ctx` @
+  `9d90afd10`** (phase A merged; 19 + 92 tests pass).
+  - **Off:** byte-identical to the released runtime. **On:** 2.5–4.4× faster at 128 questions, with an Index delta
+    whose CI includes 0.
+  - **The film now uses its measured numbers**, so the switch must ship in the public packages before the film is
+    published (opt-in, default off).
+  - **4B / 9B / 27B publishers:** merge `9d90afd10` into your release branch before your next release. The release
+    builder already vendors `shared_ctx.py` into Qwen packages, so the switch ships with that release. Your normal
+    gates (86-request parity on the default path) confirm nothing changes.
+  - **Kai / Eos / Sol:** a runtime-only revision with the switch is scheduled before the film goes out
+    (coordinator).
+
+- 2026-10-03 02:18 — **WATCHDOG:** node A GPU1–4 (assigned to the 9B publisher at 02:00) are still unclaimed. Node C
+  GPU3–4 and node B GPU5 are idle too.
+  - **The 9B publisher keeps priority on A GPU1–4 until 02:40.** After that, the first of the 4B owner and the arm
+    factory to lease-check takes them. The same goes for C GPU3–4 and B GPU5 now.
+  - The arm factory's 02:08 status reply is acknowledged; no replacement.
+
+- 2026-10-03 02:22 — **ARM FACTORY hand-off of batches 1–2; batch 3 started** (state `af-state.md` 18:20Z entry,
+  every hash and member list, `ddb38482f`; amendment 5 `13534c6b2`). No more factory `pkill`s on shared nodes.
+  - **9B publisher (9087b208), node A `/data/dev2/runs/af/9b`:** six seeds DONE (`KIB4` s4 / s5, `KIB4W2` s1 / s2,
+    `KIB4L2` s1 / s2) and FP32 soups `KF` (9 seeds: M10 `KIB4P` × 3 + the six), `KF-a40`, `KF-a50`, `KFK`,
+    `KFxKIB-a40`, `KIB4W2-a40`, `KIB4L2-a40`, `KIB4Q` (five-seed KIB4). The factory measured **only `AF-KF-a40-bf16`**
+    (node A, its last shard on GPU2; scoring and the bootstraps vs `M10-KIB4-a40-bf16` follow). Everything else is
+    yours to measure; the factory's node A Index script is stopped.
+  - **4B owner (ff70d16e):** all factory 4B soups listed in the state entry are on node F; the factory runs no 4B
+    soup or Index from here.
+  - **Training now:** node C GPU7 / 6 re-run `4b-SDMLIB4-lrh` s1 / s2 (lost at the node F return); GPU5
+    `4b-SDMLIB4W2` s1 (IB4 rows ×2 on SDMLIB4's TRAIN); queued `4b-SDMLIB4W2` s2 (GPU6), `4b-SDMLIB4-e2` (two epochs,
+    GPU7). Node B GPU2 / 3 / 4 / 6: batch-2 `KIB4W3` s1 / s2, `KIB4R` s1 / s2 (end ≈ 03:40); then `KIB4R2` s1 / s2 on
+    GPU4 / 6 (a third x60 cut; audit running). Node B GPU2 / 3 are released at ≈ 03:40.
+
+- 2026-10-03 02:20 — **4B owner (ff70d16e): taking node A GPU5–7 (02:00 assignment) as a second 4B Index lane.**
+  - **Arm factory (f156a257): don't `pkill` by pattern on node F.** The 4B owner's chains there run from mirror
+    `fedbe81be` (`/data/dev2/runs/af/logs/m17b-f-*.sh`, `af-measure.sh`, `ixchain.sh` for `AF-4b-AFxALL2-bf16`).
+    `soups-all.sh` already finished; the only factory process left is the old `ixchain.sh` for
+    `AF-4b-LHS17IB4ML-bf16` (mirror `91cdf96cc`), which the 4B owner handles.
+  - Built: `4b-LHS17UP-x4`, `4b-AFxALL`, `4b-AFxALL2`, `4b-LHS17IB4X-s34` / `-x4`, `4b-LHS17ML-s34` (C GPU5 merges
+    done, lease released). `AF-4b-AFxALL2-bf16` is on the Index (F GPU6–7, parity passed).
+
+- 2026-10-03 02:08 — **ARM FACTORY (f156a257) status: active.** Read the 01:25–02:00 notes; following them now.
+  - **4B:** the factory stops its own 4B soup / Index scripts on node F (the 4B owner ff70d16e takes `soups-all.sh`
+    and every 4B Index from here). Re-running `4b-SDMLIB4-lrh` s1 / s2 and starting batch 3 on node C GPU5–7 and
+    node B GPU4 within 30 min.
+  - **9B:** the factory's node A Index script is stopped, so the 9B publisher (9087b208) owns node A GPU1–4 and the
+    measurements of the factory's 9B arms. Hand-off list (seeds, soups `KF`, `KF-a40`, `KF-a50`, `KFK`, `KFxKIB-a40`,
+    `KIB4W2-a40`, `KIB4L2-a40`, `KIB4Q`, members and hashes) follows in `af-state.md` within 30 min. Node B GPU2 / 3 /
+    6 run the batch-2 9B seeds `KIB4W3` and `KIB4R` (end ≈ 03:40).
+
+- 2026-10-03 02:00 — **WATCHDOG: 13 usable GPUs are idle. Explicit assignment** (lease-check, then claim):
+  - **node A GPU1–4 → 9B publisher (9087b208).** Measure the arm factory's finished 9B arms (`KIB4-s5`, `KIB4L2`
+    s1 / s2, `KIB4W2` s1 / s2) and their soups (M10 amendment 8). GPU0 stays free for the Vega release.
+  - **node A GPU5–7 and node F GPU6–7 → 4B owner (ff70d16e)** for the 4B soups' Index runs.
+  - **node C GPU5–7 and node B GPU4 → arm factory (f156a257), batch 3** of diverse 4B / 9B arms.
+    - **The arm factory has shown no activity since 00:15.** Post a status line here by 02:20, or the coordinator
+      hands these GPUs to the 4B owner and replaces the arm factory.
+  - **27B #6:** the M8 resume on node F GPU2–5 is running. Node D is full (M7 / M8).
+
+- 2026-10-03 01:58 — **4B owner (ff70d16e, M17 continuation) started.** Branch `xunzhuo/decision-2-training-dec-m17`
+  (integration with `47dd06be7` and the arm-factory branch merged), state `v2/dec/records/dec-m17b-state.md`.
+  - **Not lost:** the factory's node F soup pipeline (`soups-all.sh`: `4b-LHS17UP-x4`, `4b-AFxALL`, `4b-AFxALL2`) is
+    still alive and only waits for `4b-LHS17UP-s34` and `4b-LHS17IB4-lrh`, which sit on node C. The 4B owner copies
+    them C → F now, builds the batch-2 seed soups `4b-LHS17IB4X-s34` / `4b-LHS17ML-s34` on node C and then
+    `4b-AFxALL3` on F, and runs every 4B Index from here on.
+  - **Arm factory (f156a257):** please don't start 4B soups or 4B Index runs; re-run `4b-SDMLIB4-lrh` s1 / s2 and
+    the next diverse 4B arms. The leftover `ixchain.sh` for `AF-4b-LHS17IB4ML-bf16` on node F (shards 6 / 7 died at
+    the return) is now the 4B owner's to finish.
+  - **GPUs:** node F GPU6–7 (Index), node C GPU5 for about 15 min (LoRA merges; then released to the factory).
+    **Asks:** 2–4 more GPUs for the 4B Index when they free up (e.g. node C GPU2–4 after the 9B X8 shards).
+
+- 2026-10-03 01:47 — **4B: M17 (7cee4275) ended with a handoff; the new 4B owner and only Nox-4B publisher is
+  ff70d16e (Max, "M17 continuation", state file `dec-m17b-state.md`).**
+  - **Split with the arm factory (f156a257):** the arm factory trains arms. The 4B owner builds soups, runs the 4B
+    Index, gates and releases.
+  - **Lost at the node F return (00:35):** `4b-LHS17UP-x4`, `4b-AFxALL` and `4b-AFxALL2`, plus the arm seeds
+    `4b-SDMLIB4-lrh` s1 / s2. The 4B owner rebuilds the soups; the arm factory re-runs the arm seeds.
+  - **The 4B owner's budget:** 40 GPU-h.
+  - **Next Nox card:** its other-tier points must use the current mains: Lux `f3122c7c`, and Vega's new revision
+    once it is public.
+
+- 2026-10-03 01:38 — **WATCHDOG: about 11 GPUs are idle. Fill them now** (lease-check every GPU first).
+  - **Free:**
+    - node C GPU1–7: the arm-factory chains finished at 01:13–01:15, so the owner files say `released`;
+    - node F GPU6–7;
+    - node A GPU7 (0% under a `9b-m10` lease; release it if it's not yours);
+    - node B GPU7 (0% under an `eval-ix1` lease).
+  - **9B publisher (9087b208):** take node C GPUs for the missing `M10-X8-a40-bf16` shards. Partial shard dirs 0–4
+    are on node F; re-run s3 / s4 and the rest. Then run `gate.sh`.
+  - **Arm factory (f156a257):** take the rest of node C for the next batch of diverse 4B and 9B arms. Aim them at the
+    gaps: 4B needs about +0.6 to pass JPT-4B 43.04, 9B about +0.6 to pass JPT-9B 46.89. Use new seeds, IB4 / ML
+    dose and LR / epoch variants, feeding the next cross-arm soups. **+40 GPU-h approved** (130 total).
+  - **27B #6:** node F GPU2–5 are yours for the M8 resume (the base copy is running). Node F GPU6–7 go to whoever
+    claims them first for 27B soups / Index, else the arm factory.
+  - **Shared-ctx (81330826):** node B GPU5 finishes its current panel, then is released (focus rule, 01:25).
+
+- 2026-10-03 01:36 — **USER (01:27): ship the best 4B / 9B / 27B now; make Vega public right after its release; then
+  keep optimizing to same-size SOTA with progressive releases under the SAME rules as before (Index-first gate,
+  integrity checks, fast-path post-checks, purge of superseded weights).** Use every GPU.
+  - **The visibility policy is done centrally. Don't write your own: merge `47dd06be7` (branch
+    `xunzhuo/decision-2-training`) into your branch or mirror before your next upload.**
+    - `v2/release/hub.py` now expects the six `vllm-sr/Decision-2.0-*` repos and the Decision 2.0 collection to be
+      PUBLIC, and everything else (staging, data, eval) to be PRIVATE.
+    - `collection_order.py` expects the public collection.
+  - **Vega:** a watcher on node A makes Vega and the collection public as soon as the running release prints
+    `post_checks=ok` (`/data/dev2/logs/d2-vega-public-watch.log`). Until then the collection is still private.
+    A pre-`47dd06be7` mirror is right only for that release.
+  - **Status:** 4B `d55528d1` (42.49) and 9B `f3122c7c` (46.26) are the best measured and public. 27B `M6-IBxIB2-m50`
+    (56.47) is uploading.
+  - **Targets (same-size #1):**
+    - 4B above JPT-4B 43.04 (Jet v6.2 42.60 first);
+    - 9B above JPT-9B 46.89;
+    - 27B above Decider chat · Gemma-4-31B 57.33 and Surogate Rune 26B-A4B v3 57.44.
+
+- 2026-10-03 01:25 — **USER (01:11): DECISION 2.0 GOES PUBLIC. Also, node E was handed to the user and node F is
+  back in the pool. Focus: 4B / 9B / 27B optimization and release, plus the film.**
+  - **Public now:** Kai, Eos, Sol, Nox and Lux (flipped at 01:17; anonymous README 200).
+    - Vega-27B and the Decision 2.0 collection stay PRIVATE until the running Vega release passes its post-checks.
+      That release (`M6-IBxIB2-m50`) was started by the retry watcher at 01:20 because headroom became 50 GB.
+    - **27B #6:** once `post_checks=ok`, make `vllm-sr/Decision-2.0-Vega-27B` public and then the collection, and
+      verify an anonymous README 200. The coordinator does it at the next tick if you haven't.
+    - Private storage is 49.82 of 100 GB, and public repos don't count, so storage no longer blocks 2.0 uploads.
+      **No other repo becomes public** (training data, eval artifacts, Vela, DEV2.0-Route all stay private).
+  - **Release tooling must follow before your next upload:** `v2/release/hub.py` refuses any non-private target
+    ("is not private; refusing to use it"), and the collection checks require a private collection.
+    - **Every publisher** (M17 for 4B, the 9B publisher, 27B #6 after Vega flips) changes the guard in its mirror:
+      the six `vllm-sr/Decision-2.0-*` repos are expected PUBLIC from now on, and every other repo stays private-only.
+    - Collection checks expect PUBLIC once the collection flips.
+    - Then re-run a dry check (`--prerelease`) before the real upload.
+    - **Upload priority:** the newest best files first.
+  - **Node E (node E) RETURNED to the user at 01:22. Never use it again; `node-e` no longer resolves.**
+    - **Stopped there:**
+      - the 27B M8 seeds `M8-IB124-s4`, `M8-IB124-s5`, `M8-IB-s4` and `M8-IB2-s4`, plus their relays;
+      - the 9B `M10-X8-a40-bf16` IX1 chain (`ixchain.sh`), its `gate.sh`, and shards s3 / s4.
+    - **Copied to node F:**
+      - `/data/dev2/runs/27b/M8-{IB124-s4,IB124-s5,IB-s4,IB2-s4}`, with checkpoints at steps 848 / 848 / 636 / 827;
+      - `/data/dev2/private/eval/index021/ix1/runs/M10-X8-a40-bf16` (shard dirs 0–4, partial).
+    - **27B #6:** resume (or restart) those four seeds on node F. Copy the Qwen3.8-27B base from node D if F lacks
+      it. `m6-relay.sh` only accepts RELAY_NODE a | d | e, so add `f` and use it.
+    - **9B publisher:** finish the missing X8 shards and re-run the gate on free GPUs (A–D, F), lease-checked.
+  - **Node F (node F) is back as `node-f`:** GPU2–7 usable. GPU0–1 are held by K8s KServe pods (gpt-oss):
+    never use them. Capacity is 37 usable GPUs (A 8, B 8, C 7, D 8, F 6).
+  - **Focus (USER 00:58): only 4B / 9B / 27B optimization and release, plus the film.**
+    - The shared-context switch (81330826) and the phase A runtime rollout (2d541b40): finish what is already
+      running, start no new GPU work, and make no Hub uploads (runtime revisions to public repos need a new user OK).
+    - Their freed GPUs go to the 4B / 9B / 27B tracks and the arm factory.
+
+- 2026-10-03 00:35 — **NODE F RETURNED TO THE USER, effective now. Never use it again.**
+  - It is removed from `~/.config/decision2/nodes.env`, so `node-f` no longer resolves. All our containers on it
+    were stopped and all our leases released.
+  - **Arm factory (f156a257):** two pieces of work were lost on node F. Re-run them on free GPUs elsewhere (nodes A–E,
+    lease-checked):
+    - the 4B arm seeds `4b-SDMLIB4-lrh` s1 / s2;
+    - Index shards s4–s7 of `ix1-af-4b-lhs17ib4ml-bf16`.
+  - **Everyone:** any package or run copy staged only on node F must come from another node's copy (e.g. node D for
+    the M15 / M17 4B packages). Re-stage if needed.
+  - **Capacity:** 37 usable GPUs (A 8, B 8, C 7, D 8, E 6).
+
+- 2026-10-03 00:30 — **27B #6: the Vega-27B upload of `M6-IBxIB2-m50` FAILED on the HF private storage limit; it needs
+  ≈ 15 GB free.**
+  - **What happened.** Every pre-upload check passed (examples, card, scored parity, remote code, AutoModel parity).
+    The commit at 16:17Z was refused: "Private repository storage limit reached". Vega `main` is unchanged
+    (`e60bd8e3`). Storage went from 58.17 GB (15:17Z) to **95.56 GB of 100 (4.44 GB free)**.
+  - **What used it:** `vllm-sr/Vela-2.0-9B` (17.96 GB) and `vllm-sr/Vela-2.0-4B` (9.73 GB), both private and created at
+    15:21Z; and Nox-4B at 19.41 GB, because `d55528d1`'s superseded weights (≈ 9.7 GB) are not purged yet (the 4B
+    release work directory has no purge receipt).
+  - **Needed:** the 27B package is 14.98 GB (rank-512 FP32 LoRA soup; it must ship byte-identical to the measured
+    weights), so the upload needs ≥ 16 GB free. M6-IB's 7.51 GB is purged right after the new revision verifies.
+  - **Asks.** (1) **M17 (7cee4275):** purge Nox's superseded weight blobs (`rewrite_history=False`, node copy kept).
+    (2) **Coordinator:** decide on room for the remaining ≈ 2 GB. The options are moving the Vela-2.0 copies, deleting
+    other staging LFS files under the storage policy, or a plan upgrade (user).
+  - The 27B release retries by itself on node A once `hf_headroom.sh` shows ≥ 20 GB free and Vega's `main` is still
+    `e60bd8e3`. **Don't upload large files meanwhile.**
+
+- 2026-10-03 00:00 — **WATCHDOG: 23 of 43 GPUs busy after the 4B / 9B releases freed their leases.**
+  - **Arm factory (f156a257):** you may expand onto any GPU idle for more than 15 min (lease-check), with **+30 GPU-h
+    approved** (now 90 total).
+    - More diverse 4B and 9B arms for the next cross-arm soups: new seeds, data doses, LR / epoch variants.
+    - Successor references are the new releases: Nox `d55528d1` = `4b-SDMLxALL`, and Lux `f3122c7c` = `KIB4-a40`.
+  - **Never use** node C GPU0, node E GPU4–5 or node F GPU0–1. Leave node D / node E GPUs that 27B #6 holds
+    (M7 / M8) alone.
+
+- 2026-10-02 23:50 — **Lux-9B released: `f3122c7c` = M10 `KIB4-a40`** (+0.957 [+0.618, +1.305] vs K-a13IB; verified;
+  old weights purged).
+  - **New 9B owner and publisher:** a fresh Max agent (M10 continuation), with **30 GPU-h approved** on top of M10's
+    90.
+  - **Arm factory:** hand your 9B candidates to it (node A arms finish ≈ 01:30). The successor gate is vs
+    `M10-KIB4-a40-bf16`.
+  - **Nox-4B released: `d55528d1` = `4b-SDMLxALL`.**
+  - **Vega-27B:** the cross-arm m50 release is still pending (27B #6).
+
+- 2026-10-02 23:20 — **FAST PATH for the three pending releases** (Nox `4b-SDMLxALL`, Lux `KIB4-a40`, Vega
+  `M6-IBxIB2-m50`; user: "为啥迟迟不发布").
+  - **Pre-upload checks unchanged:** formal typed-FINAL no-collapse, the row-level contamination audit, and the
+    package parity gate.
+  - **Post-upload checks:**
+    - the real download with a **sha256 re-hash of every file** against the package manifest (byte identity proves
+      the scored weights are what is served);
+    - the Hub `trust_remote_code` smoke under 5.17 and 5.18;
+    - the **86-request parity gate** on the downloaded package.
+    
+    **The four-panel answer re-run after upload is WAIVED** for these releases (coordinator decision). Record the
+    waiver in the release record.
+  - **Then purge and verify.** Publish as soon as possible; never concurrently on the same repo.
+
+- 2026-10-02 23:02 — **USER: RELEASE NOW** the three leading candidates.
+  - **4B:** `4b-SDMLxALL` (M17, 7cee4275, interrupted to release).
+  - **9B:** `KIB4-a40` (M10, 89b53e70, interrupted to release).
+  - **27B: `M6-IBxIB2-m50`.** 27B #6 (2a824a6b), this is for you: release it as soon as the pre-release parity passes,
+    on top of Vega `e60bd8e3`, without waiting for anything else. It is global #3.
+  - **The launch film uses these as the official scores:** Nox 42.49 (class #3, global #17), Lux 46.26 (class #3,
+    global #14), Vega 56.47 (class #3, **global #3**).
+
+- 2026-10-02 22:37 — **ARM FACTORY (`track=arm-factory`): batch 1 is training on 15 GPUs.** Prereg `75da74ff6`,
+  amendment 1 `b1c6e254a`, state `v2/af/records/af-state.md` on `xunzhuo/decision-2-arm-factory`.
+  - **9B, node A GPU1–6 (ends ≈ 01:30):** `KIB4` s4 / s5 (seeds 3 / 4); `KIB4W2` s1 / s2 (KIB4's TRAIN, IB4 rows
+    ×2 loss weight); `KIB4L2` s1 / s2 (backbone LR 2e-5).
+  - **4B, node C GPU3–7 and node F GPU2–5 (ends ≈ 00:30):** new seeds of `4b-LHS17IB4`, `4b-SDMLIB4`, `4b-LHS17UP`
+    (M17's locked data); `4b-LHS17IB4-lrh` (half LR); new mixtures `4b-LHS17IB4ML` (S17 + IB4 + IB3 + the ML copies)
+    and `4b-LHS23IB4` (S23 + IB4 + IB3), both with a row-level audit PASS (0 item rows, planted 200 / 200).
+  - **Leases:** node F GPU2–5 held stale harness leases of M17's finished `SDMLxALL15` run (all shards exit 0 at
+    14:14Z); they are moved to `owner.prev-af-*`. Node F GPU6–7 and node B GPU2 / 4 / 6 / 7 are untouched.
+  - **M17 (7cee4275):** don't train these arms; the factory hands over its arm soups and one `4b-AFxALL` point.
+  - **M10 (89b53e70):** the factory will build the KIB4-family soup `KF` (your KIB4 s1–s3 via the `KIB4P` soup plus
+    its six seeds) and `KF × KIB` points; it copies `KIB4P` and the KIB soup read-only from node B (hash-checked).
+
+- 2026-10-02 22:20 — **27B (continuation #6): idle 27B GPUs filled; the Vega-27B release of `M6-IBxIB2-m50` is in
+  flight.**
+  - **Release.** Choice `M6-IBxIB2-m50`: of the two qualifying cross-arm soups it has the larger Index lower bound vs
+    M6-IB (values private). R3 (no type collapsed), IF3 (row-level audit) and package parity pass. Spec and decision
+    derive from `specs/dev2-27b-org.json` and supersede `e60bd8e3` (27B branch `b9297450d`). Prerelease on node A GPU0
+    (shared lease `release-27b-27bx`) since 14:08Z; the upload runs only if Vega's `main` is still `e60bd8e3`.
+  - **Runtime phase A (2d541b40):** keep holding Vega's runtime-only revision until this release lands, then publish it
+    on top of the new `main`. Never publish concurrently.
+  - **M8** (prereg on the 27B branch, `22b3f0268`): nine seeds on node B GPU0–1, node D GPU5–7 and node E GPU0–2 / 6.
+    They are extra seeds of M6-IB / M6-IB2 / M7-IB14ML plus the ML-free arms M8-IB14 / M8-IB124. They end ≈ 04:00–09:00Z
+    on 10-03 (≈ 145 GPU-h). Node E is staged for 27B training; the 27B launcher allows node E GPU0–3 / 6–7, never 4–5.
+
+- 2026-10-02 22:00 — **New ARM FACTORY worker (fresh Max agent, `track=arm-factory`).**
+  - **Why:** GPU utilisation has been about 15 of 43 for 40+ minutes, and the owners are in release / soup phases.
+  - **What it does:** trains new, diverse 4B and 9B arms on idle GPUs (9B on node A GPU1–7; 4B on node C GPU3–7,
+    node F GPU2–7 and node B GPU2, 4, 6, 7), builds soups and BF16 copies, and measures each once.
+  - **Hand-offs:** 4B candidates go to M17 (7cee4275), the Nox publisher; 9B candidates go to M10 (89b53e70), the Lux
+    publisher. The factory never publishes.
+  - **27B #6 (2a824a6b):** owns node D and node E for the Vega cross-arm release and its M8 arms.
+  - **Owners:** fold the factory's soups into your cross-arm averages. Don't train duplicate arms; check its record on
+    `xunzhuo/decision-2-arm-factory`.
+
+- 2026-10-02 21:41 — **RUNTIME PHASE A LANDED in integration (`85419d98d`; runtime-a worker 2d541b40).** Record
+  `v2/release/records/dev2-runtime-a-2026-10-02.md`.
+  - **Runtime-only revisions (current `main`):** Kai `51b7b474` (p50 15.96 → 4.89 ms), Eos `1d380452` (21.51 → 5.99),
+    Sol `6a62b319` (21.09 → 7.18), Nox `137e28ce` (27.26 → 12.94), Lux `f77b41f5` (31.76 → 19.48). Weights
+    byte-identical; every size has 0 answer changes and 0.0 drift on all four scored panels (10,653 prompts).
+  - **Weight-release workers (M17 4B, 9B M10, 27B f5779f55):** merge integration now. Supersede the current `main`
+    by deriving from `specs/dev2-<key>-ra.json`, its ra gate and decision (`<name>.decision.ra.json`), and copy the
+    frozen autotune cache `/data/dev2/runs/release/triton/runtime-a-<key>` (digest in
+    `dev2-runtime-a-2026-10-02/<key>/triton.json`) for your runs. 9B M10 already does.
+  - **Vega 27B: held for the 27B release.** Parity on `e60bd8e3`'s weights passes (p50 109.80 → 69.18 ms);
+    `specs/dev2-27b-ra.json` and the decision supersede `e60bd8e3`, cache `runtime-a-27b`. Nothing was uploaded, so
+    `main` stays `e60bd8e3` for the 27B release. Build it with the phase A runtime (take `runtime_source` and the
+    cache from `dev2-27b-ra.json`) or say so; otherwise runtime-a publishes a runtime-only revision on top of the
+    27B release after it lands.
+  - **Left out:** the FLA gfx942 retune and GVA-prenorm (not shown bit-identical). Gate commits `5e2c3fa92` and
+    `c6c754a41` were cherry-picked. Shared modules: `runtime/fast.py`, `runtime/fast_kernels.py` (new),
+    `decision2/qwen.py` hook. No runtime-a leases remain.
+
 - 2026-10-02 21:20 — **WATCHDOG: GPU utilisation fell to 16/43 when all Index waves finished at once.**
   - **27B (f5779f55): RELEASE NOW.** The cross-arm `M6-IBxIB2-m50` / `-m67` both measure about 56.47 (node D runs),
     above M6-IB and above AutoJev-27B: **global and class rank 3**.

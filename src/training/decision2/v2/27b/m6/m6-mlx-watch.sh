@@ -5,7 +5,10 @@
 # (v2.eval.multilingual_panel score, mlx-diag-v1) and pair it with A20r's scored node A collection
 # (v2.06b.m8_scorebias mlx-paired: R4 = card-eligible Choice + Noul, paired upper bound >= 0; XNLI Score report only).
 # The pairing JSON is left in the relay directory for node B's `m6-tail.sh mlx-pull`. mlx/NAME.SKIP (node B's chain
-# made no formal run for NAME) ends the wait. Usage: m6-mlx-watch.sh MIRROR_SHA NAME. Detached, log on stdout.
+# made no formal run for NAME) ends the wait. MLX_ALSO="LABEL=RUN ..." also pairs NAME with those scored node A
+# collections (e.g. the current release's, M6-IB=/data/dev2/runs/27b/m6/mlx-diag/M6-IB) -> mlx/NAME-vs-LABEL.json,
+# written before the A20r pairing, whose arrival node B waits for.
+# Usage: m6-mlx-watch.sh MIRROR_SHA NAME. Detached, log on stdout.
 set -euo pipefail
 echo "m6 mlx watch $*: start $(date -u +%FT%TZ)"
 SHA=${1:?MIRROR_SHA} NAME=${2:?NAME}
@@ -34,6 +37,13 @@ cd "$S"
 export PYTHONPATH=$S PYTHONDONTWRITEBYTECODE=1
 python3 -m v2.eval.multilingual_panel score --panel "$PANEL" --predictions "$OUT/output/mlx-diag.predictions.jsonl" \
   --output "$OUT/mlx-diag.score.json" > "$OUT/score.log"
+for spec in ${MLX_ALSO:-}; do
+  label=${spec%%=*} run=${spec#*=}
+  [[ "$label" =~ ^[A-Za-z0-9._-]+$ ]] && [ -f "$run/mlx-diag.score.json" ] || { echo "bad MLX_ALSO entry $spec" >&2; exit 2; }
+  python3 -m v2.06b.m8_scorebias mlx-paired --candidate-run "$OUT" --released-run "$run" --panel "$PANEL" \
+    --output "$OUT/../mlx-paired-$NAME-vs-$label.json"
+  cp -p "$OUT/../mlx-paired-$NAME-vs-$label.json" "$X/$NAME-vs-$label.json"
+done
 python3 -m v2.06b.m8_scorebias mlx-paired --candidate-run "$OUT" --released-run "$REF" --panel "$PANEL" \
   --output "$OUT/../mlx-paired-$NAME-vs-A20r.json"
 cp -p "$OUT/../mlx-paired-$NAME-vs-A20r.json" "$X/$NAME-vs-A20r.json"
