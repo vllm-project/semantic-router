@@ -23,7 +23,8 @@
 #            shards per GPU, one after another); detached on the node
 #   status   NODE: per shard records, end and exit code; GPU-h of the current intervals
 #   score    NODE: score.sh (merge, port + kit, compare) once every shard ended 0
-#   pull     node D -> node C: merged/ results, compare, port, receipt and kit index (SHA-256 equal on both sides)
+#   pull     node D -> node C through node B (transfer keys; the workstation link is too slow): merged/ results,
+#            compare, port, receipt and kit index (SHA-256 equal on both sides)
 #   import   SD only: node D's runs/DEV2.0-4B-LHA10SD/merged -> node C (results SHA-256 = its receipt's)
 #   boot     node C, CPU, detached: family_delta vs DEV2.0-4B-LH; the paired bootstrap (v2.eval.ix1.paired_boot,
 #            2,000 replicates, seed 20261002) full panel -> runs/NAME/4bif-boot-full-vs-lh.json and transfer-only
@@ -188,7 +189,7 @@ EOF
     on d "test -f $R/runs/$NAME/merged/receipt.json" || { echo "node D has no scored $NAME" >&2; exit 3; }
     on c "umask 077; mkdir -p $R/runs/$NAME/merged.part/kit"
     for f in results.jsonl compare.json port.json receipt.json latency.json kit/index.json; do
-      on d "cat $R/runs/$NAME/merged/$f" | on c "umask 077; cat > $R/runs/$NAME/merged.part/$f"
+      on b "ssh $KEY $(addr d) 'cat $R/runs/$NAME/merged/$f' | ssh $KEY $(addr c) 'umask 077; cat > $R/runs/$NAME/merged.part/$f'"
       a=$(on d "sha256sum < $R/runs/$NAME/merged/$f | cut -c1-64") c=$(on c "sha256sum < $R/runs/$NAME/merged.part/$f | cut -c1-64")
       [ "$a" = "$c" ] || { echo "$f differs after the copy" >&2; exit 3; }
     done
