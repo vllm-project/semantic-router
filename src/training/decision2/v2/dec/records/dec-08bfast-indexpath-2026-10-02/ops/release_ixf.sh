@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # 0.8B / 2B Index-first successors (user decision 2026-10-02 09:55; M16 08b-RA-a75 -> Decision-2.0-Eos-0.8B,
-# 2b-RA-a75 -> Decision-2.0-Sol-2B), node A GPU0 or GPU1 as a recorded co-tenant (shared lease
+# M13 2b-RASD -> Decision-2.0-Sol-2B, coordinator 13:05), node A GPU0 or GPU1 as a recorded co-tenant (shared lease
 # owner.release-<key>-ixf; the 0.6B allocation allows release work), the scored image dbe5f32b with its kernels,
 # HIP_FORCE_DEV_KERNARG=1 and a fresh copy of the persisted autotune cache of the formal run that scored each panel
 # (relayed from node B by relay_cache.sh, checked against its manifest before the copy).
-#   --stage    CPU: the current revision's committed gate receipt and decision (card round 3) into the release
+#   --stage    CPU: the current revision's committed gate receipt and decision (card round 3 / 4) into the release
 #              inputs (identical bytes), and the final decision into the decisions directory
 #   --mlx      release.sh without upload: build, examples, card, AutoModel, parity of mlx-diag 2,275 (the mlx-diag
 #              run's cache); then verify_bundle
@@ -29,14 +29,15 @@ done
 [[ "$mode" =~ ^--(stage|mlx|release)$ ]] || { echo "mode: --stage|--mlx|--release" >&2; exit 2; }
 case "$KEY" in
   0p8b) name=Decision-2.0-Eos-0.8B POINT=08b-RA-a75 superseded=9c7f3ea09a2b04a0647e5919af23c20ed982f246 ;;
-  2b) name=Decision-2.0-Sol-2B POINT=2b-RA-a75 superseded=b42b6ff3efeedcd6534a3169a5db60247b363fb8 ;;
+  2b) name=Decision-2.0-Sol-2B POINT=2b-RASD superseded=8ed41433f5f20c73bf04fe7ef92f2d69c1145002 CARD=card4 ;;
   *) echo "tier key 0p8b or 2b" >&2; exit 2 ;;
 esac
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 S=$(cd "$(dirname "$0")/../../../../.." && pwd)
 SRC=$(basename "$(cd "$S/../../.." && pwd)")
 R=$S/v2/dec/records/dec-08bfast-indexpath-2026-10-02
-CARD3=$S/v2/release/records/dev2-card3-2026-10-02
+CARD=${CARD:-card3}
+CARDS=$S/v2/release/records/dev2-$CARD-2026-10-02
 PURGE=$S/v2/dec/records/dec-08bfast-indexpath-2026-10-02/ops/purge_superseded.py
 RENAME_OPS=$S/v2/release/records/dev2-rename-9b-27b-2026-09-29/ops
 G=/data/dev2/private/panels/goldfree
@@ -73,9 +74,9 @@ copy_cache() { # cache-dir run-receipt dest
 }
 
 if [[ "$mode" == --stage ]]; then
-  install_file "$CARD3/$KEY/release/receipts/gate.json" "$IN/current/gate.json"
-  install_file "$CARD3/$name.decision.card3.json" "$IN/current/$name.decision.card3.json"
-  echo "current gate $(sha256sum < "$IN/current/gate.json" | cut -c1-12) decision $(sha256sum < "$IN/current/$name.decision.card3.json" | cut -c1-12)"
+  install_file "$CARDS/$KEY/release/receipts/gate.json" "$IN/current/gate.json"
+  install_file "$CARDS/$name.decision.$CARD.json" "$IN/current/$name.decision.$CARD.json"
+  echo "current gate $(sha256sum < "$IN/current/gate.json" | cut -c1-12) decision $(sha256sum < "$IN/current/$name.decision.$CARD.json" | cut -c1-12)"
   exit 0
 fi
 
@@ -109,12 +110,14 @@ else
   )
   hub_args=(--upload --collect --already-collected --hub-site "tf518=$TF518")
 fi
+mounts=(--mount "$G" --mount "$RUN" --mount "$IN")
+[[ -d "$MLXRUN" ]] && mounts+=(--mount "$MLXRUN")
 echo "mirror $SRC tier $KEY mode $mode gpu $gpu work $W"
 set -x
 status=0
 "$S/v2/release/release.sh" --spec "$SPEC" --src "$SRC" --work "$W" --image "$IMAGE" \
   --gpu "$gpu" --track "$LEASE" --shared-lease "$LEASE" --threads 4 "${kernel_args[@]}" \
-  --env "TRITON_CACHE_DIR=$TC" --mount-rw "$TC" --mount "$G" --mount "$RUN" --mount "$MLXRUN" --mount "$IN" \
+  --env "TRITON_CACHE_DIR=$TC" --mount-rw "$TC" "${mounts[@]}" \
   "${parity_args[@]}" "${hub_args[@]}" || status=$?
 set +x
 [[ "$status" == 0 ]] || { echo "release.sh failed ($status); work=$W" >&2; exit "$status"; }

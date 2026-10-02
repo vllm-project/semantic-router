@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Card assets of a 0.8B / 2B Index-first successor, rendered on the workstation (as the 9B release did): the tier's
-# card round-3 spec with the successor's candidate report and mlx-diag score, every report read from a byte-identical
+# current-main card spec (0.8B round 3, 2B round 4) with the successor's candidate report and mlx-diag score (if run), every report read from a byte-identical
 # local copy of its node A file (LOCAL/<node A path>), the private Index input built on node A, the Inter fonts and
 # the repository logo; v2.release.card_assets of this checkout under Python 3.12.13, matplotlib 3.11.2 and
 # Pillow 12.3.0 (uv). The receipt card-assets.json pins the report, Index, logo and font SHA-256s, so the release
@@ -17,7 +17,9 @@ test ! -e "$OUT" || { echo "$OUT exists" >&2; exit 3; }
 umask 077
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-python3 - "$S/v2/release/specs/dev2-$KEY-card3.json" "$KEY" "$LOCAL" "$TMP/spec.json" <<'PY'
+CARD=card3
+[ "$KEY" = 2b ] && CARD=card4
+python3 - "$S/v2/release/specs/dev2-$KEY-$CARD.json" "$KEY" "$LOCAL" "$TMP/spec.json" <<'PY'
 import json, sys
 from pathlib import Path
 base, key, local, out = sys.argv[1:5]
@@ -26,7 +28,10 @@ run = f"/data/dev2/runs/release/dev2-{key}-ixf-t1"
 for i, e in enumerate(s["card"]["reports"]):
     if i == 0:
         assert e["role"] == "candidate"
-        e["report"], e["mlx"] = f"{run}/REPORT.json", f"{run}-mlx/mlx-diag.score.json"
+        e["report"] = f"{run}/REPORT.json"
+        e.pop("mlx", None)
+        if Path(local + f"{run}-mlx/mlx-diag.score.json").is_file():
+            e["mlx"] = f"{run}-mlx/mlx-diag.score.json"
     for field in ("report", "mlx"):
         if e.get(field):
             path = Path(local + e[field])

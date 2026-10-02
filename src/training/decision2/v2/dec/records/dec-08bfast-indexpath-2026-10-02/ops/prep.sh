@@ -30,7 +30,8 @@ $E/m2/q1-kev08b kev
 $E/m1/p2-jpt08b jpt08b"
     PAIRED_NAMES="dev2-0p8b adopted-1.0 intern kev" ;;
   2b)
-    POINT=2b-RA-a75 TIER=2B NAME=Decision-2.0-Sol-2B CUR=$REL/dev2-2b-t1-derived
+    POINT=2b-RASD ORIGIN=M13 TIER=2B NAME=Decision-2.0-Sol-2B CUR=$REL/dev2-2b-t1-derived NOMLX=1
+    WHY="no CAL698 fit"
     CURM_PRED=$REL/inputs/dev2-2b-t1/derived/mlx-diag.predictions.jsonl CURM_SCORE=$REL/dev2-2b-t1-derived-mlx/mlx-diag.score.json
     COMPARATORS="$CUR dev2-2b
 $DF/m3/sol1-16k same-limit-16k
@@ -49,8 +50,9 @@ DM=$D-mlx
 CURM=$IN/current-mlx
 GATES=$IN/gates
 BCK=/data/dev2/models/ix1/dec-indexpath/$POINT-bf16-ckpt
-LEFT="$NAME M16 $POINT (T = 1)"
-LABEL="$NAME successor M16 $POINT at T = 1 (the sealed M16 formal run, collected without calibration; post-key same-panel)"
+ORIGIN=${ORIGIN:-M16} WHY=${WHY:-CAL698 rejected} NOMLX=${NOMLX:-}
+LEFT="$NAME $ORIGIN $POINT (T = 1)"
+LABEL="$NAME successor $ORIGIN $POINT at T = 1 (the sealed M16 formal run, collected without calibration; post-key same-panel)"
 export PYTHONPATH=$S:$S/v2/9b
 cd "$S"
 sums() { (cd "$1" && find . -type f | LC_ALL=C sort | xargs -r sha256sum); }
@@ -83,7 +85,7 @@ PY
     --typed-final "$RUN/output/typed-final.predictions.jsonl" --css15 "$RUN/output/css15.predictions.jsonl" \
     --public231 "$RUN/output/public231.predictions.jsonl" \
     --prior-receipt "$RUN/COLLECT.json" --prior-receipt "$RUN/SEAL.json" --prior-receipt "$RUN/M6-RECEIPT.json" \
-    --reason "T = 1 (uncalibrated) predictions of the $TIER Index-first successor M16 $POINT: the sealed M16 formal run m16-$POINT (node B, image dbe5f32b), collected without calibration (CAL698 rejected), adopted unchanged; every Decision 2.0 model keeps T = 1"
+    --reason "T = 1 (uncalibrated) predictions of the $TIER Index-first successor $ORIGIN $POINT: the sealed M16 formal run m16-$POINT (node B, image dbe5f32b), collected without calibration ($WHY), adopted unchanged; every Decision 2.0 model keeps T = 1"
   python3 -B -m v2.eval.same_panel seal --run-dir "$D"
   python3 -B -m v2.eval.same_panel report --run-dir "$D" --label "$LABEL" --tier "$TIER" --family decision2 \
     --count-safetensors "$IN/bf16/checkpoint"
@@ -97,16 +99,21 @@ a, b = (json.load(open(p))["v3"] for p in sys.argv[1:3])
 assert abs(a["score"] - b["score"]) < 1e-9 and a["T"] == b["T"] and a["H"] == b["H"], (a, b)
 print("adopted run reproduces the formal report:", round(a["score"], 3))
 PY
+  mkdir "$GATES"
+  python3 -B -m v2.eval.gates types --run "$D" --label "$LEFT" --output "$GATES/types.json"
+  python3 -B -m v2.eval.gates public231 --left "$D" --right "$CUR" --left-name "$LEFT" \
+    --right-name "$NAME (current, T = 1)" --output "$GATES/public231-vs-current.json"
+  if [ -n "$NOMLX" ]; then
+    # No mlx-diag run and no exposure receipt for this point (COORDINATION 11:40: no reference-only evals).
+    sha256sum "$D"/*.json "$GATES"/* | cut -c1-80
+    exit 0
+  fi
   mkdir -p "$DM/output" "$CURM/output"
   cp "$MLX/output/mlx-diag.predictions.jsonl" "$DM/output/"
   python3 -B -m v2.eval.multilingual_panel score --panel "$MLXP" \
     --predictions "$DM/output/mlx-diag.predictions.jsonl" --output "$DM/mlx-diag.score.json"
   cp "$CURM_PRED" "$CURM/output/"
   cp "$CURM_SCORE" "$CURM/"
-  mkdir "$GATES"
-  python3 -B -m v2.eval.gates types --run "$D" --label "$LEFT" --output "$GATES/types.json"
-  python3 -B -m v2.eval.gates public231 --left "$D" --right "$CUR" --left-name "$LEFT" \
-    --right-name "$NAME (current, T = 1)" --output "$GATES/public231-vs-current.json"
   python3 -B -m lux9b.mlx_paired --left "$DM" --right "$CURM" --panel "$MLXP" --left-name "$LEFT" \
     --right-name "$NAME (current, T = 1)" --output "$GATES/mlx-paired-vs-current.json"
   cp -p "$F/exposure-$POINT.json" "$GATES/exposure.json"

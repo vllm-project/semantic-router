@@ -25,7 +25,7 @@ R=/data/dev2/private/eval/index021/ix1
 P=/data/dev2/private/release/ixf-$KEY
 case "$KEY" in
   0p8b) TIER=0.8B NAME=M16-08b-RA-a75-bf16 REF=DEV2.0-0.8B AUDIT=out-08bRA PKG=/data/dev2/models/ix1/dec-indexpath/08b-RA-a75-bf16-rbede7938 ;;
-  2b) TIER=2B NAME=M16-2b-RA-a75-bf16 REF=DEV2.0-2B AUDIT=out-2bRA PKG=/data/dev2/models/ix1/dec-indexpath/2b-RA-a75-bf16-ra53cf66a ;;
+  2b) TIER=2B NAME=M16-2b-RASD-bf16 REF=DEV2.0-2B AUDIT=out-2bRA PKG=/data/dev2/models/ix1/dec-indexpath/2b-RASD-bf16-ra53cf66a ;;
   *) echo "tier key 0p8b or 2b" >&2; exit 2 ;;
 esac
 declare -A REPO=([0.6B]=Decision-2.0-Kai-0.6B [0.8B]=Decision-2.0-Eos-0.8B [2B]=Decision-2.0-Sol-2B

@@ -17,6 +17,7 @@ T=/data/dev2/runs/dec/ixf-relay
 tm() { echo "cd $1 && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1"; }
 for run in "m16-$POINT" "m16-$POINT-mlx"; do
   dir=$F/$run-cache
+  if [[ "$run" == *-mlx ]] && ! on "$A" "test -f $F/$run/M6-RECEIPT.json"; then echo "$run: no mlx-diag run"; continue; fi
   want=$(on "$A" "python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"cache\"][\"after_manifest_sha256\"])' $F/$run/M6-RECEIPT.json")
   [[ "$want" =~ ^[0-9a-f]{64}$ ]] || { echo "no after-manifest for $run on node A" >&2; exit 3; }
   if on "$A" "test -d $dir"; then
