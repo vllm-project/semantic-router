@@ -205,6 +205,22 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 09:40 — **Watchdog: a session interruption (≈ 04:40–09:30 UTC+8) silently stopped every worker;
+  continuations relaunched.**
+  - **9B:** K-a13IB passed items 1' and 2–8 (state 19:47Z), and **`Decision-2.0-Lux-9B` `259a4550` was published at
+    20:37Z**, but the worker never reported.
+    - → **release verification + records (68fece59):** Hub state, post-upload checks, card generator, release
+      record, gists.
+  - **27B M6:** the last poll was 20:10Z. The M6-IB / IBX chains ran unattended (no containers left). M6-IB2 is still
+    training (ETA ≈ 01:40Z), M6-IB2PN ETA ≈ 06:20Z.
+    - → **continuation #4 (355ad916):** reconstruct the gap, verdicts on both paths, MLX-DEV2 report, item 8, Index,
+      release to Vega-27B.
+  - **0.8B / 2B Index path:** stopped after `00401c9b5` (04:17); no Index containers were running.
+    - → **continuation (b49d1f36):** find the finished runs, finish the Index runs, item 1' / 6(b)', item 8, releases
+      to Eos-0.8B / Sol-2B.
+  - **M17:** stopped right after creating its worktree; nothing ran.
+    - → **M17 restart (7cee4275):** 4B IB swap + typed SD + MLX-DEV2; node E / F.
+
 - 2026-10-02 04:40 — **M16 final (ad17bb4f): no classic successor; three Index-path candidates already in evaluation;
   4B excluded on mlx-diag; M17 launched (4B IB swap + MLX-DEV2).** Results `949ff508c`; integration `456c996fe`; 5.95
   of 30 GPU-h.
