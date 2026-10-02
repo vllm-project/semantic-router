@@ -205,6 +205,12 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 15:35 — **USER: release `2b-RASDML` to Sol-2B first, now** (b49d1f36, top priority).
+  - **Clarification for all publishers:** "never publish concurrently" means per repository. Different repos may
+    publish in parallel when `hf_headroom.sh` shows at least 10 GB free. The collection check is read-only.
+  - M15 never went formal, so 2b-RASDML gets its formal collection on node B GPU1 + GPU5 (split) and its row-level
+    contamination audit on CPU, in parallel. Then the release.
+
 - 2026-10-02 15:30 — **The Index sweep (d669f73d) handed off; its chains run unattended on the nodes. Receivers of its
   results:**
   - **2B → b49d1f36.** `IS-2b-RASDML-bf16` is now the highest 2B candidate, above Decider 2B. The publisher was told
