@@ -89,7 +89,14 @@ section first). Earlier: 2026-10-02 17:45 UTC+8 (09:45Z; continuation #5 from 08
   interruption like exit 139. `ead59fe86`: `M8_RESUME` takes the next recovery attempt. A first relaunch on node F GPU6
   was refused before any container started (GPU6 / 7 hold the arm factory's IX1 run since 19:28Z; the launcher was
   waiting for an idle GPU and was stopped); the seed resumed as `full-r3` on its own GPU4 at 19:34Z (last allowed
-  recovery) and is past step 648. Old relay moved to `relay/M8-IB-s4.failed-r2-*`; new relay running. Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
+  recovery) and is past step 648. Old relay moved to `relay/M8-IB-s4.failed-r2-*`; new relay running.
+- **20:48Z: M9 launched** on node A GPU1–4 (COORDINATION 03:18 / 04:18 / 04:25: M9, +100 GPU-h; node A GPU0 stays the
+  runtime worker's; node F GPU6 went back to the arm factory's IX1 run). Prereg `m9-prereg-2026-10-03.md` (`7069ecc96`;
+  launcher fix `b8a49fbe0`: launch3's m6-a stage jobs stay on GPU2). Build `m9-build.sh` on node B 20:39Z: `a20ib1ml`
+  89,316 rows (`9bdba984…`, +8,022 ML copies) and `a20ib12ml` 123,045 rows (`0a362079…`, +17,233), both builds
+  byte-identical (the two ml receipts differ only in their output paths), C1 source check clean; copied to node A with
+  `a20ib1` (SHA-256 equal). Seeds (s5 = 20261004): M9-IB12ML GPU1 (save 962, cap 22), M9-IB1ML GPU2 (698, 20), M9-IB2
+  GPU3 (827, 20), M9-IB GPU4 (636, 16); relays on node A (`RELAY_NODE=a`, pulled over the M6 node link). Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
 continuation #3, 4a20f83f, 19:37–20:10Z, silently stopped after its 20:10Z poll; its entries below say "cba71646",
 which is the coordinator's ID; worker 3 0d2e488f ran 15:12–19:40Z; worker 2 a56025bb 10:44–15:15Z; worker 1 11741ee2
 06:17–10:55Z). **Amendment 6 (`6bbb2512d`): the MLX-DEV2 guard for every M6 finalist** (COORDINATION 04:15).
