@@ -1,0 +1,179 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "final",
+  "decision": "release",
+  "model_name": "Decision-2.0-Sol-2B",
+  "repo_id": "llm-semantic-router/Decision-2.0-Sol-2B",
+  "identity": {
+    "model_sha256": "32872f2968e38aa99901797aaab5e12e32e281bf67bb924037d443394411170d"
+  },
+  "report_sha256": "08745acf9fc753bc1d3b0335dc3e341c697a657a9e6c7c26d85eebfebf4d160c",
+  "paired_sha256": "bca44e5f286312f2e96ac69b590347ddf37d81899dd762f5ce48475365c824ab",
+  "calibration": "none: raw model probabilities (temperature 1), no calibration.json; the CAL698 temperatures d73e9ce4 (Choice 0.742, Noul 0.816, Score 0.154) were evaluated on the development panels and rejected under the coordinator's 2026-09-28 23:15 UTC+8 rule (receipt 56de813b: typed-DEV Brier 0.267 -> 0.289, ECE-10 0.095 -> 0.135, CSS-pilot Brier-sum 0.748 -> 0.757; 0 answer changes)",
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's request of 2026-10-02 10:35 UTC+8 for banner A on every card now (COORDINATION 10:35): card-only revisions of the sizes whose releases are not running or about to publish",
+  "prepared_by": "Decision 2.0 release engineering, card worker fb5dd490 (worktree vllm-sr-dev2-card4-rollout)",
+  "decided_utc": "2026-10-02T02:35:00Z",
+  "action": "Card-only revision of the private repository llm-semantic-router/Decision-2.0-Sol-2B: assets/banner.png is regenerated (banner concept A of the current card generator). Every other file, the README and every Index chart included, and every model, tokenizer, runtime and remote-code file is byte-identical to the released revision b42b6ff3efeedcd6534a3169a5db60247b363fb8. The collection is not changed; everything stays private.",
+  "revision_binding": "This decision names no revision; receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified.",
+  "supersedes": {
+    "final_sha256": "bf8d2200ee889651ee3b05a342f8b8fcf4cb84cc897e1d944b8470887cac354a",
+    "released_as": "llm-semantic-router/Decision-2.0-Sol-2B@b42b6ff3efeedcd6534a3169a5db60247b363fb8",
+    "released_manifest_sha256": "fc89fd97d946cbcbf9e079105f0358ab9fe8daa068f41c16ea22be5018480484",
+    "released_gate_sha256": "c5d5a1379c19399e7c0649adef7453df2828186bcb5b453f0e0756735a23e6cb",
+    "earlier": {
+      "final_sha256": "964e7ed9b94ec3139f314d423aec760ed479b9a6351eab660e925471af1b64d6",
+      "released_as": "llm-semantic-router/Decision-2.0-Sol-2B@73bb148b08891047c5ae96656548a9fbc387f2c8",
+      "released_manifest_sha256": "e1a36cf97bf8ca2af54755c9be984e0e9a95c8e6b058b3484b9be12dafc9fd00",
+      "released_gate_sha256": "89c06c68be95d6efe2ff518b40e5a51ebc84296790b97a21b43b5aa8fc3b33fd",
+      "earlier": {
+        "final_sha256": "bdee90d9e36c8875f8fb61b095dba378d94ce95a563695f78379ab57c60e4ba9",
+        "released_as": "llm-semantic-router/DEV2.0-2B@9f6ca45d76776f3d461ae8afea4531a18a1ae624",
+        "released_manifest_sha256": "c166620fd4396d802065989a8472356af6db5e9d877c9e77af490d865374da32",
+        "released_gate_sha256": "a9367b549df66ef9baf3813e217fc34c37b30fa15404f55ea879b222299f1710",
+        "earlier": {
+          "final_sha256": "5a7a26e464ce6799bff1d5b6b95d8567a61a817e8d4a09a764dfe9f26f6c3d02",
+          "released_as": "llm-semantic-router/DEV2.0-2B@2973ad4a13d0ab47d7599595f1c938c74ac3c660",
+          "released_manifest_sha256": "d684013aa068f28c2e90db7be0fb6118ca19c2565eb97963b1bd5af67e18b7b2",
+          "released_gate_sha256": "a4357eee0699a88d990a47931ee47b91c6d35634a5cdfd3b1162f6ed46f8b254",
+          "earlier": {
+            "final_sha256": "6e15df749d6d7e24fc78d9b7fecd47c2d1d69f6338db164c87993907a769bd54",
+            "released_as": "llm-semantic-router/DEV2.0-2B@ffe291b4401930040914339592cd9fc59b9a3f87",
+            "released_manifest_sha256": "e3ef580a765d82572ce5a089d5de4a985bceaf4b6e7eb8c17c21d02340584550",
+            "released_gate_sha256": "01a442b4d28e9b4c60d92a09d450fe7defe05684d6e18668bea1105bc39f615b",
+            "earlier": {
+              "final_sha256": "efee9bf0552b9f90060dc34f248a4990669d669709e14250aeec5f1b105f7b28",
+              "released_as": "llm-semantic-router/DEV2.0-2B@56950ec50d74e0a6d34a04070eb02c05a19f6775",
+              "released_manifest_sha256": "1bf67b4956b58a91789b2d803f3987661698e2a58cec65c5b25179f9d1c4dfd5",
+              "released_gate_sha256": "d4e5c8ba0a869e1136dbbd73257c128cc4c9ad196f8ab0f47714272d324b1bc5",
+              "earlier": {
+                "final_sha256": "861297288633463d79aa23ab59ada47dcbf0ad6872c37747382d1a41dc8818b2",
+                "released_as": "llm-semantic-router/DEV2.0-2B@a53cf66a0d9d492a84b6617b61e7ce35fcd03af0",
+                "released_manifest_sha256": "637a8af08bb95c2a91c17dc4899f7406b85f9541661cb447425228f23b45846a",
+                "released_gate_sha256": "bd594337967a6e8e624f4bcd24675e5c7ef3430cc895ee2533a6fa28e32e4196",
+                "card_revision": null,
+                "earlier": {
+                  "final_sha256": "743c5b2e26f7a2c53c2c1e08e83b92f73ac617f08371341fb92c930b30e6d235",
+                  "released_as": "llm-semantic-router/DEV2.0-2B@a47bdf895d982896b0e65c2bdc61330fe1ad2d7c",
+                  "released_manifest_sha256": "1ba359509a76cb638a41d296e4037913f2864ac454bdd552e41ac8cd819bd25a",
+                  "released_gate_sha256": "beca4c82f4faeff2ed7219c59a90472ef4f7562907ee357869f36a07dbeb9f75",
+                  "card_revision": {
+                    "kind": "card-only",
+                    "spec": "v2/release/specs/dev2-2b-card-c1.json",
+                    "spec_sha256": "d7f8bed3ffb45b45443c6c2a76427ec45cfff90be09dcaa169ebac76c9230fa6",
+                    "c1_record": "v2/eval/records/m4-c1-event3-prep-2026-09-29.md (section 0000)"
+                  },
+                  "earlier": {
+                    "final_sha256": "de59a6c71e35b7cbdf32be18d72436a6b76aebc3e1adee84e068645bdd7cc85c",
+                    "released_as": "llm-semantic-router/DEV2.0-2B@5ad3e9a3cc4865ce0360f4ecce2b345020bfdb38",
+                    "released_manifest_sha256": "6c4e1885ec68f1047b7bb9e9604373cc44129178dc900791f5617612016c6e51",
+                    "released_gate_sha256": "8dbf4c87a95a69866c905e5597dec6b16f4e6b4bbf3c1c9ee305decc994f2c39",
+                    "earlier": {
+                      "draft_sha256": "31ae8a9890bc3daf4d0dbd3cb8844b4a0164449d709fde69a441791d9701b536",
+                      "build_draft_sha256": "fde8c87ea45162a1cbecf85be579eb22c8d19c6d5a3635dd1b238f81adcdaa6c",
+                      "verified_revision": "b2c5d7eac4ef24648cbf9c23c26421f0960ca542"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "rationale": "The release judgement of the superseded final decision bf8d2200… stands unchanged: the same identity 32872f29, scored report, paired comparison, calibration and licence decision. Only card files and the manifest digests change; release.sh checks the native examples, the card's Transformers example before upload, after the real download and from the Hub in fresh environments under Transformers 5.17 and 5.18, the card structure and every card link.",
+  "gate_evidence": {
+    "post_key_v3": {
+      "candidate": 53.437,
+      "sol1_16k_control": 45.781,
+      "delta": 7.66,
+      "ci95": [
+        3.26,
+        10.81
+      ],
+      "paired_sha256": "bca44e5f286312f2e96ac69b590347ddf37d81899dd762f5ce48475365c824ab"
+    },
+    "vs_sol1_adopted": {
+      "delta": 7.86,
+      "ci95": [
+        3.36,
+        10.8
+      ]
+    },
+    "vs_decider_2b": {
+      "delta": 3.94,
+      "ci95": [
+        -2.48,
+        5.67
+      ],
+      "H_delta": 0.105,
+      "H_ci95": [
+        -0.008,
+        0.132
+      ],
+      "T_delta": -0.04,
+      "T_ci95": [
+        -0.07,
+        -0.009
+      ]
+    },
+    "vs_this_that_1p2": {
+      "delta": 7.33,
+      "ci95": [
+        -2.0,
+        13.6
+      ],
+      "H_delta": 0.12,
+      "H_ci95": [
+        -0.05,
+        0.223
+      ]
+    },
+    "no_type_collapsed": {
+      "choice": 0.556,
+      "noul": 0.709,
+      "score": 0.438
+    },
+    "public231": {
+      "candidate": 171,
+      "sol1_16k_control": 160,
+      "decider_2b": 175
+    },
+    "overlap_effect": {
+      "record": "v2/eval/records/m5-overlap-effects-2026-09-29.md",
+      "integration": "cae64f4e8",
+      "touched_items": 19,
+      "v3_without_or_all_wrong": 53.44
+    }
+  },
+  "licence_decision": "apache-2.0: own weights, Decision 1.0 Sol-2B @ce0c018a and Qwen/Qwen3.5-2B @15852e8c text backbone and tokenizer are all Apache-2.0; training-data licences (CC BY, CC BY-SA, MIT, Apache-2.0, CC0, OANC) credited in ATTRIBUTIONS.md; Decider 2B (Apache-2.0) and This-That 1.2 (MIT) shown with a note that their licences come from card metadata only; the XNLI-based mlx-diag Score part stays off the card.",
+  "release_rationale": "Per-size release gate under the full-autonomy mandate. (1) Post-key same-panel JevArena v3 53.437 vs the stricter Decision 1.0 Sol same-renderer 16K control 45.781: +7.66 [+3.26, +10.81] (lower bound > 0); vs adopted Sol1 +7.86 [+3.36, +10.80]; 53.44 >= 44.5 (90% of Decider 2B 49.50). (2) Eval gates (record m4-dev2-2b-gates-2026-09-29, approval 02:50 UTC+8): human transfer not below Decider 2B (+0.105 [-0.008, +0.132]) or This-That 1.2 (+0.120 [-0.050, +0.223]); no type collapsed (Choice .556, Noul .709, Score .438 vs chance .267 / .50 / .20). (3) Calibration: T = 1 under the 23:15 rule. (4) Overlap effect (eval record m5-overlap-effects-2026-09-29, integration cae64f4e8): the S2T training rows flagged by the M3b XL r2 rescreen touch 19 scored items (18 media_ideology, 1 tropes); rescored without them or counting all as errors, v3 stays 53.44 and no comparison or gate changes; no contamination signature. (5) Package verified (real download, re-hash 33/33, loaded parameters 1,883,930,944, examples bit-identical in three processes, full-panel parity 0 changes). (6) Card in the 1.0 design with every disclosure; C1 line pending event 3 (placeholder). Licence apache-2.0.",
+  "c1": "Event 3 (v1.2) on the released weights (5ad3e9a3, identity 073bd1f2): 45.70 vs Decision 1.0 Sol 16K 45.03 (+0.68 [-0.91, +2.22], level), Decider 2B 42.45 (+3.26 [+1.32, +5.21]) and This-That 1.2 42.81 (+2.90 [+0.85, +4.99]), both significantly above. No significant loss against a card peer, so no C1 task or language list is added. The BF16 storage copy computes the same BF16 matmuls as the scored FP32 checkpoint, so the C1 baseline of these weights stays valid for this revision. The runtime-only revision computes the same products, so this line stays valid for it.",
+  "disclosures": [
+    "gain over Decision 1.0 Sol is typed reasoning; human transfer level (+0.033 [-0.044, +0.092])",
+    "transfer tasks below Sol 1.0 (mrf -0.094, wiki_corpus -0.045, flute -0.032, full tradeoffs table)",
+    "vs Decider 2B: margin not significant; typed accuracy significantly lower (-0.040); Choice weakest type vs peers; public hard tier 57 vs 63",
+    "typed Score almost never predicts level 0 (6 of 400, recall 0.03)",
+    "mlx-diag: non-English Noul -2.2 points, Korean Noul 0.59 vs 0.63",
+    "evaluation familiarity: 45 training rows share long word sequences with 19 human-transfer items; v3 unchanged without them",
+    "seed dependence; CPU not verified; C1 line pending"
+  ],
+  "storage_revision": {
+    "kind": "bf16-storage",
+    "spec": "v2/release/specs/dev2-2b-bf16.json",
+    "spec_sha256": "cef36904af02f08ba1bbfda2a1d5bde097d502630282027b3e1c2bd812b1199e",
+    "bf16_copy_receipt_sha256": "a5229ef121b8f081087bc636a247c76be5fa6c8e70ecabf3156d01c0ff2becd1",
+    "source_model_sha256": "073bd1f2fe62e39fe993f57006bab17ece50a7e6fc7c5ee72107fefddeb81da4",
+    "tensors_by_storage_dtype": {
+      "BF16": 186,
+      "F32": 134
+    },
+    "tensor_bytes": 4781866240
+  },
+  "previous_rationale": "The release judgement of the superseded final decision 964e7ed9… stands unchanged: the same identity 32872f29, scored report, paired comparison, calibration and licence decision. Only the Index charts' size axis convention, the Index footnote and the manifest digests change; release.sh checks the native examples, the card's Transformers example before upload, after the real download and from the Hub in fresh environments under Transformers 5.17 and 5.18, the card structure and every card link.",
+  "card_revision": {
+    "kind": "card-banner",
+    "spec": "v2/release/specs/dev2-2b-card4.json",
+    "spec_sha256": "6c5f01ccb57e3c58e165cabebe6596a8fe3b0e92fc35bd2a961d8ec5f6565b34"
+  }
+}
