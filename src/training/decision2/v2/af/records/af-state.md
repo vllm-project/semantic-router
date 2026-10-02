@@ -2,6 +2,18 @@
 
 Index values stay private (node private stores and `decision2-program/private/arm-factory/`); this file has none.
 
+## 2026-10-02 15:05Z (23:05 UTC+8) — all 15 preflights PASS; candidates pinned (amendment 2)
+
+- All 15 seeds passed their preflights (node A 14:29–14:38Z, node C 14:27–14:35Z, node F 14:38–14:44Z) and are in
+  their full runs. Training GPU-h so far ≈ 4.7.
+- Amendment 2 (`b1b34a3a9`): one arm, one vote (factory seeds extend M17's arm soups to `-x5` / `-x4`), the exact
+  members of `4b-AFxALL` / `4b-AFxALL2`, the 9B family soup `KF` and its points, and the measurement order.
+- Imported read-only to node A (node B → C → A, per-file SHA-256 lists equal): M10 `KIB4P` (KIB4 s1–s3, model
+  `159bfda1…`) as `soup/m10-KIB4P`; K-a13IB's arm soup `KIB` (model `794ebfd2…`) as `soup/m9-KIB`.
+- Node F is a full 4B Index node now: the scoring environment and `IS-4b-LHA10SDML-bf16`'s merged results (SHA-256
+  `a459ce7c…`) copied from node C.
+- IX1 entries `AF-<name>-bf16` (`6df5d9264`, a separate commit to `v2/eval/ix1/launch.sh`).
+
 ## 2026-10-02 14:35Z (22:35 UTC+8) — 15 GPUs training
 
 | Node / GPU | Chain (items in order) | Since |
