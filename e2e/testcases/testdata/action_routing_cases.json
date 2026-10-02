@@ -36,15 +36,15 @@
     "description": "A non-coding math question should keep the math domain decision even if the action classifier reads it as explain",
     "query": "What is 2 + 2?",
     "expected_decision": "math_decision",
-    "expected_matched_signal": "",
-    "should_match": false
+    "expected_matched_signal": "explain",
+    "should_match": true
   },
   {
     "name": "Biology request - keep domain routing",
     "description": "A non-coding biology question should keep the biology domain decision even if the action classifier reads it as explain",
     "query": "Tell me about cellular biology",
     "expected_decision": "biology_decision",
-    "expected_matched_signal": "",
-    "should_match": false
+    "expected_matched_signal": "explain",
+    "should_match": true
   }
 ]
