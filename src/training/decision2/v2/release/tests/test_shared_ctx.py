@@ -431,11 +431,11 @@ class SwitchTest(unittest.TestCase):
     def test_fallbacks(self):
         qs = questions(6, 6)
         exact, _ = self.backend().system_one(STATE, qs)
-        backend = self.backend({"tau": 1.0})
+        backend = self.backend({"tau": 1.0, "fallback": "rows"})
         answers, _ = backend.system_one(STATE, qs)
         self.assertEqual(backend.share_stats["rescored"], 6)
         self.close(answers, exact, tolerance=1e-6)
-        backend = self.backend({"tau": 1.0, "fallback": "request"})
+        backend = self.backend({"tau": 1.0})
         answers, _ = backend.system_one(STATE, qs)
         self.assertFalse(backend.share_stats["shared"])
         self.assertEqual(answers, exact)

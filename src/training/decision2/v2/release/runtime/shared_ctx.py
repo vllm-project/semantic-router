@@ -19,10 +19,12 @@ then the suffixes as a padded batch continuing from it (also the fallback when
 the packed row exceeds the forward token budget).
 
 The arithmetic is not the exact path's (other GEMM shapes, attention kernels and
-reduction orders), so answers can move slightly. ``tau`` bounds that: every
-answer whose top-two probability margin (Noul: ``|2p - 1|``) is below ``tau`` is
-re-scored on the exact path, in its exact-path batch's padded length and mask
-regime (``fallback="rows"``), or the whole request is (``fallback="request"``).
+reduction orders), so near-tie answers can flip. ``tau`` bounds that: a request
+with an answer whose top-two probability margin (Noul: ``|2p - 1|``) is below
+``tau`` runs on the exact path (``fallback="request"``, the exact answers), or
+only those answers are re-scored in their exact-path batch shape
+(``fallback="rows"``; cheaper, but a re-scored near-tie can flip again since the
+exact path itself is not batch-invariant).
 ``min_questions`` and ``min_shared_tokens`` keep requests where sharing costs
 more than it saves on the exact path.
 """
@@ -61,7 +63,7 @@ class SharePolicy:
     min_questions: int = 2
     min_shared_tokens: int | None = None
     align: int = 1
-    fallback: str = "rows"
+    fallback: str = "request"
     mode: str = "tree"
     max_buckets: int = 1
     bucket_tokens: int = 2048
