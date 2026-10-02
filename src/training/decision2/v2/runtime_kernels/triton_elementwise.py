@@ -5,8 +5,8 @@ points: FP32 residual stream and norms, BF16 at every place the reference
 rounds (Linear inputs, SiLU / sigmoid outputs, the gated norm's intermediate
 cast, the conv output before FLA's L2 norm). Transcendentals use the same
 OCML functions the ATen kernels call (``exp``, ``log1p``, ``rsqrt``) and
-floating-point contraction is disabled except where the reference itself
-fuses (the causal-conv1d kernel's multiply-adds, written as explicit FMAs).
+floating-point contraction is disabled, as in the ROCm builds of ATen and
+causal-conv1d (``probe_conv`` checks the conv arithmetic bit for bit).
 Reductions (RMSNorm means, the L2 norm) cannot follow ATen's reduction tree,
 so those outputs can differ from the reference in the last FP32 bit, which
 moves a BF16 result by one unit in rare cases.
@@ -167,7 +167,8 @@ def _gdn_prep_kernel(
             other=0.0,
         )
         wv = tl.load(w_ptr + c * KW + w)
-        acc = tl.fma(wv[None, :], xv.to(tl.float32), acc)
+        # the ROCm causal-conv1d build rounds every product and sum (no FMA): bit-exact this way
+        acc = acc + wv[None, :] * xv.to(tl.float32)
     y = (acc / (1.0 + libdevice.exp(-acc))).to(tl.bfloat16)
     if j < 2 * NK:
         yf = y.to(tl.float32)
