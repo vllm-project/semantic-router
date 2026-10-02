@@ -76,6 +76,15 @@ that window but not other memories. Corrections phrased another way or written
 in another language aren't recognized yet. Setting
 `reflection.algorithm: noop` turns this off along with the rest of the filter.
 
+## Observability
+
+Router Memory exposes bounded Prometheus metrics on the Router scrape endpoint.
+Retrieval volume is tracked by `llm_memory_retrieval_total` with `backend` and
+`status` labels (`hit`, `miss`, `error`). Latency and result counts use separate
+histograms without per-user labels. If you upgrade from a release that labeled
+memory metrics with `user_id`, follow the [Router Memory Prometheus label release
+note](../../release-notes/router-memory-prometheus-labels).
+
 ## Upgrading the embedding model
 
 Restart the model runtime after changing embedding weights. For local `mmbert`

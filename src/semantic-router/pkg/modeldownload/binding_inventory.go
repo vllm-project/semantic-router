@@ -488,7 +488,7 @@ func intersectStrings(a, b []string) []string {
 // Explicit bindings retain their selected revision. Implicit built-in modules
 // use the registry pin only when the local path still names that repository.
 func modelRevision(path, repoID string) string {
-	if model := config.GetModelByPath(path); model != nil && model.RepoID == repoID && model.Revision != "" {
+	if model := config.GetModelByPath(path); model != nil && config.SameModelRepo(model.RepoID, repoID) && model.Revision != "" {
 		return model.Revision
 	}
 	return "main"
@@ -496,7 +496,7 @@ func modelRevision(path, repoID string) string {
 
 func modelDownloadExcludePatterns(path, repoID string, runtimePatterns []string) []string {
 	patterns := slices.Clone(runtimePatterns)
-	if model := config.GetModelByPath(path); model != nil && model.RepoID == repoID {
+	if model := config.GetModelByPath(path); model != nil && config.SameModelRepo(model.RepoID, repoID) {
 		for _, pattern := range model.DownloadExcludePatterns {
 			if !slices.Contains(patterns, pattern) {
 				patterns = append(patterns, pattern)
