@@ -1,0 +1,71 @@
+{
+  "answers_file": "bench-old.answers.jsonl",
+  "answers_sha256": "76b5613e8d8c26ca1ffa8a59d68c14847991f2f8b045db022c25ad0172534454",
+  "count": 400,
+  "device_name": "",
+  "fp32_master": false,
+  "ids_sha256": "eed99a82102f2679efc132c34ef7719cf6d81999e5019c829c87be010452c3c7",
+  "input_tokens_mean": 346.2825,
+  "items_per_s": 36.27978783615844,
+  "latency_ms": {
+    "max": 50.25767697952688,
+    "mean": 27.56355700083077,
+    "min": 26.468763826414943,
+    "p50": 27.255849912762642,
+    "p95": 28.356696013361216
+  },
+  "load_seconds": 31.49618134391494,
+  "memory_gib": {
+    "after_load": 9.124245643615723,
+    "load_peak": 9.124245643615723,
+    "request_peak": 9.253693103790283
+  },
+  "mode": "run",
+  "model_name": "Decision-2.0-Nox-4B",
+  "package_manifest_sha256": "b51ed83d384290970bc4895464fe330a92fad84daff61b197c6026656ef31286",
+  "parameter_bytes": 9695352832,
+  "passed": true,
+  "profile": "qwen-full",
+  "prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd",
+  "runtime": {
+    "fast_path": null,
+    "hip": "7.2.53211",
+    "kernels": {
+      "causal_conv1d": "1.7.0",
+      "fla_path": "/opt/decision-fla/fla",
+      "flash_linear_attention": "0.5.2",
+      "kernel_bindings": {
+        "causal_conv1d_fn": "causal_conv1d.causal_conv1d_interface.causal_conv1d_fn",
+        "causal_conv1d_update": "causal_conv1d.causal_conv1d_interface.causal_conv1d_update",
+        "torch_chunk_gated_delta_rule": "fla.ops.gated_delta_rule.chunk.chunk_gated_delta_rule",
+        "torch_recurrent_gated_delta_rule": "fla.ops.gated_delta_rule.fused_recurrent.fused_recurrent_gated_delta_rule"
+      },
+      "runtime_check_sha256": "4517d9e001d9e1e2b520086b5153fa69b642a191efb19b8c9a6a9ef126e1fc2d",
+      "triton": "3.7.1+gitf0b55c07",
+      "triton_cache_autotuning": "1",
+      "triton_cache_dir": "/data/dev2/runs/runtime-a/triton/4B-bench-old-20261002T114413Z"
+    },
+    "numpy": "2.3.5",
+    "parameter_dtypes": {
+      "bfloat16": 3569090560,
+      "float32": 639292928
+    },
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "residency": {
+      "linear_bf16": 248,
+      "linear_fp32": 0
+    },
+    "safetensors": "0.8.0",
+    "sites": [
+      "/opt/decision-fla"
+    ],
+    "threads": 4,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0"
+  },
+  "schema": "dev2-runtime-bench/1",
+  "warmup": 400,
+  "warmup_passes": 2
+}
