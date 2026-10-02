@@ -95,6 +95,8 @@ def gdn_prep(
     if expand_qk and v_heads // k_heads > 1:
         query = query.repeat_interleave(v_heads // k_heads, dim=2)
         key = key.repeat_interleave(v_heads // k_heads, dim=2)
+    # FLA's ``input_guard`` makes every tensor argument contiguous before the kernels run
+    query, key, value = query.contiguous(), key.contiguous(), value.contiguous()
     if l2norm:
         from fla.modules.l2norm import l2norm_fwd
 
