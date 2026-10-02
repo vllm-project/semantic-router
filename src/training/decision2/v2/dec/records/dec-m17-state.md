@@ -4,6 +4,21 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17` (r
 stopped after creating the worktree, nothing had run). Prereg `da770d98a`, ops `1ce8b2220` (mirror on nodes E / F),
 data lock `4f68f1eb0`.
 
+## 2026-10-02 11:30Z — two successor candidates; cross-arm soups on the Index
+
+- Lower bound vs SDML > 0 (successor candidates, not yet released): `4b-SDMLxS17-m50` and `4b-LHS17IB4X-m50`.
+  Neither reaches the 4B goal. Not successors: `4b-LHS17IB4`, `4b-LHS17IB4X`, `4b-LHS17IB4-m50`.
+- Every m50 point so far measures above its arm: averaging differently trained soups helps. So wave 4 adds two
+  cross-arm soups (amendment 3, `0ebaabe8`): `4b-SDMLxS17xIB4` and `4b-SDMLxALL`, staged and on the Index (node F
+  GPU2/3/6/7, from 11:19Z).
+- Bootstraps running on node C: `4b-SDMLIB4`, `4b-SDMLIB4-m50`. Index run on node E: `4b-LHS17ML`, then
+  `4b-LHS17ML-m50`.
+- Wave 4 seeds: `4b-LHS17IB4` s3 DONE (11:16Z); its three-seed soup `-x3` is building on F GPU4. `4b-SDMLIB4` s3 is
+  training (F GPU5).
+- The formal-path readouts (DEV, CSS pilot) of the cross points are running on F GPU4. The formal collection of
+  the chosen candidate follows.
+- Integration merged at `39599a5cc` (the org pipeline change `f72f4de36`, `vllm-sr`).
+
 ## 2026-10-02 10:15Z — Nox-4B 9f2ddafc released; wave 3 on the Index; wave 4 training
 
 - Released `Decision-2.0-Nox-4B@9f2ddafc` (M15 `4b-LHA10SDML`; record `d0875c71d`). Every later candidate is judged
