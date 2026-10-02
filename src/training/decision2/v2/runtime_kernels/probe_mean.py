@@ -113,6 +113,56 @@ def _sum_kernel(
 
 
 @triton.jit
+def _sum128_kernel(x_ptr, out_ptr, VARIANT: tl.constexpr):
+    row = tl.program_id(0).to(tl.int64)
+    x = tl.load(x_ptr + row * 128 + tl.arange(0, 128))
+    sq = x * x
+    if VARIANT == 0:  # unvectorised, 64 lanes: x_t + x_{t+64}
+        lo, hi = tl.split(tl.permute(tl.reshape(sq, [2, 64]), (1, 0)))
+        s = _tree_neighbours(lo + hi)
+    elif VARIANT == 1:  # vec4, 32 lanes
+        even, odd = tl.split(tl.reshape(sq, [32, 2, 2]))
+        a0, a2 = tl.split(even)
+        a1, a3 = tl.split(odd)
+        v = ((a0 + a1) + a2) + a3
+        a, b = tl.split(tl.reshape(v, [16, 2]))
+        v = a + b
+        a, b = tl.split(tl.reshape(v, [8, 2]))
+        v = a + b
+        a, b = tl.split(tl.reshape(v, [4, 2]))
+        v = a + b
+        a, b = tl.split(tl.reshape(v, [2, 2]))
+        v = a + b
+        a, b = tl.split(tl.reshape(v, [1, 2]))
+        s = tl.reshape(a + b, [])
+    elif VARIANT == 2:  # vec2, 64 lanes
+        a0, a1 = tl.split(tl.reshape(sq, [64, 2]))
+        s = _tree_neighbours(a0 + a1)
+    elif (
+        VARIANT == 3
+    ):  # unvectorised, 32 lanes: four elements t, t+32, t+64, t+96 in four accumulators
+        q = tl.permute(tl.reshape(sq, [4, 32]), (1, 0))
+        e, o = tl.split(tl.reshape(q, [32, 2, 2]))
+        a0, a2 = tl.split(e)
+        a1, a3 = tl.split(o)
+        v = ((a0 + a1) + a2) + a3
+        a, b = tl.split(tl.reshape(v, [16, 2]))
+        v = a + b
+        a, b = tl.split(tl.reshape(v, [8, 2]))
+        v = a + b
+        a, b = tl.split(tl.reshape(v, [4, 2]))
+        v = a + b
+        a, b = tl.split(tl.reshape(v, [2, 2]))
+        v = a + b
+        a, b = tl.split(tl.reshape(v, [1, 2]))
+        s = tl.reshape(a + b, [])
+    else:  # unvectorised 64 lanes, halves tree
+        lo, hi = tl.split(tl.permute(tl.reshape(sq, [2, 64]), (1, 0)))
+        s = _tree_halves(lo + hi)
+    tl.store(out_ptr + row, s)
+
+
+@triton.jit
 def _rsqrt_kernel(v_ptr, out_ptr, eps, N, BLOCK: tl.constexpr, MODE: tl.constexpr):
     i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
     m = i < N
@@ -194,6 +244,19 @@ def main() -> None:
             out[f"H{H}/rsqrt/{name}"] = (
                 (r.view(torch.int32) == r_ref.view(torch.int32)).double().mean().item()
             )
+    x = torch.randn(65536, 128, device=dev).to(torch.bfloat16).float()
+    ref128 = x.pow(2).mean(-1)
+    for variant in range(5):
+        s128 = torch.empty(65536, device=dev)
+        _sum128_kernel[(65536,)](
+            x, s128, VARIANT=variant, num_warps=1, enable_fp_fusion=False
+        )
+        out[f"D128/variant{variant}"] = (
+            ((s128 * (1.0 / 128)).view(torch.int32) == ref128.view(torch.int32))
+            .double()
+            .mean()
+            .item()
+        )
     (args.out / "probe_mean.json").write_text(json.dumps(out, indent=1, sort_keys=True))
     for key, val in out.items():
         print(f"{key:40s} {val:.6f}")
