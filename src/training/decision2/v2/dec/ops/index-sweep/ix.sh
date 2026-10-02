@@ -6,6 +6,8 @@
 # ~/code/decision2-program/private/index-sweep/; this script prints none.
 #
 # usage: ix.sh MIRROR_SHA STAGE ARGS...
+#   env    NODE            the bootstrap environment (index021 venv, suite-0.2, kit-19ad28ec, external) from node A
+#   pkgcopy SRC NODE NAME  copy NAME's staged package from node SRC to NODE (SHA-256 lists equal)
 #   pkg    NODE TIER       copy the tier's IX1 package from node C to NODE (SHA-256 lists equal)
 #   ref    NODE TIER       copy the tier's reference run (merged results, compare, receipt) from node C to
 #                          NODE ix1/index-sweep/refs/<REF>/ (node D through a node A relay directory)
@@ -53,6 +55,7 @@ declare -A TIER=(
   [IS-08b-RASD]=0.8B [IS-08b-RAUP]=0.8B [IS-08b-RASDML]=0.8B
   [IS-2b-RA]=2B [IS-2b-RASD]=2B [IS-2b-RAUP]=2B [IS-2b-RA-a75]=2B
   [IS-L9IB]=9B [IS-K-a12IB]=9B
+  [IS-K-a13IBX]=9B [IS-L9IBX]=9B [IS-4b-LHA10SDML]=4B
 )
 declare -A SOUP=(  # node:directory of the frozen FP32 soup (or a copy whose content manifest equals the soup's)
   [IS-08b-RASD]=a:/data/dev2/runs/dec/m16/inputs/arms/08b-RASD
@@ -64,6 +67,9 @@ declare -A SOUP=(  # node:directory of the frozen FP32 soup (or a copy whose con
   [IS-2b-RA-a75]=b:/data/dev2/runs/dec/m16/points/2b-RA-a75/build/2b-RA-a75
   [IS-L9IB]=a:/data/dev2/runs/9b/m9/soup/L9IB/build/L9IB-soup
   [IS-K-a12IB]=a:/data/dev2/runs/9b/m9/soup/K-a12IB/build/K-a12IB
+  [IS-K-a13IBX]=a:/data/dev2/runs/9b/m9/soup/K-a13IBX/build/K-a13IBX
+  [IS-L9IBX]=a:/data/dev2/runs/9b/m9/soup/L9IBX/build/L9IBX-soup
+  [IS-4b-LHA10SDML]=f:/data/dev2/runs/dec/m15/soup/4b-LHA10SDML/build/4b-LHA10SDML-soup
 )
 declare -A MODEL=(  # model_sha256 from each soup's build log (the identity its development readouts carry)
   [IS-08b-RASD]=02c170864d0c00895236e2c0c5ee592f38d8360878c53a56da875197ead0e8de
@@ -75,10 +81,13 @@ declare -A MODEL=(  # model_sha256 from each soup's build log (the identity its 
   [IS-2b-RA-a75]=bbba9fad97c8fd0434f97fb641e68a14023f12cfc9f64addd555b027bfe80cdd
   [IS-L9IB]=d7c48f9a869a795cb76d2c64d633cc58af91474c94db4577ec82466af189625b
   [IS-K-a12IB]=68fed4cb24ecefb9499f4b532a4a34df621ab89138bc03f2086965f5dc0c35d0
+  [IS-K-a13IBX]=d559b85c2254c5fd77c7e207b02f157b0174cbecf877b1a53d09ee36ff00abc4
+  [IS-L9IBX]=695c0ce2cdece30482ee2fad287caf3a101d78c062351bbb3b8d20ee0dbc5b5f
+  [IS-4b-LHA10SDML]=1b51567523426b896ae50afeefca4f133c2e3c220c349ebfb9b9c630600dd19d
 )
-declare -A BASEPKG=([0.8B]=DEV2.0-0.8B-bede7938 [2B]=DEV2.0-2B-a53cf66a [9B]=DEV2.0-9B-e51f9881)
-declare -A LOADED=([0.8B]=753446208 [2B]=1883930944 [9B]=7940895744)
-declare -A REF=([0.8B]=DEV2.0-0.8B [2B]=DEV2.0-2B [9B]=K-a13IB-bf16)
+declare -A BASEPKG=([0.8B]=DEV2.0-0.8B-bede7938 [2B]=DEV2.0-2B-a53cf66a [4B]=DEV2.0-4B-13d42143 [9B]=DEV2.0-9B-e51f9881)
+declare -A LOADED=([0.8B]=753446208 [2B]=1883930944 [4B]=4208383488 [9B]=7940895744)
+declare -A REF=([0.8B]=DEV2.0-0.8B [2B]=DEV2.0-2B [4B]=DEV2.0-4B-LH [9B]=K-a13IB-bf16)
 sums() { echo "cd '$1' && find . -type f | LC_ALL=C sort | xargs -r -P 8 -n 4 sha256sum | LC_ALL=C sort -k2"; }
 pkgdir() {  # NODE NAME -> package directory of the mirror's launch.sh entry
   on "$1" "grep -o '^  \[$2\]=\"[^\"]*\"' $S/v2/eval/ix1/launch.sh" | sed -E 's/.* ([^ ]+)"$/\1/'
@@ -87,14 +96,14 @@ copy() {  # SRC_NODE SRC_DIR DST_NODE DST_DIR: whole directory, SHA-256 lists eq
   local sn=$1 sd=$2 dn=$3 dd=$4 a b
   on "$dn" "test ! -e '$dd'" || { echo "$dd exists on node $dn" >&2; return 3; }
   on "$dn" "mkdir -p '$(dirname "$dd")'"
-  case "$sn$dn" in
-    ac | ad | bc | bd) on "$sn" "rsync -a -e '$KEY' '$sd/' '$(host "$dn"):$dd.part/'" ;;
-    ea | ca) on a "rsync -a -e '$KEY' '$(host "$sn"):$sd/' '$dd.part/'" ;;
-    cd)
+  case "$sn$dn" in  # node A / B hold the key authorized on C-F; C-F pairs relay through node A
+    a[c-f] | b[c-f]) on "$sn" "rsync -a -e '$KEY' '$sd/' '$(host "$dn"):$dd.part/'" ;;
+    [c-f]a) on a "rsync -a -e '$KEY' '$(host "$sn"):$sd/' '$dd.part/'" ;;
+    [c-f][c-f])
       local relay
-      relay=/data/dev2/tmp/isweep-relay/$(basename "$dd")
-      on a "test ! -e '$relay' && mkdir -p '$(dirname "$relay")' && rsync -a -e '$KEY' '$(host c):$sd/' '$relay/' && \
-        rsync -a -e '$KEY' '$relay/' '$(host d):$dd.part/' && rm -rf '$relay'" ;;
+      relay=/data/dev2/tmp/isweep-relay/$sn$dn-$(basename "$dd")
+      on a "test ! -e '$relay' && mkdir -p '$(dirname "$relay")' && rsync -a -e '$KEY' '$(host "$sn"):$sd/' '$relay/' && \
+        rsync -a -e '$KEY' '$relay/' '$(host "$dn"):$dd.part/' && rm -rf '$relay'" ;;
     *) echo "no transfer route $sn -> $dn" >&2; return 2 ;;
   esac
   on "$dn" "mv -T '$dd.part' '$dd'"
@@ -104,6 +113,20 @@ copy() {  # SRC_NODE SRC_DIR DST_NODE DST_DIR: whole directory, SHA-256 lists eq
 }
 
 case "$STAGE" in
+  env)
+    N=${1:?NODE}
+    for x in venv suite-0.2 kit-19ad28ec external; do
+      on "$N" "test -e $R/../$x" && { echo "node $N has $x"; continue; }
+      copy a "$R/../$x" "$N" "$R/../$x"
+    done ;;
+  pkgcopy)
+    SN=${1:?SRC_NODE} N=${2:?NODE} NAME=${3:?NAME}
+    pkg=$(pkgdir "$SN" "$NAME")
+    if [[ "$pkg" != $MD/index-sweep/* ]] || ! on "$SN" "test -f $pkg/MODEL_MANIFEST.json"; then
+      echo "no staged $NAME package on node $SN" >&2
+      exit 3
+    fi
+    copy "$SN" "$pkg" "$N" "$pkg" ;;
   panel)
     N=${1:?NODE} PNAME=${2:?PANEL} FROM=${3:-a}
     on "$N" "test -f $R/$PNAME/panel.json" && { echo "node $N has $PNAME"; exit 0; }

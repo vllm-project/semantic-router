@@ -89,6 +89,12 @@ declare -A DIAGNOSTIC=(  # name -> "repository revision package-dir"
   [IS-2b-RA-a75-bf16]="DEV2.0-2B a53cf66a0d9d492a84b6617b61e7ce35fcd03af0 /data/dev2/models/ix1/index-sweep/2b-RA-a75-bf16-ra53cf66a"
   [IS-L9IB-bf16]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/index-sweep/L9IB-bf16-re51f9881"
   [IS-K-a12IB-bf16]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/index-sweep/K-a12IB-bf16-re51f9881"
+  [IS-K-a13IBX]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/index-sweep/K-a13IBX-d559b85c-re51f9881"
+  [IS-L9IBX]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/index-sweep/L9IBX-695c0ce2-re51f9881"
+  [IS-4b-LHA10SDML]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/index-sweep/4b-LHA10SDML-1b515675-r13d42143"
+  [IS-K-a13IBX-bf16]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/index-sweep/K-a13IBX-bf16-re51f9881"
+  [IS-L9IBX-bf16]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/index-sweep/L9IBX-bf16-re51f9881"
+  [IS-4b-LHA10SDML-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/index-sweep/4b-LHA10SDML-bf16-r13d42143"
 )
 
 mode="${1:-}"; shift || true
