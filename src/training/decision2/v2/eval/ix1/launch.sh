@@ -82,7 +82,7 @@ declare -A DIAGNOSTIC=(  # name -> "repository revision package-dir"
   [IS-K-a12IB]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/index-sweep/K-a12IB-68fed4cb-re51f9881"
 )
 for _m10 in KUP-a33 KUP-a25 KUP-a40 KIBM-a33 KIBM-a25 KIBM-a40 KSW-a33 KSW-a25 KSW-a40 KIB4-a33 KIB4-a25 KIB4-a40 KX-a33 KX-a25 KX-a40 \
-  X{1..6}-a33 X{1..6}-a25 X{1..6}-a40; do  # 9B M10 BF16 release copies (X: amendment 5 cross-arm points)
+  X{1..6}-a33 X{1..6}-a25 X{1..6}-a40 KIB4P-a33 KIB4P-a25 KIB4P-a40 KXP-a33 KXP-a25 KXP-a40; do  # 9B M10 BF16 release copies (X: amendment 5 cross-arm points)
   DIAGNOSTIC[M10-$_m10-bf16]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/9b-m10/$_m10-bf16-re51f9881"
 done
 unset _m10

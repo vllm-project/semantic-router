@@ -7,6 +7,8 @@
 #   M10_PHASE=2 (amendments 1 / 3): GPU2 / 4 "KSW:1" / "KSW:2" (launched by ksw.sh teach once KSW is locked;
 #   English-only x60 cut, IB1-r3 minus `sentfin` + IB2, K-a13IB self-distillation targets on the x60 rows) and
 #   GPU6 / 7 "KIB4:1" / "KIB4:2" (K-a13IB construction, IB1 `sentfin` out, IB4 phase 1 in, x60 re-cut to match)
+#   M10_PHASE=3 (amendment 6): extra seeds GPU3 "KIB4:3", GPU6 / 7 "KX:4" / "KX:5" (seeds 2 / 3 / 4; KX locked on node
+#   B with prep.sh kx-lock against node A's hashes)
 # Arms = the K-a13IB recipe (full fine-tuning of Lux 1.0, own-Lux KL 1.0 on x60 rows, IB rows gold only, CE + 0.5
 # Brier, backbone LR 1e-5, head LR 1e-4, seeds 20260926 / 1 / 2) at K-a13's 60,183,732 native tokens:
 #   KUP  = K-a13IB's TRAIN byte for byte, x60 rows loss weight 1.5, IB rows 1 (--example-weights);
@@ -35,6 +37,9 @@ case $NODE$PHASE:$GPU in
   b2:4) ITEMS="KSW:2" ;;
   b2:6) ITEMS="KIB4:1" ;;
   b2:7) ITEMS="KIB4:2" ;;
+  b3:3) ITEMS="KIB4:3" ;;
+  b3:6) ITEMS="KX:4" ;;
+  b3:7) ITEMS="KX:5" ;;
   a1:1) ITEMS="KX:1" ;;
   a1:2) ITEMS="KX:2" ;;
   a1:7) ITEMS="KX:3" ;;
@@ -54,7 +59,7 @@ if [ "$MODE" = launch ]; then
 fi
 [ "$MODE" = run ] || { echo "unknown mode $MODE" >&2; exit 2; }
 
-SEEDS=(20260926 1 2)
+SEEDS=(20260926 1 2 3 4)
 COMMON=(--teacher-kl-weight 1.0 --teacher-partial --brier-weight 0.5 --weight-decay 0.01 --warmup-ratio 0.05
   --epochs 1 --batching tokens --max-batch-tokens 32768 --max-batch-rows 64 --update-rows 64 --eval-batch 2
   --checkpoint-schedule even8 --selection matrix-v1 --init decision1 --train-mode full --backbone-lr 1e-5
