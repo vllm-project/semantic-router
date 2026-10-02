@@ -26,7 +26,12 @@ section first). Earlier: 2026-10-02 17:45 UTC+8 (09:45Z; continuation #5 from 08
 - **M8 launched** (prereg `m8-prereg-2026-10-02.md`, `22b3f0268`): M8-IB-s3 node B GPU0, M8-IB2-s3 node B GPU1 (14:06Z),
   M8-IB14ML-s3 node D GPU5 (14:07Z); M8-IB14-s4 / -s5 (node D GPU6 / 7) and M8-IB124-s4 / -s5, M8-IB-s4, M8-IB2-s4
   (node E GPU0 / 1 / 2 / 6) start once node D / node E staging ends (`m6-stage-d.sh`, `M6_STAGE_NODE=e`).
-- **M7:** 5 / 5 seeds on node D GPU0–4, untouched (caps end ≈ 03:20Z IB14ML, ≈ 06:18Z IB124ML). Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
+- **M7:** 5 / 5 seeds on node D GPU0–4, untouched (caps end ≈ 03:20Z IB14ML, ≈ 06:18Z IB124ML).
+- **14:28Z:** all nine M8 seeds past admit / onestep / reload (M8-IB2-s4 last) and in `full`; node E staged
+  (base, T0, data files, `a20ib124`, `a20ib1`, `a20ib12`; a second staging run first failed on a script edited while it
+  ran, then passed from a copy). Relay watchers (`48e4d4807`, `m6-relay.sh` for M7 / M8 seeds) run on node D for the
+  five M7 and three M8 seeds and on node E for its four; node B's two M8 seeds soup in place. Prerelease in scored-panel
+  parity since 14:17Z. M8 prereg amendment 1: the M7 cross-arm candidates and their order, fixed before any M7 result. Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
 continuation #3, 4a20f83f, 19:37–20:10Z, silently stopped after its 20:10Z poll; its entries below say "cba71646",
 which is the coordinator's ID; worker 3 0d2e488f ran 15:12–19:40Z; worker 2 a56025bb 10:44–15:15Z; worker 1 11741ee2
 06:17–10:55Z). **Amendment 6 (`6bbb2512d`): the MLX-DEV2 guard for every M6 finalist** (COORDINATION 04:15).
