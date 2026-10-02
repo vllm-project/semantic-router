@@ -15,6 +15,8 @@
 #                          lists equal; its model SHA-256 (the soup build's) is written next to it
 #   bf16   NODE NAME       v2.release.bf16_copy of the shipped point in the scored image (CPU, no network), then
 #                          restaged as M10-NAME-bf16 (identity / loaded count / T = 1 checks)
+#   pkgcopy NAME FROM NODE  a restaged M10-NAME-bf16 package from node FROM to NODE (SHA-256 lists equal, manifest
+#                          checks repeated)
 #   lease  NODE "GPUS"     owner files of other tracks' released leases -> track=eval-ix1 idle (old file kept)
 #   chain  NODE PANEL "GPUS" NAME...   m10/ixchain.sh detached on NODE (parity gates, runs, scoring, bootstraps);
 #                          M10_SHARDS=N: GPUS is a pool and each of the N shards takes the first idle pool GPU
@@ -132,6 +134,11 @@ case "$STAGE" in
       --checkpoint $out --model-sha256 $model"
     check_manifest "$N" "$bpkg" "$model"
     echo "M10-$NAME-bf16 manifest $(on "$N" "sha256sum < $bpkg/MODEL_MANIFEST.json | cut -c1-64")" ;;
+  pkgcopy)
+    NAME=${1:?NAME} FROM=${2:?FROM} N=${3:?NODE}
+    copy "$FROM" "$MD/9b-m10/$NAME-bf16-re51f9881" "$N" "$MD/9b-m10/$NAME-bf16-re51f9881"
+    check_manifest "$N" "$MD/9b-m10/$NAME-bf16-re51f9881" \
+      "$(on "$N" "python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"identity\"][\"model_sha256\"])' $MD/9b-m10/$NAME-bf16-re51f9881/MODEL_MANIFEST.json")" ;;
   lease)
     N=${1:?NODE} G=${2:?GPUS}
     on "$N" "stamp=\$(date -u +%Y%m%dT%H%M%SZ); for g in $G; do d=/data/dev2/leases/gpu\$g.lock; mkdir -p \$d; \

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 9B M10: run one job in the pinned 9B image (M9's) on one M10 GPU (node B GPU2-4 / 6-7), or on CPU.
+# 9B M10: run one job in the pinned 9B image (M9's) on one M10 GPU (node B GPU2-4 / 6-7, node A GPU1 / 2 / 7), or on CPU.
 #
 # usage: M10_NODE=b launch.sh <job> <mirror-dir> <out-dir> (--cpu | --gpu N) -- <python3 args...>
 #
@@ -23,7 +23,10 @@ fi
 
 node=${M10_NODE:?set M10_NODE=b}
 case $node in
-  b) allowed=" 2 3 4 6 7 " lux=/data/dev2/models/Decision-1.0-Lux-9B/bd45a30aee8c84032791c245c70f86dee5389cc8 ;;
+  b) allowed=" 2 3 4 6 7 " lux=/data/dev2/models/Decision-1.0-Lux-9B/bd45a30aee8c84032791c245c70f86dee5389cc8
+     sel=/data/dev2/runs/9b/m10/inputs/m9/inputs/sel700-cal698 ;;
+  a) allowed=" 1 2 7 " lux=/data/decision20-20260926/models/Decision-1.0-Lux-9B  # file for file node B's bd45a30a
+     sel=/data/dev2/runs/9b/m9/inputs/sel700-cal698 ;;
   *) echo "unknown node $node" >&2; exit 2 ;;
 esac
 image=sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54
@@ -33,7 +36,7 @@ code=/data/dev2/src/$src/src/training/decision2
 receipt_json=/data/dev2/src/$src/.dev2-mirror.json
 sha=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["commit"])' "$receipt_json")
 tree=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["tree"])' "$receipt_json")
-data=${M10_DATA:-$M/inputs/m9/inputs/sel700-cal698}
+data=${M10_DATA:-$sel}
 cache=$M/triton-cache/f83b1d10
 mkdir -p "$(dirname "$out")"
 receipt="$out.launch.json"

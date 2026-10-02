@@ -15,8 +15,10 @@ NODE=${M10_NODE:?set M10_NODE=b}
 M=/data/dev2/runs/9b/m10
 ST=$M/status
 OPS=/data/dev2/src/$SRC/src/training/decision2/v2/9b/lux9b/m10
-LUXHOST=$M/arms/pre/m10-KUP-s1-zero/checkpoint-0000000
-LUXCK=/runs/m10/arms/pre/m10-KUP-s1-zero/checkpoint-0000000
+LUXRUN=m10-KUP-s1
+[ "$NODE" = a ] && LUXRUN=m10-KX-s1
+LUXHOST=$M/arms/pre/$LUXRUN-zero/checkpoint-0000000
+LUXCK=/runs/m10/arms/pre/$LUXRUN-zero/checkpoint-0000000
 LUXSUMS=${M10_LUX_SUMS:-$M/inputs/lux-zero-m9-KIB-s1.sha256}
 mkdir -p "$M/chains" "$M/logs" "$M/soup"
 if [ "$MODE" = launch ]; then

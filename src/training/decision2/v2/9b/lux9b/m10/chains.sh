@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# 9B M10 training chains on node B (prereg lux9b-m10-prereg-2026-10-02.md), one per GPU, each under the GPU's flock:
+# 9B M10 training chains on node B, and node A for KX (amendment 4: node A GPU1 / 2 / 7 "KX:1" / "KX:2" / "KX:3", KX-s1
+# pre-warms; a seed waits ≤ 4 h for its GPU's lease to be released) (prereg lux9b-m10-prereg-2026-10-02.md), one per
+# GPU, each under the GPU's flock:
 #   GPU3 "KUP:1 KIBM:3"  (KUP-s1 pre-warms: its preflights run alone; status/prewarm.DONE after its one-step run)
 #   GPU2 "KUP:2"   GPU4 "KUP:3"   GPU6 "KIBM:1"   GPU7 "KIBM:2"   (after the pre-warm marker)
 #   M10_PHASE=2 (amendments 1 / 3): GPU2 / 4 "KSW:1" / "KSW:2" (launched by ksw.sh teach once KSW is locked;
@@ -17,26 +19,29 @@
 set -u
 MODE=$1 SRC=$2 GPU=$3
 NODE=${M10_NODE:?set M10_NODE=b}
-[ "$NODE" = b ] || { echo "M10 training chains run on node B" >&2; exit 2; }
+case $NODE in b) PREWARM_RUN=m10-KUP-s1 ;; a) PREWARM_RUN=m10-KX-s1 ;; *) echo "M10 training chains run on node A or B" >&2; exit 2 ;; esac
 M=/data/dev2/runs/9b/m10
 C=$M/chains ST=$M/status
 OPS=/data/dev2/src/$SRC/src/training/decision2/v2/9b/lux9b/m10
 mkdir -p "$C" "$ST" "$M/logs"
 PHASE=${M10_PHASE:-1}
-case $PHASE:$GPU in
-  1:3) ITEMS="KUP:1 KIBM:3" ;;
-  1:2) ITEMS="KUP:2" ;;
-  1:4) ITEMS="KUP:3" ;;
-  1:6) ITEMS="KIBM:1" ;;
-  1:7) ITEMS="KIBM:2" ;;
-  2:2) ITEMS="KSW:1" ;;
-  2:4) ITEMS="KSW:2" ;;
-  2:6) ITEMS="KIB4:1" ;;
-  2:7) ITEMS="KIB4:2" ;;
-  *) echo "no M10 phase-$PHASE chain for node B GPU$GPU" >&2; exit 2 ;;
+case $NODE$PHASE:$GPU in
+  b1:3) ITEMS="KUP:1 KIBM:3" ;;
+  b1:2) ITEMS="KUP:2" ;;
+  b1:4) ITEMS="KUP:3" ;;
+  b1:6) ITEMS="KIBM:1" ;;
+  b1:7) ITEMS="KIBM:2" ;;
+  b2:2) ITEMS="KSW:1" ;;
+  b2:4) ITEMS="KSW:2" ;;
+  b2:6) ITEMS="KIB4:1" ;;
+  b2:7) ITEMS="KIB4:2" ;;
+  a1:1) ITEMS="KX:1" ;;
+  a1:2) ITEMS="KX:2" ;;
+  a1:7) ITEMS="KX:3" ;;
+  *) echo "no M10 phase-$PHASE chain for node $NODE GPU$GPU" >&2; exit 2 ;;
 esac
-TAG=b$GPU
-[ "$PHASE" = 1 ] || TAG=b$GPU-p$PHASE
+TAG=$NODE$GPU
+[ "$PHASE" = 1 ] || TAG=$NODE$GPU-p$PHASE
 
 if [ "$MODE" = launch ]; then
   mkdir "$C/launch-$TAG.lock" 2> /dev/null || { echo "M10 chain $TAG already launched"; exit 0; }
@@ -92,9 +97,9 @@ item() {  # <ARM> <seed index>
   local g=$1 i=$2 seed r used t0 wd n=0
   seed=${SEEDS[$((i - 1))]} r=m10-$g-s$i
   terminal "$g" "$i" && return 0
-  if [ "$r" != m10-KUP-s1 ]; then
-    until [ -f "$ST/$MARK" ] || [ -f "$ST/m10-KUP-s1.FAILED" ] || [ -f "$ST/m10-KUP-s1.STOPPED" ]; do
-      [ $((n % 15)) = 0 ] && log "$r waits for the pre-warm run (KUP-s1 one-step)"
+  if [ "$r" != "$PREWARM_RUN" ]; then
+    until [ -f "$ST/$MARK" ] || [ -f "$ST/$PREWARM_RUN.FAILED" ] || [ -f "$ST/$PREWARM_RUN.STOPPED" ]; do
+      [ $((n % 15)) = 0 ] && log "$r waits for the pre-warm run ($PREWARM_RUN one-step)"
       n=$((n + 1))
       sleep 60
     done
@@ -107,6 +112,12 @@ item() {  # <ARM> <seed index>
       return 0
     fi
     [ $((n % 15)) = 0 ] && log "$r waits for its data lock entry"
+    n=$((n + 1))
+    sleep 60
+  done
+  n=0
+  until lease_free || [ "$n" -ge 240 ]; do
+    [ $((n % 15)) = 0 ] && log "$r waits for the GPU$GPU lease to be released"
     n=$((n + 1))
     sleep 60
   done
@@ -132,7 +143,7 @@ item() {  # <ARM> <seed index>
     return 0
   fi
   lease busy "$r (training; seed cap $SEED_CAP GPU-h)" 200
-  log "start $r on node B GPU$GPU (seed $seed; node M10 GPU-h used $used)"
+  log "start $r on node ${NODE^^} GPU$GPU (seed $seed; node M10 GPU-h used $used)"
   t0=$(date -u +%s)
   (
     while sleep 60; do
@@ -145,7 +156,7 @@ item() {  # <ARM> <seed index>
   ) &
   wd=$!
   # shellcheck disable=SC2046
-  M10_NODE=$NODE M10_PREWARM=$([ "$r" = m10-KUP-s1 ] && echo 1 || echo 0) M10_PREWARM_MARK=$MARK \
+  M10_NODE=$NODE M10_PREWARM=$([ "$r" = "$PREWARM_RUN" ] && echo 1 || echo 0) M10_PREWARM_MARK=$MARK \
     bash "$OPS/arm.sh" "$r" "$GPU" "$SRC" /lux -- $(arm_args "$g") "${COMMON[@]}" --seed "$seed"
   kill "$wd" 2> /dev/null
   if grep -qE "^[^ ]+ $r full run complete" "$M/arms/OPERATIONS.log"; then
