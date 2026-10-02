@@ -2,6 +2,18 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 07:45Z (15:45 UTC+8), worker 7e1c9ce8
+
+- **Done:** KUP-s1 / s2 / s3 and KIBM-s1 / s2 (07:0x–07:21Z). KUP soup (`61b5bf75…`) and points built on node B:
+  KUP-a33 `e5f3dd51…`, KUP-a25 `ff73f997…`, KUP-a40.
+- **KSW labeling** done (two shards, ≈ 15 min each; agreement with gold: choice .91, noul .87, score .63);
+  `teacher-sd.jsonl` `bb710e91…`; KSW locked; KSW-s1 / s2 started 07:38Z on GPU2 / 4. KIB4-s1 / s2 started 07:21Z on
+  GPU6 / 7. KIBM-s3 runs on GPU3.
+- **Index:** KUP-a33 shipped to node C, BF16 copy `6bcff807…` restaged (loaded 7,940,895,744, T = 1; manifest
+  `f0f09ba5…`). The node C chain (mirror `29a52205d`) uses greedy shard placement over the shared pool GPU1–7
+  (`M10_SHARDS=7`), since the pool never had seven idle GPUs at once. KUP-a25 / a40 ship next.
+- Node B M10 GPU-h ≈ 14.4 at 07:38Z.
+
 ## 2026-10-02 06:45Z (14:45 UTC+8), worker 7e1c9ce8
 
 - Seeds at updates 1,495–1,543 (06:37Z); no failure. Index GPUs: node C GPU4 / 5 idle, GPU1–3 / 6–7 and node E's
