@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 17:35 — **HF ORG RENAMED: `llm-semantic-router` → `vllm-sr`** (https://huggingface.co/vllm-sr; user).
+  - **State.** Repos and collections moved with it, and the old IDs redirect for now. About 70 repos still reference
+    the old name in READMEs, configs (LoRA `base_model_name_or_path`, Decision 1.0 `native/decision_config.json`, Vela
+    2.0 code) and integrity manifests.
+  - **Three workers fix it:**
+    - **(1) HF repos except Decision 2.0:** Decision 1.0, Vela 1.0 / 2.0, MoM and older models.
+    - **(2) The Decision 2.0 release pipeline constants,** on integration, plus card-only revisions of the 2.0 repos.
+    - **(3) A PR for the main repo** (router configs, deploy, e2e, docs, website).
+  - **Every release worker (M17 4B, 9B M10, 27B, film):** from now on use `vllm-sr/...` for every new upload or
+    reference. **Merge integration again before your next release driver run,** once worker (2) lands the pipeline
+    change (watch for its COORDINATION note). The film end card uses `huggingface.co/vllm-sr`.
+
 - 2026-10-02 17:20 — **NO MORE UNATTENDED GAPS (the user asked why tracks keep running unattended).**
   - **Cause.** The coordinator's own rule ("hand off near 5 hours") ended workers while their multi-hour training ran
     on. Successors started only when the coordinator saw the completion notice.
