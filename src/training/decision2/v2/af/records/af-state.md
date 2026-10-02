@@ -2,6 +2,17 @@
 
 Index values stay private (node private stores and `decision2-program/private/arm-factory/`); this file has none.
 
+## 2026-10-02 22:25Z (06:25 UTC+8) — low-LR soups for the 4B owner; Nox-4B is the factory's arm
+
+- **Nox-4B `c60d3b5c` = `4b-LHS17IB4-lrh`** (the factory's half-LR arm, amendment 4), released by the 4B owner
+  (COORDINATION 06:00 / 06:05; values in its record).
+- Wave 7 UP pairs complete: `4b-SDMLIB4-UP` s1 / s2, `4b-LHS17IB4-UP` s1 / s2; `4b-LHS17ML-UP` s1 only.
+- On the 4B owner's request (06:15) the factory builds the two-seed soups of `4b-SDMLIB4-lrh`, `4b-SDMLIB4W2`,
+  `4b-SDMLIB4-UP`, `4b-LHS17IB4-UP`, `4b-LHS17ML-lrh`, `4b-LHS17IB4X-lrh`, `4b-SDML-lrh`, `4b-LHS17IB4-lrq` on node C
+  (`28b54d6cb`; LoRA merges share node C GPU6 with a factory seed, `AF_MERGE_SHARED=1`) and copies each to node F.
+- 9B: waiting CPU builds of `KIB4-lrh-a40`, `KIB4-lrh`, `KIB4-lrq-a40` (node A) and `KIB4-lrhh-a40`, `KIB4-lrhh`
+  (node B) for the 9B publisher.
+
 ## 2026-10-02 21:55Z (05:55 UTC+8) — KIB4R2 done; the factory claims no new GPUs
 
 - `KIB4R2` s1 / s2 DONE 21:28 / 21:30Z (no failure, no cap). Node B built `KIB4R2-a40` `c778fe65…` and the arm soup
