@@ -40,5 +40,11 @@
     "evidence": "https://huggingface.co/datasets/glaiveai/glaive-function-calling-v2/blob/e7f4b6456019f5d8bcb991ef0dd67d8ff23221ac/README.md (license: apache-2.0)",
     "license": "Apache-2.0",
     "redistribution": "permitted with the Apache-2.0 notice"
+  },
+  "atomic_2019_train": {
+    "attribution": "Sap, Le Bras, Allaway, Bhagavatula, Lourie, Rashkin, Roof, Smith and Choi, ATOMIC: An Atlas of Machine Commonsense for If-Then Reasoning (AAAI 2019); atomic_data.tgz from maartensap.com/atomic/data (sha256 f22779944e6613044d530875dd9592a333be2e3cb83d25493b36bba7c59b2ba9; the download URL of allenai/atomic@5cd968cca3ad16bb3323948d038182b1d5f77902), v4_atomic_trn.csv only, dimensions xEffect, xWant, xNeed, xIntent, oEffect and oWant",
+    "evidence": "https://huggingface.co/datasets/allenai/atomic/blob/5cd968cca3ad16bb3323948d038182b1d5f77902/README.md (license: cc-by-4.0; Licensing Information: Creative Commons Attribution 4.0 International); LICENSE file inside atomic_data.tgz",
+    "license": "CC-BY-4.0",
+    "redistribution": "permitted with attribution"
   }
 }

@@ -68,6 +68,14 @@ BASE=(--rm --network none --entrypoint python3 -w "$CODE" --cpu-shares 256
   --label dev2.track=data-ib4 --label "dev2.commit=$SHA"
   -v "$MIRROR:$MIRROR:ro" -v "$T:$T:rw")
 PRIORS=(-v "$IB1OUT:$IB1OUT:ro" -v "$IB2OUT:$IB2OUT:ro" -v "$IB3OUT:$IB3OUT:ro")
+# Later phases also dedupe and isolate against the published phase 1.
+P1OUT=$H/p1/final/out
+P1=()
+if [ "$RUN" != p1 ]; then
+  [ -f "$P1OUT/ib4.dev.jsonl" ] || { echo "no phase-1 output" >&2; exit 1; }
+  PRIORS+=(-v "$P1OUT:$P1OUT:ro")
+  P1=(--prior "$P1OUT/ib4.train.jsonl" --prior "$P1OUT/ib4.dev.jsonl")
+fi
 
 fresh() {
   for d in "$@"; do
@@ -107,7 +115,7 @@ build() {
   [ "${#FAMS[@]}" -eq 0 ] || sel=(--families "${FAMS[@]}")
   run build -v "$RAW:$RAW:ro" -v "$CAND:$CAND:rw" "${PRIORS[@]}" "$IMG" -m v2.data.ib4.build build --raw "$RAW" \
     --prior "$IB1OUT/ib1.train.jsonl" --prior "$IB1OUT/ib1.dev.jsonl" --prior "$IB2OUT/ib2.train.jsonl" \
-    --prior "$IB2OUT/ib2.dev.jsonl" --prior "$IB3OUT/ib3.train.jsonl" --prior "$IB3OUT/ib3.dev.jsonl" \
+    --prior "$IB2OUT/ib2.dev.jsonl" --prior "$IB3OUT/ib3.train.jsonl" --prior "$IB3OUT/ib3.dev.jsonl" "${P1[@]}" \
     --out "$CAND" "${sel[@]}"
 }
 
@@ -167,6 +175,15 @@ scans() {
  {"role": "ib3_dev_r2", "origin": "$IB3OUT/ib3.dev.jsonl", "sha256": "$ib3dev", "project": true}
 ]
 EOF
+  if [ "$RUN" != p1 ]; then
+    python3 - "$O/pi-ib4.spec.json" "$P1OUT/ib4.dev.jsonl" <<'EOF'
+import hashlib, json, sys
+spec = json.load(open(sys.argv[1]))
+digest = hashlib.sha256(open(sys.argv[2], "rb").read()).hexdigest()
+spec.append({"role": "ib4_p1_dev", "origin": sys.argv[2], "sha256": digest, "project": True})
+json.dump(spec, open(sys.argv[1], "w"), indent=1)
+EOF
+  fi
   run pi-ib4 -v "$P:$P:ro" -v "$HFD:$HFD:ro" -v "$IB1DEV:$IB1DEV:ro" "${PRIORS[@]}" -v "$O:$O:rw" "$IMG" \
     -m v2.data.build_protected_inventory --spec "$O/pi-ib4.spec.json" --out-dir "$O/pi-ib4"
   overlap "$O" "$TRAIN" "$DEV" "$O/pi-ib4"
@@ -226,6 +243,8 @@ final() {
   run final -v "$CAND:$CAND:ro" -v "$R:$R:ro" -v "$R/final:$R/final:rw" "$IMG" -m v2.data.ib4.build finalize \
     --cand "$CAND" --out "$F" "${lists[@]}" "${leak[@]}" --drop-families "${fails[@]}"
   local TOKM=(-v "$TOKJ:$TOKJ:ro" -v "$Q06:$Q06:ro" -v "$Q08:$Q08:ro" -v "$KAI:$KAI:ro")
+  local -a P1PART=()
+  [ "$RUN" = p1 ] || P1PART=(--partition "aho/IB4p1=$P1OUT/ib4.dev.jsonl")
   run freeze-train "${TOKM[@]}" -v "$R/final:$R/final:ro" -v "$Z:$Z:rw" "$IMG" -m v2.data.freeze freeze \
     --rows "$F/ib4.train.jsonl" --arm-id IB4 --role train --license-registry "$LIC" --tokenizers "$TOKJ" \
     --out-manifest "$Z/ib4.train.manifest.json" &
@@ -236,7 +255,7 @@ final() {
     -v "$Z:$Z:rw" "$IMG" -m v2.data.freeze isolation --partition "train/IB4=$F/ib4.train.jsonl" \
     --partition "aho/IB4=$F/ib4.dev.jsonl" --partition "aho/IB1=$IB1OUT/ib1.dev.jsonl" \
     --partition "aho/IB2=$IB2OUT/ib2.dev.jsonl" --partition "aho/IB3=$IB3OUT/ib3.dev.jsonl" \
-    --partition "aho/HS1=$HS1DEV" \
+    --partition "aho/HS1=$HS1DEV" "${P1PART[@]}" \
     --partition "aho/PN1=$PN1DEV/pn1.dev.jsonl" --partition "aho/HR2=$HR2DEV" --report "$Z/isolation.json" &
   local part
   for part in train dev; do

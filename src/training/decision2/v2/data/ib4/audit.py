@@ -36,13 +36,15 @@ NAME_TERMS = {
     "sentfin_v1": ["sentfin"],
     "when2call_train": ["when2call"],
     "glaive_function_calling_v2": ["glaive"],
+    "atomic_2019_train": ["atomic"],
 }
-# Lines that name SQuAD as an existing training (project-used) source, not as a panel or C1 source.
+# Lines that name SQuAD or ATOMIC as an existing training (project-used / Decision 1.0) source, not a panel or C1 source.
 KNOWN_LINEAGE = frozenset(
     {
         ("eval/records/sealed-c1-source-registry-2026-09-28.md", 115, "squad"),
         ("eval/records/htdev-isolation-2026-09-29.md", 25, "squad"),
         ("eval/records/htdev-isolation-2026-09-29.md", 29, "squad"),
+        ("eval/records/htdev-isolation-2026-09-29.md", 79, "atomic"),
     }
 )
 

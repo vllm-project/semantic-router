@@ -17,6 +17,7 @@ import collections
 import csv
 import io
 import json
+import tarfile
 import zipfile
 from collections.abc import Mapping
 from pathlib import Path
@@ -46,6 +47,7 @@ PINS = {
     "rajpurkar_squad_v2/squad_v2/train-00000-of-00001.parquet": "f6da32ffb482ff463ad056477740d1bb284b96a45db3a08bee6a225ca6abf291",
     "mendeley_sms_phishing/Dataset_5971.zip": "9bbf3188fdad81495d8e82825648b9b63b53fc86841a3d26c02629990b233cc3",
     "nvidia_When2Call/train/when2call_train_sft.jsonl": "3eb20258557513579995ff55c09fcc33fabf2cd2004dea49dc3a0ba9880e631c",
+    "maartensap_atomic/atomic_data.tgz": "f22779944e6613044d530875dd9592a333be2e3cb83d25493b36bba7c59b2ba9",
 }
 # Files already pinned by IB1 / IB2 (their builders' PINS); copied unchanged into RAW.
 REUSED = (
@@ -55,7 +57,7 @@ REUSED = (
     "nvidia_When2Call/train/when2call_train_pref.jsonl",
     "glaiveai_glaive-function-calling-v2/glaive-function-calling-v2.json",
 )
-FAMILIES = ("sqa2", "smish", "isarc2", "sentfin3", "w2c_act", "fc_pick")
+FAMILIES = ("sqa2", "smish", "isarc2", "sentfin3", "w2c_act", "fc_pick", "atom")
 LABELS = {"sentfin3": (0, 1, 2), "w2c_act": (0, 1, 2)}
 LEAF_MIN_TOKENS = 6
 
@@ -179,6 +181,11 @@ def convert(
         )
         rows += fam.fc_pick(glaive, reports["fc_pick"], prior)
         del glaive
+    if "atom" in families:
+        with tarfile.open(raw / "maartensap_atomic/atomic_data.tgz") as archive:
+            member = archive.extractfile("v4_atomic_trn.csv")
+            text = member.read().decode("utf-8") if member else ""
+        rows += fam.atom(csv_rows(text), reports["atom"], prior)
     return rows, {
         "families": {
             name: {

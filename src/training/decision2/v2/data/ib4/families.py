@@ -57,8 +57,19 @@ W2C_OPTIONS = (
 FCPICK_INSTRUCTIONS = (
     "Should the assistant call the candidate function to carry out the user's request?"
 )
+ATOM_INSTRUCTIONS = "Is the inference a likely commonsense inference about the event, for the aspect asked about?"
+ATOM_ASPECTS = {
+    "xEffect": "What happens to PersonX as a result",
+    "xWant": "What PersonX likely wants to do next",
+    "xNeed": "What PersonX needed to do beforehand",
+    "xIntent": "Why PersonX does this",
+    "oEffect": "What happens to the others involved as a result",
+    "oWant": "What the others involved likely want to do next",
+}
 TEMPLATE_STRINGS = frozenset(
     [
+        ATOM_INSTRUCTIONS,
+        *ATOM_ASPECTS.values(),
         SQA2_INSTRUCTIONS,
         SMISH_INSTRUCTIONS,
         ISARC_INSTRUCTIONS,
@@ -77,6 +88,7 @@ HYPOTHESIS_FIELDS = {
     "sentfin3": "entity",
     "w2c_act": "tools",
     "fc_pick": "candidate",
+    "atom": "inference",
 }
 # Key leaves (prereg §2.0): a candidate whose leaf in this field equals a leaf of an IB1-3 row is removed.
 KEY_LEAVES = {"smish": "message", "w2c_act": "request", "fc_pick": "request"}
@@ -87,6 +99,8 @@ SQA2_PER_TITLE = 20
 SENTFIN3_PER_CLASS = 3000
 W2C_PER_CLASS = 3000
 FCPICK_CAP = 8000
+ATOM_EVENTS = 6000
+ATOM_MAX_TAIL_EVENTS = 2
 
 Prior = Callable[[Mapping[str, Any]], bool]
 
@@ -610,5 +624,113 @@ def fc_pick(
             seen.add(group)
             firsts += pairs[conv_key]
         return cell_balance(firsts, (0, 1), FCPICK_CAP, "ib4-fcpick-bal-v1")
+
+    return finish(rows, report, prior, select)
+
+
+# --------------------------------------------------------------------------- atom: event inference (ATOMIC train, phase 2)
+
+ATOM_PERSON = re.compile(r"\b(?:person[xyz]|personx|persony|personz)\b")
+
+
+def atom_words(text: str) -> set[str]:
+    return {w for w in ib2.content_words(text) if not ATOM_PERSON.fullmatch(w)}
+
+
+def atom(
+    records: Sequence[Mapping[str, str]], report: collections.Counter, prior: Prior
+) -> Rows:
+    """One aspect per ATOMIC train event: an annotated inference of that event (yes) and, in a per-aspect cycle, the
+    inference of another event that shares no content word with this event or any of its inferences (no). Only
+    specific inferences (at most two events per aspect, at least two words, not "none") are used, so each inference is
+    yes for its own event and no for at most one other; balanced per aspect."""
+    events: dict[str, dict[str, set[str]]] = collections.defaultdict(
+        lambda: collections.defaultdict(set)
+    )
+    for record in records:
+        report["read"] += 1
+        event = collapse(record.get("event"))
+        if record.get("split") != "trn" or not event or "___" in event:
+            report["skip_split_or_blank"] += 1
+            continue
+        for aspect in ATOM_ASPECTS:
+            try:
+                tails = json.loads(record.get(aspect) or "[]")
+            except json.JSONDecodeError:
+                report["drop_tail_json"] += 1
+                continue
+            for tail in tails:
+                tail = collapse(tail)
+                if tail and normalize(tail) != "none":
+                    events[event][aspect].add(tail)
+    spread: collections.Counter = collections.Counter()
+    for event, aspects in events.items():
+        for aspect, tails in aspects.items():
+            for tail in {normalize(t) for t in tails}:
+                spread[(aspect, tail)] += 1
+    vocab = {
+        e: atom_words(e) | {w for ts in a.values() for t in ts for w in atom_words(t)}
+        for e, a in events.items()
+    }
+    picks: dict[str, list[tuple[str, str]]] = collections.defaultdict(list)
+    for event in sorted(events, key=lambda e: order("ib4-atom-event-v1", e)):
+        options = [
+            (aspect, tail)
+            for aspect, tails in sorted(events[event].items())
+            for tail in sorted(tails)
+            if spread[(aspect, normalize(tail))] <= ATOM_MAX_TAIL_EVENTS
+            and len(tail.split()) >= 2
+        ]
+        if not options:
+            report["skip_no_specific_inference"] += 1
+            continue
+        aspect, tail = min(
+            options, key=lambda o: order("ib4-atom-pick-v1", f"{event}|{o[0]}|{o[1]}")
+        )
+        picks[aspect].append((event, tail))
+    rows: Rows = []
+    for aspect, items in sorted(picks.items()):
+        n = len(items)
+        for i, (event, tail) in enumerate(items):
+            other = None
+            for step in range(1, min(n, 50)):
+                cand_event, cand_tail = items[(i + step) % n]
+                if not (atom_words(cand_tail) & vocab[event]) and not (
+                    atom_words(cand_event) & atom_words(event)
+                ):
+                    other = cand_tail
+                    break
+            if other is None:
+                report["skip_no_negative"] += 1
+                continue
+            for yes, inference in ((True, tail), (False, other)):
+                rows.append(
+                    noul(
+                        yes=yes,
+                        family="atom",
+                        source="atomic_2019_train",
+                        group_key="atom:" + normalize(event),
+                        key=f"{sha(event)[:20]}:{aspect}:{'own' if yes else 'other'}",
+                        state={
+                            "event": event,
+                            "aspect": ATOM_ASPECTS[aspect],
+                            "inference": inference,
+                        },
+                        instructions=ATOM_INSTRUCTIONS,
+                        cell=aspect,
+                    )
+                )
+
+    def select(rs: Rows) -> Rows:
+        twins = cell_balance(rs, (0, 1), None, "ib4-atom-bal-v1")
+        by_event: dict[str, Rows] = collections.defaultdict(list)
+        for item in twins:
+            by_event[item["group_id"]].append(item)
+        chosen: Rows = []
+        for group in sorted(by_event, key=lambda g: order("ib4-atom-cap-v1", g))[
+            :ATOM_EVENTS
+        ]:
+            chosen += by_event[group]
+        return cell_balance(chosen, (0, 1), None, "ib4-atom-bal-v2")
 
     return finish(rows, report, prior, select)
