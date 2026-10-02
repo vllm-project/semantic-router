@@ -7,9 +7,11 @@ cast, the conv output before FLA's L2 norm). Transcendentals use the same
 OCML functions the ATen kernels call (``exp``, ``log1p``, ``rsqrt``) and
 floating-point contraction is disabled, as in the ROCm builds of ATen and
 causal-conv1d (``probe_conv`` checks the conv arithmetic bit for bit).
-Reductions (RMSNorm means, the L2 norm) cannot follow ATen's reduction tree,
-so those outputs can differ from the reference in the last FP32 bit, which
-moves a BF16 result by one unit in rare cases.
+The RMSNorm means are summed in ATen's own order and ``torch.rsqrt`` (correctly
+rounded on ROCm) is reproduced through FP64 (``aten_reduce``), so with ``exact``
+(the default) every kernel is bit-identical to the reference; ``exact=False``
+uses a plain ``tl.sum`` and OCML's FP32 rsqrt (one BF16 unit apart in ~1e-5 of
+the elements).
 
 Kernels:
     add_rmsnorm      residual add + zero-centred RMSNorm, BF16 Linear input
@@ -95,7 +97,7 @@ def _add_rmsnorm_exact_kernel(
             tl.store(hidden_ptr + offs, x, mask=rmask)
         acc = acc + sumsq_vec4_chunk(x, R)
     var = lane_tree64(combine_vec4(acc, R), R) * inv_h
-    rstd = libdevice.rsqrt(var + eps)[:, None]
+    rstd = rsqrt_rn(var + eps)[:, None]
     for c in range(0, H // 256):
         offs = base + c * 256 + cols
         x = tl.load(res_ptr + offs, mask=rmask, other=0.0)
@@ -331,10 +333,10 @@ def _gated_rmsnorm_kernel(
     offs = r[:, None] * D + d[None, :]
     x = tl.load(x_ptr + offs, mask=m, other=0.0).to(tl.float32)
     if EXACT_SUM:
-        var = sumsq_128(x, BR) * inv_d
+        rstd = rsqrt_rn(sumsq_128(x, BR) * inv_d + eps)
     else:
-        var = tl.sum(x * x, axis=1) * inv_d
-    xn = (x * libdevice.rsqrt(var + eps)[:, None]).to(tl.bfloat16).to(tl.float32)
+        rstd = libdevice.rsqrt(tl.sum(x * x, axis=1) * inv_d + eps)
+    xn = (x * rstd[:, None]).to(tl.bfloat16).to(tl.float32)
     y = tl.load(w_ptr + d)[None, :] * xn
     z = tl.load(z_ptr + offs, mask=m, other=0.0).to(tl.float32)
     y = y * (z / (1.0 + libdevice.exp(-z)))
@@ -408,10 +410,11 @@ def _attn_prep_kernel(
         dst = ko_ptr + ((b * NKV + (hid - NH)) * T + t) * D
     x = tl.load(src + d).to(tl.float32)
     if EXACT_SUM:
-        ss = tl.reshape(sumsq_256(tl.reshape(x, [1, D]), 1), [])
+        rstd = rsqrt_rn(
+            tl.reshape(sumsq_256(tl.reshape(x, [1, D]), 1), []) * inv_d + eps
+        )
     else:
-        ss = tl.sum(x * x, axis=0)
-    rstd = libdevice.rsqrt(ss * inv_d + eps)
+        rstd = libdevice.rsqrt(tl.sum(x * x, axis=0) * inv_d + eps)
     y = ((x * rstd) * tl.load(wp + d)).to(tl.bfloat16).to(tl.float32)
     xp = tl.load(src + partner).to(tl.float32)
     yp = ((xp * rstd) * tl.load(wp + partner)).to(tl.bfloat16).to(tl.float32)

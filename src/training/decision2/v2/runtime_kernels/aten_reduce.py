@@ -7,13 +7,21 @@ c = 0, 1, ... in order, the accumulators are combined left to right, and the 64 
 are combined by ``shfl_down`` with offsets 1, 2, 4, ..., 32 (a pairwise tree in lane order).
 For H <= 128 there is no vectorisation: lane t adds elements t and t + 64. Reproducing that
 association makes the FP32 mean bit-identical, so the RMSNorm kernels round exactly like the
-reference. ``probe_reduce`` checks the assumption against ATen for every hidden size we use.
+reference. ``probe_mean`` checked the order (and ``rsqrt_rn``) bit for bit against ATen for every
+hidden size we use; ``probe_reduce`` checks the kernels built on them.
 """
 
 from __future__ import annotations
 
 import triton
 import triton.language as tl
+from triton.language.extra import libdevice
+
+
+@triton.jit
+def rsqrt_rn(x):
+    """``torch.rsqrt`` on ROCm is correctly rounded; OCML's FP32 rsqrt is not (90% agreement)."""
+    return libdevice.rsqrt(x.to(tl.float64)).to(tl.float32)
 
 
 @triton.jit
