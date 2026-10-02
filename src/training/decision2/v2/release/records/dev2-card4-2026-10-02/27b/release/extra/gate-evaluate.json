@@ -1,0 +1,65 @@
+{
+  "passed": true,
+  "decision": {
+    "sha256": "1f533d2e3b7671635b8ee42094215b114b8e27f19bf3dc8d5277d01b294a9f42",
+    "status": "final"
+  },
+  "items": {
+    "1_successor_R1_v3": {
+      "passed": true,
+      "evidence": "v3 72.360 vs current 67.209: +5.15 [+2.19, +8.02]"
+    },
+    "1_successor_R2_human_transfer": {
+      "passed": true,
+      "evidence": "human transfer delta 95% [-0.037, +0.056]"
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "passed": true,
+      "evidence": "types choice OK, noul OK, score OK"
+    },
+    "1_successor_R4_mlx_diag": {
+      "passed": true,
+      "evidence": "mlx-diag card-eligible macro +0.0139 [+0.0025, +0.0250]"
+    },
+    "1_successor_R5_tier_gates": {
+      "passed": true,
+      "evidence": "no Decision 1.0 at this size; v3 72.360 vs 90% of AutoJev-27B 72.133; H vs AutoJev-27B [-0.030, +0.066]; v3 >= 64.919 ok, H vs AutoJev-27B upper >= 0 ok, no type collapsed ok"
+    },
+    "1_successor_R6_no_overlap_exposure": {
+      "passed": true,
+      "evidence": "1 training files, 0 exposed groups"
+    },
+    "1_successor_R7_public231": {
+      "passed": true,
+      "evidence": "public 231 203 vs 198 (+5; McNemar p 0.180)"
+    },
+    "1_successor_R8_c1_postkey": {
+      "passed": true,
+      "evidence": "JevArena-C1 v1.2 post-key 57.56 vs DEV2.0-27B 5683c6f0 (current revision): +0.23 [-1.22, +1.70] PASS"
+    },
+    "2_regressions_disclosed": {
+      "passed": true,
+      "evidence": "10 results below AutoJev-27B (no Decision 1.0 at this size) listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included"
+    },
+    "3_download_hash_parameters": {
+      "passed": true,
+      "evidence": "tree 31 files re-hashed; loaded 26096775168"
+    },
+    "4_native_examples": {
+      "passed": true,
+      "evidence": "examples and the card's Python block reproduced from the download"
+    },
+    "5_output_consistency": {
+      "passed": true,
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run"
+    },
+    "6_card_design": {
+      "passed": true,
+      "evidence": "Hub card apache-2.0 / problems []"
+    },
+    "7_transformers_remote_code": {
+      "passed": true,
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518"
+    }
+  }
+}
