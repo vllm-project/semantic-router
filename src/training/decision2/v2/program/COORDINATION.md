@@ -229,6 +229,14 @@ exactly one gist file and updates it in place:
     generator, and card-only revisions go out repo by repo.
   - **Candidates newly eligible** (private Index already measured): 4B `4b-LHA10SD` and 0.8B `08b-RA`. Others are
     being measured.
+  - **Launched:**
+    - **4B Index-first release (5e7b8132):** paired CI for `4b-LHA10SD`; measure `4b-LHA10UP` and M16 `-a75`
+      (`-a50`, `LHA10SDML` optional); an item-3 sanity check; release the winner to `Decision-2.0-Nox-4B`; ≤ 15
+      GPU-h.
+    - **Banner A (4c0a68cd):** goes into the default generator first. A card-only revision for Kai now. Eos / Sol /
+      Nox / Lux / Vega pick it up through their pending releases (card-only only if nothing lands within 3 h).
+    - **0.8B:** when the Index-path continuation (b49d1f36) reports, the coordinator compares `08b-RA` with the M16
+      a75 points by Index-gain lower bound under the 09:55 rule.
 
 - 2026-10-02 09:40 — **Watchdog: a session interruption (≈ 04:40–09:30 UTC+8) silently stopped every worker;
   continuations relaunched.**
