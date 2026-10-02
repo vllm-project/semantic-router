@@ -371,6 +371,16 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 03:02Z (poll 19):
+  - **Index-first interim:** M5-L128 fails the Index gate (95% lower bound vs A20r not > 0; types OK), so it is not
+    eligible. The public file is in `/tmp` only; values are in `private/m6/interim/`.
+  - Manual formals: packages frozen at T = 1 (M6-IB2 `55e0ffb0…`, M6-IBX `051eec70…`); collections running.
+  - M6-IBX staged for the Index on node D at 02:59Z (manifest `1d636706…`); `stage-c` running.
+  - Integration merged again (`591ec6c8c`): `v2.release.gate` now has the Index-first profile (`index_first:
+    {bootstrap, receipt, base_receipt, audit}`; IF1, R3, IF3, references).
+  - **Release blocker found:** IF1 binds the base run's ix1 receipt, and A20r's `runs/DEV2.0-27B/merged-budget` (the
+    bootstrap base of amendments 4 / 7) has none. Only `merged`, the pre-fix run, has one (identity `2e074511…`,
+    panel IDs `6455d7be…`). A receipt for `merged-budget` must be built before a 27B release can pass IF1.
 - 02:57Z (poll 18):
   - **M6-IB2's chain** (`DEVGATES-20261002T025243Z`): soup 01:55–02:2xZ, readout, slices; **development gates
     02:52Z:**
