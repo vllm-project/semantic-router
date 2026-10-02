@@ -1,0 +1,44 @@
+{
+  "squad_v2_train": {
+    "attribution": "Rajpurkar, Jia and Liang, Know What You Don't Know: Unanswerable Questions for SQuAD (ACL 2018); rajpurkar/squad_v2@3ffb306f725f7d2ce8394bc1873b24868140c412 squad_v2/train-00000-of-00001.parquet only (the validation split is never read); passages from Wikipedia, by Wikipedia contributors",
+    "evidence": "https://huggingface.co/datasets/rajpurkar/squad_v2/blob/3ffb306f725f7d2ce8394bc1873b24868140c412/README.md (license: cc-by-sa-4.0)",
+    "license": "CC-BY-SA-4.0",
+    "redistribution": "permitted with attribution under the same licence (ShareAlike-derived content, credited on the card)"
+  },
+  "mendeley_sms_phishing": {
+    "attribution": "Mishra and Soni, SMS Phishing Dataset for Machine Learning and Pattern Recognition, Mendeley Data f45bkkt8pr version 1 (DOI 10.17632/f45bkkt8pr.1), Dataset_5971.zip, columns LABEL and TEXT only, labels Smishing and ham only",
+    "evidence": "https://data.mendeley.com/datasets/f45bkkt8pr/1 (data_licence: CC BY 4.0, Creative Commons Attribution 4.0 International)",
+    "license": "CC-BY-4.0",
+    "redistribution": "permitted with attribution"
+  },
+  "isarcasmeval_train_en": {
+    "attribution": "Abu Farha, Oprea, Wilson and Magdy, SemEval-2022 Task 6: iSarcasmEval, Intended Sarcasm Detection in English and Arabic (SemEval 2022); iabufarha/iSarcasmEval@dfc708b53bde1bb571abfb5692f63231c2232195 train/train.En.csv only; IN-DISTRIBUTION for the Index's iSarcasmEval benchmark (which uses the test files, never read here)",
+    "evidence": "https://github.com/iabufarha/iSarcasmEval/blob/dfc708b53bde1bb571abfb5692f63231c2232195/LICENSE (MIT)",
+    "license": "MIT",
+    "redistribution": "permitted with the MIT notice"
+  },
+  "isarcasmeval_train_ar": {
+    "attribution": "Abu Farha, Oprea, Wilson and Magdy, SemEval-2022 Task 6: iSarcasmEval, Intended Sarcasm Detection in English and Arabic (SemEval 2022); iabufarha/iSarcasmEval@dfc708b53bde1bb571abfb5692f63231c2232195 train/train.Ar.csv only; IN-DISTRIBUTION for the Index's iSarcasmEval benchmark (which uses the test files, never read here)",
+    "evidence": "https://github.com/iabufarha/iSarcasmEval/blob/dfc708b53bde1bb571abfb5692f63231c2232195/LICENSE (MIT)",
+    "license": "MIT",
+    "redistribution": "permitted with the MIT notice"
+  },
+  "sentfin_v1": {
+    "attribution": "Sinha, Kedas, Kumar and Malo, SEntFiN 1.0: Entity-aware sentiment analysis for financial news (JASIST 2022); pyRis/SEntFiN@eba43610fe3cb57a3e5773cd6c037da1f8992ad5 SEntFiN.csv",
+    "evidence": "https://github.com/pyRis/SEntFiN/blob/eba43610fe3cb57a3e5773cd6c037da1f8992ad5/LICENSE (MIT)",
+    "license": "MIT",
+    "redistribution": "permitted with the MIT notice"
+  },
+  "when2call_train": {
+    "attribution": "Ross, Mahabaleshwarkar and Suhara, When2Call: When (not) to Call Tools (NAACL 2025); nvidia/When2Call@0582f7749df63a96fdc3070932e83e72396ace53 train/when2call_train_sft.jsonl and the chosen responses of train/when2call_train_pref.jsonl only (the test files are an Index source and were never downloaded); generated with Mixtral-8x22B-Instruct (Apache-2.0); IN-DISTRIBUTION for the Index's When2Call benchmark",
+    "evidence": "https://huggingface.co/datasets/nvidia/When2Call/blob/0582f7749df63a96fdc3070932e83e72396ace53/README.md (CC BY 4.0); https://github.com/NVIDIA/When2Call (generation model)",
+    "license": "CC-BY-4.0",
+    "redistribution": "permitted with attribution"
+  },
+  "glaive_function_calling_v2": {
+    "attribution": "Glaive AI, glaive-function-calling-v2; glaiveai/glaive-function-calling-v2@e7f4b6456019f5d8bcb991ef0dd67d8ff23221ac glaive-function-calling-v2.json; synthetic function-calling conversations released by Glaive AI; listed function schemas, the first user request and the name of the function the first assistant turn calls",
+    "evidence": "https://huggingface.co/datasets/glaiveai/glaive-function-calling-v2/blob/e7f4b6456019f5d8bcb991ef0dd67d8ff23221ac/README.md (license: apache-2.0)",
+    "license": "Apache-2.0",
+    "redistribution": "permitted with the Apache-2.0 notice"
+  }
+}
