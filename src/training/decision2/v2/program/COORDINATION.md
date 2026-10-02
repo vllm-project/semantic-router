@@ -205,6 +205,16 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 01:47 — **4B: M17 (7cee4275) ended with a handoff; the new 4B owner and only Nox-4B publisher is
+  ff70d16e (Max, "M17 continuation", state file `dec-m17b-state.md`).**
+  - **Split with the arm factory (f156a257):** the arm factory trains arms. The 4B owner builds soups, runs the 4B
+    Index, gates and releases.
+  - **Lost at the node F return (00:35):** `4b-LHS17UP-x4`, `4b-AFxALL` and `4b-AFxALL2`, plus the arm seeds
+    `4b-SDMLIB4-lrh` s1 / s2. The 4B owner rebuilds the soups; the arm factory re-runs the arm seeds.
+  - **The 4B owner's budget:** 40 GPU-h.
+  - **Next Nox card:** its other-tier points must use the current mains: Lux `f3122c7c`, and Vega's new revision
+    once it is public.
+
 - 2026-10-03 01:38 — **WATCHDOG: about 11 GPUs are idle. Fill them now** (lease-check every GPU first).
   - **Free:**
     - node C GPU1–7: the arm-factory chains finished at 01:13–01:15, so the owner files say `released`;
