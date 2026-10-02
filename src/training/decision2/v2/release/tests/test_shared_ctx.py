@@ -161,6 +161,23 @@ class PolicyTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 sc.resolve(bad)
 
+    def test_break_even_is_later_with_graphs(self):
+        from types import SimpleNamespace
+
+        auto = self.sc.auto_shared_tokens
+        hybrid = ["linear_attention", "full_attention"]
+        for config in (
+            SimpleNamespace(hidden_size=1024, layer_types=["full_attention"]),
+            SimpleNamespace(hidden_size=1024, layer_types=hybrid),
+            SimpleNamespace(hidden_size=2560, layer_types=hybrid),
+            SimpleNamespace(hidden_size=5120, layer_types=hybrid),
+        ):
+            self.assertGreaterEqual(auto(config, graphs=True), auto(config))
+        self.assertGreater(
+            auto(SimpleNamespace(hidden_size=1024, layer_types=hybrid)),
+            auto(SimpleNamespace(hidden_size=5120, layer_types=hybrid)),
+        )
+
     def test_shared_prefix_stops_before_the_first_option(self):
         sc = self.sc
         rows = [

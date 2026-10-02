@@ -212,23 +212,24 @@ def _padded(length: int) -> int:
     return -(-length // 8) * 8
 
 
-def auto_shared_tokens(config: Any) -> int:
+def auto_shared_tokens(config: Any, graphs: bool = False) -> int:
     """Prefix tokens a request must save before sharing pays off on this backbone.
 
     Sharing adds launches (a packed row, two attention or gated-delta kernels
-    per layer) that a small backbone recovers only on larger requests; the
-    values are the break-evens measured on one MI325X with the eager BF16
-    runtime (Index multi-question requests and the 1-128 question benchmark).
+    per layer) that a small backbone recovers only on larger requests, later
+    still when the exact path replays HIP graphs (``graphs``). The values are
+    the break-evens measured on one MI325X (the 1-128 question benchmark and
+    Index multi-question requests).
     """
     hidden = getattr(config, "hidden_size", 0)
     if "linear_attention" not in set(getattr(config, "layer_types", None) or ()):
-        return 1024
+        return 3072 if graphs else 1024
     if hidden <= 1024:
-        return 3072
+        return 6144 if graphs else 3072
     if hidden <= 2048:
-        return 2048
+        return 3072 if graphs else 2048
     if hidden <= 3072:
-        return 1024
+        return 1536 if graphs else 1024
     return 512
 
 
@@ -906,7 +907,8 @@ def shared_logits(
     stats["prefix_tokens"] = prefix
     threshold = policy.min_shared_tokens
     if threshold is None:
-        threshold = auto_shared_tokens(_core(backend.model.backbone).config)
+        graphs = getattr(getattr(backend, "fast", None), "graphs", None) is not None
+        threshold = auto_shared_tokens(_core(backend.model.backbone).config, graphs)
     if prefix < 4 or (len(jobs) - 1) * prefix < threshold:
         stats["reason"] = "too little shared input"
         return None
