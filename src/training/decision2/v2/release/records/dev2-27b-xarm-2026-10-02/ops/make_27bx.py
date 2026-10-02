@@ -1,4 +1,4 @@
-"""Release spec and decision of a Decision-2.0-Vega-27B successor over M6-IB (27B worker cba71646, continuation #5).
+"""Release spec and decision of a Decision-2.0-Vega-27B successor over M6-IB (27B worker, continuation #5).
 
 The current revision is M6-IB (``main`` 781b2b24, record ``dev2-27b-indexfirst-2026-10-02``). Same rules as that
 release (user rule 2026-10-02 09:55 UTC+8, progressive release 11:35): the gate is the frozen candidate's private Jev

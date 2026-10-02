@@ -1,6 +1,7 @@
 # ~27B M6 state (resume file)
 
-Updated: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
+Updated: 2026-10-02 17:45 UTC+8 (09:45Z; **continuation #5 from 08:44Z**: the cross-arm soups and M7;
+see its section first). Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
 continuation #3, 4a20f83f, 19:37–20:10Z, silently stopped after its 20:10Z poll; its entries below say "cba71646",
 which is the coordinator's ID; worker 3 0d2e488f ran 15:12–19:40Z; worker 2 a56025bb 10:44–15:15Z; worker 1 11741ee2
 06:17–10:55Z). **Amendment 6 (`6bbb2512d`): the MLX-DEV2 guard for every M6 finalist** (COORDINATION 04:15).
@@ -369,7 +370,48 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
    chosen finalist's `m6-stage-a.sh` (node A, item 8 / release) runs before `m6-link.sh remove`, which deletes node
    B's link directory.
 
-## Hand-off (worker 4 355ad916 → continuation, 08:45Z) — read this first
+## Continuation #5 (from 08:44Z): cross-arm soups of M6-IB and M6-IB2, M7 watch — read this first
+
+- **Assignment (parent, 08:44Z):** (1) cross-arm average of the M6-IB and M6-IB2 seed adapters now, measured once in
+  release form (≥ 8 shards on node E GPU0 / 1 / 6 / 7, node D GPU5–7, node B GPU0), bootstrap vs M6-IB, release to
+  Vega-27B on top of `781b2b24` if the lower bound is > 0 (integrity: formal typed-FINAL no-collapse, audit coverage,
+  package parity, Hub `trust_remote_code` smoke), plus 1–2 cheap weightings; ≤ 25 GPU-h on top of M7's 120. (2) Speed
+  up M7 if the trainer supports multi-GPU data parallel. (3) M7 soups in release form when they land.
+- **Candidates** (exact weighted rank-concatenation soups of the four seeds M6-IB s1 / s2 @ 5081 and M6-IB2 s1 @ 4135 /
+  s2 relay @ 4135; rank 512, alpha 1024; `mNN` = M6-IB2's weight in percent):
+  - `M6-IBxIB2-m50` (1/4 each = the mean of the two arm soups): `m6-tail.sh lsoup` from mirror `ceefc7863` (the
+    uniform tool, unchanged), node B CPU, since 08:51Z.
+  - `M6-IBxIB2-m67` (1/6, 1/6, 1/3, 1/3: 2:1 toward M6-IB2): `SOUP_WEIGHTS="1 1 2 2"` from `e5b63a396`, since 09:12Z.
+  - The soup tool verifies the weighted mean update of every projection (≤ 1e-6 relative) and the weighted head.
+    Every a20ib1 row is an a20ib12 row (81,294 ⊂ 105,812 distinct rows), so the soups' training rows are a20ib12's.
+- **Tooling** (`e5b63a396`, `973587a17`, `7042f3d84`; 27B suite 160 tests on node B, one pre-existing failure
+  `test_m1_tools test_rejects_foreign_gpu` that also fails on `ceefc7863`):
+  - `lora_soup --weight`; `m6-tail lsoup SOUP_WEIGHTS / SOUP_CPUS`.
+  - `m6-index.sh` / `m6-index-run.sh` take `M6-IBxIB2-mNN` and `M7-IB124ML` / `M7-IB14ML` (IX1 DIAGNOSTIC entries
+    added), the loaded count from the soup's rank (rank 512: 29,365,153,792), `M6_PARITY_GPU` (dN / eN / bN; node D
+    GPU4 is an M7 seed now), `M6_INDEX_BASE=M6-IB` in `score` (family delta and paired bootstrap vs the current
+    release), `audit-arm` over both training files (and the m7-data mixtures), `hold` / `unhold` (a 27B reserved-idle
+    owner on idle GPUs of the 27B allocation whose eval-ix1 run has ended all 8 shards; `run` / `parity` set holds aside).
+  - `m6-xarm.sh MIRROR NAME GPU` (node B): readout, formal (T = 1 unless CAL698 is adopted, which the release refuses),
+    mlx-diag with node A pairing (`m6-mlx-watch.sh` with `MLX_ALSO=M6-IB=…`), gates, and the references vs M6-IB
+    (paired v3, public 231, mlx-diag).
+  - Release ops `v2/release/records/dev2-27b-xarm-2026-10-02/ops/` (`make_27bx.py`, `inputs27bx.sh`, `render27bx.sh`,
+    `release27bx.sh`; `index27b.sh` of the M6-IB record is reused): spec from `dev2-27b-27bif-M6-IB.json`, current =
+    M6-IB `781b2b24` (gate `2851727b…`, decision `c7b9b224…`, manifest `4d1ca0f5…`), purge against M6-IB's verified
+    download. `CHOICE` is unset until a candidate qualifies.
+- **M7 (task 2):** the LoRA trainer refuses `WORLD_SIZE != 1` (`training/model/train.py` `validate_args`: "single-device"),
+  so a seed cannot be spread over GPUs; nothing restarted. Measured 09:14Z (≈ 300 updates): 9.78–9.84 s per update →
+  **M7-IB124ML ≈ 21.75 h of steps + ≈ 0.22 h overhead (M6 receipts) vs its effective cap 21.91 h**: the three seeds may
+  be stopped by `launch.py`'s watchdog in their last minutes; M6's rates fell ≈ 1% after the first hours, which would
+  leave ≈ 7–15 min of margin. If a seed is stopped, its `BEST.json` (written at every save) names the best checkpoint
+  among saves ≤ 6993 and that is its soup member (no resume: one attempt per arm-seed and the 120 GPU-h budget);
+  M7-IB14ML projects ≈ 16.3 h of cap 19 (safe). No room for extra seeds inside 120 GPU-h (≈ 98 seeds + ≈ 20 Index).
+- **GPUs:** node D GPU5–7 held for 27B at 09:41Z (the 4B SDMLxS17-m50 run had ended); node E GPU0–3 / 6–7 run the 4B
+  M17 pool's Index runs (eval fast lane, since 09:05–09:32Z), a workstation loop holds each as soon as its run has
+  ended all 8 shards; node B GPU0 (27B reserved-idle) for shards, GPU1 / 5 (no owner) for the formal path.
+- **Node A mlx watchers** for both names (PIDs 925204 / 925205, mirror `7042f3d84`, `MLX_ALSO=M6-IB=…`).
+
+## Hand-off (worker 4 355ad916 → continuation, 08:45Z)
 
 - **Done:** M6-IB released (`Decision-2.0-Vega-27B@781b2b24`, record
   `v2/release/records/dev2-27b-indexfirst-2026-10-02.md`); gist 06 and a COORDINATION note written. The current Vega is
@@ -395,6 +437,9 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 09:45Z (poll 27, continuation #5): both soups in their verification pass (node B, 16 CPUs each); M7 5 / 5 seeds alive
+  (≈ 300–330 updates; rates above); node D GPU5–7 held; node E busy with the 4B pool; audit-arm of `M6-IBxIB2-m50`
+  copying a20ib12 to node D. GPU-h: cross-arm 0 so far (CPU only); M7 ≈ 6.9 (5 seeds × ≈ 1.4 h) of 120.
 - 08:25Z (poll 26):
   - **M6-IB release:** uploaded (07:59Z); post-download examples / parity on the real Hub download since 07:59:44Z,
     then post checks and the purge (≈ 09:05Z).
