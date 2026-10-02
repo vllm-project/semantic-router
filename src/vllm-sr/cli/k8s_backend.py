@@ -701,7 +701,28 @@ class K8sBackend:
             self.namespace,
             "--timeout=600s",
         ]
-        self._run(cmd, check=False)
+        result = self._run(cmd, check=False)
+        if result.returncode != 0:
+            # A failed wait means pods never became ready: reporting success
+            # here would hide broken rollouts behind a green summary.
+            self._log_failed_pod_diagnostics()
+            raise SystemExit(result.returncode)
+
+    def _log_failed_pod_diagnostics(self) -> None:
+        log.error("kubectl wait failed; current pod status:")
+        self._run_display(
+            [
+                *self._kubectl_base_cmd(),
+                "get",
+                "pods",
+                "-l",
+                f"app.kubernetes.io/instance={self.release_name}",
+                "--namespace",
+                self.namespace,
+                "-o",
+                "wide",
+            ]
+        )
 
     def _log_k8s_summary(self) -> None:
         success("Kubernetes deployment is ready")
