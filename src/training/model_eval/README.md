@@ -33,7 +33,18 @@ without compatible data.
 
 ```bash
 cd src/training/model_eval
-pip install -r requirements.txt
+uv sync --locked
+```
+
+`pyproject.toml` bounds each dependency and `uv.lock` pins the exact versions, so a clean checkout resolves
+to the same environment every time. `uv run python <script>` runs a script in it. The locked `torch` is
+the default PyPI build, which is the CUDA build on Linux.
+
+The tests import `src.training.model_eval`, so run them from the repository root:
+
+```bash
+uv run --project src/training/model_eval python -m unittest discover \
+  -s src/training/model_eval/tests -p 'test_*.py'
 ```
 
 ## Run
