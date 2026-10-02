@@ -9,7 +9,8 @@
 #
 #   link AFNAME  (node A) the arm factory's built point runs/af/9b/soup/AFNAME/build/AFNAME, hard-linked (used read-only)
 #                as soup/AF-AFNAME/build/AF-AFNAME with equal SHA-256 lists; its MODEL_SHA256 is copied next to it.
-#                m10/formal.sh and this script then take AF-AFNAME like any M10 point.
+#                m10/formal.sh and this script then take AF-AFNAME like any M10 point. M10_LINK_AS=<name> links it
+#                under that M10 name instead (amendment 8: a factory point that M10 measures as M10-<name>-bf16).
 #
 # usage: M10_NODE=a|b xpts.sh launch|run <mirror-dir> <NAME> <MEMBER>... | M10_NODE=a xpts.sh link <mirror-dir> <AFNAME>
 set -u
@@ -21,20 +22,21 @@ OPS=/data/dev2/src/$SRC/src/training/decision2/v2/9b/lux9b/m10
 log() { echo "$(date -u +%FT%TZ) xpts-$NAME $*" | tee -a "$M/OPERATIONS.log"; }
 if [ "$MODE" = link ]; then
   [ "$NODE" = a ] || { echo "arm-factory 9B points are on node A" >&2; exit 2; }
-  af=/data/dev2/runs/af/9b/soup/$NAME out=$M/soup/AF-$NAME
+  as=${M10_LINK_AS:-AF-$NAME}
+  af=/data/dev2/runs/af/9b/soup/$NAME out=$M/soup/$as
   [ -f "$af/DONE" ] && [ -f "$af/MODEL_SHA256" ] && [ -f "$af/build/$NAME/decision_config.json" ] \
     || { echo "no built arm-factory point $NAME" >&2; exit 3; }
   [ ! -e "$out" ] || { echo "$out exists" >&2; exit 3; }
   mkdir -p "$out/build"
-  cp -al "$af/build/$NAME" "$out/build/AF-$NAME"
+  cp -al "$af/build/$NAME" "$out/build/$as"
   a=$(cd "$af/build/$NAME" && find . -type f | LC_ALL=C sort | xargs -r -P 8 -n 4 sha256sum | LC_ALL=C sort -k2)
-  b=$(cd "$out/build/AF-$NAME" && find . -type f | LC_ALL=C sort | xargs -r -P 8 -n 4 sha256sum | LC_ALL=C sort -k2)
+  b=$(cd "$out/build/$as" && find . -type f | LC_ALL=C sort | xargs -r -P 8 -n 4 sha256sum | LC_ALL=C sort -k2)
   [ -n "$a" ] && [ "$a" = "$b" ] || { rm -rf "$out"; echo "linked copy differs" >&2; exit 3; }
   cp "$af/MODEL_SHA256" "$out/MODEL_SHA256"
   cp "$af/members.txt" "$out/members.af.txt" 2> /dev/null || true
   printf '{"model_sha256": "%s"}\n' "$(tr -d '[:space:]' < "$af/MODEL_SHA256")" > "$out/build.stdout.log"
-  echo "$out/build/AF-$NAME" > "$out/DONE"
-  log "linked arm-factory point $NAME as AF-$NAME ($(wc -l <<< "$a") files, SHA-256 lists equal, model $(cut -c1-12 "$out/MODEL_SHA256"))"
+  echo "$out/build/$as" > "$out/DONE"
+  log "linked arm-factory point $NAME as $as ($(wc -l <<< "$a") files, SHA-256 lists equal, model $(cut -c1-12 "$out/MODEL_SHA256"))"
   exit 0
 fi
 MEMBERS=("$@")
