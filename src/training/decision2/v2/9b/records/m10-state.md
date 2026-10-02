@@ -2,6 +2,21 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 14:10Z (22:10 UTC+8), M10 continuation worker
+
+- **Index runs in:** KIB4-a40, X1-a33, X3-a33 and X5-a33 all pass IF1 vs K-a13IB-bf16 (values private). Still running:
+  X2-a33 (node C GPU1-2), KIB4P-a33 (node B GPU2/3/4/6/7, restarted 13:53Z with 7 shards; the 13:21Z start asked
+  for 6 on the 7-shard panel and exited at once).
+- **Release choice KIB4-a40** (the highest passer so far), committed at `6fa6693b3`; its formal typed-FINAL run is
+  in (no collapsed type), inputs, card Index, assets, spec and decision derived on node A (`make_m10.py --check`
+  passes at the integration merge `e842eed8b`). Prerelease running on node A GPU7. The upload waits for KIB4P-a33's
+  Index result (a later candidate must beat the released point, so it is measured first); KIB4P-a33's formal run is
+  started speculatively on node A GPU3.
+- **Integration merged** (`85419d98d`: runtime phase A record, 27B ra spec); no 9B file changed.
+- **COORDINATION 21:20 (new KIB4-family arms) not started:** M10's budget is 90 GPU-h (stop rule 85 for Index and
+  formal runs) and the projection with everything in flight is ≈ 82; one 3-seed arm is ≈ 8 GPU-h before it can be
+  measured. New arms need a follow-on milestone budget; node A GPU1/2/4/5/6 and node C GPU3-7 are released.
+
 ## 2026-10-02 13:20Z (21:20 UTC+8), M10 continuation worker
 
 - **Release base moved to the runtime phase A revision `f77b41f5`** (Lux-9B runtime-only, released while the
