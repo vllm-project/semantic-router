@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/invopop/jsonschema"
 )
@@ -374,7 +375,15 @@ func (p *Planner) Plan(req TrainingPlanRequest) TrainingPlanResponse {
 		}
 
 		// Qualification targets
+		seenQualificationKeys := make(map[string]struct{}, len(req.QualificationTargets))
 		for _, qTarget := range req.QualificationTargets {
+			if _, exists := seenQualificationKeys[qTarget.Key]; exists {
+				addError(CodeInvalidParameter, fmt.Sprintf("qualification_targets.%s.key", qTarget.Key),
+					fmt.Sprintf("duplicate qualification target key %q", qTarget.Key),
+					"Use a unique qualification target key")
+				continue
+			}
+			seenQualificationKeys[qTarget.Key] = struct{}{}
 			runtime, rOk := p.registry.GetRuntime(qTarget.Runtime)
 			if !rOk {
 				addError(CodeUnknownCapability, fmt.Sprintf("qualification_targets.%s.runtime", qTarget.Key),
@@ -444,8 +453,9 @@ func (p *Planner) Plan(req TrainingPlanRequest) TrainingPlanResponse {
 					continue
 				}
 
-				exportTaskKey := "export-" + foundConversion.TargetFormat.Name()
-				targetVariantKey = "converted-" + foundConversion.TargetFormat.Name()
+				formatIdentity := strings.NewReplacer("/", "-", "@", "-").Replace(string(foundConversion.TargetFormat))
+				exportTaskKey := "export-" + formatIdentity
+				targetVariantKey = "converted-" + formatIdentity
 
 				if _, exists := variantsMap[foundConversion.TargetFormat]; !exists {
 					exportTask := TaskSpec{
