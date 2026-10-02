@@ -4,6 +4,17 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17` (r
 stopped after creating the worktree, nothing had run). Prereg `da770d98a`, ops `1ce8b2220` (mirror on nodes E / F),
 data lock `4f68f1eb0`.
 
+## 2026-10-02 13:25Z — the cross-arm soup leads; wave 5 widens it
+
+- Lower bound vs SDML > 0: `4b-SDMLxALL` (clearly the highest so far, still short of the 4B goal), `4b-SDMLIB4-m50`,
+  `4b-LHS17ML-m50`, `4b-SDMLxS17-m50`, `4b-LHS17IB4X-m50`. Not successors: `4b-SDMLIB4` and `4b-LHS17ML` (each
+  equal to or below SDML on its own).
+- Wave 5 (amendment 4, `bc03b23f`): `4b-SDMLxALL9` (SDML and every M17 arm, three-seed soups where they exist) and
+  `4b-SDMLxALL15` (plus the M10–M13 4B soups), built 13:11–13:13Z, staged. Index runs on node F GPU2–7 since 13:19Z.
+- Bootstraps on node C: `4b-SDMLxS17xIB4`, `4b-LHS17IB4-x3`. Index run on node E: `4b-SDMLIB4-x3`.
+- Integrity: `audit4` (wave 3's TRAINs) running on node C. Formal collections on node F: `4b-SDMLIB4-m50` and
+  `4b-SDMLxS17-m50` (GPU5), `4b-SDMLxALL` (GPU6). The finalists file now has 13 slots; slots 0–7 are unchanged.
+
 ## 2026-10-02 11:30Z — two successor candidates; cross-arm soups on the Index
 
 - Lower bound vs SDML > 0 (successor candidates, not yet released): `4b-SDMLxS17-m50` and `4b-LHS17IB4X-m50`.
