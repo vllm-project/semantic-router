@@ -91,11 +91,21 @@ func (r *OpenAIRouter) recordPrimarySuccess(ctx *RequestContext) {
 	if primaryModel == "" {
 		primaryModel = ctx.RequestModel
 	}
-	backendName := primaryModel
-	if dispatch, err := r.resolveProviderDispatch(primaryModel, ctx.VSRSelectedDecisionName, false); err == nil && dispatch != nil {
-		backendName = dispatch.backendName
-	}
+	backendName := r.primaryBackendForAccounting(ctx, primaryModel)
 	orch.CircuitBreaker().RecordSuccess(backendName)
+}
+
+func (r *OpenAIRouter) primaryBackendForAccounting(ctx *RequestContext, primaryModel string) string {
+	if ctx != nil && ctx.primaryBackendName != "" {
+		return ctx.primaryBackendName
+	}
+	backendName := primaryModel
+	if ctx != nil {
+		if dispatch, err := r.resolveProviderDispatchForCandidate(primaryModel, ctx.VSRSelectedDecisionName, false, ctx); err == nil && dispatch != nil {
+			backendName = dispatch.backendName
+		}
+	}
+	return backendName
 }
 
 // shouldAttemptFallback reports whether fallback evaluation should be attempted for the request context.
@@ -131,10 +141,7 @@ func (r *OpenAIRouter) maybeExecuteFallback(body []byte, ctx *RequestContext) *e
 	if primaryModel == "" {
 		primaryModel = ctx.RequestModel
 	}
-	backendName := primaryModel
-	if dispatch, err := r.resolveProviderDispatch(primaryModel, ctx.VSRSelectedDecisionName, false); err == nil && dispatch != nil {
-		backendName = dispatch.backendName
-	}
+	backendName := r.primaryBackendForAccounting(ctx, primaryModel)
 
 	if ctx.FallbackRecord == nil {
 		ctx.FallbackRecord = orch.NewExecutionRecord(ctx.RequestID, ctx.VSRSelectedDecisionName, primaryModel)
@@ -319,15 +326,9 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	origPath := ctx.ResponsePath
 	wasStreaming := ctx.IsStreamingResponse
 	useReasoning := r.candidateReasoningChoice(ctx, candidateModel)
-	dispatch, err := r.resolveProviderDispatch(candidateModel, ctx.VSRSelectedDecisionName, useReasoning)
-	if err != nil && candidateRef.LoRAName != "" && candidateRef.Model != "" {
-		if baseDispatch, baseErr := r.resolveProviderDispatch(candidateRef.Model, ctx.VSRSelectedDecisionName, useReasoning); baseErr == nil {
-			dispatch = baseDispatch
-			dispatch.logicalModel = candidateModel
-			dispatch.upstreamModel = r.Config.ResolveExternalModelID(candidateModel, baseDispatch.backendName)
-			err = nil
-		}
-	}
+	dispatch, err := r.resolveProviderDispatchForCandidate(
+		candidateModel, ctx.VSRSelectedDecisionName, useReasoning, ctx,
+	)
 	if err != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, err
 	}
@@ -556,7 +557,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	}
 
 	if ctx.InflightToken != 0 {
-		inflight.End(primaryModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 	}
 
@@ -768,7 +769,7 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 	if err != nil {
 		return nil, 0, err
 	}
-	authorize, err := r.fallbackProviderAuthorizer(reqCtx, dispatch.profile, dispatch.logicalModel)
+	authorize, err := r.fallbackProviderAuthorizer(reqCtx, dispatch.profile, dispatch.effectiveBackendModel())
 	if err != nil {
 		return nil, 0, err
 	}

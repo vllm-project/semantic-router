@@ -877,6 +877,22 @@ profiles:
       - e2e/testcases/structure_routing.go
       - src/semantic-router/pkg/classification/structure_classifier.go
       - src/semantic-router/pkg/classification/classifier_signal_structure.go
+  preference-routing:
+    display_name: Preference Routing
+    owner: e2e
+    coverage_role: preference-routing
+    selection: pr
+    paths:
+      - e2e/profiles/preference-routing/**
+      - e2e/testcases/preference_routing.go
+      - e2e/testcases/testdata/preference_routing_cases.json
+      - src/semantic-router/pkg/classification/preference_classifier.go
+      - src/semantic-router/pkg/classification/preference_classifier_contrastive.go
+      - src/semantic-router/pkg/classification/contrastive_preference_classifier.go
+      - src/semantic-router/pkg/classification/contrastive_preference_embeddings.go
+      - src/semantic-router/pkg/classification/contrastive_preference_scoring.go
+      - src/semantic-router/pkg/classification/classifier_signal_preference_support.go
+      - src/semantic-router/pkg/classification/classifier_preference_lifecycle.go
   external-gateway-responses:
     display_name: External Gateway Responses
     owner: e2e
