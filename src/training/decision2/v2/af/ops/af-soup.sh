@@ -14,7 +14,8 @@
 # A run without a DONE marker stops the build unless AF_SKIP_UNFINISHED=1 (then it is left out and logged). With
 # AF_WAIT=1 the build first waits (<= 6 h) until every run: and soup: member has a terminal marker; a failed or
 # stopped seed is then left out (disclosed in members.txt and the log). Merges hold <gpu>'s arm-factory lease as busy
-# (only a lease its chain released; it is released again after the merges).
+# (only a lease its chain released; it is released again after the merges); with AF_MERGE_SHARED=1 they run beside an
+# arm-factory seed on <gpu> and leave its lease as it is.
 # Output /data/dev2/runs/af/<size>/soup/<NAME>/{build/<NAME>, members.txt, DONE, MODEL_SHA256}; FAILED is never
 # rebuilt.
 set -u
@@ -60,6 +61,10 @@ held=0
 hold() {  # a chain writes its seed's DONE marker just before it releases its lease: wait <= 15 min for the release
   local w=0
   [ "$GPU" != - ] && [ "$held" = 0 ] || return 0
+  if [ "${AF_MERGE_SHARED:-0}" = 1 ]; then  # merges share a GPU that an arm-factory seed holds; its lease stays
+    grep -qs '^track=arm-factory' "$LEASE" || fail "GPU$GPU's lease is not the arm factory's"
+    return 0
+  fi
   until grep -qs '^track=arm-factory' "$LEASE" && grep -qsE '^status=(released|idle)' "$LEASE"; do
     w=$((w + 1))
     [ $w -gt 90 ] && fail "GPU$GPU's lease is not a released arm-factory lease"
