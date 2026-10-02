@@ -5,7 +5,7 @@
     "val_file": "exported_modality_routing_dataset/validation.jsonl",
     "num_test_examples": 759,
     "model_paths": {
-      "published_baseline": "llm-semantic-router/mmbert32k-modality-router-merged",
+      "published_baseline": "vllm-sr/mmbert32k-modality-router-merged",
       "clean_baseline": "mmbert32k_clean_baseline_merged",
       "candidate": "distilbert_candidate_merged"
     },
