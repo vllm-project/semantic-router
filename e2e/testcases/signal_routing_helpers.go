@@ -148,14 +148,18 @@ func testSingleSignalRouting(ctx context.Context, testCase SignalRoutingCase, lo
 	}
 
 	decision := response.Headers.Get("x-vsr-selected-decision")
-	result.ActualDecision = strings.TrimSuffix(decision, "_decision")
+	result.ActualDecision = decision
 	result.ActualMatchedSignal = response.Headers.Get(cfg.MatchedHeader)
 
 	if testCase.ShouldMatch {
 		result.DecisionCorrect = result.ActualDecision == testCase.ExpectedDecision
 		result.MatchCorrect = result.ActualMatchedSignal == testCase.ExpectedMatchedSignal
 	} else {
-		result.DecisionCorrect = result.ActualDecision != cfg.TargetDecision
+		if testCase.ExpectedDecision != "" {
+			result.DecisionCorrect = result.ActualDecision == testCase.ExpectedDecision
+		} else {
+			result.DecisionCorrect = result.ActualDecision != cfg.TargetDecision
+		}
 		result.MatchCorrect = result.ActualMatchedSignal == ""
 	}
 

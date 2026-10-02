@@ -715,11 +715,13 @@ config:
               system_prompt: You are responding to a Spanish-language query. Respond in Spanish.
               mode: replace
       - name: explain_action
-        description: Requests that ask for an explanation of code or behavior
+        description: Coding requests that ask for an explanation of code or behavior
         priority: 30
         rules:
-          operator: OR
+          operator: AND
           conditions:
+            - type: domain
+              name: computer science
             - type: action
               name: explain
         modelRefs:
@@ -727,11 +729,13 @@ config:
             lora_name: general-expert
             use_reasoning: false
       - name: fix_action
-        description: Requests that ask to repair a bug or failing behavior
+        description: Coding requests that ask to repair a bug or failing behavior
         priority: 30
         rules:
-          operator: OR
+          operator: AND
           conditions:
+            - type: domain
+              name: computer science
             - type: action
               name: fix
         modelRefs:
@@ -739,11 +743,13 @@ config:
             lora_name: general-expert
             use_reasoning: false
       - name: generate_action
-        description: Requests that ask to write new code
+        description: Coding requests that ask to write new code
         priority: 30
         rules:
-          operator: OR
+          operator: AND
           conditions:
+            - type: domain
+              name: computer science
             - type: action
               name: generate
         modelRefs:

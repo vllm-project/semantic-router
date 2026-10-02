@@ -16,6 +16,8 @@ func TestClassifyAction(t *testing.T) {
 	}{
 		{name: "generate", text: "Write a function that merges two sorted lists.", action: config.ActionGenerate, score: 1},
 		{name: "explain", text: "What does this regex match?", action: config.ActionExplain, score: 1},
+		{name: "general math question still reads as explain", text: "What is 2 + 2?", action: config.ActionExplain, score: 1},
+		{name: "general biology question still reads as explain", text: "Tell me about cellular biology", action: config.ActionExplain, score: 1},
 		{name: "fix", text: "Fix the null pointer exception in the handler.", action: config.ActionFix, score: 1},
 		{name: "refactor", text: "Rename getUserData to fetchUser everywhere.", action: config.ActionRefactor, score: 1},
 		{name: "test", text: "Write unit tests for the parser.", action: config.ActionTest, score: 1},

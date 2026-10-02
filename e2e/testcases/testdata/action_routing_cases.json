@@ -2,7 +2,7 @@
   {
     "name": "Explain request - code explanation",
     "description": "explain_action matches a request that asks for an explanation of code",
-    "query": "Can you explain what this function does and why it is written this way?",
+    "query": "Can you explain what this Python function does and why it uses a deque here?",
     "expected_decision": "explain_action",
     "expected_matched_signal": "explain",
     "should_match": true
@@ -10,7 +10,7 @@
   {
     "name": "Fix request - bug repair",
     "description": "fix_action matches a request that asks to repair a bug",
-    "query": "This test keeps failing, can you fix the bug in the authentication logic?",
+    "query": "This Go test keeps failing, can you fix the bug in the authentication middleware?",
     "expected_decision": "fix_action",
     "expected_matched_signal": "fix",
     "should_match": true
@@ -28,6 +28,22 @@
     "description": "A request that names no action should not trigger any action decision",
     "query": "What is the capital of France?",
     "expected_decision": "",
+    "expected_matched_signal": "",
+    "should_match": false
+  },
+  {
+    "name": "Math request - keep domain routing",
+    "description": "A non-coding math question should keep the math domain decision even if the action classifier reads it as explain",
+    "query": "What is 2 + 2?",
+    "expected_decision": "math_decision",
+    "expected_matched_signal": "",
+    "should_match": false
+  },
+  {
+    "name": "Biology request - keep domain routing",
+    "description": "A non-coding biology question should keep the biology domain decision even if the action classifier reads it as explain",
+    "query": "Tell me about cellular biology",
+    "expected_decision": "biology_decision",
     "expected_matched_signal": "",
     "should_match": false
   }
