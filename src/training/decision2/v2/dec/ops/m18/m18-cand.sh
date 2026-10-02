@@ -58,13 +58,15 @@ case "$POINT" in
   08b-RAM-a75) BUILD="$D/m14/inputs/refs/DEV2.0-0.8B/$REV $D/m18/soup/08b-RAM/build/08b-RAM-soup 0.75" ;;
   2b-U5) BUILD="multi $D/m14/soup/2b-RAUP/build/2b-RAUP-soup $D/m16/inputs/arms/2b-RA $D/m18/soup/2b-RS17UP/build/2b-RS17UP-soup $D/m18/soup/2b-RAUPM/build/2b-RAUPM-soup $D/m18/soup/2b-RAM/build/2b-RAM-soup" SRCNODE=e ;;
   2b-U4) BUILD="multi $D/m14/soup/2b-RAUP/build/2b-RAUP-soup $D/m16/inputs/arms/2b-RA $D/m18/soup/2b-RAUPM/build/2b-RAUPM-soup $D/m18/soup/2b-RAM/build/2b-RAM-soup" SRCNODE=e ;;
+  2b-MLRAM) BUILD="$D/m18/soup/2b-RAM/build/2b-RAM-soup $D/m15/soup/2b-RASDML/build/2b-RASDML-soup 0.5" SRCNODE=e ;;
+  2b-U3ML) BUILD="multi $D/m15/soup/2b-RASDML/build/2b-RASDML-soup $D/m18/soup/2b-RAM/build/2b-RAM-soup $D/m16/inputs/arms/2b-RASD" SRCNODE=e ;;
   08b-RRM) BUILD="multi $D/m16/inputs/arms/08b-RA $D/m18/soup/08b-RAM/build/08b-RAM-soup" ;;
   08b-RRM-a75) BUILD="$D/m14/inputs/refs/DEV2.0-0.8B/$REV $P/08b-RRM/build/08b-RRM 0.75" ;;
   *) echo "no recipe for $POINT" >&2; exit 2 ;;
 esac
 [[ "$BUILD" == adopt || "$BUILD" == soup ]] || FP32=$P/$POINT/build/$POINT
 home() {  # <node path>: the node an input of an M18 point lives on
-  case $1 in */m16/inputs/arms/2b-* | */m14/soup/2b-RAUP/*) echo b ;; */m18/soup/2b-RAM/*) echo a ;; */m18/soup/*) echo f ;; *) echo "$SRCNODE" ;; esac
+  case $1 in */m16/inputs/arms/2b-* | */m14/soup/2b-RAUP/*) echo b ;; */m18/soup/2b-RAM/*) echo a ;; */m18/soup/* | */m15/soup/*) echo f ;; *) echo "$SRCNODE" ;; esac
 }
 PKG=$MD/$NAME-r${REV:0:8} CK=$MD/$NAME-ckpt BASEPKG=/data/dev2/models/ix1/$REF-${REV:0:8}
 sums() {

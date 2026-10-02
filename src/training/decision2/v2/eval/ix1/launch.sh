@@ -97,6 +97,8 @@ declare -A DIAGNOSTIC=(  # name -> "repository revision package-dir"
   [M18-2b-U5-bf16]="DEV2.0-2B a53cf66a0d9d492a84b6617b61e7ce35fcd03af0 /data/dev2/models/ix1/dec-m18/M18-2b-U5-bf16-ra53cf66a"
   [M18-2b-U4-bf16]="DEV2.0-2B a53cf66a0d9d492a84b6617b61e7ce35fcd03af0 /data/dev2/models/ix1/dec-m18/M18-2b-U4-bf16-ra53cf66a"
   [M18-08b-RRM-a75-bf16]="DEV2.0-0.8B bede7938a8c209c09f27400b79eed57948d6b75e /data/dev2/models/ix1/dec-m18/M18-08b-RRM-a75-bf16-rbede7938"
+  [M18-2b-MLRAM-bf16]="DEV2.0-2B a53cf66a0d9d492a84b6617b61e7ce35fcd03af0 /data/dev2/models/ix1/dec-m18/M18-2b-MLRAM-bf16-ra53cf66a"
+  [M18-2b-U3ML-bf16]="DEV2.0-2B a53cf66a0d9d492a84b6617b61e7ce35fcd03af0 /data/dev2/models/ix1/dec-m18/M18-2b-U3ML-bf16-ra53cf66a"
 )
 
 mode="${1:-}"; shift || true
