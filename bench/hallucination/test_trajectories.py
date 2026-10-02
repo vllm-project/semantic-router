@@ -402,7 +402,11 @@ def test_context_window_records_how_much_context_each_step_saw(
 
 def test_context_window_keeps_whole_words_with_a_real_tokenizer() -> None:
     pytest.importorskip("transformers")
-    window = tokenizer_window(512, "KRLabsOrg/lettucedect-base-modernbert-en-v1")
+    token_budget = 512
+    expected_chars_at_a_word_boundary = 3478
+    window = tokenizer_window(
+        token_budget, "KRLabsOrg/lettucedect-base-modernbert-en-v1"
+    )
     context = "failed " * 600
     question, answer = "Did the tests pass?", "The tests passed."
     tail = f" Question: {question} [SEP] {answer}"
@@ -410,8 +414,8 @@ def test_context_window_keeps_whole_words_with_a_real_tokenizer() -> None:
     seen = window.fit(context=context, question=question, answer=answer)
 
     # Cutting by characters kept 3,474 characters ending in "fa", although the
-    # 3,478 characters ending in the whole word also fit in 512 tokens.
-    assert len(seen) == 3478
+    # 3,478 characters ending in the whole word also fit in the token budget.
+    assert len(seen) == expected_chars_at_a_word_boundary
     assert seen.endswith(" failed")
-    assert window.count_tokens(seen + tail) <= 512
-    assert window.count_tokens(context[: len(seen) + 7] + tail) > 512
+    assert window.count_tokens(seen + tail) <= token_budget
+    assert window.count_tokens(context[: len(seen) + 7] + tail) > token_budget
