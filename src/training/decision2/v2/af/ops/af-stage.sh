@@ -22,7 +22,7 @@ IMAGE_ID=sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54
 IX=AF-$NAME-bf16
 PKG=$MD/$IX-$TAG CK=$MD/ckpt/$IX
 log() { echo "$(date -u +%FT%TZ) stage-$NAME $*" | tee -a "$M/OPERATIONS.log"; }
-grep -qE "^for _af in .* $NAME .*# arm factory ${SIZE^^} " "$S/v2/eval/ix1/launch.sh" \
+grep -qE "^for _af in (.* )?$NAME .*# arm factory ${SIZE^^} " "$S/v2/eval/ix1/launch.sh" \
   || { echo "the mirror's IX1 launcher has no arm-factory entry for $NAME" >&2; exit 2; }
 [ -f "$M/soup/$NAME/DONE" ] && [ -f "$M/soup/$NAME/MODEL_SHA256" ] || { echo "no built soup $NAME" >&2; exit 3; }
 [ ! -e "$PKG" ] && [ ! -e "$CK" ] || { echo "$IX is already staged" >&2; exit 3; }
