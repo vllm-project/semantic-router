@@ -22,7 +22,8 @@
 #            the shard already running on its GPU (second list)
 #   parity-copy NODE: ARM's passed parity gate (parity.json, records and frozen cache) node E -> NODE through node A,
 #            so the candidate keeps one parity gate when its shards run on NODE
-#   relay    NODE: runs/NAME (shards, launcher records) NODE -> node C through node A (lists equal)
+#   relay    NODE: runs/NAME (shards, launcher records; without the shards' triton / home copies) NODE -> node C
+#            through node A (lists equal)
 #   score    node C: score.sh --size 4B over panel-8 (merge, port + kit, compare)
 #   boot     node C, CPU, detached: family_delta vs DEV2.0-4B-LH and the paired bootstrap of the full panel
 #            (v2.eval.ix1.paired_boot, 2,000 replicates, seed 20261002) -> runs/NAME/m17-boot-full-vs-lh.json
@@ -52,13 +53,18 @@ KEY="-i /root/.ssh/d2_temp_cd -o BatchMode=yes -o ConnectTimeout=30"
 IMAGE=decision20-train-fast:host2
 IMAGE_ID=sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54
 EXCLUDE=(HoVer When2Call iSarcasmEval GSM8K BPoMP)
-sums() { printf '%s' "cd '$1' && find . -type f | LC_ALL=C sort | xargs -d '\n' -P 8 -n 4 sha256sum | sort -k2"; }
-hop() {  # <from> <to> <parent> <name>: tar stream through node A, then equal per-file SHA-256 lists
-  local from=$1 to=$2 parent=$3 item=$4 a b
+sums() {  # <dir> [lean]: per-file SHA-256 list (lean: without the shards' triton / home directories)
+  local skip=""
+  [ "${2:-}" = lean ] && skip="-not -path '*/triton/*' -not -path '*/home/*'"
+  printf '%s' "cd '$1' && find . -type f $skip | LC_ALL=C sort | xargs -d '\n' -P 8 -n 4 sha256sum | sort -k2"
+}
+hop() {  # <from> <to> <parent> <name> [lean]: tar stream through node A, then equal per-file SHA-256 lists
+  local from=$1 to=$2 parent=$3 item=$4 lean=${5:-} a b ex=""
+  [ "$lean" = lean ] && ex="--exclude=*/triton --exclude=*/home"
   on "$to" "test ! -e '$parent/$item'" || { echo "$parent/$item exists on node $to" >&2; exit 3; }
-  on a "ssh $KEY $(addr "$from") \"tar -C '$parent' -cf - '$item'\" | ssh $KEY $(addr "$to") \
+  on a "ssh $KEY $(addr "$from") \"tar -C '$parent' $ex -cf - '$item'\" | ssh $KEY $(addr "$to") \
     \"umask 077; mkdir -p '$parent/.m17-part' && tar -C '$parent/.m17-part' -xf - && mv -T '$parent/.m17-part/$item' '$parent/$item' && rmdir '$parent/.m17-part'\""
-  a=$(on "$from" "$(sums "$parent/$item")") b=$(on "$to" "$(sums "$parent/$item")")
+  a=$(on "$from" "$(sums "$parent/$item" "$lean")") b=$(on "$to" "$(sums "$parent/$item" "$lean")")
   [ -n "$a" ] && [ "$a" = "$b" ] || { echo "$item: node $to copy differs from node $from" >&2; exit 3; }
   echo "$item node $from -> node $to: $(wc -l <<< "$a") files, SHA-256 lists equal"
 }
@@ -206,7 +212,7 @@ EOF
     on "$NODE" "for k in 0 1 2 3 4 5 6 7; do test \"\$(cat $R/runs/$NAME/shard-\$k/exit_code 2>/dev/null)\" = 0 || exit 1; done" \
       || { echo "not every shard of $NAME ended with exit code 0" >&2; exit 3; }
     on "$NODE" "! find $R/runs/$NAME -iname '*gold*' | grep -q ." || { echo "gold-named files in the run" >&2; exit 3; }
-    hop "$NODE" c "$R/runs" "$NAME" ;;
+    hop "$NODE" c "$R/runs" "$NAME" lean ;;
   score)
     on c "test -f $S/v2/eval/ix1/score.sh" || { echo "mirror $SHA is not on node C" >&2; exit 2; }
     on c "test ! -e $R/runs/$NAME/merged" || { echo "$NAME is already scored" >&2; exit 3; }
