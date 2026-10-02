@@ -96,7 +96,13 @@ section first). Earlier: 2026-10-02 17:45 UTC+8 (09:45Z; continuation #5 from 08
   89,316 rows (`9bdba984…`, +8,022 ML copies) and `a20ib12ml` 123,045 rows (`0a362079…`, +17,233), both builds
   byte-identical (the two ml receipts differ only in their output paths), C1 source check clean; copied to node A with
   `a20ib1` (SHA-256 equal). Seeds (s5 = 20261004): M9-IB12ML GPU1 (save 962, cap 22), M9-IB1ML GPU2 (698, 20), M9-IB2
-  GPU3 (827, 20), M9-IB GPU4 (636, 16); relays on node A (`RELAY_NODE=a`, pulled over the M6 node link). Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
+  GPU3 (827, 20), M9-IB GPU4 (636, 16); relays on node A (`RELAY_NODE=a`, pulled over the M6 node link).
+- **21:37Z: M9 amendment 1** (`29f1010f2`, mirrored to nodes A–D, F; COORDINATION 04:58 expand M9 by ≤ 6 arms with
+  +150 GPU-h, 05:18 half-LR seeds of the released recipes): M9-IB-lrh / M9-IB2-lrh (s5, s6; LoRA 1e-5 / head 5e-5 /
+  backbone 5e-7) and M9-IB12ML / M9-IB1ML s6, preregistered before any of them is trained. The GPUs the notes named
+  (node A GPU5–7, node C GPU1–2, node F GPU6) were taken by the arm factory / 4B owner before this was ready; the seeds
+  launch, in the preregistered order, on GPUs idle in the allowance (`idle.sh` each poll). Node C is being staged
+  (base, T0, `a20ib1`, `a20ib12`). All 14 M7 / M8 seeds and the 4 M9 seeds progress (21:28Z). Earlier: 2026-10-02 10:00 UTC+8 (02:00Z; **worker 5 = continuation #4, 355ad916, from 01:32Z**; worker 4 =
 continuation #3, 4a20f83f, 19:37–20:10Z, silently stopped after its 20:10Z poll; its entries below say "cba71646",
 which is the coordinator's ID; worker 3 0d2e488f ran 15:12–19:40Z; worker 2 a56025bb 10:44–15:15Z; worker 1 11741ee2
 06:17–10:55Z). **Amendment 6 (`6bbb2512d`): the MLX-DEV2 guard for every M6 finalist** (COORDINATION 04:15).
