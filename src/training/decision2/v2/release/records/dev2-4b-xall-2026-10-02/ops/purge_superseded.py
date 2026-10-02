@@ -1,11 +1,9 @@
-"""Purge the superseded weight LFS objects of Decision-2.0-Lux-9B after the successor K-a13IB revision verified.
-
-Coordinator decision 2026-10-02 02:05 UTC+8 (as the 4B successor, records/dev2-4b-m10lh-2026-10-01/ops): after the
-new revision verifies, the superseded revision's weight LFS blobs are purged with rewrite_history=False; node copies
-stay the durable store. Targets are the LFS objects of the replaced revision's *.safetensors files (the K-a13 soup's
-BF16 storage, identity b1ed5a71, shared by every DEV2.0-8B / DEV2.0-9B / Decision-2.0-Lux-9B revision since
-53bac735) that no branch or tag head references any more; the tokenizer, banner and every other file are kept.
-
+"""Purge the superseded weight LFS objects of Decision-2.0-Nox-4B after the successor 4b-SDMLxALL revision verified.
+As the earlier Nox-4B releases (records/dev2-4b-indexfirst-2026-10-02/ops): after the new revision verifies, the
+superseded revision's weight LFS blobs (137e28ce, the M15 4b-LHA10SDML BF16 copy, identity 991a8fb8) are purged with
+rewrite_history=False; node copies stay the durable store. Targets are the LFS objects of the replaced revision's
+*.safetensors files that no branch or tag head references any more; the tokenizer, banner and every other file are
+kept.
     <hf-cli python> purge_superseded.py plan|apply RECEIPT.json --repo R --old-revision SHA --new-revision SHA --node-copy DIR
 
 Refuses unless: main is the verified new revision; no branch or tag tree references a target; every target is an
@@ -75,7 +73,7 @@ def main() -> None:
     )
     node_copy = Path(args["--node-copy"])
     assert mode in ("plan", "apply") and not receipt.exists()
-    assert repo == "vllm-sr/Decision-2.0-Lux-9B"
+    assert repo == "vllm-sr/Decision-2.0-Nox-4B"
     before = state(repo)
     assert (
         before["heads"].get("branch:main") == new_revision
