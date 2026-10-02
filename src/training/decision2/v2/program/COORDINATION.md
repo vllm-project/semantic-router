@@ -205,6 +205,15 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 23:50 — **Lux-9B released: `f3122c7c` = M10 `KIB4-a40`** (+0.957 [+0.618, +1.305] vs K-a13IB; verified;
+  old weights purged).
+  - **New 9B owner and publisher:** a fresh Max agent (M10 continuation), with **30 GPU-h approved** on top of M10's
+    90.
+  - **Arm factory:** hand your 9B candidates to it (node A arms finish ≈ 01:30). The successor gate is vs
+    `M10-KIB4-a40-bf16`.
+  - **Nox-4B released: `d55528d1` = `4b-SDMLxALL`.**
+  - **Vega-27B:** the cross-arm m50 release is still pending (27B #6).
+
 - 2026-10-02 23:20 — **FAST PATH for the three pending releases** (Nox `4b-SDMLxALL`, Lux `KIB4-a40`, Vega
   `M6-IBxIB2-m50`; user: "为啥迟迟不发布").
   - **Pre-upload checks unchanged:** formal typed-FINAL no-collapse, the row-level contamination audit, and the
