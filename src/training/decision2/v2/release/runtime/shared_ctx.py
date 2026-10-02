@@ -49,15 +49,17 @@ TREE_ATTENTION = "decision2_shared_tree"
 class SharePolicy:
     """When a request shares its prefix, and which answers go back to the exact path.
 
-    ``align``: the prefix length is a multiple of it (default 1). In ``cache``
-    mode, ``max_buckets`` > 1 splits the suffix rows by length into up to that
-    many batches when that saves more than ``bucket_tokens`` padded tokens per
-    extra batch.
+    ``min_shared_tokens``: the prefix tokens a request must save,
+    (questions - 1) * prefix, to share; None takes the backbone's measured
+    break-even (``auto_shared_tokens``). ``align``: the prefix length is a
+    multiple of it. In ``cache`` mode, ``max_buckets`` > 1 splits the suffix
+    rows by length into up to that many batches when that saves more than
+    ``bucket_tokens`` padded tokens per extra batch.
     """
 
     tau: float = 0.0
     min_questions: int = 2
-    min_shared_tokens: int = 0
+    min_shared_tokens: int | None = None
     align: int = 1
     fallback: str = "rows"
     mode: str = "tree"
@@ -67,7 +69,7 @@ class SharePolicy:
     def __post_init__(self) -> None:
         if not 0.0 <= self.tau <= 1.0:
             raise ValueError("tau must be within [0, 1]")
-        if self.min_questions < 2 or self.min_shared_tokens < 0:
+        if self.min_questions < 2 or (self.min_shared_tokens or 0) < 0:
             raise ValueError("min_questions must be >= 2 and min_shared_tokens >= 0")
         if self.align < 1:
             raise ValueError("align must be positive")
@@ -208,6 +210,26 @@ def tokenizer_for(tokenizer: Any, policy: SharePolicy | None, questions: int) ->
 
 def _padded(length: int) -> int:
     return -(-length // 8) * 8
+
+
+def auto_shared_tokens(config: Any) -> int:
+    """Prefix tokens a request must save before sharing pays off on this backbone.
+
+    Sharing adds launches (a packed row, two attention or gated-delta kernels
+    per layer) that a small backbone recovers only on larger requests; the
+    values are the break-evens measured on one MI325X with the eager BF16
+    runtime (Index multi-question requests and the 1-128 question benchmark).
+    """
+    hidden = getattr(config, "hidden_size", 0)
+    if "linear_attention" not in set(getattr(config, "layer_types", None) or ()):
+        return 1024
+    if hidden <= 1024:
+        return 3072
+    if hidden <= 2048:
+        return 2048
+    if hidden <= 3072:
+        return 1024
+    return 512
 
 
 def buckets(lengths: list[int], most: int, penalty: int) -> list[list[int]]:
@@ -882,7 +904,10 @@ def shared_logits(
         return None
     prefix = shared_prefix(encoded, policy.align)
     stats["prefix_tokens"] = prefix
-    if prefix < 4 or (len(jobs) - 1) * prefix < policy.min_shared_tokens:
+    threshold = policy.min_shared_tokens
+    if threshold is None:
+        threshold = auto_shared_tokens(_core(backend.model.backbone).config)
+    if prefix < 4 or (len(jobs) - 1) * prefix < threshold:
         stats["reason"] = "too little shared input"
         return None
     packed = prefix + sum(len(item["ids"]) - prefix for item in encoded)

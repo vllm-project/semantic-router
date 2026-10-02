@@ -300,6 +300,8 @@ class SwitchTest(unittest.TestCase):
         cls.scratch.cleanup()
 
     def backend(self, share=False, budget=None):
+        if isinstance(share, dict):
+            share = {"min_shared_tokens": 0, **share}
         return self.qwen.QwenDecision(
             self.model,
             self.tok,
@@ -352,7 +354,7 @@ class SwitchTest(unittest.TestCase):
     def test_runtime_default_and_request_override(self):
         qs = questions(5)
         exact, _ = self.backend().system_one(STATE, qs)
-        backend = self.backend(True)
+        backend = self.backend({})
         answers, _ = backend.system_one(STATE, qs)
         self.assertTrue(backend.share_stats["shared"])
         self.close(answers, exact)
@@ -362,7 +364,7 @@ class SwitchTest(unittest.TestCase):
         self.assertEqual(self.model.shapes, [self.model.shapes[0]])
 
     def test_single_question_and_invalid_questions(self):
-        backend = self.backend(True)
+        backend = self.backend({})
         one = {"q0": questions(1)["q0"]}
         answers, _ = backend.system_one(STATE, one)
         self.assertEqual(backend.share_stats["reason"], "too few questions")
@@ -372,16 +374,24 @@ class SwitchTest(unittest.TestCase):
         self.assertEqual(answers["bad"], {"type": "rank", "error": "invalid_question"})
         self.close(answers, self.backend().system_one(STATE, qs)[0])
 
-    def test_long_prefix_and_short_state(self):
+    def test_long_prefix_and_the_break_even(self):
         long_state = {"ticket": STATE * 4, "history": [STATE[:80]] * 3}
         qs = questions(6, 4)
-        self.close(
-            self.backend(True).system_one(long_state, qs)[0],
-            self.backend().system_one(long_state, qs)[0],
+        probe = self.backend({})
+        answers, _ = probe.system_one(long_state, qs)
+        self.assertTrue(probe.share_stats["shared"], probe.share_stats)
+        self.close(answers, self.backend().system_one(long_state, qs)[0])
+        saved = 5 * probe.share_stats["prefix_tokens"]
+        for threshold, shared in ((saved, True), (saved + 1, False)):
+            backend = self.backend({"min_shared_tokens": threshold})
+            backend.system_one(long_state, qs)
+            self.assertEqual(backend.share_stats["shared"], shared)
+        auto = sys.modules["decision2.shared_ctx"].auto_shared_tokens(
+            self.model.backbone.config
         )
-        backend = self.backend({"min_shared_tokens": 10_000})
-        backend.system_one("short", qs)
-        self.assertEqual(backend.share_stats["reason"], "too little shared input")
+        backend = self.backend(True)
+        backend.system_one(long_state, qs)
+        self.assertEqual(backend.share_stats["shared"], saved >= auto)
 
     def test_over_budget_tree_runs_the_cache_mode(self):
         from decision2._vendor.dev2model.decision_model import encode
