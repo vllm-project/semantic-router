@@ -64,7 +64,7 @@ jobs:
         uses: golangci/golangci-lint-action@v7
         with:
           version: ${{ steps.golangci_lint.outputs.version }}
-          install-mode: binary
+          install-mode: goinstall
           args: --help
 
       - name: Load shared native libraries
