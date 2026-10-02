@@ -1,0 +1,37 @@
+{
+  "files": {
+    "assets/banner.png": "2363db1a11ea3d8c61656a078c2b2cdf10623177e54ca3ac5a48b22ccb0be724",
+    "assets/index-areas.png": "1088285ed8cd75a4063752db5350513f55ba42864a1afecf8cd3b32d390e5064",
+    "assets/index-pareto.png": "241cdf685562dc58e8c30a321cb2056f682cacd33ddc711349b0bec0e01d26e8",
+    "assets/jevarena-types.png": "34b007d8c56bacca1898d05b804db5a10c72113fe117ce3fb1e6b497f1f55316",
+    "assets/jevarena.png": "2e26f0972f90bb274b28f4d929bdfcbe58f147c257f4787019bf92000d371f7d"
+  },
+  "inputs": {
+    "fonts_sha256": {
+      "Inter-Bold": "288316099b1e0a47a4716d159098005eef7c0066921f34e3200393dbdb01947f",
+      "Inter-Medium": "97ad806f526e41546d46365bb3a393145f75b7b1568913db74549ad8b8dba872",
+      "Inter-Regular": "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82",
+      "Inter-SemiBold": "78a843fade9d4612a5567302fb595b56976eb5fcebf4fea5a5912d638bafcde3",
+      "InterDisplay-Bold": "b74c8e0dd744b3347faca4c96bc7b2e32f7d6f62300a79b1d1a99331e44a5bc4",
+      "InterDisplay-SemiBold": "0310d7a325896129730c6c8cf9a6e0f81ee258bedf77b1ff059b2a7b75f74e02"
+    },
+    "index_sha256": "bf2bd02d1359de5f1bdd871cb3e240b6f5022cc2e3d6638580e921cd4386ad4a",
+    "logo_sha256": "e6b8428eb67f9318450e4b938639055d20e5f3643aa3b6f676a7b96a7beda94a",
+    "reports": {
+      "bosun17b": "7003d0ecead9db7710943cf350ade4a3096962ca816eb81dfc962f67abe9895c",
+      "candidate": "08745acf9fc753bc1d3b0335dc3e341c697a657a9e6c7c26d85eebfebf4d160c",
+      "decider2b": "dd91e5ba628dbb5a3d2fc4092e9fd62d336c0b88f732419c7dfadd83f634e8a2",
+      "sol1": "09892d3e6ebaa8196a0f72184c05f303c5f8d1773dcb43c7b52c85dd5d39ffbb",
+      "thisthat12": "33daa04aa94d831b630401875dfec50c16cfc63e7214be32eb9008807dd29ea3"
+    }
+  },
+  "model_name": "Decision-2.0-Sol-2B",
+  "model_sha256": "32872f2968e38aa99901797aaab5e12e32e281bf67bb924037d443394411170d",
+  "schema": "dev2-card-assets/1",
+  "software": {
+    "matplotlib": "3.11.2",
+    "pillow": "12.3.0",
+    "python": "3.12.13"
+  },
+  "tier": "2B"
+}

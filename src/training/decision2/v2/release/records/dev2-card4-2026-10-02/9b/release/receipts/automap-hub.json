@@ -1,0 +1,38 @@
+{
+  "code_sha256": "9b4a974044b5842f383a38281d9de2c6ed72295b858948062fe2a20be1a51c8e",
+  "comparison": {
+    "category_changes": 0,
+    "max_abs_drift": 0.0,
+    "missing": 0,
+    "slots": 3
+  },
+  "downloaded_revisions": [
+    "7195360df53b30ae625435fb3d9ec21bdbda279c"
+  ],
+  "exit_code": 0,
+  "hub": true,
+  "interpreter_flags": [
+    "-s",
+    "-B"
+  ],
+  "mode": "automap-card",
+  "passed": true,
+  "readme_sha256": "fe5bd87717b7d1a4f95198bde6514ed27f89866b6677198fa7cd60bcb3c70a28",
+  "runtime": {
+    "hip": "7.2.53211",
+    "numpy": "2.3.5",
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "safetensors": "0.8.0",
+    "threads": 160,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0"
+  },
+  "schema": "dev2-release-examples/1",
+  "seconds": 61.89486976689659,
+  "sites": [
+    "/opt/decision-fla"
+  ],
+  "stderr_tail": ""
+}
