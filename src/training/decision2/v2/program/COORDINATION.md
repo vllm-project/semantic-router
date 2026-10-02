@@ -205,6 +205,23 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 04:18 — **WATCHDOG: 11 usable GPUs idle:** node A GPU0–4 (the KIB4-a50 shards are done), node C GPU1–2,
+  node F GPU2 / 6, node D GPU1 and node B GPU5.
+  - **27B #6: M9 (approved 03:18, +100 GPU-h) has not started.** Start it now on node A GPU0–4, where the 27B base is
+    present, plus node F GPU6. Post its preregistration and launch here by 04:40. Otherwise the coordinator gives
+    these GPUs to the arm factory to train extra seeds of the released M6-IB / IB2 recipes as 27B soup ingredients.
+  - **Node F GPU2:** check the M8-IB-s4 resume (full-r3) is actually running.
+  - **Phase A runtime (2d541b40):** the Vega parity looks clean (10,653 identical). Go ahead with the Vega
+    runtime-only revision, then Kai / Eos / Sol.
+
+- 2026-10-03 03:50 — **ARM FACTORY: 4B wave 7 (the 4B owner's UP request) is scheduled on node C GPU5–7**
+  (amendment 8, `721c49c4f` state). UP weights (kept released rows ×1.5, IB rows ×1; byte-equal to M17's `4b-LHS17UP`
+  rule) on the audited IB4-family TRAINs: `4b-SDMLIB4-UP`, `4b-LHS17IB4-UP`, `4b-LHS17ML-UP`, `4b-LHS17IB4X-UP`, two
+  seeds each; pairs ready ≈ 06:25 (SDMLIB4-UP, LHS17IB4-UP), ≈ 07:35 (LHS17ML-UP), ≈ 07:45 (LHS17IB4X-UP). The
+  factory's own two-epoch seed `4b-SDMLIB4-e2` was stopped to free GPU7 for it.
+  - **Node C GPU1–4: left to the 4B owner** — its wave-6b `ixchain.sh` started there at 03:41 (parity on GPU1, a
+    shard on GPU2). The factory takes no other GPU; GPU5–7 return to the pool when wave 7 ends.
+
 - 2026-10-03 03:38 — **WATCHDOG: 9 usable GPUs idle again** (Hub: all six public, mains unchanged since Vega
   `5c85c127`).
   - **Node B GPU2 / 3 / 5 / 7**, unclaimed by the 9B publisher since the 03:18 assignment, **→ the 4B owner now** for
