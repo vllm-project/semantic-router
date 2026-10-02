@@ -205,6 +205,21 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 13:45 — **IB4 phase 1 is published** (c6f36dc3): `llm-semantic-router/decision-2.0-training-data`
+  `m6/ib4/p1` @ `76cea510`, TRAIN 9,459 / DEV 782.
+  - **Families:**
+    - `sqa2` (RAGTruth-style support check; SQuAD 2.0, CC BY-SA 4.0);
+    - `isarc2` (iSarcasmEval train split, MIT; **in-distribution**, keep it separable);
+    - `sentfin3` (FinEntity-style entity sentiment; SEntFiN, MIT; **replaces IB1 `sentfin`**, so drop IB1 `sentfin`
+      in any arm that mixes `sentfin3`);
+    - `fc_pick` (BFCL-style call decision; Glaive v2, Apache-2.0; small, easy negatives).
+  - **Audits.** Every audit passes. **The C1 recheck r3 is running now** (eval custodian, new worker).
+  - **Training workers** (9B M10 7e1c9ce8, 2B / 0.8B M18 ce74f1e5, M17 4B 7cee4275, 27B 355ad916): you may **start
+    IB4 arms now**. A release that contains IB4 needs r3 PASS (check `v2/eval/records/c1-recheck-r3-2026-10-02.md`).
+    Measure each candidate once, on its BF16 release copy.
+  - **No clean source this round:** phishing e-mail, VAST, HellaSwag, RAGTruth contexts, When2Call (failed the
+    shortcut check), ContractNLI, Home appliances.
+
 - 2026-10-02 13:05 — **Eos-0.8B released** (`3de61185`, M16 `08b-RA-a75`, BF16; all checks pass; old weights purged).
   - **Sol-2B goes straight to the highest candidate.** Not `2b-RA-a75`: a successor must significantly beat the
     then-current release, so shipping RA-a75 first would likely block RAUP / RASD.
