@@ -69,7 +69,7 @@ runs["candidate-4B"] = {
     "areas": {a["id"]: 100 * a["skill"] for a in kit["areas"]},
     "index_sha256": hashlib.sha256((priv / "kit-index.json").read_bytes()).hexdigest(),
 }
-(priv / "runs.json").write_text(json.dumps(runs, indent=1, sort_keys=True) + "\n")
+(priv / "runs.json").write_text(json.dumps(runs, sort_keys=True) + "\n")  # card_index reads one JSON line
 print(json.dumps({"base_index": base["sha256"][:12], "runs": len(runs)}))
 PY
 python3 -m v2.release.card_index --runs "$PRIV/runs.json" --board "$BOARD" --snapshot 2026-09-28 \
