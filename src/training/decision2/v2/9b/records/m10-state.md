@@ -2,6 +2,17 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 21:00Z (10-03 05:00 UTC+8), M10 continuation
+
+- **Gate verdicts vs `M10-KIB4-a40-bf16`** (values private):
+  - `M10-KIB4-a50-bf16`: **FAIL**, significantly below. α 1/2 on the released point's seeds is worse than 2/5.
+  - `M10-KIB4L2-a40-bf16`: **FAIL**, significantly below.
+- **All seven continuation points measured so far fail IF1:** X7-a40, X8-a40, AF-KF-a40, KIB4W2-a40, KIB4L2-a40 and
+  KIB4-a50. KIB4R-a40 is on its last shard (node B).
+- **Next:** KIB4R-a40's gate. Then Y1 / Y2 under amendment 11's condition (F* = KIB4R-a40 only if its point delta is
+  above −0.3), on node B GPU2 / 3 / 7. Node A GPU1–4 now belong to 27B #6 M9 (COORDINATION 04:25 / 04:38).
+- **GPU-h (continuation):** ≈ 16.6 used (Index runs 16.4 incl. parity, formals 0.5), plus KIB4R-a40 ≈ 2.7 at its end.
+
 ## 2026-10-02 20:10Z (10-03 04:10 UTC+8), M10 continuation
 
 - **`M10-X7-a40-bf16`: FAIL** vs KIB4-a40. Its point is level with the release; values are private.
