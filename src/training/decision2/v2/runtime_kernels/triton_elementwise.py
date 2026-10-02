@@ -30,6 +30,14 @@ import triton
 import triton.language as tl
 from triton.language.extra import libdevice
 
+from .aten_reduce import (
+    combine_vec4,
+    lane_tree64,
+    sumsq_128,
+    sumsq_256,
+    sumsq_vec4_chunk,
+)
+
 EXACT = {"enable_fp_fusion": False}
 
 
@@ -60,6 +68,43 @@ def _add_rmsnorm_kernel(
     tl.store(out_ptr + row * H + cols, y.to(tl.bfloat16), mask=mask)
 
 
+@triton.jit
+def _add_rmsnorm_exact_kernel(
+    res_ptr,
+    delta_ptr,
+    w1_ptr,
+    hidden_ptr,
+    out_ptr,
+    M,
+    H,
+    inv_h,
+    eps,
+    HAS_DELTA: tl.constexpr,
+    R: tl.constexpr,
+):
+    rows = tl.program_id(0) * R + tl.arange(0, R)
+    rmask = (rows < M)[:, None]
+    base = rows[:, None].to(tl.int64) * H
+    cols = tl.arange(0, 256)[None, :]
+    acc = tl.zeros([R, 64, 4], dtype=tl.float32)
+    for c in range(0, H // 256):
+        offs = base + c * 256 + cols
+        x = tl.load(res_ptr + offs, mask=rmask, other=0.0)
+        if HAS_DELTA:
+            x = x + tl.load(delta_ptr + offs, mask=rmask, other=0.0).to(tl.float32)
+            tl.store(hidden_ptr + offs, x, mask=rmask)
+        acc = acc + sumsq_vec4_chunk(x, R)
+    var = lane_tree64(combine_vec4(acc, R), R) * inv_h
+    rstd = libdevice.rsqrt(var + eps)[:, None]
+    for c in range(0, H // 256):
+        offs = base + c * 256 + cols
+        x = tl.load(res_ptr + offs, mask=rmask, other=0.0)
+        if HAS_DELTA:
+            x = x + tl.load(delta_ptr + offs, mask=rmask, other=0.0).to(tl.float32)
+        y = (x * rstd) * tl.load(w1_ptr + c * 256 + cols)
+        tl.store(out_ptr + offs, y.to(tl.bfloat16), mask=rmask)
+
+
 def add_rmsnorm(
     residual: Any,
     delta: Any | None,
@@ -67,8 +112,14 @@ def add_rmsnorm(
     eps: float,
     hidden_out: Any | None = None,
     num_warps: int | None = None,
+    exact: bool = True,
+    rows_per_program: int = 2,
 ):
-    """Returns (hidden FP32, normed BF16); ``weight_plus_one`` is ``1.0 + weight.float()``."""
+    """Returns (hidden FP32, normed BF16); ``weight_plus_one`` is ``1.0 + weight.float()``.
+
+    ``exact`` (H a multiple of 256) sums squares in ATen's order, so the mean, and with it
+    every output, is bit-identical to the reference; otherwise a single ``tl.sum``.
+    """
     H = residual.shape[-1]
     rows = residual.numel() // H
     hidden = (
@@ -77,6 +128,14 @@ def add_rmsnorm(
         else (hidden_out if hidden_out is not None else torch.empty_like(residual))
     )
     out = torch.empty(residual.shape, dtype=torch.bfloat16, device=residual.device)
+    if exact and H % 256 == 0:
+        R = rows_per_program
+        _add_rmsnorm_exact_kernel[(triton.cdiv(rows, R),)](
+            residual, delta if delta is not None else residual, weight_plus_one, hidden, out, rows, H,
+            float(np.float32(1.0) / np.float32(H)), eps, HAS_DELTA=delta is not None, R=R,
+            num_warps=num_warps or 4, **EXACT,
+        )  # fmt: skip
+        return hidden, out
     block = triton.next_power_of_2(H)
     warps = num_warps or (16 if block >= 8192 else 8 if block >= 2048 else 4)
     _add_rmsnorm_kernel[(rows,)](
@@ -255,14 +314,26 @@ def gdn_prep(
 
 @triton.jit
 def _gated_rmsnorm_kernel(
-    x_ptr, z_ptr, w_ptr, out_ptr, N, eps, inv_d, D: tl.constexpr, BR: tl.constexpr
+    x_ptr,
+    z_ptr,
+    w_ptr,
+    out_ptr,
+    N,
+    eps,
+    inv_d,
+    D: tl.constexpr,
+    BR: tl.constexpr,
+    EXACT_SUM: tl.constexpr,
 ):
     r = (tl.program_id(0) * BR + tl.arange(0, BR)).to(tl.int64)
     d = tl.arange(0, D)
     m = (r < N)[:, None]
     offs = r[:, None] * D + d[None, :]
     x = tl.load(x_ptr + offs, mask=m, other=0.0).to(tl.float32)
-    var = tl.sum(x * x, axis=1) * inv_d
+    if EXACT_SUM:
+        var = sumsq_128(x, BR) * inv_d
+    else:
+        var = tl.sum(x * x, axis=1) * inv_d
     xn = (x * libdevice.rsqrt(var + eps)[:, None]).to(tl.bfloat16).to(tl.float32)
     y = tl.load(w_ptr + d)[None, :] * xn
     z = tl.load(z_ptr + offs, mask=m, other=0.0).to(tl.float32)
@@ -271,8 +342,15 @@ def _gated_rmsnorm_kernel(
 
 
 def gated_rmsnorm(
-    core: Any, z: Any, weight: Any, eps: float, block_rows: int = 16, num_warps: int = 4
+    core: Any,
+    z: Any,
+    weight: Any,
+    eps: float,
+    block_rows: int = 16,
+    num_warps: int = 4,
+    exact: bool = True,
 ):
+    """``exact`` (head dim 128) sums squares in ATen's order: bit-identical to the reference."""
     D = core.shape[-1]
     n = core.numel() // D
     out = torch.empty(core.shape, dtype=torch.bfloat16, device=core.device)
@@ -286,6 +364,7 @@ def gated_rmsnorm(
         float(np.float32(1.0) / np.float32(D)),
         D=D,
         BR=block_rows,
+        EXACT_SUM=exact and D == 128,
         num_warps=num_warps,
         **EXACT,
     )
@@ -310,6 +389,7 @@ def _attn_prep_kernel(
     cs_bstride,
     D: tl.constexpr,
     ROT: tl.constexpr,
+    EXACT_SUM: tl.constexpr,
 ):
     bt = tl.program_id(0).to(tl.int64)
     hid = tl.program_id(1)
@@ -327,7 +407,11 @@ def _attn_prep_kernel(
         wp = kw1_ptr
         dst = ko_ptr + ((b * NKV + (hid - NH)) * T + t) * D
     x = tl.load(src + d).to(tl.float32)
-    rstd = libdevice.rsqrt(tl.sum(x * x, axis=0) * inv_d + eps)
+    if EXACT_SUM:
+        ss = tl.reshape(sumsq_256(tl.reshape(x, [1, D]), 1), [])
+    else:
+        ss = tl.sum(x * x, axis=0)
+    rstd = libdevice.rsqrt(ss * inv_d + eps)
     y = ((x * rstd) * tl.load(wp + d)).to(tl.bfloat16).to(tl.float32)
     xp = tl.load(src + partner).to(tl.float32)
     yp = ((xp * rstd) * tl.load(wp + partner)).to(tl.bfloat16).to(tl.float32)
@@ -352,8 +436,11 @@ def attn_prep(
     head_dim: int,
     eps: float,
     num_warps: int = 2,
+    exact: bool = True,
 ):
     """(q [B, H, T, D], k [B, Hkv, T, D]) BF16 for attention; ``*_w1`` are ``1 + weight`` (FP32).
+
+    ``exact`` (head dim 256) sums squares in ATen's order: bit-identical to the reference.
 
     ``cos``/``sin`` are [B or 1, T, rotary_dim] FP32 (the rotary module's output).
     The gate stays a strided view of ``q_proj_out`` and v a view of ``k``'s sibling.
@@ -380,6 +467,7 @@ def attn_prep(
         0 if cos.shape[0] == 1 else T * rot,
         D=head_dim,
         ROT=rot,
+        EXACT_SUM=exact and head_dim == 256,
         num_warps=num_warps,
         **EXACT,
     )
