@@ -1720,6 +1720,60 @@ func TestFallbackHTTPDispatchPreservesRequestScopedCredentials(t *testing.T) {
 	}
 }
 
+func TestFallbackHTTPDispatchUsesSelectedLoRABaseCredential(t *testing.T) {
+	var baseAReceived bool
+	var baseBAuth string
+	newBackend := func(received *bool, auth *string, model string) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			*received = true
+			if auth != nil {
+				*auth = r.Header.Get("Authorization")
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `{"id":"chatcmpl-lora-auth","object":"chat.completion","created":1700000000,"model":%q,"choices":[{"index":0,"message":{"role":"assistant","content":"fallback"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`, model)
+		}))
+	}
+	baseA := newBackend(&baseAReceived, nil, "shared")
+	defer baseA.Close()
+	baseB := newBackend(new(bool), &baseBAuth, "shared")
+	defer baseB.Close()
+
+	policy := fallback.DefaultEnabledPolicy()
+	router, cfg := setupFallbackTestRouter(t, policy)
+	cfg.ModelConfig["base-a"] = config.ModelParams{
+		PreferredEndpoints: []string{"base-a-backend"},
+		APIFormat:          "openai.chat.v1",
+		LoRAs:              []config.LoRAAdapter{{Name: "shared"}},
+		AccessKeys:         map[string]string{"openai": "base-a-key"},
+	}
+	cfg.ModelConfig["base-b"] = config.ModelParams{
+		PreferredEndpoints: []string{"base-b-backend"},
+		APIFormat:          "openai.chat.v1",
+		LoRAs:              []config.LoRAAdapter{{Name: "shared"}},
+		AccessKeys:         map[string]string{"openai": "base-b-key"},
+	}
+	cfg.ProviderProfiles["base-a-profile"] = config.ProviderProfile{Type: "openai", BaseURL: baseA.URL}
+	cfg.ProviderProfiles["base-b-profile"] = config.ProviderProfile{Type: "openai", BaseURL: baseB.URL}
+	cfg.VLLMEndpoints = append(cfg.VLLMEndpoints,
+		config.VLLMEndpoint{Name: "base-a-backend", ProviderProfileName: "base-a-profile"},
+		config.VLLMEndpoint{Name: "base-b-backend", ProviderProfileName: "base-b-profile"},
+	)
+
+	ctx := testFallbackRequestContext("model-primary", nil)
+	ctx.VSREligibleModelRefs = []config.ModelRef{
+		{Model: "model-primary"},
+		{Model: "base-b", LoRAName: "shared"},
+	}
+	ctx.UpstreamStatusCode = http.StatusServiceUnavailable
+
+	resp := router.handleUpstreamTransportError([]byte("upstream 503"), ctx)
+	require.NotNil(t, resp)
+	require.NotNil(t, resp.GetImmediateResponse())
+	require.Equal(t, "Bearer base-b-key", baseBAuth)
+	require.False(t, baseAReceived, "fallback must not call the other LoRA owner")
+}
+
 func TestFallbackRecipeCircuitBreakerConfigApplied(t *testing.T) {
 	globalPolicy := fallback.FallbackPolicy{
 		Version:     1,

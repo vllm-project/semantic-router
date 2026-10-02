@@ -769,7 +769,7 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 	if err != nil {
 		return nil, 0, err
 	}
-	authorize, err := r.fallbackProviderAuthorizer(reqCtx, dispatch.profile, dispatch.logicalModel)
+	authorize, err := r.fallbackProviderAuthorizer(reqCtx, dispatch.profile, dispatch.effectiveBackendModel())
 	if err != nil {
 		return nil, 0, err
 	}
