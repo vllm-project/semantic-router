@@ -181,7 +181,7 @@ func decodeChatChoices(wire chatResponseWire, response *llmprotocol.Response, po
 			response.Evidence.TokenLogprobs = decodeChatTokenLogprobs(choice.Logprobs)
 			if choice.FinishReason != nil {
 				response.SourceStopReason = *choice.FinishReason
-				response.StopReason = decodeChatStop(*choice.FinishReason)
+				response.StopReason, response.MatchedStopSequence = decodeChatStopWithMatch(*choice.FinishReason, choice.StopReason, policy)
 			}
 			continue
 		}
@@ -352,6 +352,17 @@ func encodeChatUsage(usage llmprotocol.Usage) *chatUsageWire {
 		wire.CompletionTokensDetails = &chatCompletionTokensDetailsWire{ReasoningTokens: tokenValue(usage.OutputReasoning)}
 	}
 	return wire
+}
+
+// decodeChatStopWithMatch reads vLLM's non-standard choices[].stop_reason when
+// the target can carry it. With finish_reason "stop", a string there is the stop
+// sequence that ended the generation; an integer is a stop token id and null is
+// end of sequence.
+func decodeChatStopWithMatch(reason string, detail *chatStopReasonWire, policy llmprotocol.Policy) (llmprotocol.StopReason, string) {
+	if policy.ProviderStopSequences && reason == "stop" && detail != nil && detail.Text != nil {
+		return llmprotocol.StopSequence, *detail.Text
+	}
+	return decodeChatStop(reason), ""
 }
 
 func decodeChatStop(reason string) llmprotocol.StopReason {

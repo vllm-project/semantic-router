@@ -363,7 +363,7 @@ func (v *ValkeyStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 
 	defer func() {
 		duration := time.Since(startTime).Seconds()
-		RecordMemoryRetrieval(backend, operation, status, opts.UserID, duration, resultCount)
+		RecordMemoryRetrieval(backend, operation, status, duration, resultCount)
 	}()
 
 	if !v.enabled {
