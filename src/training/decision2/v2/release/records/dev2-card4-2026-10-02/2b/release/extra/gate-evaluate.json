@@ -1,0 +1,37 @@
+{
+  "passed": true,
+  "decision": {
+    "sha256": "ea4b72cfb3da8bd1730c17a39f305a4cff4af878de04240075e7e7b0766a9dd1",
+    "status": "final"
+  },
+  "items": {
+    "1_beats_own_1_0": {
+      "passed": true,
+      "evidence": "paired v3 95% interval low +3.265 (sha bca44e5f2863)"
+    },
+    "2_regressions_disclosed": {
+      "passed": true,
+      "evidence": "10 results below own 1.0 listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included"
+    },
+    "3_download_hash_parameters": {
+      "passed": true,
+      "evidence": "tree 32 files re-hashed; loaded 1883930944"
+    },
+    "4_native_examples": {
+      "passed": true,
+      "evidence": "examples and the card's Python block reproduced from the download"
+    },
+    "5_output_consistency": {
+      "passed": true,
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run"
+    },
+    "6_card_design": {
+      "passed": true,
+      "evidence": "Hub card apache-2.0 / problems []"
+    },
+    "7_transformers_remote_code": {
+      "passed": true,
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518"
+    }
+  }
+}

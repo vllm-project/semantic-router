@@ -11,6 +11,12 @@ headline recomputed, so the area weighting is propagated rather than approximate
 sum Σ w_b² var_b (board weights from the private file) is reported as a cross-check. Before any replicate the
 identity resample (every case once, renamed) must reproduce both runs' headline exactly. The output holds
 Index values and stays private.
+
+``--exclude NAME ...`` adds ``transfer``: the headline delta without those benchmarks (e.g. the ones whose
+families or formats a model trained on), as the sum of the remaining benchmarks' contributions w_b x delta_b
+(board weights; on the same replicates, so paired), plus that sum renormalized by the remaining weight. The 0.2.1
+areas need all their benchmarks, so the port cannot rescore a reduced panel; ``weighted_sum_check`` is the full
+sum minus the observed headline delta.
 """
 
 from __future__ import annotations
@@ -117,6 +123,7 @@ def main() -> None:
     parser.add_argument("--seed", default="20261002")
     parser.add_argument("--workers", type=int, default=16)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--exclude", nargs="*", default=[])
     args = parser.parse_args()
 
     from decision_index.scoring.report import load_results
@@ -126,6 +133,9 @@ def main() -> None:
 
     started = time.time()
     rows, _ = selected_rows(verified_suite(args.suite_dir))
+    unknown = set(args.exclude) - set(NAMES.values())
+    if unknown:
+        raise SystemExit(f"unknown benchmarks {sorted(unknown)}")
     results = (load_results(args.base), load_results(args.new))
     cases = _cases(rows)
     observed = tuple(_summary(score_rows(rows, r)) for r in results)
@@ -172,12 +182,37 @@ def main() -> None:
             "cases": len(cases[int(number)]),
             **stats,
         }
+    transfer = None
+    if args.exclude:
+        kept = [n for n in weight if NAMES[int(n)] not in args.exclude]
+        kept_weight = sum(weight[n] for n in kept)
+
+        def contribution(s: dict, numbers: list[str]) -> float:
+            return sum(weight[n] * s["benchmarks"][n] for n in numbers)
+
+        obs = contribution(observed[1], kept) - contribution(observed[0], kept)
+        draws_kept = delta(lambda s: contribution(s, kept))
+        full = contribution(observed[1], list(weight)) - contribution(
+            observed[0], list(weight)
+        )
+        transfer = {
+            "excluded": sorted(args.exclude),
+            "kept_benchmarks": len(kept),
+            "kept_weight": round(kept_weight, 6),
+            "delta_contribution": {"delta": round(obs, 4), **_interval(draws_kept)},
+            "delta_renormalized": {
+                "delta": round(obs / kept_weight, 4),
+                **_interval([d / kept_weight for d in draws_kept]),
+            },
+            "weighted_sum_check": round(full - obs_delta, 6),
+        }
     report = {
         "schema": "ix1-paired-boot/1",
         "label": "independent provisional 0.2.1 reproduction (private)",
         "unit": "scoring case (group_id) within benchmark, paired, with replacement",
         "replicates": args.replicates,
         "seed": args.seed,
+        "excluded": sorted(args.exclude),
         "inputs_sha256": {
             key: hashlib.sha256(path.read_bytes()).hexdigest()
             for key, path in (("base", args.base), ("new", args.new))
@@ -194,6 +229,7 @@ def main() -> None:
         },
         "areas": areas,
         "benchmarks": benchmarks,
+        **({"transfer": transfer} if transfer else {}),
         "seconds": round(time.time() - started, 1),
     }
     args.out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")

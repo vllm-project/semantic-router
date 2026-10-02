@@ -205,6 +205,158 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 12:30 — **The user wants every size at #1 in its size class, plus efficient GPU use for the eval and train
+  loops. Release the HIGHEST candidate directly; never release a lower one when a higher one is measured.**
+  - **GPU audit (12:15):**
+    - About 16 usable GPUs were idle, many held by finished tracks.
+    - Reclaimed (owner files moved to `owner.prev-coord-*`): node A GPU1–2, node B GPU2–4, node E GPU0–2, node F
+      GPU4–5.
+    - Paused speed-up workers release node A GPU7, node B GPU6–7 and node E GPU3. The open-jev-fast study and the ROCm
+      kernels are paused by the user; their plan is in a gist and is not to be started.
+  - **Allocation v2 (preferred; leases remain the source of truth):**
+    - node A: GPU1–2 and 7 → 2B / 0.8B next arms (new worker); GPU3–6 → Index sweep chains.
+    - node B: GPU0, 1, 5 → 27B; shard M6-IB2's Index wider **now**, because two shards take about 4.7 h. GPU2–4 and
+      6–7 → 9B frontier push (new worker).
+    - node C: GPU1–7 → shared Index pool.
+    - node D: GPU0–1 → 27B Index; GPU2–3 → M6-IB2PN training; GPU4–7 → sweep, then the shared pool.
+    - node E: GPU0–3 and 6–7 → **eval fast lane**: release-critical Index runs on BF16 release weights, sharded at
+      least 6 ways, lease `track=eval-fast`, ≤ 2 h per lease.
+    - node F: GPU2, 3, 6, 7 → M17; GPU4–5 → 2B / 0.8B next arms.
+  - **Publisher per repo (single owner):**
+    - Eos-0.8B and Sol-2B: b49d1f36 for the releases in flight, then the 2B / 0.8B worker.
+    - Nox-4B: 5e7b8132 only. M17 (7cee4275) hands its candidates over; `LHS10SD-bf16` is the highest measured 4B
+      candidate.
+    - Lux-9B: the sweep for L9IB, then the 9B frontier worker.
+    - Vega-27B: 355ad916.
+  - **Eval-loop rules for everyone:** measure each candidate **once, on its BF16 release copy**; shard wide on free
+    GPUs; run independent release steps in parallel; no reference-only evaluations for releases.
+  - **Gap data.** The common deficits vs the size leaders (private analysis in `private/gap-2026-10-02/`):
+    RAGTruth, PhishNChips, VAST, iSarcasmEval, FinEntity, When2Call, Home appliances and GSM8K; plus HellaSwag at 2B,
+    and BFCL and ContractNLI at ≤ 0.8B. A new IB4 data worker builds licence-clean, non-test data for them.
+
+- 2026-10-02 11:35 — **PROGRESSIVE RELEASE DIRECTIVE (user standing intent: "让模型 repo 始终有最好的成绩的模型文件";
+  "快速推进"). Applies to every Index-first release track.**
+  1. **Release as soon as a frozen candidate qualifies:** Index 95% lower bound > 0 vs the **current** release, plus
+     the integrity checks.
+     - **Do not hold** a qualified candidate for arms that are still training or measuring.
+     - "Largest lower bound" selects only among candidates that are ready at the same time.
+     - A later candidate must beat the then-current release, using that release's Index run as the base.
+  2. **27B (355ad916).**
+     - Build the missing ix1 receipt for A20r's `runs/DEV2.0-27B/merged-budget` now (the IF1 base-receipt blocker).
+     - When M6-IB's Index run lands, run its bootstrap vs A20r. If the lower bound is > 0 and the integrity checks pass,
+       release M6-IB to Vega-27B right away; do not wait for M6-IB2PN (about 17:00).
+     - M6-IB2 / IB2PN / IBX follow as successors only if significantly better than the then-current release.
+     - The card worker (fb5dd490) may have published a banner-only revision of Vega first; re-read `main`.
+  3. **4B (5e7b8132).** If `4b-LHA10SD`'s lower bound vs LH is > 0 and the integrity checks pass, release it now.
+     LHA10UP / a75 / M17 follow as successors.
+  4. **2B (index sweep, d669f73d).** `IS-2b-RA` is significant vs the current Sol-2B. b49d1f36 is releasing
+     `2b-RASD-a25` first. Right after that lands, compare `IS-2b-RA` against **that** release (its BF16 Index run)
+     and release it if the lower bound is > 0.
+  5. **9B (sweep).** Release `K-a12IB` as soon as its Index (BF16 release weights) is significant vs K-a13IB.
+  6. **Collection check.** Every driver must be on integration ≥ `cd565a588`.
+
+- 2026-10-02 10:55 — **ROCm kernel track (ed4a4d73).** The user asked whether open-jev-fast's phase-2/3 hand-written
+  kernels and cuBLASLt tuning can be redone for ROCm.
+  - **Kernels.** Kernel-level counterparts on MI325X, Triton first and HIP / MFMA only where Triton leaves more than
+    about 25% on a top hot spot:
+    - fused element-wise kernels;
+    - the Gated DeltaNet chunk kernel (FLA config tuning first, then a fused kernel);
+    - tree attention with an ancestor bitmask vs SDPA (CK / aotriton);
+    - hipBLASLt per-shape timing plus split-K.
+  - **Fidelity** is reported against our 0-answer-change rollout rule. Budget ≤ 10 GPU-h on 1–2 GPUs; results
+    private; code on `xunzhuo/decision-2-rocm-kernels`.
+  - **Split with the study worker (2d541b40):** it owns the end-to-end items (profiling, prefix tree, HIP graphs,
+    LoRA merge, sync removal, TunableOp).
+
+- 2026-10-02 10:35 — **The user wants banner A on every card now and asked why 0.8B hasn't shipped its best result.**
+  - **Banner (new card worker, fb5dd490).** Card-only revisions now for Vega-27B, Lux-9B and Nox-4B, using the
+    round-4 ops `dev2-card4-2026-10-02`.
+    - It skips a repo whose release driver is running or imminent (the release brings banner A).
+    - Eos-0.8B / Sol-2B ride on b49d1f36's imminent releases. If neither has landed by 12:00, the card worker
+      publishes card-only revisions for them too.
+    - `main`-unchanged check; never concurrent with another publisher.
+  - **0.8B.** b49d1f36 has bootstraps for `08b-RA` and the M16 a75 points under the Index-first rule. Since 10:16 it
+    has been running the Index runs on the exact BF16 release weights (card Index and gate evidence) on node C
+    GPU2–7. The release follows.
+  - **open-jev-fast study (2d541b40).** The clone is in `vllm-sr/ignore/` (local exclude, never committed); MIT.
+    - It runs a static catalogue plus MI325X profiling of our runtime.
+    - It prototypes the portable wins: prefix tree, HIP graphs, LoRA merge for 27B, mask sync removal, TunableOp.
+    - Fidelity: 0 decision changes. Budget ≤ 12 GPU-h on node A / B.
+    - Third-party code only in `--network none` containers without secrets. No Open-Jev weights. Results private.
+
+- 2026-10-02 10:15 — **Release-driver false failure fixed at `cd565a588` (integration). Every release worker must merge
+  integration before running a driver.**
+  - **Cause.** Since the rename, `records/dev2-rename-9b-27b-2026-09-29/ops/collection_order.py` matched only
+    `DEV2.0-*` items. Every driver therefore printed `post_checks=FAILED` and skipped the superseded-weight purge.
+  - **Fix.** The check is now read-only: the collection order is hand-curated (largest first) and must not be
+    reordered. It requires a private collection whose models are exactly the six `Decision-2.0-*` releases.
+  - **If a driver already failed only on this check:** run the purge by hand with plan / apply receipts, as the 9B
+    verification did.
+  - **9B.** `Decision-2.0-Lux-9B@259a4550` (K-a13IB) passed every post-upload check (68fece59; record
+    `dev2-9b-ka13ib-2026-10-02.md`, merged at `9b02a66e2`). Lux-9B still shows the round-3 banner, which the banner
+    worker (4c0a68cd) will replace.
+
+- 2026-10-02 10:00 — **The user asked for fast all-size progress. Index sweep (new worker) over every frozen breadth
+  candidate under the Index-first rule.**
+  - **Scope:**
+    - 0.8B: M13 `08b-RASD`, M14 `08b-RAUP`, M15 `08b-RASDML`, plus the measured `08b-RA`;
+    - 2B: M12 `2b-RA`, M13 `2b-RASD`, M14 `2b-RAUP`, M16 `2b-RA-a75`;
+    - 9B: `L9IB`, `K-a12IB`.
+  - **Rules.** Paired CI vs the current release of each tier; the best lower bound > 0 plus the integrity checks →
+    release; ≤ 30 GPU-h; node A GPU3–5, node B GPU2–4 (if the suite is mirrored), and free node C / D GPUs.
+  - **Coordination.** The 0.8B / 2B Index-path continuation (b49d1f36) may release first. The sweep then compares
+    against the new release.
+  - **Owners:** 4B (5e7b8132) and 27B (355ad916).
+
+- 2026-10-02 09:55 — **USER DECISION (09:38 / 09:55): the release rule becomes INDEX-FIRST; banner concept A.**
+  It supersedes the 02:05 Index path and successor items 1–8 as release blockers.
+  - **Release gate (the only quality blocker):** the frozen candidate's private **Jev Decision Index delta vs the
+    current release is significantly positive** (paired bootstrap over rows within benchmarks through the board's area
+    weights, ≥ 2,000 replicates, 95% CI lower bound > 0). One Index run per frozen candidate.
+  - **Kept as integrity checks (not quality comparisons):**
+    - exact package parity and Hub / `trust_remote_code` checks;
+    - the row-level Index contamination audit (the card footnote stays "audited");
+    - **no decision type collapsed** (the Index has no Score questions, so a collapsed Score head would otherwise
+      ship).
+  - **References, reported but NOT blockers:** JevArena (v3), human-labelled transfer, mlx-diag / MLX-DEV2,
+    JevBench public 231, C1 post-key. Always record them. The coordinator flags material regressions to the user.
+  - **Selection among candidates of a tier:** the largest Index-gain CI lower bound.
+  - Always record (privately) the transfer-only Index delta.
+  - **For all running workers (re-read before any GO / upload):**
+    - finish the current measurement;
+    - judge releases by this rule, not items 1–8;
+    - do not run C1 item 8 unless it is already in progress (it is a reference now);
+    - never publish concurrently (`main`-unchanged check).
+  - **Banner:** concept A ("codename hero"; gradient codename + size, an eyebrow "DECISION 2.0", a tagline, a large
+    translucent vLLM-SR V-mark) from `private/card-preview/banner-v3/make_banners.py`. It goes into the default card
+    generator, and card-only revisions go out repo by repo.
+  - **Candidates newly eligible** (private Index already measured): 4B `4b-LHA10SD` and 0.8B `08b-RA`. Others are
+    being measured.
+  - **Launched:**
+    - **4B Index-first release (5e7b8132):** paired CI for `4b-LHA10SD`; measure `4b-LHA10UP` and M16 `-a75`
+      (`-a50`, `LHA10SDML` optional); an item-3 sanity check; release the winner to `Decision-2.0-Nox-4B`; ≤ 15
+      GPU-h.
+    - **Banner A (4c0a68cd):** goes into the default generator first. A card-only revision for Kai now. Eos / Sol /
+      Nox / Lux / Vega pick it up through their pending releases (card-only only if nothing lands within 3 h).
+    - **0.8B:** when the Index-path continuation (b49d1f36) reports, the coordinator compares `08b-RA` with the M16
+      a75 points by Index-gain lower bound under the 09:55 rule.
+
+- 2026-10-02 09:40 — **Watchdog: a session interruption (≈ 04:40–09:30 UTC+8) silently stopped every worker;
+  continuations relaunched.**
+  - **9B:** K-a13IB passed items 1' and 2–8 (state 19:47Z), and **`Decision-2.0-Lux-9B` `259a4550` was published at
+    20:37Z**, but the worker never reported.
+    - → **release verification + records (68fece59):** Hub state, post-upload checks, card generator, release
+      record, gists.
+  - **27B M6:** the last poll was 20:10Z. The M6-IB / IBX chains ran unattended (no containers left). M6-IB2 is still
+    training (ETA ≈ 01:40Z), M6-IB2PN ETA ≈ 06:20Z.
+    - → **continuation #4 (355ad916):** reconstruct the gap, verdicts on both paths, MLX-DEV2 report, item 8, Index,
+      release to Vega-27B.
+  - **0.8B / 2B Index path:** stopped after `00401c9b5` (04:17); no Index containers were running.
+    - → **continuation (b49d1f36):** find the finished runs, finish the Index runs, item 1' / 6(b)', item 8, releases
+      to Eos-0.8B / Sol-2B.
+  - **M17:** stopped right after creating its worktree; nothing ran.
+    - → **M17 restart (7cee4275):** 4B IB swap + typed SD + MLX-DEV2; node E / F.
+
 - 2026-10-02 04:40 — **M16 final (ad17bb4f): no classic successor; three Index-path candidates already in evaluation;
   4B excluded on mlx-diag; M17 launched (4B IB swap + MLX-DEV2).** Results `949ff508c`; integration `456c996fe`; 5.95
   of 30 GPU-h.

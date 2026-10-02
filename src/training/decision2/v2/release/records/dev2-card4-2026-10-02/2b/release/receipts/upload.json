@@ -1,0 +1,12 @@
+{
+  "bytes": 4811270867,
+  "commit_url": "https://huggingface.co/llm-semantic-router/Decision-2.0-Sol-2B/commit/8ed41433f5f20c73bf04fe7ef92f2d69c1145002",
+  "files": 32,
+  "manifest_sha256": "241c72a2e07d234bcf0a700d9f4c75c86f8a7b9a73ff86c0800a3859e1a68109",
+  "private": true,
+  "repo": "llm-semantic-router/Decision-2.0-Sol-2B",
+  "revision": "8ed41433f5f20c73bf04fe7ef92f2d69c1145002",
+  "schema": "dev2-hub-upload/1",
+  "seconds": 2.8251507229870185,
+  "utc": "2026-10-02T04:06:14.709006+00:00"
+}

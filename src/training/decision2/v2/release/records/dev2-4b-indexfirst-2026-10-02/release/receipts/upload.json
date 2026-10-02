@@ -1,0 +1,12 @@
+{
+  "bytes": 9716392724,
+  "commit_url": "https://huggingface.co/llm-semantic-router/Decision-2.0-Nox-4B/commit/b285e7a17791a06058817680592484868dde9545",
+  "files": 36,
+  "manifest_sha256": "35eba1817fc7f45183deba0cad0b12c0cad84177dd4937e4a6fd5c83019b0469",
+  "private": true,
+  "repo": "llm-semantic-router/Decision-2.0-Nox-4B",
+  "revision": "b285e7a17791a06058817680592484868dde9545",
+  "schema": "dev2-hub-upload/1",
+  "seconds": 13.623490930069238,
+  "utc": "2026-10-02T05:34:08.746684+00:00"
+}

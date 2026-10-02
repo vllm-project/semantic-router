@@ -38,7 +38,10 @@ FONTS = (
     "InterDisplay-Bold",
 )
 TAGLINE = "Structured decisions in one forward pass"
-TYPES_LINE = "Choice  ·  Yes / No  ·  Score"
+BANNER_INCHES = (12.0, 4.0)
+BANNER_UNITS = (120.0, 40.0)
+GRADIENT = ("#0A5BD8", "#5CC8FF")
+VMARK_ALPHA = 0.2
 
 BLUE = "#30A0FC"
 BLUE_DEEP = "#0B6BCB"
@@ -57,6 +60,12 @@ TYPE_PANELS = (
     ("score_accuracy", "Score"),
     ("transfer", "Human-labelled\ntransfer"),
 )
+
+
+def _rgb(colour: str):
+    import numpy as np
+
+    return np.array([int(colour[i : i + 2], 16) / 255 for i in (1, 3, 5)])
 
 
 def short_name(name: str) -> str:
@@ -132,80 +141,136 @@ class Renderer:
         fig.savefig(path, metadata={"Software": None})
         self.plt.close(fig)
 
-    def banner(self, name: str, path: Path) -> None:
-        from matplotlib.patches import Circle
+    def banner(
+        self, name: str, path: Path
+    ) -> dict[str, tuple[float, float, float, float]]:
+        """The codename as the focal point: a deep-blue-to-cyan gradient in Inter Display Bold, the size in ink
+        on its baseline, the DECISION 2.0 eyebrow above, the tagline with a yellow full stop below, the small
+        logo top-left and the translucent V-mark of the logo bleeding off the right edge, on white.
+
+        Returns the pixel box ``(x0, y0, x1, y1)`` of every element (``vmark`` clipped to the canvas).
+        """
+        import numpy as np
+        from matplotlib.font_manager import FontProperties
+        from matplotlib.patches import Circle, PathPatch
+        from matplotlib.textpath import TextPath
+        from matplotlib.transforms import Affine2D
 
         plt = self.plt
-        fig = plt.figure(figsize=(12, 3.6), dpi=DPI)
+        match = layout.MODEL_NAME.match(name)
+        if not match:
+            raise ValueError(f"not a Decision 2.0 model name: {name}")
+        codename, size = match["codename"], f"{match['size']}B"
+        fig = plt.figure(figsize=BANNER_INCHES, dpi=DPI)
         ax = fig.add_axes([0, 0, 1, 1])
-        ax.set_xlim(0, 12)
-        ax.set_ylim(0, 3.6)
+        ax.set_xlim(0, BANNER_UNITS[0])
+        ax.set_ylim(0, BANNER_UNITS[1])
         ax.axis("off")
+        boxes: dict[str, tuple[float, float, float, float]] = {}
+
+        vmark = self.vmark()
+        vh, vw = vmark.shape[:2]
+        aspect = BANNER_INCHES[0] / BANNER_INCHES[1]
+        height = 1.25
+        width = height * (vw / vh) / aspect
+        left, bottom = 0.985 - 0.92 * width, -0.14
+        vax = fig.add_axes([left, bottom, width, height])
+        vax.imshow(vmark, interpolation="lanczos")
+        vax.axis("off")
+
         w, h = self.logo.size
-        lax = fig.add_axes([0.045, 0.74, 0.16, 0.16 * (h / w) * 12 / 3.6])
+        logo_w = 0.12
+        lax = fig.add_axes([0.052, 0.82, logo_w, logo_w * (h / w) * aspect])
         lax.imshow(self.logo)
         lax.axis("off")
-        ax.text(
-            0.54,
-            1.88,
-            "Decision 2.0",
-            fontsize=40,
-            fontfamily="Inter Display",
+
+        x0, baseline = 5.6, 10.6
+        eyebrow = ax.text(
+            x0 + 0.5,
+            27.6,
+            "DECISION 2.0",
+            fontsize=12.5,
             fontweight="bold",
-            color=INK,
+            color=GRADIENT[0],
         )
-        label = ax.text(
-            0.56,
-            1.18,
-            short_name(name),
-            fontsize=30,
-            fontfamily="Inter Display",
-            fontweight="bold",
-            color=BLUE,
+        display = FontProperties(family="Inter Display", weight="bold")
+        code = TextPath((0, 0), codename, size=15.5, prop=display)
+        cb = code.get_extents()
+        place = Affine2D().translate(x0 - cb.x0, baseline)
+        patch = PathPatch(
+            code, transform=place + ax.transData, facecolor="none", edgecolor="none"
         )
+        ax.add_patch(patch)
+        t = np.linspace(0, 1, 512)[None, :, None]
+        ramp = _rgb(GRADIENT[0]) * (1 - t) + _rgb(GRADIENT[1]) * t
+        image = ax.imshow(
+            np.repeat(ramp, 8, axis=0),
+            extent=(x0, x0 + cb.width, baseline + cb.y0, baseline + cb.y1),
+            aspect="auto",
+            interpolation="bicubic",
+            zorder=3,
+        )
+        image.set_clip_path(patch)
+        code_right = x0 + cb.width
+        tier = TextPath((0, 0), size, size=8.4, prop=display)
+        sb = tier.get_extents()
+        size_left = code_right + 3.2
+        ax.add_patch(
+            PathPatch(
+                Affine2D().translate(size_left - sb.x0, baseline).transform_path(tier),
+                facecolor=INK,
+                edgecolor="none",
+                zorder=3,
+            )
+        )
+        tagline = ax.text(x0 + 0.5, 3.4, TAGLINE, fontsize=13.5, color=MUTED)
         fig.canvas.draw()
-        right = ax.transData.inverted().transform(
-            label.get_window_extent().get_points()
-        )[1][0]
-        ax.text(right + 0.32, 1.26, TAGLINE, fontsize=15, color=MUTED)
-        ax.text(0.56, 0.62, TYPES_LINE, fontsize=12, color=INK, fontweight="medium")
-        source, chosen = (8.4, 1.8), (10.9, 1.8)
-        for target in ((10.6, 2.75), chosen, (10.6, 0.85)):
-            picked = target == chosen
-            ax.plot(
-                [source[0], target[0]],
-                [source[1], target[1]],
-                color=BLUE if picked else GREY_LIGHT,
-                linewidth=3.2 if picked else 2.0,
-                solid_capstyle="round",
-                zorder=1,
-            )
-            ax.add_patch(
-                Circle(
-                    target,
-                    0.20 if picked else 0.15,
-                    facecolor=BLUE if picked else "white",
-                    edgecolor=BLUE if picked else GREY,
-                    linewidth=1.8,
-                    zorder=2,
-                )
-            )
-        ax.add_patch(Circle(source, 0.26, facecolor=INK, edgecolor="none", zorder=3))
-        ax.add_patch(Circle(chosen, 0.07, facecolor=YELLOW, edgecolor="none", zorder=4))
-        for radius, alpha in ((1.5, 0.35), (2.2, 0.22), (2.9, 0.12)):
-            ax.add_patch(
-                Circle(
-                    source,
-                    radius,
-                    facecolor="none",
-                    edgecolor=BLUE,
-                    linewidth=0.8,
-                    alpha=alpha,
-                    zorder=0,
-                )
-            )
-        ax.plot([0.56, 11.44], [0.18, 0.18], color=GREY_LIGHT, linewidth=1.0)
+        renderer = fig.canvas.get_renderer()
+
+        def pixels(x_0, y_0, x_1, y_1):
+            (a, b), (c, d) = ax.transData.transform([(x_0, y_0), (x_1, y_1)])
+            return (float(a), float(b), float(c), float(d))
+
+        def window(artist):
+            e = artist.get_window_extent(renderer)
+            return (float(e.x0), float(e.y0), float(e.x1), float(e.y1))
+
+        tag_box = window(tagline)
+        tag_right = ax.transData.inverted().transform((tag_box[2], tag_box[1]))[0]
+        dot = (tag_right + 0.75, 3.4 + 0.45)
+        ax.add_patch(Circle(dot, 0.45, facecolor=YELLOW, edgecolor="none", zorder=3))
+        fw, fh = fig.get_size_inches() * fig.dpi
+        boxes["vmark"] = (
+            max(0.0, left * fw),
+            max(0.0, bottom * fh),
+            min(fw, (left + width) * fw),
+            min(fh, (bottom + height) * fh),
+        )
+        boxes["logo"] = window(lax)
+        boxes["eyebrow"] = window(eyebrow)
+        boxes["codename"] = pixels(x0, baseline + cb.y0, code_right, baseline + cb.y1)
+        boxes["size"] = pixels(
+            size_left, baseline + sb.y0, size_left + sb.width, baseline + sb.y1
+        )
+        boxes["tagline"] = tag_box
+        boxes["dot"] = pixels(
+            dot[0] - 0.45, dot[1] - 0.45, dot[0] + 0.45, dot[1] + 0.45
+        )
+        boxes["canvas"] = (0.0, 0.0, float(fw), float(fh))
         self.save(fig, path)
+        return boxes
+
+    def vmark(self):
+        """The yellow and blue shapes of the logo only, cropped to them, at ``VMARK_ALPHA``."""
+        import numpy as np
+
+        rgba = np.asarray(self.logo).astype(float) / 255
+        chroma = rgba[..., :3].max(axis=2) - rgba[..., :3].min(axis=2)
+        coloured = (rgba[..., 3] > 0.15) & (chroma > 0.25)
+        coloured[:, int(rgba.shape[1] * 0.4) :] = False
+        ys, xs = np.where(coloured)
+        crop = (slice(ys.min(), ys.max() + 1), slice(xs.min(), xs.max() + 1))
+        return np.dstack([rgba[crop][..., :3], coloured[crop] * VMARK_ALPHA])
 
     def jevarena(self, rows: list[dict[str, Any]], path: Path) -> None:
         """Overall JevArena of this model, its counterpart and the same-size peers."""

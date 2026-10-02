@@ -1,0 +1,37 @@
+{
+  "passed": true,
+  "items": {
+    "1_successor_R1p_v3_not_below_index_gain": {
+      "passed": true,
+      "evidence": "v3 68.024 vs current 67.737: +0.29 [-1.57, +1.20] (not below: yes); private Index paired bootstrap 92fd2fb00ad3 (2000 replicates): 95% lower bound > 0: yes"
+    },
+    "1_successor_R2_human_transfer": {
+      "passed": true,
+      "evidence": "human transfer delta 95% [-0.021, +0.020]"
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "passed": true,
+      "evidence": "types choice OK, noul OK, score OK"
+    },
+    "1_successor_R4_mlx_diag": {
+      "passed": true,
+      "evidence": "mlx-diag card-eligible macro -0.0037 [-0.0110, +0.0034]"
+    },
+    "1_successor_R5_tier_gates": {
+      "passed": true,
+      "evidence": "own 1.0 low +0.11; v3 68.024 vs 90% of Nimble v2 62.056; H vs Nimble v2 [-0.008, +0.097]; own 1.0 low > 0 ok, v3 >= 55.850 ok, H vs Nimble v2 upper >= 0 ok, no type collapsed ok"
+    },
+    "1_successor_R6_no_overlap_exposure": {
+      "passed": true,
+      "evidence": "1 training files, 0 exposed groups; 2 training files, 0 exposed groups"
+    },
+    "1_successor_R7_public231": {
+      "passed": true,
+      "evidence": "public 231 182 vs 178 (+4; McNemar p 0.125)"
+    },
+    "1_successor_R8_c1_postkey": {
+      "passed": true,
+      "evidence": "JevArena-C1 v1.2 post-key 53.49 vs Decision-2.0-Lux-9B 53bac735 (current revision): -0.28 [-1.31, +0.65] PASS"
+    }
+  }
+}
