@@ -398,7 +398,8 @@ def isarc2(
 def sentfin3(
     records: Sequence[Mapping[str, str]], report: collections.Counter, prior: Prior
 ) -> Rows:
-    """Every (headline, entity, decision); three fixed options; equal rows per class."""
+    """Every (headline, entity, decision); three fixed options; equal rows per class inside every entity (amendment 2),
+    so the entity alone is at chance."""
     rows: Rows = []
     for record in records:
         report["read"] += 1
@@ -430,7 +431,7 @@ def sentfin3(
                     instructions=SENTFIN3_INSTRUCTIONS,
                     options=choice_options(SENTFIN3_OPTIONS, SENTFIN3_LABELS),
                     label=SENTFIN3_LABELS.index(decision),
-                    cell="all",
+                    cell=normalize(entity),
                     entities=len(decisions),
                 )
             )
@@ -557,8 +558,8 @@ def fc_pick(
     records: Sequence[Mapping[str, Any]], report: collections.Counter, prior: Prior
 ) -> Rows:
     """Conversations listing at least two functions whose first assistant turn calls one: the called function as the
-    candidate (yes) and another listed function (no). Balanced overall (amendment 1); G4's candidate-only view checks
-    that the name alone does not tell the label.
+    candidate (yes) and another listed function (no). Balanced per candidate name (amendment 2), so the name alone is
+    at chance.
     """
     rows: Rows = []
     for conv in ib2.glaive_conversations(records, report):
@@ -589,8 +590,7 @@ def fc_pick(
                         "candidate": name,
                     },
                     instructions=FCPICK_INSTRUCTIONS,
-                    cell="all",
-                    candidate_name=name,
+                    cell=name,
                 )
             )
 
