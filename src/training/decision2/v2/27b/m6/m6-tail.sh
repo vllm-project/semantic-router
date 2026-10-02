@@ -63,7 +63,7 @@ case "$STAGE" in
       --candidate "$NAME=$R/slices/$NAME/probs/$slice.probs.jsonl" \
       --reference "$REF=$R/slices/$REF/probs/$slice.probs.jsonl" "${extra[@]}" \
       --output "$R/slices/$NAME/$STAGE-vs-$REF.json") ;;
-  pull | pull-d | pull-e | pull-f)
+  pull | pull-c | pull-d | pull-e | pull-f)
     NAME=${1:?ARM-SEED}; link
     [[ "$NAME" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "ARM-SEED must be one directory name" >&2; exit 2; }
     DEST=$R/relay/$NAME

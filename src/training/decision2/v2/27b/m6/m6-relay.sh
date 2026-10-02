@@ -13,7 +13,7 @@ NAME=${1:?NAME} PID=${2:?DRIVER_PID}
 [[ "$NAME" =~ ^M[678]-[A-Za-z0-9]+-s[1-5]$ ]] || { echo "NAME is an M6 / M7 / M8 arm-seed (M6-IBX-s2, ...)" >&2; exit 2; }
 [[ "$PID" =~ ^[0-9]+$ ]] || { echo "DRIVER_PID must be a pid" >&2; exit 2; }
 RUN=/data/dev2/runs/27b/$NAME RELAY=/data/dev2/xfer/27b-m6/relay/$NAME NODE=${RELAY_NODE:-a}
-case "$NODE" in a | d | e | f) ;; *) echo "RELAY_NODE is a, d, e or f" >&2; exit 2 ;; esac
+case "$NODE" in a | c | d | e | f) ;; *) echo "RELAY_NODE is a, c, d, e or f" >&2; exit 2 ;; esac
 [ -d "$RUN" ] || { echo "no arm-seed run $RUN" >&2; exit 2; }
 [ ! -e "$RELAY" ] || { echo "$RELAY exists: refusing to overwrite" >&2; exit 66; }
 mkdir -p "$(dirname "$RELAY")"
