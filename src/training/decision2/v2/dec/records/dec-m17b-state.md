@@ -5,6 +5,32 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17`. M
 (public since 2026-10-03 01:17 UTC+8). Index values stay private (node private stores and
 `decision2-program/private/m17b/`); this file has none. Times UTC.
 
+## 2026-10-02 21:40Z — the half-LR arm `4b-LHS17IB4-lrh` passes; its Nox-4B release is running
+
+- **Wave 6, every candidate measured once** (full-panel paired bootstrap vs `DEV2.0-4B-SDMLxALL-bf16`, 2,000
+  replicates; values private):
+  - not successors: `4b-AFxALL3` (CI below 0), `4b-XALLx` (CI below 0), `4b-AFxALL2`, `4b-XALLU2` and `4b-AFxALL`
+    (the last two at the release's level, lower bounds below 0);
+  - information points: `4b-LHS23IB4` and `4b-LHS17IB4ML` below the release;
+  - **`4b-LHS17IB4-lrh` (the factory's two-seed half-LR arm) passes: lower bound above 0** (amendment 2,
+    `b60c1835a`, disclosed as written after its read).
+- **Its release inputs:**
+  - parity 86 / 86;
+  - IF3 = audit6 (TRAIN `dfed3944…`, 0 item rows);
+  - R3: formal `m17-4b-LHS17IB4-lrh` (node F GPU7, mirror `b60c1835a`), types choice / Noul / Score OK, mlx-diag
+    scored;
+  - the card's Index input: each other tier at its current main (Kai `51b7b474`, Eos `1d380452`, Sol `6a62b319`,
+    Lux `f3122c7c`, Vega `5c85c127`), and the 4B point from this run;
+  - assets rendered; spec `2495f460…` and decision `40317389…` committed at `9bde2b7c4`, with `--check` byte-equal on
+    node A.
+- `release_w6.sh LHS17IB4-lrh --release --gpu 0` started 21:38Z on node A (Hub `main` = `d55528d1` checked).
+  References (not gates, disclosed): post-key v3 below the current weights'; mlx-diag and public 231 above.
+- mlx-diag attempts of `m17-4b-XALLx` / `-XALLU2` from a mirror other than their collection's exited at the adapter
+  spec (no inference). They were moved to `formal/m17/void/mlx-mirror-mismatch-m17b-*` and relaunched from the
+  collection mirror. `AF-4b-LHS17IB4ML-bf16`'s shards 6 / 7 were re-run whole after their partial directories and
+  launch records went to `ix1/void/`.
+- GPU-h so far ≈ 22.
+
 ## 2026-10-02 20:05Z — wave 6a: no successor; wave 6b on node C
 
 - **Not successors** (full-panel paired bootstrap vs `DEV2.0-4B-SDMLxALL-bf16`, 2,000 replicates; values private):
