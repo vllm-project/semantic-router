@@ -4,7 +4,8 @@
 #   1. the parity gate of every queued model (in parallel, one per distinct listed GPU); a failed gate drops the model;
 #   2. per model, in queue order: the full run over the panel's shards with the model's own frozen parity cache
 #      (shard k on the k-th GPU slot; a GPU listed twice runs its later shard in the next wave), every shard exit 0,
-#      then score.sh (merge, port + kit, compare; the scorer gate must pass);
+#      then score.sh (merge, port + kit, compare; the scorer gate must pass); a wave an earlier chain already
+#      launched on the same panel is only waited for (a restarted chain picks up a running model);
 #   3. per scored model, in the background (CPU): family_delta vs the reference run and two paired bootstraps
 #      (2,000 replicates, seed 20261002, cases resampled within benchmarks through the board weights):
 #        runs/NAME/paired-boot-full-vs-ref.json      the full headline (the Index-first release-gate evidence)
@@ -53,6 +54,22 @@ done
 log "start: mirror $(basename "$M"), $PANEL, GPUs '$GPUS' ($waves wave(s)), queue ${names[*]}"
 
 passed() { python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1]))["pass"] else 1)' "$1" 2>/dev/null; }
+idle() {  # GPU...: every listed GPU at <= 5% use and <= 2 GiB VRAM (the launcher's own busy rule)
+  rocm-smi --showuse --showmeminfo vram --json | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+sys.exit(0 if all(float(d["card" + g]["GPU use (%)"]) <= 5 and int(d["card" + g]["VRAM Total Used Memory (B)"]) <= 2 * 2**30
+                  for g in sys.argv[1:]) else 1)' "$@"
+}
+wait_idle() {  # GPU...: wait up to 3 h for them (e.g. an earlier chain's shards still running)
+  local t=0
+  until idle "$@"; do
+    (( t == 0 )) && log "waiting for GPU(s) $* to be idle"
+    (( t < 10800 )) || return 1
+    sleep 30
+    t=$((t + 30))
+  done
+}
 queue=()
 i=0
 while (( i < ${#names[@]} )); do
@@ -87,9 +104,18 @@ for m in "${queue[@]}"; do
       only=""
       for k in "${!slots[@]}"; do [ "${wave_of[k]}" = "$w" ] && only+="$k "; done
       only=${only% }
-      log "run $m wave $w shards '$only'"
-      (cd "$S" && bash "$L" run --src "$M" --model "$m" --gpus "$GPUS" --only "$only" --run "$run" --rows-dir "$P" \
-        --cache "$R/parity/$m/cache-frozen" >> "$R/logs/isweep-run-$m.log" 2>&1) || { log "launch $m wave $w failed"; ok=0; break; }
+      started=1
+      for k in $only; do [ -f "$run/shard-$k/launched" ] || [ -f "$run/shard-$k/end_epoch" ] || started=0; done
+      if (( started )); then
+        log "run $m wave $w shards '$only' already started (an earlier chain); waiting for them"
+      else
+        gs=()
+        for k in $only; do gs+=("${slots[$k]}"); done
+        wait_idle "${gs[@]}" || { log "GPU(s) ${gs[*]} stayed busy; $m not run"; ok=0; break; }
+        log "run $m wave $w shards '$only'"
+        (cd "$S" && bash "$L" run --src "$M" --model "$m" --gpus "$GPUS" --only "$only" --run "$run" --rows-dir "$P" \
+          --cache "$R/parity/$m/cache-frozen" >> "$R/logs/isweep-run-$m.log" 2>&1) || { log "launch $m wave $w failed"; ok=0; break; }
+      fi
       for k in $only; do
         while [ ! -f "$run/shard-$k/end_epoch" ]; do sleep 30; done
         e=$(cat "$run/shard-$k/exit_code")
