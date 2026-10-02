@@ -49,6 +49,8 @@ KAI_RUNTIME = {
 KAI_ARCHITECTURE = "vela_decision_score_path_capacity_v1"
 # The Qwen runtime's exact GPU fast path; runtime trees from before it lack these files.
 FAST_RUNTIME = ("fast.py", "fast_kernels.py")
+# The Qwen runtime's opt-in shared-context switch; runtime trees from before it lack the file.
+SHARED_RUNTIME = ("shared_ctx.py",)
 QWEN_MODULES = (
     "calibration.py",
     "data.py",
@@ -627,7 +629,7 @@ def vendor_runtime(
     if profile_module == "qwen.py":
         runtime_files += [
             name
-            for name in FAST_RUNTIME
+            for name in (*FAST_RUNTIME, *SHARED_RUNTIME)
             if (runtime_tree / "v2/release/runtime" / name).is_file()
         ]
     if spec.get("bf16z"):

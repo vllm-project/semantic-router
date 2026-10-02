@@ -14,6 +14,9 @@ several batches.
 On a ROCm GPU with the verified Transformers release, ``fast.py`` replays each
 padded shape's backbone forward as a HIP graph and trims and fuses kernels,
 reproducing the eager forward bit for bit (``graphs`` / ``kernels`` switch it off).
+``share_context`` (off by default; per runtime or per request) runs the shared
+input of a multi-question request once instead of once per question
+(``shared_ctx.py``); answers can then differ slightly from the exact path.
 A package whose manifest names a weight ``storage`` codec (bf16z) is first restored
 to exact safetensors files in a cache directory; the restored checkpoint must
 reproduce the scored identity. A checkpoint whose ``decision_config.json`` declares
@@ -167,6 +170,7 @@ class QwenDecision:
         encode_fn: Any = None,
         batch_tokens: int | None = None,
         fast: Any = None,
+        share_context: Any = False,
     ):
         self.model = model
         self.tokenizer = tokenizer
@@ -179,6 +183,7 @@ class QwenDecision:
         self.encode_fn = encode_fn
         self.batch_tokens = batch_tokens
         self.fast = fast
+        self.share_context = share_context
 
     @classmethod
     def load(
@@ -192,6 +197,7 @@ class QwenDecision:
         bf16_resident: bool = True,
         graphs: bool = True,
         kernels: bool = True,
+        share_context: Any = False,
     ) -> QwenDecision:
         import torch
 
@@ -290,13 +296,14 @@ class QwenDecision:
             encode_fn,
             batch_tokens,
             fast,
+            share_context,
         )
 
     def parameter_count(self) -> int:
         return sum(p.numel() for p in self.model.parameters())
 
     def system_one(
-        self, state: Any, questions: dict[str, Any]
+        self, state: Any, questions: dict[str, Any], share_context: Any = None
     ) -> tuple[dict[str, Any], int]:
         from ._vendor.dev2model.data import canonical
         from ._vendor.dev2model.decision_model import collate, encode
@@ -316,10 +323,17 @@ class QwenDecision:
         answers: dict[str, dict[str, Any]] = {}
         jobs: list[tuple[str, dict[str, Any], dict[str, Any]]] = []
         tokens = 0
+        share = self.share_context if share_context is None else share_context
+        policy, tokenizer = None, self.tokenizer
+        if share is not None and share is not False:
+            from .shared_ctx import resolve, shared_logits, tokenizer_for
+
+            policy = resolve(share)
+            tokenizer = tokenizer_for(self.tokenizer, policy, len(questions))
         for qid, question in questions.items():
             try:
                 row = question_to_row(item, qid, question)
-                encoded = (self.encode_fn or encode)(row, self.tokenizer, self.cap)
+                encoded = (self.encode_fn or encode)(row, tokenizer, self.cap)
             except ValueError as exc:
                 reason = (
                     "max_length_exceeded"
@@ -341,9 +355,14 @@ class QwenDecision:
         if pad_id is None:
             pad_id = self.tokenizer.eos_token_id
         logits: list[Any] = [None] * len(jobs)
-        for group in micro_batches(
+        groups = micro_batches(
             [len(encoded["ids"]) for _, _, encoded in jobs], self.batch_tokens
-        ):
+        )
+        if policy is not None:
+            shared = shared_logits(self, jobs, pad_id, policy)
+            if shared is not None:
+                logits, groups = shared, []
+        for group in groups:
             batch = {
                 key: value.to(self.device) if self.torch.is_tensor(value) else value
                 for key, value in collate(

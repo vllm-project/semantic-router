@@ -165,6 +165,7 @@ class Decision2:
         bf16_resident: bool = True,
         graphs: bool = True,
         kernels: bool = True,
+        share_context: Any = False,
     ) -> Decision2:
         """Load a verified package. ``device`` defaults to cuda:0 if present, else cpu.
 
@@ -181,6 +182,12 @@ class Decision2:
         with the verified Transformers release): replay each padded shape's
         forward as a HIP graph / run the fused element-wise kernels. Answers are
         identical; False runs the eager forward.
+
+        ``share_context`` (Qwen profiles): the default for requests that do not
+        set it. True runs the shared input of a multi-question request once
+        (``shared_ctx.SharePolicy`` defaults; a dict or policy sets them), so
+        answers can differ slightly from the exact path; False (the default)
+        keeps the exact path. Other profiles always run the exact path.
         """
         manifest = verify_bundle(path)
         root = Path(path).resolve(strict=True)
@@ -205,6 +212,7 @@ class Decision2:
                 bf16_resident=bf16_resident,
                 graphs=graphs,
                 kernels=kernels,
+                share_context=share_context,
             )
         loaded = backend.parameter_count()
         if loaded != manifest["parameters"]["loaded"]:
@@ -214,15 +222,25 @@ class Decision2:
             )
         return cls(backend, manifest, root)
 
-    def system_one(self, *, state: Any, questions: dict[str, Any]) -> dict[str, Any]:
-        """Answer named typed questions about one state; over-budget input is never truncated."""
+    def system_one(
+        self, *, state: Any, questions: dict[str, Any], share_context: Any = None
+    ) -> dict[str, Any]:
+        """Answer named typed questions about one state; over-budget input is never truncated.
+
+        ``share_context`` overrides the runtime's default for this request.
+        """
         if (
             not isinstance(questions, dict)
             or not questions
             or any(not isinstance(key, str) or not key for key in questions)
         ):
             raise ValueError("questions must be a nonempty mapping of question IDs")
-        answers, tokens = self.backend.system_one(state, questions)
+        if share_context is None or not hasattr(self.backend, "share_context"):
+            answers, tokens = self.backend.system_one(state, questions)
+        else:
+            answers, tokens = self.backend.system_one(
+                state, questions, share_context=share_context
+            )
         return {
             "model": self.model_name,
             "answers": answers,
