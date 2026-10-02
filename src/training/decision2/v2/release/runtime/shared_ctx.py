@@ -3,53 +3,64 @@
 The exact path encodes every question of a request as its own row, ``[state +
 question + options]``, and runs the rows as one padded batch, so the shared
 input is recomputed for every question. With ``share_context`` on, the longest
-token prefix all rows share (cut before the first option endpoint and rounded
-down to a multiple of ``align``) runs once, as a batch of one; every row's
-suffix then continues from it in one padded batch. Full-attention layers attend
-to the prefix keys and values; gated-delta layers start from the prefix-end
-recurrent and convolution states. With ``align`` a multiple of the gated-delta
-chunk (64 tokens), the suffix chunks are the exact path's chunks. Positions and
-masks are those of a cache continuation, and the decision head reads the same
+token prefix all rows share (cut before the first option endpoint, rounded down
+to a multiple of ``align``) is computed once and every row's suffix continues
+from it: full-attention layers attend to the prefix keys and values, gated-delta
+layers start from the prefix-end recurrent state and convolution window. The
+positions are those of the exact path, and the decision head reads the same
 question and option tokens, so every head variant runs unchanged.
+
+``mode="tree"`` packs the prefix and every suffix into one row and runs one
+forward: suffix queries attend to the prefix and to their own suffix in two
+attention kernels whose results are merged by their log-sum-exp, and the
+gated-delta layers run the prefix once and the suffixes as variable-length
+sequences from its final state. ``mode="cache"`` runs the prefix with a cache,
+then the suffixes as a padded batch continuing from it (also the fallback when
+the packed row exceeds the forward token budget).
 
 The arithmetic is not the exact path's (other GEMM shapes, attention kernels and
 reduction orders), so answers can move slightly. ``tau`` bounds that: every
 answer whose top-two probability margin (Noul: ``|2p - 1|``) is below ``tau`` is
 re-scored on the exact path, in its exact-path batch's padded length and mask
 regime (``fallback="rows"``), or the whole request is (``fallback="request"``).
-``min_questions`` and ``min_shared_tokens`` keep requests where one extra
-forward costs more than the sharing saves on the exact path.
+``min_questions`` and ``min_shared_tokens`` keep requests where sharing costs
+more than it saves on the exact path.
 """
 
 from __future__ import annotations
 
 import copy
+import importlib
 import os
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, fields
+from functools import partial
 from typing import Any
 
 TESTED_TRANSFORMERS = ("5.17.",)
 SUPPORTED_MODEL_TYPES = ("qwen3", "qwen3_5_text")
 LAYER_TYPES = ("full_attention", "linear_attention")
 FALLBACKS = ("rows", "request")
+MODES = ("tree", "cache")
+TREE_ATTENTION = "decision2_shared_tree"
 
 
 @dataclass(frozen=True)
 class SharePolicy:
     """When a request shares its prefix, and which answers go back to the exact path.
 
-    ``align`` None: 64 (the gated-delta chunk) for backbones with gated-delta
-    layers, else 1. ``max_buckets`` > 1 splits the suffix rows by length into
-    up to that many batches when that saves more than ``bucket_tokens`` padded
-    tokens per extra batch.
+    ``align``: the prefix length is a multiple of it (default 1). In ``cache``
+    mode, ``max_buckets`` > 1 splits the suffix rows by length into up to that
+    many batches when that saves more than ``bucket_tokens`` padded tokens per
+    extra batch.
     """
 
     tau: float = 0.0
     min_questions: int = 2
     min_shared_tokens: int = 0
-    align: int | None = None
+    align: int = 1
     fallback: str = "rows"
+    mode: str = "tree"
     max_buckets: int = 1
     bucket_tokens: int = 2048
 
@@ -58,12 +69,14 @@ class SharePolicy:
             raise ValueError("tau must be within [0, 1]")
         if self.min_questions < 2 or self.min_shared_tokens < 0:
             raise ValueError("min_questions must be >= 2 and min_shared_tokens >= 0")
-        if self.align is not None and self.align < 1:
+        if self.align < 1:
             raise ValueError("align must be positive")
         if self.max_buckets < 1 or self.bucket_tokens < 0:
             raise ValueError("max_buckets must be >= 1 and bucket_tokens >= 0")
         if self.fallback not in FALLBACKS:
             raise ValueError(f"fallback must be one of {FALLBACKS}")
+        if self.mode not in MODES:
+            raise ValueError(f"mode must be one of {MODES}")
 
 
 DEFAULT_POLICY = SharePolicy()
@@ -345,6 +358,275 @@ def _context(backend: Any) -> Any:
     return nullcontext()
 
 
+class Tree:
+    """A request packed into one row: the shared prefix, then every suffix in order.
+
+    ``rows``/``packed`` move suffix tokens between the packed row and a padded
+    [questions, width] layout (padding reads zeros).
+    """
+
+    def __init__(self, prefix: int, lengths: list[int], width: int, device, torch):
+        self.torch = torch
+        self.prefix = prefix
+        self.lengths = lengths
+        self.suffix = sum(lengths)
+        starts = [0]
+        for length in lengths[:-1]:
+            starts.append(starts[-1] + length)
+        index = torch.full((len(lengths), width), self.suffix, dtype=torch.long)
+        for row, (start, length) in enumerate(zip(starts, lengths)):
+            index[row, :length] = torch.arange(start, start + length)
+        self.index = index.to(device)
+        self.valid = (index < self.suffix).to(device)
+        ends = [start + length for start, length in zip(starts, lengths)]
+        self.cu_seqlens = torch.tensor([0, *ends], dtype=torch.long, device=device)
+        self.positions = torch.cat(
+            [torch.arange(prefix)]
+            + [torch.arange(prefix, prefix + length) for length in lengths]
+        )[None].to(device)
+        self.prefix_mask = None
+
+    def rows(self, packed: Any) -> Any:
+        """[suffix tokens, ...] -> [questions, width, ...]."""
+        zero = packed.new_zeros((1, *packed.shape[1:]))
+        return self.torch.cat([packed, zero])[self.index]
+
+    def packed(self, rows: Any) -> Any:
+        """[questions, width, ...] -> [suffix tokens, ...]."""
+        return rows[self.valid]
+
+
+def _attend(query: Any, key: Any, value: Any, causal: bool, scale: float, torch: Any):
+    """Attention output and its log-sum-exp per query ([B, H, L, D], [B, H, L])."""
+    if query.is_cuda:
+        out = torch.ops.aten._scaled_dot_product_efficient_attention(
+            query.contiguous(),
+            key.contiguous(),
+            value.contiguous(),
+            None,
+            True,
+            0.0,
+            causal,
+            scale=scale,
+        )
+        return out[0], out[1][..., : query.shape[2]]
+    scores = (query.float() @ key.float().transpose(-1, -2)) * scale
+    if causal:
+        q, k = scores.shape[-2:]
+        keep = torch.ones(q, k, dtype=torch.bool, device=scores.device).tril()
+        scores = scores.masked_fill(~keep, -float("inf"))
+    lse = scores.logsumexp(-1)
+    out = (scores - lse[..., None]).exp() @ value.float()
+    return out.to(query.dtype), lse
+
+
+def _tree_attention(
+    module: Any,
+    query: Any,
+    key: Any,
+    value: Any,
+    attention_mask: Any,
+    dropout: float = 0.0,
+    scaling: float | None = None,
+    **kwargs: Any,
+) -> tuple[Any, None]:
+    """SDPA over a packed tree: prefix causal; each suffix over the prefix and itself.
+
+    A suffix query's attention over [prefix; own suffix] is merged from its
+    attention over each part by their log-sum-exp.
+    """
+    tree = attention_mask
+    torch = tree.torch
+    groups = getattr(module, "num_key_value_groups", 1)
+    if groups > 1:
+        b, h, n, d = key.shape
+        key = key[:, :, None].expand(b, h, groups, n, d).reshape(b, h * groups, n, d)
+        value = value[:, :, None].expand(b, h, groups, n, d)
+        value = value.reshape(b, h * groups, n, d)
+    dtype = query.dtype
+    if query.is_cuda and torch.is_autocast_enabled("cuda"):
+        dtype = torch.get_autocast_dtype("cuda")
+    scale = scaling if scaling is not None else query.shape[-1] ** -0.5
+    q, k, v = query.to(dtype), key.to(dtype), value.to(dtype)
+    p = tree.prefix
+    head = torch.nn.functional.scaled_dot_product_attention(
+        q[:, :, :p],
+        k[:, :, :p],
+        v[:, :, :p],
+        attn_mask=tree.prefix_mask,
+        is_causal=tree.prefix_mask is None,
+        scale=scale,
+    )
+    out_prefix, lse_prefix = _attend(
+        q[:, :, p:], k[:, :, :p], v[:, :, :p], False, scale, torch
+    )
+
+    def rows(x: Any) -> Any:
+        return tree.rows(x[0].transpose(0, 1)).permute(0, 2, 1, 3)
+
+    out_own, lse_own = _attend(
+        rows(q[:, :, p:]), rows(k[:, :, p:]), rows(v[:, :, p:]), True, scale, torch
+    )
+    out_own = tree.packed(out_own.permute(0, 2, 1, 3)).transpose(0, 1)[None]
+    lse_own = tree.packed(lse_own.permute(0, 2, 1)).transpose(0, 1)[None]
+    top = torch.maximum(lse_prefix, lse_own)
+    w_prefix, w_own = (lse_prefix - top).exp(), (lse_own - top).exp()
+    tail = (
+        out_prefix.float() * w_prefix[..., None] + out_own.float() * w_own[..., None]
+    ) / (w_prefix + w_own)[..., None]
+    out = torch.cat([head, tail.to(dtype)], dim=2)
+    return out.transpose(1, 2).contiguous(), None
+
+
+def _tree_gated_delta(
+    m: Any,
+    hidden_states: Any,
+    cache_params: Any = None,
+    attention_mask: Any = None,
+    **_,
+) -> Any:
+    """``Qwen3_5GatedDeltaNet.forward`` over a packed tree (no padding in the row).
+
+    The prefix runs from a zero state; every suffix runs from the prefix-end
+    recurrent state, its convolution window starting with the prefix's last
+    inputs.
+    """
+    tree = attention_mask
+    torch = tree.torch
+    modeling = importlib.import_module(type(m).__module__)
+    _, length, _ = hidden_states.shape
+    p = tree.prefix
+    mixed = m.in_proj_qkv(hidden_states)
+    z = m.in_proj_z(hidden_states).reshape(1, length, -1, m.head_v_dim)
+    b = m.in_proj_b(hidden_states)
+    a = m.in_proj_a(hidden_states)
+    weight, bias, window = m.conv1d.weight.squeeze(1), m.conv1d.bias, m.conv_kernel_size
+    head = modeling.causal_conv1d_fn(
+        mixed[:, :p].transpose(1, 2), weight, bias, activation=m.activation
+    )
+    rows = torch.cat(
+        [
+            mixed[:, p - (window - 1) : p].expand(len(tree.lengths), -1, -1),
+            tree.rows(mixed[0, p:]),
+        ],
+        dim=1,
+    )
+    tail = modeling.causal_conv1d_fn(
+        rows.transpose(1, 2), weight, bias, activation=m.activation
+    )[:, :, window - 1 :]
+    mixed = torch.cat([head[0], tree.packed(tail.transpose(1, 2)).transpose(0, 1)], 1)
+    mixed = mixed.transpose(0, 1)[None]
+    query, key, value = torch.split(mixed, [m.key_dim, m.key_dim, m.value_dim], dim=-1)
+    query = query.reshape(1, length, -1, m.head_k_dim)
+    key = key.reshape(1, length, -1, m.head_k_dim)
+    value = value.reshape(1, length, -1, m.head_v_dim)
+    beta = b.sigmoid()
+    g = -m.A_log.float().exp() * torch.nn.functional.softplus(a.float() + m.dt_bias)
+    if m.num_v_heads // m.num_k_heads > 1:
+        query = query.repeat_interleave(m.num_v_heads // m.num_k_heads, dim=2)
+        key = key.repeat_interleave(m.num_v_heads // m.num_k_heads, dim=2)
+    rule = modeling.torch_chunk_gated_delta_rule
+    out_prefix, state = rule(
+        query[:, :p],
+        key[:, :p],
+        value[:, :p],
+        g=g[:, :p],
+        beta=beta[:, :p],
+        initial_state=None,
+        output_final_state=True,
+        use_qk_l2norm_in_kernel=True,
+    )
+    start = state.expand(len(tree.lengths), *state.shape[1:]).contiguous()
+    if _varlen(rule):
+        out_suffix, _ = rule(
+            query[:, p:],
+            key[:, p:],
+            value[:, p:],
+            g=g[:, p:],
+            beta=beta[:, p:],
+            initial_state=start,
+            output_final_state=False,
+            use_qk_l2norm_in_kernel=True,
+            cu_seqlens=tree.cu_seqlens,
+        )
+    else:
+        out_rows, _ = rule(
+            tree.rows(query[0, p:]),
+            tree.rows(key[0, p:]),
+            tree.rows(value[0, p:]),
+            g=tree.rows(g[0, p:]),
+            beta=tree.rows(beta[0, p:]),
+            initial_state=start,
+            output_final_state=False,
+            use_qk_l2norm_in_kernel=True,
+        )
+        out_suffix = tree.packed(out_rows)[None]
+    core = torch.cat([out_prefix, out_suffix], dim=1)
+    core = m.norm(core.reshape(-1, m.head_v_dim), z.reshape(-1, m.head_v_dim))
+    return m.out_proj(core.reshape(1, length, -1))
+
+
+def _varlen(rule: Any) -> bool:
+    """Whether the gated-delta kernel Transformers bound takes ``cu_seqlens`` (FLA)."""
+    try:
+        import inspect
+
+        bound = inspect.getclosurevars(rule).nonlocals.get("implementation", rule)
+    except (TypeError, ValueError):
+        bound = rule
+    return getattr(bound, "__module__", "").startswith("fla")
+
+
+@contextmanager
+def _as_tree(backbone: Any, tree: Any, ids: Any, layer_types: set[str]):
+    """Every ``backbone`` call inside runs the packed tree and returns suffix rows."""
+    from transformers import AttentionInterface
+
+    if TREE_ATTENTION not in AttentionInterface._global_mapping:
+        AttentionInterface.register(TREE_ATTENTION, _tree_attention)
+    config = _core(backbone).config
+    gdn = [m for m in backbone.modules() if type(m).__name__ == "Qwen3_5GatedDeltaNet"]
+
+    def unpack(hidden: Any) -> Any:
+        return tree.rows(hidden[0, tree.prefix :])
+
+    def pre(module: Any, args: Any, kwargs: dict[str, Any]) -> Any:
+        return args, {
+            **kwargs,
+            "input_ids": ids,
+            "attention_mask": {name: tree for name in layer_types},
+            "position_ids": tree.positions,
+            "use_cache": False,
+        }
+
+    def post(module: Any, args: Any, kwargs: dict[str, Any], output: Any) -> Any:
+        output.last_hidden_state = unpack(output.last_hidden_state)
+        if getattr(output, "hidden_states", None) is not None:
+            output.hidden_states = tuple(unpack(h) for h in output.hidden_states)
+        return output
+
+    saved = config._attn_implementation
+    forwards = [m.__dict__.get("forward") for m in gdn]
+    handles = [
+        backbone.register_forward_pre_hook(pre, with_kwargs=True),
+        backbone.register_forward_hook(post, with_kwargs=True),
+    ]
+    for m in gdn:
+        m.forward = partial(_tree_gated_delta, m)
+    config._attn_implementation = TREE_ATTENTION
+    try:
+        yield
+    finally:
+        config._attn_implementation = saved
+        for m, forward in zip(gdn, forwards):
+            if forward is None:
+                del m.forward
+            else:
+                m.forward = forward
+        for handle in handles:
+            handle.remove()
+
+
 def _masks(layer_types: set[str], attention_mask: Any, torch: Any) -> dict[str, Any]:
     """The masks Transformers builds for a right-padded batch."""
     length = attention_mask.shape[1]
@@ -438,68 +720,12 @@ def margins(backend: Any, jobs: list, logits: list) -> list[float]:
     return out
 
 
-def shared_logits(
-    backend: Any, jobs: list, pad_id: int, policy: SharePolicy
-) -> list | None:
-    """Per-question logits with the shared prefix run once; None: run it exactly.
-
-    ``backend.share_stats`` records what the last request did.
-    """
+def _suffix_batch(encoded: list, group: list[int], prefix: int, pad_id: int) -> dict:
+    """The suffix rows of ``group`` collated, positions shifted to the suffix."""
     from ._vendor.dev2model.decision_model import collate
-    from .qwen import micro_batches
 
-    torch = backend.torch
-    encoded = [item for _, _, item in jobs]
-    stats: dict[str, Any] = {"questions": len(jobs), "shared": False}
-    backend.share_stats = stats
-    if len(jobs) < policy.min_questions:
-        stats["reason"] = "too few questions"
-        return None
-    reason = _supported(backend)
-    if reason:
-        stats["reason"] = reason
-        return None
-    model = backend.model
-    backbone = model.backbone
-    config = _core(backbone).config
-    layer_types = set(getattr(config, "layer_types", None) or ["full_attention"])
-    align = policy.align or (64 if "linear_attention" in layer_types else 1)
-    prefix = shared_prefix(encoded, align)
-    stats["prefix_tokens"] = prefix
-    if prefix == 0 or (len(jobs) - 1) * prefix < policy.min_shared_tokens:
-        stats["reason"] = "too little shared input"
-        return None
-    lengths = [len(item["ids"]) for item in encoded]
-    from transformers.cache_utils import DynamicCache
-
-    with torch.inference_mode(), _context(backend):
-        cache = DynamicCache(config=config)
-        ids = torch.tensor(
-            [encoded[0]["ids"][:prefix]], dtype=torch.long, device=backend.device
-        )
-        mask = None
-        if any(length != _padded(max(lengths)) for length in lengths):
-            # A padded exact batch runs SDPA with an explicit mask; so does the prefix.
-            causal = torch.ones(
-                prefix, prefix, dtype=torch.bool, device=backend.device
-            ).tril()
-            mask = {
-                name: causal[None, None] if name == "full_attention" else None
-                for name in layer_types
-            }
-        backbone(
-            input_ids=ids, attention_mask=mask, past_key_values=cache, use_cache=True
-        )
-        kv = _prefix_kv(cache, torch)
-    logits: list = [None] * len(jobs)
-    suffix = [length - prefix for length in lengths]
-    groups = [
-        [bucket[index] for index in group]
-        for bucket in buckets(suffix, policy.max_buckets, policy.bucket_tokens)
-        for group in micro_batches([suffix[i] for i in bucket], backend.batch_tokens)
-    ]
-    for group in groups:
-        items = [
+    return collate(
+        [
             {
                 **encoded[index],
                 "ids": encoded[index]["ids"][prefix:],
@@ -509,8 +735,92 @@ def shared_logits(
                 "query_position": encoded[index]["query_position"] - prefix,
             }
             for index in group
-        ]
-        batch = collate(items, pad_id)
+        ],
+        pad_id,
+    )
+
+
+def _prefix_mask(lengths: list[int], prefix: int, backend: Any) -> Any:
+    """The prefix's causal mask; explicit when the exact batch is padded."""
+    if all(length == _padded(max(lengths)) for length in lengths):
+        return None
+    torch = backend.torch
+    return torch.ones(prefix, prefix, dtype=torch.bool, device=backend.device).tril()[
+        None, None
+    ]
+
+
+def _tree_logits(backend: Any, encoded: list, prefix: int, pad_id: int) -> list:
+    torch = backend.torch
+    model = backend.model
+    config = _core(model.backbone).config
+    layer_types = set(getattr(config, "layer_types", None) or ["full_attention"])
+    group = list(range(len(encoded)))
+    batch = _suffix_batch(encoded, group, prefix, pad_id)
+    ids = list(encoded[0]["ids"][:prefix])
+    for item in encoded:
+        ids.extend(item["ids"][prefix:])
+    tree = Tree(
+        prefix,
+        [len(item["ids"]) - prefix for item in encoded],
+        batch["input_ids"].shape[1],
+        backend.device,
+        torch,
+    )
+    tree.prefix_mask = _prefix_mask(
+        [len(item["ids"]) for item in encoded], prefix, backend
+    )
+    batch = {
+        key: value.to(backend.device) if torch.is_tensor(value) else value
+        for key, value in batch.items()
+    }
+    ids = torch.tensor([ids], dtype=torch.long, device=backend.device)
+    with torch.inference_mode(), _context(backend):
+        with _as_tree(model.backbone, tree, ids, layer_types):
+            output = model(**batch)
+    if len(output) != len(group):
+        raise RuntimeError("Model returned the wrong number of question answers")
+    return list(output.float().cpu())
+
+
+def _cache_logits(
+    backend: Any, encoded: list, prefix: int, pad_id: int, policy: SharePolicy
+) -> tuple[list, int]:
+    from transformers.cache_utils import DynamicCache
+
+    from .qwen import micro_batches
+
+    torch = backend.torch
+    model = backend.model
+    backbone = model.backbone
+    config = _core(backbone).config
+    layer_types = set(getattr(config, "layer_types", None) or ["full_attention"])
+    lengths = [len(item["ids"]) for item in encoded]
+    with torch.inference_mode(), _context(backend):
+        cache = DynamicCache(config=config)
+        ids = torch.tensor(
+            [encoded[0]["ids"][:prefix]], dtype=torch.long, device=backend.device
+        )
+        causal = _prefix_mask(lengths, prefix, backend)
+        mask = None
+        if causal is not None:
+            mask = {
+                name: causal if name == "full_attention" else None
+                for name in layer_types
+            }
+        backbone(
+            input_ids=ids, attention_mask=mask, past_key_values=cache, use_cache=True
+        )
+        kv = _prefix_kv(cache, torch)
+    logits: list = [None] * len(encoded)
+    suffix = [length - prefix for length in lengths]
+    groups = [
+        [bucket[index] for index in group]
+        for bucket in buckets(suffix, policy.max_buckets, policy.bucket_tokens)
+        for group in micro_batches([suffix[i] for i in bucket], backend.batch_tokens)
+    ]
+    for group in groups:
+        batch = _suffix_batch(encoded, group, prefix, pad_id)
         batch["attention_mask"] = torch.cat(
             [
                 torch.ones(len(group), prefix, dtype=batch["attention_mask"].dtype),
@@ -529,7 +839,40 @@ def shared_logits(
             raise RuntimeError("Model returned the wrong number of question answers")
         for index, values in zip(group, output.float().cpu()):
             logits[index] = values
-    stats.update(shared=True, suffix_batches=len(groups), rescored=0)
+    return logits, len(groups)
+
+
+def shared_logits(
+    backend: Any, jobs: list, pad_id: int, policy: SharePolicy
+) -> list | None:
+    """Per-question logits with the shared prefix run once; None: run it exactly.
+
+    ``backend.share_stats`` records what the last request did.
+    """
+    encoded = [item for _, _, item in jobs]
+    stats: dict[str, Any] = {"questions": len(jobs), "shared": False}
+    backend.share_stats = stats
+    if len(jobs) < policy.min_questions:
+        stats["reason"] = "too few questions"
+        return None
+    reason = _supported(backend)
+    if reason:
+        stats["reason"] = reason
+        return None
+    prefix = shared_prefix(encoded, policy.align)
+    stats["prefix_tokens"] = prefix
+    if prefix < 4 or (len(jobs) - 1) * prefix < policy.min_shared_tokens:
+        stats["reason"] = "too little shared input"
+        return None
+    packed = prefix + sum(len(item["ids"]) - prefix for item in encoded)
+    budget = backend.batch_tokens
+    if policy.mode == "tree" and (budget is None or _padded(packed) <= budget):
+        logits = _tree_logits(backend, encoded, prefix, pad_id)
+        stats.update(shared=True, mode="tree", tokens=packed)
+    else:
+        logits, batches = _cache_logits(backend, encoded, prefix, pad_id, policy)
+        stats.update(shared=True, mode="cache", suffix_batches=batches)
+    stats["rescored"] = 0
     if policy.tau > 0:
         low = [
             i for i, m in enumerate(margins(backend, jobs, logits)) if m < policy.tau
