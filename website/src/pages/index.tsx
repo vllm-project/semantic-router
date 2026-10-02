@@ -755,7 +755,7 @@ export default function Home(): JSX.Element {
     },
     'sameAs': [
       'https://github.com/vllm-project/semantic-router',
-      'https://huggingface.co/LLM-Semantic-Router',
+      'https://huggingface.co/vllm-sr',
     ],
   }
 
