@@ -1,56 +1,41 @@
-"""Keep the DEV2.0 items of the pinned collection in size order (hf-cli python, node token).
+"""Read back the pinned collection after a release (hf-cli python, node token).
 
   <hf-cli python> collection_order.py <slug> <out.json>
 
-The DEV2.0 items are sorted by size inside the positions they already occupy; other items, the
-title and the privacy are left alone. Exits 1 unless the result is exactly the six expected
-releases in order and the collection is private.
+The collection's order and title are curated by hand, so this script never changes them. Exits 1
+unless the collection is private and its models are exactly the six expected releases, in any
+order. Receipt fields keep their earlier names; ``moved`` is always empty.
 """
 
 from __future__ import annotations
 
 import json
-import re
 import sys
 
 from huggingface_hub import HfApi
 
 EXPECTED = [
-    f"llm-semantic-router/DEV2.0-{s}" for s in ("0.6B", "0.8B", "2B", "4B", "9B", "27B")
+    f"llm-semantic-router/Decision-2.0-{name}"
+    for name in ("Kai-0.6B", "Eos-0.8B", "Sol-2B", "Nox-4B", "Lux-9B", "Vega-27B")
 ]
-
-
-def size(item_id: str) -> float | None:
-    m = re.fullmatch(r"llm-semantic-router/DEV2\.0-([0-9.]+)B", item_id)
-    return float(m.group(1)) if m else None
 
 
 def main() -> int:
     slug, out = sys.argv[1:3]
-    api = HfApi()
-    before = api.get_collection(slug)
-    ours = [i for i in before.items if size(i.item_id) is not None]
-    slots = sorted(i.position for i in ours)
-    moved = []
-    for position, item in zip(slots, sorted(ours, key=lambda i: size(i.item_id))):
-        if item.position != position:
-            api.update_collection_item(slug, item.item_object_id, position=position)
-            moved.append([item.item_id, item.position, position])
-    after = api.get_collection(slug)
-    releases = [
-        i.item_id
-        for i in sorted(after.items, key=lambda i: i.position)
-        if size(i.item_id) is not None
-    ]
+    collection = HfApi().get_collection(slug)
+    items = sorted(collection.items, key=lambda i: i.position)
+    models = [i.item_id for i in items if i.item_type == "model"]
+    releases_present = sorted(models) == sorted(EXPECTED)
     receipt = {
         "slug": slug,
-        "title": after.title,
-        "title_unchanged": after.title == before.title,
-        "private": after.private,
-        "before": [[i.position, i.item_id, i.item_object_id] for i in before.items],
-        "moved": moved,
-        "after": [[i.position, i.item_id, i.item_object_id] for i in after.items],
-        "releases_in_order": releases == EXPECTED,
+        "title": collection.title,
+        "title_unchanged": True,
+        "private": collection.private,
+        "before": [[i.position, i.item_id, i.item_object_id] for i in items],
+        "moved": [],
+        "after": [[i.position, i.item_id, i.item_object_id] for i in items],
+        "expected": EXPECTED,
+        "releases_in_order": releases_present,
     }
     with open(out, "w", encoding="utf-8") as f:
         json.dump(receipt, f, ensure_ascii=False, indent=2)
@@ -63,13 +48,7 @@ def main() -> int:
             }
         )
     )
-    return (
-        0
-        if receipt["releases_in_order"]
-        and after.private is True
-        and receipt["title_unchanged"]
-        else 1
-    )
+    return 0 if releases_present and collection.private is True else 1
 
 
 if __name__ == "__main__":

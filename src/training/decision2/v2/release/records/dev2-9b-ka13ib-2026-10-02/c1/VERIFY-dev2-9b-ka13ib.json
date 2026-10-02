@@ -1,0 +1,38 @@
+{
+ "comparisons": {
+  "baseline": {
+   "problems": [],
+   "run": "/data/dev2/runs/eval/m4/c1-event3/cand9b"
+  }
+ },
+ "image": {
+  "id": "sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54",
+  "present": true
+ },
+ "model": {
+  "adapter_module": "v2/dec/infer_dec.py",
+  "adapter_module_same_as_stored_run": true,
+  "adapter_module_sha256": "4ce2e15a5c2a2cd3896802f6b77b879f3d6d743c2055aafd15de3f3909b2d9e3",
+  "cache_sha256": "48a2611aa852efff9348c1e3f3e0247d5e2a6915bec8ed8aeca488b53563e1ca",
+  "package": {
+   "dir": "/data/dev2/runs/release/dev2-9b-ka13ib-prerelease-20261001T191732Z/package/Decision-2.0-Lux-9B",
+   "files": 39,
+   "identity": "b9a65d601bb6780c2c07998aecbfab322ede459c26fcb8ed262281ad08f909fb",
+   "manifest_sha256": "055c86f153530a3790cf4fc98c2d554b9659783f7349c111d959f34b4c4049e3",
+   "mismatched": [],
+   "ok": true,
+   "problems": []
+  },
+  "problems": [],
+  "trees": [
+   {
+    "dir": "/data/decision20-20260926/models/Decision-1.0-Lux-9B",
+    "files": 68,
+    "sha256": "3a7cab7dbe865dae53f7fd2a72410d122f3363b3fb81802c74d68ead2a5143a9"
+   }
+  ]
+ },
+ "passed": true,
+ "schema": "dev2-c1-postkey/1/verify",
+ "utc": "2026-10-01T19:25:47Z"
+}

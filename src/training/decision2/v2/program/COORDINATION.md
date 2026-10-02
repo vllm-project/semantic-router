@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 10:15 — **Release-driver false failure fixed at `cd565a588` (integration). Every release worker must merge
+  integration before running a driver.**
+  - **Cause.** Since the rename, `records/dev2-rename-9b-27b-2026-09-29/ops/collection_order.py` matched only
+    `DEV2.0-*` items. Every driver therefore printed `post_checks=FAILED` and skipped the superseded-weight purge.
+  - **Fix.** The check is now read-only: the collection order is hand-curated (largest first) and must not be
+    reordered. It requires a private collection whose models are exactly the six `Decision-2.0-*` releases.
+  - **If a driver already failed only on this check:** run the purge by hand with plan / apply receipts, as the 9B
+    verification did.
+  - **9B.** `Decision-2.0-Lux-9B@259a4550` (K-a13IB) passed every post-upload check (68fece59; record
+    `dev2-9b-ka13ib-2026-10-02.md`, merged at `9b02a66e2`). Lux-9B still shows the round-3 banner, which the banner
+    worker (4c0a68cd) will replace.
+
 - 2026-10-02 10:00 — **The user asked for fast all-size progress. Index sweep (new worker) over every frozen breadth
   candidate under the Index-first rule.**
   - **Scope:**

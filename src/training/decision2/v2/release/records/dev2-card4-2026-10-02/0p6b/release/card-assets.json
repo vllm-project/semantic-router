@@ -1,0 +1,37 @@
+{
+  "files": {
+    "assets/banner.png": "51437980d848bd5be3115c4f955438c171586c49d849a72aa3a98aae9707f7f8",
+    "assets/index-areas.png": "233684ce714bbd89102c8a46ca585a641e4f4b9126944d1f1f01769f697d60dd",
+    "assets/index-pareto.png": "c29bfb43c79b7081505cd651e09ff82c8738c9d0720549d5ad78541218aeadd8",
+    "assets/jevarena-types.png": "33e46f237d4ec9ebea78578d856496409cf552337ef53c5d81d1a417e0f56220",
+    "assets/jevarena.png": "01814a5a0955c0dda6f951ce35181a210df6853746312ee47a189b8a8e544d22"
+  },
+  "inputs": {
+    "fonts_sha256": {
+      "Inter-Bold": "288316099b1e0a47a4716d159098005eef7c0066921f34e3200393dbdb01947f",
+      "Inter-Medium": "97ad806f526e41546d46365bb3a393145f75b7b1568913db74549ad8b8dba872",
+      "Inter-Regular": "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82",
+      "Inter-SemiBold": "78a843fade9d4612a5567302fb595b56976eb5fcebf4fea5a5912d638bafcde3",
+      "InterDisplay-Bold": "b74c8e0dd744b3347faca4c96bc7b2e32f7d6f62300a79b1d1a99331e44a5bc4",
+      "InterDisplay-SemiBold": "0310d7a325896129730c6c8cf9a6e0f81ee258bedf77b1ff059b2a7b75f74e02"
+    },
+    "index_sha256": "bf2bd02d1359de5f1bdd871cb3e240b6f5022cc2e3d6638580e921cd4386ad4a",
+    "logo_sha256": "e6b8428eb67f9318450e4b938639055d20e5f3643aa3b6f676a7b96a7beda94a",
+    "reports": {
+      "bosun": "80c539bfb19116105d15b4e29978f517fb67716bd688f66c7929b6265ed3aade",
+      "candidate": "b2083796ed0a03728edffb2aa8af5c9c60db38df3ad8182ea5c9e08d6bb6a2ed",
+      "gliner25": "7dc5be9242d07a59696e37b8caef1ed18a540ab96dfae547a3ffa2ae445f162d",
+      "kai1": "1b0140e360d35613d973cf36182978b54a1679e355ba62bc3cc2785714f06716",
+      "lex1": "45f7d5c9c8e35b70e069ffe2400c96b3401dd145994b17779e7897e8c3a4b3a9"
+    }
+  },
+  "model_name": "Decision-2.0-Kai-0.6B",
+  "model_sha256": "bb806f31a14d4532a1b5e00984442128f47f46cbbc68e57e7623327c81cfb983",
+  "schema": "dev2-card-assets/1",
+  "software": {
+    "matplotlib": "3.11.2",
+    "pillow": "12.3.0",
+    "python": "3.12.13"
+  },
+  "tier": "0.6B"
+}
