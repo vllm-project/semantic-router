@@ -80,3 +80,15 @@ the `.venv-semantic-router-eval` directory is an operator-created environment,
 not a bundled checkout dependency. Use fresh output paths: this runner overwrites
 existing output files. Updated `SHA256SUMS` reflects this run-note edit and the two
 added configuration files; hashes of the captured evidence remain unchanged.
+
+### Checkpoint label-index review fix (2026-10-02)
+
+The runner normalizes integer/string `id2label` keys, requires the complete contiguous index range and verifies each semantic label against the pinned mapping at its exact index. Complete `LABEL_n` metadata remains supported; the external mapping supplies its semantic names. Empty/invalid metadata, non-integer indices, duplicate normalized indices, invalid labels, incomplete maps and semantic permutations fail before inference.
+
+The 11 offline regressions are in `bench/jev/pilot-v0.1/tests/test_vela_runner.py`:
+
+```bash
+python3 -m unittest discover -s bench/jev/pilot-v0.1/tests -p test_vela_runner.py -v
+```
+
+The current runner SHA-256 is `e4cce78707ab3d5b360d64c178b4ff0eeab6dec84a38cea08590d5322f8fdd92`. The earlier formatting hash above describes the 2026-10-01 snapshot. The saved metadata's `runner_source_sha256` still identifies the historical captured-run source; this fix has not been exercised by rerunning the model. Saved records and scores remain unchanged.
