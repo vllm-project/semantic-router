@@ -371,6 +371,33 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 04:00Z (poll 20; the state commit came 60 min after poll 19, during a GPU-contention fix; code commits in between):
+  - **Manual formals sealed 03:29Z** (references; T = 1; `m6-gates.sh 199daf794 gates / overlap / verdicts M6-IB2
+    M6-IBX`, `VERDICTS` at 03:32Z; the guard moved `contrast.json` at 03:32:28Z):
+
+    | Arm | v3 (T / H) | vs A20r [95%] | vs AutoJev-27B [95%] |
+    | --- | --- | --- | --- |
+    | M6-IB2 | 72.94 (.924 / .576) | +0.58 [−2.46, +3.24] | +0.81 [−1.93, +5.41] |
+    | M6-IBX | 74.10 (.916 / .600) | +1.74 [−1.23, +3.17] | +1.97 [−0.25, +5.42] |
+
+    **Formal typed FINAL: no type collapsed for either arm** (Choice, Noul and Score OK, including M6-IB2, whose
+    typed-DEV Noul collapsed). Both stay in the amendment-7 pool.
+  - **M6-IB2 MLX-DEV2 (reference; node D GPU0, 03:34–03:51Z):**
+    - card **−.0124 [−.0179, −.0069]** (the guard would fail); Choice +.0087, Noul **−.0336**;
+    - the same container's mlx-diag reading **−.0308 [−.0438, −.0177]** (Noul −.0514): a material multilingual
+      regression to flag to the coordinator.
+  - **M6-IB Index run done:** 8 / 8 shards exit 0, 8.95 GPU-h. `collect`: the workstation path to node D ran at ≈ 50
+    KB/s, so it was stopped (partial shard 4 → `void/`) and relayed through node B (`14ec16de5`); SHA-256 lists
+    equal. `score` running.
+  - **GPU contention:** within minutes of M6-IB's shards ending (03:31–03:51Z), every node C GPU and node D GPU4–7 went
+    to the 4B Index-first and Index-sweep runs, which use free pool GPUs too (COORDINATION 10:00).
+    - M6-IB2's Index run therefore uses **M6's own node D GPU0 / GPU1** (M6-IBX's leases, idle since 22:35Z).
+      Their M6 owners are set aside as `owner.m6-set-aside-<UTC>`, with eval-ix1 owners naming M6-IB2;
+      `m6-index.sh release` restores them (`fb7935a14`).
+    - Shards 0–5 started 03:56:30Z (`m6-index-run.sh 14ec16de5 M6-IB2 d 0,1,2,3,4,5 0 1`, log
+      `ix1/logs/m6-index-M6-IB2-d-0to5.log`); three rounds, ≈ 07:35Z.
+    - **Shards 6–7 still to launch** on node D GPU2 / GPU3 once M6-IB2PN's seeds have ended (≈ 06:20Z), after the
+      same owner set-aside: `m6-index-run.sh <sha> M6-IB2 d 6,7 2 3`.
 - 03:02Z (poll 19):
   - **Index-first interim:** M5-L128 fails the Index gate (95% lower bound vs A20r not > 0; types OK), so it is not
     eligible. The public file is in `/tmp` only; values are in `private/m6/interim/`.
