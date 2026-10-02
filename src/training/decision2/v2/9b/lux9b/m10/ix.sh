@@ -16,7 +16,8 @@
 #   bf16   NODE NAME       v2.release.bf16_copy of the shipped point in the scored image (CPU, no network), then
 #                          restaged as M10-NAME-bf16 (identity / loaded count / T = 1 checks)
 #   lease  NODE "GPUS"     owner files of other tracks' released leases -> track=eval-ix1 idle (old file kept)
-#   chain  NODE PANEL "GPUS" NAME...   m10/ixchain.sh detached on NODE (parity gates, runs, scoring, bootstraps)
+#   chain  NODE PANEL "GPUS" NAME...   m10/ixchain.sh detached on NODE (parity gates, runs, scoring, bootstraps);
+#                          M10_SHARDS=N: GPUS is a pool and each of the N shards takes the first idle pool GPU
 #   status NODE NAME...    per model: parity verdict, shards, merged rows, bootstraps present
 #   fetch  NODE NAME...    small private summaries -> ~/code/decision2-program/private/9b-m10/NAME/ (mode 700)
 set -euo pipefail
@@ -145,7 +146,7 @@ case "$STAGE" in
     specs=""
     for NAME in "$@"; do specs+=" $NAME=9B=$refdir"; done
     on "$N" "test -f $S/v2/9b/lux9b/m10/ixchain.sh" || { echo "mirror $SHA is not on node $N" >&2; exit 2; }
-    on "$N" "mkdir -p $R/logs; setsid nohup bash $S/v2/9b/lux9b/m10/ixchain.sh $M $PANEL '$G'$specs \
+    on "$N" "mkdir -p $R/logs; M10_SHARDS=${M10_SHARDS:-} setsid nohup bash $S/v2/9b/lux9b/m10/ixchain.sh $M $PANEL '$G'$specs \
       > $R/logs/m10ix-chain-$PANEL.out 2>&1 < /dev/null & echo chain started on node $N" ;;
   status)
     N=${1:?NODE}

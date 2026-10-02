@@ -14,12 +14,10 @@ set -euo pipefail
 MODE=$1
 M=/data/dev2/runs/9b/m10
 K=$M/ksw
-I=$M/inputs/m9
 LOCK=$M/data/READY-m10.json
 KA13IB=4701ba41c70636b5e215cf1f296bc920a9ee39960d4d28a2338e20b2b81e0d91
 LUXSUMS=$M/inputs/lux-zero-m9-KIB-s1.sha256
 LUXHOST=$M/arms/pre/m10-KUP-s1-zero/checkpoint-0000000
-LUXCK=/runs/m10/arms/pre/m10-KUP-s1-zero/checkpoint-0000000
 GPUS=(2 4)
 mkdir -p "$K" "$M/logs"
 log() { echo "$(date -u +%FT%TZ) ksw $*" | tee -a "$M/OPERATIONS.log"; }

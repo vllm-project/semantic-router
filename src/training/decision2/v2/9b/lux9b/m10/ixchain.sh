@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# 9B M10 Index chain: the Index sweep's node-side chain (index-sweep/chain.sh at 4a133383f), unchanged except for its
-# log names (m10-*). One node's queue, with
+# 9B M10 Index chain: the Index sweep's node-side chain (index-sweep/chain.sh at 4a133383f) with its log names (m10-*)
+# and an optional greedy shard placement (M10_SHARDS=N: GPUS is a pool, each shard starts on the first pool GPU that
+# is idle and not running another shard of this chain). One node's queue, with
 # the IX1 harness (v2/eval/ix1: image host2, kit 87d4650b, the 86-request parity gate, dual scoring):
 #   1. the parity gate of every queued model (in parallel, one per distinct listed GPU); a failed gate drops the model;
 #   2. per model, in queue order: the full run over the panel's shards with the model's own frozen parity cache
@@ -32,6 +33,8 @@ LOG=$R/logs/m10ix-chain-$PANEL.log
 log() { echo "$(date -u +%FT%TZ) $*" >> "$LOG"; }
 read -r -a slots <<< "$GPUS"
 n=${#slots[@]}
+GREEDY=${M10_SHARDS:-}
+[ -z "$GREEDY" ] || n=$GREEDY
 [ -f "$S/v2/eval/ix1/launch.sh" ] && [ -f "$P/shard-0-of-$n.jsonl.gz" ] || { log "no mirror or no $n-way shards"; exit 1; }
 declare -A seen=()
 wave_of=()
@@ -76,6 +79,38 @@ wait_idle() {  # GPU...: wait up to 3 h for them (e.g. an earlier chain's shards
     t=$((t + 30))
   done
 }
+greedy_run() {  # MODEL RUN: every shard k < n on the first idle pool GPU not busy with this chain; all must exit 0
+  local m=$1 run=$2 k g t=0 e
+  declare -A mine=()
+  local pending=()
+  for ((k = 0; k < n; k++)); do
+    [ -f "$run/shard-$k/launched" ] || [ -f "$run/shard-$k/end_epoch" ] || pending+=("$k")
+    [ -f "$run/shard-$k/launched" ] && [ ! -f "$run/shard-$k/end_epoch" ] && log "run $m shard $k already started"
+  done
+  while ((${#pending[@]})); do
+    for g in "${!mine[@]}"; do [ -f "$run/shard-${mine[$g]}/end_epoch" ] && unset "mine[$g]"; done
+    k=${pending[0]}
+    for g in "${slots[@]}"; do
+      if [ -n "${mine[$g]:-}" ] || ! idle "$g"; then continue; fi
+      log "run $m shard $k on GPU $g"
+      (cd "$S" && bash "$L" run --src "$M" --model "$m" --gpus "$(printf "$g %.0s" $(seq "$n"))" --only "$k" --run "$run" \
+        --rows-dir "$P" --cache "$R/parity/$m/cache-frozen" >> "$R/logs/m10ix-run-$m.log" 2>&1) \
+        || { log "launch $m shard $k failed"; return 1; }
+      mine[$g]=$k
+      pending=("${pending[@]:1}")
+      sleep 60
+      continue 2
+    done
+    (( t < 6 * 3600 )) || { log "$m: no pool GPU for shard $k in 6 h"; return 1; }
+    sleep 30
+    t=$((t + 30))
+  done
+  for ((k = 0; k < n; k++)); do
+    while [ ! -f "$run/shard-$k/end_epoch" ]; do sleep 30; done
+    e=$(cat "$run/shard-$k/exit_code")
+    [ "$e" = 0 ] || { log "$m shard $k exit $e"; return 1; }
+  done
+}
 queue=()
 i=0
 while (( i < ${#names[@]} )); do
@@ -86,7 +121,16 @@ while (( i < ${#names[@]} )); do
     i=$((i + 1))
     if passed "$R/parity/$m/parity.json"; then log "parity $m already passed"; continue; fi
     [ -e "$R/parity/$m" ] && { log "parity $m ran before without a pass; dropped"; continue; }
-    wait_idle "$g" || { log "GPU $g stayed busy; parity $m not run"; continue; }
+    if [ -n "$GREEDY" ]; then
+      g=""
+      for ((t = 0; t < 10800; t += 30)); do
+        for c in "${slots[@]}"; do idle "$c" && { g=$c; break 2; }; done
+        sleep 30
+      done
+      [ -n "$g" ] || { log "no idle pool GPU in 3 h; parity $m not run"; continue; }
+    else
+      wait_idle "$g" || { log "GPU $g stayed busy; parity $m not run"; continue; }
+    fi
     (cd "$S" && bash "$L" parity --src "$M" --model "$m" --gpu "$g" --run "$R/parity/$m" \
       --rows "$P/compat-86.gold-free.jsonl.gz" > "$R/logs/m10ix-parity-$m.log" 2>&1
      echo $? > "$R/logs/m10ix-parity-$m.exit") &
@@ -107,6 +151,10 @@ for m in "${queue[@]}"; do
     log "$m already scored"
   else
     ok=1
+    if [ -n "$GREEDY" ]; then
+      greedy_run "$m" "$run" || ok=0
+      waves=0
+    fi
     for ((w = 0; w < waves; w++)); do
       only=""
       for k in "${!slots[@]}"; do [ "${wave_of[k]}" = "$w" ] && only+="$k "; done
