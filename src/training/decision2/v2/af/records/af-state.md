@@ -2,6 +2,18 @@
 
 Index values stay private (node private stores and `decision2-program/private/arm-factory/`); this file has none.
 
+## 2026-10-02 21:35Z (05:35 UTC+8) — lower-LR arms first (amendment 10)
+
+- The 4B owner's read: `4b-LHS17IB4-lrh` (half LoRA / head LR, factory amendment 4) passes the Nox-4B gate and is
+  being released by the 4B owner (COORDINATION 05:20; values in its record).
+- **Stopped (re-prioritised, not failed; disclosed in the markers):** `4b-SDMLIB4-UP2` s1 / s2, `4b-LHS17IB4-UP2`
+  s1 / s2, `KIB4R-W2` s1 / s2, `KIB4-e2` s1 (each minutes in); not started: `4b-LHS17IB4ML-UP`, `4b-LHS23IB4-UP`,
+  `4b-LHS17IB4X-UP` s1 / s2, `4b-LHS17ML-UP` s2, and `KIB4-lrq` s2 (node B GPU7 went to the 9B publisher's KIB4H).
+- **Training:** node C GPU1–4 `4b-LHS17ML-lrh` s1 / s2, `4b-LHS17IB4X-lrh` s1 / s2 (since 21:27Z); queued on node C:
+  `4b-SDML-lrh` s1 / s2 (GPU5 / 6; lock `4b-SDML` = SDML's TRAIN `fef6b036…` + `teacher-ml` `b95c5e63…`),
+  `4b-LHS17IB4-lrq` s1 / s2 (GPU7 / GPU1). Node A GPU5 / 6 `KIB4-lrh` s1 / s2, GPU7 `KIB4-lrq` s1; node B GPU2 / 3
+  `KIB4-lrhh` s1 / s2; node B GPU4 / 6 `KIB4R2` s1 / s2. Wave-7 UP seeds finishing on node C GPU5–7.
+
 ## 2026-10-02 21:25Z (05:25 UTC+8) — backlog (amendment 9) launched on 9 idle GPUs
 
 - Weights locked: `4b-SDMLIB4-UP2` `b4b99b43…`, `4b-LHS17IB4-UP2` `611b59a4…`, `4b-LHS17IB4ML-UP` `e6bf77c4…`,
