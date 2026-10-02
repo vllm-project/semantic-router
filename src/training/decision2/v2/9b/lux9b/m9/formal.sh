@@ -17,7 +17,9 @@
 set -uo pipefail
 # shellcheck source=../m8/lib.sh disable=SC1091
 . "$(dirname "${BASH_SOURCE[0]}")/../m8/lib.sh"
-TRACK=9b-m9
+# M9_FORMAL_GPUS / M9_FORMAL_TRACK: another track's node A GPUs and lease track (9B M10); the defaults are M9's.
+TRACK=${M9_FORMAL_TRACK:-9b-m9}
+GPUS=" ${M9_FORMAL_GPUS:-6 7} "
 gpu=$1; name=$2; ckpt=$3; source=$4; label=$5
 OWN=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)
 MIRROR=${OWN%/src/training/decision2}
@@ -35,7 +37,7 @@ MLX_PANEL=$DATA/dev2/private/panels/mlx-diag-v1
 FROZEN=af623300d71a8fdb9a6a5588d25e17356da3610d57710b08b5830a0c5d6efb6f
 TC=$F/triton-cache
 G=$F/$name.gates
-case $gpu in 6 | 7) ;; *) echo "GPU $gpu is not an M9 formal GPU" >&2; exit 2 ;; esac
+case $GPUS in *" $gpu "*) ;; *) echo "GPU $gpu is not a formal GPU ($GPUS)" >&2; exit 2 ;; esac
 [ -f "$MIRROR/.dev2-mirror.json" ] || { echo "run from an exact mirror" >&2; exit 2; }
 [ -f "$ckpt/decision_config.json" ] || { echo "no checkpoint at $ckpt" >&2; exit 2; }
 [ -d "$source" ] || { echo "no source at $source" >&2; exit 2; }
