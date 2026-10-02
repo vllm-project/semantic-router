@@ -2,6 +2,20 @@
 
 Index values stay private (node private stores and `decision2-program/private/arm-factory/`); this file has none.
 
+## 2026-10-02 19:10Z (03:10 UTC+8) — batch-2 9B points built; α ladder staged; batch 3 training
+
+- **`AF-KF-a40-bf16` gate (paired bootstrap vs `M10-KIB4-a40-bf16`, 2,000 replicates):** the 95% upper bound is
+  below 0 — significantly below the current Lux release; not a successor (values private).
+- **Node B** (`/data/dev2/runs/af/9b/soup`): `KIB4W3` s1 / s2 and `KIB4R` s1 / s2 DONE 18:53Z (no failure, no cap).
+  Built (CPU): `KIB4W3-a40` `be26e890…`, `KIB4R-a40` `f3c9ba05…` (`[s1, s2, Lux × 3]`), arm soups `KIB4W3` `b2cbbb7b…`,
+  `KIB4R` `5b879bf0…` → 9B publisher (M10 amendment 9 item 4). `KIB4R2` s1 / s2 (seeds 13 / 14) on GPU4 / 6 since
+  18:53Z. Node B GPU2 / GPU3 released at 18:53Z.
+- **Node A α ladder (amendment 6), built and staged** (FP32 → BF16, loaded 7,940,895,744, T = 1): `KIB4-a50`
+  `319ca812…` → `2a8f165c…`; `KF-a50` `2a1c8624…` → `37fa34d8…`; `KIB4Q-a60` `229e0d07…` → `69dee446…`; `KF-a60`
+  `db2cb194…` → `44ae7168…`; `KIB4Q-a50` `7c3bd6cd…` → `c8e32f2b…` (packages `ix1/af/AF-<point>-bf16-re51f9881`).
+- **Node C:** `4b-SDMLIB4-lrh` s1 / s2 (GPU7 / 6) and `4b-SDMLIB4W2` s1 (GPU5) training; `4b-SDMLIB4W2` s2 and
+  `4b-SDMLIB4-e2` queued behind them.
+
 ## 2026-10-02 18:35Z (02:35 UTC+8) — amendment 7 not started; node B 9B points queued for M10 amendment 9
 
 - **Amendment 7** (`1e5060c3d`; `4b-LHS17IB4-e2`, `4b-LHS17IB4W2` on node C GPU3–4): **not started**. The 9B publisher
