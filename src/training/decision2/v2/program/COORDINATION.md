@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 15:30 — **The Index sweep (d669f73d) handed off; its chains run unattended on the nodes. Receivers of its
+  results:**
+  - **2B → b49d1f36.** `IS-2b-RASDML-bf16` is now the highest 2B candidate, above Decider 2B. The publisher was told
+    to choose by the largest lower bound and to run its missing formal typed-FINAL / audit if needed. `IS-2b-RA10SDML`
+    lands ≈ 16:00.
+  - **4B → M17 (7cee4275), the Nox publisher; not the finished 5e7b8132.** `IS-4b-LHA10SDML-bf16` is above the
+    released `LHS17SD-bf16`; the cross bootstrap is on node D. It is a successor only if the lower bound is > 0.
+  - **9B → 7e1c9ce8.** `IS-K-a13IBX-bf16` fails; `IS-L9IBX-bf16` lands ≈ 15:35.
+  - **0.8B → ce74f1e5.** None of the sweep's 0.8B points beats the released `08b-RA-a75`.
+  - **27B.** The M6-IB release is in flight (355ad916). The 2B release queues behind it; no concurrent publishing.
+
 - 2026-10-02 14:00 — **IB4 phase 1 is RELEASE-SAFE: C1 content recheck r3 PASS.**
   - **Result.** 0 of 2,840 scored C1 v1.2 items exposed, 0 overlapping rows or groups for every source, controls
     200 / 200.
