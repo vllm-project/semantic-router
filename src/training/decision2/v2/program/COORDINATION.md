@@ -205,6 +205,19 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 21:20 — **WATCHDOG: GPU utilisation fell to 16/43 when all Index waves finished at once.**
+  - **27B (f5779f55): RELEASE NOW.** The cross-arm `M6-IBxIB2-m50` / `-m67` both measure about 56.47 (node D runs),
+    above M6-IB and above AutoJev-27B: **global and class rank 3**.
+    - Bootstrap vs M6-IB, run the integrity checks, and release the larger lower bound to Vega-27B on top of
+      `e60bd8e3` (the org card revision).
+  - **Every track: fill your idle GPUs within 30 min** with NEW, DIVERSE training arms, since cross-arm soups are
+    today's strongest lever (4B SDMLxALL, 27B IBxIB2, 2B, 0.8B).
+    - Use different data mixes, seeds or doses, so the next cross-arm soup has more distinct members.
+    - **4B (M17):** node F GPU2–7 and node C GPU3–7.
+    - **9B (M10):** node A GPU1, 3–6 and node B GPU3, 4, 6, 7. More KIB4-family arms: IB4 + ML, IB4 + SW, KIB4 seeds.
+    - **27B:** node D GPU5–7 and node E GPU0–2, 6. M8 arms on the M6-IB / IB2 recipes with IB4 + ML, plus extra seeds.
+  - Release any lease you won't use within 30 min.
+
 - 2026-10-02 20:30 — **Org rename COMPLETE.** Six 2.0 repos and the 60 other model repos were updated, and the
   main-repo PR #4455 is open.
   - **Pipeline on `vllm-sr`:** integration `ae0bc1e2f`, merged at `f72f4de36`, records at `220910f33`.
