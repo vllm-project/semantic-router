@@ -4,6 +4,55 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17` (r
 stopped after creating the worktree, nothing had run). Prereg `da770d98a`, ops `1ce8b2220` (mirror on nodes E / F),
 data lock `4f68f1eb0`.
 
+## 2026-10-02 09:00Z — 4b-LHA10SDML release running (user override); wave 3 on the new base
+
+The coordinator interrupt at 15:45 UTC+8 (07:45Z) carried three user decisions:
+
+- Release M15 `4b-LHA10SDML` to `Decision-2.0-Nox-4B` now, once, on top of `b285e7a1`. This overrides the Index-first
+  significance rule: "the Index is equal within noise, transfer is significantly better".
+- The 4B goal is to overtake JPT-4B.
+- Stage 2 uses `4b-LHA10SDML` as the base reference.
+
+### Release of 4b-LHA10SDML
+
+- **Release gate:** a new `index_first.user_override` record (`dev2-user-override/1`, in `gate.py` with tests,
+  `c6c754a41`). IF1 still prints its lower-bound verdict ("NO" here) and passes on the record, which names these
+  weights (`991a8fb8…`) and the superseded revision. The decision binds its SHA-256.
+- **Ops:** `release/records/dev2-4b-sdml-2026-10-02/ops/`, adapted from the Index-first release.
+- **Index card input:** the 0.6B / 0.8B / 2B / 9B / 27B points come from the two released inputs that hold each
+  tier's current Hub main (27B `27bif/M6-IB`, 2B `ixf-2b`). No single earlier input holds all of them.
+- **Spec and decision:** `6c0d4b128` (spec `ae7156af…`, decision `f315621f…`; `--check` byte-equal on node A).
+- **Integrity checks:**
+  - **Formal collection:** node F GPU3, co-tenant. A first launch at 07:31Z failed before any GPU job: the rebuilt
+    `select/formal` had relative paths. It was rebuilt with absolute paths; the void markers are in
+    `formal/m17/void/relpath-select-*`. The relaunch at 07:46Z passed the smoke, then collected.
+  - **R3:** no type collapsed (choice OK, noul OK, score OK).
+  - **IF3:** `audit3`, node C, CPU. The planted control was found 200 / 200; 77,099 TRAIN lines give 0 Index item
+    rows and 114 familiar-text rows.
+  - **Package parity (`--prerelease`, node A GPU0):** typed-final, css15 and public231 answers exactly equal to the
+    formal predictions; build, examples, card and AutoModel pass. `--mlx`: mlx-diag 2,275 equal. Package manifest
+    `09d23575…`.
+- **References (not gates):**
+  - v3 65.684 vs the current release's 62.090: +3.59 [+2.11, +8.83].
+  - mlx-diag card-eligible vs the current release: −0.0075 [−0.0176, +0.0026].
+  - vs adopted Nox 1.0: +9.21 [+5.50, +12.52].
+- **`--release`:** started 08:58:35Z on node A GPU0 (Hub `main` checked = `b285e7a1`); Hub smoke and purge follow.
+
+### Stage 2
+
+- **Amendment 2** (`6d1099497`): wave 3 on the new base.
+  - `4b-SDMLIB4`: the SDML TRAIN + IB4 p1 + IB3-r2, 95,310 rows.
+  - `4b-LHS17ML`: the S17 TRAIN + SDML's 4,252 multilingual copies with their teacher rows, 75,340 rows.
+  - Training on node F GPU2/3 and 6/7 since 08:36Z.
+  - The interpolation `4b-SDMLxS17-m50` (BF16 `29db219b…`) is on its Index run, node D GPU5–7.
+- **Reference:** `M17_REF=SDML` compares with the `IS-4b-LHA10SDML-bf16` run (merged results copied D → C, hash
+  checked).
+- **Wave 1:** `4b-LHS17UP` Index scored (node C); its bootstrap vs SDML is running. `4b-LHS23SD` (node E) and the
+  two m50 points (node C) are still on their Index runs.
+- **Wave 2:** all four seeds done 08:12Z; the soups, m50 points and readouts are on node F.
+- **GPU-h for stage 2:** about 19 so far (training 9, Index runs about 7.5, formal and readouts about 1.5, release
+  checks about 1).
+
 ## 2026-10-02 07:30Z — the sweep's 4B candidate is not a successor; stage-2 Index runs in flight
 
 - **`IS-4b-LHA10SDML-bf16` (handed over by the Index sweep, coordinator 07:30Z): not a successor.** M15
