@@ -4,6 +4,8 @@
 # seed 20261002, cases resampled within benchmarks through the board weights; full panel and transfer-only). Each RUN
 # (an M10 or arm-factory run) is read in place; the outputs go to ix1/m10/gate/RUN/ (private). No Index value is logged.
 # The reference is node C's own run, or the copy that ix.sh kref placed in ix1/m10/refs.
+# M10_GATE_WAIT=1: wait (<= 10 h) until each RUN's bootstraps vs its chain reference exist (the chain's scoring and
+# its own bootstraps are done) before starting its gate bootstraps.
 #
 # usage: gate.sh <mirror-dir> RUN...
 set -uo pipefail
@@ -19,6 +21,15 @@ umask 077
 cd "$R/.." || exit 1
 for RUN in "$@"; do
   run=$R/runs/$RUN out=$R/m10/gate/$RUN
+  if [ "${M10_GATE_WAIT:-0}" = 1 ]; then
+    n=0
+    until [ -f "$run/paired-boot-full-vs-ref.json" ] && [ -f "$run/paired-boot-transfer-vs-ref.json" ]; do
+      [ $((n % 60)) = 0 ] && echo "$(date -u +%FT%TZ) $RUN: waiting for its chain's scoring and bootstraps"
+      n=$((n + 1))
+      [ $n -gt 600 ] && break
+      sleep 60
+    done
+  fi
   python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1]))["scorers"]["pass"] else 1)' \
     "$run/merged/compare.json" 2> /dev/null || { echo "$(date -u +%FT%TZ) $RUN: not scored, or its scorer gate failed"; continue; }
   [ ! -f "$out/DONE" ] || { echo "$(date -u +%FT%TZ) $RUN: gate done before"; continue; }

@@ -32,7 +32,8 @@
 #   kref   NODE            copy M10-KIB4-a40-bf16's merged results, compare and receipt from node C to NODE ix1/m10/refs
 #   gate   NODE RUN...     detached paired bootstraps (full, transfer; as ixchain.sh runs them) of a scored run on NODE
 #                          (an M10 or arm-factory run, read in place) minus M10-KIB4-a40-bf16 ->
-#                          ix1/m10/gate/RUN/paired-boot-{full,transfer}-vs-kib4a40.json
+#                          ix1/m10/gate/RUN/paired-boot-{full,transfer}-vs-kib4a40.json; M10_GATE_WAIT=1 waits for
+#                          each run's chain to finish scoring and its own bootstraps first
 #   gstatus NODE RUN...    which gate bootstraps exist
 #   gfetch NODE RUN...     the run's receipt, compare and kit index plus the gate bootstraps -> private/9b-m10/RUN/
 # Same-node copies (ship / soupcopy on node A or B) are local cp -a with the same SHA-256 list check.
@@ -255,8 +256,8 @@ EOF
     N=${1:?NODE}
     shift
     on "$N" "test -f $S/v2/9b/lux9b/m10/gate.sh" || { echo "mirror $SHA is not on node $N" >&2; exit 2; }
-    on "$N" "mkdir -p $R/logs; setsid nohup bash $S/v2/9b/lux9b/m10/gate.sh $M $* >> $R/logs/m10gate.log 2>&1 < /dev/null & \
-      echo gate bootstraps started on node $N: $*" ;;
+    on "$N" "mkdir -p $R/logs; M10_GATE_WAIT=${M10_GATE_WAIT:-0} setsid nohup bash $S/v2/9b/lux9b/m10/gate.sh $M $* \
+      >> $R/logs/m10gate.log 2>&1 < /dev/null & echo gate bootstraps started on node $N: $*" ;;
   gstatus)
     N=${1:?NODE}
     shift

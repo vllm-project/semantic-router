@@ -2,6 +2,20 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 17:15Z (10-03 01:15 UTC+8), M10 continuation
+
+- **Amendment 8** (`667202519`): the factory's node A queue measures only KF-a40, KF-a50 and KFxKIB-a40. M10 therefore
+  measures the factory's KIB4W2-a40 and KIB4L2-a40 itself, once each, as `M10-KIB4W2-a40-bf16` and
+  `M10-KIB4L2-a40-bf16` (IX1 entries `f31039025`; mirror `f31039025` on nodes A, B, C and E).
+- **X7-a40 formal done** (node A GPU7, 16:28–16:42Z, exit 0). The typed FINAL is choice / noul / score OK, with no
+  type collapsed. The formal path takes about 14 min per point now, not the planned 2 h.
+- **Index:** X7-a40 shard 2 of 7 (node B GPU7); X8-a40 shards 3–4 of 7 (node E GPU3 / 7).
+- **Reference bootstraps:** X5-a33 and KIB4-a33 were bootstrapped vs KIB4-a40 (CPU, node A). They are not
+  candidates, and they calibrate the paired interval width vs the current release. Values are private.
+- **Soups on node A for Y1 / Y2:** KIB4-a40 and X5-a33, copied B → C → A with equal lists.
+- `m10/gate.sh` and `ix.sh gate` gained `M10_GATE_WAIT=1`, which waits for a run's own scoring and bootstraps.
+- **GPU-h (continuation):** ≈ 2.0 (Index 1.7 so far, parity 0.1, formal 0.23).
+
 ## 2026-10-02 16:35Z (10-03 00:35 UTC+8), M10 continuation
 
 - **Index runs** (mirror `96c1bd3ff`; parity 86 / 86, max |Δp| 0.0 for both):
