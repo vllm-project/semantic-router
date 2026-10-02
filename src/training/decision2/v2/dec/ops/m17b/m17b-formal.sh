@@ -21,7 +21,7 @@ shift 2
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "MIRROR_SHA must be a full commit SHA" >&2; exit 2; }
 NODES=${DEV2_NODES_FILE:-$HOME/.config/decision2/nodes.env}
 addr() { awk -F= -v k="node-$1" '$1 == k { print substr($0, length(k) + 2); exit }' "$NODES"; }
-on() { local n=$1; shift; ssh -o BatchMode=yes -o ConnectTimeout=30 "$(addr "$n")" "$@"; }
+on() { local n=$1; shift; ssh -n -o BatchMode=yes -o ConnectTimeout=30 "$(addr "$n")" "$@"; }
 MIR=$SHA-src_training_decision2
 S=/data/dev2/src/$MIR/src/training/decision2
 OPS=$S/v2/dec/ops/m17
@@ -48,7 +48,7 @@ case "$STAGE" in
       on f "test -f $M/soup/$n/DONE" || { echo "$n is not linked" >&2; exit 3; }
       cmds+="M17_COTENANT=1 M17_NODE=f bash $OPS/m17-lines.sh read $MIR $G $n $(ck "$n") $BASE dev css-pilot; "
     done
-    on f "mkdir -p $M/logs && setsid nohup bash -c '$cmds' > $M/logs/m17b-readouts-g$G-$(date -u +%H%M%S).log 2>&1 < /dev/null &"
+    on f "mkdir -p $M/logs; setsid nohup bash -c '$cmds' > $M/logs/m17b-readouts-g$G-$(date -u +%H%M%S).log 2>&1 < /dev/null &"
     echo "readouts of $* on node F GPU$G started" ;;
   select)
     TAG=${1:?TAG}; shift
@@ -59,7 +59,7 @@ case "$STAGE" in
     TAG=${1:?TAG} G=${2:?GPU}; shift 2
     mode=run; [ "$STAGE" = mlx ] && mode=mlx-run
     on f "test -f $SEL/$TAG/4b-finalists.json" || { echo "no select directory $TAG" >&2; exit 3; }
-    on f "mkdir -p $F/logs && M17_SELECT=$SEL/$TAG M17_NODE=f setsid nohup bash $OPS/m17-formal.sh $mode $MIR $G $* \
+    on f "mkdir -p $F/logs; M17_SELECT=$SEL/$TAG M17_NODE=f setsid nohup bash $OPS/m17-formal.sh $mode $MIR $G $* \
       > $F/logs/m17b-$STAGE-$TAG-g$G-$(date -u +%H%M%S).log 2>&1 < /dev/null &"
     echo "$STAGE of $* on node F GPU$G started (select $TAG)" ;;
   score)
