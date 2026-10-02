@@ -1,6 +1,7 @@
-"""Release spec and decision of a Decision-2.0-Vega-27B successor over M6-IB (27B worker, continuation #5).
+"""Release spec and decision of a Decision-2.0-Vega-27B successor over M6-IB (27B worker, continuations #5 and #6).
 
-The current revision is M6-IB (``main`` 781b2b24, record ``dev2-27b-indexfirst-2026-10-02``). Same rules as that
+The current revision is the organization card-only revision of M6-IB (``main`` e60bd8e3 on vllm-sr, record
+``dev2-org-2026-10-02``; M6-IB's weights, released at 781b2b24, record ``dev2-27b-indexfirst-2026-10-02``). Same rules as that
 release (user rule 2026-10-02 09:55 UTC+8, progressive release 11:35): the gate is the frozen candidate's private Jev
 Decision Index paired bootstrap minus the current revision's (2,000 replicates, 95% lower bound > 0; ``gate.py``
 IF1 binds both IX1 run receipts to these weights and to M6-IB's), plus R3 (no type collapsed on the formal typed
@@ -12,7 +13,7 @@ Candidates (ARMS): cross-arm averages of the two M6 arms on the same base (the 2
 averages usually score above both parents), i.e. exact weighted LoRA soups of the four seeds of M6-IB (A20 + IB1-r3)
 and M6-IB2 (A20 + IB1-r3 + IB2), rank 512.
 
-The spec derives from the current revision's spec (specs/dev2-27b-27bif-M6-IB.json): roster, peers, runtime,
+The spec derives from the current revision's spec (specs/dev2-27b-org.json): roster, peers, runtime,
 remote code, licence and the product card carry over; the weights (qwen-adapter: the frozen soup checkpoint itself),
 the scored run, the gate evidence and the card's Index input and assets (the default generator, banner concept A)
 are the candidate's.
@@ -36,7 +37,7 @@ from v2.release import gate, layout
 
 ROOT = Path(__file__).resolve().parents[5]
 RECORD = Path(__file__).resolve().parents[1]
-BASE_SPEC = ROOT / "v2/release/specs/dev2-27b-27bif-M6-IB.json"
+BASE_SPEC = ROOT / "v2/release/specs/dev2-27b-org.json"
 SPECS = ROOT / "v2/release/specs"
 NAME = "Decision-2.0-Vega-27B"
 REPO = f"vllm-sr/{NAME}"
@@ -46,12 +47,12 @@ M6 = "/data/dev2/runs/27b/m6"
 GATES = f"{M6}/gates"
 CURRENT_ARM = "M6-IB"
 CURRENT = {
-    "revision": "781b2b2431abccbdcfcbfa98b66c80b332725513",
-    "gate": f"{REL}/dev2-27b-27bif-M6-IB-release-20261002T070233Z/receipts/gate.json",
-    "decision": f"{DECISIONS}/{NAME}.decision.27bif-M6-IB.json",
-    "gate_sha256": "2851727bf85d1f5af551d67e3bfbfd3cd89972655f185394f2fe715454d4ca99",
-    "decision_sha256": "c7b9b224ebb1b734adf0b00006821754176e887f77ec95adde8d7ed23e74964a",
-    "manifest_sha256": "4d1ca0f55690352b1b524eba95bc4169fd2b3bea2ccf66f4f33184f96cf26cab",
+    "revision": "e60bd8e346110b3348b6e5a25c07329d350c4b21",
+    "gate": f"{REL}/dev2-org-27B-20261002T113747Z/receipts/gate.json",
+    "decision": f"{DECISIONS}/{NAME}.decision.org.json",
+    "gate_sha256": "e9591a86c2ba07b1496da1206e5277e68044dfd443e5205f241b82974b0aef6b",
+    "decision_sha256": "08d19f0e7d482fef162efb2231624f4d52f03ad86f194cac4a2a7257faa03aea",
+    "manifest_sha256": "23a040164046b0fcd4a88006cabc474d0e965a5f091806b027b933ce2a5b24e4",
     "weights_identity": "e50fb4c130483d1c889c226f726fcca1e134a3ae0292f20907586738c06c9680",
 }
 CURRENT_RUN = f"{M6}/{CURRENT_ARM}/formal"
@@ -72,22 +73,26 @@ CROSS = (
 ARMS = {
     "M6-IBxIB2-m50": {
         "weights": "1/4 per seed (each arm 1/2)",
-        "vendor": "973587a17e620469024cfe197cee0071e8a8de2d",
+        "vendor": "8351e7c4d90e21aa2166a39427febb8e325cc0cc",
     },
     "M6-IBxIB2-m67": {
         "weights": "1/6 per M6-IB seed and 1/3 per M6-IB2 seed (M6-IB2 2/3)",
-        "vendor": "973587a17e620469024cfe197cee0071e8a8de2d",
+        "vendor": "8351e7c4d90e21aa2166a39427febb8e325cc0cc",
     },
 }
-CHOICE = None  # set to the released arm once its Index lower bound vs M6-IB is > 0
+# the larger Index lower bound vs M6-IB of the two qualifying arms
+CHOICE = "M6-IBxIB2-m50"
 DECIDED_BY = (
     "coordinator (parent agent), Decision 2.0 program: the user's Index-first rule of 2026-10-02 09:55 UTC+8 "
     "(release gate = a significantly positive private Index delta vs the current release; integrity checks; "
     "references not blocking) and the progressive-release directive of 11:35 UTC+8, applied to the 27B tier by the "
-    "27B worker (continuation #5 of 2026-10-02: the cross-arm average of M6-IB and M6-IB2, released if its Index "
-    "lower bound vs M6-IB is > 0)"
+    "27B worker (continuations #5 and #6 of 2026-10-02: the cross-arm average of M6-IB and M6-IB2, released if its "
+    "Index lower bound vs M6-IB is > 0; COORDINATION 21:20 UTC+8: release the larger lower bound on top of the "
+    "organization card-only revision e60bd8e3)"
 )
-PREPARED_BY = "Decision 2.0 27B worker, continuation #5 (worktree vllm-sr-dev2-27b)"
+PREPARED_BY = (
+    "Decision 2.0 27B worker, continuations #5 and #6 (worktree vllm-sr-dev2-27b)"
+)
 
 
 def sha(path: str | Path) -> str:
@@ -161,7 +166,7 @@ def spec(arm: str) -> dict:
         "v2.release.card_assets (banner concept A) in the card render environment of the earlier rounds; "
         "card.speed keeps the current revision's bench receipt (same base, runtime and shapes).",
         "replaces_spec": {
-            "spec": "v2/release/specs/dev2-27b-27bif-M6-IB.json",
+            "spec": "v2/release/specs/dev2-27b-org.json",
             "sha256": sha(BASE_SPEC),
         },
         "previous": old["_release"],

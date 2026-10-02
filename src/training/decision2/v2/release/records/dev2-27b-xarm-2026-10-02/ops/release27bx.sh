@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Decision-2.0-Vega-27B successor over M6-IB (27B worker, continuation #5): release27b.sh of dev2-27b-indexfirst-2026-10-02
-# with this record's spec and decision (make_27bx.py), on top of the current revision 781b2b24 (M6-IB), purging
-# M6-IB's superseded weight blobs against M6-IB's verified download. One node-A GPU with 130 GB free: GPU0-1 as a
+# Decision-2.0-Vega-27B successor over M6-IB (27B worker, continuations #5 and #6): release27b.sh of
+# dev2-27b-indexfirst-2026-10-02 with this record's spec and decision (make_27bx.py), on top of the current revision
+# e60bd8e3 (the organization card-only revision of M6-IB), purging M6-IB's superseded weight blobs against M6-IB's
+# verified download (781b2b24; e60bd8e3 serves the same weight files). One node-A GPU with 130 GB free: GPU0-1 as a
 # shared-lease co-tenant (owner.release-27b-27bx), any other GPU only if its lease has no owner, this track's or a
 # released one (set aside as owner.prev-27bx-<UTC>; release.sh then writes owner), the formal runs' image dbe5f32b
 # with its kernels, HIP_FORCE_DEV_KERNARG=1, the Qwen3.8-27B base snapshot and a fresh copy of the ARM's frozen formal
@@ -9,7 +10,7 @@
 #   --prerelease  release.sh without upload on the final spec and decision: build, native and card examples, AutoModel
 #                 and pipeline before upload, exact parity of typed-final 1,600 / css15 6,547 / public231 231 against
 #                 the formal run's and of mlx-diag 2,275 against the mlx-diag run's predictions, then verify_bundle
-#   --release     only if the Hub main is the current revision 781b2b24 (never concurrently: checked right before the
+#   --release     only if the Hub main is the current revision e60bd8e3 (never concurrently: checked right before the
 #                 upload) and no other release.sh runs on node A: hf_headroom.sh, then release.sh --upload --collect
 #                 --already-collected --hub-site tf518=... with the formal panels' parity before upload and after the
 #                 real download, AutoModel against native on every scored prompt and the Hub trust_remote_code smoke
@@ -44,7 +45,7 @@ COLL=vllm-sr/decision-20-6ab7cf7bdfb506bf8269cb00
 TRACK=release-27b-27bx
 IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1
 name=Decision-2.0-Vega-27B REPO=vllm-sr/Decision-2.0-Vega-27B
-superseded=781b2b2431abccbdcfcbfa98b66c80b332725513
+superseded=e60bd8e346110b3348b6e5a25c07329d350c4b21
 SPEC=$S/v2/release/specs/dev2-27b-27bx-$ARM.json
 DECISION=$R/$name.decision.27bx-$ARM.json
 [[ -f "$SPEC" && -f "$DECISION" ]] || { echo "no spec / decision for $ARM in this mirror" >&2; exit 2; }

@@ -3,7 +3,7 @@
 # v2.release.card_assets (banner concept A, the four charts) in the card render environment of the earlier rounds
 # (render_env.sh of dev2-27b-indexfirst-2026-10-02: CPython 3.12.13, matplotlib 3.11.2, Pillow 12.3.0, the Inter 4.1
 # fonts and the vLLM-SR logo of their receipts). The render spec is the current revision's spec
-# (specs/dev2-27b-27bif-M6-IB.json) with the ARM's report and mlx-diag score (make_27bx.paths); the inputs are read in
+# (specs/dev2-27b-org.json) with the ARM's report and mlx-diag score (make_27bx.paths); the inputs are read in
 # place on node A and the outputs (assets/ and card-assets.json, which pins input and output digests) go to
 # $PRIV/27b/, where the release build re-checks the receipt against the original files.
 # Usage (node A): bash <mirror>/v2/release/records/dev2-27b-xarm-2026-10-02/ops/render27bx.sh ARM
