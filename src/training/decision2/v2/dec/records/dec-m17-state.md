@@ -4,7 +4,7 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17` (r
 stopped after creating the worktree, nothing had run). Prereg `da770d98a`, ops `1ce8b2220` (mirror on nodes E / F),
 data lock `4f68f1eb0`.
 
-## 2026-10-02 06:40Z — stage 2 training (wave 1 running, wave 2 queued)
+## 2026-10-02 06:15Z — stage 2 training (wave 1 running, wave 2 queued)
 
 - 05:55Z coordinator: `4b-LHS17SD` is the released Nox-4B (`b285e7a1`, by 5e7b8132); M17 is now the 4B trainer and
   the single Nox-4B publisher. 5e7b8132's branch is merged here (`8af7f2d89`; `ix1/launch.sh` conflict resolved as
