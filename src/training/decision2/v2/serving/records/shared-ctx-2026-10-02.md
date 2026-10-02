@@ -64,9 +64,9 @@ mode, answers re-scored).
   the exact path, so its answers are the exact path's bit for bit. `fallback="rows"` (`exact_rows`) re-scores only
   those answers in their exact-path micro-batch's padded length and mask regime; that is not bit-identical to the
   full exact batch, because the exact path itself is not batch-invariant (GEMM kernels depend on the row count).
-- **Fast path (phase A).** Tree mode runs the original decoder-layer forwards while it runs (the fused forwards read
-  tensor masks only); HIP graphs fall back to eager for the shared calls. Checked on a trial merge with
-  `xunzhuo/decision-2-runtime-a` (`xunzhuo/decision-2-shared-ctx-on-runtime-a-trial`, not for integration).
+- **Fast path (phase A, merged into this branch at `393f72112`).** Tree mode runs the original decoder-layer forwards
+  while it runs (the fused forwards read tensor masks only); HIP graphs fall back to eager for the shared calls; the
+  exact path keeps both. The break-even thresholds account for the faster HIP-graph exact path.
 
 ## Results (summary; numbers in the private report)
 
