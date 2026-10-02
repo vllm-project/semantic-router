@@ -238,15 +238,16 @@ EOF
       ond "test ! -e $R/runs/$ARM/shard-$k" || { echo "node D already has shard-$k of $ARM" >&2; exit 3; }
     done
     ond "umask 077; mkdir -p $R/runs/$ARM"
-    for k in $ks; do
-      onc "tar -C $R/runs/$ARM --exclude=shard-$k/triton --exclude=shard-$k/home -cf - shard-$k" |
-        ond "tar -C $R/runs/$ARM -xf -"
+    for k in $ks; do  # relayed through node B's transfer key: the workstation's path to node D is slow
+      onb "$XFER root@${C#*@} 'tar -C $R/runs/$ARM --exclude=shard-$k/triton --exclude=shard-$k/home -cf - shard-$k' | \
+        $XFER root@${D#*@} 'tar -C $R/runs/$ARM -xf -'"
       c=$(onc "cd $R/runs/$ARM/shard-$k && find . \\( -path ./triton -o -path ./home \\) -prune -o -type f -print | sort | xargs sha256sum")
       t=$(ond "cd $R/runs/$ARM/shard-$k && find . -type f | sort | xargs sha256sum")
       [ -n "$c" ] && [ "$c" = "$t" ] || { echo "node D's copy of shard $k differs from node C's" >&2; exit 3; }
       echo "shard $k: $(wc -l <<< "$t") files copied node C -> node D, SHA-256 lists equal"
     done
-    onc "cd $R/runs/$ARM && tar -cf - launcher-run-only-*.json" | ond "tar -C $R/runs/$ARM --keep-old-files -xf -"
+    onb "$XFER root@${C#*@} 'cd $R/runs/$ARM && tar -cf - launcher-run-only-*.json' | \
+      $XFER root@${D#*@} 'tar -C $R/runs/$ARM --keep-old-files -xf -'"
     echo "node C launcher records copied" ;;
   score)
     has_mirror d
