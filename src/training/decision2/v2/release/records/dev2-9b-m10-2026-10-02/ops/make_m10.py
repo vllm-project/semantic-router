@@ -8,8 +8,8 @@ collapsed on the formal typed panel), IF3 (the row-level Index contamination aud
 release items 2-7. v3, human transfer, mlx-diag, the tier gates, overlap exposure and public 231 are references
 (``1_successor_references``); C1 is not run. The highest measured passer ships (``CHOICE``; values stay private).
 
-The spec derives from the spec of the current revision (specs/dev2-9b-card4.json, ``main`` 7195360d, the banner-A
-card revision of K-a13IB): roster, peers, runtime (BF16-resident, forward token budget, Transformers remote code),
+The spec derives from the spec of the current revision (specs/dev2-9b-org.json, ``main`` 6af07f36, the organization
+card-only revision of K-a13IB on vllm-sr): roster, peers, runtime (BF16-resident, forward token budget, Transformers remote code),
 remote code, licence and the product card carry over; the weights, the scored run, the gate evidence and the card's
 Index input and assets (the default generator, banner concept A) are the candidate's. The scored run is the
 candidate's sealed CAL698 formal run (m9/formal.sh, runner mirror unchanged since 787abdc54) returned to T = 1
@@ -34,20 +34,20 @@ from v2.release import gate
 
 ROOT = Path(__file__).resolve().parents[5]
 RECORD = Path(__file__).resolve().parents[1]
-BASE_SPEC = ROOT / "v2/release/specs/dev2-9b-card4.json"
+BASE_SPEC = ROOT / "v2/release/specs/dev2-9b-org.json"
 SPECS = ROOT / "v2/release/specs"
 NAME = "Decision-2.0-Lux-9B"
-REPO = f"llm-semantic-router/{NAME}"
+REPO = f"vllm-sr/{NAME}"
 REL = "/data/dev2/runs/release"
 FORMAL = "/data/dev2/runs/9b/formal-m9"
 DECISIONS = f"{REL}/decisions"
 CURRENT_RUN = f"{REL}/dev2-9b-ka13ib-t1-derived"
 CURRENT_MLX = f"{REL}/dev2-9b-ka13ib-t1-derived-mlx"
 CURRENT = {
-    "revision": "7195360df53b30ae625435fb3d9ec21bdbda279c",
-    "gate_sha256": "8f424a317431ee1d9931762ebb58e666c851a29226ea71a1c4d1f20797575686",
-    "decision_sha256": "fdcf6e3a1fea9b18c017484b259ca8140a979db7f6b8d1d8171aaacf9dbcf715",
-    "manifest_sha256": "227aef8e9c67e895a77f96e5ad57247554966ad0a5cb6287f70716e97793f59d",
+    "revision": "6af07f3684132ab684d4f064a723ae623ec3956f",
+    "gate_sha256": "2606a94f6e9e86c3bd8a8a152c053a66d80b3f441eb68012a968589ff7eabe31",
+    "decision_sha256": "821d747a4d6f6509f46d5cdb75d309ee45f38d7e390201cd5d03aa5749af8ba7",
+    "manifest_sha256": "3272c53173e254ceaf614599677b18e4684d7a5d73a39b865e39e6f3c5d46304",
     "weights_identity": "b9a65d601bb6780c2c07998aecbfab322ede459c26fcb8ed262281ad08f909fb",
 }
 VENDOR = "/data/dev2/src/787abdc54946ccdb05e52cc5c34ecb619dced237-src_training_decision2/src/training/decision2"
@@ -133,8 +133,8 @@ def paths(cand: str) -> dict:
         "in": inputs,
         "private": f"/data/dev2/private/release/m10/{cand}",
         "gates": f"{inputs}/gates",
-        "current_gate": f"{inputs}/current/card4-9b-gate.json",
-        "current_decision": f"{inputs}/current/{NAME}.decision.card4.json",
+        "current_gate": f"{inputs}/current/org-9b-gate.json",
+        "current_decision": f"{inputs}/current/{NAME}.decision.org.json",
     }
 
 
@@ -177,7 +177,7 @@ def spec(cand: str) -> dict:
         "(banner concept A); card.speed keeps the current revision's bench receipt (same architecture, runtime and "
         "shapes).",
         "replaces_spec": {
-            "spec": "v2/release/specs/dev2-9b-card4.json",
+            "spec": "v2/release/specs/dev2-9b-org.json",
             "sha256": sha(BASE_SPEC),
         },
         "previous": old["_release"],

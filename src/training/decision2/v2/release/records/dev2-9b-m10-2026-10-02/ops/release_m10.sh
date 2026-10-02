@@ -6,7 +6,7 @@
 #   --prerelease  release.sh without upload on the final spec and decision: build, native and card examples, AutoModel
 #                 and pipeline before upload, exact parity of typed-final 1,600 / css15 6,547 / public231 231 /
 #                 mlx-diag 2,275 against the T = 1 derivation of the formal run, then verify_bundle
-#   --release     only if the Hub main is the current revision 7195360d (checked right before the upload; never
+#   --release     only if the Hub main is the current revision 6af07f36 (checked right before the upload; never
 #                 concurrently) and no other release.sh runs on node A: hf_headroom.sh, then release.sh --upload
 #                 --collect --already-collected --hub-site tf518=... with the same parity before upload and after the
 #                 real download, AutoModel against native on every scored prompt and the Hub trust_remote_code smoke
@@ -34,12 +34,12 @@ RENAME_OPS=$S/v2/release/records/dev2-rename-9b-27b-2026-09-29/ops
 G=/data/dev2/private/panels/goldfree
 D=/data/dev2/runs/release/decisions
 HFPY=/data/dev2/tools/hf-cli/bin/python
-COLL=llm-semantic-router/decision-20-6ab7cf7bdfb506bf8269cb00
+COLL=vllm-sr/decision-20-6ab7cf7bdfb506bf8269cb00
 LEASE=release-9b-m10
 IMAGE=decision20-train-fast:host2
 IMAGE_ID=sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54
-name=Decision-2.0-Lux-9B REPO=llm-semantic-router/Decision-2.0-Lux-9B
-superseded=7195360df53b30ae625435fb3d9ec21bdbda279c
+name=Decision-2.0-Lux-9B REPO=vllm-sr/Decision-2.0-Lux-9B
+superseded=6af07f3684132ab684d4f064a723ae623ec3956f
 SPEC=$S/v2/release/specs/dev2-9b-m10-$CAND.json
 DECISION=$R/$name.decision.m10-$CAND.json
 [[ -f "$SPEC" && -f "$DECISION" ]] || { echo "no spec / decision for $CAND in this mirror" >&2; exit 2; }

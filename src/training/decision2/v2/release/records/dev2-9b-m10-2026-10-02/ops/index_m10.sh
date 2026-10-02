@@ -34,7 +34,7 @@ out = Path(sys.argv[1])
 api = HfApi()
 mains = {}
 for tier, codename in (("0.6B", "Kai"), ("0.8B", "Eos"), ("2B", "Sol"), ("4B", "Nox"), ("27B", "Vega")):
-    repo = f"llm-semantic-router/Decision-2.0-{codename}-{tier}"
+    repo = f"vllm-sr/Decision-2.0-{codename}-{tier}"
     sha = api.model_info(repo).sha
     path = hf_hub_download(repo, "MODEL_MANIFEST.json", revision=sha)
     (out / tier).mkdir(parents=True, exist_ok=True)

@@ -75,7 +75,7 @@ def main() -> None:
     )
     node_copy = Path(args["--node-copy"])
     assert mode in ("plan", "apply") and not receipt.exists()
-    assert repo == "llm-semantic-router/Decision-2.0-Lux-9B"
+    assert repo == "vllm-sr/Decision-2.0-Lux-9B"
     before = state(repo)
     assert (
         before["heads"].get("branch:main") == new_revision

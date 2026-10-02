@@ -3,7 +3,7 @@
 # on the servers) with the default v2.release.card_assets (banner concept A, the four charts) in the card render
 # environment of the earlier rounds (dev2-27b-indexfirst-2026-10-02/ops/render_env.sh: CPython 3.12.13, matplotlib
 # 3.11.2, Pillow 12.3.0, the Inter 4.1 fonts and the vLLM-SR logo of their receipts). The render spec is the current
-# revision's card spec (specs/dev2-9b-card4.json) with the candidate's report and mlx-diag score (make_m10.paths);
+# revision's card spec (specs/dev2-9b-org.json) with the candidate's report and mlx-diag score (make_m10.paths);
 # the inputs are read in place on node A and the outputs (assets/ and card-assets.json, which pins input and output
 # digests) go to $PRIV/9b/, where the release build re-checks the receipt against the original files.
 # Usage (node A): bash <mirror>/v2/release/records/dev2-9b-m10-2026-10-02/ops/render_m10.sh CAND
