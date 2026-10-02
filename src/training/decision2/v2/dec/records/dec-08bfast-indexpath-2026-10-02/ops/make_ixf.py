@@ -183,10 +183,10 @@ def spec(key: str) -> dict:
         "as BF16 autocast rounds them and every other tensor bit for bit in FP32, and the runtime holds the "
         "backbone's BF16-exact Linear weights in BF16, the values BF16 autocast multiplies with. The runtime, the "
         "Transformers remote code (AutoModel with trust_remote_code) and the forward token budget are the current "
-        "revision's. Checked on one node A GPU, in the scored image with a copy of the persisted Triton autotune "
-        "cache of each formal run, against the sealed formal predictions of every scored prompt (typed-final "
-        "1,600, css15 6,547, public231 231) and of the mlx-diag diagnostic (2,275) by release.sh --parity, and "
-        "AutoModel against the native runtime on every scored prompt."
+        "revision's. Checked on one GPU, in the scored image with a copy of the persisted Triton autotune cache of "
+        "the formal run, against the sealed formal predictions of every scored prompt (typed-final 1,600, css15 "
+        "6,547, public231 231) by release.sh --parity before and after the download, and AutoModel against the "
+        "native runtime on every scored prompt."
     )
     s["scored"] = {
         "label": f"post-key same-panel run m16-{t['point']} at T = 1 (the sealed M16 formal run, collected without "
