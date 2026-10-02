@@ -1020,6 +1020,43 @@ class M6ScriptTest(unittest.TestCase):
                 calls,
             )
 
+    def test_index_stage_from_soup_needs_opt_in(self):
+        soup = "ab" * 32
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir, log = Path(tmp) / "bin", Path(tmp) / "ssh.log"
+            bin_dir.mkdir()
+            (
+                bin_dir / "ssh"
+            ).write_text(  # no PACKAGE.json on node B; the soup names its identity
+                "#!/usr/bin/env bash\n"
+                f'cmd="${{@: -1}}"; echo "$cmd" >> {log}; cat > /dev/null\n'
+                'case "$cmd" in "test -f "*PACKAGE.json) exit 1 ;; '
+                f"*soup_manifest.json) echo {soup} ;; *) echo ok ;; esac\n"
+            )
+            (bin_dir / "ssh").chmod(0o755)
+            nodes = Path(tmp) / "nodes.env"
+            nodes.write_text("node-b=root@b\nnode-c=root@c\nnode-d=root@d\n")
+            env = dict(
+                os.environ,
+                PATH=f"{bin_dir}:{os.environ['PATH']}",
+                DEV2_NODES_FILE=str(nodes),
+            )
+            run = ["bash", str(M6 / "m6-index.sh"), "0" * 40, "M6-IBX", "stage"]
+            out = subprocess.run(
+                run, capture_output=True, text=True, stdin=subprocess.DEVNULL, env=env
+            )
+            self.assertEqual(out.returncode, 3)
+            self.assertIn("M6_INDEX_FROM_SOUP=1", out.stderr)
+            out = subprocess.run(
+                run,
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                env=dict(env, M6_INDEX_FROM_SOUP="1"),
+            )
+            self.assertEqual(out.returncode, 0, out.stderr)
+            self.assertIn(f"--model-sha256 {soup}", log.read_text())
+
     def test_contrast_guard_moves_m4_contrast_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             gates = Path(tmp)

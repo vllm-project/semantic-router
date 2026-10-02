@@ -91,13 +91,19 @@ has_mirror() {  # NODE: the mirror with ARM's DIAGNOSTIC entry is on that node
     { echo "mirror $SHA has no DIAGNOSTIC entry $ARM -> $PKG" >&2; return 2; }
 }
 sums() { echo "cd $1 && find . -type f | sort | xargs -P 8 -n 4 sha256sum | sort -k2"; }
-model_sha() {
-  local model
-  onb "test -f $R6/$ARM/package/PACKAGE.json && test -f $R6/$ARM/checkpoint/soup_manifest.json" ||
-    { echo "no frozen package / soup for $ARM on node B" >&2; return 3; }
-  model=$(onb "python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"model_sha256\"])' $R6/$ARM/package/PACKAGE.json")
-  [[ "$model" =~ ^[0-9a-f]{64}$ ]] || { echo "bad model SHA-256 in PACKAGE.json" >&2; return 3; }
-  echo "$model"
+model_sha() {  # the frozen package's identity; M6_INDEX_FROM_SOUP=1: the soup's, for a candidate without a formal run
+  local model soup
+  onb "test -f $R6/$ARM/checkpoint/soup_manifest.json" || { echo "no frozen soup for $ARM on node B" >&2; return 3; }
+  soup=$(onb "python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"output\"][\"model_sha256\"])' $R6/$ARM/checkpoint/soup_manifest.json")
+  [[ "$soup" =~ ^[0-9a-f]{64}$ ]] || { echo "bad model SHA-256 in soup_manifest.json" >&2; return 3; }
+  if onb "test -f $R6/$ARM/package/PACKAGE.json"; then
+    model=$(onb "python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"model_sha256\"])' $R6/$ARM/package/PACKAGE.json")
+    [ "$model" = "$soup" ] || { echo "PACKAGE.json and the soup name different identities" >&2; return 3; }
+  elif [ "${M6_INDEX_FROM_SOUP:-0}" != 1 ]; then
+    echo "no frozen package for $ARM on node B (M6_INDEX_FROM_SOUP=1 stages its soup at T = 1; amendment 7)" >&2
+    return 3
+  fi
+  echo "$soup"
 }
 copy_checkpoint() {  # NODE: node B soup checkpoint -> that node's $CK over node B's transfer key, SHA-256 lists equal
   local addr b t
