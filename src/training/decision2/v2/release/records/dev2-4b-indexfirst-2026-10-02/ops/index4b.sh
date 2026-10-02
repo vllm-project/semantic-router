@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Decision-2.0-Nox-4B Index-first release (worker 5e7b8132): the card's private Index input on node A, built by
 # python -m v2.release.card_index (schema dev2-card-index/1: board-served parameter counts, the audited footnote).
-#   runs       every family point of the latest released Index input (the 9B successor's, round 3 plus its own 9B
-#              point), one run per scored weights; plus this candidate's kit run (kit index.json of the IX1 run on
+#   runs       every family point of the latest released Index input (the 0.8B Index-first release's, 2026-10-02 04:23Z:
+#              the 9B successor's plus its own 0.8B point), one run per scored weights; plus this candidate's kit run
+#              (kit index.json of the IX1 run on
 #              exactly these weights: balanced skill, area skills x 100, its SHA-256)
 #   board      the public board snapshot of 2026-09-28 (Space index a5a4aa0a)
 #   manifests  MODEL_MANIFEST.json of every tier's current Hub main; 4B = the candidate's restaged package (its
@@ -15,7 +16,7 @@ set -euo pipefail
 CAND=${1:?CAND}
 S=$(cd "$(dirname "$0")/../../../../.." && pwd)
 PRIV=/data/dev2/private/release/4bif/$CAND
-BASE=/data/dev2/private/release/ka13ib/decision-index-card.json
+BASE=/data/dev2/private/release/ixf-0p8b/decision-index-card.json
 BOARD=/data/dev2/private/eval/index021/space/index-v0.2.1-7cdcea3d.json
 BOARD_SHA=a5a4aa0a2cce1520
 HFPY=/data/dev2/tools/hf-cli/bin/python
