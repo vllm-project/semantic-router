@@ -83,27 +83,38 @@ def state_key(state: Any) -> str:
 
 class PriorSets:
     def __init__(self, paths: list[Path]) -> None:
-        self.states: set[str] = set()
-        self.leaves: set[str] = set()
+        self.states: dict[str, set[str]] = collections.defaultdict(set)
+        self.leaves: dict[str, set[str]] = collections.defaultdict(set)
         self.files = {}
+        replaced = set(fam.REPLACES.values())
         for path in paths:
             n = 0
             for line in path.open(encoding="utf-8"):
                 if not line.strip():
                     continue
                 item = json.loads(line)
-                self.states.add(state_key(item["state"]))
-                self.leaves.update(normalize(leaf) for leaf in leaves(item["state"]))
+                bucket = item["family"] if item["family"] in replaced else ""
+                self.states[bucket].add(state_key(item["state"]))
+                self.leaves[bucket].update(
+                    normalize(leaf) for leaf in leaves(item["state"])
+                )
                 n += 1
             self.files[str(path)] = {"sha256": file_sha256(path), "rows": n}
-        self.leaf_overlap: collections.Counter = collections.Counter()
+        self.replaced_overlap: collections.Counter = collections.Counter()
 
     def __call__(self, item: Mapping[str, Any]) -> bool:
-        if state_key(item["state"]) in self.states:
-            return True
+        key = state_key(item["state"])
         field = fam.KEY_LEAVES.get(item["family"])
-        if field and normalize(str(item["state"][field])) in self.leaves:
-            return True
+        leaf = normalize(str(item["state"][field])) if field else None
+        for bucket in self.states:
+            if bucket and bucket == fam.REPLACES.get(item["family"]):
+                if key in self.states[bucket]:
+                    self.replaced_overlap[f"{item['family']}<-{bucket}"] += 1
+                continue
+            if key in self.states[bucket] or (
+                leaf is not None and leaf in self.leaves[bucket]
+            ):
+                return True
         return False
 
     def disclose(self, rows: list[dict[str, Any]]) -> dict[str, int]:
@@ -111,7 +122,7 @@ class PriorSets:
         for item in rows:
             if any(
                 len(normalize(leaf).split()) >= LEAF_MIN_TOKENS
-                and normalize(leaf) in self.leaves
+                and any(normalize(leaf) in known for known in self.leaves.values())
                 for leaf in leaves(item["state"])
             ):
                 out[item["family"]] += 1
@@ -206,6 +217,9 @@ def build(args: argparse.Namespace) -> int:
     unique, report["duplicates"] = dedup(rows)
     report["group_merges"] = merge_groups(unique)
     report["prior_leaf_overlap_disclosed"] = prior.disclose(unique)
+    report["replaced_family_state_overlap"] = dict(
+        sorted(prior.replaced_overlap.items())
+    )
     train = [r for r in unique if not is_dev(r["group_id"])]
     dev = [as_dev(r) for r in unique if is_dev(r["group_id"])]
     eval_only.check_rows(train + dev)

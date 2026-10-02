@@ -80,6 +80,8 @@ HYPOTHESIS_FIELDS = {
 }
 # Key leaves (prereg §2.0): a candidate whose leaf in this field equals a leaf of an IB1-3 row is removed.
 KEY_LEAVES = {"smish": "message", "w2c_act": "request", "fc_pick": "request"}
+# Amendment 1: an IB4 family that replaces an IB1-3 family is not deduplicated against it (overlap counted instead).
+REPLACES = {"sentfin3": "sentfin"}
 SQA2_QUESTIONS = 4000
 SQA2_PER_TITLE = 20
 SENTFIN3_PER_CLASS = 3000
@@ -361,7 +363,7 @@ def isarc2(
     for language, records in files.items():
         for record in records:
             report["read"] += 1
-            text = collapse(record.get("tweet"))
+            text = collapse(record.get("tweet" if language == "en" else "text"))
             flag = str(record.get("sarcastic") or "").strip()
             if not text or flag not in ("0", "1"):
                 report["drop_shape"] += 1
@@ -555,7 +557,8 @@ def fc_pick(
     records: Sequence[Mapping[str, Any]], report: collections.Counter, prior: Prior
 ) -> Rows:
     """Conversations listing at least two functions whose first assistant turn calls one: the called function as the
-    candidate (yes) and another listed function (no). Balanced per candidate name, so the name alone is at chance.
+    candidate (yes) and another listed function (no). Balanced overall (amendment 1); G4's candidate-only view checks
+    that the name alone does not tell the label.
     """
     rows: Rows = []
     for conv in ib2.glaive_conversations(records, report):
@@ -586,7 +589,8 @@ def fc_pick(
                         "candidate": name,
                     },
                     instructions=FCPICK_INSTRUCTIONS,
-                    cell=name,
+                    cell="all",
+                    candidate_name=name,
                 )
             )
 
