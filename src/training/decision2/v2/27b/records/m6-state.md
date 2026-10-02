@@ -369,6 +369,30 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
    chosen finalist's `m6-stage-a.sh` (node A, item 8 / release) runs before `m6-link.sh remove`, which deletes node
    B's link directory.
 
+## Hand-off (worker 4 355ad916 → continuation, 08:45Z) — read this first
+
+- **Done:** M6-IB released (`Decision-2.0-Vega-27B@781b2b24`, record
+  `v2/release/records/dev2-27b-indexfirst-2026-10-02.md`); gist 06 and a COORDINATION note written. The current Vega is
+  M6-IB: the next 27B release needs an Index lower bound above 0 **vs M6-IB** (not A20r).
+- **Running (detached, node D, mirror `ceefc7863`):** GPU0–2 M7-IB124ML s1 / s2 / s3, GPU3–4 M7-IB14ML s1 / s2.
+  Logs `/data/dev2/runs/27b/<ARM-SEED>/driver.log`. Expected ends ≈ 00:20Z (IB14ML) and ≈ 04:55Z (IB124ML) on
+  10-03. No chain exists for M7 yet: once each seed's `receipts/full.json` exists, its lease goes `reserved-idle`.
+- **Next steps:**
+  1. **Measure the run-rate** after the first saves (≈ 1 h after launch): if total M7 use projects past 120 GPU-h, stop
+     M7-IB124ML-s3.
+  2. **Cross-arm average (coordinator finding of 15:55 UTC+8)**: M6-IB s1 / s2 + M6-IB2 s1 / s2 as one 4-member soup
+     (rank 512, equal weights = the mean of the two soups). Needs: `lora_soup` with 4 members, a new loaded-parameter
+     count in `m6-index.sh` stage, the ARM regex extended, R3 types, an audit-arm over both mixtures, then one Index
+     run (≥ 8 shards). Shards fit on node D GPU5–7 + node E GPU0 / 1 / 6 / 7 (`stage-e`) + node B GPU0. Cheap
+     (CPU merge, ≈ 9 GPU-h Index); counts against M7's 120.
+  3. **M7 soups + Index:** soup each arm (3 members → rank 384, 2 members → rank 256; loaded counts change), restage,
+     Index vs M6-IB in release form, release the best with lower bound > 0 (`release27b.sh` needs a new spec and
+     decision; main must equal `781b2b24`, superseded node copy is M6-IB's).
+  4. Shared Index pool (COORDINATION 15:50): node C GPU1–7 and node A GPU0 / 3–6 are also allowed for Index shards.
+- **Leases:** node D GPU0–4 are 27B `running`; node D GPU5–7 eval-ix1 released (free); node B GPU0 27B reserved-idle;
+  node E GPU0 / 1 / 6 / 7 free (no owner); never node E GPU4–5. Node A GPU0's shared release lease is removed.
+- **Parked:** M6-IB2PN (soup exists; chain stopped at its readout), the M7 warm-start hedge.
+
 ## Poll log (newest first)
 
 - 08:25Z (poll 26):
