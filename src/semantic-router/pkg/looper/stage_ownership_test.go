@@ -211,6 +211,32 @@ func TestReMoMFinalStageOwnership(t *testing.T) {
 		assert.Equal(t, StreamingEligible, ownership.Eligibility)
 	})
 
+	t.Run("explicit synthesis model preserves adapter when ModelRef has LoRAName", func(t *testing.T) {
+		req := &Request{
+			IsStreaming: true,
+			Algorithm: &config.AlgorithmConfig{
+				Type: config.DecisionAlgorithmReMoM,
+				ReMoM: &config.ReMoMAlgorithmConfig{
+					BreadthSchedule: []int{2},
+					SynthesisModel:  "base-llama-model",
+				},
+			},
+			ModelRefs: []config.ModelRef{
+				{
+					Model:    "base-llama-model",
+					LoRAName: "lora-adapter",
+					Weight:   1.0,
+				},
+			},
+		}
+
+		ownership := ResolveFinalStageOwnership(req)
+		assert.Equal(t, "lora-adapter", ownership.TargetModel)
+		assert.Equal(t, StageRoleSynthesis, ownership.StageRole)
+		assert.True(t, ownership.IsFinalUserVisible)
+		assert.Equal(t, StreamingEligible, ownership.Eligibility)
+	})
+
 	t.Run("eligible when ModelRefs is empty but SynthesisModel is configured", func(t *testing.T) {
 		req := &Request{
 			IsStreaming: true,
