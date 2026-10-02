@@ -7,6 +7,25 @@ Branch `xunzhuo/decision-2-training-dec-08bfast`. Index values stay private (nod
 `/data/dev2/private/eval/index021/ix1/runs/<name>/` and `decision2-program/private/m16-indexpath/`); this file holds
 verdicts, counts and hashes only.
 
+## 2026-10-02 04:05Z — coordinator interrupt (11:40 UTC+8): one release per tier; 2B point is now `2b-RA-a75`
+
+- **Directive:** release only the best candidate per tier, directly. 0.8B: `08b-RA-a75` on its BF16 Index run. 2B:
+  not `2b-RASD-a25`; choose among the Index sweep's 2B runs by the largest Index lower bound vs Sol-2B. No
+  reference-only evals (v3, C1, human transfer, mlx-diag).
+- **Stopped:** `M16-2b-RASD-a25-bf16` (node A GPU0, shard 1 of 3) at 03:39Z; marked `STOPPED.txt`, co-tenant entry
+  removed. Integration (`cd565a588`) was already merged.
+- **2B choice:** the sweep's `IS-2b-RA-a75` (= M16 `2b-RA-a75`, `bbba9fad…`) has the largest lower bound, above the
+  M12 soup `IS-2b-RA` and `2b-RASD-a25` (values private). `IS-2b-RAUP` is running and `IS-2b-RASD` is queued; both
+  are re-checked before the upload. `2b-RA-a75`'s M16 formal run passed item 3 (no collapsed type), so no new
+  typed-FINAL run is needed. The contamination audit is the RA TRAIN audit (`08140409`).
+- **2B BF16 release weights:** the FP32 checkpoint was assembled on node C from the sweep's package and checked
+  file by file against the formal `PACKAGE.sha256` (9 files equal). `bf16_copy`: `bbba9fad…` → **`d58577a2…`**
+  (receipt `5e44bafc…`). Restaged onto `a53cf66a` (manifest `ec0bc4f1…`, loaded 1,883,930,944). Parity 86 / 86,
+  max |Δp| 0.0. Two shards (`panel-2`, same run-ID set `6455d7be…`) have run since 04:01Z on node A GPU0
+  (co-tenant `owner.release-2b-ixf`) and GPU6. `ops/ix.sh` now takes `IX_GPUS` / `IX_FP32` (`4ea5e7d29`).
+- **0.8B BF16 Index run done** (03:55Z): 120,224 `ok` + 2 `unsupported`, scorer gate PASS, 1.15 GPU-h. Pulled to
+  node C (13 files, SHA-256 lists equal); bootstraps running.
+
 ## 2026-10-02 03:25Z — release tooling committed; BF16 Index runs at shard 1 / shard 0 of 3
 
 - Decision record drafted ([`dec-08bfast-indexpath-2026-10-02.md`](dec-08bfast-indexpath-2026-10-02.md); release
