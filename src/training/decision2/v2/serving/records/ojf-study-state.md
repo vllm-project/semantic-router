@@ -6,13 +6,26 @@ scratch directory; no released package is changed. Times are UTC.
 
 ## Log (newest first)
 
+- 2026-10-02 03:30 — Latency panel (first 400 typed-final prompts, single requests, 400 warm-up), one leased GPU each:
+
+  | Tier | Released runtime p50 / p95 ms | Prototype | p50 / p95 ms | Answers vs released |
+  | --- | --- | --- | --- | --- |
+  | 0.8B | 22.3 / 22.5 | HIP graph per exact shape, host-built masks | 10.1 / 11.9 | 400 / 400 bit-identical |
+  | 4B | 26.8 / 30.2 | same | 19.7 / 22.4 | 400 / 400 bit-identical |
+  | 27B | 90.2–94.3 / 95.5–98.5 | same | 88.4–88.6 / 94.1–94.4 | 400 / 400 bit-identical |
+  | 27B | (same) | lean unmerged LoRA (BF16 factors, folded 2x scale, one input cast) | 79.9 / 85.1 | 400 / 400 bit-identical |
+  | 27B | (same) | lean LoRA + HIP graph | 77.2 / 82.4 | 400 / 400 bit-identical |
+  | 27B | (same) | LoRA merged into the BF16 base (+ graph) | 66.7 / 71.7 | **4 / 400 decisions changed, max dp 0.36** |
+
+  - Host-built masks alone (the sync removal) give no gain in eager mode at any size.
+  - Kernels per request: about 1,650 (0.8B), 2,180 (4B), 7,900 (27B; the unmerged LoRA path adds about 3,600).
+    GPU-busy fraction: about 47% (0.8B), 73% (4B), 97% (27B): the small tiers are launch-bound like Open-Jev with
+    FLA, the 27B is GPU-bound with many tiny kernels.
+  - The prefix-state handoff (shared token prefix once, questions' suffixes from the expanded cache) is not
+    bit-identical (different GEMM shapes); on a private multi-question sample at 0.8B it changed 0.4% of decisions
+    and was slower except on very long shared contexts. Numbers private.
 - 2026-10-02 03:10 — Profiling and first prototypes on one leased GPU per node (node A GPU7: 0.8B / 4B; node B GPU7:
   27B), scored images, frozen Triton autotune caches, `--network none`.
-  - 0.8B, latency panel (first 400 typed-final prompts, single requests): the shipped runtime is launch-bound
-    (about 800 kernel launches per request). One HIP graph per exact padded shape, with the attention masks built
-    from host-known lengths, cuts p50 22.3 → 10.1 ms and p95 22.5 → 11.9 ms; **all 400 answers bit-identical**
-    to the released runtime. Host-built masks alone (sync removal) give no gain in eager mode.
-  - 27B latency panel with the LoRA merge, and the prefix-state handoff for multi-question requests, are running.
 - 2026-10-02 02:40 — Static catalogue of the repository; request-structure analysis of the private eval panel
   (numbers kept private). Our runtime already reads every candidate of a question in one row (option endpoints +
   a global query), so Open-Jev's per-candidate prefix tree does not apply; only the context shared by a request's
