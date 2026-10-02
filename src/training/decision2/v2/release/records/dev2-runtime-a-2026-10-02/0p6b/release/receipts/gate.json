@@ -1,0 +1,86 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's approval of speed-up phase A (2026-10-02 18:00 UTC+8, COORDINATION 18:00): runtime-only revisions of the six Decision 2.0 repositories with the exact GPU fast path, each only with 0 answer changes and 0.0 drift on all four scored panels against the released runtime",
+  "decision": "release",
+  "decision_sha256": "62cf9d841c4d6b6c4eab0b649622b3bbf5649789d566922a41551b81d9d6e11f",
+  "gate_profile": "successor",
+  "items": {
+    "1_successor_R1_v3": {
+      "evidence": "v3 48.636 vs current 43.541: +5.09 [+2.65, +9.30]",
+      "passed": true
+    },
+    "1_successor_R2_human_transfer": {
+      "evidence": "human transfer delta 95% [-0.064, +0.061]",
+      "passed": true
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "evidence": "types choice OK, noul OK, score OK",
+      "passed": true
+    },
+    "1_successor_R4_mlx_diag": {
+      "evidence": "mlx-diag card-eligible macro +0.0044 [-0.0058, +0.0144]",
+      "passed": true
+    },
+    "1_successor_R5_tier_gates": {
+      "evidence": "own 1.0 low +10.00; v3 48.636 vs 90% of GLiNER2.5-Decide 42.524; H vs GLiNER2.5-Decide [-0.013, +0.161]; own 1.0 low > 0 ok, v3 >= 38.272 ok, H vs GLiNER2.5-Decide upper >= 0 ok, no type collapsed ok",
+      "passed": true
+    },
+    "1_successor_R6_no_overlap_exposure": {
+      "evidence": "6 training files, 0 exposed groups",
+      "passed": true
+    },
+    "1_successor_R7_public231": {
+      "evidence": "public 231 152 vs 142 (+10; McNemar p 0.087)",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "1 results below own 1.0 listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 34 files re-hashed; loaded 597103104",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "3a9f2817a3ddabb7340fd8249a3da2de1b8fde8e19c7b2a43271fda55fc90a98",
+  "model_name": "Decision-2.0-Kai-0.6B",
+  "receipts_sha256": {
+    "automap-card-pre": "dd61645e21fa302f5d9906ce5c12207d5f76e37d3a9cc1ad9ae2ccae25b62558",
+    "automap-hub": "a9f44e6bd11ef7fb74832bdac15ed507dacbc4b2d62d21fc6171f6148bba2f42",
+    "automap-hub-tf518": "7549eb97d793afcb9f7c16324328e9f606d8861e9e18c45fb7971ad3e9fa486f",
+    "automap-post": "e0206768eec68bebfd0590f84157e7e20d87bb4a83faef3188647b18f859f09e",
+    "automap-pre": "15681c5e9136f0521c89af940578b826e01d66a8d9fcde4ffdd52fbf34100232",
+    "card-post": "9f6536fe8c0c5a544430b00a95356cd34269de74b473d05ae67f7a56489ac939",
+    "card-pre": "3a25ac9cc4c708df758fffbade5ce203087418f996bffb23117338b672941279",
+    "download": "ab75ee1a37019953737729f56a1358e203814e78095d3f18c8fa25a7098203c2",
+    "post": "e24071f099e9b461c603ab8054564985340512604246006dc59486662ad69f68",
+    "readback": "85287ae3c9dbbb9881e03200a11712322e589e2310d17b2ffaec818a6ff24ae9",
+    "repeat-post": "489add6e65c1268396401af2b64c5e04027889cc06f8d56a50569296fd538f74",
+    "repeat-pre": "b15683cbc5fddee1b6afd2eb3be62772cfb260c698bbd639a53e768448b6e526",
+    "tree": "6d0176eaf85540af5b92408b8309c93bf50347c2f281d2d682c9f1f327517d70",
+    "upload": "e3c9bd8723dcad71d30f56740fbbe96ab73423c9d72000bf59d4353d37490626"
+  },
+  "repo_id": "vllm-sr/Decision-2.0-Kai-0.6B",
+  "revision": "51b7b4740c8c70282648d3849d233a962234e4ec",
+  "schema": "dev2-release-gate/1",
+  "supersedes": {
+    "gate_sha256": "787c31c9e5bf618c788d28acbe6b1009181d62b6e37fa16e6c231b2dd2ca2bc1",
+    "revision": "99c4e799392afa73241915aeb16fefa5ef3518d7"
+  },
+  "utc": "2026-10-02T11:31:51.495048+00:00"
+}

@@ -1,0 +1,125 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "final",
+  "decision": "release",
+  "model_name": "Decision-2.0-Eos-0.8B",
+  "repo_id": "vllm-sr/Decision-2.0-Eos-0.8B",
+  "identity": {
+    "model_sha256": "d97127991870ae202017a99eb496bdc56a62afd038594a67febfab0aea9d76fe"
+  },
+  "report_sha256": "5ce404b0358ae401a79465d08b15bf5b7f9fc80dca90fe0da4cef223c254f48f",
+  "paired_sha256": "954a7092d2f7e3754641ed2b5027f64dd30b63319db05467de424f5fff10c2fa",
+  "gate_profile": "successor",
+  "rule": "index-first",
+  "current_revision": "9c7f3ea09a2b04a0647e5919af23c20ed982f246",
+  "evidence_sha256": {
+    "current_decision": "83e15d203ad2aae621d5e1926ac80140766616b3ba81c1783c376b184ed5ccb2",
+    "current_gate": "221c331e3d75666c5d68b87652d5a4307682485d6d87d8eda2f6acd34fd49959",
+    "exposure": "cfa30cdac2e0821a7c1afa8758425dfdd29c026d45ea91e12548e4cea3a227f6",
+    "index_first_audit": "1cacd98a0a646c52c34e2db0bf3d206f30b4c7cf38e0b4cd46dc86a184b814b7",
+    "index_first_base_receipt": "0c40aff54ab23b9e118c63f12fc3fe5569995dcd496dcd481996920ebef589ed",
+    "index_first_bootstrap": "b080e76d14b5acf59dad312692808caea6397839eb4943844fb3021521006ffa",
+    "index_first_receipt": "70a5ed9a24dec269825e82499e7d9df8024851a85294a120859059a3a8eae6f4",
+    "mlx_paired": "84959ff368da4ae4df5ea7c8a4e6e9067a8fc5dc384df4792df9620178bfa510",
+    "paired": "7b1b25ced793ab911bad1c1d26c88d01c91497cf9f8da5c00c3bd4e1a3a84dbd",
+    "public231": "713e88c3a0336716779ab807a64cd37816acb293aa7c0f8d5f1e42dea72e1bd0",
+    "types": "e4b6d536d34c9432907f611ab4f35ff8aec315772d547198acef4d39af5652c9"
+  },
+  "calibration": "none (temperature 1; every Decision 2.0 model keeps T = 1): the formal run was collected without calibration (CAL698 rejected)",
+  "action": "Runtime-only revision of the private repository vllm-sr/Decision-2.0-Eos-0.8B: the package runtime decision2/*.py comes from the phase A runtime commit 54303117b, which on a ROCm GPU under Transformers 5.17 replays the backbone of each exact padded shape as a HIP graph, casts shared Linear inputs to BF16 once and (on gfx942) runs fused Triton element-wise kernels that round exactly as the ops they replace. Weights, tokenizer, configs, the vendored training/model sources, calibration, any Score offsets, the banner and the charts are byte-identical to the released revision 25f0914a188e5449c7e107f13e1376ddd47a43bc; README.md states the new median latency and MODEL_MANIFEST.json the new runtime hashes and one runtime sentence. The collection is not changed; everything stays private.",
+  "rationale": "The release judgement of the superseded final decision 900a9d19… stands unchanged: the same identity d9712799, scored report, paired comparison, calibration and licence decision. Only the package runtime changes, and it computes the same values bit for bit: every prompt of the four scored panels (typed-final 1,600, css15 6,547, public231 231, mlx-diag 2,275) answered through the released package and through this package on the released weights gave 0 answer changes and 0.0 drift; 400 single requests: p50 21.51 -> 5.99 ms, p95 21.72 -> 6.87 ms, all bit-identical. release.sh checks the native examples, the card's Transformers example before upload, after the real download and from the Hub in fresh environments under Transformers 5.17 and 5.18, the card structure and every card link.",
+  "approved_package": {
+    "identity": "d97127991870ae202017a99eb496bdc56a62afd038594a67febfab0aea9d76fe",
+    "fp32_identity": "fee82408d47016615da7399649d7cdc6404c44deda4dd332a6120c577a18c96a",
+    "profile": "qwen-full (BF16 storage of the Linear projections)",
+    "temperature": 1,
+    "max_input_tokens": 16384,
+    "revision_binding": "receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified."
+  },
+  "licence_decision": "apache-2.0, unchanged: own weights; the Decision 1.0 base and the Qwen3.5 text backbone and tokenizer are Apache-2.0 (the product card ships the Apache-2.0 LICENSE).",
+  "supersedes": {
+    "final_sha256": "900a9d190a982e09baa574e5afdc54513468fbed601d4d7049aac70ac16b6001",
+    "released_as": "vllm-sr/Decision-2.0-Eos-0.8B@25f0914a188e5449c7e107f13e1376ddd47a43bc",
+    "released_manifest_sha256": "2c3509a10c541218733ee9392de7ccfd59ed5a69a2a2ee2882e5231b5a8280c8",
+    "released_gate_sha256": "c10bdb350338d8b537dd4785c42988c4045d2b82f49cefceb79a6d276ebcb040",
+    "card_revision": {
+      "kind": "card-org",
+      "spec": "v2/release/specs/dev2-0p8b-org.json",
+      "spec_sha256": "5cad992e48fd3bf1f930a6261aba0b30e109ac1daa3480a7e4ee8f6b2579c2a2"
+    },
+    "earlier": {
+      "final_sha256": "7e3dfa05e2ecc33271d3e645e515776c41ecfc3eb260887ecddb162ae04b6fd5",
+      "released_as": "llm-semantic-router/Decision-2.0-Eos-0.8B@3de61185ade42cc307c26a6062df4baac327eac5",
+      "released_manifest_sha256": "03cd040d6bc002ec6f82710a928f515293fde6be831ed4cb54294315d2bbb775",
+      "released_gate_sha256": "f01b6f8c38afc62c124fb7ca110c4d6f1cd2f56eb205ccf28864e9cd2ccec265",
+      "earlier": {
+        "revision": "9c7f3ea09a2b04a0647e5919af23c20ed982f246",
+        "released_as": "llm-semantic-router/Decision-2.0-Eos-0.8B@9c7f3ea09a2b04a0647e5919af23c20ed982f246",
+        "final_sha256": "83e15d203ad2aae621d5e1926ac80140766616b3ba81c1783c376b184ed5ccb2",
+        "gate_sha256": "221c331e3d75666c5d68b87652d5a4307682485d6d87d8eda2f6acd34fd49959",
+        "manifest_sha256": "ca6f6186b9f00eeefa7504e24fc22ea225daade50ef0372da186dcb9e0edbece",
+        "weights_identity": "3f02f0e5fc68a1fd985ce48bf3a3bb2d4ed16d1a1705c2258317b78a4d6514f4"
+      }
+    }
+  },
+  "disclosures": [
+    "items 1 and 6(b) of the successor rule (v3 significantly above the current revision) are not met; the Index-first rule makes v3 a reference",
+    "the training rows include the IB1-r3 / IB2 families matched to Index benchmark families (HoVer, When2Call, iSarcasmEval, GSM8K) and the BPoMP format; the internal records report the transfer-only Index delta without those benchmarks (private values)",
+    "card.speed is the current revision's bench receipt (same architecture, runtime and shapes)"
+  ],
+  "prepared_by": "Decision 2.0 runtime phase A worker 2d541b40 (track=runtime-a, worktree vllm-sr-dev2-runtime-a)",
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's approval of speed-up phase A (2026-10-02 18:00 UTC+8, COORDINATION 18:00): runtime-only revisions of the six Decision 2.0 repositories with the exact GPU fast path, each only with 0 answer changes and 0.0 drift on all four scored panels against the released runtime",
+  "decided_utc": "2026-10-02T10:00:00Z",
+  "previous_rationale": "The release judgement of the superseded final decision 7e3dfa05… stands unchanged: the same identity d9712799, scored report, paired comparison, calibration and licence decision. Only the organization in the card and the manifest changes; release.sh checks the native examples, the card's Transformers example before upload, after the real download and from the Hub in fresh environments under Transformers 5.17 and 5.18, the card structure and every card link.",
+  "runtime_revision": {
+    "kind": "fast-path-runtime",
+    "runtime_commit": "54303117be355595ddf5bb184905be6c6d2ecae9",
+    "spec": "v2/release/specs/dev2-0p8b-ra.json",
+    "spec_sha256": "359927773b9540e603130c8d7a2b7f5fabfa37874eb06aaf56fac47d40d04e74",
+    "parity": {
+      "compare": "v2/release/records/dev2-runtime-a-2026-10-02/0p8b/parity/answers-compare.json",
+      "sha256": "518f67890e53f0b055f7ada6f905ea6598f9b41cc7342d26e803e91155e830b8",
+      "panels": {
+        "css15": [
+          6547,
+          6547,
+          0
+        ],
+        "mlx-diag": [
+          2275,
+          2275,
+          0
+        ],
+        "public231": [
+          231,
+          231,
+          0
+        ],
+        "typed-final": [
+          1600,
+          1600,
+          0
+        ]
+      },
+      "max_abs_drift": 0.0
+    },
+    "bench": {
+      "compare": "v2/release/records/dev2-runtime-a-2026-10-02/0p8b/bench/compare.json",
+      "sha256": "bcc9f503aa1e2dd0185e65e1466b79c4b1258930244b5d9164debf79f35c67fd",
+      "items": 400,
+      "bit_identical_items": 400,
+      "p50_ms": [
+        21.50535397231579,
+        5.985933123156428
+      ],
+      "p95_ms": [
+        21.721922094002366,
+        6.8679689429700375
+      ],
+      "request_peak_gib": [
+        2.0118274688720703,
+        2.505086898803711
+      ]
+    }
+  }
+}

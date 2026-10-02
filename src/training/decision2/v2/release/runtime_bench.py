@@ -8,7 +8,7 @@ Run like ``examples.py`` (isolated interpreter, package read-only, no network):
 
 ``run`` loads the package with its vendored runtime on cuda:0 (so an old and a
 new revision each measure their own runtime), answers the first ``warmup``
-prompts, then times the first ``count`` prompts one request at a time (all of a
+prompts ``--warmup-passes`` times untimed, then times the first ``count`` prompts one request at a time (all of a
 prompt's questions in one call, as the release parity does) with
 ``torch.cuda.synchronize()`` around each call. It records p50 / p95 / mean
 latency, items per second, the GPU memory allocated after loading, the peak
@@ -63,8 +63,9 @@ def run(args: argparse.Namespace, ex: Any) -> dict[str, Any]:
     torch.cuda.synchronize()
     after_load = torch.cuda.memory_allocated()
     load_peak = torch.cuda.max_memory_allocated()
-    for prompt in prompts[: args.warmup]:
-        model.system_one(state=prompt["state"], questions=prompt["questions"])
+    for _ in range(args.warmup_passes):
+        for prompt in prompts[: args.warmup]:
+            model.system_one(state=prompt["state"], questions=prompt["questions"])
     torch.cuda.synchronize()
     torch.cuda.reset_peak_memory_stats()
     latencies, rows, tokens = [], [], 0
@@ -86,6 +87,7 @@ def run(args: argparse.Namespace, ex: Any) -> dict[str, Any]:
         for row in rows:
             sink.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
     module = model.backend.model
+    fast = getattr(model.backend, "fast", None)
     milliseconds = [1000 * value for value in latencies]
     return {
         "schema": SCHEMA,
@@ -101,6 +103,7 @@ def run(args: argparse.Namespace, ex: Any) -> dict[str, Any]:
             "kernels": kernels,
             "residency": getattr(model.backend, "residency", None),
             "parameter_dtypes": ex.parameter_dtypes(model.backend),
+            "fast_path": fast.receipt() if fast is not None else None,
         },
         "parameter_bytes": sum(
             p.numel() * p.element_size() for p in module.parameters()
@@ -115,6 +118,7 @@ def run(args: argparse.Namespace, ex: Any) -> dict[str, Any]:
         "ids_sha256": ex.digest([p["id"] for p in prompts]),
         "count": len(prompts),
         "warmup": args.warmup,
+        "warmup_passes": args.warmup_passes,
         "input_tokens_mean": tokens / len(prompts),
         "latency_ms": {
             "p50": percentile(milliseconds, 0.50),
@@ -201,6 +205,8 @@ def main() -> None:
     p.add_argument("--prompts", type=Path, required=True)
     p.add_argument("--count", type=int, default=400)
     p.add_argument("--warmup", type=int, default=20)
+    # The fast path captures a shape's HIP graph on its second use; two passes measure replays.
+    p.add_argument("--warmup-passes", type=int, default=1)
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--threads", type=int)
     p.add_argument("--base-path")
