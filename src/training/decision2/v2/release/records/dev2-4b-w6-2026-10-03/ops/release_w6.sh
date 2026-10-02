@@ -25,7 +25,7 @@
 set -euo pipefail
 CAND=${1:?CAND}
 shift
-[[ "$CAND" =~ ^(AFxALL[23]?|XALLx|XALLU2)$ ]] || { echo "CAND: AFxALL | AFxALL2 | AFxALL3 | XALLx | XALLU2" >&2; exit 2; }
+[[ "$CAND" =~ ^(AFxALL[23]?|XALLx|XALLU2|LHS17IB4-lrh)$ ]] || { echo "CAND: AFxALL | AFxALL2 | AFxALL3 | XALLx | XALLU2 | LHS17IB4-lrh" >&2; exit 2; }
 KEY=${CAND,,}
 mode="" post=""
 [[ "${1:-}" == --post ]] || { mode="${1:-}"; shift || true; }

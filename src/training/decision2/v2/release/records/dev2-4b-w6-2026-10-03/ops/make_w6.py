@@ -88,6 +88,14 @@ CANDS = {
         f"soups, {SEVEN}, with 4b-LHS17UP at weight 2/8 and the others at 1/8; "
         + RECIPE,
     },
+    "LHS17IB4-lrh": {
+        "fp32": "0b40be9478c041e964ce340d3985369bd67b15260c1205b7cf2b7928004fe7f9",
+        "members": 1,
+        "what": "the arm factory's 4b-LHS17IB4-lrh: the uniform FP32 soup of two seeds (BEST checkpoints 1249 and "
+        "1254) of a rank-128 LoRA arm on Qwen/Qwen3.5-4B-Base @1001bb4d (merged, scoring head, typed-row "
+        "self-distillation) trained on M17's 4b-LHS17IB4 mixture (the released 4B mixture with IB1-r3 / IB2 swap "
+        "rows plus the IB3-r2 / IB4 phase-1 families) at half the LoRA / head learning rate (5e-5)",
+    },
     "AFxALL": {
         "fp32": "8f282287620dc5498c09d9bba2f8be0b86fa2f60749a6920e9a760b5fc7a5a93",
         "members": 12,
@@ -380,9 +388,14 @@ def decision(cand: str, s: dict) -> dict:
             "weights_identity": CURRENT["weights_identity"],
         },
         "disclosures": [
-            f"an FP32 weight average of {p['members']} arm soups ({'4b-LHS17UP listed twice' if cand == 'XALLU2' else 'uniform'}; "
-            "no new training run); the training rows of its "
-            "members include the IB1-r3 / IB2 / IB3-r2 / IB4 phase-1 families matched to Index benchmark families "
+            (
+                "a two-seed soup of one arm (uniform; the arm factory's half-LR training run); its training rows "
+                if p["members"] == 1
+                else f"an FP32 weight average of {p['members']} arm soups "
+                f"({'4b-LHS17UP listed twice' if cand == 'XALLU2' else 'uniform'}; no new training run); the "
+                "training rows of its "
+            )
+            + "members include the IB1-r3 / IB2 / IB3-r2 / IB4 phase-1 families matched to Index benchmark families "
             "(HoVer, When2Call, iSarcasmEval, GSM8K and others) and the BPoMP format",
             *(
                 f"Index contamination audit of the {n} training rows ({v['training_lines']} lines): "
