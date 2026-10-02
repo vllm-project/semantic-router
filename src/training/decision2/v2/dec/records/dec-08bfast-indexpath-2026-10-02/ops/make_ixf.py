@@ -1,10 +1,10 @@
-"""Release specs and decisions of the 0.8B / 2B Index-first successors (M16 08b-RA-a75 / 2b-RASD-a25).
+"""Release specs and decisions of the 0.8B / 2B Index-first successors (M16 08b-RA-a75 / 2b-RA-a75).
 
 User decision 2026-10-02 09:55 UTC+8 (COORDINATION): the release gate is the private Jev Decision Index delta of the
 frozen candidate vs the current release (paired bootstrap, >= 2,000 replicates, 95% lower bound > 0) plus integrity
 checks (exact package parity, Hub / trust_remote_code, the row-level contamination audit, no collapsed type); v3,
 human transfer, mlx-diag, public 231 and C1 are references; per tier the largest Index-gain lower bound is chosen.
-The winners are M16's interpolations 08b-RA-a75 (Decision-2.0-Eos-0.8B) and 2b-RASD-a25 (Decision-2.0-Sol-2B),
+The winners are M16's interpolations 08b-RA-a75 (Decision-2.0-Eos-0.8B) and 2b-RA-a75 (Decision-2.0-Sol-2B),
 shipped at T = 1 as the v2.release.bf16_copy of the FP32 points and served by the released runtime.
 
 Each spec derives from the tier's card round-3 spec (current main): roster, peers, runtime, remote code, licence and
@@ -70,8 +70,8 @@ TIERS = {
     "2b": {
         "tier": "2B",
         "name": "Decision-2.0-Sol-2B",
-        "point": "2b-RASD-a25",
-        "alpha": "one quarter",
+        "point": "2b-RA-a75",
+        "alpha": "three quarters",
         "current": "b42b6ff3efeedcd6534a3169a5db60247b363fb8",
         "current_run": f"{REL}/dev2-2b-t1-derived",
         "own": "same-limit-16k",
@@ -85,10 +85,10 @@ TIERS = {
         "train_note": "the arm's TRAIN file (08140409; the previous release's rows plus the IB1-r3 / IB2 rows)",
         "origin": (
             "Every weight of Decision 1.0 Sol was fine-tuned (nothing frozen, no adapter). The release interpolates two "
-            "such fine-tunes per tensor: three quarters of the previous Decision 2.0 Sol 2B weights (the uniform "
-            "average of three seeds, trained with Decision 1.0 Sol's own answer probabilities as soft targets) plus "
-            "one quarter of the uniform average of two seeds of a further fine-tune from Decision 1.0 Sol, trained "
-            "with the previous Decision 2.0 Sol's answer probabilities as soft targets. Decision 1.0 Sol is itself a "
+            "such fine-tunes per tensor: one quarter of the previous Decision 2.0 Sol 2B weights (the uniform average "
+            "of three seeds) plus three quarters of the uniform average of two seeds of a further fine-tune from "
+            "Decision 1.0 Sol; both were trained with Decision 1.0 Sol's own answer probabilities as soft targets. "
+            "Decision 1.0 Sol is itself a "
             "text-only fine-tune of [Qwen/Qwen3.5-2B](https://huggingface.co/Qwen/Qwen3.5-2B) at "
             "`15852e8c16360a2fea060d615a32b45270f8a8fc` (Apache-2.0), whose text backbone and tokenizer this model "
             "inherits; the Qwen3.5 vision tower is not part of it."

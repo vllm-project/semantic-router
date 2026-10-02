@@ -25,7 +25,7 @@
 # IX_SHARED=<name>: launch.sh writes the co-tenant entry owner.<name> (IX1_SHARED_LEASE) and leaves the GPU
 # owner's file alone (node A GPU0 / GPU1: the 0.6B allocation allows recorded release co-tenants).
 # Usage: [IX_NODE=a|c|d] IX_GPU=N ix.sh MIRROR_SHA NAME STAGE
-#   NAME: M16-08b-RA-a75-bf16 | M16-08b-RASD-a75-bf16 | M16-2b-RASD-a25-bf16
+#   NAME: M16-08b-RA-a75-bf16 | M16-08b-RASD-a75-bf16 | M16-2b-RASD-a25-bf16 | M16-2b-RA-a75-bf16
 set -euo pipefail
 SHA=${1:?MIRROR_SHA} NAME=${2:?NAME} STAGE=${3:?STAGE}
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "MIRROR_SHA must be a full commit SHA" >&2; exit 2; }
@@ -50,6 +50,7 @@ case "$NAME" in
   M16-08b-RA-a75-bf16) POINT=08b-RA-a75 SIZE=0.8B REF=DEV2.0-0.8B REV8=bede7938 LOADED=753446208 ;;
   M16-08b-RASD-a75-bf16) POINT=08b-RASD-a75 SIZE=0.8B REF=DEV2.0-0.8B REV8=bede7938 LOADED=753446208 ;;
   M16-2b-RASD-a25-bf16) POINT=2b-RASD-a25 SIZE=2B REF=DEV2.0-2B REV8=a53cf66a LOADED=1883930944 ;;
+  M16-2b-RA-a75-bf16) POINT=2b-RA-a75 SIZE=2B REF=DEV2.0-2B REV8=a53cf66a LOADED=1883930944 ;;
   *) echo "bad NAME $NAME" >&2; exit 2 ;;
 esac
 FP32=M16-$POINT

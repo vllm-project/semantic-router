@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 0.8B / 2B Index-first successors (user decision 2026-10-02 09:55; M16 08b-RA-a75 -> Decision-2.0-Eos-0.8B,
-# 2b-RASD-a25 -> Decision-2.0-Sol-2B), node A GPU0 or GPU1 as a recorded co-tenant (shared lease
+# 2b-RA-a75 -> Decision-2.0-Sol-2B), node A GPU0 or GPU1 as a recorded co-tenant (shared lease
 # owner.release-<key>-ixf; the 0.6B allocation allows release work), the scored image dbe5f32b with its kernels,
 # HIP_FORCE_DEV_KERNARG=1 and a fresh copy of the persisted autotune cache of the formal run that scored each panel
 # (relayed from node B by relay_cache.sh, checked against its manifest before the copy).
@@ -29,7 +29,7 @@ done
 [[ "$mode" =~ ^--(stage|mlx|release)$ ]] || { echo "mode: --stage|--mlx|--release" >&2; exit 2; }
 case "$KEY" in
   0p8b) name=Decision-2.0-Eos-0.8B POINT=08b-RA-a75 superseded=9c7f3ea09a2b04a0647e5919af23c20ed982f246 ;;
-  2b) name=Decision-2.0-Sol-2B POINT=2b-RASD-a25 superseded=b42b6ff3efeedcd6534a3169a5db60247b363fb8 ;;
+  2b) name=Decision-2.0-Sol-2B POINT=2b-RA-a75 superseded=b42b6ff3efeedcd6534a3169a5db60247b363fb8 ;;
   *) echo "tier key 0p8b or 2b" >&2; exit 2 ;;
 esac
 TS=$(date -u +%Y%m%dT%H%M%SZ)

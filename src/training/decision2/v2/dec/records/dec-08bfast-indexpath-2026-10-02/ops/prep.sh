@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 0.8B / 2B Index-first releases (user decision 2026-10-02 09:55; the M16 winners 08b-RA-a75 / 2b-RASD-a25): release
+# 0.8B / 2B Index-first releases (user decision 2026-10-02 09:55; the winners M16 08b-RA-a75 / 2b-RA-a75): release
 # inputs on node A, CPU only.
 #   bf16   the v2.release.bf16_copy that the Index ran on (dec-indexpath/<point>-bf16-ckpt, copied from node C by
 #          ix.sh push) -> inputs/dev2-<key>-ixf/bf16/{checkpoint,bf16-copy.json} (SHA-256 lists equal)
@@ -30,7 +30,7 @@ $E/m2/q1-kev08b kev
 $E/m1/p2-jpt08b jpt08b"
     PAIRED_NAMES="dev2-0p8b adopted-1.0 intern kev" ;;
   2b)
-    POINT=2b-RASD-a25 TIER=2B NAME=Decision-2.0-Sol-2B CUR=$REL/dev2-2b-t1-derived
+    POINT=2b-RA-a75 TIER=2B NAME=Decision-2.0-Sol-2B CUR=$REL/dev2-2b-t1-derived
     CURM_PRED=$REL/inputs/dev2-2b-t1/derived/mlx-diag.predictions.jsonl CURM_SCORE=$REL/dev2-2b-t1-derived-mlx/mlx-diag.score.json
     COMPARATORS="$CUR dev2-2b
 $DF/m3/sol1-16k same-limit-16k
