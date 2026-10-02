@@ -4,6 +4,21 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17` (r
 stopped after creating the worktree, nothing had run). Prereg `da770d98a`, ops `1ce8b2220` (mirror on nodes E / F),
 data lock `4f68f1eb0`.
 
+## 2026-10-02 02:45Z
+
+- **Amendment 1 (`367cdfa67`)**, written before any M17 soup or readout: the user's Index-first release rule
+  (COORDINATION 09:55) applies to M17. Both arm soups are the frozen candidates, each measured once on the Index as its
+  BF16 copy restaged onto LH's IX1 package (the 4B Index-first worker's method); development gates, formal items and
+  MLX-DEV2 become references; C1 item 8 is not run; anchors only on a type-collapse-only failure.
+- IX1 DIAGNOSTIC entries `DEV2.0-4B-LHS10SD-bf16` / `-LHS17SD-bf16` (`db00429a1`, a separate commit to
+  `v2/eval/ix1/launch.sh`); the Index driver `ops/m17/m17-index.sh` + `m17_ixpool.py` (`99cbfb269`), mirrored on
+  nodes A, C, E, F.
+- Node E: kit `87d4650b` and panel-8 copied from node C through node A (per-file SHA-256 lists equal; kit HEAD
+  checked). GPU0–3 still idle (Index inference only).
+- Training: seeds at checkpoints 4 / 3 / 3 / 3 of 8 (02:36Z); the formal parity run `m17-4b-LH` (LH soup, co-tenant on
+  F GPU7) passed its smoke at 02:29Z and is collecting. Its select file holds slot 0 only (listing `d5e0c085…` = M13's);
+  the finalists' file is written later with the same slot 0.
+
 ## 2026-10-02 02:30Z
 
 - All four preflights PASS (pre-warm `4b-LHS10SD` s1 02:04Z; the other three 02:09–02:10Z); full runs at update
