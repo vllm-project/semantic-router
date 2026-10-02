@@ -56,7 +56,7 @@ declare -A TIER=(
   [IS-2b-RA]=2B [IS-2b-RASD]=2B [IS-2b-RAUP]=2B [IS-2b-RA-a75]=2B
   [IS-L9IB]=9B [IS-K-a12IB]=9B
   [IS-K-a13IBX]=9B [IS-L9IBX]=9B [IS-4b-LHA10SDML]=4B
-  [IS-08b-RAUP-a75]=0.8B [IS-08b-RAUP-a50]=0.8B [IS-2b-RAUP-a75]=2B [IS-2b-RAUP-a50]=2B
+  [IS-08b-RA-a50]=0.8B [IS-08b-RASD-a50]=0.8B [IS-08b-RAAG]=0.8B [IS-08b-RA10SDML]=0.8B [IS-2b-RA-a50]=2B [IS-2b-RASD-a75]=2B [IS-2b-RASDML]=2B [IS-2b-RA10SDML]=2B
 )
 declare -A SOUP=(  # node:directory of the frozen FP32 soup (or a copy whose content manifest equals the soup's)
   [IS-08b-RASD]=a:/data/dev2/runs/dec/m16/inputs/arms/08b-RASD
@@ -71,10 +71,14 @@ declare -A SOUP=(  # node:directory of the frozen FP32 soup (or a copy whose con
   [IS-K-a13IBX]=a:/data/dev2/runs/9b/m9/soup/K-a13IBX/build/K-a13IBX
   [IS-L9IBX]=a:/data/dev2/runs/9b/m9/soup/L9IBX/build/L9IBX-soup
   [IS-4b-LHA10SDML]=f:/data/dev2/runs/dec/m15/soup/4b-LHA10SDML/build/4b-LHA10SDML-soup
-  [IS-08b-RAUP-a75]=a:/data/dev2/runs/dec/m16/points/08b-RAUP-a75/build/08b-RAUP-a75
-  [IS-08b-RAUP-a50]=a:/data/dev2/runs/dec/m16/points/08b-RAUP-a50/build/08b-RAUP-a50
-  [IS-2b-RAUP-a75]=b:/data/dev2/runs/dec/m16/points/2b-RAUP-a75/build/2b-RAUP-a75
-  [IS-2b-RAUP-a50]=b:/data/dev2/runs/dec/m16/points/2b-RAUP-a50/build/2b-RAUP-a50
+  [IS-08b-RA-a50]=a:/data/dev2/runs/dec/m16/points/08b-RA-a50/build/08b-RA-a50
+  [IS-08b-RASD-a50]=a:/data/dev2/runs/dec/m16/points/08b-RASD-a50/build/08b-RASD-a50
+  [IS-08b-RAAG]=e:/data/dev2/runs/dec/m13/soup/08b-RAAG/build/08b-RAAG-soup
+  [IS-08b-RA10SDML]=e:/data/dev2/runs/dec/m15/soup/08b-RA10SDML/build/08b-RA10SDML-soup
+  [IS-2b-RA-a50]=b:/data/dev2/runs/dec/m16/points/2b-RA-a50/build/2b-RA-a50
+  [IS-2b-RASD-a75]=b:/data/dev2/runs/dec/m16/points/2b-RASD-a75/build/2b-RASD-a75
+  [IS-2b-RASDML]=f:/data/dev2/runs/dec/m15/soup/2b-RASDML/build/2b-RASDML-soup
+  [IS-2b-RA10SDML]=f:/data/dev2/runs/dec/m15/soup/2b-RA10SDML/build/2b-RA10SDML-soup
 )
 declare -A MODEL=(  # model_sha256 from each soup's build log (the identity its development readouts carry)
   [IS-08b-RASD]=02c170864d0c00895236e2c0c5ee592f38d8360878c53a56da875197ead0e8de
@@ -89,10 +93,14 @@ declare -A MODEL=(  # model_sha256 from each soup's build log (the identity its 
   [IS-K-a13IBX]=d559b85c2254c5fd77c7e207b02f157b0174cbecf877b1a53d09ee36ff00abc4
   [IS-L9IBX]=695c0ce2cdece30482ee2fad287caf3a101d78c062351bbb3b8d20ee0dbc5b5f
   [IS-4b-LHA10SDML]=1b51567523426b896ae50afeefca4f133c2e3c220c349ebfb9b9c630600dd19d
-  [IS-08b-RAUP-a75]=bd7ce3f525fb4fea12c5312247c13e87aff92be7e09061f4a187a10e03f06a0c
-  [IS-08b-RAUP-a50]=69b56648b8624af24f91362f6f3fde1dcf63799a75ac50c70fdf86280172be8b
-  [IS-2b-RAUP-a75]=c75202293e3173e952b6bcfb9afff3890c472299d9a880fe4cdc3d4bc8602fa3
-  [IS-2b-RAUP-a50]=56cbb2c3131563c6ed25f8b8236ba82c6e2334067d5140c3bb87d9911ababd56
+  [IS-08b-RA-a50]=3168cef350c5acc5b58a56be05e5998cc298d52626d34d8f0535ffa7eb716177
+  [IS-08b-RASD-a50]=37cf8e817221d13d86e945acb72d3b32d0be41e8be165304df248cd9d0b01e24
+  [IS-08b-RAAG]=91201b30e23567efd6c787bf27243740e5b7d7a3eab93d35ba944fd115b42d45
+  [IS-08b-RA10SDML]=d4b05f5c734635b04c8ef0546390b0d636335238bb27c404598ebcaff5390192
+  [IS-2b-RA-a50]=97bcb2ee119393af969706d4fe795bb86a2bf08c65a2b7930cfe82824424c2ba
+  [IS-2b-RASD-a75]=a7065f791f171ef9b7310c0b943f0fe6698c065c479dbf6ec6a8058ce59966a0
+  [IS-2b-RASDML]=8c8e98e34eb3200492a9f22d76a4cacfd4a6dee8855c1b6aec303d3cbbf88b9a
+  [IS-2b-RA10SDML]=9c190de9778463c3430f72618b403151368082fa7d0849086d36d73cafa2b23c
 )
 declare -A BASEPKG=([0.8B]=DEV2.0-0.8B-bede7938 [2B]=DEV2.0-2B-a53cf66a [4B]=DEV2.0-4B-13d42143 [9B]=DEV2.0-9B-e51f9881)
 declare -A LOADED=([0.8B]=753446208 [2B]=1883930944 [4B]=4208383488 [9B]=7940895744)
