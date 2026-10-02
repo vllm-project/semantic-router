@@ -18,10 +18,11 @@ import (
 
 // This profile has no PII model to host, so it drives PII detection through
 // the same remote token_spans.v1 stub server ("mock-pii-spans") the
-// pii-remote-backend profile uses, and the same "mock-vllm" echo backend used
-// throughout this suite as the chat backend. mock-vllm's default completion
-// is a deterministic JSON echo of what it received (tools/mock-vllm/chat_request.py,
-// build_chat_content): {"user":["<raw text of every user message>"], ...}.
+// pii-remote-backend profile uses, and the same "provider-mocker" echo backend used
+// throughout this suite as the chat backend. Its default completion
+// is a deterministic JSON echo of what it received
+// (provider-mocker chat_request.py, build_chat_content):
+// {"user":["<raw text of every user message>"], ...}.
 // That is the only way this harness can assert on the exact provider-bound
 // bytes, since Router Replay is deliberately blind on a masking route (D3) --
 // the request body it would otherwise expose is exactly what this feature
@@ -32,7 +33,7 @@ const (
 	maskingRawEmail    = "alice@corp.example"
 )
 
-// maskingEcho is the subset of tools/mock-vllm's deterministic echo this
+// maskingEcho is the subset of provider-mocker's deterministic echo this
 // profile reads. Every user message the backend received lands in User,
 // verbatim.
 type maskingEcho struct {
@@ -214,7 +215,7 @@ func runMaskingRawRequest(
 }
 
 // runMaskingWireCase sends one case's request and returns the exact user-turn
-// text mock-vllm reports having received, decoded from the protocol-specific
+// text provider-mocker reports having received, decoded from the protocol-specific
 // completion shape.
 func runMaskingWireCase(ctx context.Context, session *fixtures.ServiceSession, tc maskingWireCase) (string, error) {
 	resp, err := runMaskingRawRequest(ctx, session, tc.path, tc.body)
@@ -230,10 +231,10 @@ func runMaskingWireCase(ctx context.Context, session *fixtures.ServiceSession, t
 	}
 	var echo maskingEcho
 	if err := json.Unmarshal([]byte(content), &echo); err != nil {
-		return "", fmt.Errorf("completion is not the mock-vllm echo JSON: %w (%q)", err, content)
+		return "", fmt.Errorf("completion is not the provider-mocker echo JSON: %w (%q)", err, content)
 	}
 	if len(echo.User) != 1 {
-		return "", fmt.Errorf("mock-vllm echo carries %d user messages, want 1: %q", len(echo.User), content)
+		return "", fmt.Errorf("provider-mocker echo carries %d user messages, want 1: %q", len(echo.User), content)
 	}
 	return echo.User[0], nil
 }

@@ -1,7 +1,7 @@
 // Package masking provides the e2e profile for the masking decision plugin
 // (#3566). It has no PII model to host, so it drives detection through the
 // same remote token_spans.v1 stub the pii-remote-backend profile uses, and
-// verifies the provider-bound bytes through mock-vllm's deterministic
+// verifies the provider-bound bytes through provider-mocker's deterministic
 // request echo rather than Router Replay, which is deliberately blind on a
 // masking route (D3).
 package masking
@@ -21,19 +21,20 @@ const (
 	mappingConfigMapYAML = "deploy/kubernetes/pii-remote-backend/pii-mapping-configmap.yaml"
 )
 
-// resourceManifests reuses two other profiles' manifests unchanged: the
-// plain mock-vllm chat backend (deploy/kubernetes/hallucination/mock-vllm.yaml)
-// and the remote PII stub server (pii-remote-backend's mock-pii-spans). Both
-// are generic fixtures, not specific to the profile that first added them --
-// pii-remote-backend itself reuses ai-gateway's backend manifest the same way.
+// resourceManifests reuses two other profiles' manifests unchanged: the plain
+// provider-mocker chat backend and the remote PII stub server
+// (pii-remote-backend's mock-pii-spans). Both are generic fixtures, not
+// specific to the profile that first added them -- response-jailbreak reuses
+// the same provider-mocker manifest, and pii-remote-backend reuses
+// ai-gateway's backend manifest the same way.
 var resourceManifests = []string{
-	"deploy/kubernetes/hallucination/mock-vllm.yaml",
+	"deploy/kubernetes/hallucination/provider-mocker.yaml",
 	"deploy/kubernetes/masking/gwapi-resources.yaml",
 	"e2e/profiles/pii-remote-backend/manifests/mock-pii-spans.yaml",
 }
 
 var waitDeployments = []helpers.DeploymentRef{
-	{Namespace: "default", Name: "mock-vllm"},
+	{Namespace: "default", Name: "provider-mocker"},
 	{Namespace: "default", Name: "mock-pii-spans"},
 }
 

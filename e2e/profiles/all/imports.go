@@ -112,7 +112,7 @@ func init() {
 		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
 	)
 	register("llm-d", func() framework.Profile { return llmd.NewProfile() }, framework.ProfileCapabilities{})
-	register("masking", func() framework.Profile { return masking.NewProfile() }, framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages})
+	register("masking", func() framework.Profile { return masking.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register(
 		"route-action",
 		func() framework.Profile { return routeaction.NewProfile() },
