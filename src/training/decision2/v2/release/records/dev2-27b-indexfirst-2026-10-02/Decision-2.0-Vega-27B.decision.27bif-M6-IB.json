@@ -55,5 +55,5 @@
  ],
  "prepared_by": "Decision 2.0 27B M6 worker 355ad916 (worktree vllm-sr-dev2-27b)",
  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's Index-first rule of 2026-10-02 09:55 UTC+8 (release gate = a significantly positive private Index delta vs the current release; integrity checks; references not blocking) and the progressive-release directive of 11:35 UTC+8 (release a frozen candidate as soon as it qualifies; later candidates must beat the then-current release), applied to the 27B tier by the 27B M6 worker 355ad916 (COORDINATOR INTERRUPT 12:40 UTC+8: release M6-IB to Vega-27B now)",
- "decided_utc": "2026-10-02T05:44:32Z"
+ "decided_utc": "2026-10-02T05:53:36Z"
 }

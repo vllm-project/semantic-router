@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Decision-2.0-Vega-27B Index-first successor (COORDINATION 12:40; 27B M6 worker 355ad916): one node-A GPU with
-# 130 GB free whose lease has no owner, this track's or a released one (set aside as owner.prev-27bif-<UTC>; release.sh
-# then writes owner track=release-27b-27bif), the
+# 130 GB free: GPU0-1 as a shared-lease co-tenant (owner.release-27b-27bif), any other GPU only if its lease has no
+# owner, this track's or a released one (set aside as owner.prev-27bif-<UTC>; release.sh then writes owner), the
 # formal runs' image dbe5f32b with its kernels, HIP_FORCE_DEV_KERNARG=1, the Qwen3.8-27B base snapshot and a fresh copy
 # of the ARM's frozen formal autotune cache (v2.27b.triton_cache copy --expect its tree; the mlx-diag run copied the
 # same tree, so one cache serves all four panels).
@@ -63,9 +63,13 @@ digest() { (cd "$1" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha2
 [[ "$(docker image inspect -f '{{.Id}}' "$IMAGE")" == "$IMAGE" ]] || { echo "image $IMAGE is missing" >&2; exit 1; }
 [[ -d "$BASE" ]] || { echo "no base snapshot $BASE" >&2; exit 1; }
 owner=/data/dev2/leases/gpu$gpu.lock/owner
+lease_args=()
 rocm-smi --showuse --showmeminfo vram --json | python3 "$RENAME_OPS/pick_gpu.py" 130 "$gpu" >/dev/null \
   || { echo "GPU$gpu is busy or lacks free VRAM" >&2; exit 1; }
-if [[ -f "$owner" ]] && ! grep -qx "track=$TRACK" "$owner"; then
+if [[ "$gpu" == 0 || "$gpu" == 1 ]]; then
+  # COORDINATION: node A GPU0-1 take release workers as shared-lease co-tenants with their own lease entries.
+  owner=$owner.$TRACK lease_args=(--shared-lease "$TRACK")
+elif [[ -f "$owner" ]] && ! grep -qx "track=$TRACK" "$owner"; then
   grep -q '^status=released' "$owner" || { echo "gpu$gpu is leased ($(grep -m1 '^track=' "$owner"))" >&2; exit 1; }
   mv "$owner" "$owner.prev-27bif-$TS"
 fi
@@ -101,7 +105,7 @@ echo "mirror $SRC arm $ARM mode $mode gpu $gpu work $W"
 set -x
 status=0
 "$S/v2/release/release.sh" --spec "$SPEC" --src "$SRC" --work "$W" --image "$IMAGE" \
-  --gpu "$gpu" --track "$TRACK" --threads 4 \
+  --gpu "$gpu" --track "$TRACK" "${lease_args[@]}" --threads 4 \
   --site /opt/decision-fla --require-kernels --env TRITON_CACHE_AUTOTUNING=1 --env HIP_FORCE_DEV_KERNARG=1 \
   --base-path "$BASE" --env "HF_HUB_CACHE=$HFC" --mount "$base_repo" \
   --env "TRITON_CACHE_DIR=$TC" --mount-rw "$TC" "${mounts[@]}" \
