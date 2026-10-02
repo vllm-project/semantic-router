@@ -2,6 +2,23 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 20:10Z (10-03 04:10 UTC+8), M10 continuation
+
+- **`M10-X7-a40-bf16`: FAIL** vs KIB4-a40. Its point is level with the release; values are private.
+- **Release-ops dry run on X7-a40** (CPU, node A, mirror `7d422f85f`). These steps all ran: `inputs_m10c.sh bf16`
+  and `index` (node B → C → A, lists and hashes equal), `prep_m10c.sh current` (KIB4-a40's gate and decision digests
+  match), `derive`, `paired`, `index_m10c.sh`, `render_m10c.sh`, and `make_m10c.spec`.
+  - `make_m10c.decision` refuses the point, with only IF1 failing. R3 and IF3 pass.
+  - The release path is ready for a passer. Nothing was uploaded.
+  - The X7-a40 inputs stay in their candidate-named directories.
+- **Card Index sources:** no single released Index input carries both new 4B (`d55528d1`) and new 27B (`5c85c127`)
+  points, because those releases ran side by side. `index_m10c.sh` now takes each other tier's point from the newest
+  released input that carries its current weights (`7d422f85f`). The board points and footnote are checked equal
+  across sources.
+- **KIB4R-a40** (the factory's node B point; KIB4's recipe with a second x60 cut; model `f3c9ba05…`) is linked,
+  staged and on node B GPU2 / 3 / 7. **KIB4-a50** is at shards 4–6 on node A GPU1–4.
+- **GPU-h (continuation):** ≈ 13.5 used, plus ≈ 3.5 running.
+
 ## 2026-10-02 19:50Z (10-03 03:50 UTC+8), M10 continuation
 
 - **Gate verdicts vs `M10-KIB4-a40-bf16`** (values private):
