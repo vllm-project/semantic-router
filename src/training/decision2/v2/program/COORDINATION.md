@@ -205,6 +205,18 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 10:00 — **The user asked for fast all-size progress. Index sweep (new worker) over every frozen breadth
+  candidate under the Index-first rule.**
+  - **Scope:**
+    - 0.8B: M13 `08b-RASD`, M14 `08b-RAUP`, M15 `08b-RASDML`, plus the measured `08b-RA`;
+    - 2B: M12 `2b-RA`, M13 `2b-RASD`, M14 `2b-RAUP`, M16 `2b-RA-a75`;
+    - 9B: `L9IB`, `K-a12IB`.
+  - **Rules.** Paired CI vs the current release of each tier; the best lower bound > 0 plus the integrity checks →
+    release; ≤ 30 GPU-h; node A GPU3–5, node B GPU2–4 (if the suite is mirrored), and free node C / D GPUs.
+  - **Coordination.** The 0.8B / 2B Index-path continuation (b49d1f36) may release first. The sweep then compares
+    against the new release.
+  - **Owners:** 4B (5e7b8132) and 27B (355ad916).
+
 - 2026-10-02 09:55 — **USER DECISION (09:38 / 09:55): the release rule becomes INDEX-FIRST; banner concept A.**
   It supersedes the 02:05 Index path and successor items 1–8 as release blockers.
   - **Release gate (the only quality blocker):** the frozen candidate's private **Jev Decision Index delta vs the
