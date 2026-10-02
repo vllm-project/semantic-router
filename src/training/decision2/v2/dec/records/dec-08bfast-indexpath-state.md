@@ -7,6 +7,19 @@ Branch `xunzhuo/decision-2-training-dec-08bfast`. Index values stay private (nod
 `/data/dev2/private/eval/index021/ix1/runs/<name>/` and `decision2-program/private/m16-indexpath/`); this file holds
 verdicts, counts and hashes only.
 
+## 2026-10-02 03:25Z — release tooling committed; BF16 Index runs at shard 1 / shard 0 of 3
+
+- Decision record drafted ([`dec-08bfast-indexpath-2026-10-02.md`](dec-08bfast-indexpath-2026-10-02.md); release
+  section pending). Release tooling: `ops/make_ixf.py` (spec + final decision, `index_first` profile),
+  `ops/release_ixf.sh` (`--stage` / `--mlx` / `--release`), `ops/stage_private.sh` (private inputs and the default
+  Index generator), `ops/index_runs.py`, `ops/render_assets.sh` (workstation render, Python 3.12.13 / matplotlib
+  3.11.2 / Pillow 12.3.0, Inter and logo hashes equal to round 4's receipt).
+- `--stage` done for both tiers on node A (current gate / decision byte-equal to card round 3: Eos `221c331e…` /
+  `83e15d20…`, Sol `c5d5a137…` / `bf8d2200…`). Hub mains unchanged (Eos `9c7f3ea0`, Sol `b42b6ff3`); HF headroom
+  47.45 GB; the Transformers 5.18 site on node A is `93df9002…` (as the 4B / 9B releases).
+- Next: 0.8B BF16 run ends ≈ 03:55Z → pull to node C, bootstraps, private inputs, Index input, assets, spec /
+  decision, `--mlx`, `--release` (node A GPU1, co-tenant `owner.release-0p8b-ixf`); then the same for 2B.
+
 ## 2026-10-02 03:05Z — winners 08b-RA-a75 / 2b-RASD-a25; Index runs on the BF16 release weights running
 
 - **0.8B choice (09:55 rule, largest Index-gain 95% lower bound):** `08b-RA-a75` > M12 `08b-RA` (`DEV2.0-0.8B-08bRA`,

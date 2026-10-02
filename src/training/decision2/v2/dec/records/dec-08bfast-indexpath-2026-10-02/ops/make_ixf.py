@@ -44,7 +44,7 @@ DECIDED_BY = (
     "Index-gain lower bound, applied to M16's Index-path candidates by the 0.8B / 2B continuation"
 )
 PREPARED_BY = "Decision 2.0 decoder track, 0.8B / 2B Index-path continuation (worktree vllm-sr-dev2-dec-08bfast)"
-DECIDED_UTC = "2026-10-02T04:00:00Z"
+DECIDED_UTC = "2026-10-02T02:15:00Z"
 TIERS = {
     "0p8b": {
         "tier": "0.8B",
