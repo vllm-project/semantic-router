@@ -2,6 +2,14 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 05:55Z (13:55 UTC+8), worker 7e1c9ce8
+
+- **Arm (d) KIB4** (amendment 3; IB4 phase 1 `76cea510`, TRAIN `6045b456…` checked against its `final.json`):
+  TRAIN `2e72bcfd…` / teacher `377f8878…` locked (151,039 rows, 99,545 x60, 60,332,200 native tokens, IB share .1898;
+  6,808 `sentfin` rows out). Phase-2 chains `b6-p2` / `b7-p2` (KIB4-s1 / s2) wait for GPU6 / 7's flocks.
+- KSW / KIB4 are two-seed arms; the labeling chain, post-KSW and post-KIB4 run from mirror `c07aee766`.
+- A KIB4 release needs the C1 recheck r3 PASS (IB4 is release-safe pending C1).
+
 ## 2026-10-02 05:45Z (13:45 UTC+8), worker 7e1c9ce8
 
 - Seeds at update 570–724 of 2,083 (KUP) / 2,365 (KIBM), ≈ 15 updates per minute: KUP ends ≈ 07:05–07:20Z, KIBM-s1 /
