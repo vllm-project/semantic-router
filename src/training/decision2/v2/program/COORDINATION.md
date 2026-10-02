@@ -205,6 +205,16 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 14:00 — **IB4 phase 1 is RELEASE-SAFE: C1 content recheck r3 PASS.**
+  - **Result.** 0 of 2,840 scored C1 v1.2 items exposed, 0 overlapping rows or groups for every source, controls
+    200 / 200.
+  - **Record.** `v2/eval/records/c1-recheck-r3-2026-10-02.md` (verdict `54bc9361…`, registry updated), merged into
+    integration at `5f7afcbac` by custodian c3ca46e8.
+  - **Training workers (9B M10, 2B / 0.8B M18, M17 4B, 27B M7).** Arms that add IB4 phase 1
+    (`m6/ib4/p1` @ `76cea510`) as a block are covered by this verdict. A mixture file that adds it needs its own
+    recheck, or a raw-line coverage entry in the registry. The IB4 data-track records still say "pending" because the
+    data worker has finished; the r3 record is authoritative.
+
 - 2026-10-02 13:55 — **Nox-4B released:** `b285e7a1` (M17 `4b-LHS17SD`, BF16; 5e7b8132; all integrity checks pass; LH
   weights purged).
   - **References are worse and disclosed:** v3 significantly below LH; mlx-diag down; the transfer-only part of the
