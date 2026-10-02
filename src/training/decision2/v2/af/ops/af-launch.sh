@@ -9,7 +9,8 @@
 # Only the arm factory's GPUs are accepted (COORDINATION 2026-10-02 22:00): node A GPU1-7, node C GPU3-7, node F
 # GPU2-7, node B GPU2 / 4 / 6 / 7, and the GPU's lease owner file must name track=arm-factory. Mounts (read-only
 # unless noted): the exact mirror's src/training/decision2 as /code, /data/dev2/models as /models, /data/dev2/runs/af
-# as /runs, the decoder panels as /panels (when present), the SELECT/CAL directory as /data, <out-dir> as /out (rw) and
+# as /runs, the decoder panels as /panels, the owners' run trees /data/dev2/runs/dec and /data/dev2/runs/9b as /dec and
+# /r9b (each when present), the SELECT/CAL directory as /data, <out-dir> as /out (rw) and
 # the Triton cache /data/dev2/runs/af/<size>/triton-cache/$AF_CACHE as /triton-cache (rw). A receipt with start / end
 # UTC, exit status, GPU and the docker argv is written to <out-dir>.launch.json; GPU-hours are summed from these.
 set -euo pipefail
@@ -59,6 +60,8 @@ argv=(docker run --name "af-$job" --rm --network none --shm-size 16g
   --mount "type=bind,src=$data,dst=/data,readonly"
   --mount "type=bind,src=$out,dst=/out")
 [[ -d /data/dev2/runs/dec/panels ]] && argv+=(--mount "type=bind,src=/data/dev2/runs/dec/panels,dst=/panels,readonly")
+[[ -d /data/dev2/runs/dec ]] && argv+=(--mount "type=bind,src=/data/dev2/runs/dec,dst=/dec,readonly")
+[[ -d /data/dev2/runs/9b ]] && argv+=(--mount "type=bind,src=/data/dev2/runs/9b,dst=/r9b,readonly")
 [[ -n $lux ]] && argv+=(--mount "type=bind,src=$lux,dst=/lux,readonly")
 label="node ${node^^} CPU"
 if [[ -n $gpu ]]; then
