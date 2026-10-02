@@ -80,7 +80,12 @@ TIERS: dict[str, tuple[str, str, str | None, str | None]] = {
         "6af07f3684132ab684d4f064a723ae623ec3956f",
         "dev2-org-9B-20261002T105801Z",
     ),
-    "27B": ("27b", "Vega", None, None),
+    "27B": (
+        "27b",
+        "Vega",
+        "e60bd8e346110b3348b6e5a25c07329d350c4b21",
+        "dev2-org-27B-20261002T113747Z",
+    ),
 }
 
 
