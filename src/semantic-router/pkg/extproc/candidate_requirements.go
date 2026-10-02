@@ -151,8 +151,11 @@ func (r *OpenAIRouter) validateDispatchRequirements(request *llmprotocol.Request
 	if !allowed {
 		return fmt.Errorf("%w: model %q is outside the selected decision's permission scope", selection.ErrNoEligibleCandidates, dispatch.logicalModel)
 	}
-	model := dispatch.logicalModel
-	if decision != nil {
+	model := dispatch.effectiveBackendModel()
+	if model == dispatch.logicalModel && ctx != nil {
+		model = ctx.backendModelForCandidate(dispatch.logicalModel)
+	}
+	if model == dispatch.logicalModel && decision != nil {
 		for _, ref := range decision.ModelRefs {
 			if ref.LoRAName == model && ref.LoRAName != "" {
 				model = ref.Model
