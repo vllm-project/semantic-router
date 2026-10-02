@@ -27,7 +27,7 @@ IB4_SHA=6045b456d4b3032db4b76d70d792e3e9e30aad13e16a8f86fb3e99bc325806fb
 A20=4aa0dc964505682b2840fa5167a7ec14983e5a0cea427480bed1996f1befc0d4
 IMAGE=sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1
 [ -f "$M/v2/27b/build_mixtures.py" ] || { echo "not inside a mirror: $M" >&2; exit 2; }
-for k in 1 2; do [ ! -e "$O/mixtures-m7-$k" ] || { echo "$O/mixtures-m7-$k exists" >&2; exit 66; }; done
+for k in 1 2; do [ ! -e "$O/mixtures-m7-$k" ] && [ ! -e "$O/ml-$k-a20ib14.json" ] || { echo "$O/mixtures-m7-$k exists" >&2; exit 66; }; done
 mkdir -p "$O" && chmod 700 "$O"
 echo "=== $(date -u +%FT%TZ) m7-build from $M"
 IB1=$(readlink -f "$IB1") IB2=$(readlink -f "$IB2") IB4=$(readlink -f "$IB4")
@@ -78,7 +78,7 @@ for k in 1 2; do docker run --rm --network none -e HIP_VISIBLE_DEVICES= -e ROCR_
  for mix in a20ib14 a20ib124; do
    (cd "$M" && PYTHONPATH=$M python3 -m v2.27b.m7.m7_data ml-upsample --base "$O/mixtures-m7-$k/a20.train.jsonl" \
      --input "$O/mixtures-m7-$k/$mix.train.jsonl" --seed decision2-27b-m7 --output "$O/mixtures-m7-$k/${mix}ml.train.jsonl") \
-     > "$O/mixtures-m7-$k/${mix}ml.json" || { echo "ML $mix $k FAILED"; exit 1; }
+     > "$O/ml-$k-$mix.json" || { echo "ML $mix $k FAILED"; exit 1; }
  done
 done
 diff -r "$O/mixtures-m7-1" "$O/mixtures-m7-2" || { echo "BUILDS DIFFER"; exit 1; }
@@ -103,7 +103,7 @@ for name, arms in (("a20ib14", ["IB1S", "IB4"]), ("a20ib124", ["IB1S", "IB2", "I
     for arm, part in parts.items():
         assert all(f["exhausted"] for f in part["families"].values()), f"{name}: an {arm} family was not exhausted"
     rows, tokens = manifest["mixtures"][name]["rows"], manifest["mixtures"][name]["tokens"]
-    ml = json.loads((root / f"{name}ml.json").read_text())
+    ml = json.loads((root.parent / f"ml-1-{name}.json").read_text())
     added = [json.loads(line) for line in lines if line not in a20_lines]
     a20_mix = manifest["mixtures"]["a20"]
     ml_tokens = tokens + round(ml["added_rows"] * a20_mix["tokens"] / a20_mix["rows"])  # copies cost like a20 rows
