@@ -371,6 +371,19 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 07:56Z (poll 25; COORDINATOR UPDATE 15:50 UTC+8: 27B goal top 3 of 15–40B, node D GPU0–7 + node E GPU0–3 / 6–7 +
+  node B GPU0 for 27B, M7 budget 120 GPU-h):
+  - **M6-IB release:** pre-upload parity passed again; AutoModel parity since 07:39:51Z, then upload.
+  - **M6-IB2 Index:** all 8 shards ended exit 0; collected (node B shards 2 / 6 / 7 → node D, SHA-256 equal); leases
+    released (node B GPU0 back to its 27B owner; GPU1 / 5 are b49d1f36's again); `score` running (paired bootstrap).
+  - **M6-IB2PN:** soup done (`edfcee97…`, rank 256); the chain stopped at its readout (node B GPU1 was eval-ix1's
+    then, now the 2B formal's). Resume it with `AUX_M6_IB2PN=0` on node B GPU0 (restart-safe; PN1 / IB12 env from
+    `m6-launch.sh`) or skip: it is a hedge.
+  - **M7 started (data):** `m7/m7_data.py` (ML block), `m7/m7-build.sh` (`b3ca2ae38`: IB1 without `sentfin`, 17,517
+    rows; IB4 phase 1 `6045b456…` 9,459 rows; `a20ib14` / `a20ib124` + ML copies → `a20ib14ml` / `a20ib124ml`), build
+    running on node B since 07:53Z. `m7/m7-arm.sh` (node D GPU0–7, node B GPU0; seeds s1–s3; cap 22) and
+    `m6-stage-d.sh M6_DATA=m7-data`. Node D GPU0–7 are idle for M7.
+
 - 07:08Z (poll 24):
   - **M6-IB prerelease PASSED** (node A GPU0, 05:57–07:02Z; work `dev2-27b-27bif-M6-IB-prerelease-20261002T055720Z`):
     build, two example processes, card example, scored-panel parity on typed-final / css15 / public231 / mlx-diag,
