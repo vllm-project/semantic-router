@@ -205,6 +205,22 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 10:35 — **The user wants banner A on every card now and asked why 0.8B hasn't shipped its best result.**
+  - **Banner (new card worker, fb5dd490).** Card-only revisions now for Vega-27B, Lux-9B and Nox-4B, using the
+    round-4 ops `dev2-card4-2026-10-02`.
+    - It skips a repo whose release driver is running or imminent (the release brings banner A).
+    - Eos-0.8B / Sol-2B ride on b49d1f36's imminent releases. If neither has landed by 12:00, the card worker
+      publishes card-only revisions for them too.
+    - `main`-unchanged check; never concurrent with another publisher.
+  - **0.8B.** b49d1f36 has bootstraps for `08b-RA` and the M16 a75 points under the Index-first rule. Since 10:16 it
+    has been running the Index runs on the exact BF16 release weights (card Index and gate evidence) on node C
+    GPU2–7. The release follows.
+  - **open-jev-fast study (2d541b40).** The clone is in `vllm-sr/ignore/` (local exclude, never committed); MIT.
+    - It runs a static catalogue plus MI325X profiling of our runtime.
+    - It prototypes the portable wins: prefix tree, HIP graphs, LoRA merge for 27B, mask sync removal, TunableOp.
+    - Fidelity: 0 decision changes. Budget ≤ 12 GPU-h on node A / B.
+    - Third-party code only in `--network none` containers without secrets. No Open-Jev weights. Results private.
+
 - 2026-10-02 10:15 — **Release-driver false failure fixed at `cd565a588` (integration). Every release worker must merge
   integration before running a driver.**
   - **Cause.** Since the rename, `records/dev2-rename-9b-27b-2026-09-29/ops/collection_order.py` matched only
