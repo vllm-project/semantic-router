@@ -237,18 +237,21 @@ func resolveReMoMFinalStage(req *Request) StageOwnership {
 	if req.Algorithm != nil && req.Algorithm.ReMoM != nil {
 		cfg = req.Algorithm.ReMoM
 	}
-	targetModel := strings.TrimSpace(cfg.SynthesisModel)
-	if targetModel == "" {
-		looper := &ReMoMLooper{}
-		defaultCalls := looper.distributeCallsToModels(cfg, 1, req.ModelRefs)
-		calls := remomFinalRoundModelCalls(cfg, defaultCalls, req.ModelRefs)
-		if len(calls) > 0 {
-			targetModel = calls[0].Model
-			if calls[0].LoRAName != "" {
-				targetModel = calls[0].LoRAName
-			}
-		} else if len(req.ModelRefs) > 0 {
-			targetModel = req.ModelRefs[0].Model
+	looper := &ReMoMLooper{}
+	defaultCalls := looper.distributeCallsToModels(cfg, 1, req.ModelRefs)
+	calls := remomFinalRoundModelCalls(cfg, defaultCalls, req.ModelRefs)
+	targetModel := ""
+	if len(calls) > 0 {
+		targetModel = calls[0].Model
+		if calls[0].LoRAName != "" {
+			targetModel = calls[0].LoRAName
+		}
+	} else if strings.TrimSpace(cfg.SynthesisModel) != "" {
+		targetModel = strings.TrimSpace(cfg.SynthesisModel)
+	} else if len(req.ModelRefs) > 0 {
+		targetModel = req.ModelRefs[0].Model
+		if req.ModelRefs[0].LoRAName != "" {
+			targetModel = req.ModelRefs[0].LoRAName
 		}
 	}
 	return ClassifyStage(req, "synthesis", StageRoleSynthesis, targetModel)
