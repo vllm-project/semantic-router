@@ -124,7 +124,7 @@ def _rsqrt_kernel(v_ptr, out_ptr, eps, N, BLOCK: tl.constexpr, MODE: tl.constexp
     elif MODE == 2:
         r = 1.0 / tl.sqrt_rn(v)
     elif MODE == 3:
-        r = (1.0 / tl.sqrt_rn(v.to(tl.float64))).to(tl.float32)
+        r = (1.0 / libdevice.sqrt(v.to(tl.float64))).to(tl.float32)
     elif MODE == 4:
         r = libdevice.rsqrt(v.to(tl.float64)).to(tl.float32)
     else:
