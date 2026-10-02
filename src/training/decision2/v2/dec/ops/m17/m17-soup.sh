@@ -30,10 +30,12 @@ case $ARM in
   4b-LHS17IB4-x3 | 4b-SDMLIB4-x3)
     TR=${ARM%-x3} SEEDN="1 2 3" NEED=6
     source=/models/Qwen--Qwen3.5-4B-Base/1001bb4d826a52d1f399e183466143f4da7b741b ;;
-  4b-*-m50 | 4b-SDMLxS17xIB4 | 4b-SDMLxALL)
+  4b-*-m50 | 4b-SDMLxS17xIB4 | 4b-SDMLxALL | 4b-SDMLxALL9 | 4b-SDMLxALL15)
     case $ARM in
       4b-SDMLxS17xIB4) list="4b-LHA10SDML 4b-LHS17SD 4b-LHS17IB4" ;;
       4b-SDMLxALL) list="4b-LHA10SDML 4b-LHS17SD 4b-LHS17UP 4b-LHS17IB4 4b-LHS17IB4X 4b-SDMLIB4 4b-LHS17ML" ;;
+      4b-SDMLxALL9) list="4b-LHA10SDML 4b-LHS10SD 4b-LHS17SD 4b-LHS17UP 4b-LHS23SD 4b-LHS17IB4-x3 4b-LHS17IB4X 4b-SDMLIB4-x3 4b-LHS17ML" ;;
+      4b-SDMLxALL15) list="4b-LHA10SDML 4b-LHS10SD 4b-LHS17SD 4b-LHS17UP 4b-LHS23SD 4b-LHS17IB4-x3 4b-LHS17IB4X 4b-SDMLIB4-x3 4b-LHS17ML m10/LH m11/4b-LHB m12/4b-LHA m12/4b-LHA10 m13/4b-LHA10SD m13/4b-LHA5" ;;
       *)
         x=${ARM%-m50} base=4b-LHS17SD
         case $x in 4b-SDMLIB4 | 4b-LHS17ML) base=4b-LHA10SDML ;; 4b-SDMLxS17) base=4b-LHA10SDML x=4b-LHS17SD ;; esac
@@ -47,10 +49,22 @@ case $ARM in
         echo "$a $SDML_FP32" >> "$OUT/members.txt"
         continue
       fi
+      if [[ $a == m1[0-3]/* ]]; then
+        d=/data/dev2/runs/dec/${a%%/*}/soup/${a#*/}
+        [ "$(cat "$d/DONE" 2> /dev/null)" = "$d/build/${a#*/}-soup" ] || fail "no soup of $a"
+        echo "$a $d/build/${a#*/}-soup" >> "$OUT/members.txt"
+        continue
+      fi
       [ -f "$M/soup/$a/DONE" ] || fail "no soup of $a"
       echo "$a $(cat "$M/soup/$a/MODEL_SHA256")" >> "$OUT/members.txt"
     done
-    member() { if [ "$1" = 4b-LHA10SDML ]; then echo /runs/m15/soup/4b-LHA10SDML/build/4b-LHA10SDML-soup; else echo "/runs/m17/soup/$1/build/$1-soup"; fi; }
+    member() {
+      case $1 in
+        4b-LHA10SDML) echo /runs/m15/soup/4b-LHA10SDML/build/4b-LHA10SDML-soup ;;
+        m1[0-3]/*) echo "/runs/${1%%/*}/soup/${1#*/}/build/${1#*/}-soup" ;;
+        *) echo "/runs/m17/soup/$1/build/$1-soup" ;;
+      esac
+    }
     mm=()
     for a in $list; do mm+=(--member "$(member "$a")"); done
     M17_NODE=$NODE bash "$OPS/m17-launch.sh" "soup-$ARM" "$SRC" "$OUT/build" --cpu -- -m v2.dec.soup "${mm[@]}" \
