@@ -7,6 +7,27 @@ Branch `xunzhuo/decision-2-training-dec-08bfast`. Index values stay private (nod
 `/data/dev2/private/eval/index021/ix1/runs/<name>/` and `decision2-program/private/m16-indexpath/`); this file holds
 verdicts, counts and hashes only.
 
+## 2026-10-02 07:56Z — COORDINATION 15:30 / 15:35: Sol-2B is M15 `2b-RASDML`; release running (node A GPU1)
+
+- **Choice (fixed by the user directive):** `IS-2b-RASDML-bf16`, the Index sweep's run on the BF16 release copy of
+  M15's soup (node F build `8c8e98e3…` → `e20df76c…`, receipt `51b10eae…`; equal to the scored package). Its
+  full-panel and transfer-only bootstraps vs DEV2.0-2B (sweep chain, 2,000 replicates, seed 20261002) both have a
+  95% lower bound > 0: **IF1 passes** (values private). The RASD inputs on node A are set aside
+  (`*.rasd-unreleased-*`); RASD is not released.
+- **Formal (node B GPU1, `select-ixf2`, `M6_FORCE_T1`):** M15 ran no formal. The soup was copied from node F (9 files,
+  SHA-256 lists equal; list `5d2e0bbb…`); smoke 07:33–07:35Z, collection to 07:39Z (one sealed run, so its
+  autotune cache backs the parity check). The GPU1 / GPU5 entries of the finished M6-IB2 shards (exit 0, 07:17Z)
+  were set aside first; both GPUs released 07:56Z. Relayed to node A (19 files) and scored; `prep` adopt
+  reproduces the formal report. **Types: choice / noul / score all OK (R3 passes).**
+- **Audit (node C CPU, IX1 method):** the whole TRAIN `97157068…` (102,402 rows: M12's RA TRAIN plus the M15 copies
+  of released multilingual rows): planted 200 / 200, item rows 0, duplicate rows 76, the same count as the RA TRAIN
+  audit, so the copies add none (**IF3 passes**); `audit/2bRASDML/out` `6fa6c907…`.
+- **Release inputs (`807acc299`):** `card_index` input `97a95897…`, assets receipt `c7ed5810…`; spec `ff95cdd3…`,
+  decision `813d0fc2…` (`decided_utc` 07:35Z); `make_ixf --check` byte-equal for 2B and 0.8B. The `release.sh` guard
+  is per repository (15:35: other repositories may publish in parallel).
+- **Release:** `release_ixf.sh 2b --release --gpu 1` started 07:55:45Z on Sol main `8ed41433`; headroom 47.43 GB
+  (≥ 10 GB). The Vega-27B release runs on GPU0 in parallel.
+
 ## 2026-10-02 07:25Z — poll: still held by the Vega-27B release on node A
 
 - The 27B prerelease ended about 07:02Z; the same worker's `release.sh --upload --collect` for
