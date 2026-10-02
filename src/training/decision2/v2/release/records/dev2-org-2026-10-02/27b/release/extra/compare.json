@@ -1,0 +1,26 @@
+{
+  "changed_files": [
+    "README.md"
+  ],
+  "files": [
+    30,
+    30
+  ],
+  "manifest_changed_fields": [
+    "builder.source_commit",
+    "card.readme_sha256",
+    "files_sha256.README.md"
+  ],
+  "package_former_org_occurrences": {},
+  "passed": true,
+  "problems": [],
+  "readme_former_org_occurrences": [
+    4,
+    0
+  ],
+  "readme_is_renamed_release_readme": true,
+  "released_revision": "781b2b2431abccbdcfcbfa98b66c80b332725513",
+  "repo": "vllm-sr/Decision-2.0-Vega-27B",
+  "schema": "dev2-org-compare/1",
+  "utc": "2026-10-02T11:38:30.914261+00:00"
+}

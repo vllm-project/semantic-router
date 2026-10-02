@@ -1,0 +1,76 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's instruction of 2026-10-02 17:35 UTC+8 (the Hugging Face organization llm-semantic-router is now vllm-sr): card-only revisions of the Decision 2.0 repositories naming the new organization; every card keeps its release's Index data, charts and banner",
+  "decision": "release",
+  "decision_sha256": "08d19f0e7d482fef162efb2231624f4d52f03ad86f194cac4a2a7257faa03aea",
+  "gate_profile": "successor",
+  "items": {
+    "1_successor_IF1_index_gain": {
+      "evidence": "private Index paired bootstrap 70c5bd0ce5e3 (2000 replicates over 138645 cases) of these weights (e50fb4c13048) minus the current revision's (2e07451107a2): 95% lower bound > 0: yes",
+      "passed": true
+    },
+    "1_successor_IF3_index_audit": {
+      "evidence": "row-level Index audit d1f1e68e66f2 of 120226 Index rows: a20ib1 81294 training lines, 0 item rows, 2 familiar-text rows; planted control 200 / 200",
+      "passed": true
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "evidence": "types choice OK, noul OK, score OK",
+      "passed": true
+    },
+    "1_successor_references": {
+      "evidence": "references only under the Index-first rule (user 2026-10-02 09:55): v3: v3 73.160 vs current 72.360: +0.80 [-1.59, +2.80] (below its former bar); human transfer: human transfer delta 95% [-0.032, +0.037] (clears its former bar); mlx-diag: mlx-diag card-eligible macro -0.0020 [-0.0118, +0.0074] (clears its former bar); tier gates: no Decision 1.0 at this size; v3 73.160 vs 90% of AutoJev-27B 72.133; H vs AutoJev-27B [-0.031, +0.061]; v3 >= 64.919 ok, H vs AutoJev-27B upper >= 0 ok, no type collapsed ok (clears its former bar); overlap exposure: 1 training files, 0 exposed groups (clears its former bar); public 231: public 231 198 vs 203 (-5; McNemar p 0.125) (clears its former bar); C1 post-key: not run",
+      "passed": true,
+      "reference": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "9 results below AutoJev-27B (no Decision 1.0 at this size) listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 31 files re-hashed; loaded 27497508864",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "23a040164046b0fcd4a88006cabc474d0e965a5f091806b027b933ce2a5b24e4",
+  "model_name": "Decision-2.0-Vega-27B",
+  "receipts_sha256": {
+    "automap-card-pre": "bd066f370829db03d50578a0becd5825feeafeb9b6ef0865ce8ad2f51cb17d2c",
+    "automap-hub": "b8dcc35714ac62a0df72fa9fd08efcef4f43392d8276593bc9137ca994922948",
+    "automap-hub-tf518": "b6c6e87b935e4f3b05f9104bb840242b5470b5d1c4bcf1aaca2a140c9ea07144",
+    "automap-post": "7e7214e759b2fc35410df25715ed78282ba0dfa8fe992b37c23d7d900e273be2",
+    "automap-pre": "6ab99cab3d10c3fad24aa5d71c6455c4865c1bf48078f7219a8ec750e43bbe0d",
+    "card-post": "54e283f248b3f338f475e1df3a920fb0e1aa00442609c985d2fb0bb75dbc50e2",
+    "card-pre": "c8ba45082adc4b3268d31a16246de8a21ba7dadb7573f18c66a87577f0ad79a5",
+    "download": "dfe184f798a52eb4164f821477a20b94133e16e3f0fa5d8e243d086fbc2c725e",
+    "post": "9ae2450ed0e901fde75b741316ac8eb9ea70d1540b418d2c2da879ad1df53232",
+    "readback": "d57a87192b6eb1363f7540bd48d1dab40c96e183978666a9ead72edf90206c60",
+    "repeat-post": "1aeab0702f1b77d7309a8dc2c5fc1ce4df732b46ab64ae6ecb4983f72f8321b7",
+    "repeat-pre": "2ecafab72789c9b7f92a3e19a85ae91b867b5d07e2e19d002057ec8b962bf8b4",
+    "tree": "6e1f5fc73ee4b94b98a7c73d366a5113eefc1f4c001a5812aa8a105cf6c21ef5",
+    "upload": "95fcef6bc7cb141bd12893758412463f32accea5ad5a8ea92a78ab62d6ab90ff"
+  },
+  "repo_id": "vllm-sr/Decision-2.0-Vega-27B",
+  "revision": "e60bd8e346110b3348b6e5a25c07329d350c4b21",
+  "rule": "index-first",
+  "schema": "dev2-release-gate/1",
+  "supersedes": {
+    "gate_sha256": "8a3da2516d1b8898761986b8bfdac93c42d43b214d82b62dfc9338f198a3ce70",
+    "revision": "b689ee66b51a0c0c45faf42b63e5aa0eaf187bde"
+  },
+  "utc": "2026-10-02T12:15:08.768376+00:00"
+}
