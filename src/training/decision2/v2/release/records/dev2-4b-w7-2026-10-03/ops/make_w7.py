@@ -130,6 +130,30 @@ CANDS = {
         [1],
         "de1ab06b31ad1971944699c4637f02a7fae6c2b445f59a08dfdceae2eb64f668",
     ),
+    "LHS17ML-lrh": lrh_cand(
+        "LHS17ML-lrh",
+        ["4b-LHS17ML-lrh"],
+        [1],
+        "a9ab8c812046e56f13c16465559f51211c9167387236e4884b24864cfa3037e1",
+    ),
+    "LHS17IB4X-lrh": lrh_cand(
+        "LHS17IB4X-lrh",
+        ["4b-LHS17IB4X-lrh"],
+        [1],
+        "77f3dba12bce2405df9d47ec294532748c5e9867dbda5e6145c14bd556b3ef26",
+    ),
+    "LRHxALL": lrh_cand(
+        "LRHxALL",
+        ["4b-LHS17IB4-lrh", "4b-SDMLIB4-lrh", "4b-LHS17ML-lrh", "4b-LHS17IB4X-lrh"],
+        [1, 1, 1, 1],
+        "2fdee0bc8055115c6fa6f96b641cbaa086f60a15774d0637f5574d8da3f58be2",
+    ),
+    "LRHxALL-L2": lrh_cand(
+        "LRHxALL-L2",
+        ["4b-LHS17IB4-lrh", "4b-SDMLIB4-lrh", "4b-LHS17ML-lrh", "4b-LHS17IB4X-lrh"],
+        [2, 1, 1, 1],
+        "72ba598ca943355cc9b99fc5443113de0722b32f1b0c1fb63c96c4b5fd99d8ad",
+    ),
 }
 
 
