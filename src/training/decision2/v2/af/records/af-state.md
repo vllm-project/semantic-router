@@ -2,6 +2,27 @@
 
 Index values stay private (node private stores and `decision2-program/private/arm-factory/`); this file has none.
 
+## 2026-10-02 16:20Z (00:20 UTC+8) — batch 2 launched (amendment 4; +30 GPU-h, 90 total)
+
+| Node / GPU | Batch-2 seed | Since |
+| --- | --- | --- |
+| C1 / C2 | `4b-LHS17IB4X` s3 (20260928) / s4 (20260929) | 16:08Z |
+| C6 / C7 | `4b-LHS17ML` s3 (20260928) / s4 (20260929) | 16:08Z |
+| F6 / F7 | `4b-SDMLIB4-lrh` s1 (20260926) / s2 (20260927) | 16:09Z |
+| B2 / B3 | `KIB4W3` s1 (seed 9; node B pre-warm) / s2 (10) | 16:10Z |
+| B4 / B6 | `KIB4R` s1 (11) / s2 (12), after the node B pre-warm | ≈ 16:20Z |
+
+- `KIB4W3` weights `af_weights.py --up-weight 3.0` on KIB4's TRAIN (IB4 loss-weight share .167).
+- `KIB4R` TRAIN `e95e32ce…` / teacher `ead5e5d6…` (`af-prep9b.sh kib4r`, `1064dc735`): 151,088 rows at the matched
+  60,183,732 native tokens; 132,232 rows shared with KIB4, 18,856 x60 rows different. Row-level audit (node C,
+  panel-7): 120,226 Index rows, planted 200 / 200, **0 item rows**, 210 duplicate-class rows (`audit.json`
+  `2976ee4b…`). Locked on node B after the audit.
+- Node B's 9B tree: M10's node B Triton cache copied as `9b-train`, KIB4's TRAIN / teacher copied (same lock hashes
+  as node A).
+- Node F armed: `4b-LHS17UP-x4`, `4b-AFxALL`, `4b-AFxALL2` (amendment-2 members) build as their inputs arrive; their
+  Index runs start when `AF-4b-LHS23IB4-bf16`'s shards end.
+- GPU-h so far ≈ 24 (training ≈ 23, Index ≈ 1); projected total ≈ 81–87 of 90.
+
 ## 2026-10-02 16:00Z (00:00 UTC+8) — first soups built; first Index run on node F
 
 - **Seeds DONE** (no failure, no cap stop): node C `4b-LHS17IB4` s4 / s5, `4b-SDMLIB4` s4 / s5, `4b-LHS17UP` s3; node F
