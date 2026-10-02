@@ -189,5 +189,101 @@ class DataTest(unittest.TestCase):
             self.data.build(args)
 
 
+class RulesTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.rules = load("m17_rules")
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def row(self, point, transfer, gain=False, eligible=True, gates=7, card=0.0):
+        line, alpha = self.rules.line_alpha(point)
+        return {
+            "point": point,
+            "line": line,
+            "alpha": alpha,
+            "eligible": eligible,
+            "gates_passed": gates,
+            "ib_dev": {"transfer_delta": transfer},
+            "htdev2": {"verdict": "GAIN" if gain else "TIE"},
+            "mlx_dev2": {"card_delta": card},
+        }
+
+    def test_gate_mapping(self) -> None:
+        g = self.rules.gate_of
+        self.assertEqual(g("type floor choice: 700 < 728 - 0.03*1000"), 1)
+        self.assertEqual(g("family floor x: 1/2 < 2/2 - 0.10"), 1)
+        self.assertEqual(g("Noul floor: rule_precedence 3 < 9 - 0.01*400"), 1)
+        self.assertEqual(g("Score floor: Score5-typed-DEV check half COLLAPSE"), 2)
+        self.assertEqual(g("Score5-typed-DEV readout missing"), 2)
+        self.assertEqual(g("HT-DEV v2 FLAG (-0.0300)"), 3)
+        self.assertEqual(
+            g("retention: probe macro delta -0.03 CI [-0.05, -0.01] below 0"), 4
+        )
+        self.assertEqual(
+            g("yes-bias guard: hs1-dev false-yes 0.4 > 4b-LH-f 0.2 + 0.1"), 5
+        )
+        self.assertEqual(g("breadth: transfer macro delta -0.01 < 0 vs 4b-LH-f"), 6)
+        self.assertEqual(
+            g("MLX-DEV2 guard: card delta -0.0200, upper bound -0.0100 < 0 vs 4b-LH-f"),
+            7,
+        )
+
+    def test_points_and_alpha(self) -> None:
+        self.assertEqual(self.rules.line_alpha("4b-LHS17SD"), ("4b-LHS17SD", 1.0))
+        self.assertAlmostEqual(self.rules.line_alpha("4b-LHS10SD-a33")[1], 1 / 3)
+        with self.assertRaises(ValueError):
+            self.rules.line_alpha("4b-LHS10SD-a50")
+
+    def test_mlx2_guard(self) -> None:
+        lines, root = self.tmp / "lines", self.tmp / "mlx2"
+        (root / "4b-LH-f").mkdir(parents=True)
+        ref = root / "4b-LH-f" / "mlx-dev2.predictions.jsonl"
+        ref.write_text('{"id": "a", "answers": ["x"]}\n')
+        out = lines / "4b-LHS10SD" / "mlx2cmp"
+        out.mkdir(parents=True)
+
+        read_sha = sha(ref)
+
+        def cmp(high):
+            (out / "4b-LHS10SD.mlx2.json").write_text(
+                json.dumps(
+                    {
+                        "candidate_name": "4b-LHS10SD",
+                        "reference_name": "4b-LH-f",
+                        "predictions_sha256": {"candidate": "c", "reference": read_sha},
+                        "card_eligible": {
+                            "delta": high - 0.01,
+                            "ci95": {"low": high - 0.02, "high": high},
+                        },
+                        "per_type": {},
+                        "guard_pass": high >= 0,
+                    }
+                )
+            )
+            return self.rules.mlx2_guard(lines, root, "4b-LHS10SD", "4b-LH-f")
+
+        self.assertEqual(cmp(0.004)[1], [])
+        self.assertTrue(cmp(-0.001)[1][0].startswith("MLX-DEV2 guard"))
+        ref.write_text('{"id": "a", "answers": ["y"]}\n')
+        self.assertIn("not against", cmp(0.004)[1][0])
+
+    def test_better_arm_and_pick(self) -> None:
+        r = self.rules
+        a = self.row("4b-LHS10SD", 0.03, eligible=False, gates=6, card=0.01)
+        b = self.row("4b-LHS17SD", 0.05, eligible=False, gates=5)
+        self.assertEqual(sorted([a, b], key=r.better_key)[0]["point"], "4b-LHS10SD")
+        c = self.row("4b-LHS17SD", 0.03, eligible=False, gates=6, card=0.02)
+        self.assertEqual(sorted([a, c], key=r.better_key)[0]["point"], "4b-LHS17SD")
+        rows = [
+            self.row("4b-LHS10SD", 0.040),
+            self.row("4b-LHS17SD", 0.050),
+            self.row("4b-LHS17SD-a67", 0.050, gain=True),
+            self.row("4b-LHS17SD-a33", 0.020),
+        ]
+        self.assertEqual(r.pick(rows), ["4b-LHS17SD-a67", "4b-LHS10SD"])
+        rows[1]["eligible"] = rows[2]["eligible"] = False
+        rows[0]["eligible"] = False
+        self.assertEqual(r.pick(rows), ["4b-LHS17SD-a33"])
+
+
 if __name__ == "__main__":
     unittest.main()
