@@ -75,6 +75,11 @@ ARMS = {
     # Amendment 7: the S17-base counterparts (two epochs; IB4 rows x2).
     "4b-LHS17IB4-e2": ("4b", "4b-LHS17IB4", ["--epochs", "2"]),
     "4b-LHS17IB4W2": ("4b", "4b-LHS17IB4W2", []),
+    # Amendment 8 (4B wave 7): UP weights (kept released rows x1.5, IB rows x1) on the IB4-family TRAINs.
+    "4b-SDMLIB4-UP": ("4b", "4b-SDMLIB4-UP", []),
+    "4b-LHS17IB4-UP": ("4b", "4b-LHS17IB4-UP", []),
+    "4b-LHS17ML-UP": ("4b", "4b-LHS17ML-UP", []),
+    "4b-LHS17IB4X-UP": ("4b", "4b-LHS17IB4X-UP", []),
 }
 
 
