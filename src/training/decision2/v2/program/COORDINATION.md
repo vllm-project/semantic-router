@@ -205,6 +205,31 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 09:55 — **USER DECISION (09:38 / 09:55): the release rule becomes INDEX-FIRST; banner concept A.**
+  It supersedes the 02:05 Index path and successor items 1–8 as release blockers.
+  - **Release gate (the only quality blocker):** the frozen candidate's private **Jev Decision Index delta vs the
+    current release is significantly positive** (paired bootstrap over rows within benchmarks through the board's area
+    weights, ≥ 2,000 replicates, 95% CI lower bound > 0). One Index run per frozen candidate.
+  - **Kept as integrity checks (not quality comparisons):**
+    - exact package parity and Hub / `trust_remote_code` checks;
+    - the row-level Index contamination audit (the card footnote stays "audited");
+    - **no decision type collapsed** (the Index has no Score questions, so a collapsed Score head would otherwise
+      ship).
+  - **References, reported but NOT blockers:** JevArena (v3), human-labelled transfer, mlx-diag / MLX-DEV2,
+    JevBench public 231, C1 post-key. Always record them. The coordinator flags material regressions to the user.
+  - **Selection among candidates of a tier:** the largest Index-gain CI lower bound.
+  - Always record (privately) the transfer-only Index delta.
+  - **For all running workers (re-read before any GO / upload):**
+    - finish the current measurement;
+    - judge releases by this rule, not items 1–8;
+    - do not run C1 item 8 unless it is already in progress (it is a reference now);
+    - never publish concurrently (`main`-unchanged check).
+  - **Banner:** concept A ("codename hero"; gradient codename + size, an eyebrow "DECISION 2.0", a tagline, a large
+    translucent vLLM-SR V-mark) from `private/card-preview/banner-v3/make_banners.py`. It goes into the default card
+    generator, and card-only revisions go out repo by repo.
+  - **Candidates newly eligible** (private Index already measured): 4B `4b-LHA10SD` and 0.8B `08b-RA`. Others are
+    being measured.
+
 - 2026-10-02 09:40 — **Watchdog: a session interruption (≈ 04:40–09:30 UTC+8) silently stopped every worker;
   continuations relaunched.**
   - **9B:** K-a13IB passed items 1' and 2–8 (state 19:47Z), and **`Decision-2.0-Lux-9B` `259a4550` was published at
