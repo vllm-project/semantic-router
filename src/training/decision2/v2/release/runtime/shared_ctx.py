@@ -377,9 +377,11 @@ class Tree:
         for row, (start, length) in enumerate(zip(starts, lengths)):
             index[row, :length] = torch.arange(start, start + length)
         self.index = index.to(device)
-        self.valid = (index < self.suffix).to(device)
+        # Index (not mask) gathers: a boolean mask would sync the host on every use.
+        self.flat = (index.reshape(-1) < self.suffix).nonzero().squeeze(1).to(device)
         ends = [start + length for start, length in zip(starts, lengths)]
-        self.cu_seqlens = torch.tensor([0, *ends], dtype=torch.long, device=device)
+        self.cu_seqlens_cpu = torch.tensor([0, *ends], dtype=torch.long)
+        self.cu_seqlens = self.cu_seqlens_cpu.to(device)
         self.positions = torch.cat(
             [torch.arange(prefix)]
             + [torch.arange(prefix, prefix + length) for length in lengths]
@@ -393,7 +395,7 @@ class Tree:
 
     def packed(self, rows: Any) -> Any:
         """[questions, width, ...] -> [suffix tokens, ...]."""
-        return rows[self.valid]
+        return rows.reshape(-1, *rows.shape[2:])[self.flat]
 
 
 def _attend(query: Any, key: Any, value: Any, causal: bool, scale: float, torch: Any):
@@ -548,6 +550,7 @@ def _tree_gated_delta(
             output_final_state=False,
             use_qk_l2norm_in_kernel=True,
             cu_seqlens=tree.cu_seqlens,
+            cu_seqlens_cpu=tree.cu_seqlens_cpu,
         )
     else:
         out_rows, _ = rule(
