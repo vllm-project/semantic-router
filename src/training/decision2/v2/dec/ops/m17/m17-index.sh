@@ -11,7 +11,9 @@
 # Usage: m17-index.sh MIRROR_SHA ARM STAGE [NODE] ["GPUS"]
 #   ARM      LHS10SD | LHS17SD (the M17 arm soups on node F); stage 2: LHS17UP | LHS23SD | LHS17IB4 | LHS17IB4X or an
 #            interpolation point (soup/4b-ARM with DONE and MODEL_SHA256, as an arm soup). With M17_REF=S17 the
-#            reference run is the current release's (runs/DEV2.0-4B-LHS17SD-bf16) and boot / fetch write *-vs-s17.json
+#            reference run is the current release's (runs/DEV2.0-4B-LHS17SD-bf16) and boot / fetch write *-vs-s17.json;
+#            with M17_REF=SDML (amendment 2) it is the released 4b-LHA10SDML's (runs/IS-4b-LHA10SDML-bf16, merged/ copied
+#            from node D by refcopy-sdml) and they write *-vs-sdml.json
 #   stage    node F: test_bf16_copy, v2.release.bf16_copy (CPU container of host2, no network) -> NAME-ckpt, then
 #            v2.eval.ix1.restage onto DEV2.0-4B-13d42143 with the copy's model SHA-256 -> NAME-r13d42143 (checked)
 #   ship     NODE: the restaged package node F -> NODE through node A (per-file SHA-256 lists equal)
@@ -57,6 +59,8 @@ BASEPKG=/data/dev2/models/ix1/DEV2.0-4B-13d42143
 LOADED=4208383488
 REF=DEV2.0-4B-LH VS=lh
 [ "${M17_REF:-LH}" = S17 ] && REF=DEV2.0-4B-LHS17SD-bf16 VS=s17
+[ "${M17_REF:-LH}" = SDML ] && REF=IS-4b-LHA10SDML-bf16 VS=sdml
+SDML_RESULTS=a459ce7c5be0383c355c49a702a4377f22b48e07cff7d2c653c85c50c0a34ea6
 KEY="-i /root/.ssh/d2_temp_cd -o BatchMode=yes -o ConnectTimeout=30"
 IMAGE=decision20-train-fast:host2
 IMAGE_ID=sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54
@@ -81,6 +85,10 @@ A2=$R/audit/m17s2
 A3=$R/audit/m17sdml
 SDML_TRAIN=fef6b036f33de6756dab083fd21ab462ec2975cfa63120f2452d3c9145d33dd4
 case "$STAGE" in
+  refcopy-sdml)
+    hop d c "$R/runs/IS-4b-LHA10SDML-bf16" merged
+    [ "$(on c "sha256sum < $R/runs/IS-4b-LHA10SDML-bf16/merged/results.jsonl | cut -c1-64")" = $SDML_RESULTS ] \
+      || { echo "the copied IS-4b-LHA10SDML-bf16 results are not $SDML_RESULTS" >&2; exit 3; } ;;
   audit2-stage)
     on c "test ! -e $A2/train/FILES.txt" || { echo "audit2 already staged" >&2; exit 3; }
     on c "umask 077; mkdir -p $A2/train"
@@ -144,7 +152,7 @@ print(json.dumps({"index_rows": a["index_rows"], "planted": a["planted_control"]
 EOF
     exit 0 ;;
 esac
-case "$STAGE" in audit-stage | audit-run | audit2-stage | audit2-run | audit3-stage | audit3-run) exit 0 ;; esac
+case "$STAGE" in audit-stage | audit-run | audit2-stage | audit2-run | audit3-stage | audit3-run | refcopy-sdml) exit 0 ;; esac
 [[ "$ARM" =~ ^(LHS|SDML)[0-9A-Za-z-]+(,(LHS|SDML)[0-9A-Za-z-]+)*$ ]] || { echo "bad ARM $ARM" >&2; exit 2; }
 NAME=$(name_of "${ARM%%,*}")
 PKG=$MD/$NAME-r13d42143 CK=$MD/$NAME-ckpt
