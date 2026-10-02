@@ -17,6 +17,8 @@ import triton
 import triton.language as tl
 from triton.language.extra import libdevice
 
+from .masks import pack_mask  # noqa: F401  (re-exported)
+
 _CONFIGS = [
     triton.Config(
         {"BLOCK_M": bm, "BLOCK_N": bn, "waves_per_eu": w}, num_warps=nw, num_stages=1
@@ -141,21 +143,6 @@ def _tree_attn_kernel(
         o,
         mask=rmask[:, None],
     )
-
-
-def pack_mask(mask: Any) -> Any:
-    """Bool [B, N, N] (row sees key) -> int32 [B, N, ceil(N/32)] bit words (bit j of word w = key 32w+j)."""
-    B, N, _ = mask.shape
-    W = (N + 31) // 32
-    padded = torch.zeros(B, N, W * 32, dtype=torch.int64, device=mask.device)
-    padded[:, :, :N] = mask.to(torch.int64)
-    weights = torch.bitwise_left_shift(
-        torch.ones(32, dtype=torch.int64, device=mask.device),
-        torch.arange(32, device=mask.device),
-    )
-    words = (padded.view(B, N, W, 32) * weights).sum(-1)
-    words = torch.where(words >= 2**31, words - 2**32, words)
-    return words.to(torch.int32).contiguous()
 
 
 def tree_attention(

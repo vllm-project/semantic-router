@@ -21,44 +21,6 @@ from pathlib import Path
 from typing import Any
 
 
-def tree_mask(torch: Any, N: int, dev: Any) -> Any:
-    """Ancestor mask of a synthetic prefix tree packed into N rows (row sees key)."""
-    prefix = int(N * 0.45)
-    seg = []  # (start, end, parent segment index or -1)
-    seg.append((0, prefix, -1))
-    rest = N - prefix
-    q_len = max(1, rest // 10)
-    pos = prefix
-    questions = []
-    for _ in range(3):
-        questions.append(len(seg))
-        seg.append((pos, min(N, pos + q_len), 0))
-        pos = min(N, pos + q_len)
-    tails = []
-    for qi, cands in zip(questions, (2, 3, 2)):
-        for _ in range(cands):
-            tails.append(qi)
-    remaining = N - pos
-    per = max(1, remaining // len(tails))
-    for i, qi in enumerate(tails):
-        end = N if i == len(tails) - 1 else min(N, pos + per)
-        if pos < end:
-            seg.append((pos, end, qi))
-        pos = end
-    mask = torch.zeros(N, N, dtype=torch.bool, device=dev)
-    for si, (s, e, parent) in enumerate(seg):
-        chain = []
-        p = si
-        while p != -1:
-            chain.append(p)
-            p = seg[p][2]
-        for c in chain[1:]:
-            cs, ce, _ = seg[c]
-            mask[s:e, cs:ce] = True
-        mask[s:e, s:e] = torch.ones(e - s, e - s, dtype=torch.bool, device=dev).tril()
-    return mask
-
-
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, required=True)
@@ -74,7 +36,8 @@ def main() -> None:
     from .fidelity import compare
     from .shapes import BACKBONES
     from .timing import time_call, time_graph
-    from .tree_attention import pack_mask, tree_attention
+    from .masks import pack_mask, tree_mask
+    from .tree_attention import tree_attention
 
     dev = torch.device("cuda")
     report: dict[str, Any] = {"device": torch.cuda.get_device_name(0), "shapes": {}}
