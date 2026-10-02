@@ -25,7 +25,8 @@ R=/data/dev2/private/eval/index021/ix1
 P=/data/dev2/private/release/ixf-$KEY
 case "$KEY" in
   0p8b) TIER=0.8B NAME=M16-08b-RA-a75-bf16 REF=DEV2.0-0.8B AUDIT=out-08bRA PKG=/data/dev2/models/ix1/dec-indexpath/08b-RA-a75-bf16-rbede7938 ;;
-  2b) TIER=2B NAME=IS-2b-RASDML-bf16 REF=DEV2.0-2B AUDIT=2bRASDML/out PKG=/data/dev2/models/ix1/dec-indexpath/2b-RASDML-bf16-ra53cf66a ;;
+  2b) TIER=2B NAME=IS-2b-RASDML-bf16 REF=DEV2.0-2B AUDIT=2bRASDML/out PKG=/data/dev2/models/ix1/dec-indexpath/2b-RASDML-bf16-ra53cf66a
+    TRANSFER=paired-boot-transfer-vs-ref.json ;;
   *) echo "tier key 0p8b or 2b" >&2; exit 2 ;;
 esac
 declare -A REPO=([0.6B]=Decision-2.0-Kai-0.6B [0.8B]=Decision-2.0-Eos-0.8B [2B]=Decision-2.0-Sol-2B
@@ -40,7 +41,7 @@ pull_c() { # node-C path, node-A name
   echo "$2 $(ona "sha256sum < $P/$2 | cut -c1-12")"
 }
 pull_c "$R/runs/$NAME/paired-boot-full-vs-ref.json" paired-boot-full-vs-current.json
-pull_c "$R/runs/$NAME/paired-boot-vs-ref.json" paired-boot-transfer-vs-current.json
+pull_c "$R/runs/$NAME/${TRANSFER:-paired-boot-vs-ref.json}" paired-boot-transfer-vs-current.json
 pull_c "$R/runs/$NAME/merged/receipt.json" ix1-receipt.json
 pull_c "$R/runs/$REF/merged/receipt.json" ix1-reference-receipt.json
 pull_c "$R/audit/$AUDIT/audit.json" contamination-audit.json
