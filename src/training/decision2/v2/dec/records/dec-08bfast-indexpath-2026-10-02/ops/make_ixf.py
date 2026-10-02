@@ -56,7 +56,6 @@ TIERS = {
         "own": "adopted-1.0",
         "own_label": "Decision 1.0 Eos",
         "references": ("intern", "kev"),
-        "audit_set": "08bRA",
         "train_note": "the arm's TRAIN file (12bd63d8; the previous release's rows plus the IB1-r3 / IB2 rows)",
         "origin": (
             "Every weight of Decision 1.0 Eos was fine-tuned (nothing frozen, no adapter). The release interpolates two "
@@ -78,7 +77,11 @@ TIERS = {
         "own": "same-limit-16k",
         "own_label": "Decision 1.0 Sol (16K)",
         "references": ("decider2b", "thisthat12"),
-        "audit_set": "2bRA",
+        "tier_gate": lambda g: {
+            "reference": "decider2b",
+            "v3_share": 0.9,
+            "paired": f"{g}/paired-vs-decider2b.json",
+        },
         "train_note": "the arm's TRAIN file (08140409; the previous release's rows plus the IB1-r3 / IB2 rows)",
         "origin": (
             "Every weight of Decision 1.0 Sol was fine-tuned (nothing frozen, no adapter). The release interpolates two "
@@ -137,11 +140,11 @@ def spec(key: str) -> dict:
         f"alpha) x current release + alpha x arm, alpha {t['alpha']}) under the user's Index-first release rule "
         "of 2026-10-02 09:55 UTC+8: the private Index delta vs the current release significantly positive, plus "
         "the integrity checks; the per-tier choice by the largest Index-gain lower bound.",
-        "gate": f"index_first profile against the current revision {t['current'][:8]} (its scored run "
-        f"{Path(t['current_run']).name}): I1 the full-panel private Index bootstrap of exactly these weights minus "
-        "the current release's (IX1 receipts bound), I2 no type collapsed, I3 the row-level contamination audit; "
-        "the references (v3, human transfer, mlx-diag, public 231, exposure) are bound by SHA-256. The Index files "
-        "stay in node A's private tree.",
+        "gate": f"successor profile with the Index-first rule (index_first block, gate.py f3590ef2a) against the current revision {t['current'][:8]} (its scored run "
+        f"{Path(t['current_run']).name}): IF1 the full-panel private Index bootstrap of exactly these weights minus the "
+        "current release's (both IX1 receipts bound, one panel), R3 no type collapsed, IF3 the row-level contamination audit; "
+        "v3, human transfer, mlx-diag, exposure and public 231 (and at 2B the tier gates) are bound and printed as "
+        "references. The Index files stay in node A's private tree.",
         "scored": f"T = 1: the sealed M16 formal run m16-{t['point']} (node B, image dbe5f32b), collected without "
         "calibration, adopted unchanged on node A (ops/prep.sh adopt / paired).",
         "storage": f"v2.release.bf16_copy of the frozen FP32 point (identity {fp32[:8]} -> {identity[:8]}; receipt "
@@ -216,32 +219,26 @@ def spec(key: str) -> dict:
     }
     g = p["gates"]
     s["gate_profile"] = {
-        "name": gate.INDEX_FIRST,
+        "name": gate.SUCCESSOR,
         "run": p["run"],
         "current": {
             "revision": t["current"],
             "gate": p["current_gate"],
             "decision": p["current_decision"],
             "run": t["current_run"],
+            "mlx_predictions": f"{p['in']}/current-mlx/output/mlx-diag.predictions.jsonl",
         },
-        "index": {
+        "paired": f"{g}/paired-vs-dev2-{key}.json",
+        "types": f"{g}/types.json",
+        "mlx_paired": f"{g}/mlx-paired-vs-current.json",
+        "exposure": f"{g}/exposure.json",
+        "public231": f"{g}/public231-vs-current.json",
+        **({"tier": t["tier_gate"](g)} if t.get("tier_gate") else {}),
+        "index_first": {
             "bootstrap": f"{p['private']}/paired-boot-full-vs-current.json",
             "receipt": f"{p['private']}/ix1-receipt.json",
-            "reference_receipt": f"{p['private']}/ix1-reference-receipt.json",
-        },
-        "types": f"{g}/types.json",
-        "contamination": {
+            "base_receipt": f"{p['private']}/ix1-reference-receipt.json",
             "audit": f"{p['private']}/contamination-audit.json",
-            "training_set": t["audit_set"],
-        },
-        "references": {
-            "v3_paired_vs_current": f"{g}/paired-vs-dev2-{key}.json",
-            "own_1_0_paired": f"{g}/paired-vs-{t['own']}.json",
-            **{f"peer_{n}_paired": f"{g}/paired-vs-{n}.json" for n in t["references"]},
-            "mlx_paired_vs_current": f"{g}/mlx-paired-vs-current.json",
-            "public231_vs_current": f"{g}/public231-vs-current.json",
-            "exposure": f"{g}/exposure.json",
-            "index_transfer_only": f"{p['private']}/paired-boot-transfer-vs-current.json",
         },
     }
     s["frozen_autotune_cache"] = {
@@ -254,24 +251,25 @@ def spec(key: str) -> dict:
 def decision(key: str, s: dict) -> dict:
     t, p = TIERS[key], paths(key)
     profile = gate.gate_profile(s)
-    items = gate.index_first_items(s, profile)
+    items = gate.successor_items(s, profile)
+    assert list(items) == list(gate.INDEX_FIRST_ITEMS), list(items)
     failed = [k for k, v in items.items() if not v["passed"]]
     if failed:
-        raise SystemExit(f"index_first items fail: {failed}")
-    refs = profile["references"]
-    v3p = load(refs["v3_paired_vs_current"])
+        raise SystemExit(f"Index-first items fail: {failed}")
+    g = p["gates"]
+    v3p = load(profile["paired"])
     low, high = gate._low_high(v3p["ci95"])
     h = v3p["axis_ci95"]["H"]["delta"]
-    own = load(refs["own_1_0_paired"])
+    own = load(f"{g}/paired-vs-{t['own']}.json")
     own_low, own_high = gate._low_high(own["ci95"])
-    mlx = load(refs["mlx_paired_vs_current"])["overall"]
-    public = load(refs["public231_vs_current"])
-    exposure = load(refs["exposure"])
+    mlx = load(profile["mlx_paired"])["overall"]
+    public = load(profile["public231"])
+    exposure = load(profile["exposure"])
     v3 = load(f"{p['run']}/REPORT.json")["v3"]["score"]
     current_v3 = load(f"{t['current_run']}/REPORT.json")["v3"]["score"]
     peers = []
     for n in t["references"]:
-        pp = load(refs[f"peer_{n}_paired"])
+        pp = load(f"{g}/paired-vs-{n}.json")
         pl, ph = gate._low_high(pp["ci95"])
         peers.append(
             f"{n} {signed(pp['point']['delta']['score'])} [{signed(pl)}, {signed(ph)}]"
@@ -287,9 +285,10 @@ def decision(key: str, s: dict) -> dict:
         "identity": s["expected_identity"],
         "report_sha256": s["scored"]["report_sha256"],
         "paired_sha256": sha(s["card"]["paired"]),
-        "gate_profile": gate.INDEX_FIRST,
+        "gate_profile": gate.SUCCESSOR,
+        "rule": gate.INDEX_FIRST,
         "current_revision": t["current"],
-        "evidence_sha256": gate.index_first_evidence_sha256(profile),
+        "evidence_sha256": gate.evidence_sha256(profile),
         "calibration": "none (temperature 1; every Decision 2.0 model keeps T = 1): the formal run was collected "
         "without calibration (CAL698 rejected)",
         "action": f"New main revision of the private repository {s['repo_id']}: the M16 interpolation {t['point']} "
