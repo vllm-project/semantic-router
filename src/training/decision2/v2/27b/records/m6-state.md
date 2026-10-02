@@ -43,8 +43,16 @@ No M6 worker was active; the detached chains, relays, watchers and the guard kep
   `ok`, max |Δp| 0.0). **MLX-DEV2 guard PASS** (node A `mlx_dev2 compare` vs A20r's validation predictions, code
   unchanged since the validation): card-eligible **+.0029 [−.0021, +.0079]** (Choice +.0083 [+.0012, +.0157], Noul
   −.0025 [−.0096, +.0043]); the same container's mlx-diag reading −.0020 [−.0112, +.0077] reproduces the formal
-  item-4 delta (−.0020). The Index run (`M6_INDEX_GPUS="d4 d5 d6 d7 c1 c2 c3 c4"`) starts after this commit; node C
-  GPU5–7 are left for the 0.8B / 2B Index worker (b49d1f36).
+  item-4 delta (−.0020).
+  - **Index run started 02:11Z:**
+    - node D: shards 0–3 on GPU4–7 (`m6-index-run` PID 848640; log `ix1/logs/m6-index-M6-IB-d.log`);
+    - node C: shards 4–7 on GPU1–4, started by hand at 02:12:30Z (PID 906277), because `m6-index.sh run` launched
+      only the first node of a split plan (fixed in `5343df87c`).
+  - Shard 0's first 300 rows took the same model time as M5-L128's (493 s vs 494 s: long inputs come first). Shards
+    take ≈ 65–73 min, staggered by 300 s, so both nodes end ≈ 03:35–03:40Z.
+  - Then: `collect` (node C → node D), `score`, `release`.
+  - Node C GPU5–7 are free (the 0.8B / 2B Index worker b49d1f36 released node C GPU1–7 at ≈ 02:10Z). M6-IB2's
+    MLX-DEV2 readout takes one of them.
 - **M6-IB2:** s1 complete 01:46Z (BEST 4135), s2 (node A) at 6,594 / 6,614 at 01:48Z; chain 2769422 waits for the
   relay. **M6-IB2PN:** 5,200 / 6,886 at 01:48Z, ≈ 10.6 s per update now → ETA ≈ 06:50Z (projection ≈ 19.3 GPU-h per
   seed, cap 22).
@@ -339,6 +347,13 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 02:25Z (poll 16):
+  - M6-IB: MLX-DEV2 PASS and parity PASS (`d5d505fe8`); Index run on 8 GPUs since 02:11–02:12Z (shards 0 / 1 / 4 / 5
+    writing).
+  - M6-IB2 soup running since 01:55Z.
+  - M6-IB2PN at ≈ 5,240 / 6,886.
+  - Closed receipts 93.43 GPU-h (node A 18.01, B 47.44, D 27.98) + running ≈ 29.3 = **≈ 122.7**.
+  - Fix `5343df87c` mirrored to nodes B–D. Results record updated (development, formal, MLX-DEV2, incidents).
 - 02:00Z (poll 15, worker 5's first; 01:32–02:00Z): integration merged (fast-forward to `3dd2dc72c`); gap
   reconstructed (above); guard and reporter fixed (`764f03321`); amendment 6 (`6bbb2512d`); M6-IB's Index path staged on
   node D and node C, parity and MLX-DEV2 running. Containers: node B M6-IB2-s1 ended, node A M6-IB2-s2 and node D
