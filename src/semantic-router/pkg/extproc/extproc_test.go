@@ -2949,6 +2949,13 @@ func TestHandleProcessReceiveErrorVerifiedTimeouts(t *testing.T) {
 						ConnectTimeout: "1s",
 					},
 				},
+				"subsecond-model": {
+					Reliability: config.ProviderReliability{
+						RequestTimeout:    "100ms",
+						StreamIdleTimeout: "100ms",
+						ConnectTimeout:    "100ms",
+					},
+				},
 			},
 		},
 	}
@@ -3041,6 +3048,164 @@ func TestHandleProcessReceiveErrorVerifiedTimeouts(t *testing.T) {
 	after8 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "slow-model"})
 	if after8 != before8 {
 		t.Fatalf("expected timeout NOT to increase on long-lived active stream non-timeout reset: before=%v after=%v", before8, after8)
+	}
+
+	// Case 9: Subsecond streaming non-timeout reset (idle gap only 1ms << 100ms stream idle deadline) -> does NOT record timeout
+	ctx9 := &RequestContext{
+		RequestModel:        "subsecond-model",
+		UpstreamStatusCode:  200,
+		IsStreamingResponse: true,
+		StreamingComplete:   false,
+		StartTime:           time.Now().Add(-10 * time.Millisecond),
+		ProcessingStartTime: time.Now().Add(-10 * time.Millisecond),
+		LastStreamChunkTime: time.Now().Add(-1 * time.Millisecond),
+	}
+	before9 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "subsecond-model"})
+	_ = r.handleProcessReceiveError(ctx9, io.EOF)
+	after9 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "subsecond-model"})
+	if after9 != before9 {
+		t.Fatalf("expected timeout NOT to increase on subsecond early stream reset: before=%v after=%v", before9, after9)
+	}
+
+	// Case 10: Subsecond streaming verified idle timeout (idle gap 105ms >= 100ms stream idle deadline) -> records timeout
+	ctx10 := &RequestContext{
+		RequestModel:        "subsecond-model",
+		UpstreamStatusCode:  200,
+		IsStreamingResponse: true,
+		StreamingComplete:   false,
+		StartTime:           time.Now().Add(-110 * time.Millisecond),
+		ProcessingStartTime: time.Now().Add(-110 * time.Millisecond),
+		LastStreamChunkTime: time.Now().Add(-105 * time.Millisecond),
+	}
+	before10 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "subsecond-model"})
+	_ = r.handleProcessReceiveError(ctx10, io.EOF)
+	after10 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "subsecond-model"})
+	if after10 != before10+1 {
+		t.Fatalf("expected timeout to increase on subsecond stream idle timeout: before=%v after=%v", before10, after10)
+	}
+
+	// Case 11: Subsecond pre-header non-timeout reset (elapsed only 1ms << 100ms connect deadline) -> does NOT record timeout
+	ctx11 := &RequestContext{
+		RequestModel:        "subsecond-model",
+		UpstreamStatusCode:  0,
+		ProcessingStartTime: time.Now().Add(-1 * time.Millisecond),
+	}
+	before11 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "subsecond-model"})
+	_ = r.handleProcessReceiveError(ctx11, io.EOF)
+	after11 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "subsecond-model"})
+	if after11 != before11 {
+		t.Fatalf("expected timeout NOT to increase on subsecond early pre-header reset: before=%v after=%v", before11, after11)
+	}
+
+	// Case 12: Subsecond pre-header verified connect timeout (elapsed 105ms >= 100ms connect deadline) -> records timeout
+	ctx12 := &RequestContext{
+		RequestModel:        "subsecond-model",
+		UpstreamStatusCode:  0,
+		ProcessingStartTime: time.Now().Add(-105 * time.Millisecond),
+	}
+	before12 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "subsecond-model"})
+	_ = r.handleProcessReceiveError(ctx12, io.EOF)
+	after12 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "subsecond-model"})
+	if after12 != before12+1 {
+		t.Fatalf("expected timeout to increase on subsecond pre-header connect timeout: before=%v after=%v", before12, after12)
+	}
+
+	// Case 13: Subsecond 503 early disconnect (elapsed 1ms << 100ms connect deadline) -> records upstream_5xx, NOT timeout
+	ctx13 := &RequestContext{
+		RequestModel:       "subsecond-model",
+		UpstreamStatusCode: 503,
+		StartTime:          time.Now().Add(-1 * time.Millisecond),
+	}
+	before13Timeout := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "subsecond-model"})
+	before13_5xx := getCounterValue("llm_request_errors_total", map[string]string{"reason": "upstream_5xx", "model": "subsecond-model"})
+	_ = r.handleProcessReceiveError(ctx13, io.EOF)
+	after13Timeout := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "subsecond-model"})
+	after13_5xx := getCounterValue("llm_request_errors_total", map[string]string{"reason": "upstream_5xx", "model": "subsecond-model"})
+	if after13Timeout != before13Timeout {
+		t.Fatalf("expected timeout NOT to increase on subsecond early 503 disconnect: before=%v after=%v", before13Timeout, after13Timeout)
+	}
+	if after13_5xx != before13_5xx+1 {
+		t.Fatalf("expected upstream_5xx to increase on subsecond early 503 disconnect: before=%v after=%v", before13_5xx, after13_5xx)
+	}
+
+	// Case 14: Subsecond 503 verified connect timeout (elapsed 105ms >= 100ms connect deadline) -> records timeout
+	ctx14 := &RequestContext{
+		RequestModel:       "subsecond-model",
+		UpstreamStatusCode: 503,
+		StartTime:          time.Now().Add(-105 * time.Millisecond),
+	}
+	before14Timeout := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "subsecond-model"})
+	_ = r.handleProcessReceiveError(ctx14, io.EOF)
+	after14Timeout := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "subsecond-model"})
+	if after14Timeout != before14Timeout+1 {
+		t.Fatalf("expected timeout to increase on subsecond 503 connect timeout: before=%v after=%v", before14Timeout, after14Timeout)
+	}
+}
+
+func TestTimeoutThreshold(t *testing.T) {
+	tests := []struct {
+		name         string
+		dur          time.Duration
+		maxAllowance time.Duration
+		want         time.Duration
+	}{
+		{
+			name:         "2s duration with 300ms allowance retains fixed 300ms (1700ms)",
+			dur:          2 * time.Second,
+			maxAllowance: 300 * time.Millisecond,
+			want:         1700 * time.Millisecond,
+		},
+		{
+			name:         "1s duration with 250ms allowance retains 250ms (750ms)",
+			dur:          1 * time.Second,
+			maxAllowance: 250 * time.Millisecond,
+			want:         750 * time.Millisecond,
+		},
+		{
+			name:         "100ms subsecond caps allowance at 25ms (75ms)",
+			dur:          100 * time.Millisecond,
+			maxAllowance: 300 * time.Millisecond,
+			want:         75 * time.Millisecond,
+		},
+		{
+			name:         "100ms subsecond with 250ms allowance caps at 25ms (75ms)",
+			dur:          100 * time.Millisecond,
+			maxAllowance: 250 * time.Millisecond,
+			want:         75 * time.Millisecond,
+		},
+		{
+			name:         "zero duration returns 0",
+			dur:          0,
+			maxAllowance: 300 * time.Millisecond,
+			want:         0,
+		},
+		{
+			name:         "negative duration returns 0",
+			dur:          -1 * time.Second,
+			maxAllowance: 300 * time.Millisecond,
+			want:         0,
+		},
+		{
+			name:         "negative max allowance returns full duration",
+			dur:          100 * time.Millisecond,
+			maxAllowance: -50 * time.Millisecond,
+			want:         100 * time.Millisecond,
+		},
+		{
+			name:         "very small 10ms duration returns 7.5ms",
+			dur:          10 * time.Millisecond,
+			maxAllowance: 300 * time.Millisecond,
+			want:         7500 * time.Microsecond,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := timeoutThreshold(tt.dur, tt.maxAllowance)
+			if got != tt.want {
+				t.Fatalf("timeoutThreshold(%v, %v) = %v, want %v", tt.dur, tt.maxAllowance, got, tt.want)
+			}
+		})
 	}
 }
 

@@ -155,7 +155,7 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 			rel := r.getModelReliability(ctx.RequestModel)
 			if connDur, ok := parseDurationSafe(rel.ConnectTimeout); ok {
 				elapsed := time.Since(ctx.StartTime)
-				if elapsed >= connDur-250*time.Millisecond {
+				if elapsed >= timeoutThreshold(connDur, 250*time.Millisecond) {
 					recordProcessTimeout(ctx)
 					ctx.UpstreamErrorMetricRecorded = true
 					return nil
@@ -188,6 +188,24 @@ func parseDurationSafe(s string) (time.Duration, bool) {
 		return 0, false
 	}
 	return d, true
+}
+
+func timeoutThreshold(dur, maxAllowance time.Duration) time.Duration {
+	if dur <= 0 {
+		return 0
+	}
+	if maxAllowance < 0 {
+		maxAllowance = 0
+	}
+	allowance := maxAllowance
+	if maxProportional := dur / 4; allowance > maxProportional {
+		allowance = maxProportional
+	}
+	thresh := dur - allowance
+	if thresh <= 0 {
+		return dur
+	}
+	return thresh
 }
 
 func (r *OpenAIRouter) getModelReliability(model string) config.ProviderReliability {
@@ -244,10 +262,10 @@ func (r *OpenAIRouter) isVerifiedTimeoutTermination(ctx *RequestContext, err err
 			idleGap = time.Since(lastActivity)
 		}
 
-		if idleDur, ok := parseDurationSafe(rel.StreamIdleTimeout); ok && idleGap >= idleDur-300*time.Millisecond {
+		if idleDur, ok := parseDurationSafe(rel.StreamIdleTimeout); ok && idleGap >= timeoutThreshold(idleDur, 300*time.Millisecond) {
 			return true
 		}
-		if reqDur, ok := parseDurationSafe(rel.RequestTimeout); ok && elapsed >= reqDur-300*time.Millisecond {
+		if reqDur, ok := parseDurationSafe(rel.RequestTimeout); ok && elapsed >= timeoutThreshold(reqDur, 300*time.Millisecond) {
 			return true
 		}
 		return false
@@ -257,7 +275,7 @@ func (r *OpenAIRouter) isVerifiedTimeoutTermination(ctx *RequestContext, err err
 	if ctx.UpstreamStatusCode == 0 && elapsed > 0 {
 		// Check if request exceeded request_timeout
 		if reqDur, ok := parseDurationSafe(rel.RequestTimeout); ok {
-			if elapsed >= reqDur-300*time.Millisecond {
+			if elapsed >= timeoutThreshold(reqDur, 300*time.Millisecond) {
 				return true
 			}
 		}
@@ -265,7 +283,7 @@ func (r *OpenAIRouter) isVerifiedTimeoutTermination(ctx *RequestContext, err err
 		// Check if request exceeded connect_timeout
 		if connDur, ok := parseDurationSafe(rel.ConnectTimeout); ok {
 			reqDur, hasReq := parseDurationSafe(rel.RequestTimeout)
-			if elapsed >= connDur-250*time.Millisecond && (!hasReq || elapsed < reqDur-300*time.Millisecond) {
+			if elapsed >= timeoutThreshold(connDur, 250*time.Millisecond) && (!hasReq || elapsed < timeoutThreshold(reqDur, 300*time.Millisecond)) {
 				return true
 			}
 		}
