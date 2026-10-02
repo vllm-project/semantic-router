@@ -72,6 +72,9 @@ ARMS = {
     "4b-SDMLIB4-e2": ("4b", "4b-SDMLIB4", ["--epochs", "2"]),
     # 9B: KIB4's construction with a second new x60 cut seed.
     "KIB4R2": ("9b", "KIB4R2", []),
+    # Amendment 7: the S17-base counterparts (two epochs; IB4 rows x2).
+    "4b-LHS17IB4-e2": ("4b", "4b-LHS17IB4", ["--epochs", "2"]),
+    "4b-LHS17IB4W2": ("4b", "4b-LHS17IB4W2", []),
 }
 
 
