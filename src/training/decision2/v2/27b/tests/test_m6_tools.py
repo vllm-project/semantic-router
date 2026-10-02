@@ -923,6 +923,42 @@ class M6ScriptTest(unittest.TestCase):
                 self.assertEqual(out.returncode, 2)
                 self.assertIn(message, out.stderr)
 
+    def test_index_run_launches_every_node_of_a_split_plan(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir, log = Path(tmp) / "bin", Path(tmp) / "ssh.log"
+            bin_dir.mkdir()
+            (
+                bin_dir / "ssh"
+            ).write_text(  # like ssh: reads stdin, answers every check with the same line
+                f'#!/usr/bin/env bash\necho "${{@: -1}}" >> {log}\ncat > /dev/null\necho ok\n'
+            )
+            (bin_dir / "sleep").write_text("#!/usr/bin/env bash\n")
+            for stub in ("ssh", "sleep"):
+                (bin_dir / stub).chmod(0o755)
+            nodes = Path(tmp) / "nodes.env"
+            nodes.write_text("node-b=root@b\nnode-c=root@c\nnode-d=root@d\n")
+            out = subprocess.run(
+                ["bash", str(M6 / "m6-index.sh"), "0" * 40, "M6-IB", "run"],
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                timeout=60,
+                env=dict(
+                    os.environ,
+                    PATH=f"{bin_dir}:{os.environ['PATH']}",
+                    DEV2_NODES_FILE=str(nodes),
+                    M6_INDEX_GPUS="d4 c1",
+                ),
+            )
+            self.assertEqual(out.returncode, 0, out.stderr)
+            calls = log.read_text()
+            self.assertIn("m6-index-run.sh " + "0" * 40 + " M6-IB d 0,2,4,6 4", calls)
+            self.assertIn("m6-index-run.sh " + "0" * 40 + " M6-IB c 1,3,5,7 1", calls)
+            self.assertIn(
+                "head -n 3 /data/dev2/private/eval/index021/ix1/logs/m6-index-M6-IB-c.log",
+                calls,
+            )
+
     def test_contrast_guard_moves_m4_contrast_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             gates = Path(tmp)

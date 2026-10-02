@@ -194,12 +194,13 @@ case "$STAGE" in
       [ "$(ond "sha256sum < $R/parity/$ARM/parity.json")" = "$(onc "sha256sum < $R/parity/$ARM/parity.json")" ] ||
         { echo "node C's parity record differs from node D's" >&2; exit 3; }
     fi
-    while read -r node shards gpus; do
+    while read -r node shards gpus; do  # ssh reads stdin: without < /dev/null it eats the plan's other lines
       "on$node" "mkdir -p $R/logs; setsid nohup bash $S/v2/27b/m6/m6-index-run.sh $SHA $ARM $node $shards $gpus \
-        > $R/logs/m6-index-$ARM-$node.log 2>&1 < /dev/null & echo node $node m6-index-run \$!: shards $shards on GPU $gpus"
+        > $R/logs/m6-index-$ARM-$node.log 2>&1 < /dev/null & echo node $node m6-index-run \$!: shards $shards on GPU $gpus" \
+        < /dev/null
     done <<< "$plan"
     sleep 20
-    while read -r node _; do "on$node" "head -n 3 $R/logs/m6-index-$ARM-$node.log"; done <<< "$plan" ;;
+    while read -r node _; do "on$node" "head -n 3 $R/logs/m6-index-$ARM-$node.log" < /dev/null; done <<< "$plan" ;;
   status)
     for node in d c; do
       "on$node" "test -d $R/runs/$ARM" || continue
