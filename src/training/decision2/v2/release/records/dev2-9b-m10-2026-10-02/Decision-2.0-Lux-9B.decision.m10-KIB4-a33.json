@@ -13,10 +13,10 @@
  "paired_sha256": "88711ecd0149c0c10367b330140d08c27ed3ad61e03e534369ba0e6c1e8131d8",
  "gate_profile": "successor",
  "rule": "index-first",
- "current_revision": "6af07f3684132ab684d4f064a723ae623ec3956f",
+ "current_revision": "f77b41f5c1a98974548d929c03e7bce008f71bd0",
  "evidence_sha256": {
-  "current_decision": "821d747a4d6f6509f46d5cdb75d309ee45f38d7e390201cd5d03aa5749af8ba7",
-  "current_gate": "2606a94f6e9e86c3bd8a8a152c053a66d80b3f441eb68012a968589ff7eabe31",
+  "current_decision": "0b092b4ec335db826f83034436ad63c2e27e1aaa82126dcb0f92e43a745b84d4",
+  "current_gate": "c89524587ae955376eac98979c8aedf6c5e1d8242ce4dc4e4568c9c9953181b6",
   "exposure_1": "14e7c0ca5ecf9c396a464af55784bd466a71774c186672dcb9a7c46dbb598ff5",
   "exposure_2": "9fd9d3dbec72bb4f035ebcc72d152063b8a1f6c61648c97f5a21d18a9d814a7d",
   "index_first_audit": "da12b2ac091dce98e7bffcf0f10e1fdabf80709e251e198303b190b8e40fe881",
@@ -30,7 +30,7 @@
   "types": "5e66e84bfc9df691eeb790409ba2cfeb624f825e693e9b297f9e93971836d713"
  },
  "calibration": "none (temperature 1; every Decision 2.0 model keeps T = 1): the CAL698 per-type temperatures of the formal run (calibration 6c3c776f) are not shipped; undoing them changes 0 answers on every scored panel and mlx-diag",
- "action": "New main revision of the private repository vllm-sr/Decision-2.0-Lux-9B: the 9B M10 point KIB4-a33: W = (1 - 1/3) x Decision 1.0 Lux-9B + 1/3 x the uniform FP32 soup of the seeds of 9B M10 arm KIB4 (full fine-tuning of Decision 1.0 Lux-9B on the K-a13IB recipe (x60 with own-Lux targets, IB rows gold only, 60.18M native tokens per seed) with IB1 sentfin replaced by the IB4 phase-1 families), stored as its BF16 copy (qwen-full, T = 1, 16,384 tokens), replaces the K-a13IB weights (b9a65d60, revision 6af07f36) with the product card of the current revision (default generator, banner concept A) and this candidate's Index input; then the superseded weight blobs are purged with rewrite_history=False (hf_headroom.sh first). The repository stays private and in the private collection.",
+ "action": "New main revision of the private repository vllm-sr/Decision-2.0-Lux-9B: the 9B M10 point KIB4-a33: W = (1 - 1/3) x Decision 1.0 Lux-9B + 1/3 x the uniform FP32 soup of the seeds of 9B M10 arm KIB4 (full fine-tuning of Decision 1.0 Lux-9B on the K-a13IB recipe (x60 with own-Lux targets, IB rows gold only, 60.18M native tokens per seed) with IB1 sentfin replaced by the IB4 phase-1 families), stored as its BF16 copy (qwen-full, T = 1, 16,384 tokens), replaces the K-a13IB weights (b9a65d60, revision f77b41f5) with the product card of the current revision (default generator, banner concept A) and this candidate's Index input; then the superseded weight blobs are purged with rewrite_history=False (hf_headroom.sh first). The repository stays private and in the private collection.",
  "rationale": "Index-first rule (user 2026-10-02 09:55 UTC+8). IF1: the private Index paired bootstrap of these exact weights minus the current revision's has a 95% lower bound > 0 (2,000 replicates; values in private files only; evidence_sha256.index_first_bootstrap); the highest measured 9B M10 candidate (directive 2026-10-02 12:30 UTC+8). R3: types choice OK, noul OK, score OK. IF3: row-level Index audit, planted control 200 / 200; KIB4 0 item rows. References (not release blockers): post-key v3 67.931 vs 68.024, -0.09 [-1.48, +1.15]; human transfer -0.026 to +0.012; card-eligible mlx-diag -0.0087 [-0.0152, -0.0021]; vs adopted Lux 1.0 +2.12 [+0.16, +3.68]; public 231 179 vs 182 (McNemar p 0.375); C1 post-key not run.",
  "approved_package": {
   "identity": "ea10ec706f29cbf33bcb020958a337a81de6bfa191b33f96b31deaa674c89995",
@@ -43,10 +43,10 @@
  },
  "licence_decision": "apache-2.0: own weights; Decision 1.0 Lux-9B @bd45a30a (direct weight origin, interpolated) and the Qwen/Qwen3.5-9B @c2022362 text backbone and tokenizer are Apache-2.0; the IB1-r3 / IB2 / IB3-r2 / IB4 phase-1 training rows are licence-clean (release-safe data records; IB4 phase 1 C1 recheck r3 PASS); the package keeps the Apache-2.0 LICENSE (product card: no NOTICE, attributions or evaluation/ files).",
  "supersedes": {
-  "revision": "6af07f3684132ab684d4f064a723ae623ec3956f",
-  "final_sha256": "821d747a4d6f6509f46d5cdb75d309ee45f38d7e390201cd5d03aa5749af8ba7",
-  "gate_sha256": "2606a94f6e9e86c3bd8a8a152c053a66d80b3f441eb68012a968589ff7eabe31",
-  "manifest_sha256": "3272c53173e254ceaf614599677b18e4684d7a5d73a39b865e39e6f3c5d46304",
+  "revision": "f77b41f5c1a98974548d929c03e7bce008f71bd0",
+  "final_sha256": "0b092b4ec335db826f83034436ad63c2e27e1aaa82126dcb0f92e43a745b84d4",
+  "gate_sha256": "c89524587ae955376eac98979c8aedf6c5e1d8242ce4dc4e4568c9c9953181b6",
+  "manifest_sha256": "f5a37c42140106a663d27493d2a2ce993ee5511ccb138f7c79efdfef11e9df55",
   "weights_identity": "b9a65d601bb6780c2c07998aecbfab322ede459c26fcb8ed262281ad08f909fb"
  },
  "disclosures": [
@@ -58,5 +58,5 @@
  ],
  "prepared_by": "Decision 2.0 9B M10 worker, Lux-9B publisher (worktree vllm-sr-dev2-9b-m10)",
  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's Index-first rule of 2026-10-02 09:55 UTC+8 (release gate = a significantly positive private Index delta vs the current release; integrity checks; references not blocking) and the directive of 2026-10-02 12:30 UTC+8 (release the highest measured candidate directly), applied to the 9B tier by the Lux-9B publisher (9B M10 worker)",
- "decided_utc": "2026-10-02T12:36:24Z"
+ "decided_utc": "2026-10-02T12:57:13Z"
 }
