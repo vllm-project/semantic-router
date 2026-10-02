@@ -2,6 +2,33 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 12:45Z (20:45 UTC+8), M10 continuation worker
+
+- **Measured, once each** (values private):
+  - KIB4-a33, KSW-a33 and KX-a33 pass the Index gate (lower bound > 0 vs K-a13IB-bf16).
+  - KIBM-a33 and KIBM-a40 do not; the KIBM family is closed.
+- **Release choice: KIB4-a33** (largest lower bound).
+  - Formal path done (typed FINAL: no collapsed type), release inputs, card Index input and assets, spec and
+    decision.
+  - Its prerelease on node A GPU7 passed (build, examples, card, parity, `verify_bundle`) against the card4 base.
+- **Base moved twice.**
+  - The organization rename made Lux `main` the card-only revision `6af07f36`. The ops now supersede it: spec from
+    `dev2-9b-org.json`, the org gate and decision, `vllm-sr` repo and collection. Integration merged at `e0c92f51a`.
+  - Runtime phase A's Lux runtime-only `release.sh` started at 12:27Z on node A. A successor must carry its runtime
+    (spec `dev2-9b-ra.json` and its frozen cache `runtime-a-9b`), so the KIB4-a33 upload waits until that release
+    and its branch's merge into integration. Then the spec is re-derived, the prerelease rerun and the upload made.
+- **Index runs in flight:**
+  - Node C: KIB4-a40, then X1-a33 (KX + KIB4) and X2-a33 (KX + KIB).
+  - Node B, GPU2 / 4: X3-a33 (KIB4 + KIB).
+  - Node A, GPU1–6: X5-a33 (KIB4 + KX + KSW; the three best arms by lower bound, amendment 5).
+  - X4 equals X1, because the two best arms are KIB4 and KX.
+- **Extra seeds (amendment 6)** run on node B GPU3 / 6 / 7. `post.sh KIB4` with `M10_POST_NAME=KIB4P` builds the
+  three-seed KIB4 soup when KIB4-s3 ends.
+- **Budget:** KXP is not built, because the 85 GPU-h stop rule leaves room for one more Index run (KIB4P-a33).
+  KX-s4 / s5 are spent unmeasured unless budget frees.
+- **GPU-h:** ≈ 65 used: training 42.2 (node A 8.9, node B 33.3), Index 20.7, formal and prerelease ≈ 2. About 14 more
+  are committed to running work.
+
 ## 2026-10-02 10:15Z (18:15 UTC+8), M10 continuation worker
 
 - **Built (node B, CPU):** the KIBM soup (3 seeds) and the KIB4 soup (2 seeds), each with its a33 / a25 / a40
