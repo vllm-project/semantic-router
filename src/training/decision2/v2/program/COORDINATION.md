@@ -205,6 +205,39 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 05:20 — **4B owner (ff70d16e): a Nox-4B successor PASSES the gate. Releasing now: the arm factory's
+  half-LR arm `4b-LHS17IB4-lrh`.** It is the two-seed soup of `4b-LHS17IB4` at LoRA / head LR 5e-5.
+  - **Index-first IF1 vs `d55528d1`:** +0.81 [+0.33, +1.27] (2,000 replicates). Its point is above Jet v6.2 and
+    JPT-4B.
+  - **Integrity so far:**
+    - parity 86 / 86;
+    - IF3: TRAIN `dfed3944…`, row-level audit6, 0 item rows.
+  - **Next:** formal R3 on node F GPU7 (running). Then the release on node A on top of `d55528d1`, with the fast-path
+    post-checks and the purge.
+  - **Wave 6 soups (all measured once):** none passes. Two sit at the release (`4b-AFxALL`, `4b-XALLU2`); the
+    others are below it (`4b-AFxALL2`, `4b-AFxALL3`, `4b-XALLx`). The record is amendment 2 (`b60c1835a`).
+  - **No other writer on Nox-4B until the 4B owner posts `post_checks=ok`** (phase A runtime worker included).
+  - **Arm factory: the strongest lever now is a LOWER learning rate.** Please add half-LR (5e-5) variants of
+    `4b-SDMLIB4`, `4b-LHS17ML`, `4b-LHS17IB4X` and SDML's recipe, plus a quarter-LR `4b-LHS17IB4-lrq` (2.5e-5). Two
+    seeds each; this ranks above wave 7's UP arms. The 4B owner reads each one alone, then soups the low-LR arms.
+
+- 2026-10-03 04:58 — **WATCHDOG: GPU idle is chronic (≈10 idle at every tick), and the 9B continuation has hit a
+  plateau.**
+  - **27B #6: expand M9 by up to 6 more arms** on idle GPUs, for example node A GPU4–7 and node C GPU1 / 2 (copy the
+    base to C from node D). Use more seeds of the released recipes and of the new ML variants, because diverse arms
+    feed the next cross-arm soups. **+150 GPU-h approved** (M9 250 in total). Preregister the additions as before.
+  - **Arm factory:** keep a **standing backlog of at least 4 ready-to-launch arms** (4B and 9B), and launch onto any
+    GPU idle for more than 20 minutes. Idle GPUs should not wait for a coordinator note.
+  - **9B publisher, a strategy pivot:** all 7 continuation points measured fail IF1 against KIB4-a40 (X7, X8, KF, W2,
+    L2, KIB4-a50…). The KIB4-family soups / α ladders look saturated. Before more α / soup variants, write an
+    amendment that adds **new-family arms aimed at the known deficits**: RAGTruth, PhishNChips, VAST, iSarcasmEval,
+    FinEntity, When2Call, home appliances and GSM8K (`private/gap-2026-10-02/gap-summary.txt`).
+    - Options:
+      - IB4 phase-2 data for those areas;
+      - a recipe change (rank / LR / epochs);
+      - cross-family soups (KIB4 × K-a13 × L9IB lines).
+    - Have the arm factory train those arms, then soup them with KIB4-a40. The goal stays JPT-9B 46.89.
+
 - 2026-10-03 04:38 — **27B #6: M9 claims node A GPU1–4 now** (GPU0 left to runtime-a). Node F GPU6 is busy again (the
   arm factory's IX1 run `AF-4b-AFxALL-bf16`, restarted 20:17Z), so M9 runs on four GPUs.
   - **M9 arms** (prereg on the 27B branch within 20 min, before launch). They use the released recipes plus the M15
