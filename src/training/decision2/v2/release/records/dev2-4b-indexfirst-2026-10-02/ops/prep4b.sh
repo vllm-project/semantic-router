@@ -19,6 +19,8 @@ case "$CAND" in
   a50) RUN=$FR/m16/m16-4b-LHA10SD-a50 LABEL="Decision-2.0-Nox-4B candidate M16 4b-LHA10SD-a50" ;;
   UP) RUN=$FR/4bif/4bif-4b-LHA10UP LABEL="Decision-2.0-Nox-4B candidate M14 4b-LHA10UP" ;;
   SDB) RUN=$FR/m13/m13-4b-LHA10SD LABEL="Decision-2.0-Nox-4B candidate M13 4b-LHA10SD" ;;
+  S10) RUN=$FR/m17/m17-4b-LHS10SD LABEL="Decision-2.0-Nox-4B candidate M17 4b-LHS10SD" ;;
+  S17) RUN=$FR/m17/m17-4b-LHS17SD LABEL="Decision-2.0-Nox-4B candidate M17 4b-LHS17SD" ;;
   *) echo "bad CAND $CAND" >&2; exit 2 ;;
 esac
 MLXR=$RUN-mlx

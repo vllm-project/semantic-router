@@ -52,6 +52,7 @@ CURRENT = {
     "weights_identity": "6a555335e077fd26952fd58df06a7dcca1f5ef317194f2e3e4d7664d5c071cd7",
 }
 TRAIN = "d41cdd1aa1e63b47394ed8fa61a87bf461cb4d2cea08cc7ff12f2e58b36dc9d5"
+LH_FAMILIAR_ROWS = 114
 LH_ARM = (
     "4b-LHA10SD = the released LH recipe (rank-128 LoRA on Qwen/Qwen3.5-4B-Base @1001bb4d, merged, scoring head) "
     "on the released 4B mixture plus 10% IB1-r3 / IB2 breadth rows, with typed-row self-distillation from LH "
@@ -92,18 +93,40 @@ CANDS = {
         "what": "the decoder M13 arm " + LH_ARM + "; soup of two seeds",
         "exposure": f"{FR}/m13/exposure-4b-LHA10SD.json",
     },
+    "S10": {
+        "index_name": "DEV2.0-4B-LHS10SD-bf16",
+        "run": f"{FR}/m17/m17-4b-LHS10SD",
+        "fp32": "537553da252d79e9fd4aca7731e74367cf15899788b80c912c3d4fc07a3f28ea",
+        "vendor": "d80933b6c9c26e7b77ceb1342f261a284bdc92eb",
+        "what": "the decoder M17 arm 4b-LHS10SD (the released LH recipe at LH's token count with English released "
+        "rows of 10% of the tokens swapped for IB1-r3 / IB2 breadth rows, every non-English row kept, typed-row "
+        "self-distillation from LH; soup of two seeds)",
+        "exposure": f"{FR}/m17/exposure-4b-LHS10SD.json",
+        "train": "72fa2d844fbf94be890858b9b66af0e26e12a62011929bf1eb0de1ebe93ef025",
+    },
+    "S17": {
+        "index_name": "DEV2.0-4B-LHS17SD-bf16",
+        "run": f"{FR}/m17/m17-4b-LHS17SD",
+        "fp32": "8995bd9d58a3aab7c83baee47adfb1ce0e4782f51097b98a3d0a2247ddf14079",
+        "vendor": "d80933b6c9c26e7b77ceb1342f261a284bdc92eb",
+        "what": "the decoder M17 arm 4b-LHS17SD (the released LH recipe at LH's token count with English released "
+        "rows of 17% of the tokens swapped for IB1-r3 / IB2 breadth rows, every non-English row kept, typed-row "
+        "self-distillation from LH; soup of two seeds)",
+        "exposure": f"{FR}/m17/exposure-4b-LHS17SD.json",
+        "train": "14bce13ce926b354e214581e7cf4718d03f80c975b36dbce6731fbc6517e25a0",
+    },
 }
-# The release choice: M13 4b-LHA10SD, the first 4B candidate whose private Index lower bound vs the current release was
-# above 0 (its FP32 run, dec M15 part A); it ships as its BF16 copy, whose own Index run is the IF1 evidence.
-# Progressive-release directive (COORDINATION 2026-10-02 11:35 UTC+8): release as soon as a frozen candidate
-# qualifies; LHA10UP / a75 / a50 follow as successors against this release.
-CHOICE = "SDB"
+# The release choice: M17 4b-LHS17SD, the largest private Index lower bound vs the current release among the finished
+# BF16 Index runs (M13 4b-LHA10SD, M17 4b-LHS10SD / 4b-LHS17SD); directive of 2026-10-02 12:25 UTC+8: release the
+# highest-scoring candidate, never a lower one once a higher one is measured. The M13 choice was never published.
+CHOICE = "S17"
 DECIDED_BY = (
     "coordinator (parent agent), Decision 2.0 program: the user's Index-first rule of 2026-10-02 09:55 UTC+8 "
     "(release gate = a significantly positive private Index delta vs the current release; integrity checks; "
-    "references not blocking; among candidates ready at the same time the largest Index-gain lower bound) and the "
-    "progressive-release directive of 2026-10-02 11:35 UTC+8 (release 4b-LHA10SD now if its lower bound vs LH is > 0 "
-    "and the integrity checks pass), applied to the 4B tier by the 4B Index-first release worker 5e7b8132"
+    "references not blocking; the largest Index-gain lower bound) and the user directive relayed 2026-10-02 12:25 "
+    "UTC+8 (release the highest-scoring candidate directly; never a lower candidate once a higher one is measured; "
+    "compare every finished BF16 Index run: M13 4b-LHA10SD, M17 4b-LHS10SD and 4b-LHS17SD), applied to the 4B tier "
+    "by the 4B Index-first release worker 5e7b8132"
 )
 PREPARED_BY = "Decision 2.0 release engineering, 4B Index-first worker 5e7b8132 (worktree vllm-sr-dev2-4b-indexfirst)"
 
@@ -271,6 +294,20 @@ def spec(cand: str) -> dict:
     return s
 
 
+def audit_disclosure(p: dict, sets: dict) -> str:
+    if "train" not in p:
+        return (
+            f"Index contamination audit of the training rows ({TRAIN[:8]}): the IB rows add no item or "
+            "familiar-text rows beyond the current revision's own training rows"
+        )
+    own = sets[p["run"].rsplit("/", 1)[1].removeprefix("m17-")]
+    return (
+        f"Index contamination audit of the training rows ({p['train'][:8]}, {own['training_lines']} lines): "
+        f"{own['item_rows']} item rows and {own['duplicate_rows']} familiar-text rows (the current revision's own "
+        f"training rows: 0 and {LH_FAMILIAR_ROWS})"
+    )
+
+
 def decision(s: dict, cand: str) -> dict:
     p = paths(cand)
     profile = gate.gate_profile(s)
@@ -312,8 +349,9 @@ def decision(s: dict, cand: str) -> dict:
         "rewrite_history=False (hf_headroom.sh first). The repository stays private and in the private collection.",
         "rationale": "Index-first rule (user 2026-10-02 09:55 UTC+8). IF1: the private Index paired bootstrap of "
         "these exact weights minus the current revision's has a 95% lower bound > 0 (2,000 replicates; values in "
-        "private files only; evidence_sha256.index_first_bootstrap); the first 4B candidate to qualify "
-        "(progressive-release directive 2026-10-02 11:35 UTC+8). R3: types "
+        "private files only; evidence_sha256.index_first_bootstrap); the largest lower bound among the finished "
+        "BF16 Index runs of M13 4b-LHA10SD and M17 4b-LHS10SD / 4b-LHS17SD (same panel, seed and replicates; "
+        "directive 2026-10-02 12:25 UTC+8). R3: types "
         + ", ".join(
             f"{k} {v}" for k, v in gate._verdicts(load(profile["types"])).items()
         )
@@ -350,13 +388,15 @@ def decision(s: dict, cand: str) -> dict:
             "weights_identity": CURRENT["weights_identity"],
         },
         "disclosures": [
-            "successor items 1 and 4 of the former rule are not met (v3 not significantly above the current "
-            "revision; card-eligible mlx-diag below it); under the Index-first rule they are references",
+            "successor items 1 and 4 of the former rule are not met (v3 "
+            + ("significantly below" if high < 0 else "not significantly above")
+            + " the current revision; card-eligible mlx-diag "
+            + ("below it" if mlx["ci95"]["high"] < 0 else "not above it")
+            + "); under the Index-first rule they are references",
             "the training rows include the IB1-r3 / IB2 families matched to Index benchmark families (HoVer, "
             "When2Call, iSarcasmEval, GSM8K) and the BPoMP format; the internal records report the transfer-only "
             "Index delta without those benchmarks (private values)",
-            f"Index contamination audit of the training rows ({TRAIN[:8]}): the IB rows add no item or "
-            "familiar-text rows beyond the current revision's own training rows",
+            audit_disclosure(p, sets),
             "card.speed is the current revision's bench receipt (same architecture, runtime and shapes)",
         ],
         "prepared_by": PREPARED_BY,
