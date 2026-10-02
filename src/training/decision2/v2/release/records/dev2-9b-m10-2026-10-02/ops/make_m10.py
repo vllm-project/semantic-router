@@ -82,6 +82,10 @@ CANDS: dict[str, dict] = {
         "fp32": "941fcbb1a281b2768986afd2a56209d15cbdb59c607738cac07c023a3f6a7dea",
         "audit_sets": ["KIB4"],
     },
+    "KIB4-a40": {
+        "fp32": "b6984475a3804714d1018b4ba18c2dc28ffa48d8bc293d26211f620bdd062ee3",
+        "audit_sets": ["KIB4"],
+    },
 }
 # The release choice (the highest measured passer); set when chosen.
 CHOICE = "KIB4-a33"
