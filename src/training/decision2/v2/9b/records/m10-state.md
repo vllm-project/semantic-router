@@ -2,6 +2,15 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 22:30Z (10-03 06:30 UTC+8), M10 continuation
+
+- **KIB4H s1 / s2 passed preflight** (21:34–21:35Z, node B GPU5 / 7) and are in their full runs (end ≈ 00:50Z). A
+  workstation waiter takes KIB4H-a40 through ship → BF16 → Index (node B GPU5 / 7) → gate as soon as the post chain
+  builds it.
+- **Integration merged** (`1d5a05496`), including `9f2c7db62`: `hub_card_http_check` follows the public visibility
+  policy (COORDINATION 06:05). `test_release` passes (26 tests) and so do the Hub tests.
+- COORDINATION 06:00 names KIB4H the 9B top priority, after the 4B half-LR release.
+
 ## 2026-10-02 21:40Z (10-03 05:40 UTC+8), M10 continuation
 
 - **`M10-KIB4R-a40-bf16`: FAIL**, significantly below KIB4-a40. **Y1 / Y2 are dropped** under amendment 11's
