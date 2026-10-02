@@ -212,7 +212,7 @@ func TestExtractRequiredFilesByModel(t *testing.T) {
 func TestBuildModelSpecsIncludesConfigDerivedRequiredFiles(t *testing.T) {
 	cfg := &config.RouterConfig{
 		MoMRegistry: map[string]string{
-			"models/mmbert32k-intent-classifier-merged": "llm-semantic-router/mmbert32k-intent-classifier-merged",
+			"models/mmbert32k-intent-classifier-merged": "vllm-sr/mmbert32k-intent-classifier-merged",
 		},
 		InlineModels: config.InlineModels{
 			Classifier: config.Classifier{
@@ -247,9 +247,9 @@ func TestBuildModelSpecsIncludesConfigDerivedRequiredFiles(t *testing.T) {
 func TestBuildModelSpecsSkipsDisabledHallucinationFeatureModels(t *testing.T) {
 	cfg := &config.RouterConfig{
 		MoMRegistry: map[string]string{
-			"models/mmbert32k-factcheck-classifier-merged": "llm-semantic-router/mmbert32k-factcheck-classifier-merged",
-			"models/mom-halugate-detector":                 "llm-semantic-router/mom-halugate-detector",
-			"models/mom-halugate-explainer":                "llm-semantic-router/mom-halugate-explainer",
+			"models/mmbert32k-factcheck-classifier-merged": "vllm-sr/mmbert32k-factcheck-classifier-merged",
+			"models/mom-halugate-detector":                 "vllm-sr/mom-halugate-detector",
+			"models/mom-halugate-explainer":                "vllm-sr/mom-halugate-explainer",
 		},
 		InlineModels: config.InlineModels{
 			HallucinationMitigation: config.HallucinationMitigationConfig{
@@ -279,7 +279,7 @@ func TestBuildModelSpecsSkipsDisabledHallucinationFeatureModels(t *testing.T) {
 func TestBuildModelSpecsIncludesFactCheckClassifierWhenSignalConfigured(t *testing.T) {
 	cfg := &config.RouterConfig{
 		MoMRegistry: map[string]string{
-			"models/mmbert32k-factcheck-classifier-merged": "llm-semantic-router/mmbert32k-factcheck-classifier-merged",
+			"models/mmbert32k-factcheck-classifier-merged": "vllm-sr/mmbert32k-factcheck-classifier-merged",
 		},
 		IntelligentRouting: config.IntelligentRouting{
 			Signals: config.Signals{
@@ -316,9 +316,9 @@ func TestBuildModelSpecsIncludesFactCheckClassifierWhenSignalConfigured(t *testi
 func TestBuildModelSpecsSkipsUnusedCoreClassifierModels(t *testing.T) {
 	cfg := &config.RouterConfig{
 		MoMRegistry: map[string]string{
-			"models/mmbert32k-intent-classifier-merged":  "llm-semantic-router/mmbert32k-intent-classifier-merged",
-			"models/mmbert32k-pii-detector-merged":       "llm-semantic-router/mmbert32k-pii-detector-merged",
-			"models/mmbert32k-jailbreak-detector-merged": "llm-semantic-router/mmbert32k-jailbreak-detector-merged",
+			"models/mmbert32k-intent-classifier-merged":  "vllm-sr/mmbert32k-intent-classifier-merged",
+			"models/mmbert32k-pii-detector-merged":       "vllm-sr/mmbert32k-pii-detector-merged",
+			"models/mmbert32k-jailbreak-detector-merged": "vllm-sr/mmbert32k-jailbreak-detector-merged",
 		},
 		InlineModels: config.InlineModels{
 			Classifier: config.Classifier{
@@ -357,9 +357,9 @@ func TestBuildModelSpecsSkipsUnusedCoreClassifierModels(t *testing.T) {
 func TestBuildModelSpecsIncludesUsedCoreClassifierModels(t *testing.T) {
 	cfg := &config.RouterConfig{
 		MoMRegistry: map[string]string{
-			"models/mmbert32k-intent-classifier-merged":  "llm-semantic-router/mmbert32k-intent-classifier-merged",
-			"models/mmbert32k-pii-detector-merged":       "llm-semantic-router/mmbert32k-pii-detector-merged",
-			"models/mmbert32k-jailbreak-detector-merged": "llm-semantic-router/mmbert32k-jailbreak-detector-merged",
+			"models/mmbert32k-intent-classifier-merged":  "vllm-sr/mmbert32k-intent-classifier-merged",
+			"models/mmbert32k-pii-detector-merged":       "vllm-sr/mmbert32k-pii-detector-merged",
+			"models/mmbert32k-jailbreak-detector-merged": "vllm-sr/mmbert32k-jailbreak-detector-merged",
 		},
 		InlineModels: config.InlineModels{
 			Classifier: config.Classifier{
@@ -407,7 +407,7 @@ func TestBuildModelSpecsIncludesUsedCoreClassifierModels(t *testing.T) {
 func TestBuildModelSpecsIncludesCoreClassifierUsedViaProjection(t *testing.T) {
 	cfg := &config.RouterConfig{
 		MoMRegistry: map[string]string{
-			"models/mmbert32k-jailbreak-detector-merged": "llm-semantic-router/mmbert32k-jailbreak-detector-merged",
+			"models/mmbert32k-jailbreak-detector-merged": "vllm-sr/mmbert32k-jailbreak-detector-merged",
 		},
 		InlineModels: config.InlineModels{
 			PromptGuard: config.PromptGuardConfig{
@@ -570,7 +570,7 @@ global:
 func TestBuildModelSpecsSkipsUnusedFeedbackDetectorDefaults(t *testing.T) {
 	cfg := &config.RouterConfig{
 		MoMRegistry: map[string]string{
-			"models/mmbert32k-feedback-detector-merged": "llm-semantic-router/mmbert32k-feedback-detector-merged",
+			"models/mmbert32k-feedback-detector-merged": "vllm-sr/mmbert32k-feedback-detector-merged",
 		},
 		InlineModels: config.InlineModels{
 			FeedbackDetector: config.FeedbackDetectorConfig{
@@ -707,7 +707,7 @@ func TestBuildModelSpecsDownloadsOnlyVelaDomainForRiscvQemuConfig(t *testing.T) 
 		t.Fatalf("BuildModelSpecs() returned %d specs, want only Vela Domain: %#v", len(specs), specs)
 	}
 	if specs[0].LocalPath != "models/Vela-1.0-Encoder-307M-Domain" ||
-		specs[0].RepoID != "llm-semantic-router/Vela-1.0-Encoder-307M-Domain" ||
+		specs[0].RepoID != "vllm-sr/Vela-1.0-Encoder-307M-Domain" ||
 		specs[0].Revision == "" {
 		t.Fatalf("RISC-V QEMU must download the pinned Vela Domain classifier: %#v", specs[0])
 	}
@@ -744,7 +744,7 @@ func TestBuildModelSpecsDownloadsOnlyVelaEmbeddingForMemoryE2EConfigs(t *testing
 				t.Fatalf("BuildModelSpecs() returned %d specs, want only the memory embedding: %#v", len(specs), specs)
 			}
 			if specs[0].LocalPath != "models/Vela-1.0-Encoder-307M-Embedding" ||
-				specs[0].RepoID != "llm-semantic-router/Vela-1.0-Encoder-307M-Embedding" ||
+				specs[0].RepoID != "vllm-sr/Vela-1.0-Encoder-307M-Embedding" ||
 				specs[0].Revision == "" || specs[0].CheckONNX {
 				t.Fatalf("memory E2E must download the pinned native Vela embedding: %#v", specs[0])
 			}

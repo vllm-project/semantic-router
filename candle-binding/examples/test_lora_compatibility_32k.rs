@@ -25,7 +25,7 @@ fn main() -> Result<()> {
 
     // Step 1: Download and load ModernBERT-base-32k
     println!("\nDownloading ModernBERT-base-32k...");
-    let base_model_id = "llm-semantic-router/modernbert-base-32k";
+    let base_model_id = "vllm-sr/modernbert-base-32k";
     let repo = Repo::with_revision(
         base_model_id.to_string(),
         RepoType::Model,
