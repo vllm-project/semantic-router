@@ -373,6 +373,57 @@ class LoraSoupTest(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             lora_soup.build(self.members(2), self.source, output)
 
+    def test_weighted_soup_is_the_weighted_mean(self):
+        members = self.members(4)
+        output = self.root / "weighted"
+        manifest = lora_soup.build(members, self.source, output, [1, 1, 2, 2])
+        shares = [1 / 6, 1 / 6, 1 / 3, 1 / 3]
+        for module in TARGETS:
+            mean = sum(w * delta(m, module) for m, w in zip(members, shares))
+            diff = (delta(output, module) - mean).abs().max().item()
+            self.assertLessEqual(diff, 1e-6 * mean.abs().max().item())
+        head = load_file(str(output / "decision_head.safetensors"))
+        heads = [load_file(str(m / "decision_head.safetensors")) for m in members]
+        for key in head:
+            mean = sum(h[key].double() * w for h, w in zip(heads, shares))
+            self.assertLess((head[key].double() - mean).abs().max().item(), 1e-6)
+        meta = json.loads((output / "decision_config.json").read_text())
+        self.assertEqual((meta["lora"]["rank"], meta["lora"]["alpha"]), (16, 32))
+        for got, want in zip(meta["soup"]["weights"], shares):
+            self.assertAlmostEqual(got, want, places=12)
+        self.assertTrue(meta["soup"]["method"].startswith("weighted"))
+        self.assertEqual(manifest["lora"]["weights"], meta["soup"]["weights"])
+        self.assertLessEqual(manifest["verification"]["max_relative_diff"], 1e-6)
+        lora_soup.verify(members, output, meta["soup"]["weights"])
+        with self.assertRaises(ValueError):
+            lora_soup.verify(members, output)
+
+    def test_uniform_soup_keeps_its_model_files_without_weights(self):
+        members = self.members(2)
+        plain = self.root / "plain"
+        lora_soup.build(members, self.source, plain)
+        meta = json.loads((plain / "decision_config.json").read_text())
+        self.assertNotIn("weights", meta["soup"])
+        self.assertTrue(meta["soup"]["method"].startswith("uniform"))
+        manifest = json.loads((plain / "soup_manifest.json").read_text())
+        self.assertNotIn("weights", manifest["lora"])
+        halves = self.root / "halves"
+        lora_soup.build(members, self.source, halves, [1, 1])
+        for name in ("adapter/adapter_model.safetensors", "decision_head.safetensors"):
+            self.assertEqual((plain / name).read_bytes(), (halves / name).read_bytes())
+
+    def test_bad_weights_are_refused(self):
+        members = self.members(2)
+        for label, weights in {
+            "count": [1.0],
+            "zero": [1.0, 0.0],
+            "negative": [1.0, -1.0],
+            "nan": [1.0, float("nan")],
+        }.items():
+            with self.subTest(label), self.assertRaises(ValueError):
+                lora_soup.build(members, self.source, self.root / f"w-{label}", weights)
+            self.assertFalse((self.root / f"w-{label}").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

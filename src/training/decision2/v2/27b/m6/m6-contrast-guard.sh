@@ -2,13 +2,13 @@
 # ~27B M6 guard for the shared gates directory on node B (node side; detached). The four chains share
 # /data/dev2/runs/27b/m6/gates, and each chain's `m6-gates.sh gates` ends with m4_contrast --output gates/contrast.json,
 # which refuses an existing file: the second chain with a sealed finalist would stop there, before overlap and
-# verdicts. While any listed chain PID is alive, this moves every complete contrast.json (it parses as JSON) to
-# contrast-<finalists>-<UTC>.json within 5 s of its writing, and copies contrast.log beside it 15 s later. Nothing
-# reads contrast.json downstream (the verdicts read gates/<NAME>/, gates/mlx and gates/overlap); the contrasts over
-# all finalists are a separate final run.
-# Usage: m6-contrast-guard.sh CHAIN_PID...
+# verdicts. While any listed chain PID is alive, this moves every complete contrast.json (it parses as JSON and names
+# its finalists: the score_levels keys, one per m4_contrast --finalist) to contrast-<finalists>-<UTC>.json within 5 s
+# of its writing, and copies contrast.log beside it 15 s later. Nothing reads contrast.json downstream (the verdicts
+# read gates/<NAME>/, gates/mlx and gates/overlap); the contrasts over all finalists are a separate final run.
+# Usage: m6-contrast-guard.sh CHAIN_PID...      (M6_GATES / M6_GUARD_LOG_DELAY override the directory / the 15 s)
 set -euo pipefail
-G=/data/dev2/runs/27b/m6/gates
+G=${M6_GATES:-/data/dev2/runs/27b/m6/gates}
 [ $# -ge 1 ] || { echo "at least one chain PID" >&2; exit 2; }
 for p in "$@"; do [[ "$p" =~ ^[0-9]+$ ]] || { echo "bad PID $p" >&2; exit 2; }; done
 alive() {
@@ -17,7 +17,7 @@ alive() {
   return 1
 }
 names() {  # contrast JSON -> its finalists joined by +, or an empty string when it is not complete JSON
-  python3 -c 'import json,sys; print("+".join(sorted(json.load(open(sys.argv[1]))["finalists"])))' "$1" 2> /dev/null
+  python3 -c 'import json,sys; print("+".join(sorted(json.load(open(sys.argv[1]))["score_levels"])))' "$1" 2> /dev/null
 }
 echo "m6 contrast guard $*: start $(date -u +%FT%TZ)"
 while alive "$@"; do
@@ -25,7 +25,7 @@ while alive "$@"; do
     out=contrast-$n-$(date -u +%Y%m%dT%H%M%SZ)
     mv -n "$G/contrast.json" "$G/$out.json"
     echo "$(date -u +%FT%TZ) gates/contrast.json -> $out.json"
-    sleep 15
+    sleep "${M6_GUARD_LOG_DELAY:-15}"
     [ ! -f "$G/contrast.log" ] || cp -p "$G/contrast.log" "$G/$out.log"
   fi
   sleep 5

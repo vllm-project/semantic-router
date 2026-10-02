@@ -1,0 +1,59 @@
+{
+ "schema": "dev2-release-decision/1",
+ "status": "final",
+ "decision": "release",
+ "model_name": "Decision-2.0-Vega-27B",
+ "repo_id": "vllm-sr/Decision-2.0-Vega-27B",
+ "name_basis": "base",
+ "name_base_model": "Qwen/Qwen3.8-27B",
+ "identity": {
+  "model_sha256": "584697310502cd20e91728e69f724c028b47b95daf3790256dea3e434c48be82"
+ },
+ "report_sha256": "9bbf6e5e5d4d0dd46fefc71e7d820546ef73ebeb528d39246f6a722af25028e2",
+ "paired_sha256": "341fa28cc1df8cce8d1102f22facb7b8f15f646084ac352582447fa30dbcd241",
+ "gate_profile": "successor",
+ "rule": "index-first",
+ "current_revision": "e60bd8e346110b3348b6e5a25c07329d350c4b21",
+ "evidence_sha256": {
+  "current_decision": "08d19f0e7d482fef162efb2231624f4d52f03ad86f194cac4a2a7257faa03aea",
+  "current_gate": "e9591a86c2ba07b1496da1206e5277e68044dfd443e5205f241b82974b0aef6b",
+  "exposure": "4fc00c8c831ec7736ed45d5e067726fc7737c6f82eb78ca8cc4702bb0fd0b8dd",
+  "index_first_audit": "791c6574184c3afd5eb5707fb6ce323d37970ce58d9110cbb15856b2a637fa5e",
+  "index_first_base_receipt": "4544293a00e9bb77e424b5f75448523d1663d07a83008186ad7a84e77563d19b",
+  "index_first_bootstrap": "81bddc52d07285f79537220ffd9a8828501d3b51b8efb0109427dc6c53092273",
+  "index_first_receipt": "654f2702ad1c6984d33d1736269ae79bf38eef4a90a7d8c0f2946a4f5db29aae",
+  "mlx_paired": "d5337c3e2c7e72fc8d00241e8a7eab66562f348b1130afbe19b7f87bc798ebde",
+  "paired": "7eb3bb32112f79346b16a42fd85842b3bc3326ee84afaa855c6f2745bb5020ed",
+  "public231": "abb76e2b07d63204c832e566060d2bd23e275088f87b95255f20d9fa5471a547",
+  "tier_paired": "341fa28cc1df8cce8d1102f22facb7b8f15f646084ac352582447fa30dbcd241",
+  "types": "a46c51cad7ae68884d8cda71d8fbc63d1b0ab50732658fabac2614a931f2e7d5"
+ },
+ "calibration": "none (temperature 1; every Decision 2.0 model keeps T = 1): CAL698 was not adopted for this soup; no calibration file is shipped",
+ "action": "New main revision of the private repository vllm-sr/Decision-2.0-Vega-27B: the cross-arm average of the 27B M6 arms M6-IB (the released A20r recipe on the A20 mixture plus the IB1-r3 Index-breadth rows; the current revision) and M6-IB2 (the same recipe on A20 + IB1-r3 + IB2): the exact weighted LoRA soup of their four seeds (two per arm, each a rank-128 LoRA on the frozen Qwen3.8-27B text backbone with the native candidate head; rank 512, alpha 1024), weights 1/4 per seed (each arm 1/2); replaces the M6-IB adapter (e50fb4c1, revision e60bd8e3) with the product card of the current revision (default generator, banner concept A) and this candidate's Index input; then the superseded weight blobs are purged with rewrite_history=False (hf_headroom.sh first). The repository stays private and in the private collection.",
+ "rationale": "Index-first rule (user 2026-10-02 09:55 UTC+8) and progressive release (11:35 UTC+8). IF1: the private Index paired bootstrap of these exact weights minus the current revision's (M6-IB) has a 95% lower bound > 0 (2,000 replicates, seed 20261002; values in private files only; evidence_sha256.index_first_bootstrap). R3: types choice OK, noul OK, score OK. IF3: row-level Index audit, planted control 200 / 200; a20ib1 0 item rows; a20ib12 0 item rows. References vs the current revision (not release blockers): post-key v3 74.01 vs 73.16, +0.85 [-0.94, +2.47]; human transfer -0.029 to +0.023; card-eligible mlx-diag -0.0019 [-0.0101, +0.0061]; public 231 203 vs 198 (McNemar p 0.180); vs AutoJev-27B +1.87 [-0.46, +6.06]; C1 post-key not run.",
+ "approved_package": {
+  "identity": "584697310502cd20e91728e69f724c028b47b95daf3790256dea3e434c48be82",
+  "loaded_parameters": 29365153792,
+  "profile": "qwen-adapter (unmerged PEFT LoRA and the native head on the pinned Qwen3.8-27B base)",
+  "temperature": 1,
+  "max_input_tokens": 32768,
+  "revision_binding": "receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified."
+ },
+ "licence_decision": "apache-2.0: own LoRA adapter, head, runtime and card; base Qwen/Qwen3.8-27B @1d4bf0f2 Apache-2.0, pinned and not redistributed; the IB1-r3 and IB2 training rows are licence-clean (release-safe data records); the package keeps the Apache-2.0 LICENSE (product card: no NOTICE, attributions or evaluation/ files).",
+ "supersedes": {
+  "revision": "e60bd8e346110b3348b6e5a25c07329d350c4b21",
+  "final_sha256": "08d19f0e7d482fef162efb2231624f4d52f03ad86f194cac4a2a7257faa03aea",
+  "gate_sha256": "e9591a86c2ba07b1496da1206e5277e68044dfd443e5205f241b82974b0aef6b",
+  "manifest_sha256": "23a040164046b0fcd4a88006cabc474d0e965a5f091806b027b933ce2a5b24e4",
+  "weights_identity": "e50fb4c130483d1c889c226f726fcca1e134a3ae0292f20907586738c06c9680"
+ },
+ "disclosures": [
+  "v3 against the current revision is a reference under the Index-first rule (v3 not significantly different from the current revision)",
+  "the training rows include the IB1-r3 and IB2 families matched to Index benchmark families and formats (IB2's hover and gsm2 are in-distribution for HoVer and GSM8K); the internal records report the transfer-only Index delta without those benchmarks (private values)",
+  "Index contamination audit of both training files (every a20ib1 row is an a20ib12 row): a20ib1 (a2ccf844) 81294 lines, 0 item rows and 2 familiar-text rows; a20ib12 (16cb5bbb) 105812 lines, 0 item rows and 2 familiar-text rows",
+  "card.speed is the current revision's bench receipt (same base, runtime and shapes; this adapter's rank is 512 instead of 256)"
+ ],
+ "prepared_by": "Decision 2.0 27B worker, continuations #5 and #6 (worktree vllm-sr-dev2-27b)",
+ "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's Index-first rule of 2026-10-02 09:55 UTC+8 (release gate = a significantly positive private Index delta vs the current release; integrity checks; references not blocking) and the progressive-release directive of 11:35 UTC+8, applied to the 27B tier by the 27B worker (continuations #5 and #6 of 2026-10-02: the cross-arm average of M6-IB and M6-IB2, released if its Index lower bound vs M6-IB is > 0; COORDINATION 21:20 UTC+8: release the larger lower bound on top of the organization card-only revision e60bd8e3)",
+ "decided_utc": "2026-10-02T14:03:02Z"
+}

@@ -77,6 +77,32 @@ class M6LaunchTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 launch.node_name()
 
+    def test_m6_node_e_map_excludes_external_gpus(self):
+        with mock.patch.dict(
+            os.environ, {"DEV2_27B_ALLOC": "m6", "DEV2_NODE": "e"}, clear=True
+        ):
+            self.assertEqual(launch.node_name(), "e")
+            self.assertEqual(sorted(launch.allowed_gpus()), [0, 1, 2, 3, 6, 7])
+            self.assertEqual(launch.allowed_gpus()[6], ("0000:b3:00.0", "renderD177"))
+            with tempfile.TemporaryDirectory() as tmp:
+                drm = fake_sysfs(Path(tmp), "renderD145", "0000:93:00.0")
+                self.assertEqual(launch.render_node(2, drm).name, "renderD145")
+                for gpu in (4, 5):
+                    with self.assertRaises(ValueError):
+                        launch.render_node(gpu, drm)
+
+    def test_m6_node_f_map_excludes_k8s_gpus(self):
+        with mock.patch.dict(
+            os.environ, {"DEV2_27B_ALLOC": "m6", "DEV2_NODE": "f"}, clear=True
+        ):
+            self.assertEqual(sorted(launch.allowed_gpus()), [2, 3, 4, 5, 6, 7])
+            with tempfile.TemporaryDirectory() as tmp:
+                drm = fake_sysfs(Path(tmp), "renderD153", "0000:9b:00.0")
+                self.assertEqual(launch.render_node(3, drm).name, "renderD153")
+                for gpu in (0, 1):
+                    with self.assertRaises(ValueError):
+                        launch.render_node(gpu, drm)
+
     def test_read_lease_single_line_owner(self):
         with tempfile.TemporaryDirectory() as tmp:
             owner = Path(tmp) / "owner"
@@ -440,6 +466,67 @@ class M6GatesTest(unittest.TestCase):
             self.gates.pn1_validated(dict(report, candidate="M6-IB"))
 
 
+class M6IndexFirstTest(unittest.TestCase):
+    def test_gate_integrity_and_choice(self):
+        rule = importlib.import_module("v2.27b.m6.m6_index_first")
+
+        def boot(low):
+            return {
+                "headline": {
+                    "delta": low + 1,
+                    "ci95": [low, low + 2],
+                    "se": 0.5,
+                    "p_le_0": 0.01,
+                }
+            }
+
+        ok = {"types": {t: {"verdict": "OK"} for t in ("choice", "noul", "score")}}
+        bad = {
+            "types": {"choice": {"verdict": "OK"}, "score": {"verdict": "COLLAPSED"}}
+        }
+        public, private = rule.decide(
+            {
+                "M6-IB": boot(0.4),
+                "M6-IB2": boot(0.9),
+                "M5-L128": boot(1.5),
+                "M6-IBX": boot(-0.1),
+            },
+            {"M6-IB": ok, "M6-IB2": ok, "M5-L128": bad, "M6-IBX": ok},
+            {
+                "M6-IB2": {
+                    "weighted_delta_sum": 2.0,
+                    "benchmarks": {
+                        "HoVer": {"weighted_delta": 1.2},
+                        "BPoMP": {"weighted_delta": 0.3},
+                        "BANKING77": {"weighted_delta": 0.1},
+                        "MMLU": {"weighted_delta": 0.4},
+                    },
+                }
+            },
+        )
+        self.assertEqual(public["order"], ["M6-IB2", "M6-IB"])
+        self.assertEqual(public["choice"], "M6-IB2")
+        self.assertFalse(public["candidates"]["M5-L128"]["eligible"])
+        self.assertFalse(public["candidates"]["M6-IBX"]["index_gate"])
+        self.assertNotIn("ci95", json.dumps(public))
+        t = private["candidates"]["M6-IB2"]["transfer_only"]
+        self.assertEqual(t["excluded"], ["HoVer", "BPoMP"])
+        self.assertEqual(t["transfer_only_weighted_delta"], 0.5)
+        self.assertEqual(
+            rule.transfer_only(
+                "M5-L128",
+                {
+                    "weighted_delta_sum": 1.0,
+                    "benchmarks": {"BPoMP": {"weighted_delta": 1.0}},
+                },
+            )["excluded"],
+            [],
+        )
+        public, _ = rule.decide({"M6-IB": boot(0.4)}, {}, {})
+        self.assertIsNone(public["choice"])
+        self.assertIsNone(public["candidates"]["M6-IB"]["no_type_collapsed"])
+
+
 class M6ReportTest(unittest.TestCase):
     def test_devgates_and_heldout_tables(self):
         report = importlib.import_module("v2.27b.m6.m6_report")
@@ -469,7 +556,7 @@ class M6ReportTest(unittest.TestCase):
                 "pass": False,
             },
             "G6_breadth_vs_A20r": {
-                "B_dev": 0.93,
+                "B_dev": {"candidate": 0.93, "reference": 0.92},
                 "delta": 0.01,
                 "delta_ci95": [0.002, 0.018],
                 "pass": True,
@@ -490,6 +577,7 @@ class M6ReportTest(unittest.TestCase):
                 "+0.0120 [+0.0020, +0.0220] / +0.0000 [+0.0000, +0.0000] (**FAIL**)",
                 lines[2],
             )
+            self.assertIn("| 0.9300, +0.0100 [+0.0020, +0.0180] (pass) |", lines[2])
             self.assertEqual(lines[-1], "Finalists: none.")
             rows = [noul_row(f"es{i}", "pn-name", "es", 0) for i in range(4)]
             rows += [noul_row(f"hop{i}", "pn-hop", "fr", 1) for i in range(2)]
@@ -806,7 +894,22 @@ class M6ScriptTest(unittest.TestCase):
         index = (M6 / "m6-index.sh").read_text()
         self.assertIn("MD=/data/dev2/models/ix1/m6\n", index)
         self.assertIn("PKG=$MD/$ARM-re876fbe", index)
-        for arm in ("M6-IB", "M6-IBX", "M6-IB2", "M6-IB2PN"):
+        for arm in (
+            "M6-IB",
+            "M6-IBX",
+            "M6-IB2",
+            "M6-IB2PN",
+            "M6-IBxIB2-m50",
+            "M6-IBxIB2-m67",
+            "M7-IB124ML",
+            "M7-IB14ML",
+            "M8-IB14",
+            "M8-IB124",
+            "X7-IBxIB2xIB14ML",
+            "X7-4ARM",
+            "X8-IBxIB2-8",
+            "X8-ML",
+        ):
             entry = (
                 f'  [{arm}]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 '
                 f'/data/dev2/models/ix1/m6/{arm}-re876fbe"\n'
@@ -818,6 +921,9 @@ class M6ScriptTest(unittest.TestCase):
             for args, message in (
                 (["abc", "M6-IB", "stage"], "full commit SHA"),
                 (["0" * 40, "M6-IB3", "stage"], "bad ARM"),
+                (["0" * 40, "M6-IBxIB2-m5", "stage"], "bad ARM"),
+                (["0" * 40, "M6-IBxIB2", "stage"], "bad ARM"),
+                (["0" * 40, "M7-IB24", "stage"], "bad ARM"),
             ):
                 with self.subTest(script=script, args=args):
                     out = subprocess.run(
@@ -846,11 +952,14 @@ class M6ScriptTest(unittest.TestCase):
 
     def test_index_run_node_checks(self):
         for args, message in (
-            (["e", "0", "4"], "NODE must be c or d"),
+            (["f", "0", "4"], "NODE must be b, c, d or e"),
+            (["b", "0", "2"], "node b: GPU 2 is not allowed"),
+            (["e", "0", "4"], "node e: GPU 4 is not allowed"),
+            (["e", "0", "5"], "node e: GPU 5 is not allowed"),
             (["d", "0,8", "4"], "SHARDS"),
             (["d", "0,0", "4"], "lists a shard twice"),
             (["d", "0,1"], "no GPU listed"),
-            (["d", "0,1", "3"], "node d: GPU 3 is not allowed"),
+            (["d", "0,1", "8"], "node d: GPU 8 is not allowed"),
             (["c", "0,1", "0"], "node c: GPU 0 is not allowed"),
             (["c", "0,1", "1", "1"], "listed twice"),
         ):
@@ -875,12 +984,35 @@ class M6ScriptTest(unittest.TestCase):
         out = self.index_run("d", "0,1", "4", "5", "6", "7")
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertIn('launch.sh --gpus "4 5 9 9 9 9 9 9"', out.stdout)
+        out = self.index_run("e", "2,3", "0", "7")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn('launch.sh --gpus "9 9 0 7 9 9 9 9"', out.stdout)
+        env = dict(os.environ, M6_INDEX_DRY="1", M6_INDEX_STAGGER="2m")
+        out = subprocess.run(
+            ["bash", str(M6 / "m6-index-run.sh"), "0" * 40, "M6-IB", "e", "2", "0"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("M6_INDEX_STAGGER", out.stderr)
+        env = dict(os.environ, M6_INDEX_DRY="1", M6_INDEX_AFTER="8")
+        out = subprocess.run(
+            ["bash", str(M6 / "m6-index-run.sh"), "0" * 40, "M6-IB", "d", "5", "0"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("M6_INDEX_AFTER", out.stderr)
         out = self.index_run("d", "0,1", "4", dry=False)
         self.assertEqual(out.returncode, 2)
         self.assertIn("missing mirror", out.stderr)
 
-    def index_plan(self, gpus):
+    def index_plan(self, gpus, shards=None):
         env = dict(os.environ, M6_INDEX_GPUS=gpus, DEV2_NODES_FILE="/nonexistent")
+        if shards is not None:
+            env["M6_INDEX_SHARDS"] = shards
         return subprocess.run(
             ["bash", str(M6 / "m6-index.sh"), "0" * 40, "M6-IB", "plan"],
             capture_output=True,
@@ -909,9 +1041,32 @@ class M6ScriptTest(unittest.TestCase):
         self.assertEqual(
             out.stdout.splitlines()[0], "node d: shards 0,1,2,3,4,5,6,7 on GPU 4 5 6 7"
         )
+        out = self.index_plan("e0 e1 e2 e3 e6 e7", shards="2 3 4 5 6 7")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        lines = out.stdout.splitlines()
+        self.assertEqual(lines[0], "node e: shards 2,3,4,5,6,7 on GPU 0 1 2 3 6 7")
+        self.assertIn('  launch.sh --gpus "9 9 0 1 2 3 6 7"', lines)
+        out = self.index_plan("b0 b1 b5 d0 d1", shards="2 3 4 5 6 7")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        lines = out.stdout.splitlines()
+        self.assertIn("node d: shards 5,6 on GPU 0 1", lines)
+        self.assertIn("node b: shards 2,3,4,7 on GPU 0 1 5", lines)
+        self.assertIn('  launch.sh --gpus "9 9 0 1 5 9 9 0"', lines)
+        for shards, message in (
+            ("2 8", "not '8'"),
+            ("2 2", "lists 2 twice"),
+            (" ", "at least one shard"),
+        ):
+            with self.subTest(shards=shards):
+                out = self.index_plan("e0", shards=shards)
+                self.assertEqual(out.returncode, 2)
+                self.assertIn(message, out.stderr)
         for gpus, message in (
+            ("e4", "not 'e4'"),
+            ("b2", "not 'b2'"),
+            ("e5", "not 'e5'"),
             ("c0", "not 'c0'"),
-            ("d3", "not 'd3'"),
+            ("d8", "not 'd8'"),
             ("d4 d4", "lists d4 twice"),
             ("4 d4", "lists d4 twice"),
             (" ", "1-8 entries"),
@@ -921,6 +1076,282 @@ class M6ScriptTest(unittest.TestCase):
                 out = self.index_plan(gpus)
                 self.assertEqual(out.returncode, 2)
                 self.assertIn(message, out.stderr)
+
+    def test_index_run_launches_every_node_of_a_split_plan(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir, log = Path(tmp) / "bin", Path(tmp) / "ssh.log"
+            bin_dir.mkdir()
+            (
+                bin_dir / "ssh"
+            ).write_text(  # like ssh: reads stdin, answers every check with the same line
+                f'#!/usr/bin/env bash\necho "${{@: -1}}" >> {log}\ncat > /dev/null\necho ok\n'
+            )
+            (bin_dir / "sleep").write_text("#!/usr/bin/env bash\n")
+            for stub in ("ssh", "sleep"):
+                (bin_dir / stub).chmod(0o755)
+            nodes = Path(tmp) / "nodes.env"
+            nodes.write_text(
+                "node-b=root@b\nnode-c=root@c\nnode-d=root@d\nnode-e=root@e\n"
+            )
+            out = subprocess.run(
+                ["bash", str(M6 / "m6-index.sh"), "0" * 40, "M6-IB", "run"],
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                timeout=60,
+                env=dict(
+                    os.environ,
+                    PATH=f"{bin_dir}:{os.environ['PATH']}",
+                    DEV2_NODES_FILE=str(nodes),
+                    M6_INDEX_GPUS="d4 c1 e0",
+                    M6_INDEX_STAGGER="120",
+                ),
+            )
+            self.assertEqual(out.returncode, 0, out.stderr)
+            calls = log.read_text()
+            self.assertIn("m6-index-run.sh " + "0" * 40 + " M6-IB d 0,3,6 4", calls)
+            self.assertIn("m6-index-run.sh " + "0" * 40 + " M6-IB c 1,4,7 1", calls)
+            self.assertIn("m6-index-run.sh " + "0" * 40 + " M6-IB e 2,5 0", calls)
+            self.assertIn("M6_INDEX_STAGGER=120 M6_INDEX_AFTER= setsid", calls)
+            self.assertIn(
+                "tail -n 3 /data/dev2/private/eval/index021/ix1/logs/m6-index-M6-IB-c.log",
+                calls,
+            )
+
+    def test_index_stage_from_soup_needs_opt_in(self):
+        soup = "ab" * 32
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir, log = Path(tmp) / "bin", Path(tmp) / "ssh.log"
+            bin_dir.mkdir()
+            (
+                bin_dir / "ssh"
+            ).write_text(  # no PACKAGE.json on node B; the soup names its identity
+                "#!/usr/bin/env bash\n"
+                f'cmd="${{@: -1}}"; echo "$cmd" >> {log}; cat > /dev/null\n'
+                'case "$cmd" in "test -f "*PACKAGE.json) exit 1 ;; '
+                '"test -f "*soup_manifest.json) exit 0 ;; '
+                "*rank*soup_manifest.json) echo 256 ;; "
+                f"*soup_manifest.json) echo {soup} ;; *) echo ok ;; esac\n"
+            )
+            (bin_dir / "ssh").chmod(0o755)
+            nodes = Path(tmp) / "nodes.env"
+            nodes.write_text("node-b=root@b\nnode-c=root@c\nnode-d=root@d\n")
+            env = dict(
+                os.environ,
+                PATH=f"{bin_dir}:{os.environ['PATH']}",
+                DEV2_NODES_FILE=str(nodes),
+            )
+            run = ["bash", str(M6 / "m6-index.sh"), "0" * 40, "M6-IBX", "stage"]
+            out = subprocess.run(
+                run, capture_output=True, text=True, stdin=subprocess.DEVNULL, env=env
+            )
+            self.assertEqual(out.returncode, 3)
+            self.assertIn("M6_INDEX_FROM_SOUP=1", out.stderr)
+            out = subprocess.run(
+                run,
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                env=dict(env, M6_INDEX_FROM_SOUP="1"),
+            )
+            self.assertEqual(out.returncode, 0, out.stderr)
+            self.assertIn(f"--model-sha256 {soup}", log.read_text())
+            self.assertIn(f"MODEL_MANIFEST.json {soup} 27497508864", log.read_text())
+
+    def fake_nodes(self, tmp, answers):
+        """A fake ssh answering each remote command by the first matching (glob, line) pair, else "ok"."""
+        bin_dir, log = Path(tmp) / "bin", Path(tmp) / "ssh.log"
+        bin_dir.mkdir()
+        cases = " ".join(f"{glob}) echo {line} ;;" for glob, line in answers)
+        (bin_dir / "ssh").write_text(
+            "#!/usr/bin/env bash\n"
+            f'cmd="${{@: -1}}"; echo "$cmd" >> {log}; cat > /dev/null\n'
+            f'case "$cmd" in {cases} *) echo ok ;; esac\n'
+        )
+        (bin_dir / "ssh").chmod(0o755)
+        nodes = Path(tmp) / "nodes.env"
+        nodes.write_text("node-b=root@b\nnode-c=root@c\nnode-d=root@d\nnode-e=root@e\n")
+        env = dict(
+            os.environ,
+            PATH=f"{bin_dir}:{os.environ['PATH']}",
+            DEV2_NODES_FILE=str(nodes),
+        )
+        return env, log
+
+    def test_index_stage_takes_the_loaded_count_from_the_soup_rank(self):
+        soup = "cd" * 32
+        with tempfile.TemporaryDirectory() as tmp:
+            env, log = self.fake_nodes(
+                tmp,
+                [
+                    ('"test -f "*PACKAGE.json', "> /dev/null; exit 1"),
+                    ('"test -f "*soup_manifest.json', "> /dev/null"),
+                    ("*rank*soup_manifest.json", "512"),
+                    ("*soup_manifest.json", soup),
+                ],
+            )
+            out = subprocess.run(
+                ["bash", str(M6 / "m6-index.sh"), "0" * 40, "M6-IBxIB2-m50", "stage"],
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                env=dict(env, M6_INDEX_FROM_SOUP="1"),
+            )
+            self.assertEqual(out.returncode, 0, out.stderr)
+            calls = log.read_text()
+            self.assertIn("/data/dev2/models/ix1/m6/M6-IBxIB2-m50-re876fbe", calls)
+            self.assertIn(f"MODEL_MANIFEST.json {soup} 29365153792", calls)
+        with tempfile.TemporaryDirectory() as tmp:
+            env, _ = self.fake_nodes(
+                tmp,
+                [
+                    ('"test -f "*PACKAGE.json', "> /dev/null; exit 1"),
+                    ('"test -f "*soup_manifest.json', "> /dev/null"),
+                    ("*rank*soup_manifest.json", "abc"),
+                    ("*soup_manifest.json", soup),
+                ],
+            )
+            out = subprocess.run(
+                ["bash", str(M6 / "m6-index.sh"), "0" * 40, "M7-IB124ML", "stage"],
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                env=dict(env, M6_INDEX_FROM_SOUP="1"),
+            )
+            self.assertEqual(out.returncode, 3)
+            self.assertIn("bad LoRA rank", out.stderr)
+
+    def test_index_parity_gpu_and_score_base_checks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env, log = self.fake_nodes(tmp, [])
+            for gpu in ("e4", "e5", "c1", "d8", "b2"):
+                with self.subTest(gpu=gpu):
+                    out = subprocess.run(
+                        [
+                            "bash",
+                            str(M6 / "m6-index.sh"),
+                            "0" * 40,
+                            "M6-IBxIB2-m67",
+                            "parity",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        stdin=subprocess.DEVNULL,
+                        env=dict(env, M6_PARITY_GPU=gpu),
+                    )
+                    self.assertEqual(out.returncode, 2)
+                    self.assertIn("M6_PARITY_GPU", out.stderr)
+            for base in ("M6-IB3", "M6-IBxIB2-m67"):
+                with self.subTest(base=base):
+                    out = subprocess.run(
+                        [
+                            "bash",
+                            str(M6 / "m6-index.sh"),
+                            "0" * 40,
+                            "M6-IBxIB2-m67",
+                            "score",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        stdin=subprocess.DEVNULL,
+                        env=dict(env, M6_INDEX_BASE=base),
+                    )
+                    self.assertEqual(out.returncode, 2)
+                    self.assertIn("M6_INDEX_BASE", out.stderr)
+
+    def test_index_hold_and_xarm_argument_checks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env, log = self.fake_nodes(tmp, [])
+            for gpus in ("", "c1", "e4", "b2", "d8"):
+                with self.subTest(gpus=gpus):
+                    out = subprocess.run(
+                        [
+                            "bash",
+                            str(M6 / "m6-index.sh"),
+                            "0" * 40,
+                            "M6-IBxIB2-m50",
+                            "hold",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        stdin=subprocess.DEVNULL,
+                        env=dict(env, M6_INDEX_GPUS=gpus),
+                    )
+                    self.assertEqual(out.returncode, 2)
+                    self.assertIn("M6_INDEX_GPUS", out.stderr)
+            out = subprocess.run(
+                ["bash", str(M6 / "m6-index.sh"), "0" * 40, "M6-IBxIB2-m50", "unhold"],
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                env=dict(env, M6_INDEX_GPUS="d5 e0 b1"),
+            )
+            self.assertEqual(out.returncode, 0, out.stderr)
+            self.assertEqual(
+                log.read_text().count("27B Index hold for M6-IBxIB2-m50"), 3
+            )
+        for args, message in (
+            (["abc", "M6-IBxIB2-m50", "1"], "full commit SHA"),
+            (["0" * 40, "M6-IB", "1"], "bad NAME"),
+            (["0" * 40, "M6-IBxIB2-m50", "2"], "not an M6 node B GPU"),
+            (["0" * 40, "M7-IB124ML", "1"], "missing mirror"),
+        ):
+            with self.subTest(args=args):
+                out = subprocess.run(
+                    ["bash", str(M6 / "m6-xarm.sh"), *args],
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(out.returncode, 2)
+                self.assertIn(message, out.stderr)
+
+    def test_index_parity_on_node_e_copies_the_record_to_node_d(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env, log = self.fake_nodes(
+                tmp,
+                [('"test ! -e "*', "> /dev/null"), ("*sha256sum*parity.json", "same")],
+            )
+            (Path(tmp) / "bin" / "sleep").write_text("#!/usr/bin/env bash\n")
+            (Path(tmp) / "bin" / "sleep").chmod(0o755)
+            out = subprocess.run(
+                ["bash", str(M6 / "m6-index.sh"), "0" * 40, "M6-IBxIB2-m50", "parity"],
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                timeout=60,
+                env=dict(env, M6_PARITY_GPU="e6"),
+            )
+            self.assertEqual(out.returncode, 0, out.stderr)
+            calls = log.read_text()
+            self.assertIn("launch.sh parity --src", calls)
+            self.assertRegex(calls, r"--model M6-IBxIB2-m50\s+--gpu 6 ")
+            self.assertIn("parity record copied node E -> node D", out.stdout)
+
+    def test_contrast_guard_moves_m4_contrast_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            gates = Path(tmp)
+            (gates / "contrast.json").write_text(
+                json.dumps({"pairs": {}, "runs": {}, "score_levels": {"M6-IB": {}}})
+            )
+            (gates / "contrast.log").write_text("log\n")
+            chain = subprocess.run(  # not our child: init reaps it, so kill -0 fails once it ends
+                ["bash", "-c", "sleep 2 > /dev/null 2>&1 & echo $!"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            out = subprocess.run(
+                ["bash", str(M6 / "m6-contrast-guard.sh"), chain],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                env=dict(os.environ, M6_GATES=tmp, M6_GUARD_LOG_DELAY="0"),
+            )
+            self.assertEqual(out.returncode, 0, out.stderr)
+            self.assertFalse((gates / "contrast.json").exists())
+            moved = sorted(p.name for p in gates.glob("contrast-M6-IB-*"))
+            self.assertEqual([Path(n).suffix for n in moved], [".json", ".log"])
+            self.assertIn("complete (no listed chain alive)", out.stdout)
 
     def test_bash_n(self):
         scripts = sorted(M6.glob("*.sh"))

@@ -1,0 +1,90 @@
+{
+  "anonymous_status": {
+    "model_api": 401,
+    "model_page": 401,
+    "readme": 401
+  },
+  "manifest_sha256": "b24f6f4fecdb407f20015a91fe968f7048a58c16f6011f97c735664ef694dc7e",
+  "model_api": {
+    "base_model": "Qwen/Qwen3.8-27B",
+    "base_model_relation": "adapter",
+    "files": 32,
+    "license": "apache-2.0",
+    "private": true,
+    "sha": "5c85c127828f4b5dfe0ca95d933be033a8a4caa3",
+    "status": 200
+  },
+  "passed": true,
+  "readme_sha256": "9c0e58291177bea8e40133d1f84ef4b09fc2885bc8e2017182614c9ab7339dd4",
+  "rendered_page": {
+    "status": 401
+  },
+  "repo": "vllm-sr/Decision-2.0-Vega-27B",
+  "revision": "5c85c127828f4b5dfe0ca95d933be033a8a4caa3",
+  "schema": "dev2-hub-card-http/1",
+  "targets": [
+    {
+      "bytes": 11544,
+      "kind": "file",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "LICENSE"
+    },
+    {
+      "bytes": 219859,
+      "kind": "image",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "assets/banner.png"
+    },
+    {
+      "bytes": 153980,
+      "kind": "image",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "assets/index-areas.png"
+    },
+    {
+      "bytes": 214321,
+      "kind": "image",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "assets/index-pareto.png"
+    },
+    {
+      "bytes": 114554,
+      "kind": "image",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "assets/jevarena-types.png"
+    },
+    {
+      "bytes": 69826,
+      "kind": "image",
+      "passed": true,
+      "sha256_matches_manifest": true,
+      "status": 200,
+      "target": "assets/jevarena.png"
+    },
+    {
+      "kind": "absolute",
+      "passed": true,
+      "status": 200,
+      "target": "https://github.com/vllm-project/semantic-router",
+      "via": "page"
+    },
+    {
+      "kind": "absolute",
+      "passed": true,
+      "status": 200,
+      "target": "https://huggingface.co/collections/vllm-sr/decision-20-6ab7cf7bdfb506bf8269cb00",
+      "via": "api"
+    }
+  ],
+  "utc": "2026-10-02T19:02:51.166707+00:00"
+}
