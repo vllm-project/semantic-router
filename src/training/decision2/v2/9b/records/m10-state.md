@@ -2,6 +2,26 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 17:55Z (10-03 01:55 UTC+8), M10 continuation
+
+- **Node E went to the user** (COORDINATION 01:25), during X8-a40's run. Shards 0–2 had finished (exit 0) and
+  shards 3–4 were partial. The coordinator moved the shard directories to node F.
+  - Shards 0–2 were relayed F → A → C, with equal SHA-256 lists. The partial shards 3 / 4 and their launcher files
+    were left out.
+  - X8's package was copied B → C. Its parity gate and the remaining shards 3–6 run on node C GPU1–4 (lease
+    `eval-ix1`, from the factory's `released` leases; COORDINATION 01:38).
+  - This completes X8's single measurement. Nothing is measured twice.
+- **Public release policy** (USER 01:11, COORDINATION 01:36): integration merged (`47dd06be7`, the hub visibility
+  policy). The Hub unit tests pass (16). The continuation decision text now says public repository and public
+  collection.
+- **Factory points linked on node A** (`xpts.sh link`, equal lists): `AF-KF-a40` (model `f555d2f7…`), and for
+  amendment 8 `KIB4W2-a40` (`9f467afe…`) and `KIB4L2-a40` (`1cacc2c4…`). The last two are shipped to node C for
+  their BF16 copies and Index runs.
+- **Formal:** AF-KF-a40 on node A GPU7 since 17:43Z (speculative; the factory's KF-a40 Index run started 17:18Z on
+  node A GPU1–6).
+- **X7-a40:** node B GPU7, shard 3 of 7.
+- **GPU-h (continuation):** ≈ 3.0.
+
 ## 2026-10-02 17:15Z (10-03 01:15 UTC+8), M10 continuation
 
 - **Amendment 8** (`667202519`): the factory's node A queue measures only KF-a40, KF-a50 and KFxKIB-a40. M10 therefore

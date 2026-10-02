@@ -338,11 +338,12 @@ def decision(s: dict, cand: str) -> dict:
         "calibration": "none (temperature 1; every Decision 2.0 model keeps T = 1): the CAL698 per-type "
         f"temperatures of the formal run (calibration {sha(p['cal'])[:8]}) are not shipped; undoing them changes 0 "
         "answers on every scored panel and mlx-diag",
-        "action": f"New main revision of the private repository {REPO}: {what(cand)}, stored as its BF16 copy "
+        "action": f"New main revision of the public repository {REPO}: {what(cand)}, stored as its BF16 copy "
         f"(qwen-full, T = 1, 16,384 tokens), replaces the KIB4-a40 weights ({CURRENT['weights_identity'][:8]}, "
         f"revision {CURRENT['revision'][:8]}) with the product card of the current revision (default generator, "
         "banner concept A) and this candidate's Index input; then the superseded weight blobs are purged with "
-        "rewrite_history=False (hf_headroom.sh first). The repository stays private and in the private collection.",
+        "rewrite_history=False (hf_headroom.sh first). The repository stays public and in the public Decision 2.0 "
+        "collection (release Hub visibility policy, USER 2026-10-03 01:11 UTC+8).",
         "rationale": "Index-first rule (user 2026-10-02 09:55 UTC+8). IF1: the private Index paired bootstrap of "
         "these exact weights minus the current revision's has a 95% lower bound > 0 (2,000 replicates; values in "
         "private files only; evidence_sha256.index_first_bootstrap); the highest measured passer of the 9B M10 "
