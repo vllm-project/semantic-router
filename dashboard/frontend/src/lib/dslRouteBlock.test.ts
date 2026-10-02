@@ -72,6 +72,49 @@ describe('updateRoute', () => {
     expect(saved.split('\n')[0]).toBe('ROUTE guard_route (on_unknown = "fail_request") {')
   })
 
+  it('keeps header options written without commas', () => {
+    const source = `ROUTE guard_route (description = "Guard." on_unknown = "fail_request") {
+  PRIORITY 10
+  MODEL "model-a"
+}
+`
+
+    const saved = updateRoute(source, 'guard_route', {
+      description: 'Guard.',
+      priority: 10,
+      models: [{ model: 'model-a' }],
+      plugins: [],
+    })
+
+    expect(saved.split('\n')[0]).toBe(
+      'ROUTE guard_route (description = "Guard.", on_unknown = "fail_request") {',
+    )
+  })
+
+  it('keeps a model named TIER inside its MODEL statement on an unchanged Save', () => {
+    const source = `ROUTE tier_route {
+  PRIORITY 10
+  MODEL TIER
+  TIER 2
+}
+`
+
+    const saved = updateRoute(source, 'tier_route', {
+      priority: 10,
+      models: [{ model: 'TIER' }],
+      plugins: [],
+    })
+
+    expect(saved).toBe(`ROUTE tier_route {
+  PRIORITY 10
+
+  MODEL "TIER"
+
+  TIER 2
+}
+`)
+  })
+
   it('writes the model reasoning mode', () => {
     const saved = updateRoute('ROUTE r {\n  PRIORITY 1\n}\n', 'r', {
       priority: 1,
