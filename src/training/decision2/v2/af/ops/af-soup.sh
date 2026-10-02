@@ -11,7 +11,10 @@
 #                (mounted read-only as /dec or /r9b).
 #   lux          9B only: the Lux 1.0 zero-step member (this node's 9b-KIB4-s4 zero-step checkpoint, byte-checked
 #                against K-a13IB's Lux member list, M10's lux-zero-m9-KIB-s1.sha256).
-# A run without a DONE marker stops the build unless AF_SKIP_UNFINISHED=1 (then it is left out and logged).
+# A run without a DONE marker stops the build unless AF_SKIP_UNFINISHED=1 (then it is left out and logged). With
+# AF_WAIT=1 the build first waits (<= 6 h) until every run: and soup: member has a terminal marker; a failed or
+# stopped seed is then left out (disclosed in members.txt and the log). Merges hold <gpu>'s arm-factory lease as busy
+# (only a lease its chain released; it is released again after the merges).
 # Output /data/dev2/runs/af/<size>/soup/<NAME>/{build/<NAME>, members.txt, DONE, MODEL_SHA256}; FAILED is never
 # rebuilt.
 set -u
@@ -34,6 +37,41 @@ fail() { mkdir -p "$OUT" && echo "$*" > "$OUT/FAILED"; log "FAILED: $*"; exit 1;
 [ -f "$OUT/DONE" ] && { log "already built"; exit 0; }
 [ -f "$OUT/FAILED" ] && { log "failed earlier; not rebuilt"; exit 1; }
 [ ! -e "$OUT" ] || fail "$OUT exists without DONE / FAILED"
+if [ "${AF_WAIT:-0}" = 1 ]; then
+  n=0
+  for spec in "$@"; do
+    case $spec in
+      run:*) t=$M/status/${spec#run:}; ends=("$t.DONE" "$t.FAILED" "$t.STOPPED") ;;
+      soup:*) t=$M/soup/${spec#soup:}; ends=("$t/DONE" "$t/FAILED") ;;
+      *) continue ;;
+    esac
+    until [ -f "${ends[0]}" ] || [ -f "${ends[1]}" ] || [ -f "${ends[2]:-/nonexistent}" ]; do
+      [ $((n % 30)) = 0 ] && log "waits for $spec"
+      n=$((n + 1))
+      [ $n -gt 360 ] && fail "$spec did not finish within 6 h"
+      sleep 60
+    done
+  done
+  AF_SKIP_UNFINISHED=1
+fi
+LEASE=/data/dev2/leases/gpu$GPU.lock/owner
+held=0
+hold() {
+  [ "$GPU" != - ] && [ "$held" = 0 ] || return 0
+  if ! grep -qs '^track=arm-factory' "$LEASE" || ! grep -qsE '^status=(released|idle)' "$LEASE"; then
+    fail "GPU$GPU's lease is not a released arm-factory lease"
+  fi
+  printf 'track=arm-factory\nstatus=busy\npurpose=arm factory LoRA merges for %s\nstart_utc=%s\n' "$NAME" \
+    "$(date -u +%FT%TZ)" > "$LEASE"
+  held=1
+}
+unhold() {
+  [ "$held" = 1 ] || return 0
+  printf 'track=arm-factory\nstatus=released\npurpose=arm factory merges for %s done\nlast_job_end_utc=%s\n' "$NAME" \
+    "$(date -u +%FT%TZ)" > "$LEASE"
+  held=0
+}
+trap unhold EXIT
 
 paths=() lines=()
 for spec in "$@"; do
@@ -43,6 +81,7 @@ for spec in "$@"; do
       if [ ! -f "$M/status/$run.DONE" ]; then
         [ "${AF_SKIP_UNFINISHED:-0}" = 1 ] || fail "$run has no DONE marker"
         log "$run is not DONE; left out (AF_SKIP_UNFINISHED=1)"
+        lines+=("$spec left out (no DONE marker)")
         continue
       fi
       best=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["checkpoint"])' "$M/arms/full/$run/BEST.json")
@@ -52,6 +91,7 @@ for spec in "$@"; do
       else
         if [ ! -f "$M/merged/$run/merge_check.json" ]; then
           [ "$GPU" != - ] || fail "$run needs a LoRA merge and no GPU was given"
+          hold
           AF_NODE=$NODE AF_CACHE=4b-read bash "$L" "merge-$run" "$SRC" "$M/merged/.job-$run" --gpu "$GPU" -- \
             v2/dec/ops/m10/m10_merge.py --checkpoint "/runs/4b/arms/full/$run/$best" \
             --source-path "/models/Qwen--Qwen3.5-4B-Base/$REV_4B" --select /data/select.jsonl --output "/out/$run" \
@@ -81,6 +121,7 @@ for spec in "$@"; do
   esac
   paths+=(--member "$p")
 done
+unhold
 [ ${#paths[@]} -ge 4 ] || fail "fewer than two members"
 mkdir -p "$OUT"
 printf '%s\n' "${lines[@]}" > "$OUT/members.txt"
