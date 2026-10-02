@@ -2,6 +2,18 @@
 
 Index values stay private (node private stores and `decision2-program/private/arm-factory/`); this file has none.
 
+## 2026-10-02 21:25Z (05:25 UTC+8) — backlog (amendment 9) launched on 9 idle GPUs
+
+- Weights locked: `4b-SDMLIB4-UP2` `b4b99b43…`, `4b-LHS17IB4-UP2` `611b59a4…`, `4b-LHS17IB4ML-UP` `e6bf77c4…`,
+  `4b-LHS23IB4-UP` `cfff578d…` (node C); `KIB4R-W2` `47545a04…` (node B). `KIB4-lrh` / `KIB4-e2` reuse the KIB4 lock.
+- Claimed after > 20 min idle (released leases, 0% use; COORDINATION 04:58 rule), 21:21–21:22Z: node C GPU1–4
+  `4b-SDMLIB4-UP2` s1 / s2, `4b-LHS17IB4-UP2` s1 / s2 (then `4b-LHS17IB4ML-UP` s1 / s2, `4b-LHS23IB4-UP` s1 / s2);
+  node A GPU5 / 6 `KIB4-lrh` s1 / s2 (seeds 15 / 16), GPU7 `KIB4-e2` s1 (seed 19, cap 6.0); node B GPU2 / 3
+  `KIB4R-W2` s1 / s2 (seeds 17 / 18).
+- Wave 7: `4b-SDMLIB4W2` s2, `4b-LHS17IB4-UP` s1, `4b-SDMLIB4-UP` s1 DONE (20:41–20:58Z); the rest running / queued.
+- Standing backlog (ready, locked, no preparation): more seeds of `4b-LHS17UP` (s5 / s6), `4b-SDMLIB4-UP` and
+  `4b-LHS17IB4-UP` (s3 / s4), and 9B `KIB4W3` (s3 / s4).
+
 ## 2026-10-02 20:15Z (04:15 UTC+8) — running
 
 - Node C: `4b-SDMLIB4-UP` s1 (GPU5), `4b-LHS17IB4-UP` s1 (GPU7), `4b-SDMLIB4W2` s2 (GPU6) in their full runs; the rest
