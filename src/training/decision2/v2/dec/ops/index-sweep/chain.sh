@@ -54,7 +54,12 @@ done
 log "start: mirror $(basename "$M"), $PANEL, GPUs '$GPUS' ($waves wave(s)), queue ${names[*]}"
 
 passed() { python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1]))["pass"] else 1)' "$1" 2>/dev/null; }
-idle() {  # GPU...: every listed GPU at <= 5% use and <= 2 GiB VRAM (the launcher's own busy rule)
+idle() {  # GPU...: every listed GPU at <= 5% use and <= 2 GiB VRAM (the launcher's own busy rule), lease free or IX1's
+  local g f
+  for g in "$@"; do
+    f=/data/dev2/leases/gpu$g.lock/owner
+    [ ! -s "$f" ] || grep -qx 'track=eval-ix1' "$f" || return 1
+  done
   rocm-smi --showuse --showmeminfo vram --json | python3 -c '
 import json, sys
 d = json.load(sys.stdin)
