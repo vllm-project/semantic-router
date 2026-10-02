@@ -77,7 +77,7 @@ test.describe('Public and transition surfaces on short screens', () => {
     await expect(footer.locator('[data-footer-group]')).toHaveCount(3)
     await expect(footer.getByRole('link', { name: 'Hugging Face' })).toHaveAttribute(
       'href',
-      'https://huggingface.co/LLM-Semantic-Router',
+      'https://huggingface.co/vllm-sr',
     )
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
