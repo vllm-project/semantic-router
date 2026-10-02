@@ -2,6 +2,13 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-02 09:05Z (17:05 UTC+8), worker 7e1c9ce8 (handoff; see `m10-handoff-2026-10-02.md`)
+
+- **M10-KUP-a33-bf16 measured** on node C: parity passed, 7 shards, 120,224 rows merged (2 unsupported), both
+  bootstraps run, 3.29 run GPU-h. Its summaries are in the private folder. It does **not** pass the gate.
+- M10-KUP-a25-bf16 is running on node A (5 of 7 shards done). M10-KUP-a40-bf16 is next on node A.
+- All training is unchanged and on schedule.
+
 ## 2026-10-02 08:15Z (16:15 UTC+8), worker 7e1c9ce8
 
 - **Amendment 4 (arm KX)** committed `c8ef116f9` before any KX row was built, then mirrored to nodes A and B.
