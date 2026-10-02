@@ -4,6 +4,9 @@
 # (soup/<P>/build/<P>: post.sh, xarm.sh, ix.sh soupcopy, or a linked arm-factory point):
 #   X7-a40 = [KIB4-a40, KX-a40, KSW-a40]   Y1 = [F*, KIB4-a40]
 #   X8-a40 = [KIB4-a40, KSW-a40]           Y2 = [F*, KIB4-a40, X5-a33]   (F* = AF-<name>, the best factory point)
+# Amendment 13 (half learning rates): HLR4 = [KIB4H, AF-KIB4-lrhh] (four half-LR seeds), HLR4-a60 = [HLR4 x 3, LUX x 2],
+#   HLR4-a80 = [HLR4 x 4, LUX]; wave 2: HLR4-a100 / HLR4-a50, LRX6-aNN. The member LUX is the pinned Lux 1.0 zero-step
+#   checkpoint (post.sh's: node B m10-KUP-s1, node A m10-KX-s1), checked against lux-zero-m9-KIB-s1.sha256 first.
 # The output is soup/<NAME>/build/<NAME> with DONE, members.txt and the build log, as post.sh writes it, so ix.sh ship
 # takes it. A failed build writes soup/<NAME>/FAILED and is never rerun.
 #
@@ -41,7 +44,11 @@ if [ "$MODE" = link ]; then
 fi
 MEMBERS=("$@")
 out=$M/soup/$NAME
-case $NAME in X7-a40 | X8-a40 | Y1 | Y2) ;; *) echo "NAME is X7-a40, X8-a40, Y1 or Y2 (amendment 7)" >&2; exit 2 ;; esac
+case $NAME in
+  X7-a40 | X8-a40 | Y1 | Y2) ;;
+  HLR4 | HLR4-a50 | HLR4-a60 | HLR4-a80 | HLR4-a100 | LRX6-a50 | LRX6-a60 | LRX6-a80 | LRX6-a100) ;;
+  *) echo "NAME is X7-a40, X8-a40, Y1, Y2 (amendment 7) or an amendment-13 point" >&2; exit 2 ;;
+esac
 (( ${#MEMBERS[@]} >= 2 )) || { echo "at least two members" >&2; exit 2; }
 if [ "$MODE" = launch ]; then
   mkdir -p "$M/chains" "$M/logs" "$M/soup"
@@ -53,7 +60,20 @@ fi
 [ -f "$out/DONE" ] && { log "already built"; exit 0; }
 [ -f "$out/FAILED" ] && { log "failed before; not rerun"; exit 1; }
 args=()
+luxrun=m10-KUP-s1
+[ "$NODE" = a ] && luxrun=m10-KX-s1
+luxhost=$M/arms/pre/$luxrun-zero/checkpoint-0000000
+luxok=0
 for p in "${MEMBERS[@]}"; do
+  if [ "$p" = LUX ]; then
+    if [ "$luxok" = 0 ]; then
+      (cd "$luxhost" && sha256sum -c --quiet "$M/inputs/lux-zero-m9-KIB-s1.sha256") \
+        || { log "Lux zero-step member differs from K-a13IB's"; exit 1; }
+      luxok=1
+    fi
+    args+=(--member "/runs/m10/arms/pre/$luxrun-zero/checkpoint-0000000")
+    continue
+  fi
   d=$(cat "$M/soup/$p/DONE" 2> /dev/null)
   [ "$d" = "$M/soup/$p/build/$p" ] && [ -f "$d/decision_config.json" ] || { log "no built point $p on node ${NODE^^}"; exit 1; }
   args+=(--member "/runs/m10/soup/$p/build/$p")

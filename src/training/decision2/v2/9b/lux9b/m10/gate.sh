@@ -5,7 +5,8 @@
 # (an M10 or arm-factory run) is read in place; the outputs go to ix1/m10/gate/RUN/ (private). No Index value is logged.
 # The reference is node C's own run, or the copy that ix.sh kref placed in ix1/m10/refs.
 # M10_GATE_WAIT=1: wait (<= 10 h) until each RUN's bootstraps vs its chain reference exist (the chain's scoring and
-# its own bootstraps are done) before starting its gate bootstraps.
+# its own bootstraps are done) before starting its gate bootstraps. M10_GATE_WAIT=scored (amendment 13): wait only
+# until the run is scored (merged/compare.json), so the gate bootstraps run beside the chain's own.
 #
 # usage: gate.sh <mirror-dir> RUN...
 set -uo pipefail
@@ -21,7 +22,16 @@ umask 077
 cd "$R/.." || exit 1
 for RUN in "$@"; do
   run=$R/runs/$RUN out=$R/m10/gate/$RUN
-  if [ "${M10_GATE_WAIT:-0}" = 1 ]; then
+  if [ "${M10_GATE_WAIT:-0}" = scored ]; then
+    n=0
+    until [ -f "$run/merged/compare.json" ]; do
+      [ $((n % 60)) = 0 ] && echo "$(date -u +%FT%TZ) $RUN: waiting for its chain's scoring"
+      n=$((n + 1))
+      [ $n -gt 600 ] && break
+      sleep 60
+    done
+    sleep 30
+  elif [ "${M10_GATE_WAIT:-0}" = 1 ]; then
     n=0
     until [ -f "$run/paired-boot-full-vs-ref.json" ] && [ -f "$run/paired-boot-transfer-vs-ref.json" ]; do
       [ $((n % 60)) = 0 ] && echo "$(date -u +%FT%TZ) $RUN: waiting for its chain's scoring and bootstraps"
