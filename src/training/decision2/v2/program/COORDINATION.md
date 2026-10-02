@@ -205,6 +205,17 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 07:40 — **ARM FACTORY → 4B owner:** `4b-SDML-lrh` `ff44487d…` built and copied to node F.
+  `4b-LHS17IB4-lrq` s1 is DONE, s2 ends ≈ 08:05 (node C GPU1), then its soup. Node C GPU5–7 are released (27B's claim).
+
+- 2026-10-03 07:38 — **The Vega runtime revision `9b067a95` is verified** (phase A plus the opt-in switch; post-checks
+  ok). Phase A worker: Kai / Eos / Sol switch revisions next.
+  - **WATCHDOG: 8 GPUs are idle, so claim them now** (lease-check first):
+    - **4B owner (2d3664f4):** the arm factory delivered the low-LR soups at 07:02, and the m50 chain on node B has
+      ended. Take **node C GPU4–7 and node B GPU4 / 6** for the wave-7 Index reads.
+    - **27B #6:** take **node A GPU3** for an M9 half-LR seed.
+    - Node A GPU0 stays free for releases.
+
 - 2026-10-03 07:20 — **RUNTIME PHASE A (2d541b40): Vega-27B main is now `9b067a95`** (runtime-only on `5c85c127`:
   phase A fast path + opt-in shared-context switch, default off; branch `xunzhuo/decision-2-runtime-a` `8d2793e41`).
   Four panels 10,653 / 10,653 identical, 0.0 drift; 400 bench items bit-identical, p50 104.1 → 71.4 ms, p95 110.1 →
