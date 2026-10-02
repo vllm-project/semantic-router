@@ -1,4 +1,4 @@
-"""Fused Triton kernels for the element-wise ops of a Qwen3.5 decoder layer (ROCm gfx942).
+"""Fused Triton kernels for the element-wise ops of Qwen3.5 and Qwen3 decoder layers (ROCm gfx942).
 
 Each kernel computes exactly what the released eager forward computes under BF16
 autocast, bit for bit: FP32 residual stream and norms, BF16 wherever the eager
@@ -13,11 +13,11 @@ the row counts the runtime runs (padded batches are multiples of 8 tokens);
 ``fast.py`` only enables these kernels on gfx942 with the verified stack.
 
 Kernels:
-    add_rmsnorm     residual add + zero-centred RMSNorm, BF16 Linear input
+    add_rmsnorm     residual add + RMSNorm (by 1 + w for Qwen3.5, w for Qwen3), BF16 Linear input
     silu_mul        SiLU(gate) * up
     gdn_prep        causal conv + SiLU + q / k / v split + beta + g
     gated_rmsnorm   Gated DeltaNet output norm with the SiLU(z) gate
-    attn_prep       q / gate split, q / k RMSNorm, partial RoPE, [B, H, T, D] layout
+    attn_prep       (Qwen3.5: q / gate split,) q / k RMSNorm, RoPE, [B, H, T, D] layout
     sigmoid_gate    attention output * sigmoid(gate)
 """
 
@@ -138,7 +138,10 @@ def _add_rmsnorm_kernel(
 def add_rmsnorm(
     residual: Any, delta: Any | None, weight_plus_one: Any, eps: float
 ) -> tuple[Any, Any]:
-    """(hidden FP32, normed BF16): ``hidden = residual + delta`` (or ``residual``), RMSNorm with ``1 + w``.
+    """(hidden FP32, normed BF16): ``hidden = residual + delta`` (or ``residual``), RMSNorm by the FP32 weight.
+
+    The weight is ``1 + w`` for Qwen3.5's zero-centred norm and ``w`` for Qwen3's (whose cast to the
+    FP32 input dtype is a no-op).
 
     ``residual`` is the contiguous FP32 stream, ``delta`` a contiguous BF16 or FP32 block output,
     the hidden size a multiple of 256.
@@ -368,6 +371,8 @@ def _attn_prep_kernel(
     cs_bstride,
     D: tl.constexpr,
     ROT: tl.constexpr,
+    GATED: tl.constexpr,
+    ROUND_BEFORE_WEIGHT: tl.constexpr,
 ):
     bt = tl.program_id(0).to(tl.int64)
     hid = tl.program_id(1)
@@ -376,8 +381,9 @@ def _attn_prep_kernel(
     d = tl.arange(0, D)
     half: tl.constexpr = ROT // 2
     partner = tl.where(d < half, d + half, tl.where(d < ROT, d - half, d))
+    QW: tl.constexpr = 2 * D if GATED else D
     if hid < NH:
-        src = qg_ptr + bt * (NH * 2 * D) + hid * (2 * D)
+        src = qg_ptr + bt * (NH * QW) + hid * QW
         wp = qw1_ptr
         dst = qo_ptr + ((b * NH + hid) * T + t) * D
     else:
@@ -385,10 +391,20 @@ def _attn_prep_kernel(
         wp = kw1_ptr
         dst = ko_ptr + ((b * NKV + (hid - NH)) * T + t) * D
     x = tl.load(src + d).to(tl.float32)
-    rstd = rsqrt_rn(tl.reshape(sumsq_256(tl.reshape(x, [1, D]), 1), []) * inv_d + eps)
-    y = ((x * rstd) * tl.load(wp + d)).to(tl.bfloat16).to(tl.float32)
+    if D == 256:
+        sumsq = sumsq_256(tl.reshape(x, [1, D]), 1)
+    else:
+        sumsq = sumsq_128(tl.reshape(x, [1, D]), 1)
+    rstd = rsqrt_rn(tl.reshape(sumsq, []) * inv_d + eps)
     xp = tl.load(src + partner).to(tl.float32)
-    yp = ((xp * rstd) * tl.load(wp + partner)).to(tl.bfloat16).to(tl.float32)
+    if ROUND_BEFORE_WEIGHT:
+        # Qwen3RMSNorm: w * (x * rstd).to(bf16), kept in FP32
+        y = tl.load(wp + d) * (x * rstd).to(tl.bfloat16).to(tl.float32)
+        yp = tl.load(wp + partner) * (xp * rstd).to(tl.bfloat16).to(tl.float32)
+    else:
+        # Qwen3_5RMSNorm: ((x * rstd) * (1 + w)).to(bf16)
+        y = ((x * rstd) * tl.load(wp + d)).to(tl.bfloat16).to(tl.float32)
+        yp = ((xp * rstd) * tl.load(wp + partner)).to(tl.bfloat16).to(tl.float32)
     yp = tl.where(d < half, -yp, yp)
     rot = d < ROT
     cs = b * cs_bstride + t * ROT + d
@@ -409,13 +425,21 @@ def attn_prep(
     kv_heads: int,
     head_dim: int,
     eps: float,
+    *,
+    gated: bool = True,
+    zero_centred: bool = True,
 ) -> tuple[Any, Any]:
-    """(q [B, H, T, D], k [B, Hkv, T, D]) in BF16: head RMSNorms with ``1 + w``, then partial RoPE.
+    """(q [B, H, T, D], k [B, Hkv, T, D]) in BF16: head RMSNorms, then RoPE, as SDPA receives them.
 
-    ``q_proj_out`` [B, T, H * 2D] (query and gate per head) and ``k_proj_out`` [B, T, Hkv * D] are
-    contiguous BF16; ``cos`` / ``sin`` the contiguous [B or 1, T, rotary dim] FP32 rotary tables;
-    the head dim is 256.
+    Qwen3.5 (``gated``, ``zero_centred``): ``q_proj_out`` [B, T, H * 2D] holds query and gate per
+    head, the norms multiply by ``1 + w`` (passed as ``q_norm_w1`` / ``k_norm_w1``) and round to
+    BF16 before the partial RoPE. Qwen3 (neither): ``q_proj_out`` is [B, T, H * D], the norms
+    round ``x * rstd`` to BF16 and multiply by ``w`` in FP32, and the full RoPE runs in FP32.
+    ``k_proj_out`` [B, T, Hkv * D] is contiguous BF16 like ``q_proj_out``; ``cos`` / ``sin`` the
+    contiguous [B or 1, T, rotary dim] FP32 rotary tables; the head dim is 128 or 256.
     """
+    if head_dim not in (128, 256):
+        raise ValueError("attn_prep reduces rows of 128 or 256")
     B, T = q_proj_out.shape[:2]
     dev = q_proj_out.device
     q = torch.empty(B, heads, T, head_dim, dtype=torch.bfloat16, device=dev)
@@ -438,6 +462,8 @@ def attn_prep(
         0 if cos.shape[0] == 1 else T * rot,
         D=head_dim,
         ROT=rot,
+        GATED=gated,
+        ROUND_BEFORE_WEIGHT=not zero_centred,
         num_warps=2,
         **EXACT,
     )

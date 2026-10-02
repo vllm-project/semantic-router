@@ -21,9 +21,9 @@ are unchanged; it only removes kernel launches and host work:
   its input once: 5 kernels instead of PEFT's 9, the same products and sums.
   Anything else stays on PEFT.
 - **Fused kernels** (``fast_kernels``, gfx942 only): the element-wise ops of
-  each Qwen3.5 decoder layer in six Triton kernels that round exactly like the
-  ATen and causal-conv1d kernels they replace. GEMMs, attention and the
-  gated-delta chunk kernel are unchanged.
+  each Qwen3.5 decoder layer in six Triton kernels, and of each Qwen3 decoder
+  layer in four, that round exactly like the ATen and causal-conv1d kernels
+  they replace. GEMMs, attention and the gated-delta chunk kernel are unchanged.
 
 The fast path is enabled only where it was verified to be exact: a ROCm GPU and
 Transformers ``TESTED_TRANSFORMERS``; elsewhere the runtime keeps the eager
@@ -48,6 +48,7 @@ MAX_GRAPHS = 512
 MAX_GRAPH_OUTPUT_BYTES = 4 << 30
 CAPTURE_AFTER = 2
 MASK_TYPES = ("full_attention", "linear_attention")
+MASK_ALIGN = 16
 
 
 def _switched_off(name: str) -> bool:
@@ -202,17 +203,19 @@ def _bound(function: Any) -> Any:
 
 
 def fused_layers(backbone: Any, torch: Any) -> tuple[int, str | None]:
-    """Fused forwards for the Qwen3.5 decoder layers of ``backbone``; (layers, reason if none)."""
+    """Fused forwards for the Qwen3.5 / Qwen3 decoder layers of ``backbone``; (layers, reason if none)."""
     if importlib.util.find_spec("triton") is None:
         return 0, "triton is not installed"
+    config = _core(backbone).config
+    config = getattr(config, "text_config", None) or config
+    if getattr(config, "model_type", None) == "qwen3":
+        return _fused_qwen3(backbone, torch, config)
     modeling = importlib.import_module("transformers.models.qwen3_5.modeling_qwen3_5")
     layers = [
         m for m in backbone.modules() if isinstance(m, modeling.Qwen3_5DecoderLayer)
     ]
     if not layers:
         return 0, "no Qwen3.5 decoder layers"
-    config = _core(backbone).config
-    config = getattr(config, "text_config", None) or config
     conv = _bound(modeling.causal_conv1d_fn)
     chunk = _bound(modeling.torch_chunk_gated_delta_rule)
     checks = {
@@ -221,6 +224,7 @@ def fused_layers(backbone: Any, torch: Any) -> tuple[int, str | None]:
         "128-wide gated-delta heads": config.linear_key_head_dim == 128
         and config.linear_value_head_dim == 128,
         "256-wide attention heads": getattr(config, "head_dim", None) == 256,
+        "SiLU MLP": getattr(config, "hidden_act", None) == "silu",
         "causal-conv1d kernel": getattr(conv, "__module__", "").startswith(
             "causal_conv1d"
         ),
@@ -373,13 +377,115 @@ def _attention(
     return m.o_proj(kernels.sigmoid_gate(attn, gate))
 
 
+def _fused_qwen3(backbone: Any, torch: Any, config: Any) -> tuple[int, str | None]:
+    modeling = importlib.import_module("transformers.models.qwen3.modeling_qwen3")
+    layers = [
+        m for m in backbone.modules() if isinstance(m, modeling.Qwen3DecoderLayer)
+    ]
+    if not layers:
+        return 0, "no Qwen3 decoder layers"
+    layer_types = set(getattr(config, "layer_types", None) or ["full_attention"])
+    checks = {
+        "SDPA attention": getattr(config, "_attn_implementation", None) == "sdpa",
+        "hidden size a multiple of 256": config.hidden_size % 256 == 0,
+        "128-wide attention heads": layers[0].self_attn.head_dim == 128,
+        "full attention layers only": layer_types == {"full_attention"},
+        "no attention bias": not getattr(config, "attention_bias", False),
+        "SiLU MLP": getattr(config, "hidden_act", None) == "silu",
+    }
+    missing = [name for name, ok in checks.items() if not ok]
+    if missing:
+        return 0, "needs " + ", ".join(missing)
+    from . import fast_kernels as kernels
+
+    from transformers.integrations.sdpa_attention import sdpa_attention_forward
+
+    forward = _qwen3_forward(kernels, sdpa_attention_forward, torch)
+    for layer in layers:
+        with torch.no_grad():
+            m = layer.self_attn
+            layer._decision2_fused = {
+                "original": layer.forward,
+                "eps": layer.input_layernorm.variance_epsilon,
+                "w_in": layer.input_layernorm.weight.float().contiguous(),
+                "w_post": layer.post_attention_layernorm.weight.float().contiguous(),
+                "qw": m.q_norm.weight.float().contiguous(),
+                "kw": m.k_norm.weight.float().contiguous(),
+            }
+        layer.forward = types.MethodType(forward, layer)
+    return len(layers), None
+
+
+def _qwen3_forward(kernels: Any, sdpa: Any, torch: Any) -> Any:
+    def forward(
+        layer: Any,
+        hidden_states: Any,
+        attention_mask: Any = None,
+        position_ids: Any = None,
+        past_key_values: Any = None,
+        use_cache: Any = False,
+        position_embeddings: Any = None,
+        **kwargs: Any,
+    ) -> Any:
+        p = layer._decision2_fused
+        if (
+            past_key_values is not None
+            or hidden_states.dtype != torch.float32
+            or not torch.is_autocast_enabled("cuda")
+            or torch.get_autocast_dtype("cuda") != torch.bfloat16
+            or position_embeddings is None
+            or position_embeddings[0].dtype != torch.float32
+        ):
+            return p["original"](
+                hidden_states,
+                attention_mask=attention_mask,
+                position_ids=position_ids,
+                past_key_values=past_key_values,
+                use_cache=use_cache,
+                position_embeddings=position_embeddings,
+                **kwargs,
+            )
+        hidden_states = hidden_states.contiguous()
+        _, normed = kernels.add_rmsnorm(hidden_states, None, p["w_in"], p["eps"])
+        m = layer.self_attn
+        B, T, _ = normed.shape
+        hd = m.head_dim
+        qp = m.q_proj(normed).contiguous()
+        kp = m.k_proj(normed).contiguous()
+        vp = m.v_proj(normed)
+        cos, sin = (t.contiguous() for t in position_embeddings)
+        heads = qp.shape[-1] // hd
+        kv_heads = kp.shape[-1] // hd
+        q, k = kernels.attn_prep(
+            qp, kp, p["qw"], p["kw"], cos, sin, heads, kv_heads, hd,
+            m.q_norm.variance_epsilon, gated=False, zero_centred=False,
+        )  # fmt: skip
+        v = vp.view(B, T, kv_heads, hd).transpose(1, 2)
+        attn, _ = sdpa(
+            m, q, k, v, attention_mask, dropout=0.0, scaling=m.scaling,
+            sliding_window=m.sliding_window, position_ids=position_ids,
+            use_cache=use_cache, **kwargs,
+        )  # fmt: skip
+        delta = m.o_proj(attn.reshape(B, T, -1).contiguous())
+        hidden, normed = kernels.add_rmsnorm(
+            hidden_states, delta.contiguous(), p["w_post"], p["eps"]
+        )
+        mlp = layer.mlp
+        act = kernels.silu_mul(mlp.gate_proj(normed), mlp.up_proj(normed))
+        return hidden + mlp.down_proj(act)
+
+    return forward
+
+
 class Masks:
     """The masks Transformers builds for a right-padded batch, from host-known padding.
 
     Unpadded: no mask for either layer type (SDPA runs causal; the gated-delta
-    layers skip their padding multiply). Padded: the boolean [B, 1, T, T]
-    causal-and-key-valid mask for full attention and the 2D mask itself for the
-    gated-delta layers.
+    layers skip their padding multiply). Padded: the 2D mask itself for the
+    gated-delta layers and, for full attention, the [B, 1, T, T] causal-and-key-valid
+    mask in the form SDPA turns Transformers' boolean mask into in every layer: BF16
+    (the autocast query dtype), 0 where allowed and -inf elsewhere, with rows padded
+    to a multiple of ``MASK_ALIGN`` so the memory-efficient kernel needs no re-padding.
     """
 
     def __init__(self, torch: Any, layer_types: set[str]):
@@ -400,8 +506,14 @@ class Masks:
             ).tril()
         masks: dict[str, Any] = {}
         if "full_attention" in self.layer_types:
-            masks["full_attention"] = (
-                causal[None, None] & attention_mask.bool()[:, None, None, :]
+            allowed = causal[None, None] & attention_mask.bool()[:, None, None, :]
+            stride = -(-T // MASK_ALIGN) * MASK_ALIGN
+            additive = torch.zeros(
+                attention_mask.shape[0], 1, T, stride,
+                dtype=torch.bfloat16, device=attention_mask.device,
+            )[..., :T]  # fmt: skip
+            masks["full_attention"] = additive.masked_fill_(
+                allowed.logical_not(), float("-inf")
             )
         if "linear_attention" in self.layer_types:
             masks["linear_attention"] = attention_mask

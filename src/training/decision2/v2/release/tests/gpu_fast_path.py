@@ -70,7 +70,18 @@ def qwen3(torch, layers: int):
         max_position_embeddings=8192,
         attn_implementation="sdpa",
     )
-    return Qwen3Model(config)
+    model = Qwen3Model(config)
+    with torch.no_grad():
+        for layer in model.layers:
+            for norm in (
+                layer.input_layernorm,
+                layer.post_attention_layernorm,
+                layer.self_attn.q_norm,
+                layer.self_attn.k_norm,
+            ):
+                norm.weight.normal_(1, 0.1)
+        model.norm.weight.normal_(1, 0.1)
+    return model
 
 
 def qwen3_5(torch, layers: int, value_heads: int, hidden: int):
@@ -188,7 +199,7 @@ def run_case(name, build, torch, fast, layers, graphs) -> dict:
     checks = {
         "bit_identical": not differences,
         "graphs_replayed": (not graphs) or stats.get("replays", 0) > 0,
-        "fused_when_qwen3_5": name.startswith("qwen3-") or receipt["fused_layers"] > 0,
+        "fused_layers": receipt["fused_layers"] == layers,
         "lean_lora_when_adapter": (not lora) or receipt["lora"]["lean"] > 0,
     }
     return {
