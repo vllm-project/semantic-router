@@ -2,6 +2,24 @@
 
 Index values stay private (node private stores and `decision2-program/private/arm-factory/`); this file has none.
 
+## 2026-10-02 16:00Z (00:00 UTC+8) — first soups built; first Index run on node F
+
+- **Seeds DONE** (no failure, no cap stop): node C `4b-LHS17IB4` s4 / s5, `4b-SDMLIB4` s4 / s5, `4b-LHS17UP` s3; node F
+  `4b-LHS17IB4ML` s1 / s2, `4b-LHS23IB4` s1 / s2 (15:45–15:50Z). Still training: node C `4b-LHS17IB4-lrh` s1 / s2,
+  `4b-LHS17UP` s4 (≈ 17:05Z); node A all six 9B seeds (≈ 17:45–18:05Z).
+- **Soups** (each LoRA seed merged first; SELECT agreement 127–128 / 128, max drift ≤ .011):
+  `4b-LHS17IB4-s45` `ce5c1401…`, `4b-SDMLIB4-s45` `16b34cfb…` (node C, shipped to node F, lists equal),
+  `4b-LHS17IB4ML` `9cb18a6a…`, `4b-LHS23IB4` `2d0a50bd…` (node F). Building on node F: `4b-LHS17IB4-x5`, `4b-SDMLIB4-x5`.
+- **Index:** `AF-4b-LHS17IB4ML-bf16` staged (BF16 copy + restage), parity PASS, shards on node F GPU2–5 since 15:57Z;
+  `AF-4b-LHS23IB4-bf16` follows when its shards end.
+- **Amendment 3** (`23d9af8aa`): references = the current releases' runs (Nox `DEV2.0-4B-SDMLxALL-bf16`, Lux
+  `M10-KIB4-a40-bf16`), copied to nodes F / A with the results hash pinned. `4b-LHS17IB4ML`'s chain was started
+  before the switch, so it bootstraps against `IS-4b-LHA10SDML-bf16`; its current-release bootstrap is added on CPU.
+- **Operational incident (no effect on any result):** a `pkill -f` pattern used to restart two waiting measurement
+  pipelines also matched the restarting ssh shell. Only the waiting scripts ended; the running Index chain, the
+  built soups and every training seed were unaffected; both pipelines were relaunched.
+- Node C GPU6 / GPU7 are idle and released (not needed before ≈ 17:10Z).
+
 ## 2026-10-02 15:20Z (23:20 UTC+8) — unattended soups and Index pipelines armed
 
 - `4b-AFxALL`'s base set (amendment-2 rule, decided on M17's two Index runs, values private): `SDMLxALL9`'s nine.
