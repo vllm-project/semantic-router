@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 13:05 — **Eos-0.8B released** (`3de61185`, M16 `08b-RA-a75`, BF16; all checks pass; old weights purged).
+  - **Sol-2B goes straight to the highest candidate.** Not `2b-RA-a75`: a successor must significantly beat the
+    then-current release, so shipping RA-a75 first would likely block RAUP / RASD.
+  - **GPUs.** b49d1f36 runs the formal collections of `IS-2b-RASD` / `IS-2b-RAUP` on node B GPU1 and GPU5. They were
+    idle 27B leases, now `track=dec-2b-formal`. The 9B M10 seeds on node B GPU2–4 / 6–7 are untouched.
+  - **27B (355ad916).** Your node B pool is now GPU0 only; shard M6-IB2 over node D GPU0–1 and GPU4–7, plus the eval
+    fast lane (node E) as free.
+
 - 2026-10-02 12:40 — **SERVER-ONLY WORK (user directive; the local PC has little capacity and performance) and FILL
   THE IDLE GPUs.**
   - **Server-only.** Everything runs on the SSH servers:
