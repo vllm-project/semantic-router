@@ -12,6 +12,28 @@ values live in the node private directories and the local private folder only.
 Reference: the released LH, `Decision-2.0-Nox-4B` `main` `54b084f9` (weights `6a555335…`, the same weights and
 runtime as DEV2.0-4B `13d42143`); its IX1 run `DEV2.0-4B-LH` (node C, panel run IDs `6455d7be…`).
 
+## 2026-10-02 05:00Z — release choice M17 `4b-LHS17SD` (BF16 `74ec8b2f…`)
+
+- **Comparison (private values; same panel, seed 20261002, 2,000 replicates, 138,645 cases):** all three BF16 runs
+  have a full-panel lower bound > 0 vs `DEV2.0-4B-LH`; the largest is `DEV2.0-4B-LHS17SD-bf16`, then
+  `-LHS10SD-bf16`, then M13 `-LHA10SD-bf16`. The M13 choice (never published) is withdrawn under the 12:25 directive.
+  The LHS10SD bootstrap re-run here equals M17's own `m17-boot` file. Transfer-only deltas: private files only.
+- **Integrity evidence (M17 hand-over, re-read on the nodes):** package parity 86 / 86 (max |Δp| 0.0; the IX1 gate);
+  the Index run scored `74ec8b2f…` (receipt `c2c72651…`, panel `6455d7be…` = LH's, dual scoring PASS); formal
+  typed-FINAL item 3 on `m17-4b-LHS17SD`: choice / Noul / Score OK / OK / OK (re-derived on node A by `prep4b.sh`);
+  row-level Index audit `ad296959…` of both M17 TRAIN files: 0 item rows, planted 200 / 200 (90 familiar-text rows
+  for `14bce13c…`, LH's own TRAIN: 114).
+- **References (not blockers; material regressions to flag):** formal v3 62.090 vs 67.345, −5.25 [−11.26, −1.67]
+  (significantly below); card-eligible mlx-diag −.0279 [−.0395, −.0167]; human transfer [−.120, +.032]; public 231
+  174 vs 172; vs adopted Nox 1.0 +5.62 [+0.46, +8.52].
+- Release inputs on node A (`inputs4b.sh S17`; the 9.1 GB BF16 checkpoint relayed F → B → C → A, 13 files equal;
+  caches = the runs' cache-after `5abdf970…` / `87797162…`); vendor mirror `d80933b6c` verified on node A. Card Index
+  input from the 0.8B Index-first release's input (0.8B main carries new weights), only the 4B point changed;
+  assets by the default generator (banner A). Spec `dev2-4b-4bif-S17.json` / decision `…4bif-S17.json`
+  (`--check` equal on node A, mirror `93dc64dbf`). Pre-release parity running on node A GPU0.
+- Ops fixes: `index4b.sh` writes the runs file on one JSON line and uses the current base; `render4b.sh` keeps its
+  copy loop's stdin away from ssh.
+
 ## 2026-10-02 04:40Z
 
 - **Coordinator interrupt (12:25 UTC+8): release the highest-scoring candidate; never a lower one once a higher one
