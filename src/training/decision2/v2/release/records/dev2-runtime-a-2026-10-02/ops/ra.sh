@@ -14,19 +14,20 @@
 #      package, on the download and from the Hub in fresh caches under Transformers 5.17 and 5.18, readback, gate
 #      and collection; the tier's frozen pre-warmed autotune cache (<key>/triton.json) is copied for the run
 #   4. ra_diff.py (weights byte-identical, only runtime and card files changed), the native examples against the
-#      superseded release's pre-upload receipt (bit-identical), card HTTP, links, the read-only collection check
-#      and gate evaluate
+#      superseded package's run on this GPU, image and frozen cache (bit-identical), card HTTP, links, the
+#      read-only collection check and gate evaluate; --post-only WORK repeats only this step for WORK's upload
 # Node A, GPU0 or GPU1 (the 0.6B track's allocation, where release workers run as recorded co-tenants), under the
 # shared lease owner.runtime-a-release (removed on exit).
-# Usage: bash <mirror>/v2/release/records/dev2-runtime-a-2026-10-02/ops/ra.sh <tier> --gpu N [--resume REV]
+# Usage: bash <mirror>/v2/release/records/dev2-runtime-a-2026-10-02/ops/ra.sh <tier> --gpu N [--resume REV | --post-only WORK]
 set -euo pipefail
 tier="${1:-}"
 shift || true
-gpu="" resume=""
+gpu="" resume="" post_only=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --gpu) gpu=$2; shift 2 ;;
     --resume) resume=$2; shift 2 ;;
+    --post-only) post_only=$2; shift 2 ;;
     *) echo "unknown argument $1" >&2; exit 2 ;;
   esac
 done
@@ -88,7 +89,12 @@ print(d["supersedes"]["released_as"].split("@")[1], Path(s["_release"]["replaces
 PY
 )
 main=$(hub_main)
-if [[ -n "$resume" && "$main" == "$resume" ]]; then
+if [[ -n "$post_only" ]]; then
+  [[ -f "$post_only/receipts/upload.json" ]] || { echo "$post_only has no upload receipt" >&2; exit 1; }
+  uploaded=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['revision'])" "$post_only/receipts/upload.json")
+  [[ "$main" == "$uploaded" ]] || { echo "$REPO main is $main, not $uploaded uploaded by $post_only: refusing" >&2; exit 1; }
+  echo "$REPO main $main = the revision $post_only uploaded (post-checks only)"
+elif [[ -n "$resume" && "$main" == "$resume" ]]; then
   echo "$REPO main $main = the revision an interrupted run of this package uploaded (resume)"
 else
   [[ "$main" == "$expected" ]] || { echo "$REPO main is $main, not the superseded revision $expected: refusing" >&2; exit 1; }
@@ -129,6 +135,15 @@ python3 -m v2.release.gate profile --spec "$SPEC" > "$X/profile.json" \
   || { echo "gate profile of $SPEC does not pass: refusing" >&2; exit 1; }
 echo "gate profile passes"
 
+read -r frozen frozen_digest < <(python3 -c 'import json,sys; t=json.load(open(sys.argv[1])); print(t["path"], t["digest"])' "$R/$key/triton.json")
+[[ "$(digest "$frozen")" == "$frozen_digest" ]] || { echo "frozen cache $frozen changed" >&2; exit 1; }
+kernel_args=()
+[[ "$kernels" != 1 ]] || kernel_args=(--site /opt/decision-fla --require-kernels)
+status=0
+if [[ -n "$post_only" ]]; then
+W=$post_only
+[[ ! -d "$W/extra" ]] || mv "$W/extra" "$W/extra.before-$TS"
+else
 if pgrep -af "[v]2/release/release[.]sh" | grep -q -- "specs/dev2-$key-"; then
   echo "another release.sh for $REPO runs on this node: refusing" >&2; exit 1
 fi
@@ -136,16 +151,11 @@ fi
 bash "$S/v2/common/hf_headroom.sh" --min-free-gb 3
 W=/data/dev2/runs/release/dev2-ra-$tier-$TS
 TC=/data/dev2/runs/release/triton/dev2-ra-$tier-$TS
-read -r frozen frozen_digest < <(python3 -c 'import json,sys; t=json.load(open(sys.argv[1])); print(t["path"], t["digest"])' "$R/$key/triton.json")
-[[ "$(digest "$frozen")" == "$frozen_digest" ]] || { echo "frozen cache $frozen changed" >&2; exit 1; }
 cp -a "$frozen" "$TC"
 chmod -R u+w "$TC"
-kernel_args=()
-[[ "$kernels" != 1 ]] || kernel_args=(--site /opt/decision-fla --require-kernels)
 cache_args=(--env TRITON_CACHE_AUTOTUNING=1 --env "TRITON_CACHE_DIR=$TC" --mount-rw "$TC")
 echo "mirror $SRC tier $tier gpu $gpu work $W cache $TC from $frozen tf518 $(cd "$TF518" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)"
 set -x
-status=0
 "$S/v2/release/release.sh" --spec "$SPEC" --src "$SRC" --work "$W" --image "$image" \
   --gpu "$gpu" --track runtime-a --shared-lease runtime-a-release --threads 4 \
   "${kernel_args[@]}" "${base_args[@]}" --env HIP_FORCE_DEV_KERNARG=1 "${cache_args[@]}" \
@@ -163,30 +173,44 @@ for name in ("card-pre", "automap-pre", "automap-card-pre", "card-post", "automa
         print(f"{name}: passed={r.get('passed', 'n/a')} example={r.get('example', '-')}")
 PY
 [[ "$status" == 0 ]] || { echo "release.sh failed ($status); work=$W" >&2; exit "$status"; }
+fi
 REV=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['revision'])" "$W/receipts/upload.json")
 [[ "$(manifest_sha "$W/package/$name")" == "$built" ]] || { echo "released package differs from the checked build" >&2; status=1; }
 mkdir -p "$W/extra"
 cp "$X"/*.json "$X/derivation.txt" "$W/extra/"
 cd "$S"
 "$HFPY" "$R/ops/ra_diff.py" "$REPO" "$expected" "$REV" "$W/extra/runtime-diff.json" || status=1
-superseded_pre=$superseded_work/receipts/pre-a.json
-if [[ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["device"])' "$superseded_pre")" != cuda:0 ]]; then
-  # The superseded release ran its examples on another device (Kai's org revision: CPU): run its package on this
-  # GPU and image instead. Only for a tier without kernels or base model mounts.
-  [[ "$kernels" == 0 && ${#base_args[@]} == 0 ]] || { echo "superseded examples ran off-GPU" >&2; exit 1; }
-  old=$X/superseded/$name
-  "$HFPY" -c 'import sys; from huggingface_hub import snapshot_download; snapshot_download(sys.argv[1], revision=sys.argv[2], local_dir=sys.argv[3])' \
-    "$REPO" "$expected" "$old" > /dev/null
-  docker run --rm --network none --ipc host --device /dev/kfd --device /dev/dri --group-add video \
-    --security-opt seccomp=unconfined -e ROCR_VISIBLE_DEVICES="$gpu" -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 \
-    -e TOKENIZERS_PARALLELISM=false -e HIP_FORCE_DEV_KERNARG=1 -v "/data/dev2/src/$SRC:/data/dev2/src/$SRC:ro" \
-    -v "$old:$old:ro" -v "$W/extra:$W/extra" --entrypoint python3 "$image" -I -B \
-    "$S/v2/release/examples.py" run --package "$old" --device cuda:0 --threads 4 \
-    --output "$W/extra/examples-superseded-gpu.json" > "$X/examples-superseded-gpu.log" 2>&1 || status=1
-  superseded_pre=$W/extra/examples-superseded-gpu.json
-fi
-python3 "$S/v2/release/examples.py" compare "$superseded_pre" "$W/receipts/pre-a.json" \
+# The superseded package runs its examples here, on this GPU and image with a copy of the same frozen autotune
+# cache as the new package's pre-upload examples: the superseded release's own receipt came from another GPU,
+# device or autotune cache (Kai's org revision: CPU; Nox's: another GPU and cache), whose kernel configurations
+# differ. That cross-environment comparison is kept for the record only.
+old=$X/superseded/$name
+OTC=/data/dev2/runs/release/triton/dev2-ra-$tier-$TS-superseded
+cp -a "$frozen" "$OTC"
+chmod -R u+w "$OTC"
+"$HFPY" -c 'import sys; from huggingface_hub import snapshot_download; snapshot_download(sys.argv[1], revision=sys.argv[2], local_dir=sys.argv[3])' \
+  "$REPO" "$expected" "$old" > /dev/null
+printf 'track=runtime-a\npurpose=superseded examples %s\nstart_utc=%s\nexpected_end_utc=%s\nrun_dir=%s\n' "$REPO" \
+  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(date -u -d '+30 min' +%Y-%m-%dT%H:%M:%SZ)" "$W" > "$lease/owner.runtime-a-release"
+old_mounts=() old_args=()
+for ((i = 0; i < ${#base_args[@]}; i += 2)); do
+  case "${base_args[i]}" in
+    --base-path) old_args+=(--base-path "${base_args[i+1]}") ;;
+    --env) old_mounts+=(-e "${base_args[i+1]}") ;;
+    --mount) old_mounts+=(-v "${base_args[i+1]}:${base_args[i+1]}:ro") ;;
+  esac
+done
+docker run --rm --network none --ipc host --device /dev/kfd --device /dev/dri --group-add video \
+  --security-opt seccomp=unconfined -e ROCR_VISIBLE_DEVICES="$gpu" -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 \
+  -e TOKENIZERS_PARALLELISM=false -e HIP_FORCE_DEV_KERNARG=1 -e TRITON_CACHE_AUTOTUNING=1 -e "TRITON_CACHE_DIR=$OTC" \
+  -v "/data/dev2/src/$SRC:/data/dev2/src/$SRC:ro" -v "$old:$old:ro" -v "$W/extra:$W/extra" -v "$OTC:$OTC" \
+  "${old_mounts[@]}" --entrypoint python3 "$image" -I -B \
+  "$S/v2/release/examples.py" run --package "$old" --device cuda:0 --threads 4 "${kernel_args[@]}" "${old_args[@]}" \
+  --output "$W/extra/examples-superseded-gpu.json" > "$X/examples-superseded-gpu.log" 2>&1 || status=1
+python3 "$S/v2/release/examples.py" compare "$W/extra/examples-superseded-gpu.json" "$W/receipts/pre-a.json" \
   --tolerance 0 --output "$W/extra/examples-vs-superseded.json" || status=1
+python3 "$S/v2/release/examples.py" compare "$superseded_work/receipts/pre-a.json" "$W/receipts/pre-a.json" \
+  --tolerance 0 --output "$W/extra/examples-vs-superseded-receipt.json" > /dev/null || true
 "$HFPY" -m v2.release.tests.hub_card_http_check --repo "$REPO" --revision "$REV" \
   --package "$W/package/$name" --output "$W/extra/card-http.json" || status=1
 "$HFPY" -m v2.release.hub_links --repo "$REPO" --revision "$REV" \
