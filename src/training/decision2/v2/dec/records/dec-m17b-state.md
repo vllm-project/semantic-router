@@ -5,6 +5,44 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17`. M
 (public since 2026-10-03 01:17 UTC+8). Index values stay private (node private stores and
 `decision2-program/private/m17b/`); this file has none. Times UTC.
 
+## 2026-10-03 00:00Z — first wave-7 reads: no successor; amendment 3; five reads on three lanes
+
+Nox-4B stays `c60d3b5c`. Index values are private (`decision2-program/private/m17b/`).
+
+- **Read once** (full-panel paired bootstrap vs `AF-4b-LHS17IB4-lrh-bf16`, 2,000 replicates):
+  - `AF-4b-LRHxXALL-m50-bf16`: not a successor. Point slightly above the release, lower bound below 0. It trades
+    the release's deficit gains for the full-LR soup's strongholds. Amendment 2's rule therefore builds
+    `4b-LRHxXALL-m75` (node F, `c79ed93d…` → BF16 `ccb3f110…`).
+  - `AF-4b-SDMLIB4-lrh-bf16`: not a successor. Point above the release, lower bound below 0. Its profile complements
+    the release's arm.
+- **Amendment 3** ([`dec-m17b-wave7-amendment-3-2026-10-03.md`](dec-m17b-wave7-amendment-3-2026-10-03.md),
+  `e43b58252`; disclosed: written after these two reads):
+  - `4b-LRH2` = ½ `4b-LHS17IB4-lrh` + ½ `4b-SDMLIB4-lrh` (node C `6381a8fc…` → BF16 `35c7ae3d…`);
+  - `4b-LRHxTOP3`;
+  - `4b-LRHxALL7`. The factory was asked for `4b-LHS17SD-lrh` and `4b-LHS17UP-lrh`.
+
+  IX1 entries are at `bdff32333`, mirrored on A / B / C / F.
+- **`4b-LHS17IB4-lrq`:**
+  - The factory's soup hit a lease precheck at 23:40:57Z: I had leased GPU6, which its `AF_MERGE_SHARED` merges
+    used. No merge had started.
+  - The FAILED marker went to `soup/void/4b-LHS17IB4-lrq-lease-precheck-*`, disclosed in OPERATIONS.log and
+    COORDINATION 08:00. The soup was rebuilt with the merges on GPU1 (released): `f95c15e6…` → BF16 `9eb03c12…`.
+- **Lanes:**
+  - node C GPU2–4: chain C2 runs `4b-LRHxALL` (shards ending), then `4b-LRHxALL-L2`. Chain C4, `4b-LRH2`, starts
+    once C2 has launched its last shard.
+  - node C GPU5–7 (idle > 20 min after the factory released them; COORDINATION 07:38 assigns them): chain C3b runs
+    `4b-SDML-lrh`, `4b-LHS17IB4-lrq`, then `4b-LRHxXALL-m75`. C3 was stopped while it waited, so as to read `-lrq`
+    before m75. The running shards were untouched, and the restart is on the same mirror.
+  - node B GPU4 / 6: chain B2 runs `4b-LHS17ML-lrh`, then `4b-LHS17IB4X-lrh`.
+- **Incident, no harm:** chains C1 and C2 overlapped on pool 2 3 4 for one wave, and two GPUs each ran two shards
+  (peak 228 of 255 GiB, every shard exit 0). Since then, a lane's next chain starts only after the previous chain
+  has launched its last shard.
+- **R3 blocker:** M17's readouts need a node F GPU whose lease names `dec-m17`, and node F is all 27B. I asked for a
+  co-tenant window on node F GPU6 (COORDINATION 07:00). `a15cb55a6` adds `M17_COTENANT_ANY` (≥ 60 GB free VRAM,
+  side entry).
+- **Leases:** node B GPU4 / 6 and node C GPU2–7 (`track=eval-ix1`).
+- **GPU-h:** ≈ 33.
+
 ## 2026-10-02 22:50Z — 4B owner #3 (2d3664f4) took over; wave 7 runs on two lanes
 
 Nox-4B stays `c60d3b5c` (`4b-LHS17IB4-lrh`). Took over at 22:12Z. The coordinator approved +30 GPU-h (70 in total).
