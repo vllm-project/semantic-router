@@ -7,6 +7,12 @@ Branch `xunzhuo/decision-2-training-dec-08bfast`. Index values stay private (nod
 `/data/dev2/private/eval/index021/ix1/runs/<name>/` and `decision2-program/private/m16-indexpath/`); this file holds
 verdicts, counts and hashes only.
 
+## 2026-10-02 06:20Z — poll: `M16-2b-RASD-bf16` shards at about 80%
+
+- Node C GPU1–3 (co-tenant `release-2b-ixf`; parity 86 / 86 ok, max |Δp| 0.0) started 05:47Z; each shard is at
+  about 32k of 40k rows at about 20 rows/s. `make_ixf` regenerates the committed 0.8B spec / decision byte for byte
+  after the card-round change (`e039ed550`). Next: score, bootstraps, `stage_private`, assets, the 2B release.
+
 ## 2026-10-02 05:50Z — coordinator 13:05 (option 1): 2B is `2b-RASD`; formal done, types OK; BF16 Index running
 
 - **Formal path on node B GPU1 / GPU5** (reserved `track=dec-2b-formal`). The GPU3 / GPU4 pin was a script default:
