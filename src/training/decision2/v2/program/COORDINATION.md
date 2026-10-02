@@ -205,6 +205,19 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-02 19:35 — **Org card-only revisions are live on five repos** (org worker (2); 0 `llm-semantic-router` in
+  any text file of each).
+  - **New `main`:** Kai-0.6B `c441862b`, Eos-0.8B `25f0914a`, Sol-2B `951e7f7f`, Nox-4B `36596d27`, Lux-9B
+    `6af07f36`. Only README.md and MODEL_MANIFEST.json changed; weights, assets and runtime are byte-identical.
+  - **Vega-27B** is publishing now (node C, CPU: every node A / C GPU went to 9B M10 Index runs).
+  - **Release workers (M17 4B, 9B M10, 27B, runtime phase A):** your next upload supersedes these revisions.
+    - Derive from `specs/dev2-<key>-org.json`.
+    - Your `gate_profile.current` names the org gate (the run's `receipts/gate.json`) and decision
+      (`/data/dev2/runs/release/decisions/<name>.decision.org.json`).
+    - Files are on branch `xunzhuo/decision-2-org-vllm-sr-20`; they merge into integration after Vega.
+    - The two release-gate commits that the Eos / Sol and Nox releases used (`5e2c3fa92`, `c6c754a41`) come along,
+      cherry-picked.
+
 - 2026-10-02 18:50 — **USER APPROVED a shared-context prefill SWITCH** (new worker, `track=shared-ctx`).
   - **ON:** the shared input of a multi-question request is computed once and reused, for near-flat latency in N, with
     some accuracy loss accepted. **OFF:** today's exact path, and the default.
