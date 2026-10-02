@@ -1,0 +1,92 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: decision 2026-10-02 02:05 UTC+8 (the Index path for frontier-targeted finalists, items 1'-8; the user did not answer and the recommended rule was adopted; the user may override), shipping K-a13IB as the Decision-2.0-Lux-9B successor after item 8",
+  "decision": "release",
+  "decision_sha256": "99621f30280fed67579ca2e9d85b01e916485b867fb8b72eac26d035f826a56e",
+  "gate_profile": "successor",
+  "items": {
+    "1_successor_R1p_v3_not_below_index_gain": {
+      "evidence": "v3 68.024 vs current 67.737: +0.29 [-1.57, +1.20] (not below: yes); private Index paired bootstrap 92fd2fb00ad3 (2000 replicates): 95% lower bound > 0: yes",
+      "passed": true
+    },
+    "1_successor_R2_human_transfer": {
+      "evidence": "human transfer delta 95% [-0.021, +0.020]",
+      "passed": true
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "evidence": "types choice OK, noul OK, score OK",
+      "passed": true
+    },
+    "1_successor_R4_mlx_diag": {
+      "evidence": "mlx-diag card-eligible macro -0.0037 [-0.0110, +0.0034]",
+      "passed": true
+    },
+    "1_successor_R5_tier_gates": {
+      "evidence": "own 1.0 low +0.11; v3 68.024 vs 90% of Nimble v2 62.056; H vs Nimble v2 [-0.008, +0.097]; own 1.0 low > 0 ok, v3 >= 55.850 ok, H vs Nimble v2 upper >= 0 ok, no type collapsed ok",
+      "passed": true
+    },
+    "1_successor_R6_no_overlap_exposure": {
+      "evidence": "1 training files, 0 exposed groups; 2 training files, 0 exposed groups",
+      "passed": true
+    },
+    "1_successor_R7_public231": {
+      "evidence": "public 231 182 vs 178 (+4; McNemar p 0.125)",
+      "passed": true
+    },
+    "1_successor_R8_c1_postkey": {
+      "evidence": "JevArena-C1 v1.2 post-key 53.49 vs Decision-2.0-Lux-9B 53bac735 (current revision): -0.28 [-1.31, +0.65] PASS",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "10 results below own 1.0 listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 40 files re-hashed; loaded 7940895744",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518, automap-parity-pre, automap-vs-native-pre; scored prompts vs the native runtime: max drift 0",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "01d642a1195edb60ca18b7846bc76e8bc0df4fe50fec254b39e2761fc4d26ab5",
+  "model_name": "Decision-2.0-Lux-9B",
+  "receipts_sha256": {
+    "automap-card-pre": "972cd6218c4f557cee0a16edbc3f799cd5c61a8193938a1ed97f57cd804e794b",
+    "automap-hub": "4acbfd517980505034496f4845bb9c1716063a7516a95cf610c561de2d29b40c",
+    "automap-hub-tf518": "3214dd298c038544ecb456157ac0311e17a100c260f9ca398c4e6e7af14836d6",
+    "automap-parity-pre": "4e25597a45efcb07c1fbbea943c7912eefbad05d29f0a37626601f7f171a87c1",
+    "automap-post": "c86b12a394bcdf45e11877857ff306f0c8cc88df299c363e82ae859a07877687",
+    "automap-pre": "b44eed04f6e4ca2b1304ea5b161c0c0af8222b487c0251d5b37ca7c80efbc597",
+    "automap-vs-native-pre": "3aceb8f714c90f9757fd6dc85be01d4c49806c502a5d8e0e0d81eaeba3500126",
+    "card-post": "e9051aca6a8e8918920ec9284e8d16aca2b39a474e657fd792e534b2511de07a",
+    "card-pre": "bdebd7434d9f313eab5aa0f063214a60ee6fab46af0201193280c009f608993c",
+    "download": "baafa399dc21759467e06563d18bc60cd9246e5bf3d68464becd7b6cf14a6a25",
+    "post": "5503a8384f83da6cae4c7b6c1c3f48e87078710b819469bf74af71dc76b21709",
+    "readback": "4b790b1e2d7a9270b6d8b8799b037d27934dfcf1cb4a6ad831dbedc728e6f4f2",
+    "repeat-post": "32c3e940e410aea05fa7e5daaf38bb29467f188fb92af5112a86a323d801d0aa",
+    "repeat-pre": "e199374fd8c56cf51dad4202527dedd07706da78ce3253c74c7ca6db8ac53b95",
+    "tree": "5eca2595fcf484ae563440db5c56baaa884fad10ac9f4975b2a358f72657239d",
+    "upload": "f7924e87fc31341e2581a7b4c5891ba9c80cc3e5e18f079c41b887104e65ca2c"
+  },
+  "repo_id": "llm-semantic-router/Decision-2.0-Lux-9B",
+  "revision": "259a45502bfca2f585a59ef99079533106e0b136",
+  "schema": "dev2-release-gate/1",
+  "supersedes": {
+    "gate_sha256": "6343afa6cb7804002997616edbab03e1cff7eebd3c7dd333100a60f8b4e64476",
+    "revision": "586af77916ee508320421bda6c22f7f0305a7279"
+  },
+  "utc": "2026-10-01T20:50:10.994510+00:00"
+}
