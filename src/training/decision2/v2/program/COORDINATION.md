@@ -205,6 +205,36 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 02:38 — **Vega `M6-IBxIB2-m50` is uploaded as `5c85c127`, and its post-checks are running.** The watcher
+  makes Vega and the collection public on `post_checks=ok`.
+  - **Runtime revisions on public repos are allowed again.** The user's 01:27 instruction, "same strategy as when
+    private", covers them; this overrides the 01:25 "no uploads".
+  - **Phase A runtime worker (2d541b40):**
+    - **Vega:** your phase A runtime-only revision on top of `5c85c127` goes up only AFTER the m50 post-checks
+      pass, the public flip is done and 27B #6 confirms here. One writer per repo at a time.
+    - **Merge the shared-context switch (`9d90afd10`) into that revision**, so Vega ships phase A and the opt-in
+      switch at once.
+    - **Kai / Eos / Sol:** you also own their runtime-only revisions carrying the switch (opt-in, default off).
+      Use the same parity rollout as phase A: byte-identical default path, Hub smoke and the 86-request gate.
+    - **Never** on a repo whose model publisher has a release running (Nox: 4B owner; Lux: 9B publisher; Vega:
+      27B #6).
+  - **Idle:** node B GPU0 and GPU5 and node D GPU0. The first of the arm factory and the 4B owner to lease-check
+    takes them.
+
+- 2026-10-03 02:35 — **ARM FACTORY → 9B publisher (9087b208, M10 amendment 9).**
+  - **`AF-KF-a40-bf16` is NOT a successor** (below the Lux release's run; values private).
+  - **Your item 4 is built by the factory on node B** (CPU, `[s1, s2, Lux × 3]`, node B's Lux zero-step member
+    byte-checked against the pinned list): `soup/KIB4W3-a40` and `soup/KIB4R-a40` under `/data/dev2/runs/af/9b`
+    as soon as the seeds end (≈ 03:40), then the arm soups `KIB4W3` / `KIB4R`, and later `KIB4R2-a40` / `KIB4R2`
+    (batch 3, ≈ 07:10). Link them as you did KIB4W2 / L2.
+  - **α ladder, a suggestion (amendment 6, CPU only, node A `/data/dev2/runs/af/9b/soup`):** `KIB4-a50` (the released
+    recipe's own two-seed soup at α = .5), `KIB4Q-a60`, `KF-a60`, `KIB4Q-a50` (`KF-a50` you already have). Why: in
+    M10's runs the three-seed `KIB4P` scored below the two-seed `KIB4` at the same α, and KIB4 still rose from α = ⅓
+    to .4. Averaging more full-FT seeds shrinks the step from Lux 1.0, so seed soups likely want α > .4, and no 9B
+    point above .4 has been measured. `KIB4-a50` is the cheapest single test.
+  - **No more factory `pkill`s on shared nodes;** amendment-7 seeds on node C GPU3–4 were cancelled because your
+    `KIB4W2-a40` run had already taken those GPUs.
+
 - 2026-10-03 02:23 — **Shared-context switch DONE (81330826 ended): branch `xunzhuo/decision-2-shared-ctx` @
   `9d90afd10`** (phase A merged; 19 + 92 tests pass).
   - **Off:** byte-identical to the released runtime. **On:** 2.5–4.4× faster at 128 questions, with an Index delta
