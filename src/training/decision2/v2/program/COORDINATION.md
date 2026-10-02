@@ -205,6 +205,39 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 01:25 — **USER (01:11): DECISION 2.0 GOES PUBLIC. Also, node E was handed to the user and node F is
+  back in the pool. Focus: 4B / 9B / 27B optimization and release, plus the film.**
+  - **Public now:** Kai, Eos, Sol, Nox and Lux (flipped at 01:17; anonymous README 200).
+    - Vega-27B and the Decision 2.0 collection stay PRIVATE until the running Vega release passes its post-checks.
+      That release (`M6-IBxIB2-m50`) was started by the retry watcher at 01:20 because headroom became 50 GB.
+    - **27B #6:** once `post_checks=ok`, make `vllm-sr/Decision-2.0-Vega-27B` public and then the collection, and
+      verify an anonymous README 200. The coordinator does it at the next tick if you haven't.
+    - Private storage is 49.82 of 100 GB, and public repos don't count, so storage no longer blocks 2.0 uploads.
+      **No other repo becomes public** (training data, eval artifacts, Vela, DEV2.0-Route all stay private).
+  - **Release tooling must follow before your next upload:** `v2/release/hub.py` refuses any non-private target
+    ("is not private; refusing to use it"), and the collection checks require a private collection.
+    - **Every publisher** (M17 for 4B, the 9B publisher, 27B #6 after Vega flips) changes the guard in its mirror:
+      the six `vllm-sr/Decision-2.0-*` repos are expected PUBLIC from now on, and every other repo stays private-only.
+    - Collection checks expect PUBLIC once the collection flips.
+    - Then re-run a dry check (`--prerelease`) before the real upload.
+    - **Upload priority:** the newest best files first.
+  - **Node E (node E) RETURNED to the user at 01:22. Never use it again; `node-e` no longer resolves.**
+    - **Stopped there:**
+      - the 27B M8 seeds `M8-IB124-s4`, `M8-IB124-s5`, `M8-IB-s4` and `M8-IB2-s4`, plus their relays;
+      - the 9B `M10-X8-a40-bf16` IX1 chain (`ixchain.sh`), its `gate.sh`, and shards s3 / s4.
+    - **Copied to node F:**
+      - `/data/dev2/runs/27b/M8-{IB124-s4,IB124-s5,IB-s4,IB2-s4}`, with checkpoints at steps 848 / 848 / 636 / 827;
+      - `/data/dev2/private/eval/index021/ix1/runs/M10-X8-a40-bf16` (shard dirs 0–4, partial).
+    - **27B #6:** resume (or restart) those four seeds on node F. Copy the Qwen3.8-27B base from node D if F lacks
+      it. `m6-relay.sh` only accepts RELAY_NODE a | d | e, so add `f` and use it.
+    - **9B publisher:** finish the missing X8 shards and re-run the gate on free GPUs (A–D, F), lease-checked.
+  - **Node F (node F) is back as `node-f`:** GPU2–7 usable. GPU0–1 are held by K8s KServe pods (gpt-oss):
+    never use them. Capacity is 37 usable GPUs (A 8, B 8, C 7, D 8, F 6).
+  - **Focus (USER 00:58): only 4B / 9B / 27B optimization and release, plus the film.**
+    - The shared-context switch (81330826) and the phase A runtime rollout (2d541b40): finish what is already
+      running, start no new GPU work, and make no Hub uploads (runtime revisions to public repos need a new user OK).
+    - Their freed GPUs go to the 4B / 9B / 27B tracks and the arm factory.
+
 - 2026-10-03 00:35 — **NODE F RETURNED TO THE USER, effective now. Never use it again.**
   - It is removed from `~/.config/decision2/nodes.env`, so `node-f` no longer resolves. All our containers on it
     were stopped and all our leases released.
