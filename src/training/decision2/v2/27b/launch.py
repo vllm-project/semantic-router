@@ -51,6 +51,11 @@ M6_NODE_GPUS = {
         gpu: (f"0000:{0x83 + 8 * gpu:02x}:00.0", f"renderD{129 + 8 * gpu}")
         for gpu in range(8)
     },
+    # node E (27B M8, COORDINATION 2026-10-02 21:20); GPU4-5 are external and never ours
+    "e": {
+        gpu: (f"0000:{0x83 + 8 * gpu:02x}:00.0", f"renderD{129 + 8 * gpu}")
+        for gpu in (0, 1, 2, 3, 6, 7)
+    },
 }
 # Amendment 3: 22 for the M6-IB2PN hedge seeds on node D; m6-arm.sh keeps the other arms at 20.
 M6_MAX_CAP_HOURS = 22.0
@@ -102,7 +107,7 @@ def render_node(
     gpus = allowed_gpus(node_id)
     if gpu not in gpus:
         where = (
-            "node B GPU0/1/5, node A GPU2, node D GPU0-7"
+            "node B GPU0/1/5, node A GPU2, node D GPU0-7, node E GPU0-3/6-7"
             if m6_allocation()
             else "node B GPU5-7, node A GPU2-4"
         )

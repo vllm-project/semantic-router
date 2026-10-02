@@ -7,14 +7,17 @@
 # to node B's link directory as peer-d for the chain's pull-d. The code mirror is mirror_to_node.sh's job (node-d).
 # Usage: m6-stage-d.sh MIRROR_SHA MIXTURE...   (e.g. a20ib1x; the mirror must already be on node D)
 # Environment: M6_BUILD (build record in m6-data, default BUILD.json; BUILD-pn.json stages amendment 3's a20ib12pn from
-#   its mixtures_dir, mixtures-m6pn-1); M6_DATA=m7-data stages M7 mixtures (m7-data/mixtures-m7-1, M7's BUILD.json).
+#   its mixtures_dir, mixtures-m6pn-1); M6_DATA=m7-data stages M7 mixtures (m7-data/mixtures-m7-1, M7's BUILD.json);
+#   M6_STAGE_NODE=e stages node E the same way (27B M8; peer file peer-e) instead of node D.
 set -euo pipefail
 SHA=${1:?MIRROR_SHA}
 shift
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "MIRROR_SHA must be a full commit SHA" >&2; exit 2; }
+STAGE_NODE=${M6_STAGE_NODE:-d}
+[[ "$STAGE_NODE" =~ ^[de]$ ]] || { echo "M6_STAGE_NODE is d or e" >&2; exit 2; }
 NODES=${DEV2_NODES_FILE:-$HOME/.config/decision2/nodes.env}
-B=$(grep '^node-b=' "$NODES" | cut -d= -f2-) D=$(grep '^node-d=' "$NODES" | cut -d= -f2-)
-[ -n "$B" ] && [ -n "$D" ] || { echo "node-b / node-d missing in $NODES" >&2; exit 2; }
+B=$(grep '^node-b=' "$NODES" | cut -d= -f2-) D=$(grep "^node-$STAGE_NODE=" "$NODES" | cut -d= -f2-)
+[ -n "$B" ] && [ -n "$D" ] || { echo "node-b / node-$STAGE_NODE missing in $NODES" >&2; exit 2; }
 onb() { ssh -o BatchMode=yes "$B" "$@"; }
 ond() { ssh -o BatchMode=yes "$D" "$@"; }
 SRC=/data/dev2/src/$SHA-src_training_decision2/src/training/decision2
@@ -29,13 +32,13 @@ build=$(onb "cat /data/dev2/private/27b/$DATA/$BUILD_FILE")
 MX=/data/dev2/private/27b/$DATA/$(python3 -c "import json,sys; print(json.loads(sys.argv[1]).get('mixtures_dir', sys.argv[2]))" "$build" "mixtures-${DATA%-data}-1")
 ond "test -f $SRC/v2/27b/triton_cache.py" || { echo "mirror $SHA is not on node D" >&2; exit 2; }
 for m in "$@"; do [[ "$m" =~ ^a20ib[0-9a-z]+$ ]] || { echo "bad mixture $m" >&2; exit 2; }; done
-onb "umask 077; test -d /data/dev2/tmp/27b-m6-xfer && printf '%s\n' '${D#*@}' > /data/dev2/tmp/27b-m6-xfer/peer-d"
+onb "umask 077; test -d /data/dev2/tmp/27b-m6-xfer && printf '%s\n' '${D#*@}' > /data/dev2/tmp/27b-m6-xfer/peer-$STAGE_NODE"
 ond "set -e; mkdir -p /data/decision20-20260926/models /data/decision20-20260926/data/rights_clean_goemotions_v2 \
   /data/decision20-20260926/runs/css-transfer-v1 /data/dev2/runs/27b /data/dev2/tmp /data/dev2/xfer/27b-m6/relay \
   /data/dev2/runs/27b/m6/logs; umask 077; mkdir -p $MX; chmod 700 /data/dev2/private/27b/$DATA"
-echo "$(date -u +%FT%TZ) copying base, data files, T0 and mixtures ($*) from node B to node D"
+echo "$(date -u +%FT%TZ) copying base, data files, T0 and mixtures ($*) from node B to node ${STAGE_NODE^^}"
 onb "set -e; E='ssh -i /root/.ssh/d2_temp_cd -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes'; \
-  P=root@\$(cat /data/dev2/tmp/27b-m6-xfer/peer-d); \
+  P=root@\$(cat /data/dev2/tmp/27b-m6-xfer/peer-$STAGE_NODE); \
   rsync -a -e \"\$E\" $BASE/ \$P:$BASE/; \
   for f in $FILES; do rsync -a -e \"\$E\" /data/decision20-20260926/\$f \$P:/data/decision20-20260926/\$f; done; \
   rsync -a -e \"\$E\" $T0/ \$P:$T0/; \
@@ -58,4 +61,4 @@ print(b['files_sha256'][m + '.train.jsonl'] if 'files_sha256' in b else b['mixtu
   [ "$got" = "$want" ] || { echo "node D $m is not $want" >&2; exit 3; }
 done
 ond "docker image inspect sha256:dbe5f32b2263b2671ba0b9aaaf18ee20abda189541fc22107e216a2f37d440b1 --format '{{.Id}}'" > /dev/null
-echo "node D staged: base tree, T0 tree, data files and mixtures ($*) equal to node B; training image present"
+echo "node ${STAGE_NODE^^} staged: base tree, T0 tree, data files and mixtures ($*) equal to node B; training image present"
