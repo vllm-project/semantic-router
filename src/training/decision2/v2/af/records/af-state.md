@@ -2,6 +2,12 @@
 
 Index values stay private (node private stores and `decision2-program/private/arm-factory/`); this file has none.
 
+## 2026-10-02 21:55Z (05:55 UTC+8) — KIB4R2 done; the factory claims no new GPUs
+
+- `KIB4R2` s1 / s2 DONE 21:28 / 21:30Z (no failure, no cap). Node B built `KIB4R2-a40` `c778fe65…` and the arm soup
+  `KIB4R2` `b484ef18…` → 9B publisher. Node B GPU4 / 6 released; COORDINATION 05:38 routes them and the next idle GPUs
+  to 27B #6.
+
 ## 2026-10-02 21:35Z (05:35 UTC+8) — lower-LR arms first (amendment 10)
 
 - The 4B owner's read: `4b-LHS17IB4-lrh` (half LoRA / head LR, factory amendment 4) passes the Nox-4B gate and is
