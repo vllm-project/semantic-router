@@ -19,16 +19,18 @@
 #            point over the 86 compatibility requests on node D GPU4, vs IX1's A20r kit results -> must pass
 #   parity   launch.sh parity on node D GPU4 (detached; waits for it, ~0.1 GPU-h); parity/ARM/parity.json must pass
 #   stage-e  after stage: node D's restaged package and A20r's frozen cache (with its .sha256) relayed node D -> node E
-#            through node B
-#            (node E holds the same base snapshot, kit and panel), SHA-256 lists equal to node D's
+#            through node B (node E holds the same base snapshot, kit and panel), SHA-256 lists equal to node D's
+#   stage-b  the same pulled by node B from node D, plus IX1's image (ID checked), kit and panel-8; node B's base
+#            snapshot must equal node D's
 #   run      m6-index-run.sh detached on each node with shards (log ix1/logs/m6-index-ARM-NODE.log): the shards of
 #            M6_INDEX_SHARDS (default all 8, e.g. "2 3 4 5 6 7" to re-split shards not yet run) on the entries of
 #            M6_INDEX_GPUS (default "d4 d5 d6 d7"; dN = node D GPU N in 0-7 (GPU0-3 are M6's own leases, used once its
-#            seeds ended, under an eval-ix1 owner naming the arm), cN = node C GPU N in 1-7, eN = node E GPU N in 0-3 or
-#            6-7 (never GPU4-5), a bare N = node D), the i-th listed shard on entry i mod n; node C needs stage-c and
-#            node E stage-e, each gets node D's parity record (SHA-256 equal); M6_INDEX_STAGGER (s) passes through
+#            seeds ended, under an eval-ix1 owner naming the arm), bN = node B GPU0 / 1 / 5 (27B's idle training leases,
+#            set aside as owner.m6-set-aside-<UTC>), cN = node C GPU N in 1-7, eN = node E GPU N in 0-3 or 6-7 (never
+#            GPU4-5), a bare N = node D), the i-th listed shard on entry i mod n; node B / C / E need stage-b / stage-c /
+#            stage-e, each gets node D's parity record (SHA-256 equal); M6_INDEX_STAGGER (s) passes through
 #   status   per node and shard: records written, ended, exit code; GPU-h so far
-#   collect  after node C's / node E's shards ended 0: their result files (no Triton cache, no home) and launcher
+#   collect  after node B's / C's / E's shards ended 0: their result files (no Triton cache, no home) and launcher
 #            records -> node D's run directory, SHA-256 lists equal; never overwrites a node D shard
 #   score    after all 8 shards ended 0 on node D: score.sh (merge, port + kit scoring, compare incl. the frontier peer),
 #            family_delta vs A20r's IX1 run (merged-budget) and vs M5-L128's, and the paired bootstrap vs A20r
@@ -38,8 +40,8 @@
 #            ~/code/decision2-program/private/m6/ARM/ (mode 700)
 #   audit    once for M6 (any ARM; CPU): v2.eval.ix1.contamination of a20ib12pn (it contains every arm's rows) and
 #            a20ib1x against the panel -> ix1/runs/m6-audit (backs the card's "audited at row level" footnote)
-#   release  owner files that launch.sh wrote for ARM on node D GPU0-7, node C GPU1-7 and node E GPU0-3 / 6-7 ->
-#            status released (no ARM container running)
+#   release  owner files that launch.sh wrote for ARM on node D GPU0-7, node B GPU0 / 1 / 5, node C GPU1-7 and node E
+#            GPU0-3 / 6-7 -> status released, or the set-aside 27B owner back (no ARM container running)
 set -euo pipefail
 SHA=${1:?MIRROR_SHA} ARM=${2:?ARM} STAGE=${3:?STAGE}
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "MIRROR_SHA must be a full commit SHA" >&2; exit 2; }
@@ -58,8 +60,9 @@ placement() {  # one line per node with shards: "NODE SHARDS GPU..." (i-th shard
   (( ${#entries[@]} >= 1 && ${#entries[@]} <= 8 )) || { echo "M6_INDEX_GPUS: 1-8 entries" >&2; return 2; }
   for e in "${entries[@]}"; do
     [[ "$e" =~ ^[4-7]$ ]] && e=d$e
-    [[ "$e" =~ ^(d[0-7]|c[1-7]|e[0-367])$ ]] ||
-      { echo "M6_INDEX_GPUS: node D GPU0-7 (d0-d7), node C GPU1-7 (c1-c7) or node E GPU0-3 / 6-7, not '$e'" >&2; return 2; }
+    [[ "$e" =~ ^(d[0-7]|b[015]|c[1-7]|e[0-367])$ ]] ||
+      { echo "M6_INDEX_GPUS: node D GPU0-7 (d0-d7), node B GPU0 / 1 / 5, node C GPU1-7 or node E GPU0-3 / 6-7, not '$e'" >&2
+        return 2; }
     [ -z "${seen[$e]:-}" ] || { echo "M6_INDEX_GPUS lists $e twice" >&2; return 2; }
     seen[$e]=1
     norm+=("$e")
@@ -69,7 +72,7 @@ placement() {  # one line per node with shards: "NODE SHARDS GPU..." (i-th shard
     shards[$node]+="${shards[$node]:+,}$k"
     [[ " ${gpus[$node]:-} " == *" $g "* ]] || gpus[$node]+="${gpus[$node]:+ }$g"
   done
-  for node in d c e; do
+  for node in d b c e; do
     [ -z "${shards[$node]:-}" ] || echo "$node ${shards[$node]} ${gpus[$node]}"
   done
 }
@@ -99,6 +102,8 @@ MD=/data/dev2/models/ix1/m6
 FIX2=/data/dev2/models/ix1/fix2/DEV2.0-27B-4e89288d-re876fbe
 PKG=$MD/$ARM-re876fbe CK=$MD/$ARM-ckpt
 CACHE=$R/parity/DEV2.0-27B/cache-frozen
+KIT=/data/dev2/private/eval/index021/kit-87d4650b IMAGE=decision20-train-fast:host2 IMAGE_ID=sha256:f83b1d10
+BASE=/data/dev2/hf-cache/models--Qwen--Qwen3.8-27B/snapshots/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0
 LOADED=27497508864
 LOCAL=${M6_INDEX_LOCAL:-$HOME/code/decision2-program/private/m6}/$ARM
 TAG=ix1-$(tr 'A-Z.' 'a-z_' <<< "$ARM")-
@@ -169,27 +174,45 @@ case "$STAGE" in
     t=$(ond "$(sums "$PKG")") c=$(onc "$(sums "$PKG")")
     [ -n "$t" ] && [ "$t" = "$c" ] || { echo "node C's restaged package differs from node D's" >&2; exit 3; }
     echo "node C package: $(wc -l <<< "$c") files, SHA-256 list equal to node D's" ;;
-  stage-e)
-    has_mirror e
-    model=$(model_sha)
+  stage-b|stage-e)  # node B pulls from node D over its transfer key; node E gets node D's files relayed through node B
+    node=${STAGE#stage-} model=$(model_sha)
+    has_mirror "$node"
     ond "test -f $PKG/MODEL_MANIFEST.json" || { echo "run stage (node D) first" >&2; exit 3; }
     ond "python3 -c 'import json,sys; sys.exit(json.load(open(sys.argv[1]))[\"identity\"][\"model_sha256\"] != sys.argv[2])' \
       $PKG/MODEL_MANIFEST.json $model" || { echo "node D's package does not carry $ARM's identity" >&2; exit 3; }
-    for dir in $PKG $CACHE; do
-      if ! one "test -e $dir"; then
-        echo "$(date -u +%FT%TZ) relaying ${dir#/data/dev2/} node D -> node E through node B"
-        onb "$XFER root@${D#*@} 'tar -C ${dir%/*} -cf - ${dir##*/}' | \
-          $XFER root@${E#*@} 'umask 077; mkdir -p ${dir%/*} && tar -C ${dir%/*} -xf -'"
+    [ "$node" = b ] && sink="bash -c" || sink="$XFER root@${E#*@}"
+    if [ "$node" = b ]; then  # node B trains: it has the base snapshot but none of IX1's image, kit or panel
+      if ! onb "docker image inspect --format '{{.Id}}' $IMAGE 2> /dev/null | grep -q '^$IMAGE_ID'"; then
+        echo "$(date -u +%FT%TZ) node B pulls image $IMAGE from node D"
+        onb "$XFER root@${D#*@} 'docker save $IMAGE' | docker load -q"
       fi
-      t=$(ond "$(sums "$dir")") c=$(one "$(sums "$dir")")
-      [ -n "$t" ] && [ "$t" = "$c" ] || { echo "node E's ${dir##*/} differs from node D's" >&2; exit 3; }
-      echo "node E ${dir##*/}: $(wc -l <<< "$c") files, SHA-256 list equal to node D's"
+      onb "docker image inspect --format '{{.Id}}' $IMAGE | grep -q '^$IMAGE_ID'" ||
+        { echo "node B's $IMAGE is not the frozen build" >&2; exit 3; }
+      echo "node B image $IMAGE: frozen build"
+      onb "test -f $BASE/config.json" || { echo "node B has no base snapshot $BASE" >&2; exit 3; }
+      q="cd $BASE && find -L . -type f | sort | xargs sha256sum | sha256sum"  # snapshot files are symlinks to blobs
+      [ "$(ond "$q")" = "$(onb "$q")" ] ||
+        { echo "node B's base snapshot differs from node D's" >&2; exit 3; }
+      echo "node B base snapshot: SHA-256 list equal to node D's"
+      dirs="$KIT $R/panel-8 $PKG $CACHE"
+    else
+      dirs="$PKG $CACHE"
+    fi
+    for dir in $dirs; do
+      if ! "on$node" "test -e $dir"; then
+        echo "$(date -u +%FT%TZ) relaying ${dir#/data/dev2/} node D -> node ${node^^}"
+        onb "$XFER root@${D#*@} 'tar -C ${dir%/*} -cf - ${dir##*/}' | \
+          $sink 'umask 077; mkdir -p ${dir%/*} && tar -C ${dir%/*} -xf -'"
+      fi
+      t=$(ond "$(sums "$dir")") c=$("on$node" "$(sums "$dir")")
+      [ -n "$t" ] && [ "$t" = "$c" ] || { echo "node ${node^^}'s ${dir##*/} differs from node D's" >&2; exit 3; }
+      echo "node ${node^^} ${dir##*/}: $(wc -l <<< "$c") files, SHA-256 list equal to node D's"
     done
-    one "test -e $CACHE.sha256" ||
-      onb "$XFER root@${D#*@} 'cat $CACHE.sha256' | $XFER root@${E#*@} 'umask 077; cat > $CACHE.sha256'"
-    [ "$(ond "sha256sum < $CACHE.sha256")" = "$(one "sha256sum < $CACHE.sha256")" ] ||
-      { echo "node E's cache digest file differs from node D's" >&2; exit 3; }
-    echo "node E cache digest file equal to node D's" ;;
+    "on$node" "test -e $CACHE.sha256" ||
+      onb "$XFER root@${D#*@} 'cat $CACHE.sha256' | $sink 'umask 077; cat > $CACHE.sha256'"
+    [ "$(ond "sha256sum < $CACHE.sha256")" = "$("on$node" "sha256sum < $CACHE.sha256")" ] ||
+      { echo "node ${node^^}'s cache digest file differs from node D's" >&2; exit 3; }
+    echo "node ${node^^} cache digest file equal to node D's" ;;
   control)
     has_mirror d
     C0=$R/runs/DEV2.0-27B-budget-control
@@ -228,7 +251,7 @@ case "$STAGE" in
     has_mirror d
     ond "python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1]))[\"pass\"] else 1)' $R/parity/$ARM/parity.json" ||
       { echo "parity gate missing or failed" >&2; exit 3; }
-    for node in c e; do
+    for node in b c e; do
       grep -q "^$node " <<< "$plan" || continue
       has_mirror $node
       t=$(ond "$(sums "$PKG")") c=$("on$node" "test -f $PKG/MODEL_MANIFEST.json && $(sums "$PKG")" || true)
@@ -244,6 +267,15 @@ case "$STAGE" in
       [ "$(ond "sha256sum < $R/parity/$ARM/parity.json")" = "$("on$node" "sha256sum < $R/parity/$ARM/parity.json")" ] ||
         { echo "node ${node^^}'s parity record differs from node D's" >&2; exit 3; }
     done
+    if grep -q '^b ' <<< "$plan"; then  # 27B's own idle node B leases (track=27b) step aside, as on node D GPU0-1
+      read -r -a bg <<< "$(grep '^b ' <<< "$plan" | cut -d' ' -f3-)"
+      for g in "${bg[@]}"; do
+        onb "f=/data/dev2/leases/gpu$g.lock/owner; grep -qx 'track=eval-ix1' \$f 2> /dev/null && exit 0; \
+          grep -qx 'track=27b' \$f && grep -qx 'status=reserved-idle' \$f || { echo 'node B gpu$g: not an idle 27B lease' >&2; exit 3; }; \
+          mv \$f /data/dev2/leases/gpu$g.lock/owner.m6-set-aside-\$(date -u +%Y%m%dT%H%M%SZ) && echo 'node B gpu$g: 27B owner set aside'" ||
+          exit 3
+      done
+    fi
     stagger=${M6_INDEX_STAGGER:-300}
     [[ "$stagger" =~ ^[0-9]{1,4}$ ]] || { echo "M6_INDEX_STAGGER: seconds, not '$stagger'" >&2; exit 2; }
     while read -r node shards gpus; do  # ssh reads stdin: without < /dev/null it eats the plan's other lines
@@ -254,7 +286,7 @@ case "$STAGE" in
     sleep 20
     while read -r node _; do "on$node" "head -n 3 $R/logs/m6-index-$ARM-$node.log" < /dev/null; done <<< "$plan" ;;
   status)
-    for node in d c e; do
+    for node in d b c e; do
       "on$node" "test -d $R/runs/$ARM" || continue
       "on$node" "python3 - $R/runs/$ARM $node" <<'EOF'
 import glob, os, sys, time
@@ -275,10 +307,11 @@ EOF
     done ;;
   collect)
     found=0
-    for node in c e; do
+    for node in b c e; do
       ks=$("on$node" "cd $R/runs/$ARM 2> /dev/null && for k in 0 1 2 3 4 5 6 7; do test -d shard-\$k && echo \$k; done" || true)
       [ -n "$ks" ] || continue
-      found=1 addr=$([ $node = c ] && echo "${C#*@}" || echo "${E#*@}")
+      found=1
+      case $node in b) from="bash -c" ;; c) from="$XFER root@${C#*@}" ;; e) from="$XFER root@${E#*@}" ;; esac
       for k in $ks; do
         if ! "on$node" "test -f $R/runs/$ARM/shard-$k/end_epoch && test \"\$(cat $R/runs/$ARM/shard-$k/exit_code)\" = 0"; then
           echo "node ${node^^} shard $k has not ended with exit code 0" >&2; exit 3
@@ -287,18 +320,18 @@ EOF
       done
       ond "umask 077; mkdir -p $R/runs/$ARM"
       for k in $ks; do  # relayed through node B's transfer key: the workstation's path to node D is slow
-        onb "$XFER root@$addr 'tar -C $R/runs/$ARM --exclude=shard-$k/triton --exclude=shard-$k/home -cf - shard-$k' | \
+        onb "$from 'tar -C $R/runs/$ARM --exclude=shard-$k/triton --exclude=shard-$k/home -cf - shard-$k' | \
           $XFER root@${D#*@} 'tar -C $R/runs/$ARM -xf -'"
         c=$("on$node" "cd $R/runs/$ARM/shard-$k && find . \\( -path ./triton -o -path ./home \\) -prune -o -type f -print | sort | xargs sha256sum")
         t=$(ond "cd $R/runs/$ARM/shard-$k && find . -type f | sort | xargs sha256sum")
         [ -n "$c" ] && [ "$c" = "$t" ] || { echo "node D's copy of shard $k differs from node ${node^^}'s" >&2; exit 3; }
         echo "shard $k: $(wc -l <<< "$t") files copied node ${node^^} -> node D, SHA-256 lists equal"
       done
-      onb "$XFER root@$addr 'cd $R/runs/$ARM && tar -cf - launcher-run-only-*.json' | \
+      onb "$from 'cd $R/runs/$ARM && tar -cf - launcher-run-only-*.json' | \
         $XFER root@${D#*@} 'tar -C $R/runs/$ARM --keep-old-files -xf -'"
       echo "node ${node^^} launcher records copied"
     done
-    [ $found = 1 ] || { echo "neither node C nor node E ran a shard of $ARM" >&2; exit 3; } ;;
+    [ $found = 1 ] || { echo "no node besides node D ran a shard of $ARM" >&2; exit 3; } ;;
   score)
     has_mirror d
     ond "for k in 0 1 2 3 4 5 6 7; do test \"\$(cat $R/runs/$ARM/shard-\$k/exit_code 2>/dev/null)\" = 0 || exit 1; done" ||
@@ -329,8 +362,8 @@ print(json.dumps({k: r[k] for k in ("rows", "statuses", "gpu_hours", "results_sh
 EOF
     echo "private outputs in $LOCAL (never copy a value into a commit, record, gist or card)" ;;
   release)  # a GPU whose M6 owner was set aside (owner.m6-set-aside-<UTC>, node D GPU0-3) gets that owner back
-    for node in d c e; do
-      case $node in d) gs="0 1 2 3 4 5 6 7" ;; c) gs="1 2 3 4 5 6 7" ;; e) gs="0 1 2 3 6 7" ;; esac
+    for node in d b c e; do
+      case $node in d) gs="0 1 2 3 4 5 6 7" ;; b) gs="0 1 5" ;; c) gs="1 2 3 4 5 6 7" ;; e) gs="0 1 2 3 6 7" ;; esac
       "on$node" "docker ps --format '{{.Names}}' | grep -q '^$TAG'" &&
         { echo "an $ARM Index container is still running on node ${node^^}" >&2; exit 3; }
       "on$node" "for g in $gs; do f=/data/dev2/leases/gpu\$g.lock/owner; grep -q 'IX1 .* $ARM\$' \$f 2>/dev/null || continue; \

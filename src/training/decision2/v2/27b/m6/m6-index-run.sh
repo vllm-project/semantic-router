@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ~27B M6 private Index full run on node C, D or E (node side; m6-index.sh run starts it detached on every node that
+# ~27B M6 private Index full run on node B, C, D or E (node side; m6-index.sh run starts it detached on every node that
 # has shards). The listed shards of IX1's panel-8 with IX1's launch.sh (run --only k) on the listed GPUs of this node:
 # the i-th listed shard runs on GPU number i mod n of the list, the shards of one GPU in turn, each with a copy of
 # A20r's frozen autotune cache (parity/DEV2.0-27B/cache-frozen, as IX1's M5-L128 diagnostic). Shards that run on the
@@ -10,7 +10,7 @@
 # Usage: m6-index-run.sh MIRROR_SHA ARM NODE SHARDS GPU...
 #   NODE    d (GPU0-7: GPU4-7 shared Index GPUs, GPU0-3 M6's own leases once its seeds ended) or c (GPU1-7; GPU0 is a
 #           K8s pod and never used) or e (GPU0-3, GPU6-7: COORDINATION 12:30's eval fast lane; GPU4-5 hold external
-#           vLLM servers and are never used)
+#           vLLM servers and are never used) or b (GPU0, 1, 5: 27B's own training leases, COORDINATION 12:30 / 12:40)
 #   SHARDS  comma-separated shard indices 0-7 that this node runs, e.g. 0,1,2,3
 # M6_INDEX_DRY=1 prints the shard -> GPU plan and exits before touching the node.
 set -euo pipefail
@@ -23,7 +23,8 @@ case "$NODE" in
   d) ALLOWED='^[0-7]$' ;;
   c) ALLOWED='^[1-7]$' ;;
   e) ALLOWED='^[0-367]$' ;;
-  *) echo "NODE must be c, d or e, not $NODE" >&2; exit 2 ;;
+  b) ALLOWED='^[015]$' ;;
+  *) echo "NODE must be b, c, d or e, not $NODE" >&2; exit 2 ;;
 esac
 [[ "$SHARDS" =~ ^[0-7](,[0-7]){0,7}$ ]] || { echo "SHARDS: comma-separated shard indices 0-7, not '$SHARDS'" >&2; exit 2; }
 IFS=, read -r -a SHARD_LIST <<< "$SHARDS"

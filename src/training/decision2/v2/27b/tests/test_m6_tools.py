@@ -908,7 +908,8 @@ class M6ScriptTest(unittest.TestCase):
 
     def test_index_run_node_checks(self):
         for args, message in (
-            (["f", "0", "4"], "NODE must be c, d or e"),
+            (["f", "0", "4"], "NODE must be b, c, d or e"),
+            (["b", "0", "2"], "node b: GPU 2 is not allowed"),
             (["e", "0", "4"], "node e: GPU 4 is not allowed"),
             (["e", "0", "5"], "node e: GPU 5 is not allowed"),
             (["d", "0,8", "4"], "SHARDS"),
@@ -992,6 +993,12 @@ class M6ScriptTest(unittest.TestCase):
         lines = out.stdout.splitlines()
         self.assertEqual(lines[0], "node e: shards 2,3,4,5,6,7 on GPU 0 1 2 3 6 7")
         self.assertIn('  launch.sh --gpus "9 9 0 1 2 3 6 7"', lines)
+        out = self.index_plan("b0 b1 b5 d0 d1", shards="2 3 4 5 6 7")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        lines = out.stdout.splitlines()
+        self.assertIn("node d: shards 5,6 on GPU 0 1", lines)
+        self.assertIn("node b: shards 2,3,4,7 on GPU 0 1 5", lines)
+        self.assertIn('  launch.sh --gpus "9 9 0 1 5 9 9 0"', lines)
         for shards, message in (
             ("2 8", "not '8'"),
             ("2 2", "lists 2 twice"),
@@ -1003,6 +1010,7 @@ class M6ScriptTest(unittest.TestCase):
                 self.assertIn(message, out.stderr)
         for gpus, message in (
             ("e4", "not 'e4'"),
+            ("b2", "not 'b2'"),
             ("e5", "not 'e5'"),
             ("c0", "not 'c0'"),
             ("d8", "not 'd8'"),
