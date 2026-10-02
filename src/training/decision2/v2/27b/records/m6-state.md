@@ -32,6 +32,30 @@ No M6 worker was active; the detached chains, relays, watchers and the guard kep
 - Nothing failed; no stage needed a rerun. Node D GPU4–7 owner files were gone at 20:26–20:27Z (not M6's doing);
   node C GPU1–7 hold the M16 Index worker's `track=eval-ix1` owners (its runs ended 20:35–21:03Z; idle).
 
+## Rule change at 01:55Z: Index-first (amendment 7, `7ad871bac`) — supersedes the hand-off lists below
+
+- **COORDINATION 09:55 (user decision):** the release gate is the private Index delta vs the current release with a
+  95% lower bound > 0, plus integrity checks:
+  - exact parity and Hub checks;
+  - the contamination audit;
+  - no type collapsed on formal typed FINAL.
+
+  Items 1–8, v3, human transfer, mlx-diag / MLX-DEV2 and public 231 become references. **C1 item 8 is not run.**
+  Selection goes to the largest lower bound.
+- **COORDINATION 10:00:** this track (355ad916) owns 27B's Index-first sweep.
+- **COORDINATION 10:35:** card worker fb5dd490 publishes a banner-A card-only revision of Vega-27B now, because no
+  27B release is imminent. **Re-read Vega's `main` right before any upload.**
+- **27B pool (fixed in amendment 7):**
+  - M6-IB (running);
+  - M6-IB2;
+  - M6-IB2PN;
+  - M5-L128 (an existing IX1 run; only a CPU bootstrap is new);
+  - M6-IBX last, if the ≤ 40 GPU-h allowance still covers it.
+- **Tool:** `python3 -m v2.27b.m6.m6_index_first --boot NAME=<private>/paired-boot-vs-a20r.json ... --types
+  NAME=<gates>/<NAME>/types.json ... --family-delta ... --public <record>.json --private
+  ~/code/decision2-program/private/m6/index-first.json` (`eb072ecb1`). It prints pass / fail, the order and the
+  choice only.
+
 ## Running now (worker 5)
 
 - **M6-IB Index path (amendment 5 (a), amendment 6 order):** `m6-index.sh 764f03321… M6-IB stage` 01:46Z (node D
@@ -347,6 +371,18 @@ including M6-IB2PN's PN1 roots and `mixtures-m6pn-1`; the Index runs go to IX1, 
 
 ## Poll log (newest first)
 
+- 02:40Z (poll 17):
+  - Read COORDINATION 09:55 / 10:00 / 10:35 (the Index-first rule, the 27B sweep, the banner card-only revision) and
+    merged integration (`256c804c7`).
+  - Amendment 7 (`7ad871bac`) and `m6_index_first` (`eb072ecb1`).
+  - M6-IB Index run: 8 / 8 shards writing; node C GPU5–7 run the Index sweep's 2B shards (no collision).
+  - M5-L128 paired bootstrap vs A20r running on node D (CPU, since 02:30:46Z).
+  - M6-IB2 readout running (development gates ≈ 02:57Z).
+  - **Plan:**
+    - M6-IB2's MLX-DEV2 readout on node D GPU0 (M6's idle lease; M6's owner set aside, then restored) once its
+      package is frozen (≈ 03:01Z);
+    - M6-IB collect / score ≈ 03:40Z;
+    - M6-IB2's Index run on d4–d7 + c1–c4 after that.
 - 02:25Z (poll 16):
   - M6-IB: MLX-DEV2 PASS and parity PASS (`d5d505fe8`); Index run on 8 GPUs since 02:11–02:12Z (shards 0 / 1 / 4 / 5
     writing).
