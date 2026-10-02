@@ -18,6 +18,9 @@
 #   pkgcopy NAME FROM NODE  a restaged M10-NAME-bf16 package from node FROM to NODE (SHA-256 lists equal, manifest
 #                          checks repeated)
 #   ckcopy NAME FROM NODE  a shipped FP32 point (ckpt/NAME and its model SHA-256) from node FROM to NODE, for its formal run
+#   runcopy NAME FROM NODE  a finished run's release evidence (merged/receipt.json, merged/kit/index.json, the two
+#                          paired bootstraps) from node FROM to NODE runs/M10-NAME-bf16 (marked IMPORTED), for
+#                          release/.../ops/inputs_m10.sh, which reads node A or C
 #   soupcopy ARM FROM NODE  a built arm soup (soup/ARM/build/ARM) from node FROM to NODE (A <-> B relays through C), for
 #                          m10/xarm.sh's cross-arm points
 #   lease  NODE "GPUS"     owner files of other tracks' released leases -> track=eval-ix1 idle (old file kept)
@@ -148,6 +151,17 @@ case "$STAGE" in
     copy "$FROM" "$MD/9b-m10/ckpt/$NAME" "$N" "$MD/9b-m10/ckpt/$NAME"
     on "$N" "echo $(on "$FROM" "cat $MD/9b-m10/ckpt/$NAME.model_sha256") > $MD/9b-m10/ckpt/$NAME.model_sha256"
     echo "$NAME FP32 point on node $N, model $(on "$N" "cut -c1-12 $MD/9b-m10/ckpt/$NAME.model_sha256")" ;;
+  runcopy)
+    NAME=${1:?NAME} FROM=${2:?FROM} N=${3:?NODE}
+    run=$R/runs/M10-$NAME-bf16 x=$R/m10/export/M10-$NAME-bf16
+    on "$FROM" "test -f $run/paired-boot-full-vs-ref.json && test -f $run/paired-boot-transfer-vs-ref.json" \
+      || { echo "M10-$NAME-bf16 has no bootstraps on node $FROM" >&2; exit 3; }
+    on "$N" "test ! -e $run" || { echo "$run exists on node $N" >&2; exit 3; }
+    on "$FROM" "umask 077; rm -rf $x && mkdir -p $x/merged/kit && cp $run/merged/receipt.json $x/merged/ && \
+      cp $run/merged/kit/index.json $x/merged/kit/ && cp $run/paired-boot-full-vs-ref.json \
+      $run/paired-boot-transfer-vs-ref.json $x/ && echo 'imported from node $FROM' > $x/IMPORTED"
+    copy "$FROM" "$x" "$N" "$run"
+    on "$FROM" "rm -rf $x" ;;
   soupcopy)
     ARM=${1:?ARM} FROM=${2:?FROM} N=${3:?NODE}
     d=$B9/soup/$ARM/build/$ARM

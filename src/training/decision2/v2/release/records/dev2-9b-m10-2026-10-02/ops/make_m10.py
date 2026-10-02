@@ -63,6 +63,9 @@ ARMS = {
     "KIB4": "9B M10 arm KIB4 ("
     + RECIPE
     + " with IB1 sentfin replaced by the IB4 phase-1 families)",
+    "KIB4P": "9B M10 arm KIB4 ("
+    + RECIPE
+    + " with IB1 sentfin replaced by the IB4 phase-1 families) with its third seed (amendment 6)",
     "KX": "9B M10 arm KX ("
     + RECIPE
     + " with IB1 sentfin replaced by the IB4 phase-1 families, plus the IB3-r2 maths rows and one copy of whole "
@@ -84,6 +87,10 @@ CANDS: dict[str, dict] = {
     },
     "KIB4-a40": {
         "fp32": "b6984475a3804714d1018b4ba18c2dc28ffa48d8bc293d26211f620bdd062ee3",
+        "audit_sets": ["KIB4"],
+    },
+    "KIB4P-a33": {
+        "fp32": "526b16867beab0cf9dc07bd431f591771060693b17024da3f4d608791f64be6b",
         "audit_sets": ["KIB4"],
     },
 }
