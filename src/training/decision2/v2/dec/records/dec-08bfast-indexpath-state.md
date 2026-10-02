@@ -7,6 +7,20 @@ Branch `xunzhuo/decision-2-training-dec-08bfast`. Index values stay private (nod
 `/data/dev2/private/eval/index021/ix1/runs/<name>/` and `decision2-program/private/m16-indexpath/`); this file holds
 verdicts, counts and hashes only.
 
+## 2026-10-02 05:05Z — Eos 0.8B released (`3de61185`); 2B choice needs the coordinator
+
+- **Decision-2.0-Eos-0.8B** main = **`3de61185`** (M16 `08b-RA-a75`, BF16 `d9712799…`). Every post-upload check passed;
+  gate evaluate PASS. The superseded weights of `9c7f3ea0` were purged (2.02 GB, `rewrite_history=False`, every
+  check true; headroom 47.45 GB). The 9B purge script was pinned to Lux-9B, so `ops/purge_superseded.py` takes
+  Eos / Sol (`74cc2d9de`). The purge was run with `release_ixf.sh`'s own arguments.
+- **2B `2b-RA-a75` BF16 run done** (node A GPU0 / GPU6, 120,224 `ok` + 2 `unsupported`, scorer gate PASS, 1.20
+  GPU-h). GPU6 was released and the GPU0 co-tenant entry removed. The run was pulled to node C, and its bootstraps
+  are running.
+- **2B candidates by lower bound (values private):** `IS-2b-RAUP` > `2b-RA-a75` > `IS-2b-RA`. `IS-2b-RASD` is merged
+  and its bootstrap is pending; its point delta is the highest. Neither RAUP nor RASD has a formal run
+  (typed-FINAL for R3, and the sealed predictions the release parity needs). The formal library runs on node B
+  GPU3 / GPU4, both held by 9B M10. Sol main is `8ed41433` (card-only over `b42b6ff3`).
+
 ## 2026-10-02 04:42Z — 0.8B release running; 2B pick moves to `2b-RAUP`, whose formal collection is blocked
 
 - **0.8B:** BF16-run bootstraps (full + transfer-only, 2,000 replicates) done; lower bound > 0 (private). The BF16

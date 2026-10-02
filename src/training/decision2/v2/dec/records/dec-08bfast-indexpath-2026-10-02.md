@@ -100,4 +100,29 @@ candidates and compares them against these releases.
 
 ## 6. Releases
 
-RELEASE-SECTION
+Coordinator directive 11:40 UTC+8: one direct release per tier of the highest-scoring candidate; no reference-only
+evals (v3, C1, human transfer, mlx-diag) are run for it.
+
+### Decision-2.0-Eos-0.8B: M16 `08b-RA-a75`, revision `3de61185ade42cc307c26a6062df4baac327eac5`
+
+- **Weights:** `v2.release.bf16_copy` of the FP32 point `fee82408…`, identity `d9712799…` (receipt `d1f51ee0…`).
+- **Index evidence:** the private Index ran on exactly these weights (node A, panel-3, 120,224 `ok` + 2
+  `unsupported`, scorer gate PASS). Paired bootstraps vs the current release (full panel and transfer-only, 2,000
+  replicates): lower bound > 0. Values are private.
+- **Integrity checks:**
+  - types OK (no collapsed type);
+  - RA TRAIN contamination audit `12bd63d8` (planted control 200 / 200);
+  - exact package parity of typed-final 1,600, css15 6,547 and public231 231, before and after the real download,
+    plus AutoModel against the native runtime;
+  - Hub `trust_remote_code` smoke (Transformers 5.18 site `93df9002…`);
+  - verify_bundle, revision diff, collection order, card HTTP and links;
+  - gate evaluate PASS (`index-first`).
+- **Card:** default generator (`v2.release.card_index`, audited footnote, Index input `42055aca…`), banner A, assets
+  receipt `980fe5c6…`. Spec `dev2-0p8b-ixf.json`; decision `Decision-2.0-Eos-0.8B.decision.ixf.json`.
+- **Purge:** the superseded weights of `9c7f3ea0` (2.02 GB) were deleted with `rewrite_history=False` after
+  `hf_headroom.sh`. Commits and refs are unchanged, the old weights are no longer served and main is still served.
+  Headroom is 47.45 GB; the node copy `inputs/dev2-0p8b-bf16/checkpoint` stays.
+
+### Decision-2.0-Sol-2B
+
+Pending (see the state file).
