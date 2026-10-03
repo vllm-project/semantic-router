@@ -9,7 +9,7 @@ cd "${REPO_ROOT}"
 
 ROUTER_BIN=${RISCV_ROUTER_BIN:?}
 QEMU=${RISCV_QEMU:?}
-RUNTIME=${VLLM_SR_RUNTIME_COMMAND:-vllm-sr-runtime}
+read -r -a RUNTIME <<<"${VLLM_SR_RUNTIME_COMMAND:-vllm-sr-runtime}"
 REPORT_DIR=${MODEL_TEST_REPORT_DIR:?}
 RUNTIME_PORT=${RISCV_RUNTIME_PORT:-18100}
 API_PORT=${RISCV_ROUTER_API_PORT:-18080}
@@ -57,8 +57,8 @@ wait_http() {
 }
 
 # A tiny random-weight Domain classifier, served on the host CPU.
-"${RUNTIME}" fixture "${work}/domain" --family task_heads --variant sequence
-"${RUNTIME}" serve "${work}/domain" --served-model-name "${DEPLOYMENT}" --device cpu \
+"${RUNTIME[@]}" fixture "${work}/domain" --family task_heads --variant sequence
+"${RUNTIME[@]}" serve "${work}/domain" --served-model-name "${DEPLOYMENT}" --device cpu \
   --host 127.0.0.1 --port "${RUNTIME_PORT}" >"${REPORT_DIR}/runtime.log" 2>&1 &
 pids+=("$!")
 wait_http runtime-health "${RUNTIME_URL}/health" 300 "${pids[0]}"
