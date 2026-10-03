@@ -1,0 +1,567 @@
+"""Legacy comparison for embedders and rerankers: the router's native facade vs the runtime.
+
+The legacy side runs the router's native facade (``pkg/modelruntime/native``
+at the legacy commit) with candle on the CPU, the router's CPU default, in a
+Go test written into a copy of that commit's tree with its built bindings (the
+setup of ``tools/legacy_parity.py``). The runtime side serves the same
+packages in-process through ``Runtime.call`` with its result cache off. Both
+answer one request at a time (one text per embedding call, a query with its
+documents per rerank call), repeated, on the same inputs; ``--concurrency``
+adds a timed closed-loop load on both.
+
+    python3 tools/embed_legacy.py legacy --tree TREE --cache HF --flat DIR --out legacy.jsonl
+    python3 tools/embed_legacy.py runtime --cache HF --out runtime.jsonl [--device rocm:0]
+    python3 tools/embed_legacy.py compare --legacy legacy.jsonl --runtime runtime.jsonl --out record.json
+
+``legacy`` needs only the standard library (the runner image has a bare
+Python); ``compare`` needs NumPy.
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import os
+import subprocess
+import sys
+import threading
+import time
+from collections.abc import Iterable
+from pathlib import Path
+from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from embed_corpus import RERANK, texts
+from legacy_parity import REPO, flat_copy, percentile, read_lines
+
+GO_TEST = "zz_legacy_embed_dump_test.go"
+EMBEDDING = (
+    "vllm-sr/Vela-1.0-Encoder-307M-Embedding",
+    "1e57cebf5a7b7fec6e6973f05bbca97c5cca4436",
+)
+RERANKER = (
+    "vllm-sr/Vela-1.0-Encoder-307M-Reranker",
+    "a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf",
+)
+QWEN3 = ("Qwen/Qwen3-Embedding-0.6B", "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3")
+# job: (repo, revision), mode, legacy adapter, (dimension, layer); 0 is the model's default
+JOBS: dict[str, tuple[tuple[str, str], str, str, tuple[int, int]]] = {
+    "embedding": (EMBEDDING, "embedding", "mmbert", (0, 0)),
+    "embedding_d256": (EMBEDDING, "embedding", "mmbert", (256, 0)),
+    "embedding_l11": (EMBEDDING, "embedding", "mmbert", (0, 11)),
+    "rerank": (RERANKER, "rerank", "vela_reranker", (768, 22)),
+    "rerank_l6d256": (RERANKER, "rerank", "vela_reranker", (256, 6)),
+    "qwen3": (QWEN3, "embedding", "qwen3", (0, 0)),
+}
+MAX_TOKENS = 8192
+CPU_THRESHOLDS = {"min_cosine": 0.99999, "max_logit_delta": 1e-3}
+ROCM_THRESHOLDS = {"min_cosine": 0.9995, "max_logit_delta": 2e-2}
+
+GO_TEMPLATE = r"""//go:build !windows && cgo
+
+package native
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+)
+
+type embedDumpInput struct {
+	ID        string   `json:"id"`
+	Text      string   `json:"text"`
+	Query     string   `json:"query"`
+	Documents []string `json:"documents"`
+}
+
+type embedDumpJob struct {
+	Job, Path, Revision, Mode, Adapter string
+	MaxTokens, Dimension, Layer        int
+	Inputs                             []embedDumpInput
+	Repeats, Concurrency               int
+	Seconds                            float64
+}
+
+type embedDumpLine struct {
+	Job       string          `json:"job"`
+	ID        string          `json:"id"`
+	Result    json.RawMessage `json:"result,omitempty"`
+	Error     string          `json:"error,omitempty"`
+	LatencyNS []int64         `json:"latency_ns,omitempty"`
+}
+
+type embedDumpLoad struct {
+	Job         string  `json:"job"`
+	Concurrency int     `json:"concurrency"`
+	Calls       int     `json:"calls"`
+	Seconds     float64 `json:"seconds"`
+	LatencyNS   []int64 `json:"latency_ns"`
+}
+
+type embedDumpCall func(context.Context, embedDumpInput) (any, error)
+
+func TestLegacyEmbedDump(t *testing.T) {
+	raw, err := os.ReadFile(os.Getenv("LEGACY_EMBED_JOBS"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var jobs []embedDumpJob
+	if err := json.Unmarshal(raw, &jobs); err != nil {
+		t.Fatal(err)
+	}
+	out, err := os.Create(os.Getenv("LEGACY_EMBED_OUT"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer out.Close()
+	encoder := json.NewEncoder(out)
+	runtime := New(nil)
+	ctx := context.Background()
+	for _, job := range jobs {
+		call, closeTask := embedDumpTask(t, runtime, job)
+		for range 3 {
+			_, _ = call(ctx, job.Inputs[0])
+		}
+		for _, input := range job.Inputs {
+			line := embedDumpLine{Job: job.Job, ID: input.ID}
+			for repeat := 0; repeat < max(job.Repeats, 1); repeat++ {
+				start := time.Now()
+				result, callErr := call(ctx, input)
+				line.LatencyNS = append(line.LatencyNS, time.Since(start).Nanoseconds())
+				if repeat > 0 {
+					continue
+				}
+				if callErr != nil {
+					line.Error = callErr.Error()
+				} else if line.Result, err = json.Marshal(result); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := encoder.Encode(line); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if job.Concurrency > 0 {
+			if err := encoder.Encode(embedDumpLoadRun(ctx, job, call)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		closeTask()
+	}
+}
+
+func embedDumpLoadRun(ctx context.Context, job embedDumpJob, call embedDumpCall) embedDumpLoad {
+	deadline := time.Now().Add(time.Duration(job.Seconds * float64(time.Second)))
+	var mutex sync.Mutex
+	var wait sync.WaitGroup
+	report := embedDumpLoad{Job: job.Job, Concurrency: job.Concurrency}
+	start := time.Now()
+	for worker := range job.Concurrency {
+		wait.Add(1)
+		go func(worker int) {
+			defer wait.Done()
+			for index := worker; time.Now().Before(deadline); index += job.Concurrency {
+				began := time.Now()
+				_, _ = call(ctx, job.Inputs[index%len(job.Inputs)])
+				elapsed := time.Since(began).Nanoseconds()
+				mutex.Lock()
+				report.Calls++
+				report.LatencyNS = append(report.LatencyNS, elapsed)
+				mutex.Unlock()
+			}
+		}(worker)
+	}
+	wait.Wait()
+	report.Seconds = time.Since(start).Seconds()
+	return report
+}
+
+func embedDumpSpec(job embedDumpJob, contract, overflow string) config.ResolvedModelBinding {
+	return config.ResolvedModelBinding{
+		Recipe: "parity", Name: job.Job,
+		Binding: config.ModelBinding{Deployment: job.Job, Adapter: job.Adapter, Contract: contract},
+		Deployment: config.ModelDeployment{
+			Artifact: job.Path, Revision: job.Revision, Provider: "candle", Device: "cpu", Precision: "native",
+			Input: config.ModelInputBudget{MaxTokens: job.MaxTokens, Overflow: overflow},
+		},
+	}
+}
+
+func embedDumpTask(t *testing.T, runtime *Runtime, job embedDumpJob) (embedDumpCall, func()) {
+	ctx := context.Background()
+	switch job.Mode {
+	case "embedding":
+		provider, err := runtime.Embedding(ctx, embedDumpSpec(job, "", "truncate"), job.Dimension, job.Layer)
+		if err != nil {
+			t.Fatal(err)
+		}
+		options := embedding.Options{Dimension: job.Dimension, Layer: job.Layer}
+		return func(ctx context.Context, in embedDumpInput) (any, error) {
+			return provider.EmbedWithOptions(ctx, in.Text, options)
+		}, func() { _ = provider.Close() }
+	case "rerank":
+		spec := embedDumpSpec(job, config.RelevanceScoresContract, "reject")
+		spec.Binding.PairScorer = &config.PairScorerSelection{Layer: job.Layer, Dimension: job.Dimension}
+		scorer, err := runtime.Relevance(ctx, spec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return func(ctx context.Context, in embedDumpInput) (any, error) {
+			pairs := make([]tasks.QueryDocument, len(in.Documents))
+			for i, document := range in.Documents {
+				pairs[i] = tasks.QueryDocument{Query: in.Query, Document: document}
+			}
+			return scorer.ScorePairs(ctx, "parity", pairs)
+		}, func() { _ = scorer.Close() }
+	}
+	t.Fatalf("unknown mode %q", job.Mode)
+	return nil, nil
+}
+"""
+
+
+def snapshot(cache: Path, repo: str, revision: str) -> Path:
+    path = cache / f"models--{repo.replace('/', '--')}" / "snapshots" / revision
+    if not (path / "config.json").is_file():
+        raise SystemExit(f"{repo}@{revision} is not in {cache}")
+    return path
+
+
+def job_specs(args: argparse.Namespace) -> list[dict[str, Any]]:
+    corpus = [{"id": f"t{i}", "text": text} for i, text in enumerate(texts())]
+    sets = [
+        {"id": f"q{i}", "query": query, "documents": list(documents)}
+        for i, (query, documents) in enumerate(RERANK)
+    ]
+    specs = []
+    for job in args.jobs.split(",") if args.jobs else JOBS:
+        (repo, revision), mode, adapter, (dimension, layer) = JOBS[job]
+        path = snapshot(Path(args.cache), repo, revision)
+        if getattr(args, "flat", None):
+            name = f"{repo.split('/')[-1]}-{revision[:12]}"
+            path = flat_copy(path, Path(args.flat) / name)
+        inputs = corpus if mode == "embedding" else sets
+        specs.append(
+            {
+                "Job": job,
+                "Repo": repo,
+                "Path": str(path),
+                "Revision": revision,
+                "Mode": mode,
+                "Adapter": adapter,
+                "MaxTokens": MAX_TOKENS,
+                "Dimension": dimension,
+                "Layer": layer,
+                "Inputs": inputs[: args.limit] if args.limit else inputs,
+                "Repeats": args.repeats,
+                "Concurrency": args.concurrency,
+                "Seconds": args.seconds,
+            }
+        )
+    return specs
+
+
+def run_legacy(args: argparse.Namespace) -> None:
+    """Write the dump test into the legacy tree and run it with the built bindings."""
+    tree = Path(args.tree)
+    package = tree / "src" / "semantic-router" / "pkg" / "modelruntime" / "native"
+    (package / GO_TEST).write_text(GO_TEMPLATE, encoding="utf-8")
+    jobs = Path(args.out).with_suffix(".jobs.json")
+    jobs.write_text(json.dumps(job_specs(args)), encoding="utf-8")
+    libraries = [
+        tree / name / "target" / "release"
+        for name in ("candle-binding", "ml-binding", "nlp-binding", "onnx-binding")
+    ]
+    env = {
+        **os.environ,
+        "CGO_ENABLED": "1",
+        "CGO_CFLAGS": f"-I{tree / 'candle-binding'}",
+        "CGO_LDFLAGS": " ".join(f"-L{p}" for p in libraries)
+        + " -lcandle_semantic_router -lml_semantic_router -lnlp_binding",
+        "LD_LIBRARY_PATH": ":".join(
+            [*(str(p) for p in libraries), os.environ.get("LD_LIBRARY_PATH", "")]
+        ),
+        "LEGACY_EMBED_JOBS": str(jobs),
+        "LEGACY_EMBED_OUT": str(Path(args.out).resolve()),
+    }
+    command = ["go", "test", "-count=1", "-timeout", "6h"]
+    command += ["-run", "^TestLegacyEmbedDump$", "./pkg/modelruntime/native/"]
+    subprocess.run(command, cwd=tree / "src" / "semantic-router", env=env, check=True)
+
+
+def runtime_request(
+    spec: dict[str, Any], item: dict[str, Any], model: str
+) -> tuple[str, dict[str, Any]]:
+    """The surface and body of one legacy call's equivalent."""
+    if spec["Mode"] == "rerank":
+        body = {
+            "model": model,
+            "query": item["query"],
+            "documents": item["documents"],
+            "layer": spec["Layer"],
+            "dimensions": spec["Dimension"],
+        }
+        return "rerank", body
+    body = {
+        "model": model,
+        "input": item["text"],
+        "options": {"max_tokens": spec["MaxTokens"], "overflow": "truncate"},
+    }
+    if spec["Dimension"]:
+        body["dimensions"] = spec["Dimension"]
+    if spec["Layer"]:
+        body["layer"] = spec["Layer"]
+    return "embeddings", body
+
+
+def runtime_result(spec: dict[str, Any], out: dict[str, Any]) -> Any:
+    if spec["Mode"] == "rerank":
+        by_index = {r["index"]: r["logit"] for r in out["results"]}
+        return [by_index[i] for i in range(len(by_index))]
+    return out["data"][0]["embedding"]
+
+
+def run_runtime(args: argparse.Namespace) -> None:
+    sys.path.insert(0, str(REPO / "src" / "model-runtime"))
+    from vllm_sr_runtime.config import ModelConfig, ServeConfig
+    from vllm_sr_runtime.runtime import Runtime
+
+    specs = job_specs(args)
+    names = {spec["Repo"]: spec["Repo"].split("/")[-1] for spec in specs}
+    models = tuple(
+        ModelConfig(model=repo, name=name, device=args.device, profile=args.profile)
+        for repo, name in names.items()
+    )
+    runtime = Runtime(
+        ServeConfig(
+            models=models,
+            threads=args.threads,
+            result_cache_entries=0,
+            cache_dir=args.cache,
+            offline=True,
+        )
+    )
+    runtime.start(background=False)
+    loop = asyncio.new_event_loop()
+
+    def call(spec: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
+        surface, body = runtime_request(spec, item, names[spec["Repo"]])
+        status, out = loop.run_until_complete(runtime.call(surface, body))
+        if status != 200:
+            raise RuntimeError(json.dumps(out))
+        return out
+
+    with open(args.out, "w", encoding="utf-8") as stream:
+        for spec in specs:
+            for _ in range(3):
+                call(spec, spec["Inputs"][0])
+            for item in spec["Inputs"]:
+                line: dict[str, Any] = {
+                    "job": spec["Job"],
+                    "id": item["id"],
+                    "latency_ns": [],
+                }
+                for repeat in range(max(args.repeats, 1)):
+                    start = time.perf_counter_ns()
+                    out = call(spec, item)
+                    line["latency_ns"].append(time.perf_counter_ns() - start)
+                    if repeat == 0:
+                        line["result"] = runtime_result(spec, out)
+                stream.write(json.dumps(line) + "\n")
+            if args.concurrency:
+                load = runtime_load(runtime, spec, names[spec["Repo"]], args)
+                stream.write(json.dumps(load) + "\n")
+    loop.close()
+    runtime.stop()
+
+
+def runtime_load(
+    runtime: Any, spec: dict[str, Any], model: str, args: argparse.Namespace
+) -> dict[str, Any]:
+    """The legacy load's closed loop: ``concurrency`` callers for ``seconds``."""
+    deadline = time.monotonic() + args.seconds
+    latencies: list[int] = []
+    lock = threading.Lock()
+
+    def worker(index: int) -> None:
+        loop = asyncio.new_event_loop()
+        position = index
+        while time.monotonic() < deadline:
+            item = spec["Inputs"][position % len(spec["Inputs"])]
+            surface, body = runtime_request(spec, item, model)
+            start = time.perf_counter_ns()
+            loop.run_until_complete(runtime.call(surface, body))
+            with lock:
+                latencies.append(time.perf_counter_ns() - start)
+            position += args.concurrency
+        loop.close()
+
+    began = time.monotonic()
+    threads = [
+        threading.Thread(target=worker, args=(i,)) for i in range(args.concurrency)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    return {
+        "job": spec["Job"],
+        "concurrency": args.concurrency,
+        "calls": len(latencies),
+        "seconds": time.monotonic() - began,
+        "latency_ns": latencies,
+    }
+
+
+def latency(lines: Iterable[dict[str, Any]]) -> dict[str, float]:
+    values = [ns for line in lines for ns in line["latency_ns"]]
+    return {"p50_ms": percentile(values, 0.5), "p95_ms": percentile(values, 0.95)}
+
+
+def load_summary(load: dict[str, Any] | None) -> dict[str, float] | None:
+    if load is None:
+        return None
+    return {
+        "concurrency": load["concurrency"],
+        "per_s": load["calls"] / load["seconds"],
+        "p50_ms": percentile(load["latency_ns"], 0.5),
+        "p95_ms": percentile(load["latency_ns"], 0.95),
+    }
+
+
+def order(logits: list[float]) -> list[int]:
+    return sorted(range(len(logits)), key=lambda i: (-logits[i], i))
+
+
+def compare_job(
+    job: str,
+    legacy: dict[str, dict],
+    runtime: dict[str, dict],
+    thresholds: dict[str, float],
+) -> dict[str, Any]:
+    """Values (cosine or logits and order), latency and load of one job."""
+    import numpy as np
+
+    errors = sorted(
+        i for i in legacy if ("error" in legacy[i]) != ("error" in runtime[i])
+    )
+    shared = [i for i in legacy if "result" in legacy[i] and "result" in runtime[i]]
+    if JOBS[job][1] == "rerank":
+        deltas, identical = [], 0
+        for i in shared:
+            old = [float(v) for v in legacy[i]["result"]["Scores"]]
+            new = runtime[i]["result"]
+            deltas.append(float(np.abs(np.subtract(old, new)).max()))
+            identical += order(old) == order(new)
+        values = {
+            "max_logit_delta": max(deltas),
+            "identical_order": f"{identical}/{len(shared)}",
+        }
+        passed = values["max_logit_delta"] <= thresholds["max_logit_delta"]
+    else:
+        cosines, deltas = [], []
+        for i in shared:
+            old = np.asarray(legacy[i]["result"], dtype=np.float64)
+            new = np.asarray(runtime[i]["result"], dtype=np.float64)
+            cosines.append(
+                float(old @ new / (np.linalg.norm(old) * np.linalg.norm(new)))
+            )
+            deltas.append(float(np.abs(old - new).max()))
+        values = {"min_cosine": min(cosines), "max_abs": max(deltas)}
+        passed = values["min_cosine"] >= thresholds["min_cosine"]
+    old_latency = latency(legacy.values())
+    new_latency = latency(runtime.values())
+    return {
+        "inputs": len(legacy),
+        "error_mismatches": errors,
+        **values,
+        "parity_passed": bool(passed and not errors),
+        "legacy": old_latency,
+        "runtime": new_latency,
+        "latency_passed": all(new_latency[k] <= old_latency[k] for k in new_latency),
+    }
+
+
+def run_compare(args: argparse.Namespace) -> None:
+    legacy, legacy_loads = read_lines(args.legacy)
+    runtime, runtime_loads = read_lines(args.runtime)
+    thresholds = CPU_THRESHOLDS if args.device_class == "cpu" else ROCM_THRESHOLDS
+    jobs: dict[str, Any] = {}
+    for job in dict.fromkeys(job for job, _ in legacy):
+        old = {i: line for (j, i), line in legacy.items() if j == job}
+        new = {i: line for (j, i), line in runtime.items() if j == job}
+        record = compare_job(job, old, new, thresholds)
+        loads = (
+            load_summary(legacy_loads.get(job)),
+            load_summary(runtime_loads.get(job)),
+        )
+        if all(loads):
+            record["load"] = {"legacy": loads[0], "runtime": loads[1]}
+            record["throughput_passed"] = loads[1]["per_s"] >= loads[0]["per_s"]
+        jobs[job] = record
+    result = {
+        "legacy": "router native facade, candle on the CPU (one call per text, per query)",
+        "device_class": args.device_class,
+        "thresholds": thresholds,
+        "jobs": jobs,
+        "passed": all(
+            r["parity_passed"]
+            and r["latency_passed"]
+            and r.get("throughput_passed", True)
+            for r in jobs.values()
+        ),
+    }
+    Path(args.out).write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    print(
+        json.dumps(
+            {
+                job: {k: v for k, v in r.items() if k.endswith("passed")}
+                for job, r in jobs.items()
+            }
+        )
+    )
+
+
+def main(argv: Iterable[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    commands = parser.add_subparsers(dest="command", required=True)
+    legacy = commands.add_parser("legacy", help="run the jobs on the legacy facade")
+    legacy.add_argument("--tree", required=True)
+    legacy.add_argument("--flat", default=None)
+    runtime = commands.add_parser("runtime", help="run the jobs on the runtime")
+    runtime.add_argument("--device", default="cpu")
+    runtime.add_argument("--profile", default="exact")
+    runtime.add_argument("--threads", type=int, default=None)
+    for sub in (legacy, runtime):
+        sub.add_argument("--cache", required=True)
+        sub.add_argument("--out", required=True)
+        sub.add_argument("--jobs", default="")
+        sub.add_argument("--limit", type=int, default=0)
+        sub.add_argument("--repeats", type=int, default=5)
+        sub.add_argument("--concurrency", type=int, default=0)
+        sub.add_argument("--seconds", type=float, default=20.0)
+    compare = commands.add_parser("compare", help="write the comparison record")
+    compare.add_argument("--legacy", required=True)
+    compare.add_argument("--runtime", required=True)
+    compare.add_argument("--out", required=True)
+    compare.add_argument("--device-class", choices=("cpu", "rocm"), default="cpu")
+    args = parser.parse_args(argv)
+    {"legacy": run_legacy, "runtime": run_runtime, "compare": run_compare}[
+        args.command
+    ](args)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
