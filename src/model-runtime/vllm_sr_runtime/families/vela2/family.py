@@ -39,8 +39,6 @@ from .package import DECODER, ENCODER, Vela2Package, member_of, verify
 from .request import MAX_LEVELS, MAX_OPTIONS, MIN_LEVELS, Plan, QuestionReader
 
 QUESTION_TYPES = ("choice", "noul", "score", "set", "span")
-# The packages' own batching budgets (padded tokens per forward).
-ENCODER_TOKEN_BUDGET = {"cpu": 16_384, "gpu": 32_768}
 TOKEN_CACHE = 8192
 LICENCES = {
     ENCODER: {
@@ -285,11 +283,8 @@ class Vela2Model(LoadedModel):
         )
 
     def forward_token_budget(self) -> int | None:
-        if isinstance(self.member, DecoderMember):
-            return None
-        return ENCODER_TOKEN_BUDGET[
-            "cpu" if self.engine_model.device.type == "cpu" else "gpu"
-        ]
+        """None: the members batch a request's sequences themselves, as the packages do."""
+        return None
 
     def plan(self, state: Any, questions: dict[str, Any]) -> Vela2Plan:
         request = self.reader.read(state, questions)

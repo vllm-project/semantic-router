@@ -30,6 +30,9 @@ from .raw import RawRow
 
 GRAPH_OUTPUTS = ("opt_logits", "span_logits")
 INDEX_INPUTS = ("q_index", "opt_index", "unit_index", "ent_index")
+# The 0.3B engine's batching: padded tokens per forward by device class, and rows per forward.
+ENCODER_BUDGET = {"cpu": 16_384, "gpu": 32_768}
+MAX_ROWS = 32
 
 
 def read_tensors(paths: list[Path], keep: tuple[str, ...]) -> dict[str, torch.Tensor]:
@@ -134,28 +137,53 @@ class EncoderMember:
             indices,
         )
 
+    def batches(self, items: list[EncoderSequence]) -> list[list[int]]:
+        """The packages' batching: by length, greedily under the token budget and 32 rows."""
+        device = "cpu" if self.engine_model.device.type == "cpu" else "gpu"
+        budget = ENCODER_BUDGET[device]
+        groups: list[list[int]] = []
+        current: list[int] = []
+        for index in sorted(range(len(items)), key=lambda i: len(items[i].ids)):
+            width = max(len(items[i].ids) for i in [*current, index])
+            if current and (
+                len(current) + 1 > MAX_ROWS or width * (len(current) + 1) > budget
+            ):
+                groups.append(current)
+                current = []
+            current.append(index)
+        if current:
+            groups.append(current)
+        return groups
+
     def run(self, items: list[EncoderSequence]) -> list[Any]:
-        output, indices = self._encode(items)
-        if self.graph:
-            option_logits, span_logits = (
-                output.outputs[name] for name in GRAPH_OUTPUTS
-            )
-        else:
-            hidden = output.hidden[max(output.hidden)]
-            device = hidden.device
-            with torch.inference_mode():
-                option_logits, span_logits = self.readout(
-                    hidden,
-                    *(
-                        torch.from_numpy(indices[name]).to(device)
-                        for name in INDEX_INPUTS
-                    ),
+        """Each sequence's (option logits, word x label block), batched and padded as the packages do."""
+        results: list[Any] = [None] * len(items)
+        for group in self.batches(items):
+            batch = [items[index] for index in group]
+            output, indices = self._encode(batch)
+            if self.graph:
+                option_logits, span_logits = (
+                    output.outputs[name] for name in GRAPH_OUTPUTS
                 )
-        return split_outputs(
-            items,
-            option_logits.float().cpu().numpy(),
-            span_logits.float().cpu().numpy(),
-        )
+            else:
+                hidden = output.hidden[max(output.hidden)]
+                device = hidden.device
+                with torch.inference_mode():
+                    option_logits, span_logits = self.readout(
+                        hidden,
+                        *(
+                            torch.from_numpy(indices[name]).to(device)
+                            for name in INDEX_INPUTS
+                        ),
+                    )
+            split = split_outputs(
+                batch,
+                option_logits.float().cpu().numpy(),
+                span_logits.float().cpu().numpy(),
+            )
+            for index, value in zip(group, split, strict=True):
+                results[index] = value
+        return results
 
     def combine(
         self,
