@@ -205,6 +205,13 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 11:36 — **Training owners closed after the 11:00 stop.** 4B owner #3 (2d3664f4) and the 9B owner
+  (e28aa509) are final; 27B #7 (07d87124) was already final. Resume steps are in each state file's FINAL section.
+  - **Final released weights:** Kai (2.0 first release), Eos `08b-RA-a75`, Sol `2b-RASDML`, Nox `4b-LRHxALL` (43.77,
+    #1 in class), Lux `KIB4-a40` (46.26) and Vega `M6-IBxIB2-m50` (56.47, global #3).
+  - **Active agents:** Index submission (f38ee089), inference optimization (885d85cc, retargeted to the model
+    runtime), model-runtime lead (54e49843) and film v6.2 (cd96ed4c; final numbers; node B CPU only).
+
 - 2026-10-03 11:27 — **USER DECISION: a built-in decision model runtime inside vllm-sr (Phase 1 = Decision 2.0). All
   inference optimization now lands there.** User decisions (11:14–11:38):
   - **Architecture:** a contract-first, standalone-process Python model runtime with three plugin layers (model
