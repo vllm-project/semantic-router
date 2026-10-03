@@ -190,3 +190,28 @@ def test_judgments_with_no_recorded_dataset_hash_are_refused(
     ).unlink()  # e.g. a checkpoint from before pinning
     code, _ = run(workspace, capsys, "report")
     assert code == 1
+
+
+def test_export_judged_keeps_the_original_label_as_a_second_column(
+    workspace, capsys, monkeypatch
+):
+    judged_workspace(workspace, capsys, monkeypatch)
+    out_path = workspace / "judged_test.jsonl"
+    code, out = run(workspace, capsys, "export-judged", "--out", str(out_path))
+    assert code == 0
+    assert "wrote 6 rows" in out
+    rows = [
+        json.loads(line) for line in out_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert [r["id"] for r in rows] == [0, 1, 2, 3, 4, 5]
+    # row 2 was originally DIFFUSION; "2 D" was judged the same, so nothing moved
+    assert rows[2]["label_name"] == "DIFFUSION"
+    assert rows[2]["judged_label_name"] == "DIFFUSION"
+    # every original field survives untouched beside the judged_* ones
+    for row in rows:
+        assert row["label_name"] == LABELS[row["id"]]
+
+
+def test_export_judged_before_any_judging_is_refused(workspace, capsys):
+    code, out = run(workspace, capsys, "export-judged")
+    assert code == 1 and "no judgments yet" in out

@@ -5,7 +5,7 @@ import random
 import types
 
 import pytest
-from audit_lib import api_judge, human_review, report
+from audit_lib import api_judge, human_review, materialize, report
 from audit_lib.checkpoint import (
     append_records,
     count_judged,
@@ -279,6 +279,44 @@ def test_error_estimate_needs_both_strata():
     review = human_review.estimate_error_rates({2: "AR"}, ORIGINAL, RECORDS)
     assert review.original_error is None
     assert "need at least one" in report.human_lines(review)[-1]
+
+
+# ---------------------------------------------------------------- materialize
+JUDGED_RECORDS = {
+    0: {"label": "AR", "vh": 0, "conf": "H", "tags": []},
+    2: {"label": "AR", "vh": 1, "conf": "M", "tags": ["deliverable_visual"]},
+    5: {"label": "AR", "vh": 0, "conf": "H", "tags": []},
+}
+
+
+def test_judged_rows_keep_the_original_label_as_its_own_column():
+    rows = make_rows(ORIGINAL)
+    out = materialize.judged_dataset_rows(rows, JUDGED_RECORDS)
+    assert [row["id"] for row in out] == [0, 2, 5]
+    row0, row2, row5 = out
+    assert row0["label_name"] == "AR" and row0["judged_label_name"] == "AR"
+    # row 2 was originally BOTH; the judge strictly says AR, with vh set
+    assert row2["label_name"] == "BOTH"
+    assert row2["judged_label_name"] == "AR"
+    assert row2["judged_label_name_inclusive"] == "BOTH"  # inclusive still upgrades it
+    assert row2["judge_vh"] is True and row2["judge_confidence"] == "M"
+    assert row2["judge_tags"] == ["deliverable_visual"]
+    # row 5 is a clean agreement: original and judged match (both AR), no vh
+    assert row5["label_name"] == row5["judged_label_name"] == "AR"
+    assert row5["judge_vh"] is False
+
+
+def test_judged_rows_carry_the_prompt_text_and_the_original_int_label():
+    rows = make_rows(ORIGINAL)
+    out = materialize.judged_dataset_rows(rows, {0: JUDGED_RECORDS[0]})
+    assert out[0]["text"] == "prompt 0"
+    assert out[0]["label"] == rows[0]["label"]
+
+
+def test_judged_rows_export_only_covers_judged_ids(tmp_path):
+    rows = make_rows(ORIGINAL)
+    out = materialize.judged_dataset_rows(rows, JUDGED_RECORDS)
+    assert len(out) == len(JUDGED_RECORDS) != len(rows)
 
 
 # ------------------------------------------------------------------------ report
