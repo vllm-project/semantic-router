@@ -23,7 +23,7 @@ func TestLocalClassifierLoadFailureDoesNotReserveGlobalSlot(t *testing.T) {
 }
 
 func TestLocalClassifierMaintainedCPU(t *testing.T) {
-	path := requireRealModel(t, "CANDLE_GENERIC_CLASSIFIER_MODEL", config.DefaultGlobalConfig().CategoryModel.ModelID)
+	path := requireRealModel(t, "VLLM_SR_DOMAIN_MODEL", config.DefaultGlobalConfig().CategoryModel.ModelID)
 	data, err := os.ReadFile(filepath.Join(path, "config.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -47,7 +47,7 @@ func TestLocalClassifierMaintainedCPU(t *testing.T) {
 	}
 	classifier, err := newLocalLabelClassifier(config.ClassifierSignalRule{
 		Name: "model-compatibility", Type: "local", ModelPath: path, UseCPU: true, Labels: labels,
-	})
+	}, managedModelRuntime(t))
 	if err != nil {
 		t.Fatal(err)
 	}
