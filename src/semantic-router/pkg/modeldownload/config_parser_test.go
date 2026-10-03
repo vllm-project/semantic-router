@@ -11,11 +11,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+// The balance recipe's classifiers are runtime-served; the router downloads
+// only the embedding it runs itself.
 var expectedAMDModelSpecs = []string{
 	"models/Vela-1.0-Encoder-307M-Embedding",
-	"models/Vela-1.0-Encoder-307M-Domain",
-	"models/Vela-1.0-Encoder-307M-FactCheck",
-	"models/Vela-1.0-Encoder-307M-Feedback",
 }
 
 func TestExtractModelPaths(t *testing.T) {
@@ -544,8 +543,6 @@ global:
           use_cpu: false
         detector:
           use_cpu: false
-        explainer:
-          use_cpu: false
       feedback_detector:
         use_cpu: false
 `))
@@ -607,11 +604,14 @@ func TestBuildModelSpecsAcceptsReferenceConfig(t *testing.T) {
 		t.Fatalf("BuildModelSpecs() error = %v", err)
 	}
 
-	assertContainsAllModelSpecs(t, specs,
-		"models/Vela-1.0-Encoder-307M-Embedding",
-		"models/mom-embedding-light",
-		"models/Vela-1.0-Encoder-307M-Modality",
-	)
+	assertContainsAllModelSpecs(t, specs, "models/Vela-1.0-Encoder-307M-Embedding")
+	served := cfg.RuntimeServedModelPaths()
+	for _, spec := range specs {
+		if served[spec.LocalPath] && !spec.FilesOnly {
+			t.Fatalf("router downloads the runtime-served %s: %+v", spec.LocalPath, spec)
+		}
+	}
+	assertRuntimeServed(t, cfg, specs, "models/Vela-1.0-Encoder-307M-Modality")
 }
 
 func TestBuildModelSpecsIncludesAllAMDDeployModels(t *testing.T) {
@@ -678,7 +678,7 @@ func TestBuildModelSpecsSkipsRouterOwnedDefaultsForAgentSmokeConfigs(t *testing.
 	}
 }
 
-func TestBuildModelSpecsDownloadsOnlyVelaDomainForRiscvQemuConfig(t *testing.T) {
+func TestBuildModelSpecsReadsOnlyTheVelaDomainMappingForRiscvQemuConfig(t *testing.T) {
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("failed to resolve RISC-V QEMU config path")
@@ -699,14 +699,16 @@ func TestBuildModelSpecsDownloadsOnlyVelaDomainForRiscvQemuConfig(t *testing.T) 
 	if err != nil {
 		t.Fatalf("BuildModelSpecs() error = %v", err)
 	}
+	// The runtime serves Vela Domain; the router reads only its mapping file.
 	if len(specs) != 1 {
-		t.Fatalf("BuildModelSpecs() returned %d specs, want only Vela Domain: %#v", len(specs), specs)
+		t.Fatalf("BuildModelSpecs() returned %d specs, want only the Vela Domain mapping: %#v", len(specs), specs)
 	}
 	if specs[0].LocalPath != "models/Vela-1.0-Encoder-307M-Domain" ||
 		specs[0].RepoID != "vllm-sr/Vela-1.0-Encoder-307M-Domain" ||
-		specs[0].Revision == "" {
-		t.Fatalf("RISC-V QEMU must download the pinned Vela Domain classifier: %#v", specs[0])
+		specs[0].Revision == "" || !specs[0].FilesOnly {
+		t.Fatalf("RISC-V QEMU must read the Vela Domain mapping at its pinned release: %#v", specs[0])
 	}
+	assertRuntimeServed(t, cfg, specs, "models/Vela-1.0-Encoder-307M-Domain")
 }
 
 func TestBuildModelSpecsDownloadsOnlyVelaEmbeddingForMemoryE2EConfigs(t *testing.T) {

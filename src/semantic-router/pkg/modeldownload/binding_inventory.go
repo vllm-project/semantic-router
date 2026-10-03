@@ -122,45 +122,9 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 	}
 	excludes := candleEmbeddingModelExcludePatterns(&scoped)
 	explicitPaths := map[string]bool{}
-	// Implicit Safety and Hazard modules use the same artifact contract as
-	// their typed owners. Explicit per-rule heads are added below from plan.
-	for _, hazard := range []bool{false, true} {
-		if !scoped.NeedsLocalSafetyHeadForRouting(hazard) {
-			continue
-		}
-		head, contract := scoped.SafetyModels.Safety, config.RemoteClassifierContractLabelDistribution
-		if hazard {
-			head, contract = scoped.SafetyModels.Hazard, config.RemoteClassifierContractLabelScores
-		}
-		provider, device := config.DefaultModelExecution(head.UseCPU)
-		spec := config.ResolvedModelBinding{
-			Recipe:     cfg.RoutingScope,
-			Binding:    config.ModelBinding{Adapter: "modernbert", Contract: contract},
-			Deployment: config.ModelDeployment{Provider: provider, Device: device, Artifact: head.ModelID},
-		}
-		if err := i.addDefaultDeployment(cfg, spec); err != nil {
-			return err
-		}
-		explicitPaths[config.ResolveModelPath(head.ModelID)] = true
-	}
-	// The Halu release ships native weights and a mandatory task policy. Use
-	// its declared provider even when the build's generic default is ORT.
-	if active["hallucination_detector"] {
-		path := config.ResolveModelPath(cfg.HallucinationMitigation.HallucinationModel.ModelID)
-		if model := config.GetModelByPath(path); model != nil && model.DefaultAdapter == "vela_halu" {
-			if _, explicit := plan.Lookup(cfg.RoutingScope, "hallucination_detector"); !explicit {
-				spec := config.ResolvedModelBinding{
-					Recipe: cfg.RoutingScope, Name: "hallucination_detector",
-					Binding:    config.ModelBinding{Adapter: model.DefaultAdapter, Contract: config.RemoteClassifierContractTokenSpans},
-					Deployment: config.ModelDeployment{Provider: model.DefaultProvider, Device: model.DefaultDevice, Artifact: path},
-				}
-				if err := i.addDefaultDeployment(cfg, spec); err != nil {
-					return err
-				}
-				explicitPaths[path] = true
-			}
-		}
-	}
+	// Built-in module models run through implicit model_runtime deployments,
+	// and the runtime downloads them.
+	servedPaths := scoped.RuntimeServedModelPaths()
 	// Catalog adapters may require a different execution format from the build
 	// default. Resolve them identically for inventory and runtime ownership.
 	for model, path := range paths {
@@ -205,9 +169,9 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 		if !ok || !active[name] {
 			continue
 		}
-		if spec.Deployment.Provider == "http" {
+		if spec.Deployment.Provider == "http" || spec.Deployment.IsModelRuntime() {
 			if spec.Binding.MappingPath != "" {
-				if err := i.addFile(spec.Binding.MappingPath, "", ""); err != nil {
+				if err := i.addFile(spec.Binding.MappingPath, spec.Deployment.Artifact, spec.Deployment.Revision); err != nil {
 					return err
 				}
 			}
@@ -223,23 +187,31 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 		explicitPaths[config.ResolveModelPath(explicitEmbedding.Deployment.Artifact)] = true
 	}
 	for _, path := range filterDisabledOptionalModelPaths(&scoped, ExtractModelPaths(&scoped)) {
-		if explicitPaths[config.ResolveModelPath(path)] {
+		if explicitPaths[config.ResolveModelPath(path)] || servedPaths[config.ResolveModelPath(path)] {
 			continue
 		}
 		if err := i.addDefault(ModelSpec{LocalPath: config.ResolveModelPath(path), RequiredFiles: append(slices.Clone(DefaultRequiredFiles), required[path]...), ExcludePatterns: excludes[config.ResolveModelPath(path)]}); err != nil {
 			return err
 		}
 	}
-	mappings := map[string]string{"domain_classifier": cfg.CategoryMappingPath, "pii_classifier": cfg.PIIMappingPath, "prompt_guard": cfg.PromptGuard.JailbreakMappingPath, "feedback_detector": cfg.FeedbackDetector.FeedbackMappingPath}
-	for consumer, path := range mappings {
-		if active[consumer] && path != "" {
-			revision, artifact := "", ""
-			if spec, ok := plan.Lookup(cfg.RoutingScope, consumer); ok {
-				revision, artifact = spec.Deployment.Revision, spec.Deployment.Artifact
-			}
-			if err := i.addFile(path, artifact, revision); err != nil {
-				return err
-			}
+	mappings := []struct{ consumer, path, model string }{
+		{"domain_classifier", cfg.CategoryMappingPath, cfg.CategoryModel.ModelID},
+		{"pii_classifier", cfg.PIIMappingPath, cfg.PIIModel.ModelID},
+		{"prompt_guard", cfg.PromptGuard.JailbreakMappingPath, cfg.PromptGuard.ModelID},
+		{"feedback_detector", cfg.FeedbackDetector.FeedbackMappingPath, cfg.FeedbackDetector.ModelID},
+	}
+	for _, mapping := range mappings {
+		if !active[mapping.consumer] || mapping.path == "" {
+			continue
+		}
+		var err error
+		if spec, ok := plan.Lookup(cfg.RoutingScope, mapping.consumer); ok {
+			err = i.addFile(mapping.path, spec.Deployment.Artifact, spec.Deployment.Revision)
+		} else {
+			err = i.addDefaultFile(mapping.path, mapping.model)
+		}
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -377,10 +349,21 @@ func (i *modelInventory) addFile(path, artifact, revision string) error {
 	if err != nil {
 		return err
 	}
-	if filepath.Clean(root) != filepath.Clean(artifact) {
+	if filepath.Clean(root) != filepath.Clean(artifact) && !config.SameModelRepo(i.registry[root], artifact) {
 		revision = ""
 	}
 	return i.add(ModelSpec{LocalPath: root, Revision: revision, RequiredFiles: []string{file}, FilesOnly: true, CheckONNX: filepath.Ext(file) == ".onnx", Strict: true})
+}
+
+// addDefaultFile adds a companion file of a module's default model at the
+// model's registered release, the revision the model runtime serves.
+func (i *modelInventory) addDefaultFile(path, model string) error {
+	model = config.ResolveModelPath(model)
+	repo, err := i.registeredRepo(model)
+	if err != nil {
+		return err
+	}
+	return i.addFile(path, model, modelRevision(model, repo))
 }
 
 // Defaults choose their registered release; explicit bindings and standalone
