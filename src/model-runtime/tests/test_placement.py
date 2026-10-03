@@ -44,3 +44,8 @@ def test_gpu_devices_report_memory_and_bf16():
     accelerator = ROCmAccelerator() if torch.version.hip else CUDAAccelerator()
     devices = accelerator.devices()
     assert devices and devices[0].total_memory and devices[0].index == 0
+
+
+def test_xpu_and_mps_devices_parse():
+    assert parse_device("xpu:1") == ("xpu", 1)
+    assert parse_device("mps") == ("mps", None)

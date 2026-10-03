@@ -17,9 +17,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..errors import RuntimeServiceError
-from ..plugins.base import Job, LoadedModel, Profile, RenderedItem
+from ..plugins.base import DEADLINE, Job, LoadedModel, Profile
 
-DEADLINE = object()
+__all__ = ["DEADLINE", "Scheduler", "SchedulerLimits"]
 
 
 @dataclass
@@ -53,6 +53,7 @@ class Scheduler:
         self._queued_tokens = 0
         self._lock = threading.Condition()
         self._stopped = False
+        self._groups = 0
         self._failure: BaseException | None = None
         self._thread = threading.Thread(
             target=self._loop, name="vllm-sr-runtime-worker", daemon=True
@@ -81,34 +82,55 @@ class Scheduler:
     # -- submission ----------------------------------------------------------
 
     def submit(
-        self, items: list[RenderedItem], *, deadline: float | None, profile: str
+        self, items: list[Any], *, deadline: float | None, profile: str
     ) -> Future:
+        return self.submit_group([items], deadline=deadline, profile=profile)[0]
+
+    def submit_group(
+        self, item_lists: list[list[Any]], *, deadline: float | None, profile: str
+    ) -> list[Future]:
+        """Queue one job per item list at once, as one group (a bundle's tasks for this model)."""
         if profile not in self.profiles:
             raise RuntimeServiceError(
                 "invalid_request", f"profile {profile!r} is not enabled"
             )
-        future: Future = Future()
-        if not items:
-            future.set_result([])
-            return future
-        tokens = sum(len(item.ids) for item in items)
-        job = Job(
-            items=items, deadline=deadline, enqueued=time.monotonic(), profile=profile
-        )
+        futures: list[Future] = [Future() for _ in item_lists]
+        pending = []
+        tokens = 0
+        enqueued = time.monotonic()
+        with self._lock:
+            self._groups += 1
+            group = self._groups if len(item_lists) > 1 else None
+        for future, items in zip(futures, item_lists, strict=True):
+            if not items:
+                future.set_result([])
+                continue
+            job_tokens = sum(len(item.ids) for item in items)
+            tokens += job_tokens
+            job = Job(
+                items=items,
+                deadline=deadline,
+                enqueued=enqueued,
+                profile=profile,
+                group=group,
+            )
+            pending.append(_Pending(job, future, job_tokens))
+        if not pending:
+            return futures
         with self._lock:
             if self._stopped:
                 raise RuntimeServiceError("not_ready", "the runtime is shutting down")
-            if len(self._queue) >= self.limits.max_queue or (
+            if len(self._queue) + len(pending) > self.limits.max_queue or (
                 self._queue
                 and self._queued_tokens + tokens > self.limits.max_queued_tokens
             ):
                 raise RuntimeServiceError(
                     "overloaded", "the request queue is full; retry later"
                 )
-            self._queue.append(_Pending(job, future, tokens))
+            self._queue.extend(pending)
             self._queued_tokens += tokens
             self._lock.notify()
-        return future
+        return futures
 
     # -- worker --------------------------------------------------------------
 

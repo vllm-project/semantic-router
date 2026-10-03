@@ -10,6 +10,7 @@ must never execute package code.
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 from pathlib import Path
 from typing import Any
@@ -17,8 +18,9 @@ from typing import Any
 import torch
 
 from ..families.decision2 import package as pkg
-from ..families.decision2.readout import CandidateHead
+from ..heads.candidate import CandidateHead
 from ..registry.artifacts import safetensors_elements, sha256_file
+from ..systemone import MAX_OPTIONS
 
 PAD = "<|endoftext|>"
 CORPUS = [
@@ -198,6 +200,30 @@ def save(tensors: dict[str, torch.Tensor], path: Path) -> None:
     )
 
 
+def write_fixture(
+    output: str | Path, *, family: str, variant: str | None = None, seed: int = 0
+) -> Path:
+    """Write a tiny package of ``family``; each family's writer lives in ``testing/<family>.py``.
+
+    A writer module exposes ``write_fixture(output, variant, seed) -> Path``
+    and lists its variants in ``VARIANTS`` (the first is the default).
+    """
+    if family == "decision2":
+        return write_package(output, backbone=variant or "qwen3_5", seed=seed)
+    try:
+        module = importlib.import_module(f"{__package__}.{family}")
+    except ImportError as exc:
+        raise ValueError(f"no fixture writer for the {family!r} family") from exc
+    variants = tuple(getattr(module, "VARIANTS", ()))
+    if variant is not None and variants and variant not in variants:
+        raise ValueError(
+            f"{family} fixtures are {', '.join(variants)}, not {variant!r}"
+        )
+    return module.write_fixture(
+        output, variant or (variants[0] if variants else None), seed
+    )
+
+
 def write_package(
     output: str | Path,
     *,
@@ -224,7 +250,7 @@ def write_package(
         "backbone_model_type": "qwen3" if backbone == "qwen3" else "qwen3_5",
         "prompt_version": pkg.PROMPT_VERSION,
         "head_dim": head_dim,
-        "max_options": pkg.MAX_OPTIONS,
+        "max_options": MAX_OPTIONS,
         "parameter_dtype": "float32",
         "autocast_dtype": "bfloat16",
         "head_compute_dtype": "float32",

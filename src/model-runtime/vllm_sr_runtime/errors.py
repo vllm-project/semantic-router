@@ -1,14 +1,16 @@
 """Error codes shared by the API, the scheduler and model families.
 
 Request-level errors become an HTTP status with ``{"error": {"code",
-"message"}}``. Question-level errors are answers of the form
-``{"type": ..., "error": <code>}`` and never fail sibling questions.
+"message"}}``. Item-level errors (a question, an input, a document) are
+reported in place, for example ``{"type": ..., "error": <code>}``, and never
+fail sibling items.
 """
 
 from __future__ import annotations
 
-# Question-level codes (inside a 200 response).
+# Item-level codes (inside a 200 response).
 INVALID_QUESTION = "invalid_question"
+INVALID_INPUT = "invalid_input"
 MAX_LENGTH_EXCEEDED = "max_length_exceeded"
 INVALID_MODEL_OUTPUT = "invalid_model_output"
 DEADLINE_EXCEEDED = "deadline_exceeded"
@@ -16,17 +18,20 @@ UNAVAILABLE = "unavailable"
 
 QUESTION_ERROR_CODES = (
     INVALID_QUESTION,
+    INVALID_INPUT,
     MAX_LENGTH_EXCEEDED,
     INVALID_MODEL_OUTPUT,
     DEADLINE_EXCEEDED,
     UNAVAILABLE,
 )
+ITEM_ERROR_CODES = QUESTION_ERROR_CODES
 
 # Request-level codes and their HTTP status.
 REQUEST_ERROR_STATUS = {
     "invalid_request": 400,
     "model_not_found": 404,
     "request_too_large": 413,
+    "unsupported_surface": 422,
     "overloaded": 429,
     "internal_error": 500,
     "not_ready": 503,
