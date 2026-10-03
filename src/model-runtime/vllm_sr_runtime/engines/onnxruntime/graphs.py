@@ -1,18 +1,22 @@
 """Facts about an ONNX graph file read from its protobuf without ONNX or ONNX Runtime.
 
 Only the model header is parsed: the custom metadata (``metadata_props``) and
-every initializer's shape and storage, so loading never needs the ``onnx``
-package and external weight files are never read. Graphs exported from one
-checkpoint share an external weight file; their initializers are keyed by
-storage, so a model's parameters count each stored tensor once.
+every initializer's name, type, shape and storage, so loading never needs the
+``onnx`` package. Graphs exported from one checkpoint share an external weight
+file; initializers are keyed by storage, so a model's parameters count each
+stored tensor once, and the engine maps each weight file once and hands its
+tensors to every session (Hugging Face snapshots are links into a blob store,
+which ONNX Runtime's own external-data loader refuses to follow).
 """
 
 from __future__ import annotations
 
 import math
 from collections.abc import Iterable, Iterator
-from dataclasses import dataclass
-from pathlib import Path
+from dataclasses import dataclass, field
+from pathlib import Path, PurePosixPath
+
+import numpy as np
 
 from ...errors import PackageError
 
@@ -21,6 +25,7 @@ _MODEL_GRAPH = 7
 _MODEL_METADATA = 14
 _GRAPH_INITIALIZER = 5
 _TENSOR_DIMS = 1
+_TENSOR_DATA_TYPE = 2
 _TENSOR_NAME = 8
 _TENSOR_EXTERNAL_DATA = 13
 _TENSOR_DATA_LOCATION = 14
@@ -31,14 +36,39 @@ _EXTERNAL = 1
 _VARINT, _FIXED64, _BYTES, _FIXED32 = 0, 1, 2, 5
 _MAX_GRAPH_BYTES = 2 << 30
 _MAX_VARINT_SHIFT = 63
+# TensorProto.DataType values NumPy can hold.
+DTYPES = {
+    1: np.float32,
+    2: np.uint8,
+    3: np.int8,
+    5: np.int16,
+    6: np.int32,
+    7: np.int64,
+    9: np.bool_,
+    10: np.float16,
+    11: np.float64,
+}
+
+
+@dataclass(frozen=True)
+class ExternalTensor:
+    """An initializer stored in a weight file next to the graph."""
+
+    name: str
+    file: Path
+    offset: int
+    length: int
+    dtype: type
+    shape: tuple[int, ...]
 
 
 @dataclass(frozen=True)
 class GraphFacts:
-    """A graph's custom metadata and its initializers' element counts by storage key."""
+    """A graph's custom metadata, its initializers' element counts by storage key, and its external tensors."""
 
     metadata: dict[str, str]
     initializers: dict[tuple[str, ...], int]
+    externals: tuple[ExternalTensor, ...] = field(default=())
 
 
 def parameters(graphs: Iterable[GraphFacts]) -> int:
@@ -90,9 +120,41 @@ def _entry(data: memoryview) -> tuple[str, str]:
     return entry.get(_ENTRY_KEY, ""), entry.get(_ENTRY_VALUE, "")
 
 
-def _initializer(tensor: memoryview, graph: Path) -> tuple[tuple[str, ...], int]:
+def _external(
+    graph: Path, name: str, data_type: int, dims: list[int], info: dict[str, str]
+) -> ExternalTensor:
+    """An external initializer whose bytes lie inside a file next to the graph."""
+    location = info.get("location", "")
+    relative = PurePosixPath(location)
+    if (
+        not location
+        or relative.is_absolute()
+        or ".." in relative.parts
+        or "\\" in location
+    ):
+        raise PackageError(
+            f"{graph.name}: external data of {name!r} must stay next to the graph"
+        )
+    if data_type not in DTYPES:
+        raise PackageError(
+            f"{graph.name}: unsupported external tensor type {data_type} for {name!r}"
+        )
+    dtype = DTYPES[data_type]
+    offset, length = int(info.get("offset", 0)), int(info.get("length", -1))
+    if length != math.prod(dims) * np.dtype(dtype).itemsize:
+        raise PackageError(
+            f"{graph.name}: external data of {name!r} has the wrong length"
+        )
+    return ExternalTensor(
+        name, graph.parent.joinpath(*relative.parts), offset, length, dtype, tuple(dims)
+    )
+
+
+def _initializer(
+    tensor: memoryview, graph: Path
+) -> tuple[tuple[str, ...], int, ExternalTensor | None]:
     dims: list[int] = []
-    name, external, location = "", {}, 0
+    name, external, location, data_type = "", {}, 0, 0
     for number, wire, value in _fields(tensor):
         if number == _TENSOR_DIMS:
             if wire == _VARINT:
@@ -102,6 +164,8 @@ def _initializer(tensor: memoryview, graph: Path) -> tuple[tuple[str, ...], int]
                 while offset < len(value):
                     dim, offset = _varint(value, offset)
                     dims.append(dim)
+        elif number == _TENSOR_DATA_TYPE and wire == _VARINT:
+            data_type = value
         elif number == _TENSOR_NAME and wire == _BYTES:
             name = bytes(value).decode()
         elif number == _TENSOR_EXTERNAL_DATA and wire == _BYTES:
@@ -109,22 +173,22 @@ def _initializer(tensor: memoryview, graph: Path) -> tuple[tuple[str, ...], int]
             external[key] = item
         elif number == _TENSOR_DATA_LOCATION and wire == _VARINT:
             location = value
-    if location == _EXTERNAL:
-        stored = str((graph.parent / external.get("location", "")).resolve())
-        key = ("external", stored, external.get("offset", "0"))
-    else:
-        key = ("embedded", str(graph.resolve()), name)
-    return key, math.prod(dims)
+    if location != _EXTERNAL:
+        return ("embedded", str(graph.resolve()), name), math.prod(dims), None
+    tensor_info = _external(graph, name, data_type, dims, external)
+    key = ("external", str(tensor_info.file.resolve()), str(tensor_info.offset))
+    return key, math.prod(dims), tensor_info
 
 
 def read_graph(path: Path) -> GraphFacts:
-    """Metadata and initializer storage of the ONNX graph at ``path``."""
+    """Metadata, initializer storage and external tensors of the ONNX graph at ``path``."""
     path = Path(path)
     if path.stat().st_size > _MAX_GRAPH_BYTES:
         raise PackageError(f"{path.name}: ONNX graph exceeds 2 GiB")
     data = memoryview(path.read_bytes())
     metadata: dict[str, str] = {}
     initializers: dict[tuple[str, ...], int] = {}
+    externals: list[ExternalTensor] = []
     for number, wire, value in _fields(data):
         if wire != _BYTES:
             continue
@@ -134,6 +198,34 @@ def read_graph(path: Path) -> GraphFacts:
         elif number == _MODEL_GRAPH:
             for graph_field, graph_wire, item in _fields(value):
                 if graph_field == _GRAPH_INITIALIZER and graph_wire == _BYTES:
-                    key, elements = _initializer(item, path)
+                    key, elements, tensor = _initializer(item, path)
                     initializers[key] = elements
-    return GraphFacts(metadata=metadata, initializers=initializers)
+                    if tensor is not None:
+                        externals.append(tensor)
+    return GraphFacts(
+        metadata=metadata, initializers=initializers, externals=tuple(externals)
+    )
+
+
+class WeightFiles:
+    """Read-only maps of a model's external weight files, each mapped once and shared by its graphs."""
+
+    def __init__(self) -> None:
+        self._maps: dict[Path, np.memmap] = {}
+
+    def tensor(self, external: ExternalTensor) -> np.ndarray:
+        path = external.file.resolve()
+        mapped = self._maps.get(path)
+        if mapped is None:
+            if not path.is_file():
+                raise PackageError(f"missing external weight file {external.file.name}")
+            mapped = self._maps[path] = np.memmap(path, dtype=np.uint8, mode="r")
+        end = external.offset + external.length
+        if external.offset < 0 or end > mapped.shape[0]:
+            raise PackageError(
+                f"external data of {external.name!r} lies outside {external.file.name}"
+            )
+        raw = mapped[external.offset : end]
+        if external.offset % np.dtype(external.dtype).itemsize:
+            raw = raw.copy()
+        return raw.view(external.dtype).reshape(external.shape)

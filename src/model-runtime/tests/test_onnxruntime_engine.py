@@ -203,3 +203,55 @@ def test_truncated_protobuf_is_a_package_error(tmp_path):
 
     with pytest.raises(PackageError):
         graphs.read_graph(path)
+
+
+def test_graphs_linked_into_a_blob_store_load_like_a_hub_snapshot(tmp_path):
+    exported = onnx_graphs.token_graph(
+        tmp_path / "export/onnx/model.onnx", external="weights.data"
+    )
+    blobs, snapshot = tmp_path / "blobs", tmp_path / "snapshots/rev/onnx"
+    blobs.mkdir()
+    snapshot.mkdir(parents=True)
+    for name in ("model.onnx", "weights.data"):
+        target = blobs / f"blob-{name}"
+        target.write_bytes((exported.parent / name).read_bytes())
+        (snapshot / name).symlink_to(target)
+    facts = graphs.read_graph(snapshot / "model.onnx")
+    assert [tensor.name for tensor in facts.externals] == ["embed.weight"]
+    model = load({"default": snapshot / "model.onnx"})
+    hidden = model.encode(batch([[1, 2, 3]])).outputs["last_hidden_state"]
+    np.testing.assert_allclose(hidden.numpy(), reference_hidden([[1, 2, 3]]), atol=1e-6)
+
+
+def test_external_data_must_stay_next_to_the_graph(tmp_path):
+    import onnx
+    from vllm_sr_runtime.errors import PackageError
+
+    path = onnx_graphs.token_graph(
+        tmp_path / "onnx/model.onnx", external="weights.data"
+    )
+    model = onnx.load(str(path), load_external_data=False)
+    for change, message in (
+        ({"location": "../escape.data"}, "stay next to"),
+        ({"length": "4"}, "wrong length"),
+    ):
+        edited = onnx.ModelProto()
+        edited.CopyFrom(model)
+        (tensor,) = [
+            t
+            for t in edited.graph.initializer
+            if t.data_location == onnx.TensorProto.EXTERNAL
+        ]
+        for entry in tensor.external_data:
+            entry.value = change.get(entry.key, entry.value)
+        broken = tmp_path / "onnx/broken.onnx"
+        onnx.save_model(edited, str(broken))
+        with pytest.raises(PackageError, match=message):
+            graphs.read_graph(broken)
+    weights = graphs.WeightFiles()
+    (tensor,) = graphs.read_graph(path).externals
+    beyond = graphs.ExternalTensor(
+        tensor.name, tensor.file, 1 << 20, tensor.length, tensor.dtype, tensor.shape
+    )
+    with pytest.raises(PackageError, match="outside"):
+        weights.tensor(beyond)

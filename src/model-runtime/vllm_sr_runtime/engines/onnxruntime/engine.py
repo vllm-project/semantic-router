@@ -57,20 +57,47 @@ class GraphInput:
 
 
 class GraphSession:
-    """One graph loaded in an ONNX Runtime session, with its declared inputs and outputs."""
+    """One graph loaded in an ONNX Runtime session, with its declared inputs and outputs.
 
-    def __init__(self, name: str, path: Path, session: Any):
+    External initializers come from the model's shared weight-file maps, so
+    the graph loads from bytes and ONNX Runtime never resolves file links.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        path: Path,
+        options: Any,
+        provider: providers.ProviderChoice,
+        weights: graph_files.WeightFiles,
+    ):
+        import onnxruntime
+
         self.name = name
         self.path = path
-        self.session = session
+        self.facts = graph_files.read_graph(path)
+        if self.facts.externals:
+            # ONNX Runtime keeps the arrays referenced, not copied; they live as long as the session.
+            self.initializers = [
+                onnxruntime.OrtValue.ortvalue_from_numpy(weights.tensor(tensor))
+                for tensor in self.facts.externals
+            ]
+            options.add_external_initializers(
+                [tensor.name for tensor in self.facts.externals], self.initializers
+            )
+            source: Any = path.read_bytes()
+        else:
+            source = str(path)
+        self.session = onnxruntime.InferenceSession(
+            source, options, providers=[(provider.name, provider.options)]
+        )
         self.inputs = tuple(
             GraphInput(
                 item.name, tuple(item.shape), NUMPY_TYPES.get(item.type, np.float32)
             )
-            for item in session.get_inputs()
+            for item in self.session.get_inputs()
         )
-        self.outputs = tuple(item.name for item in session.get_outputs())
-        self.facts = graph_files.read_graph(path)
+        self.outputs = tuple(item.name for item in self.session.get_outputs())
 
     def feeds(self, batch: EncoderBatch) -> dict[str, np.ndarray]:
         input_ids = batch.input_ids.detach().cpu().numpy()
@@ -210,18 +237,15 @@ class OnnxRuntimeEngine(Engine):
         )
         if isinstance(choice, str):
             raise RuntimeError(choice)
-        session_options = providers.session_options(
-            choice, options.threads, options.extra.get("onnxruntime_spinning")
-        )
+        weights = graph_files.WeightFiles()
+        spinning = options.extra.get("onnxruntime_spinning")
         graphs = {
             name: GraphSession(
                 name,
                 Path(path),
-                onnxruntime.InferenceSession(
-                    str(path),
-                    session_options,
-                    providers=[(choice.name, choice.options)],
-                ),
+                providers.session_options(choice, options.threads, spinning),
+                choice,
+                weights,
             )
             for name, path in spec.graphs.items()
         }
