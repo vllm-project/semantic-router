@@ -25,9 +25,10 @@ const (
 
 func init() {
 	pkgtestcases.Register("response-api-restart-recovery", pkgtestcases.TestCase{
-		Description: "Response API data stored in Redis survives a semantic-router pod restart",
-		Tags:        []string{"response-api", "functional", "redis", "restart"},
-		Fn:          testResponseAPIRestartRecovery,
+		Description:         "Response API data stored in Redis survives a semantic-router pod restart",
+		Tags:                []string{"response-api", "functional", "redis", "restart"},
+		MutatesClusterState: true,
+		Fn:                  testResponseAPIRestartRecovery,
 	})
 }
 

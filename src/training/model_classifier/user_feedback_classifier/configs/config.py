@@ -1,7 +1,7 @@
 """
 Configuration for Feedback Detector Training Pipeline.
 
-Compatible with: https://huggingface.co/llm-semantic-router/feedback-detector
+Compatible with: https://huggingface.co/vllm-sr/feedback-detector
 """
 
 from dataclasses import dataclass, field
@@ -24,7 +24,7 @@ class DataConfig:
     """Data processing configuration."""
 
     # HuggingFace dataset
-    dataset_id: str = "llm-semantic-router/feedback-detector-dataset"
+    dataset_id: str = "vllm-sr/feedback-detector-dataset"
 
     # Local paths (fallback)
     raw_data_dir: str = "data/raw"
@@ -41,7 +41,7 @@ class ModelConfig:
     """Model configuration."""
 
     # Base model - mmBERT-32K YaRN (multilingual ModernBERT with 32K context)
-    model_name: str = "llm-semantic-router/mmbert-32k-yarn"
+    model_name: str = "vllm-sr/mmbert-32k-yarn"
     # Alternatives:
     #   - "jhu-clsp/mmBERT-base" for 8K context
     #   - "answerdotai/ModernBERT-base" for English-only

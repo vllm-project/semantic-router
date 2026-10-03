@@ -17,12 +17,14 @@ import (
 	jailbreakonerror "github.com/vllm-project/semantic-router/e2e/profiles/jailbreak-onerror"
 	llmd "github.com/vllm-project/semantic-router/e2e/profiles/llm-d"
 	localclassifierbackend "github.com/vllm-project/semantic-router/e2e/profiles/local-classifier-backend"
+	longcontextrouting "github.com/vllm-project/semantic-router/e2e/profiles/long-context-routing"
 	looper "github.com/vllm-project/semantic-router/e2e/profiles/looper"
 	mlmodelselection "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
 	multiendpoint "github.com/vllm-project/semantic-router/e2e/profiles/multi-endpoint"
 	multimodalrouting "github.com/vllm-project/semantic-router/e2e/profiles/multimodal-routing"
 	nomodel "github.com/vllm-project/semantic-router/e2e/profiles/no-model"
 	piiremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/pii-remote-backend"
+	preferencerouting "github.com/vllm-project/semantic-router/e2e/profiles/preference-routing"
 	productionstack "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
 	progressgate "github.com/vllm-project/semantic-router/e2e/profiles/progress-gate"
 	providerprotocols "github.com/vllm-project/semantic-router/e2e/profiles/provider-protocols"
@@ -86,6 +88,8 @@ func init() {
 	register("pii-remote-backend", func() framework.Profile { return piiremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("local-classifier-backend", func() framework.Profile { return localclassifierbackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("structure-routing", func() framework.Profile { return structurerouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
+	register("long-context-routing", func() framework.Profile { return longcontextrouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
+	register("preference-routing", func() framework.Profile { return preferencerouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register(
 		"dashboard",
 		func() framework.Profile { return dashboard.NewProfile() },

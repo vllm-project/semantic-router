@@ -1078,7 +1078,7 @@ type MultiModalEmbeddingOutput struct {
 
 // InitMultiModalEmbeddingModel initializes the multi-modal embedding model.
 //
-// Model: llm-semantic-router/multi-modal-embed-small (~120M params)
+// Model: vllm-sr/multi-modal-embed-small (~120M params)
 //   - Text: MiniLM-L6-v2 (22M params, 384-dim)
 //   - Image: SigLIP-base-patch16-512 (86M params, 768→384 projection)
 //   - Audio: Whisper-tiny encoder (8M params, 384-dim)
@@ -2519,7 +2519,7 @@ func IsMmBertModel(configPath string) bool {
 
 // ============================================================================
 // mmBERT-32K (32K Context, YaRN RoPE Scaling) Functions
-// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
+// Reference: https://huggingface.co/vllm-sr/mmbert-32k-yarn
 // ============================================================================
 
 var (
@@ -2542,7 +2542,7 @@ func IsMmBert32KModel(configPath string) bool {
 
 // InitMmBert32KIntentClassifier initializes the mmBERT-32K intent classifier
 // This model classifies text into MMLU-Pro academic categories for request routing.
-// Reference: https://huggingface.co/llm-semantic-router/mmbert32k-intent-classifier-lora
+// Reference: https://huggingface.co/vllm-sr/mmbert32k-intent-classifier-lora
 func InitMmBert32KIntentClassifier(modelPath string, useCPU bool) error {
 	var err error
 	mmBert32KIntentClassifierInitOnce.Do(func() {
@@ -2586,7 +2586,7 @@ func ClassifyMmBert32KIntent(text string) (ClassResult, error) {
 // InitMmBert32KFactcheckClassifier initializes the mmBERT-32K fact-check classifier
 // This model determines if text needs fact-checking.
 // Outputs: 0=NO_FACT_CHECK_NEEDED, 1=FACT_CHECK_NEEDED
-// Reference: https://huggingface.co/llm-semantic-router/mmbert32k-factcheck-classifier-lora
+// Reference: https://huggingface.co/vllm-sr/mmbert32k-factcheck-classifier-lora
 func InitMmBert32KFactcheckClassifier(modelPath string, useCPU bool) error {
 	var err error
 	mmBert32KFactcheckClassifierInitOnce.Do(func() {
@@ -2630,7 +2630,7 @@ func ClassifyMmBert32KFactcheck(text string) (ClassResult, error) {
 // InitMmBert32KJailbreakClassifier initializes the mmBERT-32K jailbreak detector
 // This model detects prompt injection/jailbreak attempts.
 // Outputs: 0=benign, 1=jailbreak
-// Reference: https://huggingface.co/llm-semantic-router/mmbert32k-jailbreak-detector-lora
+// Reference: https://huggingface.co/vllm-sr/mmbert32k-jailbreak-detector-lora
 func InitMmBert32KJailbreakClassifier(modelPath string, useCPU bool) error {
 	var err error
 	mmBert32KJailbreakClassifierInitOnce.Do(func() {
@@ -2674,7 +2674,7 @@ func ClassifyMmBert32KJailbreak(text string) (ClassResult, error) {
 // InitMmBert32KFeedbackClassifier initializes the mmBERT-32K feedback detector
 // This model detects user satisfaction from follow-up messages.
 // Outputs: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT
-// Reference: https://huggingface.co/llm-semantic-router/mmbert32k-feedback-detector-lora
+// Reference: https://huggingface.co/vllm-sr/mmbert32k-feedback-detector-lora
 func InitMmBert32KFeedbackClassifier(modelPath string, useCPU bool) error {
 	var err error
 	mmBert32KFeedbackClassifierInitOnce.Do(func() {
@@ -2749,7 +2749,7 @@ func ClassifyMmBert32KFeedbackWithProbs(text string) (ClassResultWithProbs, erro
 
 // InitMmBert32KPIIClassifier initializes the mmBERT-32K PII detector
 // This model detects 17 types of PII entities using BIO tagging.
-// Reference: https://huggingface.co/llm-semantic-router/mmbert32k-pii-detector-lora
+// Reference: https://huggingface.co/vllm-sr/mmbert32k-pii-detector-lora
 func InitMmBert32KPIIClassifier(modelPath string, useCPU bool) error {
 	var err error
 	mmBert32KPIIClassifierInitOnce.Do(func() {
@@ -2821,7 +2821,7 @@ type ModalityResult struct {
 // - AR (0): Text-only response via autoregressive LLM
 // - DIFFUSION (1): Image generation via diffusion model
 // - BOTH (2): Hybrid response requiring both text and image
-// Reference: https://huggingface.co/llm-semantic-router/mmbert32k-modality-router-merged
+// Reference: https://huggingface.co/vllm-sr/mmbert32k-modality-router-merged
 func InitMmBert32KModalityClassifier(modelPath string, useCPU bool) error {
 	if modelPath == "" {
 		return fmt.Errorf("modality classifier model_path is required (set classifier.model_path in modality_detection config)")
