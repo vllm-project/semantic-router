@@ -29,7 +29,7 @@ MAX_GATE_ENV_BYTES = 4096
 
 def completed(paths=None, *, full=False, profile="pr"):
     plan = make_plan(
-        paths or ["tools/make/openvino.mk"],
+        paths or ["tools/make/build-run-test.mk"],
         source_sha=SHA,
         full=full,
         profile=profile,
@@ -272,7 +272,7 @@ class GateTests(unittest.TestCase):
         plan, receipts, builds = completed()
         jobs = {name: {"result": "success"} for name in plan["expected_dispatch_jobs"]}
         self.assertTrue(evaluate_gate(plan, receipts, builds=builds, jobs=jobs).passed)
-        for executor in ("native-shared", "native-build"):
+        for executor in ("platform", "native-build"):
             for status in ("skipped", "failure", "cancelled"):
                 jobs[executor]["result"] = status
                 self.assertFalse(
@@ -294,8 +294,8 @@ class GateTests(unittest.TestCase):
     def test_dispatch_cannot_hide_a_selected_worker_or_move_a_contract(self):
         plan, receipts, builds = completed(full=True)
         for mutate in (
-            lambda value: value["expected_dispatch_jobs"].remove("native-shared"),
-            lambda value: value["native_batches"].pop(),
+            lambda value: value["expected_dispatch_jobs"].remove("platform"),
+            lambda value: value["platform_batches"].pop(),
             lambda value: value["e2e_batches"].pop(),
             lambda value: value["image_producers"].update({"image-router": []}),
             lambda value: value.update(full_cpu_version=1),
@@ -311,7 +311,7 @@ class GateTests(unittest.TestCase):
         plan, receipts, builds = completed(full=True)
         jobs = {name: {"result": "success"} for name in plan["expected_dispatch_jobs"]}
         self.assertTrue(evaluate_gate(plan, receipts, builds=builds, jobs=jobs).passed)
-        for identity in ("native.image-calibration-cpu", "e2e.vela-omni"):
+        for identity in ("platform.image-calibration-cpu", "e2e.vela-omni"):
             selected = [receipt for receipt in receipts if receipt["id"] != identity]
             verdict = evaluate_gate(plan, selected, builds=builds, jobs=jobs)
             self.assertFalse(verdict.passed)

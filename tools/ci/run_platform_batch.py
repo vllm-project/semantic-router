@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Execute compatible native contracts with shared models and separate receipts."""
+"""Execute platform contracts (emulated targets, runtime conformance) with separate receipts."""
 
 from __future__ import annotations
 
@@ -35,9 +35,9 @@ def run_command(command: list[str], *, cwd: Path, env: dict, check: bool, timeou
 
 
 def run_batch(batch: dict, output: Path, *, run=run_command) -> bool:
-    validate_execution_batch(batch, "native")
+    validate_execution_batch(batch, "platform")
     if output.exists() and any(output.iterdir()):
-        raise ValueError("native worker evidence directory must be empty")
+        raise ValueError("platform worker evidence directory must be empty")
     output.mkdir(parents=True, exist_ok=True)
     results = output / "results"
     results.mkdir(exist_ok=True)
@@ -49,8 +49,6 @@ def run_batch(batch: dict, output: Path, *, run=run_command) -> bool:
         receipt.unlink(missing_ok=True)
         env = {
             **os.environ,
-            "MODEL_TEST_PROVIDER": record["runtime"],
-            "MODEL_TEST_DEVICE": record["device"],
             "MODEL_TEST_REPORT_DIR": str(directory.resolve()),
             "MODEL_TEST_MANIFEST": str((directory / "models.json").resolve()),
             "MODEL_TEST_MODELS_DIR": str(ROOT / "models"),
@@ -61,7 +59,7 @@ def run_batch(batch: dict, output: Path, *, run=run_command) -> bool:
             [
                 sys.executable,
                 "tools/ci/runtime_evidence.py",
-                record.get("evidence", "native"),
+                record["evidence"],
                 "--directory",
                 str(directory),
                 "--output",
@@ -129,7 +127,7 @@ def main() -> int:
     try:
         return 0 if run_batch(json.loads(args.batch), args.output.resolve()) else 1
     except (ValueError, KeyError, TypeError) as error:
-        parser.exit(1, f"Native worker rejected: {error}\n")
+        parser.exit(1, f"Platform worker rejected: {error}\n")
 
 
 if __name__ == "__main__":

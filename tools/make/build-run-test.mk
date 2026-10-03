@@ -12,7 +12,6 @@ build: $(if $(CI),rust-ci,rust) build-router
 # Development build: Use DEV=true to enable untrusted metadata["user_id"] fallback for testing
 # Example: make build-router DEV=true
 # Production builds (default) only accept user_id from auth headers (x-authz-user-id)
-# Candle-only linux/riscv64: make build-router-riscv (see tools/make/rust.mk).
 build-router: ## Build the router binary
 build-router: $(if $(CI),rust-ci,rust)
 	@bash tools/docker/check-native-abi.sh candle-binding/target/release/libcandle_semantic_router.$(if $(filter Darwin,$(shell uname -s)),dylib,so) onnx-binding/target/release/libonnx_semantic_router.$(if $(filter Darwin,$(shell uname -s)),dylib,so)
@@ -23,6 +22,23 @@ ifdef DEV
 else
 	@cd src/semantic-router && $(NATIVE_ENV) go build -tags=milvus -o ../../bin/router ./cmd
 endif
+
+# valkey-glide, the router's only cgo dependency, ships no riscv64 library; the
+# riscv64 build is pure Go and stubs the Valkey stores (see the riscv64 build tags).
+build-router-riscv: ## Cross-compile the router for linux/riscv64 (models attach to a runtime on another host)
+	@$(LOG_TARGET)
+	@mkdir -p bin
+	@cd src/semantic-router && CGO_ENABLED=0 GOOS=linux GOARCH=riscv64 go build -o ../../bin/router-riscv64 ./cmd
+
+RISCV_QEMU ?= $(firstword $(wildcard /usr/bin/qemu-riscv64-static /usr/bin/qemu-riscv64))
+
+test-riscv-qemu: build-router-riscv ## Run the riscv64 router under qemu-user, attached to a model runtime on the host
+	@$(LOG_TARGET)
+	@test -n "$(RISCV_QEMU)" || { echo "missing qemu-riscv64; install qemu-user-static"; exit 1; }
+	@RISCV_QEMU="$(RISCV_QEMU)" RISCV_ROUTER_BIN="$(CURDIR)/bin/router-riscv64" \
+		VLLM_SR_RUNTIME_COMMAND="$${VLLM_SR_RUNTIME_COMMAND:-$(AGENT_VENV)/bin/vllm-sr-runtime}" \
+		MODEL_TEST_REPORT_DIR="$${MODEL_TEST_REPORT_DIR:-$(CURDIR)/.agent-harness/riscv-qemu}" \
+		bash tools/ci/riscv-qemu-router-smoke.sh
 
 # Run the router
 run-router: ## Run the router with the specified config
@@ -99,10 +115,7 @@ test-core-unit: $(if $(CI),rust-ci,rust) ## Run discovered Go contracts with exp
 test-core-storage: $(if $(CI),rust-ci,rust) ## Run the complete source-owned storage inventory against required services
 	@export $(NATIVE_ENV) && python3 tools/ci/run_core_tests.py --mode storage --output .agent-harness/core/storage
 
-test-core-owned: $(if $(CI),rust-ci,rust) ## Run model-free binding and alternate provider-default contracts once
-	@export $(NATIVE_ENV) && python3 tools/ci/run_core_tests.py --mode owned --output .agent-harness/core/owned
-
-.PHONY: test-core-unit test-core-storage test-core-owned
+.PHONY: build-router-riscv test-riscv-qemu test-core-unit test-core-storage
 
 # Clean built artifacts
 clean: ## Clean built artifacts

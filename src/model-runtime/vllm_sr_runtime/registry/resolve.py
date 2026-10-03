@@ -6,15 +6,20 @@ revision; any other repository without ``--revision`` is refused. Only the
 files a built-in entry pins, or else the files the package manifest lists,
 are downloaded; a package with neither gets its pointer files only, and its
 family fetches what it loads (``ModelFamily.fetch``). A prepared built-in
-entry whose bundle is staged locally resolves to it without the Hub. Tokens
-come from the environment or the Hugging Face token file, never from arguments.
+entry whose bundle is staged locally resolves to it without the Hub.
+Transient Hub failures (connection errors, 429, 5xx) are retried with
+back-off. Tokens come from the environment or the Hugging Face token file,
+never from arguments.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
+import time
+from collections.abc import Iterable
 from pathlib import Path
 
 from ..errors import PackageError
@@ -28,6 +33,11 @@ REPO_ID = re.compile(r"[A-Za-z0-9][\w.-]*/[\w.-]+\Z")
 POINTER_FILES = ("config.json", "MODEL_MANIFEST.json")
 PREPARED_DIR_ENV = "VLLM_SR_RUNTIME_PREPARED_DIR"
 DEFAULT_PREPARED_DIR = "/opt/router-model-artifacts"
+DOWNLOAD_ATTEMPTS = 4
+TOO_MANY_REQUESTS = 429
+SERVER_ERROR = 500
+
+log = logging.getLogger("vllm_sr_runtime")
 
 
 def prepared_bundle(model: BuiltinModel) -> Path:
@@ -94,25 +104,10 @@ def download(
     offline: bool = False,
 ) -> Path:
     """Fetch a built-in entry's pinned files, else the pointer and the files its manifest lists."""
-    from huggingface_hub import snapshot_download
-
-    common = {
-        "repo_id": repo_id,
-        "revision": revision,
-        "cache_dir": str(cache_dir) if cache_dir else None,
-        "local_files_only": offline,
-    }
     known = builtin.lookup(repo_id)
     if known is not None and known.revision == revision and known.files:
-        root = Path(snapshot_download(allow_patterns=sorted(known.files), **common))
-        if root.name != revision:
-            raise PackageError(
-                f"{repo_id}: the Hub resolved {root.name}, not {revision}"
-            )
-        return root
-    root = Path(snapshot_download(allow_patterns=list(POINTER_FILES), **common))
-    if root.name != revision:
-        raise PackageError(f"{repo_id}: the Hub resolved {root.name}, not {revision}")
+        return snapshot(repo_id, revision, known.files, cache_dir, offline)
+    root = snapshot(repo_id, revision, POINTER_FILES, cache_dir, offline)
     manifest_path = root / "MODEL_MANIFEST.json"
     if not manifest_path.is_file():
         return root
@@ -120,8 +115,7 @@ def download(
     files = manifest.get("files_sha256") if isinstance(manifest, dict) else None
     if not isinstance(files, dict) or not files:
         raise PackageError(f"{repo_id}@{revision}: MODEL_MANIFEST.json lists no files")
-    root = Path(snapshot_download(allow_patterns=sorted(files), **common))
-    return root
+    return snapshot(repo_id, revision, files, cache_dir, offline)
 
 
 def fetch(
@@ -134,21 +128,7 @@ def fetch(
     """Download more files of a resolved Hub package (a family's inventory); local packages are complete."""
     if ref.repo_id is None or ref.revision is None or not patterns:
         return ref
-    from huggingface_hub import snapshot_download
-
-    root = Path(
-        snapshot_download(
-            repo_id=ref.repo_id,
-            revision=ref.revision,
-            allow_patterns=sorted(set(patterns)),
-            cache_dir=str(cache_dir) if cache_dir else None,
-            local_files_only=offline,
-        )
-    )
-    if root.name != ref.revision:
-        raise PackageError(
-            f"{ref.repo_id}: the Hub resolved {root.name}, not {ref.revision}"
-        )
+    root = snapshot(ref.repo_id, ref.revision, patterns, cache_dir, offline)
     return PackageRef(root=root, repo_id=ref.repo_id, revision=ref.revision)
 
 
@@ -161,19 +141,57 @@ def download_base(
     offline: bool = False,
 ) -> Path:
     """Fetch the pinned base files an adapter package names (verified by the family)."""
-    from huggingface_hub import snapshot_download
-
     if not REVISION.fullmatch(revision):
         raise PackageError(f"base revision of {repo_id} is not a 40-hex commit")
-    root = Path(
-        snapshot_download(
-            repo_id=repo_id,
-            revision=revision,
-            allow_patterns=sorted(files),
-            cache_dir=str(cache_dir) if cache_dir else None,
-            local_files_only=offline,
-        )
-    )
+    return snapshot(repo_id, revision, files, cache_dir, offline)
+
+
+def snapshot(
+    repo_id: str,
+    revision: str,
+    patterns: Iterable[str],
+    cache_dir: str | Path | None,
+    offline: bool,
+) -> Path:
+    """The local snapshot of ``patterns`` at the 40-hex ``revision``, retrying transient Hub failures."""
+    from huggingface_hub import snapshot_download
+
+    for attempt in range(DOWNLOAD_ATTEMPTS):
+        try:
+            root = Path(
+                snapshot_download(
+                    repo_id=repo_id,
+                    revision=revision,
+                    allow_patterns=sorted(set(patterns)),
+                    cache_dir=str(cache_dir) if cache_dir else None,
+                    local_files_only=offline,
+                )
+            )
+            break
+        except Exception as exc:
+            if offline or attempt == DOWNLOAD_ATTEMPTS - 1 or not transient(exc):
+                raise
+            delay = 2**attempt
+            log.warning(
+                "download of %s@%s failed (%s); retrying in %d s",
+                repo_id,
+                revision[:12],
+                type(exc).__name__,
+                delay,
+            )
+            time.sleep(delay)
     if root.name != revision:
         raise PackageError(f"{repo_id}: the Hub resolved {root.name}, not {revision}")
     return root
+
+
+def transient(exc: Exception) -> bool:
+    """Whether a Hub failure may pass on retry: no connection, 429 or 5xx, not 4xx."""
+    from huggingface_hub.errors import LocalEntryNotFoundError
+
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    if status is not None:
+        return status == TOO_MANY_REQUESTS or status >= SERVER_ERROR
+    if isinstance(exc, (LocalEntryNotFoundError, OSError, TimeoutError)):
+        return True
+    return type(exc).__module__.split(".")[0] in ("httpx", "httpcore", "requests")

@@ -6,7 +6,7 @@ on:
       verification:
         description: Verification ID from tools/ci/verification_catalog.yaml (or e2e.PROFILE) to run on the selected branch or tag.
         type: string
-        default: native.image-calibration-cpu
+        default: platform.image-calibration-cpu
         required: true
   workflow_call:
     inputs:
@@ -257,49 +257,30 @@ jobs:
       prebuilt-images: true
     secrets: inherit
 
-  native-shared:
-    name: Tests / CPU Contracts
-    needs: [plan, native-build]
-    if: >-
-      !cancelled() && needs.plan.result == 'success'
-      && needs.plan.outputs.native-shared != '[]'
-      && needs.native-build.result == 'success'
-    strategy:
-      fail-fast: false
-      matrix:
-        label: ${{ fromJSON(needs.plan.outputs.worker_labels)['native-shared'] }}
-    uses: ./.github/workflows/test-native.yml
-    with:
-      batch: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch)['native-shared'][matrix.label]) }}
-      native-artifact: ${{ needs.native-build.outputs.artifact-name }}
-    secrets: inherit
-
-  native-independent:
-    name: Tests / Emulated Contracts
+  platform:
+    name: Tests / Platform Contracts
     needs: [plan]
     if: >-
       !cancelled() && needs.plan.result == 'success'
-      && needs.plan.outputs.native-independent != '[]'
+      && needs.plan.outputs.platform != '[]'
     strategy:
       fail-fast: false
       matrix:
-        label: ${{ fromJSON(needs.plan.outputs.worker_labels)['native-independent'] }}
-    uses: ./.github/workflows/test-native.yml
+        label: ${{ fromJSON(needs.plan.outputs.worker_labels)['platform'] }}
+    uses: ./.github/workflows/test-platform.yml
     with:
-      batch: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch)['native-independent'][matrix.label]) }}
+      batch: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch)['platform'][matrix.label]) }}
     secrets: inherit
 
   performance:
     name: Tests / Performance
-    needs: [plan, native-build]
+    needs: [plan]
     if: >-
       !cancelled() && needs.plan.result == 'success'
       && needs.plan.outputs.performance != '[]'
-      && needs.native-build.result == 'success'
     uses: ./.github/workflows/performance-test.yml
     with:
       verification: ${{ toJSON(fromJSON(needs.plan.outputs.performance)[0]) }}
-      native-artifact: ${{ needs.native-build.outputs.artifact-name }}
       base-ref: ${{ inputs.performance-base-ref || fromJSON(needs.plan.outputs.plan).base_sha || 'HEAD^' }}
     secrets: inherit
 
@@ -387,7 +368,7 @@ jobs:
   gate:
     name: Gate
     if: always()
-    needs: [plan, image-router, image-local, image-dashboard, image-operator, image-fixtures, image-distribution, native-build, quality, generated, security, core, storage, dashboard, operator, local, recipes, native-shared, native-independent, performance, package, tools, e2e-router, e2e-fixtures, e2e-dashboard]
+    needs: [plan, image-router, image-local, image-dashboard, image-operator, image-fixtures, image-distribution, native-build, quality, generated, security, core, storage, dashboard, operator, local, recipes, platform, performance, package, tools, e2e-router, e2e-fixtures, e2e-dashboard]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -427,8 +408,7 @@ jobs:
               "operator": {"result": "${{ needs.operator.result }}"},
               "local": {"result": "${{ needs.local.result }}"},
               "recipes": {"result": "${{ needs.recipes.result }}"},
-              "native-shared": {"result": "${{ needs.native-shared.result }}"},
-              "native-independent": {"result": "${{ needs.native-independent.result }}"},
+              "platform": {"result": "${{ needs.platform.result }}"},
               "performance": {"result": "${{ needs.performance.result }}"},
               "package": {"result": "${{ needs.package.result }}"},
               "tools": {"result": "${{ needs.tools.result }}"},
