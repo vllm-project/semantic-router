@@ -41,6 +41,7 @@ EXECUTOR_JOBS = (
     "e2e-dashboard",
 )
 ALL_DISPATCH_JOBS = ("plan", *IMAGE_PRODUCERS, "native-build", *EXECUTOR_JOBS)
+LANE_IMAGES = frozenset({"extproc", "provider-mocker", "dashboard"})
 
 
 def content_digest(value: object) -> str:
@@ -115,6 +116,11 @@ def _batch(records: list[dict], shard: int) -> dict:
     if executor == "e2e":
         resource = "Large" if common["resource_class"] == "model" else "Standard"
         label += f" / {resource} {shard}"
+        # A fixture beyond the lane's own images forms a separate compatibility
+        # group whose shards restart at 1 in the same Actions matrix.
+        extra = [image for image in common["images"] if image not in LANE_IMAGES]
+        if extra:
+            label += " / " + " + ".join(extra)
     elif common.get("execution"):
         label += " / QEMU"
     if executor == "native":
