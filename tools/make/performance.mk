@@ -7,8 +7,8 @@ PERF_MODEL_BASELINE_DIR ?= $(CURDIR)/reports
 PERF_MODEL_BASELINE ?= $(PERF_MODEL_BASELINE_DIR)/model-baseline.json
 # Benchmarks serve the pinned catalog models through the model runtime
 # (make model-runtime-install); the base revision runs its own runtime source.
-export PERF_RUNTIME_PYTHON ?= $(AGENT_VENV)/bin/python
-export VLLM_SR_RUNTIME_COMMAND ?= $(PERF_RUNTIME_PYTHON) -m vllm_sr_runtime
+perf-%: export PERF_RUNTIME_PYTHON ?= $(AGENT_VENV)/bin/python
+perf-%: export VLLM_SR_RUNTIME_COMMAND ?= $(PERF_RUNTIME_PYTHON) -m vllm_sr_runtime
 
 perf-model-baseline: ## Measure the same pinned models on PERF_BASE_REF
 	@bash perf/scripts/compare-model-baseline.sh \
