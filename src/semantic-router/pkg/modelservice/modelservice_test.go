@@ -303,3 +303,25 @@ func TestDefaultDeciderFailsOpenBeforeStartup(t *testing.T) {
 		t.Fatal("the default decider must answer unavailable")
 	}
 }
+
+func TestEncodeQuestionSendsNullForMissingDescriptions(t *testing.T) {
+	encoded, err := json.Marshal(encodeQuestion(Question{
+		Type: "choice", Instructions: "Pick",
+		Choices: []Choice{{Key: "a", Description: "First"}, {Key: "b"}},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded struct {
+		Choices []map[string]interface{} `json:"choices"`
+	}
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Choices[0]["description"] != "First" {
+		t.Fatalf("described choice lost its description: %s", encoded)
+	}
+	if description := decoded.Choices[1]["description"]; description != nil {
+		t.Fatalf("a choice without a description must send null, not %q: %s", description, encoded)
+	}
+}

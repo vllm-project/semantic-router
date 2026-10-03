@@ -109,8 +109,11 @@ func encodeQuestion(question Question) api.Question {
 	if len(question.Choices) > 0 {
 		choices := make([]api.ChoiceOption, len(question.Choices))
 		for index, choice := range question.Choices {
-			var description interface{} = choice.Description
-			choices[index] = api.ChoiceOption{Key: choice.Key, Description: &description}
+			choices[index] = api.ChoiceOption{Key: choice.Key}
+			if choice.Description != "" {
+				var description interface{} = choice.Description
+				choices[index].Description = &description
+			}
 		}
 		encoded.Choices = &choices
 	}
