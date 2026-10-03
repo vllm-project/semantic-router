@@ -70,11 +70,8 @@ func NewFeedbackDetector(cfg *config.FeedbackDetectorConfig, models ...*classifi
 		adapter = "mmbert32k"
 	}
 	spec, err := runtime.localSpec("feedback_detector", cfg.ModelID, adapter, config.RemoteClassifierContractLabelDistribution, cfg.UseCPU, cfg.MaxSequenceLength)
-	if err != nil {
-		return nil, err
-	}
 	detector := &FeedbackDetector{
-		backend: &ownedSequenceBackend{runtime: runtime.runtime, spec: spec},
+		backend: &ownedSequenceBackend{runtime: runtime.runtime, spec: spec, err: err},
 		config:  cfg,
 	}
 

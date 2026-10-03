@@ -63,14 +63,11 @@ func (b *classifierOptionBuilder) addLocalCategoryClassifier(categoryMapping *Ca
 	}
 	models := consumerModelRuntime([]*classifierModelRuntime{b.models})
 	spec, err := models.localSpec("domain_classifier", b.cfg.CategoryModel.ModelID, variant, config.RemoteClassifierContractLabelDistribution, b.cfg.CategoryModel.UseCPU, b.cfg.CategoryModel.MaxSequenceLength)
-	if err != nil {
-		return err
-	}
 	var labels []string
 	if categoryMapping != nil {
 		labels = indexedNativeLabels(categoryMapping.IdxToCategory)
 	}
-	backend := ownedCategoryBackend{&ownedSequenceBackend{runtime: models.runtime, spec: spec, labels: labels}}
+	backend := ownedCategoryBackend{&ownedSequenceBackend{runtime: models.runtime, spec: spec, err: err, labels: labels}}
 	b.options = append(b.options, withCategory(categoryMapping, backend, backend))
 	return nil
 }
@@ -107,14 +104,11 @@ func buildJailbreakDependencies(cfg *config.RouterConfig, jailbreakMapping *Jail
 	}
 	runtime := consumerModelRuntime(models)
 	spec, err := runtime.localSpec("prompt_guard", cfg.PromptGuard.ModelID, adapter, config.RemoteClassifierContractLabelDistribution, cfg.PromptGuard.UseCPU, cfg.PromptGuard.MaxSequenceLength)
-	if err != nil {
-		return nil, nil, err
-	}
 	var labels []string
 	if jailbreakMapping != nil {
 		labels = indexedNativeLabels(jailbreakMapping.IdxToLabel)
 	}
-	backend := &ownedSequenceBackend{runtime: runtime.runtime, spec: spec, labels: labels}
+	backend := &ownedSequenceBackend{runtime: runtime.runtime, spec: spec, err: err, labels: labels}
 	return backend, backend, nil
 }
 
@@ -175,14 +169,11 @@ func buildPIIDependencies(cfg *config.RouterConfig, piiMapping *PIIMapping, mode
 	}
 	runtime := consumerModelRuntime(models)
 	spec, err := runtime.localSpec("pii_classifier", cfg.PIIModel.ModelID, adapter, config.RemoteClassifierContractTokenSpans, cfg.PIIModel.UseCPU, cfg.PIIModel.MaxSequenceLength)
-	if err != nil {
-		return nil, nil, err
-	}
 	var labels []string
 	if piiMapping != nil {
 		labels = indexedNativeLabels(piiMapping.IdxToLabel)
 	}
-	backend := &ownedTokenBackend{runtime: runtime.runtime, spec: spec, labels: labels}
+	backend := &ownedTokenBackend{runtime: runtime.runtime, spec: spec, err: err, labels: labels}
 	return backend, backend, nil
 }
 

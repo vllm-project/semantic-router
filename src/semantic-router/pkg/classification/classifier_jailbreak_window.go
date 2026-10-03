@@ -25,10 +25,7 @@ type windowedJailbreakBackend struct {
 
 func newWindowedJailbreakBackend(cfg config.PromptGuardConfig, mapping *JailbreakMapping, models ...*classifierModelRuntime) (*windowedJailbreakBackend, error) {
 	runtime := consumerModelRuntime(models)
-	spec, err := runtime.localSpec("prompt_guard", cfg.ModelID, "modernbert", config.RemoteClassifierContractLabelDistribution, cfg.UseCPU, cfg.MaxSequenceLength)
-	if err != nil {
-		return nil, err
-	}
+	spec, specErr := runtime.localSpec("prompt_guard", cfg.ModelID, "modernbert", config.RemoteClassifierContractLabelDistribution, cfg.UseCPU, cfg.MaxSequenceLength)
 	var windowErr error
 	if _, bound := runtime.plan.Lookup(runtime.recipe, "prompt_guard"); bound {
 		windowErr = cfg.ValidateBoundWindow(spec.Deployment)
@@ -61,6 +58,9 @@ func newWindowedJailbreakBackend(cfg config.PromptGuardConfig, mapping *Jailbrea
 	return &windowedJailbreakBackend{
 		labels: labels, positive: positive, spec: spec, window: window,
 		prepare: func(ctx context.Context) (*binding.Resolved[tasks.TextWindowsRequest, tasks.WindowedLabelDistribution], error) {
+			if specErr != nil {
+				return nil, specErr
+			}
 			return runtime.runtime.SequenceWindows(ctx, spec, window)
 		},
 	}, nil

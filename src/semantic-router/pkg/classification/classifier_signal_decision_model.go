@@ -52,15 +52,9 @@ func (c *Classifier) evaluateDecisionModelSignals(
 		}
 		byDeployment[rule.Deployment] = append(byDeployment[rule.Deployment], rule)
 	}
-	var waitGroup sync.WaitGroup
-	for _, deployment := range order {
-		waitGroup.Add(1)
-		go func(deployment string, rules []config.DecisionSignalRule) {
-			defer waitGroup.Done()
-			c.evaluateDecisionDeployment(ctx, results, mu, text, deployment, rules)
-		}(deployment, byDeployment[deployment])
-	}
-	waitGroup.Wait()
+	modelservice.Fan(ctx, len(order), func(i int) {
+		c.evaluateDecisionDeployment(ctx, results, mu, text, order[i], byDeployment[order[i]])
+	})
 	mu.Lock()
 	results.Metrics.Decision.ExecutionTimeMs = float64(time.Since(start).Microseconds()) / 1000.0
 	mu.Unlock()
