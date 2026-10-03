@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -81,6 +80,27 @@ type feedbackMappingFile struct {
 	Label2ID   map[string]int    `json:"label2id"`
 }
 
+// useServedLabels takes the feedback classes from the served model.
+func (d *FeedbackDetector) useServedLabels() error {
+	if d.backend.err != nil {
+		return d.backend.err
+	}
+	labels, err := d.backend.runtime.Labels(context.Background(), d.backend.spec)
+	if err != nil {
+		return fmt.Errorf("feedback_detector labels: %w", err)
+	}
+	d.mapping = &FeedbackMapping{LabelToIdx: make(map[string]int, len(labels)), IdxToLabel: make(map[string]string, len(labels))}
+	for index, label := range labels {
+		label = normalizeFeedbackLabel(label)
+		d.mapping.LabelToIdx[label] = index
+		d.mapping.IdxToLabel[strconv.Itoa(index)] = label
+	}
+	if len(d.mapping.LabelToIdx) != len(labels) {
+		return fmt.Errorf("feedback %s repeat a label", servedLabelsSource)
+	}
+	return nil
+}
+
 func (d *FeedbackDetector) loadMapping(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -147,11 +167,11 @@ func (d *FeedbackDetector) Initialize() error {
 		return fmt.Errorf("feedback detector requires ModelID to be configured")
 	}
 
-	mappingPath := d.config.FeedbackMappingPath
-	if mappingPath == "" {
-		mappingPath = filepath.Join(d.config.ModelID, "config.json")
-	}
-	if err := d.loadMapping(mappingPath); err != nil {
+	if d.config.FeedbackMappingPath != "" {
+		if err := d.loadMapping(d.config.FeedbackMappingPath); err != nil {
+			return err
+		}
+	} else if err := d.useServedLabels(); err != nil {
 		return err
 	}
 
