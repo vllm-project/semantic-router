@@ -182,6 +182,48 @@ def collate(items: list[RenderedItem], pad_id: int) -> dict[str, torch.Tensor]:
     }
 
 
+def packed_marker_logits(
+    encode: Callable[[EncoderBatch], Any],
+    readout: TypeReadout,
+    kind: str,
+    items: list[RenderedItem],
+    device: torch.device,
+    exit_layer: int,
+) -> torch.Tensor:
+    """Masked marker logits ``[rows, width]`` of rows of one type, their layer stack run packed.
+
+    The rows run back to back without padding (the engine's packed layout);
+    the type's head layers then read them padded with a key mask. Packing
+    changes the attention and GEMM shapes, so this serves approximate profiles.
+    """
+    lengths = [len(item.ids) for item in items]
+    ids = torch.tensor(
+        [token for item in items for token in item.ids], dtype=torch.long
+    )
+    packed = encode(
+        EncoderBatch(
+            input_ids=ids, attention_mask=None, lengths=lengths, branch=BRANCH[kind]
+        )
+    ).hidden[exit_layer]
+    width, hidden = max(lengths), packed.shape[-1]
+    starts = torch.arange(len(items), device=device)[:, None] * width
+    positions = (starts + torch.arange(width, device=device)[None, :])[
+        torch.arange(width, device=device)[None, :]
+        < torch.tensor(lengths, device=device)[:, None]
+    ]
+    rows = packed.new_zeros((len(items) * width, hidden)).index_copy_(
+        0, positions, packed
+    )
+    batch = {name: value.to(device) for name, value in collate(items, 0).items()}
+    scores = readout(
+        kind,
+        rows.view(len(items), width, hidden),
+        ~batch["attention_mask"],
+        batch["markers"],
+    )
+    return scores.masked_fill(~batch["valid"], torch.finfo(torch.float32).min)
+
+
 def marker_logits(
     encode: Callable[[EncoderBatch], Any],
     readout: TypeReadout,
