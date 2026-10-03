@@ -3,6 +3,7 @@
 package apiserver
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -264,6 +265,65 @@ func TestClassifierInfoRedactsSecretsWithoutSecretView(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), redactedConfigValue) {
 		t.Fatalf("expected redacted placeholder for password field, got %s", rr.Body.String())
+	}
+}
+
+func TestClassifierInfoOmitsParsedSourceDocument(t *testing.T) {
+	const canary = "redact-me-canary-value-0001"
+	cfg, err := config.ParseYAMLBytesWithoutEnvExpansion([]byte(validateTestYAML("source-doc-card", canary)))
+	if err != nil {
+		t.Fatalf("parse config: %v", err)
+	}
+	if len(cfg.SourceDocument) == 0 {
+		t.Fatal("parsed config must retain SourceDocument for this regression")
+	}
+	encodedSource := base64.StdEncoding.EncodeToString(cfg.SourceDocument)
+
+	cfg.ManagementAPI = config.ManagementAPIConfig{
+		Auth: config.ManagementAPIAuthConfig{
+			Mode: config.ManagementAuthModeBearer,
+			Tokens: []config.ManagementAPITokenRef{
+				{Env: "VSR_MGMT_TOKEN", Role: "viewer"},
+			},
+			Roles: config.DefaultManagementAPIRoles(),
+		},
+	}
+	t.Setenv("VSR_MGMT_TOKEN", "viewer-token")
+
+	server := &ClassificationAPIServer{
+		classificationSvc: services.NewPlaceholderClassificationService(),
+		config:            cfg,
+	}
+	mux := server.setupRoutes()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/inventory/classifier", nil)
+	req.Header.Set("Authorization", "Bearer viewer-token")
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	body := rr.Body.String()
+	if strings.Contains(body, canary) {
+		t.Fatalf("/api/v1/inventory/classifier leaked parsed source secret: %s", body)
+	}
+	if strings.Contains(body, encodedSource) {
+		t.Fatalf("/api/v1/inventory/classifier leaked encoded SourceDocument: %s", body)
+	}
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &parsed); err != nil {
+		t.Fatalf("inventory body must remain valid JSON: %v", err)
+	}
+	configView, _ := parsed["config"].(map[string]interface{})
+	if configView == nil {
+		t.Fatalf("expected config object, got %s", body)
+	}
+	for _, key := range []string{"SourceDocument", "sourceDocument", "DocumentHash", "documentHash", "ConfigBaseDir", "configBaseDir"} {
+		if _, ok := configView[key]; ok {
+			t.Fatalf("inventory config included runtime-only field %q: %s", key, body)
+		}
 	}
 }
 
