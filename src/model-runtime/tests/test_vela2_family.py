@@ -208,6 +208,33 @@ def test_shared_context_profile_packs_only_decoder_trees(models, name) -> None:
     ) == model.finish_surface(surface, model.run(plan.items, shared_prefix=1))
 
 
+def test_packed_encoder_batches_match_padded_ones(models) -> None:
+    model = models["encoder"]
+    plans = [
+        model.plan(GOLDEN_STATE | {"request": text}, GOLDEN_QUESTIONS)
+        for text in ("Short note.", "A much longer request about billing. " * 12)
+    ]
+    items = [item for plan in plans for item in plan.items]
+
+    def arrays(results):
+        return [
+            array
+            for logits, block in results
+            for array in [*logits, *([] if block is None else [block])]
+        ]
+
+    padded, packed = arrays(model.run(items)), arrays(model.run_approximate(items))
+    assert len(padded) == len(packed)
+    for a, b in zip(padded, packed, strict=True):
+        np.testing.assert_allclose(b, a, atol=1e-5, rtol=1e-5)
+    single = model.plan(GOLDEN_STATE, {"domain": GOLDEN_QUESTIONS["domain"]}).items
+    assert len(single) == 1
+    for a, b in zip(
+        arrays(model.run(single)), arrays(model.run_approximate(single)), strict=True
+    ):
+        assert np.array_equal(a, b)
+
+
 @pytest.mark.parametrize("layout", ["rows", "packed"])
 def test_tree_blocks_equal_their_full_sequences(models, layout) -> None:
     engine_model = models["decoder"].engine_model
