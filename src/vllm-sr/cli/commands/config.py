@@ -233,7 +233,9 @@ def _print_migration_notes(notes: MigrationNotes) -> None:
     actions = [note for note in notes if note.action_required]
     if changes:
         heading("Changes to review")
-        fields((note.path, note.message) for note in changes)
+        for note in changes:
+            echo(f"  {note.path}")
+            echo(f"      {note.message}")
     for note in actions:
         warning(f"{note.path}: {note.message}")
 

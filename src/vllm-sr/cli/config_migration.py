@@ -166,12 +166,12 @@ def _move_legacy_routing_blocks(
 def _move_legacy_flat_signal_blocks(
     source: dict[str, Any], routing: dict[str, Any]
 ) -> None:
-    signals = _ensure_dict(routing, "signals")
     for legacy_key, canonical_key in LEGACY_SIGNAL_KEY_TO_CANONICAL.items():
-        if canonical_key in signals:
-            continue
         legacy_value = _clone_list(source.get(legacy_key))
-        if legacy_value:
+        if not legacy_value:
+            continue
+        signals = _ensure_dict(routing, "signals")
+        if canonical_key not in signals:
             signals[canonical_key] = legacy_value
 
 
@@ -341,9 +341,10 @@ def _move_legacy_global_blocks(
     providers: dict[str, Any],
     global_config: dict[str, Any],
 ) -> None:
-    model_catalog = _ensure_dict(global_config, "model_catalog")
-    if "external_models" in providers and "external" not in model_catalog:
-        model_catalog["external"] = deepcopy(providers.pop("external_models"))
+    if "external_models" in providers:
+        model_catalog = _ensure_dict(global_config, "model_catalog")
+        if "external" not in model_catalog:
+            model_catalog["external"] = deepcopy(providers.pop("external_models"))
 
     for key, value in source.items():
         if (
