@@ -21,15 +21,11 @@ var embeddingModels = map[string]func(*config.RouterConfig) string{
 	"multimodal": func(cfg *config.RouterConfig) string { return cfg.MultiModalModelPath },
 }
 
-// PrepareOwnedEmbeddings prepares the catalog for a candidate generation.
-// Failure releases only the candidate's independent binding references.
+// PrepareOwnedEmbeddings prepares a candidate generation's recipe consumers;
+// the service-owned cache, tools, memory and ingestion consumers are prepared
+// by PrepareOwnedGlobalServiceEmbeddings. Failure releases only the
+// candidate's independent binding references.
 func PrepareOwnedEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *serving.Runtime) (*embedding.Set, error) {
-	return prepareEmbeddings(ctx, cfg, runtime, false, embedding.Options{})
-}
-
-// PrepareOwnedRecipeEmbeddings excludes service-owned cache, tools, memory and
-// ingestion consumers. A standalone classifier owns only its recipe consumers.
-func PrepareOwnedRecipeEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *serving.Runtime) (*embedding.Set, error) {
 	return prepareEmbeddings(ctx, cfg, runtime, false, embedding.Options{})
 }
 
@@ -67,7 +63,7 @@ func prepareEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *s
 		configured := cfg.EmbeddingConfig.WithDefaults()
 		view = embedding.Options{Dimension: configured.TargetDimension, Layer: configured.TargetLayer}
 	}
-	needed := embeddingNeedsForScope(cfg, primary, sharedServices)
+	needed := config.EmbeddingModelsNeeded(cfg, primary, sharedServices)
 	requirements := config.EmbeddingRequirements(cfg, primary, sharedServices)
 	if len(needed) == 0 {
 		return embedding.NewSet(providers, primary), nil

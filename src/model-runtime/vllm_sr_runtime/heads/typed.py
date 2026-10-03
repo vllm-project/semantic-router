@@ -83,9 +83,12 @@ class TypeReadout(nn.Module):
         padding: torch.Tensor,
         markers: torch.Tensor,
     ) -> torch.Tensor:
-        """Marker logits ``[rows, width]`` (FP32) of rows of one type; ``padding`` is True on padded tokens."""
+        """Marker logits ``[rows, width]`` of rows of one type; ``padding`` is True on padded tokens.
+
+        The heads run in FP32 whatever precision the encoder ran in.
+        """
         offset = self.type_embedding.weight[KINDS.index(kind)]
-        hidden = hidden + offset.to(hidden.dtype)
+        hidden = hidden.float() + offset
         key_padding = torch.zeros_like(padding, dtype=hidden.dtype).masked_fill_(
             padding, float("-inf")
         )

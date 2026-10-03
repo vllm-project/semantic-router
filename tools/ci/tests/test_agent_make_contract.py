@@ -353,13 +353,6 @@ class HarnessMakeContractTests(unittest.TestCase):
                 )
                 self.assertEqual(recorded, expected)
 
-    def test_precommit_native_builds_do_not_replace_host_toolchain_outputs(
-        self,
-    ) -> None:
-        for binding in ("candle-binding", "onnx-binding", "ml-binding", "nlp-binding"):
-            self.assertIn(f"-v /app/{binding}/target \\", PRECOMMIT_MAKE)
-        self.assertIn("$$CONTAINER_CMD run --rm", PRECOMMIT_MAKE)
-
     def test_dashboard_checks_keep_lockfiles_frozen(self) -> None:
         for target in (
             "dashboard-lint",
@@ -402,6 +395,24 @@ class HarnessMakeContractTests(unittest.TestCase):
         self.assertIn("dashboard-test-backend: vllm-sr-install-cli", backend)
         self.assertIn("go test -json -count=1 ./...", backend)
         self.assertNotIn("VLLM_SR_EVALUATION_TEST_PYTHON", backend)
+
+    def test_precommit_image_includes_the_ci_helm_toolchain(self) -> None:
+        workflow = yaml.safe_load(
+            (REPO_ROOT / ".github/workflows/test-and-build.yml").read_text(
+                encoding="utf-8"
+            )
+        )
+        dockerfile = (REPO_ROOT / "tools/docker/Dockerfile.precommit").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(f"ARG HELM_VERSION={workflow['env']['HELM_VERSION']}", dockerfile)
+
+    def test_precommit_native_builds_do_not_replace_host_toolchain_outputs(
+        self,
+    ) -> None:
+        for binding in ("candle-binding", "onnx-binding", "ml-binding", "nlp-binding"):
+            self.assertIn(f"-v /app/{binding}/target \\", PRECOMMIT_MAKE)
+        self.assertIn("$$CONTAINER_CMD run --rm", PRECOMMIT_MAKE)
 
     def test_native_environment_survives_subdirectory_and_vendor_overrides(
         self,
@@ -464,17 +475,6 @@ native-env-probe:
                             ]
                         ),
                     )
-
-    def test_precommit_image_includes_the_ci_helm_toolchain(self) -> None:
-        workflow = yaml.safe_load(
-            (REPO_ROOT / ".github/workflows/test-and-build.yml").read_text(
-                encoding="utf-8"
-            )
-        )
-        dockerfile = (REPO_ROOT / "tools/docker/Dockerfile.precommit").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn(f"ARG HELM_VERSION={workflow['env']['HELM_VERSION']}", dockerfile)
 
     def test_native_search_paths_have_one_make_owner(self) -> None:
         for path in (REPO_ROOT / "tools/make").glob("*.mk"):

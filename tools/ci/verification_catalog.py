@@ -76,7 +76,7 @@ def verification_records(registry: dict) -> dict[str, dict]:
             "profile": name,
             "images": images,
             "services": ["kind", "gateway", "controlled-backend"],
-            "runtime": profile.get("runtime", "candle"),
+            "runtime": profile.get("runtime", "model-runtime"),
             "device": profile.get("device", "cpu"),
             "resource_class": profile.get("resource_class", "standard"),
             "inventory": f"e2e-profile:{name}",
@@ -144,7 +144,7 @@ def catalog_errors(registry: dict) -> list[str]:
         if (execution := record.get("execution")) and (
             execution != {"mode": "qemu-user", "host_platform": "linux/amd64"}
             or record["platform"] != "linux/riscv64"
-            or record["runtime"] != "candle"
+            or record["runtime"] != "model-runtime"
             or record["device"] != "cpu"
             or record["native"]
         ):

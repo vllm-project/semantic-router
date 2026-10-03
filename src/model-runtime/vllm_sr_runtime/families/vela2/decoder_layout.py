@@ -46,10 +46,12 @@ UNCOVERED_LOGIT = -30.0
 
 
 def segment_open(role: str) -> str:
+    """The opening line of a part's segment in the packages' decoder prompt."""
     return f'<segment role="{role}">\n'
 
 
 def option_block(key: str, description: str, tag: str = "option") -> str:
+    """One option (or label) of a question block, as canonical JSON between tags."""
     return (
         f"\n<{tag}>\n"
         + canonical({"key": key, "description": description})
@@ -60,6 +62,7 @@ def option_block(key: str, description: str, tag: str = "option") -> str:
 def question_head(
     kind: str, over: str | tuple[str, ...], text: str, span: bool = False
 ) -> str:
+    """A question block's header: task type, target parts, question and the options' heading."""
     target = ", ".join(over) if isinstance(over, tuple) else over
     return f"\n\nTask type: {kind}\nTarget: {target}\nQuestion:\n{text}\n" + (
         "Labels:" if span else "Options:"

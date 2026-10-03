@@ -54,8 +54,17 @@ def write_packages(runtime: str) -> None:
             staging = ROOT / f".{name}.partial"
             shutil.rmtree(staging, ignore_errors=True)
             subprocess.run(
-                [runtime, "fixture", str(staging), "--family", family]
-                + ["--variant", variant, "--seed", str(seed)],
+                [
+                    runtime,
+                    "fixture",
+                    str(staging),
+                    "--family",
+                    family,
+                    "--variant",
+                    variant,
+                    "--seed",
+                    str(seed),
+                ],
                 check=True,
                 stdout=subprocess.DEVNULL,
             )

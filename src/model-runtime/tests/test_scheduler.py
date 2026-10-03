@@ -192,6 +192,21 @@ class FusingModel(FakeModel):
     fuse_bundled_jobs = True
 
 
+def test_exact_runs_queued_requests_together_only_on_a_batch_invariant_model():
+    jobs = [
+        Job([item("a", 9)], None, 0.0, "exact"),
+        Job([item("b", 5)], None, 0.0, "exact"),
+    ]
+    profile = ExactProfile()
+    profile.available(FakeModel())
+    assert len(profile.plan(jobs, None)) == 2
+    invariant = FakeModel()
+    invariant.batch_invariant = True
+    profile.available(invariant)
+    (batch,) = profile.plan(jobs, None)
+    assert [job for job, _ in batch.parts] == jobs and batch.exact
+
+
 def test_exact_runs_a_bundle_group_as_one_batch_only_when_the_model_fuses():
     jobs = [
         Job([item("a", 9)], None, 0.0, "exact", group=7),

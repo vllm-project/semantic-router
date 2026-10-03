@@ -2,6 +2,7 @@
 
     python3 tools/vela2_parity.py --package DIR --output OUT.json [--requests REQUESTS.jsonl | --generate N]
         [--device cpu|rocm:0|cuda:0] [--seed 0] [--answers OURS.jsonl] [--approximate]
+        [--engine native|onnxruntime] [--reference-backend torch|onnx]
 
 The reference is the package's engine, imported from the package directory by this tool only (the runtime
 never imports package code), on the same device class: FP32 on CPU; on GPUs the engine's defaults (BF16
@@ -37,7 +38,6 @@ sys.path.insert(0, str(ROOT))
 from vllm_sr_runtime.accel.cpu import CPUAccelerator  # noqa: E402
 from vllm_sr_runtime.accel.cuda import CUDAAccelerator  # noqa: E402
 from vllm_sr_runtime.accel.rocm import ROCmAccelerator  # noqa: E402
-from vllm_sr_runtime.engines.native.engine import NativeEngine  # noqa: E402
 from vllm_sr_runtime.families.vela2.decoder_layout import DecoderTree  # noqa: E402
 from vllm_sr_runtime.families.vela2.family import Vela2Family  # noqa: E402
 from vllm_sr_runtime.plugins.base import (  # noqa: E402
@@ -45,6 +45,7 @@ from vllm_sr_runtime.plugins.base import (  # noqa: E402
     PackageRef,
     SurfacePlan,
 )
+from vllm_sr_runtime.plugins.registry import instantiate  # noqa: E402
 
 ACCELERATORS = {"cpu": CPUAccelerator, "cuda": CUDAAccelerator, "rocm": ROCmAccelerator}
 CPU_BAR, GPU_BAR = 1e-4, 0.02
@@ -247,10 +248,13 @@ def generate(count: int, seed: int, scale: float = 1.0) -> list[dict[str, Any]]:
 # --------------------------------------------------------------------------- the two sides
 
 
-def load_reference(package: Path, device: str) -> Any:
+def load_reference(package: Path, device: str, backend: str = "torch") -> Any:
+    """The package's engine and module; ``backend`` ``onnx`` runs its shipped graph (0.3B, CPU)."""
     sys.path.insert(0, str(package))
     import vela2_inference  # type: ignore[import-not-found]
 
+    if backend == "onnx":
+        return vela2_inference.Vela2(str(package), backend="onnx"), vela2_inference
     torch_device = "cpu" if device == "cpu" else "cuda"
     return vela2_inference.Vela2(str(package), device=torch_device), vela2_inference
 
@@ -276,14 +280,15 @@ def device_executor(device: str) -> Any:
     return lambda work: accelerator.execute(info, work)
 
 
-def load_runtime(package: Path, device: str) -> Any:
+def load_runtime(package: Path, device: str, engine: str = "native") -> Any:
+    """The package through the vela2 family on the named engine plugin."""
     accelerator = ACCELERATORS[device.split(":", maxsplit=1)[0]]()
     devices = accelerator.devices()
     index = int(device.split(":")[1]) if ":" in device else 0
     family = Vela2Family()
     verified = family.verify(PackageRef(package))
     spec = family.describe(verified)
-    engine_model = NativeEngine().load(
+    engine_model = instantiate("engines", engine).load(
         spec, accelerator, devices[index], EngineOptions()
     )
     return family.load(verified, spec, engine_model)
@@ -652,9 +657,13 @@ def compare(reference: dict[str, Any], ours: dict[str, Any]) -> dict[str, Any]:
     shared = set(ref_v) & set(our_v)
     deltas = {k: abs(ref_v[k] - our_v[k]) for k in shared}
     worst = max(deltas, key=deltas.get) if deltas else None
+    span = [d for k, d in deltas.items() if k.startswith("span:")]
+    other = [d for k, d in deltas.items() if not k.startswith("span:")]
     return {
         "decision_changes": changed,
         "max_abs_diff": deltas[worst] if worst else 0.0,
+        "max_answer_diff": max(other, default=0.0),
+        "max_span_diff": max(span, default=0.0),
         "worst": worst,
         "missing": sorted(set(ref_v) ^ set(our_v)),
         "identical": json.dumps(reference, sort_keys=True)
@@ -688,6 +697,13 @@ def main() -> int:
         action="store_true",
         help="answer through the approximate batches (packed trees and sequences)",
     )
+    parser.add_argument("--engine", default="native", help="runtime engine plugin")
+    parser.add_argument(
+        "--reference-backend",
+        default="torch",
+        choices=("torch", "onnx"),
+        help="the package engine's backend (onnx: its shipped 0.3B graph)",
+    )
     args = parser.parse_args()
     requests = (
         [
@@ -703,8 +719,8 @@ def main() -> int:
     torch.manual_seed(0)
     started = time.time()
     pinned = pin_choices(args.package, args.device)
-    engine, module = load_reference(args.package, args.device)
-    model = load_runtime(args.package, args.device)
+    engine, module = load_reference(args.package, args.device, args.reference_backend)
+    model = load_runtime(args.package, args.device, args.engine)
     load_s = time.time() - started
     bar = CPU_BAR if args.device == "cpu" else GPU_BAR
     records, answers_out = [], []
@@ -789,9 +805,13 @@ def main() -> int:
         "rendering_mismatches": sum(bool(r["rendering"]) for r in ok),
         "rows_not_isolated": [r["id"] for r in ok if r.get("rows_isolated") is False],
         "max_abs_diff": max((r["max_abs_diff"] for r in ok), default=0.0),
+        "max_answer_diff": max((r["max_answer_diff"] for r in ok), default=0.0),
+        "max_span_diff": max((r["max_span_diff"] for r in ok), default=0.0),
         "bar": bar,
         "kernel_choices": "pinned" if pinned else "autotuned in process",
         "path": "approximate" if args.approximate else "exact",
+        "engine": args.engine,
+        "reference_backend": args.reference_backend,
         "load_s": round(load_s, 1),
         **{k: round(v, 2) for k, v in timing.items()},
         "records": records,

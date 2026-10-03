@@ -1,8 +1,9 @@
 """Legacy comparison for embedders and rerankers: the router's native facade vs the runtime.
 
 The legacy side runs the router's native facade (``pkg/modelruntime/native``
-at the legacy commit) with candle on the CPU, the router's CPU default, in a
-Go test written into a copy of that commit's tree with its built bindings (the
+at the legacy commit) on the CPU as the router did (candle for Vela and Qwen3;
+ONNX Runtime on the prepared bundle for Omni text, images and audio), in a Go
+test written into a copy of that commit's tree with its built bindings (the
 setup of ``tools/legacy_parity.py``). The runtime side serves the same
 packages in-process through ``Runtime.call`` with its result cache off. Both
 answer one request at a time (one text per embedding call, a query with its
@@ -10,30 +11,44 @@ documents per rerank call), repeated, on the same inputs; ``--concurrency``
 adds a timed closed-loop load on both.
 
     python3 tools/embed_legacy.py legacy --tree TREE --cache HF --flat DIR --out legacy.jsonl
-    python3 tools/embed_legacy.py runtime --cache HF --out runtime.jsonl [--device rocm:0]
+    python3 tools/embed_legacy.py runtime --cache HF --prepared DIR --out runtime.jsonl [--device rocm:0]
     python3 tools/embed_legacy.py compare --legacy legacy.jsonl --runtime runtime.jsonl --out record.json
 
-``legacy`` needs only the standard library (the runner image has a bare
-Python); ``compare`` needs NumPy.
+``build`` compiles the legacy side's test binary for ``ab``, which alternates
+legacy and runtime calls on the same cores (the order flips every round, and
+load windows rotate) so both sides see the same moment's contention on a
+shared host; ``ab`` reports latency and throughput only (``compare`` checks
+values).
+
+    python3 tools/embed_legacy.py build --tree TREE --cache HF --flat DIR --out legacy.test
+    python3 tools/embed_legacy.py ab --binary legacy.test --cache HF --out ab.json [--legacy-cpus 16]
+
+``legacy`` and ``build`` need only the standard library (the runner image has
+a bare Python); ``compare`` needs NumPy.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import json
 import os
+import statistics
+import struct
 import subprocess
 import sys
+import tempfile
 import threading
 import time
+from array import array
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from embed_corpus import RERANK, texts
+from embed_corpus import PARAGRAPHS, QUERIES, RERANK, texts
 from legacy_parity import REPO, flat_copy, percentile, read_lines
 
 GO_TEST = "zz_legacy_embed_dump_test.go"
@@ -46,27 +61,52 @@ RERANKER = (
     "a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf",
 )
 QWEN3 = ("Qwen/Qwen3-Embedding-0.6B", "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3")
-# job: (repo, revision), mode, legacy adapter, (dimension, layer); 0 is the model's default
-JOBS: dict[str, tuple[tuple[str, str], str, str, tuple[int, int]]] = {
-    "embedding": (EMBEDDING, "embedding", "mmbert", (0, 0)),
-    "embedding_d256": (EMBEDDING, "embedding", "mmbert", (256, 0)),
-    "embedding_l11": (EMBEDDING, "embedding", "mmbert", (0, 11)),
-    "rerank": (RERANKER, "rerank", "vela_reranker", (768, 22)),
-    "rerank_l6d256": (RERANKER, "rerank", "vela_reranker", (256, 6)),
-    "qwen3": (QWEN3, "embedding", "qwen3", (0, 0)),
+OMNI_NANO = ("vllm-sr/Vela-1.0-Omni-Nano", "2ff2d66385dbdd661a560ec3e8bcb45a0527d92e")
+OMNI_MINI = ("vllm-sr/Vela-1.0-Omni-Mini", "801bae3ad28df6891408f0e0441c676b30e132e3")
+
+
+class Job(NamedTuple):
+    """One legacy binding: model (repo, revision), task mode, legacy adapter, view, input modality."""
+
+    model: tuple[str, str]
+    mode: str
+    adapter: str
+    view: tuple[int, int] = (0, 0)  # (dimension, layer); 0 is the model's default
+    modality: str = "text"
+
+
+JOBS: dict[str, Job] = {
+    "embedding": Job(EMBEDDING, "embedding", "mmbert"),
+    "embedding_d256": Job(EMBEDDING, "embedding", "mmbert", (256, 0)),
+    "embedding_l11": Job(EMBEDDING, "embedding", "mmbert", (0, 11)),
+    "rerank": Job(RERANKER, "rerank", "vela_reranker", (768, 22)),
+    "rerank_l6d256": Job(RERANKER, "rerank", "vela_reranker", (256, 6)),
+    "qwen3": Job(QWEN3, "embedding", "qwen3"),
+    **{
+        f"omni_{size}_{modality}": Job(model, "omni", "vela_omni", modality=modality)
+        for size, model in (("nano", OMNI_NANO), ("mini", OMNI_MINI))
+        for modality in ("text", "image", "audio")
+    },
 }
-MAX_TOKENS = 8192
-CPU_THRESHOLDS = {"min_cosine": 0.99999, "max_logit_delta": 1e-3}
-ROCM_THRESHOLDS = {"min_cosine": 0.9995, "max_logit_delta": 2e-2}
+PROVIDERS = {"embedding": "candle", "rerank": "candle", "omni": "ort"}
+MAX_TOKENS = {"embedding": 8192, "rerank": 8192, "omni": 512}
+# Design section 17 (None: not gated); a rerank tie is a legacy logit margin under ``tie``.
+CPU_THRESHOLDS = {"min_cosine": 0.99999, "max_abs": 1e-4, "tie": 1e-3}
+ROCM_THRESHOLDS = {"min_cosine": 0.9995, "max_abs": None, "tie": 2e-2}
 
 GO_TEMPLATE = r"""//go:build !windows && cgo
 
 package native
 
 import (
+	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -77,15 +117,19 @@ import (
 )
 
 type embedDumpInput struct {
-	ID        string   `json:"id"`
-	Text      string   `json:"text"`
-	Query     string   `json:"query"`
-	Documents []string `json:"documents"`
+	ID        string    `json:"id"`
+	Text      string    `json:"text"`
+	Query     string    `json:"query"`
+	Documents []string  `json:"documents"`
+	Image     string    `json:"image"`
+	PCM       []float32 `json:"pcm"`
+	Rate      int       `json:"rate"`
+	Channels  int       `json:"channels"`
 }
 
 type embedDumpJob struct {
-	Job, Path, Revision, Mode, Adapter string
-	MaxTokens, Dimension, Layer        int
+	Job, Path, Revision, Mode, Adapter, Provider, Modality string
+	MaxTokens, Dimension, Layer                            int
 	Inputs                             []embedDumpInput
 	Repeats, Concurrency               int
 	Seconds                            float64
@@ -159,6 +203,57 @@ func TestLegacyEmbedDump(t *testing.T) {
 	}
 }
 
+// TestLegacyEmbedServe answers stdin commands so a driver can alternate legacy and runtime
+// work: "call<TAB>job<TAB>id" prints the call's latency in nanoseconds (-1 on error) and
+// "load<TAB>job<TAB>concurrency<TAB>seconds" a load window as JSON.
+func TestLegacyEmbedServe(t *testing.T) {
+	raw, err := os.ReadFile(os.Getenv("LEGACY_EMBED_JOBS"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var jobs []embedDumpJob
+	if err := json.Unmarshal(raw, &jobs); err != nil {
+		t.Fatal(err)
+	}
+	runtime := New(nil)
+	ctx := context.Background()
+	calls := map[string]embedDumpCall{}
+	byName := map[string]embedDumpJob{}
+	inputs := map[string]embedDumpInput{}
+	for _, job := range jobs {
+		call, closeTask := embedDumpTask(t, runtime, job)
+		defer closeTask()
+		calls[job.Job], byName[job.Job] = call, job
+		for _, input := range job.Inputs {
+			inputs[job.Job+"\t"+input.ID] = input
+		}
+		for range 3 {
+			_, _ = call(ctx, job.Inputs[0])
+		}
+	}
+	fmt.Println("READY")
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Buffer(make([]byte, 1<<20), 1<<20)
+	for scanner.Scan() {
+		fields := strings.Split(scanner.Text(), "\t")
+		if fields[0] == "load" {
+			job := byName[fields[1]]
+			job.Concurrency, _ = strconv.Atoi(fields[2])
+			job.Seconds, _ = strconv.ParseFloat(fields[3], 64)
+			report, _ := json.Marshal(embedDumpLoadRun(ctx, job, calls[job.Job]))
+			fmt.Println(string(report))
+			continue
+		}
+		start := time.Now()
+		_, callErr := calls[fields[1]](ctx, inputs[fields[1]+"\t"+fields[2]])
+		latency := time.Since(start).Nanoseconds()
+		if callErr != nil {
+			latency = -1
+		}
+		fmt.Println(latency)
+	}
+}
+
 func embedDumpLoadRun(ctx context.Context, job embedDumpJob, call embedDumpCall) embedDumpLoad {
 	deadline := time.Now().Add(time.Duration(job.Seconds * float64(time.Second)))
 	var mutex sync.Mutex
@@ -190,7 +285,7 @@ func embedDumpSpec(job embedDumpJob, contract, overflow string) config.ResolvedM
 		Recipe: "parity", Name: job.Job,
 		Binding: config.ModelBinding{Deployment: job.Job, Adapter: job.Adapter, Contract: contract},
 		Deployment: config.ModelDeployment{
-			Artifact: job.Path, Revision: job.Revision, Provider: "candle", Device: "cpu", Precision: "native",
+			Artifact: job.Path, Revision: job.Revision, Provider: job.Provider, Device: "cpu", Precision: "native",
 			Input: config.ModelInputBudget{MaxTokens: job.MaxTokens, Overflow: overflow},
 		},
 	}
@@ -200,7 +295,7 @@ func embedDumpTask(t *testing.T, runtime *Runtime, job embedDumpJob) (embedDumpC
 	ctx := context.Background()
 	switch job.Mode {
 	case "embedding":
-		provider, err := runtime.Embedding(ctx, embedDumpSpec(job, "", "truncate"), job.Dimension, job.Layer)
+		provider, err := runtime.Embedding(ctx, embedDumpSpec(job, "embedding.v1", "truncate"), job.Dimension, job.Layer)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -222,6 +317,24 @@ func embedDumpTask(t *testing.T, runtime *Runtime, job embedDumpJob) (embedDumpC
 			}
 			return scorer.ScorePairs(ctx, "parity", pairs)
 		}, func() { _ = scorer.Close() }
+	case "omni":
+		provider, err := runtime.Embedding(ctx, embedDumpSpec(job, "embedding.v1", "reject"), 0, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return func(ctx context.Context, in embedDumpInput) (any, error) {
+			switch job.Modality {
+			case "image":
+				data, err := base64.StdEncoding.DecodeString(in.Image)
+				if err != nil {
+					return nil, err
+				}
+				return provider.EmbedImage(ctx, data, 0)
+			case "audio":
+				return provider.EmbedAudio(ctx, embedding.AudioRequest{PCM: in.PCM, SampleRate: in.Rate, Channels: in.Channels})
+			}
+			return provider.EmbedWithOptions(ctx, in.Text, embedding.Options{})
+		}, func() { _ = provider.Close() }
 	}
 	t.Fatalf("unknown mode %q", job.Mode)
 	return nil, nil
@@ -236,6 +349,41 @@ def snapshot(cache: Path, repo: str, revision: str) -> Path:
     return path
 
 
+def omni_inputs(bundle: Path, modality: str) -> list[dict[str, Any]]:
+    """The bundle's golden images (encoded bytes) or channel-major PCM, or the short corpus texts."""
+    golden = bundle / "golden"
+    index = json.loads((golden / "index.json").read_text(encoding="utf-8"))
+    if modality == "image":
+        return [
+            {
+                "id": f"i{i}",
+                "image": base64.b64encode(
+                    (golden / case["file"]).read_bytes()
+                ).decode(),
+                "format": Path(case["file"]).suffix[1:].replace("jpg", "jpeg"),
+            }
+            for i, case in enumerate(index["images"])
+        ]
+    if modality == "audio":
+        inputs = []
+        for i, case in enumerate(index["audio"]):
+            shape = case["pcm"]["shape"]
+            pcm = array("f", (golden / case["pcm"]["file"]).read_bytes())
+            channels = shape[0] if len(shape) == 2 else 1
+            inputs.append(
+                {
+                    "id": f"a{i}",
+                    "pcm": pcm.tolist(),
+                    "rate": case["sampling_rate"],
+                    "channels": channels,
+                }
+            )
+        return inputs
+    return [
+        {"id": f"t{i}", "text": text} for i, text in enumerate(QUERIES + PARAGRAPHS)
+    ]
+
+
 def job_specs(args: argparse.Namespace) -> list[dict[str, Any]]:
     corpus = [{"id": f"t{i}", "text": text} for i, text in enumerate(texts())]
     sets = [
@@ -243,24 +391,32 @@ def job_specs(args: argparse.Namespace) -> list[dict[str, Any]]:
         for i, (query, documents) in enumerate(RERANK)
     ]
     specs = []
-    for job in args.jobs.split(",") if args.jobs else JOBS:
-        (repo, revision), mode, adapter, (dimension, layer) = JOBS[job]
-        path = snapshot(Path(args.cache), repo, revision)
-        if getattr(args, "flat", None):
-            name = f"{repo.split('/')[-1]}-{revision[:12]}"
-            path = flat_copy(path, Path(args.flat) / name)
-        inputs = corpus if mode == "embedding" else sets
+    for name in args.jobs.split(",") if args.jobs else JOBS:
+        job = JOBS[name]
+        repo, revision = job.model
+        if job.mode == "omni":
+            path = Path(args.prepared) / repo.split("/")[-1].lower()
+            inputs = omni_inputs(path, job.modality)
+        else:
+            path = snapshot(Path(args.cache), repo, revision)
+            if getattr(args, "flat", None):
+                path = flat_copy(
+                    path, Path(args.flat) / f"{repo.split('/')[-1]}-{revision[:12]}"
+                )
+            inputs = corpus if job.mode == "embedding" else sets
         specs.append(
             {
-                "Job": job,
+                "Job": name,
                 "Repo": repo,
                 "Path": str(path),
                 "Revision": revision,
-                "Mode": mode,
-                "Adapter": adapter,
-                "MaxTokens": MAX_TOKENS,
-                "Dimension": dimension,
-                "Layer": layer,
+                "Mode": job.mode,
+                "Adapter": job.adapter,
+                "Provider": PROVIDERS[job.mode],
+                "Modality": job.modality,
+                "MaxTokens": MAX_TOKENS[job.mode],
+                "Dimension": job.view[0],
+                "Layer": job.view[1],
                 "Inputs": inputs[: args.limit] if args.limit else inputs,
                 "Repeats": args.repeats,
                 "Concurrency": args.concurrency,
@@ -270,18 +426,13 @@ def job_specs(args: argparse.Namespace) -> list[dict[str, Any]]:
     return specs
 
 
-def run_legacy(args: argparse.Namespace) -> None:
-    """Write the dump test into the legacy tree and run it with the built bindings."""
-    tree = Path(args.tree)
-    package = tree / "src" / "semantic-router" / "pkg" / "modelruntime" / "native"
-    (package / GO_TEST).write_text(GO_TEMPLATE, encoding="utf-8")
-    jobs = Path(args.out).with_suffix(".jobs.json")
-    jobs.write_text(json.dumps(job_specs(args)), encoding="utf-8")
+def legacy_env(tree: Path, jobs: Path) -> dict[str, str]:
+    """The cgo and loader environment of the legacy tree's bindings, plus the jobs file."""
     libraries = [
         tree / name / "target" / "release"
         for name in ("candle-binding", "ml-binding", "nlp-binding", "onnx-binding")
     ]
-    env = {
+    return {
         **os.environ,
         "CGO_ENABLED": "1",
         "CGO_CFLAGS": f"-I{tree / 'candle-binding'}",
@@ -291,11 +442,56 @@ def run_legacy(args: argparse.Namespace) -> None:
             [*(str(p) for p in libraries), os.environ.get("LD_LIBRARY_PATH", "")]
         ),
         "LEGACY_EMBED_JOBS": str(jobs),
+    }
+
+
+def write_legacy_test(args: argparse.Namespace, jobs: Path) -> Path:
+    """The Go test in the legacy tree and the jobs file; returns the router module."""
+    tree = Path(args.tree)
+    package = tree / "src" / "semantic-router" / "pkg" / "modelruntime" / "native"
+    (package / GO_TEST).write_text(GO_TEMPLATE, encoding="utf-8")
+    jobs.write_text(json.dumps(job_specs(args)), encoding="utf-8")
+    return tree / "src" / "semantic-router"
+
+
+def run_legacy(args: argparse.Namespace) -> None:
+    """Run the jobs through the legacy facade with the built bindings."""
+    jobs = Path(args.out).with_suffix(".jobs.json")
+    module = write_legacy_test(args, jobs)
+    env = {
+        **legacy_env(Path(args.tree), jobs),
         "LEGACY_EMBED_OUT": str(Path(args.out).resolve()),
     }
     command = ["go", "test", "-count=1", "-timeout", "6h"]
     command += ["-run", "^TestLegacyEmbedDump$", "./pkg/modelruntime/native/"]
-    subprocess.run(command, cwd=tree / "src" / "semantic-router", env=env, check=True)
+    subprocess.run(command, cwd=module, env=env, check=True)
+
+
+def build_legacy(args: argparse.Namespace) -> None:
+    """Compile the legacy side's test binary (serve mode for ``ab``) next to its jobs file."""
+    jobs = Path(args.out).with_suffix(".jobs.json")
+    module = write_legacy_test(args, jobs)
+    command = ["go", "test", "-c", "-o", str(Path(args.out).resolve())]
+    command.append("./pkg/modelruntime/native/")
+    subprocess.run(
+        command, cwd=module, env=legacy_env(Path(args.tree), jobs), check=True
+    )
+
+
+def float_wav(pcm: list[float], rate: int, channels: int) -> bytes:
+    """Channel-major PCM as an interleaved IEEE float WAV (what the router forwards)."""
+    frames = len(pcm) // channels
+    data = array("f", bytes(4 * len(pcm)))
+    for channel in range(channels):
+        data[channel::channels] = array(
+            "f", pcm[channel * frames : (channel + 1) * frames]
+        )
+    fmt = struct.pack(
+        "<HHIIHH", 3, channels, rate, rate * 4 * channels, 4 * channels, 32
+    )
+    body = b"WAVE" + b"fmt " + struct.pack("<I", len(fmt)) + fmt
+    body += b"data" + struct.pack("<I", 4 * len(pcm)) + data.tobytes()
+    return b"RIFF" + struct.pack("<I", len(body)) + body
 
 
 def runtime_request(
@@ -311,10 +507,20 @@ def runtime_request(
             "dimensions": spec["Dimension"],
         }
         return "rerank", body
+    if "image" in item:
+        url = f"data:image/{item['format']};base64,{item['image']}"
+        value: Any = [{"type": "image_url", "image_url": {"url": url}}]
+    elif "pcm" in item:
+        wav = float_wav(item["pcm"], item["rate"], item["channels"])
+        audio = {"data": base64.b64encode(wav).decode(), "format": "wav"}
+        value = [{"type": "input_audio", "input_audio": audio}]
+    else:
+        value = item["text"]
+    options = {"max_tokens": spec["MaxTokens"], "overflow": "truncate"}
     body = {
         "model": model,
-        "input": item["text"],
-        "options": {"max_tokens": spec["MaxTokens"], "overflow": "truncate"},
+        "input": value,
+        "options": {"overflow": "reject"} if spec["Mode"] == "omni" else options,
     }
     if spec["Dimension"]:
         body["dimensions"] = spec["Dimension"]
@@ -330,27 +536,35 @@ def runtime_result(spec: dict[str, Any], out: dict[str, Any]) -> Any:
     return out["data"][0]["embedding"]
 
 
-def run_runtime(args: argparse.Namespace) -> None:
+def serve_runtime(
+    args: argparse.Namespace, specs: list[dict[str, Any]]
+) -> tuple[Any, dict[str, str]]:
+    """A started in-process runtime serving every job's model, and the served names."""
     sys.path.insert(0, str(REPO / "src" / "model-runtime"))
     from vllm_sr_runtime.config import ModelConfig, ServeConfig
     from vllm_sr_runtime.runtime import Runtime
 
-    specs = job_specs(args)
+    os.environ["VLLM_SR_RUNTIME_PREPARED_DIR"] = args.prepared
     names = {spec["Repo"]: spec["Repo"].split("/")[-1] for spec in specs}
     models = tuple(
         ModelConfig(model=repo, name=name, device=args.device, profile=args.profile)
         for repo, name in names.items()
     )
-    runtime = Runtime(
-        ServeConfig(
-            models=models,
-            threads=args.threads,
-            result_cache_entries=0,
-            cache_dir=args.cache,
-            offline=True,
-        )
+    config = ServeConfig(
+        models=models,
+        threads=args.threads,
+        result_cache_entries=0,
+        cache_dir=args.cache,
+        offline=True,
     )
+    runtime = Runtime(config)
     runtime.start(background=False)
+    return runtime, names
+
+
+def run_runtime(args: argparse.Namespace) -> None:
+    specs = job_specs(args)
+    runtime, names = serve_runtime(args, specs)
     loop = asyncio.new_event_loop()
 
     def call(spec: dict[str, Any], item: dict[str, Any]) -> dict[str, Any]:
@@ -422,6 +636,116 @@ def runtime_load(
     }
 
 
+def legacy_command(binary: str, cpus: int | None) -> list[str]:
+    """The serve-mode binary, seeing ``cpus`` CPUs in sysfs when given (needs root).
+
+    The legacy ONNX Runtime sessions size their thread pools from the host's CPU
+    count, never from the cpuset (the router never configured them); a private
+    mount namespace shows them only the CPUs the run has.
+    """
+    command = [binary, "-test.run", "^TestLegacyEmbedServe$", "-test.timeout", "12h"]
+    if not cpus:
+        return command
+    online = Path(tempfile.mkdtemp()) / "online"
+    online.write_text(f"0-{cpus - 1}\n", encoding="utf-8")
+    mounts = " && ".join(
+        f"mount --bind {online} /sys/devices/system/cpu/{name}"
+        for name in ("online", "possible", "present")
+    )
+    return ["unshare", "-m", "sh", "-c", f'{mounts} && exec "$0" "$@"', *command]
+
+
+def run_ab(args: argparse.Namespace) -> None:
+    """Alternate legacy and runtime calls per input on the same cores, round after round."""
+    jobs = Path(args.binary).with_suffix(".jobs.json")
+    specs = json.loads(jobs.read_text(encoding="utf-8"))
+    legacy = subprocess.Popen(
+        legacy_command(args.binary, args.legacy_cpus),
+        env=legacy_env(Path(args.tree), jobs),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+    )
+    assert legacy.stdin is not None and legacy.stdout is not None
+    while legacy.stdout.readline().strip() != "READY":
+        if legacy.poll() is not None:
+            raise SystemExit("the legacy binary exited before it was ready")
+    runtime, names = serve_runtime(args, specs)
+    loop = asyncio.new_event_loop()
+
+    def call_legacy(spec: dict[str, Any], item: dict[str, Any]) -> int:
+        legacy.stdin.write(f"call\t{spec['Job']}\t{item['id']}\n")
+        return int(legacy.stdout.readline())
+
+    def call_runtime(spec: dict[str, Any], item: dict[str, Any]) -> int:
+        surface, body = runtime_request(spec, item, names[spec["Repo"]])
+        start = time.perf_counter_ns()
+        status, _ = loop.run_until_complete(runtime.call(surface, body))
+        return time.perf_counter_ns() - start if status == 200 else -1
+
+    report: dict[str, Any] = {}
+    for spec in specs:
+        for _ in range(3):
+            call_runtime(spec, spec["Inputs"][0])
+    for round_index in range(args.rounds):
+        for spec in specs:
+            entry = report.setdefault(
+                spec["Job"], {"legacy": [], "runtime": [], "ratio": []}
+            )
+            for item in spec["Inputs"]:
+                if round_index % 2:
+                    runtime_ns, legacy_ns = call_runtime(spec, item), call_legacy(
+                        spec, item
+                    )
+                else:
+                    legacy_ns, runtime_ns = call_legacy(spec, item), call_runtime(
+                        spec, item
+                    )
+                if legacy_ns > 0 and runtime_ns > 0:
+                    entry["legacy"].append(legacy_ns)
+                    entry["runtime"].append(runtime_ns)
+                    entry["ratio"].append(legacy_ns / runtime_ns)
+        for spec in specs if args.concurrency else ():
+            rates = report[spec["Job"]].setdefault(
+                "throughput", {"legacy": [], "runtime": []}
+            )
+            sides = (
+                ("legacy", "runtime") if round_index % 2 == 0 else ("runtime", "legacy")
+            )
+            for side in sides:
+                if side == "legacy":
+                    command = (
+                        f"load\t{spec['Job']}\t{args.concurrency}\t{args.seconds}\n"
+                    )
+                    legacy.stdin.write(command)
+                    window = json.loads(legacy.stdout.readline())
+                else:
+                    window = runtime_load(runtime, spec, names[spec["Repo"]], args)
+                rates[side].append(window["calls"] / window["seconds"])
+    legacy.stdin.close()
+    legacy.wait()
+    loop.close()
+    runtime.stop()
+    summary = {
+        job: {
+            "pairs": len(values["ratio"]),
+            "legacy": latency([{"latency_ns": values["legacy"]}]),
+            "runtime": latency([{"latency_ns": values["runtime"]}]),
+            "median_speedup": (
+                statistics.median(values["ratio"]) if values["ratio"] else None
+            ),
+            "throughput_per_s": {
+                side: statistics.median(windows)
+                for side, windows in values.get("throughput", {}).items()
+            },
+        }
+        for job, values in report.items()
+    }
+    Path(args.out).write_text(json.dumps(summary, indent=1) + "\n", encoding="utf-8")
+    print(json.dumps(summary))
+
+
 def latency(lines: Iterable[dict[str, Any]]) -> dict[str, float]:
     values = [ns for line in lines for ns in line["latency_ns"]]
     return {"p50_ms": percentile(values, 0.5), "p95_ms": percentile(values, 0.95)}
@@ -438,8 +762,13 @@ def load_summary(load: dict[str, Any] | None) -> dict[str, float] | None:
     }
 
 
-def order(logits: list[float]) -> list[int]:
-    return sorted(range(len(logits)), key=lambda i: (-logits[i], i))
+def inversions(old: list[float], new: list[float], tie: float) -> int:
+    """Document pairs the runtime orders against legacy logits more than ``tie`` apart."""
+    return sum(
+        (old[i] - old[j]) * (new[i] - new[j]) < 0 and abs(old[i] - old[j]) > tie
+        for i in range(len(old))
+        for j in range(i + 1, len(old))
+    )
 
 
 def compare_job(
@@ -455,18 +784,16 @@ def compare_job(
         i for i in legacy if ("error" in legacy[i]) != ("error" in runtime[i])
     )
     shared = [i for i in legacy if "result" in legacy[i] and "result" in runtime[i]]
-    if JOBS[job][1] == "rerank":
-        deltas, identical = [], 0
+    mode = JOBS[job].mode
+    if mode == "rerank":
+        deltas, inverted = [], 0
         for i in shared:
             old = [float(v) for v in legacy[i]["result"]["Scores"]]
             new = runtime[i]["result"]
             deltas.append(float(np.abs(np.subtract(old, new)).max()))
-            identical += order(old) == order(new)
-        values = {
-            "max_logit_delta": max(deltas),
-            "identical_order": f"{identical}/{len(shared)}",
-        }
-        passed = values["max_logit_delta"] <= thresholds["max_logit_delta"]
+            inverted += inversions(old, new, thresholds["tie"])
+        values = {"max_logit_delta": max(deltas), "inversions_outside_ties": inverted}
+        passed = inverted == 0
     else:
         cosines, deltas = [], []
         for i in shared:
@@ -477,7 +804,10 @@ def compare_job(
             )
             deltas.append(float(np.abs(old - new).max()))
         values = {"min_cosine": min(cosines), "max_abs": max(deltas)}
-        passed = values["min_cosine"] >= thresholds["min_cosine"]
+        gated = thresholds["max_abs"] is not None and mode != "omni"
+        passed = values["min_cosine"] >= thresholds["min_cosine"] and (
+            not gated or values["max_abs"] <= thresholds["max_abs"]
+        )
     old_latency = latency(legacy.values())
     new_latency = latency(runtime.values())
     return {
@@ -539,12 +869,28 @@ def main(argv: Iterable[str] | None = None) -> int:
     legacy = commands.add_parser("legacy", help="run the jobs on the legacy facade")
     legacy.add_argument("--tree", required=True)
     legacy.add_argument("--flat", default=None)
+    build = commands.add_parser("build", help="compile the legacy test binary for ab")
+    build.add_argument("--tree", required=True)
+    build.add_argument("--flat", default=None)
     runtime = commands.add_parser("runtime", help="run the jobs on the runtime")
-    runtime.add_argument("--device", default="cpu")
-    runtime.add_argument("--profile", default="exact")
-    runtime.add_argument("--threads", type=int, default=None)
-    for sub in (legacy, runtime):
+    ab = commands.add_parser("ab", help="alternate legacy and runtime calls")
+    ab.add_argument("--binary", required=True)
+    ab.add_argument("--tree", required=True)
+    ab.add_argument("--rounds", type=int, default=4)
+    ab.add_argument("--legacy-cpus", type=int, default=None)
+    for sub in (runtime, ab):
+        sub.add_argument("--device", default="cpu")
+        sub.add_argument("--profile", default="exact")
+        sub.add_argument("--threads", type=int, default=None)
+    for sub in (legacy, build, runtime, ab):
         sub.add_argument("--cache", required=True)
+        sub.add_argument(
+            "--prepared",
+            default=os.environ.get(
+                "VLLM_SR_RUNTIME_PREPARED_DIR", "/opt/router-model-artifacts"
+            ),
+            help="the directory of the prepared Omni bundles",
+        )
         sub.add_argument("--out", required=True)
         sub.add_argument("--jobs", default="")
         sub.add_argument("--limit", type=int, default=0)
@@ -557,9 +903,14 @@ def main(argv: Iterable[str] | None = None) -> int:
     compare.add_argument("--out", required=True)
     compare.add_argument("--device-class", choices=("cpu", "rocm"), default="cpu")
     args = parser.parse_args(argv)
-    {"legacy": run_legacy, "runtime": run_runtime, "compare": run_compare}[
-        args.command
-    ](args)
+    commands_by_name = {
+        "legacy": run_legacy,
+        "build": build_legacy,
+        "runtime": run_runtime,
+        "ab": run_ab,
+        "compare": run_compare,
+    }
+    commands_by_name[args.command](args)
     return 0
 
 

@@ -1,5 +1,9 @@
 """CPU accelerator: FP32 everywhere, pure-torch reference kernels. Validated.
 
+For models that name them it registers the ``geglu`` slot's ``contiguous``
+variant and, on x86, the ``linear`` slot's ``float32-packed`` one
+(``onednn.py``): together they make an encoder's forward batch-invariant.
+
 All CPU device work of a process runs on one thread (``execute``). PyTorch's
 OpenMP backend keeps one thread team per calling thread; as soon as two teams
 exist (a loader thread, one worker per model) the threads outnumber the cores,
@@ -20,10 +24,23 @@ from typing import Any
 import torch
 
 from ..plugins.base import Accelerator, DeviceInfo
-from .kernels import KernelSet, reference_kernels
+from . import onednn
+from .kernels import (
+    CONTIGUOUS,
+    Kernel,
+    KernelSet,
+    geglu_contiguous,
+    reference_kernels,
+)
 
 _LOCK = threading.Lock()
 _EXECUTOR: ThreadPoolExecutor | None = None
+
+
+def native_bf16() -> bool:
+    """Whether the CPU computes BF16 natively (AVX-512 BF16 or AMX)."""
+    probes = ("_is_avx512_bf16_supported", "_is_amx_tile_supported")
+    return any(getattr(torch.cpu, probe, lambda: False)() for probe in probes)
 
 
 def device_thread() -> ThreadPoolExecutor:
@@ -61,7 +78,7 @@ class CPUAccelerator(Accelerator):
                 name=platform.processor() or platform.machine(),
                 total_memory=total,
                 free_memory=free,
-                bf16=False,
+                bf16=native_bf16(),
                 arch=platform.machine(),
             )
         ]
@@ -70,10 +87,29 @@ class CPUAccelerator(Accelerator):
         return torch.device("cpu")
 
     def kernels(self, device: DeviceInfo) -> KernelSet:
-        return reference_kernels("cpu")
+        kernels = reference_kernels("cpu")
+        kernels.register(
+            Kernel("geglu", geglu_contiguous, "torch", exact=True, variant=CONTIGUOUS)
+        )
+        if onednn.available():
+            kernels.register(
+                Kernel(
+                    "linear",
+                    onednn.PackedLinear,
+                    "onednn",
+                    exact=True,
+                    variant=onednn.PACKED,
+                )
+            )
+        return kernels
 
     def capabilities(self, device: DeviceInfo) -> dict[str, bool]:
-        return {"bf16_autocast": False, "graphs": False, "triton": False}
+        return {
+            "bf16_autocast": False,
+            "native_bf16": device.bf16,
+            "graphs": False,
+            "triton": False,
+        }
 
     def execute(self, device: DeviceInfo, work: Callable[[], Any]) -> Any:
         if threading.current_thread().name.startswith("vllm-sr-cpu"):

@@ -6,6 +6,7 @@ import base64
 import io
 import json
 import time
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -13,7 +14,6 @@ from vllm_sr_runtime.accel.cpu import CPUAccelerator
 from vllm_sr_runtime.errors import PackageError
 from vllm_sr_runtime.families.multimodal_embedding import bundle as bundles
 from vllm_sr_runtime.families.multimodal_embedding.family import (
-    PREPARED_DIR_ENV,
     MultimodalEmbeddingFamily,
     golden_audio,
     golden_image,
@@ -30,6 +30,7 @@ from vllm_sr_runtime.plugins.base import (
     SurfaceRequest,
 )
 from vllm_sr_runtime.registry.artifacts import inventory
+from vllm_sr_runtime.registry.resolve import PREPARED_DIR_ENV, resolve
 from vllm_sr_runtime.testing import omni
 
 pytest.importorskip("onnxruntime")
@@ -59,6 +60,24 @@ def test_a_missing_extra_names_its_install(nano, monkeypatch):
         RuntimeError, match=r"Pillow: pip install 'vllm-sr-runtime\[multimodal\]'"
     ):
         family.describe(package)
+
+
+def test_the_default_engine_serves_a_bundle_on_onnxruntime(tmp_path):
+    from vllm_sr_runtime.config import ModelConfig, ServeConfig
+    from vllm_sr_runtime.runtime import Runtime
+
+    source = {"repo_id": "example/omni-fixture", "revision": "0" * 40}
+    bundle = omni.write_bundle(tmp_path / "omni", source=source)
+    served = ModelConfig(model=str(bundle), name="omni", device="cpu")
+    runtime = Runtime(ServeConfig(models=(served,)))
+    runtime.start(background=False)
+    try:
+        assert runtime.lookup("omni").card([])["engine"] == "onnxruntime"
+    finally:
+        runtime.stop()
+    native = Runtime(ServeConfig(models=(replace(served, engine="native"),)))
+    with pytest.raises(RuntimeError, match="no engine can run"):
+        native.load()
 
 
 @pytest.fixture(scope="module")
@@ -155,6 +174,8 @@ def test_hub_ids_resolve_to_the_prepared_bundle(nano, monkeypatch, tmp_path):
     )
     monkeypatch.setenv(PREPARED_DIR_ENV, str(nano.parent))
     assert family.fetch(ref).root == nano
+    offline = resolve(omni.SOURCE["repo_id"], offline=True, cache_dir=tmp_path)
+    assert offline.root == nano and offline.revision == omni.SOURCE["revision"]
     monkeypatch.setenv(PREPARED_DIR_ENV, str(tmp_path))
     with pytest.raises(PackageError, match="tools/models/vela_omni"):
         family.fetch(ref)
@@ -269,10 +290,16 @@ def test_deadlines_and_non_unit_outputs(tmp_path, model):
     assert body["data"][0]["error"] == "invalid_model_output"
 
 
-def test_golden_request_exercises_every_graph(nano, model):
+def test_golden_request_exercises_every_graph(nano, model, tmp_path):
     family = MultimodalEmbeddingFamily()
     (golden,) = family.golden(family.verify(PackageRef(nano)))
-    assert golden["surface"] == "embeddings" and golden["expected"] == {}
+    assert golden["surface"] == "embeddings"
+    assert (
+        set(golden["expected"]) == {"cpu"} and len(golden["expected"]["cpu"]) == 3 * 384
+    )
+    unpinned = {"repo_id": "example/omni-fixture", "revision": "0" * 40}
+    other = omni.write_bundle(tmp_path / "other", source=unpinned)
+    assert family.golden(family.verify(PackageRef(other)))[0]["expected"] == {}
     plan, body = serve(model, golden["body"])
     assert [item.modality for item in plan.items] == ["text", "image", "audio"]
     values = model.golden_values("embeddings", body)

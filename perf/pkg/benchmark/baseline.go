@@ -14,10 +14,16 @@ import (
 
 // Baseline represents performance baseline data
 type Baseline struct {
-	Version    string                     `json:"version"`
-	GitCommit  string                     `json:"git_commit"`
-	Timestamp  time.Time                  `json:"timestamp"`
-	Benchmarks map[string]BenchmarkMetric `json:"benchmarks"`
+	Version   string    `json:"version"`
+	GitCommit string    `json:"git_commit"`
+	Timestamp time.Time `json:"timestamp"`
+	// ModelBaselineReset says why the base revision has no measured model
+	// numbers: it predates the harness, so model benchmarks are not gated.
+	ModelBaselineReset string `json:"model_baseline_reset,omitempty"`
+	// LegacyComparisonRecords are the records that measured the retired native
+	// bindings against the model runtime; a reset must cite at least one.
+	LegacyComparisonRecords []string                   `json:"legacy_comparison_records,omitempty"`
+	Benchmarks              map[string]BenchmarkMetric `json:"benchmarks"`
 }
 
 // BenchmarkMetric holds metrics for a single benchmark.

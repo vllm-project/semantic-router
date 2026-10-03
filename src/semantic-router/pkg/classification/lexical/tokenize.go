@@ -16,10 +16,18 @@ func tokenize(text string) []string {
 	}
 	words := asciiWords(asciiLower(deunicode.Transliterate(text)))
 	tokens := words[:0]
+	// A prompt repeats its words; each distinct word is stemmed once.
+	stems := make(map[string]string)
 	for _, word := range words {
-		if _, stop := englishStopWords[word]; !stop {
-			tokens = append(tokens, stemEnglish(word))
+		if _, stop := englishStopWords[word]; stop {
+			continue
 		}
+		stem, ok := stems[word]
+		if !ok {
+			stem = stemEnglish(word)
+			stems[word] = stem
+		}
+		tokens = append(tokens, stem)
 	}
 	return tokens
 }

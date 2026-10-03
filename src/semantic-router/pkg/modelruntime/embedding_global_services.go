@@ -39,7 +39,7 @@ func globalEmbeddingConsumerName(cfg *config.RouterConfig, model, primary string
 	if cfg.VectorStore != nil && cfg.VectorStore.Enabled {
 		selected := cfg.VectorStore.EmbeddingModel
 		if selected == "" {
-			selected = "bert"
+			selected = config.DefaultEmbeddingModel
 		}
 		if selected == model {
 			consumers = append(consumers, "vector_store")

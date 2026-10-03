@@ -194,7 +194,8 @@ def packed_marker_logits(
 
     The rows run back to back without padding (the engine's packed layout);
     the type's head layers then read them padded with a key mask. Packing
-    changes the attention and GEMM shapes, so this serves approximate profiles.
+    changes the attention and GEMM shapes, so this serves approximate profiles,
+    which also run the engine's reduced-precision copy when it loaded one.
     """
     lengths = [len(item.ids) for item in items]
     ids = torch.tensor(
@@ -202,7 +203,11 @@ def packed_marker_logits(
     )
     packed = encode(
         EncoderBatch(
-            input_ids=ids, attention_mask=None, lengths=lengths, branch=BRANCH[kind]
+            input_ids=ids,
+            attention_mask=None,
+            lengths=lengths,
+            branch=BRANCH[kind],
+            reduced=True,
         )
     ).hidden[exit_layer]
     width, hidden = max(lengths), packed.shape[-1]

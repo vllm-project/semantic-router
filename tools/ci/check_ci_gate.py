@@ -18,7 +18,7 @@ from execution_batches import (
     e2e_batches,
     expected_dispatch_jobs,
     image_producers,
-    native_batches,
+    platform_batches,
 )
 from provider_mocker_image import validate_acquisition
 from release_guard_waiver import planned_waiver
@@ -76,7 +76,7 @@ def evaluate_gate(
             if record.get("dispatch_job") != dispatch_job(record):
                 errors.append(f"{record['id']}: dispatch identity differs")
         for field, build_batches in (
-            ("native_batches", native_batches),
+            ("platform_batches", platform_batches),
             ("e2e_batches", e2e_batches),
         ):
             if plan.get(field) != build_batches(plan["verifications"]):

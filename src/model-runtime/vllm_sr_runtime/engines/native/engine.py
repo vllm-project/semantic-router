@@ -8,6 +8,8 @@ from typing import Any
 import torch
 from torch import nn
 
+from ...accel import onednn
+from ...accel.kernels import CONTIGUOUS
 from ...plugins.base import (
     Accelerator,
     BackboneSpec,
@@ -26,9 +28,17 @@ from ...plugins.base import (
 from ...scheduler.planner import padded
 from . import fast, models
 from .encoder import EncoderGraphs
+from .models.forest import ForestShape
 from .models.lora import attach
 from .models.tree import Tree
-from .weights import cast_parameters, keep_linear_bf16, load_adapter, load_backbone
+from .reduced import REDUCED_AUTOCAST, linear_bytes, reduced_view
+from .weights import (
+    cast_parameters,
+    keep_linear_bf16,
+    lay_out_linears,
+    load_adapter,
+    load_backbone,
+)
 
 
 class NativeEngineModel(EngineModel):
@@ -41,9 +51,12 @@ class NativeEngineModel(EngineModel):
         options: EngineOptions,
         residency: dict[str, int] | None,
         branches: dict[str, nn.Module] | None = None,
+        reduced: tuple[str, nn.Module] | None = None,
     ):
+        """``reduced`` is the ``(kind, view)`` copy approximate batches may run (``reduced.py``)."""
         self.backbone = backbone
         self.branches = branches or {}
+        self.reduced_kind, self.reduced = reduced or (None, None)
         self.accelerator = accelerator
         self.device_info = device_info
         self.device = accelerator.torch_device(device_info)
@@ -53,16 +66,32 @@ class NativeEngineModel(EngineModel):
         self.kernels = accelerator.kernels(device_info)
         self.kernels.allow_approximate = not options.exact_kernels_only
         self.kernels.use_variants(spec.kernel_variants)
-        for module in (backbone, *self.branches.values()):
-            module.kernels = self.kernels
+        self.linear = self.kernels.select("linear")
+        if self.linear.variant is not None:
+            for module in (backbone, *self.branches.values()):
+                lay_out_linears(module, self.linear.fn)
+        # Packed linears, contiguous GeGLU, norms and unpadded attention grids
+        # (``packed(uniform=True)``) compute each row the same in any batch.
+        self.batch_invariant = (
+            spec.encoder
+            and self.device.type == "cpu"
+            and self.linear.variant == onednn.PACKED
+            and self.kernels.select("geglu").variant == CONTIGUOUS
+        )
+        for module in (backbone, *self.branches.values(), self.reduced):
+            if module is not None:
+                module.kernels = self.kernels
         self.fast: dict[str, Any] = {}
         self.masks: fast.Masks | None = None
         self.graphs: fast.Graphs | None = None
         self.encoder_graphs: EncoderGraphs | None = None
+        self.reduced_graphs: EncoderGraphs | None = None
         if self.device.type == "cuda" and not spec.encoder:
             self._install_fast()
         if self.device.type == "cuda" and spec.encoder and options.graphs:
             self.encoder_graphs = EncoderGraphs(backbone, self.device)
+            if self.reduced is not None:
+                self.reduced_graphs = EncoderGraphs(self.reduced, self.device)
 
     def _install_fast(self) -> None:
         """The exact GPU fast path (``fast.py``): fused layers, lean LoRA, host masks and graphs."""
@@ -86,6 +115,16 @@ class NativeEngineModel(EngineModel):
             out["graphs"] = self.graphs.receipt()
         if self.encoder_graphs is not None:
             out["encoder_graphs"] = self.encoder_graphs.receipt()
+        if self.reduced is not None:
+            out["reduced"] = {
+                "kind": self.reduced_kind,
+                "bytes": linear_bytes(self.reduced),
+                **(
+                    {"encoder_graphs": self.reduced_graphs.receipt()}
+                    if self.reduced_graphs is not None
+                    else {}
+                ),
+            }
         return out
 
     def autocast(self) -> AbstractContextManager[Any]:
@@ -94,6 +133,17 @@ class NativeEngineModel(EngineModel):
 
             return nullcontext()
         return self.accelerator.autocast(self.device_info, self.spec.dtype.autocast)
+
+    def reduced_autocast(self) -> AbstractContextManager[Any]:
+        """The reduced copy's compute dtype: BF16 autocast for BF16 copies, none otherwise."""
+        dtype = REDUCED_AUTOCAST.get(self.reduced_kind or "")
+        if dtype is None:
+            from contextlib import nullcontext
+
+            return nullcontext()
+        if self.device.type == "cpu":
+            return torch.autocast("cpu", dtype=dtype)
+        return self.accelerator.autocast(self.device_info, "bfloat16")
 
     supports_shared_context = True
 
@@ -171,9 +221,15 @@ class NativeEngineModel(EngineModel):
 
         prefix_ids, prefix_mask = padded_rows(batch.prefixes, left=True)
         block_ids, block_mask = padded_rows(batch.blocks, left=False)
+        width = prefix_ids.shape[1]
+        shape = ForestShape(
+            tuple(width - len(prefix) for prefix in batch.prefixes),
+            tuple(len(block) for block in batch.blocks),
+            tuple(batch.owners),
+        )
         owner = torch.tensor(batch.owners, dtype=torch.long, device=self.device)
         _, blocks = self.backbone.forward_forest(
-            prefix_ids, prefix_mask, block_ids, block_mask, owner
+            prefix_ids, prefix_mask, block_ids, block_mask, owner, shape
         )
         return blocks
 
@@ -211,23 +267,30 @@ class NativeEngineModel(EngineModel):
         )
         if not hasattr(backbone, "encode"):
             return self._encode_decoder(batch)
+        reduced = batch.reduced and self.reduced is not None and batch.branch is None
+        if reduced:
+            backbone = self.reduced
+        graphs = self.reduced_graphs if reduced else self.encoder_graphs
+        context = self.reduced_autocast if reduced else self.autocast
         exits = tuple(batch.layers) or (backbone.num_layers,)
         if batch.lengths is not None:
             if sum(batch.lengths) != batch.input_ids.numel():
                 raise ValueError("packed lengths do not cover the input IDs")
-            if self.encoder_graphs is not None and batch.branch is None:
-                with torch.inference_mode(), self.autocast():
-                    hidden = self.encoder_graphs(
+            if graphs is not None and batch.branch is None:
+                with torch.inference_mode(), context():
+                    hidden = graphs(
                         batch.input_ids, batch.lengths, exits, batch.normalize_exits
                     )
                 return EncoderOutput(hidden=hidden)
             input_ids = batch.input_ids.to(self.device)
-            layout = backbone.packed(batch.lengths, self.device)
+            layout = backbone.packed(
+                batch.lengths, self.device, uniform=self.batch_invariant
+            )
         else:
             input_ids = batch.input_ids.to(self.device)
             rows, width = input_ids.shape
             layout = backbone.padded(batch.attention_mask, rows, width, self.device)
-        with torch.inference_mode(), self.autocast():
+        with torch.inference_mode(), context():
             hidden = backbone.encode(input_ids, layout, exits, batch.normalize_exits)
         return EncoderOutput(hidden=hidden)
 
@@ -264,11 +327,36 @@ class NativeEngineModel(EngineModel):
         }
         return list(unique.values())
 
+    def _packed(self) -> list[onednn.PackedLinear]:
+        return [
+            layer
+            for module in (self.backbone, *self.branches.values())
+            for layer in module.modules()
+            if isinstance(layer, onednn.PackedLinear)
+        ]
+
     def parameter_count(self) -> int:
-        return sum(parameter.numel() for parameter in self._parameters())
+        packed = sum(layer.weight_elements for layer in self._packed())
+        return packed + sum(parameter.numel() for parameter in self._parameters())
 
     def memory_bytes(self) -> int:
-        return sum(p.numel() * p.element_size() for p in self._parameters())
+        copy_bytes = 0 if self.reduced is None else linear_bytes(self.reduced)
+        packed = sum(
+            layer.packed.numel() * layer.packed.element_size()
+            for layer in self._packed()
+        )
+        return (
+            copy_bytes
+            + packed
+            + sum(p.numel() * p.element_size() for p in self._parameters())
+        )
+
+    def place(self, module: nn.Module) -> nn.Module:
+        """A head on this device, its linear layers laid out like the backbone's."""
+        module = module.to(self.device)
+        if self.linear.variant is not None:
+            lay_out_linears(module, self.linear.fn)
+        return module
 
     def close(self) -> None:
         self.backbone = None  # type: ignore[assignment]
@@ -352,8 +440,14 @@ class NativeEngine(Engine):
             elif target.type != "cpu" and spec.dtype.bf16_resident:
                 residency = keep_linear_bf16(module)
             module.to(target).eval()
+        kind = (
+            spec.dtype.reduced_cpu if target.type == "cpu" else spec.dtype.reduced_gpu
+        )
+        reduced = None
+        if options.reduced_precision and spec.encoder and kind is not None:
+            reduced = (kind, reduced_view(backbone, kind))
         return NativeEngineModel(
-            backbone, accelerator, device, spec, options, residency, branches
+            backbone, accelerator, device, spec, options, residency, branches, reduced
         )
 
 

@@ -41,7 +41,6 @@ _UNIT = re.compile(
     rf"|(?:(?![{_CJK}])[^\W_]|[@._\-+])+"
     rf"|\S"
 )
-_ALNUM = re.compile(r"[^\W_]")
 _URL_START = re.compile(r"(?:https?://|www\.)", re.IGNORECASE)
 _CJK_CHAR = re.compile(rf"[{_CJK}]")
 EDGE = frozenset(
@@ -64,9 +63,6 @@ class Words:
 
     def __len__(self) -> int:
         return len(self.first)
-
-    def select(self, keep: np.ndarray) -> Words:
-        return Words(self.offsets[keep], self.first[keep])
 
 
 def split_words(text: str) -> list[tuple[int, int]]:

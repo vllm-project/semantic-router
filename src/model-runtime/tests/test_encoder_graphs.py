@@ -28,6 +28,15 @@ def test_large_batches_run_packed_without_padding():
     assert graphs.shape([3] * 65) is None
 
 
+def test_buckets_that_pad_much_past_the_launch_bound_run_packed():
+    backbone, _ = native(CONFIGS["yarn"])
+    graphs = EncoderGraphs(backbone, torch.device("cpu"))
+    assert graphs.shape([16] * 64) == (64, 16)
+    assert graphs.shape([256] + [16] * 15) is None
+    assert graphs.shape([250] * 8) == (8, 256)
+    assert graphs.shape([200] * 8) is None
+
+
 @pytest.mark.parametrize("lengths", [[9], [12, 3, 7], [21, 5, 1, 16]])
 def test_bucketed_rows_match_the_packed_layout(lengths):
     backbone, _ = native(CONFIGS["yarn"], seed=8)

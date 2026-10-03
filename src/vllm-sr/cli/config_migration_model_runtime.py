@@ -12,6 +12,7 @@ from __future__ import annotations
 import posixpath
 from typing import Any
 
+from cli.config_migration_embeddings import migrate_embedding_models
 from cli.config_migration_legacy_models import (
     PREPARED_BUNDLE_ROOT,
     Replacement,
@@ -20,7 +21,6 @@ from cli.config_migration_legacy_models import (
     replacement_for,
     runtime_artifact,
 )
-from cli.config_migration_embeddings import migrate_embedding_models
 from cli.config_migration_notes import MigrationNotes
 from cli.config_migration_paths import (
     as_list,

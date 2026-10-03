@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import time
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -162,6 +163,45 @@ def test_graph_engine_serves_the_configured_exits(embedder, reranker):
     )
     logits = [r["logit"] for r in response["results"]]
     assert logits == sorted(logits, reverse=True) and all(np.isfinite(logits))
+
+
+def test_auto_tries_the_tables_engine_first_where_it_runs(embedder):
+    pytest.importorskip("onnxruntime")
+    pytest.importorskip("onnx")
+    from vllm_sr_runtime.runtime import choose_engine
+
+    family = TaskHeadsFamily(RegistryOptions())
+    spec = family.describe(family.verify(PackageRef(embedder)))
+    assert choose_engine("auto", spec, CPU)[0] == "native"
+    assert choose_engine("auto", spec, CPU, "onnxruntime")[0] == "onnxruntime"
+    assert (
+        choose_engine("auto", replace(spec, graphs={}), CPU, "onnxruntime")[0]
+        == "native"
+    )
+    assert choose_engine("native", spec, CPU, "onnxruntime")[0] == "native"
+
+
+def test_graph_runs_keep_torch_on_one_thread(embedder):
+    pytest.importorskip("onnxruntime")
+    pytest.importorskip("onnx")
+    from vllm_sr_runtime.engines.onnxruntime.engine import OnnxRuntimeEngine
+
+    _, _, model = load(embedder, OnnxRuntimeEngine(), layers=[2])
+    seen = []
+    encode = model.engine_model.encode
+
+    def spy(batch):
+        seen.append(torch.get_num_threads())
+        return encode(batch)
+
+    model.engine_model.encode = spy
+    threads = torch.get_num_threads()
+    torch.set_num_threads(2)
+    try:
+        serve(model, "embeddings", {"input": ["hello", "a cat"], "layer": 2})
+        assert seen == [1] and torch.get_num_threads() == 2
+    finally:
+        torch.set_num_threads(threads)
 
 
 def test_qwen3_embedder_on_the_native_decoder(tmp_path):

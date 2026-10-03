@@ -12,15 +12,17 @@ Two layouts run the same layers (``Layout``):
 - **padded** ``[B, T]`` rows with a key-padding mask, as Transformers runs them;
 - **packed** ``[N]`` tokens of several sequences back to back: embeddings,
   norms, projections and MLPs run on the N real tokens only, and attention
-  scatters each sequence into its own row of a ``[B, W]`` layout for one SDPA
-  call, then gathers the real rows back. Padded positions never reach the next
-  layer, so no padding waste and no fully masked row can leak into real rows.
+  scatters each sequence into its own row of a ``[B, W]`` grid (one grid per
+  group of rows of similar length) for one SDPA call per grid, then gathers
+  the real rows back. Padded positions never reach the next layer, so no
+  fully masked row can leak into real rows.
 
 ``encode`` returns the hidden states at any requested layer exits in one pass.
 """
 
 from __future__ import annotations
 
+import itertools
 import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -31,16 +33,18 @@ import torch.nn.functional as F
 from torch import nn
 
 from ....accel.kernels import KernelSet
-from .common import rotate_half
+from ..encoder import pads_little
 
 MODEL_TYPE = "modernbert"
 FULL = "full_attention"
 SLIDING = "sliding_attention"
 BAND_BLOCK = 128
-# Row width from which local layers attend in query blocks (Vela 307M, FP32): dense
-# masked SDPA is faster below on 16 EPYC cores and on MI325X alike.
-BAND_FROM = 1024
+# Row width from which local layers attend in query blocks, by device type (Vela 307M,
+# FP32): dense masked SDPA is faster below, on 16 EPYC cores and on MI325X.
+BAND_FROM = {"cpu": 1024, "cuda": 2048}
 DEFAULT_THETA = {FULL: 160_000.0, SLIDING: 10_000.0}
+# cos / sin per layer type for each grid width of a layout.
+Rotary = dict[int, dict[str, tuple[torch.Tensor, torch.Tensor]]]
 ACTIVATIONS: dict[str, Callable[[torch.Tensor], torch.Tensor]] = {
     "gelu": F.gelu,
     "gelu_pytorch_tanh": lambda x: F.gelu(x, approximate="tanh"),
@@ -184,17 +188,6 @@ class ModernBertRotary(nn.Module):
         return out
 
 
-def apply_rotary(
-    q: torch.Tensor, k: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Full rotary embedding over ``[B, H, T, D]`` computed in FP32 and cast back (ModernBERT)."""
-    dtype = q.dtype
-    cos, sin = cos.unsqueeze(1), sin.unsqueeze(1)
-    q_embed = (q.float() * cos) + (rotate_half(q.float()) * sin)
-    k_embed = (k.float() * cos) + (rotate_half(k.float()) * sin)
-    return q_embed.to(dtype), k_embed.to(dtype)
-
-
 # ---------------------------------------------------------------------------
 # Layouts
 # ---------------------------------------------------------------------------
@@ -292,14 +285,12 @@ def banded_attention(
 
 
 @dataclass(frozen=True)
-class Layout:
-    """Where each sequence's tokens sit while the layers run.
+class Group:
+    """Rows that attend together, as one ``[rows, width]`` grid.
 
-    A padded layout runs ``[rows, width]`` hidden states as they are. A packed
-    layout runs ``[N]`` tokens; ``index`` holds each token's flat position in
-    the ``[rows, width]`` attention layout (None for one unpadded row).
-    ``masks`` are the SDPA masks per layer type; with ``band``, local layers
-    attend in query blocks instead (long packed rows).
+    Packed, ``index`` holds each of the group's tokens' flat position in the
+    grid (None for one unpadded row). ``masks`` are the SDPA masks per layer
+    type; with ``band``, local layers attend in query blocks instead (long rows).
     """
 
     rows: int
@@ -310,7 +301,7 @@ class Layout:
     band: Band | None = None
 
     def to_rows(self, tokens: torch.Tensor) -> torch.Tensor:
-        """Token-major values (``[N, C]`` packed, ``[B, T, C]`` padded) as ``[rows, width, C]``."""
+        """Token-major values (``[n, C]`` packed, ``[B, T, C]`` padded) as ``[rows, width, C]``."""
         if not self.packed:
             return tokens
         if self.index is None:
@@ -328,6 +319,33 @@ class Layout:
         return rows.reshape(self.rows * self.width, -1).index_select(0, self.index)
 
 
+@dataclass(frozen=True)
+class Layout:
+    """Where each sequence's tokens sit while the layers run.
+
+    A padded layout runs ``[rows, width]`` hidden states as they are, one
+    group. A packed layout runs ``[N]`` tokens and attends in ``groups`` of
+    rows of similar length, whose tokens lie back to back in the order the
+    layers run: ``order`` (None: as given) gathers the input tokens into it,
+    ``restore`` gathers the outputs back, ``sizes`` are the groups' tokens.
+    """
+
+    groups: tuple[Group, ...]
+    order: torch.Tensor | None = None
+    restore: torch.Tensor | None = None
+    sizes: tuple[int, ...] = ()
+
+    @property
+    def width(self) -> int:
+        return max(group.width for group in self.groups)
+
+    def split(self, tokens: torch.Tensor) -> list[tuple[Group, torch.Tensor]]:
+        """Each group with its slice of the layers' token-major values."""
+        if len(self.groups) == 1:
+            return [(self.groups[0], tokens)]
+        return list(zip(self.groups, tokens.split(self.sizes), strict=True))
+
+
 def padded_layout(
     attention_mask: torch.Tensor | None, rows: int, width: int, window: int, device
 ) -> Layout:
@@ -335,35 +353,60 @@ def padded_layout(
     key_valid = None
     if attention_mask is not None and not bool(attention_mask.all()):
         key_valid = attention_mask.to(device=device, dtype=torch.bool)
-    return Layout(rows, width, attention_masks(key_valid, rows, width, window, device))
+    masks = attention_masks(key_valid, rows, width, window, device)
+    return Layout((Group(rows, width, masks),))
 
 
-def packed_layout(
+def length_groups(
+    lengths: Sequence[int], width: int = 0, uniform: bool = False
+) -> list[list[int]]:
+    """Row indices by decreasing length, cut where a grid would pad too much (``pads_little``).
+
+    ``uniform`` grids hold rows of one length only: no row is ever padded, so
+    each attends exactly as it would alone.
+    """
+    order = sorted(range(len(lengths)), key=lambda row: -lengths[row])
+    groups: list[list[int]] = []
+    real = 0
+    for row in order:
+        if groups:
+            longest = max(lengths[groups[-1][0]], width)
+            grid = (len(groups[-1]) + 1) * longest
+            if (
+                lengths[row] == longest
+                if uniform
+                else pads_little(grid, real + lengths[row])
+            ):
+                groups[-1].append(row)
+                real += lengths[row]
+                continue
+        groups.append([row])
+        real = lengths[row]
+    return groups
+
+
+def packed_group(
     lengths: Sequence[int],
     window: int,
     device,
-    width: int | None = None,
-    band_from: int = BAND_FROM,
-    block: int = BAND_BLOCK,
-) -> Layout:
-    """The layout of sequences of ``lengths`` packed back to back (rows at least ``width`` wide).
-
-    Built from host-known lengths, so no device value is read back. A single
-    row without padding keeps the identity layout, which is the padded path.
-    Rows of at least ``band_from`` tokens run local layers in query blocks.
-    """
+    width: int,
+    band_from: int,
+    block: int,
+) -> Group:
+    """One grid over rows of ``lengths`` whose tokens lie back to back."""
     rows = len(lengths)
-    width = max(*lengths, width or 0)
-    if rows == 1 and lengths[0] == width:
-        key_valid = None
-        index = None
-    else:
+    width = max(*lengths, width)
+    padded = any(length != width for length in lengths)
+    index = key_valid = None
+    if rows > 1 or padded:
         index = torch.cat(
             [
                 torch.arange(length, dtype=torch.long) + row * width
                 for row, length in enumerate(lengths)
             ]
         ).to(device)
+    # Without padding a grid needs no key mask: each row attends as it would alone.
+    if padded:
         key_valid = torch.arange(width)[None, :] < torch.tensor(list(lengths))[:, None]
     blocks = None
     if width >= band_from:
@@ -372,7 +415,54 @@ def packed_layout(
     masks = attention_masks(
         device_valid, rows, width, window, device, local=blocks is None
     )
-    return Layout(rows, width, masks, packed=True, index=index, band=blocks)
+    return Group(rows, width, masks, packed=True, index=index, band=blocks)
+
+
+def packed_layout(
+    lengths: Sequence[int],
+    window: int,
+    device,
+    width: int | None = None,
+    band_from: int | None = None,
+    block: int = BAND_BLOCK,
+    uniform: bool = False,
+) -> Layout:
+    """The layout of sequences of ``lengths`` packed back to back (grids at least ``width`` wide).
+
+    Built from host-known lengths, so no device value is read back. Rows of
+    very different lengths attend in separate grids (``length_groups``), so a
+    long row does not widen every short one: attention costs rows x width^2.
+    A single row without padding keeps the identity layout, which is the
+    padded path. Rows of at least ``band_from`` tokens (``BAND_FROM`` for the
+    device type) run local layers in query blocks.
+    """
+    if band_from is None:
+        band_from = BAND_FROM.get(torch.device(device).type, BAND_FROM["cuda"])
+    groups = length_groups(lengths, width or 0, uniform)
+    if len(groups) == 1:
+        group = packed_group(lengths, window, device, width or 0, band_from, block)
+        return Layout((group,))
+    starts = [0, *itertools.accumulate(lengths)]
+    rows = [row for group in groups for row in group]
+    order = torch.cat([torch.arange(starts[row], starts[row + 1]) for row in rows])
+    restore = torch.empty_like(order)
+    restore[order] = torch.arange(order.numel())
+    return Layout(
+        tuple(
+            packed_group(
+                [lengths[row] for row in group],
+                window,
+                device,
+                width or 0,
+                band_from,
+                block,
+            )
+            for group in groups
+        ),
+        order=order.to(device),
+        restore=restore.to(device),
+        sizes=tuple(sum(lengths[row] for row in group) for group in groups),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -413,16 +503,41 @@ class ModernBertAttention(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        rotary: tuple[torch.Tensor, torch.Tensor],
-        mask: torch.Tensor | None,
+        rotary: Rotary,
+        kind: str,
         layout: Layout,
         kernels: KernelSet,
-        blocks: Band | None = None,
     ) -> torch.Tensor:
-        rows = layout.to_rows(self.Wqkv(hidden_states))
+        """``rotary`` holds each grid width's cos / sin per layer type."""
+        parts = [
+            group.to_tokens(
+                self.attend(
+                    group.to_rows(projected),
+                    rotary[group.width][kind],
+                    kind,
+                    group,
+                    kernels,
+                )
+            )
+            for group, projected in layout.split(self.Wqkv(hidden_states))
+        ]
+        return self.Wo(parts[0] if len(parts) == 1 else torch.cat(parts))
+
+    def attend(
+        self,
+        rows: torch.Tensor,
+        rotary: tuple[torch.Tensor, torch.Tensor],
+        kind: str,
+        group: Group,
+        kernels: KernelSet,
+    ) -> torch.Tensor:
+        """Attention over one grid's ``[rows, width, 3 * hidden]`` projections."""
         batch, width = rows.shape[:2]
         query, key, value = rows.view(batch, width, 3, -1, self.head_dim).unbind(dim=-3)
-        query, key = apply_rotary(query.transpose(1, 2), key.transpose(1, 2), *rotary)
+        query, key = kernels("rotary_half")(
+            query.transpose(1, 2), key.transpose(1, 2), *rotary
+        )
+        blocks = group.band if kind == SLIDING else None
         if blocks is not None:
             output = banded_attention(
                 kernels, query, key, value.transpose(1, 2), blocks, self.scaling
@@ -432,13 +547,12 @@ class ModernBertAttention(nn.Module):
                 query,
                 key,
                 value.transpose(1, 2),
-                mask,
+                group.masks[kind],
                 scale=self.scaling,
                 is_causal=False,
                 enable_gqa=False,
             )
-        output = output.transpose(1, 2).contiguous().reshape(batch, width, -1)
-        return self.Wo(layout.to_tokens(output.contiguous()))
+        return output.transpose(1, 2).contiguous().reshape(batch, width, -1)
 
 
 class ModernBertMLP(nn.Module):
@@ -455,9 +569,8 @@ class ModernBertMLP(nn.Module):
         self.Wi = nn.Linear(hidden, 2 * intermediate, bias=bias)
         self.Wo = nn.Linear(intermediate, hidden, bias=bias)
 
-    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        value, gate = self.Wi(hidden_states).chunk(2, dim=-1)
-        return self.Wo(self.act(value) * gate)
+    def forward(self, hidden_states: torch.Tensor, kernels: KernelSet) -> torch.Tensor:
+        return self.Wo(kernels("geglu")(self.Wi(hidden_states), self.act))
 
 
 class ModernBertLayer(nn.Module):
@@ -469,16 +582,13 @@ class ModernBertLayer(nn.Module):
         self.mlp_norm = layer_norm(config)
         self.mlp = ModernBertMLP(config)
 
-    def forward(self, hidden_states, rotary, layout: Layout, kernels: KernelSet):
+    def forward(
+        self, hidden_states, rotary: Rotary, layout: Layout, kernels: KernelSet
+    ):
         hidden_states = hidden_states + self.attn(
-            self.attn_norm(hidden_states),
-            rotary[self.kind],
-            layout.masks[self.kind],
-            layout,
-            kernels,
-            layout.band if self.kind == SLIDING else None,
+            self.attn_norm(hidden_states), rotary, self.kind, layout, kernels
         )
-        return hidden_states + self.mlp(self.mlp_norm(hidden_states))
+        return hidden_states + self.mlp(self.mlp_norm(hidden_states), kernels)
 
 
 class ModernBertBackbone(nn.Module):
@@ -506,10 +616,14 @@ class ModernBertBackbone(nn.Module):
         return len(self.layers)
 
     def packed(
-        self, lengths: Sequence[int], device, width: int | None = None
+        self,
+        lengths: Sequence[int],
+        device,
+        width: int | None = None,
+        uniform: bool = False,
     ) -> Layout:
         """The layout of rows of ``lengths`` packed back to back (see ``packed_layout``)."""
-        return packed_layout(lengths, self.window, device, width)
+        return packed_layout(lengths, self.window, device, width, uniform=uniform)
 
     def padded(
         self, attention_mask: torch.Tensor | None, rows: int, width: int, device
@@ -519,9 +633,8 @@ class ModernBertBackbone(nn.Module):
 
     def masked(self, valid: torch.Tensor, rows: int, width: int, device) -> Layout:
         """Padded rows whose masks come from a device-side key mask, never read back (graphs)."""
-        return Layout(
-            rows, width, attention_masks(valid, rows, width, self.window, device)
-        )
+        masks = attention_masks(valid, rows, width, self.window, device)
+        return Layout((Group(rows, width, masks),))
 
     def encode(
         self,
@@ -547,15 +660,27 @@ class ModernBertBackbone(nn.Module):
                 return self.final_norm(hidden)
             return hidden
 
+        if layout.order is not None:
+            input_ids = input_ids.index_select(0, layout.order)
         hidden_states = self.embeddings(input_ids)
         out: dict[int, torch.Tensor] = {}
         if 0 in exits:
             out[0] = exit_state(0, hidden_states)
-        rotary = self.rotary_emb(hidden_states, layout.width)
+        # One table per grid width: cos / sin of a longer table's prefix can differ
+        # in the last bit (vectorized tails), and Transformers computes its own width.
+        rotary = {
+            width: self.rotary_emb(hidden_states, width)
+            for width in {group.width for group in layout.groups}
+        }
         for count, layer in enumerate(self.layers[: max(exits)], start=1):
             hidden_states = layer(hidden_states, rotary, layout, self.kernels)
             if count in exits:
                 out[count] = exit_state(count, hidden_states)
+        if layout.restore is not None:
+            out = {
+                layer: value.index_select(0, layout.restore)
+                for layer, value in out.items()
+            }
         return out
 
     def forward(

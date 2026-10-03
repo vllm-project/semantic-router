@@ -1,10 +1,9 @@
 # Docker build files
 
-This directory contains shared development and Router image Dockerfiles:
+This directory contains the Router image and lint toolchain Dockerfiles:
 
 | File | Purpose |
 | --- | --- |
-| `Dockerfile` | CentOS Stream development environment with the project toolchains. |
 | `Dockerfile.extproc` | Multi-architecture ExtProc Router image; Candle is the default binding. |
 | `Dockerfile.extproc-rocm` | AMD ROCm 7.0 Router image with the ONNX Runtime ROCm provider. |
 | `Dockerfile.precommit` | Reproducible lint and agent-harness toolchain used by CI. |

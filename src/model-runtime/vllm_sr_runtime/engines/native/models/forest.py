@@ -10,10 +10,13 @@ Projections, norms and MLPs run on the prefix rows and on the blocks as two
 tensors. These are the tensor shapes and operations of the Vela 2.0 packages'
 tree forward, so the states equal theirs on the same device; the packed tree
 (``tree.py``) computes the same values from fewer tokens, with other rounding.
+The element-wise steps are hooks (``project``, ``gate``, ``norm``) so the GPU
+fast path can run them as fused kernels that round exactly like these.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import torch
@@ -24,14 +27,22 @@ from .common import apply_partial_rotary
 
 
 @dataclass(frozen=True)
+class ForestShape:
+    """The host-known shape of a forest: per prefix row its left padding, per block its length and row."""
+
+    padding: tuple[int, ...]
+    lengths: tuple[int, ...]
+    owners: tuple[int, ...]
+
+
+@dataclass(frozen=True)
 class Forest:
-    """Where the real tokens are: per prefix row its left padding, per block its row and length."""
+    """Where the real tokens are: the device masks, each block's row (``owner``) and the shape."""
 
     prefix_mask: torch.Tensor
     block_mask: torch.Tensor
     owner: torch.Tensor
-    padding: list[int]
-    lengths: list[int]
+    shape: ForestShape
 
 
 def _compute_dtype(device: torch.device, fallback: torch.dtype) -> torch.dtype:
@@ -41,9 +52,18 @@ def _compute_dtype(device: torch.device, fallback: torch.dtype) -> torch.dtype:
 
 
 def forest_gated_delta(
-    m, prefix: torch.Tensor, blocks: torch.Tensor, forest: Forest, kernels
+    m,
+    prefix: torch.Tensor,
+    blocks: torch.Tensor,
+    forest: Forest,
+    kernels,
+    norm: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """``GatedDeltaNet`` over prefix rows ``[B, Lp, H]`` and blocks ``[N, Lb, H]``."""
+    """``GatedDeltaNet`` over prefix rows ``[B, Lp, H]`` and blocks ``[N, Lb, H]``.
+
+    ``norm(core, z)`` is the gated output norm over ``[tokens, head_v_dim]`` rows (``m.norm``).
+    """
+    norm = norm or m.norm
     prefix = prefix * forest.prefix_mask[..., None].to(prefix.dtype)
     blocks = blocks * forest.block_mask[..., None].to(blocks.dtype)
     rows, width, _ = prefix.shape
@@ -109,12 +129,29 @@ def forest_gated_delta(
         core: torch.Tensor, h: torch.Tensor, n: int, length: int
     ) -> torch.Tensor:
         z = m.in_proj_z(h).reshape(-1, m.head_v_dim)
-        core = m.norm(core.reshape(-1, m.head_v_dim), z).reshape(n, length, -1)
+        core = norm(core.reshape(-1, m.head_v_dim), z).reshape(n, length, -1)
         return m.out_proj(core)
 
     return output(out_prefix, prefix, rows, width), output(
         out_blocks, blocks, count, block_width
     )
+
+
+def project_attention(m, h: torch.Tensor, rotary: tuple[torch.Tensor, torch.Tensor]):
+    """Queries, keys and values ``[n, heads, L, head_dim]`` (in the values' dtype) and the output gate."""
+    shape = h.shape[:-1]
+    query, gate = torch.chunk(m.q_proj(h).view(*shape, -1, m.head_dim * 2), 2, dim=-1)
+    query = m.q_norm(query).transpose(1, 2)
+    key = m.k_norm(m.k_proj(h).view(*shape, -1, m.head_dim)).transpose(1, 2)
+    value = m.v_proj(h).view(*shape, -1, m.head_dim).transpose(1, 2)
+    query, key = apply_partial_rotary(query, key, *rotary)
+    return query.to(value.dtype), key.to(value.dtype), value, gate.reshape(*shape, -1)
+
+
+def gate_attention(m, out: torch.Tensor, gate: torch.Tensor) -> torch.Tensor:
+    """The gated output projection of attention outputs ``[n, heads, L, head_dim]``."""
+    out = out.transpose(1, 2).reshape(*gate.shape)
+    return m.o_proj(out * torch.sigmoid(gate))
 
 
 def forest_attention(
@@ -124,30 +161,22 @@ def forest_attention(
     prefix_rotary: tuple[torch.Tensor, torch.Tensor],
     block_rotary: tuple[torch.Tensor, torch.Tensor],
     forest: Forest,
+    project: Callable = project_attention,
+    gate: Callable = gate_attention,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """``GatedAttention`` over prefix rows and blocks: one causal call per row and per block."""
+    """``GatedAttention`` over prefix rows and blocks: one causal call per row and per block.
 
-    def project(h: torch.Tensor, rotary: tuple[torch.Tensor, torch.Tensor]):
-        shape = h.shape[:-1]
-        query, gate = torch.chunk(
-            m.q_proj(h).view(*shape, -1, m.head_dim * 2), 2, dim=-1
-        )
-        query = m.q_norm(query).transpose(1, 2)
-        key = m.k_norm(m.k_proj(h).view(*shape, -1, m.head_dim)).transpose(1, 2)
-        value = m.v_proj(h).view(*shape, -1, m.head_dim).transpose(1, 2)
-        query, key = apply_partial_rotary(query, key, *rotary)
-        return query, key, value, gate.reshape(*shape, -1)
-
-    qp, kp, vp, gate_prefix = project(prefix, prefix_rotary)
-    qb, kb, vb, gate_blocks = project(blocks, block_rotary)
+    ``project`` and ``gate`` are ``project_attention`` and ``gate_attention`` or fused equivalents.
+    """
+    qp, kp, vp, gate_prefix = project(m, prefix, prefix_rotary)
+    qb, kb, vb, gate_blocks = project(m, blocks, block_rotary)
 
     def expand(t: torch.Tensor) -> torch.Tensor:
         return t.repeat_interleave(m.groups, dim=1) if m.groups > 1 else t
 
-    dtype = vp.dtype
-    qp, kp, qb, kb, vb = (t.to(dtype) for t in (qp, kp, qb, kb, vb))
     rows = []
-    for row, padding in enumerate(forest.padding):
+    shape = forest.shape
+    for row, padding in enumerate(shape.padding):
         out = F.scaled_dot_product_attention(
             qp[row : row + 1, :, padding:], expand(kp[row : row + 1, :, padding:]),
             expand(vp[row : row + 1, :, padding:]), is_causal=True, scale=m.scaling,
@@ -155,9 +184,10 @@ def forest_attention(
         rows.append(F.pad(out, (0, 0, padding, 0)))
     block_width = qb.shape[2]
     outs = []
-    owners = forest.owner.tolist()
-    for index, (owner, length) in enumerate(zip(owners, forest.lengths, strict=True)):
-        padding = forest.padding[owner]
+    for index, (owner, length) in enumerate(
+        zip(shape.owners, shape.lengths, strict=True)
+    ):
+        padding = shape.padding[owner]
         keys = torch.cat(
             [kp[owner : owner + 1, :, padding:], kb[index : index + 1, :, :length]], 2
         )
@@ -170,10 +200,6 @@ def forest_attention(
         )  # fmt: skip
         outs.append(F.pad(out, (0, 0, 0, block_width - length)))
 
-    def output(out: torch.Tensor, gate: torch.Tensor) -> torch.Tensor:
-        out = out.transpose(1, 2).reshape(*gate.shape)
-        return m.o_proj(out * torch.sigmoid(gate))
-
-    return output(torch.cat(rows, 0), gate_prefix), output(
-        torch.cat(outs, 0), gate_blocks
+    return gate(m, torch.cat(rows, 0), gate_prefix), gate(
+        m, torch.cat(outs, 0), gate_blocks
     )

@@ -593,6 +593,21 @@ RUN if [ "$TARGETARCH" != "arm64" ]; then \
 # Default launcher; Candle/ORT task providers are selected in model deployments
 ENV AI_BINDING=candle
 
+# The model runtime the router starts for model_runtime deployments, in its own
+# environment: CPU PyTorch and the runtime with its multimodal extra.
+ARG TORCH_CPU=torch==2.10.0
+RUN python3 -m venv /opt/vllm-sr-runtime && \
+    /opt/vllm-sr-runtime/bin/pip install --no-cache-dir \
+      --index-url https://download.pytorch.org/whl/cpu "$TORCH_CPU"
+RUN --mount=type=bind,source=src/model-runtime,target=/tmp/model-runtime,rw \
+    /opt/vllm-sr-runtime/bin/pip install --no-cache-dir "/tmp/model-runtime[multimodal]"
+ENV VLLM_SR_RUNTIME_COMMAND=/opt/vllm-sr-runtime/bin/vllm-sr-runtime \
+    VLLM_SR_RUNTIME_CACHE_DIR=/app/models/model-runtime
+
+# Under an arbitrary uid without a passwd entry (the chart runs as 65532),
+# Python's getpass and PyTorch's compile caches take the user from here.
+ENV USER=vllm-sr
+
 # Keep immutable artifacts outside the mounted model cache, in an independent layer.
 COPY --link --from=vela-omni-builder /opt/router-model-artifacts/ /opt/router-model-artifacts/
 COPY --link --from=image-routing-assets /out/ /app/share/image-routing/
