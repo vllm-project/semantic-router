@@ -219,10 +219,16 @@ class ServedModel:
         default = profiles[config.profile]
         engine_options = default.engine_options(EngineOptions(threads=process.threads))
         self.health.set("loading", f"loading weights on {placement.device.label}")
-        engine_model = engine.load(
-            spec, placement.accelerator, placement.device, engine_options
+
+        def execute(work: Any) -> Any:
+            return placement.accelerator.execute(placement.device, work)
+
+        engine_model = execute(
+            lambda: engine.load(
+                spec, placement.accelerator, placement.device, engine_options
+            )
         )
-        model = family.load(package, spec, engine_model)
+        model = execute(lambda: family.load(package, spec, engine_model))
         for name, profile in list(profiles.items()):
             unavailable = profile.available(model)
             if unavailable:
@@ -248,6 +254,7 @@ class ServedModel:
                 batch_window_ms=process.batch_window_ms,
             ),
             observe=metrics.observe,
+            execute=execute,
         )
         self.scheduler.start()
         self.health.set("warming", "running the golden check")
