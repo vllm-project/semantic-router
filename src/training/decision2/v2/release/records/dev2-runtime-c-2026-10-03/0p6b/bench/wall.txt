@@ -1,0 +1,4 @@
+cache /data/dev2/runs/runtime-c/triton/0.6B-bench-old-20261003T041412Z from /data/dev2/runs/release/triton/dev2-ras-0.6B-20261002T235739Z files=57 digest=21d92f08cd7030548d0be91cda3dc7020e442dd250de9c7230740ad7198e5b25
+old exit=0 wall_seconds=21.5 cache_files=57
+cache /data/dev2/runs/runtime-c/triton/0.6B-bench-new-20261003T041412Z from /data/dev2/runs/runtime-c/triton/0.6B-bench-old-20261003T041412Z files=57 digest=b7e5e9249489d72ec078dca861bc2bf83085513d73d9e351331a591c90489960
+new exit=0 wall_seconds=22.1 cache_files=121

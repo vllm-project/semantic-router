@@ -38,7 +38,7 @@ OUT = RECORDS / "dev2-runtime-c-2026-10-03"
 DECISIONS = "/data/dev2/runs/release/decisions"
 RELEASES = "/data/dev2/runs/release"
 # The runtime C commit every revision ships (set when the runtime is frozen; evidence must be of this commit).
-RC_COMMIT = "0000000000000000000000000000000000000000"
+RC_COMMIT = "dcd15f5ceda29947178781c7779b521ff4a20b76"
 PANELS = {"typed-final": 1600, "css15": 6547, "public231": 231, "mlx-diag": 2275}
 SHARED_QUESTIONS = 128
 MARKER = " Checked on one GPU"

@@ -1,0 +1,4 @@
+cache /data/dev2/runs/runtime-c/triton/0.8B-shared-old-20261003T041659Z from /data/dev2/runs/release/triton/dev2-ras-0.8B-20261003T000237Z files=1180 digest=ec591cf868124d2a074919f03e3914b58023b254d77329eb2c0dc9b4e9faf018
+old exit=0 wall_seconds=61.8 cache_files=1927
+cache /data/dev2/runs/runtime-c/triton/0.8B-shared-new-20261003T041659Z from /data/dev2/runs/runtime-c/triton/0.8B-shared-old-20261003T041659Z files=1927 digest=670b507db54402415cf11f65c09597a418e1c8756e5a5ac90953c31e1a151977
+new exit=0 wall_seconds=36.2 cache_files=2015

@@ -1,0 +1,4 @@
+cache /data/dev2/runs/runtime-c/triton/0.8B-parity-old-20261003T040335Z from /data/dev2/runs/release/triton/dev2-ras-0.8B-20261003T000237Z files=1180 digest=ec591cf868124d2a074919f03e3914b58023b254d77329eb2c0dc9b4e9faf018
+old exit=1 wall_seconds=138.4 cache_files=1180
+cache /data/dev2/runs/runtime-c/triton/0.8B-parity-new-20261003T040335Z from /data/dev2/runs/runtime-c/triton/0.8B-parity-old-20261003T040335Z files=1180 digest=f2c0ef3921d5b41daa80acd60119b9217ac7628df33c335029b63fcca7594086
+new exit=1 wall_seconds=202.6 cache_files=1292

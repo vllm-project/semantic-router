@@ -1,0 +1,4 @@
+cache /data/dev2/runs/runtime-c/triton/0.6B-parity-tf518-old-20261003T040719Z from /data/dev2/runs/release/triton/dev2-ras-0.6B-20261002T235739Z files=57 digest=21d92f08cd7030548d0be91cda3dc7020e442dd250de9c7230740ad7198e5b25
+old exit=1 wall_seconds=321.2 cache_files=57
+cache /data/dev2/runs/runtime-c/triton/0.6B-parity-tf518-new-20261003T040719Z from /data/dev2/runs/runtime-c/triton/0.6B-parity-tf518-old-20261003T040719Z files=57 digest=21d92f08cd7030548d0be91cda3dc7020e442dd250de9c7230740ad7198e5b25
+new exit=1 wall_seconds=92.0 cache_files=129

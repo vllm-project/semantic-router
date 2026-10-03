@@ -1,0 +1,190 @@
+{
+  "device_name": "",
+  "load_seconds": 18.50285841198638,
+  "mode": "shared",
+  "model_name": "Decision-2.0-Sol-2B",
+  "package_manifest_sha256": "420ce3676ab79ed7097db9b44ec5aeef5804a817d644f3e9cdface499cb91393",
+  "passed": true,
+  "per_n": {
+    "128": {
+      "off": {
+        "answers_sha256": "1ffaa37c08893b3941aa8f3c4fa897a393e4c10034d32a33d6293a077ddeb383",
+        "input_tokens": 43256,
+        "latency_ms": {
+          "max": 360.6637939810753,
+          "mean": 358.24074735864997,
+          "min": 355.98680400289595,
+          "p50": 358.06511295959353,
+          "p95": 360.33730395138264
+        },
+        "share_stats": null,
+        "shared": false
+      },
+      "on": {
+        "answers_sha256": "b66c4d97b5ce9778a8c8ab9ae5df5bb8c38160e52f00f523a72055377c789f8a",
+        "input_tokens": 43256,
+        "latency_ms": {
+          "max": 167.94160311110318,
+          "mean": 163.9399549458176,
+          "min": 162.81099384650588,
+          "p50": 163.82089001126587,
+          "p95": 165.75311217457056
+        },
+        "share_stats": {
+          "mode": "tree",
+          "prefix_tokens": 238,
+          "questions": 128,
+          "rescored": 0,
+          "shared": true,
+          "tokens": 13030
+        },
+        "shared": true
+      },
+      "on_vs_off": {
+        "category_changes": 0,
+        "max_abs_drift": 0.01342129571432027,
+        "missing": 0,
+        "slots": 128
+      }
+    },
+    "16": {
+      "off": {
+        "answers_sha256": "b1656abd367549d5959873dda2bda693d0e005da4b990e5370b7d9d841a07ed1",
+        "input_tokens": 5399,
+        "latency_ms": {
+          "max": 57.593378936871886,
+          "mean": 51.14664644934237,
+          "min": 49.94132183492184,
+          "p50": 50.86327693425119,
+          "p95": 51.28438584506512
+        },
+        "share_stats": null,
+        "shared": false
+      },
+      "on": {
+        "answers_sha256": "78e083f3892e33ac252a958b2b1b405aa93675fdc28e304d3b67892f1d660315",
+        "input_tokens": 5399,
+        "latency_ms": {
+          "max": 41.78921412676573,
+          "mean": 41.345195833127946,
+          "min": 41.07244801707566,
+          "p50": 41.27402789890766,
+          "p95": 41.72950494103134
+        },
+        "share_stats": {
+          "mode": "tree",
+          "prefix_tokens": 238,
+          "questions": 16,
+          "rescored": 0,
+          "shared": true,
+          "tokens": 1829
+        },
+        "shared": true
+      },
+      "on_vs_off": {
+        "category_changes": 0,
+        "max_abs_drift": 0.01309800952699991,
+        "missing": 0,
+        "slots": 16
+      }
+    },
+    "64": {
+      "off": {
+        "answers_sha256": "0894636d19a5ec53716a25a6bb8cddfe53ebfc054441f30754ae48f5d53f49f4",
+        "input_tokens": 21612,
+        "latency_ms": {
+          "max": 183.91253799200058,
+          "mean": 183.14909365726635,
+          "min": 182.74658313021064,
+          "p50": 183.11692192219198,
+          "p95": 183.56054881587625
+        },
+        "share_stats": null,
+        "shared": false
+      },
+      "on": {
+        "answers_sha256": "57ec3e4373fd823a8ba10178cbbdadd6b3c2113e35fc753e8880ff258ab5deda",
+        "input_tokens": 21612,
+        "latency_ms": {
+          "max": 88.49040907807648,
+          "mean": 88.11044869944453,
+          "min": 87.77656103484333,
+          "p50": 88.09662982821465,
+          "p95": 88.41309999115765
+        },
+        "share_stats": {
+          "mode": "tree",
+          "prefix_tokens": 238,
+          "questions": 64,
+          "rescored": 0,
+          "shared": true,
+          "tokens": 6618
+        },
+        "shared": true
+      },
+      "on_vs_off": {
+        "category_changes": 0,
+        "max_abs_drift": 0.006691427061870758,
+        "missing": 0,
+        "slots": 64
+      }
+    }
+  },
+  "request_sha256": "ab8a55d0b70aba212c8937de9dadbb6d243c10044992548e34b7d0a971367adf",
+  "runs": 20,
+  "runtime": {
+    "fast_path": {
+      "fused_layers": 24,
+      "graph_stats": {
+        "cached": 3,
+        "captures": 3,
+        "eager": 3,
+        "evicted": 0,
+        "failed": 0,
+        "replays": 72
+      },
+      "graphs": {
+        "capture_after": 2,
+        "max_graphs": 512,
+        "max_output_bytes": 4294967296,
+        "max_tokens": 65536
+      },
+      "lora": {
+        "lean": 0,
+        "peft": 0
+      },
+      "rmsnorm_plus_one": 61,
+      "shared_cast_linears": 186,
+      "transformers": "5.17.0"
+    },
+    "hip": "7.2.53211",
+    "kernels": {
+      "causal_conv1d": "1.7.0",
+      "fla_path": "/opt/decision-fla/fla",
+      "flash_linear_attention": "0.5.2",
+      "kernel_bindings": {
+        "causal_conv1d_fn": "causal_conv1d.causal_conv1d_interface.causal_conv1d_fn",
+        "causal_conv1d_update": "causal_conv1d.causal_conv1d_interface.causal_conv1d_update",
+        "torch_chunk_gated_delta_rule": "fla.ops.gated_delta_rule.chunk.chunk_gated_delta_rule",
+        "torch_recurrent_gated_delta_rule": "fla.ops.gated_delta_rule.fused_recurrent.fused_recurrent_gated_delta_rule"
+      },
+      "runtime_check_sha256": "4517d9e001d9e1e2b520086b5153fa69b642a191efb19b8c9a6a9ef126e1fc2d",
+      "triton": "3.7.1+gitf0b55c07",
+      "triton_cache_autotuning": "1",
+      "triton_cache_dir": "/data/dev2/runs/runtime-c/triton/2B-shared-old-20261003T041903Z"
+    },
+    "numpy": "2.3.5",
+    "peft": "0.21.0",
+    "python": "3.12.13",
+    "safetensors": "0.8.0",
+    "sites": [
+      "/opt/decision-fla"
+    ],
+    "threads": 4,
+    "tokenizers": "0.23.2",
+    "torch": "2.12.0+git6bbd260",
+    "transformers": "5.17.0"
+  },
+  "schema": "dev2-runtime-bench/1",
+  "warmup": 5
+}
