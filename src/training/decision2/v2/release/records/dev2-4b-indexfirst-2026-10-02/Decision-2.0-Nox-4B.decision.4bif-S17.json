@@ -1,0 +1,60 @@
+{
+ "schema": "dev2-release-decision/1",
+ "status": "final",
+ "decision": "release",
+ "model_name": "Decision-2.0-Nox-4B",
+ "repo_id": "llm-semantic-router/Decision-2.0-Nox-4B",
+ "name_basis": null,
+ "name_base_model": null,
+ "identity": {
+  "model_sha256": "74ec8b2f838df1b8c26e94f83845f389e963da3a4a0576111a71cf8a617297d7"
+ },
+ "report_sha256": "a492bcfd37b75d065620f77feb69de95ebfe4a419df3e21c33657360e3fca0a2",
+ "paired_sha256": "cf2e4a67fb3766404406a7ab5874400ca0cc5a0d92c85fadce4d73eb5bce2085",
+ "gate_profile": "successor",
+ "rule": "index-first",
+ "current_revision": "54b084f98e1713480f7d5b83b11e37171cba2270",
+ "evidence_sha256": {
+  "current_decision": "6f8eb8e9d5338964017f3287af4a2aafa3540fa83f978581a3751e0f21b4dd2d",
+  "current_gate": "6f03954ab404287e68f93a91fdfe094e15a899d73f7c5e7833fc5b5574511f53",
+  "exposure": "f96bd46e26c0e2530a54c8027175b674250106514621368ddc599681eef96103",
+  "index_first_audit": "ad29695905a8ceb937bebda03bc7e10b5d4a6ac6df113b5f51fb9cb17dc310ff",
+  "index_first_base_receipt": "9d6158d5ac497b129223fe5a13c703d0f4ccaf4ac7d67eb46a3eba81d431d552",
+  "index_first_bootstrap": "0296af83cfb4631062c6d0c45d74be070383266d85d659310f9e228f39c3282a",
+  "index_first_receipt": "c2c72651baaae063b7634fbfb1f89016933a0dadf9822a86391b72935f7da836",
+  "mlx_paired": "ce8d6c5f81d710e21f9ef8902d0c453ee010b8b58c8bc27a7bbb3925c1e9c93f",
+  "paired": "4810c39ffac32237a2f834501c84524235e8669710b5e9af03101f8180e9e2d0",
+  "public231": "36231f8f4dc7d378ef1826b524bfbe1146d0b5ac3dc05ea2b3ffd52e02b706f6",
+  "tier_paired": "359dde4beefd3cf91b0087a8ea1b08bd821c12276db442749bb205142b885730",
+  "types": "616627e692d8ba094a30df9e5a94cfb67d980b5ce09e4181122e18f085a54e52"
+ },
+ "calibration": "none (temperature 1; every Decision 2.0 model keeps T = 1): the formal run kept T = 1 under the 23:15 rule; no calibration file is shipped",
+ "action": "New main revision of the private repository llm-semantic-router/Decision-2.0-Nox-4B: the decoder M17 arm 4b-LHS17SD (the released LH recipe at LH's token count with English released rows of 17% of the tokens swapped for IB1-r3 / IB2 breadth rows, every non-English row kept, typed-row self-distillation from LH; soup of two seeds), stored as its BF16 copy (qwen-full, T = 1, 16,384 tokens), replaces the LH weights (6a555335, revision 54b084f9) with the product card of the current revision (default generator, banner concept A) and this candidate's Index input; then the superseded weight blobs are purged with rewrite_history=False (hf_headroom.sh first). The repository stays private and in the private collection.",
+ "rationale": "Index-first rule (user 2026-10-02 09:55 UTC+8). IF1: the private Index paired bootstrap of these exact weights minus the current revision's has a 95% lower bound > 0 (2,000 replicates; values in private files only; evidence_sha256.index_first_bootstrap); the largest lower bound among the finished BF16 Index runs of M13 4b-LHA10SD and M17 4b-LHS10SD / 4b-LHS17SD (same panel, seed and replicates; directive 2026-10-02 12:25 UTC+8). R3: types choice OK, noul OK, score OK. IF3: row-level Index audit, planted control 200 / 200; 4b-LHS10SD 0 item rows; 4b-LHS17SD 0 item rows. References (not release blockers): post-key v3 62.090 vs 67.345, -5.25 [-11.26, -1.67]; human transfer -0.120 to +0.032; card-eligible mlx-diag -0.0279 [-0.0395, -0.0167]; vs adopted Nox 1.0 +5.62 [+0.46, +8.52]; public 231 174 vs 172 (McNemar p 0.791); C1 post-key not run.",
+ "approved_package": {
+  "identity": "74ec8b2f838df1b8c26e94f83845f389e963da3a4a0576111a71cf8a617297d7",
+  "fp32_identity": "8995bd9d58a3aab7c83baee47adfb1ce0e4782f51097b98a3d0a2247ddf14079",
+  "loaded_parameters": 4208383488,
+  "profile": "qwen-full (BF16 storage of the Linear projections)",
+  "temperature": 1,
+  "max_input_tokens": 16384,
+  "revision_binding": "receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified."
+ },
+ "licence_decision": "apache-2.0: own LoRA (merged), head, runtime and card; base Qwen/Qwen3.5-4B-Base @1001bb4d Apache-2.0 (LICENSE = Apache License 2.0, Copyright 2026 Alibaba Cloud); tokenizer files of Decision 1.0 Nox-4B @cde2a68d (Qwen3.5-4B vocabulary, Apache-2.0); the IB1-r3 / IB2 training rows are licence-clean (release-safe data records); the package keeps the Apache-2.0 LICENSE (product card: no NOTICE, attributions or evaluation/ files).",
+ "supersedes": {
+  "revision": "54b084f98e1713480f7d5b83b11e37171cba2270",
+  "final_sha256": "6f8eb8e9d5338964017f3287af4a2aafa3540fa83f978581a3751e0f21b4dd2d",
+  "gate_sha256": "6f03954ab404287e68f93a91fdfe094e15a899d73f7c5e7833fc5b5574511f53",
+  "manifest_sha256": "dd0ee28d812265121b10944c80cc8a3b1673797ccbcedd0ff36ccda6865ad3ed",
+  "weights_identity": "6a555335e077fd26952fd58df06a7dcca1f5ef317194f2e3e4d7664d5c071cd7"
+ },
+ "disclosures": [
+  "successor items 1 and 4 of the former rule are not met (v3 significantly below the current revision; card-eligible mlx-diag below it); under the Index-first rule they are references",
+  "the training rows include the IB1-r3 / IB2 families matched to Index benchmark families (HoVer, When2Call, iSarcasmEval, GSM8K) and the BPoMP format; the internal records report the transfer-only Index delta without those benchmarks (private values)",
+  "Index contamination audit of the training rows (14bce13c, 71088 lines): 0 item rows and 90 familiar-text rows (the current revision's own training rows: 0 and 114)",
+  "card.speed is the current revision's bench receipt (same architecture, runtime and shapes)"
+ ],
+ "prepared_by": "Decision 2.0 release engineering, 4B Index-first worker 5e7b8132 (worktree vllm-sr-dev2-4b-indexfirst)",
+ "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's Index-first rule of 2026-10-02 09:55 UTC+8 (release gate = a significantly positive private Index delta vs the current release; integrity checks; references not blocking; the largest Index-gain lower bound) and the user directive relayed 2026-10-02 12:25 UTC+8 (release the highest-scoring candidate directly; never a lower candidate once a higher one is measured; compare every finished BF16 Index run: M13 4b-LHA10SD, M17 4b-LHS10SD and 4b-LHS17SD), applied to the 4B tier by the 4B Index-first release worker 5e7b8132",
+ "decided_utc": "2026-10-02T04:54:00Z"
+}

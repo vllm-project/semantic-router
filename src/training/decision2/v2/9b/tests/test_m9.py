@@ -324,6 +324,29 @@ class Stage3MatchedBuildTest(unittest.TestCase):
             ids("kib", a["x60_rows_kept"]) <= ids("kibx", b["x60_rows_kept"])
         )
 
+    def test_cut_language_keeps_every_other_language_group_whole(self):
+        rows = [
+            json.loads(x) for x in (self.x60 / "train.jsonl").read_text().splitlines()
+        ]
+        for r in rows:
+            if r["group_id"] in {"g0", "g1", "g2"} and r["id"].endswith("1"):
+                r["language"] = "de"
+        write_jsonl(self.x60 / "train.jsonl", rows)
+        out = self.tmp / "ksw"
+        self.build(out, "--cut-language", "en")
+        manifest = json.loads((out / "manifest.json").read_text())
+        keep = manifest["x60_keep"]
+        self.assertEqual((keep["fixed_groups"], keep["fixed_rows"]), (3, 6))
+        self.assertEqual(keep["fixed_native_tokens"], 30)
+        self.assertEqual(keep["budget_tokens"], 110)
+        self.assertTrue(140 <= keep["native_tokens"] <= 162)
+        kept = (
+            (out / "train.jsonl").read_text().splitlines()[: manifest["x60_rows_kept"]]
+        )
+        kept_ids = {json.loads(x)["id"] for x in kept}
+        self.assertTrue({"x000", "x001", "x010", "x011", "x020", "x021"} <= kept_ids)
+        self.assertEqual(manifest["train_native_tokens"], keep["native_tokens"] + 60)
+
     def test_refuses_missing_counts_and_missing_ids(self):
         self.tokens(self.ib2, {})
         with self.assertRaises(ValueError):

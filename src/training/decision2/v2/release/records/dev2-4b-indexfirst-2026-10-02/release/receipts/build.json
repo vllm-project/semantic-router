@@ -1,0 +1,93 @@
+{
+  "builder_commit": "93dc64dbf05232f85ec3a592f5d43c0995da4d5a",
+  "card": {
+    "assets_receipt_sha256": "76991bc7688cc6a0288a93fa0de3718f899eba071c46530151337bc9513fbc39",
+    "excluded": [],
+    "figures_sha256": {
+      "assets/banner.png": "1a7cda52e93d1ff98ea9f3b8379c7d73417f718d73a9652aa4d75354e3ef9797",
+      "assets/index-areas.png": "2c4c260cb068bb17c63057b053887270fa22c44e07efffb8a0efedae35f811cb",
+      "assets/index-pareto.png": "fb9054eaef42c2ef0ca036a9f0612a354ef7ffca308850bfa15a61e6ea945ce2",
+      "assets/jevarena-types.png": "ace6fa081517837925c9443e71cd64c869ed5d1f6290cdf1d2708bdcc94a64c2",
+      "assets/jevarena.png": "74268a56077e99b55a148b0a21b0dd6a3ebd85367345fc24407f2ad544bc21d3"
+    },
+    "index_sha256": "cae94ca3c141b78b4d7786637c6c861ac6d3899d193055e7fbb15fa246cab1c0",
+    "paired": {
+      "ci95": [
+        0.45907690626570624,
+        8.52161926100874
+      ],
+      "delta": 5.620236288259548,
+      "replicates": 5000,
+      "sha256": "cf2e4a67fb3766404406a7ab5874400ca0cc5a0d92c85fadce4d73eb5bce2085"
+    },
+    "readme_sha256": "b1582dcb37fd5cf747818612c5d32675223d8c8b08080ca97e6b6eea1664be37",
+    "shown": [
+      {
+        "key": "candidate",
+        "licence": "package",
+        "report_sha256": "a492bcfd37b75d065620f77feb69de95ebfe4a419df3e21c33657360e3fca0a2"
+      },
+      {
+        "key": "nox1",
+        "licence": "apache-2.0",
+        "report_sha256": "ff6378c2b84242a316b0c6dd50695f4b1ca4f37d525da568c08f1be642dda3c3"
+      },
+      {
+        "key": "decider4b",
+        "licence": "apache-2.0",
+        "report_sha256": "526dbd039d7faef123048e905f137dd7a5e30629dbdf3a5dd2a139bd28bb591c"
+      },
+      {
+        "key": "jet62",
+        "licence": "apache-2.0",
+        "report_sha256": "3b9188c86e0399d5b33cf5959b377c9f3ddf9899123ee934ed3d4cb51f82e4a8"
+      }
+    ],
+    "tradeoffs": [
+      "mlx-diag non-English Noul (accuracy): 71.5% versus 80.0%",
+      "Transfer: Ideological Books Corpus (macro-F1): 46.3% versus 54.3%",
+      "Transfer: Media ideology (macro-F1): 40.0% versus 44.3%",
+      "Transfer: Reddit humour (macro-F1): 42.1% versus 46.2%",
+      "Transfer: Misinfo Reaction Frames (macro-F1): 73.0% versus 76.1%",
+      "Transfer: TalkLife empathy (macro-F1): 27.1% versus 29.6%",
+      "Transfer: Wikipedia politeness (macro-F1): 55.1% versus 57.0%"
+    ]
+  },
+  "ended_utc": "2026-10-02T05:21:22.084239+00:00",
+  "files": 36,
+  "identity": {
+    "architecture": "qwen3.5-text-endpoints-global-query-shared-bilinear-mlp",
+    "bf16_copy": {
+      "receipt_sha256": "09dd39ed9b36f2b28bbe28936bce99c6a94313c44f2b01bc355e82e573550e49",
+      "source_model_sha256": "8995bd9d58a3aab7c83baee47adfb1ce0e4782f51097b98a3d0a2247ddf14079"
+    },
+    "dec_residual": false,
+    "head_variant": "shared",
+    "model_sha256": "74ec8b2f838df1b8c26e94f83845f389e963da3a4a0576111a71cf8a617297d7",
+    "readout": "head",
+    "temperature_by_type": null,
+    "text_parameter_count": 4205751296
+  },
+  "licence": "apache-2.0",
+  "manifest_sha256": "35eba1817fc7f45183deba0cad0b12c0cad84177dd4937e4a6fd5c83019b0469",
+  "package": "/data/dev2/runs/release/dev2-4b-4bif-S17-release-20261002T052059Z/package/Decision-2.0-Nox-4B",
+  "parameters": {
+    "external_base_text": null,
+    "loaded": 4208383488,
+    "packaged": {
+      "backbone": 4205751296,
+      "head": 2632192,
+      "residual": 0
+    }
+  },
+  "release_decision": {
+    "sha256": "18d60dac94fe64ca06042d4dfc1d5dbda881fd5e4fbb699085db09e57a9ece63",
+    "status": "final"
+  },
+  "schema": "dev2-release-build/1",
+  "screen": {
+    "text_files_screened": 31
+  },
+  "spec_sha256": "35ccc4115e7bc540c259b6786ce470026d18c09149de94a0aa1e1b46c3586659",
+  "started_utc": "2026-10-02T05:21:01.080329+00:00"
+}

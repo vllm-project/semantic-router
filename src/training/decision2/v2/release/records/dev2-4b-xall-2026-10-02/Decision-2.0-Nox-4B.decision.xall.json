@@ -1,0 +1,64 @@
+{
+ "schema": "dev2-release-decision/1",
+ "status": "final",
+ "decision": "release",
+ "model_name": "Decision-2.0-Nox-4B",
+ "repo_id": "vllm-sr/Decision-2.0-Nox-4B",
+ "name_basis": null,
+ "name_base_model": null,
+ "identity": {
+  "model_sha256": "48e8c023d0f4b18461fa5f2a64c7113f25839f3cf4d8023893e7631deb0417cb"
+ },
+ "report_sha256": "ddc61e86b4588f595621bc2db31f04304111571fe328d645bb7049a53241ee78",
+ "paired_sha256": "b01a5385e8b15aea23ee3f94fc43726cfdfaf3c997756845b2933f9f13683353",
+ "gate_profile": "successor",
+ "rule": "index-first",
+ "current_revision": "137e28ceebd52b9611bb72e3645536867e0ec1ec",
+ "evidence_sha256": {
+  "current_decision": "d128c08dc5b3b64dd27f6853d8cdcb7aaf453439e2231e0f521c18fe5a928359",
+  "current_gate": "83437564d547737030eed56a9d96181ec42385b4d5af05a308d601104d8f5b56",
+  "index_first_audit": "f084fb1131defbd542dc69df2c9031af1351487721bb62fe0af21db23d160393",
+  "index_first_base_receipt": "72d6a7101c853243bf137035f87a928b89c174b61dc62379244e26daca901ea3",
+  "index_first_bootstrap": "fc45b9b257f30c9e28e952bd08041f7cc972617257cb6ce5daf3f3d149fdee80",
+  "index_first_receipt": "76ee1211edea827a0bc92e030ab9bfe790db8eaae01c08737261ca94484ba7a5",
+  "mlx_paired": "9f732cfed17df2011b30a03e498a32eedd39370954127e7a306afeb645418b9a",
+  "paired": "923036cd43b83a7a1fca9bd36ee4a68287d542a47e19b38078a6840edac67bd1",
+  "public231": "cd7090dc419a415dc42586d83b294700ff87f2c8d546560d73872e5d4eced261",
+  "tier_paired": "a2bc22ab984a1b708112a95f28d0737e584b4773718350ac33ec156714b1a0ec",
+  "types": "4716dcf99c106ec4580b505559b055b4e6c09b2b5365deb3abaa281aac1fee94"
+ },
+ "calibration": "none (temperature 1; every Decision 2.0 model keeps T = 1): the formal run kept T = 1 under the 23:15 rule; no calibration file is shipped",
+ "action": "New main revision of the private repository vllm-sr/Decision-2.0-Nox-4B: the decoder M17 cross-arm soup 4b-SDMLxALL: the uniform FP32 average of seven same-recipe soups (each a two-seed soup of rank-128 LoRA arms on Qwen/Qwen3.5-4B-Base @1001bb4d, merged, scoring head, with typed-row self-distillation): the released M15 4b-LHA10SDML and the M17 arms 4b-LHS17SD, 4b-LHS17UP, 4b-LHS17IB4, 4b-LHS17IB4X, 4b-SDMLIB4 and 4b-LHS17ML (the released 4B mixture with IB1-r3 / IB2 / IB3-r2 / IB4 phase-1 breadth rows and copies of released non-English rows in different doses), stored as its BF16 copy (qwen-full, T = 1, 16,384 tokens), replaces the M15 4b-LHA10SDML weights (991a8fb8, revision 137e28ce, the phase A runtime-only revision) keeping its runtime, with the product card of the current revision (default generator) and this candidate's Index input; then the superseded weight blobs are purged with rewrite_history=False (hf_headroom.sh first). The repository stays private and in the private collection.",
+ "rationale": "User decision 2026-10-02 23:02 UTC+8: release the highest 4B candidate now. IF1: the private Index paired bootstrap of these exact weights minus the current revision's (2,000 replicates, same panel and seed; values in private files only; evidence_sha256.index_first_bootstrap) has a 95% lower bound above 0. R3: types choice OK, noul OK, score OK. IF3: row-level Index audit, planted control 200 / 200; 4b-LHA10SDML 0 item rows; 4b-LHS17IB4 0 item rows; 4b-LHS17IB4X 0 item rows; 4b-LHS17ML 0 item rows; 4b-LHS17SD 0 item rows; 4b-SDMLIB4 0 item rows. References (not release blockers): post-key v3 66.720 vs 65.684, +1.04 [-1.75, +2.95]; human transfer -0.025 to +0.046; card-eligible mlx-diag +0.0185 [+0.0097, +0.0276]; vs adopted Nox 1.0 +10.25 [+5.81, +13.43]; public 231 176 vs 174 (McNemar p 0.774); overlap exposure and C1 post-key not run.",
+ "approved_package": {
+  "identity": "48e8c023d0f4b18461fa5f2a64c7113f25839f3cf4d8023893e7631deb0417cb",
+  "fp32_identity": "75d62986dc608d9105148f081c7cc850ad8cbc3ffec4f5f473d0c50953b8519c",
+  "loaded_parameters": 4208383488,
+  "profile": "qwen-full (BF16 storage of the Linear projections)",
+  "temperature": 1,
+  "max_input_tokens": 16384,
+  "revision_binding": "receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified."
+ },
+ "licence_decision": "apache-2.0: own LoRA (merged), head, runtime and card; base Qwen/Qwen3.5-4B-Base @1001bb4d Apache-2.0 (LICENSE = Apache License 2.0, Copyright 2026 Alibaba Cloud); tokenizer files of Decision 1.0 Nox-4B @cde2a68d (Qwen3.5-4B vocabulary, Apache-2.0); the IB1-r3 / IB2 training rows are licence-clean (release-safe data records) and the multilingual copies are released training rows; the package keeps the Apache-2.0 LICENSE (product card: no NOTICE, attributions or evaluation/ files).",
+ "supersedes": {
+  "revision": "137e28ceebd52b9611bb72e3645536867e0ec1ec",
+  "final_sha256": "d128c08dc5b3b64dd27f6853d8cdcb7aaf453439e2231e0f521c18fe5a928359",
+  "gate_sha256": "83437564d547737030eed56a9d96181ec42385b4d5af05a308d601104d8f5b56",
+  "manifest_sha256": "8fccfa69a3d33b2ccbb74067441caa080c03792a8d3283e0e47cc26fa7c84c79",
+  "weights_identity": "991a8fb855f23317f33fc77179867b1c57d62a5d4a760309f4c110d284614a68"
+ },
+ "disclosures": [
+  "a uniform weight average of seven same-recipe soups (no new training run); the training rows of its members include the IB1-r3 / IB2 / IB3-r2 / IB4 phase-1 families matched to Index benchmark families (HoVer, When2Call, iSarcasmEval, GSM8K and others) and the BPoMP format",
+  "Index contamination audit of the 4b-LHA10SDML training rows (77099 lines): 0 item rows and 114 familiar-text rows",
+  "Index contamination audit of the 4b-LHS17IB4 training rows (89299 lines): 0 item rows and 90 familiar-text rows",
+  "Index contamination audit of the 4b-LHS17IB4X training rows (86663 lines): 0 item rows and 90 familiar-text rows",
+  "Index contamination audit of the 4b-LHS17ML training rows (75340 lines): 0 item rows and 90 familiar-text rows",
+  "Index contamination audit of the 4b-LHS17SD training rows (71088 lines): 0 item rows and 90 familiar-text rows",
+  "Index contamination audit of the 4b-SDMLIB4 training rows (95310 lines): 0 item rows and 114 familiar-text rows",
+  "4b-LHS17UP trains on the 4b-LHS17SD training file (same rows, other row weights): one audit covers both",
+  "card.speed is the current revision's (phase A) bench receipt (same architecture, runtime and shapes)"
+ ],
+ "prepared_by": "Decision 2.0 release engineering, decoder M17 (worktree vllm-sr-dev2-dec-m17), the single Nox-4B publisher",
+ "decided_by": "the user (decision relayed by the coordinator, parent agent, Decision 2.0 program, 2026-10-02 23:02 UTC+8): release 4b-SDMLxALL to Decision-2.0-Nox-4B now, on top of the phase A runtime-only main 137e28ce, as the highest 4B candidate passing the Index-first gate; the integrity checks stay; applied to the 4B tier by decoder M17, the single Nox-4B publisher",
+ "decided_utc": "2026-10-02T15:02:00Z"
+}

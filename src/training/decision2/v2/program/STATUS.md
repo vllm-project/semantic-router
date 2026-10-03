@@ -6,7 +6,7 @@
 
 ## 发布状态（2026-10-03 起公开）
 
-> **2026-10-03 01:17：Decision 2.0 公开**（用户 01:11 决定）。Kai、Eos、Sol、Nox、Lux 已是 public。Vega 的 m50（56.47）正在发布，校验通过后 Vega 和 Decision 2.0 collection 自动转为 public。发布流水线的可见性规则见 `47dd06be7`：六个正式仓库和 collection 必须 public，其他仓库一律 private。后续渐进式发布沿用原规则（Index 优先门禁、完整性检查、快速发布后检查、清理被替换的权重）。
+> **2026-10-03 01:17：Decision 2.0 公开**（用户 01:11 决定）。Kai、Eos、Sol、Nox、Lux 已是 public。Vega 的 m50（56.47）已于 03:02 发布，03:03 与 Decision 2.0 collection 一起转为 public：六个模型全部公开。发布流水线的可见性规则见 `47dd06be7`：六个正式仓库和 collection 必须 public，其他仓库一律 private。后续渐进式发布沿用原规则（Index 优先门禁、完整性检查、快速发布后检查、清理被替换的权重）。
 >
 > **2026-10-03 共享上下文开关完成**（分支 `xunzhuo/decision-2-shared-ctx` @ `9d90afd10`）：关闭时与已发布运行时逐字节一致；开启时 128 个问题快 2.5–4.4 倍，Index 差值的置信区间包含 0。发布片使用它的实测速度，所以片子公开前要把开关（默认关闭、可选开启）随 4B / 9B / 27B 的下一次发布，以及 Kai / Eos / Sol 的运行时 revision 一起上线。
 >
@@ -20,9 +20,9 @@
 > | 0.6B | `vllm-sr/Decision-2.0-Kai-0.6B` | `51b7b474`（阶段 A 运行时；权重同 2.0 首发） |
 > | 0.8B | `vllm-sr/Decision-2.0-Eos-0.8B` | `1d380452`（M16 `08b-RA-a75`） |
 > | 2B | `vllm-sr/Decision-2.0-Sol-2B` | `6a62b319`（阶段 A 运行时；M15 `2b-RASDML`） |
-> | 4B | `vllm-sr/Decision-2.0-Nox-4B` | `d55528d1`（M17 跨分支平均 `4b-SDMLxALL`，2026-10-02 23:34 发布） |
+> | 4B | `vllm-sr/Decision-2.0-Nox-4B` | `c60d3b5c`（半学习率 `4b-LHS17IB4-lrh`，43.30，同尺寸第 1；2026-10-03 05:41 发布） |
 > | 9B | `vllm-sr/Decision-2.0-Lux-9B` | `f3122c7c`（M10 `KIB4-a40`，2026-10-02 23:30 发布） |
-> | 27B | `vllm-sr/Decision-2.0-Vega-27B` | `e60bd8e3`（M6-IB）；`M6-IBxIB2-m50`（56.47，全球第 3）发布中 |
+> | 27B | `vllm-sr/Decision-2.0-Vega-27B` | `9b067a95`（阶段 A 运行时加可选共享上下文开关，只改运行时；权重同 `5c85c127` = `M6-IBxIB2-m50`，56.47，全球第 3） |
 >
 > 下表各行保留了历史上的旧名字和旧版本号，仅作记录。
 
