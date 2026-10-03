@@ -23,9 +23,29 @@
   `/data/dev2/tmp/27b-claim.sh` (released owner moved to `owner.prev-27b-m9-<UTC>`). **Next:** `M9-IB1ML-s6` on node A
   GPU7 when the arm factory's `KIB4-lrq-s1` ends: `27b-claim.sh 7 …`, then `m8-arm.sh a 7 M9-IB1ML s6 a20ib1ml
   9bdba9848756ecf74fe25ac3f1b92f529f891b4f11628d5bee72fa78e77584f9 698 20` and its relay.
-- **Waiting:** `/tmp/d2w/m7a.sh` (pid 2141700) for the M7-IB14ML relays (≈ 00:50Z) → soups → stage on node D →
-  audit-arm. Then by hand: `m6-index.sh <mirror ≥ dc10d2b57> X7-IBxIB2xIB14ML parity` (M6_PARITY_GPU=d3), `run`
-  (M6_INDEX_GPUS on node D GPU3–4 + any free node B / C GPU), then M7-IB14ML; `score` with `M6_INDEX_BASE=M6-IBxIB2-m50`.
+- **00:22Z:** `M9-IB1ML-s6` launched on node A GPU7 (pid 1718745, relay started). **All ten M9 arm-seeds train.**
+- **00:20Z: release path for the next Vega** (`e972f8ced`, mirrored to A–D): the 27B branch merged integration
+  `c5450ac20` (has `fee91afd0`, `9f2c7db62`, `9d90afd10`, `47dd06be7`; 27B tests pass, release tests pass except one
+  needing torch locally) and carries runtime-a's `specs/dev2-27b-ras.json` blob (`2ca62eb62`). Record
+  `v2/release/records/dev2-27b-succ-2026-10-03/ops/`: `make_27bs.py` (base spec ras: runtime_source `9cffe606c` =
+  phase A + switch, automap `99432d1a7`; current = `9b067a95560284dac8c98ef4130fd5a2c5a92ff9`, gate
+  `dev2-ras-27B-20261002T213625Z/receipts/gate.json` `8b14ba65…`, decision `…decision.ras.json` `fb52e3f6…`, manifest
+  `0e90656f…`, weights `58469731…`; current arm M6-IBxIB2-m50; vendor = the candidate formal run's
+  `COLLECT.json` `source_mirror.commit`; `CHOICE = None` until a candidate passes), `release27bs.sh` (supersedes
+  9b067a95; purge node copy = 9b067a95's verified download), `inputs27bs.sh` (private dir `…/private/release/27bs/ARM`;
+  bootstrap `paired-boot-vs-m6-ibxib2-m50.json`), `index27bs.sh`, `render27bs.sh`. Checked on node A: the ras gate
+  seals 9b067a95, its decision names m50's formal REPORT. node A mlx watcher for X7-IBxIB2xIB14ML armed (MLX_ALSO =
+  M6-IBxIB2-m50).
+- **00:33Z: chain swap.** `m7a.sh` (still polling) was stopped; **`/tmp/d2w/m7b.sh`** (pid 2197214, log
+  `/tmp/d2w/logs/m7b.log`, mirror `e972f8ced`, scripts frozen in `/tmp/d2w/frozen-e972f8c`) waits for both M7-IB14ML
+  relays, converts node D GPU3–4's JSON owners to the KEY=VALUE 27B hold that `m6-index.sh` parity / run accept,
+  pulls to node B, builds `X7-IBxIB2xIB14ML` and `M7-IB14ML` in parallel, stages X7, runs its parity (d3) and its 8
+  shards on node D GPU3–4, then stages M7-IB14ML and audits both. **Next by hand:** `collect` / `score` with
+  `M6_INDEX_BASE=M6-IBxIB2-m50`; R3 via `m6-xarm.sh e972f8ced… X7-IBxIB2xIB14ML 0` with `CURRENT=M6-IBxIB2-m50` once
+  M8-IB-s3 frees node B GPU0 (≈ 03:50Z); M7-IB14ML parity / run on the next free node D / C GPUs.
+- **Lease note:** launch.py leaves JSON owners (`"track": "27b"`, `"status": "reserved-idle"`); `m6-index.sh`
+  parity / run / hold accept only KEY=VALUE `track=27b` + `status=reserved-idle` (or released / eval-ix1). Convert
+  before an Index use (as m7b.sh does).
 
 Updated: 2026-10-02 22:15 UTC+8 (14:15Z; **continuation #6 from 13:40Z**: the M6-IBxIB2-m50 release and M8; see its
 section first). Earlier: 2026-10-02 17:45 UTC+8 (09:45Z; continuation #5 from 08:44Z: the cross-arm soups and M7).
