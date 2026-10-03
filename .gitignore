@@ -94,8 +94,6 @@ models
 # Exception for the fleet-sim Python model catalog package
 !src/fleet-sim/fleet_sim/models/
 !src/fleet-sim/fleet_sim/models/**
-# Exception for the model runtime's native backbone package
-!src/model-runtime/vllm_sr_runtime/engines/native/models/
 !src/training/model_embeddings/multimodal/small/models/
 src/training/model_embeddings/multimodal/small/models/*
 !src/training/model_embeddings/multimodal/small/models/*.py
