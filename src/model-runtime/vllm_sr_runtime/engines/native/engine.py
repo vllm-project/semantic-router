@@ -17,6 +17,8 @@ from ...plugins.base import (
     ForwardBatch,
     ForwardOutput,
     ModelSpec,
+    TreeBatch,
+    TreeOutput,
 )
 from ...scheduler.planner import padded
 from . import fast, models
@@ -82,32 +84,43 @@ class NativeEngineModel(EngineModel):
 
     supports_shared_context = True
 
+    def _run_tree(
+        self, prefix: torch.Tensor, suffixes: list[torch.Tensor], padded_exact: bool
+    ) -> torch.Tensor:
+        """The prefix once and every suffix from it, packed in one row; the suffix rows ``[n, width, H]``."""
+        lengths = [len(suffix) for suffix in suffixes]
+        packed = torch.cat([prefix, *suffixes])[None].to(self.device)
+        tree = Tree(
+            len(prefix), lengths, padded(max(lengths)), self.device, padded_exact
+        )
+        hidden = self.backbone.forward_tree(packed, tree)
+        return tree.rows(hidden[0, len(prefix) :])
+
     def _forward_tree(self, batch: ForwardBatch) -> ForwardOutput:
         """The batch as one shared-context tree: its first ``shared_prefix`` tokens computed once."""
         prefix, lengths = batch.shared_prefix, batch.lengths
-        suffix = [length - prefix for length in lengths]
-        width = padded(max(suffix))
         ids = batch.input_ids
-        packed = torch.cat(
-            [ids[0, :prefix]]
-            + [ids[row, prefix:length] for row, length in enumerate(lengths)]
-        )[None].to(self.device)
-        tree = Tree(
-            prefix,
-            suffix,
-            width,
-            self.device,
-            padded_exact=any(length != padded(max(lengths)) for length in lengths),
-        )
         gather = (batch.gather - prefix).clamp(min=0).to(self.device)
         query = (batch.query - prefix).to(self.device)
         with torch.inference_mode(), self.autocast():
-            hidden = self.backbone.forward_tree(packed, tree)
-            rows_hidden = tree.rows(hidden[0, prefix:])
+            rows_hidden = self._run_tree(
+                ids[0, :prefix],
+                [ids[row, prefix:length] for row, length in enumerate(lengths)],
+                padded_exact=any(length != padded(max(lengths)) for length in lengths),
+            )
             rows = torch.arange(rows_hidden.shape[0], device=rows_hidden.device)
             gathered = rows_hidden[rows[:, None], gather]
             queried = rows_hidden[rows, query]
         return ForwardOutput(gathered=gathered, query=queried)
+
+    def tree(self, batch: TreeBatch) -> TreeOutput:
+        with torch.inference_mode(), self.autocast():
+            hidden = self._run_tree(
+                torch.tensor(batch.prefix, dtype=torch.long),
+                [torch.tensor(block, dtype=torch.long) for block in batch.blocks],
+                padded_exact=False,
+            )
+        return TreeOutput(hidden=hidden)
 
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
         if batch.shared_prefix:
