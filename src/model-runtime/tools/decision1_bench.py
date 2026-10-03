@@ -1,5 +1,8 @@
 """Latency and throughput of a Decision 1.0 package: the bundled runtime against the decision1 family.
 
+    python3 tools/decision1_bench.py paired --package DIR --model REPO --cache-dir DIR \\
+        --device cpu|rocm:0 --prompts NAME:REQUESTS.jsonl:COUNT --output OUT.json \\
+        [--revision REV] [--threads N] [--router QUESTIONS.json]
     python3 tools/decision1_bench.py reference --package DIR --repo REPO --device cpu|cuda:0 \\
         --prompts NAME:REQUESTS.jsonl:COUNT --output OUT.json [--threads N] [--router QUESTIONS.json]
     python3 tools/decision1_bench.py native --model REPO --revision REV --cache-dir DIR \\
@@ -9,14 +12,19 @@
 Single requests: every prompt once as one request, sequentially, after an
 untimed warm-up pass (GPU graphs captured, caches filled); p50, p95 and mean
 latency and the sequential rate. The bundled runtime is a library that answers
-one request at a time, so its sequential rate is its throughput. ``native``
-measures the request end to end through ``Runtime.call`` (``single``) and
-through the model's planning and scheduler alone (``single_scheduler``, no API
-layer), and throughput through the scheduler with C concurrent requests per
-wave. ``--router QUESTIONS.json`` replaces each prompt's questions with the
-router signals a Route-style ``QUESTIONS.json`` declares (explicit questions,
-so every Decision 1.0 model can answer them). On a GPU both sides pin the
-built-in table's FLA kernel choices.
+one request at a time, so its sequential rate is its throughput.
+
+``paired`` loads both sides in one process and times every request on each
+path back to back, rotating their order, so a shared machine's load changes
+hit all paths alike: ``bundled`` (the package's ``system_one``), ``direct``
+(the family's planning and ``run`` on the exact profile's physical batches, on
+the calling thread: the same work as ``bundled``), ``scheduler`` (planning and
+the scheduler, no API layer) and ``call`` (end to end through
+``Runtime.call``). ``native`` alone also measures throughput through the
+scheduler with C concurrent requests per wave. ``--router QUESTIONS.json``
+replaces each prompt's questions with the router signals a Route-style
+``QUESTIONS.json`` declares (explicit questions, so every Decision 1.0 model can
+answer them). On a GPU both sides pin the built-in table's FLA kernel choices.
 """
 
 from __future__ import annotations
@@ -28,6 +36,7 @@ import os
 import statistics
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -76,8 +85,8 @@ def timed(call, bodies: list[dict[str, Any]]) -> list[float]:
     return seconds
 
 
-def run_reference(args: argparse.Namespace) -> dict[str, Any]:
-    pinned = pin(args.repo, args.device)
+def bundled(args: argparse.Namespace) -> Callable[[dict[str, Any]], None]:
+    """The package's own runtime answering one request (synchronized on a GPU)."""
     import torch
 
     if args.threads:
@@ -85,7 +94,7 @@ def run_reference(args: argparse.Namespace) -> dict[str, Any]:
     from transformers import AutoModel
 
     model = AutoModel.from_pretrained(
-        args.package, trust_remote_code=True, device=args.device
+        args.package, trust_remote_code=True, device=reference_device(args.device)
     )
 
     def call(body: dict[str, Any]) -> None:
@@ -93,6 +102,93 @@ def run_reference(args: argparse.Namespace) -> dict[str, Any]:
         if args.device != "cpu":
             torch.cuda.synchronize()
 
+    return call
+
+
+def reference_device(device: str) -> str:
+    """The bundled runtime's name for a device (it predates ``rocm:N``)."""
+    return device.replace("rocm", "cuda")
+
+
+class Native:
+    """The decision1 family behind a ``Runtime``, with each way of sending it a request."""
+
+    def __init__(self, args: argparse.Namespace) -> None:
+        from vllm_sr_runtime.config import ServeConfig
+        from vllm_sr_runtime.runtime import Runtime
+
+        self.runtime = Runtime(
+            ServeConfig(
+                model=args.model,
+                revision=args.revision,
+                device=args.device,
+                cache_dir=args.cache_dir,
+                offline=True,
+                profile=args.profile,
+                threads=args.threads,
+            )
+        )
+        self.runtime.start(background=False)
+        self.served = self.runtime.primary
+        self.profile = args.profile
+        self.loop = asyncio.new_event_loop()
+        self.options = {"return_meta": False, "profile": args.profile}
+
+    def call(self, body: dict[str, Any]) -> None:
+        """End to end through ``Runtime.call``."""
+        status, _ = self.loop.run_until_complete(
+            self.runtime.call("decisions", {**body, "options": self.options})
+        )
+        if status != 200:
+            raise RuntimeError(f"HTTP {status}")
+
+    def scheduler(self, body: dict[str, Any]) -> None:
+        """Planning and the scheduler, without the API layer."""
+        model = self.served.model
+        plan = model.plan(body["state"], body["questions"])
+        self.served.submit_items(plan.items, None, self.profile).result()
+
+    def direct(self, body: dict[str, Any]) -> None:
+        """Planning and ``run`` on the exact physical batches, on the calling thread."""
+        model = self.served.model
+        items = model.plan(body["state"], body["questions"]).items
+        for batch in model.exact_batches(items) or [list(range(len(items)))]:
+            model.run([items[index] for index in batch])
+
+    def throughput(self, bodies: list[dict[str, Any]], concurrency: int) -> float:
+        """Requests per second in waves of ``concurrency`` concurrent calls."""
+
+        async def wave(batch: list[dict[str, Any]]) -> None:
+            results = await asyncio.gather(
+                *(
+                    self.runtime.call("decisions", {**body, "options": self.options})
+                    for body in batch
+                )
+            )
+            if any(status != 200 for status, _ in results):
+                raise RuntimeError("a concurrent request failed")
+
+        started = time.perf_counter()
+        for start in range(0, len(bodies), concurrency):
+            self.loop.run_until_complete(wave(bodies[start : start + concurrency]))
+        return len(bodies) / (time.perf_counter() - started)
+
+    def receipt(self) -> dict[str, Any]:
+        engine = self.served.model.engine_model
+        out = {"fast_path": getattr(engine, "fast", None)}
+        graphs = getattr(engine, "graphs", None)
+        if graphs is not None:
+            out["graphs"] = graphs.receipt()
+        return out
+
+    def close(self) -> None:
+        self.loop.close()
+        self.runtime.stop()
+
+
+def run_reference(args: argparse.Namespace) -> dict[str, Any]:
+    pinned = pin(args.repo, args.device)
+    call = bundled(args)
     bodies = requests(args)
     timed(call, bodies[: args.warmup])
     return {
@@ -103,69 +199,65 @@ def run_reference(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def run_native(args: argparse.Namespace) -> dict[str, Any]:
-    from vllm_sr_runtime.config import ServeConfig
-    from vllm_sr_runtime.runtime import Runtime
-
-    runtime = Runtime(
-        ServeConfig(
-            model=args.model,
-            revision=args.revision,
-            device=args.device,
-            cache_dir=args.cache_dir,
-            offline=True,
-            profile=args.profile,
-            threads=args.threads,
-        )
-    )
-    runtime.start(background=False)
-    loop = asyncio.new_event_loop()
-    options = {"return_meta": False, "profile": args.profile}
-
-    def call(body: dict[str, Any]) -> None:
-        status, _ = loop.run_until_complete(
-            runtime.call("decisions", {**body, "options": options})
-        )
-        if status != 200:
-            raise RuntimeError(f"HTTP {status}")
-
-    async def wave(batch: list[dict[str, Any]]) -> None:
-        results = await asyncio.gather(
-            *(runtime.call("decisions", {**body, "options": options}) for body in batch)
-        )
-        if any(status != 200 for status, _ in results):
-            raise RuntimeError("a concurrent request failed")
-
-    served = runtime.primary
-
-    def scheduled(body: dict[str, Any]) -> None:
-        plan = served.model.plan(body["state"], body["questions"])
-        served.submit_items(plan.items, None, args.profile).result()
-
+    native = Native(args)
     try:
         bodies = requests(args)
-        timed(call, bodies[: args.warmup])
+        timed(native.call, bodies[: args.warmup])
         result = {
             "side": "native",
             "profile": args.profile,
-            "fast_path": getattr(served.model.engine_model, "fast", None),
-            "single": summary(timed(call, bodies)),
-            "single_scheduler": summary(timed(scheduled, bodies)),
-            "throughput": {},
+            "single": summary(timed(native.call, bodies)),
+            "single_scheduler": summary(timed(native.scheduler, bodies)),
+            "throughput": {
+                str(concurrency): native.throughput(bodies, concurrency)
+                for concurrency in args.concurrency
+            },
         }
-        for concurrency in args.concurrency:
-            started = time.perf_counter()
-            for start in range(0, len(bodies), concurrency):
-                loop.run_until_complete(wave(bodies[start : start + concurrency]))
-            result["throughput"][str(concurrency)] = len(bodies) / (
-                time.perf_counter() - started
-            )
-        graphs = getattr(runtime.primary.model.engine_model, "graphs", None)
-        if graphs is not None:
-            result["graphs"] = graphs.receipt()
-        return result
+        return {**result, **native.receipt()}
     finally:
-        loop.close()
-        runtime.stop()
+        native.close()
+
+
+def run_paired(args: argparse.Namespace) -> dict[str, Any]:
+    pinned = pin(args.model, args.device)
+    native = Native(args)
+    try:
+        paths = {
+            "bundled": bundled(args),
+            "direct": native.direct,
+            "scheduler": native.scheduler,
+            "call": native.call,
+        }
+        bodies = requests(args)
+        for call in paths.values():
+            timed(call, bodies[: args.warmup])
+        seconds: dict[str, list[float]] = {name: [] for name in paths}
+        names = list(paths)
+        for index, body in enumerate(bodies):
+            shift = index % len(names)
+            for name in names[shift:] + names[:shift]:
+                seconds[name] += timed(paths[name], [body])
+        result = {
+            "side": "paired",
+            "fla_pinned": pinned,
+            **{name: summary(values) for name, values in seconds.items()},
+            "minus_bundled_ms": {
+                name: paired_difference(seconds[name], seconds["bundled"])
+                for name in names[1:]
+            },
+        }
+        return {**result, **native.receipt()}
+    finally:
+        native.close()
+
+
+def paired_difference(path: list[float], base: list[float]) -> dict[str, float]:
+    """Median and mean of the per-request differences ``path - base``, in ms."""
+    differences = [1000 * (a - b) for a, b in zip(path, base, strict=True)]
+    return {
+        "p50": statistics.median(differences),
+        "mean": statistics.fmean(differences),
+    }
 
 
 def main() -> int:
@@ -174,15 +266,18 @@ def main() -> int:
     )
     commands = parser.add_subparsers(dest="command", required=True)
     reference = commands.add_parser("reference")
-    reference.add_argument("--package", required=True)
     reference.add_argument("--repo")
     native = commands.add_parser("native")
-    native.add_argument("--model", required=True)
-    native.add_argument("--revision")
-    native.add_argument("--cache-dir")
-    native.add_argument("--profile", default="exact")
     native.add_argument("--concurrency", type=int, nargs="*", default=[1, 4, 16])
-    for command in (reference, native):
+    paired = commands.add_parser("paired")
+    for command in (reference, paired):
+        command.add_argument("--package", required=True)
+    for command in (native, paired):
+        command.add_argument("--model", required=True)
+        command.add_argument("--revision")
+        command.add_argument("--cache-dir")
+        command.add_argument("--profile", default="exact")
+    for command in (reference, native, paired):
         command.add_argument("--device", default="cpu")
         command.add_argument("--prompts", action="append", required=True)
         command.add_argument("--router")
@@ -192,7 +287,8 @@ def main() -> int:
     args = parser.parse_args()
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
     started = time.time()
-    result = run_reference(args) if args.command == "reference" else run_native(args)
+    run = {"reference": run_reference, "native": run_native, "paired": run_paired}
+    result = run[args.command](args)
     result.update(
         device=args.device,
         threads=args.threads,
@@ -201,7 +297,8 @@ def main() -> int:
         started_unix=started,
     )
     Path(args.output).write_text(json.dumps(result, indent=1) + "\n", encoding="utf-8")
-    print(json.dumps({key: result[key] for key in ("side", "single")}))
+    shown = ("side", "single", "bundled", "direct", "scheduler", "call")
+    print(json.dumps({key: result[key] for key in shown if key in result}))
     return 0
 
 
