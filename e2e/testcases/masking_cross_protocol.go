@@ -82,7 +82,10 @@ func testMaskingCrossProtocol(
 	}
 	defer session.Close()
 
-	prompt := fmt.Sprintf("%s EMAIL_ADDRESS %s email me at %s please", maskingSpanMarker, maskingRawEmail, maskingRawEmail)
+	// The stub reports exactly one span, over the first occurrence of the
+	// marker's argument, so the value appears once: a second occurrence would
+	// stay raw and the assertion below would blame masking for the stub.
+	prompt := fmt.Sprintf("%s EMAIL_ADDRESS %s please forward the invoice", maskingSpanMarker, maskingRawEmail)
 	cases := []maskingWireCase{
 		{
 			name: "chat completions",
