@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -411,27 +412,52 @@ func (p *EmbeddingProvider) embed(ctx context.Context, inputs []modelservice.Emb
 		resolve = sharedVectors.ResolveAlone
 	}
 	return resolve(ctx, keys, func(ctx context.Context, missing []int) ([]embedding.Embedded, error) {
-		vectors := make([]embedding.Embedded, 0, len(missing))
-		for start := 0; start < len(missing); {
-			end := len(missing)
-			if p.maxInputs > 0 {
-				end = min(end, start+p.maxInputs)
-			}
-			batch := make([]modelservice.EmbedInput, 0, end-start)
-			for _, i := range missing[start:end] {
-				batch = append(batch, inputs[i])
-			}
-			results, err := p.call.Call(ctx, p.recipe, embeddingRequest{Inputs: batch, Options: options})
-			if err != nil {
-				return nil, err
-			}
-			for _, result := range results {
-				vectors = append(vectors, embedding.Embedded{Vector: result.Embedding, Truncated: result.Input != nil && result.Input.Truncated})
-			}
-			start = end
-		}
-		return vectors, nil
+		return p.embedMissing(ctx, inputs, missing, options)
 	})
+}
+
+// concurrentEmbedBatches bounds the card-sized batches of one call that are
+// in flight at once.
+const concurrentEmbedBatches = 8
+
+// embedMissing embeds inputs[missing] in batches of the card's input limit,
+// up to concurrentEmbedBatches at a time. Inside a request bundle the
+// concurrent batches park in it and travel in one round trip.
+func (p *EmbeddingProvider) embedMissing(ctx context.Context, inputs []modelservice.EmbedInput, missing []int, options embedding.Options) ([]embedding.Embedded, error) {
+	size := len(missing)
+	if p.maxInputs > 0 {
+		size = min(size, p.maxInputs)
+	}
+	vectors := make([]embedding.Embedded, len(missing))
+	embedBatch := func(start int) error {
+		end := min(start+size, len(missing))
+		batch := make([]modelservice.EmbedInput, 0, end-start)
+		for _, i := range missing[start:end] {
+			batch = append(batch, inputs[i])
+		}
+		results, err := p.call.Call(ctx, p.recipe, embeddingRequest{Inputs: batch, Options: options})
+		if err != nil {
+			return err
+		}
+		for j, result := range results {
+			vectors[start+j] = embedding.Embedded{Vector: result.Embedding, Truncated: result.Input != nil && result.Input.Truncated}
+		}
+		return nil
+	}
+	if size == len(missing) {
+		return vectors, embedBatch(0)
+	}
+	batches := (len(missing) + size - 1) / size
+	errs := make([]error, batches)
+	for wave := 0; wave < batches; wave += concurrentEmbedBatches {
+		modelservice.Fan(ctx, min(concurrentEmbedBatches, batches-wave), func(i int) {
+			errs[wave+i] = embedBatch((wave + i) * size)
+		})
+		if err := errors.Join(errs[wave:min(wave+concurrentEmbedBatches, batches)]...); err != nil {
+			return nil, err
+		}
+	}
+	return vectors, nil
 }
 
 // CacheIdentity names the default view's vector space for request-local caches.
