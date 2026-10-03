@@ -1,4 +1,4 @@
-"""Decision 2.0 readout: the shared candidate head, in FP32 outside autocast.
+"""The candidate head (Decision 2.0's readout), in FP32 outside autocast.
 
 Option endpoint rows keep each option's local context; the query row sees all
 options. ``logit = <K c, Q q> / sqrt(d) + w . GELU(Mc c + Mq q)`` with

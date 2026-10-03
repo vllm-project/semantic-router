@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vllm-sr-runtime-example"
+version = "0.1.0"
+description = "Example out-of-tree plugin for the vllm-sr model runtime: a keyword family and a counting engine"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+dependencies = ["vllm-sr-runtime"]
+
+[project.entry-points."vllm_sr_runtime.families"]
+example_keywords = "vllm_sr_example.family:KeywordFamily"
+
+[project.entry-points."vllm_sr_runtime.engines"]
+example_counts = "vllm_sr_example.engine:CountsEngine"
+
+[tool.setuptools.packages.find]
+include = ["vllm_sr_example*"]
