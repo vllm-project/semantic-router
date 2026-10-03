@@ -112,6 +112,26 @@ def test_expired_jobs_are_not_run():
         scheduler.stop()
 
 
+def test_jobs_cancelled_while_queued_are_not_run():
+    gate = threading.Event()
+    model = FakeModel(gate=gate)
+    scheduler = Scheduler(model, {"exact": ExactProfile()})
+    scheduler.start()
+    try:
+        first = scheduler.submit([item("a", 4)], deadline=None, profile="exact")
+        time.sleep(0.05)  # the worker holds the first job inside run()
+        second = scheduler.submit([item("b", 4)], deadline=None, profile="exact")
+        assert second.cancel()
+        gate.set()
+        assert first.result(timeout=5)
+        third = scheduler.submit([item("c", 4)], deadline=None, profile="exact")
+        assert third.result(timeout=5)
+        assert model.calls == [["a"], ["c"]]
+    finally:
+        gate.set()
+        scheduler.stop()
+
+
 def test_admission_refuses_beyond_the_queue_bound():
     gate = threading.Event()
     model = FakeModel(gate=gate)

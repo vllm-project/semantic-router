@@ -513,7 +513,8 @@ request -> validate (400) -> admission (429) -> plan: render every question (per
 - **Deadlines.** A request deadline (`options.deadline_ms`, or the router's
   context deadline) travels with its jobs. A job whose deadline has passed
   when the worker picks it up is not run; its questions return
-  `deadline_exceeded`. A running forward is never interrupted.
+  `deadline_exceeded`. A job whose client disconnects while it is queued is
+  dropped. A running forward is never interrupted.
 - **Admission.** The queue is bounded by jobs (`--max-queue`) and by pending
   tokens (`--max-queued-tokens`); a request beyond either bound gets 429
   `overloaded` at once, so a client can fail open without waiting.

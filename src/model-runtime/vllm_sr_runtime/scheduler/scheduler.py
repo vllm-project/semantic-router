@@ -141,6 +141,10 @@ class Scheduler:
             now = time.monotonic()
             live = []
             for pending in taken:
+                # A job whose client left while it was queued is dropped; once
+                # running it can no longer be cancelled.
+                if not pending.future.set_running_or_notify_cancel():
+                    continue
                 if pending.job.deadline is not None and now > pending.job.deadline:
                     pending.future.set_result(DEADLINE)
                     self.observe("deadline", {"questions": len(pending.job.items)})
