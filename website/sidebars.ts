@@ -35,6 +35,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'installation/installation',
         'installation/agent',
+        'installation/shell-completion',
         {
           type: 'category',
           label: 'Plan a Deployment',
@@ -96,6 +97,7 @@ const sidebars: SidebarsConfig = {
               label: 'Learned',
               items: [
                 'tutorials/signal/learned/classifier',
+                'tutorials/signal/learned/decision',
                 'tutorials/signal/learned/complexity',
                 'tutorials/signal/learned/domain',
                 'tutorials/signal/learned/embedding',
@@ -153,6 +155,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/algorithm/selection/mlp',
                 'tutorials/algorithm/selection/multi-factor',
                 'tutorials/algorithm/selection/prompt',
+                'tutorials/algorithm/selection/decision',
                 'tutorials/algorithm/selection/router-dc',
                 'tutorials/algorithm/selection/static',
                 'tutorials/algorithm/selection/svm',
@@ -210,6 +213,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/router-replay',
                 'tutorials/plugin/shadow-dispatch',
                 'tutorials/plugin/response-cache',
+                'tutorials/plugin/prompt-cache',
               ],
             },
             {
@@ -234,6 +238,7 @@ const sidebars: SidebarsConfig = {
             'tutorials/global/api-and-observability',
             'tutorials/global/stores-and-tools',
             'tutorials/global/vela-models',
+            'tutorials/global/model-runtime',
           ],
         },
       ],
@@ -253,6 +258,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'installation/configuration-contract',
             'installation/configuration-workflows',
+            'installation/recipe-lifecycle',
             {
               type: 'category',
               label: 'Models',
@@ -499,7 +505,21 @@ const sidebars: SidebarsConfig = {
         'benchmarking/open-intelligence-index',
         'benchmarking/agent-evaluation-loop',
         'benchmarking/custom-evaluations',
-        'benchmarking/sr-bench',
+        {
+          type: 'category',
+          label: 'sr-bench 1.0',
+          link: {
+            type: 'doc',
+            id: 'benchmarking/sr-bench/index',
+          },
+          items: [
+            'benchmarking/sr-bench/shared-worker',
+            'benchmarking/sr-bench/tasks-and-targets',
+            'benchmarking/sr-bench/plan-and-run',
+            'benchmarking/sr-bench/iterate',
+            'benchmarking/sr-bench/results',
+          ],
+        },
       ],
     },
     {

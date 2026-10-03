@@ -13,7 +13,7 @@ IMAGE_PRODUCERS = {
     "image-local": ("vllm-sr",),
     "image-dashboard": ("dashboard",),
     "image-operator": ("operator", "operator-bundle"),
-    "image-fixtures": ("provider-mocker",),
+    "image-fixtures": ("provider-mocker", "model-runtime"),
     "image-distribution": (
         "extproc-rocm",
         "vllm-sr-cuda",
@@ -41,6 +41,7 @@ EXECUTOR_JOBS = (
     "e2e-dashboard",
 )
 ALL_DISPATCH_JOBS = ("plan", *IMAGE_PRODUCERS, "native-build", *EXECUTOR_JOBS)
+LANE_IMAGES = frozenset({"extproc", "provider-mocker", "dashboard"})
 
 
 def content_digest(value: object) -> str:
@@ -57,7 +58,10 @@ def dispatch_job(record: dict) -> str:
         images = set(record["images"])
         if images == {"extproc"}:
             return "e2e-router"
-        if images == {"extproc", "provider-mocker"}:
+        if images in (
+            {"extproc", "provider-mocker"},
+            {"extproc", "provider-mocker", "model-runtime"},
+        ):
             return "e2e-fixtures"
         if images == {"extproc", "dashboard"}:
             return "e2e-dashboard"
@@ -112,8 +116,17 @@ def _batch(records: list[dict], shard: int) -> dict:
     if executor == "e2e":
         resource = "Large" if common["resource_class"] == "model" else "Standard"
         label += f" / {resource} {shard}"
+        # A fixture beyond the lane's own images forms a separate compatibility
+        # group whose shards restart at 1 in the same Actions matrix.
+        extra = [image for image in common["images"] if image not in LANE_IMAGES]
+        if extra:
+            label += " / " + " + ".join(extra)
     elif common.get("execution"):
         label += " / QEMU"
+    if executor == "native":
+        # Compatible native contracts may now run in separate workers. Their
+        # runtime label alone would collide in the Actions matrix.
+        label += f" / {identity[:6]}"
     minutes = sum(
         record.get("timeout_minutes", 90 if executor == "e2e" else 120)
         for record in records
@@ -136,26 +149,13 @@ def execution_batches(records: list[dict], executor: str) -> list[dict]:
             groups[json.dumps(_compatibility(record), sort_keys=True)].append(record)
     result = []
     for key in sorted(groups):
-        rows = groups[key]
-        limit = (
-            2 if executor == "native" or rows[0].get("resource_class") == "model" else 3
-        )
-        selected: list[dict] = []
-        minutes = 0
-        shard = 1
-        for record in rows:
+        for shard, record in enumerate(groups[key], 1):
             budget = record.get("timeout_minutes", 90 if executor == "e2e" else 120)
             if budget <= 0 or budget > MAX_CONTRACT_MINUTES:
                 raise ValueError(f"invalid worker time budget for {record['id']}")
-            if selected and (
-                len(selected) >= limit or minutes + budget > MAX_CONTRACT_MINUTES
-            ):
-                result.append(_batch(selected, shard))
-                selected, minutes, shard = [], 0, shard + 1
-            selected.append(record)
-            minutes += budget
-        if selected:
-            result.append(_batch(selected, shard))
+            # One isolated Actions worker per contract lets compatible checks
+            # run at the same time while retaining their existing receipts.
+            result.append(_batch([record], shard))
     return result
 
 

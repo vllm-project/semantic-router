@@ -37,7 +37,10 @@ record = {"command": name, "args": args, "cwd": os.getcwd(),
           "stack": os.environ.get("VLLM_SR_STACK_NAME"),
           "offset": os.environ.get("VLLM_SR_PORT_OFFSET"),
           "milvus": os.environ.get("MILVUS_ADDRESS"),
-          "router": os.environ.get("ROUTER_ENDPOINT")}
+          "router": os.environ.get("ROUTER_ENDPOINT"),
+          "fault": os.environ.get("MEMORY_FAULT_CONTROL_URL"),
+          "phase": os.environ.get("MEMORY_TEST_PHASE"),
+          "report": os.environ.get("MEMORY_TEST_REPORT_PATH")}
 with open(os.environ["MEMORY_CALLS"], "a") as stream:
     stream.write(json.dumps(record) + "\n")
 if name == "fake-runtime":
@@ -59,6 +62,22 @@ if name == "curl":
         print("200")
     sys.exit(0)
 if name == "python3":
+    if args and args[0].endswith("milvus_fault_proxy.py"):
+        if os.environ.get("MEMORY_FAIL_PROXY"):
+            sys.exit(52)
+        def stop_proxy(*_):
+            with open(os.environ["MEMORY_CALLS"], "a") as stream:
+                stream.write(json.dumps({"command": "fault-proxy-exit", "args": []}) + "\n")
+            sys.exit(0)
+        signal.signal(signal.SIGTERM, stop_proxy)
+        ready = Path(args[args.index("--ready-file") + 1])
+        if os.environ.get("MEMORY_STALL_PROXY"):
+            print("fixture proxy is waiting before readiness", flush=True)
+        else:
+            ready.write_text(json.dumps({"port": 31000 + int(record["offset"]),
+                                        "control_url": "http://127.0.0.1:32000"}))
+        while True:
+            time.sleep(.01)
     if args[:2] == ["-m", "pip"] or (args[:1] == ["-c"] and "pymilvus" in args[1]):
         sys.exit(0)
     if args[:1] == ["09-memory-features-test.py"]:
@@ -93,6 +112,7 @@ raise SystemExit("unhandled fixture command: " + name)
                 MEMORY_TEST_DIR=str(state),
                 MEMORY_TEST_ARTIFACT_DIR=str(root / "artifacts"),
                 MEMORY_TEST_MODEL_DIR=str(root / "model-cache"),
+                MEMORY_TEST_REPORT_PATH=str(root / "evidence" / "memory.json"),
                 KEEP_MEMORY_TEST_DIR="1",
                 MEMORY_CALLS=str(calls),
                 MEMORY_REAL_PYTHON=sys.executable,
@@ -161,7 +181,14 @@ raise SystemExit("unhandled fixture command: " + name)
                 self.assertIn(stack + "-vllm-sr-network", mocker)
                 self.assertIn(f"127.0.0.1:{8000 + offset}:8000", mocker)
                 self.assertIn(stack + "-provider-mocker:8000", config)
-                self.assertIn(stack + "-vllm-sr-milvus:19530", config)
+                self.assertIn(f"host.docker.internal:{31000 + offset}", config)
+                proxy = next(
+                    call
+                    for call in calls
+                    if call["args"]
+                    and call["args"][0].endswith("milvus_fault_proxy.py")
+                )
+                self.assertIn(f"127.0.0.1:{19530 + offset}", proxy["args"])
                 suite = next(
                     call
                     for call in calls
@@ -169,6 +196,22 @@ raise SystemExit("unhandled fixture command: " + name)
                 )
                 self.assertEqual(suite["milvus"], f"localhost:{19530 + offset}")
                 self.assertEqual(suite["router"], f"http://localhost:{8888 + offset}")
+                phases = [
+                    call
+                    for call in calls
+                    if call["args"] == ["09-memory-features-test.py"]
+                ]
+                self.assertEqual([call["phase"] for call in phases], [None, "shutdown"])
+                self.assertTrue(
+                    all(call["fault"] == "http://127.0.0.1:32000" for call in phases)
+                )
+                self.assertEqual(
+                    phases[1]["report"],
+                    phases[0]["report"].replace(".json", "-shutdown.json"),
+                )
+                self.assertTrue(
+                    any(call["command"] == "fault-proxy-exit" for call in calls)
+                )
                 self.assertTrue(artifacts)
                 self.assertTrue(
                     all(path.startswith("memory-" + stack + "/") for path in artifacts)
@@ -179,6 +222,7 @@ raise SystemExit("unhandled fixture command: " + name)
         result, calls, _, artifacts, state = self._run_memory(MEMORY_FAIL_SUITE="1")
         self.assertEqual(result.returncode, 37, result.stdout + result.stderr)
         self.assertTrue(artifacts)
+        self.assertTrue(any(call["command"] == "fault-proxy-exit" for call in calls))
         self._assert_owned_cleanup(calls, "ci-memory-a", state)
         self.assertTrue(
             any(
@@ -186,6 +230,28 @@ raise SystemExit("unhandled fixture command: " + name)
                 for call in calls
             )
         )
+
+    def test_failed_proxy_start_cleans_milvus_without_starting_router(self):
+        result, calls, _, artifacts, _ = self._run_memory(MEMORY_FAIL_PROXY="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(any(call["command"] == "vllm-sr" for call in calls))
+        self.assertTrue(any(path.endswith("fault-proxy.log") for path in artifacts))
+
+    def test_proxy_readiness_timeout_reports_logs_and_cleans_owned_stack(self):
+        result, calls, _, artifacts, _ = self._run_memory(MEMORY_STALL_PROXY="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Milvus fault proxy did not become ready", result.stderr)
+        self.assertIn("fixture proxy is waiting before readiness", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertFalse(any(call["command"] == "vllm-sr" for call in calls))
+        self.assertTrue(any(call["command"] == "fault-proxy-exit" for call in calls))
+        self.assertTrue(any(path.endswith("fault-proxy.log") for path in artifacts))
+        removed = [
+            call["args"][-1]
+            for call in calls
+            if call["command"] == "fake-runtime" and call["args"][0] == "rm"
+        ]
+        self.assertEqual(removed, ["ci-memory-a-vllm-sr-milvus"])
 
     def test_preexisting_container_is_never_adopted_or_stopped(self):
         result, calls, _, artifacts, _ = self._run_memory(

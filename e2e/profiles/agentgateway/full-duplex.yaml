@@ -1,0 +1,153 @@
+# agentgateway FullDuplexStreamed gateway for agentgateway-full-duplex-routing.
+#
+# agentgateway selects the route before its default PostRouting ExtProc runs,
+# so a route cannot match the Router's headers there. This second Gateway runs
+# the Router as ExtProc in the PreRouting phase, before route selection. Its
+# route sends a request to full-duplex-selected only when it carries the
+# x-selected-model header that the Router sets once the body is routed, and
+# every other request to full-duplex-default. Both backends report the path and
+# credential they received.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: agentgateway-full-duplex
+  namespace: agentgateway-system
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - protocol: HTTP
+    port: 80
+    name: http
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: semantic-router-full-duplex-extproc
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: agentgateway-full-duplex
+  traffic:
+    phase: PreRouting
+    extProc:
+      backendRef:
+        name: semantic-router
+        namespace: agentgateway-system
+        port: 50051
+      processingOptions:
+        requestHeaderMode: Send
+        requestBodyMode: FullDuplexStreamed
+        responseHeaderMode: Send
+        responseBodyMode: Buffered
+        requestTrailerMode: Send
+        responseTrailerMode: Send
+        allowModeOverride: true
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: agentgateway-full-duplex
+  namespace: agentgateway-system
+spec:
+  parentRefs:
+  - name: agentgateway-full-duplex
+  rules:
+  - matches:
+    - headers:
+      - name: x-selected-model
+        value: full-duplex-provider
+    backendRefs:
+    - name: full-duplex-selected
+      port: 8000
+  - backendRefs:
+    - name: full-duplex-default
+      port: 8000
+---
+# The cli scenario also serves the provider's prefixed chat path.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: full-duplex-selected
+  namespace: agentgateway-system
+spec:
+  selector:
+    matchLabels:
+      app: full-duplex-selected
+  template:
+    metadata:
+      labels:
+        app: full-duplex-selected
+    spec:
+      containers:
+      - name: backend
+        image: semantic-router-ci/provider-mocker:e2e-test
+        imagePullPolicy: Never
+        env:
+        - name: PROVIDER_MOCKER_SCENARIO
+          value: cli
+        ports:
+        - name: http
+          containerPort: 8000
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: full-duplex-selected
+  namespace: agentgateway-system
+spec:
+  selector:
+    app: full-duplex-selected
+  ports:
+  - name: http
+    port: 8000
+    targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: full-duplex-default
+  namespace: agentgateway-system
+spec:
+  selector:
+    matchLabels:
+      app: full-duplex-default
+  template:
+    metadata:
+      labels:
+        app: full-duplex-default
+    spec:
+      containers:
+      - name: backend
+        image: semantic-router-ci/provider-mocker:e2e-test
+        imagePullPolicy: Never
+        env:
+        - name: PROVIDER_MOCKER_SCENARIO
+          value: cli
+        ports:
+        - name: http
+          containerPort: 8000
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: full-duplex-default
+  namespace: agentgateway-system
+spec:
+  selector:
+    app: full-duplex-default
+  ports:
+  - name: http
+    port: 8000
+    targetPort: http

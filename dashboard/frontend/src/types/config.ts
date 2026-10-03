@@ -220,6 +220,25 @@ export interface InputModalitySignal {
   modality: 'text' | 'image' | 'audio' | 'video'
 }
 
+export interface DecisionModelChoice {
+  key: string
+  description?: string
+}
+
+export interface DecisionModelSignal {
+  name: string
+  description?: string
+  deployment: string
+  question: {
+    type: 'choice' | 'noul' | 'score'
+    instructions: string
+    choices?: DecisionModelChoice[]
+    levels?: string[]
+  }
+  predicate?: NumericPredicate
+  timeout_ms?: number
+}
+
 export interface ComplexityCandidates {
   candidates: string[]
 }
@@ -314,6 +333,7 @@ export interface Signals {
   metadata?: MetadataSignal[]
   classifiers?: ClassifierSignal[]
   input_modality?: InputModalitySignal[]
+  decision?: DecisionModelSignal[]
 }
 
 // =============================================================================
@@ -343,6 +363,7 @@ export type DecisionConditionType =
   | 'metadata'
   | 'classifier'
   | 'input_modality'
+  | 'decision'
   | 'projection'
 export interface DecisionCondition {
   type: DecisionConditionType
@@ -382,6 +403,7 @@ export interface PluginConfig {
     | 'request_params'
     | 'response_jailbreak'
     | 'context_compression'
+    | 'prompt_cache'
     | 'shadow_dispatch'
   configuration: Record<string, unknown>
 }

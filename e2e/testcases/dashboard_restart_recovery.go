@@ -31,9 +31,10 @@ const (
 
 func init() {
 	pkgtestcases.Register("dashboard-restart-recovery", pkgtestcases.TestCase{
-		Description: "Dashboard sessions/workflows survive restart while sr-bench owns durable evidence independently",
-		Tags:        []string{"dashboard", "functional", "restart"},
-		Fn:          testDashboardRestartRecovery,
+		Description:         "Dashboard sessions/workflows survive restart while sr-bench owns durable evidence independently",
+		Tags:                []string{"dashboard", "functional", "restart"},
+		MutatesClusterState: true,
+		Fn:                  testDashboardRestartRecovery,
 	})
 }
 

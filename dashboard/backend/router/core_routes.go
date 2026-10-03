@@ -222,7 +222,10 @@ func registerTopologyRoutes(mux routeRegistrar, cfg *config.Config, credentialPr
 }
 
 func registerMLPipelineRoutes(mux routeRegistrar, cfg *config.Config, wf *workflowstore.Store) {
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/ml-pipeline/availability", auth.PermMlPipeline, auth.SensitivityOperational, auth.ResourceOwnerML, http.MethodGet), handlers.MLPipelineAvailabilityHandler(cfg))
 	if !cfg.MLPipelineEnabled {
+		cfg.MLPipelineAvailable = false
+		cfg.MLPipelineUnavailableReason = "ML Pipeline is disabled. Enable it with ML_PIPELINE_ENABLED=true."
 		log.Printf("ML Pipeline feature disabled")
 		return
 	}
@@ -245,12 +248,14 @@ func registerMLPipelineRoutes(mux routeRegistrar, cfg *config.Config, wf *workfl
 
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/ml-pipeline/jobs", auth.PermMlPipeline, auth.SensitivitySensitive, auth.ResourceOwnerML, http.MethodGet), mlHandler.ListJobsHandler())
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/ml-pipeline/jobs/", auth.PermMlPipeline, auth.SensitivitySensitive, auth.ResourceOwnerML, http.MethodGet), mlHandler.GetJobHandler())
-	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/ml-pipeline/benchmark", auth.PermMlPipeline, "ml.benchmark", auth.SensitivitySensitive, auth.ResourceOwnerML, 4<<20, http.MethodPost), mlHandler.RunBenchmarkHandler())
-	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/ml-pipeline/train", auth.PermMlPipeline, "ml.train", auth.SensitivitySensitive, auth.ResourceOwnerML, 4<<20, http.MethodPost), mlHandler.RunTrainHandler())
+	registerRouteFunc(mux, auth.ProtectedStreamingMutationRoute("/api/ml-pipeline/benchmark", auth.PermMlPipeline, "ml.benchmark", auth.SensitivitySensitive, auth.ResourceOwnerML, handlers.MLBenchmarkUploadMaxBytes, http.MethodPost), mlHandler.RunBenchmarkHandler())
+	registerRouteFunc(mux, auth.ProtectedStreamingMutationRoute("/api/ml-pipeline/train", auth.PermMlPipeline, "ml.train", auth.SensitivitySensitive, auth.ResourceOwnerML, handlers.MLTrainUploadMaxBytes, http.MethodPost), mlHandler.RunTrainHandler())
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/ml-pipeline/config", auth.PermMlPipeline, "ml.config", auth.SensitivitySensitive, auth.ResourceOwnerML, 4<<20, http.MethodPost), mlHandler.GenerateConfigHandler())
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/ml-pipeline/download/", auth.PermMlPipeline, auth.SensitivitySecret, auth.ResourceOwnerML, http.MethodGet), mlHandler.DownloadOutputHandler())
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/ml-pipeline/stream/", auth.PermMlPipeline, auth.SensitivitySensitive, auth.ResourceOwnerML, http.MethodGet), mlHandler.StreamProgressHandler())
 	log.Printf("ML Pipeline API endpoints registered: /api/ml-pipeline/*")
+	cfg.MLPipelineAvailable = true
+	cfg.MLPipelineUnavailableReason = ""
 
 	if trainingDir != "" {
 		log.Printf("ML Training scripts directory: %s", trainingDir)

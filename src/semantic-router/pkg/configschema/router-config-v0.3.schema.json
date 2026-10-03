@@ -87,6 +87,7 @@
           "enum": [
             "automix",
             "confidence",
+            "decision",
             "fusion",
             "hybrid",
             "kmeans",
@@ -138,6 +139,9 @@
         },
         "prompt": {
           "$ref": "#/$defs/PromptSelectionConfig"
+        },
+        "decision": {
+          "$ref": "#/$defs/DecisionSelectionConfig"
         },
         "on_error": {
           "type": "string"
@@ -1387,6 +1391,12 @@
             "$ref": "#/$defs/InputModalityRule"
           },
           "type": "array"
+        },
+        "decision": {
+          "items": {
+            "$ref": "#/$defs/DecisionSignalRule"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -2003,6 +2013,18 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "DecisionChoice": {
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "DecisionLearningAdaptationConfig": {
       "properties": {
         "mode": {
@@ -2303,6 +2325,25 @@
           "if": {
             "properties": {
               "type": {
+                "const": "prompt_cache"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/PromptCachePluginConfig"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "shadow_dispatch"
               }
             },
@@ -2328,6 +2369,7 @@
             "hallucination",
             "header_mutation",
             "memory",
+            "prompt_cache",
             "rag",
             "request_params",
             "response_cache",
@@ -2350,6 +2392,75 @@
         "type",
         "configuration"
       ]
+    },
+    "DecisionQuestion": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "choices": {
+          "items": {
+            "$ref": "#/$defs/DecisionChoice"
+          },
+          "type": "array"
+        },
+        "levels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DecisionSelectionConfig": {
+      "properties": {
+        "deployment": {
+          "type": "string"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "candidates": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DecisionSignalRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "deployment": {
+          "type": "string"
+        },
+        "question": {
+          "$ref": "#/$defs/DecisionQuestion"
+        },
+        "predicate": {
+          "$ref": "#/$defs/NumericPredicate"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "DynamicRetrievalConfig": {
       "properties": {
@@ -4165,6 +4276,12 @@
         },
         "input": {
           "$ref": "#/$defs/ModelInputBudget"
+        },
+        "profile": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -4872,6 +4989,7 @@
             "conversation",
             "event",
             "input_modality",
+            "decision",
             "kb_metric",
             "projection"
           ]
@@ -4896,6 +5014,27 @@
         },
         "miss": {
           "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PromptCachePluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "ttl": {
+          "type": "string"
+        },
+        "targets": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "on_unsupported": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -6247,6 +6386,7 @@
             "complexity",
             "context",
             "conversation",
+            "decision",
             "domain",
             "embedding",
             "event",
@@ -7458,6 +7598,15 @@
         "observation_key": "input_modality",
         "decision_referenceable": true,
         "schema_ref": "#/$defs/InputModalityRule"
+      },
+      {
+        "type": "decision",
+        "display_name": "Decision Model",
+        "collection": "decision",
+        "observation_key": "decision",
+        "decision_referenceable": true,
+        "reference_qualifier": "label",
+        "schema_ref": "#/$defs/DecisionSignalRule"
       }
     ],
     "algorithms": [
@@ -7595,6 +7744,16 @@
         "config_field": "prompt",
         "payload_shape": "nested",
         "schema_ref": "#/$defs/PromptSelectionConfig"
+      },
+      {
+        "type": "decision",
+        "display_name": "Decision Model",
+        "description": "Ask a decision model which declared candidate should answer.",
+        "tier": "supported",
+        "execution": "selector",
+        "config_field": "decision",
+        "payload_shape": "nested",
+        "schema_ref": "#/$defs/DecisionSelectionConfig"
       }
     ],
     "plugins": [
@@ -7677,6 +7836,12 @@
         "schema_ref": "#/$defs/ContextCompressionPluginConfig"
       },
       {
+        "type": "prompt_cache",
+        "display_name": "Prompt Cache",
+        "description": "Add bounded Anthropic prompt-cache markers after route selection.",
+        "schema_ref": "#/$defs/PromptCachePluginConfig"
+      },
+      {
         "type": "shadow_dispatch",
         "display_name": "Shadow Dispatch",
         "description": "Send a bounded asynchronous copy to a secondary model.",
@@ -7721,6 +7886,7 @@
       "conversation",
       "event",
       "input_modality",
+      "decision",
       "kb_metric",
       "projection"
     ],

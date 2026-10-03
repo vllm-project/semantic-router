@@ -107,6 +107,9 @@ type RequestContext struct {
 	FullDuplexRequestBody bool // true when the data plane negotiated FULL_DUPLEX_STREAMED
 	SkipProcessing        bool // true only when the configured opt-out header is valid
 
+	// Request header reply held until a full-duplex body is routed.
+	fullDuplexHold *fullDuplexHeaderHold
+
 	StreamingComplete      bool // True after neutral stream finalization runs once.
 	StreamingAborted       bool // True if the neutral stream ended abnormally.
 	ProtocolResponseStream *protocolcodec.StreamEngine
@@ -133,6 +136,12 @@ type RequestContext struct {
 	// the request was never admitted (rejected pre-selection, cache hit, etc.)
 	// and inflight.End on it is a no-op.
 	InflightToken uint64
+
+	// InflightModel is the model key whose bucket InflightToken was taken
+	// from. It travels with the token so every End site releases the exact
+	// bucket Begin admitted, even if the routing model is later rewritten
+	// (fallback candidates) or the request errors out before dispatch.
+	InflightModel string
 
 	// Session-aware transition metadata
 	SessionID           string  // Derived from ConversationID (Response API) or message hash (Chat Completions)
@@ -187,7 +196,11 @@ type RequestContext struct {
 	VSRCacheSource                      string
 	VSRCacheEntryAgeSeconds             float64
 	VSRCacheTTLSeconds                  int
-	VSRInjectedSystemPrompt             bool             // Whether a system prompt was injected into the request
+	VSRInjectedSystemPrompt             bool // Whether a system prompt was injected into the request
+	PromptCacheAction                   string
+	PromptCacheReason                   string
+	PromptCacheInserted                 int
+	PromptCachePreserved                int
 	VSRSelectedDecision                 *config.Decision // The decision object selected by DecisionEngine (for plugins)
 	// VSREligibleModelRefs is the selected decision's model set after applying
 	// request contracts. Loopers consume this exact set; broader Router Learning
@@ -200,6 +213,10 @@ type RequestContext struct {
 	// VSRSelectedCandidate is the exact post-policy choice used at dispatch.
 	// Never recover its reasoning settings by searching model names again.
 	VSRSelectedCandidate *config.ModelRef
+	// primaryBackendName is the exact provider backend selected for the primary
+	// dispatch. It is separate from VSRSelectedModel, which preserves the
+	// client-facing logical model or LoRA identity for telemetry and headers.
+	primaryBackendName string
 
 	// FallbackRecord tracks bounded cross-candidate execution attempts and token accounting.
 	FallbackRecord        *fallback.ExecutionRecord
@@ -249,6 +266,7 @@ type RequestContext struct {
 	VSRMatchedMetadata        []string // Matched untrusted request metadata signal names
 	VSRMatchedClassifier      []string // Matched generic classifier signal names
 	VSRMatchedInputModality   []string // Matched structural input-modality signal names
+	VSRMatchedDecisionModel   []string // Matched decision-model signals (rule or rule:choice)
 	VSRConversationFacts      classification.ConversationFacts
 	VSRMatchedProjection      []string // Matched projection mapping outputs
 	VSRProjectionScores       map[string]float64
@@ -364,6 +382,7 @@ type RequestContext struct {
 	PrimaryOutputChars       int
 	ProtocolEnvelope         llmprotocol.Envelope
 	ResponseEnvelope         llmprotocol.Envelope
+	ResponseBodyNeedsRewrite bool // The decoded client wire differs from the provider body.
 	ProtocolDiagnostics      llmprotocol.Diagnostics
 	ResponseVendor           llmprotocol.ResponseVendor
 	ResponseVendorExtensions bool // Upstream response carried vendor decorations that were dropped on decode
