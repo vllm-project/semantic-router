@@ -101,7 +101,10 @@ class LocalSnapshotStore:
         try:
             save_file(tensors, str(temp), metadata=metadata)
             os.chmod(temp, 0o600)
-            os.replace(temp, path)
+            # Publishing a second version under the same key could replace a
+            # snapshot after the target has checked it. A new source prefix
+            # must use a new cache ID instead.
+            os.link(temp, path)
         finally:
             temp.unlink(missing_ok=True)
         return path

@@ -100,6 +100,8 @@ class HandoffTests(unittest.TestCase):
 
     def test_tenant_and_expiry_fail_closed(self) -> None:
         self.store.publish(self.snapshot)
+        with self.assertRaises(FileExistsError):
+            self.store.publish(self.snapshot)
         with self.assertRaises(FileNotFoundError):
             self.store.load(
                 "tenant-b",
