@@ -36,7 +36,7 @@ type Manager struct {
 	runtimeDir string
 	command    []string
 	cacheDir   string
-	cpus       []int
+	cores      int
 	closed     bool
 }
 
@@ -50,7 +50,7 @@ func NewManager() *Manager {
 	if runtimeDir == "" {
 		runtimeDir = filepath.Join(os.TempDir(), fmt.Sprintf("vllm-sr-runtime-%d", os.Getpid()))
 	}
-	return &Manager{groups: make(map[string]*group), runtimeDir: runtimeDir, command: command, cacheDir: os.Getenv(RuntimeCacheEnv), cpus: cpuBudget()}
+	return &Manager{groups: make(map[string]*group), runtimeDir: runtimeDir, command: command, cacheDir: os.Getenv(RuntimeCacheEnv), cores: cpuCores()}
 }
 
 // Acquire returns a lease on the model_runtime deployments the configuration
@@ -62,7 +62,7 @@ func (m *Manager) Acquire(cfg *config.RouterConfig) (*Lease, error) {
 
 // AcquireDeployments returns a lease on an explicit set of deployments.
 func (m *Manager) AcquireDeployments(deployments map[string]config.ModelDeployment) (*Lease, error) {
-	plans := planProcesses(deployments, m.command, m.cacheDir, m.cpus)
+	plans := planProcesses(deployments, m.command, m.cacheDir, m.cores)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
@@ -91,7 +91,7 @@ func (m *Manager) AcquireDeployments(deployments map[string]config.ModelDeployme
 
 // extend adds one deployment to a lease in a process of its own.
 func (m *Manager) extend(lease *Lease, name string, deployment config.ModelDeployment) error {
-	plan := planProcesses(map[string]config.ModelDeployment{name: deployment}, m.command, m.cacheDir, m.cpus)[0]
+	plan := planProcesses(map[string]config.ModelDeployment{name: deployment}, m.command, m.cacheDir, m.cores)[0]
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
@@ -151,7 +151,7 @@ func (m *Manager) startGroupLocked(plan *processPlan) (*group, error) {
 	g := newGroup(plan, client, true)
 	g.modelsFile = modelsFile
 	g.supervisor = &supervisor{
-		process: plan.name, deployments: plan.deployments(), socket: socket, env: os.Environ(), cpus: plan.cpus,
+		process: plan.name, deployments: plan.deployments(), socket: socket, env: os.Environ(),
 		command: managedCommand(m.command, socket, modelsFile, m.cacheDir, plan.threads), onExit: g.processExited,
 	}
 	g.start()

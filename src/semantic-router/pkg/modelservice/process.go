@@ -24,8 +24,7 @@ type processPlan struct {
 	endpoint string
 	models   []modelEntry
 	members  map[string]string
-	// cpus and threads are a CPU process's share of the router's cores.
-	cpus    []int
+	// threads is a CPU process's share of the router's cores.
 	threads int
 }
 
@@ -46,10 +45,10 @@ type modelIdentity struct {
 // share one process per endpoint and select their model by served name.
 // Managed deployments share one process per process key, else per device,
 // except CPU models without a key, which spread over up to
-// maxCPUProcesses(len(cpus)) processes. Every CPU process gets an equal,
-// disjoint share of cpus. Deployments of the same model, revision, device and
-// profile in one process share one loaded model.
-func planProcesses(deployments map[string]config.ModelDeployment, command []string, cacheDir string, cpus []int) []*processPlan {
+// maxCPUProcesses(cores) processes. Every CPU process runs cpuThreads threads.
+// Deployments of the same model, revision, device and profile in one process
+// share one loaded model.
+func planProcesses(deployments map[string]config.ModelDeployment, command []string, cacheDir string, cores int) []*processPlan {
 	attached := make(map[string]*processPlan)
 	managed := make(map[string]*processPlan)
 	served := make(map[string]map[modelIdentity]string)
@@ -99,16 +98,16 @@ func planProcesses(deployments map[string]config.ModelDeployment, command []stri
 			add(deployment.Device, name, deployment)
 		}
 	}
-	spreadCPUModels(spread, deployments, len(cpus), add)
-	shareProcessCPUs(managed, cpus)
+	spreadCPUModels(spread, deployments, cores, add)
+	shareCPUThreads(managed, cores)
 	plans := make([]*processPlan, 0, len(attached)+len(managed))
 	for _, plan := range managed {
 		composition, _ := json.Marshal(struct {
 			Models   []modelEntry
 			Command  []string
 			CacheDir string
-			CPUs     []int
-		}{plan.models, command, cacheDir, plan.cpus})
+			Threads  int
+		}{plan.models, command, cacheDir, plan.threads})
 		sum := sha256.Sum256(composition)
 		plan.key = "managed\x00" + hex.EncodeToString(sum[:])
 		plans = append(plans, plan)
@@ -144,23 +143,21 @@ func spreadCPUModels(names []string, deployments map[string]config.ModelDeployme
 	}
 }
 
-// shareProcessCPUs gives every process whose models all run on CPU an equal,
-// disjoint share of cpus and as many threads, in process-name order.
-func shareProcessCPUs(managed map[string]*processPlan, cpus []int) {
-	var names []string
-	for name, plan := range managed {
-		onCPU := len(plan.models) > 0
+// shareCPUThreads sizes every process whose models all run on CPU to an
+// equal share of the cores.
+func shareCPUThreads(managed map[string]*processPlan, cores int) {
+	var onCPU []*processPlan
+	for _, plan := range managed {
+		cpu := len(plan.models) > 0
 		for _, model := range plan.models {
-			onCPU = onCPU && model.Device == "cpu"
+			cpu = cpu && model.Device == "cpu"
 		}
-		if onCPU {
-			names = append(names, name)
+		if cpu {
+			onCPU = append(onCPU, plan)
 		}
 	}
-	sort.Strings(names)
-	for i, share := range shareCPUs(cpus, len(names)) {
-		plan := managed[names[i]]
-		plan.cpus, plan.threads = share, len(share)
+	for _, plan := range onCPU {
+		plan.threads = cpuThreads(cores, len(onCPU))
 	}
 }
 
