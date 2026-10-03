@@ -45,7 +45,9 @@ def main() -> None:
                 {
                     "model": runtime.model.info.id,
                     "revision": runtime.model.info.revision,
+                    "model_sha256": runtime.model.info.model_sha256,
                     "device": runtime.placement.device.label,
+                    "readiness": runtime.health.golden.describe(),
                     "golden_answers": {runtime.placement.device.accelerator: answers},
                 },
                 indent=2,
