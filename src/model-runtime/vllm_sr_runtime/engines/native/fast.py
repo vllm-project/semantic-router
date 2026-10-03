@@ -17,7 +17,10 @@ four scored panels), so it belongs to the exact profile:
   length, whether any row is padded) is captured once as a HIP / CUDA graph on
   the shape's second use and replayed afterwards, with the masks built from the
   host-known row lengths as the eager path builds them. Shapes above
-  ``MAX_GRAPH_TOKENS`` run eagerly; at most ``MAX_GRAPHS`` graphs (and
+  ``MAX_GRAPH_TOKENS`` padded tokens run eagerly: they are GPU-bound (on
+  Eos-0.8B a graph saves 6% at 2,800 tokens and nothing from 11,000), and
+  concurrent traffic forms many distinct large shapes whose captures would cost
+  several forwards each. At most ``MAX_GRAPHS`` graphs (and
   ``MAX_GRAPH_OUTPUT_BYTES`` of outputs) stay cached, least recently used first out.
 """
 
@@ -48,7 +51,7 @@ FUSED_SLOTS = {
         "sigmoid_gate",
     ),
 }
-MAX_GRAPH_TOKENS = 65536
+MAX_GRAPH_TOKENS = 4096
 MAX_GRAPHS = 512
 MAX_GRAPH_OUTPUT_BYTES = 4 << 30
 CAPTURE_AFTER = 2
