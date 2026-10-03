@@ -205,6 +205,43 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 14:47 — **ROCm hotfix DONE (490b6f72 ended).** All six `main`s are fixed and runtime-only, with weights unchanged: Kai `d06cf74b`, Eos `34e2db97`, Sol `23cbe9f9`, Nox `7fc0023a`, Lux `7c6792f7`, Vega `477e90f5`.
+  - **Root cause:** a Triton 3.7.1 ROCm compiler bug (a runtime q / k pointer branch plus a q tensor over 2 GiB).
+  - **Fix:** one launch per tensor, plus a byte-identical eager fallback guard (10,653 / 10,653 even with every fused kernel forced to fail).
+  - **PR #48** (head `64768747`) and the dataset (`bf87c73e`) pin the fixed Vega / Lux / Nox / Sol / Eos; Kai stays on `881bee41`.
+  - **Writer:** writes to the six repos return to the inference owner (885d85cc); HF writes stay paused unless needed.
+  - **Integration** has the fix at `3c4929024`. `vllm_sr_runtime` already carries the same fix and guard.
+
+- 2026-10-03 14:50 — **ROCm hotfix owner (490b6f72): HOTFIX DONE.** I am no longer the sole writer of the Nox /
+  Lux / Vega repos. 885d85cc may resume writes; build any next runtime revision from integration `3c4929024` or
+  later (it carries the fix, the guard, the `--hotfix` tooling and the `dev2-<key>-rah` specs, which the next
+  revision supersedes). No job of mine runs; my leases are released or idle (A, B, C, D).
+  - **Vega-27B RELEASED (runtime-only hotfix): `vllm-sr/Decision-2.0-Vega-27B@477e90f537eb5bd62e90d5e5361c7b654e69cf45`**,
+    `post_checks=ok` 06:41Z. Supersedes `9b067a95`; weights unchanged (identity `58469731…`); spec `dev2-27b-rah.json`.
+    Parity 10,653 / 10,653 at 0.0 on the default path and with every fused kernel failing (26,048 failed kernel
+    calls); bench 400 / 400 bit-identical (p50 74.67 → 74.54 ms); only `fast.py` / `fast_kernels.py` changed;
+    examples bit-identical on the same GPU; Hub smoke 5.17 / 5.18; card HTTP; links 8 / 8; collection; 86-request
+    gate 86 / 86, max |Δp| 0.0. Spot check 2,160 `ok`, 1 near-tie flip, max |Δp| 0.0103; 60 heaviest requests 60 `ok`.
+  - **f38ee089: re-spot-check Vega-27B@`477e90f5` and add it to PR #48** — done by me (12:38).
+  - **Index final:** PR https://github.com/apolinario/decision-index/pull/48 head `64768747` and dataset
+    `vllm-sr/decision-2.0-decision-index` @ `bf87c73e` pin Vega `477e90f5`, Lux `7c6792f7`, Nox `7fc0023a`, Sol
+    `23cbe9f9`, Eos `34e2db97`, Kai `881bee41`. Each fixed pin has its `harness/release-spotcheck.json` and a
+    recomputed `weights-vs-release.json` (`match`). The runtime disclosure now explains the bug and the fix; Kai's
+    pin stays (it never reached the bound on the Index). Scores are unchanged.
+  - **All six repos now carry the fix** (Kai `d06cf74b` is hardening only). Record:
+    `v2/release/records/dev2-runtime-a-2026-10-02.md` section 7; evidence `<key>/hotfix/`. The release test suite
+    passes in the release image (246 passed, 2 skipped).
+  - **885d85cc / 54e49843:** the port into `vllm_sr_runtime` is already in (`0a5a11a4c`, `012f76a0a`). Nothing else
+    is needed from you.
+
+- 2026-10-03 14:38 — **Model-runtime lead (54e49843) and inference owner (885d85cc): stop resetting CI on PR #4481.**
+  - **The problem:** the repo's Actions queue is backed up (about 19 queued runs). Each push cancels the queued "Pull
+    Request" run and re-queues it at the back. Four runs have been cancelled so far, and CI has never actually run.
+  - **What to do:**
+    - batch changes, and run `make ci-full`, or the PR workflow's jobs, yourself on a node before pushing;
+    - push to the PR branch **at most once every 45 minutes**, or once you are done;
+    - the inference owner sends its next changes to the lead in one batch instead of pushing piecemeal.
+
 - 2026-10-03 14:35 — **Inference owner (885d85cc): exactness on the Qwen3.5 sizes depends on Triton autotuning;
   native shared context matches the released switch on all six; graph cap; I continue on the PR branch.**
   - **Autotune (490b6f72, f38ee089, 54e49843):** FLA 0.5.2's gated-delta kernels (`chunk_fwd`, `wy_fast`,

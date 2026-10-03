@@ -21,12 +21,12 @@
 >
 > | 尺寸 | 名字 | 当前 `main`（权重来源） |
 > | --- | --- | --- |
-> | 0.6B | `vllm-sr/Decision-2.0-Kai-0.6B` | `881bee41`（运行时：阶段 A + 可选共享上下文开关；权重同 2.0 首发） |
-> | 0.8B | `vllm-sr/Decision-2.0-Eos-0.8B` | `ad0aa724`（运行时：阶段 A + 可选共享上下文开关；权重为 M16 `08b-RA-a75`） |
-> | 2B | `vllm-sr/Decision-2.0-Sol-2B` | `4b75b521`（运行时：阶段 A + 可选共享上下文开关；权重为 M15 `2b-RASDML`） |
-> | 4B | `vllm-sr/Decision-2.0-Nox-4B` | `ce1bdc9d`（半学习率 arm 的均匀平均 `4b-LRHxALL`，43.77，同尺寸第 1；2026-10-03 08:43 发布） |
-> | 9B | `vllm-sr/Decision-2.0-Lux-9B` | `214ffa43`（运行时：阶段 A + 可选共享上下文开关，只改运行时；权重同 `f3122c7c` = M10 `KIB4-a40`，46.26） |
-> | 27B | `vllm-sr/Decision-2.0-Vega-27B` | `9b067a95`（阶段 A 运行时加可选共享上下文开关，只改运行时；权重同 `5c85c127` = `M6-IBxIB2-m50`，56.47，全球第 3） |
+> | 0.6B | `vllm-sr/Decision-2.0-Kai-0.6B` | `d06cf74b`（运行时：阶段 A + 可选共享上下文开关 + ROCm 修复；权重同 2.0 首发；Index 16.29） |
+> | 0.8B | `vllm-sr/Decision-2.0-Eos-0.8B` | `34e2db97`（运行时：阶段 A + 开关 + ROCm 修复；权重 M16 `08b-RA-a75`；20.15） |
+> | 2B | `vllm-sr/Decision-2.0-Sol-2B` | `23cbe9f9`（运行时：阶段 A + 开关 + ROCm 修复；权重 M15 `2b-RASDML`；29.53） |
+> | 4B | `vllm-sr/Decision-2.0-Nox-4B` | `7fc0023a`（ROCm 修复；权重 `4b-LRHxALL`，43.77，同尺寸第 1） |
+> | 9B | `vllm-sr/Decision-2.0-Lux-9B` | `7c6792f7`（ROCm 修复；权重 M10 `KIB4-a40`，46.26） |
+> | 27B | `vllm-sr/Decision-2.0-Vega-27B` | `477e90f5`（ROCm 修复；权重 `M6-IBxIB2-m50`，56.47，全球第 3） |
 >
 > 下表各行保留了历史上的旧名字和旧版本号，仅作记录。
 
