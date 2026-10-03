@@ -10,7 +10,10 @@ from torch import nn
 
 from ...plugins.base import (
     Accelerator,
+    BackboneSpec,
     DeviceInfo,
+    EncoderBatch,
+    EncoderOutput,
     Engine,
     EngineModel,
     EngineOptions,
@@ -21,8 +24,9 @@ from ...plugins.base import (
 from ...scheduler.planner import padded
 from . import fast, models
 from .models.lora import attach
+from .models.modernbert import padded_layout
 from .models.tree import Tree
-from .weights import keep_linear_bf16, load_adapter, load_backbone
+from .weights import cast_parameters, keep_linear_bf16, load_adapter, load_backbone
 
 
 class NativeEngineModel(EngineModel):
@@ -34,8 +38,10 @@ class NativeEngineModel(EngineModel):
         spec: ModelSpec,
         options: EngineOptions,
         residency: dict[str, int] | None,
+        branches: dict[str, nn.Module] | None = None,
     ):
         self.backbone = backbone
+        self.branches = branches or {}
         self.accelerator = accelerator
         self.device_info = device_info
         self.device = accelerator.torch_device(device_info)
@@ -44,7 +50,9 @@ class NativeEngineModel(EngineModel):
         self.residency = residency
         self.kernels = accelerator.kernels(device_info)
         self.kernels.allow_approximate = not options.exact_kernels_only
-        backbone.kernels = self.kernels
+        self.kernels.use_variants(spec.kernel_variants)
+        for module in (backbone, *self.branches.values()):
+            module.kernels = self.kernels
         self.fast: dict[str, Any] = {}
         self.masks: fast.Masks | None = None
         self.graphs: fast.Graphs | None = None
@@ -56,6 +64,8 @@ class NativeEngineModel(EngineModel):
         options, backbone = self.options, self.backbone
         if options.fused_kernels:
             reason = fast.fused_unavailable(backbone, self.kernels)
+            if self.spec.dtype.gpu_weights:
+                reason = f"the layers stream {self.spec.dtype.gpu_weights} (DtypePolicy.gpu_weights)"
             self.fast["fused_layers"] = 0 if reason else fast.install_fused(backbone)
             if reason:
                 self.fast["fused_skipped"] = reason
@@ -133,14 +143,39 @@ class NativeEngineModel(EngineModel):
             queried = hidden[rows, query]
         return ForwardOutput(gathered=gathered, query=queried)
 
+    def encode(self, batch: EncoderBatch) -> EncoderOutput:
+        """Hidden states at the batch's layer exits over padded rows, through its branch if it names one."""
+        backbone = (
+            self.backbone if batch.branch is None else self.branches[batch.branch]
+        )
+        input_ids = batch.input_ids.to(self.device)
+        attention_mask = batch.attention_mask.to(self.device)
+        rows, width = input_ids.shape
+        layout = padded_layout(
+            attention_mask, rows, width, backbone.window, self.device
+        )
+        with torch.inference_mode(), self.autocast():
+            hidden = backbone.encode(input_ids, layout, batch.layers)
+        return EncoderOutput(hidden=hidden)
+
+    def _parameters(self) -> list[nn.Parameter]:
+        """Every parameter once (branches share the backbone's embedding)."""
+        unique = {
+            id(parameter): parameter
+            for module in (self.backbone, *self.branches.values())
+            for parameter in module.parameters()
+        }
+        return list(unique.values())
+
     def parameter_count(self) -> int:
-        return sum(parameter.numel() for parameter in self.backbone.parameters())
+        return sum(parameter.numel() for parameter in self._parameters())
 
     def memory_bytes(self) -> int:
-        return sum(p.numel() * p.element_size() for p in self.backbone.parameters())
+        return sum(p.numel() * p.element_size() for p in self._parameters())
 
     def close(self) -> None:
         self.backbone = None  # type: ignore[assignment]
+        self.branches = {}
         if self.device.type == "cuda":
             torch.cuda.empty_cache()
 
@@ -197,17 +232,49 @@ class NativeEngine(Engine):
                     lora.alpha / lora.rank,
                 )
             load_adapter(backbone, lora.weight_files)
+        branches = {
+            name: load_branch(backbone, backbone_spec, name)
+            for name in backbone_spec.branches
+        }
+        modules = (backbone, *branches.values())
         leftovers = [
-            name for name, parameter in backbone.named_parameters() if parameter.is_meta
+            name
+            for module in modules
+            for name, parameter in module.named_parameters()
+            if parameter.is_meta
         ]
         if leftovers:
             raise ValueError(f"backbone parameters were not loaded: {leftovers[:3]}")
-        backbone = backbone.float()
         target = accelerator.torch_device(device)
         residency = None
-        if target.type != "cpu" and spec.dtype.bf16_resident:
-            residency = keep_linear_bf16(backbone)
-        backbone = backbone.to(target).eval()
+        for module in modules:
+            module.float()
+            if target.type != "cpu" and spec.dtype.gpu_weights:
+                cast_parameters(module, getattr(torch, spec.dtype.gpu_weights))
+            elif target.type != "cpu" and spec.dtype.bf16_resident:
+                residency = keep_linear_bf16(module)
+            module.to(target).eval()
         return NativeEngineModel(
-            backbone, accelerator, device, spec, options, residency
+            backbone, accelerator, device, spec, options, residency, branches
         )
+
+
+def load_branch(backbone: nn.Module, spec: BackboneSpec, name: str) -> nn.Module:
+    """A branch of a branched encoder: its own layer stack and final norm over the backbone's embedding."""
+    branch = spec.branches[name]
+    with torch.device("meta"):
+        view = models.build(spec.model_type, spec.config)
+    holder = nn.Module()
+    holder.layers = view.layers
+    holder.final_norm = view.final_norm
+    load_backbone(
+        holder,
+        branch.weight_files,
+        renames={
+            f"{branch.layers}.": "layers.",
+            f"{branch.final_norm}.": "final_norm.",
+        },
+    )
+    view.embeddings = backbone.embeddings
+    view.rotary_emb = backbone.rotary_emb
+    return view
