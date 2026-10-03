@@ -10,11 +10,11 @@ Two separate questions protect your models:
 
 - **Is the request an attack?** Vela 1.0 Guard detects prompt injection and
   jailbreak attempts. It backs the
-  [`jailbreak` signal](../../tutorials/signal/learned/jailbreak.md).
+  [`jailbreak` signal](tutorials/signal/learned/jailbreak.md).
 - **Is the content unsafe?** Vela 1.0 Safety (or the alternative, Shield)
   scores whether a request is unsafe, and Vela 1.0 Hazard names which of 12
   hazard categories apply. They back the
-  [`safety` signal](../../tutorials/signal/learned/safety.md).
+  [`safety` signal](tutorials/signal/learned/safety.md).
 
 An unsafe request is not necessarily an attack, and an attack can be politely
 worded, so most deployments use both.

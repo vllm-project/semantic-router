@@ -8,7 +8,7 @@ description: Route requests on the images and audio they carry with the Vela Omn
 Vela 1.0 Omni embeds text, images and audio into one vector space, so an
 image can be compared with a text description ("a photograph of a passport
 page") or with example images. The router uses it for
-[embedding signals](../../tutorials/signal/learned/embedding.md) whose
+[embedding signals](tutorials/signal/learned/embedding.md) whose
 `query_modality` is `image` or `audio`.
 
 | Model | Size | Vector | Text limit | Use when |

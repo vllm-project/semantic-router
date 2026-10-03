@@ -11,11 +11,11 @@ image. Routes match on those labels.
 
 | Signal | Model | Labels |
 | --- | --- | --- |
-| [`domain`](../../tutorials/signal/learned/domain.md) | Vela 1.0 Domain | 14 domains: `biology`, `business`, `chemistry`, `computer science`, `economics`, `engineering`, `health`, `history`, `law`, `math`, `other`, `philosophy`, `physics`, `psychology` |
-| [`fact_check`](../../tutorials/signal/learned/fact-check.md) | Vela 1.0 FactCheck | `FACT_CHECK_NEEDED`, `NO_FACT_CHECK_NEEDED` |
-| [`user_feedback`](../../tutorials/signal/learned/user-feedback.md) | Vela 1.0 Feedback | satisfied, need clarification, wrong answer, want different, no feedback |
-| [`modality`](../../tutorials/signal/learned/modality.md) | Vela 1.0 Modality | `AR` (text), `DIFFUSION` (image), `BOTH` |
-| [`classifier`](../../tutorials/signal/learned/classifier.md) | your own model | your labels |
+| [`domain`](tutorials/signal/learned/domain.md) | Vela 1.0 Domain | 14 domains: `biology`, `business`, `chemistry`, `computer science`, `economics`, `engineering`, `health`, `history`, `law`, `math`, `other`, `philosophy`, `physics`, `psychology` |
+| [`fact_check`](tutorials/signal/learned/fact-check.md) | Vela 1.0 FactCheck | `FACT_CHECK_NEEDED`, `NO_FACT_CHECK_NEEDED` |
+| [`user_feedback`](tutorials/signal/learned/user-feedback.md) | Vela 1.0 Feedback | satisfied, need clarification, wrong answer, want different, no feedback |
+| [`modality`](tutorials/signal/learned/modality.md) | Vela 1.0 Modality | `AR` (text), `DIFFUSION` (image), `BOTH` |
+| [`classifier`](tutorials/signal/learned/classifier.md) | your own model | your labels |
 
 ## Turn it on
 
@@ -134,4 +134,4 @@ List `labels` in the model's own label order (its `id2label`). The router
 reads the model's labels from the runtime and refuses to start if they do not
 match the rule. A model with independent
 labels and a published operating point uses `label_scores.v1` instead; see
-[classifier signals](../../tutorials/signal/learned/classifier.md).
+[classifier signals](tutorials/signal/learned/classifier.md).

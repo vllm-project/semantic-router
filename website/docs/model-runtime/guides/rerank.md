@@ -8,7 +8,7 @@ description: Reorder retrieved documents by their relevance to the request befor
 Vector search finds documents that are similar to a request; a reranker reads
 the request and each document together and scores how well the document
 answers it. Vela 1.0 Reranker reorders the candidates of the
-[RAG plugin](../../tutorials/plugin/rag.md#neural-reranking) so the most
+[RAG plugin](tutorials/plugin/rag.md#neural-reranking) so the most
 relevant ones reach the prompt.
 
 ## Turn it on

@@ -9,9 +9,9 @@ A decision model answers questions you write in plain language about a
 request, without training a classifier for each one. The router uses it in two
 places:
 
-- a [`decision` signal](../../tutorials/signal/learned/decision.md) asks a
+- a [`decision` signal](tutorials/signal/learned/decision.md) asks a
   question and routes on the answer;
-- the [`decision` selection algorithm](../../tutorials/algorithm/selection/decision.md)
+- the [`decision` selection algorithm](tutorials/algorithm/selection/decision.md)
   asks which of a route's models should answer.
 
 ## Kinds of questions

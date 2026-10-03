@@ -8,7 +8,7 @@ description: Check a model's answer against the context it was given and mark th
 Vela 1.0 Halu reads the context a request carried (tool results, retrieved
 documents), the user's question and the model's answer, and marks the spans
 of the answer that the context does not support. The
-[`hallucination` plugin](../../tutorials/plugin/hallucination.md) then adds a
+[`hallucination` plugin](tutorials/plugin/hallucination.md) then adds a
 warning header, a note in the response body, or only records the result.
 
 It checks support, not truth: an answer can be supported by wrong context, and

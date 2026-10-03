@@ -8,14 +8,14 @@ description: Embeddings for semantic routing, the semantic cache, memory, RAG, t
 An embedding turns text into a vector so the router can compare meaning. One
 embedding model serves every feature that needs one:
 
-- [embedding signals](../../tutorials/signal/learned/embedding.md) and
-  [knowledge bases](../../tutorials/signal/learned/kb.md): route on similarity
+- [embedding signals](tutorials/signal/learned/embedding.md) and
+  [knowledge bases](tutorials/signal/learned/kb.md): route on similarity
   to example texts;
-- the [semantic cache](../../tutorials/plugin/response-cache.md): answer a
+- the [semantic cache](tutorials/plugin/response-cache.md): answer a
   repeated question from the cache;
-- [memory](../../tutorials/plugin/memory.md) and [RAG](../../tutorials/plugin/rag.md):
+- [memory](tutorials/plugin/memory.md) and [RAG](tutorials/plugin/rag.md):
   find stored facts and documents;
-- [tool selection](../../tutorials/plugin/tool-selection.md): offer the tools
+- [tool selection](tutorials/plugin/tool-selection.md): offer the tools
   that fit the request.
 
 The default model is Vela 1.0 Embedding. It reads up to 32,768 tokens and can

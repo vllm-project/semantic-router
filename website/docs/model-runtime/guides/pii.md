@@ -7,7 +7,7 @@ description: Find personal information in requests with exact character spans, a
 
 Vela 1.0 PII finds personal information in a request and returns where it is:
 the type, the exact characters and a probability for every span. A
-[`pii` signal](../../tutorials/signal/learned/pii.md) matches when it finds a
+[`pii` signal](tutorials/signal/learned/pii.md) matches when it finds a
 type you do not allow, and a route can then keep the request on a private
 model or refuse it.
 
