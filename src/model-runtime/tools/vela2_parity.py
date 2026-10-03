@@ -253,6 +253,13 @@ def load_reference(package: Path, device: str) -> Any:
     return vela2_inference.Vela2(str(package), device=torch_device), vela2_inference
 
 
+def device_executor(device: str) -> Any:
+    """Runs work where the device wants it: the process's one CPU thread, inline on GPUs."""
+    accelerator = ACCELERATORS[device.split(":", maxsplit=1)[0]]()
+    info = accelerator.devices()[int(device.split(":")[1]) if ":" in device else 0]
+    return lambda work: accelerator.execute(info, work)
+
+
 def load_runtime(package: Path, device: str) -> Any:
     accelerator = ACCELERATORS[device.split(":", maxsplit=1)[0]]()
     devices = accelerator.devices()

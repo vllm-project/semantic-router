@@ -35,7 +35,12 @@ TOOLS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS.parent))
 sys.path.insert(0, str(TOOLS))
 
-from vela2_parity import expand_presets, load_reference, load_runtime  # noqa: E402
+from vela2_parity import (  # noqa: E402
+    device_executor,
+    expand_presets,
+    load_reference,
+    load_runtime,
+)
 from vllm_sr_runtime.plugins.base import SurfacePlan  # noqa: E402
 from vllm_sr_runtime.profiles.batching import BatchingProfile  # noqa: E402
 from vllm_sr_runtime.profiles.exact import ExactProfile  # noqa: E402
@@ -124,7 +129,7 @@ SENTENCES = [
 ]
 
 
-def prompts(tokenizer: Any, tokens: int, count: int, seed: int) -> list[str]:
+def prompts(encode: Any, tokens: int, count: int, seed: int) -> list[str]:
     """``count`` distinct prompts of about ``tokens`` tokens each."""
     rng = random.Random(seed)
     out = []
@@ -132,7 +137,7 @@ def prompts(tokenizer: Any, tokens: int, count: int, seed: int) -> list[str]:
         text, length = "", 0
         while length < tokens:
             text = f"{text} {rng.choice(SENTENCES)}".strip()
-            length = len(tokenizer.encode(text, add_special_tokens=False).ids)
+            length = len(encode(text).ids)
         out.append(text)
     return out
 
@@ -165,7 +170,7 @@ def drive(call: Any, states: list[Any], concurrency: int) -> dict[str, float]:
     return summary(latencies, time.perf_counter() - started)
 
 
-def runtime_side(model: Any, profile: str) -> tuple[Any, Any]:
+def runtime_side(model: Any, profile: str, execute: Any) -> tuple[Any, Any]:
     profiles = {
         "exact": ExactProfile(),
         "shared_context": SharedContextProfile(),
@@ -173,7 +178,9 @@ def runtime_side(model: Any, profile: str) -> tuple[Any, Any]:
     }
     for value in profiles.values():
         value.available(model)
-    scheduler = Scheduler(model, profiles, SchedulerLimits(batch_window_ms=2.0))
+    scheduler = Scheduler(
+        model, profiles, SchedulerLimits(batch_window_ms=2.0), execute=execute
+    )
     scheduler.start()
 
     def call(state: Any) -> dict[str, Any]:
@@ -201,7 +208,8 @@ def main() -> int:
     sides = args.sides.split(",")
     lengths = [int(x) for x in args.tokens.split(",")]
     concurrency = [int(x) for x in args.concurrency.split(",")]
-    model = load_runtime(args.package, args.device)
+    execute = device_executor(args.device)
+    model = execute(lambda: load_runtime(args.package, args.device))
     runs: list[dict[str, Any]] = []
     callers: dict[str, Any] = {}
     for side in sides:
@@ -209,19 +217,21 @@ def main() -> int:
             profile = {"runtime": "exact", "runtime-shared": "shared_context"}.get(
                 side, "batching"
             )
-            callers[side], _ = runtime_side(model, profile)
+            callers[side], _ = runtime_side(model, profile, execute)
         elif side == "reference-onnx":
             sys.path.insert(0, str(args.package))
             import vela2_inference  # type: ignore[import-not-found]
 
-            engine = vela2_inference.Vela2(str(args.package), backend="onnx")
-            callers[side] = _reference_caller(engine)
+            engine = execute(
+                lambda: vela2_inference.Vela2(str(args.package), backend="onnx")
+            )
+            callers[side] = _reference_caller(engine, execute)
         else:
-            engine, _ = load_reference(args.package, args.device)
-            callers[side] = _reference_caller(engine)
+            engine, _ = execute(lambda: load_reference(args.package, args.device))
+            callers[side] = _reference_caller(engine, execute)
     for tokens in lengths:
         texts = prompts(
-            model.tokenizer, tokens, args.requests + args.warmup, args.seed + tokens
+            model.tokens.encode, tokens, args.requests + args.warmup, args.seed + tokens
         )
         states = [{"request": text} for text in texts]
         for side in sides:
@@ -243,14 +253,18 @@ def main() -> int:
     return 0
 
 
-def _reference_caller(engine: Any) -> Any:
-    """The engine as its own server runs it: one request at a time (a lock), presets expanded."""
+def _reference_caller(engine: Any, execute: Any) -> Any:
+    """The engine as its own server runs it: one request at a time, presets expanded.
+
+    Its forwards run on the device's thread (the process's one CPU thread), the
+    best case for its torch work, as the runtime's batches do.
+    """
     lock = threading.Lock()
     questions = expand_presets(engine, ROUTER_QUESTIONS)
 
     def call(state: Any) -> dict[str, Any]:
         with lock:
-            return engine.system_one(state, questions)
+            return execute(lambda: engine.system_one(state, questions))
 
     return call
 
