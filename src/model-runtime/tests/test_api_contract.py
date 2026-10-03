@@ -1,6 +1,10 @@
 """Every response is validated against the checked-in OpenAPI contract."""
 
+import asyncio
 import copy
+import json
+import threading
+import time
 from pathlib import Path
 
 import jsonschema
@@ -167,6 +171,62 @@ def test_body_that_is_not_json(client):
         "/v1/decisions", content=b"{", headers={"content-type": "application/json"}
     )
     assert response.status_code == 400
+
+
+def test_queued_request_is_dropped_when_its_client_disconnects(
+    qwen3_runtime, monkeypatch
+):
+    app = create_app(qwen3_runtime)
+    model = qwen3_runtime.scheduler.model
+    original, calls, release = model.run, [], threading.Event()
+
+    def held(items, **kwargs):
+        calls.append(len(items))
+        release.wait(10)
+        return original(items, **kwargs)
+
+    monkeypatch.setattr(model, "run", held)
+    threading.Timer(5, release.set).start()  # never leave the worker held
+    request = {"state": STATE, "questions": QUESTIONS}
+    first = threading.Thread(target=post, args=(TestClient(app), request))
+    first.start()
+    while not calls:
+        time.sleep(0.01)
+    messages = [
+        {
+            "type": "http.request",
+            "body": json.dumps(request).encode(),
+            "more_body": False,
+        }
+    ]
+    sent = []
+
+    async def receive():
+        return messages.pop(0) if messages else {"type": "http.disconnect"}
+
+    async def send(message):
+        sent.append(message)
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": "/v1/decisions",
+        "raw_path": b"/v1/decisions",
+        "query_string": b"",
+        "root_path": "",
+        "headers": [(b"content-type", b"application/json")],
+        "client": ("127.0.0.1", 1),
+        "server": ("127.0.0.1", 80),
+    }
+    asyncio.run(app(scope, receive, send))
+    assert sent[0]["status"] == 499
+    release.set()
+    first.join(10)
+    assert post(TestClient(app), request).status_code == 200
+    assert len(calls) == 2  # the first and the last request; the dropped one never ran
 
 
 def test_models_health_metrics_and_openapi(client):

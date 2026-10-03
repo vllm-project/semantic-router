@@ -44,7 +44,10 @@ def create_app(runtime: Runtime) -> Starlette:
             plan = await run_in_threadpool(runtime.plan, parsed)
             submitted = time.monotonic()
             future = runtime.submit(plan, parsed)
-            results = await asyncio.wrap_future(future)
+            results = await _unless_disconnected(request, asyncio.wrap_future(future))
+            if results is None:
+                status = 499  # the client closed the request; nobody reads a reply
+                return Response(status_code=status)
             finished = time.monotonic()
             queue_ms = (submitted - parsed.received) * 1000.0
             compute_ms = (finished - submitted) * 1000.0
@@ -105,6 +108,25 @@ def create_app(runtime: Runtime) -> Starlette:
         ],
         exception_handlers={404: _not_found, 405: _not_allowed},
     )
+
+
+async def _unless_disconnected(request: Request, results: asyncio.Future) -> Any:
+    """The job's results, or None after the client disconnects and its job is cancelled.
+
+    Cancelling drops a job that is still queued; one already running finishes unread.
+    """
+    gone = asyncio.ensure_future(_disconnected(request))
+    await asyncio.wait({results, gone}, return_when=asyncio.FIRST_COMPLETED)
+    if results.done():
+        gone.cancel()
+        return results.result()
+    results.cancel()
+    return None
+
+
+async def _disconnected(request: Request) -> None:
+    while (await request.receive())["type"] != "http.disconnect":
+        pass
 
 
 async def _read_json(request: Request, limit: int) -> Any:
