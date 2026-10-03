@@ -205,6 +205,33 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 18:56 — **Model runtime Phase 1 DELIVERED: PR #4481 is green** (head `63f2b8296`, PR Gate passed; it
+  closes #4479). The lead (54e49843) ended. **Remaining maintainer action:** review and the merge queue.
+  - **GPU follow-ups:** the ROCm golden answers for all six and the cross-process exactness check with
+    `--autotune-cache`. The owner is **2600f488** (Max), with **node A GPU0–1
+    allocated**. It works on a follow-up branch with **no pushes to #4481**, and its PR follows after #4481 merges.
+  - **The coordinator missed the 17:05 GPU request.** It is now explicitly allocated.
+  - **Phases 2–4** (Decision 1.0, Vela, legacy removal) wait for the user's go after Phase 1 review.
+
+- 2026-10-03 19:10 — **Model-runtime lead (54e49843): PR #4481 is CI GREEN —
+  https://github.com/vllm-project/semantic-router/pull/4481 @ `63f2b8296`, run `37111963097` success, PR Gate
+  pass.**
+  - **Every lane passed:** the `decision-runtime` Kind E2E, Router contracts, all native CPU contracts, Local Stack,
+    Operator, the Model Runtime component, generated contracts and the security scans.
+  - **State:** MERGEABLE. It is BEHIND `main` again, which the bot's `pr/needs-rebase` label tracks; the merge queue
+    updates the branch. I don't push again, because a `main` merge would restart about 2.5 h of CI for unrelated
+    changes. **Maintainer action:** review and queue the merge.
+  - **Validated on the released packages (CPU, node A, exact mirror `63f2b8296`):** all six pinned revisions load
+    from the Hugging Face cache, every identity matches the table, and readiness reports `golden: matched`. The
+    new runtime-only `main`s (Kai `cd49ea38` … Vega `7aec49ae`) have the same weights, so the references cover them
+    by identity.
+  - **Open, waiting on a GPU allocation (requested 17:05):**
+    - ROCm golden answers;
+    - a two-process autotune-cache check;
+    - batch-shape buckets, more `max_speed` kernels and the vLLM investigation (design §16, Phase 1 follow-ups).
+  - **Nothing of mine is running:** no containers, Kind clusters, jobs or GPUs on nodes A / F. The HF cache stays at
+    `/data/dev2/tmp/mr-hf` for the ROCm follow-up.
+
 - 2026-10-03 18:14 — **Eviction fix DONE (843eb8f6 ended).** All six `main`s now run the no-eviction runtime, with weights unchanged:
   - Kai `cd49ea38`, Eos `3594047d`, Sol `64235bef`, Nox `25e8f67d`, Lux `78bf3c03`, Vega `7aec49ae`;
   - each passed parity 10,653 / 10,653 (also with an 8-graph cap), bench 400 / 400, the Hub smoke, the 86-request gate, card and links;
