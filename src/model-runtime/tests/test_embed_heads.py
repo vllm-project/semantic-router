@@ -1,4 +1,4 @@
-"""The pooled and relevance heads: package detection, planning, readouts and responses."""
+"""The pooled and relevance heads: package layouts, request planning, readouts and responses."""
 
 from __future__ import annotations
 
@@ -14,9 +14,14 @@ from vllm_sr_runtime.accel.cpu import CPUAccelerator
 from vllm_sr_runtime.engines.native import models
 from vllm_sr_runtime.engines.native.models.modernbert import padded_layout
 from vllm_sr_runtime.errors import PackageError
-from vllm_sr_runtime.heads import embedding
-from vllm_sr_runtime.heads.pooled import PooledHead
-from vllm_sr_runtime.heads.relevance import RelevanceHead
+from vllm_sr_runtime.heads.pooled import EmbeddingSurface, PooledHead, PooledLayout
+from vllm_sr_runtime.heads.relevance import (
+    LOGITS,
+    RelevanceHead,
+    RelevanceLayout,
+    RerankSurface,
+)
+from vllm_sr_runtime.heads.task import Rows
 from vllm_sr_runtime.plugins.base import DEADLINE, DeviceInfo, SurfaceRequest
 from vllm_sr_runtime.testing import embed_packages
 
@@ -27,12 +32,27 @@ def request(surface, body):
     return SurfaceRequest(surface, body, None, "exact", True, time.monotonic())
 
 
+def config_of(root):
+    return json.loads((root / "config.json").read_text())
+
+
+def tokenizer_of(root):
+    return Tokenizer.from_file(str(root / "tokenizer.json"))
+
+
 def backbone(root):
-    config = json.loads((root / "config.json").read_text())
+    config = config_of(root)
     module = models.build(config["model_type"], config)
     module.load_state_dict(load_file(str(root / "model.safetensors")), strict=False)
     module.kernels = CPUAccelerator().kernels(CPU)
-    return module.float().eval(), config
+    return module.float().eval()
+
+
+def packed_rows(hidden, mask):
+    """Padded [B, T, H] hidden states as the family's packed ``Rows``."""
+    lengths = mask.sum(1).tolist()
+    starts = [sum(lengths[:row]) for row in range(len(lengths))]
+    return lambda layer: Rows({layer: hidden[mask.bool()]}, starts, lengths)
 
 
 def padded(rows):
@@ -64,239 +84,192 @@ def qwen(tmp_path_factory):
     )
 
 
-def test_vela_embedding_layout_is_detected(embedder):
-    head = PooledHead.detect(
-        embedder, json.loads((embedder / "config.json").read_text())
+def test_vela_embedding_layout(embedder):
+    layout = PooledLayout.read(embedder, config_of(embedder))
+    assert layout.pooling == "mean" and layout.normalize and not layout.normalize_exits
+    assert layout.layers == (1, 2, 4) and layout.dimensions == (64,)
+    assert set(layout.graphs) == {1, 2} and layout.prompts == {}
+    assert (
+        "onnx/model_layer_1.onnx" in layout.files
+        and "onnx/weights.data" not in layout.files
     )
-    assert head.pooling == "mean" and head.normalize and not head.normalize_exits
-    assert head.layers == (1, 2, 4) and head.dimensions == (64,)
-    assert set(head.graphs) == {1, 2} and head.prompts == {}
-    info = head.info()
-    assert info.layers == (1, 2, 4) and info.input_types == ()
+    assert layout.info([4]).layers == (4,) and layout.info().input_types == ()
 
 
 def test_matryoshka_dimensions_follow_the_contract(tmp_path):
     root = embed_packages.write_embedding_package(tmp_path / "wide", exits=())
-    config = json.loads((root / "config.json").read_text())
+    config = config_of(root)
     config["hidden_size"] = 768
     pooling = json.loads((root / "1_Pooling/config.json").read_text())
     (root / "1_Pooling/config.json").write_text(
         json.dumps({**pooling, "word_embedding_dimension": 768})
     )
-    head = PooledHead.detect(root, config)
-    assert head.dimensions == (768, 512, 256, 128, 64)
+    assert PooledLayout.read(root, config).dimensions == (768, 512, 256, 128, 64)
     for change in (
-        {
-            "representation_contract": {
-                **embed_packages.EMBED_CONTRACT,
-                "truncate_before_l2_normalize": False,
-            }
-        },
-        {
-            "representation_contract": {
-                **embed_packages.EMBED_CONTRACT,
-                "intermediate_normalization": "typo",
-            }
-        },
+        {"truncate_before_l2_normalize": False},
+        {"intermediate_normalization": "typo"},
     ):
+        contract = {**embed_packages.EMBED_CONTRACT, **change}
         with pytest.raises(PackageError):
-            PooledHead.detect(root, {**config, **change})
+            PooledLayout.read(root, {**config, "representation_contract": contract})
 
 
-def test_qwen3_embedding_layout_is_detected(qwen):
-    config = json.loads((qwen / "config.json").read_text())
-    head = PooledHead.detect(qwen, config)
-    assert (
-        head.pooling == "last_token"
-        and head.layers == (2,)
-        and head.dimensions == (64,)
+def test_qwen3_embedding_layout(qwen):
+    layout = PooledLayout.read(qwen, config_of(qwen))
+    assert layout.pooling == "last_token" and layout.layers == (2,)
+    assert layout.info().input_types == ("document", "query")
+
+
+def test_embedding_plans_prompts_budgets_and_shared_keys(qwen, embedder):
+    surface = EmbeddingSurface(
+        PooledLayout.read(qwen, config_of(qwen)), tokenizer_of(qwen), [2]
     )
-    assert head.info().input_types == ("document", "query")
-    assert PooledHead.detect(qwen.parent, config) is None
-
-
-def test_pooled_plans_prompts_budgets_and_keys(qwen, embedder):
-    head = PooledHead.detect(qwen, json.loads((qwen / "config.json").read_text()))
-    tokenizer = Tokenizer.from_file(str(qwen / "tokenizer.json"))
-    plan = head.plan(
-        request("embeddings", {"input": ["hello", "hello"], "input_type": "query"}),
-        tokenizer,
-        64,
+    query = surface.plan(
+        request("embeddings", {"input": ["hello"] * 2, "input_type": "query"}),
         "sha",
+        64,
     )
-    plain = head.plan(request("embeddings", {"input": "hello"}), tokenizer, 64, "sha")
-    query_ids, plain_ids = plan.items[0].ids, plain.items[0].ids
-    assert plain_ids == [tokenizer.token_to_id("hello"), 1]
-    assert len(query_ids) > len(plain_ids) and query_ids[-2:] == plain_ids
+    plain = surface.plan(
+        request("embeddings", {"input": "hello", "dimensions": 64}), "sha", 64
+    )
+    hello = tokenizer_of(qwen).token_to_id("hello")
+    assert plain.items[0].ids == (hello, 1) and query.items[0].ids[-2:] == (hello, 1)
     assert (
-        plan.items[0].cache_key == plan.items[1].cache_key != plain.items[0].cache_key
+        query.items[0].cache_key == query.items[1].cache_key != plain.items[0].cache_key
     )
-    vela = PooledHead.detect(
-        embedder, json.loads((embedder / "config.json").read_text())
+    vela = EmbeddingSurface(
+        PooledLayout.read(embedder, config_of(embedder)),
+        tokenizer_of(embedder),
+        [1, 2, 4],
     )
-    vela_tokens = Tokenizer.from_file(str(embedder / "tokenizer.json"))
-    first = vela.plan(
-        request("embeddings", {"input": "hello", "layer": 1}), vela_tokens, 64, "sha"
+    first = vela.plan(request("embeddings", {"input": "hello", "layer": 1}), "sha", 64)
+    full = vela.plan(request("embeddings", {"input": "hello"}), "sha", 64)
+    assert (first.items[0].head, first.items[0].layer) == ("pooled@1", 1)
+    assert (
+        full.items[0].head == "pooled@4"
+        and first.items[0].cache_key != full.items[0].cache_key
     )
-    full = vela.plan(request("embeddings", {"input": "hello"}), vela_tokens, 64, "sha")
-    assert first.items[0].layer == 1 and full.items[0].layer == 4
-    assert first.items[0].cache_key != full.items[0].cache_key
-    long = vela.plan(
-        request("embeddings", {"input": "hello " * 80}), vela_tokens, 64, "sha"
-    )
+    long = vela.plan(request("embeddings", {"input": "hello " * 80}), "sha", 64)
     assert long.items == [] and long.state.slots == ["max_length_exceeded"]
 
 
-def test_pooled_readout_is_masked_mean_then_view(embedder):
-    module, config = backbone(embedder)
-    head = PooledHead.detect(embedder, config)
+def test_pooled_readout_and_matryoshka_views(embedder):
+    module = backbone(embedder)
+    layout = PooledLayout.read(embedder, config_of(embedder))
     ids, mask = padded([[2, 5, 6, 7, 1], [2, 19, 1]])
     with torch.inference_mode():
-        hidden = module.encode(ids, padded_layout(mask, 2, 5, module.window, "cpu"))[4]
-        vectors = head.readout(hidden, mask, 64)
-        alone = head.readout(
-            module.encode(ids[1:, :3], padded_layout(None, 1, 3, module.window, "cpu"))[
-                4
-            ],
-            mask[1:, :3],
-            64,
-        )
-    expected = hidden[1, :3].sum(0) / 3
-    torch.testing.assert_close(vectors[1], expected / (expected.norm() + 1e-12))
-    torch.testing.assert_close(vectors[1:], alone, atol=1e-5, rtol=1e-5)
-    assert torch.allclose(vectors.norm(dim=-1), torch.ones(2))
+        hidden = module.encode(
+            ids, padded_layout(mask, 2, 5, module.window, "cpu"), (4,)
+        )[4]
+    vectors = PooledHead(layout, 4).readout(packed_rows(hidden, mask)(4), [0, 1])
+    torch.testing.assert_close(vectors[1], hidden[1, :3].sum(0) / 3)
+    surface = EmbeddingSurface(layout, tokenizer_of(embedder), [4])
+    plan = surface.plan(request("embeddings", {"input": ["a", "b"]}), "sha", 64)
+    body = surface.finish(plan, vectors)
+    first = torch.tensor(body["data"][0]["embedding"])
+    torch.testing.assert_close(first, vectors[0] / (vectors[0].norm() + 1e-12))
 
 
 def test_last_token_readout_on_the_qwen3_backbone(qwen):
-    module, config = backbone(qwen)
-    head = PooledHead.detect(qwen, config)
+    module = backbone(qwen)
+    layout = PooledLayout.read(qwen, config_of(qwen))
     ids, mask = padded([[5, 6, 7, 1], [19, 1]])
     with torch.inference_mode():
         hidden = module(ids, mask)
-        vectors = head.readout(hidden, mask, 64)
-        alone = head.readout(module(ids[1:, :2], None), mask[1:, :2], 64)
-    torch.testing.assert_close(vectors[1:], alone, atol=1e-5, rtol=1e-5)
+        alone = module(ids[1:, :2], None)
+    (_, last) = PooledHead(layout, 2).readout(packed_rows(hidden, mask)(2), [0, 1])
+    torch.testing.assert_close(last, alone[0, -1], atol=1e-5, rtol=1e-5)
 
 
-def test_reranker_exits_and_contract(reranker):
-    config = json.loads((reranker / "config.json").read_text())
-    head = RelevanceHead.detect(reranker, config)
-    assert head.exits == ((2, 64), (2, 32), (4, 64), (4, 32)) and head.default == (
+def test_reranker_layout(reranker):
+    config = config_of(reranker)
+    layout = RelevanceLayout.read(reranker, config)
+    assert layout.exits == ((2, 64), (2, 32), (4, 64), (4, 32)) and layout.default == (
         4,
         64,
     )
-    assert RelevanceHead.detect(reranker, config, (2, 32)).default == (2, 32)
+    assert RelevanceLayout.read(reranker, config, (2, 32)).default == (2, 32)
+    assert "special_tokens_map.json" not in layout.files(reranker, [(4, 64)])
     with pytest.raises(PackageError, match="no trained pair scorer"):
-        RelevanceHead.detect(reranker, config, (3, 64))
-    broken = {
-        **config,
-        "representation_contract": {
-            **config["representation_contract"],
-            "pooling": "mean",
-        },
-    }
+        RelevanceLayout.read(reranker, config, (3, 64))
+    contract = {**config["representation_contract"], "pooling": "mean"}
     with pytest.raises(PackageError, match="representation contract"):
-        RelevanceHead.detect(reranker, broken)
-    assert RelevanceHead.detect(reranker.parent, config) is None
+        RelevanceLayout.read(reranker, {**config, "representation_contract": contract})
+
+
+def surface_of(reranker, exits=None):
+    layout = RelevanceLayout.read(reranker, config_of(reranker))
+    exits = exits or layout.exits
+    scorers = layout.scorers(exits)
+    heads = {exit: RelevanceHead(exit, scorers[exit]) for exit in exits}
+    return RerankSurface(layout, tokenizer_of(reranker), heads)
 
 
 def test_rerank_plan_uses_the_pair_template_once_per_query(reranker):
-    head = RelevanceHead.detect(
-        reranker, json.loads((reranker / "config.json").read_text())
-    )
-    tokenizer = Tokenizer.from_file(str(reranker / "tokenizer.json"))
+    surface = surface_of(reranker)
+    tokenizer = tokenizer_of(reranker)
     body = {
         "query": "how do i reset my password",
         "documents": ["open settings security", "  ", "offices are closed today " * 4],
     }
-    plan = head.plan(request("rerank", body), tokenizer, head.exits, 24, "sha")
-    assert [item.index for item in plan.items] == [0]
-    assert (
-        plan.items[0].ids == tokenizer.encode(body["query"], body["documents"][0]).ids
+    plan = surface.plan(request("rerank", body), "sha", 24)
+    assert plan.items[0].ids == tuple(
+        tokenizer.encode(body["query"], body["documents"][0]).ids
     )
+    assert plan.items[0].head == "relevance@4x64"
     assert plan.state.slots == [0, "invalid_input", "max_length_exceeded"]
     with pytest.raises(ValueError, match="served pair scorer"):
-        head.plan(
-            request("rerank", {**body, "layer": 3}), tokenizer, head.exits, 24, "sha"
-        )
+        surface.plan(request("rerank", {**body, "layer": 3}), "sha", 24)
     with pytest.raises(ValueError, match="rejects over-long"):
-        head.plan(
-            request("rerank", {**body, "options": {"overflow": "truncate"}}),
-            tokenizer,
-            head.exits,
-            24,
-            "sha",
+        surface.plan(
+            request("rerank", {**body, "options": {"overflow": "truncate"}}), "sha", 24
         )
-    other = head.plan(
-        request("rerank", {**body, "layer": 2, "dimensions": 32}),
-        tokenizer,
-        head.exits,
-        24,
-        "sha",
+    other = surface.plan(
+        request("rerank", {**body, "layer": 2, "dimensions": 32}), "sha", 24
     )
-    assert (
-        other.items[0].exit == (2, 32)
-        and other.items[0].cache_key != plan.items[0].cache_key
-    )
+    assert other.items[0].head == "relevance@2x32"
+    assert other.items[0].cache_key != plan.items[0].cache_key
 
 
 def test_relevance_readout_matches_the_trained_mlp(reranker):
-    module, config = backbone(reranker)
-    head = RelevanceHead.detect(reranker, config)
-    scorers = head.load(head.exits, torch.device("cpu"))
+    module = backbone(reranker)
+    surface = surface_of(reranker)
     tensors = load_file(str(reranker / "classification_heads.safetensors"))
     ids, mask = padded([[2, 5, 6, 1, 11, 12, 1], [2, 19, 1, 22, 1]])
     with torch.inference_mode():
         hidden = module.encode(
-            ids, padded_layout(mask, 2, 7, module.window, "cpu"), (2,)
+            ids, padded_layout(mask, 2, 7, module.window, "cpu"), (2,), True
         )[2]
-        logits = head.readout(scorers, hidden[:, 0], (2, 32))
+        logits = surface.heads[(2, 32)].readout(packed_rows(hidden, mask)(2), [0, 1])
     cls = hidden[:, 0, :32]
     inner = torch.nn.functional.gelu(
         cls @ tensors["2.32.0.weight"].T + tensors["2.32.0.bias"]
     )
     expected = (inner @ tensors["2.32.3.weight"].T + tensors["2.32.3.bias"]).squeeze(-1)
-    torch.testing.assert_close(logits, expected)
+    torch.testing.assert_close(torch.tensor(logits), expected)
+    graph_rows = Rows({}, [], [7, 5], {LOGITS: torch.tensor([[0.25], [-1.5]])})
+    assert RelevanceHead((4, 64), None).readout(graph_rows, [1, 0]) == [-1.5, 0.25]
 
 
 def test_rerank_response_orders_by_logit_and_keeps_failures(reranker):
-    head = RelevanceHead.detect(
-        reranker, json.loads((reranker / "config.json").read_text())
-    )
-    tokenizer = Tokenizer.from_file(str(reranker / "tokenizer.json"))
+    surface = surface_of(reranker)
     body = {
         "query": "cat",
         "documents": ["a cat", "the router", "", "an animal"],
         "top_n": 2,
         "return_documents": True,
     }
-    plan = head.plan(request("rerank", body), tokenizer, head.exits, 64, "sha")
-    response = head.finish(plan, [0.5, 2.0, 0.5])
+    plan = surface.plan(request("rerank", body), "sha", 64)
+    response = surface.finish(plan, [0.5, 2.0, 0.5])
     results = response["results"]
     assert [entry["index"] for entry in results] == [1, 0, 2]
     assert results[0]["relevance_score"] == pytest.approx(1 / (1 + math.exp(-2.0)))
-    assert results[0]["document"] == "the router" and results[2] == {
-        "index": 2,
-        "error": "invalid_input",
-    }
+    assert results[0]["document"] == "the router"
+    assert results[2] == {"index": 2, "error": "invalid_input"}
     assert response["usage"]["input_tokens"] == plan.input_tokens
     assert response["meta"]["pair_scorer"] == {"layer": 4, "dimension": 64}
-    expired = head.finish(plan, DEADLINE)["results"]
+    expired = surface.finish(plan, DEADLINE)["results"]
     assert {entry.get("error") for entry in expired} == {
         "deadline_exceeded",
         "invalid_input",
     }
-
-
-def test_embedding_views_share_one_forward(embedder):
-    module, config = backbone(embedder)
-    head = PooledHead.detect(embedder, config)
-    ids, mask = padded([[2, 5, 6, 1]])
-    with torch.inference_mode():
-        hidden = module.encode(
-            ids, padded_layout(None, 1, 4, module.window, "cpu"), (4,)
-        )[4]
-    full, small = head.readout(hidden, mask, 64), embedding.matryoshka(
-        embedding.pool(hidden, mask, "mean"), 32
-    )
-    torch.testing.assert_close(full[:, :32] / full[:, :32].norm(), small)

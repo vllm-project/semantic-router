@@ -4,8 +4,9 @@ A cross-encoder reads ``<bos> query <eos> document <eos>`` and scores the
 final-normed CLS state at a layer exit, truncated to a Matryoshka width, with
 a trained MLP per (layer, dimension) exit (``classification_heads.safetensors``:
 ``Linear(D, D/2)``, exact GELU, ``Linear(D/2, 1)``, FP32). Scores are raw
-logits; ``relevance_score`` is their sigmoid. All pairs of a request run as
-one batch; the query is tokenized once.
+logits; ``relevance_score`` is their sigmoid. All pairs of a request run in
+one forward and the query is tokenized once. An engine that runs the
+package's exit graphs returns the logits directly.
 """
 
 from __future__ import annotations
@@ -15,12 +16,13 @@ import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import torch
 from torch import nn
 
 from ..errors import (
+    DEADLINE_EXCEEDED,
     INVALID_INPUT,
     INVALID_MODEL_OUTPUT,
     MAX_LENGTH_EXCEEDED,
@@ -28,7 +30,7 @@ from ..errors import (
 )
 from ..plugins.base import DEADLINE, RerankInfo, SurfacePlan, SurfaceRequest
 from ..registry.artifacts import safetensors_header
-from .embedding import content_key
+from .task import Head, Item, Rows, cache_key
 
 MAX_DOCUMENTS = 1024
 CONTRACT = {
@@ -40,6 +42,8 @@ CONTRACT = {
 }
 HEADS_FILE = "classification_heads.safetensors"
 LAYOUT_FILE = "matryoshka_config.json"
+LOGITS = "logits"
+WEIGHT_DATA = "onnx/weights.data"
 _MIN_DIMENSION = 2
 
 
@@ -50,35 +54,17 @@ def _json(path: Path) -> Any:
         raise PackageError(f"unreadable {path.name}: {exc}") from exc
 
 
-@dataclass(frozen=True)
-class RerankRequest:
-    query: str
-    documents: tuple[str, ...]
-    exit: tuple[int, int]
-    top_n: int
-    return_documents: bool
-    max_tokens: int
+def is_reranker(root: Path) -> bool:
+    """Cheap test: a Matryoshka reranker layout with its trained scorers."""
+    return (root / LAYOUT_FILE).is_file() and (root / HEADS_FILE).is_file()
+
+
+def exit_name(exit: tuple[int, int]) -> str:
+    return f"relevance@{exit[0]}x{exit[1]}"
 
 
 @dataclass(frozen=True)
-class PairItem:
-    """One query-document pair: its token IDs, exit and content key."""
-
-    index: int
-    ids: list[int]
-    exit: tuple[int, int]
-    usage: dict[str, Any]
-    cache_key: str
-
-
-@dataclass
-class RerankPlanState:
-    request: RerankRequest
-    slots: list[int | str]
-
-
-@dataclass(frozen=True)
-class RelevanceHead:
+class RelevanceLayout:
     """The pair-scorer exits a package trains; ``graphs`` holds the ONNX graph per exit."""
 
     exits: tuple[tuple[int, int], ...]
@@ -87,18 +73,13 @@ class RelevanceHead:
     graphs: Mapping[tuple[int, int], Path] = field(default_factory=dict)
 
     @classmethod
-    def detect(
+    def read(
         cls,
         root: Path,
         config: dict[str, Any],
         selection: tuple[int, int] | None = None,
-    ) -> RelevanceHead | None:
-        """The head of a reranker package; None when ``root`` holds no pair scorers.
-
-        ``selection`` pins the served default exit (the deployment's pair scorer).
-        """
-        if not (root / LAYOUT_FILE).is_file() or not (root / HEADS_FILE).is_file():
-            return None
+    ) -> RelevanceLayout:
+        """The layout of a reranker package; ``selection`` pins the served default exit."""
         if (
             config.get("architectures") != ["ModernBertModel"]
             or config.get("representation_contract") != CONTRACT
@@ -128,10 +109,10 @@ class RelevanceHead:
             (layer, dim)
             for layer in sorted(layer_indices)
             for dim in sorted(dim_indices, reverse=True)
-            if _has_head(header, layer, dim)
+            if _has_scorer(header, layer, dim)
         )
         if not exits:
-            raise PackageError("the reranker ships no complete pair-scorer head")
+            raise PackageError("the reranker ships no complete pair scorer")
         default = selection or (layers, hidden)
         if default not in exits:
             raise PackageError(
@@ -152,17 +133,27 @@ class RelevanceHead:
             exits=exits, default=default, weights=root / HEADS_FILE, graphs=graphs
         )
 
-    def info(self, served: Sequence[tuple[int, int]] | None = None) -> RerankInfo:
-        return RerankInfo(exits=tuple(served or self.exits), default=self.default)
+    def files(self, root: Path, served: Sequence[tuple[int, int]]) -> tuple[str, ...]:
+        """What the family loads: the layout, the scorers and the served exits' graphs."""
+        graphs = [
+            self.graphs[exit].relative_to(root).as_posix()
+            for exit in served
+            if exit in self.graphs
+        ]
+        data = (WEIGHT_DATA,) if graphs and (root / WEIGHT_DATA).is_file() else ()
+        return (LAYOUT_FILE, HEADS_FILE, *graphs, *data)
 
-    def load(
-        self, exits: Sequence[tuple[int, int]], device: torch.device
-    ) -> nn.ModuleDict:
-        """The FP32 scorer MLP of every exit in ``exits``, keyed ``"<layer>_<dim>"``."""
+    def info(self, served: Sequence[tuple[int, int]]) -> RerankInfo:
+        return RerankInfo(exits=tuple(served), default=self.default)
+
+    def scorers(
+        self, exits: Sequence[tuple[int, int]]
+    ) -> dict[tuple[int, int], nn.Module]:
+        """The FP32 scorer MLP of every exit in ``exits``."""
         from safetensors.torch import load_file
 
         tensors = load_file(str(self.weights))
-        scorers = nn.ModuleDict()
+        out = {}
         for layer, dim in exits:
             prefix = f"{layer}.{dim}"
             scorer = nn.Sequential(
@@ -172,15 +163,68 @@ class RelevanceHead:
             scorer[0].bias.data = tensors[f"{prefix}.0.bias"]
             scorer[2].weight.data = tensors[f"{prefix}.3.weight"]
             scorer[2].bias.data = tensors[f"{prefix}.3.bias"]
-            scorers[f"{layer}_{dim}"] = scorer
-        return scorers.float().to(device).eval()
+            out[(layer, dim)] = scorer.float().eval()
+        return out
 
-    def parse(
+
+class RelevanceHead(Head):
+    """One pair-scorer exit: logits from final-normed CLS rows, or from the exit graph's output."""
+
+    kind: ClassVar[str] = "relevance"
+    surface: ClassVar[str] = "rerank"
+
+    def __init__(self, exit: tuple[int, int], scorer: nn.Module | None):
+        super().__init__(exit_name(exit), exit[0])
+        self.exit = exit
+        self.scorer = scorer
+
+    def readout(self, rows: Rows, sequences: Sequence[int]) -> list[Any]:
+        if LOGITS in rows.outputs:
+            logits = rows.outputs[LOGITS][list(sequences)].reshape(-1)
+        else:
+            assert self.scorer is not None
+            cls = rows.first(sequences, self.layer)[:, : self.exit[1]].float()
+            logits = self.scorer(cls).reshape(-1)
+        return [float(value) for value in logits.float().cpu()]
+
+    def to(self, device: torch.device) -> RelevanceHead:
+        if self.scorer is not None:
+            self.scorer = self.scorer.to(device)
+        return self
+
+
+@dataclass(frozen=True)
+class RerankRequest:
+    query: str
+    documents: tuple[str, ...]
+    exit: tuple[int, int]
+    top_n: int
+    return_documents: bool
+    max_tokens: int
+
+
+@dataclass
+class RerankPlanState:
+    request: RerankRequest
+    slots: list[int | str]
+    usages: list[dict[str, Any] | None]
+
+
+class RerankSurface:
+    """``/v1/rerank`` over a model's relevance heads, one per served exit."""
+
+    def __init__(
         self,
-        request: SurfaceRequest,
-        served: Sequence[tuple[int, int]],
-        max_input_tokens: int,
-    ) -> RerankRequest:
+        layout: RelevanceLayout,
+        tokenizer: Any,
+        heads: Mapping[tuple[int, int], RelevanceHead],
+    ):
+        self.layout = layout
+        self.tokenizer = tokenizer
+        self.heads = dict(heads)
+        self.info = layout.info(list(heads))
+
+    def parse(self, request: SurfaceRequest, max_input_tokens: int) -> RerankRequest:
         """Validate a rerank request (``ValueError`` -> 400)."""
         body, options = request.body, request.options
         query, documents = body.get("query"), body.get("documents")
@@ -194,14 +238,14 @@ class RelevanceHead:
             raise ValueError("documents must be a nonempty list of strings")
         if len(documents) > MAX_DOCUMENTS:
             raise ValueError(f"documents holds at most {MAX_DOCUMENTS} items")
-        layer = _positive(body.get("layer"), "layer") or self.default[0]
-        dim = _positive(body.get("dimensions"), "dimensions") or self.default[1]
-        if (layer, dim) not in served:
+        layer = _positive(body.get("layer"), "layer") or self.layout.default[0]
+        dim = _positive(body.get("dimensions"), "dimensions") or self.layout.default[1]
+        if (layer, dim) not in self.heads:
+            served = ", ".join(
+                f"{exit_layer}/{exit_dim}" for exit_layer, exit_dim in self.heads
+            )
             raise ValueError(
-                f"layer {layer} and dimensions {dim} are not a served pair scorer: "
-                + ", ".join(
-                    f"{exit_layer}/{exit_dim}" for exit_layer, exit_dim in served
-                )
+                f"layer {layer} and dimensions {dim} are not a served pair scorer: {served}"
             )
         top_n = _positive(body.get("top_n"), "top_n") or len(documents)
         return_documents = body.get("return_documents", False)
@@ -222,88 +266,75 @@ class RelevanceHead:
         )
 
     def plan(
-        self,
-        request: SurfaceRequest,
-        tokenizer: Any,
-        served: Sequence[tuple[int, int]],
-        max_input_tokens: int,
-        model_sha256: str,
+        self, request: SurfaceRequest, identity: str, max_input_tokens: int
     ) -> SurfacePlan:
         """Every pair tokenized with the tokenizer's pair template; the query once."""
-        parsed = self.parse(request, served, max_input_tokens)
+        parsed = self.parse(request, max_input_tokens)
+        head = self.heads[parsed.exit]
+        tokenizer = self.tokenizer
         query = tokenizer.encode(parsed.query, add_special_tokens=False)
         specials = tokenizer.num_special_tokens_to_add(True)
         documents = tokenizer.encode_batch(
             list(parsed.documents), add_special_tokens=False
         )
-        items: list[PairItem] = []
+        items: list[Item] = []
         slots: list[int | str] = []
-        for index, (text, document) in enumerate(
-            zip(parsed.documents, documents, strict=True)
-        ):
+        usages: list[dict[str, Any] | None] = []
+        for text, document in zip(parsed.documents, documents, strict=True):
             tokens = len(query.ids) + len(document.ids) + specials
-            if not text.strip():
-                slots.append(INVALID_INPUT)
-            elif tokens > parsed.max_tokens:
-                slots.append(MAX_LENGTH_EXCEEDED)
-            else:
-                ids = list(tokenizer.post_process(query, document).ids)
-                key = content_key(model_sha256, "relevance", *parsed.exit, ids)
-                usage = {
-                    "tokens": tokens,
-                    "processed_tokens": tokens,
-                    "truncated": False,
-                }
-                slots.append(len(items))
-                items.append(PairItem(index, ids, parsed.exit, usage, key))
+            if not text.strip() or tokens > parsed.max_tokens:
+                slots.append(INVALID_INPUT if not text.strip() else MAX_LENGTH_EXCEEDED)
+                usages.append(None)
+                continue
+            ids = tuple(tokenizer.post_process(query, document).ids)
+            slots.append(len(items))
+            usages.append(
+                {"tokens": tokens, "processed_tokens": tokens, "truncated": False}
+            )
+            items.append(
+                Item(
+                    ids,
+                    head.name,
+                    head.layer,
+                    cache_key(identity, head.name, head.layer, ids),
+                )
+            )
         tokens = sum(len(item.ids) for item in items)
         return SurfacePlan(
-            request.surface, items, tokens, RerankPlanState(parsed, slots)
+            request.surface, items, tokens, RerankPlanState(parsed, slots, usages)
         )
-
-    @staticmethod
-    def readout(
-        scorers: nn.ModuleDict, cls: torch.Tensor, exit: tuple[int, int]
-    ) -> torch.Tensor:
-        """Logits ``[rows]`` from final-normed CLS states ``[rows, hidden]`` at ``exit``."""
-        layer, dim = exit
-        return scorers[f"{layer}_{dim}"](cls[:, :dim].float()).squeeze(-1)
 
     @staticmethod
     def finish(plan: SurfacePlan, results: Any) -> dict[str, Any]:
         """Results by descending logit (ties by input order), ``top_n`` of them, then failed pairs."""
         state: RerankPlanState = plan.state
         scored, failed = [], []
-        for index, slot in enumerate(state.slots):
+        for index, (slot, usage) in enumerate(
+            zip(state.slots, state.usages, strict=True)
+        ):
             if isinstance(slot, str):
                 failed.append({"index": index, "error": slot})
                 continue
             value = DEADLINE if results is DEADLINE else results[slot]
             if value is DEADLINE or value is None or not math.isfinite(value):
-                code = (
-                    "deadline_exceeded" if value is DEADLINE else INVALID_MODEL_OUTPUT
-                )
+                code = DEADLINE_EXCEEDED if value is DEADLINE else INVALID_MODEL_OUTPUT
                 failed.append({"index": index, "error": code})
                 continue
             entry: dict[str, Any] = {
                 "index": index,
                 "relevance_score": 1.0 / (1.0 + math.exp(-value)),
                 "logit": value,
-                "input": dict(plan.items[slot].usage),
+                "input": dict(usage or {}),
             }
             if state.request.return_documents:
                 entry["document"] = state.request.documents[index]
             scored.append(entry)
         scored.sort(key=lambda entry: (-entry["logit"], entry["index"]))
+        layer, dim = state.request.exit
         return {
             "results": scored[: state.request.top_n] + failed,
             "usage": {"input_tokens": plan.input_tokens, "output_tokens": 0},
-            "meta": {
-                "pair_scorer": {
-                    "layer": state.request.exit[0],
-                    "dimension": state.request.exit[1],
-                }
-            },
+            "meta": {"pair_scorer": {"layer": layer, "dimension": dim}},
         }
 
 
@@ -315,7 +346,7 @@ def _positive(value: Any, name: str) -> int | None:
     return value
 
 
-def _has_head(header: dict[str, Any], layer: int, dim: int) -> bool:
+def _has_scorer(header: dict[str, Any], layer: int, dim: int) -> bool:
     prefix = f"{layer}.{dim}"
     shapes = {
         "0.weight": [dim // 2, dim],
@@ -328,5 +359,7 @@ def _has_head(header: dict[str, Any], layer: int, dim: int) -> bool:
         if meta is None:
             return False
         if meta.get("dtype") != "F32" or meta.get("shape") != shape:
-            raise PackageError(f"reranker head {prefix}.{suffix} must be FP32 {shape}")
+            raise PackageError(
+                f"reranker scorer {prefix}.{suffix} must be FP32 {shape}"
+            )
     return True

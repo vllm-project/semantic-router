@@ -95,6 +95,11 @@ def write_tokenizer(root: Path, *, gemma: bool = True) -> None:
         ),
         encoding="utf-8",
     )
+    if gemma:
+        special = {"bos_token": "<bos>", "eos_token": "<eos>", "pad_token": "<pad>"}
+        (root / "special_tokens_map.json").write_text(
+            json.dumps(special), encoding="utf-8"
+        )
 
 
 def _write_json(path: Path, value: Any) -> None:
@@ -142,9 +147,14 @@ def _sentence_transformers(
 
 
 def write_embedding_package(
-    root: Path, *, exits: tuple[int, ...] = (1, 2), seed: int = 0
+    root: Path, *, exits: tuple[int, ...] = (1, 2), graphs: bool = False, seed: int = 0
 ) -> Path:
-    """A Vela-Embedding-shaped package: mean pooling, raw intermediate exits, exit graph stubs."""
+    """A Vela-Embedding-shaped package: mean pooling, raw intermediate exits, exit graphs.
+
+    The exit graphs are empty stubs unless ``graphs`` writes toy hidden-state
+    graphs with the real ports, the full-model ``model.onnx`` included
+    (``testing.onnx_graphs``, needs the onnx package).
+    """
     config = modernbert_config(
         len(WORDS), hidden_size=64, representation_contract=EMBED_CONTRACT
     )
@@ -155,9 +165,18 @@ def write_embedding_package(
     )
     _sentence_transformers(root, "mean", 64, None)
     write_tokenizer(root)
-    for layer in exits:
+    names = [f"model_layer_{layer}.onnx" for layer in exits]
+    names += ["model.onnx"] if graphs else []
+    for position, name in enumerate(names):
         (root / "onnx").mkdir(exist_ok=True)
-        (root / "onnx" / f"model_layer_{layer}.onnx").write_bytes(b"")
+        if graphs:
+            from .onnx_graphs import token_graph
+
+            token_graph(
+                root / "onnx" / name, vocab=len(WORDS), hidden=64, seed=position
+            )
+        else:
+            (root / "onnx" / name).write_bytes(b"")
     return root
 
 
@@ -166,9 +185,14 @@ def write_reranker_package(
     *,
     layers: tuple[int, ...] = (2, 4),
     dims: tuple[int, ...] = (64, 32),
+    graphs: bool = False,
     seed: int = 0,
 ) -> Path:
-    """A Vela-Reranker-shaped package: Matryoshka layout and an FP32 scorer per exit."""
+    """A Vela-Reranker-shaped package: Matryoshka layout and an FP32 scorer per exit.
+
+    ``graphs`` adds toy logit graphs for the default exit and one other
+    (``model.onnx``, ``model_layer_2_dim_32.onnx``) with the pair-scorer metadata.
+    """
     config = modernbert_config(len(WORDS), representation_contract=RERANK_CONTRACT)
     root.mkdir(parents=True, exist_ok=True)
     _write_json(root / "config.json", config)
@@ -201,6 +225,28 @@ def write_reranker_package(
             heads[f"{prefix}.3.bias"] = torch.randn(1, generator=generator) * 0.1
     save_file(heads, str(root / "classification_heads.safetensors"))
     write_tokenizer(root)
+    if graphs:
+        from .onnx_graphs import token_graph
+
+        for name, (layer, dim) in (
+            ("model.onnx", (4, 64)),
+            ("model_layer_2_dim_32.onnx", (2, 32)),
+        ):
+            contract = {
+                "version": 1,
+                "layer": layer,
+                "dimension": dim,
+                "score_type": "relevance_logit",
+            }
+            token_graph(
+                root / "onnx" / name,
+                vocab=len(WORDS),
+                hidden=64,
+                scorer=dim,
+                output="logits",
+                metadata={"semantic_router.pair_scorer": json.dumps(contract)},
+                seed=layer,
+            )
     return root
 
 
