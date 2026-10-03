@@ -37,9 +37,9 @@ MODEL_TYPE = "modernbert"
 FULL = "full_attention"
 SLIDING = "sliding_attention"
 BAND_BLOCK = 128
-# Row width from which local layers attend in query blocks, per device type (measured,
-# Vela 307M FP32): blocks win from 1,024 tokens on MI325X, from BAND_FROM['cpu'] on CPU.
-BAND_FROM = {"cpu": 512, "cuda": 1024}
+# Row width from which local layers attend in query blocks (Vela 307M, FP32): dense
+# masked SDPA is faster below on 16 EPYC cores and on MI325X alike.
+BAND_FROM = 1024
 DEFAULT_THETA = {FULL: 160_000.0, SLIDING: 10_000.0}
 ACTIVATIONS: dict[str, Callable[[torch.Tensor], torch.Tensor]] = {
     "gelu": F.gelu,
@@ -273,11 +273,20 @@ def banded_attention(
     count, span = blocks.mask.shape[2], blocks.mask.shape[-1]
     tail = count * blocks.block - width
     pad = (0, 0, blocks.window, tail + blocks.window)
-    q = F.pad(query, (0, 0, 0, tail)).view(rows, heads, count, blocks.block, dim)
+    # Heads and blocks fold into one batch axis: fused SDPA kernels take 4-D inputs only.
+    folded = (rows, heads * count)
+    q = F.pad(query, (0, 0, 0, tail)).reshape(*folded, blocks.block, dim)
     k = F.pad(key, pad).unfold(2, span, blocks.block).transpose(-1, -2)
     v = F.pad(value, pad).unfold(2, span, blocks.block).transpose(-1, -2)
+    mask = blocks.mask.expand(rows, heads, count, blocks.block, span)
     out = kernels("sdpa")(
-        q, k, v, blocks.mask, scale=scale, is_causal=False, enable_gqa=False
+        q,
+        k.reshape(*folded, span, dim),
+        v.reshape(*folded, span, dim),
+        mask.reshape(*folded, blocks.block, span),
+        scale=scale,
+        is_causal=False,
+        enable_gqa=False,
     )
     return out.reshape(rows, heads, count * blocks.block, dim)[:, :, :width]
 
@@ -334,18 +343,15 @@ def packed_layout(
     window: int,
     device,
     width: int | None = None,
-    band_from: int | None = None,
+    band_from: int = BAND_FROM,
     block: int = BAND_BLOCK,
 ) -> Layout:
     """The layout of sequences of ``lengths`` packed back to back (rows at least ``width`` wide).
 
     Built from host-known lengths, so no device value is read back. A single
     row without padding keeps the identity layout, which is the padded path.
-    Rows of at least ``band_from`` tokens (default: the device type's
-    ``BAND_FROM``) run local layers in query blocks.
+    Rows of at least ``band_from`` tokens run local layers in query blocks.
     """
-    if band_from is None:
-        band_from = BAND_FROM.get(torch.device(device).type, BAND_FROM["cuda"])
     rows = len(lengths)
     width = max(*lengths, width or 0)
     if rows == 1 and lengths[0] == width:
