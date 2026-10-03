@@ -116,6 +116,14 @@ SWITCH_TIERS: dict[str, tuple[str, str, str, str]] = {
         "6a62b3198f3bcf87259cfc2d72185b4861884394",
         "dev2-ra-2B-20261002T114630Z",
     ),
+    # Lux: the 9B M10 release KIB4-a40 (phase A runtime 54303117b); its switch revision is the 9B owner's
+    # (COORDINATION 2026-10-03 08:30).
+    "9B": (
+        "9b",
+        "Lux",
+        "f3122c7c8abd302326c22220aac4095eb1799f37",
+        "dev2-9b-m10-KIB4-a40-release-20261002T151423Z",
+    ),
     "27B": TIERS["27B"],
 }
 KINDS = {
@@ -244,8 +252,12 @@ SWITCH_SENTENCE = (
 
 
 def phase_a_sentence_added(src: dict) -> bool:
-    return src["kind"] == "switch" and runtime_sentence(src["key"] == "27b") not in (
-        src["spec"]["runtime_equivalence"]
+    text = src["spec"]["runtime_equivalence"]
+    # Lux's main (9B M10 release) already describes the phase A runtime in its own words.
+    return (
+        src["kind"] == "switch"
+        and runtime_sentence(src["key"] == "27b") not in text
+        and "the phase A runtime, which replays" not in text
     )
 
 
