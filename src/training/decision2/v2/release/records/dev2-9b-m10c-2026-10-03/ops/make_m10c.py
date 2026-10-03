@@ -8,12 +8,13 @@ collapsed on the formal typed panel), IF3 (the row-level Index contamination aud
 release items 2-7. v3, human transfer, mlx-diag, the tier gates, overlap exposure and public 231 are references
 (``1_successor_references``); C1 is not run. The highest measured passer ships (``CHOICE``; values stay private).
 
-The spec derives from the spec of the current revision (specs/dev2-9b-m10-KIB4-a40.json, ``main`` f3122c7c, the 9B M10
-point KIB4-a40 on the speed-up phase A runtime): roster, peers, runtime, remote code, licence and the product card
-carry over; the weights, the scored run, the gate evidence and the card's Index input and assets (the default
-generator, banner concept A) are the candidate's. The scored run is the candidate's sealed CAL698 formal run
-(m9/formal.sh, runner mirror unchanged since 787abdc54) returned to T = 1 offline (ops/prep_m10c.sh derive), as for
-KIB4-a40. The Index base is M10-KIB4-a40-bf16, the IX1 run of the current revision's exact weights.
+The spec derives from the spec of the current revision (specs/dev2-9b-ras.json, ``main`` 214ffa43: the KIB4-a40
+weights of f3122c7c on the phase A runtime with the opt-in shared-context switch, a runtime-only revision of
+2026-10-03): roster, peers, runtime, remote code, licence and the product card carry over; the weights, the scored
+run, the gate evidence and the card's Index input and assets (the default generator, banner concept A) are the
+candidate's. The scored run is the candidate's sealed CAL698 formal run (m9/formal.sh, runner mirror unchanged since
+787abdc54) returned to T = 1 offline (ops/prep_m10c.sh derive), as for KIB4-a40. The Index base is M10-KIB4-a40-bf16,
+the IX1 run of the current revision's exact weights.
 
 Run on node A from the exact mirror holding this file (host python3; every hashed file is a node A path):
   PYTHONPATH=<mirror>/src/training/decision2 python3 <this file> --cand CAND --decided-utc UTC --out DIR [--check]
@@ -34,7 +35,7 @@ from v2.release import gate
 
 ROOT = Path(__file__).resolve().parents[5]
 RECORD = Path(__file__).resolve().parents[1]
-BASE_SPEC = ROOT / "v2/release/specs/dev2-9b-m10-KIB4-a40.json"
+BASE_SPEC = ROOT / "v2/release/specs/dev2-9b-ras.json"
 SPECS = ROOT / "v2/release/specs"
 NAME = "Decision-2.0-Lux-9B"
 REPO = f"vllm-sr/{NAME}"
@@ -44,17 +45,16 @@ DECISIONS = f"{REL}/decisions"
 CURRENT_RUN = f"{REL}/dev2-9b-m10-KIB4-a40-t1-derived"
 CURRENT_MLX = f"{REL}/dev2-9b-m10-KIB4-a40-t1-derived-mlx"
 CURRENT_INDEX = "M10-KIB4-a40-bf16"
+# The Lux runtime-only switch revision 214ffa43 (record dev2-runtime-a-2026-10-02, 9b/switch; the 9B owner, 2026-10-03
+# 02:24Z): the KIB4-a40 weights of f3122c7c, unchanged.
 CURRENT = {
-    "revision": "f3122c7c8abd302326c22220aac4095eb1799f37",
-    "gate_sha256": "8817732f9585a4e8c833eab4db12f6307b96f68d123b5742638b8902d105cc0b",
-    "decision_sha256": "ba0e0beebcf88881e3962b84744a4162d02b278ffec175954b72fb0f713e7662",
-    "manifest_sha256": "d0a407c7af291ee473ea516abebeb03968fd4a6b63cf0128e550dfcd5132d7c8",
+    "revision": "214ffa4322bc1bce3215c1bd5de6168402c76969",
+    "gate_sha256": "277f24d1fd356f5ca169d09005d2089d8325e4d3905c4368a95d3b2403a9ea50",
+    "decision_sha256": "6c18dd57d5bd2070ac9e4849ed1c76877847924e1dbd3c851e050a2e441fa328",
+    "manifest_sha256": "6e8e7f7dbe98cc100ed2d478eec9aba3ae1bc1711ac2ffe323f60512684d913b",
     "weights_identity": "0ece5faa210173f443f353474b419fd913a253b06645da3e8370c2db0e1c3339",
 }
 VENDOR = "/data/dev2/src/787abdc54946ccdb05e52cc5c34ecb619dced237-src_training_decision2/src/training/decision2"
-# The phase A runtime plus the opt-in shared-context switch (COORDINATION 2026-10-03 02:23 / 08:30): this branch's
-# merge of integration ef27d8885 or later (runtime/shared_ctx.py; default path byte-identical to 54303117b's).
-RUNTIME_SOURCE = "/data/dev2/src/aa0ae61465ee60330a35d37e771f20c217c6a2eb-src_training_decision2/src/training/decision2"
 EXPOSURE = [
     "/data/dev2/runs/9b/m6/exposure/x60.json",
     "/data/dev2/runs/9b/m9/exposure/ib1-ib2-train.json",
@@ -214,8 +214,8 @@ def paths(cand: str) -> dict:
         "in": inputs,
         "private": f"/data/dev2/private/release/m10c/{cand}",
         "gates": f"{inputs}/gates",
-        "current_gate": f"{inputs}/current/m10-KIB4-a40-gate.json",
-        "current_decision": f"{inputs}/current/{NAME}.decision.m10-KIB4-a40.json",
+        "current_gate": f"{inputs}/current/ras-gate.json",
+        "current_decision": f"{inputs}/current/{NAME}.decision.ras.json",
     }
 
 
@@ -250,24 +250,23 @@ def spec(cand: str) -> dict:
         "storage": f"v2.release.bf16_copy of the frozen FP32 point (identity {p['fp32'][:8]} -> {identity[:8]}; "
         f"receipt {bf16_receipt[:8]}), the copy the Index run {p['index_name']} scored.",
         "runtime": "vendor_source = K-a13IB's formal runner mirror 787abdc54 (training/model checked equal to the "
-        "scored adapter sources at build time); runtime_source = this branch's mirror aa0ae6146: the current "
-        "revision's phase A runtime (HIP-graph replay of each padded input shape and, on gfx942, fused Triton "
+        "scored adapter sources at build time); runtime_source = automap_source = the current revision's, "
+        "unchanged: the phase A runtime (HIP-graph replay of each padded input shape and, on gfx942, fused Triton "
         "element-wise kernels; BF16-resident, Transformers remote code, forward token budget) plus the opt-in "
-        "shared-context switch (shared_ctx.py, off by default, the default path byte-identical; COORDINATION "
-        "2026-10-03 02:23 / 08:30), with the phase A frozen pre-warmed autotune cache for parity; "
-        "automap_source = the current revision's, unchanged.",
+        "shared-context switch (shared_ctx.py, off by default, the default path byte-identical; runtime_source "
+        "9cffe606c, whose runtime files equal integration ef27d8885's), with the phase A frozen pre-warmed "
+        "autotune cache for parity.",
         "card": "the product card of the current revision with this candidate's reports, an Index input built by "
         "python -m v2.release.card_index (board-served parameter counts, the audited footnote) with the 9B point "
         "from the Index run on exactly these weights, and assets rendered by the default v2.release.card_assets "
         "(banner concept A); card.speed keeps the current revision's bench receipt (same architecture, runtime and "
         "shapes).",
         "replaces_spec": {
-            "spec": "v2/release/specs/dev2-9b-m10-KIB4-a40.json",
+            "spec": "v2/release/specs/dev2-9b-ras.json",
             "sha256": sha(BASE_SPEC),
         },
         "previous": old["_release"],
     }
-    s["runtime_source"] = RUNTIME_SOURCE
     s["checkpoint"] = f"{p['in']}/bf16/checkpoint"
     s["expected_identity"] = {"model_sha256": identity}
     s["bf16_copy"] = {

@@ -6,12 +6,12 @@
 #   --prerelease  release.sh without upload on the final spec and decision: build, native and card examples, AutoModel
 #                 and pipeline before upload, exact parity of typed-final 1,600 / css15 6,547 / public231 231 /
 #                 mlx-diag 2,275 against the T = 1 derivation of the formal run, then verify_bundle
-#   --release     only if the Hub main is the current revision f3122c7c (checked right before the upload; never
+#   --release     only if the Hub main is the current revision 214ffa43 (checked right before the upload; never
 #                 concurrently) and no other release.sh runs on node A: hf_headroom.sh, then release.sh --upload
 #                 --collect --already-collected --hub-site tf518=... with the same parity before upload and after the
 #                 real download, AutoModel against native on every scored prompt and the Hub trust_remote_code smoke
 #                 under Transformers 5.17 and 5.18; then the revision diff, collection order, card HTTP, links and
-#                 gate evaluate; only if all pass, purge_superseded.py plan and apply (the KIB4-a40 weight blobs,
+#                 gate evaluate; only if all pass, purge_superseded.py plan and apply (the KIB4-a40 weight blobs of 214ffa43,
 #                 rewrite_history=False; node copy = KIB4-a40's verified release package)
 # Usage (node A): bash <mirror>/v2/release/records/dev2-9b-m10c-2026-10-03/ops/release_m10c.sh CAND <mode> --gpu N
 set -euo pipefail
@@ -40,7 +40,7 @@ LEASE=release-9b-m10c
 IMAGE=decision20-train-fast:host2
 IMAGE_ID=sha256:f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54
 name=Decision-2.0-Lux-9B REPO=vllm-sr/Decision-2.0-Lux-9B
-superseded=f3122c7c8abd302326c22220aac4095eb1799f37
+superseded=214ffa4322bc1bce3215c1bd5de6168402c76969  # the Lux switch revision (KIB4-a40's weights)
 SPEC=$S/v2/release/specs/dev2-9b-m10c-$CAND.json
 DECISION=$R/$name.decision.m10c-$CAND.json
 [[ -f "$SPEC" && -f "$DECISION" ]] || { echo "no spec / decision for $CAND in this mirror" >&2; exit 2; }

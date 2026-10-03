@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Decision-2.0-Lux-9B Index-first successor of KIB4-a40 (9B M10 amendment 7): release inputs of one candidate on node A,
-# CPU only, from the exact mirror holding this file (as dev2-9b-m10-2026-10-02/ops/prep_m10.sh, with the current revision
-# f3122c7c, KIB4-a40, as the comparator).
-#   current  the current revision's sealed gate receipt and final decision (the KIB4-a40 release) -> $IN/current/,
-#            checked against make_m10c.py's digests
+# CPU only, from the exact mirror holding this file (as dev2-9b-m10-2026-10-02/ops/prep_m10.sh, with the KIB4-a40 weights
+# as the comparator; the current revision is their runtime-only switch revision 214ffa43).
+#   current  the current revision's sealed gate receipt and final decision (the Lux switch release, record
+#            dev2-runtime-a-2026-10-02 9b/switch) -> $IN/current/, checked against make_m10c.py's digests
 #   derive   the sealed CAL698 formal run formal-m9/M10-CAND-16k and its mlx-diag run returned to T = 1 offline
 #            (softmax(log q * T); answers unchanged), then adopt, seal, report, compare (the current revision's T = 1
 #            run, adopted Lux 1.0, the 16K Lux 1.0 control, Nimble v2, JPT-9B) and mlx-diag score; gates types,
@@ -16,7 +16,7 @@ CAND=${1:?CAND} STAGE=${2:?STAGE}
 [[ "$CAND" =~ ^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$ ]] || { echo "bad CAND $CAND" >&2; exit 2; }
 S=$(cd "$(dirname "$0")/../../../../.." && pwd)
 R=$S/v2/release/records/dev2-9b-m10c-2026-10-03
-R10=$S/v2/release/records/dev2-9b-m10-2026-10-02
+RRA=$S/v2/release/records/dev2-runtime-a-2026-10-02
 G=/data/dev2/private/panels/goldfree
 MLXP=/data/dev2/private/panels/mlx-diag-v1
 F=/data/dev2/runs/9b/formal-m9
@@ -44,8 +44,8 @@ cd "$S"
 case "$STAGE" in
 current)
   mkdir -p "$IN/current"
-  for pair in "$R10/KIB4-a40/receipts/gate.json:m10-KIB4-a40-gate.json" \
-    "$R10/Decision-2.0-Lux-9B.decision.m10-KIB4-a40.json:Decision-2.0-Lux-9B.decision.m10-KIB4-a40.json"; do
+  for pair in "$RRA/9b/switch/release/receipts/gate.json:ras-gate.json" \
+    "$RRA/Decision-2.0-Lux-9B.decision.ras.json:Decision-2.0-Lux-9B.decision.ras.json"; do
     src=${pair%%:*} dst=$IN/current/${pair#*:}
     if [[ -e "$dst" ]]; then cmp "$src" "$dst"; else cp "$src" "$dst"; chmod 444 "$dst"; fi
   done
@@ -53,7 +53,7 @@ current)
 import hashlib, re, sys
 from pathlib import Path
 text = Path(sys.argv[2]).read_text()
-for name, key in (("m10-KIB4-a40-gate.json", "gate_sha256"), ("Decision-2.0-Lux-9B.decision.m10-KIB4-a40.json", "decision_sha256")):
+for name, key in (("ras-gate.json", "gate_sha256"), ("Decision-2.0-Lux-9B.decision.ras.json", "decision_sha256")):
     want = re.search(rf'"{key}": "([0-9a-f]{{64}})"', text).group(1)
     got = hashlib.sha256((Path(sys.argv[1]) / name).read_bytes()).hexdigest()
     assert got == want, (name, got)
