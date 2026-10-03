@@ -77,13 +77,21 @@ class KVMapperConnector(KVConnectorBase_V1):
             manifest = Manifest.from_dict(
                 json.loads((path / "manifest.json").read_text())
             )
-            if len(manifest.source_layers_per_target["k"]) != int(
+            deployment = _deployment(vllm_config, manifest, extra)
+            artifact = MapperArtifact.open(path, deployment)
+            if len(artifact.manifest.source_layers_per_target["k"]) != int(
                 vllm_config.model_config.hf_config.num_hidden_layers
             ):
                 raise ValueError("mapper target layer count differs from running model")
-            deployment = _deployment(vllm_config, manifest, extra)
-            self.artifact = MapperArtifact.open(path, deployment)
-        except (OSError, KeyError, TypeError, ValueError, SafetensorError) as exc:
+            self.artifact = artifact
+        except (
+            OSError,
+            AttributeError,
+            KeyError,
+            TypeError,
+            ValueError,
+            SafetensorError,
+        ) as exc:
             logger.warning("Mapper unavailable; using normal prefill: %s", exc)
 
     def get_num_new_matched_tokens(
