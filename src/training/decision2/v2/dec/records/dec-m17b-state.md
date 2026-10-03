@@ -5,6 +5,45 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17`. M
 (public since 2026-10-03 01:17 UTC+8). Index values stay private (node private stores and
 `decision2-program/private/m17b/`); this file has none. Times UTC.
 
+## 2026-10-03 03:25Z — FINAL: all training stopped by the user (11:00 UTC+8); this run ends
+
+**User, 2026-10-03 11:00 UTC+8 (COORDINATION 11:00 / 11:12):** stop all training; the focus is inference
+optimization and the Index submission. The coordinator stopped the 4B quarter-LR seeds and the candidate Index chain
+at 03:04–03:07Z. Every owner must stop, release their leases, write final state and end the run, and must not
+relaunch.
+
+- **Nox-4B is final for now: `vllm-sr/Decision-2.0-Nox-4B@ce1bdc9d` = `4b-LRHxALL`** (released 00:43Z,
+  `post_checks=ok` 01:35Z; record [`dev2-4b-w7-2026-10-03.md`](../../release/records/dev2-4b-w7-2026-10-03.md)).
+  The inference-optimization owner (885d85cc) is now the only writer to the model repos.
+- **Nothing of mine runs; no lease is held** (checked on A / B / C / F at 03:20Z).
+  - **Stopped by the coordinator (no markers):**
+    - chain C5 died after all eight `AF-4b-LRQxLRHxALL-bf16` shards exited 0, before `score.sh`;
+    - training chains GPU5 / GPU6 stopped `4b-SDMLIB4-lrq` s1 / s2 at steps ≈ 886 / 906 of ≈ 1,310 (partial run
+      directories on node C; not usable as finished seeds).
+  - **My local launcher** for the GPU2–4 seeds was stopped before it launched anything.
+- **Wave-7 reads** (gate vs the then-current release; values private):
+  - against `c60d3b5c`: **`4b-LRHxALL` passed** and was released. Not successors: `4b-LRHxXALL-m50`,
+    `4b-SDMLIB4-lrh`.
+  - against `ce1bdc9d` (amendment 4), not successors:
+    - `4b-LHS17IB4-lrq` (quarter LR, the strongest single arm; lower bound just below 0);
+    - `4b-LRH2` and `4b-LRHxALL-L2` (points above the release, lower bounds below 0);
+    - `4b-SDML-lrh`, `4b-LHS17ML-lrh`, `4b-LHS17IB4X-lrh` (below).
+  - **Unscored:** `4b-LRQxLRHxALL`. Its shards are complete on node C (`ix1/runs/AF-4b-LRQxLRHxALL-bf16`) and its
+    R3 run `m17-4b-LRQxLRHxALL` is collected and scored on node A. Per the stop, it was not scored.
+  - **Not built / not read:** `4b-LRHxQ` (the top-3 rule picks the same set), `4b-LRQxALL`, `4b-LHS17IB4-lre`;
+    `4b-LRHxXALL-m75` was dropped unread (amendment 5).
+- **Resume notes (only if the user restarts 4B training):**
+  1. Score `4b-LRQxLRHxALL` without any GPU: on node C, `bash <mirror 4d077f0fa>/…/v2/eval/ix1/score.sh --src <mirror>
+     --model AF-4b-LRQxLRHxALL-bf16 --size 4B --panel <ix1>/panel-8`. Then run the paired bootstrap against
+     `ix1/af/refs/AF-4b-LRHxALL-bf16`, as `ixchain.sh` does.
+  2. If it passes, release it with `v2/release/records/dev2-4b-w8-2026-10-03/ops/` (`96380dfba`; `CURRENT` =
+     `ce1bdc9d`; `CANDS` has it). Its R3 and BF16 inputs are already on node A.
+  3. The quarter-LR wave: factory amendment 12 arms (`4b-SDMLIB4-lrq`, `4b-LHS17IB4X-lrq`, `4b-SDML-lrq`,
+     `4b-LHS17IB4-lre`) with `af-chain.sh` on node C, then `4b-LRQxALL` (amendment 6). The lesson so far: lower LR
+     helped at every step (full → half → quarter), and uniform cross-arm averaging of low-LR arms adds on top.
+- **GPU-h:** ≈ 54 of 70 (Index reads ≈ 24, parity ≈ 0.6, formal ≈ 0.7, release ≈ 0.7, training ≈ 1.9, lane idle
+  and tails ≈ 2, on top of the 24 before this owner).
+
 ## 2026-10-03 02:15Z — the quarter-LR lever; amendment 6; the 4B owner trains (rolling handoff)
 
 Nox-4B is `ce1bdc9d` (`4b-LRHxALL`). Gate reference: `AF-4b-LRHxALL-bf16`, results `852e9928…`, at
