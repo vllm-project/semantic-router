@@ -75,3 +75,13 @@ def test_licence_policy():
         policy.check({"licence": {"spdx": "cc-by-nc-4.0"}}, ("CC-BY-NC-4.0",))
         == "cc-by-nc-4.0"
     )
+
+
+def test_every_builtin_model_has_cpu_golden_answers():
+    from vllm_sr_runtime.supervision.readiness import well_formed
+
+    for model in builtin.all_models():
+        answers = model.golden_answers.get("cpu")
+        assert answers, model.repo_id
+        assert set(answers) == {"domain", "reasoning", "difficulty"}
+        assert all(well_formed(answer) for answer in answers.values()), model.repo_id

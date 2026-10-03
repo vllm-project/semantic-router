@@ -1,14 +1,16 @@
 """First-party models the runtime serves out of the box, pinned by revision and identity.
 
 A new model revision is a new entry; a built-in model is never resolved
-through a moving branch. ``golden`` requests gate readiness; reference
-answers per device class are recorded by the parity runs
-(``docs/records/``) and added here.
+through a moving branch. Golden requests gate readiness; their reference
+answers per device class live in ``golden_answers.json``, recorded with
+``tools/golden_answers.py`` for the pinned revision.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import json
+from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Any
 
 ORG = "vllm-sr"
@@ -91,6 +93,23 @@ DECISION2_MODELS = (
         base=("Qwen/Qwen3.8-27B", "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"),
     ),
 )
+
+
+def _with_golden_answers(models: tuple[BuiltinModel, ...]) -> tuple[BuiltinModel, ...]:
+    recorded = json.loads(
+        Path(__file__).with_name("golden_answers.json").read_text(encoding="utf-8")
+    )
+    result = []
+    for model in models:
+        entry = recorded.get(model.repo_id)
+        if entry and entry.get("revision") == model.revision:
+            result.append(replace(model, golden_answers=entry["answers"]))
+        else:
+            result.append(model)
+    return tuple(result)
+
+
+DECISION2_MODELS = _with_golden_answers(DECISION2_MODELS)
 
 _BY_REPO = {model.repo_id.lower(): model for model in DECISION2_MODELS}
 _BY_NAME = {model.repo_id.split("/", 1)[1].lower(): model for model in DECISION2_MODELS}
