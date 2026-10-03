@@ -91,11 +91,11 @@ class VllmConnectorTests(unittest.TestCase):
             wrong_layers = cls(config, KVConnectorRole.SCHEDULER, None)
             self.assertIsNone(wrong_layers.artifact)
             config.model_config.hf_config.num_hidden_layers = 1
-            extra["artifact_path"] = str(path / "missing")
+            transfer.kv_connector_extra_config["artifact_path"] = str(path / "missing")
             missing = cls(config, KVConnectorRole.SCHEDULER, None)
             self.assertIsNone(missing.artifact)
             self.assertEqual(missing.get_num_new_matched_tokens(None, 0), (0, False))
-            extra["artifact_path"] = str(path)
+            transfer.kv_connector_extra_config["artifact_path"] = str(path)
             (path / "weights.safetensors").write_bytes(b"corrupt")
             corrupt = cls(config, KVConnectorRole.SCHEDULER, None)
             self.assertIsNone(corrupt.artifact)
