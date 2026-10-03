@@ -139,9 +139,7 @@ class NativeEngineModel(EngineModel):
         """Hidden states at the batch's exits; packed rows stay packed, padded rows padded."""
         backbone = self.backbone
         if not hasattr(backbone, "encode"):
-            raise NotImplementedError(
-                f"the native {backbone.model_type!r} backbone is not an encoder"
-            )
+            return self._encode_decoder(batch)
         input_ids = batch.input_ids.to(self.device)
         if batch.lengths is not None:
             if sum(batch.lengths) != input_ids.numel():
@@ -155,6 +153,30 @@ class NativeEngineModel(EngineModel):
                 input_ids, layout, batch.layers, batch.normalize_exits
             )
         return EncoderOutput(hidden=hidden)
+
+    def _encode_decoder(self, batch: EncoderBatch) -> EncoderOutput:
+        """A decoder's last layer (embedders such as Qwen3-Embedding): right-padded causal rows.
+
+        Causal attention never reads a later position, so padding changes no
+        real token; packed requests come back packed.
+        """
+        last = len(self.backbone.layers)
+        if set(batch.layers) - {last}:
+            raise ValueError(f"a decoder backbone serves its last layer ({last}) only")
+        if batch.lengths is not None:
+            width = max(batch.lengths)
+            mask = torch.arange(width)[None, :] < torch.tensor(batch.lengths)[:, None]
+            input_ids = torch.zeros(mask.shape, dtype=torch.long)
+            input_ids[mask] = batch.input_ids.cpu()
+        else:
+            input_ids, mask = batch.input_ids, batch.attention_mask.bool()
+        with torch.inference_mode(), self.autocast():
+            hidden = self.backbone(
+                input_ids.to(self.device), mask.to(self.device, torch.long)
+            )
+        if batch.lengths is not None:
+            hidden = hidden[mask.to(hidden.device)]
+        return EncoderOutput(hidden={last: hidden})
 
     def parameter_count(self) -> int:
         return sum(parameter.numel() for parameter in self.backbone.parameters())
