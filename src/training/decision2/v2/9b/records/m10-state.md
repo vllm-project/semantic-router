@@ -2,6 +2,28 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-03 00:10Z (08:10 UTC+8), M10 continuation (owner e28aa509)
+
+- **Took over** from 9087b208, whose runtime failed to resume at ≈ 23:39Z (COORDINATION 07:42). KIB4H s1 / s2 are at
+  step ≈ 1,790 of ≈ 3,050 (no failure) and end ≈ 01:15Z. `post-KIB4H` (node B, pid 783911) is alive.
+- **Amendment 13** (`fcb073e3b`) and its revision 1 (`1c7d73d9d`) were written before any half-LR 9B read. Four reads
+  on node B, pool GPU2 / 3 / 5 / 7, one at a time: `KIB4-lrhh-a80`, `HLR4-a80`, `HLR4-a60`, `KIB4H-a40`. HLR4 is the
+  four-seed half-LR soup (KIB4H + the factory's `KIB4-lrhh`). IX1 entries are in `0948b02ed` / `09a1cbf06`. Mirror
+  `1c7d73d9d` is on nodes A, B and C (content manifests equal).
+- The factory's `KIB4-lrhh` seeds (21 / 22) train on KIB4's TRAIN `2e72bcfd…` / teacher `377f8878…`, re-hashed on
+  node B. The trainer records backbone LR 5e-6 and head LR 5e-5; the launch argv's later flags override the
+  defaults. So audit `m10c` covers every amendment-13 point.
+- **Workstation orchestrator** `/tmp/m10c/a13-orch.sh` (log `a13-orch.log`). It replaces amendment 12's KIB4H-a40
+  waiter, which is stopped and kept as `kib4h-waiter.sh.superseded`. The orchestrator:
+  - links the factory's arm soup and builds, ships and stages the points;
+  - leases GPU2 / 3 / 5 / 7 for IX1 as the factory's and KIB4H's chains release them;
+  - runs one Index chain at a time, each gated with `M10_GATE_WAIT=scored` (new in `gate.sh`), and fetches the gate
+    results to the private folder.
+  It is idempotent: restart it with `setsid nohup bash /tmp/m10c/a13-orch.sh >> /tmp/m10c/a13-orch.log 2>&1 &`.
+- Two stale node A gate waiters (for the dropped KF-a50 points) were stopped.
+- **GPU-h (continuation):** ≈ 28.9 committed, including KIB4H-a40's Index run; ≈ 39.7 with the three other wave-1
+  reads.
+
 ## 2026-10-02 23:00Z (10-03 07:00 UTC+8), M10 continuation
 
 - KIB4H s1 / s2 are at about 39% / 37% of their updates (no failure). Both should end ≈ 01:15Z, and the waiter
