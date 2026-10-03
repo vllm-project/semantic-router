@@ -277,7 +277,9 @@ def _qwen3_5_forest(
             *rotary,
             forest,
             project=lambda m, h, table: _forest_projection(m, p, h, table, kernels),
-            gate=lambda m, out, gate: m.o_proj(kernels("sigmoid_gate")(out, gate)),
+            gate=lambda m, out, gate: m.o_proj(
+                kernels("sigmoid_gate")(out.transpose(1, 2), gate)
+            ),
         )
     out = []
     for stream, delta in zip((prefix, blocks), mixed, strict=True):
