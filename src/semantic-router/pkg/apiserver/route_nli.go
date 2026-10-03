@@ -40,7 +40,6 @@ import (
 //	    "processing_time_ms": 14
 //	}
 func (s *ClassificationAPIServer) handleNLIClassification(w http.ResponseWriter, r *http.Request) {
-
 	var req services.NLIRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)

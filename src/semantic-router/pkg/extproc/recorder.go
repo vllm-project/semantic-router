@@ -44,7 +44,6 @@ func (r *OpenAIRouter) logRoutingDecision(ctx *RequestContext, reasonCode string
 
 // recordRoutingDecision records routing decision with tracing
 func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, decisionName string, originalModel string, matchedModel string, reasoningDecision entropy.ReasoningDecision) {
-
 	useReasoning := reasoningDecision.UseReasoning
 	logging.ComponentDebugEvent("extproc", "reasoning_decision_applied", map[string]interface{}{
 		"request_id":        ctx.RequestID,

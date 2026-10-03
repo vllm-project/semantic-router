@@ -9,9 +9,11 @@ func (*OmniModel) Clone() (*OmniModel, error) { return nil, unavailable }
 func (*OmniModel) EncodeText(string, int) (EmbeddingResult, error) {
 	return EmbeddingResult{}, unavailable
 }
+
 func (*OmniModel) EncodeImageBytes([]byte, int) (EmbeddingResult, error) {
 	return EmbeddingResult{}, unavailable
 }
+
 func (*OmniModel) EncodeAudioPCM([]float32, int, int, int) (EmbeddingResult, error) {
 	return EmbeddingResult{}, unavailable
 }
