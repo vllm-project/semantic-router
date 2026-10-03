@@ -28,7 +28,7 @@ func testModelRuntimeLifecycle(ctx context.Context, client *kubernetes.Clientset
 	}
 	defer session.Close()
 
-	if err := session.waitReady(ctx, append(append([]string(nil), mrManagedDeployments...), mrAttachedDeployments...)...); err != nil {
+	if err = session.waitReady(ctx, append(append([]string(nil), mrManagedDeployments...), mrAttachedDeployments...)...); err != nil {
 		return err
 	}
 	metrics, err := session.routerMetrics(ctx)
@@ -106,6 +106,11 @@ func checkFixtureCard(card modelruntime.ModelCard) error {
 	case mrDecisionDeployment:
 		if card.Family != "decision2" || !card.HasSurface("decisions") {
 			return fmt.Errorf("model %s is %s serving %v, want decision2 decisions", card.ID, card.Family, card.Surfaces)
+		}
+	case mrEmbeddingDeployment, mrRerankerDeployment:
+		surface := map[string]string{mrEmbeddingDeployment: "embeddings", mrRerankerDeployment: "rerank"}[card.ID]
+		if card.Family != "task_heads" || !card.HasSurface(surface) {
+			return fmt.Errorf("model %s is %s serving %v, want task_heads %s", card.ID, card.Family, card.Surfaces, surface)
 		}
 	default:
 		if card.Family != "task_heads" || !card.HasSurface("classify") || len(card.Heads) == 0 {

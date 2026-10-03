@@ -95,7 +95,10 @@ func TestProfileRunsManagedAndAttachedRuntimesOnItsOwnFixtures(t *testing.T) {
 	deployments := profile.Config.Global.ModelCatalog.Deployments
 
 	// The names testcases/model_runtime_support.go relies on.
-	managed := map[string]string{"decision-fixture": "decisions", "vela-domain": "", "vela-pii": "", "vela-guard": ""}
+	managed := map[string]string{
+		"decision-fixture": "decisions", "vela-domain": "", "vela-pii": "", "vela-guard": "",
+		"vela-embedding": "", "vela-reranker": "",
+	}
 	for name, process := range managed {
 		deployment, ok := deployments[name]
 		if !ok || deployment.Provider != "model_runtime" || deployment.Endpoint != "" || deployment.Device != "cpu" || deployment.Process != process {

@@ -1,9 +1,7 @@
 package testcases
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,23 +18,26 @@ import (
 // Names from e2e/profiles/model-runtime/values.yaml, which its profile test
 // checks against this file.
 const (
-	mrSocketDir          = "/tmp/vsr-runtime"
-	mrDecisionDeployment = "decision-fixture"
-	mrDomainDeployment   = "vela-domain"
-	mrPIIDeployment      = "vela-pii"
-	mrGuardDeployment    = "vela-guard"
-	mrAttachedDecisions  = "attached-decisions"
-	mrAttachedFeedback   = "attached-feedback"
-	mrOfflineDeployment  = "decision-offline"
-	mrAttachedService    = "model-runtime-attached"
-	mrDecisionsProcess   = "decisions"
-	mrDeviceProcess      = "cpu"
-	mrReadyTimeout       = 5 * time.Minute
-	mrRequestTimeout     = 60 * time.Second
+	mrSocketDir           = "/tmp/vsr-runtime"
+	mrDecisionDeployment  = "decision-fixture"
+	mrDomainDeployment    = "vela-domain"
+	mrPIIDeployment       = "vela-pii"
+	mrGuardDeployment     = "vela-guard"
+	mrEmbeddingDeployment = "vela-embedding"
+	mrRerankerDeployment  = "vela-reranker"
+	mrAttachedDecisions   = "attached-decisions"
+	mrAttachedFeedback    = "attached-feedback"
+	mrOfflineDeployment   = "decision-offline"
+	mrAttachedService     = "model-runtime-attached"
+	mrDecisionsProcess    = "decisions"
+	mrDeviceProcess       = "cpu"
+	mrReadyTimeout        = 5 * time.Minute
+	mrRequestTimeout      = 60 * time.Second
 )
 
 var (
-	mrDeviceGroup         = []string{mrDomainDeployment, mrGuardDeployment, mrPIIDeployment}
+	// Sorted, as the lifecycle case compares it with each process's models.
+	mrDeviceGroup         = []string{mrDomainDeployment, mrEmbeddingDeployment, mrGuardDeployment, mrPIIDeployment, mrRerankerDeployment}
 	mrManagedDeployments  = append([]string{mrDecisionDeployment}, mrDeviceGroup...)
 	mrAttachedDeployments = []string{mrAttachedDecisions, mrAttachedFeedback}
 )
@@ -178,34 +179,11 @@ type routingPreview struct {
 // preview evaluates one user message without generating an answer.
 func (s *modelRuntimeSession) preview(ctx context.Context, text string) (routingPreview, error) {
 	var preview routingPreview
-	payload, err := json.Marshal(map[string]interface{}{
+	err := s.postAPI(ctx, "/api/v1/routing/preview?trace=true", map[string]interface{}{
 		"model":    "auto",
 		"messages": []map[string]string{{"role": "user", "content": text}},
-	})
-	if err != nil {
-		return preview, err
-	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, s.api.URL("/api/v1/routing/preview?trace=true"), bytes.NewReader(payload))
-	if err != nil {
-		return preview, err
-	}
-	request.Header.Set("Content-Type", "application/json")
-	response, err := s.api.HTTPClient(mrRequestTimeout).Do(request)
-	if err != nil {
-		return preview, err
-	}
-	defer response.Body.Close()
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return preview, err
-	}
-	if response.StatusCode != http.StatusOK {
-		return preview, fmt.Errorf("routing preview returned %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
-	}
-	if err := json.Unmarshal(body, &preview); err != nil {
-		return preview, fmt.Errorf("routing preview: %w", err)
-	}
-	return preview, nil
+	}, &preview)
+	return preview, err
 }
 
 // chat sends one user message through the gateway with the debug headers on.

@@ -2,8 +2,9 @@
 # (runtime_with_fixtures.py writes them; nothing is downloaded):
 #
 # - managed: the Router starts two runtime processes itself, the device
-#   group (domain, PII and guard classifiers) and the "decisions" process
-#   group (a Decision 2.0 model), through VLLM_SR_RUNTIME_COMMAND;
+#   group (domain, PII and guard classifiers, an embedder and a reranker) and
+#   the "decisions" process group (a Decision 2.0 model), through
+#   VLLM_SR_RUNTIME_COMMAND;
 # - attached: model-runtime-attached serves a decision model and a feedback
 #   classifier in one process, selected by served_name;
 # - fail-open: decision-offline points at a Service with no pods.
@@ -67,6 +68,11 @@ config:
         - name: user_reaction
           type: local
           labels: [SAT, NEED_CLARIFICATION, WRONG_ANSWER, WANT_DIFFERENT, NO_FEEDBACK]
+      keywords:
+        - name: rerank_probe
+          operator: OR
+          keywords: [vsr-rerank-probe]
+          case_sensitive: false
       # testcases/decision_runtime_routing.go asks the runtimes these questions.
       decision:
         - name: answered
@@ -113,7 +119,33 @@ config:
       classifier.user_reaction:
         deployment: attached-feedback
         contract: label_distribution.v1
+      rag.reranker:
+        deployment: vela-reranker
+        contract: relevance_scores.v1
     decisions:
+      # Keeps the reranker prepared: only reachable recipes with an enabled
+      # rerank plugin load one. No case sends the keyword.
+      - name: rerank_route
+        description: Retrieval with neural reranking
+        priority: 600
+        rules:
+          operator: AND
+          conditions:
+            - {type: keyword, name: rerank_probe}
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
+        plugins:
+          - type: rag
+            configuration:
+              enabled: true
+              backend: vectorstore
+              backend_config:
+                vector_store_id: vs-model-runtime-e2e
+              top_k: 4
+              rerank:
+                top_k: 2
+              on_failure: skip
       # An unknown answer never matches: the offline deployment never answers.
       - name: offline_route
         description: Fails open; never selected
@@ -231,6 +263,20 @@ config:
           input:
             max_tokens: 2048
             overflow: window
+        vela-embedding:
+          provider: model_runtime
+          artifact: /tmp/vsr-fixtures/embedding
+          device: cpu
+          input:
+            max_tokens: 512
+            overflow: truncate
+        vela-reranker:
+          provider: model_runtime
+          artifact: /tmp/vsr-fixtures/reranker
+          device: cpu
+          input:
+            max_tokens: 512
+            overflow: reject
         # Attached: one runtime process serving two models.
         attached-decisions:
           provider: model_runtime
@@ -256,6 +302,9 @@ config:
         prompt_guard:
           deployment: vela-guard
           contract: label_distribution.v1
+        embedding:
+          deployment: vela-embedding
+          contract: embedding.v1
       modules:
         classifier:
           domain:
@@ -273,6 +322,10 @@ config:
             overlap: 16
         hallucination_mitigation:
           enabled: false
+    services:
+      api:
+        # Makes the global embedding binding a prepared service.
+        embeddings: {enabled: true}
 
 extraEnv:
   - name: VLLM_SR_RUNTIME_COMMAND

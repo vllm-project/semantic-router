@@ -30,6 +30,8 @@ PACKAGES = {
     "guard": ("task_heads", "guard", 3),
     "feedback": ("task_heads", "feedback", 4),
     "decision-attached": ("decision2", "qwen3", 5),
+    "embedding": ("task_heads", "embedding", 6),
+    "reranker": ("task_heads", "reranker", 7),
 }
 
 
