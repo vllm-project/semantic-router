@@ -1,20 +1,20 @@
-"""Engine-level latency and throughput of the embedding and rerank models (embed workstream).
+"""Latency and throughput of the embedding and rerank models through the task_heads family (embed workstream).
 
-    python3 tools/embed_bench.py --package DIR --engine native|onnxruntime --task embed|rerank \
-        --output OUT.json [--device cpu|rocm:0] [--threads N] [--layout padded|packed]
-        [--iterations N] [--warmup N] [--exit LAYER] [--dimension D]
+    python3 tools/embed_bench.py --package DIR --engine native|onnxruntime --output OUT.json
+        [--device cpu|rocm:N] [--threads N] [--iterations N] [--warmup N] [--option KEY=JSON ...]
 
-Runs the package's backbone through one engine with synthetic token rows (no
-tokenizer, so every engine sees identical inputs) and times the forward plus
-the head readout per request:
+Loads the package through ``TaskHeadsFamily`` and an engine, and times the
+model's ``run`` (the shared forward plus every head's readout: the native
+engine's packed forward, or the onnxruntime exit graph in length buckets) on
+synthetic token rows, so every engine sees identical inputs:
 
-* ``embed``: one text of 16, 64, 256 and 1,024 tokens (latency p50 / p95 per
-  request), and a batch of 32 texts of 16-256 tokens (one request; texts/s);
-* ``rerank``: one query of 12 tokens with 10 and 50 documents of 64-192 tokens
+* embeddings: one text of 16, 64, 256 and 1,024 tokens per request (latency
+  p50 / p95), and a request of 32 texts of 16-256 tokens (texts/s);
+* rerank: one query of 12 tokens with 10 and 50 documents of 64-192 tokens
   (all pairs of a request in one forward; pairs/s).
 
-The native engine runs the package's ModernBERT or Qwen3 backbone (``padded``
-or ``packed`` layout); the onnxruntime engine runs the package's exit graph.
+``--option`` sets a model option (for example ``layers=[22]`` or
+``pair_scorer={"layer":22,"dimension":768}``).
 """
 
 from __future__ import annotations
@@ -37,20 +37,14 @@ sys.path.insert(0, str(ROOT))
 from vllm_sr_runtime.accel.cpu import CPUAccelerator  # noqa: E402
 from vllm_sr_runtime.accel.rocm import ROCmAccelerator  # noqa: E402
 from vllm_sr_runtime.engines.native.engine import NativeEngine  # noqa: E402
-from vllm_sr_runtime.engines.native.models.modernbert import (  # noqa: E402
-    packed_layout,
-    padded_layout,
-)
 from vllm_sr_runtime.engines.onnxruntime.engine import OnnxRuntimeEngine  # noqa: E402
-from vllm_sr_runtime.heads.pooled import PooledHead  # noqa: E402
-from vllm_sr_runtime.heads.relevance import RelevanceHead  # noqa: E402
+from vllm_sr_runtime.families.task_heads.family import TaskHeadsFamily  # noqa: E402
+from vllm_sr_runtime.heads.task import Item  # noqa: E402
 from vllm_sr_runtime.plugins.base import (  # noqa: E402
-    BackboneSpec,
     DeviceInfo,
-    DtypePolicy,
-    EncoderBatch,
     EngineOptions,
-    ModelSpec,
+    PackageRef,
+    RegistryOptions,
 )
 
 EMBED_LENGTHS = (16, 64, 256, 1024)
@@ -59,118 +53,48 @@ BATCH = 32
 SPECIAL_IDS = 8
 
 
-def rows_of(lengths: list[int], vocab: int, seed: int) -> list[list[int]]:
+def load(args: argparse.Namespace) -> Any:
+    options = {
+        key: json.loads(value) for key, value in (o.split("=", 1) for o in args.option)
+    }
+    family = TaskHeadsFamily(RegistryOptions(model_options=options))
+    package = family.verify(PackageRef(args.package))
+    spec = family.describe(package)
+    index = None if args.device == "cpu" else int(args.device.split(":")[1])
+    device = DeviceInfo(
+        accelerator=args.device.split(":")[0], index=index, name=args.device
+    )
+    accelerator = CPUAccelerator() if index is None else ROCmAccelerator()
+    engine = NativeEngine() if args.engine == "native" else OnnxRuntimeEngine()
+    reason = engine.supports(spec, device)
+    if reason:
+        raise SystemExit(reason)
+    engine_options = EngineOptions(
+        threads=args.threads, graphs=False, fused_kernels=False
+    )
+    model = family.load(
+        package, spec, engine.load(spec, accelerator, device, engine_options)
+    )
+    return model, int(package.details["package"].config["vocab_size"])
+
+
+def rows_of(lengths: list[int], vocab: int, seed: int) -> list[tuple[int, ...]]:
     rng = np.random.default_rng(seed)
     return [
-        [2, *rng.integers(SPECIAL_IDS, vocab, length - 2).tolist(), 1]
+        (2, *rng.integers(SPECIAL_IDS, vocab, length - 2).tolist(), 1)
         for length in lengths
     ]
 
 
-def padded_tensors(rows: list[list[int]]) -> tuple[torch.Tensor, torch.Tensor]:
-    width = max(len(row) for row in rows)
-    ids = torch.zeros(len(rows), width, dtype=torch.long)
-    mask = torch.zeros(len(rows), width, dtype=torch.long)
-    for index, row in enumerate(rows):
-        ids[index, : len(row)] = torch.tensor(row)
-        mask[index, : len(row)] = 1
-    return ids, mask
-
-
-class Runner:
-    """One engine, one package, one task: ``run(rows)`` is one request's forward and readout."""
-
-    def __init__(self, args: argparse.Namespace):
-        self.root = args.package
-        self.config = json.loads((self.root / "config.json").read_text())
-        self.task, self.layout = args.task, args.layout
-        index = None if args.device == "cpu" else int(args.device.split(":")[1])
-        accelerator = CPUAccelerator() if index is None else ROCmAccelerator()
-        self.device = DeviceInfo(
-            accelerator=args.device.split(":")[0], index=index, name=args.device
-        )
-        if self.task == "embed":
-            self.head = PooledHead.detect(self.root, self.config)
-            self.exit = args.exit or self.head.layers[-1]
-            self.dimension = args.dimension or self.head.dimensions[0]
-            graphs = (
-                {"default": self.head.graphs[self.exit]}
-                if self.exit in self.head.graphs
-                else {}
-            )
-        else:
-            self.head = RelevanceHead.detect(self.root, self.config)
-            self.exit = (
-                args.exit or self.head.default[0],
-                args.dimension or self.head.default[1],
-            )
-            graphs = (
-                {"default": self.head.graphs[self.exit]}
-                if self.exit in self.head.graphs
-                else {}
-            )
-        spec = ModelSpec(
-            name=self.root.name,
-            backbone=BackboneSpec(
-                model_type=self.config["model_type"],
-                config=self.config,
-                weight_files=(self.root / "model.safetensors",),
-            ),
-            dtype=DtypePolicy(autocast=None, bf16_resident=False),
-            max_input_tokens=int(self.config["max_position_embeddings"]),
-            graphs=graphs,
-            encoder=True,
-        )
-        engine = NativeEngine() if args.engine == "native" else OnnxRuntimeEngine()
-        reason = engine.supports(spec, self.device)
-        if reason:
-            raise SystemExit(reason)
-        self.model = engine.load(
-            spec, accelerator, self.device, EngineOptions(threads=args.threads)
-        )
-        self.engine = args.engine
-        if self.task == "rerank" and self.engine == "native":
-            self.scorers = self.head.load([self.exit], self.model.device)
-
-    def run(self, rows: list[list[int]]) -> Any:
-        ids, mask = padded_tensors(rows)
-        if self.engine == "onnxruntime":
-            out = self.model.encode(EncoderBatch(input_ids=ids, attention_mask=mask))
-            if self.task == "rerank":
-                return out.outputs["logits"][:, 0]
-            return self.head.readout(
-                out.outputs["last_hidden_state"], mask, self.dimension
-            )
-        backbone, device = self.model.backbone, self.model.device
-        layer = self.exit if self.task == "embed" else self.exit[0]
-        with torch.inference_mode():
-            if self.config["model_type"] != "modernbert":
-                hidden = backbone(ids.to(device), mask.to(device))
-                return self.head.readout(hidden, mask.to(device), self.dimension).cpu()
-            if self.layout == "packed":
-                lengths = [len(row) for row in rows]
-                flat = torch.tensor(
-                    [token for row in rows for token in row], device=device
-                )
-                layout = packed_layout(lengths, backbone.window, device)
-                hidden = layout.to_rows(backbone.encode(flat, layout, (layer,))[layer])
-            else:
-                layout = padded_layout(mask, *ids.shape, backbone.window, device)
-                hidden = backbone.encode(ids.to(device), layout, (layer,))[layer]
-            if self.task == "rerank":
-                return self.head.readout(self.scorers, hidden[:, 0], self.exit).cpu()
-            return self.head.readout(hidden, mask.to(device), self.dimension).cpu()
-
-
 def timed(
-    runner: Runner, rows: list[list[int]], warmup: int, iterations: int
+    model: Any, items: list[Item], warmup: int, iterations: int
 ) -> dict[str, float]:
     for _ in range(warmup):
-        runner.run(rows)
+        model.run(items)
     samples = []
     for _ in range(iterations):
         started = time.perf_counter()
-        runner.run(rows)
+        model.run(items)
         samples.append((time.perf_counter() - started) * 1000)
     samples.sort()
     return {
@@ -187,59 +111,69 @@ def main() -> int:
     )
     parser.add_argument("--package", type=Path, required=True)
     parser.add_argument("--engine", choices=("native", "onnxruntime"), required=True)
-    parser.add_argument("--task", choices=("embed", "rerank"), required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--threads", type=int, default=None)
-    parser.add_argument("--layout", choices=("padded", "packed"), default="padded")
     parser.add_argument("--iterations", type=int, default=30)
     parser.add_argument("--warmup", type=int, default=3)
-    parser.add_argument("--exit", type=int, default=None)
-    parser.add_argument("--dimension", type=int, default=None)
+    parser.add_argument("--option", action="append", default=[])
     args = parser.parse_args()
     if args.threads:
         torch.set_num_threads(args.threads)
-    runner = Runner(args)
-    vocab = int(runner.config["vocab_size"])
+    model, vocab = load(args)
+    planner = next(iter(model.planners.values()))
     scenarios: dict[str, Any] = {}
-    if args.task == "embed":
+    if "embeddings" in model.planners:
+        head = planner.heads[planner.info.layers[-1]]
+
+        def items(rows: list[tuple[int, ...]]) -> list[Item]:
+            return [Item(ids, head.name, head.layer) for ids in rows]
+
         for length in EMBED_LENGTHS:
             scenarios[f"single/{length}"] = timed(
-                runner, rows_of([length], vocab, length), args.warmup, args.iterations
+                model,
+                items(rows_of([length], vocab, length)),
+                args.warmup,
+                args.iterations,
             )
         lengths = np.random.default_rng(7).integers(16, 257, BATCH).tolist()
         batch = timed(
-            runner,
-            rows_of(lengths, vocab, 7),
+            model,
+            items(rows_of(lengths, vocab, 7)),
             args.warmup,
             max(args.iterations // 3, 5),
         )
         batch["items_per_s"] = round(BATCH / batch["mean_ms"] * 1000, 1)
         scenarios[f"batch/{BATCH}x16-256"] = batch
+        served = list(planner.info.layers)
     else:
+        head = planner.heads[planner.layout.default]
         query = rows_of([12], vocab, 1)[0][:-1]
         for count in RERANK_DOCUMENTS:
             lengths = np.random.default_rng(count).integers(64, 193, count).tolist()
             pairs = [
-                query + document[1:] for document in rows_of(lengths, vocab, count)
+                Item(query + doc[1:], head.name, head.layer)
+                for doc in rows_of(lengths, vocab, count)
             ]
-            result = timed(runner, pairs, args.warmup, max(args.iterations // 3, 5))
+            result = timed(model, pairs, args.warmup, max(args.iterations // 3, 5))
             result["pairs_per_s"] = round(count / result["mean_ms"] * 1000, 1)
             scenarios[f"query+{count}docs"] = result
+        served = [list(exit) for exit in planner.info.exits]
     record = {
         "package": args.package.name,
+        "model": model.info.id,
+        "model_sha256": model.info.model_sha256,
         "engine": args.engine,
-        "layout": args.layout if args.engine == "native" else "graph",
-        "task": args.task,
-        "exit": runner.exit,
+        "served_exits": served,
         "device": args.device,
         "threads": args.threads,
         "torch": torch.__version__,
         "machine": platform.processor() or platform.machine(),
         "scenarios": scenarios,
     }
-    if args.engine == "onnxruntime":
-        record["receipt"] = runner.model.receipt()
+    receipt = getattr(model.engine_model, "receipt", None)
+    if callable(receipt):
+        record["receipt"] = receipt()
     args.output.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(record["scenarios"]))
     return 0
