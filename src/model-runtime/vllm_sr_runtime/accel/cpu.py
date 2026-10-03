@@ -26,6 +26,12 @@ _LOCK = threading.Lock()
 _EXECUTOR: ThreadPoolExecutor | None = None
 
 
+def native_bf16() -> bool:
+    """Whether the CPU computes BF16 natively (AVX-512 BF16 or AMX)."""
+    probes = ("_is_avx512_bf16_supported", "_is_amx_tile_supported")
+    return any(getattr(torch.cpu, probe, lambda: False)() for probe in probes)
+
+
 def device_thread() -> ThreadPoolExecutor:
     """The process's single CPU device thread."""
     global _EXECUTOR  # noqa: PLW0603 - one executor per process, created on first use
@@ -61,7 +67,7 @@ class CPUAccelerator(Accelerator):
                 name=platform.processor() or platform.machine(),
                 total_memory=total,
                 free_memory=free,
-                bf16=False,
+                bf16=native_bf16(),
                 arch=platform.machine(),
             )
         ]
@@ -73,7 +79,12 @@ class CPUAccelerator(Accelerator):
         return reference_kernels("cpu")
 
     def capabilities(self, device: DeviceInfo) -> dict[str, bool]:
-        return {"bf16_autocast": False, "graphs": False, "triton": False}
+        return {
+            "bf16_autocast": False,
+            "native_bf16": device.bf16,
+            "graphs": False,
+            "triton": False,
+        }
 
     def execute(self, device: DeviceInfo, work: Callable[[], Any]) -> Any:
         if threading.current_thread().name.startswith("vllm-sr-cpu"):

@@ -179,6 +179,8 @@ class ModelSpec:
 
 @dataclass(frozen=True)
 class DeviceInfo:
+    """One device an accelerator offers. ``bf16``: the device computes BF16 natively."""
+
     accelerator: str
     index: int | None
     name: str
