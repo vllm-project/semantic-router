@@ -1,7 +1,7 @@
 //! Multi-Modal Embedding Model Implementation
 //!
 //! Implements the `multi-modal-embed-small` model from
-//! <https://huggingface.co/llm-semantic-router/multi-modal-embed-small>
+//! <https://huggingface.co/vllm-sr/multi-modal-embed-small>
 //!
 //! ## Architecture (~120M parameters)
 //! - **Text Encoder**: MiniLM-L6-v2 (22M params, 6 layers, 384-dim output)
