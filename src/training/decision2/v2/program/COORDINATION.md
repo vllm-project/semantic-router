@@ -205,6 +205,67 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 21:17 — **USER (21:15): ACCEPTANCE BAR for the Phases 2–4 PR** ("确保 code clean 以及 architecture well designed
+  可扩展、可插拔，以及非常 high performance 有我们独到的性能优化的算法"). Lead (23203ab9) and every workstream agent: these are
+  blocking criteria, not polish.
+  1. **Clean code**
+     - cohesive modules with single owners;
+     - no copy-paste between families: shared encoder and decoder building blocks, shared readout and head code;
+     - typed public interfaces with short docstrings;
+     - no dead code, no legacy shims in the runtime or config parser (migration lives in tooling only);
+     - consistent naming;
+     - lint clean (black, ruff, golangci-lint, the repo's pre-commit);
+     - every module has tests.
+  2. **Architecture: extensible and pluggable**
+     - one plugin mechanism (entry points plus registries) for **families, engines, accelerators and profiles**, each
+       with a capability descriptor;
+     - a versioned OpenAPI contract;
+     - a router-side client that **bundles all of a request's signals into one runtime call**;
+     - placement and supervision decoupled from model code;
+     - a **documented third-party plugin example** (a small out-of-tree family, tested);
+     - no forbidden dependencies or cycles (the repo's architecture checks).
+  3. **Very high performance with OUR OWN optimizations.** Bring every Decision 2.0 technique and add encoder-specific
+     ones:
+     - **Decision models:** exact-shape HIP / CUDA graphs with host-built masks; bit-exact fused Triton kernels; lean
+       LoRA; shared-context tree mode (prefix plus GDN state hand-off); cross-request batching; pinned kernel choices
+       (cross-process exactness); the 2 GiB guard.
+     - **Encoders (Vela / Decision 1.0):**
+       - **one forward for all heads sharing a backbone** (fused multi-head readout, so one pass replaces the many
+         separate legacy passes);
+       - one bundled call per request;
+       - **dynamic cross-request batching with length buckets**;
+       - **packed / varlen sequences** (no padding waste);
+       - graphs per bucket on GPU;
+       - fused kernels (bit-exact where possible);
+       - a content-hash result / embedding cache;
+       - an ONNX Runtime CPU engine where it beats torch;
+       - opt-in int8 / fp8 profiles with accuracy records;
+       - per-hardware kernel selection.
+     - **Router:** parallel async dispatch, deadlines, fail-open, and caching of bundle results.
+  - **Performance gate:** every migrated feature must **match or beat the legacy binding's latency (p50 / p95) and
+    throughput** on CPU and on ROCm GPU, with recorded benchmarks (legacy vs new, same inputs, same hardware) in
+    `src/model-runtime/docs/records/`. Any regression blocks the PR.
+  - **Lead:** reflect all three in the design doc and the workstream split. The coordinator copies this bar into every
+    workstream brief.
+
+- 2026-10-03 21:16 — **USER (21:11): Phase 1 PR #4481 is MERGED (`977f53661`). Do ALL of Phases 2, 3 and 4 in ONE PR
+  with CI green** ("我合并了之前的 PR 了请完整第二、三、和第四阶段所有的任务 并且 PR CI passed。在一个 PR 里闭环").
+  - **Lead: 23203ab9** (Max). Branch `xunzhuo/model-runtime-phases-2-4`, from `origin/main` plus the follow-up
+    branch `xunzhuo/model-runtime-decision2-followup` (`a82b60962`).
+  - **Scope:**
+    - Phase 2: Decision 1.0;
+    - Phase 3: Vela 1.0 migration plus Vela 2.0, the `/v1/classify`, `/v1/embeddings` and `/v1/rerank` surfaces,
+      Set / Span, and CPU-efficient encoder engines;
+    - Phase 4: remove the candle, onnx, openvino, ml and nlp bindings and every dependent path, with config
+      migration tooling and docs;
+    - update the Decision 2.0 pins to the current Hub mains.
+  - **User requirements:** complete E2E (managed and attached lifecycle, `vllm-sr serve`, every migrated feature,
+    fail-open, plus an opt-in real-model profile) and user-first docs (Quickstart, task guides, migration guide,
+    troubleshooting), not tech details.
+  - **GPU allocation for this project:** node B GPU0–7 and node C GPU1–7, lease-checked.
+  - **Sequence:** the lead posts the inventory and migration matrix, the contracts and a workstream split here. The
+    coordinator then launches the workstream agents (Max). The lead integrates everything into one PR.
+
 - 2026-10-03 20:58 — **The model-runtime GPU follow-ups are DONE (2600f488 ended).** Branch
   `xunzhuo/model-runtime-decision2-followup` @ `a82b60962`: 11 commits on `63f2b8296`, `make check` green, and the GPU
   tests 7 / 7 on MI325X.
