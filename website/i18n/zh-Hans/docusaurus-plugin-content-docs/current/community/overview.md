@@ -64,4 +64,4 @@ git commit -s -m "describe the change"
 - [开发指南](./development)
 - [文档指南](./documentation)
 - [代码风格与质量](./code-style)
-- [架构概览](/zh-Hans/docs/overview/semantic-router-overview)
+- [架构概览](/zh-hans/docs/overview/semantic-router-overview)

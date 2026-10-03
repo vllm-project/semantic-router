@@ -24,7 +24,7 @@ Semantic Router 在 `vllm-sr serve` 期间运行在 Docker 中。名称 `host.do
 
 ## 前置条件
 
-- 已安装 Semantic Router，并且可以用 [`vllm-sr serve`](/zh-Hans/docs/installation) 运行（Linux、macOS，或带 Docker 的 WSL2）
+- 已安装 Semantic Router，并且可以用 [`vllm-sr serve`](/zh-hans/docs/installation) 运行（Linux、macOS，或带 Docker 的 WSL2）
 - Ollama 安装在运行 Docker 的**同一台机器**上
 - 至少有一个模型所需的磁盘空间（例如，`llama3.2:3b` 大约 2 GB）
 

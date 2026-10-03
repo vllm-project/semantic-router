@@ -7,7 +7,7 @@ translation:
   outdated: false
 ---
 
-Router Runtime 运行 Vela 分类、嵌入、重排序和安全检查模型。默认设置见 [Vela 模型](../tutorials/global/vela-models.md)。负责回答用户的 LLM 在[模型配置](/zh-Hans/docs/installation/model-configuration)中单独设置。
+Router Runtime 运行 Vela 分类、嵌入、重排序和安全检查模型。默认设置见 [Vela 模型](../tutorials/global/vela-models.md)。负责回答用户的 LLM 在[模型配置](/zh-hans/docs/installation/model-configuration)中单独设置。
 
 ## 选择运行方式 {#choose-a-running-mode}
 
