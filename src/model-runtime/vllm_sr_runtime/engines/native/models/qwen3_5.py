@@ -307,23 +307,24 @@ class Qwen3_5Backbone(nn.Module):
         block_ids: torch.Tensor,
         block_mask: torch.Tensor,
         owner: torch.Tensor,
+        padding: list[int],
+        lengths: list[int],
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Left-padded prefix rows ``[B, Lp]`` and right-padded blocks ``[N, Lb]`` through every layer.
 
-        Block ``i`` continues from prefix row ``owner[i]``. Returns the final-normed
-        states of both, ``[B, Lp, hidden]`` and ``[N, Lb, hidden]``.
+        Block ``i`` continues from prefix row ``owner[i]``; ``padding`` (per row)
+        and ``lengths`` (per block) are the host-known shapes, so the forward
+        reads nothing back and can be captured as a graph. Returns the
+        final-normed states of both, ``[B, Lp, hidden]`` and ``[N, Lb, hidden]``.
         """
         assert self.kernels is not None, "bind kernels before running the backbone"
         rows, width = prefix_ids.shape
         count, block_width = block_ids.shape
         device = prefix_ids.device
-        lengths = prefix_mask.sum(1)
-        padding = width - lengths
-        prefix_positions = (
-            torch.arange(width, device=device)[None] - padding[:, None]
-        ).clamp(min=0)
+        prefix_positions = (prefix_mask.cumsum(1) - 1).clamp(min=0)
         block_positions = (
-            lengths[owner][:, None] + torch.arange(block_width, device=device)[None]
+            prefix_mask.sum(1)[owner][:, None]
+            + torch.arange(block_width, device=device)[None]
         )
         prefix = self.embed_tokens(prefix_ids)
         blocks = self.embed_tokens(block_ids)
@@ -333,9 +334,7 @@ class Qwen3_5Backbone(nn.Module):
                 blocks, block_positions[None].expand(3, count, block_width)
             ),
         )
-        forest = Forest(
-            prefix_mask, block_mask, owner, padding.tolist(), block_mask.sum(1).tolist()
-        )
+        forest = Forest(prefix_mask, block_mask, owner, padding, lengths)
         for layer in self.layers:
             prefix, blocks = layer.forward_forest(
                 prefix, blocks, rotary, forest, self.kernels
