@@ -12,11 +12,16 @@ Reference:
 
 from __future__ import annotations
 
+import hashlib
 import json
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+import sklearn
+from objective import SelectorObjective
+from query_outcome_set import CandidateOutcome, QueryOutcomeSet, _digest
 from sklearn.cluster import KMeans as SKLearnKMeans
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import LabelEncoder
@@ -41,6 +46,8 @@ class TrainingSample:
     model_name: str
     quality: float
     latency_ms: float
+    # Groups a query's rows so query-level selectors fit one point per query.
+    query_id: str | None = None
 
 
 class KNNModel:
@@ -180,129 +187,612 @@ class KNNModel:
         return model
 
 
+KMEANS_FORMAT_VERSION = 2
+SELECTOR_TARGET_CONTRACT = "selector.model-choice/v1"
+KMEANS_DISTANCE = "squared_l2"
+KMEANS_TIE_BREAK = "lowest_index"
+KMEANS_FEATURE_NORMALIZATION = "none"
+# Bounds the (chunk, k, d) difference tensor to about 32 MiB of float64.
+_DISTANCE_CHUNK_ELEMENTS = 1 << 22
+
+
+class KMeansArtifactError(ValueError):
+    """A KMeans artifact, or the runtime it is loaded into, breaks the v2 contract."""
+
+
+class NoEligibleCandidateError(ValueError):
+    """No candidate offered by the request is in the trained candidate set."""
+
+
+@dataclass(frozen=True)
+class KMeansDecision:
+    """One scored query: nearest cluster, eligible candidate scores, winner."""
+
+    cluster_id: int
+    scores: dict[str, float]
+    model: str
+
+
+def squared_l2(points: np.ndarray, centroids: np.ndarray) -> np.ndarray:
+    """(n, k) squared L2 distances, each summed over dimensions in index order."""
+    # np.cumsum adds strictly left to right, an order native code reproduces bit for bit.
+    distances = np.empty((points.shape[0], centroids.shape[0]), dtype=np.float64)
+    step = max(1, _DISTANCE_CHUNK_ELEMENTS // max(1, centroids.size))
+    for start in range(0, points.shape[0], step):
+        diff = points[start : start + step, None, :] - centroids[None, :, :]
+        distances[start : start + step] = np.cumsum(diff * diff, axis=2)[..., -1]
+    return distances
+
+
+def assign_clusters(points: np.ndarray, centroids: np.ndarray) -> np.ndarray:
+    """Nearest centroid per row; np.argmin keeps the lowest index on ties."""
+    return np.argmin(squared_l2(points, centroids), axis=1)
+
+
+def drop_empty_clusters(
+    centroids: np.ndarray, labels: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Remove clusters that own no training query, keeping the survivors' order."""
+    sizes = np.bincount(labels, minlength=len(centroids))
+    keep = np.flatnonzero(sizes)
+    remap = np.full(len(centroids), -1, dtype=np.intp)
+    remap[keep] = np.arange(len(keep))
+    return centroids[keep], remap[labels], sizes[keep]
+
+
+def _content_id(*arrays: np.ndarray) -> str:
+    h = hashlib.blake2b(digest_size=8)
+    for array in arrays:
+        h.update(np.ascontiguousarray(array).tobytes())
+        h.update(b"\x00")
+    return h.hexdigest()
+
+
+def _objective_block(objective: SelectorObjective) -> dict:
+    return {
+        "id": objective.objective_id,
+        "version": objective.version,
+        "weights": {
+            "quality": objective.quality_weight,
+            "latency": objective.latency_weight,
+            "cost": objective.cost_weight,
+        },
+        "latency_scale_ms": objective.latency_scale_ms,
+        "cost_scale": objective.cost_scale,
+    }
+
+
 class KMeansModel:
-    """
-    KMeans clustering model for model selection.
+    """Query-level KMeans selector scored under the versioned selector objective.
 
-    Assigns models to clusters based on quality + efficiency weighting.
-    Reference: Avengers-Pro (arXiv:2508.12631)
+    Centroids are fit on one row per unique train query. Each (cluster, candidate)
+    stores the mean objective score and its support; a cell below min_support
+    uses the candidate's global train mean. Distances are squared L2 and every
+    tie, between clusters or candidates, goes to the lowest index.
+
+    Fit is O(n_unique * k * d * iter); scoring one query is O(k * d + m).
     """
 
-    def __init__(self, n_clusters: int = 8, efficiency_weight: float = 0.1):
+    def __init__(
+        self,
+        n_clusters: int = 8,
+        efficiency_weight: float = 0.1,
+        *,
+        objective: SelectorObjective | None = None,
+        seed: int = 42,
+        n_init: int = 10,
+        max_iter: int = 300,
+        tol: float = 1e-4,
+        min_support: int = 1,
+    ):
+        if n_clusters < 1 or n_init < 1 or max_iter < 1 or min_support < 1:
+            raise ValueError(
+                "n_clusters, n_init, max_iter and min_support must be >= 1"
+            )
+        if not np.isfinite(tol) or tol < 0:
+            raise ValueError("tol must be finite and non-negative")
         self.n_clusters = n_clusters
         self.efficiency_weight = efficiency_weight
-        self.quality_weight = 1.0 - efficiency_weight
-        self.kmeans = None
-        self.cluster_models: dict[int, str] = {}
+        self.objective = objective or SelectorObjective(
+            quality_weight=1.0 - efficiency_weight, latency_weight=efficiency_weight
+        )
+        self.seed = seed
+        self.n_init = n_init
+        self.max_iter = max_iter
+        self.tol = tol
+        self.min_support = min_support
+        self.format_version = KMEANS_FORMAT_VERSION
+        self.centroids: np.ndarray | None = None
+        self.cluster_sizes: np.ndarray | None = None
+        self.scores: np.ndarray | None = None
+        self.support: np.ndarray | None = None
+        self.global_scores: np.ndarray | None = None
+        self.global_support: np.ndarray | None = None
         self.model_names: list[str] = []
         self.feature_dim: int = 0
+        self.n_train_queries: int = 0
+        self.training_snapshot_id: str | None = None
+        self.feature_snapshot_id: str | None = None
+        self.library_versions: dict[str, str] = {}
+        self._index: dict[str, int] = {}
+        self._legacy_artifact: dict | None = None
+
+    @property
+    def effective_k(self) -> int:
+        return 0 if self.centroids is None else len(self.centroids)
+
+    @property
+    def cluster_models(self) -> list[str]:
+        """Per-cluster argmax over the whole candidate set, for the v1 runtime."""
+        return [self.model_names[i] for i in np.argmax(self.scores, axis=1)]
 
     def train(self, samples: list[TrainingSample]) -> None:
-        """Train KMeans model."""
-        # Extract features
-        features = np.array([s.feature_vector for s in samples], dtype=np.float32)
-        self.feature_dim = features.shape[1]
+        """Fit on (query, candidate) rows; rows sharing a query become one point.
 
-        # Fit KMeans
-        self.kmeans = SKLearnKMeans(
-            n_clusters=min(self.n_clusters, len(samples)),
-            random_state=42,
-            n_init=10,
+        Rows are keyed by query_id, or by the feature vector when no sample has one.
+        """
+        if not samples:
+            raise ValueError("KMeans requires nonempty training samples")
+        features = np.asarray([s.feature_vector for s in samples], dtype=np.float64)
+        ids = [s.query_id for s in samples]
+        if all(i is None for i in ids):
+            keys = features
+        elif any(i is None for i in ids):
+            raise ValueError("either every training sample has a query_id or none does")
+        else:
+            keys = np.asarray(ids, dtype=str)
+        outcomes = [
+            CandidateOutcome(
+                model_ref=s.model_name,
+                success=True,
+                quality=s.quality,
+                latency_ms=s.latency_ms,
+            )
+            for s in samples
+        ]
+        self._fit(keys, features, outcomes)
+
+    def train_snapshots(
+        self,
+        snapshots: Sequence[QueryOutcomeSet],
+        features: Mapping[str, np.ndarray],
+        *,
+        training_snapshot_id: str | None = None,
+        feature_snapshot_id: str | None = None,
+    ) -> None:
+        """Fit on train-split query snapshots, with features keyed by query_id."""
+        keys: list[str] = []
+        rows: list[np.ndarray] = []
+        outcomes: list[CandidateOutcome] = []
+        for snapshot in snapshots:
+            if snapshot.query_id not in features:
+                raise ValueError(f"no feature vector for query_id {snapshot.query_id}")
+            vector = features[snapshot.query_id]
+            for outcome in snapshot.outcomes:
+                keys.append(snapshot.query_id)
+                rows.append(vector)
+                outcomes.append(outcome)
+        if not outcomes:
+            raise ValueError("KMeans requires at least one candidate outcome")
+        self._fit(
+            np.asarray(keys, dtype=str),
+            np.asarray(rows, dtype=np.float64),
+            outcomes,
+            training_snapshot_id=training_snapshot_id,
+            feature_snapshot_id=feature_snapshot_id,
         )
-        cluster_labels = self.kmeans.fit_predict(features)
 
-        # Get unique model names
-        self.model_names = sorted({s.model_name for s in samples})
+    def _fit(
+        self,
+        keys: np.ndarray,
+        features: np.ndarray,
+        outcomes: list[CandidateOutcome],
+        *,
+        training_snapshot_id: str | None = None,
+        feature_snapshot_id: str | None = None,
+    ) -> None:
+        if (
+            features.ndim != 2  # noqa: PLR2004 - a feature matrix is two-dimensional
+            or features.shape[1] == 0
+            or not np.isfinite(features).all()
+        ):
+            raise ValueError("KMeans requires a finite, nonempty feature matrix")
+        if any(not o.model_ref for o in outcomes):
+            raise ValueError("every outcome needs a model_ref")
 
-        # Assign best model to each cluster using quality+efficiency weighting
-        cluster_scores: dict[int, dict[str, float]] = {}
-        for sample, cluster_id in zip(samples, cluster_labels, strict=True):
-            if cluster_id not in cluster_scores:
-                cluster_scores[cluster_id] = {}
+        # Sorted unique keys make the fit independent of input row order.
+        axis = None if keys.ndim == 1 else 0
+        unique_keys, first, inverse = np.unique(
+            keys, axis=axis, return_index=True, return_inverse=True
+        )
+        inverse = inverse.reshape(-1)
+        points = features[first]
+        if not np.array_equal(points[inverse], features):
+            raise ValueError("a query_id maps to more than one feature vector")
 
-            # Calculate combined score
-            speed_factor = 1.0 / (1.0 + sample.latency_ms / 10000.0)
-            score = (
-                self.quality_weight * sample.quality
-                + self.efficiency_weight * speed_factor
-            )
+        names = sorted({o.model_ref for o in outcomes})
+        index = {name: i for i, name in enumerate(names)}
+        m = len(names)
+        candidates = np.fromiter(
+            (index[o.model_ref] for o in outcomes), dtype=np.intp, count=len(outcomes)
+        )
+        # A repeated (query, candidate) keeps its first observation, as in QueryOutcomeSet.
+        _, kept = np.unique(inverse * m + candidates, return_index=True)
+        query_idx = inverse[kept]
+        cand_idx = candidates[kept]
+        raw = np.array(
+            [
+                (
+                    float(outcomes[i].success),
+                    outcomes[i].quality,
+                    outcomes[i].latency_ms,
+                    outcomes[i].cost,
+                )
+                for i in kept
+            ],
+            dtype=np.float64,
+        )
+        observed = np.fromiter(
+            (self.objective.score(outcomes[i]) for i in kept),
+            dtype=np.float64,
+            count=len(kept),
+        )
 
-            model = sample.model_name
-            cluster_scores[cluster_id][model] = (
-                cluster_scores[cluster_id].get(model, 0.0) + score
-            )
+        distinct = len(np.unique(points, axis=0))
+        effective_k = min(self.n_clusters, distinct)
+        fitted = SKLearnKMeans(
+            n_clusters=effective_k,
+            init="k-means++",
+            n_init=self.n_init,
+            max_iter=self.max_iter,
+            tol=self.tol,
+            algorithm="lloyd",
+            random_state=self.seed,
+        ).fit(points)
+        centroids = np.asarray(fitted.cluster_centers_, dtype=np.float64)
+        # Relabel under the contract's own distance and tie-break, not sklearn's.
+        labels = assign_clusters(points, centroids)
+        centroids, labels, sizes = drop_empty_clusters(centroids, labels)
 
-        # Pick best model for each cluster
-        for cluster_id, scores in cluster_scores.items():
-            self.cluster_models[cluster_id] = max(scores, key=scores.get)
+        self._set_scores(labels[query_idx], cand_idx, observed, len(centroids), m)
+        self.centroids = centroids
+        self.cluster_sizes = sizes
+        self.model_names = names
+        self._index = index
+        self.feature_dim = features.shape[1]
+        self.n_train_queries = len(points)
+        self.format_version = KMEANS_FORMAT_VERSION
+        self._legacy_artifact = None
+        self.feature_snapshot_id = feature_snapshot_id or _content_id(points)
+        self.training_snapshot_id = training_snapshot_id or _content_id(
+            np.asarray(unique_keys),
+            np.asarray(names, dtype=str),
+            query_idx,
+            cand_idx,
+            raw,
+        )
+        self.library_versions = {
+            "scikit-learn": sklearn.__version__,
+            "numpy": np.__version__,
+        }
+        print(
+            f"KMeans trained on {len(points)} unique queries, "
+            f"k={self.effective_k} (requested {self.n_clusters})"
+        )
 
-        print(f"KMeans trained with {len(samples)} samples, {self.n_clusters} clusters")
+    def _set_scores(
+        self,
+        cluster_idx: np.ndarray,
+        cand_idx: np.ndarray,
+        observed: np.ndarray,
+        k: int,
+        m: int,
+    ) -> None:
+        cell = cluster_idx * m + cand_idx
+        support = np.bincount(cell, minlength=k * m).reshape(k, m)
+        sums = np.bincount(cell, weights=observed, minlength=k * m).reshape(k, m)
+        global_support = np.bincount(cand_idx, minlength=m)
+        global_scores = np.bincount(cand_idx, weights=observed, minlength=m)
+        global_scores = global_scores / global_support
+        means = np.divide(sums, support, out=np.zeros_like(sums), where=support > 0)
+        self.scores = np.where(support >= self.min_support, means, global_scores)
+        self.support = support
+        self.global_scores = global_scores
+        self.global_support = global_support
 
-    def predict(self, feature_vector: np.ndarray) -> str:
-        """Predict best model for a query."""
-        if self.kmeans is None:
+    def _check_query(self, feature_vector: np.ndarray) -> np.ndarray:
+        if self.centroids is None:
             raise ValueError("Model not trained")
+        query = np.asarray(feature_vector, dtype=np.float64)
+        if query.shape != (self.feature_dim,) or not np.isfinite(query).all():
+            raise ValueError(
+                "Query must be finite and match the KMeans feature dimension"
+            )
+        return query
 
-        cluster_id = self.kmeans.predict([feature_vector])[0]
-        return self.cluster_models.get(cluster_id, self.model_names[0])
+    def cluster_of(self, feature_vector: np.ndarray) -> int:
+        query = self._check_query(feature_vector)
+        return int(assign_clusters(query[None, :], self.centroids)[0])
 
-    def save(self, path: str) -> None:
-        """Save model to JSON format compatible with Rust/Linfa."""
-        # Convert cluster_models dict to ordered list (Rust expects Vec<String>)
-        # Rust expects cluster_models[i] = model for cluster i
-        cluster_models_list = []
-        for i in range(self.n_clusters):
-            cluster_models_list.append(self.cluster_models.get(i, self.model_names[0]))
+    def score(
+        self, feature_vector: np.ndarray, candidates: Iterable[str] | None = None
+    ) -> KMeansDecision:
+        """Score the request's candidates in the nearest cluster; unknown names are ignored."""
+        cluster = self.cluster_of(feature_vector)
+        if candidates is None:
+            eligible = list(range(len(self.model_names)))
+        else:
+            eligible = sorted({self._index[c] for c in candidates if c in self._index})
+        if not eligible:
+            raise NoEligibleCandidateError(
+                "none of the requested candidates is in the trained candidate set"
+            )
+        row = self.scores[cluster, eligible]
+        # np.argmax keeps the first maximum, the lowest candidate-set index.
+        best = eligible[int(np.argmax(row))]
+        return KMeansDecision(
+            cluster_id=cluster,
+            scores={
+                self.model_names[i]: float(s)
+                for i, s in zip(eligible, row, strict=True)
+            },
+            model=self.model_names[best],
+        )
 
-        data = {
+    def predict(
+        self, feature_vector: np.ndarray, candidates: Iterable[str] | None = None
+    ) -> str:
+        """Predict the best model for a query."""
+        return self.score(feature_vector, candidates).model
+
+    def to_artifact(self) -> dict:
+        if self._legacy_artifact is not None:
+            return self._legacy_artifact
+        if self.centroids is None:
+            raise ValueError("Model not trained")
+        return {
             "algorithm": "kmeans",
+            "format_version": KMEANS_FORMAT_VERSION,
             "trained": True,
-            "num_clusters": self.n_clusters,
-            "centroids": self.kmeans.cluster_centers_.tolist(),
-            "cluster_models": cluster_models_list,
-            # Keep legacy fields for Python reloading
-            "n_clusters": self.n_clusters,
-            "efficiency_weight": self.efficiency_weight,
+            "target_contract": SELECTOR_TARGET_CONTRACT,
+            "objective": _objective_block(self.objective),
+            "candidate_set": {
+                "id": _digest(*self.model_names),
+                "models": self.model_names,
+            },
+            "feature": {
+                "snapshot_id": self.feature_snapshot_id,
+                "dim": self.feature_dim,
+                "normalization": KMEANS_FEATURE_NORMALIZATION,
+            },
+            "training_snapshot_id": self.training_snapshot_id,
+            "clustering": {
+                "init": "k-means++",
+                "algorithm": "lloyd",
+                "dtype": "float64",
+                "seed": self.seed,
+                "n_init": self.n_init,
+                "max_iter": self.max_iter,
+                "tol": self.tol,
+                "library_versions": self.library_versions,
+                "requested_k": self.n_clusters,
+                "effective_k": self.effective_k,
+                "train_queries": self.n_train_queries,
+            },
+            "distance": KMEANS_DISTANCE,
+            "tie_break": KMEANS_TIE_BREAK,
+            "num_clusters": self.effective_k,
+            "centroids": self.centroids.tolist(),
+            "cluster_sizes": self.cluster_sizes.tolist(),
+            "scores": self.scores.tolist(),
+            "support": self.support.tolist(),
+            "fallback": {
+                "min_support": self.min_support,
+                "global_scores": self.global_scores.tolist(),
+                "global_support": self.global_support.tolist(),
+            },
+            "cluster_models": self.cluster_models,
             "model_names": self.model_names,
             "feature_dim": self.feature_dim,
         }
 
+    def save(self, path: str) -> None:
+        """Write the v2 artifact; cluster_models keeps the current runtime loading it."""
         with open(path, "w") as f:
-            json.dump(data, f)
-
+            json.dump(self.to_artifact(), f, allow_nan=False)
         size_mb = Path(path).stat().st_size / (1024 * 1024)
         print(f"Saved KMeans model to {path} ({size_mb:.1f} MB)")
 
     @classmethod
-    def load(cls, path: str) -> KMeansModel:
-        """Load model from JSON."""
+    def load(
+        cls,
+        path: str,
+        *,
+        candidates: Iterable[str] | None = None,
+        feature_dim: int | None = None,
+        objective: SelectorObjective | None = None,
+    ) -> KMeansModel:
+        """Load and validate an artifact against the runtime's configuration."""
         with open(path) as f:
             data = json.load(f)
+        return cls.from_artifact(
+            data, candidates=candidates, feature_dim=feature_dim, objective=objective
+        )
 
+    @classmethod
+    def from_artifact(
+        cls,
+        data: dict,
+        *,
+        candidates: Iterable[str] | None = None,
+        feature_dim: int | None = None,
+        objective: SelectorObjective | None = None,
+    ) -> KMeansModel:
+        version = data.get("format_version", 1)
+        if version == 1:
+            model = cls._from_v1(data)
+        elif version == KMEANS_FORMAT_VERSION:
+            model = cls._from_v2(data)
+        else:
+            raise KMeansArtifactError(f"unsupported KMeans format_version {version!r}")
+        if candidates is not None and set(candidates) != set(model.model_names):
+            raise KMeansArtifactError(
+                "configured candidates differ from the artifact candidate set"
+            )
+        if feature_dim is not None and feature_dim != model.feature_dim:
+            raise KMeansArtifactError(
+                f"feature dim {feature_dim} != artifact dim {model.feature_dim}"
+            )
+        if (
+            objective is not None
+            and version == KMEANS_FORMAT_VERSION
+            and objective.objective_id != model.objective.objective_id
+        ):
+            raise KMeansArtifactError("configured objective differs from the artifact")
+        return model
+
+    @classmethod
+    def _from_v2(cls, data: dict) -> KMeansModel:
+        try:
+            block = data["objective"]
+            weights = block["weights"]
+            rule = SelectorObjective(
+                quality_weight=weights["quality"],
+                latency_weight=weights["latency"],
+                cost_weight=weights["cost"],
+                latency_scale_ms=block["latency_scale_ms"],
+                cost_scale=block["cost_scale"],
+                version=block["version"],
+            )
+            clustering = data["clustering"]
+            fallback = data["fallback"]
+            names = list(data["candidate_set"]["models"])
+            dim = data["feature"]["dim"]
+            model = cls(
+                n_clusters=clustering["requested_k"],
+                efficiency_weight=rule.latency_weight,
+                objective=rule,
+                seed=clustering["seed"],
+                n_init=clustering["n_init"],
+                max_iter=clustering["max_iter"],
+                tol=clustering["tol"],
+                min_support=fallback["min_support"],
+            )
+            centroids = np.asarray(data["centroids"], dtype=np.float64)
+            sizes = np.asarray(data["cluster_sizes"])
+            scores = np.asarray(data["scores"], dtype=np.float64)
+            support = np.asarray(data["support"])
+            global_scores = np.asarray(fallback["global_scores"], dtype=np.float64)
+            global_support = np.asarray(fallback["global_support"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise KMeansArtifactError(f"malformed KMeans v2 artifact: {exc}") from exc
+
+        k, m = len(centroids), len(names)
+        problems = []
+        if data.get("algorithm") != "kmeans":
+            problems.append("algorithm")
+        if data.get("target_contract") != SELECTOR_TARGET_CONTRACT:
+            problems.append("target_contract")
+        if block.get("id") != rule.objective_id:
+            problems.append("objective id")
+        if m == 0 or len(set(names)) != m or names != sorted(names):
+            problems.append("candidate_set models")
+        elif data["candidate_set"].get("id") != _digest(*names):
+            problems.append("candidate_set id")
+        if data.get("distance") != KMEANS_DISTANCE:
+            problems.append("distance")
+        if data.get("tie_break") != KMEANS_TIE_BREAK:
+            problems.append("tie_break")
+        if data["feature"].get("normalization") != KMEANS_FEATURE_NORMALIZATION:
+            problems.append("feature normalization")
+        if (
+            not isinstance(dim, int)
+            or dim < 1
+            or centroids.shape != (k, dim)
+            or k == 0
+            or not np.isfinite(centroids).all()
+        ):
+            problems.append("centroids or feature dim")
+        if not (
+            k
+            == clustering.get("effective_k")
+            == data.get("num_clusters")
+            == len(sizes)
+            <= model.n_clusters
+        ) or not (sizes.dtype.kind == "i" and (sizes > 0).all()):
+            problems.append("cluster counts")
+        if (
+            scores.shape != (k, m)
+            or support.shape != (k, m)
+            or global_scores.shape != (m,)
+            or global_support.shape != (m,)
+            or not np.isfinite(scores).all()
+            or not np.isfinite(global_scores).all()
+            or support.dtype.kind != "i"
+            or global_support.dtype.kind != "i"
+            or (support < 0).any()
+            or (global_support < 1).any()
+        ):
+            problems.append("score tables")
+        elif not np.array_equal(
+            scores[support < model.min_support],
+            np.broadcast_to(global_scores, (k, m))[support < model.min_support],
+        ):
+            problems.append("fallback cells")
+        if problems:
+            raise KMeansArtifactError(
+                f"invalid KMeans v2 artifact: {', '.join(problems)}"
+            )
+
+        model.centroids = centroids
+        model.cluster_sizes = sizes
+        model.scores = scores
+        model.support = support
+        model.global_scores = global_scores
+        model.global_support = global_support
+        model.model_names = names
+        model._index = {name: i for i, name in enumerate(names)}
+        model.feature_dim = dim
+        model.n_train_queries = clustering.get("train_queries", int(sizes.sum()))
+        model.training_snapshot_id = data.get("training_snapshot_id")
+        model.feature_snapshot_id = data["feature"].get("snapshot_id")
+        model.library_versions = dict(clustering.get("library_versions", {}))
+        if data.get("cluster_models") != model.cluster_models:
+            raise KMeansArtifactError("cluster_models is not the per-cluster argmax")
+        return model
+
+    @classmethod
+    def _from_v1(cls, data: dict) -> KMeansModel:
+        """Read an unversioned export as one-hot scores; it re-saves unchanged."""
+        centroids = np.asarray(data.get("centroids", []), dtype=np.float64)
+        raw = data.get("cluster_models", [])
+        if isinstance(raw, dict):
+            raw = [raw.get(str(i), raw.get(i)) for i in range(len(centroids))]
+        if (
+            centroids.ndim != 2  # noqa: PLR2004 - centroids form a matrix
+            or len(centroids) == 0
+            or centroids.shape[1] == 0
+            or not np.isfinite(centroids).all()
+            or len(raw) < len(centroids)
+            or any(not isinstance(name, str) or not name for name in raw)
+        ):
+            raise KMeansArtifactError("invalid unversioned KMeans artifact")
+        assigned = raw[: len(centroids)]
+        names = sorted(set(assigned) | set(data.get("model_names", [])))
         model = cls(
-            n_clusters=data.get("n_clusters", data.get("num_clusters", 8)),
+            n_clusters=max(len(centroids), data.get("n_clusters", len(centroids))),
             efficiency_weight=data.get("efficiency_weight", 0.1),
         )
-        model.model_names = data.get("model_names", [])
-        model.feature_dim = data.get("feature_dim", 0)
-
-        # Handle both dict format (old) and list format (new Rust-compatible)
-        cluster_models_raw = data.get("cluster_models", {})
-        if isinstance(cluster_models_raw, list):
-            # New format: list where index is cluster_id
-            model.cluster_models = dict(enumerate(cluster_models_raw))
-        elif isinstance(cluster_models_raw, dict):
-            # Old format: dict with string keys
-            model.cluster_models = {int(k): v for k, v in cluster_models_raw.items()}
-        else:
-            model.cluster_models = {}
-
-        # Rebuild KMeans from centroids
-        centroids = np.array(data["centroids"], dtype=np.float32)
-        model.kmeans = SKLearnKMeans(n_clusters=len(centroids), n_init=1)
-        model.kmeans.cluster_centers_ = centroids
-        model.kmeans._n_features_out = centroids.shape[1]
-
+        model.format_version = 1
+        model.model_names = names
+        model._index = {name: i for i, name in enumerate(names)}
+        model.centroids = centroids
+        model.feature_dim = centroids.shape[1]
+        winners = [model._index[name] for name in assigned]
+        model.scores = np.zeros((len(centroids), len(names)))
+        model.scores[np.arange(len(centroids)), winners] = 1.0
+        model.support = np.zeros(model.scores.shape, dtype=np.int64)
+        model._legacy_artifact = data
         return model
 
 

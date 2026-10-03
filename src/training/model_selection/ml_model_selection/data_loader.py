@@ -7,15 +7,11 @@ Reference: FusionFactory (arXiv:2507.10540), Avengers-Pro (arXiv:2508.12631)
 """
 
 import json
-import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 from huggingface_hub import hf_hub_download
-from tqdm import tqdm
-
 
 # HuggingFace dataset info
 HF_DATASET_REPO = "vllm-project/semantic-router-benchmark"
@@ -60,8 +56,8 @@ class TrainingRecord:
     model_name: str
     quality: float
     latency_ms: float
-    embedding: Optional[np.ndarray] = None
-    feature_vector: Optional[np.ndarray] = None
+    embedding: np.ndarray | None = None
+    feature_vector: np.ndarray | None = None
 
 
 def download_data(cache_dir: str = ".cache/ml_model_selection") -> Path:
@@ -99,7 +95,7 @@ def download_data(cache_dir: str = ".cache/ml_model_selection") -> Path:
         raise
 
 
-def load_jsonl(file_path: Path) -> List[RoutingRecord]:
+def load_jsonl(file_path: Path) -> list[RoutingRecord]:
     """
     Load benchmark data from JSONL file.
 
@@ -111,9 +107,9 @@ def load_jsonl(file_path: Path) -> List[RoutingRecord]:
     """
     records = []
 
-    with open(file_path, "r", encoding="utf-8") as f:
-        for line_num, line in enumerate(f, 1):
-            line = line.strip()
+    with open(file_path, encoding="utf-8") as f:
+        for line_num, raw_line in enumerate(f, 1):
+            line = raw_line.strip()
             if not line:
                 continue
 
@@ -153,7 +149,7 @@ def load_jsonl(file_path: Path) -> List[RoutingRecord]:
     return records
 
 
-def get_unique_queries(records: List[RoutingRecord]) -> List[str]:
+def get_unique_queries(records: list[RoutingRecord]) -> list[str]:
     """Get unique queries from records."""
     seen = set()
     unique = []
@@ -164,9 +160,9 @@ def get_unique_queries(records: List[RoutingRecord]) -> List[str]:
     return unique
 
 
-def get_model_names(records: List[RoutingRecord]) -> List[str]:
+def get_model_names(records: list[RoutingRecord]) -> list[str]:
     """Get unique model names from records."""
-    return sorted(set(r.model_name for r in records))
+    return sorted({r.model_name for r in records})
 
 
 def category_to_onehot(category: str) -> np.ndarray:
@@ -197,10 +193,10 @@ def create_feature_vector(embedding: np.ndarray, category: str) -> np.ndarray:
 
 
 def group_by_query(
-    records: List[RoutingRecord],
-) -> Dict[str, List[RoutingRecord]]:
+    records: list[RoutingRecord],
+) -> dict[str, list[RoutingRecord]]:
     """Group records by query."""
-    groups: Dict[str, List[RoutingRecord]] = {}
+    groups: dict[str, list[RoutingRecord]] = {}
     for r in records:
         if r.query not in groups:
             groups[r.query] = []
@@ -208,51 +204,11 @@ def group_by_query(
     return groups
 
 
-def find_best_model_per_query(
-    records: List[RoutingRecord],
-    quality_weight: float = 0.9,
-) -> Dict[str, Tuple[str, float]]:
-    """
-    Find the best model for each query based on quality + efficiency.
-
-    Args:
-        records: List of routing records
-        quality_weight: Weight for quality (1 - quality_weight for efficiency)
-
-    Returns:
-        Dict mapping query -> (best_model, score)
-    """
-    groups = group_by_query(records)
-    best_models = {}
-
-    for query, group in groups.items():
-        # Find max latency for normalization
-        max_latency = max(r.latency_ms for r in group) or 1.0
-
-        best_score = -1
-        best_model = None
-
-        for r in group:
-            # Calculate combined score: quality_weight * quality + (1-quality_weight) * speed
-            normalized_latency = r.latency_ms / max_latency
-            speed_factor = 1.0 / (1.0 + normalized_latency)
-            score = quality_weight * r.quality + (1 - quality_weight) * speed_factor
-
-            if score > best_score:
-                best_score = score
-                best_model = r.model_name
-
-        if best_model:
-            best_models[query] = (best_model, best_score)
-
-    return best_models
-
-
-def print_data_stats(records: List[RoutingRecord]) -> None:
+def print_data_stats(records: list[RoutingRecord]) -> None:
     """Print statistics about the loaded data."""
     queries = get_unique_queries(records)
     models = get_model_names(records)
-    categories = set(r.category for r in records)
+    categories = {r.category for r in records}
 
     print("\n" + "=" * 50)
     print("  Data Statistics")
