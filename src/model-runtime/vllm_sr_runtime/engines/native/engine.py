@@ -20,6 +20,8 @@ from ...plugins.base import (
     ForwardBatch,
     ForwardOutput,
     ModelSpec,
+    TreeBatch,
+    TreeOutput,
 )
 from ...scheduler.planner import padded
 from . import fast, models
@@ -89,32 +91,85 @@ class NativeEngineModel(EngineModel):
 
     supports_shared_context = True
 
+    def _run_tree(
+        self, prefix: torch.Tensor, suffixes: list[torch.Tensor], padded_exact: bool
+    ) -> torch.Tensor:
+        """The prefix once and every suffix from it, packed in one row; the suffix rows ``[n, width, H]``."""
+        lengths = [len(suffix) for suffix in suffixes]
+        packed = torch.cat([prefix, *suffixes])[None].to(self.device)
+        tree = Tree(
+            len(prefix), lengths, padded(max(lengths)), self.device, padded_exact
+        )
+        hidden = self.backbone.forward_tree(packed, tree)
+        return tree.rows(hidden[0, len(prefix) :])
+
     def _forward_tree(self, batch: ForwardBatch) -> ForwardOutput:
         """The batch as one shared-context tree: its first ``shared_prefix`` tokens computed once."""
         prefix, lengths = batch.shared_prefix, batch.lengths
-        suffix = [length - prefix for length in lengths]
-        width = padded(max(suffix))
         ids = batch.input_ids
-        packed = torch.cat(
-            [ids[0, :prefix]]
-            + [ids[row, prefix:length] for row, length in enumerate(lengths)]
-        )[None].to(self.device)
-        tree = Tree(
-            prefix,
-            suffix,
-            width,
-            self.device,
-            padded_exact=any(length != padded(max(lengths)) for length in lengths),
-        )
         gather = (batch.gather - prefix).clamp(min=0).to(self.device)
         query = (batch.query - prefix).to(self.device)
         with torch.inference_mode(), self.autocast():
-            hidden = self.backbone.forward_tree(packed, tree)
-            rows_hidden = tree.rows(hidden[0, prefix:])
+            rows_hidden = self._run_tree(
+                ids[0, :prefix],
+                [ids[row, prefix:length] for row, length in enumerate(lengths)],
+                padded_exact=any(length != padded(max(lengths)) for length in lengths),
+            )
             rows = torch.arange(rows_hidden.shape[0], device=rows_hidden.device)
             gathered = rows_hidden[rows[:, None], gather]
             queried = rows_hidden[rows, query]
         return ForwardOutput(gathered=gathered, query=queried)
+
+    def tree(self, batch: TreeBatch) -> TreeOutput:
+        method = "forward_forest" if batch.layout == "rows" else "forward_tree"
+        if not hasattr(self.backbone, method):
+            raise NotImplementedError(
+                f"the native {self.spec.backbone.model_type!r} backbone has no {batch.layout} tree forward"
+            )
+        width = max(len(block) for block in batch.blocks)
+        with torch.inference_mode(), self.autocast():
+            if batch.layout == "rows":
+                return TreeOutput(hidden=self._tree_rows(batch))
+            hidden = None
+            for owner, prefix in enumerate(batch.prefixes):
+                members = [i for i, o in enumerate(batch.owners) if o == owner]
+                if not members:
+                    continue
+                rows = self._run_tree(
+                    torch.tensor(prefix, dtype=torch.long),
+                    [torch.tensor(batch.blocks[i], dtype=torch.long) for i in members],
+                    padded_exact=False,
+                )
+                if hidden is None:
+                    hidden = rows.new_zeros((len(batch.blocks), width, rows.shape[-1]))
+                span = min(width, rows.shape[1])
+                hidden[members, :span] = rows[:, :span]
+        return TreeOutput(hidden=hidden)
+
+    def _tree_rows(self, batch: TreeBatch) -> torch.Tensor:
+        """``layout: rows``: left-padded prefix rows and right-padded blocks (``models/forest.py``)."""
+
+        def padded_rows(sequences: list[list[int]], left: bool):
+            width = max(len(sequence) for sequence in sequences)
+            ids = torch.zeros((len(sequences), width), dtype=torch.long)
+            mask = torch.zeros((len(sequences), width), dtype=torch.long)
+            for row, sequence in enumerate(sequences):
+                cut = (
+                    slice(width - len(sequence), width)
+                    if left
+                    else slice(0, len(sequence))
+                )
+                ids[row, cut] = torch.tensor(sequence, dtype=torch.long)
+                mask[row, cut] = 1
+            return ids.to(self.device), mask.to(self.device)
+
+        prefix_ids, prefix_mask = padded_rows(batch.prefixes, left=True)
+        block_ids, block_mask = padded_rows(batch.blocks, left=False)
+        owner = torch.tensor(batch.owners, dtype=torch.long, device=self.device)
+        _, blocks = self.backbone.forward_forest(
+            prefix_ids, prefix_mask, block_ids, block_mask, owner
+        )
+        return blocks
 
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
         if batch.shared_prefix:
@@ -141,17 +196,15 @@ class NativeEngineModel(EngineModel):
         return ForwardOutput(gathered=gathered, query=queried)
 
     def encode(self, batch: EncoderBatch) -> EncoderOutput:
-        """Hidden states at the batch's exits; packed rows stay packed, padded rows padded.
+        """Hidden states at the batch's exits, through its branch if it names one.
 
-        A batch that names a branch runs that branch's layer stack over the shared embedding.
+        Packed rows stay packed and padded rows padded.
         """
         backbone = (
             self.backbone if batch.branch is None else self.branches[batch.branch]
         )
         if not hasattr(backbone, "encode"):
-            raise NotImplementedError(
-                f"the native {backbone.model_type!r} backbone is not an encoder"
-            )
+            return self._encode_decoder(batch)
         input_ids = batch.input_ids.to(self.device)
         if batch.lengths is not None:
             if sum(batch.lengths) != input_ids.numel():
@@ -165,6 +218,30 @@ class NativeEngineModel(EngineModel):
                 input_ids, layout, batch.layers, batch.normalize_exits
             )
         return EncoderOutput(hidden=hidden)
+
+    def _encode_decoder(self, batch: EncoderBatch) -> EncoderOutput:
+        """A decoder's last layer (embedders such as Qwen3-Embedding): right-padded causal rows.
+
+        Causal attention never reads a later position, so padding changes no
+        real token; packed requests come back packed.
+        """
+        last = len(self.backbone.layers)
+        if set(batch.layers) - {last}:
+            raise ValueError(f"a decoder backbone serves its last layer ({last}) only")
+        if batch.lengths is not None:
+            width = max(batch.lengths)
+            mask = torch.arange(width)[None, :] < torch.tensor(batch.lengths)[:, None]
+            input_ids = torch.zeros(mask.shape, dtype=torch.long)
+            input_ids[mask] = batch.input_ids.cpu()
+        else:
+            input_ids, mask = batch.input_ids, batch.attention_mask.bool()
+        with torch.inference_mode(), self.autocast():
+            hidden = self.backbone(
+                input_ids.to(self.device), mask.to(self.device, torch.long)
+            )
+        if batch.lengths is not None:
+            hidden = hidden[mask.to(hidden.device)]
+        return EncoderOutput(hidden={last: hidden})
 
     def _parameters(self) -> list[nn.Parameter]:
         """Every parameter once (branches share the backbone's embedding)."""

@@ -35,7 +35,7 @@ func (cfg PIIModel) ValidateBoundWindow(deployment ModelDeployment) error {
 	if cfg.Window == nil {
 		return nil
 	}
-	if cfg.Backend != nil || (deployment.Provider != "candle" && deployment.Provider != "ort") {
+	if cfg.Backend != nil || !deployment.IsLocalTask() {
 		return fmt.Errorf("classifier.pii.window requires a local deployment")
 	}
 	if deployment.Input.Overflow != "window" || deployment.Input.MaxTokens <= 0 {

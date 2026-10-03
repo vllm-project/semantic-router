@@ -20,7 +20,7 @@ func modalityPreparationConfig(recipe config.RecipeName, method string) *config.
 		ModalityDetectionConfig: config.ModalityDetectionConfig{
 			Method: method, ConfidenceThreshold: 0.6, LowerThresholdRatio: 0.7,
 			Keywords:   []string{"make a poster"},
-			Classifier: &config.ModalityClassifierConfig{ModelPath: "unused-inherited-model", MaxSequenceLength: 32768},
+			Classifier: &config.ModalityClassifierConfig{ModelPath: "models/Vela-1.0-Encoder-307M-Modality", MaxSequenceLength: 32768},
 		},
 	}
 	return cfg

@@ -1,0 +1,518 @@
+"""Parity records for the embedding and rerank models (embed workstream).
+
+    python3 tools/embed_parity.py omni --bundle DIR --output OUT.json [--threads N]
+    python3 tools/embed_parity.py encoder --package DIR --output OUT.json [--threads N]
+
+``encoder`` serves an embedder or reranker package (Vela Embedding, Vela
+Reranker, Qwen3-Embedding) through ``TaskHeadsFamily`` on the native engine
+(every exit) and, when the package ships exit graphs, on the onnxruntime
+engine (every graph), and compares both with a Transformers FP32 reference
+fed the same token IDs (``tools/embed_corpus.py``): every exit's embedding
+(raw or final-normed intermediate exits per the package contract, Matryoshka
+views of the last one) or every pair scorer's logits and rerank order.
+
+``omni`` serves a prepared Vela Omni bundle that kept its goldens
+(``VELA_OMNI_KEEP_GOLDEN=1``) through ``MultimodalEmbeddingFamily`` and the
+``onnxruntime`` engine on the CPU, and compares every stage with the bundle's
+official-reference goldens (``golden/index.json``): token IDs, image pixels,
+16 kHz and 48 kHz audio, Whisper and CLAP features, CLAP window embeddings and
+their aggregate, and every end-to-end embedding (text, padded text, Mini's
+instruction roles, PNG and JPEG images, mono and stereo audio of one to three
+CLAP windows). Media go through the request path as the router sends them:
+images as their file bytes, audio as float32 WAV of the golden PCM. Passes when
+every embedding has cosine >= 0.99999 and |delta| <= 1e-4 (design section 17).
+"""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import json
+import struct
+import sys
+import time
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from embed_corpus import RERANK, texts  # noqa: E402
+from vllm_sr_runtime.accel.cpu import CPUAccelerator  # noqa: E402
+from vllm_sr_runtime.engines.native.engine import NativeEngine  # noqa: E402
+from vllm_sr_runtime.engines.onnxruntime.engine import OnnxRuntimeEngine  # noqa: E402
+from vllm_sr_runtime.families.multimodal_embedding import audio  # noqa: E402
+from vllm_sr_runtime.families.multimodal_embedding.family import (  # noqa: E402
+    MultimodalEmbeddingFamily,
+)
+from vllm_sr_runtime.families.task_heads.family import TaskHeadsFamily  # noqa: E402
+from vllm_sr_runtime.heads.embedding import matryoshka, pool  # noqa: E402
+from vllm_sr_runtime.heads.relevance import RelevanceLayout  # noqa: E402
+from vllm_sr_runtime.plugins.base import (  # noqa: E402
+    DeviceInfo,
+    EncoderBatch,
+    EngineOptions,
+    PackageRef,
+    RegistryOptions,
+    SurfaceRequest,
+)
+
+MIN_COSINE = 0.99999
+MAX_ABS = 1e-4
+CPU = DeviceInfo(accelerator="cpu", index=None, name="cpu")
+
+
+def golden_array(root: Path, ref: dict[str, Any]) -> np.ndarray:
+    return np.fromfile(root / "golden" / ref["file"], dtype="<f4").reshape(ref["shape"])
+
+
+def compare(actual: Any, expected: np.ndarray) -> dict[str, float]:
+    a = np.asarray(actual, dtype=np.float64).reshape(-1)
+    b = np.asarray(expected, dtype=np.float64).reshape(-1)
+    if a.shape != b.shape:
+        return {"shape_mismatch": 1.0, "max_abs": float("inf"), "cosine": 0.0}
+    denominator = np.linalg.norm(a) * np.linalg.norm(b)
+    cosine = float(a @ b / denominator) if denominator else float(np.array_equal(a, b))
+    return {
+        "max_abs": float(np.abs(a - b).max()) if a.size else 0.0,
+        "cosine": cosine,
+        "equal": float(np.mean(a == b)),
+    }
+
+
+def float_wav(pcm: np.ndarray, rate: int) -> bytes:
+    """Channels-first float32 PCM as an IEEE float WAV (what the router forwards)."""
+    channels = pcm.shape[0]
+    data = np.ascontiguousarray(pcm.T, dtype="<f4").tobytes()
+    fmt = struct.pack(
+        "<HHIIHH", 3, channels, rate, rate * 4 * channels, 4 * channels, 32
+    )
+    body = (
+        b"WAVE"
+        + b"fmt "
+        + struct.pack("<I", len(fmt))
+        + fmt
+        + b"data"
+        + struct.pack("<I", len(data))
+        + data
+    )
+    return b"RIFF" + struct.pack("<I", len(body)) + body
+
+
+class OmniParity:
+    def __init__(self, bundle: Path, threads: int | None):
+        family = MultimodalEmbeddingFamily()
+        self.package = family.verify(PackageRef(bundle))
+        spec = family.describe(self.package)
+        engine_model = OnnxRuntimeEngine().load(
+            spec, CPUAccelerator(), CPU, EngineOptions(threads=threads)
+        )
+        self.model = family.load(self.package, spec, engine_model)
+        self.root = bundle
+        self.index = json.loads(
+            (bundle / "golden/index.json").read_text(encoding="utf-8")
+        )
+        self.cases: list[dict[str, Any]] = []
+
+    def embed(
+        self, part: Any, input_type: str | None = None
+    ) -> tuple[list[float], float]:
+        body: dict[str, Any] = {"input": [part]}
+        if input_type:
+            body["input_type"] = input_type
+        request = SurfaceRequest(
+            "embeddings", body, None, "exact", False, time.monotonic()
+        )
+        started = time.perf_counter()
+        plan = self.model.plan_surface("embeddings", request)
+        response = self.model.finish_surface(plan, self.model.run(plan.items))
+        elapsed = (time.perf_counter() - started) * 1000
+        entry = response["data"][0]
+        if "embedding" not in entry:
+            raise RuntimeError(f"{entry.get('error')} for a golden input")
+        return entry["embedding"], elapsed
+
+    def record(self, name: str, stages: dict[str, dict[str, float]], ms: float) -> None:
+        final = stages["embedding"]
+        passed = final["cosine"] >= MIN_COSINE and final["max_abs"] <= MAX_ABS
+        self.cases.append(
+            {"name": name, "passed": passed, "ms": round(ms, 3), **stages}
+        )
+
+    def texts(self) -> None:
+        for index, case in enumerate(self.index["texts"]):
+            role = case.get("role")
+            ids_expected = [
+                token
+                for token, mask in zip(
+                    case["input_ids"][0], case["attention_mask"][0], strict=True
+                )
+                if mask
+            ]
+            budget = self.model.info.limits["max_input_tokens"]
+            ids, _ = self.model.text.encode(case["text"], budget, role)
+            vector, ms = self.embed(case["text"], role)
+            stages = {
+                "token_ids": {"equal": float(ids == ids_expected), "tokens": len(ids)},
+                "embedding": compare(
+                    vector, golden_array(self.root, case["embedding"])
+                ),
+            }
+            name = (
+                f"text/{role}"
+                if role
+                else (
+                    "text/padding"
+                    if 0 in case["attention_mask"][0]
+                    else f"text/{index}"
+                )
+            )
+            self.record(name, stages, ms)
+
+    def images(self) -> None:
+        for index, case in enumerate(self.index["images"]):
+            data = (self.root / "golden" / case["file"]).read_bytes()
+            pixels = self.model.image.pixels(data)
+            media = "image/jpeg" if case["file"].endswith(".jpg") else "image/png"
+            url = f"data:{media};base64,{base64.b64encode(data).decode()}"
+            vector, ms = self.embed({"type": "image_url", "image_url": {"url": url}})
+            stages = {
+                "pixels": compare(pixels, golden_array(self.root, case["pixels"])),
+                "embedding": compare(
+                    vector, golden_array(self.root, case["embedding"])
+                ),
+            }
+            self.record(f"image/{index}", stages, ms)
+
+    def clap_embeddings(self, features: np.ndarray) -> np.ndarray:
+        import torch
+
+        vectors = []
+        for window in features:
+            batch = EncoderBatch(
+                input_ids=torch.zeros(1, 1, dtype=torch.long),
+                attention_mask=torch.ones(1, 1, dtype=torch.long),
+                graph="clap",
+                graph_inputs={"input_features": torch.from_numpy(window)},
+                outputs=("embedding",),
+            )
+            vectors.append(
+                self.model.engine_model.encode(batch).outputs["embedding"].numpy()[0]
+            )
+        return np.stack(vectors)
+
+    def audio(self) -> None:
+        processor = self.model.audio
+        for index, case in enumerate(self.index["audio"]):
+            pcm = golden_array(self.root, case["pcm"])
+            pcm = pcm[None] if pcm.ndim == 1 else pcm
+            rate = case["sampling_rate"]
+            wav = float_wav(pcm, rate)
+            decoded = audio.decode_wav(wav)
+            speech = audio.native_rate(decoded, audio.WHISPER_RATE)
+            wide = audio.native_rate(decoded, audio.CLAP_RATE)
+            features = processor.features(wav, "wav")
+            clap = self.clap_embeddings(features.clap)
+            vector, ms = self.embed(
+                {
+                    "type": "input_audio",
+                    "input_audio": {
+                        "data": base64.b64encode(wav).decode(),
+                        "format": "wav",
+                    },
+                }
+            )
+            stages = {
+                "decoded_pcm": compare(decoded.samples, pcm),
+                "audio16": compare(speech, golden_array(self.root, case["audio16"])),
+                "audio48": compare(wide, golden_array(self.root, case["audio48"])),
+                "whisper_features": compare(
+                    features.whisper, golden_array(self.root, case["whisper_features"])
+                ),
+                "clap_features": compare(
+                    features.clap, golden_array(self.root, case["clap_features"])
+                ),
+                "clap_embeddings": compare(
+                    clap, golden_array(self.root, case["clap_embeddings"])
+                ),
+                "embedding": compare(
+                    vector, golden_array(self.root, case["embedding"])
+                ),
+            }
+            self.record(
+                f"audio/{index}@{rate}Hz/{pcm.shape[0]}ch/{case['seconds']}s",
+                stages,
+                ms,
+            )
+
+    def run(self) -> dict[str, Any]:
+        self.texts()
+        self.images()
+        self.audio()
+        return {
+            "model": self.package.model_name,
+            "source": self.package.details["bundle"].source,
+            "bundle_sha256": self.package.model_sha256,
+            "variant": self.index["variant"],
+            "engine": "onnxruntime",
+            "provider": "CPUExecutionProvider",
+            "thresholds": {"min_cosine": MIN_COSINE, "max_abs": MAX_ABS},
+            "passed": all(case["passed"] for case in self.cases),
+            "cases": self.cases,
+        }
+
+
+def serve(model: Any, surface: str, body: dict[str, Any]) -> tuple[Any, dict[str, Any]]:
+    request = SurfaceRequest(surface, body, None, "exact", False, time.monotonic())
+    plan = model.plan_surface(surface, request)
+    return plan, model.finish_surface(plan, model.run(plan.items))
+
+
+class EncoderParity:
+    """One embedder or reranker on both engines against the Transformers reference."""
+
+    def __init__(self, package: Path, threads: int | None):
+        import torch
+
+        torch.set_num_threads(threads or torch.get_num_threads())
+        self.package = package
+        self.threads = threads
+        self.native = self.load(NativeEngine(), {})
+        layout = self.native.planners[next(iter(self.native.planners))].layout
+        if isinstance(layout, RelevanceLayout):
+            option = {
+                "pair_scorers": [
+                    {"layer": layer, "dimension": dim} for layer, dim in layout.graphs
+                ]
+            }
+        else:
+            option = {"layers": sorted(layout.graphs)}
+        self.graph = self.load(OnnxRuntimeEngine(), option) if layout.graphs else None
+        self.layout = layout
+        self.reference = self.reference_model()
+        self.cases: list[dict[str, Any]] = []
+
+    def load(self, engine: Any, options: dict[str, Any]) -> Any:
+        family = TaskHeadsFamily(RegistryOptions(model_options=options))
+        verified = family.verify(PackageRef(self.package))
+        spec = family.describe(verified)
+        model = engine.load(
+            spec, CPUAccelerator(), CPU, EngineOptions(threads=self.threads)
+        )
+        return family.load(verified, spec, model)
+
+    def reference_model(self) -> Any:
+        import torch
+        from transformers import AutoModel
+
+        model = AutoModel.from_pretrained(
+            str(self.package), dtype=torch.float32, attn_implementation="sdpa"
+        )
+        return model.eval()
+
+    def hidden(
+        self, rows: list[tuple[int, ...]], layer: int, normalize_exits: bool
+    ) -> tuple[Any, Any]:
+        """The reference's right-padded hidden states at ``layer`` and the mask."""
+        import torch
+
+        width = max(len(row) for row in rows)
+        ids = torch.zeros(len(rows), width, dtype=torch.long)
+        mask = torch.zeros(len(rows), width, dtype=torch.long)
+        for index, row in enumerate(rows):
+            ids[index, : len(row)] = torch.tensor(row)
+            mask[index, : len(row)] = 1
+        with torch.inference_mode():
+            out = self.reference(
+                input_ids=ids, attention_mask=mask, output_hidden_states=True
+            )
+            if layer == self.reference.config.num_hidden_layers:
+                return out.last_hidden_state, mask
+            hidden = out.hidden_states[layer]
+            return (
+                self.reference.final_norm(hidden) if normalize_exits else hidden
+            ), mask
+
+    def record(
+        self,
+        name: str,
+        pairs: dict[str, dict[str, float]],
+        extra: dict[str, Any] | None = None,
+    ) -> None:
+        passed = all(
+            stats["min_cosine"] >= MIN_COSINE and stats["max_abs"] <= MAX_ABS
+            for key, stats in pairs.items()
+            if "min_cosine" in stats
+        )
+        passed = passed and all(
+            stats.get("max_abs", 0) <= MAX_ABS for stats in pairs.values()
+        )
+        self.cases.append({"name": name, "passed": passed, **pairs, **(extra or {})})
+
+    @staticmethod
+    def rows_compare(a: Any, b: Any) -> dict[str, float]:
+        a = np.asarray(a, dtype=np.float64)
+        b = np.asarray(b, dtype=np.float64)
+        cosines = (a * b).sum(-1) / (
+            np.linalg.norm(a, axis=-1) * np.linalg.norm(b, axis=-1)
+        )
+        return {
+            "min_cosine": float(cosines.min()),
+            "max_abs": float(np.abs(a - b).max()),
+        }
+
+    def embeddings(self) -> None:
+        corpus = texts()
+        planner = self.native.planners["embeddings"]
+        dims = sorted(
+            {planner.info.dimensions[0], *planner.info.dimensions[-2:]}, reverse=True
+        )
+        for layer in planner.info.layers:
+            for dimension in dims if layer == planner.info.layers[-1] else dims[:1]:
+                body = {"input": corpus, "layer": layer, "dimensions": dimension}
+                plan, native = serve(self.native, "embeddings", body)
+                rows = [item.ids for item in plan.items]
+                hidden, mask = self.hidden(rows, layer, self.layout.normalize_exits)
+                pooled = pool(hidden, mask, self.layout.pooling)
+                reference = matryoshka(pooled, dimension, self.layout.normalize)
+                vectors = [entry["embedding"] for entry in native["data"]]
+                pairs = {
+                    "native_vs_reference": self.rows_compare(vectors, reference.numpy())
+                }
+                if (
+                    self.graph is not None
+                    and layer in self.graph.planners["embeddings"].info.layers
+                ):
+                    _, graph = serve(self.graph, "embeddings", body)
+                    graph_vectors = [entry["embedding"] for entry in graph["data"]]
+                    pairs["onnxruntime_vs_reference"] = self.rows_compare(
+                        graph_vectors, reference.numpy()
+                    )
+                    pairs["native_vs_onnxruntime"] = self.rows_compare(
+                        vectors, graph_vectors
+                    )
+                tokens = [len(row) for row in rows]
+                self.record(
+                    f"embeddings/layer{layer}/dim{dimension}",
+                    pairs,
+                    {"inputs": len(rows), "max_tokens": max(tokens)},
+                )
+
+    def rerank(self) -> None:
+        import torch
+
+        planner = self.native.planners["rerank"]
+        scorers = self.layout.scorers(planner.info.exits)
+        for exit in planner.info.exits:
+            native_logits, reference_logits, graph_logits, orders = [], [], [], []
+            for query, documents in RERANK:
+                body = {
+                    "query": query,
+                    "documents": documents,
+                    "layer": exit[0],
+                    "dimensions": exit[1],
+                }
+                plan, native = serve(self.native, "rerank", body)
+                by_index = {r["index"]: r["logit"] for r in native["results"]}
+                native_logits += [by_index[i] for i in range(len(documents))]
+                rows = [item.ids for item in plan.items]
+                hidden, _ = self.hidden(rows, exit[0], True)
+                with torch.inference_mode():
+                    logits = scorers[exit](hidden[:, 0, : exit[1]].float()).reshape(-1)
+                reference_logits += logits.tolist()
+                reference_order = sorted(
+                    range(len(documents)), key=lambda i: (-float(logits[i]), i)
+                )
+                orders.append(
+                    [r["index"] for r in native["results"]] == reference_order
+                )
+                if (
+                    self.graph is not None
+                    and exit in self.graph.planners["rerank"].info.exits
+                ):
+                    _, graph = serve(self.graph, "rerank", body)
+                    graph_index = {r["index"]: r["logit"] for r in graph["results"]}
+                    graph_logits += [graph_index[i] for i in range(len(documents))]
+            pairs = {
+                "native_vs_reference": {
+                    "max_abs": float(
+                        np.abs(np.subtract(native_logits, reference_logits)).max()
+                    )
+                }
+            }
+            if graph_logits:
+                pairs["onnxruntime_vs_reference"] = {
+                    "max_abs": float(
+                        np.abs(np.subtract(graph_logits, reference_logits)).max()
+                    )
+                }
+                pairs["native_vs_onnxruntime"] = {
+                    "max_abs": float(
+                        np.abs(np.subtract(native_logits, graph_logits)).max()
+                    )
+                }
+            self.record(
+                f"rerank/layer{exit[0]}/dim{exit[1]}",
+                pairs,
+                {"identical_order": all(orders), "pairs": len(native_logits)},
+            )
+
+    def run(self) -> dict[str, Any]:
+        if "embeddings" in self.native.planners:
+            self.embeddings()
+        else:
+            self.rerank()
+        return {
+            "model": self.native.info.id,
+            "model_sha256": self.native.info.model_sha256,
+            "engines": ["native", *(["onnxruntime"] if self.graph is not None else [])],
+            "reference": "transformers fp32 (sdpa), same token IDs",
+            "thresholds": {"min_cosine": MIN_COSINE, "max_abs": MAX_ABS},
+            "passed": all(
+                case["passed"] and case.get("identical_order", True)
+                for case in self.cases
+            ),
+            "cases": self.cases,
+        }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    commands = parser.add_subparsers(dest="command", required=True)
+    omni = commands.add_parser(
+        "omni", help="Vela Omni bundle vs its official-reference goldens"
+    )
+    omni.add_argument("--bundle", type=Path, required=True)
+    omni.add_argument("--output", type=Path, required=True)
+    omni.add_argument("--threads", type=int, default=None)
+    encoder = commands.add_parser(
+        "encoder", help="an embedder or reranker on both engines vs Transformers"
+    )
+    encoder.add_argument("--package", type=Path, required=True)
+    encoder.add_argument("--output", type=Path, required=True)
+    encoder.add_argument("--threads", type=int, default=None)
+    args = parser.parse_args()
+    if args.command == "omni":
+        result = OmniParity(args.bundle.resolve(), args.threads).run()
+    else:
+        result = EncoderParity(args.package.resolve(), args.threads).run()
+    args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    failed = [case["name"] for case in result["cases"] if not case["passed"]]
+    print(
+        json.dumps(
+            {
+                "passed": result["passed"],
+                "cases": len(result["cases"]),
+                "failed": failed,
+            }
+        )
+    )
+    return 0 if result["passed"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -105,7 +105,7 @@ func (r *OpenAIRouter) performHallucinationDetectionWithNLI(ctx *RequestContext,
 	start := time.Now()
 
 	classifier := r.classifierForRequest(ctx)
-	result, err := classifier.DetectHallucinationWithNLI(
+	result, err := classifier.DetectHallucinationWithExplanations(
 		ctx.embeddingContext(),
 		ctx.ToolResultsContext,
 		ctx.UserContent,

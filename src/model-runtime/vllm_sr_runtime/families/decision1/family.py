@@ -19,7 +19,6 @@ from ...heads.typed import load_readout
 from ...plugins.base import (
     BackboneSpec,
     BranchSpec,
-    DeviceInfo,
     DtypePolicy,
     EngineModel,
     ModelFamily,
@@ -301,11 +300,3 @@ class Decision1Family(ModelFamily):
             questions[f"preset:{first}"] = {"preset": first}
         expected = dict(known.golden_answers) if known else {}
         return [{"state": GOLDEN_STATE, "questions": questions, "expected": expected}]
-
-    def kernel_choices(
-        self, package: VerifiedPackage, device: DeviceInfo
-    ) -> dict[str, Any]:
-        known = builtin.by_identity(package.model_sha256)
-        if known is None or not device.arch:
-            return {}
-        return known.kernel_choices.get(f"{device.accelerator}:{device.arch}", {})

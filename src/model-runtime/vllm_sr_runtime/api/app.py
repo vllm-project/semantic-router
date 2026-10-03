@@ -40,8 +40,8 @@ def create_app(runtime: Runtime) -> Starlette:
             started = time.perf_counter()
             status = 200
             try:
-                body = await _read_json(request, runtime.config.max_request_bytes)
-                status, response = await runtime.call(surface, body)
+                body, size = await _read_json(request, runtime.config.max_request_bytes)
+                status, response = await runtime.call(surface, body, size)
                 return JSON(response, status_code=status)
             except RuntimeServiceError as exc:
                 status = exc.status
@@ -55,8 +55,8 @@ def create_app(runtime: Runtime) -> Starlette:
         started = time.perf_counter()
         status = 200
         try:
-            body = await _read_json(request, runtime.config.max_request_bytes)
-            status, response = await runtime.bundle(body)
+            body, size = await _read_json(request, runtime.config.max_request_bytes)
+            status, response = await runtime.bundle(body, size)
             return JSON(response, status_code=status)
         except RuntimeServiceError as exc:
             status = exc.status
@@ -117,7 +117,8 @@ def create_app(runtime: Runtime) -> Starlette:
     )
 
 
-async def _read_json(request: Request, limit: int) -> Any:
+async def _read_json(request: Request, limit: int) -> tuple[Any, int]:
+    """The parsed body and its size in bytes."""
     declared = request.headers.get("content-length")
     if declared is not None and declared.isdigit() and int(declared) > limit:
         raise RuntimeServiceError(
@@ -133,7 +134,7 @@ async def _read_json(request: Request, limit: int) -> Any:
             )
         chunks.append(chunk)
     try:
-        return json.loads(b"".join(chunks))
+        return json.loads(b"".join(chunks)), size
     except (UnicodeDecodeError, ValueError) as exc:
         raise RuntimeServiceError(
             "invalid_request", f"the request body is not JSON: {exc}"

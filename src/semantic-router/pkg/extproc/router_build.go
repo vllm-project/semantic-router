@@ -16,7 +16,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -35,6 +37,8 @@ type routerComponents struct {
 	serviceEmbeddings           *embedding.Set
 	cacheEmbeddings             *embedding.Set
 	modelRuntime                *native.Runtime
+	modelLease                  *modelservice.Lease
+	serving                     *serving.Runtime
 	rerankers                   map[config.RecipeName]modelruntime.PairScorer
 	cfg                         *config.RouterConfig
 	categoryDescriptions        []string
@@ -270,6 +274,9 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 		protocolCodecs:     protocolcodec.NewBuiltinRegistry(),
 	}
 	components.resources.add(components.modelRuntime.Close)
+	if err := components.acquireModelServices(components.modelRuntime.Pool); err != nil {
+		return nil, rollbackResources(components.resources, err)
+	}
 	registerRouterSessionStore(components.resources, components.routerSessionStore)
 	embeddings, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, components.modelRuntime)
 	if err != nil {
@@ -423,7 +430,7 @@ func (components *routerComponents) buildEarlyResources() error {
 		return rollbackResources(components.resources, err)
 	}
 
-	components.recipeClassifiers, components.classifier, components.classificationSvc, err = createRouterClassifier(components.cfg, classification.RecipeRuntimeOptions{Runtime: components.modelRuntime, Embeddings: components.embeddings})
+	components.recipeClassifiers, components.classifier, components.classificationSvc, err = createRouterClassifier(components.cfg, classification.RecipeRuntimeOptions{Runtime: components.serving, EmbeddingRuntime: components.modelRuntime, Embeddings: components.embeddings})
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}
@@ -448,6 +455,24 @@ func (components *routerComponents) buildEarlyResources() error {
 		return rollbackResources(components.resources, err)
 	}
 
+	return nil
+}
+
+// acquireModelServices leases the generation's model_runtime deployments from
+// the process manager. The lease closes after every binding that uses it,
+// since resources close in reverse order. Without a manager (embedded
+// routers, tests) model_runtime bindings fail preparation.
+func (components *routerComponents) acquireModelServices(pool *binding.Pool) error {
+	var services serving.Services
+	if manager := modelservice.DefaultManager(); manager != nil {
+		lease, err := manager.Acquire(components.cfg)
+		if err != nil {
+			return err
+		}
+		components.modelLease, services = lease, lease
+		components.resources.add(lease.Close)
+	}
+	components.serving = serving.New(services, pool)
 	return nil
 }
 
@@ -559,6 +584,9 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		FallbackOrchestrator:        components.fallbackOrchestrator,
 		RecipeFallbackOrchestrators: components.recipeFallbackOrchestrators,
 		resources:                   components.resources,
+	}
+	if components.modelLease != nil {
+		router.decisionDecider = components.modelLease
 	}
 	if components.classificationSvc != nil {
 		components.classificationSvc.SetEvalModelSelector(router)

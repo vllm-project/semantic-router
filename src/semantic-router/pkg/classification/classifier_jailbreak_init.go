@@ -1,103 +1,15 @@
 package classification
 
 import (
-	"context"
 	"fmt"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 type JailbreakInitializer interface {
 	Init(modelID string, useCPU bool, numClasses ...int) error
-}
-
-type JailbreakInitializerImpl struct {
-	usedModernBERT bool // Track which init path succeeded for inference routing
-}
-
-func (c *JailbreakInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
-	// A ModernBERT config.json is incompatible with the traditional Candle BERT
-	// loader, so probing Candle first logs alarming "Failed to initialize" errors
-	// before the ModernBERT fallback succeeds (#2096). When the model is detected
-	// as ModernBERT, try the ModernBERT initializer first to skip that doomed probe.
-	if isModernBertModel(modelID) {
-		if err := candle_binding.InitModernBertJailbreakClassifier(modelID, useCPU); err == nil {
-			c.usedModernBERT = true
-			logging.ComponentEvent("classifier", "jailbreak_detector_initialized", map[string]interface{}{
-				"backend":   "modernbert",
-				"model_ref": modelID,
-			})
-			return nil
-		}
-		// Detected as ModernBERT but its initializer failed (e.g. a LoRA model
-		// whose base is ModernBERT); fall through to the auto-detect path.
-		logging.ComponentDebugEvent("classifier", "jailbreak_detector_fallback_enabled", map[string]interface{}{
-			"fallback_backend": "candle_bert_auto",
-			"model_ref":        modelID,
-		})
-	}
-
-	// Try auto-detecting jailbreak classifier init - checks for lora_config.json.
-	// This enables LoRA Jailbreak models when available. InitJailbreakClassifier routes
-	// to LORA_JAILBREAK_CLASSIFIER or BERT_JAILBREAK_CLASSIFIER.
-	err := candle_binding.InitJailbreakClassifier(modelID, numClasses[0], useCPU)
-	if err == nil {
-		c.usedModernBERT = false
-		logging.ComponentEvent("classifier", "jailbreak_detector_initialized", map[string]interface{}{
-			"backend":   "candle_bert_auto",
-			"model_ref": modelID,
-		})
-		return nil
-	}
-
-	// Fallback to ModernBERT-specific init for backward compatibility.
-	// This handles models with incomplete configs (missing hidden_act, etc.).
-	logging.ComponentDebugEvent("classifier", "jailbreak_detector_fallback_enabled", map[string]interface{}{
-		"fallback_backend": "modernbert",
-		"model_ref":        modelID,
-	})
-	err = candle_binding.InitModernBertJailbreakClassifier(modelID, useCPU)
-	if err != nil {
-		return fmt.Errorf("failed to initialize jailbreak classifier (both auto-detect and ModernBERT): %w", err)
-	}
-	c.usedModernBERT = true
-	logging.ComponentEvent("classifier", "jailbreak_detector_initialized", map[string]interface{}{
-		"backend":   "modernbert",
-		"model_ref": modelID,
-	})
-	return nil
-}
-
-// createJailbreakInitializer creates the jailbreak initializer (auto-detecting).
-func createJailbreakInitializer() JailbreakInitializer {
-	return &JailbreakInitializerImpl{}
-}
-
-// MmBERT32KJailbreakInitializerImpl uses mmBERT-32K (YaRN RoPE, 32K context) for jailbreak detection.
-type MmBERT32KJailbreakInitializerImpl struct {
-	maxSequenceLength int
-	usedMmBERT32K     bool
-}
-
-func (c *MmBERT32KJailbreakInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
-	logging.ComponentDebugEvent("classifier", "jailbreak_detector_backend_loading", map[string]interface{}{
-		"backend":   "mmbert_32k",
-		"model_ref": modelID,
-	})
-	err := candle_binding.InitMmBert32KJailbreakClassifierWithMaxSequenceLength(modelID, useCPU, c.maxSequenceLength)
-	if err != nil {
-		return fmt.Errorf("failed to initialize mmBERT-32K jailbreak detector: %w", err)
-	}
-	c.usedMmBERT32K = true
-	logging.ComponentEvent("classifier", "jailbreak_detector_initialized", map[string]interface{}{
-		"backend":   "mmbert_32k",
-		"model_ref": modelID,
-	})
-	return nil
 }
 
 // deriveArgmax returns the index and score of the highest-probability class
@@ -116,57 +28,8 @@ func deriveArgmax(probabilities []float32) (int, float32) {
 	return bestIdx, bestScore
 }
 
-// candleResultToSequenceClassification drops the argmax fields Candle's FFI
-// layer computes and keeps only the probability distribution, so local
-// backends return the same classification-owned type as every other backend.
-func candleResultToSequenceClassification(result candle_binding.ClassResultWithProbs) SequenceClassificationResult {
-	return SequenceClassificationResult{Probabilities: append([]float32(nil), result.Probabilities...)}
-}
-
-type JailbreakInferenceImpl struct{}
-
-func (c *JailbreakInferenceImpl) Classify(_ context.Context, text string) (SequenceClassificationResult, error) {
-	// Try jailbreak-specific classifier first, fall back to ModernBERT if it fails
-	result, err := candle_binding.ClassifyJailbreakTextWithProbs(text)
-	if err != nil {
-		// Jailbreak classifier not initialized or failed, try ModernBERT
-		result, err = candle_binding.ClassifyModernBertJailbreakTextWithProbs(text)
-		if err != nil {
-			return SequenceClassificationResult{}, err
-		}
-	}
-	return candleResultToSequenceClassification(result), nil
-}
-
-// createJailbreakInferenceCandle creates Candle-based jailbreak inference (auto-detecting).
-func createJailbreakInferenceCandle() SequenceClassifierBackend {
-	return &JailbreakInferenceImpl{}
-}
-
-// MmBERT32KJailbreakInferenceImpl uses mmBERT-32K for jailbreak detection.
-type MmBERT32KJailbreakInferenceImpl struct{}
-
-func (c *MmBERT32KJailbreakInferenceImpl) Classify(_ context.Context, text string) (SequenceClassificationResult, error) {
-	result, err := candle_binding.ClassifyMmBert32KJailbreakWithProbs(text)
-	if err != nil {
-		return SequenceClassificationResult{}, err
-	}
-	return candleResultToSequenceClassification(result), nil
-}
-
-// createMmBERT32KJailbreakInference creates mmBERT-32K jailbreak inference.
-func createMmBERT32KJailbreakInference() SequenceClassifierBackend {
-	return &MmBERT32KJailbreakInferenceImpl{}
-}
-
-// createJailbreakInference creates the appropriate jailbreak inference based on
-// the configured prompt_guard.backend (remote) or prompt_guard.variant
-// (local) - the two are mutually exclusive, validated at config load time.
-// An empty/unset variant reaching this switch falls back to candle - but a
-// canonical-resolved config never actually reaches here empty: canonical
-// defaults set variant to mmbert32k explicitly (see
-// config.PromptGuardVariantCandle's doc comment). This fallback only fires
-// for configs built without going through canonical resolution.
+// createJailbreakInference creates the remote jailbreak inference of
+// prompt_guard.backend; local prompt guards are prepared task bindings.
 func createJailbreakInference(promptGuardCfg *config.PromptGuardConfig, routerCfg *config.RouterConfig, jailbreakMapping *JailbreakMapping, models ...*classifierModelRuntime) (SequenceClassifierBackend, error) {
 	if promptGuardCfg.Backend != nil {
 		backend := promptGuardCfg.Backend
@@ -197,20 +60,7 @@ func createJailbreakInference(promptGuardCfg *config.PromptGuardConfig, routerCf
 		}
 	}
 
-	switch promptGuardCfg.Variant {
-	case config.PromptGuardVariantMmBERT32K:
-		logging.ComponentEvent("classifier", "jailbreak_detector_backend_selected", map[string]interface{}{
-			"variant": config.PromptGuardVariantMmBERT32K,
-		})
-		return createMmBERT32KJailbreakInference(), nil
-
-	default:
-		// Empty/unset or "candle": use Candle-based inference.
-		logging.ComponentEvent("classifier", "jailbreak_detector_backend_selected", map[string]interface{}{
-			"variant": config.PromptGuardVariantCandle,
-		})
-		return createJailbreakInferenceCandle(), nil
-	}
+	return nil, fmt.Errorf("prompt guard has no remote backend")
 }
 
 // JailbreakDetection represents the result of jailbreak analysis for a piece of content.

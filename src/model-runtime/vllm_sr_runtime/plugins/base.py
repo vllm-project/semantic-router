@@ -264,11 +264,43 @@ class EncoderOutput:
     outputs: dict[str, torch.Tensor] = field(default_factory=dict)
 
 
+@dataclass
+class TreeBatch:
+    """Causal prefixes computed once, and blocks that each continue from one of them.
+
+    Block ``i`` attends to prefix ``owners[i]`` and to itself (causally), with
+    positions that continue after the prefix, so its states equal those of the
+    sequence prefix + block. ``layout`` sets how an engine lays the tokens out,
+    which changes rounding only: ``packed`` runs each prefix and its blocks back
+    to back in one row (the fewest tokens); ``rows`` runs left-padded prefix rows
+    and right-padded blocks as two tensors (the tensor shapes and operations of
+    the Vela 2.0 packages' engine).
+    """
+
+    prefixes: list[list[int]]
+    blocks: list[list[int]]
+    owners: list[int]
+    layout: Literal["packed", "rows"] = "packed"
+
+
+@dataclass
+class TreeOutput:
+    """Final hidden states of every block's tokens, ``[blocks, width, hidden]`` (rows padded at the end)."""
+
+    hidden: torch.Tensor
+
+
 class EngineModel(ABC):
-    """A backbone loaded on one device."""
+    """A backbone loaded on one device.
+
+    ``hidden_states`` says whether ``encode`` returns hidden states at any
+    requested exit (an engine that builds the backbone) or the named outputs
+    of the graph a batch names (an engine that runs graphs).
+    """
 
     device: torch.device
     device_info: DeviceInfo
+    hidden_states: ClassVar[bool] = True
 
     @abstractmethod
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
@@ -277,6 +309,10 @@ class EngineModel(ABC):
     def encode(self, batch: EncoderBatch) -> EncoderOutput:
         """Run an encoder and return hidden states at the requested exits or graph outputs."""
         raise NotImplementedError(f"{type(self).__name__} has no encoder forward")
+
+    def tree(self, batch: TreeBatch) -> TreeOutput:
+        """Run a prefix once and every block from it (decoder backbones with a tree forward)."""
+        raise NotImplementedError(f"{type(self).__name__} has no tree forward")
 
     @abstractmethod
     def parameter_count(self) -> int: ...
@@ -626,7 +662,12 @@ class ModelFamily(ABC):
         self, package: VerifiedPackage, device: DeviceInfo
     ) -> dict[str, Any]:
         """Recorded autotuned-kernel configurations for this model on the device's class, if any."""
-        return {}
+        from ..registry import builtin
+
+        known = builtin.by_identity(package.model_sha256)
+        if known is None or not device.arch:
+            return {}
+        return known.kernel_choices.get(f"{device.accelerator}:{device.arch}", {})
 
 
 # ---------------------------------------------------------------------------

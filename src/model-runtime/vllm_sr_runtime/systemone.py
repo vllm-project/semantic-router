@@ -9,11 +9,11 @@ render the options into their own prompt formats.
 
 from __future__ import annotations
 
-import json
 import math
 from typing import Any
 
 from .errors import INVALID_QUESTION, QuestionError
+from .registry.artifacts import canonical_json
 
 MIN_OPTIONS = 2
 MAX_OPTIONS = 255
@@ -21,14 +21,7 @@ QUESTION_TYPES = ("choice", "noul", "score")
 MIN_LEVELS, MAX_LEVELS = 2, 10
 
 
-def canonical(value: Any) -> str:
-    return json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    )
+canonical = canonical_json
 
 
 def json_payload(
