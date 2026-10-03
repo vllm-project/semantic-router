@@ -189,3 +189,37 @@ func TestRouterStartsManagedRuntimesThroughTheFixtureScript(t *testing.T) {
 		}
 	}
 }
+
+// The modules' label maps come from the ConfigMap, or the Router would fetch
+// the Vela models' maps from the Hub, which HF_HUB_OFFLINE forbids.
+func TestModulesReadTheFixtureLabelMapsFromTheConfigMap(t *testing.T) {
+	var profile struct {
+		Config struct {
+			Global struct {
+				ModelCatalog struct {
+					Modules struct {
+						Classifier struct {
+							Domain struct {
+								Mapping string `yaml:"category_mapping_path"`
+							} `yaml:"domain"`
+							PII struct {
+								Mapping string `yaml:"pii_mapping_path"`
+							} `yaml:"pii"`
+						} `yaml:"classifier"`
+						PromptGuard struct {
+							Mapping string `yaml:"jailbreak_mapping_path"`
+						} `yaml:"prompt_guard"`
+					} `yaml:"modules"`
+				} `yaml:"model_catalog"`
+			} `yaml:"global"`
+		} `yaml:"config"`
+	}
+	load(t, "values.yaml", &profile)
+	modules := profile.Config.Global.ModelCatalog.Modules
+	for _, path := range []string{modules.Classifier.Domain.Mapping, modules.Classifier.PII.Mapping, modules.PromptGuard.Mapping} {
+		key := strings.TrimPrefix(path, "/opt/vsr-e2e/")
+		if _, shipped := configMapFiles[key]; !shipped || key == path {
+			t.Fatalf("label map %q is not one of the ConfigMap's files", path)
+		}
+	}
+}

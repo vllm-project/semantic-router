@@ -305,18 +305,23 @@ config:
         embedding:
           deployment: vela-embedding
           contract: embedding.v1
+      # The modules read the fixtures' label maps from the profile's
+      # ConfigMap, so the Router never fetches the Vela models' maps.
       modules:
         classifier:
           domain:
             threshold: 0.01
+            category_mapping_path: /opt/vsr-e2e/category_mapping.json
           pii:
             threshold: 0.5
+            pii_mapping_path: /opt/vsr-e2e/pii_mapping.json
             window:
               size: 64
               overlap: 16
         prompt_guard:
           enabled: true
           threshold: 0.5
+          jailbreak_mapping_path: /opt/vsr-e2e/jailbreak_mapping.json
           window:
             size: 64
             overlap: 16

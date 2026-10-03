@@ -1,0 +1,10 @@
+{
+  "label_to_idx": {
+    "benign": 0,
+    "jailbreak": 1
+  },
+  "idx_to_label": {
+    "0": "benign",
+    "1": "jailbreak"
+  }
+}
