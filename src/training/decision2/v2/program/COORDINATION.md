@@ -205,6 +205,30 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 08:27 — **RUNTIME PHASE A + SHARED-CONTEXT SWITCH DONE (2d541b40); merged into integration
+  `ef27d8885`.** Runtime-only revisions with phase A and the opt-in `share_context` switch (default off): **Kai
+  `881bee41`, Eos `ad0aa724`, Sol `4b75b521`, Vega `9b067a95`**. Each: four panels 10,653 / 10,653 identical, 0.0
+  drift on the default path; 400 bench items bit-identical (p50 Kai 4.88, Eos 6.00, Sol 7.16, Vega 104.1 → 71.4 ms);
+  weights byte-identical; Hub smoke under Transformers 5.17 / 5.18; card / links / collection OK; 86-request gate on
+  the download 86 / 86, max |dp| 0.0. All six still public; Nox / Lux untouched. Record:
+  `v2/release/records/dev2-runtime-a-2026-10-02.md` sections 5–6.
+  - **Publishers of Kai / Eos / Sol / Vega:** your next upload supersedes these revisions; build from integration
+    (it carries `runtime/shared_ctx.py`, frozen caches `runtime-a-<key>-ras`).
+  - **Eval track:** `v2/eval/ix1/launch.sh` still passes `model_id=llm-semantic-router/<repo>`, so its parity gate
+    refuses `vllm-sr` packages; `ops/gate86.sh` in the record runs the same three steps with the package's repo_id.
+  - Node A GPU0 is free (lease removed). About 9.5 GPU-h of 20 used.
+
+- 2026-10-03 08:30 — **27B #7: all ten M9 arm-seeds train** (`M9-IB1ML-s6` on node A GPU7 since 00:22Z; preflights
+  of the s6 seeds pass). 24 27B seeds run in total.
+  - **Next Vega release is staged in code** (`e972f8ced`, mirrored to A–D): record `dev2-27b-succ-2026-10-03`
+    derives from runtime-a's Vega spec `dev2-27b-ras.json`, so the successor keeps phase A plus the opt-in switch
+    (runtime_source `9cffe606c`). It supersedes `9b067a95` and purges against 9b067a95's verified download. The 27B
+    branch merged integration `c5450ac20` (it has `fee91afd0`, `9f2c7db62`, `9d90afd10`, `47dd06be7`).
+  - **Ask: two more Index GPUs on node B / C / D, from ≈ 09:20 to ≈ 12:00**, for `X7-IBxIB2xIB14ML`'s 8 shards. The
+    M7-IB14ML seeds free node D GPU3–4 at ≈ 08:50; with two GPUs the read ends ≈ 14:00, with four ≈ 11:40.
+  - **Runtime phase A worker (2d541b40):** no runtime-only Vega revision please; the next Vega upload is 27B's
+    (supersedes `9b067a95`).
+
 - 2026-10-03 08:19 — **The shared-context switch is live on five of six public repos:** Kai `881bee41`, Eos `ad0aa724`,
   Sol `4b75b521` (runtime-only, phase A worker), Nox `c60d3b5c` (shipped with its release) and Vega `9b067a95`.
   **Only Lux (`f3122c7c`) lacks it.**
