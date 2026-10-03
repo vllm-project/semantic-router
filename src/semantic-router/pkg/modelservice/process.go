@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -23,6 +24,8 @@ type processPlan struct {
 	endpoint string
 	models   []modelEntry
 	members  map[string]string
+	// threads is a CPU process's share of the router's cores.
+	threads int
 }
 
 // modelEntry is one model of a --models file.
@@ -40,10 +43,12 @@ type modelIdentity struct {
 
 // planProcesses groups deployments into processes. Attached deployments
 // share one process per endpoint and select their model by served name.
-// Managed deployments share one process per process key, else per device;
-// deployments of the same model, revision, device and profile in one
-// process share one loaded model.
-func planProcesses(deployments map[string]config.ModelDeployment, command []string, cacheDir string) []*processPlan {
+// Managed deployments share one process per process key, else per device,
+// except CPU models without a key, which spread over up to
+// maxCPUProcesses(cores) processes. Every CPU process runs cpuThreads threads.
+// Deployments of the same model, revision, device and profile in one process
+// share one loaded model.
+func planProcesses(deployments map[string]config.ModelDeployment, command []string, cacheDir string, cores int) []*processPlan {
 	attached := make(map[string]*processPlan)
 	managed := make(map[string]*processPlan)
 	served := make(map[string]map[modelIdentity]string)
@@ -52,6 +57,23 @@ func planProcesses(deployments map[string]config.ModelDeployment, command []stri
 		names = append(names, name)
 	}
 	sort.Strings(names)
+	add := func(process, name string, deployment config.ModelDeployment) {
+		plan := managed[process]
+		if plan == nil {
+			plan = &processPlan{name: process, members: map[string]string{}}
+			managed[process] = plan
+			served[process] = make(map[modelIdentity]string)
+		}
+		identity := modelIdentity{deployment.Artifact, deployment.Revision, deployment.Device, deployment.Profile}
+		if model, shared := served[process][identity]; shared {
+			plan.members[name] = model
+			return
+		}
+		served[process][identity] = name
+		plan.members[name] = name
+		plan.models = append(plan.models, modelEntry{Model: deployment.Artifact, Revision: deployment.Revision, Name: name, Device: deployment.Device, Profile: deployment.Profile})
+	}
+	var spread []string
 	for _, name := range names {
 		deployment := deployments[name].WithDefaults()
 		if endpoint := strings.TrimSpace(deployment.Endpoint); endpoint != "" {
@@ -67,32 +89,25 @@ func planProcesses(deployments map[string]config.ModelDeployment, command []stri
 			plan.members[name] = model
 			continue
 		}
-		process := deployment.Process
-		if process == "" {
-			process = deployment.Device
+		switch {
+		case deployment.Process != "":
+			add(deployment.Process, name, deployment)
+		case deployment.Device == "cpu":
+			spread = append(spread, name)
+		default:
+			add(deployment.Device, name, deployment)
 		}
-		plan := managed[process]
-		if plan == nil {
-			plan = &processPlan{name: process, members: map[string]string{}}
-			managed[process] = plan
-			served[process] = make(map[modelIdentity]string)
-		}
-		identity := modelIdentity{deployment.Artifact, deployment.Revision, deployment.Device, deployment.Profile}
-		if model, shared := served[process][identity]; shared {
-			plan.members[name] = model
-			continue
-		}
-		served[process][identity] = name
-		plan.members[name] = name
-		plan.models = append(plan.models, modelEntry{Model: deployment.Artifact, Revision: deployment.Revision, Name: name, Device: deployment.Device, Profile: deployment.Profile})
 	}
+	spreadCPUModels(spread, deployments, cores, add)
+	shareCPUThreads(managed, cores)
 	plans := make([]*processPlan, 0, len(attached)+len(managed))
 	for _, plan := range managed {
 		composition, _ := json.Marshal(struct {
 			Models   []modelEntry
 			Command  []string
 			CacheDir string
-		}{plan.models, command, cacheDir})
+			Threads  int
+		}{plan.models, command, cacheDir, plan.threads})
 		sum := sha256.Sum256(composition)
 		plan.key = "managed\x00" + hex.EncodeToString(sum[:])
 		plans = append(plans, plan)
@@ -102,6 +117,48 @@ func planProcesses(deployments map[string]config.ModelDeployment, command []stri
 	}
 	sort.Slice(plans, func(i, j int) bool { return plans[i].key < plans[j].key })
 	return plans
+}
+
+// spreadCPUModels assigns CPU models without a process key round-robin, in
+// name order, to processes cpu-0 … cpu-(n-1), or to one process "cpu" when
+// n is 1; deployments of one model share its process.
+func spreadCPUModels(names []string, deployments map[string]config.ModelDeployment, cores int, add func(process, name string, deployment config.ModelDeployment)) {
+	shard := make(map[modelIdentity]int)
+	for _, name := range names {
+		deployment := deployments[name].WithDefaults()
+		identity := modelIdentity{deployment.Artifact, deployment.Revision, deployment.Device, deployment.Profile}
+		if _, ok := shard[identity]; !ok {
+			shard[identity] = len(shard)
+		}
+	}
+	processes := min(len(shard), maxCPUProcesses(cores))
+	for _, name := range names {
+		deployment := deployments[name].WithDefaults()
+		process := "cpu"
+		if processes > 1 {
+			index := shard[modelIdentity{deployment.Artifact, deployment.Revision, deployment.Device, deployment.Profile}]
+			process = fmt.Sprintf("cpu-%d", index%processes)
+		}
+		add(process, name, deployment)
+	}
+}
+
+// shareCPUThreads sizes every process whose models all run on CPU to an
+// equal share of the cores.
+func shareCPUThreads(managed map[string]*processPlan, cores int) {
+	var onCPU []*processPlan
+	for _, plan := range managed {
+		cpu := len(plan.models) > 0
+		for _, model := range plan.models {
+			cpu = cpu && model.Device == "cpu"
+		}
+		if cpu {
+			onCPU = append(onCPU, plan)
+		}
+	}
+	for _, plan := range onCPU {
+		plan.threads = cpuThreads(cores, len(onCPU))
+	}
 }
 
 var unsafeFileName = regexp.MustCompile(`[^A-Za-z0-9_.-]+`)
@@ -127,10 +184,13 @@ func (p *processPlan) writeModelsFile(path string) error {
 	return os.WriteFile(path, append(data, '\n'), 0o600)
 }
 
-func managedCommand(base []string, socket, modelsFile, cacheDir string) []string {
+func managedCommand(base []string, socket, modelsFile, cacheDir string, threads int) []string {
 	command := append(append([]string(nil), base...), "serve", "--models", modelsFile, "--uds", socket)
 	if cacheDir != "" {
 		command = append(command, "--cache-dir", cacheDir)
+	}
+	if threads > 0 {
+		command = append(command, "--threads", strconv.Itoa(threads))
 	}
 	return command
 }

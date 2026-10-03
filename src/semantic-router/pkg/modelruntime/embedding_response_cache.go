@@ -29,7 +29,7 @@ func PrepareOwnedResponseCacheEmbeddings(ctx context.Context, cfg *config.Router
 	}
 	// The catalog name selects the primary service. Adapter names identify a
 	// concrete implementation and need not equal that alias. Preparation below
-	// validates the loaded provider's dimensions, layers and window capability.
+	// validates the loaded provider's dimensions and layers.
 	// An empty routing profile carries service settings without routing signals,
 	// selectors, KBs, or recipe overrides. Prepare only the response-cache demand.
 	scoped := cfg.ConfigForGlobalModelServices()
