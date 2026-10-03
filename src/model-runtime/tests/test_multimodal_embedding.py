@@ -18,7 +18,10 @@ from vllm_sr_runtime.families.multimodal_embedding.family import (
     golden_audio,
     golden_image,
 )
-from vllm_sr_runtime.families.multimodal_embedding.processors import ImageProcessor
+from vllm_sr_runtime.families.multimodal_embedding.processors import (
+    ImageProcessor,
+    TextProcessor,
+)
 from vllm_sr_runtime.plugins.base import (
     DEADLINE,
     DeviceInfo,
@@ -257,3 +260,19 @@ def test_golden_request_exercises_every_graph(nano, model):
     assert [item.modality for item in plan.items] == ["text", "image", "audio"]
     values = model.golden_values("embeddings", body)
     assert len(values) == 3 * 384 and all(np.isfinite(list(values.values())))
+
+
+def test_mini_formats_queries_with_its_instruction(tmp_path):
+    text = TextProcessor(
+        bundles.load(omni.write_bundle(tmp_path / "mini", variant="mini"))
+    )
+    assert text.input_types == ("query", "document")
+    plain, _ = text.encode("  hello  ", 64)
+    document, _ = text.encode("  hello  ", 64, "document")
+    query, _ = text.encode("  hello  ", 64, "query")
+    assert plain == document == [2, 10, 3]
+    assert len(query) > len(plain) and query[-2:] == [10, 3]
+    assert (
+        TextProcessor(bundles.load(omni.write_bundle(tmp_path / "nano"))).input_types
+        == ()
+    )

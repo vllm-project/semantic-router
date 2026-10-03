@@ -167,6 +167,7 @@ class MultimodalEmbeddingFamily(ModelFamily):
                 encoding="utf-8"
             )
         )
+        text = TextProcessor(verified)
         info = ModelInfo(
             id=package.model_name,
             family=self.name,
@@ -185,12 +186,13 @@ class MultimodalEmbeddingFamily(ModelFamily):
                 layers=(),
                 modalities=("text", "image", "audio"),
                 pooling=verified.contract.text_pooling,
+                input_types=text.input_types,
             ),
         )
         return OmniModel(
             info,
             engine_model,
-            TextProcessor(verified),
+            text,
             ImageProcessor(verified),
             AudioProcessor(verified, config),
         )
@@ -261,7 +263,7 @@ class OmniModel(LoadedModel):
             return entry.error
         if entry.modality == "text":
             assert entry.text is not None
-            encoded = self.text.encode(entry.text, parsed.max_tokens)
+            encoded = self.text.encode(entry.text, parsed.max_tokens, parsed.input_type)
             if isinstance(encoded, str):
                 return encoded
             ids, usage = encoded

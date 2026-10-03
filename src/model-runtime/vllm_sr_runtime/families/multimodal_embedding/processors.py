@@ -20,6 +20,14 @@ from .bundle import OmniBundle
 
 MAX_IMAGE_PIXELS = 64 << 20
 _RESAMPLE = {"bicubic": "BICUBIC", "bilinear": "BILINEAR"}
+# Prefixes per input_type of each instruction API a bundle may declare (Mini's retrieval task).
+INSTRUCTIONS = {
+    "qwen_optional_instruction_v1": {
+        "query": "Instruct: Given a search query, retrieve relevant passages that answer "
+        "the query.\nQuery:",
+        "document": "",
+    }
+}
 
 
 @dataclass(frozen=True)
@@ -31,7 +39,11 @@ class AudioFeatures:
 
 
 class TextProcessor:
-    """The bundle tokenizer with its special tokens; over-long input is rejected, never cut."""
+    """The bundle tokenizer with its special tokens; over-long input is rejected, never cut.
+
+    A bundle with an instruction API formats the raw text for its ``input_type``
+    first (a query gets the task instruction), then strips the result.
+    """
 
     def __init__(self, bundle: OmniBundle):
         from tokenizers import Tokenizer
@@ -43,11 +55,20 @@ class TextProcessor:
         self.backend.no_truncation()
         self.backend.no_padding()
         self.strip = bool(settings["strip_whitespace"])
+        self.instructions = INSTRUCTIONS.get(settings["instruction_api"] or "", {})
         self.pad_id = int(settings["pad_token_id"])
         if self.pad_id >= self.backend.get_vocab_size(with_added_tokens=True):
             raise ValueError("the pad token is outside the tokenizer vocabulary")
 
-    def encode(self, text: str, budget: int) -> tuple[list[int], dict[str, Any]] | str:
+    @property
+    def input_types(self) -> tuple[str, ...]:
+        return tuple(self.instructions)
+
+    def encode(
+        self, text: str, budget: int, input_type: str | None = None
+    ) -> tuple[list[int], dict[str, Any]] | str:
+        if input_type is not None:
+            text = self.instructions[input_type] + text
         ids = list(self.backend.encode(text.strip() if self.strip else text).ids)
         if not ids or len(ids) > budget:
             return MAX_LENGTH_EXCEEDED
