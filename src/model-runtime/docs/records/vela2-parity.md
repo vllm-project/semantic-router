@@ -8,9 +8,10 @@ spans in long windowed documents) and move answers by up to 0.037, above the
 design's GPU bar of 0.02 (section 17); on the 0.3B they stay within 6e-6.
 
 - **Date:** 2026-10-04.
-- **Packages:** the revisions `registry/tables/vela2.py` pins:
-  Vela-2.0-0.3B `13e85201`, Vela-2.0-4B `c50cba67`, Vela-2.0-9B `2c90057d`
-  (private preview).
+- **Packages:** Vela-2.0-0.3B `13e85201`, Vela-2.0-4B `c50cba67`,
+  Vela-2.0-9B `2c90057d` (private preview). `registry/tables/vela2.py` pins
+  the 4B at `756f4921` and the 9B at `23b9a557`, whose later commits change
+  licence notices only: every file the family loads is the same.
 - **Devices:** one AMD Instinct MI325X (gfx942) per run, in the Decision 2.0
   release image (PyTorch ROCm, Triton, FLA). CPU runs use PyTorch 2.10's CPU
   build with MKL on 16–32 cores of an AMD EPYC, for both sides: the release
