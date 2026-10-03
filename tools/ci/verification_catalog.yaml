@@ -245,6 +245,16 @@ verifications:
     workflow: .github/workflows/test-tools.yml
     target: vllm-sr-sim-test
     inventory: simulator-pytest-discovery
+  model-runtime:
+    display_name: Model Runtime
+    activity: test
+    boundary: [unit, integration]
+    executor: tools
+    category: components
+    worker: model
+    workflow: .github/workflows/test-tools.yml
+    target: model-runtime-test
+    inventory: model-runtime-pytest-discovery
   training:
     display_name: Training Contracts
     activity: test

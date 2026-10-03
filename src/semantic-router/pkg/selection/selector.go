@@ -101,6 +101,10 @@ const (
 	// through a runtime-owned structured output contract.
 	MethodPrompt SelectionMethod = "prompt"
 
+	// MethodDecision asks a decision model served by the built-in model runtime
+	// to choose one declared candidate; its probabilities are the candidate scores.
+	MethodDecision SelectionMethod = "decision"
+
 	// MethodSessionAware wraps a base selector with agentic session policy:
 	// it keeps tool loops and hot multi-turn continuations on the current model
 	// unless the switch benefit clears the explicit handoff and prefix-cache cost.
