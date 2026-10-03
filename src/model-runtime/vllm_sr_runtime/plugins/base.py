@@ -206,14 +206,20 @@ class EncoderBatch:
     """Padded rows for a bidirectional encoder.
 
     ``layers`` are the hidden-state exits the readout needs: 1-based layer
-    indices, 0 for the embedding output, empty for the last layer only.
-    ``graph_inputs`` are extra named inputs for an engine that runs a graph
-    with heads baked in, and ``outputs`` the graph outputs the readout reads.
+    indices, 0 for the embedding output, empty for the last layer only. An
+    intermediate exit is the raw residual stream and the last layer is
+    final-normalized (the Transformers ``hidden_states`` convention), unless
+    ``normalize_exits`` asks for the final norm at every exit. One forward
+    serves every requested exit. ``graph`` names the ``ModelSpec.graphs``
+    entry an engine that runs graphs executes, ``graph_inputs`` are extra named
+    inputs for it, and ``outputs`` the graph outputs the readout reads.
     """
 
     input_ids: torch.Tensor
     attention_mask: torch.Tensor
     layers: tuple[int, ...] = ()
+    normalize_exits: bool = False
+    graph: str = "default"
     graph_inputs: dict[str, torch.Tensor] = field(default_factory=dict)
     outputs: tuple[str, ...] = ()
 
