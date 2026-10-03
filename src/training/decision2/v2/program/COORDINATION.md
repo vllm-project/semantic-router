@@ -205,6 +205,136 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 05:10 — **Model-runtime P2–4 `stores`: node D 32–63 claimed (untimed)** for the IP2 native-deletion
+  checks (build, vet, tests, golangci-lint), pinned with `taskset`, `GOMAXPROCS=32`, `-p 32`. Load 6 at 05:10.
+
+- 2026-10-04 05:12 — **Coordinator: `stores` (60afd248) and `vela2` (cedf4b1a) RESUMED.** Both triggers fired.
+  - **`stores`:** `removal`'s branch no longer imports `pkg/modelruntime/native` (`b04d8293d`). It ports its local
+    deletion plus the embedding-window removal (lead: remove at IP2) onto the PR head + `b04d8293d`, verifies, and
+    posts `INTEGRATION READY` for IP2. `router`: `pkg/extproc/extproc_test_support_test.go` still imports
+    `candle-binding`; coordinate with `stores` / `removal` on its timing.
+  - **`vela2`:** `a7f5a178d`, `43f48b3d1` and `1fd1a7065` are on the PR branch (`3ca402416`). It adds the 0.3B
+    `max_speed` reduced copy, with consent from records only, and posts `INTEGRATION READY`, ideally for IP2.
+  - Both work under the 04:22 CPU-range table.
+
+- 2026-10-04 05:08 — **Model-runtime P2–4 `removal` (00053ab2) → lead (23203ab9): all three new platform lanes PASS
+  on `b04d8293d`** (node F, vCPUs 128–159, exact mirror; each lane's evidence verified with `runtime_evidence.py`):
+  - image calibration: 236 / 236;
+  - models: 14 / 14 required cases (33 with subtests);
+  - RISC-V (linux/riscv64 router under qemu-user, runtime attached): 3 / 3.
+
+- 2026-10-04 05:03 — **INTEGRATION READY removal `b04d8293d`** (`xunzhuo/model-runtime-p24-removal`; merges the PR
+  head `3ca402416`). → lead (23203ab9): **please take this as removal's IP1 sha instead of `f766b3a03`**. On top of
+  `f766b3a03` it adds:
+  - `f147b6a93`: the models lane fix (router label mappings);
+  - `32db3c6d9`: the image calibration fix (lossless re-encode of the one oversized PNG fixture);
+  - `c06b9ef80`: the perf reset cites the legacy-vs-runtime records;
+  - `2d430fb66` / `87b78a2d7`: `fusioneval` on the router's own grounding backends.
+  - **Validated on the merged head:**
+    - Local: `tools/ci` 451, harness tests 74, `validate_workflows.py` (36), `make harness-check`, ruff (lead's
+      config) on all PR-changed Python files.
+    - Builds: router amd64, riscv64 `CGO_ENABLED=0`; no `cgo` tag outside `native` / `modelcompat`.
+    - Tests: perf vet + tests; calibration, `fusioneval` and `sr-dsl` tool tests; dev examples build.
+  - **Node F (vCPUs 128–159, exact mirror of `b04d8293d`): `make verify-image-routing-calibration` PASS.** 236 / 236
+    required observations, and every shipped image-routing threshold equals the report-selected value with the
+    Omni Nano bundle served by the runtime. The **models lane** passed at `f147b6a93` (04:45) and the **RISC-V
+    lane** at `3f5a85eb1` (04:39); both are re-running on `b04d8293d` now, result here.
+  - **Recorded for the footprint (no IP1 action):** on the preview image, `extproc` reached ready in 73–79 s with
+    1.4 GiB at ready (legacy: 14–17 s, 6.1–6.9 GiB; 2 CPU / 7 GiB). The runtime loads Domain, PII and Guard one
+    after another in one process, 12–26 s each on 2 CPUs. I'll profile the load and bring numbers before IP2.
+
+- 2026-10-04 04:59 — **`e2e-docs` (3b457b58): first green Kind lane — `model-runtime-real` PASSES on node A** (exact mirror
+  `115f88d85` = PR head `57d00d3ea` + my branch; router image from the same mirror, i.e. `removal`'s runtime-in-image
+  and `ENV USER`, plus a run-only passwd entry that the `ENV USER` change makes redundant).
+  - **Result:** 3 m 43 s from Kind create to green (helm install, the Router's own label-map downloads, the runtime's
+    Kai-0.6B + Vela Domain / PII / Guard + implicit `@embedding.mmbert` downloads, readiness, cases); 16 / 16 pods
+    running, Router 0 restarts. `model-runtime-real-routing` 14.3 s: prompt attack → `jailbreak_route`, personal data
+    → `pii_route`, code → `code_route` (Kai: code), derivative → `math_route` (Kai: math), penguins → `default-route`;
+    for each, the Router's `request_kind` match equals Kai's own answer asked directly over the managed socket;
+    722–820 ms per request through Envoy + Router + mock LLM.
+  - **Root cause of the "Kind broken on node B" note (04:06), fixed in the framework (`f8412233e`):** these hosts set
+    `net.ipv4.conf.default.arp_ignore=2`; Kind's node image resets only `all`, so kindnet's /32 veths kept 2 and
+    ignored their pods' ARP requests — every pod lost its network. The E2E framework now resets the default and every
+    interface of each Kind node after creating the cluster. Node B was never the problem; load was a coincidence.
+  - **Fixture lane (`model-runtime`) now runs offline:** the Router still plans downloads of the Vela label maps
+    (`category_mapping.json`, `pii_mapping.json`, `jailbreak_type_mapping.json`) for module defaults even when the
+    consumers are bound to `model_runtime` deployments; the profile ships its fixtures' maps in its ConfigMap
+    (`ba6d4b894`), so `BuildModelSpecs` plans nothing. **`router`:** when cards replace local maps (your IP2 item),
+    tell me and I drop them. Lane running on node A now.
+  - **`router`:** the PR head's CPU spreading (`cpu-0` …) is covered: the lifecycle / bundle cases accept any spread
+    (`4d52075cf`).
+
+- 2026-10-04 04:55 — **Model-runtime P2–4 `removal` (00053ab2) → lead (23203ab9), coordinator, `router`
+  (bb9d5719), `embed` (fd9f7608).**
+  - **Lead 04:30 (IP1 sha): I object to `f766b3a03` as final.** Three later commits keep IP1 CI green and meet your
+    own condition. I'll post a new INTEGRATION READY (merging `57d00d3ea`) before 05:30:
+    - `f147b6a93`: without it, 4 of the 9 published-model tests fail in `platform.models-cpu` (missing router
+      label mappings). The lane passes with it (04:45).
+    - `32db3c6d9`: without it, `platform.image-calibration-cpu` fails on its first fixture. A 6.6 MB screenshot
+      exceeds the runtime's default 8 MiB request body once base64-encoded; the calibration provider now re-encodes
+      it losslessly (identical pixels, 4.8 MB). Rerun on node F in progress.
+    - `c06b9ef80`: the perf model-baseline reset cites the legacy-vs-runtime records (your 02:39 condition).
+    - Also `2d430fb66` / `87b78a2d7` (`fusioneval` on the router's own grounding backends; tests pass). Low risk,
+      and it lets `stores` delete `native` at IP2: **no Go file outside `pkg/modelruntime/native` imports it any
+      more.**
+  - **Node F block: `removal` takes vCPUs 128–159** for untimed lane runs, pinned with `--cpuset-cpus` and threads
+    capped at 32. Load 0.9 at 04:54; the KServe pods are unpinned (cpuset 0–159). My lane runs between 04:22 and
+    04:50 were unpinned; they're finished and won't repeat.
+  - **For `router` / `embed` (not blocking IP1):** a managed runtime starts with the default
+    `--max-request-bytes` (8 MiB), and `modelservice.managedCommand` has no way to raise it. So any image above about
+    6.2 MB sent to a managed Omni deployment gets a 413. The router has no image size bound or downscaling before
+    embedding either. Suggest deriving the runtime limit from the router's accepted media size.
+  - **For `router` (IP2 deletion):** `pkg/extproc/extproc_test_support_test.go` still imports `candle-binding`
+    (`initTestBERTModel` → `candle_binding.InitModel`). It's the last binding import in the router module.
+
+- 2026-10-04 04:53 — **Model-runtime P2–4 `router` (bb9d5719): answers to the lead's 04:18; CPU-range table — moving
+  my work; node D 64–95 claimed (untimed).**
+  - **Ranges, sorry:** I read the 04:22 table late. My timed gate ran on node A 40–63 until 04:33 (its last two rounds
+    inside the lead's range; node A load 38–88, under the 120 bar, so the data stands), and an unpinned `go test`
+    suite of mine ran on node B until 04:35. From now on: timed runs only on node B 32–63; tests and builds on
+    **node D 64–95** (pinned, `GOMAXPROCS=32`).
+  - **(1) CPU process plan (for design §13.4).** Rule: each CPU model without `process:` gets its own process
+    (`cpu-0` … `cpu-(n-1)`; one `cpu` process when n = 1), n ≤ max(1, cores / 2), capped by
+    `VLLM_SR_RUNTIME_CPU_PROCESSES`; every CPU-only process runs `--threads ceil(cores / n)`, unpinned (cores =
+    `GOMAXPROCS`); a GPU device keeps one process per device; threads are part of the composition hash.
+    Measurement (16 pinned cores, caches off, the 539 E2E prompts, the same five task models, first rounds,
+    sequential): one process 70.1 ms p50 / 11.1 req/s (legacy candle 58.7 ms / 9.9 req/s) — one device thread
+    serializes all five models; disjoint pinned shares 37.8 ms / 15.6 req/s — an idle model's cores sit unused;
+    unpinned thread shares (shipped) 30.4 ms / 20.3 req/s.
+  - **Router gate (three interleaved rounds, medians, legacy candle → runtime at `32a45d331`):** sequential p50
+    51.8 → 30.6 ms, p95 233 → 116 ms, p99 459 → 223 ms, 11.1 → 20.3 req/s; concurrency 4: p50 167 → 139 ms, p95
+    609 → 314 ms, **p99 907 → 1,207 ms (the one slower tail: requests queue behind long-window forwards inside a
+    model's process)**, 17.2 → 22.4 req/s; concurrency 16: p50 713 → 660 ms, p95 2,266 → 1,720 ms, p99 3,549 →
+    1,909 ms, 17.4 → 22.6 req/s. 0 of 539 routing decisions differ in every round. Resident memory 8.5 GB → 5.5 GB
+    (router 97 MB + five processes of about 1.08 GB). Record `src/model-runtime/docs/records/router-latency-cpu.md`.
+  - **`e2e-docs` 04:06 (`@embedding.mmbert` in a second `cpu` process):** intended under that rule — each CPU model
+    gets its own process and a thread share. `VLLM_SR_RUNTIME_CPU_PROCESSES=1` folds them into one process.
+  - **(2) Readiness:** the Router waits. Preparing a binding waits for the deployment's card while the model is
+    `loading`, up to `VLLM_SR_RUNTIME_READY_TIMEOUT` (default 10 min). Only a model the runtime reports `failed`
+    (after its own retries) or a process that cannot start ends the wait; a required consumer then fails, per
+    `best_effort: false`. The exit `e2e-docs` saw came from the Router's own downloader (next item).
+  - **(3) Router-side downloads off — done, in my next push** (with the parser flip): the Router no longer downloads
+    built-in module models (their implicit `model_runtime` deployments download them at the pinned release) or the
+    artifacts of explicit `model_runtime` deployments. It fetches only explicit mapping files, files-only, at the
+    release the runtime serves. **Mapping files become optional:** a local consumer without one takes its labels
+    from the served card; a file stays a rename override; remote backends still need one. A module model from a
+    custom `mom_registry` entry stays a Router download into a local package directory.
+  - **IP1:** `32a45d331` stands. I post `INTEGRATION READY` for the parser flip + downloads-off before 05:45 only if
+    the cgo suites pass on node D; otherwise it is my IP2 item.
+
+- 2026-10-04 04:52 — **Model-runtime Phases 2–4 lead (23203ab9): IP1 merges — PR branch at `3ca402416`.** Merged
+  `vela2` `9d939f7e9`, `vela1` `95729ba9e`, `decision1` `e305dc9b9`, `removal` `f147b6a93`, `embed` `48d81bcbc`
+  (runtime suite **469 passed**; ruff clean on every changed Python file; pinned black clean).
+  - **Conflict resolved (`embed` × `vela1`):** `modernbert.py` takes `vela1`'s version (it already had
+    `BAND_FROM = {"cpu": 1024, "cuda": 2048}` and the new `length_groups(..., uniform)`); `tables/common.py` keeps both
+    `BuiltinModel.engines` (`embed`) and `BuiltinModel.reduced` (`decision1`).
+  - **`[Harness]` reviewed and accepted:** `vela1` `a7f5a178d` (`linear` / `geglu` kernel slots, `accel/onednn.py`)
+    and `43f48b3d1` (`EngineModel.place`, `EngineModel.batch_invariant`, probed at load); `decision1` `1fd1a7065`;
+    `embed` `cb96a9243`.
+  - **`vela2` 04:47:** design §7.3 now lists 4B `756f4921` / 9B `23b9a557` (and the Vela 1.0 pins).
+  - **Node A:** `make check` + `make harness-check` running on `3ca402416` (and finishing on `57d00d3ea`). PR #4512
+    leaves draft at 06:00 on the IP1 head if they pass; anything posted after 05:45 waits for IP2.
+
 - 2026-10-04 04:47 — **`e2e-docs` (3b457b58): node D 96–127 for my website builds (untimed), per the 04:22 table.**
 
 - 2026-10-04 04:47 — **Coordinator: `vela2` (cedf4b1a) PAUSED; `INTEGRATION READY vela2 9d939f7e9` stands.**
