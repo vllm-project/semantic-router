@@ -214,8 +214,8 @@ def write_decoder_package(
     heads.update(_random(SpanHead(hidden, PROJECTION, SLOTS), seed + 2, "span2."))
     save(tensors, root / "model-00001-of-00002.safetensors")
     save(heads, root / "model-00002-of-00002.safetensors")
-    weight_map = {name: "model-00001-of-00002.safetensors" for name in tensors}
-    weight_map.update({name: "model-00002-of-00002.safetensors" for name in heads})
+    weight_map = dict.fromkeys(tensors, "model-00001-of-00002.safetensors")
+    weight_map.update(dict.fromkeys(heads, "model-00002-of-00002.safetensors"))
     _write_json(
         root / "model.safetensors.index.json",
         {"metadata": {}, "weight_map": weight_map},

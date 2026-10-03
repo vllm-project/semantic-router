@@ -29,8 +29,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
@@ -40,11 +38,11 @@ from vllm_sr_runtime.accel.rocm import ROCmAccelerator  # noqa: E402
 from vllm_sr_runtime.engines.native.engine import NativeEngine  # noqa: E402
 from vllm_sr_runtime.families.vela2.decoder_layout import DecoderTree  # noqa: E402
 from vllm_sr_runtime.families.vela2.family import Vela2Family  # noqa: E402
-from vllm_sr_runtime.plugins.base import (
+from vllm_sr_runtime.plugins.base import (  # noqa: E402
     EngineOptions,
     PackageRef,
     SurfacePlan,
-)  # noqa: E402
+)
 
 ACCELERATORS = {"cpu": CPUAccelerator, "cuda": CUDAAccelerator, "rocm": ROCmAccelerator}
 CPU_BAR, GPU_BAR = 1e-4, 0.02
@@ -60,7 +58,7 @@ PROMPTS = [
     "Translate 'good morning, how are you?' into French and Japanese.",
     "Hi, I'm Tom Baker (tom.baker@example.com, +1 415-555-0132). What is the maximum daily dose of paracetamol?",
     "Sarah Johnson, 42, lives at 12 Oak Street, Springfield, IL 62704; SSN 123-45-6789; IBAN DE89370400440532013000.",
-    "请帮我总结这篇关于气候变化的文章，并列出三个要点。",
+    "\u8bf7\u5e2e\u6211\u603b\u7ed3\u8fd9\u7bc7\u5173\u4e8e\u6c14\u5019\u53d8\u5316\u7684\u6587\u7ae0\uff0c\u5e76\u5217\u51fa\u4e09\u4e2a\u8981\u70b9\u3002",
     "Explain how transformers use attention, with a short example in PyTorch: https://pytorch.org/docs/stable/nn.html",
     "Thanks, that answer was wrong: the meeting is on Tuesday, not Monday. Please fix the summary.",
     "Generate an image of a cat astronaut and also describe the scene in two sentences.",
@@ -249,7 +247,7 @@ def load_reference(package: Path, device: str) -> Any:
 
 
 def load_runtime(package: Path, device: str) -> Any:
-    accelerator = ACCELERATORS[device.split(":")[0]]()
+    accelerator = ACCELERATORS[device.split(":", maxsplit=1)[0]]()
     devices = accelerator.devices()
     index = int(device.split(":")[1]) if ":" in device else 0
     family = Vela2Family()
@@ -283,8 +281,8 @@ def reference_rows(
     parts, generic, _ = engine._to_generic(request)
     spans = [q for q in generic if q["type"] == "span"]
     rest = [q for q in generic if q["type"] != "span"]
-    rows = [dict(parts=parts, questions=rest + spans[:1])] + [
-        dict(parts=parts, questions=[s]) for s in spans[1:]
+    rows = [{"parts": parts, "questions": rest + spans[:1]}] + [
+        {"parts": parts, "questions": [s]} for s in spans[1:]
     ]
     out = []
     for row in rows:
