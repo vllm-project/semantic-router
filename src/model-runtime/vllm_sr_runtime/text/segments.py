@@ -1,10 +1,12 @@
-"""System One questions to Decision 2.0 model inputs, exactly as the packages were scored.
+"""The segmented candidate-endpoint prompt of the decision decoders, exactly as their packages were scored.
 
-Prompt ``decision2-segmented-options-global-query-v1``: a context and question
-prefix, one ``<option>`` segment per option, and a fixed query suffix. Each
-segment is tokenized on its own without special tokens; the last token of an
-option segment is its endpoint and the last token overall is the query
-position. Inputs longer than the model limit are rejected, never truncated.
+Decision 2.0 (``decision2-segmented-options-global-query-v1``) and the
+Decision 1.0 decoders (``structured-segmented-candidate-endpoints-global-query-v2``)
+render the same prompt: a context and question prefix, one ``<option>``
+segment per option, and a fixed query suffix. Each segment is tokenized on its
+own without special tokens; the last token of an option segment is its
+endpoint and the last token overall is the query position. Inputs longer than
+the model limit are rejected, never truncated.
 """
 
 from __future__ import annotations
@@ -13,8 +15,8 @@ import math
 from collections.abc import Callable
 from typing import Any
 
-from ...errors import INVALID_QUESTION, MAX_LENGTH_EXCEEDED, QuestionError
-from ...systemone import MAX_OPTIONS, MIN_OPTIONS, canonical
+from ..errors import INVALID_QUESTION, MAX_LENGTH_EXCEEDED, QuestionError
+from ..systemone import MAX_OPTIONS, MIN_OPTIONS, canonical
 
 SUFFIX = "\n\nSelect the single option best supported by the context and instructions.\nDecision:"
 
@@ -67,13 +69,13 @@ def encode(
     return {"ids": ids, "endpoints": endpoints, "query": len(ids) - 1}
 
 
-def collate(items: list[Any], pad_id: int) -> dict[str, Any]:
-    """Pad rows to a multiple of 8 and option endpoints to the widest row (the scored layout)."""
+def collate(items: list[Any], pad_id: int, multiple: int = 8) -> dict[str, Any]:
+    """Pad rows to a multiple of ``multiple`` tokens and option endpoints to the widest row (the scored layout)."""
     import torch
 
     if not items:
         raise ValueError("cannot collate an empty batch")
-    length = math.ceil(max(len(item.ids) for item in items) / 8) * 8
+    length = math.ceil(max(len(item.ids) for item in items) / multiple) * multiple
     width = max(len(item.keys) for item in items)
     input_ids = torch.full((len(items), length), pad_id, dtype=torch.long)
     attention_mask = torch.zeros_like(input_ids)
