@@ -17,10 +17,11 @@ one request at a time, so its sequential rate is its throughput.
 ``paired`` loads both sides in one process and times every request on each
 path back to back, rotating their order, so a shared machine's load changes
 hit all paths alike: ``bundled`` (the package's ``system_one``), ``direct``
-(the family's planning and ``run`` on the exact profile's physical batches, on
-the calling thread: the same work as ``bundled``), ``scheduler`` (planning and
-the scheduler, no API layer) and ``call`` (end to end through
-``Runtime.call``). ``native`` alone also measures throughput through the
+(the family's planning and ``run`` on the exact profile's physical batches:
+the same work as ``bundled``), ``scheduler`` (planning and the scheduler, no
+API layer) and ``call`` (end to end through ``Runtime.call``). ``bundled`` and
+``direct`` run on the thread the scheduler runs batches on, so every path
+uses the same CPU thread pool. ``native`` alone also measures throughput through the
 scheduler with C concurrent requests per wave. ``--router QUESTIONS.json``
 replaces each prompt's questions with the router signals a Route-style
 ``QUESTIONS.json`` declares (explicit questions, so every Decision 1.0 model can
@@ -155,6 +156,16 @@ class Native:
         for batch in model.exact_batches(items) or [list(range(len(items)))]:
             model.run([items[index] for index in batch])
 
+    def on_device(
+        self, call: Callable[[dict[str, Any]], None]
+    ) -> Callable[[dict[str, Any]], None]:
+        """``call`` on the thread the scheduler runs batches on (the CPU device thread).
+
+        CPU thread pools are per calling thread: paths timed on different
+        threads would keep two pools spinning on the same cores.
+        """
+        return lambda body: self.served.scheduler.execute(lambda: call(body))
+
     def throughput(self, bodies: list[dict[str, Any]], concurrency: int) -> float:
         """Requests per second in waves of ``concurrency`` concurrent calls."""
 
@@ -223,8 +234,8 @@ def run_paired(args: argparse.Namespace) -> dict[str, Any]:
     native = Native(args)
     try:
         paths = {
-            "bundled": bundled(args),
-            "direct": native.direct,
+            "bundled": native.on_device(bundled(args)),
+            "direct": native.on_device(native.direct),
             "scheduler": native.scheduler,
             "call": native.call,
         }
