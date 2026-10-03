@@ -31,6 +31,19 @@ type AudioProvider interface {
 	EmbedAudio(context.Context, AudioRequest) ([]float32, error)
 }
 
+// InputChecker reports whether the model reads text whole: false when it
+// would truncate it. The answer comes with the vector of the provider's view,
+// so embedding the same text next costs no second model call. A provider that
+// cannot tell reports binding.ErrCapability or does not implement it.
+type InputChecker interface {
+	FitsInput(context.Context, string) (bool, error)
+}
+
+// ConfigurableInputChecker answers FitsInput at another output view.
+type ConfigurableInputChecker interface {
+	FitsInputWithOptions(context.Context, string, Options) (bool, error)
+}
+
 // Window offsets are UTF-8 bytes in the original text, with End exclusive.
 type Window struct {
 	Start int
@@ -129,6 +142,16 @@ func (p *providerView) EmbedAudio(ctx context.Context, request AudioRequest) ([]
 		return nil, fmt.Errorf("%w: embedding provider does not support audio", binding.ErrCapability)
 	}
 	return q.EmbedAudio(ctx, request)
+}
+
+// FitsInput asks at the view's options, so the answer shares the call that
+// embeds the text through this view.
+func (p *providerView) FitsInput(ctx context.Context, text string) (bool, error) {
+	q, ok := p.Provider.(ConfigurableInputChecker)
+	if !ok {
+		return false, fmt.Errorf("%w: embedding provider does not report input truncation", binding.ErrCapability)
+	}
+	return q.FitsInputWithOptions(ctx, text, p.options)
 }
 
 // Windows reports a missing tokenizer as a capability mismatch, the same way a

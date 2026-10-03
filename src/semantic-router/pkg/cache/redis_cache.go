@@ -245,6 +245,8 @@ func (c *RedisCache) getEmbedding(ctx context.Context, text string) ([]float32, 
 	return computeCacheEmbedding(ctx, c.embeddingProvider, text)
 }
 
+func (c *RedisCache) semanticEmbeddingProvider() embedding.Provider { return c.embeddingProvider }
+
 func (c *RedisCache) embeddingDimension() int {
 	if c == nil || c.config == nil {
 		return 0

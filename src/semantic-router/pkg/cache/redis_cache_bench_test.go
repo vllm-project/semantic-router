@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -63,10 +62,6 @@ func setupRedisCacheBench(b *testing.B) *RedisCache {
 			b.Fatalf(format, args...)
 		}
 		b.Skipf(format, args...)
-	}
-
-	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
-		unavailable("failed to initialize BERT model: %v", err)
 	}
 
 	host, port := redisBenchmarkAddr()

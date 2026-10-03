@@ -445,23 +445,25 @@ class TaskHeadsFamily(ModelFamily):
             limit = min(limit, int(task.operating_point["max_input_tokens"]))
         return limit
 
-    def _graph_exits(self, task: pkg.TaskPackage) -> list[Any]:
-        """The exits a graph engine serves: the package default plus the model options' extra exits."""
+    def _graph_exits(self, task: pkg.TaskPackage, strict: bool = False) -> list[Any]:
+        """The exits a graph engine serves: the package default plus the model options' extra exits.
+
+        Exits the options name must have graphs; ``strict`` (loading on a graph
+        engine) refuses a default exit without one too.
+        """
         layout = task.layout
         if isinstance(layout, PooledLayout):
-            wanted = self._option_exits("layers") or [layout.layers[-1]]
-            missing = [layer for layer in wanted if layer not in layout.graphs]
-            if missing and layout.graphs:
-                raise PackageError(
-                    f"the package ships no exit graph for layers {missing}"
-                )
-            return [layer for layer in wanted if layer in layout.graphs]
-        if isinstance(layout, RelevanceLayout):
-            wanted = list(
-                dict.fromkeys([layout.default, *self._option_exits("pair_scorers")])
-            )
-            return [exit for exit in wanted if exit in layout.graphs]
-        return []
+            requested = self._option_exits("layers")
+            wanted = requested or [layout.layers[-1]]
+        elif isinstance(layout, RelevanceLayout):
+            requested = self._option_exits("pair_scorers")
+            wanted = list(dict.fromkeys([layout.default, *requested]))
+        else:
+            return []
+        missing = [exit for exit in wanted if exit not in layout.graphs]
+        if missing and (strict or requested):
+            raise PackageError(f"the package ships no exit graph for {missing}")
+        return [exit for exit in wanted if exit in layout.graphs]
 
     def describe(self, package: VerifiedPackage) -> ModelSpec:
         task: pkg.TaskPackage = package.details["package"]
@@ -558,7 +560,9 @@ class TaskHeadsFamily(ModelFamily):
         layout = task.layout
         if isinstance(layout, PooledLayout):
             layers = (
-                layout.layers if engine_model.hidden_states else self._graph_exits(task)
+                layout.layers
+                if engine_model.hidden_states
+                else self._graph_exits(task, strict=True)
             )
             planner: EmbeddingSurface | RerankSurface = EmbeddingSurface(
                 layout, tokenizer, layers
@@ -571,7 +575,7 @@ class TaskHeadsFamily(ModelFamily):
         else:
             assert isinstance(layout, RelevanceLayout)
             native = engine_model.hidden_states
-            exits = layout.exits if native else self._graph_exits(task)
+            exits = layout.exits if native else self._graph_exits(task, strict=True)
             scorers = layout.scorers(exits) if native else dict.fromkeys(exits)
             relevance = {
                 exit: RelevanceHead(exit, scorers[exit]).to(engine_model.device)

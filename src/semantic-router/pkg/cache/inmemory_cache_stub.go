@@ -25,7 +25,6 @@ type InMemoryCacheOptions struct {
 	HNSWM               int
 	HNSWEfConstruction  int
 	EmbeddingModel      string
-	PolarityGuard       PolarityGuardOptions
 }
 
 // NewInMemoryCache creates a new in-memory cache instance

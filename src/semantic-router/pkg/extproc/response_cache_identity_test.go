@@ -48,25 +48,6 @@ func TestResponseCacheDoesNotInventIdentityForOtherProviders(t *testing.T) {
 	}
 }
 
-func TestResponseCacheKeysOnlyCandleBERTByEncoderVersion(t *testing.T) {
-	for runtime, keyed := range map[string]bool{"candle": true, "ort": false} {
-		provider, err := embedding.NewFuncProvider(runtime, 384, func(context.Context, string) ([]float32, error) {
-			return nil, errors.New("identity resolution ran inference")
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		backend := cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: true, EmbeddingModel: "bert", EmbeddingProvider: provider})
-		t.Cleanup(func() { _ = backend.Close() })
-		identity, err := responseCacheEmbeddingIdentity(&config.RouterConfig{}, backend, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
-			return embedding.ResolveNamespaceIdentity(provider, settings)
-		})
-		if err != nil || (identity != "") != keyed {
-			t.Fatalf("%s BERT response cache identity %q, %v", runtime, identity, err)
-		}
-	}
-}
-
 func TestResponseCacheBindsPreparedOmniRepresentation(t *testing.T) {
 	for _, size := range []int{384, 768} {
 		provider, err := embedding.NewFuncProvider("test", size, func(context.Context, string) ([]float32, error) {

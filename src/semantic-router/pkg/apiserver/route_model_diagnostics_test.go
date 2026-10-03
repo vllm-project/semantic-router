@@ -17,18 +17,17 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving/servingtest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/runtimetest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 )
 
 // Controlled typed handles verify HTTP->live generation->prepared inference.
 // These are not quality or hardware tests of the published Vela artifacts.
-// diagnosticHost is a runtime whose inventory and pool a test handle joins:
-// serving for classify bindings, native for embedding and relevance ones.
+// diagnosticHost is a runtime whose inventory and pool a test handle joins.
 type diagnosticHost interface {
 	ObserveBinding(binding.Event)
 	ResourcePool() *binding.Pool
@@ -37,10 +36,6 @@ type diagnosticHost interface {
 type servingHost struct{ *serving.Runtime }
 
 func (h servingHost) ResourcePool() *binding.Pool { return h.Pool }
-
-type nativeHost struct{ *native.Runtime }
-
-func (h nativeHost) ResourcePool() *binding.Pool { return h.Pool }
 
 func diagnosticTestHandle[I, O any](t *testing.T, runtime diagnosticHost, recipe, name, contract string, capability binding.Capability, infer func(I) (O, error)) *binding.Resolved[I, O] {
 	t.Helper()
@@ -82,9 +77,10 @@ func diagnosticRequest(t *testing.T, server *httptest.Server, path, body string)
 }
 
 func TestModelDiagnosticsHTTPAllVelaTaskContractsAndExplicitScope(t *testing.T) {
-	tasksRuntime := serving.New(nil, nil)
-	embeddings := native.New(tasksRuntime.Pool)
-	cfg, service := preparedInventoryServiceWith(t, classification.RecipeRuntimeOptions{Runtime: tasksRuntime, EmbeddingRuntime: embeddings}, &config.RouterConfig{Recipes: []config.RoutingRecipe{{Name: config.DefaultRecipeName}, {Name: "private"}}})
+	tasksRuntime, fake := servingtest.Runtime(t, map[string]runtimetest.Model{
+		"embed": {Embedding: &runtimetest.Embedder{Dimensions: []int{2, 4}, Layers: []int{7}, Modalities: []string{"text", "audio"}}},
+	})
+	cfg, service := preparedInventoryServiceWith(t, classification.RecipeRuntimeOptions{Runtime: tasksRuntime}, &config.RouterConfig{Recipes: []config.RoutingRecipe{{Name: config.DefaultRecipeName}, {Name: "private"}}})
 	runtime := tasksRuntime
 	registry := routerruntime.NewRegistry(cfg)
 	registry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{Config: cfg, ClassificationService: service})
@@ -127,18 +123,25 @@ func TestModelDiagnosticsHTTPAllVelaTaskContractsAndExplicitScope(t *testing.T) 
 	if status != 200 || !strings.Contains(string(body), `"end":3`) {
 		t.Fatalf("pii byte offsets: %d %s", status, body)
 	}
-	diagnosticTestHandle(t, nativeHost{embeddings}, "default", "embedding", "embedding.v1", binding.Capability{Embedding: &binding.EmbeddingCapability{Dimension: 2, Layer: 7, AvailableDimensions: []int{2}, Audio: &binding.AudioCapability{SampleRates: []int{16000, 48000}, MaxSampleRate: 48000, MaxSeconds: 30, MaxChannels: 8, Layout: "channels_first"}}}, func(input embedding.TextRequest) (tasks.EmbeddingResult, error) {
-		calls.Add(1)
-		if input.Options.Dimension != 2 || input.Options.Layer != 7 {
-			t.Errorf("prepared representation lost: %+v", input)
-		}
-		return tasks.EmbeddingResult{Embedding: []float32{.3, .4}, Input: usage}, nil
-	})
+	provider, err := tasksRuntime.Embedding(context.Background(), config.ResolvedModelBinding{
+		Recipe: "default", Name: "embedding", Binding: config.ModelBinding{Deployment: "embed", Contract: "embedding.v1"},
+		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: "http://runtime:8100"},
+	}, 2, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = provider.Close() })
+	embedCalls := fake.Calls("embeddings")
 	status, body = diagnosticRequest(t, server, "embeddings", `{"recipe":"default","binding":"embedding","text":"query"}`)
-	if status != 200 || !strings.Contains(string(body), `"embedding":[0.3,0.4]`) || !strings.Contains(string(body), `"dimensions":[2]`) || !strings.Contains(string(body), `"sample_rates":[16000,48000]`) || !strings.Contains(string(body), `"max_seconds":30`) {
+	var embedded ModelDiagnosticResponse[ModelDiagnosticEmbeddingResult]
+	if err = json.Unmarshal(body, &embedded); err != nil {
+		t.Fatal(err)
+	}
+	if status != 200 || len(embedded.Result.Embedding) != 2 || fake.Calls("embeddings") != embedCalls+1 || !strings.Contains(string(body), `"dimensions":[2,4]`) || !strings.Contains(string(body), `"max_seconds":30`) {
 		t.Fatalf("embedding: %d %s", status, body)
 	}
-	diagnosticTestHandle(t, nativeHost{embeddings}, "default", "rag.reranker", "relevance_scores.v1", binding.Capability{}, func(input []tasks.QueryDocument) (tasks.RelevanceScores, error) {
+	calls.Add(1)
+	diagnosticTestHandle(t, servingHost{runtime}, "default", "rag.reranker", "relevance_scores.v1", binding.Capability{}, func(input []tasks.QueryDocument) (tasks.RelevanceScores, error) {
 		calls.Add(1)
 		if len(input) != 2 || input[0].Document != "a" || input[1].Document != "b" {
 			t.Errorf("pairs/order lost: %+v", input)
@@ -287,8 +290,7 @@ func TestModelDiagnosticsRerankBoundsBatchUsingLeasedConfig(t *testing.T) {
 	}{{"configured", 2, 3, 400}, {"at limit", 2, 2, 200}, {"default", 0, 101, 400}} {
 		t.Run(tc.name, func(t *testing.T) {
 			tasksRuntime := serving.New(nil, nil)
-			embeddings := native.New(tasksRuntime.Pool)
-			cfg, service := preparedInventoryServiceWith(t, classification.RecipeRuntimeOptions{Runtime: tasksRuntime, EmbeddingRuntime: embeddings})
+			cfg, service := preparedInventoryServiceWith(t, classification.RecipeRuntimeOptions{Runtime: tasksRuntime})
 			cfg.API.BatchClassification.MaxBatchSize = tc.limit
 			registry := routerruntime.NewRegistry(cfg)
 			registry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{Config: cfg, ClassificationService: service})
@@ -296,7 +298,7 @@ func TestModelDiagnosticsRerankBoundsBatchUsingLeasedConfig(t *testing.T) {
 			stale.API.BatchClassification.MaxBatchSize = 1
 			api := &ClassificationAPIServer{config: stale, runtimeRegistry: registry}
 			calls := 0
-			diagnosticTestHandle(t, nativeHost{embeddings}, "default", "rag.reranker", "relevance_scores.v1", binding.Capability{}, func(pairs []tasks.QueryDocument) (tasks.RelevanceScores, error) {
+			diagnosticTestHandle(t, servingHost{tasksRuntime}, "default", "rag.reranker", "relevance_scores.v1", binding.Capability{}, func(pairs []tasks.QueryDocument) (tasks.RelevanceScores, error) {
 				calls++
 				return tasks.RelevanceScores{Scores: make([]float32, len(pairs))}, nil
 			})
