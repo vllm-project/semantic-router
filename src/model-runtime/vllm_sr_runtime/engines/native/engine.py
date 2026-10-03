@@ -26,6 +26,7 @@ from ...plugins.base import (
 from ...scheduler.planner import padded
 from . import fast, models
 from .encoder import EncoderGraphs
+from .models.forest import ForestShape
 from .models.lora import attach
 from .models.tree import Tree
 from .weights import cast_parameters, keep_linear_bf16, load_adapter, load_backbone
@@ -179,8 +180,11 @@ class NativeEngineModel(EngineModel):
         prefix_ids, prefix_mask = padded_rows(batch.prefixes, left=True)
         block_ids, block_mask = padded_rows(batch.blocks, left=False)
         width = prefix_ids.shape[1]
-        padding = [width - len(prefix) for prefix in batch.prefixes]
-        lengths = [len(block) for block in batch.blocks]
+        shape = ForestShape(
+            tuple(width - len(prefix) for prefix in batch.prefixes),
+            tuple(len(block) for block in batch.blocks),
+            tuple(batch.owners),
+        )
         inputs = {
             "prefix_ids": prefix_ids,
             "prefix_mask": prefix_mask,
@@ -190,15 +194,12 @@ class NativeEngineModel(EngineModel):
         }
 
         def forward(x: dict[str, torch.Tensor]) -> torch.Tensor:
-            return self.backbone.forward_forest(**x, padding=padding, lengths=lengths)[
-                1
-            ]
+            return self.backbone.forward_forest(**x, shape=shape)[1]
 
         if self.forest_graphs is None:
             return forward(inputs)
-        key = (tuple(padding), tuple(lengths), tuple(batch.owners), width)
         tokens = prefix_ids.numel() + block_ids.numel()
-        return self.forest_graphs.run(key, inputs, forward, tokens)
+        return self.forest_graphs.run((shape, width), inputs, forward, tokens)
 
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
         if batch.shared_prefix:

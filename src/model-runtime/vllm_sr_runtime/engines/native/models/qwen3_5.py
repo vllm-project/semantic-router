@@ -22,7 +22,7 @@ from .common import (
     causal_mask,
     recurrent_mask,
 )
-from .forest import Forest, forest_attention, forest_gated_delta
+from .forest import Forest, ForestShape, forest_attention, forest_gated_delta
 from .tree import Tree, tree_gated_delta
 
 MODEL_TYPE = "qwen3_5_text"
@@ -307,15 +307,14 @@ class Qwen3_5Backbone(nn.Module):
         block_ids: torch.Tensor,
         block_mask: torch.Tensor,
         owner: torch.Tensor,
-        padding: list[int],
-        lengths: list[int],
+        shape: ForestShape,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Left-padded prefix rows ``[B, Lp]`` and right-padded blocks ``[N, Lb]`` through every layer.
 
-        Block ``i`` continues from prefix row ``owner[i]``; ``padding`` (per row)
-        and ``lengths`` (per block) are the host-known shapes, so the forward
-        reads nothing back and can be captured as a graph. Returns the
-        final-normed states of both, ``[B, Lp, hidden]`` and ``[N, Lb, hidden]``.
+        Block ``i`` continues from prefix row ``owner[i]``; ``shape`` holds the
+        same layout as host values, so the forward reads nothing back and can be
+        captured as a graph. Returns the final-normed states of both,
+        ``[B, Lp, hidden]`` and ``[N, Lb, hidden]``.
         """
         assert self.kernels is not None, "bind kernels before running the backbone"
         rows, width = prefix_ids.shape
@@ -334,7 +333,7 @@ class Qwen3_5Backbone(nn.Module):
                 blocks, block_positions[None].expand(3, count, block_width)
             ),
         )
-        forest = Forest(prefix_mask, block_mask, owner, padding, lengths)
+        forest = Forest(prefix_mask, block_mask, owner, shape)
         for layer in self.layers:
             prefix, blocks = layer.forward_forest(
                 prefix, blocks, rotary, forest, self.kernels

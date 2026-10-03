@@ -27,14 +27,22 @@ from .common import apply_partial_rotary
 
 
 @dataclass(frozen=True)
+class ForestShape:
+    """The host-known shape of a forest: per prefix row its left padding, per block its length and row."""
+
+    padding: tuple[int, ...]
+    lengths: tuple[int, ...]
+    owners: tuple[int, ...]
+
+
+@dataclass(frozen=True)
 class Forest:
-    """Where the real tokens are: per prefix row its left padding, per block its row and length."""
+    """Where the real tokens are: the device masks, each block's row (``owner``) and the shape."""
 
     prefix_mask: torch.Tensor
     block_mask: torch.Tensor
     owner: torch.Tensor
-    padding: list[int]
-    lengths: list[int]
+    shape: ForestShape
 
 
 def _compute_dtype(device: torch.device, fallback: torch.dtype) -> torch.dtype:
@@ -167,7 +175,8 @@ def forest_attention(
         return t.repeat_interleave(m.groups, dim=1) if m.groups > 1 else t
 
     rows = []
-    for row, padding in enumerate(forest.padding):
+    shape = forest.shape
+    for row, padding in enumerate(shape.padding):
         out = F.scaled_dot_product_attention(
             qp[row : row + 1, :, padding:], expand(kp[row : row + 1, :, padding:]),
             expand(vp[row : row + 1, :, padding:]), is_causal=True, scale=m.scaling,
@@ -175,9 +184,10 @@ def forest_attention(
         rows.append(F.pad(out, (0, 0, padding, 0)))
     block_width = qb.shape[2]
     outs = []
-    owners = forest.owner.tolist()
-    for index, (owner, length) in enumerate(zip(owners, forest.lengths, strict=True)):
-        padding = forest.padding[owner]
+    for index, (owner, length) in enumerate(
+        zip(shape.owners, shape.lengths, strict=True)
+    ):
+        padding = shape.padding[owner]
         keys = torch.cat(
             [kp[owner : owner + 1, :, padding:], kb[index : index + 1, :, :length]], 2
         )

@@ -18,6 +18,7 @@ torch = pytest.importorskip("torch")
 
 from vllm_sr_runtime.accel.rocm import ROCmAccelerator  # noqa: E402
 from vllm_sr_runtime.engines.native import fast, models  # noqa: E402
+from vllm_sr_runtime.engines.native.models.forest import ForestShape  # noqa: E402
 from vllm_sr_runtime.engines.native.models.lora import attach  # noqa: E402
 from vllm_sr_runtime.engines.native.weights import keep_linear_bf16  # noqa: E402
 
@@ -253,21 +254,21 @@ def test_fused_forest_and_its_graphs_equal_eager():
             "block_mask": block_mask,
             "owner": torch.tensor(owners, device=torch_device),
         }
-        shape = {
-            "padding": [width - length for length in prefix_lengths],
-            "lengths": block_lengths,
-        }
-        key = (tuple(shape["padding"]), tuple(block_lengths), tuple(owners), width)
+        shape = ForestShape(
+            tuple(width - length for length in prefix_lengths),
+            tuple(block_lengths),
+            tuple(owners),
+        )
         with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
-            want = [t.clone() for t in reference.forward_forest(**inputs, **shape)]
-            got = fused.forward_forest(**inputs, **shape)
+            want = [t.clone() for t in reference.forward_forest(**inputs, shape=shape)]
+            got = fused.forward_forest(**inputs, shape=shape)
             assert not any(layer._fused_failed for layer in fused.layers)
             assert all(torch.equal(a, b) for a, b in zip(want, got, strict=True))
             for _ in range(3):
                 replay = cache.run(
-                    key,
+                    (shape, width),
                     inputs,
-                    lambda x, shape=shape: fused.forward_forest(**x, **shape),
+                    lambda x, shape=shape: fused.forward_forest(**x, shape=shape),
                     prefix_ids.numel() + block_ids.numel(),
                 )
                 assert all(torch.equal(a, b) for a, b in zip(want, replay, strict=True))
