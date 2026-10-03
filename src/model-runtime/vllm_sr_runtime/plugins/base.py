@@ -95,6 +95,12 @@ class DtypePolicy:
     BF16 autocast multiplies with anyway. ``gpu_weights`` holds every backbone
     parameter in that dtype on GPUs, so the hidden-state stream follows it
     (released runtimes that load the backbone in BF16); CPU keeps ``weights``.
+    ``reduced_gpu`` / ``reduced_cpu`` consent to a reduced-precision copy of
+    the backbone's linear layers when the configured profile asks for one
+    (``EngineOptions.reduced_precision``): ``"bfloat16"`` on GPUs, ``"int8"``
+    (dynamic) or ``"bfloat16"`` on CPUs; None keeps FP32. A family consents only
+    where its records show at least 99% label agreement with the exact path
+    (embeddings: cosine of at least 0.999).
     """
 
     weights: str = "float32"
@@ -102,6 +108,8 @@ class DtypePolicy:
     head: str = "float32"
     bf16_resident: bool = True
     gpu_weights: str | None = None
+    reduced_gpu: str | None = None
+    reduced_cpu: str | None = None
 
 
 @dataclass(frozen=True)
@@ -190,12 +198,17 @@ class DeviceInfo:
 
 @dataclass(frozen=True)
 class EngineOptions:
-    """Execution switches a profile may change. Defaults are the exact path."""
+    """Execution switches a profile may change. Defaults are the exact path.
+
+    ``reduced_precision`` loads, next to the exact weights, the reduced copy the
+    model's ``DtypePolicy`` consents to on its device.
+    """
 
     graphs: bool = True
     fused_kernels: bool = True
     exact_kernels_only: bool = True
     merge_lora: bool = False
+    reduced_precision: bool = False
     threads: int | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
@@ -242,7 +255,8 @@ class EncoderBatch:
     entry an engine that runs graphs executes, ``graph_inputs`` are extra named
     inputs for it, and ``outputs`` the graph outputs the readout reads.
     ``branch`` runs one of the backbone's branches (``BackboneSpec.branches``)
-    instead of its own layer stack.
+    instead of its own layer stack. ``reduced`` runs the reduced-precision copy
+    when the engine loaded one (approximate batches only), else the exact weights.
     """
 
     input_ids: torch.Tensor
@@ -254,6 +268,7 @@ class EncoderBatch:
     outputs: tuple[str, ...] = ()
     lengths: list[int] | None = None
     branch: str | None = None
+    reduced: bool = False
 
 
 @dataclass
@@ -718,14 +733,22 @@ class Batch:
 
 
 class Profile(ABC):
+    """How queued jobs become forwards.
+
+    ``coalesces`` profiles merge jobs of concurrent requests into one batch, so
+    the scheduler holds a queue that has any of their jobs for the batching
+    window before planning it.
+    """
+
     name: ClassVar[str]
     numerics: ClassVar[Literal["exact", "approximate"]]
     description: ClassVar[str]
+    coalesces: ClassVar[bool] = False
 
     @classmethod
     def descriptor(cls) -> dict[str, Any]:
         """Capability descriptor listed in ``/v1/models``."""
-        return {"numerics": cls.numerics}
+        return {"numerics": cls.numerics, "coalesces": cls.coalesces}
 
     def engine_options(self, base: EngineOptions) -> EngineOptions:
         return base
