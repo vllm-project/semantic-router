@@ -76,9 +76,9 @@ PADDING_ALLOWANCE = 0.25
 EXACT_DTYPE = DtypePolicy(
     weights="float32", autocast=None, head="float32", bf16_resident=False
 )
-# Classify heads' exact reference is the legacy path's recorded agreement, so
-# on CPUs they run the batch-invariant variants: oneDNN's packed FP32 linear
-# (x86) and GeGLU on contiguous rows.
+# Task heads' exact reference is the legacy path's recorded agreement (classify,
+# embeddings and rerank alike), so on CPUs they run the batch-invariant variants:
+# oneDNN's packed FP32 linear (x86) and GeGLU on contiguous rows.
 TASK_KERNELS = {"linear": onednn.PACKED, "geglu": CONTIGUOUS}
 # Token counts of the rows that probe a loaded model's batch invariance.
 INVARIANCE_PROBE = (3, 9, 9, 17, 40, 130)
@@ -553,7 +553,7 @@ class TaskHeadsFamily(ModelFamily):
             max_input_tokens=package.max_input_tokens,
             graphs=graphs,
             encoder=True,
-            kernel_variants={} if task.layout is not None else TASK_KERNELS,
+            kernel_variants=TASK_KERNELS,
         )
 
     def load(
