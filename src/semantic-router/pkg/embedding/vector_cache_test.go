@@ -33,12 +33,12 @@ func TestVectorCacheComputesMissesOnceInOneCall(t *testing.T) {
 	cache := NewVectorCache(1 << 20)
 	var calls atomic.Int32
 	var embedded atomic.Int64
-	compute := func(_ context.Context, missing []int) ([][]float32, error) {
+	compute := func(_ context.Context, missing []int) ([]Embedded, error) {
 		calls.Add(1)
 		embedded.Add(int64(len(missing)))
-		out := make([][]float32, len(missing))
+		out := make([]Embedded, len(missing))
 		for i, index := range missing {
-			out[i] = []float32{float32(index)}
+			out[i] = Embedded{Vector: []float32{float32(index)}, Truncated: index == 1}
 		}
 		return out, nil
 	}
@@ -47,12 +47,12 @@ func TestVectorCacheComputesMissesOnceInOneCall(t *testing.T) {
 	if err != nil || calls.Load() != 1 || embedded.Load() != 2 {
 		t.Fatalf("first resolve: %v, %d calls, %d embedded", err, calls.Load(), embedded.Load())
 	}
-	if vectors[0][0] != 0 || vectors[1][0] != 1 || vectors[2][0] != 0 {
+	if vectors[0].Vector[0] != 0 || vectors[1].Vector[0] != 1 || vectors[2].Vector[0] != 0 || !vectors[1].Truncated || vectors[0].Truncated {
 		t.Fatalf("vectors = %v", vectors)
 	}
-	vectors[0][0] = 99 // callers own their copies
+	vectors[0].Vector[0] = 99 // callers own their copies
 	again, err := cache.Resolve(context.Background(), keys, compute)
-	if err != nil || calls.Load() != 1 || again[0][0] != 0 {
+	if err != nil || calls.Load() != 1 || again[0].Vector[0] != 0 || !again[1].Truncated {
 		t.Fatalf("cached resolve: %v, %d calls, %v", err, calls.Load(), again)
 	}
 }
@@ -61,13 +61,13 @@ func TestVectorCacheCoalescesConcurrentRequests(t *testing.T) {
 	cache := NewVectorCache(1 << 20)
 	var calls atomic.Int32
 	release := make(chan struct{})
-	compute := func(_ context.Context, missing []int) ([][]float32, error) {
+	compute := func(_ context.Context, missing []int) ([]Embedded, error) {
 		calls.Add(1)
 		<-release
-		return [][]float32{{1, 2}}, nil
+		return []Embedded{{Vector: []float32{1, 2}}}, nil
 	}
 	var wg sync.WaitGroup
-	results := make([][][]float32, 8)
+	results := make([][]Embedded, 8)
 	for i := range results {
 		wg.Add(1)
 		go func() {
@@ -82,7 +82,7 @@ func TestVectorCacheCoalescesConcurrentRequests(t *testing.T) {
 		t.Fatalf("%d model calls for one key, want 1", calls.Load())
 	}
 	for _, result := range results {
-		if len(result) != 1 || len(result[0]) != 2 {
+		if len(result) != 1 || len(result[0].Vector) != 2 {
 			t.Fatalf("result %v", result)
 		}
 	}
@@ -93,33 +93,33 @@ func TestVectorCacheRetriesAfterAnotherCallerFails(t *testing.T) {
 	started := make(chan struct{})
 	fail := make(chan struct{})
 	go func() {
-		_, _ = cache.Resolve(context.Background(), []VectorKey{textKey("k")}, func(context.Context, []int) ([][]float32, error) {
+		_, _ = cache.Resolve(context.Background(), []VectorKey{textKey("k")}, func(context.Context, []int) ([]Embedded, error) {
 			close(started)
 			<-fail
 			return nil, errors.New("owner canceled")
 		})
 	}()
 	<-started
-	done := make(chan [][]float32)
+	done := make(chan []Embedded)
 	go func() {
-		vectors, _ := cache.Resolve(context.Background(), []VectorKey{textKey("k")}, func(context.Context, []int) ([][]float32, error) {
-			return [][]float32{{7}}, nil
+		vectors, _ := cache.Resolve(context.Background(), []VectorKey{textKey("k")}, func(context.Context, []int) ([]Embedded, error) {
+			return []Embedded{{Vector: []float32{7}}}, nil
 		})
 		done <- vectors
 	}()
 	time.Sleep(10 * time.Millisecond)
 	close(fail)
-	if vectors := <-done; len(vectors) != 1 || vectors[0][0] != 7 {
+	if vectors := <-done; len(vectors) != 1 || vectors[0].Vector[0] != 7 {
 		t.Fatalf("waiter did not recompute: %v", vectors)
 	}
 }
 
 func TestVectorCacheEvictsLeastRecentlyUsed(t *testing.T) {
 	cache := NewVectorCache(vectorCacheShards * (4*4 + entryOverhead) * 2)
-	compute := func(_ context.Context, missing []int) ([][]float32, error) {
-		out := make([][]float32, len(missing))
+	compute := func(_ context.Context, missing []int) ([]Embedded, error) {
+		out := make([]Embedded, len(missing))
 		for i := range out {
-			out[i] = make([]float32, 4)
+			out[i] = Embedded{Vector: make([]float32, 4)}
 		}
 		return out, nil
 	}
@@ -147,9 +147,9 @@ func TestVectorCacheEvictsLeastRecentlyUsed(t *testing.T) {
 func TestVectorCacheWithoutBudgetOnlyCoalesces(t *testing.T) {
 	cache := NewVectorCache(0)
 	var calls atomic.Int32
-	compute := func(_ context.Context, missing []int) ([][]float32, error) {
+	compute := func(_ context.Context, missing []int) ([]Embedded, error) {
 		calls.Add(1)
-		return [][]float32{{1}}, nil
+		return []Embedded{{Vector: []float32{1}}}, nil
 	}
 	for i := 0; i < 2; i++ {
 		if _, err := cache.Resolve(context.Background(), []VectorKey{textKey("x")}, compute); err != nil {

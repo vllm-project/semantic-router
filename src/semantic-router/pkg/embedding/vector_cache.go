@@ -40,6 +40,13 @@ func NewVectorKey(representation string, options Options, kind byte, input []byt
 
 const vectorCacheShards = 32
 
+// Embedded is one input's vector and whether the input was truncated to fit
+// the model's input budget.
+type Embedded struct {
+	Vector    []float32
+	Truncated bool
+}
+
 // VectorCache is a bounded, sharded LRU of embedding vectors with in-flight
 // coalescing: concurrent requests for one key make a single model call, so
 // the consumers of one request that embed the same text share one vector.
@@ -59,14 +66,14 @@ type vectorShard struct {
 }
 
 type vectorEntry struct {
-	key    VectorKey
-	vector []float32
+	key      VectorKey
+	embedded Embedded
 }
 
 type vectorFlight struct {
-	done   chan struct{}
-	vector []float32
-	err    error
+	done     chan struct{}
+	embedded Embedded
+	err      error
 }
 
 // entryOverhead approximates the per-entry bookkeeping beyond the vector.
@@ -89,12 +96,12 @@ func (c *VectorCache) shard(key VectorKey) *vectorShard {
 	return &c.shards[key[0]%vectorCacheShards]
 }
 
-// Resolve returns one vector per key. Cached keys are answered at once; the
+// Resolve returns one result per key. Cached keys are answered at once; the
 // rest are computed by one call of compute with their indexes, unless another
 // caller is already computing a key, in which case this call waits for that
 // result. If that other computation fails, the key is computed here.
-func (c *VectorCache) Resolve(ctx context.Context, keys []VectorKey, compute func(context.Context, []int) ([][]float32, error)) ([][]float32, error) {
-	vectors := make([][]float32, len(keys))
+func (c *VectorCache) Resolve(ctx context.Context, keys []VectorKey, compute func(context.Context, []int) ([]Embedded, error)) ([]Embedded, error) {
+	vectors := make([]Embedded, len(keys))
 	var owned []int
 	var flights []*vectorFlight
 	type pending struct {
@@ -105,9 +112,9 @@ func (c *VectorCache) Resolve(ctx context.Context, keys []VectorKey, compute fun
 	for i, key := range keys {
 		shard := c.shard(key)
 		shard.mu.Lock()
-		switch vector, flight := shard.get(key); {
-		case vector != nil:
-			vectors[i] = vector
+		switch cached, flight := shard.get(key); {
+		case cached.Vector != nil:
+			vectors[i] = cached
 		case flight != nil:
 			waits = append(waits, pending{index: i, flight: flight})
 		default:
@@ -129,8 +136,8 @@ func (c *VectorCache) Resolve(ctx context.Context, keys []VectorKey, compute fun
 			shard.mu.Lock()
 			delete(shard.flights, keys[i])
 			if err == nil {
-				flight.vector = shard.put(keys[i], computed[j])
-				vectors[i] = copyVector(computed[j])
+				flight.embedded = shard.put(keys[i], computed[j])
+				vectors[i] = copyEmbedded(computed[j])
 			} else {
 				flight.err = err
 			}
@@ -152,7 +159,7 @@ func (c *VectorCache) Resolve(ctx context.Context, keys []VectorKey, compute fun
 			retry = append(retry, wait.index)
 			continue
 		}
-		vectors[wait.index] = copyVector(wait.flight.vector)
+		vectors[wait.index] = copyEmbedded(wait.flight.embedded)
 	}
 	if len(retry) > 0 {
 		computed, err := compute(ctx, retry)
@@ -163,48 +170,49 @@ func (c *VectorCache) Resolve(ctx context.Context, keys []VectorKey, compute fun
 			return nil, err
 		}
 		for j, i := range retry {
-			vectors[i] = copyVector(computed[j])
+			vectors[i] = copyEmbedded(computed[j])
 		}
 	}
 	return vectors, nil
 }
 
-// get returns a copy of a cached vector, or the flight computing it. The
+// get returns a copy of a cached result, or the flight computing it. The
 // caller holds the lock.
-func (s *vectorShard) get(key VectorKey) ([]float32, *vectorFlight) {
+func (s *vectorShard) get(key VectorKey) (Embedded, *vectorFlight) {
 	if element, ok := s.entries[key]; ok {
 		s.order.MoveToFront(element)
-		return copyVector(element.Value.(*vectorEntry).vector), nil
+		return copyEmbedded(element.Value.(*vectorEntry).embedded), nil
 	}
-	return nil, s.flights[key]
+	return Embedded{}, s.flights[key]
 }
 
-// put stores a private copy of vector and returns it, evicting the least
+// put stores a private copy of embedded and returns it, evicting the least
 // recently used entries over budget. The caller holds the lock.
-func (s *vectorShard) put(key VectorKey, vector []float32) []float32 {
-	stored := copyVector(vector)
-	size := 4*len(stored) + entryOverhead
+func (s *vectorShard) put(key VectorKey, embedded Embedded) Embedded {
+	stored := copyEmbedded(embedded)
+	size := 4*len(stored.Vector) + entryOverhead
 	if size > s.maxBytes {
 		return stored
 	}
 	if element, ok := s.entries[key]; ok {
 		s.order.MoveToFront(element)
-		return element.Value.(*vectorEntry).vector
+		return element.Value.(*vectorEntry).embedded
 	}
-	s.entries[key] = s.order.PushFront(&vectorEntry{key: key, vector: stored})
+	s.entries[key] = s.order.PushFront(&vectorEntry{key: key, embedded: stored})
 	s.bytes += size
 	for s.bytes > s.maxBytes {
 		oldest := s.order.Back()
 		entry := oldest.Value.(*vectorEntry)
 		s.order.Remove(oldest)
 		delete(s.entries, entry.key)
-		s.bytes -= 4*len(entry.vector) + entryOverhead
+		s.bytes -= 4*len(entry.embedded.Vector) + entryOverhead
 	}
 	return stored
 }
 
-func copyVector(vector []float32) []float32 {
-	return append([]float32(nil), vector...)
+func copyEmbedded(embedded Embedded) Embedded {
+	embedded.Vector = append([]float32(nil), embedded.Vector...)
+	return embedded
 }
 
 var errVectorCount = errors.New("embedding call returned a different number of vectors")

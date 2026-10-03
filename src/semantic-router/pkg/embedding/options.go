@@ -31,6 +31,13 @@ type AudioProvider interface {
 	EmbedAudio(context.Context, AudioRequest) ([]float32, error)
 }
 
+// InputChecker reports whether text fits the model's input budget whole. A
+// provider whose model would truncate it reports false; one that cannot tell
+// does not implement the interface.
+type InputChecker interface {
+	FitsInput(context.Context, string) (bool, error)
+}
+
 // Window offsets are UTF-8 bytes in the original text, with End exclusive.
 type Window struct {
 	Start int
