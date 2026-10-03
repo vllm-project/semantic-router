@@ -12,7 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
@@ -144,7 +144,7 @@ func (s *ClassificationAPIServer) handleModelDiagnosticTokens(w http.ResponseWri
 
 func (s *ClassificationAPIServer) handleModelDiagnosticEmbedding(w http.ResponseWriter, r *http.Request) {
 	runModelTextDiagnostic(s, w, r, func(ctx context.Context, runtime services.ModelDiagnostics, req ModelTextDiagnosticRequest) (ModelDiagnosticResponse[ModelDiagnosticEmbeddingResult], error) {
-		result, err := runtime.Embeddings.DiagnoseEmbedding(ctx, req.Recipe, req.Binding, req.Text)
+		result, err := runtime.Tasks.DiagnoseEmbedding(ctx, req.Recipe, req.Binding, req.Text)
 		return ModelDiagnosticResponse[ModelDiagnosticEmbeddingResult]{Binding: diagnosticBinding(result.Binding), Result: ModelDiagnosticEmbeddingResult{Embedding: result.Result.Embedding, Input: diagnosticInput(result.Result.Input)}}, err
 	})
 }
@@ -177,8 +177,8 @@ func (s *ClassificationAPIServer) handleModelDiagnosticRerank(w http.ResponseWri
 	for i, p := range req.Pairs {
 		pairs[i] = tasks.QueryDocument{Query: p.Query, Document: p.Document}
 	}
-	result, err := executeModelDiagnostic(w, r, release, func(ctx context.Context) (native.DiagnosticResult[tasks.RelevanceScores], error) {
-		return runtime.Embeddings.DiagnoseRerank(ctx, req.Recipe, req.Binding, pairs)
+	result, err := executeModelDiagnostic(w, r, release, func(ctx context.Context) (serving.DiagnosticResult[tasks.RelevanceScores], error) {
+		return runtime.Tasks.DiagnoseRerank(ctx, req.Recipe, req.Binding, pairs)
 	})
 	if err != nil {
 		s.writeModelDiagnosticError(w, err)

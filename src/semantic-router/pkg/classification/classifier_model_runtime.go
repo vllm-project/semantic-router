@@ -8,7 +8,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
@@ -17,11 +16,10 @@ import (
 // classifierModelRuntime is preparation-only state. Requests use typed handles;
 // they never resolve catalog paths or scan another recipe's configuration.
 type classifierModelRuntime struct {
-	runtime          *serving.Runtime
-	embeddingRuntime *native.Runtime
-	plan             *config.ModelBindingPlan
-	cfg              *config.RouterConfig
-	recipe           config.RecipeName
+	runtime *serving.Runtime
+	plan    *config.ModelBindingPlan
+	cfg     *config.RouterConfig
+	recipe  config.RecipeName
 	// Contrastive input policy is captured before the module window defaults.
 	jailbreakContrastiveFullContext *bool
 }
@@ -31,18 +29,15 @@ func newClassifierModelRuntime(cfg *config.RouterConfig, options RecipeRuntimeOp
 	if err != nil {
 		return nil, err
 	}
-	runtime, embeddings := options.Runtime, options.EmbeddingRuntime
+	runtime := options.Runtime
 	if runtime == nil {
 		runtime = serving.New(nil, nil)
-	}
-	if embeddings == nil {
-		embeddings = native.New(runtime.Pool)
 	}
 	recipe := cfg.RoutingScope
 	if recipe == "" {
 		recipe = config.DefaultRecipeName
 	}
-	models := &classifierModelRuntime{runtime: runtime, embeddingRuntime: embeddings, plan: plan, cfg: cfg, recipe: recipe}
+	models := &classifierModelRuntime{runtime: runtime, plan: plan, cfg: cfg, recipe: recipe}
 	if err := models.projectBindings(); err != nil {
 		return nil, err
 	}
@@ -255,8 +250,7 @@ func (b *ownedTokenBackend) Close() error {
 }
 
 func standaloneModelRuntime() *classifierModelRuntime {
-	runtime := serving.New(nil, nil)
-	return &classifierModelRuntime{runtime: runtime, embeddingRuntime: native.New(runtime.Pool), cfg: &config.RouterConfig{}, recipe: config.DefaultRecipeName}
+	return &classifierModelRuntime{runtime: serving.New(nil, nil), cfg: &config.RouterConfig{}, recipe: config.DefaultRecipeName}
 }
 
 func consumerModelRuntime(models []*classifierModelRuntime) *classifierModelRuntime {

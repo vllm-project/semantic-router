@@ -4,7 +4,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
@@ -23,5 +22,5 @@ func serviceModelRuntimes(cfg *config.RouterConfig, pool *binding.Pool) (classif
 		}
 		lease, services = acquired, acquired
 	}
-	return classification.RecipeRuntimeOptions{Runtime: serving.New(services, pool), EmbeddingRuntime: native.New(pool)}, lease, nil
+	return classification.RecipeRuntimeOptions{Runtime: serving.New(services, pool)}, lease, nil
 }

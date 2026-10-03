@@ -125,6 +125,44 @@ def qwen3_5_config(vocab: int) -> dict[str, Any]:
     }
 
 
+def modernbert_config(vocab: int, **overrides: Any) -> dict[str, Any]:
+    """A tiny Vela-shaped ModernBERT: global and local layers, YaRN rotary, a 4-token local half-window."""
+    config = {
+        "architectures": ["ModernBertModel"],
+        "model_type": "modernbert",
+        "attention_bias": False,
+        "bos_token_id": 2,
+        "cls_token_id": 1,
+        "eos_token_id": 1,
+        "global_attn_every_n_layers": 3,
+        "global_rope_theta": 160000,
+        "hidden_activation": "gelu",
+        "hidden_size": 64,
+        "intermediate_size": 96,
+        "local_attention": 8,
+        "local_rope_theta": 160000,
+        "max_position_embeddings": 32768,
+        "mlp_bias": False,
+        "norm_bias": False,
+        "norm_eps": 1e-5,
+        "num_attention_heads": 4,
+        "num_hidden_layers": 4,
+        "pad_token_id": 0,
+        "rope_scaling": {
+            "beta_fast": 32.0,
+            "beta_slow": 1.0,
+            "factor": 4.0,
+            "original_max_position_embeddings": 8192,
+            "rope_type": "yarn",
+            "truncate": True,
+        },
+        "sep_token_id": 1,
+        "vocab_size": vocab,
+    }
+    config.update(overrides)
+    return config
+
+
 def random_backbone(
     backbone: str, config: dict[str, Any], seed: int
 ) -> dict[str, torch.Tensor]:
@@ -146,7 +184,7 @@ def random_backbone(
         elif (
             name.endswith("dt_bias")
             or name.endswith("linear_attn.norm.weight")
-            or (backbone == "qwen3" and name.endswith("norm.weight"))
+            or (backbone in ("qwen3", "modernbert") and name.endswith("norm.weight"))
         ):
             value = torch.ones(parameter.shape) + value
         state[name] = value.to(torch.bfloat16) if name in linear else value
