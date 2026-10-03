@@ -730,9 +730,16 @@ def main() -> int:
                 if exc.type != "too_long" or not failed:
                     raise
                 record["too_long"] = failed
-                ours = drop_questions(ours, failed)
                 questions = {k: q for k, q in questions.items() if k not in failed}
-                plan = model.plan(state, questions)
+                kept, plan = (
+                    answer(model, state, questions, args.approximate)
+                    if questions
+                    else ({"answers": {}}, None)
+                )
+                record["rows_isolated"] = (
+                    drop_questions(ours, failed)["answers"] == kept["answers"]
+                )
+                ours = kept
                 reference = (
                     reference_answer(engine, state, questions, model.info.id)
                     if questions
@@ -780,6 +787,7 @@ def main() -> int:
         "identical": sum(r["identical"] for r in ok),
         "decision_changes": sum(bool(r["decision_changes"]) for r in ok),
         "rendering_mismatches": sum(bool(r["rendering"]) for r in ok),
+        "rows_not_isolated": [r["id"] for r in ok if r.get("rows_isolated") is False],
         "max_abs_diff": max((r["max_abs_diff"] for r in ok), default=0.0),
         "bar": bar,
         "kernel_choices": "pinned" if pinned else "autotuned in process",
@@ -792,6 +800,7 @@ def main() -> int:
         not summary["errors"]
         and summary["decision_changes"] == 0
         and summary["rendering_mismatches"] == 0
+        and not summary["rows_not_isolated"]
         and summary["max_abs_diff"] <= bar
     )
     args.output.write_text(
