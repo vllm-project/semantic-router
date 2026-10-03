@@ -115,13 +115,13 @@ config:
             top_k: 0
       deployments:
         nano:
-          artifact: models/vela-1.0-omni-nano
-          provider: ort
+          provider: model_runtime
+          artifact: /opt/router-model-artifacts/vela-1.0-omni-nano
           device: cpu
           input: {max_tokens: 512, overflow: reject}
         mini:
-          artifact: models/vela-1.0-omni-mini
-          provider: ort
+          provider: model_runtime
+          artifact: /opt/router-model-artifacts/vela-1.0-omni-mini
           device: cpu
           input: {max_tokens: 32768, overflow: reject}
     services:

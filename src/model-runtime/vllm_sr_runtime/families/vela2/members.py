@@ -180,8 +180,8 @@ class EncoderMember:
         """Each sequence's (option logits, word x label block), batched and padded as the packages do.
 
         ``packed`` (approximate batches, hidden-state engines) packs each batch's
-        sequences back to back, so no projection runs on padding; a batch of one
-        sequence is the padded batch.
+        sequences back to back, so no projection runs on padding, and the
+        backbone's packed layout attends locally in query blocks on long rows.
         """
         packed = packed and not self.graph
         results: list[Any] = [None] * len(items)

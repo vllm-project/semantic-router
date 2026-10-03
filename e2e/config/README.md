@@ -10,8 +10,10 @@ This directory holds smoke, demo, and harness manifests that the repository uses
 
 `config.hallucination.yaml` is the local hallucination router config used by the
 `hallucination-demo` targets in `tools/make/build-run-test.mk` (and
-`e2e/testing/hallucination-demo/`). It runs the in-process Candle detector with
-NLI so the flow can be exercised locally with `./bin/router -config=e2e/config/config.hallucination.yaml`.
+`e2e/testing/hallucination-demo/`). It runs the default Vela Halu detector in a
+router-managed model runtime, so the flow can be exercised locally with
+`./bin/router -config=e2e/config/config.hallucination.yaml` once the runtime is
+installed (`make model-runtime-install`).
 
 The endpoint-backed detector
 (`global.model_catalog.modules.hallucination_mitigation.detector.backend: endpoint`)

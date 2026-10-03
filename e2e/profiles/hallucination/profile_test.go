@@ -28,8 +28,11 @@ func TestProfileUsesCanonicalFactCheckBindingWithRemoteDetector(t *testing.T) {
 	if modelID, exists := factCheck["model_id"]; exists && modelID != "" {
 		t.Fatalf("fact-check must inherit the catalog model instead of overriding it with %v", modelID)
 	}
-	if factCheck["threshold"] != 0.65 || factCheck["use_cpu"] != true || factCheck["use_mmbert_32k"] != true {
+	if factCheck["threshold"] != 0.65 || factCheck["use_cpu"] != true {
 		t.Fatalf("fact-check execution policy changed: %#v", factCheck)
+	}
+	if _, retired := factCheck["use_mmbert_32k"]; retired {
+		t.Fatal("use_mmbert_32k is retired: the model runtime reads the architecture from the package")
 	}
 	detector := profileSection(t, module, "detector")
 	if detector["backend"] != "endpoint" || detector["endpoint"] != "http://mock-hallucination-detector.default.svc.cluster.local:8000/v1" {

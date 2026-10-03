@@ -59,16 +59,11 @@ zh-Hans	installation/milvus.md
 zh-Hans	installation/model-configuration-patterns.md
 zh-Hans	installation/model-configuration.md
 zh-Hans	installation/model-reasoning.md
-zh-Hans	installation/native-backends.md
 zh-Hans	installation/nvidia-cuda.md
 zh-Hans	installation/ollama.md
 zh-Hans	installation/protocol-compatibility.md
 zh-Hans	installation/qdrant.md
-zh-Hans	installation/runtime/embeddings.md
 zh-Hans	installation/runtime/external.md
-zh-Hans	installation/runtime/in-process.md
-zh-Hans	installation/runtime/lifecycle-diagnostics.md
-zh-Hans	installation/runtime/safety.md
 zh-Hans	installation/security-hardening.md
 zh-Hans	installation/storage-overview.md
 zh-Hans	installation/support-matrix.md

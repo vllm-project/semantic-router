@@ -250,6 +250,13 @@ family: an engine that returns hidden states (native) and one that returns
 graph outputs with heads baked in (ONNX graphs as published) serve the same
 family, and the family records which one it used.
 
+The engine defaults to `auto`: a built-in model's preferred engine for the
+placed device class (`BuiltinModel.engines`, set where an interleaved
+measurement shows it faster), else the first registered engine whose
+`supports()` accepts the model on the device, native first. A load that no
+engine accepts fails with every engine's reason; cards, response meta and
+metrics name the engine chosen. `--engine NAME` pins one.
+
 ### 5.3 Accelerator
 
 An accelerator describes one device class and supplies kernels: detection,
@@ -263,7 +270,7 @@ MPS backend and run the pure-torch references; they are marked unvalidated.
 
 | Profile | Numerics | What it does |
 | --- | --- | --- |
-| `exact` (default) | exact | The released numerics: Decision 2.0 as in Phase 1; Decision 1.0 as its bundled runtime; encoders in FP32 on every device, one request's rows as one padded batch |
+| `exact` (default) | exact | The released numerics: Decision 2.0 as in Phase 1; Decision 1.0 as its bundled runtime; encoders in FP32 on every device, one request's rows per batch, or the requests queued together on a batch-invariant model |
 | `shared_context` | approximate | Runs a multi-question request's shared state once (decision families) |
 | `batching` | approximate | Coalesces rows from concurrent requests into shared padded batches within a bounded window |
 | `max_speed` | approximate | Numerics-changing kernels and dtypes on top of the above |
@@ -641,13 +648,23 @@ Section 13.4.
 
 | Accelerator | Status | Kernels |
 | --- | --- | --- |
-| `cpu` | validated | pure-torch references, FP32 |
+| `cpu` | validated | pure-torch references, FP32; on x86, encoder linears through oneDNN's pre-packed FP32 kernel (weights reordered once at load, batch-invariant, within 3.3e-6 of `F.linear`) |
 | `rocm` | validated (MI300X, MI325X) | BF16 autocast, FLA gated delta, causal-conv1d, exact-shape HIP graphs, bit-exact fused Triton element-wise kernels (gfx942) |
 | `cuda` | implemented, unit-tested, **unvalidated** | the same kernel slots; fused kernels only after a bit-exactness record |
 | `xpu`, `mps` | built-in plugins, **unvalidated** | pure-torch references |
 
 Intel hardware that used the OpenVINO provider runs on CPU, on `xpu`, or
 through ONNX Runtime's OpenVINO execution provider.
+
+The oneDNN linear is a kernel variant a family opts into
+(`ModelSpec.kernel_variants`): Vela 1.0 task heads use it on `exact`, since
+their reference is the legacy path's recorded agreement, not a bit pattern;
+Decision 1.0 keeps `F.linear` to stay byte-identical to its bundled runtime.
+Tests that compare against Transformers bit for bit run the reference
+kernels. A model whose whole CPU forward is batch-invariant (each row the
+same alone or in any batch, shown by a test) sets
+`LoadedModel.batch_invariant`, and `exact` then batches the requests queued
+together, which lifts throughput under load without changing an answer.
 
 ## 12. CLI
 
