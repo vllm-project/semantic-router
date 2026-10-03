@@ -118,6 +118,16 @@ the warmup, the six cases and that one check.
 
 ## Artifact SHA-256
 
+Kai review fix (2026-10-03): subin's commit `3bf6b49a7b9774ea9aed930186ab92fcafd4ca6b` is integrated with authorship retained. Non-object responses, null/non-object answers and invalid probability values now produce recorded contract failures with raw responses preserved; the runner continues through the remaining inputs. Top-1 calculations are performed only on contract-valid responses. The current `run_kai.py` SHA-256 is `3170f8b4b17b28639d291d1b9ae13100de143d75c6de1ee0f7dfee2099ea6eff`; the source hashes below describe earlier snapshots. Captured results and warmup records remain unchanged, and no model rerun is claimed.
+
+Run the offline regressions with:
+
+```bash
+python3 -m unittest discover -s bench/jev/pilot-v0.1/tests -p test_kai_runner.py -v
+```
+
+The tests cover malformed bodies, null answers, string probabilities and integers beyond float range, plus a complete simulated run with four malformed responses followed by valid responses. All six case records must still be written.
+
 The table below records the original run artifacts. On 2026-10-01, the two Python scripts were formatted with repository-pinned Black 25.1.0. Ruff cleanup in `run_kai.py` also names the existing 0.001 probability-sum tolerance and HTTP 200 constant, and uses list unpacking for two error lists. Saved-response and synthetic-failure checks agree with the original validator and request runner. The exact original sources remain available at commit `efb0e7143fa52f715b3de31f84625c2031ceb6b2`. Current source hashes are `ba9b3f4354c7e962ac03200410adf5c9eb639a83d60c14232ecc96585d2de00c` for `run_kai.py` and `e312e4a736db18d54ed83a4e8ae7f0da6924ca1c6a63510ae87389aef3096ee2` for `prepare_artifact.py`. Captured requests, results and warmup records were not changed or rerun.
 
 | File | SHA-256 |
