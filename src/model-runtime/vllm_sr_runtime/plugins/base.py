@@ -92,13 +92,16 @@ class DtypePolicy:
 
     ``autocast`` applies only on GPUs; CPU inference runs in ``weights`` dtype.
     ``bf16_resident`` holds BF16-exact Linear weights in BF16 on GPUs, which
-    BF16 autocast multiplies with anyway.
+    BF16 autocast multiplies with anyway. ``gpu_weights`` holds every backbone
+    parameter in that dtype on GPUs, so the hidden-state stream follows it
+    (released runtimes that load the backbone in BF16); CPU keeps ``weights``.
     """
 
     weights: str = "float32"
     autocast: str | None = "bfloat16"
     head: str = "float32"
     bf16_resident: bool = True
+    gpu_weights: str | None = None
 
 
 @dataclass(frozen=True)
@@ -113,14 +116,31 @@ class LoRASpec:
 
 
 @dataclass(frozen=True)
+class BranchSpec:
+    """Another layer stack of a branched encoder over the backbone's embedding.
+
+    Its weights are named ``<layers>.<i>.*`` and ``<final_norm>.*`` in ``weight_files``.
+    """
+
+    weight_files: tuple[Path, ...]
+    layers: str
+    final_norm: str
+
+
+@dataclass(frozen=True)
 class BackboneSpec:
-    """A backbone architecture and the files that hold its weights."""
+    """A backbone architecture and the files that hold its weights.
+
+    ``branches`` names extra layer stacks that share the embedding; an encoder
+    batch selects one with ``EncoderBatch.branch``.
+    """
 
     model_type: str
     config: dict[str, Any]
     weight_files: tuple[Path, ...]
     weight_prefix: str = ""
     lora: LoRASpec | None = None
+    branches: Mapping[str, BranchSpec] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -130,6 +150,9 @@ class ModelSpec:
     ``graphs`` names ONNX graphs a package ships (``{"default": path}``), for
     engines that run a graph instead of building the backbone; ``encoder``
     marks a bidirectional encoder whose readout needs hidden states.
+    ``kernel_variants`` maps a kernel slot to the variant the model's released
+    runtime ran (``KernelSet.use_variants``); a slot without that variant on
+    the device runs its reference.
     """
 
     name: str
@@ -138,6 +161,7 @@ class ModelSpec:
     max_input_tokens: int
     graphs: Mapping[str, Path] = field(default_factory=dict)
     encoder: bool = False
+    kernel_variants: Mapping[str, str] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -217,6 +241,8 @@ class EncoderBatch:
     serves every requested exit. ``graph`` names the ``ModelSpec.graphs``
     entry an engine that runs graphs executes, ``graph_inputs`` are extra named
     inputs for it, and ``outputs`` the graph outputs the readout reads.
+    ``branch`` runs one of the backbone's branches (``BackboneSpec.branches``)
+    instead of its own layer stack.
     """
 
     input_ids: torch.Tensor
@@ -227,6 +253,7 @@ class EncoderBatch:
     graph_inputs: dict[str, torch.Tensor] = field(default_factory=dict)
     outputs: tuple[str, ...] = ()
     lengths: list[int] | None = None
+    branch: str | None = None
 
 
 @dataclass
@@ -264,10 +291,16 @@ class TreeOutput:
 
 
 class EngineModel(ABC):
-    """A backbone loaded on one device."""
+    """A backbone loaded on one device.
+
+    ``hidden_states`` says whether ``encode`` returns hidden states at any
+    requested exit (an engine that builds the backbone) or the named outputs
+    of the graph a batch names (an engine that runs graphs).
+    """
 
     device: torch.device
     device_info: DeviceInfo
+    hidden_states: ClassVar[bool] = True
 
     @abstractmethod
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
@@ -522,6 +555,10 @@ class LoadedModel(ABC):
         ``shared_prefix`` > 0 runs the items as one shared-context tree (see ``ForwardBatch``).
         """
 
+    def run_approximate(self, items: list[Any]) -> list[Any]:
+        """``run`` for a batch of an approximate profile, where a family may trade exactness for speed."""
+        return self.run(items)
+
     def answer(self, item: RenderedItem, logits: list[float] | None) -> dict[str, Any]:
         """The API answer for one decision item."""
         raise UnsupportedSurfaceError("decisions", self.info.id)
@@ -571,6 +608,16 @@ class LoadedModel(ABC):
         A positive value runs them through ``run(items, shared_prefix=value)``,
         0 runs them exactly, and None lets the profile find the common token
         prefix of decision items itself.
+        """
+        return None
+
+    def exact_batches(self, items: list[Any]) -> list[list[int]] | None:
+        """How the released runtime splits one request's items into forwards (indices into ``items``).
+
+        None (the default) is one padded batch, split only by the forward
+        token budget. A family whose released runtime batches otherwise (for
+        example in fixed physical batches) returns its split, which ``exact``
+        and the exact fallback of the other profiles then run.
         """
         return None
 
@@ -624,7 +671,12 @@ class ModelFamily(ABC):
         self, package: VerifiedPackage, device: DeviceInfo
     ) -> dict[str, Any]:
         """Recorded autotuned-kernel configurations for this model on the device's class, if any."""
-        return {}
+        from ..registry import builtin
+
+        known = builtin.by_identity(package.model_sha256)
+        if known is None or not device.arch:
+            return {}
+        return known.kernel_choices.get(f"{device.accelerator}:{device.arch}", {})
 
 
 # ---------------------------------------------------------------------------
@@ -654,10 +706,12 @@ class Batch:
     """Items from one or more jobs that run as one forward, in order.
 
     ``shared_prefix`` > 0 (shared-context profile): the items' common prefix length, run once.
+    ``exact`` False marks a batch an approximate profile formed (``LoadedModel.run_approximate``).
     """
 
     parts: list[tuple[Job, list[int]]]
     shared_prefix: int = 0
+    exact: bool = True
 
     def items(self) -> list[RenderedItem]:
         return [job.items[index] for job, indices in self.parts for index in indices]

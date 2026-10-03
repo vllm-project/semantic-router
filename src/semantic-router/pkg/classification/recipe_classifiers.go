@@ -7,6 +7,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -22,11 +23,13 @@ type RecipeClassifiers struct {
 	routingOrder []config.RecipeName
 }
 
-// RecipeRuntimeOptions borrows the generation's default snapshot and pool.
-// Named recipes prepare independent snapshots against the same resource pool.
+// RecipeRuntimeOptions borrows the generation's model runtimes and default
+// embedding snapshot. Named recipes prepare independent bindings against the
+// same deployments and resource pool.
 type RecipeRuntimeOptions struct {
-	Runtime    *native.Runtime
-	Embeddings *embedding.Set
+	Runtime          *serving.Runtime
+	EmbeddingRuntime *native.Runtime
+	Embeddings       *embedding.Set
 }
 
 // BuildRecipeClassifiers prepares the classifier graph and owned dependencies
@@ -43,15 +46,16 @@ func BuildRecipeClassifiers(
 		return nil, fmt.Errorf("config is nil")
 	}
 
-	runtime := native.New(nil)
-	options := RecipeRuntimeOptions{Runtime: runtime}
+	options := RecipeRuntimeOptions{}
 	if len(runtimeOptions) > 0 {
 		options = runtimeOptions[0]
-		if options.Runtime != nil {
-			runtime = options.Runtime
-		}
 	}
-	options.Runtime = runtime
+	if options.Runtime == nil {
+		options.Runtime = serving.New(nil, nil)
+	}
+	if options.EmbeddingRuntime == nil {
+		options.EmbeddingRuntime = native.New(options.Runtime.Pool)
+	}
 	sharedAdmission := buildAdmissionRegistry(cfg)
 	set := &RecipeClassifiers{
 		byRecipe:     make(map[config.RecipeName]*Classifier),
@@ -84,7 +88,7 @@ func BuildRecipeClassifiers(
 			err = config.ValidateKubernetesConfigContracts(scopedConfig)
 			if err == nil {
 				var models *classifierModelRuntime
-				models, err = newClassifierModelRuntime(scopedConfig, runtime)
+				models, err = newClassifierModelRuntime(scopedConfig, options)
 				if err == nil {
 					classifier = &Classifier{Config: models.cfg, models: models}
 				}
@@ -207,12 +211,6 @@ func (s *RecipeClassifiers) HasHallucinationDetector() bool {
 	return classifier != nil && classifier.IsHallucinationDetectorReady()
 }
 
-// HasHallucinationExplainer reports default/API NLI readiness.
-func (s *RecipeClassifiers) HasHallucinationExplainer() bool {
-	classifier := s.Default()
-	return classifier != nil && classifier.IsHallucinationExplainerReady()
-}
-
 // HasFeedbackDetector reports default/API feedback readiness.
 func (s *RecipeClassifiers) HasFeedbackDetector() bool {
 	return feedbackDetectorReady(s.Default())
@@ -228,12 +226,6 @@ func (s *RecipeClassifiers) HasAnyFactCheckClassifier() bool {
 // inventory readiness.
 func (s *RecipeClassifiers) HasAnyHallucinationDetector() bool {
 	return s.anyClassifierReady((*Classifier).IsHallucinationDetectorReady)
-}
-
-// HasAnyHallucinationExplainer reports aggregate reachable-recipe NLI
-// inventory readiness.
-func (s *RecipeClassifiers) HasAnyHallucinationExplainer() bool {
-	return s.anyClassifierReady((*Classifier).IsHallucinationExplainerReady)
 }
 
 // HasAnyFeedbackDetector reports aggregate reachable-recipe feedback inventory

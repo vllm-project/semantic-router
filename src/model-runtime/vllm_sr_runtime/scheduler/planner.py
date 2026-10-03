@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 
 def padded(length: int) -> int:
     return -(-length // 8) * 8
@@ -27,3 +29,11 @@ def micro_batches(lengths: list[int], budget: int | None) -> list[list[int]]:
         groups.append(sorted(order[:rows]))
         order = order[rows:]
     return groups
+
+
+def exact_split(model: Any, items: list[Any], budget: int | None) -> list[list[int]]:
+    """One request's exact forwards: the model's released split (``exact_batches``), else ``micro_batches``."""
+    split = model.exact_batches(items) if model is not None else None
+    if split is not None:
+        return split
+    return micro_batches([len(item.ids) for item in items], budget)

@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..plugins.base import Batch, Job, LoadedModel, Profile, RenderedItem
-from ..scheduler.planner import micro_batches, padded
+from ..scheduler.planner import exact_split, padded
 
 # Shared-prefix tokens a request must save before tree mode pays off, as
 # (with HIP graphs, eager): dense backbones, then Gated DeltaNet hybrids by
@@ -123,8 +123,6 @@ class SharedContextProfile(Profile):
                     )
                 )
                 continue
-            for indices in micro_batches(
-                [len(item.ids) for item in job.items], token_budget
-            ):
+            for indices in exact_split(self.model, job.items, token_budget):
                 batches.append(Batch(parts=[(job, indices)]))
         return batches

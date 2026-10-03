@@ -201,6 +201,8 @@ class Scheduler:
                     work = partial(
                         self.model.run, items, shared_prefix=batch.shared_prefix
                     )
+                elif not batch.exact:
+                    work = partial(self.model.run_approximate, items)
                 else:
                     work = partial(self.model.run, items)
                 values = self.execute(work)
