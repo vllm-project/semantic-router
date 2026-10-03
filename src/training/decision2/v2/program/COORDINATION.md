@@ -205,6 +205,56 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 20:58 — **Model-runtime follow-up owner (2600f488): DONE. Nothing of mine is running; node A GPU0–1
+  are released.** Branch `xunzhuo/model-runtime-decision2-followup` @ `a82b60962` (11 commits on `63f2b8296`). PR #4481
+  is untouched (still open, `BEHIND`). **Open the follow-up PR once #4481 merges**; the body is ready at
+  `/home/xunliu/code/mr-scratch/pr-body-followup.md`.
+  - **ROCm golden answers: done for all six.** They are recorded with the pinned kernel choices. Readiness passes
+    3 / 3, bit for bit, in 12 fresh processes: the current `main`s on GPU1 and the pinned revisions on GPU0. The
+    `main`s share the table's identity, so the table keeps its pins. Moving the default pins is a separate change.
+  - **Cross-process:** a shared `--autotune-cache` repeats only once it is warm. Two cold processes started
+    together diverge (Eos 77 / 10,653 identical, Sol 76 / 10,653). **Fixed by pinning** each Qwen3.5 model's
+    release kernel choices on gfx942 (`678ae6fe5`). Pinned, both racers are 10,653 / 10,653 identical to the
+    release cache, for Eos and Sol.
+  - **Measured, defaults unchanged** (record `src/model-runtime/docs/records/rocm-mi325x-repeatability.md`):
+    - **Graph cap, Index-like stream:** 4,096 stays. 1,024 is 1–5% faster (Kai +3–5%, Eos +1–3%, two paired
+      rounds), and a full cache costs nothing.
+    - **Batch-shape buckets:** +4–7% at C = 4 and nothing from C = 16; not adopted.
+  - **Checks:** `make check` on node A at the exact commit: pass (108 CPU tests, client check). `pytest -m gpu`:
+    7 passed.
+  - **Left:**
+    - the follow-up PR;
+    - a serving option for the graph cap;
+    - kernel choices for other device classes (CUDA, non-gfx942 ROCm);
+    - more `max_speed` kernels and the vLLM investigation (design §16).
+  - **GPU-h:** node A GPU0–1, 11:05–12:58Z, ≈ 3.8 GPU-h of lease.
+
+- 2026-10-03 20:02 — **Model-runtime follow-up owner (2600f488): a shared autotune cache is NOT enough on a cold
+  start; fixed by pinning the released runtime's FLA kernel choices.** No push to PR #4481. Branch
+  `xunzhuo/model-runtime-decision2-followup` @ `678ae6fe5`.
+  - **ROCm golden answers** for all six are recorded (`275b6945f`) on the current `main`s. Their identity equals the
+    table's, and the old pins answer bit-identically, so the table keeps its pins.
+  - **Cross-process, the four scored panels (10,653 prompts) per process, node A GPU0 / GPU1:**
+    - A warm shared cache repeats exactly (Eos 10,653 / 10,653 on both GPUs).
+    - **Two cold processes started together on one empty shared cache diverge:** Eos 77 / 10,653 identical
+      (47 decisions, max |Δp| 0.056), Sol 76 / 10,653 (35 decisions, max 0.045). A warm cache reproduces its
+      writer, not the release (Sol: 1 prompt off the release's own cache).
+    - The release caches chose differently per model, even for equal tuning keys.
+  - **Fix (`678ae6fe5`):** `registry/kernel_choices.json` holds each Qwen3.5 model's FLA choices from its release
+    autotune cache (identical across the ras / rah / rae chain). The runtime writes them as FLA config files with
+    `FLA_CACHE_MODE=full` before FLA loads. Pinned, two cold processes started together are both 10,653 / 10,653
+    identical to the release cache (Eos and Sol), tune nothing, and pass readiness 3 / 3.
+  - **Next:** goldens re-recorded under pinning and readiness for all six (running), the record, then the
+    graph-cap and bucket measurements. Leases: node A GPU0–1 (busy).
+
+- 2026-10-03 19:05 — **Model-runtime follow-up owner (2600f488): STARTED** (handoff from 54e49843). No pushes to PR #4481.
+  - **Work:** ROCm golden answers for the six released `main`s (Kai `cd49ea38` … Vega `7aec49ae`) and readiness on
+    ROCm; the two-process `--autotune-cache` exactness check (Eos plus Sol, a few hundred prompts); then, if time
+    allows, batch-shape buckets and the graph-size cap, measured only, with default numerics unchanged.
+  - **Branch:** `xunzhuo/model-runtime-decision2-followup`, stacked on `63f2b8296`. Its PR opens after #4481 merges.
+  - **GPUs:** node A GPU0–1 (lease files `owner.model-runtime-followup`), release image `dbe5f32b`, HF cache
+    `/data/dev2/tmp/mr-hf`. Nothing else is touched.
+
 - 2026-10-03 18:56 — **Model runtime Phase 1 DELIVERED: PR #4481 is green** (head `63f2b8296`, PR Gate passed; it
   closes #4479). The lead (54e49843) ended. **Remaining maintainer action:** review and the merge queue.
   - **GPU follow-ups:** the ROCm golden answers for all six and the cross-process exactness check with
