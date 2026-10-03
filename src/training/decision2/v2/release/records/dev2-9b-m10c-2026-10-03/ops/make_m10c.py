@@ -81,8 +81,25 @@ ARMS = {
     + RECIPE
     + " with IB1 sentfin replaced by the IB4 phase-1 families, at half learning rates: backbone 5e-6, head 5e-5; "
     "the seeds of KIB4 s1 / s2)",
+    "KIB4-lrhh": "the arm factory's 9B arm KIB4-lrhh ("
+    + RECIPE
+    + " with IB1 sentfin replaced by the IB4 phase-1 families, at half learning rates: backbone 5e-6, head 5e-5; "
+    "seeds 21 / 22)",
 }
-ALPHA = {"a33": "1/3", "a25": "1/4", "a40": "2/5", "a50": "1/2"}
+HLR4 = (
+    "four half-learning-rate seeds of the KIB4 recipe ("
+    + RECIPE
+    + " with IB1 sentfin replaced by the IB4 phase-1 families, at backbone LR 5e-6 and head LR 5e-5): 9B M10 KIB4H "
+    "s1 / s2 (the seeds of KIB4 s1 / s2) and the arm factory's KIB4-lrhh s1 / s2 (seeds 21 / 22)"
+)
+ALPHA = {
+    "a33": "1/3",
+    "a25": "1/4",
+    "a40": "2/5",
+    "a50": "1/2",
+    "a60": "3/5",
+    "a80": "4/5",
+}
 KIB4_FAMILY = (
     "nine KIB4-family seeds: M10 KIB4 s1-s3 and arm-factory KIB4 s4-s5 (the KIB4 recipe), KIB4W2 s1-s2 (IB4 phase-1 "
     "rows at twice the loss weight) and KIB4L2 s1-s2 (backbone LR 2e-5), all on KIB4's TRAIN"
@@ -111,6 +128,31 @@ CANDS: dict[str, dict] = {
         + " (the uniform FP32 average of the points KIB4-a40 and KSW-a40)",
         "fp32": "310228cb3e188332695c34a533727c7fb342807ff4d55b457589bff3ce7e3cb9",
         "audit_sets": ["KIB4", "KSW"],
+        "index_node": "b",
+    },
+    # Amendment 13 (half learning rates); every member seed trained on KIB4's TRAIN 2e72bcfd / teacher 377f8878.
+    "KIB4H-a40": {
+        "fp32": "5d22b60be9e0581e6946ebf9ca573ca797e666b2d9b2203703e058978ce8e1fa",
+        "audit_sets": ["KIB4"],
+        "index_node": "b",
+    },
+    "KIB4-lrhh-a80": {
+        "fp32": "699bfd70f5b1094c807ad6df6dc6fdeb9fd1e4c4db558aceca8a4d4bba07fc8e",
+        "audit_sets": ["KIB4"],
+        "index_node": "b",
+    },
+    "HLR4-a80": {
+        "what": "the 9B M10 point HLR4-a80: W = 1/5 x Decision 1.0 Lux-9B + 4/5 x the uniform FP32 soup of "
+        + HLR4,
+        "fp32": "d99cc9f171ee2263791f4d3fd5eb850b12bcca6344710ab178190b87c44e4a4e",
+        "audit_sets": ["KIB4"],
+        "index_node": "b",
+    },
+    "HLR4-a60": {
+        "what": "the 9B M10 point HLR4-a60: W = 2/5 x Decision 1.0 Lux-9B + 3/5 x the uniform FP32 soup of "
+        + HLR4,
+        "fp32": "0b056425ff705a81c5c734f6c72a64e950ddd29e44a581be914414d24ef94579",
+        "audit_sets": ["KIB4"],
         "index_node": "b",
     },
 }
@@ -351,7 +393,7 @@ def decision(s: dict, cand: str) -> dict:
         "rationale": "Index-first rule (user 2026-10-02 09:55 UTC+8). IF1: the private Index paired bootstrap of "
         "these exact weights minus the current revision's has a 95% lower bound > 0 (2,000 replicates; values in "
         "private files only; evidence_sha256.index_first_bootstrap); the highest measured passer of the 9B M10 "
-        "continuation (amendment 7; directive 2026-10-02 12:30 UTC+8). R3: types "
+        "continuation (amendments 7 and 13; directive 2026-10-02 12:30 UTC+8). R3: types "
         + ", ".join(
             f"{k} {v}" for k, v in gate._verdicts(load(profile["types"])).items()
         )

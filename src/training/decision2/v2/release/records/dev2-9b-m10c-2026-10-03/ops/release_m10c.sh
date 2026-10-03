@@ -25,7 +25,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 [[ "$mode" =~ ^--(prerelease|release)$ ]] || { echo "mode: --prerelease|--release" >&2; exit 2; }
-[[ "$gpu" =~ ^[1-7]$ ]] || { echo "--gpu 1-7 (node A)" >&2; exit 2; }
+[[ "$gpu" =~ ^[0-7]$ ]] || { echo "--gpu 0-7 (node A; 0 is the release GPU)" >&2; exit 2; }
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 S=$(cd "$(dirname "$0")/../../../../.." && pwd)
 SRC=$(basename "$(cd "$S/../../.." && pwd)")

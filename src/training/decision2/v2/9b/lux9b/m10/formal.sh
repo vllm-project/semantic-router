@@ -7,8 +7,9 @@
 # is unchanged since K-a13IB's formal mirror 787abdc54. Runs land in /data/dev2/runs/9b/formal-m9/M10-NAME-*.
 #
 # usage (node A, from an exact mirror): formal.sh launch|status NAME [GPU]
-#   launch  the point is soup/NAME (built on node A: KX) or models/ix1/9b-m10/ckpt/NAME (ix.sh ckcopy); GPU (1-7) must
-#           be idle with its owner file absent, idle or released; runs detached and releases the lease at the end
+#   launch  the point is soup/NAME (built on node A: KX) or models/ix1/9b-m10/ckpt/NAME (ix.sh ckcopy); GPU (0-7; 0 is
+#           node A's release GPU, amendment 13) must be idle with its owner file absent, idle or released; runs
+#           detached and releases the lease at the end
 #   status  exit code, log tail, run directories
 set -uo pipefail
 MODE=${1:?launch|status} NAME=${2:?NAME} GPU=${3:-}
@@ -21,7 +22,7 @@ lease=/data/dev2/leases/gpu$GPU.lock/owner
 point() { if [ -f "$B9/soup/$NAME/DONE" ]; then cat "$B9/soup/$NAME/DONE"; else echo "/data/dev2/models/ix1/9b-m10/ckpt/$NAME"; fi; }
 case "$MODE" in
   launch)
-    [[ "$GPU" =~ ^[1-7]$ ]] || { echo "node A GPU1-7" >&2; exit 2; }
+    [[ "$GPU" =~ ^[0-7]$ ]] || { echo "node A GPU0-7" >&2; exit 2; }
     ck=$(point)
     [ -f "$ck/decision_config.json" ] || { echo "no point at $ck" >&2; exit 3; }
     mkdir -p "$B9/logs"
