@@ -4282,6 +4282,12 @@
         },
         "endpoint": {
           "type": "string"
+        },
+        "process": {
+          "type": "string"
+        },
+        "served_name": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
