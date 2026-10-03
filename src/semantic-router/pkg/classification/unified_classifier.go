@@ -92,6 +92,9 @@ func (uc *UnifiedClassifier) ClassifyBatchContext(ctx context.Context, texts []s
 	if uc.closed {
 		return nil, binding.ErrClosed
 	}
+	if uc.classifier == nil {
+		return nil, fmt.Errorf("%w: unified classification needs a recipe's prepared intent, PII and security bindings", binding.ErrCapability)
+	}
 	started := time.Now()
 	ctx, bundle := modelservice.WithBundle(ctx, 0)
 	leave := bundle.Join()

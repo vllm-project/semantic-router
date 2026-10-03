@@ -275,20 +275,15 @@ func aggregateSafetyWindows(result labelClassification, labels []string, selectS
 	return maximum
 }
 
-// prefetchSafetyHeads classifies the text with every distinct head the used
-// rules read, concurrently, so the heads share one bundle.
+// prefetchSafetyHeads classifies the text with every distinct binary head the
+// used rules read, concurrently, so the heads share one bundle. A hazard head
+// runs only after its rule's binary head matched.
 func (c *Classifier) prefetchSafetyHeads(ctx context.Context, text string, used map[string]bool) map[string]safetyCachedResult {
 	heads := make(map[string]labelClassifier)
 	for _, rule := range c.Config.SafetyRules {
 		detector := c.safetyClassifiers[rule.Name]
-		if detector == nil || !signalRuleUsed(used, config.SignalTypeSafety, rule.Name) {
-			continue
-		}
-		if detector.binary != nil {
+		if detector != nil && detector.binary != nil && signalRuleUsed(used, config.SignalTypeSafety, rule.Name) {
 			heads[detector.binaryKey] = detector.binary
-		}
-		if detector.hazard != nil {
-			heads[detector.hazardKey] = detector.hazard
 		}
 	}
 	keys := make([]string, 0, len(heads))

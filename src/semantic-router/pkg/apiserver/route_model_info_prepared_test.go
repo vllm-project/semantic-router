@@ -20,11 +20,16 @@ import (
 
 func preparedInventoryService(t *testing.T, runtime *serving.Runtime, configs ...*config.RouterConfig) (*config.RouterConfig, *services.ClassificationService) {
 	t.Helper()
+	return preparedInventoryServiceWith(t, classification.RecipeRuntimeOptions{Runtime: runtime}, configs...)
+}
+
+func preparedInventoryServiceWith(t *testing.T, options classification.RecipeRuntimeOptions, configs ...*config.RouterConfig) (*config.RouterConfig, *services.ClassificationService) {
+	t.Helper()
 	cfg := &config.RouterConfig{}
 	if len(configs) > 0 {
 		cfg = configs[0]
 	}
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil, classification.RecipeRuntimeOptions{Runtime: runtime})
+	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil, options)
 	if err != nil {
 		t.Fatal(err)
 	}
