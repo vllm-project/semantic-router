@@ -200,13 +200,44 @@ of truth for schemas, test selection, or public documentation.
 6. Open a PR using the module prefixes and sections in
    [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md).
 
+Keep commits reviewable and avoid unrelated cleanup. A PR should explain why
+the change is needed, which modules it affects, and how its user-visible
+behavior was verified.
+
 Mergify places a pull request in the merge queue only after at least two
 reviewers with `write`, `maintain`, or `admin` repository permission approve
 it and all required checks pass.
 
-Keep commits reviewable and avoid unrelated cleanup. A PR should explain why
-the change is needed, which modules it affects, and how its user-visible
-behavior was verified.
+### Troubleshoot the merge queue
+
+Check the **Mergify Merge Queue** check or Mergify's **Merge Queue Status**
+comment on the PR. The **Reason** and **Hint** explain whether the PR is
+waiting or was dequeued because its branch could not be updated.
+
+- **Waiting in the queue:** the queue processes PRs serially, so a long wait
+  can be normal. See [.mergify.yml](.mergify.yml) for the current settings.
+  Avoid pushing while queued: a push restarts PR Gate, which the queue requires.
+- **Workflow permission refusal:** until
+  [#3902](https://github.com/vllm-project/semantic-router/issues/3902) is resolved,
+  Mergify cannot update a branch when the update includes workflow changes
+  requiring its pending `workflows` permission. An organization owner must
+  accept that permission in the Mergify dashboard. Contributors can use the
+  manual branch update below; requeueing without updating repeats the failure.
+- **Fork cannot be queued:** on a personal-account fork containing workflows,
+  GitHub offers **Allow edits and access to secrets by maintainers**. Enabling
+  it lets maintainers update the branch, including workflows, which can expose
+  fork secrets and allow access to other branches. This is optional; if you
+  leave it off, update the branch yourself after a dequeue. See
+  [GitHub's explanation of fork permissions][fork-permissions].
+
+To recover from a branch-update failure, merge upstream `main` into your PR
+branch and push it, or use GitHub's **Update branch** button when available.
+Once PR Gate passes on the new head and the required approvals still hold,
+the rule requeues the PR automatically. The `@mergifyio queue` command and
+**Requeue** checkbox require write permission by default; contributors do not
+need them for this recovery.
+
+[fork-permissions]: https://docs.github.com/en/pull-requests/how-tos/work-with-forks/allowing-changes-to-a-pull-request-branch-created-from-a-fork
 
 ## Repository map
 
