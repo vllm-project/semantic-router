@@ -84,6 +84,9 @@ SURFACE_OPTIONS = {
     "rerank": {"overflow", "max_tokens"},
 }
 STATE_ORDER = {state: index for index, state in enumerate(STATES)}
+# Requests up to this many encoded bytes are planned on the event loop: their
+# rendering costs less than a hop to a worker thread.
+INLINE_PLAN_BYTES = 16 << 10
 
 
 @dataclass
@@ -219,10 +222,16 @@ class ServedModel:
         default = profiles[config.profile]
         engine_options = default.engine_options(EngineOptions(threads=process.threads))
         self.health.set("loading", f"loading weights on {placement.device.label}")
-        engine_model = engine.load(
-            spec, placement.accelerator, placement.device, engine_options
+
+        def execute(work: Any) -> Any:
+            return placement.accelerator.execute(placement.device, work)
+
+        engine_model = execute(
+            lambda: engine.load(
+                spec, placement.accelerator, placement.device, engine_options
+            )
         )
-        model = family.load(package, spec, engine_model)
+        model = execute(lambda: family.load(package, spec, engine_model))
         for name, profile in list(profiles.items()):
             unavailable = profile.available(model)
             if unavailable:
@@ -248,14 +257,15 @@ class ServedModel:
                 batch_window_ms=process.batch_window_ms,
             ),
             observe=metrics.observe,
+            execute=execute,
         )
         self.scheduler.start()
         self.health.set("warming", "running the golden check")
         self.health.golden = golden_check(
-            self._golden_decisions,
+            self.golden_decisions,
             family.golden(package),
             placement.device.accelerator,
-            run_surface=self._golden_surface,
+            run_surface=self.golden_surface,
         )
         if self.health.golden.status == "failed":
             raise RuntimeError(self.health.golden.detail or "golden check failed")
@@ -308,9 +318,8 @@ class ServedModel:
                 profiles[self.config.profile] = entry()
         return profiles
 
-    def _golden_decisions(
-        self, state: Any, questions: dict[str, Any]
-    ) -> dict[str, Any]:
+    def golden_decisions(self, state: Any, questions: dict[str, Any]) -> dict[str, Any]:
+        """Answers to a golden decisions request on the exact profile, before readiness."""
         parsed = ParsedRequest(
             state, questions, None, "exact", False, time.monotonic(), self
         )
@@ -318,7 +327,8 @@ class ServedModel:
         results = self.submit_items(plan.items, None, "exact").result()
         return self.assemble(parsed, plan, results, 0.0, 0.0)["answers"]
 
-    def _golden_surface(self, surface: str, body: dict[str, Any]) -> dict[str, float]:
+    def golden_surface(self, surface: str, body: dict[str, Any]) -> dict[str, float]:
+        """The numbers of a golden surface response on the exact profile, before readiness."""
         assert self.model is not None
         request = SurfaceRequest(surface, body, None, "exact", False, time.monotonic())
         plan = self.model.plan_surface(surface, request)
@@ -836,18 +846,26 @@ class Runtime:
         self.metrics.input_tokens.inc(plan.input_tokens)
         return response
 
-    async def call(self, surface: str, body: Any) -> tuple[int, dict[str, Any]]:
-        """Serve one surface request; returns (HTTP status, body)."""
-        return (await self._serve([(surface, body)]))[0]
+    async def call(
+        self, surface: str, body: Any, size: int | None = None
+    ) -> tuple[int, dict[str, Any]]:
+        """Serve one surface request; returns (HTTP status, body).
 
-    async def bundle(self, body: Any) -> tuple[int, dict[str, Any]]:
+        ``size`` is the request's encoded size: small requests are planned on
+        the event loop, larger ones on a worker thread.
+        """
+        return (await self._serve([(surface, body)], size))[0]
+
+    async def bundle(
+        self, body: Any, size: int | None = None
+    ) -> tuple[int, dict[str, Any]]:
         """Serve every task of a bundle at once; results keep task order."""
         try:
             tasks = self._bundle_tasks(body)
         except RuntimeServiceError as exc:
             return exc.status, exc.body()
         outcomes = await self._serve(
-            [(surface, task_body) for _, surface, task_body in tasks]
+            [(surface, task_body) for _, surface, task_body in tasks], size
         )
         results = []
         for (task_id, surface, _), (status, response) in zip(
@@ -874,17 +892,22 @@ class Runtime:
             return 500, error.body()
 
     async def _serve(
-        self, requests: list[tuple[str, Any]]
+        self, requests: list[tuple[str, Any]], size: int | None = None
     ) -> list[tuple[int, dict[str, Any]]]:
         """Plan every request, run each model's share as one job group, finish in order."""
-        from starlette.concurrency import run_in_threadpool
+        if size is not None and size <= INLINE_PLAN_BYTES:
+            planned = [
+                self._prepare_outcome(surface, body) for surface, body in requests
+            ]
+        else:
+            from starlette.concurrency import run_in_threadpool
 
-        planned = await asyncio.gather(
-            *(
-                run_in_threadpool(self._prepare_outcome, surface, body)
-                for surface, body in requests
+            planned = await asyncio.gather(
+                *(
+                    run_in_threadpool(self._prepare_outcome, surface, body)
+                    for surface, body in requests
+                )
             )
-        )
         outcomes: list[tuple[int, dict[str, Any]] | None] = [None] * len(requests)
         groups: dict[tuple[int, str, float | None], list[tuple[int, Prepared]]] = {}
         for index, prepared in enumerate(planned):

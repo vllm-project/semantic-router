@@ -5,11 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"math"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding/vecmath"
 )
 
 // mlpModel is an MLP artifact evaluated in float32 like the candle model it
-// replaces: linear layers (float64 accumulation), ReLU, batch normalization
-// with running statistics, and dropout as the identity.
+// replaces: linear layers, ReLU, batch normalization with running
+// statistics, and dropout as the identity. Each output of a linear layer is
+// one SIMD inner product over a contiguous weight row.
 type mlpModel struct {
 	names  []string
 	dim    int
@@ -169,17 +172,12 @@ func (m *mlpModel) classify(query []float64) (string, error) {
 		return "", fmt.Errorf("feature dimension mismatch: expected %d, got %d", m.dim, len(query))
 	}
 	x := toFloat32(query)
-	wide := make([]float64, 0, m.dim)
 	for _, layer := range m.layers {
 		switch layer.kind {
 		case "linear":
-			wide = wide[:0]
-			for _, v := range x {
-				wide = append(wide, float64(v))
-			}
 			out := make([]float32, layer.out)
 			for j := range out {
-				out[j] = float32(dot32(layer.weight[j*layer.in:(j+1)*layer.in], wide)) + layer.bias[j]
+				out[j] = vecmath.Dot(layer.weight[j*layer.in:(j+1)*layer.in], x) + layer.bias[j]
 			}
 			x = out
 		case "relu":

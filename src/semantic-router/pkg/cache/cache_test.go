@@ -1427,7 +1427,6 @@ func BenchmarkComprehensive(b *testing.B) {
 
 // BenchmarkIndexConstruction benchmarks HNSW index build time
 func BenchmarkIndexConstruction(b *testing.B) {
-
 	cacheSizes := []int{100, 500, 1000, 5000}
 	contentLengths := []ContentLength{ShortContent, MediumContent, LongContent}
 
@@ -2434,7 +2433,6 @@ func getMilvusConfigPath() string {
 // BenchmarkHybridVsMilvus is the comprehensive benchmark comparing hybrid cache vs pure Milvus
 // This validates the claims from the hybrid HNSW storage architecture paper
 func BenchmarkHybridVsMilvus(b *testing.B) {
-
 	// Test configurations - realistic production scales
 	cacheSizes := []int{
 		10000,  // Medium: 10K entries
@@ -2857,7 +2855,6 @@ func BenchmarkHybridVsMilvus(b *testing.B) {
 
 // BenchmarkComponentLatency measures individual component latencies
 func BenchmarkComponentLatency(b *testing.B) {
-
 	cacheSize := 10000
 	testQueries := make([]string, cacheSize)
 	for i := 0; i < cacheSize; i++ {
@@ -2939,7 +2936,6 @@ func BenchmarkComponentLatency(b *testing.B) {
 
 // BenchmarkThroughputUnderLoad tests throughput with concurrent requests
 func BenchmarkThroughputUnderLoad(b *testing.B) {
-
 	cacheSize := 10000
 	concurrencyLevels := []int{1, 10, 50, 100}
 
@@ -3466,7 +3462,6 @@ func TestInMemoryCacheHNSW(t *testing.T) {
 
 // BenchmarkInMemoryCacheSearch benchmarks search performance with and without HNSW
 func BenchmarkInMemoryCacheSearch(b *testing.B) {
-
 	// Test different cache sizes
 	cacheSizes := []int{100, 500, 1000, 5000}
 
@@ -3538,7 +3533,6 @@ func BenchmarkInMemoryCacheSearch(b *testing.B) {
 
 // BenchmarkHNSWIndexConstruction benchmarks HNSW index construction time
 func BenchmarkHNSWIndexConstruction(b *testing.B) {
-
 	entryCounts := []int{100, 500, 1000, 5000}
 
 	for _, count := range entryCounts {
@@ -3576,7 +3570,6 @@ func BenchmarkHNSWIndexConstruction(b *testing.B) {
 
 // BenchmarkHNSWParameters benchmarks different HNSW parameter configurations
 func BenchmarkHNSWParameters(b *testing.B) {
-
 	cacheSize := 1000
 	testConfigs := []struct {
 		name           string
@@ -3630,7 +3623,6 @@ func BenchmarkHNSWParameters(b *testing.B) {
 
 // BenchmarkCacheOperations benchmarks complete cache workflow
 func BenchmarkCacheOperations(b *testing.B) {
-
 	b.Run("LinearSearch_AddAndFind", func(b *testing.B) {
 		cache := NewInMemoryCache(InMemoryCacheOptions{
 			EmbeddingProvider:   cacheTestEmbeddingProvider(),
@@ -3682,7 +3674,6 @@ func BenchmarkCacheOperations(b *testing.B) {
 
 // BenchmarkHNSWRebuild benchmarks index rebuild performance
 func BenchmarkHNSWRebuild(b *testing.B) {
-
 	sizes := []int{100, 500, 1000}
 
 	for _, size := range sizes {
@@ -4235,7 +4226,6 @@ func BenchmarkLargeScale(b *testing.B) {
 
 // BenchmarkScalability tests how performance scales with cache size
 func BenchmarkScalability(b *testing.B) {
-
 	// Test cache sizes from small to very large
 	cacheSizes := []int{1000, 5000, 10000, 25000, 50000, 100000}
 
@@ -4368,7 +4358,6 @@ func BenchmarkScalability(b *testing.B) {
 
 // BenchmarkHNSWParameterSweep tests different HNSW parameters at large scale
 func BenchmarkHNSWParameterSweep(b *testing.B) {
-
 	cacheSize := 50000 // 50K entries - good size to show differences
 
 	// Parameter combinations to test
@@ -4493,141 +4482,6 @@ func BenchmarkHNSWParameterSweep(b *testing.B) {
 			b.ReportMetric(totalMemMB, "memory_mb")
 		})
 	}
-}
-
-// Benchmark SIMD vs scalar dotProduct implementations
-func BenchmarkDotProduct(b *testing.B) {
-	// Test with different vector sizes
-	sizes := []int{64, 128, 256, 384, 512, 768, 1024}
-
-	for _, size := range sizes {
-		// Generate random vectors
-		a := make([]float32, size)
-		vec_b := make([]float32, size)
-		for i := 0; i < size; i++ {
-			a[i] = rand.Float32()
-			vec_b[i] = rand.Float32()
-		}
-
-		b.Run(fmt.Sprintf("SIMD/%d", size), func(b *testing.B) {
-			b.ReportAllocs()
-			var sum float32
-			for i := 0; i < b.N; i++ {
-				sum += dotProductSIMD(a, vec_b)
-			}
-			_ = sum
-		})
-
-		b.Run(fmt.Sprintf("Scalar/%d", size), func(b *testing.B) {
-			b.ReportAllocs()
-			var sum float32
-			for i := 0; i < b.N; i++ {
-				sum += dotProductScalar(a, vec_b)
-			}
-			_ = sum
-		})
-	}
-}
-
-// Test correctness of SIMD implementation
-func TestDotProductSIMD(t *testing.T) {
-	testCases := []struct {
-		name string
-		a    []float32
-		b    []float32
-		want float32
-	}{
-		{
-			name: "empty",
-			a:    []float32{},
-			b:    []float32{},
-			want: 0,
-		},
-		{
-			name: "single element",
-			a:    []float32{2.0},
-			b:    []float32{3.0},
-			want: 6.0,
-		},
-		{
-			name: "short vector",
-			a:    []float32{1, 2, 3},
-			b:    []float32{4, 5, 6},
-			want: 32.0, // 1*4 + 2*5 + 3*6 = 4 + 10 + 18 = 32
-		},
-		{
-			name: "8 elements (AVX2 boundary)",
-			a:    []float32{1, 2, 3, 4, 5, 6, 7, 8},
-			b:    []float32{1, 1, 1, 1, 1, 1, 1, 1},
-			want: 36.0, // 1+2+3+4+5+6+7+8 = 36
-		},
-		{
-			name: "16 elements (AVX-512 boundary)",
-			a:    []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
-			b:    []float32{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-			want: 136.0, // 1+2+...+16 = 136
-		},
-		{
-			name: "non-aligned size (17 elements)",
-			a:    []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17},
-			b:    []float32{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-			want: 153.0, // 1+2+...+17 = 153
-		},
-		{
-			name: "384 dimensions (typical embedding size)",
-			a:    make384Vector(),
-			b:    ones(384),
-			want: sum384(),
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := dotProductSIMD(tc.a, tc.b)
-			if abs(got-tc.want) > 0.0001 {
-				t.Errorf("dotProductSIMD() = %v, want %v", got, tc.want)
-			}
-
-			// Also verify scalar produces same result
-			scalar := dotProductScalar(tc.a, tc.b)
-			if abs(scalar-tc.want) > 0.0001 {
-				t.Errorf("dotProductScalar() = %v, want %v", scalar, tc.want)
-			}
-
-			// SIMD and scalar should match
-			if abs(got-scalar) > 0.0001 {
-				t.Errorf("SIMD (%v) != Scalar (%v)", got, scalar)
-			}
-		})
-	}
-}
-
-func make384Vector() []float32 {
-	v := make([]float32, 384)
-	for i := range v {
-		v[i] = float32(i + 1)
-	}
-	return v
-}
-
-func ones(n int) []float32 {
-	v := make([]float32, n)
-	for i := range v {
-		v[i] = 1.0
-	}
-	return v
-}
-
-func sum384() float32 {
-	// Sum of 1+2+3+...+384 = 384 * 385 / 2 = 73920
-	return 73920.0
-}
-
-func abs(x float32) float32 {
-	if x < 0 {
-		return -x
-	}
-	return x
 }
 
 // TestHNSWSelectLevelBatchRandomness verifies selectLevel() produces
@@ -4808,7 +4662,11 @@ func bruteForceKNN(query []float32, candidates [][]float32, k int) []int {
 	}
 	scores := make([]scored, len(candidates))
 	for i, emb := range candidates {
-		scores[i] = scored{idx: i, sim: dotProductScalar(query, emb)}
+		var sim float32
+		for j := range query {
+			sim += query[j] * emb[j]
+		}
+		scores[i] = scored{idx: i, sim: sim}
 	}
 	// Partial sort: only need top k
 	for i := 0; i < k && i < len(scores); i++ {

@@ -49,7 +49,7 @@ func warnUnboundRemoteMemoryEmbedding(cfg *config.RouterConfig, prepared *embedd
 
 func memoryConfigForIdentity(cfg *config.RouterConfig, resolve func(embedding.ConsumerSettings) (embedding.ContentIdentity, error)) (*config.RouterConfig, error) {
 	model := strings.ToLower(strings.TrimSpace(detectMemoryEmbeddingModel(cfg)))
-	if model != "mmbert" && model != "multimodal" && model != "bert" {
+	if model != "mmbert" && model != "multimodal" {
 		return cfg, nil
 	}
 	bound := *cfg
@@ -107,7 +107,9 @@ func memoryConfigForIdentity(cfg *config.RouterConfig, resolve func(embedding.Co
 		identity, err := resolve(embedding.ConsumerSettings{
 			ModelType: model, Dimension: *dimension, Layer: 0, InputPolicy: "memory-content-v1",
 		})
-		if model == "bert" && errors.Is(err, embedding.ErrIdentityUnsupported) {
+		// A provider without a content identity (a remote endpoint) keeps the
+		// configured namespace; memory warns that it cannot verify the model.
+		if errors.Is(err, embedding.ErrIdentityUnsupported) {
 			return cfg, nil
 		}
 		if err != nil {

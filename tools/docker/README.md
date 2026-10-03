@@ -1,10 +1,9 @@
 # Docker build files
 
-This directory contains shared development and Router image Dockerfiles:
+This directory contains the Router image and lint toolchain Dockerfiles:
 
 | File | Purpose |
 | --- | --- |
-| `Dockerfile` | CentOS Stream development environment with the project toolchains. |
 | `Dockerfile.extproc` | Every Router image: the Go router with the built-in model runtime. |
 | `Dockerfile.precommit` | Reproducible lint and agent-harness toolchain used by CI. |
 

@@ -74,7 +74,8 @@ ENV PIP_NO_CACHE_DIR=1 \
 
 # PyTorch per accelerator, in its own layer: the largest and least often
 # changed part of every image. GPU images add FLA's Triton kernels (fla-core,
-# the version the runtime's pinned kernel choices were recorded with).
+# the version the runtime's pinned kernel choices were recorded with), which
+# import packaging without declaring it.
 FROM python-base AS torch-cpu
 ARG TORCH_CPU=torch==2.10.0
 RUN pip install --index-url https://download.pytorch.org/whl/cpu "$TORCH_CPU" && \
@@ -89,7 +90,7 @@ RUN test "$TARGETARCH" = amd64 || { echo "ACCELERATOR=rocm supports linux/amd64 
 RUN apt-get update && apt-get install -y --no-install-recommends libatomic1 && \
     rm -rf /var/lib/apt/lists/*
 RUN pip install --index-url "$TORCH_ROCM_INDEX" "$TORCH_ROCM" && \
-    pip install fla-core==0.5.2 && \
+    pip install fla-core==0.5.2 packaging && \
     python -c "import torch, fla.ops.gated_delta_rule"
 
 FROM python-base AS torch-cuda
@@ -98,14 +99,14 @@ ARG TORCH_CUDA=torch==2.10.0
 ARG TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu128
 RUN test "$TARGETARCH" = amd64 || { echo "ACCELERATOR=cuda supports linux/amd64 only" >&2; exit 1; }
 RUN pip install --index-url "$TORCH_CUDA_INDEX" "$TORCH_CUDA" && \
-    pip install fla-core==0.5.2 && \
+    pip install fla-core==0.5.2 packaging && \
     python -c "import torch, fla.ops.gated_delta_rule"
 
 # The model runtime: its third-party dependencies in one layer and the package
 # in the next, so a runtime code change does not reinstall its dependencies.
-# The onnx extra runs the prepared Omni graphs.
+# The multimodal extra serves the prepared Omni bundles (ONNX Runtime, Pillow).
 FROM torch-${ACCELERATOR} AS runtime
-ARG MODEL_RUNTIME_EXTRAS=onnx
+ARG MODEL_RUNTIME_EXTRAS=multimodal
 RUN --mount=type=bind,source=src/model-runtime/pyproject.toml,target=/tmp/pyproject.toml \
     python - $MODEL_RUNTIME_EXTRAS >/tmp/runtime-requirements.txt <<'EOF' && \
     pip install -r /tmp/runtime-requirements.txt && \

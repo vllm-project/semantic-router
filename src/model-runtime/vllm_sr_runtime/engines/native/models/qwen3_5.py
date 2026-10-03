@@ -22,6 +22,7 @@ from .common import (
     causal_mask,
     recurrent_mask,
 )
+from .forest import Forest, forest_attention, forest_gated_delta
 from .tree import Tree, tree_gated_delta
 
 MODEL_TYPE = "qwen3_5_text"
@@ -189,6 +190,25 @@ class Qwen3_5Layer(nn.Module):
         hidden_states = self.mlp(hidden_states)
         return residual + hidden_states
 
+    def forward_forest(
+        self, prefix, blocks, rotary, forest: Forest, kernels: KernelSet
+    ):
+        """The layer over prefix rows and blocks (``forest.py``); ``rotary`` holds both tables."""
+        normed_prefix = self.input_layernorm(prefix)
+        normed_blocks = self.input_layernorm(blocks)
+        if self.kind == "linear_attention":
+            mixed = forest_gated_delta(
+                self.linear_attn, normed_prefix, normed_blocks, forest, kernels
+            )
+        else:
+            mixed = forest_attention(
+                self.self_attn, normed_prefix, normed_blocks, *rotary, forest
+            )
+        prefix, blocks = prefix + mixed[0], blocks + mixed[1]
+        prefix = prefix + self.mlp(self.post_attention_layernorm(prefix))
+        blocks = blocks + self.mlp(self.post_attention_layernorm(blocks))
+        return prefix, blocks
+
 
 class Qwen3_5Rotary(nn.Module):
     """Interleaved multimodal RoPE; text positions are equal across its three sections."""
@@ -279,6 +299,48 @@ class Qwen3_5Backbone(nn.Module):
                 hidden_states, rotary, full_mask, linear_mask, self.kernels
             )
         return self.norm(hidden_states)
+
+    def forward_forest(
+        self,
+        prefix_ids: torch.Tensor,
+        prefix_mask: torch.Tensor,
+        block_ids: torch.Tensor,
+        block_mask: torch.Tensor,
+        owner: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Left-padded prefix rows ``[B, Lp]`` and right-padded blocks ``[N, Lb]`` through every layer.
+
+        Block ``i`` continues from prefix row ``owner[i]``. Returns the final-normed
+        states of both, ``[B, Lp, hidden]`` and ``[N, Lb, hidden]``.
+        """
+        assert self.kernels is not None, "bind kernels before running the backbone"
+        rows, width = prefix_ids.shape
+        count, block_width = block_ids.shape
+        device = prefix_ids.device
+        lengths = prefix_mask.sum(1)
+        padding = width - lengths
+        prefix_positions = (
+            torch.arange(width, device=device)[None] - padding[:, None]
+        ).clamp(min=0)
+        block_positions = (
+            lengths[owner][:, None] + torch.arange(block_width, device=device)[None]
+        )
+        prefix = self.embed_tokens(prefix_ids)
+        blocks = self.embed_tokens(block_ids)
+        rotary = (
+            self.rotary_emb(prefix, prefix_positions[None].expand(3, rows, width)),
+            self.rotary_emb(
+                blocks, block_positions[None].expand(3, count, block_width)
+            ),
+        )
+        forest = Forest(
+            prefix_mask, block_mask, owner, padding.tolist(), block_mask.sum(1).tolist()
+        )
+        for layer in self.layers:
+            prefix, blocks = layer.forward_forest(
+                prefix, blocks, rotary, forest, self.kernels
+            )
+        return self.norm(prefix), self.norm(blocks)
 
     def forward_tree(self, input_ids: torch.Tensor, tree: Tree) -> torch.Tensor:
         """The packed shared-context row ([1, L] ids) through every layer; [1, L, hidden]."""

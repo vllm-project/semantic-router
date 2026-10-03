@@ -174,7 +174,7 @@ func resolveVectorStoreEmbeddingIdentity(embedder embedding.Provider, cfg *confi
 		ModelType: cfg.EmbeddingModel, Dimension: cfg.EmbeddingDimension,
 		InputPolicy: "vectorstore-chunk-content-and-query-v1",
 	})
-	if err != nil && (cfg.EmbeddingModel == "mmbert" || cfg.EmbeddingModel == "multimodal" || !errors.Is(err, embedding.ErrIdentityUnsupported)) {
+	if err != nil && !errors.Is(err, embedding.ErrIdentityUnsupported) {
 		return embedding.ContentIdentity{}, fmt.Errorf("bind vector store embedding representation: %w", err)
 	}
 	return identity, nil
