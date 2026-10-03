@@ -1052,18 +1052,8 @@ var _ = Describe("validateConfigStructure", func() {
 })
 
 var _ = Describe("validatePromptGuardBackendConfig", func() {
-	It("accepts an unset variant/backend (defaults to candle)", func() {
+	It("accepts the local model (no backend)", func() {
 		cfg := &PromptGuardConfig{}
-		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
-	})
-
-	It("accepts variant candle", func() {
-		cfg := &PromptGuardConfig{Variant: PromptGuardVariantCandle}
-		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
-	})
-
-	It("accepts variant mmbert32k", func() {
-		cfg := &PromptGuardConfig{Variant: PromptGuardVariantMmBERT32K}
 		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
 	})
 
@@ -1089,30 +1079,4 @@ var _ = Describe("validatePromptGuardBackendConfig", func() {
 		Expect(validatePromptGuardBackendConfig(cfg)).To(Succeed())
 	})
 
-	It("rejects an unrecognized variant", func() {
-		cfg := &PromptGuardConfig{Variant: "some_typo"}
-		err := validatePromptGuardBackendConfig(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("some_typo"))
-	})
-
-	It("rejects a stale boolean-flag-era value", func() {
-		cfg := &PromptGuardConfig{Variant: "use_vllm"}
-		err := validatePromptGuardBackendConfig(cfg)
-		Expect(err).To(HaveOccurred())
-	})
-
-	It("rejects setting both variant and backend", func() {
-		cfg := &PromptGuardConfig{
-			Variant: PromptGuardVariantCandle,
-			Backend: &RemoteClassifierBackend{
-				Protocol: RemoteClassifierProtocolHTTPChat,
-				Contract: RemoteClassifierContractLabelDecision,
-				Model:    "guard",
-			},
-		}
-		err := validatePromptGuardBackendConfig(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("mutually exclusive"))
-	})
 })

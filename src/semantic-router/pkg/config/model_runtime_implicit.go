@@ -48,7 +48,7 @@ func (c *RouterConfig) implicitModule(consumer string) (moduleModel, bool) {
 			return local(consumer, classifier.ModelPath, classifier.UseCPU)
 		}
 	case "hallucination_detector":
-		if c.HallucinationMitigation.HallucinationModel.NormalizedBackend() == HallucinationBackendCandle {
+		if c.HallucinationMitigation.HallucinationModel.NormalizedBackend() == HallucinationBackendLocal {
 			return local(consumer, c.HallucinationMitigation.HallucinationModel.ModelID, c.HallucinationMitigation.HallucinationModel.UseCPU)
 		}
 	}
@@ -89,7 +89,7 @@ func (c *RouterConfig) ImplicitTaskDeployment(consumer string) (name string, dep
 // or alias) at its pinned revision, or a local package directory. It runs on
 // CPU when useCPU, else on the best available device.
 func ImplicitModelRuntimeDeployment(model string, useCPU bool) (ModelDeployment, error) {
-	deployment := ModelDeployment{Provider: ModelRuntimeProvider, Device: "auto", Profile: "exact", Precision: "native"}
+	deployment := ModelDeployment{Provider: ModelRuntimeProvider, Device: "auto", Profile: "exact"}
 	if useCPU {
 		deployment.Device = "cpu"
 	}

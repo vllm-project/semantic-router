@@ -25,8 +25,8 @@ func (cfg PIIModel) ValidateWindow() error {
 	if cfg.Window == nil {
 		return nil
 	}
-	if cfg.Backend != nil || !cfg.UseMmBERT32K {
-		return fmt.Errorf("classifier.pii.window requires local mmbert32k")
+	if cfg.Backend != nil {
+		return fmt.Errorf("classifier.pii.window requires the local model")
 	}
 	return cfg.validateWindowParameters(cfg.MaxSequenceLength)
 }

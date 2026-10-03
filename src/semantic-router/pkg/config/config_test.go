@@ -183,13 +183,11 @@ classifier:
     model_id: "test-category-model"
     threshold: 0.7
     use_cpu: false
-    use_modernbert: true
     category_mapping_path: "/path/to/category.json"
   pii_model:
     model_id: "test-pii-model"
     threshold: 0.6
     use_cpu: true
-    use_modernbert: false
     pii_mapping_path: "/path/to/pii.json"
 
 categories:
@@ -263,7 +261,6 @@ tools:
 
 				// Verify classifier config
 				Expect(cfg.CategoryModel.ModelID).To(Equal("test-category-model"))
-				Expect(cfg.CategoryModel.UseModernBERT).To(BeTrue())
 
 				// Verify categories
 				Expect(cfg.Categories).To(HaveLen(1))

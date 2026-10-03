@@ -16,13 +16,16 @@ func validateGenericModelBinding(cfg *RouterConfig, rule *ClassifierSignalRule, 
 		return err
 	}
 	if decl.Contract == RemoteClassifierContractLabelScores {
-		if decl.OperatingPoint == nil || !deployment.IsLocalTask() || rule.Type == ClassifierSignalTypeLLM || (deployment.Provider == "candle" && decl.Head != "") {
+		// The model runtime serves the package's own operating point; other
+		// local providers load the referenced policy file.
+		servedPolicy := deployment.IsModelRuntime()
+		if (decl.OperatingPoint == nil && !servedPolicy) || !deployment.IsLocalTask() || rule.Type == ClassifierSignalTypeLLM || (deployment.Provider == "candle" && decl.Head != "") {
 			return fmt.Errorf("independent scores require an operating_point and a complete local artifact")
 		}
 		if deployment.Input.MaxTokens <= 0 || deployment.Input.Overflow != "reject" {
 			return fmt.Errorf("operating_point requires an explicit document token budget with reject overflow")
 		}
-		if deployment.Precision != "native" && (deployment.Provider != "candle" || deployment.Precision != "fp32") {
+		if !servedPolicy && deployment.Precision != "native" && (deployment.Provider != "candle" || deployment.Precision != "fp32") {
 			return fmt.Errorf("operating_point requires Candle float32 or qualified ORT native execution")
 		}
 	} else if decl.OperatingPoint != nil {
