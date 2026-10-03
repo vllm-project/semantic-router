@@ -1,0 +1,12 @@
+{
+  "bytes": 17947651839,
+  "commit_url": "https://huggingface.co/vllm-sr/Decision-2.0-Lux-9B/commit/7c6792f7e59dce7a64115bfe750ee636e7a63bd4",
+  "files": 43,
+  "manifest_sha256": "1fb2edcb3e3d4ea6913a6c9010f66ffe86dbabea7f7f9cd0af58cd0015e215df",
+  "private": false,
+  "repo": "vllm-sr/Decision-2.0-Lux-9B",
+  "revision": "7c6792f7e59dce7a64115bfe750ee636e7a63bd4",
+  "schema": "dev2-hub-upload/1",
+  "seconds": 3.785294645000249,
+  "utc": "2026-10-03T05:16:25.491136+00:00"
+}

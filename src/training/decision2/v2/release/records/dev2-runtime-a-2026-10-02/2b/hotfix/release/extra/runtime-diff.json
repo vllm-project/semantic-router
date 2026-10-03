@@ -1,0 +1,24 @@
+{
+  "schema": "dev2-runtime-diff/1",
+  "mode": "hotfix",
+  "repo": "vllm-sr/Decision-2.0-Sol-2B",
+  "released": "4b75b52114583b4519001492e8dfb0926c89cfe1",
+  "new": "23cbe9f96dde4a7e1e6a238d576128bf73c5b09e",
+  "files": {
+    "released": 37,
+    "new": 37
+  },
+  "changed_runtime_files": [
+    "decision2/fast.py",
+    "decision2/fast_kernels.py"
+  ],
+  "changed_card_files": [
+    "MODEL_MANIFEST.json"
+  ],
+  "changed_hub_managed_files": [],
+  "changed_other_files": [],
+  "weight_files": 3,
+  "weight_bytes": 4790324776,
+  "weights_byte_identical": true,
+  "ok": true
+}

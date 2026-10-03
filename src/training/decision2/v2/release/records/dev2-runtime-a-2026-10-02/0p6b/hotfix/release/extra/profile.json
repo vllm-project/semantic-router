@@ -1,0 +1,33 @@
+{
+  "passed": true,
+  "items": {
+    "1_successor_R1_v3": {
+      "passed": true,
+      "evidence": "v3 48.636 vs current 43.541: +5.09 [+2.65, +9.30]"
+    },
+    "1_successor_R2_human_transfer": {
+      "passed": true,
+      "evidence": "human transfer delta 95% [-0.064, +0.061]"
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "passed": true,
+      "evidence": "types choice OK, noul OK, score OK"
+    },
+    "1_successor_R4_mlx_diag": {
+      "passed": true,
+      "evidence": "mlx-diag card-eligible macro +0.0044 [-0.0058, +0.0144]"
+    },
+    "1_successor_R5_tier_gates": {
+      "passed": true,
+      "evidence": "own 1.0 low +10.00; v3 48.636 vs 90% of GLiNER2.5-Decide 42.524; H vs GLiNER2.5-Decide [-0.013, +0.161]; own 1.0 low > 0 ok, v3 >= 38.272 ok, H vs GLiNER2.5-Decide upper >= 0 ok, no type collapsed ok"
+    },
+    "1_successor_R6_no_overlap_exposure": {
+      "passed": true,
+      "evidence": "6 training files, 0 exposed groups"
+    },
+    "1_successor_R7_public231": {
+      "passed": true,
+      "evidence": "public 231 152 vs 142 (+10; McNemar p 0.087)"
+    }
+  }
+}

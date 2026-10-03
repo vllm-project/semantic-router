@@ -1,0 +1,14 @@
+{
+  "bytes": 17947651839,
+  "command": "hf download <repo> --revision <sha> --local-dir <fresh dir> (fresh HF_HUB_CACHE)",
+  "files": 43,
+  "hub_added": [
+    ".gitattributes"
+  ],
+  "passed": true,
+  "repo": "vllm-sr/Decision-2.0-Lux-9B",
+  "revision": "7c6792f7e59dce7a64115bfe750ee636e7a63bd4",
+  "schema": "dev2-hub-download/1",
+  "seconds": 13.506078524049371,
+  "utc": "2026-10-03T05:16:48.277888+00:00"
+}

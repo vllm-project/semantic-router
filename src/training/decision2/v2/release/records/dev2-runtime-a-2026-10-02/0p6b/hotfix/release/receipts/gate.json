@@ -1,0 +1,86 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: COORDINATION 2026-10-03 12:03 UTC+8 (the ROCm hotfix owner fixes the _attn_prep_kernel compile failure the Index submission's release spot check found, adds a byte-identical eager fallback for fused kernels and ships runtime-only revisions through the phase A parity rollout; the user's 11:34 instruction makes the Jev Decision Index submission the top priority)",
+  "decision": "release",
+  "decision_sha256": "4e1255af324febad6aca23132beb8bdaa74695bccb5d1aeae98b00ac9502ddb4",
+  "gate_profile": "successor",
+  "items": {
+    "1_successor_R1_v3": {
+      "evidence": "v3 48.636 vs current 43.541: +5.09 [+2.65, +9.30]",
+      "passed": true
+    },
+    "1_successor_R2_human_transfer": {
+      "evidence": "human transfer delta 95% [-0.064, +0.061]",
+      "passed": true
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "evidence": "types choice OK, noul OK, score OK",
+      "passed": true
+    },
+    "1_successor_R4_mlx_diag": {
+      "evidence": "mlx-diag card-eligible macro +0.0044 [-0.0058, +0.0144]",
+      "passed": true
+    },
+    "1_successor_R5_tier_gates": {
+      "evidence": "own 1.0 low +10.00; v3 48.636 vs 90% of GLiNER2.5-Decide 42.524; H vs GLiNER2.5-Decide [-0.013, +0.161]; own 1.0 low > 0 ok, v3 >= 38.272 ok, H vs GLiNER2.5-Decide upper >= 0 ok, no type collapsed ok",
+      "passed": true
+    },
+    "1_successor_R6_no_overlap_exposure": {
+      "evidence": "6 training files, 0 exposed groups",
+      "passed": true
+    },
+    "1_successor_R7_public231": {
+      "evidence": "public 231 152 vs 142 (+10; McNemar p 0.087)",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "1 results below own 1.0 listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 35 files re-hashed; loaded 597103104",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "b1b09faf93e0379a7cc11204715ad35647dcd617ab894c23cd7114587a867b4e",
+  "model_name": "Decision-2.0-Kai-0.6B",
+  "receipts_sha256": {
+    "automap-card-pre": "32078813f2e823bead63dfc3860058a29db9f17336df1fd165ce6a55a20a950f",
+    "automap-hub": "fdd4d3fa01f49a65899edac2e7efd99f9b118b12707262861c41cbe60e41442e",
+    "automap-hub-tf518": "1a167ad0af085d28651672bde28c62a9c6c2ab7d5a37f5a529f778a29ed2e76f",
+    "automap-post": "1f94f5942bf2713e4a36f454cac31dde2b12e5c1ab8a89e6d57944beabff9938",
+    "automap-pre": "eef07e214f9eac3e8f78839b0fb9baaae4d3a7dda5a49e01e2f35c6f27332432",
+    "card-post": "030bf505d5cf33553a3a873a380c67cda4b87389157cd4fdada956f17e7d7c2d",
+    "card-pre": "f40900d999fc527018b1c7cf3a8b60a52d6cba3b8de0cdb26998fb07f0ba95cb",
+    "download": "268cd31e759489e0ddf039408109e7c23c7b8a233646049c3e40c21c2723844f",
+    "post": "db78ed0a190bd5ce198ee85461d230ea343b813acb7a7cecf6b40c6225e94b80",
+    "readback": "7f543d569d680ba637994b2cddae3a5a83d63d26437a2694c1e1de59541b4d56",
+    "repeat-post": "30a9ca9326023157158a35f910aa15eac4e57a327f49e673794dd186600cca1a",
+    "repeat-pre": "1b1350f873591a75a855cfc9bf01cabd3185a10e5a04a8355d4857b49168ce76",
+    "tree": "ee445d7587095afdfb28ef3eb218fc636e522528f3656cff2e17d89221383d54",
+    "upload": "ca87c2f6c473cdf63ecda025a395b82497d718c91d0ee1d7d96e87b66023f2b1"
+  },
+  "repo_id": "vllm-sr/Decision-2.0-Kai-0.6B",
+  "revision": "d06cf74b1304c6454b9de6e0adb8eaad5ac719fa",
+  "schema": "dev2-release-gate/1",
+  "supersedes": {
+    "gate_sha256": "787c31c9e5bf618c788d28acbe6b1009181d62b6e37fa16e6c231b2dd2ca2bc1",
+    "revision": "99c4e799392afa73241915aeb16fefa5ef3518d7"
+  },
+  "utc": "2026-10-03T06:03:16.783951+00:00"
+}

@@ -1,0 +1,12 @@
+{
+  "bytes": 2039606151,
+  "commit_url": "https://huggingface.co/vllm-sr/Decision-2.0-Eos-0.8B/commit/34e2db970f2f49ef431237aa3218e0688a1fe992",
+  "files": 33,
+  "manifest_sha256": "99327d5bdc73d26fe7c7084d56f00a4233369a567a650b0cc9b7a7653b587280",
+  "private": false,
+  "repo": "vllm-sr/Decision-2.0-Eos-0.8B",
+  "revision": "34e2db970f2f49ef431237aa3218e0688a1fe992",
+  "schema": "dev2-hub-upload/1",
+  "seconds": 3.3326826631091535,
+  "utc": "2026-10-03T05:58:09.075785+00:00"
+}

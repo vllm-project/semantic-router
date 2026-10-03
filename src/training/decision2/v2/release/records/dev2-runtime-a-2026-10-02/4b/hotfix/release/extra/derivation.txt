@@ -1,0 +1,2 @@
+v2/release/specs/dev2-4b-rah.json 6b4831284f38cb1d08dbedd2f496bfa731ea7450909386a73d2994f9bcc12995
+v2/release/records/dev2-runtime-a-2026-10-02/Decision-2.0-Nox-4B.decision.rah.json 1765c8e8445e1b2d1bb47b2e060a3a2e73385f0aad55622168971f06615f4ea0

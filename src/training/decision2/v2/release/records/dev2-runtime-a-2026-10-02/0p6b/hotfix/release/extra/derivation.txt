@@ -1,0 +1,2 @@
+v2/release/specs/dev2-0p6b-rah.json a5eed8e5e0e8efb2193b42defff422cd821fe2d314eb2b37ad502faec9d13ea0
+v2/release/records/dev2-runtime-a-2026-10-02/Decision-2.0-Kai-0.6B.decision.rah.json 4e1255af324febad6aca23132beb8bdaa74695bccb5d1aeae98b00ac9502ddb4

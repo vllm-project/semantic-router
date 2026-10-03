@@ -1,0 +1,37 @@
+{
+ "bytes": {
+  "k_proj": 301989888,
+  "q_proj": 2415919104
+ },
+ "device": "gfx942:sramecc+:xnack-",
+ "new": {
+  "full_batch": "ran"
+ },
+ "old": {
+  "error": "RuntimeError: PassManager::run failed",
+  "full_batch": "failed",
+  "traceback_tail": [
+   "  File \"/usr/local/lib/python3.12/dist-packages/triton/backends/amd/compiler.py\", line 273, in make_ttgir",
+   "    pm.run(mod, 'make_ttgir')",
+   "RuntimeError: PassManager::run failed"
+  ]
+ },
+ "passed": true,
+ "rows_equal_to_old_per_row": {
+  "new": 9
+ },
+ "schema": "dev2-attn-prep-2gib/1",
+ "shapes": {
+  "head_dim": 256,
+  "heads": 16,
+  "kv_heads": 4,
+  "rotary": 64,
+  "rows": 9,
+  "tokens": 16384
+ },
+ "torch": "2.12.0+git6bbd260",
+ "within_2gib": {
+  "k_proj": true,
+  "q_proj": false
+ }
+}

@@ -137,3 +137,77 @@ first Kai and Eos benches ran while Vega's post-checks shared the GPU and are no
 `<key>/switch/release/`.
 
 GPU use: about 9.5 GPU-h of the 20 budgeted (phase A about 6; the switch rollout about 3.5, most of it Vega).
+
+## 7. ROCm hotfix: `attn_prep` above 2 GiB and the eager fallback (2026-10-03; hotfix owner 490b6f72)
+
+COORDINATION 2026-10-03 12:03 UTC+8: the Index submission's release spot check found that Nox `ce1bdc9d`, Lux
+`214ffa43` and Vega `9b067a95` return `error` on 5 of 2,160 sample requests (`PassManager::run failed` in AMD
+`make_ttgir`, compiling `_attn_prep_kernel`). Branch `xunzhuo/decision-2-runtime-hotfix`, worktree
+`vllm-sr-dev2-runtime-hotfix`; runtime commit `3c8cd1a84`.
+
+**Root cause.** Triton 3.7.1 marks a pointer argument `tt.pointer_range = 32` only when its tensor's storage is at most
+2 GiB. `_attn_prep_kernel` chose its source, weight and destination pointers with a runtime branch
+(`if hid < NH`: query, else key). On a long request with many questions, the query projection
+(B × T × heads × 2 × D BF16; 16 KiB per token for Nox and Lux) is above 2 GiB while the key projection is below, so the
+two arms carry differently canonicalized pointers and `TritonAMDGPUCanonicalizePointers` asserts "ifOp types must
+match in both arms". Every failing log shows the same signature: the query pointer is the only one without
+`pointer_range`. That is why a standalone call with small batches compiled, why the autotune cache did not matter, and
+why Vega (wider query rows) fails on more requests. Eos and Sol (8 KiB per token) fail the full-Index request
+`reversechain_query_51` the same way; Kai's narrower rows (4 KiB per token) did not reach the bound on the Index.
+
+**Fix (`runtime/fast_kernels.py`).** `attn_prep` launches the kernel once per tensor (query, then key); each launch is
+straight-line code with the same per-row arithmetic, so no pointer passes through a runtime branch.
+
+**Guard (`runtime/fast.py`).** A fused decoder-layer call that raises (compile or launch failure) runs the layer's
+eager forward instead, which computes the same values (the fused kernels round exactly like the ops they replace);
+that input shape then stays eager in that layer, and the receipt counts it (`fused_fallbacks`). A failure during HIP
+graph capture propagates to `Graphs` as before, which runs that shape eagerly.
+
+**Kernel and unit evidence (node B).**
+
+- `ops/attn_prep_2gib.py` at Nox's widths, 9 × 16,384 tokens (query projection 2.42 GB, key 0.30 GB): the released
+  kernel fails with `PassManager::run failed`; the new kernel runs and equals the released kernel run row by row on
+  copies below 2 GiB (9 / 9 rows bit-identical).
+- `tests/gpu_fast_path.py`: 14 / 14 cases bit-identical to the eager backbone, including the > 2 GiB Nox-width case
+  (0 fallbacks) and every fused kernel forced to fail (each layer on the fallback, still bit-identical).
+
+**Rollout (`fast.sh` / `make_fast.py` / `ra.sh` / `ra_diff.py --hotfix`).** The old side is each repository's current
+`main` with the image, spec and autotune cache of the release that built it. `--parity` adds a third side, the new
+package with every fused kernel raising (`ops/fallback_parity.py`), compared with the old side at tolerance 0, so the
+fallback is shown byte-identical on every prompt. The parity and bench ran on node D (Kai on node A) from copies of
+the previews and caches; the benches were repeated alone. `card.speed` stays the current main's (README byte-identical);
+the bench is recorded in each decision. `ra.sh --hotfix` accepts exactly `decision2/fast.py` and
+`decision2/fast_kernels.py` changing.
+
+| Model | Superseded | New `main` | Parity default / fallback (identical of 10,653, drift) | Bench p50 old → new (400 bit-identical) | 86-request gate |
+| --- | --- | --- | --- | --- | --- |
+| Decision-2.0-Nox-4B | `ce1bdc9d` | `7fc0023a8c51ffaf0f4d4a8f1eb1fb54fa2451cc` | 10,653 / 10,653, 0.0 | 13.94 → 13.72 ms | 86 / 86, 0.0 |
+| Decision-2.0-Lux-9B | `214ffa43` | `7c6792f7e59dce7a64115bfe750ee636e7a63bd4` | 10,653 / 10,653, 0.0 | 18.71 → 18.73 ms | 86 / 86, 0.0 |
+| Decision-2.0-Vega-27B | `9b067a95` | `477e90f537eb5bd62e90d5e5361c7b654e69cf45` | 10,653 / 10,653, 0.0 | 74.67 → 74.54 ms | see below |
+| Decision-2.0-Eos-0.8B | `ad0aa724` | `34e2db970f2f49ef431237aa3218e0688a1fe992` | 10,653 / 10,653, 0.0 | 6.12 → 6.16 ms | 86 / 86, 0.0 |
+| Decision-2.0-Sol-2B | `4b75b521` | `23cbe9f96dde4a7e1e6a238d576128bf73c5b09e` | 10,653 / 10,653, 0.0 | 7.55 → 7.61 ms | 86 / 86, 0.0 |
+| Decision-2.0-Kai-0.6B | `881bee41` | `d06cf74b1304c6454b9de6e0adb8eaad5ac719fa` | 10,653 / 10,653, 0.0 | 4.91 → 4.95 ms | 86 / 86, 0.0 |
+
+Every release: weights byte-identical (`ra_diff.py --hotfix`), examples bit-identical to the superseded package on
+the same GPU, image and frozen cache, the Hub `trust_remote_code` smoke under Transformers 5.17 and 5.18, readback,
+gate seal, collection order, card HTTP, links 8 / 8, `gate evaluate`. Frozen caches `runtime-a-<key>-rah`
+(`<key>/hotfix/triton.json`). Receipts: `/data/dev2/runs/release/dev2-rah-<tier>-*` on node A.
+
+**Real calls (Index harness, the stored runs' frozen caches).**
+
+- Before upload, the staging builds answered the 5 failing requests `ok` (Nox, Lux; Nox's answers byte-identical to
+  the stored pre-release answers, max |Δp| 0.0), and the Vega staging build answered all 2,160 sample requests `ok`
+  (its 5 formerly failing requests byte-identical to the stored answers; 2 near-tie flips elsewhere).
+- Release spot checks of the downloads (2,160 requests, `v2.eval.ix1.submission spotcheck` + `repin.py spotcheck`):
+  Nox `7fc0023a` 2,160 `ok`, 0 flips, max |Δp| 0.0143; Lux `7c6792f7` 0 flips, 0.0249; Eos `34e2db97` 6 near-tie
+  flips, 0.0153; Sol `23cbe9f9` 0 flips, 0.0141; Vega `5c85c127` (PR pin before the fix) 0 flips, 0.0103.
+- The 60 heaviest Index requests (questions × longest row): the released Eos `ad0aa724` and Sol `4b75b521` each
+  error on `reversechain_query_51`; the fixed Nox, Lux, Eos and Sol return 59 `ok` and 1 over the input limit.
+
+**Index submission.** Dataset `vllm-sr/decision-2.0-decision-index` and PR
+https://github.com/apolinario/decision-index/pull/48 pin the fixed revisions once each passes the spot check
+(`v2/eval/ix1/repin.py` recomputes `weights-vs-release.json` for the new revision; `publish_dataset.py --update`).
+
+Shared-module changes (called out): `runtime/fast.py`, `runtime/fast_kernels.py`, `tests/gpu_fast_path.py`; the ops
+above; `v2/eval/ix1/launch.sh` entries, `repin.py`, `publish_dataset.py --update`. The opt-in shared-context switch is
+unchanged.

@@ -1,0 +1,20 @@
+{
+ "kit_revision": "87d4650b",
+ "package_manifest_sha256": "b1b09faf93e0379a7cc11204715ad35647dcd617ab894c23cd7114587a867b4e",
+ "parity": {
+  "max_abs_dp": 0.0,
+  "mismatched_requests": 0,
+  "pass": true,
+  "questions_compared": 419,
+  "requests": 86,
+  "schema": "ix1-parity/1",
+  "statuses": {
+   "ok": 86
+  },
+  "tolerance": 0.0001
+ },
+ "repo": "vllm-sr/Decision-2.0-Kai-0.6B",
+ "revision": "d06cf74b1304c6454b9de6e0adb8eaad5ac719fa",
+ "rows": "compat-86",
+ "schema": "dev2-runtime-a-gate86/1"
+}

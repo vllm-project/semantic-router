@@ -1,0 +1,2 @@
+v2/release/specs/dev2-0p8b-rah.json 811a3b874e4f507eca410a07515e40a3dea9cdc3777b0c3c4a85e399e4b5a311
+v2/release/records/dev2-runtime-a-2026-10-02/Decision-2.0-Eos-0.8B.decision.rah.json 942cb90312c7ae8d13debff4738dfa5d27d52c11d4ad48a34d2b669946a5763d
