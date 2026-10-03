@@ -118,6 +118,15 @@ def _provider_projection_errors(config: UserConfig) -> list[ValidationError]:
     return []
 
 
+def collect_config_errors(user_config: UserConfig) -> list[ValidationError]:
+    """Return the semantic and provider projection errors for a parsed config."""
+
+    errors = validate_user_config(user_config, log_summary=False)
+    if not errors:
+        errors.extend(_provider_projection_errors(user_config))
+    return errors
+
+
 def validate_command(config_path: str):
     """
     Validate user configuration.
@@ -132,11 +141,7 @@ def validate_command(config_path: str):
         error(f"Configuration parsing failed: {e}")
         sys.exit(1)
 
-    # Validate config
-    errors = validate_user_config(user_config, log_summary=False)
-    if not errors:
-        errors.extend(_provider_projection_errors(user_config))
-
+    errors = collect_config_errors(user_config)
     if errors:
         print_validation_errors(errors)
         sys.exit(1)

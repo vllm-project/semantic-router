@@ -581,6 +581,131 @@ def test_cli_config_migrate_writes_canonical_yaml(tmp_path: Path):
     ]
 
 
+def _legacy_config_with_pii_plugin() -> dict:
+    return {
+        "version": "v0.2.0",
+        "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        "providers": {
+            "default_model": "gpt-4o-mini",
+            "models": [
+                {
+                    "name": "gpt-4o-mini",
+                    "endpoints": [
+                        {
+                            "name": "primary",
+                            "endpoint": "host.docker.internal:8000",
+                            "protocol": "http",
+                        }
+                    ],
+                }
+            ],
+        },
+        "decisions": [
+            {
+                "name": "default-route",
+                "description": "fallback",
+                "priority": 100,
+                "rules": {"operator": "AND", "conditions": []},
+                "modelRefs": [{"model": "gpt-4o-mini"}],
+                "plugins": [
+                    {
+                        "type": "pii",
+                        "configuration": {"enabled": True, "pii_types_allowed": []},
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def test_cli_config_migrate_reports_non_canonical_output_without_writing(
+    tmp_path: Path,
+):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        yaml.safe_dump(_legacy_config_with_pii_plugin(), sort_keys=False)
+    )
+
+    result = CliRunner().invoke(
+        main, ["config", "migrate", "--config", str(config_path)]
+    )
+
+    assert result.exit_code == 1
+    assert "Configuration migrated" not in result.stdout
+    assert "routing.decisions.0.plugins.0.type" in result.stderr
+    assert "No output was written" in result.stderr
+    assert not (tmp_path / "config.migrated.yaml").exists()
+
+
+def test_cli_config_migrate_force_keeps_existing_output_on_failure(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        yaml.safe_dump(_legacy_config_with_pii_plugin(), sort_keys=False)
+    )
+    output_path = tmp_path / "out.yaml"
+    output_path.write_text("previous: output\n")
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "config",
+            "migrate",
+            "--config",
+            str(config_path),
+            "--output",
+            str(output_path),
+            "--force",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert output_path.read_text() == "previous: output\n"
+
+
+def test_cli_config_migrate_rejects_hnsw_fields_without_writing(tmp_path: Path):
+    source = {
+        "version": "v0.2.0",
+        "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        "providers": {
+            "default_model": "m",
+            "models": [
+                {
+                    "name": "m",
+                    "endpoints": [
+                        {
+                            "name": "p",
+                            "endpoint": "host.docker.internal:8000",
+                            "protocol": "http",
+                        }
+                    ],
+                }
+            ],
+        },
+        "decisions": [
+            {
+                "name": "d",
+                "description": "x",
+                "priority": 1,
+                "rules": {"operator": "AND", "conditions": []},
+                "modelRefs": [{"model": "m"}],
+            }
+        ],
+        "semantic_cache": {"enabled": True, "hnsw_config": {"hnsw_m": 16}},
+    }
+    config_path = tmp_path / "legacy.yaml"
+    config_path.write_text(yaml.safe_dump(source, sort_keys=False))
+
+    result = CliRunner().invoke(
+        main, ["config", "migrate", "--config", str(config_path)]
+    )
+
+    assert result.exit_code == 1
+    assert "Configuration migrated" not in result.stdout
+    assert "hnsw_config" in result.stderr
+    assert "No output was written" in result.stderr
+    assert not (tmp_path / "legacy.migrated.yaml").exists()
+
+
 def test_migrate_config_data_moves_global_modules_under_model_catalog():
     legacy = {
         "version": "v0.3",
