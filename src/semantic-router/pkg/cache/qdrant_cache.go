@@ -167,6 +167,8 @@ func (c *QdrantCache) getEmbedding(ctx context.Context, text string) ([]float32,
 	return computeCacheEmbedding(ctx, c.embeddingProvider, text)
 }
 
+func (c *QdrantCache) semanticEmbeddingProvider() embedding.Provider { return c.embeddingProvider }
+
 func (c *QdrantCache) embeddingDimension() int {
 	if c == nil {
 		return 0
