@@ -56,9 +56,14 @@
 - **01:25Z: M9 amendment 3** (`cf8c660f5`): `X9-IBLRH` (M9-IB-lrh s5 / s6, ½ each) and `X9-IBLRHxM50` (+ M50's four,
   ⅙ each), read first (≈ 14:20Z). +30 GPU-h asked. Generic chain **`/tmp/d2w/cand.sh ARM`** (member lists and weights
   for every preregistered candidate except X8-ML; `CAND_PARITY_GPU` / `CAND_INDEX_GPUS` start parity and the run).
+- **01:45Z: M9 amendment 4** (`d5703f30f`): `M9-IB14ML-lrh` / `M9-IB124ML-lrh` s5 / s6 (half LR, M7's mixtures; cap
+  19 / 22; `m8-arm.sh` knows them) and `X9-LRHALL` (four half-LR arms, ¼ each). **Launch only after the +90 GPU-h
+  approval** (COORDINATION 09:40); node F / A first; copy `a20ib14ml` / `a20ib124ml` there (`/tmp/d2w/xfer.sh d f
+  <path>`); then set their node in `cand.sh`'s `src_of` before `cand.sh X9-LRHALL`.
 - **Waiters running (workstation, detached):** `score-wait.sh X7-IBxIB2xIB14ML` (log `logs/score-wait-X7.log`;
   scores with `M6_INDEX_BASE=M6-IBxIB2-m50` once all 8 shards end 0, prints only YES / no for lower bound > 0);
-  `idx-wait.sh M7-IB14ML "d6 d7" "M8-IB14-s4 M8-IB14-s5"` (parity + run when those seeds relay, ≈ 04:50Z);
+  `handover.sh "M8-IB14-s4 M8-IB14-s5" "6 7"` (≈ 04:50Z: released owners on node D GPU6–7 for the Index submission
+  worker's Vega complement, user ask; M7-IB14ML's read follows them: `idx-wait.sh M7-IB14ML "<free dN>" "<seeds>"`);
   `cand.sh X7-4ARM` with `CAND_PARITY_GPU=d0 CAND_INDEX_GPUS="d0 d1 d2 d3 d4 d5"` (waits for the M7-IB124ML relays,
   soup with weights 3×6 / 2×3, stage, then waits until those GPUs are idle, parity, run, audit).
 - **Release runbook (a candidate ARM with lower bound > 0 and R3 types OK):**
