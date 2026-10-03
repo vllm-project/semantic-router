@@ -140,6 +140,15 @@ func newResultCache(limit int) *resultCache {
 	return &resultCache{limit: limit, entries: make(map[cacheKey]*list.Element), order: list.New()}
 }
 
+// active returns the cache, or nil when caching is disabled, so callers skip
+// hashing the request.
+func (c *resultCache) active() *resultCache {
+	if c == nil || c.limit == 0 {
+		return nil
+	}
+	return c
+}
+
 func (c *resultCache) get(key cacheKey) (any, bool) {
 	if c == nil || c.limit == 0 {
 		return nil, false
