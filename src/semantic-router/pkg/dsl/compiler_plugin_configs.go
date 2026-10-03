@@ -170,7 +170,7 @@ func compilePluginFields(
 	return target, true
 }
 
-// withObjectFields keeps nested objects as written, since their config structs have no JSON tags.
+// withObjectFields keeps nested objects as written, so the payload does not depend on their structs' JSON tags.
 func (c *Compiler) withObjectFields(cfg interface{}, fields map[string]Value, keys ...string) (interface{}, bool) {
 	payload, err := config.NewStructuredPayload(cfg)
 	if err != nil {
