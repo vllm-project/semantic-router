@@ -1,24 +1,165 @@
 """ONNX Runtime engine: runs the ONNX graphs a package ships or a prepared bundle holds.
 
 Graphs are data: the engine loads them with ONNX Runtime and no custom
-operators. It returns named graph outputs (heads baked in) or hidden states
-when a graph exports them. Execution providers: CPU (validated); CUDA, ROCm
-and MIGraphX, and OpenVINO when the installed onnxruntime build provides them
+operators, and returns named graph outputs (heads baked in, or hidden states
+when a graph exports them). Each ``ModelSpec.graphs`` entry becomes one
+session; an ``EncoderBatch`` names the graph it runs. The standard token
+inputs (``input_ids``, ``attention_mask``, ``position_ids``,
+``token_type_ids``) are filled from the batch, any other declared input comes
+from ``EncoderBatch.graph_inputs``.
+
+Execution providers (``providers.py``): CPU (validated); CUDA, MIGraphX or
+ROCm, and OpenVINO when the installed onnxruntime build provides them
 (unvalidated until recorded).
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, ClassVar
+
+import numpy as np
+import torch
 
 from ...plugins.base import (
     Accelerator,
     DeviceInfo,
+    EncoderBatch,
+    EncoderOutput,
     Engine,
     EngineModel,
     EngineOptions,
+    ForwardBatch,
+    ForwardOutput,
     ModelSpec,
 )
+from . import graphs as graph_files
+from . import providers
+
+INSTALL_HINT = "install the onnx extra: pip install 'vllm-sr-runtime[onnx]'"
+NUMPY_TYPES = {
+    "tensor(int64)": np.int64,
+    "tensor(int32)": np.int32,
+    "tensor(float)": np.float32,
+    "tensor(float16)": np.float16,
+    "tensor(double)": np.float64,
+    "tensor(bool)": np.bool_,
+}
+TOKEN_INPUTS = ("input_ids", "attention_mask", "position_ids", "token_type_ids")
+
+
+@dataclass(frozen=True)
+class GraphInput:
+    name: str
+    shape: tuple[int | str | None, ...]
+    dtype: Any
+
+
+class GraphSession:
+    """One graph loaded in an ONNX Runtime session, with its declared inputs and outputs."""
+
+    def __init__(self, name: str, path: Path, session: Any):
+        self.name = name
+        self.path = path
+        self.session = session
+        self.inputs = tuple(
+            GraphInput(
+                item.name, tuple(item.shape), NUMPY_TYPES.get(item.type, np.float32)
+            )
+            for item in session.get_inputs()
+        )
+        self.outputs = tuple(item.name for item in session.get_outputs())
+        self.facts = graph_files.read_graph(path)
+
+    def feeds(self, batch: EncoderBatch) -> dict[str, np.ndarray]:
+        input_ids = batch.input_ids.detach().cpu().numpy()
+        rows, width = input_ids.shape
+        feeds: dict[str, np.ndarray] = {}
+        for declared in self.inputs:
+            if declared.name in batch.graph_inputs:
+                value = batch.graph_inputs[declared.name].detach().cpu().numpy()
+            elif declared.name == "input_ids":
+                value = input_ids
+            elif declared.name == "attention_mask":
+                value = batch.attention_mask.detach().cpu().numpy()
+            elif declared.name == "position_ids":
+                positions = np.arange(width, dtype=np.int64)[None]
+                value = (
+                    positions
+                    if declared.shape[:1] == (1,)
+                    else np.repeat(positions, rows, 0)
+                )
+            elif declared.name == "token_type_ids":
+                value = np.zeros_like(input_ids)
+            else:
+                raise ValueError(
+                    f"graph {self.name!r} needs the input {declared.name!r}"
+                )
+            feeds[declared.name] = np.ascontiguousarray(value, dtype=declared.dtype)
+        return feeds
+
+    def run(self, batch: EncoderBatch) -> dict[str, torch.Tensor]:
+        names = list(batch.outputs) or list(self.outputs)
+        unknown = sorted(set(names) - set(self.outputs))
+        if unknown:
+            raise ValueError(f"graph {self.name!r} has no outputs {unknown}")
+        values = self.session.run(names, self.feeds(batch))
+        return {
+            name: torch.from_numpy(value)
+            for name, value in zip(names, values, strict=True)
+        }
+
+
+class OnnxRuntimeModel(EngineModel):
+    """A model's graphs loaded on one device; ``encode`` runs the graph a batch names."""
+
+    def __init__(
+        self,
+        graphs: dict[str, GraphSession],
+        choice: providers.ProviderChoice,
+        device_info: DeviceInfo,
+        threads: int | None,
+    ):
+        self.graphs = graphs
+        self.choice = choice
+        self.device_info = device_info
+        self.device = torch.device("cpu")
+        self.threads = threads
+
+    def forward(self, batch: ForwardBatch) -> ForwardOutput:
+        raise NotImplementedError("the onnxruntime engine runs encoder graphs only")
+
+    def encode(self, batch: EncoderBatch) -> EncoderOutput:
+        graph = self.graphs.get(batch.graph)
+        if graph is None:
+            raise ValueError(
+                f"no graph {batch.graph!r} is loaded; loaded: {sorted(self.graphs)}"
+            )
+        return EncoderOutput(outputs=graph.run(batch))
+
+    def graph_metadata(self, name: str) -> dict[str, str]:
+        """The custom metadata a loaded graph declares (for example a pair scorer's exit)."""
+        return dict(self.graphs[name].facts.metadata)
+
+    def parameter_count(self) -> int:
+        return graph_files.parameters(graph.facts for graph in self.graphs.values())
+
+    def memory_bytes(self) -> int:
+        return 4 * self.parameter_count()
+
+    def receipt(self) -> dict[str, Any]:
+        """What runs this model: the provider, its options and the loaded graphs."""
+        return {
+            "provider": self.choice.name,
+            "provider_options": dict(self.choice.options),
+            "validated": self.choice.validated,
+            "threads": self.threads,
+            "graphs": {name: graph.path.name for name, graph in self.graphs.items()},
+        }
+
+    def close(self) -> None:
+        self.graphs = {}
 
 
 class OnnxRuntimeEngine(Engine):
@@ -26,12 +167,32 @@ class OnnxRuntimeEngine(Engine):
 
     @classmethod
     def descriptor(cls) -> dict[str, Any]:
-        return {"outputs": ["graph"], "graphs": "onnx"}
+        try:
+            import onnxruntime
+
+            installed = onnxruntime.get_available_providers()
+        except ImportError:
+            installed = []
+        return {
+            "architectures": ["onnx-graph"],
+            "outputs": ["graph_outputs"],
+            "devices": sorted(providers.PROVIDERS),
+            "providers": {
+                name: list(order) for name, order in providers.PROVIDERS.items()
+            },
+            "validated": sorted(providers.VALIDATED),
+            "installed": installed,
+        }
 
     def supports(self, spec: ModelSpec, device: DeviceInfo) -> str | None:
         if not spec.graphs:
             return "the package ships no ONNX graph for this model"
-        return "the onnxruntime engine cannot run models yet"
+        try:
+            import onnxruntime
+        except ImportError:
+            return f"onnxruntime is not installed ({INSTALL_HINT})"
+        choice = providers.choose(device, onnxruntime.get_available_providers())
+        return choice if isinstance(choice, str) else None
 
     def load(
         self,
@@ -39,5 +200,29 @@ class OnnxRuntimeEngine(Engine):
         accelerator: Accelerator,
         device: DeviceInfo,
         options: EngineOptions,
-    ) -> EngineModel:
-        raise NotImplementedError("the onnxruntime engine cannot run models yet")
+    ) -> OnnxRuntimeModel:
+        import onnxruntime
+
+        choice = providers.choose(
+            device,
+            onnxruntime.get_available_providers(),
+            options.extra.get("onnxruntime_provider"),
+        )
+        if isinstance(choice, str):
+            raise RuntimeError(choice)
+        session_options = providers.session_options(
+            choice, options.threads, options.extra.get("onnxruntime_spinning")
+        )
+        graphs = {
+            name: GraphSession(
+                name,
+                Path(path),
+                onnxruntime.InferenceSession(
+                    str(path),
+                    session_options,
+                    providers=[(choice.name, choice.options)],
+                ),
+            )
+            for name, path in spec.graphs.items()
+        }
+        return OnnxRuntimeModel(graphs, choice, device, options.threads)
