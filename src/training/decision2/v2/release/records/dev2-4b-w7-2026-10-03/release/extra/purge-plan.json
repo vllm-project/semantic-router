@@ -1,0 +1,71 @@
+{
+  "before": {
+    "commits": 19,
+    "heads": {
+      "branch:main": "ce1bdc9d91333aae2bf496ec48c66e1a913eb0a0"
+    },
+    "lfs_objects": 36,
+    "main_lfs_served": {
+      "assets/banner.png": 206,
+      "assets/index-areas.png": 206,
+      "assets/index-pareto.png": 206,
+      "assets/jevarena-types.png": 206,
+      "backbone/model-00001-of-00005.safetensors": 206,
+      "backbone/model-00002-of-00005.safetensors": 206,
+      "backbone/model-00003-of-00005.safetensors": 206,
+      "backbone/model-00004-of-00005.safetensors": 206,
+      "backbone/model-00005-of-00005.safetensors": 206,
+      "decision_head.safetensors": 206,
+      "tokenizer.json": 206
+    },
+    "old_paths_served": {
+      "backbone/model-00001-of-00005.safetensors": 206,
+      "backbone/model-00002-of-00005.safetensors": 206,
+      "backbone/model-00003-of-00005.safetensors": 206,
+      "backbone/model-00004-of-00005.safetensors": 206,
+      "backbone/model-00005-of-00005.safetensors": 206,
+      "decision_head.safetensors": 206
+    }
+  },
+  "mode": "plan",
+  "new_revision": "ce1bdc9d91333aae2bf496ec48c66e1a913eb0a0",
+  "node_copy": "/data/dev2/runs/release/dev2-4b-lhs17ib4-lrh-release-20261002T213803Z/package/Decision-2.0-Nox-4B",
+  "old_revision": "c60d3b5ca7d71a36669392bc4fb94a1596df6739",
+  "repo": "vllm-sr/Decision-2.0-Nox-4B",
+  "rewrite_history": false,
+  "schema": "dev2-release-purge-superseded/1",
+  "target_bytes": 9695398936,
+  "targets": {
+    "1c24238d1256c9d60ada824cb156b360097a5466fbd2c68123e6f13919e697ec": {
+      "bytes": 488124128,
+      "node_copy_sha256": "1c24238d1256c9d60ada824cb156b360097a5466fbd2c68123e6f13919e697ec",
+      "path": "backbone/model-00005-of-00005.safetensors"
+    },
+    "3f8f4035ce89104917e3963b769ed3c0434c050e83972573e7fa24d1001ad2dd": {
+      "bytes": 1990469200,
+      "node_copy_sha256": "3f8f4035ce89104917e3963b769ed3c0434c050e83972573e7fa24d1001ad2dd",
+      "path": "backbone/model-00003-of-00005.safetensors"
+    },
+    "6a917a6624e68bdbbdfbb21c93a7fa8e0a2472ebf87bd0fdb7021cd6a8a02689": {
+      "bytes": 1974414912,
+      "node_copy_sha256": "6a917a6624e68bdbbdfbb21c93a7fa8e0a2472ebf87bd0fdb7021cd6a8a02689",
+      "path": "backbone/model-00002-of-00005.safetensors"
+    },
+    "7ec59b744595af00380aab3231ee82a7693cfd95d773cec73251e7056c947ef1": {
+      "bytes": 10529624,
+      "node_copy_sha256": "7ec59b744595af00380aab3231ee82a7693cfd95d773cec73251e7056c947ef1",
+      "path": "decision_head.safetensors"
+    },
+    "93c49eaf00ad01ed08099270e0927868135c6294c52679cffe043e712ff497c8": {
+      "bytes": 1964101896,
+      "node_copy_sha256": "93c49eaf00ad01ed08099270e0927868135c6294c52679cffe043e712ff497c8",
+      "path": "backbone/model-00004-of-00005.safetensors"
+    },
+    "b1a5e302f0af5dd71cb510c8f3432e1d2749bce1107e362869644417dfe65f95": {
+      "bytes": 3267759176,
+      "node_copy_sha256": "b1a5e302f0af5dd71cb510c8f3432e1d2749bce1107e362869644417dfe65f95",
+      "path": "backbone/model-00001-of-00005.safetensors"
+    }
+  },
+  "utc": "2026-10-03T01:33:04.956558+00:00"
+}

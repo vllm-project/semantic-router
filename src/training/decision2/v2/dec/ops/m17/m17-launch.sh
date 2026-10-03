@@ -55,8 +55,17 @@ argv=(docker run --name "m17-$job" --rm --network none --shm-size 16g
 label="node ${node^^} CPU"
 if [[ -n $gpu ]]; then
   [[ $allowed == *" $gpu "* ]] || { echo "GPU $gpu on node $node is not an M17 GPU" >&2; exit 2; }
-  grep -qs "dec-m17" "/data/dev2/leases/gpu$gpu.lock/owner" \
-    || { echo "lease gpu$gpu.lock/owner does not name dec-m17" >&2; exit 2; }
+  if [[ ${M17_COTENANT_ANY:-0} == 1 ]]; then
+    # A coordinator-approved co-tenant read beside another track's job: the M6 formal library's co-tenant rule
+    # (>= 60 GB free VRAM) and m17-lines.sh's side entry owner.dec-m17-lines; the owner file stays the other track's.
+    free=$(rocm-smi -d "$gpu" --showmeminfo vram | awk -F': ' '/Total Memory/ {t=$NF} /Total Used Memory/ {u=$NF} END {printf "%d\n", (t-u)/1e9}')
+    [[ $free -ge 60 ]] || { echo "GPU $gpu has $free GB free VRAM (< 60); no co-tenant read" >&2; exit 2; }
+    grep -qs "dec-m17" "/data/dev2/leases/gpu$gpu.lock/owner.dec-m17-lines" \
+      || { echo "no side entry gpu$gpu.lock/owner.dec-m17-lines" >&2; exit 2; }
+  else
+    grep -qs "dec-m17" "/data/dev2/leases/gpu$gpu.lock/owner" \
+      || { echo "lease gpu$gpu.lock/owner does not name dec-m17" >&2; exit 2; }
+  fi
   bdf=$(amd-smi list 2>/dev/null | awk -v g="GPU: $gpu" '$0 ~ "^"g"$" {getline; print tolower($2)}')
   render=$(readlink -f "/dev/dri/by-path/pci-${bdf}-render")
   [[ -c $render ]] || { echo "no render node for GPU $gpu ($bdf)" >&2; exit 2; }
