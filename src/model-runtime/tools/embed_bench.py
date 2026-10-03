@@ -64,11 +64,10 @@ def load(args: argparse.Namespace) -> Any:
     reason = engine.supports(spec, device)
     if reason:
         raise SystemExit(reason)
-    engine_options = EngineOptions(
-        threads=args.threads, graphs=False, fused_kernels=False
-    )
     model = family.load(
-        package, spec, engine.load(spec, accelerator, device, engine_options)
+        package,
+        spec,
+        engine.load(spec, accelerator, device, EngineOptions(threads=args.threads)),
     )
     return model, int(package.details["package"].config["vocab_size"])
 

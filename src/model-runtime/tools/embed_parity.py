@@ -283,6 +283,7 @@ class EncoderParity:
         torch.set_num_threads(threads or torch.get_num_threads())
         self.package = package
         self.threads = threads
+        self.forward: tuple[Any, Any, Any] | None = None
         self.device = CPU
         if device != "cpu":
             accelerator, _, index = device.partition(":")
@@ -315,10 +316,9 @@ class EncoderParity:
         accelerator = (
             CPUAccelerator() if device.accelerator == "cpu" else ROCmAccelerator()
         )
-        engine_options = EngineOptions(
-            threads=self.threads, graphs=False, fused_kernels=False
+        model = engine.load(
+            spec, accelerator, device, EngineOptions(threads=self.threads)
         )
-        model = engine.load(spec, accelerator, device, engine_options)
         return family.load(verified, spec, model)
 
     def reference_model(self) -> Any:
@@ -333,21 +333,30 @@ class EncoderParity:
     def hidden(
         self, rows: list[tuple[int, ...]], layer: int, normalize_exits: bool
     ) -> tuple[Any, Any]:
-        """The reference's right-padded hidden states at ``layer`` and the mask."""
+        """The reference's right-padded hidden states at ``layer`` and the mask.
+
+        One reference forward serves every exit of the same rows.
+        """
         import torch
 
-        width = max(len(row) for row in rows)
-        ids = torch.zeros(len(rows), width, dtype=torch.long)
-        mask = torch.zeros(len(rows), width, dtype=torch.long)
-        for index, row in enumerate(rows):
-            ids[index, : len(row)] = torch.tensor(row)
-            mask[index, : len(row)] = 1
+        key = tuple(rows)
+        if self.forward is None or self.forward[0] != key:
+            width = max(len(row) for row in rows)
+            ids = torch.zeros(len(rows), width, dtype=torch.long)
+            mask = torch.zeros(len(rows), width, dtype=torch.long)
+            for index, row in enumerate(rows):
+                ids[index, : len(row)] = torch.tensor(row)
+                mask[index, : len(row)] = 1
+            self.forward = None
+            with torch.inference_mode():
+                out = self.reference(
+                    input_ids=ids, attention_mask=mask, output_hidden_states=True
+                )
+            self.forward = (key, out, mask)
+        _, out, mask = self.forward
+        if layer == self.reference.config.num_hidden_layers:
+            return out.last_hidden_state, mask
         with torch.inference_mode():
-            out = self.reference(
-                input_ids=ids, attention_mask=mask, output_hidden_states=True
-            )
-            if layer == self.reference.config.num_hidden_layers:
-                return out.last_hidden_state, mask
             hidden = out.hidden_states[layer]
             return (
                 self.reference.final_norm(hidden) if normalize_exits else hidden
@@ -427,59 +436,55 @@ class EncoderParity:
         import torch
 
         planner = self.native.planners["rerank"]
-        scorers = self.layout.scorers(planner.info.exits)
-        for exit in planner.info.exits:
-            native_logits, reference_logits, graph_logits, orders = [], [], [], []
-            for query, documents in RERANK:
+        exits = planner.info.exits
+        scorers = self.layout.scorers(exits)
+        graph_exits = self.graph.planners["rerank"].info.exits if self.graph else ()
+        runs = {
+            exit: {"native": [], "reference": [], "onnxruntime": [], "orders": []}
+            for exit in exits
+        }
+        for query, documents in RERANK:
+            for exit in exits:
                 body = {
                     "query": query,
                     "documents": documents,
                     "layer": exit[0],
                     "dimensions": exit[1],
                 }
+                run = runs[exit]
                 plan, native = serve(self.native, "rerank", body)
                 by_index = {r["index"]: r["logit"] for r in native["results"]}
-                native_logits += [by_index[i] for i in range(len(documents))]
+                run["native"] += [by_index[i] for i in range(len(documents))]
                 rows = [item.ids for item in plan.items]
                 hidden, _ = self.hidden(rows, exit[0], True)
                 with torch.inference_mode():
                     logits = scorers[exit](hidden[:, 0, : exit[1]].float()).reshape(-1)
-                reference_logits += logits.tolist()
+                run["reference"] += logits.tolist()
                 reference_order = sorted(
                     range(len(documents)), key=lambda i: (-float(logits[i]), i)
                 )
-                orders.append(
-                    [r["index"] for r in native["results"]] == reference_order
-                )
-                if (
-                    self.graph is not None
-                    and exit in self.graph.planners["rerank"].info.exits
-                ):
+                served_order = [r["index"] for r in native["results"]]
+                run["orders"].append(served_order == reference_order)
+                if exit in graph_exits:
                     _, graph = serve(self.graph, "rerank", body)
                     graph_index = {r["index"]: r["logit"] for r in graph["results"]}
-                    graph_logits += [graph_index[i] for i in range(len(documents))]
+                    run["onnxruntime"] += [
+                        graph_index[i] for i in range(len(documents))
+                    ]
+        for exit, run in runs.items():
+            compared = [("native", "reference")]
+            if run["onnxruntime"]:
+                compared += [("onnxruntime", "reference"), ("native", "onnxruntime")]
             pairs = {
-                "native_vs_reference": {
-                    "max_abs": float(
-                        np.abs(np.subtract(native_logits, reference_logits)).max()
-                    )
+                f"{a}_vs_{b}": {
+                    "max_abs": float(np.abs(np.subtract(run[a], run[b])).max())
                 }
+                for a, b in compared
             }
-            if graph_logits:
-                pairs["onnxruntime_vs_reference"] = {
-                    "max_abs": float(
-                        np.abs(np.subtract(graph_logits, reference_logits)).max()
-                    )
-                }
-                pairs["native_vs_onnxruntime"] = {
-                    "max_abs": float(
-                        np.abs(np.subtract(native_logits, graph_logits)).max()
-                    )
-                }
             self.record(
                 f"rerank/layer{exit[0]}/dim{exit[1]}",
                 pairs,
-                {"identical_order": all(orders), "pairs": len(native_logits)},
+                {"identical_order": all(run["orders"]), "pairs": len(run["native"])},
             )
 
     def run(self) -> dict[str, Any]:
