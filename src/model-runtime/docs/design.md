@@ -102,7 +102,7 @@ src/model-runtime/
     registry/               # model registry (artifacts, not plugins)
       resolve.py            # local directory or Hub repo at a pinned 40-hex revision, cache
       manifest.py           # pointer + MODEL_MANIFEST.json verification (inventory, SHA-256, tensor counts)
-      builtin.py            # the first-party model table: repo, revision, identity, goldens
+      builtin.py            # the first-party model table: repo, revision, identity, goldens, kernel choices
       policy.py             # licence and access policy, token handling
     scheduler/
       planner.py            # grouping, token budgets, micro-batches
@@ -548,10 +548,20 @@ instruction sets, and 0.02 on GPUs. Without a reference the runtime checks
 determinism and well-formed answers and reports `golden: unverified`.
 References are recorded with `tools/golden_answers.py` on the released
 packages and stored in `registry/golden_answers.json`, keyed by the pinned
-revision. FLA's gated-delta kernels autotune per process, so on a GPU the
-Qwen3.5 sizes repeat bit for bit only across processes that share one
-autotune cache: `--autotune-cache DIR` (or `VLLM_SR_RUNTIME_AUTOTUNE_CACHE`)
-points Triton's persisted autotuning at `DIR` before FLA is imported. A device error during serving marks the runtime
+revision; a later revision with the same model identity uses them too. FLA's
+gated-delta kernels choose their configurations by timing them in each
+process, so two processes can answer the Qwen3.5 sizes differently by
+rounding. Built-in models therefore pin the configurations their released
+runtime ran with (`registry/kernel_choices.json`, per device class, read from
+the release's autotune cache by `tools/kernel_choices.py`). Before FLA is
+imported, the runtime writes them as FLA config files with
+`FLA_CACHE_MODE=full`: no kernel is timed, and every process computes the
+released numerics. They apply only with the FLA version they were recorded
+with. `--autotune-cache DIR` (or `VLLM_SR_RUNTIME_AUTOTUNE_CACHE`) points
+Triton's persisted autotuning at `DIR` before FLA is imported, for compiled
+kernels and models without pinned choices; a shared cache repeats only once
+it is warm, since processes that start cold together can tune differently.
+A device error during serving marks the runtime
 `degraded`; the model worker exits the process so the supervisor restarts it
 with a clean device context.
 
@@ -750,7 +760,8 @@ for the E2E profile.
 
 Phase 1 follow-ups, measured before they become defaults:
 
-- ROCm golden answers recorded with a shared autotune cache;
+- ROCm golden answers and pinned kernel choices: done for all six on gfx942
+  (`docs/records/rocm-mi325x-repeatability.md`);
 - batch-shape buckets, so that graphs and batched forwards reuse a small set of
   padded shapes;
 - more `max_speed` kernels, each with an accuracy record against `exact`;
