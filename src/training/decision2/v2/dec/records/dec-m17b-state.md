@@ -5,6 +5,46 @@ Branch `xunzhuo/decision-2-training-dec-m17`, worktree `vllm-sr-dev2-dec-m17`. M
 (public since 2026-10-03 01:17 UTC+8). Index values stay private (node private stores and
 `decision2-program/private/m17b/`); this file has none. Times UTC.
 
+## 2026-10-03 02:15Z — the quarter-LR lever; amendment 6; the 4B owner trains (rolling handoff)
+
+Nox-4B is `ce1bdc9d` (`4b-LRHxALL`). Gate reference: `AF-4b-LRHxALL-bf16`, results `852e9928…`, at
+`ix1/af/refs/AF-4b-LRHxALL-bf16` on B and C.
+
+- **Read (values private):**
+  - `4b-LHS17IB4-lrq` reads above the release and above `-lrh`, but its gate lower bound is just below 0. Its chain
+    C3c bootstrapped against the new reference directly.
+  - `4b-LRHxALL-L2` reads slightly above the release (gate re-bootstrap running on node C).
+  - `4b-LHS17ML-lrh` reads significantly below the single-arm release and does not qualify.
+  - `4b-SDML-lrh` qualifies.
+- **Amendment 6** (`f17187347`, disclosed: written after those reads): `4b-LRQxLRHxALL`, `4b-LRQxALL` amended
+  (`4b-SDML-lrq` in place of `4b-LHS17ML-lrq`), and `4b-LHS17IB4-lre`. **Factory amendment 12** (`b04abb6d4`):
+  the 4B owner continues the factory's 4B line (arms in `af_arms.py`; node C gate 56).
+- **Running (mine), mirror `4d077f0fa`:**
+  - node C chain C5, `ixchain.sh` on GPU2–4 with `4b-LRQxLRHxALL` (FP32 `e332f699…` → BF16 `5f204130…`) against
+    the new reference;
+  - node C `af-chain.sh` chains: GPU5 `4b-SDMLIB4-lrq` s1, then `4b-LHS17IB4X-lrq` s2; GPU6 `4b-SDMLIB4-lrq` s2,
+    then `4b-LHS17IB4-lre` s1 (from 02:09Z, each seed ≈ 70–80 min);
+  - CPU re-bootstraps against the new reference (`runs/<m>/paired-boot-full-vs-lrhxall.json`): `4b-LRHxALL-L2`,
+    `4b-SDML-lrh` (C), `4b-LHS17ML-lrh` (B);
+  - node B's chain B2 finishes `4b-LHS17IB4X-lrh`'s scoring and bootstrap; then node B GPU4 / 6 are released.
+  - Node C GPU7 went to the Index submission worker.
+- **Next commands** (worktree `vllm-sr-dev2-dec-m17`; `H` = the mirrored head):
+  1. Read `4b-LRQxLRHxALL`: `AF_LOCAL=~/code/decision2-program/private/m17b bash src/training/decision2/v2/af/ops/af-ix.sh $H fetch c 4b-LRQxLRHxALL`.
+     The gate is `paired-boot-full-vs-ref.json`, whose reference is LRHxALL.
+  2. When C5 has launched its last shard, start the remaining seeds as `af-chain.sh` chains on GPU2–4:
+     `4b-SDML-lrq` s1, `4b-SDML-lrq` s2, then `4b-LHS17IB4X-lrq` s1 + `4b-LHS17IB4-lre` s2. Lists must be disjoint
+     across chains.
+  3. As pairs finish: `af-soup.sh` two-seed soups on node C (merges on a held GPU). Then `4b-LRQxALL` (CPU), staged
+     and read with `ixchain.sh` against the LRHxALL reference.
+  4. Release path for a pass: copy `dev2-4b-w7-2026-10-03/ops/` to a new record with `CURRENT` = `ce1bdc9d`. The
+     pins are in the 01:45Z section. The candidate's gate bootstrap is the file against LRHxALL; the private driver
+     is `~/code/decision2-program/private/m17b/logs/release-w7.sh`.
+     - R3 runs as a co-tenant on node F GPU6 (`M17_COTENANT_ANY=1`, `formal-w7.sh`).
+     - The upload needs node A GPU0 below 50% use.
+- **Leases:** node C GPU2–4 (`eval-ix1`, chain C5), node C GPU5 / 6 (`arm-factory`, my training chains), node B
+  GPU4 / 6 (`eval-ix1`, released at B2's end).
+- **GPU-h:** ≈ 48. Asked for +30 (COORDINATION 10:12).
+
 ## 2026-10-03 01:45Z — Nox-4B `ce1bdc9d` RELEASED (`4b-LRHxALL`); wave 7 continues against it
 
 - **`vllm-sr/Decision-2.0-Nox-4B@ce1bdc9d` is `main` and public.**
