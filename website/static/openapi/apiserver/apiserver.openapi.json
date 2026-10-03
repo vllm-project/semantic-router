@@ -45086,6 +45086,14 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Rows to skip after created_at descending, id descending. Best-effort under concurrent writes. Defaults to 0.",
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "security": [
@@ -45150,6 +45158,9 @@
                         ]
                       }
                     },
+                    "offset": {
+                      "type": "integer"
+                    },
                     "total": {
                       "type": "integer"
                     }
@@ -45157,7 +45168,8 @@
                   "required": [
                     "memories",
                     "total",
-                    "limit"
+                    "limit",
+                    "offset"
                   ]
                 }
               }
