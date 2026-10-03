@@ -9,10 +9,10 @@ This is the out-of-tree vLLM connector for mapper artifacts from
 - `transform.py` converts a source Qwen3 post-RoPE cache into target post-RoPE
   K/V tensors using the full-head weights. It supports unscaled Qwen3 RoPE and
   a complete prefix beginning at position zero.
-- `snapshot.py` and `handoff.py` provide the same-host transport and validated
-  map/inject operation. Snapshots are immutable, tenant-scoped, and expire.
-  Expired files are removed on read or before the next publish.
-  Only complete, block-aligned source prefixes are eligible for reuse.
+- `snapshot.py` and `handoff.py` provide same-host snapshot storage and the
+  mapped cache write. Snapshots are immutable, tenant-scoped, and have a TTL.
+  Expired files are cleaned during reads and publishes. Reuse uses complete,
+  block-aligned source prefixes.
 
 The artifact is checked against the target model id, pinned revision, dtype,
 TP degree, KV head count, head dimension, and layer count. The source id and
@@ -27,22 +27,15 @@ uses `kv_role=kv_consumer`, `kv_load_failure_policy=recompute`, the same
 `snapshot_root`, and `artifact_path`, `source_model`, `source_revision`,
 `source_tp`, `head_order`, and `source_rope_theta` in
 `kv_connector_extra_config`. Both models use bf16 and TP=1 for the published
-full-head artifact.
-The producer records its actual RoPE theta in each snapshot. The consumer
-checks that value against `source_rope_theta` and rejects scaled RoPE.
+full-head artifact. The producer records its RoPE theta in each snapshot, and
+the consumer checks it against `source_rope_theta`. Both models use unscaled
+Qwen3 RoPE.
 
-Set `VLLM_USE_V2_MODEL_RUNNER=0` on the consumer. Live vLLM 0.30.0 testing found
-that its V2 runner could return an incorrect token after a synchronous KV load
-failure despite logging a reschedule. The connector disables cache reuse when
-V2 is selected. With V1, a failed load returned the same token as a cold
-request in the live probe.
+The consumer runs with `VLLM_USE_V2_MODEL_RUNNER=0`.
 
 Both requests pass the same `namespace`, `cache_id`, and `mapper_id` in JSON
 `kv_transfer_params`. The target prompt must extend the source's exact token
-prefix. Missing, expired, or mismatched snapshots use normal prefill. The
-router's `x-vsr-kv-*` headers still need a trusted request adapter. Remote
-source-pod transport, response status reporting, and a full routed end-to-end
-test remain. The shared directory is a same-host test transport.
+prefix. The two vLLM servers share the snapshot directory on one host.
 
 Run the synthetic artifact and conversion checks from the repository root:
 
@@ -59,4 +52,4 @@ PYTHONPATH=. python3 -m src.kv_connector.gpu_probe --artifact /path/to/mapper-ar
 
 The probe publishes synthetic source KV from GPU 0, loads it through the local
 snapshot store, maps all target layers onto GPU 1, and compares the first
-target layer against a CPU reference. It does not start vLLM or measure TTFT.
+target layer against a CPU reference.
