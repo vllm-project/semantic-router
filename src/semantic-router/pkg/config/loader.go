@@ -98,24 +98,42 @@ func configBaseDir(defaultDir string) (string, error) {
 
 // ParseYAMLBytes parses config YAML content without touching the filesystem.
 func ParseYAMLBytes(data []byte) (*RouterConfig, error) {
-	return parseYAMLBytesWithOptions(data, "", true)
+	return parseYAMLBytesWithOptions(data, "", &processEnv)
 }
 
 func parseYAMLBytesWithBaseDir(data []byte, baseDir string) (*RouterConfig, error) {
-	return parseYAMLBytesWithOptions(data, baseDir, true)
+	return parseYAMLBytesWithOptions(data, baseDir, &processEnv)
 }
 
 // ParseYAMLBytesWithoutEnvExpansion validates in-memory YAML while preserving
 // ${VAR} references verbatim. It is intended for read-only validation APIs
 // that must not expose process environment values in normalized output.
 func ParseYAMLBytesWithoutEnvExpansion(data []byte) (*RouterConfig, error) {
-	return parseYAMLBytesWithOptions(data, "", false)
+	return parseYAMLBytesWithOptions(data, "", nil)
 }
 
+// ValidateYAMLBytesDeferringEnv validates a config that another process will
+// load with its own environment, so it resolves no reference from this one:
+// references take their defaults, and the config passes if it is valid with
+// the other references either kept as written or empty. External assets are
+// checked as in ParseYAMLBytes.
+func ValidateYAMLBytesDeferringEnv(data []byte) error {
+	_, err := parseYAMLBytesWithOptions(data, "", &envExpander{lookup: noEnv, keepUnset: true})
+	if err == nil {
+		return nil
+	}
+	if _, unsetErr := parseYAMLBytesWithOptions(data, "", &envExpander{lookup: noEnv}); unsetErr == nil {
+		return nil
+	}
+	return err
+}
+
+// parseYAMLBytesWithOptions keeps references as written and skips external
+// assets when env is nil.
 func parseYAMLBytesWithOptions(
 	data []byte,
 	baseDir string,
-	expandEnvironment bool,
+	env *envExpander,
 ) (*RouterConfig, error) {
 	raw, err := parseRawConfigMap(data)
 	if err != nil {
@@ -125,8 +143,8 @@ func parseYAMLBytesWithOptions(
 		return nil, normalizeErr
 	}
 
-	if expandEnvironment {
-		expandEnvSubstitutionsInMap(raw)
+	if env != nil {
+		env.expandMap(raw)
 	}
 	expandedData, marshalErr := yaml.Marshal(raw)
 	if marshalErr != nil {
@@ -146,7 +164,7 @@ func parseYAMLBytesWithOptions(
 	cfg.ConfigBaseDir = baseDir
 	documentDigest := sha256.Sum256(data)
 	cfg.DocumentHash = hex.EncodeToString(documentDigest[:])
-	cfg.SkipExternalAssetValidation = !expandEnvironment
+	cfg.SkipExternalAssetValidation = env == nil
 	if err := finalizeParsedConfig(cfg); err != nil {
 		return nil, err
 	}
