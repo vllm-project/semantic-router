@@ -70,6 +70,58 @@ def test_support_service_images_never_float():
     assert ":latest" not in source
 
 
+@pytest.mark.parametrize(
+    ("host_bind", "rendered_host"),
+    [(None, "127.0.0.1"), ("0.0.0.0", "0.0.0.0"), ("::1", "[::1]")],
+)
+def test_observability_ports_are_private_unless_explicitly_exposed(
+    tmp_path, monkeypatch, host_bind, rendered_host
+):
+    if host_bind is None:
+        monkeypatch.delenv("VLLM_SR_OBSERVABILITY_HOST_BIND", raising=False)
+    else:
+        monkeypatch.setenv("VLLM_SR_OBSERVABILITY_HOST_BIND", host_bind)
+    commands = []
+    monkeypatch.setattr(
+        container_support_services, "get_container_runtime", lambda: "docker"
+    )
+    monkeypatch.setattr(
+        container_support_services, "_replace_existing_container", lambda _: None
+    )
+    monkeypatch.setattr(
+        container_support_services,
+        "_run_service_start",
+        lambda command, _: commands.append(command),
+    )
+    layout = resolve_runtime_stack()
+    container_support_services.container_start_jaeger(stack_layout=layout)
+    container_support_services.container_start_prometheus(
+        config_dir=str(tmp_path), stack_layout=layout
+    )
+    container_support_services.container_start_grafana(
+        config_dir=str(tmp_path), stack_layout=layout
+    )
+
+    published_ports = [
+        command[index + 1]
+        for command in commands
+        for index, argument in enumerate(command)
+        if argument == "-p"
+    ]
+    assert published_ports == [
+        f"{rendered_host}:{layout.jaeger_otlp_port}:4317",
+        f"{rendered_host}:{layout.jaeger_ui_port}:16686",
+        f"{rendered_host}:{layout.prometheus_port}:9090",
+        f"{rendered_host}:{layout.grafana_port}:3000",
+    ]
+
+
+def test_observability_port_rejects_ambiguous_host_binding(monkeypatch):
+    monkeypatch.setenv("VLLM_SR_OBSERVABILITY_HOST_BIND", "public.example")
+    with pytest.raises(ValueError, match="explicit wildcard or loopback"):
+        container_support_services._published_observability_port(16686, 16686)
+
+
 def test_grafana_state_volume_is_stable_and_stack_scoped(tmp_path, monkeypatch):
     commands = []
     monkeypatch.setattr(

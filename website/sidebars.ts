@@ -35,6 +35,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'installation/installation',
         'installation/agent',
+        'installation/shell-completion',
         {
           type: 'category',
           label: 'Plan a Deployment',
@@ -210,6 +211,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/router-replay',
                 'tutorials/plugin/shadow-dispatch',
                 'tutorials/plugin/response-cache',
+                'tutorials/plugin/prompt-cache',
               ],
             },
             {
@@ -253,6 +255,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'installation/configuration-contract',
             'installation/configuration-workflows',
+            'installation/recipe-lifecycle',
             {
               type: 'category',
               label: 'Models',
@@ -499,7 +502,21 @@ const sidebars: SidebarsConfig = {
         'benchmarking/open-intelligence-index',
         'benchmarking/agent-evaluation-loop',
         'benchmarking/custom-evaluations',
-        'benchmarking/sr-bench',
+        {
+          type: 'category',
+          label: 'sr-bench 1.0',
+          link: {
+            type: 'doc',
+            id: 'benchmarking/sr-bench/index',
+          },
+          items: [
+            'benchmarking/sr-bench/shared-worker',
+            'benchmarking/sr-bench/tasks-and-targets',
+            'benchmarking/sr-bench/plan-and-run',
+            'benchmarking/sr-bench/iterate',
+            'benchmarking/sr-bench/results',
+          ],
+        },
       ],
     },
     {

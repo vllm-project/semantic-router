@@ -44,6 +44,12 @@ export const EMPTY_PARTITIONS: ProjectionPartition[] = []
 export const EMPTY_SCORES: ProjectionScore[] = []
 export const EMPTY_MAPPINGS: ProjectionMapping[] = []
 
+// kb_metric inputs have no name; the router keys them as kb_metric:<kb>:<metric>.
+export const projectionInputSource = (input: ProjectionScoreInput): string =>
+  input.type === 'kb_metric'
+    ? `${input.type}:${input.kb ?? ''}:${input.metric ?? ''}`
+    : `${input.type}:${input.name ?? ''}`
+
 export const cloneProjections = (cfg: ConfigData): ConfigProjections => ({
   partitions: [...(cfg.projections?.partitions || [])],
   scores: [...(cfg.projections?.scores || [])],

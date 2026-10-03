@@ -50,19 +50,17 @@ The PR, main, nightly, and release entrypoints share one verification plan:
 Display categories, execution workers, and verification identities are separate.
 Catalog IDs identify results even when a display name changes. Job names describe
 the execution boundary; model names and feature cases appear in its report.
-Compatible component checks share three workers: **CLI and Fleet**, **Model
-Tools**, and **Router Tools**. Each selected contract keeps its own test
-inventory, logs, and result. A failed contract leaves other independent checks
-running, but fails its worker and the Gate.
+Compatible component checks use one of three setup classes: **CLI and Fleet**,
+**Model Tools**, and **Router Tools**. Each selected contract runs in its own
+worker with its own test inventory, logs, and result. A failed contract leaves
+other independent checks running, but fails its worker and the Gate.
 
-Compatible runtime contracts share a worker for their runtime, device, target
-platform, and execution mode. ORT model regression and image conformance can
-reuse the same prepared model while retaining separate required receipts.
-Kubernetes profiles run in bounded shards with compatible artifact and resource
-requirements. Images are loaded once per worker, but profiles have separate
-clusters, state, and evidence. A profile failure does not suppress independent
-profiles; a cleanup failure fails the remaining work instead of running it in
-contaminated state. Adding a model or feature does not automatically add a job.
+Runtime contracts run in separate workers matched to their runtime, device,
+target platform, and execution mode. Each keeps its own prepared models and
+required receipt. Kubernetes profiles also run in separate workers with their
+own images, clusters, state, and evidence. A profile failure does not suppress
+independent profiles. Adding a model or feature does not automatically add a
+job.
 
 Local deployment contracts appear under **Local Stack**. The existing serving,
 routing, and lifecycle tests and the stateful memory tests remain separate

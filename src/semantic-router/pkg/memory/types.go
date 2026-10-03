@@ -124,11 +124,15 @@ func DefaultMemoryConfig() config.MemoryConfig {
 			Dimension: 384, // Safe default, will be overridden by router
 		},
 		DefaultRetrievalLimit:      5,
-		DefaultSimilarityThreshold: 0.70,
+		DefaultSimilarityThreshold: config.DefaultMemorySimilarityThreshold,
 	}
 }
 
-// ListOptions configures memory listing (non-semantic, filter-based retrieval)
+// ListOptions configures memory listing (non-semantic, filter-based retrieval).
+// Pages are ordered by created_at descending, then id descending.
+// Offset pagination is best-effort: a write or delete between pages can duplicate
+// or skip a row. Total is the match count observed by that read, not a snapshot
+// shared with the next page.
 type ListOptions struct {
 	// UserID filters memories to this user only (required)
 	UserID string
@@ -138,6 +142,10 @@ type ListOptions struct {
 
 	// Limit is the maximum number of results to return (default: 20, max: 100)
 	Limit int
+
+	// Offset skips this many matches after the stable order is applied.
+	// Negative values are rejected.
+	Offset int
 }
 
 // ListResult contains the memories returned by a List operation
@@ -145,11 +153,14 @@ type ListResult struct {
 	// Memories is the list of memories returned
 	Memories []*Memory `json:"memories"`
 
-	// Total is the total number of matching memories
+	// Total is the match count observed by this read. It can change before the next page.
 	Total int `json:"total"`
 
 	// Limit is the limit that was applied
 	Limit int `json:"limit"`
+
+	// Offset is the offset that was applied
+	Offset int `json:"offset"`
 }
 
 // MemoryFilter is the interface for post-retrieval, pre-injection memory

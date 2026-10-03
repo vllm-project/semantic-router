@@ -584,7 +584,9 @@ func (c *ValkeyCache) LookupSimilarWithThreshold(ctx context.Context, model stri
 	})
 	metrics.RecordCacheOperation("valkey", "find_similar", "hit", time.Since(start).Seconds())
 	storedAt, expiresAt := valkeyTiming(match)
-	return lookupResultFromTimestamps(responseBody, similarity, storedAt, expiresAt), nil
+	result := lookupResultFromTimestamps(responseBody, similarity, storedAt, expiresAt)
+	result.NegationGuard = negationGuardOutcomeFor(queryTokens, match.query)
+	return result, nil
 }
 
 func valkeyTiming(match *searchMatch) (time.Time, time.Time) {

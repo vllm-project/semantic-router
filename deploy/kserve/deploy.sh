@@ -132,14 +132,14 @@ resolve_embedding_settings() {
     case "$1" in
         Vela-1.0-Encoder-307M-Embedding)
             EMBEDDING_MODEL="Vela-1.0-Encoder-307M-Embedding"
-            EMBEDDING_MODEL_REPO="llm-semantic-router/Vela-1.0-Encoder-307M-Embedding"
+            EMBEDDING_MODEL_REPO="vllm-sr/Vela-1.0-Encoder-307M-Embedding"
             EMBEDDING_MODEL_REVISION="1e57cebf5a7b7fec6e6973f05bbca97c5cca4436"
             EMBEDDING_MODEL_TYPE="mmbert"
             EMBEDDING_MODEL_PATH_KEY="mmbert_model_path"
             ;;
         mom-embedding-ultra|mmbert|mmbert-embedding|mmbert-embed-32k-2d-matryoshka)
             EMBEDDING_MODEL="mmbert-embed-32k-2d-matryoshka"
-            EMBEDDING_MODEL_REPO="llm-semantic-router/mmbert-embed-32k-2d-matryoshka"
+            EMBEDDING_MODEL_REPO="vllm-sr/mmbert-embed-32k-2d-matryoshka"
             EMBEDDING_MODEL_TYPE="mmbert"
             EMBEDDING_MODEL_PATH_KEY="mmbert_model_path"
             ;;
@@ -545,7 +545,7 @@ else
     echo -e "${YELLOW}⚠ Missing envoy config source: $ENVOY_CONFIG_SRC${NC}"
 fi
 
-for file in serviceaccount.yaml pvc.yaml peerauthentication.yaml deployment.yaml service.yaml route.yaml; do
+for file in serviceaccount.yaml rbac.yaml pvc.yaml peerauthentication.yaml deployment.yaml service.yaml route.yaml; do
     if [ -f "$SCRIPT_DIR/$file" ]; then
         substitute_vars "$SCRIPT_DIR/$file" "$TEMP_DIR/$file"
         echo -e "${GREEN}✓${NC} Generated: $file"
@@ -607,6 +607,9 @@ if oc get deployment semantic-router-kserve -n "$NAMESPACE" &>/dev/null; then
 fi
 
 oc apply -f "$TEMP_DIR/serviceaccount.yaml" -n "$NAMESPACE"
+# Lets the config write API patch the router ConfigMap through the
+# Kubernetes API instead of the read-only mounted file (issue #3688).
+oc apply -f "$TEMP_DIR/rbac.yaml" -n "$NAMESPACE"
 oc apply -f "$TEMP_DIR/pvc.yaml" -n "$NAMESPACE"
 oc apply -f "$TEMP_DIR/configmap-router-config.yaml" -n "$NAMESPACE"
 oc apply -f "$TEMP_DIR/configmap-envoy-config.yaml" -n "$NAMESPACE"

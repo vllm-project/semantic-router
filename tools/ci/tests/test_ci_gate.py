@@ -19,6 +19,7 @@ from ci_plan import digest, github_outputs, make_plan  # noqa: E402
 from ci_results import make_receipt  # noqa: E402
 from execution_batches import ALL_DISPATCH_JOBS  # noqa: E402
 from provider_mocker_image import IMAGE, REGISTRY  # noqa: E402
+from release_guard_waiver import GUARD_WAIVER  # noqa: E402
 from validate_workflows import load_workflows  # noqa: E402
 from workflow_policy_validation import validate_gate_transport  # noqa: E402
 
@@ -26,8 +27,13 @@ SHA = "a" * 40
 MAX_GATE_ENV_BYTES = 4096
 
 
-def completed(paths=None, *, full=False):
-    plan = make_plan(paths or ["tools/make/openvino.mk"], source_sha=SHA, full=full)
+def completed(paths=None, *, full=False, profile="pr"):
+    plan = make_plan(
+        paths or ["tools/make/openvino.mk"],
+        source_sha=SHA,
+        full=full,
+        profile=profile,
+    )
     builds = [
         {"id": f"image:{name}", "sha256": "b" * 64, "source_sha": SHA}
         for name in plan["images"]
@@ -96,6 +102,74 @@ def completed(paths=None, *, full=False):
 
 
 class GateTests(unittest.TestCase):
+    def test_release_guard_waiver_is_visible_and_strictly_scoped(self):
+        paths = ["e2e/profiles/production-stack/values.yaml"]
+        plan, receipts, builds = completed(paths, profile="release")
+        record = next(
+            row for row in plan["verifications"] if row["id"] == "e2e.production-stack"
+        )
+        self.assertEqual(record["known_issue_waiver"], GUARD_WAIVER)
+        receipt = next(row for row in receipts if row["id"] == record["id"])
+        evidence = receipt["evidence"]
+        evidence.update(
+            profile="production-stack",
+            known_issue_waiver=GUARD_WAIVER,
+            waived_failure={
+                "case": "jailbreak-detection",
+                "reason": GUARD_WAIVER["reason"],
+                "details": GUARD_WAIVER["details"],
+            },
+            framework_report={
+                "status": "FAILED",
+                "exit_code": 1,
+                "total_tests": 10,
+                "passed_tests": 9,
+                "failed_tests": 1,
+            },
+            cases=[{"id": f"other-{index}", "status": "passed"} for index in range(9)]
+            + [{"id": "jailbreak-detection", "status": "failed"}],
+            expected_cases=[
+                *(f"other-{index}" for index in range(9)),
+                "jailbreak-detection",
+            ],
+        )
+        qualified = make_receipt(
+            record,
+            evidence,
+            source_sha=SHA,
+            execution_platform="linux/amd64",
+            environ={},
+        )
+        self.assertEqual(qualified["result"], "qualified-with-waiver")
+        receipts[receipts.index(receipt)] = qualified
+        self.assertTrue(evaluate_gate(plan, receipts, builds=builds).passed)
+
+        for field, value in (
+            ("known_issue_waiver", {"issue": 9999}),
+            ("waived_failure", {"case": "jailbreak-detection"}),
+            ("framework_report", {"status": "PASSED"}),
+            ("cases", [*evidence["cases"], {"id": "new-failure", "status": "failed"}]),
+        ):
+            candidate = copy.deepcopy(receipts)
+            replacement = next(row for row in candidate if row["id"] == record["id"])
+            replacement["evidence"][field] = value
+            replacement["evidence_sha256"] = digest(replacement["evidence"])
+            with self.subTest(field=field):
+                self.assertFalse(evaluate_gate(plan, candidate, builds=builds).passed)
+
+        changed_plan = copy.deepcopy(plan)
+        changed_plan["profile"] = "pr"
+        changed_plan["plan_sha256"] = digest(
+            {key: value for key, value in changed_plan.items() if key != "plan_sha256"}
+        )
+        self.assertFalse(evaluate_gate(changed_plan, receipts, builds=builds).passed)
+
+        ordinary = make_plan(paths, source_sha=SHA, profile="pr")
+        self.assertNotIn(
+            "known_issue_waiver",
+            next(row for row in ordinary["verifications"] if row["id"] == record["id"]),
+        )
+
     def test_complete_plan_passes(self):
         for full in (False, True):
             plan, receipts, builds = completed(full=full)

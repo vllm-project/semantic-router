@@ -114,7 +114,7 @@ global:
 
 - **Istio：** 使用 ExtProc `EnvoyFilter` 及其服务 `DestinationRule`。[Istio 指南](istio) 展示了直接 Service 版本的接入方式。
 - **agentgateway：** 在其预路由阶段附加 `AgentgatewayPolicy`。见 [agentgateway](agentgateway)。
-- **Envoy AI Gateway / Envoy Gateway：** 使用网关支持的 ExtProc 策略面。见 [Envoy AI Gateway](ai-gateway)。
+- **Agent Router（原 Envoy AI Gateway） / Envoy Gateway：** 使用网关支持的 ExtProc 策略面。见 [Agent Router](ai-gateway)。
 
 不要把一种网关实现的接入资源应用到另一种；它们的策略 API 和处理模式不可互换。
 

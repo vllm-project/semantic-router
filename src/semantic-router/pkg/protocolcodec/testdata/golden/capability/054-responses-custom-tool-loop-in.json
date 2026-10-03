@@ -1,0 +1,41 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "client-model",
+    "input": [
+      {
+        "role": "user",
+        "content": "Apply this patch."
+      },
+      {
+        "type": "custom_tool_call",
+        "id": "item_1",
+        "call_id": "call_1",
+        "name": "apply_patch",
+        "input": "*** Begin Patch\n+hello\n*** End Patch",
+        "status": "completed"
+      },
+      {
+        "type": "custom_tool_call_output",
+        "call_id": "call_1",
+        "output": "Success",
+        "status": "completed"
+      }
+    ],
+    "tools": [
+      {
+        "type": "custom",
+        "name": "apply_patch",
+        "description": "Apply a patch",
+        "format": {
+          "type": "grammar",
+          "syntax": "lark",
+          "definition": "start: /.+/"
+        }
+      }
+    ],
+    "text": {
+      "verbosity": "low"
+    }
+  }
+}

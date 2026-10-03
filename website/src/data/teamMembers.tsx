@@ -367,6 +367,25 @@ export const topNewContributorMembers: TeamMember[] = [
 export const allCommitterMembers: TeamMember[] = [
   ...topNewContributorMembers,
   {
+    name: 'Stefan Wang',
+    role: <Translate id="team.members.1fanwang.role">AI Infrastructure</Translate>,
+    company: 'LinkedIn',
+    avatar: 'https://github.com/1fanwang.png',
+    github: 'https://github.com/1fanwang',
+    linkedin: 'https://www.linkedin.com/in/stefanyifanwang/',
+    bio: <Translate id="team.members.1fanwang.bio">Works across AI, agent, and data infrastructure, with recent work in vLLM, Ray, and data systems.</Translate>,
+    memberType: 'committer',
+  },
+  {
+    name: 'Binbin Zhang',
+    role: <Translate id="team.members.Bevisy.role">Container R&D Engineer</Translate>,
+    company: 'Telecom Cloud',
+    avatar: 'https://github.com/Bevisy.png',
+    github: 'https://github.com/Bevisy',
+    bio: <Translate id="team.members.Bevisy.bio">Kata Containers maintainer working on Kubernetes and container infrastructure.</Translate>,
+    memberType: 'committer',
+  },
+  {
     name: 'Chen Wang',
     role: <Translate id="team.members.ChenWang.role">Senior Staff Research Scientist</Translate>,
     company: 'IBM',
