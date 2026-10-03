@@ -738,6 +738,9 @@ def run_ab(args: argparse.Namespace) -> None:
         elapsed = time.perf_counter_ns() - start
         return elapsed if status == 200 else -1
 
+    for spec in specs:
+        for _ in range(3):
+            call_runtime(spec, spec["Inputs"][0])
     report: dict[str, Any] = {}
     for round_index in range(args.rounds):
         for spec in specs:
