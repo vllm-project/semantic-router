@@ -380,6 +380,10 @@ ENV ORT_DYLIB_PATH=/usr/local/lib/libonnxruntime.so
 # Decision models the managed runtime downloads persist in the model volume.
 ENV VLLM_SR_RUNTIME_CACHE_DIR=/app/models/model-runtime
 
+# Under an arbitrary uid without a passwd entry (the chart runs as 65532),
+# Python's getpass and PyTorch's compile caches take the user from here.
+ENV USER=vllm-sr
+
 WORKDIR /app
 RUN mkdir -p /app /app/.vllm-sr /app/config /app/models
 

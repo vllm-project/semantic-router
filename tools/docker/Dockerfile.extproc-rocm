@@ -301,6 +301,10 @@ RUN --mount=type=bind,source=src/model-runtime,target=/tmp/model-runtime,rw \
 ENV VLLM_SR_RUNTIME_COMMAND="env -u LD_LIBRARY_PATH /opt/vllm-sr-runtime/bin/vllm-sr-runtime" \
     VLLM_SR_RUNTIME_CACHE_DIR=/app/models/model-runtime
 
+# Under an arbitrary uid without a passwd entry (the chart runs as 65532),
+# Python's getpass and PyTorch's compile caches take the user from here.
+ENV USER=vllm-sr
+
 # Keep immutable artifacts outside the mounted model cache, in an independent layer.
 COPY --link --from=vela-omni-builder /opt/router-model-artifacts/ /opt/router-model-artifacts/
 COPY --link --from=image-routing-assets /out/ /app/share/image-routing/
