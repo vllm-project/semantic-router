@@ -139,6 +139,11 @@ CANDS: dict[str, dict] = {
         "audit_sets": ["KIB4"],
         "index_node": "b",
     },
+    "KIB4H-a80": {
+        "fp32": "4dea07dc0ad38062bf88b4a5bca5d3b3db18a9c575bce433024f0cb3d0a97862",
+        "audit_sets": ["KIB4"],
+        "index_node": "b",
+    },
     "KIB4-lrhh-a80": {
         "fp32": "699bfd70f5b1094c807ad6df6dc6fdeb9fd1e4c4db558aceca8a4d4bba07fc8e",
         "audit_sets": ["KIB4"],
