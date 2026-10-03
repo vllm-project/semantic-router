@@ -5,9 +5,11 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from collections.abc import Sequence
 
+from .accel.autotune import AUTOTUNE_ENV
 from .config import DEFAULT_PORT, ServeConfig
 from .plugins import registry
 from .registry import builtin
@@ -107,6 +109,14 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--log-level", default="info", choices=("debug", "info", "warning", "error")
     )
+    parser.add_argument(
+        "--autotune-cache",
+        default=os.environ.get(AUTOTUNE_ENV),
+        help=(
+            "record and reuse GPU kernel autotuning in this directory, so answers "
+            f"repeat across processes (default: ${AUTOTUNE_ENV})"
+        ),
+    )
 
 
 def config_from_args(args: argparse.Namespace) -> ServeConfig:
@@ -133,6 +143,7 @@ def config_from_args(args: argparse.Namespace) -> ServeConfig:
         base_path=args.base_path,
         accept_licences=tuple(args.accept_licence),
         log_level=args.log_level,
+        autotune_cache=args.autotune_cache,
     )
 
 

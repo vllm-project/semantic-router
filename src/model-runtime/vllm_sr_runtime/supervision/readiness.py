@@ -9,6 +9,8 @@ from typing import Any
 
 STATES = ("starting", "loading", "warming", "ready", "degraded", "failed")
 GPU_TOLERANCE = 0.02
+# CPU kernels round differently across instruction sets (AVX2, AVX-512, NEON).
+CPU_TOLERANCE = 1e-3
 SUM_TOLERANCE = 1e-6
 
 
@@ -66,7 +68,7 @@ def well_formed(answer: dict[str, Any]) -> bool:
 
 
 def compare(
-    answers: dict[str, Any], expected: dict[str, Any], exact: bool
+    answers: dict[str, Any], expected: dict[str, Any], tolerance: float
 ) -> tuple[int, int]:
     """(checked, matched) of answers against reference answers for the same questions."""
     checked = matched = 0
@@ -75,19 +77,16 @@ def compare(
         if answer is None:
             continue
         checked += 1
-        if exact:
-            matched += answer == reference
-            continue
         if answer.get("type") != reference.get("type"):
             continue
         if answer.get("type") == "noul":
-            matched += abs(answer["noul"] - reference["noul"]) <= GPU_TOLERANCE
+            matched += abs(answer["noul"] - reference["noul"]) <= tolerance
             continue
         left, right = answer.get("probabilities", {}), reference.get(
             "probabilities", {}
         )
         if set(left) == set(right) and all(
-            abs(left[k] - right[k]) <= GPU_TOLERANCE for k in left
+            abs(left[k] - right[k]) <= tolerance for k in left
         ):
             matched += 1
     return checked, matched
@@ -101,8 +100,8 @@ def golden_check(
     """Run each golden request twice; require determinism, well-formed answers and the reference when known.
 
     ``run(state, questions)`` returns the answers dict. References are keyed
-    by device class (``cpu``, ``rocm``, ``cuda``); CPU references must match
-    exactly, GPU references within ``GPU_TOLERANCE``.
+    by device class (``cpu``, ``rocm``, ``cuda``); answers must match within
+    ``CPU_TOLERANCE`` on CPUs and ``GPU_TOLERANCE`` on GPUs.
     """
     result = GoldenResult(status="unverified")
     for golden in goldens:
@@ -116,7 +115,8 @@ def golden_check(
             return GoldenResult(status="failed", detail="golden answers are malformed")
         reference = (golden.get("expected") or {}).get(device_class)
         if reference:
-            checked, matched = compare(first, reference, exact=device_class == "cpu")
+            tolerance = CPU_TOLERANCE if device_class == "cpu" else GPU_TOLERANCE
+            checked, matched = compare(first, reference, tolerance)
             result.checked += checked
             result.matched += matched
             result.reference = device_class

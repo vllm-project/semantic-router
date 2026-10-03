@@ -31,4 +31,5 @@ class ServeConfig:
     base_path: str | None = None
     accept_licences: tuple[str, ...] = ()
     log_level: str = "info"
+    autotune_cache: str | None = None
     exit_on_device_error: bool = True

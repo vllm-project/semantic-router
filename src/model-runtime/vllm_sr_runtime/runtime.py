@@ -16,6 +16,7 @@ from concurrent.futures import Future
 from dataclasses import dataclass, replace
 from typing import Any
 
+from .accel.autotune import freeze_autotune
 from .config import ServeConfig
 from .errors import DEADLINE_EXCEEDED, RuntimeServiceError
 from .placement import Placement, place
@@ -94,6 +95,8 @@ class Runtime:
 
     def load(self) -> None:
         config = self.config
+        if config.autotune_cache:
+            freeze_autotune(config.autotune_cache)
         self.health.set("loading", "resolving the model")
         options = RegistryOptions(
             cache_dir=config.cache_dir,
