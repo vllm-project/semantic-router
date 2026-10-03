@@ -372,12 +372,26 @@ def snapshot(cache: Path, name: str) -> Path:
     return path
 
 
+def flat_copy(source: Path, target: Path) -> Path:
+    """The snapshot as plain files (hard links to its blobs), as the router downloads models."""
+    for path in sorted(source.rglob("*")):
+        if path.is_dir():
+            continue
+        destination = target / path.relative_to(source)
+        if not destination.exists():
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            os.link(path.resolve(), destination)
+    return target
+
+
 def job_specs(args: argparse.Namespace) -> list[dict[str, Any]]:
     items = corpus(args.seed)
     specs = []
     for job in args.jobs.split(","):
         name, mode, max_tokens, overflow, window = JOBS[job]
         path = snapshot(Path(args.cache), name)
+        if getattr(args, "flat", None):
+            path = flat_copy(path, Path(args.flat) / f"{name}-{REVISIONS[name][:12]}")
         config = json.loads((path / "config.json").read_text(encoding="utf-8"))
         labels = [config["id2label"][str(i)] for i in range(len(config["id2label"]))]
         selected = inputs_for(job, items)
@@ -469,7 +483,7 @@ def run_runtime(args: argparse.Namespace) -> None:
     specs = job_specs(args)
     models = tuple(
         ModelConfig(
-            model=spec["Path"],
+            model=f"vllm-sr/Vela-1.0-Encoder-307M-{JOBS[spec['Job']][0]}",
             name=spec["Job"],
             device=args.device,
             profile=args.profile,
@@ -477,7 +491,13 @@ def run_runtime(args: argparse.Namespace) -> None:
         for spec in specs
     )
     runtime = Runtime(
-        ServeConfig(models=models, threads=args.threads, result_cache_entries=0)
+        ServeConfig(
+            models=models,
+            threads=args.threads,
+            result_cache_entries=0,
+            cache_dir=args.cache,
+            offline=True,
+        )
     )
     runtime.start(background=False)
     loop = asyncio.new_event_loop()
@@ -854,6 +874,11 @@ def main(argv: Iterable[str] | None = None) -> int:
                 "--tree",
                 required=True,
                 help="a copy of the legacy commit's mirror with built bindings",
+            )
+            sub.add_argument(
+                "--flat",
+                required=True,
+                help="where to link the snapshots as plain model directories",
             )
         else:
             sub.add_argument("--device", default="cpu")
