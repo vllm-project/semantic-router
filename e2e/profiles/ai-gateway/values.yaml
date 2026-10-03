@@ -1237,12 +1237,9 @@ config:
         ttl_seconds: 3600
         eviction_policy: fifo
         embedding_model: mmbert
-        # Exercised by the semantic-cache-polarity case: the NLI tier reuses the
-        # default hallucination explainer (models/mom-halugate-explainer).
+        # Exercised by the semantic-cache-polarity case.
         polarity_guard:
-          mode: lexical+nli
-          nli:
-            contradiction_threshold: 0.5
+          mode: lexical
       memory:
         embedding_model: mmbert
       vector_store:

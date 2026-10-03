@@ -72,17 +72,17 @@ reach a routable interface without an explicit `bind` change. The switch is read
 once at startup, so changing it requires a Router restart. See
 [API and Observability](../tutorials/global/api-and-observability).
 
-Built-in category/domain classification uses the local `variant` selector when
-no remote backend is configured. To call a named external classifier, attach a
+Built-in category/domain classification runs Vela Domain in the
+[model runtime](../model-runtime/overview.md) when no remote backend is
+configured. To call a named external classifier, attach a
 `backend` under `global.model_catalog.modules.classifier.domain` and resolve
 its `model` from `global.model_catalog.external[]` with
 `model_role: classification`. The shared backend fields are `protocol`,
 `contract`, `model`, and optional `deadline_ms`; category
 currently supports `http_classify` with the full `label_distribution.v1`
-response contract. Omit `backend` to retain local behavior. The deprecated
-`use_modernbert` and `use_mmbert_32k` keys remain readable, while generated
-canonical configuration uses `variant: candle`, `variant: modernbert`, or
-`variant: mmbert32k`.
+response contract. Omit `backend` to keep the runtime-served model. The earlier
+`variant`, `use_modernbert` and `use_mmbert_32k` selectors are gone;
+`vllm-sr config migrate` removes them.
 
 Complexity attaches the same block under
 `global.model_catalog.modules.complexity`, beside `prototype_scoring`. It reads
@@ -108,8 +108,7 @@ result. `on_error` beside the backend selects what such a failure, or a
 provider-declared `truncated_at`, does to the rule that consumed it: `allow`
 (the default) treats the content as not matching, `block` matches it as
 `classification_error`. Spans returned before a declared truncation still
-count under both policies. A backend is mutually exclusive with the local
-`use_mmbert_32k` selector.
+count under both policies.
 
 The [Routing Pipeline](../overview/signal-driven-decisions) explains the design.
 Capability pages under **Capabilities** document each signal, projection,

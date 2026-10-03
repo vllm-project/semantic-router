@@ -5,7 +5,8 @@ description: Connect a classifier, guard, or embedding model hosted outside the 
 
 Use an external service when another server manages the model and its hardware.
 The Router sends it the text to inspect and uses its response as a routing
-signal. For models running inside the Router, see [In-process models](in-process.md).
+signal. For models the router runs itself, see the
+[model runtime](../../model-runtime/overview.md).
 
 ## Choose an API
 
@@ -13,11 +14,11 @@ signal. For models running inside the Router, see [In-process models](in-process
 | --- | --- | --- |
 | Classification API | `adapter: http_classify` | Domain, custom labels, prompt attacks, PII, hallucination detection, complexity |
 | Chat API | `adapter: http_chat` | Prompt attacks, hallucination detection, LLM classification |
-| OpenAI-compatible embedding API | `backend: openai_compatible` | [Remote embeddings](embeddings.md#remote-embeddings) |
+| OpenAI-compatible embedding API | `backend: openai_compatible` | [External embeddings](../../model-runtime/guides/embeddings.md#use-an-external-embedding-service) |
 | MCP tool | `modules.classifier.mcp` | Classification through an MCP server |
 
-Fact-check, feedback, output-modality classification, and NLI currently require
-supported local models.
+Fact-check, feedback and output-modality classification run only in the
+model runtime.
 
 ## Connect a guard service
 
@@ -98,6 +99,6 @@ endpoint to check capacity.
 - A classify request contains text but no model name. Use separate endpoints
   for different classify models. Chat and embedding requests include a model name.
 
-See [failure policies](safety.md#handle-failures-and-missing-scores) before using
-remote signals to enforce a guardrail. MCP transport, tool, and timeout options
+See [when a check cannot finish](../../model-runtime/guides/safety.md#when-a-check-cannot-finish)
+before using remote signals to enforce a guardrail. MCP transport, tool, and timeout options
 are listed in the [configuration reference](../../api/configuration-schema.mdx).
