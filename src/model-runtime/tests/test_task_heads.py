@@ -5,11 +5,16 @@ from __future__ import annotations
 import pytest
 import torch
 from starlette.testclient import TestClient
+from vllm_sr_runtime.accel import onednn
 from vllm_sr_runtime.api.app import create_app
 from vllm_sr_runtime.config import ModelConfig, ServeConfig
 from vllm_sr_runtime.errors import PackageError
-from vllm_sr_runtime.families.task_heads.family import TaskHeadsFamily
-from vllm_sr_runtime.plugins.base import PackageRef
+from vllm_sr_runtime.families.task_heads.family import (
+    TaskHeadsFamily,
+    batch_invariant,
+)
+from vllm_sr_runtime.heads.task import identical
+from vllm_sr_runtime.plugins.base import PackageRef, SurfaceRequest
 from vllm_sr_runtime.registry import builtin
 from vllm_sr_runtime.registry.tables.common import BuiltinModel
 from vllm_sr_runtime.runtime import Runtime
@@ -300,6 +305,63 @@ def test_approximate_profiles_serve_every_head(packages, profile):
                     )
     finally:
         runtime.stop()
+
+
+def test_cpu_rows_are_bit_identical_alone_and_inside_other_requests_batches(runtime):
+    if not onednn.available():
+        pytest.skip("oneDNN's packed linear needs an x86 CPU")
+    texts = ["Hi", TEXT, LONG[:300], LONG[:120], LONG]
+    for name in ("sequence", "safety", "scores", "token", "grounded"):
+        model = served(runtime, name).model
+        if torch.version.hip is None and torch.version.cuda is None:
+            assert model.batch_invariant, name
+        if not model.batch_invariant:
+            continue
+        inputs = (
+            [GROUNDED, {**GROUNDED, "answer": "It opened in 1889."}]
+            if name == "grounded"
+            else texts
+        )
+        plans = [
+            model.plan_surface(
+                "classify",
+                SurfaceRequest(
+                    "classify",
+                    {"model": name, "input": [value]},
+                    None,
+                    "exact",
+                    False,
+                    0.0,
+                ),
+            )
+            for value in inputs
+        ]
+        alone = [model.run(plan.items) for plan in plans]
+        mixed = [item for plan in reversed(plans) for item in plan.items]
+        together = model.run(mixed)
+        position = 0
+        for expected in reversed(alone):
+            for value in expected:
+                assert identical(together[position], value), name
+                position += 1
+
+
+def test_a_model_whose_rows_change_with_the_batch_is_not_batch_invariant(
+    runtime, monkeypatch
+):
+    model = served(runtime, "sequence").model
+    head = model.heads[model.primary]
+    readout = head.readout
+    monkeypatch.setattr(
+        head,
+        "readout",
+        lambda rows, sequences: [
+            tuple(value + 1e-7 * len(sequences) for value in values)
+            for values in readout(rows, sequences)
+        ],
+    )
+    vocab = model.engine_model.backbone.config["vocab_size"]
+    assert not batch_invariant(model, vocab)
 
 
 def test_the_result_cache_answers_repeated_inputs(monkeypatch, packages):

@@ -1,5 +1,9 @@
 """CPU accelerator: FP32 everywhere, pure-torch reference kernels. Validated.
 
+For models that name them it registers the ``geglu`` slot's ``contiguous``
+variant and, on x86, the ``linear`` slot's ``float32-packed`` one
+(``onednn.py``): together they make an encoder's forward batch-invariant.
+
 All CPU device work of a process runs on one thread (``execute``). PyTorch's
 OpenMP backend keeps one thread team per calling thread; as soon as two teams
 exist (a loader thread, one worker per model) the threads outnumber the cores,
@@ -20,7 +24,14 @@ from typing import Any
 import torch
 
 from ..plugins.base import Accelerator, DeviceInfo
-from .kernels import KernelSet, reference_kernels
+from . import onednn
+from .kernels import (
+    CONTIGUOUS,
+    Kernel,
+    KernelSet,
+    geglu_contiguous,
+    reference_kernels,
+)
 
 _LOCK = threading.Lock()
 _EXECUTOR: ThreadPoolExecutor | None = None
@@ -76,7 +87,21 @@ class CPUAccelerator(Accelerator):
         return torch.device("cpu")
 
     def kernels(self, device: DeviceInfo) -> KernelSet:
-        return reference_kernels("cpu")
+        kernels = reference_kernels("cpu")
+        kernels.register(
+            Kernel("geglu", geglu_contiguous, "torch", exact=True, variant=CONTIGUOUS)
+        )
+        if onednn.available():
+            kernels.register(
+                Kernel(
+                    "linear",
+                    onednn.PackedLinear,
+                    "onednn",
+                    exact=True,
+                    variant=onednn.PACKED,
+                )
+            )
+        return kernels
 
     def capabilities(self, device: DeviceInfo) -> dict[str, bool]:
         return {

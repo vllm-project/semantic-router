@@ -153,7 +153,10 @@ class Native:
         """Planning and ``run`` on the exact physical batches, on the calling thread."""
         model = self.served.model
         items = model.plan(body["state"], body["questions"]).items
-        for batch in model.exact_batches(items) or [list(range(len(items)))]:
+        batches = model.exact_batches(items)
+        if batches is None:
+            batches = [list(range(len(items)))] if items else []
+        for batch in batches:
             model.run([items[index] for index in batch])
 
     def on_device(

@@ -39,11 +39,12 @@ MODEL_TYPE = "modernbert"
 FULL = "full_attention"
 SLIDING = "sliding_attention"
 BAND_BLOCK = 128
-# Row width from which local layers attend in query blocks, per device type (Vela 307M,
-# FP32, one row): dense masked SDPA is faster below; on MI325X blocks win from 2,048
-# tokens (1,536: 12.8 vs 11.7 ms dense; 2,048: 15.2 vs 18.0 ms).
+# Row width from which local layers attend in query blocks, by device type (Vela 307M,
+# FP32): dense masked SDPA is faster below, on 16 EPYC cores and on MI325X.
 BAND_FROM = {"cpu": 1024, "cuda": 2048}
 DEFAULT_THETA = {FULL: 160_000.0, SLIDING: 10_000.0}
+# cos / sin per layer type for each grid width of a layout.
+Rotary = dict[int, dict[str, tuple[torch.Tensor, torch.Tensor]]]
 ACTIVATIONS: dict[str, Callable[[torch.Tensor], torch.Tensor]] = {
     "gelu": F.gelu,
     "gelu_pytorch_tanh": lambda x: F.gelu(x, approximate="tanh"),
@@ -356,15 +357,26 @@ def padded_layout(
     return Layout((Group(rows, width, masks),))
 
 
-def length_groups(lengths: Sequence[int], width: int = 0) -> list[list[int]]:
-    """Row indices by decreasing length, cut where a grid would pad too much (``pads_little``)."""
+def length_groups(
+    lengths: Sequence[int], width: int = 0, uniform: bool = False
+) -> list[list[int]]:
+    """Row indices by decreasing length, cut where a grid would pad too much (``pads_little``).
+
+    ``uniform`` grids hold rows of one length only: no row is ever padded, so
+    each attends exactly as it would alone.
+    """
     order = sorted(range(len(lengths)), key=lambda row: -lengths[row])
     groups: list[list[int]] = []
     real = 0
     for row in order:
         if groups:
-            grid = (len(groups[-1]) + 1) * max(lengths[groups[-1][0]], width)
-            if pads_little(grid, real + lengths[row]):
+            longest = max(lengths[groups[-1][0]], width)
+            grid = (len(groups[-1]) + 1) * longest
+            if (
+                lengths[row] == longest
+                if uniform
+                else pads_little(grid, real + lengths[row])
+            ):
                 groups[-1].append(row)
                 real += lengths[row]
                 continue
@@ -384,16 +396,17 @@ def packed_group(
     """One grid over rows of ``lengths`` whose tokens lie back to back."""
     rows = len(lengths)
     width = max(*lengths, width)
-    if rows == 1 and lengths[0] == width:
-        key_valid = None
-        index = None
-    else:
+    padded = any(length != width for length in lengths)
+    index = key_valid = None
+    if rows > 1 or padded:
         index = torch.cat(
             [
                 torch.arange(length, dtype=torch.long) + row * width
                 for row, length in enumerate(lengths)
             ]
         ).to(device)
+    # Without padding a grid needs no key mask: each row attends as it would alone.
+    if padded:
         key_valid = torch.arange(width)[None, :] < torch.tensor(list(lengths))[:, None]
     blocks = None
     if width >= band_from:
@@ -412,6 +425,7 @@ def packed_layout(
     width: int | None = None,
     band_from: int | None = None,
     block: int = BAND_BLOCK,
+    uniform: bool = False,
 ) -> Layout:
     """The layout of sequences of ``lengths`` packed back to back (grids at least ``width`` wide).
 
@@ -420,11 +434,11 @@ def packed_layout(
     long row does not widen every short one: attention costs rows x width^2.
     A single row without padding keeps the identity layout, which is the
     padded path. Rows of at least ``band_from`` tokens (``BAND_FROM`` for the
-    device type by default) run local layers in query blocks.
+    device type) run local layers in query blocks.
     """
     if band_from is None:
-        band_from = BAND_FROM[torch.device(device).type]
-    groups = length_groups(lengths, width or 0)
+        band_from = BAND_FROM.get(torch.device(device).type, BAND_FROM["cuda"])
+    groups = length_groups(lengths, width or 0, uniform)
     if len(groups) == 1:
         group = packed_group(lengths, window, device, width or 0, band_from, block)
         return Layout((group,))
@@ -489,14 +503,21 @@ class ModernBertAttention(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        rotary: tuple[torch.Tensor, torch.Tensor],
+        rotary: Rotary,
         kind: str,
         layout: Layout,
         kernels: KernelSet,
     ) -> torch.Tensor:
+        """``rotary`` holds each grid width's cos / sin per layer type."""
         parts = [
             group.to_tokens(
-                self.attend(group.to_rows(projected), rotary, kind, group, kernels)
+                self.attend(
+                    group.to_rows(projected),
+                    rotary[group.width][kind],
+                    kind,
+                    group,
+                    kernels,
+                )
             )
             for group, projected in layout.split(self.Wqkv(hidden_states))
         ]
@@ -513,9 +534,8 @@ class ModernBertAttention(nn.Module):
         """Attention over one grid's ``[rows, width, 3 * hidden]`` projections."""
         batch, width = rows.shape[:2]
         query, key, value = rows.view(batch, width, 3, -1, self.head_dim).unbind(dim=-3)
-        cos, sin = rotary
         query, key = kernels("rotary_half")(
-            query.transpose(1, 2), key.transpose(1, 2), cos[:, :width], sin[:, :width]
+            query.transpose(1, 2), key.transpose(1, 2), *rotary
         )
         blocks = group.band if kind == SLIDING else None
         if blocks is not None:
@@ -549,9 +569,8 @@ class ModernBertMLP(nn.Module):
         self.Wi = nn.Linear(hidden, 2 * intermediate, bias=bias)
         self.Wo = nn.Linear(intermediate, hidden, bias=bias)
 
-    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        value, gate = self.Wi(hidden_states).chunk(2, dim=-1)
-        return self.Wo(self.act(value) * gate)
+    def forward(self, hidden_states: torch.Tensor, kernels: KernelSet) -> torch.Tensor:
+        return self.Wo(kernels("geglu")(self.Wi(hidden_states), self.act))
 
 
 class ModernBertLayer(nn.Module):
@@ -563,11 +582,13 @@ class ModernBertLayer(nn.Module):
         self.mlp_norm = layer_norm(config)
         self.mlp = ModernBertMLP(config)
 
-    def forward(self, hidden_states, rotary, layout: Layout, kernels: KernelSet):
+    def forward(
+        self, hidden_states, rotary: Rotary, layout: Layout, kernels: KernelSet
+    ):
         hidden_states = hidden_states + self.attn(
-            self.attn_norm(hidden_states), rotary[self.kind], self.kind, layout, kernels
+            self.attn_norm(hidden_states), rotary, self.kind, layout, kernels
         )
-        return hidden_states + self.mlp(self.mlp_norm(hidden_states))
+        return hidden_states + self.mlp(self.mlp_norm(hidden_states), kernels)
 
 
 class ModernBertBackbone(nn.Module):
@@ -595,10 +616,14 @@ class ModernBertBackbone(nn.Module):
         return len(self.layers)
 
     def packed(
-        self, lengths: Sequence[int], device, width: int | None = None
+        self,
+        lengths: Sequence[int],
+        device,
+        width: int | None = None,
+        uniform: bool = False,
     ) -> Layout:
         """The layout of rows of ``lengths`` packed back to back (see ``packed_layout``)."""
-        return packed_layout(lengths, self.window, device, width)
+        return packed_layout(lengths, self.window, device, width, uniform=uniform)
 
     def padded(
         self, attention_mask: torch.Tensor | None, rows: int, width: int, device
@@ -641,7 +666,12 @@ class ModernBertBackbone(nn.Module):
         out: dict[int, torch.Tensor] = {}
         if 0 in exits:
             out[0] = exit_state(0, hidden_states)
-        rotary = self.rotary_emb(hidden_states, layout.width)
+        # One table per grid width: cos / sin of a longer table's prefix can differ
+        # in the last bit (vectorized tails), and Transformers computes its own width.
+        rotary = {
+            width: self.rotary_emb(hidden_states, width)
+            for width in {group.width for group in layout.groups}
+        }
         for count, layer in enumerate(self.layers[: max(exits)], start=1):
             hidden_states = layer(hidden_states, rotary, layout, self.kernels)
             if count in exits:

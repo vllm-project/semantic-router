@@ -147,6 +147,27 @@ class Item:
     cache_key: str | None = None
 
 
+def identical(left: Any, right: Any) -> bool:
+    """Whether two readout values are the same bit for bit (tensors, arrays, nested containers)."""
+    if isinstance(left, torch.Tensor):
+        return isinstance(right, torch.Tensor) and torch.equal(left, right)
+    if isinstance(left, np.ndarray):
+        return (
+            isinstance(right, np.ndarray)
+            and left.dtype == right.dtype
+            and np.array_equal(left, right)
+        )
+    if isinstance(left, dict):
+        return (
+            isinstance(right, dict)
+            and left.keys() == right.keys()
+            and all(identical(left[key], right[key]) for key in left)
+        )
+    if isinstance(left, list | tuple):
+        return len(left) == len(right) and all(map(identical, left, right))
+    return left == right
+
+
 def cache_key(identity: str, head: str, layer: int, ids: Sequence[int]) -> str:
     """A content hash of everything an item's result depends on."""
     digest = hashlib.sha256(f"{identity}\0{head}\0{layer}\0".encode())

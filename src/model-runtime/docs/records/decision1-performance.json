@@ -1,0 +1,5617 @@
+{
+ "schema": "decision1-performance/1",
+ "runs": [
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 10.9017,
+    "p95_ms": 11.5073,
+    "mean_ms": 11.2976,
+    "requests_per_second": 88.5145
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 10.1767,
+    "p95_ms": 10.574,
+    "mean_ms": 10.3244,
+    "requests_per_second": 96.8579
+   },
+   "throughput": {
+    "1": 89.549,
+    "4": 198.793,
+    "16": 279.889
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 9.3908,
+    "p95_ms": 10.2295,
+    "mean_ms": 9.8712,
+    "requests_per_second": 101.3052
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 8.631,
+    "p95_ms": 9.0179,
+    "mean_ms": 8.6371,
+    "requests_per_second": 115.7797
+   },
+   "throughput": {
+    "1": 104.322,
+    "4": 90.764,
+    "16": 84.043
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 26.851,
+    "p95_ms": 29.3131,
+    "mean_ms": 27.1467,
+    "requests_per_second": 36.8368
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "shared_context",
+   "single": {
+    "requests": 400,
+    "p50_ms": 11.6459,
+    "p95_ms": 12.4107,
+    "mean_ms": 12.4569,
+    "requests_per_second": 80.2766
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 10.7868,
+    "p95_ms": 11.3004,
+    "mean_ms": 10.9218,
+    "requests_per_second": 91.5598
+   },
+   "throughput": {
+    "1": 84.257,
+    "4": 99.349,
+    "16": 83.361
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 231,
+    "p50_ms": 23.7769,
+    "p95_ms": 190.2318,
+    "mean_ms": 58.5117,
+    "requests_per_second": 17.0906
+   },
+   "single_scheduler": {
+    "requests": 231,
+    "p50_ms": 22.9744,
+    "p95_ms": 191.9879,
+    "mean_ms": 53.6614,
+    "requests_per_second": 18.6354
+   },
+   "throughput": {
+    "1": 22.569,
+    "4": 22.925,
+    "16": 23.352
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "single": {
+    "requests": 231,
+    "p50_ms": 29.8306,
+    "p95_ms": 186.4641,
+    "mean_ms": 62.0208,
+    "requests_per_second": 16.1236
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "shared_context",
+   "single": {
+    "requests": 231,
+    "p50_ms": 26.8806,
+    "p95_ms": 147.5233,
+    "mean_ms": 70.7714,
+    "requests_per_second": 14.13
+   },
+   "single_scheduler": {
+    "requests": 231,
+    "p50_ms": 24.793,
+    "p95_ms": 104.3181,
+    "mean_ms": 43.8748,
+    "requests_per_second": 22.7921
+   },
+   "throughput": {
+    "1": 26.441,
+    "4": 28.134,
+    "16": 29.355
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 11.6907,
+    "p95_ms": 15.3057,
+    "mean_ms": 12.3295,
+    "requests_per_second": 81.1065
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 10.6079,
+    "p95_ms": 12.2906,
+    "mean_ms": 10.748,
+    "requests_per_second": 93.0404
+   },
+   "throughput": {
+    "1": 82.471,
+    "4": 211.643,
+    "16": 368.33
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 9.4114,
+    "p95_ms": 13.2413,
+    "mean_ms": 9.7369,
+    "requests_per_second": 102.7022
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 8.4289,
+    "p95_ms": 10.4051,
+    "mean_ms": 8.5481,
+    "requests_per_second": 116.9857
+   },
+   "throughput": {
+    "1": 101.836,
+    "4": 104.156,
+    "16": 114.836
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 17.1159,
+    "p95_ms": 24.006,
+    "mean_ms": 17.5101,
+    "requests_per_second": 57.1098
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 231,
+    "p50_ms": 21.4744,
+    "p95_ms": 34.1347,
+    "mean_ms": 20.4963,
+    "requests_per_second": 48.7893
+   },
+   "single_scheduler": {
+    "requests": 231,
+    "p50_ms": 18.9867,
+    "p95_ms": 33.8394,
+    "mean_ms": 18.6322,
+    "requests_per_second": 53.6707
+   },
+   "throughput": {
+    "1": 46.936,
+    "4": 78.027,
+    "16": 96.082
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 231,
+    "p50_ms": 28.4075,
+    "p95_ms": 58.4697,
+    "mean_ms": 29.4129,
+    "requests_per_second": 33.9987
+   },
+   "single_scheduler": {
+    "requests": 231,
+    "p50_ms": 26.0486,
+    "p95_ms": 56.405,
+    "mean_ms": 27.7677,
+    "requests_per_second": 36.013
+   },
+   "throughput": {
+    "1": 33.31,
+    "4": 34.294,
+    "16": 34.537
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "single": {
+    "requests": 231,
+    "p50_ms": 30.4923,
+    "p95_ms": 59.3371,
+    "mean_ms": 31.1368,
+    "requests_per_second": 32.1164
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 10.8952,
+    "p95_ms": 13.0683,
+    "mean_ms": 11.1435,
+    "requests_per_second": 89.7387
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 10.306,
+    "p95_ms": 13.5081,
+    "mean_ms": 10.6566,
+    "requests_per_second": 93.8388
+   },
+   "throughput": {
+    "1": 93.377,
+    "4": 246.97,
+    "16": 397.966
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 9.5814,
+    "p95_ms": 11.8985,
+    "mean_ms": 9.7767,
+    "requests_per_second": 102.2844
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 8.9479,
+    "p95_ms": 10.8162,
+    "mean_ms": 9.0588,
+    "requests_per_second": 110.3901
+   },
+   "throughput": {
+    "1": 89.481,
+    "4": 91.778,
+    "16": 126.489
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 13.8712,
+    "p95_ms": 19.3337,
+    "mean_ms": 15.2108,
+    "requests_per_second": 65.7426
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 231,
+    "p50_ms": 20.6038,
+    "p95_ms": 34.6792,
+    "mean_ms": 20.1365,
+    "requests_per_second": 49.661
+   },
+   "single_scheduler": {
+    "requests": 231,
+    "p50_ms": 18.9716,
+    "p95_ms": 33.7146,
+    "mean_ms": 18.5471,
+    "requests_per_second": 53.9168
+   },
+   "throughput": {
+    "1": 49.233,
+    "4": 81.891,
+    "16": 100.882
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 231,
+    "p50_ms": 27.177,
+    "p95_ms": 56.9038,
+    "mean_ms": 28.8394,
+    "requests_per_second": 34.6748
+   },
+   "single_scheduler": {
+    "requests": 231,
+    "p50_ms": 25.6552,
+    "p95_ms": 55.7047,
+    "mean_ms": 27.334,
+    "requests_per_second": 36.5845
+   },
+   "throughput": {
+    "1": 34.99,
+    "4": 36.311,
+    "16": 37.071
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "single": {
+    "requests": 231,
+    "p50_ms": 29.8123,
+    "p95_ms": 64.1534,
+    "mean_ms": 31.446,
+    "requests_per_second": 31.8005
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 22.0405,
+    "p95_ms": 22.94,
+    "mean_ms": 22.5949,
+    "requests_per_second": 44.2577
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 21.2147,
+    "p95_ms": 28.1816,
+    "mean_ms": 22.3265,
+    "requests_per_second": 44.7897
+   },
+   "throughput": {
+    "1": 41.322,
+    "4": 66.451,
+    "16": 88.487
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 20.9392,
+    "p95_ms": 21.8464,
+    "mean_ms": 21.5245,
+    "requests_per_second": 46.4588
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 19.4344,
+    "p95_ms": 20.2861,
+    "mean_ms": 19.5424,
+    "requests_per_second": 51.1707
+   },
+   "throughput": {
+    "1": 47.077,
+    "4": 48.598,
+    "16": 50.212
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 32.7991,
+    "p95_ms": 35.7362,
+    "mean_ms": 32.857,
+    "requests_per_second": 30.4349
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "shared_context",
+   "single": {
+    "requests": 400,
+    "p50_ms": 23.5078,
+    "p95_ms": 25.0196,
+    "mean_ms": 24.1695,
+    "requests_per_second": 41.3744
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 22.0556,
+    "p95_ms": 22.7142,
+    "mean_ms": 22.08,
+    "requests_per_second": 45.2898
+   },
+   "throughput": {
+    "1": 42.013,
+    "4": 47.531,
+    "16": 49.55
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 231,
+    "p50_ms": 93.2719,
+    "p95_ms": 531.5881,
+    "mean_ms": 185.487,
+    "requests_per_second": 5.3912
+   },
+   "single_scheduler": {
+    "requests": 231,
+    "p50_ms": 91.0681,
+    "p95_ms": 529.3635,
+    "mean_ms": 179.0257,
+    "requests_per_second": 5.5858
+   },
+   "throughput": {
+    "1": 5.589,
+    "4": 5.605,
+    "16": 5.664
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "single": {
+    "requests": 231,
+    "p50_ms": 103.2257,
+    "p95_ms": 600.5489,
+    "mean_ms": 205.3023,
+    "requests_per_second": 4.8709
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "shared_context",
+   "single": {
+    "requests": 231,
+    "p50_ms": 90.2121,
+    "p95_ms": 145.4113,
+    "mean_ms": 106.8012,
+    "requests_per_second": 9.3632
+   },
+   "single_scheduler": {
+    "requests": 231,
+    "p50_ms": 88.4264,
+    "p95_ms": 161.964,
+    "mean_ms": 94.4707,
+    "requests_per_second": 10.5853
+   },
+   "throughput": {
+    "1": 10.803,
+    "4": 11.156,
+    "16": 11.232
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 16.8111,
+    "p95_ms": 17.6212,
+    "mean_ms": 17.2968,
+    "requests_per_second": 57.8142
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 15.8112,
+    "p95_ms": 16.4403,
+    "mean_ms": 15.8502,
+    "requests_per_second": 63.0906
+   },
+   "throughput": {
+    "1": 60.204,
+    "4": 100.089,
+    "16": 130.689
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 15.9754,
+    "p95_ms": 16.7932,
+    "mean_ms": 16.5865,
+    "requests_per_second": 60.29
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 14.4638,
+    "p95_ms": 15.2221,
+    "mean_ms": 14.6634,
+    "requests_per_second": 68.1969
+   },
+   "throughput": {
+    "1": 62.925,
+    "4": 65.284,
+    "16": 66.373
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 38.6461,
+    "p95_ms": 43.3974,
+    "mean_ms": 38.8093,
+    "requests_per_second": 25.767
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "shared_context",
+   "single": {
+    "requests": 400,
+    "p50_ms": 17.7281,
+    "p95_ms": 18.4834,
+    "mean_ms": 18.1855,
+    "requests_per_second": 54.9888
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 16.4843,
+    "p95_ms": 17.2357,
+    "mean_ms": 16.647,
+    "requests_per_second": 60.0708
+   },
+   "throughput": {
+    "1": 55.096,
+    "4": 64.563,
+    "16": 68.744
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 231,
+    "p50_ms": 63.0531,
+    "p95_ms": 355.5264,
+    "mean_ms": 123.9628,
+    "requests_per_second": 8.0669
+   },
+   "single_scheduler": {
+    "requests": 231,
+    "p50_ms": 68.0595,
+    "p95_ms": 352.5492,
+    "mean_ms": 119.9876,
+    "requests_per_second": 8.3342
+   },
+   "throughput": {
+    "1": 8.393,
+    "4": 8.514,
+    "16": 8.523
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "single": {
+    "requests": 231,
+    "p50_ms": 73.9172,
+    "p95_ms": 407.3954,
+    "mean_ms": 143.0889,
+    "requests_per_second": 6.9887
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "shared_context",
+   "single": {
+    "requests": 231,
+    "p50_ms": 63.0608,
+    "p95_ms": 119.9927,
+    "mean_ms": 91.1443,
+    "requests_per_second": 10.9716
+   },
+   "single_scheduler": {
+    "requests": 231,
+    "p50_ms": 61.365,
+    "p95_ms": 115.4987,
+    "mean_ms": 72.9222,
+    "requests_per_second": 13.7132
+   },
+   "throughput": {
+    "1": 13.736,
+    "4": 14.399,
+    "16": 14.531
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 10.6109,
+    "p95_ms": 12.6046,
+    "mean_ms": 10.7123,
+    "requests_per_second": 93.3506
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 9.3796,
+    "p95_ms": 10.8019,
+    "mean_ms": 9.5959,
+    "requests_per_second": 104.2113
+   },
+   "throughput": {
+    "1": 94.093,
+    "4": 238.515,
+    "16": 365.8
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 7.7889,
+    "p95_ms": 9.5366,
+    "mean_ms": 8.0994,
+    "requests_per_second": 123.4655
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 7.0728,
+    "p95_ms": 7.6629,
+    "mean_ms": 7.0076,
+    "requests_per_second": 142.7013
+   },
+   "throughput": {
+    "1": 122.777,
+    "4": 125.301,
+    "16": 142.376
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 12.0094,
+    "p95_ms": 15.1429,
+    "mean_ms": 12.4187,
+    "requests_per_second": 80.524
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 231,
+    "p50_ms": 20.7765,
+    "p95_ms": 37.5167,
+    "mean_ms": 20.4436,
+    "requests_per_second": 48.9152
+   },
+   "single_scheduler": {
+    "requests": 231,
+    "p50_ms": 19.799,
+    "p95_ms": 33.1741,
+    "mean_ms": 19.0081,
+    "requests_per_second": 52.6091
+   },
+   "throughput": {
+    "1": 50.214,
+    "4": 86.808,
+    "16": 104.752
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 231,
+    "p50_ms": 26.9639,
+    "p95_ms": 55.718,
+    "mean_ms": 28.166,
+    "requests_per_second": 35.5038
+   },
+   "single_scheduler": {
+    "requests": 231,
+    "p50_ms": 25.5458,
+    "p95_ms": 54.9547,
+    "mean_ms": 27.0459,
+    "requests_per_second": 36.9742
+   },
+   "throughput": {
+    "1": 34.111,
+    "4": 36.205,
+    "16": 37.059
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "single": {
+    "requests": 231,
+    "p50_ms": 29.2551,
+    "p95_ms": 63.1847,
+    "mean_ms": 30.3601,
+    "requests_per_second": 32.9379
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 400,
+    "p50_ms": 10.4688,
+    "p95_ms": 11.4046,
+    "mean_ms": 11.1317,
+    "requests_per_second": 89.8335
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 9.7885,
+    "p95_ms": 10.2975,
+    "mean_ms": 9.8519,
+    "requests_per_second": 101.5035
+   },
+   "throughput": {
+    "1": 92.444,
+    "4": 173.953,
+    "16": 225.07
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 400,
+    "p50_ms": 9.1539,
+    "p95_ms": 9.9759,
+    "mean_ms": 9.5537,
+    "requests_per_second": 104.6711
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 8.0234,
+    "p95_ms": 8.6315,
+    "mean_ms": 8.1783,
+    "requests_per_second": 122.2751
+   },
+   "throughput": {
+    "1": 106.24,
+    "4": 108.28,
+    "16": 90.381
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 400,
+    "p50_ms": 27.7104,
+    "p95_ms": 31.3098,
+    "mean_ms": 27.9477,
+    "requests_per_second": 35.7811
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "shared_context",
+   "single": {
+    "requests": 400,
+    "p50_ms": 11.7381,
+    "p95_ms": 12.5401,
+    "mean_ms": 12.3177,
+    "requests_per_second": 81.1839
+   },
+   "single_scheduler": {
+    "requests": 400,
+    "p50_ms": 10.6461,
+    "p95_ms": 11.7011,
+    "mean_ms": 10.6678,
+    "requests_per_second": 93.7402
+   },
+   "throughput": {
+    "1": 82.414,
+    "4": 105.179,
+    "16": 111.585
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 231,
+    "p50_ms": 31.343,
+    "p95_ms": 164.2859,
+    "mean_ms": 58.9569,
+    "requests_per_second": 16.9616
+   },
+   "single_scheduler": {
+    "requests": 231,
+    "p50_ms": 29.6553,
+    "p95_ms": 192.1098,
+    "mean_ms": 64.0186,
+    "requests_per_second": 15.6205
+   },
+   "throughput": {
+    "1": 17.851,
+    "4": 17.849,
+    "16": 18.133
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "single": {
+    "requests": 231,
+    "p50_ms": 40.1824,
+    "p95_ms": 193.5075,
+    "mean_ms": 69.8677,
+    "requests_per_second": 14.3128
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "shared_context",
+   "single": {
+    "requests": 231,
+    "p50_ms": 33.7177,
+    "p95_ms": 75.0909,
+    "mean_ms": 61.3607,
+    "requests_per_second": 16.2971
+   },
+   "single_scheduler": {
+    "requests": 231,
+    "p50_ms": 31.5367,
+    "p95_ms": 82.2035,
+    "mean_ms": 43.0192,
+    "requests_per_second": 23.2454
+   },
+   "throughput": {
+    "1": 19.555,
+    "4": 24.682,
+    "16": 25.059
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many16",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many16:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 20,
+    "p50_ms": 47.6873,
+    "p95_ms": 50.7268,
+    "mean_ms": 48.21,
+    "requests_per_second": 20.7426
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 46.0069,
+    "p95_ms": 51.3544,
+    "mean_ms": 47.1042,
+    "requests_per_second": 21.2295
+   },
+   "throughput": {
+    "1": 20.21,
+    "4": 18.745,
+    "16": 15.747
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many16",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "many16:20"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 20,
+    "p50_ms": 61.9635,
+    "p95_ms": 75.0584,
+    "mean_ms": 62.3381,
+    "requests_per_second": 16.0416
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many16",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many16:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "shared_context",
+   "single": {
+    "requests": 20,
+    "p50_ms": 47.8565,
+    "p95_ms": 51.2888,
+    "mean_ms": 48.7818,
+    "requests_per_second": 20.4994
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 47.8874,
+    "p95_ms": 52.6758,
+    "mean_ms": 48.3318,
+    "requests_per_second": 20.6903
+   },
+   "throughput": {
+    "1": 20.683,
+    "4": 22.236,
+    "16": 22.329
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many16",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many16:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 20,
+    "p50_ms": 43.1077,
+    "p95_ms": 45.7701,
+    "mean_ms": 43.4363,
+    "requests_per_second": 23.0222
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 40.8239,
+    "p95_ms": 41.5901,
+    "mean_ms": 40.718,
+    "requests_per_second": 24.5592
+   },
+   "throughput": {
+    "1": 23.405,
+    "4": 33.251,
+    "16": 36.919
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many16",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many16:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 20,
+    "p50_ms": 60.189,
+    "p95_ms": 61.6679,
+    "mean_ms": 61.188,
+    "requests_per_second": 16.3431
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 56.9251,
+    "p95_ms": 58.2459,
+    "mean_ms": 57.0945,
+    "requests_per_second": 17.5148
+   },
+   "throughput": {
+    "1": 16.142,
+    "4": 16.958,
+    "16": 17.021
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many16",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "many16:20"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 20,
+    "p50_ms": 67.677,
+    "p95_ms": 69.9265,
+    "mean_ms": 67.849,
+    "requests_per_second": 14.7386
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many16",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many16:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 20,
+    "p50_ms": 43.4646,
+    "p95_ms": 45.2621,
+    "mean_ms": 43.4204,
+    "requests_per_second": 23.0306
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 41.5468,
+    "p95_ms": 42.2599,
+    "mean_ms": 41.4407,
+    "requests_per_second": 24.1308
+   },
+   "throughput": {
+    "1": 22.527,
+    "4": 34.256,
+    "16": 36.537
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many16",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many16:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 20,
+    "p50_ms": 59.4304,
+    "p95_ms": 60.2043,
+    "mean_ms": 59.5566,
+    "requests_per_second": 16.7908
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 57.7318,
+    "p95_ms": 58.6125,
+    "mean_ms": 57.8099,
+    "requests_per_second": 17.2981
+   },
+   "throughput": {
+    "1": 16.776,
+    "4": 16.954,
+    "16": 17.174
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many16",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "many16:20"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 20,
+    "p50_ms": 66.5537,
+    "p95_ms": 71.4702,
+    "mean_ms": 67.1943,
+    "requests_per_second": 14.8822
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many16",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many16:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 20,
+    "p50_ms": 184.7657,
+    "p95_ms": 188.1275,
+    "mean_ms": 185.5464,
+    "requests_per_second": 5.3895
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 183.4944,
+    "p95_ms": 187.2861,
+    "mean_ms": 184.4959,
+    "requests_per_second": 5.4202
+   },
+   "throughput": {
+    "1": 5.395,
+    "4": 5.439,
+    "16": 5.378
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many16",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "many16:20"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 20,
+    "p50_ms": 211.9809,
+    "p95_ms": 213.3747,
+    "mean_ms": 212.1447,
+    "requests_per_second": 4.7138
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many16",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many16:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "shared_context",
+   "single": {
+    "requests": 20,
+    "p50_ms": 86.1715,
+    "p95_ms": 88.7776,
+    "mean_ms": 86.4336,
+    "requests_per_second": 11.5696
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 86.4684,
+    "p95_ms": 89.2925,
+    "mean_ms": 86.1979,
+    "requests_per_second": 11.6012
+   },
+   "throughput": {
+    "1": 11.626,
+    "4": 11.979,
+    "16": 12.17
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many16",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many16:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 20,
+    "p50_ms": 123.6272,
+    "p95_ms": 126.5546,
+    "mean_ms": 124.1573,
+    "requests_per_second": 8.0543
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 122.6638,
+    "p95_ms": 123.7475,
+    "mean_ms": 122.5537,
+    "requests_per_second": 8.1597
+   },
+   "throughput": {
+    "1": 7.794,
+    "4": 8.219,
+    "16": 8.254
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many16",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "many16:20"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 20,
+    "p50_ms": 148.7656,
+    "p95_ms": 150.4665,
+    "mean_ms": 149.0675,
+    "requests_per_second": 6.7084
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many16",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many16:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "shared_context",
+   "single": {
+    "requests": 20,
+    "p50_ms": 63.3357,
+    "p95_ms": 68.5409,
+    "mean_ms": 63.8476,
+    "requests_per_second": 15.6623
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 61.5012,
+    "p95_ms": 64.776,
+    "mean_ms": 61.895,
+    "requests_per_second": 16.1564
+   },
+   "throughput": {
+    "1": 16.003,
+    "4": 15.764,
+    "16": 16.513
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many16",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many16:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 20,
+    "p50_ms": 54.2121,
+    "p95_ms": 66.7285,
+    "mean_ms": 56.9689,
+    "requests_per_second": 17.5534
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 52.6628,
+    "p95_ms": 55.7837,
+    "mean_ms": 50.1515,
+    "requests_per_second": 19.9396
+   },
+   "throughput": {
+    "1": 18.727,
+    "4": 27.769,
+    "16": 29.353
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many16",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many16:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 20,
+    "p50_ms": 59.6893,
+    "p95_ms": 61.3654,
+    "mean_ms": 59.9916,
+    "requests_per_second": 16.669
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 58.563,
+    "p95_ms": 62.9784,
+    "mean_ms": 59.0815,
+    "requests_per_second": 16.9258
+   },
+   "throughput": {
+    "1": 16.44,
+    "4": 16.923,
+    "16": 16.728
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many16",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "many16:20"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 20,
+    "p50_ms": 66.2948,
+    "p95_ms": 69.5162,
+    "mean_ms": 68.0883,
+    "requests_per_second": 14.6868
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many16",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many16:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 20,
+    "p50_ms": 60.3523,
+    "p95_ms": 100.1787,
+    "mean_ms": 65.9254,
+    "requests_per_second": 15.1687
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 62.3354,
+    "p95_ms": 97.3319,
+    "mean_ms": 72.0152,
+    "requests_per_second": 13.8859
+   },
+   "throughput": {
+    "1": 10.205,
+    "4": 11.442,
+    "16": 16.856
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many16",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "many16:20"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 20,
+    "p50_ms": 76.6488,
+    "p95_ms": 76.9724,
+    "mean_ms": 76.691,
+    "requests_per_second": 13.0393
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many16",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many16:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "shared_context",
+   "single": {
+    "requests": 20,
+    "p50_ms": 45.6893,
+    "p95_ms": 50.8403,
+    "mean_ms": 46.2213,
+    "requests_per_second": 21.6351
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 43.8529,
+    "p95_ms": 46.2209,
+    "mean_ms": 43.8601,
+    "requests_per_second": 22.7998
+   },
+   "throughput": {
+    "1": 20.892,
+    "4": 21.017,
+    "16": 22.399
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many64",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many64:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 20,
+    "p50_ms": 175.4274,
+    "p95_ms": 188.2801,
+    "mean_ms": 178.1884,
+    "requests_per_second": 5.612
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 175.5625,
+    "p95_ms": 177.0569,
+    "mean_ms": 175.6047,
+    "requests_per_second": 5.6946
+   },
+   "throughput": {
+    "1": 5.662,
+    "4": 5.671,
+    "16": 5.821
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many64",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "many64:20"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 20,
+    "p50_ms": 210.0429,
+    "p95_ms": 226.9458,
+    "mean_ms": 215.7536,
+    "requests_per_second": 4.6349
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many64",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many64:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "shared_context",
+   "single": {
+    "requests": 20,
+    "p50_ms": 87.1159,
+    "p95_ms": 120.4977,
+    "mean_ms": 90.5774,
+    "requests_per_second": 11.0403
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 82.5964,
+    "p95_ms": 88.2314,
+    "mean_ms": 83.3236,
+    "requests_per_second": 12.0014
+   },
+   "throughput": {
+    "1": 11.836,
+    "4": 12.471,
+    "16": 12.556
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many64",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many64:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 20,
+    "p50_ms": 113.468,
+    "p95_ms": 136.7003,
+    "mean_ms": 117.4665,
+    "requests_per_second": 8.5131
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 108.6893,
+    "p95_ms": 110.0466,
+    "mean_ms": 108.6664,
+    "requests_per_second": 9.2025
+   },
+   "throughput": {
+    "1": 7.996,
+    "4": 8.03,
+    "16": 7.666
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many64",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many64:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 20,
+    "p50_ms": 135.958,
+    "p95_ms": 138.9951,
+    "mean_ms": 136.2621,
+    "requests_per_second": 7.3388
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 136.2205,
+    "p95_ms": 138.2436,
+    "mean_ms": 136.0728,
+    "requests_per_second": 7.349
+   },
+   "throughput": {
+    "1": 7.351,
+    "4": 7.361,
+    "16": 7.457
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many64",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "many64:20"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 20,
+    "p50_ms": 171.1332,
+    "p95_ms": 294.5992,
+    "mean_ms": 192.3386,
+    "requests_per_second": 5.1992
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many64",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many64:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 20,
+    "p50_ms": 109.8631,
+    "p95_ms": 110.3062,
+    "mean_ms": 109.6026,
+    "requests_per_second": 9.1239
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 108.0305,
+    "p95_ms": 109.2254,
+    "mean_ms": 107.8278,
+    "requests_per_second": 9.274
+   },
+   "throughput": {
+    "1": 9.08,
+    "4": 9.935,
+    "16": 10.022
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many64",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many64:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 20,
+    "p50_ms": 134.9259,
+    "p95_ms": 136.7424,
+    "mean_ms": 134.7725,
+    "requests_per_second": 7.4199
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 132.8168,
+    "p95_ms": 135.2843,
+    "mean_ms": 132.9686,
+    "requests_per_second": 7.5206
+   },
+   "throughput": {
+    "1": 7.343,
+    "4": 7.381,
+    "16": 7.509
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many64",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "many64:20"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 20,
+    "p50_ms": 170.3828,
+    "p95_ms": 203.7971,
+    "mean_ms": 178.333,
+    "requests_per_second": 5.6075
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many64",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many64:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 20,
+    "p50_ms": 727.062,
+    "p95_ms": 735.9102,
+    "mean_ms": 728.746,
+    "requests_per_second": 1.3722
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 732.7612,
+    "p95_ms": 744.4753,
+    "mean_ms": 733.2641,
+    "requests_per_second": 1.3638
+   },
+   "throughput": {
+    "1": 1.349,
+    "4": 1.369,
+    "16": 1.375
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many64",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "many64:20"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 20,
+    "p50_ms": 843.9671,
+    "p95_ms": 865.9223,
+    "mean_ms": 846.8476,
+    "requests_per_second": 1.1808
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many64",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many64:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "shared_context",
+   "single": {
+    "requests": 20,
+    "p50_ms": 249.3469,
+    "p95_ms": 255.0459,
+    "mean_ms": 248.3374,
+    "requests_per_second": 4.0268
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 246.3221,
+    "p95_ms": 258.3795,
+    "mean_ms": 249.1025,
+    "requests_per_second": 4.0144
+   },
+   "throughput": {
+    "1": 4.014,
+    "4": 4.05,
+    "16": 4.059
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many64",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many64:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 20,
+    "p50_ms": 493.4838,
+    "p95_ms": 498.9112,
+    "mean_ms": 491.2189,
+    "requests_per_second": 2.0358
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 495.4499,
+    "p95_ms": 508.4257,
+    "mean_ms": 495.4986,
+    "requests_per_second": 2.0182
+   },
+   "throughput": {
+    "1": 2.011,
+    "4": 2.027,
+    "16": 2.017
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many64",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "many64:20"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 20,
+    "p50_ms": 587.8288,
+    "p95_ms": 591.0515,
+    "mean_ms": 588.3905,
+    "requests_per_second": 1.6996
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many64",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many64:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "shared_context",
+   "single": {
+    "requests": 20,
+    "p50_ms": 175.642,
+    "p95_ms": 186.4248,
+    "mean_ms": 178.1351,
+    "requests_per_second": 5.6137
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 177.5803,
+    "p95_ms": 193.0225,
+    "mean_ms": 182.5537,
+    "requests_per_second": 5.4778
+   },
+   "throughput": {
+    "1": 5.428,
+    "4": 5.377,
+    "16": 5.574
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many64",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many64:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "batching",
+   "single": {
+    "requests": 20,
+    "p50_ms": 109.3348,
+    "p95_ms": 111.5432,
+    "mean_ms": 109.5228,
+    "requests_per_second": 9.1305
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 108.8824,
+    "p95_ms": 110.2965,
+    "mean_ms": 108.9594,
+    "requests_per_second": 9.1777
+   },
+   "throughput": {
+    "1": 9.044,
+    "4": 9.883,
+    "16": 10.024
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many64",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many64:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 20,
+    "p50_ms": 133.8556,
+    "p95_ms": 134.919,
+    "mean_ms": 133.8837,
+    "requests_per_second": 7.4692
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 131.3836,
+    "p95_ms": 134.1029,
+    "mean_ms": 131.75,
+    "requests_per_second": 7.5901
+   },
+   "throughput": {
+    "1": 7.241,
+    "4": 7.642,
+    "16": 7.545
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many64",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "many64:20"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 20,
+    "p50_ms": 172.755,
+    "p95_ms": 249.2317,
+    "mean_ms": 185.5857,
+    "requests_per_second": 5.3883
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many64",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many64:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 20,
+    "p50_ms": 230.9383,
+    "p95_ms": 239.9529,
+    "mean_ms": 232.9584,
+    "requests_per_second": 4.2926
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 232.0244,
+    "p95_ms": 233.3449,
+    "mean_ms": 232.1921,
+    "requests_per_second": 4.3068
+   },
+   "throughput": {
+    "1": 4.233,
+    "4": 4.222,
+    "16": 4.291
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many64",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "many64:20"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 20,
+    "p50_ms": 298.8442,
+    "p95_ms": 581.1307,
+    "mean_ms": 327.3623,
+    "requests_per_second": 3.0547
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many64",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many64:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "shared_context",
+   "single": {
+    "requests": 20,
+    "p50_ms": 91.702,
+    "p95_ms": 104.0207,
+    "mean_ms": 94.9075,
+    "requests_per_second": 10.5366
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 93.8712,
+    "p95_ms": 126.3601,
+    "mean_ms": 99.7849,
+    "requests_per_second": 10.0216
+   },
+   "throughput": {
+    "1": 10.725,
+    "4": 10.851,
+    "16": 11.307
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many128",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many128:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 20,
+    "p50_ms": 344.0216,
+    "p95_ms": 358.3765,
+    "mean_ms": 346.7769,
+    "requests_per_second": 2.8837
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 349.8836,
+    "p95_ms": 366.5558,
+    "mean_ms": 352.4235,
+    "requests_per_second": 2.8375
+   },
+   "throughput": {
+    "1": 2.268,
+    "4": 2.85,
+    "16": 2.877
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many128",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "many128:20"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 20,
+    "p50_ms": 422.3366,
+    "p95_ms": 432.7056,
+    "mean_ms": 423.3036,
+    "requests_per_second": 2.3624
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many128",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many128:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "shared_context",
+   "single": {
+    "requests": 20,
+    "p50_ms": 145.8474,
+    "p95_ms": 171.5099,
+    "mean_ms": 150.9737,
+    "requests_per_second": 6.6237
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 152.1085,
+    "p95_ms": 158.5782,
+    "mean_ms": 153.3117,
+    "requests_per_second": 6.5227
+   },
+   "throughput": {
+    "1": 6.751,
+    "4": 6.773,
+    "16": 6.033
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many128",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many128:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 20,
+    "p50_ms": 1438.3497,
+    "p95_ms": 1455.7694,
+    "mean_ms": 1440.9256,
+    "requests_per_second": 0.694
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 1452.9114,
+    "p95_ms": 1466.7992,
+    "mean_ms": 1454.5068,
+    "requests_per_second": 0.6875
+   },
+   "throughput": {
+    "1": 0.687,
+    "4": 0.687,
+    "16": 0.692
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many128",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "many128:20"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 20,
+    "p50_ms": 1686.7063,
+    "p95_ms": 1699.8001,
+    "mean_ms": 1686.7026,
+    "requests_per_second": 0.5929
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many128",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many128:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "shared_context",
+   "single": {
+    "requests": 20,
+    "p50_ms": 453.3534,
+    "p95_ms": 460.2236,
+    "mean_ms": 454.0056,
+    "requests_per_second": 2.2026
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 460.742,
+    "p95_ms": 478.6101,
+    "mean_ms": 462.1721,
+    "requests_per_second": 2.1637
+   },
+   "throughput": {
+    "1": 2.139,
+    "4": 2.158,
+    "16": 2.189
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many128",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many128:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 20,
+    "p50_ms": 981.8032,
+    "p95_ms": 1002.9909,
+    "mean_ms": 984.7433,
+    "requests_per_second": 1.0155
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 990.3461,
+    "p95_ms": 1052.9481,
+    "mean_ms": 999.6595,
+    "requests_per_second": 1.0003
+   },
+   "throughput": {
+    "1": 1.012,
+    "4": 0.954,
+    "16": 1.015
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many128",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "many128:20"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 20,
+    "p50_ms": 1180.5505,
+    "p95_ms": 1300.1917,
+    "mean_ms": 1233.1637,
+    "requests_per_second": 0.8109
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many128",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many128:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "shared_context",
+   "single": {
+    "requests": 20,
+    "p50_ms": 328.5054,
+    "p95_ms": 342.516,
+    "mean_ms": 330.0377,
+    "requests_per_second": 3.03
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 340.068,
+    "p95_ms": 369.741,
+    "mean_ms": 346.8088,
+    "requests_per_second": 2.8834
+   },
+   "throughput": {
+    "1": 2.958,
+    "4": 2.973,
+    "16": 2.972
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many128",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many128:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "single": {
+    "requests": 20,
+    "p50_ms": 456.6684,
+    "p95_ms": 474.0253,
+    "mean_ms": 460.2305,
+    "requests_per_second": 2.1728
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 462.754,
+    "p95_ms": 521.5364,
+    "mean_ms": 472.5606,
+    "requests_per_second": 2.1161
+   },
+   "throughput": {
+    "1": 2.183,
+    "4": 2.162,
+    "16": 2.166
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many128",
+   "side": "reference",
+   "commit": null,
+   "prompts": [
+    "many128:20"
+   ],
+   "router": false,
+   "threads": null,
+   "single": {
+    "requests": 20,
+    "p50_ms": 593.9283,
+    "p95_ms": 599.7068,
+    "mean_ms": 592.9176,
+    "requests_per_second": 1.6866
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-many128",
+   "side": "native",
+   "commit": "d5b985e43",
+   "prompts": [
+    "many128:20"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "shared_context",
+   "single": {
+    "requests": 20,
+    "p50_ms": 167.5964,
+    "p95_ms": 187.0754,
+    "mean_ms": 169.9618,
+    "requests_per_second": 5.8837
+   },
+   "single_scheduler": {
+    "requests": 20,
+    "p50_ms": 176.3888,
+    "p95_ms": 180.384,
+    "mean_ms": 175.9522,
+    "requests_per_second": 5.6834
+   },
+   "throughput": {
+    "1": 5.847,
+    "4": 5.931,
+    "16": 5.312
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "bundled": {
+    "requests": 400,
+    "p50_ms": 24.7344,
+    "p95_ms": 33.5425,
+    "mean_ms": 26.1506,
+    "requests_per_second": 38.2401
+   },
+   "direct": {
+    "requests": 400,
+    "p50_ms": 9.0089,
+    "p95_ms": 18.5524,
+    "mean_ms": 9.9638,
+    "requests_per_second": 100.3634
+   },
+   "scheduler": {
+    "requests": 400,
+    "p50_ms": 9.1885,
+    "p95_ms": 18.2385,
+    "mean_ms": 10.1945,
+    "requests_per_second": 98.0917
+   },
+   "call": {
+    "requests": 400,
+    "p50_ms": 9.7742,
+    "p95_ms": 19.011,
+    "mean_ms": 10.8455,
+    "requests_per_second": 92.2044
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -15.6139,
+     "mean": -16.1868
+    },
+    "scheduler": {
+     "p50": -15.4339,
+     "mean": -15.956
+    },
+    "call": {
+     "p50": -14.8529,
+     "mean": -15.3051
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "exact",
+   "bundled": {
+    "requests": 231,
+    "p50_ms": 30.0757,
+    "p95_ms": 181.4387,
+    "mean_ms": 60.8064,
+    "requests_per_second": 16.4456
+   },
+   "direct": {
+    "requests": 231,
+    "p50_ms": 22.0482,
+    "p95_ms": 156.7652,
+    "mean_ms": 47.2041,
+    "requests_per_second": 21.1846
+   },
+   "scheduler": {
+    "requests": 231,
+    "p50_ms": 22.2987,
+    "p95_ms": 144.3767,
+    "mean_ms": 44.7854,
+    "requests_per_second": 22.3287
+   },
+   "call": {
+    "requests": 231,
+    "p50_ms": 24.0193,
+    "p95_ms": 123.3593,
+    "mean_ms": 44.8479,
+    "requests_per_second": 22.2976
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -6.2928,
+     "mean": -13.6024
+    },
+    "scheduler": {
+     "p50": -6.0947,
+     "mean": -16.021
+    },
+    "call": {
+     "p50": -4.802,
+     "mean": -15.9585
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "shared_context",
+   "bundled": {
+    "requests": 231,
+    "p50_ms": 28.498,
+    "p95_ms": 177.9973,
+    "mean_ms": 60.284,
+    "requests_per_second": 16.5881
+   },
+   "direct": {
+    "requests": 231,
+    "p50_ms": 21.1567,
+    "p95_ms": 169.238,
+    "mean_ms": 49.6351,
+    "requests_per_second": 20.147
+   },
+   "scheduler": {
+    "requests": 231,
+    "p50_ms": 24.6202,
+    "p95_ms": 116.2326,
+    "mean_ms": 52.7081,
+    "requests_per_second": 18.9724
+   },
+   "call": {
+    "requests": 231,
+    "p50_ms": 25.7589,
+    "p95_ms": 86.8668,
+    "mean_ms": 37.8637,
+    "requests_per_second": 26.4105
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -6.5174,
+     "mean": -10.6489
+    },
+    "scheduler": {
+     "p50": -3.8472,
+     "mean": -7.5759
+    },
+    "call": {
+     "p50": -2.4403,
+     "mean": -22.4203
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "a3d2593a0",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "shared_context",
+   "bundled": {
+    "requests": 231,
+    "p50_ms": 30.7045,
+    "p95_ms": 188.2306,
+    "mean_ms": 61.4315,
+    "requests_per_second": 16.2783
+   },
+   "direct": {
+    "requests": 231,
+    "p50_ms": 22.096,
+    "p95_ms": 174.1585,
+    "mean_ms": 50.3118,
+    "requests_per_second": 19.876
+   },
+   "scheduler": {
+    "requests": 231,
+    "p50_ms": 22.4618,
+    "p95_ms": 117.1973,
+    "mean_ms": 51.1395,
+    "requests_per_second": 19.5544
+   },
+   "call": {
+    "requests": 231,
+    "p50_ms": 23.6182,
+    "p95_ms": 88.967,
+    "mean_ms": 36.1882,
+    "requests_per_second": 27.6333
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -6.1573,
+     "mean": -11.1197
+    },
+    "scheduler": {
+     "p50": -5.9163,
+     "mean": -10.292
+    },
+    "call": {
+     "p50": -4.6931,
+     "mean": -25.2433
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "bundled": {
+    "requests": 400,
+    "p50_ms": 13.3513,
+    "p95_ms": 17.5224,
+    "mean_ms": 14.3533,
+    "requests_per_second": 69.6703
+   },
+   "direct": {
+    "requests": 400,
+    "p50_ms": 8.9881,
+    "p95_ms": 11.7114,
+    "mean_ms": 9.1872,
+    "requests_per_second": 108.8475
+   },
+   "scheduler": {
+    "requests": 400,
+    "p50_ms": 9.8945,
+    "p95_ms": 11.6349,
+    "mean_ms": 10.2412,
+    "requests_per_second": 97.6452
+   },
+   "call": {
+    "requests": 400,
+    "p50_ms": 9.8732,
+    "p95_ms": 11.2359,
+    "mean_ms": 10.183,
+    "requests_per_second": 98.2028
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -4.3738,
+     "mean": -5.1662
+    },
+    "scheduler": {
+     "p50": -3.4628,
+     "mean": -4.1122
+    },
+    "call": {
+     "p50": -3.5767,
+     "mean": -4.1703
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "6537747d8",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "batching",
+   "bundled": {
+    "requests": 231,
+    "p50_ms": 29.4744,
+    "p95_ms": 60.4955,
+    "mean_ms": 30.4516,
+    "requests_per_second": 32.839
+   },
+   "direct": {
+    "requests": 231,
+    "p50_ms": 25.0494,
+    "p95_ms": 54.1474,
+    "mean_ms": 26.3868,
+    "requests_per_second": 37.8977
+   },
+   "scheduler": {
+    "requests": 231,
+    "p50_ms": 16.7543,
+    "p95_ms": 32.909,
+    "mean_ms": 17.4037,
+    "requests_per_second": 57.4589
+   },
+   "call": {
+    "requests": 231,
+    "p50_ms": 17.5465,
+    "p95_ms": 37.7719,
+    "mean_ms": 19.0437,
+    "requests_per_second": 52.5108
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -4.3201,
+     "mean": -4.0648
+    },
+    "scheduler": {
+     "p50": -12.7628,
+     "mean": -13.0479
+    },
+    "call": {
+     "p50": -11.9497,
+     "mean": -11.4079
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "6537747d8",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "exact",
+   "bundled": {
+    "requests": 231,
+    "p50_ms": 29.9284,
+    "p95_ms": 59.7017,
+    "mean_ms": 30.6284,
+    "requests_per_second": 32.6494
+   },
+   "direct": {
+    "requests": 231,
+    "p50_ms": 24.9759,
+    "p95_ms": 54.9233,
+    "mean_ms": 26.6923,
+    "requests_per_second": 37.464
+   },
+   "scheduler": {
+    "requests": 231,
+    "p50_ms": 25.8884,
+    "p95_ms": 56.5857,
+    "mean_ms": 27.1919,
+    "requests_per_second": 36.7757
+   },
+   "call": {
+    "requests": 231,
+    "p50_ms": 26.8118,
+    "p95_ms": 57.3848,
+    "mean_ms": 28.5161,
+    "requests_per_second": 35.0679
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -4.5839,
+     "mean": -3.9361
+    },
+    "scheduler": {
+     "p50": -3.7431,
+     "mean": -3.4366
+    },
+    "call": {
+     "p50": -2.8662,
+     "mean": -2.1123
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "bundled": {
+    "requests": 400,
+    "p50_ms": 12.0369,
+    "p95_ms": 19.5155,
+    "mean_ms": 12.8712,
+    "requests_per_second": 77.6928
+   },
+   "direct": {
+    "requests": 400,
+    "p50_ms": 8.0574,
+    "p95_ms": 13.3999,
+    "mean_ms": 8.8695,
+    "requests_per_second": 112.7453
+   },
+   "scheduler": {
+    "requests": 400,
+    "p50_ms": 8.9382,
+    "p95_ms": 13.866,
+    "mean_ms": 9.5219,
+    "requests_per_second": 105.0213
+   },
+   "call": {
+    "requests": 400,
+    "p50_ms": 8.4936,
+    "p95_ms": 13.7268,
+    "mean_ms": 9.4652,
+    "requests_per_second": 105.6504
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -3.8772,
+     "mean": -4.0017
+    },
+    "scheduler": {
+     "p50": -3.0453,
+     "mean": -3.3493
+    },
+    "call": {
+     "p50": -3.3214,
+     "mean": -3.406
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "6537747d8",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "batching",
+   "bundled": {
+    "requests": 231,
+    "p50_ms": 30.0684,
+    "p95_ms": 58.6172,
+    "mean_ms": 30.5438,
+    "requests_per_second": 32.7398
+   },
+   "direct": {
+    "requests": 231,
+    "p50_ms": 24.9691,
+    "p95_ms": 53.72,
+    "mean_ms": 26.3219,
+    "requests_per_second": 37.9911
+   },
+   "scheduler": {
+    "requests": 231,
+    "p50_ms": 16.8598,
+    "p95_ms": 35.8427,
+    "mean_ms": 17.5832,
+    "requests_per_second": 56.8725
+   },
+   "call": {
+    "requests": 231,
+    "p50_ms": 17.6306,
+    "p95_ms": 39.5646,
+    "mean_ms": 18.9706,
+    "requests_per_second": 52.7132
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -4.8408,
+     "mean": -4.2219
+    },
+    "scheduler": {
+     "p50": -13.3774,
+     "mean": -12.9606
+    },
+    "call": {
+     "p50": -12.5228,
+     "mean": -11.5733
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "6537747d8",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "exact",
+   "bundled": {
+    "requests": 231,
+    "p50_ms": 29.7448,
+    "p95_ms": 58.5137,
+    "mean_ms": 30.426,
+    "requests_per_second": 32.8666
+   },
+   "direct": {
+    "requests": 231,
+    "p50_ms": 24.886,
+    "p95_ms": 53.224,
+    "mean_ms": 26.2514,
+    "requests_per_second": 38.0932
+   },
+   "scheduler": {
+    "requests": 231,
+    "p50_ms": 25.7135,
+    "p95_ms": 55.8982,
+    "mean_ms": 27.0011,
+    "requests_per_second": 37.0355
+   },
+   "call": {
+    "requests": 231,
+    "p50_ms": 26.6225,
+    "p95_ms": 55.6567,
+    "mean_ms": 27.7783,
+    "requests_per_second": 35.9993
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -4.4361,
+     "mean": -4.1746
+    },
+    "scheduler": {
+     "p50": -3.6488,
+     "mean": -3.4249
+    },
+    "call": {
+     "p50": -2.7872,
+     "mean": -2.6477
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "bundled": {
+    "requests": 400,
+    "p50_ms": 33.4277,
+    "p95_ms": 39.6464,
+    "mean_ms": 34.2739,
+    "requests_per_second": 29.1767
+   },
+   "direct": {
+    "requests": 400,
+    "p50_ms": 19.3454,
+    "p95_ms": 20.0347,
+    "mean_ms": 19.3856,
+    "requests_per_second": 51.5848
+   },
+   "scheduler": {
+    "requests": 400,
+    "p50_ms": 19.8113,
+    "p95_ms": 20.6711,
+    "mean_ms": 20.1745,
+    "requests_per_second": 49.5675
+   },
+   "call": {
+    "requests": 400,
+    "p50_ms": 20.7074,
+    "p95_ms": 21.635,
+    "mean_ms": 20.9374,
+    "requests_per_second": 47.7615
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -14.244,
+     "mean": -14.8884
+    },
+    "scheduler": {
+     "p50": -13.6833,
+     "mean": -14.0994
+    },
+    "call": {
+     "p50": -12.7098,
+     "mean": -13.3366
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "exact",
+   "bundled": {
+    "requests": 231,
+    "p50_ms": 107.8595,
+    "p95_ms": 575.0886,
+    "mean_ms": 202.6872,
+    "requests_per_second": 4.9337
+   },
+   "direct": {
+    "requests": 231,
+    "p50_ms": 89.6442,
+    "p95_ms": 520.0297,
+    "mean_ms": 177.5019,
+    "requests_per_second": 5.6337
+   },
+   "scheduler": {
+    "requests": 231,
+    "p50_ms": 89.3456,
+    "p95_ms": 522.1853,
+    "mean_ms": 179.3107,
+    "requests_per_second": 5.5769
+   },
+   "call": {
+    "requests": 231,
+    "p50_ms": 93.0509,
+    "p95_ms": 523.2353,
+    "mean_ms": 180.122,
+    "requests_per_second": 5.5518
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -16.0164,
+     "mean": -25.1854
+    },
+    "scheduler": {
+     "p50": -15.352,
+     "mean": -23.3766
+    },
+    "call": {
+     "p50": -13.8321,
+     "mean": -22.5652
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "shared_context",
+   "bundled": {
+    "requests": 231,
+    "p50_ms": 104.0819,
+    "p95_ms": 585.8164,
+    "mean_ms": 203.4433,
+    "requests_per_second": 4.9154
+   },
+   "direct": {
+    "requests": 231,
+    "p50_ms": 86.8331,
+    "p95_ms": 539.6415,
+    "mean_ms": 182.7036,
+    "requests_per_second": 5.4733
+   },
+   "scheduler": {
+    "requests": 231,
+    "p50_ms": 88.6811,
+    "p95_ms": 141.7504,
+    "mean_ms": 105.3855,
+    "requests_per_second": 9.489
+   },
+   "call": {
+    "requests": 231,
+    "p50_ms": 90.258,
+    "p95_ms": 144.2,
+    "mean_ms": 92.8844,
+    "requests_per_second": 10.7661
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -15.9295,
+     "mean": -20.7398
+    },
+    "scheduler": {
+     "p50": -13.1196,
+     "mean": -98.0579
+    },
+    "call": {
+     "p50": -11.6653,
+     "mean": -110.5589
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "a3d2593a0",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "shared_context",
+   "bundled": {
+    "requests": 231,
+    "p50_ms": 103.3515,
+    "p95_ms": 574.703,
+    "mean_ms": 201.6829,
+    "requests_per_second": 4.9583
+   },
+   "direct": {
+    "requests": 231,
+    "p50_ms": 87.1262,
+    "p95_ms": 520.7522,
+    "mean_ms": 180.2702,
+    "requests_per_second": 5.5472
+   },
+   "scheduler": {
+    "requests": 231,
+    "p50_ms": 86.3123,
+    "p95_ms": 136.0889,
+    "mean_ms": 101.4478,
+    "requests_per_second": 9.8573
+   },
+   "call": {
+    "requests": 231,
+    "p50_ms": 88.0497,
+    "p95_ms": 135.1884,
+    "mean_ms": 89.1123,
+    "requests_per_second": 11.2218
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -16.0407,
+     "mean": -21.4127
+    },
+    "scheduler": {
+     "p50": -15.945,
+     "mean": -100.235
+    },
+    "call": {
+     "p50": -14.2015,
+     "mean": -112.5706
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "bundled": {
+    "requests": 400,
+    "p50_ms": 36.2426,
+    "p95_ms": 45.2997,
+    "mean_ms": 37.5212,
+    "requests_per_second": 26.6516
+   },
+   "direct": {
+    "requests": 400,
+    "p50_ms": 14.2228,
+    "p95_ms": 14.7861,
+    "mean_ms": 14.5971,
+    "requests_per_second": 68.5065
+   },
+   "scheduler": {
+    "requests": 400,
+    "p50_ms": 14.6003,
+    "p95_ms": 15.2928,
+    "mean_ms": 15.08,
+    "requests_per_second": 66.313
+   },
+   "call": {
+    "requests": 400,
+    "p50_ms": 15.4359,
+    "p95_ms": 16.3686,
+    "mean_ms": 15.9929,
+    "requests_per_second": 62.5278
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -21.8746,
+     "mean": -22.9241
+    },
+    "scheduler": {
+     "p50": -21.5285,
+     "mean": -22.4412
+    },
+    "call": {
+     "p50": -20.7579,
+     "mean": -21.5283
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "exact",
+   "bundled": {
+    "requests": 231,
+    "p50_ms": 76.7592,
+    "p95_ms": 411.9316,
+    "mean_ms": 145.1325,
+    "requests_per_second": 6.8903
+   },
+   "direct": {
+    "requests": 231,
+    "p50_ms": 68.4832,
+    "p95_ms": 349.3624,
+    "mean_ms": 120.8783,
+    "requests_per_second": 8.2728
+   },
+   "scheduler": {
+    "requests": 231,
+    "p50_ms": 62.7178,
+    "p95_ms": 349.253,
+    "mean_ms": 121.7812,
+    "requests_per_second": 8.2114
+   },
+   "call": {
+    "requests": 231,
+    "p50_ms": 64.7823,
+    "p95_ms": 382.0796,
+    "mean_ms": 123.5886,
+    "requests_per_second": 8.0914
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -15.3784,
+     "mean": -24.2541
+    },
+    "scheduler": {
+     "p50": -14.8423,
+     "mean": -23.3513
+    },
+    "call": {
+     "p50": -12.9555,
+     "mean": -21.5438
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "shared_context",
+   "bundled": {
+    "requests": 231,
+    "p50_ms": 78.1666,
+    "p95_ms": 404.797,
+    "mean_ms": 143.2597,
+    "requests_per_second": 6.9803
+   },
+   "direct": {
+    "requests": 231,
+    "p50_ms": 68.6191,
+    "p95_ms": 347.3041,
+    "mean_ms": 118.8661,
+    "requests_per_second": 8.4128
+   },
+   "scheduler": {
+    "requests": 231,
+    "p50_ms": 61.0826,
+    "p95_ms": 122.0079,
+    "mean_ms": 89.4256,
+    "requests_per_second": 11.1825
+   },
+   "call": {
+    "requests": 231,
+    "p50_ms": 63.5207,
+    "p95_ms": 125.1919,
+    "mean_ms": 77.2214,
+    "requests_per_second": 12.9498
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -15.3854,
+     "mean": -24.3936
+    },
+    "scheduler": {
+     "p50": -12.7423,
+     "mean": -53.8341
+    },
+    "call": {
+     "p50": -10.4081,
+     "mean": -66.0383
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "a3d2593a0",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "shared_context",
+   "bundled": {
+    "requests": 231,
+    "p50_ms": 73.245,
+    "p95_ms": 401.0402,
+    "mean_ms": 141.086,
+    "requests_per_second": 7.0879
+   },
+   "direct": {
+    "requests": 231,
+    "p50_ms": 58.9179,
+    "p95_ms": 343.9672,
+    "mean_ms": 117.1955,
+    "requests_per_second": 8.5327
+   },
+   "scheduler": {
+    "requests": 231,
+    "p50_ms": 57.9977,
+    "p95_ms": 104.839,
+    "mean_ms": 82.9866,
+    "requests_per_second": 12.0501
+   },
+   "call": {
+    "requests": 231,
+    "p50_ms": 60.0017,
+    "p95_ms": 105.8655,
+    "mean_ms": 71.8587,
+    "requests_per_second": 13.9162
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -15.0894,
+     "mean": -23.8905
+    },
+    "scheduler": {
+     "p50": -14.5244,
+     "mean": -58.0994
+    },
+    "call": {
+     "p50": -12.9412,
+     "mean": -69.2273
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "bundled": {
+    "requests": 400,
+    "p50_ms": 11.9868,
+    "p95_ms": 13.5125,
+    "mean_ms": 12.262,
+    "requests_per_second": 81.5527
+   },
+   "direct": {
+    "requests": 400,
+    "p50_ms": 8.1938,
+    "p95_ms": 8.9926,
+    "mean_ms": 8.2398,
+    "requests_per_second": 121.362
+   },
+   "scheduler": {
+    "requests": 400,
+    "p50_ms": 9.1434,
+    "p95_ms": 9.9534,
+    "mean_ms": 9.3061,
+    "requests_per_second": 107.456
+   },
+   "call": {
+    "requests": 400,
+    "p50_ms": 8.7544,
+    "p95_ms": 10.0872,
+    "mean_ms": 8.9682,
+    "requests_per_second": 111.5053
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -3.7717,
+     "mean": -4.0222
+    },
+    "scheduler": {
+     "p50": -2.8172,
+     "mean": -2.9559
+    },
+    "call": {
+     "p50": -3.1045,
+     "mean": -3.2938
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "6537747d8",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "batching",
+   "bundled": {
+    "requests": 231,
+    "p50_ms": 30.1382,
+    "p95_ms": 60.112,
+    "mean_ms": 31.0464,
+    "requests_per_second": 32.2099
+   },
+   "direct": {
+    "requests": 231,
+    "p50_ms": 25.6159,
+    "p95_ms": 54.5638,
+    "mean_ms": 27.147,
+    "requests_per_second": 36.8364
+   },
+   "scheduler": {
+    "requests": 231,
+    "p50_ms": 17.1615,
+    "p95_ms": 35.6054,
+    "mean_ms": 17.889,
+    "requests_per_second": 55.9003
+   },
+   "call": {
+    "requests": 231,
+    "p50_ms": 17.9335,
+    "p95_ms": 36.9991,
+    "mean_ms": 19.0775,
+    "requests_per_second": 52.4178
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -4.191,
+     "mean": -3.8993
+    },
+    "scheduler": {
+     "p50": -13.0413,
+     "mean": -13.1574
+    },
+    "call": {
+     "p50": -12.2132,
+     "mean": -11.9689
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "6537747d8",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "exact",
+   "bundled": {
+    "requests": 231,
+    "p50_ms": 29.7495,
+    "p95_ms": 58.3317,
+    "mean_ms": 30.1732,
+    "requests_per_second": 33.142
+   },
+   "direct": {
+    "requests": 231,
+    "p50_ms": 25.2245,
+    "p95_ms": 54.6583,
+    "mean_ms": 26.4768,
+    "requests_per_second": 37.769
+   },
+   "scheduler": {
+    "requests": 231,
+    "p50_ms": 25.7168,
+    "p95_ms": 56.6604,
+    "mean_ms": 27.0162,
+    "requests_per_second": 37.0148
+   },
+   "call": {
+    "requests": 231,
+    "p50_ms": 26.5843,
+    "p95_ms": 61.1302,
+    "mean_ms": 28.2786,
+    "requests_per_second": 35.3624
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -4.0937,
+     "mean": -3.6964
+    },
+    "scheduler": {
+     "p50": -3.5395,
+     "mean": -3.157
+    },
+    "call": {
+     "p50": -2.7153,
+     "mean": -1.8946
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "workload": "panel",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": null,
+   "profile": "exact",
+   "bundled": {
+    "requests": 400,
+    "p50_ms": 24.5748,
+    "p95_ms": 30.9726,
+    "mean_ms": 25.1183,
+    "requests_per_second": 39.8115
+   },
+   "direct": {
+    "requests": 400,
+    "p50_ms": 8.3725,
+    "p95_ms": 13.5836,
+    "mean_ms": 8.9713,
+    "requests_per_second": 111.467
+   },
+   "scheduler": {
+    "requests": 400,
+    "p50_ms": 8.4181,
+    "p95_ms": 13.7369,
+    "mean_ms": 9.3035,
+    "requests_per_second": 107.4869
+   },
+   "call": {
+    "requests": 400,
+    "p50_ms": 8.9155,
+    "p95_ms": 14.2713,
+    "mean_ms": 9.7987,
+    "requests_per_second": 102.054
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -16.0282,
+     "mean": -16.1471
+    },
+    "scheduler": {
+     "p50": -15.9202,
+     "mean": -15.8149
+    },
+    "call": {
+     "p50": -15.249,
+     "mean": -15.3196
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "exact",
+   "bundled": {
+    "requests": 231,
+    "p50_ms": 38.3794,
+    "p95_ms": 198.91,
+    "mean_ms": 69.2633,
+    "requests_per_second": 14.4377
+   },
+   "direct": {
+    "requests": 231,
+    "p50_ms": 27.9039,
+    "p95_ms": 162.4588,
+    "mean_ms": 55.0895,
+    "requests_per_second": 18.1523
+   },
+   "scheduler": {
+    "requests": 231,
+    "p50_ms": 28.6813,
+    "p95_ms": 171.6484,
+    "mean_ms": 55.9775,
+    "requests_per_second": 17.8643
+   },
+   "call": {
+    "requests": 231,
+    "p50_ms": 30.126,
+    "p95_ms": 162.41,
+    "mean_ms": 56.6075,
+    "requests_per_second": 17.6655
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -10.0064,
+     "mean": -14.1738
+    },
+    "scheduler": {
+     "p50": -9.6499,
+     "mean": -13.2858
+    },
+    "call": {
+     "p50": -8.1925,
+     "mean": -12.6558
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "shared_context",
+   "bundled": {
+    "requests": 231,
+    "p50_ms": 38.8743,
+    "p95_ms": 184.7905,
+    "mean_ms": 67.1673,
+    "requests_per_second": 14.8882
+   },
+   "direct": {
+    "requests": 231,
+    "p50_ms": 28.0337,
+    "p95_ms": 152.7305,
+    "mean_ms": 52.8717,
+    "requests_per_second": 18.9137
+   },
+   "scheduler": {
+    "requests": 231,
+    "p50_ms": 30.9057,
+    "p95_ms": 63.1371,
+    "mean_ms": 52.9976,
+    "requests_per_second": 18.8688
+   },
+   "call": {
+    "requests": 231,
+    "p50_ms": 33.3818,
+    "p95_ms": 62.4098,
+    "mean_ms": 40.3482,
+    "requests_per_second": 24.7843
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -10.1493,
+     "mean": -14.2956
+    },
+    "scheduler": {
+     "p50": -7.4855,
+     "mean": -14.1697
+    },
+    "call": {
+     "p50": -6.081,
+     "mean": -26.8191
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "workload": "router",
+   "set": "bench-rocm-paired",
+   "side": "paired",
+   "commit": "a3d2593a0",
+   "prompts": [
+    "public231:231"
+   ],
+   "router": true,
+   "threads": null,
+   "profile": "shared_context",
+   "bundled": {
+    "requests": 231,
+    "p50_ms": 38.204,
+    "p95_ms": 184.9762,
+    "mean_ms": 67.5444,
+    "requests_per_second": 14.8051
+   },
+   "direct": {
+    "requests": 231,
+    "p50_ms": 27.9708,
+    "p95_ms": 154.0391,
+    "mean_ms": 53.6265,
+    "requests_per_second": 18.6475
+   },
+   "scheduler": {
+    "requests": 231,
+    "p50_ms": 28.3536,
+    "p95_ms": 59.6685,
+    "mean_ms": 51.4625,
+    "requests_per_second": 19.4316
+   },
+   "call": {
+    "requests": 231,
+    "p50_ms": 29.8461,
+    "p95_ms": 61.7408,
+    "mean_ms": 38.4792,
+    "requests_per_second": 25.988
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -9.9539,
+     "mean": -13.9179
+    },
+    "scheduler": {
+     "p50": -9.5816,
+     "mean": -16.0819
+    },
+    "call": {
+     "p50": -8.0898,
+     "mean": -29.0652
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "cpu",
+   "workload": "panel",
+   "set": "bench-cpu-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "typed-final:200"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "exact",
+   "bundled": {
+    "requests": 200,
+    "p50_ms": 792.3917,
+    "p95_ms": 934.0058,
+    "mean_ms": 799.227,
+    "requests_per_second": 1.2512
+   },
+   "direct": {
+    "requests": 200,
+    "p50_ms": 791.2193,
+    "p95_ms": 941.8517,
+    "mean_ms": 805.4231,
+    "requests_per_second": 1.2416
+   },
+   "scheduler": {
+    "requests": 200,
+    "p50_ms": 788.7994,
+    "p95_ms": 948.8839,
+    "mean_ms": 802.9271,
+    "requests_per_second": 1.2454
+   },
+   "call": {
+    "requests": 200,
+    "p50_ms": 788.7353,
+    "p95_ms": 968.518,
+    "mean_ms": 803.5308,
+    "requests_per_second": 1.2445
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": 3.3265,
+     "mean": 6.1961
+    },
+    "scheduler": {
+     "p50": -4.2635,
+     "mean": 3.7
+    },
+    "call": {
+     "p50": -1.7097,
+     "mean": 4.3037
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "workload": "panel",
+   "set": "bench-cpu-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "exact",
+   "bundled": {
+    "requests": 400,
+    "p50_ms": 111.7927,
+    "p95_ms": 152.7879,
+    "mean_ms": 116.9738,
+    "requests_per_second": 8.5489
+   },
+   "direct": {
+    "requests": 400,
+    "p50_ms": 108.4035,
+    "p95_ms": 140.2911,
+    "mean_ms": 111.8663,
+    "requests_per_second": 8.9392
+   },
+   "scheduler": {
+    "requests": 400,
+    "p50_ms": 108.2564,
+    "p95_ms": 136.6354,
+    "mean_ms": 111.6331,
+    "requests_per_second": 8.9579
+   },
+   "call": {
+    "requests": 400,
+    "p50_ms": 108.7078,
+    "p95_ms": 132.1252,
+    "mean_ms": 112.1478,
+    "requests_per_second": 8.9168
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -3.3564,
+     "mean": -5.1075
+    },
+    "scheduler": {
+     "p50": -3.3602,
+     "mean": -5.3407
+    },
+    "call": {
+     "p50": -2.633,
+     "mean": -4.8259
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "workload": "router",
+   "set": "bench-cpu-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "public231:100"
+   ],
+   "router": true,
+   "threads": 16,
+   "profile": "batching",
+   "bundled": {
+    "requests": 100,
+    "p50_ms": 1338.7068,
+    "p95_ms": 1653.7272,
+    "mean_ms": 1340.4254,
+    "requests_per_second": 0.746
+   },
+   "direct": {
+    "requests": 100,
+    "p50_ms": 1318.4272,
+    "p95_ms": 1589.2412,
+    "mean_ms": 1313.0576,
+    "requests_per_second": 0.7616
+   },
+   "scheduler": {
+    "requests": 100,
+    "p50_ms": 334.7949,
+    "p95_ms": 426.2998,
+    "mean_ms": 334.1298,
+    "requests_per_second": 2.9928
+   },
+   "call": {
+    "requests": 100,
+    "p50_ms": 325.4323,
+    "p95_ms": 458.8859,
+    "mean_ms": 333.0193,
+    "requests_per_second": 3.0028
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -27.0027,
+     "mean": -27.3678
+    },
+    "scheduler": {
+     "p50": -1002.7155,
+     "mean": -1006.2956
+    },
+    "call": {
+     "p50": -1008.6304,
+     "mean": -1007.4061
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "workload": "router",
+   "set": "bench-cpu-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "public231:100"
+   ],
+   "router": true,
+   "threads": 16,
+   "profile": "exact",
+   "bundled": {
+    "requests": 100,
+    "p50_ms": 1054.2779,
+    "p95_ms": 1350.5197,
+    "mean_ms": 1048.1096,
+    "requests_per_second": 0.9541
+   },
+   "direct": {
+    "requests": 100,
+    "p50_ms": 1019.672,
+    "p95_ms": 1317.9521,
+    "mean_ms": 1014.2983,
+    "requests_per_second": 0.9859
+   },
+   "scheduler": {
+    "requests": 100,
+    "p50_ms": 1031.1254,
+    "p95_ms": 1304.3983,
+    "mean_ms": 1011.004,
+    "requests_per_second": 0.9891
+   },
+   "call": {
+    "requests": 100,
+    "p50_ms": 986.6649,
+    "p95_ms": 1260.5679,
+    "mean_ms": 997.021,
+    "requests_per_second": 1.003
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -36.3691,
+     "mean": -33.8113
+    },
+    "scheduler": {
+     "p50": -53.4434,
+     "mean": -37.1056
+    },
+    "call": {
+     "p50": -51.1303,
+     "mean": -51.0886
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "workload": "panel",
+   "set": "bench-cpu-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "exact",
+   "bundled": {
+    "requests": 400,
+    "p50_ms": 115.4198,
+    "p95_ms": 169.3755,
+    "mean_ms": 125.8218,
+    "requests_per_second": 7.9477
+   },
+   "direct": {
+    "requests": 400,
+    "p50_ms": 114.8204,
+    "p95_ms": 160.6892,
+    "mean_ms": 122.3272,
+    "requests_per_second": 8.1748
+   },
+   "scheduler": {
+    "requests": 400,
+    "p50_ms": 114.7968,
+    "p95_ms": 170.1081,
+    "mean_ms": 123.2191,
+    "requests_per_second": 8.1156
+   },
+   "call": {
+    "requests": 400,
+    "p50_ms": 116.1708,
+    "p95_ms": 166.1654,
+    "mean_ms": 123.4885,
+    "requests_per_second": 8.0979
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -0.924,
+     "mean": -3.4946
+    },
+    "scheduler": {
+     "p50": -0.661,
+     "mean": -2.6027
+    },
+    "call": {
+     "p50": 1.2434,
+     "mean": -2.3333
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "workload": "router",
+   "set": "bench-cpu-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "public231:100"
+   ],
+   "router": true,
+   "threads": 16,
+   "profile": "batching",
+   "bundled": {
+    "requests": 100,
+    "p50_ms": 1102.4649,
+    "p95_ms": 1389.586,
+    "mean_ms": 1123.0341,
+    "requests_per_second": 0.8904
+   },
+   "direct": {
+    "requests": 100,
+    "p50_ms": 1079.9001,
+    "p95_ms": 1365.0302,
+    "mean_ms": 1086.8033,
+    "requests_per_second": 0.9201
+   },
+   "scheduler": {
+    "requests": 100,
+    "p50_ms": 283.1,
+    "p95_ms": 385.6147,
+    "mean_ms": 297.1277,
+    "requests_per_second": 3.3656
+   },
+   "call": {
+    "requests": 100,
+    "p50_ms": 279.0528,
+    "p95_ms": 384.6388,
+    "mean_ms": 290.2239,
+    "requests_per_second": 3.4456
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -39.1581,
+     "mean": -36.2308
+    },
+    "scheduler": {
+     "p50": -805.1734,
+     "mean": -825.9064
+    },
+    "call": {
+     "p50": -812.3465,
+     "mean": -832.8102
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "workload": "router",
+   "set": "bench-cpu-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "public231:100"
+   ],
+   "router": true,
+   "threads": 16,
+   "profile": "exact",
+   "bundled": {
+    "requests": 100,
+    "p50_ms": 1064.1843,
+    "p95_ms": 1396.7749,
+    "mean_ms": 1085.7624,
+    "requests_per_second": 0.921
+   },
+   "direct": {
+    "requests": 100,
+    "p50_ms": 1074.4514,
+    "p95_ms": 1305.7939,
+    "mean_ms": 1081.507,
+    "requests_per_second": 0.9246
+   },
+   "scheduler": {
+    "requests": 100,
+    "p50_ms": 1093.379,
+    "p95_ms": 1335.2179,
+    "mean_ms": 1093.5757,
+    "requests_per_second": 0.9144
+   },
+   "call": {
+    "requests": 100,
+    "p50_ms": 1060.9935,
+    "p95_ms": 1292.9638,
+    "mean_ms": 1065.1282,
+    "requests_per_second": 0.9389
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": 8.5782,
+     "mean": -4.2554
+    },
+    "scheduler": {
+     "p50": 1.2216,
+     "mean": 7.8133
+    },
+    "call": {
+     "p50": -20.5994,
+     "mean": -20.6343
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "cpu",
+   "workload": "panel",
+   "set": "bench-cpu-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "typed-final:30"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "exact",
+   "bundled": {
+    "requests": 30,
+    "p50_ms": 5262.6996,
+    "p95_ms": 5419.9885,
+    "mean_ms": 5251.6207,
+    "requests_per_second": 0.1904
+   },
+   "direct": {
+    "requests": 30,
+    "p50_ms": 5237.4633,
+    "p95_ms": 5459.9295,
+    "mean_ms": 5247.0356,
+    "requests_per_second": 0.1906
+   },
+   "scheduler": {
+    "requests": 30,
+    "p50_ms": 5274.6048,
+    "p95_ms": 5528.6565,
+    "mean_ms": 5280.5171,
+    "requests_per_second": 0.1894
+   },
+   "call": {
+    "requests": 30,
+    "p50_ms": 5235.557,
+    "p95_ms": 5492.7145,
+    "mean_ms": 5246.7022,
+    "requests_per_second": 0.1906
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -38.4524,
+     "mean": -4.5851
+    },
+    "scheduler": {
+     "p50": 34.6245,
+     "mean": 28.8964
+    },
+    "call": {
+     "p50": -5.0986,
+     "mean": -4.9186
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "cpu",
+   "workload": "panel",
+   "set": "bench-cpu-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "typed-final:50"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "exact",
+   "bundled": {
+    "requests": 50,
+    "p50_ms": 3068.0554,
+    "p95_ms": 3360.5485,
+    "mean_ms": 3089.0393,
+    "requests_per_second": 0.3237
+   },
+   "direct": {
+    "requests": 50,
+    "p50_ms": 2965.5924,
+    "p95_ms": 3260.0285,
+    "mean_ms": 2985.515,
+    "requests_per_second": 0.335
+   },
+   "scheduler": {
+    "requests": 50,
+    "p50_ms": 2940.5614,
+    "p95_ms": 3153.1676,
+    "mean_ms": 2963.8481,
+    "requests_per_second": 0.3374
+   },
+   "call": {
+    "requests": 50,
+    "p50_ms": 2931.5003,
+    "p95_ms": 3193.1777,
+    "mean_ms": 2955.1647,
+    "requests_per_second": 0.3384
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -86.8129,
+     "mean": -103.5244
+    },
+    "scheduler": {
+     "p50": -111.9808,
+     "mean": -125.1913
+    },
+    "call": {
+     "p50": -123.0047,
+     "mean": -133.8746
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "workload": "panel",
+   "set": "bench-cpu-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "typed-final:400"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "exact",
+   "bundled": {
+    "requests": 400,
+    "p50_ms": 111.1866,
+    "p95_ms": 150.0118,
+    "mean_ms": 115.2981,
+    "requests_per_second": 8.6732
+   },
+   "direct": {
+    "requests": 400,
+    "p50_ms": 106.9567,
+    "p95_ms": 143.7451,
+    "mean_ms": 111.4385,
+    "requests_per_second": 8.9736
+   },
+   "scheduler": {
+    "requests": 400,
+    "p50_ms": 106.9572,
+    "p95_ms": 135.0411,
+    "mean_ms": 110.1211,
+    "requests_per_second": 9.0809
+   },
+   "call": {
+    "requests": 400,
+    "p50_ms": 107.2192,
+    "p95_ms": 142.3635,
+    "mean_ms": 111.7796,
+    "requests_per_second": 8.9462
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -3.7946,
+     "mean": -3.8596
+    },
+    "scheduler": {
+     "p50": -3.5759,
+     "mean": -5.177
+    },
+    "call": {
+     "p50": -2.7205,
+     "mean": -3.5185
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "workload": "router",
+   "set": "bench-cpu-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "public231:100"
+   ],
+   "router": true,
+   "threads": 16,
+   "profile": "batching",
+   "bundled": {
+    "requests": 100,
+    "p50_ms": 1147.3273,
+    "p95_ms": 1397.4575,
+    "mean_ms": 1147.5993,
+    "requests_per_second": 0.8714
+   },
+   "direct": {
+    "requests": 100,
+    "p50_ms": 1139.5487,
+    "p95_ms": 1412.0353,
+    "mean_ms": 1131.8055,
+    "requests_per_second": 0.8835
+   },
+   "scheduler": {
+    "requests": 100,
+    "p50_ms": 354.6205,
+    "p95_ms": 469.5586,
+    "mean_ms": 360.1931,
+    "requests_per_second": 2.7763
+   },
+   "call": {
+    "requests": 100,
+    "p50_ms": 350.0118,
+    "p95_ms": 437.5325,
+    "mean_ms": 350.3113,
+    "requests_per_second": 2.8546
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -25.806,
+     "mean": -15.7938
+    },
+    "scheduler": {
+     "p50": -790.6584,
+     "mean": -787.4061
+    },
+    "call": {
+     "p50": -801.2928,
+     "mean": -797.288
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "workload": "router",
+   "set": "bench-cpu-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "public231:100"
+   ],
+   "router": true,
+   "threads": 16,
+   "profile": "exact",
+   "bundled": {
+    "requests": 100,
+    "p50_ms": 1021.8784,
+    "p95_ms": 1467.4625,
+    "mean_ms": 1070.8577,
+    "requests_per_second": 0.9338
+   },
+   "direct": {
+    "requests": 100,
+    "p50_ms": 967.971,
+    "p95_ms": 1387.8627,
+    "mean_ms": 1010.6391,
+    "requests_per_second": 0.9895
+   },
+   "scheduler": {
+    "requests": 100,
+    "p50_ms": 978.6363,
+    "p95_ms": 1262.3558,
+    "mean_ms": 985.3234,
+    "requests_per_second": 1.0149
+   },
+   "call": {
+    "requests": 100,
+    "p50_ms": 1003.2622,
+    "p95_ms": 1328.4789,
+    "mean_ms": 1007.1033,
+    "requests_per_second": 0.9929
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -64.7459,
+     "mean": -60.2185
+    },
+    "scheduler": {
+     "p50": -71.8315,
+     "mean": -85.5343
+    },
+    "call": {
+     "p50": -39.6775,
+     "mean": -63.7543
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "cpu",
+   "workload": "panel",
+   "set": "bench-cpu-paired",
+   "side": "paired",
+   "commit": "0bc5c6a75",
+   "prompts": [
+    "typed-final:100"
+   ],
+   "router": false,
+   "threads": 16,
+   "profile": "exact",
+   "bundled": {
+    "requests": 100,
+    "p50_ms": 1348.3691,
+    "p95_ms": 1587.0225,
+    "mean_ms": 1353.3111,
+    "requests_per_second": 0.7389
+   },
+   "direct": {
+    "requests": 100,
+    "p50_ms": 1324.009,
+    "p95_ms": 1638.3726,
+    "mean_ms": 1343.529,
+    "requests_per_second": 0.7443
+   },
+   "scheduler": {
+    "requests": 100,
+    "p50_ms": 1317.8778,
+    "p95_ms": 1595.5971,
+    "mean_ms": 1345.6164,
+    "requests_per_second": 0.7432
+   },
+   "call": {
+    "requests": 100,
+    "p50_ms": 1305.0326,
+    "p95_ms": 1570.6237,
+    "mean_ms": 1332.1431,
+    "requests_per_second": 0.7507
+   },
+   "minus_bundled_ms": {
+    "direct": {
+     "p50": -6.4664,
+     "mean": -9.7821
+    },
+    "scheduler": {
+     "p50": -11.3494,
+     "mean": -7.6947
+    },
+    "call": {
+     "p50": -10.6035,
+     "mean": -21.168
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "workload": "reduced-precision",
+   "variant": "cpu-bf16-large",
+   "requests": 2631,
+   "questions": 2987,
+   "decision_agreement": 0.98259,
+   "decision_changes": 52,
+   "max_abs_diff": 0.02693,
+   "p99_abs_diff": 0.01895,
+   "mean_abs_diff": 0.003726,
+   "by_kind": {
+    "choice": {
+     "questions": 1456,
+     "agreement": 0.989010989010989,
+     "max_abs_diff": 0.0260239839553833
+    },
+    "noul": {
+     "questions": 991,
+     "agreement": 0.9979818365287588,
+     "max_abs_diff": 0.02693188190460205
+    },
+    "score": {
+     "questions": 540,
+     "agreement": 0.937037037037037,
+     "max_abs_diff": 0.00043529272079467773
+    }
+   },
+   "fp32": {
+    "p50_ms": 96.1043,
+    "p95_ms": 251.7104,
+    "mean_ms": 119.5478
+   },
+   "reduced": {
+    "p50_ms": 76.1225,
+    "p95_ms": 169.7014,
+    "mean_ms": 90.196
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "workload": "reduced-precision",
+   "variant": "cpu-bf16",
+   "requests": 500,
+   "questions": 500,
+   "decision_agreement": 0.986,
+   "decision_changes": 7,
+   "max_abs_diff": 0.02367,
+   "p99_abs_diff": 0.01964,
+   "mean_abs_diff": 0.005412,
+   "by_kind": {
+    "choice": {
+     "questions": 460,
+     "agreement": 0.9847826086956522,
+     "max_abs_diff": 0.02366587519645691
+    },
+    "noul": {
+     "questions": 28,
+     "agreement": 1.0,
+     "max_abs_diff": 0.019641771912574768
+    },
+    "score": {
+     "questions": 12,
+     "agreement": 1.0,
+     "max_abs_diff": 0.0003332197666168213
+    }
+   },
+   "fp32": {
+    "p50_ms": 75.6902,
+    "p95_ms": 148.8055,
+    "mean_ms": 94.0175
+   },
+   "reduced": {
+    "p50_ms": 66.6305,
+    "p95_ms": 105.3522,
+    "mean_ms": 74.7611
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "workload": "reduced-precision",
+   "variant": "cpu-int8",
+   "requests": 500,
+   "questions": 500,
+   "decision_agreement": 0.518,
+   "decision_changes": 241,
+   "max_abs_diff": 0.84564,
+   "p99_abs_diff": 0.69387,
+   "mean_abs_diff": 0.231484,
+   "by_kind": {
+    "choice": {
+     "questions": 460,
+     "agreement": 0.5152173913043478,
+     "max_abs_diff": 0.8456386551260948
+    },
+    "noul": {
+     "questions": 28,
+     "agreement": 0.5357142857142857,
+     "max_abs_diff": 0.6761280745267868
+    },
+    "score": {
+     "questions": 12,
+     "agreement": 0.5833333333333334,
+     "max_abs_diff": 0.013178646564483643
+    }
+   },
+   "fp32": {
+    "p50_ms": 83.3753,
+    "p95_ms": 152.5991,
+    "mean_ms": 94.6899
+   },
+   "reduced": {
+    "p50_ms": 53.2386,
+    "p95_ms": 85.1085,
+    "mean_ms": 58.1013
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "workload": "reduced-precision",
+   "variant": "cpu-int8pc",
+   "requests": 500,
+   "questions": 500,
+   "decision_agreement": 0.52,
+   "decision_changes": 240,
+   "max_abs_diff": 0.87062,
+   "p99_abs_diff": 0.65186,
+   "mean_abs_diff": 0.231225,
+   "by_kind": {
+    "choice": {
+     "questions": 460,
+     "agreement": 0.532608695652174,
+     "max_abs_diff": 0.8706195801496506
+    },
+    "noul": {
+     "questions": 28,
+     "agreement": 0.42857142857142855,
+     "max_abs_diff": 0.7151131629943848
+    },
+    "score": {
+     "questions": 12,
+     "agreement": 0.25,
+     "max_abs_diff": 0.015896379947662354
+    }
+   },
+   "fp32": {
+    "p50_ms": 92.2213,
+    "p95_ms": 154.8697,
+    "mean_ms": 99.0988
+   },
+   "reduced": {
+    "p50_ms": 57.6002,
+    "p95_ms": 91.4491,
+    "mean_ms": 61.5438
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "workload": "reduced-precision",
+   "variant": "rocm-bf16",
+   "requests": 10653,
+   "questions": 10605,
+   "decision_agreement": 0.98746,
+   "decision_changes": 133,
+   "max_abs_diff": 0.04256,
+   "p99_abs_diff": 0.01787,
+   "mean_abs_diff": 0.003933,
+   "by_kind": {
+    "choice": {
+     "questions": 7930,
+     "agreement": 0.9916771752837327,
+     "max_abs_diff": 0.04256361722946167
+    },
+    "noul": {
+     "questions": 1567,
+     "agreement": 0.9929802169751116,
+     "max_abs_diff": 0.03025040030479431
+    },
+    "score": {
+     "questions": 1108,
+     "agreement": 0.9494584837545126,
+     "max_abs_diff": 0.0006706416606903076
+    }
+   },
+   "fp32": {
+    "p50_ms": 7.452,
+    "p95_ms": 11.0512,
+    "mean_ms": 7.575
+   },
+   "reduced": {
+    "p50_ms": 8.6596,
+    "p95_ms": 11.6322,
+    "mean_ms": 8.7811
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "workload": "reduced-precision",
+   "variant": "cpu-bf16-large",
+   "requests": 2631,
+   "questions": 2987,
+   "decision_agreement": 0.99263,
+   "decision_changes": 22,
+   "max_abs_diff": 0.03566,
+   "p99_abs_diff": 0.01498,
+   "mean_abs_diff": 0.003448,
+   "by_kind": {
+    "choice": {
+     "questions": 1456,
+     "agreement": 0.9896978021978022,
+     "max_abs_diff": 0.015173077583312988
+    },
+    "noul": {
+     "questions": 991,
+     "agreement": 0.9979818365287588,
+     "max_abs_diff": 0.03565603494644165
+    },
+    "score": {
+     "questions": 540,
+     "agreement": 0.9907407407407407,
+     "max_abs_diff": 0.014151990413665771
+    }
+   },
+   "fp32": {
+    "p50_ms": 108.452,
+    "p95_ms": 313.7671,
+    "mean_ms": 134.0239
+   },
+   "reduced": {
+    "p50_ms": 80.661,
+    "p95_ms": 195.3658,
+    "mean_ms": 95.7965
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "workload": "reduced-precision",
+   "variant": "cpu-bf16",
+   "requests": 500,
+   "questions": 500,
+   "decision_agreement": 0.99,
+   "decision_changes": 5,
+   "max_abs_diff": 0.01436,
+   "p99_abs_diff": 0.01006,
+   "mean_abs_diff": 0.003274,
+   "by_kind": {
+    "choice": {
+     "questions": 460,
+     "agreement": 0.9891304347826086,
+     "max_abs_diff": 0.014363855123519897
+    },
+    "noul": {
+     "questions": 28,
+     "agreement": 1.0,
+     "max_abs_diff": 0.006223559379577637
+    },
+    "score": {
+     "questions": 12,
+     "agreement": 1.0,
+     "max_abs_diff": 0.007609069347381592
+    }
+   },
+   "fp32": {
+    "p50_ms": 81.0442,
+    "p95_ms": 144.9241,
+    "mean_ms": 94.6976
+   },
+   "reduced": {
+    "p50_ms": 69.7729,
+    "p95_ms": 106.8243,
+    "mean_ms": 75.2546
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "workload": "reduced-precision",
+   "variant": "cpu-int8",
+   "requests": 500,
+   "questions": 500,
+   "decision_agreement": 0.524,
+   "decision_changes": 238,
+   "max_abs_diff": 0.59619,
+   "p99_abs_diff": 0.46673,
+   "mean_abs_diff": 0.150617,
+   "by_kind": {
+    "choice": {
+     "questions": 460,
+     "agreement": 0.5065217391304347,
+     "max_abs_diff": 0.5961906462907791
+    },
+    "noul": {
+     "questions": 28,
+     "agreement": 0.7857142857142857,
+     "max_abs_diff": 0.26667749881744385
+    },
+    "score": {
+     "questions": 12,
+     "agreement": 0.5833333333333334,
+     "max_abs_diff": 0.46673184633255005
+    }
+   },
+   "fp32": {
+    "p50_ms": 85.6529,
+    "p95_ms": 146.219,
+    "mean_ms": 95.2953
+   },
+   "reduced": {
+    "p50_ms": 54.4208,
+    "p95_ms": 82.7962,
+    "mean_ms": 57.8121
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "workload": "reduced-precision",
+   "variant": "cpu-int8pc",
+   "requests": 500,
+   "questions": 500,
+   "decision_agreement": 0.48,
+   "decision_changes": 260,
+   "max_abs_diff": 0.56118,
+   "p99_abs_diff": 0.46341,
+   "mean_abs_diff": 0.154289,
+   "by_kind": {
+    "choice": {
+     "questions": 460,
+     "agreement": 0.46956521739130436,
+     "max_abs_diff": 0.5611802339553833
+    },
+    "noul": {
+     "questions": 28,
+     "agreement": 0.7142857142857143,
+     "max_abs_diff": 0.31439512968063354
+    },
+    "score": {
+     "questions": 12,
+     "agreement": 0.3333333333333333,
+     "max_abs_diff": 0.5080839395523071
+    }
+   },
+   "fp32": {
+    "p50_ms": 88.3873,
+    "p95_ms": 164.2454,
+    "mean_ms": 103.5049
+   },
+   "reduced": {
+    "p50_ms": 53.1742,
+    "p95_ms": 92.2127,
+    "mean_ms": 60.4253
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "workload": "reduced-precision",
+   "variant": "rocm-bf16",
+   "requests": 10653,
+   "questions": 10605,
+   "decision_agreement": 0.99331,
+   "decision_changes": 71,
+   "max_abs_diff": 0.03483,
+   "p99_abs_diff": 0.01024,
+   "mean_abs_diff": 0.002804,
+   "by_kind": {
+    "choice": {
+     "questions": 7930,
+     "agreement": 0.9918032786885246,
+     "max_abs_diff": 0.01801547408103943
+    },
+    "noul": {
+     "questions": 1567,
+     "agreement": 0.9993618379068283,
+     "max_abs_diff": 0.034831464290618896
+    },
+    "score": {
+     "questions": 1108,
+     "agreement": 0.9954873646209387,
+     "max_abs_diff": 0.014321744441986084
+    }
+   },
+   "fp32": {
+    "p50_ms": 7.4953,
+    "p95_ms": 11.1426,
+    "mean_ms": 7.625
+   },
+   "reduced": {
+    "p50_ms": 8.7215,
+    "p95_ms": 11.895,
+    "mean_ms": 8.835
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "workload": "reduced-precision",
+   "variant": "cpu-bf16-large",
+   "requests": 2631,
+   "questions": 2987,
+   "decision_agreement": 0.98025,
+   "decision_changes": 59,
+   "max_abs_diff": 0.05586,
+   "p99_abs_diff": 0.01766,
+   "mean_abs_diff": 0.004056,
+   "by_kind": {
+    "choice": {
+     "questions": 1456,
+     "agreement": 0.9910714285714286,
+     "max_abs_diff": 0.055858999490737915
+    },
+    "noul": {
+     "questions": 991,
+     "agreement": 0.987891019172553,
+     "max_abs_diff": 0.047543346881866455
+    },
+    "score": {
+     "questions": 540,
+     "agreement": 0.937037037037037,
+     "max_abs_diff": 0.00043529272079467773
+    }
+   },
+   "fp32": {
+    "p50_ms": 105.1428,
+    "p95_ms": 323.9724,
+    "mean_ms": 132.0372
+   },
+   "reduced": {
+    "p50_ms": 79.356,
+    "p95_ms": 200.6365,
+    "mean_ms": 95.8363
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "workload": "reduced-precision",
+   "variant": "cpu-bf16",
+   "requests": 500,
+   "questions": 500,
+   "decision_agreement": 0.99,
+   "decision_changes": 5,
+   "max_abs_diff": 0.02815,
+   "p99_abs_diff": 0.01669,
+   "mean_abs_diff": 0.00454,
+   "by_kind": {
+    "choice": {
+     "questions": 460,
+     "agreement": 0.9891304347826086,
+     "max_abs_diff": 0.0281524658203125
+    },
+    "noul": {
+     "questions": 28,
+     "agreement": 1.0,
+     "max_abs_diff": 0.009894013404846191
+    },
+    "score": {
+     "questions": 12,
+     "agreement": 1.0,
+     "max_abs_diff": 0.0003332197666168213
+    }
+   },
+   "fp32": {
+    "p50_ms": 78.0325,
+    "p95_ms": 146.9484,
+    "mean_ms": 91.0382
+   },
+   "reduced": {
+    "p50_ms": 66.6163,
+    "p95_ms": 102.6519,
+    "mean_ms": 72.127
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "workload": "reduced-precision",
+   "variant": "cpu-int8",
+   "requests": 500,
+   "questions": 500,
+   "decision_agreement": 0.638,
+   "decision_changes": 181,
+   "max_abs_diff": 0.66817,
+   "p99_abs_diff": 0.55466,
+   "mean_abs_diff": 0.20383,
+   "by_kind": {
+    "choice": {
+     "questions": 460,
+     "agreement": 0.6260869565217392,
+     "max_abs_diff": 0.6681709289550781
+    },
+    "noul": {
+     "questions": 28,
+     "agreement": 0.8571428571428571,
+     "max_abs_diff": 0.2120668888092041
+    },
+    "score": {
+     "questions": 12,
+     "agreement": 0.5833333333333334,
+     "max_abs_diff": 0.013178646564483643
+    }
+   },
+   "fp32": {
+    "p50_ms": 88.6784,
+    "p95_ms": 154.4245,
+    "mean_ms": 99.075
+   },
+   "reduced": {
+    "p50_ms": 57.8324,
+    "p95_ms": 86.2813,
+    "mean_ms": 59.7783
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "workload": "reduced-precision",
+   "variant": "cpu-int8pc",
+   "requests": 500,
+   "questions": 500,
+   "decision_agreement": 0.598,
+   "decision_changes": 201,
+   "max_abs_diff": 0.63968,
+   "p99_abs_diff": 0.56703,
+   "mean_abs_diff": 0.202382,
+   "by_kind": {
+    "choice": {
+     "questions": 460,
+     "agreement": 0.5978260869565217,
+     "max_abs_diff": 0.6396757364273071
+    },
+    "noul": {
+     "questions": 28,
+     "agreement": 0.75,
+     "max_abs_diff": 0.23948568105697632
+    },
+    "score": {
+     "questions": 12,
+     "agreement": 0.25,
+     "max_abs_diff": 0.015896379947662354
+    }
+   },
+   "fp32": {
+    "p50_ms": 83.6191,
+    "p95_ms": 151.1524,
+    "mean_ms": 96.0236
+   },
+   "reduced": {
+    "p50_ms": 53.923,
+    "p95_ms": 84.2594,
+    "mean_ms": 59.3876
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "workload": "reduced-precision",
+   "variant": "rocm-bf16",
+   "requests": 10653,
+   "questions": 10605,
+   "decision_agreement": 0.98595,
+   "decision_changes": 149,
+   "max_abs_diff": 0.04647,
+   "p99_abs_diff": 0.01768,
+   "mean_abs_diff": 0.004119,
+   "by_kind": {
+    "choice": {
+     "questions": 7930,
+     "agreement": 0.9906683480453973,
+     "max_abs_diff": 0.0464651882648468
+    },
+    "noul": {
+     "questions": 1567,
+     "agreement": 0.9878749202297383,
+     "max_abs_diff": 0.04516196250915527
+    },
+    "score": {
+     "questions": 1108,
+     "agreement": 0.9494584837545126,
+     "max_abs_diff": 0.0006706416606903076
+    }
+   },
+   "fp32": {
+    "p50_ms": 7.4606,
+    "p95_ms": 11.102,
+    "mean_ms": 7.6215
+   },
+   "reduced": {
+    "p50_ms": 8.6702,
+    "p95_ms": 11.6436,
+    "mean_ms": 8.7942
+   }
+  }
+ ]
+}

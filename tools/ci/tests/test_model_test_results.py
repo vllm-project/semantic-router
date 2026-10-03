@@ -90,6 +90,7 @@ class ModelContractTests(unittest.TestCase):
             ref = types.SimpleNamespace(root=snapshot, revision="b" * 40)
             resolver = types.ModuleType("vllm_sr_runtime.registry.resolve")
             resolver.resolve = mock.Mock(return_value=ref)
+            resolver.fetch = mock.Mock(side_effect=lambda ref, patterns, **_: ref)
             modules = {
                 "vllm_sr_runtime": types.ModuleType("vllm_sr_runtime"),
                 "vllm_sr_runtime.registry": types.ModuleType(
@@ -99,12 +100,19 @@ class ModelContractTests(unittest.TestCase):
             }
             with mock.patch.dict(sys.modules, modules):
                 models = run_model_tests.provision(root / "models")
+                # A later fetch adds the router's label mappings to the snapshot.
+                (snapshot / "category_mapping.json").write_text("{}")
                 run_model_tests.provision(root / "models")
             self.assertEqual(set(models), set(run_model_tests.PACKAGES))
+            for call in resolver.fetch.call_args_list:
+                self.assertEqual(call.args[1], run_model_tests.ROUTER_FILES)
             for model in models.values():
                 weights = Path(model["path"]) / "model.safetensors"
                 self.assertFalse(weights.is_symlink())
                 self.assertEqual(weights.read_text(), "weights")
+                self.assertTrue(
+                    (Path(model["path"]) / "category_mapping.json").is_file()
+                )
                 self.assertEqual(model["revision"], "b" * 40)
 
     def test_receipt_requires_the_complete_inventory_source_and_runtime(self):

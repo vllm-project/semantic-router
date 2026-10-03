@@ -8,6 +8,8 @@ from typing import Any
 import torch
 from torch import nn
 
+from ...accel import onednn
+from ...accel.kernels import CONTIGUOUS
 from ...plugins.base import (
     Accelerator,
     BackboneSpec,
@@ -30,7 +32,13 @@ from .models.forest import ForestShape
 from .models.lora import attach
 from .models.tree import Tree
 from .reduced import REDUCED_AUTOCAST, linear_bytes, reduced_view
-from .weights import cast_parameters, keep_linear_bf16, load_adapter, load_backbone
+from .weights import (
+    cast_parameters,
+    keep_linear_bf16,
+    lay_out_linears,
+    load_adapter,
+    load_backbone,
+)
 
 
 class NativeEngineModel(EngineModel):
@@ -58,6 +66,18 @@ class NativeEngineModel(EngineModel):
         self.kernels = accelerator.kernels(device_info)
         self.kernels.allow_approximate = not options.exact_kernels_only
         self.kernels.use_variants(spec.kernel_variants)
+        self.linear = self.kernels.select("linear")
+        if self.linear.variant is not None:
+            for module in (backbone, *self.branches.values()):
+                lay_out_linears(module, self.linear.fn)
+        # Packed linears, contiguous GeGLU, norms and unpadded attention grids
+        # (``packed(uniform=True)``) compute each row the same in any batch.
+        self.batch_invariant = (
+            spec.encoder
+            and self.device.type == "cpu"
+            and self.linear.variant == onednn.PACKED
+            and self.kernels.select("geglu").variant == CONTIGUOUS
+        )
         for module in (backbone, *self.branches.values(), self.reduced):
             if module is not None:
                 module.kernels = self.kernels
@@ -263,7 +283,9 @@ class NativeEngineModel(EngineModel):
                     )
                 return EncoderOutput(hidden=hidden)
             input_ids = batch.input_ids.to(self.device)
-            layout = backbone.packed(batch.lengths, self.device)
+            layout = backbone.packed(
+                batch.lengths, self.device, uniform=self.batch_invariant
+            )
         else:
             input_ids = batch.input_ids.to(self.device)
             rows, width = input_ids.shape
@@ -305,14 +327,36 @@ class NativeEngineModel(EngineModel):
         }
         return list(unique.values())
 
+    def _packed(self) -> list[onednn.PackedLinear]:
+        return [
+            layer
+            for module in (self.backbone, *self.branches.values())
+            for layer in module.modules()
+            if isinstance(layer, onednn.PackedLinear)
+        ]
+
     def parameter_count(self) -> int:
-        return sum(parameter.numel() for parameter in self._parameters())
+        packed = sum(layer.weight_elements for layer in self._packed())
+        return packed + sum(parameter.numel() for parameter in self._parameters())
 
     def memory_bytes(self) -> int:
         copy_bytes = 0 if self.reduced is None else linear_bytes(self.reduced)
-        return copy_bytes + sum(
-            p.numel() * p.element_size() for p in self._parameters()
+        packed = sum(
+            layer.packed.numel() * layer.packed.element_size()
+            for layer in self._packed()
         )
+        return (
+            copy_bytes
+            + packed
+            + sum(p.numel() * p.element_size() for p in self._parameters())
+        )
+
+    def place(self, module: nn.Module) -> nn.Module:
+        """A head on this device, its linear layers laid out like the backbone's."""
+        module = module.to(self.device)
+        if self.linear.variant is not None:
+            lay_out_linears(module, self.linear.fn)
+        return module
 
     def close(self) -> None:
         self.backbone = None  # type: ignore[assignment]

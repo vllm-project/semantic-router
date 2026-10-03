@@ -62,6 +62,10 @@ it is 2.2× faster than their sum at the median and 10× at p95.
   latency is the engine's within 1%: the sides alternate per request, so the
   machine's drift reaches both alike (separate runs on this shared node vary
   by up to 25%).
+- On the parity requests, whose long documents run in windows with spans
+  over thousands of words, the exact path took 1,476 s against the engine's
+  1,836 s for 300 requests (sides alternating per request): the span
+  decoding the engine runs word by word in Python is vectorized here.
 - The approximate profiles run packed sequences with local layers in query
   blocks from 1,024 tokens: 9% faster per request at 512 prompt tokens, 19% at
   2,048. `batching` (and `max_speed`) also merge concurrent requests, which a
