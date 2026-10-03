@@ -26,6 +26,12 @@ from data_loader import (
     print_data_stats,
 )
 from embeddings import generate_embeddings_for_queries
+from kmeans_evaluation import (
+    held_out_kmeans_report,
+    summarize,
+    write_held_out_report,
+)
+from objective import SelectorObjective
 from models import (
     TORCH_AVAILABLE,
     KMeansModel,
@@ -34,6 +40,10 @@ from models import (
     SVMModel,
     TrainingSample,
 )
+
+
+# KMeans weighs latency at this share; training and held-out evaluation both use it.
+KMEANS_EFFICIENCY_WEIGHT = 0.1
 
 
 def create_training_samples(
@@ -167,7 +177,9 @@ def train_models(
     if train_kmeans:
         step += 1
         print(f"[{step}/{num_models}] Training KMeans...")
-        kmeans = KMeansModel(n_clusters=kmeans_clusters, efficiency_weight=0.1)
+        kmeans = KMeansModel(
+            n_clusters=kmeans_clusters, efficiency_weight=KMEANS_EFFICIENCY_WEIGHT
+        )
         kmeans.train(samples)
         kmeans.save(str(output_dir / "kmeans_model.json"))
 
@@ -215,6 +227,7 @@ def run_training_pipeline(
     skip_mlp: bool = False,
     algorithm: str = "all",
     on_progress=None,
+    evaluate_held_out: bool = False,
 ) -> list[str]:
     """
     Run the full training pipeline: load data -> embed -> create samples -> train.
@@ -240,6 +253,8 @@ def run_training_pipeline(
         mlp_dropout: Dropout rate for MLP.
         skip_mlp: Skip MLP training.
         algorithm: Which algorithm to train (all, knn, kmeans, svm, mlp).
+        evaluate_held_out: Also score KMeans on a held-out query split against
+            the baselines and write kmeans_evaluation.json to output_dir.
         on_progress: Optional callback(percent, step, message) for progress.
 
     Returns:
@@ -303,6 +318,23 @@ def run_training_pipeline(
         algorithm=algorithm,
     )
 
+    report_file = None
+    if evaluate_held_out and algorithm in ("all", "kmeans"):
+        progress(90, "Evaluating", "Scoring KMeans on a held-out query split")
+        reports = held_out_kmeans_report(
+            records,
+            embeddings,
+            SelectorObjective(
+                quality_weight=1.0 - KMEANS_EFFICIENCY_WEIGHT,
+                latency_weight=KMEANS_EFFICIENCY_WEIGHT,
+            ),
+            source=data_path.name,
+            n_clusters=kmeans_clusters,
+        )
+        print("\nHeld-out evaluation (KMeans vs baselines):")
+        print(summarize(reports))
+        report_file = write_held_out_report(reports, output_path)
+
     elapsed = time.time() - start_time
     print(f"\nTraining complete in {elapsed:.1f}s")
     print(f"   Models saved to: {output_path.absolute()}")
@@ -318,6 +350,8 @@ def run_training_pipeline(
         model_file = output_path / model_name
         if model_file.exists():
             output_files.append(str(model_file))
+    if report_file is not None:
+        output_files.append(str(report_file))
 
     return output_files
 
@@ -444,6 +478,11 @@ Examples:
         choices=["all", "knn", "kmeans", "svm", "mlp"],
         help="Train specific algorithm: all, knn, kmeans, svm, mlp (default: all)",
     )
+    parser.add_argument(
+        "--evaluate-held-out",
+        action="store_true",
+        help="Also score KMeans on a held-out query split against the baselines",
+    )
 
     args = parser.parse_args()
 
@@ -490,6 +529,7 @@ Examples:
         mlp_dropout=args.mlp_dropout,
         skip_mlp=args.skip_mlp,
         algorithm=args.algorithm,
+        evaluate_held_out=args.evaluate_held_out,
     )
 
 
