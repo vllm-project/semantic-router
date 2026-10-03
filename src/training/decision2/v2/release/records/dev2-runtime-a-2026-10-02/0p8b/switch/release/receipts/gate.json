@@ -1,0 +1,76 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: COORDINATION 2026-10-03 02:38 and 03:18 UTC+8 (the shared-context switch ships opt-in, default off, in runtime-only revisions with the phase A parity rollout; the user's 01:27 instruction 'same strategy as when private' covers the public repositories)",
+  "decision": "release",
+  "decision_sha256": "d56513a2da822c149ec2929b53a121a174f89acf1ca91553aa7285c73d8efebd",
+  "gate_profile": "successor",
+  "items": {
+    "1_successor_IF1_index_gain": {
+      "evidence": "private Index paired bootstrap b080e76d14b5 (2000 replicates over 138645 cases) of these weights (d97127991870) minus the current revision's (3f02f0e5fc68): 95% lower bound > 0: yes",
+      "passed": true
+    },
+    "1_successor_IF3_index_audit": {
+      "evidence": "row-level Index audit 1cacd98a0a64 of 120226 Index rows: 0.8B 162777 training lines, 1 item rows, 20 familiar-text rows; 08bRA 309225 training lines, 1 item rows, 18 familiar-text rows; planted control 200 / 200",
+      "passed": true
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "evidence": "types choice OK, noul OK, score OK",
+      "passed": true
+    },
+    "1_successor_references": {
+      "evidence": "references only under the Index-first rule (user 2026-10-02 09:55): v3: v3 53.913 vs current 50.236: +3.68 [-2.76, +4.82] (below its former bar); human transfer: human transfer delta 95% [-0.046, +0.079] (clears its former bar); mlx-diag: mlx-diag card-eligible macro -0.0037 [-0.0139, +0.0065] (clears its former bar); tier gates: not run; overlap exposure: 1 training files, 0 exposed groups (clears its former bar); public 231: public 231 162 vs 156 (+6; McNemar p 0.327) (clears its former bar); C1 post-key: not run",
+      "passed": true,
+      "reference": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "8 results below own 1.0 listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 33 files re-hashed; loaded 753446208",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "c728ca1893a4bd6e5bf65082a176510794da80de74c1872664a687112f873f1e",
+  "model_name": "Decision-2.0-Eos-0.8B",
+  "receipts_sha256": {
+    "automap-card-pre": "04cb94620c07594820bb8239081f98a33e93ff5e42e3674baa1022f09136ba09",
+    "automap-hub": "e2fa6fe947bcc94cfff48c5677f7890c46653534d0b75001c7538f13376bb86f",
+    "automap-hub-tf518": "45a503c8987feb99c00e7a3c7164a59cc05d8cc095661753fa754cb3a80f4a04",
+    "automap-post": "e70b79e17298c300bff7fee9e0a7264c1d62e61569bf8299fb80417b5f053496",
+    "automap-pre": "cc119df2ab1876a902c1a55b90b734e18f572b767285e7876ea5ed688d5805e1",
+    "card-post": "b1c95c5a482412c85ad15dd5419254fa7f7bc055712eebded0b62a7567a66ad4",
+    "card-pre": "6d8be4d5461386bb956f32925c9f39dbbe2f27d1a6a8c19eee7bd9f1c0733bc2",
+    "download": "4503f8dd4a387661a6e27441eb8103ea6cdb38e60418ebfaf19aaadb05e140b9",
+    "post": "2d3410ff48955dc968e63e9cc0f7a82f7240a6570c85a02359e4c6163ab89f32",
+    "readback": "3a96b10cb8246e80879fc47cfea9b65a8aadb1e1730266bad2a9a3d1936becff",
+    "repeat-post": "a3e3176df1994451d5fbba48d214fb5200b75474d53d3a41241b58795f18c491",
+    "repeat-pre": "490965b30fc9785600ddc89bab1b28f4afcec2962ab58365ebb9a1f4b77aa1c0",
+    "tree": "6053842023eb85d53af606ec3052db5e82ef40e8b855c72214301c452eb64323",
+    "upload": "3d5dc610dc0f5b57674b86015105d94a21a22394f1d04e89fb6cd0eb18741289"
+  },
+  "repo_id": "vllm-sr/Decision-2.0-Eos-0.8B",
+  "revision": "ad0aa724c924f7c4194be94b1b8441caf2d61c01",
+  "rule": "index-first",
+  "schema": "dev2-release-gate/1",
+  "supersedes": {
+    "gate_sha256": "221c331e3d75666c5d68b87652d5a4307682485d6d87d8eda2f6acd34fd49959",
+    "revision": "9c7f3ea09a2b04a0647e5919af23c20ed982f246"
+  },
+  "utc": "2026-10-03T00:07:05.277940+00:00"
+}

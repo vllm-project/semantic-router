@@ -1,0 +1,14 @@
+{
+  "bytes": 14983453729,
+  "command": "hf download <repo> --revision <sha> --local-dir <fresh dir> (fresh HF_HUB_CACHE)",
+  "files": 34,
+  "hub_added": [
+    ".gitattributes"
+  ],
+  "passed": true,
+  "repo": "vllm-sr/Decision-2.0-Vega-27B",
+  "revision": "9b067a95560284dac8c98ef4130fd5a2c5a92ff9",
+  "schema": "dev2-hub-download/1",
+  "seconds": 17.177325104828924,
+  "utc": "2026-10-02T21:57:04.310064+00:00"
+}

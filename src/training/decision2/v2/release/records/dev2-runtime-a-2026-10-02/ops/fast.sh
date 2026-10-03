@@ -11,16 +11,20 @@
 #   --bench --gpu N    runtime_bench.py on the first 400 typed-final prompts, old then new, two untimed passes
 #                      (the fast path captures a shape's HIP graph on its second use) then one timed; compare
 #   --profile --gpu N  profile_request.py on the same 400 prompts, old then new: per-step milliseconds
-# Usage: bash <mirror>/v2/release/records/dev2-runtime-a-2026-10-02/ops/fast.sh <tier> <mode> [--gpu N]
-# Work: /data/dev2/runs/runtime-a/<tier>/ (the newest preview is used by --parity and --bench).
+#   --switch           (with any mode; 0.6B 0.8B 2B 27B) the shared-context switch revision: the old side is the
+#                      current main (Kai, Eos, Sol: their phase A revisions; Vega: the 27B release) with the image,
+#                      spec and autotune cache of the release that built it; the new side is this mirror's runtime
+# Usage: bash <mirror>/v2/release/records/dev2-runtime-a-2026-10-02/ops/fast.sh <tier> <mode> [--gpu N] [--switch]
+# Work: /data/dev2/runs/runtime-a/<tier>/ or <tier>-switch/ (the newest preview is used by --parity and --bench).
 # Lease: /data/dev2/leases/gpuN.lock/owner.runtime-a (a co-tenant entry; status set to idle on exit).
 set -euo pipefail
 tier="${1:-}" mode="${2:-}"
 shift 2 || true
-gpu=""
+gpu="" switch=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --gpu) gpu=$2; shift 2 ;;
+    --switch) switch=1; shift ;;
     *) echo "unknown argument $1" >&2; exit 2 ;;
   esac
 done
@@ -50,15 +54,24 @@ case "$tier" in
   4B) key=4b codename=Nox image=$LATEST; release_of dev2-4b-sdml-release-20261002T085835Z ;;
   9B) key=9b codename=Lux vram=60; release_of dev2-card4-9B-20261002T033640Z ;;
   27B)
-    key=27b codename=Vega image=$LATEST vram=130; release_of dev2-27b-27bif-M6-IB-release-20261002T070233Z
+    key=27b codename=Vega image=$LATEST vram=130; release_of dev2-27b-27bx-M6-IBxIB2-m50-release-20261002T172034Z
     base_repo=$HFC/models--Qwen--Qwen3.8-27B
     base_args=(--base-path "$base_repo/snapshots/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0")
     base_mounts=(-v "$base_repo:$base_repo:ro")
     [[ ! -d "$HFC/blobs" ]] || base_mounts+=(-v "$HFC/blobs:$HFC/blobs:ro") ;;
   *) echo "tier must be one of 0.6B 0.8B 2B 4B 9B 27B" >&2; exit 2 ;;
 esac
+if [[ -n "$switch" ]]; then
+  case "$tier" in
+    0.6B) release_of dev2-ra-0.6B-20261002T112747Z ;;
+    0.8B) release_of dev2-ra-0.8B-20261002T122005Z ;;
+    2B) release_of dev2-ra-2B-20261002T114630Z ;;
+    27B) ;;
+    *) echo "--switch: tier must be one of 0.6B 0.8B 2B 27B" >&2; exit 2 ;;
+  esac
+fi
 name=Decision-2.0-$codename-$tier REPO=vllm-sr/$name STAGE=dev2-release-staging-ra$key
-T=/data/dev2/runs/runtime-a/$tier
+T=/data/dev2/runs/runtime-a/$tier${switch:+-switch}
 export TMPDIR=/data/dev2/tmp PYTHONPATH=$S PYTHONDONTWRITEBYTECODE=1
 mkdir -p "$TMPDIR" "$T" /data/dev2/runs/runtime-a/triton
 digest() { (cd "$1" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-64); }
