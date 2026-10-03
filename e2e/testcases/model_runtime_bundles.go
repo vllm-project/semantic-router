@@ -32,7 +32,7 @@ func testModelRuntimeBundles(ctx context.Context, client *kubernetes.Clientset, 
 		return err
 	}
 	defer session.Close()
-	if err := session.waitReady(ctx, mrManagedDeployments...); err != nil {
+	if err = session.waitReady(ctx, mrManagedDeployments...); err != nil {
 		return err
 	}
 	device, _, err := session.managed(ctx, mrDomainDeployment)
@@ -44,7 +44,7 @@ func testModelRuntimeBundles(ctx context.Context, client *kubernetes.Clientset, 
 		return err
 	}
 	for index := 0; index < mrBundleRequests; index++ {
-		if _, err := session.chat(ctx, freshPrompt("Explain how a hash map handles collisions.")); err != nil {
+		if _, err = session.chat(ctx, freshPrompt("Explain how a hash map handles collisions.")); err != nil {
 			return err
 		}
 	}

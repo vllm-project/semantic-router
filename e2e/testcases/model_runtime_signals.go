@@ -104,7 +104,7 @@ func checkTaskSignals(
 	if matched := headerItems(response.Headers, "x-vsr-matched-domains"); len(matched) != 1 || !matched[domain.result.Label] {
 		return nil, fmt.Errorf("x-vsr-matched-domains %v, the domain model chose %q", matched, domain.result.Label)
 	}
-	if err := sameScore(preview.SignalConfidences, "domain:"+domain.result.Label, domainProbability); err != nil {
+	if err = sameScore(preview.SignalConfidences, "domain:"+domain.result.Label, domainProbability); err != nil {
 		return nil, err
 	}
 
@@ -120,7 +120,7 @@ func checkTaskSignals(
 	if !ok {
 		return nil, fmt.Errorf("the guard model has no jailbreak label: %v", guard.labels)
 	}
-	if err := sameScore(preview.SignalValues, "jailbreak:prompt_attack", risk); err != nil {
+	if err = sameScore(preview.SignalValues, "jailbreak:prompt_attack", risk); err != nil {
 		return nil, err
 	}
 	if matched := headerItems(response.Headers, "x-vsr-matched-jailbreak")["prompt_attack"]; matched != (risk >= mrSignalThreshold) {

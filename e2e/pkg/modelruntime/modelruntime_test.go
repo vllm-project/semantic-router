@@ -118,7 +118,7 @@ func TestClientDecodesSurfacesAndRequiresEveryAnswer(t *testing.T) {
 	if err != nil || !card.HasSurface("classify") || card.Heads[0].Labels[1] != "math" {
 		t.Fatalf("card = %+v, %v", card, err)
 	}
-	if _, err := client.Model(ctx, "missing"); err == nil {
+	if _, err = client.Model(ctx, "missing"); err == nil {
 		t.Fatal("a missing model resolved")
 	}
 	classified, err := client.Classify(ctx, ClassifyRequest{Model: "vela-domain", Input: []string{"2+2"}})

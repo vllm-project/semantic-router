@@ -89,7 +89,7 @@ func testModelRuntimeRealRouting(ctx context.Context, client *kubernetes.Clients
 	}
 	defer session.Close()
 	started := time.Now()
-	if err := session.waitReadyWithin(ctx, mrRealReadyTimeout, mrRealDeployments...); err != nil {
+	if err = session.waitReadyWithin(ctx, mrRealReadyTimeout, mrRealDeployments...); err != nil {
 		return err
 	}
 	kai, _, err := session.managed(ctx, mrRealKai)

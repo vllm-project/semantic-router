@@ -39,9 +39,9 @@ func testModelRuntimeFailOpen(ctx context.Context, client *kubernetes.Clientset,
 		return err
 	}
 	for index := 0; index < mrFailOpenRequests; index++ {
-		response, err := session.chat(ctx, freshPrompt("Is this request about software?"))
-		if err != nil {
-			return err
+		response, chatErr := session.chat(ctx, freshPrompt("Is this request about software?"))
+		if chatErr != nil {
+			return chatErr
 		}
 		if decision := response.Headers.Get("x-vsr-selected-decision"); decision == "offline_route" {
 			return fmt.Errorf("offline_route matched: an unanswered decision signal must not match")
@@ -71,7 +71,7 @@ func testModelRuntimeSupervision(ctx context.Context, client *kubernetes.Clients
 		return err
 	}
 	defer session.Close()
-	if err := session.waitReady(ctx, mrManagedDeployments...); err != nil {
+	if err = session.waitReady(ctx, mrManagedDeployments...); err != nil {
 		return err
 	}
 	before, err := session.routerMetrics(ctx)
@@ -92,13 +92,13 @@ func testModelRuntimeSupervision(ctx context.Context, client *kubernetes.Clients
 	// device group, a separate process, must stay ready.
 	var requests int
 	err = modelruntime.Eventually(ctx, mrReadyTimeout, func(ctx context.Context) error {
-		if _, err := session.chat(ctx, freshPrompt("Write a Go function that merges two sorted slices.")); err != nil {
-			return modelruntime.Stop(err)
+		if _, chatErr := session.chat(ctx, freshPrompt("Write a Go function that merges two sorted slices.")); chatErr != nil {
+			return modelruntime.Stop(chatErr)
 		}
 		requests++
-		metrics, err := session.routerMetrics(ctx)
-		if err != nil {
-			return err
+		metrics, metricsErr := session.routerMetrics(ctx)
+		if metricsErr != nil {
+			return metricsErr
 		}
 		for _, name := range mrDeviceGroup {
 			if !metrics.DeploymentReady(name) {

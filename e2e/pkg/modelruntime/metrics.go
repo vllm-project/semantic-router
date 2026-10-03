@@ -49,7 +49,7 @@ func ParseMetrics(text string) (Metrics, error) {
 
 func parseSample(line string) (Sample, error) {
 	sample := Sample{Labels: map[string]string{}}
-	rest := line
+	var rest string
 	if open := strings.IndexByte(line, '{'); open >= 0 {
 		end := strings.LastIndexByte(line, '}')
 		if end < open {

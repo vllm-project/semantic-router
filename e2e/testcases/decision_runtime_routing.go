@@ -61,7 +61,7 @@ func testDecisionRuntimeRouting(ctx context.Context, client *kubernetes.Clientse
 		return err
 	}
 	defer session.Close()
-	if err := session.waitReady(ctx, mrDecisionDeployment, mrAttachedDecisions); err != nil {
+	if err = session.waitReady(ctx, mrDecisionDeployment, mrAttachedDecisions); err != nil {
 		return err
 	}
 	managed, _, err := session.managed(ctx, mrDecisionDeployment)
@@ -100,7 +100,7 @@ func checkDecisionRuntimePrompt(
 	if err != nil {
 		return "", err
 	}
-	if _, err := session.attachedRuntime().Decide(ctx, modelruntime.DecisionsRequest{Model: "decision-a", State: prompt, Questions: decisionRuntimeAttachedQuestions}); err != nil {
+	if _, err = session.attachedRuntime().Decide(ctx, modelruntime.DecisionsRequest{Model: "decision-a", State: prompt, Questions: decisionRuntimeAttachedQuestions}); err != nil {
 		return "", err
 	}
 	kind := signals.Answers["request_kind"].Choice
