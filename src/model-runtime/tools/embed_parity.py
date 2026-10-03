@@ -1,7 +1,7 @@
 """Parity records for the embedding and rerank models (embed workstream).
 
     python3 tools/embed_parity.py omni --bundle DIR --output OUT.json [--threads N]
-    python3 tools/embed_parity.py encoder --package DIR --output OUT.json [--threads N]
+    python3 tools/embed_parity.py encoder --package DIR --output OUT.json [--threads N] [--device rocm:N]
 
 ``encoder`` serves an embedder or reranker package (Vela Embedding, Vela
 Reranker, Qwen3-Embedding) through ``TaskHeadsFamily`` on the native engine
@@ -9,7 +9,9 @@ Reranker, Qwen3-Embedding) through ``TaskHeadsFamily`` on the native engine
 engine (every graph), and compares both with a Transformers FP32 reference
 fed the same token IDs (``tools/embed_corpus.py``): every exit's embedding
 (raw or final-normed intermediate exits per the package contract, Matryoshka
-views of the last one) or every pair scorer's logits and rerank order.
+views of the last one) or every pair scorer's logits and rerank order. With
+``--device`` the native engine runs on that GPU against the CPU reference
+under the GPU bar (cosine >= 0.9995); the onnxruntime side stays on the CPU.
 
 ``omni`` serves a prepared Vela Omni bundle that kept its goldens
 (``VELA_OMNI_KEEP_GOLDEN=1``) through ``MultimodalEmbeddingFamily`` and the
@@ -61,6 +63,8 @@ from vllm_sr_runtime.plugins.base import (  # noqa: E402
 
 MIN_COSINE = 0.99999
 MAX_ABS = 1e-4
+# Design section 17: the GPU bar for embeddings; logits are reported, not gated, on GPUs.
+GPU_MIN_COSINE = 0.9995
 CPU = DeviceInfo(accelerator="cpu", index=None, name="cpu")
 
 
@@ -273,13 +277,19 @@ def serve(model: Any, surface: str, body: dict[str, Any]) -> tuple[Any, dict[str
 class EncoderParity:
     """One embedder or reranker on both engines against the Transformers reference."""
 
-    def __init__(self, package: Path, threads: int | None):
+    def __init__(self, package: Path, threads: int | None, device: str = "cpu"):
         import torch
 
         torch.set_num_threads(threads or torch.get_num_threads())
         self.package = package
         self.threads = threads
-        self.native = self.load(NativeEngine(), {})
+        self.device = CPU
+        if device != "cpu":
+            accelerator, _, index = device.partition(":")
+            self.device = DeviceInfo(
+                accelerator=accelerator, index=int(index or 0), name=device
+            )
+        self.native = self.load(NativeEngine(), {}, self.device)
         layout = self.native.planners[next(iter(self.native.planners))].layout
         if isinstance(layout, RelevanceLayout):
             option = {
@@ -289,18 +299,26 @@ class EncoderParity:
             }
         else:
             option = {"layers": sorted(layout.graphs)}
-        self.graph = self.load(OnnxRuntimeEngine(), option) if layout.graphs else None
+        self.graph = (
+            self.load(OnnxRuntimeEngine(), option, CPU) if layout.graphs else None
+        )
         self.layout = layout
         self.reference = self.reference_model()
         self.cases: list[dict[str, Any]] = []
 
-    def load(self, engine: Any, options: dict[str, Any]) -> Any:
+    def load(self, engine: Any, options: dict[str, Any], device: DeviceInfo) -> Any:
+        from vllm_sr_runtime.accel.rocm import ROCmAccelerator
+
         family = TaskHeadsFamily(RegistryOptions(model_options=options))
         verified = family.verify(PackageRef(self.package))
         spec = family.describe(verified)
-        model = engine.load(
-            spec, CPUAccelerator(), CPU, EngineOptions(threads=self.threads)
+        accelerator = (
+            CPUAccelerator() if device.accelerator == "cpu" else ROCmAccelerator()
         )
+        engine_options = EngineOptions(
+            threads=self.threads, graphs=False, fused_kernels=False
+        )
+        model = engine.load(spec, accelerator, device, engine_options)
         return family.load(verified, spec, model)
 
     def reference_model(self) -> Any:
@@ -341,15 +359,20 @@ class EncoderParity:
         pairs: dict[str, dict[str, float]],
         extra: dict[str, Any] | None = None,
     ) -> None:
-        passed = all(
-            stats["min_cosine"] >= MIN_COSINE and stats["max_abs"] <= MAX_ABS
-            for key, stats in pairs.items()
-            if "min_cosine" in stats
+        """Gate every comparison: CPU pairs on cosine and |delta|, GPU pairs on cosine."""
+        gpu = self.device.accelerator != "cpu"
+        passed = True
+        for key, stats in pairs.items():
+            on_gpu = gpu and key.startswith("native")
+            if "min_cosine" in stats:
+                passed &= stats["min_cosine"] >= (
+                    GPU_MIN_COSINE if on_gpu else MIN_COSINE
+                )
+            if not on_gpu:
+                passed &= stats.get("max_abs", 0.0) <= MAX_ABS
+        self.cases.append(
+            {"name": name, "passed": bool(passed), **pairs, **(extra or {})}
         )
-        passed = passed and all(
-            stats.get("max_abs", 0) <= MAX_ABS for stats in pairs.values()
-        )
-        self.cases.append({"name": name, "passed": passed, **pairs, **(extra or {})})
 
     @staticmethod
     def rows_compare(a: Any, b: Any) -> dict[str, float]:
@@ -468,7 +491,8 @@ class EncoderParity:
             "model": self.native.info.id,
             "model_sha256": self.native.info.model_sha256,
             "engines": ["native", *(["onnxruntime"] if self.graph is not None else [])],
-            "reference": "transformers fp32 (sdpa), same token IDs",
+            "reference": "transformers fp32 (sdpa) on the CPU, same token IDs",
+            "device": self.device.label,
             "thresholds": {"min_cosine": MIN_COSINE, "max_abs": MAX_ABS},
             "passed": all(
                 case["passed"] and case.get("identical_order", True)
@@ -495,11 +519,12 @@ def main() -> int:
     encoder.add_argument("--package", type=Path, required=True)
     encoder.add_argument("--output", type=Path, required=True)
     encoder.add_argument("--threads", type=int, default=None)
+    encoder.add_argument("--device", default="cpu")
     args = parser.parse_args()
     if args.command == "omni":
         result = OmniParity(args.bundle.resolve(), args.threads).run()
     else:
-        result = EncoderParity(args.package.resolve(), args.threads).run()
+        result = EncoderParity(args.package.resolve(), args.threads, args.device).run()
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     failed = [case["name"] for case in result["cases"] if not case["passed"]]
     print(

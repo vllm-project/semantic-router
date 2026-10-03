@@ -6,9 +6,18 @@ Deterministic, explicit text: short router queries, paragraphs, long
 documents (repeated variations up to a few thousand tokens), code and JSON,
 in English, Chinese, Spanish, German, Japanese, Russian and Arabic, plus
 rerank sets of one query and eight candidate documents (one or two relevant).
+The performance scenarios use seeded synthetic token rows instead, so every
+engine and the legacy path see identical inputs without a tokenizer.
 """
 
 from __future__ import annotations
+
+import numpy as np
+
+EMBED_LENGTHS = (16, 64, 256, 1024)
+RERANK_DOCUMENTS = (10, 50)
+BATCH = 32
+SPECIAL_IDS = 8
 
 QUERIES = [
     "How do I reset my password?",
@@ -125,3 +134,36 @@ def texts() -> list[str]:
         for seed, count in ((1, 4), (2, 8), (3, 16), (4, 32), (5, 48))
     ]
     return QUERIES + PARAGRAPHS + documents
+
+
+def synthetic_rows(lengths: list[int], vocab: int, seed: int) -> list[tuple[int, ...]]:
+    """``<bos> ... <eos>`` rows of random non-special token IDs (Vela's special-token layout)."""
+    rng = np.random.default_rng(seed)
+    return [
+        (2, *rng.integers(SPECIAL_IDS, vocab, length - 2).tolist(), 1)
+        for length in lengths
+    ]
+
+
+def embed_scenarios(vocab: int) -> dict[str, list[tuple[int, ...]]]:
+    """One text of each length per request, and one request of 32 texts of 16-256 tokens."""
+    scenarios = {
+        f"single/{length}": synthetic_rows([length], vocab, length)
+        for length in EMBED_LENGTHS
+    }
+    lengths = np.random.default_rng(7).integers(16, 257, BATCH).tolist()
+    scenarios[f"batch/{BATCH}x16-256"] = synthetic_rows(lengths, vocab, 7)
+    return scenarios
+
+
+def rerank_scenarios(vocab: int) -> dict[str, list[tuple[int, ...]]]:
+    """One 12-token query with 10 and 50 documents of 64-192 tokens, as pair rows."""
+    query = synthetic_rows([12], vocab, 1)[0][:-1]
+    scenarios = {}
+    for count in RERANK_DOCUMENTS:
+        lengths = np.random.default_rng(count).integers(64, 193, count).tolist()
+        documents = synthetic_rows(lengths, vocab, count)
+        scenarios[f"query+{count}docs"] = [
+            query + document[1:] for document in documents
+        ]
+    return scenarios
