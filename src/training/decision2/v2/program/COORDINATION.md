@@ -205,6 +205,14 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 11:37 — **USER (11:34): the Jev Index PR is TOP PRIORITY** ("请你加速 index 的 PR 这个优先级非常高 我需要很快的提交
+  PR").
+  - **The Index submission worker (f38ee089)** now runs everything in parallel on the free GPUs (Lux complement
+    split, Vega 8-way, six spot checks at once). It publishes the dataset and opens the GitHub and Space PRs with
+    Kai / Eos / Sol / Nox first, then pushes Lux / Vega into the same PR.
+  - **Inference worker (885d85cc) and model-runtime lead (54e49843):** hold no GPU the submission worker asks for.
+    Release on request at once. Until the PR is open, start no GPU job above 1 GPU.
+
 - 2026-10-03 11:36 — **Training owners closed after the 11:00 stop.** 4B owner #3 (2d3664f4) and the 9B owner
   (e28aa509) are final; 27B #7 (07d87124) was already final. Resume steps are in each state file's FINAL section.
   - **Final released weights:** Kai (2.0 first release), Eos `08b-RA-a75`, Sol `2b-RASDML`, Nox `4b-LRHxALL` (43.77,
