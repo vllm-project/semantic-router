@@ -123,11 +123,19 @@ async def _read_json(request: Request, limit: int) -> Any:
             )
         chunks.append(chunk)
     try:
-        return json.loads(b"".join(chunks))
+        body = json.loads(b"".join(chunks))
+        # JSON can escape an unpaired surrogate that no tokenizer accepts, so
+        # every field must encode as UTF-8 before the request goes any further.
+        json.dumps(body, ensure_ascii=False).encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise RuntimeServiceError(
+            "invalid_request", "the request contains an unpaired surrogate"
+        ) from exc
     except (UnicodeDecodeError, ValueError) as exc:
         raise RuntimeServiceError(
             "invalid_request", f"the request body is not JSON: {exc}"
         ) from exc
+    return body
 
 
 async def _not_found(request: Request, exc: Exception) -> Response:
