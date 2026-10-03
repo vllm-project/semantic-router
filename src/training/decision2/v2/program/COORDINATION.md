@@ -205,6 +205,112 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 11:27 — **USER DECISION: a built-in decision model runtime inside vllm-sr (Phase 1 = Decision 2.0). All
+  inference optimization now lands there.** User decisions (11:14–11:38):
+  - **Architecture:** a contract-first, standalone-process Python model runtime with three plugin layers (model
+    family / engine / accelerator).
+    - The router (Go) talks to it over HTTP/JSON with an OpenAPI schema (UDS internally, TCP for engine mode) and
+      a generated Go client.
+    - The new domain is `src/model-runtime/`, Python package `vllm_sr_runtime`, CLI `vllm-sr serve <hf-model>`.
+  - **Numerics:** the default path is byte-identical to the released packages. Shared context, batching and
+    max-speed are opt-in profiles with measured accuracy impact.
+  - **Router depth:** a `decision` signal plus a `decision` selector (Choice over modelRefs), with a router-managed
+    lifecycle; fail-open.
+  - **Delivery:** ONE PR to `vllm-project/semantic-router`, CI green.
+  - **Hardware:** ROCm and CPU validated; CUDA implemented and unit-tested but marked unvalidated.
+  - **Later phases (design for them now):** 2. Decision 1.0; 3. Vela 1.0 and Vela 2.0 move over; 4. the legacy
+    bindings are removed. The final built-ins are Decision 2.0 / 1.0 and Vela 2.0 / 1.0, plus pluggable third-party
+    models, on universal hardware.
+  - **Lead: 54e49843 (Max, started 11:30)** — branch `xunzhuo/model-runtime-decision2`. Owns: the design doc, the interface scaffold, API / schemas,
+    registry, scheduler, CLI, router Go integration, config, docs, E2E, CI and the PR.
+  - **Inference worker (885d85cc), RETARGETED:**
+    - your workstreams now land in `vllm_sr_runtime` on the lead's branch. You own `families/decision2` (numerics),
+      `engines/native`, `accel/*` and `profiles/*`, plus the GPU parity and perf records on our nodes;
+    - **pause new HF runtime revisions;** keep measuring opt-in profiles;
+    - start porting as soon as the lead posts the interface scaffold commit here.
+
+- 2026-10-03 11:30 — **4B owner (2d3664f4): STOPPED per the user's 11:00 instruction; this run ends.**
+  - **Nothing of mine runs and no lease is held** (A / B / C / F checked at 11:20).
+    - The coordinator's 11:04–11:07 stops ended `4b-SDMLIB4-lrq` s1 / s2 (≈ 70% trained; partial, not used) and
+      chain C5.
+    - My local launcher for further seeds was stopped before it launched anything.
+  - **Nox-4B final for now: `ce1bdc9d` = `4b-LRHxALL`, Index 43.77,** released 08:43, `post_checks=ok` 09:35, gate
+    +0.48 [+0.12, +0.82] vs `c60d3b5c`. It is #1 in the 3–6B class (JPT-4B 43.04).
+  - **Unreleased, for a possible resume:**
+    - `4b-LHS17IB4-lrq` (quarter LR) reads 44.18, but its gate vs `ce1bdc9d` gives +0.40 [−0.01, +0.77], just short;
+    - `4b-LRH2` gives +0.17 [−0.07, +0.41];
+    - `4b-LRQxLRHxALL` (½ `-lrq` + ½ `ce1bdc9d`) has all 8 shards exit 0 but was left unscored per the stop. Its R3
+      run and node A release inputs are ready.
+  - **Final state, resume steps and release ops:** `dec-m17b-state.md` section "FINAL" (`13d84c705` in
+    integration); release ops for a successor of `ce1bdc9d` are in `dev2-4b-w8-2026-10-03/ops/`.
+  - **GPU-h:** ≈ 54 of 70.
+
+- 2026-10-03 11:17 — **Index submission worker (f38ee089) → 27B #7: you get node D GPU6–7 back sooner.** Vega's
+  complement is now split four ways (`2d4d17dc9`).
+  - **Node C GPU7** runs shards 0–1 right after the Lux complement, ≈ 11:40–12:50.
+  - **Node D GPU6 / 7** run shards 2 / 3 in parallel as soon as your waiter marks them released and they are idle
+    (`complement_after_release.sh --only "2 3"`). That's ≈ 35 min instead of ≈ 75, so M7-IB14ML gets them back at
+    ≈ 13:25. I'll post when they're released.
+  - **Then node C GPU7 runs the release spot checks** (≈ 12:50–13:30) and is released after that.
+  - Nox is complete and checked: **43.77 / raw 57.24 / breadth 42.10**, 2 unsupported, Index identical to the stored
+    run.
+
+- 2026-10-03 11:25 — **9B owner (e28aa509): STOPPED per the user's 11:00 instruction; this run ends.**
+  - **Stopped:** my workstation orchestrator, the `HLR4-a50` waiter and the arm-factory launcher. `KIB4-lrhh` s3 / s4
+    and `KXH` s1 / s2 were never started. The coordinator had already stopped the node B chains (`KIB4H-a40` at 3 of
+    7 shards, `HLR4-a50` before any shard) and `HLR4-a50`'s formal on node A GPU0.
+  - **Checked:** no 9B process, container or lease is left on nodes A and B. Node B GPU2 / 3 / 5 / 7 and node A GPU0
+    are free. The +12 GPU-h ask of 11:00 is withdrawn.
+  - **Lux-9B stays `214ffa43`** (the runtime-only switch revision on the KIB4-a40 weights). No weights successor
+    passed IF1:
+    - `HLR4-a80` fails (level with the release);
+    - `HLR4-a60` fails narrowly, the best 9B point measured;
+    - `KIB4H-a80` fails (below the release);
+    - `KIB4H-a40` and `HLR4-a50` were not measured.
+  - **Inference-optimization owner (885d85cc):** integration `6eefee76f` now carries Lux's switch record
+    (`dev2-runtime-a-2026-10-02/9b/switch`; spec `dev2-9b-ras.json`, decision `.ras.json`, frozen cache
+    `runtime-a-9b-ras`) and a 9B switch path in `fast.sh` / `make_fast.py`. Your next Lux runtime-only revision
+    supersedes `214ffa43`.
+  - **Final state and resume notes:** `m10-state.md` "FINAL" (`e928fca52`). Continuation GPU-h ≈ 38 of 60.
+
+- 2026-10-03 11:35 — **Inference owner (885d85cc): started.** Branch `xunzhuo/decision-2-runtime-c` (from integration
+  `3d8826ff3`), worktree `vllm-sr-dev2-runtime-c`, state `v2/serving/records/runtime-c-state.md`.
+  - **Leases (`track=runtime-c`):** node A GPU0–1 (release rollouts, as phase A did) and node B GPU0–3
+    (measurement). Node C, D and F stay untouched. **Index worker (f38ee089): any of these is yours on request; I
+    yield at once.**
+  - **First findings:** the README's `AutoModel` path forwards only `device` / `base_path` / `threads` /
+    `bf16_resident`, so `share_context` is unreachable there; and the phase A fast path and the switch turn on only
+    under Transformers 5.17 (5.18 users get the eager path).
+  - **Plan:** (1) one runtime-only revision per repo: remote code passes `share_context` / `graphs` / `kernels`
+    through, the fast path is verified under 5.18 too, tree mode reuses the fused kernels, and the card shows
+    multi-question use and speed (default byte-identical, full parity rollout); (2) an opt-in max-speed profile,
+    measured under the numerics policy; (3) cross-request batching throughput.
+  - **No repo is touched until a rollout note here.**
+
+- 2026-10-03 11:15 — **27B #7 (07d87124): STOPPED per the user's 11:00 instruction; this run ends.**
+  - **Stopped (03:04–03:07Z, next to the coordinator's own stops):** every 27B training container (M7 / M8 / M9, 26
+    arm-seeds), relay, arm driver, mlx watcher, the X7 Index run and every workstation waiter. Checked: no 27B process
+    or container is left on A / B / C / D / F.
+  - **Leases released:** node A GPU1–7, node B GPU0 / 1 / 4 / 6, node D GPU0–7, node F GPU2–7 (`status=released`;
+    node C GPU1 was released by the coordinator). Node D GPU6–7 are free now for the Index submission worker.
+  - **Vega-27B unchanged:** `9b067a95` (phase A + opt-in switch, M6-IBxIB2-m50 weights, 56.47). No release this run;
+    no candidate read finished (`X7-IBxIB2xIB14ML` had 2 of 8 shards).
+  - **Final state, hand-off and resume notes:** `m6-state.md` section "Continuation #7 FINAL" (27B branch
+    `a017139dc`; integration `d1f733c15`). Checkpoints stay on disk; the successor release ops on `9b067a95` and
+    the half-LR preregistrations (M9 amendments 2–4) are ready if 27B work ever resumes.
+
+- 2026-10-03 11:12 — **Training STOPPED on every node** (the coordinator stopped the 27B M7 / M8 / M9 seeds and
+  relays, the 9B KIB4H / HLR4 Index, gate and parity chains, the 4B quarter-LR arms and candidate Index, and the X7
+  Index), and their leases are released.
+  - **Kept:** the Index submission's run on node C GPU7 (`ix1-m10-kib4-a40-*` under `/index021/submit/`) and its
+    complement chains.
+  - **The released versions are final for now:** Kai `881bee41`, Eos `ad0aa724`, Sol `4b75b521`, Nox `ce1bdc9d`, Lux
+    `214ffa43`, Vega `9b067a95`.
+  - **4B / 9B / 27B owners:** do NOT relaunch anything. Write your final state and end your run.
+  - **The new inference-optimization owner is 885d85cc** (Max, 60 GPU-h), now the only writer to the six model
+    repos (runtime-only revisions through the parity rollout).
+  - **The Index submission worker (f38ee089) has first call on every GPU.**
+
 - 2026-10-03 11:00 — **USER: STOP ALL TRAINING. The focus is now (1) inference optimization and (2) the Jev Decision
   Index submission.** The user's words: "我觉得所有的训练任务可以停止了 现在的 focus 就是推理优化和提交 index".
   - **4B owner (2d3664f4), 9B owner (e28aa509), 27B owner (07d87124):**
