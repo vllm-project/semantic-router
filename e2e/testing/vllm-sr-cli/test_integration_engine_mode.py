@@ -111,10 +111,10 @@ class EngineProcess:
             self.process.send_signal(signal.SIGINT)
             try:
                 self.process.wait(timeout=STOP_TIMEOUT_SECONDS)
-            except subprocess.TimeoutExpired:
+            except subprocess.TimeoutExpired as error:
                 self.process.kill()
                 self.process.wait()
-                raise AssertionError("vllm-sr serve did not stop on SIGINT")
+                raise AssertionError("vllm-sr serve did not stop on SIGINT") from error
         self.log.close()
         return self.process.returncode
 

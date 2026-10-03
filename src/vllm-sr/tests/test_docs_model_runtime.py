@@ -38,7 +38,8 @@ from cli.parser import parse_user_config  # noqa: E402
 from cli.validator import validate_user_config  # noqa: E402
 
 DOCS = REPO_ROOT / "website" / "docs"
-PAGES = sorted((DOCS / "model-runtime").rglob("*.md")) + [
+PAGES = [
+    *sorted((DOCS / "model-runtime").rglob("*.md")),
     DOCS / "tutorials/global/model-runtime.md",
     DOCS / "tutorials/signal/learned/decision.md",
     DOCS / "tutorials/algorithm/selection/decision.md",
@@ -285,8 +286,8 @@ def _commands(program: str) -> list[tuple[str, list[str]]]:
     commands = []
     for block in _blocks("bash"):
         logical = block.text.replace("\\\n", " ")
-        for line in logical.splitlines():
-            line = line.strip()
+        for raw in logical.splitlines():
+            line = raw.strip()
             if line.startswith(program + " "):
                 commands.append((block.where, shlex.split(line)[1:]))
     return commands
@@ -314,7 +315,9 @@ def test_vllm_sr_commands_parse():
         try:
             _parse_cli(arguments)
         except click.ClickException as error:
-            raise AssertionError(f"{where}: vllm-sr {' '.join(arguments)}: {error}")
+            raise AssertionError(
+                f"{where}: vllm-sr {' '.join(arguments)}: {error}"
+            ) from error
 
 
 def test_vllm_sr_runtime_commands_use_real_options():

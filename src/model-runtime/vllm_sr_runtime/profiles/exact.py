@@ -16,25 +16,21 @@ class ExactProfile(Profile):
 
     def __init__(self) -> None:
         self.fuse = False
+        self.merge = False
         self.model: LoadedModel | None = None
 
     def available(self, model: LoadedModel) -> str | None:
         self.fuse = bool(getattr(model, "fuse_bundled_jobs", False))
+        self.merge = bool(getattr(model, "batch_invariant", False))
         self.model = model
         return None
 
     def plan(self, jobs: list[Job], token_budget: int | None) -> list[Batch]:
-        """One request (or, for models that fuse bundles, one bundle group) per batch."""
-        units: list[list[Job]] = []
-        groups: dict[int, list[Job]] = {}
-        for job in jobs:
-            if self.fuse and job.group is not None:
-                if job.group not in groups:
-                    groups[job.group] = []
-                    units.append(groups[job.group])
-                groups[job.group].append(job)
-            else:
-                units.append([job])
+        """One request (or, for models that fuse bundles, one bundle group) per batch.
+
+        A batch-invariant model runs every queued job in shared batches instead.
+        """
+        units = ([list(jobs)] if jobs else []) if self.merge else self._units(jobs)
         batches = []
         for unit in units:
             rows = [(job, index) for job in unit for index in range(len(job.items))]
@@ -46,3 +42,16 @@ class ExactProfile(Profile):
                     parts.setdefault(id(job), (job, []))[1].append(index)
                 batches.append(Batch(parts=list(parts.values())))
         return batches
+
+    def _units(self, jobs: list[Job]) -> list[list[Job]]:
+        units: list[list[Job]] = []
+        groups: dict[int, list[Job]] = {}
+        for job in jobs:
+            if self.fuse and job.group is not None:
+                if job.group not in groups:
+                    groups[job.group] = []
+                    units.append(groups[job.group])
+                groups[job.group].append(job)
+            else:
+                units.append([job])
+        return units

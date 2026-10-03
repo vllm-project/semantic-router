@@ -19,7 +19,8 @@ keys, so repeated inputs are answered from the runtime's result cache.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from itertools import chain
 from typing import Any
 
@@ -100,6 +101,22 @@ def length_buckets(lengths: Sequence[int], budget: int) -> list[list[int]]:
         buckets.append([index])
         real = length
     return buckets
+
+
+@contextmanager
+def single_threaded() -> Iterator[None]:
+    """Torch on one thread around graph runs, restored after.
+
+    A graph engine's own thread pool spins on the cores between runs; a
+    parallel torch op there (a pooled head over 64 or more tokens) makes the
+    next run share them: 28 ms became 39 ms at 64 tokens on 16 cores.
+    """
+    threads = torch.get_num_threads()
+    torch.set_num_threads(1)
+    try:
+        yield
+    finally:
+        torch.set_num_threads(threads)
 
 
 def graph_name(head: Head) -> str:
@@ -277,6 +294,10 @@ class TaskHeadsModel(LoadedModel):
 
     def _run_graphs(self, items: list[Item]) -> list[Any]:
         """Each head's exit graph over its distinct sequences, in length buckets of padded rows."""
+        with single_threaded():
+            return self._graph_results(items)
+
+    def _graph_results(self, items: list[Item]) -> list[Any]:
         results: list[Any] = [None] * len(items)
         by_head: dict[str, list[int]] = {}
         for position, item in enumerate(items):
@@ -307,8 +328,6 @@ class TaskHeadsModel(LoadedModel):
         lengths = [len(ids) for ids in sequences]
         if LOGITS in output.outputs:
             return Rows({}, [], lengths, {LOGITS: output.outputs[LOGITS]})
-        # Row slices, not a boolean gather: a parallel torch op right after a graph run
-        # contends with the graph engine's spinning threads for the same cores.
         padded = output.outputs["last_hidden_state"]
         hidden = torch.cat([padded[row, :length] for row, length in enumerate(lengths)])
         starts = [sum(lengths[:row]) for row in range(len(lengths))]

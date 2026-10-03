@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package classification_test
 
@@ -16,8 +16,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	candle "github.com/vllm-project/semantic-router/candle-binding"
-	ort "github.com/vllm-project/semantic-router/onnx-binding/instance"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiserver"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
@@ -33,8 +31,7 @@ func TestSignalInputLimitClassificationEvalAndPreview(t *testing.T) {
 		err     error
 		limited bool
 	}{
-		{"candle", fmt.Errorf("%w: %w", binding.ErrInputLimit, &candle.InstanceError{Code: "input_limit", Message: privateMessage}), true},
-		{"ort", fmt.Errorf("%w: %w", binding.ErrInputLimit, &ort.Error{Kind: "input_limit", Message: privateMessage}), true},
+		{"typed input limit", fmt.Errorf("%w: %s", binding.ErrInputLimit, privateMessage), true},
 		{"untyped text", errors.New(privateMessage), false},
 	}
 	for _, tc := range cases {

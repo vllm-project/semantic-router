@@ -8,9 +8,10 @@ as a HIP / CUDA graph on its second use and replayed afterwards. Eager runs of
 a bucket shape compute exactly what its replay computes, so an answer never
 depends on whether its bucket was captured yet. Padded keys get exactly zero
 attention weight; padded queries' rows are dropped. Rows wider than the last
-width bucket or batches above ``MAX_GRAPH_TOKENS`` padded tokens are GPU-bound:
-they run eagerly on the packed layout, without padding (on MI325X a 512-token
-row is faster unpadded, 5.4 ms, than as a masked bucket replay, 5.8 ms).
+width bucket, batches above ``MAX_GRAPH_TOKENS`` padded tokens and buckets
+that pad too much (``pads_little``) are GPU-bound: they run eagerly on the
+packed layout (on MI325X a 512-token row is faster unpadded, 5.4 ms, than as a
+masked bucket replay, 5.8 ms).
 """
 
 from __future__ import annotations
@@ -27,6 +28,15 @@ WIDTH_BUCKETS = (16, 32, 48, 64, 96, 128, 192, 256, 384)
 MAX_GRAPH_TOKENS = 8192
 MAX_GRAPHS = 256
 CAPTURE_AFTER = 2
+# A padded grid pays while it pads at most this share of its real tokens, or
+# while it is at most LAUNCH_BOUND_TOKENS (launch overhead outweighs the padding).
+MAX_PADDING = 0.25
+LAUNCH_BOUND_TOKENS = 1024
+
+
+def pads_little(padded: int, real: int) -> bool:
+    """Whether ``padded`` grid positions for ``real`` tokens are worth one padded kernel."""
+    return padded <= LAUNCH_BOUND_TOKENS or padded <= (1 + MAX_PADDING) * real
 
 
 def bucket(value: int, buckets: Sequence[int]) -> int | None:
@@ -59,10 +69,12 @@ class EncoderGraphs:
         self.stats = {"captures": 0, "replays": 0, "eager": 0, "packed": 0, "failed": 0}
 
     def shape(self, lengths: Sequence[int]) -> tuple[int, int] | None:
-        """The ``(rows, width)`` bucket of a batch; None when it runs unpadded."""
+        """The ``(rows, width)`` bucket of a batch; None when it runs packed."""
         rows = bucket(len(lengths), ROW_BUCKETS)
         width = bucket(max(lengths), WIDTH_BUCKETS)
         if rows is None or width is None or rows * width > self.max_tokens:
+            return None
+        if not pads_little(rows * width, sum(lengths)):
             return None
         return rows, width
 

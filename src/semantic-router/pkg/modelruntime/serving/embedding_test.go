@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
@@ -22,11 +23,14 @@ import (
 // dimension, layer, 1, 1, ...] truncated to the requested dimension; a rerank
 // logit is the document's length.
 type embedServices struct {
-	mu      sync.Mutex
-	cards   map[string]modelservice.ModelCard
-	embeds  []modelservice.EmbedRequest
-	reranks []modelservice.RerankRequest
-	fail    string
+	mu       sync.Mutex
+	cards    map[string]modelservice.ModelCard
+	embeds   []modelservice.EmbedRequest
+	reranks  []modelservice.RerankRequest
+	fail     string
+	inFlight int
+	peak     int
+	hold     time.Duration
 }
 
 func (f *embedServices) Card(_ context.Context, deployment string) (modelservice.ModelCard, error) {
@@ -44,8 +48,16 @@ func (f *embedServices) Classify(context.Context, string, modelservice.ClassifyR
 func (f *embedServices) Embed(_ context.Context, deployment string, request modelservice.EmbedRequest) (modelservice.EmbedResponse, error) {
 	f.mu.Lock()
 	f.embeds = append(f.embeds, request)
-	fail := f.fail
+	fail, hold := f.fail, f.hold
+	f.inFlight++
+	f.peak = max(f.peak, f.inFlight)
 	f.mu.Unlock()
+	time.Sleep(hold)
+	defer func() {
+		f.mu.Lock()
+		f.inFlight--
+		f.mu.Unlock()
+	}()
 	full := f.cards[deployment].Embedding.Dimensions[0]
 	dimension := full
 	if request.Dimensions > 0 {
@@ -188,6 +200,38 @@ func TestFitsInputSharesTheViewsCall(t *testing.T) {
 	}
 	if _, err = embedding.WithOptions(fixed, embedding.Options{}).(embedding.InputChecker).FitsInput(ctx, long); !errors.Is(err, binding.ErrCapability) {
 		t.Fatalf("a provider that cannot tell reported %v", err)
+	}
+}
+
+// Inputs beyond the card's limit go out in concurrent batches, at most
+// eight at a time, and come back in input order.
+func TestEmbeddingBatchesRunConcurrentlyInOrder(t *testing.T) {
+	services := &embedServices{cards: map[string]modelservice.ModelCard{"emb-waves": embeddingCard("emb-waves", "text")}}
+	provider, err := New(services, nil).Embedding(context.Background(), embeddingSpec("emb-waves"), 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer provider.Close()
+	services.mu.Lock()
+	services.hold, services.peak = 20*time.Millisecond, 0
+	services.mu.Unlock()
+	texts := make([]string, 30)
+	for i := range texts {
+		texts[i] = strings.Repeat("w", i+1) + " waves"
+	}
+	vectors, err := provider.EmbedBatch(context.Background(), texts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, text := range texts {
+		if vectors[i][0] != float32(len(text)) {
+			t.Fatalf("vector %d belongs to another input: %v", i, vectors[i])
+		}
+	}
+	services.mu.Lock()
+	defer services.mu.Unlock()
+	if services.peak < 2 || services.peak > concurrentEmbedBatches {
+		t.Fatalf("%d batches in flight at once, want between 2 and %d", services.peak, concurrentEmbedBatches)
 	}
 }
 

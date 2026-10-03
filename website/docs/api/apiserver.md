@@ -619,7 +619,7 @@ Discover recipe-scoped plugin bindings, dependencies, and typed behavior preview
 
 ### diagnostics
 
-Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, NLI, and rerankers.
+Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, and rerankers.
 
 | Method | Path | Description |
 | --- | --- | --- |
@@ -630,7 +630,6 @@ Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, NLI, 
 | `POST` | `/api/v1/diagnostics/classify/user-feedback` | Classify user feedback type (satisfied, need_clarification, wrong_answer, want_different) |
 | `POST` | `/api/v1/diagnostics/classify/combined` | Perform combined classification (intent, PII, and security) |
 | `POST` | `/api/v1/diagnostics/classify/batch` | Batch classification with configurable task_type parameter |
-| `POST` | `/api/v1/diagnostics/nli` | Natural language inference classification for premise and hypothesis pairs |
 | `POST` | `/api/v1/diagnostics/embeddings` | Generate text, image, and audio embeddings |
 | `POST` | `/api/v1/diagnostics/similarity` | Calculate pairwise text similarity |
 | `POST` | `/api/v1/diagnostics/similarity/batch` | Calculate batch text-similarity matches |

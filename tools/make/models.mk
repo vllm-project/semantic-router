@@ -4,23 +4,20 @@
 
 ##@ Models
 
-test-model-selection-parity: ## Compare Python-trained selectors with the current Rust C ABI
-ifneq ($(PREBUILT_NATIVE_LIBS),1)
-	@cargo test --locked --manifest-path ml-binding/Cargo.toml
-endif
-	@python3 -m pytest -q src/training/model_selection/ml_model_selection/tests/test_native_parity.py
+test-model-selection-parity: ## Compare Python-trained selectors with the router's selectors
+	@python3 -m pytest -q src/training/model_selection/ml_model_selection/tests/test_selector_parity.py
 	@python3 -m pytest -q src/training/model_selection/ml_model_selection/tests/test_service_boundary.py
 
 .PHONY: test-model-selection-parity
 
 .PHONY: onnx-artifact-test
 onnx-artifact-test: ck-rewrite-deps ## Verify external ONNX weight packing with real CPU inference
-	@"$(AGENT_PYTHON)" -m unittest discover -s onnx-binding/scripts/artifact_tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s tools/models/onnx/artifact_tests -p 'test_*.py'
 
 test-training-contracts: harness-venv-install ## Run dependency-light model training contract tests
 	@"$(AGENT_PYTHON)" -m unittest src.training.control_plane.test_contracts
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/tests -p 'test_*.py'
-	@"$(AGENT_PYTHON)" -m unittest discover -s onnx-binding/scripts/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s tools/models/onnx/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/mmbert_32k/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/multimodal/small/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/multimodal/large/tests -p 'test_*.py'
@@ -167,43 +164,11 @@ qualify-candle-cpu: check-candle-qualification-source ## Generate a local CPU Ca
 			--output "$(abspath $(CANDLE_COMPAT_OUTPUT))"
 	@echo "Candle CPU compatibility receipt: $(CANDLE_COMPAT_OUTPUT)"
 
-# Test artifacts use the runtime registry's pinned releases, independent of the
-# example config's on-demand model graph. No Hugging Face IDs are duplicated here.
-MODEL_TEST_PROVIDER ?= candle
-MODEL_TEST_DEVICE ?= cpu
-MODEL_TEST_REPORT_DIR ?= $(CURDIR)/.agent-harness/model-tests/$(MODEL_TEST_PROVIDER)-cpu
+# The published-model contract and image calibration serve the runtime's pinned
+# releases; the prepared Omni Nano bundle is built once in the models directory.
 MODEL_TEST_MODELS_DIR ?= $(CURDIR)/$(MODELS_DIR)
+MODEL_TEST_REPORT_DIR ?= $(CURDIR)/.agent-harness/model-tests/image-calibration
 MODEL_TEST_MANIFEST ?= $(MODEL_TEST_REPORT_DIR)/models.json
-MULTIMODAL_TEST_REPORT_DIR ?= $(MODEL_TEST_REPORT_DIR)/multimodal
-MULTIMODAL_TEST_MANIFEST ?= $(MULTIMODAL_TEST_REPORT_DIR)/models.json
-PERF_MODEL_MANIFEST ?= $(CURDIR)/reports/models.json
-
-download-models-test: ## Provision every supported runtime model at its registered revision
-	@if [ "$(MODEL_TEST_PROVIDER)" = ort ]; then \
-		CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" python3 tools/ci/prepare_model_test_assets.py \
-			--variants nano mini --output "$(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts"; \
-	fi
-	@cd src/semantic-router && go run ./tools/model-test-assets \
-		--provider "$(MODEL_TEST_PROVIDER)" --suite runtime \
-		--output "$(MODEL_TEST_MODELS_DIR)" --manifest "$(MODEL_TEST_MANIFEST)" --download
-
-test-models: rust-ci download-models-test ## Require actual published-model CPU inference (MODEL_TEST_PROVIDER=candle|ort)
-	@export $(NATIVE_ENV) && python3 tools/ci/run_model_tests.py \
-		--manifest "$(MODEL_TEST_MANIFEST)" --output "$(MODEL_TEST_REPORT_DIR)" \
-		--device "$(MODEL_TEST_DEVICE)"
-	@if [ "$(MODEL_TEST_PROVIDER)" = candle ]; then \
-		$(MAKE) test-multimodal-models; \
-	fi
-
-download-models-multimodal-test: ## Provision the pinned multimodal compatibility checkpoint
-	@cd src/semantic-router && go run ./tools/model-test-assets \
-		--provider candle --suite multimodal \
-		--output "$(MODEL_TEST_MODELS_DIR)" --manifest "$(MULTIMODAL_TEST_MANIFEST)" --download
-
-test-multimodal-models: rust-ci download-models-multimodal-test ## Require existing text/image compatibility contracts on Candle CPU
-	@export $(NATIVE_ENV) && python3 tools/ci/run_model_tests.py --suite multimodal \
-		--manifest "$(MULTIMODAL_TEST_MANIFEST)" --output "$(MULTIMODAL_TEST_REPORT_DIR)" \
-		--device "$(MODEL_TEST_DEVICE)"
 
 download-models-image-calibration: ## Prepare the pinned Nano ONNX artifact and attest its manifest
 	@CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" python3 tools/ci/prepare_model_test_assets.py \
@@ -212,19 +177,21 @@ download-models-image-calibration: ## Prepare the pinned Nano ONNX artifact and 
 		--artifact "$(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts/vela-1.0-omni-nano" \
 		--manifest "$(MODEL_TEST_MANIFEST)"
 
-verify-image-routing-calibration: rust-ci download-models-image-calibration ## Verify shipped image thresholds and the multimodal profile against source-bound fixtures
-	@export $(NATIVE_ENV) && python3 tools/ci/image_calibration.py \
+verify-image-routing-calibration: download-models-image-calibration ## Verify shipped image thresholds and the multimodal profile against source-bound fixtures
+	@VLLM_SR_RUNTIME_COMMAND="$${VLLM_SR_RUNTIME_COMMAND:-$(AGENT_VENV)/bin/vllm-sr-runtime}" \
+		python3 tools/ci/image_calibration.py \
 		--manifest "$(MODEL_TEST_MANIFEST)" --output "$(MODEL_TEST_REPORT_DIR)"
 
 .PHONY: download-models-image-calibration verify-image-routing-calibration
 
-download-models-perf: ## Provision the canonical Vela classifier and embedding benchmark artifacts
-	@cd src/semantic-router && go run ./tools/model-test-assets \
-		--provider candle --suite perf --output "$(CURDIR)/$(MODELS_DIR)" \
-		--manifest "$(PERF_MODEL_MANIFEST)" --download
+test-models: download-models-image-calibration ## Run the published-model contract through the model runtime
+	@VLLM_SR_RUNTIME_COMMAND="$${VLLM_SR_RUNTIME_COMMAND:-$(AGENT_VENV)/bin/vllm-sr-runtime}" \
+		"$(AGENT_PYTHON)" tools/ci/run_model_tests.py \
+		--models-dir "$(MODEL_TEST_MODELS_DIR)" \
+		--omni "$(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts/vela-1.0-omni-nano" \
+		--output "$(MODEL_TEST_REPORT_DIR)"
 
-.PHONY: download-models-test test-models download-models-perf \
-	download-models-multimodal-test test-multimodal-models
+.PHONY: test-models
 
 download-mmbert: ## Download all mmBERT merged models for Rust inference
 	@echo "📦 Downloading mmBERT merged models from Hugging Face..."

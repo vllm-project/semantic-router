@@ -60,7 +60,7 @@ func TestGlobalServicesSharePeerResourceWithoutBorrowingDefault(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = local.Close() })
 	peerConfig := cfg.ConfigForRecipe(&config.RoutingRecipe{Name: "peer", Profile: config.RoutingProfile{Signals: config.Signals{EmbeddingRules: cfg.EmbeddingRules}}})
-	peer, err := PrepareOwnedRecipeEmbeddings(context.Background(), peerConfig, runtime)
+	peer, err := PrepareOwnedEmbeddings(context.Background(), peerConfig, runtime)
 	if err != nil {
 		t.Fatal(err)
 	}

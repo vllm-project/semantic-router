@@ -88,6 +88,47 @@ func TestVectorCacheCoalescesConcurrentRequests(t *testing.T) {
 	}
 }
 
+// ResolveAlone computes a key another caller is computing instead of waiting,
+// and still answers the keys that are cached or new.
+func TestVectorCacheResolveAloneDoesNotWait(t *testing.T) {
+	cache := NewVectorCache(1 << 20)
+	if _, err := cache.Resolve(context.Background(), []VectorKey{textKey("cached")}, func(context.Context, []int) ([]Embedded, error) {
+		return []Embedded{{Vector: []float32{3}}}, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	release := make(chan struct{})
+	owner := make(chan error, 1)
+	go func() {
+		_, err := cache.Resolve(context.Background(), []VectorKey{textKey("in flight")}, func(context.Context, []int) ([]Embedded, error) {
+			<-release
+			return []Embedded{{Vector: []float32{1}}}, nil
+		})
+		owner <- err
+	}()
+	time.Sleep(20 * time.Millisecond)
+	var computed []int
+	keys := []VectorKey{textKey("cached"), textKey("in flight"), textKey("new")}
+	vectors, err := cache.ResolveAlone(context.Background(), keys, func(_ context.Context, missing []int) ([]Embedded, error) {
+		computed = append(computed, missing...)
+		out := make([]Embedded, len(missing))
+		for j, i := range missing {
+			out[j] = Embedded{Vector: []float32{float32(10 + i)}}
+		}
+		return out, nil
+	})
+	close(release)
+	if err != nil || len(vectors) != 3 || vectors[0].Vector[0] != 3 || vectors[1].Vector[0] != 11 || vectors[2].Vector[0] != 12 {
+		t.Fatalf("ResolveAlone = %v, %v", vectors, err)
+	}
+	if len(computed) != 2 || computed[0] != 2 || computed[1] != 1 {
+		t.Fatalf("computed %v, want the new key then the one in flight elsewhere", computed)
+	}
+	if err := <-owner; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestVectorCacheRetriesAfterAnotherCallerFails(t *testing.T) {
 	cache := NewVectorCache(1 << 20)
 	started := make(chan struct{})

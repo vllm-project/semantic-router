@@ -88,8 +88,10 @@ func validateWindowTokens(input tasks.TextWindowsRequest, output tasks.WindowedT
 	if output.Result.TruncatedAt != nil || !output.Result.HasScores() {
 		return fmt.Errorf("token windows returned partial or unscored spans")
 	}
-	if err := tasks.ValidateWindowCoverage(output.ContentTokens, output.Windows, output.Result.Input); err != nil {
-		return err
+	if len(output.Windows) > 0 {
+		if err := tasks.ValidateWindowCoverage(output.ContentTokens, output.Windows, output.Result.Input); err != nil {
+			return err
+		}
 	}
 	return validateSpans(input.Text, output.Result)
 }

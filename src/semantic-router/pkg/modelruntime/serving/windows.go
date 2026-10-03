@@ -24,6 +24,9 @@ func (r *Runtime) SequenceWindows(ctx context.Context, spec config.ResolvedModel
 	}
 	return publish(ctx, r.sequenceWindows, t, capability, func(ctx context.Context, _ io.Closer, input tasks.TextWindowsRequest) (tasks.WindowedLabelDistribution, error) {
 		result, err := r.classifyWindows(ctx, t, window, input, options)
+		if err == nil {
+			err = requireWindowValues(result)
+		}
 		if err != nil {
 			return tasks.WindowedLabelDistribution{}, err
 		}
@@ -51,6 +54,9 @@ func (r *Runtime) scoreWindowsTask(ctx context.Context, spec config.ResolvedMode
 	}
 	return publish(ctx, r.scoreWindows, t, capability, func(ctx context.Context, _ io.Closer, input tasks.TextWindowsRequest) (tasks.WindowedLabelScores, error) {
 		result, err := r.classifyWindows(ctx, t, window, input, options)
+		if err == nil {
+			err = requireWindowValues(result)
+		}
 		if err != nil {
 			return tasks.WindowedLabelScores{}, err
 		}
@@ -81,13 +87,16 @@ func (r *Runtime) TokenWindows(ctx context.Context, spec config.ResolvedModelBin
 		if err != nil {
 			return tasks.WindowedTokenClassification{}, err
 		}
+		if len(result.Windows) == 0 && (result.Input == nil || result.Input.Windows < 1) {
+			return tasks.WindowedTokenClassification{}, fmt.Errorf("%w: windowed result reports no windows", binding.ErrInvalidResult)
+		}
 		spans, err := tokenResult(input.Text, result)
 		if err != nil {
 			return tasks.WindowedTokenClassification{}, err
 		}
-		out := tasks.WindowedTokenClassification{Result: spans, ContentTokens: contentTokens(result.Windows), Windows: make([][2]int, len(result.Windows))}
-		for i, item := range result.Windows {
-			out.Windows[i] = [2]int{item.Start, item.End}
+		out := tasks.WindowedTokenClassification{Result: spans, ContentTokens: contentTokens(result.Windows)}
+		for _, item := range result.Windows {
+			out.Windows = append(out.Windows, [2]int{item.Start, item.End})
 		}
 		return out, nil
 	}, windowWarmup(window))
@@ -123,19 +132,22 @@ func (r *Runtime) prepareWindows(ctx context.Context, spec config.ResolvedModelB
 }
 
 // classifyWindows runs one document; the request must keep the prepared
-// geometry, and the result must report its windows.
+// geometry.
 func (r *Runtime) classifyWindows(ctx context.Context, t *target, prepared, input tasks.TextWindowsRequest, options classifyOptions) (modelservice.ClassifyResult, error) {
 	if input.Size != prepared.Size || input.Overlap != prepared.Overlap {
 		return modelservice.ClassifyResult{}, fmt.Errorf("%w: window settings differ from the prepared consumer", binding.ErrInvalidInput)
 	}
-	result, err := r.classify(ctx, t, modelservice.ClassifyInput{Text: input.Text}, options)
-	if err != nil {
-		return result, err
-	}
+	return r.classify(ctx, t, modelservice.ClassifyInput{Text: input.Text}, options)
+}
+
+// requireWindowValues checks that a sequence or score head returned every
+// window's values; routing policy reduces them. Token heads merge their spans
+// in the runtime and report only the window count.
+func requireWindowValues(result modelservice.ClassifyResult) error {
 	if len(result.Windows) == 0 {
-		return result, fmt.Errorf("%w: windowed result reports no windows", binding.ErrInvalidResult)
+		return fmt.Errorf("%w: windowed result reports no windows", binding.ErrInvalidResult)
 	}
-	return result, nil
+	return nil
 }
 
 func contentTokens(windows []modelservice.ClassifyWindow) int {
