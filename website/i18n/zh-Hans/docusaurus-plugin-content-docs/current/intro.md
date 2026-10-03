@@ -51,7 +51,7 @@ vLLM Semantic Router 不替代网关或模型服务。Envoy 继续承载流量�
 
 ## 从你想做的事开始
 
-- **在本地运行：** 按[快速开始](/zh-Hans/docs/installation)操作，并通过 Router 发送一次请求。
+- **在本地运行：** 按[快速开始](/zh-hans/docs/installation)操作，并通过 Router 发送一次请求。
 - **找到适合工作负载的模式：** 浏览[使用场景](overview/use-cases)，覆盖云、数据中心、边缘和企业部署。
 - **理解系统：** 阅读[系统概览](overview/semantic-router-overview)和[路由流水线](overview/signal-driven-decisions)。
 - **打造稳定的模型体验：** 了解[入口与配方](tutorials/global/entrypoints-and-recipes)如何把共享模型池变成面向目标的虚拟模型。

@@ -87,4 +87,4 @@ Router 可以考虑请求语义和已配置的运行时观测；它不替代后�
 - [使用场景](use-cases)：实用部署模式。
 - [路由流水线](signal-driven-decisions)：策略分层。
 - [Mixture of Models](mom-model-family)：虚拟模型与多模型执行。
-- [快速开始](/zh-Hans/docs/installation)：运行本地协议栈。
+- [快速开始](/zh-hans/docs/installation)：运行本地协议栈。
