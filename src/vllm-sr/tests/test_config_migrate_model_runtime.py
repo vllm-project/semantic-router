@@ -407,12 +407,14 @@ def test_endpoint_hallucination_detector_is_left_to_its_service():
         "include_explanation": True,
         "model_id": "KRLabsOrg/lettucedect-v2-qwen-2b",
     }
-    migrated, _ = _migrate(
+    migrated, notes = _migrate(
         _config(
             {
                 "model_catalog": {
                     "modules": {
-                        "hallucination_mitigation": {"detector": dict(detector)}
+                        "hallucination_mitigation": {
+                            "detector": {**detector, "enable_nli_filtering": True}
+                        }
                     }
                 }
             }
@@ -423,6 +425,45 @@ def test_endpoint_hallucination_detector_is_left_to_its_service():
         _catalog(migrated)["modules"]["hallucination_mitigation"]["detector"]
         == detector
     )
+    assert _note_paths(notes) == {
+        "global.model_catalog.modules.hallucination_mitigation.detector"
+        ".enable_nli_filtering"
+    }
+
+
+def test_every_field_the_router_rejects_leaves_the_configuration():
+    migrated, _ = _migrate(
+        _config(
+            {
+                "model_catalog": {
+                    "deployments": {
+                        "served": {
+                            "provider": "model_runtime",
+                            "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
+                            "precision": "fp16",
+                            "custom_ops_profile": "none",
+                        }
+                    },
+                    "modules": {
+                        "prompt_guard": {"model_type": "modernbert"},
+                        "hallucination_mitigation": {
+                            "nli_model": {"model_id": "models/mom-halugate-explainer"}
+                        },
+                    },
+                },
+                "stores": {"response_cache": {"polarity_guard": {"mode": "lexical"}}},
+            }
+        )
+    )
+
+    catalog = _catalog(migrated)
+    assert catalog["deployments"]["served"] == {
+        "provider": "model_runtime",
+        "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
+        "profile": "max_speed",
+    }
+    assert catalog["modules"] == {"prompt_guard": {}, "hallucination_mitigation": {}}
+    assert migrated["global"]["stores"]["response_cache"] == {}
 
 
 def test_embedding_backends_and_retired_embedders_move_to_the_runtime():
@@ -471,7 +512,7 @@ def test_embedding_backends_and_retired_embedders_move_to_the_runtime():
     }
     stores = migrated["global"]["stores"]
     assert stores["response_cache"]["embedding_model"] == "mmbert"
-    assert stores["response_cache"]["polarity_guard"] == {"mode": "lexical"}
+    assert "polarity_guard" not in stores["response_cache"]
     assert stores["memory"]["embedding_model"] == "qwen3"
     assert sum("re-embedded" in note.message for note in notes) >= 3
 
@@ -675,6 +716,8 @@ def _removed_values(value, path=""):
             if key in {
                 "explainer",
                 "hallucination_explainer",
+                "nli_model",
+                "polarity_guard",
                 "use_nli",
                 "nli",
                 "nli_contradiction_penalty",
