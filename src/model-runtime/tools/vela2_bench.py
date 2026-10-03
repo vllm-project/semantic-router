@@ -3,12 +3,15 @@
     python3 tools/vela2_bench.py --package DIR --device cpu|rocm:0 --output OUT.json
         [--sides runtime,runtime-shared,runtime-batching,reference,reference-onnx]
         [--tokens 32,128,512,2048] [--requests 40] [--warmup 5] [--concurrency 1,8]
+        [--prompts PROMPTS.jsonl]
 
 Workload: the router's signals as one Vela 2.0 request (domain over 14 subject areas,
 jailbreak, PII spans, fact-check, feedback, modality and safety categories) over a
 prompt of about N tokens; every request has its own prompt. After warm-up, each side
 answers the same requests from ``concurrency`` client threads: latency is per request
-(p50, p95, mean), throughput is requests per second over the run.
+(p50, p95, mean), throughput is requests per second over the run. ``--prompts`` runs
+given prompts (``{"id", "text"}`` lines) instead, and records each one's latency at
+concurrency 1, to pair with another runtime's per-prompt latencies.
 
 Sides:
 - ``runtime``: the family on the exact profile through the runtime's scheduler;
@@ -154,21 +157,21 @@ def summary(latencies: list[float], wall: float) -> dict[str, float]:
     }
 
 
-def drive(call: Any, states: list[Any], concurrency: int) -> dict[str, float]:
-    latencies: list[float] = []
-    lock = threading.Lock()
+def drive(
+    call: Any, states: list[Any], concurrency: int
+) -> tuple[dict[str, float], list[float]]:
+    """The run's summary and each request's latency (seconds), in ``states`` order."""
+    latencies = [0.0] * len(states)
 
-    def one(state: Any) -> None:
+    def one(index: int) -> None:
         started = time.perf_counter()
-        call(state)
-        elapsed = time.perf_counter() - started
-        with lock:
-            latencies.append(elapsed)
+        call(states[index])
+        latencies[index] = time.perf_counter() - started
 
     started = time.perf_counter()
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
-        list(pool.map(one, states))
-    return summary(latencies, time.perf_counter() - started)
+        list(pool.map(one, range(len(states))))
+    return summary(latencies, time.perf_counter() - started), latencies
 
 
 def runtime_side(model: Any, profile: str, execute: Any) -> tuple[Any, Any]:
@@ -205,6 +208,7 @@ def main() -> int:
     parser.add_argument("--warmup", type=int, default=5)
     parser.add_argument("--concurrency", default="1")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--prompts", type=Path)
     args = parser.parse_args()
     sides = args.sides.split(",")
     lengths = [int(x) for x in args.tokens.split(",")]
@@ -231,19 +235,44 @@ def main() -> int:
         else:
             engine, _ = execute(lambda: load_reference(args.package, args.device))
             callers[side] = _reference_caller(engine, execute)
-    for tokens in lengths:
-        texts = prompts(
-            model.tokens.encode, tokens, args.requests + args.warmup, args.seed + tokens
-        )
+    encode = model.tokens.encode
+    if args.prompts:
+        rows = [
+            json.loads(line)
+            for line in args.prompts.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        warm = prompts(encode, 64, args.warmup, args.seed)
+        workloads = [
+            (
+                "prompts",
+                warm,
+                [row["text"] for row in rows],
+                [row["id"] for row in rows],
+            )
+        ]
+    else:
+        workloads = []
+        for tokens in lengths:
+            texts = prompts(
+                encode, tokens, args.requests + args.warmup, args.seed + tokens
+            )
+            workloads.append((tokens, texts[: args.warmup], texts[args.warmup :], None))
+    for tokens, warm, texts, ids in workloads:
         states = [{"request": text} for text in texts]
         for side in sides:
-            for _ in states[: args.warmup]:
-                callers[side](_)
+            for text in warm:
+                callers[side]({"request": text})
             for clients in concurrency:
-                result = drive(callers[side], states[args.warmup :], clients)
+                result, latencies = drive(callers[side], states, clients)
                 result.update(side=side, tokens=tokens, concurrency=clients)
-                runs.append(result)
                 print(json.dumps(result), flush=True)
+                if ids and clients == 1:
+                    result["latency_ms"] = {
+                        key: round(1000 * value, 3)
+                        for key, value in zip(ids, latencies, strict=True)
+                    }
+                runs.append(result)
     args.output.write_text(
         json.dumps(
             {"package": str(args.package), "device": args.device, "runs": runs},
