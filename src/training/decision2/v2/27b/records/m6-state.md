@@ -1,6 +1,37 @@
 # ~27B M6 state (resume file)
 
-## Continuation #7 (07d87124, from 23:42Z on 10-02) — read this first
+## Continuation #7 FINAL (03:10Z on 10-03): USER STOP — all 27B training stopped; nothing runs — read this first
+
+- **USER 2026-10-03 11:00 UTC+8 (03:00Z):** "我觉得所有的训练任务可以停止了 现在的 focus 就是推理优化和提交 index".
+  COORDINATION 11:00: owners stop every training job and candidate Index / gate chain, release their leases, write
+  the final state and end their run; released versions stay as they are.
+- **Done at 03:04–03:07Z** (with the coordinator's own stops at ≈ 03:03Z): every workstation waiter stopped
+  (`xarm-wait`, `score-wait`, `cand.sh X7-4ARM`, `handover`, two `launch-wait`); on nodes A / B / C / D / F every 27B
+  relay, Index loop, mlx watcher, arm driver, training container and 27B IX1 shard stopped
+  (`/data/dev2/tmp/27b-stop.sh`); every 27B lease written `status=released` (node A GPU1–7, node B GPU0 / 1 / 4 / 6,
+  node D GPU0–7, node F GPU2–7; node C GPU1 released by the coordinator). Checked: no 27B process or container left.
+- **Vega-27B is unchanged:** `main` = `9b067a95` (phase A + opt-in switch, weights M6-IBxIB2-m50 `58469731…`, Index
+  56.47, global #3). No release in this continuation.
+- **State at the stop** (step / total, BEST so far; checkpoints stay on disk, resumable exactly with `M8_RESUME=1`):
+  - M7: IB14ML s1 / s2 **complete** (BEST 2944 / 3680, relayed, souped); IB124ML s1 / s2 / s3 at 6847 / 6761 / 6772
+    of 7989 (BEST 5994 / 4995 / 5994).
+  - M8: IB-s3 4704 / 5081, IB2-s3 4643 / 6614 (node B); IB14 s4 / s5 4626 / 4618 of 5247, IB14ML-s3 4618 / 5882
+    (node D); IB-s4 3375 / 5081, IB2-s4 4298 / 6614, IB124 s4 / s5 4352 / 4351 of 6779 (node F).
+  - M9: IB / IB2 / IB1ML / IB12ML s5 at 2309 / 2333 / 2277 / 2306; IB-lrh / IB2-lrh s5 at 1815 / 1819; s6 seeds
+    IB-lrh 1051, IB2-lrh 986, IB12ML 1065, IB1ML 946; amendment 4 IB14ML-lrh-s5 192, IB124ML-lrh-s5 202.
+  - Candidates: `X7-IBxIB2xIB14ML` soup (rank 768, `b42d598a…`) staged on node D, parity 86 / 86, audit clean; its
+    Index run stopped with shards 0–1 complete and 2–3 partial (no read). `M7-IB14ML` soup staged on node D, audit
+    clean (a20ib14ml 0 item rows, planted 200 / 200), no Index run. No M8 / M9 candidate exists.
+- **GPU-h this continuation (wall-clock, 23:42Z–03:04Z; the stopped stages wrote no receipts):** seeds ≈ 76 (M7
+  ≈ 12, M8 ≈ 30, M9 ≈ 33) + X7 Index ≈ 3.6 + parity ≈ 0.2. Milestone totals (wall-clock since launch): M7 ≈ 89 (+ X7
+  Index ≈ 4), M8 ≈ 117, M9 ≈ 48 of 350 approved.
+- **Ready if 27B optimization ever resumes** (all pushed): successor release ops on `9b067a95`
+  (`dev2-27b-succ-2026-10-03`, `CHOICE = None`); M8 amendment 2, M9 amendments 2–4 (half-LR candidates, read order);
+  capped-seed relays; `cand.sh` / `idx-wait.sh` / `score-wait.sh` / `xarm-wait.sh` in `/tmp/d2w` (workstation).
+  The strongest untested lever is the half-LR soups (`X9-IBLRH`, `X9-LRH2`, `X9-LRHALL`); their seeds would resume
+  from their saves. X7's read would need its 6 remaining shards (≈ 9 GPU-h, IX1 `launch.sh resume`).
+
+## Continuation #7 (07d87124, from 23:42Z on 10-02)
 
 - **Assignment:** COORDINATION 2026-10-03 07:45 and the parent's brief: 27B owner and the only Vega model publisher.
   Goal: Vega-27B #1 in its class and globally on the Index (above Decider chat · Gemma-4-31B and Surogate Rune
