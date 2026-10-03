@@ -1,7 +1,7 @@
 """Parity of the vela2 family with the Vela 2.0 packages' own engine (``vela2_inference.py``).
 
     python3 tools/vela2_parity.py --package DIR --output OUT.json [--requests REQUESTS.jsonl | --generate N]
-        [--device cpu|rocm:0|cuda:0] [--seed 0] [--answers OURS.jsonl]
+        [--device cpu|rocm:0|cuda:0] [--seed 0] [--answers OURS.jsonl] [--approximate]
 
 The reference is the package's engine, imported from the package directory by this tool only (the runtime
 never imports package code), on the same device class: FP32 on CPU; on GPUs the engine's defaults (BF16
@@ -17,6 +17,8 @@ the exact profile. Per request the tool compares:
 ``--generate N`` builds N synthetic requests (seeded): router-style questions, every question type, presets,
 typed JSON states with ``over``, thresholds, open span labels, long parts that are windowed or cut, Unicode.
 The design's bar (section 17): decisions and span sets identical; max |dp| <= 1e-4 on CPU, <= 0.02 on GPUs.
+``--approximate`` answers through the approximate batches instead (packed trees and sequences), for the
+accuracy record of the faster profiles.
 """
 
 from __future__ import annotations
@@ -253,6 +255,27 @@ def load_reference(package: Path, device: str) -> Any:
     return vela2_inference.Vela2(str(package), device=torch_device), vela2_inference
 
 
+def pin_choices(package: Path, device: str) -> bool:
+    """Pin a built-in model's FLA kernel choices for this process, as the runtime does at load.
+
+    Must run before anything imports FLA; both sides then run the same kernels.
+    """
+    from vllm_sr_runtime.accel.autotune import pin_kernel_choices
+
+    accelerator = ACCELERATORS[device.split(":", maxsplit=1)[0]]()
+    info = accelerator.devices()[int(device.split(":")[1]) if ":" in device else 0]
+    family = Vela2Family()
+    choices = family.kernel_choices(family.verify(PackageRef(package)), info)
+    return bool(choices) and pin_kernel_choices(choices) is not None
+
+
+def device_executor(device: str) -> Any:
+    """Runs work where the device wants it: the process's one CPU thread, inline on GPUs."""
+    accelerator = ACCELERATORS[device.split(":", maxsplit=1)[0]]()
+    info = accelerator.devices()[int(device.split(":")[1]) if ":" in device else 0]
+    return lambda work: accelerator.execute(info, work)
+
+
 def load_runtime(package: Path, device: str) -> Any:
     accelerator = ACCELERATORS[device.split(":", maxsplit=1)[0]]()
     devices = accelerator.devices()
@@ -340,10 +363,11 @@ def reference_answer(
 
 
 def answer(
-    model: Any, state: Any, questions: dict[str, Any]
+    model: Any, state: Any, questions: dict[str, Any], approximate: bool = False
 ) -> tuple[dict[str, Any], Any]:
     plan = model.plan(state, questions)
-    results = model.run(plan.items) if plan.items else []
+    run = model.run_approximate if approximate else model.run
+    results = run(plan.items) if plan.items else []
     response = model.finish_surface(
         SurfacePlan("decisions", plan.items, plan.input_tokens, plan), results
     )
@@ -659,6 +683,11 @@ def main() -> int:
     parser.add_argument(
         "--answers", type=Path, help="write both sides' responses as JSONL"
     )
+    parser.add_argument(
+        "--approximate",
+        action="store_true",
+        help="answer through the approximate batches (packed trees and sequences)",
+    )
     args = parser.parse_args()
     requests = (
         [
@@ -673,6 +702,7 @@ def main() -> int:
 
     torch.manual_seed(0)
     started = time.time()
+    pinned = pin_choices(args.package, args.device)
     engine, module = load_reference(args.package, args.device)
     model = load_runtime(args.package, args.device)
     load_s = time.time() - started
@@ -684,7 +714,7 @@ def main() -> int:
         record: dict[str, Any] = {"id": request["id"]}
         try:
             started = time.perf_counter()
-            ours, plan = answer(model, state, questions)
+            ours, plan = answer(model, state, questions, args.approximate)
             runtime_s = time.perf_counter() - started
             started = time.perf_counter()
             try:
@@ -700,24 +730,37 @@ def main() -> int:
                 if exc.type != "too_long" or not failed:
                     raise
                 record["too_long"] = failed
-                ours = drop_questions(ours, failed)
-                kept = {k: q for k, q in questions.items() if k not in failed}
+                questions = {k: q for k, q in questions.items() if k not in failed}
+                kept, plan = (
+                    answer(model, state, questions, args.approximate)
+                    if questions
+                    else ({"answers": {}}, None)
+                )
+                record["rows_isolated"] = (
+                    drop_questions(ours, failed)["answers"] == kept["answers"]
+                )
+                ours = kept
                 reference = (
-                    reference_answer(engine, state, kept, model.info.id)
-                    if kept
+                    reference_answer(engine, state, questions, model.info.id)
+                    if questions
                     else {"answers": {}}
                 )
             reference_s = time.perf_counter() - started
+            record.update(compare(reference, ours))
+            record["rendering"] = (
+                rendering_diffs(
+                    reference_rows(engine, module, state, questions),
+                    runtime_rows(plan),
+                )
+                if questions
+                else []
+            )
         except Exception as exc:  # recorded per request, the run goes on
             record["error"] = f"{type(exc).__name__}: {exc}"
             records.append(record)
             continue
         timing["reference_s"] += reference_s
         timing["runtime_s"] += runtime_s
-        record.update(compare(reference, ours))
-        record["rendering"] = rendering_diffs(
-            reference_rows(engine, module, state, questions), runtime_rows(plan)
-        )
         records.append(record)
         print(
             json.dumps(
@@ -744,8 +787,11 @@ def main() -> int:
         "identical": sum(r["identical"] for r in ok),
         "decision_changes": sum(bool(r["decision_changes"]) for r in ok),
         "rendering_mismatches": sum(bool(r["rendering"]) for r in ok),
+        "rows_not_isolated": [r["id"] for r in ok if r.get("rows_isolated") is False],
         "max_abs_diff": max((r["max_abs_diff"] for r in ok), default=0.0),
         "bar": bar,
+        "kernel_choices": "pinned" if pinned else "autotuned in process",
+        "path": "approximate" if args.approximate else "exact",
         "load_s": round(load_s, 1),
         **{k: round(v, 2) for k, v in timing.items()},
         "records": records,
@@ -754,6 +800,7 @@ def main() -> int:
         not summary["errors"]
         and summary["decision_changes"] == 0
         and summary["rendering_mismatches"] == 0
+        and not summary["rows_not_isolated"]
         and summary["max_abs_diff"] <= bar
     )
     args.output.write_text(

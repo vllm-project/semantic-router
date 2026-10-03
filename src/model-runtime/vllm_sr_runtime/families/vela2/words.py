@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from itertools import pairwise
 
 import numpy as np
 
@@ -81,32 +82,46 @@ def words_of(text: str, token_offsets: np.ndarray | None) -> Words:
     offsets = np.asarray(token_offsets)
     starts, ends = offsets[:, 0], offsets[:, 1]
     valid = ends > starts
+    count = len(offsets)
     reach = np.maximum.accumulate(np.where(valid, ends, -1))
-    word_offsets, first = [], []
-    for start, end in units:
-        token = int(np.searchsorted(reach, start, side="right"))
-        while token < len(offsets) and not valid[token]:
-            token += 1
-        if token < len(offsets) and starts[token] < end:
-            word_offsets.append((start, end))
-            first.append(token)
-    return Words(
-        np.asarray(word_offsets, np.int32).reshape(-1, 2),
-        np.asarray(first, np.int32),
+    spans = np.asarray(units, np.int64).reshape(-1, 2)
+    # The first token whose running end passes the word start, moved on to the next non-empty token.
+    token = np.searchsorted(reach, spans[:, 0], side="right")
+    nonempty = np.nonzero(valid)[0]
+    position = np.searchsorted(nonempty, token)
+    token = np.where(
+        position < len(nonempty),
+        (
+            nonempty[np.minimum(position, max(len(nonempty) - 1, 0))]
+            if len(nonempty)
+            else count
+        ),
+        count,
     )
+    covered = token < count
+    covered[covered] &= starts[token[covered]] < spans[covered, 1]
+    return Words(spans[covered].astype(np.int32), token[covered].astype(np.int32))
 
 
-def _units(text: str) -> np.ndarray:
-    unit = np.full(len(text) + 1, -1, dtype=np.int64)
-    for index, match in enumerate(_UNIT.finditer(text)):
-        unit[match.start() : match.end()] = index
-    return unit
-
-
-def _first_nonspace(text: str, start: int, end: int) -> int:
-    while start < end and text[start].isspace():
-        start += 1
-    return start
+def _word_units(text: str, offsets: np.ndarray) -> np.ndarray:
+    """The unit (of ``_UNIT``) each word's first non-space character belongs to, -1 for none."""
+    bounds = np.asarray(
+        [match.span() for match in _UNIT.finditer(text)], np.int64
+    ).reshape(-1, 2)
+    first = offsets[:, 0].astype(np.int64)
+    for index in np.nonzero([text[a].isspace() for a in first.tolist()])[0]:
+        a, b = int(offsets[index, 0]), int(offsets[index, 1])
+        while a < b and text[a].isspace():
+            a += 1
+        first[index] = a
+    unit = np.searchsorted(bounds[:, 0], first, side="right") - 1
+    inside = (
+        (unit >= 0)
+        & (first < offsets[:, 1])
+        & (first < len(text))
+        & (first < bounds[np.maximum(unit, 0), 1] if len(bounds) else False)
+    )
+    return np.where(inside, unit, -1)
 
 
 def trim(text: str, start: int, end: int) -> tuple[int, int]:
@@ -136,79 +151,52 @@ def decode_spans(
 ) -> list[dict[str, object]]:
     """Labelled spans from word x label probabilities (the packages' word readout decoder).
 
-    Each word takes its most probable label when that probability exceeds the
-    threshold (in float32, as the packages compare). Inside one unit of the
-    text, conflicting labels are resolved by summed probability and gaps
-    between words of the same label are filled; consecutive words with the
-    same label form a span, whose probability is the mean over its words.
+    Each word (a non-empty span of ``words_of``) takes its most probable label
+    when that probability exceeds the threshold (in float32, as the packages
+    compare). Inside one unit of the text, conflicting labels are resolved by
+    summed probability and gaps between labelled words are filled; only units
+    that hold a labelled word can change. Consecutive words with the same label
+    form a span, whose probability is the mean over its words.
     """
     probs = np.asarray(probabilities, dtype=np.float32)
     offsets = np.asarray(offsets)
     count = len(offsets)
     if count == 0:
         return []
-    valid = offsets[:, 1] > offsets[:, 0]
     best = probs.argmax(1)
     best_probability = probs[np.arange(count), best]
-    label = np.where(valid & (best_probability > threshold), best, -1)
-    units = _units(text)
-    word_unit = np.full(count, -1, dtype=np.int64)
-    for index in range(count):
-        if not valid[index]:
+    label = np.where(best_probability > threshold, best, -1)
+    labelled = np.nonzero(label >= 0)[0]
+    if not len(labelled):
+        return []
+    unit = _word_units(text, offsets)
+    change = np.ones(count, bool)
+    change[1:] = unit[1:] != unit[:-1]
+    run_start = np.nonzero(change)[0]
+    run_end = np.append(run_start[1:], count)
+    run_of = np.cumsum(change) - 1
+    for run in np.unique(run_of[labelled]):
+        first, stop = int(run_start[run]), int(run_end[run])
+        if unit[first] < 0:
             continue
-        start, end = int(offsets[index, 0]), int(offsets[index, 1])
-        first = _first_nonspace(text, start, end)
-        word_unit[index] = units[first] if first < end and first < len(text) else -1
-    index = 0
-    while index < count:
-        if word_unit[index] < 0:
-            index += 1
-            continue
-        last = index
-        while last + 1 < count and (
-            word_unit[last + 1] == word_unit[index] or not valid[last + 1]
-        ):
-            last += 1
-        members = [i for i in range(index, last + 1) if valid[i]]
-        labelled = [i for i in members if label[i] >= 0]
-        if labelled:
-            if len({int(label[i]) for i in labelled}) > 1:
-                votes: dict[int, float] = {}
-                for i in labelled:
-                    votes[int(label[i])] = votes.get(int(label[i]), 0.0) + float(
-                        best_probability[i]
-                    )
-                winner = max(votes, key=votes.get)
-                for i in labelled:
-                    label[i] = winner
-            for value in {int(label[i]) for i in labelled}:
-                positions = [i for i in labelled if label[i] == value]
-                for i in members:
-                    if positions[0] < i < positions[-1] and label[i] < 0:
-                        label[i] = value
-        index = last + 1
-    runs: list[list] = []
-    current: list | None = None
-    for index in range(count):
-        if not valid[index]:
-            continue
-        value = int(label[index])
-        if current is not None and value == current[0]:
-            current[2] = int(offsets[index, 1])
-            current[3].append(index)
-            continue
-        if current is not None:
-            runs.append(current)
-        current = (
-            [value, int(offsets[index, 0]), int(offsets[index, 1]), [index]]
-            if value >= 0
-            else None
-        )
-    if current is not None:
-        runs.append(current)
+        members = [i for i in range(first, stop) if label[i] >= 0]
+        values = [int(label[i]) for i in members]
+        if len(set(values)) > 1:
+            votes: dict[int, float] = {}
+            for i, value in zip(members, values, strict=True):
+                votes[value] = votes.get(value, 0.0) + float(best_probability[i])
+            winner = max(votes, key=votes.get)
+            label[members] = winner
+        low, high = members[0], members[-1]
+        gap = label[low + 1 : high] < 0
+        label[low + 1 : high][gap] = label[low]
+    edges = np.flatnonzero(np.diff(np.concatenate(([-2], label, [-2]))) != 0)
     spans = []
-    for value, first, last, members in runs:
-        start, end = trim(text, first, last)
+    for begin, stop in pairwise(edges):
+        value = int(label[begin])
+        if value < 0:
+            continue
+        start, end = trim(text, int(offsets[begin, 0]), int(offsets[stop - 1, 1]))
         if end <= start:
             continue
         spans.append(
@@ -216,7 +204,7 @@ def decode_spans(
                 "start": start,
                 "end": end,
                 "label": labels[value],
-                "probability": float(np.mean(probs[members, value])),
+                "probability": float(np.mean(probs[list(range(begin, stop)), value])),
             }
         )
     return spans
