@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-`tool_selection` 是一个决策插件，控制已匹配路由如何选择工具。 
+`tool_selection` 是一个决策插件，控制已匹配路由如何选择工具。
 它支持两种模式：
 
 - `add`：从工具数据库检索工具

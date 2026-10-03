@@ -25,10 +25,6 @@
               "reasoning_tokens": 0
             },
             "prompt_tokens": 2,
-            "prompt_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
-            },
             "total_tokens": 3
           }
         },
@@ -65,10 +61,6 @@
               "reasoning_tokens": 0
             },
             "prompt_tokens": 2,
-            "prompt_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
-            },
             "total_tokens": 3
           }
         }
@@ -189,10 +181,6 @@
               "reasoning_tokens": 0
             },
             "prompt_tokens": 2,
-            "prompt_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
-            },
             "total_tokens": 3
           }
         }
@@ -223,10 +211,6 @@
               "reasoning_tokens": 0
             },
             "prompt_tokens": 2,
-            "prompt_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
-            },
             "total_tokens": 3
           }
         }
@@ -257,10 +241,6 @@
               "reasoning_tokens": 0
             },
             "prompt_tokens": 2,
-            "prompt_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
-            },
             "total_tokens": 3
           }
         }
@@ -291,10 +271,6 @@
               "reasoning_tokens": 0
             },
             "prompt_tokens": 2,
-            "prompt_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
-            },
             "total_tokens": 3
           }
         },
@@ -331,10 +307,6 @@
               "reasoning_tokens": 0
             },
             "prompt_tokens": 2,
-            "prompt_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
-            },
             "total_tokens": 3
           }
         }
@@ -375,10 +347,6 @@
               "reasoning_tokens": 0
             },
             "prompt_tokens": 2,
-            "prompt_tokens_details": {
-              "cache_write_tokens": 0,
-              "cached_tokens": 0
-            },
             "total_tokens": 3
           }
         }

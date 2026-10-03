@@ -415,6 +415,11 @@ func TestValidateUsageRequiresExplicitStateAndSafeTotals(t *testing.T) {
 			InputUncached: authoritativeTestCount(1), InputCacheRead: authoritativeTestCount(1),
 			InputCacheWrite: authoritativeTestCount(0),
 		},
+		"partial breakdown above total": {
+			State: UsageAvailable, InputTotal: authoritativeTestCount(4),
+			InputCacheRead:  authoritativeTestCount(5),
+			InputCacheWrite: TokenCount{Provenance: UsageUnknown},
+		},
 		"overflow": {
 			State: UsageAvailable, Total: authoritativeTestCount(1),
 			InputTotal: authoritativeTestCount(math.MaxInt64), OutputTotal: authoritativeTestCount(1),
