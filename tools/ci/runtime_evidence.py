@@ -6,12 +6,14 @@ from __future__ import annotations
 import argparse
 import json
 import platform
+import subprocess
 import sys
 from http import HTTPStatus
 from pathlib import Path
 
 from image_calibration import evidence as image_calibration_evidence
 from riscv_evidence import evidence as riscv_evidence
+from run_model_tests import required_inventory
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -25,6 +27,45 @@ def host_platform() -> str:
         platform.machine(), platform.machine()
     )
     return platform.system().lower() + "/" + arch
+
+
+def models_evidence(directory: Path) -> dict:
+    report = read(directory / "results.json")
+    actual_sha = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], text=True
+    ).strip()
+    if report["source_sha"] != actual_sha:
+        raise ValueError("Model evidence source differs from the checked-out commit")
+    if (report["runtime"], report["device"]) != ("model-runtime", "cpu"):
+        raise ValueError("Model suite qualifies the model runtime on CPU only")
+    inventory = [
+        (suite["package"], name)
+        for suite in report["suites"]
+        for name in suite["expected"]
+    ]
+    if len(inventory) != len(set(inventory)) or set(inventory) != required_inventory():
+        raise ValueError(
+            "Model evidence case inventory differs from the required inventory"
+        )
+    cases, expected = [], []
+    for suite in report["suites"]:
+        prefix = suite["package"] + ":"
+        expected.extend(prefix + name for name in suite["expected"])
+        for field in ("passed", "skipped", "failed"):
+            cases.extend(
+                {"id": prefix + name, "status": field} for name in suite[field]
+            )
+        # A crashed Go process can lack a terminal test event.
+        if suite["exit_code"] and not suite["failed"]:
+            cases.append({"id": prefix + "process", "status": "failed"})
+    return {
+        "runtime": "model-runtime",
+        "device": "cpu",
+        "platform": host_platform(),
+        "models": report["models"],
+        "cases": cases,
+        "expected_cases": expected,
+    }
 
 
 def local_evidence(directory: Path, suite: str) -> dict:
@@ -115,13 +156,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "kind",
-        choices=["local", "recipes", "image-calibration", "riscv-qemu"],
+        choices=["local", "recipes", "models", "image-calibration", "riscv-qemu"],
     )
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--suite", choices=["cli", "memory"], default="cli")
     args = parser.parse_args()
-    if args.kind == "image-calibration":
+    if args.kind == "models":
+        result = models_evidence(args.directory)
+    elif args.kind == "image-calibration":
         result = image_calibration_evidence(args.directory)
     elif args.kind == "riscv-qemu":
         result = riscv_evidence(args.directory)
