@@ -11,7 +11,7 @@ import (
 func TestBuildDownloadArgsFetchesFullSnapshotByDefault(t *testing.T) {
 	spec := ModelSpec{
 		LocalPath: "models/category_classifier_modernbert-base_model",
-		RepoID:    "llm-semantic-router/category_classifier_modernbert-base_model",
+		RepoID:    "vllm-sr/category_classifier_modernbert-base_model",
 	}
 
 	want := []string{

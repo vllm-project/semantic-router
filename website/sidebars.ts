@@ -35,6 +35,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'installation/installation',
         'installation/agent',
+        'installation/shell-completion',
         {
           type: 'category',
           label: 'Plan a Deployment',
@@ -254,6 +255,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'installation/configuration-contract',
             'installation/configuration-workflows',
+            'installation/recipe-lifecycle',
             {
               type: 'category',
               label: 'Models',
