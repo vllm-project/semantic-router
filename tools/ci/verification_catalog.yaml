@@ -10,6 +10,7 @@ defaults:
   images: []
   services: []
 component_workers:
+  # These select per-contract setup; each selected verification gets its own job.
   cli:
     display_name: CLI and Fleet
     go: false
@@ -359,17 +360,18 @@ full_cpu:
     - e2e.streaming
     - e2e.vela-omni
     - e2e.vela-halu
+    - e2e.vela-shield
     - e2e.multimodal-routing
   support_contracts:
     Helm chart: [core]
     Local deployment: [local.cli]
     Kubernetes Operator: [operator]
     agentgateway: [e2e.agentgateway]
-    Envoy AI Gateway: [e2e.envoy-ai-gateway]
+    Agent Router: [e2e.envoy-ai-gateway]
     AIBrix: [e2e.aibrix]
     Istio Gateway: [e2e.istio]
     llm-d: [e2e.llm-d]
-    Streaming with Envoy AI Gateway: [e2e.streaming]
+    Streaming with Agent Router: [e2e.streaming]
   excluded:
     cuda: No CUDA runner is declared in this CPU inventory; image build is not device qualification.
     rocm: No ROCm runner is declared in this CPU inventory; image build is not device qualification.

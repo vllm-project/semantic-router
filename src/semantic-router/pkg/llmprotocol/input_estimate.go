@@ -65,6 +65,9 @@ func EstimateInput(request *Request) InputEstimate {
 	for _, tool := range request.Tools {
 		estimate.TextBytes = SaturatingTokenSum(estimate.TextBytes, len(tool.Name), len(tool.Description))
 		estimate.StructuredBytes = SaturatingTokenSum(estimate.StructuredBytes, len(tool.InputSchema))
+		if tool.CustomFormat != nil {
+			estimate.StructuredBytes = SaturatingTokenSum(estimate.StructuredBytes, len(tool.CustomFormat.Definition))
+		}
 		framing = SaturatingTokenSum(framing, InputToolDefinitionFramingTokens)
 	}
 	// A constrained output schema is prompt-bearing structure, even though it

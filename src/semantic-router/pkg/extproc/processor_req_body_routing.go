@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"strconv"
@@ -23,6 +24,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
 type routeHeaderState struct {
@@ -33,6 +35,7 @@ type routeHeaderState struct {
 
 type providerDispatch struct {
 	logicalModel   string
+	backendModel   string
 	upstreamModel  string
 	backendAddress string
 	backendName    string
@@ -41,6 +44,8 @@ type providerDispatch struct {
 	decisionName   string
 	useReasoning   bool
 }
+
+const preparedDispatchReceiptVersion = 1
 
 // prepareProviderDispatch is the only point where a neutral request becomes a
 // provider-bound request. Routing and plugins mutate semantic state first;
@@ -55,7 +60,7 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	if request == nil || ctx == nil || r == nil || r.Config == nil {
 		return nil, status.Error(codes.Internal, "neutral inference request is unavailable")
 	}
-	dispatch, err := r.resolveProviderDispatch(logicalModel, decisionName, useReasoning)
+	dispatch, err := r.resolveProviderDispatchForCandidate(logicalModel, decisionName, useReasoning, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +71,7 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	if changed {
 		request.Generation++
 	}
-	if err := r.prepareDispatchContextOverflow(ctx, request, dispatch.logicalModel); err != nil {
+	if err := r.prepareDispatchContextOverflow(ctx, request, dispatch.effectiveBackendModel()); err != nil {
 		return nil, err
 	}
 	if err := r.prepareAutomaticDispatch(ctx, request, dispatch); err != nil {
@@ -78,6 +83,9 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 		return nil, protocolErr
 	}
 	ctx.TargetFormat = dispatch.targetFormat
+	if !ctx.LooperRequest {
+		ctx.primaryBackendName = dispatch.backendName
+	}
 	// Bind response policy where the backend is selected.
 	ctx.ResponseVendor = resolveResponseVendor(dispatch.profile)
 	ctx.SemanticRequest = request
@@ -110,10 +118,19 @@ func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
 	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) error {
-	if err := r.validateDispatchRequirements(request, dispatch, ctx); err != nil {
+	backendModel := dispatch.effectiveBackendModel()
+	projected, err := r.projectRequestForBackend(*request, backendModel, dispatch.targetFormat)
+	if err != nil {
+		var protocolError *llmprotocol.ProtocolError
+		if errors.As(err, &protocolError) && ctx != nil {
+			ctx.ImmediateProtocolError = protocolError
+		}
 		return err
 	}
-	if err := r.providerCapabilityMismatch(dispatch.logicalModel, dispatch.targetFormat, llmprotocol.RequiredCapabilities(*request)); err != nil {
+	if err := r.validateDispatchRequirements(&projected, dispatch, ctx); err != nil {
+		return err
+	}
+	if err := r.providerCapabilityMismatch(backendModel, dispatch.targetFormat, llmprotocol.RequiredCapabilities(projected)); err != nil {
 		var protocolError *llmprotocol.ProtocolError
 		if errors.As(err, &protocolError) && ctx != nil {
 			ctx.ImmediateProtocolError = protocolError
@@ -157,27 +174,61 @@ func (r *OpenAIRouter) resolveProviderDispatch(
 	decisionName string,
 	useReasoning bool,
 ) (*providerDispatch, error) {
-	backendAddress, backendName, found, err := r.Config.ResolvePrimaryBackendForModel(logicalModel)
+	return r.resolveProviderDispatchForBackendModel(logicalModel, logicalModel, decisionName, useReasoning)
+}
+
+func (r *OpenAIRouter) resolveProviderDispatchForCandidate(
+	logicalModel string,
+	decisionName string,
+	useReasoning bool,
+	ctx *RequestContext,
+) (*providerDispatch, error) {
+	return r.resolveProviderDispatchForBackendModel(
+		logicalModel,
+		ctx.backendModelForCandidate(logicalModel),
+		decisionName,
+		useReasoning,
+	)
+}
+
+func (r *OpenAIRouter) resolveProviderDispatchForBackendModel(
+	logicalModel string,
+	backendModel string,
+	decisionName string,
+	useReasoning bool,
+) (*providerDispatch, error) {
+	backendAddress, backendName, found, err := r.Config.ResolvePrimaryBackendForModel(backendModel)
 	if err != nil {
-		return nil, fmt.Errorf("resolve backend for model %q: %w", logicalModel, err)
+		return nil, fmt.Errorf("resolve backend for model %q: %w", backendModel, err)
 	}
 	if !found {
-		return nil, fmt.Errorf("model %q has no configured backend", logicalModel)
+		return nil, fmt.Errorf("model %q has no configured backend", backendModel)
 	}
 	profile, err := r.Config.GetProviderProfileForEndpoint(backendName)
 	if err != nil {
-		return nil, fmt.Errorf("resolve provider profile for model %q: %w", logicalModel, err)
+		return nil, fmt.Errorf("resolve provider profile for model %q: %w", backendModel, err)
 	}
-	targetFormat, err := wireFormatForModel(r.Config.GetModelAPIFormat(logicalModel))
+	targetFormat, err := wireFormatForModel(r.Config.GetModelAPIFormat(backendModel))
 	if err != nil {
-		return nil, fmt.Errorf("model %q: %w", logicalModel, err)
+		return nil, fmt.Errorf("model %q: %w", backendModel, err)
 	}
 	return &providerDispatch{
-		logicalModel: logicalModel, upstreamModel: r.Config.ResolveExternalModelID(logicalModel, backendName),
+		logicalModel: logicalModel, backendModel: backendModel,
+		upstreamModel:  r.Config.ResolveExternalModelID(logicalModel, backendName),
 		backendAddress: backendAddress, backendName: backendName,
 		profile: profile, targetFormat: targetFormat,
 		decisionName: decisionName, useReasoning: useReasoning,
 	}, nil
+}
+
+func (dispatch *providerDispatch) effectiveBackendModel() string {
+	if dispatch == nil || dispatch.backendModel == "" {
+		if dispatch == nil {
+			return ""
+		}
+		return dispatch.logicalModel
+	}
+	return dispatch.backendModel
 }
 
 func (r *OpenAIRouter) prepareProviderRequest(
@@ -212,7 +263,8 @@ func (r *OpenAIRouter) applyDispatchDecision(
 	changed := false
 	if dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
 		changed = r.applySemanticReasoningMode(
-			request, dispatch.logicalModel, dispatch.targetFormat, dispatch.useReasoning, ctx.decisionForCandidate(dispatch.logicalModel),
+			request, dispatch.effectiveBackendModel(), dispatch.targetFormat, dispatch.useReasoning,
+			ctx.decisionForBackend(dispatch.logicalModel),
 		)
 	}
 	injected, err := r.addSemanticSystemPromptIfConfigured(
@@ -256,9 +308,7 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
 	state := &routeHeaderState{
-		setHeaders: r.startUpstreamSpanAndInjectHeaders(
-			dispatch.logicalModel, dispatch.backendAddress, ctx,
-		),
+		setHeaders:    r.startUpstreamSpanAndInjectHeaders(dispatch, ctx),
 		removeHeaders: []string{"content-length"},
 		profile:       dispatch.profile,
 	}
@@ -266,12 +316,12 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 	// extra header can never replace the credential selected for this request.
 	appendProfileHeaders(&state.setHeaders, dispatch.profile)
 	if errorResponse := r.appendProviderCredential(
-		state, dispatch.logicalModel, dispatch.backendName, ctx,
+		state, dispatch.effectiveBackendModel(), dispatch.backendName, ctx,
 	); errorResponse != nil {
 		return errorResponse
 	}
-	appendRoutingHeaders(&state.setHeaders, dispatch.logicalModel)
-	r.appendReliabilityHeaders(&state.setHeaders, dispatch.logicalModel)
+	appendRoutingHeaders(&state.setHeaders, dispatch.effectiveBackendModel())
+	r.appendReliabilityHeaders(&state.setHeaders, dispatch.logicalModel, dispatch.effectiveBackendModel())
 	setProviderRequestPath(&state.setHeaders, dispatch.profile, dispatch.targetFormat)
 	r.applyDecisionHeaderMutations(state, ctx)
 	// Body-stage model and path mutations can change the Envoy route selected
@@ -293,6 +343,9 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	}
 	if err := selectionRequestContext(ctx).Err(); err != nil {
 		return nil, err
+	}
+	if ctx != nil {
+		ctx.preparedDispatchReceipt = nil
 	}
 	if response.GetImmediateResponse() != nil {
 		return response, nil
@@ -320,6 +373,14 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	)
 	body, err := r.encodeDispatchRequest(ctx)
 	if err != nil {
+		var protocolError *llmprotocol.ProtocolError
+		if errors.As(err, &protocolError) &&
+			protocolError.Code == promptCacheErrorTargetUnsupported {
+			if ctx != nil {
+				ctx.ImmediateProtocolError = protocolError
+			}
+			return nil, err
+		}
 		metrics.RecordRequestError(dispatch.logicalModel, "serialization_error")
 		return nil, dispatchWireError(err, ctx, "encode provider request")
 	}
@@ -336,12 +397,10 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 		common.HeaderMutation = &ext_proc.HeaderMutation{}
 	}
 	appendContentLengthHeader(&common.HeaderMutation.SetHeaders, len(body))
-	common.BodyMutation = &ext_proc.BodyMutation{
-		Mutation: &ext_proc.BodyMutation_Body{Body: body},
-	}
 	if err := commitAgenticSessionDecision(ctx); err != nil {
 		return nil, err
 	}
+	bindPreparedDispatchArtifact(common, ctx, body, dispatch.targetFormat)
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_encoded", map[string]interface{}{
 		"request_id":  ctx.RequestID,
 		"model":       dispatch.logicalModel,
@@ -349,6 +408,30 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 		"body_bytes":  len(body),
 	})
 	return response, nil
+}
+
+// bindPreparedDispatchArtifact couples the payload-free primary-dispatch
+// receipt to the exact final byte slice returned to Envoy. The caller has
+// already completed codec encoding and provider adaptation; this helper
+// performs no transformation. Existing Replay records, including Looper's
+// per-attempt records, are intentionally outside this no-updater contract.
+func bindPreparedDispatchArtifact(
+	common *ext_proc.CommonResponse,
+	ctx *RequestContext,
+	body []byte,
+	format llmprotocol.WireFormat,
+) {
+	common.BodyMutation = &ext_proc.BodyMutation{
+		Mutation: &ext_proc.BodyMutation_Body{Body: body},
+	}
+	if !shouldStartRouterReplay(ctx) {
+		return
+	}
+	digest := sha256.Sum256(body)
+	ctx.preparedDispatchReceipt = &routerreplay.PreparedDispatchReceipt{
+		Version: preparedDispatchReceiptVersion, WireFormat: string(format),
+		SHA256: fmt.Sprintf("%x", digest), ByteLength: len(body),
+	}
 }
 
 // processBodyRoutingError answers every ProtocolError it recognizes with HTTP
@@ -374,17 +457,17 @@ func isClientProtocolError(category llmprotocol.ErrorCategory) bool {
 }
 
 func (r *OpenAIRouter) startUpstreamSpanAndInjectHeaders(
-	model string,
-	endpoint string,
+	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) []*core.HeaderValueOption {
 	spanContext, upstreamSpan := tracing.StartSpan(
 		ctx.TraceContext, tracing.SpanUpstreamRequest, trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(genAIRequestAttributes(dispatch)...),
 	)
 	ctx.UpstreamSpan = upstreamSpan
 	tracing.SetSpanAttributes(upstreamSpan,
-		attribute.String(tracing.AttrModelName, model),
-		attribute.String(tracing.AttrEndpointAddress, endpoint),
+		attribute.String(tracing.AttrModelName, dispatch.logicalModel),
+		attribute.String(tracing.AttrEndpointAddress, dispatch.backendAddress),
 	)
 	traceHeaders := tracing.InjectTraceContextToSlice(spanContext)
 	result := make([]*core.HeaderValueOption, 0, len(traceHeaders))
@@ -492,22 +575,28 @@ func appendRoutingHeaders(headersOut *[]*core.HeaderValueOption, model string) {
 	}})
 }
 
-func (r *OpenAIRouter) appendReliabilityHeaders(headersOut *[]*core.HeaderValueOption, model string) {
-	if r == nil || r.Config == nil || model == "" {
+func (r *OpenAIRouter) appendReliabilityHeaders(headersOut *[]*core.HeaderValueOption, models ...string) {
+	if r == nil || r.Config == nil {
 		return
 	}
-	modelParams, ok := r.Config.ModelConfig[model]
-	if !ok {
-		return
-	}
-	rel := modelParams.Reliability
-	if rel.RequestTimeout != "" {
-		if dur, err := time.ParseDuration(rel.RequestTimeout); err == nil {
-			timeoutMs := dur.Milliseconds()
-			*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
-				Key:      "x-envoy-upstream-rq-timeout-ms",
-				RawValue: []byte(strconv.FormatInt(timeoutMs, 10)),
-			}})
+	for _, model := range models {
+		if model == "" {
+			continue
+		}
+		modelParams, ok := r.Config.ModelConfig[model]
+		if !ok {
+			continue
+		}
+		rel := modelParams.Reliability
+		if rel.RequestTimeout != "" {
+			if dur, err := time.ParseDuration(rel.RequestTimeout); err == nil {
+				timeoutMs := dur.Milliseconds()
+				*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
+					Key:      "x-envoy-upstream-rq-timeout-ms",
+					RawValue: []byte(strconv.FormatInt(timeoutMs, 10)),
+				}})
+				return
+			}
 		}
 	}
 }

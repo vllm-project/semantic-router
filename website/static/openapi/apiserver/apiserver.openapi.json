@@ -20509,6 +20509,30 @@
                               "original_model": {
                                 "type": "string"
                               },
+                              "prepared_dispatch": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "byte_length": {
+                                    "type": "integer"
+                                  },
+                                  "sha256": {
+                                    "type": "string"
+                                  },
+                                  "version": {
+                                    "type": "integer"
+                                  },
+                                  "wire_format": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "version",
+                                  "wire_format",
+                                  "sha256",
+                                  "byte_length"
+                                ]
+                              },
                               "previous_model": {
                                 "type": "string"
                               },
@@ -22033,6 +22057,27 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "balance_by",
+            "in": "query",
+            "description": "Group a balance cap applies to. Requires balance_max.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "recipe",
+                "decision",
+                "primary_model"
+              ]
+            }
+          },
+          {
+            "name": "balance_max",
+            "in": "query",
+            "description": "Most examples one group may contribute. Requires balance_by.",
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "security": [
@@ -22169,6 +22214,22 @@
                     "policy": {
                       "type": "object",
                       "properties": {
+                        "balance": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "by": {
+                              "type": "string"
+                            },
+                            "max": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "by",
+                            "max"
+                          ]
+                        },
                         "seed": {
                           "type": "string"
                         },
@@ -24604,6 +24665,30 @@
                         },
                         "original_model": {
                           "type": "string"
+                        },
+                        "prepared_dispatch": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "byte_length": {
+                              "type": "integer"
+                            },
+                            "sha256": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": "integer"
+                            },
+                            "wire_format": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "version",
+                            "wire_format",
+                            "sha256",
+                            "byte_length"
+                          ]
                         },
                         "previous_model": {
                           "type": "string"
@@ -41397,7 +41482,7 @@
             }
           },
           "202": {
-            "description": "Saved candidate awaiting publication; poll /api/v1/config/hash for its generated_runtime_hash",
+            "description": "Saved candidate awaiting publication (poll /api/v1/config/hash for its generated_runtime_hash), or, on a Kubernetes ConfigMap target, durably persisted with activation deferred to the router's next restart",
             "content": {
               "application/json": {
                 "schema": {
@@ -43003,7 +43088,7 @@
             }
           },
           "202": {
-            "description": "Saved candidate awaiting publication; poll /api/v1/config/hash for its generated_runtime_hash",
+            "description": "Saved candidate awaiting publication (poll /api/v1/config/hash for its generated_runtime_hash), or, on a Kubernetes ConfigMap target, durably persisted with activation deferred to the router's next restart",
             "content": {
               "application/json": {
                 "schema": {
@@ -44018,7 +44103,7 @@
             }
           },
           "202": {
-            "description": "Saved candidate awaiting publication; poll /api/v1/config/hash for its generated_runtime_hash",
+            "description": "Saved candidate awaiting publication (poll /api/v1/config/hash for its generated_runtime_hash), or, on a Kubernetes ConfigMap target, durably persisted with activation deferred to the router's next restart",
             "content": {
               "application/json": {
                 "schema": {
@@ -45001,6 +45086,14 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Rows to skip after created_at descending, id descending. Best-effort under concurrent writes. Defaults to 0.",
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "security": [
@@ -45065,6 +45158,9 @@
                         ]
                       }
                     },
+                    "offset": {
+                      "type": "integer"
+                    },
                     "total": {
                       "type": "integer"
                     }
@@ -45072,7 +45168,8 @@
                   "required": [
                     "memories",
                     "total",
-                    "limit"
+                    "limit",
+                    "offset"
                   ]
                 }
               }

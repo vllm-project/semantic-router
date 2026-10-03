@@ -35,7 +35,7 @@ for name in (
     "mmbert32k-pii-detector-merged",
 ):
     snapshot_download(
-        repo_id=f"llm-semantic-router/{name}",
+        repo_id=f"vllm-sr/{name}",
         local_dir=f"bench/cpu-vs-gpu/models/{name}-onnx",
         allow_patterns=["onnx/*", "*.json"],
         ignore_patterns=["*.safetensors", "*.bin", "*.pt"],

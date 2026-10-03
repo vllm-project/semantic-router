@@ -163,6 +163,8 @@ vllm-sr serve --platform amd --config vela-amd.yaml
 
 平台标志选择镜像和设备访问，具名 deployment 选择实际 provider 与计算图；显式 CPU 选择仍然保留。MIGraphX 冷编译可能比缓存启动更慢。CLI 默认等待 1,800 秒；若实测需要更长时间，可用 `--startup-timeout SECONDS` 设置有界等待。超时后所属容器仍保留，可继续查看日志与就绪状态。
 
+AMD Docker 部署会把 Router 的 COMGR 编译缓存保存在 `<state-root>/.vllm-sr/compiler-cache/`，按 stack 和不可变 Router 镜像隔离。相同镜像重启时可以复用已编译的内核；更换镜像或镜像内 ROCm 用户态版本后会使用新的缓存。默认 state root 是源配置所在目录。需要清理旧镜像缓存时，请先停止对应 stack。
+
 `/ready` 成功后，查看真实信号与时延：
 
 ```bash
@@ -177,7 +179,7 @@ curl --fail 'http://localhost:8080/api/v1/routing/preview?trace=true' \
 
 ### 可选的 Domain 和 FactCheck 32K ROCm 部署 {#optional-32k-domain-and-factcheck-on-rocm}
 
-[Vela Domain](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Domain) 和 [Vela FactCheck](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-FactCheck) 提供固定 32K FP32 图 `onnx/model_rocm_32k.onnx`。以下配置已锁定包含该图的模型发布版本。
+[Vela Domain](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-Domain) 和 [Vela FactCheck](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-FactCheck) 提供固定 32K FP32 图 `onnx/model_rocm_32k.onnx`。以下配置已锁定包含该图的模型发布版本。
 
 若需启用，在 `vela-amd.yaml` 中用以下片段替换这两个 binding 条目及两个完整的 deployment 条目。下面的 ROCm 条目会替换原 MIGraphX 条目，包括移除其 `compilation_cache_dir` 设置；保留配方的其余配置。
 

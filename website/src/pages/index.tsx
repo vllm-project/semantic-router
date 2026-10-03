@@ -1,16 +1,16 @@
 import React from 'react'
 import clsx from 'clsx'
 import Head from '@docusaurus/Head'
+import Link from '@docusaurus/Link'
 import Layout from '@theme/Layout'
 import Translate, { translate } from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
+import useBaseUrl from '@docusaurus/useBaseUrl'
 import IntegrationArchitecture from '@site/src/components/homepage/IntegrationArchitecture'
 import UseCaseExplorer from '@site/src/components/homepage/UseCaseExplorer'
-import CompatibilityBand from '@site/src/components/homepage/CompatibilityBand'
 import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
 import InstallQuickStartSection from '@site/src/components/InstallQuickStartSection'
 import YouTubeSection from '@site/src/components/YouTubeSection'
-import PaperFigureShowcase from '@site/src/components/PaperFigureShowcase'
 import ResearchPaperCarousel from '@site/src/components/ResearchPaperCarousel'
 import TeamCarousel from '@site/src/components/TeamCarousel'
 import TestimonialsRail from '@site/src/components/TestimonialsRail'
@@ -219,7 +219,50 @@ const momScorecards = [
   },
 ]
 
+type ExampleProduct = {
+  label: string
+  to?: string
+}
+
+function ExampleProducts({ products }: { products: ExampleProduct[] }): JSX.Element {
+  return (
+    <span className="site-prose">
+      {products.map((product, index) => (
+        <React.Fragment key={product.label}>
+          {index > 0 && ', '}
+          {product.to ? <Link to={product.to}>{product.label}</Link> : product.label}
+        </React.Fragment>
+      ))}
+    </span>
+  )
+}
+
 const alternativeComparison = [
+  {
+    capability: translate({
+      id: 'homepage.alternatives.examples.capability',
+      message: 'Examples',
+    }),
+    semanticRouter: 'vLLM Semantic Router',
+    aiGateway: (
+      <ExampleProducts
+        products={[
+          { label: 'Agent Router', to: '/docs/installation/k8s/ai-gateway' },
+          { label: 'LiteLLM' },
+          { label: 'agentgateway', to: '/docs/installation/k8s/agentgateway' },
+        ]}
+      />
+    ),
+    llmd: (
+      <ExampleProducts
+        products={[
+          { label: 'llm-d', to: '/docs/installation/k8s/llm-d' },
+          { label: 'vLLM Router' },
+          { label: 'AIBrix gateway', to: '/docs/installation/k8s/aibrix' },
+        ]}
+      />
+    ),
+  },
   {
     capability: translate({
       id: 'homepage.alternatives.decides.capability',
@@ -289,7 +332,7 @@ const alternativeComparison = [
     }),
     llmd: translate({
       id: 'homepage.alternatives.runs.llmd',
-      message: 'The llm-d Endpoint Picker',
+      message: 'A pool scheduler, such as the llm-d Endpoint Picker',
     }),
   },
   {
@@ -303,11 +346,11 @@ const alternativeComparison = [
     }),
     aiGateway: translate({
       id: 'homepage.alternatives.receipt.aiGateway',
-      message: 'None',
+      message: 'Varies by implementation',
     }),
     llmd: translate({
       id: 'homepage.alternatives.receipt.llmd',
-      message: 'None',
+      message: 'Varies by implementation',
     }),
   },
 ]
@@ -420,8 +463,8 @@ function AlternativesSection(): JSX.Element {
             </h2>
             <p>
               <Translate id="homepage.alternatives.description">
-                What the Router owns next to the AI gateway and llm-d — three
-                components, no overlapping decisions.
+                What the Router owns next to an AI Gateway and an Inference
+                Router. The three components make no overlapping decisions.
               </Translate>
             </p>
           </header>
@@ -433,7 +476,7 @@ function AlternativesSection(): JSX.Element {
               aria-label={translate({
                 id: 'homepage.alternatives.table.aria',
                 message:
-                  'Semantic Router compared with an AI gateway and llm-d',
+                  'Semantic Router compared with an AI Gateway and an Inference Router',
               })}
             >
               <div className={styles.matrixHeader} role="row">
@@ -453,7 +496,9 @@ function AlternativesSection(): JSX.Element {
                   </Translate>
                 </span>
                 <span role="columnheader">
-                  <Translate id="homepage.alternatives.table.llmd">LLM-D</Translate>
+                  <Translate id="homepage.alternatives.table.llmd">
+                    Inference Router
+                  </Translate>
                 </span>
               </div>
 
@@ -480,7 +525,9 @@ function AlternativesSection(): JSX.Element {
                   </div>
                   <div className={styles.matrixFragmented} role="cell">
                     <span className={styles.matrixMobileLabel}>
-                      <Translate id="homepage.alternatives.table.llmd">LLM-D</Translate>
+                      <Translate id="homepage.alternatives.table.llmd">
+                        Inference Router
+                      </Translate>
                     </span>
                     <p>{item.llmd}</p>
                   </div>
@@ -689,6 +736,7 @@ function FinalCtaSection(): JSX.Element {
 
 export default function Home(): JSX.Element {
   const { siteConfig } = useDocusaurusContext()
+  const filmPoster = useBaseUrl('/videos/vllm-sr-intro/vllm-sr-intro-poster.webp')
   const ogImage = new URL(
     SITE_SOCIAL_PREVIEW_IMAGE_PATH,
     siteConfig.url,
@@ -707,13 +755,14 @@ export default function Home(): JSX.Element {
     },
     'sameAs': [
       'https://github.com/vllm-project/semantic-router',
-      'https://huggingface.co/LLM-Semantic-Router',
+      'https://huggingface.co/vllm-sr',
     ],
   }
 
   return (
     <Layout title={homepageMetaTitle} description={homepageMetaDescription}>
       <Head>
+        <link rel="preload" as="image" href={filmPoster} fetchPriority="high" />
         <meta property="og:title" content={homepageSocialTitle} />
         <meta property="og:description" content={homepageMetaDescription} />
         <meta property="og:image" content={ogImage} />
@@ -763,21 +812,15 @@ export default function Home(): JSX.Element {
         </div>
 
         <div className={styles.bandBlack}>
-          <IntegrationArchitecture />
+          <CapabilitySection />
         </div>
 
         <div className={styles.bandGraphite}>
-          <CapabilitySection />
+          <IntegrationArchitecture />
         </div>
 
         <div className={styles.bandBlack}>
           <AlternativesSection />
-        </div>
-
-        <div className={styles.bandRaised}>
-          <ScrollReveal delay={60}>
-            <PaperFigureShowcase />
-          </ScrollReveal>
         </div>
 
         <div className={styles.bandBlack}>
@@ -790,10 +833,6 @@ export default function Home(): JSX.Element {
 
         <div className={styles.bandRaised}>
           <DataSovereigntySection />
-        </div>
-
-        <div className={styles.bandGraphite}>
-          <CompatibilityBand />
         </div>
 
         <div className={styles.bandBlack}>

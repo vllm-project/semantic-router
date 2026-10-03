@@ -68,7 +68,8 @@ const (
 	VSRSelectedRecipe = "x-vsr-selected-recipe"
 
 	// VSRSelectedDecision indicates the decision selected by VSR during decision evaluation.
-	// This is the final routing decision made by the DecisionEngine.
+	// This is the final routing decision made by the DecisionEngine. It is
+	// omitted when no decision matched and the request went to the default model.
 	// Example values: "math_decision", "business_decision", "thinking_decision"
 	VSRSelectedDecision = "x-vsr-selected-decision"
 
@@ -144,6 +145,11 @@ const (
 	// VSRInjectedSystemPrompt indicates whether a system prompt was injected into the request.
 	// Values: "true" or "false"
 	VSRInjectedSystemPrompt = "x-vsr-injected-system-prompt"
+
+	VSRPromptCacheAction    = "x-vsr-prompt-cache-action"
+	VSRPromptCacheReason    = "x-vsr-prompt-cache-reason"
+	VSRPromptCacheInserted  = "x-vsr-prompt-cache-inserted"
+	VSRPromptCachePreserved = "x-vsr-prompt-cache-preserved"
 
 	// --- v0.4 keystone response-contract headers (issue #2203) ---
 	// These two headers are emitted on every VSR-processed response and form
