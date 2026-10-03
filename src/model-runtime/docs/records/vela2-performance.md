@@ -102,9 +102,10 @@ it is 2.2× faster than their sum at the median and 10× at p95.
 | 512 | 4.2 | 9.1 | 9.3 | 2.3 |
 | 2,048 | 2.1 | 2.5 | 3.2 | 1.4 |
 
-- The exact path's p95 is 1.4–1.8× its p50: a prompt length seen for the
-  first time compiles shape-specialized Triton kernels. The engine pays the
-  same on its own shapes, plus its lock at concurrency 4.
+- The exact path's p95 is 1.4–1.8× its p50: a tree shape seen for the first
+  time pays a one-time setup (about 50 ms on the 4B: kernel specialization
+  and library algorithm choices), and every prompt length is a new shape. The
+  engine pays the same on its own shapes, plus its lock at concurrency 4.
 - Throughput at concurrency 4 is the scheduler's: `exact` runs one request
   per forward, as the engine does; the approximate profiles run the packed
   trees, `batching` also several requests per forward.
