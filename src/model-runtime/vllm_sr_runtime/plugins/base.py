@@ -662,7 +662,12 @@ class ModelFamily(ABC):
         self, package: VerifiedPackage, device: DeviceInfo
     ) -> dict[str, Any]:
         """Recorded autotuned-kernel configurations for this model on the device's class, if any."""
-        return {}
+        from ..registry import builtin
+
+        known = builtin.by_identity(package.model_sha256)
+        if known is None or not device.arch:
+            return {}
+        return known.kernel_choices.get(f"{device.accelerator}:{device.arch}", {})
 
 
 # ---------------------------------------------------------------------------
