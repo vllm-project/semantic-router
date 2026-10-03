@@ -5,7 +5,8 @@
 #   X7-a40 = [KIB4-a40, KX-a40, KSW-a40]   Y1 = [F*, KIB4-a40]
 #   X8-a40 = [KIB4-a40, KSW-a40]           Y2 = [F*, KIB4-a40, X5-a33]   (F* = AF-<name>, the best factory point)
 # Amendment 13 (half learning rates): HLR4 = [KIB4H, AF-KIB4-lrhh] (four half-LR seeds), HLR4-a60 = [HLR4 x 3, LUX x 2],
-#   HLR4-a80 = [HLR4 x 4, LUX]; wave 2: HLR4-a100 / HLR4-a50, LRX6-aNN. The member LUX is the pinned Lux 1.0 zero-step
+#   HLR4-a80 = [HLR4 x 4, LUX], KIB4-lrhh-a80 = [AF-KIB4-lrhh x 4, LUX] (revision 1); wave 2: HLR4-a100 / HLR4-a50,
+#   LRX6-aNN, KIB4-lrh-aNN (node A, [AF-KIB4-lrh x k, LUX x m]). The member LUX is the pinned Lux 1.0 zero-step
 #   checkpoint (post.sh's: node B m10-KUP-s1, node A m10-KX-s1), checked against lux-zero-m9-KIB-s1.sha256 first.
 # The output is soup/<NAME>/build/<NAME> with DONE, members.txt and the build log, as post.sh writes it, so ix.sh ship
 # takes it. A failed build writes soup/<NAME>/FAILED and is never rerun.
@@ -47,6 +48,7 @@ out=$M/soup/$NAME
 case $NAME in
   X7-a40 | X8-a40 | Y1 | Y2) ;;
   HLR4 | HLR4-a50 | HLR4-a60 | HLR4-a80 | HLR4-a100 | LRX6-a50 | LRX6-a60 | LRX6-a80 | LRX6-a100) ;;
+  KIB4-lrhh-a80 | KIB4-lrh-a50 | KIB4-lrh-a60 | KIB4-lrh-a80 | KIB4-lrh-a100) ;;
   *) echo "NAME is X7-a40, X8-a40, Y1, Y2 (amendment 7) or an amendment-13 point" >&2; exit 2 ;;
 esac
 (( ${#MEMBERS[@]} >= 2 )) || { echo "at least two members" >&2; exit 2; }

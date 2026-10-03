@@ -74,3 +74,21 @@ The budget is COORDINATION 05:38's: 60 GPU-h for the continuation.
 About 28.9 GPU-h were committed at writing, including KIB4H-a40's Index run. Wave 1 adds four Index runs (≈ 10.8),
 for ≈ 39.7. Wave 2 adds at most two (≈ 5.4) and a release ≈ 3–5, for ≈ 50 of the 60 approved. Speculative formal
 runs (≈ 0.25 GPU-h each) are counted as they run.
+
+## Revision 1 (2026-10-03 ≈00:05Z, before any half-LR read or build)
+
+COORDINATION 07:55: 27B #7 claimed node A GPU5–7 for M9 half-LR seeds when the factory's 9B seeds end. Node B GPU2 / 3
+(the factory's `KIB4-lrhh` seeds) and GPU5 / 7 (KIB4H) remain for 9B, so the placement and the first read change:
+
+- **All wave-1 reads run on node B, pool GPU2 / 3 / 5 / 7, one at a time in this order:** `KIB4-lrhh-a80`,
+  `HLR4-a80`, `HLR4-a60`, `KIB4H-a40`. KIB4H-a40 is read last because the α argument above makes it the least likely
+  passer. It is still read (amendment 12).
+- **`KIB4-lrhh-a80` replaces `KIB4-lrhh-a40`:** `[AF-KIB4-lrhh × 4, LUX]`, the factory's two-seed half-LR arm soup at
+  α = 4/5. It is the first point that can be built (≈ 00:50Z), and it tests the higher-α half-LR step an hour
+  before HLR4 exists. `KIB4-lrhh-a40` is not read.
+- **`KIB4-lrh-a40` moves to wave 2** as `KIB4-lrh-aB` (the factory's backbone-only half-LR pair at the best wave-1 α
+  B, built on node A), read only on GPUs outside node B that are free by then. Wave-2 rule 2's condition becomes
+  d(KIB4-lrh-aB) ≥ d(best HLR4 point) − 0.15.
+- If node C GPUs are granted when the 4B owner's current reads end (≈ 03:45Z), the remaining wave-1 reads run there
+  in parallel (packages copied B → C, SHA-256 lists equal).
+- The budget is unchanged: four wave-1 reads.
