@@ -78,7 +78,9 @@ class EncoderGraphs:
         if shape is None:
             self.stats["packed"] += 1
             layout = self.backbone.packed(lengths, self.device)
-            return self.backbone.encode(input_ids, layout, exits, normalize)
+            return self.backbone.encode(
+                input_ids.to(self.device), layout, exits, normalize
+            )
         rows, width = shape
         ids, valid, index = self._pad(input_ids, lengths, rows, width)
         key = (rows, width, exits, normalize)
