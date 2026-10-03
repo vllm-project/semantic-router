@@ -1,0 +1,165 @@
+{
+  "schema": "dev2-release-decision/1",
+  "status": "final",
+  "decision": "release",
+  "model_name": "Decision-2.0-Sol-2B",
+  "repo_id": "vllm-sr/Decision-2.0-Sol-2B",
+  "identity": {
+    "model_sha256": "e20df76c14edb0d28ef17593f49a1870fdea9438ff4805594402e39766f3546c"
+  },
+  "report_sha256": "6610c86ca1a9249c21cce031ee6df36b3c97d1ad7541458e91c4061154a10385",
+  "paired_sha256": "677e8edece5f40c85fce279fd7fbcaed547d60cfe881a496649fabe5a5082047",
+  "gate_profile": "successor",
+  "rule": "index-first",
+  "current_revision": "8ed41433f5f20c73bf04fe7ef92f2d69c1145002",
+  "evidence_sha256": {
+    "current_decision": "ea4b72cfb3da8bd1730c17a39f305a4cff4af878de04240075e7e7b0766a9dd1",
+    "current_gate": "445ca889f4c286b46580925627cf0e8a37b502894fda073a231ad0fcfb2603a8",
+    "index_first_audit": "6fa6c907a7d1563f01723238fdcffd4a9a7482b171f4121095fafbdf240efb84",
+    "index_first_base_receipt": "75b04a842e029f54cc472d1fa778c4ae3013ecc5220ea2cf19893ad59c62e447",
+    "index_first_bootstrap": "bf1dbeda8d68c2cfe74c769743408567aca3b2bf06245208ddcf3ab04a32dfe3",
+    "index_first_receipt": "86c1d90974699e3d8cfbc643ef5babf96b9b32a401cbe06dade29a70cb938658",
+    "paired": "7fe831607de9b9891a5f399aa1bdc4fdf1ca6241673d333db272b27e97af28fd",
+    "public231": "7e7ccf8d3361bb059467dfad0044498303a8ace275fa91d0882e97d877462e46",
+    "tier_paired": "439ba3fb8a5312f6676717dd00545a1caec277e2be94c9c21d0214d0d41798d1",
+    "types": "a7cba161c8739f3dd43ce59c780130af6d429973e76fa9a46dcf1630947860d3"
+  },
+  "calibration": "none (temperature 1; every Decision 2.0 model keeps T = 1): the formal run was collected at T = 1 (no CAL698 fit)",
+  "action": "Runtime-only revision of the public repository vllm-sr/Decision-2.0-Sol-2B: decision2/fast.py and decision2/fast_kernels.py come from commit 3c8cd1a84, in which the fused attention-prep kernel runs once per tensor (on ROCm it failed to compile, and the request returned an error, when a long multi-question input made the query projection exceed 2 GiB) and a decoder layer whose fused kernels fail to compile or launch runs its eager forward. Weights, tokenizer, configs, the vendored training/model sources, calibration, any Score offsets, the banner and the charts are byte-identical to the released revision 4b75b52114583b4519001492e8dfb0926c89cfe1, and so is README.md; MODEL_MANIFEST.json states the new runtime hashes and the runtime sentences. The collection is not changed.",
+  "rationale": "The release judgement of the superseded final decision 82a82929… stands unchanged: the same identity e20df76c, scored report, paired comparison, calibration and licence decision. Only the package runtime changes, and it computes the same values bit for bit: every prompt of the four scored panels (typed-final 1,600, css15 6,547, public231 231, mlx-diag 2,275) answered through the released package and through this package on the released weights gave 0 answer changes and 0.0 drift, and so did this package with every fused kernel made to fail (each decoder layer on its eager fallback); 400 single requests: p50 7.55 -> 7.61 ms, p95 7.60 -> 7.77 ms, all bit-identical. release.sh checks the native examples, the card's Transformers example before upload, after the real download and from the Hub in fresh environments under Transformers 5.17 and 5.18, the card structure and every card link; then the downloaded package must pass the Index harness's 86-request parity gate.",
+  "approved_package": {
+    "identity": "e20df76c14edb0d28ef17593f49a1870fdea9438ff4805594402e39766f3546c",
+    "fp32_identity": "8c8e98e34eb3200492a9f22d76a4cacfd4a6dee8855c1b6aec303d3cbbf88b9a",
+    "profile": "qwen-full (BF16 storage of the Linear projections)",
+    "temperature": 1,
+    "max_input_tokens": 16384,
+    "revision_binding": "receipts/gate.json of the release.sh --upload --collect --already-collected run binds this file's SHA-256 to the new Hub revision and package manifest it verified."
+  },
+  "licence_decision": "apache-2.0, unchanged: own weights; the Decision 1.0 base and the Qwen3.5 text backbone and tokenizer are Apache-2.0 (the product card ships the Apache-2.0 LICENSE).",
+  "supersedes": {
+    "final_sha256": "82a8292934ef040d56d04d6a76c56c8d93571a2d055a3bc0c2a53228b4859dff",
+    "released_as": "vllm-sr/Decision-2.0-Sol-2B@4b75b52114583b4519001492e8dfb0926c89cfe1",
+    "released_manifest_sha256": "420ce3676ab79ed7097db9b44ec5aeef5804a817d644f3e9cdface499cb91393",
+    "released_gate_sha256": "564e58fcad590bbe4bdf62f661bd6003a5db657d8f0e9ce8a26b4d4033377528",
+    "card_revision": null,
+    "earlier": {
+      "final_sha256": "6e128d9bf669d4349fcded2397d4c64a549e95379fa660a3c4a7f2a5f2be311b",
+      "released_as": "vllm-sr/Decision-2.0-Sol-2B@6a62b3198f3bcf87259cfc2d72185b4861884394",
+      "released_manifest_sha256": "296e611633f2a1a49c65b672e351d298a816e113903b12ca465969e45c492b39",
+      "released_gate_sha256": "4694a08b58dce01d27ef21d1f4933292e0c40da416f65bf10a5aa6ccc8e841f1",
+      "card_revision": null,
+      "earlier": {
+        "final_sha256": "9baa254b1ec77ab65d86f843c3bdb5987cb717791a33bbfec67d6b2373941fee",
+        "released_as": "vllm-sr/Decision-2.0-Sol-2B@951e7f7ff04237021793da50a959955b1fe35635",
+        "released_manifest_sha256": "21ace6b15f52a56874fbeb976313b5759215defb329eb90754e428fe2c4fc2e4",
+        "released_gate_sha256": "aa82f9ee3a9bfe2288edaa83f02469f3f4c4c069fef2c9a9044e33d5ff5f246b",
+        "card_revision": {
+          "kind": "card-org",
+          "spec": "v2/release/specs/dev2-2b-org.json",
+          "spec_sha256": "e9c88e72f8fa98a5c505fbc3e036def3501f279a02955b81f5f49d94310387fa"
+        },
+        "earlier": {
+          "final_sha256": "813d0fc2fdd05d1d3b3d578ef7e015c5ea05c53c9897cf484886f8edcbf905b6",
+          "released_as": "llm-semantic-router/Decision-2.0-Sol-2B@1b7c47eafa3ffec1f4f4b79b0abfe9309d583439",
+          "released_manifest_sha256": "b16789f1c777beceef5c7bed7484616eb6e32dbc2ce8ef5ac3582c4c749269fb",
+          "released_gate_sha256": "168d83d14cf5dffb0b21cae1236b60bd2d56377b44f52c13a35ce2d042173467",
+          "earlier": {
+            "revision": "8ed41433f5f20c73bf04fe7ef92f2d69c1145002",
+            "released_as": "llm-semantic-router/Decision-2.0-Sol-2B@8ed41433f5f20c73bf04fe7ef92f2d69c1145002",
+            "final_sha256": "ea4b72cfb3da8bd1730c17a39f305a4cff4af878de04240075e7e7b0766a9dd1",
+            "gate_sha256": "445ca889f4c286b46580925627cf0e8a37b502894fda073a231ad0fcfb2603a8",
+            "manifest_sha256": "241c72a2e07d234bcf0a700d9f4c75c86f8a7b9a73ff86c0800a3859e1a68109",
+            "weights_identity": "32872f2968e38aa99901797aaab5e12e32e281bf67bb924037d443394411170d"
+          }
+        }
+      }
+    }
+  },
+  "disclosures": [
+    "items 1 and 6(b) of the successor rule (v3 significantly above the current revision) are not met; the Index-first rule makes v3 a reference",
+    "the training rows include the IB1-r3 / IB2 families matched to Index benchmark families (HoVer, When2Call, iSarcasmEval, GSM8K) and the BPoMP format; the internal records report the transfer-only Index delta without those benchmarks (private values)",
+    "card.speed is the current revision's bench receipt (same architecture, runtime and shapes)"
+  ],
+  "prepared_by": "Decision 2.0 ROCm hotfix owner 490b6f72 (worktree vllm-sr-dev2-runtime-hotfix, branch xunzhuo/decision-2-runtime-hotfix) with the runtime phase A tooling of this record",
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: COORDINATION 2026-10-03 12:03 UTC+8 (the ROCm hotfix owner fixes the _attn_prep_kernel compile failure the Index submission's release spot check found, adds a byte-identical eager fallback for fused kernels and ships runtime-only revisions through the phase A parity rollout; the user's 11:34 instruction makes the Jev Decision Index submission the top priority)",
+  "decided_utc": "2026-10-03T04:03:00Z",
+  "previous_rationale": "The release judgement of the superseded final decision 6e128d9b… stands unchanged: the same identity e20df76c, scored report, paired comparison, calibration and licence decision. Only the package runtime changes, and with the switch off (the default) it computes the same values bit for bit: every prompt of the four scored panels (typed-final 1,600, css15 6,547, public231 231, mlx-diag 2,275) answered through the released package and through this package on the released weights gave 0 answer changes and 0.0 drift; 400 single requests: p50 7.17 -> 7.16 ms, p95 7.21 -> 7.20 ms, all bit-identical. release.sh checks the native examples, the card's Transformers example before upload, after the real download and from the Hub in fresh environments under Transformers 5.17 and 5.18, the card structure and every card link; then the downloaded package must pass the Index harness's 86-request parity gate (the kit runner against the package's own entry point; the phase A revisions of Kai, Eos and Sol pass it with 0.0 drift).",
+  "runtime_revision": {
+    "kind": "attn-prep-fix-eager-fallback-runtime",
+    "runtime_commit": "3c8cd1a84e1cbf9ee8cd3fd44cc0ac4f5f07a987",
+    "spec": "v2/release/specs/dev2-2b-rah.json",
+    "spec_sha256": "46597bd878c18034c5d18b4361831964ff2e3601cfdd4693bc8b98e4d79a4b71",
+    "parity": {
+      "compare": "v2/release/records/dev2-runtime-a-2026-10-02/2b/hotfix/parity/answers-compare.json",
+      "sha256": "6bf53e0ac955affa900d0c90028f30043c9b5d97e925e1a7627e502a06d3e88a",
+      "panels": {
+        "css15": [
+          6547,
+          6547,
+          0
+        ],
+        "mlx-diag": [
+          2275,
+          2275,
+          0
+        ],
+        "public231": [
+          231,
+          231,
+          0
+        ],
+        "typed-final": [
+          1600,
+          1600,
+          0
+        ]
+      },
+      "max_abs_drift": 0.0
+    },
+    "bench": {
+      "compare": "v2/release/records/dev2-runtime-a-2026-10-02/2b/hotfix/bench/compare.json",
+      "sha256": "6275804307e48ed87a44652c3303db6a3160eec7decb0d1d49fdbf4994a8ac6f",
+      "items": 400,
+      "bit_identical_items": 400,
+      "p50_ms": [
+        7.552392082288861,
+        7.608861080370843
+      ],
+      "p95_ms": [
+        7.598440977744758,
+        7.765797898173332
+      ],
+      "request_peak_gib": [
+        5.072263717651367,
+        5.072263717651367
+      ]
+    },
+    "fallback_parity": {
+      "compare": "v2/release/records/dev2-runtime-a-2026-10-02/2b/hotfix/parity/answers-compare-fallback.json",
+      "sha256": "6bf53e0ac955affa900d0c90028f30043c9b5d97e925e1a7627e502a06d3e88a",
+      "panels": {
+        "css15": [
+          6547,
+          6547,
+          0
+        ],
+        "mlx-diag": [
+          2275,
+          2275,
+          0
+        ],
+        "public231": [
+          231,
+          231,
+          0
+        ],
+        "typed-final": [
+          1600,
+          1600,
+          0
+        ]
+      },
+      "max_abs_drift": 0.0
+    }
+  }
+}
