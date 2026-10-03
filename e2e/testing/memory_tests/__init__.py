@@ -20,6 +20,7 @@ from memory_tests.test_pipeline import (
     MemoryInjectionPipelineTest,
     SimilarityThresholdTest,
     StaleMemoryTest,
+    SupersededMemoryTest,
 )
 from memory_tests.test_storage import MemoryStorageTest, PluginCombinationTest
 
@@ -38,5 +39,6 @@ __all__ = [
     "PluginCombinationTest",
     "SimilarityThresholdTest",
     "StaleMemoryTest",
+    "SupersededMemoryTest",
     "UserIsolationTest",
 ]

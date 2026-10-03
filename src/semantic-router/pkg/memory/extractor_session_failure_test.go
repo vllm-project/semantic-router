@@ -16,7 +16,7 @@ type sessionFailureStore struct {
 }
 
 func (s *sessionFailureStore) Store(ctx context.Context, mem *Memory) error {
-	if mem.Source == "session_window" {
+	if mem.Source == sessionChunkSource {
 		return s.cause
 	}
 	// Avoid model inference when testing partial persistence.

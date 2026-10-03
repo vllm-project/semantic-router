@@ -48,6 +48,34 @@ threshold inherits the global setting; calibrate that value for the selected
 embedding model and search mode before adding an override. See a complete example:
 [`config/fragments/plugin/memory/session-memory.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/memory/session-memory.yaml).
 
+## Corrections
+
+Router Memory stores each turn as it was said, so a fact and its later
+correction can both be retrieved for the same request. The default memory
+filter (`reflection.algorithm: heuristic`) then drops the older turn when a
+sentence in the newer one says the user changed something, as in "I moved",
+"we've switched", "I'm no longer" or "I don't ... anymore", and the part about
+the change shares a word pair with the older message, such as "work as" or "I
+live" followed by a place. A shared verb must keep its complement and a shared
+noun its purpose, so "I work as a paramedic now" doesn't correct "I work out
+every morning" and "my budget for groceries" doesn't correct "my budget for the
+Japan trip". The destination in "I moved to Denver" doesn't match other facts
+about Denver either. A question, a change made by someone else, or one that is
+negated, hypothetical or only planned doesn't count. A session-window memory
+loses only the corrected turn. When a message quotes a `---` line followed by a
+`Q:` line, the stored copy escapes that `Q:`, so the quote can't start a new
+turn. Windows stored before that escaping can still lose a corrected turn, but
+their turns never correct other memories.
+
+Stored records don't change. An old turn is hidden only when its correction is
+injected in the same request, and only if it states a single fact. A turn with
+several sentences or clauses, such as "I live in Boston and work as a nurse" or
+"I live in Boston, my dog is Biscuit", is kept because it may hold other facts. A session window carries the time of
+its newest turn only, so its earlier turns can correct turns before them in
+that window but not other memories. Corrections phrased another way or written
+in another language aren't recognized yet. Setting
+`reflection.algorithm: noop` turns this off along with the rest of the filter.
+
 ## Observability
 
 Router Memory exposes bounded Prometheus metrics on the Router scrape endpoint.
