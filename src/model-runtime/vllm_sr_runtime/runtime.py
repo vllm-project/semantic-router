@@ -16,7 +16,7 @@ from concurrent.futures import Future
 from dataclasses import dataclass, replace
 from typing import Any
 
-from .accel.autotune import freeze_autotune
+from .accel.autotune import freeze_autotune, pin_kernel_choices
 from .config import ServeConfig
 from .errors import DEADLINE_EXCEEDED, RuntimeServiceError
 from .placement import Placement, place
@@ -116,6 +116,9 @@ class Runtime:
         spec = family.describe(package)
         parameters = package.loaded_parameters or 0
         placement = place(spec, config.device, parameters, config.memory_budget_gib)
+        choices = family.kernel_choices(package, placement.device)
+        if choices:
+            pin_kernel_choices(choices)
         engine = registry.instantiate("engines", config.engine)
         reason = engine.supports(spec, placement.device)
         if reason:

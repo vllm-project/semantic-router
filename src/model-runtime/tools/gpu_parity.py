@@ -11,9 +11,9 @@ The package is verified and loaded through the decision2 family and the native e
 Every prompt is answered as one request with the profile's batching (``exact``: the request's questions in one
 padded batch, split only by the forward token budget) and compared with the released runtime's answers for the
 same panel and prompt ID (the ``--answers`` file of ``v2/release/examples.py parity``, produced on the same device
-class with the same autotune cache). Per panel: prompts, identical prompts (canonical JSON equality), category
-changes, missing answers and the largest absolute difference of any probability, Noul or Score value. Exits 1
-unless every prompt is identical.
+class with the same autotune cache; a built-in model runs with its pinned kernel choices, the released runtime's).
+Per panel: prompts, identical prompts (canonical JSON equality), category changes, missing answers and the largest
+absolute difference of any probability, Noul or Score value. Exits 1 unless every prompt is identical.
 """
 
 from __future__ import annotations
@@ -28,6 +28,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from vllm_sr_runtime.accel.autotune import pin_kernel_choices  # noqa: E402
 from vllm_sr_runtime.accel.cpu import CPUAccelerator  # noqa: E402
 from vllm_sr_runtime.accel.cuda import CUDAAccelerator  # noqa: E402
 from vllm_sr_runtime.accel.rocm import ROCmAccelerator  # noqa: E402
@@ -90,6 +91,9 @@ def load(args: argparse.Namespace):
     accelerator = ACCELERATORS[kind]()
     devices = accelerator.devices()
     device = devices[int(index or 0)] if kind != "cpu" else devices[0]
+    choices = family.kernel_choices(package, device)
+    if choices:
+        pin_kernel_choices(choices)
     options = EngineOptions(graphs=not args.no_graphs, fused_kernels=not args.no_fused)
     engine_model = NativeEngine().load(spec, accelerator, device, options)
     return family.load(package, spec, engine_model)
