@@ -110,7 +110,12 @@ def _go_base0_int(text: str) -> int | None:
         return sign * int(match.group("hex"), 16)
     if match.group("oct0") is not None:
         return sign * int(match.group("oct0") or "0", 8)
-    return sign * int(match.group("dec"))
+    decimal = match.group("dec")
+    # More than 20 decimal digits cannot fit uint64. Leave them to the float
+    # fallback without building a large int or hitting Python's digit limit.
+    if len(decimal) > 20:
+        return None
+    return sign * int(decimal)
 
 
 def _finite_go_float(text: str) -> float | None:
