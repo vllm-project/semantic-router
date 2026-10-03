@@ -6,7 +6,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -23,13 +22,12 @@ type RecipeClassifiers struct {
 	routingOrder []config.RecipeName
 }
 
-// RecipeRuntimeOptions borrows the generation's model runtimes and default
+// RecipeRuntimeOptions borrows the generation's model runtime and default
 // embedding snapshot. Named recipes prepare independent bindings against the
 // same deployments and resource pool.
 type RecipeRuntimeOptions struct {
-	Runtime          *serving.Runtime
-	EmbeddingRuntime *native.Runtime
-	Embeddings       *embedding.Set
+	Runtime    *serving.Runtime
+	Embeddings *embedding.Set
 }
 
 // BuildRecipeClassifiers prepares the classifier graph and owned dependencies
@@ -52,9 +50,6 @@ func BuildRecipeClassifiers(
 	}
 	if options.Runtime == nil {
 		options.Runtime = serving.New(nil, nil)
-	}
-	if options.EmbeddingRuntime == nil {
-		options.EmbeddingRuntime = native.New(options.Runtime.Pool)
 	}
 	sharedAdmission := buildAdmissionRegistry(cfg)
 	set := &RecipeClassifiers{

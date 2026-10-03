@@ -62,7 +62,7 @@ func (r classifierAPIResources) Close() error {
 }
 
 func (s *ClassificationService) prepareAndPublishClassifiers(cfg *config.RouterConfig, classifier *classification.Classifier, recipes *classification.RecipeClassifiers, owner io.Closer, options classification.RecipeRuntimeOptions, lease io.Closer) error {
-	prepared, err := modelruntime.PrepareOwnedEmbeddingAPI(context.Background(), cfg, options.EmbeddingRuntime)
+	prepared, err := modelruntime.PrepareOwnedEmbeddingAPI(context.Background(), cfg, options.Runtime)
 	if err != nil {
 		_ = owner.Close()
 		_ = lease.Close()
