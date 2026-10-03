@@ -1,0 +1,289 @@
+"""The two Vela 2.0 members: how their rows become model inputs, run, and reduce to raw outputs.
+
+The 0.3B member pads its marker sequences into one encoder batch; the engine
+returns the last hidden states (native) or the published graph's outputs
+(ONNX graph with the readout baked in), and the schema readout runs in the
+family. The 4B / 9B member runs each tree once on the engine's
+shared-context forward (the parts computed once, every block continuing from
+them) and reads the blocks with the candidate head and the span heads.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import torch
+
+from ...heads.candidate import CandidateHead
+from ...heads.marker import MarkerHead
+from ...heads.span import SpanHead
+from ...plugins.base import EncoderBatch, EncoderOutput, EngineModel, TreeBatch
+from .calibration import BROAD_HEAD, ROUTER_HEAD
+from .decoder_layout import Block, DecoderLayout, DecoderTree, RowTrees
+from .dispatch import Dispatcher
+from .encoder_layout import EncoderLayout, EncoderSequence, batch_indices, split_outputs
+from .layout import Row, SchemaTooLongError, Tokens
+from .package import Vela2Package
+from .raw import RawRow
+
+GRAPH_OUTPUTS = ("opt_logits", "span_logits")
+INDEX_INPUTS = ("q_index", "opt_index", "unit_index", "ent_index")
+
+
+def read_tensors(paths: list[Path], keep: tuple[str, ...]) -> dict[str, torch.Tensor]:
+    """The tensors whose names start with one of ``keep``, from safetensors files."""
+    from safetensors import safe_open
+
+    out = {}
+    for path in paths:
+        with safe_open(str(path), framework="pt") as handle:
+            for name in handle.keys():  # noqa: SIM118 - safe_open has no __iter__
+                if name.startswith(keep):
+                    out[name] = handle.get_tensor(name)
+    return out
+
+
+def load_prefixed(
+    module: torch.nn.Module, tensors: dict[str, torch.Tensor], prefix: str
+) -> None:
+    """Load the ``prefix.*`` tensors into ``module`` strictly, as FP32."""
+    state = {
+        name[len(prefix) :]: value.float()
+        for name, value in tensors.items()
+        if name.startswith(prefix)
+    }
+    module.load_state_dict(state, strict=True)
+
+
+def _pad(rows: list[list[int]], pad: int) -> tuple[torch.Tensor, torch.Tensor]:
+    width = max(len(row) for row in rows)
+    ids = torch.full((len(rows), width), pad, dtype=torch.long)
+    mask = torch.zeros((len(rows), width), dtype=torch.long)
+    for index, row in enumerate(rows):
+        ids[index, : len(row)] = torch.tensor(row, dtype=torch.long)
+        mask[index, : len(row)] = 1
+    return ids, mask
+
+
+class EncoderMember:
+    """Vela 2.0 0.3B: marker sequences, schema readout (in the family or baked into a graph).
+
+    An engine that runs the published graph returns its ``opt_logits`` and
+    ``span_logits``; one that returns hidden states gets the readout here.
+    Which one the loaded engine does is probed once at load.
+    """
+
+    def __init__(self, package: Vela2Package, engine_model: EngineModel):
+        config = package.config
+        self.layout = EncoderLayout(config)
+        self.engine_model = engine_model
+        readout = MarkerHead(
+            config["encoder_config"]["hidden_size"],
+            int(config["proj_dim"]),
+            config["readout"],
+        )
+        tensors = read_tensors(
+            list(package.weights), ("norm.", "w_", "log_tau", "cls_mlp.")
+        )
+        readout.load_state_dict({k: v.float() for k, v in tensors.items()}, strict=True)
+        self.readout = readout.float().eval().to(engine_model.device)
+        probe, _ = self._encode(
+            [EncoderSequence(ids=[self.layout.bos, self.layout.eos], questions=[])]
+        )
+        self.graph = bool(probe.outputs)
+
+    def parameters(self) -> int:
+        """Readout parameters the family adds (none when the graph holds the readout)."""
+        return 0 if self.graph else sum(p.numel() for p in self.readout.parameters())
+
+    def plan(
+        self, rows: list[Row], tokens: Tokens
+    ) -> tuple[list[EncoderSequence], list[list[int] | None]]:
+        """Sequences of every row and, per row, the indices of its sequences (None when it cannot fit)."""
+        items: list[EncoderSequence] = []
+        groups: list[list[int] | None] = []
+        for row in rows:
+            try:
+                sequences = self.layout.sequences(row, tokens)
+            except SchemaTooLongError:
+                groups.append(None)
+                continue
+            groups.append(list(range(len(items), len(items) + len(sequences))))
+            items.extend(sequences)
+        return items, groups
+
+    def _encode(
+        self, items: list[EncoderSequence]
+    ) -> tuple[EncoderOutput, dict[str, np.ndarray]]:
+        """One padded batch through the engine, asking for the graph outputs (graph engines return them)."""
+        input_ids, attention_mask = _pad([item.ids for item in items], self.layout.pad)
+        indices = batch_indices(items)
+        return (
+            self.engine_model.encode(
+                EncoderBatch(
+                    input_ids,
+                    attention_mask,
+                    graph_inputs={
+                        name: torch.from_numpy(value) for name, value in indices.items()
+                    },
+                    outputs=GRAPH_OUTPUTS,
+                )
+            ),
+            indices,
+        )
+
+    def run(self, items: list[EncoderSequence]) -> list[Any]:
+        output, indices = self._encode(items)
+        if self.graph:
+            option_logits, span_logits = (
+                output.outputs[name] for name in GRAPH_OUTPUTS
+            )
+        else:
+            hidden = output.hidden[max(output.hidden)]
+            device = hidden.device
+            with torch.inference_mode():
+                option_logits, span_logits = self.readout(
+                    hidden,
+                    *(
+                        torch.from_numpy(indices[name]).to(device)
+                        for name in INDEX_INPUTS
+                    ),
+                )
+        return split_outputs(
+            items,
+            option_logits.float().cpu().numpy(),
+            span_logits.float().cpu().numpy(),
+        )
+
+    def combine(
+        self,
+        rows: list[Row],
+        groups: list[list[int] | None],
+        items: list[EncoderSequence],
+        results: list[Any],
+    ) -> list[RawRow | None]:
+        out: list[RawRow | None] = []
+        for row, group in zip(rows, groups, strict=True):
+            if group is None:
+                out.append(None)
+                continue
+            out.append(
+                self.layout.combine(
+                    row, [items[i] for i in group], [results[i] for i in group]
+                )
+            )
+        return out
+
+
+class DecoderMember:
+    """Vela 2.0 4B / 9B: one tree per request, candidate head for options, span heads for spans."""
+
+    def __init__(self, package: Vela2Package, engine_model: EngineModel):
+        config = package.config
+        hidden = config["backbone_config"]["hidden_size"]
+        span = config.get("span_head") or {}
+        tensors = read_tensors(list(package.weights), ("head.", "set_bias", "span2."))
+        self.head = CandidateHead(hidden, int(config["head_dim"]))
+        load_prefixed(self.head, tensors, "head.")
+        self.set_bias = tensors["set_bias"].float().to(engine_model.device)
+        self.spans: dict[str, SpanHead] = {
+            ROUTER_HEAD: SpanHead(hidden, span.get("d", 256), span.get("slots", 64))
+        }
+        load_prefixed(self.spans[ROUTER_HEAD], tensors, "span2.")
+        if package.broad_head is not None:
+            broad = read_tensors([package.broad_head], ("span_broad.",))
+            self.spans[BROAD_HEAD] = SpanHead(
+                hidden,
+                broad["span_broad.K.weight"].shape[0],
+                broad["span_broad.slot.weight"].shape[0],
+            )
+            load_prefixed(self.spans[BROAD_HEAD], broad, "span_broad.")
+        device = engine_model.device
+        self.head = self.head.float().eval().to(device)
+        self.spans = {
+            name: head.float().eval().to(device) for name, head in self.spans.items()
+        }
+        self.engine_model = engine_model
+        self.layout = DecoderLayout(
+            config, Dispatcher(package.calibration, BROAD_HEAD in self.spans)
+        )
+
+    @property
+    def broad_head(self) -> bool:
+        return BROAD_HEAD in self.spans
+
+    def parameters(self) -> int:
+        modules = [self.head, *self.spans.values()]
+        return (
+            sum(p.numel() for m in modules for p in m.parameters())
+            + self.set_bias.numel()
+        )
+
+    def plan(
+        self, rows: list[Row], tokens: Tokens
+    ) -> tuple[list[DecoderTree], list[RowTrees | None]]:
+        return self.layout.trees(rows, tokens)
+
+    def run(self, items: list[DecoderTree]) -> list[list[np.ndarray]]:
+        return [self._tree(tree) for tree in items]
+
+    def combine(
+        self, plans: list[RowTrees | None], items: list[DecoderTree], results: list[Any]
+    ) -> list[RawRow | None]:
+        outputs = {
+            id(block): value
+            for tree, values in zip(items, results, strict=True)
+            for block, value in zip(tree.blocks, values, strict=True)
+        }
+        return [
+            None if plan is None else self.layout.combine(plan, outputs)
+            for plan in plans
+        ]
+
+    def _tree(self, tree: DecoderTree) -> list[np.ndarray]:
+        """The tree's forward (parts once, every block from them), then each block's readout in order."""
+        blocks = tree.blocks
+        hidden = self.engine_model.tree(
+            TreeBatch(tree.prefix, [block.ids for block in blocks])
+        ).hidden
+        device = hidden.device
+        results: list[np.ndarray] = [np.zeros(0)] * len(blocks)
+        questions = [index for index, block in enumerate(blocks) if not block.is_span]
+        with torch.inference_mode():
+            if questions:
+                width = max(len(blocks[index].ends) for index in questions)
+                ends = torch.zeros((len(questions), width), dtype=torch.long)
+                for row, index in enumerate(questions):
+                    ends[row, : len(blocks[index].ends)] = torch.tensor(
+                        blocks[index].ends
+                    )
+                rows = torch.tensor(questions, device=device)
+                queries = torch.tensor(
+                    [blocks[index].query for index in questions], device=device
+                )
+                scores = self.head(
+                    hidden[rows[:, None], ends.to(device)], hidden[rows, queries]
+                ).float()
+                for row, index in enumerate(questions):
+                    block = blocks[index]
+                    values = scores[row, : len(block.ends)]
+                    if block.question.type == "set":
+                        values = values + self.set_bias
+                    results[index] = values.cpu().numpy()
+            for index, block in enumerate(blocks):
+                if block.is_span:
+                    results[index] = self._span(block, hidden[index])
+        return results
+
+    def _span(self, block: Block, rows: torch.Tensor) -> np.ndarray:
+        """Word x label logits of one span block from its hidden rows (labels: mean over each label block)."""
+        labels = torch.stack(
+            [
+                rows[start : end + 1].mean(0)
+                for start, end in zip(block.starts, block.ends, strict=True)
+            ]
+        )
+        words = rows[torch.as_tensor(block.words, device=rows.device)]
+        return self.spans[block.head](words, labels).float().cpu().numpy()
