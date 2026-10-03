@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 import torch
 from vllm_sr_runtime.accel.cpu import CPUAccelerator
@@ -165,26 +166,43 @@ def test_decoder_answers_a_halu_alias_with_the_callers_label(models) -> None:
     assert {span["label"] for span in response["spans"]["h"]} == {"Hallucinated"}
 
 
-def test_decoder_runs_all_span_questions_in_one_parts_pass(models) -> None:
+def test_decoder_shared_context_path_runs_one_parts_pass(models, monkeypatch) -> None:
     model = models["decoder"]
     state = {"request": "Tom Baker wrote", "answer": "Adults may take 6 grams."}
-    plan = model.plan(
-        state, {"pii": {"preset": "pii", "over": "request"}, "halu": {"preset": "halu"}}
+    questions = {
+        "pii": {"preset": "pii", "over": "request"},
+        "halu": {"preset": "halu"},
+        "q": GOLDEN_QUESTIONS["jailbreak"],
+    }
+    plan = model.plan(state, questions)
+    assert len(plan.rows) == 2 and len(plan.items) == 2
+    calls = []
+    tree = model.engine_model.tree
+    monkeypatch.setattr(
+        model.engine_model, "tree", lambda batch: calls.append(batch) or tree(batch)
     )
-    assert (
-        len(plan.rows) == 2 and len(plan.items) == 1 and len(plan.items[0].blocks) == 2
-    )
+    exact = model.run(plan.items)
+    packed = model.run(plan.items, shared_prefix=1)
+    assert [c.layout for c in calls] == ["rows", "packed"]
+    assert len(calls[0].prefixes) == 2 and len(calls[1].prefixes) == 1
+    for exact_tree, packed_tree in zip(exact, packed, strict=True):
+        for a, b in zip(exact_tree, packed_tree, strict=True):
+            np.testing.assert_allclose(a, b, atol=1e-4)
 
 
-def test_tree_blocks_equal_their_full_sequences(models) -> None:
+@pytest.mark.parametrize("layout", ["rows", "packed"])
+def test_tree_blocks_equal_their_full_sequences(models, layout) -> None:
     engine_model = models["decoder"].engine_model
-    prefix = list(range(5, 25))
-    blocks = [list(range(30, 37)), list(range(40, 52))]
-    hidden = engine_model.tree(TreeBatch(prefix, blocks)).hidden
-    for index, block in enumerate(blocks):
-        ids = torch.tensor([prefix + block])
+    prefixes = [list(range(5, 25)), list(range(60, 73))]
+    blocks = [list(range(30, 37)), list(range(40, 52)), list(range(80, 85))]
+    owners = [0, 0, 1]
+    hidden = engine_model.tree(TreeBatch(prefixes, blocks, owners, layout)).hidden
+    for index, (block, owner) in enumerate(zip(blocks, owners, strict=True)):
+        ids = torch.tensor([prefixes[owner] + block])
         with torch.inference_mode():
-            full = engine_model.backbone(ids, torch.ones_like(ids))[0, len(prefix) :]
+            full = engine_model.backbone(ids, torch.ones_like(ids))[
+                0, len(prefixes[owner]) :
+            ]
         torch.testing.assert_close(
             hidden[index, : len(block)], full, atol=1e-4, rtol=1e-4
         )

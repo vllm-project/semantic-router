@@ -213,7 +213,8 @@ def test_decoder_blocks_share_the_parts_and_read_endpoints() -> None:
     )
     rows = rows_of(plan, TOKENS)
     trees, plans = decoder().trees(rows, TOKENS)
-    assert len(rows) == 2 and len(trees) == 1
+    assert len(rows) == 2 and len(trees) == 2
+    assert trees[0].prefix == trees[1].prefix
     tree = trees[0]
     text = "".join(chr(t - 10) for t in tree.prefix)
     assert (
@@ -232,7 +233,7 @@ def test_decoder_blocks_share_the_parts_and_read_endpoints() -> None:
     )
     assert [block[w] for w in pii.words] == ["h", "w"]
     assert len(pii.starts) == 17 and pii.head == "router"
-    assert plans[0].span is pii and plans[1].span.question.id == "h"
+    assert plans[0].span is pii and plans[1].span is trees[1].blocks[0]
     assert plans[0].tokens == len(tree.prefix) + len(choice.ids) + len(pii.ids)
 
 
@@ -247,9 +248,11 @@ def test_decoder_windows_long_span_targets() -> None:
     rows = rows_of(plan, TOKENS)
     trees, plans = decoder(repeat=64).trees(rows, TOKENS)
     (row,) = plans
-    assert row.windows and row.span is not None
+    assert row.windows and row.span is not None and not row.span.read
     assert [b.question.id for b in row.blocks] == ["c"]
     assert len(trees) == 1 + len(row.windows)
+    assert trees[0].blocks == [row.blocks[0], row.span] and not trees[0].window
+    assert all(tree.window for tree in trees[1:])
     covered = np.concatenate([w.word_index for w in row.windows])
     assert set(covered.tolist()) == set(range(len(rows[0].part("user").words)))
     outputs = {id(row.blocks[0]): np.zeros(3)} | {
