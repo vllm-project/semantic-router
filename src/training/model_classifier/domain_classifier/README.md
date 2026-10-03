@@ -40,6 +40,10 @@ python -m src.training.model_classifier.domain_classifier.prepare_data \
   --output artifacts/vela/domain
 ```
 
+Without `--annotations`, the corpus holds only Global-MMLU rows and its
+manifest records `annotations_sha256: null`. Use it to exercise the pipeline,
+not to replace the released model.
+
 The reference contract supplies the original 14 label IDs, and the written
 contract sets `classifier_pooling` to `cls`, as the released Vela Domain uses. New Vela Domain
 training starts from the shared Vela Base with a fresh classification head,
@@ -55,3 +59,14 @@ academic score. Long context variants mark the requested task within independent
 authored background narratives; they are controlled stress tests, not natural
 long-document estimates. Independent test evaluation occurs only after the
 candidate and base lineage are frozen.
+
+Check a frozen candidate in the router's Candle runtime with the Domain
+qualification suite before a promotion decision:
+
+```bash
+make qualify-candle-cpu \
+  CANDLE_MODEL_PATH=artifacts/vela/frozen/domain \
+  CANDLE_ARTIFACT_REVISION=<candidate revision> \
+  CANDLE_COMPAT_SUITE=../training/model_classifier/domain_classifier/qualification-suite.json \
+  CANDLE_COMPAT_LABELS="biology,business,chemistry,computer science,economics,engineering,health,history,law,math,other,philosophy,physics,psychology"
+```

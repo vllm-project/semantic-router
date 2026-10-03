@@ -243,6 +243,7 @@ def main():
         help="Skip development data and selection; save only the final checkpoint",
     )
     parser.add_argument("--seed", type=int, default=20260913)
+    parser.add_argument("--device", default="cuda")
     args = parser.parse_args()
     if args.train_only:
         if args.dev:
@@ -409,7 +410,9 @@ def main():
     model.gradient_checkpointing_enable(
         gradient_checkpointing_kwargs={"use_reentrant": False}
     )
-    model.to("cuda")
+    device = args.device
+    cuda = device == "cuda"
+    model.to(device)
     model.train()
     parameters = [
         parameter for parameter in model.parameters() if parameter.requires_grad
@@ -490,7 +493,9 @@ def main():
         "selection": None if args.train_only else args.selection,
         "evaluation_dtype": None if args.train_only else args.evaluation_dtype,
         "test_used": False,
-        "precision": "FP32 parameters and explicit FP32 mean CE / BF16 autocast",
+        "device": device,
+        "precision": "FP32 parameters and explicit FP32 mean CE"
+        + (" / BF16 autocast" if cuda else ""),
         "attention": "sdpa",
         "checkpointing": "non-reentrant",
         "parameters": sum(parameter.numel() for parameter in model.parameters()),
@@ -625,8 +630,9 @@ def main():
         evaluate_checkpoint(0)
     for step in range(1, args.steps + 1):
         optimizer.zero_grad(set_to_none=True)
-        torch.cuda.reset_peak_memory_stats()
-        torch.cuda.synchronize()
+        if cuda:
+            torch.cuda.reset_peak_memory_stats()
+            torch.cuda.synchronize()
         start, step_loss, lengths = time.perf_counter(), 0.0, []
         step_ce_loss, step_retention_loss, retention_examples = 0.0, 0.0, 0
         if training_order:
@@ -664,11 +670,11 @@ def main():
             batch = tokenizer.pad(
                 [encoded for _, encoded in selected], padding=True, return_tensors="pt"
             )
-            batch = {key: value.to("cuda") for key, value in batch.items()}
+            batch = {key: value.to(device) for key, value in batch.items()}
             gold = torch.tensor(
-                [label_to_id[row["label"]] for row, _ in selected], device="cuda"
+                [label_to_id[row["label"]] for row, _ in selected], device=device
             )
-            with torch.autocast("cuda", dtype=torch.bfloat16):
+            with torch.autocast(device, dtype=torch.bfloat16, enabled=cuda):
                 logits = model(**batch).logits
                 loss = (
                     microbatch_loss(logits, gold, args.accumulate)
@@ -719,7 +725,8 @@ def main():
             trace = training_order.record_step(step, microbatches)
             with (args.output / "actual-training-order.jsonl").open("a") as stream:
                 stream.write(json.dumps(trace) + "\n")
-        torch.cuda.synchronize()
+        if cuda:
+            torch.cuda.synchronize()
         log = {
             "step": step,
             "loss": step_loss,
@@ -734,8 +741,12 @@ def main():
             "microbatches": microbatch_count,
             "max_padded_tokens": max_padded_tokens,
             "step_seconds": time.perf_counter() - start,
-            "peak_allocated_gib": torch.cuda.max_memory_allocated() / 2**30,
-            "peak_reserved_gib": torch.cuda.max_memory_reserved() / 2**30,
+            "peak_allocated_gib": (
+                torch.cuda.max_memory_allocated() / 2**30 if cuda else None
+            ),
+            "peak_reserved_gib": (
+                torch.cuda.max_memory_reserved() / 2**30 if cuda else None
+            ),
         }
         with (args.output / "steps.jsonl").open("a") as stream:
             stream.write(json.dumps(log) + "\n")
