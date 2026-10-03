@@ -8,7 +8,6 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import ValidationError
 
 from . import ollama_fixture, openrouter_fixture, vllm_fixture, workflow_chat
-from .fault_schedule import FAULT_INJECTED_HEADER, get_fault_key
 from .chat_request import ChatRequest, build_chat_content
 from .chat_wire import (
     build_chat_custom_tool_response,
@@ -24,6 +23,7 @@ from .chat_wire import (
     generate_chat_tool_stream,
     mock_chat_tool_response,
 )
+from .fault_schedule import FAULT_INJECTED_HEADER, get_fault_key
 from .provider_boundary import (
     SESSION_HEADER,
     invalid_request_response,

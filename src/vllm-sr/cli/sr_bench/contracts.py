@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 
 import yaml
@@ -263,6 +264,10 @@ def validate_request_params(params, limits, label="request_params"):
             raise ValueError(f"{label}.{name} must be boolean")
 
 
+_MIN_HTTP_STATUS = 100
+_MAX_HTTP_STATUS = 599
+
+
 def validate_fault_schedule_entry(entry: Any, label: str) -> dict:
     if not isinstance(entry, dict):
         raise ValueError(f"{label} entries must be objects")
@@ -274,13 +279,12 @@ def validate_fault_schedule_entry(entry: Any, label: str) -> dict:
     ):
         raise ValueError(f"{label} call_index must be a non-negative integer")
     status = entry.get("status") or entry.get("status_code") or entry.get("http_status")
-    if status is not None:
-        if (
-            isinstance(status, bool)
-            or not isinstance(status, int)
-            or not (100 <= status <= 599)
-        ):
-            raise ValueError(f"{label} status must be a valid HTTP status code integer")
+    if status is not None and (
+        isinstance(status, bool)
+        or not isinstance(status, int)
+        or not (_MIN_HTTP_STATUS <= status <= _MAX_HTTP_STATUS)
+    ):
+        raise ValueError(f"{label} status must be a valid HTTP status code integer")
     delay = entry.get("delay") or entry.get("delay_s")
     if delay is None and "delay_ms" in entry:
         delay = float(entry["delay_ms"]) / 1000.0

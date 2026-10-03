@@ -6,9 +6,10 @@ import json
 import os
 import threading
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 FAULT_KEY_HEADER = "x-vsr-fault-key"
 SESSION_HEADER = "x-vsr-test-session-id"

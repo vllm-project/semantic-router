@@ -563,8 +563,8 @@ def test_sr_bench_run_with_stream_cut_short_fault(tmp_path, fault_target):
 @pytest.fixture
 def running_provider_mocker():
     """Start a real instance of provider_mocker on a free local port."""
-    from provider_mocker.app import create_app
-    from provider_mocker.settings import Settings
+    from provider_mocker.app import create_app  # noqa: PLC0415
+    from provider_mocker.settings import Settings  # noqa: PLC0415
 
     # Configure provider mocker with fault schedules for status (503), delay, and stream_cut_short
     schedule_json = json.dumps(
