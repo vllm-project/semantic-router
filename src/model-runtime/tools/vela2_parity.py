@@ -1,7 +1,7 @@
 """Parity of the vela2 family with the Vela 2.0 packages' own engine (``vela2_inference.py``).
 
     python3 tools/vela2_parity.py --package DIR --output OUT.json [--requests REQUESTS.jsonl | --generate N]
-        [--device cpu|rocm:0|cuda:0] [--seed 0] [--answers OURS.jsonl]
+        [--device cpu|rocm:0|cuda:0] [--seed 0] [--answers OURS.jsonl] [--approximate]
 
 The reference is the package's engine, imported from the package directory by this tool only (the runtime
 never imports package code), on the same device class: FP32 on CPU; on GPUs the engine's defaults (BF16
@@ -17,6 +17,8 @@ the exact profile. Per request the tool compares:
 ``--generate N`` builds N synthetic requests (seeded): router-style questions, every question type, presets,
 typed JSON states with ``over``, thresholds, open span labels, long parts that are windowed or cut, Unicode.
 The design's bar (section 17): decisions and span sets identical; max |dp| <= 1e-4 on CPU, <= 0.02 on GPUs.
+``--approximate`` answers through the approximate batches instead (packed trees and sequences), for the
+accuracy record of the faster profiles.
 """
 
 from __future__ import annotations
@@ -361,10 +363,11 @@ def reference_answer(
 
 
 def answer(
-    model: Any, state: Any, questions: dict[str, Any]
+    model: Any, state: Any, questions: dict[str, Any], approximate: bool = False
 ) -> tuple[dict[str, Any], Any]:
     plan = model.plan(state, questions)
-    results = model.run(plan.items) if plan.items else []
+    run = model.run_approximate if approximate else model.run
+    results = run(plan.items) if plan.items else []
     response = model.finish_surface(
         SurfacePlan("decisions", plan.items, plan.input_tokens, plan), results
     )
@@ -680,6 +683,11 @@ def main() -> int:
     parser.add_argument(
         "--answers", type=Path, help="write both sides' responses as JSONL"
     )
+    parser.add_argument(
+        "--approximate",
+        action="store_true",
+        help="answer through the approximate batches (packed trees and sequences)",
+    )
     args = parser.parse_args()
     requests = (
         [
@@ -706,7 +714,7 @@ def main() -> int:
         record: dict[str, Any] = {"id": request["id"]}
         try:
             started = time.perf_counter()
-            ours, plan = answer(model, state, questions)
+            ours, plan = answer(model, state, questions, args.approximate)
             runtime_s = time.perf_counter() - started
             started = time.perf_counter()
             try:
@@ -775,6 +783,7 @@ def main() -> int:
         "max_abs_diff": max((r["max_abs_diff"] for r in ok), default=0.0),
         "bar": bar,
         "kernel_choices": "pinned" if pinned else "autotuned in process",
+        "path": "approximate" if args.approximate else "exact",
         "load_s": round(load_s, 1),
         **{k: round(v, 2) for k, v in timing.items()},
         "records": records,
