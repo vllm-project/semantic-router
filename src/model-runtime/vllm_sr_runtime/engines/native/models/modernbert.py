@@ -36,6 +36,10 @@ from .common import rotate_half
 MODEL_TYPE = "modernbert"
 FULL = "full_attention"
 SLIDING = "sliding_attention"
+BAND_BLOCK = 128
+# Row width from which local layers attend in query blocks, per device type (measured,
+# Vela 307M FP32): blocks win from 1,024 tokens on MI325X, from BAND_FROM['cpu'] on CPU.
+BAND_FROM = {"cpu": 512, "cuda": 1024}
 DEFAULT_THETA = {FULL: 160_000.0, SLIDING: 10_000.0}
 ACTIVATIONS: dict[str, Callable[[torch.Tensor], torch.Tensor]] = {
     "gelu": F.gelu,
@@ -197,22 +201,85 @@ def apply_rotary(
 
 
 def attention_masks(
-    key_valid: torch.Tensor | None, rows: int, width: int, window: int, device
+    key_valid: torch.Tensor | None,
+    rows: int,
+    width: int,
+    window: int,
+    device,
+    local: bool = True,
 ) -> dict[str, torch.Tensor | None]:
     """Boolean SDPA masks per layer type, None where Transformers passes none.
 
     Global layers mask padded keys; local layers also mask keys farther than
     ``window`` positions. Without padding, the global mask is dropped, and the
-    local one too when the row is shorter than ``window``.
+    local one too when the row is shorter than ``window``. ``local=False``
+    skips the local mask (local layers attend in blocks, ``Band``).
     """
     padding = None if key_valid is None else key_valid[:, None, None, :]
     full = None if padding is None else padding.expand(rows, 1, width, width)
-    if padding is None and width < window:
+    if not local or (padding is None and width < window):
         return {FULL: full, SLIDING: None}
     position = torch.arange(width, device=device)
     band = ((position[:, None] - position[None, :]).abs() <= window)[None, None]
     sliding = band if padding is None else band & padding
     return {FULL: full, SLIDING: sliding.expand(rows, 1, width, width)}
+
+
+@dataclass(frozen=True)
+class Band:
+    """Local attention in query blocks: block ``b`` reads keys ``[b * block - window, (b + 1) * block + window)``.
+
+    ``mask`` (``[rows, 1, blocks, block, block + 2 * window]``) keeps each
+    query's keys within ``window`` positions that are real tokens.
+    """
+
+    block: int
+    window: int
+    mask: torch.Tensor
+
+
+def band(
+    key_valid: torch.Tensor | None,
+    rows: int,
+    width: int,
+    window: int,
+    block: int,
+    device,
+) -> Band:
+    """The block mask of local attention over rows of ``width`` (built on the host)."""
+    blocks = -(-width // block)
+    span = block + 2 * window
+    if key_valid is None:
+        key_valid = torch.ones(rows, width, dtype=torch.bool)
+    padded = F.pad(key_valid.cpu(), (window, blocks * block - width + window))
+    keys = padded.unfold(1, span, block)
+    query = torch.arange(block)[:, None]
+    slot = torch.arange(span)[None, :]
+    near = (slot >= query) & (slot <= query + 2 * window)
+    mask = near[None, None, None] & keys[:, None, :, None, :]
+    return Band(block, window, mask.to(device))
+
+
+def banded_attention(
+    kernels: KernelSet,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    blocks: Band,
+    scale: float,
+) -> torch.Tensor:
+    """Local attention of ``[rows, heads, width, dim]`` inputs, O(width * (block + 2 window))."""
+    rows, heads, width, dim = query.shape
+    count, span = blocks.mask.shape[2], blocks.mask.shape[-1]
+    tail = count * blocks.block - width
+    pad = (0, 0, blocks.window, tail + blocks.window)
+    q = F.pad(query, (0, 0, 0, tail)).view(rows, heads, count, blocks.block, dim)
+    k = F.pad(key, pad).unfold(2, span, blocks.block).transpose(-1, -2)
+    v = F.pad(value, pad).unfold(2, span, blocks.block).transpose(-1, -2)
+    out = kernels("sdpa")(
+        q, k, v, blocks.mask, scale=scale, is_causal=False, enable_gqa=False
+    )
+    return out.reshape(rows, heads, count * blocks.block, dim)[:, :, :width]
 
 
 @dataclass(frozen=True)
@@ -222,7 +289,8 @@ class Layout:
     A padded layout runs ``[rows, width]`` hidden states as they are. A packed
     layout runs ``[N]`` tokens; ``index`` holds each token's flat position in
     the ``[rows, width]`` attention layout (None for one unpadded row).
-    ``masks`` are the SDPA masks per layer type.
+    ``masks`` are the SDPA masks per layer type; with ``band``, local layers
+    attend in query blocks instead (long packed rows).
     """
 
     rows: int
@@ -230,6 +298,7 @@ class Layout:
     masks: dict[str, torch.Tensor | None]
     packed: bool = False
     index: torch.Tensor | None = None
+    band: Band | None = None
 
     def to_rows(self, tokens: torch.Tensor) -> torch.Tensor:
         """Token-major values (``[N, C]`` packed, ``[B, T, C]`` padded) as ``[rows, width, C]``."""
@@ -261,27 +330,43 @@ def padded_layout(
 
 
 def packed_layout(
-    lengths: Sequence[int], window: int, device, width: int | None = None
+    lengths: Sequence[int],
+    window: int,
+    device,
+    width: int | None = None,
+    band_from: int | None = None,
+    block: int = BAND_BLOCK,
 ) -> Layout:
     """The layout of sequences of ``lengths`` packed back to back (rows at least ``width`` wide).
 
     Built from host-known lengths, so no device value is read back. A single
     row without padding keeps the identity layout, which is the padded path.
+    Rows of at least ``band_from`` tokens (default: the device type's
+    ``BAND_FROM``) run local layers in query blocks.
     """
+    if band_from is None:
+        band_from = BAND_FROM.get(torch.device(device).type, BAND_FROM["cuda"])
     rows = len(lengths)
     width = max(*lengths, width or 0)
     if rows == 1 and lengths[0] == width:
-        masks = attention_masks(None, 1, width, window, device)
-        return Layout(1, width, masks, packed=True)
-    index = torch.cat(
-        [
-            torch.arange(length, dtype=torch.long) + row * width
-            for row, length in enumerate(lengths)
-        ]
+        key_valid = None
+        index = None
+    else:
+        index = torch.cat(
+            [
+                torch.arange(length, dtype=torch.long) + row * width
+                for row, length in enumerate(lengths)
+            ]
+        ).to(device)
+        key_valid = torch.arange(width)[None, :] < torch.tensor(list(lengths))[:, None]
+    blocks = None
+    if width >= band_from:
+        blocks = band(key_valid, rows, width, window, block, device)
+    device_valid = None if key_valid is None else key_valid.to(device)
+    masks = attention_masks(
+        device_valid, rows, width, window, device, local=blocks is None
     )
-    key_valid = torch.arange(width)[None, :] < torch.tensor(list(lengths))[:, None]
-    masks = attention_masks(key_valid.to(device), rows, width, window, device)
-    return Layout(rows, width, masks, packed=True, index=index.to(device))
+    return Layout(rows, width, masks, packed=True, index=index, band=blocks)
 
 
 # ---------------------------------------------------------------------------
@@ -326,20 +411,26 @@ class ModernBertAttention(nn.Module):
         mask: torch.Tensor | None,
         layout: Layout,
         kernels: KernelSet,
+        blocks: Band | None = None,
     ) -> torch.Tensor:
         rows = layout.to_rows(self.Wqkv(hidden_states))
         batch, width = rows.shape[:2]
         query, key, value = rows.view(batch, width, 3, -1, self.head_dim).unbind(dim=-3)
         query, key = apply_rotary(query.transpose(1, 2), key.transpose(1, 2), *rotary)
-        output = kernels("sdpa")(
-            query,
-            key,
-            value.transpose(1, 2),
-            mask,
-            scale=self.scaling,
-            is_causal=False,
-            enable_gqa=False,
-        )
+        if blocks is not None:
+            output = banded_attention(
+                kernels, query, key, value.transpose(1, 2), blocks, self.scaling
+            )
+        else:
+            output = kernels("sdpa")(
+                query,
+                key,
+                value.transpose(1, 2),
+                mask,
+                scale=self.scaling,
+                is_causal=False,
+                enable_gqa=False,
+            )
         output = output.transpose(1, 2).contiguous().reshape(batch, width, -1)
         return self.Wo(layout.to_tokens(output.contiguous()))
 
@@ -379,6 +470,7 @@ class ModernBertLayer(nn.Module):
             layout.masks[self.kind],
             layout,
             kernels,
+            layout.band if self.kind == SLIDING else None,
         )
         return hidden_states + self.mlp(self.mlp_norm(hidden_states))
 
