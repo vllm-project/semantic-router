@@ -42,12 +42,13 @@ var algorithmSubConfigCompilers = map[string]algorithmSubConfigCompiler{
 	"decision": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
 		algo.Decision = c.compileDecisionModelAlgo(fields)
 	},
-	"static": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
-	"knn":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
-	"kmeans": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
-	"mlp":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
-	"svm":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
-	"random": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
+	"static":     func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
+	"knn":        func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
+	"kmeans":     func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
+	"mlp":        func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
+	"svm":        func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
+	"random":     func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
+	"hiershrink": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
 }
 
 func (c *Compiler) compilePromptAlgo(

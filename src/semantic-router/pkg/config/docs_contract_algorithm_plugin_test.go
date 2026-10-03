@@ -13,6 +13,7 @@ var algorithmTutorialBuckets = map[string]string{
 	"automix":       "selection",
 	"confidence":    "looper",
 	"fusion":        "looper",
+	"hiershrink":    "selection",
 	"hybrid":        "selection",
 	"kmeans":        "selection",
 	"knn":           "selection",
