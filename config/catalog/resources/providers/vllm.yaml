@@ -687,6 +687,17 @@ models:
     status: claimed
     verified_at: 2026-09-09
     source: https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506
+- catalog: mistral/ministral-3-14b-instruct
+  relationship: self_hosted
+  id: mistralai/Ministral-3-14B-Instruct-2512
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512
 - catalog: nvidia/nemotron-3-nano-30b-a3b
   relationship: self_hosted
   id: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
