@@ -43,6 +43,19 @@
   shards on node D GPU3–4, then stages M7-IB14ML and audits both. **Next by hand:** `collect` / `score` with
   `M6_INDEX_BASE=M6-IBxIB2-m50`; R3 via `m6-xarm.sh e972f8ced… X7-IBxIB2xIB14ML 0` with `CURRENT=M6-IBxIB2-m50` once
   M8-IB-s3 frees node B GPU0 (≈ 03:50Z); M7-IB14ML parity / run on the next free node D / C GPUs.
+- **01:16Z: `X7-IBxIB2xIB14ML` on the Index** (node D GPU3–4, 8 shards, m6-index-run PID 3635374 on node D; parity
+  86 / 86, max |dp| 0.0; soup identity `b42d598a…`, rank 768, loaded 31,232,798,720). Ends ≈ 06:05Z; then `score`
+  with `M6_INDEX_BASE=M6-IBxIB2-m50` (frozen scripts `/tmp/d2w/frozen-e972f8c`, mirror `e972f8ced`). M7-IB14ML soup
+  built, staged by m7b (read only on free GPUs, M8 amendment 2). **R3 waiter** `/tmp/d2w/xarm-wait.sh
+  X7-IBxIB2xIB14ML 0 M8-IB-s3` (log `/tmp/d2w/logs/xarm-wait-X7.log`; starts `m6-xarm.sh e9dec5c1b… X7… 0` with
+  `CURRENT=M6-IBxIB2-m50` on node B when M8-IB-s3 ends ≈ 03:50Z). A restart of `m7a.sh` by another session at
+  00:28:56Z died on a container-name clash (COORDINATION 09:05).
+- **01:10Z: capped-seed relays** (`d70cdd780`, test added): a seed stopped by its GPU-hour cap relays its last BEST
+  save with `CAPPED.json`. All 20 waiting relays were restarted on it (`/data/dev2/tmp/27b-relay-restart.sh`). The
+  M7-IB124ML seeds (7,989 steps at ≈ 10 s) hit their caps ≈ 06:17–06:19Z; their best save is among saves ≤ 6,993.
+- **01:25Z: M9 amendment 3** (`cf8c660f5`): `X9-IBLRH` (M9-IB-lrh s5 / s6, ½ each) and `X9-IBLRHxM50` (+ M50's four,
+  ⅙ each), read first (≈ 14:20Z). +30 GPU-h asked. Generic chain **`/tmp/d2w/cand.sh ARM`** (member lists and weights
+  for every preregistered candidate except X8-ML; `CAND_PARITY_GPU` / `CAND_INDEX_GPUS` start parity and the run).
 - **Lease note:** launch.py leaves JSON owners (`"track": "27b"`, `"status": "reserved-idle"`); `m6-index.sh`
   parity / run / hold accept only KEY=VALUE `track=27b` + `status=reserved-idle` (or released / eval-ix1). Convert
   before an Index use (as m7b.sh does).
