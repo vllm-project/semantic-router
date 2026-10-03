@@ -222,6 +222,8 @@ func (c *InMemoryCache) generateEmbedding(ctx context.Context, text string) ([]f
 }
 
 // computeEmbedding runs the configured embedding model for text (no caching).
+func (c *InMemoryCache) semanticEmbeddingProvider() embedding.Provider { return c.embeddingProvider }
+
 func (c *InMemoryCache) computeEmbedding(ctx context.Context, text string) ([]float32, error) {
 	return invokeCacheEmbedding(ctx, c.embeddingProvider, text)
 }

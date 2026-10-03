@@ -281,9 +281,6 @@ func detectMemoryEmbeddingModel(cfg *config.RouterConfig) string {
 	}
 
 	switch {
-	case embeddingModels.BertModelPath != "":
-		logging.Infof("Memory: Auto-selected bert from embedding_models config (384-dim, recommended for memory)")
-		return "bert"
 	case embeddingModels.MmBertModelPath != "":
 		logging.Infof("Memory: Auto-selected mmbert from embedding_models config")
 		return "mmbert"
@@ -297,7 +294,7 @@ func detectMemoryEmbeddingModel(cfg *config.RouterConfig) string {
 		logging.Infof("Memory: Auto-selected gemma from embedding_models config")
 		return "gemma"
 	default:
-		logging.Warnf("Memory: No embedding models configured, bert will be used but may fail without bert_model_path")
-		return "bert"
+		logging.Infof("Memory: No embedding model configured, using the built-in %s", config.DefaultEmbeddingModel)
+		return config.DefaultEmbeddingModel
 	}
 }

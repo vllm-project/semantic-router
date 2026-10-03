@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding/vecmath"
 )
 
 // knnModel is a KNN artifact: unit-normalized training features, their
@@ -113,7 +115,7 @@ func (m *knnModel) classify(query []float64) (string, error) {
 	// The k nearest samples by squared distance, ties to the lower index.
 	nearest := make(neighborHeap, 0, m.k)
 	for i := 0; i*m.dim < len(m.features); i++ {
-		candidate := neighbor{distance: squaredDistance(m.features[i*m.dim:(i+1)*m.dim], query), index: i}
+		candidate := neighbor{distance: vecmath.SquaredDistance64(m.features[i*m.dim:(i+1)*m.dim], query), index: i}
 		if len(nearest) < m.k {
 			heap.Push(&nearest, candidate)
 		} else if candidate.closer(nearest[0]) {

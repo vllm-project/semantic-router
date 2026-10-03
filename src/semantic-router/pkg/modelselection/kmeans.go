@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding/vecmath"
 )
 
 // kmeansModel is a KMeans artifact: cluster centroids and the model
@@ -51,7 +53,7 @@ func (m *kmeansModel) classify(query []float64) (string, error) {
 	}
 	nearest, best := 0, 0.0
 	for i := range m.models {
-		distance := squaredDistance(m.centroids[i*m.dim:(i+1)*m.dim], query)
+		distance := vecmath.SquaredDistance64(m.centroids[i*m.dim:(i+1)*m.dim], query)
 		if i == 0 || distance < best {
 			nearest, best = i, distance
 		}

@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -89,11 +90,14 @@ class Rows:
     """Hidden states of one packed forward by layer exit (``[tokens, hidden]``).
 
     Sequence ``i`` occupies rows ``starts[i] : starts[i] + lengths[i]``.
+    ``outputs`` holds an engine's named graph outputs instead, one row per
+    sequence, when it runs graphs with heads baked in.
     """
 
     hidden: dict[int, torch.Tensor]
     starts: list[int]
     lengths: list[int]
+    outputs: dict[str, torch.Tensor] = field(default_factory=dict)
 
     def first(self, sequences: Sequence[int], layer: int) -> torch.Tensor:
         """The first token's row of each sequence (CLS pooling)."""
@@ -111,6 +115,15 @@ class Rows:
                 for s in sequences
             ]
         )
+
+    def last(self, sequences: Sequence[int], layer: int) -> torch.Tensor:
+        """The last token's row of each sequence (last-token pooling)."""
+        hidden = self.hidden[layer]
+        index = torch.tensor(
+            [self.starts[s] + self.lengths[s] - 1 for s in sequences],
+            device=hidden.device,
+        )
+        return hidden.index_select(0, index)
 
     def tokens(self, sequences: Sequence[int], layer: int) -> torch.Tensor:
         """Every row of the sequences, concatenated in order."""
@@ -162,21 +175,52 @@ class HeadOptions:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
-class TaskHead(ABC):
-    """One readout of a task model.
+class Head(ABC):
+    """One readout of a model's shared forward: the exit it reads and a batched ``readout``.
 
-    ``prepare`` turns one input into items (on the request thread), ``readout``
-    reads the rows of a batch of this head's items (on the model's worker, one
-    batched call per forward) and ``result`` assembles one input's API result.
+    The family runs one forward for the items of every head and hands each
+    head the rows of its own items (on the model's worker, one batched call
+    per forward).
     """
 
     kind: ClassVar[str]
+    surface: ClassVar[str]
+
+    def __init__(self, name: str, layer: int):
+        self.name = name
+        self.layer = layer
+
+    @abstractmethod
+    def readout(self, rows: Rows, sequences: Sequence[int]) -> list[Any]:
+        """Per sequence, this head's result; must not keep references to ``rows``."""
+
+    def to(self, device: torch.device) -> Head:
+        """Move the head's tensors to the backbone's device."""
+        return self
+
+    def items(self, rows: Sequence[Sequence[int]], identity: str) -> list[Item]:
+        """One item per framed row of token IDs, keyed by everything its result depends on."""
+        return [
+            Item(
+                tuple(ids),
+                self.name,
+                self.layer,
+                cache_key(identity, self.name, self.layer, ids),
+            )
+            for ids in rows
+        ]
+
+
+class TaskHead(Head):
+    """A classify head: ``prepare`` turns one input into items (on the request
+    thread) and ``result`` assembles one input's API result from their readouts.
+    """
+
     surface: ClassVar[str] = "classify"
 
     def __init__(self, name: str, labels: Sequence[str], layer: int):
-        self.name = name
+        super().__init__(name, layer)
         self.labels = tuple(labels)
-        self.layer = layer
 
     @abstractmethod
     def describe(self) -> dict[str, Any]:
@@ -187,13 +231,21 @@ class TaskHead(ABC):
         """Validate and tokenize one input; raises ``ValueError`` for a bad input."""
 
     @abstractmethod
-    def readout(self, rows: Rows, sequences: Sequence[int]) -> list[Any]:
-        """Per sequence, this head's result; must not keep references to ``rows``."""
-
-    @abstractmethod
     def result(self, prepared: Prepared, values: Sequence[Any]) -> dict[str, Any]:
         """One input's API result from its items' readouts, in item order."""
 
-    def to(self, device: torch.device) -> TaskHead:
-        """Move the head's tensors to the backbone's device."""
-        return self
+
+def token_probabilities(
+    classifier: ClassifierHead, rows: Rows, sequences: Sequence[int], layer: int
+) -> list[np.ndarray]:
+    """Per sequence, the read-only ``[tokens, labels]`` softmax of a per-token classifier."""
+    logits = classifier(rows.tokens(sequences, layer).float())
+    probabilities = torch.softmax(logits, dim=-1).cpu().numpy()
+    out, start = [], 0
+    for sequence in sequences:
+        length = rows.lengths[sequence]
+        values = probabilities[start : start + length]
+        values.flags.writeable = False
+        out.append(values)
+        start += length
+    return out
