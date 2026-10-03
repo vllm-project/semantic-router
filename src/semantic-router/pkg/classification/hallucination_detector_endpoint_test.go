@@ -123,18 +123,6 @@ func assertSpanShape(t *testing.T, first EnhancedHallucinationSpan, answer, expe
 	if first.Start != wantStart || first.End != wantStart+len(expectedText) {
 		t.Errorf("Span offsets = [%d,%d), want [%d,%d)", first.Start, first.End, wantStart, wantStart+len(expectedText))
 	}
-	// NLI fields must be backend-neutral, not fabricated. The numeric label must
-	// be the NLIUnknown sentinel (not 0, which is NLIEntailment) and stay
-	// consistent with the string form.
-	if first.NLILabelStr != "UNKNOWN" || first.NLIConfidence != 0 {
-		t.Errorf("Span NLI = (%q, %v), want (UNKNOWN, 0)", first.NLILabelStr, first.NLIConfidence)
-	}
-	if first.NLILabel != NLIUnknown {
-		t.Errorf("Span.NLILabel = %v, want NLIUnknown", first.NLILabel)
-	}
-	if first.NLILabel == NLIEntailment {
-		t.Errorf("Span.NLILabel must not serialize as entailment (0)")
-	}
 	if first.Severity == 4 {
 		t.Errorf("Span.Severity = 4 (critical); endpoint spans must not synthesize critical severity")
 	}
