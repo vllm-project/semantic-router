@@ -46,7 +46,7 @@ repos:
         entry: make go-tools-lint
         language: system
         pass_filenames: false
-        files: ^(tools/(dev/dsl|models/classifier-operating-point|calibration/image-routing)/.*\.go$|bench/grounded_fusion/fusioneval/.*\.go$|tools/make/go-tools\.mk$)
+        files: ^(tools/(dev/dsl|models/classifier-operating-point|calibration/image-routing|calibration/shadow-dataset)/.*\.go$|bench/grounded_fusion/fusioneval/.*\.go$|tools/make/go-tools\.mk$)
 
   - repo: local
     hooks:
