@@ -7,13 +7,13 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 )
 
 // PrepareOwnedResponseCacheEmbeddings gives the shared cache its own typed
 // consumer handle over the global serving binding. Its resource reference uses
 // the same pool as recipe handles, without borrowing any recipe's override.
-func PrepareOwnedResponseCacheEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *native.Runtime) (*embedding.Set, error) {
+func PrepareOwnedResponseCacheEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *serving.Runtime) (*embedding.Set, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("response cache requires model configuration")
 	}

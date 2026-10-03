@@ -23,7 +23,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"gopkg.in/yaml.v3"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -1301,12 +1300,7 @@ func generateQuery(length ContentLength, index int) string {
 
 // BenchmarkComprehensive runs comprehensive benchmarks across multiple dimensions
 func BenchmarkComprehensive(b *testing.B) {
-	// Initialize BERT model
 	useCPU := os.Getenv("USE_CPU") != "false" // Default to CPU
-	modelName := "sentence-transformers/all-MiniLM-L6-v2"
-	if err := candle_binding.InitModel(modelName, useCPU); err != nil {
-		b.Skipf("Failed to initialize BERT model: %v", err)
-	}
 
 	// Determine hardware type
 	hardware := "cpu"
@@ -1350,7 +1344,7 @@ func BenchmarkComprehensive(b *testing.B) {
 			// Benchmark Linear Search
 			b.Run(fmt.Sprintf("%s/Linear/%s/%dEntries", hardware, contentLen.String(), cacheSize), func(b *testing.B) {
 				cache := NewInMemoryCache(InMemoryCacheOptions{
-					EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					Enabled:             true,
 					MaxEntries:          cacheSize * 2,
 					SimilarityThreshold: 0.85,
@@ -1389,7 +1383,7 @@ func BenchmarkComprehensive(b *testing.B) {
 			for _, hnswCfg := range hnswConfigs {
 				b.Run(fmt.Sprintf("%s/HNSW_%s/%s/%dEntries", hardware, hnswCfg.name, contentLen.String(), cacheSize), func(b *testing.B) {
 					cache := NewInMemoryCache(InMemoryCacheOptions{
-						EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+						EmbeddingProvider:   cacheTestEmbeddingProvider(),
 						Enabled:             true,
 						MaxEntries:          cacheSize * 2,
 						SimilarityThreshold: 0.85,
@@ -1433,10 +1427,6 @@ func BenchmarkComprehensive(b *testing.B) {
 
 // BenchmarkIndexConstruction benchmarks HNSW index build time
 func BenchmarkIndexConstruction(b *testing.B) {
-	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
-		b.Skipf("Failed to initialize BERT model: %v", err)
-	}
-
 	cacheSizes := []int{100, 500, 1000, 5000}
 	contentLengths := []ContentLength{ShortContent, MediumContent, LongContent}
 
@@ -1452,7 +1442,7 @@ func BenchmarkIndexConstruction(b *testing.B) {
 				for i := 0; i < b.N; i++ {
 					b.StopTimer()
 					cache := NewInMemoryCache(InMemoryCacheOptions{
-						EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+						EmbeddingProvider:   cacheTestEmbeddingProvider(),
 						Enabled:             true,
 						MaxEntries:          cacheSize * 2,
 						SimilarityThreshold: 0.85,
@@ -2210,9 +2200,6 @@ func BenchmarkHybridCacheAddEntry(b *testing.B) {
 	if os.Getenv("MILVUS_URI") == "" {
 		b.Skip("Skipping: MILVUS_URI not set")
 	}
-	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
-		b.Fatalf("Failed to initialize benchmark embedding model: %v", err)
-	}
 
 	milvusConfig := "/tmp/bench_milvus_config.yaml"
 	err := os.WriteFile(milvusConfig, []byte(`
@@ -2230,7 +2217,7 @@ milvus:
 	defer os.Remove(milvusConfig)
 
 	cache, err := NewHybridCache(HybridCacheOptions{
-		EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+		EmbeddingProvider:   cacheTestEmbeddingProvider(),
 		Enabled:             true,
 		SimilarityThreshold: 0.8,
 		TTLSeconds:          300,
@@ -2258,9 +2245,6 @@ func BenchmarkHybridCacheFindSimilar(b *testing.B) {
 	if os.Getenv("MILVUS_URI") == "" {
 		b.Skip("Skipping: MILVUS_URI not set")
 	}
-	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
-		b.Fatalf("Failed to initialize benchmark embedding model: %v", err)
-	}
 
 	milvusConfig := "/tmp/bench_milvus_search_config.yaml"
 	err := os.WriteFile(milvusConfig, []byte(`
@@ -2278,7 +2262,7 @@ milvus:
 	defer os.Remove(milvusConfig)
 
 	cache, err := NewHybridCache(HybridCacheOptions{
-		EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+		EmbeddingProvider:   cacheTestEmbeddingProvider(),
 		Enabled:             true,
 		SimilarityThreshold: 0.8,
 		TTLSeconds:          300,
@@ -2449,13 +2433,6 @@ func getMilvusConfigPath() string {
 // BenchmarkHybridVsMilvus is the comprehensive benchmark comparing hybrid cache vs pure Milvus
 // This validates the claims from the hybrid HNSW storage architecture paper
 func BenchmarkHybridVsMilvus(b *testing.B) {
-	// Initialize BERT model
-	useCPU := os.Getenv("USE_CPU") != "false"
-	modelName := "sentence-transformers/all-MiniLM-L6-v2"
-	if err := candle_binding.InitModel(modelName, useCPU); err != nil {
-		b.Fatalf("Failed to initialize BERT model: %v", err)
-	}
-
 	// Test configurations - realistic production scales
 	cacheSizes := []int{
 		10000,  // Medium: 10K entries
@@ -2544,7 +2521,7 @@ func BenchmarkHybridVsMilvus(b *testing.B) {
 				b.Logf("\n=== Testing Pure Milvus Cache ===")
 
 				milvusCache, err := NewMilvusCache(MilvusCacheOptions{
-					EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					Enabled:             true,
 					SimilarityThreshold: 0.80,
 					TTLSeconds:          3600,
@@ -2702,7 +2679,7 @@ func BenchmarkHybridVsMilvus(b *testing.B) {
 				b.Logf("\n=== Testing Hybrid Cache ===")
 
 				hybridCache, err := NewHybridCache(HybridCacheOptions{
-					EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					Enabled:             true,
 					SimilarityThreshold: 0.80,
 					TTLSeconds:          3600,
@@ -2878,39 +2855,16 @@ func BenchmarkHybridVsMilvus(b *testing.B) {
 
 // BenchmarkComponentLatency measures individual component latencies
 func BenchmarkComponentLatency(b *testing.B) {
-	// Initialize BERT model
-	useCPU := os.Getenv("USE_CPU") != "false"
-	modelName := "sentence-transformers/all-MiniLM-L6-v2"
-	if err := candle_binding.InitModel(modelName, useCPU); err != nil {
-		b.Fatalf("Failed to initialize BERT model: %v", err)
-	}
-
 	cacheSize := 10000
 	testQueries := make([]string, cacheSize)
 	for i := 0; i < cacheSize; i++ {
 		testQueries[i] = generateQuery(MediumContent, i)
 	}
 
-	b.Run("EmbeddingGeneration", func(b *testing.B) {
-		query := testQueries[0]
-		b.ResetTimer()
-		start := time.Now()
-		for i := 0; i < b.N; i++ {
-			_, err := candle_binding.GetEmbedding(query, 0)
-			if err != nil {
-				b.Fatal(err)
-			}
-		}
-		elapsed := time.Since(start)
-		avgMs := float64(elapsed.Nanoseconds()) / float64(b.N) / 1e6
-		b.Logf("Embedding generation: %.2f ms/op", avgMs)
-		b.ReportMetric(avgMs, "ms/op")
-	})
-
 	b.Run("HNSWSearch", func(b *testing.B) {
 		// Build HNSW index
 		cache := NewInMemoryCache(InMemoryCacheOptions{
-			EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+			EmbeddingProvider:   cacheTestEmbeddingProvider(),
 			Enabled:             true,
 			SimilarityThreshold: 0.80,
 			MaxEntries:          cacheSize,
@@ -2941,7 +2895,7 @@ func BenchmarkComponentLatency(b *testing.B) {
 
 	b.Run("MilvusVectorSearch", func(b *testing.B) {
 		milvusCache, err := NewMilvusCache(MilvusCacheOptions{
-			EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+			EmbeddingProvider:   cacheTestEmbeddingProvider(),
 			Enabled:             true,
 			SimilarityThreshold: 0.80,
 			TTLSeconds:          3600,
@@ -2982,13 +2936,6 @@ func BenchmarkComponentLatency(b *testing.B) {
 
 // BenchmarkThroughputUnderLoad tests throughput with concurrent requests
 func BenchmarkThroughputUnderLoad(b *testing.B) {
-	// Initialize BERT model
-	useCPU := os.Getenv("USE_CPU") != "false"
-	modelName := "sentence-transformers/all-MiniLM-L6-v2"
-	if err := candle_binding.InitModel(modelName, useCPU); err != nil {
-		b.Fatalf("Failed to initialize BERT model: %v", err)
-	}
-
 	cacheSize := 10000
 	concurrencyLevels := []int{1, 10, 50, 100}
 
@@ -3000,7 +2947,7 @@ func BenchmarkThroughputUnderLoad(b *testing.B) {
 	for _, concurrency := range concurrencyLevels {
 		b.Run(fmt.Sprintf("Milvus_Concurrency_%d", concurrency), func(b *testing.B) {
 			milvusCache, err := NewMilvusCache(MilvusCacheOptions{
-				EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				Enabled:             true,
 				SimilarityThreshold: 0.80,
 				TTLSeconds:          3600,
@@ -3040,7 +2987,7 @@ func BenchmarkThroughputUnderLoad(b *testing.B) {
 
 		b.Run(fmt.Sprintf("Hybrid_Concurrency_%d", concurrency), func(b *testing.B) {
 			hybridCache, err := NewHybridCache(HybridCacheOptions{
-				EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				Enabled:             true,
 				SimilarityThreshold: 0.80,
 				TTLSeconds:          3600,
@@ -3515,10 +3462,6 @@ func TestInMemoryCacheHNSW(t *testing.T) {
 
 // BenchmarkInMemoryCacheSearch benchmarks search performance with and without HNSW
 func BenchmarkInMemoryCacheSearch(b *testing.B) {
-	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
-		b.Skipf("Failed to initialize BERT model: %v", err)
-	}
-
 	// Test different cache sizes
 	cacheSizes := []int{100, 500, 1000, 5000}
 
@@ -3537,7 +3480,7 @@ func BenchmarkInMemoryCacheSearch(b *testing.B) {
 		// Benchmark Linear Search
 		b.Run(fmt.Sprintf("LinearSearch_%d_entries", size), func(b *testing.B) {
 			cache := NewInMemoryCache(InMemoryCacheOptions{
-				EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				Enabled:             true,
 				MaxEntries:          size * 2,
 				SimilarityThreshold: 0.85,
@@ -3562,7 +3505,7 @@ func BenchmarkInMemoryCacheSearch(b *testing.B) {
 		// Benchmark HNSW Search
 		b.Run(fmt.Sprintf("HNSWSearch_%d_entries", size), func(b *testing.B) {
 			cache := NewInMemoryCache(InMemoryCacheOptions{
-				EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				Enabled:             true,
 				MaxEntries:          size * 2,
 				SimilarityThreshold: 0.85,
@@ -3590,10 +3533,6 @@ func BenchmarkInMemoryCacheSearch(b *testing.B) {
 
 // BenchmarkHNSWIndexConstruction benchmarks HNSW index construction time
 func BenchmarkHNSWIndexConstruction(b *testing.B) {
-	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
-		b.Skipf("Failed to initialize BERT model: %v", err)
-	}
-
 	entryCounts := []int{100, 500, 1000, 5000}
 
 	for _, count := range entryCounts {
@@ -3608,7 +3547,7 @@ func BenchmarkHNSWIndexConstruction(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				b.StopTimer()
 				cache := NewInMemoryCache(InMemoryCacheOptions{
-					EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					Enabled:             true,
 					MaxEntries:          count * 2,
 					SimilarityThreshold: 0.85,
@@ -3631,10 +3570,6 @@ func BenchmarkHNSWIndexConstruction(b *testing.B) {
 
 // BenchmarkHNSWParameters benchmarks different HNSW parameter configurations
 func BenchmarkHNSWParameters(b *testing.B) {
-	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
-		b.Skipf("Failed to initialize BERT model: %v", err)
-	}
-
 	cacheSize := 1000
 	testConfigs := []struct {
 		name           string
@@ -3660,7 +3595,7 @@ func BenchmarkHNSWParameters(b *testing.B) {
 	for _, config := range testConfigs {
 		b.Run(config.name, func(b *testing.B) {
 			cache := NewInMemoryCache(InMemoryCacheOptions{
-				EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				Enabled:             true,
 				MaxEntries:          cacheSize * 2,
 				SimilarityThreshold: 0.85,
@@ -3688,13 +3623,9 @@ func BenchmarkHNSWParameters(b *testing.B) {
 
 // BenchmarkCacheOperations benchmarks complete cache workflow
 func BenchmarkCacheOperations(b *testing.B) {
-	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
-		b.Skipf("Failed to initialize BERT model: %v", err)
-	}
-
 	b.Run("LinearSearch_AddAndFind", func(b *testing.B) {
 		cache := NewInMemoryCache(InMemoryCacheOptions{
-			EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+			EmbeddingProvider:   cacheTestEmbeddingProvider(),
 			Enabled:             true,
 			MaxEntries:          10000,
 			SimilarityThreshold: 0.85,
@@ -3717,7 +3648,7 @@ func BenchmarkCacheOperations(b *testing.B) {
 
 	b.Run("HNSWSearch_AddAndFind", func(b *testing.B) {
 		cache := NewInMemoryCache(InMemoryCacheOptions{
-			EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+			EmbeddingProvider:   cacheTestEmbeddingProvider(),
 			Enabled:             true,
 			MaxEntries:          10000,
 			SimilarityThreshold: 0.85,
@@ -3743,17 +3674,13 @@ func BenchmarkCacheOperations(b *testing.B) {
 
 // BenchmarkHNSWRebuild benchmarks index rebuild performance
 func BenchmarkHNSWRebuild(b *testing.B) {
-	if err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true); err != nil {
-		b.Skipf("Failed to initialize BERT model: %v", err)
-	}
-
 	sizes := []int{100, 500, 1000}
 
 	for _, size := range sizes {
 		b.Run(fmt.Sprintf("Rebuild_%d_entries", size), func(b *testing.B) {
 			// Create and populate cache
 			cache := NewInMemoryCache(InMemoryCacheOptions{
-				EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				Enabled:             true,
 				MaxEntries:          size * 2,
 				SimilarityThreshold: 0.85,
@@ -4045,12 +3972,7 @@ func TestHNSWSearchLayerAndInsertionRegressions(t *testing.T) {
 
 // BenchmarkLargeScale tests HNSW vs Linear at scales where HNSW shows advantages (10K-100K entries)
 func BenchmarkLargeScale(b *testing.B) {
-	// Initialize BERT model (GPU by default)
 	useCPU := os.Getenv("USE_CPU") == "true"
-	modelName := "sentence-transformers/all-MiniLM-L6-v2"
-	if err := candle_binding.InitModel(modelName, useCPU); err != nil {
-		b.Skipf("Failed to initialize BERT model: %v", err)
-	}
 
 	// Large scale cache sizes where HNSW shines
 	cacheSizes := []int{10000, 50000, 100000}
@@ -4120,7 +4042,7 @@ func BenchmarkLargeScale(b *testing.B) {
 			}
 
 			for i := 0; i < cacheSize; i++ {
-				emb, err := candle_binding.GetEmbedding(testQueries[i], 0)
+				emb, err := cacheTestEmbeddingProvider().Embed(context.Background(), testQueries[i])
 				if err != nil {
 					b.Fatalf("Failed to generate embedding: %v", err)
 				}
@@ -4148,7 +4070,7 @@ func BenchmarkLargeScale(b *testing.B) {
 			b.Run("Linear", func(b *testing.B) {
 				b.Logf("=== Testing Linear Search with %d entries ===", cacheSize)
 				cache := NewInMemoryCache(InMemoryCacheOptions{
-					EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					Enabled:             true,
 					SimilarityThreshold: 0.8,
 					MaxEntries:          cacheSize,
@@ -4215,7 +4137,7 @@ func BenchmarkLargeScale(b *testing.B) {
 					b.Logf("=== Testing %s with %d entries (M=%d, ef=%d) ===",
 						config.name, cacheSize, config.m, config.ef)
 					cache := NewInMemoryCache(InMemoryCacheOptions{
-						EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+						EmbeddingProvider:   cacheTestEmbeddingProvider(),
 						Enabled:             true,
 						SimilarityThreshold: 0.8,
 						MaxEntries:          cacheSize,
@@ -4304,12 +4226,6 @@ func BenchmarkLargeScale(b *testing.B) {
 
 // BenchmarkScalability tests how performance scales with cache size
 func BenchmarkScalability(b *testing.B) {
-	useCPU := os.Getenv("USE_CPU") == "true"
-	modelName := "sentence-transformers/all-MiniLM-L6-v2"
-	if err := candle_binding.InitModel(modelName, useCPU); err != nil {
-		b.Skipf("Failed to initialize BERT model: %v", err)
-	}
-
 	// Test cache sizes from small to very large
 	cacheSizes := []int{1000, 5000, 10000, 25000, 50000, 100000}
 
@@ -4349,7 +4265,7 @@ func BenchmarkScalability(b *testing.B) {
 			if testLinear {
 				b.Run("Linear", func(b *testing.B) {
 					cache := NewInMemoryCache(InMemoryCacheOptions{
-						EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+						EmbeddingProvider:   cacheTestEmbeddingProvider(),
 						Enabled:             true,
 						SimilarityThreshold: 0.8,
 						MaxEntries:          cacheSize,
@@ -4391,7 +4307,7 @@ func BenchmarkScalability(b *testing.B) {
 
 			b.Run("HNSW", func(b *testing.B) {
 				cache := NewInMemoryCache(InMemoryCacheOptions{
-					EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+					EmbeddingProvider:   cacheTestEmbeddingProvider(),
 					Enabled:             true,
 					SimilarityThreshold: 0.8,
 					MaxEntries:          cacheSize,
@@ -4442,12 +4358,6 @@ func BenchmarkScalability(b *testing.B) {
 
 // BenchmarkHNSWParameterSweep tests different HNSW parameters at large scale
 func BenchmarkHNSWParameterSweep(b *testing.B) {
-	useCPU := os.Getenv("USE_CPU") == "true"
-	modelName := "sentence-transformers/all-MiniLM-L6-v2"
-	if err := candle_binding.InitModel(modelName, useCPU); err != nil {
-		b.Skipf("Failed to initialize BERT model: %v", err)
-	}
-
 	cacheSize := 50000 // 50K entries - good size to show differences
 
 	// Parameter combinations to test
@@ -4509,7 +4419,7 @@ func BenchmarkHNSWParameterSweep(b *testing.B) {
 	for _, config := range configs {
 		b.Run(config.name, func(b *testing.B) {
 			cache := NewInMemoryCache(InMemoryCacheOptions{
-				EmbeddingProvider:   legacyBenchmarkEmbeddingProvider(),
+				EmbeddingProvider:   cacheTestEmbeddingProvider(),
 				Enabled:             true,
 				SimilarityThreshold: 0.8,
 				MaxEntries:          cacheSize,
@@ -4572,141 +4482,6 @@ func BenchmarkHNSWParameterSweep(b *testing.B) {
 			b.ReportMetric(totalMemMB, "memory_mb")
 		})
 	}
-}
-
-// Benchmark SIMD vs scalar dotProduct implementations
-func BenchmarkDotProduct(b *testing.B) {
-	// Test with different vector sizes
-	sizes := []int{64, 128, 256, 384, 512, 768, 1024}
-
-	for _, size := range sizes {
-		// Generate random vectors
-		a := make([]float32, size)
-		vec_b := make([]float32, size)
-		for i := 0; i < size; i++ {
-			a[i] = rand.Float32()
-			vec_b[i] = rand.Float32()
-		}
-
-		b.Run(fmt.Sprintf("SIMD/%d", size), func(b *testing.B) {
-			b.ReportAllocs()
-			var sum float32
-			for i := 0; i < b.N; i++ {
-				sum += dotProductSIMD(a, vec_b)
-			}
-			_ = sum
-		})
-
-		b.Run(fmt.Sprintf("Scalar/%d", size), func(b *testing.B) {
-			b.ReportAllocs()
-			var sum float32
-			for i := 0; i < b.N; i++ {
-				sum += dotProductScalar(a, vec_b)
-			}
-			_ = sum
-		})
-	}
-}
-
-// Test correctness of SIMD implementation
-func TestDotProductSIMD(t *testing.T) {
-	testCases := []struct {
-		name string
-		a    []float32
-		b    []float32
-		want float32
-	}{
-		{
-			name: "empty",
-			a:    []float32{},
-			b:    []float32{},
-			want: 0,
-		},
-		{
-			name: "single element",
-			a:    []float32{2.0},
-			b:    []float32{3.0},
-			want: 6.0,
-		},
-		{
-			name: "short vector",
-			a:    []float32{1, 2, 3},
-			b:    []float32{4, 5, 6},
-			want: 32.0, // 1*4 + 2*5 + 3*6 = 4 + 10 + 18 = 32
-		},
-		{
-			name: "8 elements (AVX2 boundary)",
-			a:    []float32{1, 2, 3, 4, 5, 6, 7, 8},
-			b:    []float32{1, 1, 1, 1, 1, 1, 1, 1},
-			want: 36.0, // 1+2+3+4+5+6+7+8 = 36
-		},
-		{
-			name: "16 elements (AVX-512 boundary)",
-			a:    []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
-			b:    []float32{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-			want: 136.0, // 1+2+...+16 = 136
-		},
-		{
-			name: "non-aligned size (17 elements)",
-			a:    []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17},
-			b:    []float32{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-			want: 153.0, // 1+2+...+17 = 153
-		},
-		{
-			name: "384 dimensions (typical embedding size)",
-			a:    make384Vector(),
-			b:    ones(384),
-			want: sum384(),
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := dotProductSIMD(tc.a, tc.b)
-			if abs(got-tc.want) > 0.0001 {
-				t.Errorf("dotProductSIMD() = %v, want %v", got, tc.want)
-			}
-
-			// Also verify scalar produces same result
-			scalar := dotProductScalar(tc.a, tc.b)
-			if abs(scalar-tc.want) > 0.0001 {
-				t.Errorf("dotProductScalar() = %v, want %v", scalar, tc.want)
-			}
-
-			// SIMD and scalar should match
-			if abs(got-scalar) > 0.0001 {
-				t.Errorf("SIMD (%v) != Scalar (%v)", got, scalar)
-			}
-		})
-	}
-}
-
-func make384Vector() []float32 {
-	v := make([]float32, 384)
-	for i := range v {
-		v[i] = float32(i + 1)
-	}
-	return v
-}
-
-func ones(n int) []float32 {
-	v := make([]float32, n)
-	for i := range v {
-		v[i] = 1.0
-	}
-	return v
-}
-
-func sum384() float32 {
-	// Sum of 1+2+3+...+384 = 384 * 385 / 2 = 73920
-	return 73920.0
-}
-
-func abs(x float32) float32 {
-	if x < 0 {
-		return -x
-	}
-	return x
 }
 
 // TestHNSWSelectLevelBatchRandomness verifies selectLevel() produces
@@ -4887,7 +4662,11 @@ func bruteForceKNN(query []float32, candidates [][]float32, k int) []int {
 	}
 	scores := make([]scored, len(candidates))
 	for i, emb := range candidates {
-		scores[i] = scored{idx: i, sim: dotProductScalar(query, emb)}
+		var sim float32
+		for j := range query {
+			sim += query[j] * emb[j]
+		}
+		scores[i] = scored{idx: i, sim: sim}
 	}
 	// Partial sort: only need top k
 	for i := 0; i < k && i < len(scores); i++ {

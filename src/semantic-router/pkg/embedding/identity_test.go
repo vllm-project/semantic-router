@@ -1,7 +1,6 @@
 package embedding
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -78,38 +77,48 @@ func TestContentIdentityCanonicalArtifactsAndRejectsUnverified(t *testing.T) {
 	}
 }
 
-func TestNamespaceIdentityKeysCandleBERTByEncoderVersion(t *testing.T) {
-	embed := func(context.Context, string) ([]float32, error) {
-		return nil, errors.New("identity resolution ran inference")
+func TestRuntimeIdentityNamesPackageViewAndPolicy(t *testing.T) {
+	descriptor := RuntimeDescriptor{
+		ModelType: "vllm-sr/Vela-1.0-Encoder-307M-Embedding", Runtime: "model_runtime", Dimension: 256, Layer: 6,
+		MaxSequenceLength: 8192, PoolingContract: "mean+l2", Artifacts: []ArtifactDigest{{Role: "package", SHA256: strings.Repeat("a", 64)}},
 	}
-	candle, err := NewFuncProvider("candle", 384, embed)
-	if err != nil {
-		t.Fatal(err)
+	base, err := IdentityForRuntime(descriptor, "memory-content-v1")
+	if err != nil || !strings.HasPrefix(base.Fingerprint, "embedding-v2-") || base.Descriptor.Version != 2 {
+		t.Fatalf("identity %+v, %v", base, err)
 	}
-	ort, err := NewFuncProvider("ort", 384, embed)
-	if err != nil {
-		t.Fatal(err)
+	changes := []func(*RuntimeDescriptor){
+		func(d *RuntimeDescriptor) { d.Dimension = 768 },
+		func(d *RuntimeDescriptor) { d.Layer = 22 },
+		func(d *RuntimeDescriptor) { d.MaxSequenceLength = 512 },
+		func(d *RuntimeDescriptor) {
+			d.Artifacts = []ArtifactDigest{{Role: "package", SHA256: strings.Repeat("b", 64)}}
+		},
 	}
-	memory := ConsumerSettings{ModelType: "bert", InputPolicy: "memory-content-v1"}
-	identity, err := ResolveNamespaceIdentity(candle, memory)
-	if err != nil || identity.Descriptor.Dimension != 384 || !strings.HasPrefix(identity.Fingerprint, candleBERTNamespace+":") {
-		t.Fatalf("Candle BERT namespace: %+v %v", identity, err)
-	}
-	cache := memory
-	cache.InputPolicy = "response-cache-v1"
-	if other, _ := ResolveNamespaceIdentity(candle, cache); other.Fingerprint == identity.Fingerprint {
-		t.Fatal("memory and cache inputs shared a namespace")
-	}
-	if _, err = ResolveNamespaceIdentity(candle, ConsumerSettings{ModelType: "bert", Dimension: 256, InputPolicy: "memory-content-v1"}); err == nil {
-		t.Fatal("namespace accepted a width the provider does not produce")
-	}
-	for _, provider := range []Provider{nil, ort} {
-		if _, err = ResolveNamespaceIdentity(provider, memory); !errors.Is(err, ErrIdentityUnsupported) {
-			t.Fatalf("unchanged BERT runtime acquired a namespace: %v", err)
+	for i, change := range changes {
+		changed := descriptor
+		change(&changed)
+		if other, _ := IdentityForRuntime(changed, "memory-content-v1"); other.Fingerprint == base.Fingerprint {
+			t.Fatalf("change %d kept the namespace", i)
 		}
 	}
-	if _, err = ResolveNamespaceIdentity(candle, ConsumerSettings{ModelType: "mmbert", InputPolicy: "memory-content-v1"}); !errors.Is(err, ErrIdentityUnsupported) {
-		t.Fatalf("other models must keep requiring a content descriptor: %v", err)
+	if other, _ := IdentityForRuntime(descriptor, "response-cache-v1"); other.Fingerprint == base.Fingerprint {
+		t.Fatal("memory and cache inputs shared a namespace")
+	}
+	for _, broken := range []RuntimeDescriptor{
+		{Runtime: "model_runtime", Dimension: 1, PoolingContract: "mean", Artifacts: descriptor.Artifacts},
+		func() RuntimeDescriptor {
+			d := descriptor
+			d.Artifacts = []ArtifactDigest{{Role: "package", SHA256: "not-hex"}}
+			return d
+		}(),
+		func() RuntimeDescriptor { d := descriptor; d.Dimension = 0; return d }(),
+	} {
+		if _, err := IdentityForRuntime(broken, "memory-content-v1"); err == nil {
+			t.Fatalf("incomplete descriptor %+v accepted", broken)
+		}
+	}
+	if _, err := IdentityForRuntime(descriptor, ""); err == nil {
+		t.Fatal("an empty input policy was accepted")
 	}
 }
 
