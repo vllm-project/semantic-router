@@ -45,6 +45,22 @@ def test_models_and_fixture_commands(capsys, tmp_path):
     )
     assert main(["fixture", str(tmp_path / "pkg"), "--backbone", "qwen3"]) == 0
     assert (tmp_path / "pkg" / "MODEL_MANIFEST.json").is_file()
+    assert (
+        main(
+            [
+                "fixture",
+                str(tmp_path / "hybrid"),
+                "--family",
+                "decision2",
+                "--variant",
+                "qwen3_5",
+            ]
+        )
+        == 0
+    )
+    assert (tmp_path / "hybrid" / "MODEL_MANIFEST.json").is_file()
+    with pytest.raises(ValueError, match="no fixture writer"):
+        main(["fixture", str(tmp_path / "none"), "--family", "nobody"])
 
 
 def test_several_models_share_the_process_options(tmp_path):
