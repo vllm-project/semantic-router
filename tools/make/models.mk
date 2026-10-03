@@ -42,14 +42,6 @@ test-training-contracts: harness-venv-install ## Run dependency-light model trai
 HF_ORG := vllm-sr
 MODELS_DIR := models
 
-# The checked-in reference suite targets
-# peft-internal-testing/tiny-random-BertForSequenceClassification at
-# 325bf1727142e5f4216ca8e3eef68752321979ac. The model remains external and
-# must be downloaded at that exact revision before running qualification.
-CANDLE_COMPAT_LABELS ?= LABEL_0,LABEL_1
-CANDLE_COMPAT_SUITE ?= pkg/modelruntime/compatibility/testdata/tiny-random-bert-cpu-suite-v1.json
-CANDLE_COMPAT_OUTPUT ?= $(CURDIR)/.agent-harness/compatibility/candle-cpu-receipt.json
-
 # mmBERT merged models (for Rust inference)
 MMBERT_MODELS := \
 	mmbert-intent-classifier-merged \
@@ -127,42 +119,6 @@ download-models-lora: ## Download models for LoRA and advanced embedding tests
 .PHONY: download-eval-models
 download-eval-models: ## Download Vela native eval models, including attack-only Guard (legacy is explicit)
 	@python3 -m src.training.model_eval.download_models --output $(MODELS_DIR)
-
-.PHONY: qualify-candle-cpu check-candle-qualification-source test-modelcompat-native check-modelcompat
-
-# Offline command tests are owned by the shared Go-tool registry. Native
-# qualification stays explicit and never downloads a checkpoint by default.
-test-modelcompat-native: ## Test the native receipt round-trip against an explicitly supplied pinned fixture
-	@test -n "$(CANDLE_MODEL_PATH)" || (echo "CANDLE_MODEL_PATH is required" && exit 1)
-	@$(MAKE) rust-ci
-	@cd src/semantic-router && $(NATIVE_ENV) CGO_ENABLED=1 CANDLE_MODEL_PATH="$(abspath $(CANDLE_MODEL_PATH))" \
-		go test -race -count=1 -v -run '^TestNativeCandleCPUCommandRoundTrip$$' ../../tools/modelcompat/*.go
-
-check-modelcompat: test-modelcompat harness-go-bootstrap ## Test and lint the offline compatibility tool
-	@cd src/semantic-router && $(NATIVE_ENV) "$$(go env GOPATH)/bin/golangci-lint" run --config ../../tools/linter/go/.golangci.yml ../../tools/modelcompat/*.go
-
-# Do not attribute a working-tree build to HEAD. Local planning artifacts outside
-# the compiled source trees do not affect this source check.
-check-candle-qualification-source:
-	@git diff --quiet HEAD -- || { echo "Candle qualification requires committed sources (tracked changes found)"; exit 1; }
-	@untracked="$$(git ls-files --others --exclude-standard -- src/semantic-router candle-binding tools/modelcompat)" && \
-		test -z "$$untracked" || { echo "Candle qualification requires committed sources (untracked source files found)"; exit 1; }
-
-qualify-candle-cpu: check-candle-qualification-source ## Generate a local CPU Candle compatibility receipt (requires CANDLE_MODEL_PATH and CANDLE_ARTIFACT_REVISION)
-	@test -n "$(CANDLE_MODEL_PATH)" || (echo "CANDLE_MODEL_PATH is required" && exit 1)
-	@test -n "$(CANDLE_ARTIFACT_REVISION)" || (echo "CANDLE_ARTIFACT_REVISION is required" && exit 1)
-	@$(MAKE) rust-ci
-	@mkdir -p "$(dir $(CANDLE_COMPAT_OUTPUT))"
-	@cd src/semantic-router && \
-		$(NATIVE_ENV) \
-		go run ../../tools/modelcompat/main.go qualify-candle-cpu \
-			--model-path "$(abspath $(CANDLE_MODEL_PATH))" \
-			--artifact-revision "$(CANDLE_ARTIFACT_REVISION)" \
-			--router-revision "$(shell git rev-parse HEAD)" \
-			--labels "$(CANDLE_COMPAT_LABELS)" \
-			--suite "$(CANDLE_COMPAT_SUITE)" \
-			--output "$(abspath $(CANDLE_COMPAT_OUTPUT))"
-	@echo "Candle CPU compatibility receipt: $(CANDLE_COMPAT_OUTPUT)"
 
 # Test artifacts use the runtime registry's pinned releases, independent of the
 # example config's on-demand model graph. No Hugging Face IDs are duplicated here.
@@ -366,22 +322,6 @@ download-mmbert-32k-onnx: ## Download mmBERT-32K ONNX models (from onnx/ subdir 
 	@echo ""
 	@echo "Usage with onnx-binding:"
 	@echo "  ONNX_MODEL_PATH=models/mmbert32k-intent-classifier-merged-onnx make run-router-onnx"
-
-# Fact-check and feedback: download merged models, export to ONNX, upload to HF
-# Requires: hf login (or HF_TOKEN) for upload
-download-export-upload-onnx-factcheck-feedback: ## Download merged factcheck/feedback, export to ONNX, upload to Hugging Face
-	@chmod +x scripts/download_export_upload_onnx_factcheck_feedback.sh
-	@./scripts/download_export_upload_onnx_factcheck_feedback.sh
-
-export-onnx-factcheck-feedback: ## Export factcheck and feedback merged models to ONNX (requires models in models/, run: make download-mmbert-32k-merged first; needs optimum: pip install optimum[onnxruntime])
-	@echo "📤 Exporting factcheck and feedback to ONNX..."
-	@python3 tools/models/export_classifiers_to_onnx.py --model factcheck --output-dir $(MODELS_DIR)
-	@python3 tools/models/export_classifiers_to_onnx.py --model feedback --output-dir $(MODELS_DIR)
-	@echo "ONNX export done: $(MODELS_DIR)/mmbert32k-factcheck-classifier-merged-onnx, $(MODELS_DIR)/mmbert32k-feedback-detector-merged-onnx"
-
-upload-onnx-factcheck-feedback: export-onnx-factcheck-feedback ## Export and upload factcheck/feedback ONNX to Hugging Face (requires login)
-	@echo "⬆️  Uploading ONNX to Hugging Face..."
-	@SKIP_DOWNLOAD=1 SKIP_UPLOAD=0 ./scripts/download_export_upload_onnx_factcheck_feedback.sh
 
 test-mmbert-32k: ## Test mmBERT 32K context with AVX512 optimization
 	@echo "🧪 Testing mmBERT 32K context length support..."
