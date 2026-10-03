@@ -205,6 +205,44 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 15:35 — **Model-runtime lead (54e49843): PR #4481 head `73e8b0cc1`.** It is 885d85cc's batch
+  (`99208b6d3` no-eviction, `48e12c040` records) plus a merge of `main`. The PR was only BEHIND, with no conflicts,
+  and the bot's `pr/needs-rebase` label tracks that.
+  - **Verified on node A from exact mirrors** (CPU only, cleaned up; no GPU held):
+    - The cgo-linked Go suites `classification`, `selection`, `extproc`, `routerruntime`, `services` and `cmd` all
+      pass. They ran in the extproc image's Go build stage, linked against the native bindings.
+    - The runtime CPU suite passes: 96 passed, 7 GPU skips.
+  - **PR body updated** with the records' summary: exact parity 10,653 / 10,653 for all six, shared context
+    207 / 207, latency, and profile speed-ups and accuracy.
+  - **CI:** the repo's Actions queue is still saturated (org-wide; GitHub reports no incident). I don't push again
+    until this run finishes, unless CI fails. **No more pushes to the PR branch by anyone, please.**
+
+- 2026-10-03 15:30 — **Eviction-fix owner (843eb8f6): STARTED. I am the sole writer of the six model repos until I
+  post "eviction fix done".** No pushes to PR #4481.
+  - **Plan:**
+    - port the native engine's no-eviction policy (`99208b6d3`) into `v2/release/runtime/fast.py`, with a test, on
+      branch `xunzhuo/decision-2-runtime-evict` from integration `93753ee91`;
+    - try to reproduce the crash on a released runtime under eviction pressure, without blocking on it;
+    - ship runtime-only revisions with the phase A hotfix tooling (`ra.sh`, `fast.sh --hotfix`, `ops/gate86.sh`), in
+      the order Eos, Nox, Lux, Vega, Sol, Kai;
+    - write record section 8;
+    - spot-check the new revisions for PR #48, moving pins only on a pass.
+  - **GPUs:** free GPUs only, lease-checked (never node E, node C GPU0 or node F GPU0–1). I post leases as I take them.
+
+- 2026-10-03 15:30 — **The inference owner (885d85cc) ended.** Its work is on model-runtime PR #4481 (`48e12c040`):
+  - the native engine is byte-identical to the released runtime on 10,653 prompts for all six sizes;
+  - `shared_context` is 1.8–3.4× faster at 128 questions;
+  - `batching` gives 1.9–3.6× requests/s at 64 concurrent requests and stays opt-in (the Eos Index CI leans
+    negative);
+  - the graph-eviction crash is fixed in the native engine (no eviction);
+  - FLA autotuning makes Qwen3.5 exactness depend on the process.
+  - **Coordinator decision:** ship the eviction fix to all six HF packages as runtime-only revisions. The owner is
+    **843eb8f6** (Max), the sole writer of the six repos until it posts "eviction fix done", with no pushes to PR
+    #4481.
+  - **Model-runtime lead (54e49843):** you now own the remaining inference follow-ups on the PR: frozen FLA autotune
+    per device class plus golden answers, batch-shape buckets, more `max_speed` kernels with accuracy records, and
+    the optional vLLM investigation. Respect the CI push freeze.
+
 - 2026-10-03 15:25 — **Inference owner (885d85cc): PUSHED `48e12c040` to PR #4481 (fast-forward from
   `d65a6e13e`). It carries the graph-eviction fix and the records. No job or GPU of mine is left running.**
   - **54e49843, the push** (CPU suite 96 passed / 7 GPU skips; ruff and markdown lint clean):
