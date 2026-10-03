@@ -392,18 +392,83 @@ func testStreamingSSECache(ctx context.Context, client *kubernetes.Clientset, op
 // HTTP helpers
 // ---------------------------------------------------------------------------
 
-func sendNonStreamingRequest(ctx context.Context, question, model, localPort string) (*http.Response, error) {
+// streamedBodyWrites and streamedWritePause make the client write a request
+// body in several pieces, so Envoy hands it to the Router in STREAMED mode as
+// more than one ext_proc chunk.
+const (
+	streamedBodyWrites = 3
+	streamedWritePause = 500 * time.Millisecond
+)
+
+// chatRequestBody returns a one-message Chat Completions request.
+func chatRequestBody(question, model string, stream bool) []byte {
 	body := map[string]interface{}{
 		"model": model,
 		"messages": []map[string]string{
 			{"role": "user", "content": question},
 		},
 	}
-
-	jsonData, err := json.Marshal(body)
-	if err != nil {
-		return nil, fmt.Errorf("marshal: %w", err)
+	if stream {
+		body["stream"] = true
 	}
+	data, _ := json.Marshal(body)
+	return data
+}
+
+// splitBody cuts body into n contiguous pieces of near-equal size.
+func splitBody(body []byte, n int) []string {
+	if n < 1 {
+		n = 1
+	}
+	if n > len(body) {
+		n = len(body)
+	}
+	pieces := make([]string, 0, n)
+	for i := 0; i < n; i++ {
+		pieces = append(pieces, string(body[i*len(body)/n:(i+1)*len(body)/n]))
+	}
+	return pieces
+}
+
+// sendChunkedChatRequest posts body as a chunked upload written in the given
+// number of pieces with streamedWritePause between them. The caller owns the
+// response and checks its status.
+func sendChunkedChatRequest(ctx context.Context, localPort string, body []byte, writes int) (*http.Response, error) {
+	reader, writer := io.Pipe()
+	go func() {
+		for i, piece := range splitBody(body, writes) {
+			if i > 0 {
+				select {
+				case <-time.After(streamedWritePause):
+				case <-ctx.Done():
+					writer.CloseWithError(ctx.Err())
+					return
+				}
+			}
+			if _, err := io.WriteString(writer, piece); err != nil {
+				return
+			}
+		}
+		writer.Close()
+	}()
+
+	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, reader)
+	if err != nil {
+		reader.Close()
+		return nil, fmt.Errorf("new request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("do: %w", err)
+	}
+	return resp, nil
+}
+
+func sendNonStreamingRequest(ctx context.Context, question, model, localPort string) (*http.Response, error) {
+	jsonData := chatRequestBody(question, model, false)
 
 	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
@@ -428,18 +493,7 @@ func sendNonStreamingRequest(ctx context.Context, question, model, localPort str
 }
 
 func sendStreamingRequest(ctx context.Context, question, model, localPort string) (*http.Response, error) {
-	body := map[string]interface{}{
-		"model":  model,
-		"stream": true,
-		"messages": []map[string]string{
-			{"role": "user", "content": question},
-		},
-	}
-
-	jsonData, err := json.Marshal(body)
-	if err != nil {
-		return nil, fmt.Errorf("marshal: %w", err)
-	}
+	jsonData := chatRequestBody(question, model, true)
 
 	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
