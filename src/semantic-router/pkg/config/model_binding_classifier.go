@@ -4,7 +4,8 @@ import "fmt"
 
 // Generic rules retain their declared labels and score policy. A deployment
 // replaces execution selectors, while an LLM rule retains its scored extraction
-// prompt rather than becoming a sequence classifier or categorical chat guard.
+// prompt and a SystemOne rule its Choice question rather than becoming a
+// sequence classifier or categorical chat guard.
 func validateGenericModelBinding(cfg *RouterConfig, rule *ClassifierSignalRule, decl ModelBinding, deployment ModelDeployment) error {
 	if rule == nil {
 		return fmt.Errorf("generic classifier binding requires an existing rule in the same recipe")
@@ -40,6 +41,10 @@ func validateGenericModelBinding(cfg *RouterConfig, rule *ClassifierSignalRule, 
 		if deployment.Provider != "http" || decl.Adapter != RemoteClassifierProtocolHTTPChat {
 			return fmt.Errorf("llm classifier binding requires HTTP http_chat scored extraction")
 		}
+	case ClassifierSignalTypeSystemOne:
+		if deployment.Provider != "http" || decl.Adapter != RemoteClassifierProtocolHTTPSystemOne {
+			return fmt.Errorf("systemone classifier binding requires HTTP http_systemone")
+		}
 	default:
 		return fmt.Errorf("unsupported generic classifier type %q", rule.Type)
 	}
@@ -47,8 +52,11 @@ func validateGenericModelBinding(cfg *RouterConfig, rule *ClassifierSignalRule, 
 	if deployment.Provider != "http" {
 		return nil
 	}
-	if projected.Type == ClassifierSignalTypeLLM {
+	switch projected.Type {
+	case ClassifierSignalTypeLLM:
 		return validateLLMClassifierSignal(cfg, projected)
+	case ClassifierSignalTypeSystemOne:
+		return validateSystemOneClassifierSignal(cfg, projected)
 	}
 	return validateSequenceClassifierSignal(cfg, projected)
 }
@@ -57,7 +65,7 @@ func projectGenericClassifierRule(rule ClassifierSignalRule, deployment ModelDep
 	rule.Model, rule.ModelPath, rule.UseCPU = "", "", false
 	if deployment.Provider == "http" {
 		rule.Model = deployment.ExternalModel
-		if rule.Type != ClassifierSignalTypeLLM {
+		if rule.Type != ClassifierSignalTypeLLM && rule.Type != ClassifierSignalTypeSystemOne {
 			rule.Type = ClassifierSignalTypeSequenceClassifier
 		}
 	} else {

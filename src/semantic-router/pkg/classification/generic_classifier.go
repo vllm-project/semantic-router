@@ -308,6 +308,12 @@ func (b *classifierOptionBuilder) buildGenericClassifiersOption() (option, error
 				b.cfg.FindExternalModelByName(rule.Model),
 				b.models,
 			)
+		case config.ClassifierSignalTypeSystemOne:
+			classifier, err = newSystemOneLabelClassifier(
+				rule,
+				b.cfg.FindExternalModelByName(rule.Model),
+				b.models,
+			)
 		default:
 			// Config validation rejects unknown types, so reaching here means a
 			// rule bypassed it. Fail instead of storing a nil classifier that

@@ -205,7 +205,7 @@ export interface MetadataSignal {
 export interface ClassifierSignal {
   name: string
   description?: string
-  type: 'local' | 'llm' | 'sequence_classifier'
+  type: 'local' | 'llm' | 'sequence_classifier' | 'systemone'
   model?: string
   model_path?: string
   labels: string[]

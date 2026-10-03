@@ -82,6 +82,44 @@ func newSequenceLabelClassifierForBinding(
 	}, nil
 }
 
+// newSystemOneLabelClassifier reuses the same label-distribution seam as the
+// http_classify path, so a rule served by a typed-decision endpoint reaches
+// every existing signal consumer unchanged. Only the transport and the fact
+// that the question travels with the request differ.
+func newSystemOneLabelClassifier(
+	rule config.ClassifierSignalRule,
+	external *config.ExternalModelConfig,
+	models ...*classifierModelRuntime,
+) (labelClassifier, error) {
+	if external == nil {
+		return nil, fmt.Errorf("external model %q is not configured", rule.Model)
+	}
+	backend, err := NewSystemOneClassifierInference(
+		external,
+		newDeclaredLabelMapping(rule.Labels),
+		rule.Name,
+		rule.Instructions,
+		0,
+	)
+	if err != nil {
+		return nil, err
+	}
+	runtime := consumerModelRuntime(models)
+	backendCfg := &config.RemoteClassifierBackend{
+		Model:    external.Name,
+		Protocol: config.RemoteClassifierProtocolHTTPSystemOne,
+		Contract: config.RemoteClassifierContractLabelDistribution,
+	}
+	owned, err := prepareRemoteSequence(runtime, runtime.remoteSpec("classifier."+rule.Name, backendCfg), external, backend)
+	if err != nil {
+		return nil, err
+	}
+	return &sequenceLabelClassifier{
+		backend: owned,
+		labels:  append([]string(nil), rule.Labels...),
+	}, nil
+}
+
 func (c *sequenceLabelClassifier) Classify(
 	ctx context.Context,
 	input string,

@@ -8,8 +8,9 @@ import (
 // Remote classifier protocols describe how a built-in classifier is called.
 // They are deliberately independent from the response contract.
 const (
-	RemoteClassifierProtocolHTTPClassify = "http_classify"
-	RemoteClassifierProtocolHTTPChat     = "http_chat"
+	RemoteClassifierProtocolHTTPClassify  = "http_classify"
+	RemoteClassifierProtocolHTTPChat      = "http_chat"
+	RemoteClassifierProtocolHTTPSystemOne = "http_systemone"
 )
 
 // Remote classifier contracts describe the semantic product returned by a
@@ -102,7 +103,7 @@ func (b *RemoteClassifierBackend) Validate() error {
 		return fmt.Errorf("backend.protocol is required")
 	}
 	switch b.Protocol {
-	case RemoteClassifierProtocolHTTPClassify, RemoteClassifierProtocolHTTPChat:
+	case RemoteClassifierProtocolHTTPClassify, RemoteClassifierProtocolHTTPChat, RemoteClassifierProtocolHTTPSystemOne:
 	default:
 		return fmt.Errorf("backend.protocol: unsupported value %q", b.Protocol)
 	}

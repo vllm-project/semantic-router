@@ -16,13 +16,15 @@ from pydantic import ValidationError
 
 def generic_document(provider="http", rule_type="local", named=False):
     rule = {"name": "risk.tenant", "type": rule_type, "labels": ["safe", "unsafe"]}
-    if rule_type == "llm":
+    if rule_type in {"llm", "systemone"}:
         rule["instructions"] = "Score all labels."
     deployment = {"provider": provider, "artifact": "models/selected"}
     adapter = "modernbert"
     if provider == "http":
         deployment = {"provider": provider, "external_model": "selected"}
-        adapter = "http_chat" if rule_type == "llm" else "http_classify"
+        adapter = {"llm": "http_chat", "systemone": "http_systemone"}.get(
+            rule_type, "http_classify"
+        )
     profile = {
         "signals": {"classifiers": [rule]},
         "model_bindings": {
@@ -110,6 +112,85 @@ def test_generic_binding_resolves_provider_without_default_selector(
     assert resolved.model == ("selected" if provider == "http" else None)
     assert resolved.model_path == (None if provider == "http" else "models/selected")
     assert rule.model_dump() == original
+
+
+def assert_valid(config: UserConfig) -> None:
+    assert validate_model_runtime_references(config) == []
+    assert validate_classifier_contracts(config) == []
+
+
+def test_unbound_systemone_rule_validates_against_its_external_model():
+    document = generic_document("http", "systemone")
+    document["routing"]["model_bindings"] = {}
+    document["routing"]["signals"]["classifiers"][0]["model"] = "selected"
+    assert validate_config_structure(document) == []
+    assert_valid(UserConfig.model_validate(document))
+
+
+@pytest.mark.parametrize("named", [False, True])
+def test_bound_systemone_rule_keeps_its_type_and_question(named):
+    document = generic_document("http", "systemone", named)
+    assert validate_config_structure(document) == []
+    config = UserConfig.model_validate(document)
+    assert_valid(config)
+    profile = config.recipes[0].routing if named else config.routing
+    resolved = project_classifier_rule(
+        profile.signals.classifiers[0],
+        profile.model_bindings,
+        config.global_["model_catalog"]["deployments"],
+    )
+    assert resolved.type == "systemone"
+    assert resolved.model == "selected"
+    assert resolved.instructions == "Score all labels."
+
+
+@pytest.mark.parametrize(
+    "provider,adapter",
+    [("http", "http_classify"), ("http", "http_chat"), ("candle", "modernbert")],
+)
+def test_systemone_binding_requires_http_systemone(provider, adapter):
+    document = generic_document(provider, "systemone")
+    document["routing"]["model_bindings"]["classifier.risk.tenant"]["adapter"] = adapter
+    errors = validate_model_runtime_references(UserConfig.model_validate(document))
+    assert [error.message for error in errors] == [
+        "SystemOne classifier binding requires HTTP http_systemone"
+    ]
+
+
+@pytest.mark.parametrize(
+    "scenario,message",
+    [
+        ("no question", "require instructions"),
+        ("one label", "at least two labels"),
+        ("too many labels", "at most 255 labels"),
+        ("rationale", "disable_rationale"),
+    ],
+)
+def test_systemone_rule_rejects_what_the_router_rejects(scenario, message):
+    document = generic_document("http", "systemone")
+    rule = document["routing"]["signals"]["classifiers"][0]
+    if scenario == "no question":
+        rule["instructions"] = " "
+    elif scenario == "one label":
+        rule["labels"] = ["safe"]
+    elif scenario == "too many labels":
+        rule["labels"] = [f"label-{index}" for index in range(256)]
+    else:
+        rule["disable_rationale"] = True
+    with pytest.raises(ValidationError, match=message):
+        UserConfig.model_validate(document)
+
+
+def test_systemone_external_model_needs_a_model_name_but_no_json_parser():
+    document = generic_document("http", "systemone")
+    external = document["global"]["model_catalog"]["external"][0]
+    external["parser_type"] = "qwen3guard"
+    assert_valid(UserConfig.model_validate(document))
+    external["llm_model_name"] = " "
+    errors = validate_classifier_contracts(UserConfig.model_validate(document))
+    assert [error.message for error in errors] == [
+        "SystemOne 'risk.tenant' external model requires llm_model_name"
+    ]
 
 
 @pytest.mark.parametrize(

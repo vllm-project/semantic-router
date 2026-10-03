@@ -850,6 +850,15 @@ profiles:
     paths:
       - e2e/profiles/category-remote-backend/**
       - e2e/testcases/category_backend_routing.go
+  systemone-backend:
+    display_name: SystemOne Classifier Signal
+    owner: e2e
+    coverage_role: systemone-classifier-signal-backend
+    selection: pr
+    paths:
+      - e2e/profiles/systemone-backend/**
+      - e2e/testcases/systemone_classifier_routing.go
+      - src/semantic-router/pkg/classification/systemone_classifier.go
   complexity-remote-backend:
     display_name: Remote Complexity Classifier
     owner: e2e

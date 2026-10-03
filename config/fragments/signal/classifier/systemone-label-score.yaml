@@ -1,0 +1,21 @@
+version: v0.3
+
+global:
+  model_catalog:
+    external:
+      - name: decision-runtime
+        model_role: classification
+        llm_model_name: llm-semantic-router/Decision-1.0-Kai-0.6B
+        llm_endpoint:
+          address: decision.example.com
+          port: 8710
+          protocol: https
+
+routing:
+  signals:
+    classifiers:
+      - name: tool-risk
+        type: systemone
+        model: decision-runtime
+        instructions: Does this request ask for an action that could change state outside the conversation?
+        labels: [SAFE, RISKY]

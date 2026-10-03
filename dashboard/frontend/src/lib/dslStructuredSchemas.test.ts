@@ -112,6 +112,7 @@ describe('DSL structured field schemas', () => {
       'local',
       'llm',
       'sequence_classifier',
+      'systemone',
     ])
     expect(requireField(getSignalFieldSchema('classifier'), 'labels').type).toBe('string[]')
     expect(requireField(getSignalFieldSchema('classifier'), 'disable_rationale').type).toBe('boolean')

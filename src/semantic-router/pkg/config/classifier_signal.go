@@ -8,12 +8,15 @@ const (
 	ClassifierSignalTypeLocal              = "local"
 	ClassifierSignalTypeLLM                = "llm"
 	ClassifierSignalTypeSequenceClassifier = "sequence_classifier"
+	ClassifierSignalTypeSystemOne          = "systemone"
 )
 
 // ClassifierSignalRule exposes a reusable label-score classifier as a signal.
 // Supported types are "local" for native sequence-classification models, "llm"
-// for configured external chat classifiers, and "sequence_classifier" for a
-// remote sequence classifier reached over the shared http_classify contract.
+// for configured external chat classifiers, "sequence_classifier" for a remote
+// sequence classifier reached over the shared http_classify contract, and
+// "systemone" for a remote typed-decision endpoint asked one Choice question
+// over the declared labels.
 type ClassifierSignalRule struct {
 	Name             string   `yaml:"name"`
 	Description      string   `yaml:"description,omitempty"`

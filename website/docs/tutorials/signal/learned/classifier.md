@@ -68,7 +68,8 @@ Set `disable_rationale: true` on an `llm` classifier rule to request only
 string; if present, it must still be a string. Other response fields are
 rejected. When the flag is omitted or `false`, the prompt requests both
 `scores` and `rationale`, and the response must include a nonempty rationale.
-The flag does not apply to `local` or `sequence_classifier` rules.
+The flag does not apply to `local`, `sequence_classifier`, or `systemone`
+rules.
 The model must report a score for every declared
 label; each score must be between `0` and `1`, and the complete distribution
 must sum to approximately `1.0`. These are model-reported confidence scores,
@@ -107,6 +108,7 @@ Reasoning control is currently supported only when the external classifier uses
 `chat_template_kwargs`; families declared with `top_level_reasoning_effort` use
 the typed top-level `reasoning_effort` field. The control applies only to
 `type: llm` classifier requests. It does not affect `sequence_classifier`,
+`systemone`,
 other router model calls, or response parsing. This is a request preference:
 the upstream model may still ignore it or fail to produce the requested JSON
 contract, which remains subject to the normal classifier error policy. If the
@@ -135,6 +137,22 @@ approximately `1.0`; sigmoid multi-label outputs and label subsets are rejected.
 They require at least two labels and do not accept `instructions`, `model_path`,
 or `use_cpu`.
 
+`systemone` classifiers reach a typed-decision endpoint over `POST /v1/systemone`
+and read the same complete label distribution. The declared labels become one
+Choice question's options, and `instructions` becomes the question text the
+request carries, so unlike `sequence_classifier` they require `instructions`
+rather than rejecting it. The endpoint answers the one question that was asked;
+an extra answer, a missing option, or a non-Choice answer type is an error
+rather than a partial result. So is a response that names another model, a
+choice that is not a most probable option, or a confidence outside zero to one.
+Confidence is not recomputed from the probabilities, since each SystemOne
+provider defines its own. The Choice contract accepts two to 255 options,
+and the external model entry needs `llm_model_name` because the request names
+its model explicitly. An absolute `address` such as
+`http://decision.example.com/v1` is used as the API base, so the request goes
+to `{address}/systemone`. `model_path`, `use_cpu`, and `disable_rationale` are
+rejected.
+
 Local classifiers use `model_path` and support two or more declared labels.
 The native Candle backend reads `model_type` from the checkpoint's `config.json`
 and supports classic BERT and ModernBERT, including mmBERT. Set `use_cpu: true`
@@ -149,8 +167,9 @@ A recipe can select execution explicitly with a `classifier.<rule name>` entry
 in `model_bindings`; this replaces the rule's `model` or `model_path` selector.
 Local and sequence rules support local sequence deployments or HTTP
 `http_classify`, while LLM rules retain their scored extraction instructions
-and require HTTP `http_chat`. These use `label_distribution.v1`, with the rule's
-ordered `labels` as the mapping. See [In-process models](../../../installation/runtime/in-process).
+and require HTTP `http_chat`, and `systemone` rules retain their question and
+require HTTP `http_systemone`. These use `label_distribution.v1`, with the
+rule's ordered `labels` as the mapping. See [In-process models](../../../installation/runtime/in-process).
 
 ## Independent labels with a frozen operating point
 
@@ -282,9 +301,12 @@ model, and refuses to overwrite an existing file. Publish this sidecar with the
 exact native files; do not copy thresholds between checkpoints.
 
 The local path processes request text inside the Router. Both `llm` and
-`sequence_classifier` send that text to their configured external model, so
+`sequence_classifier` and `systemone` send that text to their configured
+external model, so
 choose the provider and retention policy accordingly. Labels and thresholds
 must be evaluated as one versioned contract. See complete examples for
 [`llm`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/classifier/label-score.yaml)
 and
-[`sequence_classifier`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/classifier/sequence-label-score.yaml).
+[`sequence_classifier`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/classifier/sequence-label-score.yaml)
+and
+[`systemone`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/classifier/systemone-label-score.yaml).

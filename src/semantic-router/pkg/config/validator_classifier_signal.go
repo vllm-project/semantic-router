@@ -115,14 +115,19 @@ func validateClassifierSignalRules(cfg *RouterConfig) error {
 			if err := validateSequenceClassifierSignal(cfg, rule); err != nil {
 				return err
 			}
+		case ClassifierSignalTypeSystemOne:
+			if err := validateSystemOneClassifierSignal(cfg, rule); err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf(
-				"routing.signals.classifiers[%q]: unsupported type %q (supported: %s, %s, %s)",
+				"routing.signals.classifiers[%q]: unsupported type %q (supported: %s, %s, %s, %s)",
 				rule.Name,
 				rule.Type,
 				ClassifierSignalTypeLocal,
 				ClassifierSignalTypeLLM,
 				ClassifierSignalTypeSequenceClassifier,
+				ClassifierSignalTypeSystemOne,
 			)
 		}
 	}
@@ -279,6 +284,77 @@ func validateSequenceClassifierSignal(cfg *RouterConfig, rule ClassifierSignalRu
 			rule.Name,
 			rule.Model,
 			ModelRoleClassification,
+		)
+	}
+	return validateClassifierExternalEndpoint(rule, external)
+}
+
+// systemOneMaxChoiceOptions mirrors the Choice arity the SystemOne request
+// contract accepts. Declaring more labels than this cannot be served, so the
+// rule is rejected at load time rather than on every request.
+const systemOneMaxChoiceOptions = 255
+
+// validateSystemOneClassifierSignal checks a rule against the http_systemone
+// contract, where the declared labels become one Choice question's options and
+// the instructions become its required question text.
+func validateSystemOneClassifierSignal(cfg *RouterConfig, rule ClassifierSignalRule) error {
+	if strings.TrimSpace(rule.Model) == "" {
+		return fmt.Errorf(
+			"routing.signals.classifiers[%q]: systemone classifiers require model",
+			rule.Name,
+		)
+	}
+	if rule.ModelPath != "" || rule.UseCPU || rule.DisableRationale {
+		return fmt.Errorf(
+			"routing.signals.classifiers[%q]: systemone classifiers do not accept model_path, use_cpu or disable_rationale",
+			rule.Name,
+		)
+	}
+	// The Choice contract rejects a null question, so instructions are required
+	// here even though the sibling sequence_classifier type forbids them.
+	if strings.TrimSpace(rule.Instructions) == "" {
+		return fmt.Errorf(
+			"routing.signals.classifiers[%q]: systemone classifiers require instructions",
+			rule.Name,
+		)
+	}
+	if len(rule.Labels) < 2 {
+		return fmt.Errorf(
+			"routing.signals.classifiers[%q]: systemone classifiers require at least two labels",
+			rule.Name,
+		)
+	}
+	if len(rule.Labels) > systemOneMaxChoiceOptions {
+		return fmt.Errorf(
+			"routing.signals.classifiers[%q]: systemone classifiers accept at most %d labels, got %d",
+			rule.Name,
+			systemOneMaxChoiceOptions,
+			len(rule.Labels),
+		)
+	}
+	external := cfg.FindExternalModelByName(rule.Model)
+	if external == nil {
+		return fmt.Errorf(
+			"routing.signals.classifiers[%q]: systemone model %q is not declared in global.model_catalog.external[].name",
+			rule.Name,
+			rule.Model,
+		)
+	}
+	if external.ModelRole != ModelRoleClassification {
+		return fmt.Errorf(
+			"routing.signals.classifiers[%q]: external model %q must use model_role %q",
+			rule.Name,
+			rule.Model,
+			ModelRoleClassification,
+		)
+	}
+	// The request carries the model explicitly, so an unnamed external model
+	// cannot be served at all.
+	if strings.TrimSpace(external.ModelName) == "" {
+		return fmt.Errorf(
+			"routing.signals.classifiers[%q]: external model %q requires llm_model_name",
+			rule.Name,
+			rule.Model,
 		)
 	}
 	return validateClassifierExternalEndpoint(rule, external)

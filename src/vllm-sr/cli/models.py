@@ -27,6 +27,7 @@ from .algorithms import AlgorithmConfig, ModelRef
 from .config_contract import (
     CLASSIFIER_TYPE_LLM,
     CLASSIFIER_TYPE_LOCAL,
+    CLASSIFIER_TYPE_SYSTEMONE,
     ClassifierSignalType,
     UnknownPolicy,
 )
@@ -35,6 +36,9 @@ from .context_bands import normalize_token_count, validate_context_band
 
 RoutingStrategy = Literal["priority", "confidence"]
 SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT = 2
+# The Choice arity a SystemOne request accepts, as in the router's
+# systemOneMaxChoiceOptions.
+SYSTEMONE_MAX_CHOICE_OPTIONS = 255
 PROMPT_MIN_CANDIDATES = 2
 MAX_DECISION_ANNOTATIONS = 32
 MAX_DECISION_ANNOTATION_BYTES = 4096
@@ -579,6 +583,8 @@ class ClassifierSignal(BaseModel):
             self._validate_local()
         elif self.type == CLASSIFIER_TYPE_LLM:
             self._validate_llm()
+        elif self.type == CLASSIFIER_TYPE_SYSTEMONE:
+            self._validate_systemone()
         else:
             self._validate_sequence()
         return self
@@ -596,6 +602,21 @@ class ClassifierSignal(BaseModel):
             raise ValueError("llm classifiers require instructions")
         if self.model_path or self.use_cpu:
             raise ValueError("llm classifiers do not accept model_path or use_cpu")
+
+    def _validate_systemone(self) -> None:
+        if self.model_path or self.use_cpu or self.disable_rationale:
+            raise ValueError(
+                "systemone classifiers do not accept model_path, use_cpu or disable_rationale"
+            )
+        # The Choice contract rejects a null question.
+        if not (self.instructions or "").strip():
+            raise ValueError("systemone classifiers require instructions")
+        if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
+            raise ValueError("systemone classifiers require at least two labels")
+        if len(self.labels) > SYSTEMONE_MAX_CHOICE_OPTIONS:
+            raise ValueError(
+                f"systemone classifiers accept at most {SYSTEMONE_MAX_CHOICE_OPTIONS} labels"
+            )
 
     def _validate_sequence(self) -> None:
         if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
