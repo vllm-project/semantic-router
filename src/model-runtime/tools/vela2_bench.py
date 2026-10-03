@@ -9,7 +9,9 @@ Workload: the router's signals as one Vela 2.0 request (domain over 14 subject a
 jailbreak, PII spans, fact-check, feedback, modality and safety categories) over a
 prompt of about N tokens; every request has its own prompt. After warm-up, each side
 answers the same requests from ``concurrency`` client threads: latency is per request
-(p50, p95, mean), throughput is requests per second over the run. ``--prompts`` runs
+(p50, p95, mean), throughput is requests per second over the run. At concurrency 1 the
+sides take turns per request (in rotating order), so a drift of the machine's speed
+during the run reaches every side alike. ``--prompts`` runs
 given prompts (``{"id", "text"}`` lines) instead, and records each one's latency at
 concurrency 1, to pair with another runtime's per-prompt latencies.
 
@@ -174,6 +176,24 @@ def drive(
     return summary(latencies, time.perf_counter() - started), latencies
 
 
+def interleaved(
+    callers: dict[str, Any], states: list[Any]
+) -> dict[str, tuple[dict[str, float], list[float]]]:
+    """Every side answers each request in turn, one at a time; per side its summary and latencies."""
+    sides = list(callers)
+    latencies = {side: [0.0] * len(states) for side in sides}
+    for index, state in enumerate(states):
+        shift = index % len(sides)
+        for side in sides[shift:] + sides[:shift]:
+            started = time.perf_counter()
+            callers[side](state)
+            latencies[side][index] = time.perf_counter() - started
+    return {
+        side: (summary(values, sum(values)), values)
+        for side, values in latencies.items()
+    }
+
+
 def runtime_side(model: Any, profile: str, execute: Any) -> tuple[Any, Any]:
     profiles = {
         "exact": ExactProfile(),
@@ -263,16 +283,22 @@ def main() -> int:
         for side in sides:
             for text in warm:
                 callers[side]({"request": text})
-            for clients in concurrency:
-                result, latencies = drive(callers[side], states, clients)
-                result.update(side=side, tokens=tokens, concurrency=clients)
-                print(json.dumps(result), flush=True)
-                if ids and clients == 1:
-                    result["latency_ms"] = {
-                        key: round(1000 * value, 3)
-                        for key, value in zip(ids, latencies, strict=True)
-                    }
-                runs.append(result)
+        measured: list[tuple[str, int, dict[str, float], list[float]]] = []
+        if 1 in concurrency:
+            for side, (result, latencies) in interleaved(callers, states).items():
+                measured.append((side, 1, result, latencies))
+        for clients in (c for c in concurrency if c != 1):
+            for side in sides:
+                measured.append((side, clients, *drive(callers[side], states, clients)))
+        for side, clients, result, latencies in measured:
+            result.update(side=side, tokens=tokens, concurrency=clients)
+            print(json.dumps(result), flush=True)
+            if ids and clients == 1:
+                result["latency_ms"] = {
+                    key: round(1000 * value, 3)
+                    for key, value in zip(ids, latencies, strict=True)
+                }
+            runs.append(result)
     args.output.write_text(
         json.dumps(
             {"package": str(args.package), "device": args.device, "runs": runs},
