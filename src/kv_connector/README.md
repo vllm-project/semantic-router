@@ -11,6 +11,7 @@ This is the out-of-tree vLLM connector for mapper artifacts from
   a complete prefix beginning at position zero.
 - `snapshot.py` and `handoff.py` provide the same-host transport and validated
   map/inject operation. Snapshots are immutable, tenant-scoped, and expire.
+  Expired files are removed on read or before the next publish.
   Only complete, block-aligned source prefixes are eligible for reuse.
 
 The artifact is checked against the target model id, pinned revision, dtype,
@@ -27,6 +28,8 @@ uses `kv_role=kv_consumer`, `kv_load_failure_policy=recompute`, the same
 `source_tp`, `head_order`, and `source_rope_theta` in
 `kv_connector_extra_config`. Both models use bf16 and TP=1 for the published
 full-head artifact.
+The producer records its actual RoPE theta in each snapshot. The consumer
+checks that value against `source_rope_theta` and rejects scaled RoPE.
 
 Set `VLLM_USE_V2_MODEL_RUNNER=0` on the consumer. Live vLLM 0.30.0 testing found
 that its V2 runner could return an incorrect token after a synchronous KV load

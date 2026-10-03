@@ -22,6 +22,7 @@ def apply_handoff(
     block_ids: list[int],
     source_rope_theta: float,
     target_rope_theta: float,
+    cache_layout: str | None = None,
 ) -> int:
     """Map and inject KV, returning the token count eligible as an external hit.
 
@@ -84,7 +85,10 @@ def apply_handoff(
             heads=compat.num_kv_heads,
             head_dim=compat.head_dim,
             dtype=dtype,
+            layout=cache_layout,
         )
     for layer, (keys, values) in mapped.items():
-        inject_prefix(target_caches[layer], block_ids, keys, values)
+        inject_prefix(
+            target_caches[layer], block_ids, keys, values, layout=cache_layout
+        )
     return count

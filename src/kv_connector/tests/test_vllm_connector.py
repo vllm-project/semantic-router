@@ -79,6 +79,7 @@ class VllmConnectorTests(unittest.TestCase):
                         num_key_value_heads=1,
                         head_dim=2,
                         num_hidden_layers=1,
+                        rope_theta=1_000_000,
                     ),
                 ),
                 parallel_config=SimpleNamespace(tensor_parallel_size=1),

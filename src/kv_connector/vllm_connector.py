@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 import time
 from dataclasses import dataclass, field
@@ -84,6 +85,30 @@ def _precision(dtype: Any) -> str:
     return aliases[value]
 
 
+def _rope_theta(hf_config: Any) -> float:
+    """Accept only the unscaled Qwen3 RoPE used by the mapper."""
+    scaling = getattr(hf_config, "rope_scaling", None)
+    if scaling and (
+        not isinstance(scaling, dict)
+        or set(scaling) - {"type", "rope_type"}
+        or scaling.get("rope_type", scaling.get("type", "default")) != "default"
+    ):
+        raise ValueError("scaled RoPE is unsupported by the mapper")
+    parameters = getattr(hf_config, "rope_parameters", None)
+    if parameters is not None and (
+        not isinstance(parameters, dict)
+        or parameters.get("rope_type", parameters.get("type", "default")) != "default"
+    ):
+        raise ValueError("scaled RoPE is unsupported by the mapper")
+    theta = getattr(hf_config, "rope_theta", None)
+    if theta is None and isinstance(parameters, dict):
+        theta = parameters.get("rope_theta")
+    value = float(theta)
+    if not math.isfinite(value) or value <= 0:
+        raise ValueError("RoPE theta must be positive and finite")
+    return value
+
+
 def _deployment(
     vllm_config: Any, manifest: Manifest, extra: dict[str, Any]
 ) -> CompatibilitySpec:
@@ -148,7 +173,9 @@ class KVMapperConnector(KVConnectorBase_V1):
                     raise ValueError("source snapshot requires bf16")
                 if self._ttl_seconds <= 0:
                     raise ValueError("snapshot TTL must be positive")
+                rope_theta = _rope_theta(model.hf_config)
                 self._source_identity = str(model.model), revision
+                self._source_rope_theta = rope_theta
             except (AttributeError, TypeError, ValueError) as exc:
                 logger.warning("Source snapshot disabled: %s", exc)
             return
@@ -174,20 +201,16 @@ class KVMapperConnector(KVConnectorBase_V1):
                 vllm_config.model_config.hf_config.num_hidden_layers
             ):
                 raise ValueError("mapper target layer count differs from running model")
-            self.artifact = artifact
             source_theta = extra.get("source_rope_theta")
-            target_theta = getattr(
-                vllm_config.model_config.hf_config, "rope_theta", None
-            )
-            if target_theta is None:
-                rope = getattr(
-                    vllm_config.model_config.hf_config, "rope_parameters", None
-                )
-                if isinstance(rope, dict):
-                    target_theta = rope.get("rope_theta")
-            if source_theta is not None and target_theta is not None:
+            self._target_rope_theta = _rope_theta(vllm_config.model_config.hf_config)
+            if source_theta is not None:
                 self._source_rope_theta = float(source_theta)
-                self._target_rope_theta = float(target_theta)
+                if (
+                    not math.isfinite(self._source_rope_theta)
+                    or self._source_rope_theta <= 0
+                ):
+                    raise ValueError("source RoPE theta must be positive and finite")
+            self.artifact = artifact
         except (
             OSError,
             AttributeError,
@@ -253,9 +276,10 @@ class KVMapperConnector(KVConnectorBase_V1):
                 or count % self._block_size
                 or tuple(prompt[:count]) != snapshot.token_ids
                 or len(snapshot.layers) < required_source_layers
+                or snapshot.rope_theta != self._source_rope_theta
             ):
                 return 0, False
-        except (OSError, KeyError, TypeError, ValueError) as exc:
+        except (OSError, KeyError, TypeError, ValueError, SafetensorError) as exc:
             logger.info("No eligible source KV snapshot: %s", exc)
             return 0, False
         self._ready_loads[request.request_id] = (
@@ -347,6 +371,8 @@ class KVMapperConnector(KVConnectorBase_V1):
                 )
                 if job.token_ids != snapshot.token_ids:
                     raise ValueError("source snapshot changed after scheduler lookup")
+                if snapshot.rope_theta != self._source_rope_theta:
+                    raise ValueError("source RoPE theta changed after scheduler lookup")
                 matched = apply_handoff(
                     self.artifact,
                     snapshot,
@@ -358,6 +384,7 @@ class KVMapperConnector(KVConnectorBase_V1):
                     block_ids=list(job.block_ids),
                     source_rope_theta=self._source_rope_theta,
                     target_rope_theta=self._target_rope_theta,
+                    cache_layout="lbnhc",
                 )
                 logger.info("Applied mapper KV prefix: %d tokens", matched)
             except Exception:
@@ -396,6 +423,7 @@ class KVMapperConnector(KVConnectorBase_V1):
                     len(job.token_ids),
                     heads=heads,
                     head_dim=int(head_dim),
+                    layout="lbnhc",
                 )
                 self._captured.setdefault(job.request_id, {})[index] = (
                     key.detach().cpu().contiguous(),
@@ -428,6 +456,7 @@ class KVMapperConnector(KVConnectorBase_V1):
                     source_revision=self._source_identity[1],
                     token_ids=job.token_ids,
                     layers=layers,
+                    rope_theta=self._source_rope_theta,
                     expires_at=time.time() + self._ttl_seconds,
                 )
                 self.store.publish(snapshot)

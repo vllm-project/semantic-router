@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import torch
-from safetensors import safe_open
+from safetensors import SafetensorError, safe_open
 from safetensors.torch import save_file
 
 from src.training.kv_mapper.mapper_id import require_weight_commit
@@ -30,6 +30,7 @@ class SourceSnapshot:
     source_revision: str
     token_ids: tuple[int, ...]
     layers: dict[int, tuple[torch.Tensor, torch.Tensor]]
+    rope_theta: float
     expires_at: float
 
 
@@ -54,6 +55,8 @@ def _validate(snapshot: SourceSnapshot) -> None:
         raise ValueError("source snapshot token IDs must be nonnegative integers")
     if not math.isfinite(snapshot.expires_at):
         raise ValueError("source snapshot expiry must be finite")
+    if not math.isfinite(snapshot.rope_theta) or snapshot.rope_theta <= 0:
+        raise ValueError("source snapshot RoPE theta must be positive and finite")
     if set(snapshot.layers) != set(range(len(snapshot.layers))):
         raise ValueError("source layers must be contiguous from zero")
     shape: tuple[int, ...] | None = None
@@ -79,12 +82,31 @@ class LocalSnapshotStore:
     def _path(self, namespace: str, cache_id: str) -> Path:
         return self.root / f"{_key(namespace, cache_id)}.safetensors"
 
+    def prune_expired(self, now: float | None = None) -> int:
+        """Remove expired snapshots from this trusted local directory."""
+        cutoff = time.time() if now is None else now
+        removed = 0
+        for path in self.root.glob("*.safetensors"):
+            try:
+                with safe_open(path, framework="pt", device="cpu") as source:
+                    expiry = float((source.metadata() or {})["expires_at"])
+            except (OSError, KeyError, TypeError, ValueError, SafetensorError):
+                continue
+            if expiry <= cutoff:
+                try:
+                    path.unlink()
+                except FileNotFoundError:
+                    continue
+                removed += 1
+        return removed
+
     def publish(self, snapshot: SourceSnapshot) -> Path:
         _validate(snapshot)
         if snapshot.expires_at <= time.time():
             raise ValueError("cannot publish an expired source snapshot")
         path = self._path(snapshot.namespace, snapshot.cache_id)
         self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.prune_expired()
         temp = self.root / f".{uuid.uuid4().hex}.safetensors"
         tensors = {"token_ids": torch.tensor(snapshot.token_ids, dtype=torch.int64)}
         for layer, (key, value) in snapshot.layers.items():
@@ -96,6 +118,7 @@ class LocalSnapshotStore:
             "source_model": snapshot.source_model,
             "source_revision": snapshot.source_revision,
             "expires_at": str(snapshot.expires_at),
+            "rope_theta": str(snapshot.rope_theta),
             "layer_count": str(len(snapshot.layers)),
         }
         try:
@@ -130,6 +153,7 @@ class LocalSnapshotStore:
                 raise ValueError("source snapshot identity mismatch")
             expires_at = float(metadata["expires_at"])
             if expires_at <= (time.time() if now is None else now):
+                path.unlink(missing_ok=True)
                 raise ValueError("source snapshot expired")
             layer_count = int(metadata["layer_count"])
             expected = {"token_ids"} | {
@@ -155,6 +179,7 @@ class LocalSnapshotStore:
                     )
                     for layer in range(layer_count)
                 },
+                rope_theta=float(metadata["rope_theta"]),
                 expires_at=expires_at,
             )
         _validate(snapshot)

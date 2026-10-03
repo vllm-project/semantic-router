@@ -5,10 +5,12 @@ from __future__ import annotations
 import tempfile
 import time
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
 import torch
+from safetensors import SafetensorError
 
 from src.kv_connector.handoff import apply_handoff
 from src.kv_connector.paged_cache import extract_prefix
@@ -67,6 +69,7 @@ class HandoffTests(unittest.TestCase):
             source_revision="a" * 40,
             token_ids=(1, 2, 3, 4),
             layers={0: (keys, values)},
+            rope_theta=1_000_000,
             expires_at=time.time() + 60,
         )
 
@@ -81,6 +84,7 @@ class HandoffTests(unittest.TestCase):
     def test_snapshot_transfer_and_noncontiguous_target_blocks(self) -> None:
         self.store.publish(self.snapshot)
         loaded = self._load()
+        self.assertEqual(loaded.rope_theta, 1_000_000)
         cache = torch.zeros((3, 2, 2, 4), dtype=torch.bfloat16)
         count = apply_handoff(
             self.artifact,
@@ -93,9 +97,12 @@ class HandoffTests(unittest.TestCase):
             block_ids=[2, 0],
             source_rope_theta=1_000_000,
             target_rope_theta=1_000_000,
+            cache_layout="legacy",
         )
         self.assertEqual(count, 4)
-        keys, values = extract_prefix(cache, [2, 0], 4, heads=2, head_dim=2)
+        keys, values = extract_prefix(
+            cache, [2, 0], 4, heads=2, head_dim=2, layout="legacy"
+        )
         torch.testing.assert_close(keys, self.snapshot.layers[0][0])
         torch.testing.assert_close(values, self.snapshot.layers[0][1])
         self.assertEqual(cache[1].count_nonzero().item(), 0)
@@ -119,6 +126,21 @@ class HandoffTests(unittest.TestCase):
                 source_revision="a" * 40,
                 now=self.snapshot.expires_at + 1,
             )
+        self.assertFalse(self.store._path("tenant-a", "session-1").exists())
+
+    def test_expired_snapshots_are_pruned_before_next_publish(self) -> None:
+        self.store.publish(self.snapshot)
+        newer = replace(self.snapshot, cache_id="session-2")
+        self.assertEqual(self.store.prune_expired(self.snapshot.expires_at + 1), 1)
+        self.store.publish(newer)
+        self.assertFalse(self.store._path("tenant-a", "session-1").exists())
+        self.assertTrue(self.store._path("tenant-a", "session-2").exists())
+
+    def test_corrupt_snapshot_reports_read_error(self) -> None:
+        self.store.publish(self.snapshot)
+        self.store._path("tenant-a", "session-1").write_bytes(b"corrupt")
+        with self.assertRaises(SafetensorError):
+            self._load()
 
     def test_bad_hint_or_destination_does_not_modify_cache(self) -> None:
         cache = torch.zeros((3, 2, 2, 4), dtype=torch.bfloat16)
@@ -133,6 +155,7 @@ class HandoffTests(unittest.TestCase):
             "block_ids": [2, 0],
             "source_rope_theta": 1_000_000,
             "target_rope_theta": 1_000_000,
+            "cache_layout": "legacy",
         }
         with self.assertRaisesRegex(ValueError, "mapper ID"):
             apply_handoff(**{**kwargs, "mapper_id": "wrong"})
