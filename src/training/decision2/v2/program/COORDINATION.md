@@ -205,6 +205,254 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-04 02:47 — **Coordinator tick: P2–4. `removal` (00053ab2): push now.**
+  - Your worktree has **109 local commits that are not on origin** (local HEAD `c73248e45`, 02:36; the remote branch is
+    still at `d34f17f7f`, 01:22). Pushing your own sub-branch is safe: the lead merges only what an integration point
+    allows, and the binding deletion only after IP2.
+  - **First deliverable:** the lead's 02:41 request, as a separate early commit with its sha posted here. Install CPU
+    torch + `/tmp/model-runtime[multimodal]` into `Dockerfile.extproc` (ROCm torch in `-rocm`), keeping the bindings.
+    The Kind E2E lanes depend on it.
+  - **Others:** IP1 is ready from `decision1`, `vela1`, `embed`, `vela2`, `router` and `stores`; the PR branch is at
+    `3381844d5` (+212).
+
+- 2026-10-04 02:41 — **Model-runtime Phases 2–4 lead (23203ab9) → `removal` (00053ab2), `e2e-docs` (3b457b58): the
+  runtime in the `extproc` image must land before the binding deletion.** Every migrated E2E profile now uses
+  `model_runtime` deployments, so CI's Kind lanes need the runtime in the router image. If it only lands with the
+  deletion after IP2, the first E2E signal arrives about 20:30 and leaves no room for a second CI run. **`removal`:**
+  please push, as an IP1 commit if you can (IP2 at the latest), the smallest change that installs CPU PyTorch +
+  `/tmp/model-runtime[multimodal]` into `tools/docker/Dockerfile.extproc` (and `-rocm` with ROCm torch), keeping the
+  bindings until your deletion; post its sha here. **`e2e-docs`:** then drop the derived image and run Kind on the
+  real one. Design doc refreshed in the gist (§13.3, §13.5, §19).
+
+- 2026-10-04 02:39 — **Model-runtime Phases 2–4 lead (23203ab9): `vela1` `d63d9c2fd`, `embed` `add83ef21`, `stores`
+  `0b7bcac39` MERGED — PR branch at `3381844d5`** (runtime suite 414 passed; ruff clean; `modelservice`, `serving`,
+  `config`, `embedding`, `modelselection` build, `vecmath` vets clean). Every workstream: merge `3381844d5` next.
+  Still waiting for `router`'s IP1 push (my 01:56 items: codespell `allReady`, the `tools/ci` test tables, API docs);
+  then I run the full node check and take the PR out of draft.
+  - **`stores`:** the AVX2 / FMA `vecmath` kernel meets the 01:50 rule (one file, `x/sys/cpu`, tested fallback);
+    accepted. The `classification` test binary links in the precommit image on node A (it has cmake / OpenSSL), so
+    those router tests ran green there at `50fe5a160`.
+  - **`removal` (02:29), answers:** (1) **`platform.models-cpu` ("Published Models")**: yes — one lane, runtime
+    `model-runtime`, every listed managed test must run without a skip; `router` changes only the test tables now, you
+    convert the runner after IP2 as proposed. (2) **Performance baseline reset for model benchmarks: confirmed**, on
+    two conditions: non-model benchmarks stay gated, and the lane's evidence links the legacy-vs-runtime records
+    (`router-*`, `vela1-*`, `embed-*`, `decision1-*`, `stores-algorithms.md`) that justify it. (3) `model-test-assets`
+    goes with router-side downloads (`router`, IP2).
+  - **`embed` → `vela1`, encoder-graph padding (02:37):** agreed with `embed`'s rule; `vela1`, please replay a bucket
+    only when it pads little (padded ≤ 1.25 × real tokens) or the batch is launch-bound (≤ about 1,024 padded tokens),
+    else run packed, and record both cases in `vela1-*`.
+
+- 2026-10-04 02:38 — **Model-runtime P2–4 `e2e-docs` (3b457b58): status; PR `5fcac8313` and `router` `ead65b1ae`
+  merged, PUSHED `551436917`.**
+  - **In:** (1) `vllm-sr config migrate` follows `stores`' 01:42 ask: `bert` / `gemma` embedding users move to `mmbert`
+    — response cache, memory and vector store (also when they relied on the former MiniLM default), ML selection
+    `model_type` — with a re-embed **action** note for persistent stores, selection models and every Milvus / Qdrant /
+    hybrid RAG collection (Vela Embedding is 768-d). (2) The docs-snippet test is committed and green on `router`'s
+    schema (`process` / `served_name`); I also ran every docs config fragment through the router's own
+    `config.Parse` (30 / 30 parse). (3) The engine-mode test reads the Quickstart's requests from the page (3 / 3 on
+    `5fcac8313`). (4) Capability, install (AMD, NVIDIA) and troubleshooting pages no longer describe candle / ORT /
+    OpenVINO / NLI. (5) Existing E2E profiles migrated: `ai-gateway` polarity guard `lexical` (its lock/unlock case,
+    which only NLI caught, becomes enable/disable), `vela-halu` / `hallucination` without explainer / `use_nli`,
+    `vela-omni` on `model_runtime` prepared bundles (inventory expects `provider: model_runtime`), retired selectors
+    and `gemma` / `bert` paths gone from every profile and `e2e/config` file; all profile configs parse with
+    `config.Parse`.
+  - **`router` (bb9d5719):** (a) `config/config.yaml` still has `global.stores.memory.embedding_model: bert`; migrate
+    rewrites it to `mmbert` with a re-embed action — please change it in your `config/**` pass. (b) For your IP2
+    rejection of local `*_mapping_path` on runtime modules, I make migrate drop `category` / `pii` / `jailbreak` /
+    `feedback_mapping_path` on runtime-served modules (changed note when the model is a Vela or legacy model with the
+    same labels, action note for a custom map) unless you object here before IP2.
+  - **`removal`:** `e2e/config/onnx-binding/*` (my path) is still read by your `run-router-onnx` make target and by
+    `router`'s `pkg/config/maintained_asset_contract_test.go`: please delete the two files in the commit that deletes
+    `onnx-binding/` (fine by me), or tell me when the references are gone and I delete them. Kind E2E needs the runtime
+    in the `extproc` image; until it lands I build a derived image on node B (extproc from my mirror + the CPU runtime)
+    for an early `model-runtime` run.
+  - **Node B CPU:** my untimed jobs (website build, image builds, Kind) stay on cores **0–47**.
+  - **Next:** website build (running), Kind `model-runtime` run on the derived image, the opt-in `model-runtime-real`
+    profile and its real Kai-0.6B + Vela CPU run, `INTEGRATION READY` before IP1.
+
+- 2026-10-04 02:37 — **Model-runtime P2–4 `embed` (fd9f7608): pushed `add83ef21` (on the PR head `7d7052803`); lead's 01:59 /
+  02:00 items done; real-model CPU parity passes; first ROCm numbers vs legacy.**
+  - **Lead items:** `c43a7b1e8` the Omni family fails the model's load with `pip install 'vllm-sr-runtime[multimodal]'`
+    when Pillow or onnxruntime is missing (checked in `describe()`, before the engine's generic hint).
+    `add83ef21` `tests/test_task_heads_embed.py` writes graph fixtures only when `onnx` is installed (native tests run
+    without it; checked with `onnx` blocked), and an embedder refuses a missing exit graph only where a graph engine
+    needs it (packages with partial graphs load on the native engine). Runtime suite 414 passed.
+  - **CPU parity (node B, Transformers FP32 reference, same token IDs):** Vela Embedding 6 / 6 (every exit + Matryoshka
+    views; native cosine ≥ 0.9999999999998, max |Δ| ≤ 2.7e-7; ORT ≤ 5.9e-7), Vela Reranker 20 / 20 pair scorers (logits
+    native ≤ 3.8e-6, ORT ≤ 2.0e-5, identical order). Qwen3-Embedding and ROCm parity running.
+  - **ROCm (MI325X, GPU2) vs legacy ORT ROCm + CK flash attention, one sequence per run as the binding did:** Embedding
+    single 16 / 64 / 256 tokens p50 2.33 / 2.53 / 3.60 ms vs 4.04 / 3.99 / 4.57; 1,024 tokens 7.45 vs 7.02 (re-measuring
+    with `vela1`'s banded local attention, now merged); batch of 32 38.0 ms vs 138; Reranker query + 10 / 50 docs 18.0 /
+    35.3 ms vs 43.6 / 213.9.
+  - **To `vela1` (f6488e31), `EncoderGraphs` padding:** on my multi-row batches the bucket replay is slower than the
+    packed eager path it replaced: query + 10 docs (≈1,400 real tokens → 16 × 256 = 4,096 padded) 18.0 ms vs 10.1 ms
+    packed; 32 texts of 16–256 tokens (≈4,350 → 8,192) 38.0 vs 28.5. Single rows win big (16 tokens 2.33 vs 5.02).
+    Suggestion: replay only when the bucket adds little padding (padded ≤ 1.25 × real tokens) or the batch is
+    launch-bound (padded ≤ ~1,024 tokens); otherwise run packed. Your file, your call; I can measure a patch on GPU2.
+    (`c206598f4` had the same unbucketed-row `.to(device)` fix as your `b762e4ef2`; the lead kept one.)
+  - **Tools:** `embed_bench` / `embed_parity` load the native engine with the default engine options (graphs and fused
+    kernels on, the serving path); `embed_parity encoder --device rocm:N` (native on the GPU vs the CPU reference, GPU
+    bar cosine ≥ 0.9995); `embed_legacy_baseline.py` (legacy ORT execution in the legacy image); `embed_legacy.py`
+    (Vela Embedding / Reranker / Qwen3 through the router's native facade at `61aa7eb2d`, candle CPU, vs `Runtime.call`).
+  - **Next:** candle CPU comparison on node B 112–127, the in-process ORT overhead at 64–256 tokens (the bare legacy ORT
+    session is faster there), ORT-vs-torch per-model decision, `docs/records/embed-*`. GPU2–3 leased to 10:00.
+
+- 2026-10-04 02:36 — **INTEGRATION READY vela1 `d63d9c2fd`** (`xunzhuo/model-runtime-p24-vela1`; PR branch `7d7052803`
+  merged; runtime suite **413 passed**, 1 skipped on CPU; repo ruff + black 25.1 clean; GPU tests on node B MI325X: the
+  encoder-graph test passes).
+  - **Since `b762e4ef2` (your last vela1 merge):** `heads/` duplicates removed as asked (`Head.items()` and
+    `heads.task.token_probabilities` shared by every head; the heads' unused `to()` dropped) — merged with `embed`'s
+    `Head` / `TaskHead` split (`items()` sits on `Head`, so pooled / relevance heads can use it); blocked local attention
+    through 4-D SDPA from 1,024 tokens (`4a341de8e`, measured CPU + MI325X); `tools/golden_answers.py` records any
+    family's surface goldens (`--family F --record FILE`; the scaffold had renamed the decision helper it called, so it
+    was broken for Decision 2.0 too); legacy parity driver recipes (`--recipe cpu|amd`).
+  - **Finding for the AMD recipe (`config/recipes/vela-amd`):** the legacy ROCm path compiles one **fixed 8,192-token
+    ORT session** per model (`prepareFixedGPUExecution`), so every request is an 8K forward: Domain 152 ms, Guard
+    (ROCm EP) 242 ms, PII 132 ms for a 7-token input on MI325X (Hazard 13 ms: its operating point compiles 2,048-token
+    sessions). The runtime's bucketed graphs answer the same inputs in ~2–3 ms. Also: the image `Dockerfile.extproc-rocm`
+    builds at `61aa7eb2d` **cannot start its router** (router + candle libs need glibc 2.39 on a 2.35 base); my driver
+    links only its ROCm ORT binding (glibc 2.34) with bookworm-built candle / ml / nlp.
+  - **Running / next:** CPU legacy reference complete (all 11 jobs, 611 inputs); ROCm legacy (AMD recipe) and ROCm
+    runtime runs on node B GPU0–1; then CPU runtime parity, an interleaved legacy / runtime CPU latency A/B (node B is
+    at load ~170, so back-to-back runs are not comparable), golden answers (CPU, ROCm), `docs/records/vela1-*`.
+
+- 2026-10-04 02:36 — **INTEGRATION READY stores `0b7bcac39`** (`xunzhuo/model-runtime-p24-stores`; merges the PR
+  branch `7d7052803` and `router` `ead65b1ae`).
+  - **Switched to `serving`:**
+    - every embedding preparation (default, recipe, global services, response cache, embedding API), the RAG
+      rerankers, and embedding / rerank diagnostics;
+    - implicit embeddings are `@embedding.<model>`: mmbert, qwen3, multimodal, through
+      `config.ImplicitModelRuntimeDeployment`;
+    - the vector store holds its own lease;
+    - **nothing imports `pkg/modelruntime/native` any more**; it is deleted after IP2.
+  - **Retired:**
+    - the response-cache NLI verifier;
+    - the `bert` / `gemma` defaults: `config.DefaultEmbeddingModel = "mmbert"` (your 01:50 yes); persisted vectors
+      without a content identity (remote endpoints) keep their namespace whatever the model is called;
+    - tokenizer-window checks: the cache asks `InputChecker.FitsInput` at its own view, so the answer shares the
+      vector's cached call.
+  - **Performance work:**
+    - process-wide content-hash vector cache;
+    - `pkg/embedding/vecmath`: one Go assembly file (AVX2 + FMA behind `x/sys/cpu`, with portable fallbacks tested
+      against it), used by the cache HNSW, embedding signal, memory, KNN / KMeans / SVM / MLP. It replaces the
+      cache's old kernel, which ran FMA after checking only AVX2.
+  - **Selectors vs bindings (published artifacts, one core):** AVX2 / portable / binding.
+
+    | Selector | AVX2 | Portable | Binding |
+    | --- | --- | --- | --- |
+    | KNN | 0.14 ms | 0.44 ms | 2.0 s |
+    | SVM | 0.33 ms | 0.72 ms | 1.47 ms |
+    | KMeans | 1.4 µs | 2.7 µs | 10.4 µs |
+    | MLP | 15.8 µs | 64.8 µs | 22.3 µs |
+
+    Lead, per your 01:50 rule: the portable MLP is 2.9× slower than candle, hence the kernel. Keyword rules are
+    1.5–18× faster than `nlp-binding` (side by side, same binary). Record:
+    `src/model-runtime/docs/records/stores-algorithms.md`.
+  - **Node B checks at `75c1aa5e0` (same Go tree as the IP1 sha):**
+    - build and vet clean;
+    - `go test` passes for embedding, vecmath, modelruntime, serving, cache, memory, vectorstore, routerruntime,
+      tools, modelselection, lexical, services, apiserver, extproc, promptcompression, selection, modelservice,
+      config and cmd;
+    - golangci-lint 2.13.2 is clean on my packages.
+    - **Not mine:** the `classification` test binary does not link on node B. `router`'s
+      `classifier_signal_input_limit_integration_test.go` and `classifier_fail_closed_test.go` import
+      onnx-binding / candle, and onnx-binding needs cmake and OpenSSL headers there. The remaining lint findings are
+      in `extproc` / `apiserver` files I did not touch.
+  - **`[CI]` `944597c44`:** my `core_test_profiles.json` rows (deleted NLI / ORT-default / native selector rows;
+    cache and Omni classifier integrations on `model-runtime`).
+  - **Your files I edited, `router`:**
+    - `extproc/{router_memory_identity,response_cache_service}.go` and their tests (identity policy; Candle BERT
+      tests deleted);
+    - `extproc/{router_memory,req_filter_rag_windowing}.go` (mmbert defaults);
+    - `apiserver/route_model_diagnostics_test.go` (embedding / rerank handles on serving).
+  - **`removal` (00053ab2), env vars of my managed tests:**
+    - `VLLM_SR_MMBERT_TEST_MODEL` (cache negation regression);
+    - `VELA_OMNI_ARTIFACT` and `REQUIRE_OMNI_TESTS` (cache Omni storage, embedding-classifier image tests);
+    - `VLLM_SR_TEST_ML_MODELS_DIR` (published selector parity);
+    - `VSR_TEST_MEMORY_IDENTITY_CONFIG` (extproc memory identity);
+    - tools suites: the repo `models/` dirs.
+
+    All of them take the runtime command from `VLLM_SR_RUNTIME_COMMAND` and skip without it. The calibration and
+    example conversions are yours, go ahead.
+  - **`e2e-docs` (3b457b58):** `config/config.yaml` still sets `memory.embedding_model: bert`, and
+    `TestReferenceMemoryCalibratedRequestPath` asserts it. When you migrate it to `mmbert`, change that assertion
+    too, or tell me and I will.
+  - **Running:** consumer latency, legacy candle in process (base `1c6d372ec`) vs serving with a managed runtime,
+    on the same inputs: semantic cache, memory, RAG rerank. It runs on **node D, cores 96–111**, because node B is at
+    85–99 % on every core.
+
+- 2026-10-04 02:32 — **Model-runtime Phases 2–4 lead (23203ab9): runtime heads merged — PR branch at `7d7052803`**
+  (`decision1` `b3f449d85`, `vela1` `b762e4ef2`, `embed` `0012e93ad`, `vela2` `7066f9dca`; runtime suite **413
+  passed**, 1 skipped; ruff + pinned black clean on all of `src/model-runtime`). **Runtime workstreams: merge
+  `7d7052803` before your next push.**
+  - **Conflicts resolved (`vela1` × `decision1` / `embed`), please check:** `NativeEngineModel.encode` keeps the
+    decoder path (`_encode_decoder`) and `vela1`'s default exits; encoder graphs run only for the main backbone
+    (`batch.branch is None`), since they are captured for it. `tools/golden_answers.py` is one tool for every family:
+    each golden entry is answered as a decisions request or a surface request and merged, with `vela1`'s `--family` /
+    `--record`; it calls the now public `ServedModel.golden_decisions` / `golden_surface` (were `_golden_*`).
+  - Node A: the runtime install + CPU suite in the precommit image is running on `7d7052803`.
+
+- 2026-10-04 02:29 — **Model-runtime P2–4 `removal` → lead (23203ab9), `router` (bb9d5719): the real-model suite's home
+  after the native lanes; perf and tool conversions done (local).**
+  - **Gap I found in my `[CI]` refactor:** removing `native.candle-cpu` / `native.ort-cpu` left no lane for the real-model
+    Go tests (`router`'s `servingtest.Managed` cases from `e27ab5d62` skip unless model env vars are set). Proposal: one
+    platform lane **`platform.models-cpu`** ("Published Models", runtime `model-runtime`, target `test-models`, evidence
+    `models`) that installs the runtime, provides the pinned models and requires every listed test to run without a
+    skip. `tools/ci/run_model_tests.py` stays as its runner with the provider axis removed.
+  - **To avoid a modify/delete conflict with the lead's 01:56 item 2:** `router`, in your IP1 `[CI]` commit please
+    change only the test tables in `run_model_tests.py` (`CLASSIFIER_TESTS`, `OWNED_OMNI_TESTS`, `CANDLE_CACHE_TESTS`, the
+    Halu / Omni case lists) and the `core_test_profiles.json` rows; I restore the file in my branch and convert its
+    runner, make target and catalog lane on top of your names after IP2. Tell me the env var each managed test reads
+    for its model (`VLLM_SR_MMBERT_TEST_MODEL`, ...) if it differs from the old manifest names.
+  - **Perf (local, `[Perf]`):** benchmarks serve the catalog's pinned models through one runtime manager and the
+    `serving` facade (a runtime process per deployment); Domain / PII / Guard run as one request bundle;
+    `BenchmarkCGOOverhead` → `BenchmarkClassifyRuntimeOverhead`; identities come from each runtime's card
+    (`ModelSHA256`, device, dtype, engine). The base-revision comparison runs the base's own runtime source. **A base
+    that predates the model runtime cannot run the harness, so this PR's performance lane records an explicit model
+    baseline reset** (model benchmarks measured, not gated; non-model benchmarks still gated); the justification is
+    `router`'s legacy-vs-runtime latency record. Lead: please confirm; the evidence side is a small `[CI]` commit
+    (`workflow_evidence.py` requires `model_runtime` / CPU identities).
+  - **Also converted (local):** `tools/calibration/image-routing` (managed runtime on the prepared Omni bundle, via
+    `embed`'s `multimodal_embedding` family), the Redis / Valkey examples (runtime embeddings). `fusioneval` waits for
+    `router`'s Looper Halu grounding API (IP2). **`router`:** `src/semantic-router/tools/model-test-assets` has no
+    caller once perf converts; please delete it with router-side downloads (or tell me to).
+  - **Footprint:** I record "after" next to "before" as `src/model-runtime/docs/records/removal-footprint.md`; every
+    router image gets `[multimodal]` per your 01:59 note.
+
+- 2026-10-04 02:26 — **Model-runtime Phases 2–4 lead (23203ab9): full `make check` on `50fe5a160` (node A, precommit
+  image; my 01:56 items 1 and 3 patched in the scratch worktree only).** Passes: translation coverage, config docs and
+  schema, CRD docs, API docs (after regeneration), runtime client, router build, **`test-semantic-router` (whole Go
+  module)**, multimodal E2E profile, `vllm-sr-test` (3,065), dashboard, CLI docs. Fails: `model-runtime-test` (the
+  `decision1` preset test, fixed in `d5b985e43`; `onnx`, fixed in `a9bff4bc1`). **So the open IP1 blockers are only
+  `router`'s three items (codespell, `tools/ci` inventory, API docs).** Thanks, `decision1`.
+
+- 2026-10-04 02:19 — **Model-runtime P2–4 `decision1` (6a8380f8): lead's 02:00 test fix done, PR head merged, PUSHED
+  `d5b985e43`; node C core ranges and a warning about unpinned ROCm containers.**
+  - **To lead (23203ab9):** `test_presets_answer_like_their_questions` now sends the preset and the plain question as
+    two one-question requests (`d5b985e43`); none of my other tests compares rows of one batch bit for bit. Merged
+    `dcaf8a0b9` (`540d2dbd7`): `engine.py` and `named_files` taken from the PR branch (a superset of mine),
+    `37fbf860e`'s default `kernel_choices` replaces my copy. Local suite: 370 passed, 13 skipped; the only errors are
+    `test_task_heads_embed.py`'s missing `onnx` (fixed in CI by `a9bff4bc1`). Thanks for `5fcac8313`; my final benches
+    run at `d5b985e43`, so they include it, and they record the scheduler path next to `Runtime.call`.
+  - **Parity at `11ab95952` (fused BF16-stream kernels in), node C MI325X, 4 full panels:** Kai, Lex, Route, Eos, Sol,
+    Nox, **Lux** all **10,653 / 10,653 byte-identical** to the bundled runtime. Re-running at `d5b985e43` for the record.
+  - **Node C cores (decision1, from now on):** ROCm containers pinned to **16–23 (GPU1)** and **24–31 (GPU2)**, timed
+    CPU benches on **112–127**, untimed CPU parity on **32–79**. I moved off 96–111 (`vela2` has it for GPU
+    containers). Nobody else listed 16–31 or 112–127 for node C; tell me if you use them.
+  - **Warning, anyone timing on node C:** my ROCm bench containers were unpinned until 02:15 and each kept about 20
+    cores busy across all 160 (PyTorch / OpenMP threads sized to the whole machine), which put a 25–35 % load on every
+    core. CPU timings taken on node C between about 01:00 and 02:15 may be contaminated (I discard mine). Give every
+    GPU container `--cpuset-cpus`.
+  - **GPU1–2:** final parity and benches running; leases end by 10:00, released earlier if the jobs finish.
+
+- 2026-10-04 02:10 — **Model-runtime Phases 2–4 lead (23203ab9) → `removal` (00053ab2): answers to 02:05.**
+  (1) Plan accepted (one router Dockerfile with targets, platform executor, `test-platform.yml`, RISC-V attached smoke);
+  I review the `[CI]` / `[Harness]` commits at IP2. (2) `platform.image-calibration-cpu` on the runtime's
+  `multimodal_embedding` package: yes, `[CI]` commit. (3) `core_test_profiles.json`: `router` reconciles the rows of
+  the tests it already deleted in its IP1 push (`harness-check` fails on `50fe5a160` today); you reconcile yours with
+  the binding deletion after IP2. (4) Images: `[multimodal]` extra per my 01:59 note. (5) Record the "after" footprint
+  next to the "before" one in `docs/records/removal-*`.
+
 - 2026-10-04 02:07 — **Coordinator tick: P2–4.**
   - The PR is open as a draft: https://github.com/vllm-project/semantic-router/pull/4512. It leaves draft at IP1
     (06:00); after that, the PR branch takes pushes only at integration points.
