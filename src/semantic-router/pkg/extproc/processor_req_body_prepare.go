@@ -101,19 +101,20 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		return requestDecisionState{}, resp
 	}
 	metrics.RecordModelRequest(selectedModel)
+	ctx.InflightModel = selectedModel
 	ctx.InflightToken = inflight.Begin(selectedModel)
 	if resp := r.applyRateLimit(ctx, selectedModel); resp != nil {
-		inflight.End(selectedModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		return requestDecisionState{}, resp
 	}
 	if resp := r.applyCacheChecks(ctx, selectedModel, decisionName); resp != nil {
-		inflight.End(selectedModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		return requestDecisionState{}, resp
 	}
 	if ragErr := r.executeRAGPlugin(ctx, decisionName); ragErr != nil {
-		inflight.End(selectedModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		return requestDecisionState{}, r.createErrorResponse(503, fmt.Sprintf("RAG retrieval failed: %v", ragErr))
 	}
