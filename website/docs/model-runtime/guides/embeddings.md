@@ -73,9 +73,10 @@ own vector space and is stored separately.
 ## Use an external embedding service
 
 Any OpenAI-compatible `/embeddings` endpoint, for example `vllm serve` with an
-embedding model, can replace the local model for text:
+embedding model, can replace the local model for text. It replaces the
+`embedding` binding above, so leave that binding out:
 
-```yaml
+```yaml alternative
 global:
   model_catalog:
     embeddings:
