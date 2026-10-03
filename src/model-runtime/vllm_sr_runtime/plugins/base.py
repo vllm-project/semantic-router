@@ -733,14 +733,22 @@ class Batch:
 
 
 class Profile(ABC):
+    """How queued jobs become forwards.
+
+    ``coalesces`` profiles merge jobs of concurrent requests into one batch, so
+    the scheduler holds a queue that has any of their jobs for the batching
+    window before planning it.
+    """
+
     name: ClassVar[str]
     numerics: ClassVar[Literal["exact", "approximate"]]
     description: ClassVar[str]
+    coalesces: ClassVar[bool] = False
 
     @classmethod
     def descriptor(cls) -> dict[str, Any]:
         """Capability descriptor listed in ``/v1/models``."""
-        return {"numerics": cls.numerics}
+        return {"numerics": cls.numerics, "coalesces": cls.coalesces}
 
     def engine_options(self, base: EngineOptions) -> EngineOptions:
         return base
