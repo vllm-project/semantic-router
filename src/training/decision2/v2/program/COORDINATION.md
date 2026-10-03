@@ -205,6 +205,109 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 23:50 — **Coordinator: PHASES 2–4 WORKSTREAMS LAUNCHED; LEAD RESUMED.**
+  - A session interruption at about 22:20 stopped the lead mid-scaffold. Its uncommitted scaffold is intact in
+    `/home/xunliu/code/vllm-sr-phases-2-4` (+3294 / −530 across 18 files plus new stub dirs). The lead was resumed at
+    23:48 with priority 1 = **push the scaffold and post `SCAFFOLD READY <sha>` here**. Workstreams: build on
+    `1c6d372ec` (scaffold-independent parts) until then, then `git merge` it.
+  - `/accept` posted on #4496 at 23:41; the label workflow is queued.
+  - **Agents (all Opus 5.5 Max, launched 23:43, per the lead's table below):**
+
+    | Workstream | Agent | GPUs |
+    | --- | --- | --- |
+    | `decision1` | 6a8380f8 | node C GPU1–2 |
+    | `vela1` | f6488e31 | node B GPU0–1 |
+    | `embed` | fd9f7608 | node B GPU2–3 |
+    | `vela2` | cedf4b1a | node B GPU4–5, node C GPU3–4 |
+    | `router` | bb9d5719 | — |
+    | `stores` | 60afd248 | — |
+    | `removal` | 00053ab2 | — |
+    | `e2e-docs` | 3b457b58 | — |
+    | lead | 23203ab9 | integration nodes as needed |
+
+    node B GPU6–7 and node C GPU5–7 stay free for the lead's integration runs and any workstream that asks here first.
+  - Every brief carries the 21:17 acceptance bar plus a **per-workstream performance gate** (match or beat legacy
+    p50 / p95 and throughput on CPU and ROCm, records in `src/model-runtime/docs/records/<id>-*`).
+  - Watchdog re-armed every 20 min. **Any agent that is stopped unexpectedly:** your uncommitted work stays in your
+    worktree. The coordinator resumes you; on resume, re-read this file first.
+
+- 2026-10-03 23:05 — **Model-runtime Phases 2–4 lead (23203ab9): INVENTORY, CONTRACTS AND WORKSTREAM SPLIT. Coordinator:
+  please launch the 8 workstreams below (Opus 5.5 Max).** Issue #4496 still needs `/accept`.
+  - **Design (inventory, migration matrix, contracts, parity thresholds):** `src/model-runtime/docs/design.md` on
+    `xunzhuo/model-runtime-phases-2-4` @ `1c6d372ec` (sections 2.2, 5, 6, 8, 13, 16, 17); public copy refreshed at
+    https://gist.github.com/Xunzhuo/0daab6d0de1d01f1346ff15970891257. The branch also has the 10 follow-up commits and
+    the new Decision 2.0 pins (`61aaec52c`: Kai `cd49ea38` … Vega `7aec49ae`, same identities, new manifest digests).
+  - **Key decisions (recorded in design 2.2):**
+    - families `decision1`, `task_heads` (Vela 1.0 and compatible HF ModernBERT task models), `vela2`,
+      `multimodal_embedding` (Omni); engines `native` (PyTorch, + ModernBERT) and `onnxruntime`; accelerators + `xpu`,
+      `mps` (unvalidated);
+    - new surfaces `/v1/classify`, `/v1/embeddings` (OpenAI-compatible + `layer`), `/v1/rerank`, `/v1/bundle`, and Set /
+      Span on `/v1/decisions` in the Vela 2.0 server's shape;
+    - **a runtime process serves several models**; the router groups managed deployments into processes (default
+      one per device, optional `process:` key) and sends **one `/v1/bundle` per request stage and process** through a
+      request-scoped bundle that flushes when every signal goroutine has parked or finished (2 ms cap);
+    - router seam: `pkg/modelruntime/serving` replaces `pkg/modelruntime/native` with the same facade (`Sequence`,
+      `Scores`, `*Windows`, `Tokens`, `Grounded`, `Embedding`, `Relevance`, `OperatingPoint`, `Diagnose*`), so
+      consumers change constructors, not logic; windows and tokenization move into the runtime;
+    - BM25 / n-gram and KNN / KMeans / SVM / MLP become pure Go with parity fixtures recorded from the bindings first;
+    - canonical config layout kept; `provider: model_runtime` may serve task bindings; `candle` / `ort` / `openvino`,
+      `precision`, `custom_ops_profile`, `compilation_cache_dir` rejected by the parser, rewritten by `vllm-sr config migrate`;
+    - every router image ships the runtime (CPU / ROCm / CUDA PyTorch), so managed is the default everywhere;
+    - retired: NLI (explainer, polarity guard), OpenVINO, the ORT MIGraphX / CK paths, unwired candle models;
+    - Vela 2.0 is private: full revisions live in the code table (a revision is not a secret); docs say "private
+      preview, access required".
+  - **Scaffold (lead, by about 01:00):** OpenAPI for every surface + regenerated Go client; `plugins/base.py` surface
+    interfaces (`plan_surface` / `run` / `finish_surface`, `SurfacePlan`, `HeadInfo`, `EmbeddingInfo`, engine
+    hidden-state / graph outputs); multi-model `ServeConfig` / `--models` file / `MODEL@REVISION`; runtime core with
+    surface dispatch and `/v1/bundle`; per-family built-in tables `registry/models/*.py`; stub families, engine and
+    accelerators registered in `pyproject.toml`; Go `modelservice` client methods and the bundle API. **Workstreams start
+    now from `1c6d372ec` on the parts listed as scaffold-independent, then `git merge` the scaffold commit when I post it.**
+  - **Workstreams** (sub-branch `xunzhuo/model-runtime-p24-<id>`, worktree `/home/xunliu/code/vllm-sr-p24-<id>`, created
+    from `origin/xunzhuo/model-runtime-phases-2-4`; merge, never rebase pushed commits; `git commit -s`; commits split by
+    module; tests with tiny fixtures; real-model and GPU runs on nodes from exact mirrors):
+
+    | ID | Scope | Owns | GPUs |
+    | --- | --- | --- | --- |
+    | `decision1` | Phase 2: `decision1` family for all 7 Decision 1.0 packages (Kai, Lex, Route on the Vela encoder; Eos, Sol, Nox, Lux on Qwen3.5); pinned revisions + file digests, golden answers (CPU, ROCm), parity record vs the packages' bundled runtime | `families/decision1/**`, `registry/models/decision1.py`, its golden file, `tests/test_decision1*`, `docs/records/decision1-*` | node C GPU1–2 |
+    | `vela1` | Phase 3: native ModernBERT backbone (`engines/native/models/modernbert.py`, vs Transformers on fixtures) **first, pushed early for `decision1` / `vela2`**; `task_heads` family: sequence, scores (Hazard operating point), token (PII), grounded (Halu) heads, windows / truncate / reject exactly as `pkg/modelruntime/native/window_contract.go`; the **legacy parity driver** (`tools/legacy_parity.py`, legacy router diagnostics API from `main` `61aa7eb2d`) shared with `embed`; CPU + ROCm parity records for the 10 text models; CPU latency vs candle | `engines/native/models/modernbert.py`, `families/task_heads/{family,package,heads/sequence,heads/scores,heads/token,heads/grounded,windows}.py`, `registry/models/vela1.py`, `tools/legacy_parity.py`, `docs/records/vela1-*` | node B GPU0–1 |
+    | `embed` | Phase 3: `task_heads` pooled (Vela Embedding: Matryoshka dims, layer exits) and relevance (Vela Reranker exits) heads; Qwen3-Embedding-0.6B as a pooled model on the native Qwen3 backbone; `onnxruntime` engine (CPU EP validated; CUDA / ROCm / OpenVINO EPs when present); `multimodal_embedding` family (Omni Nano / Mini prepared bundle from `tools/models/vela_omni`, NumPy processors vs the bundle goldens); parity records; decide with numbers whether ORT beats torch on CPU | `families/task_heads/heads/{pooled,relevance}.py`, `families/multimodal_embedding/**`, `engines/onnxruntime/**`, `docs/records/embed-*` | node B GPU2–3 |
+    | `vela2` | Phase 3: `vela2` family for 0.3B (ModernBERT + markers) and 4B / 9B (Qwen3.5 encoder with per-question blocks on `engines/native/models/tree.py`); Choice / Noul / Score / Set / Span, typed parts, `over`, thresholds and the PII length rule from `calibration.json`, windows; presets; parity vs `vela2_inference.py` (CPU, ROCm); private repos need the node HF token | `families/vela2/**`, `registry/models/vela2.py`, `docs/records/vela2-*` | node B GPU4–5, node C GPU3–4 |
+    | `router` | Phase 4 Go, model path: `pkg/modelservice` (process groups, managed `--models` files, attached endpoints, per-deployment cards and readiness, bundles), new `pkg/modelruntime/serving` facade for every contract, model-backed signals (domain, guard, PII, fact-check, feedback, modality, safety, generic classifier, hallucination) switched to it, legacy classification singletons deleted, `pkg/config` (task bindings on `model_runtime`, `process`, removed providers / fields with migration hints, implicit defaults → `model_runtime`), config schema + generated TS, `config/**`, diagnostics / classify APIs | `pkg/modelservice/**`, `pkg/modelruntime/serving/**`, `pkg/config/**`, `pkg/configschema/**`, `config/**`, the model-backed files of `pkg/classification/**` and the shared classifier construction files, `pkg/apiserver/**`, `pkg/services/**`, `pkg/extproc/router_build*.go` | — |
+    | `stores` | Phase 4 Go, embeddings and algorithms: embedding provider through `serving` (text, image, audio, dims / layers), embedding signal, KB, complexity candidates, contrastive, reask, semantic cache, memory, vector stores, RAG reranker, tool selection, response-cache NLI removal; pure-Go BM25 / n-gram (`keyword_classifier*`) and KNN / KMeans / SVM / MLP (`pkg/modelselection`) with fixtures recorded from the bindings **before** they are deleted; finally delete `pkg/modelruntime/native` | `pkg/embedding/**`, `pkg/modelruntime/{embedding_*,reranker*,response_cache_nli*}.go`, `pkg/cache/**`, `pkg/memory/**`, `pkg/vectorstore/**`, `pkg/routerruntime/**`, `pkg/tools/**`, `pkg/modelselection/**`, embedding / keyword files of `pkg/classification/**`, `pkg/modelruntime/native/**` (deletion) | — |
+    | `removal` | Phase 4 platform: delete the 5 binding directories; images (`tools/docker/Dockerfile.extproc{,-rocm}`, `src/vllm-sr/Dockerfile{,.cuda,.rocm}`, operator) → pure-Go router + runtime with CPU / ROCm / CUDA PyTorch (Omni bundle stage kept); `tools/make/{rust,openvino,build-run-test,models,common}.mk`; native workflows; Helm / operator settings; non-router Go (`src/training/*` verifiers, `tools/dev/examples`, `tools/modelcompat`, `perf/`, `bench/`); RISC-V story; dashboard backend / frontend references to removed providers | the binding dirs, `tools/docker/**`, `src/vllm-sr/Dockerfile*`, `tools/make/**` (except `model-runtime.mk`), `.github/workflows/**` (except `ci*.yml`, `pr.yml`), `deploy/**`, `perf/**`, `bench/**`, `tools/dev/**`, `tools/modelcompat/**`, `src/training/**` Go, `dashboard/**` | — |
+    | `e2e-docs` | E2E: managed and attached runtimes, `vllm-sr serve <model>` engine mode, every migrated signal / feature (classification, PII spans, embeddings → semantic cache / memory / RAG, rerank, guard, hallucination …), decision signals + selector, fail-open; migrate `vela-halu`, `vela-shield`, `vela-omni`, `multimodal-routing`, `local-classifier-backend`, `ml-model-selection`, `hallucination` …; opt-in `model-runtime-real` profile (real Kai-0.6B + Vela on CPU, run on a node, recorded); `vllm-sr config migrate` for legacy layouts + tests; user docs (Quickstart, choose model / size / hardware, per-signal guides, profiles in plain words, migration guide, troubleshooting / FAQ; rewrite Phase 1 pages) | `e2e/**`, `website/**`, `src/vllm-sr/cli/config_migration*.py` and its tests | — |
+
+  - **Lead (23203ab9) owns:** `docs/design.md`, `api/openapi.yaml` + generated Go client, `plugins/base.py`,
+    `config.py`, `runtime.py`, `api/**`, `cli.py`, `scheduler/**`, `registry/{builtin,resolve,artifacts,policy}.py`,
+    `pyproject.toml`, `tools/agent/domains.yaml`, `tools/ci/**`, `.github/workflows/{ci,ci-changes,pr}.yml`,
+    `tools/make/model-runtime.mk`, the CLI engine-mode delegation in `src/vllm-sr/cli`, integration and the PR. Contract
+    changes: post a request here; I change the OpenAPI / base classes. Workstreams may edit lead-owned files only in
+    separate `[CI]` / `[Harness]` commits; I resolve conflicts at integration.
+  - **Shared rules:** design 17 thresholds are the parity bar; parity records name commit, image, device, inputs and
+    every disagreement; no credentials / private hostnames / fleet details in the repo or gist; GPU leases in
+    `/data/dev2/leases/gpuN.lock/owner` (`track=model-runtime-p24-<id>`), released when done; node work under
+    `/data/dev2/runs/mr-p24/<id>/`, HF cache `/data/dev2/tmp/mr-hf`.
+  - **Integration points** (post `INTEGRATION READY <id> <sha>` here; I merge into the PR branch, run `make check` /
+    `make ci-full` on a node from an exact mirror, and push): **IP1 2026-10-04 06:00** (everything compiles, unit tests
+    green, scaffold merged), **IP2 12:00**, **IP3 18:00 = feature complete** (PR opened, full CI). Router Go order:
+    `router` and `stores` switch consumers to `serving` first; `stores` deletes `pkg/modelruntime/native` and `removal`
+    deletes the binding directories only after IP2.
+
+- 2026-10-03 21:55 — **Model-runtime Phases 2–4 lead (23203ab9): STARTED. MAINTAINER ACTION NEEDED: `/accept` on
+  issue https://github.com/vllm-project/semantic-router/issues/4496** (the Phases 2–4 feature issue, workgroup Router
+  Models & Inference Runtime).
+  - **Worktree / branch:** `/home/xunliu/code/vllm-sr-phases-2-4`, branch `xunzhuo/model-runtime-phases-2-4` = `origin/main`
+    `61aa7eb2d` + the 10 follow-up commits cherry-picked (`63f2b8296..a82b60962`; #4481 was squash-merged, and the
+    model-runtime tree of `63f2b8296` equals `main`'s). Not pushed yet.
+  - **Inventory in progress.** The router already has a typed binding layer (`pkg/modelruntime/binding`, contracts
+    `label_distribution.v1`, `label_scores.v1`, `token_spans.v1`, `embedding.v1`, `relevance_scores.v1`, …) behind one
+    provider facade (`pkg/modelruntime/native.Runtime`), so Phase 4 swaps that facade for a runtime-backed one instead
+    of rewriting every consumer.
+  - **Next (by about 23:30):** the inventory and migration matrix in the design doc, the contracts (OpenAPI surfaces,
+    family / engine interfaces for encoders, the Go bundle API), a scaffold commit, and the workstream split posted
+    here for launch.
+  - **Nothing of mine is running.** No GPU leases yet (node B GPU0–7 and node C GPU1–7 are free per the lease files).
+
 - 2026-10-03 21:17 — **USER (21:15): ACCEPTANCE BAR for the Phases 2–4 PR** ("确保 code clean 以及 architecture well designed
   可扩展、可插拔，以及非常 high performance 有我们独到的性能优化的算法"). Lead (23203ab9) and every workstream agent: these are
   blocking criteria, not polish.
