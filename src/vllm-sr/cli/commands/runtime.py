@@ -19,6 +19,11 @@ from cli.commands.runtime_config_mutation import (
 from cli.commands.runtime_config_mutation import (
     inject_algorithm_into_config as _inject_algorithm_into_config,
 )
+from cli.commands.runtime_engine import (
+    ENGINE_HELP,
+    reject_engine_options,
+    run_engine_mode,
+)
 from cli.commands.runtime_help import SERVE_HELP
 from cli.commands.runtime_serve_config import _prepare_effective_serve_config
 from cli.commands.runtime_support import (
@@ -263,7 +268,8 @@ def _execute_serve(
             runtime_lock.close()
 
 
-@click.command(help=SERVE_HELP)
+@click.command(help=SERVE_HELP + ENGINE_HELP)
+@click.argument("model", required=False)
 @click.option(
     "--config",
     default="config.yaml",
@@ -377,7 +383,11 @@ def _execute_serve(
 @click.option(
     "--profile",
     default=None,
-    help="Deployment profile: dev, prod (k8s target only). Selects values-<profile>.yaml defaults.",
+    help=(
+        "Deployment profile: dev, prod (k8s target only). Selects "
+        "values-<profile>.yaml defaults. With MODEL: the runtime numerics profile "
+        "(exact, shared_context, batching, max_speed)."
+    ),
 )
 @click.option(
     "--chart-dir", default=None, help="Path to Helm chart directory (k8s target only)"
@@ -398,8 +408,24 @@ def _execute_serve(
         "Repeat for multiple names; NAME=value is rejected."
     ),
 )
+@click.option("--revision", default=None, help="Engine mode: 40-hex revision of MODEL.")
+@click.option(
+    "--device",
+    default=None,
+    help="Engine mode: auto (default), cpu, cuda[:N] or rocm[:N].",
+)
+@click.option(
+    "--host", default=None, help="Engine mode: TCP bind address (default 127.0.0.1)."
+)
+@click.option(
+    "--port", type=int, default=None, help="Engine mode: TCP port (default 8100)."
+)
+@click.option(
+    "--uds", default=None, help="Engine mode: serve on this Unix socket instead."
+)
 @exit_with_logged_error(log, interrupt_message="\nInterrupted by user")
 def serve(
+    model: str | None,
     config: str,
     replace_active_config: bool,
     image: str | None,
@@ -420,7 +446,27 @@ def serve(
     runtime: str | None,
     recipe_env_names: tuple[str, ...],
     startup_timeout: int | None,
+    revision: str | None,
+    device: str | None,
+    host: str | None,
+    port: int | None,
+    uds: str | None,
 ) -> None:
+    ctx = click.get_current_context()
+    if model is not None:
+        run_engine_mode(
+            ctx,
+            model,
+            revision=revision,
+            device=device,
+            host=host,
+            port=port,
+            uds=uds,
+            profile=profile,
+            log_level=log_level,
+        )
+        return
+    reject_engine_options(ctx)
     _execute_serve(
         config,
         replace_active_config,

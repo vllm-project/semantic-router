@@ -29,6 +29,7 @@ def profile_image_dependencies() -> dict[str, list[str]]:
     fixtures = {
         "providerMockerLocalImages": ["provider-mocker"],
         "dashboardLocalImages": ["dashboard"],
+        "modelRuntimeLocalImages": ["provider-mocker", "model-runtime"],
     }
     result = {}
     for match in re.finditer(

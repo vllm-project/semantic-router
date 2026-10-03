@@ -1,6 +1,6 @@
 import type { Endpoint } from '../components/EndpointsEditor'
 import bundledCatalog from '../modelCatalogDocument'
-import type { DecisionConditionType, SafetySignal } from '../types/config'
+import type { DecisionConditionType, DecisionModelSignal, SafetySignal } from '../types/config'
 import type { BuiltInModelCatalog, CatalogBenchmark, CatalogIndex } from '../types/modelCatalog'
 
 export interface ListenerConfig {
@@ -910,6 +910,7 @@ export interface ConfigSignals {
   conversation?: ConversationSignal[]
   events?: EventSignal[]
   input_modality?: InputModalitySignal[]
+  decision?: DecisionModelSignal[]
 }
 
 export interface ConfigProjections {
