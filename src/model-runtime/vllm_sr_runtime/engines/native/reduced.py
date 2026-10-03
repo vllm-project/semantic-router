@@ -10,10 +10,8 @@ view holds in a reduced form; the backbone keeps its FP32 weights, so
   heads stay FP32): GPUs, and CPUs with BF16 instructions;
 - ``int8``: dynamic int8 (per-channel weight scales, per-batch activation
   scales; x86 CPUs);
-- ``float32-packed``: FP32 weights reordered once for oneDNN (x86 CPUs). On
-  EPYC its GEMMs are 2.5-4.4x faster than ``F.linear`` at every batch size,
-  give each row the same result whatever else is in the batch, and stay
-  within 3.3e-6 of ``F.linear``.
+- ``float32-packed``: FP32 weights reordered once for oneDNN (x86 CPUs,
+  ``accel/onednn.py``), for models whose exact path keeps ``F.linear``.
 """
 
 from __future__ import annotations
@@ -24,24 +22,10 @@ from collections.abc import Callable
 import torch
 from torch import nn
 
+from ...accel import onednn
+from ...accel.onednn import PackedLinear
+
 REDUCED_AUTOCAST = {"bfloat16": torch.bfloat16}
-
-
-class PackedLinear(nn.Module):
-    """An FP32 linear layer whose weight oneDNN reordered once (x86 CPUs)."""
-
-    def __init__(self, linear: nn.Linear):
-        super().__init__()
-        self.in_features, self.out_features = linear.in_features, linear.out_features
-        # Reordered for single rows: the layout every batch size then shares.
-        self.packed = torch.ops.mkldnn._reorder_linear_weight(linear.weight.detach(), 1)
-        self.bias = None if linear.bias is None else linear.bias.detach()
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        out = torch.ops.mkldnn._linear_pointwise(
-            x.reshape(-1, self.in_features), self.packed, self.bias, "none", [], ""
-        )
-        return out.reshape(*x.shape[:-1], self.out_features)
 
 
 def bf16_linear(linear: nn.Linear) -> nn.Module:
@@ -81,8 +65,8 @@ def unavailable(kind: str, device: torch.device) -> str | None:
         return f"unknown reduced copy {kind!r} (one of {', '.join(COPIES)})"
     if kind in ("int8", "float32-packed") and device.type != "cpu":
         return f"{kind} copies run on CPUs"
-    if kind == "float32-packed" and not torch.backends.mkldnn.is_available():
-        return "this PyTorch build has no oneDNN"
+    if kind == "float32-packed" and not onednn.available():
+        return "oneDNN's packed linear needs an x86 CPU and a PyTorch build with oneDNN"
     if kind == "int8" and "fbgemm" not in torch.backends.quantized.supported_engines:
         return "this PyTorch build has no fbgemm"
     return None

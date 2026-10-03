@@ -3,8 +3,8 @@
 import pytest
 import torch
 from torch import nn
+from vllm_sr_runtime.accel.onednn import PackedLinear
 from vllm_sr_runtime.engines.native.reduced import (
-    PackedLinear,
     linear_bytes,
     reduced_view,
     unavailable,
