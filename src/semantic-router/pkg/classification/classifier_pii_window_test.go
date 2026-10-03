@@ -28,7 +28,7 @@ func TestPIIWindowInputsPreserveUnpreparedFallback(t *testing.T) {
 func TestDefaultPIIWindowUsesCompleteInputWithoutChangingSource(t *testing.T) {
 	cfg := config.DefaultGlobalConfig()
 	original := cfg.PIIModel
-	models, err := newClassifierModelRuntime(&cfg, nil)
+	models, err := newClassifierModelRuntime(&cfg, RecipeRuntimeOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestDefaultPIIWindowRespectsArtifactSelection(t *testing.T) {
 			cfg := config.DefaultGlobalConfig()
 			cfg.PIIModel.ModelID = test.artifact
 			original := cfg.PIIModel
-			models, err := newClassifierModelRuntime(&cfg, nil)
+			models, err := newClassifierModelRuntime(&cfg, RecipeRuntimeOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -134,7 +134,7 @@ func TestDefaultPIIWindowPreservesExplicitPolicies(t *testing.T) {
 	cfg := config.DefaultGlobalConfig()
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"pii-amd": {Artifact: config.DefaultSystemModels().PIIClassifier, Provider: "ort", Device: "migraphx:0", Precision: "native", Input: config.ModelInputBudget{MaxTokens: 8192, Overflow: "reject"}}}
 	cfg.ModelBindings = map[string]config.ModelBinding{"pii_classifier": {Deployment: "pii-amd", Adapter: "mmbert32k", Contract: config.RemoteClassifierContractTokenSpans}}
-	models, err := newClassifierModelRuntime(&cfg, nil)
+	models, err := newClassifierModelRuntime(&cfg, RecipeRuntimeOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +168,7 @@ func (b *capturedWindowPII) ClassifyTokens(_ context.Context, text string) (task
 
 func TestPIIWindowFullInputReachesSignalsAndDetailOffsets(t *testing.T) {
 	cfg := config.DefaultGlobalConfig()
-	models, err := newClassifierModelRuntime(&cfg, nil)
+	models, err := newClassifierModelRuntime(&cfg, RecipeRuntimeOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

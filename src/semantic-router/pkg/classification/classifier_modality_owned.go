@@ -63,7 +63,10 @@ func buildOwnedModalityOption(
 	if md.Classifier != nil {
 		path, useCPU, limit = md.Classifier.ModelPath, md.Classifier.UseCPU, md.Classifier.MaxSequenceLength
 	}
-	spec := models.localSpec("modality_detector", path, "mmbert32k", config.RemoteClassifierContractLabelDistribution, useCPU, limit)
+	spec, err := models.localSpec("modality_detector", path, "mmbert32k", config.RemoteClassifierContractLabelDistribution, useCPU, limit)
+	if err != nil {
+		return nil, fmt.Errorf("prepare modality classifier: %w", err)
+	}
 	handle, err := load(context.Background(), spec)
 	if err != nil {
 		if md.GetMethod() == config.ModalityDetectionHybrid && !explicit {

@@ -20,6 +20,9 @@ func (c *Classifier) decider() modelservice.Decider {
 	if c.decisionDecider != nil {
 		return c.decisionDecider
 	}
+	if decider, ok := c.models.decider(); ok {
+		return decider
+	}
 	return modelservice.Default()
 }
 

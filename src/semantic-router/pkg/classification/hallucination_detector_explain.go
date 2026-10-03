@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -51,95 +50,10 @@ type EnhancedHallucinationResult struct {
 	Spans                 []EnhancedHallucinationSpan `json:"spans,omitempty"`
 }
 
-// NLIResult represents the result of NLI classification.
-type NLIResult struct {
-	Label          NLILabel `json:"label"`
-	LabelStr       string   `json:"label_str"`
-	Confidence     float32  `json:"confidence"`
-	EntailmentProb float32  `json:"entailment_prob"`
-	NeutralProb    float32  `json:"neutral_prob"`
-	ContradictProb float32  `json:"contradiction_prob"`
-}
-
-// SetNLIConfig sets the NLI model configuration for enhanced detection.
-// Recommended model: tasksource/ModernBERT-base-nli.
-func (d *HallucinationDetector) SetNLIConfig(cfg *config.NLIModelConfig) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	d.nliConfig = cfg
-}
-
-// InitializeNLI initializes the NLI model for enhanced hallucination detection.
-func (d *HallucinationDetector) InitializeNLI() error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	if d.nliInitialized {
-		return nil
-	}
-
-	if d.nliConfig == nil || d.nliConfig.ModelID == "" {
-		return fmt.Errorf("NLI model config not set")
-	}
-
-	if d.models == nil {
-		d.models = standaloneModelRuntime()
-	}
-	d.nliSpec = d.models.localSpec("hallucination_explainer", d.nliConfig.ModelID, "modernbert", "text_pair_distribution.v1", d.nliConfig.UseCPU)
-	handle, err := d.models.runtime.TextPair(context.Background(), d.nliSpec)
-	if err != nil {
-		return err
-	}
-	d.nliHandle = handle
-
-	d.nliInitialized = true
-	logging.ComponentEvent("classifier", "hallucination_nli_initialized", map[string]interface{}{
-		"backend":   "candle",
-		"model_ref": d.nliConfig.ModelID,
-	})
-
-	return nil
-}
-
-// IsNLIInitialized returns whether the NLI model is initialized.
-func (d *HallucinationDetector) IsNLIInitialized() bool {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	return d.nliInitialized
-}
-
-// ClassifyNLI classifies the relationship between premise and hypothesis.
-// Returns: ENTAILMENT (supports), NEUTRAL (can't verify), CONTRADICTION (conflicts).
-func (d *HallucinationDetector) ClassifyNLI(ctx context.Context, premise, hypothesis string) (*NLIResult, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	if !d.nliInitialized {
-		return nil, fmt.Errorf("NLI model not initialized")
-	}
-
-	return d.classifyNLILocked(ctx, premise, hypothesis)
-}
-
-func (d *HallucinationDetector) classifyNLILocked(ctx context.Context, premise, hypothesis string) (*NLIResult, error) {
-	if d.nliHandle == nil {
-		return nil, fmt.Errorf("NLI model not initialized")
-	}
-	distribution, err := d.nliHandle.Call(ctx, string(d.nliSpec.Recipe), tasks.TextPairRequest{Premise: premise, Hypothesis: hypothesis})
-	if err != nil {
-		return nil, err
-	}
-	if len(distribution.Probabilities) != 3 {
-		return nil, fmt.Errorf("NLI requires entailment/neutral/contradiction probabilities")
-	}
-	class, confidence := deriveArgmax(distribution.Probabilities)
-	label := NLILabel(class)
-	return &NLIResult{Label: label, LabelStr: label.String(), Confidence: confidence, EntailmentProb: distribution.Probabilities[0], NeutralProb: distribution.Probabilities[1], ContradictProb: distribution.Probabilities[2]}, nil
-}
-
-// DetectWithNLI composes two owned typed tasks. No global detector or NLI slot
-// can be changed by a candidate generation while this request is running.
-func (d *HallucinationDetector) DetectWithNLI(ctx context.Context, contextText, question, answer string) (*EnhancedHallucinationResult, error) {
+// DetectWithExplanations returns the unsupported spans with a severity and a
+// plain explanation each. The NLI explainer is retired, so span NLI labels
+// stay NLIUnknown.
+func (d *HallucinationDetector) DetectWithExplanations(ctx context.Context, contextText, question, answer string) (*EnhancedHallucinationResult, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	spans, err := d.detectSpans(ctx, contextText, question, answer)
@@ -162,28 +76,7 @@ func (d *HallucinationDetector) DetectWithNLI(ctx context.Context, contextText, 
 				enhanced.Severity = 3
 			}
 		}
-		if d.nliInitialized {
-			nli, err := d.classifyNLILocked(ctx, contextText+" "+question, span.Text)
-			if err != nil {
-				return nil, fmt.Errorf("explain hallucination span: %w", err)
-			}
-			enhanced.NLILabel = nli.Label
-			enhanced.NLILabelStr = nli.LabelStr
-			enhanced.NLIConfidence = nli.Confidence
-			switch nli.Label {
-			case NLIContradiction:
-				enhanced.Severity = 4
-				enhanced.Explanation = "CONTRADICTION: This claim directly conflicts with the provided context"
-			case NLINeutral:
-				enhanced.Severity = 2
-				enhanced.Explanation = "FABRICATION: This claim is not supported by the provided context"
-			case NLIEntailment:
-				enhanced.Severity = 1
-				enhanced.Explanation = "UNCERTAIN: Hallucination detector flagged this but NLI suggests it may be supported"
-			}
-			enhanced.Explanation += fmt.Sprintf(" (confidence: %.1f%%)", nli.Confidence*100)
-		}
-		converted, ok := d.convertEnhancedHallucinationSpan(enhanced, d.nliThreshold())
+		converted, ok := d.convertEnhancedHallucinationSpan(enhanced)
 		if ok {
 			result.Spans = append(result.Spans, converted)
 		}
@@ -200,22 +93,7 @@ func (d *HallucinationDetector) hallucinationThreshold() float32 {
 	return threshold
 }
 
-func (d *HallucinationDetector) nliThreshold() float32 {
-	if d.nliConfig != nil && d.nliConfig.Threshold > 0 {
-		return d.nliConfig.Threshold
-	}
-	return 0.7
-}
-
-func (d *HallucinationDetector) nliEntailmentThreshold() float32 {
-	threshold := d.config.NLIEntailmentThreshold
-	if threshold <= 0 {
-		return 0.75
-	}
-	return threshold
-}
-
-func (d *HallucinationDetector) convertEnhancedHallucinationSpan(span EnhancedHallucinationSpan, nliThreshold float32) (EnhancedHallucinationSpan, bool) {
+func (d *HallucinationDetector) convertEnhancedHallucinationSpan(span EnhancedHallucinationSpan) (EnhancedHallucinationSpan, bool) {
 	minSpanLen := d.config.MinSpanLength
 	if minSpanLen <= 0 {
 		minSpanLen = 1
@@ -236,12 +114,6 @@ func (d *HallucinationDetector) convertEnhancedHallucinationSpan(span EnhancedHa
 			span.Text, span.HallucinationConfidence, minSpanConfidence)
 		return EnhancedHallucinationSpan{}, false
 	}
-	if d.config.EnableNLIFiltering && span.NLILabel == NLIEntailment && span.NLIConfidence >= d.nliEntailmentThreshold() {
-		logging.Debugf("Filtered span (NLI entailment): '%s' (entailment confidence %.3f >= %.3f)",
-			span.Text, span.NLIConfidence, d.nliEntailmentThreshold())
-		return EnhancedHallucinationSpan{}, false
-	}
-
 	enhancedSpan := EnhancedHallucinationSpan{
 		Text:                    span.Text,
 		Start:                   span.Start,
@@ -253,13 +125,6 @@ func (d *HallucinationDetector) convertEnhancedHallucinationSpan(span EnhancedHa
 		NLIConfidence:           span.NLIConfidence,
 		Severity:                span.Severity,
 		Explanation:             span.Explanation,
-	}
-	if span.NLILabel != NLIUnknown && span.NLIConfidence < nliThreshold {
-		if enhancedSpan.Severity > 0 {
-			enhancedSpan.Severity--
-		}
-		enhancedSpan.Explanation = fmt.Sprintf("%s (NLI confidence %.0f%% below threshold %.0f%%)",
-			span.Explanation, span.NLIConfidence*100, nliThreshold*100)
 	}
 	return enhancedSpan, true
 }

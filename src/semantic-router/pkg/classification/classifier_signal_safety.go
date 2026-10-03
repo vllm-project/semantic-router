@@ -36,7 +36,7 @@ func (b *classifierOptionBuilder) buildSafetyClassifiersOption() (option, error)
 	runtime := b.models
 	if runtime == nil {
 		var err error
-		runtime, err = newClassifierModelRuntime(b.cfg, nil)
+		runtime, err = newClassifierModelRuntime(b.cfg, RecipeRuntimeOptions{})
 		if err != nil {
 			return nil, err
 		}
@@ -79,14 +79,17 @@ func (b *classifierOptionBuilder) safetySpec(models *classifierModelRuntime, con
 	if model != "" {
 		spec = models.remoteSpec(consumer, &config.RemoteClassifierBackend{Model: model, Protocol: config.RemoteClassifierProtocolHTTPClassify, Contract: contract})
 	} else {
-		spec = models.localSpec(consumer, local.ModelID, "modernbert", contract, local.UseCPU, local.MaxSequenceLength)
+		var err error
+		spec, err = models.localSpec(consumer, local.ModelID, "modernbert", contract, local.UseCPU, local.MaxSequenceLength)
+		if err != nil {
+			return spec, nil, err
+		}
 		if _, declared := models.plan.Lookup(models.recipe, consumer); !declared {
-			deployment := "safety"
+			module := "safety"
 			if multiLabel {
-				deployment = "hazard"
+				module = "hazard"
 			}
-			spec.Binding.Deployment = deployment
-			spec.Admission = b.cfg.ModelAdmission[deployment]
+			spec.Admission = b.cfg.ModelAdmission[module]
 		}
 	}
 	if spec.Binding.Contract != contract {
