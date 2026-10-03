@@ -5,7 +5,7 @@
 #                                    [--deadline-hours H]
 #
 # Runs in the foreground (start it with nohup). Waits until every listed GPU's lease owner file says
-# status=released and the GPU is idle (use <= 5 %, VRAM <= 2 GiB), then writes eval-ix1 leases for them
+# status=released (key=value or JSON) and the GPU is idle (use <= 5 %, VRAM <= 2 GiB), then writes eval-ix1 leases for them
 # (launch.sh only takes eval-ix1 leases) and runs launch.sh run into $BASE/submit/runs/<model>. Gives up at
 # the deadline (default 6 h) or when $BASE/submit/STOP-wait exists.
 set -euo pipefail
@@ -29,7 +29,7 @@ deadline=$(( $(date +%s) + deadline_hours * 3600 ))
 
 ready() {  # gpu
   local owner="/data/dev2/leases/gpu$1.lock/owner"
-  grep -q "status=released" "$owner" 2>/dev/null || return 1
+  grep -Eq 'status"?[[:space:]]*[=:][[:space:]]*"?released' "$owner" 2>/dev/null || return 1
   rocm-smi --showuse --showmeminfo vram --json | python3 -c '
 import json, sys
 card = json.load(sys.stdin)["card" + sys.argv[1]]
