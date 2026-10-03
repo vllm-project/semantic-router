@@ -9,6 +9,8 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Annotated, Any, Dict, List, Literal, Optional
 
+from .models_decision import DecisionSignalRule
+from .models_predicates import NumericPredicate
 from .models_safety import SafetyRule
 
 from pydantic import (
@@ -36,6 +38,7 @@ SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT = 2
 PROMPT_MIN_CANDIDATES = 2
 MAX_DECISION_ANNOTATIONS = 32
 MAX_DECISION_ANNOTATION_BYTES = 4096
+LABELED_CONDITION_TYPES = frozenset({"classifier", "decision"})
 
 
 class Listener(BaseModel):
@@ -262,36 +265,6 @@ class StructureFeature(BaseModel):
 
     type: str
     source: StructureSource
-
-
-class NumericPredicate(BaseModel):
-    """Numeric threshold predicate for structure signals."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    gt: Optional[float] = None
-    gte: Optional[float] = None
-    lt: Optional[float] = None
-    lte: Optional[float] = None
-
-    @model_validator(mode="after")
-    def validate_contract(self):
-        for value in (self.gt, self.gte, self.lt, self.lte):
-            if value is not None and not math.isfinite(value):
-                raise ValueError("numeric predicate values must be finite")
-        if all(value is None for value in (self.gt, self.gte, self.lt, self.lte)):
-            raise ValueError("numeric predicate requires at least one comparator")
-        if self.gt is not None and self.gte is not None:
-            raise ValueError("numeric predicate cannot set both gt and gte")
-        if self.lt is not None and self.lte is not None:
-            raise ValueError("numeric predicate cannot set both lt and lte")
-        lower = self.gt if self.gt is not None else self.gte
-        upper = self.lt if self.lt is not None else self.lte
-        if lower is not None and upper is not None:
-            strict = self.gt is not None or self.lt is not None
-            if lower > upper or (lower == upper and strict):
-                raise ValueError("numeric predicate defines an empty range")
-        return self
 
 
 class StructureRule(BaseModel):
@@ -676,6 +649,7 @@ class Signals(BaseModel):
     classifiers: Optional[List[ClassifierSignal]] = []
     input_modality: Optional[List[InputModalityRule]] = []
     actions: Optional[List[ActionRule]] = []
+    decision: Optional[List[DecisionSignalRule]] = []
 
     @model_validator(mode="after")
     def validate_rule_names(self):
@@ -746,12 +720,16 @@ class Condition(BaseModel):
             raise ValueError("leaf condition node requires both type and name")
         if self.conditions:
             raise ValueError("leaf condition node cannot define child conditions")
-        if self.label is not None and self.type != "classifier":
-            raise ValueError("label is only valid for classifier conditions")
+        if self.label is not None and self.type not in LABELED_CONDITION_TYPES:
+            raise ValueError(
+                "label is only valid for classifier and decision conditions"
+            )
         if self.type == "classifier" and self.label is None:
             raise ValueError("classifier conditions require a label")
-        if self.on_error is not None and self.type != "classifier":
-            raise ValueError("on_error is only valid for classifier conditions")
+        if self.on_error is not None and self.type not in LABELED_CONDITION_TYPES:
+            raise ValueError(
+                "on_error is only valid for classifier and decision conditions"
+            )
         if self.on_unknown is not None:
             raise ValueError("on_unknown is only valid on the root rules node")
         return self
@@ -1156,6 +1134,22 @@ class AdvancedToolFilteringConfig(BaseModel):
     hybrid_history: Optional[HybridHistoryConfig] = None
 
 
+class StickyToolSelectionConfig(BaseModel):
+    """Session-scoped sticky tool-set selection (issue #3347).
+
+    Mirrors the Go-side `config.StickyToolSelectionConfig`. Opt-in and
+    disabled by default. This layer only mirrors the schema surface so
+    Pydantic stops dropping the subtree; the Go side is authoritative for
+    bounds (max_tools 1..128, max_new_tools_per_turn 0..max_tools) and for
+    rejecting sticky.enabled under a disabled tool_selection plugin.
+    """
+
+    enabled: bool = False
+    max_tools: Optional[int] = Field(default=None, ge=1, le=128)
+    max_new_tools_per_turn: Optional[int] = Field(default=None, ge=0)
+    pin_called_tools: Optional[bool] = None
+
+
 class ToolSelectionPluginConfig(BaseModel):
     """Configuration for tool_selection plugin (semantic add/filter on request tools)."""
 
@@ -1169,6 +1163,7 @@ class ToolSelectionPluginConfig(BaseModel):
     relevance_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     preserve_count: Optional[int] = Field(default=None, ge=0)
     advanced_filtering: Optional[AdvancedToolFilteringConfig] = None
+    sticky: Optional[StickyToolSelectionConfig] = None
 
 
 class SystemPromptPluginConfig(BaseModel):

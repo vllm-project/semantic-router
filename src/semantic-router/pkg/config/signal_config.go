@@ -33,6 +33,7 @@ type Signals struct {
 	ClassifierRules    []ClassifierSignalRule `yaml:"classifiers,omitempty"`
 	InputModalityRules []InputModalityRule    `yaml:"input_modality,omitempty"`
 	ActionRules        []ActionRule           `yaml:"actions,omitempty"`
+	DecisionRules      []DecisionSignalRule   `yaml:"decision,omitempty"`
 }
 
 // HallucinationRule declares the response-stage hallucination observation:

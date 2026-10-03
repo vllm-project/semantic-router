@@ -21,6 +21,7 @@ DEFINITIONS = {
     "extproc": (".", "tools/docker/Dockerfile.extproc", DUAL),
     "extproc-rocm": (".", "tools/docker/Dockerfile.extproc-rocm", ["linux/amd64"]),
     mocker.IMAGE: (mocker.CONTEXT, mocker.CONTEXT + "/Dockerfile", DUAL),
+    "model-runtime": ("src/model-runtime", "src/model-runtime/Dockerfile", DUAL),
     "operator": (".", "deploy/operator/Dockerfile", DUAL),
     "operator-bundle": ("deploy/operator", "deploy/operator/bundle/Dockerfile", DUAL),
     "vllm-sr": (".", "src/vllm-sr/Dockerfile", DUAL),
@@ -35,6 +36,7 @@ IMAGE_ENV = {
     "operator": ["E2E_PREBUILT_OPERATOR_IMAGE"],
     "operator-bundle": ["E2E_PREBUILT_OPERATOR_BUNDLE_IMAGE"],
     mocker.IMAGE: ["E2E_PREBUILT_PROVIDER_MOCKER_IMAGE", "PROVIDER_MOCKER_IMAGE"],
+    "model-runtime": ["E2E_PREBUILT_MODEL_RUNTIME_IMAGE"],
 }
 
 

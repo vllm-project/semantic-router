@@ -464,6 +464,7 @@ func addMatchedSignalHeaders(builder *responseHeaderMutationBuilder, ctx *Reques
 	builder.addJoined(headers.VSRMatchedConversation, ctx.VSRMatchedConversation)
 	builder.addJoined(headers.VSRMatchedEvent, ctx.VSRMatchedEvent)
 	builder.addJoined(headers.VSRMatchedInputModality, ctx.VSRMatchedInputModality)
+	builder.addJoined(headers.VSRMatchedDecisionModel, ctx.VSRMatchedDecisionModel)
 	builder.addJoined(headers.VSRMatchedProjection, ctx.VSRMatchedProjection)
 }
 
