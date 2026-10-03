@@ -101,8 +101,21 @@ func (c *VectorCache) shard(key VectorKey) *vectorShard {
 // caller is already computing a key, in which case this call waits for that
 // result. If that other computation fails, the key is computed here.
 func (c *VectorCache) Resolve(ctx context.Context, keys []VectorKey, compute func(context.Context, []int) ([]Embedded, error)) ([]Embedded, error) {
+	return c.resolve(ctx, keys, compute, true)
+}
+
+// ResolveAlone is Resolve without waiting on other callers: a key another
+// caller is computing is computed again here. A caller inside a request
+// bundle uses it, because the bundle sends both calls' inputs in one round
+// trip, while a waiting participant would hold the bundle until its window
+// ends.
+func (c *VectorCache) ResolveAlone(ctx context.Context, keys []VectorKey, compute func(context.Context, []int) ([]Embedded, error)) ([]Embedded, error) {
+	return c.resolve(ctx, keys, compute, false)
+}
+
+func (c *VectorCache) resolve(ctx context.Context, keys []VectorKey, compute func(context.Context, []int) ([]Embedded, error), wait bool) ([]Embedded, error) {
 	vectors := make([]Embedded, len(keys))
-	var owned []int
+	var owned, unshared []int
 	var flights []*vectorFlight
 	type pending struct {
 		index  int
@@ -115,8 +128,10 @@ func (c *VectorCache) Resolve(ctx context.Context, keys []VectorKey, compute fun
 		switch cached, flight := shard.get(key); {
 		case cached.Vector != nil:
 			vectors[i] = cached
-		case flight != nil:
+		case flight != nil && wait:
 			waits = append(waits, pending{index: i, flight: flight})
+		case flight != nil:
+			unshared = append(unshared, i)
 		default:
 			flight = &vectorFlight{done: make(chan struct{})}
 			shard.flights[key] = flight
@@ -125,9 +140,9 @@ func (c *VectorCache) Resolve(ctx context.Context, keys []VectorKey, compute fun
 		}
 		shard.mu.Unlock()
 	}
-	if len(owned) > 0 {
-		computed, err := compute(ctx, owned)
-		if err == nil && len(computed) != len(owned) {
+	if len(owned)+len(unshared) > 0 {
+		computed, err := compute(ctx, append(owned, unshared...))
+		if err == nil && len(computed) != len(owned)+len(unshared) {
 			err = errVectorCount
 		}
 		for j, i := range owned {
@@ -146,6 +161,9 @@ func (c *VectorCache) Resolve(ctx context.Context, keys []VectorKey, compute fun
 		}
 		if err != nil {
 			return nil, err
+		}
+		for j, i := range unshared {
+			vectors[i] = copyEmbedded(computed[len(owned)+j])
 		}
 	}
 	var retry []int

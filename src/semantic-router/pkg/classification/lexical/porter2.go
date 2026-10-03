@@ -1,5 +1,7 @@
 package lexical
 
+import "slices"
+
 // stemEnglish is the Snowball English (Porter2) stemmer, ported from the
 // Snowball-generated code in rust-stemmers 1.2.0, which the bm25 crate used.
 // Input is a lowercase ASCII token, as produced by the tokenizer.
@@ -10,7 +12,9 @@ func stemEnglish(word string) string {
 	if stem, ok := stemException1(word); ok {
 		return stem
 	}
-	s := stemmer{b: []byte(word)}
+	// Snowball English rewrites a word by a few bytes at most; the headroom
+	// keeps every replacement in this one buffer.
+	s := stemmer{b: append(make([]byte, 0, len(word)+stemHeadroom), word...)}
 	s.limit = len(s.b)
 	s.prelude()
 	s.markRegions()
@@ -38,8 +42,13 @@ func stemEnglish(word string) string {
 			}
 		}
 	}
+	if string(s.b) == word {
+		return word
+	}
 	return string(s.b)
 }
+
+const stemHeadroom = 8
 
 type stemmer struct {
 	b             []byte
@@ -70,15 +79,17 @@ func isValidLI(c byte) bool {
 	return false
 }
 
-// replace substitutes b[bra:ket] and adjusts the limit and cursor the way the
-// Snowball runtime does.
+// replace substitutes b[bra:ket] in place and adjusts the limit and cursor
+// the way the Snowball runtime does.
 func (s *stemmer) replace(bra, ket int, with string) {
 	adjustment := len(with) - (ket - bra)
-	next := make([]byte, 0, len(s.b)+adjustment)
-	next = append(next, s.b[:bra]...)
-	next = append(next, with...)
-	next = append(next, s.b[ket:]...)
-	s.b = next
+	tail := len(s.b) - ket
+	if adjustment > 0 {
+		s.b = slices.Grow(s.b, adjustment)[:len(s.b)+adjustment]
+	}
+	copy(s.b[bra+len(with):], s.b[ket:ket+tail])
+	copy(s.b[bra:], with)
+	s.b = s.b[:bra+len(with)+tail]
 	s.limit += adjustment
 	if s.cursor >= ket {
 		s.cursor += adjustment

@@ -103,13 +103,20 @@ func logf(x float32) float32 { return float32(math.Log(float64(x))) }
 // least the threshold match, best first; equal scores keep declaration order.
 func (m *BM25) Match(text *Text) (Match, bool) {
 	keywords := m.rule.Keywords
-	scores := make([]float32, len(keywords))
-	hit := make([]bool, len(keywords))
+	var scores []float32
+	var hit []bool
 	for _, token := range text.bm25Tokens(m.rule.CaseSensitive) {
-		for _, posting := range m.postings[token] {
+		postings := m.postings[token]
+		if len(postings) > 0 && scores == nil {
+			scores, hit = make([]float32, len(keywords)), make([]bool, len(keywords))
+		}
+		for _, posting := range postings {
 			scores[posting.keyword] += posting.weight
 			hit[posting.keyword] = true
 		}
+	}
+	if scores == nil {
+		return m.rule.decide(nil, nil)
 	}
 	order := make([]int, 0, len(keywords))
 	for i := range keywords {
