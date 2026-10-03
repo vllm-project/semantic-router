@@ -38,7 +38,7 @@ def test_a_view_shares_everything_but_its_linear_layers(kind):
         isinstance(m, nn.Linear) and m.weight.dtype == torch.float32
         for m in view.modules()
     )
-    assert 0 < linear_bytes(view)
+    assert linear_bytes(view) > 0
     for name, value in backbone.state_dict().items():
         assert torch.equal(value, exact[name]), name
 

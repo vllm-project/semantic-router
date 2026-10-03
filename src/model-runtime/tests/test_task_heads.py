@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 import torch
 from starlette.testclient import TestClient
+from vllm_sr_runtime.accel import onednn
 from vllm_sr_runtime.api.app import create_app
 from vllm_sr_runtime.config import ModelConfig, ServeConfig
 from vllm_sr_runtime.errors import PackageError
@@ -13,7 +14,6 @@ from vllm_sr_runtime.families.task_heads.family import (
     batch_invariant,
 )
 from vllm_sr_runtime.heads.task import identical
-from vllm_sr_runtime.accel import onednn
 from vllm_sr_runtime.plugins.base import PackageRef, SurfaceRequest
 from vllm_sr_runtime.registry import builtin
 from vllm_sr_runtime.registry.tables.common import BuiltinModel
