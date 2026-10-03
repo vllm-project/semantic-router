@@ -119,9 +119,13 @@ class Decision2Family(ModelFamily):
                 "model identity differs from the scored checkpoint in MODEL_MANIFEST.json"
             )
         known = builtin.lookup(package.repo_id) if package.repo_id else None
-        if known is not None and (
-            known.model_sha256 != model_sha256
-            or known.manifest_sha256 != manifest_sha256
+        if (
+            known is not None
+            and known.revision == package.revision
+            and (
+                known.model_sha256 != model_sha256
+                or known.manifest_sha256 != manifest_sha256
+            )
         ):
             raise PackageError(
                 f"{package.repo_id}@{package.revision} differs from the built-in pinned identity"

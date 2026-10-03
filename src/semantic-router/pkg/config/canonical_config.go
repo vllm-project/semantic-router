@@ -111,6 +111,7 @@ type CanonicalSignals struct {
 	Metadata      []MetadataRule         `yaml:"metadata,omitempty"`
 	Classifiers   []ClassifierSignalRule `yaml:"classifiers,omitempty"`
 	InputModality []InputModalityRule    `yaml:"input_modality,omitempty"`
+	Decision      []DecisionSignalRule   `yaml:"decision,omitempty"`
 }
 
 // CanonicalProjections groups derived routing outputs under routing.projections.
@@ -541,6 +542,7 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		MetadataRules:      append([]MetadataRule(nil), signals.Metadata...),
 		ClassifierRules:    append([]ClassifierSignalRule(nil), signals.Classifiers...),
 		InputModalityRules: append([]InputModalityRule(nil), signals.InputModality...),
+		DecisionRules:      append([]DecisionSignalRule(nil), signals.Decision...),
 	}
 
 	if len(result.Categories) == 0 {

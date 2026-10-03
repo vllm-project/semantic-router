@@ -14,6 +14,10 @@ from torch import nn
 from ....accel.kernels import KernelSet
 from .tree import tree_attention
 
+PADDING_MASK_RANK = 2
+# Transformers passes enable_gqa to SDPA only up to this head size.
+SDPA_GQA_MAX_HEAD_DIM = 256
+
 
 class RMSNorm(nn.Module):
     """``weight * normalize(x)`` (Qwen3)."""
@@ -140,7 +144,11 @@ def recurrent_mask(
     attention_mask: torch.Tensor | None, length: int
 ) -> torch.Tensor | None:
     """The 2D padding mask the gated-delta layers multiply into their inputs, or None when unpadded."""
-    if attention_mask is None or attention_mask.ndim != 2 or length == 1:
+    if (
+        attention_mask is None
+        or attention_mask.ndim != PADDING_MASK_RANK
+        or length == 1
+    ):
         return None
     if torch.all(attention_mask == 1):
         return None
@@ -165,7 +173,7 @@ def attention(
         return tree_attention(query, key, value, mask, groups=groups, scaling=scaling)
     enable_gqa = False
     if groups > 1:
-        if mask is None and key.shape[-1] == value.shape[-1] <= 256:
+        if mask is None and key.shape[-1] == value.shape[-1] <= SDPA_GQA_MAX_HEAD_DIM:
             enable_gqa = True
         else:
             key = repeat_kv(key, groups)

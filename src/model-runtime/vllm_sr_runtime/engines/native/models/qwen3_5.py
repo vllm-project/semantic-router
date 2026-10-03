@@ -13,7 +13,6 @@ import torch.nn.functional as F
 from torch import nn
 
 from ....accel.kernels import KernelSet
-from .tree import Tree, tree_gated_delta
 from .common import (
     GatedMLP,
     GatedRMSNorm,
@@ -23,6 +22,7 @@ from .common import (
     causal_mask,
     recurrent_mask,
 )
+from .tree import Tree, tree_gated_delta
 
 MODEL_TYPE = "qwen3_5_text"
 

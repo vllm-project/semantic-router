@@ -685,6 +685,45 @@ routing:
         description: Request contains at least one audio content part.
         modality: audio
 
+    # Typed questions answered by a decision model through the built-in model
+    # runtime (global.model_catalog.deployments, provider model_runtime).
+    decision:
+      - name: needs_reasoning
+        description: The decision model judges that the request needs multi-step reasoning.
+        deployment: decision-kai
+        question:
+          type: noul
+          instructions: Does answering this request need multi-step reasoning?
+        predicate:
+          gte: 0.7
+        timeout_ms: 1000
+      - name: request_kind
+        description: What kind of work the request asks for.
+        deployment: decision-kai
+        question:
+          type: choice
+          instructions: What kind of request is this?
+          choices:
+            - key: code
+              description: Writing, reviewing or debugging code
+            - key: math
+              description: Mathematics or quantitative reasoning
+            - key: chat
+              description: Anything else
+        timeout_ms: 1000
+      - name: difficulty
+        description: Expected difficulty on a three-level scale.
+        deployment: decision-kai
+        question:
+          type: score
+          instructions: How difficult is this request?
+          levels:
+            - Trivial
+            - Moderate
+            - Hard
+        predicate:
+          gte: 1.5
+
     classifiers:
       - name: content-risk
         description: Independent content hazards with model-specific operating points.
@@ -1479,6 +1518,33 @@ routing:
             Choose qwen3-8b for ordinary requests and qwen3-32b for hard
             reasoning, coding, or multi-step analysis.
           timeout_seconds: 5
+
+    - name: decision_model_route
+      description: Let a decision model pick the model for hard code requests.
+      priority: 126
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+          - type: decision
+            name: request_kind
+            label: code
+          - type: decision
+            name: needs_reasoning
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: false
+        - model: qwen3-32b
+          use_reasoning: true
+      algorithm:
+        type: decision
+        decision:
+          deployment: decision-kai
+          instructions: Which model should answer this request?
+          candidates:
+            qwen3-8b: Fast general model for routine code
+            qwen3-32b: Strong reasoning model for hard code
+          timeout_ms: 1000
 
     - name: content_privacy_route
       description: Route requests that cross the Hazard privacy operating point.
@@ -2358,6 +2424,15 @@ global:
     bindings: {}
     # Named physical deployments and their shared admission budgets.
     deployments:
+      # Decision 2.0 served by the built-in model runtime. The Router starts and
+      # supervises it on a private Unix socket; set endpoint to attach to an
+      # engine started elsewhere with `vllm-sr serve <hf-model>`.
+      decision-kai:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        revision: 881bee413681d80ebeac86afcda8b4138dae516e
+        device: auto
+        profile: exact
       content-risk:
         artifact: models/Vela-1.0-Encoder-307M-Hazard
         provider: candle

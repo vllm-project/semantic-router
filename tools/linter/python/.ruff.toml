@@ -86,6 +86,7 @@ ignore = [
 # so the API, registry and CLI stay importable without them.
 "src/model-runtime/**/*.py" = ["N812", "PLC0415"]
 "src/model-runtime/tests/*.py" = ["N812", "PLC0415", "PLR2004"]
+"src/model-runtime/vllm_sr_runtime/engines/native/models/*.py" = ["N801", "N812", "PLC0415"]
 "bench/grounded_fusion/test_*.py" = ["PLR2004"]
 "src/training/model_classifier/modality_routing_classifier/test_*.py" = ["PLR2004"]
 "src/training/model_classifier/modality_routing_classifier/label_audit/test_*.py" = ["PLR2004"]
