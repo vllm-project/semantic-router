@@ -1,0 +1,207 @@
+{
+ "fixed_runtime": "fbedfded8ce33c7c25a99b8fb1f71f733b2c2c44 (v2/release/runtime loaded over the same package)",
+ "image": "decision20-train-fast sha256:dbe5f32b",
+ "node": "node B, one MI325X per shard",
+ "package": "vllm-sr/Decision-2.0-Eos-0.8B@34e2db970f2f49ef431237aa3218e0688a1fe992",
+ "panel": "Decision Index 0.2.1 panel (120,226 requests), groups of 16 consecutive requests, shard i of 6 = every sixth group",
+ "paths": [
+  "exact (system_one per request)",
+  "batched (the group's questions in shared padded batches)",
+  "shared (system_one share_context=True)"
+ ],
+ "runs": {
+  "new-s1": {
+   "crash_group": null,
+   "crash_path": null,
+   "elapsed_s": 1257,
+   "errors": {
+    "batched": 0,
+    "exact": 0,
+    "shared": 0
+   },
+   "exit": "exit=0",
+   "fault": null,
+   "graphs_at_last_log": {
+    "cached": 127,
+    "captures": 127,
+    "eager": 34820,
+    "failed": 0,
+    "full": 33264,
+    "output_bytes": 4367319040,
+    "replays": 6393
+   },
+   "groups_logged": 1253,
+   "of": 1253,
+   "requests_recorded": 20048
+  },
+  "new-s2": {
+   "crash_group": null,
+   "crash_path": null,
+   "elapsed_s": 1265,
+   "errors": {
+    "batched": 0,
+    "exact": 0,
+    "shared": 0
+   },
+   "exit": "exit=0",
+   "fault": null,
+   "graphs_at_last_log": {
+    "cached": 124,
+    "captures": 124,
+    "eager": 31202,
+    "failed": 0,
+    "full": 29601,
+    "output_bytes": 4362567680,
+    "replays": 9982
+   },
+   "groups_logged": 1253,
+   "of": 1253,
+   "requests_recorded": 20034
+  },
+  "old-s0": {
+   "crash_group": 576,
+   "crash_path": "exact",
+   "elapsed_s": 762,
+   "errors": {
+    "batched": 0,
+    "exact": 0,
+    "shared": 0
+   },
+   "exit": "exit=139",
+   "fault": "Memory access fault by GPU node-2 (Agent handle: 0x\u2026) on address 0x\u2026. Reason: Unknown.",
+   "graphs_at_last_log": {
+    "cached": 247,
+    "captures": 1234,
+    "eager": 1090,
+    "evicted": 987,
+    "failed": 0,
+    "output_bytes": 4164517888,
+    "replays": 17687
+   },
+   "groups_logged": 571,
+   "of": 1253,
+   "requests_recorded": 9136
+  },
+  "old-s1": {
+   "crash_group": 570,
+   "crash_path": "exact",
+   "elapsed_s": 674,
+   "errors": {
+    "batched": 0,
+    "exact": 0,
+    "shared": 0
+   },
+   "exit": "exit=139",
+   "fault": "Memory access fault by GPU node-3 (Agent handle: 0x\u2026) on address 0x\u2026. Reason: Unknown.",
+   "graphs_at_last_log": {
+    "cached": 219,
+    "captures": 1181,
+    "eager": 1108,
+    "evicted": 962,
+    "failed": 0,
+    "output_bytes": 4285628416,
+    "replays": 17341
+   },
+   "groups_logged": 561,
+   "of": 1253,
+   "requests_recorded": 8976
+  },
+  "old-s2": {
+   "crash_group": 164,
+   "crash_path": "shared",
+   "elapsed_s": 277,
+   "errors": {
+    "batched": 0,
+    "exact": 0,
+    "shared": 0
+   },
+   "exit": "exit=139",
+   "fault": "Memory access fault by GPU node-4 (Agent handle: 0x\u2026) on address 0x\u2026. Reason: Unknown.",
+   "graphs_at_last_log": {
+    "cached": 304,
+    "captures": 410,
+    "eager": 446,
+    "evicted": 106,
+    "failed": 0,
+    "output_bytes": 4179656704,
+    "replays": 4850
+   },
+   "groups_logged": 161,
+   "of": 1253,
+   "requests_recorded": 2576
+  },
+  "old-s3": {
+   "crash_group": 599,
+   "crash_path": "exact",
+   "elapsed_s": 737,
+   "errors": {
+    "batched": 0,
+    "exact": 0,
+    "shared": 0
+   },
+   "exit": "exit=139",
+   "fault": "Memory access fault by GPU node-5 (Agent handle: 0x\u2026) on address 0x\u2026. Reason: Unknown.",
+   "graphs_at_last_log": {
+    "cached": 341,
+    "captures": 1353,
+    "eager": 1161,
+    "evicted": 1012,
+    "failed": 0,
+    "output_bytes": 4286152704,
+    "replays": 18277
+   },
+   "groups_logged": 591,
+   "of": 1252,
+   "requests_recorded": 9456
+  },
+  "old-s4": {
+   "crash_group": 274,
+   "crash_path": "shared",
+   "elapsed_s": 469,
+   "errors": {
+    "batched": 0,
+    "exact": 0,
+    "shared": 0
+   },
+   "exit": "exit=139",
+   "fault": "Memory access fault by GPU node-6 (Agent handle: 0x\u2026) on address 0x\u2026. Reason: Unknown.",
+   "graphs_at_last_log": {
+    "cached": 372,
+    "captures": 695,
+    "eager": 794,
+    "evicted": 323,
+    "failed": 0,
+    "output_bytes": 4285923328,
+    "replays": 8107
+   },
+   "groups_logged": 271,
+   "of": 1252,
+   "requests_recorded": 4336
+  },
+  "old-s5": {
+   "crash_group": 587,
+   "crash_path": "shared",
+   "elapsed_s": 751,
+   "errors": {
+    "batched": 0,
+    "exact": 0,
+    "shared": 0
+   },
+   "exit": "exit=139",
+   "fault": "Memory access fault by GPU node-7 (Agent handle: 0x\u2026) on address 0x\u2026. Reason: Unknown.",
+   "graphs_at_last_log": {
+    "cached": 308,
+    "captures": 1322,
+    "eager": 1121,
+    "evicted": 1014,
+    "failed": 0,
+    "output_bytes": 4275142656,
+    "replays": 17979
+   },
+   "groups_logged": 581,
+   "of": 1252,
+   "requests_recorded": 9296
+  }
+ },
+ "schema": "dev2-eviction-repro/1"
+}
