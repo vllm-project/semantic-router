@@ -175,6 +175,27 @@ def test_fast_path_equals_eager(case):
     assert stats["failed"] == 0 and stats["replays"] > 0
 
 
+def test_full_graph_cache_runs_eager():
+    """Past the cache limit new shapes run eagerly; the captured graphs stay and replay."""
+    accelerator, device = _device()
+    reference = build(qwen3_5(4, 1024, 16, 8), 7, False, accelerator, device)
+    fused = copy.deepcopy(reference)
+    fused.kernels = reference.kernels
+    fast.install_fused(fused)
+    graphs = fast.Graphs(fused, fast.Masks(), max_graphs=2)
+    torch_device = accelerator.torch_device(device)
+    shapes = [[8], [13], [37, 200], [64] * 8]
+    with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
+        for _ in range(3):
+            for seed, lengths in enumerate(shapes):
+                generator = torch.Generator().manual_seed(seed)
+                ids, mask = batch(lengths, generator, torch_device)
+                want = reference(ids, mask).clone()
+                assert torch.equal(want, graphs(ids, mask, lengths)), lengths
+    stats = graphs.receipt()
+    assert stats["cached"] == 2 and stats["full"] > 0 and stats["replays"] > 0
+
+
 def test_attention_prep_above_2gib():
     """A q projection above 2 GiB (9 x 16,384 tokens at Nox-4B's widths) runs fused, without the eager fallback."""
     accelerator, device = _device()

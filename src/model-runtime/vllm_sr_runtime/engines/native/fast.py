@@ -21,14 +21,16 @@ four scored panels), so it belongs to the exact profile:
   Eos-0.8B a graph saves 6% at 2,800 tokens and nothing from 11,000), and
   concurrent traffic forms many distinct large shapes whose captures would cost
   several forwards each. At most ``MAX_GRAPHS`` graphs (and
-  ``MAX_GRAPH_OUTPUT_BYTES`` of outputs) stay cached, least recently used first out.
+  ``MAX_GRAPH_OUTPUT_BYTES`` of outputs) are captured; after that, new shapes
+  run eagerly. Captured graphs are never destroyed while serving: on ROCm,
+  evicting large graphs from the shared memory pool, between large eager
+  batches of Index traffic, led to GPU memory access faults.
 """
 
 from __future__ import annotations
 
 import math
 import types
-from collections import OrderedDict
 from typing import Any
 
 import torch
@@ -466,7 +468,7 @@ class Graphs:
         self.max_graphs = max_graphs
         self.max_tokens = max_tokens
         self.max_output_bytes = max_output_bytes
-        self.graphs: OrderedDict[tuple, dict[str, Any]] = OrderedDict()
+        self.graphs: dict[tuple, dict[str, Any]] = {}
         self.seen: dict[tuple, int] = {}
         self.failed: set[tuple] = set()
         self.output_bytes = 0
@@ -475,7 +477,7 @@ class Graphs:
             "captures": 0,
             "replays": 0,
             "eager": 0,
-            "evicted": 0,
+            "full": 0,
             "failed": 0,
         }
 
@@ -504,8 +506,6 @@ class Graphs:
             if entry is None:
                 self.stats["eager"] += 1
                 return self.eager(input_ids, attention_mask, padded)
-        else:
-            self.graphs.move_to_end(key)
         entry["input_ids"].copy_(input_ids)
         entry["attention_mask"].copy_(attention_mask)
         entry["graph"].replay()
@@ -520,6 +520,12 @@ class Graphs:
         )
 
     def _capture(self, key, input_ids, attention_mask, padded) -> dict[str, Any] | None:
+        if (
+            len(self.graphs) >= self.max_graphs
+            or self.output_bytes >= self.max_output_bytes
+        ):
+            self.stats["full"] += 1
+            return None
         static = {
             "input_ids": input_ids.clone(),
             "attention_mask": attention_mask.clone(),
@@ -553,13 +559,6 @@ class Graphs:
         self.graphs[key] = entry
         self.output_bytes += size
         self.stats["captures"] += 1
-        while len(self.graphs) > 1 and (
-            len(self.graphs) > self.max_graphs
-            or self.output_bytes > self.max_output_bytes
-        ):
-            _, old = self.graphs.popitem(last=False)
-            self.output_bytes -= old["bytes"]
-            self.stats["evicted"] += 1
         return entry
 
     def receipt(self) -> dict[str, Any]:
