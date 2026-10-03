@@ -44,6 +44,23 @@ def nano(tmp_path_factory):
     return omni.write_bundle(tmp_path_factory.mktemp("omni") / "vela-1.0-omni-nano")
 
 
+def test_a_missing_extra_names_its_install(nano, monkeypatch):
+    import importlib.util
+
+    find_spec = importlib.util.find_spec
+    monkeypatch.setattr(
+        importlib.util,
+        "find_spec",
+        lambda name, *rest: None if name == "PIL" else find_spec(name, *rest),
+    )
+    family = MultimodalEmbeddingFamily()
+    package = family.verify(PackageRef(nano))
+    with pytest.raises(
+        RuntimeError, match=r"Pillow: pip install 'vllm-sr-runtime\[multimodal\]'"
+    ):
+        family.describe(package)
+
+
 @pytest.fixture(scope="module")
 def model(nano):
     from vllm_sr_runtime.engines.onnxruntime.engine import OnnxRuntimeEngine

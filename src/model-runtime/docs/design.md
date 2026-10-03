@@ -954,6 +954,12 @@ Index-like traffic); kernel choices for other device classes; more `max_speed`
 kernels; a `vllm` engine (pooling runner plus the family readouts) and a
 `llamacpp` engine; CUDA validation on CUDA hardware.
 
+Router `decision` signals ask Choice, Noul and Score questions, which every
+decision family answers, Vela 2.0 included. Set and Span answers are served
+on `/v1/decisions` to any client; signal rules over them (a label of a Set,
+a span label present) are later work, together with Vela 2.0 presets as
+drop-in task bindings (`pii`, `halu`, `relevance`).
+
 ## 20. Risks
 
 | Risk | Mitigation |

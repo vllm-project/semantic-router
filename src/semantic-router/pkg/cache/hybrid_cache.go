@@ -235,6 +235,13 @@ func milvusCacheOptionsFromHybridOptions(options HybridCacheOptions) MilvusCache
 	return milvusOptions
 }
 
+func (h *HybridCache) semanticEmbeddingProvider() embedding.Provider {
+	if h.milvusCache == nil {
+		return nil
+	}
+	return h.milvusCache.embeddingProvider
+}
+
 func (h *HybridCache) generateEmbedding(ctx context.Context, text string) ([]float32, error) {
 	if h.milvusCache == nil {
 		return nil, fmt.Errorf("milvus cache is not initialized")

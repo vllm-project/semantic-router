@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
@@ -74,7 +75,7 @@ func (h *ragHits) top(topK int) ([]string, []float32) {
 }
 
 func (r *OpenAIRouter) ragQueryEmbeddings(ctx context.Context, query string, request *RequestContext) ([][]float32, error) {
-	provider, err := r.embeddingsForRequest(request).Get("bert", 0, 0)
+	provider, err := r.embeddingsForRequest(request).Get(config.RAGQueryEmbeddingModel, 0, 0)
 	if err != nil {
 		return nil, err
 	}

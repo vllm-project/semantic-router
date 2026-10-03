@@ -1,7 +1,7 @@
 """Parity records for the embedding and rerank models (embed workstream).
 
     python3 tools/embed_parity.py omni --bundle DIR --output OUT.json [--threads N]
-    python3 tools/embed_parity.py encoder --package DIR --output OUT.json [--threads N]
+    python3 tools/embed_parity.py encoder --package DIR --output OUT.json [--threads N] [--device rocm:N]
 
 ``encoder`` serves an embedder or reranker package (Vela Embedding, Vela
 Reranker, Qwen3-Embedding) through ``TaskHeadsFamily`` on the native engine
@@ -9,7 +9,9 @@ Reranker, Qwen3-Embedding) through ``TaskHeadsFamily`` on the native engine
 engine (every graph), and compares both with a Transformers FP32 reference
 fed the same token IDs (``tools/embed_corpus.py``): every exit's embedding
 (raw or final-normed intermediate exits per the package contract, Matryoshka
-views of the last one) or every pair scorer's logits and rerank order.
+views of the last one) or every pair scorer's logits and rerank order. With
+``--device`` the native engine runs on that GPU against the CPU reference
+under the GPU bar (cosine >= 0.9995); the onnxruntime side is a CPU record.
 
 ``omni`` serves a prepared Vela Omni bundle that kept its goldens
 (``VELA_OMNI_KEEP_GOLDEN=1``) through ``MultimodalEmbeddingFamily`` and the
@@ -61,6 +63,8 @@ from vllm_sr_runtime.plugins.base import (  # noqa: E402
 
 MIN_COSINE = 0.99999
 MAX_ABS = 1e-4
+# Design section 17: the GPU bar for embeddings; logits are reported, not gated, on GPUs.
+GPU_MIN_COSINE = 0.9995
 CPU = DeviceInfo(accelerator="cpu", index=None, name="cpu")
 
 
@@ -273,13 +277,20 @@ def serve(model: Any, surface: str, body: dict[str, Any]) -> tuple[Any, dict[str
 class EncoderParity:
     """One embedder or reranker on both engines against the Transformers reference."""
 
-    def __init__(self, package: Path, threads: int | None):
+    def __init__(self, package: Path, threads: int | None, device: str = "cpu"):
         import torch
 
         torch.set_num_threads(threads or torch.get_num_threads())
         self.package = package
         self.threads = threads
-        self.native = self.load(NativeEngine(), {})
+        self.forward: tuple[Any, Any, Any] | None = None
+        self.device = CPU
+        if device != "cpu":
+            accelerator, _, index = device.partition(":")
+            self.device = DeviceInfo(
+                accelerator=accelerator, index=int(index or 0), name=device
+            )
+        self.native = self.load(NativeEngine(), {}, self.device)
         layout = self.native.planners[next(iter(self.native.planners))].layout
         if isinstance(layout, RelevanceLayout):
             option = {
@@ -289,17 +300,27 @@ class EncoderParity:
             }
         else:
             option = {"layers": sorted(layout.graphs)}
-        self.graph = self.load(OnnxRuntimeEngine(), option) if layout.graphs else None
+        on_cpu = self.device.accelerator == "cpu"
+        self.graph = (
+            self.load(OnnxRuntimeEngine(), option, CPU)
+            if layout.graphs and on_cpu
+            else None
+        )
         self.layout = layout
         self.reference = self.reference_model()
         self.cases: list[dict[str, Any]] = []
 
-    def load(self, engine: Any, options: dict[str, Any]) -> Any:
+    def load(self, engine: Any, options: dict[str, Any], device: DeviceInfo) -> Any:
+        from vllm_sr_runtime.accel.rocm import ROCmAccelerator
+
         family = TaskHeadsFamily(RegistryOptions(model_options=options))
         verified = family.verify(PackageRef(self.package))
         spec = family.describe(verified)
+        accelerator = (
+            CPUAccelerator() if device.accelerator == "cpu" else ROCmAccelerator()
+        )
         model = engine.load(
-            spec, CPUAccelerator(), CPU, EngineOptions(threads=self.threads)
+            spec, accelerator, device, EngineOptions(threads=self.threads)
         )
         return family.load(verified, spec, model)
 
@@ -315,21 +336,30 @@ class EncoderParity:
     def hidden(
         self, rows: list[tuple[int, ...]], layer: int, normalize_exits: bool
     ) -> tuple[Any, Any]:
-        """The reference's right-padded hidden states at ``layer`` and the mask."""
+        """The reference's right-padded hidden states at ``layer`` and the mask.
+
+        One reference forward serves every exit of the same rows.
+        """
         import torch
 
-        width = max(len(row) for row in rows)
-        ids = torch.zeros(len(rows), width, dtype=torch.long)
-        mask = torch.zeros(len(rows), width, dtype=torch.long)
-        for index, row in enumerate(rows):
-            ids[index, : len(row)] = torch.tensor(row)
-            mask[index, : len(row)] = 1
+        key = tuple(rows)
+        if self.forward is None or self.forward[0] != key:
+            width = max(len(row) for row in rows)
+            ids = torch.zeros(len(rows), width, dtype=torch.long)
+            mask = torch.zeros(len(rows), width, dtype=torch.long)
+            for index, row in enumerate(rows):
+                ids[index, : len(row)] = torch.tensor(row)
+                mask[index, : len(row)] = 1
+            self.forward = None
+            with torch.inference_mode():
+                out = self.reference(
+                    input_ids=ids, attention_mask=mask, output_hidden_states=True
+                )
+            self.forward = (key, out, mask)
+        _, out, mask = self.forward
+        if layer == self.reference.config.num_hidden_layers:
+            return out.last_hidden_state, mask
         with torch.inference_mode():
-            out = self.reference(
-                input_ids=ids, attention_mask=mask, output_hidden_states=True
-            )
-            if layer == self.reference.config.num_hidden_layers:
-                return out.last_hidden_state, mask
             hidden = out.hidden_states[layer]
             return (
                 self.reference.final_norm(hidden) if normalize_exits else hidden
@@ -341,15 +371,20 @@ class EncoderParity:
         pairs: dict[str, dict[str, float]],
         extra: dict[str, Any] | None = None,
     ) -> None:
-        passed = all(
-            stats["min_cosine"] >= MIN_COSINE and stats["max_abs"] <= MAX_ABS
-            for key, stats in pairs.items()
-            if "min_cosine" in stats
+        """Gate every comparison: CPU pairs on cosine and |delta|, GPU pairs on cosine."""
+        gpu = self.device.accelerator != "cpu"
+        passed = True
+        for key, stats in pairs.items():
+            on_gpu = gpu and key.startswith("native")
+            if "min_cosine" in stats:
+                passed &= stats["min_cosine"] >= (
+                    GPU_MIN_COSINE if on_gpu else MIN_COSINE
+                )
+            if not on_gpu:
+                passed &= stats.get("max_abs", 0.0) <= MAX_ABS
+        self.cases.append(
+            {"name": name, "passed": bool(passed), **pairs, **(extra or {})}
         )
-        passed = passed and all(
-            stats.get("max_abs", 0) <= MAX_ABS for stats in pairs.values()
-        )
-        self.cases.append({"name": name, "passed": passed, **pairs, **(extra or {})})
 
     @staticmethod
     def rows_compare(a: Any, b: Any) -> dict[str, float]:
@@ -404,59 +439,55 @@ class EncoderParity:
         import torch
 
         planner = self.native.planners["rerank"]
-        scorers = self.layout.scorers(planner.info.exits)
-        for exit in planner.info.exits:
-            native_logits, reference_logits, graph_logits, orders = [], [], [], []
-            for query, documents in RERANK:
+        exits = planner.info.exits
+        scorers = self.layout.scorers(exits)
+        graph_exits = self.graph.planners["rerank"].info.exits if self.graph else ()
+        runs = {
+            exit: {"native": [], "reference": [], "onnxruntime": [], "orders": []}
+            for exit in exits
+        }
+        for query, documents in RERANK:
+            for exit in exits:
                 body = {
                     "query": query,
                     "documents": documents,
                     "layer": exit[0],
                     "dimensions": exit[1],
                 }
+                run = runs[exit]
                 plan, native = serve(self.native, "rerank", body)
                 by_index = {r["index"]: r["logit"] for r in native["results"]}
-                native_logits += [by_index[i] for i in range(len(documents))]
+                run["native"] += [by_index[i] for i in range(len(documents))]
                 rows = [item.ids for item in plan.items]
                 hidden, _ = self.hidden(rows, exit[0], True)
                 with torch.inference_mode():
                     logits = scorers[exit](hidden[:, 0, : exit[1]].float()).reshape(-1)
-                reference_logits += logits.tolist()
+                run["reference"] += logits.tolist()
                 reference_order = sorted(
                     range(len(documents)), key=lambda i: (-float(logits[i]), i)
                 )
-                orders.append(
-                    [r["index"] for r in native["results"]] == reference_order
-                )
-                if (
-                    self.graph is not None
-                    and exit in self.graph.planners["rerank"].info.exits
-                ):
+                served_order = [r["index"] for r in native["results"]]
+                run["orders"].append(served_order == reference_order)
+                if exit in graph_exits:
                     _, graph = serve(self.graph, "rerank", body)
                     graph_index = {r["index"]: r["logit"] for r in graph["results"]}
-                    graph_logits += [graph_index[i] for i in range(len(documents))]
+                    run["onnxruntime"] += [
+                        graph_index[i] for i in range(len(documents))
+                    ]
+        for exit, run in runs.items():
+            compared = [("native", "reference")]
+            if run["onnxruntime"]:
+                compared += [("onnxruntime", "reference"), ("native", "onnxruntime")]
             pairs = {
-                "native_vs_reference": {
-                    "max_abs": float(
-                        np.abs(np.subtract(native_logits, reference_logits)).max()
-                    )
+                f"{a}_vs_{b}": {
+                    "max_abs": float(np.abs(np.subtract(run[a], run[b])).max())
                 }
+                for a, b in compared
             }
-            if graph_logits:
-                pairs["onnxruntime_vs_reference"] = {
-                    "max_abs": float(
-                        np.abs(np.subtract(graph_logits, reference_logits)).max()
-                    )
-                }
-                pairs["native_vs_onnxruntime"] = {
-                    "max_abs": float(
-                        np.abs(np.subtract(native_logits, graph_logits)).max()
-                    )
-                }
             self.record(
                 f"rerank/layer{exit[0]}/dim{exit[1]}",
                 pairs,
-                {"identical_order": all(orders), "pairs": len(native_logits)},
+                {"identical_order": all(run["orders"]), "pairs": len(run["native"])},
             )
 
     def run(self) -> dict[str, Any]:
@@ -468,7 +499,8 @@ class EncoderParity:
             "model": self.native.info.id,
             "model_sha256": self.native.info.model_sha256,
             "engines": ["native", *(["onnxruntime"] if self.graph is not None else [])],
-            "reference": "transformers fp32 (sdpa), same token IDs",
+            "reference": "transformers fp32 (sdpa) on the CPU, same token IDs",
+            "device": self.device.label,
             "thresholds": {"min_cosine": MIN_COSINE, "max_abs": MAX_ABS},
             "passed": all(
                 case["passed"] and case.get("identical_order", True)
@@ -495,11 +527,12 @@ def main() -> int:
     encoder.add_argument("--package", type=Path, required=True)
     encoder.add_argument("--output", type=Path, required=True)
     encoder.add_argument("--threads", type=int, default=None)
+    encoder.add_argument("--device", default="cpu")
     args = parser.parse_args()
     if args.command == "omni":
         result = OmniParity(args.bundle.resolve(), args.threads).run()
     else:
-        result = EncoderParity(args.package.resolve(), args.threads).run()
+        result = EncoderParity(args.package.resolve(), args.threads, args.device).run()
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     failed = [case["name"] for case in result["cases"] if not case["passed"]]
     print(

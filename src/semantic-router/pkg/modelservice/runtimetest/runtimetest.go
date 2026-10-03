@@ -1,7 +1,8 @@
 // Package runtimetest serves a fake model runtime for router tests. It speaks
 // the runtime contract (health with per-model states, model cards, classify,
-// decisions and bundles) with deterministic heads, so tests exercise the real
-// client, bundles and typed bindings without a Python process.
+// decisions, embeddings, rerank and bundles) with deterministic answers, so
+// tests exercise the real client, bundles and typed bindings without a Python
+// process.
 //
 // Text is read as whitespace-separated words, each one token, plus two special
 // tokens per window. Sequence heads put 0.9 on the first label the text names
@@ -31,10 +32,13 @@ type Head struct {
 	Window     *api.WindowOptions
 }
 
-// Model is one served model. Without heads it serves decisions.
+// Model is one served model: classify with heads, embeddings with an
+// Embedder, rerank with a Reranker, otherwise decisions.
 type Model struct {
 	ID             string
 	Heads          []Head
+	Embedding      *Embedder
+	Rerank         *Reranker
 	MaxInputTokens int
 	Device         string
 }
@@ -87,7 +91,8 @@ func (r *Runtime) Bundles() (calls, tasks int) {
 	return r.bundles, r.tasks
 }
 
-// Calls reports direct calls to a surface (classify, decisions), outside bundles.
+// Calls reports direct calls to a surface (classify, decisions, embeddings,
+// rerank), outside bundles.
 func (r *Runtime) Calls(surface string) int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -115,6 +120,24 @@ func (r *Runtime) Handler() http.Handler {
 		}
 		r.count("decisions")
 		status, response, errBody := r.decide(body)
+		write(w, status, response, errBody)
+	})
+	mux.HandleFunc("/v1/embeddings", func(w http.ResponseWriter, req *http.Request) {
+		var body api.EmbeddingsRequest
+		if !decode(w, req, &body) {
+			return
+		}
+		r.count("embeddings")
+		status, response, errBody := r.embeddings(body)
+		write(w, status, response, errBody)
+	})
+	mux.HandleFunc("/v1/rerank", func(w http.ResponseWriter, req *http.Request) {
+		var body api.RerankRequest
+		if !decode(w, req, &body) {
+			return
+		}
+		r.count("rerank")
+		status, response, errBody := r.rerank(body)
 		write(w, status, response, errBody)
 	})
 	mux.HandleFunc("/v1/bundle", r.bundle)
@@ -169,7 +192,14 @@ func (r *Runtime) card(model Model, ready bool) api.ModelCard {
 	device, dtype, profile := model.Device, "float32", "exact"
 	limits := api.ModelLimits{MaxInputTokens: &model.MaxInputTokens}
 	card := api.ModelCard{Id: model.ID, Object: "model", Family: "task_heads", Ready: ready, ModelSha256: &sha, Device: &device, Dtype: &dtype, Profile: &profile, Limits: &limits}
-	if len(model.Heads) == 0 {
+	switch {
+	case model.Embedding != nil:
+		card.Surfaces, card.Embedding = []string{"embeddings"}, embeddingCard(model.Embedding)
+		return card
+	case model.Rerank != nil:
+		card.Surfaces, card.Rerank = []string{"rerank"}, rerankCard(model.Rerank)
+		return card
+	case len(model.Heads) == 0:
 		card.Family, card.Surfaces = "decision2", []string{"decisions"}
 		return card
 	}
@@ -228,6 +258,18 @@ func (r *Runtime) bundle(w http.ResponseWriter, req *http.Request) {
 			if status == http.StatusOK {
 				result.Decisions = &response
 			}
+		case task.Embeddings != nil:
+			status, response, errBody := r.embeddings(*task.Embeddings)
+			result.Status, result.Error = status, errBody
+			if status == http.StatusOK {
+				result.Embeddings = &response
+			}
+		case task.Rerank != nil:
+			status, response, errBody := r.rerank(*task.Rerank)
+			result.Status, result.Error = status, errBody
+			if status == http.StatusOK {
+				result.Rerank = &response
+			}
 		default:
 			result.Status, result.Error = http.StatusUnprocessableEntity, &api.ErrorBody{Code: "unsupported_surface", Message: "fake runtime"}
 		}
@@ -254,7 +296,7 @@ func (r *Runtime) model(id *string, surface string) (Model, int, *api.ErrorBody)
 		return Model{}, http.StatusNotFound, &api.ErrorBody{Code: "model_not_found", Message: name}
 	case !r.ready[name]:
 		return Model{}, http.StatusServiceUnavailable, &api.ErrorBody{Code: "not_ready", Message: name}
-	case (surface == "classify") != (len(model.Heads) > 0):
+	case !serves(model, surface):
 		return Model{}, http.StatusUnprocessableEntity, &api.ErrorBody{Code: "unsupported_surface", Message: surface}
 	}
 	return model, http.StatusOK, nil

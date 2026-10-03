@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import time
 
 import numpy as np
@@ -24,6 +25,10 @@ from vllm_sr_runtime.testing import embed_packages
 CPU = DeviceInfo(accelerator="cpu", index=None, name="cpu")
 
 
+# Graph fixtures need the onnx package; native tests run without it.
+HAS_ONNX = importlib.util.find_spec("onnx") is not None
+
+
 def load(root, engine=None, **model_options):
     family = TaskHeadsFamily(RegistryOptions(model_options=model_options))
     assert family.detect(PackageRef(root))
@@ -44,14 +49,14 @@ def serve(model, surface, body):
 @pytest.fixture(scope="module")
 def embedder(tmp_path_factory):
     return embed_packages.write_embedding_package(
-        tmp_path_factory.mktemp("emb") / "pkg", exits=(1, 2), graphs=True
+        tmp_path_factory.mktemp("emb") / "pkg", exits=(1, 2), graphs=HAS_ONNX
     )
 
 
 @pytest.fixture(scope="module")
 def reranker(tmp_path_factory):
     return embed_packages.write_reranker_package(
-        tmp_path_factory.mktemp("rr") / "pkg", graphs=True
+        tmp_path_factory.mktemp("rr") / "pkg", graphs=HAS_ONNX
     )
 
 

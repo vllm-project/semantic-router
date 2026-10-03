@@ -97,6 +97,9 @@ class SharedContextProfile(Profile):
 
     def share(self, items: list[RenderedItem], token_budget: int | None) -> int:
         """The prefix this job shares, or 0 when it runs exactly."""
+        decided = self.model.shared_context(items, token_budget) if self.model else None
+        if decided is not None:
+            return decided
         if len(items) < self.policy.min_questions:
             return 0
         prefix = shared_prefix(items, self.policy.align)
