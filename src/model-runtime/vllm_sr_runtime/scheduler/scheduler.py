@@ -14,6 +14,7 @@ from collections import deque
 from collections.abc import Callable
 from concurrent.futures import Future
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Any
 
 from ..errors import RuntimeServiceError
@@ -44,11 +45,14 @@ class Scheduler:
         profiles: dict[str, Profile],
         limits: SchedulerLimits | None = None,
         observe: Callable[[str, dict[str, Any]], None] | None = None,
+        execute: Callable[[Callable[[], Any]], Any] | None = None,
     ):
+        """``execute`` runs each batch where the device wants its work (the CPU's one thread)."""
         self.model = model
         self.profiles = profiles
         self.limits = limits or SchedulerLimits()
         self.observe = observe or (lambda event, values: None)
+        self.execute = execute or (lambda work: work())
         self._queue: deque[_Pending] = deque()
         self._queued_tokens = 0
         self._lock = threading.Condition()
@@ -194,11 +198,14 @@ class Scheduler:
             started = time.monotonic()
             try:
                 if batch.shared_prefix:
-                    values = self.model.run(items, shared_prefix=batch.shared_prefix)
+                    work = partial(
+                        self.model.run, items, shared_prefix=batch.shared_prefix
+                    )
                 elif not batch.exact:
-                    values = self.model.run_approximate(items)
+                    work = partial(self.model.run_approximate, items)
                 else:
-                    values = self.model.run(items)
+                    work = partial(self.model.run, items)
+                values = self.execute(work)
             except Exception as exc:
                 self._failure = exc
                 for job, _ in batch.parts:

@@ -1,14 +1,40 @@
-"""CPU accelerator: FP32 everywhere, pure-torch reference kernels. Validated."""
+"""CPU accelerator: FP32 everywhere, pure-torch reference kernels. Validated.
+
+All CPU device work of a process runs on one thread (``execute``). PyTorch's
+OpenMP backend keeps one thread team per calling thread; as soon as two teams
+exist (a loader thread, one worker per model) the threads outnumber the cores,
+libgomp stops spin-waiting between parallel regions and every one of a
+forward's hundreds of regions pays a wake-up: a 307M encoder's short-input
+forward took 25 ms instead of 13 ms on 16 cores. One thread, one team.
+"""
 
 from __future__ import annotations
 
 import os
 import platform
+import threading
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any
 
 import torch
 
 from ..plugins.base import Accelerator, DeviceInfo
 from .kernels import KernelSet, reference_kernels
+
+_LOCK = threading.Lock()
+_EXECUTOR: ThreadPoolExecutor | None = None
+
+
+def device_thread() -> ThreadPoolExecutor:
+    """The process's single CPU device thread."""
+    global _EXECUTOR  # noqa: PLW0603 - one executor per process, created on first use
+    with _LOCK:
+        if _EXECUTOR is None:
+            _EXECUTOR = ThreadPoolExecutor(
+                max_workers=1, thread_name_prefix="vllm-sr-cpu"
+            )
+        return _EXECUTOR
 
 
 class CPUAccelerator(Accelerator):
@@ -48,3 +74,8 @@ class CPUAccelerator(Accelerator):
 
     def capabilities(self, device: DeviceInfo) -> dict[str, bool]:
         return {"bf16_autocast": False, "graphs": False, "triton": False}
+
+    def execute(self, device: DeviceInfo, work: Callable[[], Any]) -> Any:
+        if threading.current_thread().name.startswith("vllm-sr-cpu"):
+            return work()
+        return device_thread().submit(work).result()
