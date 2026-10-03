@@ -19,7 +19,6 @@ dashboard/frontend/package-lock.json
 dashboard/wizmap/package-lock.json
 dashboard/wizmap/src/utils/font-width-data/*
 dashboard/wizmap/src/components/embedding/shaders/point.vert
-candle-binding/target/*
 vendor/*
 
 deploy/kubernetes/aibrix/aigw-resources/*
@@ -27,8 +26,6 @@ e2e/testcases/testdata/*
 data/cache_embeddings/*
 models/*
 paper/*
-candle-binding/target-mkl/*
-candle-binding/target-cpu/*
 *.patch
 src/training/model_classifier/modality_routing_classifier/exported_modality_routing_dataset/*.jsonl
 src/training/model_classifier/modality_routing_classifier/label_audit/human_review.tsv

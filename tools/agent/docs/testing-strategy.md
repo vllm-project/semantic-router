@@ -34,10 +34,9 @@ The PR, main, nightly, and release entrypoints share one verification plan:
   It records the source revision, selection reasons, required cases, and build
   dependencies in the `ci-plan` artifact.
 - **Quality** checks source formatting, static rules, trusted security checks,
-  and generated contracts. Checks that need native libraries wait for that
-  artifact; other static checks can start immediately.
-- **Artifacts** builds selected container images and native libraries, or
-  acquires an already qualified provider-mocker image by immutable digest.
+  and generated contracts. Every static check can start immediately.
+- **Artifacts** builds selected container images, or acquires an already
+  qualified provider-mocker image by immutable digest.
   Artifact production and verification are separate responsibilities.
 - **Tests** executes the selected unit, integration, and end-to-end contracts.
   Contracts are grouped as Components, Runtime, Conformance, Integration,
@@ -55,7 +54,7 @@ Compatible component checks use one of three setup classes: **CLI and Fleet**,
 worker with its own test inventory, logs, and result. A failed contract leaves
 other independent checks running, but fails its worker and the Gate.
 
-Runtime contracts run in separate workers matched to their runtime, device,
+Platform contracts run in separate workers matched to their runtime, device,
 target platform, and execution mode. Each keeps its own prepared models and
 required receipt. Kubernetes profiles also run in separate workers with their
 own images, clusters, state, and evidence. A profile failure does not suppress
@@ -77,8 +76,8 @@ a controlled API validates UI behavior, not a live Router deployment.
 Features such as memory and session-aware routing can have checks at several
 levels. Recipes and model checkpoints are test inputs. The runner platform,
 actual device, inference runtime, service dependencies, and artifact identities
-are separate fields. For example, OpenVINO/CPU is an inference combination;
-Kind supplies a cluster, and `vllm-sr serve` starts a local stack.
+are separate fields. For example, the model runtime on CPU is an inference
+combination; Kind supplies a cluster, and `vllm-sr serve` starts a local stack.
 
 Selected checks must finish successfully. Missing results, skipped required
 cases, duplicate IDs, missing shards, a different source revision, or a wrong
@@ -107,7 +106,7 @@ selects the image-calibration contract even under a documentation directory.
 
 For a manual qualification, dispatch **CI** (`ci.yml`),
 select the branch or tag, and enter a catalog verification ID such as
-`native.image-calibration-cpu` or `native.ort-cpu`. It uses the
+`platform.image-calibration-cpu` or `platform.router-riscv64-qemu`. It uses the
 same plan, compatible build dependencies, required receipt, and Gate. Normal PR checks
 calibrate the plan's merge-tree source SHA; reports must name that exact clean
 commit. Full CPU, nightly, and release qualification also include this contract.
@@ -119,24 +118,22 @@ unexecuted blocks qualification. Manual and experimental environments are
 listed separately. A previous run on another commit cannot fill a missing
 result in the current run.
 
-The native matrix also runs a separate **RISC-V QEMU** contract: Candle classifier
-parity, owned binding fixtures, and router diagnostics on `linux/riscv64` binaries
-emulated on a Linux AMD64 runner. Its receipt names both the target and the host.
-This proves the emulated instruction-set path; it does not qualify physical
-RISC-V hardware or its performance and never loads the shared AMD64 libraries.
+The platform executor also runs a **RISC-V QEMU** contract: the pure-Go Router
+built for `linux/riscv64` runs under qemu-user on a Linux AMD64 runner, attached
+to a model runtime on the host, and its classification must equal the runtime's
+own answer. Its receipt names both the target and the host. This proves the
+Router's emulated instruction-set path; it does not qualify physical RISC-V
+hardware or its performance, and the riscv64 Router runs no model code.
 
 ## Reproduce the affected boundary
 
 | Contract | Local command | Required evidence |
 | --- | --- | --- |
-| Core | `make test-and-build-local` | Router logic, registered Go tools, native interfaces, selector parity, and local core checks. |
-| Go tools | `make go-tools-test` | CLI, classifier operating-point, fusion evaluation, image calibration, and offline model-compatibility tests. |
+| Core | `make test-and-build-local` | Router logic, registered Go tools, selector parity, and local core checks. |
+| Go tools | `make go-tools-test` | CLI, classifier operating-point, fusion evaluation, image calibration, and model-selection tests. |
 | Dashboard | `make dashboard-check`; `make dashboard-test-wasm`; `make dashboard-test-e2e-evaluation` | Frontend and backend tests, compiled WASM behavior, and browser acceptance. |
-| Native fixtures | `CI=true make test-owned-native` | Real libraries with small tensors: ownership, isolation, cleanup, and assembly. |
-| Published Candle models | `make test-models MODEL_TEST_PROVIDER=candle` | Ten Vela families, real Halu grounding contracts, and legacy multimodal binding compatibility cases. |
-| Published ORT models | `make test-models MODEL_TEST_PROVIDER=ort` | Ten Vela families, prepared Omni Nano/Mini contracts, classifier integration, and implicit/explicit execution defaults. |
-| RISC-V QEMU | `make test-riscv-qemu` | Host/target classifier parity, owned fixtures, target ELF identity, and live router diagnostics under emulation. |
-| OpenVINO runtime | `make verify-openvino-binding` | Owned-handle lifetime and token-budget checks under the race detector, plus pinned Vela Domain and Embedding tokenization and CPU inference. |
+| Model runtime | `make model-runtime-test` | Families, engines, scheduling, the HTTP contract, and golden answers on CPU. |
+| RISC-V QEMU | `make test-riscv-qemu` | Target ELF identity, Router health and readiness under emulation, and a classification through an attached host runtime that equals the runtime's answer. |
 | Image-routing conformance | `make verify-image-routing-calibration` | Prepared Nano identity, every authored scored image, prototype provenance, frozen threshold/validation assertions, and multimodal profile package tests. |
 | Local Stack serving contracts | `make vllm-sr-test-integration` | Live `serve`/`stop`, mounts, environment, pull policy, request behavior, and service isolation. |
 | Local Stack memory contracts | `USE_DETERMINISTIC_MEMORY_EMBEDDINGS=0 make memory-test-integration` | Vela embedding, persistent retrieval, injection, user isolation, and persistence failure behavior. |
@@ -146,9 +143,9 @@ RISC-V hardware or its performance and never loads the shared AMD64 libraries.
 | Performance | `make perf-check PERF_BASE_REF=<base-commit>` | Complete benchmark inventory and a paired comparison using identical model artifacts. |
 
 Use the prerequisites in the corresponding reusable workflow when reproducing
-its job. ORT needs a compatible `ORT_DYLIB_PATH`; OpenVINO dependencies are in
-`openvino-binding/requirements-test.txt`. Storage integration requires its
-selected services. In required CI, missing dependencies fail the suite.
+its job. Model contracts need the model runtime (`make model-runtime-install`).
+Storage integration requires its selected services. In required CI, missing
+dependencies fail the suite.
 
 Kubernetes baseline inventory comes from the test registry. Regular runs select
 all 36 non-stress cases; full runs select all 38 cases, including the two stress
@@ -162,9 +159,7 @@ retain their dedicated `soak-tools` and image-calibration owners.
 
 Core discovers external Go tools from
 [`go-tools.mk`](../../make/go-tools.mk), including sources outside the Router Go
-module. For the separate compatibility CLI test that needs a pinned checkpoint,
-run `make test-modelcompat-native CANDLE_MODEL_PATH=/path/to/fixture`. The default
-Core suite tests the offline command without downloading that checkpoint.
+module.
 
 Dashboard runs both Go tests in the JavaScript/WASM runtime and Node
 assertions against the compiled compiler. Their discovered cases and actual
@@ -172,14 +167,13 @@ results must agree, just like the other required suites.
 
 ## Models and artifacts
 
-Published inference retains Domain, Guard, PII, FactCheck, Feedback, Modality,
-Safety, Hazard, Embedding, and Reranker. The supported runtime inventory also
-owns Candle Halu grounding and ORT Omni Nano/Mini contracts. Task adapters retain
-their semantic assertions, including spans, input budgets, modalities, dimensions,
-and ownership; a common runner does not reduce them to health checks. The
-downloader resolves immutable revisions and validates the required format. The
-runner requires every selected case and rejects skipped or missing results.
-Candle's pinned legacy multimodal compatibility checkpoint remains distinct.
+The model runtime serves every published model: Domain, Guard, PII, FactCheck,
+Feedback, Modality, Safety, Hazard, Halu grounding, Embedding, Reranker, Omni
+Nano/Mini, and the decision models. Its golden answers pin each family's outputs,
+and the E2E profiles keep the deployed semantic assertions, including spans,
+input budgets, modalities, and dimensions; a common runner does not reduce them
+to health checks. The runtime resolves immutable Hub revisions from its registry
+and verifies every loaded file.
 
 Prepared Omni bundles include a source identity, file hashes, and export parity.
 Preparation is shared by compatible runtime and conformance contracts. Image
@@ -190,19 +184,16 @@ parity and maximum-context qualifications that require explicit inputs remain
 separately declared; a shorter input acceptance test cannot qualify full context.
 
 ```bash
-make download-models-test MODEL_TEST_PROVIDER=candle
-make download-models-test MODEL_TEST_PROVIDER=ort
 make download-models-perf
 ```
 
-`make test-models` provisions its own prerequisites. Product startup and
-`make download-models` instead provision models referenced by the active
-configuration. They are not the full test inventory. A pre-existing local model
+Product startup and `make download-models` instead provision models referenced
+by the active configuration. They are not the full test inventory. A pre-existing local model
 cache does not activate optional inference during ordinary core tests.
 
 A build identity includes its source revision, platform, and build inputs.
-CI builds each selected image and CPU native library artifact once, checks its
-content digest when loading it, and reuses that read-only artifact across suites.
+CI builds each selected image once, checks its content digest when loading it,
+and reuses that read-only artifact across suites.
 Containers, databases, networks, and volumes are not shared between suites.
 Image publication promotes the qualified OCI archive. CLI publication uploads
 the wheel and source distribution already checked from an isolated installation.
