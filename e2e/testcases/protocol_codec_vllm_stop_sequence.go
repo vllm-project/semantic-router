@@ -16,9 +16,13 @@ import (
 
 const vllmStopSequenceMarker = "__mock_vllm_stop_sequence__"
 
+// Longer than the 128 bytes the Chat decoder used to accept (#4516).
+const vllmLongStopSequence = "alpha bravo charlie delta echo foxtrot golf hotel india juliett kilo lima mike " +
+	"november oscar papa quebec romeo sierra tango unif"
+
 func init() {
 	pkgtestcases.Register("protocol-codec-vllm-stop-sequence", pkgtestcases.TestCase{
-		Description: "vLLM's matched stop string in choices[].stop_reason reaches Anthropic clients as stop_sequence",
+		Description: "vLLM's matched stop string in choices[].stop_reason, short or over 128 bytes, reaches Anthropic clients as stop_sequence",
 		Tags:        []string{"protocol-codec", "vllm", "anthropic", "stop-reason", "streaming"},
 		Fn:          testProtocolCodecVLLMStopSequence,
 	})
@@ -38,28 +42,33 @@ func testProtocolCodecVLLMStopSequence(ctx context.Context, client *kubernetes.C
 
 	// The fixture answers only when the Chat request carries a stop list, so a
 	// pass also shows the Router forwarded stop_sequences as Chat stop.
-	for _, stream := range []bool{false, true} {
-		sessionID := fmt.Sprintf("vllm-stop-sequence-%t-%s", stream, uuid.NewString())
-		result, err := sendProtocolMatrixRaw(ctx, session, "/v1/messages", map[string]any{
-			"model": chatBackendModel, "max_tokens": 64, "stream": stream,
-			"stop_sequences": []string{"CHARLIE"},
-			"messages":       []map[string]string{{"role": "user", "content": vllmStopSequenceMarker}},
-		}, stream, map[string]string{"x-vsr-test-session-id": sessionID})
-		if err != nil {
-			return fmt.Errorf("vLLM stop sequence Messages request (stream=%t): %w", stream, err)
-		}
-		if result.StatusCode != http.StatusOK {
-			return fmt.Errorf("vLLM stop sequence Messages (stream=%t) returned HTTP %d: %s",
-				stream, result.StatusCode, truncateString(string(result.Body), 600))
-		}
-		if replyErr := assertVLLMStopSequenceReply(result, stream); replyErr != nil {
-			return replyErr
-		}
-		if verificationErr := verifyProviderSimulatorRequest(ctx, provider, sessionID, "openai.chat.v1", vllmStopSequenceMarker); verificationErr != nil {
-			return fmt.Errorf("vLLM stop sequence provider dispatch (stream=%t): %w", stream, verificationErr)
-		}
-		if modeErr := assertProviderStreamMode(ctx, provider, sessionID, stream); modeErr != nil {
-			return modeErr
+	if len(vllmLongStopSequence) <= 128 {
+		return fmt.Errorf("vllmLongStopSequence is %d bytes; it must exceed 128", len(vllmLongStopSequence))
+	}
+	for _, stop := range []string{"CHARLIE", vllmLongStopSequence} {
+		for _, stream := range []bool{false, true} {
+			sessionID := fmt.Sprintf("vllm-stop-sequence-%d-%t-%s", len(stop), stream, uuid.NewString())
+			result, err := sendProtocolMatrixRaw(ctx, session, "/v1/messages", map[string]any{
+				"model": chatBackendModel, "max_tokens": 64, "stream": stream,
+				"stop_sequences": []string{stop},
+				"messages":       []map[string]string{{"role": "user", "content": vllmStopSequenceMarker}},
+			}, stream, map[string]string{"x-vsr-test-session-id": sessionID})
+			if err != nil {
+				return fmt.Errorf("vLLM stop sequence Messages request (%d bytes, stream=%t): %w", len(stop), stream, err)
+			}
+			if result.StatusCode != http.StatusOK {
+				return fmt.Errorf("vLLM stop sequence Messages (%d bytes, stream=%t) returned HTTP %d: %s",
+					len(stop), stream, result.StatusCode, truncateString(string(result.Body), 600))
+			}
+			if replyErr := assertVLLMStopSequenceReply(result, stream, stop); replyErr != nil {
+				return replyErr
+			}
+			if verificationErr := verifyProviderSimulatorRequest(ctx, provider, sessionID, "openai.chat.v1", vllmStopSequenceMarker); verificationErr != nil {
+				return fmt.Errorf("vLLM stop sequence provider dispatch (%d bytes, stream=%t): %w", len(stop), stream, verificationErr)
+			}
+			if modeErr := assertProviderStreamMode(ctx, provider, sessionID, stream); modeErr != nil {
+				return modeErr
+			}
 		}
 	}
 	return nil
@@ -67,7 +76,7 @@ func testProtocolCodecVLLMStopSequence(ctx context.Context, client *kubernetes.C
 
 // A streamed reply must be real SSE with the match on message_delta, not a
 // buffered body that happens to contain it.
-func assertVLLMStopSequenceReply(result protocolMatrixHTTPResult, stream bool) error {
+func assertVLLMStopSequenceReply(result protocolMatrixHTTPResult, stream bool, want string) error {
 	var terminal struct {
 		Type         string  `json:"type"`
 		StopReason   string  `json:"stop_reason"`
@@ -95,9 +104,9 @@ func assertVLLMStopSequenceReply(result protocolMatrixHTTPResult, stream bool) e
 	if terminal.Delta != nil {
 		terminal.StopReason, terminal.StopSequence = terminal.Delta.StopReason, terminal.Delta.StopSequence
 	}
-	if terminal.StopReason != "stop_sequence" || terminal.StopSequence == nil || *terminal.StopSequence != "CHARLIE" {
-		return fmt.Errorf("vLLM matched stop sequence did not reach the Messages client (stream=%t): %s",
-			stream, truncateString(payload, 900))
+	if terminal.StopReason != "stop_sequence" || terminal.StopSequence == nil || *terminal.StopSequence != want {
+		return fmt.Errorf("vLLM matched stop sequence (%d bytes) did not reach the Messages client (stream=%t): %s",
+			len(want), stream, truncateString(payload, 900))
 	}
 	return nil
 }
