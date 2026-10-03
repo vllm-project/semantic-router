@@ -1704,6 +1704,17 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://developers.openai.com/api/docs/models/gpt-5.4
+  - catalog: openai/gpt-5.4-mini
+    relationship: first_party
+    id: gpt-5.4-mini
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-23'
+      source: https://developers.openai.com/api/docs/models/gpt-5.4-mini
   - catalog: openai/gpt-5.5
     relationship: first_party
     id: gpt-5.5
@@ -7178,6 +7189,48 @@ models:
   - proprietary
   - agentic
   released_at: '2026-03-05'
+- id: openai/gpt-5.4-mini
+  display_name: GPT-5.4 mini
+  description: OpenAI small GPT-5.4 model for low-latency coding, computer use, and subagents.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-5.4-mini
+  family: gpt-5
+  lifecycle: active
+  limits:
+    context_window_size: 400000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt-5.4
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: '2026-09-23'
+    source: https://developers.openai.com/api/docs/models/gpt-5.4-mini
+  tags:
+  - efficient
+  - proprietary
+  - agentic
+  released_at: '2026-03-17'
+  knowledge_cutoff: '2025-08-31'
 - id: openai/gpt-oss-120b
   display_name: GPT-OSS 120B
   description: OpenAI open-weight reasoning model sized for a single 80 GB accelerator.
@@ -29172,6 +29225,117 @@ evaluations:
     provenance: vendor_claimed
     verification: claimed
     source: https://openai.com/index/introducing-gpt-5-5/
+    redistributable: true
+- id: openai/gpt-5.4-mini-launch-evals-swe-bench-pro@1.0.0
+  model: openai/gpt-5.4-mini
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject:
+    variant: GPT-5.4 mini
+    reasoning_effort: xhigh
+    subset: public
+    source_kind: official_launch_evaluation
+  metrics:
+    resolved: 0.544
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/introducing-gpt-5-4-mini-and-nano/
+    redistributable: true
+- id: openai/gpt-5.4-mini-launch-evals-terminal-bench-2.0@1.0.0
+  model: openai/gpt-5.4-mini
+  benchmark: harbor/terminal-bench@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject:
+    variant: GPT-5.4 mini
+    reasoning_effort: xhigh
+    source_kind: official_launch_evaluation
+  metrics:
+    resolved: 0.6
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/introducing-gpt-5-4-mini-and-nano/
+    redistributable: true
+- id: openai/gpt-5.4-mini-launch-evals-gpqa-diamond@1.0.0
+  model: openai/gpt-5.4-mini
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject:
+    variant: GPT-5.4 mini
+    reasoning_effort: xhigh
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.88
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/introducing-gpt-5-4-mini-and-nano/
+    redistributable: true
+- id: openai/gpt-5.4-mini-launch-evals-humanitys-last-exam-tools@1.0.0
+  model: openai/gpt-5.4-mini
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: xhigh
+  subject:
+    variant: GPT-5.4 mini
+    reasoning_effort: xhigh
+    tool_policy: tools_enabled
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.415
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/introducing-gpt-5-4-mini-and-nano/
+    redistributable: true
+- id: openai/gpt-5.4-mini-launch-evals-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.4-mini
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-no-tools
+  reasoning_effort: xhigh
+  subject:
+    variant: GPT-5.4 mini
+    reasoning_effort: xhigh
+    hle_mode: no_tools
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.282
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/introducing-gpt-5-4-mini-and-nano/
+    redistributable: true
+- id: openai/gpt-5.4-mini-launch-evals-osworld-verified@1.0.0
+  model: openai/gpt-5.4-mini
+  benchmark: osworld/verified@1.0.0
+  benchmark_profile: official
+  reasoning_effort: xhigh
+  subject:
+    variant: GPT-5.4 mini
+    reasoning_effort: xhigh
+    source_kind: official_launch_evaluation
+  metrics:
+    success_rate: 0.721
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/introducing-gpt-5-4-mini-and-nano/
     redistributable: true
 - id: mmlu-pro-leaderboard/gpt-oss-120b-high@1.0.0
   model: openai/gpt-oss-120b
