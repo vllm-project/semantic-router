@@ -9,8 +9,6 @@ import (
 	"math"
 	"sort"
 	"strings"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // ErrIdentityUnsupported means this provider has no verified local representation
@@ -83,27 +81,40 @@ func (s *Set) ResolveIdentity(settings ConsumerSettings) (ContentIdentity, error
 	return ResolveProviderIdentity(provider, settings)
 }
 
-// candleBERTNamespace keys Candle `bert` vectors, which have no content
-// descriptor. Bump it whenever a Candle BERT change moves stored vectors.
-const candleBERTNamespace = "candle-bert-unpadded-mean-v1"
-
-// ResolveNamespaceIdentity isolates persisted memory and cache vectors. Candle
-// BERT is keyed by candleBERTNamespace; other `bert` runtimes keep their storage.
+// ResolveNamespaceIdentity isolates persisted memory and cache vectors by the
+// prepared provider's representation identity.
 func ResolveNamespaceIdentity(provider Provider, settings ConsumerSettings) (ContentIdentity, error) {
-	if !strings.EqualFold(strings.TrimSpace(settings.ModelType), "bert") {
-		return ResolveProviderIdentity(provider, settings)
+	return ResolveProviderIdentity(provider, settings)
+}
+
+// IdentityForRuntime identifies vectors a model runtime serves: the model
+// package's content digest, the output view, pooling and normalization, the
+// input budget and the caller's versioned input policy.
+func IdentityForRuntime(descriptor RuntimeDescriptor, inputPolicy string) (ContentIdentity, error) {
+	descriptor.Version = 2
+	if strings.TrimSpace(descriptor.ModelType) == "" || descriptor.Runtime == "" || descriptor.PoolingContract == "" ||
+		descriptor.Layer < 0 || descriptor.Dimension <= 0 || inputPolicy == "" || len(descriptor.Artifacts) == 0 {
+		return ContentIdentity{}, fmt.Errorf("incomplete runtime embedding descriptor")
 	}
-	if provider == nil || provider.Backend() != config.EmbeddingBackendCandle {
-		return ContentIdentity{}, ErrIdentityUnsupported
+	for _, artifact := range descriptor.Artifacts {
+		if artifact.Role == "" || !validDigest(artifact.SHA256) {
+			return ContentIdentity{}, fmt.Errorf("runtime embedding descriptor lacks a verified content digest")
+		}
 	}
-	dimension, err := ResolveDimension(provider, settings.Dimension)
+	canonical, err := json.Marshal(struct {
+		Descriptor  RuntimeDescriptor `json:"descriptor"`
+		InputPolicy string            `json:"input_policy"`
+	}{descriptor, inputPolicy})
 	if err != nil {
 		return ContentIdentity{}, err
 	}
-	return ContentIdentity{
-		Fingerprint: fmt.Sprintf("%s:dimension=%d:%s", candleBERTNamespace, dimension, settings.InputPolicy),
-		Descriptor:  RuntimeDescriptor{ModelType: "bert", Dimension: dimension},
-	}, nil
+	digest := sha256.Sum256(canonical)
+	return ContentIdentity{Fingerprint: "embedding-v2-" + hex.EncodeToString(digest[:]), Descriptor: descriptor}, nil
+}
+
+func validDigest(value string) bool {
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == sha256.Size && value == strings.ToLower(value)
 }
 
 // IdentityFromDescriptor combines the native representation with the caller's
@@ -115,10 +126,6 @@ func IdentityFromDescriptor(raw []byte, inputPolicy string) (ContentIdentity, er
 	}
 	if descriptor.Version != 1 || strings.TrimSpace(descriptor.ModelType) == "" || descriptor.Runtime == "" || descriptor.PoolingContract == "" || descriptor.Layer < 0 || descriptor.Dimension <= 0 || descriptor.MaxSequenceLength <= 0 || inputPolicy == "" {
 		return ContentIdentity{}, fmt.Errorf("incomplete or unsupported embedding runtime descriptor")
-	}
-	validDigest := func(value string) bool {
-		decoded, err := hex.DecodeString(value)
-		return err == nil && len(decoded) == sha256.Size && value == strings.ToLower(value)
 	}
 	if !validDigest(descriptor.EffectiveConfigSHA256) || !validDigest(descriptor.TokenizerSHA256) || len(descriptor.Artifacts) == 0 {
 		return ContentIdentity{}, fmt.Errorf("embedding descriptor lacks verified content digests")
