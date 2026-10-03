@@ -25,13 +25,21 @@ def _slots(
     return ids[positions // block_size], positions % block_size
 
 
-def _check_cache(
-    cache: torch.Tensor, block_size: int, heads: int, head_dim: int
-) -> None:
-    if cache.ndim not in (4, 5) or cache.shape[1:3] != (2, block_size):
-        raise ValueError("expected a standardized [blocks, 2, block_size, KV] cache")
-    if cache.numel() // (cache.shape[0] * 2 * block_size) != heads * head_dim:
-        raise ValueError("paged-cache KV width differs from mapper")
+def _cache_layout(cache: torch.Tensor, heads: int, head_dim: int) -> str:
+    """Recognize the connector's legacy view or vLLM's LBNHC layer view."""
+    legacy = (
+        cache.ndim in (4, 5)
+        and cache.shape[1] == 2
+        and cache.numel() // (cache.shape[0] * 2 * cache.shape[2]) == heads * head_dim
+    )
+    lbnhc = (
+        cache.ndim == 4 and cache.shape[1] == heads and cache.shape[3] == 2 * head_dim
+    )
+    if legacy:
+        return "legacy"
+    if lbnhc:
+        return "lbnhc"
+    raise ValueError("paged-cache shape differs from mapper")
 
 
 def extract_prefix(
@@ -44,10 +52,15 @@ def extract_prefix(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Return K and V as [tokens, heads, head_dim]."""
     block_size = cache.shape[2]
-    _check_cache(cache, block_size, heads, head_dim)
+    layout = _cache_layout(cache, heads, head_dim)
     blocks, offsets = _slots(block_ids, num_tokens, block_size, cache.shape[0])
-    values = cache[blocks.to(cache.device), :, offsets.to(cache.device)]
-    values = values.reshape(num_tokens, 2, heads, head_dim)
+    block_indices, token_offsets = blocks.to(cache.device), offsets.to(cache.device)
+    if layout == "lbnhc":
+        values = cache[block_indices, :, token_offsets]
+        return values[..., :head_dim], values[..., head_dim:]
+    values = cache[block_indices, :, token_offsets].reshape(
+        num_tokens, 2, heads, head_dim
+    )
     return values[:, 0], values[:, 1]
 
 
@@ -63,11 +76,14 @@ def inject_prefix(
     if keys.dtype != cache.dtype or values.dtype != cache.dtype:
         raise ValueError("mapped KV dtype differs from paged cache")
     block_size = cache.shape[2]
-    _check_cache(cache, block_size, keys.shape[1], keys.shape[2])
+    layout = _cache_layout(cache, keys.shape[1], keys.shape[2])
     blocks, offsets = _slots(block_ids, keys.shape[0], block_size, cache.shape[0])
-    stacked = torch.stack((keys, values), dim=1).reshape(
-        keys.shape[0], 2, *cache.shape[3:]
-    )
+    if layout == "lbnhc":
+        stacked = torch.cat((keys, values), dim=-1)
+    else:
+        stacked = torch.stack((keys, values), dim=1).reshape(
+            keys.shape[0], 2, *cache.shape[3:]
+        )
     cache[blocks.to(cache.device), :, offsets.to(cache.device)] = stacked.to(
         cache.device
     )
@@ -86,5 +102,5 @@ def validate_prefix_destination(
     if cache.dtype != dtype:
         raise ValueError("mapped KV dtype differs from paged cache")
     block_size = cache.shape[2]
-    _check_cache(cache, block_size, heads, head_dim)
+    _cache_layout(cache, heads, head_dim)
     _slots(block_ids, num_tokens, block_size, cache.shape[0])

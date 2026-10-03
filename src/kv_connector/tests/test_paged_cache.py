@@ -33,6 +33,17 @@ class PagedCacheTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicate"):
             inject_prefix(cache, [1, 1], keys, keys)
 
+    def test_vllm_lbnhc_layer_view_round_trip(self) -> None:
+        cache = torch.zeros((5, 8, 4, 4), dtype=torch.bfloat16)
+        keys = torch.arange(96, dtype=torch.bfloat16).reshape(6, 8, 2)
+        values = -keys
+        inject_prefix(cache, [3, 1], keys, values)
+        restored_k, restored_v = extract_prefix(cache, [3, 1], 6, heads=8, head_dim=2)
+        torch.testing.assert_close(restored_k, keys)
+        torch.testing.assert_close(restored_v, values)
+        self.assertEqual(cache[0].count_nonzero().item(), 0)
+        self.assertEqual(cache[1, :, 2:].count_nonzero().item(), 0)
+
 
 if __name__ == "__main__":
     unittest.main()
