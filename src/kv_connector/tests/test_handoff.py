@@ -122,18 +122,18 @@ class HandoffTests(unittest.TestCase):
 
     def test_bad_hint_or_destination_does_not_modify_cache(self) -> None:
         cache = torch.zeros((3, 2, 2, 4), dtype=torch.bfloat16)
-        kwargs = dict(
-            artifact=self.artifact,
-            snapshot=self.snapshot,
-            namespace="tenant-a",
-            cache_id="session-1",
-            mapper_id="mapper-1",
-            target_prompt_ids=[1, 2, 3, 4, 5],
-            target_caches={0: cache},
-            block_ids=[2, 0],
-            source_rope_theta=1_000_000,
-            target_rope_theta=1_000_000,
-        )
+        kwargs = {
+            "artifact": self.artifact,
+            "snapshot": self.snapshot,
+            "namespace": "tenant-a",
+            "cache_id": "session-1",
+            "mapper_id": "mapper-1",
+            "target_prompt_ids": [1, 2, 3, 4, 5],
+            "target_caches": {0: cache},
+            "block_ids": [2, 0],
+            "source_rope_theta": 1_000_000,
+            "target_rope_theta": 1_000_000,
+        }
         with self.assertRaisesRegex(ValueError, "mapper ID"):
             apply_handoff(**{**kwargs, "mapper_id": "wrong"})
         with self.assertRaisesRegex(ValueError, "scope"):
