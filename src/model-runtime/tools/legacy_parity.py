@@ -28,6 +28,7 @@ import json
 import math
 import os
 import random
+import statistics
 import subprocess
 import sys
 import threading
@@ -39,6 +40,7 @@ from typing import Any
 REPO = Path(__file__).resolve().parents[3]
 TESTDATA = REPO / "e2e" / "testcases" / "testdata"
 GO_TEST = "zz_legacy_parity_dump_test.go"
+PARTIAL = "provider truncated its input"
 CPU_THRESHOLDS = {"probability": 1e-3, "near_tie": 1e-3, "label": 1.0, "spans": 0.995}
 ROCM_THRESHOLDS = {"probability": 0.02, "near_tie": 1e-3, "label": 0.995, "spans": 0.98}
 
@@ -189,12 +191,16 @@ GO_TEMPLATE = r"""//go:build !windows && cgo
 package native
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -262,8 +268,11 @@ func TestLegacyParityDump(t *testing.T) {
 				}
 				if callErr != nil {
 					line.Error = callErr.Error()
-				} else if line.Result, err = json.Marshal(result); err != nil {
-					t.Fatal(err)
+				}
+				if callErr == nil || errors.Is(callErr, tasks.ErrTokenSpansTruncated) {
+					if line.Result, err = json.Marshal(result); err != nil {
+						t.Fatal(err)
+					}
 				}
 			}
 			if err := encoder.Encode(line); err != nil {
@@ -276,6 +285,48 @@ func TestLegacyParityDump(t *testing.T) {
 			}
 		}
 		closeTask()
+	}
+}
+
+// TestLegacyParityServe answers "job<TAB>id" lines from stdin with each call's latency in
+// nanoseconds (-1 on error), so a driver can alternate legacy and runtime calls.
+func TestLegacyParityServe(t *testing.T) {
+	raw, err := os.ReadFile(os.Getenv("LEGACY_PARITY_JOBS"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var jobs []parityJob
+	if err := json.Unmarshal(raw, &jobs); err != nil {
+		t.Fatal(err)
+	}
+	runtime := New(nil)
+	ctx := context.Background()
+	calls := map[string]func(context.Context, map[string]string) (any, error){}
+	inputs := map[string]map[string]string{}
+	for _, job := range jobs {
+		call, closeTask := parityTask(t, runtime, job)
+		defer closeTask()
+		calls[job.Job] = call
+		for _, input := range job.Inputs {
+			inputs[job.Job+"\t"+input["id"]] = input
+		}
+		for range 3 {
+			_, _ = call(ctx, job.Inputs[0])
+		}
+	}
+	fmt.Println("READY")
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Buffer(make([]byte, 1<<20), 1<<20)
+	for scanner.Scan() {
+		key := scanner.Text()
+		job, _, _ := strings.Cut(key, "\t")
+		start := time.Now()
+		_, callErr := calls[job](ctx, inputs[key])
+		latency := time.Since(start).Nanoseconds()
+		if callErr != nil && !errors.Is(callErr, tasks.ErrTokenSpansTruncated) {
+			latency = -1
+		}
+		fmt.Println(latency)
 	}
 }
 
@@ -452,19 +503,15 @@ def job_specs(args: argparse.Namespace) -> list[dict[str, Any]]:
     return specs
 
 
-def run_legacy(args: argparse.Namespace) -> None:
-    """Write the dump test into the legacy tree and run it with the built bindings."""
+def legacy_env(args: argparse.Namespace, jobs: Path) -> dict[str, str]:
+    """The cgo and loader environment of the legacy tree's bindings, plus the jobs file."""
     tree = Path(args.tree)
-    package = tree / "src" / "semantic-router" / "pkg" / "modelruntime" / "native"
-    (package / GO_TEST).write_text(GO_TEMPLATE, encoding="utf-8")
-    jobs = Path(args.out).with_suffix(".jobs.json")
-    jobs.write_text(json.dumps(job_specs(args)), encoding="utf-8")
     libraries = [Path(p) for p in args.libs.split(":")] if args.libs else []
     libraries += [
         tree / name / "target" / "release"
         for name in ("candle-binding", "ml-binding", "nlp-binding", "onnx-binding")
     ]
-    env = {
+    return {
         **os.environ,
         "CGO_ENABLED": "1",
         "CGO_CFLAGS": f"-I{tree / 'candle-binding'}",
@@ -474,8 +521,23 @@ def run_legacy(args: argparse.Namespace) -> None:
             [*(str(p) for p in libraries), os.environ.get("LD_LIBRARY_PATH", "")]
         ),
         "LEGACY_PARITY_JOBS": str(jobs),
-        "LEGACY_PARITY_OUT": str(Path(args.out).resolve()),
     }
+
+
+def write_legacy_test(args: argparse.Namespace, jobs: Path) -> Path:
+    """The dump test in the legacy tree and the jobs file; returns the router module."""
+    tree = Path(args.tree)
+    package = tree / "src" / "semantic-router" / "pkg" / "modelruntime" / "native"
+    (package / GO_TEST).write_text(GO_TEMPLATE, encoding="utf-8")
+    jobs.write_text(json.dumps(job_specs(args)), encoding="utf-8")
+    return tree / "src" / "semantic-router"
+
+
+def run_legacy(args: argparse.Namespace) -> None:
+    """Run every job's inputs on the legacy facade and write results and latencies."""
+    jobs = Path(args.out).with_suffix(".jobs.json")
+    module = write_legacy_test(args, jobs)
+    env = {**legacy_env(args, jobs), "LEGACY_PARITY_OUT": str(Path(args.out).resolve())}
     command = [
         "go",
         "test",
@@ -484,9 +546,25 @@ def run_legacy(args: argparse.Namespace) -> None:
         "6h",
         "-run",
         "^TestLegacyParityDump$",
+    ]
+    subprocess.run(
+        [*command, "./pkg/modelruntime/native/"], cwd=module, env=env, check=True
+    )
+
+
+def build_legacy(args: argparse.Namespace) -> None:
+    """Compile the legacy facade's test binary (serve mode for ``ab``) next to its jobs file."""
+    jobs = Path(args.out).with_suffix(".jobs.json")
+    module = write_legacy_test(args, jobs)
+    command = [
+        "go",
+        "test",
+        "-c",
+        "-o",
+        str(Path(args.out).resolve()),
         "./pkg/modelruntime/native/",
     ]
-    subprocess.run(command, cwd=tree / "src" / "semantic-router", env=env, check=True)
+    subprocess.run(command, cwd=module, env=legacy_env(args, jobs), check=True)
 
 
 # ---------------------------------------------------------------------------
@@ -605,6 +683,106 @@ def runtime_load(
     }
 
 
+def run_ab(args: argparse.Namespace) -> None:
+    """Alternate one legacy and one runtime call per input, on the same cores, round after round.
+
+    Both sides then see the same moment's contention on a shared host; the
+    order flips every round. The legacy side is the ``build-legacy`` binary in
+    serve mode, the runtime side this process.
+    """
+    sys.path.insert(0, str(REPO / "src" / "model-runtime"))
+    from vllm_sr_runtime.config import ModelConfig, ServeConfig
+    from vllm_sr_runtime.runtime import Runtime
+
+    jobs = Path(args.binary).with_suffix(".jobs.json")
+    specs = json.loads(jobs.read_text(encoding="utf-8"))
+    legacy = subprocess.Popen(
+        [args.binary, "-test.run", "^TestLegacyParityServe$", "-test.timeout", "12h"],
+        env=legacy_env(args, jobs),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+    )
+    assert legacy.stdin is not None and legacy.stdout is not None
+    while legacy.stdout.readline().strip() != "READY":
+        if legacy.poll() is not None:
+            raise SystemExit("the legacy binary exited before it was ready")
+    models = tuple(
+        ModelConfig(
+            model=spec["Repo"], name=spec["Job"], device="cpu", profile=args.profile
+        )
+        for spec in specs
+    )
+    runtime = Runtime(
+        ServeConfig(
+            models=models,
+            threads=args.threads,
+            result_cache_entries=0,
+            cache_dir=args.cache,
+            offline=True,
+        )
+    )
+    runtime.start(background=False)
+    loop = asyncio.new_event_loop()
+
+    def call_legacy(spec: dict[str, Any], item: dict[str, str]) -> int:
+        legacy.stdin.write(f"{spec['Job']}\t{item['id']}\n")
+        return int(legacy.stdout.readline())
+
+    def call_runtime(spec: dict[str, Any], item: dict[str, str]) -> int:
+        start = time.perf_counter_ns()
+        status, _ = loop.run_until_complete(
+            runtime.call("classify", runtime_body(spec, item))
+        )
+        elapsed = time.perf_counter_ns() - start
+        return elapsed if status == 200 else -1
+
+    report: dict[str, Any] = {}
+    for round_index in range(args.rounds):
+        for spec in specs:
+            entry = report.setdefault(
+                spec["Job"], {"legacy": [], "runtime": [], "ratio": []}
+            )
+            for item in spec["Inputs"]:
+                sides = [("legacy", call_legacy), ("runtime", call_runtime)]
+                if round_index % 2:
+                    sides.reverse()
+                measured = {name: call(spec, item) for name, call in sides}
+                if measured["legacy"] < 0 or measured["runtime"] < 0:
+                    continue
+                entry["legacy"].append(measured["legacy"])
+                entry["runtime"].append(measured["runtime"])
+                entry["ratio"].append(measured["legacy"] / measured["runtime"])
+    legacy.stdin.close()
+    legacy.wait()
+    loop.close()
+    runtime.stop()
+    summary = {
+        job: {
+            "pairs": len(values["ratio"]),
+            "legacy_ms": {
+                "p50": percentile(values["legacy"], 0.5),
+                "p95": percentile(values["legacy"], 0.95),
+            },
+            "runtime_ms": {
+                "p50": percentile(values["runtime"], 0.5),
+                "p95": percentile(values["runtime"], 0.95),
+            },
+            "median_speedup": (
+                statistics.median(values["ratio"]) if values["ratio"] else math.nan
+            ),
+        }
+        for job, values in report.items()
+    }
+    Path(args.out).write_text(json.dumps(summary, indent=1) + "\n", encoding="utf-8")
+    for job, row in summary.items():
+        print(
+            f"{job:13s} pairs={row['pairs']:4d} p50 {row['legacy_ms']['p50']:.2f}->{row['runtime_ms']['p50']:.2f} ms "
+            f"p95 {row['legacy_ms']['p95']:.2f}->{row['runtime_ms']['p95']:.2f} ms speedup x{row['median_speedup']:.2f}"
+        )
+
+
 # ---------------------------------------------------------------------------
 # Comparison
 # ---------------------------------------------------------------------------
@@ -715,6 +893,10 @@ def compare_job(
         )
         legacy_error = left.get("error")
         runtime_error = right.get("result", {}).get("error")
+        if legacy_error and PARTIAL in legacy_error and left.get("result"):
+            # The facade reports a truncated token scan as partial, with its spans.
+            truncated = right.get("result", {}).get("input", {}).get("truncated")
+            legacy_error = None if truncated else legacy_error
         if legacy_error or runtime_error:
             if legacy_error and runtime_error:
                 both_errors += 1
@@ -932,6 +1114,28 @@ def main(argv: Iterable[str] | None = None) -> int:
             sub.add_argument("--device", default="cpu")
             sub.add_argument("--profile", default="exact")
             sub.add_argument("--threads", type=int)
+    build = commands.add_parser("build-legacy")
+    build.add_argument("--cache", required=True)
+    build.add_argument("--recipe", choices=sorted(RECIPES), default="cpu")
+    build.add_argument("--jobs", default="")
+    build.add_argument("--out", required=True, help="the test binary to write")
+    build.add_argument("--limit", type=int, default=0)
+    build.add_argument("--tree", required=True)
+    build.add_argument("--flat", required=True)
+    build.add_argument("--libs")
+    build.add_argument("--compile-cache")
+    for name, default in (("repeats", 1), ("concurrency", 0)):
+        build.add_argument(f"--{name}", type=int, default=default)
+    build.add_argument("--seconds", type=float, default=0.0)
+    ab_parser = commands.add_parser("ab")
+    ab_parser.add_argument("--binary", required=True, help="a build-legacy test binary")
+    ab_parser.add_argument("--tree", required=True)
+    ab_parser.add_argument("--libs")
+    ab_parser.add_argument("--cache", required=True)
+    ab_parser.add_argument("--threads", type=int)
+    ab_parser.add_argument("--profile", default="exact")
+    ab_parser.add_argument("--rounds", type=int, default=2)
+    ab_parser.add_argument("--out", required=True)
     compare = commands.add_parser("compare")
     compare.add_argument("--legacy", required=True)
     compare.add_argument("--runtime", required=True)
@@ -950,6 +1154,10 @@ def main(argv: Iterable[str] | None = None) -> int:
         )
     elif args.command == "legacy":
         run_legacy(args)
+    elif args.command == "build-legacy":
+        build_legacy(args)
+    elif args.command == "ab":
+        run_ab(args)
     elif args.command == "runtime":
         run_runtime(args)
     else:
