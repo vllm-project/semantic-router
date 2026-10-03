@@ -559,6 +559,13 @@ records restarts in metrics. The socket lives in a private directory (mode
 attaches to an engine it does not manage, such as a Kubernetes sidecar or a
 shared engine started with `vllm-sr serve <hf-model>`.
 
+`VLLM_SR_RUNTIME_COMMAND` overrides the command (default `vllm-sr-runtime` on
+`PATH`), `VLLM_SR_RUNTIME_DIR` the socket directory and
+`VLLM_SR_RUNTIME_CACHE_DIR` the model cache. The `vllm-sr` image ships the
+runtime with CPU PyTorch and keeps its cache in the model volume, so managed
+CPU deployments work out of the box; GPU deployments attach to a runtime built
+with a GPU wheel.
+
 Fail-open is the rule on the router side: while a deployment is not ready, a
 question to it is unknown immediately (no network wait), a late answer is
 unknown at the rule's timeout, and a failed selector falls back to the first
@@ -584,7 +591,7 @@ under `docs/records/`.
 Engine mode runs one model server in the current Python environment:
 
 ```bash
-pip install "vllm-sr-runtime"            # or the runtime image
+pip install ./src/model-runtime          # or the vllm-sr image, or src/model-runtime/Dockerfile
 vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --device cpu --port 8100
 vllm-sr serve vllm-sr/Decision-2.0-Lux-9B --device rocm:0 --profile shared_context
 vllm-sr serve ./my-package --uds /run/vllm-sr/kai.sock
@@ -597,14 +604,18 @@ vllm-sr serve ./my-package --uds /run/vllm-sr/kai.sock
 | `--device` | `auto`, `cpu`, `cuda[:N]`, `rocm[:N]` |
 | `--host`, `--port` / `--uds` | TCP listener (default `127.0.0.1:8100`) or a Unix socket |
 | `--profile` | `exact` (default), `shared_context`, `batching`, `max_speed` |
-| `--engine`, `--accelerator` | plugin overrides (default: chosen by placement) |
-| `--threads`, `--memory-budget`, `--max-queue`, `--max-batch-tokens` | resources and admission |
-| `--cache-dir`, `--offline`, `--accept-licence` | registry |
+
+`vllm-sr-runtime serve` takes the same options plus plugin overrides
+(`--engine`, `--family`), resources and admission (`--threads`,
+`--memory-budget`, `--max-queue`, `--max-batch-tokens`) and registry options
+(`--cache-dir`, `--offline`, `--accept-licence`).
 
 `vllm-sr serve` without `MODEL` keeps its router-mode behaviour. In engine
 mode, `--profile` names the runtime profile; in router mode it keeps naming
 the Kubernetes deployment profile. `vllm-sr serve <model>` delegates to
 `vllm-sr-runtime serve` and prints an install hint when the runtime is absent.
+Router-mode options are rejected in engine mode and engine options in router
+mode.
 
 ## 13. Router integration
 
@@ -657,8 +668,11 @@ routing:
           timeout_ms: 150
 ```
 
-- **Deployment** `provider: model_runtime`: `artifact` + `revision` (40-hex,
-  required) or a local path; `device`; `profile`; optional `endpoint`.
+- **Deployment** `provider: model_runtime`: `artifact` (a Hub repository or an
+  absolute package path) with an optional 40-hex `revision` (built-in models
+  default to their pinned revision; other Hub models need one); `device`;
+  `profile`; or `endpoint` to attach instead. Other providers reject `profile`
+  and `endpoint`, and task bindings cannot name a `model_runtime` deployment.
 - **Signal** `decision`: a named question to a deployment. Noul answers match
   when P(true) satisfies `predicate` (default `gte: 0.5`); Score answers match
   when the expected level satisfies `predicate` (required); Choice answers are
@@ -717,8 +731,11 @@ question type, unknown answers by reason, readiness, and restarts. The
 | GPU | records under `docs/records/` | parity on the four scored panels and latency per size on ROCm |
 
 The `model-runtime` domain is registered in `tools/agent/domains.yaml` with
-`make model-runtime-test` as its check and its own CI verification on the
-model-tools worker (CPU PyTorch).
+`make model-runtime-test` and `make model-runtime-client-check` as its checks,
+its own CI verification on the model-tools worker (CPU PyTorch), and the
+generated-contracts check, which fails when the router's generated client
+drifts from `openapi.yaml`. CI builds the runtime image as a provider fixture
+for the E2E profile.
 
 ## 16. Phases 2–4
 
