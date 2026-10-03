@@ -239,15 +239,21 @@ class EncoderOutput:
 
 @dataclass
 class TreeBatch:
-    """A causal prefix computed once, and blocks that each continue from it.
+    """Causal prefixes computed once, and blocks that each continue from one of them.
 
-    The prefix runs as one unpadded causal sequence; every block attends to
-    the prefix and to itself (causally), with positions that continue after
-    the prefix, so a block's states equal those of the sequence prefix + block.
+    Block ``i`` attends to prefix ``owners[i]`` and to itself (causally), with
+    positions that continue after the prefix, so its states equal those of the
+    sequence prefix + block. ``layout`` sets how an engine lays the tokens out,
+    which changes rounding only: ``packed`` runs each prefix and its blocks back
+    to back in one row (the fewest tokens); ``rows`` runs left-padded prefix rows
+    and right-padded blocks as two tensors (the tensor shapes and operations of
+    the Vela 2.0 packages' engine).
     """
 
-    prefix: list[int]
+    prefixes: list[list[int]]
     blocks: list[list[int]]
+    owners: list[int]
+    layout: Literal["packed", "rows"] = "packed"
 
 
 @dataclass
