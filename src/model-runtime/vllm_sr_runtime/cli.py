@@ -10,7 +10,13 @@ import sys
 from collections.abc import Sequence
 
 from .accel.autotune import AUTOTUNE_ENV
-from .config import DEFAULT_PORT, ServeConfig
+from .config import (
+    DEFAULT_PORT,
+    ModelConfig,
+    ServeConfig,
+    load_models_file,
+    split_revision,
+)
 from .plugins import registry
 from .registry import builtin
 
@@ -20,16 +26,25 @@ PROFILES = ("exact", "shared_context", "batching", "max_speed")
 def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "model",
-        help="Hub repository ID, built-in model name, or local package directory",
+        nargs="*",
+        help=(
+            "Hub repository ID, built-in model name, or local package directory; "
+            "several models share one process, and MODEL@REVISION pins a revision"
+        ),
+    )
+    parser.add_argument(
+        "--models",
+        dest="models_file",
+        help="YAML file listing the models to serve with their own name, revision, device and profile",
     )
     parser.add_argument(
         "--revision",
-        help="40-hex commit; required for a Hub model that is not built in",
+        help="40-hex commit; required for a Hub model that is not built in (one MODEL only)",
     )
     parser.add_argument(
         "--device",
         default="auto",
-        help="auto, cpu, cuda[:N] or rocm[:N] (default: auto)",
+        help="auto, cpu, cuda[:N], rocm[:N], xpu[:N] or mps (default: auto)",
     )
     parser.add_argument(
         "--host", default="127.0.0.1", help="TCP bind address (default: 127.0.0.1)"
@@ -94,6 +109,18 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
         help="largest accepted request body",
     )
     parser.add_argument(
+        "--max-bundle-tasks",
+        type=int,
+        default=64,
+        help="most tasks one /v1/bundle request may carry (default: 64)",
+    )
+    parser.add_argument(
+        "--result-cache-entries",
+        type=int,
+        default=16_384,
+        help="item results each model keeps by content hash, for families that allow it; 0 disables",
+    )
+    parser.add_argument(
         "--cache-dir", help="Hugging Face cache directory (default: HF_HUB_CACHE)"
     )
     parser.add_argument("--offline", action="store_true", help="use only cached files")
@@ -121,10 +148,55 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _models(
+    args: argparse.Namespace,
+) -> tuple[str | None, str | None, tuple[ModelConfig, ...]]:
+    """(single model, its revision, explicit models) from MODEL arguments or --models."""
+    positional = list(args.model or [])
+    if args.models_file:
+        if positional:
+            raise SystemExit("give either MODEL arguments or --models, not both")
+        if args.revision or args.served_model_name:
+            raise SystemExit(
+                "--revision and --served-model-name apply to one MODEL argument"
+            )
+        return None, None, load_models_file(args.models_file)
+    if not positional:
+        raise SystemExit("serve needs a MODEL argument or --models FILE")
+    if len(positional) == 1:
+        model, revision = split_revision(positional[0])
+        if revision and args.revision and revision != args.revision:
+            raise SystemExit(
+                f"{positional[0]} conflicts with --revision {args.revision}"
+            )
+        return model, revision or args.revision, ()
+    if args.revision or args.served_model_name:
+        raise SystemExit(
+            "--revision and --served-model-name apply to one MODEL argument"
+        )
+    models = []
+    for value in positional:
+        model, revision = split_revision(value)
+        models.append(
+            ModelConfig(
+                model=model,
+                revision=revision,
+                device=args.device,
+                profile=args.profile,
+                engine=args.engine,
+                family=args.family,
+                memory_budget_gib=args.memory_budget,
+            )
+        )
+    return None, None, tuple(models)
+
+
 def config_from_args(args: argparse.Namespace) -> ServeConfig:
+    model, revision, models = _models(args)
     return ServeConfig(
-        model=args.model,
-        revision=args.revision,
+        model=model,
+        revision=revision,
+        models=models,
         device=args.device,
         host=args.host,
         port=args.port,
@@ -133,6 +205,8 @@ def config_from_args(args: argparse.Namespace) -> ServeConfig:
         engine=args.engine,
         family=args.family,
         served_model_name=args.served_model_name,
+        max_bundle_tasks=args.max_bundle_tasks,
+        result_cache_entries=args.result_cache_entries,
         threads=args.threads,
         memory_budget_gib=args.memory_budget,
         max_queue=args.max_queue,
@@ -155,7 +229,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     commands = parser.add_subparsers(dest="command", required=True)
     serve = commands.add_parser(
-        "serve", help="serve one model over HTTP (TCP or a Unix socket)"
+        "serve", help="serve one or more models over HTTP (TCP or a Unix socket)"
     )
     add_serve_arguments(serve)
     commands.add_parser(
@@ -166,10 +240,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="list the installed families, engines, accelerators and profiles",
     )
     fixture = commands.add_parser(
-        "fixture", help="write a tiny random-weight Decision 2.0 package (tests, E2E)"
+        "fixture",
+        help="write a tiny random-weight package of a family (tests, E2E)",
     )
     fixture.add_argument("output", help="directory to create")
-    fixture.add_argument("--backbone", default="qwen3_5", choices=("qwen3", "qwen3_5"))
+    fixture.add_argument(
+        "--family",
+        default="decision2",
+        help="family whose package format to write (default: decision2)",
+    )
+    fixture.add_argument(
+        "--variant",
+        help="family-specific variant, for example a backbone or a head kind",
+    )
+    fixture.add_argument(
+        "--backbone",
+        choices=("qwen3", "qwen3_5"),
+        help="decision2 backbone (the same as --variant)",
+    )
     fixture.add_argument("--seed", type=int, default=0)
     return parser
 
@@ -203,10 +291,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0
     if args.command == "fixture":
-        from .testing.fixtures import write_package
+        from .testing.fixtures import write_fixture
 
-        path = write_package(args.output, backbone=args.backbone, seed=args.seed)
-        print(path)
+        variant = args.variant or args.backbone
+        print(
+            write_fixture(
+                args.output, family=args.family, variant=variant, seed=args.seed
+            )
+        )
         return 0
     return 2
 

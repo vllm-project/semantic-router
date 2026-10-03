@@ -7,7 +7,7 @@ from vllm_sr_runtime.registry.resolve import pinned_revision, resolve
 
 
 def test_builtin_table_pins_every_phase1_model():
-    names = [model.repo_id for model in builtin.all_models()]
+    names = [model.repo_id for model in builtin.all_models("decision2")]
     assert names == [
         "vllm-sr/Decision-2.0-Kai-0.6B",
         "vllm-sr/Decision-2.0-Eos-0.8B",
@@ -16,7 +16,7 @@ def test_builtin_table_pins_every_phase1_model():
         "vllm-sr/Decision-2.0-Lux-9B",
         "vllm-sr/Decision-2.0-Vega-27B",
     ]
-    for model in builtin.all_models():
+    for model in builtin.all_models("decision2"):
         assert (
             len(model.revision) == 40
             and len(model.model_sha256) == 64
@@ -82,7 +82,7 @@ def test_licence_policy():
 def test_every_builtin_model_has_cpu_and_rocm_golden_answers():
     from vllm_sr_runtime.supervision.readiness import well_formed
 
-    for model in builtin.all_models():
+    for model in builtin.all_models("decision2"):
         for device_class in ("cpu", "rocm"):
             answers = model.golden_answers.get(device_class)
             assert answers, (model.repo_id, device_class)
@@ -116,3 +116,69 @@ def test_a_later_revision_with_the_same_identity_gets_the_table_references(tmp_p
     assert golden["expected"] == known.golden_answers
     (other,) = family.golden(replace(package, model_sha256="d" * 64))
     assert other["expected"] == {}
+
+
+def test_every_family_has_a_table_and_lookups_cover_them():
+    families = {model.family for model in builtin.all_models()}
+    assert families <= {
+        "decision2",
+        "decision1",
+        "task_heads",
+        "vela2",
+        "multimodal_embedding",
+    }
+    assert all(model.family == "decision2" for model in builtin.all_models("decision2"))
+    assert builtin.all_models("nobody") == ()
+
+
+def test_pinned_files_are_the_whole_download(monkeypatch, tmp_path):
+    from vllm_sr_runtime.registry import resolve as resolver
+
+    pinned = replace(
+        builtin.lookup("vllm-sr/Decision-2.0-Kai-0.6B"),
+        repo_id="vllm-sr/Pinned-Files",
+        files={"config.json": "0" * 64, "model.safetensors": "1" * 64},
+    )
+    monkeypatch.setattr(
+        builtin, "lookup", lambda name: pinned if name == pinned.repo_id else None
+    )
+    calls = []
+
+    def snapshot_download(allow_patterns, **kwargs):
+        calls.append(sorted(allow_patterns))
+        root = tmp_path / pinned.revision
+        root.mkdir(exist_ok=True)
+        return str(root)
+
+    import huggingface_hub
+
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", snapshot_download)
+    resolver.download(pinned.repo_id, pinned.revision)
+    assert calls == [["config.json", "model.safetensors"]]
+
+
+def test_a_hub_package_without_a_manifest_keeps_its_pointer_files(
+    monkeypatch, tmp_path
+):
+    from vllm_sr_runtime.plugins.base import PackageRef
+    from vllm_sr_runtime.registry import resolve as resolver
+
+    calls = []
+
+    def snapshot_download(allow_patterns, **kwargs):
+        calls.append(sorted(allow_patterns))
+        root = tmp_path / kwargs["revision"]
+        root.mkdir(exist_ok=True)
+        return str(root)
+
+    import huggingface_hub
+
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", snapshot_download)
+    revision = "e" * 40
+    root = resolver.download("acme/encoder", revision)
+    assert calls == [sorted(resolver.POINTER_FILES)] and root.name == revision
+    ref = resolver.fetch(
+        PackageRef(root=root, repo_id="acme/encoder", revision=revision),
+        ["model.safetensors"],
+    )
+    assert calls[-1] == ["model.safetensors"] and ref.revision == revision
