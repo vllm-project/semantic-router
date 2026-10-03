@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 
 import pytest
 from vllm_sr_runtime.errors import PackageError
@@ -25,9 +26,7 @@ def test_valid_package_verifies_without_running_package_code(qwen3_package):
     assert verified.max_input_tokens == 2048
     assert verified.details["package"].score_bias[3] == [0.05, -0.02, 0.01]
     # The bundled decision2/ package raises on import; verification never touched it.
-    assert "decision2" not in [
-        name.split(".")[0] for name in list(__import__("sys").modules)
-    ]
+    assert "decision2" not in [name.split(".")[0] for name in list(sys.modules)]
 
 
 def test_detect_reads_only_the_pointer(qwen3_package, tmp_path):

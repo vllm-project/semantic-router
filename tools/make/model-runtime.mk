@@ -17,9 +17,13 @@ model-runtime-install: ## Install the model runtime with CPU PyTorch and its tes
 	@"$(MODEL_RUNTIME_PYTHON)" -m pip install "$(MODEL_RUNTIME_TORCH)" --index-url "$(MODEL_RUNTIME_TORCH_INDEX)"
 	@"$(MODEL_RUNTIME_PYTHON)" -m pip install -e "$(MODEL_RUNTIME_DIR)[test,reference]"
 
-model-runtime-test: ## Run the model runtime tests on CPU (tiny fixtures; GPU cases skip)
+model-runtime-test: ## Run the model runtime tests on CPU (tiny fixtures; GPU cases are deselected)
 	@$(LOG_TARGET)
-	@cd $(MODEL_RUNTIME_DIR) && HF_HUB_OFFLINE=1 "$(MODEL_RUNTIME_PYTHON)" -m pytest -q -p no:cacheprovider tests
+	@cd $(MODEL_RUNTIME_DIR) && HF_HUB_OFFLINE=1 "$(MODEL_RUNTIME_PYTHON)" -m pytest -q -p no:cacheprovider -m "not gpu" tests
+
+model-runtime-test-gpu: ## Run the model runtime GPU tests on a CUDA or ROCm host
+	@$(LOG_TARGET)
+	@cd $(MODEL_RUNTIME_DIR) && HF_HUB_OFFLINE=1 "$(MODEL_RUNTIME_PYTHON)" -m pytest -q -p no:cacheprovider -m gpu tests
 
 model-runtime-client-generate: ## Regenerate the router's Go client from the runtime OpenAPI contract
 	@$(LOG_TARGET)
@@ -36,4 +40,4 @@ model-runtime-client-check: ## Fail when the generated Go client differs from th
 			echo "the generated model runtime client is stale; run make model-runtime-client-generate"; exit 1; \
 		fi
 
-.PHONY: model-runtime-install model-runtime-test model-runtime-client-generate model-runtime-client-check
+.PHONY: model-runtime-install model-runtime-test model-runtime-test-gpu model-runtime-client-generate model-runtime-client-check
