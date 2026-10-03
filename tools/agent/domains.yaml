@@ -608,6 +608,7 @@ domains:
   training:
     owner: training
     paths:
+      - src/kv_connector/**
       - src/training/**
       - tools/make/models.mk
       - tools/ci/training-test-requirements.txt
