@@ -34,6 +34,7 @@ import sys
 import threading
 import time
 from collections.abc import Iterable
+from functools import partial
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
@@ -201,6 +202,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -289,8 +291,9 @@ func TestLegacyParityDump(t *testing.T) {
 	}
 }
 
-// TestLegacyParityServe answers "job<TAB>id" lines from stdin with each call's latency in
-// nanoseconds (-1 on error), so a driver can alternate legacy and runtime calls.
+// TestLegacyParityServe answers stdin commands so a driver can alternate legacy and runtime
+// work: "call<TAB>job<TAB>id" prints the call's latency in nanoseconds (-1 on error) and
+// "load<TAB>job<TAB>concurrency<TAB>seconds" a load window's parityThroughput as JSON.
 func TestLegacyParityServe(t *testing.T) {
 	raw, err := os.ReadFile(os.Getenv("LEGACY_PARITY_JOBS"))
 	if err != nil {
@@ -303,11 +306,13 @@ func TestLegacyParityServe(t *testing.T) {
 	runtime := New(nil)
 	ctx := context.Background()
 	calls := map[string]func(context.Context, map[string]string) (any, error){}
+	byName := map[string]parityJob{}
 	inputs := map[string]map[string]string{}
 	for _, job := range jobs {
 		call, closeTask := parityTask(t, runtime, job)
 		defer closeTask()
 		calls[job.Job] = call
+		byName[job.Job] = job
 		for _, input := range job.Inputs {
 			inputs[job.Job+"\t"+input["id"]] = input
 		}
@@ -319,10 +324,17 @@ func TestLegacyParityServe(t *testing.T) {
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Buffer(make([]byte, 1<<20), 1<<20)
 	for scanner.Scan() {
-		key := scanner.Text()
-		job, _, _ := strings.Cut(key, "\t")
+		fields := strings.Split(scanner.Text(), "\t")
+		if fields[0] == "load" {
+			job := byName[fields[1]]
+			job.Concurrency, _ = strconv.Atoi(fields[2])
+			job.Seconds, _ = strconv.ParseFloat(fields[3], 64)
+			report, _ := json.Marshal(parityLoad(ctx, job, calls[job.Job]))
+			fmt.Println(string(report))
+			continue
+		}
 		start := time.Now()
-		_, callErr := calls[job](ctx, inputs[key])
+		_, callErr := calls[fields[1]](ctx, inputs[fields[1]+"\t"+fields[2]])
 		latency := time.Since(start).Nanoseconds()
 		if callErr != nil && !errors.Is(callErr, tasks.ErrTokenSpansTruncated) {
 			latency = -1
@@ -728,8 +740,12 @@ def run_ab(args: argparse.Namespace) -> None:
     loop = asyncio.new_event_loop()
 
     def call_legacy(spec: dict[str, Any], item: dict[str, str]) -> int:
-        legacy.stdin.write(f"{spec['Job']}\t{item['id']}\n")
+        legacy.stdin.write(f"call\t{spec['Job']}\t{item['id']}\n")
         return int(legacy.stdout.readline())
+
+    def load_legacy(spec: dict[str, Any]) -> dict[str, Any]:
+        legacy.stdin.write(f"load\t{spec['Job']}\t{args.concurrency}\t{args.seconds}\n")
+        return json.loads(legacy.stdout.readline())
 
     def call_runtime(spec: dict[str, Any], item: dict[str, str]) -> int:
         start = time.perf_counter_ns()
@@ -758,6 +774,20 @@ def run_ab(args: argparse.Namespace) -> None:
                 entry["legacy"].append(measured["legacy"])
                 entry["runtime"].append(measured["runtime"])
                 entry["ratio"].append(measured["legacy"] / measured["runtime"])
+    for round_index in range(args.rounds if args.concurrency else 0):
+        for spec in specs:
+            loads = [
+                ("legacy", load_legacy),
+                ("runtime", partial(runtime_load, runtime, args=args)),
+            ]
+            if round_index % 2:
+                loads.reverse()
+            entry = report[spec["Job"]].setdefault(
+                "throughput", {"legacy": [], "runtime": []}
+            )
+            for name, load in loads:
+                window = load(spec)
+                entry[name].append(window["calls"] / window["seconds"])
     legacy.stdin.close()
     legacy.wait()
     loop.close()
@@ -776,14 +806,20 @@ def run_ab(args: argparse.Namespace) -> None:
             "median_speedup": (
                 statistics.median(values["ratio"]) if values["ratio"] else math.nan
             ),
+            "throughput_per_s": {
+                side: statistics.median(windows)
+                for side, windows in values.get("throughput", {}).items()
+            },
         }
         for job, values in report.items()
     }
     Path(args.out).write_text(json.dumps(summary, indent=1) + "\n", encoding="utf-8")
     for job, row in summary.items():
+        rates = row["throughput_per_s"]
+        load = f" tput {rates['legacy']:.1f}->{rates['runtime']:.1f}/s" if rates else ""
         print(
             f"{job:13s} pairs={row['pairs']:4d} p50 {row['legacy_ms']['p50']:.2f}->{row['runtime_ms']['p50']:.2f} ms "
-            f"p95 {row['legacy_ms']['p95']:.2f}->{row['runtime_ms']['p95']:.2f} ms speedup x{row['median_speedup']:.2f}"
+            f"p95 {row['legacy_ms']['p95']:.2f}->{row['runtime_ms']['p95']:.2f} ms speedup x{row['median_speedup']:.2f}{load}"
         )
 
 
@@ -1139,6 +1175,10 @@ def main(argv: Iterable[str] | None = None) -> int:
     ab_parser.add_argument("--threads", type=int)
     ab_parser.add_argument("--profile", default="exact")
     ab_parser.add_argument("--rounds", type=int, default=2)
+    ab_parser.add_argument(
+        "--concurrency", type=int, default=0, help="callers per load window (0: none)"
+    )
+    ab_parser.add_argument("--seconds", type=float, default=20.0)
     ab_parser.add_argument("--out", required=True)
     compare = commands.add_parser("compare")
     compare.add_argument("--legacy", required=True)
