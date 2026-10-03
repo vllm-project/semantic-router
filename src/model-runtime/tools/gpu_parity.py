@@ -1,8 +1,11 @@
 """Parity of the native engine with the released packages' runtime on the four scored panels (GPU records).
 
     python3 tools/gpu_parity.py --package DIR --released ANSWERS.jsonl --panel NAME:PROMPTS:COUNT ...
-        --output OUT.json [--answers NATIVE.jsonl] [--device rocm:0] [--base-path DIR] [--profile exact]
-        [--no-graphs] [--no-fused]
+        --output OUT.json [--answers NATIVE.jsonl] [--device rocm:0] [--base-path DIR]
+        [--profile exact|shared_context] [--no-graphs] [--no-fused]
+
+``--panel NAME:REQUESTS.jsonl:COUNT`` takes any JSONL of ``{"id", "state", "questions"}`` requests; with
+``--profile shared_context`` the released answers are the released runtime's with ``share_context=True``.
 
 The package is verified and loaded through the decision2 family and the native engine; no package code runs.
 Every prompt is answered as one request with the profile's batching (``exact``: the request's questions in one
@@ -37,8 +40,10 @@ from vllm_sr_runtime.plugins.base import (  # noqa: E402
     RegistryOptions,
 )
 from vllm_sr_runtime.profiles.exact import ExactProfile  # noqa: E402
+from vllm_sr_runtime.profiles.shared_context import SharedContextProfile  # noqa: E402
 
 ACCELERATORS = {"cpu": CPUAccelerator, "cuda": CUDAAccelerator, "rocm": ROCmAccelerator}
+PROFILES = {"exact": ExactProfile, "shared_context": SharedContextProfile}
 
 
 def canonical(value: Any) -> str:
@@ -97,8 +102,13 @@ def system_one(
     logits: dict[int, list[float] | None] = {}
     for batch in profile.plan([job], model.forward_token_budget()):
         indices = [index for _, part in batch.parts for index in part]
-        for index, values in zip(indices, model.run([plan.items[i] for i in indices])):
-            logits[index] = values
+        items = [plan.items[i] for i in indices]
+        if batch.shared_prefix:
+            values = model.run(items, shared_prefix=batch.shared_prefix)
+        else:
+            values = model.run(items)
+        for index, value in zip(indices, values):
+            logits[index] = value
     answers = dict(plan.errors)
     for index, item in enumerate(plan.items):
         answers[item.question_id] = model.answer(item, logits.get(index))
@@ -119,6 +129,7 @@ def main() -> int:
     parser.add_argument("--answers", type=Path)
     parser.add_argument("--device", default="rocm:0")
     parser.add_argument("--base-path")
+    parser.add_argument("--profile", default="exact", choices=sorted(PROFILES))
     parser.add_argument("--no-graphs", action="store_true")
     parser.add_argument("--no-fused", action="store_true")
     args = parser.parse_args()
@@ -129,7 +140,10 @@ def main() -> int:
             released[(row["panel"], row["id"])] = row["answers"]
     started = time.perf_counter()
     model = load(args)
-    profile = ExactProfile()
+    profile = PROFILES[args.profile]()
+    unavailable = profile.available(model)
+    if unavailable:
+        raise SystemExit(f"profile {args.profile} is unavailable: {unavailable}")
     load_seconds = time.perf_counter() - started
     sink = args.answers.open("x", encoding="utf-8") if args.answers else None
     panels = {}

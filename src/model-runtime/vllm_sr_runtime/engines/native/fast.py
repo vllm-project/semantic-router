@@ -34,6 +34,7 @@ from torch import nn
 from ...accel.kernels import KernelSet
 from .models.common import attention
 from .models.lora import LoRALinear
+from .models.tree import suffix_rule
 
 FUSED_SLOTS = {
     "qwen3": ("add_rmsnorm", "residual_add", "silu_mul", "attn_prep"),
@@ -209,7 +210,59 @@ def _qwen3_5_forward(
     return _residual(kernels, hidden, mlp.down_proj(act))
 
 
+def _tree_gated_delta(m, p, normed, tree, kernels: KernelSet):
+    """``tree.tree_gated_delta`` with the fused kernels: the prefix from a zero state, every suffix from the
+    prefix-end state with its convolution window starting in the prefix (rows ``[prefix tail | suffix]``,
+    whose first outputs are dropped)."""
+    _, length, _ = normed.shape
+    pre, n, window = tree.prefix, len(tree.lengths), m.conv_kernel_size
+    mixed = m.in_proj_qkv(normed)
+    z = m.in_proj_z(normed)
+    b = m.in_proj_b(normed)
+    a = m.in_proj_a(normed)
+    args = (p["conv_w"], p["A_log"], p["dt_bias"], m.num_k_heads, m.head_k_dim)
+
+    def rows(x):
+        return torch.cat(
+            [x[:, pre - (window - 1) : pre].expand(n, -1, -1), tree.rows(x[0, pre:])],
+            dim=1,
+        )
+
+    def packed(x):
+        return tree.packed(x[:, window - 1 :])[None]
+
+    prep = kernels("gdn_prep")
+    hq, hk, hv, hg, hbeta = prep(
+        mixed[:, :pre].contiguous(),
+        b[:, :pre].contiguous(),
+        a[:, :pre].contiguous(),
+        *args,
+    )
+    sq, sk, sv, sg, sbeta = (
+        packed(x) for x in prep(rows(mixed), rows(b), rows(a), *args)
+    )
+    repeat = m.num_v_heads // m.num_k_heads
+    if repeat > 1:
+        hq, hk, sq, sk = (x.repeat_interleave(repeat, dim=2) for x in (hq, hk, sq, sk))
+    rule = kernels("chunk_gated_delta_rule")
+    out_prefix, state = rule(
+        hq, hk, hv, g=hg, beta=hbeta, initial_state=None, output_final_state=True, use_qk_l2norm_in_kernel=True,
+    )  # fmt: skip
+    start = state.expand(n, *state.shape[1:]).contiguous()
+    out_suffix = suffix_rule(rule, tree, sq, sk, sv, sg, sbeta, start)
+    core = torch.cat([out_prefix, out_suffix], dim=1)
+    out = kernels("gated_rmsnorm")(
+        core.reshape(-1, m.head_v_dim).contiguous(),
+        z.reshape(-1, m.head_v_dim).contiguous(),
+        m.norm.weight,
+        m.norm.variance_epsilon,
+    )
+    return m.out_proj(out.reshape(1, length, -1))
+
+
 def _gated_delta(m, p, normed, mask, kernels: KernelSet):
+    if getattr(mask, "is_tree", False):
+        return _tree_gated_delta(m, p, normed, mask, kernels)
     if mask is not None:
         normed = (normed * mask[:, :, None]).to(normed.dtype)
     batch, length, _ = normed.shape

@@ -171,7 +171,10 @@ class Scheduler:
             items = batch.items()
             started = time.monotonic()
             try:
-                values = self.model.run(items)
+                if batch.shared_prefix:
+                    values = self.model.run(items, shared_prefix=batch.shared_prefix)
+                else:
+                    values = self.model.run(items)
             except Exception as exc:
                 self._failure = exc
                 for job, _ in batch.parts:

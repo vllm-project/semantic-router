@@ -8,6 +8,7 @@ they are installed, else the torch references. The same order applies here.
 from __future__ import annotations
 
 import importlib
+import inspect
 from contextlib import AbstractContextManager, nullcontext
 from typing import Any
 
@@ -107,6 +108,13 @@ def _wrap_conv(fn: Any) -> Any:
 
 
 def _wrap_delta(fn: Any) -> Any:
+    """FLA's chunked gated delta rule, called as Transformers' fallback wrapper calls it.
+
+    ``cu_seqlens`` (variable-length sequences packed in one row, shared-context
+    tree mode) passes through, with ``cu_seqlens_cpu`` where FLA takes it.
+    """
+    accepted = set(inspect.signature(fn).parameters)
+
     def delta(
         query,
         key,
@@ -117,7 +125,14 @@ def _wrap_delta(fn: Any) -> Any:
         initial_state=None,
         output_final_state=False,
         use_qk_l2norm_in_kernel=False,
+        cu_seqlens=None,
+        cu_seqlens_cpu=None,
     ):
+        extra = {}
+        if cu_seqlens is not None:
+            extra["cu_seqlens"] = cu_seqlens
+            if cu_seqlens_cpu is not None and "cu_seqlens_cpu" in accepted:
+                extra["cu_seqlens_cpu"] = cu_seqlens_cpu
         return fn(
             query,
             key,
@@ -127,6 +142,7 @@ def _wrap_delta(fn: Any) -> Any:
             initial_state=initial_state,
             output_final_state=output_final_state,
             use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+            **extra,
         )
 
     return delta

@@ -334,7 +334,9 @@ class Decision2Model(LoadedModel):
             input_tokens=tokens,
         )
 
-    def run(self, items: list[RenderedItem]) -> list[list[float] | None]:
+    def run(
+        self, items: list[RenderedItem], shared_prefix: int = 0
+    ) -> list[list[float] | None]:
         batch = collate(items, self.tokenizer.pad_id)
         output = self.engine_model.forward(
             ForwardBatch(
@@ -343,6 +345,7 @@ class Decision2Model(LoadedModel):
                 gather=batch["candidate_positions"],
                 query=batch["query_positions"],
                 lengths=[len(item.ids) for item in items],
+                shared_prefix=shared_prefix,
             )
         )
         mask = batch["candidate_mask"].to(output.gathered.device)

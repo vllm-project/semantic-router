@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from ....accel.kernels import KernelSet
+from .tree import tree_attention
 
 
 class RMSNorm(nn.Module):
@@ -156,7 +157,12 @@ def attention(
     groups: int,
     scaling: float,
 ) -> torch.Tensor:
-    """SDPA as Transformers dispatches it: GQA in-kernel only without a mask; returns [B, T, H, D]."""
+    """SDPA as Transformers dispatches it: GQA in-kernel only without a mask; returns [B, T, H, D].
+
+    A shared-context ``Tree`` as the mask runs the tree attention instead.
+    """
+    if getattr(mask, "is_tree", False):
+        return tree_attention(query, key, value, mask, groups=groups, scaling=scaling)
     enable_gqa = False
     if groups > 1:
         if mask is None and key.shape[-1] == value.shape[-1] <= 256:

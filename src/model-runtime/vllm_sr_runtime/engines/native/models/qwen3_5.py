@@ -13,6 +13,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from ....accel.kernels import KernelSet
+from .tree import Tree, tree_gated_delta
 from .common import (
     GatedMLP,
     GatedRMSNorm,
@@ -61,6 +62,8 @@ class GatedDeltaNet(nn.Module):
     def forward(
         self, hidden_states: torch.Tensor, mask: torch.Tensor | None, kernels: KernelSet
     ) -> torch.Tensor:
+        if getattr(mask, "is_tree", False):
+            return tree_gated_delta(self, hidden_states, mask, kernels)
         if mask is not None:
             dtype = hidden_states.dtype
             hidden_states = (hidden_states * mask[:, :, None]).to(dtype)
@@ -275,4 +278,14 @@ class Qwen3_5Backbone(nn.Module):
             hidden_states = layer(
                 hidden_states, rotary, full_mask, linear_mask, self.kernels
             )
+        return self.norm(hidden_states)
+
+    def forward_tree(self, input_ids: torch.Tensor, tree: Tree) -> torch.Tensor:
+        """The packed shared-context row ([1, L] ids) through every layer; [1, L, hidden]."""
+        assert self.kernels is not None, "bind kernels before running the backbone"
+        hidden_states = self.embed_tokens(input_ids)
+        rope_positions = tree.positions[None].expand(4, 1, -1)[1:]
+        rotary = self.rotary_emb(hidden_states, rope_positions)
+        for layer in self.layers:
+            hidden_states = layer(hidden_states, rotary, tree, tree, self.kernels)
         return self.norm(hidden_states)
