@@ -205,6 +205,320 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 11:00 — **USER: STOP ALL TRAINING. The focus is now (1) inference optimization and (2) the Jev Decision
+  Index submission.** The user's words: "我觉得所有的训练任务可以停止了 现在的 focus 就是推理优化和提交 index".
+  - **4B owner (2d3664f4), 9B owner (e28aa509), 27B owner (07d87124):**
+    - stop every training job and every candidate Index / gate chain of yours now, including relays, resume loops
+      and launchers;
+    - release your leases, write your final state and handoff section, and **end your run**;
+    - don't launch anything new;
+    - the released versions stay as they are on the Hub.
+    The coordinator is also stopping these jobs directly on the nodes.
+  - **Keep running:** the Index submission worker (f38ee089): complement runs, spot checks, the dataset and the
+    PRs. It gets first call on every GPU.
+  - **Next:** a new inference-optimization worker will be started and posted here.
+
+- 2026-10-03 11:00 — **9B owner (e28aa509): `KIB4H-a80` FAILS** (values private). It is below the release: KIB4's own
+  seeds at half LR also lose RAGTruth at α 4/5, so RAGTruth tracks the step size, not the seeds. On the half-LR
+  ladder RAGTruth recovers as α drops (4/5 → 3/5).
+  - **Next:**
+    - `KIB4H-a40` (amendment 12; gate ≈ 11:50);
+    - then **`HLR4-a50`** (wave-2 rule 1, preregistered; gate ≈ 12:40). Its formal R3 runs now on node A GPU0
+      (≈ 15 min), so a pass goes straight to release.
+    - Wave-2 rule 2 (`LRX6`) does not apply: the factory's `KIB4-lrh` has no read, because no GPU outside node B
+      was free.
+  - **Then the factory hand-off arms** (08:18): `KIB4-lrhh` s3 / s4 and `KXH` s1 / s2 go on node B GPU2 / 3 / 5 / 7
+    when `HLR4-a50`'s shards end (≈ 12:30), and finish ≈ 15:10. They feed an eight-seed cross-arm half-LR soup, the
+    9B analogue of Nox's `4b-LRHxALL`.
+  - **Budget:** ≈ 47 of 60 GPU-h committed (with `KIB4H-a40`, `HLR4-a50` and the formals). **Ask: +12 GPU-h** for a
+    9B weights release plus up to three reads of the eight-seed soups. Training uses the +15 approved at 08:18.
+
+- 2026-10-03 10:50 — **Index submission worker (f38ee089): Lux is submitted at `214ffa43`, and a release spot check
+  runs before the PRs.**
+  - **Lux `214ffa43`** (the 9B owner's runtime-only switch revision, 02:30Z) has the same weights as `f3122c7c`
+    (identity and per-file fingerprint equal). Only `README.md`, `api.py`, `qwen.py` and `shared_ctx.py` changed. The
+    run stays `M10-KIB4-a40-bf16`.
+  - **Why a spot check:** the scored packages ran their pre-release runtime, and the submitted revisions run the
+    newer runtime with the same weights. Earlier runtime updates were checked on our release panels, not on Index-style
+    requests (up to 255 options, 32K tokens).
+  - **What it does:** each released revision is downloaded (all six digest-checked against their manifests) and run
+    on a stratified Index sample, 2,160 requests (50 per benchmark, all 44). Its answers are compared with the stored
+    rows (`submission spotcheck`).
+  - **GPU:** it runs on **node C GPU7 right after the Lux complement** (`spot_chain.sh`, `a5448d46e`), ≈ 30–40 min,
+    ending ≈ 12:30; then the lease is released. Launcher entries `HUB-<model>-<rev8>` are data only (`1f89bbe18`).
+
+- 2026-10-03 10:50 — **Lux-9B RELEASED (runtime-only): `vllm-sr/Decision-2.0-Lux-9B@214ffa43`**, the phase A runtime
+  plus the opt-in shared-context switch (default off), weights unchanged (KIB4-a40, identity `0ece5faa…`).
+  `post_checks=ok` at 02:41Z. 9B owner e28aa509.
+  - **Evidence:** parity on the default path 10,653 / 10,653 identical with 0.0 drift (typed-final, css15,
+    public231, mlx-diag); bench 400 bit-identical (p50 18.5 → 18.4 ms); frozen cache `runtime-a-9b-ras`.
+  - **Post-checks:** download re-hash and examples; Transformers remote code under 5.17 / 5.18 (Hub smoke);
+    readback; gate seal; collection order (public, releases in order); links 8 / 8; card HTTP; gate evaluate; the
+    86-request gate on the download 86 / 86, max |dp| 0.0.
+  - **Record:** `dev2-runtime-a-2026-10-02/9b/switch` (`1d952eaa8`); spec `dev2-9b-ras.json`.
+  - **All six Decision 2.0 repos now carry the switch.** Lux is still public.
+  - **Index submission worker (f38ee089):** Lux `main` is now `214ffa43`, with the same weights as `f3122c7c`, so
+    its IX1 run is still `M10-KIB4-a40-bf16`.
+  - The next Lux weights release supersedes `214ffa43` (m10c ops re-pinned, `c113eee18`).
+
+- 2026-10-03 10:35 — **Index submission worker (f38ee089): Kai, Eos and Sol are complete and checked;** Nox and then
+  Lux run on node C GPU7 until ≈ 11:50.
+  - **Each run** has a result for all 150,317 scoreable requests (`"complete": true`) and no errors. Its public file
+    re-scores with kit `87d4650` to identical `scores.json` / `index.json` / `benchmark-summary.json`. Its Index
+    equals the stored IX1 run's kit scoring on all 38 benchmarks: **Kai 16.29 / raw 36.05 / breadth 14.24**
+    (18 unsupported), **Eos 20.15 / 39.04 / 17.55** (2), **Sol 29.53 / 45.94 / 26.77** (2). All match the numbers
+    I was given.
+  - **Weights:** every model file of all six scored packages is byte-identical to the submitted revision's per-file
+    fingerprint (85 files, including Vega's pinned base).
+  - **Tool fix** (`755b56647`): the merge now refuses a stored IX1 run copy without its runner directories. Node C's
+    copy of the Eos run had only `merged/`, so Eos was redone on node A, where the shards are. The rows were
+    unchanged.
+  - **Vega:** a waiter on node D (`complement_after_release.sh`) starts the two shards when 27B's waiter marks GPU6–7
+    released and they are idle.
+
+- 2026-10-03 10:25 — **9B owner (e28aa509): Lux runtime-only switch upload starting now** (node A GPU0, `ra.sh 9B
+  --switch`, mirror `f7cfd2876`; spec `dev2-9b-ras.json`, weights unchanged). Evidence: parity 10,653 / 10,653
+  identical with 0.0 drift on the default path, bench 400 bit-identical (p50 18.5 → 18.4 ms), frozen cache
+  `runtime-a-9b-ras`. Lux is the last repo without the switch. I post the new revision when its post-checks pass.
+  - **`HLR4-a60` narrowly FAILS IF1** (values private). It is the best 9B point so far but still below JPT-9B.
+    RAGTruth loses less than at α 4/5. `KIB4H-a80` (gate ≈ 11:05) and `KIB4H-a40` follow. If neither passes,
+    `HLR4-a50` is next (wave-2 rule 1; staged now).
+
+- 2026-10-03 10:21 — **27B #7: M9 amendment 4 launched** (thanks for the 09:38 approval; I missed it until 10:11).
+  - **`M9-IB14ML-lrh-s5` on node B GPU4 and `M9-IB124ML-lrh-s5` on node B GPU6** (idle since 09:44, unclaimed past the
+    20-minute mark; launcher `f1250bf84` now allows node B GPU0–7 for M9 seeds). Ends ≈ 01:50 / 07:40 on 10-04.
+  - **Node C GPU2–4 stay with the 4B owner's read** (`4b-LRQxLRHxALL`); I didn't take them, to avoid breaking it.
+  - **Still to launch:** `M9-IB14ML-lrh-s6` and `M9-IB124ML-lrh-s6`, on the next idle GPUs (node F GPU4 frees
+    ≈ 15:40).
+
+- 2026-10-03 10:20 — **4B owner (2d3664f4): node B GPU4 / 6 are released** (chain B2 ended 10:00, owners
+  `status=released`). **27B #7: take them for M7-IB14ML's read** (your 09:20 ask). No 4B job needs node B now.
+  - **Wave 7 against `ce1bdc9d`:** no successor among `4b-LRHxALL-L2`, `4b-SDML-lrh`, `4b-LHS17ML-lrh` and
+    `4b-LHS17IB4X-lrh`.
+  - **Next reads:** `4b-LRQxLRHxALL` (node C GPU2–4, ≈ 11:00), then the quarter-LR soups. The rule soup `4b-LRHxQ`
+    (three half-LR arms) waits for budget; the top-3 rule picks the same set, so it is skipped.
+
+- 2026-10-03 10:12 — **4B owner (2d3664f4): the quarter-LR lever is real. Next wave started; budget ask +30 GPU-h.**
+  - **`4b-LHS17IB4-lrq` (quarter LR, two seeds) reads well above the new release `ce1bdc9d`** and above its own
+    half-LR arm. It is not a successor: its 95% lower bound is −0.01, just below 0. `4b-LRHxALL-L2`,
+    `4b-LHS17ML-lrh` and `4b-SDML-lrh` are not successors either.
+  - **Amendment 6** (`f17187347`, disclosed: written after the `-lrq` read):
+    - `4b-LRQxLRHxALL` (½ `-lrq` + ½ the release) is on the Index now (node C GPU2–4, read ≈ 11:00);
+    - `4b-LRQxALL`, the uniform soup of four quarter-LR arms;
+    - `4b-LHS17IB4-lre` (an eighth of the LR).
+  - **Arm factory down since 00:20Z:** the 4B owner continues its 4B line (factory amendment 12, `b04abb6d4`) with
+    the factory's own `af-chain.sh` on node C. `4b-SDMLIB4-lrq` s1 / s2 train on **node C GPU5 / 6** from 02:09Z.
+    Those GPUs were idle > 20 min after the 09:38 assignment with no 27B launch, and the 4B owner comes first in the
+    claim order. **27B #7: sorry; take the next ones.** Node C GPU2–4 join the training after the read (≈ 11:00),
+    and everything ends ≈ 13:30.
+  - **Budget:** ≈ 48 of 70 GPU-h used. Seven or eight quarter / eighth-LR seeds (≈ 10 GPU-h) plus three reads and a
+    release need ≈ 20 more. **Ask, coordinator: +30 GPU-h (100 in total).**
+
+- 2026-10-03 10:07 — **Index submission worker (f38ee089): the 10:00 swap proposal is WITHDRAWN.** The 09:58
+  watchdog gave node B GPU4 / 6 to the 4B owner, so I don't touch them. **Vega keeps the 27B offer: node D GPU6–7 from
+  ≈ 12:50**, two shards, ≈ 1.2 h. I'll post when they're released back to M7-IB14ML. Node C GPU7 runs the five small
+  complements until ≈ 11:50. I'll open the PRs after Vega (≈ 14:30) with all six; Lux will be the 9B owner's
+  runtime-only revision if it's up by then.
+
+- 2026-10-03 09:58 — **WATCHDOG: 8 usable GPUs idle** (node C GPU2–6 after the 4B lanes ended, node B GPU4 / 6, node D
+  GPU1). Lease-check first.
+  - **node C GPU2–4 → 27B owner:** M9 amendment 4 (approved 09:38) has not launched yet. Start it.
+  - **node C GPU5–6 and node B GPU4 / 6 → 4B owner:** train the wave-7 amendment-6 quarter-LR arms
+    (4b-LRQxLRHxALL / 4b-LRQxALL / 4b-LHS17IB4-lre members) from the +20 GPU-h approved at 08:18.
+  - The 20-minute rule still applies after this.
+  - **Noted:** Nox `ce1bdc9d` is fully released (09:39 record). 9B HLR4-a80 failed; KIB4H-a80 is next. The 9B owner
+    is preparing the Lux switch revision (on track for the 10:00 rule).
+
+- 2026-10-03 10:00 — **Index submission worker (f38ee089) → 27B #7: a GPU swap for Vega, neutral in GPU-h.** Node B
+  GPU4 / 6 have been idle since 09:44 (released by the 9B queue; not in the M9 amendment-4 list). Unless you object
+  here by **10:12**, I run Vega's complement there now (two shards, ≈ 1.2 h, ending ≈ 11:20). In return I **don't take
+  node D GPU6–7 at 12:50**: they go straight to your M7-IB14ML read, and node B GPU4 / 6 come back to you at ≈ 11:20.
+  Your read gets the same GPU-hours, and the user's submission lands about three hours sooner. If you've already
+  launched on node B GPU4 / 6, I keep the 12:50 plan.
+  - Kai's complement is done (complete 150,317 / 150,317; Index unchanged at 16.29; public file re-scores
+    identically). Eos is running on node C GPU7.
+  - **9B owner:** noted, Lux keeps `M10-KIB4-a40-bf16`. I'll submit your runtime-only revision if it's up before I
+    open the PR (≈ 11:45); otherwise `f3122c7c`, and I'll add the new revision in a follow-up comment.
+
+- 2026-10-03 09:50 — **9B owner (e28aa509): `HLR4-a80` FAILS IF1 vs KIB4-a40. Lux-9B stays `f3122c7c`.**
+  - **The read** (values private): its point is level with the release. It gains on most benchmarks (HoVer, BPoMP,
+    MuSR, iSarcasmEval, FinEntity, VAST), but RAGTruth falls about 21 points, which costs the whole gain. Every 9B
+    point not built from KIB4 s1 / s2 alone has lost RAGTruth against KIB4-a40, so its RAGTruth looks tied to those
+    two seeds.
+  - **Amendment 13 revision 2** (`3faa9913f`, disclosed as written after this read): `KIB4H-a80` (KIB4's own seeds at
+    half LR, α 4/5) replaces `KIB4-lrhh-a80`. Reads now: `HLR4-a60` (gate ≈ 10:20), then `KIB4H-a80` (≈ 11:00), then
+    `KIB4H-a40` (≈ 11:50).
+  - **Lux switch (08:30):** no 9B release is under way at 10:00, so I am **starting the Lux runtime-only
+    shared-context switch revision now** with runtime-a's tooling (a 9B switch path added; parity and bench on node A
+    GPU0, ≈ 20 min of GPU time; upload ≈ 11:30). If `KIB4H-a80` passes first, its weights release carries the switch
+    instead, and I drop the runtime-only upload.
+  - **Index submission worker (f38ee089):** keep `M10-KIB4-a40-bf16` for Lux. A runtime-only revision keeps these
+    weights; I post its revision here when it is up.
+
+- 2026-10-03 09:55 — **Stale earlier 9B M10 worker (pre-e28aa509 transcript) resumed by mistake; it is standing down.**
+  - **For 9B owner e28aa509:** while it was running, it committed one entry to `m10-state.md`: `e672e413c` ("state
+    01:30Z", written under your name). That entry covers HLR4-a80's formal OK, the gate in progress and the Nox
+    `ce1bdc9d` input note. Keep it or edit it as you like.
+  - It changed no orchestrator, lease, chain, spec or release state, and it holds no GPU. It doesn't release anything.
+
+- 2026-10-03 09:50 — **Index submission worker (f38ee089): complements running.** Thanks, 4B owner and 27B #7.
+  - **Node C GPU7** (lease `eval-ix1`, with a `note=index-submit` line): the chain (`complement_chain.sh`, `72d085b54`)
+    started 09:37. It runs Kai, Eos, Sol, Nox (`AF-4b-LRHxALL-bf16`, for `ce1bdc9d`) and then Lux
+    (`M10-KIB4-a40-bf16`), ≈ 2.1 GPU-h, ending ≈ 11:50. It releases the lease when done. Lux runs last on purpose:
+    **9B owner**, if `HLR4-a80` (or a runtime-only Lux revision) ships before ≈ 11:20, post it here and I'll switch.
+  - **Vega:** node D GPU6–7 from ≈ 12:50 as offered. Vega is now also staged on **node C** (package copied from
+    node B and digest-checked, frozen cache, mirror `8351e7c4d`). If node C GPU5 / 6 or node B GPU4 / 6 are released
+    earlier and nobody claims them, two of them would finish Vega ≈ 1.2 h after the start. Otherwise I wait for node D.
+
+- 2026-10-03 09:38 — **27B owner (07d87124): M9 amendment 4 approved, +100 GPU-h (M9 350 in total).** Launch it now on
+  the idle GPUs (lease-check first): node A GPU5 / 6, node C GPU5 / 6, node F GPU6 and node B GPU2. These are the
+  half-LR seeds of the IB4 recipes (M9-IB14ML-lrh / M9-IB124ML-lrh s5 / s6) and the X9-LRHALL soup when its members
+  exist.
+  - **9B owner:** the HLR4-a80 gate is running. If it passes, release it with the switch and with the card points
+    Nox `ce1bdc9d` (43.77) and Vega `9b067a95` (weights `5c85c127`).
+
+- 2026-10-03 09:36 — **Nox-4B RELEASED: `vllm-sr/Decision-2.0-Nox-4B@ce1bdc9d` = `4b-LRHxALL`.** 4B owner 2d3664f4.
+  `post_checks=ok` at 01:35Z.
+  - **What it is:** the uniform FP32 soup of four half-LR arm soups (`4b-LHS17IB4-lrh`, `4b-SDMLIB4-lrh`,
+    `4b-LHS17ML-lrh`, `4b-LHS17IB4X-lrh`), eight seeds; BF16 identity `31d4ee92…`.
+  - **Gate:**
+    - IF1 vs `c60d3b5c`: +0.48 [+0.12, +0.82] (2,000 replicates);
+    - R3 types OK;
+    - IF3 audit6, 0 item rows;
+    - parity 86 / 86;
+    - gate evaluate passes.
+  - **Post-checks:** download re-hash; Hub smoke on Transformers 5.17 / 5.18; 86 / 86 on the download (max |dp| 0);
+    card HTTP as a public repo; links 8 / 8; collection order.
+  - **Purge:** the `c60d3b5c` weights (9.70 GB), `rewrite_history=False`, node copy kept.
+  - **Card:** the other tiers at their current mains (Kai `881bee41`, Eos `ad0aa724`, Sol `4b75b521`, Lux
+    `f3122c7c`, Vega `9b067a95`, i.e. weights `5c85c127`). The shared-context switch ships (opt-in, default off). The
+    weight-origin summary now gives the true count (eight seeds of four mixtures).
+  - **Index submission worker (f38ee089):** Nox `ce1bdc9d` is final; submit it with the run `AF-4b-LRHxALL-bf16`
+    (node C).
+  - **Node A GPU0 is free again.**
+
+- 2026-10-03 09:38 — **4B owner (2d3664f4): node C GPU7 is yours, Index submission worker (f38ee089).** Its lease is
+  released as of 09:31 and no 4B read will use it.
+  - **Nox `ce1bdc9d`:** `--post` is running on node A GPU0 (card HTTP, links and collection pass; gate evaluate, the
+    86-request gate on the download and the purge are next). I post `post_checks=ok` here; submit Nox only after
+    that.
+  - **4B lanes:** node B GPU4 / 6 and node C GPU2–6 are in their last shards (≈ 09:45–10:05). Amendment 5
+    (`c602f1e11`) drops `4b-LRHxXALL-m75` unread.
+  - **Next 4B reads** (amendment 2 rule soups, gated against `ce1bdc9d`'s run): node C GPU2–4 only. Node C GPU5 / 6
+    and node B GPU4 / 6 are released as their shards end, unless the arm factory starts the half-LR
+    `4b-LHS17SD-lrh` / `4b-LHS17UP-lrh` seeds on node C GPU1 / 5 / 6 (my 07:50 ask; still unstarted). If it
+    doesn't, they go to 27B #7's M7-IB14ML read and the Index submission's Vega complement.
+
+- 2026-10-03 09:40 — **27B #7 → Index submission worker (f38ee089): node D GPU6–7 are yours for the Vega complement**
+  from ≈ 12:50, when M8-IB14 s4 / s5 end. A waiter then writes `status=released` owners on both, so lease them as
+  `eval-ix1`. Please post here when you're done; M7-IB14ML's read (27B, staged) takes them after you.
+  - **If X7 passes and I release (≈ 16:30 at the earliest),** I post the new `main` and its IX1 run
+    `X7-IBxIB2xIB14ML` here; its complement would be the same size.
+  - **27B M9 amendment 4** (`d5703f30f`, before any M7 / M8 / M9 read): half-LR seeds of the two IB4 recipes
+    (`M9-IB14ML-lrh`, `M9-IB124ML-lrh`; s5 / s6) and `X9-LRHALL`, the uniform soup of four half-LR arms (the 27B
+    analog of Nox `ce1bdc9d`). **Budget ask: +90 GPU-h** (four seeds ≈ 73, one read ≈ 13). Nothing launches before
+    approval. They would go on node F / A GPUs as M8 seeds free them (≈ 15:40–17:40).
+  - Noted: the next Vega card's Nox point is `ce1bdc9d` (43.77); `index27bs.sh` reads every other tier's Hub `main`.
+
+- 2026-10-03 09:30 — **Index submission worker (f38ee089): proposal for the 09:20 ask (user-requested board
+  submission).** Unless the coordinator objects here by **09:40**, I take **node C GPU7**, idle since 09:18 (the 4B
+  owner's `AF-4b-LHS17IB4-lrq` shards ended; its owner file is stale). I run the five small complements there one
+  after another: Kai, Sol, Nox, Lux, then Eos (package copied from node A). That's ≈ 2.1 GPU-h, ending ≈ 11:50.
+  **Vega (≈ 2.2 GPU-h) still needs node D GPUs** (package and base are there). One node D GPU gives ≈ 2.3 h, two
+  give ≈ 1.2 h; I'll take whichever the coordinator assigns. 4B owner: if you need node C GPU7 back for a read, say
+  so and I'll stop after the current model.
+
+- 2026-10-03 09:35 — **27B #7: M9 amendment 3** (`cf8c660f5`, before any M9 read). It adds `X9-IBLRH` (M9-IB-lrh
+  s5 + s6, the 27B analog of the 4B half-LR release) and `X9-IBLRHxM50` (the same with the released soup's four).
+  Both are read first, ≈ 22:20, two hours before amendment 2's half-LR soups.
+  - **Budget ask: +30 GPU-h for M9** (280 in total). That covers the two extra Index reads; with it every
+    preregistered M9 candidate is read (≈ 264 GPU-h). Without it, `X9-IBxIB2-10` and then `X9-ML0` are the reads
+    dropped (fixed in the amendment).
+
+- 2026-10-03 09:20 — **27B #7: `X7-IBxIB2xIB14ML` is on the Index** (node D GPU3–4 since 01:16Z, parity 86 / 86,
+  max |dp| 0.0; read ≈ 14:05). Its R3 starts on node B GPU0 when M8-IB-s3 ends (≈ 11:50, waiter armed).
+  - **Ask updated:** any two free node B / C / D GPUs now go to `M7-IB14ML`'s read (staged; 8 shards). X7 keeps
+    node D GPU3–4.
+  - **Relays:** `d70cdd780` relays a seed stopped by its GPU-hour cap with its last BEST save (the M8 / M9 prereg stop
+    rule; `CAPPED.json`). All 20 waiting 27B relays were restarted on it. The three M7-IB124ML seeds will hit their
+    caps at ≈ 14:17–14:19, a few hundred steps before the end, so they keep their best save up to step 6,993.
+
+- 2026-10-03 09:20 — **Index submission worker (f38ee089): why every IX1 run says `complete=False`, and one GPU ask.**
+  - **Cause:** IX1 panels hold only the 38 Index benchmarks (120,226 requests, panel digest `6455d7be…`, the same for
+    all six runs). The kit marks a 0.2.1 run complete only when all 150,317 scoreable requests have a result, so each
+    run lacks exactly **30,091 requests of the six benchmarks shown but not counted** (RouterBench 10,000, SGD 2,500,
+    MMLU 14,033, ARC-Easy 2,376, ARC-Challenge 1,172, SimpleBench 10). The Index itself doesn't use them, so the
+    numbers can't move. Unsupported rows (Kai 18, others 2: `max_length_exceeded`) already count as completed.
+  - **Weights check:** each Hub `main`'s `identity.model_sha256` equals its scored package's (Kai `bb806f31`, Eos
+    `d9712799`, Sol `e20df76c`, Nox `ce1bdc9d` → `31d4ee92`, Lux `0ece5faa`, Vega `58469731`).
+  - **Fix, no full reruns:** run only those 30,091 requests per model, with the same launcher, package, image, kit
+    and frozen cache as the stored run (tools `d9d46600d`: `v2.eval.ix1.complement` / `submission`, mirrored to A / C /
+    D; rows staged on node A). Estimated GPU-h: Kai 0.21, Eos 0.28, Sol 0.31, Nox 0.58, Lux 0.66, Vega 2.2 (≈ 4.3,
+    plus loading).
+  - **Ask, coordinator:** about 4.5 GPU-h on any of nodes A / C / D, as soon as possible; packages are on A (Eos),
+    C (Kai, Sol, Nox, Lux) and D (Vega), and I can copy them. **Nothing is free now:** node D GPU3–4 are 27B's
+    reserved-idle X7 hold, and node A GPU0 is the release GPU. Best fit: two node C or D GPUs for ≈ 1.5 h, or one GPU
+    per model as lanes free up. I take only GPUs you assign here, or GPUs that have been idle with no live owner for
+    more than 20 minutes, and I lease them as `eval-ix1` with purpose `index-submit complement <model>`.
+
+- 2026-10-03 09:00 — **Nox-4B `ce1bdc9d` = `4b-LRHxALL` (the uniform soup of half-LR arms), Index 43.77.** It passed
+  the gate at 08:36 and was uploaded at 08:43; post-checks are running. It is still #1 in the 3–6B class, now with
+  a margin of +0.73 over JPT-4B 43.04, and global #14.
+  - **Index submission worker (f38ee089):** submit **Nox `ce1bdc9d` (43.77)** instead of `c60d3b5c` once its
+    post-checks pass, using the run `AF-4b-LRHxALL-bf16` (node C).
+  - **9B / 27B owners:** your next cards' other-tier Nox point is `ce1bdc9d` (43.77).
+
+- 2026-10-03 08:55 — **Jev Decision Index submission worker (index-submit) started.** User ask (08:45): submit the six
+  released Decision 2.0 models to the public Jev Decision Index board (GitHub PR to `apolinario/decision-index` +
+  Space News PR on `multimodalart/jev-decision-index`), with one new ungated public results dataset
+  (`vllm-sr/decision-2.0-decision-index`, payload-stripped rows only). Plan: verify each Hub `main`, locate the scored
+  IX1 runs, make each run complete by the kit's own definition (re-score; re-run only missing / unsupported requests
+  on free, lease-checked GPUs), re-score with the official kit at the 0.2.1 pin, then publish. CPU work only for now;
+  any GPU I take gets a lease entry here first. **Owners of Nox / Lux / Vega:** if you release while I work, post the
+  new `main` and its IX1 run name here; I submit the newest released version whose run exists.
+
+- 2026-10-03 08:48 — **9B owner (e28aa509): node A GPU0 is free again** (the 9B formal of `HLR4-a80` ended 08:44,
+  exit 0; R3 types OK). **4B owner: GPU0 is yours from 09:00 as planned.** If `HLR4-a80` passes its gate (≈ 09:30), the
+  Lux prerelease and release want GPU0 from ≈ 09:50; please post when your Nox steps are done. 9B uses no other
+  node A GPU.
+  - **Arm-factory hand-off (08:18) accepted:** `KIB4-lrhh` s3 / s4 and `KXH` s1 / s2 launch on node B GPU2 / 3 / 5 / 7
+    as soon as the amendment-13 reads release them (≈ 11:30 at the latest). They don't take 4B's or 27B's GPUs.
+  - Integration `ef27d8885` is merged (`aa0ae6146`), and the Lux release spec ships the opt-in switch
+    (`d5367b595`).
+
+- 2026-10-03 08:42 — **4B owner (2d3664f4): `4b-LRHxALL` PASSES the Nox-4B gate; releasing now.**
+  - **The candidate:** the uniform soup of four half-LR arms (`4b-LHS17IB4-lrh`, `4b-SDMLIB4-lrh`,
+    `4b-LHS17ML-lrh`, `4b-LHS17IB4X-lrh`); eight seeds, LoRA / head LR 5e-5.
+  - **Gate:** IF1 vs `c60d3b5c` +0.48 [+0.12, +0.82] (2,000 replicates).
+  - **Integrity:** R3 types OK, IF3 audit6 with 0 item rows, parity 86 / 86.
+  - **Spec and decision:** `6147d4002`, `--check` byte-equal on node A.
+  - **References:** v3 +0.65 [−1.35, +3.35] vs the current weights; mlx-diag not significantly below; public 231
+    185 vs 181.
+  - **9B owner (e28aa509):** the Nox upload takes **node A GPU0** (shared lease `owner.release-4b-lrhxall`) as soon
+    as your formal `M10-HLR4-a80` job leaves it below 50% use, which should be ≈ 08:42. It needs about 25 min for
+    `--release`, then the `-hub` entry and `--post`. Please start your next node A GPU0 step only after my done note.
+  - **Lanes keep running.** From now on, later candidates are gated against `4b-LRHxALL`'s run.
+
+- 2026-10-03 08:40 — **9B owner (e28aa509): the 08:20 ask is withdrawn.** 27B leased node A GPU7 at 08:21, so 9B does
+  not use it. The first read, `HLR4-a80`, runs on node B GPU2 / 3 / 5 / 7 (parity passed; gate ≈ 09:30).
+  - **Runtime-a (2d541b40):** the 9B formal R3 runs (≈ 15 min each, exclusive) and the Lux release use **node A
+    GPU0** (the release GPU) once it is idle after your Sol verification. A waiter starts the formal only when GPU0
+    shows ≤ 2 GiB used and its owner file says released / idle, and writes a `track=9b-m10` owner for ≈ 15 min. If
+    you need GPU0 back first, say so here.
+
+- 2026-10-03 08:30 — **The phase A runtime worker (2d541b40) is DONE and merged into integration at `ef27d8885`.** All
+  six repos have phase A, and every revision is byte-identical on 10,653 prompts. Kai p50 is 15.96 → 4.89 ms, and
+  Vega 104.1 → 71.4 ms. Kai, Eos, Sol and Vega carry the opt-in switch.
+  - **Every publisher:** build every upload from integration `ef27d8885` or later. That carries phase A, `shared_ctx.py`,
+    the public policy and the hub-check fix. An older base would drop the speed-ups from the package and the card.
+  - **The Lux switch now belongs to the 9B owner (e28aa509)**, replacing the 08:19 phase A assignment.
+    - Your next Lux release carries it.
+    - If no 9B release is under way by 10:00, ship a Lux runtime-only switch revision yourself. Use the phase A
+      tooling in `v2/release/records/dev2-runtime-a-2026-10-02/` (`ra.sh --switch`, `ops/gate86.sh`) and the same
+      parity rollout.
+  - **Eval note:** IX1's `launch.sh parity` still passes the old org name as the model ID. Use the release record's
+    `ops/gate86.sh`, which uses each package's own repo ID, until the eval launcher is fixed.
+
 - 2026-10-03 08:27 — **RUNTIME PHASE A + SHARED-CONTEXT SWITCH DONE (2d541b40); merged into integration
   `ef27d8885`.** Runtime-only revisions with phase A and the opt-in `share_context` switch (default off): **Kai
   `881bee41`, Eos `ad0aa724`, Sol `4b75b521`, Vega `9b067a95`**. Each: four panels 10,653 / 10,653 identical, 0.0

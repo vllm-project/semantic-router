@@ -38,6 +38,10 @@ TRAIN_PYTHONPATH=${TRAIN_PYTHONPATH:-/pipeline:/code}
 # smaller of FULL_CAP and what is left of ARM_CAP.
 LORA_RANK=${LORA_RANK:-8}
 LORA_ALPHA=${LORA_ALPHA:-16}
+# M9 amendment 1: LORA_LR / HEAD_LR / BACKBONE_LR (defaults are every earlier arm's 2e-5 / 1e-4 / 1e-6).
+LORA_LR=${LORA_LR:-2e-5}
+HEAD_LR=${HEAD_LR:-1e-4}
+BACKBONE_LR=${BACKBONE_LR:-1e-6}
 TRAIN_CACHE_FROZEN=${TRAIN_CACHE_FROZEN:-}
 TRAIN_EXTRA=()
 if [ -n "$TRAIN_CACHE_FROZEN" ]; then
@@ -115,9 +119,9 @@ CONTRACT_ARGS=(
   --init-kind posttrained
   --base-revision "$REVISION" --train /data/train.jsonl --select /data/select.jsonl
   --cal /data/cal.jsonl --objective ce_brier --brier-weight 0.5 --train-mode lora
-  --lora-rank "$LORA_RANK" --lora-alpha "$LORA_ALPHA" --lora-dropout 0.05 --lora-lr 2e-5 --epochs 1
+  --lora-rank "$LORA_RANK" --lora-alpha "$LORA_ALPHA" --lora-dropout 0.05 --lora-lr "$LORA_LR" --epochs 1
   --microbatch 1 --accumulation 16 --eval-batch 1 --max-length 4096 --head-dim 256
-  --backbone-lr 1e-6 --head-lr 1e-4 --weight-decay 0.01 --warmup-ratio 0.05
+  --backbone-lr "$BACKBONE_LR" --head-lr "$HEAD_LR" --weight-decay 0.01 --warmup-ratio 0.05
   --seed "$SEED" --gradient-checkpointing "${REPLAY_ARGS[@]}"
 )
 TRAIN_ARGS=(python3 -m training.model.train --model-path "$MODEL" "${CONTRACT_ARGS[@]}")

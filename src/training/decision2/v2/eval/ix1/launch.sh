@@ -68,6 +68,15 @@ declare -A DIAGNOSTIC=(  # name -> "repository revision package-dir"
   [X7-4ARM]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X7-4ARM-re876fbe"
   [X8-IBxIB2-8]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X8-IBxIB2-8-re876fbe"
   [X8-ML]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X8-ML-re876fbe"
+  [X9-LRH2]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X9-LRH2-re876fbe"
+  [X9-LRH2xM50]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X9-LRH2xM50-re876fbe"
+  [X9-LRH]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X9-LRH-re876fbe"
+  [X9-LRHxM50]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X9-LRHxM50-re876fbe"
+  [X9-ML0]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X9-ML0-re876fbe"
+  [X9-IBxIB2-10]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X9-IBxIB2-10-re876fbe"
+  [X9-IBLRH]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X9-IBLRH-re876fbe"
+  [X9-IBLRHxM50]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X9-IBLRHxM50-re876fbe"
+  [X9-LRHALL]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/m6/X9-LRHALL-re876fbe"
   [M5-L128]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/fix2/M5-L128-95d61175-re876fbe"
   [DEV2.0-27B-budget]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 /data/dev2/models/ix1/fix2/DEV2.0-27B-4e89288d-re876fbe"
   [DEV2.0-4B-LH]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/DEV2.0-4B-13d42143"
@@ -98,6 +107,7 @@ declare -A DIAGNOSTIC=(  # name -> "repository revision package-dir"
   [DEV2.0-4B-SDMLxALL15-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-SDMLxALL15-bf16-r13d42143"
   [DEV2.0-4B-SDMLxALL-hub]="vllm-sr/Decision-2.0-Nox-4B d55528d1635fc474061ec59e31a7c722d3e7ab95 /data/dev2/models/ix1/dec-m17/DEV2.0-4B-SDMLxALL-hub"
   [DEV2.0-4B-LHS17IB4-lrh-hub]="vllm-sr/Decision-2.0-Nox-4B c60d3b5ca7d71a36669392bc4fb94a1596df6739 /data/dev2/models/ix1/dec-m17/DEV2.0-4B-LHS17IB4-lrh-hub"
+  [DEV2.0-4B-LRHxALL-hub]="vllm-sr/Decision-2.0-Nox-4B ce1bdc9d91333aae2bf496ec48c66e1a913eb0a0 /data/dev2/models/ix1/dec-m17/DEV2.0-4B-LRHxALL-hub"
   [DEV2.0-4B-SDMLxS17-m50-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-m17/DEV2.0-4B-SDMLxS17-m50-bf16-r13d42143"
   [DEV2.0-4B-LHA10UP-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-4bif/DEV2.0-4B-LHA10UP-bf16-r13d42143"
   [DEV2.0-4B-LHA10SD-a75-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/dec-4bif/DEV2.0-4B-LHA10SD-a75-bf16-r13d42143"
@@ -122,7 +132,7 @@ for _m10 in KUP-a33 KUP-a25 KUP-a40 KIBM-a33 KIBM-a25 KIBM-a40 KSW-a33 KSW-a25 K
   DIAGNOSTIC[M10-$_m10-bf16]="DEV2.0-9B e51f9881b92f646cb0bd62b2876d4878cc8d16ec /data/dev2/models/ix1/9b-m10/$_m10-bf16-re51f9881"
 done
 unset _m10
-for _af in 4b-LHS17IB4-lrh 4b-LHS17IB4ML 4b-LHS23IB4 4b-LHS17IB4-s45 4b-SDMLIB4-s45 4b-LHS17UP-s34 4b-AFxALL 4b-AFxALL2 4b-AFxALL3 4b-XALLx 4b-XALLU2 4b-LRHxXALL-m50 4b-SDMLIB4-lrh 4b-LRHxALL 4b-LHS17IB4-lrq 4b-LHS17ML-lrh 4b-LHS17IB4X-lrh 4b-SDML-lrh ; do  # arm factory 4B BF16 release copies (4B owner: 4b-XALLx, 4b-XALLU2, wave 7 low-LR points)
+for _af in 4b-LHS17IB4-lrh 4b-LHS17IB4ML 4b-LHS23IB4 4b-LHS17IB4-s45 4b-SDMLIB4-s45 4b-LHS17UP-s34 4b-AFxALL 4b-AFxALL2 4b-AFxALL3 4b-XALLx 4b-XALLU2 4b-LRHxXALL-m50 4b-SDMLIB4-lrh 4b-LRHxALL 4b-LHS17IB4-lrq 4b-LHS17ML-lrh 4b-LHS17IB4X-lrh 4b-SDML-lrh 4b-LRHxALL-L2 4b-LRHxQ 4b-LRHxXALL-m75 4b-LRQxLRH 4b-SDMLIB4-UP 4b-LHS17IB4-UP 4b-SDMLIB4W2 4b-LRH2 4b-LRHxTOP3 4b-LRHxALL7 4b-LHS17SD-lrh 4b-LHS17UP-lrh 4b-LRQxALL 4b-SDMLIB4-lrq 4b-LHS17ML-lrq 4b-LHS17IB4X-lrq ; do  # arm factory 4B BF16 release copies (4B owner: 4b-XALLx, 4b-XALLU2, wave 7 low-LR points and amendments 2-4)
   DIAGNOSTIC[AF-$_af-bf16]="DEV2.0-4B 13d4214361d0d4fdb0d5002f9a8eae79e8c6a73f /data/dev2/models/ix1/af/AF-$_af-bf16-r13d42143"
 done
 for _af in KIB4W2-a40 KIB4L2-a40 KIB4Q-a40 KF-a33 KF-a40 KF-a50 KFxKIB-a40 KFxKIB-a50 KFxKIB2-a40 KF2-a40 KF2-a50 ; do  # arm factory 9B BF16 release copies
