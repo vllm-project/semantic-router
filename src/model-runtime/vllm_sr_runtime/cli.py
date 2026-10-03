@@ -240,10 +240,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="list the installed families, engines, accelerators and profiles",
     )
     fixture = commands.add_parser(
-        "fixture", help="write a tiny random-weight Decision 2.0 package (tests, E2E)"
+        "fixture",
+        help="write a tiny random-weight package of a family (tests, E2E)",
     )
     fixture.add_argument("output", help="directory to create")
-    fixture.add_argument("--backbone", default="qwen3_5", choices=("qwen3", "qwen3_5"))
+    fixture.add_argument(
+        "--family",
+        default="decision2",
+        help="family whose package format to write (default: decision2)",
+    )
+    fixture.add_argument(
+        "--variant",
+        help="family-specific variant, for example a backbone or a head kind",
+    )
+    fixture.add_argument(
+        "--backbone",
+        choices=("qwen3", "qwen3_5"),
+        help="decision2 backbone (the same as --variant)",
+    )
     fixture.add_argument("--seed", type=int, default=0)
     return parser
 
@@ -277,10 +291,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0
     if args.command == "fixture":
-        from .testing.fixtures import write_package
+        from .testing.fixtures import write_fixture
 
-        path = write_package(args.output, backbone=args.backbone, seed=args.seed)
-        print(path)
+        variant = args.variant or args.backbone
+        print(
+            write_fixture(
+                args.output, family=args.family, variant=variant, seed=args.seed
+            )
+        )
         return 0
     return 2
 
