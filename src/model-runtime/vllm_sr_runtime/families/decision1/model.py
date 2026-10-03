@@ -241,7 +241,7 @@ class QwenDecisionModel(Decision1Model):
         )
 
     def physical_batches(self, items: list[RenderedItem]) -> list[list[int]]:
-        return qwen.physical_batches(items)
+        return qwen.physical_batches(items, self.forward_token_budget())
 
     def forward_token_budget(self) -> int | None:
         """GPU forwards keep the gated-delta q / k / v within FLA's 32-bit offsets (the 2 GiB guard)."""
