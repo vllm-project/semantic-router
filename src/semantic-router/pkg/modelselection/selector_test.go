@@ -33,7 +33,7 @@ var testModels = []config.ModelRef{
 var algorithms = []string{"knn", "kmeans", "svm", "mlp"}
 
 func TestNewSelector(t *testing.T) {
-	for _, algorithm := range algorithms {
+	for _, algorithm := range append(algorithms, "hiershrink") {
 		selector, err := NewSelector(&config.MLModelSelectionConfig{Type: algorithm})
 		if err != nil || selector.Name() != algorithm {
 			t.Fatalf("NewSelector(%s) = %v, %v", algorithm, selector, err)

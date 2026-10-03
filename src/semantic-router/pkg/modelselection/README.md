@@ -1,8 +1,9 @@
 # ML model selectors
 
-This package implements the runtime side of four learned model-selection
+This package implements the runtime side of five learned model-selection
 algorithms: K-nearest neighbors (`knn`), K-means (`kmeans`), support vector
-machines (`svm`), and a multilayer perceptron (`mlp`). A selector runs only
+machines (`svm`), a multilayer perceptron (`mlp`), and hierarchical shrinkage
+(`hiershrink`). A selector runs only
 after a routing decision has matched and chooses one of that decision's
 `modelRefs`.
 
@@ -26,6 +27,7 @@ own workload. For a policy that does not require a trained artifact, start with
 | `kmeans` | Query clusters and a model choice per cluster | Workloads contain recurring, separable request groups. |
 | `svm` | Boundaries between model assignments | Labeled assignments are available and separate cleanly. |
 | `mlp` | A nonlinear mapping from request features to models | The dataset is large enough to justify a learned nonlinear policy. |
+| `hiershrink` | Per-cluster quality shrunk toward each model's mean | A candidate has only a few dozen scored queries. |
 
 ## Configure the router
 
@@ -97,8 +99,9 @@ The exhaustive field reference is
 [`config/config.yaml`](../../../../config/config.yaml). The public pages for
 [`knn`](../../../../website/docs/tutorials/algorithm/selection/knn.md),
 [`kmeans`](../../../../website/docs/tutorials/algorithm/selection/kmeans.md),
-[`svm`](../../../../website/docs/tutorials/algorithm/selection/svm.md), and
-[`mlp`](../../../../website/docs/tutorials/algorithm/selection/mlp.md) explain
+[`svm`](../../../../website/docs/tutorials/algorithm/selection/svm.md),
+[`mlp`](../../../../website/docs/tutorials/algorithm/selection/mlp.md), and
+[`hiershrink`](../../../../website/docs/tutorials/algorithm/selection/hiershrink.md) explain
 each policy and its limits.
 
 ## Train an artifact
