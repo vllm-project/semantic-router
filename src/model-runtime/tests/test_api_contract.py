@@ -1,6 +1,7 @@
 """Every response is validated against the checked-in OpenAPI contract."""
 
 import copy
+import json
 from pathlib import Path
 
 import jsonschema
@@ -167,6 +168,30 @@ def test_body_that_is_not_json(client):
         "/v1/decisions", content=b"{", headers={"content-type": "application/json"}
     )
     assert response.status_code == 400
+
+
+@pytest.mark.parametrize(
+    "field,old",
+    [
+        ("state", '"Write a'),
+        ("instructions", '"Which domain'),
+        ("question id", '"domain"'),
+        ("criteria key", '"code"'),
+    ],
+)
+def test_unpaired_surrogate_is_an_invalid_request(client, field, old):
+    raw = json.dumps({"state": STATE, "questions": QUESTIONS})
+    assert raw.count(old) == 1, field
+    raw = raw.replace(old, old[:3] + "\\ud800" + old[3:])
+    response = client.post(
+        "/v1/decisions",
+        content=raw.encode(),
+        headers={"content-type": "application/json"},
+    )
+    assert response.status_code == 400
+    check("ErrorResponse", response.json())
+    assert response.json()["error"]["code"] == "invalid_request"
+    assert client.get("/health").json()["status"] == "ready"
 
 
 def test_models_health_metrics_and_openapi(client):
