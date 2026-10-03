@@ -1,0 +1,76 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: COORDINATION 2026-10-03 02:38 and 03:18 UTC+8 (the shared-context switch ships opt-in, default off, in runtime-only revisions with the phase A parity rollout; the user's 01:27 instruction 'same strategy as when private' covers the public repositories)",
+  "decision": "release",
+  "decision_sha256": "82a8292934ef040d56d04d6a76c56c8d93571a2d055a3bc0c2a53228b4859dff",
+  "gate_profile": "successor",
+  "items": {
+    "1_successor_IF1_index_gain": {
+      "evidence": "private Index paired bootstrap bf1dbeda8d68 (2000 replicates over 138645 cases) of these weights (e20df76c14ed) minus the current revision's (32872f2968e3): 95% lower bound > 0: yes",
+      "passed": true
+    },
+    "1_successor_IF3_index_audit": {
+      "evidence": "row-level Index audit 6fa6c907a7d1 of 120226 Index rows: 2b-RASDML 102402 training lines, 0 item rows, 76 familiar-text rows; planted control 200 / 200",
+      "passed": true
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "evidence": "types choice OK, noul OK, score OK",
+      "passed": true
+    },
+    "1_successor_references": {
+      "evidence": "references only under the Index-first rule (user 2026-10-02 09:55): v3: v3 52.074 vs current 53.437: -1.36 [-3.18, +3.62] (below its former bar); human transfer: human transfer delta 95% [-0.044, +0.075] (clears its former bar); mlx-diag: not run; tier gates: own 1.0 low +3.53; v3 52.074 vs 90% of Decider 2B 49.499; H vs Decider 2B [-0.005, +0.139]; own 1.0 low > 0 ok, v3 >= 44.549 ok, H vs Decider 2B upper >= 0 ok, no type collapsed ok (clears its former bar); overlap exposure: not run; public 231: public 231 166 vs 171 (-5; McNemar p 0.227) (clears its former bar); C1 post-key: not run",
+      "passed": true,
+      "reference": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "4 results below own 1.0 listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 36 files re-hashed; loaded 1883930944",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "420ce3676ab79ed7097db9b44ec5aeef5804a817d644f3e9cdface499cb91393",
+  "model_name": "Decision-2.0-Sol-2B",
+  "receipts_sha256": {
+    "automap-card-pre": "b45bc059ec4d2d7c2645e4d0252a8cd7c6d68eb71cf7bff3155fd83026c635eb",
+    "automap-hub": "68f56f9c9ec3c53c516bbc04ad8cb94409d049164e244f8b9df622e7f42c3a75",
+    "automap-hub-tf518": "6fa222533de9a23b3a54437f6152c78b8b40b120215fefaf5dded8aad3f96ddf",
+    "automap-post": "c2e8a52e33d60e61a10a7f4abbf2f127fdc9e93cb9fa2980c476f91f176f2e61",
+    "automap-pre": "cc64c1318c867c1c33867a53aad04560687224861603603c4159384755469f9a",
+    "card-post": "f173d9dbb62db625686a744a3bcbffe2dfc958fae0a0fdc1defda555a6ba7f82",
+    "card-pre": "2564c7961d0615839718ecb80ab838d5ae5f65890fdaa8988e4f37bc06cedc8c",
+    "download": "3022885b84c4599df9ee154f0310aaf722f20bdb0a1748e26a85cc00c762cd1e",
+    "post": "8d45bc5846110aeeed97056764e54236b6ed28cbff91c9b1c9ccef16c2682b84",
+    "readback": "30e6cdd953e5289a0c200bc69ccdd4944797be95e02064d60bdf73344060d3bc",
+    "repeat-post": "0b4872aaf5bf1eabf893b176d06e2f81733c1573796bb156ee397cf005994f5d",
+    "repeat-pre": "fc05bd62319a075b58c063b5a38cab03f78c72d9b9d4748ddc5148ce5b29eadb",
+    "tree": "6d328f3d77910db8f50fb128b332cf10f3a62e59c5ad7a734eef93db1c46f145",
+    "upload": "b3b826ab04205790bbbf066907d8779c7df3364d3fd8306dce64f3a1be2675fa"
+  },
+  "repo_id": "vllm-sr/Decision-2.0-Sol-2B",
+  "revision": "4b75b52114583b4519001492e8dfb0926c89cfe1",
+  "rule": "index-first",
+  "schema": "dev2-release-gate/1",
+  "supersedes": {
+    "gate_sha256": "445ca889f4c286b46580925627cf0e8a37b502894fda073a231ad0fcfb2603a8",
+    "revision": "8ed41433f5f20c73bf04fe7ef92f2d69c1145002"
+  },
+  "utc": "2026-10-03T00:15:14.783070+00:00"
+}

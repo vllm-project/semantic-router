@@ -53,7 +53,11 @@ ALLOCATIONS = {
         {gpu: base.M6_NODE_GPUS["b"][gpu] for gpu in (0, 1, 5)},
         "the M6 allocation on node B (GPU0, GPU1, GPU5)",
     ),
-    "m6-a": ("27b", dict(base.M6_NODE_GPUS["a"]), "the M6 allocation on node A (GPU2)"),
+    "m6-a": (
+        "27b",
+        {2: base.M6_NODE_GPUS["a"][2]},
+        "the M6 allocation on node A (GPU2)",
+    ),
     "m6-d": (
         "27b",
         dict(base.M6_NODE_GPUS["d"]),

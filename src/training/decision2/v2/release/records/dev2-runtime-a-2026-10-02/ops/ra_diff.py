@@ -1,12 +1,14 @@
 """Files that differ between a released revision and its phase A runtime-only successor (hf-cli python, node token).
 
-  <hf-cli python> ra_diff.py <repo> <released revision> <new revision> <out.json>
+  <hf-cli python> ra_diff.py <repo> <released revision> <new revision> <out.json> [--switch]
 
 The BF16-resident rollout's runtime_diff.py with the two fast-path modules of the phase A runtime, which the
 successor adds: a runtime-only revision may change decision2/__init__.py, api.py and the profile module, add
 decision2/fast.py and fast_kernels.py (never decision2/_vendor/), change the card files that revision_diff.py allows
 and MODEL_MANIFEST.json; every other file, and every weight file in particular, must keep its size and LFS SHA-256
-or git blob id, and nothing is removed. Exits 1 otherwise.
+or git blob id, and nothing is removed. Exits 1 otherwise. With --switch (the opt-in shared-context switch, which
+may follow a phase A revision or carry phase A itself) the fast-path modules may also change, and the successor must
+add decision2/shared_ctx.py.
 """
 
 from __future__ import annotations
@@ -18,6 +20,8 @@ from pathlib import Path
 
 from huggingface_hub import HfApi
 
+from v2.release import hub
+
 RUNTIME_FILES = {
     "decision2/__init__.py",
     "decision2/api.py",
@@ -25,6 +29,7 @@ RUNTIME_FILES = {
     "decision2/kai_native.py",
 }
 ADDED_RUNTIME_FILES = {"decision2/fast.py", "decision2/fast_kernels.py"}
+SWITCH_FILE = "decision2/shared_ctx.py"
 
 
 def card_rules():
@@ -38,19 +43,50 @@ def card_rules():
     return module
 
 
+def files(api: HfApi, repo: str, revision: str) -> dict:
+    """revision_diff.py's file listing, with the visibility the hub policy expects (the six are public)."""
+    info = api.model_info(repo, revision=revision, files_metadata=True)
+    if (
+        info.id != repo
+        or info.sha != revision
+        or info.private is not hub.expected_private(repo)
+    ):
+        raise SystemExit(
+            f"{repo}@{revision} resolves to {info.id}@{info.sha} (private={info.private})"
+        )
+    out = {}
+    for s in info.siblings:
+        lfs = getattr(s, "lfs", None)
+        sha = (
+            (
+                getattr(lfs, "sha256", None)
+                or (lfs.get("sha256") if isinstance(lfs, dict) else None)
+            )
+            if lfs
+            else None
+        )
+        out[s.rfilename] = {
+            "size": s.size,
+            "lfs_sha256": sha,
+            "blob_id": getattr(s, "blob_id", None),
+        }
+    return out
+
+
 def main() -> int:
     repo, released, new, out = sys.argv[1:5]
+    switch = sys.argv[5:] == ["--switch"]
+    changeable = RUNTIME_FILES | (ADDED_RUNTIME_FILES if switch else set())
+    addable = ADDED_RUNTIME_FILES | ({SWITCH_FILE} if switch else set())
+    required = {SWITCH_FILE} if switch else ADDED_RUNTIME_FILES
     rules = card_rules()
     api = HfApi()
-    a, b = rules.files(api, repo, released), rules.files(api, repo, new)
+    a, b = files(api, repo, released), files(api, repo, new)
     changed = sorted(n for n in set(a) | set(b) if a.get(n) != b.get(n))
     runtime = [
         n
         for n in changed
-        if n in b
-        and (
-            (n in RUNTIME_FILES and n in a) or (n in ADDED_RUNTIME_FILES and n not in a)
-        )
+        if n in b and ((n in changeable and n in a) or (n in addable and n not in a))
     ]
     card = [
         n for n in changed if n in rules.CARD_FILES or n.startswith(rules.CARD_PREFIXES)
@@ -63,6 +99,7 @@ def main() -> int:
     ) and all(a[n] == b[n] for n in weights)
     receipt = {
         "schema": "dev2-runtime-diff/1",
+        "mode": "switch" if switch else "phase-a",
         "repo": repo,
         "released": released,
         "new": new,
@@ -74,7 +111,7 @@ def main() -> int:
         "weight_files": len(weights),
         "weight_bytes": sum(a[n]["size"] or 0 for n in weights),
         "weights_byte_identical": weights_identical,
-        "ok": weights_identical and not other and ADDED_RUNTIME_FILES <= set(runtime),
+        "ok": weights_identical and not other and required <= set(runtime),
     }
     Path(out).write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     print(

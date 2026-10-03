@@ -14,7 +14,7 @@ SHA=${1:?MIRROR_SHA}
 shift
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "MIRROR_SHA must be a full commit SHA" >&2; exit 2; }
 STAGE_NODE=${M6_STAGE_NODE:-d}
-[[ "$STAGE_NODE" =~ ^[def]$ ]] || { echo "M6_STAGE_NODE is d, e or f" >&2; exit 2; }
+[[ "$STAGE_NODE" =~ ^[cdef]$ ]] || { echo "M6_STAGE_NODE is c, d, e or f" >&2; exit 2; }
 NODES=${DEV2_NODES_FILE:-$HOME/.config/decision2/nodes.env}
 B=$(grep '^node-b=' "$NODES" | cut -d= -f2-) D=$(grep "^node-$STAGE_NODE=" "$NODES" | cut -d= -f2-)
 [ -n "$B" ] && [ -n "$D" ] || { echo "node-b / node-$STAGE_NODE missing in $NODES" >&2; exit 2; }

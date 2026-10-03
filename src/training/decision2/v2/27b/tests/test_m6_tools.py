@@ -49,7 +49,9 @@ class M6LaunchTest(unittest.TestCase):
     def test_m6_allocation(self):
         with mock.patch.dict(os.environ, {"DEV2_27B_ALLOC": "m6"}, clear=True):
             self.assertEqual(sorted(launch.allowed_gpus("b")), [0, 1, 5])
-            self.assertEqual(sorted(launch.allowed_gpus("a")), [2])
+            self.assertEqual(sorted(launch.allowed_gpus("a")), [1, 2, 3, 4, 5, 6, 7])
+            self.assertEqual(sorted(launch.allowed_gpus("c")), [1, 2, 3, 4, 5, 6, 7])
+            self.assertEqual(launch.allowed_gpus("a")[2], launch.NODE_GPUS["a"][2])
             self.assertEqual(launch.max_cap_hours(), 22.0)
             with tempfile.TemporaryDirectory() as tmp:
                 drm = fake_sysfs(Path(tmp), "renderD129", "0000:83:00.0")
@@ -909,6 +911,12 @@ class M6ScriptTest(unittest.TestCase):
             "X7-4ARM",
             "X8-IBxIB2-8",
             "X8-ML",
+            "X9-LRH2",
+            "X9-LRH2xM50",
+            "X9-LRH",
+            "X9-LRHxM50",
+            "X9-ML0",
+            "X9-IBxIB2-10",
         ):
             entry = (
                 f'  [{arm}]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 '
@@ -924,6 +932,8 @@ class M6ScriptTest(unittest.TestCase):
                 (["0" * 40, "M6-IBxIB2-m5", "stage"], "bad ARM"),
                 (["0" * 40, "M6-IBxIB2", "stage"], "bad ARM"),
                 (["0" * 40, "M7-IB24", "stage"], "bad ARM"),
+                (["0" * 40, "X9-LRH4", "stage"], "bad ARM"),
+                (["0" * 40, "M9-IB-lrh", "stage"], "bad ARM"),
             ):
                 with self.subTest(script=script, args=args):
                     out = subprocess.run(
@@ -1295,6 +1305,8 @@ class M6ScriptTest(unittest.TestCase):
             (["0" * 40, "M6-IB", "1"], "bad NAME"),
             (["0" * 40, "M6-IBxIB2-m50", "2"], "not an M6 node B GPU"),
             (["0" * 40, "M7-IB124ML", "1"], "missing mirror"),
+            (["0" * 40, "X9-LRH2xM50", "1"], "missing mirror"),
+            (["0" * 40, "X9-LRH3", "1"], "bad NAME"),
         ):
             with self.subTest(args=args):
                 out = subprocess.run(
@@ -1352,6 +1364,56 @@ class M6ScriptTest(unittest.TestCase):
             moved = sorted(p.name for p in gates.glob("contrast-M6-IB-*"))
             self.assertEqual([Path(n).suffix for n in moved], [".json", ".log"])
             self.assertIn("complete (no listed chain alive)", out.stdout)
+
+    def test_successor_release_ops_cover_the_candidates(self):
+        import importlib.util
+        import re
+
+        ops = ROOT.parent / "release" / "records" / "dev2-27b-succ-2026-10-03" / "ops"
+        spec = importlib.util.spec_from_file_location("make_27bs", ops / "make_27bs.py")
+        make = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(make)
+        self.assertIsNone(make.CHOICE)
+        xarm = (M6 / "m6-xarm.sh").read_text()
+        names = re.search(r'\[\[ "\$NAME" =~ \^\((.*)\)\$ \]\]', xarm).group(1)
+        for arm, a in make.ARMS.items():
+            with self.subTest(arm=arm):
+                self.assertRegex(arm, f"^({names})$")
+                self.assertTrue(set(a["mixes"]) <= set(make.MIXES))
+                self.assertTrue(set(a["mixes"]) <= set(make.RECIPE))
+                for script in ("release27bs.sh", "inputs27bs.sh"):
+                    pattern = re.search(
+                        r'\[\[ "\$ARM" =~ (\S+) \]\]', (ops / script).read_text()
+                    ).group(1)
+                    self.assertRegex(arm, pattern)
+                index = (M6 / "m6-index.sh").read_text()
+                case = re.search(
+                    rf"\n\s+([^\n)]*\b{re.escape(arm)}\b[^\n)]*)\)\s*\n?\s*mixes=\"([^\"]*)\"",
+                    index,
+                )
+                self.assertIsNotNone(case, arm)
+                audited = {spec.split(":")[2] for spec in case.group(2).split()}
+                self.assertEqual(audited, set(a["mixes"]))
+
+    def test_relay_accepts_m9_arm_seeds(self):
+        for name, message in (
+            ("M8-IB124-s4", "no arm-seed run"),
+            ("M9-IB12ML-s5", "no arm-seed run"),
+            ("M9-IB2-lrh-s6", "no arm-seed run"),
+            ("M9-IB-lrh-s5", "no arm-seed run"),
+            ("M9-IB-lrq-s5", "NAME is an"),
+            ("M9-IB-s7", "NAME is an"),
+            ("X9-LRH-s5", "NAME is an"),
+        ):
+            with self.subTest(name=name):
+                out = subprocess.run(
+                    ["bash", str(M6 / "m6-relay.sh"), name, "1"],
+                    capture_output=True,
+                    text=True,
+                    env=dict(os.environ, RELAY_NODE="c"),
+                )
+                self.assertEqual(out.returncode, 2)
+                self.assertIn(message, out.stderr)
 
     def test_bash_n(self):
         scripts = sorted(M6.glob("*.sh"))

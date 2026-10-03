@@ -1,8 +1,8 @@
 {
   "device": "cuda:0",
-  "load_seconds": 146.79536709398963,
+  "load_seconds": 278.1220867349766,
   "mode": "parity",
-  "package_manifest_sha256": "03d6f16ac9bbb9b269657b64d64b5719d54c3b493df2d6c630b28823cd13d098",
+  "package_manifest_sha256": "517947705e89157b9d0b82b7765cd9ad5af2a51de47b6ac1bffb3308eda8b478",
   "panels": {
     "css15": {
       "category_changes": 0,
@@ -13,7 +13,7 @@
       "predictions_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "prompts": 6547,
       "prompts_sha256": "7a527357e8ac3ca8da8f8663da66684d04c568a8c728261125c194294dd34af6",
-      "seconds": 624.7219105281401,
+      "seconds": 641.6811286280863,
       "slots": 6547
     },
     "mlx-diag": {
@@ -25,7 +25,7 @@
       "predictions_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "prompts": 2275,
       "prompts_sha256": "25fde28f4b227a9cc8588da79a597ce816ba4a8f979139f99f69aeb595580a5f",
-      "seconds": 167.7486594519578,
+      "seconds": 150.84284637193196,
       "slots": 2275
     },
     "public231": {
@@ -37,7 +37,7 @@
       "predictions_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "prompts": 231,
       "prompts_sha256": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd",
-      "seconds": 34.39197306986898,
+      "seconds": 36.140790306031704,
       "slots": 231
     },
     "typed-final": {
@@ -49,7 +49,7 @@
       "predictions_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "prompts": 1600,
       "prompts_sha256": "e2a4a86bc978fc7497823e106533d8aa896a0307453d712f7bf99ee3174e87bd",
-      "seconds": 117.40872992994264,
+      "seconds": 194.36161321308464,
       "slots": 2000
     }
   },
@@ -69,12 +69,12 @@
       "runtime_check_sha256": "4517d9e001d9e1e2b520086b5153fa69b642a191efb19b8c9a6a9ef126e1fc2d",
       "triton": "3.7.1+gitf0b55c07",
       "triton_cache_autotuning": "1",
-      "triton_cache_dir": "/data/dev2/runs/runtime-a/triton/27B-parity-new-20261002T124053Z"
+      "triton_cache_dir": "/data/dev2/runs/runtime-a/triton/27B-parity-new-20261002T190654Z"
     },
     "numpy": "2.3.5",
     "parameter_dtypes": {
       "bfloat16": 24350556160,
-      "float32": 3146952704
+      "float32": 5014597632
     },
     "peft": "0.21.0",
     "python": "3.12.13",

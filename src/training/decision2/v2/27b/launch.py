@@ -45,7 +45,16 @@ M6_NODE_GPUS = {
         1: ("0000:8b:00.0", "renderD137"),
         5: NODE_GPUS["b"][5],
     },
-    "a": {2: NODE_GPUS["a"][2]},
+    # node A: GPU2 (M6) and GPU1-7 for 27B M9 (COORDINATION 2026-10-03 04:18 / 04:25 / 05:18)
+    "a": {
+        gpu: (f"0000:{0x83 + 8 * gpu:02x}:00.0", f"renderD{129 + 8 * gpu}")
+        for gpu in range(1, 8)
+    },
+    # node C (27B M9 amendment 1, COORDINATION 2026-10-03 04:58); GPU0 is K8s-held and never ours
+    "c": {
+        gpu: (f"0000:{0x83 + 8 * gpu:02x}:00.0", f"renderD{129 + 8 * gpu}")
+        for gpu in range(1, 8)
+    },
     # node D (once IX1 releases it; per-GPU render node only, as on every node C-F); node B's PCI layout
     "d": {
         gpu: (f"0000:{0x83 + 8 * gpu:02x}:00.0", f"renderD{129 + 8 * gpu}")
@@ -112,7 +121,7 @@ def render_node(
     gpus = allowed_gpus(node_id)
     if gpu not in gpus:
         where = (
-            "node B GPU0/1/5, node A GPU2, node D GPU0-7, node E GPU0-3/6-7, node F GPU2-7"
+            "node B GPU0/1/5, node A GPU1-7, node C GPU1-7, node D GPU0-7, node E GPU0-3/6-7, node F GPU2-7"
             if m6_allocation()
             else "node B GPU5-7, node A GPU2-4"
         )

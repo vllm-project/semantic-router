@@ -1,0 +1,6 @@
+{
+ "path": "/data/dev2/runs/release/triton/runtime-a-0p6b-ras",
+ "digest": "2d18b7641c4a65e6452ae990aaae6a326f4d42bc9ef094e36bc88405a32fc8dc",
+ "files": 57,
+ "from": "the new-side autotune cache of fast.sh 0.6B --parity --switch 20261002T224715Z on the phase A release 51b7b474 (all four scored panels through the phase A runtime with the shared-context switch off, mirror b3276a299; runtime files as at 9cffe606c; it started from that release's autotune cache after the old runtime ran the same panels), frozen read-only"
+}
