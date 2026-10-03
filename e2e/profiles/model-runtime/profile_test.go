@@ -200,7 +200,8 @@ func TestModulesReadTheFixtureLabelMapsFromTheConfigMap(t *testing.T) {
 					Modules struct {
 						Classifier struct {
 							Domain struct {
-								Mapping string `yaml:"category_mapping_path"`
+								Mapping   string  `yaml:"category_mapping_path"`
+								Threshold float64 `yaml:"threshold"`
 							} `yaml:"domain"`
 							PII struct {
 								Mapping string `yaml:"pii_mapping_path"`
@@ -216,6 +217,10 @@ func TestModulesReadTheFixtureLabelMapsFromTheConfigMap(t *testing.T) {
 	}
 	load(t, "values.yaml", &profile)
 	modules := profile.Config.Global.ModelCatalog.Modules
+	// testcases/model_runtime_signals.go (mrDomainThreshold) checks matches against it.
+	if modules.Classifier.Domain.Threshold != 0.01 {
+		t.Fatalf("domain threshold %v, the task-signal case expects 0.01", modules.Classifier.Domain.Threshold)
+	}
 	for _, path := range []string{modules.Classifier.Domain.Mapping, modules.Classifier.PII.Mapping, modules.PromptGuard.Mapping} {
 		key := strings.TrimPrefix(path, "/opt/vsr-e2e/")
 		if _, shipped := configMapFiles[key]; !shipped || key == path {

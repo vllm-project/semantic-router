@@ -30,6 +30,8 @@ var mrSignalPrompts = []string{
 
 const (
 	mrSignalThreshold = 0.5
+	// Must match classifier.domain.threshold in values.yaml.
+	mrDomainThreshold = 0.01
 	// The Router reads float32 model outputs the runtime reports as JSON.
 	mrScoreTolerance = 1e-5
 	// Must match the windows in values.yaml.
@@ -100,12 +102,20 @@ func checkTaskSignals(
 	if err != nil {
 		return nil, err
 	}
-	domainProbability, _ := domain.result.Probability(domain.labels, domain.result.Label)
-	if matched := headerItems(response.Headers, "x-vsr-matched-domains"); len(matched) != 1 || !matched[domain.result.Label] {
-		return nil, fmt.Errorf("x-vsr-matched-domains %v, the domain model chose %q", matched, domain.result.Label)
+	// An uncertain distribution, which random weights give, matches every
+	// domain at or above the threshold; a confident one only the top domain.
+	matchedDomains := headerItems(response.Headers, "x-vsr-matched-domains")
+	if !matchedDomains[domain.result.Label] {
+		return nil, fmt.Errorf("x-vsr-matched-domains %v lacks %q, the domain model's choice", matchedDomains, domain.result.Label)
 	}
-	if err = sameScore(preview.SignalConfidences, "domain:"+domain.result.Label, domainProbability); err != nil {
-		return nil, err
+	for name := range matchedDomains {
+		probability, known := domain.result.Probability(domain.labels, name)
+		if !known || probability < mrDomainThreshold {
+			return nil, fmt.Errorf("domain %s matched, but the domain model gives it %.6f", name, probability)
+		}
+		if err = sameScore(preview.SignalConfidences, "domain:"+name, probability); err != nil {
+			return nil, err
+		}
 	}
 
 	windowed := &modelruntime.ClassifyOptions{
