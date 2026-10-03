@@ -38,6 +38,7 @@ type (
 	LearningDiagnostics           = store.LearningDiagnostics
 	LearningAdaptationDiagnostics = store.LearningAdaptationDiagnostics
 	LearningCandidateScore        = store.LearningCandidateScore
+	LearningSuccessEstimate       = store.LearningSuccessEstimate
 	LearningCandidateTrace        = store.LearningCandidateTrace
 	LearningIdentityDiagnostics   = store.LearningIdentityDiagnostics
 	LearningIdentityHeaders       = store.LearningIdentityHeaders

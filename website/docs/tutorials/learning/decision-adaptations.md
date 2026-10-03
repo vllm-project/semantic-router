@@ -67,6 +67,19 @@ adaptations:
 `adaptation.candidate_set` is optional. When omitted, the decision inherits
 `global.router.learning.adaptation.candidate_set`.
 
+`adaptation.success` is optional. When omitted, the decision inherits
+`global.router.learning.adaptation.success`. A decision-local
+`stale_after_seconds` or `outcome` overrides the global default without
+changing the selected model:
+
+```yaml
+adaptations:
+  mode: observe
+  adaptation:
+    success:
+      stale_after_seconds: 3600
+```
+
 Allowed modes:
 
 | Mode | Meaning |
