@@ -28,6 +28,16 @@ build-router-riscv: ## Cross-compile the router for linux/riscv64 (models attach
 	@mkdir -p bin
 	@cd src/semantic-router && CGO_ENABLED=0 GOOS=linux GOARCH=riscv64 go build -o ../../bin/router-riscv64 ./cmd
 
+RISCV_QEMU ?= $(firstword $(wildcard /usr/bin/qemu-riscv64-static /usr/bin/qemu-riscv64))
+
+test-riscv-qemu: build-router-riscv ## Run the riscv64 router under qemu-user, attached to a model runtime on the host
+	@$(LOG_TARGET)
+	@test -n "$(RISCV_QEMU)" || { echo "missing qemu-riscv64; install qemu-user-static"; exit 1; }
+	@RISCV_QEMU="$(RISCV_QEMU)" RISCV_ROUTER_BIN="$(CURDIR)/bin/router-riscv64" \
+		VLLM_SR_RUNTIME_COMMAND="$${VLLM_SR_RUNTIME_COMMAND:-$(AGENT_VENV)/bin/vllm-sr-runtime}" \
+		MODEL_TEST_REPORT_DIR="$${MODEL_TEST_REPORT_DIR:-$(CURDIR)/.agent-harness/riscv-qemu}" \
+		bash tools/ci/riscv-qemu-router-smoke.sh
+
 # Run the router
 run-router: ## Run the router with the specified config
 run-router: build-router
@@ -70,7 +80,7 @@ test-core-unit: ## Run discovered Go contracts with explicit model/service profi
 test-core-storage: ## Run the complete source-owned storage inventory against required services
 	@python3 tools/ci/run_core_tests.py --mode storage --output .agent-harness/core/storage
 
-.PHONY: build-router-riscv test-core-unit test-core-storage
+.PHONY: build-router-riscv test-riscv-qemu test-core-unit test-core-storage
 
 # Clean built artifacts
 clean: ## Clean built artifacts
