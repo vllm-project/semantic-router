@@ -49,6 +49,8 @@ def apply_handoff(
         raise ValueError("source KV shape differs from mapper")
     first_cache = next(iter(target_caches.values()))
     dtype = first_cache.dtype
+    if first_cache.ndim < 3 or first_cache.shape[2] <= 0:
+        raise ValueError("target cache has no valid block dimension")
     if count % first_cache.shape[2]:
         raise ValueError("source prefix must end on a target cache block boundary")
     if any(cache.device != first_cache.device for cache in target_caches.values()):
