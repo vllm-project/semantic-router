@@ -30,7 +30,7 @@ family. [Provider model evaluation](./model-performance-eval) and
 
 ## Choose your starting checkpoint {#record-the-base-and-task-lineage}
 
-Use [Vela Encoder](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M)
+Use [Vela Encoder](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M)
 to train a new task. It is the common base for Vela's classifiers, embeddings,
 and reranker. Download an explicit Hub revision and keep its tokenizer and
 configuration together with the weights.
