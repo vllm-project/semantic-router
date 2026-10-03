@@ -1,268 +1,4 @@
 {
-  "vllm-sr/Vela-1.0-Encoder-307M-Domain": {
-    "answers": {
-      "cpu": {
-        "0.probabilities.0": 6.361186422054743e-08,
-        "0.probabilities.1": 4.985605883689459e-08,
-        "0.probabilities.10": 4.133967479447165e-07,
-        "0.probabilities.11": 1.9082584401530767e-09,
-        "0.probabilities.12": 4.1138960682474135e-08,
-        "0.probabilities.13": 4.827201305346307e-09,
-        "0.probabilities.2": 2.664797982276923e-08,
-        "0.probabilities.3": 0.9999954700469971,
-        "0.probabilities.4": 4.792452656943169e-08,
-        "0.probabilities.5": 3.193895981024042e-10,
-        "0.probabilities.6": 2.789402042679967e-10,
-        "0.probabilities.7": 2.1821362494733876e-09,
-        "0.probabilities.8": 2.4491184191788307e-08,
-        "0.probabilities.9": 4.039096438646084e-06,
-        "1.probabilities.0": 0.0009184263763017952,
-        "1.probabilities.1": 0.006021156907081604,
-        "1.probabilities.10": 0.4873102307319641,
-        "1.probabilities.11": 4.765253470395692e-05,
-        "1.probabilities.12": 0.0022214341443032026,
-        "1.probabilities.13": 0.0001609020255273208,
-        "1.probabilities.2": 0.00018036540132015944,
-        "1.probabilities.3": 0.07671938091516495,
-        "1.probabilities.4": 0.014548378065228462,
-        "1.probabilities.5": 0.1077403798699379,
-        "1.probabilities.6": 0.023863792419433594,
-        "1.probabilities.7": 9.384571603732184e-05,
-        "1.probabilities.8": 0.012793688103556633,
-        "1.probabilities.9": 0.26738035678863525
-      },
-      "rocm": {
-        "0.probabilities.0": 6.361161553058992e-08,
-        "0.probabilities.1": 4.9855863437642256e-08,
-        "0.probabilities.10": 4.1339552581121097e-07,
-        "0.probabilities.11": 1.908254665394793e-09,
-        "0.probabilities.12": 4.1138875417345844e-08,
-        "0.probabilities.13": 4.8271822095102834e-09,
-        "0.probabilities.2": 2.6647926532064048e-08,
-        "0.probabilities.3": 0.9999953508377075,
-        "0.probabilities.4": 4.7924430646162364e-08,
-        "0.probabilities.5": 3.1938895972416503e-10,
-        "0.probabilities.6": 2.789396491564844e-10,
-        "0.probabilities.7": 2.1821402462762762e-09,
-        "0.probabilities.8": 2.4491226824352452e-08,
-        "0.probabilities.9": 4.039080522488803e-06,
-        "1.probabilities.0": 0.0009184289956465364,
-        "1.probabilities.1": 0.00602113688364625,
-        "1.probabilities.10": 0.4873088002204895,
-        "1.probabilities.11": 4.765280755236745e-05,
-        "1.probabilities.12": 0.0022214381024241447,
-        "1.probabilities.13": 0.00016090247663669288,
-        "1.probabilities.2": 0.00018036669644061476,
-        "1.probabilities.3": 0.07671929150819778,
-        "1.probabilities.4": 0.014548443257808685,
-        "1.probabilities.5": 0.10774052888154984,
-        "1.probabilities.6": 0.02386404015123844,
-        "1.probabilities.7": 9.38465163926594e-05,
-        "1.probabilities.8": 0.012793704867362976,
-        "1.probabilities.9": 0.2673814296722412
-      }
-    },
-    "revision": "f6354f54adcf38770f635ad903be2b00577f6c11"
-  },
-  "vllm-sr/Vela-1.0-Encoder-307M-FactCheck": {
-    "answers": {
-      "cpu": {
-        "0.probabilities.0": 0.999945878982544,
-        "0.probabilities.1": 5.4064468713477254e-05,
-        "1.probabilities.0": 0.9692270755767822,
-        "1.probabilities.1": 0.03077295981347561
-      },
-      "rocm": {
-        "0.probabilities.0": 0.999945878982544,
-        "0.probabilities.1": 5.4065294534666464e-05,
-        "1.probabilities.0": 0.9692268371582031,
-        "1.probabilities.1": 0.030773188918828964
-      }
-    },
-    "revision": "99ede1aba1563e59e416f744d25b3f6b7e9d8274"
-  },
-  "vllm-sr/Vela-1.0-Encoder-307M-Feedback": {
-    "answers": {
-      "cpu": {
-        "0.probabilities.0": 2.214190608640365e-08,
-        "0.probabilities.1": 5.98091531855971e-08,
-        "0.probabilities.2": 1.9273600173619343e-06,
-        "0.probabilities.3": 2.0975686254587345e-07,
-        "0.probabilities.4": 0.9999977350234985,
-        "1.probabilities.0": 9.36684543262345e-08,
-        "1.probabilities.1": 7.754896724776472e-11,
-        "1.probabilities.2": 1.2730589560305816e-07,
-        "1.probabilities.3": 4.2387489074258156e-09,
-        "1.probabilities.4": 0.9999997615814209
-      },
-      "rocm": {
-        "0.probabilities.0": 2.2142076616660233e-08,
-        "0.probabilities.1": 5.980984241205078e-08,
-        "0.probabilities.2": 1.927376843013917e-06,
-        "0.probabilities.3": 2.0975866732442228e-07,
-        "0.probabilities.4": 0.9999978542327881,
-        "1.probabilities.0": 9.366827669055056e-08,
-        "1.probabilities.1": 7.75491129645367e-11,
-        "1.probabilities.2": 1.2730626508528076e-07,
-        "1.probabilities.3": 4.238757345120803e-09,
-        "1.probabilities.4": 0.9999997615814209
-      }
-    },
-    "revision": "47434a7fd7c245c0c7c17564a000b3c56ccfec41"
-  },
-  "vllm-sr/Vela-1.0-Encoder-307M-Guard": {
-    "answers": {
-      "cpu": {
-        "0.probabilities.0": 0.9999865293502808,
-        "0.probabilities.1": 1.3507775292964652e-05,
-        "1.probabilities.0": 0.9999204874038696,
-        "1.probabilities.1": 7.955731416586787e-05
-      },
-      "rocm": {
-        "0.probabilities.0": 0.9999865293502808,
-        "0.probabilities.1": 1.3507788025890477e-05,
-        "1.probabilities.0": 0.9999204874038696,
-        "1.probabilities.1": 7.95576925156638e-05
-      }
-    },
-    "revision": "087f9e401012df839c83717b746967ac7aebfa3e"
-  },
-  "vllm-sr/Vela-1.0-Encoder-307M-Halu": {
-    "answers": {
-      "cpu": {
-        "0.span.0.hallucinated.27.32": 0.9573665857315063
-      },
-      "rocm": {
-        "0.span.0.hallucinated.27.32": 0.9573665857315063
-      }
-    },
-    "revision": "ca87531211e414ac21c641b2faa8b8e21619de8f"
-  },
-  "vllm-sr/Vela-1.0-Encoder-307M-Hazard": {
-    "answers": {
-      "cpu": {
-        "0.scores.0": 6.068223592592403e-05,
-        "0.scores.1": 0.00032763928174972534,
-        "0.scores.10": 1.731508928060066e-05,
-        "0.scores.11": 0.0001294335670536384,
-        "0.scores.2": 0.000359128083800897,
-        "0.scores.3": 0.00011082580749643967,
-        "0.scores.4": 0.00011034506314899772,
-        "0.scores.5": 0.00013884012878406793,
-        "0.scores.6": 0.0006869899807497859,
-        "0.scores.7": 0.000105810679087881,
-        "0.scores.8": 0.0003950730024371296,
-        "0.scores.9": 0.00010045157978311181,
-        "1.scores.0": 0.0004085261607542634,
-        "1.scores.1": 0.00013511974248103797,
-        "1.scores.10": 0.00035940841189585626,
-        "1.scores.11": 2.5735691451700404e-05,
-        "1.scores.2": 0.00023116280499380082,
-        "1.scores.3": 0.0002755918831098825,
-        "1.scores.4": 5.3896244935458526e-05,
-        "1.scores.5": 0.0001510868751211092,
-        "1.scores.6": 0.00013604061678051949,
-        "1.scores.7": 5.170804797671735e-05,
-        "1.scores.8": 0.00010502669465495273,
-        "1.scores.9": 0.3491007089614868
-      },
-      "rocm": {
-        "0.scores.0": 6.06820649409201e-05,
-        "0.scores.1": 0.00032763989293016493,
-        "0.scores.10": 1.7315138393314555e-05,
-        "0.scores.11": 0.0001294340763706714,
-        "0.scores.2": 0.0003591277345549315,
-        "0.scores.3": 0.00011082602577516809,
-        "0.scores.4": 0.00011034496128559113,
-        "0.scores.5": 0.00013883999781683087,
-        "0.scores.6": 0.0006869890494272113,
-        "0.scores.7": 0.000105810679087881,
-        "0.scores.8": 0.00039507338078692555,
-        "0.scores.9": 0.00010045139060821384,
-        "1.scores.0": 0.000408525753300637,
-        "1.scores.1": 0.00013511974248103797,
-        "1.scores.10": 0.00035940753878094256,
-        "1.scores.11": 2.5735644157975912e-05,
-        "1.scores.2": 0.00023116169904824346,
-        "1.scores.3": 0.00027559162117540836,
-        "1.scores.4": 5.3896244935458526e-05,
-        "1.scores.5": 0.0001510868751211092,
-        "1.scores.6": 0.0001360408787149936,
-        "1.scores.7": 5.1708146202145144e-05,
-        "1.scores.8": 0.00010502740042284131,
-        "1.scores.9": 0.34910058975219727
-      }
-    },
-    "revision": "5dd25f2cc3c98f338e6a79b667662d60f936a28d"
-  },
-  "vllm-sr/Vela-1.0-Encoder-307M-Modality": {
-    "answers": {
-      "cpu": {
-        "0.probabilities.0": 1.0,
-        "0.probabilities.1": 8.600495871036173e-10,
-        "0.probabilities.2": 8.65123112037125e-11,
-        "1.probabilities.0": 0.9999977350234985,
-        "1.probabilities.1": 2.2847598302178085e-06,
-        "1.probabilities.2": 4.1760403468593665e-10
-      },
-      "rocm": {
-        "0.probabilities.0": 1.0,
-        "0.probabilities.1": 8.600495871036173e-10,
-        "0.probabilities.2": 8.651197813680511e-11,
-        "1.probabilities.0": 0.9999977350234985,
-        "1.probabilities.1": 2.2847532363812206e-06,
-        "1.probabilities.2": 4.176032297742438e-10
-      }
-    },
-    "revision": "5384b8997e3cbb79ca3a670e869577f4e4f4997e"
-  },
-  "vllm-sr/Vela-1.0-Encoder-307M-PII": {
-    "answers": {
-      "cpu": {
-        "1.span.0.PHONE_NUMBER.24.35": 0.9981785199858926,
-        "1.span.1.GPE.53.59": 0.9997298121452332
-      },
-      "rocm": {
-        "1.span.0.PHONE_NUMBER.24.35": 0.9981785199858926,
-        "1.span.1.GPE.53.59": 0.9997298121452332
-      }
-    },
-    "revision": "6d3300c4bd7975f30a664503f6c725cf1fbbad48"
-  },
-  "vllm-sr/Vela-1.0-Encoder-307M-Safety": {
-    "answers": {
-      "cpu": {
-        "0.probabilities.0": 0.9959297776222229,
-        "0.probabilities.1": 0.004070220980793238,
-        "1.probabilities.0": 0.07584327459335327,
-        "1.probabilities.1": 0.9241567850112915
-      },
-      "rocm": {
-        "0.probabilities.0": 0.9959297776222229,
-        "0.probabilities.1": 0.004070224706083536,
-        "1.probabilities.0": 0.07584310322999954,
-        "1.probabilities.1": 0.924156904220581
-      }
-    },
-    "revision": "6e70e725a5f4d86da10f5be5e4dfd1da0358bb85"
-  },
-  "vllm-sr/Vela-1.0-Encoder-307M-Shield": {
-    "answers": {
-      "cpu": {
-        "0.probabilities.0": 0.9106253385543823,
-        "0.probabilities.1": 0.08937466144561768,
-        "1.probabilities.0": 0.02909344807267189,
-        "1.probabilities.1": 0.9709064960479736
-      },
-      "rocm": {
-        "0.probabilities.0": 0.9106253385543823,
-        "0.probabilities.1": 0.08937466144561768,
-        "1.probabilities.0": 0.029093490913510323,
-        "1.probabilities.1": 0.9709064960479736
-      }
-    },
-    "revision": "a981a99eeb05a2859b88b5cee9af4352897ec4ec"
-  },
   "Qwen/Qwen3-Embedding-0.6B": {
     "answers": {
       "cpu": {
@@ -4368,6 +4104,71 @@
     },
     "revision": "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3"
   },
+  "vllm-sr/Vela-1.0-Encoder-307M-Domain": {
+    "answers": {
+      "cpu": {
+        "0.probabilities.0": 6.361138105148711e-08,
+        "0.probabilities.1": 4.985596291362526e-08,
+        "0.probabilities.10": 4.133947868467658e-07,
+        "0.probabilities.11": 1.908254887439398e-09,
+        "0.probabilities.12": 4.11388825227732e-08,
+        "0.probabilities.13": 4.82719242356211e-09,
+        "0.probabilities.2": 2.6647930084777727e-08,
+        "0.probabilities.3": 0.9999954700469971,
+        "0.probabilities.4": 4.792452656943169e-08,
+        "0.probabilities.5": 3.1938776623441356e-10,
+        "0.probabilities.6": 2.78940759379509e-10,
+        "0.probabilities.7": 2.1821238149755118e-09,
+        "0.probabilities.8": 2.449123037706613e-08,
+        "0.probabilities.9": 4.039100076624891e-06,
+        "1.probabilities.0": 0.0009184387163259089,
+        "1.probabilities.1": 0.006021169014275074,
+        "1.probabilities.10": 0.4873093366622925,
+        "1.probabilities.11": 4.765285484609194e-05,
+        "1.probabilities.12": 0.0022214404307305813,
+        "1.probabilities.13": 0.0001609032624401152,
+        "1.probabilities.2": 0.00018036644905805588,
+        "1.probabilities.3": 0.07671947777271271,
+        "1.probabilities.4": 0.014548538252711296,
+        "1.probabilities.5": 0.10774072259664536,
+        "1.probabilities.6": 0.02386397495865822,
+        "1.probabilities.7": 9.384572331327945e-05,
+        "1.probabilities.8": 0.01279372163116932,
+        "1.probabilities.9": 0.2673804461956024
+      },
+      "rocm": {
+        "0.probabilities.0": 6.361161553058992e-08,
+        "0.probabilities.1": 4.9855863437642256e-08,
+        "0.probabilities.10": 4.1339552581121097e-07,
+        "0.probabilities.11": 1.908254665394793e-09,
+        "0.probabilities.12": 4.1138875417345844e-08,
+        "0.probabilities.13": 4.8271822095102834e-09,
+        "0.probabilities.2": 2.6647926532064048e-08,
+        "0.probabilities.3": 0.9999953508377075,
+        "0.probabilities.4": 4.7924430646162364e-08,
+        "0.probabilities.5": 3.1938895972416503e-10,
+        "0.probabilities.6": 2.789396491564844e-10,
+        "0.probabilities.7": 2.1821402462762762e-09,
+        "0.probabilities.8": 2.4491226824352452e-08,
+        "0.probabilities.9": 4.039080522488803e-06,
+        "1.probabilities.0": 0.0009184289956465364,
+        "1.probabilities.1": 0.00602113688364625,
+        "1.probabilities.10": 0.4873088002204895,
+        "1.probabilities.11": 4.765280755236745e-05,
+        "1.probabilities.12": 0.0022214381024241447,
+        "1.probabilities.13": 0.00016090247663669288,
+        "1.probabilities.2": 0.00018036669644061476,
+        "1.probabilities.3": 0.07671929150819778,
+        "1.probabilities.4": 0.014548443257808685,
+        "1.probabilities.5": 0.10774052888154984,
+        "1.probabilities.6": 0.02386404015123844,
+        "1.probabilities.7": 9.38465163926594e-05,
+        "1.probabilities.8": 0.012793704867362976,
+        "1.probabilities.9": 0.2673814296722412
+      }
+    },
+    "revision": "f6354f54adcf38770f635ad903be2b00577f6c11"
+  },
   "vllm-sr/Vela-1.0-Encoder-307M-Embedding": {
     "answers": {
       "cpu": {
@@ -7449,6 +7250,171 @@
     },
     "revision": "1e57cebf5a7b7fec6e6973f05bbca97c5cca4436"
   },
+  "vllm-sr/Vela-1.0-Encoder-307M-FactCheck": {
+    "answers": {
+      "cpu": {
+        "0.probabilities.0": 0.999945878982544,
+        "0.probabilities.1": 5.406467607826926e-05,
+        "1.probabilities.0": 0.9692274332046509,
+        "1.probabilities.1": 0.030772600322961807
+      },
+      "rocm": {
+        "0.probabilities.0": 0.999945878982544,
+        "0.probabilities.1": 5.4065294534666464e-05,
+        "1.probabilities.0": 0.9692268371582031,
+        "1.probabilities.1": 0.030773188918828964
+      }
+    },
+    "revision": "99ede1aba1563e59e416f744d25b3f6b7e9d8274"
+  },
+  "vllm-sr/Vela-1.0-Encoder-307M-Feedback": {
+    "answers": {
+      "cpu": {
+        "0.probabilities.0": 2.21418225976322e-08,
+        "0.probabilities.1": 5.980892581192165e-08,
+        "0.probabilities.2": 1.9273581983725308e-06,
+        "0.probabilities.3": 2.097564504310867e-07,
+        "0.probabilities.4": 0.9999977350234985,
+        "1.probabilities.0": 9.36684543262345e-08,
+        "1.probabilities.1": 7.75491129645367e-11,
+        "1.probabilities.2": 1.2730554033169028e-07,
+        "1.probabilities.3": 4.238732920214261e-09,
+        "1.probabilities.4": 0.9999997615814209
+      },
+      "rocm": {
+        "0.probabilities.0": 2.2142076616660233e-08,
+        "0.probabilities.1": 5.980984241205078e-08,
+        "0.probabilities.2": 1.927376843013917e-06,
+        "0.probabilities.3": 2.0975866732442228e-07,
+        "0.probabilities.4": 0.9999978542327881,
+        "1.probabilities.0": 9.366827669055056e-08,
+        "1.probabilities.1": 7.75491129645367e-11,
+        "1.probabilities.2": 1.2730626508528076e-07,
+        "1.probabilities.3": 4.238757345120803e-09,
+        "1.probabilities.4": 0.9999997615814209
+      }
+    },
+    "revision": "47434a7fd7c245c0c7c17564a000b3c56ccfec41"
+  },
+  "vllm-sr/Vela-1.0-Encoder-307M-Guard": {
+    "answers": {
+      "cpu": {
+        "0.probabilities.0": 0.9999865293502808,
+        "0.probabilities.1": 1.3507633411791176e-05,
+        "1.probabilities.0": 0.9999204874038696,
+        "1.probabilities.1": 7.955640467116609e-05
+      },
+      "rocm": {
+        "0.probabilities.0": 0.9999865293502808,
+        "0.probabilities.1": 1.3507788025890477e-05,
+        "1.probabilities.0": 0.9999204874038696,
+        "1.probabilities.1": 7.95576925156638e-05
+      }
+    },
+    "revision": "087f9e401012df839c83717b746967ac7aebfa3e"
+  },
+  "vllm-sr/Vela-1.0-Encoder-307M-Halu": {
+    "answers": {
+      "cpu": {
+        "0.span.0.hallucinated.27.32": 0.9573665857315063
+      },
+      "rocm": {
+        "0.span.0.hallucinated.27.32": 0.9573665857315063
+      }
+    },
+    "revision": "ca87531211e414ac21c641b2faa8b8e21619de8f"
+  },
+  "vllm-sr/Vela-1.0-Encoder-307M-Hazard": {
+    "answers": {
+      "cpu": {
+        "0.scores.0": 6.0682006733259186e-05,
+        "0.scores.1": 0.00032763928174972534,
+        "0.scores.10": 1.7315072909696028e-05,
+        "0.scores.11": 0.0001294340763706714,
+        "0.scores.2": 0.00035912738530896604,
+        "0.scores.3": 0.0001108261349145323,
+        "0.scores.4": 0.00011034569615731016,
+        "0.scores.5": 0.0001388396049151197,
+        "0.scores.6": 0.0006869899807497859,
+        "0.scores.7": 0.000105810679087881,
+        "0.scores.8": 0.00039507413748651743,
+        "0.scores.9": 0.00010045139060821384,
+        "1.scores.0": 0.00040852438542060554,
+        "1.scores.1": 0.00013512038276530802,
+        "1.scores.10": 0.00035940943052992225,
+        "1.scores.11": 2.5735544113558717e-05,
+        "1.scores.2": 0.00023116169904824346,
+        "1.scores.3": 0.00027559397858567536,
+        "1.scores.4": 5.389588113757782e-05,
+        "1.scores.5": 0.00015108543448150158,
+        "1.scores.6": 0.00013604166451841593,
+        "1.scores.7": 5.170849181013182e-05,
+        "1.scores.8": 0.0001050274950102903,
+        "1.scores.9": 0.3491002023220062
+      },
+      "rocm": {
+        "0.scores.0": 6.06820649409201e-05,
+        "0.scores.1": 0.00032763989293016493,
+        "0.scores.10": 1.7315138393314555e-05,
+        "0.scores.11": 0.0001294340763706714,
+        "0.scores.2": 0.0003591277345549315,
+        "0.scores.3": 0.00011082602577516809,
+        "0.scores.4": 0.00011034496128559113,
+        "0.scores.5": 0.00013883999781683087,
+        "0.scores.6": 0.0006869890494272113,
+        "0.scores.7": 0.000105810679087881,
+        "0.scores.8": 0.00039507338078692555,
+        "0.scores.9": 0.00010045139060821384,
+        "1.scores.0": 0.000408525753300637,
+        "1.scores.1": 0.00013511974248103797,
+        "1.scores.10": 0.00035940753878094256,
+        "1.scores.11": 2.5735644157975912e-05,
+        "1.scores.2": 0.00023116169904824346,
+        "1.scores.3": 0.00027559162117540836,
+        "1.scores.4": 5.3896244935458526e-05,
+        "1.scores.5": 0.0001510868751211092,
+        "1.scores.6": 0.0001360408787149936,
+        "1.scores.7": 5.1708146202145144e-05,
+        "1.scores.8": 0.00010502740042284131,
+        "1.scores.9": 0.34910058975219727
+      }
+    },
+    "revision": "5dd25f2cc3c98f338e6a79b667662d60f936a28d"
+  },
+  "vllm-sr/Vela-1.0-Encoder-307M-Modality": {
+    "answers": {
+      "cpu": {
+        "0.probabilities.0": 1.0,
+        "0.probabilities.1": 8.600446466111578e-10,
+        "0.probabilities.2": 8.651312999319316e-11,
+        "1.probabilities.0": 0.9999977350234985,
+        "1.probabilities.1": 2.284755510117975e-06,
+        "1.probabilities.2": 4.1760245261812656e-10
+      },
+      "rocm": {
+        "0.probabilities.0": 1.0,
+        "0.probabilities.1": 8.600495871036173e-10,
+        "0.probabilities.2": 8.651197813680511e-11,
+        "1.probabilities.0": 0.9999977350234985,
+        "1.probabilities.1": 2.2847532363812206e-06,
+        "1.probabilities.2": 4.176032297742438e-10
+      }
+    },
+    "revision": "5384b8997e3cbb79ca3a670e869577f4e4f4997e"
+  },
+  "vllm-sr/Vela-1.0-Encoder-307M-PII": {
+    "answers": {
+      "cpu": {
+        "1.span.0.PHONE_NUMBER.24.35": 0.9981785308231007,
+        "1.span.1.GPE.53.59": 0.9997298121452332
+      },
+      "rocm": {
+        "1.span.0.PHONE_NUMBER.24.35": 0.9981785199858926,
+        "1.span.1.GPE.53.59": 0.9997298121452332
+      }
+    },
+    "revision": "6d3300c4bd7975f30a664503f6c725cf1fbbad48"
+  },
   "vllm-sr/Vela-1.0-Encoder-307M-Reranker": {
     "answers": {
       "cpu": {
@@ -7461,5 +7427,39 @@
       }
     },
     "revision": "a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf"
+  },
+  "vllm-sr/Vela-1.0-Encoder-307M-Safety": {
+    "answers": {
+      "cpu": {
+        "0.probabilities.0": 0.9959297776222229,
+        "0.probabilities.1": 0.004070226568728685,
+        "1.probabilities.0": 0.07584354281425476,
+        "1.probabilities.1": 0.9241564869880676
+      },
+      "rocm": {
+        "0.probabilities.0": 0.9959297776222229,
+        "0.probabilities.1": 0.004070224706083536,
+        "1.probabilities.0": 0.07584310322999954,
+        "1.probabilities.1": 0.924156904220581
+      }
+    },
+    "revision": "6e70e725a5f4d86da10f5be5e4dfd1da0358bb85"
+  },
+  "vllm-sr/Vela-1.0-Encoder-307M-Shield": {
+    "answers": {
+      "cpu": {
+        "0.probabilities.0": 0.910625159740448,
+        "0.probabilities.1": 0.08937479555606842,
+        "1.probabilities.0": 0.029093511402606964,
+        "1.probabilities.1": 0.9709064960479736
+      },
+      "rocm": {
+        "0.probabilities.0": 0.9106253385543823,
+        "0.probabilities.1": 0.08937466144561768,
+        "1.probabilities.0": 0.029093490913510323,
+        "1.probabilities.1": 0.9709064960479736
+      }
+    },
+    "revision": "a981a99eeb05a2859b88b5cee9af4352897ec4ec"
   }
 }
