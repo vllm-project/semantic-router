@@ -220,3 +220,29 @@ def test_features_match_the_transformers_extractors():
     np.testing.assert_allclose(
         audio.features(window, clap), batch["input_features"][0, 0], atol=2e-4
     )
+
+
+def test_whisper_features_skip_only_frames_that_see_zeros():
+    rng = np.random.default_rng(3)
+    spec = audio.Spectrum.from_config(audio_config()["whisper"], clap=False)
+    for seconds in (0.3, 0.75, 29.9):
+        wave = (0.1 * rng.standard_normal(int(seconds * audio.WHISPER_RATE))).astype(
+            np.float32
+        )
+        padded = np.zeros(spec.n_samples, dtype=np.float32)
+        padded[: len(wave)] = wave
+        half = spec.n_fft // 2
+        centred = np.pad(padded.astype(np.float64), (half, half), mode="reflect")
+        frames = np.lib.stride_tricks.sliding_window_view(centred, spec.n_fft)
+        frames = frames[:: spec.hop_length][: spec.n_frames]
+        window = 0.5 - 0.5 * np.cos(2 * np.pi * np.arange(spec.n_fft) / spec.n_fft)
+        spectrum = np.fft.rfft(frames * window, axis=1).astype(np.complex64)
+        power = (
+            spectrum.real.astype(np.float64) ** 2
+            + spectrum.imag.astype(np.float64) ** 2
+        )
+        log = np.log10(np.maximum(power @ spec.mel_filters, 1e-10)).T.astype(np.float32)
+        every_frame = (
+            np.maximum(log, log.max() - np.float32(8.0)) + np.float32(4.0)
+        ) / np.float32(4.0)
+        np.testing.assert_array_equal(audio.features(wave, spec), every_frame)
