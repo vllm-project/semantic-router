@@ -76,6 +76,24 @@ func apiRouterReplayRoutes() []apiRoute {
 			jsonResponse[shadowdataset.Manifest](http.StatusOK, "Shadow comparison dataset manifest"),
 			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
 		),
+		// Judge tasks carry captured prompt and answer text, so the route asks
+		// for replay.detail up front rather than serving a redacted task a
+		// judge could not use.
+		managedRoute(
+			EndpointMetadata{
+				Path:        apiObservabilityReplaysPath + "/dataset/judge-tasks",
+				Method:      "GET",
+				Description: "Build blinded pairwise judge tasks over the shadow comparison dataset",
+				Parameters: append(routerReplayDatasetParameters(),
+					requiredQueryParameter("blinding_key", "Secret that derives the opaque arm labels. Keep it from the judge, since it maps each label back to a model.", "string")),
+			},
+			routePolicy{Permission: PermReplayDetail, Sensitivity: SensitivityReplay},
+			(*ClassificationAPIServer).handleRouterReplay,
+			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
+			pluginOperationFor(config.DecisionPluginShadowDispatch, "read"),
+			jsonResponse[shadowdataset.JudgeTaskSet](http.StatusOK, "Blinded judge tasks"),
+			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
+		),
 		managedRoute(
 			EndpointMetadata{Path: apiObservabilityReplaysPath + "/{id}", Method: "GET", Description: "Read one Router Replay record"},
 			policy,

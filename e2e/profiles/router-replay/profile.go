@@ -68,6 +68,7 @@ func (p *Profile) GetTestCases() []string {
 		"router-replay-session-turn-progression",
 		"shadow-dispatch-observes-candidate-model",
 		"shadow-dataset-export-manifest",
+		"shadow-dataset-judge-tasks",
 		"shadow-dispatch-fail-open-unreachable-backend",
 		"shadow-dispatch-fail-open-timeout",
 		"shadow-dispatch-fail-open-malformed-response",
