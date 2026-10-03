@@ -16,6 +16,7 @@ DEFAULT_MAX_BATCH_TOKENS = 65_536
 class BatchingProfile(Profile):
     name = "batching"
     numerics = "approximate"
+    coalesces = True
     description = "Coalesce questions from concurrent requests into shared padded batches (higher throughput)."
 
     def __init__(self, max_batch_tokens: int = DEFAULT_MAX_BATCH_TOKENS):

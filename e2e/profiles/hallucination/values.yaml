@@ -35,7 +35,6 @@ config:
           - type: hallucination
             configuration:
               enabled: true
-              use_nli: false
               hallucination_action: header
               unverified_factual_action: header
               include_hallucination_details: true
@@ -100,12 +99,10 @@ config:
             model_ref: ""
             model_id: ""
             category_mapping_path: ""
-            use_mmbert_32k: false
           pii:
             model_ref: ""
             model_id: ""
             pii_mapping_path: ""
-            use_mmbert_32k: false
         hallucination_mitigation:
           enabled: true
           # Use the canonical Vela fact-check binding to gate detection.
@@ -113,7 +110,6 @@ config:
             model_ref: fact_check_classifier
             threshold: 0.65
             use_cpu: true
-            use_mmbert_32k: true
           # Pluggable endpoint backend under test: the detector is served by an
           # OpenAI-compatible endpoint (mock stands in for a vLLM-hosted
           # KRLabsOrg/lettucedect-v2-qwen-2b) instead of an in-process model.

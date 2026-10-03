@@ -217,8 +217,8 @@ a supplied recipe is resolved explicitly. The typed model endpoints are the
 preferred way to verify exactly which loaded model produced a result. Rerank
 batches obey `global.services.api.batch_classification.max_batch_size` (100 pairs when
 unset). Typed calls share their prepared resource's admission gate and have a
-two-minute request deadline; native inference retains its lease until it
-actually returns, even after cancellation. Actual coverage follows active configuration: discovering a task does not load it.
+two-minute request deadline; a model call retains its lease until the model
+runtime answers, even after cancellation. Actual coverage follows active configuration: discovering a task does not load it.
 
 ## Inspect models and metrics
 

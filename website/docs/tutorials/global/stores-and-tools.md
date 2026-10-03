@@ -40,9 +40,7 @@ global:
       backend_type: memory
       similarity_threshold: 0.8
       polarity_guard:
-        mode: lexical          # lexical | nli | lexical+nli
-        nli:
-          contradiction_threshold: 0.5
+        mode: lexical
 ```
 
 #### Negation guard
@@ -50,33 +48,22 @@ global:
 Bi-encoder similarity cannot tell *"turn on dark mode"* from *"turn off dark
 mode"*: opposite-meaning queries often score above `similarity_threshold`
 while genuine paraphrases score below it, so raising the threshold does not
-reliably prevent false hits. All cache backends apply the lexical tier before
-serving a semantic candidate. The `polarity_guard` configuration additionally
-selects an optional verifier for the in-memory backend:
+reliably prevent false hits. Every cache backend applies a lexical guard
+before it serves a semantic candidate: it catches negation cues and known
+antonym swaps in near-identical English token sets (`polarity_guard.mode:
+lexical`, the only mode). It needs no model and runs for the in-memory, Redis,
+Valkey, Milvus, Qdrant and hybrid caches. It does not cover cue-less,
+word-order-only or non-English changes.
 
-- `lexical` (default): the model-free tier that catches negation cues and
-  known antonym swaps in near-identical English token sets. It is always on
-  for in-memory, Redis, Valkey, Milvus, Qdrant, and hybrid caches and needs no
-  model. It does not cover cue-less, word-order-only, or non-English changes.
-- `nli` / `lexical+nli`: additionally runs the router's NLI model once per
-  lookup on the single best candidate and rejects the hit when the
-  contradiction probability exceeds `nli.contradiction_threshold`. The tier
-  reuses the hallucination explainer
-  (`global.model_catalog.modules.hallucination_mitigation.explainer`, by default
-  `tasksource/ModernBERT-base-nli`); the cache owns its verifier independently
-  of recipe classifiers. Config loading fails when an NLI mode
-  is selected without that model. Expect roughly 70 ms per verified hit on CPU;
-  a cache hit still saves a full generation. If the model is unavailable or
-  errors at lookup time, the unverified candidate becomes a cache miss so the
-  request continues to the model backend; a `cache_polarity_nli_skipped`
-  warning records the degraded lookup. This intentionally prioritizes response
-  correctness over cache-hit latency while the verifier is unavailable.
+Rejections are logged as `cache_negation_reject`, count as misses, and still
+surface the rejected score on `x-vsr-cache-similarity`. Remote and hybrid
+backends reject candidates without an original query and continue checking the
+bounded fetched candidate set. The same check also applies to hybrid's Milvus
+fallback.
 
-Rejections are logged as `cache_negation_reject` with `tier: nli`, count as
-misses, and still surface the rejected score on `x-vsr-cache-similarity`. Remote
-and hybrid backends run the lexical tier only. They reject candidates without
-an original query and continue checking the bounded fetched candidate set.
-The same lexical check also applies to hybrid's Milvus fallback.
+Earlier releases offered an NLI tier (`nli`, `lexical+nli`) on the in-memory
+backend. The NLI model is retired; `vllm-sr config migrate` changes those modes
+to `lexical`.
 
 ### Memory
 
@@ -220,10 +207,9 @@ CLI local runtime will provision Postgres and fill `metadata_postgres` connectio
 defaults when `metadata_store: postgres` is set. Use `memory` only for ephemeral
 local experiments because store and file metadata is lost on router restart.
 
-With local `mmbert` embeddings, including Vela Embedding, each new vector store
-records the identity of the representation that created its vectors. Candle
-`bert` stores also record an encoder version so the corrected unpadded vectors
-cannot mix with earlier padded vectors. Existing stores remain visible and their
+With embeddings from the [model runtime](../../model-runtime/guides/embeddings.md),
+including Vela Embedding, each new vector store records the identity of the
+representation that created its vectors. Existing stores remain visible and their
 uploaded files are retained. Searching or attaching files to an incompatible or
 untagged store returns `409 EMBEDDING_REINDEX_REQUIRED`. Create a new vector
 store and reattach the original uploaded file IDs to generate compatible
@@ -232,7 +218,7 @@ vectors. Client metadata cannot replace the router-owned
 
 The same check applies to request-time RAG and cached retrieval results. The
 `llama_stack` backend embeds search queries remotely, so it cannot currently be
-combined with identity-bound local `mmbert` or Candle `bert` document embeddings. Use `memory`,
+combined with identity-bound runtime document embeddings. Use `memory`,
 `milvus`, `valkey`, or `qdrant` for that configuration. Remote provider identity
 verification is a separate capability.
 
