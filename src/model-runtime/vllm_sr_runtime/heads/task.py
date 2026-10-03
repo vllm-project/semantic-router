@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -194,6 +195,30 @@ class TaskHead(ABC):
     def result(self, prepared: Prepared, values: Sequence[Any]) -> dict[str, Any]:
         """One input's API result from its items' readouts, in item order."""
 
-    def to(self, device: torch.device) -> TaskHead:
-        """Move the head's tensors to the backbone's device."""
-        return self
+    def items(self, rows: Sequence[Sequence[int]], identity: str) -> list[Item]:
+        """One item per framed row of token IDs, keyed by everything its result depends on."""
+        return [
+            Item(
+                tuple(ids),
+                self.name,
+                self.layer,
+                cache_key(identity, self.name, self.layer, ids),
+            )
+            for ids in rows
+        ]
+
+
+def token_probabilities(
+    classifier: ClassifierHead, rows: Rows, sequences: Sequence[int], layer: int
+) -> list[np.ndarray]:
+    """Per sequence, the read-only ``[tokens, labels]`` softmax of a per-token classifier."""
+    logits = classifier(rows.tokens(sequences, layer).float())
+    probabilities = torch.softmax(logits, dim=-1).cpu().numpy()
+    out, start = [], 0
+    for sequence in sequences:
+        length = rows.lengths[sequence]
+        values = probabilities[start : start + length]
+        values.flags.writeable = False
+        out.append(values)
+        start += length
+    return out
