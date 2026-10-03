@@ -103,9 +103,9 @@ RUN pip install --index-url "$TORCH_CUDA_INDEX" "$TORCH_CUDA" && \
 
 # The model runtime: its third-party dependencies in one layer and the package
 # in the next, so a runtime code change does not reinstall its dependencies.
-# The onnx extra runs the prepared Omni graphs.
+# The multimodal extra serves the prepared Omni bundles (ONNX Runtime, Pillow).
 FROM torch-${ACCELERATOR} AS runtime
-ARG MODEL_RUNTIME_EXTRAS=onnx
+ARG MODEL_RUNTIME_EXTRAS=multimodal
 RUN --mount=type=bind,source=src/model-runtime/pyproject.toml,target=/tmp/pyproject.toml \
     python - $MODEL_RUNTIME_EXTRAS >/tmp/runtime-requirements.txt <<'EOF' && \
     pip install -r /tmp/runtime-requirements.txt && \
