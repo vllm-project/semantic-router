@@ -237,16 +237,20 @@ the locked chart dependencies.
 | dependencies.semanticCache.redis.search.topk | int | `1` |  |
 | dependencies.semanticCache.redis.timeout | int | `30` |  |
 | dependencies.semanticCache.redis.tls.enabled | bool | `false` |  |
-| env[0].name | string | `"LD_LIBRARY_PATH"` |  |
-| env[0].value | string | `"/app/lib"` |  |
-| env[1].name | string | `"HF_TOKEN"` |  |
-| env[1].valueFrom.secretKeyRef.key | string | `"token"` |  |
-| env[1].valueFrom.secretKeyRef.name | string | `"hf-token-secret"` |  |
-| env[1].valueFrom.secretKeyRef.optional | bool | `true` |  |
-| env[2].name | string | `"HUGGINGFACE_HUB_TOKEN"` |  |
-| env[2].valueFrom.secretKeyRef.key | string | `"token"` |  |
-| env[2].valueFrom.secretKeyRef.name | string | `"hf-token-secret"` |  |
-| env[2].valueFrom.secretKeyRef.optional | bool | `true` |  |
+| env[0].name | string | `"HOME"` |  |
+| env[0].value | string | `"/tmp"` |  |
+| env[1].name | string | `"TMPDIR"` |  |
+| env[1].value | string | `"/tmp"` |  |
+| env[2].name | string | `"HF_HOME"` |  |
+| env[2].value | string | `"/app/models/.cache/huggingface"` |  |
+| env[3].name | string | `"HF_TOKEN"` |  |
+| env[3].valueFrom.secretKeyRef.key | string | `"token"` |  |
+| env[3].valueFrom.secretKeyRef.name | string | `"hf-token-secret"` |  |
+| env[3].valueFrom.secretKeyRef.optional | bool | `true` |  |
+| env[4].name | string | `"HUGGINGFACE_HUB_TOKEN"` |  |
+| env[4].valueFrom.secretKeyRef.key | string | `"token"` |  |
+| env[4].valueFrom.secretKeyRef.name | string | `"hf-token-secret"` |  |
+| env[4].valueFrom.secretKeyRef.optional | bool | `true` |  |
 | extraVolumeMounts | list | `[]` | Extra Router mounts. A mount at `/app/models` replaces the default model volume mount. |
 | extraVolumes | list | `[]` | Volumes for custom mounts; provide a matching volume when replacing `/app/models`. |
 | fullnameOverride | string | `""` | Override the full name of the chart |

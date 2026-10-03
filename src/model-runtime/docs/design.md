@@ -266,10 +266,22 @@ MPS backend and run the pure-torch references; they are marked unvalidated.
 | `exact` (default) | exact | The released numerics: Decision 2.0 as in Phase 1; Decision 1.0 as its bundled runtime; encoders in FP32 on every device, one request's rows as one padded batch |
 | `shared_context` | approximate | Runs a multi-question request's shared state once (decision families) |
 | `batching` | approximate | Coalesces rows from concurrent requests into shared padded batches within a bounded window |
-| `max_speed` | approximate | Numerics-changing kernels and dtypes on top of the above (for encoders: BF16 or FP16 on GPUs) |
+| `max_speed` | approximate | Numerics-changing kernels and dtypes on top of the above |
 
 A request may select `exact` at any time and another profile only if the
 server enabled it for that model.
+
+When `max_speed` is a deployment's configured profile, an encoder also loads
+a reduced-precision copy of its linear layers next to the FP32 weights, which
+`exact` keeps using: BF16 on GPUs, with FP32 norms, softmax and heads (the
+Decision 2.0 GPU policy), and dynamic int8 on CPU where that measures faster
+than FP32. `max_speed` requests run the copy. A family consents to a copy
+(`DtypePolicy.reduced_gpu` / `reduced_cpu`) only where its records show at
+least 99% label agreement with `exact` (embeddings: cosine of at least
+0.999); faster alone is not enough. Golden readiness always runs `exact`;
+each family records the accuracy (label agreement, max |Δp| or embedding
+cosine against `exact`) and the latency of its reduced path. `vllm-sr config
+migrate` maps the legacy `precision: fp16` to `max_speed`.
 
 ### 5.5 Third-party plugins
 

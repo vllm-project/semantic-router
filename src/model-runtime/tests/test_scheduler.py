@@ -6,6 +6,7 @@ from vllm_sr_runtime.errors import RuntimeServiceError
 from vllm_sr_runtime.plugins.base import Job, LoadedModel, RenderedItem
 from vllm_sr_runtime.profiles.batching import BatchingProfile
 from vllm_sr_runtime.profiles.exact import ExactProfile
+from vllm_sr_runtime.profiles.shared_context import SharedContextProfile
 from vllm_sr_runtime.scheduler.planner import micro_batches
 from vllm_sr_runtime.scheduler.scheduler import DEADLINE, Scheduler, SchedulerLimits
 
@@ -165,6 +166,24 @@ def test_batching_window_coalesces_concurrent_requests():
         for future in futures:
             future.result(timeout=5)
         assert len(model.calls) == 1 and sorted(model.calls[0]) == ["r0", "r1", "r2"]
+    finally:
+        scheduler.stop()
+
+
+def test_only_coalescing_profiles_wait_for_the_batching_window():
+    model = FakeModel()
+    scheduler = Scheduler(
+        model,
+        {"shared_context": SharedContextProfile()},
+        SchedulerLimits(batch_window_ms=2_000),
+    )
+    scheduler.start()
+    try:
+        started = time.monotonic()
+        scheduler.submit(
+            [item("a", 8)], deadline=None, profile="shared_context"
+        ).result(timeout=5)
+        assert time.monotonic() - started < 1.0
     finally:
         scheduler.stop()
 

@@ -269,6 +269,8 @@ func (c *MilvusCache) getEmbedding(ctx context.Context, text string) ([]float32,
 	return computeCacheEmbedding(ctx, c.embeddingProvider, text)
 }
 
+func (c *MilvusCache) semanticEmbeddingProvider() embedding.Provider { return c.embeddingProvider }
+
 func (c *MilvusCache) embeddingDimension() int {
 	if c == nil || c.config == nil {
 		return 0

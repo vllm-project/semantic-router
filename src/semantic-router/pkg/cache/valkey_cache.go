@@ -211,6 +211,8 @@ func (c *ValkeyCache) getEmbedding(ctx context.Context, text string) ([]float32,
 	return computeCacheEmbedding(ctx, c.embeddingProvider, text)
 }
 
+func (c *ValkeyCache) semanticEmbeddingProvider() embedding.Provider { return c.embeddingProvider }
+
 func (c *ValkeyCache) embeddingDimension() int {
 	if c == nil || c.config == nil {
 		return 0
