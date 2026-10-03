@@ -48,7 +48,11 @@ class M6LaunchTest(unittest.TestCase):
 
     def test_m6_allocation(self):
         with mock.patch.dict(os.environ, {"DEV2_27B_ALLOC": "m6"}, clear=True):
-            self.assertEqual(sorted(launch.allowed_gpus("b")), [0, 1, 5])
+            self.assertEqual(sorted(launch.allowed_gpus("b")), list(range(8)))
+            for gpu in (5, 6, 7):
+                self.assertEqual(
+                    launch.allowed_gpus("b")[gpu], launch.NODE_GPUS["b"][gpu]
+                )
             self.assertEqual(sorted(launch.allowed_gpus("a")), [1, 2, 3, 4, 5, 6, 7])
             self.assertEqual(sorted(launch.allowed_gpus("c")), [1, 2, 3, 4, 5, 6, 7])
             self.assertEqual(launch.allowed_gpus("a")[2], launch.NODE_GPUS["a"][2])
@@ -917,6 +921,9 @@ class M6ScriptTest(unittest.TestCase):
             "X9-LRHxM50",
             "X9-ML0",
             "X9-IBxIB2-10",
+            "X9-IBLRH",
+            "X9-IBLRHxM50",
+            "X9-LRHALL",
         ):
             entry = (
                 f'  [{arm}]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 '
@@ -1394,6 +1401,53 @@ class M6ScriptTest(unittest.TestCase):
                 self.assertIsNotNone(case, arm)
                 audited = {spec.split(":")[2] for spec in case.group(2).split()}
                 self.assertEqual(audited, set(a["mixes"]))
+
+    def test_relay_keeps_the_best_save_of_a_capped_seed(self):
+        dead = subprocess.Popen(["true"])
+        dead.wait()
+        for watchdog in (True, False):
+            with self.subTest(watchdog=watchdog), tempfile.TemporaryDirectory() as tmp:
+                run = Path(tmp) / "runs" / "M7-IB124ML-s1"
+                ckpt = run / "full" / "run" / "checkpoint-0006993"
+                ckpt.mkdir(parents=True)
+                (ckpt / "adapter_model.safetensors").write_text("weights")
+                (run / "full" / "run" / "BEST.json").write_text(
+                    json.dumps({"checkpoint": "checkpoint-0006993"})
+                )
+                (run / "receipts").mkdir()
+                (run / "receipts" / "full.json").write_text(
+                    json.dumps({"watchdog_fired": watchdog, "gpu_hours": 21.8})
+                )
+                (run / "driver.log").write_text("arm stopped: exit 137 on attempt 1\n")
+                out = subprocess.run(
+                    ["bash", str(M6 / "m6-relay.sh"), "M7-IB124ML-s1", str(dead.pid)],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    env=dict(
+                        os.environ,
+                        RELAY_NODE="d",
+                        M6_RELAY_RUNS=str(Path(tmp) / "runs"),
+                        M6_RELAY_XFER=str(Path(tmp) / "xfer"),
+                        M6_RELAY_GRACE="0",
+                    ),
+                )
+                relay = Path(tmp) / "xfer" / "M7-IB124ML-s1"
+                if watchdog:
+                    self.assertEqual(out.returncode, 0, out.stderr)
+                    capped = json.loads((relay / "CAPPED.json").read_text())
+                    self.assertEqual(capped["best"], "checkpoint-0006993")
+                    self.assertFalse((relay / "COMPLETE.json").exists())
+                    self.assertTrue(
+                        (relay / "checkpoint" / "adapter_model.safetensors").exists()
+                    )
+                    self.assertIn(
+                        "adapter_model.safetensors", (relay / "SHA256SUMS").read_text()
+                    )
+                else:
+                    self.assertEqual(out.returncode, 3)
+                    self.assertTrue((relay / "RELAY-FAILED.txt").exists())
+                    self.assertFalse((relay / "checkpoint").exists())
 
     def test_relay_accepts_m9_arm_seeds(self):
         for name, message in (

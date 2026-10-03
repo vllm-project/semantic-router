@@ -2,6 +2,322 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-03 03:20Z (11:20 UTC+8), M10 continuation FINAL (owner e28aa509): stopped by the user
+
+- **USER 11:00 (COORDINATION):** stop all training; the focus is now inference optimization and the Index
+  submission. Every 9B job is stopped, and nothing is relaunched.
+  - **The coordinator stopped** the node B Index and gate chains, with `KIB4H-a40` at 3 of 7 shards and `HLR4-a50`
+    before any shard. It also stopped `HLR4-a50`'s formal on node A GPU0 (exit 1, interrupted).
+  - **I stopped** the workstation orchestrator, the `HLR4-a50` waiter and the arm-factory launcher. `KIB4-lrhh`
+    s3 / s4 and `KXH` s1 / s2 were never started.
+  - No 9B process, container or lease is left on nodes A and B. Node B GPU2 / 3 / 5 / 7 and node A GPU0 have no owner
+    file. No continuation is needed.
+- **Lux-9B for now:** `main` = `214ffa43`, the runtime-only switch revision (phase A plus the opt-in shared-context
+  switch) on the KIB4-a40 weights of `f3122c7c`. No weights successor passed IF1 in this continuation.
+- **Amendment 13 verdicts vs `M10-KIB4-a40-bf16`** (values private):
+  - `HLR4-a80`: FAIL (level with the release);
+  - `HLR4-a60`: FAIL, narrowly. Its lower bound is just below 0, and it is the best 9B point measured;
+  - `KIB4H-a80`: FAIL. Its point is below the release; the gate bootstraps were stopped;
+  - `KIB4H-a40` and `HLR4-a50`: not measured (stopped).
+- **What was learned** (for whoever resumes):
+  - RAGTruth is the swing benchmark. KIB4's full-LR seeds at α 1/3–2/5 hold it high, and every other construction
+    loses it.
+  - The half-LR soups gain broadly (HoVer, MuSR, iSarcasmEval, FinEntity, VAST, BPoMP, PhishNChips), but lose
+    RAGTruth as the step grows. HLR4's ladder rises as α falls from 4/5 to 3/5.
+- **If 9B work resumes:**
+  - **`HLR4-a50`** is staged on node B (FP32 `9a3c7e05…`, package `M10-HLR4-a50-bf16`, parity not yet run). Rerun
+    its formal (`m10/formal.sh launch HLR4-a50 0` on node A) and then its Index chain.
+  - **Then the factory's locked arms** (`af-state.md` 00:20Z, mirror `7eb2a7037`) for an eight-seed cross-arm half-LR
+    soup. Preregister its points before reading them.
+  - **Release path:** ready for a successor of `214ffa43`. The m10c ops are re-pinned (`c113eee18`), and `make_m10c.py`
+    has entries for `HLR4-a50` / `-a60` / `-a80`, `KIB4H-a40` / `-a80` and `KIB4-lrhh-a80`. `HLR4-a80` and
+    `KIB4H-a80` have staged inputs on node A.
+- **GPU-h (continuation):** ≈ 38 of 60. That is ≈ 26 before this owner (KIB4H training included), Index reads
+  ≈ 10.5, formals ≈ 0.6, and the Lux switch evidence and release ≈ 0.7.
+
+## 2026-10-03 02:50Z (10:50 UTC+8), M10 continuation (owner e28aa509)
+
+- **RELEASED: Lux-9B `main` = `214ffa4322bc1bce3215c1bd5de6168402c76969`.** It is a runtime-only revision: the phase A
+  runtime plus the opt-in shared-context switch, with the KIB4-a40 weights unchanged (COORDINATION 08:30: the Lux
+  switch is the 9B owner's when no 9B release is under way by 10:00). `ra.sh 9B --switch` (mirror `f7cfd2876`) passed:
+  - parity on the default path 10,653 / 10,653 identical, 0.0 drift; bench 400 bit-identical;
+  - download re-hash and examples, the Hub smoke under Transformers 5.17 / 5.18, readback, gate seal, collection,
+    links 8 / 8, card HTTP, gate evaluate;
+  - the 86-request gate on the download 86 / 86, max |dp| 0.0.
+  `post_checks=ok` at 02:41Z. The record is `dev2-runtime-a-2026-10-02/9b/switch` (`1d952eaa8`).
+- **m10c ops re-pinned** (`c113eee18`): a weights successor now supersedes `214ffa43`, derives from
+  `dev2-9b-ras.json` and takes the switch release's gate and decision as "current". The comparator run and the purge
+  node copy stay KIB4-a40's (same weights).
+- **`M10-HLR4-a60-bf16`: FAIL**, narrowly; the lower bound is just below 0. It is the best 9B point so far. RAGTruth
+  loses less than in HLR4-a80, and the broad gains hold.
+- **Formal R3:** `KIB4H-a80` exit 0, types OK. Its release inputs (`bf16`, `derive`, `paired`, `current`) are staged
+  on node A.
+- **Index:** `KIB4H-a80` is scoring (gate ≈ 03:06Z) and `KIB4H-a40` is on shards. `HLR4-a50` (wave-2 rule 1, FP32
+  `9a3c7e05…`) is staged on node B.
+- **GPU-h (continuation):** ≈ 41 (Index ≈ 32.5 incl. HLR4-a80 / -a60 / KIB4H-a80 / -a40; formals ≈ 1.2; switch
+  evidence and release ≈ 1.2; training 6.8).
+
+## 2026-10-03 01:55Z (09:55 UTC+8), M10 continuation (owner e28aa509)
+
+- **`M10-HLR4-a80-bf16`: FAIL** vs KIB4-a40. Its point is level with the release. Most benchmarks rose, but RAGTruth
+  fell by about 21 points, which costs the whole gain. Every measured point not built from KIB4 s1 / s2 alone has
+  lost RAGTruth against KIB4-a40, while KIB4-a33 kept it.
+- **Amendment 13 revision 2** (`3faa9913f`, disclosed as written after that read): `KIB4H-a80` (`[KIB4H × 4, LUX]`,
+  FP32 `4dea07dc…`) replaces `KIB4-lrhh-a80`. Reads: `HLR4-a60` (shards ending), `KIB4H-a80` (chain started 01:47Z),
+  `KIB4H-a40`. The orchestrator was restarted for this order on mirror `3faa9913f`.
+- **Release path ships the switch:** integration `ef27d8885` is merged (`aa0ae6146`), and the m10c spec's
+  `runtime_source` is that mirror (`d5367b595`).
+- **Lux runtime-only switch revision** (COORDINATION 08:30 gives it to the 9B owner if no release is under way by
+  10:00): runtime-a's tooling gained a 9B switch tier on `f3122c7c` (`c5c281e98`). The node A preview is OK: the
+  manifest changes only the runtime files and README. Parity and bench run on node A GPU0. The upload waits for
+  `KIB4H-a80`'s gate; a weights release carries the switch if it passes.
+- **GPU-h (continuation):** ≈ 37.6, plus `KIB4H-a80` / `KIB4H-a40` ≈ 5.4 and the switch evidence ≈ 0.4.
+
+## 2026-10-03 01:30Z (09:30 UTC+8), M10 continuation (owner e28aa509)
+
+- **Formal R3 of `HLR4-a80`** (node A GPU0, 00:30–00:44Z): exit 0; the choice, no-UL and score types are all OK (no
+  collapsed type). GPU0 went back to 4B at 00:48Z (COORDINATION 08:48). `HLR4-a60`'s formal runs only if it leads.
+- **Index:** `HLR4-a80` scored at 01:15Z; its bootstraps and gate vs KIB4-a40 are running on node B (CPU). `HLR4-a60`
+  is on GPU2 / 3 / 5 / 7 (gate waiter armed); `KIB4H-a40` follows, then `KIB4-lrhh-a80`.
+- **Release note:** Nox-4B is now `ce1bdc9d` (COORDINATION 09:00), so `index_m10c.sh` must take the 4B point from
+  that release's input.
+- **GPU-h (continuation):** ≈ 37.3.
+
+## 2026-10-03 00:40Z (08:40 UTC+8), M10 continuation (owner e28aa509)
+
+- **All half-LR seeds finished ≈ 00:03–00:05Z** (an hour before the estimate), with no failure: KIB4H s1 / s2 (BEST
+  checkpoints 1,813 / 2,076) and the factory's `KIB4-lrhh` s1 / s2.
+- **Built on node B** (FP32 model SHA-256, then BF16 identity):
+
+  | Point | FP32 | BF16 |
+  | --- | --- | --- |
+  | `KIB4H-a40` (post chain) | `5d22b60b…` | `a3a77170…` |
+  | `HLR4` (arm soup) | `43fbddcb…` | — |
+  | `HLR4-a80` | `d99cc9f1…` | `51771728…` |
+  | `HLR4-a60` | `0b056425…` | staged |
+  | `KIB4-lrhh-a80` | `699bfd70…` | `112500f8…` |
+
+  KIB4H's arm soup is `82852…`. The factory's arm soup `KIB4-lrhh` (`0bd35ed6…`) is linked as `AF-KIB4-lrhh`.
+- **Read order changed to `HLR4-a80`, `HLR4-a60`, `KIB4H-a40`, `KIB4-lrhh-a80`.** This changes timing only. All
+  points were ready at once, so the read most likely to pass goes first; all four are still read once.
+- **Index:** `HLR4-a80` started on node B GPU2 / 3 / 5 / 7 at 00:21Z. Parity passed, and shards 0–3 run. The other
+  three follow from one chain each.
+- **Formal R3** (`formal.sh` and `release_m10c.sh` now accept node A GPU0, the release GPU; `1e1c26296`, mirrored on
+  A / B / C): `HLR4-a80` on node A GPU0 since 00:30Z, and `HLR4-a60` next. 27B took node A GPU7 first, so it is not
+  used.
+- **Release prep (no upload):** `make_m10c.py` has entries for the four points, with `CHOICE` unset. For `HLR4-a80`,
+  `inputs_m10c.sh bf16` (16 files equal) and `prep_m10c.sh current` (KIB4-a40's gate and decision digests match) are
+  done on node A.
+- **GPU-h (continuation):** ≈ 37 with the four reads, plus ≈ 0.25 per formal.
+
+## 2026-10-03 00:10Z (08:10 UTC+8), M10 continuation (owner e28aa509)
+
+- **Took over** from 9087b208, whose runtime failed to resume at ≈ 23:39Z (COORDINATION 07:42). KIB4H s1 / s2 are at
+  step ≈ 1,790 of ≈ 3,050 (no failure) and end ≈ 01:15Z. `post-KIB4H` (node B, pid 783911) is alive.
+- **Amendment 13** (`fcb073e3b`) and its revision 1 (`1c7d73d9d`) were written before any half-LR 9B read. Four reads
+  on node B, pool GPU2 / 3 / 5 / 7, one at a time: `KIB4-lrhh-a80`, `HLR4-a80`, `HLR4-a60`, `KIB4H-a40`. HLR4 is the
+  four-seed half-LR soup (KIB4H + the factory's `KIB4-lrhh`). IX1 entries are in `0948b02ed` / `09a1cbf06`. Mirror
+  `1c7d73d9d` is on nodes A, B and C (content manifests equal).
+- The factory's `KIB4-lrhh` seeds (21 / 22) train on KIB4's TRAIN `2e72bcfd…` / teacher `377f8878…`, re-hashed on
+  node B. The trainer records backbone LR 5e-6 and head LR 5e-5; the launch argv's later flags override the
+  defaults. So audit `m10c` covers every amendment-13 point.
+- **Workstation orchestrator** `/tmp/m10c/a13-orch.sh` (log `a13-orch.log`). It replaces amendment 12's KIB4H-a40
+  waiter, which is stopped and kept as `kib4h-waiter.sh.superseded`. The orchestrator:
+  - links the factory's arm soup and builds, ships and stages the points;
+  - leases GPU2 / 3 / 5 / 7 for IX1 as the factory's and KIB4H's chains release them;
+  - runs one Index chain at a time, each gated with `M10_GATE_WAIT=scored` (new in `gate.sh`), and fetches the gate
+    results to the private folder.
+  It is idempotent: restart it with `setsid nohup bash /tmp/m10c/a13-orch.sh >> /tmp/m10c/a13-orch.log 2>&1 &`.
+- Two stale node A gate waiters (for the dropped KF-a50 points) were stopped.
+- **GPU-h (continuation):** ≈ 28.9 committed, including KIB4H-a40's Index run; ≈ 39.7 with the three other wave-1
+  reads.
+
+## 2026-10-02 23:00Z (10-03 07:00 UTC+8), M10 continuation
+
+- KIB4H s1 / s2 are at about 39% / 37% of their updates (no failure). Both should end ≈ 01:15Z, and the waiter
+  then takes KIB4H-a40 through measurement. No other continuation job is running.
+
+## 2026-10-02 22:30Z (10-03 06:30 UTC+8), M10 continuation
+
+- **KIB4H s1 / s2 passed preflight** (21:34–21:35Z, node B GPU5 / 7) and are in their full runs (end ≈ 00:50Z). A
+  workstation waiter takes KIB4H-a40 through ship → BF16 → Index (node B GPU5 / 7) → gate as soon as the post chain
+  builds it.
+- **Integration merged** (`1d5a05496`), including `9f2c7db62`: `hub_card_http_check` follows the public visibility
+  policy (COORDINATION 06:05). `test_release` passes (26 tests) and so do the Hub tests.
+- COORDINATION 06:00 names KIB4H the 9B top priority, after the 4B half-LR release.
+
+## 2026-10-02 21:40Z (10-03 05:40 UTC+8), M10 continuation
+
+- **`M10-KIB4R-a40-bf16`: FAIL**, significantly below KIB4-a40. **Y1 / Y2 are dropped** under amendment 11's
+  condition: no arm-factory point except the KIB4 s1 / s2 point KIB4-a50 is within 0.3 of KIB4-a40.
+- **Amendment 12** (`6ed194fa6`; COORDINATION 05:18, the half-learning-rate pivot): arm **KIB4H** is KIB4's TRAIN and
+  seeds (20260926 / 1) at backbone LR 5e-6 and head LR 5e-5.
+  - Locked on node B with `prep.sh alias-lock KIB4H KIB4`, every file re-hashed.
+  - s1 on node B GPU5 and s2 on GPU7, both started 21:27Z. The zero-step runs are done, and the trainer records
+    `backbone_lr` 5e-06 and `head_lr` 5e-05.
+  - The post chain builds the two-seed soup and its a40 / a33 / a25 points when both seeds finish (≈ 00:50Z).
+    `M10-KIB4H-a40-bf16` is then measured once.
+  - It is distinct from the factory's backlog arm KIB4-lrh (backbone only, seeds 15 / 16).
+- **GPU-h (continuation):** ≈ 19.4 used. KIB4H training is ≈ 6.8 and its Index run ≈ 2.7, for ≈ 28.9 at the end.
+  **Budget request to the coordinator:** about 5 GPU-h for a release if KIB4H-a40 passes, plus 2.7 per further
+  half-LR point (the factory's KIB4-lrh, or a four-seed half-LR soup).
+
+## 2026-10-02 21:00Z (10-03 05:00 UTC+8), M10 continuation
+
+- **Gate verdicts vs `M10-KIB4-a40-bf16`** (values private):
+  - `M10-KIB4-a50-bf16`: **FAIL**, significantly below. α 1/2 on the released point's seeds is worse than 2/5.
+  - `M10-KIB4L2-a40-bf16`: **FAIL**, significantly below.
+- **All seven continuation points measured so far fail IF1:** X7-a40, X8-a40, AF-KF-a40, KIB4W2-a40, KIB4L2-a40 and
+  KIB4-a50. KIB4R-a40 is on its last shard (node B).
+- **Next:** KIB4R-a40's gate. Then Y1 / Y2 under amendment 11's condition (F* = KIB4R-a40 only if its point delta is
+  above −0.3), on node B GPU2 / 3 / 7. Node A GPU1–4 now belong to 27B #6 M9 (COORDINATION 04:25 / 04:38).
+- **GPU-h (continuation):** ≈ 16.6 used (Index runs 16.4 incl. parity, formals 0.5), plus KIB4R-a40 ≈ 2.7 at its end.
+
+## 2026-10-02 20:10Z (10-03 04:10 UTC+8), M10 continuation
+
+- **`M10-X7-a40-bf16`: FAIL** vs KIB4-a40. Its point is level with the release; values are private.
+- **Release-ops dry run on X7-a40** (CPU, node A, mirror `7d422f85f`). These steps all ran: `inputs_m10c.sh bf16`
+  and `index` (node B → C → A, lists and hashes equal), `prep_m10c.sh current` (KIB4-a40's gate and decision digests
+  match), `derive`, `paired`, `index_m10c.sh`, `render_m10c.sh`, and `make_m10c.spec`.
+  - `make_m10c.decision` refuses the point, with only IF1 failing. R3 and IF3 pass.
+  - The release path is ready for a passer. Nothing was uploaded.
+  - The X7-a40 inputs stay in their candidate-named directories.
+- **Card Index sources:** no single released Index input carries both new 4B (`d55528d1`) and new 27B (`5c85c127`)
+  points, because those releases ran side by side. `index_m10c.sh` now takes each other tier's point from the newest
+  released input that carries its current weights (`7d422f85f`). The board points and footnote are checked equal
+  across sources.
+- **KIB4R-a40** (the factory's node B point; KIB4's recipe with a second x60 cut; model `f3c9ba05…`) is linked,
+  staged and on node B GPU2 / 3 / 7. **KIB4-a50** is at shards 4–6 on node A GPU1–4.
+- **GPU-h (continuation):** ≈ 13.5 used, plus ≈ 3.5 running.
+
+## 2026-10-02 19:50Z (10-03 03:50 UTC+8), M10 continuation
+
+- **Gate verdicts vs `M10-KIB4-a40-bf16`** (values private):
+  - `M10-KIB4W2-a40-bf16`: **FAIL**, significantly below.
+  - `M10-KIB4L2-a40-bf16`: **FAIL**. It is significantly below even K-a13IB; its bootstrap vs KIB4-a40 is
+    finishing.
+  - `M10-X7-a40-bf16`: scored. Its point is level with KIB4-a40, so a FAIL is expected; the gate bootstrap is
+    running on node B.
+- **Amendment 10** (`6c0c3d195`): the factory's α ladder. KIB4-a50 runs on node A GPU1–4 (linked, model
+  `319ca812…`; BF16 copy on node A). KIB4Q-a60 and KF-a60 are dropped.
+- **Amendment 11:** KIB4W3-a40 is dropped, Y1 / Y2 become conditional, and no extra KIB4-family arm is planned (see
+  the record).
+- Node C GPU1–4 and node B GPU7 were released when their chains finished.
+- **GPU-h (continuation):** ≈ 12.0 used (Index: X7 2.70, X8 2.70, W2 2.79, L2 2.77; parity gates ≈ 0.6; formals
+  0.47), plus KIB4-a50 running (≈ 2.7).
+
+## 2026-10-02 19:05Z (10-03 03:05 UTC+8), M10 continuation
+
+- **Gate verdicts vs `M10-KIB4-a40-bf16`** (IF1; values private):
+  - `AF-KF-a40-bf16` (the factory's nine-seed KIB4-family soup at α = 2/5): **FAIL**, significantly below the current
+    release.
+  - `M10-X8-a40-bf16` (KIB4 + KSW at α = 2/5): **FAIL**. Its lower bound is ≤ 0, though its point delta is
+    positive. That meets amendment 7's condition for planning one more KIB4-family arm, which the W2 / L2 results
+    will inform first.
+- **KF-a50 dropped before measurement.** It is the same nine-seed soup as KF-a40, and α 1/2 vs 2/5 has moved
+  KIB-family points by about 0.1 (K-a12IB vs K-a13IB, KIB4-a40 vs KIB4-a33). It cannot plausibly pass. Its parity
+  gate (node A) had already run; the node A chain was restarted for KIB4L2-a40 alone.
+- **Index:** X7-a40 is at shard 6 of 7 (node B GPU7), KIB4W2-a40 at shards 4–6 (node C), and KIB4L2-a40 at shards 0–3
+  (node A GPU1–4).
+- **Arm factory:** its amendment 6 stages an α ladder for the 9B publisher (KIB4-a50, KIB4Q-a50 / -a60, KF-a60).
+  Its node B batch-2 soups KIB4W3-a40 / KIB4R-a40 wait for their seeds (≈ 19:40Z).
+- **GPU-h (continuation):** ≈ 9.5 used, ≈ 12.2 with the running shards.
+
+## 2026-10-02 18:25Z (10-03 02:25 UTC+8), M10 continuation
+
+- **Arm-factory hand-off** (COORDINATION 02:00 / 02:22). The factory measured only `AF-KF-a40-bf16`, and M10 now
+  measures its other 9B points on node A GPU1–4. **Amendment 9** (`a35efba33` with the IX1 entries; mirror on A, B and
+  C) sets the order: KF-a40 (gate) → KIB4W2-a40 / KIB4L2-a40 → KF-a50 → the batch-2 points KIB4W3-a40 / KIB4R-a40 →
+  Y1 / Y2 → KFxKIB-a40 (last, budget permitting).
+- **Index:**
+  - X8-a40 is scored on node C (120,224 rows + 2 unsupported), and its bootstraps are running.
+  - X7-a40 is at shard 5 of 7 on node B GPU7.
+  - KIB4W2-a40 is on node C GPU1–4 (shards 0–3). The chain was restarted for W2 alone, and KIB4L2-a40 moves to node A.
+  - On node A GPU1–4: KIB4L2-a40 (package C → A), then KF-a50 (linked from the factory, model `2a1c8624…`).
+  - AF-KF-a40 is scored on node A, and its gate bootstraps vs KIB4-a40 are running.
+- **Formal:** AF-KF-a40 done (node A GPU7, 17:43–17:57Z, exit 0; choice / noul / score OK). Node A GPU7 is now the
+  4B owner's (COORDINATION 02:00).
+- **GPU-h (continuation):** ≈ 7.0 (Index: X8 2.70, X7 2.3 so far, W2 0.5 so far; parity 0.4; formal 0.5).
+
+## 2026-10-02 17:55Z (10-03 01:55 UTC+8), M10 continuation
+
+- **Node E went to the user** (COORDINATION 01:25), during X8-a40's run. Shards 0–2 had finished (exit 0) and
+  shards 3–4 were partial. The coordinator moved the shard directories to node F.
+  - Shards 0–2 were relayed F → A → C, with equal SHA-256 lists. The partial shards 3 / 4 and their launcher files
+    were left out.
+  - X8's package was copied B → C. Its parity gate and the remaining shards 3–6 run on node C GPU1–4 (lease
+    `eval-ix1`, from the factory's `released` leases; COORDINATION 01:38).
+  - This completes X8's single measurement. Nothing is measured twice.
+- **Public release policy** (USER 01:11, COORDINATION 01:36): integration merged (`47dd06be7`, the hub visibility
+  policy). The Hub unit tests pass (16). The continuation decision text now says public repository and public
+  collection.
+- **Factory points linked on node A** (`xpts.sh link`, equal lists): `AF-KF-a40` (model `f555d2f7…`), and for
+  amendment 8 `KIB4W2-a40` (`9f467afe…`) and `KIB4L2-a40` (`1cacc2c4…`). The last two are shipped to node C for
+  their BF16 copies and Index runs.
+- **Formal:** AF-KF-a40 on node A GPU7 since 17:43Z (speculative; the factory's KF-a40 Index run started 17:18Z on
+  node A GPU1–6).
+- **X7-a40:** node B GPU7, shard 3 of 7.
+- **GPU-h (continuation):** ≈ 3.0.
+
+## 2026-10-02 17:15Z (10-03 01:15 UTC+8), M10 continuation
+
+- **Amendment 8** (`667202519`): the factory's node A queue measures only KF-a40, KF-a50 and KFxKIB-a40. M10 therefore
+  measures the factory's KIB4W2-a40 and KIB4L2-a40 itself, once each, as `M10-KIB4W2-a40-bf16` and
+  `M10-KIB4L2-a40-bf16` (IX1 entries `f31039025`; mirror `f31039025` on nodes A, B, C and E).
+- **X7-a40 formal done** (node A GPU7, 16:28–16:42Z, exit 0). The typed FINAL is choice / noul / score OK, with no
+  type collapsed. The formal path takes about 14 min per point now, not the planned 2 h.
+- **Index:** X7-a40 shard 2 of 7 (node B GPU7); X8-a40 shards 3–4 of 7 (node E GPU3 / 7).
+- **Reference bootstraps:** X5-a33 and KIB4-a33 were bootstrapped vs KIB4-a40 (CPU, node A). They are not
+  candidates, and they calibrate the paired interval width vs the current release. Values are private.
+- **Soups on node A for Y1 / Y2:** KIB4-a40 and X5-a33, copied B → C → A with equal lists.
+- `m10/gate.sh` and `ix.sh gate` gained `M10_GATE_WAIT=1`, which waits for a run's own scoring and bootstraps.
+- **GPU-h (continuation):** ≈ 2.0 (Index 1.7 so far, parity 0.1, formal 0.23).
+
+## 2026-10-02 16:35Z (10-03 00:35 UTC+8), M10 continuation
+
+- **Index runs** (mirror `96c1bd3ff`; parity 86 / 86, max |Δp| 0.0 for both):
+  - X7-a40 on node B GPU7, 7 shards in sequence. The arm factory took node B GPU2 / 3 / 4 / 6 at 16:09–16:17Z for
+    its second 9B batch (KIB4W3, KIB4R; COORDINATION 00:00). The first node B chain was stopped before any shard
+    and restarted for X7 alone; its log records this.
+  - X8-a40 on node E GPU3 / 7 (released by dec-m17 at 14:07Z, leased `track=eval-ix1`). Panel-7, the 9B package
+    and both reference runs were copied there with equal SHA-256 lists.
+  - Each candidate is still measured once. The gate bootstraps vs KIB4-a40 follow scoring (`ix.sh gate`).
+- **Formal:** X7-a40 on node A GPU7 since 16:28Z (`m10/formal.sh`; FP32 point copied B → C → A, equal lists). It
+  went first because node A GPU7 was idle and may be taken after 15 min (COORDINATION 00:00), and KF-a40 is not
+  built before ≈ 18:20Z. KF-a40 follows on the first free node A GPU.
+- **Audit `m10c` PASS** (node C CPU, driver `0ae8eaa34`, mirror `96c1bd3ff`): 120,226 Index rows, planted control
+  200 / 200 (0 missed). Every set has 0 item rows: KIB (K-a13IB's TRAIN `2cd09292…`, 151,015 lines; 212
+  familiar-text rows), KIB4 (151,039; 196), KIB4R (the factory's, 151,088; 210), KSW (146,600; 166) and KX
+  (176,159; 189). It covers every continuation candidate, including the points that contain KIB.
+- **GPU-h (continuation):** ≈ 0.2 so far (two parity gates; the X7 shards and formal are running).
+
+## 2026-10-02 16:15Z (10-03 00:15 UTC+8), M10 continuation (amendment 7; 30 GPU-h)
+
+- **Amendment 7** (`d802c97c4`): every candidate is now gated vs `M10-KIB4-a40-bf16`. The candidates are the arm
+  factory's 9B hand-offs, `Y1` / `Y2` (averages of the best factory point with KIB4-a40 / X5-a33) and the cheap
+  weightings `X7-a40` (KIB4 + KX + KSW at α = 2/5) and `X8-a40` (KIB4 + KSW at α = 2/5).
+- **Ops** (mirror `96c1bd3ff` on nodes A, B and C): `m10/ix.sh kref | gate | gstatus | gfetch` (gate bootstraps vs
+  KIB4-a40, `m10/gate.sh`), `m10/xpts.sh` (averages of points; `link` for arm-factory points); IX1 names
+  (`259b6fc2a`, a separate commit to `v2/eval/ix1/launch.sh`). The continuation release ops are in
+  `v2/release/records/dev2-9b-m10c-2026-10-03/ops/`: they supersede `f3122c7c`, take KIB4-a40's gate and
+  decision, and purge with KIB4-a40's node A package as the node copy.
+- **Built on node B (CPU):** X8-a40 (model `310228cb…`) and X7-a40 (building). KX-a40 was copied A → C → B with
+  equal lists. KIB4-a40's run is on nodes A and B (`kref`, equal lists).
+- **Next:** stage X7 / X8 (BF16 copy, restage), then their Index chain on node B GPU2 / 3 / 4 / 6 / 7 (7 shards,
+  greedy) and their gate bootstraps. The factory's 9B seeds end ≈ 17:45–18:05Z, and its KF soups follow. The KF-a40
+  formal starts on node A GPU7 as soon as KF-a40 exists.
+- **GPU-h (continuation):** 0 so far.
+
+## 2026-10-02 15:50Z (23:50 UTC+8), M10 continuation worker
+
+- **RELEASED: Lux-9B `main` = `f3122c7c8abd302326c22220aac4095eb1799f37`** (KIB4-a40, user 23:02 UTC+8), superseding
+  `f77b41f5`; private; K-a13IB's weights purged. Record `v2/release/records/dev2-9b-m10-2026-10-02.md` (with the
+  23:20 fast-path waiver note). The upload waited for the 27B prerelease's `release.sh` to end (15:14Z).
+- **All M10 Index runs are in** (values private): X2-a33 and KIB4P-a33 pass IF1 vs K-a13IB but are below KIB4-a40.
+  Later candidates (arm factory hand-offs) must now beat `M10-KIB4-a40-bf16`.
+- **Leases:** node A GPU7 released; node A GPU3 is the arm factory's. KIB4P-a33's release inputs on node A are kept
+  (unused).
+
 ## 2026-10-02 14:10Z (22:10 UTC+8), M10 continuation worker
 
 - **Index runs in:** KIB4-a40, X1-a33, X3-a33 and X5-a33 all pass IF1 vs K-a13IB-bf16 (values private). Still running:

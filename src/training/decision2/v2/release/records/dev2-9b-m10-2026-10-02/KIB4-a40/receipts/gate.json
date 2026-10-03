@@ -1,0 +1,78 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: the user's Index-first rule of 2026-10-02 09:55 UTC+8 (release gate = a significantly positive private Index delta vs the current release; integrity checks; references not blocking) and the directive of 2026-10-02 12:30 UTC+8 (release the highest measured candidate directly), applied to the 9B tier by the Lux-9B publisher (9B M10 worker)",
+  "decision": "release",
+  "decision_sha256": "ba0e0beebcf88881e3962b84744a4162d02b278ffec175954b72fb0f713e7662",
+  "gate_profile": "successor",
+  "items": {
+    "1_successor_IF1_index_gain": {
+      "evidence": "private Index paired bootstrap dcea4c3efe65 (2000 replicates over 138645 cases) of these weights (0ece5faa2101) minus the current revision's (b9a65d601bb6): 95% lower bound > 0: yes",
+      "passed": true
+    },
+    "1_successor_IF3_index_audit": {
+      "evidence": "row-level Index audit da12b2ac091d of 120226 Index rows: KIB4 151039 training lines, 0 item rows, 196 familiar-text rows; KIBM 151375 training lines, 0 item rows, 202 familiar-text rows; KSW 146600 training lines, 0 item rows, 166 familiar-text rows; KX 176159 training lines, 0 item rows, 189 familiar-text rows; planted control 200 / 200",
+      "passed": true
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "evidence": "types choice OK, noul OK, score OK",
+      "passed": true
+    },
+    "1_successor_references": {
+      "evidence": "references only under the Index-first rule (user 2026-10-02 09:55): v3: v3 68.077 vs current 68.024: +0.05 [-1.62, +1.41] (below its former bar); human transfer: human transfer delta 95% [-0.037, +0.007] (clears its former bar); mlx-diag: mlx-diag card-eligible macro -0.0151 [-0.0235, -0.0068] (below its former bar); tier gates: own 1.0 low +0.25; v3 68.077 vs 90% of Nimble v2 62.056; H vs Nimble v2 [-0.024, +0.087]; own 1.0 low > 0 ok, v3 >= 55.850 ok, H vs Nimble v2 upper >= 0 ok, no type collapsed ok (clears its former bar); overlap exposure: 1 training files, 0 exposed groups; 2 training files, 0 exposed groups (clears its former bar); public 231: public 231 179 vs 182 (-3; McNemar p 0.375) (clears its former bar); C1 post-key: not run",
+      "passed": true,
+      "reference": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "11 results below own 1.0 listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 42 files re-hashed; loaded 7940895744",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518, automap-parity-pre, automap-vs-native-pre; scored prompts vs the native runtime: max drift 0",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "d0a407c7af291ee473ea516abebeb03968fd4a6b63cf0128e550dfcd5132d7c8",
+  "model_name": "Decision-2.0-Lux-9B",
+  "receipts_sha256": {
+    "automap-card-pre": "863155afc7e9860fd2e74630eac82d4dee5596373c9e9eb8b49030364edeaa32",
+    "automap-hub": "42241b4ac066a1157ef99b6b66c0edad6d0b3e46287f400142758560d20f2795",
+    "automap-hub-tf518": "5a0620823c53b73fc037815fc744f5c356dde3d9917e5b3c4c02ab50ee02abca",
+    "automap-parity-pre": "9adbfa7c6ff0bce95c28331ce6e998d786e64599c3c9c334df613c1817a19bcf",
+    "automap-post": "b0604dc5530be93b0be6b67867bf5acf6594d0cb75578fa0c4a07890f814914f",
+    "automap-pre": "b2a6a23f31b0233604e957ecb65dfe6065cbedfb4678cf5bde4c508435e4da10",
+    "automap-vs-native-pre": "2e1759e6faad78763f5b3d427f630fcd968699fc1281cf7283e77943cf684f5d",
+    "card-post": "09f1bccccc59048f95a4ace1e68dc73181a002e74e58475a664298127c954746",
+    "card-pre": "0acd37b32d3cad374e7624d688d53b4f2526bcf7505af4720964c0f466913a78",
+    "download": "8785fdbeaf8af2321d4021df68be40961aff51230722d36fb590d3db2273ae7a",
+    "post": "346e470ad464222295605759b2e4a914924638422846d156450612e55cb85a09",
+    "readback": "0b85db90bcc4c0e8aceb96dc69dc9424716edbbfa9e8a0ec4223bd1e86470b6d",
+    "repeat-post": "cf96568b416b9f51add03b10c760b101e78a428a95d819cbfb31a35a83f3e315",
+    "repeat-pre": "b7fd6ccefdedc472ccd65743c10bcabe2939deb12dd7ffa12e892bf67559d35f",
+    "tree": "577c3957c68f2838fc06a6d35d95b8df92fce348f9ae340e64f006647ce0cdc8",
+    "upload": "0b7d8eb62279221ecdb41e57f25606259d34434030482e32011b94ec4ec3d2d8"
+  },
+  "repo_id": "vllm-sr/Decision-2.0-Lux-9B",
+  "revision": "f3122c7c8abd302326c22220aac4095eb1799f37",
+  "rule": "index-first",
+  "schema": "dev2-release-gate/1",
+  "supersedes": {
+    "gate_sha256": "c89524587ae955376eac98979c8aedf6c5e1d8242ce4dc4e4568c9c9953181b6",
+    "revision": "f77b41f5c1a98974548d929c03e7bce008f71bd0"
+  },
+  "utc": "2026-10-02T15:40:59.713605+00:00"
+}

@@ -9,6 +9,8 @@
 #   GPU6 / 7 "KIB4:1" / "KIB4:2" (K-a13IB construction, IB1 `sentfin` out, IB4 phase 1 in, x60 re-cut to match)
 #   M10_PHASE=3 (amendment 6): extra seeds GPU3 "KIB4:3", GPU6 / 7 "KX:4" / "KX:5" (seeds 2 / 3 / 4; KX locked on node
 #   B with prep.sh kx-lock against node A's hashes)
+#   M10_PHASE=4 (amendment 12): GPU5 / 7 "KIB4H:1" / "KIB4H:2": KIB4's TRAIN and seeds at half learning rates (backbone
+#   5e-6, head 5e-5; prep.sh alias-lock KIB4H KIB4)
 # Arms = the K-a13IB recipe (full fine-tuning of Lux 1.0, own-Lux KL 1.0 on x60 rows, IB rows gold only, CE + 0.5
 # Brier, backbone LR 1e-5, head LR 1e-4, seeds 20260926 / 1 / 2) at K-a13's 60,183,732 native tokens:
 #   KUP  = K-a13IB's TRAIN byte for byte, x60 rows loss weight 1.5, IB rows 1 (--example-weights);
@@ -40,6 +42,8 @@ case $NODE$PHASE:$GPU in
   b3:3) ITEMS="KIB4:3" ;;
   b3:6) ITEMS="KX:4" ;;
   b3:7) ITEMS="KX:5" ;;
+  b4:5) ITEMS="KIB4H:1" ;;
+  b4:7) ITEMS="KIB4H:2" ;;
   a1:1) ITEMS="KX:1" ;;
   a1:2) ITEMS="KX:2" ;;
   a1:7) ITEMS="KX:3" ;;
@@ -92,6 +96,9 @@ def sha(p):
 entry = lock["arms"][arm]
 sys.exit(0 if all(sha(f"{m}/{rel}") == want for rel, want in entry["files"].items()) else 1)
 EOF
+}
+arm_lr() {  # <ARM>: learning-rate overrides after COMMON (argparse keeps the last value)
+  case $1 in KIB4H) echo "--backbone-lr 5e-6 --head-lr 5e-5" ;; esac
 }
 arm_args() {  # <ARM>: train_dec data flags (container paths)
   python3 -c 'import json,sys; print(" ".join(json.load(open(sys.argv[1]))["arms"][sys.argv[2]]["args"]))' "$LOCK" "$1"
@@ -162,7 +169,7 @@ item() {  # <ARM> <seed index>
   wd=$!
   # shellcheck disable=SC2046
   M10_NODE=$NODE M10_PREWARM=$([ "$r" = "$PREWARM_RUN" ] && echo 1 || echo 0) M10_PREWARM_MARK=$MARK \
-    bash "$OPS/arm.sh" "$r" "$GPU" "$SRC" /lux -- $(arm_args "$g") "${COMMON[@]}" --seed "$seed"
+    bash "$OPS/arm.sh" "$r" "$GPU" "$SRC" /lux -- $(arm_args "$g") "${COMMON[@]}" $(arm_lr "$g") --seed "$seed"
   kill "$wd" 2> /dev/null
   if grep -qE "^[^ ]+ $r full run complete" "$M/arms/OPERATIONS.log"; then
     echo "complete $(date -u +%FT%TZ)" > "$ST/$r.DONE"

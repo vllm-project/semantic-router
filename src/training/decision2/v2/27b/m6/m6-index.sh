@@ -12,7 +12,7 @@
 #   ARM      an M6 arm, a cross-arm soup M6-IBxIB2-mNN (seeds of M6-IB and M6-IB2; NN = M6-IB2's weight in percent) or
 #            an M7 arm soup (M7-IB124ML, M7-IB14ML), an M8 arm soup (M8-IB14, M8-IB124) or a preregistered M7 / M8 / M9
 #            cross-arm soup (X7-IBxIB2xIB14ML, X7-4ARM, X8-IBxIB2-8, X8-ML, X9-LRH2, X9-LRH2xM50, X9-LRH, X9-LRHxM50,
-#            X9-ML0, X9-IBxIB2-10); its soup is node B m6/ARM/checkpoint
+#            X9-ML0, X9-IBxIB2-10, X9-IBLRH, X9-IBLRHxM50, X9-LRHALL); its soup is node B m6/ARM/checkpoint
 #   plan     prints which shards run on which node and GPU for M6_INDEX_GPUS (no node is touched)
 #   stage    node B m6/ARM/checkpoint -> node D /data/dev2/models/ix1/m6/ARM-ckpt over node B's transfer key (SHA-256
 #            lists equal), then v2.eval.ix1.restage -> /data/dev2/models/ix1/m6/ARM-re876fbe with the model SHA-256 of
@@ -61,7 +61,7 @@
 set -euo pipefail
 SHA=${1:?MIRROR_SHA} ARM=${2:?ARM} STAGE=${3:?STAGE}
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "MIRROR_SHA must be a full commit SHA" >&2; exit 2; }
-ARM_RE='^(M6-(IB|IBX|IB2|IB2PN|IBxIB2-m[0-9]{2})|M7-(IB124ML|IB14ML)|M8-(IB14|IB124)|X7-(IBxIB2xIB14ML|4ARM)|X8-(IBxIB2-8|ML)|X9-(LRH2|LRH2xM50|LRH|LRHxM50|ML0|IBxIB2-10))$'
+ARM_RE='^(M6-(IB|IBX|IB2|IB2PN|IBxIB2-m[0-9]{2})|M7-(IB124ML|IB14ML)|M8-(IB14|IB124)|X7-(IBxIB2xIB14ML|4ARM)|X8-(IBxIB2-8|ML)|X9-(LRH2|LRH2xM50|LRH|LRHxM50|ML0|IBxIB2-10|IBLRH|IBLRHxM50|LRHALL))$'
 [[ "$ARM" =~ $ARM_RE ]] || { echo "bad ARM $ARM" >&2; exit 2; }
 placement() {  # one line per node with shards: "NODE SHARDS GPU..." (i-th shard of M6_INDEX_SHARDS on entry i mod n)
   local entries=() norm=() todo=() e i k node g
@@ -283,6 +283,10 @@ case "$STAGE" in
         m7-data:mixtures-m7:a20ib124ml m7-data:mixtures-m7:a20ib14 m7-data:mixtures-m7:a20ib124" ;;
       X9-LRH2 | X9-LRH2xM50 | X9-LRH | X9-LRHxM50 | X9-IBxIB2-10)
         mixes="m6-data:mixtures-m6:a20ib1 m6-data:mixtures-m6:a20ib12" ;;
+      X9-IBLRH) mixes="m6-data:mixtures-m6:a20ib1" ;;
+      X9-LRHALL) mixes="m6-data:mixtures-m6:a20ib1 m6-data:mixtures-m6:a20ib12 m7-data:mixtures-m7:a20ib14ml
+        m7-data:mixtures-m7:a20ib124ml" ;;
+      X9-IBLRHxM50) mixes="m6-data:mixtures-m6:a20ib1 m6-data:mixtures-m6:a20ib12" ;;
       X9-ML0) mixes="m6-data:mixtures-m6:a20ib1 m6-data:mixtures-m6:a20ib12 m9-data:mixtures-m9:a20ib1ml
         m9-data:mixtures-m9:a20ib12ml" ;;
     esac

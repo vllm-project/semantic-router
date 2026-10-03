@@ -54,6 +54,12 @@ DECIDED_BY = (
     "fast path, each only with 0 answer changes and 0.0 drift on all four scored panels against the released runtime"
 )
 PREPARED_BY = "Decision 2.0 runtime phase A worker 2d541b40 (track=runtime-a, worktree vllm-sr-dev2-runtime-a)"
+# Lux's switch revision is the 9B owner's (COORDINATION 2026-10-03 08:30), run with this record's tooling.
+LUX_SWITCH_WORKER = "9B owner e28aa509"
+LUX_SWITCH_PREPARED_BY = (
+    "Decision 2.0 9B owner e28aa509 (M10 continuation, Lux-9B publisher; worktree vllm-sr-dev2-9b-m10) with the "
+    "runtime phase A tooling of this record"
+)
 DECIDED_UTC = "2026-10-02T10:00:00Z"
 # The current main of each repository and the release work directory on node A that built and sealed it (the org
 # worker's card-only revisions; Kai's was built on node E and its receipts copied to the same path on node A; Vega's
@@ -115,6 +121,14 @@ SWITCH_TIERS: dict[str, tuple[str, str, str, str]] = {
         "Sol",
         "6a62b3198f3bcf87259cfc2d72185b4861884394",
         "dev2-ra-2B-20261002T114630Z",
+    ),
+    # Lux: the 9B M10 release KIB4-a40 (phase A runtime 54303117b); its switch revision is the 9B owner's
+    # (COORDINATION 2026-10-03 08:30).
+    "9B": (
+        "9b",
+        "Lux",
+        "f3122c7c8abd302326c22220aac4095eb1799f37",
+        "dev2-9b-m10-KIB4-a40-release-20261002T151423Z",
     ),
     "27B": TIERS["27B"],
 }
@@ -244,8 +258,12 @@ SWITCH_SENTENCE = (
 
 
 def phase_a_sentence_added(src: dict) -> bool:
-    return src["kind"] == "switch" and runtime_sentence(src["key"] == "27b") not in (
-        src["spec"]["runtime_equivalence"]
+    text = src["spec"]["runtime_equivalence"]
+    # Lux's main (9B M10 release) already describes the phase A runtime in its own words.
+    return (
+        src["kind"] == "switch"
+        and runtime_sentence(src["key"] == "27b") not in text
+        and "the phase A runtime, which replays" not in text
     )
 
 
@@ -306,7 +324,9 @@ def switch_spec_for(src: dict) -> dict:
     lat = src["bench"]["latency_ms"]
     spec["_release"] = {
         "runtime_switch": (
-            "Runtime-only revision (COORDINATION 2026-10-03 02:38 / 03:18 UTC+8; worker 2d541b40): the package "
+            "Runtime-only revision (COORDINATION 2026-10-03 02:38 / 03:18 UTC+8"
+            + ("; 08:30" if src["key"] == "9b" else "")
+            + f"; {LUX_SWITCH_WORKER if src['key'] == '9b' else 'worker 2d541b40'}): the package "
             f"runtime comes from commit {SWITCH_COMMIT[:9]} (runtime_source): the phase A fast path and the opt-in "
             "shared-context switch (runtime/shared_ctx.py, off by default). Weights, tokenizer, configs, the "
             "vendored training/model sources, card index, assets and remote code are those of the spec that built "
@@ -364,9 +384,19 @@ def switch_decision_for(src: dict, spec_sha: str) -> dict:
                 "(the shared-context switch ships opt-in, default off, in runtime-only revisions with the phase A "
                 "parity rollout; the user's 01:27 instruction 'same strategy as when private' covers the public "
                 "repositories)"
+                + (
+                    "; COORDINATION 2026-10-03 08:30 UTC+8 (the Lux switch revision is the 9B owner's when no 9B "
+                    "release is under way by 10:00)"
+                    if src["key"] == "9b"
+                    else ""
+                )
             ),
-            "prepared_by": PREPARED_BY,
-            "decided_utc": "2026-10-02T19:18:00Z",
+            "prepared_by": (
+                LUX_SWITCH_PREPARED_BY if src["key"] == "9b" else PREPARED_BY
+            ),
+            "decided_utc": (
+                "2026-10-03T00:30:00Z" if src["key"] == "9b" else "2026-10-02T19:18:00Z"
+            ),
             "action": (
                 f"Runtime-only revision of the public repository {repo}: the package runtime decision2/*.py comes "
                 f"from commit {SWITCH_COMMIT[:9]}"

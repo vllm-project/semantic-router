@@ -1,6 +1,37 @@
 # ~27B M6 state (resume file)
 
-## Continuation #7 (07d87124, from 23:42Z on 10-02) — read this first
+## Continuation #7 FINAL (03:10Z on 10-03): USER STOP — all 27B training stopped; nothing runs — read this first
+
+- **USER 2026-10-03 11:00 UTC+8 (03:00Z):** "我觉得所有的训练任务可以停止了 现在的 focus 就是推理优化和提交 index".
+  COORDINATION 11:00: owners stop every training job and candidate Index / gate chain, release their leases, write
+  the final state and end their run; released versions stay as they are.
+- **Done at 03:04–03:07Z** (with the coordinator's own stops at ≈ 03:03Z): every workstation waiter stopped
+  (`xarm-wait`, `score-wait`, `cand.sh X7-4ARM`, `handover`, two `launch-wait`); on nodes A / B / C / D / F every 27B
+  relay, Index loop, mlx watcher, arm driver, training container and 27B IX1 shard stopped
+  (`/data/dev2/tmp/27b-stop.sh`); every 27B lease written `status=released` (node A GPU1–7, node B GPU0 / 1 / 4 / 6,
+  node D GPU0–7, node F GPU2–7; node C GPU1 released by the coordinator). Checked: no 27B process or container left.
+- **Vega-27B is unchanged:** `main` = `9b067a95` (phase A + opt-in switch, weights M6-IBxIB2-m50 `58469731…`, Index
+  56.47, global #3). No release in this continuation.
+- **State at the stop** (step / total, BEST so far; checkpoints stay on disk, resumable exactly with `M8_RESUME=1`):
+  - M7: IB14ML s1 / s2 **complete** (BEST 2944 / 3680, relayed, souped); IB124ML s1 / s2 / s3 at 6847 / 6761 / 6772
+    of 7989 (BEST 5994 / 4995 / 5994).
+  - M8: IB-s3 4704 / 5081, IB2-s3 4643 / 6614 (node B); IB14 s4 / s5 4626 / 4618 of 5247, IB14ML-s3 4618 / 5882
+    (node D); IB-s4 3375 / 5081, IB2-s4 4298 / 6614, IB124 s4 / s5 4352 / 4351 of 6779 (node F).
+  - M9: IB / IB2 / IB1ML / IB12ML s5 at 2309 / 2333 / 2277 / 2306; IB-lrh / IB2-lrh s5 at 1815 / 1819; s6 seeds
+    IB-lrh 1051, IB2-lrh 986, IB12ML 1065, IB1ML 946; amendment 4 IB14ML-lrh-s5 192, IB124ML-lrh-s5 202.
+  - Candidates: `X7-IBxIB2xIB14ML` soup (rank 768, `b42d598a…`) staged on node D, parity 86 / 86, audit clean; its
+    Index run stopped with shards 0–1 complete and 2–3 partial (no read). `M7-IB14ML` soup staged on node D, audit
+    clean (a20ib14ml 0 item rows, planted 200 / 200), no Index run. No M8 / M9 candidate exists.
+- **GPU-h this continuation (wall-clock, 23:42Z–03:04Z; the stopped stages wrote no receipts):** seeds ≈ 76 (M7
+  ≈ 12, M8 ≈ 30, M9 ≈ 33) + X7 Index ≈ 3.6 + parity ≈ 0.2. Milestone totals (wall-clock since launch): M7 ≈ 89 (+ X7
+  Index ≈ 4), M8 ≈ 117, M9 ≈ 48 of 350 approved.
+- **Ready if 27B optimization ever resumes** (all pushed): successor release ops on `9b067a95`
+  (`dev2-27b-succ-2026-10-03`, `CHOICE = None`); M8 amendment 2, M9 amendments 2–4 (half-LR candidates, read order);
+  capped-seed relays; `cand.sh` / `idx-wait.sh` / `score-wait.sh` / `xarm-wait.sh` in `/tmp/d2w` (workstation).
+  The strongest untested lever is the half-LR soups (`X9-IBLRH`, `X9-LRH2`, `X9-LRHALL`); their seeds would resume
+  from their saves. X7's read would need its 6 remaining shards (≈ 9 GPU-h, IX1 `launch.sh resume`).
+
+## Continuation #7 (07d87124, from 23:42Z on 10-02)
 
 - **Assignment:** COORDINATION 2026-10-03 07:45 and the parent's brief: 27B owner and the only Vega model publisher.
   Goal: Vega-27B #1 in its class and globally on the Index (above Decider chat · Gemma-4-31B and Surogate Rune
@@ -43,6 +74,51 @@
   shards on node D GPU3–4, then stages M7-IB14ML and audits both. **Next by hand:** `collect` / `score` with
   `M6_INDEX_BASE=M6-IBxIB2-m50`; R3 via `m6-xarm.sh e972f8ced… X7-IBxIB2xIB14ML 0` with `CURRENT=M6-IBxIB2-m50` once
   M8-IB-s3 frees node B GPU0 (≈ 03:50Z); M7-IB14ML parity / run on the next free node D / C GPUs.
+- **01:16Z: `X7-IBxIB2xIB14ML` on the Index** (node D GPU3–4, 8 shards, m6-index-run PID 3635374 on node D; parity
+  86 / 86, max |dp| 0.0; soup identity `b42d598a…`, rank 768, loaded 31,232,798,720). Ends ≈ 06:05Z; then `score`
+  with `M6_INDEX_BASE=M6-IBxIB2-m50` (frozen scripts `/tmp/d2w/frozen-e972f8c`, mirror `e972f8ced`). M7-IB14ML soup
+  built, staged by m7b (read only on free GPUs, M8 amendment 2). **R3 waiter** `/tmp/d2w/xarm-wait.sh
+  X7-IBxIB2xIB14ML 0 M8-IB-s3` (log `/tmp/d2w/logs/xarm-wait-X7.log`; starts `m6-xarm.sh e9dec5c1b… X7… 0` with
+  `CURRENT=M6-IBxIB2-m50` on node B when M8-IB-s3 ends ≈ 03:50Z). A restart of `m7a.sh` by another session at
+  00:28:56Z died on a container-name clash (COORDINATION 09:05).
+- **01:10Z: capped-seed relays** (`d70cdd780`, test added): a seed stopped by its GPU-hour cap relays its last BEST
+  save with `CAPPED.json`. All 20 waiting relays were restarted on it (`/data/dev2/tmp/27b-relay-restart.sh`). The
+  M7-IB124ML seeds (7,989 steps at ≈ 10 s) hit their caps ≈ 06:17–06:19Z; their best save is among saves ≤ 6,993.
+- **01:25Z: M9 amendment 3** (`cf8c660f5`): `X9-IBLRH` (M9-IB-lrh s5 / s6, ½ each) and `X9-IBLRHxM50` (+ M50's four,
+  ⅙ each), read first (≈ 14:20Z). +30 GPU-h asked. Generic chain **`/tmp/d2w/cand.sh ARM`** (member lists and weights
+  for every preregistered candidate except X8-ML; `CAND_PARITY_GPU` / `CAND_INDEX_GPUS` start parity and the run).
+- **01:45Z: M9 amendment 4** (`d5703f30f`): `M9-IB14ML-lrh` / `M9-IB124ML-lrh` s5 / s6 (half LR, M7's mixtures; cap
+  19 / 22) and `X9-LRHALL` (four half-LR arms, ¼ each). **Approved +100 GPU-h (M9 350) at COORDINATION 09:38.**
+- **02:20Z: launched on node B** (launcher `f1250bf84`: node B GPU0–7 in the M6 allocation; idle > 20 min after the
+  09:58 assignment): `M9-IB14ML-lrh-s5` GPU4 (pid 1034066), `M9-IB124ML-lrh-s5` GPU6 (pid 1034080); preflights pass.
+  Node B seeds have no relay (cand.sh reads their COMPLETE / BEST on node B; a capped one needs its BEST by hand).
+  **s6 waiters** (`/tmp/d2w/launch-wait.sh`, logs `logs/launch-wait-IB1*ML-lrh-s6.log`): `M9-IB14ML-lrh-s6` on node F
+  GPU4 after M8-IB-s4 (≈ 07:40Z), `M9-IB124ML-lrh-s6` on node F GPU5 after M8-IB2-s4 (≈ 09:15Z), relays included;
+  both mixtures copied to node F (SHA-256 equal). `cand.sh` maps the s5 seeds to node B and the s6 seeds to node F.
+- **Waiters running (workstation, detached):** `score-wait.sh X7-IBxIB2xIB14ML` (log `logs/score-wait-X7.log`;
+  scores with `M6_INDEX_BASE=M6-IBxIB2-m50` once all 8 shards end 0, prints only YES / no for lower bound > 0);
+  `handover.sh "M8-IB14-s4 M8-IB14-s5" "6 7"` (≈ 04:50Z: released owners on node D GPU6–7 for the Index submission
+  worker's Vega complement, user ask; M7-IB14ML's read follows them: `idx-wait.sh M7-IB14ML "<free dN>" "<seeds>"`);
+  `cand.sh X7-4ARM` with `CAND_PARITY_GPU=d0 CAND_INDEX_GPUS="d0 d1 d2 d3 d4 d5"` (waits for the M7-IB124ML relays,
+  soup with weights 3×6 / 2×3, stage, then waits until those GPUs are idle, parity, run, audit).
+- **Release runbook (a candidate ARM with lower bound > 0 and R3 types OK):**
+  1. `bash v2/27b/m6/m6-stage-a.sh ARM` (workstation; formal run, package, soup, gates node B → node A).
+  2. `bash v2/release/records/dev2-27b-succ-2026-10-03/ops/inputs27bs.sh ARM` (workstation; private Index files → node A
+     `/data/dev2/private/release/27bs/ARM`).
+  3. node A, mirror ≥ `e9dec5c1b`: `ops/index27bs.sh ARM`, then `ops/render27bs.sh ARM`.
+  4. Set `CHOICE = "ARM"` in `make_27bs.py`, commit, push, mirror to node A; there run
+     `PYTHONPATH=<mirror>/src/training/decision2 python3 <mirror>/…/ops/make_27bs.py --arm ARM --decided-utc <UTC> --out
+     /data/dev2/tmp/27bs-ARM`; copy the two outputs into `v2/release/specs/` and the record dir, commit, push, mirror,
+     re-run with `--check`.
+  5. node A: `TF518_DIGEST=93df9002544f8394b572497d97dd2df778e79b63adbcc5624173bcf84de7fffe bash
+     <mirror>/…/ops/release27bs.sh ARM --release --gpu 0` (GPU0 shared lease; Vega `main` must still be `9b067a95`);
+     wait for `post_checks=ok` (upload, download re-hash, Hub smoke 5.17 / 5.18, 86-request parity on the download,
+     card HTTP / links / collection, gate evaluate, purge of 9b067a95's weights).
+  6. 86-request gate on the download (node A, same GPU): `bash <mirror>/v2/release/records/dev2-runtime-a-2026-10-02/ops/
+     gate86.sh --package <work>/download/Decision-2.0-Vega-27B --repo vllm-sr/Decision-2.0-Vega-27B --revision <new>
+     --gpu 0 --summary <work>/extra/gate86.json --base-path /data/dev2/hf-cache/models--Qwen--Qwen3.8-27B/snapshots/
+     1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0` (IX1's `launch.sh parity` still names the former org).
+  7. Record `dev2-27b-succ-2026-10-03.md`, receipts, integration push, COORDINATION, gist.
 - **Lease note:** launch.py leaves JSON owners (`"track": "27b"`, `"status": "reserved-idle"`); `m6-index.sh`
   parity / run / hold accept only KEY=VALUE `track=27b` + `status=reserved-idle` (or released / eval-ix1). Convert
   before an Index use (as m7b.sh does).
