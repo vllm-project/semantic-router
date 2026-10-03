@@ -72,7 +72,7 @@ JOBS: dict[str, Job] = {
     "rerank_l6d256": Job(RERANKER, "rerank", "vela_reranker", (256, 6)),
     "qwen3": Job(QWEN3, "embedding", "qwen3"),
     **{
-        f"omni_{size}_{modality}": Job(model, "omni", "multimodal", modality=modality)
+        f"omni_{size}_{modality}": Job(model, "omni", "vela_omni", modality=modality)
         for size, model in (("nano", OMNI_NANO), ("mini", OMNI_MINI))
         for modality in ("text", "image", "audio")
     },
