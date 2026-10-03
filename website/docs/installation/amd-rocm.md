@@ -282,7 +282,7 @@ Here, `truncate` processes the first 32,768 tokens, including special tokens,
 when the encoder input exceeds its budget. Use `reject` if complete input is
 required. This policy affects the encoder view only; it does not shorten the
 chat request or change the generation model's context window. See
-[encoder input budgets](runtime/in-process.md#choose-an-input-budget).
+[encoder input budgets](../model-runtime/deploy.md#describe-a-deployment).
 The fixed graph pads even short inputs to 32,768 tokens, increasing their
 latency and memory cost. Keep the default 8K MIGraphX deployments when that
 budget fits your workload.

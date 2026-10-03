@@ -126,7 +126,7 @@ tree, so the Router rejects a configuration that sets both.
 `prompt_guard.on_error` (`allow` or `block`) remains the compatibility
 default for jailbreak rules. Diagnostics include both the signal error and any
 terminal policy that was applied. See
-[Safety models](../../../installation/runtime/safety).
+[Safety models](../../../model-runtime/guides/safety.md).
 
 `sequence_classifier` classifiers also reference a named external model, but
 use the shared `http_classify` contract and preserve its full label distribution.
@@ -150,7 +150,7 @@ in `model_bindings`; this replaces the rule's `model` or `model_path` selector.
 Local and sequence rules support local sequence deployments or HTTP
 `http_classify`, while LLM rules retain their scored extraction instructions
 and require HTTP `http_chat`. These use `label_distribution.v1`, with the rule's
-ordered `labels` as the mapping. See [In-process models](../../../installation/runtime/in-process).
+ordered `labels` as the mapping. See [In-process models](../../../model-runtime/deploy.md).
 
 ## Independent labels with a frozen operating point
 

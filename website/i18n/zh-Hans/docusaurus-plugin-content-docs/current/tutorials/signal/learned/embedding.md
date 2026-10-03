@@ -13,7 +13,7 @@ translation:
 
 它依赖 `global.model_catalog.embeddings` 中配置的嵌入模型。
 
-这些资产可以在本地运行，或通过外部兼容 OpenAI 的文本嵌入端点运行。共享提供方配置见[运行时嵌入](../../../installation/runtime/embeddings)；信号候选、阈值与决策条件保持不变。
+这些资产可以在本地运行，或通过外部兼容 OpenAI 的文本嵌入端点运行。共享提供方配置见[运行时嵌入](../../../model-runtime/guides/embeddings.md)；信号候选、阈值与决策条件保持不变。
 
 ## 主要优势 {#key-advantages}
 

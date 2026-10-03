@@ -178,7 +178,7 @@ Use the same deployment and consumer-binding structure for other classifiers.
 PII returns `token_spans.v1`. Embedding uses the `mmbert` adapter and
 `embedding.v1`; Reranker uses `vela_reranker` and `relevance_scores.v1`. These
 adapter names describe inference architectures and are independent of release
-names. See [in-process inference](/docs/installation/runtime/in-process) for the full contract.
+names. See [in-process inference](/docs/model-runtime/deploy) for the full contract.
 
 For Hazard, bind the independent classifier contract `label_scores.v1` and pin
 `operating_point.json` with its SHA-256. The policy binds the weights, tokenizer,
