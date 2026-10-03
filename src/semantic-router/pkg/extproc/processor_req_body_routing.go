@@ -4,7 +4,9 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -319,6 +321,7 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 		return errorResponse
 	}
 	appendRoutingHeaders(&state.setHeaders, dispatch.effectiveBackendModel())
+	r.appendReliabilityHeaders(&state.setHeaders, dispatch.logicalModel, dispatch.effectiveBackendModel())
 	setProviderRequestPath(&state.setHeaders, dispatch.profile, dispatch.targetFormat)
 	r.applyDecisionHeaderMutations(state, ctx)
 	// Body-stage model and path mutations can change the Envoy route selected
@@ -570,6 +573,32 @@ func appendRoutingHeaders(headersOut *[]*core.HeaderValueOption, model string) {
 	*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
 		Key: headers.SelectedModel, RawValue: []byte(model),
 	}})
+}
+
+func (r *OpenAIRouter) appendReliabilityHeaders(headersOut *[]*core.HeaderValueOption, models ...string) {
+	if r == nil || r.Config == nil {
+		return
+	}
+	for _, model := range models {
+		if model == "" {
+			continue
+		}
+		modelParams, ok := r.Config.ModelConfig[model]
+		if !ok {
+			continue
+		}
+		rel := modelParams.Reliability
+		if rel.RequestTimeout != "" {
+			if dur, err := time.ParseDuration(rel.RequestTimeout); err == nil {
+				timeoutMs := dur.Milliseconds()
+				*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
+					Key:      "x-envoy-upstream-rq-timeout-ms",
+					RawValue: []byte(strconv.FormatInt(timeoutMs, 10)),
+				}})
+				return
+			}
+		}
+	}
 }
 
 func appendContentLengthHeader(headersOut *[]*core.HeaderValueOption, bodyLength int) {
