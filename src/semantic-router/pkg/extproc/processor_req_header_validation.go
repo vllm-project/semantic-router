@@ -7,52 +7,78 @@ import (
 )
 
 func (r *OpenAIRouter) validateRequestHeaders(method string, path string) *ext_proc.ProcessingResponse {
+	response, _ := r.classifyRequestHeaders(method, path)
+	return response
+}
+
+// classifyRequestHeaders validates the public route and reports whether an
+// accepted request is an inference call that must carry a JSON body.
+func (r *OpenAIRouter) classifyRequestHeaders(method string, path string) (*ext_proc.ProcessingResponse, bool) {
 	normalizedPath := normalizeRequestPath(path)
 
 	switch normalizedPath {
 	case "/v1/chat/completions", azureV1ChatPath:
-		return validateAllowedMethod(r, method, "POST")
+		return validateInferenceMethod(r, method)
 	case "/v1/messages":
-		return validateAllowedMethod(r, method, "POST")
+		return validateInferenceMethod(r, method)
 	case "/v1/models":
-		return validateAllowedMethod(r, method, "GET")
+		return validateAllowedMethod(r, method, "GET"), false
 	case "/v1/responses", azureResponsesPath, azureV1ResponsesPath:
 		return r.validateResponseAPICollectionMethod(method)
 	}
 
 	if extractResponseIDFromInputItemsPath(normalizedPath) != "" {
-		return validateAllowedMethod(r, method, "GET")
+		return validateAllowedMethod(r, method, "GET"), false
 	}
 
 	if extractResponseIDFromPath(normalizedPath) != "" {
-		return r.validateResponseAPIItemMethod(method)
+		return r.validateResponseAPIItemMethod(method), false
 	}
 
 	if _, ok := azureChatDeployment(normalizedPath); ok {
-		return validateAllowedMethod(r, method, "POST")
+		return validateInferenceMethod(r, method)
 	}
 
 	if isAzureOpenAIPath(normalizedPath) {
-		return r.createErrorResponse(404, "endpoint not found")
+		return r.createErrorResponse(404, "endpoint not found"), false
 	}
 
 	if normalizedPath == routerReplayAPIBasePath || strings.HasPrefix(normalizedPath, routerReplayAPIBasePath+"/") {
-		return r.createErrorResponse(404, "endpoint not found")
+		return r.createErrorResponse(404, "endpoint not found"), false
 	}
 
 	if normalizedPath == "/v1" || strings.HasPrefix(normalizedPath, "/v1/") {
-		return r.createErrorResponse(404, "endpoint not found")
+		return r.createErrorResponse(404, "endpoint not found"), false
 	}
 
-	return nil
+	return nil, false
 }
 
-func (r *OpenAIRouter) validateResponseAPICollectionMethod(method string) *ext_proc.ProcessingResponse {
+// validateInferenceMethod accepts only POST, which always carries the JSON request.
+func validateInferenceMethod(r *OpenAIRouter, method string) (*ext_proc.ProcessingResponse, bool) {
+	if response := validateAllowedMethod(r, method, "POST"); response != nil {
+		return response, false
+	}
+	return nil, true
+}
+
+// rejectBodylessInferenceRequest runs the ingress codec on the body Envoy will
+// never send, so end_of_stream headers get the body stage's own 400.
+func (r *OpenAIRouter) rejectBodylessInferenceRequest(ctx *RequestContext) *ext_proc.ProcessingResponse {
+	engine, err := r.protocolEngine()
+	if err != nil {
+		return r.createErrorResponse(503, "protocol runtime unavailable")
+	}
+	_, _, _, err = engine.DecodeRequestForMutation(ctx.SourceFormat, nil)
+	return r.ingressDecodeErrorResponse(ctx, err)
+}
+
+func (r *OpenAIRouter) validateResponseAPICollectionMethod(method string) (*ext_proc.ProcessingResponse, bool) {
 	if r.ResponseAPIFilter == nil || !r.ResponseAPIFilter.IsEnabled() {
-		return r.createErrorResponse(404, "endpoint not found")
+		return r.createErrorResponse(404, "endpoint not found"), false
 	}
 
-	return validateAllowedMethod(r, method, "POST")
+	return validateInferenceMethod(r, method)
 }
 
 func (r *OpenAIRouter) validateResponseAPIItemMethod(method string) *ext_proc.ProcessingResponse {
