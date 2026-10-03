@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -150,8 +152,8 @@ func (g *ReflectionGate) applyRecencyDecay(memories []*RetrieveResult, now time.
 }
 
 // dedup removes memories that are near-duplicates of a higher-scored memory.
-// Uses simple content similarity (Jaccard on word sets) as a proxy for
-// cosine similarity -- avoids needing embeddings at this stage.
+// Uses text-unit Jaccard as a proxy for cosine similarity, so it does not
+// need embeddings. Latin words stay one unit; each CJK character is its own.
 func (g *ReflectionGate) dedup(memories []*RetrieveResult) []*RetrieveResult {
 	if len(memories) <= 1 {
 		return memories
@@ -190,7 +192,7 @@ func (g *ReflectionGate) enforceTokenBudget(memories []*RetrieveResult) []*Retri
 	return memories
 }
 
-// wordJaccard computes Jaccard similarity on lowercased word sets.
+// wordJaccard computes Jaccard similarity on lowercased text units.
 func wordJaccard(a, b string) float32 {
 	setA := wordSet(a)
 	setB := wordSet(b)
@@ -213,19 +215,77 @@ func wordJaccard(a, b string) float32 {
 }
 
 func wordSet(s string) map[string]bool {
-	words := strings.Fields(strings.ToLower(s))
-	set := make(map[string]bool, len(words))
-	for _, w := range words {
-		set[w] = true
+	units := textUnits(s)
+	set := make(map[string]bool, len(units))
+	for _, unit := range units {
+		set[unit] = true
 	}
 	return set
 }
 
-// estimateTokens gives a rough token count (words * 1.3, the common
-// English approximation). Good enough for budget enforcement.
+// textUnits splits text the same way multilingual signals do. Each Han,
+// Hiragana, Katakana, or Hangul character is one unit. A contiguous run of
+// other letters or digits is one unit. Punctuation and whitespace separate
+// units and are not counted.
+func textUnits(s string) []string {
+	var units []string
+	var latin strings.Builder
+	flush := func() {
+		if latin.Len() == 0 {
+			return
+		}
+		units = append(units, latin.String())
+		latin.Reset()
+	}
+	for _, r := range strings.ToLower(s) {
+		switch {
+		case isCJK(r):
+			flush()
+			units = append(units, string(r))
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
+			latin.WriteRune(r)
+		default:
+			flush()
+		}
+	}
+	flush()
+	return units
+}
+
+func isCJK(r rune) bool {
+	return unicode.Is(unicode.Han, r) ||
+		unicode.Is(unicode.Hiragana, r) ||
+		unicode.Is(unicode.Katakana, r) ||
+		unicode.Is(unicode.Hangul, r)
+}
+
+const (
+	// latinTokensPerUnit is the English word approximation (words * 1.3).
+	latinTokensPerUnit = 1.3
+	// cjkTokensPerRune uses the same 1.5 CJK multiplier as
+	// promptcompression.CountTokensApprox (conservative vs real tokenizers).
+	cjkTokensPerRune = 1.5
+)
+
+// estimateTokens estimates injected size for the reflection token budget.
+// Latin word units use 1.3 tokens; each Han, Hiragana, Katakana, or Hangul
+// character uses 1.5. The total is Ceil'd; CountTokensApprox truncates instead.
+// This is a heuristic, not a model tokenizer. Thai is not segmented here.
 func estimateTokens(s string) int {
-	words := len(strings.Fields(s))
-	return int(math.Ceil(float64(words) * 1.3))
+	cjk := 0
+	latin := 0
+	for _, unit := range textUnits(s) {
+		r, size := utf8.DecodeRuneInString(unit)
+		if size == len(unit) && isCJK(r) {
+			cjk++
+			continue
+		}
+		latin++
+	}
+	if cjk == 0 && latin == 0 {
+		return 0
+	}
+	return int(math.Ceil(float64(cjk)*cjkTokensPerRune + float64(latin)*latinTokensPerUnit))
 }
 
 // resolveReflectionConfig merges per-decision overrides into global config.
