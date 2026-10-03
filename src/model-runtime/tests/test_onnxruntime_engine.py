@@ -103,6 +103,18 @@ def test_descriptor_lists_providers_per_device():
     assert "CPUExecutionProvider" in descriptor["installed"]
 
 
+def test_cpu_sessions_share_one_pool_sized_to_the_process():
+    choice = providers.choose(CPU, ["CPUExecutionProvider"])
+    assert providers.cpu_threads(3) == 3 and providers.cpu_threads(None) >= 1
+    options = providers.session_options(choice, 2)
+    size = providers.shared_pool(2)
+    if size:
+        assert options.use_per_session_threads is False
+    else:
+        assert options.intra_op_num_threads == 2
+    assert providers.shared_pool(5) == size
+
+
 def test_gpu_sessions_never_fall_back_to_the_cpu():
     gpu = providers.session_options(
         providers.ProviderChoice("CUDAExecutionProvider"), 2
@@ -111,8 +123,9 @@ def test_gpu_sessions_never_fall_back_to_the_cpu():
     cpu = providers.session_options(
         providers.ProviderChoice("CPUExecutionProvider"), 2, False
     )
-    assert cpu.intra_op_num_threads == 2 and cpu.inter_op_num_threads == 1
+    assert cpu.inter_op_num_threads == 1
     assert cpu.get_session_config_entry("session.intra_op.allow_spinning") == "0"
+    assert cpu.use_per_session_threads is False or cpu.intra_op_num_threads == 2
 
 
 def test_unsupported_specs_say_why(tmp_path):
