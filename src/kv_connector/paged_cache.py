@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import torch
 
+_KV_TENSOR_RANK = 3
+
 
 def _slots(
     block_ids: list[int], num_tokens: int, block_size: int, num_blocks: int
@@ -56,7 +58,7 @@ def inject_prefix(
     values: torch.Tensor,
 ) -> None:
     """Write mapped K/V into allocated cache blocks after all checks pass."""
-    if keys.shape != values.shape or keys.ndim != 3:
+    if keys.shape != values.shape or keys.ndim != _KV_TENSOR_RANK:
         raise ValueError("K and V must have equal [tokens, heads, head_dim] shapes")
     if keys.dtype != cache.dtype or values.dtype != cache.dtype:
         raise ValueError("mapped KV dtype differs from paged cache")

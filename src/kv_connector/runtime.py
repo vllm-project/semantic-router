@@ -18,6 +18,8 @@ from src.training.kv_mapper.artifact import (
     verify_compatibility,
 )
 
+_KV_TENSOR_RANK = 3
+
 
 @dataclass(frozen=True)
 class MapperArtifact:
@@ -100,7 +102,7 @@ class MapperArtifact:
             * self.manifest.compatibility.head_dim
         )
         if not parts or any(
-            part.ndim != 3
+            part.ndim != _KV_TENSOR_RANK
             or part.shape[1:]
             != (
                 self.manifest.compatibility.num_kv_heads,

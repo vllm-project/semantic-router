@@ -6,6 +6,8 @@ import torch
 
 from src.kv_connector.runtime import MapperArtifact
 
+_KV_TENSOR_RANK = 3
+
 
 def _rotate_half(values: torch.Tensor) -> torch.Tensor:
     half = values.shape[-1] // 2
@@ -20,7 +22,7 @@ def qwen3_rope(
     inverse: bool = False,
 ) -> torch.Tensor:
     """Apply or undo unscaled Qwen3 RoPE on [tokens, KV heads, head dim]."""
-    if keys.ndim != 3 or keys.shape[-1] % 2:
+    if keys.ndim != _KV_TENSOR_RANK or keys.shape[-1] % 2:
         raise ValueError("keys must be [tokens, heads, even head_dim]")
     if positions.ndim != 1 or positions.shape[0] != keys.shape[0]:
         raise ValueError("positions must have one entry per token")

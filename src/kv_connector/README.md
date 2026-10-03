@@ -32,3 +32,9 @@ Run the synthetic artifact and conversion checks from the repository root:
 ```bash
 PYTHONPATH=. python3 -m unittest discover -s src/kv_connector/tests -p 'test_*.py'
 ```
+
+With vLLM installed, run the connector integration check separately:
+
+```bash
+PYTHONPATH=. python3 -m unittest src.kv_connector.tests.vllm_connector_integration
+```
