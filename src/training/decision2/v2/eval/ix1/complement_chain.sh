@@ -30,7 +30,7 @@ n=$(ls "$rows_dir"/shard-*-of-*.jsonl.gz | wc -l)
 gpus="$(printf "$gpu %.0s" $(seq "$n"))"
 lease="/data/dev2/leases/gpu$gpu.lock/owner"
 if [[ -n "$after_log" ]]; then
-  echo "$(date -u +%FT%TZ) waiting for '$after_grep' in $after_log"
+  echo "$(date -u +%FT%TZ) waiting for the --after-grep text in $after_log"
   until grep -qF "$after_grep" "$after_log" 2>/dev/null; do sleep 20; done
 fi
 for job in "${jobs[@]}"; do
