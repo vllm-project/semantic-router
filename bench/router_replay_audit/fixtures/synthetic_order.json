@@ -1,0 +1,28 @@
+{
+  "fixture_version": "0.1",
+  "evidence_class": "synthetic-stress",
+  "description": "Non-commuting state updates with a route boundary.",
+  "initial_state": {
+    "risk": 0.4
+  },
+  "events": {
+    "A": {
+      "field": "risk",
+      "op": "add",
+      "value": 0.4,
+      "label": "risk evidence"
+    },
+    "B": {
+      "field": "risk",
+      "op": "scale",
+      "value": 0.5,
+      "label": "trust projection"
+    }
+  },
+  "route": {
+    "field": "risk",
+    "threshold": 0.5,
+    "if_gte": "guarded_route",
+    "if_lt": "normal_route"
+  }
+}

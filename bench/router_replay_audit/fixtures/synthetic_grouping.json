@@ -1,0 +1,23 @@
+{
+  "fixture_version": "0.1",
+  "evidence_class": "synthetic-stress",
+  "description": "Associator counterexample for merge + lossy projection/reduction.",
+  "values": {
+    "A": 0.05,
+    "B": 0.05,
+    "C": 0.5
+  },
+  "projection": {
+    "clamp_min": 0.0,
+    "clamp_max": 1.0,
+    "compression_cutoff": 0.5,
+    "low_band_retention": 0.5,
+    "round_digits": 12,
+    "semantics": "After every binary merge, sub-0.50 state is compressed by retaining only 50%."
+  },
+  "route": {
+    "threshold": 0.6,
+    "if_gte": "guarded_route",
+    "if_lt": "normal_route"
+  }
+}

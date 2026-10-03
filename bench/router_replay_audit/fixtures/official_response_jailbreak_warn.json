@@ -1,0 +1,33 @@
+{
+  "fixture_version": "0.1",
+  "evidence_class": "official-test-derived",
+  "provenance": {
+    "repository": "vllm-project/semantic-router",
+    "commit": "8d84987b04c63cd35be211a7aa337336b071ae20",
+    "testcase_file": "e2e/testcases/response_jailbreak_window.go",
+    "note": "Reference-only Replay-shaped fixture based on public testcase naming/expected warning path; not used for route-margin scoring in v0.1."
+  },
+  "replay": {
+    "id": "poc-response-jailbreak-warn",
+    "decision": "response_jailbreak_warn",
+    "signals": {
+      "jailbreak": [
+        "unsafe_completion"
+      ],
+      "keyword": [
+        "__response_warn_probe__"
+      ]
+    },
+    "route_diagnostics": {
+      "decision": "response_jailbreak_warn"
+    },
+    "outcomes": [
+      {
+        "source": "response_jailbreak",
+        "target": "response",
+        "verdict": "warning",
+        "reason": "unsafe_completion"
+      }
+    ]
+  }
+}
