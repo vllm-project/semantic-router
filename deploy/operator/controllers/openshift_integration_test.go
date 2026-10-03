@@ -22,13 +22,13 @@ import (
 
 	routev1 "github.com/openshift/api/route/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
-
-	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
 )
 
 // Disabling routes must delete the Route and stop reporting it in status;
