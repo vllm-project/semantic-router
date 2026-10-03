@@ -26,13 +26,23 @@ from typing import Any
 
 import torch
 
+from ...accel import onednn
+from ...accel.kernels import CONTIGUOUS
 from ...errors import INVALID_INPUT, MAX_LENGTH_EXCEEDED, PackageError
 from ...heads.grounded import GroundedHead, GroundingPolicy, PairEnvelope
 from ...heads.pooled import EmbeddingSurface, PooledLayout
 from ...heads.relevance import LOGITS, RelevanceHead, RelevanceLayout, RerankSurface
 from ...heads.scores import OperatingPoint, ScoresHead
 from ...heads.sequence import SequenceHead
-from ...heads.task import ClassifierHead, Head, HeadOptions, Item, Rows, TaskHead
+from ...heads.task import (
+    ClassifierHead,
+    Head,
+    HeadOptions,
+    Item,
+    Rows,
+    TaskHead,
+    identical,
+)
 from ...heads.token import TokenHead
 from ...plugins.base import (
     DEADLINE,
@@ -66,6 +76,12 @@ PADDING_ALLOWANCE = 0.25
 EXACT_DTYPE = DtypePolicy(
     weights="float32", autocast=None, head="float32", bf16_resident=False
 )
+# Classify heads' exact reference is the legacy path's recorded agreement, so
+# on CPUs they run the batch-invariant variants: oneDNN's packed FP32 linear
+# (x86) and GeGLU on contiguous rows.
+TASK_KERNELS = {"linear": onednn.PACKED, "geglu": CONTIGUOUS}
+# Token counts of the rows that probe a loaded model's batch invariance.
+INVARIANCE_PROBE = (3, 9, 9, 17, 40, 130)
 GOLDEN_TEXTS = (
     "Write a Python function that merges two sorted lists.",
     "Meine Telefonnummer ist 030 1234567 und ich wohne in Berlin.",
@@ -117,6 +133,28 @@ def single_threaded() -> Iterator[None]:
         yield
     finally:
         torch.set_num_threads(threads)
+
+
+def batch_invariant(model: TaskHeadsModel, vocab: int) -> bool:
+    """Whether every head answers probe rows the same alone and inside one mixed batch.
+
+    Kernels are invariant by construction only on some PyTorch builds (a
+    narrow classifier through oneDNN 3.11 is not at small batch sizes), so
+    the loaded model is probed on its own host before ``exact`` may batch.
+    """
+    generator = torch.Generator().manual_seed(0)
+    items = [
+        Item(
+            tuple(torch.randint(5, vocab, (length,), generator=generator).tolist()),
+            name,
+            head.layer,
+        )
+        for name, head in model.heads.items()
+        for length in INVARIANCE_PROBE
+    ]
+    alone = [model.run([item])[0] for item in items]
+    together = model.run(items[::-1])[::-1]
+    return all(map(identical, alone, together))
 
 
 def graph_name(head: Head) -> str:
@@ -515,6 +553,7 @@ class TaskHeadsFamily(ModelFamily):
             max_input_tokens=package.max_input_tokens,
             graphs=graphs,
             encoder=True,
+            kernel_variants={} if task.layout is not None else TASK_KERNELS,
         )
 
     def load(
@@ -530,10 +569,11 @@ class TaskHeadsFamily(ModelFamily):
             return self._load_exits(package, task, engine_model, tokenizer)
         classifier = ClassifierHead.load(
             [task.root / pkg.WEIGHTS], task.config, len(task.labels)
-        ).to(engine_model.device)
+        )
         parameters = engine_model.parameter_count() + sum(
             parameter.numel() for parameter in classifier.parameters()
         )
+        classifier = engine_model.place(classifier)
         if parameters != package.loaded_parameters:
             raise PackageError(
                 f"loaded {parameters:,} parameters; the checkpoint holds {package.loaded_parameters:,}"
@@ -544,9 +584,13 @@ class TaskHeadsFamily(ModelFamily):
         info = self._info(
             package, ("classify",), parameters, heads=(HeadInfo(**head.describe()),)
         )
-        return TaskHeadsModel(
+        model = TaskHeadsModel(
             info, engine_model, heads, package.max_input_tokens, defaults
         )
+        model.batch_invariant = engine_model.batch_invariant and batch_invariant(
+            model, int(task.config["vocab_size"])
+        )
+        return model
 
     def _info(
         self,
