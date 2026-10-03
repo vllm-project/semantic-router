@@ -141,6 +141,8 @@ class GraphSession:
 class OnnxRuntimeModel(EngineModel):
     """A model's graphs loaded on one device; ``encode`` runs the graph a batch names."""
 
+    hidden_states: ClassVar[bool] = False
+
     def __init__(
         self,
         graphs: dict[str, GraphSession],

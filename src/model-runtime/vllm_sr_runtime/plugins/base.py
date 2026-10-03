@@ -238,10 +238,16 @@ class EncoderOutput:
 
 
 class EngineModel(ABC):
-    """A backbone loaded on one device."""
+    """A backbone loaded on one device.
+
+    ``hidden_states`` says whether ``encode`` returns hidden states at any
+    requested exit (an engine that builds the backbone) or the named outputs
+    of the graph a batch names (an engine that runs graphs).
+    """
 
     device: torch.device
     device_info: DeviceInfo
+    hidden_states: ClassVar[bool] = True
 
     @abstractmethod
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
