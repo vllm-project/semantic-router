@@ -8,7 +8,7 @@ from cli.validator import validate_user_config
 from cli.validator_decision_model import model_runtime_deployment_error
 from pydantic import ValidationError
 
-REVISION = "881bee413681d80ebeac86afcda8b4138dae516e"
+REVISION = "cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764"
 
 BASE = {
     "version": "v0.3",

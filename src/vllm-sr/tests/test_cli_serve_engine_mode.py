@@ -8,7 +8,7 @@ from cli.commands import runtime as runtime_commands
 from cli.main import main
 from click.testing import CliRunner
 
-REVISION = "881bee413681d80ebeac86afcda8b4138dae516e"
+REVISION = "cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764"
 
 
 @pytest.fixture

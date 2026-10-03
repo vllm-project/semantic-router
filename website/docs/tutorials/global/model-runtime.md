@@ -13,12 +13,12 @@ Phase 1 serves the six Decision 2.0 models out of the box:
 
 | Model | Revision | Backbone |
 | --- | --- | --- |
-| `vllm-sr/Decision-2.0-Kai-0.6B` | `881bee41` | Qwen3 dense |
-| `vllm-sr/Decision-2.0-Eos-0.8B` | `ad0aa724` | Qwen3.5 Gated DeltaNet hybrid |
-| `vllm-sr/Decision-2.0-Sol-2B` | `4b75b521` | Qwen3.5 Gated DeltaNet hybrid |
-| `vllm-sr/Decision-2.0-Nox-4B` | `ce1bdc9d` | Qwen3.5 Gated DeltaNet hybrid |
-| `vllm-sr/Decision-2.0-Lux-9B` | `214ffa43` | Qwen3.5 Gated DeltaNet hybrid |
-| `vllm-sr/Decision-2.0-Vega-27B` | `9b067a95` | Qwen3.8-27B with a LoRA adapter |
+| `vllm-sr/Decision-2.0-Kai-0.6B` | `cd49ea38` | Qwen3 dense |
+| `vllm-sr/Decision-2.0-Eos-0.8B` | `3594047d` | Qwen3.5 Gated DeltaNet hybrid |
+| `vllm-sr/Decision-2.0-Sol-2B` | `64235bef` | Qwen3.5 Gated DeltaNet hybrid |
+| `vllm-sr/Decision-2.0-Nox-4B` | `25e8f67d` | Qwen3.5 Gated DeltaNet hybrid |
+| `vllm-sr/Decision-2.0-Lux-9B` | `78bf3c03` | Qwen3.5 Gated DeltaNet hybrid |
+| `vllm-sr/Decision-2.0-Vega-27B` | `7aec49ae` | Qwen3.8-27B with a LoRA adapter |
 
 Every package is pinned by revision and verified file by file against its
 manifest before load. Model code is built into the runtime; code shipped
@@ -47,7 +47,7 @@ global:
       decision-kai:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B      # Hub repository or an absolute package path
-        revision: 881bee413681d80ebeac86afcda8b4138dae516e
+        revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
         device: auto                                  # auto, cpu, cuda[:N] or rocm[:N]
         profile: exact                                # exact, shared_context, batching or max_speed
       decision-shared:

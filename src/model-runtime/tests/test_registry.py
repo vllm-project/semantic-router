@@ -22,14 +22,14 @@ def test_builtin_table_pins_every_phase1_model():
             and len(model.model_sha256) == 64
             and len(model.manifest_sha256) == 64
         )
-    assert builtin.lookup("decision-2.0-kai-0.6b").revision.startswith("881bee41")
+    assert builtin.lookup("decision-2.0-kai-0.6b").revision.startswith("cd49ea38")
     assert builtin.lookup("vllm-sr/Decision-2.0-Vega-27B").base[0] == "Qwen/Qwen3.8-27B"
 
 
 def test_revisions_are_always_pinned():
-    assert pinned_revision("vllm-sr/Decision-2.0-Eos-0.8B", None).startswith("ad0aa724")
+    assert pinned_revision("vllm-sr/Decision-2.0-Eos-0.8B", None).startswith("3594047d")
     assert (
-        pinned_revision("vllm-sr/Decision-2.0-Eos-0.8B", "ad0aa724")
+        pinned_revision("vllm-sr/Decision-2.0-Eos-0.8B", "3594047d")
         == builtin.lookup("Decision-2.0-Eos-0.8B").revision
     )
     assert pinned_revision("acme/model", "a" * 40) == "a" * 40
