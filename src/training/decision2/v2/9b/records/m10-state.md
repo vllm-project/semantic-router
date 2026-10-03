@@ -2,6 +2,39 @@
 
 Index values stay private (node private run directories and the coordinator's private folder); this file has none.
 
+## 2026-10-03 03:20Z (11:20 UTC+8), M10 continuation FINAL (owner e28aa509): stopped by the user
+
+- **USER 11:00 (COORDINATION):** stop all training; the focus is now inference optimization and the Index
+  submission. Every 9B job is stopped, and nothing is relaunched.
+  - **The coordinator stopped** the node B Index and gate chains, with `KIB4H-a40` at 3 of 7 shards and `HLR4-a50`
+    before any shard. It also stopped `HLR4-a50`'s formal on node A GPU0 (exit 1, interrupted).
+  - **I stopped** the workstation orchestrator, the `HLR4-a50` waiter and the arm-factory launcher. `KIB4-lrhh`
+    s3 / s4 and `KXH` s1 / s2 were never started.
+  - No 9B process, container or lease is left on nodes A and B. Node B GPU2 / 3 / 5 / 7 and node A GPU0 have no owner
+    file. No continuation is needed.
+- **Lux-9B for now:** `main` = `214ffa43`, the runtime-only switch revision (phase A plus the opt-in shared-context
+  switch) on the KIB4-a40 weights of `f3122c7c`. No weights successor passed IF1 in this continuation.
+- **Amendment 13 verdicts vs `M10-KIB4-a40-bf16`** (values private):
+  - `HLR4-a80`: FAIL (level with the release);
+  - `HLR4-a60`: FAIL, narrowly. Its lower bound is just below 0, and it is the best 9B point measured;
+  - `KIB4H-a80`: FAIL. Its point is below the release; the gate bootstraps were stopped;
+  - `KIB4H-a40` and `HLR4-a50`: not measured (stopped).
+- **What was learned** (for whoever resumes):
+  - RAGTruth is the swing benchmark. KIB4's full-LR seeds at α 1/3–2/5 hold it high, and every other construction
+    loses it.
+  - The half-LR soups gain broadly (HoVer, MuSR, iSarcasmEval, FinEntity, VAST, BPoMP, PhishNChips), but lose
+    RAGTruth as the step grows. HLR4's ladder rises as α falls from 4/5 to 3/5.
+- **If 9B work resumes:**
+  - **`HLR4-a50`** is staged on node B (FP32 `9a3c7e05…`, package `M10-HLR4-a50-bf16`, parity not yet run). Rerun
+    its formal (`m10/formal.sh launch HLR4-a50 0` on node A) and then its Index chain.
+  - **Then the factory's locked arms** (`af-state.md` 00:20Z, mirror `7eb2a7037`) for an eight-seed cross-arm half-LR
+    soup. Preregister its points before reading them.
+  - **Release path:** ready for a successor of `214ffa43`. The m10c ops are re-pinned (`c113eee18`), and `make_m10c.py`
+    has entries for `HLR4-a50` / `-a60` / `-a80`, `KIB4H-a40` / `-a80` and `KIB4-lrhh-a80`. `HLR4-a80` and
+    `KIB4H-a80` have staged inputs on node A.
+- **GPU-h (continuation):** ≈ 38 of 60. That is ≈ 26 before this owner (KIB4H training included), Index reads
+  ≈ 10.5, formals ≈ 0.6, and the Lux switch evidence and release ≈ 0.7.
+
 ## 2026-10-03 02:50Z (10:50 UTC+8), M10 continuation (owner e28aa509)
 
 - **RELEASED: Lux-9B `main` = `214ffa4322bc1bce3215c1bd5de6168402c76969`.** It is a runtime-only revision: the phase A
