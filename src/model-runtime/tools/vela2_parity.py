@@ -652,9 +652,13 @@ def compare(reference: dict[str, Any], ours: dict[str, Any]) -> dict[str, Any]:
     shared = set(ref_v) & set(our_v)
     deltas = {k: abs(ref_v[k] - our_v[k]) for k in shared}
     worst = max(deltas, key=deltas.get) if deltas else None
+    span = [d for k, d in deltas.items() if k.startswith("span:")]
+    other = [d for k, d in deltas.items() if not k.startswith("span:")]
     return {
         "decision_changes": changed,
         "max_abs_diff": deltas[worst] if worst else 0.0,
+        "max_answer_diff": max(other, default=0.0),
+        "max_span_diff": max(span, default=0.0),
         "worst": worst,
         "missing": sorted(set(ref_v) ^ set(our_v)),
         "identical": json.dumps(reference, sort_keys=True)
@@ -789,6 +793,8 @@ def main() -> int:
         "rendering_mismatches": sum(bool(r["rendering"]) for r in ok),
         "rows_not_isolated": [r["id"] for r in ok if r.get("rows_isolated") is False],
         "max_abs_diff": max((r["max_abs_diff"] for r in ok), default=0.0),
+        "max_answer_diff": max((r["max_answer_diff"] for r in ok), default=0.0),
+        "max_span_diff": max((r["max_span_diff"] for r in ok), default=0.0),
         "bar": bar,
         "kernel_choices": "pinned" if pinned else "autotuned in process",
         "path": "approximate" if args.approximate else "exact",

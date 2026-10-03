@@ -263,8 +263,16 @@ components:
           description: Ordered Score level descriptions, an alternative to a criteria list.
           items: {}
         over:
+          description: |
+            The state field a question reads (typed-part models): a field name, or a list of field names it reads
+            together in state order; default the whole state, or for a span the answer if present, else the
+            request. A span reads one field.
+        head:
           type: string
-          description: The state field a question reads (typed-part models); default the whole state, or for a span the answer if present, else the request.
+          enum: [router, broad]
+          description: |
+            Span questions on models with a broad span head: the head that answers (default: the model's routing,
+            reported per question in `span_heads`). Models without one answer `broad` with invalid_question.
         threshold:
           type: number
           format: double
@@ -328,6 +336,11 @@ components:
           additionalProperties:
             type: number
             format: double
+        span_heads:
+          type: object
+          description: The span head (router or broad) that answered each Span question, on models with a broad span head.
+          additionalProperties:
+            type: string
         usage:
           $ref: '#/components/schemas/Usage'
         meta:
