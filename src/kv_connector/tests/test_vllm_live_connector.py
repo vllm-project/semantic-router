@@ -122,8 +122,8 @@ class LiveConnectorTests(unittest.TestCase):
                 theta=1_000_000,
             )
             values = torch.arange(8, dtype=torch.bfloat16).reshape(4, 1, 2) / 10
-            source_cache = torch.zeros((3, 2, 2, 2), dtype=torch.bfloat16)
-            inject_prefix(source_cache, [2, 0], keys, values)
+            source_cache = torch.zeros((3, 1, 2, 4), dtype=torch.bfloat16)
+            inject_prefix(source_cache, [2, 0], keys, values, layout="lbnhc")
             source_worker.save_kv_layer(
                 "model.layers.0.self_attn.attn", source_cache, None
             )
@@ -177,7 +177,7 @@ class LiveConnectorTests(unittest.TestCase):
             target_worker = KVMapperConnector(
                 target_config, KVConnectorRole.WORKER, None
             )
-            target_cache = torch.zeros((3, 2, 2, 2), dtype=torch.bfloat16)
+            target_cache = torch.zeros((3, 1, 2, 4), dtype=torch.bfloat16)
             target_worker.register_kv_caches(
                 {"model.layers.0.self_attn.attn": target_cache}
             )
@@ -185,7 +185,7 @@ class LiveConnectorTests(unittest.TestCase):
             target_worker.start_load_kv(None)
             self.assertEqual(target_worker.get_block_ids_with_load_errors(), set())
             actual_key, actual_value = extract_prefix(
-                target_cache, [1, 2], 4, heads=1, head_dim=2
+                target_cache, [1, 2], 4, heads=1, head_dim=2, layout="lbnhc"
             )
             torch.testing.assert_close(actual_key, keys, atol=0.01, rtol=0.01)
             torch.testing.assert_close(actual_value, values)
