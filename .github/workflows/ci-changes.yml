@@ -61,10 +61,8 @@ on:
         value: ${{ jobs.plan.outputs.local }}
       recipes:
         value: ${{ jobs.plan.outputs.recipes }}
-      native-shared:
-        value: ${{ jobs.plan.outputs.native-shared }}
-      native-independent:
-        value: ${{ jobs.plan.outputs.native-independent }}
+      platform:
+        value: ${{ jobs.plan.outputs.platform }}
       performance:
         value: ${{ jobs.plan.outputs.performance }}
       package:
@@ -108,8 +106,7 @@ jobs:
       operator: ${{ steps.plan.outputs.operator }}
       local: ${{ steps.plan.outputs.local }}
       recipes: ${{ steps.plan.outputs.recipes }}
-      native-shared: ${{ steps.plan.outputs.native-shared }}
-      native-independent: ${{ steps.plan.outputs.native-independent }}
+      platform: ${{ steps.plan.outputs.platform }}
       performance: ${{ steps.plan.outputs.performance }}
       package: ${{ steps.plan.outputs.package }}
       tools: ${{ steps.plan.outputs.tools }}
