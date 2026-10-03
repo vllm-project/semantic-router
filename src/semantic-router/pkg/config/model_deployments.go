@@ -409,6 +409,9 @@ func validateModelDeploymentContracts(cfg *RouterConfig) error {
 		if strings.TrimSpace(name) == "" || strings.TrimSpace(name) != name {
 			return fmt.Errorf("model deployment name must be non-empty and trimmed")
 		}
+		if strings.HasPrefix(name, ImplicitDeploymentPrefix) {
+			return fmt.Errorf("global.model_catalog.deployments.%s: names starting with %q are reserved for module defaults", name, ImplicitDeploymentPrefix)
+		}
 		if err := cfg.ModelDeployments[name].WithDefaults().validate(cfg); err != nil {
 			return fmt.Errorf("global.model_catalog.deployments.%s: %w", name, err)
 		}
