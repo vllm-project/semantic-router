@@ -15,13 +15,6 @@ func dot(a, b []float32) float32 {
 	return dotGeneric(a, b)
 }
 
-func dotMixed(row []float32, x []float64) float64 {
-	if useAVX2 && len(row) >= 4 {
-		return dotMixedAVX2(row, x)
-	}
-	return dotMixedGeneric(row, x)
-}
-
 func dot64(a, b []float64) float64 {
 	if useAVX2 && len(a) >= 4 {
 		return dot64AVX2(a, b)
@@ -36,13 +29,10 @@ func squaredDistance64(a, b []float64) float64 {
 	return squaredDistance64Generic(a, b)
 }
 
-// The assembly kernels read len(a) (or len(row)) elements of both operands.
+// The assembly kernels read len(a) elements of both operands.
 
 //go:noescape
 func dotAVX2(a, b []float32) float32
-
-//go:noescape
-func dotMixedAVX2(row []float32, x []float64) float64
 
 //go:noescape
 func dot64AVX2(a, b []float64) float64

@@ -67,66 +67,6 @@ dot_done:
 	MOVSS X0, ret+48(FP)
 	RET
 
-// func dotMixedAVX2(row []float32, x []float64) float64
-TEXT ·dotMixedAVX2(SB), NOSPLIT, $0-56
-	MOVQ   row_base+0(FP), SI
-	MOVQ   row_len+8(FP), CX
-	MOVQ   x_base+24(FP), DI
-	VXORPD Y0, Y0, Y0
-	VXORPD Y1, Y1, Y1
-	VXORPD Y2, Y2, Y2
-	VXORPD Y3, Y3, Y3
-	CMPQ   CX, $16
-	JL     mixed_by4
-
-mixed_by16:
-	VCVTPS2PD   (SI), Y4
-	VCVTPS2PD   16(SI), Y5
-	VCVTPS2PD   32(SI), Y6
-	VCVTPS2PD   48(SI), Y7
-	VFMADD231PD (DI), Y4, Y0
-	VFMADD231PD 32(DI), Y5, Y1
-	VFMADD231PD 64(DI), Y6, Y2
-	VFMADD231PD 96(DI), Y7, Y3
-	ADDQ        $64, SI
-	ADDQ        $128, DI
-	SUBQ        $16, CX
-	CMPQ        CX, $16
-	JGE         mixed_by16
-
-mixed_by4:
-	CMPQ        CX, $4
-	JL          mixed_reduce
-	VCVTPS2PD   (SI), Y4
-	VFMADD231PD (DI), Y4, Y0
-	ADDQ        $16, SI
-	ADDQ        $32, DI
-	SUBQ        $4, CX
-	JMP         mixed_by4
-
-mixed_reduce:
-	VADDPD       Y1, Y0, Y0
-	VADDPD       Y3, Y2, Y2
-	VADDPD       Y2, Y0, Y0
-	VEXTRACTF128 $1, Y0, X1
-	VADDPD       X1, X0, X0
-	VHADDPD      X0, X0, X0
-
-mixed_by1:
-	TESTQ       CX, CX
-	JE          mixed_done
-	VCVTSS2SD   (SI), X4, X4
-	VFMADD231SD (DI), X4, X0
-	ADDQ        $4, SI
-	ADDQ        $8, DI
-	DECQ        CX
-	JMP         mixed_by1
-
-mixed_done:
-	VZEROUPPER
-	MOVSD X0, ret+48(FP)
-	RET
-
 // func dot64AVX2(a, b []float64) float64
 TEXT ·dot64AVX2(SB), NOSPLIT, $0-56
 	MOVQ   a_base+0(FP), SI

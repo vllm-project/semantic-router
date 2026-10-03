@@ -54,10 +54,6 @@ func TestKernelsMatchSequentialSums(t *testing.T) {
 			if got := float64(Dot(a32, b32)); math.Abs(got-want) > 1e-6*magnitude+1e-7 {
 				t.Errorf("Dot n=%d offset=%d: %v, want %v", n, offset, got, want)
 			}
-			want, magnitude = reference(n, func(i int) float64 { return float64(a32[i]) * b64[i] })
-			if got := DotMixed(a32, b64); math.Abs(got-want) > 1e-14*magnitude {
-				t.Errorf("DotMixed n=%d offset=%d: %v, want %v", n, offset, got, want)
-			}
 			want, magnitude = reference(n, func(i int) float64 { return a64[i] * b64[i] })
 			if got := Dot64(a64, b64); math.Abs(got-want) > 1e-14*magnitude {
 				t.Errorf("Dot64 n=%d offset=%d: %v, want %v", n, offset, got, want)
@@ -80,10 +76,6 @@ func TestDispatchAgreesWithPortableLoops(t *testing.T) {
 		if d := float64(Dot(a32, b32) - dotGeneric(a32, b32)); math.Abs(d) > 1e-6*magnitude+1e-7 {
 			t.Errorf("Dot n=%d differs by %v", n, d)
 		}
-		_, magnitude = reference(n, func(i int) float64 { return math.Abs(float64(a32[i]) * b64[i]) })
-		if d := DotMixed(a32, b64) - dotMixedGeneric(a32, b64); math.Abs(d) > 1e-14*magnitude {
-			t.Errorf("DotMixed n=%d differs by %v", n, d)
-		}
 		_, magnitude = reference(n, func(i int) float64 { return math.Abs(a64[i] * b64[i]) })
 		if d := Dot64(a64, b64) - dot64Generic(a64, b64); math.Abs(d) > 1e-14*magnitude {
 			t.Errorf("Dot64 n=%d differs by %v", n, d)
@@ -97,7 +89,6 @@ func TestDispatchAgreesWithPortableLoops(t *testing.T) {
 func TestShortSecondOperandPanics(t *testing.T) {
 	for name, call := range map[string]func(){
 		"Dot":               func() { Dot(make([]float32, 9), make([]float32, 8)) },
-		"DotMixed":          func() { DotMixed(make([]float32, 9), make([]float64, 8)) },
 		"Dot64":             func() { Dot64(make([]float64, 9), make([]float64, 8)) },
 		"SquaredDistance64": func() { SquaredDistance64(make([]float64, 9), make([]float64, 8)) },
 	} {
@@ -127,21 +118,6 @@ func BenchmarkDot(b *testing.B) {
 			}
 		})
 	}
-}
-
-func BenchmarkDotMixed(b *testing.B) {
-	r := rand.New(rand.NewPCG(7, 8))
-	row, x := randomFloat32(r, 1038), randomFloat64(r, 1038)
-	b.Run("n=1038", func(b *testing.B) {
-		for b.Loop() {
-			DotMixed(row, x)
-		}
-	})
-	b.Run("portable/n=1038", func(b *testing.B) {
-		for b.Loop() {
-			dotMixedGeneric(row, x)
-		}
-	})
 }
 
 func BenchmarkSquaredDistance64(b *testing.B) {

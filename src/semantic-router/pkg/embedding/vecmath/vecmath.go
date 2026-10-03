@@ -11,13 +11,6 @@ func Dot(a, b []float32) float32 {
 	return dot(a, b[:len(a)])
 }
 
-// DotMixed is the inner product of a float32 row and a float64 vector,
-// accumulated in float64: float32 weights at half the memory traffic, without
-// float32 rounding in the sum.
-func DotMixed(row []float32, x []float64) float64 {
-	return dotMixed(row, x[:len(row)])
-}
-
 // Dot64 is the inner product of float64 vectors.
 func Dot64(a, b []float64) float64 {
 	return dot64(a, b[:len(a)])
@@ -40,22 +33,6 @@ func dotGeneric(a, b []float32) float32 {
 	}
 	for ; i < len(a); i++ {
 		s0 += a[i] * b[i]
-	}
-	return (s0 + s1) + (s2 + s3)
-}
-
-func dotMixedGeneric(row []float32, x []float64) float64 {
-	x = x[:len(row)]
-	var s0, s1, s2, s3 float64
-	i := 0
-	for ; i+4 <= len(row); i += 4 {
-		s0 += float64(row[i]) * x[i]
-		s1 += float64(row[i+1]) * x[i+1]
-		s2 += float64(row[i+2]) * x[i+2]
-		s3 += float64(row[i+3]) * x[i+3]
-	}
-	for ; i < len(row); i++ {
-		s0 += float64(row[i]) * x[i]
 	}
 	return (s0 + s1) + (s2 + s3)
 }
