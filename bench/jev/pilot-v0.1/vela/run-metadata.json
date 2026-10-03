@@ -1,0 +1,32 @@
+{
+  "run_started": "2026-09-29T08:44:18.161515+00:00",
+  "run_finished": "2026-09-29T08:44:22.196374+00:00",
+  "device": "cpu",
+  "warmup_runs": 1,
+  "attempts_per_case": 1,
+  "automatic_retries": false,
+  "model": "llm-semantic-router/Vela-1.0-Encoder-307M-Domain",
+  "model_revision": "f6354f54adcf38770f635ad903be2b00577f6c11",
+  "dataset_sha256": "671c09f62dc9fc9b864efe54b0adfef0ec666f309f74b776dcec3d6d8cdd2ef6",
+  "question_sha256": "33f7ef7c4826df98a4bc23c2e0fc2302ea3ab61e18b8b45d0515e51e64f69738",
+  "protocol_sha256": "d54fbe14b70ee8e2224dbd36bc51adc2dd1f1d337ffe05353ab30f6dcc509af7",
+  "runner_source_sha256": "9255245d87895c11c287e0c6df354823c8a174e2a8ff5d87cbbd520338a2df84",
+  "runtime": "Transformers 5.17.0 / PyTorch 2.14.0",
+  "python": "3.13.15",
+  "packages": {
+    "torch": "2.14.0",
+    "transformers": "5.17.0",
+    "huggingface-hub": "1.32.0",
+    "PyYAML": "6.0.3"
+  },
+  "hardware": "macOS-27.0-arm64-arm-64bit-Mach-O",
+  "cpu": "Apple M5",
+  "coarse_region": "local",
+  "timing_boundary": "local CPU model inference; tokenization excluded; one unrecorded warmup",
+  "timeout_ms": null,
+  "stop_policy": "continue and record",
+  "threshold_fallback_applied": false,
+  "probability_renormalized": false,
+  "question_key": "intent",
+  "protocol_shared_protocol_frozen": false
+}

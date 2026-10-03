@@ -41,6 +41,7 @@ languages:
       - deploy/**/*.go
       - tools/**/*.go
       - bench/grounded_fusion/fusioneval/**/*.go
+      - bench/jev/**/*.go
   python:
     globs:
       - src/**/*.py
