@@ -106,8 +106,8 @@ func compareWithBaseline(baselineDir, currentResultsFile, thresholdFile, outputP
 			return err
 		}
 		if baseline.ModelBaselineReset != "" {
-			fmt.Printf("⚠️  Model baseline reset at %s (%s): model benchmarks are measured but not gated\n",
-				modelBaseline.GitCommit, baseline.ModelBaselineReset)
+			fmt.Printf("⚠️  Model baseline reset at %s (%s): model benchmarks are measured but not gated; legacy-versus-runtime records: %s\n",
+				modelBaseline.GitCommit, baseline.ModelBaselineReset, strings.Join(baseline.LegacyComparisonRecords, ", "))
 		} else {
 			fmt.Printf("Model baseline source: %s\n", modelBaseline.GitCommit)
 		}

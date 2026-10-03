@@ -1,4 +1,4 @@
-"""Fused Triton kernels for the element-wise ops of Qwen3.5 and Qwen3 decoder layers (ROCm gfx942).
+"""Fused Triton kernels for the element-wise ops of Qwen3.5 / Qwen3 decoder layers and ModernBERT (ROCm gfx942).
 
 Each kernel computes exactly what the eager decoder layer computes under BF16
 autocast, bit for bit: FP32 residual stream and norms, BF16 wherever the eager
@@ -25,6 +25,7 @@ Kernels:
     gated_rmsnorm   Gated DeltaNet output norm with the SiLU(z) gate
     attn_prep       (Qwen3.5: q / gate split,) q / k RMSNorm, RoPE, [B, H, T, D] layout
     sigmoid_gate    attention output * sigmoid(gate)
+    rotary_half     ModernBERT's FP32 rotate-half rotary of q and k, [B, H, T, D] out
 """
 
 from __future__ import annotations
@@ -612,3 +613,78 @@ def sigmoid_gate(attn_out: Any, gate: Any) -> Any:
         **EXACT,
     )
     return out
+
+
+@triton.jit
+def _rotary_half_kernel(
+    q_ptr,
+    k_ptr,
+    cos_ptr,
+    sin_ptr,
+    qo_ptr,
+    ko_ptr,
+    sb,
+    sh,
+    st,
+    H,
+    T,
+    HALF: tl.constexpr,
+    HP: tl.constexpr,
+    BT: tl.constexpr,
+):
+    bh = tl.program_id(0)
+    t = tl.program_id(1) * BT + tl.arange(0, BT)[:, None]
+    d = tl.arange(0, HP)[None, :]
+    m = (t < T) & (d < HALF)
+    src = (bh // H) * sb + (bh % H) * sh + t * st
+    dst = (bh * T + t) * (2 * HALF)
+    table = t * (2 * HALF)
+    c1 = tl.load(cos_ptr + table + d, mask=m)
+    c2 = tl.load(cos_ptr + table + HALF + d, mask=m)
+    s1 = tl.load(sin_ptr + table + d, mask=m)
+    s2 = tl.load(sin_ptr + table + HALF + d, mask=m)
+    q1 = tl.load(q_ptr + src + d, mask=m).to(tl.float32)
+    q2 = tl.load(q_ptr + src + HALF + d, mask=m).to(tl.float32)
+    k1 = tl.load(k_ptr + src + d, mask=m).to(tl.float32)
+    k2 = tl.load(k_ptr + src + HALF + d, mask=m).to(tl.float32)
+    out = qo_ptr.dtype.element_ty
+    tl.store(qo_ptr + dst + d, (q1 * c1 - q2 * s1).to(out), mask=m)
+    tl.store(qo_ptr + dst + HALF + d, (q2 * c2 + q1 * s2).to(out), mask=m)
+    tl.store(ko_ptr + dst + d, (k1 * c1 - k2 * s1).to(out), mask=m)
+    tl.store(ko_ptr + dst + HALF + d, (k2 * c2 + k1 * s2).to(out), mask=m)
+
+
+def rotary_half(query: Any, key: Any, cos: Any, sin: Any) -> tuple[Any, Any]:
+    """``kernels.rotary_half_ref`` in one launch: contiguous ``[B, H, T, D]`` query and key.
+
+    ``query`` and ``key`` are views with one stride set and a unit last stride
+    (the halves of a fused QKV projection); other layouts run the reference.
+    The FP32 products round before the sum, as the eager ``x * cos + rotate(x) * sin``.
+    """
+    from .kernels import rotary_half_ref
+
+    B, H, T, D = query.shape
+    if query.stride() != key.stride() or query.stride(-1) != 1 or D % 2:
+        return rotary_half_ref(query, key, cos, sin)
+    cos = cos.reshape(-1, D)[:T].float().contiguous()
+    sin = sin.reshape(-1, D)[:T].float().contiguous()
+    query_out = torch.empty((B, H, T, D), dtype=query.dtype, device=query.device)
+    key_out = torch.empty_like(query_out)
+    _rotary_half_kernel[(B * H, triton.cdiv(T, 64))](
+        query,
+        key,
+        cos,
+        sin,
+        query_out,
+        key_out,
+        query.stride(0),
+        query.stride(1),
+        query.stride(2),
+        H,
+        T,
+        HALF=D // 2,
+        HP=triton.next_power_of_2(D // 2),
+        BT=64,
+        **EXACT,
+    )
+    return query_out, key_out

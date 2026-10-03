@@ -136,6 +136,36 @@ func TestSequenceBindsTheCardHeadAndForwardsTheBudget(t *testing.T) {
 	}
 }
 
+func TestLabelsAreTheServedHeadVocabulary(t *testing.T) {
+	fake := newFake()
+	runtime := New(fake, nil)
+	domain := spec("domain", config.RemoteClassifierContractLabelDistribution, config.ModelInputBudget{})
+	labels, err := runtime.Labels(context.Background(), domain)
+	if err != nil || strings.Join(labels, ",") != "math,law,other" {
+		t.Fatalf("labels = %v, %v", labels, err)
+	}
+	labels[0] = "changed"
+	if again, _ := runtime.Labels(context.Background(), domain); again[0] != "math" {
+		t.Fatalf("labels alias the card: %v", again)
+	}
+	if len(fake.requests) != 0 {
+		t.Fatalf("reading labels ran the model: %d requests", len(fake.requests))
+	}
+	absent := domain
+	absent.Binding.Head = "absent"
+	for name, unservable := range map[string]config.ResolvedModelBinding{
+		"unknown head": absent,
+		"no heads":     spec("embed", config.RemoteClassifierContractLabelDistribution, config.ModelInputBudget{}),
+	} {
+		if _, err := runtime.Labels(context.Background(), unservable); !errors.Is(err, binding.ErrCapability) {
+			t.Fatalf("%s: want a capability error, got %v", name, err)
+		}
+	}
+	if _, err := New(nil, nil).Labels(context.Background(), domain); !errors.Is(err, ErrNotConfigured) {
+		t.Fatalf("without services labels must fail with ErrNotConfigured, got %v", err)
+	}
+}
+
 func TestPreparationRefusesBindingsTheCardCannotServe(t *testing.T) {
 	runtime := New(newFake(), nil)
 	cases := map[string]config.ResolvedModelBinding{

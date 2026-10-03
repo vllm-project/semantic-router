@@ -320,9 +320,7 @@ func (d *EndpointHallucinationDetector) buildRequestPayload(reqContext, question
 // for any malformed response so the caller can fail open via the detection_error
 // path instead of recording a false clean verdict. The taxonomy is validated
 // locally, each span is verified to be a substring of the answer, and deterministic
-// Start/End offsets are populated. The NLI label is set to the NLIUnknown sentinel
-// (not 0, which is NLIEntailment) because the endpoint backend does not produce NLI
-// labels, keeping the numeric and string forms consistent.
+// Start/End offsets are populated.
 func (d *EndpointHallucinationDetector) parseOpenAIResponse(respBytes []byte, answer string) ([]tasks.TokenEntity, error) {
 	var openaiResp struct {
 		Choices []struct {
@@ -487,7 +485,7 @@ func (d *EndpointHallucinationDetector) DetectWithExplanations(ctx context.Conte
 	}
 	enhanced := &EnhancedHallucinationResult{HallucinationDetected: len(result.Entities) > 0, Spans: make([]EnhancedHallucinationSpan, 0, len(result.Entities))}
 	for _, span := range result.Entities {
-		enhanced.Spans = append(enhanced.Spans, EnhancedHallucinationSpan{Text: span.Text, Start: span.Start, End: span.End, Label: span.EntityType, HallucinationConfidence: span.Confidence, ScoreAvailable: result.HasScores(), NLILabel: NLIUnknown, NLILabelStr: NLIUnknown.String(), Severity: 2, Explanation: span.Explanation})
+		enhanced.Spans = append(enhanced.Spans, EnhancedHallucinationSpan{Text: span.Text, Start: span.Start, End: span.End, Label: span.EntityType, HallucinationConfidence: span.Confidence, ScoreAvailable: result.HasScores(), Severity: 2, Explanation: span.Explanation})
 	}
 	return enhanced, nil
 }

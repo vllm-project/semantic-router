@@ -251,6 +251,7 @@ class QuestionReader:
         self.presets = tuple(name for name in PRESETS if calibration.schema(name))
 
     def read(self, state: Any, questions: dict[str, Any]) -> Plan:
+        """The request's state and questions; an invalid question becomes its own error."""
         plan = Plan(read_state(state), list(questions))
         for question_id, question in questions.items():
             try:
@@ -268,6 +269,7 @@ class QuestionReader:
         return plan
 
     def question(self, question_id: str, question: Any, state: State) -> Question:
+        """One question in the engine's form; ``QuestionError`` when it is invalid."""
         if not question_id.strip():
             raise _invalid("question IDs must not be empty or whitespace")
         if not isinstance(question, dict):

@@ -63,7 +63,7 @@ func TestModelRuntimeDeploymentValidation(t *testing.T) {
 
 func TestModelRuntimeDeploymentDefaults(t *testing.T) {
 	deployment := ModelDeployment{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/x"}.WithDefaults()
-	if deployment.Device != "auto" || deployment.Profile != "exact" || deployment.Precision != "native" || !deployment.Managed() {
+	if deployment.Device != "auto" || deployment.Profile != "exact" || deployment.Precision != "" || !deployment.Managed() {
 		t.Fatalf("defaults = %+v", deployment)
 	}
 	if (ModelDeployment{Provider: ModelRuntimeProvider, Endpoint: "http://x:1"}).Managed() {

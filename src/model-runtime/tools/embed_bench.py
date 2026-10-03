@@ -41,7 +41,6 @@ from vllm_sr_runtime.engines.onnxruntime.engine import OnnxRuntimeEngine  # noqa
 from vllm_sr_runtime.families.task_heads.family import TaskHeadsFamily  # noqa: E402
 from vllm_sr_runtime.heads.task import Item  # noqa: E402
 from vllm_sr_runtime.plugins.base import (  # noqa: E402
-    DeviceInfo,
     EngineOptions,
     PackageRef,
     RegistryOptions,
@@ -55,11 +54,12 @@ def load(args: argparse.Namespace) -> Any:
     family = TaskHeadsFamily(RegistryOptions(model_options=options))
     package = family.verify(PackageRef(args.package))
     spec = family.describe(package)
-    index = None if args.device == "cpu" else int(args.device.split(":")[1])
-    device = DeviceInfo(
-        accelerator=args.device.split(":")[0], index=index, name=args.device
-    )
-    accelerator = CPUAccelerator() if index is None else ROCmAccelerator()
+    if args.device == "cpu":
+        accelerator: Any = CPUAccelerator()
+        device = accelerator.devices()[0]
+    else:
+        accelerator = ROCmAccelerator()
+        device = accelerator.devices()[int(args.device.split(":")[1])]
     engine = NativeEngine() if args.engine == "native" else OnnxRuntimeEngine()
     reason = engine.supports(spec, device)
     if reason:

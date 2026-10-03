@@ -60,6 +60,7 @@ MODELS: tuple[BuiltinModel, ...] = (
             "native/tokenizer/tokenizer.json": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
             "native/tokenizer/tokenizer_config.json": "74a259bb1a3811a7e3028adcd07a65765d866d5e66e0e883f0994ccfa67e8455",
         },
+        reduced={"cpu": "bfloat16"},
     ),
     BuiltinModel(
         repo_id=f"{ORG}/Decision-1.0-Route-0.6B",

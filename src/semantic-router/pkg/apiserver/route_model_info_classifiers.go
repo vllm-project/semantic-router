@@ -73,7 +73,7 @@ func buildRoutingClassifierModels(
 			Categories: configuredCategoryNames(cfg),
 			Metadata: map[string]string{
 				"mapping_path": categoryModel.CategoryMappingPath,
-				"model_type":   categoryModelInfoType(categoryModel),
+				"model_type":   localModelType(categoryModel.Backend),
 				"threshold":    fmt.Sprintf("%.2f", categoryModel.Threshold),
 			},
 		})
@@ -88,7 +88,7 @@ func buildRoutingClassifierModels(
 			ModelPath: piiModel.ModelID,
 			Metadata: map[string]string{
 				"mapping_path": piiModel.PIIMappingPath,
-				"model_type":   resolveInlineModelType(piiModel.UseMmBERT32K, false, true),
+				"model_type":   localModelType(piiModel.Backend),
 				"threshold":    fmt.Sprintf("%.2f", piiModel.Threshold),
 			},
 		})
@@ -96,15 +96,6 @@ func buildRoutingClassifierModels(
 
 	promptGuard := cfg.PromptGuard
 	if cfg.IsPromptGuardEnabled() {
-		backend := ""
-		if promptGuard.Backend != nil {
-			backend = promptGuard.Backend.Protocol
-		} else {
-			backend = promptGuard.Variant
-		}
-		if backend == "" {
-			backend = routerconfig.PromptGuardVariantCandle
-		}
 		models = append(models, ModelInfo{
 			Name:      "jailbreak_classifier",
 			Type:      "security_detection",
@@ -113,7 +104,7 @@ func buildRoutingClassifierModels(
 			Metadata: map[string]string{
 				"enabled":                "true",
 				"jailbreak_mapping_path": promptGuard.JailbreakMappingPath,
-				"backend":                backend,
+				"backend":                localModelType(promptGuard.Backend),
 			},
 		})
 	}
@@ -121,16 +112,13 @@ func buildRoutingClassifierModels(
 	return models
 }
 
-func categoryModelInfoType(model routerconfig.CategoryModel) string {
-	if model.Backend != nil {
-		// Match the existing prompt_guard convention: a remote classifier reports
-		// its effective transport rather than pretending to be a local model.
-		return model.Backend.Protocol
+// localModelType names how a classifier module runs: the built-in model
+// runtime, or a remote classifier's transport.
+func localModelType(backend *routerconfig.RemoteClassifierBackend) string {
+	if backend != nil {
+		return backend.Protocol
 	}
-	if variant, err := model.EffectiveVariant(); err == nil && variant != "" {
-		return variant
-	}
-	return resolveInlineModelType(model.UseMmBERT32K, model.UseModernBERT, false)
+	return routerconfig.ModelRuntimeProvider
 }
 
 func buildHallucinationModels(
@@ -146,7 +134,7 @@ func buildHallucinationModels(
 			Loaded:    availability.factCheck,
 			ModelPath: factCheckModel.ModelID,
 			Metadata: map[string]string{
-				"model_type": resolveInlineModelType(factCheckModel.UseMmBERT32K, false, false),
+				"model_type": routerconfig.ModelRuntimeProvider,
 				"threshold":  fmt.Sprintf("%.2f", factCheckModel.Threshold),
 				"use_cpu":    fmt.Sprintf("%t", factCheckModel.UseCPU),
 			},
@@ -211,7 +199,7 @@ func buildFeedbackAndSimilarityModels(
 			Loaded:    availability.feedback,
 			ModelPath: feedbackModel.ModelID,
 			Metadata: map[string]string{
-				"model_type": resolveInlineModelType(feedbackModel.UseMmBERT32K, feedbackModel.UseModernBERT, false),
+				"model_type": routerconfig.ModelRuntimeProvider,
 				"threshold":  fmt.Sprintf("%.2f", feedbackModel.Threshold),
 				"use_cpu":    fmt.Sprintf("%t", feedbackModel.UseCPU),
 			},
@@ -270,23 +258,6 @@ func placeholderModelInfo(name, modelType string) ModelInfo {
 		Metadata: map[string]string{
 			"status": "not_initialized",
 		},
-	}
-}
-
-func resolveInlineModelType(useMmBERT32K, useModernBERT, tokenLevel bool) string {
-	switch {
-	case useMmBERT32K && tokenLevel:
-		return "mmbert_32k_token"
-	case useMmBERT32K:
-		return "mmbert_32k"
-	case useModernBERT && tokenLevel:
-		return "modernbert_token"
-	case useModernBERT:
-		return "modernbert"
-	case tokenLevel:
-		return "bert_token"
-	default:
-		return "bert"
 	}
 }
 

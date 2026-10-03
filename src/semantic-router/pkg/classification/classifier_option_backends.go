@@ -54,15 +54,8 @@ func (b *classifierOptionBuilder) addRemoteCategoryClassifier(categoryMapping *C
 }
 
 func (b *classifierOptionBuilder) addLocalCategoryClassifier(categoryMapping *CategoryMapping) error {
-	variant, err := b.cfg.CategoryModel.EffectiveVariant()
-	if err != nil {
-		return err
-	}
-	if variant == "" || variant == config.CategoryVariantCandle {
-		variant = "auto"
-	}
 	models := consumerModelRuntime([]*classifierModelRuntime{b.models})
-	spec, err := models.localSpec("domain_classifier", b.cfg.CategoryModel.ModelID, variant, config.RemoteClassifierContractLabelDistribution, b.cfg.CategoryModel.UseCPU, b.cfg.CategoryModel.MaxSequenceLength)
+	spec, err := models.localSpec("domain_classifier", b.cfg.CategoryModel.ModelID, "auto", config.RemoteClassifierContractLabelDistribution, b.cfg.CategoryModel.UseCPU, b.cfg.CategoryModel.MaxSequenceLength)
 	var labels []string
 	if categoryMapping != nil {
 		labels = indexedNativeLabels(categoryMapping.IdxToCategory)
@@ -98,12 +91,8 @@ func buildJailbreakDependencies(cfg *config.RouterConfig, jailbreakMapping *Jail
 		}
 		return nil, jailbreakInference, nil
 	}
-	adapter := cfg.PromptGuard.Variant
-	if adapter == "" || adapter == config.PromptGuardVariantCandle {
-		adapter = "auto"
-	}
 	runtime := consumerModelRuntime(models)
-	spec, err := runtime.localSpec("prompt_guard", cfg.PromptGuard.ModelID, adapter, config.RemoteClassifierContractLabelDistribution, cfg.PromptGuard.UseCPU, cfg.PromptGuard.MaxSequenceLength)
+	spec, err := runtime.localSpec("prompt_guard", cfg.PromptGuard.ModelID, "auto", config.RemoteClassifierContractLabelDistribution, cfg.PromptGuard.UseCPU, cfg.PromptGuard.MaxSequenceLength)
 	var labels []string
 	if jailbreakMapping != nil {
 		labels = indexedNativeLabels(jailbreakMapping.IdxToLabel)
@@ -163,12 +152,8 @@ func buildPIIDependencies(cfg *config.RouterConfig, piiMapping *PIIMapping, mode
 		})
 		return nil, inference, nil
 	}
-	adapter := "auto"
-	if cfg.PIIModel.UseMmBERT32K {
-		adapter = "mmbert32k"
-	}
 	runtime := consumerModelRuntime(models)
-	spec, err := runtime.localSpec("pii_classifier", cfg.PIIModel.ModelID, adapter, config.RemoteClassifierContractTokenSpans, cfg.PIIModel.UseCPU, cfg.PIIModel.MaxSequenceLength)
+	spec, err := runtime.localSpec("pii_classifier", cfg.PIIModel.ModelID, "auto", config.RemoteClassifierContractTokenSpans, cfg.PIIModel.UseCPU, cfg.PIIModel.MaxSequenceLength)
 	var labels []string
 	if piiMapping != nil {
 		labels = indexedNativeLabels(piiMapping.IdxToLabel)

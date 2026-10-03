@@ -95,7 +95,7 @@ func (d ModelDeployment) WithDefaults() ModelDeployment {
 			d.Profile = "exact"
 		}
 	}
-	if d.Provider != "http" {
+	if d.Provider != "http" && d.Provider != ModelRuntimeProvider {
 		if d.Device == "" {
 			d.Device = "cpu"
 			if d.Provider == "openvino" {
@@ -270,9 +270,6 @@ func compileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
 }
 
 func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDeployment) error {
-	if deployment.IsModelRuntime() && name == "hallucination_explainer" {
-		return fmt.Errorf("the NLI hallucination explainer is retired and has no model_runtime task")
-	}
 	want := ""
 	if decl.OperatingPoint != nil {
 		if !strings.HasPrefix(name, "classifier.") {
@@ -297,8 +294,6 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 		want = RemoteClassifierContractTokenSpans
 	case "hallucination_detector":
 		want = RemoteClassifierContractTokenSpans
-	case "hallucination_explainer":
-		want = "text_pair_distribution.v1"
 	case "embedding":
 		want = "embedding.v1"
 	case RAGRerankerConsumer:
@@ -342,7 +337,7 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 		return fmt.Errorf("remote task cannot bind a local head")
 	}
 	if deployment.Provider == "http" {
-		if name == "fact_check_classifier" || name == "feedback_detector" || name == "modality_detector" || name == "hallucination_explainer" {
+		if name == "fact_check_classifier" || name == "feedback_detector" || name == "modality_detector" {
 			return fmt.Errorf("%s has no HTTP task adapter", name)
 		}
 		if name != "embedding" && (deployment.Input.MaxTokens != 0 || deployment.Input.Overflow != "reject") {
@@ -360,7 +355,7 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 			return fmt.Errorf("vela_halu task input budget cannot exceed 8192 tokens")
 		}
 	}
-	if deployment.Provider == "ort" && (name == "hallucination_explainer" || (name == "hallucination_detector" && decl.Adapter != "vela_halu")) {
+	if deployment.Provider == "ort" && name == "hallucination_detector" && decl.Adapter != "vela_halu" {
 		return fmt.Errorf("%s has no ORT task adapter", name)
 	}
 	if deployment.Provider == "openvino" {

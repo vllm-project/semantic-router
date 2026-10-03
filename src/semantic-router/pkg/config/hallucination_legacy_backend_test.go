@@ -18,23 +18,23 @@ func TestGlobalConfigContractsValidateHallucinationBackend(t *testing.T) {
 	}
 }
 
-func TestValidateHallucinationBackend_DefaultsToCandle(t *testing.T) {
+func TestValidateHallucinationBackend_DefaultsToTheLocalDetector(t *testing.T) {
 	cfg := &HallucinationModelConfig{ModelID: "models/mom-halugate-detector"}
 	if err := ValidateHallucinationBackend(cfg); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.NormalizedBackend() != HallucinationBackendCandle {
-		t.Errorf("NormalizedBackend() = %q, want candle", cfg.NormalizedBackend())
+	if cfg.NormalizedBackend() != HallucinationBackendLocal {
+		t.Errorf("NormalizedBackend() = %q, want model_runtime", cfg.NormalizedBackend())
 	}
 }
 
 func TestValidateHallucinationBackend_NormalizesCaseAndWhitespace(t *testing.T) {
-	cfg := &HallucinationModelConfig{Backend: "  Candle "}
+	cfg := &HallucinationModelConfig{Backend: "  Model_Runtime "}
 	if err := ValidateHallucinationBackend(cfg); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.NormalizedBackend() != HallucinationBackendCandle {
-		t.Errorf("NormalizedBackend() = %q, want candle", cfg.NormalizedBackend())
+	if cfg.NormalizedBackend() != HallucinationBackendLocal {
+		t.Errorf("NormalizedBackend() = %q, want model_runtime", cfg.NormalizedBackend())
 	}
 }
 
@@ -89,8 +89,8 @@ func TestValidateHallucinationBackend_EndpointValid(t *testing.T) {
 
 func TestNormalizedBackend_DefaultsWhenEmpty(t *testing.T) {
 	cfg := &HallucinationModelConfig{}
-	if got := cfg.NormalizedBackend(); got != HallucinationBackendCandle {
-		t.Errorf("NormalizedBackend() = %q, want candle", got)
+	if got := cfg.NormalizedBackend(); got != HallucinationBackendLocal {
+		t.Errorf("NormalizedBackend() = %q, want model_runtime", got)
 	}
 }
 
@@ -114,7 +114,7 @@ func TestCompileModelBindingsDesugarsLegacyHallucinationEndpoint(t *testing.T) {
 	}
 }
 
-func TestCompileModelBindingsCandleLeavesHallucinationUnbound(t *testing.T) {
+func TestCompileModelBindingsLocalDefaultLeavesHallucinationUnbound(t *testing.T) {
 	cfg := &RouterConfig{}
 	cfg.HallucinationMitigation.HallucinationModel = HallucinationModelConfig{ModelID: "models/mom-halugate-detector"}
 	plan, err := CompileModelBindings(cfg)
@@ -122,7 +122,7 @@ func TestCompileModelBindingsCandleLeavesHallucinationUnbound(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, ok := plan.Lookup(DefaultRecipeName, "hallucination_detector"); ok {
-		t.Fatal("the candle default is the module's canonical local binding, not a plan entry")
+		t.Fatal("the local default is the module's canonical local binding, not a plan entry")
 	}
 }
 

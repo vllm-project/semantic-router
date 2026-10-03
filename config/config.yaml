@@ -550,11 +550,9 @@ routing:
     # Hallucination rules check the model's answer against the grounding
     # context the request carried (tool results or retrieved context), so they
     # only exist once the model has answered; the selected decision's
-    # hallucination plugin enforces on them. use_nli asks the detector for
-    # span-level NLI explanations.
+    # hallucination plugin enforces on them.
     hallucination:
       - name: ungrounded_claims
-        use_nli: true
         description: Detect claims the grounding context does not support.
 
     pii:
@@ -1011,7 +1009,6 @@ routing:
         - type: hallucination
           configuration:
             enabled: true
-            use_nli: true
             hallucination_action: header
             unverified_factual_action: header
             include_hallucination_details: true
@@ -2172,14 +2169,6 @@ global:
       ttl_seconds: 7200
       eviction_policy: lru
       embedding_model: mmbert
-      # Negation/antonym guard for the in-memory backend. "lexical" is the
-      # model-free default; "nli" or "lexical+nli" additionally verifies the
-      # winning candidate once with the hallucination explainer NLI model and
-      # rejects it above nli.contradiction_threshold (~70 ms/hit on CPU).
-      polarity_guard:
-        mode: lexical
-        nli:
-          contradiction_threshold: 0.5
       milvus:
         connection:
           host: milvus
@@ -2258,7 +2247,7 @@ global:
         db: 0
         key_prefix: "memory_cache:"
         password: ""
-      embedding_model: bert
+      embedding_model: mmbert
       default_retrieval_limit: 10
       # Calibrated for mom-embedding-light with weighted hybrid scoring.
       default_similarity_threshold: 0.40
@@ -2465,18 +2454,20 @@ global:
         device: auto
         profile: exact
       content-risk:
-        artifact: models/Vela-1.0-Encoder-307M-Hazard
-        provider: candle
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Hazard
+        revision: 5dd25f2cc3c98f338e6a79b667662d60f936a28d
         device: cpu
-        precision: fp32
+        profile: exact
         input:
           max_tokens: 32768
           overflow: reject
       document-ranker:
-        artifact: models/Vela-1.0-Encoder-307M-Reranker
-        provider: candle
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
+        revision: a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf
         device: cpu
-        precision: native
+        profile: exact
         input:
           max_tokens: 4096
           overflow: reject
@@ -2521,12 +2512,11 @@ global:
       pii_classifier: models/Vela-1.0-Encoder-307M-PII
       fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck
       hallucination_detector: models/Vela-1.0-Encoder-307M-Halu
-      hallucination_explainer: models/mom-halugate-explainer
       feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
     # admission bounds concurrent inference per system model deployment.
     # Keys must match global.model_catalog.system entries (prompt_guard,
     # domain_classifier, pii_classifier, fact_check_classifier,
-    # hallucination_detector, hallucination_explainer, feedback_detector).
+    # hallucination_detector, feedback_detector).
     # max_concurrency: inference slots running at once (>= 1).
     # max_queue: bounded wait queue beyond the slots (0 = no queue).
     # queue_timeout_ms: longest a request may wait for a slot; on expiry the
@@ -2733,7 +2723,6 @@ global:
         model_id: models/Vela-1.0-Encoder-307M-Guard
         threshold: 0.5
         use_cpu: true
-        variant: mmbert32k
         max_sequence_length: 0
         # Optional token windows. The total input budget above remains 512
         # when zero; larger budgets require a qualified checkpoint and policy.
@@ -2783,7 +2772,6 @@ global:
           model_id: models/Vela-1.0-Encoder-307M-PII
           threshold: 0.9
           use_cpu: true
-          use_mmbert_32k: true
           pii_mapping_path: models/Vela-1.0-Encoder-307M-PII/pii_mapping.json
           # allow (default) keeps a classify error or a provider-declared
           # truncation as a non-match for that content; block treats it as a
@@ -2815,9 +2803,8 @@ global:
           model_id: models/Vela-1.0-Encoder-307M-FactCheck
           threshold: 0.95
           use_cpu: true
-          use_mmbert_32k: true
         detector:
-          backend: candle
+          backend: model_runtime
           endpoint: ""
           include_explanation: false
           model_ref: hallucination_detector
@@ -2827,13 +2814,6 @@ global:
           min_span_length: 1
           min_span_confidence: 0.0
           context_window_size: 50
-          enable_nli_filtering: false
-          nli_entailment_threshold: 0.75
-        explainer:
-          model_ref: hallucination_explainer
-          model_id: models/mom-halugate-explainer
-          threshold: 0.9
-          use_cpu: true
       feedback_detector:
         enabled: true
         model_ref: feedback_detector
@@ -2841,8 +2821,6 @@ global:
         model_id: models/Vela-1.0-Encoder-307M-Feedback
         threshold: 0.7
         use_cpu: true
-        use_modernbert: false
-        use_mmbert_32k: true
         feedback_mapping_path: ''
       modality_detector:
         enabled: true

@@ -7,13 +7,12 @@ import (
 )
 
 func TestPIIWindowConfigurationPreservesExplicitDocumentBudget(t *testing.T) {
-	base := PIIModel{UseMmBERT32K: true, MaxSequenceLength: 32768, Window: &SequenceHeadWindowConfig{Size: 512, Overlap: 255}}
+	base := PIIModel{MaxSequenceLength: 32768, Window: &SequenceHeadWindowConfig{Size: 512, Overlap: 255}}
 	if err := base.ValidateWindow(); err != nil {
 		t.Fatal(err)
 	}
 	for name, change := range map[string]func(*PIIModel){
 		"remote":   func(c *PIIModel) { c.Backend = &RemoteClassifierBackend{} },
-		"adapter":  func(c *PIIModel) { c.UseMmBERT32K = false },
 		"size":     func(c *PIIModel) { c.Window = &SequenceHeadWindowConfig{Size: 0} },
 		"overlap":  func(c *PIIModel) { c.Window = &SequenceHeadWindowConfig{Size: 512, Overlap: 512} },
 		"document": func(c *PIIModel) { c.MaxSequenceLength = 128 },
@@ -57,7 +56,7 @@ func TestPIIWindowConfigurationPreservesExplicitDocumentBudget(t *testing.T) {
 }
 
 func TestPIIWindowCanonicalModuleRoundTrip(t *testing.T) {
-	original := CanonicalPIIModule{PIIModel: PIIModel{UseMmBERT32K: true, MaxSequenceLength: 32768, Window: &SequenceHeadWindowConfig{Size: 512, Overlap: 255}}, ModelRef: "pii_classifier"}
+	original := CanonicalPIIModule{PIIModel: PIIModel{MaxSequenceLength: 32768, Window: &SequenceHeadWindowConfig{Size: 512, Overlap: 255}}, ModelRef: "pii_classifier"}
 	raw, err := yaml.Marshal(original)
 	if err != nil {
 		t.Fatal(err)

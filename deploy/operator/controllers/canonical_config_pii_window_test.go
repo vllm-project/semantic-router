@@ -18,8 +18,8 @@ func TestCanonicalPIITokenWindowPreserved(t *testing.T) {
 			t.Fatal(err)
 		}
 		got := module.PII.PIIModel
-		if !got.UseMmBERT32K || got.MaxSequenceLength != 32768 {
-			t.Fatalf("lost local selector or total input budget: %+v", got)
+		if got.MaxSequenceLength != 32768 {
+			t.Fatalf("lost the total input budget: %+v", got)
 		}
 		if window == nil {
 			if got.Window != nil {
