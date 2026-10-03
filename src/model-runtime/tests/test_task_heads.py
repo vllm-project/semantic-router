@@ -275,6 +275,33 @@ def test_one_forward_reads_every_repeat_and_bundled_task(monkeypatch, client, ru
     assert len(calls) == 1 and len(calls[0]) == 2
 
 
+@pytest.mark.parametrize("profile", ["shared_context", "batching", "max_speed"])
+def test_approximate_profiles_serve_every_head(packages, profile):
+    models = tuple(
+        ModelConfig(model=str(path), name=name, device="cpu", profile=profile)
+        for name, path in packages.items()
+    )
+    runtime = Runtime(ServeConfig(models=models, result_cache_entries=0))
+    runtime.start(background=False)
+    try:
+        client = TestClient(create_app(runtime))
+        for name in packages:
+            inputs = [GROUNDED] if name == "grounded" else [TEXT, LONG[:200]]
+            exact = classify(client, name, inputs, profile="exact")["results"]
+            approximate = classify(client, name, inputs)["results"]
+            for left, right in zip(exact, approximate, strict=True):
+                values = "scores" if name == "scores" else "probabilities"
+                if values in left:
+                    torch.testing.assert_close(
+                        torch.tensor(left[values]),
+                        torch.tensor(right[values]),
+                        rtol=0,
+                        atol=0.05,
+                    )
+    finally:
+        runtime.stop()
+
+
 def test_the_result_cache_answers_repeated_inputs(monkeypatch, packages):
     runtime = Runtime(ServeConfig(model=str(packages["sequence"]), device="cpu"))
     runtime.start(background=False)
