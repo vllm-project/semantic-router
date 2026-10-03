@@ -51,7 +51,29 @@ type modelRuntimeSession struct {
 	closers     []func()
 }
 
+// openModelRuntimeSession opens the Router's connections and the model-runtime
+// profile's attached runtime.
 func openModelRuntimeSession(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	opts pkgtestcases.TestCaseOptions,
+) (*modelRuntimeSession, error) {
+	session, err := openRouterRuntimeSession(ctx, client, opts)
+	if err != nil {
+		return nil, err
+	}
+	session.attached, err = fixtures.OpenServiceEndpointSession(ctx, client, opts, modelruntime.RouterNamespace, mrAttachedService, "8100")
+	if err != nil {
+		session.Close()
+		return nil, err
+	}
+	session.closers = append(session.closers, session.attached.Close)
+	return session, nil
+}
+
+// openRouterRuntimeSession opens the gateway, Router API and metrics
+// connections and finds the Router pod that runs the managed runtimes.
+func openRouterRuntimeSession(
 	ctx context.Context,
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
@@ -73,12 +95,6 @@ func openModelRuntimeSession(
 		return nil, err
 	}
 	session.closers = append(session.closers, session.metrics.Close)
-	session.attached, err = fixtures.OpenServiceEndpointSession(ctx, client, opts, modelruntime.RouterNamespace, mrAttachedService, "8100")
-	if err != nil {
-		session.Close()
-		return nil, err
-	}
-	session.closers = append(session.closers, session.attached.Close)
 	if session.pod, err = modelruntime.RouterPod(ctx, client, opts.RestConfig); err != nil {
 		session.Close()
 		return nil, err
@@ -115,7 +131,12 @@ func (s *modelRuntimeSession) routerMetrics(ctx context.Context) (modelruntime.M
 
 // waitReady waits until the Router reports every named deployment ready.
 func (s *modelRuntimeSession) waitReady(ctx context.Context, deployments ...string) error {
-	return modelruntime.Eventually(ctx, mrReadyTimeout, func(ctx context.Context) error {
+	return s.waitReadyWithin(ctx, mrReadyTimeout, deployments...)
+}
+
+// waitReadyWithin is waitReady with its own bound, for models that download first.
+func (s *modelRuntimeSession) waitReadyWithin(ctx context.Context, timeout time.Duration, deployments ...string) error {
+	return modelruntime.Eventually(ctx, timeout, func(ctx context.Context) error {
 		metrics, err := s.routerMetrics(ctx)
 		if err != nil {
 			return err

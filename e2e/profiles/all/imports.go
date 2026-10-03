@@ -21,6 +21,7 @@ import (
 	looper "github.com/vllm-project/semantic-router/e2e/profiles/looper"
 	mlmodelselection "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
 	modelruntime "github.com/vllm-project/semantic-router/e2e/profiles/model-runtime"
+	modelruntimereal "github.com/vllm-project/semantic-router/e2e/profiles/model-runtime-real"
 	multiendpoint "github.com/vllm-project/semantic-router/e2e/profiles/multi-endpoint"
 	multimodalrouting "github.com/vllm-project/semantic-router/e2e/profiles/multimodal-routing"
 	piiremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/pii-remote-backend"
@@ -101,6 +102,7 @@ func init() {
 	register("complexity-remote-backend", func() framework.Profile { return complexityremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("pii-remote-backend", func() framework.Profile { return piiremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("model-runtime", func() framework.Profile { return modelruntime.NewProfile() }, framework.ProfileCapabilities{LocalImages: modelRuntimeLocalImages})
+	register("model-runtime-real", func() framework.Profile { return modelruntimereal.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("local-classifier-backend", func() framework.Profile { return localclassifierbackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("structure-routing", func() framework.Profile { return structurerouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("long-context-routing", func() framework.Profile { return longcontextrouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
