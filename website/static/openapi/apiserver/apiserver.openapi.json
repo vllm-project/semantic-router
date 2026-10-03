@@ -22625,6 +22625,27 @@
             }
           },
           {
+            "name": "balance_by",
+            "in": "query",
+            "description": "Group a balance cap applies to. Requires balance_max.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "recipe",
+                "decision",
+                "primary_model"
+              ]
+            }
+          },
+          {
+            "name": "balance_max",
+            "in": "query",
+            "description": "Most examples one group may contribute. Requires balance_by.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
             "name": "blinding_key",
             "in": "query",
             "description": "Secret that derives the opaque arm labels. Keep it from the judge, since it maps each label back to a model.",
