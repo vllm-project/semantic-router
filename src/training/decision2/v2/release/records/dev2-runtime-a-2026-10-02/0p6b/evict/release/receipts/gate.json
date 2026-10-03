@@ -1,0 +1,86 @@
+{
+  "decided_by": "coordinator (parent agent), Decision 2.0 program: COORDINATION 2026-10-03 15:30 UTC+8 (the inference owner 885d85cc found that evicting captured HIP graphs crashes the GPU process on ROCm and fixed its native engine by never evicting; the released runtime carries the same eviction, so the eviction-fix owner ports that policy and ships runtime-only revisions of all six repositories through the phase A parity rollout; the user's full-autonomy mandate)",
+  "decision": "release",
+  "decision_sha256": "36d38860492f62d0370dfb6e1255f2f519170035dc211ef8d77e9c0491de956c",
+  "gate_profile": "successor",
+  "items": {
+    "1_successor_R1_v3": {
+      "evidence": "v3 48.636 vs current 43.541: +5.09 [+2.65, +9.30]",
+      "passed": true
+    },
+    "1_successor_R2_human_transfer": {
+      "evidence": "human transfer delta 95% [-0.064, +0.061]",
+      "passed": true
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "evidence": "types choice OK, noul OK, score OK",
+      "passed": true
+    },
+    "1_successor_R4_mlx_diag": {
+      "evidence": "mlx-diag card-eligible macro +0.0044 [-0.0058, +0.0144]",
+      "passed": true
+    },
+    "1_successor_R5_tier_gates": {
+      "evidence": "own 1.0 low +10.00; v3 48.636 vs 90% of GLiNER2.5-Decide 42.524; H vs GLiNER2.5-Decide [-0.013, +0.161]; own 1.0 low > 0 ok, v3 >= 38.272 ok, H vs GLiNER2.5-Decide upper >= 0 ok, no type collapsed ok",
+      "passed": true
+    },
+    "1_successor_R6_no_overlap_exposure": {
+      "evidence": "6 training files, 0 exposed groups",
+      "passed": true
+    },
+    "1_successor_R7_public231": {
+      "evidence": "public 231 152 vs 142 (+10; McNemar p 0.087)",
+      "passed": true
+    },
+    "2_regressions_disclosed": {
+      "evidence": "1 results below own 1.0 listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included",
+      "passed": true
+    },
+    "3_download_hash_parameters": {
+      "evidence": "tree 35 files re-hashed; loaded 597103104",
+      "passed": true
+    },
+    "4_native_examples": {
+      "evidence": "examples and the card's Python block reproduced from the download",
+      "passed": true
+    },
+    "5_output_consistency": {
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run",
+      "passed": true
+    },
+    "6_card_design": {
+      "evidence": "Hub card apache-2.0 / problems []",
+      "passed": true
+    },
+    "7_transformers_remote_code": {
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518",
+      "passed": true
+    }
+  },
+  "manifest_sha256": "ca7bf2cff1494a5bfc51f4271f52557da0f3ce3b6f0f6e7a2b4118cb4965e92e",
+  "model_name": "Decision-2.0-Kai-0.6B",
+  "receipts_sha256": {
+    "automap-card-pre": "72d402e7603098b5d817894d2d6afa2ffb82d2319d6ee6af70bb247208e45f41",
+    "automap-hub": "a9ead1bdab53e777b0604db729034a140d74047979f2effcaceea5fdc7408963",
+    "automap-hub-tf518": "ed6f95e15d160f8b66b864b2ed4035e0421d544bbcec58d06e9d37c9c0589b76",
+    "automap-post": "68c908936ba191c04fb7e56606fdd637c5c479b0f0031ee52d6e8f0b195a13b2",
+    "automap-pre": "effb3db9cd2e5e0a781896af58f59d453fdc7a2aa978517b06629d560062df23",
+    "card-post": "f35e98394b89b3dc2bec29f88d1b4e33522738a0b2cc8ffc984807fc3adc6511",
+    "card-pre": "6070d6251b3c361dbe08790e760a9ef9e6ff224687770d992a798e2402983527",
+    "download": "88a0e3be1e072e16a07e97044404ccf1290354e5f680d936b05422a49bde0b06",
+    "post": "52f4ed33dead7d32461f248bb0cbfcb62bf4d3aaa23d48a6b340573e363d6d54",
+    "readback": "a112400ec174f40f57f7180a509e77a602c0de51743667cd1fd6e5661fe79de0",
+    "repeat-post": "fe53df6da7c8cc52ef27afd86e501cbd832db2b45c69f6251c7ff389f92e146e",
+    "repeat-pre": "695e76b09d0de35d79e3d461c395690a0485b9c252b1827f876e2fe1bce4fa38",
+    "tree": "14a49babd8be454025e42059aec0acb8774e0a903b3d09d9dc8ca19f250ab8e1",
+    "upload": "c4fc200002b845ff582a543acab48ad354242577bc4f8e1fb0c37b6da99d4005"
+  },
+  "repo_id": "vllm-sr/Decision-2.0-Kai-0.6B",
+  "revision": "cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764",
+  "schema": "dev2-release-gate/1",
+  "supersedes": {
+    "gate_sha256": "787c31c9e5bf618c788d28acbe6b1009181d62b6e37fa16e6c231b2dd2ca2bc1",
+    "revision": "99c4e799392afa73241915aeb16fefa5ef3518d7"
+  },
+  "utc": "2026-10-03T09:39:31.592265+00:00"
+}

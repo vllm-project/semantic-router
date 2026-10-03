@@ -1,0 +1,33 @@
+{
+  "card_data": {
+    "base_model": "vllm-sr/Decision-1.0-Lux-9B",
+    "base_model_relation": "finetune",
+    "license": "apache-2.0",
+    "license_name": null,
+    "tags": [
+      "decision-model",
+      "classification",
+      "system-one",
+      "safetensors"
+    ]
+  },
+  "card_problems": [],
+  "collection": {
+    "contains_repo": true,
+    "expected_repo": true,
+    "items": 6,
+    "private": false,
+    "slug": "vllm-sr/decision-20-6ab7cf7bdfb506bf8269cb00",
+    "title": "🎲 Decision 2.0"
+  },
+  "extra_remote": [],
+  "hash_mismatch": [],
+  "missing_remote": [],
+  "passed": true,
+  "private": false,
+  "remote_files": 43,
+  "repo": "vllm-sr/Decision-2.0-Lux-9B",
+  "revision": "78bf3c03d9147aeb30b641edfe0e30ed04887ca5",
+  "schema": "dev2-hub-readback/1",
+  "utc": "2026-10-03T08:40:22.906267+00:00"
+}

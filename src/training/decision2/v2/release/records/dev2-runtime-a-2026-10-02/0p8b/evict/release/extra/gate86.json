@@ -1,0 +1,20 @@
+{
+ "kit_revision": "87d4650b",
+ "package_manifest_sha256": "e8b1081be4a76deca5247792a4031c8e19e2b52b95d91775c13d9e257c407101",
+ "parity": {
+  "max_abs_dp": 0.0,
+  "mismatched_requests": 0,
+  "pass": true,
+  "questions_compared": 419,
+  "requests": 86,
+  "schema": "ix1-parity/1",
+  "statuses": {
+   "ok": 86
+  },
+  "tolerance": 0.0001
+ },
+ "repo": "vllm-sr/Decision-2.0-Eos-0.8B",
+ "revision": "3594047d69f476f1d01cf84c593e213fc3a4dfe0",
+ "rows": "compat-86",
+ "schema": "dev2-runtime-a-gate86/1"
+}

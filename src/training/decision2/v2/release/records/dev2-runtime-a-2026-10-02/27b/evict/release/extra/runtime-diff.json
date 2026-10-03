@@ -1,0 +1,23 @@
+{
+  "schema": "dev2-runtime-diff/1",
+  "mode": "evict",
+  "repo": "vllm-sr/Decision-2.0-Vega-27B",
+  "released": "477e90f537eb5bd62e90d5e5361c7b654e69cf45",
+  "new": "7aec49ae11a18741706da549ab626b9052795fe7",
+  "files": {
+    "released": 35,
+    "new": 35
+  },
+  "changed_runtime_files": [
+    "decision2/fast.py"
+  ],
+  "changed_card_files": [
+    "MODEL_MANIFEST.json"
+  ],
+  "changed_hub_managed_files": [],
+  "changed_other_files": [],
+  "weight_files": 2,
+  "weight_bytes": 14962350224,
+  "weights_byte_identical": true,
+  "ok": true
+}

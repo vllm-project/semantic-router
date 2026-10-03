@@ -1,0 +1,20 @@
+{
+ "kit_revision": "87d4650b",
+ "package_manifest_sha256": "49771ea33a451274687ad2a246ce5fb78f8f42ec904fc91a467477179975bb16",
+ "parity": {
+  "max_abs_dp": 0.0,
+  "mismatched_requests": 0,
+  "pass": true,
+  "questions_compared": 419,
+  "requests": 86,
+  "schema": "ix1-parity/1",
+  "statuses": {
+   "ok": 86
+  },
+  "tolerance": 0.0001
+ },
+ "repo": "vllm-sr/Decision-2.0-Nox-4B",
+ "revision": "25e8f67d1b486c647222df3aac640d2d5d736bbe",
+ "rows": "compat-86",
+ "schema": "dev2-runtime-a-gate86/1"
+}

@@ -1,0 +1,50 @@
+{
+  "passed": true,
+  "decision": {
+    "sha256": "4b8e6be323cde168a148fa9cb5d4f19c05e01a45769da2286f49c686ff051079",
+    "status": "final"
+  },
+  "items": {
+    "1_successor_IF1_index_gain": {
+      "passed": true,
+      "evidence": "private Index paired bootstrap dcea4c3efe65 (2000 replicates over 138645 cases) of these weights (0ece5faa2101) minus the current revision's (b9a65d601bb6): 95% lower bound > 0: yes"
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "passed": true,
+      "evidence": "types choice OK, noul OK, score OK"
+    },
+    "1_successor_IF3_index_audit": {
+      "passed": true,
+      "evidence": "row-level Index audit da12b2ac091d of 120226 Index rows: KIB4 151039 training lines, 0 item rows, 196 familiar-text rows; KIBM 151375 training lines, 0 item rows, 202 familiar-text rows; KSW 146600 training lines, 0 item rows, 166 familiar-text rows; KX 176159 training lines, 0 item rows, 189 familiar-text rows; planted control 200 / 200"
+    },
+    "1_successor_references": {
+      "passed": true,
+      "reference": true,
+      "evidence": "references only under the Index-first rule (user 2026-10-02 09:55): v3: v3 68.077 vs current 68.024: +0.05 [-1.62, +1.41] (below its former bar); human transfer: human transfer delta 95% [-0.037, +0.007] (clears its former bar); mlx-diag: mlx-diag card-eligible macro -0.0151 [-0.0235, -0.0068] (below its former bar); tier gates: own 1.0 low +0.25; v3 68.077 vs 90% of Nimble v2 62.056; H vs Nimble v2 [-0.024, +0.087]; own 1.0 low > 0 ok, v3 >= 55.850 ok, H vs Nimble v2 upper >= 0 ok, no type collapsed ok (clears its former bar); overlap exposure: 1 training files, 0 exposed groups; 2 training files, 0 exposed groups (clears its former bar); public 231: public 231 179 vs 182 (-3; McNemar p 0.375) (clears its former bar); C1 post-key: not run"
+    },
+    "2_regressions_disclosed": {
+      "passed": true,
+      "evidence": "11 results below own 1.0 listed in the build receipt; the card charts every decision type, human-labelled transfer and Index area against it, losses included"
+    },
+    "3_download_hash_parameters": {
+      "passed": true,
+      "evidence": "tree 43 files re-hashed; loaded 7940895744"
+    },
+    "4_native_examples": {
+      "passed": true,
+      "evidence": "examples and the card's Python block reproduced from the download"
+    },
+    "5_output_consistency": {
+      "passed": true,
+      "evidence": "cross-process and pre/post-download answers identical; scored-panel parity where run"
+    },
+    "6_card_design": {
+      "passed": true,
+      "evidence": "Hub card apache-2.0 / problems []"
+    },
+    "7_transformers_remote_code": {
+      "passed": true,
+      "evidence": "Transformers trust_remote_code: automap-pre, automap-card-pre, automap-post, automap-hub, automap-hub-tf518"
+    }
+  }
+}

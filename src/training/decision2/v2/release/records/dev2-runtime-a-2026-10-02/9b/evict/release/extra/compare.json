@@ -1,0 +1,14 @@
+{
+ "changed": [
+  "decision2/fast.py"
+ ],
+ "other": [],
+ "equal": {
+  "identity": true,
+  "parameters": true,
+  "profile": true,
+  "max_input_tokens": true
+ },
+ "readme_diff": [],
+ "ok": true
+}

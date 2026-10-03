@@ -1,0 +1,20 @@
+{
+ "kit_revision": "87d4650b",
+ "package_manifest_sha256": "a91c440ca371668d488a788bdfe12cc574a97123df60730afedf419737ced970",
+ "parity": {
+  "max_abs_dp": 0.0,
+  "mismatched_requests": 0,
+  "pass": true,
+  "questions_compared": 419,
+  "requests": 86,
+  "schema": "ix1-parity/1",
+  "statuses": {
+   "ok": 86
+  },
+  "tolerance": 0.0001
+ },
+ "repo": "vllm-sr/Decision-2.0-Sol-2B",
+ "revision": "64235bef55dad29387dd16da7c90e038bf2f0972",
+ "rows": "compat-86",
+ "schema": "dev2-runtime-a-gate86/1"
+}

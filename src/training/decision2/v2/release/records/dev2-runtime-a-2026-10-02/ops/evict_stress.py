@@ -268,9 +268,8 @@ def main():
         flush=True,
     )
     # Kept open across groups and flushed every --log-every groups, so a crash keeps what was written.
-    sink = gzip.open(
-        out_dir / "records.jsonl.gz", "wt", encoding="utf-8"
-    )  # noqa: SIM115
+    records = out_dir / "records.jsonl.gz"
+    sink = gzip.open(records, "wt", encoding="utf-8")  # noqa: SIM115
     totals = {"requests": 0, "groups": 0, "errors": dict.fromkeys(paths, 0)}
     seconds = dict.fromkeys(paths, 0.0)
     t0 = time.time()

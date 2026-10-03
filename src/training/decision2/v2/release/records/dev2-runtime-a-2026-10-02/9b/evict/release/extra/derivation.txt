@@ -1,0 +1,2 @@
+v2/release/specs/dev2-9b-rae.json 2f091365975c78507ab455de4b583744f68efad74bdb59b72e9128902ad2110c
+v2/release/records/dev2-runtime-a-2026-10-02/Decision-2.0-Lux-9B.decision.rae.json 4b8e6be323cde168a148fa9cb5d4f19c05e01a45769da2286f49c686ff051079

@@ -1,0 +1,22 @@
+{
+  "passed": true,
+  "items": {
+    "1_successor_IF1_index_gain": {
+      "passed": true,
+      "evidence": "private Index paired bootstrap bf1dbeda8d68 (2000 replicates over 138645 cases) of these weights (e20df76c14ed) minus the current revision's (32872f2968e3): 95% lower bound > 0: yes"
+    },
+    "1_successor_R3_no_type_collapsed": {
+      "passed": true,
+      "evidence": "types choice OK, noul OK, score OK"
+    },
+    "1_successor_IF3_index_audit": {
+      "passed": true,
+      "evidence": "row-level Index audit 6fa6c907a7d1 of 120226 Index rows: 2b-RASDML 102402 training lines, 0 item rows, 76 familiar-text rows; planted control 200 / 200"
+    },
+    "1_successor_references": {
+      "passed": true,
+      "reference": true,
+      "evidence": "references only under the Index-first rule (user 2026-10-02 09:55): v3: v3 52.074 vs current 53.437: -1.36 [-3.18, +3.62] (below its former bar); human transfer: human transfer delta 95% [-0.044, +0.075] (clears its former bar); mlx-diag: not run; tier gates: own 1.0 low +3.53; v3 52.074 vs 90% of Decider 2B 49.499; H vs Decider 2B [-0.005, +0.139]; own 1.0 low > 0 ok, v3 >= 44.549 ok, H vs Decider 2B upper >= 0 ok, no type collapsed ok (clears its former bar); overlap exposure: not run; public 231: public 231 166 vs 171 (-5; McNemar p 0.227) (clears its former bar); C1 post-key: not run"
+    }
+  }
+}

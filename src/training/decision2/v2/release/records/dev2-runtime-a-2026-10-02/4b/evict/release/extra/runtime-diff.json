@@ -1,0 +1,23 @@
+{
+  "schema": "dev2-runtime-diff/1",
+  "mode": "evict",
+  "repo": "vllm-sr/Decision-2.0-Nox-4B",
+  "released": "7fc0023a8c51ffaf0f4d4a8f1eb1fb54fa2451cc",
+  "new": "25e8f67d1b486c647222df3aac640d2d5d736bbe",
+  "files": {
+    "released": 40,
+    "new": 40
+  },
+  "changed_runtime_files": [
+    "decision2/fast.py"
+  ],
+  "changed_card_files": [
+    "MODEL_MANIFEST.json"
+  ],
+  "changed_hub_managed_files": [],
+  "changed_other_files": [],
+  "weight_files": 6,
+  "weight_bytes": 9695398936,
+  "weights_byte_identical": true,
+  "ok": true
+}

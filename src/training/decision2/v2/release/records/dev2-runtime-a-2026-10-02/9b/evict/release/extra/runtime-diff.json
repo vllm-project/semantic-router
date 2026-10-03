@@ -1,0 +1,23 @@
+{
+  "schema": "dev2-runtime-diff/1",
+  "mode": "evict",
+  "repo": "vllm-sr/Decision-2.0-Lux-9B",
+  "released": "7c6792f7e59dce7a64115bfe750ee636e7a63bd4",
+  "new": "78bf3c03d9147aeb30b641edfe0e30ed04887ca5",
+  "files": {
+    "released": 44,
+    "new": 44
+  },
+  "changed_runtime_files": [
+    "decision2/fast.py"
+  ],
+  "changed_card_files": [
+    "MODEL_MANIFEST.json"
+  ],
+  "changed_hub_managed_files": [],
+  "changed_other_files": [],
+  "weight_files": 10,
+  "weight_bytes": 17926620224,
+  "weights_byte_identical": true,
+  "ok": true
+}

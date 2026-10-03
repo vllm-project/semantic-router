@@ -1,0 +1,14 @@
+{
+  "bytes": 1520110185,
+  "command": "hf download <repo> --revision <sha> --local-dir <fresh dir> (fresh HF_HUB_CACHE)",
+  "files": 35,
+  "hub_added": [
+    ".gitattributes"
+  ],
+  "passed": true,
+  "repo": "vllm-sr/Decision-2.0-Kai-0.6B",
+  "revision": "cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764",
+  "schema": "dev2-hub-download/1",
+  "seconds": 3.700293401023373,
+  "utc": "2026-10-03T09:37:50.278013+00:00"
+}

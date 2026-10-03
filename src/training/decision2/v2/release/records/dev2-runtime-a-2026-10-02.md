@@ -215,3 +215,133 @@ dataset commits `0fac8ed9` (Nox, Lux) and `bf87c73e` (Vega, Sol, Eos); PR head `
 Shared-module changes (called out): `runtime/fast.py`, `runtime/fast_kernels.py`, `tests/gpu_fast_path.py`; the ops
 above; `v2/eval/ix1/launch.sh` entries, `repin.py`, `publish_dataset.py --update`. The opt-in shared-context switch is
 unchanged.
+
+## 8. Graph-eviction fix: a full HIP graph cache runs new shapes eagerly (2026-10-03; eviction-fix owner 843eb8f6)
+
+COORDINATION 2026-10-03 15:00 / 15:30 UTC+8: the inference owner (885d85cc) found that evicting captured HIP graphs
+from the fast path's graph cache crashes the GPU process on ROCm. Its native engine answered the full Eos Index under
+three profiles in one process; 5 of 6 shards died with `Memory access fault by GPU`, and 0 of 6 once captured graphs
+were never destroyed (model-runtime `99208b6d3`, PR #4481). The released runtime's `fast.py` had the same least-recently-used
+eviction over one shared graph memory pool, with the limits of the crashing variant (65,536 padded tokens, 512
+graphs, 4 GiB of retained outputs). Branch `xunzhuo/decision-2-runtime-evict`, worktree `vllm-sr-dev2-evict`; runtime
+commit `fbedfded8`.
+
+**Fix (`runtime/fast.py`).** The native engine's policy: once 512 graphs or 4 GiB of graph outputs are captured, a new
+shape runs the eager forward (which computes the same values) instead of evicting the least recently used graph, and
+no captured graph is ever destroyed. The receipt's `evicted` counter becomes `full` (refused captures). The memory bound
+is the same as before. Nothing else in the package changes.
+
+**Tests.**
+
+- `tests/test_graph_cache.py` (new, CPU, a stand-in for torch): the first graphs stay cached and keep replaying past
+  the graph and output-byte limits, refused shapes run eagerly, and shapes above the token limit stay eager. It fails
+  on the LRU code. The release suite in the release image: 250 passed, 2 skipped.
+- `tests/gpu_fast_path.py` gains two cases with a cache of two graphs (Qwen3 at Kai's widths, Qwen3.5 at Eos's): 2
+  graphs kept, 22 refused captures, 10 replays, every output bit-identical to the eager backbone. 18 / 18 cases pass
+  on node A (`evict-tests/`).
+
+**The released runtime crashes.** Node B, Eos-0.8B `34e2db97` (the `main` this fix supersedes, default limits), on
+the Index panel (120,226 requests) in panel order. Groups of 16 consecutive requests, every sixth group per shard as in the native
+run. Each group goes through three paths in one process, as the native crash run did:
+
+- every request alone through `system_one`;
+- the group's questions coalesced into shared padded batches over the forward budget;
+- every request through `system_one(share_context=True)`.
+
+Recurring shapes are captured; large captured graphs alternate with eager batches above 65,536 tokens. The same
+harness ran the fixed runtime: this branch's `runtime/*.py` loaded over the same package, byte-identical to the
+fixed package's `decision2/*.py`. The harness is `ops/evict_stress.py`; its per-request records stay private on node
+B (`runs/runtime-evict/`), and the counts below are in `evict-tests/repro-summary.json`.
+
+| Runtime | Shards | Crashed | Where | Graph cache at the end |
+| --- | --- | --- | --- | --- |
+| released (`34e2db97`) | 6 | 6 (exit 139, `Memory access fault by GPU`, a GPU page fault in the kernel log) | groups 164, 274, 570, 576, 587, 599 of about 1,253; after 106–1,014 evictions | 219–372 graphs, about 4.2 GB of outputs |
+| fixed (`fbedfded8`) | 2 (shards 1, 2) | 0 | all 1,253 groups, 20,048 / 20,034 requests × 3 paths, ≈ 21 min each | 127 / 124 graphs (the output budget), 33,264 / 29,601 refused captures, 0 evictions |
+
+No request returned an error before a crash. The two runtimes ran in separate processes with separately autotuned
+FLA kernels (section 7's note on autotuning), so their answers differ at rounding level on some requests. The
+exactness evidence is the parity below.
+
+**Rollout (`fast.sh` / `make_fast.py` / `ra.sh` / `ra_diff.py --evict`, tooling `fe9b40874`).**
+
+- **Old side:** each repository's current `main` (the hotfix revisions of section 7), with the image, spec and
+  autotune cache of the release that built it (`dev2-rah-<tier>-*` on node A).
+- **`--parity`:** a third side is added, the new package with its graph cache cut to 8 graphs
+  (`ops/full_cache_parity.py`). Every shape past the first 8 captured runs eagerly (Eos: 8,850 refused captures,
+  9,375 eager forwards). It is compared with the old side at tolerance 0 too (`answers-compare-fullcache.json`,
+  `full-cache.json`).
+- **Card speed and README:** `card.speed` stays the current main's, so the README is byte-identical; the bench is
+  recorded in each decision.
+- **`ra.sh --evict`:** accepts exactly `decision2/fast.py` changing.
+- **Where it ran:** parity and bench on node A, one tier per GPU (GPU2–7); the releases on node A GPU0–2 in the
+  order Eos, Nox, Lux, Vega, Sol, Kai.
+- **Frozen caches:** `runtime-a-<key>-rae` (`<key>/evict/triton.json`), each the new side's cache after its parity
+  run.
+
+| Model | Superseded | New `main` | Parity default / 8-graph cache (identical of 10,653, drift) | Bench p50 old → new (400 bit-identical) | 86-request gate |
+| --- | --- | --- | --- | --- | --- |
+| Decision-2.0-Eos-0.8B | `34e2db97` | `3594047d69f476f1d01cf84c593e213fc3a4dfe0` | 10,653 / 10,653, 0.0 | 5.99 → 5.97 ms | 86 / 86, 0.0 |
+| Decision-2.0-Nox-4B | `7fc0023a` | `25e8f67d1b486c647222df3aac640d2d5d736bbe` | 10,653 / 10,653, 0.0 | 12.86 → 12.87 ms | 86 / 86, 0.0 |
+| Decision-2.0-Lux-9B | `7c6792f7` | `78bf3c03d9147aeb30b641edfe0e30ed04887ca5` | 10,653 / 10,653, 0.0 | 18.39 → 18.29 ms | 86 / 86, 0.0 |
+| Decision-2.0-Vega-27B | `477e90f5` | `7aec49ae11a18741706da549ab626b9052795fe7` | 10,653 / 10,653, 0.0 | 71.11 → 71.06 ms | 86 / 86, 0.0 |
+| Decision-2.0-Sol-2B | `23cbe9f9` | `64235bef55dad29387dd16da7c90e038bf2f0972` | 10,653 / 10,653, 0.0 | 7.22 → 7.24 ms | 86 / 86, 0.0 |
+| Decision-2.0-Kai-0.6B | `d06cf74b` | `cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764` | 10,653 / 10,653, 0.0 | 4.98 → 4.99 ms | 86 / 86, 0.0 |
+
+**Checks on every release.**
+
+- Weights are byte-identical (`ra_diff.py --evict`). Only `decision2/fast.py` and `MODEL_MANIFEST.json` changed:
+  the new runtime hash, `runtime_source` and the eviction-fix sentence. `README.md` and `config.json` are
+  byte-identical to the superseded revision's.
+- The native examples are bit-identical to the superseded package's on the same GPU, image and frozen cache.
+- The Hub `trust_remote_code` smoke passed under Transformers 5.17 and 5.18, with readback, gate seal and collection
+  order (public, nothing moved, releases in order).
+- Card HTTP, links 8 / 8, `gate evaluate`, and the 86-request gate on the download.
+
+Receipts: `<key>/evict/release/` and `/data/dev2/runs/release/dev2-rae-<tier>-*` on node A.
+
+**Index submission.** Each new revision was downloaded on node C (every file checked against its manifest) and went
+through the release spot check:
+
+- 2,160 sample requests, IX1 `launch.sh extra` in four shards with the stored run's frozen cache (launcher entries
+  `HUB-<model>-<rev8>`);
+- then `v2.eval.ix1.submission spotcheck` and `repin.py spotcheck`.
+
+It also answered the 60 heaviest Index requests (`launch.sh extra --tag heavy60`) with the same statuses as the
+revision it supersedes: Vega 60 `ok`; Lux, Nox, Sol and Eos 59 `ok` and 1 over the input limit; Kai 58 `ok` and 2
+over its limit.
+
+| Model | New pin | Requests that agree | Flips (all near ties) | Max \|Δp\| |
+| --- | --- | --- | --- | --- |
+| Decision-2.0-Vega-27B | `7aec49ae` | 2,158 / 2,160 | 2 | 0.0103 |
+| Decision-2.0-Lux-9B | `78bf3c03` | 2,159 / 2,160 | 1 | 0.0110 |
+| Decision-2.0-Nox-4B | `25e8f67d` | 2,159 / 2,160 | 1 | 0.0143 |
+| Decision-2.0-Sol-2B | `64235bef` | 2,158 / 2,160 | 2 | 0.0143 |
+| Decision-2.0-Eos-0.8B | `3594047d` | 2,157 / 2,160 | 3 | 0.0117 |
+| Decision-2.0-Kai-0.6B | `cd49ea38` | 2,160 / 2,160 (1 `unsupported` in both runs) | 0 | 0.0 |
+
+Every request kept its status. All six passed, so all six pins moved, Kai's too: its previous pin `881bee41` predates
+both runtime fixes.
+
+- **Dataset:** `vllm-sr/decision-2.0-decision-index` @ `09ef6f55`, through `publish_dataset.py --update`. The card,
+  each run's `harness/weights-vs-release.json` (recomputed by `repin.py weights`, all `match`) and
+  `harness/release-spotcheck.json` changed. A readback from the Hub is exact; scores and results are unchanged.
+- **PR:** https://github.com/apolinario/decision-index/pull/48 head `dc3b997f` (`submissions/README.md`) and its
+  body: pins, links to the new dataset commit, the runtime disclosure and the spot-check line.
+
+**Shared-module changes (called out).**
+
+- Runtime: `runtime/fast.py`.
+- Tests: `tests/test_graph_cache.py` (new) and `tests/gpu_fast_path.py`.
+- Ops: `fast.sh`, `make_fast.py`, `ra.sh` and `ra_diff.py` (`--evict`), plus the new `ops/full_cache_parity.py` and
+  `ops/evict_stress.py`.
+- `v2/eval/ix1/launch.sh` entries (data only).
+
+The hotfix and switch derivations of `make_fast.py` still re-derive their committed specs and decisions byte for byte.
+
+**GPU use:** about 9 GPU-h.
+
+- Parity and bench: 2.3.
+- Crash repro: 1.8 (8 GPUs on node B).
+- The six `ra.sh` releases: 1.8.
+- Spot checks and the 60 heaviest requests: 3.2 (node C GPU1–7).
+- GPU tests: under 0.1.

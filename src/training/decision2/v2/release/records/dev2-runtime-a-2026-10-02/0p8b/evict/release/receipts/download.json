@@ -1,0 +1,14 @@
+{
+  "bytes": 2039606594,
+  "command": "hf download <repo> --revision <sha> --local-dir <fresh dir> (fresh HF_HUB_CACHE)",
+  "files": 33,
+  "hub_added": [
+    ".gitattributes"
+  ],
+  "passed": true,
+  "repo": "vllm-sr/Decision-2.0-Eos-0.8B",
+  "revision": "3594047d69f476f1d01cf84c593e213fc3a4dfe0",
+  "schema": "dev2-hub-download/1",
+  "seconds": 5.711779698031023,
+  "utc": "2026-10-03T08:16:30.669412+00:00"
+}

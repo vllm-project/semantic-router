@@ -1,0 +1,270 @@
+{
+  "schema": "dev2-release-spec/1",
+  "kind": "release",
+  "repo_id": "vllm-sr/Decision-2.0-Lux-9B",
+  "model_name": "Decision-2.0-Lux-9B",
+  "name_basis": "base",
+  "name_base_model": "Qwen/Qwen3.5-9B",
+  "profile": "qwen-full",
+  "checkpoint": "/data/dev2/runs/release/inputs/dev2-9b-m10-KIB4-a40/bf16/checkpoint",
+  "expected_identity": {
+    "model_sha256": "0ece5faa210173f443f353474b419fd913a253b06645da3e8370c2db0e1c3339"
+  },
+  "calibration": null,
+  "max_input_tokens": 16384,
+  "gate_receipt": "/data/dev2/runs/release/decisions/Decision-2.0-Lux-9B.decision.rae.json",
+  "origin": {
+    "repo_id": "vllm-sr/Decision-1.0-Lux-9B",
+    "revision": "bd45a30aee8c84032791c245c70f86dee5389cc8",
+    "relation": "finetune",
+    "summary": "Every weight of Decision 1.0 Lux was fine-tuned (nothing frozen, no adapter), with Decision 1.0 Lux's own answer probabilities as soft targets on every training row; three seeds of that fine-tune were averaged, and the release is one third of that average plus two thirds of the original Decision 1.0 Lux weights (a weight interpolation back toward Decision 1.0 Lux). Decision 1.0 Lux is itself a text-only decision adaptation of [Qwen/Qwen3.5-9B](https://huggingface.co/Qwen/Qwen3.5-9B) at `c202236235762e1c871ad0ccb60c8ee5ba337b9a` (Apache-2.0), whose text backbone and tokenizer this model inherits; the Qwen3.5 vision tower is not part of it."
+  },
+  "runtime_requirements": {
+    "python": "3.12.13",
+    "torch": "2.12.0+git6bbd260 (ROCm 7.2 build; one ROCm GPU tested)",
+    "transformers": "5.17.0",
+    "tokenizers": "0.23.2",
+    "safetensors": "0.8.0",
+    "flash-linear-attention": "0.5.2 (GPU gated-delta kernels)",
+    "causal-conv1d": "1.7.0 (GPU convolution kernels)",
+    "triton": "3.7.1 (persisted autotune cache)"
+  },
+  "runtime_equivalence": "decision2/qwen.py loads this full checkpoint with the training/model sources vendored from the scored run's runner mirror (787abdc54), whose SHA-256 equal the scored adapter sources (checked at build time), and applies the per-item batching, BF16-backbone / FP32-head execution, raw probabilities (temperature 1; no calibration file) and answer normalization of v2.dec.infer_dec. The scored checkpoint (b6984475) stored every tensor in FP32; this package (v2.release.bf16_copy) stores its 248 Linear projection matrices in BF16 exactly as BF16 autocast rounds them and every other tensor bit for bit in FP32. The runtime, the Transformers remote code and the forward token budget are the current revision's: the phase A runtime, which replays the backbone of each exact padded input shape as a HIP graph and, on MI300-class (gfx942) GPUs, fuses the element-wise ops of each decoder layer into Triton kernels that round exactly as the ops they replace. From this revision the runtime also ships an opt-in shared-context switch (share_context, off by default) that runs the shared input of a multi-question request once instead of once per question, so its answers can differ slightly from the exact path; with the switch off it was checked with 0 answer changes and 0.0 drift on every scored prompt and on mlx-diag (10,653 prompts) against the previous runtime. From this revision the fused attention kernel also compiles for very long multi-question inputs on ROCm (a query projection above 2 GiB, which returned an error before), and a decoder layer whose fused kernels fail to compile or launch runs its eager forward, which gives the same values; it was checked with 0 answer changes and 0.0 drift on every scored prompt and on mlx-diag (10,653 prompts) against the previous runtime, both with the fused kernels and with every fused kernel failing. From this revision the runtime never destroys a captured HIP graph: once its graph cache is full (512 graphs or 4 GiB of graph outputs), new input shapes run the eager forward, which gives the same values (on ROCm, evicting large graphs under long, varied traffic could crash the GPU process); it was checked with 0 answer changes and 0.0 drift on every scored prompt and on mlx-diag (10,653 prompts) against the previous runtime, both with the default cache and with a cache of 8 graphs. Checked on one GPU against the T = 1 predictions derived exactly from the sealed CAL698 predictions of every scored prompt (typed-final 1,600, css15 6,547, public231 231) and of the mlx-diag diagnostic (2,275) by release.sh --parity, with a copy of the current revision's frozen pre-warmed autotune cache (the formal run's persisted cache plus the fused kernels' configurations), and AutoModel against the native runtime on every scored prompt.",
+  "vendor_source": "/data/dev2/src/787abdc54946ccdb05e52cc5c34ecb619dced237-src_training_decision2/src/training/decision2",
+  "runtime_source": "/data/dev2/src/fbedfded8ce33c7c25a99b8fb1f71f733b2c2c44-src_training_decision2/src/training/decision2",
+  "scored": {
+    "label": "post-key same-panel run M10-KIB4-a40-16k at T = 1 (predictions derived from the sealed CAL698 run by undoing its temperatures; adopted and sealed)",
+    "report_sha256": "6143caba38a49a04fbae6770d2a836d5821ec99dc7db5100a1e6c61444d9a200",
+    "seal_sha256": "2a20e96226b4bfc2d2ca42e9da697cc988c88e6f1847e74d762e51e47059912c",
+    "predictions_sha256": {
+      "typed-final": "c06074683e129f7b607e49204875c868fcad350fccd71d119b938f2cdd607a5d",
+      "css15": "316da27acbbe3640b8a3ae9fbfc81e385e406f43f25549cbbe52c17d0511ebee",
+      "public231": "1291a72a7b65da5f5b95a852ec05fe4a3d8b2557b779c07f73423aa94fdf862c",
+      "mlx-diag": "94d7ca5aac55f3e833c1e73700df7ff10dac4d54d92f7ee5eccda6f85bb4ce1d"
+    },
+    "paired_sha256": "4bce815ce276ce6b758c866e3b2cb0aa3098f78df0c25752c43a529e1ba1339e",
+    "native_manifest": "/data/dev2/runs/9b/formal-m9/M10-KIB4-a40-16k/output/typed-final.predictions.jsonl.manifest.json"
+  },
+  "licence": {
+    "components": [
+      {
+        "component": "Decision-2.0-Lux-9B weights, decision head, package runtime, card and artwork",
+        "licence": "apache-2.0",
+        "source": "vllm-sr/Decision-2.0-Lux-9B"
+      },
+      {
+        "component": "Decision 1.0 Lux-9B weights (direct weight origin: fully fine-tuned, then interpolated back toward it)",
+        "licence": "apache-2.0",
+        "source": "vllm-sr/Decision-1.0-Lux-9B@bd45a30a"
+      },
+      {
+        "component": "Qwen3.5-9B text backbone and tokenizer (upstream of Decision 1.0 Lux)",
+        "licence": "apache-2.0",
+        "source": "Qwen/Qwen3.5-9B@c2022362"
+      }
+    ],
+    "files": [
+      {
+        "source": "/data/decision20-20260926/models/Decision-1.0-Lux-9B/LICENSE",
+        "path": "LICENSE",
+        "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a"
+      }
+    ]
+  },
+  "card": {
+    "roster": "v2/eval/records/decision-index-peer-roster-2026-09-28.json",
+    "paired": "/data/dev2/runs/release/dev2-9b-m10-KIB4-a40-t1-derived/PAIRED-vs-adopted-1.0.json",
+    "text": {},
+    "reports": [
+      {
+        "key": "candidate",
+        "role": "candidate",
+        "report": "/data/dev2/runs/release/dev2-9b-m10-KIB4-a40-t1-derived/REPORT.json",
+        "mlx": "/data/dev2/runs/release/dev2-9b-m10-KIB4-a40-t1-derived-mlx/mlx-diag.score.json",
+        "label": "Decision-2.0-Lux-9B"
+      },
+      {
+        "key": "lux1",
+        "role": "own-1.0",
+        "report": "/data/dev2/runs/eval/m1/d1-lux1-autotune-cache/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/mlx/x-lux1/mlx-diag.score.json",
+        "repo_id": "vllm-sr/Decision-1.0-Lux-9B",
+        "label": "Decision 1.0 Lux"
+      },
+      {
+        "key": "nimble2",
+        "role": "peer",
+        "report": "/data/dev2/runs/eval/m2/q6-nimble2/REPORT.json",
+        "mlx": "/data/dev2/runs/eval/m2/q6-nimble2/mlx-diag.score.json",
+        "repo_id": "bespokelabs/Bespoke-Nimble-9B-v2",
+        "label": "Nimble v2"
+      }
+    ],
+    "paired_peers": {
+      "nimble2": "/data/dev2/runs/release/dev2-9b-m10-KIB4-a40-t1-derived/PAIRED-vs-nimble2.json"
+    },
+    "index": {
+      "path": "/data/dev2/private/release/m10/KIB4-a40/decision-index-card.json",
+      "sha256": "38cd77f44b10539808738b6ea8bc0b84b490afdb126221a63b03d0eb42cc9fd1"
+    },
+    "assets": {
+      "dir": "/data/dev2/private/release/m10/KIB4-a40/9b",
+      "receipt_sha256": "25a1281a2d494e02312cec6e5d4317310b526e7e6bfcddbfcba6732fc4406362"
+    },
+    "speed": {
+      "evidence": "v2/release/records/dev2-runtime-a-2026-10-02/9b/switch/bench/bench-new.json",
+      "sha256": "8adc63435b0a416ca7495f8760b73829e0725f4350d93f9f650745f2de5c7146"
+    }
+  },
+  "automap_source": "/data/dev2/src/99432d1a7da5adbc70212df78ae7ebf7e50b41e4-src_training_decision2/src/training/decision2",
+  "remote_code": {
+    "tested": [
+      "5.17.0",
+      "5.18.0"
+    ]
+  },
+  "bf16_copy": {
+    "receipt": "/data/dev2/runs/release/inputs/dev2-9b-m10-KIB4-a40/bf16/bf16-copy.json",
+    "sha256": "1ddbc353b6c17d079cc67060507bccc3e0b7676ee33d0e6235fee41c82c1790c"
+  },
+  "gate_profile": {
+    "name": "successor",
+    "run": "/data/dev2/runs/release/dev2-9b-m10-KIB4-a40-t1-derived",
+    "current": {
+      "revision": "f77b41f5c1a98974548d929c03e7bce008f71bd0",
+      "gate": "/data/dev2/runs/release/inputs/dev2-9b-m10-KIB4-a40/current/ra-9b-gate.json",
+      "decision": "/data/dev2/runs/release/inputs/dev2-9b-m10-KIB4-a40/current/Decision-2.0-Lux-9B.decision.ra.json",
+      "run": "/data/dev2/runs/release/dev2-9b-ka13ib-t1-derived",
+      "mlx_predictions": "/data/dev2/runs/release/dev2-9b-ka13ib-t1-derived-mlx/output/mlx-diag.predictions.jsonl"
+    },
+    "types": "/data/dev2/runs/release/inputs/dev2-9b-m10-KIB4-a40/gates/types.json",
+    "paired": "/data/dev2/runs/release/inputs/dev2-9b-m10-KIB4-a40/gates/paired-vs-lux-9b.json",
+    "mlx_paired": "/data/dev2/runs/release/inputs/dev2-9b-m10-KIB4-a40/gates/mlx-paired-vs-lux-9b.json",
+    "public231": "/data/dev2/runs/release/inputs/dev2-9b-m10-KIB4-a40/gates/public231-vs-lux-9b.json",
+    "exposure": [
+      "/data/dev2/runs/9b/m6/exposure/x60.json",
+      "/data/dev2/runs/9b/m9/exposure/ib1-ib2-train.json"
+    ],
+    "tier": {
+      "reference": "nimble2",
+      "v3_share": 0.9,
+      "paired": "/data/dev2/runs/release/inputs/dev2-9b-m10-KIB4-a40/gates/paired-vs-nimble2.json"
+    },
+    "index_first": {
+      "bootstrap": "/data/dev2/private/release/m10/KIB4-a40/boot-full-vs-ka13ib.json",
+      "receipt": "/data/dev2/private/release/m10/KIB4-a40/receipt.json",
+      "base_receipt": "/data/dev2/private/release/m10/KIB4-a40/base-receipt.json",
+      "audit": "/data/dev2/private/release/m10/KIB4-a40/audit.json"
+    }
+  },
+  "frozen_autotune_cache": {
+    "formal": "/data/dev2/runs/9b/formal-m9/triton-cache (the formal runs' persisted cache; the typed-final, css15, public231 and mlx-diag runs shared it)"
+  },
+  "_release": {
+    "runtime_evict": "Runtime-only revision (COORDINATION 2026-10-03 15:30 UTC+8; eviction-fix owner 843eb8f6): the package runtime comes from commit fbedfded8 (runtime_source): the hotfix runtime whose HIP graph cache never destroys a captured graph and runs new input shapes eagerly once it is full (on ROCm, evicting large graphs from the shared memory pool between large eager batches crashed the GPU process). Weights, tokenizer, configs, the vendored training/model sources, card index, assets and remote code are those of the spec that built vllm-sr/Decision-2.0-Lux-9B@7c6792f7. card.speed stays that spec's (the eviction-fix bench, old then new on one GPU: p50 18.4 -> 18.3 ms) and runtime_equivalence gains the eviction-fix sentence.",
+    "replaces_spec": {
+      "spec": "/data/dev2/runs/release/dev2-rah-9B-20261003T051039Z/receipts/spec.json",
+      "sha256": "5051cf79184cd5999f4bc6dfbef07ce68301d2c1933a943f4faec1fbf4e9a755"
+    },
+    "previous": {
+      "runtime_hotfix": "Runtime-only revision (COORDINATION 2026-10-03 12:03 UTC+8; ROCm hotfix owner 490b6f72): the package runtime comes from commit 3c8cd1a84 (runtime_source): the switch runtime with attn_prep launching its kernel once per tensor (Triton's ROCm compiler failed on its query / key pointer branch when only the query projection exceeded 2 GiB) and fused decoder layers falling back to their eager forward when a kernel fails. Weights, tokenizer, configs, the vendored training/model sources, card index, assets and remote code are those of the spec that built vllm-sr/Decision-2.0-Lux-9B@214ffa43. card.speed stays that spec's (the hotfix bench, old then new on one GPU: p50 18.7 -> 18.7 ms) and runtime_equivalence gains the hotfix sentence.",
+      "replaces_spec": {
+        "spec": "/data/dev2/runs/release/dev2-ras-9B-20261003T022358Z/receipts/spec.json",
+        "sha256": "a832e1f9a6bb2ad15ad24d591e5a5f3545224b6fb0fd8d1a7569211c32206328"
+      },
+      "previous": {
+        "runtime_switch": "Runtime-only revision (COORDINATION 2026-10-03 02:38 / 03:18 UTC+8; 08:30; 9B owner e28aa509): the package runtime comes from commit 9cffe606c (runtime_source): the phase A fast path and the opt-in shared-context switch (runtime/shared_ctx.py, off by default). Weights, tokenizer, configs, the vendored training/model sources, card index, assets and remote code are those of the spec that built vllm-sr/Decision-2.0-Lux-9B@f3122c7c. card.speed is the new runtime's bench (p50 18.5 -> 18.4 ms) and runtime_equivalence gains the switch sentence.",
+        "replaces_spec": {
+          "spec": "/data/dev2/runs/release/dev2-9b-m10-KIB4-a40-release-20261002T151423Z/receipts/spec.json",
+          "sha256": "a14237aa00cc4f64818f2e54225dee23f4747cea5edfaf786ddd899d8c9f0e06"
+        },
+        "previous": {
+          "successor": "Decision-2.0-Lux-9B Index-first successor: the 9B M10 point KIB4-a40: W = (1 - 2/5) x Decision 1.0 Lux-9B + 2/5 x the uniform FP32 soup of the seeds of 9B M10 arm KIB4 (full fine-tuning of Decision 1.0 Lux-9B on the K-a13IB recipe (x60 with own-Lux targets, IB rows gold only, 60.18M native tokens per seed) with IB1 sentfin replaced by the IB4 phase-1 families); stored as its v2.release.bf16_copy.",
+          "gate": "successor profile with index_first (user rule 2026-10-02 09:55): IF1 = the private Index paired bootstrap of these weights minus the current revision's (K-a13IB-bf16), 95% lower bound > 0, bound to both IX1 run receipts; R3 = no type collapsed on the formal typed panel; IF3 = the row-level Index contamination audit of the training files; items 2-7 as for every release. v3, human transfer, mlx-diag, tier gates, exposure and public 231 are references; C1 is not run. The Index files stay in release node's private tree.",
+          "scored": "T = 1: the sealed CAL698 formal run M10-KIB4-a40-16k (image f83b1d10, runner mirror equal to 787abdc54 for every scored source) returned to T = 1 offline with 0 answer changes on every panel and mlx-diag, then adopted, sealed and paired on the release node (ops/prep_m10.sh).",
+          "storage": "v2.release.bf16_copy of the frozen FP32 point (identity b6984475 -> 0ece5faa; receipt 1ddbc353), the copy the Index run M10-KIB4-a40-bf16 scored.",
+          "runtime": "vendor_source = K-a13IB's formal runner mirror 787abdc54 (training/model checked equal to the scored adapter sources at build time); runtime_source = automap_source = the current revision's (the phase A runtime: HIP-graph replay of each padded input shape and, on gfx942, fused Triton element-wise kernels; BF16-resident, Transformers remote code, forward token budget), unchanged.",
+          "card": "the product card of the current revision with this candidate's reports, an Index input built by python -m v2.release.card_index (board-served parameter counts, the audited footnote) with the 9B point from the Index run on exactly these weights, and assets rendered by the default v2.release.card_assets (banner concept A); card.speed keeps the current revision's bench receipt (same architecture, runtime and shapes).",
+          "replaces_spec": {
+            "spec": "v2/release/specs/dev2-9b-ra.json",
+            "sha256": "93bc26f1ec67406221e33c2f98068399639106073abd21e2dac67c31e99c47c6"
+          },
+          "previous": {
+            "runtime_a": "Runtime-only revision (user approval of speed-up phase A, 2026-10-02 18:00 UTC+8; worker 2d541b40): the package runtime comes from the phase A commit 54303117b (runtime_source), the exact GPU fast path of runtime/fast.py. Weights, tokenizer, configs, the vendored training/model sources, card index, assets and remote code are those of the spec that built vllm-sr/Decision-2.0-Lux-9B@6af07f36. card.speed is the new runtime's bench (p50 31.8 -> 19.5 ms) and runtime_equivalence gains one runtime sentence.",
+            "replaces_spec": {
+              "spec": "/data/dev2/runs/release/dev2-org-9B-20261002T105801Z/receipts/spec.json",
+              "sha256": "1c41326e80d4267281fd31ae9e9de1b8dba0f72f8729f73eeb9785ab02bcebe4"
+            },
+            "previous": {
+              "card_org": "Card-only revision (user instruction 2026-10-02 17:35 UTC+8, org worker (2)): the Hugging Face organization llm-semantic-router is now vllm-sr, so README.md and MODEL_MANIFEST.json name vllm-sr/Decision-2.0-Lux-9B. The spec is the one that built llm-semantic-router/Decision-2.0-Lux-9B@7195360d with its Hub references on the renamed organization; card.index, card.assets and every model, runtime and remote-code input are unchanged, so the Index data, the charts and the banner stay as released.",
+              "replaces_spec": {
+                "spec": "/data/dev2/runs/release/dev2-card4-9B-20261002T033640Z/receipts/spec.json",
+                "sha256": "3a5c75ac1ca4af6d1df0d76787f86e79084d15be2a1938fe1a01794d4dc596be"
+              },
+              "previous": {
+                "card_banner": "Card-only revision (user request 2026-10-02 10:35 UTC+8 for banner A on every card, card worker fb5dd490): assets/banner.png is concept A, the default banner of v2.release.card_assets. card.index keeps the released card's own private Index input in place and card.assets the regenerated assets; the README and the charts are those of the current default generator.",
+                "replaces_spec": {
+                  "spec": "v2/release/specs/dev2-9b-ka13ib.json",
+                  "sha256": "c58b0d6f4fb7d17ffed649a848aecc9d613a2a6bbd4f88dea1bf416773e13818"
+                },
+                "previous": {
+                  "successor": "Decision-2.0-Lux-9B successor K-a13IB (9B Milestone 9 stage-3 soup: the K-a13 recipe with the IB1-r3 / IB2 rows at matched tokens; [KIB soup, Lux 1.0, Lux 1.0] at alpha 1/3) under the Index path of the coordinator decision 2026-10-02 02:05 UTC+8: item 1' (v3 not significantly below the current revision and the private Index delta against it significantly positive) and items 2-8 of the successor rule.",
+                  "gate": "successor profile with index_path: R1' and R2-R7 against the current revision 586af779 (its scored run dev2-8b-t1-derived), R5 = the tier gates (adopted Lux 1.0, v3 >= 0.9 x Nimble v2, human transfer vs Nimble v2), R6 = both exposure receipts (x60 and the IB1 / IB2 rows), R8 = the JevArena-C1 v1.2 post-key guard. The Index bootstrap file stays in node A's private tree (SHA-256 bound by the decision).",
+                  "scored": "T = 1: the sealed CAL698 formal run formal-m9/K-a13IB-16k (node A GPU6, image f83b1d10) returned to T = 1 offline with 0 answer changes on every panel and mlx-diag, then adopted, sealed and paired on node A (ops/prep.sh derive / paired).",
+                  "storage": "v2.release.bf16_copy of the frozen FP32 soup (identity 4701ba41 -> b9a65d60; receipt 773d9b0c).",
+                  "runtime": "vendor_source = the formal run's runner mirror 787abdc54 (training/model checked equal to the scored adapter sources at build time); runtime_source = automap_source = 99432d1a7, the released runtime (BF16-resident, Transformers remote code, forward token budget), unchanged from the current revision.",
+                  "card": "the product card of the current revision (card round 2) with K-a13IB's reports and the card round-3 Index conventions (user card fix 2026-10-02 03:04 UTC+8, which leaves Lux 9B to this release): card.index = the round-3 Index input (board-served parameter counts, the audited footnote of card_index.FOOTNOTE) with the 9B scores from an independent kit run on exactly these weights (K-a13IB-bf16); card.assets rendered by the round-3 v2.release.card_assets in the round-2 environment (Python 3.12.13, matplotlib 3.11.2, Pillow 12.3.0, the same Inter fonts and logo); card.speed keeps the 400-request bench receipt of this runtime (same architecture, runtime and shapes).",
+                  "c1": "final: post-key C1 summary bound as R8",
+                  "replaces_spec": {
+                    "spec": "v2/release/specs/dev2-9b-product.json",
+                    "sha256": "900e14762405b2fd63cdaec9d51e5d723b26cf4df1749a3a1b7d04de76ea8be1"
+                  },
+                  "previous": {
+                    "card_product": "Card-only revision under the new name (user job 2026-10-02 00:05 UTC+8, release worker 4c0a68cd): the product card of v2.release.card (banner, title, one paragraph, at-a-glance table, highlights, code-only quickstart, JevArena and Jev Decision Index charts with one compact table, licence, citation). card.text is empty; card.index and card.assets pin the private Index input and the assets rendered by v2.release.card_assets; card.speed pins the 400-request bench receipt of this runtime. licence.files keeps the LICENSE only; the upstream NOTICE and the attributions are dropped (no NOTICE, ATTRIBUTIONS.md, LICENSES/ or evaluation/ in the package). Weights, tokenizer, the package runtime, the vendored sources and the Transformers remote code are byte-identical to the replaced revision; config.json and MODEL_MANIFEST.json carry the new model name.",
+                    "renamed_from": "llm-semantic-router/DEV2.0-9B",
+                    "replaces_spec": {
+                      "spec": "v2/release/specs/dev2-9b-card.json",
+                      "sha256": "b7339e99edc79045fb8c04b46e1a2a437e72b8d00ea3b27aedc7449b13007754"
+                    },
+                    "previous": {
+                      "card_redesign": "Card-only revision (user card job 2026-10-01 21:58 UTC+8, release worker 4c0a68cd): a standard model-release card from v2.release.card (highlights, model overview, one evaluation chart pair and table, a Transformers-only quickstart, at most five limitations, training data with the licence attributions, licence, citation); methods and every result below the counterpart in evaluation/EVALUATION.md; internal release facts in the records. card.text is the short card text; banner, calibration_text and requirements_text are dropped; the attributions lose the internal panel version and the banner credit. Weights, tokenizer, configs, the package runtime, the vendored sources and the Transformers remote code are byte-identical to the replaced revision (same runtime_source, vendor_source and automap_source).",
+                      "replaces_spec": {
+                        "spec": "v2/release/specs/dev2-9b-budget.json",
+                        "sha256": "45981f7001579c20e306f6d2273c8ed5d85b0ccea4ae5eca8c801409761e2549"
+                      },
+                      "previous": {
+                        "forward_token_budget": "Runtime-only revision (user release round 2026-10-01 18:08 UTC+8; IX1 hand-off dev2-runtime-forward-budget-2026-10-01): the package runtime (runtime_source 99432d1a7) is the auto_map runtime plus the forward token budget of decision2/qwen.py (8e6bdfc33, e876fbefc). Weights, tokenizer, model configs, the vendored training/model sources and the Transformers remote code are byte-identical to the replaced revision. Adopted only with 0 answer changes on every scored prompt and on mlx-diag, AutoModel equal to native and the long-input regression passing.",
+                        "replaces_spec": {
+                          "spec": "v2/release/specs/dev2-9b-automap.json",
+                          "sha256": "5c42eba51162e45c43d912d801be6955c85be0d08c601515db986ee1c5d80858"
+                        },
+                        "previous": {
+                          "transformers_remote_code": "Runtime-only revision (user request 2026-10-01 10:53 UTC+8; coordinator note 11:20, worker 4c0a68cd): the package gains the Transformers remote code and config.json fields; the package runtime (runtime_source 8e8082440) is the BF16-resident runtime plus the remote-code prompt fix. Weights, tokenizer, model configs and the vendored training/model sources are byte-identical to the replaced revision. Adopted only with 0 answer changes against the native runtime on every scored prompt and on mlx-diag.",
+                          "replaces_spec": {
+                            "spec": "v2/release/specs/dev2-9b-bf16r.json",
+                            "sha256": "4eb3ee4012448c9ea308cd52e9dd92f778892624667960c49085a70605c0962e"
+                          },
+                          "previous": {
+                            "bf16_resident_runtime": "Runtime-only revision (coordinator note 2026-10-01 10:30 UTC+8, b5f60b33): the package runtime comes from the BF16-resident commit 5dc962b00 (runtime_source); weights, tokenizer, configs and the vendored training/model sources (vendor_source, the mirror the replaced revision vendors) are byte-identical to the replaced revision. Adopted only with 0 answer changes on every scored prompt and on mlx-diag. The card gains one runtime-update line and runtime_equivalence one runtime sentence.",
+                            "replaces_spec": {
+                              "spec": "v2/release/specs/dev2-9b-card-c1.json",
+                              "sha256": "eddbaa03eca8981006f0f03c7e9980db0090cff87f9a4efd20b33b8886f1fc01"
+                            },
+                            "previous": {
+                              "rename": "user directive 2026-09-29 16:05 UTC+8: names follow the base model's size. llm-semantic-router/DEV2.0-8B was moved to llm-semantic-router/DEV2.0-9B with move_repo on 2026-09-29 (history, revisions and privacy unchanged; the old ID redirects). This spec builds the card-only revision: name, banner, labels and the naming sentence; the weights are byte-identical to the released revision 53bac735be58def53673d0d290b9baa3f2af1cf9.",
+                              "card_c1": "Card-only revision after JevArena-C1 event 3 (item set v1.2, scored 2026-09-29; eval record v2/eval/records/m4-c1-event3-prep-2026-09-29.md section 0000), coordinator note 2026-09-29 23:40 UTC+8: the C1 line replaces the placeholder. The card re-renders with the current public-231 note of card.py. Every model file stays byte-identical to the released revision ae6831960dd1114296cb15a59248b79832c42959. The package runtime (decision2/*.py) come from the mirror that built ae683196 (2926952c1), so only card files change."
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

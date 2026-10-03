@@ -1,0 +1,2 @@
+v2/release/specs/dev2-27b-rae.json eb652f8dcac94bde84430616e14ee0e11baa7b1eab2bc02f02c398645bd89918
+v2/release/records/dev2-runtime-a-2026-10-02/Decision-2.0-Vega-27B.decision.rae.json 5540ca8ab56446b5b9eee7f77ad61b0fbfb752e89b2a1fb12d6d892f2615a43b

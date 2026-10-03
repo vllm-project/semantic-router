@@ -1,0 +1,23 @@
+{
+  "schema": "dev2-runtime-diff/1",
+  "mode": "evict",
+  "repo": "vllm-sr/Decision-2.0-Kai-0.6B",
+  "released": "d06cf74b1304c6454b9de6e0adb8eaad5ac719fa",
+  "new": "cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764",
+  "files": {
+    "released": 36,
+    "new": 36
+  },
+  "changed_runtime_files": [
+    "decision2/fast.py"
+  ],
+  "changed_card_files": [
+    "MODEL_MANIFEST.json"
+  ],
+  "changed_hub_managed_files": [],
+  "changed_other_files": [],
+  "weight_files": 2,
+  "weight_bytes": 1507642792,
+  "weights_byte_identical": true,
+  "ok": true
+}
