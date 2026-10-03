@@ -187,6 +187,11 @@ helm-ci-validate: helm-ci-setup $(HARNESS_VENV_DEPS)
 		> "$(dir $(HELM_TEMPLATE_OUTPUT))model-runtime-template.yaml"
 	@"$(AGENT_PYTHON)" deploy/helm/check-model-runtime.py "$(dir $(HELM_TEMPLATE_OUTPUT))model-runtime-template.yaml"
 	@echo "Model deployment and recipe binding rendering verified"
+	@helm template extra-containers-release $(HELM_CHART_PATH) \
+		-f deploy/helm/testdata/extra-containers-values.yaml \
+		-s templates/deployment.yaml > "$(dir $(HELM_TEMPLATE_OUTPUT))extra-containers-template.yaml"
+	@"$(AGENT_PYTHON)" deploy/helm/check-extra-containers.py "$(dir $(HELM_TEMPLATE_OUTPUT))extra-containers-template.yaml"
+	@echo "Router extraContainers rendering verified"
 	@echo "$(GREEN)[SUCCESS]$(NC) Helm CI validation completed successfully"
 
 helm-safety-validate: ## Validate Helm schema and local-state safety guards

@@ -1,0 +1,12 @@
+extraVolumes:
+  - name: classifier-cache
+    emptyDir: {}
+extraContainers:
+  - name: task-classifier
+    image: ghcr.io/example/prompt-task-classifier:1.0.0
+    ports:
+      - name: classifier
+        containerPort: 8000
+    volumeMounts:
+      - name: classifier-cache
+        mountPath: /cache
