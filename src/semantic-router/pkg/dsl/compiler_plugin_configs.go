@@ -45,6 +45,10 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 		cfg := &config.ContextCompressionPluginConfig{}
 		return compilePluginFields(c, fields, cfg)
 	},
+	"context_dedup": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
+		cfg := &config.ContextDedupPluginConfig{}
+		return compilePluginFields(c, fields, cfg)
+	},
 	"prompt_cache": compilePromptCachePluginConfig,
 	"hallucination": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileHallucinationPluginConfig(fields), true
