@@ -156,6 +156,13 @@ CANDS: dict[str, dict] = {
         "audit_sets": ["KIB4"],
         "index_node": "b",
     },
+    "HLR4-a50": {
+        "what": "the 9B M10 point HLR4-a50: W = 1/2 x Decision 1.0 Lux-9B + 1/2 x the uniform FP32 soup of "
+        + HLR4,
+        "fp32": "9a3c7e05f36186004b3823bcba19765009f768261c2639e62731211ed7e537c3",
+        "audit_sets": ["KIB4"],
+        "index_node": "b",
+    },
     "HLR4-a60": {
         "what": "the 9B M10 point HLR4-a60: W = 2/5 x Decision 1.0 Lux-9B + 3/5 x the uniform FP32 soup of "
         + HLR4,
