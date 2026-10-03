@@ -71,3 +71,20 @@ def inject_prefix(
     cache[blocks.to(cache.device), :, offsets.to(cache.device)] = stacked.to(
         cache.device
     )
+
+
+def validate_prefix_destination(
+    cache: torch.Tensor,
+    block_ids: list[int],
+    num_tokens: int,
+    *,
+    heads: int,
+    head_dim: int,
+    dtype: torch.dtype,
+) -> None:
+    """Check a destination before any mapped layer is written."""
+    if cache.dtype != dtype:
+        raise ValueError("mapped KV dtype differs from paged cache")
+    block_size = cache.shape[2]
+    _check_cache(cache, block_size, heads, head_dim)
+    _slots(block_ids, num_tokens, block_size, cache.shape[0])

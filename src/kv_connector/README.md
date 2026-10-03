@@ -9,6 +9,11 @@ This is the out-of-tree vLLM connector for mapper artifacts from
 - `transform.py` converts a source Qwen3 post-RoPE cache into target post-RoPE
   K/V tensors using the full-head weights. It supports unscaled Qwen3 RoPE and
   a complete prefix beginning at position zero.
+- `snapshot.py` and `handoff.py` provide a same-host C2 probe: an atomic,
+  tenant-scoped source snapshot and a validated map/inject operation for a
+  block-aligned token prefix. They have CPU tests with noncontiguous cache
+  blocks and rejection tests for wrong tenant, expired cache, mismatched mapper,
+  mismatched prompt, and insufficient target blocks.
 
 The artifact is checked against the target model id, pinned revision, dtype,
 TP degree, KV head count, head dimension, and layer count. The source id and
@@ -23,9 +28,10 @@ supplies `artifact_path`, `source_model`, `source_revision`, `source_tp`, and
 
 vLLM passes request-specific transfer hints in JSON `kv_transfer_params`.
 The router's `x-vsr-kv-*` headers therefore need a trusted request adapter.
-The source vLLM pod also needs a way to export a complete cache before the
-target can claim a hit. Those paths and the paged-cache write are the remaining
-C2 integration work; the mapping function alone does not skip prefill.
+The source vLLM pod still needs an export hook, and the target connector still
+needs scheduler and worker integration before it can claim a hit. A remote
+source-pod transport and response status emission also remain. The local
+snapshot path is a test transport only; the connector continues normal prefill.
 
 Run the synthetic artifact and conversion checks from the repository root:
 
