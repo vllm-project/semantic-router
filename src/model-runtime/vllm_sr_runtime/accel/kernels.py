@@ -44,6 +44,12 @@ class KernelSet:
     def __call__(self, name: str) -> Callable:
         return self.select(name).fn
 
+    def has(self, name: str) -> bool:
+        return any(
+            kernel.exact or self.allow_approximate
+            for kernel in self.available.get(name, [])
+        )
+
     def describe(self) -> dict[str, str]:
         return {name: self.select(name).source for name in sorted(self.available)}
 

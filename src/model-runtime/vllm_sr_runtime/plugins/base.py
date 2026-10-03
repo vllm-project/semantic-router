@@ -150,6 +150,9 @@ class ForwardBatch:
 
     ``gather`` holds per-row option endpoints padded with 0 to the widest row;
     ``query`` holds one query position per row; ``lengths`` the unpadded lengths.
+    ``shared_prefix`` > 0 asks an engine that ``supports_shared_context`` to run the
+    rows as one shared-context tree whose first ``shared_prefix`` tokens (common to
+    every row, before any endpoint) are computed once.
     """
 
     input_ids: torch.Tensor
@@ -157,6 +160,7 @@ class ForwardBatch:
     gather: torch.Tensor
     query: torch.Tensor
     lengths: list[int]
+    shared_prefix: int = 0
 
 
 @dataclass
@@ -294,8 +298,13 @@ class LoadedModel(ABC):
         """Validate and render every question; failures become per-question errors."""
 
     @abstractmethod
-    def run(self, items: list[RenderedItem]) -> list[list[float] | None]:
-        """One forward over ``items`` in order; per item the logits of its options."""
+    def run(
+        self, items: list[RenderedItem], shared_prefix: int = 0
+    ) -> list[list[float] | None]:
+        """One forward over ``items`` in order; per item the logits of its options.
+
+        ``shared_prefix`` > 0 runs the items as one shared-context tree (see ``ForwardBatch``).
+        """
 
     @abstractmethod
     def answer(self, item: RenderedItem, logits: list[float] | None) -> dict[str, Any]:
@@ -355,9 +364,13 @@ class Job:
 
 @dataclass
 class Batch:
-    """Items from one or more jobs that run as one forward, in order."""
+    """Items from one or more jobs that run as one forward, in order.
+
+    ``shared_prefix`` > 0 (shared-context profile): the items' common prefix length, run once.
+    """
 
     parts: list[tuple[Job, list[int]]]
+    shared_prefix: int = 0
 
     def items(self) -> list[RenderedItem]:
         return [job.items[index] for job, indices in self.parts for index in indices]

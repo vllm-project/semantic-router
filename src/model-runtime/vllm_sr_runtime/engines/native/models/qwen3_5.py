@@ -22,6 +22,7 @@ from .common import (
     causal_mask,
     recurrent_mask,
 )
+from .tree import Tree, tree_gated_delta
 
 MODEL_TYPE = "qwen3_5_text"
 
@@ -61,6 +62,8 @@ class GatedDeltaNet(nn.Module):
     def forward(
         self, hidden_states: torch.Tensor, mask: torch.Tensor | None, kernels: KernelSet
     ) -> torch.Tensor:
+        if getattr(mask, "is_tree", False):
+            return tree_gated_delta(self, hidden_states, mask, kernels)
         if mask is not None:
             dtype = hidden_states.dtype
             hidden_states = (hidden_states * mask[:, :, None]).to(dtype)
@@ -249,8 +252,13 @@ class Qwen3_5Backbone(nn.Module):
         self.kernels: KernelSet | None = None
 
     def forward(
-        self, input_ids: torch.Tensor, attention_mask: torch.Tensor | None
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor | None,
+        masks: dict[str, torch.Tensor | None] | None = None,
     ) -> torch.Tensor:
+        """``masks`` (``{"full", "linear"}``, built from host-known padding) replaces the masks derived
+        from ``attention_mask``, which read the mask back to the host."""
         assert self.kernels is not None, "bind kernels before running the backbone"
         hidden_states = self.embed_tokens(input_ids)
         batch, length = hidden_states.shape[:2]
@@ -260,11 +268,24 @@ class Qwen3_5Backbone(nn.Module):
             .expand(4, batch, -1)
         )
         rope_positions = position_ids[1:]
-        full_mask = causal_mask(attention_mask, length)
-        linear_mask = recurrent_mask(attention_mask, length)
+        if masks is None:
+            full_mask = causal_mask(attention_mask, length)
+            linear_mask = recurrent_mask(attention_mask, length)
+        else:
+            full_mask, linear_mask = masks["full"], masks["linear"]
         rotary = self.rotary_emb(hidden_states, rope_positions)
         for layer in self.layers:
             hidden_states = layer(
                 hidden_states, rotary, full_mask, linear_mask, self.kernels
             )
+        return self.norm(hidden_states)
+
+    def forward_tree(self, input_ids: torch.Tensor, tree: Tree) -> torch.Tensor:
+        """The packed shared-context row ([1, L] ids) through every layer; [1, L, hidden]."""
+        assert self.kernels is not None, "bind kernels before running the backbone"
+        hidden_states = self.embed_tokens(input_ids)
+        rope_positions = tree.positions[None].expand(4, 1, -1)[1:]
+        rotary = self.rotary_emb(hidden_states, rope_positions)
+        for layer in self.layers:
+            hidden_states = layer(hidden_states, rotary, tree, tree, self.kernels)
         return self.norm(hidden_states)

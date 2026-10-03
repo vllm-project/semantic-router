@@ -9,6 +9,7 @@ from torch import nn
 
 from ....accel.kernels import KernelSet
 from .common import GatedMLP, RMSNorm, apply_rotary, attention, causal_mask
+from .tree import Tree
 
 MODEL_TYPE = "qwen3"
 
@@ -132,14 +133,28 @@ class Qwen3Backbone(nn.Module):
         self.kernels: KernelSet | None = None
 
     def forward(
-        self, input_ids: torch.Tensor, attention_mask: torch.Tensor | None
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor | None,
+        masks: dict[str, torch.Tensor | None] | None = None,
     ) -> torch.Tensor:
+        """``masks`` (``{"full", ...}``, built from host-known padding) replaces the mask derived from
+        ``attention_mask``, which reads the mask back to the host."""
         assert self.kernels is not None, "bind kernels before running the backbone"
         hidden_states = self.embed_tokens(input_ids)
         length = hidden_states.shape[1]
         position_ids = torch.arange(length, device=hidden_states.device).unsqueeze(0)
-        mask = causal_mask(attention_mask, length)
+        mask = causal_mask(attention_mask, length) if masks is None else masks["full"]
         rotary = self.rotary_emb(hidden_states, position_ids)
         for layer in self.layers:
             hidden_states = layer(hidden_states, rotary, mask, self.kernels)
+        return self.norm(hidden_states)
+
+    def forward_tree(self, input_ids: torch.Tensor, tree: Tree) -> torch.Tensor:
+        """The packed shared-context row ([1, L] ids) through every layer; [1, L, hidden]."""
+        assert self.kernels is not None, "bind kernels before running the backbone"
+        hidden_states = self.embed_tokens(input_ids)
+        rotary = self.rotary_emb(hidden_states, tree.positions)
+        for layer in self.layers:
+            hidden_states = layer(hidden_states, rotary, tree, self.kernels)
         return self.norm(hidden_states)
