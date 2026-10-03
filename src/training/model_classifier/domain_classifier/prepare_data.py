@@ -145,7 +145,7 @@ def main():
     known = []
     for folder in [
         "TIGER-Lab--MMLU-Pro",
-        "LLM-Semantic-Router--category-classifier-supplement",
+        "vllm-sr--category-classifier-supplement",
     ]:
         for path in (args.legacy_datasets / folder).rglob("*.parquet"):
             for row in parquet.read_table(path).to_pylist():
