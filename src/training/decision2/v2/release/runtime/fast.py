@@ -10,8 +10,10 @@ are unchanged; it only removes kernel launches and host work:
   masks are built inside the graph from host-known lengths, as Transformers
   builds them for a right-padded batch, so nothing reads the mask back. Shapes
   above ``MAX_GRAPH_TOKENS`` padded tokens run eagerly; at most ``MAX_GRAPHS``
-  graphs (and ``MAX_GRAPH_OUTPUT_BYTES`` of retained outputs) stay cached, least
-  recently used first out.
+  graphs (and ``MAX_GRAPH_OUTPUT_BYTES`` of retained outputs) are captured, and
+  after that new shapes run eagerly. Captured graphs are never destroyed: on
+  ROCm, evicting large graphs from the shared memory pool between large eager
+  batches led to GPU memory access faults.
 - **Trims.** A Linear input feeding several BF16-resident Linear layers is cast
   to BF16 once instead of once per layer (the same cast autocast performs), and
   the zero-centred RMSNorm's ``1 + w`` is computed once instead of per call.
@@ -42,7 +44,6 @@ import math
 import os
 import types
 import warnings
-from collections import OrderedDict
 from contextlib import contextmanager
 from typing import Any
 
@@ -612,7 +613,7 @@ class Graphs:
         self.max_graphs = max_graphs
         self.max_tokens = max_tokens
         self.max_output_bytes = max_output_bytes
-        self.graphs: OrderedDict[tuple, dict[str, Any]] = OrderedDict()
+        self.graphs: dict[tuple, dict[str, Any]] = {}
         self.seen: dict[tuple, int] = {}
         self.failed: set[tuple] = set()
         self.output_bytes = 0
@@ -622,7 +623,7 @@ class Graphs:
             "captures": 0,
             "replays": 0,
             "eager": 0,
-            "evicted": 0,
+            "full": 0,
             "failed": 0,
         }
         backbone.forward = self.__call__
@@ -673,8 +674,6 @@ class Graphs:
             if entry is None:
                 self.stats["eager"] += 1
                 return self.forward(*args, **kwargs)
-        else:
-            self.graphs.move_to_end(key)
         entry["input_ids"].copy_(input_ids)
         entry["attention_mask"].copy_(mask)
         entry["graph"].replay()
@@ -682,6 +681,12 @@ class Graphs:
         return entry["output"]
 
     def _capture(self, key: tuple, kwargs: dict[str, Any], padded: bool) -> dict | None:
+        if (
+            len(self.graphs) >= self.max_graphs
+            or self.output_bytes >= self.max_output_bytes
+        ):
+            self.stats["full"] += 1
+            return None
         torch = self.torch
         static = {
             "input_ids": kwargs["input_ids"].clone(),
@@ -722,13 +727,6 @@ class Graphs:
         self.graphs[key] = entry
         self.output_bytes += size
         self.stats["captures"] += 1
-        while len(self.graphs) > 1 and (
-            len(self.graphs) > self.max_graphs
-            or self.output_bytes > self.max_output_bytes
-        ):
-            _, old = self.graphs.popitem(last=False)
-            self.output_bytes -= old["bytes"]
-            self.stats["evicted"] += 1
         return entry
 
 

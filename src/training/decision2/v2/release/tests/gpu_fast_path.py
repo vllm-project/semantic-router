@@ -13,11 +13,13 @@ PEFT LoRA (rank 16, scaling 2) on every Linear, as Vega-27B. An untouched copy
 is the reference. For each backbone the fast path is installed (graphs and
 kernels; then kernels only) and right-padded batches of many shapes run three
 times each (first use eager, second captured, third replayed), every output
-compared with the reference's by ``torch.equal``. Two more cases: Nox-4B's
+compared with the reference's by ``torch.equal``. Three more cases: Nox-4B's
 attention widths on 9 rows of 16,384 tokens, whose query projection is above
-2 GiB and key projection below (the input that once failed to compile), and
-every fused kernel made to raise, which must leave each layer call on its eager
-forward with the same output. Writes RESULT.json; exits non-zero on any difference.
+2 GiB and key projection below (the input that once failed to compile), every
+fused kernel made to raise, which must leave each layer call on its eager
+forward with the same output, and a graph cache of two graphs, past which new
+shapes run eagerly while the two captured graphs stay and replay (no graph is
+ever destroyed). Writes RESULT.json; exits non-zero on any difference.
 """
 
 from __future__ import annotations
@@ -192,7 +194,15 @@ def failing_kernels(kernels):
 
 
 def run_case(
-    name, build, torch, fast, layers, graphs, lengths_list=LENGTHS, inject=False
+    name,
+    build,
+    torch,
+    fast,
+    layers,
+    graphs,
+    lengths_list=LENGTHS,
+    inject=False,
+    max_graphs=None,
 ) -> dict:
     torch.manual_seed(20261002)
     model = build().float()
@@ -205,6 +215,8 @@ def run_case(
     path = fast.install(holder, torch, graphs=graphs, kernels=True)
     if path is None:
         return {"installed": False, "passed": False}
+    if max_graphs is not None and path.graphs is not None:
+        path.graphs.max_graphs = max_graphs
     from v2.release.runtime import fast_kernels
 
     generator = torch.Generator().manual_seed(7)
@@ -255,6 +267,14 @@ def run_case(
             if inject
             else fallbacks == {"calls": 0, "shapes": 0, "errors": []}
         ),
+        "full_cache_kept_its_graphs": max_graphs is None
+        or not graphs
+        or (
+            stats.get("captures") == max_graphs
+            and stats.get("cached") == max_graphs
+            and stats.get("full", 0) > 0
+            and "evicted" not in stats
+        ),
     }
     return {
         "installed": True,
@@ -298,6 +318,14 @@ def main() -> None:
         "qwen3_5-0.8b-dims-failing-kernels": (
             lambda: qwen3_5(torch, n, 16, 1024),
             {"inject": True},
+        ),
+        "qwen3-0.6b-dims-full-cache": (
+            lambda: qwen3(torch, n),
+            {"max_graphs": 2, "lengths_list": LENGTHS + LENGTHS[:2]},
+        ),
+        "qwen3_5-0.8b-dims-full-cache": (
+            lambda: qwen3_5(torch, n, 16, 1024),
+            {"max_graphs": 2, "lengths_list": LENGTHS + LENGTHS[:2]},
         ),
     }
     results = {}
