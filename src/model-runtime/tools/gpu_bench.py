@@ -8,7 +8,8 @@ latency     the first --count prompts as single requests on the exact profile, -
 many        the public many-question request (``many_questions.py``) at 16, 64 and 128 questions as one request
             on the exact and the shared_context profiles: p50 / p95 of --runs requests
 throughput  the first --throughput-count prompts in waves of C concurrent requests through the scheduler, for
-            the exact and the batching profiles: requests/s and the mean request latency per C
+            the exact and the batching profiles, two untimed passes then a timed one: requests/s, the mean wave
+            latency and the timed pass's graph captures / replays / eager forwards per C
 Every request is timed with the device synchronized around it.
 """
 
@@ -144,8 +145,10 @@ def main() -> int:
         )
         scheduler.start()
         per = {}
+        graphs = getattr(model.engine_model, "graphs", None)
         for concurrency in [int(c) for c in args.concurrency.split(",")]:
-            for _ in range(2):
+            for _ in range(3):
+                before = dict(graphs.receipt()) if graphs is not None else {}
                 latencies = []
                 torch.cuda.synchronize()
                 started = time.perf_counter()
@@ -165,6 +168,12 @@ def main() -> int:
                 "requests_per_s": len(plans) / seconds,
                 "wave_ms_mean": statistics.mean(latencies),
             }
+            if graphs is not None:
+                after = graphs.receipt()
+                per[str(concurrency)]["graphs"] = {
+                    key: after[key] - before.get(key, 0)
+                    for key in ("captures", "replays", "eager")
+                }
             print(
                 json.dumps(
                     {
