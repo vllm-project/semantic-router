@@ -40,6 +40,7 @@ from vela2_parity import (  # noqa: E402
     expand_presets,
     load_reference,
     load_runtime,
+    pin_choices,
 )
 from vllm_sr_runtime.plugins.base import SurfacePlan  # noqa: E402
 from vllm_sr_runtime.profiles.batching import BatchingProfile  # noqa: E402
@@ -208,6 +209,7 @@ def main() -> int:
     sides = args.sides.split(",")
     lengths = [int(x) for x in args.tokens.split(",")]
     concurrency = [int(x) for x in args.concurrency.split(",")]
+    pin_choices(args.package, args.device)
     execute = device_executor(args.device)
     model = execute(lambda: load_runtime(args.package, args.device))
     runs: list[dict[str, Any]] = []

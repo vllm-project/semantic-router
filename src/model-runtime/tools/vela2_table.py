@@ -19,7 +19,12 @@ TOOLS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS.parent))
 sys.path.insert(0, str(TOOLS))
 
-from vela2_parity import answer, device_executor, load_runtime  # noqa: E402
+from vela2_parity import (  # noqa: E402
+    answer,
+    device_executor,
+    load_runtime,
+    pin_choices,
+)
 from vllm_sr_runtime.families.vela2.family import (  # noqa: E402
     GOLDEN_QUESTIONS,
     GOLDEN_STATE,
@@ -33,6 +38,7 @@ def main() -> None:
     parser.add_argument("--revision", required=True)
     parser.add_argument("--device", default="cpu")
     args = parser.parse_args()
+    pinned = pin_choices(args.package, args.device)
     execute = device_executor(args.device)
     model = execute(lambda: load_runtime(args.package, args.device))
     response = execute(lambda: answer(model, GOLDEN_STATE, GOLDEN_QUESTIONS)[0])
@@ -48,6 +54,7 @@ def main() -> None:
                 "loaded_parameters": model.info.parameters,
                 "files": package.files,
                 "device_class": args.device.split(":", maxsplit=1)[0],
+                "kernel_choices": "pinned" if pinned else "none",
                 "golden_answers": response["answers"],
             },
             indent=1,

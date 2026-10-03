@@ -19,6 +19,7 @@ from ...errors import DEADLINE_EXCEEDED, MAX_LENGTH_EXCEEDED, PackageError
 from ...plugins.base import (
     DEADLINE,
     BackboneSpec,
+    DeviceInfo,
     DtypePolicy,
     EngineModel,
     LoadedModel,
@@ -237,6 +238,15 @@ class Vela2Family(ModelFamily):
         return Vela2Model(
             info, engine_model, details, member, reader, answerer, _tokenizer(details)
         )
+
+    def kernel_choices(
+        self, package: VerifiedPackage, device: DeviceInfo
+    ) -> dict[str, Any]:
+        """The pinned FLA kernel choices of a built-in 4B / 9B backbone on the device's class."""
+        known = builtin.by_identity(package.model_sha256)
+        if known is None or not device.arch:
+            return {}
+        return known.kernel_choices.get(f"{device.accelerator}:{device.arch}", {})
 
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
         known = builtin.by_identity(package.model_sha256)

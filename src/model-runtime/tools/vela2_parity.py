@@ -253,6 +253,20 @@ def load_reference(package: Path, device: str) -> Any:
     return vela2_inference.Vela2(str(package), device=torch_device), vela2_inference
 
 
+def pin_choices(package: Path, device: str) -> bool:
+    """Pin a built-in model's FLA kernel choices for this process, as the runtime does at load.
+
+    Must run before anything imports FLA; both sides then run the same kernels.
+    """
+    from vllm_sr_runtime.accel.autotune import pin_kernel_choices
+
+    accelerator = ACCELERATORS[device.split(":", maxsplit=1)[0]]()
+    info = accelerator.devices()[int(device.split(":")[1]) if ":" in device else 0]
+    family = Vela2Family()
+    choices = family.kernel_choices(family.verify(PackageRef(package)), info)
+    return bool(choices) and pin_kernel_choices(choices) is not None
+
+
 def device_executor(device: str) -> Any:
     """Runs work where the device wants it: the process's one CPU thread, inline on GPUs."""
     accelerator = ACCELERATORS[device.split(":", maxsplit=1)[0]]()
@@ -680,6 +694,7 @@ def main() -> int:
 
     torch.manual_seed(0)
     started = time.time()
+    pinned = pin_choices(args.package, args.device)
     engine, module = load_reference(args.package, args.device)
     model = load_runtime(args.package, args.device)
     load_s = time.time() - started
@@ -753,6 +768,7 @@ def main() -> int:
         "rendering_mismatches": sum(bool(r["rendering"]) for r in ok),
         "max_abs_diff": max((r["max_abs_diff"] for r in ok), default=0.0),
         "bar": bar,
+        "kernel_choices": "pinned" if pinned else "autotuned in process",
         "load_s": round(load_s, 1),
         **{k: round(v, 2) for k, v in timing.items()},
         "records": records,
