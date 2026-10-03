@@ -30,6 +30,7 @@ from src.training.kv_mapper.artifact import CompatibilitySpec, Manifest
 from src.training.kv_mapper.mapper_id import require_weight_commit
 
 logger = logging.getLogger(__name__)
+_HF_REPO_PARTS = 2
 _LAYER = re.compile(r"(?:^|\.)layers\.(\d+)\.")
 
 
@@ -95,7 +96,7 @@ def _model_name(model: Any) -> str:
         and path.parent.parent.name.startswith("models--")
     ):
         parts = path.parent.parent.name.removeprefix("models--").split("--")
-        if len(parts) == 2 and all(parts):
+        if len(parts) == _HF_REPO_PARTS and all(parts):
             return "/".join(parts)
     return name
 

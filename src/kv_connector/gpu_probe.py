@@ -22,6 +22,8 @@ from src.kv_connector.snapshot import LocalSnapshotStore, SourceSnapshot
 from src.kv_connector.transform import qwen3_rope
 from src.training.kv_mapper.artifact import Manifest
 
+_REQUIRED_GPU_COUNT = 2
+
 
 def run(
     artifact_path: Path,
@@ -31,7 +33,7 @@ def run(
     block_size: int,
     rope_theta: float,
 ) -> dict[str, object]:
-    if not torch.cuda.is_available() or torch.cuda.device_count() < 2:
+    if not torch.cuda.is_available() or torch.cuda.device_count() < _REQUIRED_GPU_COUNT:
         raise RuntimeError("the GPU probe requires two CUDA devices")
     if block_size <= 0:
         raise ValueError("block_size must be positive")

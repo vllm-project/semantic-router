@@ -43,10 +43,10 @@ Run the synthetic artifact and conversion checks from the repository root:
 PYTHONPATH=. python3 -m unittest discover -s src/kv_connector/tests -p 'test_*.py'
 ```
 
-With vLLM installed, run the connector integration check separately:
+With vLLM installed, run the connector integration checks separately:
 
 ```bash
-PYTHONPATH=. python3 -m unittest src.kv_connector.tests.vllm_connector_integration
+PYTHONPATH=. python3 -m unittest src.kv_connector.tests.vllm_connector_integration src.kv_connector.tests.vllm_live_connector_integration
 ```
 
 On a two-GPU CUDA host, exercise the published mapper geometry and cache write

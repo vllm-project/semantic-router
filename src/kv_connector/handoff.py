@@ -9,6 +9,8 @@ from src.kv_connector.runtime import MapperArtifact
 from src.kv_connector.snapshot import SourceSnapshot
 from src.kv_connector.transform import map_source_cache
 
+_MIN_CACHE_RANK = 3
+
 
 def apply_handoff(
     artifact: MapperArtifact,
@@ -54,7 +56,7 @@ def apply_handoff(
         raise ValueError("source KV shape differs from mapper")
     first_cache = next(iter(target_caches.values()))
     dtype = first_cache.dtype
-    if first_cache.ndim < 3 or first_cache.shape[2] <= 0:
+    if first_cache.ndim < _MIN_CACHE_RANK or first_cache.shape[2] <= 0:
         raise ValueError("target cache has no valid block dimension")
     if count % first_cache.shape[2]:
         raise ValueError("source prefix must end on a target cache block boundary")

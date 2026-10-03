@@ -21,6 +21,9 @@ from safetensors.torch import save_file
 
 from src.training.kv_mapper.mapper_id import require_weight_commit
 
+_KV_CHANNELS = 2
+_KV_TENSOR_RANK = 3
+
 
 @dataclass(frozen=True)
 class SourceSnapshot:
@@ -62,10 +65,12 @@ def _validate(snapshot: SourceSnapshot) -> None:
     shape: tuple[int, ...] | None = None
     dtype: torch.dtype | None = None
     for key, value in snapshot.layers.items():
-        if len(value) != 2:
+        if len(value) != _KV_CHANNELS:
             raise ValueError(f"source layer {key} must contain K and V")
         for tensor in value:
-            if tensor.ndim != 3 or tensor.shape[0] != len(snapshot.token_ids):
+            if tensor.ndim != _KV_TENSOR_RANK or tensor.shape[0] != len(
+                snapshot.token_ids
+            ):
                 raise ValueError("source KV must be [tokens, heads, head_dim]")
             if shape is None:
                 shape, dtype = tuple(tensor.shape), tensor.dtype

@@ -1,5 +1,7 @@
 """Exercise vLLM scheduler and worker hooks with a small CPU cache."""
 
+# ruff: noqa: PLC0415 - vLLM is optional in the training contract environment.
+
 from __future__ import annotations
 
 import importlib.util

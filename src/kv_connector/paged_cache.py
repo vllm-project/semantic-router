@@ -5,6 +5,8 @@ from __future__ import annotations
 import torch
 
 _KV_TENSOR_RANK = 3
+_KV_CHANNELS = 2
+_LBNHC_RANK = 4
 
 
 def _slots(
@@ -31,11 +33,13 @@ def _cache_layout(
     """Recognize the connector's legacy view or vLLM's LBNHC layer view."""
     legacy = (
         cache.ndim in (4, 5)
-        and cache.shape[1] == 2
+        and cache.shape[1] == _KV_CHANNELS
         and cache.numel() // (cache.shape[0] * 2 * cache.shape[2]) == heads * head_dim
     )
     lbnhc = (
-        cache.ndim == 4 and cache.shape[1] == heads and cache.shape[3] == 2 * head_dim
+        cache.ndim == _LBNHC_RANK
+        and cache.shape[1] == heads
+        and cache.shape[3] == 2 * head_dim
     )
     if layout is not None:
         if layout == "legacy" and legacy:
