@@ -4,7 +4,7 @@
 # These native commands have no build-tag variants. The Dashboard WASM adapter
 # selects its js/wasm sources separately in dashboard/wasm/Makefile.
 
-ROUTER_GO_TOOLS := sr-dsl classifier-operating-point fusioneval memory-coldstart image-routing-calibration modelcompat
+ROUTER_GO_TOOLS := sr-dsl classifier-operating-point fusioneval memory-coldstart image-routing-calibration modelcompat ml-selection-validate selector-parity
 
 sr-dsl_DIR := tools/dev/dsl
 classifier-operating-point_DIR := tools/models/classifier-operating-point
@@ -12,6 +12,8 @@ fusioneval_DIR := bench/grounded_fusion/fusioneval
 memory-coldstart_DIR := bench/memory_coldstart
 image-routing-calibration_DIR := tools/calibration/image-routing
 modelcompat_DIR := tools/modelcompat
+ml-selection-validate_DIR := src/training/model_selection/ml_model_selection
+selector-parity_DIR := src/training/model_selection/ml_model_selection/selectorparity
 # The external checkpoint round-trip belongs to test-modelcompat-native. Its
 # subprocess helper must not appear as an empty successful offline test.
 modelcompat_TEST_EXCLUDE := tools/modelcompat/main_integration_test.go
@@ -48,9 +50,9 @@ endef
 
 $(foreach tool,$(ROUTER_GO_TOOLS),$(eval $(call router_go_tool,$(tool))))
 
-# These commands link native bindings, including the DSL CLI's test runner.
-# Prepare them for standalone tool invocations from a fresh checkout as well.
-NATIVE_ROUTER_GO_TOOLS := sr-dsl fusioneval image-routing-calibration modelcompat
+# These commands link native bindings. Prepare them for standalone tool
+# invocations from a fresh checkout as well.
+NATIVE_ROUTER_GO_TOOLS := fusioneval modelcompat
 $(foreach tool,$(NATIVE_ROUTER_GO_TOOLS),$(eval build-$(tool) run-$(tool) test-$(tool): | $(if $(CI),rust-ci,rust)))
 
 go-tools-build: $(addprefix build-,$(ROUTER_GO_TOOLS)) ## Build repository Go tools with Router module dependencies

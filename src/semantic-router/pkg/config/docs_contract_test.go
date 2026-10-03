@@ -202,15 +202,6 @@ var configContractRequiredDocs = []docNeedles{
 		},
 	},
 	{
-		path: repoRel("bench", "cpu-vs-gpu", "README.md"),
-		needles: []string{
-			"`config-bench.yaml`",
-			"`config-bench-candle.yaml`",
-			"`global.router.streamed_body.enabled`",
-			"`bench-3way.sh`",
-		},
-	},
-	{
 		path: repoRel("website", "docs", "proposals", "nvidia-dynamo-integration.md"),
 		needles: []string{
 			"global:\n  model_catalog:\n    modules:\n      classifier:",
@@ -371,12 +362,6 @@ var configContractForbiddenDocs = []docNeedles{
 			"\nvllm_endpoints:\n",
 			"\nmodel_config:\n",
 			"\nhallucination_mitigation:\n",
-		},
-	},
-	{
-		path: repoRel("bench", "cpu-vs-gpu", "README.md"),
-		needles: []string{
-			"streamed_body_mode",
 		},
 	},
 	{

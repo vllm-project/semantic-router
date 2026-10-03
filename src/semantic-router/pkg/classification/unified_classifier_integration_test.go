@@ -23,7 +23,7 @@ func publishedUnifiedClassifier(t *testing.T) (*UnifiedClassifier, *Classifier) 
 	cfg := &config.RouterConfig{}
 	cfg.CategoryModel, cfg.PIIModel, cfg.PromptGuard = defaults.CategoryModel, defaults.PIIModel, defaults.PromptGuard
 	// Resolve published document policies before rebasing the explicit artifacts.
-	models, err := newClassifierModelRuntime(cfg, nil)
+	models, err := newClassifierModelRuntime(cfg, managedRuntimeOptions(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,6 @@ func verifyPublishedBatchResults(t *testing.T, results *UnifiedBatchResults, exp
 	}
 }
 
-// The mandatory manifest runner selects this same test for Candle and ORT.
 // Hardware-dependent latency belongs to perf's model-identity-bound baseline.
 func TestUnifiedClassifierPublishedModels(t *testing.T) {
 	classifier, owner := publishedUnifiedClassifier(t)
@@ -141,29 +140,6 @@ func TestUnifiedClassifierPublishedModels(t *testing.T) {
 		t.Errorf("positive/negative Guard inputs lost their batch positions: %+v", results.SecurityResults)
 	}
 
-	t.Run("compatibility_methods", func(t *testing.T) {
-		one := texts[:1]
-		intent, callErr := classifier.ClassifyIntent(one)
-		if callErr != nil || len(intent) != 1 || intent[0].Category != results.IntentResults[0].Category {
-			t.Fatalf("intent compatibility: %+v %v", intent, callErr)
-		}
-		pii, callErr := classifier.ClassifyPII(texts[1:2])
-		if callErr != nil || len(pii) != 1 || !reflect.DeepEqual(pii[0], results.PIIResults[1]) {
-			t.Fatalf("PII compatibility: %+v %v", pii, callErr)
-		}
-		security, callErr := classifier.ClassifySecurity(texts[2:3])
-		if callErr != nil || len(security) != 1 || !reflect.DeepEqual(security[0], results.SecurityResults[2]) {
-			t.Fatalf("security compatibility: %+v %v", security, callErr)
-		}
-		single, callErr := classifier.ClassifySingle(texts[3])
-		if callErr != nil {
-			t.Fatal(callErr)
-		}
-		verifyPublishedBatchResults(t, single, 1, owner.CategoryMapping.GetCategoryCount())
-		if !reflect.DeepEqual(single.SecurityResults[0], results.SecurityResults[3]) {
-			t.Fatalf("single-input compatibility changed result: %+v", single)
-		}
-	})
 	t.Run("empty_batch", func(t *testing.T) {
 		if _, emptyErr := classifier.ClassifyBatch(nil); emptyErr == nil || emptyErr.Error() != "empty text batch" {
 			t.Fatalf("empty batch accepted or misreported: %v", emptyErr)

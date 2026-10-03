@@ -18,13 +18,22 @@ GROUPS = {
 # example when the package runs from a source tree without installation).
 BUILTIN = {
     "families": {
-        "decision2": "vllm_sr_runtime.families.decision2.family:Decision2Family"
+        "decision1": "vllm_sr_runtime.families.decision1.family:Decision1Family",
+        "decision2": "vllm_sr_runtime.families.decision2.family:Decision2Family",
+        "multimodal_embedding": "vllm_sr_runtime.families.multimodal_embedding.family:MultimodalEmbeddingFamily",
+        "task_heads": "vllm_sr_runtime.families.task_heads.family:TaskHeadsFamily",
+        "vela2": "vllm_sr_runtime.families.vela2.family:Vela2Family",
     },
-    "engines": {"native": "vllm_sr_runtime.engines.native.engine:NativeEngine"},
+    "engines": {
+        "native": "vllm_sr_runtime.engines.native.engine:NativeEngine",
+        "onnxruntime": "vllm_sr_runtime.engines.onnxruntime.engine:OnnxRuntimeEngine",
+    },
     "accelerators": {
         "cpu": "vllm_sr_runtime.accel.cpu:CPUAccelerator",
         "cuda": "vllm_sr_runtime.accel.cuda:CUDAAccelerator",
+        "mps": "vllm_sr_runtime.accel.mps:MPSAccelerator",
         "rocm": "vllm_sr_runtime.accel.rocm:ROCmAccelerator",
+        "xpu": "vllm_sr_runtime.accel.xpu:XPUAccelerator",
     },
     "profiles": {
         "exact": "vllm_sr_runtime.profiles.exact:ExactProfile",
@@ -54,7 +63,16 @@ class PluginEntry:
             "name": self.name,
             "distribution": self.distribution,
             "version": self.version,
+            "capabilities": self.capabilities(),
         }
+
+    def capabilities(self) -> dict[str, Any]:
+        """The plugin class's capability descriptor; a plugin that fails to import reports why."""
+        try:
+            descriptor = getattr(self.load(), "descriptor", None)
+            return dict(descriptor()) if callable(descriptor) else {}
+        except Exception as exc:
+            return {"error": f"{type(exc).__name__}: {exc}"}
 
 
 class PluginConflictError(RuntimeError):

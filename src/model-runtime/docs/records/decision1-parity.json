@@ -1,0 +1,1885 @@
+{
+ "schema": "decision1-parity/1",
+ "runs": [
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "11ab95952",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "11ab95952",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "batching",
+   "commit": "d5b985e43",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1200,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 9.59634780883789e-06
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "11ab95952",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "profile": "batching",
+   "commit": "d5b985e43",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1200,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 5.7220458984375e-06
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "11ab95952",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "11ab95952",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "11ab95952",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "profile": "batching",
+   "commit": "d5b985e43",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1200,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 8.171796798706055e-05
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "11ab95952",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "css15": {
+     "prompts": 6547,
+     "identical": 6547,
+     "questions": 6547,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 2275,
+     "identical": 2275,
+     "questions": 2275,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 1600,
+     "identical": 1600,
+     "questions": 2000,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "51b6bd721",
+   "panels": {
+    "css15": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Kai-0.6B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "51b6bd721",
+   "panels": {
+    "css15": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lex-0.6B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "51b6bd721",
+   "panels": {
+    "css15": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "51b6bd721",
+   "panels": {
+    "css15": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "51b6bd721",
+   "panels": {
+    "css15": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Route-0.6B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "51b6bd721",
+   "panels": {
+    "css15": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 400,
+     "identical": 400,
+     "questions": 400,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "046f27883",
+   "panels": {
+    "css15": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "51b6bd721",
+   "panels": {
+    "css15": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 200,
+     "identical": 200,
+     "questions": 200,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "many128": {
+     "prompts": 5,
+     "identical": 5,
+     "questions": 640,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "many64": {
+     "prompts": 5,
+     "identical": 5,
+     "questions": 320,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Eos-0.8B",
+   "device": "rocm",
+   "profile": "shared_context",
+   "commit": "d5b985e43",
+   "panels": {
+    "many128": {
+     "prompts": 5,
+     "identical": 0,
+     "questions": 640,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.04634942286553101
+    },
+    "many64": {
+     "prompts": 5,
+     "identical": 0,
+     "questions": 320,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.03321716843964184
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "many128": {
+     "prompts": 5,
+     "identical": 5,
+     "questions": 640,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "many64": {
+     "prompts": 5,
+     "identical": 5,
+     "questions": 320,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Lux-9B",
+   "device": "rocm",
+   "profile": "shared_context",
+   "commit": "d5b985e43",
+   "panels": {
+    "many128": {
+     "prompts": 5,
+     "identical": 0,
+     "questions": 640,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.02120363735630626
+    },
+    "many64": {
+     "prompts": 5,
+     "identical": 0,
+     "questions": 320,
+     "decision_changes": 5,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.03150317371912048
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "many128": {
+     "prompts": 5,
+     "identical": 5,
+     "questions": 640,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "many64": {
+     "prompts": 5,
+     "identical": 5,
+     "questions": 320,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Nox-4B",
+   "device": "rocm",
+   "profile": "shared_context",
+   "commit": "d5b985e43",
+   "panels": {
+    "many128": {
+     "prompts": 5,
+     "identical": 0,
+     "questions": 640,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.025149976593148438
+    },
+    "many64": {
+     "prompts": 5,
+     "identical": 0,
+     "questions": 320,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.02103409757801017
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "exact",
+   "commit": "d5b985e43",
+   "panels": {
+    "many128": {
+     "prompts": 5,
+     "identical": 5,
+     "questions": 640,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "many64": {
+     "prompts": 5,
+     "identical": 5,
+     "questions": 320,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
+   "model": "Sol-2B",
+   "device": "rocm",
+   "profile": "shared_context",
+   "commit": "d5b985e43",
+   "panels": {
+    "many128": {
+     "prompts": 5,
+     "identical": 0,
+     "questions": 640,
+     "decision_changes": 15,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.03134746315246195
+    },
+    "many64": {
+     "prompts": 5,
+     "identical": 0,
+     "questions": 320,
+     "decision_changes": 10,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.028099290639471475
+    }
+   }
+  }
+ ]
+}

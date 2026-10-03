@@ -74,8 +74,6 @@ global:
       semantic:
         mmbert_model_path: ""
         qwen3_model_path: ""
-        gemma_model_path: ""
-        bert_model_path: ""
         multimodal_model_path: ""
     kbs: []
     modules:
@@ -90,18 +88,15 @@ global:
           model_ref: domain_classifier
           model_id: models/Vela-1.0-Encoder-307M-Domain
           category_mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json
-          variant: mmbert32k
           use_cpu: true
           threshold: 0.5
         pii:
           model_ref: ""
           model_id: ""
           pii_mapping_path: ""
-          use_mmbert_32k: false
       feedback_detector:
         enabled: false
         model_ref: ""
         model_id: ""
-        use_mmbert_32k: false
       hallucination_mitigation:
         enabled: false

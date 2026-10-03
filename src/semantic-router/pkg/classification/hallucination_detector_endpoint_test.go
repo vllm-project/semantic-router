@@ -88,7 +88,7 @@ func TestEndpointDetector_RequestShape(t *testing.T) {
 	defer server.Close()
 
 	detector := newTestEndpointDetector(t, server.URL, true)
-	if _, err := detector.DetectWithNLI(context.Background(), "the sky is blue", "what color is the sky?", "the sky is green"); err != nil {
+	if _, err := detector.DetectWithExplanations(context.Background(), "the sky is blue", "what color is the sky?", "the sky is green"); err != nil {
 		t.Fatalf("DetectWithNLI: %v", err)
 	}
 
@@ -102,7 +102,7 @@ func TestEndpointDetector_CleanResponse(t *testing.T) {
 	defer server.Close()
 
 	detector := newTestEndpointDetector(t, server.URL, false)
-	result, err := detector.DetectWithNLI(context.Background(), "ctx", "q", "answer text")
+	result, err := detector.DetectWithExplanations(context.Background(), "ctx", "q", "answer text")
 	if err != nil {
 		t.Fatalf("DetectWithNLI: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestEndpointDetector_DetectedResponse_TaxonomyAndOffsets(t *testing.T) {
 	defer server.Close()
 
 	detector := newTestEndpointDetector(t, server.URL, true)
-	result, err := detector.DetectWithNLI(context.Background(), "France's capital is Paris.", "capital of France?", answer)
+	result, err := detector.DetectWithExplanations(context.Background(), "France's capital is Paris.", "capital of France?", answer)
 	if err != nil {
 		t.Fatalf("DetectWithNLI: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestEndpointDetector_SpanNotInAnswerIsDropped(t *testing.T) {
 	defer server.Close()
 
 	detector := newTestEndpointDetector(t, server.URL, false)
-	result, err := detector.DetectWithNLI(context.Background(), "ctx", "q", "Berlin is the answer")
+	result, err := detector.DetectWithExplanations(context.Background(), "ctx", "q", "Berlin is the answer")
 	if err != nil {
 		t.Fatalf("DetectWithNLI: %v", err)
 	}
@@ -202,7 +202,7 @@ func TestEndpointDetector_AllInvalidSpansReturnsError(t *testing.T) {
 	defer server.Close()
 
 	detector := newTestEndpointDetector(t, server.URL, false)
-	if _, err := detector.DetectWithNLI(context.Background(), "ctx", "q", "a completely different answer"); err == nil {
+	if _, err := detector.DetectWithExplanations(context.Background(), "ctx", "q", "a completely different answer"); err == nil {
 		t.Fatalf("expected error when every returned span is invalid")
 	}
 }
@@ -219,7 +219,7 @@ func TestEndpointDetector_InvalidTaxonomyReturnsError(t *testing.T) {
 	defer server.Close()
 
 	detector := newTestEndpointDetector(t, server.URL, false)
-	if _, err := detector.DetectWithNLI(context.Background(), "ctx", "q", answer); err == nil {
+	if _, err := detector.DetectWithExplanations(context.Background(), "ctx", "q", answer); err == nil {
 		t.Fatalf("expected error when the only span has invalid taxonomy")
 	}
 }
@@ -233,7 +233,7 @@ func TestEndpointDetector_MissingSpansArrayReturnsError(t *testing.T) {
 	defer server.Close()
 
 	detector := newTestEndpointDetector(t, server.URL, false)
-	if _, err := detector.DetectWithNLI(context.Background(), "ctx", "q", "answer text"); err == nil {
+	if _, err := detector.DetectWithExplanations(context.Background(), "ctx", "q", "answer text"); err == nil {
 		t.Fatalf("expected error when hallucinated_spans is missing")
 	}
 }
@@ -247,7 +247,7 @@ func TestEndpointDetector_NullSpansArrayReturnsError(t *testing.T) {
 	defer server.Close()
 
 	detector := newTestEndpointDetector(t, server.URL, false)
-	if _, err := detector.DetectWithNLI(context.Background(), "ctx", "q", "answer text"); err == nil {
+	if _, err := detector.DetectWithExplanations(context.Background(), "ctx", "q", "answer text"); err == nil {
 		t.Fatalf("expected error when hallucinated_spans is null")
 	}
 }
@@ -262,7 +262,7 @@ func TestEndpointDetector_EmptyTextSpanReturnsError(t *testing.T) {
 	defer server.Close()
 
 	detector := newTestEndpointDetector(t, server.URL, false)
-	if _, err := detector.DetectWithNLI(context.Background(), "ctx", "q", "answer text"); err == nil {
+	if _, err := detector.DetectWithExplanations(context.Background(), "ctx", "q", "answer text"); err == nil {
 		t.Fatalf("expected error when the only span has empty text")
 	}
 }
@@ -273,7 +273,7 @@ func TestEndpointDetector_NetworkErrorReturnsError(t *testing.T) {
 	server.Close() // force connection refused
 
 	detector := newTestEndpointDetector(t, url, false)
-	result, err := detector.DetectWithNLI(context.Background(), "ctx", "q", "answer")
+	result, err := detector.DetectWithExplanations(context.Background(), "ctx", "q", "answer")
 	if err == nil {
 		t.Fatalf("expected error on network failure, got result=%v", result)
 	}
@@ -289,7 +289,7 @@ func TestEndpointDetector_Non200ReturnsError(t *testing.T) {
 	defer server.Close()
 
 	detector := newTestEndpointDetector(t, server.URL, false)
-	if _, err := detector.DetectWithNLI(context.Background(), "ctx", "q", "answer"); err == nil {
+	if _, err := detector.DetectWithExplanations(context.Background(), "ctx", "q", "answer"); err == nil {
 		t.Fatalf("expected error on non-200 status")
 	}
 }
@@ -301,7 +301,7 @@ func TestEndpointDetector_MalformedResponseReturnsError(t *testing.T) {
 	defer server.Close()
 
 	detector := newTestEndpointDetector(t, server.URL, false)
-	if _, err := detector.DetectWithNLI(context.Background(), "ctx", "q", "answer"); err == nil {
+	if _, err := detector.DetectWithExplanations(context.Background(), "ctx", "q", "answer"); err == nil {
 		t.Fatalf("expected error on malformed outer response")
 	}
 }
@@ -313,7 +313,7 @@ func TestEndpointDetector_MalformedContentReturnsError(t *testing.T) {
 	defer server.Close()
 
 	detector := newTestEndpointDetector(t, server.URL, false)
-	if _, err := detector.DetectWithNLI(context.Background(), "ctx", "q", "answer"); err == nil {
+	if _, err := detector.DetectWithExplanations(context.Background(), "ctx", "q", "answer"); err == nil {
 		t.Fatalf("expected error on malformed structured content")
 	}
 }
@@ -329,7 +329,7 @@ func TestEndpointDetector_OversizedResponseCappedAndErrors(t *testing.T) {
 	defer server.Close()
 
 	detector := newTestEndpointDetector(t, server.URL, false)
-	if _, err := detector.DetectWithNLI(context.Background(), "ctx", "q", "answer"); err == nil {
+	if _, err := detector.DetectWithExplanations(context.Background(), "ctx", "q", "answer"); err == nil {
 		t.Fatalf("expected error on oversized/malformed response")
 	}
 }
@@ -342,7 +342,7 @@ func TestEndpointDetector_EmptyAnswerIsCleanNoCall(t *testing.T) {
 	defer server.Close()
 
 	detector := newTestEndpointDetector(t, server.URL, false)
-	result, err := detector.DetectWithNLI(context.Background(), "ctx", "q", "")
+	result, err := detector.DetectWithExplanations(context.Background(), "ctx", "q", "")
 	if err != nil {
 		t.Fatalf("DetectWithNLI empty answer: %v", err)
 	}
@@ -361,18 +361,8 @@ func TestEndpointDetector_EmptyContextReturnsError(t *testing.T) {
 	defer server.Close()
 
 	detector := newTestEndpointDetector(t, server.URL, false)
-	if _, err := detector.DetectWithNLI(context.Background(), "", "q", "answer"); err == nil {
+	if _, err := detector.DetectWithExplanations(context.Background(), "", "q", "answer"); err == nil {
 		t.Fatalf("expected error when context is empty")
-	}
-}
-
-func TestEndpointDetector_NLINotAdvertised(t *testing.T) {
-	detector := newTestEndpointDetector(t, "http://127.0.0.1:65535/v1", true)
-	if err := detector.Initialize(); err != nil {
-		t.Fatalf("Initialize: %v", err)
-	}
-	if detector.IsNLIInitialized() {
-		t.Errorf("endpoint backend must not advertise NLI readiness")
 	}
 }
 
@@ -422,7 +412,7 @@ func TestEndpointDetector_RepeatedQuoteTakesSuccessiveOccurrences(t *testing.T) 
 	defer server.Close()
 
 	detector := newTestEndpointDetector(t, server.URL, false)
-	result, err := detector.DetectWithNLI(context.Background(), "ctx", "q", answer)
+	result, err := detector.DetectWithExplanations(context.Background(), "ctx", "q", answer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -443,7 +433,7 @@ func TestEndpointDetector_ChatSpansUseTheSharedAlignment(t *testing.T) {
 	defer server.Close()
 
 	detector := newTestEndpointDetector(t, server.URL, false)
-	result, err := detector.DetectWithNLI(context.Background(), "ctx", "q", answer)
+	result, err := detector.DetectWithExplanations(context.Background(), "ctx", "q", answer)
 	if err != nil {
 		t.Fatal(err)
 	}

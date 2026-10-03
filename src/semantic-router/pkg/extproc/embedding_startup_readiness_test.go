@@ -13,7 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 )
 
 func newReadinessEmbeddingConfig(t *testing.T) (*config.RouterConfig, func(string) int) {
@@ -51,7 +51,7 @@ func newReadinessEmbeddingConfig(t *testing.T) (*config.RouterConfig, func(strin
 // publication and startup/reload warmup used by the server.
 func prepareReadinessRouter(t *testing.T, cfg *config.RouterConfig) *OpenAIRouter {
 	t.Helper()
-	runtime := native.New(nil)
+	runtime := serving.New(nil, nil)
 	components := &routerComponents{cfg: cfg, resources: newResourceScope()}
 	var err error
 	components.embeddings, err = modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, runtime)

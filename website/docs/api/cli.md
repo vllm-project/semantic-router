@@ -1318,7 +1318,7 @@ Probe a real route and assert complete assistant delivery for expected 2xx.
 ## `vllm-sr serve` {#vllm-sr-serve}
 
 ```text
-Usage: vllm-sr serve [OPTIONS] [MODEL]
+Usage: vllm-sr serve [OPTIONS] [MODEL]...
 ```
 
 Start vLLM Semantic Router.
@@ -1394,21 +1394,25 @@ ENGINE MODE:
 ```
 
 ```text
-vllm-sr serve MODEL [--revision SHA] [--device auto|cpu|cuda[:N]|rocm[:N]]
-                    [--host HOST] [--port N | --uds PATH] [--profile PROFILE]
+vllm-sr serve MODEL [MODEL ...] [--revision SHA] [--device DEVICE]
+              [--host HOST] [--port N | --uds PATH] [--profile PROFILE]
+vllm-sr serve --models models.yaml [--host HOST] [--port N | --uds PATH]
 ```
 
-Serves one decision model with the built-in model runtime (POST /v1/decisions,
-/v1/systemone, GET /v1/models, /health, /metrics) instead of starting the
-Router. MODEL is a Hub repository, a built-in model name or a local package
-directory. In engine mode --profile selects the numerics profile: exact
-(default, identical to the released package), shared_context, batching or
-max_speed. Router mode starts managed runtimes itself for model_runtime
-deployments in the config.
+Serves router models with the built-in model runtime instead of starting the
+Router: decision models (POST /v1/decisions), classifiers (/v1/classify),
+embedders (/v1/embeddings) and rerankers (/v1/rerank), with /v1/bundle,
+/v1/models, /health and /metrics. MODEL is a Hub repository, a built-in model
+name or a local package directory; MODEL@REVISION pins a revision, and several
+MODELs share one process. --models lists models with their own name,
+revision, device and profile. In engine mode --profile selects the numerics
+profile: exact (default, identical to the released package), shared_context,
+batching or max_speed. Router mode starts managed runtimes itself for
+model_runtime deployments in the config.
 
 | Parameter | Description |
 | --- | --- |
-| `[MODEL]` | Optional argument. Type: text. |
+| `[MODEL]...` | Optional argument. Type: text. Accepts multiple values. |
 | `--config TEXT` | Path to the Router configuration.  [default: config.yaml] |
 | `--replace-active-config` | Replace this local Docker stack's active runtime config from --config, discarding Dashboard edits. Default: false. |
 | `--image TEXT` | Docker image to use (default: ghcr.io/vllm-project/semantic-router/vllm-sr:v0.4.0) |
@@ -1429,8 +1433,9 @@ deployments in the config.
 | `--chart-dir TEXT` | Path to Helm chart directory (k8s target only) |
 | `--runtime CHOICE` | Container runtime for the local Docker target: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Has no effect on the k8s target. Choices: docker, podman. |
 | `--recipe-env NAME` | Explicitly bind one host environment variable for the active Recipe. Repeat for multiple names; NAME=value is rejected. May be repeated. |
-| `--revision TEXT` | Engine mode: 40-hex revision of MODEL. |
-| `--device TEXT` | Engine mode: auto (default), cpu, cuda[:N] or rocm[:N]. |
+| `--models TEXT` | Engine mode: YAML file listing the models to serve, each with its own name, revision, device and profile. |
+| `--revision TEXT` | Engine mode: 40-hex revision of a single MODEL. |
+| `--device TEXT` | Engine mode: auto (default), cpu, cuda[:N], rocm[:N], xpu[:N] or mps. |
 | `--host TEXT` | Engine mode: TCP bind address (default 127.0.0.1). |
 | `--port INTEGER` | Engine mode: TCP port (default 8100). |
 | `--uds TEXT` | Engine mode: serve on this Unix socket instead. |

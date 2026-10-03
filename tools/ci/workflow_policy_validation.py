@@ -177,7 +177,6 @@ def validate_release_publishers(release: WorkflowLike, errors: list[str]) -> Non
         "docker",
         "helm",
         "pypi",
-        "crate",
         "release-notes",
     }
     if set(release.jobs) != expected_jobs:
@@ -200,7 +199,6 @@ def validate_release_publishers(release: WorkflowLike, errors: list[str]) -> Non
         "docker": "docker-publish.yml",
         "helm": "helm-publish.yml",
         "pypi": "pypi-publish.yml",
-        "crate": "publish-crate.yml",
     }
     expected_prebuilds = {
         "helm-build": ("helm-publish.yml", "prebuilt-chart"),

@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..plugins.base import Batch, Job, LoadedModel, Profile, RenderedItem
-from ..scheduler.planner import micro_batches, padded
+from ..scheduler.planner import exact_split, padded
 
 # Shared-prefix tokens a request must save before tree mode pays off, as
 # (with HIP graphs, eager): dense backbones, then Gated DeltaNet hybrids by
@@ -78,6 +78,7 @@ class SharedContextProfile(Profile):
     def __init__(self, policy: SharePolicy | None = None):
         self.policy = policy or SharePolicy()
         self.threshold = self.policy.min_shared_tokens
+        self.model: LoadedModel | None = None
 
     def available(self, model: LoadedModel) -> str | None:
         engine = model.engine_model
@@ -85,6 +86,7 @@ class SharedContextProfile(Profile):
             return "the loaded engine model has no shared-context forward"
         if self.policy.mode != "tree" or self.policy.tau > 0:
             return "only tree mode with tau 0 is implemented"
+        self.model = model
         if self.threshold is None:
             spec = getattr(model, "spec", None)
             config = spec.backbone.config if spec is not None else {}
@@ -95,6 +97,9 @@ class SharedContextProfile(Profile):
 
     def share(self, items: list[RenderedItem], token_budget: int | None) -> int:
         """The prefix this job shares, or 0 when it runs exactly."""
+        decided = self.model.shared_context(items, token_budget) if self.model else None
+        if decided is not None:
+            return decided
         if len(items) < self.policy.min_questions:
             return 0
         prefix = shared_prefix(items, self.policy.align)
@@ -118,8 +123,6 @@ class SharedContextProfile(Profile):
                     )
                 )
                 continue
-            for indices in micro_batches(
-                [len(item.ids) for item in job.items], token_budget
-            ):
+            for indices in exact_split(self.model, job.items, token_budget):
                 batches.append(Batch(parts=[(job, indices)]))
         return batches

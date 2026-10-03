@@ -6,6 +6,7 @@ from vllm_sr_runtime.errors import RuntimeServiceError
 from vllm_sr_runtime.plugins.base import Job, LoadedModel, RenderedItem
 from vllm_sr_runtime.profiles.batching import BatchingProfile
 from vllm_sr_runtime.profiles.exact import ExactProfile
+from vllm_sr_runtime.profiles.shared_context import SharedContextProfile
 from vllm_sr_runtime.scheduler.planner import micro_batches
 from vllm_sr_runtime.scheduler.scheduler import DEADLINE, Scheduler, SchedulerLimits
 
@@ -167,3 +168,89 @@ def test_batching_window_coalesces_concurrent_requests():
         assert len(model.calls) == 1 and sorted(model.calls[0]) == ["r0", "r1", "r2"]
     finally:
         scheduler.stop()
+
+
+def test_only_coalescing_profiles_wait_for_the_batching_window():
+    model = FakeModel()
+    scheduler = Scheduler(
+        model,
+        {"shared_context": SharedContextProfile()},
+        SchedulerLimits(batch_window_ms=2_000),
+    )
+    scheduler.start()
+    try:
+        started = time.monotonic()
+        scheduler.submit(
+            [item("a", 8)], deadline=None, profile="shared_context"
+        ).result(timeout=5)
+        assert time.monotonic() - started < 1.0
+    finally:
+        scheduler.stop()
+
+
+class FusingModel(FakeModel):
+    fuse_bundled_jobs = True
+
+
+def test_exact_runs_queued_requests_together_only_on_a_batch_invariant_model():
+    jobs = [
+        Job([item("a", 9)], None, 0.0, "exact"),
+        Job([item("b", 5)], None, 0.0, "exact"),
+    ]
+    profile = ExactProfile()
+    profile.available(FakeModel())
+    assert len(profile.plan(jobs, None)) == 2
+    invariant = FakeModel()
+    invariant.batch_invariant = True
+    profile.available(invariant)
+    (batch,) = profile.plan(jobs, None)
+    assert [job for job, _ in batch.parts] == jobs and batch.exact
+
+
+def test_exact_runs_a_bundle_group_as_one_batch_only_when_the_model_fuses():
+    jobs = [
+        Job([item("a", 9)], None, 0.0, "exact", group=7),
+        Job([item("b", 17)], None, 0.0, "exact", group=7),
+        Job([item("c", 5)], None, 0.0, "exact"),
+    ]
+    separate = ExactProfile()
+    separate.available(FakeModel())
+    assert len(separate.plan(jobs, None)) == 3
+    fused = ExactProfile()
+    fused.available(FusingModel())
+    batches = fused.plan(jobs, None)
+    assert [
+        [job.items[0].question_id for job, _ in batch.parts] for batch in batches
+    ] == [
+        ["a", "b"],
+        ["c"],
+    ]
+
+
+def test_a_group_is_queued_at_once_and_answered_per_job():
+    model = FusingModel()
+    exact = ExactProfile()
+    exact.available(model)
+    scheduler = Scheduler(model, {"exact": exact})
+    scheduler.start()
+    try:
+        first, empty, second = scheduler.submit_group(
+            [[item("a", 4)], [], [item("b", 6)]], deadline=None, profile="exact"
+        )
+        assert first.result(timeout=5) == [[0.0, 4.0]]
+        assert empty.result(timeout=5) == []
+        assert second.result(timeout=5) == [[0.0, 6.0]]
+        assert model.calls == [["a", "b"]]
+    finally:
+        scheduler.stop()
+
+
+def test_a_group_beyond_the_queue_bound_is_refused_whole():
+    scheduler = Scheduler(
+        FakeModel(), {"exact": ExactProfile()}, SchedulerLimits(max_queue=1)
+    )
+    with pytest.raises(RuntimeServiceError) as error:
+        scheduler.submit_group(
+            [[item("a", 4)], [item("b", 4)]], deadline=None, profile="exact"
+        )
+    assert error.value.code == "overloaded"

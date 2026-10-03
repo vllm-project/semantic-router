@@ -14,12 +14,13 @@ from collections import deque
 from collections.abc import Callable
 from concurrent.futures import Future
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Any
 
 from ..errors import RuntimeServiceError
-from ..plugins.base import Job, LoadedModel, Profile, RenderedItem
+from ..plugins.base import DEADLINE, Job, LoadedModel, Profile
 
-DEADLINE = object()
+__all__ = ["DEADLINE", "Scheduler", "SchedulerLimits"]
 
 
 @dataclass
@@ -44,15 +45,19 @@ class Scheduler:
         profiles: dict[str, Profile],
         limits: SchedulerLimits | None = None,
         observe: Callable[[str, dict[str, Any]], None] | None = None,
+        execute: Callable[[Callable[[], Any]], Any] | None = None,
     ):
+        """``execute`` runs each batch where the device wants its work (the CPU's one thread)."""
         self.model = model
         self.profiles = profiles
         self.limits = limits or SchedulerLimits()
         self.observe = observe or (lambda event, values: None)
+        self.execute = execute or (lambda work: work())
         self._queue: deque[_Pending] = deque()
         self._queued_tokens = 0
         self._lock = threading.Condition()
         self._stopped = False
+        self._groups = 0
         self._failure: BaseException | None = None
         self._thread = threading.Thread(
             target=self._loop, name="vllm-sr-runtime-worker", daemon=True
@@ -81,34 +86,55 @@ class Scheduler:
     # -- submission ----------------------------------------------------------
 
     def submit(
-        self, items: list[RenderedItem], *, deadline: float | None, profile: str
+        self, items: list[Any], *, deadline: float | None, profile: str
     ) -> Future:
+        return self.submit_group([items], deadline=deadline, profile=profile)[0]
+
+    def submit_group(
+        self, item_lists: list[list[Any]], *, deadline: float | None, profile: str
+    ) -> list[Future]:
+        """Queue one job per item list at once, as one group (a bundle's tasks for this model)."""
         if profile not in self.profiles:
             raise RuntimeServiceError(
                 "invalid_request", f"profile {profile!r} is not enabled"
             )
-        future: Future = Future()
-        if not items:
-            future.set_result([])
-            return future
-        tokens = sum(len(item.ids) for item in items)
-        job = Job(
-            items=items, deadline=deadline, enqueued=time.monotonic(), profile=profile
-        )
+        futures: list[Future] = [Future() for _ in item_lists]
+        pending = []
+        tokens = 0
+        enqueued = time.monotonic()
+        with self._lock:
+            self._groups += 1
+            group = self._groups if len(item_lists) > 1 else None
+        for future, items in zip(futures, item_lists, strict=True):
+            if not items:
+                future.set_result([])
+                continue
+            job_tokens = sum(len(item.ids) for item in items)
+            tokens += job_tokens
+            job = Job(
+                items=items,
+                deadline=deadline,
+                enqueued=enqueued,
+                profile=profile,
+                group=group,
+            )
+            pending.append(_Pending(job, future, job_tokens))
+        if not pending:
+            return futures
         with self._lock:
             if self._stopped:
                 raise RuntimeServiceError("not_ready", "the runtime is shutting down")
-            if len(self._queue) >= self.limits.max_queue or (
+            if len(self._queue) + len(pending) > self.limits.max_queue or (
                 self._queue
                 and self._queued_tokens + tokens > self.limits.max_queued_tokens
             ):
                 raise RuntimeServiceError(
                     "overloaded", "the request queue is full; retry later"
                 )
-            self._queue.append(_Pending(job, future, tokens))
+            self._queue.extend(pending)
             self._queued_tokens += tokens
             self._lock.notify()
-        return future
+        return futures
 
     # -- worker --------------------------------------------------------------
 
@@ -120,8 +146,7 @@ class Scheduler:
                 return []
             window = self.limits.batch_window_ms / 1000.0
             if window > 0 and any(
-                self.profiles[p.job.profile].numerics == "approximate"
-                for p in self._queue
+                self.profiles[p.job.profile].coalesces for p in self._queue
             ):
                 deadline = time.monotonic() + window
                 while (
@@ -172,9 +197,14 @@ class Scheduler:
             started = time.monotonic()
             try:
                 if batch.shared_prefix:
-                    values = self.model.run(items, shared_prefix=batch.shared_prefix)
+                    work = partial(
+                        self.model.run, items, shared_prefix=batch.shared_prefix
+                    )
+                elif not batch.exact:
+                    work = partial(self.model.run_approximate, items)
                 else:
-                    values = self.model.run(items)
+                    work = partial(self.model.run, items)
+                values = self.execute(work)
             except Exception as exc:
                 self._failure = exc
                 for job, _ in batch.parts:

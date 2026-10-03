@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -396,13 +396,12 @@ func TestBuildModelsInfoResponseIncludesConfiguredAuxiliaryModels(t *testing.T) 
 
 	resp := apiServer.buildModelsInfoResponse()
 	expected := map[string]string{
-		"category_classifier":     "models/mmbert32k-intent-classifier-merged",
-		"pii_classifier":          "models/mmbert32k-pii-detector-merged",
-		"jailbreak_classifier":    "models/mmbert32k-jailbreak-detector-merged",
-		"fact_check_classifier":   "models/mmbert32k-factcheck-classifier-merged",
-		"hallucination_detector":  "models/mom-halugate-detector",
-		"hallucination_explainer": "models/mom-halugate-explainer",
-		"feedback_detector":       "models/mmbert32k-feedback-detector-merged",
+		"category_classifier":    "models/mmbert32k-intent-classifier-merged",
+		"pii_classifier":         "models/mmbert32k-pii-detector-merged",
+		"jailbreak_classifier":   "models/mmbert32k-jailbreak-detector-merged",
+		"fact_check_classifier":  "models/mmbert32k-factcheck-classifier-merged",
+		"hallucination_detector": "models/mom-halugate-detector",
+		"feedback_detector":      "models/mmbert32k-feedback-detector-merged",
 	}
 
 	modelsByName := map[string]ModelInfo{}

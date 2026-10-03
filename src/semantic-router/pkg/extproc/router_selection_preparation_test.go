@@ -46,7 +46,7 @@ func TestPreparedMLSelectionUsesExplicitEmbedding(t *testing.T) {
 			defer server.Close()
 
 			cfg := preparedMLSelectionConfig(t, server.URL, recipe)
-			prepared, err := modelruntime.PrepareOwnedRecipeEmbeddings(context.Background(), cfg, nil)
+			prepared, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

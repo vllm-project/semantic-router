@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -178,7 +178,7 @@ func populateCache(cache *InMemoryCache, size int) error {
 // cosineSimilarity computes cosine similarity using SIMD-optimized dot product
 // Embeddings are normalized, so dot product = cosine similarity
 func cosineSimilarity(a, b []float32) float32 {
-	return dotProductSIMD(a, b)
+	return dotProduct(a, b)
 }
 
 // measureSearchLatency performs a search and measures component latencies

@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -233,6 +233,13 @@ func milvusCacheOptionsFromHybridOptions(options HybridCacheOptions) MilvusCache
 
 	milvusOptions.ConfigPath = options.MilvusConfigPath
 	return milvusOptions
+}
+
+func (h *HybridCache) semanticEmbeddingProvider() embedding.Provider {
+	if h.milvusCache == nil {
+		return nil
+	}
+	return h.milvusCache.embeddingProvider
 }
 
 func (h *HybridCache) generateEmbedding(ctx context.Context, text string) ([]float32, error) {

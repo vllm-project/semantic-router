@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 )
@@ -59,53 +58,38 @@ func (c *Client) Models(ctx context.Context) ([]api.ModelCard, error) {
 	return response.JSON200.Data, nil
 }
 
-// Decide sends every question in one /v1/decisions call. The context deadline
-// is also sent as options.deadline_ms so the runtime drops work it cannot
-// start in time.
+// Decide sends every question in one /v1/decisions call, inside the
+// context's bundle when there is one. The context deadline is also sent as
+// options.deadline_ms so the runtime drops work it cannot start in time.
 func (c *Client) Decide(ctx context.Context, request Request) (Response, error) {
-	body := api.DecisionRequest{
-		State:     request.State,
-		Questions: make(map[string]api.Question, len(request.Questions)),
+	deadline, err := remainingMillis(ctx)
+	if err != nil {
+		return Response{}, err
 	}
 	returnMeta := true
-	options := api.RequestOptions{ReturnMeta: &returnMeta}
-	if deadline, ok := ctx.Deadline(); ok {
-		remaining := float64(time.Until(deadline).Microseconds()) / 1000.0
-		if remaining <= 0 {
-			return Response{}, context.DeadlineExceeded
-		}
-		options.DeadlineMs = &remaining
+	body := api.DecisionRequest{
+		Model:     optionalString(request.Model),
+		State:     request.State,
+		Questions: make(map[string]api.Question, len(request.Questions)),
+		Options:   &api.RequestOptions{ReturnMeta: &returnMeta, DeadlineMs: deadline},
 	}
-	body.Options = &options
 	for _, question := range request.Questions {
 		body.Questions[question.ID] = encodeQuestion(question)
 	}
-	response, err := c.api.CreateDecisionsWithResponse(ctx, body)
+	result, err := c.exchange(ctx, api.BundleTask{Decisions: &body})
 	if err != nil {
-		if ctx.Err() != nil {
-			return Response{}, ctx.Err()
-		}
-		return Response{}, fmt.Errorf("%w: %w", ErrFailed, err)
+		return Response{}, err
 	}
-	switch response.StatusCode() {
-	case http.StatusOK:
-	case http.StatusTooManyRequests:
-		return Response{}, ErrOverloaded
-	case http.StatusServiceUnavailable:
-		return Response{}, ErrUnavailable
-	case http.StatusBadRequest, http.StatusNotFound, http.StatusRequestEntityTooLarge:
-		return Response{}, fmt.Errorf("%w: %s", ErrRejected, errorMessage(response))
-	default:
-		return Response{}, fmt.Errorf("%w: %s", ErrFailed, errorMessage(response))
-	}
-	if response.JSON200 == nil {
+	if result.Decisions == nil {
 		return Response{}, fmt.Errorf("%w: missing decision response body", ErrFailed)
 	}
-	return decodeResponse(*response.JSON200), nil
+	return decodeResponse(*result.Decisions), nil
 }
 
 func encodeQuestion(question Question) api.Question {
-	encoded := api.Question{Type: question.Type, Instructions: question.Instructions}
+	questionType := question.Type
+	var instructions interface{} = question.Instructions
+	encoded := api.Question{Type: &questionType, Instructions: &instructions}
 	if len(question.Choices) > 0 {
 		choices := make([]api.ChoiceOption, len(question.Choices))
 		for index, choice := range question.Choices {
@@ -179,16 +163,4 @@ func finiteAnswer(answer Answer) bool {
 		}
 	}
 	return true
-}
-
-func errorMessage(response *api.CreateDecisionsResponse) string {
-	for _, body := range []*api.Error{
-		response.JSON400, response.JSON404, response.JSON413,
-		response.JSON429, response.JSON500, response.JSON503,
-	} {
-		if body != nil {
-			return fmt.Sprintf("%s (%s)", body.Error.Code, body.Error.Message)
-		}
-	}
-	return response.Status()
 }

@@ -366,7 +366,7 @@ ARG MODEL_RUNTIME_TORCH=torch==2.10.0
 COPY src/model-runtime/ /tmp/model-runtime/
 RUN "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir \
       --index-url https://download.pytorch.org/whl/cpu "${MODEL_RUNTIME_TORCH}" && \
-    "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir /tmp/model-runtime && \
+    "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir "/tmp/model-runtime[multimodal]" && \
     rm -rf /tmp/model-runtime
 
 COPY --from=go-builder /build/router /usr/local/bin/router
@@ -379,6 +379,10 @@ ENV LD_LIBRARY_PATH=/usr/local/lib
 ENV ORT_DYLIB_PATH=/usr/local/lib/libonnxruntime.so
 # Decision models the managed runtime downloads persist in the model volume.
 ENV VLLM_SR_RUNTIME_CACHE_DIR=/app/models/model-runtime
+
+# Under an arbitrary uid without a passwd entry (the chart runs as 65532),
+# Python's getpass and PyTorch's compile caches take the user from here.
+ENV USER=vllm-sr
 
 WORKDIR /app
 RUN mkdir -p /app /app/.vllm-sr /app/config /app/models

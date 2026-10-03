@@ -51,13 +51,6 @@ docker-build-extproc-rocm:
 	@$(CONTAINER_RUNTIME) build -f tools/docker/Dockerfile.extproc-rocm -t $(DOCKER_REGISTRY)/extproc-rocm:$(DOCKER_TAG) .
 
 
-# Build openvino-binding Docker image (OpenVINO inference backend, x86_64 only)
-docker-build-openvino-binding: ## Build openvino-binding Docker image
-docker-build-openvino-binding:
-	@$(LOG_TARGET)
-	@echo "Building openvino-binding Docker image (x86_64 only)..."
-	@$(CONTAINER_RUNTIME) build -f openvino-binding/Dockerfile -t $(DOCKER_REGISTRY)/openvino-binding:$(DOCKER_TAG) .
-
 # One shared deterministic backend; publishing is handled by its scoped CI job.
 docker-build-provider-mocker: ## Build the provider mocker, or reuse an explicitly supplied image
 	@$(LOG_TARGET)
@@ -541,7 +534,7 @@ vllm-sr-test: vllm-sr-install-cli
 	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q src/vllm-sr/tests
 
 vllm-sr-test-integration: ## Run CLI integration tests (requires local runtime images)
-vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli docker-build-provider-mocker
+vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli model-runtime-install docker-build-provider-mocker
 	@$(LOG_TARGET)
 	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) VLLM_SR_STACK_NAME="$${VLLM_SR_STACK_NAME:-vllm-sr-cli-integration}" VLLM_SR_PORT_OFFSET="$${VLLM_SR_PORT_OFFSET:-4200}" VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) VLLM_SR_ROUTER_IMAGE=$(VLLM_SR_ROUTER_IMAGE) VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) PROVIDER_MOCKER_IMAGE="$(PROVIDER_MOCKER_IMAGE)" RUN_INTEGRATION_TESTS=true "$(AGENT_PYTHON)" run_cli_tests.py --verbose --integration-only
 

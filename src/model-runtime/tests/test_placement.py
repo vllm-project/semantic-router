@@ -1,5 +1,6 @@
 import pytest
 import torch
+from vllm_sr_runtime.accel.cpu import CPUAccelerator
 from vllm_sr_runtime.accel.cuda import CUDAAccelerator
 from vllm_sr_runtime.accel.rocm import ROCmAccelerator
 from vllm_sr_runtime.errors import PlacementError
@@ -17,6 +18,18 @@ def test_parse_device():
     for bad in ("gpu", "cuda:x", "rocm:-1", ""):
         with pytest.raises(PlacementError):
             parse_device(bad)
+
+
+@pytest.mark.parametrize(
+    ("avx512_bf16", "amx", "native"),
+    [(False, False, False), (True, False, True), (False, True, True)],
+)
+def test_cpu_devices_report_native_bf16(monkeypatch, avx512_bf16, amx, native):
+    monkeypatch.setattr(torch.cpu, "_is_avx512_bf16_supported", lambda: avx512_bf16)
+    monkeypatch.setattr(torch.cpu, "_is_amx_tile_supported", lambda: amx)
+    (device,) = CPUAccelerator().devices()
+    assert device.bf16 is native
+    assert CPUAccelerator().capabilities(device)["native_bf16"] is native
 
 
 def test_cpu_placement_and_budget():
@@ -44,3 +57,8 @@ def test_gpu_devices_report_memory_and_bf16():
     accelerator = ROCmAccelerator() if torch.version.hip else CUDAAccelerator()
     devices = accelerator.devices()
     assert devices and devices[0].total_memory and devices[0].index == 0
+
+
+def test_xpu_and_mps_devices_parse():
+    assert parse_device("xpu:1") == ("xpu", 1)
+    assert parse_device("mps") == ("mps", None)

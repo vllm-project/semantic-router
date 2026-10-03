@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import time
 from pathlib import Path
 from typing import Any
 
 from starlette.applications import Starlette
-from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, Response
 from starlette.routing import Route
@@ -30,52 +28,53 @@ class JSON(Response):
 
 
 def create_app(runtime: Runtime) -> Starlette:
-    async def decisions(request: Request) -> Response:
-        endpoint = request.url.path
+    def observe(endpoint: str, status: int, started: float) -> None:
+        runtime.metrics.requests.labels(endpoint=endpoint, status=str(status)).inc()
+        runtime.metrics.request_seconds.labels(endpoint=endpoint).observe(
+            time.perf_counter() - started
+        )
+
+    def surface_route(surface: str):
+        async def handle(request: Request) -> Response:
+            endpoint = request.url.path
+            started = time.perf_counter()
+            status = 200
+            try:
+                body, size = await _read_json(request, runtime.config.max_request_bytes)
+                status, response = await runtime.call(surface, body, size)
+                return JSON(response, status_code=status)
+            except RuntimeServiceError as exc:
+                status = exc.status
+                return JSON(exc.body(), status_code=exc.status)
+            finally:
+                observe(endpoint, status, started)
+
+        return handle
+
+    async def bundle(request: Request) -> Response:
         started = time.perf_counter()
         status = 200
         try:
-            body = await _read_json(request, runtime.config.max_request_bytes)
-            if not runtime.health.ready:
-                raise RuntimeServiceError(
-                    "not_ready", f"the model is {runtime.health.state}"
-                )
-            parsed = runtime.parse(body)
-            plan = await run_in_threadpool(runtime.plan, parsed)
-            submitted = time.monotonic()
-            future = runtime.submit(plan, parsed)
-            results = await asyncio.wrap_future(future)
-            finished = time.monotonic()
-            queue_ms = (submitted - parsed.received) * 1000.0
-            compute_ms = (finished - submitted) * 1000.0
-            return JSON(runtime.assemble(parsed, plan, results, queue_ms, compute_ms))
+            body, size = await _read_json(request, runtime.config.max_request_bytes)
+            status, response = await runtime.bundle(body, size)
+            return JSON(response, status_code=status)
         except RuntimeServiceError as exc:
             status = exc.status
             return JSON(exc.body(), status_code=exc.status)
-        except Exception as exc:
-            status = 500
-            failure = runtime.device_failure()
-            if failure is not None:
-                runtime.degrade(f"{type(failure).__name__}: {failure}")
-            error = RuntimeServiceError(
-                "internal_error", f"{type(exc).__name__}: {exc}"
-            )
-            return JSON(error.body(), status_code=500)
         finally:
-            runtime.metrics.requests.labels(endpoint=endpoint, status=str(status)).inc()
-            runtime.metrics.request_seconds.labels(endpoint=endpoint).observe(
-                time.perf_counter() - started
-            )
+            observe(request.url.path, status, started)
 
     async def models(request: Request) -> Response:
-        return JSON({"object": "list", "data": [runtime.model_card()]})
+        return JSON({"object": "list", "data": runtime.model_cards()})
 
     async def health(request: Request) -> Response:
-        body = {
+        body: dict[str, Any] = {
             "status": runtime.health.state,
             "reason": runtime.health.reason,
             "model": runtime.served_id,
         }
+        if len(runtime.served) > 1:
+            body["models"] = runtime.health.describe()
         return JSON(body, status_code=200 if runtime.health.ready else 503)
 
     async def live(request: Request) -> Response:
@@ -83,7 +82,13 @@ def create_app(runtime: Runtime) -> Starlette:
 
     async def metrics(request: Request) -> Response:
         if runtime.scheduler is not None:
-            runtime.metrics.queue_depth.set(runtime.scheduler.depth())
+            runtime.metrics.queue_depth.set(
+                sum(
+                    served.scheduler.depth()
+                    for served in runtime.served
+                    if served.scheduler
+                )
+            )
         return Response(
             runtime.metrics.render(), media_type="text/plain; version=0.0.4"
         )
@@ -93,10 +98,15 @@ def create_app(runtime: Runtime) -> Starlette:
             OPENAPI_PATH.read_text(encoding="utf-8"), media_type="application/yaml"
         )
 
+    decisions = surface_route("decisions")
     return Starlette(
         routes=[
             Route("/v1/decisions", decisions, methods=["POST"]),
             Route("/v1/systemone", decisions, methods=["POST"]),
+            Route("/v1/classify", surface_route("classify"), methods=["POST"]),
+            Route("/v1/embeddings", surface_route("embeddings"), methods=["POST"]),
+            Route("/v1/rerank", surface_route("rerank"), methods=["POST"]),
+            Route("/v1/bundle", bundle, methods=["POST"]),
             Route("/v1/models", models, methods=["GET"]),
             Route("/health", health, methods=["GET"]),
             Route("/health/live", live, methods=["GET"]),
@@ -107,7 +117,8 @@ def create_app(runtime: Runtime) -> Starlette:
     )
 
 
-async def _read_json(request: Request, limit: int) -> Any:
+async def _read_json(request: Request, limit: int) -> tuple[Any, int]:
+    """The parsed body and its size in bytes."""
     declared = request.headers.get("content-length")
     if declared is not None and declared.isdigit() and int(declared) > limit:
         raise RuntimeServiceError(
@@ -123,7 +134,7 @@ async def _read_json(request: Request, limit: int) -> Any:
             )
         chunks.append(chunk)
     try:
-        return json.loads(b"".join(chunks))
+        return json.loads(b"".join(chunks)), size
     except (UnicodeDecodeError, ValueError) as exc:
         raise RuntimeServiceError(
             "invalid_request", f"the request body is not JSON: {exc}"

@@ -10,6 +10,7 @@ import hashlib
 import json
 import math
 import struct
+from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -86,6 +87,32 @@ def inventory(root: Path, *, ignore_hub_added: bool = True) -> dict[str, str]:
         if not path.is_file() or not safe_relative(name):
             raise PackageError(f"unsafe package entry: {name}")
         files[name] = sha256_file(path)
+    return files
+
+
+def named_files(root: Path, names: Iterable[str]) -> dict[str, str]:
+    """SHA-256 of each named file under ``root``, for packages whose manifest does not list them.
+
+    Names must be safe relative paths to regular files. As in ``inventory``, a
+    link is followed only inside the Hugging Face cache that holds a Hub
+    snapshot; a local package may hold no links.
+    """
+    root = Path(root)
+    if not root.is_dir():
+        raise PackageError(f"package root is not a directory: {root}")
+    resolved = root.resolve()
+    store = _snapshot_store(root)
+    files: dict[str, str] = {}
+    for name in sorted(set(names)):
+        if not safe_relative(name):
+            raise PackageError(f"unsafe package path: {name}")
+        target = (root / name).resolve()
+        linked = target != resolved / name
+        if linked and (store is None or not _inside(target, store)):
+            raise PackageError(f"package contains a link: {name}")
+        if not target.is_file():
+            raise PackageError(f"package file is missing: {name}")
+        files[name] = sha256_file(target)
     return files
 
 
