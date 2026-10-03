@@ -26,8 +26,10 @@ type Choice struct {
 	Description string
 }
 
-// Request asks one deployment several questions about one state.
+// Request asks one deployment several questions about one state. Model is
+// the served model on the runtime (empty while it serves one model).
 type Request struct {
+	Model     string
 	State     string
 	Questions []Question
 }

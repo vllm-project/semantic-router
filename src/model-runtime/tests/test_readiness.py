@@ -142,7 +142,7 @@ def test_built_in_models_pin_their_released_kernel_choices_on_gfx942(tmp_path):
     assert family.kernel_choices(package, gfx942) == known.kernel_choices["rocm:gfx942"]
     other = DeviceInfo(accelerator="rocm", index=0, name="MI210", arch="gfx90a")
     assert family.kernel_choices(package, other) == {}
-    for model in builtin.all_models():
+    for model in builtin.all_models("decision2"):
         choices = model.kernel_choices.get("rocm:gfx942")
         if model.backbone == "qwen3":
             assert choices is None, model.repo_id
@@ -159,3 +159,48 @@ def test_autotune_cache_comes_from_the_flag_or_the_environment(monkeypatch):
         ["serve", "/models/kai", "--autotune-cache", "/cache/flag"]
     )
     assert config_from_args(parsed).autotune_cache == "/cache/flag"
+
+
+def test_surface_goldens_compare_flattened_values():
+    from vllm_sr_runtime.supervision.readiness import flatten
+
+    response = {
+        "results": [
+            {"index": 0, "probabilities": [0.25, 0.75]},
+            {
+                "index": 1,
+                "spans": [
+                    {"label": "PERSON", "start": 0, "end": 3, "probability": 0.9}
+                ],
+            },
+        ]
+    }
+    values = flatten("classify", response)
+    assert values == {
+        "0.probabilities.0": 0.25,
+        "0.probabilities.1": 0.75,
+        "1.span.0.PERSON.0.3": 0.9,
+    }
+    golden = {"surface": "classify", "body": {}, "expected": {"cpu": values}}
+    assert (
+        golden_check(None, [golden], "cpu", run_surface=lambda s, b: values).status
+        == "matched"
+    )
+    shifted = {key: value + 2 * CPU_TOLERANCE for key, value in values.items()}
+    assert (
+        golden_check(None, [golden], "cpu", run_surface=lambda s, b: shifted).status
+        == "failed"
+    )
+    assert (
+        golden_check(
+            None, [{**golden, "expected": {}}], "cpu", run_surface=lambda s, b: values
+        ).status
+        == "unverified"
+    )
+    assert flatten("embeddings", {"data": [{"index": 0, "embedding": [0.6, 0.8]}]}) == {
+        "0.0": 0.6,
+        "0.1": 0.8,
+    }
+    assert flatten("rerank", {"results": [{"index": 2, "logit": 1.5}]}) == {
+        "2.logit": 1.5
+    }

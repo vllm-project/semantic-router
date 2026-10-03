@@ -1,0 +1,373 @@
+"""The out-of-tree example plugin, installed through entry points, in a process serving two models.
+
+It exercises every surface beyond decisions, bundles across models, the
+per-model result cache, bundle fusion and per-model readiness.
+"""
+
+from __future__ import annotations
+
+import json
+from importlib import metadata
+from pathlib import Path
+
+import pytest
+from starlette.testclient import TestClient
+from vllm_sr_runtime.api.app import create_app
+from vllm_sr_runtime.config import ModelConfig, ServeConfig
+from vllm_sr_runtime.plugins import registry
+from vllm_sr_runtime.runtime import Runtime
+
+from .conftest import QUESTIONS, STATE
+from .test_api_contract import check
+
+EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "third_party_plugin"
+ENTRY_POINTS = {
+    "vllm_sr_runtime.families": [
+        ("example_keywords", "vllm_sr_example.family:KeywordFamily")
+    ],
+    "vllm_sr_runtime.engines": [
+        ("example_counts", "vllm_sr_example.engine:CountsEngine")
+    ],
+}
+KEYWORDS = {
+    "format": "vllm-sr-example/1",
+    "labels": ["billing", "shipping", "other"],
+    "keywords": {
+        "billing": ["refund", "invoice", "charge"],
+        "shipping": ["parcel", "delivery"],
+    },
+}
+
+
+@pytest.fixture(scope="module")
+def example_plugin():
+    patch = pytest.MonkeyPatch()
+    patch.syspath_prepend(str(EXAMPLE))
+    original = metadata.entry_points
+
+    def entry_points(**selection):
+        found = list(original(**selection))
+        for name, target in ENTRY_POINTS.get(selection.get("group"), []):
+            found.append(metadata.EntryPoint(name, target, selection["group"]))
+        return found
+
+    patch.setattr(metadata, "entry_points", entry_points)
+    registry.discover.cache_clear()
+    yield
+    patch.undo()
+    registry.discover.cache_clear()
+
+
+@pytest.fixture(scope="module")
+def keyword_package(tmp_path_factory):
+    root = tmp_path_factory.mktemp("keywords") / "keywords"
+    root.mkdir()
+    (root / "example_model.json").write_text(json.dumps(KEYWORDS))
+    return root
+
+
+@pytest.fixture(scope="module")
+def runtime(example_plugin, keyword_package, qwen3_package):
+    runtime = Runtime(
+        ServeConfig(
+            models=(
+                ModelConfig(
+                    model=str(keyword_package),
+                    name="keywords",
+                    device="cpu",
+                    engine="example_counts",
+                ),
+                ModelConfig(model=str(qwen3_package), name="kai", device="cpu"),
+            )
+        )
+    )
+    runtime.start(background=False)
+    yield runtime
+    runtime.stop()
+
+
+@pytest.fixture(scope="module")
+def client(runtime):
+    return TestClient(create_app(runtime))
+
+
+def keyword_model(runtime):
+    return runtime.lookup("keywords").model
+
+
+def test_models_describe_both_models_and_the_plugins(client):
+    body = client.get("/v1/models").json()
+    check("ModelList", body)
+    cards = {card["id"]: card for card in body["data"]}
+    assert set(cards) == {"keywords", "kai"} and all(
+        card["ready"] for card in cards.values()
+    )
+    keywords = cards["keywords"]
+    assert (
+        keywords["family"] == "example_keywords"
+        and keywords["engine"] == "example_counts"
+    )
+    assert keywords["heads"][0]["labels"] == KEYWORDS["labels"]
+    assert keywords["embedding"]["dimensions"] == [3]
+    assert keywords["rerank"]["default"] == {"layer": 1, "dimension": 3}
+    plugins = {(p["group"], p["name"]): p for p in keywords["plugins"]}
+    assert plugins[("vllm_sr_runtime.families", "example_keywords")][
+        "capabilities"
+    ] == {
+        "surfaces": ["classify", "embeddings", "rerank"],
+        "formats": ["vllm-sr-example/1"],
+    }
+    assert plugins[("vllm_sr_runtime.engines", "example_counts")]["capabilities"][
+        "outputs"
+    ] == ["hidden"]
+    health = client.get("/health").json()
+    check("Health", health)
+    assert health["status"] == "ready" and set(health["models"]) == {"keywords", "kai"}
+
+
+def test_classify_embeddings_and_rerank_answer_by_contract(client):
+    classified = client.post(
+        "/v1/classify",
+        json={
+            "model": "keywords",
+            "input": ["Please refund the invoice", "Where is my parcel?"],
+        },
+    )
+    assert classified.status_code == 200
+    body = classified.json()
+    check("ClassifyResponse", body)
+    assert [result["label"] for result in body["results"]] == ["billing", "shipping"]
+    assert body["meta"]["engine"] == "example_counts"
+
+    embedded = client.post(
+        "/v1/embeddings",
+        json={"model": "keywords", "input": ["refund", "parcel delivery"]},
+    ).json()
+    check("EmbeddingsResponse", embedded)
+    vectors = [item["embedding"] for item in embedded["data"]]
+    assert all(abs(sum(v * v for v in vector) - 1) < 1e-9 for vector in vectors)
+    assert embedded["meta"]["representation"]["dimension"] == 3
+
+    ranked = client.post(
+        "/v1/rerank",
+        json={
+            "model": "keywords",
+            "query": "refund my charge",
+            "documents": ["parcel", "invoice refund"],
+        },
+    ).json()
+    check("RerankResponse", ranked)
+    assert [result["index"] for result in ranked["results"]] == [1, 0]
+
+
+def test_requests_name_their_model_and_surface(client):
+    missing = client.post("/v1/classify", json={"input": ["refund"]})
+    assert (
+        missing.status_code == 400
+        and "model is required" in missing.json()["error"]["message"]
+    )
+    unknown = client.post("/v1/classify", json={"model": "nobody", "input": ["refund"]})
+    assert unknown.status_code == 404
+    unsupported = client.post(
+        "/v1/rerank", json={"model": "kai", "query": "q", "documents": ["d"]}
+    )
+    assert unsupported.status_code == 422
+    check("ErrorResponse", unsupported.json())
+    assert unsupported.json()["error"]["code"] == "unsupported_surface"
+
+
+def test_a_bundle_serves_every_surface_and_model_in_task_order(client):
+    alone = client.post(
+        "/v1/decisions", json={"model": "kai", "state": STATE, "questions": QUESTIONS}
+    ).json()
+    bundle = client.post(
+        "/v1/bundle",
+        json={
+            "tasks": [
+                {
+                    "id": "route",
+                    "decisions": {
+                        "model": "kai",
+                        "state": STATE,
+                        "questions": QUESTIONS,
+                    },
+                },
+                {
+                    "id": "topic",
+                    "classify": {"model": "keywords", "input": ["refund please"]},
+                },
+                {
+                    "id": "vector",
+                    "embeddings": {"model": "keywords", "input": "parcel"},
+                },
+                {
+                    "id": "rank",
+                    "rerank": {
+                        "model": "keywords",
+                        "query": "parcel",
+                        "documents": ["parcel"],
+                    },
+                },
+                {"id": "lost", "classify": {"model": "nobody", "input": ["x"]}},
+            ]
+        },
+    )
+    assert bundle.status_code == 200
+    body = bundle.json()
+    check("BundleResponse", body)
+    results = body["results"]
+    assert [result["id"] for result in results] == [
+        "route",
+        "topic",
+        "vector",
+        "rank",
+        "lost",
+    ]
+    assert [result["status"] for result in results] == [200, 200, 200, 200, 404]
+    assert results[0]["decisions"]["answers"] == alone["answers"]
+    assert results[1]["classify"]["results"][0]["label"] == "billing"
+    assert results[4]["error"]["code"] == "model_not_found"
+
+
+def test_bundled_tasks_for_one_model_share_one_forward(client, runtime):
+    model = keyword_model(runtime)
+    before = model.forwards
+    body = client.post(
+        "/v1/bundle",
+        json={
+            "tasks": [
+                {
+                    "id": "a",
+                    "classify": {"model": "keywords", "input": ["one charge, fused"]},
+                },
+                {
+                    "id": "b",
+                    "classify": {
+                        "model": "keywords",
+                        "input": ["two parcels, fused delivery"],
+                    },
+                },
+            ]
+        },
+    ).json()
+    assert [result["status"] for result in body["results"]] == [200, 200]
+    assert model.forwards == before + 1
+
+
+def test_repeated_items_are_answered_from_the_result_cache(client, runtime):
+    model = keyword_model(runtime)
+    request = {"model": "keywords", "input": ["an invoice for the cache"]}
+    first = client.post("/v1/classify", json=request).json()
+    forwards = model.forwards
+    second = client.post("/v1/classify", json=request).json()
+    assert model.forwards == forwards
+    assert second["results"] == first["results"]
+    assert (
+        'vllm_sr_runtime_result_cache_total{model="keywords",outcome="hit"}'
+        in client.get("/metrics").text
+    )
+
+
+def test_a_bundle_deadline_reaches_every_task(client):
+    body = client.post(
+        "/v1/bundle",
+        json={
+            "tasks": [
+                {
+                    "id": "late",
+                    "classify": {
+                        "model": "keywords",
+                        "input": ["unique words, never cached"],
+                    },
+                },
+                {
+                    "id": "route",
+                    "decisions": {
+                        "model": "kai",
+                        "state": STATE,
+                        "questions": QUESTIONS,
+                    },
+                },
+            ],
+            "options": {"deadline_ms": 0.001},
+        },
+    ).json()
+    check("BundleResponse", body)
+    late, route = body["results"]
+    assert late["classify"]["results"][0]["error"] == "deadline_exceeded"
+    assert {answer["error"] for answer in route["decisions"]["answers"].values()} == {
+        "deadline_exceeded"
+    }
+
+
+@pytest.mark.parametrize(
+    "body,status",
+    [
+        ({"tasks": []}, 400),
+        ({"tasks": [{"id": "a"}]}, 400),
+        ({"tasks": [{"id": "a", "classify": {}, "rerank": {}}]}, 400),
+        (
+            {
+                "tasks": [
+                    {"id": "a", "classify": {"input": "x"}},
+                    {"id": "a", "classify": {"input": "y"}},
+                ]
+            },
+            400,
+        ),
+        (
+            {"tasks": [{"id": str(i), "classify": {"input": "x"}} for i in range(65)]},
+            413,
+        ),
+        (
+            {
+                "tasks": [{"id": "a", "classify": {"input": "x"}}],
+                "options": {"deadline_ms": -1},
+            },
+            400,
+        ),
+    ],
+)
+def test_malformed_bundles_are_rejected(client, body, status):
+    response = client.post("/v1/bundle", json=body)
+    assert response.status_code == status
+    check("ErrorResponse", response.json())
+
+
+def test_a_model_that_fails_to_load_leaves_the_others_serving(
+    example_plugin, keyword_package, tmp_path
+):
+    runtime = Runtime(
+        ServeConfig(
+            models=(
+                ModelConfig(
+                    model=str(keyword_package),
+                    name="keywords",
+                    device="cpu",
+                    engine="example_counts",
+                ),
+                ModelConfig(
+                    model=str(tmp_path / "missing"), name="broken", device="cpu"
+                ),
+            )
+        )
+    )
+    runtime.start(background=True)
+    runtime.wait(timeout=60)
+    try:
+        client = TestClient(create_app(runtime))
+        health = client.get("/health")
+        assert health.status_code == 503 and health.json()["status"] == "degraded"
+        assert health.json()["models"]["broken"]["status"] == "failed"
+        served = client.post(
+            "/v1/classify", json={"model": "keywords", "input": ["refund"]}
+        )
+        assert served.status_code == 200
+        broken = client.post(
+            "/v1/classify", json={"model": "broken", "input": ["refund"]}
+        )
+        assert broken.status_code == 503
+        cards = {card["id"]: card for card in client.get("/v1/models").json()["data"]}
+        assert cards["broken"]["status"] == "failed" and not cards["broken"]["ready"]
+    finally:
+        runtime.stop()

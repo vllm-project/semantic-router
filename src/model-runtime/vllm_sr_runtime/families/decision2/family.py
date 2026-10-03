@@ -32,20 +32,20 @@ from ...plugins.base import (
 )
 
 __all__ = ["Decision2Family", "Decision2Model"]
+from ...heads.candidate import load_head, logits
 from ...registry import builtin, policy
 from ...registry.resolve import download_base
-from . import package as pkg
-from .answers import apply_score_bias, product_answer
-from .readout import load_head, logits
-from .renderer import (
+from ...systemone import (
     MAX_LEVELS,
+    MAX_OPTIONS,
     MIN_LEVELS,
-    Tokenizer,
-    collate,
-    encode,
     question_options,
     valid_state,
 )
+from ...text.tokenizer import Tokenizer
+from . import package as pkg
+from .answers import apply_score_bias, product_answer
+from .renderer import collate, encode
 
 INT32_MAX = 2**31 - 1
 GOLDEN_STATE = (
@@ -76,6 +76,14 @@ GOLDEN_QUESTIONS = {
 class Decision2Family(ModelFamily):
     name = "decision2"
     surfaces = frozenset({"decisions"})
+
+    @classmethod
+    def descriptor(cls) -> dict[str, Any]:
+        return {
+            "surfaces": sorted(cls.surfaces),
+            "formats": ["vllm-sr-decision/2"],
+            "question_types": ["choice", "noul", "score"],
+        }
 
     def detect(self, package: PackageRef) -> bool:
         return pkg.is_package(package.root)
@@ -231,7 +239,7 @@ class Decision2Family(ModelFamily):
             limits={
                 "max_input_tokens": package.max_input_tokens,
                 "min_options": 2,
-                "max_options": pkg.MAX_OPTIONS,
+                "max_options": MAX_OPTIONS,
                 "min_levels": MIN_LEVELS,
                 "max_levels": MAX_LEVELS,
             },

@@ -148,6 +148,15 @@ class NativeEngineModel(EngineModel):
 class NativeEngine(Engine):
     name = "native"
 
+    @classmethod
+    def descriptor(cls) -> dict[str, Any]:
+        return {
+            "architectures": sorted(models.ARCHITECTURES),
+            "outputs": ["gathered"],
+            "shared_context": True,
+            "lora": "peft-unmerged",
+        }
+
     def supports(self, spec: ModelSpec, device: DeviceInfo) -> str | None:
         if spec.backbone.model_type not in models.ARCHITECTURES:
             return f"no native {spec.backbone.model_type!r} backbone"
