@@ -20,12 +20,18 @@ from cli.config_migration_legacy_models import (
     replacement_for,
     runtime_artifact,
 )
+from cli.config_migration_embeddings import migrate_embedding_models
 from cli.config_migration_notes import MigrationNotes
+from cli.config_migration_paths import (
+    as_list,
+    binding_maps,
+    decisions,
+    dict_at,
+    signal_maps,
+)
 
 MODEL_RUNTIME = "model_runtime"
 REMOVED_PROVIDERS = frozenset({"candle", "ort", "openvino"})
-REMOVED_EMBEDDING_BACKENDS = frozenset({"candle", "openvino"})
-RETIRED_EMBEDDING_TYPES = frozenset({"gemma", "bert"})
 # Legacy device prefixes and the runtime accelerator that replaces them.
 _DEVICE_PREFIXES = {"cuda": "cuda", "rocm": "rocm", "migraphx": "rocm"}
 _EXECUTION_FIELDS = ("custom_ops_profile", "compilation_cache_dir")
@@ -98,20 +104,20 @@ def migrate_model_runtime_contract(
 ) -> None:
     """Move every local model onto the model runtime and retire the NLI paths."""
 
-    catalog = _dict_at(canonical, "global", "model_catalog")
+    catalog = dict_at(canonical, "global", "model_catalog")
     if catalog is not None:
         migrated = _migrate_deployments(catalog, notes)
         _retire_explainer_deployments(catalog, notes)
-        for path, bindings in _binding_maps(canonical):
+        for path, bindings in binding_maps(canonical):
             _migrate_bindings(path, bindings, migrated, notes)
         _migrate_system_models(catalog, notes)
         _migrate_modules(catalog, notes)
-        _migrate_embeddings(catalog, notes)
-    for path, signals in _signal_maps(canonical):
+    migrate_embedding_models(canonical, notes)
+    for path, signals in signal_maps(canonical):
         _migrate_signals(path, signals, notes)
-    for path, decision in _decisions(canonical):
+    for path, decision in decisions(canonical):
         _migrate_decision(path, decision, notes)
-    _migrate_stores(canonical, notes)
+    _migrate_polarity_guard(canonical, notes)
 
 
 def runtime_device(provider: str, device: Any) -> tuple[str, str | None]:
@@ -293,20 +299,20 @@ def _migrate_modules(catalog: dict[str, Any], notes: MigrationNotes) -> None:
         return
     base = "global.model_catalog.modules"
     for keys, model_field, mapping_field in _MODULE_MODELS:
-        module = _dict_at(modules, *keys)
+        module = dict_at(modules, *keys)
         if module is None:
             continue
         path = ".".join((base, *keys))
         _replace_module_model(path, module, model_field, mapping_field, notes)
         _drop_local_selectors(path, module, notes)
-    guard = _dict_at(modules, "prompt_guard")
+    guard = dict_at(modules, "prompt_guard")
     if guard is not None and str(guard.get("model_type") or "").lower() == "candle":
         guard.pop("model_type")
         notes.changed(
             base + ".prompt_guard.model_type",
             "removed; the runtime detects the model architecture from the package",
         )
-    hallucination = _dict_at(modules, "hallucination_mitigation")
+    hallucination = dict_at(modules, "hallucination_mitigation")
     if hallucination is not None:
         _migrate_hallucination(base + ".hallucination_mitigation", hallucination, notes)
 
@@ -380,52 +386,8 @@ def _migrate_hallucination(
         )
 
 
-def _migrate_embeddings(catalog: dict[str, Any], notes: MigrationNotes) -> None:
-    semantic = _dict_at(catalog, "embeddings", "semantic")
-    if semantic is None:
-        return
-    path = "global.model_catalog.embeddings.semantic"
-    config = semantic.get("embedding_config")
-    if isinstance(config, dict):
-        backend = str(config.get("backend") or "").strip().lower()
-        if backend in REMOVED_EMBEDDING_BACKENDS:
-            config.pop("backend")
-            notes.changed(
-                path + ".embedding_config.backend",
-                f"removed {backend}; the model runtime serves local embeddings",
-            )
-        model_type = str(config.get("model_type") or "").strip().lower()
-        if model_type in RETIRED_EMBEDDING_TYPES:
-            config["model_type"] = "mmbert"
-            semantic.setdefault(
-                "mmbert_model_path", "models/Vela-1.0-Encoder-307M-Embedding"
-            )
-            notes.changed(
-                path + ".embedding_config.model_type",
-                f"{model_type} -> mmbert (Vela Embedding); stored vectors must be "
-                "re-embedded and similarity thresholds re-checked",
-            )
-    for slot in ("gemma_model_path", "bert_model_path"):
-        if slot in semantic:
-            semantic.pop(slot)
-            notes.changed(
-                f"{path}.{slot}",
-                "removed; the runtime has no EmbeddingGemma or MiniLM family "
-                "(use Vela Embedding or an OpenAI-compatible endpoint)",
-            )
-    for slot in ("qwen3_model_path", "mmbert_model_path", "multimodal_model_path"):
-        legacy = semantic.get(slot)
-        replacement = replacement_for(legacy)
-        if replacement is not None:
-            semantic[slot] = replacement.target
-            notes.changed(
-                f"{path}.{slot}",
-                f"{legacy} -> {replacement.target}: {replacement.note}",
-            )
-
-
 def _migrate_signals(path: str, signals: dict[str, Any], notes: MigrationNotes) -> None:
-    for index, rule in enumerate(_list(signals.get("classifiers"))):
+    for index, rule in enumerate(as_list(signals.get("classifiers"))):
         if not isinstance(rule, dict):
             continue
         legacy = rule.get("model_path")
@@ -436,7 +398,7 @@ def _migrate_signals(path: str, signals: dict[str, Any], notes: MigrationNotes) 
                 f"{path}.classifiers[{index}].model_path",
                 f"{legacy} -> {replacement.target}: {replacement.note}",
             )
-    for index, rule in enumerate(_list(signals.get("hallucination"))):
+    for index, rule in enumerate(as_list(signals.get("hallucination"))):
         if isinstance(rule, dict) and rule.pop("use_nli", None) is not None:
             notes.changed(
                 f"{path}.hallucination[{index}].use_nli",
@@ -447,7 +409,7 @@ def _migrate_signals(path: str, signals: dict[str, Any], notes: MigrationNotes) 
 def _migrate_decision(
     path: str, decision: dict[str, Any], notes: MigrationNotes
 ) -> None:
-    for index, plugin in enumerate(_list(decision.get("plugins"))):
+    for index, plugin in enumerate(as_list(decision.get("plugins"))):
         if not isinstance(plugin, dict) or plugin.get("type") != "hallucination":
             continue
         configuration = plugin.get("configuration")
@@ -459,12 +421,12 @@ def _migrate_decision(
                 f"{path}.plugins[{index}].configuration.use_nli",
                 "removed; NLI explanations are retired",
             )
-    mlp = _dict_at(decision, "algorithm", "mlp")
+    mlp = dict_at(decision, "algorithm", "mlp")
     if mlp is not None and mlp.pop("device", None) is not None:
         notes.changed(
             path + ".algorithm.mlp.device", "removed; the MLP selector runs in Go"
         )
-    grounding = _dict_at(decision, "algorithm", "fusion", "grounding")
+    grounding = dict_at(decision, "algorithm", "fusion", "grounding")
     if grounding is not None and "nli_contradiction_penalty" in grounding:
         penalty = grounding.pop("nli_contradiction_penalty")
         grounding.setdefault("contradiction_penalty", penalty)
@@ -475,77 +437,17 @@ def _migrate_decision(
         )
 
 
-def _migrate_stores(canonical: dict[str, Any], notes: MigrationNotes) -> None:
-    stores = _dict_at(canonical, "global", "stores")
-    if stores is None:
+def _migrate_polarity_guard(canonical: dict[str, Any], notes: MigrationNotes) -> None:
+    guard = dict_at(canonical, "global", "stores", "response_cache", "polarity_guard")
+    if guard is None:
         return
-    guard = _dict_at(stores, "response_cache", "polarity_guard")
-    if guard is not None:
-        path = "global.stores.response_cache.polarity_guard"
-        mode = str(guard.get("mode") or "").strip().lower()
-        if mode in {"nli", "lexical+nli"}:
-            guard["mode"] = "lexical"
-            notes.changed(
-                path + ".mode",
-                f"{mode} -> lexical; the NLI tier is retired and the lexical guard stays",
-            )
-        if guard.pop("nli", None) is not None:
-            notes.changed(path + ".nli", "removed; the NLI tier is retired")
-    for name, store in stores.items():
-        if not isinstance(store, dict):
-            continue
-        model = str(store.get("embedding_model") or "").strip().lower()
-        if model in RETIRED_EMBEDDING_TYPES:
-            store["embedding_model"] = "mmbert"
-            notes.changed(
-                f"global.stores.{name}.embedding_model",
-                f"{model} -> mmbert (Vela Embedding); stored vectors must be re-embedded",
-            )
-
-
-def _binding_maps(canonical: dict[str, Any]):
-    catalog_bindings = _dict_at(canonical, "global", "model_catalog", "bindings")
-    if catalog_bindings is not None:
-        yield "global.model_catalog.bindings", catalog_bindings
-    routing_bindings = _dict_at(canonical, "routing", "model_bindings")
-    if routing_bindings is not None:
-        yield "routing.model_bindings", routing_bindings
-    for index, recipe in enumerate(_list(canonical.get("recipes"))):
-        bindings = _dict_at(recipe, "routing", "model_bindings")
-        if bindings is not None:
-            yield f"recipes[{index}].routing.model_bindings", bindings
-
-
-def _signal_maps(canonical: dict[str, Any]):
-    signals = _dict_at(canonical, "routing", "signals")
-    if signals is not None:
-        yield "routing.signals", signals
-    for index, recipe in enumerate(_list(canonical.get("recipes"))):
-        recipe_signals = _dict_at(recipe, "routing", "signals")
-        if recipe_signals is not None:
-            yield f"recipes[{index}].routing.signals", recipe_signals
-
-
-def _decisions(canonical: dict[str, Any]):
-    for index, decision in enumerate(
-        _list(_dict_at(canonical, "routing", default={}).get("decisions"))
-    ):
-        if isinstance(decision, dict):
-            yield f"routing.decisions[{index}]", decision
-    for recipe_index, recipe in enumerate(_list(canonical.get("recipes"))):
-        routing = _dict_at(recipe, "routing", default={})
-        for index, decision in enumerate(_list(routing.get("decisions"))):
-            if isinstance(decision, dict):
-                yield f"recipes[{recipe_index}].routing.decisions[{index}]", decision
-
-
-def _dict_at(value: Any, *keys: str, default: dict[str, Any] | None = None):
-    for key in keys:
-        if not isinstance(value, dict):
-            return default
-        value = value.get(key)
-    return value if isinstance(value, dict) else default
-
-
-def _list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
+    path = "global.stores.response_cache.polarity_guard"
+    mode = str(guard.get("mode") or "").strip().lower()
+    if mode in {"nli", "lexical+nli"}:
+        guard["mode"] = "lexical"
+        notes.changed(
+            path + ".mode",
+            f"{mode} -> lexical; the NLI tier is retired and the lexical guard stays",
+        )
+    if guard.pop("nli", None) is not None:
+        notes.changed(path + ".nli", "removed; the NLI tier is retired")

@@ -476,6 +476,100 @@ def test_embedding_backends_and_retired_embedders_move_to_the_runtime():
     assert sum("re-embedded" in note.message for note in notes) >= 3
 
 
+def test_stores_selection_and_rag_leave_the_retired_minilm_default():
+    rag = {
+        "type": "rag",
+        "configuration": {
+            "enabled": True,
+            "backend": "milvus",
+            "backend_config": {"collection": "docs"},
+        },
+    }
+    hosted_rag = {
+        "type": "rag",
+        "configuration": {
+            "enabled": True,
+            "backend": "openai",
+            "backend_config": {"vector_store_id": "vs-1"},
+        },
+    }
+    migrated, notes = _migrate(
+        _config(
+            {
+                "model_catalog": {
+                    "embeddings": {
+                        "semantic": {"bert_model_path": "models/mom-embedding-light"}
+                    }
+                },
+                "router": {
+                    "model_selection": {
+                        "ml": {"models_path": "models/selection", "model_type": "bert"}
+                    }
+                },
+                "stores": {
+                    "response_cache": {"enabled": True, "backend_type": "memory"},
+                    "memory": {
+                        "enabled": True,
+                        "backend": "milvus",
+                        "embedding_model": "gemma",
+                    },
+                    "vector_store": {"enabled": True, "backend_type": "milvus"},
+                    "tool_sessions": {"backend": "redis"},
+                },
+            },
+            routing={
+                "decisions": [
+                    {"name": "docs", "plugins": [rag]},
+                    {"name": "hosted", "plugins": [hosted_rag]},
+                ]
+            },
+        )
+    )
+
+    stores = migrated["global"]["stores"]
+    assert stores["response_cache"]["embedding_model"] == "mmbert"
+    assert stores["memory"]["embedding_model"] == "mmbert"
+    assert stores["vector_store"]["embedding_model"] == "mmbert"
+    assert "embedding_model" not in stores["tool_sessions"]
+    assert (
+        migrated["global"]["router"]["model_selection"]["ml"]["model_type"] == "mmbert"
+    )
+    by_path = {note.path: note for note in notes}
+    cache = by_path["global.stores.response_cache.embedding_model"]
+    assert not cache.action_required
+    assert "bert was this store's default" in cache.message
+    for path in (
+        "global.stores.memory.embedding_model",
+        "global.stores.vector_store.embedding_model",
+        "global.router.model_selection.ml.model_type",
+        "routing.decisions[0].plugins[0].configuration.backend",
+    ):
+        assert by_path[path].action_required, path
+    assert (
+        "'docs'"
+        in by_path["routing.decisions[0].plugins[0].configuration.backend"].message
+    )
+    assert "routing.decisions[1].plugins[0].configuration.backend" not in by_path
+
+
+def test_store_default_follows_a_served_semantic_model():
+    source = _config(
+        {
+            "model_catalog": {
+                "embeddings": {
+                    "semantic": {"qwen3_model_path": "models/mom-embedding-pro"}
+                }
+            },
+            "stores": {"response_cache": {"enabled": True, "backend_type": "redis"}},
+        }
+    )
+
+    migrated, notes = _migrate(source)
+
+    assert "embedding_model" not in migrated["global"]["stores"]["response_cache"]
+    assert len(notes) == 0
+
+
 def test_signal_and_plugin_nli_options_and_mlp_devices_are_removed():
     decision = {
         "name": "grounded",
@@ -538,13 +632,19 @@ def test_signal_and_plugin_nli_options_and_mlp_devices_are_removed():
     assert "routing.decisions[0].algorithm.mlp.device" in _note_paths(notes)
 
 
+def _is_reembed_reminder(note):
+    return note.action_required and "re-embed" in note.message
+
+
 def test_runtime_migration_is_idempotent_and_quiet_the_second_time():
     source = yaml.safe_load((REPO_ROOT / "config/config.yaml").read_text())
     first, _ = _migrate(source)
     second, notes = _migrate(first)
 
     assert second == first
-    assert len(notes) == 0
+    # No value records that a RAG collection was re-embedded, so its reminder repeats.
+    assert [note.path for note in notes if not _is_reembed_reminder(note)] == []
+    assert all(note.path.endswith(".configuration.backend") for note in notes)
 
 
 @pytest.mark.parametrize(
@@ -555,7 +655,11 @@ def test_maintained_configs_leave_no_removed_provider_or_field(path):
 
     leftovers = list(_removed_values(migrated))
     assert leftovers == []
-    assert not any(note.action_required for note in notes)
+    assert [
+        note.path
+        for note in notes
+        if note.action_required and not _is_reembed_reminder(note)
+    ] == []
 
 
 def _removed_values(value, path=""):
