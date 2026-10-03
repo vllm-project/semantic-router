@@ -1,0 +1,4 @@
+cache /data/dev2/runs/runtime-a/triton/27B-bench-old-20261003T085639Z from /data/dev2/runs/release/triton/dev2-rah-27B-20261003T054541Z files=2836 digest=97418e1d87c1a3beab7f0fa977f6713199feac593ff6b2fcddcc86cbfcca80aa
+old exit=0 wall_seconds=261.9 cache_files=2836
+cache /data/dev2/runs/runtime-a/triton/27B-bench-new-20261003T085639Z from /data/dev2/runs/runtime-a/triton/27B-bench-old-20261003T085639Z files=2836 digest=313607dfdf71d5951cdb71410b8aa9276aff7ff63a66d98ca4d845477b4a205e
+new exit=0 wall_seconds=276.2 cache_files=2836
