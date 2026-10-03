@@ -88,13 +88,42 @@ def render(
     )
 
 
-def physical_batches(items: list[RenderedItem]) -> list[list[int]]:
-    """Item indices in request order, in batches of eight."""
+def physical_batches(
+    items: list[RenderedItem], budget: int | None = None
+) -> list[list[int]]:
+    """Item indices in request order, in batches of eight.
+
+    A batch whose padded size exceeds ``budget`` tokens splits into
+    consecutive parts that fit. The released packages never reach it (eight
+    rows at the input limit stay within it); wider packages could.
+    """
     indices = list(range(len(items)))
-    return [
+    batches = [
         indices[start : start + PHYSICAL_BATCH]
         for start in range(0, len(indices), PHYSICAL_BATCH)
     ]
+    if budget is None:
+        return batches
+    return [part for batch in batches for part in _within(batch, items, budget)]
+
+
+def _within(
+    batch: list[int], items: list[RenderedItem], budget: int
+) -> list[list[int]]:
+    """``batch`` in consecutive parts whose padded size stays within ``budget`` tokens."""
+    parts: list[list[int]] = []
+    width = 0
+    for index in batch:
+        padded = -(-len(items[index].ids) // PAD_MULTIPLE) * PAD_MULTIPLE
+        if padded > budget:
+            raise ValueError("a single question exceeds the forward token budget")
+        if parts and max(width, padded) * (len(parts[-1]) + 1) <= budget:
+            parts[-1].append(index)
+            width = max(width, padded)
+        else:
+            parts.append([index])
+            width = padded
+    return parts
 
 
 def probabilities(

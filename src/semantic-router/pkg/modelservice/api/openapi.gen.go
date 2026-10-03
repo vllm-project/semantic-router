@@ -109,6 +109,12 @@ const (
 	Exact       ProfileInfoNumerics = "exact"
 )
 
+// Defines values for QuestionHead.
+const (
+	Broad  QuestionHead = "broad"
+	Router QuestionHead = "router"
+)
+
 // Answer One answer. Choice: choice, probabilities, confidence. Noul: noul (P(true)). Score: score (the expected
 // level), probabilities, confidence, legend. A failed question has only type and error.
 type Answer struct {
@@ -268,6 +274,9 @@ type DecisionResponse struct {
 
 	// Sets Set answers by question ID.
 	Sets *map[string]SetAnswer `json:"sets,omitempty"`
+
+	// SpanHeads The span head (router or broad) that answered each Span question, on models with a broad span head.
+	SpanHeads *map[string]string `json:"span_heads,omitempty"`
 
 	// Spans Span answers by question ID.
 	Spans *map[string][]Span `json:"spans,omitempty"`
@@ -526,14 +535,20 @@ type Question struct {
 	// descriptions. Set and Span: an object of 1..255 labels to descriptions.
 	Criteria *interface{} `json:"criteria,omitempty"`
 
+	// Head Span questions on models with a broad span head: the head that answers (default: the model's routing,
+	// reported per question in `span_heads`). Models without one answer `broad` with invalid_question.
+	Head *QuestionHead `json:"head,omitempty"`
+
 	// Instructions The question; non-empty text, an object or an array.
 	Instructions *interface{} `json:"instructions,omitempty"`
 
 	// Levels Ordered Score level descriptions, an alternative to a criteria list.
 	Levels *[]interface{} `json:"levels,omitempty"`
 
-	// Over The state field a question reads (typed-part models); default the whole state, or for a span the answer if present, else the request.
-	Over *string `json:"over,omitempty"`
+	// Over The state field a question reads (typed-part models): a field name, or a list of field names it reads
+	// together in state order; default the whole state, or for a span the answer if present, else the
+	// request. A span reads one field.
+	Over *interface{} `json:"over,omitempty"`
 
 	// Preset A question the model defines; the model fills in its type, instructions and criteria.
 	Preset *string `json:"preset,omitempty"`
@@ -545,6 +560,10 @@ type Question struct {
 	// Unknown or undeclared types are answered with invalid_question.
 	Type *string `json:"type,omitempty"`
 }
+
+// QuestionHead Span questions on models with a broad span head: the head that answers (default: the model's routing,
+// reported per question in `span_heads`). Models without one answer `broad` with invalid_question.
+type QuestionHead string
 
 // Representation The identity of an embedding space; vectors with different representations never mix.
 type Representation struct {

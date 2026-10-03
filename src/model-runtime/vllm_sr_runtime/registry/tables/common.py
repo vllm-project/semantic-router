@@ -22,6 +22,8 @@ class BuiltinModel:
     them (Decision 1.0, Vela 1.0, Vela 2.0, Omni); the resolver downloads
     exactly these files and the family verifies them. ``access`` is
     ``public``, ``gated`` or ``private`` (a token with access is needed).
+    A ``prepared`` entry is served from a bundle prepared from ``revision``
+    (``registry.resolve.prepared_bundle``), which resolves without the Hub.
     """
 
     repo_id: str
@@ -35,6 +37,7 @@ class BuiltinModel:
     base: tuple[str, str] | None = None
     files: Mapping[str, str] = field(default_factory=dict)
     access: str = "public"
+    prepared: bool = False
     golden_answers: dict[str, Any] = field(default_factory=dict)
     kernel_choices: dict[str, Any] = field(default_factory=dict)
 

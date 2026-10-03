@@ -100,7 +100,6 @@ global:
   model_catalog:
     modules:
       prompt_guard:
-        variant: mmbert32k
         max_sequence_length: 32768
         window:
           size: 128
@@ -134,9 +133,9 @@ Outside the implicit default, omitting `window` retains whole-input inference
 or the configured legacy scan. Window sizes and thresholds need separate
 checkpoint evaluation; scanning all tokens does not establish understanding of
 distant context. Quoted attacks and instructions whose meaning depends on
-another window require separate evaluation. Local Candle and ORT model bindings
-can also select token windows; their loaded adapter and graph must support the
-requested execution geometry.
+another window require separate evaluation. Model bindings to a
+[model runtime](../../../model-runtime/guides/safety.md) deployment can also
+select token windows; the model must support the requested window size.
 
 A provider result declaring truncated or incompletely processed input is an
 unresolved scan. Request rules, the text detection APIs, and response scans
