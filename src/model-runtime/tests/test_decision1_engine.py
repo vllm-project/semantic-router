@@ -20,6 +20,7 @@ from vllm_sr_runtime.families.decision1 import package as pkg
 from vllm_sr_runtime.families.decision1.family import Decision1Family
 from vllm_sr_runtime.heads.typed import TypeHeadLayer, TypeReadout
 from vllm_sr_runtime.plugins.base import EncoderBatch, EngineOptions, PackageRef
+from vllm_sr_runtime.registry import builtin
 from vllm_sr_runtime.testing.decision1 import write_package
 from vllm_sr_runtime.testing.fixtures import modernbert_config, random_backbone, save
 
@@ -159,6 +160,21 @@ def test_named_kernel_variants_per_runtime(tmp_path):
     assert family.describe(family.verify(PackageRef(eos))).kernel_variants == {
         "causal_conv1d": "fp64_accumulate"
     }
+
+
+def test_reduced_copy_consent_comes_from_the_pinned_package(tmp_path, monkeypatch):
+    family = Decision1Family()
+    package = family.verify(PackageRef(write_package(tmp_path / "v", runtime=pkg.VELA)))
+    dtype = family.describe(package).dtype
+    assert (dtype.reduced_gpu, dtype.reduced_cpu) == (None, None)
+    lex = builtin.lookup("Decision-1.0-Lex-0.6B")
+    monkeypatch.setattr(
+        builtin,
+        "by_identity",
+        lambda digest: lex if digest == package.model_sha256 else None,
+    )
+    dtype = family.describe(package).dtype
+    assert (dtype.reduced_gpu, dtype.reduced_cpu) == (None, "bfloat16")
 
 
 def test_type_head_layer_is_the_reference_encoder_layer():

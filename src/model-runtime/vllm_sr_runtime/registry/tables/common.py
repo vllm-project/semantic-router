@@ -24,6 +24,9 @@ class BuiltinModel:
     ``public``, ``gated`` or ``private`` (a token with access is needed).
     A ``prepared`` entry is served from a bundle prepared from ``revision``
     (``registry.resolve.prepared_bundle``), which resolves without the Hub.
+    ``reduced`` maps ``gpu`` / ``cpu`` to the reduced-precision copy the
+    package's records support (``DtypePolicy.reduced_gpu`` / ``reduced_cpu``);
+    a device it does not name gets none.
     """
 
     repo_id: str
@@ -40,6 +43,7 @@ class BuiltinModel:
     prepared: bool = False
     golden_answers: dict[str, Any] = field(default_factory=dict)
     kernel_choices: dict[str, Any] = field(default_factory=dict)
+    reduced: Mapping[str, str] = field(default_factory=dict)
 
 
 def with_recorded(

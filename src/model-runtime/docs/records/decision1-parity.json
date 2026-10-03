@@ -1366,6 +1366,50 @@
    }
   },
   {
+   "model": "Lux-9B",
+   "device": "cpu",
+   "profile": "exact",
+   "commit": "51b6bd721",
+   "panels": {
+    "css15": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "mlx-diag": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "public231": {
+     "prompts": 231,
+     "identical": 231,
+     "questions": 231,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    },
+    "typed-final": {
+     "prompts": 100,
+     "identical": 100,
+     "questions": 100,
+     "decision_changes": 0,
+     "error_mismatches": 0,
+     "missing": 0,
+     "max_abs_diff": 0.0
+    }
+   }
+  },
+  {
    "model": "Nox-4B",
    "device": "cpu",
    "profile": "exact",
