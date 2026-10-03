@@ -65,7 +65,9 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
         help="numerics profile (default: exact)",
     )
     parser.add_argument(
-        "--engine", default="native", help="engine plugin (default: native)"
+        "--engine",
+        default="auto",
+        help="engine plugin, or auto: the first that runs the model, native first (default: auto)",
     )
     parser.add_argument(
         "--family", help="model family plugin (default: detected from the package)"

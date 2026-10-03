@@ -25,6 +25,7 @@ MODELS: tuple[BuiltinModel, ...] = (
         loaded_parameters=0,
         backbone="vela_omni",
         min_device_memory_gib=2,
+        prepared=True,
     ),
     BuiltinModel(
         repo_id=f"{ORG}/Vela-1.0-Omni-Mini",
@@ -35,6 +36,7 @@ MODELS: tuple[BuiltinModel, ...] = (
         loaded_parameters=0,
         backbone="vela_omni",
         min_device_memory_gib=8,
+        prepared=True,
     ),
 )
 MODELS = with_recorded(MODELS, "golden_answers_omni.json", "answers", "golden_answers")
@@ -44,11 +46,6 @@ _BY_REPO = {model.repo_id.lower(): model for model in MODELS}
 def lookup(repo_id: str) -> BuiltinModel | None:
     """The pin of an Omni repository (case-insensitive), or None."""
     return _BY_REPO.get(repo_id.strip().lower())
-
-
-def bundle_name(model: BuiltinModel) -> str:
-    """The prepared bundle's directory name: ``vela-1.0-omni-nano`` for ``vllm-sr/Vela-1.0-Omni-Nano``."""
-    return model.repo_id.split("/", 1)[1].lower()
 
 
 def variant(model: BuiltinModel) -> str:
