@@ -90,7 +90,7 @@ def _rope_theta(hf_config: Any) -> float:
     scaling = getattr(hf_config, "rope_scaling", None)
     if scaling and (
         not isinstance(scaling, dict)
-        or set(scaling) - {"type", "rope_type"}
+        or set(scaling) - {"type", "rope_type", "rope_theta"}
         or scaling.get("rope_type", scaling.get("type", "default")) != "default"
     ):
         raise ValueError("scaled RoPE is unsupported by the mapper")
@@ -103,9 +103,18 @@ def _rope_theta(hf_config: Any) -> float:
     theta = getattr(hf_config, "rope_theta", None)
     if theta is None and isinstance(parameters, dict):
         theta = parameters.get("rope_theta")
+    if theta is None and isinstance(scaling, dict):
+        theta = scaling.get("rope_theta")
     value = float(theta)
     if not math.isfinite(value) or value <= 0:
         raise ValueError("RoPE theta must be positive and finite")
+    for config in (parameters, scaling):
+        if (
+            isinstance(config, dict)
+            and "rope_theta" in config
+            and float(config["rope_theta"]) != value
+        ):
+            raise ValueError("RoPE theta differs between configuration fields")
     return value
 
 

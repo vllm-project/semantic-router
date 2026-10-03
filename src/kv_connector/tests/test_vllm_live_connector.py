@@ -209,6 +209,15 @@ class LiveConnectorTests(unittest.TestCase):
     def test_rejects_scaled_rope_before_cache_reuse(self) -> None:
         from src.kv_connector.vllm_connector import _rope_theta
 
+        self.assertEqual(
+            _rope_theta(
+                SimpleNamespace(
+                    rope_scaling={"rope_theta": 1_000_000, "rope_type": "default"},
+                    rope_parameters={"rope_theta": 1_000_000, "rope_type": "default"},
+                )
+            ),
+            1_000_000,
+        )
         with self.assertRaisesRegex(ValueError, "scaled RoPE"):
             _rope_theta(
                 SimpleNamespace(
