@@ -77,6 +77,14 @@ class Decision2Family(ModelFamily):
     name = "decision2"
     surfaces = frozenset({"decisions"})
 
+    @classmethod
+    def descriptor(cls) -> dict[str, Any]:
+        return {
+            "surfaces": sorted(cls.surfaces),
+            "formats": ["vllm-sr-decision/2"],
+            "question_types": ["choice", "noul", "score"],
+        }
+
     def detect(self, package: PackageRef) -> bool:
         return pkg.is_package(package.root)
 
