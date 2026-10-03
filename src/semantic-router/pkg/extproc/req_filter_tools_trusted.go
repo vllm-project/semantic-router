@@ -16,11 +16,19 @@ import (
 // unless the decision's stage_roles authorize it.
 const trustedFactsRequestStage = llmprotocol.TrustedStageCandidate
 
+// trustedFactsLooperStage is the role attributed to Looper execution: Looper
+// forwards the tool-bearing request to the models that produce the final
+// answer, so it binds tools at the final stage.
+const trustedFactsLooperStage = llmprotocol.TrustedStageFinal
+
+// trustedFactsNow is the clock for availability freshness; tests override it.
+var trustedFactsNow = time.Now
+
 // resolveTrustedFactsGate builds the distinct capability, authorization,
 // availability, and stage-role facts for the llmprotocol eligibility gate. It
 // reports false when the decision does not opt in to trusted facts, in which
 // case the caller must leave the request untouched.
-func resolveTrustedFactsGate(request *llmprotocol.Request, toolsCfg *config.ToolsPluginConfig, toolsAvailable bool) (llmprotocol.TrustedFacts, bool) {
+func resolveTrustedFactsGate(request *llmprotocol.Request, toolsCfg *config.ToolsPluginConfig, toolsAvailable bool, stage llmprotocol.TrustedStage) (llmprotocol.TrustedFacts, bool) {
 	if request == nil || toolsCfg == nil || !toolsCfg.TrustedFactsEnabled() {
 		return llmprotocol.TrustedFacts{}, false
 	}
@@ -30,7 +38,7 @@ func resolveTrustedFactsGate(request *llmprotocol.Request, toolsCfg *config.Tool
 		Capable:       llmprotocol.RequiredCapabilities(*request).Supports(llmprotocol.CapabilityTools),
 		Authorized:    trustedFactsAuthorized(trusted.TrustSources),
 		Available:     toolsAvailable,
-		Stage:         trustedFactsRequestStage,
+		Stage:         stage,
 		AllowedStages: trustedFactsAllowedStages(trusted.StageRoles),
 	}, true
 }
@@ -64,14 +72,17 @@ func trustedFactsAllowedStages(roles []string) []llmprotocol.TrustedStage {
 	return allowed
 }
 
-// applyTrustedFactsGate evaluates the trusted-facts eligibility gate before
-// relevance or learned ranking and enforces the outcome on the request tool
-// set. It returns true when the caller must stop: deny strips all tools and
-// narrow keeps only explicitly policy-filtered tools with no retrieval
-// expansion, so neither outcome can widen privileges. Allow and observe leave
-// the request untouched.
-func (r *OpenAIRouter) applyTrustedFactsGate(request *llmprotocol.Request, ctx *RequestContext, toolsCfg *config.ToolsPluginConfig) bool {
-	facts, ok := resolveTrustedFactsGate(request, toolsCfg, r.trustedFactsToolsAvailable())
+// applyTrustedFactsGate evaluates the trusted-facts eligibility gate for the
+// requesting stage before relevance, learned ranking, or Looper execution and
+// enforces the outcome on the request tool set. It returns true when the
+// caller must stop: deny strips all tools and narrow keeps only explicitly
+// policy-filtered tools with no retrieval expansion, so neither outcome can
+// widen privileges. Allow and observe leave the request untouched.
+func (r *OpenAIRouter) applyTrustedFactsGate(request *llmprotocol.Request, ctx *RequestContext, toolsCfg *config.ToolsPluginConfig, stage llmprotocol.TrustedStage) bool {
+	if !toolsCfg.TrustedFactsEnabled() {
+		return false
+	}
+	facts, ok := resolveTrustedFactsGate(request, toolsCfg, r.trustedFactsToolsAvailable(toolsCfg.TrustedFacts.FreshnessSeconds), stage)
 	if !ok || facts.Enforcement == llmprotocol.TrustedDisabled {
 		return false
 	}
@@ -83,6 +94,7 @@ func (r *OpenAIRouter) applyTrustedFactsGate(request *llmprotocol.Request, ctx *
 			request.Tools = nil
 			request.Generation++
 		}
+		clearSemanticToolChoiceWhenNoTools(request)
 		_ = commitToolSelection(request, ctx)
 		return true
 	case llmprotocol.TrustedNarrow:
@@ -91,6 +103,7 @@ func (r *OpenAIRouter) applyTrustedFactsGate(request *llmprotocol.Request, ctx *
 			request.Generation++
 		}
 		request.Tools = filtered
+		clearSemanticToolChoiceWhenNoTools(request)
 		_ = commitToolSelection(request, ctx)
 		return true
 	default:
@@ -98,12 +111,23 @@ func (r *OpenAIRouter) applyTrustedFactsGate(request *llmprotocol.Request, ctx *
 	}
 }
 
-// trustedFactsToolsAvailable reports live tools-database availability: the
-// request-time liveness probe is fresh by construction. FreshnessSeconds
-// bounds cached availability snapshots once such evidence exists; until then
-// only a live database counts as available.
-func (r *OpenAIRouter) trustedFactsToolsAvailable() bool {
-	return r != nil && r.ToolsDatabase != nil && r.ToolsDatabase.IsEnabled()
+// trustedFactsToolsAvailable reports bounded runtime availability evidence:
+// the tools database must be enabled and must have completed a successful
+// load, and when freshnessSeconds is positive that load must be no older than
+// the bound. An enabled flag alone, an unloaded database, or stale evidence
+// is unavailable, which narrows and never allows.
+func (r *OpenAIRouter) trustedFactsToolsAvailable(freshnessSeconds int) bool {
+	if r == nil || r.ToolsDatabase == nil || !r.ToolsDatabase.IsEnabled() {
+		return false
+	}
+	loadedAt := r.ToolsDatabase.LoadedAt()
+	if loadedAt.IsZero() {
+		return false
+	}
+	if freshnessSeconds <= 0 {
+		return true
+	}
+	return trustedFactsNow().Sub(loadedAt) <= time.Duration(freshnessSeconds)*time.Second
 }
 
 // recordTrustedFactsOutcome records the bounded gate result: enforcement,

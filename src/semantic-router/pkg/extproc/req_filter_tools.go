@@ -176,7 +176,7 @@ func (r *OpenAIRouter) handleToolSelection(
 	// The trusted-facts gate runs before the decision-plugin branch and
 	// before relevance/ranking so deny and narrow close the bypass for
 	// tool_selection flows too: neither outcome can widen the tool set.
-	if r.applyTrustedFactsGate(request, ctx, toolsCfg) {
+	if r.applyTrustedFactsGate(request, ctx, toolsCfg, trustedFactsRequestStage) {
 		return nil
 	}
 

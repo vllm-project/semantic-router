@@ -1,7 +1,10 @@
 package extproc
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
@@ -33,6 +36,21 @@ func trustedFactsTestContext(t *testing.T, cfg *config.ToolsPluginConfig) *Reque
 	}
 }
 
+// loadedTrustedFactsToolsDB returns an enabled tools database that completed
+// a successful load, so it carries fresh availability evidence.
+func loadedTrustedFactsToolsDB(t *testing.T) *tools.ToolsDatabase {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "tools.json")
+	if err := os.WriteFile(path, []byte("[]"), 0o600); err != nil {
+		t.Fatalf("write tools file: %v", err)
+	}
+	db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{Enabled: true})
+	if err := db.LoadToolsFromFile(path); err != nil {
+		t.Fatalf("load tools file: %v", err)
+	}
+	return db
+}
+
 func trustedFactsTestRequest() *llmprotocol.Request {
 	req := testNeutralRequest("model", "look up the weather")
 	req.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
@@ -48,7 +66,7 @@ func TestResolveTrustedFactsGateMapsDistinctFacts(t *testing.T) {
 		TrustSources: []string{config.TrustedSourceOperatorPolicy},
 		StageRoles:   []string{config.TrustedStageCandidate},
 	})
-	facts, ok := resolveTrustedFactsGate(req, cfg, true)
+	facts, ok := resolveTrustedFactsGate(req, cfg, true, trustedFactsRequestStage)
 	if !ok {
 		t.Fatal("gate should engage for an enabled trusted-facts block")
 	}
@@ -80,12 +98,12 @@ func TestResolveTrustedFactsGateSkipsWhenDisabled(t *testing.T) {
 		"disabled block": {Enabled: true, TrustedFacts: &config.TrustedFactsConfig{Enabled: false}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, ok := resolveTrustedFactsGate(req, cfg, true); ok {
+			if _, ok := resolveTrustedFactsGate(req, cfg, true, trustedFactsRequestStage); ok {
 				t.Fatal("gate must not engage")
 			}
 		})
 	}
-	if _, ok := resolveTrustedFactsGate(nil, trustedFactsTestConfig(t, &config.TrustedFactsConfig{Enabled: true}), true); ok {
+	if _, ok := resolveTrustedFactsGate(nil, trustedFactsTestConfig(t, &config.TrustedFactsConfig{Enabled: true}), true, trustedFactsRequestStage); ok {
 		t.Fatal("gate must not engage for a nil request")
 	}
 }
@@ -102,7 +120,7 @@ func TestResolveTrustedFactsGateSeparatesAuthorizationFromAvailability(t *testin
 		FreshnessSeconds: 60,
 		StageRoles:       []string{config.TrustedStageCandidate},
 	})
-	facts, ok := resolveTrustedFactsGate(req, cfg, true)
+	facts, ok := resolveTrustedFactsGate(req, cfg, true, trustedFactsRequestStage)
 	if !ok {
 		t.Fatal("gate should engage")
 	}
@@ -174,7 +192,7 @@ func TestHandleToolSelectionTrustedFactsNarrowKeepsExplicitToolsOnly(t *testing.
 }
 
 func TestHandleToolSelectionTrustedFactsAllowAndObserveContinue(t *testing.T) {
-	db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{Enabled: true})
+	db := loadedTrustedFactsToolsDB(t)
 	for _, enforcement := range []string{"", config.TrustedEnforcementAuthoritative} {
 		name := "advisory observes"
 		if enforcement != "" {
@@ -240,5 +258,41 @@ func TestHandleToolSelectionDisabledParentDisengagesGate(t *testing.T) {
 	}
 	if len(req.Tools) != 2 {
 		t.Fatalf("disabled parent must leave tools untouched, got %v", req.Tools)
+	}
+}
+
+func TestHandleToolSelectionTrustedFactsAvailabilityNeedsBoundedEvidence(t *testing.T) {
+	cfg := trustedFactsTestConfig(t, &config.TrustedFactsConfig{
+		Enabled:          true,
+		Enforcement:      config.TrustedEnforcementAuthoritative,
+		TrustSources:     []string{config.TrustedSourceOperatorPolicy, config.TrustedSourceRuntimeFresh},
+		FreshnessSeconds: 60,
+		StageRoles:       []string{config.TrustedStageCandidate},
+	})
+	cfg.AllowTools = []string{"search"}
+	cases := map[string]struct {
+		db        *tools.ToolsDatabase
+		age       time.Duration
+		wantTools int
+	}{
+		// Enabled but never loaded: the static flag is not evidence.
+		"unloaded database narrows": {db: tools.NewToolsDatabase(tools.ToolsDatabaseOptions{Enabled: true}), wantTools: 1},
+		"stale load narrows":        {db: loadedTrustedFactsToolsDB(t), age: 2 * time.Minute, wantTools: 1},
+		"fresh load allows":         {db: loadedTrustedFactsToolsDB(t), wantTools: 2},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			trustedFactsNow = func() time.Time { return time.Now().Add(tc.age) }
+			t.Cleanup(func() { trustedFactsNow = time.Now })
+			router := &OpenAIRouter{ToolsDatabase: tc.db}
+			req := trustedFactsTestRequest()
+			resp := &ext_proc.ProcessingResponse{}
+			if err := router.handleToolSelection(req, "look up the weather", nil, &resp, trustedFactsTestContext(t, cfg)); err != nil {
+				t.Fatalf("handleToolSelection returned unexpected error: %v", err)
+			}
+			if len(req.Tools) != tc.wantTools {
+				t.Fatalf("tools = %v, want %d", req.Tools, tc.wantTools)
+			}
+		})
 	}
 }
