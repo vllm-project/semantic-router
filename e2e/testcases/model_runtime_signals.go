@@ -81,8 +81,8 @@ func checkTaskSignals(
 	if err != nil {
 		return nil, err
 	}
-	if len(preview.SignalErrors) > 0 {
-		return nil, fmt.Errorf("routing preview reported signal errors %v", preview.SignalErrors)
+	if err = onlyOfflineSignalError(preview.SignalErrors); err != nil {
+		return nil, err
 	}
 	text := preview.OriginalText
 	if text == "" {
@@ -179,6 +179,17 @@ func sameScore(values map[string]float64, key string, want float64) error {
 	}
 	if math.Abs(got-want) > mrScoreTolerance {
 		return fmt.Errorf("the Router reported %s=%.6f, the runtime %.6f", key, got, want)
+	}
+	return nil
+}
+
+// onlyOfflineSignalError allows the one signal error the profile plants: the
+// decision signal of the deployment that has no runtime.
+func onlyOfflineSignalError(signalErrors map[string]string) error {
+	for signal, reason := range signalErrors {
+		if signal != "decision:offline" || reason != "decision_unavailable" {
+			return fmt.Errorf("routing preview reported signal errors %v", signalErrors)
+		}
 	}
 	return nil
 }
