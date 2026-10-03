@@ -1365,6 +1365,36 @@ class M6ScriptTest(unittest.TestCase):
             self.assertEqual([Path(n).suffix for n in moved], [".json", ".log"])
             self.assertIn("complete (no listed chain alive)", out.stdout)
 
+    def test_successor_release_ops_cover_the_candidates(self):
+        import importlib.util
+        import re
+
+        ops = ROOT.parent / "release" / "records" / "dev2-27b-succ-2026-10-03" / "ops"
+        spec = importlib.util.spec_from_file_location("make_27bs", ops / "make_27bs.py")
+        make = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(make)
+        self.assertIsNone(make.CHOICE)
+        xarm = (M6 / "m6-xarm.sh").read_text()
+        names = re.search(r'\[\[ "\$NAME" =~ \^\((.*)\)\$ \]\]', xarm).group(1)
+        for arm, a in make.ARMS.items():
+            with self.subTest(arm=arm):
+                self.assertRegex(arm, f"^({names})$")
+                self.assertTrue(set(a["mixes"]) <= set(make.MIXES))
+                self.assertTrue(set(a["mixes"]) <= set(make.RECIPE))
+                for script in ("release27bs.sh", "inputs27bs.sh"):
+                    pattern = re.search(
+                        r'\[\[ "\$ARM" =~ (\S+) \]\]', (ops / script).read_text()
+                    ).group(1)
+                    self.assertRegex(arm, pattern)
+                index = (M6 / "m6-index.sh").read_text()
+                case = re.search(
+                    rf"\n\s+([^\n)]*\b{re.escape(arm)}\b[^\n)]*)\)\s*\n?\s*mixes=\"([^\"]*)\"",
+                    index,
+                )
+                self.assertIsNotNone(case, arm)
+                audited = {spec.split(":")[2] for spec in case.group(2).split()}
+                self.assertEqual(audited, set(a["mixes"]))
+
     def test_relay_accepts_m9_arm_seeds(self):
         for name, message in (
             ("M8-IB124-s4", "no arm-seed run"),
