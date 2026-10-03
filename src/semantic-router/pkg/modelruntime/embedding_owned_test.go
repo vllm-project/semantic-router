@@ -106,7 +106,7 @@ func TestOwnedRecipeEmbeddingDoesNotProvisionSharedCache(t *testing.T) {
 	cfg.SemanticCache.Enabled = true
 	cfg.SemanticCache.EmbeddingModel = "mmbert"
 	cfg.MmBertModelPath = "/does-not-exist/shared-cache"
-	prepared, err := PrepareOwnedRecipeEmbeddings(context.Background(), cfg, nil)
+	prepared, err := PrepareOwnedEmbeddings(context.Background(), cfg, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
