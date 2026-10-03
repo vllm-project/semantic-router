@@ -309,11 +309,56 @@ def _activation(name: str) -> Callable[[torch.Tensor], torch.Tensor]:
     raise ValueError(f"unsupported activation {name!r}")
 
 
+# The ``geglu`` variant that gives each row the same result in any batch.
+CONTIGUOUS = "contiguous"
+# Columns a row is padded to for ``rowwise``: whole unrolled AVX-512 vectors.
+ROW_ALIGN = 64
+
+
+def rowwise(
+    fn: Callable[[torch.Tensor], torch.Tensor], x: torch.Tensor
+) -> torch.Tensor:
+    """An element-wise ``fn`` whose result for a row never depends on where the row sits.
+
+    Vectorized CPU loops round a vector's lanes and its scalar tail apart, and
+    a flattened row straddles vectors by its position; rows padded to
+    ``ROW_ALIGN`` columns each start a vector and leave no tail.
+    """
+    width = x.shape[-1]
+    pad = -width % ROW_ALIGN
+    if pad == 0:
+        return fn(x.contiguous())
+    return fn(F.pad(x, (0, pad)))[..., :width]
+
+
+def geglu_ref(
+    projected: torch.Tensor, activation: Callable[[torch.Tensor], torch.Tensor]
+) -> torch.Tensor:
+    """GeGLU over ``[..., 2 * I]`` projections: ``activation(value) * gate`` on the halves (Transformers)."""
+    value, gate = projected.chunk(2, dim=-1)
+    return activation(value) * gate
+
+
+def geglu_contiguous(
+    projected: torch.Tensor, activation: Callable[[torch.Tensor], torch.Tensor]
+) -> torch.Tensor:
+    """``geglu_ref`` with the activation on whole aligned rows of the value half (``rowwise``)."""
+    value, gate = projected.chunk(2, dim=-1)
+    return rowwise(activation, value) * gate
+
+
+def linear_ref(linear: torch.nn.Module) -> torch.nn.Module:
+    """The ``linear`` slot lays a linear layer out for its device at load; the reference keeps it."""
+    return linear
+
+
 def reference_kernels(device: str) -> KernelSet:
     kernels = KernelSet(device=device)
     for name, fn in (
         ("causal_conv1d", causal_conv1d_ref),
         ("chunk_gated_delta_rule", chunk_gated_delta_rule_ref),
+        ("geglu", geglu_ref),
+        ("linear", linear_ref),
         ("rotary_half", rotary_half_ref),
         ("sdpa", sdpa_ref),
     ):
