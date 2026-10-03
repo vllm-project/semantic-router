@@ -15,11 +15,20 @@ from cli.config_contract import (
 )
 from cli.config_migration_catalog import migrate_v03_catalog_contract
 from cli.config_migration_global import normalize_global_layout, place_global_block
-from cli.config_migration_model_runtime import migrate_prompt_guard_backend
+from cli.config_migration_model_runtime import (
+    migrate_model_runtime_contract,
+    migrate_prompt_guard_backend,
+)
+from cli.config_migration_notes import MigrationNotes
 
 
-def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
-    """Return a canonical v0.3 config dict from legacy or mixed input data."""
+def migrate_config_data(
+    data: dict[str, Any], notes: MigrationNotes | None = None
+) -> dict[str, Any]:
+    """Return a canonical v0.3 config dict from legacy or mixed input data.
+
+    ``notes`` collects the rewrites and removals an operator should review.
+    """
 
     source = deepcopy(data or {})
     # Historically an omitted listener list meant that the local CLI would
@@ -73,6 +82,9 @@ def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
         router_owns_transport=router_owns_transport,
     )
     migrate_prompt_guard_backend(canonical)
+    migrate_model_runtime_contract(
+        canonical, notes if notes is not None else MigrationNotes()
+    )
 
     return canonical
 

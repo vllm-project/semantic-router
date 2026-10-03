@@ -12,11 +12,12 @@ import yaml
 from cli.config_generator import generate_envoy_config_from_user_config
 from cli.config_import import import_config_command as run_import_config_command
 from cli.config_migration import migrate_config_data
+from cli.config_migration_notes import MigrationNotes
 from cli.config_schema import schema_document
 from cli.config_schema.views import parse_surface_selector, schema_view
 from cli.parser import ConfigParseError, load_config_file, parse_user_config
 from cli.router_management_client import RouterManagementClient
-from cli.terminal import echo, fields, heading, success
+from cli.terminal import echo, fields, heading, success, warning
 from cli.utils import get_logger
 from cli.validator import (
     print_validation_errors,
@@ -196,7 +197,8 @@ def migrate_config_command(
         log.error(f"Failed to read configuration: {e}")
         sys.exit(1)
 
-    migrated = migrate_config_data(data)
+    notes = MigrationNotes()
+    migrated = migrate_config_data(data, notes)
 
     destination = (
         Path(output_path)
@@ -222,7 +224,18 @@ def migrate_config_command(
             ("Output", destination),
         )
     )
+    _print_migration_notes(notes)
     return destination
+
+
+def _print_migration_notes(notes: MigrationNotes) -> None:
+    changes = [note for note in notes if not note.action_required]
+    actions = [note for note in notes if note.action_required]
+    if changes:
+        heading("Changes to review")
+        fields((note.path, note.message) for note in changes)
+    for note in actions:
+        warning(f"{note.path}: {note.message}")
 
 
 def import_config_from_source_command(
