@@ -34,7 +34,6 @@ from torch import nn
 
 from ....accel.kernels import KernelSet
 from ..encoder import pads_little
-from .common import rotate_half
 
 MODEL_TYPE = "modernbert"
 FULL = "full_attention"
@@ -185,17 +184,6 @@ class ModernBertRotary(nn.Module):
                 sin = emb.sin() * self.scaling[kind]
             out[kind] = (cos.to(dtype=x.dtype), sin.to(dtype=x.dtype))
         return out
-
-
-def apply_rotary(
-    q: torch.Tensor, k: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Full rotary embedding over ``[B, H, T, D]`` computed in FP32 and cast back (ModernBERT)."""
-    dtype = q.dtype
-    cos, sin = cos.unsqueeze(1), sin.unsqueeze(1)
-    q_embed = (q.float() * cos) + (rotate_half(q.float()) * sin)
-    k_embed = (k.float() * cos) + (rotate_half(k.float()) * sin)
-    return q_embed.to(dtype), k_embed.to(dtype)
 
 
 # ---------------------------------------------------------------------------
@@ -523,7 +511,7 @@ class ModernBertAttention(nn.Module):
         batch, width = rows.shape[:2]
         query, key, value = rows.view(batch, width, 3, -1, self.head_dim).unbind(dim=-3)
         cos, sin = rotary
-        query, key = apply_rotary(
+        query, key = kernels("rotary_half")(
             query.transpose(1, 2), key.transpose(1, 2), cos[:, :width], sin[:, :width]
         )
         blocks = group.band if kind == SLIDING else None

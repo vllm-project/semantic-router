@@ -183,6 +183,25 @@ def chunk_gated_delta_rule_ref(
     return core_attn_out, last_recurrent_state
 
 
+def rotary_half_ref(
+    query: torch.Tensor, key: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Rotate-half rotary embedding of ``[B, H, T, D]`` query and key, in FP32 and cast back (ModernBERT).
+
+    ``cos`` and ``sin`` are ``[1, T, D]``.
+    """
+    dtype = query.dtype
+    cos, sin = cos.unsqueeze(1), sin.unsqueeze(1)
+
+    def rotate(x: torch.Tensor) -> torch.Tensor:
+        half = x.shape[-1] // 2
+        return torch.cat((-x[..., half:], x[..., :half]), dim=-1)
+
+    query_embed = (query.float() * cos) + (rotate(query.float()) * sin)
+    key_embed = (key.float() * cos) + (rotate(key.float()) * sin)
+    return query_embed.to(dtype), key_embed.to(dtype)
+
+
 def sdpa_ref(
     query: torch.Tensor,
     key: torch.Tensor,
@@ -295,6 +314,7 @@ def reference_kernels(device: str) -> KernelSet:
     for name, fn in (
         ("causal_conv1d", causal_conv1d_ref),
         ("chunk_gated_delta_rule", chunk_gated_delta_rule_ref),
+        ("rotary_half", rotary_half_ref),
         ("sdpa", sdpa_ref),
     ):
         kernels.register(Kernel(name=name, fn=fn, source="torch-reference", exact=True))
