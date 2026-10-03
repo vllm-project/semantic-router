@@ -43,6 +43,91 @@ its task is counted only in `multi_inference_tasks`. A switch is reported as a
 fact, not a penalty. sr-bench sends no session identity, so these runs measure
 routing without session state.
 
+Subject call receipts also include `phase`. sr-bench uses the Router's
+`x-vsr-session-phase` response header when it is available, and otherwise derives
+`tool_loop` or `user_turn` from the request's latest messages.
+`model_switches_by_phase` counts a switch under the phase of the later request.
+Provider cache fields retain their presence separately from their numeric values:
+`cache_read_reported` and `cache_write_reported` are true only when the provider
+sent the corresponding field, including an explicit zero. The target and
+benchmark metrics expose `cache_read_ratio` and `cache_read_call_count`; only
+subject calls with `cache_read_reported=true` are included, so missing cache
+usage stays unknown instead of becoming a zero-hit observation. Older stored
+runs remain readable: missing phases group under `unknown`, and cache-read
+metrics report a null ratio with a zero sample count. If a reported cache-read
+call lacks normalized prompt usage, its sample is counted but the ratio remains
+null because its denominator is unknown.
+
+## Stored Router run example
+
+The following sanitized summary receipts and regenerated report come from the
+completed Router smoke run `run-536d2993f0b54e08bda8`. They are retained from the
+saved output of that run; the original store is no longer available. Request and
+response bodies, headers, endpoint addresses and credentials are omitted.
+
+```json
+{
+  "run_id": "run-536d2993f0b54e08bda8",
+  "status": "completed",
+  "subject_calls": [
+    {
+      "case_id": "turn-start",
+      "status": "completed",
+      "phase": "user_turn",
+      "cache_read_reported": true,
+      "cache_write_reported": true,
+      "usage": {
+        "input_tokens": 2,
+        "cached_input_tokens": 0,
+        "cache_write_tokens": 0,
+        "output_tokens": 63
+      }
+    },
+    {
+      "case_id": "tool-result-followup",
+      "status": "completed",
+      "phase": "tool_loop",
+      "cache_read_reported": true,
+      "cache_write_reported": true,
+      "usage": {
+        "input_tokens": 3,
+        "cached_input_tokens": 0,
+        "cache_write_tokens": 0,
+        "output_tokens": 5
+      }
+    }
+  ],
+  "continuity": {
+    "decision_changed_tasks": 0,
+    "max_switches_per_task": null,
+    "mean_switches_per_task": null,
+    "model_switches": 0,
+    "model_switches_by_phase": {},
+    "multi_inference_tasks": 0,
+    "multi_request_tasks": 0,
+    "switched_accuracy": null,
+    "switched_tasks": 0,
+    "unknown_model_requests": 0,
+    "unswitched_accuracy": null,
+    "unswitched_tasks": 0
+  },
+  "cache": {
+    "cache_read_call_count": 2,
+    "cache_read_prompt_tokens": 5,
+    "cache_read_ratio": 0.0,
+    "cache_read_tokens": 0
+  }
+}
+```
+
+Both calls explicitly reported zero cache-read and cache-write tokens. The
+cache-read ratio is therefore `0 / (2 + 3) = 0.0` with two observed calls,
+rather than an unavailable ratio. The calls belong to separate cases: the second
+request contains tool-result history, but this run does not demonstrate a model
+switch within one task. Its empty phase-switch map is consistent with zero
+multi-request tasks. The saved summary does not establish whether either phase
+came from a Router header or request derivation.
+
 The full sr-bench score uses fixed benchmark weights: MMLU-Pro 10%, SimpleQA 10%,
 GPQA 15%, HLE 15%, ARC 10%, LiveCodeBench 10%, SciCode 10%, Terminal-Bench 10% and
 τ³ 10%. It requires all nine complete benchmarks. A subset macro result retains
