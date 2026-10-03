@@ -2336,6 +2336,25 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "history_reset"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/HistoryResetPluginConfig"
+              }
+            }
+          }
         }
       ],
       "properties": {
@@ -2346,6 +2365,7 @@
             "fast_response",
             "hallucination",
             "header_mutation",
+            "history_reset",
             "memory",
             "prompt_cache",
             "rag",
@@ -2939,6 +2959,63 @@
         },
         "value": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "HistoryResetLimitsConfig": {
+      "properties": {
+        "max_history_turns": {
+          "type": "integer"
+        },
+        "max_history_bytes": {
+          "type": "integer"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "HistoryResetPluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "trigger": {
+          "$ref": "#/$defs/HistoryResetTriggerConfig"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "failure_mode": {
+          "type": "string"
+        },
+        "limits": {
+          "$ref": "#/$defs/HistoryResetLimitsConfig"
+        },
+        "recovery": {
+          "$ref": "#/$defs/ContextCompressionRecoveryConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "HistoryResetTriggerConfig": {
+      "properties": {
+        "signal": {
+          "type": "string"
+        },
+        "min_confidence": {
+          "type": "number"
+        },
+        "accepted_versions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -7698,6 +7775,12 @@
         "display_name": "Shadow Dispatch",
         "description": "Send a bounded asynchronous copy to a secondary model.",
         "schema_ref": "#/$defs/ShadowDispatchPluginConfig"
+      },
+      {
+        "type": "history_reset",
+        "display_name": "History Reset",
+        "description": "Remove eligible prior turns after an accepted topic change.",
+        "schema_ref": "#/$defs/HistoryResetPluginConfig"
       }
     ],
     "projections": [

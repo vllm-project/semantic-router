@@ -17,6 +17,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/historyreset"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
@@ -51,6 +52,10 @@ type OpenAIRouter struct {
 	responseCacheMu       sync.Mutex
 	ContextCompression    *contextcompression.Service
 	CompressionRecovery   contextcompression.RecoveryStore
+	// HistoryResetTriggers resolves the configured topic-continuity signal for
+	// a history-reset policy. It stays nil until a producer is wired, and an
+	// enabled policy cannot be activated without it.
+	HistoryResetTriggers  historyreset.TriggerSource
 	CompressionEmbedding  embedding.Provider
 	CompressionScorer     contextcompression.RelevanceScorer
 	compressionScorers    map[string]contextcompression.RelevanceScorer

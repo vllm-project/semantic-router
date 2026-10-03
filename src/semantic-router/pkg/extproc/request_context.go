@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/historyreset"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
@@ -371,7 +372,15 @@ type RequestContext struct {
 	ContextRequestIR         *contextcompression.RequestIR
 	ContextHistorySteps      []contextcompression.TransformationStep
 	ProtectedContextMessages map[int]contextcompression.Protection
-	SemanticResponse         *llmprotocol.Response
+
+	// History reset state. HistoryResetTrigger is the seam a topic-continuity
+	// signal fills; the action treats an absent result as missing evidence.
+	HistoryResetPolicy      *config.HistoryResetPluginConfig
+	HistoryResetBlocked     string
+	HistoryResetTrigger     *historyreset.TriggerResult
+	HistoryResetAction      *historyreset.Action
+	HistoryResetDiagnostics *historyreset.Diagnostics
+	SemanticResponse        *llmprotocol.Response
 	// PrimaryOutputDigest hashes the answer the selected model produced, taken
 	// before any response-stage plugin rewrites it. A body warning prepends
 	// router text to SemanticResponse in place, so hashing that later would
@@ -411,7 +420,11 @@ type RequestContext struct {
 	RequestAutoStore *bool
 
 	ContextCompressionTargetTokens *int
+	// ContextCompressionRecoveryKeys holds every recovery key issued for this
+	// request, by any context action, and ContextRecoveryToolOwned records
+	// that the router installed the reserved retrieval tool itself.
 	ContextCompressionRecoveryKeys []string
+	ContextRecoveryToolOwned       bool
 	ContextCompressionStrategy     string
 	ContextCompressionBudgetMode   string
 	ContextCompressionTokenSource  string

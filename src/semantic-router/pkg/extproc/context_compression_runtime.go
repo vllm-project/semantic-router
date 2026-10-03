@@ -86,7 +86,20 @@ func (r *OpenAIRouter) contextCompressionScorer(ctx context.Context, cfg *config
 func (r *OpenAIRouter) contextCompressionRecoveryStore(
 	cfg *config.ContextCompressionPluginConfig,
 ) contextcompression.RecoveryStore {
-	if cfg == nil || cfg.Recovery == nil || !cfg.Recovery.Enabled {
+	if cfg == nil {
+		return nil
+	}
+	return r.contextRecoveryStore(cfg.Recovery)
+}
+
+// contextRecoveryStore builds or returns the one shared recovery store. Every
+// context action that can remove content uses this instance, so a removed turn
+// and a compressed block remain retrievable through the same store, scope, and
+// reserved tool.
+func (r *OpenAIRouter) contextRecoveryStore(
+	recovery *config.ContextCompressionRecoveryConfig,
+) contextcompression.RecoveryStore {
+	if recovery == nil || !recovery.Enabled {
 		return nil
 	}
 	r.contextCompressionMu.Lock()
@@ -97,14 +110,14 @@ func (r *OpenAIRouter) contextCompressionRecoveryStore(
 	if r.Config == nil {
 		return nil
 	}
-	storeType := strings.TrimSpace(cfg.Recovery.Store)
+	storeType := strings.TrimSpace(recovery.Store)
 	if storeType == "response_cache" {
 		storeType = strings.TrimSpace(r.Config.SemanticCache.BackendType)
 	}
 	options, ok, err := recoveryRedisOptions(
 		r.Config,
 		storeType,
-		cfg.Recovery.MaxTotalBytes,
+		recovery.MaxTotalBytes,
 	)
 	if err != nil {
 		logging.ComponentWarnEvent("extproc", "context_recovery_store_config_failed", map[string]interface{}{

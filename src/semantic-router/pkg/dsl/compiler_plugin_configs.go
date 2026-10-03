@@ -46,6 +46,10 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 		return compilePluginFields(c, fields, cfg)
 	},
 	"prompt_cache": compilePromptCachePluginConfig,
+	"history_reset": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
+		cfg := &config.HistoryResetPluginConfig{}
+		return compilePluginFields(c, fields, cfg)
+	},
 	"hallucination": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileHallucinationPluginConfig(fields), true
 	},

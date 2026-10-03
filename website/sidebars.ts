@@ -196,6 +196,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/fast-response',
                 'tutorials/plugin/header-mutation',
                 'tutorials/plugin/context-compression',
+                'tutorials/plugin/history-reset',
                 'tutorials/plugin/request-params',
                 'tutorials/plugin/system-prompt',
                 'tutorials/plugin/tool-selection',
