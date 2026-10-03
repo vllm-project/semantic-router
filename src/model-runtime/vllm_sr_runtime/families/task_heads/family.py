@@ -1,10 +1,14 @@
-"""Encoder task heads (Phase 3): Vela 1.0 and compatible HF ModernBERT task models.
+"""Encoder task heads (Phase 3): Vela 1.0 and compatible HF task models.
 
-A package carries one head over the native ModernBERT backbone: ``sequence``
-(softmax distribution), ``scores`` (independent sigmoid per label, packaged
-operating point), ``token`` (BIO spans) or ``grounded`` (answer spans against
-a context). The family serves ``/v1/classify`` with reject, truncate and
-window overflow as the legacy router bindings applied them.
+A classifier carries one head over the native ModernBERT backbone:
+``sequence`` (softmax distribution), ``scores`` (independent sigmoid per
+label, packaged operating point), ``token`` (BIO spans) or ``grounded``
+(answer spans against a context), served on ``/v1/classify`` with reject,
+truncate and window overflow as the legacy router bindings applied them. An
+embedder (Vela Embedding, Qwen3-Embedding) serves ``/v1/embeddings`` from
+pooled layer exits and a reranker (Vela Reranker) ``/v1/rerank`` from its
+pair-scorer exits; on the onnxruntime engine both run the package's exit
+graphs instead of the native backbone.
 
 Every forward is shared: a micro-batch's items are deduplicated by token IDs
 (across inputs, windows, heads and bundled tasks), the distinct sequences run
@@ -15,6 +19,7 @@ keys, so repeated inputs are answered from the runtime's result cache.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from itertools import chain
 from typing import Any
 
@@ -22,9 +27,11 @@ import torch
 
 from ...errors import INVALID_INPUT, MAX_LENGTH_EXCEEDED, PackageError
 from ...heads.grounded import GroundedHead, GroundingPolicy, PairEnvelope
+from ...heads.pooled import EmbeddingSurface, PooledLayout
+from ...heads.relevance import LOGITS, RelevanceHead, RelevanceLayout, RerankSurface
 from ...heads.scores import OperatingPoint, ScoresHead
 from ...heads.sequence import SequenceHead
-from ...heads.task import ClassifierHead, HeadOptions, Item, Rows, TaskHead
+from ...heads.task import ClassifierHead, Head, HeadOptions, Item, Rows, TaskHead
 from ...heads.token import TokenHead
 from ...plugins.base import (
     DEADLINE,
@@ -53,6 +60,8 @@ OVERFLOW = ("reject", "truncate", "window")
 HEAD_NAME = "default"
 MAX_INPUTS = 2048
 FORWARD_TOKEN_BUDGET = 65536
+# A graph batch (no packing) grows while its padding stays within this share of its real tokens.
+PADDING_ALLOWANCE = 0.25
 EXACT_DTYPE = DtypePolicy(
     weights="float32", autocast=None, head="float32", bf16_resident=False
 )
@@ -65,6 +74,39 @@ GOLDEN_GROUNDED = {
     "question": "When was the Eiffel Tower completed?",
     "answer": "It was completed in 1889 in Rome.",
 }
+GOLDEN_RERANK = {
+    "query": "How do I reset my password?",
+    "documents": [
+        "Open Settings, then Security, and choose Reset password.",
+        "Our offices are closed on public holidays.",
+    ],
+}
+
+
+def length_buckets(lengths: Sequence[int], budget: int) -> list[list[int]]:
+    """Indices grouped by length for padded batches: padding stays within the allowance, tokens within ``budget``."""
+    order = sorted(range(len(lengths)), key=lambda index: (lengths[index], index))
+    buckets: list[list[int]] = []
+    real = 0
+    for index in order:
+        length = lengths[index]
+        if buckets:
+            count = len(buckets[-1]) + 1
+            padded = length * count
+            if padded <= budget and padded <= (real + length) * (1 + PADDING_ALLOWANCE):
+                buckets[-1].append(index)
+                real += length
+                continue
+        buckets.append([index])
+        real = length
+    return buckets
+
+
+def graph_name(head: Head) -> str:
+    """The ``ModelSpec.graphs`` entry of an exit head: ``layer:<L>`` or ``layer:<L>/dim:<D>``."""
+    if isinstance(head, RelevanceHead):
+        return f"layer:{head.exit[0]}/dim:{head.exit[1]}"
+    return f"layer:{head.layer}"
 
 
 def classify_inputs(value: Any) -> list[Any]:
@@ -77,7 +119,13 @@ def classify_inputs(value: Any) -> list[Any]:
 
 
 class TaskHeadsModel(LoadedModel):
-    """A task checkpoint's heads over one native encoder."""
+    """A task checkpoint's heads over one shared forward.
+
+    ``heads`` are every readout of the forward (classify heads, or one
+    pooled / relevance head per served exit); ``planners`` serve the
+    embeddings or rerank surface over them; ``normalize_exits`` is the
+    package's representation contract for intermediate exits.
+    """
 
     fuse_bundled_jobs = True
 
@@ -85,9 +133,11 @@ class TaskHeadsModel(LoadedModel):
         self,
         info: ModelInfo,
         engine_model: EngineModel,
-        heads: dict[str, TaskHead],
+        heads: dict[str, Head],
         limit: int,
         defaults: dict[str, Any],
+        planners: dict[str, EmbeddingSurface | RerankSurface] | None = None,
+        normalize_exits: bool = False,
     ):
         self.info = info
         self.engine_model = engine_model
@@ -95,6 +145,8 @@ class TaskHeadsModel(LoadedModel):
         self.primary = next(iter(heads))
         self.limit = limit
         self.defaults = defaults
+        self.planners = planners or {}
+        self.normalize_exits = normalize_exits
 
     def forward_token_budget(self) -> int | None:
         return max(FORWARD_TOKEN_BUDGET, self.limit)
@@ -143,7 +195,11 @@ class TaskHeadsModel(LoadedModel):
         )
 
     def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan:
-        if surface != "classify":
+        if surface in self.planners:
+            return self.planners[surface].plan(
+                request, self.info.model_sha256, self.limit
+            )
+        if surface != "classify" or "classify" not in self.info.surfaces:
             raise UnsupportedSurfaceError(surface, self.info.id)
         body = request.body
         name = body.get("head") or self.primary
@@ -183,6 +239,8 @@ class TaskHeadsModel(LoadedModel):
 
     def run(self, items: list[Item], shared_prefix: int = 0) -> list[Any]:
         """One packed forward over the distinct sequences of ``items``; each head reads its rows."""
+        if not self.engine_model.hidden_states:
+            return self._run_graphs(items)
         index: dict[tuple[int, ...], int] = {}
         for item in items:
             index.setdefault(item.ids, len(index))
@@ -198,6 +256,7 @@ class TaskHeadsModel(LoadedModel):
                 torch.tensor(list(chain.from_iterable(sequences)), dtype=torch.long),
                 None,
                 layers=layers,
+                normalize_exits=self.normalize_exits,
                 lengths=lengths,
             )
         )
@@ -216,9 +275,47 @@ class TaskHeadsModel(LoadedModel):
                     results[position] = values[index[items[position].ids]]
         return results
 
+    def _run_graphs(self, items: list[Item]) -> list[Any]:
+        """Each head's exit graph over its distinct sequences, in length buckets of padded rows."""
+        results: list[Any] = [None] * len(items)
+        by_head: dict[str, list[int]] = {}
+        for position, item in enumerate(items):
+            by_head.setdefault(item.head, []).append(position)
+        for name, positions in by_head.items():
+            head = self.heads[name]
+            sequences = list(dict.fromkeys(items[p].ids for p in positions))
+            lengths = [len(ids) for ids in sequences]
+            values: dict[tuple[int, ...], Any] = {}
+            for bucket in length_buckets(lengths, FORWARD_TOKEN_BUDGET):
+                rows = self._graph_rows(head, [sequences[i] for i in bucket])
+                for local, value in enumerate(head.readout(rows, range(len(bucket)))):
+                    values[sequences[bucket[local]]] = value
+            for position in positions:
+                results[position] = values[items[position].ids]
+        return results
+
+    def _graph_rows(self, head: Head, sequences: list[tuple[int, ...]]) -> Rows:
+        width = max(len(ids) for ids in sequences)
+        input_ids = torch.zeros(len(sequences), width, dtype=torch.long)
+        mask = torch.zeros(len(sequences), width, dtype=torch.long)
+        for row, ids in enumerate(sequences):
+            input_ids[row, : len(ids)] = torch.tensor(ids)
+            mask[row, : len(ids)] = 1
+        output = self.engine_model.encode(
+            EncoderBatch(input_ids, mask, graph=graph_name(head))
+        )
+        lengths = [len(ids) for ids in sequences]
+        if LOGITS in output.outputs:
+            return Rows({}, [], lengths, {LOGITS: output.outputs[LOGITS]})
+        hidden = output.outputs["last_hidden_state"][mask.bool()]
+        starts = [sum(lengths[:row]) for row in range(len(lengths))]
+        return Rows({head.layer: hidden}, starts, lengths)
+
     # -- answers ----------------------------------------------------------
 
     def finish_surface(self, plan: SurfacePlan, results: Any) -> dict[str, Any]:
+        if plan.surface in self.planners:
+            return self.planners[plan.surface].finish(plan, results)
         head, options, entries = plan.state
         out: list[dict[str, Any]] = []
         for index, entry in entries:
@@ -249,14 +346,19 @@ class TaskHeadsModel(LoadedModel):
 
 class TaskHeadsFamily(ModelFamily):
     name = "task_heads"
-    surfaces = frozenset({"classify"})
+    surfaces = frozenset({"classify", "embeddings", "rerank"})
 
     @classmethod
     def descriptor(cls) -> dict[str, Any]:
         return {
             "surfaces": sorted(cls.surfaces),
-            "formats": ["hf-modernbert"],
-            "heads": ["sequence", "scores", "token", "grounded"],
+            "formats": [
+                "hf-modernbert",
+                "sentence-transformers",
+                "matryoshka-reranker",
+            ],
+            "backbones": [pkg.MODEL_TYPE, pkg.DECODER_TYPE],
+            "heads": ["sequence", "scores", "token", "grounded", "pooled", "relevance"],
             "overflow": list(OVERFLOW),
         }
 
@@ -268,13 +370,30 @@ class TaskHeadsFamily(ModelFamily):
             return package
         return fetch(
             package,
-            [*pkg.REQUIRED, pkg.OPERATING_POINT],
+            list(pkg.FETCH_PATTERNS),
             cache_dir=self.options.cache_dir,
             offline=self.options.offline,
         )
 
+    def _option_exits(self, name: str) -> list[Any]:
+        value = self.options.model_options.get(name)
+        if value is None:
+            return []
+        values = value if isinstance(value, list) else [value]
+        if name == "layers":
+            if not all(isinstance(v, int) and not isinstance(v, bool) for v in values):
+                raise PackageError("model option layers is a list of layer exits")
+            return values
+        exits = []
+        for entry in values:
+            if not isinstance(entry, dict) or set(entry) != {"layer", "dimension"}:
+                raise PackageError(f"model option {name} is {{layer, dimension}}")
+            exits.append((int(entry["layer"]), int(entry["dimension"])))
+        return exits
+
     def verify(self, package: PackageRef) -> VerifiedPackage:
-        task = pkg.read(package.root)
+        selection = self._option_exits("pair_scorer")
+        task = pkg.read(package.root, selection[0] if selection else None)
         files = named_files(package.root, task.files)
         known = None
         if package.repo_id is not None:
@@ -323,18 +442,43 @@ class TaskHeadsFamily(ModelFamily):
             limit = min(limit, int(task.operating_point["max_input_tokens"]))
         return limit
 
+    def _graph_exits(self, task: pkg.TaskPackage) -> list[Any]:
+        """The exits a graph engine serves: the package default plus the model options' extra exits."""
+        layout = task.layout
+        if isinstance(layout, PooledLayout):
+            wanted = self._option_exits("layers") or [layout.layers[-1]]
+            missing = [layer for layer in wanted if layer not in layout.graphs]
+            if missing and layout.graphs:
+                raise PackageError(
+                    f"the package ships no exit graph for layers {missing}"
+                )
+            return [layer for layer in wanted if layer in layout.graphs]
+        if isinstance(layout, RelevanceLayout):
+            wanted = list(
+                dict.fromkeys([layout.default, *self._option_exits("pair_scorers")])
+            )
+            return [exit for exit in wanted if exit in layout.graphs]
+        return []
+
     def describe(self, package: VerifiedPackage) -> ModelSpec:
         task: pkg.TaskPackage = package.details["package"]
+        graphs = {}
+        for exit in self._graph_exits(task):
+            if isinstance(task.layout, PooledLayout):
+                graphs[f"layer:{exit}"] = task.layout.graphs[exit]
+            else:
+                graphs[f"layer:{exit[0]}/dim:{exit[1]}"] = task.layout.graphs[exit]
         return ModelSpec(
             name=package.model_name,
             backbone=BackboneSpec(
-                model_type=pkg.MODEL_TYPE,
+                model_type=task.model_type,
                 config=task.config,
                 weight_files=(task.root / pkg.WEIGHTS,),
-                weight_prefix=pkg.BACKBONE_PREFIX,
+                weight_prefix=task.weight_prefix,
             ),
             dtype=EXACT_DTYPE,
             max_input_tokens=package.max_input_tokens,
+            graphs=graphs,
             encoder=True,
         )
 
@@ -347,6 +491,8 @@ class TaskHeadsFamily(ModelFamily):
         tokenizer = Tokenizer.from_file(str(task.root / "tokenizer.json"))
         tokenizer.no_truncation()
         tokenizer.no_padding()
+        if task.layout is not None:
+            return self._load_exits(package, task, engine_model, tokenizer)
         classifier = ClassifierHead.load(
             [task.root / pkg.WEIGHTS], task.config, len(task.labels)
         ).to(engine_model.device)
@@ -359,15 +505,29 @@ class TaskHeadsFamily(ModelFamily):
             )
         layer = int(task.config["num_hidden_layers"])
         head, defaults = self._head(task, tokenizer, classifier, layer)
-        heads = {head.name: head}
-        info = ModelInfo(
+        heads: dict[str, Head] = {head.name: head}
+        info = self._info(
+            package, ("classify",), parameters, heads=(HeadInfo(**head.describe()),)
+        )
+        return TaskHeadsModel(
+            info, engine_model, heads, package.max_input_tokens, defaults
+        )
+
+    def _info(
+        self,
+        package: VerifiedPackage,
+        surfaces: tuple[str, ...],
+        parameters: int,
+        **descriptors: Any,
+    ) -> ModelInfo:
+        return ModelInfo(
             id=package.model_name,
             family=self.name,
             repo=package.ref.repo_id,
             revision=package.ref.revision,
             model_sha256=package.model_sha256,
             manifest_sha256=package.manifest_sha256,
-            surfaces=tuple(sorted(self.surfaces)),
+            surfaces=surfaces,
             question_types=(),
             limits={
                 "max_input_tokens": package.max_input_tokens,
@@ -376,10 +536,57 @@ class TaskHeadsFamily(ModelFamily):
             licence=package.licence,
             parameters=parameters,
             dtype="fp32",
-            heads=tuple(HeadInfo(**h.describe()) for h in heads.values()),
+            **descriptors,
         )
+
+    def _load_exits(
+        self,
+        package: VerifiedPackage,
+        task: pkg.TaskPackage,
+        engine_model: EngineModel,
+        tokenizer: Any,
+    ) -> TaskHeadsModel:
+        """An embedder or reranker: one head per exit the engine serves (every exit natively)."""
+        parameters = engine_model.parameter_count()
+        if engine_model.hidden_states and parameters != package.loaded_parameters:
+            raise PackageError(
+                f"loaded {parameters:,} parameters; the checkpoint holds {package.loaded_parameters:,}"
+            )
+        layout = task.layout
+        if isinstance(layout, PooledLayout):
+            layers = (
+                layout.layers if engine_model.hidden_states else self._graph_exits(task)
+            )
+            planner: EmbeddingSurface | RerankSurface = EmbeddingSurface(
+                layout, tokenizer, layers
+            )
+            heads = {head.name: head for head in planner.heads.values()}
+            info = self._info(
+                package, ("embeddings",), parameters, embedding=planner.info
+            )
+            normalize_exits = layout.normalize_exits
+        else:
+            assert isinstance(layout, RelevanceLayout)
+            native = engine_model.hidden_states
+            exits = layout.exits if native else self._graph_exits(task)
+            scorers = layout.scorers(exits) if native else dict.fromkeys(exits)
+            relevance = {
+                exit: RelevanceHead(exit, scorers[exit]).to(engine_model.device)
+                for exit in exits
+            }
+            planner = RerankSurface(layout, tokenizer, relevance)
+            heads = {head.name: head for head in relevance.values()}
+            info = self._info(package, ("rerank",), parameters, rerank=planner.info)
+            normalize_exits = True
+        surface = info.surfaces[0]
         return TaskHeadsModel(
-            info, engine_model, heads, package.max_input_tokens, defaults
+            info,
+            engine_model,
+            heads,
+            package.max_input_tokens,
+            {},
+            planners={surface: planner},
+            normalize_exits=normalize_exits,
         )
 
     @staticmethod
@@ -416,8 +623,12 @@ class TaskHeadsFamily(ModelFamily):
         task: pkg.TaskPackage = package.details["package"]
         known = builtin.by_identity(package.model_sha256)
         expected = dict(known.golden_answers) if known else {}
+        surface = "classify"
         if task.kind == "grounded":
-            body = {"input": [GOLDEN_GROUNDED]}
+            body: dict[str, Any] = {"input": [GOLDEN_GROUNDED]}
+        elif task.kind == "relevance":
+            surface, body = "rerank", dict(GOLDEN_RERANK)
         else:
             body = {"input": list(GOLDEN_TEXTS)}
-        return [{"surface": "classify", "body": body, "expected": expected}]
+            surface = "embeddings" if task.kind == "pooled" else surface
+        return [{"surface": surface, "body": body, "expected": expected}]

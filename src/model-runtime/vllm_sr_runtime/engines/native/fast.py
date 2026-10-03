@@ -96,6 +96,10 @@ def fused_unavailable(backbone: nn.Module, kernels: KernelSet) -> str | None:
             config["linear_key_head_dim"] == GATED_DELTA_HEAD_DIM
             and config["linear_value_head_dim"] == GATED_DELTA_HEAD_DIM
         )
+    if model_type == "qwen3":
+        checks["an FP32 stream (BF16 Qwen3 norms round differently)"] = (
+            backbone.norm.weight.dtype == torch.float32
+        )
     failed = [name for name, ok in checks.items() if not ok]
     return "needs " + ", ".join(failed) if failed else None
 
@@ -163,9 +167,9 @@ def _prepare_qwen3(layer: nn.Module) -> dict[str, Any]:
 
 
 def fused_applies(hidden_states: torch.Tensor) -> bool:
-    """The fused kernels reproduce the eager layer only under BF16 autocast on an FP32 stream."""
+    """The fused kernels reproduce the eager layer under BF16 autocast on an FP32 or BF16 stream."""
     return (
-        hidden_states.dtype == torch.float32
+        hidden_states.dtype in (torch.float32, torch.bfloat16)
         and hidden_states.is_cuda
         and torch.is_autocast_enabled("cuda")
         and torch.get_autocast_dtype("cuda") == torch.bfloat16
@@ -271,6 +275,9 @@ def _tree_gated_delta(m, p, normed, tree, kernels: KernelSet):
 
 
 def _gated_delta(m, p, normed, mask, kernels: KernelSet):
+    if kernels.select("causal_conv1d").variant is not None:
+        # The model's released convolution (a kernel variant) is not what gdn_prep fuses.
+        return m(normed, mask, kernels)
     if getattr(mask, "is_tree", False):
         return _tree_gated_delta(m, p, normed, mask, kernels)
     if mask is not None:

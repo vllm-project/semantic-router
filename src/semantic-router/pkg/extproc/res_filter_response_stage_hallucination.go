@@ -119,7 +119,7 @@ func (r *OpenAIRouter) detectHallucinationEvidence(
 		}, nil
 	}
 
-	result, err := classifier.DetectHallucinationWithNLI(ctx.embeddingContext(), ctx.ToolResultsContext, ctx.UserContent, answer)
+	result, err := classifier.DetectHallucinationWithExplanations(ctx.embeddingContext(), ctx.ToolResultsContext, ctx.UserContent, answer)
 	if err != nil {
 		return nil, err
 	}

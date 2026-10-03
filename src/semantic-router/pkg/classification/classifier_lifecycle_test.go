@@ -3,7 +3,6 @@ package classification
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -269,16 +268,11 @@ func TestInitializeRuntimeInitializesJailbreakClassifierForResponseStageConsumer
 	}
 }
 
-func TestUnsupportedLocalHallucinationBackendRejectsCandidate(t *testing.T) {
-	original := nativeBackendCapabilities
-	t.Cleanup(func() { nativeBackendCapabilities = original })
-	nativeBackendCapabilities = NativeBackendCapabilities{Name: "test-backend"}
-
+func TestLocalHallucinationDetectorWithoutRuntimeRejectsCandidate(t *testing.T) {
 	classifier := &Classifier{Config: newHallucinationLifecycleConfig(config.HallucinationBackendCandle)}
 	if classifier.IsHallucinationDetectionEnabled() {
-		t.Fatal("unsupported local hallucination backend must not advertise enabled capability")
+		t.Fatal("a local detector without model runtime services must not advertise enabled capability")
 	}
-
 	var hallucinationTaskFound bool
 	for _, task := range classifier.runtimeTasks() {
 		if task.Name != "classifier.hallucination" {
@@ -288,30 +282,22 @@ func TestUnsupportedLocalHallucinationBackendRejectsCandidate(t *testing.T) {
 		if task.BestEffort {
 			t.Fatal("required hallucination task must reject an unusable candidate")
 		}
-		err := task.Run(context.Background())
-		if err == nil || !strings.Contains(err.Error(), "does not support local hallucination detection") {
-			t.Fatalf("unsupported local hallucination task error = %v", err)
+		if err := task.Run(context.Background()); err == nil {
+			t.Fatal("a local detector that cannot be served must fail its task")
 		}
 	}
 	if !hallucinationTaskFound {
 		t.Fatal("configured local hallucination task was silently omitted")
 	}
-	if err := classifier.InitializeRuntime(); err == nil {
-		t.Fatal("unsupported required model must reject candidate preparation")
-	}
 	if classifier.IsHallucinationDetectorReady() {
-		t.Fatal("unsupported local hallucination backend must not report ready")
+		t.Fatal("an unserved local hallucination detector must not report ready")
 	}
 }
 
-func TestEndpointHallucinationDoesNotDependOnNativeCapability(t *testing.T) {
-	original := nativeBackendCapabilities
-	t.Cleanup(func() { nativeBackendCapabilities = original })
-	nativeBackendCapabilities = NativeBackendCapabilities{Name: "test-backend"}
-
+func TestEndpointHallucinationDetectionIsEnabledWithoutModelRuntime(t *testing.T) {
 	classifier := &Classifier{Config: newHallucinationLifecycleConfig(config.HallucinationBackendEndpoint)}
 	if !classifier.IsHallucinationDetectionEnabled() {
-		t.Fatal("endpoint hallucination backend should not depend on local binding capability")
+		t.Fatal("endpoint hallucination backend does not depend on the model runtime")
 	}
 }
 
@@ -344,9 +330,8 @@ func TestPublicAuxiliaryConsumersAreOwnedOnlyByDefaultClassifier(t *testing.T) {
 		},
 	}
 	defaultClassifier := &Classifier{Config: cfg}
-	if !defaultClassifier.needsHallucinationDetectorForRuntime() ||
-		!defaultClassifier.needsLocalHallucinationNLIForRuntime() {
-		t.Fatal("default API-only NLI configuration was omitted from runtime lifecycle")
+	if !defaultClassifier.needsHallucinationDetectorForRuntime() {
+		t.Fatal("default API-only hallucination configuration was omitted from runtime lifecycle")
 	}
 	defaultTasks := make(map[string]bool)
 	for _, task := range defaultClassifier.runtimeTasks() {
@@ -361,9 +346,8 @@ func TestPublicAuxiliaryConsumersAreOwnedOnlyByDefaultClassifier(t *testing.T) {
 	namedConfig := *cfg
 	namedConfig.RoutingScope = "named"
 	namedClassifier := &Classifier{Config: &namedConfig}
-	if namedClassifier.needsHallucinationDetectorForRuntime() ||
-		namedClassifier.needsLocalHallucinationNLIForRuntime() {
-		t.Fatal("named classifier inherited the default public NLI API consumer")
+	if namedClassifier.needsHallucinationDetectorForRuntime() {
+		t.Fatal("named classifier inherited the default public hallucination API consumer")
 	}
 	for _, task := range namedClassifier.runtimeTasks() {
 		if task.Name == "classifier.fact_check" ||

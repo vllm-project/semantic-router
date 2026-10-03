@@ -192,7 +192,7 @@ def test_named_files_hash_only_what_a_family_loads(tmp_path):
     assert named_files(tmp_path, ["config.json"]) == {
         "config.json": sha256_file(tmp_path / "config.json")
     }
-    with pytest.raises(PackageError, match="misses"):
+    with pytest.raises(PackageError, match="missing"):
         named_files(tmp_path, ["model.safetensors"])
     with pytest.raises(PackageError, match="unsafe"):
         named_files(tmp_path, ["../config.json"])

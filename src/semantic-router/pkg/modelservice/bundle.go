@@ -9,27 +9,29 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 )
 
-// DefaultBundleWindow bounds how long a parked call waits for the other
+// DefaultBundleWindow caps how long a parked call waits for the other
 // participants of its bundle.
 const DefaultBundleWindow = 2 * time.Millisecond
 
 type bundleKey struct{}
 
-// Bundle coalesces the runtime calls made while serving one request stage.
+// Bundle coalesces the runtime calls of one request stage into one
+// /v1/bundle call per runtime process.
 //
 // The goroutines of the stage Join the bundle. A runtime call made with the
-// bundle's context parks in it; when every joined goroutine has parked or
-// left, or the window since the first parked call has passed, the bundle
-// sends one /v1/bundle call per runtime process and hands each caller its own
-// result. Calls keep their own deadlines: a caller stops waiting when its
-// context ends, and its task carries that deadline to the runtime.
+// bundle's context parks in it. The bundle flushes when no participant can
+// still add a call (every one is blocked on a call or on its own fan-out, or
+// has left), or when the window since the first parked call has passed, and
+// hands each caller its own result. Calls keep their own deadlines: a caller
+// stops waiting when its context ends, and its task carries that deadline.
 type Bundle struct {
 	base    context.Context
 	window  time.Duration
 	mu      sync.Mutex
 	active  int
-	parked  int
+	blocked int
 	pending map[*Client][]*bundleCall
+	first   time.Time
 	timer   *time.Timer
 	seq     int
 	flushes int
@@ -58,6 +60,15 @@ func bundleFrom(ctx context.Context) *Bundle {
 	return bundle
 }
 
+// Join adds a participant to the context's bundle; call leave when it has
+// finished. Without a bundle both are no-ops.
+func Join(ctx context.Context) (leave func()) {
+	if bundle := bundleFrom(ctx); bundle != nil {
+		return bundle.Join()
+	}
+	return func() {}
+}
+
 // Join adds a participant; call the returned function when it has finished.
 func (b *Bundle) Join() (leave func()) {
 	b.mu.Lock()
@@ -68,12 +79,47 @@ func (b *Bundle) Join() (leave func()) {
 		once.Do(func() {
 			b.mu.Lock()
 			b.active--
-			if b.parked > 0 && b.parked >= b.active {
-				b.flushLocked()
-			}
+			b.flushIfIdleLocked()
 			b.mu.Unlock()
 		})
 	}
+}
+
+// Fan runs work(i) for every i in [0, n) in its own goroutine, each a
+// participant of the context's bundle, and waits for all of them. While it
+// waits, the calling participant cannot add a call, so it counts as blocked.
+func Fan(ctx context.Context, n int, work func(i int)) {
+	bundle := bundleFrom(ctx)
+	if bundle != nil {
+		bundle.mu.Lock()
+		bundle.active += n
+		bundle.blocked++
+		bundle.mu.Unlock()
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			if bundle != nil {
+				defer bundle.leaveFanned()
+			}
+			work(i)
+		}(i)
+	}
+	wg.Wait()
+	if bundle != nil {
+		bundle.mu.Lock()
+		bundle.blocked--
+		bundle.mu.Unlock()
+	}
+}
+
+func (b *Bundle) leaveFanned() {
+	b.mu.Lock()
+	b.active--
+	b.flushIfIdleLocked()
+	b.mu.Unlock()
 }
 
 // Flushes reports how many /v1/bundle rounds the bundle has sent (tests, metrics).
@@ -88,20 +134,34 @@ func (b *Bundle) submit(ctx context.Context, client *Client, task api.BundleTask
 	b.mu.Lock()
 	b.seq++
 	call.task.Id = strconv.Itoa(b.seq)
+	if len(b.pending) == 0 {
+		b.first = time.Now()
+	}
 	b.pending[client] = append(b.pending[client], call)
-	b.parked++
-	if b.timer == nil {
+	b.blocked++
+	if b.blocked >= b.active {
+		b.flushLocked()
+	} else if b.timer == nil {
 		b.timer = time.AfterFunc(b.window, b.flushOnTimer)
 	}
-	if b.parked >= b.active {
-		b.flushLocked()
-	}
 	b.mu.Unlock()
+	defer func() {
+		b.mu.Lock()
+		b.blocked--
+		b.mu.Unlock()
+	}()
 	select {
 	case <-call.done:
 		return call.result, call.err
 	case <-ctx.Done():
 		return api.BundleResult{}, ctx.Err()
+	}
+}
+
+// flushIfIdleLocked flushes when no participant is still running.
+func (b *Bundle) flushIfIdleLocked() {
+	if len(b.pending) > 0 && b.blocked >= b.active {
+		b.flushLocked()
 	}
 }
 
@@ -120,9 +180,9 @@ func (b *Bundle) flushLocked() {
 	if len(b.pending) == 0 {
 		return
 	}
+	bundleWait.Observe(time.Since(b.first).Seconds())
 	pending := b.pending
 	b.pending = make(map[*Client][]*bundleCall)
-	b.parked = 0
 	b.flushes++
 	for client, calls := range pending {
 		go b.send(client, calls)
@@ -153,20 +213,16 @@ func (b *Bundle) send(client *Client, calls []*bundleCall) {
 	for index, call := range calls {
 		tasks[index] = call.task
 	}
+	bundleTasks.Observe(float64(len(tasks)))
 	results, err := client.Bundle(ctx, tasks)
-	byID := make(map[string]api.BundleResult, len(results))
-	for _, result := range results {
-		byID[result.Id] = result
-	}
-	for _, call := range calls {
-		result, ok := byID[call.task.Id]
+	for index, call := range calls {
 		switch {
 		case err != nil:
 			call.err = err
-		case !ok:
+		case results[index].Id != call.task.Id:
 			call.err = ErrFailed
 		default:
-			call.result = result
+			call.result = results[index]
 		}
 		close(call.done)
 	}

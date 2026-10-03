@@ -21,7 +21,8 @@ type RAGRerankConfig struct {
 }
 
 func validateRerankerBinding(decl ModelBinding, deployment ModelDeployment) error {
-	if decl.Adapter != "vela_reranker" || deployment.Provider == "http" {
+	runtimeDefault := deployment.IsModelRuntime() && decl.Adapter == ""
+	if deployment.Provider == "http" || (decl.Adapter != "vela_reranker" && !runtimeDefault) {
 		return fmt.Errorf("reranker requires a local vela_reranker adapter")
 	}
 	if decl.MappingPath != "" {
