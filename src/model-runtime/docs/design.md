@@ -763,7 +763,11 @@ Phase 1 follow-ups, measured before they become defaults:
 - ROCm golden answers and pinned kernel choices: done for all six on gfx942
   (`docs/records/rocm-mi325x-repeatability.md`);
 - batch-shape buckets, so that graphs and batched forwards reuse a small set of
-  padded shapes;
+  padded shapes: measured on Eos, a few percent at 4 concurrent requests and
+  none from 16, so not adopted (same record);
+- the graph-size cap under Index-like traffic: measured; 4,096 stays, and a
+  serving option would let Index-like deployments use 1,024 (1–5% faster
+  there);
 - more `max_speed` kernels, each with an accuracy record against `exact`;
 - a `vllm` engine investigation: pooling runner plus the family's readout.
 
