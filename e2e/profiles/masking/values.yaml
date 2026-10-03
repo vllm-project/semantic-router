@@ -67,6 +67,14 @@ config:
   global:
     router:
       strategy: priority
+    services:
+      # The cross-protocol case sends /v1/responses, which needs the Responses
+      # object store enabled or the router answers 404 before any masking runs.
+      response_api:
+        enabled: true
+        store_backend: memory
+        ttl_seconds: 86400
+        max_responses: 1000
     model_catalog:
       kbs: []
       external:
