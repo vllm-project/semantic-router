@@ -9,7 +9,7 @@
 # Usage: m6-stage-a.sh ARM
 set -euo pipefail
 ARM=${1:?ARM}
-ARM_RE='^(M6-(IB|IBX|IB2|IB2PN|IBxIB2-m[0-9]{2})|M7-(IB124ML|IB14ML)|M8-(IB14|IB124)|X7-(IBxIB2xIB14ML|4ARM)|X8-(IBxIB2-8|ML)|X9-(LRH2|LRH2xM50|LRH|LRHxM50|ML0|IBxIB2-10))$'
+ARM_RE='^(M6-(IB|IBX|IB2|IB2PN|IBxIB2-m[0-9]{2})|M7-(IB124ML|IB14ML)|M8-(IB14|IB124)|X7-(IBxIB2xIB14ML|4ARM)|X8-(IBxIB2-8|ML)|X9-(LRH2|LRH2xM50|LRH|LRHxM50|ML0|IBxIB2-10|IBLRH|IBLRHxM50))$'
 [[ "$ARM" =~ $ARM_RE ]] || { echo "bad ARM $ARM" >&2; exit 2; }
 NODES=${DEV2_NODES_FILE:-$HOME/.config/decision2/nodes.env}
 A=$(grep '^node-a=' "$NODES" | cut -d= -f2-) B=$(grep '^node-b=' "$NODES" | cut -d= -f2-)

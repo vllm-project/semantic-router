@@ -29,7 +29,7 @@ while [[ $# -gt 0 ]]; do
     *) echo "unknown argument $1" >&2; exit 2 ;;
   esac
 done
-[[ "$ARM" =~ ^(M7-(IB124ML|IB14ML)|M8-(IB14|IB124)|X7-(IBxIB2xIB14ML|4ARM)|X8-(IBxIB2-8|ML)|X9-(LRH2|LRH2xM50|LRH|LRHxM50|ML0|IBxIB2-10))$ ]] ||
+[[ "$ARM" =~ ^(M7-(IB124ML|IB14ML)|M8-(IB14|IB124)|X7-(IBxIB2xIB14ML|4ARM)|X8-(IBxIB2-8|ML)|X9-(LRH2|LRH2xM50|LRH|LRHxM50|ML0|IBxIB2-10|IBLRH|IBLRHxM50))$ ]] ||
   { echo "bad ARM $ARM" >&2; exit 2; }
 [[ "$mode" =~ ^--(prerelease|release)$ ]] || { echo "mode: --prerelease|--release" >&2; exit 2; }
 [[ "$gpu" =~ ^[0-7]$ ]] || { echo "--gpu 0..7 (node A)" >&2; exit 2; }

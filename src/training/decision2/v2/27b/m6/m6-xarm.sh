@@ -19,7 +19,7 @@ set -euo pipefail
 echo "m6 xarm $*: start $(date -u +%FT%TZ)"
 SHA=${1:?MIRROR_SHA} NAME=${2:?NAME} GPU=${3:?GPU}
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "MIRROR_SHA must be a full commit SHA" >&2; exit 2; }
-[[ "$NAME" =~ ^(M6-IBxIB2-m[0-9]{2}|M7-(IB124ML|IB14ML)|M8-(IB14|IB124)|X7-(IBxIB2xIB14ML|4ARM)|X8-(IBxIB2-8|ML)|X9-(LRH2|LRH2xM50|LRH|LRHxM50|ML0|IBxIB2-10))$ ]] ||
+[[ "$NAME" =~ ^(M6-IBxIB2-m[0-9]{2}|M7-(IB124ML|IB14ML)|M8-(IB14|IB124)|X7-(IBxIB2xIB14ML|4ARM)|X8-(IBxIB2-8|ML)|X9-(LRH2|LRH2xM50|LRH|LRHxM50|ML0|IBxIB2-10|IBLRH|IBLRHxM50))$ ]] ||
   { echo "bad NAME $NAME" >&2; exit 2; }
 case "$GPU" in 0 | 1 | 5) ;; *) echo "GPU$GPU is not an M6 node B GPU (0, 1, 5)" >&2; exit 2 ;; esac
 S=/data/dev2/src/$SHA-src_training_decision2/src/training/decision2
