@@ -113,8 +113,10 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
         "--autotune-cache",
         default=os.environ.get(AUTOTUNE_ENV),
         help=(
-            "record and reuse GPU kernel autotuning in this directory, so answers "
-            f"repeat across processes (default: ${AUTOTUNE_ENV})"
+            "record and reuse GPU kernel autotuning and compiled kernels in this "
+            "directory; processes that share a warm cache answer alike, and built-in "
+            "models pin their kernel choices on gfx942 (MI300X, MI325X) "
+            f"(default: ${AUTOTUNE_ENV})"
         ),
     )
 
