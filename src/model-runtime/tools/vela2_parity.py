@@ -607,6 +607,16 @@ def contract_view(response: dict[str, Any]) -> dict[str, Any]:
     return {**response, "answers": answers}
 
 
+def drop_questions(response: dict[str, Any], names: list[str]) -> dict[str, Any]:
+    """The response without the given questions (usage dropped: it covers every row)."""
+    out = {"answers": {k: v for k, v in response["answers"].items() if k not in names}}
+    for key in ("spans", "span_heads", "sets", "thresholds"):
+        kept = {k: v for k, v in response.get(key, {}).items() if k not in names}
+        if kept:
+            out[key] = kept
+    return out
+
+
 def compare(reference: dict[str, Any], ours: dict[str, Any]) -> dict[str, Any]:
     ours = system_one_view(ours)
     reference = contract_view(reference)
@@ -673,17 +683,37 @@ def main() -> int:
         state, questions = request["state"], request["questions"]
         record: dict[str, Any] = {"id": request["id"]}
         try:
-            t0 = time.perf_counter()
-            reference = reference_answer(engine, state, questions, model.info.id)
-            t1 = time.perf_counter()
+            started = time.perf_counter()
             ours, plan = answer(model, state, questions)
-            t2 = time.perf_counter()
+            runtime_s = time.perf_counter() - started
+            started = time.perf_counter()
+            try:
+                reference = reference_answer(engine, state, questions, model.info.id)
+            except module.SystemOneError as exc:
+                # The engine rejects a whole request when one of its rows cannot fit; the
+                # runtime fails only that row's questions. Compare the rest.
+                failed = [
+                    k
+                    for k, a in ours["answers"].items()
+                    if a.get("error") == "max_length_exceeded"
+                ]
+                if exc.type != "too_long" or not failed:
+                    raise
+                record["too_long"] = failed
+                ours = drop_questions(ours, failed)
+                kept = {k: q for k, q in questions.items() if k not in failed}
+                reference = (
+                    reference_answer(engine, state, kept, model.info.id)
+                    if kept
+                    else {"answers": {}}
+                )
+            reference_s = time.perf_counter() - started
         except Exception as exc:  # recorded per request, the run goes on
             record["error"] = f"{type(exc).__name__}: {exc}"
             records.append(record)
             continue
-        timing["reference_s"] += t1 - t0
-        timing["runtime_s"] += t2 - t1
+        timing["reference_s"] += reference_s
+        timing["runtime_s"] += runtime_s
         record.update(compare(reference, ours))
         record["rendering"] = rendering_diffs(
             reference_rows(engine, module, state, questions), runtime_rows(plan)
@@ -696,7 +726,7 @@ def main() -> int:
                     "decisions": record["decision_changes"],
                     "max": record["max_abs_diff"],
                     "rendering": record["rendering"],
-                    "ms": [round(1000 * (t1 - t0)), round(1000 * (t2 - t1))],
+                    "ms": [round(1000 * reference_s), round(1000 * runtime_s)],
                 }
             ),
             flush=True,
