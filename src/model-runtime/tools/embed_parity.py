@@ -285,10 +285,12 @@ def serve(
 
 
 def device_info(name: str) -> DeviceInfo:
+    """The device as placement reports it (architecture included, which selects fused kernels)."""
     if name == "cpu":
         return CPU
-    accelerator, _, index = name.partition(":")
-    return DeviceInfo(accelerator=accelerator, index=int(index or 0), name=name)
+    from vllm_sr_runtime.accel.rocm import ROCmAccelerator
+
+    return ROCmAccelerator().devices()[int(name.partition(":")[2] or 0)]
 
 
 def load_task_model(
