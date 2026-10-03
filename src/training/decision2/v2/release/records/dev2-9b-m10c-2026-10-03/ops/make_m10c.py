@@ -52,6 +52,9 @@ CURRENT = {
     "weights_identity": "0ece5faa210173f443f353474b419fd913a253b06645da3e8370c2db0e1c3339",
 }
 VENDOR = "/data/dev2/src/787abdc54946ccdb05e52cc5c34ecb619dced237-src_training_decision2/src/training/decision2"
+# The phase A runtime plus the opt-in shared-context switch (COORDINATION 2026-10-03 02:23 / 08:30): this branch's
+# merge of integration ef27d8885 or later (runtime/shared_ctx.py; default path byte-identical to 54303117b's).
+RUNTIME_SOURCE = "/data/dev2/src/aa0ae61465ee60330a35d37e771f20c217c6a2eb-src_training_decision2/src/training/decision2"
 EXPOSURE = [
     "/data/dev2/runs/9b/m6/exposure/x60.json",
     "/data/dev2/runs/9b/m9/exposure/ib1-ib2-train.json",
@@ -242,9 +245,12 @@ def spec(cand: str) -> dict:
         "storage": f"v2.release.bf16_copy of the frozen FP32 point (identity {p['fp32'][:8]} -> {identity[:8]}; "
         f"receipt {bf16_receipt[:8]}), the copy the Index run {p['index_name']} scored.",
         "runtime": "vendor_source = K-a13IB's formal runner mirror 787abdc54 (training/model checked equal to the "
-        "scored adapter sources at build time); runtime_source = automap_source = the current revision's "
-        "(the phase A runtime: HIP-graph replay of each padded input shape and, on gfx942, fused Triton "
-        "element-wise kernels; BF16-resident, Transformers remote code, forward token budget), unchanged.",
+        "scored adapter sources at build time); runtime_source = this branch's mirror aa0ae6146: the current "
+        "revision's phase A runtime (HIP-graph replay of each padded input shape and, on gfx942, fused Triton "
+        "element-wise kernels; BF16-resident, Transformers remote code, forward token budget) plus the opt-in "
+        "shared-context switch (shared_ctx.py, off by default, the default path byte-identical; COORDINATION "
+        "2026-10-03 02:23 / 08:30), with the phase A frozen pre-warmed autotune cache for parity; "
+        "automap_source = the current revision's, unchanged.",
         "card": "the product card of the current revision with this candidate's reports, an Index input built by "
         "python -m v2.release.card_index (board-served parameter counts, the audited footnote) with the 9B point "
         "from the Index run on exactly these weights, and assets rendered by the default v2.release.card_assets "
@@ -256,6 +262,7 @@ def spec(cand: str) -> dict:
         },
         "previous": old["_release"],
     }
+    s["runtime_source"] = RUNTIME_SOURCE
     s["checkpoint"] = f"{p['in']}/bf16/checkpoint"
     s["expected_identity"] = {"model_sha256": identity}
     s["bf16_copy"] = {
@@ -274,7 +281,8 @@ def spec(cand: str) -> dict:
         "FP32. The runtime, the Transformers remote code and the forward token budget are the current revision's: "
         "the phase A runtime, which replays the backbone of each exact padded input shape as a HIP graph and, on "
         "MI300-class (gfx942) GPUs, fuses the element-wise ops of each decoder layer into Triton kernels that round "
-        "exactly as the ops they replace. "
+        "exactly as the ops they replace, plus the opt-in shared-context switch (off by default; the default path "
+        "runs exactly the phase A runtime). "
         "Checked on one GPU against the T = 1 predictions derived exactly from the sealed CAL698 predictions of "
         "every scored prompt (typed-final 1,600, css15 6,547, public231 231) and of the mlx-diag diagnostic "
         "(2,275) by release.sh --parity, with a copy of the current revision's frozen pre-warmed autotune cache "
