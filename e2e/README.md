@@ -115,6 +115,7 @@ until the selected cases are known to be isolated.
 ### Supported Profiles
 
 - **envoy-ai-gateway**: baseline routing, safety, cache, and decision contracts.
+- **model-runtime**: Router-managed and attached model runtimes on tiny fixture models: process groups, task signals and decision signals against the runtimes' own answers, the decision selector, request bundles, supervisor restarts, and fail-open.
 - **external-gateway-responses**: ExtProc-only Responses create, get, and conversation chaining with external gateway-owned dispatch.
 - **dashboard**: dashboard API, validation, and routing-authoring contracts.
 - **aibrix**: AIBrix gateway and control-plane integration.

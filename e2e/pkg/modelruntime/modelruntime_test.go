@@ -69,6 +69,16 @@ func TestEventuallyReturnsOnFirstSuccessAndExplainsTimeouts(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "still starting") {
 		t.Fatalf("timeout error %v does not carry the last check error", err)
 	}
+
+	calls = 0
+	final := errors.New("cannot recover")
+	err = Eventually(context.Background(), time.Minute, func(context.Context) error {
+		calls++
+		return Stop(final)
+	})
+	if !errors.Is(err, final) || calls != 1 {
+		t.Fatalf("Stop returned %v after %d calls, want the final error at once", err, calls)
+	}
 }
 
 func TestClientDecodesSurfacesAndRequiresEveryAnswer(t *testing.T) {
