@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 const (
@@ -55,7 +56,12 @@ func NewManager() *Manager {
 // uses, starting the processes no other generation runs yet. It does not wait
 // for readiness: calls fail open until a deployment is ready, and Card waits.
 func (m *Manager) Acquire(cfg *config.RouterConfig) (*Lease, error) {
-	plans := planProcesses(config.ModelRuntimeDeploymentsInUse(cfg), m.command, m.cacheDir)
+	return m.AcquireDeployments(config.ModelRuntimeDeploymentsInUse(cfg))
+}
+
+// AcquireDeployments returns a lease on an explicit set of deployments.
+func (m *Manager) AcquireDeployments(deployments map[string]config.ModelDeployment) (*Lease, error) {
+	plans := planProcesses(deployments, m.command, m.cacheDir)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
@@ -80,6 +86,37 @@ func (m *Manager) Acquire(cfg *config.RouterConfig) (*Lease, error) {
 		}
 	}
 	return lease, nil
+}
+
+// extend adds one deployment to a lease in a process of its own.
+func (m *Manager) extend(lease *Lease, name string, deployment config.ModelDeployment) error {
+	plan := planProcesses(map[string]config.ModelDeployment{name: deployment}, m.command, m.cacheDir)[0]
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return fmt.Errorf("model runtime manager is shut down")
+	}
+	lease.mu.Lock()
+	defer lease.mu.Unlock()
+	if _, ok := lease.members[name]; ok {
+		return nil
+	}
+	g := m.groups[plan.key]
+	if g == nil {
+		started, err := m.startGroupLocked(plan)
+		if err != nil {
+			return fmt.Errorf("model runtime process %s: %w", plan.name, err)
+		}
+		g = started
+		m.groups[plan.key] = g
+	}
+	g.refs++
+	lease.groups = append(lease.groups, g)
+	lease.members[name] = member{group: g, served: g.models[plan.members[name]]}
+	logging.ComponentWarnEvent("model_runtime", "deployment_outside_generation_plan", map[string]interface{}{
+		"deployment": name, "process": plan.name,
+	})
+	return nil
 }
 
 func (m *Manager) startGroupLocked(plan *processPlan) (*group, error) {

@@ -6,6 +6,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // DeploymentStatus is the observable state of one deployment.
@@ -27,6 +29,7 @@ type DeploymentStatus struct {
 // composition starts new ones without disturbing the previous generation.
 type Lease struct {
 	manager   *Manager
+	mu        sync.RWMutex
 	members   map[string]member
 	groups    []*group
 	closeOnce sync.Once
@@ -42,6 +45,8 @@ func (l *Lease) Deployments() []string {
 	if l == nil {
 		return nil
 	}
+	l.mu.RLock()
+	defer l.mu.RUnlock()
 	names := make([]string, 0, len(l.members))
 	for name := range l.members {
 		names = append(names, name)
@@ -50,12 +55,28 @@ func (l *Lease) Deployments() []string {
 	return names
 }
 
+// Ensure adds a deployment the generation's plan did not include, in a
+// process of its own, so a consumer the plan missed still runs. It is a no-op
+// for a deployment the lease already serves.
+func (l *Lease) Ensure(name string, deployment config.ModelDeployment) error {
+	if _, ok := l.lookup(name); ok {
+		return nil
+	}
+	return l.manager.extend(l, name, deployment)
+}
+
 // Close releases the lease's processes; the last reference stops a process.
 func (l *Lease) Close() error {
 	if l == nil {
 		return nil
 	}
-	l.closeOnce.Do(func() { l.manager.release(l.groups) })
+	l.closeOnce.Do(func() {
+		l.mu.Lock()
+		groups := l.groups
+		l.groups = nil
+		l.mu.Unlock()
+		l.manager.release(groups)
+	})
 	return nil
 }
 
@@ -64,10 +85,13 @@ func (l *Lease) Statuses() []DeploymentStatus {
 	if l == nil {
 		return nil
 	}
+	l.mu.RLock()
+	groups := append([]*group(nil), l.groups...)
+	l.mu.RUnlock()
 	var statuses []DeploymentStatus
-	for _, g := range l.groups {
+	for _, g := range groups {
 		for _, status := range g.status() {
-			if _, ok := l.members[status.Name]; ok {
+			if _, ok := l.lookup(status.Name); ok {
 				statuses = append(statuses, status)
 			}
 		}
@@ -89,7 +113,9 @@ func (l *Lease) lookup(deployment string) (member, bool) {
 	if l == nil {
 		return member{}, false
 	}
+	l.mu.RLock()
 	m, ok := l.members[deployment]
+	l.mu.RUnlock()
 	return m, ok
 }
 

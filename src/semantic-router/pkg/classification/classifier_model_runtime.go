@@ -9,33 +9,40 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
 // classifierModelRuntime is preparation-only state. Requests use typed handles;
 // they never resolve catalog paths or scan another recipe's configuration.
 type classifierModelRuntime struct {
-	runtime *native.Runtime
-	plan    *config.ModelBindingPlan
-	cfg     *config.RouterConfig
-	recipe  config.RecipeName
-	// Contrastive input policy is captured before native-only defaults.
+	runtime          *serving.Runtime
+	embeddingRuntime *native.Runtime
+	plan             *config.ModelBindingPlan
+	cfg              *config.RouterConfig
+	recipe           config.RecipeName
+	// Contrastive input policy is captured before the module window defaults.
 	jailbreakContrastiveFullContext *bool
 }
 
-func newClassifierModelRuntime(cfg *config.RouterConfig, runtime *native.Runtime) (*classifierModelRuntime, error) {
+func newClassifierModelRuntime(cfg *config.RouterConfig, options RecipeRuntimeOptions) (*classifierModelRuntime, error) {
 	plan, err := config.CompileModelBindings(cfg)
 	if err != nil {
 		return nil, err
 	}
+	runtime, embeddings := options.Runtime, options.EmbeddingRuntime
 	if runtime == nil {
-		runtime = native.New(nil)
+		runtime = serving.New(nil, nil)
+	}
+	if embeddings == nil {
+		embeddings = native.New(runtime.Pool)
 	}
 	recipe := cfg.RoutingScope
 	if recipe == "" {
 		recipe = config.DefaultRecipeName
 	}
-	models := &classifierModelRuntime{runtime: runtime, plan: plan, cfg: cfg, recipe: recipe}
+	models := &classifierModelRuntime{runtime: runtime, embeddingRuntime: embeddings, plan: plan, cfg: cfg, recipe: recipe}
 	if err := models.projectBindings(); err != nil {
 		return nil, err
 	}
@@ -48,6 +55,15 @@ func newClassifierModelRuntime(cfg *config.RouterConfig, runtime *native.Runtime
 		return nil, err
 	}
 	return models, nil
+}
+
+// decider answers decision signals through the generation's deployments.
+func (m *classifierModelRuntime) decider() (modelservice.Decider, bool) {
+	if m == nil || m.runtime == nil {
+		return nil, false
+	}
+	decider, ok := m.runtime.Services().(modelservice.Decider)
+	return decider, ok
 }
 
 // Match registry aliases and equivalent local paths without treating an
@@ -64,50 +80,46 @@ func isDefaultModelArtifact(selected, defaultPath string) bool {
 	return err == nil && selectedPath == registeredPath
 }
 
-// localSpec materializes the existing canonical module default when no recipe
-// override is declared. A module's name is its default binding, not its physical
-// identity: native preparation fingerprints the artifact and execution options.
-func (m *classifierModelRuntime) localSpec(name, artifact, adapter, contract string, useCPU bool, maxTokens ...int) config.ResolvedModelBinding {
+// localSpec resolves a consumer's binding: the recipe's declared binding, else
+// the implicit model_runtime deployment of the module's model (config owns its
+// name and identity, so the manager already runs it in the device's process).
+// The module's input budget truncates by default; Vela Halu reads the whole
+// grounded input and rejects longer ones.
+func (m *classifierModelRuntime) localSpec(name, artifact, adapter, contract string, useCPU bool, maxTokens ...int) (config.ResolvedModelBinding, error) {
 	if spec, ok := m.plan.Lookup(m.recipe, name); ok {
-		spec.Deployment.Artifact = config.ResolveModelPath(spec.Deployment.Artifact)
-		if spec.Binding.Head != "" {
-			spec.Binding.Head = config.ResolveModelPath(spec.Binding.Head)
-		}
-		return spec
+		return spec, nil
 	}
 	limit := 0
 	if len(maxTokens) > 0 {
 		limit = maxTokens[0]
 	}
 	overflow := "truncate"
-	if model := config.GetModelByPath(artifact); model != nil && model.DefaultAdapter != "" {
+	if model := config.GetModelByPath(artifact); model != nil && model.DefaultAdapter == "vela_halu" {
 		adapter = model.DefaultAdapter
-		// Only a declared task adapter changes implicit execution policy. The
-		// historical classifier defaults continue to use their 512-token policy.
-		if adapter == "vela_halu" {
-			if limit == 0 {
-				limit = model.MaxContextLength
-			}
-			overflow = "reject"
+		if limit == 0 {
+			limit = model.MaxContextLength
 		}
+		overflow = "reject"
 	}
-	provider, device := config.DefaultModelExecution(useCPU)
-	if name == "domain_classifier" {
-		provider, device = config.DefaultCategoryExecution(useCPU)
+	deploymentName, deployment, ok, err := m.cfg.ImplicitTaskDeployment(name)
+	if !ok && err == nil {
+		deployment, err = config.ImplicitModelRuntimeDeployment(artifact, useCPU)
+		deploymentName = config.ImplicitDeploymentPrefix + string(m.recipe) + "/" + name
 	}
-	if model := config.GetModelByPath(artifact); model != nil && model.DefaultProvider != "" {
-		provider, device = model.DefaultProvider, model.DefaultDevice
+	if err != nil {
+		return config.ResolvedModelBinding{}, fmt.Errorf("%s/%s: %w", m.recipe, name, err)
 	}
+	deployment.Input = config.ModelInputBudget{MaxTokens: limit, Overflow: overflow}
 	return config.ResolvedModelBinding{
 		Recipe: m.recipe, Name: name,
-		Binding:    config.ModelBinding{Deployment: name, Adapter: adapter, Contract: contract},
-		Deployment: config.ModelDeployment{Artifact: config.ResolveModelPath(artifact), Provider: provider, Device: device, Precision: "native", Input: config.ModelInputBudget{MaxTokens: limit, Overflow: overflow}},
+		Binding:    config.ModelBinding{Deployment: deploymentName, Adapter: adapter, Contract: contract},
+		Deployment: deployment.WithDefaults(),
 		Admission:  m.cfg.ModelAdmission[name],
-	}
+	}, nil
 }
 
 type ownedSequenceBackend struct {
-	runtime        *native.Runtime
+	runtime        *serving.Runtime
 	spec           config.ResolvedModelBinding
 	labels         []string
 	normalizeLabel func(string) string
@@ -181,7 +193,7 @@ func (b ownedCategoryBackend) ClassifyWithProbabilities(ctx context.Context, tex
 }
 
 type ownedTokenBackend struct {
-	runtime *native.Runtime
+	runtime *serving.Runtime
 	spec    config.ResolvedModelBinding
 	labels  []string
 	mu      sync.RWMutex
@@ -230,7 +242,8 @@ func (b *ownedTokenBackend) Close() error {
 }
 
 func standaloneModelRuntime() *classifierModelRuntime {
-	return &classifierModelRuntime{runtime: native.New(nil), cfg: &config.RouterConfig{}, recipe: config.DefaultRecipeName}
+	runtime := serving.New(nil, nil)
+	return &classifierModelRuntime{runtime: runtime, embeddingRuntime: native.New(runtime.Pool), cfg: &config.RouterConfig{}, recipe: config.DefaultRecipeName}
 }
 
 func consumerModelRuntime(models []*classifierModelRuntime) *classifierModelRuntime {

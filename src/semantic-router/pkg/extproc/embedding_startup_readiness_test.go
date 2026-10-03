@@ -73,7 +73,7 @@ func prepareReadinessRouter(t *testing.T, cfg *config.RouterConfig) *OpenAIRoute
 	if err != nil {
 		t.Fatal(err)
 	}
-	components.recipeClassifiers, err = classification.BuildRecipeClassifiers(cfg, nil, nil, nil, classification.RecipeRuntimeOptions{Runtime: runtime, Embeddings: components.embeddings})
+	components.recipeClassifiers, err = classification.BuildRecipeClassifiers(cfg, nil, nil, nil, classification.RecipeRuntimeOptions{EmbeddingRuntime: runtime, Embeddings: components.embeddings})
 	if err != nil {
 		t.Fatal(err)
 	}

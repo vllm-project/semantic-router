@@ -32,12 +32,6 @@ const JailbreakClassificationErrorType = "classification_error"
 
 const jailbreakEvaluationFailedCode = "jailbreak_evaluation_failed"
 
-// collectJailbreakClassifierContents returns the deduplicated set of text pieces
-// that need BERT classifier inference (contrastive rules are excluded).
-func (c *Classifier) collectJailbreakClassifierContents(jailbreakText string, nonUserMessages []string) []string {
-	return c.collectJailbreakClassifierContentPieces([]string{jailbreakText}, nonUserMessages)
-}
-
 func (c *Classifier) collectJailbreakClassifierContentPieces(current, history []string) []string {
 	seen := make(map[string]struct{})
 	var contents []string
@@ -142,10 +136,6 @@ func (c *Classifier) recordJailbreakObservedRisk(results *SignalResults, mu *syn
 	}
 }
 
-func (c *Classifier) evaluateJailbreakRule(rule config.JailbreakRule, jailbreakText string, nonUserMessages []string, jailbreakCache map[string][]cachedJailbreakResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
-	c.evaluateJailbreakRulePieces(rule, []string{jailbreakText}, nonUserMessages, jailbreakCache, start, results, mu)
-}
-
 func (c *Classifier) evaluateJailbreakRulePieces(rule config.JailbreakRule, current, history []string, jailbreakCache map[string][]cachedJailbreakResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
 	var contentToAnalyze []string
 	for _, text := range current {
@@ -170,18 +160,6 @@ func (c *Classifier) evaluateJailbreakRulePieces(rule config.JailbreakRule, curr
 	default:
 		c.evaluateBERTJailbreakRule(rule, contentToAnalyze, jailbreakCache, start, results, mu)
 	}
-}
-
-// buildContentList assembles the text pieces to analyze for a single rule.
-func buildContentList(text string, nonUserMessages []string, includeHistory bool) []string {
-	var content []string
-	if text != "" {
-		content = append(content, text)
-	}
-	if includeHistory && len(nonUserMessages) > 0 {
-		content = append(content, nonUserMessages...)
-	}
-	return content
 }
 
 func (c *Classifier) evaluateContrastiveJailbreakRule(rule config.JailbreakRule, contentToAnalyze []string, start time.Time, results *SignalResults, mu *sync.Mutex) {

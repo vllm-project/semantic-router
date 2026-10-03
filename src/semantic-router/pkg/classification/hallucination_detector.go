@@ -2,12 +2,10 @@ package classification
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
@@ -61,25 +59,12 @@ func mergeChunkConfidence(merged bool, mergedConfidence float32, chunk bool, chu
 }
 
 type HallucinationDetector struct {
-	config         *config.HallucinationModelConfig
-	nliConfig      *config.NLIModelConfig
-	models         *classifierModelRuntime
-	spec           config.ResolvedModelBinding
-	nliSpec        config.ResolvedModelBinding
-	handle         *binding.Resolved[tasks.GroundedTextRequest, tasks.TokenClassificationResult]
-	nliHandle      *binding.Resolved[tasks.TextPairRequest, tasks.LabelDistribution]
-	initialized    bool
-	nliInitialized bool
-	gate           admission.Admissioner
-	explainerGate  admission.Admissioner
-	mu             sync.RWMutex
-}
-
-func (d *HallucinationDetector) SetAdmissioners(detector, explainer admission.Admissioner) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	d.gate = detector
-	d.explainerGate = explainer
+	config      *config.HallucinationModelConfig
+	models      *classifierModelRuntime
+	spec        config.ResolvedModelBinding
+	handle      *binding.Resolved[tasks.GroundedTextRequest, tasks.TokenClassificationResult]
+	initialized bool
+	mu          sync.RWMutex
 }
 
 func NewHallucinationDetector(cfg *config.HallucinationModelConfig, models ...*classifierModelRuntime) (*HallucinationDetector, error) {
@@ -87,9 +72,9 @@ func NewHallucinationDetector(cfg *config.HallucinationModelConfig, models ...*c
 		return nil, fmt.Errorf("hallucination model config is required")
 	}
 	runtime := consumerModelRuntime(models)
-	spec := runtime.localSpec("hallucination_detector", cfg.ModelID, "modernbert", config.RemoteClassifierContractTokenSpans, cfg.UseCPU)
-	if spec.Deployment.Artifact == "" {
-		return nil, fmt.Errorf("hallucination model_id is required")
+	spec, err := runtime.localSpec("hallucination_detector", cfg.ModelID, "modernbert", config.RemoteClassifierContractTokenSpans, cfg.UseCPU)
+	if err != nil {
+		return nil, fmt.Errorf("hallucination detector: %w", err)
 	}
 	return &HallucinationDetector{config: cfg, models: runtime, spec: spec}, nil
 }
@@ -222,13 +207,8 @@ func (d *HallucinationDetector) Close() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.initialized = false
-	d.nliInitialized = false
-	var errs []error
-	if d.handle != nil {
-		errs = append(errs, d.handle.Close())
+	if d.handle == nil {
+		return nil
 	}
-	if d.nliHandle != nil {
-		errs = append(errs, d.nliHandle.Close())
-	}
-	return errors.Join(errs...)
+	return d.handle.Close()
 }

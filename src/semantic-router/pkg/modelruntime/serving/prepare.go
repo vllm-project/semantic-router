@@ -33,6 +33,12 @@ type target struct {
 	resource   *binding.Resource
 }
 
+// deploymentPlanner is implemented by services that can start a deployment
+// their generation's plan did not include (modelservice.Lease).
+type deploymentPlanner interface {
+	Ensure(name string, deployment config.ModelDeployment) error
+}
+
 // remoteModel stands for a model served by a runtime process. The process
 // owns the weights; the reference shares only the deployment's admission gate.
 type remoteModel struct{}
@@ -87,6 +93,11 @@ func (r *Runtime) card(ctx context.Context, spec config.ResolvedModelBinding) (m
 	}
 	if r.services == nil {
 		return modelservice.ModelCard{}, ErrNotConfigured
+	}
+	if planner, ok := r.services.(deploymentPlanner); ok {
+		if err := planner.Ensure(spec.Binding.Deployment, spec.Deployment); err != nil {
+			return modelservice.ModelCard{}, fmt.Errorf("model_runtime deployment %q: %w", spec.Binding.Deployment, err)
+		}
 	}
 	card, err := r.services.Card(ctx, spec.Binding.Deployment)
 	if err != nil {
