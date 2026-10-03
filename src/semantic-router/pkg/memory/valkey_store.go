@@ -566,7 +566,7 @@ func (v *ValkeyStore) upsert(ctx context.Context, memory *Memory) error {
 
 	key := v.hashKey(memory.ID)
 
-	updated, err := v.updateHashIfExists(ctx, key, fields)
+	updated, err := v.updateHashIfCurrent(ctx, key, memory.ID, fields)
 	if err != nil {
 		return fmt.Errorf("valkey conditional update failed for memory id=%s: %w", memory.ID, err)
 	}

@@ -59,11 +59,14 @@ func TestValkeyReplaceCurrentGroupArgs(t *testing.T) {
 	require.Equal(t, []string{"content", "summary", "id", "summary-id"}, args[10:])
 }
 
-func TestValkeyUpdateIfExistsScript(t *testing.T) {
+func TestValkeyConditionalMutationScripts(t *testing.T) {
 	t.Parallel()
 
-	assert.Contains(t, valkeyUpdateIfExistsScriptSource, "redis.call('EXISTS', KEYS[1])")
-	assert.Contains(t, valkeyUpdateIfExistsScriptSource, "redis.call('HSET', KEYS[1], unpack(ARGV))")
+	assert.Contains(t, valkeyUpdateIfCurrentScriptSource, "redis.call('HGET', KEYS[1], 'id') ~= ARGV[1]")
+	assert.Contains(t, valkeyUpdateIfCurrentScriptSource, "redis.call('HSET', KEYS[1], unpack(ARGV, 2))")
+	assert.Contains(t, valkeyTrackRetrievalScriptSource, "redis.call('HGET', KEYS[1], 'id') ~= ARGV[1]")
+	assert.Contains(t, valkeyTrackRetrievalScriptSource, "redis.call('HINCRBY', KEYS[1], 'access_count', 1)")
+	assert.Contains(t, valkeyTrackRetrievalScriptSource, "redis.call('HSET', KEYS[1], 'last_accessed', ARGV[2])")
 	assert.Equal(t, []string{"content", "summary", "id", "memory-id"}, valkeyHashFieldArgs(map[string]string{
 		"id":      "memory-id",
 		"content": "summary",

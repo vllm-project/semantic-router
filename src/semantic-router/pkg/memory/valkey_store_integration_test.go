@@ -788,7 +788,7 @@ func TestValkeyStoreInteg_AtomicConsolidationLeavesUpdatedSources(t *testing.T) 
 }
 
 // StorageIntegration: valkey
-func TestValkeyStoreInteg_ConditionalUpdateDoesNotRecreateConsolidatedSource(t *testing.T) {
+func TestValkeyStoreInteg_QueuedTrackingAndStaleUpdateDoNotRecreateConsolidatedSource(t *testing.T) {
 	store, _ := setupValkeyMemoryIntegration(t)
 	ctx := context.Background()
 	userID := fmt.Sprintf("conditional_update_%d", time.Now().UnixNano())
@@ -821,6 +821,12 @@ func TestValkeyStoreInteg_ConditionalUpdateDoesNotRecreateConsolidatedSource(t *
 	require.NoError(t, err)
 	require.True(t, replaced)
 	require.Equal(t, 2, deleted)
+
+	// This simulates retrieval tracking that was queued before consolidation
+	// but reaches Valkey after the source hash has been deleted.
+	require.NoError(t, store.recordRetrieval(ctx, idA))
+	_, err = store.Get(ctx, idA)
+	require.Error(t, err)
 
 	staleUpdate := *originalA
 	staleUpdate.Content = "stale update must not recreate the source"

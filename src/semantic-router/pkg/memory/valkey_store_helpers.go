@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	glideoptions "github.com/valkey-io/valkey-glide/go/v2/options"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	valkeyutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/valkey"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
@@ -23,7 +25,7 @@ import (
 // ---------------------------------------------------------------------------
 
 // recordRetrievalBatch updates LastAccessed and AccessCount for each retrieved memory in the background.
-// Uses targeted HINCRBY + HSET instead of full read-modify-write for efficiency.
+// Uses a targeted Valkey script instead of full read-modify-write for efficiency.
 // Reads update access metadata only; they must not change UpdatedAt because that
 // timestamp is the write-version used by atomic consolidation.
 func (v *ValkeyStore) recordRetrievalBatch(ids []string) {
@@ -36,31 +38,24 @@ func (v *ValkeyStore) recordRetrievalBatch(ids []string) {
 	}
 }
 
-// recordRetrieval updates LastAccessed and AccessCount for a single memory (reinforcement: S += 1, t = 0).
-//
-// The authoritative access_count and last_accessed live as top-level HASH
-// fields. HINCRBY and HSET update their respective fields atomically. Do not
-// rewrite duplicated values inside metadata JSON here: a separate
-// read-modify-write can race with retrievals and move access metadata
-// backwards. UpdatedAt changes only on Store and Update, so it remains a
-// write-version for atomic consolidation.
+// recordRetrieval updates LastAccessed and AccessCount for a live memory
+// (reinforcement: S += 1, t = 0). The ID check and metadata writes execute in
+// one script so queued tracking cannot recreate a hash that consolidation or
+// Forget has deleted. UpdatedAt changes only on Store and Update, so it
+// remains a write-version for atomic consolidation.
 func (v *ValkeyStore) recordRetrieval(ctx context.Context, id string) error {
 	key := v.hashKey(id)
-	now := time.Now()
-	nowUnixMilli := strconv.FormatInt(now.UnixMilli(), 10)
+	nowUnixMilli := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	scriptOptions := glideoptions.NewScriptOptions().
+		WithKeys([]string{key}).
+		WithArgs([]string{id, nowUnixMilli})
 
-	// Increment access_count atomically.
-	_, err := v.client.CustomCommand(ctx, []string{"HINCRBY", key, "access_count", "1"})
-	if err != nil {
-		return fmt.Errorf("HINCRBY access_count failed: %w", err)
-	}
-
-	// Record access time without changing the write-version.
-	_, err = v.client.HSet(ctx, key, map[string]string{
-		"last_accessed": nowUnixMilli,
+	err := v.retryWithBackoff(ctx, func() error {
+		_, runErr := v.client.InvokeScriptWithOptions(ctx, *valkeyTrackRetrievalScript(), *scriptOptions)
+		return runErr
 	})
 	if err != nil {
-		return fmt.Errorf("HSET last_accessed failed: %w", err)
+		return fmt.Errorf("record retrieval metadata failed: %w", err)
 	}
 
 	return nil

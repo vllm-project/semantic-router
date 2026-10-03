@@ -16,8 +16,10 @@ import (
 var (
 	valkeyReplaceCurrentGroupScriptOnce sync.Once
 	valkeyReplaceCurrentGroupScript     *glideoptions.Script
-	valkeyUpdateIfExistsScriptOnce      sync.Once
-	valkeyUpdateIfExistsCompiledScript  *glideoptions.Script
+	valkeyUpdateIfCurrentScriptOnce     sync.Once
+	valkeyUpdateIfCurrentCompiledScript *glideoptions.Script
+	valkeyTrackRetrievalScriptOnce      sync.Once
+	valkeyTrackRetrievalCompiledScript  *glideoptions.Script
 )
 
 // valkeyReplaceCurrentGroupScriptSource validates every source snapshot,
@@ -68,36 +70,58 @@ func valkeyAtomicGroupReplacementScript() *glideoptions.Script {
 	return valkeyReplaceCurrentGroupScript
 }
 
-// valkeyUpdateIfExistsScriptSource prevents Update from recreating a source
+// valkeyUpdateIfCurrentScriptSource prevents Update from recreating a source
 // deleted by atomic consolidation between Update's initial Get and its write.
-// EXISTS and HSET must run in the same script because HSET creates a missing
-// hash key.
-const valkeyUpdateIfExistsScriptSource = `
-if redis.call('EXISTS', KEYS[1]) == 0 then
+// The ID comparison and HSET must run in the same script because HSET creates
+// a missing hash key. Checking the ID, rather than only key existence, also
+// rejects an incomplete hash left by a stale background operation.
+const valkeyUpdateIfCurrentScriptSource = `
+if redis.call('HGET', KEYS[1], 'id') ~= ARGV[1] then
   return 0
 end
-redis.call('HSET', KEYS[1], unpack(ARGV))
+redis.call('HSET', KEYS[1], unpack(ARGV, 2))
 return 1
 `
 
-func valkeyUpdateIfExistsScript() *glideoptions.Script {
-	valkeyUpdateIfExistsScriptOnce.Do(func() {
-		valkeyUpdateIfExistsCompiledScript = glideoptions.NewScript(valkeyUpdateIfExistsScriptSource)
+func valkeyUpdateIfCurrentScript() *glideoptions.Script {
+	valkeyUpdateIfCurrentScriptOnce.Do(func() {
+		valkeyUpdateIfCurrentCompiledScript = glideoptions.NewScript(valkeyUpdateIfCurrentScriptSource)
 	})
-	return valkeyUpdateIfExistsCompiledScript
+	return valkeyUpdateIfCurrentCompiledScript
 }
 
-// updateHashIfExists updates an existing memory hash without allowing HSET to
-// recreate it after it has been removed by consolidation or Forget.
-func (v *ValkeyStore) updateHashIfExists(ctx context.Context, key string, fields map[string]string) (bool, error) {
+// valkeyTrackRetrievalScriptSource records retrieval metadata only when the
+// hash still holds the requested memory ID. The check and writes are atomic so
+// queued retrieval tracking cannot recreate a source deleted by consolidation
+// or Forget.
+const valkeyTrackRetrievalScriptSource = `
+if redis.call('HGET', KEYS[1], 'id') ~= ARGV[1] then
+  return 0
+end
+redis.call('HINCRBY', KEYS[1], 'access_count', 1)
+redis.call('HSET', KEYS[1], 'last_accessed', ARGV[2])
+return 1
+`
+
+func valkeyTrackRetrievalScript() *glideoptions.Script {
+	valkeyTrackRetrievalScriptOnce.Do(func() {
+		valkeyTrackRetrievalCompiledScript = glideoptions.NewScript(valkeyTrackRetrievalScriptSource)
+	})
+	return valkeyTrackRetrievalCompiledScript
+}
+
+// updateHashIfCurrent updates a memory hash only while it still holds the
+// expected ID, without allowing HSET to recreate it after consolidation or
+// Forget removes it.
+func (v *ValkeyStore) updateHashIfCurrent(ctx context.Context, key, id string, fields map[string]string) (bool, error) {
 	scriptOptions := glideoptions.NewScriptOptions().
 		WithKeys([]string{key}).
-		WithArgs(valkeyHashFieldArgs(fields))
+		WithArgs(append([]string{id}, valkeyHashFieldArgs(fields)...))
 
 	var result any
 	err := v.retryWithBackoff(ctx, func() error {
 		var runErr error
-		result, runErr = v.client.InvokeScriptWithOptions(ctx, *valkeyUpdateIfExistsScript(), *scriptOptions)
+		result, runErr = v.client.InvokeScriptWithOptions(ctx, *valkeyUpdateIfCurrentScript(), *scriptOptions)
 		return runErr
 	})
 	if err != nil {
