@@ -129,13 +129,17 @@ func (m *Manager) startGroupLocked(plan *processPlan) (*group, error) {
 		g.start()
 		return g, nil
 	}
-	if err := os.MkdirAll(m.runtimeDir, 0o700); err != nil {
-		return nil, err
-	}
-	if err := os.Chmod(m.runtimeDir, 0o700); err != nil {
+	if err := privateDir(m.runtimeDir); err != nil {
 		return nil, err
 	}
 	socket, modelsFile := plan.files(m.runtimeDir)
+	if len(socket) > maxSocketPath {
+		dir := shortSocketDir(m.runtimeDir)
+		if err := privateDir(dir); err != nil {
+			return nil, err
+		}
+		socket, _ = plan.files(dir)
+	}
 	if err := plan.writeModelsFile(modelsFile); err != nil {
 		return nil, err
 	}

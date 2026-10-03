@@ -62,6 +62,7 @@ type HallucinationDetector struct {
 	config      *config.HallucinationModelConfig
 	models      *classifierModelRuntime
 	spec        config.ResolvedModelBinding
+	specErr     error
 	handle      *binding.Resolved[tasks.GroundedTextRequest, tasks.TokenClassificationResult]
 	initialized bool
 	mu          sync.RWMutex
@@ -72,11 +73,11 @@ func NewHallucinationDetector(cfg *config.HallucinationModelConfig, models ...*c
 		return nil, fmt.Errorf("hallucination model config is required")
 	}
 	runtime := consumerModelRuntime(models)
-	spec, err := runtime.localSpec("hallucination_detector", cfg.ModelID, "modernbert", config.RemoteClassifierContractTokenSpans, cfg.UseCPU)
-	if err != nil {
-		return nil, fmt.Errorf("hallucination detector: %w", err)
+	if _, bound := runtime.plan.Lookup(runtime.recipe, "hallucination_detector"); !bound && strings.TrimSpace(cfg.ModelID) == "" {
+		return nil, fmt.Errorf("hallucination model_id is required")
 	}
-	return &HallucinationDetector{config: cfg, models: runtime, spec: spec}, nil
+	spec, err := runtime.localSpec("hallucination_detector", cfg.ModelID, "modernbert", config.RemoteClassifierContractTokenSpans, cfg.UseCPU)
+	return &HallucinationDetector{config: cfg, models: runtime, spec: spec, specErr: err}, nil
 }
 
 func (d *HallucinationDetector) Initialize() error {
@@ -84,6 +85,9 @@ func (d *HallucinationDetector) Initialize() error {
 	defer d.mu.Unlock()
 	if d.initialized {
 		return nil
+	}
+	if d.specErr != nil {
+		return fmt.Errorf("hallucination detector: %w", d.specErr)
 	}
 	handle, err := d.models.runtime.Grounded(context.Background(), d.spec, d.hallucinationThreshold())
 	if err != nil {

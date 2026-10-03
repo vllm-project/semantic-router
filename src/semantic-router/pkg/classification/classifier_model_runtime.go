@@ -96,13 +96,16 @@ func (m *classifierModelRuntime) localSpec(name, artifact, adapter, contract str
 		}
 		overflow = "reject"
 	}
-	deploymentName, deployment, ok, err := m.cfg.ImplicitTaskDeployment(name)
-	if !ok && err == nil {
-		deployment, err = config.ImplicitModelRuntimeDeployment(artifact, useCPU)
-		deploymentName = config.ImplicitDeploymentPrefix + string(m.recipe) + "/" + name
-	}
+	deployment, err := config.ImplicitModelRuntimeDeployment(artifact, useCPU)
 	if err != nil {
 		return config.ResolvedModelBinding{}, fmt.Errorf("%s/%s: %w", m.recipe, name, err)
+	}
+	// The module's own model already runs under its config-owned name; any
+	// other artifact gets a recipe-scoped deployment of its own.
+	deploymentName := config.ImplicitDeploymentPrefix + string(m.recipe) + "/" + name
+	if moduleName, module, ok, moduleErr := m.cfg.ImplicitTaskDeployment(name); ok && moduleErr == nil &&
+		module.Artifact == deployment.Artifact && module.Revision == deployment.Revision && module.Device == deployment.Device {
+		deploymentName = moduleName
 	}
 	deployment.Input = config.ModelInputBudget{MaxTokens: limit, Overflow: overflow}
 	return config.ResolvedModelBinding{
@@ -113,9 +116,12 @@ func (m *classifierModelRuntime) localSpec(name, artifact, adapter, contract str
 	}, nil
 }
 
+// ownedSequenceBackend prepares its binding at Init; err is a resolution
+// failure that Init reports, so a consumer nobody uses never fails a build.
 type ownedSequenceBackend struct {
 	runtime        *serving.Runtime
 	spec           config.ResolvedModelBinding
+	err            error
 	labels         []string
 	normalizeLabel func(string) string
 	mu             sync.RWMutex
@@ -128,6 +134,9 @@ func (b *ownedSequenceBackend) Init(_ string, _ bool, classes ...int) error {
 	defer b.mu.Unlock()
 	if b.closed {
 		return binding.ErrClosed
+	}
+	if b.err != nil {
+		return b.err
 	}
 	if b.handle != nil {
 		return nil
@@ -190,6 +199,7 @@ func (b ownedCategoryBackend) ClassifyWithProbabilities(ctx context.Context, tex
 type ownedTokenBackend struct {
 	runtime *serving.Runtime
 	spec    config.ResolvedModelBinding
+	err     error
 	labels  []string
 	mu      sync.RWMutex
 	handle  *binding.Resolved[string, tasks.TokenClassificationResult]
@@ -201,6 +211,9 @@ func (b *ownedTokenBackend) Init(_ string, _ bool, _ int) error {
 	defer b.mu.Unlock()
 	if b.closed {
 		return binding.ErrClosed
+	}
+	if b.err != nil {
+		return b.err
 	}
 	if b.handle != nil {
 		return nil

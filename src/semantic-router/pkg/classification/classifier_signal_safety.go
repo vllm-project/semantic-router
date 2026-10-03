@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
 type safetyDetector struct {
@@ -158,7 +159,7 @@ func (c *Classifier) evaluateSafetySignals(ctx context.Context, results *SignalR
 		ctx = context.Background()
 	}
 	start := time.Now()
-	cache := make(map[string]safetyCachedResult)
+	cache := c.prefetchSafetyHeads(ctx, text, used)
 	classify := func(key string, classifier labelClassifier) (labelClassification, error) {
 		if previous, ok := cache[key]; ok {
 			return previous.result, previous.err
@@ -272,4 +273,30 @@ func aggregateSafetyWindows(result labelClassification, labels []string, selectS
 		maximum = max(maximum, selectScore(scores, labels))
 	}
 	return maximum
+}
+
+// prefetchSafetyHeads classifies the text with every distinct binary head the
+// used rules read, concurrently, so the heads share one bundle. A hazard head
+// runs only after its rule's binary head matched.
+func (c *Classifier) prefetchSafetyHeads(ctx context.Context, text string, used map[string]bool) map[string]safetyCachedResult {
+	heads := make(map[string]labelClassifier)
+	for _, rule := range c.Config.SafetyRules {
+		detector := c.safetyClassifiers[rule.Name]
+		if detector != nil && detector.binary != nil && signalRuleUsed(used, config.SignalTypeSafety, rule.Name) {
+			heads[detector.binaryKey] = detector.binary
+		}
+	}
+	keys := make([]string, 0, len(heads))
+	for key := range heads {
+		keys = append(keys, key)
+	}
+	results := make([]safetyCachedResult, len(keys))
+	modelservice.Fan(ctx, len(keys), func(i int) {
+		results[i].result, results[i].err = heads[keys[i]].Classify(ctx, text)
+	})
+	cache := make(map[string]safetyCachedResult, len(keys))
+	for i, key := range keys {
+		cache[key] = results[i]
+	}
+	return cache
 }

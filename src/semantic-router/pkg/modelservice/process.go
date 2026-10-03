@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -141,4 +142,31 @@ func (p *processPlan) deployments() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// maxSocketPath keeps a Unix socket path under the kernel's sockaddr limit
+// (108 bytes on Linux), which binding and dialing both enforce.
+const maxSocketPath = 100
+
+// shortSocketDir is the socket directory for a runtime directory whose
+// socket paths would be too long: a private directory under /tmp named after it.
+func shortSocketDir(runtimeDir string) string {
+	sum := sha256.Sum256([]byte(runtimeDir))
+	return filepath.Join("/tmp", "vsr-"+hex.EncodeToString(sum[:4]))
+}
+
+// privateDir creates dir with owner-only access, or tightens an existing one;
+// a symbolic link is refused, so another user cannot redirect the sockets.
+func privateDir(dir string) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%s is not a directory", dir)
+	}
+	return os.Chmod(dir, 0o700)
 }
