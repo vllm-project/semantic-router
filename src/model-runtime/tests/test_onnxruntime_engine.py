@@ -223,6 +223,35 @@ def test_graphs_linked_into_a_blob_store_load_like_a_hub_snapshot(tmp_path):
     np.testing.assert_allclose(hidden.numpy(), reference_hidden([[1, 2, 3]]), atol=1e-6)
 
 
+def test_external_data_without_a_length_runs_to_the_end_of_its_file(tmp_path):
+    import onnx
+    from vllm_sr_runtime.errors import PackageError
+
+    path = onnx_graphs.token_graph(
+        tmp_path / "onnx/model.onnx", external="weights.data"
+    )
+    model = onnx.load(str(path), load_external_data=False)
+    (tensor,) = [
+        t
+        for t in model.graph.initializer
+        if t.data_location == onnx.TensorProto.EXTERNAL
+    ]
+    location = [entry for entry in tensor.external_data if entry.key == "location"]
+    del tensor.external_data[:]
+    tensor.external_data.extend(location)
+    bare = tmp_path / "onnx/bare.onnx"
+    onnx.save_model(model, str(bare))
+    hidden = load({"default": bare}).encode(batch([[1, 2, 3]]))
+    np.testing.assert_allclose(
+        hidden.outputs["last_hidden_state"].numpy(),
+        reference_hidden([[1, 2, 3]]),
+        atol=1e-6,
+    )
+    (tmp_path / "onnx/weights.data").unlink()
+    with pytest.raises(PackageError, match="is missing"):
+        graphs.read_graph(bare)
+
+
 def test_external_data_must_stay_next_to_the_graph(tmp_path):
     import onnx
     from vllm_sr_runtime.errors import PackageError
