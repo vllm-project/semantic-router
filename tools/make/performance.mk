@@ -5,17 +5,12 @@
 PERF_BASE_REF ?= HEAD^
 PERF_MODEL_BASELINE_DIR ?= $(CURDIR)/reports
 PERF_MODEL_BASELINE ?= $(PERF_MODEL_BASELINE_DIR)/model-baseline.json
-PERF_MODEL_MANIFEST ?= $(CURDIR)/reports/models.json
-export VLLM_SR_MODEL_MANIFEST ?= $(PERF_MODEL_MANIFEST)
+# Benchmarks serve the pinned catalog models through the model runtime
+# (make model-runtime-install); the base revision runs its own runtime source.
+export PERF_RUNTIME_PYTHON ?= $(AGENT_VENV)/bin/python
+export VLLM_SR_RUNTIME_COMMAND ?= $(PERF_RUNTIME_PYTHON) -m vllm_sr_runtime
 
-download-models-perf: ## Provision the canonical Vela classifier and embedding benchmark artifacts
-	@cd src/semantic-router && go run ./tools/model-test-assets \
-		--provider candle --suite perf --output "$(CURDIR)/$(MODELS_DIR)" \
-		--manifest "$(PERF_MODEL_MANIFEST)" --download
-
-.PHONY: download-models-perf
-
-perf-model-baseline: download-models-perf ## Measure the same Vela artifacts against PERF_BASE_REF
+perf-model-baseline: ## Measure the same pinned models on PERF_BASE_REF
 	@bash perf/scripts/compare-model-baseline.sh \
 		"$(PERF_BASE_REF)" "$(PERF_MODEL_BASELINE_DIR)"
 
