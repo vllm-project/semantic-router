@@ -250,6 +250,13 @@ family: an engine that returns hidden states (native) and one that returns
 graph outputs with heads baked in (ONNX graphs as published) serve the same
 family, and the family records which one it used.
 
+The engine defaults to `auto`: a built-in model's preferred engine for the
+placed device class (`BuiltinModel.engines`, set where an interleaved
+measurement shows it faster), else the first registered engine whose
+`supports()` accepts the model on the device, native first. A load that no
+engine accepts fails with every engine's reason; cards, response meta and
+metrics name the engine chosen. `--engine NAME` pins one.
+
 ### 5.3 Accelerator
 
 An accelerator describes one device class and supplies kernels: detection,
