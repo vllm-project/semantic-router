@@ -723,23 +723,29 @@ def main() -> int:
                     raise
                 record["too_long"] = failed
                 ours = drop_questions(ours, failed)
-                kept = {k: q for k, q in questions.items() if k not in failed}
+                questions = {k: q for k, q in questions.items() if k not in failed}
+                plan = model.plan(state, questions)
                 reference = (
-                    reference_answer(engine, state, kept, model.info.id)
-                    if kept
+                    reference_answer(engine, state, questions, model.info.id)
+                    if questions
                     else {"answers": {}}
                 )
             reference_s = time.perf_counter() - started
+            record.update(compare(reference, ours))
+            record["rendering"] = (
+                rendering_diffs(
+                    reference_rows(engine, module, state, questions),
+                    runtime_rows(plan),
+                )
+                if questions
+                else []
+            )
         except Exception as exc:  # recorded per request, the run goes on
             record["error"] = f"{type(exc).__name__}: {exc}"
             records.append(record)
             continue
         timing["reference_s"] += reference_s
         timing["runtime_s"] += runtime_s
-        record.update(compare(reference, ours))
-        record["rendering"] = rendering_diffs(
-            reference_rows(engine, module, state, questions), runtime_rows(plan)
-        )
         records.append(record)
         print(
             json.dumps(
