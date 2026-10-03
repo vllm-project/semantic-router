@@ -5,11 +5,14 @@ Transformers code the released packages were scored with. An accelerator may
 register a faster implementation for a slot; it declares whether it is
 bit-exact against the reference on that device. A kernel that is not
 bit-exact is used only when the active profile allows approximate numerics.
+A variant is an alternative a model's released runtime ran for a slot (for
+example a different convolution); it runs only for models that name it
+(``ModelSpec.kernel_variants``) and is that model's reference.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 
 import torch
@@ -22,33 +25,44 @@ class Kernel:
     fn: Callable
     source: str
     exact: bool
+    variant: str | None = None
 
 
 @dataclass
 class KernelSet:
-    """The kernels one device uses; ``select`` honours the profile's exactness."""
+    """The kernels one device uses; ``select`` honours the profile's exactness and the model's variants."""
 
     device: str
     available: dict[str, list[Kernel]] = field(default_factory=dict)
     allow_approximate: bool = False
+    variants: dict[str, str] = field(default_factory=dict)
 
     def register(self, kernel: Kernel) -> None:
         self.available.setdefault(kernel.name, []).insert(0, kernel)
 
+    def use_variants(self, variants: Mapping[str, str]) -> None:
+        """Run each named slot with the given variant where this device registers it."""
+        self.variants = dict(variants)
+
     def select(self, name: str) -> Kernel:
-        for kernel in self.available.get(name, []):
-            if kernel.exact or self.allow_approximate:
-                return kernel
+        candidates = self.available.get(name, [])
+        for variant in dict.fromkeys((self.variants.get(name), None)):
+            for kernel in candidates:
+                if kernel.variant == variant and (
+                    kernel.exact or self.allow_approximate
+                ):
+                    return kernel
         raise KeyError(f"no kernel registered for {name!r} on {self.device}")
 
     def __call__(self, name: str) -> Callable:
         return self.select(name).fn
 
     def has(self, name: str) -> bool:
-        return any(
-            kernel.exact or self.allow_approximate
-            for kernel in self.available.get(name, [])
-        )
+        try:
+            self.select(name)
+        except KeyError:
+            return False
+        return True
 
     def describe(self) -> dict[str, str]:
         return {name: self.select(name).source for name in sorted(self.available)}
@@ -192,6 +206,48 @@ def sdpa_ref(
     )
 
 
+ADDITIVE_MASKS = "additive_masks"
+
+
+def sdpa_additive_masks(
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attn_mask: torch.Tensor | None,
+    *,
+    scale: float,
+    is_causal: bool,
+    enable_gqa: bool,
+) -> torch.Tensor:
+    """SDPA with an additive float mask on every call, as Transformers 4.57's ModernBERT calls it.
+
+    A boolean mask becomes 0 where allowed and the dtype's minimum elsewhere, a
+    missing one zeros; on ROCm the inputs are made contiguous first, as that
+    code does for the memory-efficient kernel. Both fix which SDPA backend runs.
+    """
+    if attn_mask is None:
+        attn_mask = query.new_zeros((query.shape[0], 1, query.shape[-2], key.shape[-2]))
+    elif attn_mask.dtype == torch.bool:
+        attn_mask = torch.zeros(
+            attn_mask.shape, dtype=query.dtype, device=query.device
+        ).masked_fill_(attn_mask.logical_not(), torch.finfo(query.dtype).min)
+    if (
+        torch.version.hip is not None
+        and query.is_cuda
+        and torch.backends.cuda.mem_efficient_sdp_enabled()
+    ):
+        query, key, value = query.contiguous(), key.contiguous(), value.contiguous()
+    return sdpa_ref(
+        query,
+        key,
+        value,
+        attn_mask,
+        scale=scale,
+        is_causal=is_causal,
+        enable_gqa=enable_gqa,
+    )
+
+
 def _activation(name: str) -> Callable[[torch.Tensor], torch.Tensor]:
     if name in ("silu", "swish"):
         return F.silu
@@ -208,4 +264,13 @@ def reference_kernels(device: str) -> KernelSet:
         ("sdpa", sdpa_ref),
     ):
         kernels.register(Kernel(name=name, fn=fn, source="torch-reference", exact=True))
+    kernels.register(
+        Kernel(
+            "sdpa",
+            sdpa_additive_masks,
+            "torch-reference",
+            exact=True,
+            variant=ADDITIVE_MASKS,
+        )
+    )
     return kernels
