@@ -1,0 +1,161 @@
+{
+  "vllm-sr/Vela-2.0-0.3B": {
+    "answers": {
+      "cpu": {
+        "domain": {
+          "abstain_probability": 0.030883394851261563,
+          "choice": "health",
+          "confidence": 0.3321741609092661,
+          "probabilities": {
+            "health": 0.61908029626811,
+            "math": 0.2869061353588439,
+            "other": 0.09401356837304593
+          },
+          "type": "choice"
+        },
+        "halu": {
+          "noul": 0.9938214802378829,
+          "type": "noul"
+        },
+        "jailbreak": {
+          "noul": 0.486132825757937,
+          "type": "noul"
+        },
+        "pii": {
+          "noul": 0.9997741772243828,
+          "type": "noul"
+        },
+        "topics.billing": {
+          "noul": 0.004833187628064087,
+          "type": "noul"
+        },
+        "topics.medication": {
+          "noul": 0.3769105503501694,
+          "type": "noul"
+        },
+        "urgency": {
+          "confidence": 0.0,
+          "legend": {
+            "0": "Routine",
+            "1": "Needs prompt attention",
+            "2": "Critical"
+          },
+          "probabilities": {
+            "0": 0.4845903872208001,
+            "1": 0.24082953672645718,
+            "2": 0.2745800760527427
+          },
+          "score": 0.7899896888319426,
+          "type": "score"
+        }
+      }
+    },
+    "revision": "13e85201312febce801f8311960096160a3490fe"
+  },
+  "vllm-sr/Vela-2.0-4B": {
+    "answers": {
+      "cpu": {
+        "domain": {
+          "abstain_probability": 0.005675705477015666,
+          "choice": "health",
+          "confidence": 0.9713894787108026,
+          "probabilities": {
+            "health": 0.9847289846455516,
+            "math": 0.0019315094196994975,
+            "other": 0.01333950593474899
+          },
+          "type": "choice"
+        },
+        "halu": {
+          "noul": 0.9905335041056328,
+          "type": "noul"
+        },
+        "jailbreak": {
+          "noul": 0.13633259281892893,
+          "type": "noul"
+        },
+        "pii": {
+          "noul": 0.9999484750942274,
+          "type": "noul"
+        },
+        "topics.billing": {
+          "noul": 0.0001025361894643162,
+          "type": "noul"
+        },
+        "topics.medication": {
+          "noul": 0.951655673122835,
+          "type": "noul"
+        },
+        "urgency": {
+          "confidence": 0.7029018312045716,
+          "legend": {
+            "0": "Routine",
+            "1": "Needs prompt attention",
+            "2": "Critical"
+          },
+          "probabilities": {
+            "0": 0.9021874246937502,
+            "1": 0.05808961015773173,
+            "2": 0.03972296514851807
+          },
+          "score": 0.13753554045476787,
+          "type": "score"
+        }
+      }
+    },
+    "revision": "c50cba67d9d04b21ef63292b7ecf7334a3d2e9e3"
+  },
+  "vllm-sr/Vela-2.0-9B": {
+    "answers": {
+      "cpu": {
+        "domain": {
+          "abstain_probability": 0.006792695493617424,
+          "choice": "health",
+          "confidence": 0.9776926022526841,
+          "probabilities": {
+            "health": 0.9885184699343844,
+            "math": 0.0006556623839151661,
+            "other": 0.010825867681700317
+          },
+          "type": "choice"
+        },
+        "halu": {
+          "noul": 0.9889163112169755,
+          "type": "noul"
+        },
+        "jailbreak": {
+          "noul": 0.13946104251843003,
+          "type": "noul"
+        },
+        "pii": {
+          "noul": 0.9999945671013583,
+          "type": "noul"
+        },
+        "topics.billing": {
+          "noul": 0.00045496931006340117,
+          "type": "noul"
+        },
+        "topics.medication": {
+          "noul": 0.8880935558048915,
+          "type": "noul"
+        },
+        "urgency": {
+          "confidence": 0.0,
+          "legend": {
+            "0": "Routine",
+            "1": "Needs prompt attention",
+            "2": "Critical"
+          },
+          "probabilities": {
+            "0": 0.5668147249315815,
+            "1": 0.20847229158611963,
+            "2": 0.22471298348229876
+          },
+          "score": 0.6578982585507172,
+          "type": "score"
+        }
+      }
+    },
+    "revision": "2c90057dcf206ffde7e2734fc132bad881708bec"
+  }
+}
