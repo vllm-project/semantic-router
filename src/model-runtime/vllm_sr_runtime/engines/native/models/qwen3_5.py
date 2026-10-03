@@ -312,9 +312,8 @@ class Qwen3_5Backbone(nn.Module):
         """Left-padded prefix rows ``[B, Lp]`` and right-padded blocks ``[N, Lb]`` through every layer.
 
         Block ``i`` continues from prefix row ``owner[i]``; ``shape`` holds the
-        same layout as host values, so the forward reads nothing back and can be
-        captured as a graph. Returns the final-normed states of both,
-        ``[B, Lp, hidden]`` and ``[N, Lb, hidden]``.
+        same layout as host values, so the forward reads nothing back. Returns
+        the final-normed states of both, ``[B, Lp, hidden]`` and ``[N, Lb, hidden]``.
         """
         assert self.kernels is not None, "bind kernels before running the backbone"
         rows, width = prefix_ids.shape

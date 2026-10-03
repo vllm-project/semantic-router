@@ -230,14 +230,13 @@ FOREST_CASES = [
 ]
 
 
-def test_fused_forest_and_its_graphs_equal_eager():
-    """The fused forest forward (``models/forest.py``) and its graph replays equal the eager forward."""
+def test_fused_forest_equals_eager():
+    """The fused forest forward (prefix rows and blocks, ``models/forest.py``) equals the eager one."""
     accelerator, device = _device()
     reference = build(qwen3_5(4, 2560, 32, 16), 7, False, accelerator, device)
     fused = copy.deepcopy(reference)
     fused.kernels = reference.kernels
     assert fast.install_fused(fused) == len(fused.layers)
-    cache = fast.GraphCache(max_tokens=fast.MAX_FOREST_GRAPH_TOKENS)
     generator = torch.Generator().manual_seed(11)
     torch_device = accelerator.torch_device(device)
     for prefix_lengths, block_lengths, owners in FOREST_CASES:
@@ -247,30 +246,16 @@ def test_fused_forest_and_its_graphs_equal_eager():
             prefix_ids[row] = prefix_ids[row].roll(width - length)
             prefix_mask[row] = prefix_mask[row].roll(width - length)
         block_ids, block_mask = batch(block_lengths, generator, torch_device)
-        inputs = {
-            "prefix_ids": prefix_ids,
-            "prefix_mask": prefix_mask,
-            "block_ids": block_ids,
-            "block_mask": block_mask,
-            "owner": torch.tensor(owners, device=torch_device),
-        }
+        owner = torch.tensor(owners, device=torch_device)
         shape = ForestShape(
             tuple(width - length for length in prefix_lengths),
             tuple(block_lengths),
             tuple(owners),
         )
+        args = (prefix_ids, prefix_mask, block_ids, block_mask, owner, shape)
         with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
-            want = [t.clone() for t in reference.forward_forest(**inputs, shape=shape)]
-            got = fused.forward_forest(**inputs, shape=shape)
-            assert not any(layer._fused_failed for layer in fused.layers)
-            assert all(torch.equal(a, b) for a, b in zip(want, got, strict=True))
-            for _ in range(3):
-                replay = cache.run(
-                    (shape, width),
-                    inputs,
-                    lambda x, shape=shape: fused.forward_forest(**x, shape=shape),
-                    prefix_ids.numel() + block_ids.numel(),
-                )
-                assert all(torch.equal(a, b) for a, b in zip(want, replay, strict=True))
-    stats = cache.receipt()
-    assert stats["failed"] == 0 and stats["replays"] > 0
+            want = reference.forward_forest(*args)
+            got = fused.forward_forest(*args)
+        assert not any(layer._fused_failed for layer in fused.layers)
+        for a, b in zip(want, got, strict=True):
+            assert torch.equal(a, b), (prefix_lengths, block_lengths)

@@ -24,10 +24,7 @@ four scored panels), so it belongs to the exact profile:
   concurrent traffic forms many distinct large shapes whose captures would cost
   several forwards each. At most ``MAX_GRAPHS`` graphs (and
   ``MAX_GRAPH_OUTPUT_BYTES`` of outputs) are captured; after that, new shapes
-  run eagerly. A tree's forest forward (``layout: rows``) is captured the same
-  way per exact tree shape (row paddings, block lengths and owners) up to
-  ``MAX_FOREST_GRAPH_TOKENS``: its attention runs one call per row and per
-  block, so it stays launch-bound at larger sizes. Captured graphs are never destroyed while serving: on ROCm,
+  run eagerly. Captured graphs are never destroyed while serving: on ROCm,
   evicting large graphs from the shared memory pool, between large eager
   batches of Index traffic, led to GPU memory access faults.
 """
@@ -60,7 +57,6 @@ FUSED_SLOTS = {
     ),
 }
 MAX_GRAPH_TOKENS = 4096
-MAX_FOREST_GRAPH_TOKENS = 8192
 MAX_GRAPHS = 512
 MAX_GRAPH_OUTPUT_BYTES = 4 << 30
 CAPTURE_AFTER = 2
@@ -147,8 +143,6 @@ def _install_fused_forest(layer: nn.Module) -> None:
         try:
             return fused(prefix, blocks, *args)
         except RuntimeError:
-            if torch.cuda.is_current_stream_capturing():
-                raise
             self._fused_failed.add(key)
             return eager(prefix, blocks, *args)
 
@@ -543,31 +537,25 @@ class Masks:
         }
 
 
-def _output_bytes(value: Any) -> int:
-    if isinstance(value, tuple | list):
-        return sum(_output_bytes(item) for item in value)
+def _output_bytes(value: torch.Tensor) -> int:
     return value.numel() * value.element_size()
 
 
-class GraphCache:
-    """Graphs of a forward per exact input shape (see the module docstring).
-
-    ``run(key, inputs, forward, tokens)`` runs ``forward(inputs)`` eagerly
-    until ``key``'s ``capture_after``-th use, then captures it once (static
-    copies of ``inputs``) and replays it afterwards; the outputs of a replay
-    are the graph's buffers, valid until its next replay. Keys above
-    ``max_tokens`` tokens, keys whose capture failed and new keys once the
-    cache is full run eagerly.
-    """
+class Graphs:
+    """Graphs of the backbone forward per exact padded shape (see the module docstring)."""
 
     def __init__(
         self,
+        backbone: nn.Module,
+        masks: Masks,
         *,
         capture_after: int = CAPTURE_AFTER,
         max_graphs: int = MAX_GRAPHS,
         max_tokens: int = MAX_GRAPH_TOKENS,
         max_output_bytes: int = MAX_GRAPH_OUTPUT_BYTES,
     ):
+        self.backbone = backbone
+        self.masks = masks
         self.capture_after = capture_after
         self.max_graphs = max_graphs
         self.max_tokens = max_tokens
@@ -585,51 +573,58 @@ class GraphCache:
             "failed": 0,
         }
 
-    def run(
-        self,
-        key: tuple,
-        inputs: dict[str, torch.Tensor],
-        forward: Any,
-        tokens: int,
-    ) -> Any:
+    def __call__(
+        self, input_ids: torch.Tensor, attention_mask: torch.Tensor, lengths: list[int]
+    ) -> torch.Tensor:
+        rows, length = input_ids.shape
+        padded = any(n != length for n in lengths)
+        key = (rows, length, padded)
         entry = self.graphs.get(key)
         if entry is None:
             if (
                 key in self.failed
-                or tokens > self.max_tokens
+                or rows * length > self.max_tokens
                 or not torch.is_inference_mode_enabled()
             ):
                 self.stats["eager"] += 1
-                return forward(inputs)
+                return self.eager(input_ids, attention_mask, padded)
             if len(self.seen) > 1 << 16:
                 self.seen.clear()
             self.seen[key] = self.seen.get(key, 0) + 1
             if self.seen[key] < self.capture_after:
                 self.stats["eager"] += 1
-                return forward(inputs)
-            entry = self._capture(key, inputs, forward)
+                return self.eager(input_ids, attention_mask, padded)
+            entry = self._capture(key, input_ids, attention_mask, padded)
             if entry is None:
                 self.stats["eager"] += 1
-                return forward(inputs)
-        for name, value in inputs.items():
-            entry["inputs"][name].copy_(value)
+                return self.eager(input_ids, attention_mask, padded)
+        entry["input_ids"].copy_(input_ids)
+        entry["attention_mask"].copy_(attention_mask)
         entry["graph"].replay()
         self.stats["replays"] += 1
         return entry["output"]
 
-    def _capture(
-        self, key: tuple, inputs: dict[str, torch.Tensor], forward: Any
-    ) -> dict[str, Any] | None:
+    def eager(
+        self, input_ids: torch.Tensor, attention_mask: torch.Tensor, padded: bool
+    ) -> torch.Tensor:
+        return self.backbone(
+            input_ids, attention_mask, masks=self.masks.build(attention_mask, padded)
+        )
+
+    def _capture(self, key, input_ids, attention_mask, padded) -> dict[str, Any] | None:
         if (
             len(self.graphs) >= self.max_graphs
             or self.output_bytes >= self.max_output_bytes
         ):
             self.stats["full"] += 1
             return None
-        static = {name: value.clone() for name, value in inputs.items()}
+        static = {
+            "input_ids": input_ids.clone(),
+            "attention_mask": attention_mask.clone(),
+        }
 
-        def body() -> Any:
-            return forward(static)
+        def body() -> torch.Tensor:
+            return self.eager(static["input_ids"], static["attention_mask"], padded)
 
         try:
             if self.pool is None:
@@ -652,7 +647,7 @@ class GraphCache:
             self.stats["failed"] += 1
             return None
         size = _output_bytes(output)
-        entry = {"inputs": static, "graph": graph, "output": output, "bytes": size}
+        entry = {**static, "graph": graph, "output": output, "bytes": size}
         self.graphs[key] = entry
         self.output_bytes += size
         self.stats["captures"] += 1
@@ -660,31 +655,3 @@ class GraphCache:
 
     def receipt(self) -> dict[str, Any]:
         return {**self.stats, "cached": len(self.graphs)}
-
-
-class Graphs(GraphCache):
-    """Graphs of the backbone forward per exact padded shape ``(rows, length, padded)``."""
-
-    def __init__(self, backbone: nn.Module, masks: Masks, **limits: Any):
-        super().__init__(**limits)
-        self.backbone = backbone
-        self.masks = masks
-
-    def __call__(
-        self, input_ids: torch.Tensor, attention_mask: torch.Tensor, lengths: list[int]
-    ) -> torch.Tensor:
-        rows, length = input_ids.shape
-        padded = any(n != length for n in lengths)
-        return self.run(
-            (rows, length, padded),
-            {"input_ids": input_ids, "attention_mask": attention_mask},
-            lambda x: self.eager(x["input_ids"], x["attention_mask"], padded),
-            rows * length,
-        )
-
-    def eager(
-        self, input_ids: torch.Tensor, attention_mask: torch.Tensor, padded: bool
-    ) -> torch.Tensor:
-        return self.backbone(
-            input_ids, attention_mask, masks=self.masks.build(attention_mask, padded)
-        )

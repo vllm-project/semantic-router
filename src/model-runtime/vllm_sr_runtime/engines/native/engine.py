@@ -59,7 +59,6 @@ class NativeEngineModel(EngineModel):
         self.fast: dict[str, Any] = {}
         self.masks: fast.Masks | None = None
         self.graphs: fast.Graphs | None = None
-        self.forest_graphs: fast.GraphCache | None = None
         self.encoder_graphs: EncoderGraphs | None = None
         if self.device.type == "cuda" and not spec.encoder:
             self._install_fast()
@@ -80,18 +79,12 @@ class NativeEngineModel(EngineModel):
             self.masks = fast.Masks()
         if options.graphs:
             self.graphs = fast.Graphs(backbone, self.masks)
-            if hasattr(backbone, "forward_forest"):
-                self.forest_graphs = fast.GraphCache(
-                    max_tokens=fast.MAX_FOREST_GRAPH_TOKENS
-                )
 
     def receipt(self) -> dict[str, Any]:
         """What runs this model: kernels, fast-path pieces and graph statistics."""
         out: dict[str, Any] = {"kernels": self.kernels.describe(), **self.fast}
         if self.graphs is not None:
             out["graphs"] = self.graphs.receipt()
-        if self.forest_graphs is not None:
-            out["forest_graphs"] = self.forest_graphs.receipt()
         if self.encoder_graphs is not None:
             out["encoder_graphs"] = self.encoder_graphs.receipt()
         return out
@@ -185,21 +178,11 @@ class NativeEngineModel(EngineModel):
             tuple(len(block) for block in batch.blocks),
             tuple(batch.owners),
         )
-        inputs = {
-            "prefix_ids": prefix_ids,
-            "prefix_mask": prefix_mask,
-            "block_ids": block_ids,
-            "block_mask": block_mask,
-            "owner": torch.tensor(batch.owners, dtype=torch.long, device=self.device),
-        }
-
-        def forward(x: dict[str, torch.Tensor]) -> torch.Tensor:
-            return self.backbone.forward_forest(**x, shape=shape)[1]
-
-        if self.forest_graphs is None:
-            return forward(inputs)
-        tokens = prefix_ids.numel() + block_ids.numel()
-        return self.forest_graphs.run((shape, width), inputs, forward, tokens)
+        owner = torch.tensor(batch.owners, dtype=torch.long, device=self.device)
+        _, blocks = self.backbone.forward_forest(
+            prefix_ids, prefix_mask, block_ids, block_mask, owner, shape
+        )
+        return blocks
 
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
         if batch.shared_prefix:
