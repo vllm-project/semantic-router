@@ -34,7 +34,7 @@ ROLE_TO_CONFIG_KEY = {
 
 # What the registry used to say. These repos still resolve, which is exactly
 # why the drift stayed invisible.
-LEGACY_PREFIX = "llm-semantic-router/mmbert-"
+LEGACY_PREFIX = "vllm-sr/mmbert-"
 
 MERGED_SUFFIX = "-merged"
 LORA_SUFFIX = "-lora"
@@ -171,7 +171,7 @@ class EvaluationRegistryMatchesServedModels(unittest.TestCase):
         ).read_text()
         pins = dict(
             re.findall(
-                r'RepoID:\s*"(llm-semantic-router/Vela-[^"]+)"[,]\s*Revision:\s*"([0-9a-f]{40})"',
+                r'RepoID:\s*"(vllm-sr/Vela-[^"]+)"[,]\s*Revision:\s*"([0-9a-f]{40})"',
                 source,
             )
         )

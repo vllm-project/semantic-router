@@ -54,6 +54,15 @@ threshold inherits the global setting; calibrate that value for the selected
 embedding model and search mode before adding an override. See a complete example:
 [`config/fragments/plugin/memory/session-memory.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/memory/session-memory.yaml).
 
+## Observability
+
+Router Memory exposes bounded Prometheus metrics on the Router scrape endpoint.
+Retrieval volume is tracked by `llm_memory_retrieval_total` with `backend` and
+`status` labels (`hit`, `miss`, `error`). Latency and result counts use separate
+histograms without per-user labels. If you upgrade from a release that labeled
+memory metrics with `user_id`, follow the [Router Memory Prometheus label release
+note](../../release-notes/router-memory-prometheus-labels).
+
 ## Upgrading the embedding model
 
 Restart the model runtime after changing embedding weights. For local `mmbert`

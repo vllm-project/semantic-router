@@ -1417,7 +1417,7 @@ routing:
                 X-Environment: admin
 
     - name: long_context_latency_route
-      description: Long-context route with latency-aware policy and MCP-backed RAG.
+      description: Long-context route with latency-aware policy. MCP RAG stays disabled until an invoker exists.
       priority: 125
       rules:
         operator: AND
@@ -1436,7 +1436,9 @@ routing:
       plugins:
         - type: rag
           configuration:
-            enabled: true
+            # Keep this example. TestReferenceConfigRAGBackends requires an mcp
+            # backend_config, and enabled must stay false until an invoker exists.
+            enabled: false
             backend: mcp
             similarity_threshold: 0.74
             top_k: 4
