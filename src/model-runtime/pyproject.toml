@@ -61,7 +61,11 @@ max_speed = "vllm_sr_runtime.profiles.max_speed:MaxSpeedProfile"
 include = ["vllm_sr_runtime*"]
 
 [tool.setuptools.package-data]
-vllm_sr_runtime = ["api/openapi.yaml", "registry/golden_answers.json"]
+vllm_sr_runtime = [
+  "api/openapi.yaml",
+  "registry/golden_answers.json",
+  "registry/kernel_choices.json",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

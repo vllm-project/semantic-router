@@ -3,7 +3,10 @@
 A new model revision is a new entry; a built-in model is never resolved
 through a moving branch. Golden requests gate readiness; their reference
 answers per device class live in ``golden_answers.json``, recorded with
-``tools/golden_answers.py`` for the pinned revision.
+``tools/golden_answers.py`` for the pinned revision. ``kernel_choices.json``
+holds, per device class, the autotuned kernel configurations the released
+runtime ran with (``tools/kernel_choices.py``); the runtime pins them so every
+process computes the released numerics.
 """
 
 from __future__ import annotations
@@ -28,6 +31,7 @@ class BuiltinModel:
     min_device_memory_gib: float
     base: tuple[str, str] | None = None
     golden_answers: dict[str, Any] = field(default_factory=dict)
+    kernel_choices: dict[str, Any] = field(default_factory=dict)
 
 
 DECISION2_MODELS = (
@@ -95,21 +99,28 @@ DECISION2_MODELS = (
 )
 
 
-def _with_golden_answers(models: tuple[BuiltinModel, ...]) -> tuple[BuiltinModel, ...]:
+def _with_recorded(
+    models: tuple[BuiltinModel, ...], file_name: str, entry_field: str, model_field: str
+) -> tuple[BuiltinModel, ...]:
     recorded = json.loads(
-        Path(__file__).with_name("golden_answers.json").read_text(encoding="utf-8")
+        Path(__file__).with_name(file_name).read_text(encoding="utf-8")
     )
     result = []
     for model in models:
         entry = recorded.get(model.repo_id)
         if entry and entry.get("revision") == model.revision:
-            result.append(replace(model, golden_answers=entry["answers"]))
+            result.append(replace(model, **{model_field: entry[entry_field]}))
         else:
             result.append(model)
     return tuple(result)
 
 
-DECISION2_MODELS = _with_golden_answers(DECISION2_MODELS)
+DECISION2_MODELS = _with_recorded(
+    DECISION2_MODELS, "golden_answers.json", "answers", "golden_answers"
+)
+DECISION2_MODELS = _with_recorded(
+    DECISION2_MODELS, "kernel_choices.json", "choices", "kernel_choices"
+)
 
 _BY_REPO = {model.repo_id.lower(): model for model in DECISION2_MODELS}
 _BY_NAME = {model.repo_id.split("/", 1)[1].lower(): model for model in DECISION2_MODELS}

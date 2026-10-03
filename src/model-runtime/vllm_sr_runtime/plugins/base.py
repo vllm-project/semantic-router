@@ -345,6 +345,12 @@ class ModelFamily(ABC):
         """Golden requests ({state, questions, expected?}) that gate readiness."""
         return []
 
+    def kernel_choices(
+        self, package: VerifiedPackage, device: DeviceInfo
+    ) -> dict[str, Any]:
+        """Recorded autotuned-kernel configurations for this model on the device's class, if any."""
+        return {}
+
 
 # ---------------------------------------------------------------------------
 # Profiles
