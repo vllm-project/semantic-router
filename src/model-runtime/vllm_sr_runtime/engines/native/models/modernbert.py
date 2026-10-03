@@ -419,6 +419,12 @@ class ModernBertBackbone(nn.Module):
         """The layout of padded ``[rows, width]`` rows (see ``padded_layout``)."""
         return padded_layout(attention_mask, rows, width, self.window, device)
 
+    def masked(self, valid: torch.Tensor, rows: int, width: int, device) -> Layout:
+        """Padded rows whose masks come from a device-side key mask, never read back (graphs)."""
+        return Layout(
+            rows, width, attention_masks(valid, rows, width, self.window, device)
+        )
+
     def encode(
         self,
         input_ids: torch.Tensor,

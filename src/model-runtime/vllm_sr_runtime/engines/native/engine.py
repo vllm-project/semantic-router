@@ -22,6 +22,7 @@ from ...plugins.base import (
 )
 from ...scheduler.planner import padded
 from . import fast, models
+from .encoder import EncoderGraphs
 from .models.lora import attach
 from .models.tree import Tree
 from .weights import keep_linear_bf16, load_adapter, load_backbone
@@ -50,8 +51,11 @@ class NativeEngineModel(EngineModel):
         self.fast: dict[str, Any] = {}
         self.masks: fast.Masks | None = None
         self.graphs: fast.Graphs | None = None
+        self.encoder_graphs: EncoderGraphs | None = None
         if self.device.type == "cuda" and not spec.encoder:
             self._install_fast()
+        if self.device.type == "cuda" and spec.encoder and options.graphs:
+            self.encoder_graphs = EncoderGraphs(backbone, self.device)
 
     def _install_fast(self) -> None:
         """The exact GPU fast path (``fast.py``): fused layers, lean LoRA, host masks and graphs."""
@@ -73,6 +77,8 @@ class NativeEngineModel(EngineModel):
         out: dict[str, Any] = {"kernels": self.kernels.describe(), **self.fast}
         if self.graphs is not None:
             out["graphs"] = self.graphs.receipt()
+        if self.encoder_graphs is not None:
+            out["encoder_graphs"] = self.encoder_graphs.receipt()
         return out
 
     def autocast(self) -> AbstractContextManager[Any]:
@@ -142,18 +148,24 @@ class NativeEngineModel(EngineModel):
             raise NotImplementedError(
                 f"the native {backbone.model_type!r} backbone is not an encoder"
             )
-        input_ids = batch.input_ids.to(self.device)
+        exits = tuple(batch.layers) or (backbone.num_layers,)
         if batch.lengths is not None:
-            if sum(batch.lengths) != input_ids.numel():
+            if sum(batch.lengths) != batch.input_ids.numel():
                 raise ValueError("packed lengths do not cover the input IDs")
+            if self.encoder_graphs is not None:
+                with torch.inference_mode(), self.autocast():
+                    hidden = self.encoder_graphs(
+                        batch.input_ids, batch.lengths, exits, batch.normalize_exits
+                    )
+                return EncoderOutput(hidden=hidden)
+            input_ids = batch.input_ids.to(self.device)
             layout = backbone.packed(batch.lengths, self.device)
         else:
+            input_ids = batch.input_ids.to(self.device)
             rows, width = input_ids.shape
             layout = backbone.padded(batch.attention_mask, rows, width, self.device)
         with torch.inference_mode(), self.autocast():
-            hidden = backbone.encode(
-                input_ids, layout, batch.layers, batch.normalize_exits
-            )
+            hidden = backbone.encode(input_ids, layout, exits, batch.normalize_exits)
         return EncoderOutput(hidden=hidden)
 
     def parameter_count(self) -> int:
