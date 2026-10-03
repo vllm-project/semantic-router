@@ -283,7 +283,7 @@ class EncoderParity:
         torch.set_num_threads(threads or torch.get_num_threads())
         self.package = package
         self.threads = threads
-        self.forward: tuple[Any, Any, Any] | None = None
+        self.states: dict[tuple[int, ...], tuple[Any, ...]] = {}
         self.device = CPU
         if device != "cpu":
             accelerator, _, index = device.partition(":")
@@ -333,37 +333,47 @@ class EncoderParity:
         )
         return model.eval()
 
+    def row_states(self, row: tuple[int, ...]) -> tuple[Any, ...]:
+        """One row's reference states by layer: raw exits, the last one final-normed."""
+        import torch
+
+        states = self.states.get(row)
+        if states is None:
+            with torch.inference_mode():
+                out = self.reference(
+                    input_ids=torch.tensor([row]), output_hidden_states=True
+                )
+            last = self.reference.config.num_hidden_layers
+            states = (
+                *(h[0] for h in out.hidden_states[:last]),
+                out.last_hidden_state[0],
+            )
+            self.states[row] = states
+        return states
+
     def hidden(
         self, rows: list[tuple[int, ...]], layer: int, normalize_exits: bool
     ) -> tuple[Any, Any]:
-        """The reference's right-padded hidden states at ``layer`` and the mask.
+        """The reference's hidden states at ``layer`` as right-padded rows, and the mask.
 
-        One reference forward serves every exit of the same rows.
+        Each row runs alone once (no padding in the reference); every exit reads it.
         """
         import torch
 
-        key = tuple(rows)
-        if self.forward is None or self.forward[0] != key:
-            width = max(len(row) for row in rows)
-            ids = torch.zeros(len(rows), width, dtype=torch.long)
-            mask = torch.zeros(len(rows), width, dtype=torch.long)
-            for index, row in enumerate(rows):
-                ids[index, : len(row)] = torch.tensor(row)
-                mask[index, : len(row)] = 1
-            self.forward = None
-            with torch.inference_mode():
-                out = self.reference(
-                    input_ids=ids, attention_mask=mask, output_hidden_states=True
-                )
-            self.forward = (key, out, mask)
-        _, out, mask = self.forward
-        if layer == self.reference.config.num_hidden_layers:
-            return out.last_hidden_state, mask
+        last = self.reference.config.num_hidden_layers
+        width = max(len(row) for row in rows)
+        mask = torch.zeros(len(rows), width, dtype=torch.long)
+        hidden = None
         with torch.inference_mode():
-            hidden = out.hidden_states[layer]
-            return (
-                self.reference.final_norm(hidden) if normalize_exits else hidden
-            ), mask
+            for index, row in enumerate(rows):
+                value = self.row_states(row)[layer]
+                if normalize_exits and layer != last:
+                    value = self.reference.final_norm(value)
+                if hidden is None:
+                    hidden = value.new_zeros(len(rows), width, value.shape[-1])
+                hidden[index, : len(row)] = value
+                mask[index, : len(row)] = 1
+        return hidden, mask
 
     def record(
         self,
