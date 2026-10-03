@@ -67,7 +67,10 @@ HEADS: dict[str, tuple[str, list[str], str, str | None]] = {
         "single_label_classification",
     ),
 }
-VARIANTS = tuple(HEADS)
+# Embedders and rerankers are task_heads packages too; testing.embed_packages
+# writes their Vela-shaped layouts.
+PACKAGES = ("embedding", "reranker")
+VARIANTS = tuple(HEADS) + PACKAGES
 SCORE_WINDOW = (64, 16)
 SCORE_DOCUMENT = 4096
 GROUNDED_LIMIT = 512
@@ -164,13 +167,19 @@ def operating_point(
 def write_fixture(output: str | Path, variant: str | None, seed: int) -> Path:
     """Write a tiny task package of ``variant`` (``VARIANTS``) and return its root."""
     variant = variant or VARIANTS[0]
-    if variant not in HEADS:
+    if variant not in VARIANTS:
         raise ValueError(
             f"task_heads fixtures are {', '.join(VARIANTS)}, not {variant!r}"
         )
-    architecture, labels, pooling, problem = HEADS[variant]
     root = Path(output)
     root.mkdir(parents=True, exist_ok=False)
+    if variant in PACKAGES:
+        from . import embed_packages
+
+        if variant == "embedding":
+            return embed_packages.write_embedding_package(root, seed=seed)
+        return embed_packages.write_reranker_package(root, seed=seed)
+    architecture, labels, pooling, problem = HEADS[variant]
     vocab = encoder_tokenizer(root)
     config = modernbert_config(
         vocab,
