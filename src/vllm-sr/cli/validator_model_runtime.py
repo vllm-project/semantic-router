@@ -192,6 +192,9 @@ def _binding_error(
                 return (
                     "LLM classifier binding requires HTTP http_chat scored extraction"
                 )
+        elif rule.type == "systemone":
+            if provider != "http" or binding.adapter != "http_systemone":
+                return "SystemOne classifier binding requires HTTP http_systemone"
         elif provider == "http" and binding.adapter != "http_classify":
             return "Sequence classifier binding requires http_classify adapter"
     if consumer not in contracts:
@@ -264,7 +267,9 @@ def project_classifier_rule(rule, bindings, deployments):
     updates = {"model": None, "model_path": None, "use_cpu": False}
     if deployment.get("provider") == "http":
         updates["model"] = deployment.get("external_model")
-        updates["type"] = "llm" if rule.type == "llm" else "sequence_classifier"
+        updates["type"] = (
+            rule.type if rule.type in {"llm", "systemone"} else "sequence_classifier"
+        )
     else:
         updates["type"] = "local"
         updates["model_path"] = deployment.get("artifact")

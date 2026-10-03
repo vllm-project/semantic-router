@@ -13,10 +13,12 @@ CANONICAL_VERSION = str(routing_surface_catalog()["config_version"])
 CLASSIFIER_TYPE_LOCAL = "local"
 CLASSIFIER_TYPE_LLM = "llm"
 CLASSIFIER_TYPE_SEQUENCE = "sequence_classifier"
+CLASSIFIER_TYPE_SYSTEMONE = "systemone"
 ClassifierSignalType = Literal[
     "local",
     "llm",
     "sequence_classifier",
+    "systemone",
 ]
 
 UNKNOWN_POLICY_VALUES = ("no_match", "match", "fail_request")

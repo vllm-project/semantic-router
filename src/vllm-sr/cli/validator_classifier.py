@@ -4,6 +4,7 @@ from cli.config_contract import (
     CLASSIFIER_TYPE_LLM,
     CLASSIFIER_TYPE_LOCAL,
     CLASSIFIER_TYPE_SEQUENCE,
+    CLASSIFIER_TYPE_SYSTEMONE,
     iter_condition_leaves,
 )
 from cli.model_runtime_defaults import (
@@ -16,6 +17,11 @@ from cli.validator_model_runtime import project_classifier_rule
 
 LOCAL_CLASSIFIER_MIN_CONFIDENCE = 0.5
 MAX_NETWORK_PORT = 65535
+REMOTE_CLASSIFIER_KINDS = {
+    CLASSIFIER_TYPE_LLM: "LLM",
+    CLASSIFIER_TYPE_SEQUENCE: "Sequence classifier",
+    CLASSIFIER_TYPE_SYSTEMONE: "SystemOne",
+}
 
 
 def validate_classifier_contracts(
@@ -61,11 +67,9 @@ def _validate_profile_classifier_rules(
 ) -> list[ValidationError]:
     errors: list[ValidationError] = []
     for rule in rules.values():
-        if rule.type not in {CLASSIFIER_TYPE_LLM, CLASSIFIER_TYPE_SEQUENCE}:
+        if rule.type not in REMOTE_CLASSIFIER_KINDS:
             continue
-        classifier_kind = (
-            "LLM" if rule.type == CLASSIFIER_TYPE_LLM else "Sequence classifier"
-        )
+        classifier_kind = REMOTE_CLASSIFIER_KINDS[rule.type]
         external = external_models.get(rule.model or "")
         field = f"{profile_field}.signals.classifiers.{rule.name}.model"
         if external is None:
@@ -89,7 +93,10 @@ def _validate_profile_classifier_rules(
                     external,
                     field,
                     classifier_kind=classifier_kind,
-                    require_model_name=rule.type == CLASSIFIER_TYPE_LLM,
+                    require_model_name=(
+                        rule.type in {CLASSIFIER_TYPE_LLM, CLASSIFIER_TYPE_SYSTEMONE}
+                    ),
+                    require_json_parser=rule.type == CLASSIFIER_TYPE_LLM,
                 )
             )
     return errors
@@ -161,6 +168,7 @@ def _external_model_endpoint_errors(
     *,
     classifier_kind: str,
     require_model_name: bool,
+    require_json_parser: bool,
 ) -> list[ValidationError]:
     errors: list[ValidationError] = []
     endpoint = external.get("llm_endpoint") or {}
@@ -171,7 +179,7 @@ def _external_model_endpoint_errors(
                 field=field,
             )
         )
-    if require_model_name and str(
+    if require_json_parser and str(
         external.get("parser_type") or ""
     ).strip().lower() not in {"", "json"}:
         errors.append(
