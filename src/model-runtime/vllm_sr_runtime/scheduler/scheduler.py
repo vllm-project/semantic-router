@@ -195,6 +195,8 @@ class Scheduler:
             try:
                 if batch.shared_prefix:
                     values = self.model.run(items, shared_prefix=batch.shared_prefix)
+                elif not batch.exact:
+                    values = self.model.run_approximate(items)
                 else:
                     values = self.model.run(items)
             except Exception as exc:

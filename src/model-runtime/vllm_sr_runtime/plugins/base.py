@@ -504,6 +504,10 @@ class LoadedModel(ABC):
         ``shared_prefix`` > 0 runs the items as one shared-context tree (see ``ForwardBatch``).
         """
 
+    def run_approximate(self, items: list[Any]) -> list[Any]:
+        """``run`` for a batch of an approximate profile, where a family may trade exactness for speed."""
+        return self.run(items)
+
     def answer(self, item: RenderedItem, logits: list[float] | None) -> dict[str, Any]:
         """The API answer for one decision item."""
         raise UnsupportedSurfaceError("decisions", self.info.id)
@@ -637,10 +641,12 @@ class Batch:
     """Items from one or more jobs that run as one forward, in order.
 
     ``shared_prefix`` > 0 (shared-context profile): the items' common prefix length, run once.
+    ``exact`` False marks a batch an approximate profile formed (``LoadedModel.run_approximate``).
     """
 
     parts: list[tuple[Job, list[int]]]
     shared_prefix: int = 0
+    exact: bool = True
 
     def items(self) -> list[RenderedItem]:
         return [job.items[index] for job, indices in self.parts for index in indices]
