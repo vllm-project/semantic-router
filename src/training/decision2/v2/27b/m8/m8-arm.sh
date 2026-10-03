@@ -12,7 +12,8 @@
 #   ARM:MIXTURE  M8-IB:a20ib1 | M8-IB2:a20ib12 | M9-IB:a20ib1 | M9-IB2:a20ib12 (m6-data/mixtures-m6-1; M6-IB / M6-IB2's
 #                files); M8-IB14:a20ib14 | M8-IB124:a20ib124 | M8-IB14ML:a20ib14ml | M8-IB124ML:a20ib124ml
 #                (m7-data/mixtures-m7-1); M9-IB1ML:a20ib1ml | M9-IB12ML:a20ib12ml (m9-data/mixtures-m9-1, M9 prereg);
-#                M9-IB-lrh:a20ib1 | M9-IB2-lrh:a20ib12 (M9 amendment 1: half LR, LoRA 1e-5 / head 5e-5 / backbone 5e-7)
+#                M9-IB-lrh:a20ib1 | M9-IB2-lrh:a20ib12 (M9 amendment 1: half LR, LoRA 1e-5 / head 5e-5 / backbone 5e-7);
+#                M9-IB14ML-lrh:a20ib14ml | M9-IB124ML-lrh:a20ib124ml (M9 amendment 4: the same half LRs)
 #   NODE c (GPU1-7; never GPU0) as well; SEED s3 | s4 | s5 | s6; CAP <= 22 GPU-h
 set -euo pipefail
 NODE=${1:?NODE} GPU=${2:?GPU} ARM=${3:?ARM} SEED=${4:?SEED} MIX=${5:?MIXTURE} MIX_SHA=${6:?MIXTURE_SHA}
@@ -24,6 +25,7 @@ LRS=(2e-5 1e-4 1e-6)
 case "$ARM:$MIX" in
   M8-IB:a20ib1 | M8-IB2:a20ib12 | M9-IB:a20ib1 | M9-IB2:a20ib12) DATA=m6-data/mixtures-m6-1 ;;
   M9-IB-lrh:a20ib1 | M9-IB2-lrh:a20ib12) DATA=m6-data/mixtures-m6-1 LRS=(1e-5 5e-5 5e-7) ;;
+  M9-IB14ML-lrh:a20ib14ml | M9-IB124ML-lrh:a20ib124ml) DATA=m7-data/mixtures-m7-1 LRS=(1e-5 5e-5 5e-7) ;;
   M8-IB14:a20ib14 | M8-IB124:a20ib124 | M8-IB14ML:a20ib14ml | M8-IB124ML:a20ib124ml) DATA=m7-data/mixtures-m7-1 ;;
   M9-IB1ML:a20ib1ml | M9-IB12ML:a20ib12ml) DATA=m9-data/mixtures-m9-1 ;;
   *) echo "unknown arm / mixture $ARM $MIX" >&2; exit 2 ;;

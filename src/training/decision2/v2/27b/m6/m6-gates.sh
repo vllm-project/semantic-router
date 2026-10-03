@@ -35,7 +35,7 @@ for name in "$@"; do
   [[ "$name" =~ ^M6-IBxIB2-m[0-9]{2}$|^X9-(LRH2|LRH2xM50|LRH|LRHxM50|IBxIB2-10|IBLRHxM50)$ ]] && MIX[$name]=a20ib12
   [[ "$name" == X9-IBLRH ]] && MIX[$name]=a20ib1
   # the M7 / M8 / M9 cross-arm soups train on several mixtures, none holding the others: no single exposure file
-  [[ "$name" =~ ^X7-|^X8-ML$|^X9-ML0$ ]] && MIX[$name]=several
+  [[ "$name" =~ ^X7-|^X8-ML$|^X9-(ML0|LRHALL)$ ]] && MIX[$name]=several
   [ -n "${MIX[$name]:-}" ] || { echo "unknown M6 finalist $name" >&2; exit 2; }
   [ -f "$R/$name/formal/SEAL.json" ] || { echo "$name has no sealed formal run" >&2; exit 2; }
   RUN[$name]=$R/$name/formal

@@ -182,6 +182,13 @@ ARMS = {  # members: allowed member counts; every member is a rank-128 seed
         "seeds": f"M9-IB-lrh s5 / s6 (the released recipe M6-IB at {HALF}) and {M50}",
         "weights": "1/6 per seed (each arm 1/3)",
     },
+    "X9-LRHALL": {
+        "members": (7, 8),
+        "mixes": ("a20ib1", "a20ib12", "a20ib14ml", "a20ib124ml"),
+        "seeds": "M9-IB-lrh s5 / s6, M9-IB2-lrh s5 / s6, M9-IB14ML-lrh s5 / s6 and M9-IB124ML-lrh s5 / s6 (four "
+        f"recipes at {HALF})",
+        "weights": "each arm 1/4, its seeds uniform within it",
+    },
     "X9-IBxIB2-10": {
         "members": (10,),
         "mixes": ("a20ib1", "a20ib12"),

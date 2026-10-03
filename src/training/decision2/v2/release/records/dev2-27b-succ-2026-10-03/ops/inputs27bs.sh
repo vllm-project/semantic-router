@@ -12,7 +12,7 @@
 # Usage: inputs27bs.sh ARM
 set -euo pipefail
 ARM=${1:?ARM}
-[[ "$ARM" =~ ^(M7-(IB124ML|IB14ML)|M8-(IB14|IB124)|X7-(IBxIB2xIB14ML|4ARM)|X8-(IBxIB2-8|ML)|X9-(LRH2|LRH2xM50|LRH|LRHxM50|ML0|IBxIB2-10|IBLRH|IBLRHxM50))$ ]] || { echo "bad ARM $ARM" >&2; exit 2; }
+[[ "$ARM" =~ ^(M7-(IB124ML|IB14ML)|M8-(IB14|IB124)|X7-(IBxIB2xIB14ML|4ARM)|X8-(IBxIB2-8|ML)|X9-(LRH2|LRH2xM50|LRH|LRHxM50|ML0|IBxIB2-10|IBLRH|IBLRHxM50|LRHALL))$ ]] || { echo "bad ARM $ARM" >&2; exit 2; }
 NODES=${DEV2_NODES_FILE:-$HOME/.config/decision2/nodes.env}
 addr() { awk -F= -v k="node-$1" '$1 == k { print substr($0, length(k) + 2); exit }' "$NODES"; }
 on() { local n=$1; shift; ssh -o BatchMode=yes -o ConnectTimeout=30 "$(addr "$n")" "$@" < /dev/null; }
