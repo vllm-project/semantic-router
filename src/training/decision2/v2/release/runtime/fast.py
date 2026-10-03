@@ -24,6 +24,9 @@ are unchanged; it only removes kernel launches and host work:
   each Qwen3.5 decoder layer in six Triton kernels, and of each Qwen3 decoder
   layer in four, that round exactly like the ATen and causal-conv1d kernels
   they replace. GEMMs, attention and the gated-delta chunk kernel are unchanged.
+  A layer call whose fused kernels fail to compile or launch runs the layer's
+  eager forward instead, which computes the same values; that input shape then
+  stays eager in that layer.
 
 The fast path is enabled only where it was verified to be exact: a ROCm GPU and
 Transformers ``TESTED_TRANSFORMERS``; elsewhere the runtime keeps the eager
@@ -38,6 +41,7 @@ import inspect
 import math
 import os
 import types
+import warnings
 from collections import OrderedDict
 from contextlib import contextmanager
 from typing import Any
@@ -49,6 +53,7 @@ MAX_GRAPH_OUTPUT_BYTES = 4 << 30
 CAPTURE_AFTER = 2
 MASK_TYPES = ("full_attention", "linear_attention")
 MASK_ALIGN = 16
+MAX_EAGER_SHAPES = 1 << 16
 
 
 def _switched_off(name: str) -> bool:
@@ -202,14 +207,60 @@ def _bound(function: Any) -> Any:
         return None
 
 
-def fused_layers(backbone: Any, torch: Any) -> tuple[int, str | None]:
+def new_fallbacks() -> dict[str, Any]:
+    """Counts of the fused layer calls that ran the eager forward instead (see ``_guarded``)."""
+    return {"calls": 0, "shapes": 0, "errors": []}
+
+
+def _guarded(fused: Any, torch: Any, fallbacks: dict[str, Any]) -> Any:
+    """``fused``, or the layer's eager forward for a call whose fused kernels fail to compile or launch.
+
+    A failure while a HIP graph is being captured propagates instead: ``Graphs`` then runs that shape
+    eagerly, and its eager call lands here.
+    """
+
+    def forward(layer: Any, hidden_states: Any, *args: Any, **kwargs: Any) -> Any:
+        p = layer._decision2_fused
+        shape = tuple(hidden_states.shape)
+        if shape not in p["eager"]:
+            try:
+                return fused(layer, hidden_states, *args, **kwargs)
+            except Exception as error:
+                if torch.cuda.is_current_stream_capturing():
+                    raise
+                if len(p["eager"]) >= MAX_EAGER_SHAPES:
+                    p["eager"].clear()
+                p["eager"].add(shape)
+                fallbacks["shapes"] += 1
+                if len(fallbacks["errors"]) < 4:
+                    fallbacks["errors"].append(
+                        f"{type(error).__name__}: {str(error)[:300]}"
+                    )
+                warnings.warn(
+                    f"Decision 2.0 fast path: a fused kernel failed on input shape {shape} "
+                    f"({type(error).__name__}); this layer runs its eager forward for that shape, "
+                    "which gives the same values",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+        fallbacks["calls"] += 1
+        return p["original"](hidden_states, *args, **kwargs)
+
+    return forward
+
+
+def fused_layers(
+    backbone: Any, torch: Any, fallbacks: dict[str, Any] | None = None
+) -> tuple[int, str | None]:
     """Fused forwards for the Qwen3.5 / Qwen3 decoder layers of ``backbone``; (layers, reason if none)."""
     if importlib.util.find_spec("triton") is None:
         return 0, "triton is not installed"
+    if fallbacks is None:
+        fallbacks = new_fallbacks()
     config = _core(backbone).config
     config = getattr(config, "text_config", None) or config
     if getattr(config, "model_type", None) == "qwen3":
-        return _fused_qwen3(backbone, torch, config)
+        return _fused_qwen3(backbone, torch, config, fallbacks)
     modeling = importlib.import_module("transformers.models.qwen3_5.modeling_qwen3_5")
     layers = [
         m for m in backbone.modules() if isinstance(m, modeling.Qwen3_5DecoderLayer)
@@ -237,7 +288,11 @@ def fused_layers(backbone: Any, torch: Any) -> tuple[int, str | None]:
 
     from transformers.integrations.sdpa_attention import sdpa_attention_forward
 
-    forward = _fused_forward(kernels, modeling, sdpa_attention_forward, torch)
+    forward = _guarded(
+        _fused_forward(kernels, modeling, sdpa_attention_forward, torch),
+        torch,
+        fallbacks,
+    )
     for layer in layers:
         _prepare(layer, torch)
         layer.forward = types.MethodType(forward, layer)
@@ -248,6 +303,7 @@ def _prepare(layer: Any, torch: Any) -> None:
     with torch.no_grad():
         p: dict[str, Any] = {
             "original": layer.forward,
+            "eager": set(),
             "eps": layer.input_layernorm.eps,
             "w1_in": (1.0 + layer.input_layernorm.weight.float()).contiguous(),
             "w1_post": (
@@ -377,7 +433,9 @@ def _attention(
     return m.o_proj(kernels.sigmoid_gate(attn, gate))
 
 
-def _fused_qwen3(backbone: Any, torch: Any, config: Any) -> tuple[int, str | None]:
+def _fused_qwen3(
+    backbone: Any, torch: Any, config: Any, fallbacks: dict[str, Any]
+) -> tuple[int, str | None]:
     modeling = importlib.import_module("transformers.models.qwen3.modeling_qwen3")
     layers = [
         m for m in backbone.modules() if isinstance(m, modeling.Qwen3DecoderLayer)
@@ -400,12 +458,15 @@ def _fused_qwen3(backbone: Any, torch: Any, config: Any) -> tuple[int, str | Non
 
     from transformers.integrations.sdpa_attention import sdpa_attention_forward
 
-    forward = _qwen3_forward(kernels, sdpa_attention_forward, torch)
+    forward = _guarded(
+        _qwen3_forward(kernels, sdpa_attention_forward, torch), torch, fallbacks
+    )
     for layer in layers:
         with torch.no_grad():
             m = layer.self_attn
             layer._decision2_fused = {
                 "original": layer.forward,
+                "eager": set(),
                 "eps": layer.input_layernorm.variance_epsilon,
                 "w_in": layer.input_layernorm.weight.float().contiguous(),
                 "w_post": layer.post_attention_layernorm.weight.float().contiguous(),
@@ -674,10 +735,17 @@ class Graphs:
 class FastPath:
     """What is installed on one loaded model, and the per-forward hook ``QwenDecision`` calls."""
 
-    def __init__(self, memo: CastMemo, graphs: Graphs | None, summary: dict[str, Any]):
+    def __init__(
+        self,
+        memo: CastMemo,
+        graphs: Graphs | None,
+        summary: dict[str, Any],
+        fallbacks: dict[str, Any] | None = None,
+    ):
         self.memo = memo
         self.graphs = graphs
         self.summary = summary
+        self.fallbacks = fallbacks
 
     @contextmanager
     def forward(self, lengths: list[int]):
@@ -697,6 +765,11 @@ class FastPath:
             out["graph_stats"] = {
                 **self.graphs.stats,
                 "cached": len(self.graphs.graphs),
+            }
+        if self.fallbacks is not None:
+            out["fused_fallbacks"] = {
+                **self.fallbacks,
+                "errors": list(self.fallbacks["errors"]),
             }
         return out
 
@@ -730,12 +803,13 @@ def install(
         "lora": lean_lora(backbone, memo, torch),
     }
     fused, reason = 0, "off"
+    fallbacks = new_fallbacks()
     if kernels:
         arch = torch.cuda.get_device_properties(
             next(backbone.parameters()).device
         ).gcnArchName.split(":")[0]
         if arch == "gfx942":
-            fused, reason = fused_layers(backbone, torch)
+            fused, reason = fused_layers(backbone, torch, fallbacks)
         else:
             reason = f"verified on gfx942 only, not {arch}"
     summary["fused_layers"] = fused
@@ -758,4 +832,4 @@ def install(
             "max_tokens": runner.max_tokens,
             "max_output_bytes": runner.max_output_bytes,
         }
-    return FastPath(memo, runner, summary)
+    return FastPath(memo, runner, summary, fallbacks if fused else None)

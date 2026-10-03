@@ -355,23 +355,19 @@ def gated_rmsnorm(core: Any, z: Any, weight: Any, eps: float) -> Any:
 
 @triton.jit
 def _attn_prep_kernel(
-    qg_ptr,
-    k_ptr,
-    qw1_ptr,
-    kw1_ptr,
+    x_ptr,
+    w1_ptr,
     cos_ptr,
     sin_ptr,
-    qo_ptr,
-    ko_ptr,
+    o_ptr,
     T,
     NH,
-    NKV,
     eps,
     inv_d,
     cs_bstride,
     D: tl.constexpr,
     ROT: tl.constexpr,
-    GATED: tl.constexpr,
+    QW: tl.constexpr,
     ROUND_BEFORE_WEIGHT: tl.constexpr,
 ):
     bt = tl.program_id(0).to(tl.int64)
@@ -381,15 +377,8 @@ def _attn_prep_kernel(
     d = tl.arange(0, D)
     half: tl.constexpr = ROT // 2
     partner = tl.where(d < half, d + half, tl.where(d < ROT, d - half, d))
-    QW: tl.constexpr = 2 * D if GATED else D
-    if hid < NH:
-        src = qg_ptr + bt * (NH * QW) + hid * QW
-        wp = qw1_ptr
-        dst = qo_ptr + ((b * NH + hid) * T + t) * D
-    else:
-        src = k_ptr + bt * (NKV * D) + (hid - NH) * D
-        wp = kw1_ptr
-        dst = ko_ptr + ((b * NKV + (hid - NH)) * T + t) * D
+    src = x_ptr + bt * (NH * QW) + hid * QW
+    dst = o_ptr + ((b * NH + hid) * T + t) * D
     x = tl.load(src + d).to(tl.float32)
     if D == 256:
         sumsq = sumsq_256(tl.reshape(x, [1, D]), 1)
@@ -399,12 +388,12 @@ def _attn_prep_kernel(
     xp = tl.load(src + partner).to(tl.float32)
     if ROUND_BEFORE_WEIGHT:
         # Qwen3RMSNorm: w * (x * rstd).to(bf16), kept in FP32
-        y = tl.load(wp + d) * (x * rstd).to(tl.bfloat16).to(tl.float32)
-        yp = tl.load(wp + partner) * (xp * rstd).to(tl.bfloat16).to(tl.float32)
+        y = tl.load(w1_ptr + d) * (x * rstd).to(tl.bfloat16).to(tl.float32)
+        yp = tl.load(w1_ptr + partner) * (xp * rstd).to(tl.bfloat16).to(tl.float32)
     else:
         # Qwen3_5RMSNorm: ((x * rstd) * (1 + w)).to(bf16)
-        y = ((x * rstd) * tl.load(wp + d)).to(tl.bfloat16).to(tl.float32)
-        yp = ((xp * rstd) * tl.load(wp + partner)).to(tl.bfloat16).to(tl.float32)
+        y = ((x * rstd) * tl.load(w1_ptr + d)).to(tl.bfloat16).to(tl.float32)
+        yp = ((xp * rstd) * tl.load(w1_ptr + partner)).to(tl.bfloat16).to(tl.float32)
     yp = tl.where(d < half, -yp, yp)
     rot = d < ROT
     cs = b * cs_bstride + t * ROT + d
@@ -445,28 +434,30 @@ def attn_prep(
     q = torch.empty(B, heads, T, head_dim, dtype=torch.bfloat16, device=dev)
     k = torch.empty(B, kv_heads, T, head_dim, dtype=torch.bfloat16, device=dev)
     rot = cos.shape[-1]
-    _attn_prep_kernel[(B * T, heads + kv_heads)](
-        q_proj_out,
-        k_proj_out,
-        q_norm_w1,
-        k_norm_w1,
-        cos,
-        sin,
-        q,
-        k,
-        T,
-        heads,
-        kv_heads,
-        eps,
-        float(np.float32(1.0) / np.float32(head_dim)),
-        0 if cos.shape[0] == 1 else T * rot,
-        D=head_dim,
-        ROT=rot,
-        GATED=gated,
-        ROUND_BEFORE_WEIGHT=not zero_centred,
-        num_warps=2,
-        **EXACT,
-    )
+    # One launch per tensor: Triton's AMD pointer canonicalization fails on a runtime branch between two
+    # pointers when only one of their tensors fits the 2 GiB buffer range (a long many-question query).
+    for x, w1, out, n, width in (
+        (q_proj_out, q_norm_w1, q, heads, 2 * head_dim if gated else head_dim),
+        (k_proj_out, k_norm_w1, k, kv_heads, head_dim),
+    ):
+        _attn_prep_kernel[(B * T, n)](
+            x,
+            w1,
+            cos,
+            sin,
+            out,
+            T,
+            n,
+            eps,
+            float(np.float32(1.0) / np.float32(head_dim)),
+            0 if cos.shape[0] == 1 else T * rot,
+            D=head_dim,
+            ROT=rot,
+            QW=width,
+            ROUND_BEFORE_WEIGHT=not zero_centred,
+            num_warps=2,
+            **EXACT,
+        )
     return q, k
 
 

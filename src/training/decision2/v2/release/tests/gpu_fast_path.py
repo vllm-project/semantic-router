@@ -13,13 +13,17 @@ PEFT LoRA (rank 16, scaling 2) on every Linear, as Vega-27B. An untouched copy
 is the reference. For each backbone the fast path is installed (graphs and
 kernels; then kernels only) and right-padded batches of many shapes run three
 times each (first use eager, second captured, third replayed), every output
-compared with the reference's by ``torch.equal``. Writes RESULT.json; exits
-non-zero on any difference.
+compared with the reference's by ``torch.equal``. Two more cases: Nox-4B's
+attention widths on 9 rows of 16,384 tokens, whose query projection is above
+2 GiB and key projection below (the input that once failed to compile), and
+every fused kernel made to raise, which must leave each layer call on its eager
+forward with the same output. Writes RESULT.json; exits non-zero on any difference.
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import copy
 import json
 import math
@@ -27,6 +31,15 @@ import sys
 import time
 from pathlib import Path
 
+KERNELS = (
+    "add_rmsnorm",
+    "silu_mul",
+    "gdn_prep",
+    "gated_rmsnorm",
+    "attn_prep",
+    "sigmoid_gate",
+)
+LONG = [[16384] * 9]
 LENGTHS = [
     [8],
     [13],
@@ -84,7 +97,10 @@ def qwen3(torch, layers: int):
     return model
 
 
-def qwen3_5(torch, layers: int, value_heads: int, hidden: int):
+def qwen3_5(
+    torch, layers: int, value_heads: int, hidden: int, heads: int = 8, kv_heads: int = 2,
+    positions: int = 8192,
+):  # fmt: skip
     from transformers.models.qwen3_5.configuration_qwen3_5 import Qwen3_5TextConfig
     from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5TextModel
 
@@ -99,15 +115,15 @@ def qwen3_5(torch, layers: int, value_heads: int, hidden: int):
         hidden_size=hidden,
         intermediate_size=3 * hidden + 512,
         num_hidden_layers=layers,
-        num_attention_heads=8,
-        num_key_value_heads=2,
+        num_attention_heads=heads,
+        num_key_value_heads=kv_heads,
         head_dim=256,
         linear_key_head_dim=128,
         linear_value_head_dim=128,
         linear_num_key_heads=16,
         linear_num_value_heads=value_heads,
         layer_types=[pattern[i % 4] for i in range(layers)],
-        max_position_embeddings=8192,
+        max_position_embeddings=positions,
         attn_implementation="sdpa",
     )
     model = Qwen3_5TextModel(config)
@@ -158,7 +174,26 @@ def batch(lengths, torch, generator, device):
     return ids, mask.to(device)
 
 
-def run_case(name, build, torch, fast, layers, graphs) -> dict:
+@contextlib.contextmanager
+def failing_kernels(kernels):
+    """Every fused kernel of ``kernels`` raises, as a kernel that fails to compile does."""
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("PassManager::run failed (injected)")
+
+    saved = {name: getattr(kernels, name) for name in KERNELS}
+    for name in KERNELS:
+        setattr(kernels, name, fail)
+    try:
+        yield
+    finally:
+        for name, function in saved.items():
+            setattr(kernels, name, function)
+
+
+def run_case(
+    name, build, torch, fast, layers, graphs, lengths_list=LENGTHS, inject=False
+) -> dict:
     torch.manual_seed(20261002)
     model = build().float()
     lora = hasattr(model, "get_base_model")
@@ -170,37 +205,56 @@ def run_case(name, build, torch, fast, layers, graphs) -> dict:
     path = fast.install(holder, torch, graphs=graphs, kernels=True)
     if path is None:
         return {"installed": False, "passed": False}
+    from v2.release.runtime import fast_kernels
+
     generator = torch.Generator().manual_seed(7)
     differences, compared = [], 0
     started = time.perf_counter()
-    for lengths in LENGTHS:
-        for repeat in range(3):
-            ids, mask = batch(lengths, torch, generator, device)
-            with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
-                want = reference(input_ids=ids, attention_mask=mask, use_cache=False)
-                want = want.last_hidden_state.clone()
-                with path.forward(lengths):
-                    got = candidate(input_ids=ids, attention_mask=mask, use_cache=False)
-                got = got.last_hidden_state.clone()
-            compared += 1
-            if not torch.equal(want, got):
-                diff = (want - got).abs()
-                differences.append(
-                    {
-                        "lengths": lengths,
-                        "repeat": repeat,
-                        "mismatched": int((want != got).sum()),
-                        "elements": want.numel(),
-                        "max_abs": float(diff.max()),
-                    }
-                )
+    injected = failing_kernels(fast_kernels) if inject else contextlib.nullcontext()
+    with injected:
+        for lengths in lengths_list:
+            for repeat in range(3):
+                ids, mask = batch(lengths, torch, generator, device)
+                with torch.inference_mode(), torch.autocast(
+                    "cuda", dtype=torch.bfloat16
+                ):
+                    want = reference(
+                        input_ids=ids, attention_mask=mask, use_cache=False
+                    )
+                    want = want.last_hidden_state.clone()
+                    with path.forward(lengths):
+                        got = candidate(
+                            input_ids=ids, attention_mask=mask, use_cache=False
+                        )
+                    got = got.last_hidden_state.clone()
+                compared += 1
+                if not torch.equal(want, got):
+                    diff = (want - got).abs()
+                    differences.append(
+                        {
+                            "lengths": lengths,
+                            "repeat": repeat,
+                            "mismatched": int((want != got).sum()),
+                            "elements": want.numel(),
+                            "max_abs": float(diff.max()),
+                        }
+                    )
     receipt = path.receipt()
     stats = receipt.get("graph_stats") or {}
+    fallbacks = receipt["fused_fallbacks"]
+    shapes = {(len(n), math.ceil(max(n) / 8) * 8) for n in lengths_list}
     checks = {
         "bit_identical": not differences,
-        "graphs_replayed": (not graphs) or stats.get("replays", 0) > 0,
+        "graphs_replayed": (not graphs)
+        or all(len(n) * max(n) > fast.MAX_GRAPH_TOKENS for n in lengths_list)
+        or stats.get("replays", 0) > 0,
         "fused_layers": receipt["fused_layers"] == layers,
         "lean_lora_when_adapter": (not lora) or receipt["lora"]["lean"] > 0,
+        "fallbacks": (
+            fallbacks["shapes"] == layers * len(shapes) and fallbacks["calls"] > 0
+            if inject
+            else fallbacks == {"calls": 0, "shapes": 0, "errors": []}
+        ),
     }
     return {
         "installed": True,
@@ -232,19 +286,28 @@ def main() -> None:
     args.work.mkdir(parents=True)
     n = args.layers
     cases = {
-        "qwen3-0.6b-dims": lambda: qwen3(torch, n),
-        "qwen3_5-0.8b-dims": lambda: qwen3_5(torch, n, 16, 1024),
-        "qwen3_5-4b-dims": lambda: qwen3_5(torch, n, 32, 2560),
-        "qwen3_5-lora": lambda: with_lora(qwen3_5(torch, n, 32, 1024), torch),
+        "qwen3-0.6b-dims": (lambda: qwen3(torch, n), {}),
+        "qwen3_5-0.8b-dims": (lambda: qwen3_5(torch, n, 16, 1024), {}),
+        "qwen3_5-4b-dims": (lambda: qwen3_5(torch, n, 32, 2560), {}),
+        "qwen3_5-lora": (lambda: with_lora(qwen3_5(torch, n, 32, 1024), torch), {}),
+        "qwen3_5-4b-heads-long": (
+            lambda: qwen3_5(torch, n, 32, 2560, 16, 4, 32768),
+            {"lengths_list": LONG},
+        ),
+        "qwen3-0.6b-dims-failing-kernels": (lambda: qwen3(torch, n), {"inject": True}),
+        "qwen3_5-0.8b-dims-failing-kernels": (
+            lambda: qwen3_5(torch, n, 16, 1024),
+            {"inject": True},
+        ),
     }
     results = {}
-    for name, build in cases.items():
+    for name, (build, options) in cases.items():
         if args.only and args.only not in name:
             continue
         for graphs in (True, False):
             key = f"{name}/{'graphs' if graphs else 'eager'}"
             try:
-                results[key] = run_case(name, build, torch, fast, n, graphs)
+                results[key] = run_case(name, build, torch, fast, n, graphs, **options)
             except Exception as exc:  # recorded, the run goes on
                 results[key] = {"error": repr(exc), "passed": False}
             print(json.dumps({key: results[key].get("passed")}), flush=True)
