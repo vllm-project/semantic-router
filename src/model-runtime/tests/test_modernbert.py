@@ -313,7 +313,7 @@ def test_length_groups_cut_where_a_grid_pads_too_much():
     assert length_groups([1500, 1500, 1500]) == [[0, 1, 2]]
 
 
-@pytest.mark.parametrize("band_from", [BAND_FROM, 1])
+@pytest.mark.parametrize("band_from", [BAND_FROM["cpu"], 1])
 def test_rows_of_very_different_lengths_attend_in_separate_grids(
     monkeypatch, band_from
 ):

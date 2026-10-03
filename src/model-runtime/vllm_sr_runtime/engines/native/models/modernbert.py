@@ -39,9 +39,10 @@ MODEL_TYPE = "modernbert"
 FULL = "full_attention"
 SLIDING = "sliding_attention"
 BAND_BLOCK = 128
-# Row width from which local layers attend in query blocks (Vela 307M, FP32): dense
-# masked SDPA is faster below on 16 EPYC cores and on MI325X alike.
-BAND_FROM = 1024
+# Row width from which local layers attend in query blocks, per device type (Vela 307M,
+# FP32, one row): dense masked SDPA is faster below; on MI325X blocks win from 2,048
+# tokens (1,536: 12.8 vs 11.7 ms dense; 2,048: 15.2 vs 18.0 ms).
+BAND_FROM = {"cpu": 1024, "cuda": 2048}
 DEFAULT_THETA = {FULL: 160_000.0, SLIDING: 10_000.0}
 ACTIVATIONS: dict[str, Callable[[torch.Tensor], torch.Tensor]] = {
     "gelu": F.gelu,
@@ -409,7 +410,7 @@ def packed_layout(
     window: int,
     device,
     width: int | None = None,
-    band_from: int = BAND_FROM,
+    band_from: int | None = None,
     block: int = BAND_BLOCK,
 ) -> Layout:
     """The layout of sequences of ``lengths`` packed back to back (grids at least ``width`` wide).
@@ -418,9 +419,11 @@ def packed_layout(
     very different lengths attend in separate grids (``length_groups``), so a
     long row does not widen every short one: attention costs rows x width^2.
     A single row without padding keeps the identity layout, which is the
-    padded path. Rows of at least ``band_from`` tokens run local layers in
-    query blocks.
+    padded path. Rows of at least ``band_from`` tokens (``BAND_FROM`` for the
+    device type by default) run local layers in query blocks.
     """
+    if band_from is None:
+        band_from = BAND_FROM[torch.device(device).type]
     groups = length_groups(lengths, width or 0)
     if len(groups) == 1:
         group = packed_group(lengths, window, device, width or 0, band_from, block)
