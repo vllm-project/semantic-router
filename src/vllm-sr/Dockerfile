@@ -366,7 +366,7 @@ ARG MODEL_RUNTIME_TORCH=torch==2.10.0
 COPY src/model-runtime/ /tmp/model-runtime/
 RUN "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir \
       --index-url https://download.pytorch.org/whl/cpu "${MODEL_RUNTIME_TORCH}" && \
-    "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir /tmp/model-runtime && \
+    "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir "/tmp/model-runtime[multimodal]" && \
     rm -rf /tmp/model-runtime
 
 COPY --from=go-builder /build/router /usr/local/bin/router
