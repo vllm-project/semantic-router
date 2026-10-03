@@ -33,9 +33,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
+      - uses: ./.github/actions/setup-go-ci
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -74,13 +72,6 @@ jobs:
           key: ${{ runner.os }}-cargo-precommit-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-precommit-
-      - name: Cache Go Dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-precommit-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-precommit-
       - name: Cache Node Dependencies
         uses: actions/cache@v4
         with:

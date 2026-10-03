@@ -37,9 +37,7 @@ jobs:
       ROUTER_REPLAY_TEST_POSTGRES_CONFIG: '{"host":"localhost","port":5432,"database":"router_test","user":"router","password":"router-test","ssl_mode":"disable"}'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
+      - uses: ./.github/actions/setup-go-ci
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
