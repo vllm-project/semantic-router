@@ -911,6 +911,12 @@ class M6ScriptTest(unittest.TestCase):
             "X7-4ARM",
             "X8-IBxIB2-8",
             "X8-ML",
+            "X9-LRH2",
+            "X9-LRH2xM50",
+            "X9-LRH",
+            "X9-LRHxM50",
+            "X9-ML0",
+            "X9-IBxIB2-10",
         ):
             entry = (
                 f'  [{arm}]="DEV2.0-27B 4e89288d6146034743a14e3fbb98b5864e693c52 '
@@ -926,6 +932,8 @@ class M6ScriptTest(unittest.TestCase):
                 (["0" * 40, "M6-IBxIB2-m5", "stage"], "bad ARM"),
                 (["0" * 40, "M6-IBxIB2", "stage"], "bad ARM"),
                 (["0" * 40, "M7-IB24", "stage"], "bad ARM"),
+                (["0" * 40, "X9-LRH4", "stage"], "bad ARM"),
+                (["0" * 40, "M9-IB-lrh", "stage"], "bad ARM"),
             ):
                 with self.subTest(script=script, args=args):
                     out = subprocess.run(
@@ -1297,6 +1305,8 @@ class M6ScriptTest(unittest.TestCase):
             (["0" * 40, "M6-IB", "1"], "bad NAME"),
             (["0" * 40, "M6-IBxIB2-m50", "2"], "not an M6 node B GPU"),
             (["0" * 40, "M7-IB124ML", "1"], "missing mirror"),
+            (["0" * 40, "X9-LRH2xM50", "1"], "missing mirror"),
+            (["0" * 40, "X9-LRH3", "1"], "bad NAME"),
         ):
             with self.subTest(args=args):
                 out = subprocess.run(
