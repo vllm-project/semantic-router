@@ -1,5 +1,32 @@
 # ~27B M6 state (resume file)
 
+## Continuation #7 (07d87124, from 23:42Z on 10-02) — read this first
+
+- **Assignment:** COORDINATION 2026-10-03 07:45 and the parent's brief: 27B owner and the only Vega model publisher.
+  Goal: Vega-27B #1 in its class and globally on the Index (above Decider chat · Gemma-4-31B and Surogate Rune
+  26B-A4B v3). Vega `main` = **`9b067a95`** (runtime-a's runtime-only revision on `5c85c127`, weights = M6-IBxIB2-m50).
+  The next release supersedes `9b067a95`, keeps phase A plus the opt-in shared-context switch (merge integration at
+  `fee91afd0` or later) and cards Nox `c60d3b5c` / Lux `f3122c7c` (or newer mains). Gate base: `M6_INDEX_BASE=M6-IBxIB2-m50`.
+- **Local shell note:** the Cursor workspace path does not exist, so every shell call needs an explicit working
+  directory (a missing one fails as "spawn /usr/bin/zsh ENOENT"). `/tmp/d2w/on X` forces stdin from /dev/null; copy
+  files to nodes with `/tmp/d2w/put X PATH < file`.
+- **23:51Z: all six M9 relays had exited at start** (`m6-relay.sh` accepted only `M[678]-…-s[1-5]`). Fix `45eaa15ee`
+  (test added), mirrored to A / C / F; relays restarted on the same driver PIDs (node A: M9-IB12ML-s5 1576287,
+  M9-IB1ML-s5 1576302, M9-IB2-s5 1576317, M9-IB-s5 1576331; node F: M9-IB2-lrh-s5 2660200, M9-IB-lrh-s5 2660214).
+- **00:05Z: M9 amendment 2** (`f03f9b5a2`, before any read): exact members / weights of `X9-LRH2` (IB-lrh s5 + IB2-lrh
+  s5, ½ each), `X9-LRH2xM50` (those two at ¼ + M50's four at ⅛), `X9-LRH` (four half-LR seeds, ¼ each), `X9-LRHxM50`
+  (those four + M50's four, ⅛ each), `X9-ML0`, `X9-IBxIB2-10` (only if X8-IBxIB2-8 passes); half-LR candidates read
+  first. **M8 amendment 2** (same commit): cross-arm candidates before single-arm soups when Index GPUs are short;
+  R3 of the first candidate may run during its Index run. Tooling `dc10d2b57` + IX1 entries `95d3baf64` (44 tests pass).
+- **00:05Z: launched** (mirror `45eaa15ee`, `m8-arm.sh`, relays started): `M9-IB-lrh-s6` node A GPU5 (pid 1689948),
+  `M9-IB12ML-s6` node A GPU6 (1689981), `M9-IB2-lrh-s6` node C GPU1 (1458537, `RELAY_NODE=c`). Leases claimed with
+  `/data/dev2/tmp/27b-claim.sh` (released owner moved to `owner.prev-27b-m9-<UTC>`). **Next:** `M9-IB1ML-s6` on node A
+  GPU7 when the arm factory's `KIB4-lrq-s1` ends: `27b-claim.sh 7 …`, then `m8-arm.sh a 7 M9-IB1ML s6 a20ib1ml
+  9bdba9848756ecf74fe25ac3f1b92f529f891b4f11628d5bee72fa78e77584f9 698 20` and its relay.
+- **Waiting:** `/tmp/d2w/m7a.sh` (pid 2141700) for the M7-IB14ML relays (≈ 00:50Z) → soups → stage on node D →
+  audit-arm. Then by hand: `m6-index.sh <mirror ≥ dc10d2b57> X7-IBxIB2xIB14ML parity` (M6_PARITY_GPU=d3), `run`
+  (M6_INDEX_GPUS on node D GPU3–4 + any free node B / C GPU), then M7-IB14ML; `score` with `M6_INDEX_BASE=M6-IBxIB2-m50`.
+
 Updated: 2026-10-02 22:15 UTC+8 (14:15Z; **continuation #6 from 13:40Z**: the M6-IBxIB2-m50 release and M8; see its
 section first). Earlier: 2026-10-02 17:45 UTC+8 (09:45Z; continuation #5 from 08:44Z: the cross-arm soups and M7).
 
