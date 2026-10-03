@@ -1,0 +1,15 @@
+{
+ "caches": [
+  {
+   "cached": 8,
+   "captures": 8,
+   "eager": 9228,
+   "failed": 0,
+   "full": 8720,
+   "replays": 1410
+  }
+ ],
+ "max_graphs": 8,
+ "package": "/data/dev2/runs/runtime-a/0.6B-evict/preview-20261003T075646Z/new/dev2-release-staging-ra0p6b",
+ "schema": "dev2-full-cache-parity/1"
+}
