@@ -13,12 +13,16 @@ import (
 const JudgeTasksVersion = "shadow-judge-tasks.v1"
 
 // Reasons a pair is left out of the judge tasks. A judge reads text while a
-// manifest holds digests, so a pair is judged only when both texts hash back to
-// the digests the manifest recorded. Anything else would credit a model with a
-// fragment of its answer, or with text the router wrote over it.
+// manifest holds digests, so a pair is judged only when the request and both
+// answers hash back to the digests the manifest recorded. Anything else would
+// credit a model with a fragment of its answer, or with text the router wrote
+// over it, or have the judge weigh the answers against a different request
+// under the original lineage.
 const (
-	ExcludeJudgeTextMissing  = "arm_text_missing"
-	ExcludeJudgeTextMismatch = "arm_text_digest_mismatch"
+	ExcludeJudgeTextMissing   = "arm_text_missing"
+	ExcludeJudgeTextMismatch  = "arm_text_digest_mismatch"
+	ExcludeJudgeInputMissing  = "input_text_missing"
+	ExcludeJudgeInputMismatch = "input_text_digest_mismatch"
 )
 
 // ExampleText is the text behind one example's digests. Shadows follows the
@@ -131,6 +135,12 @@ func ArmID(key, exampleID string, shadow int, primary bool) string {
 func pairTextFault(example Example, text ExampleText, found bool, shadow int) string {
 	if !found || text.Primary == "" || shadow >= len(text.Shadows) || text.Shadows[shadow] == "" {
 		return ExcludeJudgeTextMissing
+	}
+	if text.Input == "" {
+		return ExcludeJudgeInputMissing
+	}
+	if digestOf(text.Input) != example.InputDigest {
+		return ExcludeJudgeInputMismatch
 	}
 	if digestOf(text.Primary) != example.Primary.OutputDigest ||
 		digestOf(text.Shadows[shadow]) != example.Shadows[shadow].OutputDigest {

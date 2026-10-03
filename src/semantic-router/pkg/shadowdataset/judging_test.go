@@ -156,6 +156,41 @@ func TestBuildJudgeTasksCountsMissingText(t *testing.T) {
 	}
 }
 
+// The input digest ties a verdict to the request the answers were given for. A
+// prompt that was replaced, or left out, would have the judge weigh the answers
+// against a different request while the tasks kept the original lineage.
+func TestBuildJudgeTasksJudgesOnlyTheRecordedInput(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input    string
+		pairs    int
+		excluded map[string]int
+	}{
+		"matching": {input: "ask one", pairs: 2},
+		"missing":  {input: "", excluded: map[string]int{ExcludeJudgeInputMissing: 2}},
+		"replaced": {input: "ask two", excluded: map[string]int{ExcludeJudgeInputMismatch: 2}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			manifest, texts := judgedManifest(t)
+			id := manifest.Examples[0].ID
+			text := texts[id]
+			text.Input = tc.input
+			texts[id] = text
+
+			set := buildTasksOrFail(t, manifest, texts)
+			if set.Counts.Pairs != tc.pairs || len(set.Tasks) != 2*tc.pairs ||
+				!reflect.DeepEqual(set.Counts.Excluded, tc.excluded) {
+				t.Fatalf("input %q: counts %+v with %d tasks, want %d pairs and exclusions %v",
+					tc.input, set.Counts, len(set.Tasks), tc.pairs, tc.excluded)
+			}
+			for _, task := range set.Tasks {
+				if task.Input != "ask one" {
+					t.Fatalf("task %s carries input %q, want the recorded request", task.ID, task.Input)
+				}
+			}
+		})
+	}
+}
+
 func TestBuildJudgeTasksFlagsAnAnswerThatNamesItsModel(t *testing.T) {
 	manifest := buildOrFail(t, []store.Record{comparedRecord("r1", "ask one", "primary answer",
 		shadowOutcome("openai/shadow-candidate", digestOf("I am Shadow-Candidate, happy to help")),
