@@ -73,7 +73,7 @@ curl -s localhost:8100/v1/decisions -H 'content-type: application/json' -d '{
 The answer for `kind` names the chosen option and the probability of every
 option. The answer for `reasoning` is the probability that the answer is yes:
 
-```json
+```json title="Response"
 {
   "model": "vllm-sr/Decision-2.0-Kai-0.6B",
   "answers": {

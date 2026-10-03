@@ -117,11 +117,11 @@ vllm-sr serve vllm-sr/Decision-2.0-Lux-9B vllm-sr/Vela-1.0-Encoder-307M-PII --de
 global:
   model_catalog:
     deployments:
-      decision-lux:
+      gpu-lux:
         provider: model_runtime
         endpoint: http://gpu-runtime.internal:8100
         served_name: vllm-sr/Decision-2.0-Lux-9B
-      vela-pii:
+      gpu-pii:
         provider: model_runtime
         endpoint: http://gpu-runtime.internal:8100
         served_name: vllm-sr/Vela-1.0-Encoder-307M-PII

@@ -36,6 +36,18 @@ global:
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
 
 routing:
+  signals:
+    decision:
+      - name: request_kind
+        deployment: decision-kai
+        question:
+          type: choice
+          instructions: What kind of request is this?
+          choices:
+            - key: code
+              description: Writing, reviewing or debugging code
+            - key: chat
+              description: Anything else
   decisions:
     - name: code-route
       priority: 100

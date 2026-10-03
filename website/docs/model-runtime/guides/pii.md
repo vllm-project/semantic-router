@@ -61,10 +61,17 @@ global:
       pii_classifier:
         deployment: vela-pii
         contract: token_spans.v1
+    modules:
+      classifier:
+        pii:
+          window:
+            size: 512
+            overlap: 255
 ```
 
-Keep `overflow: window` for PII. `truncate` would scan only the beginning, and
-`reject` makes the signal unknown for longer requests.
+Keep `overflow: window` for PII: the model reads the whole request in
+512-token windows that overlap by 255 tokens. `truncate` would scan only the
+beginning, and `reject` makes the signal unknown for longer requests.
 
 ## When the scan cannot finish
 

@@ -17,7 +17,7 @@ Without a `MODEL` argument, `vllm-sr serve` starts the router instead.
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `MODEL ...` | | Hub repositories, built-in model names or local package directories. Several models share one process. `MODEL@REVISION` pins a revision. |
-| `--models FILE` | | A models file instead of `MODEL` arguments (`vllm-sr-runtime`). |
+| `--models FILE` | | A models file instead of `MODEL` arguments. |
 | `--revision SHA` | | The 40-character commit to load, for one `MODEL`. |
 | `--device` | `auto` | `auto`, `cpu`, `cuda[:N]`, `rocm[:N]`, `xpu[:N]` or `mps`. |
 | `--host` | `127.0.0.1` | Address to listen on. |
@@ -50,7 +50,7 @@ engines, accelerators and profiles.
 
 A models file lists the models of one process, each with its own options:
 
-```yaml
+```yaml title="models.yaml"
 models:
   - model: vllm-sr/Vela-1.0-Encoder-307M-Domain
     name: vela-domain
@@ -92,7 +92,7 @@ code and never fails the others.
 
 ### Classify
 
-```json
+```json title="POST /v1/classify"
 {
   "model": "vela-pii",
   "input": ["Hi, I'm Tom Baker (tom.baker@example.com)."],
@@ -107,7 +107,7 @@ Span offsets count Unicode code points, end exclusive.
 
 ### Embeddings
 
-```json
+```json title="POST /v1/embeddings"
 {"model": "vela-embedding", "input": ["How do I reset my password?"], "dimensions": 256, "layer": 11}
 ```
 
@@ -117,14 +117,14 @@ vector space, so vectors of different settings are never mixed.
 
 ### Rerank
 
-```json
+```json title="POST /v1/rerank"
 {"model": "vela-reranker", "query": "How do I reset my password?",
  "documents": ["Open Settings, then Security.", "Our offices are closed on Sunday."], "top_n": 1}
 ```
 
 ### Bundle
 
-```json
+```json title="POST /v1/bundle"
 {
   "tasks": [
     {"id": "domain", "classify": {"model": "vela-domain", "input": ["What is 2 + 2?"]}},
