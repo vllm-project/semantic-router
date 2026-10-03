@@ -116,13 +116,55 @@ class NativeEngineModel(EngineModel):
         return ForwardOutput(gathered=gathered, query=queried)
 
     def tree(self, batch: TreeBatch) -> TreeOutput:
-        with torch.inference_mode(), self.autocast():
-            hidden = self._run_tree(
-                torch.tensor(batch.prefix, dtype=torch.long),
-                [torch.tensor(block, dtype=torch.long) for block in batch.blocks],
-                padded_exact=False,
+        method = "forward_forest" if batch.layout == "rows" else "forward_tree"
+        if not hasattr(self.backbone, method):
+            raise NotImplementedError(
+                f"the native {self.spec.backbone.model_type!r} backbone has no {batch.layout} tree forward"
             )
+        width = max(len(block) for block in batch.blocks)
+        with torch.inference_mode(), self.autocast():
+            if batch.layout == "rows":
+                return TreeOutput(hidden=self._tree_rows(batch))
+            hidden = None
+            for owner, prefix in enumerate(batch.prefixes):
+                members = [i for i, o in enumerate(batch.owners) if o == owner]
+                if not members:
+                    continue
+                rows = self._run_tree(
+                    torch.tensor(prefix, dtype=torch.long),
+                    [torch.tensor(batch.blocks[i], dtype=torch.long) for i in members],
+                    padded_exact=False,
+                )
+                if hidden is None:
+                    hidden = rows.new_zeros((len(batch.blocks), width, rows.shape[-1]))
+                span = min(width, rows.shape[1])
+                hidden[members, :span] = rows[:, :span]
         return TreeOutput(hidden=hidden)
+
+    def _tree_rows(self, batch: TreeBatch) -> torch.Tensor:
+        """``layout: rows``: left-padded prefix rows and right-padded blocks (``models/forest.py``)."""
+
+        def padded_rows(sequences: list[list[int]], left: bool):
+            width = max(len(sequence) for sequence in sequences)
+            ids = torch.zeros((len(sequences), width), dtype=torch.long)
+            mask = torch.zeros((len(sequences), width), dtype=torch.long)
+            for row, sequence in enumerate(sequences):
+                cut = (
+                    slice(width - len(sequence), width)
+                    if left
+                    else slice(0, len(sequence))
+                )
+                ids[row, cut] = torch.tensor(sequence, dtype=torch.long)
+                mask[row, cut] = 1
+            return ids.to(self.device), mask.to(self.device)
+
+        prefix_ids, prefix_mask = padded_rows(batch.prefixes, left=True)
+        block_ids, block_mask = padded_rows(batch.blocks, left=False)
+        owner = torch.tensor(batch.owners, dtype=torch.long, device=self.device)
+        _, blocks = self.backbone.forward_forest(
+            prefix_ids, prefix_mask, block_ids, block_mask, owner
+        )
+        return blocks
 
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
         if batch.shared_prefix:
