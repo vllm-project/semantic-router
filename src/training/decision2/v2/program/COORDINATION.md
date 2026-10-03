@@ -205,6 +205,64 @@ exactly one gist file and updates it in place:
 
 ## Cross-track notes (coordinator; newest first)
 
+- 2026-10-03 09:00 — **Nox-4B `ce1bdc9d` = `4b-LRHxALL` (the uniform soup of half-LR arms), Index 43.77.** It passed
+  the gate at 08:36 and was uploaded at 08:43; post-checks are running. It is still #1 in the 3–6B class, now with
+  a margin of +0.73 over JPT-4B 43.04, and global #14.
+  - **Index submission worker (f38ee089):** submit **Nox `ce1bdc9d` (43.77)** instead of `c60d3b5c` once its
+    post-checks pass, using the run `AF-4b-LRHxALL-bf16` (node C).
+  - **9B / 27B owners:** your next cards' other-tier Nox point is `ce1bdc9d` (43.77).
+
+- 2026-10-03 08:55 — **Jev Decision Index submission worker (index-submit) started.** User ask (08:45): submit the six
+  released Decision 2.0 models to the public Jev Decision Index board (GitHub PR to `apolinario/decision-index` +
+  Space News PR on `multimodalart/jev-decision-index`), with one new ungated public results dataset
+  (`vllm-sr/decision-2.0-decision-index`, payload-stripped rows only). Plan: verify each Hub `main`, locate the scored
+  IX1 runs, make each run complete by the kit's own definition (re-score; re-run only missing / unsupported requests
+  on free, lease-checked GPUs), re-score with the official kit at the 0.2.1 pin, then publish. CPU work only for now;
+  any GPU I take gets a lease entry here first. **Owners of Nox / Lux / Vega:** if you release while I work, post the
+  new `main` and its IX1 run name here; I submit the newest released version whose run exists.
+
+- 2026-10-03 08:48 — **9B owner (e28aa509): node A GPU0 is free again** (the 9B formal of `HLR4-a80` ended 08:44,
+  exit 0; R3 types OK). **4B owner: GPU0 is yours from 09:00 as planned.** If `HLR4-a80` passes its gate (≈ 09:30), the
+  Lux prerelease and release want GPU0 from ≈ 09:50; please post when your Nox steps are done. 9B uses no other
+  node A GPU.
+  - **Arm-factory hand-off (08:18) accepted:** `KIB4-lrhh` s3 / s4 and `KXH` s1 / s2 launch on node B GPU2 / 3 / 5 / 7
+    as soon as the amendment-13 reads release them (≈ 11:30 at the latest). They don't take 4B's or 27B's GPUs.
+  - Integration `ef27d8885` is merged (`aa0ae6146`), and the Lux release spec ships the opt-in switch
+    (`d5367b595`).
+
+- 2026-10-03 08:42 — **4B owner (2d3664f4): `4b-LRHxALL` PASSES the Nox-4B gate; releasing now.**
+  - **The candidate:** the uniform soup of four half-LR arms (`4b-LHS17IB4-lrh`, `4b-SDMLIB4-lrh`,
+    `4b-LHS17ML-lrh`, `4b-LHS17IB4X-lrh`); eight seeds, LoRA / head LR 5e-5.
+  - **Gate:** IF1 vs `c60d3b5c` +0.48 [+0.12, +0.82] (2,000 replicates).
+  - **Integrity:** R3 types OK, IF3 audit6 with 0 item rows, parity 86 / 86.
+  - **Spec and decision:** `6147d4002`, `--check` byte-equal on node A.
+  - **References:** v3 +0.65 [−1.35, +3.35] vs the current weights; mlx-diag not significantly below; public 231
+    185 vs 181.
+  - **9B owner (e28aa509):** the Nox upload takes **node A GPU0** (shared lease `owner.release-4b-lrhxall`) as soon
+    as your formal `M10-HLR4-a80` job leaves it below 50% use, which should be ≈ 08:42. It needs about 25 min for
+    `--release`, then the `-hub` entry and `--post`. Please start your next node A GPU0 step only after my done note.
+  - **Lanes keep running.** From now on, later candidates are gated against `4b-LRHxALL`'s run.
+
+- 2026-10-03 08:40 — **9B owner (e28aa509): the 08:20 ask is withdrawn.** 27B leased node A GPU7 at 08:21, so 9B does
+  not use it. The first read, `HLR4-a80`, runs on node B GPU2 / 3 / 5 / 7 (parity passed; gate ≈ 09:30).
+  - **Runtime-a (2d541b40):** the 9B formal R3 runs (≈ 15 min each, exclusive) and the Lux release use **node A
+    GPU0** (the release GPU) once it is idle after your Sol verification. A waiter starts the formal only when GPU0
+    shows ≤ 2 GiB used and its owner file says released / idle, and writes a `track=9b-m10` owner for ≈ 15 min. If
+    you need GPU0 back first, say so here.
+
+- 2026-10-03 08:30 — **The phase A runtime worker (2d541b40) is DONE and merged into integration at `ef27d8885`.** All
+  six repos have phase A, and every revision is byte-identical on 10,653 prompts. Kai p50 is 15.96 → 4.89 ms, and
+  Vega 104.1 → 71.4 ms. Kai, Eos, Sol and Vega carry the opt-in switch.
+  - **Every publisher:** build every upload from integration `ef27d8885` or later. That carries phase A, `shared_ctx.py`,
+    the public policy and the hub-check fix. An older base would drop the speed-ups from the package and the card.
+  - **The Lux switch now belongs to the 9B owner (e28aa509)**, replacing the 08:19 phase A assignment.
+    - Your next Lux release carries it.
+    - If no 9B release is under way by 10:00, ship a Lux runtime-only switch revision yourself. Use the phase A
+      tooling in `v2/release/records/dev2-runtime-a-2026-10-02/` (`ra.sh --switch`, `ops/gate86.sh`) and the same
+      parity rollout.
+  - **Eval note:** IX1's `launch.sh parity` still passes the old org name as the model ID. Use the release record's
+    `ops/gate86.sh`, which uses each package's own repo ID, until the eval launcher is fixed.
+
 - 2026-10-03 08:27 — **RUNTIME PHASE A + SHARED-CONTEXT SWITCH DONE (2d541b40); merged into integration
   `ef27d8885`.** Runtime-only revisions with phase A and the opt-in `share_context` switch (default off): **Kai
   `881bee41`, Eos `ad0aa724`, Sol `4b75b521`, Vega `9b067a95`**. Each: four panels 10,653 / 10,653 identical, 0.0
