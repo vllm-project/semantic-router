@@ -291,7 +291,8 @@ func scanVectorStoreFromRow(s rowScanner) (*VectorStore, error) {
 	return &vs, nil
 }
 
-func scanVectorStoreRow(row *sql.Row) (*VectorStore, error)    { return scanVectorStoreFromRow(row) }
+func scanVectorStoreRow(row *sql.Row) (*VectorStore, error) { return scanVectorStoreFromRow(row) }
+
 func scanVectorStoreRows(rows *sql.Rows) (*VectorStore, error) { return scanVectorStoreFromRow(rows) }
 
 func flattenExpiration(ep *ExpirationPolicy) (string, int) {

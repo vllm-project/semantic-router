@@ -3,14 +3,6 @@
 
 package openvino_binding
 
-import (
-	"fmt"
-	"log"
-	"runtime"
-	"sync"
-	"unsafe"
-)
-
 /*
 #cgo CFLAGS: -I${SRCDIR}/cpp/include
 #cgo LDFLAGS: -L${SRCDIR}/build -lopenvino_semantic_router -lstdc++ -lm
@@ -21,6 +13,14 @@ import (
 #include "openvino_semantic_router.h"
 */
 import "C"
+
+import (
+	"fmt"
+	"log"
+	"runtime"
+	"sync"
+	"unsafe"
+)
 
 var (
 	initOnce         sync.Once

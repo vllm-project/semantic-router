@@ -419,5 +419,4 @@ func main() {
 	} else {
 		fmt.Printf("POOR (%.1f%% accuracy) - Requires retraining\n", accuracy)
 	}
-
 }

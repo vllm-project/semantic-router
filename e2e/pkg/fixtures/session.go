@@ -8,9 +8,10 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 // ServiceSession owns a port-forwarded local endpoint for an in-cluster service.

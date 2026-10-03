@@ -20,6 +20,9 @@ REV=$(shell git rev-parse --short HEAD)
 PREBUILT_NATIVE_LIBS ?= 0
 NATIVE_ARTIFACT_DIR ?= $(CURDIR)/.agent-harness/native-input
 
+# Shared golangci-lint configuration for every Go module.
+GOLANGCI_LINT_CONFIG ?= $(CURDIR)/tools/linter/go/.golangci.yml
+
 # The router links all native providers in one process. Keep the build and
 # runtime search paths independent of each recipe's working directory, while
 # preserving caller-supplied vendor/OpenVINO paths and linker options.

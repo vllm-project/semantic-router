@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 

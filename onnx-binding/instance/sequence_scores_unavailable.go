@@ -10,6 +10,7 @@ func (*LabelScorer) Score(string) (LabelScores, error) { return LabelScores{}, u
 func (*LabelScorer) ScoreWindows(string, SequenceWindowOptions) (WindowedLabelScoresOutput, error) {
 	return WindowedLabelScoresOutput{}, unavailable
 }
+
 func (*SequenceClassifier) ClassifyWindows(string, SequenceWindowOptions) (WindowedClassificationOutput, error) {
 	return WindowedClassificationOutput{}, unavailable
 }

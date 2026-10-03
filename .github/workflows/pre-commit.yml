@@ -137,4 +137,9 @@ jobs:
         run: |
           git status --short
           git diff --stat
+          echo ""
+          echo "=== golangci-lint fmt diff per Go module ==="
+          for module in $(git ls-files "*/go.mod" | xargs -n1 dirname); do
+            (cd "$module" && golangci-lint fmt --diff --config "$GITHUB_WORKSPACE/tools/linter/go/.golangci.yml" ./...) || true
+          done
           echo "Reproduce with make check BASE_REF=origin/${{ github.base_ref }}"

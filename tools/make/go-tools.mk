@@ -43,7 +43,7 @@ vet-$(1):
 	@cd src/semantic-router && $$(NATIVE_ENV) go vet $(call go_tool_test_sources,$(1))
 
 lint-$(1):
-	@cd src/semantic-router && $$(NATIVE_ENV) golangci-lint run --config ../../tools/linter/go/.golangci.yml $(call go_tool_test_sources,$(1))
+	@cd src/semantic-router && $$(NATIVE_ENV) golangci-lint run --config $$(GOLANGCI_LINT_CONFIG) $(call go_tool_test_sources,$(1))
 endef
 
 $(foreach tool,$(ROUTER_GO_TOOLS),$(eval $(call router_go_tool,$(tool))))

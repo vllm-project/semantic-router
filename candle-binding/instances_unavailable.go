@@ -2,11 +2,14 @@
 
 package candle_binding
 
-func nativeInstanceLoad(InstanceOptions, string) (uint64, error)    { return 0, ErrBackendUnavailable }
-func nativeInstanceClose(uint64) error                              { return ErrBackendUnavailable }
-func nativeInstanceClone(uint64) (uint64, error)                    { return 0, ErrBackendUnavailable }
-func nativeInstanceInfo(uint64) (InstanceInfo, error)               { return InstanceInfo{}, ErrBackendUnavailable }
+func nativeInstanceLoad(InstanceOptions, string) (uint64, error) { return 0, ErrBackendUnavailable }
+func nativeInstanceClose(uint64) error                           { return ErrBackendUnavailable }
+func nativeInstanceClone(uint64) (uint64, error)                 { return 0, ErrBackendUnavailable }
+
+func nativeInstanceInfo(uint64) (InstanceInfo, error) { return InstanceInfo{}, ErrBackendUnavailable }
+
 func nativeInstanceBindHead(uint64, string, string) (uint64, error) { return 0, ErrBackendUnavailable }
+
 func nativeInstanceSequence(uint64, string) (DistributionOutput, error) {
 	return DistributionOutput{}, ErrBackendUnavailable
 }

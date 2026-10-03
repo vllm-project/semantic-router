@@ -83,7 +83,7 @@ dashboard-lint: dashboard-frontend-deps ## Lint dashboard frontend and backend
 		export GOROOT=$$(dirname $$(dirname $$(readlink -f $$(which go)))) && \
 		export GOPATH=$$(go env GOPATH 2>/dev/null || echo "$$HOME/go") && \
 		export PATH="$$GOPATH/bin:$$PATH" && \
-		golangci-lint run ./... --config ../../tools/linter/go/.golangci.yml
+		golangci-lint run ./... --config $(GOLANGCI_LINT_CONFIG)
 	@echo "dashboard/backend lint passed"
 
 dashboard-lint-fix: dashboard-frontend-deps ## Auto-fix lint issues in dashboard (frontend + backend)
@@ -96,7 +96,7 @@ dashboard-lint-fix: dashboard-frontend-deps ## Auto-fix lint issues in dashboard
 		export GOROOT=$$(dirname $$(dirname $$(readlink -f $$(which go)))) && \
 		export GOPATH=$$(go env GOPATH 2>/dev/null || echo "$$HOME/go") && \
 		export PATH="$$GOPATH/bin:$$PATH" && \
-		golangci-lint run ./... --fix --config ../../tools/linter/go/.golangci.yml
+		golangci-lint run ./... --fix --config $(GOLANGCI_LINT_CONFIG)
 	@echo "dashboard/backend lint fix applied"
 
 dashboard-type-check: dashboard-frontend-deps dashboard-build-wizmap ## Type-check the frontend and compile the Knowledge Map

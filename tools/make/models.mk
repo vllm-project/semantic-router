@@ -142,7 +142,7 @@ test-modelcompat-native: ## Test the native receipt round-trip against an explic
 		go test -race -count=1 -v -run '^TestNativeCandleCPUCommandRoundTrip$$' ../../tools/modelcompat/*.go
 
 check-modelcompat: test-modelcompat harness-go-bootstrap ## Test and lint the offline compatibility tool
-	@cd src/semantic-router && $(NATIVE_ENV) "$$(go env GOPATH)/bin/golangci-lint" run --config ../../tools/linter/go/.golangci.yml ../../tools/modelcompat/*.go
+	@cd src/semantic-router && $(NATIVE_ENV) "$$(go env GOPATH)/bin/golangci-lint" run --config $(GOLANGCI_LINT_CONFIG) ../../tools/modelcompat/*.go
 
 # Do not attribute a working-tree build to HEAD. Local planning artifacts outside
 # the compiled source trees do not affect this source check.
