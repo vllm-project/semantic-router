@@ -10,17 +10,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
-import uvicorn
 from cli.sr_bench.contracts import plan
 from cli.sr_bench.engine import Engine
 from cli.sr_bench.report import fault_summary, make_report
 from cli.sr_bench.store import TERMINAL, Store
-
-# Allow importing provider_mocker from tools directory
-_ROOT = Path(__file__).resolve().parents[3]
-_PROVIDER_MOCKER_PATH = _ROOT / "tools" / "test" / "services" / "provider-mocker"
-if str(_PROVIDER_MOCKER_PATH) not in sys.path:
-    sys.path.insert(0, str(_PROVIDER_MOCKER_PATH))
 
 
 def wait_run(store, run_id, timeout=10):
@@ -563,8 +556,17 @@ def test_sr_bench_run_with_stream_cut_short_fault(tmp_path, fault_target):
 @pytest.fixture
 def running_provider_mocker():
     """Start a real instance of provider_mocker on a free local port."""
-    from provider_mocker.app import create_app  # noqa: PLC0415
-    from provider_mocker.settings import Settings  # noqa: PLC0415
+    uvicorn = pytest.importorskip("uvicorn")
+    _root = Path(__file__).resolve().parents[3]
+    _provider_mocker_path = _root / "tools" / "test" / "services" / "provider-mocker"
+    if str(_provider_mocker_path) not in sys.path:
+        sys.path.insert(0, str(_provider_mocker_path))
+
+    try:
+        from provider_mocker.app import create_app  # noqa: PLC0415
+        from provider_mocker.settings import Settings  # noqa: PLC0415
+    except ImportError as exc:
+        pytest.skip(f"provider_mocker dependencies not available: {exc}")
 
     # Configure provider mocker with fault schedules for status (503), delay, and stream_cut_short
     schedule_json = json.dumps(
