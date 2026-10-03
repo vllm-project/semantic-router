@@ -152,14 +152,6 @@ func apiClassifyRoutes() []apiRoute {
 			jsonBodyFor[BatchClassificationRequest](),
 		),
 		managedRoute(
-			EndpointMetadata{Path: apiDiagnosticsPath + "/nli", Method: "POST", Description: "Natural language inference classification for premise and hypothesis pairs"},
-			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
-			(*ClassificationAPIServer).handleNLIClassification,
-			jsonResponse[services.NLIResponse](http.StatusOK, "Successful response"),
-			errorResponses(400, 413, 429, 500, 503),
-			jsonBodyFor[services.NLIRequest](),
-		),
-		managedRoute(
 			EndpointMetadata{Path: apiDiagnosticsPath + "/embeddings", Method: "POST", Description: "Generate text, image, and audio embeddings"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleEmbeddings,
