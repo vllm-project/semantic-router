@@ -203,9 +203,13 @@ class ForwardOutput:
 
 @dataclass
 class EncoderBatch:
-    """Padded rows for a bidirectional encoder.
+    """Rows for a bidirectional encoder: padded, or packed back to back.
 
-    ``layers`` are the hidden-state exits the readout needs: 1-based layer
+    Padded: ``input_ids`` and ``attention_mask`` are ``[rows, tokens]`` and
+    hidden states come back as ``[rows, tokens, hidden]``. Packed: ``lengths``
+    (host-known) splits ``input_ids`` ``[N]`` into rows, ``attention_mask`` is
+    unused, and hidden states come back as ``[N, hidden]``, so no position is
+    padding. ``layers`` are the hidden-state exits the readout needs: 1-based layer
     indices, 0 for the embedding output, empty for the last layer only. An
     intermediate exit is the raw residual stream and the last layer is
     final-normalized (the Transformers ``hidden_states`` convention), unless
@@ -216,12 +220,13 @@ class EncoderBatch:
     """
 
     input_ids: torch.Tensor
-    attention_mask: torch.Tensor
+    attention_mask: torch.Tensor | None
     layers: tuple[int, ...] = ()
     normalize_exits: bool = False
     graph: str = "default"
     graph_inputs: dict[str, torch.Tensor] = field(default_factory=dict)
     outputs: tuple[str, ...] = ()
+    lengths: list[int] | None = None
 
 
 @dataclass
