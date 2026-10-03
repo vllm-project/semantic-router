@@ -15,7 +15,8 @@ on the same node, inputs and devices.
 - **On CPU, exact matches the bundled runtime, and the opt-in profiles win:**
   both sides run the same FP32 math through the same MKL kernels, so single
   requests land at 0.99–1.05× at p50. Six router signals run 3.3–4.1× faster
-  on the encoders with `batching`.
+  on the encoders with `batching`. For `max_speed`, the encoders consent to a
+  `float32-packed` copy, measured 1.5× faster with every decision kept.
 
 - **Date:** 2026-10-04.
 - **ROCm:** one AMD Instinct MI325X (gfx942) per run, in the packages' release
@@ -172,6 +173,8 @@ Router requests:
 - Both sides run the same FP32 math through the same MKL kernels, so exact
   matches the bundled runtime: 0.99–1.05× at p50, and p95 from 14% lower
   (Kai) to 4% higher (Eos).
+- Again at `a3d2593a0` (with `GOMP_SPINCOUNT=10000`, on the quieter cores
+  32–47): Kai bundled 106.0 / 119.6, runtime 107.2 / 125.0, paired Δ +1.1 ms.
 
 ### Router request
 
@@ -183,25 +186,42 @@ Router requests:
 |  | `batching` | 1,102 | 1,390 | 279.1 | 384.6 | -812.3 | `0bc5c6a75` |
 | Route-0.6B | `exact` | 1,022 | 1,467 | 1,003 | 1,328 | -39.7 | `0bc5c6a75` |
 |  | `batching` | 1,147 | 1,397 | 350.0 | 437.5 | -801.3 | `0bc5c6a75` |
+| Eos-0.8B | `shared_context` | 6,255 | 6,666 | 6,315 | 6,785 | +27.1 | `0bc5c6a75` |
 
 - Exact does the bundled runtime's work and is 2–5% faster. `batching` runs
   each question type's stack over its own rows only, packed, and serves the
   six signals 3.3–4.1× faster.
+- Eos (the first 30 prompts): `shared_context` is within 1% of the bundled
+  runtime. These prompts are short next to the six router questions, so
+  little is shared; on ROCm, the long prompts are where it pays (p95 above).
 
 ### Throughput (requests/s, encoders)
 
-Pending: the encoders' CPU throughput runs (exact and `batching`, C = 4 and
-16) are still running and land in the next update of this record.
+Single requests, all runs on the same 16 cores (32–47) at `0bc5c6a75`; the
+bundled rate is its sequential rate on those cores.
 
-## Reduced precision under `max_speed`
+| Model | Bundled (sequential) | Exact C = 4 | Exact C = 16 | Approximate C = 4 | Approximate C = 16 | Approximate profile |
+| --- | --- | --- | --- | --- | --- | --- |
+| Kai-0.6B | 12.7 | 12.0 | 12.0 | 14.3 | 12.0 | `batching` |
+| Lex-0.6B | 13.0 | 13.0 | 13.3 | 15.0 | 12.8 | `batching` |
+| Route-0.6B | 13.0 | 12.2 | 12.5 | 14.3 | 12.6 | `batching` |
 
-Under `max_speed` an encoder may run approximate batches on a reduced copy of
-its linear layers (design §5.4). A package consents only where its records
-show at least 99% label agreement with exact and a faster path. Each copy below
-held the three stacks' linear weights in reduced precision, with norms,
-softmax and heads in FP32. Both versions ran in one process, interleaved per
-request, on the exact profile's batches. Agreement means the same label (the
-choice, Noul class or Score level) as the FP32 path.
+- A CPU forward is compute-bound and exact runs one request per forward, so
+  exact under concurrency stays at the bundled runtime's rate (−6% to +2%).
+- `batching` is 10–15% above it at C = 4, where packing removes the padding
+  and the per-forward overheads are shared. At C = 16 it falls back to the
+  exact rate; that cause is not measured yet.
+
+## Reduced copies under `max_speed`
+
+Under `max_speed` an encoder may run approximate batches on a copy of its
+linear layers (design §5.4). A package consents only where its records show
+at least 99% label agreement with exact and a faster path. Each copy below
+replaced the three stacks' linear layers: dynamic int8, BF16, or FP32
+weights that oneDNN pre-packs (`float32-packed`). Norms, softmax and heads
+stayed FP32. Both versions ran in one process, interleaved per request, on the
+exact profile's batches. Agreement means the same label (the choice, Noul class
+or Score level) as the FP32 path.
 
 | Copy (device, questions) | Kai | Lex | Route | p50 vs FP32 |
 | --- | --- | --- | --- | --- |
@@ -209,6 +229,7 @@ choice, Noul class or Score level) as the FP32 path.
 | Dynamic int8, per-channel weights (CPU, 500) | 52.0% | 48.0% | 59.8% | 1.55–1.66× faster |
 | BF16 autocast (CPU with AVX-512 BF16, 2,987) | 98.26% | 99.26% | 98.02% | 1.26–1.34× faster |
 | BF16 autocast (MI325X, 10,605) | 98.75% | 99.33% | 98.60% | 1.16× slower |
+| `float32-packed`: oneDNN pre-packed FP32 linears (CPU, 2,987) | 100% | 100% | 100% | 1.52–1.53× faster |
 
 - **int8 breaks the models:** max |Δp| reaches 0.56–0.87, with or without
   per-channel weights. The likely cause is 8-bit activations against
@@ -217,8 +238,12 @@ choice, Noul class or Score level) as the FP32 path.
   many questions are near-ties. Max |Δp| stays at 0.027–0.056.
 - **GPU BF16 is slower:** a single-request encoder forward is launch-bound, so
   the casts autocast adds cost more than the BF16 matrix units save.
-- **So only Lex consents, on CPU** (`BuiltinModel.reduced`). `max_speed` runs
-  the other packages' approximate batches on their FP32 weights.
+- **`float32-packed` keeps every decision:** max |Δp| 2.4e-5, while its
+  linears run through oneDNN's pre-packed kernel instead of MKL's.
+- **So Kai, Lex and Route consent to `float32-packed` on CPU, and to no GPU
+  copy** (`BuiltinModel.reduced`). The copy serves `max_speed`'s approximate
+  batches once the engine loads reduced copies; the exact profile keeps
+  MKL, so its answers stay byte-identical to the bundled runtime.
 
 ## Where a request's time goes
 
