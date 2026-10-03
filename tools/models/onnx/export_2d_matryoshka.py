@@ -36,7 +36,7 @@ from onnx_artifacts import (
 from onnx_portable_ops import lower_nan_predicates
 from onnx_shape_simplification import simplify_batch_reshapes
 
-TRAINING_ROOT = Path(__file__).resolve().parents[2] / "src/training/model_embeddings"
+TRAINING_ROOT = Path(__file__).resolve().parents[3] / "src/training/model_embeddings"
 sys.path.insert(0, str(TRAINING_ROOT))
 from mmbert_32k.representation_contract import (  # noqa: E402
     read_representation_contract,
