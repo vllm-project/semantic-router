@@ -51,7 +51,7 @@ class ModelCardTest(unittest.TestCase):
             self.assertIn("LoRA adapter", card)
             self.assertIn("example/actual-training-base", card)
             self.assertIn("b" * 40, card)
-            self.assertNotIn("llm-semantic-router/mmbert-32k-yarn", card)
+            self.assertNotIn("vllm-sr/mmbert-32k-yarn", card)
             self.assertIn("| `accuracy` | 0.750000 |", card)
             self.assertNotIn("test_runtime", card)
             self.assertNotIn("false_positives", card)
