@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -65,6 +66,7 @@ type EmbeddingProvider struct {
 	numerics       string
 	maxInputs      int
 	fullDimension  int
+	closed         atomic.Bool
 }
 
 // Embedding prepares a binding on a model_runtime deployment that serves
@@ -280,8 +282,12 @@ func numerics(card modelservice.ModelCard, limits binding.Limits) string {
 	return string(encoded)
 }
 
-// Close releases the binding's reference to its deployment.
-func (p *EmbeddingProvider) Close() error { return p.call.Close() }
+// Close releases the binding's reference to its deployment. A closed
+// provider fails every call, cached inputs included.
+func (p *EmbeddingProvider) Close() error {
+	p.closed.Store(true)
+	return p.call.Close()
+}
 
 // Backend names the serving path.
 func (p *EmbeddingProvider) Backend() string { return Provider }
@@ -309,11 +315,21 @@ func (p *EmbeddingProvider) Embed(ctx context.Context, text string) ([]float32, 
 
 // EmbedWithOptions embeds text at another declared view.
 func (p *EmbeddingProvider) EmbedWithOptions(ctx context.Context, text string, options embedding.Options) ([]float32, error) {
-	vectors, err := p.embed(ctx, []modelservice.EmbedInput{{Text: text}}, options)
+	embedded, err := p.embed(ctx, []modelservice.EmbedInput{{Text: text}}, options)
 	if err != nil {
 		return nil, err
 	}
-	return vectors[0], nil
+	return embedded[0].Vector, nil
+}
+
+// FitsInput reports whether the model reads text whole at the default view.
+// The answer comes with the vector, which the cache keeps for the next call.
+func (p *EmbeddingProvider) FitsInput(ctx context.Context, text string) (bool, error) {
+	embedded, err := p.embed(ctx, []modelservice.EmbedInput{{Text: text}}, p.options)
+	if err != nil {
+		return false, err
+	}
+	return !embedded[0].Truncated, nil
 }
 
 // EmbedBatch embeds texts at the default view in as few runtime calls as the
@@ -326,7 +342,15 @@ func (p *EmbeddingProvider) EmbedBatch(ctx context.Context, texts []string) ([][
 	for i, text := range texts {
 		inputs[i] = modelservice.EmbedInput{Text: text}
 	}
-	return p.embed(ctx, inputs, p.options)
+	embedded, err := p.embed(ctx, inputs, p.options)
+	if err != nil {
+		return nil, err
+	}
+	vectors := make([][]float32, len(embedded))
+	for i := range embedded {
+		vectors[i] = embedded[i].Vector
+	}
+	return vectors, nil
 }
 
 // EmbedImage embeds raw image bytes (any format the model's processor reads).
@@ -335,11 +359,11 @@ func (p *EmbeddingProvider) EmbedImage(ctx context.Context, data []byte, dimensi
 		return nil, fmt.Errorf("%w: image is empty", binding.ErrInvalidInput)
 	}
 	url := "data:" + http.DetectContentType(data) + ";base64," + base64.StdEncoding.EncodeToString(data)
-	vectors, err := p.embed(ctx, []modelservice.EmbedInput{{ImageURL: url}}, embedding.Options{Dimension: dimension})
+	embedded, err := p.embed(ctx, []modelservice.EmbedInput{{ImageURL: url}}, embedding.Options{Dimension: dimension})
 	if err != nil {
 		return nil, err
 	}
-	return vectors[0], nil
+	return embedded[0].Vector, nil
 }
 
 // EmbedAudio embeds decoded PCM, sent to the runtime as 32-bit float WAV so
@@ -349,16 +373,19 @@ func (p *EmbeddingProvider) EmbedAudio(ctx context.Context, request embedding.Au
 		return nil, fmt.Errorf("%w: %w", binding.ErrInvalidInput, err)
 	}
 	wav := base64.StdEncoding.EncodeToString(embedding.EncodeFloatWAV(request))
-	vectors, err := p.embed(ctx, []modelservice.EmbedInput{{AudioWAV: wav}}, embedding.Options{Dimension: request.Options.Dimension})
+	embedded, err := p.embed(ctx, []modelservice.EmbedInput{{AudioWAV: wav}}, embedding.Options{Dimension: request.Options.Dimension})
 	if err != nil {
 		return nil, err
 	}
-	return vectors[0], nil
+	return embedded[0].Vector, nil
 }
 
 // embed answers inputs from the shared cache and embeds the rest in calls of
 // at most maxInputs inputs.
-func (p *EmbeddingProvider) embed(ctx context.Context, inputs []modelservice.EmbedInput, options embedding.Options) ([][]float32, error) {
+func (p *EmbeddingProvider) embed(ctx context.Context, inputs []modelservice.EmbedInput, options embedding.Options) ([]embedding.Embedded, error) {
+	if p.closed.Load() {
+		return nil, binding.ErrClosed
+	}
 	keys := make([]embedding.VectorKey, len(inputs))
 	for i, input := range inputs {
 		kind, content := embedding.InputText, input.Text
@@ -370,8 +397,8 @@ func (p *EmbeddingProvider) embed(ctx context.Context, inputs []modelservice.Emb
 		}
 		keys[i] = embedding.NewVectorKey(p.numerics, options, kind, []byte(content))
 	}
-	return sharedVectors.Resolve(ctx, keys, func(ctx context.Context, missing []int) ([][]float32, error) {
-		vectors := make([][]float32, 0, len(missing))
+	return sharedVectors.Resolve(ctx, keys, func(ctx context.Context, missing []int) ([]embedding.Embedded, error) {
+		vectors := make([]embedding.Embedded, 0, len(missing))
 		for start := 0; start < len(missing); {
 			end := len(missing)
 			if p.maxInputs > 0 {
@@ -386,7 +413,7 @@ func (p *EmbeddingProvider) embed(ctx context.Context, inputs []modelservice.Emb
 				return nil, err
 			}
 			for _, result := range results {
-				vectors = append(vectors, result.Embedding)
+				vectors = append(vectors, embedding.Embedded{Vector: result.Embedding, Truncated: result.Input != nil && result.Input.Truncated})
 			}
 			start = end
 		}

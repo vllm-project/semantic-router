@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync/atomic"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
@@ -25,6 +26,7 @@ type RemoteEmbeddingProvider struct {
 	model     string
 	dimension int
 	space     string
+	closed    atomic.Bool
 }
 
 // RemoteEmbedding prepares and warms a binding on an OpenAI-compatible endpoint.
@@ -116,8 +118,12 @@ func remoteConnector(cfg embedding.OpenAICompatibleConfig) (string, error) {
 	return hex.EncodeToString(digest[:]), nil
 }
 
-// Close releases the connector reference.
-func (p *RemoteEmbeddingProvider) Close() error { return p.call.Close() }
+// Close releases the connector reference. A closed provider fails every
+// call, cached inputs included.
+func (p *RemoteEmbeddingProvider) Close() error {
+	p.closed.Store(true)
+	return p.call.Close()
+}
 
 // Backend names the serving path.
 func (p *RemoteEmbeddingProvider) Backend() string { return config.EmbeddingBackendOpenAICompatible }
@@ -148,11 +154,14 @@ func (p *RemoteEmbeddingProvider) EmbedBatch(ctx context.Context, texts []string
 	if len(texts) == 0 {
 		return nil, nil
 	}
+	if p.closed.Load() {
+		return nil, binding.ErrClosed
+	}
 	keys := make([]embedding.VectorKey, len(texts))
 	for i, text := range texts {
 		keys[i] = embedding.NewVectorKey(p.CacheIdentity(), embedding.Options{}, embedding.InputText, []byte(text))
 	}
-	return sharedVectors.Resolve(ctx, keys, func(ctx context.Context, missing []int) ([][]float32, error) {
+	embedded, err := sharedVectors.Resolve(ctx, keys, func(ctx context.Context, missing []int) ([]embedding.Embedded, error) {
 		inputs := make([]modelservice.EmbedInput, len(missing))
 		for j, i := range missing {
 			inputs[j] = modelservice.EmbedInput{Text: texts[i]}
@@ -161,10 +170,18 @@ func (p *RemoteEmbeddingProvider) EmbedBatch(ctx context.Context, texts []string
 		if err != nil {
 			return nil, err
 		}
-		vectors := make([][]float32, len(results))
+		vectors := make([]embedding.Embedded, len(results))
 		for i, result := range results {
-			vectors[i] = result.Embedding
+			vectors[i] = embedding.Embedded{Vector: result.Embedding}
 		}
 		return vectors, nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	vectors := make([][]float32, len(embedded))
+	for i := range embedded {
+		vectors[i] = embedded[i].Vector
+	}
+	return vectors, nil
 }
