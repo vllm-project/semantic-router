@@ -174,7 +174,7 @@ def test_reduced_copy_consent_comes_from_the_pinned_package(tmp_path, monkeypatc
         lambda digest: lex if digest == package.model_sha256 else None,
     )
     dtype = family.describe(package).dtype
-    assert (dtype.reduced_gpu, dtype.reduced_cpu) == (None, "bfloat16")
+    assert (dtype.reduced_gpu, dtype.reduced_cpu) == (None, "float32-packed")
 
 
 def test_type_head_layer_is_the_reference_encoder_layer():
